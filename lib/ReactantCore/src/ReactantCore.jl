@@ -6,7 +6,18 @@ using MacroTools: MacroTools
 export @trace, within_compile, MissingTracedValue
 
 # Traits
-is_traced(x) = false
+function is_traced((@nospecialize x::T), seen=Base.IdSet()) where {T}
+    if !isprimitivetype(x)
+        for fn in fieldnames(T)
+            f = getfield(x, fn)
+            if !(f in seen)
+                push!(seen, f)
+                is_traced(f, seen) && return true
+            end
+        end
+    end
+    return false
+end
 
 # New Type signifying that a value is missing
 mutable struct MissingTracedValue
@@ -117,11 +128,25 @@ function fn(x)
 end
 ```
 """
-macro trace(expr)
+macro trace(args...)
+    track_numbers = true
+    expr = first(args)
+    if length(args) > 1 && Meta.isexpr(args[1], :(=))
+        tn_expr = args[1]
+        tn_expr.args[1] == :track_numbers ||
+            error("@trace supports setting track_numbers, but got $(tn_expr)")
+
+        track_numbers = tn_expr.args[2]
+        expr = only(args[2:end])
+    else
+        expr = only(args)
+    end
+    track_numbers = track_numbers ? Number : Union{}
     expr = macroexpand(__module__, expr)
+
     if Meta.isexpr(expr, :(=))
         if Meta.isexpr(expr.args[2], :if)
-            return esc(trace_if_with_returns(__module__, expr))
+            return esc(trace_if_with_returns(__module__, expr; track_numbers))
         end
     end
     Meta.isexpr(expr, :call) && return esc(trace_call(__module__, expr))
@@ -131,12 +156,12 @@ macro trace(expr)
         call = Expr(:call, fname, args...)
         return esc(trace_call(__module__, call))
     end
-    Meta.isexpr(expr, :if) && return esc(trace_if(__module__, expr))
-    Meta.isexpr(expr, :for) && return (esc(trace_for(__module__, expr)))
+    Meta.isexpr(expr, :if) && return esc(trace_if(__module__, expr; track_numbers))
+    Meta.isexpr(expr, :for) && return (esc(trace_for(__module__, expr; track_numbers)))
     return error("Only `if-elseif-else` blocks are currently supported by `@trace`")
 end
 
-function trace_for(mod, expr)
+function trace_for(mod, expr; track_numbers)
     Meta.isexpr(expr, :for, 2) || error("expected for expr")
     assign, body = expr.args
 
@@ -168,44 +193,59 @@ function trace_for(mod, expr)
     filter!(∉(SPECIAL_SYMBOLS), external_syms)
 
     all_syms = Expr(:tuple, counter, external_syms...)
+
+    args_names = Expr(:tuple, counter, external_syms...)
+    cond_val(s) = :(@isdefined($s) ? $s : nothing)
     args_init = Expr(
         :tuple,
-        :(Reactant.TracedUtils.promote_to(Reactant.TracedRNumber{Int}, 0)),
-        external_syms...,
+        :(Ref(Reactant.TracedUtils.promote_to(Reactant.TracedRNumber{Int}, 0))),
+        (:(Ref($(cond_val(s)))) for s in external_syms)...,
     )
 
-    cond_val(s) = :(@isdefined($s) ? $s : nothing)
+    ref_syms = Symbol[Symbol(string(sym) * "_ref") for sym in external_syms]
+    arg_syms = Expr(:tuple, counter, ref_syms...)
 
-    while_defined = gensym(:while_defined)
-    locals = Expr[
-        [Expr(:(=), s, cond_val(s)) for s in external_syms]..., :(args = $(args_init))
+    to_locals = [:(local $s = $ref[]) for (s, ref) in zip(external_syms, ref_syms)]
+    from_locals = [
+        (
+            quote
+                if !($ref[] isa Nothing)
+                    $ref[] = $s
+                end
+            end
+        ) for (s, ref) in zip(external_syms, ref_syms)
     ]
 
-    var_syms = all_syms.args[(begin + 1):end]
     reactant_code_block = quote
-        let $(locals...)
+        let args = $(args_init)
             cond_fn =
-                $(all_syms) -> begin
+                $(arg_syms) -> begin
+                    $(to_locals...)
                     local num_iters = div($limit - $start, $step, RoundDown)
                     local num_iters = Reactant.TracedUtils.promote_to(
                         Reactant.TracedRNumber{Int64}, num_iters
                     )
-                    $counter < num_iters + 1
+                    $counter[] < num_iters + 1
                 end
             body_fn =
-                $(all_syms) -> begin
-                    local isdefined_before = isnothing.(Any[$(var_syms...)])
+                $(arg_syms) -> begin
                     local step_ = $step
                     local start_ = $start
-                    local $induction = start_ + $counter * step_
+                    local $induction = start_ + $counter[] * step_
+                    $(to_locals...)
                     $body
-                    local results_ = Any[
-                        s for (d, s) in zip(isdefined_before, Any[$(var_syms...)]) if !d
-                    ]
-                    ($counter + 1, results_...)
+                    $(from_locals...)
+                    $counter[].mlir_data = ($counter[] + 1).mlir_data
+                    nothing
                 end
 
-            $(ReactantCore).traced_while(cond_fn, body_fn, args)
+            $(ReactantCore).traced_while(
+                cond_fn,
+                body_fn,
+                args;
+                track_numbers=$(track_numbers),
+                verify_arg_names=$(QuoteNode(args_names)),
+            )
         end
     end
 
@@ -221,9 +261,9 @@ function trace_for(mod, expr)
 end
 
 # ... = if ... style expressions
-function trace_if_with_returns(mod, expr)
+function trace_if_with_returns(mod, expr; track_numbers)
     new_expr, _, all_check_vars = trace_if(
-        mod, expr.args[2]; store_last_line=expr.args[1], depth=1
+        mod, expr.args[2]; store_last_line=expr.args[1], depth=1, track_numbers
     )
     cond_name = first(all_check_vars)
     original_cond = expr.args[2].args[1]
@@ -238,7 +278,7 @@ function trace_if_with_returns(mod, expr)
     end
 end
 
-function trace_if(mod, expr; store_last_line=nothing, depth=0)
+function trace_if(mod, expr; store_last_line=nothing, depth=0, track_numbers)
     discard_vars_from_expansion = []
     original_expr = expr
 
@@ -249,7 +289,9 @@ function trace_if(mod, expr; store_last_line=nothing, depth=0)
         expr = MacroTools.prewalk(expr) do x
             counter += 1
             if x isa Expr && x.head == :if && counter > 1
-                ex_new, dv, _ = trace_if(mod, x; store_last_line, depth=depth + 1)
+                ex_new, dv, _ = trace_if(
+                    mod, x; store_last_line, depth=depth + 1, track_numbers
+                )
                 append!(discard_vars_from_expansion, dv)
                 return ex_new
             end
@@ -289,7 +331,7 @@ function trace_if(mod, expr; store_last_line=nothing, depth=0)
         if !(expr.args[3] isa Expr) || expr.args[3].head != :elseif
             expr.args[3], [], nothing
         else
-            trace_if(mod, expr.args[3]; store_last_line, depth=depth + 1)
+            trace_if(mod, expr.args[3]; store_last_line, depth=depth + 1, track_numbers)
         end
     elseif length(expr.args) == 2
         tmp_expr = []
@@ -377,7 +419,8 @@ function trace_if(mod, expr; store_last_line=nothing, depth=0)
             $(cond_name),
             $(true_branch_fn_name),
             $(false_branch_fn_name),
-            ($(all_input_vars...),),
+            ($(all_input_vars...),);
+            track_numbers=$(track_numbers),
         )
     end
 
@@ -447,7 +490,7 @@ function remove_shortcircuiting(expr)
 end
 
 # Generate this dummy function and later we remove it during tracing
-function traced_if(cond, true_fn, false_fn, args)
+function traced_if(cond, true_fn, false_fn, args; track_numbers)
     return cond ? true_fn(args) : false_fn(args)
 end
 
@@ -485,5 +528,13 @@ function error_if_any_control_flow(expr)
         return x
     end
 end
+
+"""
+    materialize_traced_array(AbstractArray{<:TracedRNumber})::TracedRArray
+
+Given an AbstractArray{TracedRNumber}, return or create an equivalent TracedRArray.
+
+"""
+function materialize_traced_array end
 
 end

@@ -1,8 +1,7 @@
 module ReactantCUDAExt
 
 using CUDA
-using Reactant:
-    Reactant, TracedRArray, AnyTracedRArray, AnyConcretePJRTArray, MLIR, TracedRNumber
+using Reactant: Reactant, TracedRArray, AnyConcretePJRTArray, MLIR, TracedRNumber
 using Reactant.Compiler: raising
 using ReactantCore: @trace
 using GPUCompiler: GPUCompiler
@@ -10,12 +9,15 @@ using KernelAbstractions: KernelAbstractions
 import KernelAbstractions as KA
 using LLVM: LLVM
 using Libdl
+
 const ReactantKernelAbstractionsExt = Base.get_extension(
     Reactant, :ReactantKernelAbstractionsExt
 )
 const ReactantBackend = ReactantKernelAbstractionsExt.ReactantBackend
 
 using Adapt
+
+Reactant.is_extension_loaded(::Val{:CUDA}) = true
 
 struct CuTracedArray{T,N,A,Size} <: DenseArray{T,N}
     ptr::Core.LLVMPtr{T,A}
@@ -39,7 +41,17 @@ struct CuTracedRNumber{T,A} <: Number
         ptr = Base.reinterpret(Core.LLVMPtr{T,CUDA.AS.Global}, Base.pointer_from_objref(xs))
         return new(ptr)
     end
+    function CuTracedRNumber{T,A}(ptr::Core.LLVMPtr{T,A}) where {T,A}
+        return new(ptr)
+    end
 end
+
+Base.@nospecializeinfer Reactant.is_traced_number(
+    @nospecialize(T::Type{<:CuTracedRNumber})
+) = true
+Reactant.unwrapped_eltype(::Type{<:CuTracedRNumber{T}}) where {T} = T
+
+@inline CuTracedRNumber{T,A}(val::Number) where {T,A} = convert(CuTracedRNumber{T,A}, val)
 
 function Base.getindex(RN::CuTracedRNumber{T,A}) where {T,A}
     align = alignment(RN)
@@ -50,26 +62,171 @@ function Base.convert(::Type{T}, RN::CuTracedRNumber) where {T<:Number}
     return Base.convert(T, Base.getindex(RN))
 end
 
-Base.isless(a::CuTracedRNumber, b::CuTracedRNumber) = Base.isless(a[], b[])
-Base.isless(a, b::CuTracedRNumber) = Base.isless(a, b[])
-Base.isless(a::CuTracedRNumber, b) = Base.isless(a[], b)
+for jlop in (
+    :(Base.min),
+    :(Base.mod),
+    :(Base.max),
+    :(Base.:+),
+    :(Base.:-),
+    :(Base.:*),
+    :(Base.:/),
+    :(Base.:^),
+    :(Base.rem),
+    :(Base.isless),
+    :(Base.:(==)),
+    :(Base.:(!=)),
+)
+    @eval begin
+        @inline $jlop(a::CuTracedRNumber, b::CuTracedRNumber) = $jlop(a[], b[])
+        @inline $jlop(a::CuTracedRNumber{T,A}, b::Number) where {T,A} = $jlop(a[], b)
+        @inline $jlop(a::Number, b::CuTracedRNumber{T,A}) where {T,A} = $jlop(a, b[])
+    end
+end
 
-function Base.promote_rule(
-    ::Type{<:CuTracedRNumber{T}}, ::Type{<:CuTracedRNumber{T2}}
+Base.@constprop :aggressive @inline Base.:^(
+    a::CuTracedRNumber{T,A}, b::Integer
+) where {T,A} = ^(a[], b)
+
+@inline Base.unsafe_trunc(::Type{T}, a::CuTracedRNumber) where {T} =
+    Base.unsafe_trunc(T, a[])
+
+for jlop in (:(Base.:+), :(Base.:-), :(Base.isnan), :(Base.isfinite), :(Base.isinf))
+    @eval begin
+        @inline $jlop(a::CuTracedRNumber) = $jlop(a[])
+    end
+end
+
+Base.OneTo(x::CuTracedRNumber{<:Integer}) = Base.OneTo(x[])
+
+@static if isdefined(Base, :unchecked_oneto)
+    function Base.unchecked_oneto(x::CuTracedRNumber{<:Integer})
+        return Base.unchecked_oneto(x[])
+    end
+end
+
+@inline function Base.convert(CT::Type{CuTracedRNumber{Float64,1}}, x::Number)
+    return CT(
+        Base.reinterpret(
+            Core.LLVMPtr{Float64,1},
+            Base.llvmcall(
+                (
+                    """define i8 addrspace(1)* @entry(double %d) alwaysinline {
+              %a = alloca double
+              store atomic double %d, double* %a release, align 8
+       %bc = bitcast double* %a to i8*
+              %ac = addrspacecast i8* %bc to i8 addrspace(1)*
+              ret i8 addrspace(1)* %ac
+                        }
+          """,
+                    "entry",
+                ),
+                Core.LLVMPtr{UInt8,1},
+                Tuple{Float64},
+                Base.convert(Float64, x),
+            ),
+        ),
+    )
+end
+
+@inline function Base.convert(CT::Type{CuTracedRNumber{Float32,1}}, x::Number)
+    return CT(
+        Base.reinterpret(
+            Core.LLVMPtr{Float32,1},
+            Base.llvmcall(
+                (
+                    """define i8 addrspace(1)* @entry(float %d) alwaysinline {
+              %a = alloca float
+              store atomic float %d, float* %a release, align 4
+       %bc = bitcast float* %a to i8*
+              %ac = addrspacecast i8* %bc to i8 addrspace(1)*
+              ret i8 addrspace(1)* %ac
+                        }
+          """,
+                    "entry",
+                ),
+                Core.LLVMPtr{UInt8,1},
+                Tuple{Float32},
+                Base.convert(Float32, x),
+            ),
+        ),
+    )
+end
+
+Base.convert(::Type{<:CuTracedRNumber{T}}, x::CuTracedRNumber{T}) where {T} = x
+
+Base.one(a::CuTracedRNumber) = one(a[])
+Base.one(::Type{<:CuTracedRNumber{T,A}}) where {T,A} = one(T)
+Base.zero(a::CuTracedRNumber) = zero(a[])
+Base.zero(::Type{<:CuTracedRNumber{T,A}}) where {T,A} = zero(T)
+
+Base.@nospecializeinfer function Base.promote_rule(
+    @nospecialize(a::Type{<:CuTracedRNumber{T}}),
+    @nospecialize(b::Type{<:CuTracedRNumber{T2}})
 ) where {T,T2}
     return Base.promote_rule(T, T2)
 end
-function Base.promote_rule(::Type{Any}, ::Type{<:CuTracedRNumber})
+Base.@nospecializeinfer function Base.promote_rule(
+    ::Type{Any}, @nospecialize(b::Type{<:CuTracedRNumber})
+)
     return Any
 end
-function Base.promote_rule(::Type{<:CuTracedRNumber}, ::Type{Any})
+Base.@nospecializeinfer function Base.promote_rule(
+    @nospecialize(a::Type{<:CuTracedRNumber}), ::Type{Any}
+)
     return Any
 end
-function Base.promote_rule(::Type{T2}, ::Type{<:CuTracedRNumber{T}}) where {T,T2}
-    return Base.promote_rule(T, T2)
+Base.@nospecializeinfer function Base.promote_rule(
+    @nospecialize(T2::Type), @nospecialize(b::Type{<:CuTracedRNumber{T}})
+) where {T}
+    if T == T2
+        return T
+    else
+        return Base.promote_rule(T, T2)
+    end
 end
-function Base.promote_rule(::Type{<:CuTracedRNumber{T}}, ::Type{T2}) where {T,T2}
-    return Base.promote_rule(T, T2)
+Base.@nospecializeinfer function Base.promote_rule(
+    @nospecialize(a::Type{<:CuTracedRNumber{T}}), @nospecialize(T2::Type)
+) where {T}
+    if T == T2
+        return T
+    else
+        return Base.promote_rule(T, T2)
+    end
+end
+
+Base.@nospecializeinfer function Reactant.promote_traced_type(
+    @nospecialize(a::Type{<:CuTracedRNumber{T,A}}),
+    @nospecialize(b::Type{<:CuTracedRNumber{T2,A}})
+) where {T,T2,A}
+    return CuTracedRNumber{Reactant.promote_traced_type(T, T2),A}
+end
+Base.@nospecializeinfer function Reactant.promote_traced_type(
+    ::Type{Any}, @nospecialize(b::Type{<:CuTracedRNumber})
+)
+    return Any
+end
+Base.@nospecializeinfer function Reactant.promote_traced_type(
+    @nospecialize(a::Type{<:CuTracedRNumber}), ::Type{Any}
+)
+    return Any
+end
+Base.@nospecializeinfer function Reactant.promote_traced_type(
+    @nospecialize(T2::Type), ::Type{<:CuTracedRNumber{T,A}}
+) where {T,A}
+    if T == T2
+        return CuTracedRNumber{T,A}
+    else
+        return CuTracedRNumber{Reactant.promote_trace_type(T, T2),A}
+    end
+end
+Base.@nospecializeinfer function Reactant.promote_traced_type(
+    ::Type{<:CuTracedRNumber{T,A}}, @nospecialize(T2::Type)
+) where {T,A}
+    if T == T2
+        return CuTracedRNumber{T,A}
+    else
+        return CuTracedRNumber{Reactant.promote_trace_type(T, T2),A}
+    end
 end
 
 function Base.show(io::IO, a::AT) where {AT<:CuTracedArray}
@@ -331,7 +488,9 @@ function threads_to_workgroupsize(threads, ndrange)
     end
 end
 
-function ka_with_reactant(ndrange, workgroupsize, obj, args...)
+function ReactantKernelAbstractionsExt.ka_with_reactant(
+    ndrange, workgroupsize, obj, args...
+)
     backend = KA.backend(obj)
 
     ndrange, workgroupsize, iterspace, dynamic = KA.launch_config(
@@ -384,14 +543,6 @@ function ka_with_reactant(ndrange, workgroupsize, obj, args...)
     return nothing
 end
 
-Reactant.@reactant_overlay @noinline function (obj::KA.Kernel{ReactantBackend})(
-    args...; ndrange=nothing, workgroupsize=nothing
-)
-    return Reactant.call_with_reactant(
-        ka_with_reactant, ndrange, workgroupsize, obj, args...
-    )
-end
-
 Adapt.adapt_storage(to::KA.ConstAdaptor, a::CuTracedArray) = Base.Experimental.Const(a)
 
 struct ReactantRefValue{T} <: Ref{T}
@@ -417,6 +568,24 @@ end
 function Adapt.adapt_storage(::ReactantKernelAdaptor, xs::TracedRNumber{T}) where {T}
     res = CuTracedRNumber{T,CUDA.AS.Global}(xs)
     return res
+end
+
+import Reactant.TracedRNumberOverrides.TracedStepRangeLen
+
+function Adapt.adapt_storage(::ReactantKernelAdaptor, r::TracedStepRangeLen)
+    return TracedStepRangeLen(
+        Adapt.adapt(ReactantKernelAdaptor(), r.ref),
+        Adapt.adapt(ReactantKernelAdaptor(), r.step),
+        Adapt.adapt(ReactantKernelAdaptor(), r.len),
+        Adapt.adapt(ReactantKernelAdaptor(), r.offset),
+    )
+end
+
+function Adapt.adapt_storage(::ReactantKernelAdaptor, r::Base.TwicePrecision)
+    return Base.TwicePrecision(
+        Adapt.adapt(ReactantKernelAdaptor(), r.hi),
+        Adapt.adapt(ReactantKernelAdaptor(), r.lo),
+    )
 end
 
 # Since we cache these objects we cannot cache data containing MLIR operations (e.g. the entry must be a string
@@ -717,10 +886,6 @@ function compile(job)
             # :llvm, job; optimize=false, cleanup=false, validate=false, libraries=true
             :llvm,
             job;
-            optimize=false,
-            cleanup=false,
-            validate=false,
-            libraries=false,
             # :llvm, job; optimize=false, cleanup=false, validate=true, libraries=false
             # :llvm, job; optimize=false, cleanup=false, validate=false, libraries=false
         )
@@ -751,11 +916,19 @@ function compile(job)
         if Reactant.Compiler.DUMP_LLVMIR[]
             println("cuda.jl pre vendor IR\n", string(mod))
         end
+
+        LLVM.@dispose pb = LLVM.NewPMPassBuilder() begin
+            LLVM.add!(pb, LLVM.NewPMModulePassManager()) do mpm
+                LLVM.add!(mpm, LLVM.AlwaysInlinerPass())
+            end
+            LLVM.run!(pb, mod, tm)
+        end
+
         vendored_optimize_module!(job, mod)
         if Reactant.Compiler.DUMP_LLVMIR[]
             println("cuda.jl post vendor IR\n", string(mod))
         end
-        LLVM.run!(CUDA.GPUCompiler.DeadArgumentEliminationPass(), mod, tm)
+        LLVM.run!(GPUCompiler.DeadArgumentEliminationPass(), mod, tm)
 
         for fname in ("gpu_report_exception", "gpu_signal_exception")
             if LLVM.haskey(LLVM.functions(mod), fname)
@@ -899,6 +1072,7 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
 ) where {F,tt}
     blockdim = CUDA.CuDim3(blocks)
     threaddim = CUDA.CuDim3(threads)
+    mod = MLIR.IR.mmodule()
 
     if convert == Val(true)
         args = recudaconvert.(args)
@@ -917,6 +1091,7 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
     # linearize kernel arguments
     seen = Reactant.OrderedIdDict()
     kernelargsym = gensym("kernelarg")
+
     for (i, prev) in enumerate(Any[func.f, args...])
         Reactant.make_tracer(seen, prev, (kernelargsym, i), Reactant.NoStopTracedTrack)
     end
@@ -929,7 +1104,6 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
     end
 
     sym_name = String(gensym("call_$fname"))
-    mod = MLIR.IR.mmodule()
     CConv = MLIR.IR.Attribute(
         MLIR.API.mlirLLVMCConvAttrGet(ctx, MLIR.API.MlirLLVMCConvPTX_Kernel)
     )
@@ -1099,7 +1273,6 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
         )
     end
 
-    location = MLIR.IR.Location()
     @assert length(restys) == length(aliases)
     call = MLIR.Dialects.enzymexla.kernel_call(
         blk_operands...,
@@ -1107,6 +1280,7 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
         result_0=restys,
         fn=MLIR.IR.FlatSymbolRefAttribute(sym_name),
         output_operand_aliases=MLIR.IR.Attribute(output_operand_aliases),
+        xla_side_effect_free=MLIR.IR.UnitAttribute(),
     )
 
     argidx = 1
@@ -1148,14 +1322,18 @@ Reactant.@reactant_overlay @noinline function CUDA.cufunction(
         always_inline = false
         name = nothing
         debuginfo = false
-        config = CUDA.CompilerConfig(
+        config = GPUCompiler.CompilerConfig(
             CUDA.PTXCompilerTarget(; cap=llvm_cap, ptx=llvm_ptx, debuginfo),
             CUDA.CUDACompilerParams(; cap=cuda_cap, ptx=cuda_ptx);
             kernel,
             name,
             always_inline,
+            optimize=false,
+            cleanup=false,
+            validate=false,
+            libraries=false,
         )
-        CUDA.GPUCompiler.cached_compilation(cache, source, config, compile, link)
+        GPUCompiler.cached_compilation(cache, source, config, compile, link)
     end
     return Core.Typeof(res)(f, res.entry)
 end
@@ -1276,7 +1454,7 @@ function Reactant.make_tracer(
 end
 
 function __init__()
-    if CUDA.functional()
+    if CUDA.functional() && !Reactant.precompiling()
         target = CUDA._compiler_config(CUDA.device()).target
         Reactant.Compiler.cubinChip[] = "sm_$(target.cap.major)$(target.cap.minor)"
     end

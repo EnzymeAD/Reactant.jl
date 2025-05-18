@@ -153,8 +153,8 @@ gcloud compute tpus queued-resources \
     --node-count ${SLICE_COUNT}
 
 # Create a Project.toml file and a LocalPreferences.toml
-echo "[deps]\nReactant = \"3c362404-f566-11ee-1572-e11a4b42c853\"" > Project.toml;
-echo "[Reactant]\nxla_runtime = \"IFRT\"" > LocalPreferences.toml;
+echo -e '[deps]\nReactant = "3c362404-f566-11ee-1572-e11a4b42c853"' > Project.toml
+echo -e '[Reactant]\nxla_runtime = "IFRT"' > LocalPreferences.toml
 
 # Copy these files to all the workers
 gcloud compute tpus queued-resources scp ./LocalPreferences.toml ${QR_ID}: \
@@ -169,14 +169,14 @@ gcloud compute tpus queued-resources ssh ${QR_ID} \
     --worker=all --node=all \
     --zone=${ZONE} --project=${PROJECT} \
     --command="
-        wget --quiet https://julialang-s3.julialang.org/bin/linux/x64/1.11/julia-1.11.4-linux-x86_64.tar.gz;
-        tar xzf julia-1.11.4-linux-x86_64.tar.gz;
-        rm julia-1.11.4-linux-x86_64.tar.gz;
-        unset LD_PRELOAD;
-        ./julia-1.11.4/bin/julia --project=. --threads=auto -e '
-            using Pkg;
-            Pkg.instantiate();
-            Pkg.precompile();'"
+       wget --quiet https://julialang-s3.julialang.org/bin/linux/x64/1.11/julia-1.11.5-linux-x86_64.tar.gz;
+                tar xzf julia-1.11.5-linux-x86_64.tar.gz;
+                rm julia-1.11.5-linux-x86_64.tar.gz;
+                unset LD_PRELOAD;
+                ./julia-1.11.5/bin/julia --project=. --threads=auto -e '
+                    using Pkg;
+                    Pkg.instantiate();
+                    Pkg.precompile();'"
 
 # Run the sharding code
 gcloud compute tpus queued-resources ssh ${QR_ID} \

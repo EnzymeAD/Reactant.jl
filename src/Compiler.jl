@@ -2,11 +2,13 @@ module Compiler
 
 using Reactant_jll
 using Libdl: dlsym
+using LinearAlgebra: BLAS
 
 import ..Reactant:
     Reactant,
     MLIR,
     XLA,
+    Sharding,
     ConcretePJRTArray,
     ConcretePJRTNumber,
     ConcreteIFRTArray,
@@ -24,6 +26,12 @@ import ..Reactant:
 
 import ..ReactantCore: correct_maybe_bcast_call
 
+const DEBUG_PRINT_CODEGEN = Ref(false)
+const DEBUG_DISABLE_RESHARDING = Ref(false)
+const DEBUG_ALIASED_BUFFER_ASSIGNMENT_ERROR = Ref(false)
+
+const DEBUG_BUFFER_POINTERS_STORE_DICT = Base.IdDict()
+
 @inline function traced_getfield(@nospecialize(obj::Dict), field)
     return Base.getindex(obj, field)
 end
@@ -32,47 +40,180 @@ end
     return Base.getfield(obj, field)
 end
 
-@inline function traced_getfield(@nospecialize(obj::AbstractArray{T}), field) where {T}
-    (isbitstype(T) || ancestor(obj) isa RArray) && return Base.getfield(obj, field)
+@inline function traced_getfield(
+    @nospecialize(
+        obj::AbstractArray{<:Union{ConcretePJRTNumber,ConcreteIFRTNumber,TracedRNumber}}
+    ),
+    field,
+)
+    return Base.getfield(obj, field)
+end
+
+@inline function traced_getfield(
+    @nospecialize(obj::Array{<:Union{ConcretePJRTNumber,ConcreteIFRTNumber,TracedRNumber}}),
+    field,
+)
     return Base.getindex(obj, field)
 end
 
-@inline traced_setfield!(@nospecialize(obj), field, val) = Base.setfield!(obj, field, val)
+@inline function traced_getfield(
+    @nospecialize(
+        obj::Union{Reactant.AbstractConcreteArray,Reactant.AbstractConcreteNumber}
+    ),
+    field,
+)
+    return Base.getproperty(obj, field)
+end
+
+@inline function traced_getfield(@nospecialize(obj::AbstractArray{T}), field) where {T}
+    (isbitstype(T) || ancestor(obj) isa RArray || obj isa AbstractRange) &&
+        return Base.getfield(obj, field)
+    return Base.getindex(obj, field)
+end
+
 @inline function traced_setfield!(
-    @nospecialize(obj::AbstractArray{T}), field, val
+    @nospecialize(obj::Reactant.AbstractConcreteNumber), field, val, path
+)
+    if DEBUG_ALIASED_BUFFER_ASSIGNMENT_ERROR[] && field == :data
+        if val ∈ keys(DEBUG_BUFFER_POINTERS_STORE_DICT)
+            if obj !== DEBUG_BUFFER_POINTERS_STORE_DICT[val]
+                error("Aliased buffer cannot be assigned to multiple Concrete Structs. \
+                       Path: $path.")
+            end
+        else
+            DEBUG_BUFFER_POINTERS_STORE_DICT[val] = obj
+        end
+    end
+
+    return Base.setproperty!(obj, field, val)
+end
+
+@inline traced_setfield!(@nospecialize(obj), field, val, path) =
+    Base.setfield!(obj, field, val)
+
+@inline function traced_setfield!(
+    @nospecialize(obj::AbstractArray{T}), field, val, path
 ) where {T}
     ancestor_obj = ancestor(obj)
-    (isbitstype(T) || ancestor_obj isa RArray) && return setfield_carray!(obj, field, val)
+    (isbitstype(T) || ancestor_obj isa RArray) &&
+        return setfield_carray!(obj, field, val, path)
     return Base.setindex!(obj, val, field)
 end
 
-@inline function traced_setfield!(@nospecialize(obj::Dict), field, val)
+@inline function traced_setfield!(
+    @nospecialize(obj::AbstractArray{<:Union{ConcretePJRTNumber,ConcreteIFRTNumber}}),
+    field,
+    val,
+    path,
+)
+    return setfield_carray!(obj, field, val, path)
+end
+
+@inline function traced_setfield!(@nospecialize(obj::Dict), field, val, path)
     return Base.setindex!(obj, field, val)
 end
 
 # fallback
-@inline function setfield_carray!(obj, field, val)
-    return Base.setfield!(obj, field, val)
+@inline function setfield_carray!(obj, field, val, path)
+    if DEBUG_ALIASED_BUFFER_ASSIGNMENT_ERROR[] && field == :data
+        if val ∈ keys(DEBUG_BUFFER_POINTERS_STORE_DICT)
+            if obj !== DEBUG_BUFFER_POINTERS_STORE_DICT[val]
+                error("Aliased buffer cannot be assigned to multiple Concrete Structs. \
+                       Path: $path.")
+            end
+        else
+            DEBUG_BUFFER_POINTERS_STORE_DICT[val] = obj
+        end
+    end
+
+    return Base.setproperty!(obj, field, val)
 end
 
-@inline function setfield_carray!(obj::ConcretePJRTArray, field, val)
+@inline function setfield_carray!(obj::ConcretePJRTArray, field, val, path)
+    if DEBUG_ALIASED_BUFFER_ASSIGNMENT_ERROR[] && field == :data
+        if val ∈ keys(DEBUG_BUFFER_POINTERS_STORE_DICT)
+            if obj !== DEBUG_BUFFER_POINTERS_STORE_DICT[val]
+                error("Aliased buffer cannot be assigned to multiple Concrete Structs. \
+                       Path: $path.")
+            end
+        else
+            DEBUG_BUFFER_POINTERS_STORE_DICT[val] = obj
+        end
+    end
+
     if field !== :data || typeof(val) == typeof(getfield(obj, field))
-        return Base.setfield!(obj, field, val)
+        return Base.setproperty!(obj, field, val)
     end
 
     # This case is triggered if the user had provided an unsharded input (NoSharding), but
     # we had to replicate it before feeding it to XLA
-    @assert !Reactant.Sharding.is_sharded(obj) "Expected unsharded input. Open an issue on \
-                                                Reactant.jl with a MWE."
+    @assert !Sharding.is_sharded(obj) "Expected unsharded input. Open an issue on \
+                                       Reactant.jl with a MWE."
     devices = Reactant.XLA.device.(val)
-    device = Reactant.XLA.device(only(obj.data))
+    device = Reactant.XLA.device(only(getfield(obj, :data)))
     idx = findfirst(isequal(device), devices)
-    return Base.setfield!(obj, field, (val[idx],))
+    return Base.setproperty!(obj, field, (val[idx],))
 end
 
-function create_result(
-    tocopy::T, path, result_stores, path_to_shard_info, sharding_mesh
-) where {T}
+function traced_setfield_buffer!(runtime::Val, cache_dict, concrete_res, obj, field, path)
+    return traced_setfield_buffer!(
+        runtime, cache_dict, traced_getfield(obj, field), concrete_res, obj, field, path
+    )
+end
+
+function traced_setfield_buffer!(::Val, cache_dict, val, concrete_res, obj, field, path)
+    return traced_setfield!(val, :data, concrete_res, path)
+end
+
+function traced_setfield_buffer!(
+    ::Val{:PJRT},
+    cache_dict,
+    val::Union{TracedRArray,TracedRNumber},
+    concrete_res,
+    obj,
+    field,
+    path,
+)
+    if haskey(cache_dict, val)
+        cval = cache_dict[val]
+    else
+        cval = if val isa TracedRArray
+            ConcretePJRTArray{Reactant.unwrapped_eltype(val),ndims(val)}(
+                concrete_res, size(val)
+            )
+        else
+            ConcretePJRTNumber{Reactant.unwrapped_eltype(val)}(concrete_res)
+        end
+        cache_dict[val] = cval
+    end
+    return traced_setfield!(obj, field, cval, path)
+end
+
+function traced_setfield_buffer!(
+    ::Val{:IFRT},
+    cache_dict,
+    val::Union{TracedRArray,TracedRNumber},
+    concrete_res,
+    obj,
+    field,
+    path,
+)
+    if haskey(cache_dict, val)
+        cval = cache_dict[val]
+    else
+        cval = if val isa TracedRArray
+            ConcreteIFRTArray{Reactant.unwrapped_eltype(val),ndims(val)}(
+                concrete_res, size(val)
+            )
+        else
+            ConcreteIFRTNumber{Reactant.unwrapped_eltype(val)}(concrete_res)
+        end
+        cache_dict[val] = cval
+    end
+    return traced_setfield!(obj, field, cval, path)
+end
+
+function create_result(tocopy::T, path, args...) where {T}
     if !isstructtype(typeof(tocopy))
         error("cannot copy $tocopy of type $(Core.Typeof(tocopy))")
     end
@@ -83,26 +224,11 @@ function create_result(
         # If the field is undefined we don't set it. A common example for this is `du2`
         # for Tridiagonal
         isdefined(tocopy, i) || continue
-        ev = create_result(
-            getfield(tocopy, i),
-            append_path(path, i),
-            result_stores,
-            path_to_shard_info,
-            sharding_mesh,
-        )
+        ev = create_result(getfield(tocopy, i), append_path(path, i), args...)
         push!(elems, ev)
     end
 
     return Expr(:new, T, elems...)
-end
-
-function __reconstruct_shardinfo(path, path_to_shard_info, sharding_mesh, N::Integer)
-    device_to_array_slices, hlo_sharding = path_to_shard_info[path]
-    delete!(path_to_shard_info, path)
-    sharding = Reactant.Sharding.HloSharding(
-        hlo_sharding, sharding_mesh, ntuple(Returns(true), N), ntuple(Returns(-1), N)
-    )
-    return Reactant.Sharding.ShardInfo(sharding, device_to_array_slices)
 end
 
 function create_result(
@@ -110,59 +236,79 @@ function create_result(
     path,
     result_stores,
     path_to_shard_info,
-    sharding_mesh,
+    to_unreshard_results,
+    unresharded_code::Vector{Expr},
+    unresharded_arrays_cache,
+    used_shardinfo,
+    result_cache,
 ) where {T,D,S}
     if haskey(result_stores, path)
         restore = result_stores[path]
         delete!(result_stores, path)
-        if path_to_shard_info !== nothing # restore sharding
-            sharding = __reconstruct_shardinfo(
-                path, path_to_shard_info, sharding_mesh, ndims(tocopy)
-            )
-            return :(ConcretePJRTNumber{$T,length($(restore)),$(typeof(sharding))}(
-                ($(restore)...,), $sharding
-            ))
+        if path_to_shard_info !== nothing && haskey(path_to_shard_info, path)
+            if haskey(to_unreshard_results, path)
+                error("TODO: Not yet Implemented. Use IFRT for this.")
+            end
+            sharding = pop!(path_to_shard_info, path)
+            push!(used_shardinfo, sharding)
+            return :(ConcretePJRTNumber{$T}(($(restore)...,), $sharding))
         else
             return :(ConcretePJRTNumber{$T}($restore))
         end
     end
 
     # We will set the data for this later
-    if path_to_shard_info !== nothing # restore sharding
-        sharding = __reconstruct_shardinfo(
-            path, path_to_shard_info, sharding_mesh, ndims(tocopy)
-        )
-        return :(ConcretePJRTNumber{$T,length($(tocopy.data)),$(typeof(sharding))}(
-            ($(tocopy.data...,)), $sharding
-        ))
+    haskey(result_cache, tocopy) && return Meta.quot(result_cache[tocopy])
+
+    if path_to_shard_info !== nothing && haskey(path_to_shard_info, path)
+        sharding = pop!(path_to_shard_info, path)
+        push!(used_shardinfo, sharding)
+        result = ConcretePJRTNumber{T}(tocopy.data, sharding)
+    else
+        result = ConcretePJRTNumber{T}(tocopy.data)
     end
-    return :(ConcretePJRTNumber{$T}($(tocopy.data)))
+    result_cache[tocopy] = result
+    return Meta.quot(result)
 end
 
 function create_result(
-    tocopy::ConcreteIFRTNumber{T,S}, path, result_stores, path_to_shard_info, sharding_mesh
+    tocopy::ConcreteIFRTNumber{T,S},
+    path,
+    result_stores,
+    path_to_shard_info,
+    to_unreshard_results,
+    unresharded_code::Vector{Expr},
+    unresharded_arrays_cache,
+    used_shardinfo,
+    result_cache,
 ) where {T,S}
     if haskey(result_stores, path)
         restore = result_stores[path]
         delete!(result_stores, path)
-        if path_to_shard_info !== nothing # restore sharding
-            sharding = __reconstruct_shardinfo(
-                path, path_to_shard_info, sharding_mesh, ndims(tocopy)
-            )
-            return :(ConcreteIFRTNumber{$T,$(typeof(sharding))}($(restore), $sharding))
+        if path_to_shard_info !== nothing && haskey(path_to_shard_info, path)
+            if haskey(to_unreshard_results, path)
+                error("TODO: Not yet Implemented.")
+            end
+            sharding = pop!(path_to_shard_info, path)
+            push!(used_shardinfo, sharding)
+            return :(ConcreteIFRTNumber{$T}($(restore), $sharding))
         else
             return :(ConcreteIFRTNumber{$T}($restore))
         end
     end
 
     # We will set the data for this later
-    if path_to_shard_info !== nothing # restore sharding
-        sharding = __reconstruct_shardinfo(
-            path, path_to_shard_info, sharding_mesh, ndims(tocopy)
-        )
-        return :(ConcreteIFRTNumber{$T,$(typeof(sharding))}($(tocopy.data), $sharding))
+    haskey(result_cache, tocopy) && return Meta.quot(result_cache[tocopy])
+
+    if path_to_shard_info !== nothing && haskey(path_to_shard_info, path)
+        sharding = pop!(path_to_shard_info, path)
+        push!(used_shardinfo, sharding)
+        result = ConcreteIFRTNumber{T}(tocopy.data, sharding)
+    else
+        result = ConcreteIFRTNumber{T}(tocopy.data)
     end
-    return :(ConcreteIFRTNumber{$T}($(tocopy.data)))
+    result_cache[tocopy] = result
+    return Meta.quot(result)
 end
 
 function create_result(
@@ -170,142 +316,189 @@ function create_result(
     path,
     result_stores,
     path_to_shard_info,
-    sharding_mesh,
+    to_unreshard_results,
+    unresharded_code::Vector{Expr},
+    unresharded_arrays_cache,
+    used_shardinfo,
+    result_cache,
 ) where {T,N,D,S}
     if haskey(result_stores, path)
         restore = result_stores[path]
         delete!(result_stores, path)
-        if path_to_shard_info !== nothing # restore sharding
-            sharding = __reconstruct_shardinfo(
-                path, path_to_shard_info, sharding_mesh, ndims(tocopy)
-            )
-            return :(ConcretePJRTArray{$T,$N,length($(restore)),$(typeof(sharding))}(
-                ($(restore)...,), $(tocopy.shape), $sharding
-            ))
+        if path_to_shard_info !== nothing && haskey(path_to_shard_info, path)
+            if haskey(to_unreshard_results, path)
+                error("TODO: Not yet Implemented. Use IFRT for this.")
+            end
+            sharding = pop!(path_to_shard_info, path)
+            push!(used_shardinfo, sharding)
+            return :(ConcretePJRTArray{$T,$N}(($(restore)...,), $(tocopy.shape), $sharding))
         else
             return :(ConcretePJRTArray{$T,$N}($restore, $(tocopy.shape)))
         end
     end
 
-    if path_to_shard_info !== nothing # restore sharding
-        sharding = __reconstruct_shardinfo(
-            path, path_to_shard_info, sharding_mesh, ndims(tocopy)
-        )
-        return :(ConcretePJRTArray{$T,$N,length($(tocopy.data)),$(typeof(sharding))}(
-            ($(tocopy.data)...,), $(tocopy.shape), $sharding
-        ))
-    end
     # We will set the data for this later
-    return :(ConcretePJRTArray{$T,$N,$D,$S}(
-        $(tocopy.data), $(tocopy.shape), $(tocopy.sharding)
-    ))
+    haskey(result_cache, tocopy) && return Meta.quot(result_cache[tocopy])
+
+    if path_to_shard_info !== nothing && haskey(path_to_shard_info, path)
+        sharding = pop!(path_to_shard_info, path)
+        push!(used_shardinfo, sharding)
+        result = ConcretePJRTArray{T,N}(tocopy.data, tocopy.shape, sharding)
+    else
+        result = ConcretePJRTArray{T,N,D,S}(tocopy.data, tocopy.shape, tocopy.sharding)
+    end
+    result_cache[tocopy] = result
+    return Meta.quot(result)
 end
 
 function create_result(
-    tocopy::ConcreteIFRTArray{T,N,S}, path, result_stores, path_to_shard_info, sharding_mesh
+    tocopy::ConcreteIFRTArray{T,N,S},
+    path,
+    result_stores,
+    path_to_shard_info,
+    to_unreshard_results,
+    unresharded_code::Vector{Expr},
+    unresharded_arrays_cache,
+    used_shardinfo,
+    result_cache,
 ) where {T,N,S}
     if haskey(result_stores, path)
         restore = result_stores[path]
         delete!(result_stores, path)
-        if path_to_shard_info !== nothing # restore sharding
-            sharding = __reconstruct_shardinfo(
-                path, path_to_shard_info, sharding_mesh, ndims(tocopy)
-            )
-            return :(ConcreteIFRTArray{$T,$N,$(typeof(sharding))}(
-                $(restore), $(tocopy.shape), $sharding
-            ))
+        if path_to_shard_info !== nothing && haskey(path_to_shard_info, path)
+            if haskey(to_unreshard_results, path)
+                if !haskey(unresharded_arrays_cache, restore)
+                    unresharded_array_sym = gensym(:unresharded_array)
+                    push!(
+                        unresharded_code,
+                        :(
+                            $unresharded_array_sym = generate_unresharded_ifrt_array(
+                                $(restore),
+                                $(to_unreshard_results[path][1]),
+                                $(to_unreshard_results[path][2]),
+                                global_mesh,
+                            )
+                        ),
+                    )
+                    unresharded_arrays_cache[restore] = unresharded_array_sym
+                end
+                return :(ConcreteIFRTArray{$T,$N}(
+                    $(unresharded_arrays_cache[restore]), $(tocopy.shape)
+                ))
+            end
+            sharding = pop!(path_to_shard_info, path)
+            push!(used_shardinfo, sharding)
+            return :(ConcreteIFRTArray{$T,$N}($(restore), $(tocopy.shape), $sharding))
         else
-            return :(ConcreteIFRTArray{$T,$N}($restore, $(tocopy.shape)))
+            return :(ConcreteIFRTArray{$T,$N}($(restore), $(tocopy.shape)))
         end
     end
 
-    if path_to_shard_info !== nothing # restore sharding
-        sharding = __reconstruct_shardinfo(
-            path, path_to_shard_info, sharding_mesh, ndims(tocopy)
-        )
-        return :(ConcreteIFRTArray{$T,$N,$(typeof(sharding))}(
-            $(tocopy.data), $(tocopy.shape), $sharding
-        ))
-    end
     # We will set the data for this later
-    return :(ConcreteIFRTArray{$T,$N,$S}(
-        $(tocopy.data), $(tocopy.shape), $(tocopy.sharding)
-    ))
+    haskey(result_cache, tocopy) && return Meta.quot(result_cache[tocopy])
+
+    if path_to_shard_info !== nothing && haskey(path_to_shard_info, path)
+        sharding = pop!(path_to_shard_info, path)
+        push!(used_shardinfo, sharding)
+        result = ConcreteIFRTArray{T,N}(tocopy.data, tocopy.shape, sharding)
+    else
+        result = ConcreteIFRTArray{T,N,S}(tocopy.data, tocopy.shape, tocopy.sharding)
+    end
+    result_cache[tocopy] = result
+    return Meta.quot(result)
 end
 
-function create_result(
-    tocopy::Array{T,N}, path, result_stores, path_to_shard_info, sharding_mesh
-) where {T,N}
+function generate_unresharded_ifrt_array(
+    arr::Reactant.XLA.IFRT.AsyncArray, target_device, output_sharding, mesh
+)
+    size_arr = reverse(size(arr))
+
+    single_device_arrays = Reactant.XLA.IFRT.disassemble_into_single_device_arrays(
+        Reactant.XLA.IFRT.replicate_array_to_all_devices(
+            arr, output_sharding, mesh, size_arr
+        ),
+        true,
+    )
+    devs = Reactant.XLA.device.(single_device_arrays)
+    idx = findfirst(isequal(target_device), devs)
+    @assert idx !== nothing
+    res_arr = Reactant.XLA.IFRT.AsyncArray(single_device_arrays[idx], nothing)
+    res_arr_size = reverse(size(res_arr))
+    @assert size_arr == res_arr_size "Expected size of array to be $(size_arr), but got \
+                                      $(res_arr_size)"
+
+    ifrt_sharding = Reactant.XLA.sharding(res_arr)
+    if !Reactant.XLA.IFRT.is_single_device_sharding(ifrt_sharding)
+        error("Unexpected sharding of result array: $(string(ifrt_sharding))")
+    end
+
+    return res_arr
+end
+
+function create_result(tocopy::Array{T,N}, path, args...) where {T,N}
     elems = Expr[]
     for (i, v) in enumerate(tocopy)
-        push!(
-            elems,
-            create_result(
-                v, append_path(path, i), result_stores, path_to_shard_info, sharding_mesh
-            ),
-        )
+        push!(elems, create_result(v, append_path(path, i), args...))
     end
     # TODO is there a way to not call `reshape` here? what expr is used for array literals?
     return :(reshape($T[$(elems...)], $(size(tocopy))...))
 end
 
-function create_result(
-    tocopy::Tuple, path, result_stores, path_to_shard_info, sharding_mesh
-)
+function create_result(tocopy::Tuple, path, args...)
     elems = Union{Symbol,Expr}[]
     for (k, v) in pairs(tocopy)
-        push!(
-            elems,
-            create_result(
-                v, append_path(path, k), result_stores, path_to_shard_info, sharding_mesh
-            ),
-        )
+        push!(elems, create_result(v, append_path(path, k), args...))
     end
     return :(($(elems...),))
 end
 
-function create_result(
-    tocopy::NamedTuple{K,T}, path, result_stores, path_to_shard_info, sharding_mesh
-) where {K,T}
+function create_result(tocopy::NamedTuple{K,T}, path, args...) where {K,T}
     elems = Union{Symbol,Expr}[]
     for (i, (k, v)) in enumerate(pairs(tocopy))
-        push!(
-            elems,
-            create_result(
-                v, append_path(path, i), result_stores, path_to_shard_info, sharding_mesh
-            ),
-        )
+        push!(elems, create_result(v, append_path(path, i), args...))
     end
     return :(NamedTuple{$K}(($(elems...),)))
 end
 
-function create_result(
-    tocopy::D, path, result_stores, path_to_shard_info, sharding_mesh
-) where {K,V,D<:AbstractDict{K,V}}
+function create_result(tocopy::D, path, args...) where {K,V,D<:AbstractDict{K,V}}
     elems = Expr[]
     for (i, p) in enumerate(pairs(tocopy))
-        push!(
-            elems,
-            create_result(
-                p, append_path(path, i), result_stores, path_to_shard_info, sharding_mesh
-            ),
-        )
+        push!(elems, create_result(p, append_path(path, i), args...))
     end
     return :($D([$(elems...)]))
 end
 
+function create_result(tocopy::Reactant.XLA.AbstractDevice, args...)
+    return Meta.quot(:($(tocopy)))
+end
+
 function create_result(
-    tocopy::Union{Integer,AbstractFloat,AbstractString,Nothing,Type,Symbol,Char},
-    path,
-    result_stores,
-    path_to_shard_info,
-    sharding_mesh,
+    tocopy::Union{Integer,AbstractFloat,AbstractString,Nothing,Type,Symbol,Char}, args...
 )
     return Meta.quot(tocopy)
 end
 
+const WHILE_CONCAT = Ref(false)
+const DUS_TO_CONCAT = Ref(false)
+const SUM_TO_REDUCEWINDOW = Ref(false)
+const SUM_TO_CONV = Ref(false)
+const AGGRESSIVE_SUM_TO_CONV = Ref(false)
+const AGGRESSIVE_PROPAGATION = Ref(false)
+const DUS_SLICE_SIMPLIFY = Ref(true)
+const CONCATS_TO_DUS = Ref(false)
+
 # Optimization passes via transform dialect
-function optimization_passes(; no_nan::Bool=false, sroa::Bool=false, inline::Bool=true)
+function optimization_passes(;
+    no_nan::Bool=false,
+    sroa::Bool=false,
+    inline::Bool=true,
+    transpose_propagate::Symbol=:up,
+    reshape_propagate::Symbol=:up,
+    dus_to_concat::Bool=false,
+    recognize_comms::Bool=true,
+    lower_comms::Bool=true,
+    max_constant_threshold::Int=1024,
+)
     transform_passes_list = [
         "patterns=compare_op_canon<16>",
         "transpose_transpose<16>",
@@ -327,7 +520,6 @@ function optimization_passes(; no_nan::Bool=false, sroa::Bool=false, inline::Boo
         "merge_consecutive_reshapes<16>",
         "transpose_is_reshape<16>",
         "zero_extent_tensor_canon<16>",
-        "reorder_elementwise_and_shape_op<16>",
         "chlo_inf_const_prop<16>",
         "gamma_const_prop<16>",
         "cse_broadcast_in_dim<16>",
@@ -344,20 +536,26 @@ function optimization_passes(; no_nan::Bool=false, sroa::Bool=false, inline::Boo
         "cse_min<16>",
         "cse_max<16>",
         "cse_neg<16>",
+        "cse_abs<16>",
         "cse_concatenate<16>",
-        "concatenate_op_canon<16>(1024)",
-        "select_op_canon<16>(1024)",
+        "concatenate_op_canon<16>($max_constant_threshold)",
+        "select_op_canon<16>($max_constant_threshold)",
         "add_simplify<16>",
         "sub_simplify<16>",
         "and_simplify<16>",
         "max_simplify<16>",
         "min_simplify<16>",
         "or_simplify<16>",
+        "xor_simplify<16>",
+        "abs_const_prop<16>",
         "negate_simplify<16>",
         "mul_simplify<16>",
         "div_simplify<16>",
         "rem_simplify<16>",
         "pow_simplify<16>",
+        "simplify_extend<16>",
+        "simplify_wrap<16>",
+        "simplify_rotate<16>",
         "sqrt_simplify<16>",
         "cos_simplify<16>",
         "sin_simplify<16>",
@@ -366,7 +564,9 @@ function optimization_passes(; no_nan::Bool=false, sroa::Bool=false, inline::Boo
         "const_prop_through_barrier<16>",
         "slice_slice<16>",
         "shift_right_logical_simplify<16>",
-        "pad_simplify<16>",
+        "pad_simplify<16>($max_constant_threshold)",
+        "select_pad_to_dus<1>",
+        "and_pad_pad<1>",
         "negative_pad_to_slice<16>",
         "tanh_simplify<16>",
         "exp_simplify<16>",
@@ -378,15 +578,16 @@ function optimization_passes(; no_nan::Bool=false, sroa::Bool=false, inline::Boo
         "reduce_to_reshape<16>",
         "broadcast_to_reshape<16>",
         "gather_simplify<16>",
-        "iota_simplify<16>(1024)",
-        "broadcast_in_dim_simplify<16>(1024)",
+        "slice_internal",
+        "iota_simplify<16>($max_constant_threshold)",
+        "broadcast_in_dim_simplify<16>($max_constant_threshold)",
         "convert_concat<1>",
         "dynamic_update_to_concat<1>",
         "slice_of_dynamic_update<1>",
         "slice_elementwise<1>",
         "slice_pad<1>",
         "dot_reshape_dot<1>",
-        "concat_const_prop<1>",
+        "concat_const_prop<1>($max_constant_threshold)",
         "concat_fuse<1>",
         "pad_reshape_pad<1>",
         "pad_pad<1>",
@@ -401,17 +602,11 @@ function optimization_passes(; no_nan::Bool=false, sroa::Bool=false, inline::Boo
         "bin_broadcast_splat_subtract<1>",
         "bin_broadcast_splat_div<1>",
         "bin_broadcast_splat_mul<1>",
-        "reshape_iota<16>",
-        "slice_reshape_slice<1>",
         "dot_general_simplify<16>",
         "transpose_simplify<16>",
         "reshape_empty_broadcast<1>",
         "add_pad_pad_to_concat<1>",
         "broadcast_reshape<1>",
-        "slice_reshape_concat<1>",
-        "slice_reshape_elementwise<1>",
-        "slice_reshape_transpose<1>",
-        "slice_reshape_dot_general<1>",
         "concat_pad<1>",
         "reduce_pad<1>",
         "broadcast_pad<1>",
@@ -423,7 +618,6 @@ function optimization_passes(; no_nan::Bool=false, sroa::Bool=false, inline::Boo
         "binop_const_pad_subtract<1>",
         "binop_const_pad_mul<1>",
         "binop_const_pad_div<1>",
-        "slice_reshape_pad<1>",
         "binop_binop_pad_pad_add<1>",
         "binop_binop_pad_pad_mul<1>",
         "binop_pad_pad_add<1>",
@@ -435,40 +629,40 @@ function optimization_passes(; no_nan::Bool=false, sroa::Bool=false, inline::Boo
         "unary_pad_push_convert<1>",
         "unary_pad_push_tanh<1>",
         "unary_pad_push_exp<1>",
-        "transpose_pad<1>",
         "transpose_dot_reorder<1>",
         "dot_transpose<1>",
-        "transpose_einsum<1>",
-        "einsum_transpose<1>",
         "transpose_convolution<1>",
         "convolution_transpose<1>",
         "convert_convert_float<1>",
         "concat_to_pad<1>",
-        "concat_appending_reshape<1>",
         "reshape_iota<1>",
         "broadcast_reduce<1>",
         "slice_dot_general<1>",
-        "dot_reshape_pad<1>",
-        "pad_dot_general<1>(0)",
-        "dot_reshape_pad<1>",
-        "pad_dot_general<1>(1)",
         "if_inline<1>",
         "if_to_select<1>",
-        "dynamic_update_slice_const_prop",
+        "dynamic_update_slice_const_prop($max_constant_threshold)",
         "dynamic_gather_op_is_not_dynamic<16>",
         "divide_sqrt_to_multiply_rsqrt<16>",
-        "binary_op_transpose_simplify_add",
-        "binary_op_transpose_simplify_sub",
-        "binary_op_transpose_simplify_mul",
-        "binary_op_transpose_simplify_div",
-        "binary_op_transpose_simplify_min",
-        "binary_op_transpose_simplify_max",
-        "binary_op_transpose_simplify_pow",
-        "binary_op_transpose_simplify_rem",
-        "binary_op_transpose_simplify_or",
-        "binary_op_transpose_simplify_and",
-        "binary_op_transpose_simplify_xor",
         "associative_binary_op_reordering<1>",
+        "transpose_broadcast_in_dim_to_broadcast_in_dim<16>",
+        "scatter_indices_are_unique",
+        "replace_neg_add_with_subtract",
+        "log_const_prop<1>",
+        "log_plus_one_const_prop<1>",
+        "binop_const_simplify",
+        "is_finite_const_prop",
+        "not_const_prop",
+        "not_select_simplify",
+        "scatter_update_computation_const_prop",
+        "common_compare_expression_rewrite",
+        "compare_select_simplify",
+        "while_simplify<1>(1)",
+        "if_remove_unused",
+        "transpose_reshape_to_broadcast",
+        "reshape_transpose_to_broadcast",
+        "dus_dus",
+        "dus_dus_concat",
+        "abs_positive_simplify",
         "transpose_unary_transpose_abs",
         "transpose_unary_transpose_neg",
         "transpose_unary_transpose_sqrt",
@@ -483,22 +677,177 @@ function optimization_passes(; no_nan::Bool=false, sroa::Bool=false, inline::Boo
         "transpose_unary_transpose_sign",
         "transpose_unary_transpose_sine",
         "transpose_unary_transpose_tanh",
-        "transpose_broadcast_in_dim_to_broadcast_in_dim<16>",
-        "scatter_indices_are_unique",
-        "transpose_reduce_simplify",
-        "replace_neg_add_with_subtract",
-        "log_const_prop<1>",
-        "log_plus_one_const_prop<1>",
-        "binop_const_simplify",
-        "transpose_broadcast_in_dim_to_broadcast_in_dim",
-        "not_select_simplify",
-        "scatter_update_computation_const_prop",
-        "common_compare_expression_rewrite",
-        "compare_select_simplify",
-        "while_simplify<1>",
-        "scatter_update_computation_const_prop",
-        "if_remove_unused",
+        "select_comp_iota_const_simplify<1>",
+        "sign_abs_simplify<1>",
+        "broadcastindim_is_reshape",
+        "slice_reduce_window<1>",
+        "while_deadresult",
+        "while_dus",
+        "dus_licm(0)",
+        "while_op_induction_replacement",
+        "dus_pad",
+        "dus_concat",
+        "slice_dus_to_concat",
+        "while_induction_reduction",
+        "slice_licm(0)",
+        "pad_licm(0)",
+        "elementwise_licm(0)",
+        "concatenate_licm(0)",
+        "slice_broadcast",
+        "while_pad_induction_reduction",
+        "while_licm<1>(1)",
+        "associative_common_mul_op_reordering",
+        "slice_select_to_select_slice",
+        "pad_concat_to_concat_pad",
+        "slice_if",
+        "dus_to_i32",
+        "rotate_pad",
+        "slice_extend",
+        "concat_wrap",
+        "cse_extend<16>",
+        "cse_wrap<16>",
+        "cse_rotate<16>",
+        "cse_rotate<16>",
+        "concat_concat_axis_swap",
+        "concat_multipad",
+        "concat_concat_to_dus",
+        "speculate_if_pad_to_select",
+        "broadcast_iota_simplify",
+        "select_comp_iota_to_dus",
+        "compare_cleanup",
+        "broadcast_compare",
+        "not_compare",
+        "broadcast_iota",
+        "cse_iota",
+        "compare_iota_const_simplify",
+        "reshuffle_ands_compares",
+        "square_abs_simplify",
+        "divide_divide_simplify",
+        "concat_reshape_slice",
+        "full_reduce_reshape_or_transpose",
+        "concat_reshape_reduce",
+        "concat_elementwise",
+        "reduce_reduce",
+        # TODO we want to enable but may cause an infinite compile time
+        # "concat_to_onedim_dusslice",
     ]
+
+    if DUS_SLICE_SIMPLIFY[]
+        push!(transform_passes_list, "dus_slice_simplify")
+    end
+    if SUM_TO_REDUCEWINDOW[]
+        push!(transform_passes_list, "sum_to_reducewindow")
+    end
+    if SUM_TO_CONV[]
+        push!(transform_passes_list, "sum_to_conv(0)")
+    end
+    if AGGRESSIVE_SUM_TO_CONV[]
+        push!(transform_passes_list, "sum_to_conv(1)")
+    end
+
+    if WHILE_CONCAT[]
+        push!(transform_passes_list, "while_concat")
+        push!(transform_passes_list, "while_wrap")
+    end
+
+    if dus_to_concat
+        push!(transform_passes_list, "dus_to_concat")
+    end
+
+    if reshape_propagate === :up
+        append!(
+            transform_passes_list,
+            [
+                "reshape_concat",
+                "reshape_dus",
+                "dot_reshape_pad<1>",
+                "pad_dot_general<1>(0)",
+                "pad_dot_general<1>(1)",
+                "reshape_pad",
+                "reshape_wrap",
+                "reshape_rotate",
+                "reshape_extend",
+            ],
+        )
+        if AGGRESSIVE_PROPAGATION[]
+            push!(transform_passes_list, "reshape_slice(0)")
+            push!(transform_passes_list, "reshape_elementwise(0)")
+        else
+            push!(transform_passes_list, "reshape_slice(1)")
+            push!(transform_passes_list, "reshape_elementwise(1)")
+        end
+    elseif reshape_propagate === :down
+        append!(
+            transform_passes_list,
+            [
+                "concat_appending_reshape",
+                "slice_reshape",
+                "slice_reshape_slice<1>",
+                "slice_reshape_concat<1>",
+                "slice_reshape_elementwise<1>",
+                "slice_reshape_dot_general<1>",
+                "slice_reshape_pad<1>",
+                "elementwise_reshape_like",
+            ],
+        )
+    else
+        error("Invalid value for reshape_propagate. Must be :up or :down.")
+    end
+
+    if transpose_propagate === :up
+        append!(
+            transform_passes_list,
+            [
+                "transpose_select",
+                "transpose_while",
+                "transpose_slice",
+                "transpose_concat",
+                "transpose_iota",
+                "transpose_reduce",
+                "transpose_reduce_window",
+                "transpose_dus",
+                "transpose_pad<1>",
+                "transpose_einsum<1>",
+                "transpose_wrap",
+                "transpose_extend",
+                "transpose_rotate",
+                "transpose_dynamic_slice",
+                "transpose_reverse",
+            ],
+        )
+        if AGGRESSIVE_PROPAGATION[]
+            push!(transform_passes_list, "transpose_elementwise(0)")
+        else
+            push!(transform_passes_list, "transpose_elementwise(1)")
+        end
+    elseif transpose_propagate === :down
+        append!(
+            transform_passes_list,
+            [
+                "reorder_elementwise_and_shape_op<16>",
+                "binary_op_transpose_simplify_add",
+                "binary_op_transpose_simplify_sub",
+                "binary_op_transpose_simplify_mul",
+                "binary_op_transpose_simplify_div",
+                "binary_op_transpose_simplify_min",
+                "binary_op_transpose_simplify_max",
+                "binary_op_transpose_simplify_pow",
+                "binary_op_transpose_simplify_rem",
+                "binary_op_transpose_simplify_or",
+                "binary_op_transpose_simplify_and",
+                "binary_op_transpose_simplify_xor",
+                "slice_transpose",
+                "einsum_transpose<1>",
+                "slice_reshape_transpose<1>",
+                "reduce_transpose_simplify",
+                "reverse_transpose",
+                "transpose_all_users_slice",
+            ],
+        )
+    else
+        error("Invalid value for transpose_propagate. Must be :up or :down.")
+    end
+
     if no_nan
         append!(
             transform_passes_list,
@@ -507,6 +856,20 @@ function optimization_passes(; no_nan::Bool=false, sroa::Bool=false, inline::Boo
     else
         push!(transform_passes_list, "no_nan_add_sub_simplify(0)")
     end
+
+    lower_transform_passes = copy(transform_passes_list)
+
+    if recognize_comms
+        append!(
+            transform_passes_list,
+            ["recognize_extend", "recognize_wrap", "recognize_rotate"],
+        )
+    end
+
+    if lower_comms
+        append!(lower_transform_passes, ["lower_extend", "lower_wrap", "lower_rotate"])
+    end
+
     transform_passes = join(
         [
             "enzyme-hlo-generate-td{" * join(transform_passes_list, ';') * "}",
@@ -516,6 +879,19 @@ function optimization_passes(; no_nan::Bool=false, sroa::Bool=false, inline::Boo
         ",",
     )
     func_passes = join(["canonicalize", "cse", "canonicalize", transform_passes], ",")
+    if lower_comms
+        func_passes =
+            func_passes *
+            ",enzyme-hlo-generate-td{" *
+            join(lower_transform_passes, ';') *
+            "},transform-interpreter,enzyme-hlo-remove-transform"
+    end
+    if CONCATS_TO_DUS[]
+        push!(
+            transform_passes_list,
+            "enzyme-hlo-generate-td{patterns=concat_to_onedim_dus},transform-interpreter,enzyme-hlo-remove-transform",
+        )
+    end
     passes = String[]
     if inline
         push!(passes, "inline{default-pipeline=canonicalize max-iterations=4}")
@@ -550,12 +926,32 @@ end
 # However, this errs as we cannot attach the transform with to the funcop itself [as we run a functionpass].
 const enzyme_pass::String = "enzyme{postpasses=\"arith-raise{stablehlo=true},canonicalize,cse,canonicalize,remove-unnecessary-enzyme-ops,enzyme-simplify-math,canonicalize,cse,canonicalize\"}"
 
-function run_pass_pipeline!(mod, pass_pipeline; enable_verifier=true)
+function run_pass_pipeline!(mod, pass_pipeline, key=""; enable_verifier=true)
     pm = MLIR.IR.PassManager()
     MLIR.IR.enable_verifier!(pm, enable_verifier)
     opm = MLIR.IR.OpPassManager(pm)
     MLIR.IR.add_pipeline!(opm, pass_pipeline)
-    MLIR.IR.run!(pm, mod)
+    MLIR.IR.run!(pm, mod, key)
+    return mod
+end
+
+function run_pass_pipeline!(
+    mod, propagation_options::Sharding.ShardyPropagationOptions; enable_verifier=true
+)
+    pm = MLIR.IR.PassManager()
+    MLIR.IR.enable_verifier!(pm, enable_verifier)
+    opm = MLIR.IR.OpPassManager(pm)
+    @ccall MLIR.API.mlir_c.addSdyPropagationPipeline(
+        opm::MLIR.API.MlirOpPassManager,
+        propagation_options.keep_sharding_rules::UInt8,
+        propagation_options.conservative_propagation::UInt8,
+        propagation_options.debug_sharding_origins::UInt8,
+        propagation_options.debug_propagation_edge_sharding::UInt8,
+        propagation_options.skip_convert_to_reshard::UInt8,
+        propagation_options.skip_inline::UInt8,
+        propagation_options.enable_insert_explicit_collectives::UInt8,
+    )::Cvoid
+    MLIR.IR.run!(pm, mod, "sdy_prop")
     return mod
 end
 
@@ -563,24 +959,15 @@ const context_gc_vector = Dict{MLIR.IR.Context,Vector{Union{TracedRArray,TracedR
 
 # helper for debug purposes: String -> Text
 function run_pass_pipeline_on_source(source, pass_pipeline; enable_verifier=true)
-    ctx = MLIR.IR.Context(Reactant.registry[], false)
-    context_gc_vector[ctx] = Vector{Union{TracedRArray,TracedRNumber}}(undef, 0)
-    @ccall MLIR.API.mlir_c.RegisterDialects(ctx::MLIR.API.MlirContext)::Cvoid
-    result = MLIR.IR.context!(ctx) do
+    return MLIR.IR.with_context() do ctx
         mod = parse(MLIR.IR.Module, source)
         run_pass_pipeline!(mod, pass_pipeline; enable_verifier)
         MLIR.IR.verifyall(MLIR.IR.Operation(mod); debug=true)
         Text(repr(mod))
     end
-    Base.delete!(context_gc_vector, ctx)
-    return result
 end
 
 function compile_mlir(f, args; client=nothing, kwargs...)
-    ctx = MLIR.IR.Context(Reactant.registry[], false)
-    context_gc_vector[ctx] = Vector{Union{TracedRArray,TracedRNumber}}(undef, 0)
-    @ccall MLIR.API.mlir_c.RegisterDialects(ctx::MLIR.API.MlirContext)::Cvoid
-
     backend = XLA.platform_name(client !== nothing ? client : XLA.default_backend())
 
     if backend == "CUDA"
@@ -589,7 +976,7 @@ function compile_mlir(f, args; client=nothing, kwargs...)
         backend = "cpu"
     end
 
-    results = MLIR.IR.context!(ctx) do
+    results = MLIR.IR.with_context() do ctx
         mod = MLIR.IR.Module(MLIR.IR.Location())
 
         mlir_fn_res = compile_mlir!(
@@ -603,7 +990,6 @@ function compile_mlir(f, args; client=nothing, kwargs...)
 
         return mod, mlir_fn_res
     end
-    Base.delete!(context_gc_vector, ctx)
 
     return results
 end
@@ -665,6 +1051,7 @@ end
 
 const DEBUG_KERNEL = Ref{Bool}(false)
 const DUMP_LLVMIR = Ref{Bool}(false)
+const DUMP_FAILED_LOCKSTEP = Ref{Bool}(false)
 const OpenMP = Ref{Bool}(true)
 const SROA_ATTRIBUTOR = Ref{Bool}(true)
 
@@ -700,35 +1087,56 @@ function raising!(f, is_raising::Bool)
     end
 end
 
+function get_optimize_comms_passes(options::Bool)
+    options || return String[]
+    return get_optimize_comms_passes(Reactant.OptimizeCommunicationOptions())
+end
+
+function get_optimize_comms_passes(options::Reactant.OptimizeCommunicationOptions)
+    options_str = String(options)
+    res = [
+        "enzyme-hlo-generate-td{patterns=lower_rotate;concat_to_onedim_dus;concat_to_onedim_dusslice;concatreshape_to_onedim_dus}",
+        "transform-interpreter",
+        "enzyme-hlo-remove-transform",
+        "enzyme-hlo-generate-td{patterns=reshape_to_broadcast}",
+        "transform-interpreter",
+        "enzyme-hlo-remove-transform",
+        options_str,
+        "enzyme-hlo-generate-td{patterns=lower_rotate;lower_wrap;lower_extend}",
+        "transform-interpreter",
+        "enzyme-hlo-remove-transform",
+        options_str,
+    ]
+    return res
+end
+
 function compile_mlir!(
     mod,
     f,
     args,
-    callcache=Dict{
-        Vector,
-        @NamedTuple{
-            f_name::String,
-            mlir_result_types::Vector{MLIR.IR.Type},
-            traced_result::Any,
-            mutated_args::Vector{Int},
-        }
-    }(),
-    sdycache=IdDict{
-        Reactant.Sharding.Mesh,
-        @NamedTuple{
-            sym_name::MLIR.IR.Attribute,
-            mesh_attr::MLIR.IR.Attribute,
-            mesh_op::MLIR.IR.Operation,
-        }
-    }();
-    optimize::Union{Bool,Symbol}=true,
-    no_nan::Bool=false,
-    backend="gpu",
+    callcache=default_callcache(),
+    sdycache=default_sdycache();
     fn_kwargs=(),
+    optimize::Union{Bool,Symbol,String}=true,
+    cudnn_hlo_optimize::Bool=false,
+    # :none | :to_mhlo_shardings or Sharding.ShardyPropagationOptions
+    shardy_passes::Union{Symbol,Sharding.ShardyPropagationOptions}=:to_mhlo_shardings,
+    no_nan::Bool=false,
+    transpose_propagate::Symbol=:up,
+    reshape_propagate::Symbol=:up,
+    optimize_communications::Bool=true,
+    assert_nonallocating::Bool=false,
+    backend="gpu",
     raise::Union{Bool,String}=false,
-    input_shardings=nothing,
+    raise_first::Bool=false,
+    # TODO: allow more fine-grained options to control the donation of specific arguments
+    donated_args::Symbol=:auto, # :auto | :none
+    optimize_then_pad::Bool=true,
     runtime::Union{Val{:PJRT},Val{:IFRT}},
+    kwargs...,
 )
+    @assert donated_args ∈ (:auto, :none)
+
     # Explicitly don't use block! to avoid creating a closure, which creates
     # both compile-time and relocatability issues
 
@@ -746,9 +1154,10 @@ function compile_mlir!(
     is_raising = raise isa String || raise
     activate_raising!(is_raising)
 
+    fnname = string(f)
     mlir_fn_res = try
         Reactant.TracedUtils.make_mlir_fn(
-            f, args, fn_kwargs, "main", true; input_shardings, runtime
+            f, args, fn_kwargs, fnname, true; runtime, optimize_then_pad, kwargs...
         )
     finally
         deactivate_raising!(is_raising)
@@ -784,10 +1193,7 @@ function compile_mlir!(
 
     optimize isa Bool && (optimize = ifelse(optimize, :all, :none))
 
-    toolkit = ""
-    if isdefined(Reactant_jll, :ptxas_path)
-        toolkit = Reactant_jll.ptxas_path[1:(end - length("/bin/ptxas"))]
-    end
+    toolkit = XLA.CUDA_DATA_DIR[]
 
     if backend == "cpu" || backend == "tpu"
         kern = "lower-kernel{backend=cpu},canonicalize"
@@ -817,101 +1223,203 @@ function compile_mlir!(
         jit = "lower-jit{cuOptLevel=$(cuOptLevel[]) indexBitWidth=$(cuindexBitWidth[]) cubinFormat=$(cubinFormat[]) cubinChip=$(cubinChip[]) cubinFeatures=$(cubinFeatures()) run_init=true toolkitPath=$toolkit},symbol-dce"
     end
 
-    opt_passes = optimization_passes(; no_nan, sroa=true)
-    opt_passes2 = optimization_passes(; no_nan, sroa=false)
+    recognize_comms = true
+    lower_comms = true
+    if is_sharded && shardy_passes == :to_mhlo_shardings
+        lower_comms = false
+    end
+
+    opt_passes = optimization_passes(;
+        no_nan,
+        sroa=true,
+        transpose_propagate,
+        reshape_propagate,
+        recognize_comms,
+        lower_comms,
+    )
+    opt_passes2 = optimization_passes(;
+        no_nan,
+        sroa=false,
+        transpose_propagate,
+        reshape_propagate,
+        recognize_comms,
+        lower_comms,
+    )
 
     raise_passes = if raise isa String
         # Raising passes were specified
         raise
     elseif raise
+
         # Raise enabled but use default passes
-        "canonicalize,llvm-to-memref-access,canonicalize,convert-llvm-to-cf,canonicalize,enzyme-lift-cf-to-scf,canonicalize,func.func(canonicalize-loops),canonicalize-scf-for,canonicalize,affine-cfg,canonicalize,func.func(canonicalize-loops),canonicalize,llvm-to-affine-access,canonicalize,delinearize-indexing,canonicalize,simplify-affine-exprs,affine-cfg,canonicalize,func.func(affine-loop-invariant-code-motion,affine-loop-unroll{unroll-full}),canonicalize,raise-affine-to-stablehlo,arith-raise{stablehlo=true}," *
-        opt_passes2
+        # TODO remove redundant libdevice raise after fixing phase ordering
+        result =
+            "canonicalize,llvm-to-memref-access,canonicalize,convert-llvm-to-cf,canonicalize,enzyme-lift-cf-to-scf,canonicalize,func.func(canonicalize-loops),canonicalize-scf-for,canonicalize,libdevice-funcs-raise,canonicalize,affine-cfg,canonicalize,func.func(canonicalize-loops),canonicalize,llvm-to-affine-access,canonicalize,delinearize-indexing,canonicalize,simplify-affine-exprs,affine-cfg,canonicalize,func.func(affine-loop-invariant-code-motion),canonicalize,sort-memory,raise-affine-to-stablehlo{prefer_while_raising=false dump_failed_lockstep=$(DUMP_FAILED_LOCKSTEP[])},canonicalize,arith-raise{stablehlo=true}," *
+            opt_passes2
+
+        if DUS_TO_CONCAT[]
+            opt_passes3 = optimization_passes(;
+                no_nan,
+                sroa=false,
+                transpose_propagate,
+                reshape_propagate,
+                dus_to_concat=true,
+                recognize_comms,
+                lower_comms,
+            )
+            result = result * "," * opt_passes3
+        end
+        result
     else
         "canonicalize"
     end
 
+    blas_int_width = sizeof(BLAS.BlasInt) * 8
+    lower_enzymexla_linalg_pass = "lower-enzymexla-linalg{backend=$backend \
+                                   blas_int_width=$blas_int_width}"
+
     if optimize === :all
-        run_pass_pipeline!(mod, join([opt_passes, "enzyme-batch", opt_passes2], ","))
-        run_pass_pipeline!(
-            mod, "$enzyme_pass,arith-raise{stablehlo=true}"; enable_verifier=false
-        )
         run_pass_pipeline!(
             mod,
             join(
-                [
-                    "canonicalize",
-                    "remove-unnecessary-enzyme-ops",
-                    "enzyme-simplify-math",
-                    opt_passes2,
-                    kern,
-                    raise_passes,
-                    jit,
-                ],
-                ',',
+                if raise_first
+                    [
+                        "mark-func-memory-effects",
+                        opt_passes,
+                        kern,
+                        raise_passes,
+                        "enzyme-batch",
+                        opt_passes2,
+                        enzyme_pass,
+                        opt_passes2,
+                        "canonicalize",
+                        "remove-unnecessary-enzyme-ops",
+                        "enzyme-simplify-math",
+                        opt_passes2,
+                        lower_enzymexla_linalg_pass,
+                        jit,
+                    ]
+                else
+                    [
+                        "mark-func-memory-effects",
+                        opt_passes,
+                        "enzyme-batch",
+                        opt_passes2,
+                        enzyme_pass,
+                        opt_passes2,
+                        "canonicalize",
+                        "remove-unnecessary-enzyme-ops",
+                        "enzyme-simplify-math",
+                        opt_passes2,
+                        kern,
+                        raise_passes,
+                        lower_enzymexla_linalg_pass,
+                        jit,
+                    ]
+                end,
+                ",",
             ),
+            "all",
         )
     elseif optimize === :before_kernel
-        run_pass_pipeline!(mod, join([opt_passes, "enzyme-batch", opt_passes2], ","))
-        run_pass_pipeline!(
-            mod, "$enzyme_pass,arith-raise{stablehlo=true}"; enable_verifier=false
-        )
         run_pass_pipeline!(
             mod,
             join(
-                [
-                    "canonicalize",
-                    "remove-unnecessary-enzyme-ops",
-                    "enzyme-simplify-math",
-                    opt_passes2,
-                ],
+                if raise_first
+                    ["mark-func-memory-effects", opt_passes]
+                else
+                    [
+                        "mark-func-memory-effects",
+                        opt_passes,
+                        "enzyme-batch",
+                        opt_passes2,
+                        enzyme_pass,
+                        opt_passes2,
+                        "canonicalize",
+                        "remove-unnecessary-enzyme-ops",
+                        "enzyme-simplify-math",
+                        opt_passes2,
+                    ]
+                end,
                 ',',
             ),
+            "before_kernel",
         )
     elseif optimize === :before_jit
-        run_pass_pipeline!(mod, join([opt_passes, "enzyme-batch", opt_passes2], ","))
-        run_pass_pipeline!(
-            mod, "$enzyme_pass,arith-raise{stablehlo=true}"; enable_verifier=false
-        )
         run_pass_pipeline!(
             mod,
             join(
-                [
-                    "canonicalize",
-                    "remove-unnecessary-enzyme-ops",
-                    "enzyme-simplify-math",
-                    opt_passes2,
-                    kern,
-                    raise_passes,
-                ],
+                if raise_first
+                    [
+                        "mark-func-memory-effects",
+                        opt_passes,
+                        kern,
+                        raise_passes,
+                        "enzyme-batch",
+                        opt_passes2,
+                        enzyme_pass,
+                        opt_passes2,
+                        "canonicalize",
+                        "remove-unnecessary-enzyme-ops",
+                        "enzyme-simplify-math",
+                        opt_passes2,
+                    ]
+                else
+                    [
+                        "mark-func-memory-effects",
+                        opt_passes,
+                        "enzyme-batch",
+                        opt_passes2,
+                        enzyme_pass,
+                        opt_passes2,
+                        "canonicalize",
+                        "remove-unnecessary-enzyme-ops",
+                        "enzyme-simplify-math",
+                        opt_passes2,
+                        kern,
+                        raise_passes,
+                    ]
+                end,
                 ',',
             ),
+            "before_jit",
         )
     elseif optimize === :before_raise
-        run_pass_pipeline!(mod, join([opt_passes, "enzyme-batch", opt_passes2], ","))
-        run_pass_pipeline!(
-            mod, "$enzyme_pass,arith-raise{stablehlo=true}"; enable_verifier=false
-        )
         run_pass_pipeline!(
             mod,
             join(
-                [
-                    "canonicalize",
-                    "remove-unnecessary-enzyme-ops",
-                    "enzyme-simplify-math",
-                    opt_passes2,
-                    kern,
-                ],
+                if raise_first
+                    ["mark-func-memory-effects", opt_passes]
+                else
+                    [
+                        "mark-func-memory-effects",
+                        opt_passes,
+                        "enzyme-batch",
+                        opt_passes2,
+                        enzyme_pass,
+                        opt_passes2,
+                        "canonicalize",
+                        "remove-unnecessary-enzyme-ops",
+                        "enzyme-simplify-math",
+                        opt_passes2,
+                        kern,
+                    ]
+                end,
                 ',',
             ),
+            "before_raise",
         )
     elseif optimize === :no_enzyme
-        run_pass_pipeline!(mod, join([opt_passes, "enzyme-batch", opt_passes2], ","))
-        run_pass_pipeline!(mod, "arith-raise{stablehlo=true}"; enable_verifier=false)
         run_pass_pipeline!(
             mod,
             join(
                 [
+                    "mark-func-memory-effects",
+                    opt_passes,
+                    "enzyme-batch",
+                    opt_passes2,
+                    enzyme_pass,
+                    opt_passes2,
                     "canonicalize",
                     "remove-unnecessary-enzyme-ops",
                     "enzyme-simplify-math",
@@ -919,62 +1427,365 @@ function compile_mlir!(
                 ],
                 ',',
             ),
+            "only_enzyme",
         )
     elseif optimize === :only_enzyme
-        run_pass_pipeline!(mod, "enzyme-batch")
-        run_pass_pipeline!(
-            mod, "$enzyme_pass,arith-raise{stablehlo=true}"; enable_verifier=false
-        )
-        run_pass_pipeline!(
-            mod,
-            join(
-                ["canonicalize", "remove-unnecessary-enzyme-ops", "enzyme-simplify-math"],
-                ',',
-            ),
-        )
-    elseif optimize === :after_enzyme
-        run_pass_pipeline!(mod, "enzyme-batch")
-        run_pass_pipeline!(
-            mod, "$enzyme_pass,arith-raise{stablehlo=true}"; enable_verifier=false
-        )
         run_pass_pipeline!(
             mod,
             join(
                 [
+                    "mark-func-memory-effects",
+                    "enzyme-batch",
+                    enzyme_pass,
                     "canonicalize",
                     "remove-unnecessary-enzyme-ops",
                     "enzyme-simplify-math",
-                    opt_passes2,
-                    kern,
-                    raise_passes,
-                    jit,
                 ],
                 ',',
             ),
+            "after_enzyme",
         )
-    elseif optimize === :before_enzyme
-        run_pass_pipeline!(mod, join([opt_passes, "enzyme-batch", opt_passes2], ","))
-        run_pass_pipeline!(
-            mod, "$enzyme_pass,arith-raise{stablehlo=true}"; enable_verifier=false
-        )
+    elseif optimize === :after_enzyme
         run_pass_pipeline!(
             mod,
             join(
-                [
-                    "canonicalize,remove-unnecessary-enzyme-ops,enzyme-simplify-math",
-                    kern,
-                    raise_passes,
-                    jit,
-                ],
+                if raise_first
+                    [
+                        "mark-func-memory-effects",
+                        kern,
+                        raise_passes,
+                        "enzyme-batch",
+                        enzyme_pass,
+                        "canonicalize",
+                        "remove-unnecessary-enzyme-ops",
+                        "enzyme-simplify-math",
+                        opt_passes2,
+                        lower_enzymexla_linalg_pass,
+                        jit,
+                    ]
+                else
+                    [
+                        "mark-func-memory-effects",
+                        "enzyme-batch",
+                        enzyme_pass,
+                        "canonicalize",
+                        "remove-unnecessary-enzyme-ops",
+                        "enzyme-simplify-math",
+                        opt_passes2,
+                        kern,
+                        raise_passes,
+                        lower_enzymexla_linalg_pass,
+                        jit,
+                    ]
+                end,
                 ',',
             ),
+            "before_enzyme",
+        )
+    elseif optimize === :before_enzyme
+        run_pass_pipeline!(
+            mod,
+            join(
+                if raise_first
+                    [
+                        "mark-func-memory-effects",
+                        opt_passes,
+                        kern,
+                        raise_passes,
+                        "enzyme-batch",
+                        opt_passes2,
+                        enzyme_pass,
+                        "canonicalize,remove-unnecessary-enzyme-ops,enzyme-simplify-math",
+                        lower_enzymexla_linalg_pass,
+                        jit,
+                    ]
+                else
+                    [
+                        "mark-func-memory-effects",
+                        opt_passes,
+                        "enzyme-batch",
+                        opt_passes2,
+                        enzyme_pass,
+                        "canonicalize,remove-unnecessary-enzyme-ops,enzyme-simplify-math",
+                        kern,
+                        raise_passes,
+                        lower_enzymexla_linalg_pass,
+                        jit,
+                    ]
+                end,
+                ',',
+            ),
+            "after_enzyme",
         )
     elseif optimize === :canonicalize
-        run_pass_pipeline!(mod, "canonicalize")
+        run_pass_pipeline!(mod, "mark-func-memory-effects,canonicalize", "canonicalize")
     elseif optimize === :just_batch
-        run_pass_pipeline!(mod, "enzyme-batch")
+        run_pass_pipeline!(mod, "enzyme-batch", "enzyme-batch")
+    elseif optimize isa String
+        run_pass_pipeline!(mod, optimize, optimize)
     elseif optimize !== :none
         error("Invalid optimize option: $(Meta.quot(optimize))")
+    end
+
+    if !(optimize isa String)
+        if optimize ∉ (:none, :just_batch, :canonicalize) &&
+            (transpose_propagate === :up || reshape_propagate === :up)
+            # We tried propagating reshapes and transposes up. If at this point we are left with
+            # them, we propagate them down to minimize the number of Ops in the IR.
+            run_pass_pipeline!(
+                mod,
+                optimization_passes(;
+                    transpose_propagate=:down,
+                    reshape_propagate=:down,
+                    recognize_comms,
+                    lower_comms,
+                ),
+                "post_op_transpose_reshape",
+            )
+        end
+    end
+
+    if backend == "cuda" && cudnn_hlo_optimize
+        run_pass_pipeline!(mod, "enzymexla-cudnn-hlo-opt", "cudnn-hlo-opt")
+    end
+
+    # Now we resolve paddings if `optimize_then_pad`
+    if optimize_then_pad
+        padded_inputs = IdDict()
+        has_padded_inputs = false
+        for (k, v) in seen_args
+            v isa Reactant.TracedType || continue
+            if Reactant.has_padding(k)
+                has_padded_inputs = true
+                padded_inputs[v] = Reactant.get_padding(k)
+            end
+        end
+
+        if has_padded_inputs
+            MLIR.IR.DUMP_MLIR_ALWAYS[] && MLIR.IR.dump_mlir(mod, nothing, "pre_padding")
+
+            in_tys_padded = Vector{MLIR.IR.Type}(undef, length(linear_args))
+            input_arg_padded_idxs = Int[]
+            for (i, arg) in enumerate(linear_args)
+                if haskey(padded_inputs, arg)
+                    push!(input_arg_padded_idxs, i)
+                    in_tys_padded[i] = MLIR.IR.TensorType(
+                        collect(Int, reverse(size(arg) .+ padded_inputs[arg])),
+                        MLIR.IR.Type(Reactant.unwrapped_eltype(arg)),
+                    )
+                else
+                    in_tys_padded[i] = in_tys[i]
+                end
+            end
+
+            out_tys_padded = Vector{MLIR.IR.Type}(undef, length(linear_results))
+            output_res_padded_idxs = Int[]
+            for (i, res) in enumerate(linear_results)
+                if haskey(padded_inputs, res)
+                    push!(output_res_padded_idxs, i)
+                    out_tys_padded[i] = MLIR.IR.TensorType(
+                        collect(Int, reverse(size(res) .+ padded_inputs[res])),
+                        MLIR.IR.Type(Reactant.unwrapped_eltype(res)),
+                    )
+                else
+                    out_tys_padded[i] = Reactant.TracedUtils.transpose_ty(
+                        Reactant.Ops.mlir_type(res)
+                    )
+                end
+            end
+
+            fnname_old = fnname
+            fnname = string(f, "_padded")
+            func_with_padding = MLIR.Dialects.func.func_(;
+                sym_name=fnname,
+                function_type=MLIR.IR.FunctionType(in_tys_padded, out_tys_padded),
+                arg_attrs=MLIR.IR.attr(compiled_f, "arg_attrs"),
+                res_attrs=MLIR.IR.attr(compiled_f, "res_attrs"),
+                no_inline=MLIR.IR.attr(compiled_f, "no_inline"),
+                body=MLIR.IR.Region(),
+                sym_visibility=MLIR.IR.attr(compiled_f, "private"),
+            )
+            fnbody = MLIR.IR.Block(
+                in_tys_padded,
+                [
+                    MLIR.IR.Location(
+                        MLIR.API.mlirValueGetLocation(
+                            MLIR.IR.argument(
+                                MLIR.IR.first_block(MLIR.IR.region(compiled_f, 1)), i
+                            ),
+                        ),
+                    ) for i in 1:length(linear_args)
+                ],
+            )
+            push!(MLIR.IR.region(func_with_padding, 1), fnbody)
+            MLIR.IR.activate!(fnbody)
+            push!(MLIR.IR.body(mod), func_with_padding)
+
+            try
+                call_args = MLIR.IR.Value[
+                    MLIR.IR.argument(fnbody, i) for i in 1:length(linear_args)
+                ]
+
+                for i in input_arg_padded_idxs
+                    arg = linear_args[i]
+                    padding = padded_inputs[arg]
+
+                    block_arg = MLIR.IR.argument(fnbody, i)
+                    unpad_op = Reactant.TracedUtils.unpad_val_op(
+                        block_arg, reverse(padding), reverse(size(arg) .+ padding)
+                    )
+
+                    call_args[i] = MLIR.IR.result(unpad_op, 1)
+                end
+
+                ftype = MLIR.IR.Type(MLIR.IR.attr(compiled_f, "function_type"))
+                call_op = MLIR.Dialects.func.call(
+                    call_args;
+                    result_0=[MLIR.IR.result(ftype, i) for i in 1:MLIR.IR.nresults(ftype)],
+                    callee=MLIR.IR.FlatSymbolRefAttribute(fnname_old),
+                )
+
+                results = MLIR.IR.Value[
+                    MLIR.IR.result(call_op, i) for i in 1:MLIR.IR.nresults(call_op)
+                ]
+
+                for i in output_res_padded_idxs
+                    res = linear_results[i]
+                    padding = padded_inputs[res]
+
+                    pad_op = MLIR.Dialects.stablehlo.pad(
+                        results[i],
+                        Reactant.TracedUtils.promote_to(
+                            TracedRNumber{Reactant.unwrapped_eltype(res)}, 0
+                        ).mlir_data;
+                        edge_padding_low=MLIR.IR.DenseArrayAttribute(
+                            fill(0, length(padding))
+                        ),
+                        edge_padding_high=MLIR.IR.DenseArrayAttribute(
+                            collect(reverse(padding))
+                        ),
+                        interior_padding=MLIR.IR.DenseArrayAttribute(
+                            fill(0, length(padding))
+                        ),
+                    )
+
+                    results[i] = MLIR.IR.result(pad_op, 1)
+                end
+
+                ret = MLIR.Dialects.func.return_(results)
+            finally
+                MLIR.IR.deactivate!(fnbody)
+            end
+
+            # we just need the ops to potentially remove slices / paddings
+            if optimize === :all
+                run_pass_pipeline!(
+                    mod,
+                    join(
+                        [opt_passes, "canonicalize", "cse", "canonicalize", opt_passes2],
+                        ",",
+                    ),
+                    "mid_pad_opts",
+                )
+            end
+
+            MLIR.IR.attr!(compiled_f, "sym_visibility", MLIR.IR.Attribute("private"))
+            run_pass_pipeline!(
+                mod,
+                "inline{default-pipeline=canonicalize max-iterations=4}",
+                "inline_pad_opts",
+            )
+
+            compiled_f = func_with_padding
+            in_tys = in_tys_padded
+        end
+    end
+
+    # shardy passes
+    use_shardy_partitioner = false
+    result_shardings = missing
+    if is_sharded
+        module_op = copy(MLIR.IR.Operation(mod))
+        mod_copied = MLIR.IR.Module(module_op)
+
+        if shardy_passes isa Sharding.ShardyPropagationOptions
+            run_pass_pipeline!(mod_copied, shardy_passes)
+            run_pass_pipeline!(mod_copied, "sdy-close-shardings", "sdy_close_shardings")
+        else
+            run_pass_pipeline!(
+                mod_copied,
+                join(["sdy-propagation-pipeline", "sdy-close-shardings"], ","),
+                "sdy_prop_capture_res_shardings",
+            )
+        end
+
+        func_op = MLIR.API.mlirSymbolTableLookup(MLIR.IR.SymbolTable(module_op), fnname)
+        @assert func_op.ptr !== C_NULL
+        func_op_new_module = MLIR.IR.Operation(func_op)
+
+        result_attrs = MLIR.IR.attr(func_op_new_module, "res_attrs")
+        if result_attrs !== nothing
+            result_shardings = Vector{Union{Sharding.NamedSharding,Sharding.Replicated}}(
+                undef, length(result_attrs)
+            )
+            for i in 1:length(result_attrs)
+                result_shardings[i] = Sharding.sdy_sharding_to_reactant_sharding(
+                    result_attrs[i - 1], mlir_fn_res.global_device_ids, mod_copied
+                )
+            end
+        else
+            result_shardings = [Sharding.Replicated() for _ in 1:length(linear_results)]
+        end
+
+        if shardy_passes === :none
+            use_shardy_partitioner = true
+        elseif shardy_passes === :post_sdy_propagation
+            use_shardy_partitioner = true
+            run_pass_pipeline!(
+                mod,
+                join(
+                    [
+                        "sdy-propagation-pipeline",
+                        "sdy-close-shardings",
+                        get_optimize_comms_passes(optimize_communications)...,
+                    ],
+                    ",",
+                ),
+                "post_sdy_propagation",
+            )
+        elseif shardy_passes isa Sharding.ShardyPropagationOptions
+            run_pass_pipeline!(mod, shardy_passes)
+            # sdy passes are run deep inside the XLA compiler. So the only way to respect
+            # the options is to export them to MHLO shardings
+            run_pass_pipeline!(
+                mod,
+                join(
+                    [
+                        "sdy-close-shardings",
+                        get_optimize_comms_passes(optimize_communications)...,
+                        "xla-sdy-stablehlo-export-pipeline",
+                    ],
+                    ",",
+                ),
+                "sdy_export",
+            )
+        elseif shardy_passes === :to_mhlo_shardings
+            run_pass_pipeline!(
+                mod,
+                join(
+                    [
+                        "sdy-propagation-pipeline",
+                        "sdy-close-shardings",
+                        get_optimize_comms_passes(optimize_communications)...,
+                        "xla-sdy-stablehlo-export-pipeline",
+                    ],
+                    ",",
+                ),
+                "to_mhlo_shardings",
+            )
+        else
+            error("Invalid shardy_passes option: $(Meta.quot(shardy_passes))")
+        end
     end
 
     preserved_args = Tuple{TracedType,Int}[]
@@ -982,8 +1793,10 @@ function compile_mlir!(
     nresults = MLIR.IR.Value[]
     linear_results2 = TracedType[]
     results_mask = falses(length(results))
+
     for (i, op) in enumerate(results)
-        if !MLIR.IR.is_block_arg(op)
+        if !MLIR.IR.is_block_arg(op) ||
+            !Reactant.TracedUtils.has_idx(linear_results[i], :args) # new buffer
             push!(nresults, op)
             push!(linear_results2, linear_results[i])
             results_mask[i] = true
@@ -1023,6 +1836,63 @@ function compile_mlir!(
     MLIR.API.mlirOperationDestroy(compiled_f.operation)
     compiled_f.operation = MLIR.API.MlirOperation(C_NULL)
 
+    # Add a `donated` attr to the function arguments. This doesn't affect XLA, but lets us
+    # check which arguments were donated.
+    preserved_args_idx = last.(preserved_args)
+    donated_args_mask = Vector{Bool}(undef, length(linear_args))
+    for (i, arg) in enumerate(linear_args)
+        if donated_args == :auto
+            if (i - 1) ∉ preserved_args_idx
+                donated_args_mask[i] = true
+
+                residx = findfirst(Base.Fix1(===, arg), linear_results2)
+                if residx !== nothing
+                    MLIR.API.mlirFuncSetArgAttr(
+                        func3,
+                        i - 1,
+                        "tf.aliasing_output",
+                        MLIR.IR.Attribute(Int32(residx - 1)),
+                    )
+                end
+            else
+                donated_args_mask[i] = false
+            end
+        else # :none
+            donated_args_mask[i] = false
+        end
+    end
+
+    # drop certain operations from the module if using TPU backend
+    if backend == "tpu"
+        for op in collect(MLIR.IR.OperationIterator(MLIR.IR.body(mod)))
+            if MLIR.IR.dialect(op) == :llvm
+                MLIR.API.mlirOperationDestroy(op.operation)
+                op.operation = MLIR.API.MlirOperation(C_NULL)
+            end
+        end
+    end
+
+    if assert_nonallocating
+        if length(linear_args) - length(preserved_args_idx) != length(nresults)
+            str = sprint() do io
+                Base.show(IOContext(io, :debug => true), func3)
+            end
+            throw(
+                AssertionError(
+                    """length(preserved_args_idx) = $(length(preserved_args_idx))
+             donated = length(linear_args) - length(preserved_args_idx) = $(length(linear_args) - length(preserved_args_idx))
+                    length(nresults) = $(length(nresults))
+                    linear_args = $linear_args
+                    linear_results = $linear_results
+                    $((MLIR.IR.argument(fnbody, i) for i in 1:length(in_tys))...)
+                    preserved_args = $(preserved_args_idx)
+                    $str
+                    """,
+                ),
+            )
+        end
+    end
+
     return Reactant.TracedUtils.CompiledMlirFnResult(
         fnwrapped,
         func3,
@@ -1038,8 +1908,12 @@ function compile_mlir!(
         mlir_fn_res.is_sharded,
         preserved_args,
         concrete_result,
-        mlir_fn_res.sharding_mesh,
+        mlir_fn_res.unique_meshes,
         mlir_fn_res.mutated_args,
+        use_shardy_partitioner,
+        result_shardings,
+        mlir_fn_res.global_device_ids,
+        donated_args_mask,
     )
 end
 
@@ -1050,7 +1924,19 @@ See also [`@code_xla`](@ref), [`@code_mhlo`](@ref).
 """
 macro code_hlo(args...)
     default_options = Dict{Symbol,Any}(
-        :optimize => true, :no_nan => false, :client => nothing, :raise => false
+        :optimize => true,
+        :no_nan => false,
+        :client => nothing,
+        :raise => false,
+        :raise_first => false,
+        :shardy_passes => :(:to_mhlo_shardings),
+        :assert_nonallocating => false,
+        :donated_args => :(:auto),
+        :transpose_propagate => :(:up),
+        :reshape_propagate => :(:up),
+        :optimize_then_pad => true,
+        :optimize_communications => true,
+        :cudnn_hlo_optimize => false,
     )
     compile_expr, (; compiled) = compile_call_expr(
         __module__, compile_mlir, default_options, args...
@@ -1074,7 +1960,19 @@ See also [`@code_xla`](@ref), [`@code_hlo`](@ref).
 """
 macro code_mhlo(args...)
     default_options = Dict{Symbol,Any}(
-        :optimize => true, :no_nan => false, :client => nothing, :raise => false
+        :optimize => true,
+        :no_nan => false,
+        :client => nothing,
+        :raise => false,
+        :raise_first => false,
+        :shardy_passes => :(:to_mhlo_shardings),
+        :assert_nonallocating => false,
+        :donated_args => :(:auto),
+        :transpose_propagate => :(:up),
+        :reshape_propagate => :(:up),
+        :optimize_then_pad => true,
+        :optimize_communications => true,
+        :cudnn_hlo_optimize => false,
     )
     compile_expr, (; compiled) = compile_call_expr(
         __module__, compile_xla, default_options, args...
@@ -1098,7 +1996,19 @@ See also [`@code_mhlo`](@ref), [`@code_hlo`](@ref).
 """
 macro code_xla(args...)
     default_options = Dict{Symbol,Any}(
-        :optimize => true, :no_nan => false, :client => nothing, :raise => false
+        :optimize => true,
+        :no_nan => false,
+        :client => nothing,
+        :raise => false,
+        :raise_first => false,
+        :shardy_passes => :(:to_mhlo_shardings),
+        :assert_nonallocating => false,
+        :donated_args => :(:auto),
+        :transpose_propagate => :(:up),
+        :reshape_propagate => :(:up),
+        :optimize_then_pad => true,
+        :optimize_communications => true,
+        :cudnn_hlo_optimize => false,
     )
     compile_expr, (; compiled) = compile_call_expr(
         __module__, compile_xla, default_options, args...
@@ -1125,6 +2035,16 @@ macro compile(args...)
         :no_nan => false,
         :client => nothing,
         :raise => false,
+        :raise_first => false,
+        :shardy_passes => :(:to_mhlo_shardings),
+        :assert_nonallocating => false,
+        :serializable => false,
+        :donated_args => :(:auto),
+        :transpose_propagate => :(:up),
+        :reshape_propagate => :(:up),
+        :optimize_then_pad => true,
+        :optimize_communications => true,
+        :cudnn_hlo_optimize => false,
     )
     return esc(first(compile_call_expr(__module__, compile, default_options, args...)))
 end
@@ -1141,6 +2061,15 @@ macro jit(args...)
         :no_nan => false,
         :client => nothing,
         :raise => false,
+        :raise_first => false,
+        :shardy_passes => :(:to_mhlo_shardings),
+        :assert_nonallocating => false,
+        :donated_args => :(:auto),
+        :transpose_propagate => :(:up),
+        :reshape_propagate => :(:up),
+        :optimize_then_pad => true,
+        :optimize_communications => true,
+        :cudnn_hlo_optimize => false,
     )
     compile_expr, (; compiled, args) = compile_call_expr(
         __module__, compile, default_options, args...
@@ -1166,6 +2095,7 @@ function compile_call_expr(mod, compiler, options::Dict, args...)
             options[option_name] = option.args[2]
         end
     end
+
     call = only(args)
     f_symbol = gensym(:f)
     args_symbol = gensym(:args)
@@ -1207,18 +2137,38 @@ function compile_call_expr(mod, compiler, options::Dict, args...)
         error("Invalid function call: $(call)")
     end
 
-    return quote
-        $(f_symbol) = $(fname)
-        $(args_symbol) = $(args_rhs)
-        $(kwargs_symbol) = (; $(kwargs_rhs...))
-        $(compiled_symbol) = $(compiler)(
-            $(f_symbol),
-            $(args_symbol);
-            fn_kwargs=$(kwargs_symbol),
-            $(Expr.(:kw, keys(options), values(options))...),
-        )
-    end,
-    (; compiled=compiled_symbol, args=args_symbol)
+    return (
+        quote
+            $(f_symbol) = $(fname)
+            $(args_symbol) = $(args_rhs)
+            $(kwargs_symbol) = (; $(kwargs_rhs...))
+            $(compiled_symbol) = $(compiler)(
+                $(f_symbol),
+                $(args_symbol);
+                fn_kwargs=$(kwargs_symbol),
+                $(Expr.(:kw, keys(options), values(options))...),
+            )
+        end,
+        (; compiled=compiled_symbol, args=args_symbol),
+    )
+end
+
+function assert_mismatched_sharding(
+    sharding_from_input, hlo_sharding_from_executable::Reactant.XLA.HloSharding, size_x
+)
+    return assert_mismatched_sharding(
+        Sharding.HloSharding(sharding_from_input, size_x).hlo_sharding,
+        hlo_sharding_from_executable,
+        size_x,
+    )
+end
+
+function assert_mismatched_sharding(
+    hlo_sharding_from_input::Reactant.XLA.HloSharding,
+    hlo_sharding_from_executable::Reactant.XLA.HloSharding,
+    size_x,
+)
+    @assert hlo_sharding_from_executable == hlo_sharding_from_input "Sharding provided by the user ($(string(hlo_sharding_from_input))) does not match the sharding computed by XLA ($(string(hlo_sharding_from_executable))). This generally means that Reactant.jl made an error in generating the executable. Please open an issue with the error message and an MWE."
 end
 
 """
@@ -1245,13 +2195,14 @@ function codegen_flatten!(
     seen_args,
     result_stores,
     is_sharded::Bool,
-    mesh,
     linear_parameter_shardings,
     client,
+    ndevices::Int,
 )
     flatten_names = Symbol[]
     flatten_code = Expr[]
     runtime = XLA.runtime(client)
+    resharded_inputs = Dict{Tuple,Any}()
 
     if is_sharded
         inv_seen_args = Reactant.OrderedIdDict()
@@ -1259,6 +2210,8 @@ function codegen_flatten!(
             inv_seen_args[v] = k
         end
     end
+
+    xla_parameter_sharding_sym = missing
 
     for (i, arg) in enumerate(linear_args)
         paths = (
@@ -1275,6 +2228,7 @@ function codegen_flatten!(
             )
         end
 
+        carg_sym = Symbol(:carg_, i)
         usbuf = Symbol(:usbuf_, i)
 
         flatcode = :(getindex(args, $(path[2])))
@@ -1283,37 +2237,68 @@ function codegen_flatten!(
         end
 
         if runtime isa Val{:PJRT}
+            push!(flatten_code, :($carg_sym = $flatcode))
             if is_sharded
                 carg = inv_seen_args[arg]
 
                 condensed_op_sharding = convert(
                     XLA.CondensedOpSharding, linear_parameter_shardings[i]
                 )
-                if Reactant.Sharding.is_sharded(carg)
-                    arg_condensed_op_sharding = convert(
-                        XLA.CondensedOpSharding, carg.sharding.sharding.hlo_sharding
-                    )
+                hlo_sharding_from_executable = convert(
+                    XLA.HloSharding, condensed_op_sharding
+                )
+                if Sharding.is_sharded(carg)
                     # Check if the sharding provided is same as the one we have
-                    @assert arg_condensed_op_sharding == condensed_op_sharding "Sharding provided by the user ($arg_condensed_op_sharding) does not match the sharding computed by XLA ($condensed_op_sharding). This generally means that Reactant.jl made an error in generating the executable. Please open an issue with the error message and an MWE."
+                    assert_mismatched_sharding(
+                        carg.sharding.sharding.hlo_sharding,
+                        hlo_sharding_from_executable,
+                        size(carg),
+                    )
 
-                    push!(flatten_code, :($usbuf = $flatcode.data))
-                    for j in 1:length(mesh)
-                        sbuf = Symbol(:sbuf_, i, "_", mesh.logical_device_ids[j])
+                    push!(flatten_code, :($usbuf = $carg_sym.data))
+                    for j in 1:length(carg.sharding.mesh)
+                        logical_id = carg.sharding.mesh.logical_device_ids[j]
+                        sbuf = Symbol(:sbuf_, i, "_", logical_id)
                         push!(flatten_names, sbuf)
                         push!(
-                            flatten_code, :($sbuf = XLA.synced_buffer(getindex($usbuf, $j)))
+                            flatten_code,
+                            :($sbuf = XLA.synced_buffer(getindex($usbuf, $(j)))),
                         )
                     end
                 else
-                    push!(flatten_code, :($usbuf = $flatcode))
+                    if DEBUG_DISABLE_RESHARDING[]
+                        error("Resharding is disabled. Problematic input:\ntypeof: \
+                               $(typeof(carg))\nsize: $(size(carg))\nsharding: \
+                               $(carg.sharding)\nInput Index: $(i)\nInput Path: \
+                               $(path[3:end])")
+                    end
+
+                    push!(flatten_code, :($usbuf = $carg_sym))
+                    device_sym = gensym(:device)
+                    push!(flatten_code, :($device_sym = Reactant.XLA.device($usbuf)))
+
+                    if xla_parameter_sharding_sym === missing
+                        xla_parameter_sharding_sym = :xla_parameter_sharding
+                        pushfirst!(
+                            flatten_code,
+                            :(
+                                $(xla_parameter_sharding_sym) = Reactant.XLA.get_parameter_shardings(
+                                    thunk.exec
+                                )
+                            ),
+                        )
+                    end
+
+                    resharded_inputs[path[3:end]] = (device_sym, xla_parameter_sharding_sym)
+
                     device_to_array_slices, _ = XLA.sharding_to_concrete_array_indices(
-                        condensed_op_sharding, size(carg), mesh.logical_device_ids
+                        condensed_op_sharding, size(carg), 0:(ndevices - 1)
                     )
 
                     # Extract the buffer_slice
                     buf_slice = Dict{eltype(device_to_array_slices),Symbol}()
                     counter = 0
-                    for j in 1:length(mesh)
+                    for j in 1:ndevices
                         sliced_buf = Symbol(:sliced_buf_, i, :_, counter)
                         slice = device_to_array_slices[j]
                         haskey(buf_slice, slice) && continue
@@ -1329,9 +2314,8 @@ function codegen_flatten!(
                         buf_slice[slice] = sliced_buf
                     end
 
-                    for j in 1:length(mesh)
-                        device_id = mesh.logical_device_ids[j]
-                        buf = Symbol(:buf_, i, :_, device_id)
+                    for j in 1:ndevices
+                        buf = Symbol(:buf_, i, :_, j)
                         slice = device_to_array_slices[j]
                         sbuf = Symbol(:s, buf)
                         push!(flatten_names, sbuf)
@@ -1340,14 +2324,16 @@ function codegen_flatten!(
                             :(
                                 $sbuf = XLA.copy_buffer_to_device(
                                     XLA.synced_buffer($(buf_slice[slice])),
-                                    $(XLA.get_device(client, device_id)),
+                                    XLA.get_device(
+                                        thunk.client, global_mesh.device_ids[$(j)]
+                                    ),
                                 )
                             ),
                         )
                     end
                 end
             else
-                push!(flatten_code, :($usbuf = $flatcode.data))
+                push!(flatten_code, :($usbuf = $carg_sym.data))
                 sbuf = Symbol(:sbuf_, i)
                 push!(flatten_names, sbuf)
                 if arg isa TracedRArray || arg isa TracedRNumber
@@ -1356,8 +2342,16 @@ function codegen_flatten!(
                     error("Unsupported type $(typeof(arg))")
                 end
             end
+            # Important to mark donated after we have extracted the data
+            push!(
+                flatten_code,
+                :(donate_argument!(
+                    donated_args_mask, $carg_sym, $i, donated_buffers, $(path)
+                )),
+            )
         elseif runtime isa Val{:IFRT}
-            push!(flatten_code, :($usbuf = $flatcode.data))
+            push!(flatten_code, :($carg_sym = $flatcode))
+            push!(flatten_code, :($usbuf = $carg_sym.data))
             sbuf = Symbol(:sbuf_, i)
             push!(flatten_names, sbuf)
             if is_sharded
@@ -1366,52 +2360,129 @@ function codegen_flatten!(
                 condensed_op_sharding = convert(
                     XLA.CondensedOpSharding, linear_parameter_shardings[i]
                 )
-                if Reactant.Sharding.is_sharded(carg)
-                    arg_condensed_op_sharding = convert(
-                        XLA.CondensedOpSharding, carg.sharding.sharding.hlo_sharding
-                    )
+
+                if Sharding.is_sharded(carg)
                     # Check if the sharding provided is same as the one we have
-                    @assert arg_condensed_op_sharding == condensed_op_sharding "Sharding provided by the user ($arg_condensed_op_sharding) does not match the sharding computed by XLA ($condensed_op_sharding). This generally means that Reactant.jl made an error in generating the executable. Please open an issue with the error message and an MWE."
+                    assert_mismatched_sharding(
+                        carg.sharding.sharding.hlo_sharding,
+                        convert(XLA.HloSharding, condensed_op_sharding),
+                        size(carg),
+                    )
+
                     push!(flatten_code, :($sbuf = XLA.synced_buffer($usbuf)))
                 else
-                    # XXX: Currently we copy to host and then make the transfer to the
-                    #      sharded devices. This is not ideal, we might be able to do a
-                    #      device-to-device transfer, maybe using reshard?
-                    hlo_sharding = convert(XLA.HloSharding, condensed_op_sharding)
-                    ifrt_sharding = XLA.IFRT.Sharding(
-                        vec(Reactant.XLA.get_device.((client,), mesh.device_ids)),
-                        hlo_sharding,
+                    if DEBUG_DISABLE_RESHARDING[]
+                        error("Resharding is disabled. Problematic input:\ntypeof: \
+                               $(typeof(carg))\nsize: $(size(carg))\nsharding: \
+                               $(carg.sharding)\nInput Index: $(i)\nInput Path: \
+                               $(path[3:end])")
+                    end
+
+                    device_sym = gensym(:device)
+                    push!(flatten_code, :($device_sym = Reactant.XLA.device($usbuf)))
+
+                    if xla_parameter_sharding_sym === missing
+                        xla_parameter_sharding_sym = :xla_parameter_sharding
+                        pushfirst!(
+                            flatten_code,
+                            :(
+                                $(xla_parameter_sharding_sym) = Reactant.XLA.get_parameter_shardings(
+                                    thunk.exec
+                                )
+                            ),
+                        )
+                    end
+
+                    resharded_inputs[path] = (
+                        device_sym, :($(xla_parameter_sharding_sym)[$(i)])
                     )
-                    data_sym = gensym(:data)
+
                     push!(
                         flatten_code,
-                        quote
-                            $(data_sym) = similar(
-                                $(Array{eltype(carg),ndims(carg)}), $(size(carg))
+                        :(
+                            $(sbuf) = ifrt_resharded_buffer(
+                                $(Reactant.unwrapped_eltype(carg)),
+                                $(usbuf),
+                                $(size(carg)),
+                                thunk.client,
+                                $(carg_sym).sharding,
+                                thunk.global_device_ids,
+                                $(xla_parameter_sharding_sym)[$(i)],
                             )
-                            $(XLA.to_host)(
-                                XLA.synced_buffer($usbuf), $(data_sym), $(carg.sharding)
-                            )
-                            $(sbuf) = XLA.IFRT.Array(
-                                $(client), $(data_sym), $(ifrt_sharding)
-                            )
-                        end,
+                        ),
                     )
                 end
             else
                 push!(flatten_code, :($sbuf = XLA.synced_buffer($usbuf)))
             end
+            # Important to mark donated after we have extracted the data
+            push!(
+                flatten_code,
+                :(donate_argument!(
+                    donated_args_mask, $carg_sym, $i, donated_buffers, $(path)
+                )),
+            )
         else
             error("Unsupported runtime $runtime")
         end
     end
 
     # We reorder how the buffers are passed to the XLA call
-    is_sharded &&
-        runtime isa Val{:PJRT} &&
-        (flatten_names = vcat(eachrow(reshape(flatten_names, length(mesh), :))...))
+    if is_sharded && runtime isa Val{:PJRT}
+        flatten_names = vcat(eachrow(reshape(flatten_names, ndevices, :))...)
+    end
 
-    return flatten_names, flatten_code
+    return flatten_names, flatten_code, resharded_inputs
+end
+
+function donate_argument!(
+    donated_args_mask,
+    carg::Union{ConcretePJRTNumber,ConcretePJRTArray},
+    i::Int,
+    donated_buffers,
+    path,
+)
+    if donated_args_mask[i]
+        buffers = Tuple(d.buffer for d in carg.data)
+        if buffers in donated_buffers
+            error("Donated buffer $(carg.data) is already marked as donated. Can't donate \
+                   the same buffer multiple times. The argument is present at $(path)")
+        end
+        push!(donated_buffers, buffers)
+        Reactant.mark_donated!(carg)
+    end
+end
+
+function donate_argument!(
+    donated_args_mask,
+    carg::Union{ConcreteIFRTNumber,ConcreteIFRTArray},
+    i::Int,
+    donated_buffers,
+    path,
+)
+    if donated_args_mask[i]
+        if carg.data.buffer in donated_buffers
+            error("Donated buffer $(carg.data) is already marked as donated. Can't donate \
+                   the same buffer multiple times. The argument is present at $(path)")
+        end
+        push!(donated_buffers, carg.data.buffer)
+        Reactant.mark_donated!(carg)
+    end
+end
+
+# XXX: Currently we copy to host and then make the transfer to the sharded devices. This is
+#      not ideal, we should be able to do a direct transfer using remapplan
+function ifrt_resharded_buffer(
+    ::Type{T}, ifrt_array, sz, client, reactant_sharding, global_device_ids, opsharding
+) where {T}
+    hlo_sharding = convert(XLA.HloSharding, opsharding)
+    ifrt_sharding = XLA.IFRT.Sharding(
+        XLA.get_device.((client,), global_device_ids), hlo_sharding
+    )
+
+    data = similar(Array{T,length(sz)}, sz)
+    XLA.to_host(XLA.synced_buffer(ifrt_array), data, reactant_sharding)
+    return XLA.IFRT.Array(client, data, ifrt_sharding)
 end
 
 """
@@ -1429,12 +2500,15 @@ function codegen_unflatten!(
     result_stores,
     path_to_shard_info,
     linear_result_shard_info,
-    sharding_mesh,
     client,
+    resharded_inputs,
 )
     cache_dict = gensym("cache_dict")
-    has_cache_dict = false
+    needs_cache_dict = false
+    unresharded_arrays_cache = Dict{Symbol,Symbol}()
+    unresharded_code = Expr[]
     unflatten_code = Expr[]
+    used_shardinfo = Set{Symbol}()
 
     runtime = XLA.runtime(client)
     if runtime isa Val{:PJRT}
@@ -1448,89 +2522,119 @@ function codegen_unflatten!(
     end
     ctypes = Union{arrtype,numtype}
 
+    to_unreshard_results = Dict{Tuple,Any}()
+
+    # Ofcourse not thread-safe but this isn't meant for end-users anyways
+    if DEBUG_ALIASED_BUFFER_ASSIGNMENT_ERROR[]
+        push!(unflatten_code, :(empty!(DEBUG_BUFFER_POINTERS_STORE_DICT)))
+    end
+
     # mutate the result stores to point to the correct concrete results
+
+    argprefix::Symbol = :args
+    resprefix::Symbol = :result
+    resargprefix::Symbol = :resargs
+
     for (concrete_res_name, result, shard_info) in
         zip(concretized_res_names, linear_results, linear_result_shard_info)
         paths = (
             (
                 p for p in Reactant.TracedUtils.get_paths(result) if
-                length(p) > 0 && (p[1] == :result || p[1] == :resargs)
+                length(p) > 0 && (p[1] == resprefix || p[1] == resargprefix)
             )...,
         )
         for path in paths
-            if path[1] == :result
+            if path[1] == resprefix
                 unflatcode = :result
                 path = path[2:end]
+
+                if Reactant.TracedUtils.has_idx(result, argprefix)
+                    argidx = Reactant.TracedUtils.get_idx(result, argprefix)
+                    if haskey(resharded_inputs, argidx)
+                        to_unreshard_results[path] = resharded_inputs[argidx]
+                    end
+                end
+
                 result_stores[path] = concrete_res_name
                 if path_to_shard_info !== nothing
                     path_to_shard_info[path] = shard_info
                 end
                 continue
             else
-                @assert path[1] == :resargs
+                @assert path[1] == resargprefix
                 unflatcode = :(args[$(path[2])])
-                path = path[3:end]
 
+                need_to_unreshard = get(resharded_inputs, (:args, path[2:end]...), nothing)
+                if need_to_unreshard !== nothing
+                    @assert runtime isa Val{:IFRT} "PJRT is not supported here. Use IFRT \
+                                                    instead."
+                end
+
+                path = path[3:end]
                 for p in path[1:(end - 1)]
                     unflatcode = :(traced_getfield($unflatcode, $(Meta.quot(p))))
                 end
 
-                if length(path) > 0
-                    final_val = gensym("final_val")
-                    clocal = gensym("clocal")
-                    if !has_cache_dict
-                        has_cache_dict = true
+                concrete_res_name_final = concrete_res_name
+                if need_to_unreshard !== nothing
+                    if !haskey(unresharded_arrays_cache, concrete_res_name)
+                        unreshard_sym = gensym(:unresharded_buffer)
                         push!(
-                            unflatten_code,
+                            unresharded_code,
                             :(
-                                $cache_dict =
-                                    $(IdDict{Union{TracedRArray,TracedRNumber},ctypes}())
+                                $unreshard_sym = generate_unresharded_ifrt_array(
+                                    $(concrete_res_name),
+                                    $(need_to_unreshard[1]),
+                                    $(need_to_unreshard[2]),
+                                    global_mesh,
+                                )
                             ),
                         )
+                        unresharded_arrays_cache[concrete_res_name] = unreshard_sym
                     end
-                    unflatcode = quote
-                        # XXX: we might need to handle sharding here
-                        $final_val = traced_getfield($unflatcode, $(Meta.quot(path[end])))
-                        if $final_val isa TracedRArray
-                            $clocal = if haskey($cache_dict, $final_val)
-                                $cache_dict[$final_val]
-                            else
-                                $cache_dict[$final_val] = $(arrtype){
-                                    $(Reactant.unwrapped_eltype)($final_val),
-                                    ndims($final_val),
-                                }(
-                                    $concrete_res_name, size($final_val)
-                                )
-                                $cache_dict[$final_val]
-                            end
-                            traced_setfield!($unflatcode, $(Meta.quot(path[end])), $clocal)
-                        elseif $final_val isa TracedRNumber
-                            $clocal = if haskey($cache_dict, $final_val)
-                                $cache_dict[$final_val]
-                            else
-                                $cache_dict[$final_val] = $(numtype){
-                                    $(Reactant.unwrapped_eltype)($final_val)
-                                }(
-                                    $concrete_res_name
-                                )
-                                $cache_dict[$final_val]
-                            end
-                            traced_setfield!($unflatcode, $(Meta.quot(path[end])), $clocal)
-                        else
-                            traced_setfield!($final_val, :data, $concrete_res_name)
-                        end
-                    end
+                    concrete_res_name_final = unresharded_arrays_cache[concrete_res_name]
+                end
+
+                if length(path) > 0
+                    needs_cache_dict = true
+                    # XXX: we might need to handle sharding here
+                    unflatcode = :(traced_setfield_buffer!(
+                        $(runtime),
+                        $(cache_dict),
+                        $(concrete_res_name_final),
+                        $(unflatcode),
+                        $(Meta.quot(path[end])),
+                        $(path),
+                    ))
                 else
-                    unflatcode = :(traced_setfield!($unflatcode, :data, $concrete_res_name))
+                    unflatcode = :(traced_setfield!(
+                        $(unflatcode), :data, $(concrete_res_name_final), $(path)
+                    ))
                 end
                 push!(unflatten_code, unflatcode)
             end
         end
     end
 
+    if needs_cache_dict
+        pushfirst!(
+            unflatten_code,
+            :($cache_dict = $(IdDict{Union{TracedRArray,TracedRNumber},ctypes}())),
+        )
+    end
+
     prevkeys = collect(keys(result_stores))
+    result_cache = IdDict{ctypes,ctypes}()
     result_code = create_result(
-        concrete_result, (), result_stores, path_to_shard_info, sharding_mesh
+        concrete_result,
+        (),
+        result_stores,
+        path_to_shard_info,
+        to_unreshard_results,
+        unresharded_code,
+        unresharded_arrays_cache,
+        used_shardinfo,
+        result_cache,
     )
     postkeys = collect(keys(result_stores))
     used = [t for t in prevkeys if !in(t, postkeys)]
@@ -1566,8 +2670,15 @@ function codegen_unflatten!(
                 res = :(args[$(path[2])])
                 path = path[3:end]
             end
+
             for p in path
                 res = :(traced_getfield($res, $(Meta.quot(p))))
+            end
+
+            need_to_unreshard = get(resharded_inputs, (:args, argpath[2:end]...), nothing)
+            if need_to_unreshard !== nothing
+                # TODO(@avik-pal): I need an MWE to debug this codepath
+                error("TODO: Not yet Implemented. Open an issue on Reactant.jl.")
             end
 
             argres = :(args[$(argpath[2])])
@@ -1575,16 +2686,18 @@ function codegen_unflatten!(
                 argres = :(traced_getfield($argres, $(Meta.quot(p))))
             end
 
-            res = :($res.data = $argres.data)
+            res = :(traced_setfield!($res, :data, $argres.data, $(path)))
             push!(unflatten_code, res)
         end
     end
 
-    # generate return object which stores the concrete results in some arbitrary way
-    pushfirst!(unflatten_code, :(result = $result_code))
-    # push!(unflatten_code, :(return result))
+    if DEBUG_ALIASED_BUFFER_ASSIGNMENT_ERROR[]
+        push!(unflatten_code, :(empty!(DEBUG_BUFFER_POINTERS_STORE_DICT)))
+    end
 
-    return unflatten_code
+    # generate return object which stores the concrete results in some arbitrary way
+    return [unresharded_code..., :(result = $result_code), unflatten_code...],
+    used_shardinfo
 end
 
 """
@@ -1595,12 +2708,9 @@ Generate Julia code to call the XLA executable.
 # Arguments
 
 - `flatten_names`: A list of `Symbol`s representing the names of the flattened linear arguments.
-- `donated_args_mask`: A list of `UInt8`s representing whether the argument is donated.
 - `nresults`: The number of results to expect.
 """
-function codegen_xla_call(
-    flatten_names, donated_args_mask, nresults, is_sharded::Bool, ndevices::Int
-)
+function codegen_xla_call(flatten_names, nresults, is_sharded::Bool, ndevices::Int)
     flatten_buffer_refs = map(n -> :($n.buffer), flatten_names)
 
     base_symbol_name = is_sharded ? Symbol(:result_buffer_m, ndevices, :_) : :result_buffer_
@@ -1618,7 +2728,7 @@ function codegen_xla_call(
                     linearized_results = XLA.execute(
                         thunk.exec,
                         ($(flatten_buffer_refs...),),
-                        $(Tuple(donated_args_mask)),
+                        UInt8.(Tuple(donated_args_mask)),
                         Val($nresults),
                         Val($ndevices),
                     )
@@ -1632,7 +2742,7 @@ function codegen_xla_call(
                         thunk.exec,
                         thunk.device,
                         ($(flatten_buffer_refs...),),
-                        $(Tuple(donated_args_mask)),
+                        UInt8.(Tuple(donated_args_mask)),
                         Val($nresults),
                     )
                 end
@@ -1642,6 +2752,102 @@ function codegen_xla_call(
     end
 
     return concretized_res_names, xla_call_code
+end
+
+# generate the shard info code. we cannot embed any mesh information into the code here,
+# else serialization will be incorrect.
+function codegen_shard_info(
+    is_sharded, nresults::Int, linear_results, output_reactant_shardings, exec, ndevices
+)
+    !is_sharded && return Expr[], Expr[], [nothing for _ in 1:nresults]
+
+    shard_info_code = Expr[]
+    optional_shard_info_code = Expr[]
+    output_hlo_shardings_var = missing
+    output_hlo_shardings = XLA.get_output_shardings(exec)
+
+    linear_result_shard_info = Vector{Symbol}(undef, length(linear_results))
+    mesh_codegen_cache = Dict{Tuple,Symbol}()
+
+    for i in 1:nresults
+        res_size = size(linear_results[i])
+        array_slices, hlo_sharding = XLA.compute_array_indices_and_hlo_sharding(
+            output_hlo_shardings[i],
+            res_size,
+            0:(ndevices - 1), # verify if this is correct?
+        )
+
+        if output_reactant_shardings !== missing
+            reactant_sharding = output_reactant_shardings[i]
+            use_hlo_sharding =
+                reactant_sharding isa Sharding.NoSharding ||
+                Sharding.HloSharding(reactant_sharding, res_size).hlo_sharding !=
+                hlo_sharding
+        else
+            use_hlo_sharding = true
+        end
+
+        var_name = Symbol(:shard_info_, i)
+        if use_hlo_sharding
+            if output_hlo_shardings_var === missing
+                output_hlo_shardings_var = :output_hlo_shardings
+                pushfirst!(
+                    shard_info_code,
+                    :(
+                        $(output_hlo_shardings_var) = Reactant.XLA.get_output_shardings(
+                            thunk.exec
+                        )
+                    ),
+                )
+            end
+
+            push!(
+                optional_shard_info_code,
+                :(
+                    $(var_name) = Sharding.ShardInfo(
+                        Sharding.HloSharding(
+                            convert(XLA.HloSharding, $(output_hlo_shardings_var)[$(i)]),
+                            global_mesh,
+                            $(ntuple(Returns(true), length(res_size))),
+                            $(ntuple(Returns(-1), length(res_size))),
+                            nothing,
+                        ),
+                        $(array_slices),
+                    )
+                ),
+            )
+        else
+            mesh = output_reactant_shardings[i].mesh
+            mesh_key = (mesh.logical_device_ids, mesh.axis_names, mesh.axis_sizes)
+            if haskey(mesh_codegen_cache, mesh_key)
+                mesh_name = mesh_codegen_cache[mesh_key]
+            else
+                mesh_name = gensym(:mesh)
+                push!(
+                    shard_info_code,
+                    :(
+                        $(mesh_name) = Sharding.Mesh(
+                            thunk.global_device_ids,
+                            $(mesh.logical_device_ids),
+                            $(mesh.axis_names),
+                            $(mesh.axis_sizes),
+                        )
+                    ),
+                )
+                mesh_codegen_cache[mesh_key] = mesh_name
+            end
+
+            new_sharding = Sharding.codegen_with_new_mesh(
+                output_reactant_shardings[i], mesh_name
+            )
+            push!(
+                optional_shard_info_code,
+                :($(var_name) = Sharding.ShardInfo($(new_sharding), $(array_slices))),
+            )
+        end
+        linear_result_shard_info[i] = var_name
+    end
+    return shard_info_code, optional_shard_info_code, linear_result_shard_info
 end
 
 function __add_mhlo_attributes_and_name!(mod::MLIR.IR.Module, f; kwargs...)
@@ -1712,7 +2918,7 @@ function __resolve_device_and_client(client, seen_args, linear_args, is_sharded)
     return (client, device)
 end
 
-function compile_xla(f, args; client=nothing, kwargs...)
+function compile_xla(f, args; client=nothing, serializable::Bool=false, kwargs...)
     # register MLIR dialects
     ctx = MLIR.IR.Context(Reactant.registry[], false)
     context_gc_vector[ctx] = Vector{Union{TracedRArray,TracedRNumber}}(undef, 0)
@@ -1748,12 +2954,17 @@ function compile_xla(f, args; client=nothing, kwargs...)
         )
 
         # compile MLIR module to XLA executable
-        global_device_ids = if mlir_fn_res.is_sharded
-            vec(mlir_fn_res.sharding_mesh.device_ids)
-        else
-            Int64[]
-        end
+        global_device_ids = collect(Int64, mlir_fn_res.global_device_ids)
         mlir_fn_res.is_sharded && (device = nothing)
+
+        # XLA.compile mutates the module, for serialization we need to keep a copy
+        if serializable
+            iobuffer = IOBuffer()
+            show(IOContext(iobuffer, :debug => debug), mod)
+            module_string = String(take!(iobuffer))
+        else
+            module_string = ""
+        end
 
         exec = XLA.compile(
             client,
@@ -1765,9 +2976,10 @@ function compile_xla(f, args; client=nothing, kwargs...)
             global_device_ids,
             mlir_fn_res.num_replicas,
             mlir_fn_res.num_partitions,
+            mlir_fn_res.use_shardy_partitioner,
         )
 
-        return mod, exec, mlir_fn_res, device, client
+        return mod, exec, mlir_fn_res, device, client, module_string
     finally
         MLIR.IR.deactivate!(ctx)
     end
@@ -1777,49 +2989,65 @@ function compile_xla(f, args; client=nothing, kwargs...)
 end
 
 function compile(f, args; sync=false, kwargs...)
-    _, exec, mlir_fn_res, device, client = compile_xla(f, args; kwargs...)
-    (; linear_args, seen_args, linear_results, preserved_args, concrete_result) =
-        mlir_fn_res
-
-    preserved_args_idx = last.(preserved_args)
-    donated_args_mask = map(1:length(linear_args)) do i
-        UInt8(i ∉ preserved_args_idx)
-    end
+    _, exec, mlir_fn_res, device, client, str = compile_xla(f, args; kwargs...)
+    (;
+        linear_args,
+        seen_args,
+        linear_results,
+        preserved_args,
+        concrete_result,
+        donated_args_mask,
+    ) = mlir_fn_res
 
     result_stores = Dict{Tuple,Symbol}()
-    path_to_shard_info = mlir_fn_res.is_sharded ? Dict{Tuple,Tuple}() : nothing
+    path_to_shard_info = mlir_fn_res.is_sharded ? Dict{Tuple,Symbol}() : nothing
+
+    global_mesh_expr = if mlir_fn_res.unique_meshes === nothing
+        :()
+    elseif length(mlir_fn_res.unique_meshes) == 1
+        only_mesh = only(mlir_fn_res.unique_meshes)
+        :(Sharding.Mesh(
+            thunk.global_device_ids, # same as only_mesh.global_device_ids
+            0:(length(thunk.global_device_ids) - 1), # same as only_mesh.logical_device_ids
+            $(only_mesh.axis_names),
+            $(only_mesh.axis_sizes),
+        ))
+    else
+        :(Sharding.Mesh(
+            thunk.global_device_ids,
+            0:(length(thunk.global_device_ids) - 1),
+            (:flat_mesh,),
+            (length(thunk.global_device_ids),),
+        ))
+    end
+
+    ndevices = mlir_fn_res.is_sharded ? length(mlir_fn_res.global_device_ids) : 1
 
     # generate Julia `Thunk` code
-    flatten_arg_names, flatten_code = codegen_flatten!(
+    flatten_arg_names, flatten_code, resharded_inputs = codegen_flatten!(
         linear_args,
         seen_args,
         result_stores,
         mlir_fn_res.is_sharded,
-        mlir_fn_res.sharding_mesh,
-        XLA.get_parameter_shardings(exec),
+        XLA.get_parameter_shardings(exec), # TODO: use the same workflow as output shardings to parse the tensor sharding attributes directly if possible
         client,
+        ndevices,
     )
 
     concretized_res_names, xla_call_code = codegen_xla_call(
-        flatten_arg_names,
-        donated_args_mask,
-        length(linear_results),
-        mlir_fn_res.is_sharded,
-        mlir_fn_res.is_sharded ? length(mlir_fn_res.sharding_mesh) : 1,
+        flatten_arg_names, length(linear_results), mlir_fn_res.is_sharded, ndevices
     )
 
-    linear_result_shard_info = if mlir_fn_res.is_sharded
-        output_shardings = XLA.get_output_shardings(exec)
-        XLA.compute_array_indices_and_hlo_sharding.(
-            output_shardings,
-            size.(mlir_fn_res.linear_results),
-            (mlir_fn_res.sharding_mesh.logical_device_ids,),
-        )
-    else
-        ntuple(Returns(nothing), length(linear_results))
-    end
+    shard_info_code, optional_shard_info_code, linear_result_shard_info = codegen_shard_info(
+        mlir_fn_res.is_sharded,
+        length(linear_results),
+        linear_results,
+        mlir_fn_res.result_shardings,
+        exec,
+        ndevices,
+    )
 
-    unflatten_code = codegen_unflatten!(
+    unflatten_code, used_shardinfo = codegen_unflatten!(
         linear_args,
         preserved_args,
         concretized_res_names,
@@ -1828,9 +3056,15 @@ function compile(f, args; sync=false, kwargs...)
         result_stores,
         path_to_shard_info,
         linear_result_shard_info,
-        mlir_fn_res.sharding_mesh,
         client,
+        resharded_inputs,
     )
+
+    for (i, name) in enumerate(linear_result_shard_info)
+        if name in used_shardinfo
+            push!(shard_info_code, optional_shard_info_code[i])
+        end
+    end
 
     sync_call = if sync
         calls = []
@@ -1844,12 +3078,27 @@ function compile(f, args; sync=false, kwargs...)
 
     fname = gensym(Symbol(Symbol(f), :_reactant))
 
+    donated_buffers_set = if XLA.runtime(client) isa Val{:PJRT}
+        :(Base.IdSet{NTuple{<:Any,XLA.PJRT.Buffer}}())
+    else
+        :(Base.IdSet{XLA.IFRT.Array}())
+    end
+
     body = quote
+        global_mesh = $(global_mesh_expr)
+        donated_buffers = $(donated_buffers_set)
+        donated_args_mask = thunk.donated_args_mask
         $(flatten_code...)
         $(xla_call_code)
         $(sync_call)
+        $(shard_info_code...)
         $(unflatten_code...)
         return result
+    end
+
+    if DEBUG_PRINT_CODEGEN[] && Reactant.Distributed.local_rank() == 0
+        display(body)
+        display(mlir_fn_res.donated_args_mask)
     end
 
     return register_thunk(
@@ -1860,28 +3109,49 @@ function compile(f, args; sync=false, kwargs...)
         mlir_fn_res.fnwrapped,
         exec,
         mlir_fn_res.is_sharded ? nothing : device,
+        str,
+        client,
+        mlir_fn_res.global_device_ids,
+        mlir_fn_res.donated_args_mask,
     )
 end
 
 # inspired by RuntimeGeneratedFunction.jl
 const __thunk_body_cache = Dict{Symbol,Expr}()
 
-struct Thunk{FTy,tag,IsClosure,ArgTypes,ExecTy,DeviceTy}
+struct Thunk{FTy,tag,IsClosure,ArgTypes,ExecTy,DeviceTy,ClientTy,GD,DAM}
     f::FTy
     exec::ExecTy
     device::DeviceTy
+    module_string::String
+    client::ClientTy
+    global_device_ids::GD
+    donated_args_mask::DAM
+end
+
+function Base.show(io::IO, thunk::Thunk{FTy,tag}) where {FTy,tag}
+    return print(io, "Reactant compiled function $(thunk.f) (with tag $(tag))")
 end
 
 XLA.cost_analysis(thunk::Thunk) = XLA.cost_analysis(thunk.exec)
 
+XLA.get_output_shardings(thunk::Thunk) = XLA.get_output_shardings(thunk.exec)
+
+XLA.get_parameter_shardings(thunk::Thunk) = XLA.get_parameter_shardings(thunk.exec)
+
 struct MisMatchedThunkTypeError{ThunkTy,FoundTypes} <: Base.Exception end
 
 function Base.showerror(
-    io::IO, ece::MisMatchedThunkTypeError{Thunk{FTy,tag,ArgTypes,IsClosure},FoundTypes}
-) where {FTy,tag,ArgTypes,FoundTypes,IsClosure}
+    io::IO,
+    ::MisMatchedThunkTypeError{
+        <:Thunk{FTy,tag,IsClosure,ArgTypes,ExecTy,DeviceTy,ClientTy,GD},FoundTypes
+    },
+) where {FTy,tag,ArgTypes,FoundTypes,IsClosure,ExecTy,DeviceTy,ClientTy,GD}
     print(
         io,
-        "\nThe Reactant-compiled function `$(Thunk{FTy, tag, ArgTypes, IsClosure})` exists, but no method is defined for this combination of argument types.",
+        "\nThe Reactant-compiled function \
+         `$(Thunk{FTy, tag, ArgTypes, IsClosure, ExecTy, DeviceTy, ClientTy, GD})` exists, \
+         but no method is defined for this combination of argument types.",
     )
     print(
         io,
@@ -1897,15 +3167,18 @@ function Base.showerror(
     )
 end
 
-@generated function (thunk::Thunk{FTy,tag,ArgTypes,IsClosure,ExecTy,DeviceTy})(
+@generated function (
+    thunk::Thunk{FTy,tag,IsClosure,ArgTypes,ExecTy,DeviceTy,ClientTy,GD,DAM}
+)(
     args...
-) where {FTy,tag,ArgTypes,IsClosure,ExecTy,DeviceTy}
+) where {FTy,tag,IsClosure,ArgTypes,ExecTy,DeviceTy,ClientTy,GD,DAM}
     FoundTypes = Tuple{args...}
     if ArgTypes != FoundTypes
         return quote
             throw(
                 $(MisMatchedThunkTypeError{
-                    Thunk{FTy,tag,ArgTypes,IsClosure,ExecTy,DeviceTy},FoundTypes
+                    Thunk{FTy,tag,IsClosure,ArgTypes,ExecTy,DeviceTy,ClientTy,GD,DAM},
+                    FoundTypes,
                 }()),
             )
         end
@@ -1929,10 +3202,24 @@ function register_thunk(
     isclosure::Bool,
     exec,
     device,
+    module_string,
+    client,
+    global_device_ids,
+    donated_args_mask,
 )
     __thunk_body_cache[tag] = body
-    return Thunk{Core.Typeof(f),tag,argtys,isclosure,Core.Typeof(exec),Core.Typeof(device)}(
-        f, exec, device
+    return Thunk{
+        Core.Typeof(f),
+        tag,
+        isclosure,
+        argtys,
+        Core.Typeof(exec),
+        Core.Typeof(device),
+        Core.Typeof(client),
+        Core.Typeof(global_device_ids),
+        Core.Typeof(donated_args_mask),
+    }(
+        f, exec, device, module_string, client, global_device_ids, donated_args_mask
     )
 end
 
@@ -1969,6 +3256,35 @@ for cache_type in (:callcache, :sdycache)
             return last(task_local_storage($(Meta.quot(cache_type))))
         end
     end
+end
+
+function default_sdycache()
+    return Dict{
+        Tuple{AbstractVector{Int},NTuple{<:Any,Symbol},Dims{<:Any}},
+        @NamedTuple{
+            sym_name::MLIR.IR.Attribute,
+            mesh_attr::MLIR.IR.Attribute,
+            mesh_op::MLIR.IR.Operation,
+            mesh::Sharding.Mesh,
+        }
+    }()
+end
+
+function default_callcache()
+    return Dict{
+        Vector,
+        @NamedTuple{
+            f_name::String,
+            mlir_result_types::Vector{MLIR.IR.Type},
+            traced_result::Any,
+            mutated_args::Vector{Int},
+            linear_results::Vector{Reactant.TracedType},
+            fnwrapped::Bool,
+            argprefix::Symbol,
+            resprefix::Symbol,
+            resargprefix::Symbol,
+        }
+    }()
 end
 
 end

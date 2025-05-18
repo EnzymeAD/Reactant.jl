@@ -3,6 +3,15 @@ using Reactant
 using Test
 using CUDA
 
+const ReactantCUDAExt = Base.get_extension(Reactant, :ReactantCUDAExt)
+
+@testset "Promote CuTraced" begin
+    TFT = ReactantCUDAExt.CuTracedRNumber{Float64,1}
+    FT = Float64
+    @test Reactant.promote_traced_type(TFT, FT) == TFT
+    @test Base.promote_type(TFT, FT) == FT
+end
+
 function square_kernel!(x, y)
     i = threadIdx().x
     x[i] *= y[i]
@@ -155,6 +164,25 @@ end
     @test all(Array(A) .≈ oA .* 3.1)
 end
 
+function pow_number_kernel!(x, y)
+    i = threadIdx().x
+    x[i] *= (y^2)
+    return nothing
+end
+
+function pow_number!(x, y)
+    @cuda blocks = 1 threads = length(x) pow_number_kernel!(x, y)
+    return nothing
+end
+
+@testset "Pow Number" begin
+    oA = collect(Float64, 1:1:64)
+    A = Reactant.to_rarray(oA)
+    B = ConcreteRNumber(3.1)
+    @jit pow_number!(A, B)
+    @test all(Array(A) .≈ oA .* 3.1 * 3.1)
+end
+
 function searchsorted_kernel!(x, y)
     i = threadIdx().x
     times = 0:0.01:4.5
@@ -174,4 +202,23 @@ end
     B = ConcreteRNumber(3.1)
     @jit searchsorted!(A, B)
     @test all(Array(A) .≈ 311)
+end
+
+function convert_mul_kernel!(Gu, w::FT) where {FT}
+    r = FT(0.5) * w
+    @inbounds Gu[1, 1, 1] = r
+    return nothing
+end
+
+function convert_mul!(Gu, w)
+    @cuda blocks = 1 threads = 1 convert_mul_kernel!(Gu, w)
+    return nothing
+end
+
+@testset "Convert mul" begin
+    w = Reactant.ConcreteRNumber(0.6)
+    Gu = Reactant.to_rarray(ones(24, 24, 24))
+    @jit convert_mul!(Gu, w)
+    Gui = Array((Gu))
+    @test Gui[1] ≈ 0.3
 end

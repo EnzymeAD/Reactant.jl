@@ -183,17 +183,17 @@ function get_number_of_ways_dim_sharded(op_sharding::OpSharding)
     return td, 1
 end
 
-function sharding_to_concrete_array_indices(sharding::OpSharding, shape, device_ids)
+function sharding_to_concrete_array_indices(sharding::OpSharding, shape, logical_device_ids)
     return sharding_to_concrete_array_indices(
-        convert(CondensedOpSharding, sharding), shape, device_ids
+        convert(CondensedOpSharding, sharding), shape, logical_device_ids
     )
 end
 
 function compute_array_indices_and_hlo_sharding(
-    sharding::OpSharding, array_size, device_ids
+    sharding::OpSharding, array_size, logical_device_ids
 )
     return compute_array_indices_and_hlo_sharding(
-        convert(CondensedOpSharding, sharding), array_size, device_ids
+        convert(CondensedOpSharding, sharding), array_size, logical_device_ids
     )
 end
 
@@ -248,10 +248,10 @@ function get_number_of_ways_dim_sharded(op_sharding::CondensedOpSharding{N}) whe
 end
 
 function sharding_to_concrete_array_indices(
-    sharding::CondensedOpSharding, shape::Dims{N}, device_ids
+    sharding::CondensedOpSharding, shape::Dims{N}, logical_device_ids
 ) where {N}
     if sharding.type == OpShardingType.Replicated || sharding.type == OpShardingType.Maximal
-        return map(Returns(UnitRange.(1, shape)), device_ids), false
+        return map(Returns(UnitRange.(1, shape)), logical_device_ids), false
     elseif sharding.type == OpShardingType.Other
         partitions, num_replicas = get_number_of_ways_dim_sharded(sharding)
         @assert length(partitions) == length(shape)
@@ -290,30 +290,19 @@ function sharding_to_concrete_array_indices(
             end
         end
 
-        return map(Base.Fix1(getindex, indices), device_ids), needs_padding
+        return map(Base.Fix1(getindex, indices), logical_device_ids), needs_padding
     else
         error("Unsupported sharding type: $(sharding.type)")
     end
 end
 
 function compute_array_indices_and_hlo_sharding(
-    sharding::CondensedOpSharding, array_size, device_ids
+    sharding::CondensedOpSharding, array_size, logical_device_ids
 )
     return (
-        first(sharding_to_concrete_array_indices(sharding, array_size, device_ids)),
+        first(sharding_to_concrete_array_indices(sharding, array_size, logical_device_ids)),
         convert(HloSharding, sharding),
     )
-end
-
-# Helper function to get device sequence along a dimension
-function __get_device_sequence(arr, dim)
-    idx = ones(Int, ndims(arr))
-    sequence = Int[]
-    for i in 1:size(arr, dim)
-        idx[dim] = i
-        push!(sequence, arr[idx...])
-    end
-    return sequence
 end
 
 # xla::HloSharding
@@ -323,6 +312,14 @@ mutable struct HloSharding
     function HloSharding(ptr::Ptr{Cvoid})
         @assert ptr != C_NULL
         return finalizer(free_hlo_sharding, new(ptr))
+    end
+end
+
+function Base.:(==)(hsharding1::HloSharding, hsharding2::HloSharding)
+    GC.@preserve hsharding1 hsharding2 begin
+        return @ccall MLIR.API.mlir_c.hlo_sharding_check_eq(
+            hsharding1.ptr::Ptr{Cvoid}, hsharding2.ptr::Ptr{Cvoid}
+        )::Bool
     end
 end
 
@@ -367,24 +364,80 @@ function Base.string(hlo_sharding::HloSharding)
     return unsafe_string_and_free(str)
 end
 
-function Base.show(io::IO, ::MIME"text/plain", hlo_sharding::HloSharding)
+function Base.show(io::IO, hlo_sharding::HloSharding)
     print(io, "XLA.HloSharding(\"", string(hlo_sharding), "\")")
     return nothing
 end
 
-function sharding_to_concrete_array_indices(sharding::HloSharding, shape, device_ids)
+function sharding_to_concrete_array_indices(
+    sharding::HloSharding, shape, logical_device_ids
+)
     return sharding_to_concrete_array_indices(
-        convert(CondensedOpSharding, sharding), shape, device_ids
+        convert(CondensedOpSharding, sharding), shape, logical_device_ids
     )
 end
 
 function compute_array_indices_and_hlo_sharding(
-    sharding::HloSharding, array_size, device_ids
+    sharding::HloSharding, array_size, logical_device_ids
 )
     return (
         compute_array_indices_and_hlo_sharding(
-            convert(CondensedOpSharding, sharding), array_size, device_ids
+            convert(CondensedOpSharding, sharding), array_size, logical_device_ids
         ),
         sharding,
     )
+end
+
+function tile_assignment_dimensions(hlo_sharding::HloSharding)
+    GC.@preserve hlo_sharding begin
+        ndims = @ccall MLIR.API.mlir_c.hlo_sharding_tile_assignment_dimensions_size(
+            hlo_sharding.ptr::Ptr{Cvoid}
+        )::Int32
+    end
+    dimensions = Vector{Int64}(undef, ndims)
+    GC.@preserve hlo_sharding dimensions begin
+        @ccall MLIR.API.mlir_c.hlo_sharding_tile_assignment_dimensions(
+            hlo_sharding.ptr::Ptr{Cvoid}, dimensions::Ptr{Int64}, ndims::Int32
+        )::Cvoid
+    end
+    return dimensions
+end
+
+function tile_assignment_devices(hlo_sharding::HloSharding)
+    GC.@preserve hlo_sharding begin
+        ndims = @ccall MLIR.API.mlir_c.hlo_sharding_tile_assignment_devices_size(
+            hlo_sharding.ptr::Ptr{Cvoid}
+        )::Int32
+    end
+    devices = Vector{Int64}(undef, ndims)
+    GC.@preserve hlo_sharding devices begin
+        @ccall MLIR.API.mlir_c.hlo_sharding_tile_assignment_devices(
+            hlo_sharding.ptr::Ptr{Cvoid}, devices::Ptr{Int64}, ndims::Int32
+        )::Cvoid
+    end
+    return devices
+end
+
+for check in (:is_tiled, :is_maximal, :is_tuple, :is_replicated, :is_manual, :is_unknown)
+    cfn = Symbol(:hlo_sharding_, check)
+    @eval function $(check)(hlo_sharding::HloSharding)
+        GC.@preserve hlo_sharding begin
+            return @ccall MLIR.API.mlir_c.$(cfn)(hlo_sharding.ptr::Ptr{Cvoid})::Bool
+        end
+    end
+end
+
+function replicate_on_last_tile_dim(hlo_sharding::HloSharding)
+    GC.@preserve hlo_sharding begin
+        return @ccall MLIR.API.mlir_c.hlo_sharding_replicate_on_last_tile_dim(
+            hlo_sharding.ptr::Ptr{Cvoid}
+        )::Bool
+    end
+end
+
+function shard_shape(args...; kwargs...)
+    indices = sharding_to_concrete_array_indices(args...; kwargs...)
+    shard_shapes = map(Base.BroadcastFunction(length), indices)
+    allequal(shard_shapes) && return first(shard_shapes)
+    return nothing
 end

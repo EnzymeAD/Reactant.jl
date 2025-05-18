@@ -1,9 +1,30 @@
 module Distributed
 
-using ..Reactant: Reactant
+using ..Reactant: Reactant, Accelerators
 using Sockets
 
 const initialized = Ref(false)
+
+"""
+    local_rank()
+
+Returns the local rank of the current process.
+"""
+local_rank() = Reactant.XLA.global_state.process_id
+
+"""
+    num_processes()
+
+Returns the number of processes.
+"""
+num_processes() = Reactant.XLA.global_state.num_processes
+
+"""
+    is_initialized()
+
+Returns `true` if the distributed environment has been initialized.
+"""
+is_initialized() = initialized[]
 
 function initialize(;
     coordinator_address::Union{Nothing,String}=nothing,
@@ -14,6 +35,12 @@ function initialize(;
     initialization_timeout_in_seconds::Integer=300,
     kwargs...,
 )
+    if Reactant.XLA.runtime() isa Val{:PJRT}
+        @warn "Attempting to using Reactant Distributed functionality with PJRT runtime. \
+               This will never be properly supported. Switch to using IFRT runtime by \
+               adding a `xla_runtime` preference with value \"IFRT\""
+    end
+
     if isinteractive()
         @warn "Reactant.Distributed.initialize() should not be called in interactive mode. \
                Use Reactant.Distributed.initialize() in a script instead."
@@ -276,8 +303,8 @@ const _TPU_COORDINATOR_PORT = "8476"
 function get_coordinator_address(
     env::AbstractCloudTPUEnvDetector, timeout_in_seconds::Integer
 )
-    coordinator_address = if Reactant.TPUUtils.has_megascale_address()
-        Reactant.TPUUtils.get_tpu_env_value("MEGASCALE_COORDINATOR_ADDRESS")
+    coordinator_address = if Accelerators.TPU.has_megascale_address()
+        Accelerators.TPU.get_tpu_env_value("MEGASCALE_COORDINATOR_ADDRESS")
     else
         first(_get_worker_list_in_slice(env))
     end
@@ -334,13 +361,13 @@ function get_process_id(env::AbstractCloudTPUEnvDetector)
 end
 
 function _get_num_slices(::AbstractCloudTPUEnvDetector)
-    Reactant.TPUUtils.has_megascale_address() || return 1
-    return parse(Int, Reactant.TPUUtils.get_tpu_env_value("MEGASCALE_NUM_SLICES"))
+    Accelerators.TPU.has_megascale_address() || return 1
+    return parse(Int, Accelerators.TPU.get_tpu_env_value("MEGASCALE_NUM_SLICES"))
 end
 
 function _get_slice_id(::AbstractCloudTPUEnvDetector)
-    Reactant.TPUUtils.has_megascale_address() || return 0
-    return parse(Int, Reactant.TPUUtils.get_tpu_env_value("MEGASCALE_SLICE_ID"))
+    Accelerators.TPU.has_megascale_address() || return 0
+    return parse(Int, Accelerators.TPU.get_tpu_env_value("MEGASCALE_SLICE_ID"))
 end
 
 function _get_process_id_in_slice end
@@ -349,7 +376,7 @@ function _get_worker_list_in_slice end
 ## GceTPUCluster
 
 function is_env_present(::GceTPUCluster)
-    if !Reactant.TPUUtils.RUNNING_IN_CLOUD_TPU_VM[]
+    if !Accelerators.TPU.RUNNING_IN_CLOUD_TPU_VM[]
         @debug "Did not detect cloud TPU VM"
         return false
     end
@@ -359,8 +386,8 @@ function is_env_present(::GceTPUCluster)
         return false
     end
 
-    metadata_response, metadata_code = Reactant.TPUUtils.get_metadata("agent-worker-number")
-    if metadata_code == Reactant.TPUUtils._TPU_METADATA_RESPONSE_CODE_SUCCESS
+    metadata_response, metadata_code = Accelerators.TPU.get_metadata("agent-worker-number")
+    if metadata_code == Accelerators.TPU._TPU_METADATA_RESPONSE_CODE_SUCCESS
         @debug "Gce Tpu Cluster detected for Reactant Distributed System"
         return true
     else
@@ -373,23 +400,23 @@ function is_env_present(::GceTPUCluster)
 end
 
 function _get_process_id_in_slice(::GceTPUCluster)
-    return parse(Int, first(Reactant.TPUUtils.get_metadata("agent-worker-number")))
+    return parse(Int, first(Accelerators.TPU.get_metadata("agent-worker-number")))
 end
 
 function _get_worker_list_in_slice(::GceTPUCluster)
-    workers = split(first(Reactant.TPUUtils.get_metadata("worker-network-endpoints")), ',')
+    workers = split(first(Accelerators.TPU.get_metadata("worker-network-endpoints")), ',')
     return [split(w, ':')[3] for w in workers]
 end
 
 ## GkeTPUCluster
 
 function is_env_present(::GkeTPUCluster)
-    if Reactant.TPUUtils.RUNNING_IN_CLOUD_TPU_VM[] && haskey(ENV, "TPU_WORKER_HOSTNAMES")
+    if Accelerators.TPU.RUNNING_IN_CLOUD_TPU_VM[] && haskey(ENV, "TPU_WORKER_HOSTNAMES")
         @debug "Detected GKE TPU cluster for Reactant Distributed System"
         return true
     end
 
-    if !Reactant.TPUUtils.RUNNING_IN_CLOUD_TPU_VM[]
+    if !Accelerators.TPU.RUNNING_IN_CLOUD_TPU_VM[]
         @debug "Did not detect cloud TPU VM"
         return false
     end

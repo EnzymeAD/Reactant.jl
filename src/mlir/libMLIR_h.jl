@@ -477,6 +477,24 @@ function mlirContextSetThreadPool(context, threadPool)
 end
 
 """
+    mlirContextGetNumThreads(context)
+
+Gets the number of threads of the thread pool of the context when multithreading is enabled. Returns 1 if no multithreading.
+"""
+function mlirContextGetNumThreads(context)
+    @ccall mlir_c.mlirContextGetNumThreads(context::MlirContext)::Cuint
+end
+
+"""
+    mlirContextGetThreadPool(context)
+
+Gets the thread pool of the context when enabled multithreading, otherwise an assertion is raised.
+"""
+function mlirContextGetThreadPool(context)
+    @ccall mlir_c.mlirContextGetThreadPool(context::MlirContext)::MlirLlvmThreadPool
+end
+
+"""
     mlirDialectGetContext(dialect)
 
 Returns the context that owns the dialect.
@@ -629,6 +647,71 @@ function mlirLocationFileLineColRangeGet(
 end
 
 """
+    mlirLocationFileLineColRangeGetFilename(location)
+
+Getter for filename of FileLineColRange.
+"""
+function mlirLocationFileLineColRangeGetFilename(location)
+    @ccall mlir_c.mlirLocationFileLineColRangeGetFilename(
+        location::MlirLocation
+    )::MlirIdentifier
+end
+
+"""
+    mlirLocationFileLineColRangeGetStartLine(location)
+
+Getter for start\\_line of FileLineColRange.
+"""
+function mlirLocationFileLineColRangeGetStartLine(location)
+    @ccall mlir_c.mlirLocationFileLineColRangeGetStartLine(location::MlirLocation)::Cint
+end
+
+"""
+    mlirLocationFileLineColRangeGetStartColumn(location)
+
+Getter for start\\_column of FileLineColRange.
+"""
+function mlirLocationFileLineColRangeGetStartColumn(location)
+    @ccall mlir_c.mlirLocationFileLineColRangeGetStartColumn(location::MlirLocation)::Cint
+end
+
+"""
+    mlirLocationFileLineColRangeGetEndLine(location)
+
+Getter for end\\_line of FileLineColRange.
+"""
+function mlirLocationFileLineColRangeGetEndLine(location)
+    @ccall mlir_c.mlirLocationFileLineColRangeGetEndLine(location::MlirLocation)::Cint
+end
+
+"""
+    mlirLocationFileLineColRangeGetEndColumn(location)
+
+Getter for end\\_column of FileLineColRange.
+"""
+function mlirLocationFileLineColRangeGetEndColumn(location)
+    @ccall mlir_c.mlirLocationFileLineColRangeGetEndColumn(location::MlirLocation)::Cint
+end
+
+"""
+    mlirLocationFileLineColRangeGetTypeID()
+
+TypeID Getter for FileLineColRange.
+"""
+function mlirLocationFileLineColRangeGetTypeID()
+    @ccall mlir_c.mlirLocationFileLineColRangeGetTypeID()::MlirTypeID
+end
+
+"""
+    mlirLocationIsAFileLineColRange(location)
+
+Checks whether the given location is an FileLineColRange.
+"""
+function mlirLocationIsAFileLineColRange(location)
+    @ccall mlir_c.mlirLocationIsAFileLineColRange(location::MlirLocation)::Bool
+end
+
+"""
     mlirLocationCallSiteGet(callee, caller)
 
 Creates a call site location with a callee and a caller.
@@ -637,6 +720,42 @@ function mlirLocationCallSiteGet(callee, caller)
     @ccall mlir_c.mlirLocationCallSiteGet(
         callee::MlirLocation, caller::MlirLocation
     )::MlirLocation
+end
+
+"""
+    mlirLocationCallSiteGetCallee(location)
+
+Getter for callee of CallSite.
+"""
+function mlirLocationCallSiteGetCallee(location)
+    @ccall mlir_c.mlirLocationCallSiteGetCallee(location::MlirLocation)::MlirLocation
+end
+
+"""
+    mlirLocationCallSiteGetCaller(location)
+
+Getter for caller of CallSite.
+"""
+function mlirLocationCallSiteGetCaller(location)
+    @ccall mlir_c.mlirLocationCallSiteGetCaller(location::MlirLocation)::MlirLocation
+end
+
+"""
+    mlirLocationCallSiteGetTypeID()
+
+TypeID Getter for CallSite.
+"""
+function mlirLocationCallSiteGetTypeID()
+    @ccall mlir_c.mlirLocationCallSiteGetTypeID()::MlirTypeID
+end
+
+"""
+    mlirLocationIsACallSite(location)
+
+Checks whether the given location is an CallSite.
+"""
+function mlirLocationIsACallSite(location)
+    @ccall mlir_c.mlirLocationIsACallSite(location::MlirLocation)::Bool
 end
 
 """
@@ -654,6 +773,53 @@ function mlirLocationFusedGet(ctx, nLocations, locations, metadata)
 end
 
 """
+    mlirLocationFusedGetNumLocations(location)
+
+Getter for number of locations fused together.
+"""
+function mlirLocationFusedGetNumLocations(location)
+    @ccall mlir_c.mlirLocationFusedGetNumLocations(location::MlirLocation)::Cuint
+end
+
+"""
+    mlirLocationFusedGetLocations(location, locationsCPtr)
+
+Getter for locations of Fused. Requires pre-allocated memory of #fusedLocations X sizeof([`MlirLocation`](@ref)).
+"""
+function mlirLocationFusedGetLocations(location, locationsCPtr)
+    @ccall mlir_c.mlirLocationFusedGetLocations(
+        location::MlirLocation, locationsCPtr::Ptr{MlirLocation}
+    )::Cvoid
+end
+
+"""
+    mlirLocationFusedGetMetadata(location)
+
+Getter for metadata of Fused.
+"""
+function mlirLocationFusedGetMetadata(location)
+    @ccall mlir_c.mlirLocationFusedGetMetadata(location::MlirLocation)::MlirAttribute
+end
+
+"""
+    mlirLocationFusedGetTypeID()
+
+TypeID Getter for Fused.
+"""
+function mlirLocationFusedGetTypeID()
+    @ccall mlir_c.mlirLocationFusedGetTypeID()::MlirTypeID
+end
+
+"""
+    mlirLocationIsAFused(location)
+
+Checks whether the given location is an Fused.
+"""
+function mlirLocationIsAFused(location)
+    @ccall mlir_c.mlirLocationIsAFused(location::MlirLocation)::Bool
+end
+
+"""
     mlirLocationNameGet(context, name, childLoc)
 
 Creates a name location owned by the given context. Providing null location for childLoc is allowed and if childLoc is null location, then the behavior is the same as having unknown child location.
@@ -662,6 +828,42 @@ function mlirLocationNameGet(context, name, childLoc)
     @ccall mlir_c.mlirLocationNameGet(
         context::MlirContext, name::MlirStringRef, childLoc::MlirLocation
     )::MlirLocation
+end
+
+"""
+    mlirLocationNameGetName(location)
+
+Getter for name of Name.
+"""
+function mlirLocationNameGetName(location)
+    @ccall mlir_c.mlirLocationNameGetName(location::MlirLocation)::MlirIdentifier
+end
+
+"""
+    mlirLocationNameGetChildLoc(location)
+
+Getter for childLoc of Name.
+"""
+function mlirLocationNameGetChildLoc(location)
+    @ccall mlir_c.mlirLocationNameGetChildLoc(location::MlirLocation)::MlirLocation
+end
+
+"""
+    mlirLocationNameGetTypeID()
+
+TypeID Getter for Name.
+"""
+function mlirLocationNameGetTypeID()
+    @ccall mlir_c.mlirLocationNameGetTypeID()::MlirTypeID
+end
+
+"""
+    mlirLocationIsAName(location)
+
+Checks whether the given location is an Name.
+"""
+function mlirLocationIsAName(location)
+    @ccall mlir_c.mlirLocationIsAName(location::MlirLocation)::Bool
 end
 
 """
@@ -965,6 +1167,15 @@ Always print operations in the generic form.
 """
 function mlirOpPrintingFlagsPrintGenericOpForm(flags)
     @ccall mlir_c.mlirOpPrintingFlagsPrintGenericOpForm(flags::MlirOpPrintingFlags)::Cvoid
+end
+
+"""
+    mlirOpPrintingFlagsPrintNameLocAsPrefix(flags)
+
+Print the name and location, if NamedLoc, as a prefix to the SSA ID.
+"""
+function mlirOpPrintingFlagsPrintNameLocAsPrefix(flags)
+    @ccall mlir_c.mlirOpPrintingFlagsPrintNameLocAsPrefix(flags::MlirOpPrintingFlags)::Cvoid
 end
 
 """
@@ -2016,6 +2227,24 @@ function mlirValueReplaceAllUsesExcept(of, with, numExceptions, exceptions)
 end
 
 """
+    mlirValueGetLocation(v)
+
+Gets the location of the value.
+"""
+function mlirValueGetLocation(v)
+    @ccall mlir_c.mlirValueGetLocation(v::MlirValue)::MlirLocation
+end
+
+"""
+    mlirValueGetContext(v)
+
+Gets the context that a value was created with.
+"""
+function mlirValueGetContext(v)
+    @ccall mlir_c.mlirValueGetContext(v::MlirValue)::MlirContext
+end
+
+"""
     mlirOpOperandIsNull(opOperand)
 
 Returns whether the op operand is null.
@@ -2483,6 +2712,39 @@ Composes the given map with the given expression.
 function mlirAffineExprCompose(affineExpr, affineMap)
     @ccall mlir_c.mlirAffineExprCompose(
         affineExpr::MlirAffineExpr, affineMap::MlirAffineMap
+    )::MlirAffineExpr
+end
+
+"""
+    mlirAffineExprShiftDims(affineExpr, numDims, shift, offset)
+
+Replace dims[offset ... numDims) by dims[offset + shift ... shift + numDims).
+"""
+function mlirAffineExprShiftDims(affineExpr, numDims, shift, offset)
+    @ccall mlir_c.mlirAffineExprShiftDims(
+        affineExpr::MlirAffineExpr, numDims::UInt32, shift::UInt32, offset::UInt32
+    )::MlirAffineExpr
+end
+
+"""
+    mlirAffineExprShiftSymbols(affineExpr, numSymbols, shift, offset)
+
+Replace symbols[offset ... numSymbols) by symbols[offset + shift ... shift + numSymbols).
+"""
+function mlirAffineExprShiftSymbols(affineExpr, numSymbols, shift, offset)
+    @ccall mlir_c.mlirAffineExprShiftSymbols(
+        affineExpr::MlirAffineExpr, numSymbols::UInt32, shift::UInt32, offset::UInt32
+    )::MlirAffineExpr
+end
+
+"""
+    mlirSimplifyAffineExpr(expr, numDims, numSymbols)
+
+Simplify an affine expression by flattening and some amount of simple analysis. This has complexity linear in the number of nodes in 'expr'. Returns the simplified expression, which is the same as the input expression if it can't be simplified. When `expr` is semi-affine, a simplified semi-affine expression is constructed in the sorted order of dimension and symbol positions.
+"""
+function mlirSimplifyAffineExpr(expr, numDims, numSymbols)
+    @ccall mlir_c.mlirSimplifyAffineExpr(
+        expr::MlirAffineExpr, numDims::UInt32, numSymbols::UInt32
     )::MlirAffineExpr
 end
 
@@ -7079,6 +7341,48 @@ function mlirLinalgFillBuiltinNamedOpRegion(mlirOp)
     @ccall mlir_c.mlirLinalgFillBuiltinNamedOpRegion(mlirOp::MlirOperation)::Cvoid
 end
 
+function mlirLinalgIsAContractionOp(op)
+    @ccall mlir_c.mlirLinalgIsAContractionOp(op::MlirOperation)::Bool
+end
+
+struct MlirLinalgContractionDimensions
+    batch::MlirAttribute
+    m::MlirAttribute
+    n::MlirAttribute
+    k::MlirAttribute
+end
+
+function mlirLinalgInferContractionDimensions(op)
+    @ccall mlir_c.mlirLinalgInferContractionDimensions(
+        op::MlirOperation
+    )::MlirLinalgContractionDimensions
+end
+
+function mlirLinalgIsAConvolutionOp(op)
+    @ccall mlir_c.mlirLinalgIsAConvolutionOp(op::MlirOperation)::Bool
+end
+
+struct MlirLinalgConvolutionDimensions
+    batch::MlirAttribute
+    outputImage::MlirAttribute
+    outputChannel::MlirAttribute
+    filterLoop::MlirAttribute
+    inputChannel::MlirAttribute
+    depth::MlirAttribute
+    strides::MlirAttribute
+    dilations::MlirAttribute
+end
+
+function mlirLinalgInferConvolutionDimensions(op)
+    @ccall mlir_c.mlirLinalgInferConvolutionDimensions(
+        op::MlirOperation
+    )::MlirLinalgConvolutionDimensions
+end
+
+function mlirLinalgGetIndexingMapsAttribute(op)
+    @ccall mlir_c.mlirLinalgGetIndexingMapsAttribute(op::MlirOperation)::MlirAttribute
+end
+
 function mlirGetDialectHandle__linalg__()
     @ccall mlir_c.mlirGetDialectHandle__linalg__()::MlirDialectHandle
 end
@@ -7525,6 +7829,101 @@ function mlirUniformQuantizedPerAxisTypeIsFixedPoint(type)
 end
 
 """
+    mlirTypeIsAUniformQuantizedSubChannelType(type)
+
+Returns `true` if the given type is a UniformQuantizedSubChannel.
+"""
+function mlirTypeIsAUniformQuantizedSubChannelType(type)
+    @ccall mlir_c.mlirTypeIsAUniformQuantizedSubChannelType(type::MlirType)::Bool
+end
+
+"""
+    mlirUniformQuantizedSubChannelTypeGet(flags, storageType, expressedType, scalesAttr, zeroPointsAttr, blockSizeInfoLength, quantizedDimensions, blockSizes, storageTypeMin, storageTypeMax)
+
+Creates a UniformQuantizedSubChannelType with the given parameters.
+
+The type is owned by the context. `scalesAttr` and `zeroPointsAttr` must be DenseElementsAttrs. `quantizedDimensions` and `blockSizes` point to `blockSizeInfoLength` number of elements, describing respectively the quantization axis and corresponding block size.
+"""
+function mlirUniformQuantizedSubChannelTypeGet(
+    flags,
+    storageType,
+    expressedType,
+    scalesAttr,
+    zeroPointsAttr,
+    blockSizeInfoLength,
+    quantizedDimensions,
+    blockSizes,
+    storageTypeMin,
+    storageTypeMax,
+)
+    @ccall mlir_c.mlirUniformQuantizedSubChannelTypeGet(
+        flags::Cuint,
+        storageType::MlirType,
+        expressedType::MlirType,
+        scalesAttr::MlirAttribute,
+        zeroPointsAttr::MlirAttribute,
+        blockSizeInfoLength::intptr_t,
+        quantizedDimensions::Ptr{Int32},
+        blockSizes::Ptr{Int64},
+        storageTypeMin::Int64,
+        storageTypeMax::Int64,
+    )::MlirType
+end
+
+"""
+    mlirUniformQuantizedSubChannelTypeGetNumBlockSizes(type)
+
+Returns the number of block sizes provided in type.
+"""
+function mlirUniformQuantizedSubChannelTypeGetNumBlockSizes(type)
+    @ccall mlir_c.mlirUniformQuantizedSubChannelTypeGetNumBlockSizes(
+        type::MlirType
+    )::intptr_t
+end
+
+"""
+    mlirUniformQuantizedSubChannelTypeGetQuantizedDimension(type, pos)
+
+Returns the quantized dimension at the given position.
+"""
+function mlirUniformQuantizedSubChannelTypeGetQuantizedDimension(type, pos)
+    @ccall mlir_c.mlirUniformQuantizedSubChannelTypeGetQuantizedDimension(
+        type::MlirType, pos::intptr_t
+    )::Int32
+end
+
+"""
+    mlirUniformQuantizedSubChannelTypeGetBlockSize(type, pos)
+
+Returns the block size at the given position.
+"""
+function mlirUniformQuantizedSubChannelTypeGetBlockSize(type, pos)
+    @ccall mlir_c.mlirUniformQuantizedSubChannelTypeGetBlockSize(
+        type::MlirType, pos::intptr_t
+    )::Int64
+end
+
+"""
+    mlirUniformQuantizedSubChannelTypeGetScales(type)
+
+Returns the scales of the quantized type.
+"""
+function mlirUniformQuantizedSubChannelTypeGetScales(type)
+    @ccall mlir_c.mlirUniformQuantizedSubChannelTypeGetScales(type::MlirType)::MlirAttribute
+end
+
+"""
+    mlirUniformQuantizedSubChannelTypeGetZeroPoints(type)
+
+Returns the zero-points of the quantized type.
+"""
+function mlirUniformQuantizedSubChannelTypeGetZeroPoints(type)
+    @ccall mlir_c.mlirUniformQuantizedSubChannelTypeGetZeroPoints(
+        type::MlirType
+    )::MlirAttribute
+end
+
+"""
     mlirTypeIsACalibratedQuantizedType(type)
 
 Returns `true` if the given type is a CalibratedQuantizedType.
@@ -7568,6 +7967,208 @@ end
 
 function mlirGetDialectHandle__scf__()
     @ccall mlir_c.mlirGetDialectHandle__scf__()::MlirDialectHandle
+end
+
+function mlirGetDialectHandle__smt__()
+    @ccall mlir_c.mlirGetDialectHandle__smt__()::MlirDialectHandle
+end
+
+"""
+    mlirSMTTypeIsAnyNonFuncSMTValueType(type)
+
+Checks if the given type is any non-func SMT value type.
+"""
+function mlirSMTTypeIsAnyNonFuncSMTValueType(type)
+    @ccall mlir_c.mlirSMTTypeIsAnyNonFuncSMTValueType(type::MlirType)::Bool
+end
+
+"""
+    mlirSMTTypeIsAnySMTValueType(type)
+
+Checks if the given type is any SMT value type.
+"""
+function mlirSMTTypeIsAnySMTValueType(type)
+    @ccall mlir_c.mlirSMTTypeIsAnySMTValueType(type::MlirType)::Bool
+end
+
+"""
+    mlirSMTTypeIsAArray(type)
+
+Checks if the given type is a smt::ArrayType.
+"""
+function mlirSMTTypeIsAArray(type)
+    @ccall mlir_c.mlirSMTTypeIsAArray(type::MlirType)::Bool
+end
+
+"""
+    mlirSMTTypeGetArray(ctx, domainType, rangeType)
+
+Creates an array type with the given domain and range types.
+"""
+function mlirSMTTypeGetArray(ctx, domainType, rangeType)
+    @ccall mlir_c.mlirSMTTypeGetArray(
+        ctx::MlirContext, domainType::MlirType, rangeType::MlirType
+    )::MlirType
+end
+
+"""
+    mlirSMTTypeIsABitVector(type)
+
+Checks if the given type is a smt::BitVectorType.
+"""
+function mlirSMTTypeIsABitVector(type)
+    @ccall mlir_c.mlirSMTTypeIsABitVector(type::MlirType)::Bool
+end
+
+"""
+    mlirSMTTypeGetBitVector(ctx, width)
+
+Creates a smt::BitVectorType with the given width.
+"""
+function mlirSMTTypeGetBitVector(ctx, width)
+    @ccall mlir_c.mlirSMTTypeGetBitVector(ctx::MlirContext, width::Int32)::MlirType
+end
+
+"""
+    mlirSMTTypeIsABool(type)
+
+Checks if the given type is a smt::BoolType.
+"""
+function mlirSMTTypeIsABool(type)
+    @ccall mlir_c.mlirSMTTypeIsABool(type::MlirType)::Bool
+end
+
+"""
+    mlirSMTTypeGetBool(ctx)
+
+Creates a smt::BoolType.
+"""
+function mlirSMTTypeGetBool(ctx)
+    @ccall mlir_c.mlirSMTTypeGetBool(ctx::MlirContext)::MlirType
+end
+
+"""
+    mlirSMTTypeIsAInt(type)
+
+Checks if the given type is a smt::IntType.
+"""
+function mlirSMTTypeIsAInt(type)
+    @ccall mlir_c.mlirSMTTypeIsAInt(type::MlirType)::Bool
+end
+
+"""
+    mlirSMTTypeGetInt(ctx)
+
+Creates a smt::IntType.
+"""
+function mlirSMTTypeGetInt(ctx)
+    @ccall mlir_c.mlirSMTTypeGetInt(ctx::MlirContext)::MlirType
+end
+
+"""
+    mlirSMTTypeIsASMTFunc(type)
+
+Checks if the given type is a smt::FuncType.
+"""
+function mlirSMTTypeIsASMTFunc(type)
+    @ccall mlir_c.mlirSMTTypeIsASMTFunc(type::MlirType)::Bool
+end
+
+"""
+    mlirSMTTypeGetSMTFunc(ctx, numberOfDomainTypes, domainTypes, rangeType)
+
+Creates a smt::FuncType with the given domain and range types.
+"""
+function mlirSMTTypeGetSMTFunc(ctx, numberOfDomainTypes, domainTypes, rangeType)
+    @ccall mlir_c.mlirSMTTypeGetSMTFunc(
+        ctx::MlirContext,
+        numberOfDomainTypes::Csize_t,
+        domainTypes::Ptr{MlirType},
+        rangeType::MlirType,
+    )::MlirType
+end
+
+"""
+    mlirSMTTypeIsASort(type)
+
+Checks if the given type is a smt::SortType.
+"""
+function mlirSMTTypeIsASort(type)
+    @ccall mlir_c.mlirSMTTypeIsASort(type::MlirType)::Bool
+end
+
+"""
+    mlirSMTTypeGetSort(ctx, identifier, numberOfSortParams, sortParams)
+
+Creates a smt::SortType with the given identifier and sort parameters.
+"""
+function mlirSMTTypeGetSort(ctx, identifier, numberOfSortParams, sortParams)
+    @ccall mlir_c.mlirSMTTypeGetSort(
+        ctx::MlirContext,
+        identifier::MlirIdentifier,
+        numberOfSortParams::Csize_t,
+        sortParams::Ptr{MlirType},
+    )::MlirType
+end
+
+"""
+    mlirSMTAttrCheckBVCmpPredicate(ctx, str)
+
+Checks if the given string is a valid smt::BVCmpPredicate.
+"""
+function mlirSMTAttrCheckBVCmpPredicate(ctx, str)
+    @ccall mlir_c.mlirSMTAttrCheckBVCmpPredicate(ctx::MlirContext, str::MlirStringRef)::Bool
+end
+
+"""
+    mlirSMTAttrCheckIntPredicate(ctx, str)
+
+Checks if the given string is a valid smt::IntPredicate.
+"""
+function mlirSMTAttrCheckIntPredicate(ctx, str)
+    @ccall mlir_c.mlirSMTAttrCheckIntPredicate(ctx::MlirContext, str::MlirStringRef)::Bool
+end
+
+"""
+    mlirSMTAttrIsASMTAttribute(attr)
+
+Checks if the given attribute is a smt::SMTAttribute.
+"""
+function mlirSMTAttrIsASMTAttribute(attr)
+    @ccall mlir_c.mlirSMTAttrIsASMTAttribute(attr::MlirAttribute)::Bool
+end
+
+"""
+    mlirSMTAttrGetBitVector(ctx, value, width)
+
+Creates a smt::BitVectorAttr with the given value and width.
+"""
+function mlirSMTAttrGetBitVector(ctx, value, width)
+    @ccall mlir_c.mlirSMTAttrGetBitVector(
+        ctx::MlirContext, value::UInt64, width::Cuint
+    )::MlirAttribute
+end
+
+"""
+    mlirSMTAttrGetBVCmpPredicate(ctx, str)
+
+Creates a smt::BVCmpPredicateAttr with the given string.
+"""
+function mlirSMTAttrGetBVCmpPredicate(ctx, str)
+    @ccall mlir_c.mlirSMTAttrGetBVCmpPredicate(
+        ctx::MlirContext, str::MlirStringRef
+    )::MlirAttribute
+end
+
+"""
+    mlirSMTAttrGetIntPredicate(ctx, str)
+
+Creates a smt::IntPredicateAttr with the given string.
+"""
+function mlirSMTAttrGetIntPredicate(ctx, str)
+    @ccall mlir_c.mlirSMTAttrGetIntPredicate(
+        ctx::MlirContext, str::MlirStringRef
+    )::MlirAttribute
 end
 
 function mlirGetDialectHandle__spirv__()
@@ -8874,6 +9475,35 @@ function mlirApplyPatternsAndFoldGreedily(op, patterns, arg3)
 end
 
 """
+    mlirTranslateModuleToSMTLIB(arg1, arg2, userData, inlineSingleUseValues, indentLetBody)
+
+Emits SMTLIB for the specified module using the provided callback and user data
+"""
+function mlirTranslateModuleToSMTLIB(
+    arg1, arg2, userData, inlineSingleUseValues, indentLetBody
+)
+    @ccall mlir_c.mlirTranslateModuleToSMTLIB(
+        arg1::MlirModule,
+        arg2::MlirStringCallback,
+        userData::Ptr{Cvoid},
+        inlineSingleUseValues::Bool,
+        indentLetBody::Bool,
+    )::MlirLogicalResult
+end
+
+function mlirTranslateOperationToSMTLIB(
+    arg1, arg2, userData, inlineSingleUseValues, indentLetBody
+)
+    @ccall mlir_c.mlirTranslateOperationToSMTLIB(
+        arg1::MlirOperation,
+        arg2::MlirStringCallback,
+        userData::Ptr{Cvoid},
+        inlineSingleUseValues::Bool,
+        indentLetBody::Bool,
+    )::MlirLogicalResult
+end
+
+"""
 ` LLVMCSupportTypes Types and Enumerations`
 
 @{
@@ -10118,6 +10748,8 @@ function sdyOpShardingRuleAttrGet(
     needReplicationFactors,
     nPermutationFactors,
     permutationFactors,
+    nBlockedPropagationFactors,
+    blockedPropagationFactors,
     isCustomRule,
 )
     @ccall mlir_c.sdyOpShardingRuleAttrGet(
@@ -10134,6 +10766,8 @@ function sdyOpShardingRuleAttrGet(
         needReplicationFactors::Ptr{Int64},
         nPermutationFactors::intptr_t,
         permutationFactors::Ptr{Int64},
+        nBlockedPropagationFactors::intptr_t,
+        blockedPropagationFactors::Ptr{Int64},
         isCustomRule::Bool,
     )::MlirAttribute
 end
@@ -10204,6 +10838,18 @@ end
 
 function sdyOpShardingRuleAttrGetPermutationFactorsElem(attr, pos)
     @ccall mlir_c.sdyOpShardingRuleAttrGetPermutationFactorsElem(
+        attr::MlirAttribute, pos::intptr_t
+    )::Int64
+end
+
+function sdyOpShardingRuleAttrGetBlockedPropagationFactorsSize(attr)
+    @ccall mlir_c.sdyOpShardingRuleAttrGetBlockedPropagationFactorsSize(
+        attr::MlirAttribute
+    )::intptr_t
+end
+
+function sdyOpShardingRuleAttrGetBlockedPropagationFactorsElem(attr, pos)
+    @ccall mlir_c.sdyOpShardingRuleAttrGetBlockedPropagationFactorsElem(
         attr::MlirAttribute, pos::intptr_t
     )::Int64
 end

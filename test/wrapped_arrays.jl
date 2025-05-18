@@ -191,7 +191,7 @@ function tridiagonal_write(x)
     return y
 end
 
-@testset "Broadcasted Multiply and Alloate" begin
+@testset "Broadcasted Multiply and Allocate" begin
     @testset "$(aType)" for (aType, fn) in [
         ("LowerTriangular", lower_triangular_write),
         ("UpperTriangular", upper_triangular_write),

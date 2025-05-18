@@ -1,3 +1,5 @@
+#include <iostream>
+
 #include "mlir-c/IR.h"
 #include "mlir-c/Support.h"
 
@@ -89,7 +91,11 @@
 
 // shardy
 #include "shardy/dialect/sdy/ir/dialect.h"
+#include "shardy/dialect/sdy/transforms/export/passes.h"
+#include "shardy/dialect/sdy/transforms/import/passes.h"
 #include "shardy/dialect/sdy/transforms/passes.h"
+#include "shardy/dialect/sdy/transforms/propagation/passes.h"
+#include "shardy/dialect/sdy/transforms/propagation/user_priority_propagation.h"
 #include "shardy/integrations/c/attributes.h"
 #include "xla/pjrt/mlir_to_hlo.h"
 #include "xla/service/spmd/shardy/stablehlo_round_trip/export_shardings.h"
@@ -140,12 +146,16 @@
 #include "xla/service/hlo_cost_analysis.h"
 
 #include "jaxlib/mosaic/dialect/tpu/tpu_dialect.h"
-#include "triton/Dialect/Triton/IR/Dialect.h"
+
+// Triton did a dumb thing and their import is incompatible
+// We don't use so disabling until upstream fix
+// #include "triton/Dialect/Triton/IR/Dialect.h"
 
 #include "llvm/Support/ExtensibleRTTI.h"
+#include <llvm/Support/FileSystem.h>
+#include <llvm/Support/raw_ostream.h>
 
 using namespace mlir;
-using namespace llvm;
 using namespace xla;
 
 namespace mlir {
@@ -153,6 +163,11 @@ namespace enzyme {
 void registerRemoveTransformPass();
 void registerGenerateApplyPatternsPass();
 } // namespace enzyme
+
+namespace triton {
+class TritonDialect;
+}
+
 } // namespace mlir
 
 namespace reactant {
@@ -197,6 +212,7 @@ using HeldPjRtClient = HeldValue<std::shared_ptr<xla::PjRtClient>>;
 using HeldPjRtBuffer = HeldValue<std::shared_ptr<xla::PjRtBuffer>>;
 using HeldIfrtArray = HeldValue<tsl::RCReference<xla::ifrt::Array>>;
 using HeldHloModule = HeldValue<std::shared_ptr<xla::HloModule>>;
+using HeldIfrtSharding = HeldValue<std::shared_ptr<xla::ifrt::Sharding>>;
 
 extern "C" void (*ReactantThrowError)(const char *) = nullptr;
 
@@ -404,9 +420,9 @@ extern "C" PjRtClient *MakeCPUClient(uint8_t asynchronous, int node_id) {
 
 // xla/python/xla.cc 390
 extern "C" PjRtClient *
-MakeGPUClient(int node_id, int num_nodes, int *allowed_devices,
-              int num_allowed_devices, double memory_fraction, bool preallocate,
-              const char *platform_name, const char **error,
+MakeGPUClient(int node_id, int num_nodes, int64_t *allowed_devices,
+              int64_t num_allowed_devices, double memory_fraction,
+              bool preallocate, const char *platform_name, const char **error,
               void *distributed_runtime_client) {
   GpuClientOptions options;
 
@@ -428,10 +444,15 @@ MakeGPUClient(int node_id, int num_nodes, int *allowed_devices,
   options.allocator_config.memory_fraction = memory_fraction;
   options.node_id = node_id;
   options.num_nodes = num_nodes;
-  options.allowed_devices =
-      allowed_devices ? std::set<int>(allowed_devices,
-                                      allowed_devices + num_allowed_devices)
-                      : std::optional<std::set<int>>();
+  if (allowed_devices) {
+    std::set<int> allowed_devices_set;
+    for (int i = 0; i < num_allowed_devices; i++) {
+      allowed_devices_set.insert(static_cast<int>(allowed_devices[i]));
+    }
+    options.allowed_devices = allowed_devices_set;
+  } else {
+    options.allowed_devices = std::optional<std::set<int>>();
+  }
   options.platform_name =
       platform_name ? std::string(platform_name) : std::optional<std::string>();
   // options.collectives = num_nodes;
@@ -483,6 +504,24 @@ extern "C" PjRtClient *GetCApiClient(const char *device_type) {
   return xla::GetCApiClient(device_type).value().release();
 }
 
+extern "C" void pjrt_client_register_profiler(const PJRT_Api *api) {
+  RegisterProfiler(api);
+}
+
+extern "C" PjRtClient *MakeClientUsingPluginAPI(const char *device_type,
+                                                const char *library_path,
+                                                const char *client_name,
+                                                const char **error) {
+  const PJRT_Api *pluginLoad = LoadPjrtPlugin(device_type, library_path, error);
+  if (pluginLoad == nullptr)
+    return nullptr;
+  if (InitializePjrtPlugin(device_type, error) == 1)
+    return nullptr;
+
+  RegisterProfiler(pluginLoad);
+  return GetCApiClient(client_name);
+}
+
 extern "C" PjRtClient *MakeTPUClient(const char *tpu_path, const char **error) {
   // Prefer $TPU_LIBRARY_PATH if set
   std::string tpu_library_path;
@@ -495,16 +534,8 @@ extern "C" PjRtClient *MakeTPUClient(const char *tpu_path, const char **error) {
     return nullptr;
   }
 
-  const PJRT_Api *pluginLoad =
-      LoadPjrtPlugin("tpu", tpu_library_path.c_str(), error);
-  if (pluginLoad == nullptr)
-    return nullptr;
-  auto tpu_status = InitializePjrtPlugin("tpu", error);
-  if (tpu_status)
-    return nullptr;
-
-  RegisterProfiler(pluginLoad);
-  return GetCApiClient("TPU");
+  return MakeClientUsingPluginAPI("tpu", tpu_library_path.c_str(), "TPU",
+                                  error);
 }
 
 extern "C" int ClientNumDevices(PjRtClient *client) {
@@ -584,6 +615,16 @@ extern "C" void PjRtDeviceGetAllocatorStats(PjRtDevice *device,
   jlstats->largest_free_block_bytes = stats.largest_free_block_bytes;
   jlstats->pool_bytes = stats.pool_bytes.value_or(optnull);
   jlstats->peak_pool_bytes = stats.peak_pool_bytes.value_or(optnull);
+}
+
+extern "C" void ifrt_device_get_allocator_stats(ifrt::Device *device,
+                                                JLAllocatorStats *jlstats) {
+  if (!llvm::isa<ifrt::PjRtDevice>(device)) {
+    ReactantThrowError(
+        "ifrt_device_get_allocator_stats: only supported for ifrt-pjrt.");
+  }
+  auto ifrt_pjrt_device = llvm::dyn_cast<ifrt::PjRtDevice>(device);
+  PjRtDeviceGetAllocatorStats(ifrt_pjrt_device->pjrt_device(), jlstats);
 }
 
 extern "C" void ExecutableFree(xla::PjRtLoadedExecutable *exec) { delete exec; }
@@ -731,7 +772,7 @@ extern "C" void RegisterCustomCallTarget(const char *name, void *address,
 
 #include "mlir/Target/LLVMIR/Import.h"
 extern "C" MlirModule ConvertLLVMToMLIR(LLVMModuleRef lmod, MlirContext cctx) {
-  auto llvmModule = std::unique_ptr<llvm::Module>(unwrap(lmod));
+  auto llvmModule = std::unique_ptr<llvm::Module>(llvm::unwrap(lmod));
   mlir::MLIRContext &context = *unwrap(cctx);
 
   auto res = mlir::translateLLVMIRToModule(std::move(llvmModule), &context,
@@ -743,8 +784,8 @@ extern "C" MlirModule ConvertLLVMToMLIR(LLVMModuleRef lmod, MlirContext cctx) {
 
 #include "llvm/IRReader/IRReader.h"
 extern "C" MlirModule ConvertLLVMStrToMLIR(const char *lmod, MlirContext cctx) {
-  LLVMContext Context;
-  SMDiagnostic Err;
+  llvm::LLVMContext Context;
+  llvm::SMDiagnostic Err;
   auto llvmModule =
       llvm::parseIR(llvm::MemoryBufferRef(lmod, "conversion"), Err, Context);
   if (!llvmModule) {
@@ -779,22 +820,30 @@ extern "C" uint8_t FutureIsReady(FutureType *Future) {
 
 extern "C" void FutureAwait(FutureType *Future) { Future->Await(); }
 
-xla::CompileOptions GenerateCompileOptions(int64_t device_id, bool is_sharded,
-                                           const int64_t *mesh_ids,
-                                           int64_t num_mesh_ids,
-                                           const char *xla_gpu_cuda_data_dir,
-                                           bool use_shardy_partitioner) {
+xla::CompileOptions
+GenerateCompileOptions(int64_t device_id, const int64_t *mesh_ids,
+                       int64_t num_mesh_ids, const char *xla_gpu_cuda_data_dir,
+                       bool use_shardy_partitioner, int64_t num_replicas,
+                       int64_t num_partitions, bool use_spmd_partitioning) {
   xla::CompileOptions options;
   options.executable_build_options.mutable_debug_options()
       ->set_xla_gpu_cuda_data_dir(xla_gpu_cuda_data_dir);
 
-  if (is_sharded) {
-    assert(device_id < 0);
+  options.executable_build_options.set_num_replicas(num_replicas);
+  options.executable_build_options.set_num_partitions(num_partitions);
 
-    options.executable_build_options.set_num_replicas(1);
-    options.executable_build_options.set_num_partitions(num_mesh_ids);
+  if (device_id < 0) {
+    if (num_replicas == 1 && num_partitions == 1) {
+      llvm::errs()
+          << "[libReactantExtra] num_replicas & num_partitions are both 1, but "
+             "device_id is negative. This can happen if you are sharding with "
+             "a single device.\n";
+    }
 
-    options.executable_build_options.set_use_spmd_partitioning(true);
+    assert(num_replicas * num_partitions == num_mesh_ids);
+
+    options.executable_build_options.set_use_spmd_partitioning(
+        use_spmd_partitioning);
     options.executable_build_options.set_use_shardy_partitioner(
         use_shardy_partitioner);
 
@@ -806,11 +855,13 @@ xla::CompileOptions GenerateCompileOptions(int64_t device_id, bool is_sharded,
     // std::vector<int64_t> mesh_ids_vec(mesh_ids, mesh_ids + num_mesh_ids);
     // options.executable_build_options.set_auto_spmd_partitioning_mesh_ids(mesh_ids_vec);
 
-    xla::DeviceAssignment device_assignment(1, num_mesh_ids);
-    for (int64_t i = 0; i < num_mesh_ids; ++i) {
-      int64_t mesh_id = mesh_ids[i];
-      assert(mesh_id >= 0);
-      device_assignment(0, i) = mesh_id;
+    xla::DeviceAssignment device_assignment(num_replicas, num_partitions);
+    for (int64_t i = 0; i < num_replicas; ++i) {
+      for (int64_t j = 0; j < num_partitions; ++j) {
+        int64_t mesh_id = mesh_ids[i * num_partitions + j];
+        assert(mesh_id >= 0);
+        device_assignment(i, j) = mesh_id;
+      }
     }
     options.executable_build_options.set_device_assignment(device_assignment);
 
@@ -820,9 +871,9 @@ xla::CompileOptions GenerateCompileOptions(int64_t device_id, bool is_sharded,
         .set_allow_spmd_sharding_propagation_to_output({false});
   } else {
     assert(device_id >= 0);
+    assert(num_replicas == 1);
+    assert(num_partitions == 1);
 
-    options.executable_build_options.set_num_replicas(1);
-    options.executable_build_options.set_num_partitions(1);
     options.executable_build_options.set_device_ordinal(device_id);
 
     xla::DeviceAssignment device_assignment(1, 1);
@@ -835,15 +886,18 @@ xla::CompileOptions GenerateCompileOptions(int64_t device_id, bool is_sharded,
 
 extern "C" xla::PjRtLoadedExecutable *
 ClientCompile(PjRtClient *client, MlirModule cmod, int64_t device_id,
-              bool is_sharded, const int64_t *mesh_ids, int64_t num_mesh_ids,
-              const char *xla_gpu_cuda_data_dir, bool use_shardy_partitioner) {
-  CompileOptions options =
-      GenerateCompileOptions(device_id, is_sharded, mesh_ids, num_mesh_ids,
-                             xla_gpu_cuda_data_dir, use_shardy_partitioner);
+              const int64_t *mesh_ids, int64_t num_mesh_ids,
+              const char *xla_gpu_cuda_data_dir, bool use_shardy_partitioner,
+              int64_t num_replicas, int64_t num_partitions,
+              bool use_spmd_partitioning) {
+  CompileOptions options = GenerateCompileOptions(
+      device_id, mesh_ids, num_mesh_ids, xla_gpu_cuda_data_dir,
+      use_shardy_partitioner, num_replicas, num_partitions,
+      use_spmd_partitioning);
 
   mlir::ModuleOp cmod_op = cast<ModuleOp>(*unwrap(cmod));
 
-  if (is_sharded && use_shardy_partitioner) {
+  if (use_spmd_partitioning && use_shardy_partitioner) {
     // https://github.com/openxla/xla/blob/b3c641b05692f3712fb3c272e38665fdfa28bdf8/xla/python/py_client.cc#L460
     auto status = xla::ExportShardyForHloRoundTrip(cmod_op);
     if (!status.ok()) {
@@ -851,7 +905,7 @@ ClientCompile(PjRtClient *client, MlirModule cmod, int64_t device_id,
     }
   }
 
-  auto exec_err = client->Compile(cmod_op, options);
+  auto exec_err = client->CompileAndLoad(cmod_op, options);
 
   if (!exec_err.ok()) {
     std::string err_str;
@@ -1074,7 +1128,7 @@ extern "C" void RegisterDialects(MlirContext cctx) {
   context.loadDialect<mlir::arith::ArithDialect>();
   context.loadDialect<mlir::enzyme::EnzymeDialect>();
   context.loadDialect<mlir::enzymexla::EnzymeXLADialect>();
-  context.loadDialect<mlir::triton::TritonDialect>();
+  // context.loadDialect<mlir::triton::TritonDialect>();
   context.loadDialect<mlir::tpu::TPUDialect>();
   context.loadDialect<mlir::tensor::TensorDialect>();
   context.loadDialect<mlir::func::FuncDialect>();
@@ -1325,8 +1379,8 @@ extern "C" HeldIfrtArray *ifrt_client_make_array_from_host_buffer(
       std::nullopt, // byte_strides
       sharding->obj(),
       static_cast<ifrt::Client::HostBufferSemantics>(c_semantics),
-      [] {} // on_done_with_host_buffer
-      )));
+      [] {}, // on_done_with_host_buffer,
+      client->CreateUserContext())));
 }
 
 extern "C" HeldIfrtArray *ifrt_client_make_single_shard_array_from_host_buffer(
@@ -1372,16 +1426,21 @@ ifrt_pjrt_array_create(ifrt::PjRtClient *client,
 // `Topology`
 extern "C" xla::ifrt::LoadedExecutable *
 ifrt_compile(ifrt::Client *client, MlirModule cmod, int64_t device_id,
-             bool is_sharded, const int64_t *mesh_ids, int64_t num_mesh_ids,
-             const char *xla_gpu_cuda_data_dir, bool use_shardy_partitioner) {
-  xla::CompileOptions compile_options =
-      GenerateCompileOptions(device_id, is_sharded, mesh_ids, num_mesh_ids,
-                             xla_gpu_cuda_data_dir, use_shardy_partitioner);
+             const int64_t *mesh_ids, int64_t num_mesh_ids,
+             const char *xla_gpu_cuda_data_dir, bool use_shardy_partitioner,
+             int64_t num_replicas, int64_t num_partitions,
+             bool use_spmd_partitioning) {
+  xla::CompileOptions compile_options = GenerateCompileOptions(
+      device_id, mesh_ids, num_mesh_ids, xla_gpu_cuda_data_dir,
+      use_shardy_partitioner, num_replicas, num_partitions,
+      use_spmd_partitioning);
+  xla::ifrt::DeviceListRef devices = MyValueOrThrow(
+      xla::ifrt::GetDeviceListFromXlaCompileOptions(client, compile_options));
   auto options = std::make_unique<xla::ifrt::XlaCompileOptions>(
-      xla::ifrt::XlaCompileOptions(compile_options));
+      compile_options, std::move(devices));
 
   mlir::ModuleOp cmod_op = cast<ModuleOp>(*unwrap(cmod));
-  if (is_sharded && use_shardy_partitioner) {
+  if (use_spmd_partitioning && use_shardy_partitioner) {
     // https://github.com/openxla/xla/blob/b3c641b05692f3712fb3c272e38665fdfa28bdf8/xla/python/py_client.cc#L460
     auto status = xla::ExportShardyForHloRoundTrip(cmod_op);
     if (!status.ok()) {
@@ -1553,6 +1612,16 @@ extern "C" ifrt::Client *ifrt_pjrt_make_client(
   return MyValueOrThrow(xla::ifrt::PjRtClient::Create(options)).release();
 }
 
+extern "C" ifrt::Client *ifrt_pjrt_make_client_with_default_kv_store(
+    PjRtClient *pjrt_client, int node_id, int num_nodes,
+    void *distributed_runtime_client, const char **error,
+    std::string key_prefix) {
+  std::optional<std::shared_ptr<KeyValueStoreInterface>> kv_store;
+  return ifrt_pjrt_make_client(pjrt_client, node_id, num_nodes,
+                               distributed_runtime_client, error, key_prefix,
+                               kv_store);
+}
+
 const char *const kMpiTrampolineLibEnv = "MPITRAMPOLINE_LIB";
 
 extern "C" ifrt::Client *
@@ -1606,10 +1675,12 @@ ifrt_make_pjrt_cpu_client(uint8_t asynchronous, int node_id, int num_nodes,
                                kv_store);
 }
 
-extern "C" ifrt::Client *ifrt_make_pjrt_gpu_client(
-    int node_id, int num_nodes, int *allowed_devices, int num_allowed_devices,
-    double memory_fraction, bool preallocate, const char *platform_name,
-    const char **error, void *distributed_runtime_client) {
+extern "C" ifrt::Client *
+ifrt_make_pjrt_gpu_client(int node_id, int num_nodes, int64_t *allowed_devices,
+                          int64_t num_allowed_devices, double memory_fraction,
+                          bool preallocate, const char *platform_name,
+                          const char **error,
+                          void *distributed_runtime_client) {
   PjRtClient *pjrt_client = MakeGPUClient(
       node_id, num_nodes, allowed_devices, num_allowed_devices, memory_fraction,
       preallocate, platform_name, error, distributed_runtime_client);
@@ -1715,8 +1786,10 @@ extern "C" bool ifrt_DeviceIsAddressable(ifrt::Device *device) {
   return device->IsAddressable();
 }
 
-tsl::RCReference<ifrt::DeviceList> ifrt_CreateDeviceListFromDevices(
-    ifrt::Client *client, ifrt::Device **device_list, int32_t num_devices) {
+static xla::ifrt::RCReferenceWrapper<ifrt::DeviceList>
+ifrt_CreateDeviceListFromDevices(ifrt::Client *client,
+                                 ifrt::Device **device_list,
+                                 int32_t num_devices) {
   absl::Span<ifrt::Device *const> devices(device_list, num_devices);
   return client->MakeDeviceList(devices);
 }
@@ -1892,10 +1965,6 @@ extern "C" void free_hlo_sharding(xla::HloSharding *hlo_sharding) {
   delete hlo_sharding;
 }
 
-extern "C" void free_ifrt_hlo_sharding(ifrt::HloSharding *hlo_sharding) {
-  delete hlo_sharding;
-}
-
 extern "C" xla::HloSharding *
 hlo_sharding_from_op_sharding(xla::OpSharding *op_sharding) {
   xla::HloSharding *hlo_sharding = new xla::HloSharding(
@@ -1918,88 +1987,73 @@ extern "C" ifrt::MemoryKind *ifrt_memory_kind_from_string(const char *c_str) {
   return new ifrt::MemoryKind(std::string(c_str));
 }
 
-extern "C" ifrt::HloSharding *ifrt_hlo_sharding_from_xla_hlo_sharding(
-    ifrt::Client *client, ifrt::Device **device_list, int32_t num_devices,
-    ifrt::MemoryKind *memory_kind, xla::HloSharding *xla_hlo_sharding) {
-  return ifrt::HloSharding::Create(
-             ifrt_CreateDeviceListFromDevices(client, device_list, num_devices),
-             *memory_kind, *xla_hlo_sharding)
-      .release();
+extern "C" ifrt::MemoryKind *ifrt_memory_kind_with_optional_memory_space() {
+  return new ifrt::MemoryKind(std::nullopt);
 }
 
-extern "C" xla::HloSharding *
-ifrt_hlo_sharding_to_xla_hlo_sharding(ifrt::HloSharding *hlo_sharding) {
-  xla::HloSharding *xla_hlo_sharding =
-      new xla::HloSharding(hlo_sharding->xla_hlo_sharding());
-  return xla_hlo_sharding;
+extern "C" bool ifrt_memory_kind_has_value(ifrt::MemoryKind *memory_kind) {
+  return *memory_kind != ifrt::MemoryKind(std::nullopt);
 }
 
-extern "C" const char *
-ifrt_hlo_sharding_to_string(ifrt::HloSharding *hlo_sharding) {
-  return cstr_from_string(hlo_sharding->DebugString());
-}
-
-extern "C" ifrt::HloSharding *ifrt_sharding_to_ifrt_hlo_sharding(
-    HeldValue<std::shared_ptr<ifrt::Sharding>> *sharding) {
-  const ifrt::Sharding *val = sharding->obj().get();
-  if (!llvm::isa<ifrt::HloSharding>(val))
-    ReactantThrowError("Expected a HloSharding");
-  return new ifrt::HloSharding(*llvm::dyn_cast<const ifrt::HloSharding>(val));
-}
-
-extern "C" void
-free_ifrt_sharding(HeldValue<std::shared_ptr<ifrt::Sharding>> *sharding) {
+extern "C" void free_ifrt_sharding(HeldIfrtSharding *sharding) {
   delete sharding;
 }
 
-extern "C" HeldValue<std::shared_ptr<ifrt::Sharding>> *
-ifrt_sharding_from_ifrt_hlo_sharding(ifrt::HloSharding *hlo_sharding) {
-  return reactant::capture(std::shared_ptr<ifrt::Sharding>(hlo_sharding));
+extern "C" HeldIfrtSharding *ifrt_sharding_from_xla_hlo_sharding(
+    ifrt::Client *client, ifrt::Device **device_list, int32_t num_devices,
+    ifrt::MemoryKind *memory_kind, xla::HloSharding *xla_hlo_sharding) {
+  // convert to ifrt::HloSharding
+  auto hlo_sharding =
+      ifrt::HloSharding::Create(
+          ifrt_CreateDeviceListFromDevices(client, device_list, num_devices),
+          *memory_kind, *xla_hlo_sharding)
+          .release();
+  // convert to ifrt::Sharding
+  return reactant::capture(
+      std::shared_ptr<ifrt::Sharding>(std::move(hlo_sharding)));
 }
 
-extern "C" HeldValue<std::shared_ptr<ifrt::Sharding>> *
-ifrt_sharding_from_hlo_sharding(ifrt::Client *client,
-                                ifrt::Device **device_list, int32_t num_devices,
-                                ifrt::MemoryKind *memory_kind,
-                                xla::HloSharding *xla_hlo_sharding) {
-  return ifrt_sharding_from_ifrt_hlo_sharding(
-      ifrt_hlo_sharding_from_xla_hlo_sharding(client, device_list, num_devices,
-                                              memory_kind, xla_hlo_sharding));
+extern "C" xla::HloSharding *
+ifrt_sharding_to_xla_hlo_sharding(HeldIfrtSharding *sharding) {
+  const ifrt::Sharding *val = sharding->obj().get();
+  if (!llvm::isa<ifrt::HloSharding>(val))
+    ReactantThrowError("Expected a HloSharding");
+  auto ifrt_hlo_sharding = llvm::dyn_cast<const ifrt::HloSharding>(val);
+  xla::HloSharding *xla_hlo_sharding =
+      new xla::HloSharding(ifrt_hlo_sharding->xla_hlo_sharding());
+  return xla_hlo_sharding;
 }
 
-extern "C" bool ifrt_sharding_is_single_device_sharding(
-    HeldValue<std::shared_ptr<ifrt::Sharding>> *sharding) {
+extern "C" bool
+ifrt_sharding_is_single_device_sharding(HeldIfrtSharding *sharding) {
   return llvm::isa<const ifrt::SingleDeviceSharding>(sharding->obj().get());
 }
 
-extern "C" bool ifrt_sharding_is_fully_replicated(
-    HeldValue<std::shared_ptr<ifrt::Sharding>> *sharding) {
+extern "C" bool ifrt_sharding_is_fully_replicated(HeldIfrtSharding *sharding) {
   return sharding->obj()->IsFullyReplicated();
 }
 
-extern "C" const char *
-ifrt_sharding_to_string(HeldValue<std::shared_ptr<ifrt::Sharding>> *sharding) {
+extern "C" const char *ifrt_sharding_to_string(HeldIfrtSharding *sharding) {
   return cstr_from_string(sharding->obj()->DebugString());
 }
 
-extern "C" int32_t ifrt_sharding_devices_size(
-    HeldValue<std::shared_ptr<ifrt::Sharding>> *sharding) {
+extern "C" int32_t ifrt_sharding_devices_size(HeldIfrtSharding *sharding) {
   return sharding->obj()->devices()->size();
 }
 
-extern "C" void ifrt_sharding_to_device_list(
-    HeldValue<std::shared_ptr<ifrt::Sharding>> *sharding,
-    ifrt::Device **devices) {
+extern "C" void ifrt_sharding_to_device_list(HeldIfrtSharding *sharding,
+                                             ifrt::Device **devices) {
   auto device_list = sharding->obj()->devices()->devices();
   for (int i = 0; i < device_list.size(); i++) {
     devices[i] = device_list[i];
   }
 }
 
-extern "C" void ifrt_sharding_to_index_domains(
-    HeldValue<std::shared_ptr<ifrt::Sharding>> *sharding,
-    int64_t *array_size_list, int32_t array_size_len,
-    int64_t *index_domain_origins, int64_t *index_domain_shapes) {
+extern "C" void ifrt_sharding_to_index_domains(HeldIfrtSharding *sharding,
+                                               int64_t *array_size_list,
+                                               int32_t array_size_len,
+                                               int64_t *index_domain_origins,
+                                               int64_t *index_domain_shapes) {
   std::vector<int64_t> array_size(array_size_len);
   for (int i = 0; i < array_size_len; i++) {
     array_size[i] = array_size_list[i];
@@ -2021,6 +2075,68 @@ extern "C" void ifrt_sharding_to_index_domains(
       index_domain_shapes[idx] = shape[j];
     }
   }
+}
+
+extern "C" bool hlo_sharding_is_tuple(xla::HloSharding *hloSharding) {
+  return hloSharding->IsTuple();
+}
+
+extern "C" bool hlo_sharding_is_replicated(xla::HloSharding *hloSharding) {
+  return hloSharding->IsReplicated();
+}
+
+extern "C" bool hlo_sharding_is_manual(xla::HloSharding *hloSharding) {
+  return hloSharding->IsManual();
+}
+
+extern "C" bool hlo_sharding_is_unknown(xla::HloSharding *hloSharding) {
+  return hloSharding->IsUnknown();
+}
+
+extern "C" bool hlo_sharding_is_tiled(xla::HloSharding *hloSharding) {
+  return hloSharding->IsTiled();
+}
+
+extern "C" bool hlo_sharding_is_maximal(xla::HloSharding *hloSharding) {
+  return hloSharding->IsTileMaximal();
+}
+
+extern "C" bool
+hlo_sharding_replicate_on_last_tile_dim(xla::HloSharding *hloSharding) {
+  return hloSharding->ReplicateOnLastTileDim();
+}
+
+extern "C" int32_t
+hlo_sharding_tile_assignment_dimensions_size(xla::HloSharding *hloSharding) {
+  return static_cast<int32_t>(hloSharding->tile_assignment().num_dimensions());
+}
+
+extern "C" int32_t
+hlo_sharding_tile_assignment_devices_size(xla::HloSharding *hloSharding) {
+  return static_cast<int32_t>(hloSharding->tile_assignment().num_elements());
+}
+
+extern "C" void
+hlo_sharding_tile_assignment_dimensions(xla::HloSharding *hloSharding,
+                                        int64_t *dims, int32_t size) {
+  auto tileAssignmentDims = hloSharding->tile_assignment().dimensions();
+  for (int32_t i = 0; i < size; i++) {
+    dims[i] = tileAssignmentDims[i];
+  }
+}
+
+extern "C" void
+hlo_sharding_tile_assignment_devices(xla::HloSharding *hloSharding,
+                                     int64_t *devices, int32_t size) {
+  auto tileAssignmentDevices = hloSharding->tile_assignment().array().data();
+  for (int32_t i = 0; i < size; i++) {
+    devices[i] = tileAssignmentDevices[i];
+  }
+}
+
+extern "C" bool hlo_sharding_check_eq(xla::HloSharding *hloSharding,
+                                      xla::HloSharding *other) {
+  return *hloSharding == *other;
 }
 
 #pragma endregion
@@ -2186,8 +2302,9 @@ extern "C" mlir::sdy::TensorShardingAttr hloShardingToTensorShardingAttr(
     mlir::MLIRContext *context, const xla::HloSharding *hloSharding,
     mlir::StringAttr meshName, mlir::sdy::MeshAttr meshAttr, int64_t rank,
     const bool *isClosed, const int64_t *priority) {
-  const SmallDenseMap<int64_t, StringRef> deviceIdToMaximalMeshName =
-      SmallDenseMap<int64_t, StringRef>();
+  const llvm::SmallDenseMap<int64_t, llvm::StringRef>
+      deviceIdToMaximalMeshName =
+          llvm::SmallDenseMap<int64_t, llvm::StringRef>();
   mlir::sdy::TensorShardingAttr tensorShardingAttr =
       xla::sdy::convertToSdySharding(*hloSharding, meshAttr,
                                      deviceIdToMaximalMeshName, rank,
@@ -2382,3 +2499,132 @@ extern "C" void ifrt_hlo_module_cost_analysis_properties(
 }
 
 #pragma endregion
+
+extern "C" void dump_op(Operation *op) { llvm::errs() << *op << "\n"; }
+extern "C" void dump_mval(mlir::Value v) { llvm::errs() << v << "\n"; }
+extern "C" void dump_operation(Operation *op, const char *filename) {
+  std::error_code EC;
+  llvm::raw_fd_ostream file(filename, EC, llvm::sys::fs::OF_Text);
+
+  if (EC) {
+    std::cerr << "Error opening file: " << EC.message() << std::endl;
+    return;
+  }
+
+  op->print(file, mlir::OpPrintingFlags().enableDebugInfo(true, false));
+}
+
+extern "C" bool pjrt_device_is_addressable(PjRtDevice *device) {
+  return device->IsAddressable();
+}
+
+extern "C" mlir::Operation *mlirGetParentOfTypeFunctionOp(mlir::Operation *op) {
+  return op->getParentOfType<mlir::FunctionOpInterface>();
+}
+
+// batched copy
+// https://github.com/jax-ml/jax/blob/2b86f38585a517ce50e8ddf964a4709040a1bd53/jaxlib/xla/py_array.cc#L1112
+
+// xla::ifrt::CopyArrays
+extern "C" HeldIfrtArray **ifrt_copy_arrays_to_device_with_sharding(
+    ifrt::Client *client, HeldIfrtArray **arrays, int32_t num_arrays,
+    HeldValue<std::shared_ptr<const ifrt::Sharding>> *dst_sharding,
+    int32_t c_semantics) {
+  std::vector<tsl::RCReference<ifrt::Array>> src_arrays_vec;
+  for (int i = 0; i < num_arrays; i++) {
+    src_arrays_vec.push_back(arrays[i]->obj());
+  }
+
+  auto dst_arrays = MyValueOrThrow(client->CopyArrays(
+      absl::MakeSpan(src_arrays_vec), dst_sharding->obj()->devices(),
+      dst_sharding->obj()->memory_kind(),
+      static_cast<ifrt::ArrayCopySemantics>(c_semantics)));
+
+  HeldIfrtArray **res_dst_arrays = new HeldIfrtArray *[num_arrays];
+  for (int i = 0; i < num_arrays; i++) {
+    arrays[i] = reactant::capture(std::move(dst_arrays[i]));
+  }
+  return res_dst_arrays;
+}
+
+ifrt::Client::MakeArraysFromHostBufferShardsSpec
+ifrt_make_arrays_from_host_buffer_shards_spec(
+    const void **host_buffers, int num_buffers,
+    const int64_t **host_buffer_shapes,
+    const int64_t **addressable_shard_indices,
+    const int64_t *addressable_shard_indices_sizes, int dtype_kind, int ndims,
+    const int64_t *final_buffer_shape,
+    HeldValue<std::shared_ptr<const ifrt::Sharding>> *sharding) {
+  ifrt::DType ifrt_dtype =
+      ifrt::DType(static_cast<ifrt::DType::Kind>(dtype_kind));
+
+  auto array_spec = ifrt::ArraySpec{
+      /*dtype=*/ifrt_dtype,
+      /*shape=*/
+      ifrt::Shape(absl::Span<const int64_t>(final_buffer_shape, ndims)),
+      /*sharding=*/sharding->obj()};
+
+  absl::InlinedVector<
+      std::pair<absl::InlinedVector<int64_t, 1>, ifrt::Client::HostBuffer>, 1>
+      buffers;
+
+  for (int i = 0; i < num_buffers; i++) {
+    ifrt::Client::HostBuffer buffer = ifrt::Client::HostBuffer{
+        /*data=*/host_buffers[i],
+        /*dtype=*/ifrt_dtype,
+        /*shape=*/
+        ifrt::Shape(absl::Span<const int64_t>(host_buffer_shapes[i], ndims)),
+    };
+
+    absl::InlinedVector<int64_t, 1> indices;
+    for (int j = 0; j < addressable_shard_indices_sizes[i]; j++) {
+      indices.push_back(addressable_shard_indices[i][j]);
+    }
+
+    buffers.push_back(std::make_pair(indices, buffer));
+  }
+
+  return ifrt::Client::MakeArraysFromHostBufferShardsSpec{
+      /*buffers=*/buffers,
+      /*array_spec=*/array_spec,
+  };
+}
+
+// TODO: We can batch the construction of multiple arrays into a single call.
+extern "C" HeldIfrtArray *ifrt_make_array_from_host_buffer_shards(
+    ifrt::Client *client, const void **host_buffers, int num_buffers,
+    const int64_t **host_buffer_shapes,
+    const int64_t **addressable_shard_indices,
+    const int64_t *addressable_shard_indices_sizes, int dtype_kind, int ndims,
+    const int64_t *final_buffer_shape,
+    HeldValue<std::shared_ptr<const ifrt::Sharding>> *sharding,
+    int32_t c_host_buffer_semantics) {
+  auto spec = ifrt_make_arrays_from_host_buffer_shards_spec(
+      host_buffers, num_buffers, host_buffer_shapes, addressable_shard_indices,
+      addressable_shard_indices_sizes, dtype_kind, ndims, final_buffer_shape,
+      sharding);
+  auto arrays = MyValueOrThrow(client->MakeArraysFromHostBufferShards(
+      absl::MakeSpan(&spec, 1),
+      static_cast<ifrt::Client::HostBufferSemantics>(c_host_buffer_semantics),
+      client->CreateUserContext()));
+  return reactant::capture(arrays[0]);
+}
+
+extern "C" void addSdyPropagationPipeline(
+    mlir::OpPassManager &pm, uint8_t keepShardingRules /*false*/,
+    uint8_t conservativePropagation /*false*/,
+    uint8_t debugShardingOrigins /*false*/,
+    uint8_t debugPropagationEdgeSharding /*false*/,
+    uint8_t skipConvertToReshard /*false*/, uint8_t skipInline /*false*/,
+    uint8_t enableInsertExplicitCollectives /*false*/) {
+  const mlir::sdy::PropagationOptions options{keepShardingRules != 0,
+                                              "",
+                                              conservativePropagation != 0,
+                                              debugShardingOrigins != 0,
+                                              debugPropagationEdgeSharding != 0,
+                                              skipConvertToReshard != 0,
+                                              skipInline != 0,
+                                              enableInsertExplicitCollectives !=
+                                                  0};
+  mlir::sdy::addPropagationPipeline(pm, options);
+}

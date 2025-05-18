@@ -64,18 +64,102 @@ function enable_verifier!(pm, enable=true)
     return pm
 end
 
+# Where to dump the MLIR modules
+const DUMP_MLIR_DIR = Ref{Union{Nothing,String}}(nothing)
+# Whether to always dump MLIR, regardless of failure
+const DUMP_MLIR_ALWAYS = Ref{Bool}(false)
+# Counter for dumping MLIR modules
+const MLIR_DUMP_COUNTER = Threads.Atomic{Int}(0)
+
+# Utilities for dumping to a file the module of a failed compilation, useful for
+# debugging purposes.
+function dump_mlir(
+    mod::Module, pm::Union{Nothing,PassManager}=nothing, mode::String=""; failed::Bool=false
+)
+    try
+        # If `DUMP_MLIR_DIR` is `nothing`, create a persistent new temp
+        # directory, otherwise use the provided path.
+        dir = if isnothing(DUMP_MLIR_DIR[])
+            mkpath(tempdir())
+            # Use the same directory for this session
+            DUMP_MLIR_DIR[] = mktempdir(; prefix="reactant_", cleanup=false)
+        else
+            DUMP_MLIR_DIR[]
+        end
+
+        # Make sure the directory exists
+        mkpath(dir)
+
+        # Attempt to get the name of the module if that exists
+        module_op = Operation(mod)
+        mod_name = attr(module_op, String(API.mlirSymbolTableGetSymbolAttributeName()))
+        fname = mod_name === nothing ? randstring(4) : String(mod_name)
+        fname = "module_" * lpad(MLIR_DUMP_COUNTER[], 3, "0") * "_$(fname)"
+        if isempty(mode)
+            fname *= ".mlir"
+        else
+            if length(mode) > 100
+                mode = mode[1:100]
+            end
+            fname *= "_$(mode).mlir"
+        end
+        MLIR_DUMP_COUNTER[] += 1
+        path = joinpath(dir, fname)
+
+        open(path, "w") do io
+            if !isnothing(pm)
+                println(io, "// Pass pipeline:")
+                print(io, "// ")
+                print_pass_pipeline(io, OpPassManager(pm))
+                println(io)
+            end
+            show(IOContext(io, :debug => true), mod)
+        end
+        if failed
+            @error "Compilation failed, MLIR module written to $(path)"
+        else
+            @debug "MLIR module written to $(path)"
+        end
+    catch err
+        @error "Couldn't save MLIR module" exception = err
+    end
+end
+
+function try_compile_dump_mlir(f, mod::Module, pm=nothing)
+    failed = false
+    # Dump MLIR before calling `f`.  We set `pm` to nothing because the pass
+    # manager isn't called yet here.
+    DUMP_MLIR_ALWAYS[] && dump_mlir(mod, nothing, "pre_xla_compile")
+    try
+        f()
+    catch
+        failed = true
+        rethrow()
+    finally
+        if failed || DUMP_MLIR_ALWAYS[]
+            dump_mlir(mod, pm, "post_xla_compile"; failed)
+        end
+    end
+end
+
 """
     run!(passManager, module)
 
 Run the provided `passManager` on the given `module`.
 """
-function run!(pm::PassManager, mod::Module)
+function run!(pm::PassManager, mod::Module, key::String="")
+    # Dump MLIR before running the pass manager, but also print the list of passes that will be called later.
+    DUMP_MLIR_ALWAYS[] && dump_mlir(mod, pm, isempty(key) ? "pre_pm" : "pre_$(key)_pm")
     status = LogicalResult(@static if isdefined(API, :mlirPassManagerRunOnOp)
         API.mlirPassManagerRunOnOp(pm, Operation(mod))
     else
         API.mlirPassManagerRun(pm, mod)
     end)
-    if isfailure(status)
+    failed = isfailure(status)
+    if failed || DUMP_MLIR_ALWAYS[]
+        dump_mlir(mod, pm, isempty(key) ? "post_pm" : "post_$(key)_pm"; failed)
+    end
+    if failed
         throw("failed to run pass manager on module")
     end
     return mod
@@ -118,13 +202,29 @@ OpPassManager(opm::OpPassManager, opname) =
 
 Base.convert(::Core.Type{API.MlirOpPassManager}, op_pass::OpPassManager) = op_pass.op_pass
 
-function Base.show(io::IO, op_pass::OpPassManager)
+"""
+    pass_pipeline(opPassManager) -> String
+
+Returns the pass pipeline.
+"""
+pass_pipeline(op_pass::OpPassManager) = sprint(print_pass_pipeline, op_pass)
+
+"""
+    print_pass_pipeline(io::IO, opPassManager)
+
+Prints the pass pipeline to the IO.
+"""
+function print_pass_pipeline(io::IO, op_pass::OpPassManager)
     c_print_callback = @cfunction(print_callback, Cvoid, (API.MlirStringRef, Any))
     ref = Ref(io)
-    println(io, "OpPassManager(\"\"\"")
     API.mlirPrintPassPipeline(op_pass, c_print_callback, ref)
-    println(io)
-    return print(io, "\"\"\")")
+    return io
+end
+
+function Base.show(io::IO, op_pass::OpPassManager)
+    println(io, "OpPassManager(\"\"\"")
+    print_pass_pipeline(io, opm)
+    return print(io, "\n\"\"\")")
 end
 
 struct AddPipelineException <: Exception
@@ -157,19 +257,15 @@ function add_owned_pass!(opm::OpPassManager, pass)
 end
 
 """
-    parse(passManager, pipeline)
+    parse(opPassManager, pipeline)
 
 Parse a textual MLIR pass pipeline and add it to the provided `OpPassManager`.
 """
 function Base.parse(opm::OpPassManager, pipeline::String)
+    io = IOBuffer()
+    c_print_callback = @cfunction(print_callback, Cvoid, (API.MlirStringRef, Any))
     result = LogicalResult(
-        if true
-            io = IOBuffer()
-            c_print_callback = @cfunction(print_callback, Cvoid, (API.MlirStringRef, Any))
-            API.mlirParsePassPipeline(opm, pipeline, c_print_callback, Ref(io))
-        else
-            API.mlirParsePassPipeline(opm, pipeline)
-        end,
+        API.mlirParsePassPipeline(opm, pipeline, c_print_callback, Ref(io))
     )
 
     if isfailure(result)
@@ -179,7 +275,7 @@ function Base.parse(opm::OpPassManager, pipeline::String)
 end
 
 """
-    add_pipeline!(passManager, pipelineElements, callback, userData)
+    add_pipeline!(opPassManager, pipeline)
 
 Parse a sequence of textual MLIR pass pipeline elements and add them to the provided OpPassManager. If parsing fails an error message is reported using the provided callback.
 """

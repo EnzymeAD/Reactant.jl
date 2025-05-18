@@ -304,6 +304,37 @@ function breakpoint(; location=Location())
     )
 end
 
+"""
+`st_bulk`
+
+Initializes a region of shared memory at the address given by `addr`.
+The `size` operand specifies the number of bytes to initialize and must be 
+a multiple of 8.
+The `initVal` operand specifies the value to initialize the memory to. The 
+only supported value is 0.
+
+[For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/#data-movement-and-conversion-instructions-st-bulk)
+"""
+function st_bulk(addr::Value, size::Value; initVal=nothing, location=Location())
+    op_ty_results = IR.Type[]
+    operands = Value[addr, size]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+    !isnothing(initVal) && push!(attributes, namedattribute("initVal", initVal))
+
+    return create_operation(
+        "nvvm.st.bulk",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
 function read_ptx_sreg_clock64(; res::IR.Type, location=Location())
     op_ty_results = IR.Type[res,]
     operands = Value[]
@@ -1205,6 +1236,45 @@ function cvt_float_to_tf32(
 
     return create_operation(
         "nvvm.cvt.float.to.tf32",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+"""
+`cvt_to_f6x2`
+
+This Op converts each of the given float inputs to the specified fp6 type.
+The result `dst` is represented either as an i16 type or as a vector
+of two i8 types.
+If `dst` is returned as an i16 type, the converted values are packed such 
+that the value converted from `a` is stored in the upper 8 bits of `dst` 
+with 2 MSB bits padded with zeros and the value converted from `b` is 
+stored in the lower 8 bits of `dst` with 2 MSB bits padded with zeros.
+If `dst` is returned as a vector type, each converted value is stored as an 
+i8 element in the vector.
+The `relu` attribute, when set, lowers to the \'.relu\' variant of
+the cvt instruction.
+
+[For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-cvt)
+"""
+function cvt_to_f6x2(
+    a::Value, b::Value; dst::IR.Type, type, relu=nothing, location=Location()
+)
+    op_ty_results = IR.Type[dst,]
+    operands = Value[a, b]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[namedattribute("type", type),]
+    !isnothing(relu) && push!(attributes, namedattribute("relu", relu))
+
+    return create_operation(
+        "nvvm.cvt.to.f6x2",
         location;
         operands,
         owned_regions,
@@ -2631,6 +2701,42 @@ function mapa(a::Value, b::Value; res::IR.Type, location=Location())
 end
 
 """
+`match_sync`
+
+The `match.sync` op performs broadcast and compare of operand `val` across 
+all non-exited threads in `thread_mask` and returns a mask depending on the 
+kind and an optional predicate.
+
+The matching operation kinds are:
+- `any`: Returns a mask corresponding to the non-exited threads in the 
+`thread_mask` that have the same value of operand `val`.
+- `all`: Returns a mask and a predicate. If all non-exited threads in the 
+`thread_mask` have the same value of operand `val`, the predicate is set to 
+true and the mask corresponds to the non-exited threads in the 
+`thread_mask`. Otherwise, the predicate is set to false and the mask is 0.
+
+[For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/#parallel-synchronization-and-communication-instructions-match-sync)
+"""
+function match_sync(thread_mask::Value, val::Value; res::IR.Type, kind, location=Location())
+    op_ty_results = IR.Type[res,]
+    operands = Value[thread_mask, val]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[namedattribute("kind", kind),]
+
+    return create_operation(
+        "nvvm.match.sync",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+"""
 `mma_sync`
 
 The `nvvm.mma.sync` operation collectively performs the operation
@@ -3159,6 +3265,80 @@ function tcgen05_fence(; kind, location=Location())
 end
 
 """
+`tcgen05_ld`
+
+Instruction `tcgen05.ld` asynchronously loads data from the Tensor Memory at
+the location specified by the 32-bit address operand `tmemAddr` into the
+destination register `res`, collectively across all threads of the warps.
+
+The `shape` and the `num` attribute together determines the total
+dimension of the data which is loaded from the Tensor Memory. The `shape`
+attribute indicates the base dimension of data to be accessed as described
+in the Data Movement Shape. The `num` attribute indicates the repeat
+factor on the base dimension resulting in the total dimension of the data
+that is accessed.
+
+The shape `16x32bx2` performs two accesses into Tensor Memory of the shape
+`16x32b`. The base address of the first access is specified by `tmemAddr`
+and the base address of the second access is specified by
+`tmemAddr + offset`, where `offset` is an immediate argument.
+
+The unit attribute `pack` can be used to pack two 16-bit
+elements from adjacent columns into a single 32-bit element during the load.
+
+The following table describes the size of the vector for various combinations
+of `num` and `shape` attributes
+|=====================================================================|
+| num/shape      |     16x32bx2/16x64b/32x32b |  16x128b   | 16x256b  |
+|=====================================================================|
+| x1             |          1                 |    2       |    4     |
+| x2             |          2                 |    4       |    8     |
+| x4             |          4                 |    8       |    16    |
+| x8             |          8                 |    16      |    32    |
+| x16            |          16                |    32      |    64    |
+| x32            |          32                |    64      |    128   |
+| x64            |          64                |    128     |    NA    |
+| x128           |          128               |    NA      |    NA    |
+|=====================================================================|
+
+# Example
+```mlir
+  nvvm.tcgen05.ld %tmemAddr, %offset pack {
+    shape = #nvvm.tcgen05_ldst_shape<shape_16x32bx2>,
+  } : <2xi32>
+```
+
+[For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/#tcgen05-instructions-tcgen05-st)
+"""
+function tcgen05_ld(
+    tmemAddr::Value,
+    offset=nothing::Union{Nothing,Value};
+    res::IR.Type,
+    pack=nothing,
+    shape,
+    location=Location(),
+)
+    op_ty_results = IR.Type[res,]
+    operands = Value[tmemAddr,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[namedattribute("shape", shape),]
+    !isnothing(offset) && push!(operands, offset)
+    !isnothing(pack) && push!(attributes, namedattribute("pack", pack))
+
+    return create_operation(
+        "nvvm.tcgen05.ld",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+"""
 `tcgen05_relinquish_alloc_permit`
 
 The `tcgen05.relinquish_alloc_permit` Op specifies that the CTA
@@ -3207,6 +3387,79 @@ function tcgen05_shift(taddr::Value; group=nothing, location=Location())
 
     return create_operation(
         "nvvm.tcgen05.shift",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+"""
+`tcgen05_st`
+
+Instruction `tcgen05.st` asynchronously stores data from the source register `r`
+into the Tensor Memory at the location specified by the 32-bit address operand
+`tmemAddr`, collectively across all threads of the warps.
+
+The `shape` and the `num` attribute together determines the total dimension of
+the data which is stored to the Tensor Memory. The `shape` indicates the base
+dimension of data to be accessed. The `num` attribute indicates the repeat
+factor on the base dimension resulting in the total dimension of the data that
+is accessed.
+
+The shape `16x32bx2` performs two accesses into Tensor Memory of the shape
+`16x32b`. The base address of the first access is specified by `tmemAddr`
+and the base address of the second access is specified by
+`tmemAddr + offset`, where `offset` is an immediate argument.
+
+The unit attribute `unpack` can be used to unpack a 32-bit element
+in the register into two 16-bit elements and store them in adjacent columns.
+
+The following table describes the size of the vector for various combinations
+of `num` and `shape` attributes
+|=====================================================================|
+| num/shape      |     16x32bx2/16x64b/32x32b |  16x128b   | 16x256b  |
+|=====================================================================|
+| x1             |          1                 |    2       |    4     |
+| x2             |          2                 |    4       |    8     |
+| x4             |          4                 |    8       |    16    |
+| x8             |          8                 |    16      |    32    |
+| x16            |          16                |    32      |    64    |
+| x32            |          32                |    64      |    128   |
+| x64            |          64                |    128     |    NA    |
+| x128           |          128               |    NA      |    NA    |
+|=====================================================================|
+
+# Example
+```mlir
+  nvvm.tcgen05.st %tmemAddr, %val, %offset unpack {
+    shape = #nvvm.tcgen05_ldst_shape<shape_16x32bx2>,
+  } : <2xi32>
+```
+
+[For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/#tcgen05-instructions-tcgen05-st)
+"""
+function tcgen05_st(
+    tmemAddr::Value,
+    val::Value,
+    offset=nothing::Union{Nothing,Value};
+    unpack=nothing,
+    shape,
+    location=Location(),
+)
+    op_ty_results = IR.Type[]
+    operands = Value[tmemAddr, val]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[namedattribute("shape", shape),]
+    !isnothing(offset) && push!(operands, offset)
+    !isnothing(unpack) && push!(attributes, namedattribute("unpack", unpack))
+
+    return create_operation(
+        "nvvm.tcgen05.st",
         location;
         operands,
         owned_regions,
@@ -3306,15 +3559,35 @@ function read_ptx_sreg_tid_z(; res::IR.Type, range=nothing, location=Location())
     )
 end
 
-function vote_ballot_sync(mask::Value, pred::Value; res::IR.Type, location=Location())
+"""
+`vote_sync`
+
+The `vote.sync` op will cause executing thread to wait until all non-exited
+threads corresponding to membermask have executed `vote.sync` with the same
+qualifiers and same membermask value before resuming execution.
+
+The vote operation kinds are:
+- `any`: True if source predicate is True for some thread in membermask.
+- `all`: True if source predicate is True for all non-exited threads in
+  membermask. 
+- `uni`: True if source predicate has the same value in all non-exited
+  threads in membermask.
+- `ballot`: In the ballot form, the destination result is a 32 bit integer.
+  In this form, the predicate from each thread in membermask are copied into
+  the corresponding bit position of the result, where the bit position
+  corresponds to the thread’s lane id.
+
+[For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/#parallel-synchronization-and-communication-instructions-vote-sync)
+"""
+function vote_sync(mask::Value, pred::Value; res::IR.Type, kind, location=Location())
     op_ty_results = IR.Type[res,]
     operands = Value[mask, pred]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[]
+    attributes = NamedAttribute[namedattribute("kind", kind),]
 
     return create_operation(
-        "nvvm.vote.ballot.sync",
+        "nvvm.vote.sync",
         location;
         operands,
         owned_regions,

@@ -4,18 +4,8 @@
 #       we should move all the reactant_overrides to relevant files.
 
 # Compiling within a compile should return simply the original function
-@reactant_overlay function Compiler.compile(
-    f, args; client=nothing, optimize=true, sync=false
-)
+@reactant_overlay function Compiler.compile(f, args; kwargs...)
     return f
-end
-
-@reactant_overlay @noinline function Base.setindex!(
-    a::AnyTracedRArray{T,N}, v, indices::Vararg{Any,N}
-) where {T,N}
-    ancestor_indices = TracedUtils.get_ancestor_indices(a, indices...)
-    (Base.inferencebarrier(setindex!))(Reactant.ancestor(a), v, ancestor_indices...)
-    return a
 end
 
 # Enzyme.jl overlays
@@ -157,5 +147,34 @@ end
         error("Reactant doesn't have a `Base._unique_dims` with the current interpreter.")
     else
         Base.inferencebarrier(Base._unique_dims)(A, dims)
+    end
+end
+
+# overlay mapreduce since users often do a reduction over empty collections which can have a
+# Union{} type. Since Union{} <: TracedRNumber it goes through our dispatch, and here we
+# explicitly prevent it from going through our dispatch.
+@reactant_overlay @noinline function Base.mapreduce(
+    f, op, A::AbstractArray{T}; kwargs...
+) where {T}
+    if T <: TracedRNumber && T !== Union{}
+        return TracedRArrayOverrides.overloaded_mapreduce(f, op, A; kwargs...)
+    else
+        return Base.inferencebarrier(Base.mapreduce)(f, op, A; kwargs...)
+    end
+end
+
+@reactant_overlay @noinline function Base._all(f, x::AbstractArray{T}, dims) where {T}
+    if T <: TracedRNumber && T !== Union{}
+        return TracedRArrayOverrides.overloaded_all(f, x, dims)
+    else
+        return Base.inferencebarrier(Base._all)(f, x, dims)
+    end
+end
+
+@reactant_overlay @noinline function Base.any(f, x::AbstractArray{T}, dims) where {T}
+    if T <: TracedRNumber && T !== Union{}
+        return TracedRArrayOverrides.overloaded_any(f, x, dims)
+    else
+        return Base.inferencebarrier(Base.any)(f, x, dims)
     end
 end

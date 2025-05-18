@@ -26,6 +26,10 @@ struct RMSProp{Teta,Trho,Teps,C<:Bool}
     centred::C
 end
 
+@testset "Traced Type" begin
+    @test !(Vector{Union{}} <: Reactant.AnyTracedRArray)
+end
+
 @testset "Tracing" begin
     @testset "trace_type" begin
         @testset "mode = ConcreteToTraced" begin

@@ -3,6 +3,7 @@ import { tabsMarkdownPlugin } from "vitepress-plugin-tabs";
 import mathjax3 from "markdown-it-mathjax3";
 import footnote from "markdown-it-footnote";
 import { transformerMetaWordHighlight } from "@shikijs/transformers";
+import path from 'path'
 
 const baseTemp = {
   base: 'REPLACE_ME_DOCUMENTER_VITEPRESS', // TODO: replace this in makedocs!
@@ -15,9 +16,35 @@ export default defineConfig({
   description: "Documentation for Reactant.jl",
   cleanUrls: true,
   outDir: 'REPLACE_ME_DOCUMENTER_VITEPRESS', // This is required for MarkdownVitepress to work correctly...
-
   ignoreDeadLinks: true, // tested in Documenter.jl directly
+  lastUpdated: true,
 
+  head: [
+    ['link', { rel: "icon", href: `${baseTemp.base}favicon.ico` }],
+    ['script', {src: `/versions.js` }],
+    ['script', { src: `${baseTemp.base}siteinfo.js` }],
+  ],
+  vite: {
+    resolve: {
+      alias: {
+        '@': path.resolve(__dirname, '../components')
+      }
+    },
+    optimizeDeps: {
+      exclude: [
+        '@nolebase/vitepress-plugin-enhanced-readabilities/client',
+        'vitepress',
+        '@nolebase/ui',
+      ],
+    },
+    ssr: {
+      noExternal: [
+        // If there are other packages that need to be processed by Vite, you can add them here.
+        '@nolebase/vitepress-plugin-enhanced-readabilities',
+        '@nolebase/ui',
+      ],
+    },
+  },
   markdown: {
     math: true,
     config(md) {
@@ -29,12 +56,6 @@ export default defineConfig({
     },
     codeTransformers: [transformerMetaWordHighlight()],
   },
-
-  head: [
-    ["link", { rel: "icon", href: "REPLACE_ME_DOCUMENTER_VITEPRESS_FAVICON" }],
-    ["script", { src: `/versions.js` }],
-    ["script", { src: `${baseTemp.base}siteinfo.js` }],
-  ],
 
   themeConfig: {
     outline: "deep",
@@ -64,6 +85,7 @@ export default defineConfig({
           {text: "Overview", link: "/tutorials/"},
           {text: "Profiling", link: "/tutorials/profiling"},
           {text: "Distributed", link: "/tutorials/multihost"},
+          {text: "Local build", link: "/tutorials/local-build"},
         ],
       },
       {
@@ -72,6 +94,7 @@ export default defineConfig({
           { text: "Core Reactant API", link: "/api/api" },
           { text: "Sharding", link: "/api/sharding" },
           { text: "Ops", link: "/api/ops" },
+          { text: "Configuration", link: "/api/config" },
           {
             text: "MLIR Dialects",
             items: [
@@ -88,6 +111,7 @@ export default defineConfig({
               { text: "MemRef", link: "/api/dialects/memref" },
               { text: "NVVM", link: "/api/dialects/nvvm" },
               { text: "Shardy", link: "/api/dialects/shardy" },
+              { text: "SparseTensor", link: "/api/dialects/sparsetensor" },
               { text: "StableHLO", link: "/api/dialects/stablehlo" },
               { text: "Triton", link: "/api/dialects/triton" },
               { text: "TPU", link: "/api/dialects/tpu" },
@@ -109,24 +133,30 @@ export default defineConfig({
       },
     ],
     sidebar: {
-      "/introduction/": {
+      "/introduction/": [
+        {
         text: "Getting Started",
         collapsed: false,
         items: [
           { text: "Introduction", link: "/introduction" },
           { text: "Configuration", link: "/introduction/configuration" },
         ],
-      },
-      "/tutorials/": {
+      }
+    ],
+      "/tutorials/": [
+        {
         text: "Tutorials",
         collapsed: false,
         items: [
           { text: "Overview", link: "/tutorials/" },
           { text: "Profiling", link: "/tutorials/profiling" },
           { text: "Distributed", link: "/tutorials/multihost" },
+          { text: "Local build", link: "/tutorials/local-build" },
         ],
-      },
-      "/api/": {
+      }
+    ],
+      "/api/": [
+        {
         text: "API Reference",
         collapsed: false,
         items: [
@@ -136,6 +166,7 @@ export default defineConfig({
           },
           { text: "Sharding", link: "/api/sharding" },
           { text: "Ops", link: "/api/ops" },
+          { text: "Configuration", link: "/api/config" },
           {
             text: "MLIR Dialects",
             collapsed: false,
@@ -153,6 +184,7 @@ export default defineConfig({
               { text: "MemRef", link: "/api/dialects/memref" },
               { text: "NVVM", link: "/api/dialects/nvvm" },
               { text: "Shardy", link: "/api/dialects/shardy" },
+              { text: "SparseTensor", link: "/api/dialects/sparsetensor" },
               { text: "StableHLO", link: "/api/dialects/stablehlo" },
               { text: "Triton", link: "/api/dialects/triton" },
               { text: "TPU", link: "/api/dialects/tpu" },
@@ -169,14 +201,14 @@ export default defineConfig({
           },
           { text: "Internal API", link: "/api/internal" },
         ],
-      },
+      }
+    ],
     },
     editLink: {
       pattern: "https://github.com/EnzymeAD/Reactant.jl/edit/main/docs/src/:path",
       text: "Edit this page on GitHub",
     },
     socialLinks: [
-      { icon: "github", link: "https://github.com/EnzymeAD/Reactant.jl" },
       { icon: "slack", link: "https://julialang.org/slack/" },
     ],
     footer: {

@@ -3,17 +3,32 @@ module TracedRNumberOverrides
 using ..Reactant:
     Reactant, TracedRNumber, TracedRArray, TracedUtils, Ops, MLIR, unwrapped_eltype
 using ReactantCore
+using Adapt
 
+import Base.TwicePrecision
+
+ReactantCore.is_traced(::TracedRNumber, seen) = true
 ReactantCore.is_traced(::TracedRNumber) = true
 
 Base.getindex(a::TracedRNumber{T}) where {T} = a
+
+Base.to_index(x::TracedRNumber{<:Integer}) = x
 
 Base.zero(::TracedRNumber{T}) where {T} = TracedUtils.promote_to(TracedRNumber{T}, zero(T))
 Base.one(::TracedRNumber{T}) where {T} = TracedUtils.promote_to(TracedRNumber{T}, one(T))
 Base.collect(x::TracedRNumber{T}) where {T} = TracedRArray{T,0}((), x.mlir_data, ())
 
+Base.copy(x::TracedRNumber{T}) where {T} = TracedRNumber{T}((), x.mlir_data)
+
 function Base.eps(::Type{TracedRNumber{T}}) where {T}
     return TracedUtils.promote_to(TracedRNumber{T}, eps(T))
+end
+
+function Base.typemin(::Type{TracedRNumber{T}}) where {T}
+    return TracedUtils.promote_to(TracedRNumber{T}, typemin(T))
+end
+function Base.typemax(::Type{TracedRNumber{T}}) where {T}
+    return TracedUtils.promote_to(TracedRNumber{T}, typemax(T))
 end
 
 function Base.rtoldefault(T::Type{<:TracedRNumber})
@@ -254,10 +269,58 @@ function Base.ifelse(
     end
 end
 
+function Base.:*(
+    x::Base.TwicePrecision{T}, y::Base.TwicePrecision{T}
+) where {T<:TracedRNumber}
+    zh, zl = Base.mul12(x.hi, y.hi)
+    hi, lo = Base.canonicalize2(zh, (x.hi * y.lo + x.lo * y.hi) + zl)
+    hi = ifelse(iszero(zh) | !isfinite(zh), zh, hi)
+    lo = ifelse(iszero(zl) | !isfinite(zl), zl, lo)
+
+    return Base.TwicePrecision{T}(hi, lo)
+end
+
+function Base.:+(
+    x::Base.TwicePrecision{T}, y::Base.TwicePrecision{T}
+) where {T<:TracedRNumber}
+    r = x.hi + y.hi
+    @trace s = if abs(x.hi) > abs(y.hi)
+        begin
+            (((x.hi - r) + y.hi) + y.lo) + x.lo
+        end
+    else
+        begin
+            (((y.hi - r) + x.hi) + x.lo) + y.lo
+        end
+    end
+    return Base.TwicePrecision(Base.canonicalize2(r, s)...)
+end
+
+function Base.:*(x::TwicePrecision, v::TracedRNumber)
+    @trace result = if v == 0
+        TwicePrecision(x.hi * v, x.lo * v)
+    else
+        x * TwicePrecision(oftype(x.hi * v, v))
+    end
+    return result
+end
+
 for (T1, T2) in zip((Bool, Integer), (Bool, Integer))
     T = promote_type(T1, T2)
     @eval begin
         function Base.:&(x::TracedRNumber{<:$(T1)}, y::TracedRNumber{<:$(T2)})
+            return Ops.and(
+                TracedUtils.promote_to(TracedRNumber{$(T)}, x),
+                TracedUtils.promote_to(TracedRNumber{$(T)}, y),
+            )
+        end
+        function Base.:&(x::TracedRNumber{<:$(T1)}, y::$(T2))
+            return Ops.and(
+                TracedUtils.promote_to(TracedRNumber{$(T)}, x),
+                TracedUtils.promote_to(TracedRNumber{$(T)}, y),
+            )
+        end
+        function Base.:&(x::$(T1), y::TracedRNumber{<:$(T2)})
             return Ops.and(
                 TracedUtils.promote_to(TracedRNumber{$(T)}, x),
                 TracedUtils.promote_to(TracedRNumber{$(T)}, y),
@@ -269,7 +332,31 @@ for (T1, T2) in zip((Bool, Integer), (Bool, Integer))
                 TracedUtils.promote_to(TracedRNumber{$(T)}, y),
             )
         end
+        function Base.:|(x::TracedRNumber{<:$(T1)}, y::$(T2))
+            return Ops.or(
+                TracedUtils.promote_to(TracedRNumber{$(T)}, x),
+                TracedUtils.promote_to(TracedRNumber{$(T)}, y),
+            )
+        end
+        function Base.:|(x::$(T1), y::TracedRNumber{<:$(T2)})
+            return Ops.or(
+                TracedUtils.promote_to(TracedRNumber{$(T)}, x),
+                TracedUtils.promote_to(TracedRNumber{$(T)}, y),
+            )
+        end
         function Base.xor(x::TracedRNumber{<:$(T1)}, y::TracedRNumber{<:$(T2)})
+            return Ops.xor(
+                TracedUtils.promote_to(TracedRNumber{$(T)}, x),
+                TracedUtils.promote_to(TracedRNumber{$(T)}, y),
+            )
+        end
+        function Base.xor(x::TracedRNumber{<:$(T1)}, y::$(T2))
+            return Ops.xor(
+                TracedUtils.promote_to(TracedRNumber{$(T)}, x),
+                TracedUtils.promote_to(TracedRNumber{$(T)}, y),
+            )
+        end
+        function Base.xor(x::$(T1), y::TracedRNumber{<:$(T2)})
             return Ops.xor(
                 TracedUtils.promote_to(TracedRNumber{$(T)}, x),
                 TracedUtils.promote_to(TracedRNumber{$(T)}, y),
@@ -340,7 +427,14 @@ function Base.iseven(x::TracedRNumber{<:Real})
 end
 
 for (minT, maxT) in Iterators.product((Number, TracedRNumber), (Number, TracedRNumber))
-    @eval Base.clamp(x::TracedRNumber, min::$(minT), max::$(maxT)) = Ops.clamp(min, x, max)
+    @eval function Base.clamp(x::TracedRNumber, min::$(minT), max::$(maxT))
+        T = promote_type(unwrapped_eltype(x), unwrapped_eltype(min), unwrapped_eltype(max))
+        return Ops.clamp(
+            TracedUtils.promote_to(TracedRNumber{T}, min),
+            TracedUtils.promote_to(TracedRNumber{T}, x),
+            TracedUtils.promote_to(TracedRNumber{T}, max),
+        )
+    end
 end
 
 function Base.fill(x::TracedRNumber, dims::NTuple{N,Integer}) where {N}
@@ -354,11 +448,14 @@ function Base.float(x::TracedRNumber{T}) where {T}
     return TracedUtils.promote_to(TracedRNumber{float(T)}, x)
 end
 
-using Reactant: ReactantFloat
+using Reactant: ReactantFloat, ReactantInt
 
 Base.round(A::TracedRNumber{<:ReactantFloat}) = Ops.round_nearest_even(A)
+Base.round(A::TracedRNumber{<:ReactantInt}) = A
 Base.floor(A::TracedRNumber{<:ReactantFloat}) = Ops.floor(A)
+Base.floor(A::TracedRNumber{<:ReactantInt}) = A
 Base.ceil(A::TracedRNumber{<:ReactantFloat}) = Ops.ceil(A)
+Base.ceil(A::TracedRNumber{<:ReactantInt}) = A
 
 function Base.unsafe_trunc(
     T::Type{<:Reactant.ReactantInt}, x::TracedRNumber{<:Reactant.ReactantFloat}
@@ -416,9 +513,297 @@ function Base.getindex(
     return Base.unsafe_getindex(r, i)
 end
 
+function unitrange_last(start::Integer, stop::Integer)
+    return ifelse(stop >= start, stop, convert(typeof(stop), start - oneunit(start - stop)))
+end
+function unitrange_last(start, stop)
+    return ifelse(
+        stop >= start,
+        convert(typeof(stop), start + floor(stop - start)),
+        convert(typeof(stop), start - oneunit(start - stop)),
+    )
+end
+
+struct TracedUnitRange{T} <: AbstractUnitRange{T}
+    start::T
+    stop::T
+    function TracedUnitRange{T}(start::T, stop::T) where {T}
+        return new(start, unitrange_last(start, stop))
+    end
+end
+function Adapt.parent_type(::Type{TracedUnitRange{T}}) where {T}
+    return TracedUnitRange{T}
+end
+function TracedUnitRange{T}(start, stop) where {T}
+    return TracedUnitRange{T}(convert(T, start), convert(T, stop))
+end
+TracedUnitRange(start::T, stop::T) where {T} = TracedUnitRange{T}(start, stop)
+function TracedUnitRange(start, stop)
+    startstop_promoted = promote(start, stop)
+    not_sametype((start, stop), startstop_promoted)
+    return TracedUnitRange(startstop_promoted...)
+end
+function Base._in_unit_range(
+    v::TracedUnitRange, val, i::Union{Integer,TracedRNumber{<:Integer}}
+)
+    return (i > 0) & (val <= v.stop) & (val >= v.start)
+end
+
+function _traced_unitrange_getindex(v::TracedUnitRange{T}, i) where {T}
+    val = convert(T, v.start + (i - oneunit(i)))
+    # TODO: we should have error messages at some point.
+    # @boundscheck Base._in_unit_range(v, val, i) || throw_boundserror(v, i)
+    return val
+end
+
+function Base._getindex(v::TracedUnitRange, i::TracedRNumber{<:Integer})
+    return _traced_unitrange_getindex(v, i)
+end
+Base.getindex(v::TracedUnitRange, i::Integer) = _traced_unitrange_getindex(v, i)
+Base.getindex(r::TracedUnitRange, i::TracedRNumber) = Base._getindex(r, i)
+function Base.getindex(r::Base.UnitRange, i::I) where {I<:TracedRNumber{<:Integer}}
+    val = convert(I, r.start + (i - oneunit(i)))
+    # TODO: we should have error messages at some point.
+    # @boundscheck Base._in_unit_range(v, val, i) || throw_boundserror(v, i)
+    return val
+end
+
+function Base.promote_rule(
+    a::Type{TracedUnitRange{T1}}, b::Type{TracedUnitRange{T2}}
+) where {T1,T2}
+    return el_same(promote_type(T1, T2), a, b)
+end
+TracedUnitRange{T}(r::TracedUnitRange{T}) where {T<:Real} = r
+TracedUnitRange{T}(r::TracedUnitRange) where {T<:Real} = TracedUnitRange{T}(r.start, r.stop)
+
+function Base.promote_rule(
+    a::Type{TracedUnitRange{T1}}, ::Type{UR}
+) where {T1,UR<:AbstractUnitRange}
+    return promote_rule(a, TracedUnitRange{eltype(UR)})
+end
+function TracedUnitRange{T}(r::AbstractUnitRange) where {T<:Real}
+    return TracedUnitRange{T}(first(r), last(r))
+end
+TracedUnitRange(r::AbstractUnitRange) = TracedUnitRange(first(r), last(r))
+
+@inline function Base.length(r::TracedUnitRange{TracedRNumber{T}}) where {T}
+    start, stop = first(r), last(r)
+    a = Base.oneunit(Base.zero(stop) - Base.zero(start))
+    if a isa Signed
+        # Signed are allowed to go negative
+        Ops.select(stop >= start, a + stop - start, a)
+    else
+        Ops.select(stop >= start, a + stop - start, zero(a))
+    end
+end
+
+function Base._reshape(v::TracedUnitRange, dims::Dims{1})
+    Base.require_one_based_indexing(v)
+    len = dims[1]
+    # TODO support errors
+    # len == length(v) || Base._throw_dmrs(length(v), "length", len)
+    return v
+end
+function Base._reshape(parent::TracedUnitRange, dims::Dims)
+    n = length(parent)
+    # TODO support errors
+    # prod(dims) == n || Base._throw_dmrs(n, "size", dims)
+    return Base.__reshape((parent, IndexStyle(parent)), dims)
+end
+
+AbstractUnitRange{T}(r::TracedUnitRange) where {T} = TracedUnitRange{T}(r)
+
+struct TracedStepRangeLen{T,R,S,L} <: AbstractRange{T}
+    ref::R
+    step::S
+    len::L
+    offset::L
+end
+
+function Base.Array(x::TracedStepRangeLen{<:Reactant.AbstractConcreteNumber})
+    return StepRangeLen(
+        Reactant.to_number(x.ref),
+        Reactant.to_number(x.step),
+        Reactant.to_number(x.len),
+        Reactant.to_number(x.offset),
+    )
+end
+
+function Adapt.parent_type(::Type{TracedStepRangeLen{T,R,S,L}}) where {T,R,S,L}
+    return TracedStepRangeLen{T,R,S,L}
+end
+
+# constructors and interface implementation copied from range.jl
+function TracedStepRangeLen{T,R,S}(ref::R, step::S, len, offset=1) where {T,R,S}
+    return TracedStepRangeLen{T,R,S,typeof(len)}(ref, step, len, offset)
+end
+function TracedStepRangeLen(ref::R, step::S, len, offset=1) where {R,S}
+    return TracedStepRangeLen{typeof(ref + zero(step)),R,S,typeof(len)}(
+        ref, step, len, offset
+    )
+end
+function TracedStepRangeLen{T}(
+    ref::R, step::S, len::Integer, offset::Integer=1
+) where {T,R,S}
+    return TracedStepRangeLen{T,R,S,typeof(len)}(ref, step, len, offset)
+end
+
+Base.isempty(r::TracedStepRangeLen) = length(r) == 0
+Base.step(r::TracedStepRangeLen) = r.step
+Base.step_hp(r::TracedStepRangeLen) = r.step
+Base.length(r::TracedStepRangeLen) = r.len
+Base.first(r::TracedStepRangeLen) = Base.unsafe_getindex(r, 1)
+Base.last(r::TracedStepRangeLen) = Base.unsafe_getindex(r, r.len)
+function Base.iterate(r::TracedStepRangeLen, i::Integer=1)
+    @inline
+    i += oneunit(i)
+    length(r) < i && return nothing
+    return Base.unsafe_getindex(r, i), i
+end
+
+function _tracedsteprangelen_unsafe_getindex(
+    r::AbstractRange{T}, i::Union{I,TracedRNumber{I}}
+) where {T,I}
+    finalT = T
+    offsetT = typeof(r.offset)
+    if i isa TracedRNumber
+        if !(T <: TracedRNumber)
+            finalT = TracedRNumber{T}
+        end
+        if !(r.offset isa TracedRNumber)
+            offsetT = TracedRNumber{offsetT}
+        end
+    end
+    u = convert(offsetT, i) - r.offset
+    return finalT(r.ref + u * r.step)
+end
+function Base.unsafe_getindex(r::TracedStepRangeLen, i::Integer)
+    return _tracedsteprangelen_unsafe_getindex(r, i)
+end
+function Base.unsafe_getindex(r::TracedStepRangeLen, i::TracedRNumber{<:Integer})
+    return _tracedsteprangelen_unsafe_getindex(r, i)
+end
+Base.getindex(r::TracedStepRangeLen, i::TracedRNumber) = Base.unsafe_getindex(r, i)
+function getindex(r::TracedStepRangeLen{T}, s::OrdinalRange{S}) where {T,S<:Integer}
+    @inline
+    @boundscheck checkbounds(r, s)
+
+    len = length(s)
+    sstep = Base.step_hp(s)
+    rstep = Base.step_hp(r)
+    L = typeof(len)
+    if S === Bool
+        rstep *= one(sstep)
+        if len == 0
+            return TracedStepRangeLen{T}(first(r), rstep, zero(L), oneunit(L))
+        elseif len == 1
+            if first(s)
+                return TracedStepRangeLen{T}(first(r), rstep, oneunit(L), oneunit(L))
+            else
+                return TracedStepRangeLen{T}(first(r), rstep, zero(L), oneunit(L))
+            end
+        else # len == 2
+            return TracedStepRangeLen{T}(last(r), rstep, oneunit(L), oneunit(L))
+        end
+    else
+        # Find closest approach to offset by s
+        ind = LinearIndices(s)
+        offset = L(
+            max(min(1 + round(L, (r.offset - first(s)) / sstep), last(ind)), first(ind))
+        )
+        ref = Base._getindex_hiprec(r, first(s) + (offset - oneunit(offset)) * sstep)
+        return TracedStepRangeLen{T}(ref, rstep * sstep, len, offset)
+    end
+end
+function Base._getindex_hiprec(r::TracedStepRangeLen, i::Integer)  # without rounding by T
+    u = oftype(r.offset, i) - r.offset
+    return r.ref + u * r.step
+end
+function Base.:(==)(r::T, s::T) where {T<:TracedStepRangeLen}
+    return (isempty(r) & isempty(s)) |
+           ((first(r) == first(s)) & (length(r) == length(s)) & (last(r) == last(s)))
+end
+
+# TODO: if there ever comes a ReactantStepRange:
+# ==(r::Union{StepRange{T},StepRangeLen{T,T}}, s::Union{StepRange{T},StepRangeLen{T,T}}) where {T}
+
+function Base.:-(r::TracedStepRangeLen{T,R,S,L}) where {T,R,S,L}
+    return TracedStepRangeLen{T,R,S,L}(-r.ref, -r.step, r.len, r.offset)
+end
+
+# TODO: promotion from StepRangeLen{T} to TracedStepRangeLen{T}?
+function Base.promote_rule(
+    ::Type{TracedStepRangeLen{T1,R1,S1,L1}}, ::Type{TracedStepRangeLen{T2,R2,S2,L2}}
+) where {T1,T2,R1,R2,S1,S2,L1,L2}
+    R, S, L = promote_type(R1, R2), promote_type(S1, S2), promote_type(L1, L2)
+    return Base.el_same(
+        promote_type(T1, T2), TracedStepRangeLen{T1,R,S,L}, TracedStepRangeLen{T2,R,S,L}
+    )
+end
+TracedStepRangeLen{T,R,S,L}(r::TracedStepRangeLen{T,R,S,L}) where {T,R,S,L} = r
+function TracedStepRangeLen{T,R,S,L}(r::TracedStepRangeLen) where {T,R,S,L}
+    return TracedStepRangeLen{T,R,S,L}(
+        convert(R, r.ref), convert(S, r.step), convert(L, r.len), convert(L, r.offset)
+    )
+end
+function TracedStepRangeLen{T}(r::TracedStepRangeLen) where {T}
+    return TracedStepRangeLen(convert(T, r.ref), convert(T, r.step), r.len, r.offset)
+end
+function Base.promote_rule(
+    a::Type{TracedStepRangeLen{T,R,S,L}}, ::Type{OR}
+) where {T,R,S,L,OR<:AbstractRange}
+    return promote_rule(a, TracedStepRangeLen{eltype(OR),eltype(OR),eltype(OR),Int})
+end
+function TracedStepRangeLen{T,R,S,L}(r::AbstractRange) where {T,R,S,L}
+    return TracedStepRangeLen{T,R,S,L}(R(first(r)), S(step(r)), length(r))
+end
+function TracedStepRangeLen{T}(r::AbstractRange) where {T}
+    return TracedStepRangeLen(T(first(r)), T(step(r)), length(r))
+end
+TracedStepRangeLen(r::AbstractRange) = TracedStepRangeLen{eltype(r)}(r)
+
+function Base.promote_rule(
+    ::Type{LinRange{A,L}}, b::Type{TracedStepRangeLen{T2,R2,S2,L2}}
+) where {A,L,T2,R2,S2,L2}
+    return promote_rule(TracedStepRangeLen{A,A,A,L}, b)
+end
+
+function Base._reverse(r::TracedStepRangeLen, ::Colon)
+    # If `r` is empty, `length(r) - r.offset + 1 will be nonpositive hence
+    # invalid. As `reverse(r)` is also empty, any offset would work so we keep
+    # `r.offset`
+    offset = isempty(r) ? r.offset : length(r) - r.offset + 1
+    return typeof(r)(r.ref, negate(r.step), length(r), offset)
+end
+
+# TODO: +, - for TracedStepRangeLen (see Base._define_range_op)
+
+function (::Type{T})(x::TwicePrecision) where {T<:Reactant.TracedRNumber}
+    return (T(x.hi) + T(x.lo))::T
+end
+
+function (::Type{T})(x::TwicePrecision) where {T<:Reactant.ConcreteRNumber}
+    return Reactant.ConcreteRNumber(T(x.hi) - T(x.lo))::T
+end
+
+Base.nbitslen(r::TracedStepRangeLen) = Base.nbitslen(eltype(r), length(r), r.offset)
+function TracedStepRangeLen(
+    ref::TwicePrecision{T}, step::TwicePrecision{T}, len, offset=1
+) where {T}
+    return TracedStepRangeLen{T,TwicePrecision{T},TwicePrecision{T}}(ref, step, len, offset)
+end
+function Base.step(r::TracedStepRangeLen{T,TwicePrecision{T},TwicePrecision{T}}) where {T}
+    return T(r.step)
+end
+
 # This assumes that r.step has already been split so that (0:len-1)*r.step.hi is exact
 function Base.unsafe_getindex(
-    r::Base.StepRangeLen{T,<:Base.TwicePrecision,<:Base.TwicePrecision},
+    r::Union{
+        Base.StepRangeLen{T,<:Base.TwicePrecision,<:Base.TwicePrecision},
+        TracedStepRangeLen{
+            T,<:Base.TwicePrecision,<:Base.TwicePrecision,<:Base.TwicePrecision
+        },
+    },
     i::TracedRNumber{<:Integer},
 ) where {T}
     # Very similar to _getindex_hiprec, but optimized to avoid a 2nd call to add12
@@ -441,7 +826,9 @@ function Base.unsafe_getindex(
 end
 
 function Base.searchsortedfirst(
-    a::AbstractRange{<:Real}, x::TracedRNumber{<:Real}, o::Base.DirectOrdering
+    a::AbstractRange{<:Union{Real,TracedRNumber}},
+    x::TracedRNumber{<:Real},
+    o::Base.DirectOrdering,
 )::TracedRNumber{keytype(a)}
 
     # require_one_based_indexing(a)
@@ -452,11 +839,17 @@ function Base.searchsortedfirst(
         !Base.Order.lt(o, f, x),
         1,
         ifelse(
-            h == 0 || Base.Order.lt(o, l, x),
+            (h == 0) | Base.Order.lt(o, l, x),
             length(a) + 1,
             ifelse(Base.Order.lt(o, a[n], x), n + 1, n),
         ),
     )
+end
+
+function Base.searchsortedfirst(
+    a::AbstractRange{<:TracedRNumber}, x::Real, o::Base.DirectOrdering
+)::TracedRNumber{keytype(a)}
+    return Base.searchsortedfirst(a, TracedRNumber{typeof(x)}(x), o)
 end
 
 function Base.round(::Type{T}, x::TracedRNumber{<:AbstractFloat}) where {T<:Integer}

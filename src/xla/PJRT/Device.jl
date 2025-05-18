@@ -32,3 +32,19 @@ function XLA.get_local_device_id(device::Device)
         )::Cint
     end
 end
+
+function XLA.is_addressable(device::Device)
+    GC.@preserve device begin
+        return @ccall MLIR.API.mlir_c.pjrt_device_is_addressable(
+            device.device::Ptr{Cvoid}
+        )::Bool
+    end
+end
+
+function XLA.allocatorstats_internal(device::Device)
+    ref = Ref{XLA.JLAllocatorStats}()
+    @ccall MLIR.API.mlir_c.PjRtDeviceGetAllocatorStats(
+        device.device::Ptr{Cvoid}, ref::Ptr{Cvoid}
+    )::Cvoid
+    return ref[]
+end

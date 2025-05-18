@@ -24,3 +24,8 @@ function Base.string(device::AbstractDevice)
     pname = XLA.platform_name(client)
     return "$(uppercase(pname)):$(device_ordinal(device)) $(device_kind(device))"
 end
+
+# Fallback method, preferably all device implementations overload this
+function XLA.is_addressable(device::AbstractDevice)
+    return device ∈ XLA.addressable_devices(XLA.client(device))
+end

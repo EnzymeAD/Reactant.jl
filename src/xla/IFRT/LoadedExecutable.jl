@@ -41,7 +41,9 @@ for (jlop, xlaop, field) in (
     ),
 )
     @eval function XLA.$(jlop)(exec::LoadedExecutable)
-        exec.is_sharded || return XLA.OpSharding[]
+        if !exec.is_sharded || iszero(exec.$(field))
+            return XLA.OpSharding[]
+        end
 
         op_shardings = Ref{NTuple{exec.$(field),Ptr{Cvoid}}}()
 
@@ -79,18 +81,24 @@ function XLA.compile(
     num_parameters::Int64,
     num_replicas::Int64,
     num_partitions::Int64,
+    use_shardy_partitioner::Bool,
 )
     device_id = is_sharded ? Int64(-1) : Int64(XLA.device_ordinal(device))
     GC.@preserve client mod begin
-        exec = @ccall MLIR.API.mlir_c.ifrt_compile(
-            client.client::Ptr{Cvoid},
-            mod.module_::MLIR.API.MlirModule,
-            device_id::Clong,
-            is_sharded::Bool,
-            global_device_ids::Ptr{Clong},
-            length(global_device_ids)::Clong,
-            XLA.CUDA_DATA_DIR[]::Cstring,
-        )::Ptr{Cvoid}
+        exec = MLIR.IR.try_compile_dump_mlir(mod) do
+            @ccall MLIR.API.mlir_c.ifrt_compile(
+                client.client::Ptr{Cvoid},
+                mod.module_::MLIR.API.MlirModule,
+                device_id::Clong,
+                global_device_ids::Ptr{Clong},
+                length(global_device_ids)::Clong,
+                XLA.CUDA_DATA_DIR[]::Cstring,
+                use_shardy_partitioner::Bool,
+                num_replicas::Int64,
+                num_partitions::Int64,
+                is_sharded::Bool,
+            )::Ptr{Cvoid}
+        end
     end
     return LoadedExecutable(
         exec, num_outputs, num_parameters, is_sharded, num_replicas, num_partitions

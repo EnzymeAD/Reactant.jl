@@ -18,14 +18,14 @@ s = ArgParseSettings()
         arg_type = String
     "--gcc_host_compiler_path"
         help = "Path to the gcc host compiler."
-        default = "/usr/bin/gcc"
+        default = something(Sys.which("gcc"), "/usr/bin/gcc")
         arg_type = String
     "--cc"
-        default = "/usr/bin/cc"
+        default = something(Sys.which("cc"), Sys.which("gcc"), Sys.which("clang"), "/usr/bin/cc")
         arg_type = String
     "--hermetic_python_version"
         help = "Hermetic Python version."
-        default = "3.10"
+        default = "3.12"
         arg_type = String
     "--jobs"
         help = "Number of parallel jobs."
@@ -137,6 +137,7 @@ push!(build_cmd_list, "--repo_env=CC=$(cc)")
 push!(build_cmd_list, "--check_visibility=false")
 push!(build_cmd_list, "--verbose_failures")
 push!(build_cmd_list, "--jobs=$(parsed_args["jobs"])")
+push!(build_cmd_list, "--experimental_ui_max_stdouterr_bytes=-1")
 for opt in parsed_args["copt"]
     push!(build_cmd_list, "--copt=$(opt)")
 end
@@ -147,7 +148,7 @@ for opt in parsed_args["extraopt"]
     push!(build_cmd_list, opt)
 end
 # Some versions of GCC can't deal with some components of XLA, disable them if necessary.
-if cc_is_gcc && build_backend == "cuda"
+if cc_is_gcc
     arch = Base.BinaryPlatforms.arch(Base.BinaryPlatforms.HostPlatform())
     if arch == "x86_64"
         if gcc_version < v"13"
@@ -156,7 +157,15 @@ if cc_is_gcc && build_backend == "cuda"
         if gcc_version < v"12"
             push!(build_cmd_list, "--define=xnn_enable_avx512fp16=false")
         end
+        if gcc_version < v"11"
+            # TODO: this is not sufficient to complete a build with GCC 10.
+            push!(build_cmd_list, "--define=xnn_enable_avxvnni=false")
+        end
     end
+else
+    # Assume the compiler is clang if not GCC. `using_clang` is an option
+    # introduced by Enzyme-JAX.
+    push!(build_cmd_list, "--define=using_clang=true")
 end
 push!(build_cmd_list, "--color=$(parsed_args["color"])")
 push!(build_cmd_list, ":libReactantExtra.so")
@@ -194,7 +203,6 @@ using Preferences
 set_preferences!(
     joinpath(dirname(@__DIR__), "LocalPreferences.toml"),
     "Reactant_jll",
-    "libReactantExtra_path" => lib_path,
-    "libReactantDialects_path" => joinpath(source_dir, "bazel-bin");
+    "libReactantExtra_path" => lib_path;
     force=true,
 )

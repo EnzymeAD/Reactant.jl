@@ -143,8 +143,30 @@ end
     a_re = Reactant.to_rarray(a)
     b_re = Reactant.to_rarray(b)
     df(x, y) = Enzyme.gradient(ReverseWithPrimal, *, x, y)
-    res = @jit df(a_re, b_re) # before, this segfaulted
-    @test res.val ≈ 4ones(2, 2)
-    @test res.derivs[1] ≈ 4ones(2, 2)
-    @test res.derivs[2] ≈ 2ones(2, 2)
+    @test begin
+        res = @jit df(a_re, b_re) # before, this segfaulted
+        (res.val ≈ 4ones(2, 2)) &&
+            (res.derivs[1] ≈ 4ones(2, 2)) &&
+            (res.derivs[2] ≈ 2ones(2, 2))
+    end
+end
+
+@testset "onehot" begin
+    x = Reactant.to_rarray(rand(3, 4))
+    hlo = @code_hlo optimize = false Enzyme.onehot(x)
+    @test !contains("stablehlo.constant", repr(hlo))
+end
+
+fn(x) = sum(abs2, x)
+vector_forward_ad(x) = Enzyme.autodiff(Forward, fn, BatchDuplicated(x, Enzyme.onehot(x)))
+
+@testset "Vector Mode AD" begin
+    x = Reactant.to_rarray(reshape(collect(Float32, 1:4), 2, 2))
+    res = @jit vector_forward_ad(x)
+    res_enz = vector_forward_ad(Array(x))
+
+    @test res[1][1] ≈ res_enz[1][1]
+    @test res[1][2] ≈ res_enz[1][2]
+    @test res[1][3] ≈ res_enz[1][3]
+    @test res[1][4] ≈ res_enz[1][4]
 end

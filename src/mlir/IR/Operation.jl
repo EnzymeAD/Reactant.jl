@@ -159,6 +159,13 @@ function operand(operation::Operation, i=1)
 end
 
 """
+    operands(op)
+
+Return an array of all operands of the operation.
+"""
+operands(op) = Value[operand(op, i) for i in 1:noperands(op)]
+
+"""
     operand!(op, i, value)
 
 Sets the `i`-th operand of the operation.
@@ -252,11 +259,35 @@ function Base.show(io::IO, operation::Operation)
 
     flags = API.mlirOpPrintingFlagsCreate()
 
-    API.mlirOpPrintingFlagsEnableDebugInfo(flags, get(io, :debug, false), true)
+    API.mlirOpPrintingFlagsEnableDebugInfo(flags, get(io, :debug, false), false)
     API.mlirOperationPrintWithFlags(operation, flags, c_print_callback, ref)
     API.mlirOpPrintingFlagsDestroy(flags)
 
     return write(io, rstrip(String(take!(buffer))))
+end
+
+"""
+    parse(::Type{Operation}, code; context=context())
+
+Parses an operation from the string and transfers ownership to the caller.
+"""
+function Base.parse(
+    ::Core.Type{Operation},
+    code;
+    verify::Bool=false,
+    context::Context=context(),
+    block=Block(),
+    location::Location=Location(),
+)
+    return Operation(
+        @ccall API.mlir_c.mlirOperationParse(
+            context::API.MlirContext,
+            block::API.MlirBlock,
+            code::API.MlirStringRef,
+            location::API.MlirLocation,
+            verify::Bool,
+        )::API.MlirOperation
+    )
 end
 
 """

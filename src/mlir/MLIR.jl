@@ -7,7 +7,11 @@ module API
     using Preferences
     using Reactant_jll
 
-    const mlir_c = Reactant_jll.libReactantExtra
+    const mlir_c = if Reactant_jll.is_available()
+        Reactant_jll.libReactantExtra
+    else
+        ""
+    end
 
     # MLIR C API
     let

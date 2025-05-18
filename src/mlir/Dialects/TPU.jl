@@ -345,6 +345,7 @@ function enqueue_dma(
     target_semaphore::Value,
     device_id=nothing::Union{Nothing,Value},
     core_id=nothing::Union{Nothing,Value},
+    priority=nothing,
     location=Location(),
 )
     op_ty_results = IR.Type[]
@@ -370,6 +371,7 @@ function enqueue_dma(
             end,
         ]),
     )
+    !isnothing(priority) && push!(attributes, namedattribute("priority", priority))
 
     return create_operation(
         "tpu.enqueue_dma",
@@ -805,6 +807,32 @@ function pack_subelements(
     )
 end
 
+function reciprocal(
+    input::Value;
+    output=nothing::Union{Nothing,IR.Type},
+    approx=nothing,
+    location=Location(),
+)
+    op_ty_results = IR.Type[]
+    operands = Value[input,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+    !isnothing(output) && push!(op_ty_results, output)
+    !isnothing(approx) && push!(attributes, namedattribute("approx", approx))
+
+    return create_operation(
+        "tpu.reciprocal",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
+    )
+end
+
 function region(; results::Vector{IR.Type}, region::Region, location=Location())
     op_ty_results = IR.Type[results...,]
     operands = Value[]
@@ -903,6 +931,13 @@ function roll_vectors(input::Vector{Value}; output::IR.Type, location=Location()
     )
 end
 
+"""
+`rotate`
+
+Rotates the given vector by the given amount in the given dimension, i.e.,
+for a 2D vector of shape (m, n), rotating dim 0 by `amount` will shift a row
+at index `i` to index `(i + amount) % m`
+"""
 function rotate(
     value::Value;
     result=nothing::Union{Nothing,IR.Type},

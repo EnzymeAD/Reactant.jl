@@ -981,6 +981,25 @@ end
             y_reactant,
         )
     )[1] ≈ x .+ y
+
+    @test Float32(
+        only(
+            Reactant.@jit(
+                Ops.hlo_call(
+                    """
+                    module {
+                      func.func @main(%arg0: tensor<f32>, %arg1: tensor<f32>) -> tensor<f32> {
+                        %0 = stablehlo.add %arg0, %arg1 : tensor<f32>
+                        return %0 : tensor<f32>
+                      }
+                    }
+                    """,
+                    Reactant.ConcreteRNumber(2.0f0),
+                    Reactant.ConcreteRNumber(2.0f0),
+                )
+            )
+        ),
+    ) == 4.0f0
 end
 
 function f_repeat(x, y)
@@ -1117,8 +1136,13 @@ end
     hlo_ir = repr(mod)
     csts = collect(x for x in eachsplit(hlo_ir, "\n") if occursin("stablehlo.constant", x))
     @test length(csts) == 2
-    @test occursin("1, 2, 3, 4", csts[1])
-    @test occursin("6, 2, 3, 4", csts[2])
+    idx = findfirst(x -> occursin("1, 2, 3, 4", x), csts)
+    @test idx !== nothing
+    if idx == 1
+        @test occursin("6, 2, 3, 4", csts[2])
+    else
+        @test occursin("6, 2, 3, 4", csts[1])
+    end
 end
 
 @testset "Large constant" begin
@@ -1129,16 +1153,70 @@ end
     # Function which would use the `constant` object
     f!(v) = v .+= constant
     default_threshold = Ops.LARGE_CONSTANT_THRESHOLD[]
+    default_raise_error = Ops.LARGE_CONSTANT_RAISE_ERROR[]
     try
         Ops.LARGE_CONSTANT_THRESHOLD[] = N
+        Ops.LARGE_CONSTANT_RAISE_ERROR[] = true
         @compile f!(vr)
     catch err
-        @test err.msg == "Generating a constant larger than $(N) bytes."
+        @test err.msg ==
+            "Generating a constant of 40 bytes, which larger than the $(N) bytes threshold"
     finally
         # Restore threshold
         Ops.LARGE_CONSTANT_THRESHOLD[] = default_threshold
+        Ops.LARGE_CONSTANT_RAISE_ERROR[] = default_raise_error
     end
     # Make sure we can now compile the function
     fr! = @compile f!(vr)
     @test fr!(vr) ≈ f!(v)
+end
+
+@testset "Ops.fill" begin
+    @testset "Fill with TracedScalar" begin
+        fn(x) = Ops.fill(x, [2, 3])
+        x_ra = ConcreteRNumber(1.0f0)
+        y_ra = @jit fn(x_ra)
+        @test y_ra isa ConcreteRArray{Float32,2}
+        @test Array(y_ra) == ones(Float32, 2, 3)
+    end
+end
+
+function recon_from_lu(lu_res::AbstractArray{T,4}) where {T}
+    y = similar(lu_res)
+    for i in 1:size(lu_res, 1), j in 1:size(lu_res, 2)
+        y[i, j, :, :] .= recon_from_lu(lu_res[i, j, :, :])
+    end
+    return y
+end
+
+function apply_permutation(x::AbstractArray{T,4}, perm) where {T}
+    y = similar(x)
+    for i in 1:size(x, 1), j in 1:size(x, 2)
+        y[i, j, :, :] .= x[i, j, perm[i, j, :], :]
+    end
+    return y
+end
+
+function recon_from_lu(lu_res::AbstractMatrix)
+    return UnitLowerTriangular(lu_res) * UpperTriangular(lu_res)
+end
+
+@testset "lu factorization" begin
+    @testset "unbatched" begin
+        x_ra = Reactant.to_rarray(randn(6, 6))
+        lu_ra, ipiv, perm, info = @jit Ops.lu(x_ra)
+
+        @test @jit(recon_from_lu(lu_ra)) ≈ @jit(getindex(x_ra, perm, :))
+    end
+
+    @testset "batched" begin
+        x_ra = Reactant.to_rarray(randn(4, 3, 6, 6))
+        lu_ra, ipiv, perm, info = @jit Ops.lu(x_ra)
+        @test size(lu_ra) == (4, 3, 6, 6)
+        @test size(ipiv) == (4, 3, 6)
+        @test size(perm) == (4, 3, 6)
+        @test size(info) == (4, 3)
+
+        @test @jit(recon_from_lu(lu_ra)) ≈ @jit(apply_permutation(x_ra, perm))
+    end
 end

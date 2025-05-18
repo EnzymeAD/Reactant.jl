@@ -675,13 +675,20 @@ https://github.com/openxla/stablehlo/blob/main/docs/spec.md#cbrt
 %result = stablehlo.cbrt %operand : tensor<4xf64>
 ```
 """
-function cbrt(operand::Value; result=nothing::Union{Nothing,IR.Type}, location=Location())
+function cbrt(
+    operand::Value;
+    result=nothing::Union{Nothing,IR.Type},
+    result_accuracy=nothing,
+    location=Location(),
+)
     op_ty_results = IR.Type[]
     operands = Value[operand,]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
     !isnothing(result) && push!(op_ty_results, result)
+    !isnothing(result_accuracy) &&
+        push!(attributes, namedattribute("result_accuracy", result_accuracy))
 
     return create_operation(
         "stablehlo.cbrt",
@@ -1265,13 +1272,20 @@ https://github.com/openxla/stablehlo/blob/main/docs/spec.md#cosine
 %result = stablehlo.cosine %operand : tensor<2xf32>
 ```
 """
-function cosine(operand::Value; result=nothing::Union{Nothing,IR.Type}, location=Location())
+function cosine(
+    operand::Value;
+    result=nothing::Union{Nothing,IR.Type},
+    result_accuracy=nothing,
+    location=Location(),
+)
     op_ty_results = IR.Type[]
     operands = Value[operand,]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
     !isnothing(result) && push!(op_ty_results, result)
+    !isnothing(result_accuracy) &&
+        push!(attributes, namedattribute("result_accuracy", result_accuracy))
 
     return create_operation(
         "stablehlo.cosine",
@@ -2035,7 +2049,10 @@ https://github.com/openxla/stablehlo/blob/main/docs/spec.md#exponential_minus_on
 ```
 """
 function exponential_minus_one(
-    operand::Value; result=nothing::Union{Nothing,IR.Type}, location=Location()
+    operand::Value;
+    result=nothing::Union{Nothing,IR.Type},
+    result_accuracy=nothing,
+    location=Location(),
 )
     op_ty_results = IR.Type[]
     operands = Value[operand,]
@@ -2043,6 +2060,8 @@ function exponential_minus_one(
     successors = Block[]
     attributes = NamedAttribute[]
     !isnothing(result) && push!(op_ty_results, result)
+    !isnothing(result_accuracy) &&
+        push!(attributes, namedattribute("result_accuracy", result_accuracy))
 
     return create_operation(
         "stablehlo.exponential_minus_one",
@@ -2459,7 +2478,10 @@ https://github.com/openxla/stablehlo/blob/main/docs/spec.md#log_plus_one
 ```
 """
 function log_plus_one(
-    operand::Value; result=nothing::Union{Nothing,IR.Type}, location=Location()
+    operand::Value;
+    result=nothing::Union{Nothing,IR.Type},
+    result_accuracy=nothing,
+    location=Location(),
 )
     op_ty_results = IR.Type[]
     operands = Value[operand,]
@@ -2467,6 +2489,8 @@ function log_plus_one(
     successors = Block[]
     attributes = NamedAttribute[]
     !isnothing(result) && push!(op_ty_results, result)
+    !isnothing(result_accuracy) &&
+        push!(attributes, namedattribute("result_accuracy", result_accuracy))
 
     return create_operation(
         "stablehlo.log_plus_one",
@@ -2494,13 +2518,20 @@ https://github.com/openxla/stablehlo/blob/main/docs/spec.md#log
 %result = stablehlo.log %operand : tensor<2x2xf64>
 ```
 """
-function log(operand::Value; result=nothing::Union{Nothing,IR.Type}, location=Location())
+function log(
+    operand::Value;
+    result=nothing::Union{Nothing,IR.Type},
+    result_accuracy=nothing,
+    location=Location(),
+)
     op_ty_results = IR.Type[]
     operands = Value[operand,]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
     !isnothing(result) && push!(op_ty_results, result)
+    !isnothing(result_accuracy) &&
+        push!(attributes, namedattribute("result_accuracy", result_accuracy))
 
     return create_operation(
         "stablehlo.log",
@@ -2529,7 +2560,10 @@ https://github.com/openxla/stablehlo/blob/main/docs/spec.md#logistic
 ```
 """
 function logistic(
-    operand::Value; result=nothing::Union{Nothing,IR.Type}, location=Location()
+    operand::Value;
+    result=nothing::Union{Nothing,IR.Type},
+    result_accuracy=nothing,
+    location=Location(),
 )
     op_ty_results = IR.Type[]
     operands = Value[operand,]
@@ -2537,6 +2571,8 @@ function logistic(
     successors = Block[]
     attributes = NamedAttribute[]
     !isnothing(result) && push!(op_ty_results, result)
+    !isnothing(result_accuracy) &&
+        push!(attributes, namedattribute("result_accuracy", result_accuracy))
 
     return create_operation(
         "stablehlo.logistic",
@@ -3694,13 +3730,20 @@ https://github.com/openxla/stablehlo/blob/main/docs/spec.md#rsqrt
 %result = stablehlo.rsqrt %operand : tensor<2x2xf32>
 ```
 """
-function rsqrt(operand::Value; result=nothing::Union{Nothing,IR.Type}, location=Location())
+function rsqrt(
+    operand::Value;
+    result=nothing::Union{Nothing,IR.Type},
+    result_accuracy=nothing,
+    location=Location(),
+)
     op_ty_results = IR.Type[]
     operands = Value[operand,]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
     !isnothing(result) && push!(op_ty_results, result)
+    !isnothing(result_accuracy) &&
+        push!(attributes, namedattribute("result_accuracy", result_accuracy))
 
     return create_operation(
         "stablehlo.rsqrt",
@@ -3799,8 +3842,8 @@ https://github.com/openxla/stablehlo/blob/main/docs/spec.md#select_and_scatter
     %0 = stablehlo.add %arg0, %arg1 : tensor<i64>
     stablehlo.return %0 : tensor<i64>
 }) {
-  window_dimensions = dense<[3, 1]> : tensor<2xi64>,
-  window_strides = dense<[2, 1]> : tensor<2xi64>,
+  window_dimensions = array<i64: [3, 1]>,
+  window_strides = array<i64: [2, 1]>,
   padding = dense<[[0, 1], [0, 0]]> : tensor<2x2xi64>
 } : (tensor<4x2xi64>, tensor<2x2xi64>, tensor<i64>) -> tensor<4x2xi64>
 ```
@@ -4121,13 +4164,20 @@ https://github.com/openxla/stablehlo/blob/main/docs/spec.md#sine
 %result = stablehlo.sine %operand : tensor<2xf32>
 ```
 """
-function sine(operand::Value; result=nothing::Union{Nothing,IR.Type}, location=Location())
+function sine(
+    operand::Value;
+    result=nothing::Union{Nothing,IR.Type},
+    result_accuracy=nothing,
+    location=Location(),
+)
     op_ty_results = IR.Type[]
     operands = Value[operand,]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
     !isnothing(result) && push!(op_ty_results, result)
+    !isnothing(result_accuracy) &&
+        push!(attributes, namedattribute("result_accuracy", result_accuracy))
 
     return create_operation(
         "stablehlo.sine",
@@ -4260,13 +4310,20 @@ https://github.com/openxla/stablehlo/blob/main/docs/spec.md#sqrt
 %result = stablehlo.sqrt %operand : tensor<2x2xf32>
 ```
 """
-function sqrt(operand::Value; result=nothing::Union{Nothing,IR.Type}, location=Location())
+function sqrt(
+    operand::Value;
+    result=nothing::Union{Nothing,IR.Type},
+    result_accuracy=nothing,
+    location=Location(),
+)
     op_ty_results = IR.Type[]
     operands = Value[operand,]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
     !isnothing(result) && push!(op_ty_results, result)
+    !isnothing(result_accuracy) &&
+        push!(attributes, namedattribute("result_accuracy", result_accuracy))
 
     return create_operation(
         "stablehlo.sqrt",
@@ -4330,13 +4387,20 @@ https://github.com/openxla/stablehlo/blob/main/docs/spec.md#tan
 %result = stablehlo.tan %operand : tensor<2x2xf64>
 ```
 """
-function tan(operand::Value; result=nothing::Union{Nothing,IR.Type}, location=Location())
+function tan(
+    operand::Value;
+    result=nothing::Union{Nothing,IR.Type},
+    result_accuracy=nothing,
+    location=Location(),
+)
     op_ty_results = IR.Type[]
     operands = Value[operand,]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
     !isnothing(result) && push!(op_ty_results, result)
+    !isnothing(result_accuracy) &&
+        push!(attributes, namedattribute("result_accuracy", result_accuracy))
 
     return create_operation(
         "stablehlo.tan",
@@ -4364,13 +4428,20 @@ https://github.com/openxla/stablehlo/blob/main/docs/spec.md#tanh
 %result = stablehlo.tanh %operand : tensor<2xf32>
 ```
 """
-function tanh(operand::Value; result=nothing::Union{Nothing,IR.Type}, location=Location())
+function tanh(
+    operand::Value;
+    result=nothing::Union{Nothing,IR.Type},
+    result_accuracy=nothing,
+    location=Location(),
+)
     op_ty_results = IR.Type[]
     operands = Value[operand,]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
     !isnothing(result) && push!(op_ty_results, result)
+    !isnothing(result_accuracy) &&
+        push!(attributes, namedattribute("result_accuracy", result_accuracy))
 
     return create_operation(
         "stablehlo.tanh",

@@ -1,62 +1,68 @@
 module TracedLinearAlgebra
 
 using ..Reactant:
+    Reactant,
     TracedRArray,
     TracedRNumber,
     AnyTracedRArray,
     AnyTracedRMatrix,
     AnyTracedRVector,
     AnyTracedRVecOrMat,
-    WrappedTracedRArray,
     unwrapped_eltype,
     Ops,
     MLIR
 
-using ..TracedUtils: TracedUtils, get_mlir_data, materialize_traced_array, set_mlir_data!
+using ReactantCore: ReactantCore
+using ReactantCore: materialize_traced_array
+
+using ..TracedUtils: TracedUtils, get_mlir_data, set_mlir_data!
 
 using LinearAlgebra
+using Libdl: Libdl
+
+function __init__()
+    libblastrampoline_handle = Libdl.dlopen(LinearAlgebra.BLAS.libblas)
+
+    for (cname, enzymexla_name) in [
+        (LinearAlgebra.BLAS.@blasfunc(sgetrf_), :enzymexla_lapack_sgetrf_),
+        (LinearAlgebra.BLAS.@blasfunc(dgetrf_), :enzymexla_lapack_dgetrf_),
+        (LinearAlgebra.BLAS.@blasfunc(cgetrf_), :enzymexla_lapack_cgetrf_),
+        (LinearAlgebra.BLAS.@blasfunc(zgetrf_), :enzymexla_lapack_zgetrf_),
+    ]
+        sym = Libdl.dlsym(libblastrampoline_handle, cname)
+        @ccall MLIR.API.mlir_c.EnzymeJaXMapSymbol(
+            enzymexla_name::Cstring, sym::Ptr{Cvoid}
+        )::Cvoid
+    end
+
+    return nothing
+end
 
 # Various Wrapper Arrays defined in LinearAlgebra
-function TracedUtils.materialize_traced_array(
-    x::Transpose{TracedRNumber{T},TracedRArray{T,N}}
-) where {T,N}
-    px = parent(x)
+function ReactantCore.materialize_traced_array(
+    x::Transpose{TracedRNumber{T},<:AnyTracedRArray}
+) where {T}
+    px = materialize_traced_array(parent(x))
     A = ndims(px) == 1 ? reshape(px, :, 1) : px
     return permutedims(A, (2, 1))
 end
 
-function TracedUtils.materialize_traced_array(
-    x::Transpose{TracedRNumber{T},<:WrappedTracedRArray{T,N}}
-) where {T,N}
-    return materialize_traced_array(transpose(materialize_traced_array(parent(x))))
-end
-
-function TracedUtils.materialize_traced_array(
-    x::Adjoint{TracedRNumber{T},TracedRArray{T,N}}
-) where {T,N}
-    return conj(materialize_traced_array(transpose(parent(x))))
-end
-
-function TracedUtils.materialize_traced_array(
-    x::Adjoint{TracedRNumber{T},<:WrappedTracedRArray{T,N}}
-) where {T,N}
-    return materialize_traced_array(adjoint(materialize_traced_array(parent(x))))
-end
-
-function TracedUtils.materialize_traced_array(
-    x::Diagonal{TracedRNumber{T},TracedRArray{T,1}}
+function ReactantCore.materialize_traced_array(
+    x::Adjoint{TracedRNumber{T},<:AnyTracedRArray}
 ) where {T}
-    return diagm(parent(x))
+    return Ops.conj(
+        materialize_traced_array(transpose(materialize_traced_array(parent(x))))
+    )
 end
 
-function TracedUtils.materialize_traced_array(
-    x::Diagonal{TracedRNumber{T},WrappedTracedRArray{T,1}}
+function ReactantCore.materialize_traced_array(
+    x::Diagonal{TracedRNumber{T},<:AnyTracedRVector}
 ) where {T}
     return diagm(materialize_traced_array(parent(x)))
 end
 
-function TracedUtils.materialize_traced_array(
-    x::Tridiagonal{TracedRNumber{T},TracedRArray{T,1}}
+function ReactantCore.materialize_traced_array(
+    x::Tridiagonal{TracedRNumber{T},<:AnyTracedRVector}
 ) where {T}
     return diagm(-1 => x.dl, 0 => x.d, 1 => x.du)
 end
@@ -64,31 +70,33 @@ end
 for (AT, comp) in ((:LowerTriangular, "GE"), (:UpperTriangular, "LE"))
     uAT = Symbol(:Unit, AT)
     @eval begin
-        function TracedUtils.materialize_traced_array(
-            x::$(AT){TracedRNumber{T},TracedRArray{T,2}}
+        function ReactantCore.materialize_traced_array(
+            x::$(AT){TracedRNumber{T},<:AnyTracedRMatrix}
         ) where {T}
             m, n = size(x)
+            px = materialize_traced_array(parent(x))
             row_idxs = Ops.iota(Int, [m, n]; iota_dimension=1)
             col_idxs = Ops.iota(Int, [m, n]; iota_dimension=2)
             indicator = Ops.compare(row_idxs, col_idxs; comparison_direction=$(comp))
-            return Ops.select(indicator, parent(x), zero(parent(x)))
+            return Ops.select(indicator, px, zero(px))
         end
 
-        function TracedUtils.materialize_traced_array(
-            x::$(uAT){TracedRNumber{T},TracedRArray{T,2}}
+        function ReactantCore.materialize_traced_array(
+            x::$(uAT){TracedRNumber{T},<:AnyTracedRMatrix}
         ) where {T}
             m, n = size(x)
+            px = materialize_traced_array(parent(x))
             row_idxs = Ops.iota(Int, [m, n]; iota_dimension=1)
             col_idxs = Ops.iota(Int, [m, n]; iota_dimension=2)
             nondiag_indicator = Ops.compare(row_idxs, col_idxs; comparison_direction="NE")
-            x = materialize_traced_array($(AT)(parent(x)))
+            x = materialize_traced_array($(AT)(px))
             return Ops.select(nondiag_indicator, x, one.(x))
         end
     end
 end
 
-function TracedUtils.materialize_traced_array(
-    x::Symmetric{TracedRNumber{T},TracedRArray{T,2}}
+function ReactantCore.materialize_traced_array(
+    x::Symmetric{TracedRNumber{T},<:AnyTracedRMatrix}
 ) where {T}
     m, n = size(x)
     row_idxs = Ops.iota(Int, [m, n]; iota_dimension=1)
@@ -146,7 +154,7 @@ for (AT, dcomp, ocomp) in (
     (:UnitUpperTriangular, "LT", "GE"),
 )
     @eval function TracedUtils.set_mlir_data!(
-        x::$(AT){TracedRNumber{T},TracedRArray{T,2}}, data
+        x::$(AT){TracedRNumber{T},<:AnyTracedRMatrix}, data
     ) where {T}
         tdata = TracedRArray{T}(data)
         z = zero(tdata)
@@ -158,13 +166,13 @@ for (AT, dcomp, ocomp) in (
         res = Ops.add(
             Ops.select(data_indicator, tdata, z), Ops.select(original_indicator, x.data, z)
         )
-        set_mlir_data!(x.data, res.mlir_data)
+        set_mlir_data!(parent(x), res.mlir_data)
         return x
     end
 end
 
 function TracedUtils.set_mlir_data!(
-    x::Symmetric{TracedRNumber{T},TracedRArray{T,2}}, data
+    x::Symmetric{TracedRNumber{T},<:AnyTracedRMatrix}, data
 ) where {T}
     if x.uplo == 'L'
         set_mlir_data!(LowerTriangular(parent(x)), data)
@@ -175,14 +183,16 @@ function TracedUtils.set_mlir_data!(
 end
 
 function TracedUtils.set_mlir_data!(
-    x::Tridiagonal{TracedRNumber{T},TracedRArray{T,1}}, data
+    x::Tridiagonal{TracedRNumber{T},<:AnyTracedRVector}, data
 ) where {T}
     tdata = TracedRArray{T}(data)
-    set_mlir_data!(x.dl, diag(tdata, -1).mlir_data)
-    set_mlir_data!(x.d, diag(tdata, 0).mlir_data)
-    set_mlir_data!(x.du, diag(tdata, 1).mlir_data)
+    set_mlir_data!(x.dl, materialize_traced_array(diag(tdata, -1)).mlir_data)
+    set_mlir_data!(x.d, materialize_traced_array(diag(tdata, 0)).mlir_data)
+    set_mlir_data!(x.du, materialize_traced_array(diag(tdata, 1)).mlir_data)
     return x
 end
+
+Reactant.aos_to_soa(x::Tridiagonal{TracedRNumber{T}}) where {T} = x
 
 # Core functions
 function overloaded_mul!(
@@ -278,26 +288,6 @@ function LinearAlgebra.norm(x::TracedRArray{T,N}, p::Real=2) where {T,N}
     return mapreduce(Base.Fix2(^, p), +, x)^(1 / p)
 end
 
-function LinearAlgebra.diag(x::AnyTracedRArray{T,2}, k::Integer=0) where {T}
-    y = materialize_traced_array(x)
-
-    rows, cols = size(y)
-    (start_row, start_col) = k ≥ 0 ? (0, k) : (-k, 0)
-    diag_length = min(rows - start_row, cols - start_col)
-
-    indices = stack((
-        start_row:(start_row + diag_length - 1), start_col:(start_col + diag_length - 1)
-    ))
-
-    # XXX: creating an empty array causes
-    # terminate called after throwing an instance of 'xla::XlaRuntimeError'
-    #   what():  UNKNOWN: <unknown>:0: error: 'tensor.empty' op unsupported op for export to XLA
-    #   <unknown>:0: note: see current operation: %0 = "tensor.empty"() : () -> tensor<0xf64>
-    length(indices) ≤ 0 && return TracedUtils.promote_to(TracedRArray{T,1}, T[])
-
-    return Ops.gather_getindex(y, TracedUtils.promote_to(TracedRArray{Int,2}, indices))
-end
-
 function LinearAlgebra._diagm(
     shape, kv::Pair{<:Integer,<:AnyTracedRArray{T,1}}...
 ) where {T}
@@ -316,7 +306,7 @@ function LinearAlgebra._diagm(
     scatter_indices = Matrix{Int64}[]
     concat_inputs = MLIR.IR.Value[]
     for (k, v) in pairs(kv_updated)
-        push!(scatter_indices, diagonal_indices_zero_indexed(m, n, k)[1:length(v), :])
+        push!(scatter_indices, diagonal_indices(m, n, k)[1:length(v), :])
         push!(concat_inputs, get_mlir_data(v))
     end
     scatter_indices = Ops.constant(reduce(vcat, scatter_indices))
@@ -330,26 +320,19 @@ end
 
 # Common Utilities
 ## The cartesian version doesn't exist in julia 1.10
-function diagonal_indices_zero_indexed(m::Integer, n::Integer, k::Integer=0)
+function diagonal_indices(m::Integer, n::Integer, k::Integer=0)
     idx1, idx2 = 1 + max(0, -k), 1 + max(0, k)
     L = max(0, k ≤ 0 ? min(m + k, n) : min(m, n - k))
     indices = Matrix{Int}(undef, (L, 2))
     for i in axes(indices, 1)
-        indices[i, 1] = idx1 + i - 2
-        indices[i, 2] = idx2 + i - 2
+        indices[i, 1] = idx1 + i - 1
+        indices[i, 2] = idx2 + i - 1
     end
     return indices
 end
 
 function LinearAlgebra.ldiv!(
-    B::Union{
-        AbstractArray{<:TracedRNumber{T},1},
-        AbstractArray{<:TracedRNumber{T},2},
-        AnyTracedRArray{T,1},
-        AnyTracedRArray{T,2},
-    },
-    D::Diagonal,
-    A::AbstractVecOrMat,
+    B::Union{AnyTracedRArray{T,1},AnyTracedRArray{T,2}}, D::Diagonal, A::AbstractVecOrMat
 ) where {T}
     LinearAlgebra.require_one_based_indexing(A, B)
     dd = D.diag
@@ -449,6 +432,111 @@ function LinearAlgebra.axpby!(
 
     set_mlir_data!(y, get_mlir_data(Ops.add(ax, by)))
     return y
+end
+
+# -------------
+# TODO: The following currently drop several safety checks that are present in LinearAlgebra
+#       Once we have auto if tracing we can remove them.
+
+# Base.fill!
+function Base.fill!(
+    A::Union{
+        Diagonal{<:TracedRNumber},
+        Bidiagonal{<:TracedRNumber},
+        Tridiagonal{<:TracedRNumber},
+        SymTridiagonal{<:TracedRNumber},
+    },
+    x,
+)
+    xT = convert(eltype(A), x)
+    LinearAlgebra.fillstored!(A, xT)
+    return A
+end
+
+# Structured Broadcast
+function Base.copyto!(
+    dest::Union{
+        Diagonal{<:TracedRNumber},
+        Bidiagonal{<:TracedRNumber},
+        Tridiagonal{<:TracedRNumber},
+        SymTridiagonal{<:TracedRNumber},
+        LowerTriangular{<:TracedRNumber},
+        UpperTriangular{<:TracedRNumber},
+    },
+    bc::Broadcast.Broadcasted{<:LinearAlgebra.StructuredMatrixStyle},
+)
+    copyto!(dest, convert(Broadcast.Broadcasted{Nothing}, bc))
+    return dest
+end
+
+#-------------
+
+function LinearAlgebra.dot(x::AnyTracedRVector, y::AnyTracedRVector)
+    if length(x) != length(y)
+        throw(
+            DimensionMismatch(
+                lazy"x has length $(length(x)), but y has length $(length(y))"
+            ),
+        )
+    end
+
+    res = Ops.dot_general(
+        Ops.conj(materialize_traced_array(x)),
+        materialize_traced_array(y);
+        contracting_dimensions=([1], [1]),
+    )
+    return TracedRNumber{unwrapped_eltype(res)}((), res.mlir_data)
+end
+
+# ldiv & rdiv interfaces
+tfun_to_char(::typeof(identity)) = 'N'
+tfun_to_char(::typeof(transpose)) = 'T'
+tfun_to_char(::typeof(adjoint)) = 'C'
+
+function LinearAlgebra.generic_trimatdiv!(
+    C::AbstractVecOrMat{TracedRNumber{T}},
+    uploc,
+    isunitc,
+    tfun::Function,
+    A::AbstractMatrix,
+    B::AbstractVecOrMat,
+) where {T}
+    @assert uploc in ('L', 'U')
+    @assert isunitc in ('N', 'U')
+
+    res = Ops.triangular_solve(
+        TracedUtils.promote_to(TracedRArray{T,2}, materialize_traced_array(A)),
+        TracedUtils.promote_to(TracedRArray{T,ndims(B)}, materialize_traced_array(B));
+        left_side=true,
+        lower=(uploc == 'L'),
+        transpose_a=tfun_to_char(tfun),
+        unit_diagonal=(isunitc == 'U'),
+    )
+    set_mlir_data!(C, get_mlir_data(res))
+    return C
+end
+
+function LinearAlgebra.generic_mattridiv!(
+    C::AbstractMatrix{TracedRNumber{T}},
+    uploc,
+    isunitc,
+    tfun::Function,
+    A::AbstractMatrix,
+    B::AbstractMatrix,
+) where {T}
+    @assert uploc in ('L', 'U')
+    @assert isunitc in ('N', 'U')
+
+    res = Ops.triangular_solve(
+        TracedUtils.promote_to(TracedRArray{T,2}, materialize_traced_array(B)),
+        TracedUtils.promote_to(TracedRArray{T,2}, materialize_traced_array(A));
+        left_side=false,
+        lower=(uploc == 'L'),
+        transpose_a=tfun_to_char(tfun),
+        unit_diagonal=(isunitc == 'U'),
+    )
+    set_mlir_data!(C, get_mlir_data(res))
+    return C
 end
 
 end

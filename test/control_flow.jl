@@ -628,6 +628,31 @@ end
     @test @jit(for_with_named_tuple(x_ra)) ≈ for_with_named_tuple(x)
 end
 
+mutable struct Container{A,B,C}
+    a::A
+    b::B
+    c::C
+end
+
+function for_in_container(ctr)
+    dt = copy(ctr.a)
+    @trace for i in 1:10
+        ctr.b .+= ctr.c * dt
+    end
+end
+
+@testset "for: container" begin
+    x = Container(3.1, [1.4], [2.7])
+    x_ra = Reactant.to_rarray(x)
+
+    @jit(for_in_container(x_ra))
+    for_in_container(x)
+
+    @test x.a ≈ x_ra.a
+    @test x.b ≈ x_ra.b
+    @test x.c ≈ x_ra.c
+end
+
 _call1(a, b) = a
 function call1(a, b)
     x = @trace _call1(a, b)
@@ -754,7 +779,7 @@ function step!(sim)
     else
         sim.clock.iteration += 1 # time step
     end
-    return sim
+    return nothing
 end
 
 function simulate!(sim)
@@ -783,4 +808,47 @@ end
     a, b = ConcreteRNumber(1), ConcreteRNumber(2)
 
     @test (@jit ternary_max(a, b)) == 2
+end
+
+mutable struct MaybeTraced
+    x
+end
+
+@testset "is_traced of struct" begin
+    containstraced = MaybeTraced(
+        MaybeTraced(Reactant.TracedRArray{Float64,1}((), nothing, (3,)))
+    )
+    @test Reactant.ReactantCore.is_traced(containstraced)
+
+    doesnotcontaintraced = MaybeTraced(MaybeTraced(3))
+    @test !Reactant.ReactantCore.is_traced(doesnotcontaintraced)
+
+    recursivetraced = MaybeTraced((
+        1,
+        "string",
+        MaybeTraced(nothing),
+        MaybeTraced(Reactant.TracedRArray{Float64,1}((), nothing, (3,))),
+    ))
+    recursivetraced.x[3].x = recursivetraced
+    @test Reactant.ReactantCore.is_traced(recursivetraced)
+
+    recursivenottraced = MaybeTraced((1, "string", MaybeTraced(nothing)))
+    recursivenottraced.x[3].x = recursivenottraced
+    @test !Reactant.ReactantCore.is_traced(recursivenottraced)
+end
+
+function loop_batched(x)
+    y = similar(x)
+    @trace for i in 1:size(x, 1)
+        y[i, :] = x[i, :] .+ 1
+        y[i, :] = y[i, :] .^ 2
+    end
+    return y
+end
+
+@testset "setindex: batched" begin
+    x = rand(1024, 128)
+    x_ra = Reactant.to_rarray(x)
+
+    @test @jit(loop_batched(x_ra)) ≈ loop_batched(x)
 end

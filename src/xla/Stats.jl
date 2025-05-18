@@ -76,12 +76,7 @@ Return an [`AllocatorStats`](@ref) instance with information about the device sp
     This method is currently not implemented for the CPU device.
 """
 function allocatorstats(device::AbstractDevice=XLA.default_device(XLA.default_backend()))
-    ref = Ref{JLAllocatorStats}()
-    @ccall MLIR.API.mlir_c.PjRtDeviceGetAllocatorStats(
-        device.device::Ptr{Cvoid}, ref::Ptr{Cvoid}
-    )::Cvoid
-    stats = ref[]
-
+    stats = allocatorstats_internal(device)
     nullopt = typemin(Int64)
     return AllocatorStats(
         stats.num_allocs,
@@ -97,6 +92,8 @@ function allocatorstats(device::AbstractDevice=XLA.default_device(XLA.default_ba
         stats.peak_pool_bytes == nullopt ? nothing : stats.peak_pool_bytes,
     )
 end
+
+function allocatorstats_internal end
 
 # To keep in sync with JLHloCostAnalysisProperties in ReactantExtra/API.cpp
 struct HloCostAnalysisProperties

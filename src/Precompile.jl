@@ -53,33 +53,31 @@ function precompilation_supported()
     return VERSION >= v"1.11" || VERSION >= v"1.10.8"
 end
 
-function precompiling()
-    return (@ccall jl_generating_output()::Cint) == 1
-end
+if Reactant_jll.is_available()
+    @setup_workload begin
+        initialize_dialect()
 
-@setup_workload begin
-    initialize_dialect()
-
-    if XLA.REACTANT_XLA_RUNTIME == "PJRT"
-        client = XLA.PJRT.CPUClient(; checkcount=false)
-    elseif XLA.REACTANT_XLA_RUNTIME == "IFRT"
-        client = XLA.IFRT.CPUClient(; checkcount=false)
-    else
-        error("Unsupported runtime: $(XLA.REACTANT_XLA_RUNTIME)")
-    end
-
-    @compile_workload begin
-        @static if precompilation_supported()
-            x = ConcreteRNumber(2.0; client)
-            Reactant.compile(sin, (x,); client, optimize=:all)
-
-            y = ConcreteRArray([2.0]; client)
-            Reactant.compile(Base.sum, (y,); client, optimize=:all)
+        if XLA.REACTANT_XLA_RUNTIME == "PJRT"
+            client = XLA.PJRT.CPUClient(; checkcount=false)
+        elseif XLA.REACTANT_XLA_RUNTIME == "IFRT"
+            client = XLA.IFRT.CPUClient(; checkcount=false)
+        else
+            error("Unsupported runtime: $(XLA.REACTANT_XLA_RUNTIME)")
         end
-    end
 
-    XLA.free_client(client)
-    client.client = C_NULL
-    deinitialize_dialect()
-    clear_oc_cache()
+        @compile_workload begin
+            @static if precompilation_supported()
+                x = ConcreteRNumber(2.0; client)
+                Reactant.compile(sin, (x,); client, optimize=:all)
+
+                y = ConcreteRArray([2.0]; client)
+                Reactant.compile(Base.sum, (y,); client, optimize=:all)
+            end
+        end
+
+        XLA.free_client(client)
+        client.client = C_NULL
+        deinitialize_dialect()
+        clear_oc_cache()
+    end
 end

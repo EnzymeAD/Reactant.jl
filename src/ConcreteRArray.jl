@@ -17,6 +17,26 @@ for runtime in (:PJRT, :IFRT)
     end
 end
 
+# copy
+function Base.copy(x::Union{AbstractConcreteArray,AbstractConcreteNumber})
+    fn = Reactant.compile(copy, (x,))
+    return fn(x)
+end
+
+# deepcopy
+function Base.deepcopy(x::Union{AbstractConcreteArray,AbstractConcreteNumber})
+    fn = Reactant.compile(copy, (x,))
+    return fn(x)
+end
+
+# One more reason why users shouldn't call `deepcopy`
+function Base.deepcopy_internal(
+    x::Union{AbstractConcreteArray,AbstractConcreteNumber}, stackdict::IdDict
+)
+    haskey(stackdict, x) && return stackdict[x]
+    return deepcopy(x)
+end
+
 Base.size(::AbstractConcreteNumber) = ()
 Base.real(x::AbstractConcreteNumber{<:Real}) = x
 function Base.rtoldefault(T::Type{<:AbstractConcreteNumber})
@@ -24,6 +44,14 @@ function Base.rtoldefault(T::Type{<:AbstractConcreteNumber})
 end
 
 Base.strides(x::AbstractConcreteArray) = Base.size_to_strides(1, size(x)...)
+
+Base.OneTo(x::AbstractConcreteNumber{<:Integer}) = Base.OneTo(to_number(x))
+
+@static if isdefined(Base, :unchecked_oneto)
+    function Base.unchecked_oneto(x::AbstractConcreteNumber{<:Integer})
+        return Base.unchecked_oneto(to_number(x))
+    end
+end
 
 # Ensure the device and client are the same as the input
 for numType in (:ConcretePJRTNumber, :ConcreteIFRTNumber)
@@ -58,9 +86,16 @@ function Base.isempty(x::Union{WrappedConcretePJRTArray,WrappedConcreteIFRTArray
 end
 
 function Base.convert(::Type{<:Array}, X::AbstractConcreteArray{T,N}) where {T,N}
-    data = Array{T,N}(undef, size(X)...)
-    write_to_host_buffer!(data, X)
-    return data
+    if has_padding(X)
+        padding = get_padding(X)
+        data = Array{T,N}(undef, (size(X) .+ padding)...)
+        write_to_host_buffer!(data, X)
+        return view(data, [1:size(X, i) for i in 1:ndims(X)]...)
+    else
+        data = Array{T,N}(undef, size(X)...)
+        write_to_host_buffer!(data, X)
+        return data
+    end
 end
 
 function write_to_host_buffer!(data::Array, X::ConcretePJRTArray{T,N}) where {T,N}
@@ -106,6 +141,10 @@ function synchronize(x::Union{ConcreteIFRTArray,ConcreteIFRTNumber})
     return nothing
 end
 
+function to_number(tp::Base.TwicePrecision)
+    return Base.TwicePrecision(to_number(tp.hi), to_number(tp.lo))
+end
+
 to_number(x::Number) = x
 
 function to_number(X::ConcretePJRTScalar{T}) where {T}
@@ -147,6 +186,8 @@ for jlop in (
         $(jlop)(x::Number, y::$(T)) = $(jlop)(x, to_number(y))
     end
 end
+
+Base.:^(x::AbstractConcreteNumber, y::Integer) = ^(to_number(x), y)
 
 for jlop in (:(Base.isnan), :(Base.isfinite)),
     T in (AbstractConcreteNumber, AbstractConcreteArray{<:Any,0})
@@ -209,7 +250,12 @@ function Base.showarg(
 ) where {T,N}
     toplevel || print(io, "::")
     print(io, "$(typeof(a).name.wrapper){$T,$N}")
-    Sharding.is_sharded(a) && print(io, " with sharding $(typeof(a.sharding.sharding))")
+    if Sharding.is_sharded(a)
+        (; hlo_sharding) = Sharding.HloSharding(
+            Sharding.unwrap_shardinfo(a.sharding), size(a)
+        )
+        print(io, " with \"mhlo.sharding = $(string(hlo_sharding))\"")
+    end
     return nothing
 end
 
@@ -224,7 +270,7 @@ function Base.show(io::IO, X::Union{AnyConcretePJRTArray,AnyConcreteIFRTArray})
     return nothing
 end
 
-function Base.getindex(a::ConcretePJRTArray{T}, args::Vararg{Int,N}) where {T,N}
+function Base.getindex(a::ConcretePJRTArray{T,N}, args::Vararg{Int,N}) where {T,N}
     isempty(a) && throw("Cannot getindex from empty buffer")
 
     wait(a)
@@ -246,9 +292,15 @@ function Base.getindex(a::ConcretePJRTArray{T}, args::Vararg{Int,N}) where {T,N}
     return convert(Array, a)[args...]
 end
 
-function Base.getindex(a::ConcreteIFRTArray, args::Vararg{Int,N}) where {N}
+function Base.getindex(a::ConcreteIFRTArray{T,N}, args::Vararg{Int,N}) where {T,N}
     GPUArraysCore.assertscalar("getindex(::ConcreteIFRTArray, ::Vararg{Int, N})")
     return convert(Array, a)[args...]
+end
+
+function Base.getindex(
+    a::Union{ConcreteIFRTArray{T,N},ConcretePJRTArray{T,N}}, args::Vararg{Any,N}
+) where {T,N}
+    return compile(getindex, (a, args...))(a, args...)
 end
 
 # This doesn't follow the semantics of getindex with ranges. It is mostly meant to be used
@@ -262,6 +314,8 @@ end
     fn = compile(getindex, (a, args...))
     return fn(a, args...)
 end
+
+@inline _fast_slice(a::AbstractConcreteNumber) = a
 
 function mysetindex!(a, v, args::Vararg{Any,N}) where {N}
     setindex!(a, v, args...)
@@ -341,6 +395,7 @@ end
 
 # TODO replace this copy for `setindex!` maybe? how to copy data to already existing buffer? (i.e. `copyto!`)
 function Base.copy(bc::Base.Broadcast.Broadcasted{Broadcast.ArrayStyle{ConcretePJRTArray}})
+    bc = Broadcast.flatten(bc)
     for x in bc.args
         x isa ConcretePJRTArray && wait(x)
     end
@@ -370,15 +425,48 @@ function Base.copy(bc::Base.Broadcast.Broadcasted{Broadcast.ArrayStyle{ConcreteP
 end
 
 function Base.copy(bc::Base.Broadcast.Broadcasted{Broadcast.ArrayStyle{ConcreteIFRTArray}})
+    bc = Broadcast.flatten(bc)
     fn = compile(Broadcast.BroadcastFunction(bc.f), (bc.args...,))
     return fn(bc.args...)
 end
 
-# XXX: This is not necessarily correct. We need to check for sharding and also device
-#      compatibility.
-function Base.copyto!(dest::AbstractConcreteArray, src::AbstractConcreteArray)
-    dest.data = src.data
+function mycopyto!(dest, src)
+    dest .= src # use broadcasting instead of copyto!
+    return nothing
+end
+
+for aType in (:ConcretePJRTArray, :ConcreteIFRTArray)
+    @eval function Base.copyto!(dest::$(aType), src::$(aType))
+        # We can't directly set the data field. it will alias the inner buffers without
+        # actually copying them.
+        fn = compile(mycopyto!, (dest, src))
+        fn(dest, src)
+        return dest
+    end
+end
+
+function Base.copyto!(
+    dest::Union{AnyConcreteIFRTArray,AnyConcretePJRTArray}, src::AbstractConcreteArray
+)
+    fn = compile(mycopyto!, (dest, src))
+    fn(dest, src)
     return dest
+end
+
+for aType in (:ConcretePJRTArray, :ConcreteIFRTArray)
+    anyaType = Symbol(:Any, aType)
+    @eval function Base.copyto!(dest::$(anyaType), src::Array{<:ReactantPrimitive})
+        ancestor_dest = ancestor(dest)
+        return copyto!(
+            dest,
+            $(aType)(
+                src;
+                sharding=ancestor_dest.sharding,
+                client=XLA.client(ancestor_dest),
+                device=XLA.device(ancestor_dest),
+            ),
+        )
+    end
 end
 
 for aType in (:ConcretePJRTArray, :ConcreteIFRTArray)
@@ -403,6 +491,12 @@ for aType in (:ConcretePJRTArray, :ConcreteIFRTArray)
         )
             copyto!(dest, convert(Array, copy(src)))
             return dest
+        end
+
+        function Base.copyto!(
+            dest::SubArray{<:Any,<:Any,<:$(aType)}, src::SubArray{<:Any,<:Any,<:Array}
+        )
+            return Base.copyto!(dest, convert(Array, copy(src)))
         end
     end
 end
@@ -459,25 +553,22 @@ function Base.fill!(a::ConcretePJRTArray{T,N}, val) where {T,N}
         return a
     end
 
-    idxs = ntuple(Returns(Colon()), N)
-    fn = compile(mysetindex!, (a, val, idxs...))
-    fn(a, val, idxs...)
+    fn = compile(fill!, (a, val))
+    fn(a, val)
     return a
 end
 
 function Base.fill!(a::ConcreteIFRTArray{T,N}, val) where {T,N}
     isempty(a) && throw("Cannot setindex! to empty buffer")
 
-    idxs = ntuple(Returns(Colon()), N)
-    fn = compile(mysetindex!, (a, val, idxs...))
-    fn(a, val, idxs...)
+    fn = compile(fill!, (a, val))
+    fn(a, val)
     return a
 end
 
 function Base.fill!(x::Union{AnyConcreteIFRTArray,AnyConcretePJRTArray}, val)
-    idxs = ntuple(Returns(Colon()), ndims(x))
-    fn = compile(mysetindex!, (x, val, idxs...))
-    fn(x, val, idxs...)
+    fn = compile(fill!, (x, val))
+    fn(x, val)
     return x
 end
 
@@ -506,4 +597,18 @@ function Base.map!(f, R::Union{AnyConcreteIFRTArray,AnyConcretePJRTArray}, A::Ab
     fn = compile(mymap!, (f, R, A))
     fn(f, R, A)
     return R
+end
+
+# Directly initialize a Device Array
+function Base.fill(
+    ::Type{<:Union{ConcreteIFRTArray,ConcretePJRTArray}},
+    val,
+    dims::Vararg{Int};
+    sharding::Sharding.AbstractSharding=Sharding.NoSharding(),
+)
+    output_shardings = Sharding.is_sharded(sharding) ? Dict(1 => sharding) : nothing
+    fn = Reactant.compile((); output_shardings) do
+        return Ops.fill(val, collect(Int64, dims))
+    end
+    return fn()
 end

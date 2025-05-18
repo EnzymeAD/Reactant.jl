@@ -173,7 +173,16 @@ function should_rewrite_call(@nospecialize(ft))
         ft <: typeof(Base.identity) ||
         ft <: typeof(Base.print) ||
         ft <: typeof(Base.println) ||
-        ft <: typeof(Adapt.adapt_structure)
+        ft <: typeof(Base.show) ||
+        ft <: typeof(Base.show_delim_array) ||
+        ft <: typeof(Base.sprint) ||
+        ft <: typeof(Adapt.adapt_structure) ||
+        ft <: typeof(Core.is_top_bit_set) ||
+        ft <: typeof(Base.setindex_widen_up_to) ||
+        ft <: typeof(Base.typejoin) ||
+        ft <: typeof(Base.argtype_decl) ||
+        ft <: typeof(Base.arg_decl_parts) ||
+        ft <: typeof(Base.StackTraces.show_spec_sig)
         return false
     end
 
@@ -182,7 +191,12 @@ function should_rewrite_call(@nospecialize(ft))
 end
 
 # by default, same as `should_rewrite_call`
-should_rewrite_invoke(@nospecialize(ft), @nospecialize(args)) = should_rewrite_call(ft)
+function should_rewrite_invoke(@nospecialize(ft), @nospecialize(args))
+    if ft <: typeof(repeat) && (args == Tuple{String,Int64} || args == Tuple{Char,Int64})
+        return false
+    end
+    return should_rewrite_call(ft)
+end
 
 # Avoid recursively interpreting into methods we define explicitly
 # as overloads, which we assume should handle the entirety of the
@@ -576,7 +590,16 @@ function call_with_reactant_generator(
         safe_print("ir", ir)
     end
 
-    if !is_reactant_method(mi::Core.MethodInstance) || guaranteed_error
+    mi = mi::Core.MethodInstance
+
+    if !(
+        is_reactant_method(mi) || (
+            mi.def.sig isa DataType &&
+            !should_rewrite_invoke(
+                mi.def.sig.parameters[1], Tuple{mi.def.sig.parameters[2:end]...}
+            )
+        )
+    ) || guaranteed_error
         ir, any_changed = rewrite_insts!(ir, interp, guaranteed_error)
     end
 
@@ -614,6 +637,11 @@ function call_with_reactant_generator(
     # the end of the pass, we'll reset `code_info` fields accordingly.
     overdubbed_code = Any[]
     overdubbed_codelocs = Int32[]
+    function push_inst!(inst)
+        push!(overdubbed_code, inst)
+        push!(overdubbed_codelocs, code_info.codelocs[1])
+        return Core.SSAValue(length(overdubbed_code))
+    end
     # Rewire the arguments from our tuple input of fn and args, to the corresponding calling convention
     # required by the base method.
 
@@ -639,15 +667,13 @@ function call_with_reactant_generator(
         actual_argument = Expr(
             :call, Core.GlobalRef(Core, :getfield), overdub_args_slot, offset
         )
-        push!(overdubbed_code, actual_argument)
-        push!(overdubbed_codelocs, code_info.codelocs[1])
+        arg = push_inst!(actual_argument)
         offset += 1
-        push!(fn_args, Core.SSAValue(length(overdubbed_code)))
+        push!(fn_args, arg)
         push!(tys, redub_arguments[i + (guaranteed_error ? 1 : 0)])
 
         if DEBUG_INTERP[]
-            push!(
-                overdubbed_code,
+            push_inst!(
                 Expr(
                     :call,
                     safe_print,
@@ -655,7 +681,6 @@ function call_with_reactant_generator(
                     fn_args[end],
                 ),
             )
-            push!(overdubbed_codelocs, code_info.codelocs[1])
         end
     end
 
@@ -664,18 +689,14 @@ function call_with_reactant_generator(
     if method.isva
         trailing_arguments = Expr(:call, Core.GlobalRef(Core, :tuple))
         for i in n_method_args:n_actual_args
-            push!(
-                overdubbed_code,
-                Expr(:call, Core.GlobalRef(Core, :getfield), overdub_args_slot, offset),
+            arg = push_inst!(
+                Expr(:call, Core.GlobalRef(Core, :getfield), overdub_args_slot, offset)
             )
-            push!(overdubbed_codelocs, code_info.codelocs[1])
-            push!(trailing_arguments.args, Core.SSAValue(length(overdubbed_code)))
+            push!(trailing_arguments.args, arg)
             offset += 1
         end
 
-        push!(overdubbed_code, trailing_arguments)
-        push!(overdubbed_codelocs, code_info.codelocs[1])
-        push!(fn_args, Core.SSAValue(length(overdubbed_code)))
+        push!(fn_args, push_inst!(trailing_arguments))
         push!(
             tys,
             Tuple{
@@ -684,8 +705,7 @@ function call_with_reactant_generator(
         )
 
         if DEBUG_INTERP[]
-            push!(
-                overdubbed_code,
+            push_inst!(
                 Expr(
                     :call,
                     safe_print,
@@ -693,7 +713,6 @@ function call_with_reactant_generator(
                     fn_args[end],
                 ),
             )
-            push!(overdubbed_codelocs, code_info.codelocs[1])
         end
     end
 
@@ -728,23 +747,19 @@ function call_with_reactant_generator(
     else
         farg = fn_args[1]
         rep = Expr(:call, make_oc, dict, octup, rt, src, ocnargs, ocva, farg)
-        push!(overdubbed_code, rep)
-        push!(overdubbed_codelocs, code_info.codelocs[1])
+        push_inst!(rep)
         Core.SSAValue(length(overdubbed_code))
     end
 
-    push!(overdubbed_code, Expr(:call, oc, fn_args[2:end]...))
-    push!(overdubbed_codelocs, code_info.codelocs[1])
+    push_inst!(Expr(:call, oc, fn_args[2:end]...))
 
     ocres = Core.SSAValue(length(overdubbed_code))
 
     if DEBUG_INTERP[]
-        push!(overdubbed_code, Expr(:call, safe_print, "ocres", ocres))
-        push!(overdubbed_codelocs, code_info.codelocs[1])
+        push_inst!(Expr(:call, safe_print, "ocres", ocres))
     end
 
-    push!(overdubbed_code, Core.ReturnNode(ocres))
-    push!(overdubbed_codelocs, code_info.codelocs[1])
+    push_inst!(Core.ReturnNode(ocres))
 
     #=== set `code_info`/`reflection` fields accordingly ===#
 
@@ -768,3 +783,10 @@ end
     $(Expr(:meta, :generated_only))
     return $(Expr(:meta, :generated, call_with_reactant_generator))
 end
+
+@static if isdefined(Core, :BFloat16)
+    nmantissa(::Type{Core.BFloat16}) = 7
+end
+nmantissa(::Type{Float16}) = 10
+nmantissa(::Type{Float32}) = 23
+nmantissa(::Type{Float64}) = 52

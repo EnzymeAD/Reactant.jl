@@ -509,10 +509,14 @@ end
         @test minimum(y) ≥ 0.0
         @test x_ra ≈ x
     end
+
+    x_ra = ConcreteRNumber(3.0)
+    y = @jit(clamp(x_ra, 0.0, 0.25))
+    @test y isa ConcreteRNumber{Float64}
 end
 
 @testset for op in [round, ceil, floor]
-    for x in (rand(Float32, (3, 3)), rand(Float64))
+    @testset "$(typeof(x)) : $(size(x))" for x in (rand(Float32, (3, 3)), rand(Float64))
         intop = Base.Fix1(op, Int)
         x_ra = Reactant.to_rarray.(x; track_numbers=Number)
 
@@ -993,10 +997,33 @@ end
 
 @testset "Fractional index" begin
     times = 0:0.01:4.5
+    @test times isa Base.StepRangeLen
     res = @jit fractional_idx(times, ConcreteRNumber(2.143))
     @test res[1] == 0.29999999999997334
     @test res[2] == 215
     @test res[3] == 216
+end
+
+@testset "Traced fractional index" begin
+    times = Reactant.to_rarray(0:0.01:4.5; track_numbers=Number)
+    @test times isa Reactant.TracedRNumberOverrides.TracedStepRangeLen
+    res = @jit fractional_idx(times, ConcreteRNumber(2.143))
+    @test res[1] == 0.29999999999997334
+    @test res[2] == 215
+    @test res[3] == 216
+end
+
+function unitrange_test(r, i)
+    return r[i]
+end
+@testset "Unitrange" begin
+    x = 2:10
+    @test (@jit unitrange_test(x, 3)) == 4
+    @test (@jit unitrange_test(x, Reactant.ConcreteRNumber(4))) == 5
+
+    x = Reactant.to_rarray(2:10; track_numbers=Number)
+    @test (@jit unitrange_test(x, 3)) == 4
+    @test (@jit unitrange_test(x, Reactant.ConcreteRNumber(4))) == 5
 end
 
 mulpi(x) = π * x
@@ -1005,4 +1032,146 @@ mulpi(x) = π * x
     x = Reactant.to_rarray(ones(2))
     y = @jit mulpi(x)
     @test all(Array(y) .≈ π)
+end
+
+@testset "copyto! ConcreteArray" begin
+    x_ra = Reactant.to_rarray(ones(4, 4))
+    y_ra = Reactant.to_rarray(zeros(2, 2))
+    copyto!(view(x_ra, 1:2, 1:2), y_ra)
+    @test Array(x_ra) ==
+        [0.0 0.0 1.0 1.0; 0.0 0.0 1.0 1.0; 1.0 1.0 1.0 1.0; 1.0 1.0 1.0 1.0]
+end
+
+@testset "copyto! ConcreteArray Array" begin
+    x_ra = Reactant.to_rarray(ones(4, 4))
+    y_ra = view(zeros(4, 4), 1:2, 1:2)
+    copyto!(view(x_ra, 1:2, 1:2), y_ra)
+    @test Array(x_ra) ==
+        [0.0 0.0 1.0 1.0; 0.0 0.0 1.0 1.0; 1.0 1.0 1.0 1.0; 1.0 1.0 1.0 1.0]
+end
+
+@testset "copyto! TracedRArray" begin
+    x_ra = Reactant.to_rarray(ones(4, 4))
+    y_ra = Reactant.to_rarray(zeros(2, 2))
+    @jit copyto!(x_ra, 6, y_ra, 3, 2)
+
+    x = ones(4, 4)
+    y = zeros(2, 2)
+    copyto!(x, 6, y, 3, 2)
+    @test Array(x_ra) == x
+end
+
+@testset "copy(::Broadcast.Broadcasted{ArrayStyle{ConcreteRArray}})" begin
+    x_ra = Reactant.to_rarray(ones(4, 4))
+    res = copy(Broadcast.broadcasted(-, Broadcast.broadcasted(+, x_ra, 1)))
+    @test res ≈ -(Array(x_ra) .+ 1)
+end
+
+@testset "typemin/typemax" begin
+    fn(x) = [typemin(eltype(x)), typemax(eltype(x))]
+
+    x_ra = Reactant.to_rarray(ones(4))
+    @test @jit(fn(x_ra)) == fn(ones(4))
+
+    x_ra = Reactant.to_rarray(ones(Int, 4))
+    @test @jit(fn(x_ra)) == fn(ones(Int, 4))
+end
+
+@testset "Module printing" begin
+    for opt in (true, false, :before_jit), debug in (true, false)
+        v = collect(Float32(1):Float32(64))
+        vr = Reactant.to_rarray(v)
+        mod = @code_hlo optimize = opt log.(vr)
+
+        # Store the module as a string with different debug options.
+        io = IOBuffer()
+        show(IOContext(io, :debug => debug), mod)
+        mod_string = String(take!(io))
+
+        # Test that we can parse back the string as an MLIR module, compile it
+        # and get correct results.
+        res = @jit(Reactant.Ops.hlo_call(mod_string, vr))[1]
+        @test res ≈ log.(v)
+    end
+end
+
+@testset "Dump MLIR modules" begin
+    always_old = Reactant.MLIR.IR.DUMP_MLIR_ALWAYS[]
+    dir_old = Reactant.MLIR.IR.DUMP_MLIR_DIR[]
+
+    mktempdir() do dir
+        Reactant.MLIR.IR.DUMP_MLIR_ALWAYS[] = true
+        Reactant.MLIR.IR.DUMP_MLIR_DIR[] = dir
+        @compile sin.(Reactant.to_rarray(Float32[1.0]))
+        for mod in readdir(dir; join=true)
+            @test contains(read(mod, String), "hlo.sine")
+        end
+    end
+
+    mktempdir() do dir
+        Reactant.MLIR.IR.DUMP_MLIR_ALWAYS[] = false
+        Reactant.MLIR.IR.DUMP_MLIR_DIR[] = dir
+        @compile exp.(Reactant.to_rarray(Float32[1.0]))
+        # Make sure we don't save anything to file when compilation is
+        # successful and `DUMP_MLIR_ALWAYS=false`.
+        @test isempty(readdir(dir; join=true))
+    end
+
+    Reactant.MLIR.IR.DUMP_MLIR_ALWAYS[] = always_old
+    Reactant.MLIR.IR.DUMP_MLIR_DIR[] = dir_old
+end
+
+@testset "Allocator Stats" begin
+    platform_name = lowercase(Reactant.XLA.platform_name(Reactant.XLA.default_backend()))
+    if platform_name != "cpu" # not supported on CPU
+        @test Reactant.XLA.allocatorstats() isa Reactant.XLA.AllocatorStats
+    else
+        @test_throws Reactant.XLA.ReactantInternalError Reactant.XLA.allocatorstats()
+    end
+end
+
+@testset "copy/deepcopy" begin
+    for op in (copy, deepcopy)
+        x = Reactant.to_rarray(ones(4, 4))
+        if x isa Reactant.ConcretePJRTArray
+            orig_ptr = only(x.data).buffer.buffer
+            y = op(x)
+            @test y isa Reactant.ConcretePJRTArray
+            @test only(y.data).buffer.buffer != orig_ptr
+            @test only(x.data).buffer.buffer == orig_ptr
+        else
+            orig_ptr = x.data.buffer.buffer
+            y = op(x)
+            @test y isa Reactant.ConcreteIFRTArray
+            @test y.data.buffer.buffer != orig_ptr
+            @test x.data.buffer.buffer == orig_ptr
+        end
+
+        x = Reactant.to_rarray(4.0; track_numbers=Number)
+        if x isa Reactant.ConcretePJRTNumber
+            orig_ptr = only(x.data).buffer.buffer
+            y = op(x)
+            @test y isa Reactant.ConcretePJRTNumber
+            @test only(y.data).buffer.buffer != orig_ptr
+            @test only(x.data).buffer.buffer == orig_ptr
+        else
+            orig_ptr = x.data.buffer.buffer
+            y = op(x)
+            @test y isa Reactant.ConcreteIFRTNumber
+            @test y.data.buffer.buffer != orig_ptr
+            @test x.data.buffer.buffer == orig_ptr
+        end
+    end
+end
+
+function test_aliased_numbers(ps, x)
+    return map(Returns(x), ps)
+end
+
+@testset "Correct Aliasing" begin
+    ps = Reactant.to_rarray((a=rand(4), b=rand(2), c=rand(4)))
+    x = ConcreteRNumber(3.14)
+    res = @jit test_aliased_numbers(ps, x)
+
+    @test res[1] === res[2] === res[3]
 end

@@ -237,6 +237,15 @@ function Type(::Core.Type{<:Reactant.F8E4M3FNUZ}; context::Context=context())
 end
 
 """
+    Type(::Core.Type{Reactant.TF32}; context=context())
+
+Creates a tf32 type in the given context. The type is owned by the context.
+"""
+function Type(::Core.Type{<:Reactant.TF32}; context::Context=context())
+    return Type(API.mlirTF32TypeGet(context))
+end
+
+"""
     isf8e5m2(type)
 
 Checks whether the given type is an f8E5M2 type.
@@ -298,6 +307,13 @@ isf32(type::Type) = API.mlirTypeIsAF32(type)
 Checks whether the given type is an f64 type.
 """
 isf64(type::Type) = API.mlirTypeIsAF64(type)
+
+"""
+    istf32(type)
+
+Checks whether the given type is an tf32 type.
+"""
+istf32(type::Type) = API.mlirTypeIsATF32(type)
 
 # Complex types
 """
@@ -424,14 +440,17 @@ isvector(type::Type) = API.mlirTypeIsAVector(type)
     TensorType(shape, elementType, encoding=Attribute(); location=Location(), check=false)
 
 Creates a tensor type of a fixed rank with the given shape, element type, and optional encoding in the same context as the element type.
-The type is owned by the context. Tensor types without any specific encoding field should assign [`mlirAttributeGetNull`](@ref) to this parameter.
+The type is owned by the context. Tensor types without any specific encoding field should assign [`Reactant.MLIR.API.mlirAttributeGetNull`](@ref) to this parameter.
 If `check=true`, emits appropriate diagnostics on illegal arguments.
 """
-function TensorType(
-    shape, elem_type, encoding=Attribute(); location::Location=Location(), check::Bool=false
+Base.@nospecializeinfer function TensorType(
+    shape::Vector{Int},
+    @nospecialize(elem_type::Type),
+    encoding=Attribute();
+    location::Location=Location(),
+    check::Bool=false,
 )
     rank = length(shape)
-    shape = shape isa AbstractVector ? shape : collect(shape)
     return Type(
         if check
             API.mlirRankedTensorTypeGetChecked(location, rank, shape, elem_type, encoding)
@@ -447,7 +466,7 @@ end
 Creates an unranked tensor type with the given element type in the same context as the element type. The type is owned by the context.
 If `check=true`, emits appropriate diagnostics on illegal arguments.
 """
-function TensorType(elem_type; location::Location=Location(), check::Bool=false)
+function TensorType(elem_type::Type; location::Location=Location(), check::Bool=false)
     return Type(
         if check
             API.mlirUnrankedTensorTypeGetChecked(location, elem_type)
@@ -796,6 +815,8 @@ function julia_type(type::Type)
                 throw("could not convert unsigned $width-bit integer type to julia")
             end
         end
+    elseif istf32(type)
+        Reactant.TF32
     elseif isbf16(type)
         Core.BFloat16
     elseif isf16(type)

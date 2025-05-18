@@ -14,8 +14,8 @@ using ..Reactant:
     Reactant,
     TracedUtils,
     Ops,
-    ConcretePJRTArray,
-    ConcretePJRTNumber,
+    AbstractConcreteArray,
+    AbstractConcreteNumber,
     unwrapped_eltype
 using Random: Random, AbstractRNG
 
@@ -43,14 +43,14 @@ end
 end
 
 @noinline function Random.seed!(rng::TracedRNG, seed::TracedRArray{UInt64,1})
-    rng.seed = seed
+    rng.seed.mlir_data = seed.mlir_data
     return rng
 end
 
 @noinline function Random.seed!(rng::ConcreteRNG, seed::Number)
-    seed isa ConcretePJRTNumber && (seed = unwrapped_eltype(seed)(seed))
+    seed isa AbstractConcreteNumber && (seed = unwrapped_eltype(seed)(seed))
     seed = reinterpret(UInt64, Random.hash_seed(seed))
-    return Random.seed!(rng, ConcretePJRTArray(seed))
+    return Random.seed!(rng, Reactant.to_rarray(seed))
 end
 
 @noinline function Random.seed!(rng::ConcreteRNG, seed::AbstractVector{<:Integer})
@@ -58,19 +58,19 @@ end
 end
 
 @noinline function Random.seed!(rng::ConcreteRNG, seed::AbstractVector{UInt64})
-    return Random.seed!(rng, ConcretePJRTArray(seed))
+    return Random.seed!(rng, Reactant.to_rarray(seed))
 end
 
-@noinline function Random.seed!(rng::ConcreteRNG, seed::ConcretePJRTArray{UInt64,1})
-    rng.seed = seed
+@noinline function Random.seed!(rng::ConcreteRNG, seed::AbstractConcreteArray{UInt64,1})
+    Base.copyto!(rng.seed, seed)
     return rng
 end
 
 Base.copy(rng::ConcreteRNG) = ConcreteRNG(copy(rng.seed), rng.algorithm)
 Base.copy(rng::TracedRNG) = TracedRNG(copy(rng.seed), rng.algorithm)
 
-@noinline ConcreteRNG() = ConcreteRNG(ConcretePJRTArray(make_seed()))
-@noinline ConcreteRNG(seed::ConcretePJRTArray{UInt64,1}) = ConcreteRNG(seed, "DEFAULT")
+@noinline ConcreteRNG() = ConcreteRNG(Reactant.to_rarray(make_seed()))
+@noinline ConcreteRNG(seed::AbstractConcreteArray{UInt64,1}) = ConcreteRNG(seed, "DEFAULT")
 
 @noinline default_rng() = ConcreteRNG()
 
@@ -82,7 +82,7 @@ Base.copy(rng::TracedRNG) = TracedRNG(copy(rng.seed), rng.algorithm)
 ) where {T,N}
     length(A) == 0 && return A
     res = Ops.rng_bit_generator(T, rng.seed, [size(A)...]; rng.algorithm)
-    rng.seed = res.output_state
+    rng.seed.mlir_data = res.output_state.mlir_data
     TracedUtils.set_mlir_data!(A, res.output.mlir_data)
     return A
 end
@@ -92,7 +92,7 @@ end
 ) where {T,N}
     length(A) == 0 && return A
     res = Ops.randn(T, rng.seed, [size(A)...]; rng.algorithm)
-    rng.seed = res.output_state
+    rng.seed.mlir_data = res.output_state.mlir_data
     TracedUtils.set_mlir_data!(A, res.output.mlir_data)
     return A
 end
@@ -102,7 +102,7 @@ end
 ) where {T,N}
     length(A) == 0 && return A
     res = Ops.randexp(T, rng.seed, [size(A)...]; rng.algorithm)
-    rng.seed = res.output_state
+    rng.seed.mlir_data = res.output_state.mlir_data
     TracedUtils.set_mlir_data!(A, res.output.mlir_data)
     return A
 end

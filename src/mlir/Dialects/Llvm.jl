@@ -378,6 +378,88 @@ function bitcast(arg::Value; res::IR.Type, location=Location())
     )
 end
 
+"""
+`blockaddress`
+
+Creates an SSA value containing a pointer to a basic block. The block
+address information (function and block) is given by the `BlockAddressAttr`
+attribute. This operation assumes an existing `llvm.blocktag` operation
+identifying an existing MLIR block within a function. Example:
+
+```mlir
+llvm.mlir.global private @g() : !llvm.ptr {
+  %0 = llvm.blockaddress <function = @fn, tag = <id = 0>> : !llvm.ptr
+  llvm.return %0 : !llvm.ptr
+}
+
+llvm.func @fn() {
+  llvm.br ^bb1
+^bb1:  // pred: ^bb0
+  llvm.blocktag <id = 0>
+  llvm.return
+}
+```
+"""
+function blockaddress(; res::IR.Type, block_addr, location=Location())
+    op_ty_results = IR.Type[res,]
+    operands = Value[]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[namedattribute("block_addr", block_addr),]
+
+    return create_operation(
+        "llvm.blockaddress",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+"""
+`blocktag`
+
+This operation uses a `tag` to uniquely identify an MLIR block in a
+function. The same tag is used by `llvm.blockaddress` in order to compute
+the target address.
+
+A given function should have at most one `llvm.blocktag` operation with a
+given `tag`. This operation cannot be used as a terminator.
+
+# Example
+
+```mlir
+llvm.func @f() -> !llvm.ptr {
+  %addr = llvm.blockaddress <function = @f, tag = <id = 1>> : !llvm.ptr
+  llvm.br ^bb1
+^bb1:
+  llvm.blocktag <id = 1>
+  llvm.return %addr : !llvm.ptr
+}
+```
+"""
+function blocktag(; tag, location=Location())
+    op_ty_results = IR.Type[]
+    operands = Value[]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[namedattribute("tag", tag),]
+
+    return create_operation(
+        "llvm.blocktag",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
 function br(
     destOperands::Vector{Value}; loop_annotation=nothing, dest::Block, location=Location()
 )
@@ -415,6 +497,8 @@ function call_intrinsic(
     fastmathFlags=nothing,
     op_bundle_sizes,
     op_bundle_tags=nothing,
+    arg_attrs=nothing,
+    res_attrs=nothing,
     location=Location(),
 )
     op_ty_results = IR.Type[]
@@ -430,6 +514,8 @@ function call_intrinsic(
         push!(attributes, namedattribute("fastmathFlags", fastmathFlags))
     !isnothing(op_bundle_tags) &&
         push!(attributes, namedattribute("op_bundle_tags", op_bundle_tags))
+    !isnothing(arg_attrs) && push!(attributes, namedattribute("arg_attrs", arg_attrs))
+    !isnothing(res_attrs) && push!(attributes, namedattribute("res_attrs", res_attrs))
 
     return create_operation(
         "llvm.call_intrinsic",
@@ -461,6 +547,11 @@ the variadic LLVM function type. The trailing type list contains the
 optional indirect callee type and the MLIR function type, which differs from
 the LLVM function type that uses an explicit void type to model functions
 that do not return a value.
+
+If this operatin has the `no_inline` attribute, then this specific function call 
+will never be inlined. The opposite behavior will occur if the call has `always_inline` 
+attribute. The `inline_hint` attribute indicates that it is desirable to inline 
+this function call.
 
 Examples:
 
@@ -500,6 +591,9 @@ function call(
     op_bundle_tags=nothing,
     arg_attrs=nothing,
     res_attrs=nothing,
+    no_inline=nothing,
+    always_inline=nothing,
+    inline_hint=nothing,
     access_groups=nothing,
     alias_scopes=nothing,
     noalias_scopes=nothing,
@@ -535,6 +629,10 @@ function call(
         push!(attributes, namedattribute("op_bundle_tags", op_bundle_tags))
     !isnothing(arg_attrs) && push!(attributes, namedattribute("arg_attrs", arg_attrs))
     !isnothing(res_attrs) && push!(attributes, namedattribute("res_attrs", res_attrs))
+    !isnothing(no_inline) && push!(attributes, namedattribute("no_inline", no_inline))
+    !isnothing(always_inline) &&
+        push!(attributes, namedattribute("always_inline", always_inline))
+    !isnothing(inline_hint) && push!(attributes, namedattribute("inline_hint", inline_hint))
     !isnothing(access_groups) &&
         push!(attributes, namedattribute("access_groups", access_groups))
     !isnothing(alias_scopes) &&
@@ -712,6 +810,45 @@ function mlir_constant(; res::IR.Type, value, location=Location())
 
     return create_operation(
         "llvm.mlir.constant",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+"""
+`dso_local_equivalent`
+
+Creates an SSA value containing a pointer to a global value (function or
+alias to function). It represents a function which is functionally
+equivalent to a given function, but is always defined in the current
+linkage unit. The target function may not have `extern_weak` linkage.
+
+Examples:
+
+```mlir
+llvm.mlir.global external constant @const() : i64 {
+  %0 = llvm.mlir.addressof @const : !llvm.ptr
+  %1 = llvm.ptrtoint %0 : !llvm.ptr to i64
+  %2 = llvm.dso_local_equivalent @func : !llvm.ptr
+  %4 = llvm.ptrtoint %2 : !llvm.ptr to i64
+  llvm.return %4 : i64
+}
+```
+"""
+function dso_local_equivalent(; res::IR.Type, function_name, location=Location())
+    op_ty_results = IR.Type[res,]
+    operands = Value[]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[namedattribute("function_name", function_name),]
+
+    return create_operation(
+        "llvm.dso_local_equivalent",
         location;
         operands,
         owned_regions,
@@ -1085,8 +1222,12 @@ Like in LLVM IR, it is possible to use both constants as well as SSA values
 as indices. In the case of indexing within a structure, it is required to
 either use constant indices directly, or supply a constant SSA value.
 
-An optional \'inbounds\' attribute specifies the low-level pointer arithmetic
+The no-wrap flags can be used to specify the low-level pointer arithmetic
 overflow behavior that LLVM uses after lowering the operation to LLVM IR.
+Valid options include \'inbounds\' (pointer arithmetic must be within object
+bounds), \'nusw\' (no unsigned signed wrap), and \'nuw\' (no unsigned wrap).
+Note that \'inbounds\' implies \'nusw\' which is ensured by the enum
+definition. The flags can be set individually or in combination.
 
 Examples:
 
@@ -1108,7 +1249,6 @@ function getelementptr(
     res::IR.Type,
     rawConstantIndices,
     elem_type,
-    inbounds=nothing,
     location=Location(),
 )
     op_ty_results = IR.Type[res,]
@@ -1119,7 +1259,6 @@ function getelementptr(
         namedattribute("rawConstantIndices", rawConstantIndices),
         namedattribute("elem_type", elem_type),
     ]
-    !isnothing(inbounds) && push!(attributes, namedattribute("inbounds", inbounds))
 
     return create_operation(
         "llvm.getelementptr",
@@ -1136,32 +1275,34 @@ end
 """
 `mlir_global_ctors`
 
-Specifies a list of constructor functions and priorities. The functions
-referenced by this array will be called in ascending order of priority (i.e.
-lowest first) when the module is loaded. The order of functions with the
-same priority is not defined. This operation is translated to LLVM\'s
-global_ctors global variable. The initializer functions are run at load
-time. The `data` field present in LLVM\'s global_ctors variable is not
-modeled here.
+Specifies a list of constructor functions, priorities, and associated data.
+The functions referenced by this array will be called in ascending order
+of priority (i.e. lowest first) when the module is loaded. The order of
+functions with the same priority is not defined. This operation is
+translated to LLVM\'s global_ctors global variable. The initializer
+functions are run at load time. However, if the associated data is not
+`#llvm.zero`, functions only run if the data is not discarded.
 
 Examples:
 
 ```mlir
-llvm.mlir.global_ctors {@ctor}
-
 llvm.func @ctor() {
   ...
   llvm.return
 }
+llvm.mlir.global_ctors ctors = [@ctor], priorities = [0],
+                               data = [#llvm.zero]
 ```
 """
-function mlir_global_ctors(; ctors, priorities, location=Location())
+function mlir_global_ctors(; ctors, priorities, data, location=Location())
     op_ty_results = IR.Type[]
     operands = Value[]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[
-        namedattribute("ctors", ctors), namedattribute("priorities", priorities)
+        namedattribute("ctors", ctors),
+        namedattribute("priorities", priorities),
+        namedattribute("data", data),
     ]
 
     return create_operation(
@@ -1180,11 +1321,12 @@ end
 `mlir_global_dtors`
 
 Specifies a list of destructor functions and priorities. The functions
-referenced by this array will be called in descending order of priority (i.e.
-highest first) when the module is unloaded. The order of functions with the
-same priority is not defined. This operation is translated to LLVM\'s
-global_dtors global variable. The `data` field present in LLVM\'s
-global_dtors variable is not modeled here.
+referenced by this array will be called in descending order of priority
+(i.e. highest first) when the module is unloaded. The order of functions
+with the same priority is not defined. This operation is translated to
+LLVM\'s global_dtors global variable. The destruction functions are run at
+load time. However, if the associated data is not `#llvm.zero`, functions
+only run if the data is not discarded.
 
 Examples:
 
@@ -1192,16 +1334,19 @@ Examples:
 llvm.func @dtor() {
   llvm.return
 }
-llvm.mlir.global_dtors {@dtor}
+llvm.mlir.global_dtors dtors = [@dtor], priorities = [0],
+                               data = [#llvm.zero]
 ```
 """
-function mlir_global_dtors(; dtors, priorities, location=Location())
+function mlir_global_dtors(; dtors, priorities, data, location=Location())
     op_ty_results = IR.Type[]
     operands = Value[]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[
-        namedattribute("dtors", dtors), namedattribute("priorities", priorities)
+        namedattribute("dtors", dtors),
+        namedattribute("priorities", priorities),
+        namedattribute("data", data),
     ]
 
     return create_operation(
@@ -1396,6 +1541,65 @@ function icmp(
 end
 
 """
+`indirectbr`
+
+Transfer control flow to address in `\$addr`. A list of possible target
+blocks in `\$successors` can be provided and maybe used as a hint in LLVM:
+
+```mlir
+...
+llvm.func @g(...
+  %dest = llvm.blockaddress <function = @g, tag = <id = 0>> : !llvm.ptr
+  llvm.indirectbr %dest : !llvm.ptr, [
+    ^head
+  ]
+^head:
+  llvm.blocktag <id = 0>
+  llvm.return %arg0 : i32
+  ...
+```
+
+It also supports a list of operands that can be passed to a target block:
+
+```mlir
+  llvm.indirectbr %dest : !llvm.ptr, [
+    ^head(%arg0 : i32),
+    ^tail(%arg1, %arg0 : i32, i32)
+  ]
+^head(%r0 : i32):
+  llvm.return %r0 : i32
+^tail(%r1 : i32, %r2 : i32):
+  ...
+```
+"""
+function indirectbr(
+    addr::Value,
+    succOperands::Vector{Value};
+    indbr_operand_segments,
+    successors::Vector{Block},
+    location=Location(),
+)
+    op_ty_results = IR.Type[]
+    operands = Value[addr, succOperands...]
+    owned_regions = Region[]
+    successors = Block[successors...,]
+    attributes = NamedAttribute[namedattribute(
+        "indbr_operand_segments", indbr_operand_segments
+    ),]
+
+    return create_operation(
+        "llvm.indirectbr",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+"""
 `inline_asm`
 
 The InlineAsmOp mirrors the underlying LLVM semantics with a notable
@@ -1496,12 +1700,14 @@ function insertvalue(
     )
 end
 
-function inttoptr(arg::Value; res::IR.Type, location=Location())
+function inttoptr(arg::Value; res::IR.Type, dereferenceable=nothing, location=Location())
     op_ty_results = IR.Type[res,]
     operands = Value[arg,]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
+    !isnothing(dereferenceable) &&
+        push!(attributes, namedattribute("dereferenceable", dereferenceable))
 
     return create_operation(
         "llvm.inttoptr",
@@ -1655,6 +1861,7 @@ function func(;
     work_group_size_hint=nothing,
     reqd_work_group_size=nothing,
     intel_reqd_sub_group_size=nothing,
+    uwtable_kind=nothing,
     body::Region,
     location=Location(),
 )
@@ -1742,6 +1949,8 @@ function func(;
         attributes,
         namedattribute("intel_reqd_sub_group_size", intel_reqd_sub_group_size),
     )
+    !isnothing(uwtable_kind) &&
+        push!(attributes, namedattribute("uwtable_kind", uwtable_kind))
 
     return create_operation(
         "llvm.func",
@@ -1875,6 +2084,7 @@ function load(
     invariantGroup=nothing,
     ordering=nothing,
     syncscope=nothing,
+    dereferenceable=nothing,
     access_groups=nothing,
     alias_scopes=nothing,
     noalias_scopes=nothing,
@@ -1894,6 +2104,8 @@ function load(
         push!(attributes, namedattribute("invariantGroup", invariantGroup))
     !isnothing(ordering) && push!(attributes, namedattribute("ordering", ordering))
     !isnothing(syncscope) && push!(attributes, namedattribute("syncscope", syncscope))
+    !isnothing(dereferenceable) &&
+        push!(attributes, namedattribute("dereferenceable", dereferenceable))
     !isnothing(access_groups) &&
         push!(attributes, namedattribute("access_groups", access_groups))
     !isnothing(alias_scopes) &&
@@ -1904,6 +2116,40 @@ function load(
 
     return create_operation(
         "llvm.load",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+"""
+`module_flags`
+
+Represents the equivalent in MLIR for LLVM\'s `llvm.module.flags` metadata,
+which requires a list of metadata triplets. Each triplet entry is described
+by a `ModuleFlagAttr`.
+
+# Example
+```mlir
+llvm.module.flags [
+  #llvm.mlir.module_flag<error, \"wchar_size\", 4>,
+  #llvm.mlir.module_flag<max, \"PIC Level\", 2>
+]
+```
+"""
+function module_flags(; flags, location=Location())
+    op_ty_results = IR.Type[]
+    operands = Value[]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[namedattribute("flags", flags),]
+
+    return create_operation(
+        "llvm.module_flags",
         location;
         operands,
         owned_regions,

@@ -36,8 +36,13 @@ jobs:
         exclude:
           - os: macOS-latest
             version: '1.10'
+    env:
+      TMPDIR: ${{ github.workspace }}/tmp
     steps:
       - uses: actions/checkout@v4
+      - name: Create TMPDIR
+        run: |
+          mkdir -p ${{ env.TMPDIR }}
       - uses: julia-actions/setup-julia@v2
         with:
           version: ${{ matrix.version }}
@@ -95,8 +100,17 @@ jobs:
         shell: julia --color=yes --code-coverage=user --depwarn=yes --project=. {0}
         env:
           JULIA_PKG_SERVER_REGISTRY_PREFERENCE: eager
-          XLA_FLAGS: "--xla_force_host_platform_device_count=8"
+          XLA_FLAGS: "--xla_force_host_platform_device_count=12"
           JULIA_DEBUG: "Reactant,Reactant_jll"
+      - name: Upload MLIR modules (PJRT)
+        uses: actions/upload-artifact@v4
+        timeout-minutes: 10
+        if: ${{ always() }}
+        with:
+          name: "mlir-localjll-PJRT-${{ matrix.version }}-${{ matrix.os }}-${{ github.event_name }}"
+          path: "**/*.mlir"
+          retention-days: 90
+          overwrite: false
       - name: "Setup Runtime Preferences"
         run: |
           import Pkg
@@ -115,8 +129,17 @@ jobs:
         shell: julia --color=yes --code-coverage=user --depwarn=yes --project=. {0}
         env:
           JULIA_PKG_SERVER_REGISTRY_PREFERENCE: eager
-          XLA_FLAGS: "--xla_force_host_platform_device_count=8"
+          XLA_FLAGS: "--xla_force_host_platform_device_count=12"
           JULIA_DEBUG: "Reactant,Reactant_jll"
+      - name: Upload MLIR modules (IFRT)
+        uses: actions/upload-artifact@v4
+        timeout-minutes: 10
+        if: ${{ always() }}
+        with:
+          name: "mlir-localjll-IFRT-${{ matrix.version }}-${{ matrix.os }}-${{ github.event_name }}"
+          path: "**/*.mlir"
+          retention-days: 90
+          overwrite: false
       - uses: julia-actions/julia-processcoverage@v1
       - uses: codecov/codecov-action@v5
         with:
