@@ -1181,27 +1181,27 @@ end
     end
 end
 
+function recon_from_lu(lu_res::AbstractArray{T,4}) where {T}
+    y = similar(lu_res)
+    for i in 1:size(lu_res, 1), j in 1:size(lu_res, 2)
+        y[i, j, :, :] .= recon_from_lu(lu_res[i, j, :, :])
+    end
+    return y
+end
+
+function apply_permutation(x::AbstractArray{T,4}, perm) where {T}
+    y = similar(x)
+    for i in 1:size(x, 1), j in 1:size(x, 2)
+        y[i, j, :, :] .= x[i, j, perm[i, j, :], :]
+    end
+    return y
+end
+
+function recon_from_lu(lu_res::AbstractMatrix)
+    return UnitLowerTriangular(lu_res) * UpperTriangular(lu_res)
+end
+
 @testset "lu factorization" begin
-    function recon_from_lu(lu_res::AbstractArray{T,4}) where {T}
-        y = similar(lu_res)
-        for i in 1:size(lu_res, 1), j in 1:size(lu_res, 2)
-            y[i, j, :, :] .= recon_from_lu(lu_res[i, j, :, :])
-        end
-        return y
-    end
-
-    function apply_permutation(x::AbstractArray{T,4}, perm) where {T}
-        y = similar(x)
-        for i in 1:size(x, 1), j in 1:size(x, 2)
-            y[i, j, :, :] .= x[i, j, perm[i, j, :], :]
-        end
-        return y
-    end
-
-    function recon_from_lu(lu_res::AbstractMatrix)
-        return UnitLowerTriangular(lu_res) * UpperTriangular(lu_res)
-    end
-
     @testset "unbatched" begin
         x_ra = Reactant.to_rarray(randn(6, 6))
         lu_ra, ipiv, perm, info = @jit Ops.lu(x_ra)
