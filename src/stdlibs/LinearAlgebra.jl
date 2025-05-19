@@ -539,30 +539,54 @@ function LinearAlgebra.generic_mattridiv!(
     return C
 end
 
+# Supports batched factorization
+abstract type GeneralizedFactorization{T} <: Factorization{T} end
+
+function LinearAlgebra.TransposeFactorization(f::GeneralizedFactorization)
+    return LinearAlgebra.TransposeFactorization{eltype(f),typeof(f)}(f)
+end
+
+function LinearAlgebra.AdjointFactorization(f::GeneralizedFactorization)
+    return LinearAlgebra.AdjointFactorization{eltype(f),typeof(f)}(f)
+end
+
+const GeneralizedTransposeFactorization{T} =
+    LinearAlgebra.TransposeFactorization{T,<:GeneralizedFactorization{T}} where {T}
+const GeneralizedAdjointFactorization{T} =
+    LinearAlgebra.AdjointFactorization{T,<:GeneralizedFactorization{T}} where {T}
+
 # LU Factorization
-## Generalized because we allow for batched LU
 struct GeneralizedLU{T,S<:AbstractArray,P<:AbstractArray,I<:Union{AbstractArray,Number}} <:
-       Factorization{T}
+       GeneralizedFactorization{T}
     factors::S
     ipiv::P
     perm::P
     info::I
 end
 
+Base.ndims(lu::GeneralizedLU) = ndims(lu.factors)
+
 function GeneralizedLU(factors::S, ipiv::P, perm::P, info::I) where {S,P,I}
+    @assert ndims(ipiv) == ndims(perm) == ndims(factors) - 1
+    @assert ndims(info) == ndims(factors) - 2
     return GeneralizedLU{eltype(factors),S,P,I}(factors, ipiv, perm, info)
 end
 
-function LinearAlgebra.lu!(
-    A::AnyTracedRArray{T,N}, ::RowMaximum; check::Bool=false, allowsingular::Bool=false
+## allow > 2 dimensions as inputs
+function LinearAlgebra.lu(A::AnyTracedRArray{T,2}, pivot=RowMaximum(); kwargs...) where {T}
+    return lu!(copy(A), pivot; kwargs...)
+end
+function LinearAlgebra.lu(
+    A::AnyTracedRArray{T,N}, pivot=RowMaximum(); kwargs...
 ) where {T,N}
-    return _lu_overload(A, RowMaximum(); check, allowsingular)
+    return lu!(copy(A), pivot; kwargs...)
 end
 
-function LinearAlgebra.lu!(
-    A::AnyTracedRArray{T,2}, ::RowMaximum; check::Bool=false, allowsingular::Bool=false
-) where {T}
-    return _lu_overload(A, RowMaximum(); check, allowsingular)
+function LinearAlgebra.lu!(A::AnyTracedRArray{T,N}, ::RowMaximum; kwargs...) where {T,N}
+    return _lu_overload(A, RowMaximum(); kwargs...)
+end
+function LinearAlgebra.lu!(A::AnyTracedRArray{T,2}, ::RowMaximum; kwargs...) where {T}
+    return _lu_overload(A, RowMaximum(); kwargs...)
 end
 
 function _lu_overload(
@@ -573,20 +597,57 @@ function _lu_overload(
     return GeneralizedLU(factors, ipiv, perm, info)
 end
 
-# TODO: generalize for higher dimensions of B
 function LinearAlgebra.ldiv!(
-    lu::GeneralizedLU{T,<:AbstractMatrix,P,I}, B::AbstractVector
-) where {T,P,I}
-    ldiv!(lu, reshape(B, :, 1))
+    lu::GeneralizedLU{T,<:AbstractArray{T,N},P,I}, B::AbstractArray{T,M}
+) where {T,P,I,N,M}
+    @assert N == M + 1
+    ldiv!(lu, reshape(B, size(B)..., 1))
     return B
 end
 
 function LinearAlgebra.ldiv!(
-    lu::GeneralizedLU{T,<:AbstractMatrix,P,I}, B::AbstractMatrix
+    lu::GeneralizedLU{T,<:AbstractArray{T,2},P,I}, B::AbstractArray{T,2}
 ) where {T,P,I}
     ldiv!(B, UnitLowerTriangular(lu.factors), B[Int64.(lu.perm), :])
     ldiv!(B, UpperTriangular(lu.factors), B)
     return B
 end
+
+# XXX: implement this using Ops.batch
+function LinearAlgebra.ldiv!(
+    lu::GeneralizedLU{T,<:AbstractArray{T,N},P,I}, B::AbstractArray{T,N}
+) where {T,P,I,N}
+    @assert size(lu.factors)[1:(N - 2)] == size(B)[1:(N - 2)]
+    # TODO: apply the permutation
+    factors = materialize_traced_array(lu.factors)
+    x1 = Ops.triangular_solve(
+        factors,
+        materialize_traced_array(B);
+        left_side=true,
+        lower=true,
+        transpose_a='N',
+        unit_diagonal=true,
+    )
+    x2 = Ops.triangular_solve(
+        factors, x1; left_side=true, lower=false, transpose_a='N', unit_diagonal=false
+    )
+    copyto!(B, x2)
+    return B
+end
+
+# Overload \ to support batched factorization
+function Base.:(\)(F::GeneralizedFactorization, B::AbstractVecOrMat)
+    return _overloaded_backslash(F, B)
+end
+function Base.:(\)(F::GeneralizedFactorization, B::AbstractArray)
+    return _overloaded_backslash(F, B)
+end
+
+function _overloaded_backslash(F::GeneralizedFactorization, B::AbstractArray)
+    TFB = typeof(oneunit(eltype(F)) \ oneunit(eltype(B)))
+    return ldiv!(F, LinearAlgebra.copy_similar(B, TFB))
+end
+
+# (\)(F::TransposeFactorization, B::AbstractVecOrMat) = conj!(adjoint(F.parent) \ conj.(B))
 
 end
