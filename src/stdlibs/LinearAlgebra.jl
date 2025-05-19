@@ -608,31 +608,33 @@ end
 function LinearAlgebra.ldiv!(
     lu::GeneralizedLU{T,<:AbstractArray{T,2},P,I}, B::AbstractArray{T,2}
 ) where {T,P,I}
-    ldiv!(B, UnitLowerTriangular(lu.factors), B[Int64.(lu.perm), :])
-    ldiv!(B, UpperTriangular(lu.factors), B)
+    copyto!(B, _lu_solve_core(lu.factors, B, lu.perm))
     return B
 end
 
-# XXX: implement this using Ops.batch
 function LinearAlgebra.ldiv!(
     lu::GeneralizedLU{T,<:AbstractArray{T,N},P,I}, B::AbstractArray{T,N}
 ) where {T,P,I,N}
     @assert size(lu.factors)[1:(N - 2)] == size(B)[1:(N - 2)]
-    # TODO: apply the permutation
-    factors = materialize_traced_array(lu.factors)
-    x1 = Ops.triangular_solve(
-        factors,
-        materialize_traced_array(B);
-        left_side=true,
-        lower=true,
-        transpose_a='N',
-        unit_diagonal=true,
+    batch_shape = size(lu.factors)[1:(N - 2)]
+
+    B .= only(
+        Ops.batch(
+            _lu_solve_core,
+            [
+                materialize_traced_array(lu.factors),
+                materialize_traced_array(B),
+                materialize_traced_array(lu.perm),
+            ],
+            collect(Int64, batch_shape),
+        ),
     )
-    x2 = Ops.triangular_solve(
-        factors, x1; left_side=true, lower=false, transpose_a='N', unit_diagonal=false
-    )
-    copyto!(B, x2)
     return B
+end
+
+function _lu_solve_core(factors::AbstractMatrix, B::AbstractMatrix, perm::AbstractVector)
+    permuted_B = B[Int64.(perm), :]
+    return UpperTriangular(factors) \ (UnitLowerTriangular(factors) \ permuted_B)
 end
 
 # Overload \ to support batched factorization
