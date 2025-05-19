@@ -1,18 +1,11 @@
-using Reactant
-using Test
-using OneHotArrays
-using Random
-
-function oh_mul(a, b)
-    return a * b
-end
+using Reactant, Test, OneHotArrays, Random
 
 @testset "OneHotArrays" begin
     m = onehotbatch([10, 20, 30, 10, 10], 10:10:40)
     r_m = Reactant.to_rarray(m)
     a = rand(100, 4)
     r_a = Reactant.to_rarray(a)
-    r_res = @jit oh_mul(r_a, r_m)
-    res = oh_mul(a, m)
+    r_res = @jit r_a * r_m
+    res = a * m
     @test convert(Array, r_res) ≈ res
 end
