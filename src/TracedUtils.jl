@@ -1207,11 +1207,18 @@ _isone(x) = isone(x)
 _isone(::CartesianIndex) = false
 
 __contiguous_indices(::Base.LogicalIndex) = false
-__contiguous_indices(x) = all(_isone, diff(x))
+function __contiguous_indices(x)
+    x isa Reactant.TracedType && return false
+    x isa AbstractArray{<:Reactant.TracedType} && return false
+    return all(_isone, diff(x))
+end
 
 _get_slice_stride(::Base.LogicalIndex) = -1
 _get_slice_stride(x::CartesianIndex) = -1
 function _get_slice_stride(x)
+    x isa Reactant.TracedType && return -1
+    x isa AbstractArray{<:Reactant.TracedType} && return -1
+
     length(x) == 1 && return 1
     strides = diff(x)
     isempty(strides) && return -1
