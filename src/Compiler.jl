@@ -2,6 +2,7 @@ module Compiler
 
 using Reactant_jll
 using Libdl: dlsym
+using LinearAlgebra: BLAS
 
 import ..Reactant:
     Reactant,
@@ -1273,6 +1274,10 @@ function compile_mlir!(
         "canonicalize"
     end
 
+    blas_int_width = sizeof(BLAS.BlasInt) * 8
+    lower_enzymexla_linalg_pass = "lower-enzymexla-linalg{backend=$backend \
+                                   blas_int_width=$blas_int_width}"
+
     if optimize === :all
         run_pass_pipeline!(
             mod,
@@ -1292,6 +1297,7 @@ function compile_mlir!(
                         "remove-unnecessary-enzyme-ops",
                         "enzyme-simplify-math",
                         opt_passes2,
+                        lower_enzymexla_linalg_pass,
                         jit,
                     ]
                 else
@@ -1309,6 +1315,7 @@ function compile_mlir!(
                         opt_passes2,
                         kern,
                         raise_passes,
+                        lower_enzymexla_linalg_pass,
                         jit,
                     ]
                 end,
@@ -1471,6 +1478,7 @@ function compile_mlir!(
                         "remove-unnecessary-enzyme-ops",
                         "enzyme-simplify-math",
                         opt_passes2,
+                        lower_enzymexla_linalg_pass,
                         jit,
                     ]
                 else
@@ -1484,6 +1492,7 @@ function compile_mlir!(
                         opt_passes2,
                         kern,
                         raise_passes,
+                        lower_enzymexla_linalg_pass,
                         jit,
                     ]
                 end,
@@ -1505,6 +1514,7 @@ function compile_mlir!(
                         opt_passes2,
                         enzyme_pass,
                         "canonicalize,remove-unnecessary-enzyme-ops,enzyme-simplify-math",
+                        lower_enzymexla_linalg_pass,
                         jit,
                     ]
                 else
@@ -1517,6 +1527,7 @@ function compile_mlir!(
                         "canonicalize,remove-unnecessary-enzyme-ops,enzyme-simplify-math",
                         kern,
                         raise_passes,
+                        lower_enzymexla_linalg_pass,
                         jit,
                     ]
                 end,
