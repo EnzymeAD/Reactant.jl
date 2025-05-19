@@ -539,4 +539,54 @@ function LinearAlgebra.generic_mattridiv!(
     return C
 end
 
+# LU Factorization
+## Generalized because we allow for batched LU
+struct GeneralizedLU{T,S<:AbstractArray,P<:AbstractArray,I<:Union{AbstractArray,Number}} <:
+       Factorization{T}
+    factors::S
+    ipiv::P
+    perm::P
+    info::I
+end
+
+function GeneralizedLU(factors::S, ipiv::P, perm::P, info::I) where {S,P,I}
+    return GeneralizedLU{eltype(factors),S,P,I}(factors, ipiv, perm, info)
+end
+
+function LinearAlgebra.lu!(
+    A::AnyTracedRArray{T,N}, ::RowMaximum; check::Bool=false, allowsingular::Bool=false
+) where {T,N}
+    return _lu_overload(A, RowMaximum(); check, allowsingular)
+end
+
+function LinearAlgebra.lu!(
+    A::AnyTracedRArray{T,2}, ::RowMaximum; check::Bool=false, allowsingular::Bool=false
+) where {T}
+    return _lu_overload(A, RowMaximum(); check, allowsingular)
+end
+
+function _lu_overload(
+    A::AnyTracedRArray{T,N}, ::RowMaximum; check::Bool=false, allowsingular::Bool=false
+) where {T,N}
+    # TODO: don't ignore the check and allowsingular flags
+    factors, ipiv, perm, info = Reactant.Ops.lu(materialize_traced_array(A))
+    return GeneralizedLU(factors, ipiv, perm, info)
+end
+
+# TODO: generalize for higher dimensions of B
+function LinearAlgebra.ldiv!(
+    lu::GeneralizedLU{T,<:AbstractMatrix,P,I}, B::AbstractVector
+) where {T,P,I}
+    ldiv!(lu, reshape(B, :, 1))
+    return B
+end
+
+function LinearAlgebra.ldiv!(
+    lu::GeneralizedLU{T,<:AbstractMatrix,P,I}, B::AbstractMatrix
+) where {T,P,I}
+    ldiv!(B, UnitLowerTriangular(lu.factors), B[Int64.(lu.perm), :])
+    ldiv!(B, UpperTriangular(lu.factors), B)
+    return B
+end
+
 end
