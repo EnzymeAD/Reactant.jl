@@ -2797,6 +2797,7 @@ end
 
     # First we permute and make sure the batch dims are at the beginning
     batch_dims = Int64[i for i in 1:N if i ∉ dims]
+    batch_shape = [size(A, i) for i in batch_dims]
     permutation = zeros(Int64, N)
     for (i, d) in enumerate(batch_dims)
         permutation[i] = d
@@ -2806,14 +2807,7 @@ end
     end
 
     return Ops.transpose(
-        only(
-            batch(
-                f,
-                [Ops.transpose(A, permutation; location)],
-                [size(A, i) for i in 1:length(dims)];
-                location,
-            ),
-        ),
+        only(batch(f, [Ops.transpose(A, permutation; location)], batch_shape; location)),
         invperm(permutation);
         location,
     )
