@@ -632,24 +632,62 @@ function LinearAlgebra.ldiv!(
     return B
 end
 
+function LinearAlgebra.ldiv!(
+    lu::LinearAlgebra.TransposeFactorization{<:Any,<:GeneralizedLU}, B::AbstractVecOrMat
+)
+    # TODO: implement this
+    return error("TransposeFactorization is not supported yet for LU.")
+end
+function LinearAlgebra.ldiv!(
+    lu::LinearAlgebra.TransposeFactorization{<:Any,<:GeneralizedLU}, B::AbstractArray
+)
+    # TODO: implement this
+    return error("TransposeFactorization is not supported yet for LU.")
+end
+
+function LinearAlgebra.ldiv!(
+    lu::LinearAlgebra.AdjointFactorization{<:Any,<:GeneralizedLU}, B::AbstractVecOrMat
+)
+    # TODO: implement this
+    return error("AdjointFactorization is not supported yet for LU.")
+end
+function LinearAlgebra.ldiv!(
+    lu::LinearAlgebra.AdjointFactorization{<:Any,<:GeneralizedLU}, B::AbstractArray
+)
+    # TODO: implement this
+    return error("AdjointFactorization is not supported yet for LU.")
+end
+
 function _lu_solve_core(factors::AbstractMatrix, B::AbstractMatrix, perm::AbstractVector)
     permuted_B = B[Int64.(perm), :]
     return UpperTriangular(factors) \ (UnitLowerTriangular(factors) \ permuted_B)
 end
 
 # Overload \ to support batched factorization
-function Base.:(\)(F::GeneralizedFactorization, B::AbstractVecOrMat)
-    return _overloaded_backslash(F, B)
-end
-function Base.:(\)(F::GeneralizedFactorization, B::AbstractArray)
-    return _overloaded_backslash(F, B)
+for T in (
+        :GeneralizedFactorization,
+        :GeneralizedTransposeFactorization,
+        :GeneralizedAdjointFactorization,
+    ),
+    aType in (:AbstractVecOrMat, :AbstractArray)
+
+    @eval Base.:(\)(F::$T, B::$aType) = _overloaded_backslash(F, B)
 end
 
 function _overloaded_backslash(F::GeneralizedFactorization, B::AbstractArray)
-    TFB = typeof(oneunit(eltype(F)) \ oneunit(eltype(B)))
-    return ldiv!(F, LinearAlgebra.copy_similar(B, TFB))
+    return ldiv!(
+        F, LinearAlgebra.copy_similar(B, typeof(oneunit(eltype(F)) \ oneunit(eltype(B))))
+    )
 end
 
-# (\)(F::TransposeFactorization, B::AbstractVecOrMat) = conj!(adjoint(F.parent) \ conj.(B))
+function _overloaded_backslash(F::GeneralizedTransposeFactorization, B::AbstractArray)
+    return conj!(adjoint(F.parent) \ conj.(B))
+end
+
+function _overloaded_backslash(F::GeneralizedAdjointFactorization, B::AbstractArray)
+    return ldiv!(
+        F, LinearAlgebra.copy_similar(B, typeof(oneunit(eltype(F)) \ oneunit(eltype(B))))
+    )
+end
 
 end
