@@ -7,8 +7,8 @@ function generate_model(seed, μ, σ, shape)
     function model(seed, μ, σ, shape)
         rng = Random.default_rng()
         Random.seed!(rng, seed)
-        s = ProbProg.sample(normal, rng, μ, σ, shape)
-        t = ProbProg.sample(normal, rng, s, σ, shape)
+        s = ProbProg.sample!(normal, rng, μ, σ, shape)
+        t = ProbProg.sample!(normal, rng, s, σ, shape)
         return t
     end
 
@@ -25,7 +25,7 @@ end
         σ1 = Reactant.ConcreteRArray(1.0)
         σ2 = Reactant.ConcreteRArray(1.0)
 
-        model_compiled = @compile generate_model(seed1, μ1, σ1, shape)
+        model_compiled = @compile optimize = :probprog generate_model(seed1, μ1, σ1, shape)
 
         @test Array(model_compiled(seed1, μ1, σ1, shape)) ≈ Array(model_compiled(seed1, μ1, σ1, shape))
         @test mean(Array(model_compiled(seed1, μ1, σ1, shape))) ≈ 0.0 atol = 0.05 rtol = 0.05
