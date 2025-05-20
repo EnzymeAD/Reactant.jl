@@ -319,3 +319,40 @@ end
         end
     end
 end
+
+solve_with_lu(A, b) = lu(A) \ b
+function solve_with_lu_batched_vector(A, B)
+end
+function solve_with_lu_batched_matrix(A, B)
+end
+
+@testset "LU Factorization" begin
+    @testset "Un-batched" begin
+        @testset for T in (Float32, Float64, ComplexF32, ComplexF64)
+            A = rand(T, 4, 4)
+            A_ra = Reactant.to_rarray(A)
+
+            b = rand(T, 4)
+            b_ra = Reactant.to_rarray(b)
+
+            B = rand(T, 4, 3)
+            B_ra = Reactant.to_rarray(B)
+
+            @test @jit(solve_with_lu(A_ra, b_ra)) ≈ solve_with_lu(A, b)
+            @test @jit(solve_with_lu(A_ra, B_ra)) ≈ solve_with_lu(A, B)
+        end
+    end
+
+    @testset "Batched" begin
+        @testset for T in (Float32, Float64, ComplexF32, ComplexF64)
+            A = rand(T, 4, 4, 3, 2)
+            A_ra = Reactant.to_rarray(A)
+
+            b = rand(T, 4, 3, 2)
+            b_ra = Reactant.to_rarray(b)
+
+            B = rand(T, 5, 4, 3, 2)
+            B_ra = Reactant.to_rarray(B)
+        end
+    end
+end

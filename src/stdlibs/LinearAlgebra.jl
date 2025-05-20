@@ -589,6 +589,8 @@ function LinearAlgebra.lu!(A::AnyTracedRArray{T,2}, ::RowMaximum; kwargs...) whe
     return _lu_overload(A, RowMaximum(); kwargs...)
 end
 
+# XXX: batch with the ending dimensions instead of the beginning matching Julia's
+#      default convention
 function _lu_overload(
     A::AnyTracedRArray{T,N}, ::RowMaximum; check::Bool=false, allowsingular::Bool=false
 ) where {T,N}
@@ -608,10 +610,12 @@ end
 function LinearAlgebra.ldiv!(
     lu::GeneralizedLU{T,<:AbstractArray{T,2},P,I}, B::AbstractArray{T,2}
 ) where {T,P,I}
-    copyto!(B, _lu_solve_core(lu.factors, B, lu.perm))
+    B .= _lu_solve_core(lu.factors, B, lu.perm)
     return B
 end
 
+# XXX: batch with the ending dimensions instead of the beginning matching Julia's
+#      default convention
 function LinearAlgebra.ldiv!(
     lu::GeneralizedLU{T,<:AbstractArray{T,N},P,I}, B::AbstractArray{T,N}
 ) where {T,P,I,N}
@@ -632,30 +636,14 @@ function LinearAlgebra.ldiv!(
     return B
 end
 
-function LinearAlgebra.ldiv!(
-    lu::LinearAlgebra.TransposeFactorization{<:Any,<:GeneralizedLU}, B::AbstractVecOrMat
-)
-    # TODO: implement this
-    return error("TransposeFactorization is not supported yet for LU.")
-end
-function LinearAlgebra.ldiv!(
-    lu::LinearAlgebra.TransposeFactorization{<:Any,<:GeneralizedLU}, B::AbstractArray
-)
-    # TODO: implement this
-    return error("TransposeFactorization is not supported yet for LU.")
-end
+for f_wrapper in (LinearAlgebra.TransposeFactorization, LinearAlgebra.AdjointFactorization),
+    aType in (:AbstractVecOrMat, :AbstractArray)
 
-function LinearAlgebra.ldiv!(
-    lu::LinearAlgebra.AdjointFactorization{<:Any,<:GeneralizedLU}, B::AbstractVecOrMat
-)
-    # TODO: implement this
-    return error("AdjointFactorization is not supported yet for LU.")
-end
-function LinearAlgebra.ldiv!(
-    lu::LinearAlgebra.AdjointFactorization{<:Any,<:GeneralizedLU}, B::AbstractArray
-)
-    # TODO: implement this
-    return error("AdjointFactorization is not supported yet for LU.")
+    @eval function LinearAlgebra.ldiv!(lu::$(f_wrapper){<:Any,<:GeneralizedLU}, B::$aType)
+        # TODO: implement this
+        error("`$(f_wrapper)` is not supported yet for LU.")
+        return nothing
+    end
 end
 
 function _lu_solve_core(factors::AbstractMatrix, B::AbstractMatrix, perm::AbstractVector)
