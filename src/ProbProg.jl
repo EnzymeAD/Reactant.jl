@@ -44,14 +44,10 @@ using Enzyme
 
     gen_op = MLIR.Dialects.enzyme.generate(batch_inputs; outputs=out_tys, fn=fname)
 
-    residx = 1
-    for a in linear_results
-        resv = MLIR.IR.result(gen_op, residx)
-        residx += 1
-        for path in a.paths
-            if length(path) == 0
-                continue
-            end
+    for (i, res) in enumerate(linear_results)
+        resv = MLIR.IR.result(gen_op, i)
+        for path in res.paths
+            isempty(path) && continue
             if path[1] == resprefix
                 TracedUtils.set!(result, path[2:end], resv)
             elseif path[1] == argprefix
@@ -109,18 +105,23 @@ function sample!(f::Function, args::Vararg{Any,Nargs}) where {Nargs}
 
     sample_op = MLIR.Dialects.enzyme.sample(batch_inputs; outputs=out_tys, fn=fn_attr)
 
-    ridx = 1
-    for a in linear_results
-        val = MLIR.IR.result(sample_op, ridx)
-        ridx += 1
+    for (i, res) in enumerate(linear_results)
+        resv = MLIR.IR.result(sample_op, i)
 
-        for path in a.paths
+        for path in res.paths
             isempty(path) && continue
             if path[1] == resprefix
-                TracedUtils.set!(result, path[2:end], val)
+                TracedUtils.set!(result, path[2:end], resv)
             elseif path[1] == argprefix
-                idx = path[2]::Int - (fnwrap ? 1 : 0)
-                TracedUtils.set!(args[idx], path[3:end], val)
+                idx = path[2]::Int
+                if idx == 1 && fnwrap
+                    TracedUtils.set!(f, path[3:end], resv)
+                else
+                    if fnwrap
+                        idx -= 1
+                    end
+                    TracedUtils.set!(args[idx], path[3:end], resv)
+                end
             end
         end
     end
