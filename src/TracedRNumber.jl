@@ -393,6 +393,9 @@ for (jlop, hloop) in (
     (:(Base.atan), :atan),
     (:(Base.atanh), :atanh),
     (:(Base.sign), :sign),
+    (:(Base.conj), :conj),
+    (:(Base.real), :real),
+    (:(Base.imag), :imag),
 )
     @eval $(jlop)(@nospecialize(lhs::TracedRNumber)) = Ops.$(hloop)(lhs)
 end
@@ -404,17 +407,8 @@ end
 
 Base.sincospi(x::TracedRNumber{T}) where {T} = Ops.sine(T(π) * x), Ops.cosine(T(π) * x)
 
-Base.conj(x::TracedRNumber) = x
-Base.conj(x::TracedRNumber{<:Complex}) = Ops.conj(x)
-
-Base.real(x::TracedRNumber) = x
-Base.real(x::TracedRNumber{<:Complex}) = Ops.real(x)
-
 Base.isreal(::TracedRNumber) = false
 Base.isreal(::TracedRNumber{<:Real}) = true
-
-Base.imag(x::TracedRNumber) = zero(x)
-Base.imag(x::TracedRNumber{<:Complex}) = Ops.imag(x)
 
 Base.iseven(x::TracedRNumber) = iseven(real(x))
 function Base.iseven(x::TracedRNumber{<:Real})

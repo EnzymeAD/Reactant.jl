@@ -304,7 +304,7 @@ end
 
 @noinline function conj(
     x::TracedRArray{T,N}; location=mlir_stacktrace("conj", @__FILE__, @__LINE__)
-) where {T<:Complex,N}
+) where {T,N}
     res = MLIR.IR.result(
         chlo.conj(x.mlir_data; result=mlir_type(TracedRArray{T,N}, size(x)), location)
     )
@@ -313,7 +313,7 @@ end
 
 @noinline function conj(
     x::TracedRNumber{T}; location=mlir_stacktrace("conj", @__FILE__, @__LINE__)
-) where {T<:Complex}
+) where {T}
     res = MLIR.IR.result(
         chlo.conj(x.mlir_data; result=mlir_type(TracedRArray{T,0}, ()), location)
     )
@@ -597,39 +597,47 @@ end
 end
 
 @noinline function real(
-    x::TracedRArray{Complex{T},N}; location=mlir_stacktrace("real", @__FILE__, @__LINE__)
+    x::TracedRArray{T,N}; location=mlir_stacktrace("real", @__FILE__, @__LINE__)
 ) where {T,N}
     res = MLIR.IR.result(
-        stablehlo.real(x.mlir_data; result=mlir_type(TracedRArray{T,N}, size(x)), location)
+        stablehlo.real(
+            x.mlir_data; result=mlir_type(TracedRArray{Base.real(T),N}, size(x)), location
+        ),
     )
-    return TracedRArray{T,N}((), res, size(x))
+    return TracedRArray{Base.real(T),N}((), res, size(x))
 end
 
 @noinline function real(
-    x::TracedRNumber{Complex{T}}; location=mlir_stacktrace("real", @__FILE__, @__LINE__)
+    x::TracedRNumber{T}; location=mlir_stacktrace("real", @__FILE__, @__LINE__)
 ) where {T}
     res = MLIR.IR.result(
-        stablehlo.real(x.mlir_data; result=mlir_type(TracedRArray{T,0}, ()), location)
+        stablehlo.real(
+            x.mlir_data; result=mlir_type(TracedRArray{Base.real(T),0}, ()), location
+        ),
     )
-    return TracedRNumber{T}((), res)
+    return TracedRNumber{Base.real(T)}((), res)
 end
 
 @noinline function imag(
-    x::TracedRArray{Complex{T},N}; location=mlir_stacktrace("imag", @__FILE__, @__LINE__)
+    x::TracedRArray{T,N}; location=mlir_stacktrace("imag", @__FILE__, @__LINE__)
 ) where {T,N}
     res = MLIR.IR.result(
-        stablehlo.imag(x.mlir_data; result=mlir_type(TracedRArray{T,N}, size(x)), location)
+        stablehlo.imag(
+            x.mlir_data; result=mlir_type(TracedRArray{Base.real(T),N}, size(x)), location
+        ),
     )
-    return TracedRArray{T,N}((), res, size(x))
+    return TracedRArray{Base.real(T),N}((), res, size(x))
 end
 
 @noinline function imag(
-    x::TracedRNumber{Complex{T}}; location=mlir_stacktrace("imag", @__FILE__, @__LINE__)
+    x::TracedRNumber{T}; location=mlir_stacktrace("imag", @__FILE__, @__LINE__)
 ) where {T}
     res = MLIR.IR.result(
-        stablehlo.imag(x.mlir_data; result=mlir_type(TracedRArray{T,0}, ()), location)
+        stablehlo.imag(
+            x.mlir_data; result=mlir_type(TracedRArray{Base.real(T),0}, ()), location
+        ),
     )
-    return TracedRNumber{T}((), res)
+    return TracedRNumber{Base.real(T)}((), res)
 end
 
 function bitcast_convert(
@@ -679,7 +687,7 @@ end
         end
     elseif type == "IRFFT"
         @assert T <: Complex
-        Tout = Base.real(T)
+        Tout = Base.Base.real(T)
         rsize = let rsize = collect(Int64, size(x))
             rsize[(end - Base.length(length) + 1):end] = length
             Tuple(rsize)
