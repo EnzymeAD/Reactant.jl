@@ -67,7 +67,7 @@ using Enzyme
     return result
 end
 
-function sample!(f::Function, args::Vararg{Any,Nargs}) where {Nargs}
+@noinline function sample!(f::Function, args::Vararg{Any,Nargs}) where {Nargs}
     argprefix::Symbol = gensym("samplearg")
     resprefix::Symbol = gensym("sampleresult")
     resargprefix::Symbol = gensym("sampleresarg")
