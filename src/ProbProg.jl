@@ -16,7 +16,7 @@ using Enzyme
         (),
         string(f),
         false;
-        args_in_result=:result,
+        args_in_result=:result_and_mutated,
         argprefix,
         resprefix,
         resargprefix,
@@ -71,7 +71,7 @@ using Enzyme
     return result
 end
 
-function sample(f::Function, args::Vararg{Any,Nargs}) where {Nargs}
+function sample!(f::Function, args::Vararg{Any,Nargs}) where {Nargs}
     argprefix::Symbol = gensym("samplearg")
     resprefix::Symbol = gensym("sampleresult")
     resargprefix::Symbol = gensym("sampleresarg")
@@ -82,7 +82,7 @@ function sample(f::Function, args::Vararg{Any,Nargs}) where {Nargs}
         (),
         string(f),
         false;
-        args_in_result=:result,
+        args_in_result=:result_and_mutated,
         argprefix,
         resprefix,
         resargprefix,
