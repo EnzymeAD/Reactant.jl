@@ -728,6 +728,7 @@ function optimization_passes(;
         "concat_reshape_reduce",
         "concat_elementwise",
         "reduce_reduce",
+        "conj_real",
         # TODO we want to enable but may cause an infinite compile time
         # "concat_to_onedim_dusslice",
     ]
