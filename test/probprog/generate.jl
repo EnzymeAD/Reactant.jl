@@ -27,11 +27,15 @@ end
 
         model_compiled = @compile optimize = :probprog generate_model(seed1, μ1, σ1, shape)
 
-        @test Array(model_compiled(seed1, μ1, σ1, shape)) ≈ Array(model_compiled(seed1, μ1, σ1, shape))
-        @test mean(Array(model_compiled(seed1, μ1, σ1, shape))) ≈ 0.0 atol = 0.05 rtol = 0.05
-        @test mean(Array(model_compiled(seed2, μ2, σ2, shape))) ≈ 1000.0 atol = 0.05 rtol = 0.05
+        @test Array(model_compiled(seed1, μ1, σ1, shape)) ≈
+            Array(model_compiled(seed1, μ1, σ1, shape))
+        @test mean(Array(model_compiled(seed1, μ1, σ1, shape))) ≈ 0.0 atol = 0.05 rtol =
+            0.05
+        @test mean(Array(model_compiled(seed2, μ2, σ2, shape))) ≈ 1000.0 atol = 0.05 rtol =
+            0.05
         @test !(all(
-            Array(model_compiled(seed1, μ1, σ1, shape)) .≈ Array(model_compiled(seed2, μ2, σ2, shape))
+            Array(model_compiled(seed1, μ1, σ1, shape)) .≈
+            Array(model_compiled(seed2, μ2, σ2, shape)),
         ))
     end
     @testset "normal_hlo" begin
