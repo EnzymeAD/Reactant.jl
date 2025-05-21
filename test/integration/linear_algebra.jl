@@ -370,4 +370,13 @@ end
             @test @jit(solve_with_lu(A_ra, B_ra)) ≈ solve_with_lu_batched(A, B)
         end
     end
+
+    @testset "Input Permutation" begin
+        A = rand(Float32, 10, 10, 32)
+        B = rand(Float32, 10, 32)
+        A_ra = Reactant.to_rarray(A)
+        B_ra = Reactant.to_rarray(B)
+
+        @test @jit(solve_with_lu(A_ra, B_ra)) ≈ solve_with_lu_batched(A, B)
+    end
 end
