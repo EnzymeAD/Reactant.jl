@@ -594,7 +594,7 @@ function _lu_overload(
 ) where {T,N}
     # TODO: don't ignore the check and allowsingular flags
     # Batching here is in the last dimensions. `Ops.lu` expects the last dimensions
-    permdims = vcat(Int64[N - 1, N], collect(Int64, 1:(N - 2)))
+    permdims = vcat(collect(Int64, 3:N), 1, 2)
     A = Ops.transpose(materialize_traced_array(A), permdims)
     factors, ipiv, perm, info = Reactant.Ops.lu(A)
 
