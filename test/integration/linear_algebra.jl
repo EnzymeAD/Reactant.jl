@@ -279,3 +279,95 @@ end
 
     @test @jit(dot(x_ra, y_ra)) ≈ dot(x, y)
 end
+
+@testset "Triangular ldiv and rdiv" begin
+    fn1(A, b) = A \ b
+    fn2(A, b) = A' \ b
+    fn3(A, b) = transpose(A) \ b
+
+    fn4(A, B) = B / A
+    fn5(A, B) = B / A'
+    fn6(A, B) = B / transpose(A)
+
+    @testset for T in (Float32, Float64, ComplexF32, ComplexF64)
+        A = rand(T, 6, 6)
+        B = rand(T, 6, 6)
+        b = rand(T, 6)
+        b_ra = Reactant.to_rarray(b)
+        B_ra = Reactant.to_rarray(B)
+
+        @testset for wT in (
+            UnitLowerTriangular, UnitUpperTriangular, LowerTriangular, UpperTriangular
+        )
+            A_wrapped = wT(A)
+            A_ra = Reactant.to_rarray(A_wrapped)
+
+            @testset "no_tranpose" begin
+                @test @jit(fn1(A_ra, b_ra)) ≈ fn1(A_wrapped, b)
+                @test @jit(fn4(A_ra, B_ra)) ≈ fn4(A_wrapped, B)
+            end
+
+            @testset "adjoint" begin
+                @test @jit(fn2(A_ra, b_ra)) ≈ fn2(A_wrapped, b)
+                @test @jit(fn5(A_ra, B_ra)) ≈ fn5(A_wrapped, B)
+            end
+
+            @testset "transpose" begin
+                @test @jit(fn3(A_ra, b_ra)) ≈ fn3(A_wrapped, b)
+                @test @jit(fn6(A_ra, B_ra)) ≈ fn6(A_wrapped, B)
+            end
+        end
+    end
+end
+
+solve_with_lu(A, b) = lu(A) \ b
+function solve_with_lu_batched(A::AbstractArray{T,N}, B::AbstractArray{T,N}) where {T,N}
+    A2 = reshape(A, size(A, 1), size(A, 2), prod(size(A)[3:end]))
+    B2 = reshape(B, size(B, 1), size(B, 2), prod(size(B)[3:end]))
+    @assert size(A2, 3) == size(B2, 3)
+    return reshape(
+        stack(lu(view(A2, :, :, i)) \ view(B2, :, :, i) for i in axes(A2, 3)),
+        size(A2, 1),
+        size(B2, 2),
+        size(A)[3:end]...,
+    )
+end
+function solve_with_lu_batched(A::AbstractArray{T,N}, b::AbstractArray{T,M}) where {T,N,M}
+    @assert N == M + 1
+    B = reshape(b, size(b, 1), 1, size(b)[2:end]...)
+    return dropdims(solve_with_lu_batched(A, B); dims=2)
+end
+
+@testset "LU Factorization" begin
+    @testset "Un-batched" begin
+        @testset for T in (Float32, Float64, ComplexF32, ComplexF64)
+            A = rand(T, 4, 4)
+            A_ra = Reactant.to_rarray(A)
+
+            b = rand(T, 4)
+            b_ra = Reactant.to_rarray(b)
+
+            B = rand(T, 4, 3)
+            B_ra = Reactant.to_rarray(B)
+
+            @test @jit(solve_with_lu(A_ra, b_ra)) ≈ solve_with_lu(A, b)
+            @test @jit(solve_with_lu(A_ra, B_ra)) ≈ solve_with_lu(A, B)
+        end
+    end
+
+    @testset "Batched" begin
+        @testset for T in (Float32, Float64, ComplexF32, ComplexF64)
+            A = rand(T, 4, 4, 3, 2)
+            A_ra = Reactant.to_rarray(A)
+
+            b = rand(T, 4, 3, 2)
+            b_ra = Reactant.to_rarray(b)
+
+            B = rand(T, 4, 5, 3, 2)
+            B_ra = Reactant.to_rarray(B)
+
+            @test @jit(solve_with_lu(A_ra, b_ra)) ≈ solve_with_lu_batched(A, b)
+            @test @jit(solve_with_lu(A_ra, B_ra)) ≈ solve_with_lu_batched(A, B)
+        end
+    end
+end

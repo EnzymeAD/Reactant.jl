@@ -430,64 +430,43 @@ function NNlib.pad_constant(
 end
 
 # Gather
-# XXX: reevaluate this manual optimization once
-#      https://github.com/EnzymeAD/Enzyme-JAX/issues/164 is handled
-function NNlib.gather!(
-    dst::AnyTracedRArray{T1,2},
-    src::AnyTracedRArray{T2,2},
-    idxs::Union{AbstractUnitRange{<:Number}},
-) where {T1,T2}
-    set_mlir_data!(dst, get_mlir_data(src[:, idxs]))
-    return dst
-end
-
-function NNlib.gather!(
-    dst::AnyTracedRArray{T1,2}, src::AnyTracedRArray{T2,2}, idxs::AbstractVector{<:Number}
-) where {T1,T2}
-    dims = NNlib.scatter_dims(src, dst, idxs)
-    @assert dims == 1  # scatter_dims lets us do some size checks so we call that function
-    idxs = get_mlir_data(TracedUtils.promote_to(TracedRArray{Int,1}, idxs) .- 1)
-    slice_sizes = get_mlir_data(
-        TracedUtils.promote_to(TracedRArray{Int,1}, [size(src, 1), 1])
-    )
-
-    #! format: off
-    dimension_numbers = MLIR.API.stablehloGatherDimensionNumbersGet(
-        MLIR.IR.context(),
-        Int64(1), Int64[0],
-        Int64(1), Int64[1],
-        Int64(0), Int64[],
-        Int64(0), Int64[],
-        Int64(1), Int64[1],
-        Int64(1)
-    )
-    #! format: on
-
-    res = MLIR.IR.result(
-        Reactant.MLIR.Dialects.stablehlo.dynamic_gather(
-            get_mlir_data(src), idxs, slice_sizes; dimension_numbers
-        ),
-        1,
-    )
-    set_mlir_data!(dst, res)
-    return dst
-end
-
-# XXX: For performance to use `stablehlo.dynamic_gather` or atleast use traced loop
-#      instead of unrolling the loop (the case for AbstractArray can just use
-#      `stablehlo.gather`). See above for the special case implementation that is optimized.
 function NNlib.gather!(dst::AnyTracedRArray, src::AnyTracedRArray, idxs::AbstractArray)
-    @warn "Using fallback implementation of `gather!` for using `stablehlo.dynamic_slice`. \
-           This case is not optimized and will be slow." maxlog = 1
-    dims = NNlib.scatter_dims(src, dst, idxs)
-    colons = ntuple(Returns(Colon()), dims)
-    start_sizes = ntuple(Base.Fix1(size, src), dims)
-    results = map(CartesianIndices(idxs)) do k
-        res = @allowscalar src[colons..., Tuple(idxs[k])...]
-        res isa TracedRNumber && (res = TracedUtils.broadcast_to_size(res, (1,)))
-        return reshape(res, start_sizes..., :)
-    end
-    res = reshape(cat(results...; dims=(dims + 1)), size(dst))
+    n_dims = NNlib.scatter_dims(src, dst, idxs)
+    res = _nnlib_gather_impl(src, _stack_indices(idxs), n_dims)
     set_mlir_data!(dst, get_mlir_data(res))
     return dst
+end
+
+function NNlib.gather!(
+    dst::AnyTracedRArray, src::AnyTracedRArray, idxs::AbstractArray{<:Number}
+)
+    n_dims = NNlib.scatter_dims(src, dst, idxs)
+    res = _nnlib_gather_impl(src, reshape(idxs, 1, size(idxs)...), n_dims)
+    set_mlir_data!(dst, get_mlir_data(res))
+    return dst
+end
+
+_stack_indices(idxs::AbstractArray) = stack(idxs)
+function _stack_indices(idxs::AbstractArray{<:CartesianIndex})
+    stacked_idxs = similar(idxs, Int, length(first(idxs)), size(idxs)...)
+    for k in CartesianIndices(idxs)
+        stacked_idxs[:, k.I...] .= idxs[k].I
+    end
+    return stacked_idxs
+end
+
+function _nnlib_gather_impl(src::AnyTracedRArray, idxs::AbstractArray, n_dims::Int)
+    idxs = TracedUtils.promote_to(TracedRArray{Int,ndims(idxs)}, idxs)
+    n_idxs = size(idxs, 1)
+    return Ops.gather(
+        src,
+        idxs;
+        offset_dims=collect(Int64, 1:n_dims),
+        collapsed_slice_dims=collect(Int64, (n_dims + 1):ndims(src)),
+        operand_batching_dims=Int64[],
+        start_indices_batching_dims=Int64[],
+        start_index_map=collect(Int64, (ndims(src) - n_idxs + 1):ndims(src)),
+        index_vector_dim=1,
+        slice_sizes=Int64[size(src)[1:n_dims]..., ones(Int64, ndims(src) - n_dims)...],
+    )
 end

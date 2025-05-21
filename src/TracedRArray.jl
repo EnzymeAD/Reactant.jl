@@ -140,20 +140,28 @@ function Base.getindex(a::TracedRArray{T,1}, indices::CartesianIndex{1}) where {
     return _getindex_cartesian(a, indices)
 end
 
-_isone(x) = isone(x)
-_isone(::CartesianIndex) = false
-
-__contiguous_indices(::Base.LogicalIndex) = false
-__contiguous_indices(x) = all(_isone, diff(x))
-
 function _getindex_linear(a::TracedRArray{T,N}, indices::AbstractArray) where {T,N}
-    if !(indices isa Reactant.TracedType) && __contiguous_indices(vec(indices))
-        a_flat = materialize_traced_array(vec(a))
-        indices_flat = vec(indices)
-        return Ops.reshape(
-            Ops.dynamic_slice(a_flat, [first(indices_flat)], [length(indices_flat)]),
-            collect(size(indices)),
-        )
+    if !(indices isa Reactant.TracedType)
+        if length(indices) == 1 && first(indices) isa CartesianIndex
+            # fast-path else we will end up with a gather
+            return TracedUtils.broadcast_to_size(
+                @allowscalar(_getindex_cartesian(a, first(indices))), (1,)
+            )
+        end
+        stride = TracedUtils._get_slice_stride(vec(indices))
+        if stride > 0
+            a_flat = materialize_traced_array(vec(a))
+            indices_flat = vec(indices)
+            return Ops.reshape(
+                Ops.slice(
+                    a_flat,
+                    Int64[first(indices_flat)],
+                    Int64[last(indices_flat)];
+                    strides=Int64[stride],
+                ),
+                collect(Int64, size(indices)),
+            )
+        end
     end
 
     if !(indices isa TracedRArray)
@@ -180,14 +188,21 @@ function Base.getindex(a::TracedRArray{T,N}, indices::Vararg{Any,N}) where {T,N}
     indices = Base.to_indices(a, indices)
 
     use_gather_getindex = false
+    use_dynamic_slice = false
+    strides = Int64[]
     for idxs in indices
-        idxs isa Number && continue
+        if idxs isa Number
+            idxs isa TracedRNumber && (use_dynamic_slice = true)
+            push!(strides, 1)
+            continue
+        end
         if idxs isa Reactant.TracedType
             use_gather_getindex = true
             break
         end
-        contiguous = __contiguous_indices(vec(idxs))
-        if typeof(contiguous) <: Bool && !contiguous
+        stride = TracedUtils._get_slice_stride(vec(idxs))
+        push!(strides, stride)
+        if stride ≤ 0 || (use_dynamic_slice && stride != 1)
             use_gather_getindex = true
             break
         end
@@ -200,18 +215,37 @@ function Base.getindex(a::TracedRArray{T,N}, indices::Vararg{Any,N}) where {T,N}
             error("Boolean indexing with TracedRArrays isn't fully supported yet.")
         end
 
-        indices, integer_indices, result_size, preddim_result_size, _ = TracedUtils.traced_indices(
-            indices...
+        gather_dims = TracedUtils.indices_to_gather_dims(indices...)
+
+        return Ops.reshape(
+            Ops.transpose(
+                Ops.reshape(
+                    Ops.gather(
+                        a,
+                        gather_dims.start_indices;
+                        gather_dims.offset_dims,
+                        gather_dims.collapsed_slice_dims,
+                        operand_batching_dims=Int64[],
+                        start_indices_batching_dims=Int64[],
+                        gather_dims.start_index_map,
+                        gather_dims.index_vector_dim,
+                        gather_dims.slice_sizes,
+                    ),
+                    gather_dims.gather_reshape_shape,
+                ),
+                gather_dims.permutation,
+            ),
+            gather_dims.result_shape,
         )
-        res = Ops.reshape(
-            Ops.gather_getindex(a, generate_index_list(indices...)), preddim_result_size
-        )
-        isempty(integer_indices) ||
-            (res = materialize_traced_array(dropdims(res; dims=integer_indices)))
-        return Ops.reshape(res, result_size)
     end
 
-    x = Ops.dynamic_slice(a, [first.(indices)...], [length.(indices)...])
+    if use_dynamic_slice
+        @assert all(isone, strides) "This should not happen, please report a bug"
+        x = Ops.dynamic_slice(a, [first.(indices)...], [length.(indices)...])
+    else
+        x = Ops.slice(a, [first.(indices)...], [last.(indices)...]; strides)
+    end
+
     ddims = findall(indices) do idx
         return idx isa Integer || idx isa TracedRNumber{<:Integer}
     end
@@ -313,7 +347,7 @@ function Base.setindex!(a::TracedRArray{T,N}, v, index::CartesianIndex{N}) where
 end
 
 function _setindex_linear!(a::TracedRArray{T,N}, v, indices::AbstractArray) where {T,N}
-    if !(indices isa Reactant.TracedType) && __contiguous_indices(vec(indices))
+    if !(indices isa Reactant.TracedType) && TracedUtils.__contiguous_indices(vec(indices))
         res = Ops.reshape(
             Ops.dynamic_update_slice(
                 materialize_traced_array(vec(a)),
@@ -371,7 +405,7 @@ function Base.setindex!(a::TracedRArray{T,N}, v, indices::Vararg{Any,N}) where {
             use_scatter_setindex = true
             break
         end
-        contiguous = __contiguous_indices(idxs)
+        contiguous = TracedUtils.__contiguous_indices(idxs)
         if typeof(contiguous) <: Bool && !contiguous
             use_scatter_setindex = true
             break
@@ -384,9 +418,44 @@ function Base.setindex!(a::TracedRArray{T,N}, v, indices::Vararg{Any,N}) where {
         if any(i -> unwrapped_eltype(i) <: Bool, indices)
             error("Boolean indexing with TracedRArrays isn't fully supported yet.")
         end
-        indices_list = map(Base.Fix1(TracedUtils.promote_to, TracedRArray{Int,1}), indices)
-        indices_list = generate_index_list(indices_list...)
-        res = Ops.scatter_setindex(a, indices_list, Ops.reshape(v, length(v)))
+
+        gather_dims = TracedUtils.indices_to_gather_dims(indices...)
+
+        v = Ops.convert(
+            TracedRArray{T,ndims(v)},
+            TracedUtils.promote_to(TracedRArray{unwrapped_eltype(v),ndims(v)}, v),
+        )
+
+        updates = Ops.transpose(v, invperm(gather_dims.permutation))
+        n_collapsed = length(gather_dims.collapsed_slice_dims)
+        updates_shape = Int64[
+            prod(size(updates)[1:n_collapsed]), size(updates)[(n_collapsed + 1):end]...
+        ]
+        updates = Ops.reshape(updates, updates_shape)
+
+        # simply set the 2nd block argument as a result
+        update_computation = MLIR.IR.Region()
+        block = MLIR.IR.Block(
+            [Ops.mlir_type(TracedRNumber{T}), Ops.mlir_type(TracedRNumber{T})],
+            [MLIR.IR.Location(), MLIR.IR.Location()],
+        )
+        return_op = MLIR.Dialects.stablehlo.return_([MLIR.IR.argument(block, 2)])
+        MLIR.IR.rmfromparent!(return_op)
+        push!(block, return_op)
+        pushfirst!(update_computation, block)
+
+        res = Ops.scatter(
+            [a],
+            gather_dims.start_indices,
+            [updates];
+            update_computation,
+            update_window_dims=gather_dims.offset_dims,
+            inserted_window_dims=gather_dims.collapsed_slice_dims,
+            input_batching_dims=Int64[],
+            scatter_indices_batching_dims=Int64[],
+            scatter_dims_to_operand_dims=gather_dims.start_index_map,
+            index_vector_dim=gather_dims.index_vector_dim,
+        )[1]
         set_mlir_data!(a, get_mlir_data(res))
         return v
     end
@@ -441,22 +510,6 @@ end
 function Base.permutedims(A::AnyTracedRArray{T,N}, perm) where {T,N}
     return Ops.transpose(materialize_traced_array(A), Int64[perm...])
 end
-
-Base.conj(A::AnyTracedRArray) = A
-Base.conj(A::AnyTracedRArray{<:Complex}) = Ops.conj(materialize_traced_array(A))
-
-Base.conj!(A::AnyTracedRArray) = A
-
-function Base.conj!(A::AnyTracedRArray{<:Complex})
-    TracedUtils.set_mlir_data!(A, Ops.conj(materialize_traced_array(A)).mlir_data)
-    return A
-end
-
-Base.real(A::AnyTracedRArray) = A
-Base.real(A::AnyTracedRArray{<:Complex}) = Ops.real(materialize_traced_array(A))
-
-Base.imag(A::AnyTracedRArray) = zero(A)
-Base.imag(A::AnyTracedRArray{<:Complex}) = Ops.imag(materialize_traced_array(A))
 
 TracedUtils.promote_to(::Type{TracedRArray{T,N}}, rhs) where {T,N} = TracedRArray{T,N}(rhs)
 function TracedUtils.promote_to(::TracedRArray{T,N}, rhs) where {T,N}

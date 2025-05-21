@@ -188,6 +188,32 @@ function kernel_call(
     )
 end
 
+function linalg_lu(
+    input::Value;
+    output::IR.Type,
+    pivots::IR.Type,
+    permutation::IR.Type,
+    info::IR.Type,
+    location=Location(),
+)
+    op_ty_results = IR.Type[output, pivots, permutation, info]
+    operands = Value[input,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+
+    return create_operation(
+        "enzymexla.linalg.lu",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
 function memref2pointer(source::Value; result::IR.Type, location=Location())
     op_ty_results = IR.Type[result,]
     operands = Value[source,]

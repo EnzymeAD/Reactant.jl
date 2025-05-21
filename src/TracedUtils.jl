@@ -22,8 +22,6 @@ ReactantCore.materialize_traced_array(x::AbstractArray) = x
 
 ReactantCore.materialize_traced_array(x::TracedRArray) = x
 
-ReactantCore.materialize_traced_array(x::AnyTracedRArray) = x[axes(x)...]
-
 function ReactantCore.materialize_traced_array(x::AbstractRange)
     return Reactant.aos_to_soa(collect(x))
 end
@@ -54,7 +52,11 @@ function ReactantCore.materialize_traced_array(
 end
 
 function ReactantCore.materialize_traced_array(x::AbstractArray{TracedRNumber{T}}) where {T}
-    return Reactant.aos_to_soa(x)
+    as = Reactant.aos_to_soa(x)
+    if as === x
+        as = x[axes(x)...]
+    end
+    return ReactantCore.materialize_traced_array(as)
 end
 
 get_mlir_data(x::TracedRNumber) = x.mlir_data
@@ -1212,6 +1214,119 @@ function traced_indices(indices...)
         result_size,
         preddim_result_size,
         flattened_size,
+    )
+end
+
+_isone(x) = isone(x)
+_isone(::CartesianIndex) = false
+
+__contiguous_indices(::Base.LogicalIndex) = false
+__contiguous_indices(x) = all(_isone, diff(x))
+
+_get_slice_stride(::Base.LogicalIndex) = -1
+_get_slice_stride(x::CartesianIndex) = -1
+function _get_slice_stride(x)
+    length(x) == 1 && return 1
+    strides = diff(x)
+    isempty(strides) && return -1
+    allequal(strides) || return -1
+    val = first(strides)
+    val isa Number || return -1
+    return val
+end
+
+function create_index_mesh(idxs::AbstractVector...)
+    lens = map(length, idxs)
+    inner_repeats = cumprod(lens) .÷ lens
+    outer_repeats = reverse(cumprod(reverse(lens)) .÷ reverse(lens))
+    return [
+        repeat(idx; inner, outer) for
+        (idx, inner, outer) in zip(idxs, inner_repeats, outer_repeats)
+    ]
+end
+
+function indices_to_gather_dims(indices...)
+    non_contiguous_indices = TracedRArray{Int,1}[]
+    contiguous_indices = Tuple{Int,Int}[]
+    non_contiguous_indices_idxs = Int[]
+    contiguous_indices_idxs = Int[]
+    ddims = Int[]
+    result_shape = Int64[]
+    for (i, index) in enumerate(indices)
+        if index isa Number
+            push!(ddims, i)
+            if index isa TracedRNumber
+                push!(non_contiguous_indices_idxs, i)
+                push!(non_contiguous_indices, broadcast_to_size(index, (1,)))
+            else
+                push!(contiguous_indices_idxs, i)
+                push!(contiguous_indices, (index, 1))
+            end
+        else
+            append!(result_shape, [size(index)...])
+            if !(index isa TracedRArray)
+                if __contiguous_indices(vec(index))
+                    push!(contiguous_indices_idxs, i)
+                    push!(contiguous_indices, (first(index), length(index)))
+                    continue
+                end
+                index = promote_to(TracedRArray{Int,ndims(index)}, index)
+            end
+            push!(non_contiguous_indices_idxs, i)
+            push!(non_contiguous_indices, materialize_traced_array(vec(index)))
+        end
+    end
+
+    expanded_non_contiguous_indices = create_index_mesh(non_contiguous_indices...)
+    L = length(first(expanded_non_contiguous_indices))
+    new_indices = TracedRArray{Int,1}[]
+    slice_sizes = ones(Int, length(indices))
+    start_index_map = Int64[]
+
+    for i in 1:length(indices)
+        cont_idx = findfirst(==(i), contiguous_indices_idxs)
+        if cont_idx !== nothing
+            if !isone(contiguous_indices[cont_idx][1])
+                push!(new_indices, broadcast_to_size(contiguous_indices[cont_idx][1], (L,)))
+                push!(start_index_map, i)
+            end
+            slice_sizes[i] = contiguous_indices[cont_idx][2]
+            continue
+        end
+
+        non_cont_idx = findfirst(==(i), non_contiguous_indices_idxs)
+        @assert non_cont_idx !== nothing
+        push!(new_indices, expanded_non_contiguous_indices[non_cont_idx])
+        push!(start_index_map, i)
+    end
+
+    collapsed_slice_dims = vcat(non_contiguous_indices_idxs, ddims)
+    sort!(collapsed_slice_dims)
+    unique!(collapsed_slice_dims)
+    start_indices = hcat(new_indices...)
+    offset_dims = collect(Int64, 2:(length(indices) - length(collapsed_slice_dims) + 1))
+
+    gather_reshape_shape = Int64[]
+    perm = Int64[]
+    for i in non_contiguous_indices_idxs
+        push!(gather_reshape_shape, length(indices[i]))
+        push!(perm, i)
+    end
+    for i in contiguous_indices_idxs
+        push!(gather_reshape_shape, length(indices[i]))
+        push!(perm, i)
+    end
+
+    return (;
+        start_indices,
+        slice_sizes,
+        index_vector_dim=ndims(start_indices),
+        start_index_map,
+        collapsed_slice_dims,
+        offset_dims,
+        result_shape,
+        permutation=invperm(perm),
+        gather_reshape_shape,
     )
 end
 

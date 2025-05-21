@@ -222,9 +222,7 @@ end
             5 7 7 5
         ]
 
-        y1 = @test_warn r"Using fallback implementation of `gather!`" @jit(
-            NNlib.gather(Reactant.to_rarray(src), Reactant.to_rarray(index))
-        )
+        y1 = @jit(NNlib.gather(Reactant.to_rarray(src), Reactant.to_rarray(index)))
         @test y1 ≈ output
         @test y1 isa ConcreteRArray{Float32,2}
         @test size(y1) == size(index)
