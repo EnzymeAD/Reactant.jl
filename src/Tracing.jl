@@ -1195,19 +1195,21 @@ function make_tracer(
     )
 end
 
-Base.@nospecializeinfer function make_tracer(
-    seen,
-    @nospecialize(prev::Memory),
-    @nospecialize(path),
-    mode;
-    @nospecialize(sharding = Sharding.NoSharding()),
-    kwargs...,
-)
-    if mode == TracedToTypes
-        return nothing
+@static if VERSION >= v"1.11.0"
+    Base.@nospecializeinfer function make_tracer(
+        seen,
+        @nospecialize(prev::Memory),
+        @nospecialize(path),
+        mode;
+        @nospecialize(sharding = Sharding.NoSharding()),
+        kwargs...,
+    )
+        if mode == TracedToTypes
+            return nothing
+        end
+        # TODO: does anything more need to be done here?
+        return prev
     end
-    # TODO: does anything more need to be done here?
-    return prev
 end
 
 Base.@nospecializeinfer function make_tracer(
