@@ -148,7 +148,6 @@ macro trace(args...)
     else
         expr = only(args)
     end
-    track_numbers = track_numbers ? Number : Union{}
     expr = macroexpand(__module__, expr)
 
     if Meta.isexpr(expr, :(=))
