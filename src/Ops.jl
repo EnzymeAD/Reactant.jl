@@ -2806,11 +2806,14 @@ end
         permutation[i + length(batch_dims)] = d
     end
 
-    return Ops.transpose(
-        only(batch(f, [Ops.transpose(A, permutation; location)], batch_shape; location)),
-        invperm(permutation);
-        location,
-    )
+    res = only(batch(f, [Ops.transpose(A, permutation; location)], batch_shape; location))
+    if ndims(res) != length(permutation)
+        res = Ops.reshape(
+            res,
+            vcat(collect(Int64, size(res)), ones(Int64, length(permutation) - ndims(res))),
+        )
+    end
+    return Ops.transpose(res, invperm(permutation); location)
 end
 
 @noinline function batch(
@@ -2841,25 +2844,13 @@ end
 
     output_types = MLIR.IR.Type[]
     for result in mlir_fn_res.linear_results
-        if result isa TracedRArray
-            push!(
-                output_types,
-                MLIR.IR.TensorType(
-                    vcat(batch_shape, collect(Int64, size(result))),
-                    MLIR.IR.Type(unwrapped_eltype(result)),
-                ),
-            )
-        elseif result isa TracedRNumber
-            push!(
-                output_types,
-                MLIR.IR.TensorType(
-                    vcat(batch_shape, ones(Int64, ndims(sample_inputs))),
-                    MLIR.IR.Type(unwrapped_eltype(result)),
-                ),
-            )
-        else
-            error("Unsupported result type $(typeof(result))")
-        end
+        push!(
+            output_types,
+            MLIR.IR.TensorType(
+                vcat(batch_shape, collect(Int64, size(result))),
+                MLIR.IR.Type(unwrapped_eltype(result)),
+            ),
+        )
     end
 
     return batch(inputs, output_types, batch_shape; fn=func, location)
