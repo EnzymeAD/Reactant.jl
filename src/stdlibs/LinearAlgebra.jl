@@ -573,19 +573,19 @@ function GeneralizedLU(factors::S, ipiv::P, perm::P, info::I) where {S,P,I}
 end
 
 ## allow > 2 dimensions as inputs
-function LinearAlgebra.lu(A::AnyTracedRArray{T,2}, pivot=RowMaximum(); kwargs...) where {T}
-    return lu!(copy(A), pivot; kwargs...)
+function LinearAlgebra.lu(A::AnyTracedRArray{T,2}, ::RowMaximum; kwargs...) where {T}
+    return lu!(copy(A), RowMaximum(); kwargs...)
 end
 function LinearAlgebra.lu(
-    A::AnyTracedRArray{T,N}, pivot=RowMaximum(); kwargs...
+    A::AnyTracedRArray{T,N}, ::RowMaximum=RowMaximum(); kwargs...
 ) where {T,N}
-    return lu!(copy(A), pivot; kwargs...)
+    return lu!(copy(A), RowMaximum(); kwargs...)
 end
 
-function LinearAlgebra.lu!(A::AnyTracedRArray{T,N}, ::RowMaximum; kwargs...) where {T,N}
+function LinearAlgebra.lu!(A::AnyTracedRArray{T,2}, ::RowMaximum; kwargs...) where {T}
     return _lu_overload(A, RowMaximum(); kwargs...)
 end
-function LinearAlgebra.lu!(A::AnyTracedRArray{T,2}, ::RowMaximum; kwargs...) where {T}
+function LinearAlgebra.lu!(A::AnyTracedRArray{T,N}, ::RowMaximum; kwargs...) where {T,N}
     return _lu_overload(A, RowMaximum(); kwargs...)
 end
 
