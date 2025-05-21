@@ -1154,23 +1154,6 @@ function make_tracer(
     )
 end
 
-@static if VERSION >= v"1.11.0"
-    Base.@nospecializeinfer function make_tracer(
-        seen,
-        @nospecialize(prev::Memory),
-        @nospecialize(path),
-        mode;
-        @nospecialize(sharding = Sharding.NoSharding()),
-        kwargs...,
-    )
-        if mode == TracedToTypes
-            return nothing
-        end
-        # TODO: does anything more need to be done here?
-        return prev
-    end
-end
-
 Base.@nospecializeinfer function make_tracer(
     seen,
     @nospecialize(prev::ConcretePJRTArray{T,N}),
