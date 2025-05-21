@@ -131,7 +131,7 @@ function set_mlir_data!(x::AnyTracedRArray{T}, data) where {T}
     return x
 end
 
-function set_mlir_data!(x::T, data) where T
+function set_mlir_data!(x::T, data) where {T}
     @warn "Setting mlir data on a $T is a no-op."
     return x
 end

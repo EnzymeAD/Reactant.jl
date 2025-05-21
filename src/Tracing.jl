@@ -398,7 +398,10 @@ Base.@nospecializeinfer function traced_type_inner(
             }
         end
         error("Unsupported runtime $runtime")
-    elseif mode == TracedTrack || mode == NoStopTracedTrack || mode == TracedSetPath || mode == TracedToTypes
+    elseif mode == TracedTrack ||
+        mode == NoStopTracedTrack ||
+        mode == TracedSetPath ||
+        mode == TracedToTypes
         return T
     else
         throw("Abstract RArray cannot be made concrete in mode $mode")
@@ -444,7 +447,10 @@ Base.@nospecializeinfer function traced_type_inner(
             }
         end
         error("Unsupported runtime $runtime")
-    elseif mode == TracedTrack || mode == NoStopTracedTrack || mode == TracedSetPath || mode == TracedToTypes
+    elseif mode == TracedTrack ||
+        mode == NoStopTracedTrack ||
+        mode == TracedSetPath ||
+        mode == TracedToTypes
         return T
     else
         throw("Abstract RNumber cannot be made concrete in mode $mode")
@@ -1198,7 +1204,7 @@ Base.@nospecializeinfer function make_tracer(
     kwargs...,
 )
     if mode == TracedToTypes
-        return
+        return nothing
     end
     # TODO: does anything more need to be done here?
     return prev
@@ -1306,21 +1312,24 @@ Base.@nospecializeinfer function make_tracer(
         return nothing
     end
     if mode == TracedTrack
-        !isnothing(path) && TracedUtils.set_paths!(prev, (TracedUtils.get_paths(prev)..., path))
+        !isnothing(path) &&
+            TracedUtils.set_paths!(prev, (TracedUtils.get_paths(prev)..., path))
         if !haskey(seen, prev)
             return seen[prev] = prev
         end
         return prev
     end
     if mode == NoStopTracedTrack
-        !isnothing(path) && TracedUtils.set_paths!(prev, (TracedUtils.get_paths(prev)..., path))
+        !isnothing(path) &&
+            TracedUtils.set_paths!(prev, (TracedUtils.get_paths(prev)..., path))
         if !haskey(seen, prev)
             seen[prev] = prev # don't return!
         end
         return prev
     end
     if mode == TracedSetPath
-        !isnothing(path) && TracedUtils.set_paths!(prev, (TracedUtils.get_paths(prev)..., path))
+        !isnothing(path) &&
+            TracedUtils.set_paths!(prev, (TracedUtils.get_paths(prev)..., path))
         if haskey(seen, prev)
             return seen[prev]
         end
@@ -1391,21 +1400,24 @@ Base.@nospecializeinfer function make_tracer(
         return nothing
     end
     if mode == TracedTrack
-        !isnothing(path) && TracedUtils.set_paths!(prev, (TracedUtils.get_paths(prev)..., path))
+        !isnothing(path) &&
+            TracedUtils.set_paths!(prev, (TracedUtils.get_paths(prev)..., path))
         if !haskey(seen, prev)
             return seen[prev] = prev
         end
         return prev
     end
     if mode == NoStopTracedTrack
-        !isnothing(path) && TracedUtils.set_paths!(prev, (TracedUtils.get_paths(prev)..., path))
+        !isnothing(path) &&
+            TracedUtils.set_paths!(prev, (TracedUtils.get_paths(prev)..., path))
         if !haskey(seen, prev)
             seen[prev] = prev # don't return!
         end
         return prev
     end
     if mode == TracedSetPath
-        !isnothing(path) && TracedUtils.set_paths!(prev, (TracedUtils.get_paths(prev)..., path))
+        !isnothing(path) &&
+            TracedUtils.set_paths!(prev, (TracedUtils.get_paths(prev)..., path))
         if haskey(seen, prev)
             return seen[prev]
         end
@@ -1460,21 +1472,24 @@ Base.@nospecializeinfer function make_tracer(
         throw("Cannot have MissingTracedValue as function call argument.")
     end
     if mode == TracedTrack
-        !isnothing(path) && TracedUtils.set_paths!(prev, (TracedUtils.get_paths(prev)..., path))
+        !isnothing(path) &&
+            TracedUtils.set_paths!(prev, (TracedUtils.get_paths(prev)..., path))
         if !haskey(seen, prev)
             return seen[prev] = prev
         end
         return prev
     end
     if mode == NoStopTracedTrack
-        !isnothing(path) && TracedUtils.set_paths!(prev, (TracedUtils.get_paths(prev)..., path))
+        !isnothing(path) &&
+            TracedUtils.set_paths!(prev, (TracedUtils.get_paths(prev)..., path))
         if !haskey(seen, prev)
             seen[prev] = prev # don't return!
         end
         return prev
     end
     if mode == TracedSetPath
-        !isnothing(path) && TracedUtils.set_paths!(prev, (TracedUtils.get_paths(prev)..., path))
+        !isnothing(path) &&
+            TracedUtils.set_paths!(prev, (TracedUtils.get_paths(prev)..., path))
         haskey(seen, prev) && return seen[prev]
         res = MissingTracedValue((path,))
         seen[res] = res
