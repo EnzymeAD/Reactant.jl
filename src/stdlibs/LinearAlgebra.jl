@@ -589,13 +589,20 @@ function LinearAlgebra.lu!(A::AnyTracedRArray{T,2}, ::RowMaximum; kwargs...) whe
     return _lu_overload(A, RowMaximum(); kwargs...)
 end
 
-# XXX: batch with the ending dimensions instead of the beginning matching Julia's
-#      default convention
 function _lu_overload(
     A::AnyTracedRArray{T,N}, ::RowMaximum; check::Bool=false, allowsingular::Bool=false
 ) where {T,N}
     # TODO: don't ignore the check and allowsingular flags
-    factors, ipiv, perm, info = Reactant.Ops.lu(materialize_traced_array(A))
+    # Batching here is in the last dimensions. `Ops.lu` expects the last dimensions
+    permdims = vcat(Int64[N - 1, N], collect(Int64, 1:(N - 2)))
+    A = Ops.transpose(materialize_traced_array(A), permdims)
+    factors, ipiv, perm, info = Reactant.Ops.lu(A)
+
+    # Permute back to the original dimensions
+    perm_perm = vcat(N - 1, collect(Int64, 1:(N - 2)))
+    factors = Ops.transpose(factors, invperm(permdims))
+    ipiv = Ops.transpose(ipiv, perm_perm)
+    perm = Ops.transpose(perm, perm_perm)
     return GeneralizedLU(factors, ipiv, perm, info)
 end
 
@@ -603,7 +610,7 @@ function LinearAlgebra.ldiv!(
     lu::GeneralizedLU{T,<:AbstractArray{T,N},P,I}, B::AbstractArray{T,M}
 ) where {T,P,I,N,M}
     @assert N == M + 1
-    ldiv!(lu, reshape(B, size(B)..., 1))
+    ldiv!(lu, reshape(B, size(B, 1), 1, size(B)[2:end]...))
     return B
 end
 
@@ -614,25 +621,29 @@ function LinearAlgebra.ldiv!(
     return B
 end
 
-# XXX: batch with the ending dimensions instead of the beginning matching Julia's
-#      default convention
 function LinearAlgebra.ldiv!(
     lu::GeneralizedLU{T,<:AbstractArray{T,N},P,I}, B::AbstractArray{T,N}
 ) where {T,P,I,N}
-    @assert size(lu.factors)[1:(N - 2)] == size(B)[1:(N - 2)]
-    batch_shape = size(lu.factors)[1:(N - 2)]
+    batch_shape = size(lu.factors)[3:end]
+    @assert batch_shape == size(B)[3:end]
 
-    B .= only(
-        Ops.batch(
-            _lu_solve_core,
-            [
-                materialize_traced_array(lu.factors),
-                materialize_traced_array(B),
-                materialize_traced_array(lu.perm),
-            ],
-            collect(Int64, batch_shape),
-        ),
+    permutation = vcat(collect(Int64, 3:N), 1, 2)
+
+    factors = Ops.transpose(materialize_traced_array(lu.factors), permutation)
+    B_permuted = Ops.transpose(materialize_traced_array(B), permutation)
+    perm = Ops.transpose(
+        materialize_traced_array(lu.perm), vcat(collect(Int64, 2:(N - 1)), 1)
     )
+
+    res = Ops.transpose(
+        only(
+            Ops.batch(
+                _lu_solve_core, [factors, B_permuted, perm], collect(Int64, batch_shape)
+            ),
+        ),
+        invperm(permutation),
+    )
+    B .= res
     return B
 end
 
