@@ -628,10 +628,7 @@ function finalize_mlir_fn(
         end
         if args_in_result != :all
             if has_idx(v, argprefix)
-                if !(
-                    (args_in_result == :result_and_mutated || args_in_result == :result) &&
-                    has_idx(v, resprefix)
-                )
+                if !(args_in_result == :result && has_idx(v, resprefix))
                     continue
                 end
             end
@@ -639,7 +636,7 @@ function finalize_mlir_fn(
         push!(linear_results, v)
     end
 
-    if args_in_result == :mutated || args_in_result == :result_and_mutated
+    if args_in_result == :mutated
         append!(linear_results, linear_args[mutated_args])
     end
     if !isnothing(verify_arg_names) && typeof.(linear_args) != typeof.(linear_results)

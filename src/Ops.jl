@@ -2406,7 +2406,7 @@ end
             (),
             f_name,
             false;
-            args_in_result=:result_and_mutated,
+            args_in_result=:all,
             do_transpose=false,
             argprefix,
             resprefix,
