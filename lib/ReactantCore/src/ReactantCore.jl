@@ -129,7 +129,7 @@ end
 ```
 """
 macro trace(args...)
-    track_numbers = true
+    track_numbers = Number
     expr = first(args)
     if length(args) > 1 && Meta.isexpr(args[1], :(=))
         tn_expr = args[1]
@@ -137,11 +137,17 @@ macro trace(args...)
             error("@trace supports setting track_numbers, but got $(tn_expr)")
 
         track_numbers = tn_expr.args[2]
+        if track_numbers isa Bool
+            track_numbers = track_numbers ? Number : Union{}
+        elseif track_numbers == :AbstractFloat
+            track_numbers = AbstractFloat
+        else
+            error("Unknown argument for track_numbers, got $(track_numbers)")
+        end
         expr = only(args[2:end])
     else
         expr = only(args)
     end
-    track_numbers = track_numbers ? Number : Union{}
     expr = macroexpand(__module__, expr)
 
     if Meta.isexpr(expr, :(=))
