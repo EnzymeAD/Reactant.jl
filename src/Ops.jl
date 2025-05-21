@@ -2797,6 +2797,7 @@ end
 
     # First we permute and make sure the batch dims are at the beginning
     batch_dims = Int64[i for i in 1:N if i ∉ dims]
+    batch_shape = [size(A, i) for i in batch_dims]
     permutation = zeros(Int64, N)
     for (i, d) in enumerate(batch_dims)
         permutation[i] = d
@@ -2805,51 +2806,54 @@ end
         permutation[i + length(batch_dims)] = d
     end
 
-    A = Ops.transpose(A, permutation; location)
+    res = only(batch(f, [Ops.transpose(A, permutation; location)], batch_shape; location))
+    if ndims(res) != length(permutation)
+        res = Ops.reshape(
+            res,
+            vcat(collect(Int64, size(res)), ones(Int64, length(permutation) - ndims(res))),
+        )
+    end
+    return Ops.transpose(res, invperm(permutation); location)
+end
 
-    sample_input = fill(T(0), [size(A, i) for i in (length(batch_dims) + 1):N]; location)
-    # TODO: detect and forbid internal mutations
+@noinline function batch(
+    f::F,
+    inputs::Vector{<:TracedRArray},
+    batch_shape::Vector{Int64};
+    location=mlir_stacktrace("batch", @__FILE__, @__LINE__),
+) where {F}
+    sample_inputs = [
+        fill(
+            unwrapped_eltype(input)(0),
+            [size(input, i) for i in (length(batch_shape) + 1):ndims(input)]...,
+        ) for input in inputs
+    ]
     mlir_fn_res = Reactant.TracedUtils.make_mlir_fn(
         f,
-        (sample_input,),
+        (sample_inputs...,),
         (),
         "unbatched_" * string(f),
         false;
         args_in_result=:none,
         do_transpose=false,
     )
-
     @assert !mlir_fn_res.fnwrapped "Currently we don't support batching closures."
 
     func = mlir_fn_res.f
     @assert MLIR.IR.nregions(func) == 1
 
-    result = only(mlir_fn_res.linear_results)
-    batch_shape = [size(A, i) for i in 1:length(batch_dims)]
-
-    if result isa TracedRArray
-        @assert ndims(result) == ndims(sample_input)
-        output_type = MLIR.IR.TensorType(
-            vcat(batch_shape, collect(Int64, size(result))),
-            MLIR.IR.Type(unwrapped_eltype(result)),
-        )
-    elseif result isa TracedRNumber
-        output_type = MLIR.IR.TensorType(
-            batch_shape, MLIR.IR.Type(unwrapped_eltype(result))
-        )
-    else
-        error("Unsupported result type $(typeof(result))")
-    end
-
-    batched_result = batch([A], [output_type], batch_shape; fn=func, location)[1]
-
-    if result isa TracedRNumber
-        batched_result = Ops.reshape(
-            batched_result, vcat(batch_shape, ones(Int64, ndims(sample_input))); location
+    output_types = MLIR.IR.Type[]
+    for result in mlir_fn_res.linear_results
+        push!(
+            output_types,
+            MLIR.IR.TensorType(
+                vcat(batch_shape, collect(Int64, size(result))),
+                MLIR.IR.Type(unwrapped_eltype(result)),
+            ),
         )
     end
 
-    return Ops.transpose(batched_result, invperm(permutation); location)
+    return batch(inputs, output_types, batch_shape; fn=func, location)
 end
 
 @noinline function batch(
