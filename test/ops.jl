@@ -1135,7 +1135,6 @@ end
     mod = @code_hlo optimize = false const_dedup(x)
     hlo_ir = repr(mod)
     csts = collect(x for x in eachsplit(hlo_ir, "\n") if occursin("stablehlo.constant", x))
-    
     # calls to similar give rise to dense<0> constants (that are not deduplicated):
     csts = filter(x -> !occursin("dense<0>", x), csts)
 
