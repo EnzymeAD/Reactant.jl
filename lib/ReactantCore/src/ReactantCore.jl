@@ -318,6 +318,7 @@ function trace_if(mod, expr; store_last_line=nothing, depth=0, track_numbers)
         end
     else
         expr.args[2]
+        nothing # explicitly return nothing to prevent branches from returning different types
     end
 
     true_branch_symbols = ExpressionExplorer.compute_symbols_state(true_block)
@@ -361,6 +362,7 @@ function trace_if(mod, expr; store_last_line=nothing, depth=0, track_numbers)
         end
     else
         else_block
+        nothing # explicitly return nothing to prevent branches from returning different types
     end
 
     false_branch_symbols = ExpressionExplorer.compute_symbols_state(false_block)
