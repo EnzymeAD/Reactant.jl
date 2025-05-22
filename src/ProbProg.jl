@@ -16,7 +16,7 @@ using Enzyme
         (),
         string(f),
         false;
-        args_in_result=:result_and_mutated,
+        args_in_result=:all,
         argprefix,
         resprefix,
         resargprefix,
@@ -78,7 +78,7 @@ end
         (),
         string(f),
         false;
-        args_in_result=:result_and_mutated,
+        args_in_result=:all,
         argprefix,
         resprefix,
         resargprefix,
