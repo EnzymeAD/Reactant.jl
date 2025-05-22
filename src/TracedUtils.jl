@@ -42,6 +42,7 @@ function ReactantCore.materialize_traced_array(x::SubArray)
 end
 
 function ReactantCore.materialize_traced_array(x::Base.ReshapedArray)
+    @assert Base.product(size(parent(x))) == Base.product(size(x))
     return Ops.reshape(materialize_traced_array(parent(x)), size(x)...)
 end
 
