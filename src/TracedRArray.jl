@@ -727,6 +727,11 @@ function Base.copyto!(dest::TracedRArray{T,N}, src::TracedRArray{T,N}) where {T,
     dest.mlir_data = src.mlir_data
     return dest
 end
+
+function Base.copyto!(dest::TracedRArray, src::AnyTracedRArray)
+    return copyto!(dest, materialize_traced_array(src))
+end
+
 function Base.copyto!(
     dest::Reactant.TracedRArray{T},
     dstart::Integer,
