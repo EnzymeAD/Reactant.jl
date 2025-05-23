@@ -259,7 +259,7 @@ function trace_for(mod, expr; track_numbers)
 
     return quote
         if any($(is_traced), $(Expr(:tuple, all_syms.args[(begin + 1):end]...)))
-        $(reactant_code_block)
+            $(reactant_code_block)
         else
             $(expr)
         end
