@@ -22,10 +22,10 @@ fwd(Mode, RT, x, y) = Enzyme.autodiff(Mode, square, RT, Duplicated(x, y))
             Float32,1,Reactant.Sharding.ShardInfo{Reactant.Sharding.NoSharding,Nothing}
         },
         Enzyme.Reverse,
-    ) <: Enzyme.Active
+    ) <: Enzyme.Duplicated
 
     @test Enzyme.guess_activity(Reactant.ConcretePJRTNumber{Float32}, Enzyme.Reverse) <:
-        Enzyme.Active
+        Enzyme.Duplicated
 
     @test Enzyme.guess_activity(Reactant.ConcretePJRTNumber{Float32, 1, Reactant.Sharding.ShardInfo{Reactant.Sharding.NoSharding, Nothing}}, Enzyme.Reverse) <: Enzyme.Duplicated
 
