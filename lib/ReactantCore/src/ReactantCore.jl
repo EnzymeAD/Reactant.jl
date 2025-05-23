@@ -215,7 +215,6 @@ function trace_for(mod, expr; track_numbers)
             end
         ) for (s, ref) in zip(external_syms, ref_syms)
     ]
-    
     body_fn_sym = gensym(:body_fn)
     cond_fn_sym = gensym(:cond_fn)
     args_sym = gensym(:args)
@@ -246,7 +245,7 @@ function trace_for(mod, expr; track_numbers)
             $(verify_arg_names_sym) = if sizeof($(cond_fn_sym)) != 0
                 (Symbol($cond_fn_sym), $(QuoteNode.(args_names.args)...))
             else
-                ($(QuoteNode.(args_names.args)...), )
+                ($(QuoteNode.(args_names.args)...),)
             end
             $(ReactantCore).traced_while(
                 $(cond_fn_sym),
@@ -260,7 +259,7 @@ function trace_for(mod, expr; track_numbers)
 
     return quote
         if any($(is_traced), $(Expr(:tuple, all_syms.args[(begin + 1):end]...)))
-            $(reactant_code_block)
+        $(reactant_code_block)
         else
             $(expr)
         end
