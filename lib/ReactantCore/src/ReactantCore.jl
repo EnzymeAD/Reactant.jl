@@ -259,13 +259,11 @@ function trace_for(mod, expr; track_numbers)
     end
 
     return quote
-        # if $(within_compile)() && $(any)(
-        #     $(is_traced), $(Expr(:tuple, cond_val.(all_syms.args[(begin + 1):end])...))
-        # )
+        if any($(is_traced), $(Expr(:tuple, all_syms.args[(begin + 1):end]...)))
             $(reactant_code_block)
-        # else
-        #     $(expr)
-        # end
+        else
+            $(expr)
+        end
     end
 end
 
