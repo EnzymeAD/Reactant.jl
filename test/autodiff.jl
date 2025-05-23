@@ -48,8 +48,8 @@ fwd(Mode, RT, x, y) = Enzyme.autodiff(Mode, square, RT, Duplicated(x, y))
     @test Enzyme.guess_activity(Reactant.TracedRArray{Float32}, Enzyme.Reverse) <: Enzyme.Duplicated
 
 
-    @test Enzyme.guess_activity(Reactant.TracedRNumber{Float32}, Enzyme.Reverse) <: Enzyme.Duplicated
-    
+    @test Enzyme.guess_activity(Reactant.TracedRNumber{Float32}, Enzyme.Reverse) <:
+        Enzyme.Duplicated
 end
 
 @testset "Basic Forward Mode" begin
