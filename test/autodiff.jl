@@ -4,6 +4,36 @@ square(x) = x * 2
 
 fwd(Mode, RT, x, y) = Enzyme.autodiff(Mode, square, RT, Duplicated(x, y))
 
+
+@testset "Activity" begin
+    @test Enzyme.guess_activity(Reactant.ConcretePJRTArray{Float32, 2, 1, Reactant.Sharding.ShardInfo{Reactant.Sharding.NoSharding, Nothing}}, Enzyme.Reverse) <: Enzyme.Duplicated
+
+    @test Enzyme.guess_activity(Reactant.ConcretePJRTArray{Float32}, Enzyme.Reverse) <: Enzyme.Duplicated
+
+
+    @test Enzyme.guess_activity(Reactant.ConcreteIFRTArray{Float32, 2, 1, Reactant.Sharding.ShardInfo{Reactant.Sharding.NoSharding, Nothing}}, Enzyme.Reverse) <: Enzyme.Duplicated
+
+    @test Enzyme.guess_activity(ConcreteIFRTArray{Float32}, Enzyme.Reverse) <: Enzyme.Duplicated
+
+
+    @test Enzyme.guess_activity(Reactant.ConcretePJRTNumber{Float32, 1, Reactant.Sharding.ShardInfo{Reactant.Sharding.NoSharding, Nothing}}, Enzyme.Reverse) <: Enzyme.Active
+
+    @test Enzyme.guess_activity(Reactant.ConcretePJRTNumber{Float32}, Enzyme.Reverse) <: Enzyme.Active
+
+    @test Enzyme.guess_activity(Reactant.ConcreteIFRTNumber{Float32, 1, Reactant.Sharding.ShardInfo{Reactant.Sharding.NoSharding, Nothing}}, Enzyme.Reverse) <: Enzyme.Active
+
+    @test Enzyme.guess_activity(Reactant.ConcreteIFRTNumber{Float32}, Enzyme.Reverse) <: Enzyme.Active
+
+
+    @test Enzyme.guess_activity(Reactant.TracedRArray{Float32, 2}, Enzyme.Reverse) <: Enzyme.Duplicated
+
+    @test Enzyme.guess_activity(Reactant.TracedRArray{Float32}, Enzyme.Reverse) <: Enzyme.Duplicated
+
+
+    @test Enzyme.guess_activity(Reactant.TracedRNumber{Float32}, Enzyme.Reverse) <: Enzyme.Active
+    
+end
+
 @testset "Basic Forward Mode" begin
     ores1 = fwd(Forward, Duplicated, ones(3, 2), 3.1 * ones(3, 2))
     @test typeof(ores1) == NamedTuple{(Symbol("1"),),Tuple{Array{Float64,2}}}
