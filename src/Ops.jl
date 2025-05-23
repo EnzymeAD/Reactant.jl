@@ -2647,6 +2647,32 @@ Produces a [`Reactant.MLIR.Dialects.sdy.sharding_constraint`](@ref) operation wi
     end
 end
 
+function _construct_reduce_function(f::F, ::Type{T}) where {F,T}
+    func =
+        Reactant.TracedUtils.make_mlir_fn(
+            f,
+            (
+                Reactant.TracedUtils.promote_to(TracedRNumber{T}, 0),
+                Reactant.TracedUtils.promote_to(TracedRNumber{T}, 0),
+            ),
+            (),
+            "reduce_fn" * string(f),
+            false;
+            args_in_result=:none,
+            return_dialect=:stablehlo,
+        ).f
+    @assert MLIR.IR.nregions(func) == 1
+    ftype_attr = MLIR.IR.attr(func, "function_type")
+    ftype = MLIR.IR.Type(ftype_attr)
+    @assert MLIR.IR.result(ftype) == MLIR.IR.TensorType(Int[], MLIR.IR.Type(T)) "$(fn) return type is not of tensor<$(T)>"
+
+    fn = MLIR.IR.Region()
+    MLIR.API.mlirRegionTakeBody(fn, MLIR.IR.region(func, 1))
+    MLIR.IR.rmfromparent!(func)
+
+    return fn
+end
+
 """
     reduce(
         x::TracedRArray{T},
@@ -2698,45 +2724,13 @@ Applies a reduction function `fn` along the specified `dimensions` of input `x`,
 ) where {T}
     reduced_shape = Tuple(deleteat!(collect(Int64, size(x)), dimensions))
 
-    result_type = mlir_type(TracedRArray{T,length(reduced_shape)}, reduced_shape)
-
-    sample_inputs = [
-        Reactant.TracedUtils.promote_to(TracedRNumber{T}, 0),
-        Reactant.TracedUtils.promote_to(TracedRNumber{T}, 0),
-    ]
-
-    func =
-        Reactant.TracedUtils.make_mlir_fn(
-            fn,
-            (sample_inputs),
-            (),
-            "reduce_fn",
-            false;
-            args_in_result=:none,
-            return_dialect=:stablehlo,
-        ).f
-    @assert MLIR.IR.nregions(func) == 1
-    fn_name = String(
-        MLIR.IR.attr(func, String(MLIR.API.mlirSymbolTableGetSymbolAttributeName()))
-    )
-    ftype_attr = MLIR.IR.attr(func, "function_type")
-    ftype = MLIR.IR.Type(ftype_attr)
-    @assert MLIR.IR.result(ftype) == MLIR.IR.TensorType(Int[], MLIR.IR.Type(T)) error (
-        "$fn return type is not tensor<i1>"
-    )
-    fn = MLIR.IR.Region()
-    MLIR.API.mlirRegionTakeBody(fn, MLIR.IR.region(func, 1))
-    MLIR.IR.rmfromparent!(func)
-
-    dimensions = MLIR.IR.Attribute(dimensions .- 1)
-
     res = MLIR.IR.result(
         stablehlo.reduce(
             [x.mlir_data],
             [init_values.mlir_data];
-            result_0=[result_type],
-            dimensions=dimensions,
-            body=fn,
+            result_0=[mlir_type(TracedRArray{T,length(reduced_shape)}, reduced_shape)],
+            dimensions=MLIR.IR.Attribute(dimensions .- 1),
+            body=_construct_reduce_function(fn, T),
             location=location,
         ),
     )
@@ -2984,6 +2978,48 @@ Compute the row maximum pivoted LU factorization of `x` and return the factors `
         info = TracedRArray{pT,ndims(x) - 2}((), MLIR.IR.result(op, 4), info_shape)
     end
     return (res, ipiv, perm, info)
+end
+
+@noinline function reduce_window(
+    f::F,
+    inputs::Vector{TracedRArray{T,N}},
+    init_values::Vector{TracedRNumber{T}};
+    window_dimensions::Vector{Int},
+    window_strides::Vector{Int},
+    base_dilations::Vector{Int},
+    window_dilations::Vector{Int},
+    padding_low::Vector{Int},
+    padding_high::Vector{Int},
+    output_shape::Vector{Int},
+    location=mlir_stacktrace("reduce_window", @__FILE__, @__LINE__),
+) where {F,T,N}
+    @assert length(inputs) == length(init_values)
+    @assert length(window_dimensions) ==
+        length(window_strides) ==
+        length(base_dilations) ==
+        length(window_dilations) ==
+        length(padding_low) ==
+        length(padding_high) ==
+        N
+
+    reduction = stablehlo.reduce_window(
+        [inp.mlir_data for inp in inputs],
+        [init.mlir_data for init in init_values];
+        result_0=mlir_type(TracedRArray{T,length(output_shape)}, output_shape),
+        window_dimensions,
+        window_strides,
+        base_dilations,
+        window_dilations,
+        padding=MLIR.IR.DenseElementsAttribute(hcat(padding_low, padding_high)),
+        body=_construct_reduce_function(f, T),
+        location,
+    )
+
+    return [
+        TracedRArray{T,length(output_shape)}(
+            (), MLIR.IR.result(reduction, i), output_shape
+        ) for i in 1:length(inputs)
+    ]
 end
 
 end # module Ops
