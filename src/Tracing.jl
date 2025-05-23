@@ -1784,6 +1784,8 @@ Base.@nospecializeinfer function make_tracer(
         seen[prev] = prev
         return prev
     end
+    res = Core.Box(prev2)
+    seen[prev] = res
     tr = make_tracer(
         seen,
         prev2,
@@ -1796,8 +1798,7 @@ Base.@nospecializeinfer function make_tracer(
         seen[prev] = prev
         return prev
     end
-    res = Core.Box(tr)
-    seen[prev] = res
+    res.contents = prev2
     return res
 end
 
