@@ -495,7 +495,7 @@ function prepare_mlir_fn_args(
         stridx = if verify_arg_names isa Nothing
             "arg" * string(path[2])
         else
-            string(verify_arg_names.args[path[2]])
+            string(verify_arg_names[path[2]])
         end
         aval = args[path[2]]
         for (cidx, idx) in enumerate(path[3:end])
@@ -683,7 +683,7 @@ function finalize_mlir_fn(
         for (errs, prev, post) in ((err1, resis, argis), (err2, argis, resis))
             conflicts = setdiff(prev, post)
             for conflict in conflicts
-                stridx = string(verify_arg_names.args[conflict[1]])
+                stridx = string(verify_arg_names[conflict[1]])
                 aval = args[conflict[1]]
                 for (cidx, idx) in enumerate(Base.tail(conflict))
                     if aval isa Array || aval isa Dict

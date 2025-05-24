@@ -852,3 +852,28 @@ end
 
     @test @jit(loop_batched(x_ra)) ≈ loop_batched(x)
 end
+
+function loop!(h_mat::AbstractMatrix, η_mat::AbstractMatrix, H_mat::AbstractMatrix)
+    m,n = size(h_mat)
+    @inbounds @trace for i in 1:m
+        @trace for j in 1:n
+            @allowscalar h_mat[i,j] = η_mat[i,j] + H_mat[i,j]
+        end
+    end
+end
+
+@testset "loop! with nested traced loops and scalar setindex!" begin
+    h = zeros(Float64, 2, 3)
+    η = [1.0 2.0 3.0; 4.0 5.0 6.0]
+    H = [0.5 1.5 2.5; 3.5 4.5 5.5]
+
+    h_ra = Reactant.to_rarray(h)
+    η_ra = Reactant.to_rarray(η)
+    H_ra = Reactant.to_rarray(H)
+
+    @jit loop!(h_ra, η_ra, H_ra)
+
+    loop!(h, η, H)
+
+    @test h_ra ≈ h
+end
