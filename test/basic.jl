@@ -1295,3 +1295,5 @@ accum_fn(x, y) = abs2(x) + abs2(y)
         end ≈ accumulate(accum_fn, b; dims=3, init=0.0f0)
     end
 end
+
+@testset "searchsortedfirst" begin end

@@ -956,7 +956,12 @@ function Base.sort(x::AnyTracedRVector; alg=missing, kwargs...)
 end
 
 function Base.sort!(
-    x::AnyTracedRVector; lt=isless, by=identity, rev::Bool=false, alg=missing, order=missing
+    x::AnyTracedRVector;
+    lt=isless,
+    by=identity,
+    rev::Bool=false,
+    alg=missing,
+    order=Base.Order.Forward,
 )
     @assert alg === missing "Reactant doesn't support `alg` kwarg for `sort!`"
 
@@ -975,7 +980,7 @@ function Base.sort!(
     by=identity,
     rev::Bool=false,
     alg=missing,
-    order=missing,
+    order=Base.Order.Forward,
 )
     @assert alg === missing "Reactant doesn't support `alg` kwarg for `sort!`"
 
@@ -1002,7 +1007,7 @@ function Base.sortperm!(
     by=identity,
     rev::Bool=false,
     alg=missing,
-    order=missing,
+    order=Base.Order.Forward,
 ) where {N}
     if dims === nothing
         @assert ndims(x) == 1
@@ -1356,13 +1361,50 @@ end
 function Base.searchsortedfirst(
     v::AnyTracedRVector, x, lo::T, hi::T, o::Base.Ordering
 ) where {T<:Integer}
-    return sum(eltype(lo).(__lt(o, v[lo:hi], x)); init=lo)
+    return sum(T.(__lt(o, v[lo:hi], x)); init=lo)
 end
 
 function Base.searchsortedlast(
     v::AnyTracedRVector, x, lo::T, hi::T, o::Base.Ordering
 ) where {T<:Integer}
-    return sum(eltype(lo).(.!(__lt(o, v[lo:hi], x))); init=lo)
+    v_slice = v[lo:hi]
+    reverse!(v_slice)
+    idx = searchsortedfirst(v_slice, x, 1, length(v_slice), o)
+    return hi - idx + 1
+end
+
+function Base.searchsorted(
+    v::AnyTracedRVector, x, lo::T, hi::T, o::Base.Ordering
+) where {T<:Integer}
+    firstidx = searchsortedfirst(v, x, lo, hi, o)
+    lastidx = searchsortedlast(v, x, lo, hi, o)
+    return Reactant.TracedRNumberOverrides.TracedUnitRange(firstidx, lastidx)
+end
+
+function Base.reverse(
+    v::AnyTracedRVector{T}, start::Integer, stop::Integer=lastindex(v)
+) where {T}
+    v[start:stop] = reverse!(v[start:stop])
+    return v
+end
+
+function Base.reverse!(
+    v::AnyTracedRVector{T}, start::Integer, stop::Integer=lastindex(v)
+) where {T}
+    reverse!(view(v, start:stop))
+    return v
+end
+
+function Base.reverse!(v::AnyTracedRVector{T}) where {T}
+    v_mat = materialize_traced_array(v)
+    copyto!(v, Ops.reverse(v_mat; dimensions=1))
+    return v
+end
+
+function Base._reverse!(a::AnyTracedRArray{T,N}, dims::NTuple{M,Int}) where {T,N,M}
+    a_mat = materialize_traced_array(a)
+    copyto!(a, Ops.reverse(a_mat; dimensions=dims))
+    return a
 end
 
 end
