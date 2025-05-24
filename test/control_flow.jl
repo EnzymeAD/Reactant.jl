@@ -854,10 +854,10 @@ end
 end
 
 function loop!(h_mat::AbstractMatrix, η_mat::AbstractMatrix, H_mat::AbstractMatrix)
-    m,n = size(h_mat)
+    m, n = size(h_mat)
     @inbounds @trace for i in 1:m
         @trace for j in 1:n
-            @allowscalar h_mat[i,j] = η_mat[i,j] + H_mat[i,j]
+            @allowscalar h_mat[i, j] = η_mat[i, j] + H_mat[i, j]
         end
     end
 end
