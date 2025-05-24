@@ -42,6 +42,13 @@ function ReactantCore.materialize_traced_array(x::SubArray)
 end
 
 function ReactantCore.materialize_traced_array(x::Base.ReshapedArray)
+    if Base.prod(size(parent(x))) != Base.prod(size(x))
+        throw(
+            AssertionError(
+                "Invalid reshape array, original size $(size(parent(x))) not compatible with new size $(size(x))",
+            ),
+        )
+    end
     return Ops.reshape(materialize_traced_array(parent(x)), size(x)...)
 end
 
