@@ -294,7 +294,7 @@ function LinearAlgebra._diagm(
     m, n = LinearAlgebra.diagm_size(shape, kv...)
 
     # For repeated indices we need to aggregate the values
-    kv_updated = Dict{Integer,AnyTracedRArray{T,1}}()
+    kv_updated = Dict()
     for (k, v) in kv
         if haskey(kv_updated, k)
             kv_updated[k] = kv_updated[k] + v
