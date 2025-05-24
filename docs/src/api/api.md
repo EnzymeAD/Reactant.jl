@@ -27,6 +27,7 @@ within_compile
 @code_hlo
 @code_mhlo
 @code_xla
+@mlir_visualize
 ```
 
 ## Profile XLA
