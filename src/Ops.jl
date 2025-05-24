@@ -3005,7 +3005,10 @@ end
     reduction = stablehlo.reduce_window(
         [inp.mlir_data for inp in inputs],
         [init.mlir_data for init in init_values];
-        result_0=mlir_type(TracedRArray{T,length(output_shape)}, output_shape),
+        result_0=[
+            mlir_type(TracedRArray{T,length(output_shape)}, output_shape) for
+            _ in 1:length(inputs)
+        ],
         window_dimensions,
         window_strides,
         base_dilations,
