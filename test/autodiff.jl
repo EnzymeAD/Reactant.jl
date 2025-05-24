@@ -15,7 +15,12 @@ fwd(Mode, RT, x, y) = Enzyme.autodiff(Mode, square, RT, Duplicated(x, y))
     @test Enzyme.guess_activity(Reactant.ConcretePJRTArray{Float32}, Enzyme.Reverse) <:
         Enzyme.Duplicated
 
-    @test Enzyme.guess_activity(Reactant.ConcreteIFRTArray{Float32, 2, Reactant.Sharding.ShardInfo{Reactant.Sharding.NoSharding, Nothing}}, Enzyme.Reverse) <: Enzyme.Duplicated
+    @test Enzyme.guess_activity(
+        Reactant.ConcreteIFRTArray{
+            Float32,2,Reactant.Sharding.ShardInfo{Reactant.Sharding.NoSharding,Nothing}
+        },
+        Enzyme.Reverse,
+    ) <: Enzyme.Duplicated
 
     @test Enzyme.guess_activity(
         Reactant.ConcretePJRTNumber{
@@ -27,19 +32,31 @@ fwd(Mode, RT, x, y) = Enzyme.autodiff(Mode, square, RT, Duplicated(x, y))
     @test Enzyme.guess_activity(Reactant.ConcretePJRTNumber{Float32}, Enzyme.Reverse) <:
         Enzyme.Duplicated
 
-    @test Enzyme.guess_activity(Reactant.ConcretePJRTNumber{Float32, 1, Reactant.Sharding.ShardInfo{Reactant.Sharding.NoSharding, Nothing}}, Enzyme.Reverse) <: Enzyme.Duplicated
+    @test Enzyme.guess_activity(
+        Reactant.ConcretePJRTNumber{
+            Float32,1,Reactant.Sharding.ShardInfo{Reactant.Sharding.NoSharding,Nothing}
+        },
+        Enzyme.Reverse,
+    ) <: Enzyme.Duplicated
 
-    @test Enzyme.guess_activity(Reactant.ConcretePJRTNumber{Float32}, Enzyme.Reverse) <: Enzyme.Duplicated
+    @test Enzyme.guess_activity(Reactant.ConcretePJRTNumber{Float32}, Enzyme.Reverse) <:
+        Enzyme.Duplicated
 
-    @test Enzyme.guess_activity(Reactant.ConcreteIFRTNumber{Float32, Reactant.Sharding.ShardInfo{Reactant.Sharding.NoSharding, Nothing}}, Enzyme.Reverse) <: Enzyme.Duplicated
+    @test Enzyme.guess_activity(
+        Reactant.ConcreteIFRTNumber{
+            Float32,Reactant.Sharding.ShardInfo{Reactant.Sharding.NoSharding,Nothing}
+        },
+        Enzyme.Reverse,
+    ) <: Enzyme.Duplicated
 
-    @test Enzyme.guess_activity(Reactant.ConcreteIFRTNumber{Float32}, Enzyme.Reverse) <: Enzyme.Duplicated
+    @test Enzyme.guess_activity(Reactant.ConcreteIFRTNumber{Float32}, Enzyme.Reverse) <:
+        Enzyme.Duplicated
 
+    @test Enzyme.guess_activity(Reactant.TracedRArray{Float32,2}, Enzyme.Reverse) <:
+        Enzyme.Duplicated
 
-    @test Enzyme.guess_activity(Reactant.TracedRArray{Float32, 2}, Enzyme.Reverse) <: Enzyme.Duplicated
-
-    @test Enzyme.guess_activity(Reactant.TracedRArray{Float32}, Enzyme.Reverse) <: Enzyme.Duplicated
-
+    @test Enzyme.guess_activity(Reactant.TracedRArray{Float32}, Enzyme.Reverse) <:
+        Enzyme.Duplicated
 
     @test Enzyme.guess_activity(Reactant.TracedRNumber{Float32}, Enzyme.Reverse) <:
         Enzyme.Duplicated
