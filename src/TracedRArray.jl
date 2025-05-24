@@ -531,6 +531,12 @@ for (jlop, hloop, hlocomp, merge) in
     end
 end
 
+__default_init(::Type{T}, ::typeof(Base.min)) where {T} = typemax(T)
+__default_init(::Type{T}, ::typeof(Base.max)) where {T} = typemin(T)
+function __default_init(::Type{T}, op::F) where {T,F}
+    return Base.reduce_empty(Base.BottomRF(op), T)
+end
+
 function overloaded_mapreduce(
     @nospecialize(f),
     @nospecialize(op),
@@ -547,13 +553,7 @@ function overloaded_mapreduce(
     op_in_T = Core.Compiler.return_type(f, Tuple{T})
 
     if init === nothing
-        if op === min
-            init = typemax(op_in_T)
-        elseif op === max
-            init = typemin(op_in_T)
-        else
-            init = Base.reduce_empty(Base.BottomRF(op), op_in_T)
-        end
+        init = __default_init(op_in_T, op)
 
         if typeof(init) != op_in_T
             op_in_T = typeof(init)
@@ -1239,6 +1239,111 @@ function Base.mapslices(f::F, A::TracedRArray; dims) where {F}
     dims isa Integer && (dims = Int64[dims])
     dims isa AbstractVector || (dims = collect(Int64, dims))
     return Ops.batch(f, A, dims)
+end
+
+# accumulate interface
+## Taken from https://github.com/JuliaGPU/CUDA.jl/blob/a4a7af45f54f0e57f5912bb52db48e2d27cf7b4f/src/accumulate.jl#L201
+function Base.accumulate(
+    op, A::AnyTracedRArray; dims::Union{Integer,Nothing}=nothing, kwargs...
+)
+    if dims === nothing && ndims(A) != 1
+        return reshape(accumulate(op, A[:]), size(A)...)
+    end
+
+    nt = values(kwargs)
+    # Base.promote_op was having issues
+    if isempty(kwargs)
+        zA = zero(unwrapped_eltype(A))
+        out = similar(A, TracedRNumber{unwrapped_eltype(op(zA, zA))})
+    elseif keys(nt) === (:init,)
+        zA = zero(unwrapped_eltype(A))
+        zI = zero(unwrapped_eltype(nt.init))
+        out = similar(A, TracedRNumber{unwrapped_eltype(op(zA, zI))})
+    else
+        throw(
+            ArgumentError(
+                "accumulate does not support the keyword arguments $(setdiff(keys(nt), (:init,)))",
+            ),
+        )
+    end
+
+    return accumulate!(op, out, A; dims, kwargs...)
+end
+
+function Base.accumulate_pairwise!(op, A::AnyTracedRVector, B::AnyTracedRVector)
+    return accumulate!(op, A, B; dims=1)
+end
+
+function Base._accumulate!(
+    op, output::AnyTracedRArray, input::AnyTracedRVector, ::Nothing, ::Nothing
+)
+    return scan_impl!(op, output, input; dims=1)
+end
+
+function Base._accumulate!(
+    op, output::AnyTracedRArray, input::AnyTracedRArray, dims::Integer, ::Nothing
+)
+    return scan_impl!(op, output, input; dims=dims)
+end
+
+function Base._accumulate!(
+    op, output::AnyTracedRArray, input::AnyTracedRVector, ::Nothing, init::Some
+)
+    return scan_impl!(op, output, input; dims=1, init=init)
+end
+
+function Base._accumulate!(
+    op, output::AnyTracedRArray, input::AnyTracedRArray, dims::Integer, init::Some
+)
+    return scan_impl!(op, output, input; dims=dims, init=init)
+end
+
+function scan_impl!(
+    op,
+    output::AnyTracedRArray{T,N},
+    input::AnyTracedRArray{T,N};
+    dims::Integer,
+    init=nothing,
+) where {T,N}
+    @assert dims > 0 "dims must be a positive integer"
+    @assert axes(output) == axes(input) "output and input must have the same shape"
+
+    dims > ndims(input) && return copyto!(output, input)
+
+    if init === nothing
+        op_in_T = Core.Compiler.return_type(op, Tuple{T,T})
+        op_in_T === Union{} && (op_in_T = T)
+
+        init = __default_init(T, op)
+        if typeof(init) != op_in_T
+            op_in_T = typeof(init)
+            input = typeof(init).(input)
+        end
+    end
+    init = something(init) # unwrap Some
+    init = TracedUtils.promote_to(TracedRNumber{unwrapped_eltype(init)}, init)
+
+    window_dimensions = ones(Int64, N)
+    window_dimensions[dims] = size(input, dims)
+
+    padding_low = zeros(Int64, N)
+    padding_low[dims] = size(input, dims) - 1
+
+    reduction_result = Ops.reduce_window(
+        op,
+        [materialize_traced_array(input)],
+        [init];
+        window_dimensions=window_dimensions,
+        window_strides=ones(Int64, N),
+        base_dilations=ones(Int64, N),
+        window_dilations=ones(Int64, N),
+        padding_low=padding_low,
+        padding_high=zeros(Int64, N),
+        output_shape=collect(Int64, size(output)),
+    )[1]
+    copyto!(output, reduction_result)
+
+    return output
 end
 
 end

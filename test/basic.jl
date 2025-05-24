@@ -1192,3 +1192,106 @@ end
 
     @test res[1] === res[2] === res[3]
 end
+
+accum_fn(x, y) = abs2(x) + abs2(y)
+
+@testset "accumulate" begin
+    a = collect(Float32, 1:10) ./ 10
+    a_ra = Reactant.to_rarray(a)
+
+    b = reshape(collect(Float32, 1:60), (3, 4, 5)) ./ 60
+    b_ra = Reactant.to_rarray(b)
+
+    @testset "cumsum" begin
+        @test @jit(cumsum(a_ra)) ≈ cumsum(a)
+
+        @test @jit(cumsum(b_ra; dims=1)) ≈ cumsum(b; dims=1)
+        @test @jit(cumsum(b_ra; dims=2)) ≈ cumsum(b; dims=2)
+        @test @jit(cumsum(b_ra; dims=3)) ≈ cumsum(b; dims=3)
+
+        @test begin
+            z = similar(a_ra)
+            @jit(cumsum!(z, a_ra))
+            z
+        end ≈ cumsum(a)
+
+        @test begin
+            z = similar(b_ra)
+            @jit(cumsum!(z, b_ra; dims=1))
+            z
+        end ≈ cumsum(b; dims=1)
+        @test begin
+            z = similar(b_ra)
+            @jit(cumsum!(z, b_ra; dims=2))
+            z
+        end ≈ cumsum(b; dims=2)
+        @test begin
+            z = similar(b_ra)
+            @jit(cumsum!(z, b_ra; dims=3))
+            z
+        end ≈ cumsum(b; dims=3)
+    end
+
+    @testset "cumprod" begin
+        @test @jit(cumprod(a_ra)) ≈ cumprod(a)
+
+        @test @jit(cumprod(b_ra; dims=1)) ≈ cumprod(b; dims=1)
+        @test @jit(cumprod(b_ra; dims=2)) ≈ cumprod(b; dims=2)
+        @test @jit(cumprod(b_ra; dims=3)) ≈ cumprod(b; dims=3)
+
+        @test begin
+            z = similar(a_ra)
+            @jit(cumprod!(z, a_ra))
+            z
+        end ≈ cumprod(a)
+        @test begin
+            z = similar(b_ra)
+            @jit(cumprod!(z, b_ra; dims=1))
+            z
+        end ≈ cumprod(b; dims=1)
+        @test begin
+            z = similar(b_ra)
+            @jit(cumprod!(z, b_ra; dims=2))
+            z
+        end ≈ cumprod(b; dims=2)
+        @test begin
+            z = similar(b_ra)
+            @jit(cumprod!(z, b_ra; dims=3))
+            z
+        end ≈ cumprod(b; dims=3)
+    end
+
+    @testset "accumulate" begin
+        @test @jit(accumulate(accum_fn, a_ra; init=0.0f0)) ≈
+            accumulate(accum_fn, a; init=0.0f0)
+
+        @test @jit(accumulate(accum_fn, b_ra; init=0.0f0, dims=1)) ≈
+            accumulate(accum_fn, b; dims=1, init=0.0f0)
+        @test @jit(accumulate(accum_fn, b_ra; init=0.0f0, dims=2)) ≈
+            accumulate(accum_fn, b; dims=2, init=0.0f0)
+        @test @jit(accumulate(accum_fn, b_ra; init=0.0f0, dims=3)) ≈
+            accumulate(accum_fn, b; dims=3, init=0.0f0)
+
+        @test begin
+            z = similar(a_ra)
+            @jit(accumulate!(accum_fn, z, a_ra; init=0.0f0))
+            z
+        end ≈ accumulate(accum_fn, a; init=0.0f0)
+
+        @test begin
+            z = similar(b_ra)
+            @jit(accumulate!(accum_fn, z, b_ra; init=0.0f0, dims=1))
+            z
+        end ≈ accumulate(accum_fn, b; dims=1, init=0.0f0)
+        @test begin
+            z = similar(b_ra)
+            @jit(accumulate!(accum_fn, z, b_ra; init=0.0f0, dims=2))
+            z
+        end ≈ accumulate(accum_fn, b; dims=2, init=0.0f0)
+        @test begin
+            z = similar(b_ra)
+            @jit(accumulate!(accum_fn, z, b_ra; init=0.0f0, dims=3))
+            z
+        end ≈ accumulate(accum_fn, b; dims=3, init=0.0f0)
+    end
+end

@@ -337,7 +337,7 @@ function overloaded_maxpool!(
     y::AnyTracedRArray{T,N}, x::AnyTracedRArray{T2,N}, pdims::NNlib.PoolDims;
 ) where {T,T2,N}
     res = reduce_window(
-        Reactant.MLIR.Dialects.stablehlo.maximum,
+        max,
         T.(x);
         init=typemin(T),
         dilation=NNlib.dilation(pdims),
@@ -353,7 +353,7 @@ function overloaded_meanpool!(
     y::AnyTracedRArray{T,N}, x::AnyTracedRArray{T2,N}, pdims::NNlib.PoolDims;
 ) where {T,T2,N}
     res = reduce_window(
-        Reactant.MLIR.Dialects.stablehlo.add,
+        +,
         T.(x);
         init=zero(T),
         dilation=NNlib.dilation(pdims),
