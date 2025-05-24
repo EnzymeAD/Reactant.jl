@@ -1061,6 +1061,23 @@ end
     @test Array(x_ra) == x
 end
 
+function reshapecopy!(x, y)
+    Base.copyto!(x, reshape(y, size(x)))
+    return nothing
+end
+@testset "copyto! Reshaped TracedRArray" begin
+    x = zeros(3, 4, 5)
+    y = collect(reshape(1:60, (3, 20)))
+
+    xr = Reactant.to_rarray(x)
+    yr = Reactant.to_rarray(y)
+
+    @jit reshapecopy!(xr, yr)
+
+    reshapecopy!(x, y)
+    @test Array(xr) == x
+end
+
 @testset "copy(::Broadcast.Broadcasted{ArrayStyle{ConcreteRArray}})" begin
     x_ra = Reactant.to_rarray(ones(4, 4))
     res = copy(Broadcast.broadcasted(-, Broadcast.broadcasted(+, x_ra, 1)))
