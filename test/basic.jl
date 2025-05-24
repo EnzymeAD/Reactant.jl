@@ -1296,4 +1296,4 @@ accum_fn(x, y) = abs2(x) + abs2(y)
     end
 end
 
-@testset "searchsortedfirst" begin end
+@testset "searchsorted" begin end

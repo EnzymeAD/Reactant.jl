@@ -1367,10 +1367,7 @@ end
 function Base.searchsortedlast(
     v::AnyTracedRVector, x, lo::T, hi::T, o::Base.Ordering
 ) where {T<:Integer}
-    v_slice = v[lo:hi]
-    reverse!(v_slice)
-    idx = searchsortedfirst(v_slice, x, 1, length(v_slice), o)
-    return hi - idx + 1
+    return sum(T.(.!(__lt(o, x, v[lo:hi]))); init=lo - 1)
 end
 
 function Base.searchsorted(
