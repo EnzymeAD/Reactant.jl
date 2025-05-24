@@ -675,14 +675,14 @@ function Base.similar(
     ::Broadcasted{AbstractReactantArrayStyle{N}}, ::Type{T}, dims
 ) where {T<:Reactant.ReactantPrimitive,N}
     @assert N isa Int
-    return TracedRArray{T,length(dims)}((), nothing, map(length, dims))
+    return Ops.fill(zero(unwrapped_eltype(T)), dims)
 end
 
 function Base.similar(
     ::Broadcasted{AbstractReactantArrayStyle{N}}, ::Type{TracedRNumber{T}}, dims
 ) where {T<:Reactant.ReactantPrimitive,N}
     @assert N isa Int
-    return TracedRArray{T,length(dims)}((), nothing, map(length, dims))
+    return Ops.fill(zero(T), dims)
 end
 
 function Broadcast.copy(bc::Broadcasted{<:AbstractReactantArrayStyle{0}})
