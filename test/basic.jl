@@ -1063,10 +1063,10 @@ end
 
 function reshapecopy!(x, y)
     Base.copyto!(x, reshape(y, size(x)))
-    nothing
+    return nothing
 end
 @testset "copyto! Reshaped TracedRArray" begin
-    x = zeros(3,4,5)
+    x = zeros(3, 4, 5)
     y = collect(reshape(1:60, (3, 20)))
 
     xr = Reactant.to_rarray(x)
