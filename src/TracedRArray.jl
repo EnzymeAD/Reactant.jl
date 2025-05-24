@@ -21,6 +21,11 @@ using ..TracedUtils: TracedUtils, get_mlir_data, set_mlir_data!, materialize_tra
 using ReactantCore: ReactantCore
 using GPUArraysCore: GPUArraysCore, @allowscalar
 
+__lt(::Base.Order.ForwardOrdering, a, b) = isless.(a, b)
+__lt(o::Base.Order.ReverseOrdering, a, b) = __lt(o.fwd, b, a)
+__lt(o::Base.Order.By, a, b) = __lt(o.order, o.by.(a), o.by.(b))
+__lt(o::Base.Order.Lt, a, b) = o.lt.(a, b)
+
 ReactantCore.is_traced(::TracedRArray, seen) = true
 ReactantCore.is_traced(::TracedRArray) = true
 
@@ -943,20 +948,21 @@ function overloaded_stack(dims::Union{Integer,Colon}, xs)
 end
 
 # sort
-function Base.sort(x::AnyTracedRArray; alg=missing, order=missing, kwargs...)
-    return sort!(copy(x); alg, order, kwargs...)
+function Base.sort(x::AnyTracedRArray; alg=missing, kwargs...)
+    return sort!(copy(x); alg, kwargs...)
 end
-function Base.sort(x::AnyTracedRVector; alg=missing, order=missing, kwargs...)
-    return sort!(copy(x); alg, order, kwargs...)
+function Base.sort(x::AnyTracedRVector; alg=missing, kwargs...)
+    return sort!(copy(x); alg, kwargs...)
 end
 
 function Base.sort!(
     x::AnyTracedRVector; lt=isless, by=identity, rev::Bool=false, alg=missing, order=missing
 )
     @assert alg === missing "Reactant doesn't support `alg` kwarg for `sort!`"
-    @assert order === missing "Reactant doesn't support `order` kwarg for `sort!`"
 
-    comparator = rev ? (a, b) -> !lt(by(a), by(b)) : (a, b) -> lt(by(a), by(b))
+    ordering = Base.ord(lt, by, rev, order)
+    comparator = (a, b) -> __lt(ordering, a, b)
+
     res = only(Ops.sort(materialize_traced_array(x); comparator, dimension=1))
     set_mlir_data!(x, get_mlir_data(res))
     return x
@@ -972,19 +978,20 @@ function Base.sort!(
     order=missing,
 )
     @assert alg === missing "Reactant doesn't support `alg` kwarg for `sort!`"
-    @assert order === missing "Reactant doesn't support `order` kwarg for `sort!`"
 
-    comparator = rev ? (a, b) -> !lt(by(a), by(b)) : (a, b) -> lt(by(a), by(b))
+    ordering = Base.ord(lt, by, rev, order)
+    comparator = (a, b) -> __lt(ordering, a, b)
+
     res = only(Ops.sort(materialize_traced_array(x); dimension=dims, comparator))
     set_mlir_data!(x, get_mlir_data(res))
     return x
 end
 
-function Base.sortperm(x::AnyTracedRArray; alg=missing, order=missing, kwargs...)
-    return sortperm!(similar(x, Int), x; alg, order, kwargs...)
+function Base.sortperm(x::AnyTracedRArray; alg=missing, kwargs...)
+    return sortperm!(similar(x, Int), x; alg, kwargs...)
 end
-function Base.sortperm(x::AnyTracedRVector; alg=missing, order=missing, kwargs...)
-    return sortperm!(similar(x, Int), x; alg, order, dims=1, kwargs...)
+function Base.sortperm(x::AnyTracedRVector; alg=missing, kwargs...)
+    return sortperm!(similar(x, Int), x; alg, dims=1, kwargs...)
 end
 
 function Base.sortperm!(
@@ -1003,10 +1010,10 @@ function Base.sortperm!(
     end
 
     @assert alg === missing "Reactant doesn't support `alg` kwarg for `sortperm!`"
-    @assert order === missing "Reactant doesn't support `order` kwarg for `sortperm!`"
 
-    comparator =
-        rev ? (a, b, i1, i2) -> !lt(by(a), by(b)) : (a, b, i1, i2) -> lt(by(a), by(b))
+    ordering = Base.ord(lt, by, rev, order)
+    comparator = (a, b, i1, i2) -> __lt(ordering, a, b)
+
     idxs = Ops.constant(collect(LinearIndices(x)))
     _, res = Ops.sort(materialize_traced_array(x), idxs; dimension=dims, comparator)
     set_mlir_data!(ix, get_mlir_data(res))
@@ -1344,6 +1351,18 @@ function scan_impl!(
     copyto!(output, reduction_result)
 
     return output
+end
+
+function Base.searchsortedfirst(
+    v::AnyTracedRVector, x, lo::T, hi::T, o::Base.Ordering
+) where {T<:Integer}
+    return sum(eltype(lo).(__lt(o, v[lo:hi], x)); init=lo)
+end
+
+function Base.searchsortedlast(
+    v::AnyTracedRVector, x, lo::T, hi::T, o::Base.Ordering
+) where {T<:Integer}
+    return sum(eltype(lo).(.!(__lt(o, v[lo:hi], x))); init=lo)
 end
 
 end
