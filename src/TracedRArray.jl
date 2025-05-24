@@ -1251,17 +1251,14 @@ function Base.accumulate(
     end
 
     nt = values(kwargs)
+    # Base.promote_op was having issues
     if isempty(kwargs)
-        out = similar(
-            A, TracedRNumber{Base.promote_op(op, unwrapped_eltype(A), unwrapped_eltype(A))}
-        )
+        zA = zero(unwrapped_eltype(A))
+        out = similar(A, TracedRNumber{unwrapped_eltype(op(zA, zA))})
     elseif keys(nt) === (:init,)
-        out = similar(
-            A,
-            TracedRNumber{
-                Base.promote_op(op, unwrapped_eltype(A), unwrapped_eltype(nt.init))
-            },
-        )
+        zA = zero(unwrapped_eltype(A))
+        zI = zero(unwrapped_eltype(nt.init))
+        out = similar(A, TracedRNumber{unwrapped_eltype(op(zA, zI))})
     else
         throw(
             ArgumentError(
@@ -1313,14 +1310,17 @@ function scan_impl!(
 
     dims > ndims(input) && return copyto!(output, input)
 
-    op_in_T = Core.Compiler.return_type(op, Tuple{T,T})
     if init === nothing
+        op_in_T = Core.Compiler.return_type(op, Tuple{T,T})
+        op_in_T === Union{} && (op_in_T = T)
+
         init = __default_init(T, op)
         if typeof(init) != op_in_T
             op_in_T = typeof(init)
             input = typeof(init).(input)
         end
     end
+    init = something(init) # unwrap Some
     init = TracedUtils.promote_to(TracedRNumber{unwrapped_eltype(init)}, init)
 
     window_dimensions = ones(Int64, N)
