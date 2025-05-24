@@ -794,9 +794,9 @@ end
 #     return TracedRArray{T,N}((), res, size(lhs))
 # end
 
-@noinline function dot_general(
-    lhs::TracedRArray{T1},
-    rhs::TracedRArray{T2};
+Base.@nospecializeinfer @noinline function dot_general(
+    @nospecialize(lhs::TracedRArray{T1}),
+    @nospecialize(rhs::TracedRArray{T2});
     contracting_dimensions,
     batching_dimensions=(Int[], Int[]),
     precision_config=Reactant.DOT_GENERAL_PRECISION[],
@@ -919,63 +919,6 @@ end
     )
     return TracedRArray{resT,length(ressize)}((), res, ressize)
 end
-
-@noinline function einsum(
-    lhs::TracedRArray{T},
-    rhs::TracedRArray{T};
-    equation::String,
-    location=mlir_stacktrace("einsum", @__FILE__, @__LINE__),
-) where {T}
-    Base.depwarn(
-        "`stablehlo.einsum` is on deprecation process; use `dot_general` instead", :einsum
-    )
-    ins, ic = split(equation, "->")
-    ia, ib = split(ins, ",")
-
-    sizea = Dict(c => d for (c, d) in zip(ia, size(lhs)))
-    sizeb = Dict(c => d for (c, d) in zip(ib, size(rhs)))
-    sizes = mergewith(sizea, sizeb) do da, db
-        da == db ? da : error("Invalid dimensions in einsum equation")
-    end
-
-    rsize = Tuple(sizes[i] for i in ic)
-    result_0 = mlir_type(TracedRArray{T,length(ic)}, rsize)
-
-    res = MLIR.IR.result(
-        stablehlo.einsum(
-            lhs.mlir_data,
-            rhs.mlir_data;
-            result_0,
-            einsum_config=MLIR.IR.Attribute(equation),
-            location,
-        ),
-    )
-    return TracedRArray{T,length(rsize)}((), res, rsize)
-end
-
-# function unary_einsum(
-#     x::TracedRArray{T};
-#     equation::String,
-#     location=mlir_stacktrace(
-#         "unary_einsum", @__FILE__, @__LINE__
-#     ),
-# ) where {T}
-#     ia, ic = split(equation, "->")
-#     sizes = Dict(c => d for (c, d) in zip(ia, size(x)))
-#     rsize = Tuple(sizes[i] for i in ic)
-#     result_0 = mlir_type(TracedRArray{T,length(ic)}, rsize)
-
-#     res = MLIR.IR.result(
-#         stablehlo.unary_einsum(
-#             x.mlir_data; result_0, einsum_config=MLIR.IR.Attribute(equation), location
-#         ),
-#     )
-#     if length(rsize) == 0
-#         return TracedRNumber{T}((), res)
-#     else
-#         return TracedRArray{T,length(rsize)}((), res, rsize)
-#     end
-# end
 
 # parallel ops
 @noinline function partition_id(;
