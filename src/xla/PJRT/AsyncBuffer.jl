@@ -9,6 +9,5 @@ AsyncBuffer(args...; kwargs...) = AsyncBuffer(Buffer(args...; kwargs...), nothin
 
 function Base.copy(b::AsyncBuffer)
      Base.wait(b)
-     b2 = XLA.copy_buffer_to_device(b.buffer, XLA.device(b.buffer))
-     AsyncBuffer(b2, nothing)
+     AsyncBuffer(Base.copy(b.buffer), nothing)
 end
