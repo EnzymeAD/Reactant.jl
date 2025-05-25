@@ -623,7 +623,7 @@ function create_result(
     )
 
     if !haskey(result_cache, tocopy)
-        ar = create_result(pairs(tocopy), path, args...)
+        ar = create_result(collect(tocopy), path, args...)
         sym = Symbol("result", var_idx[])
         var_idx[] += 1
 
