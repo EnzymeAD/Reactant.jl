@@ -213,21 +213,10 @@ function traced_setfield_buffer!(
     return traced_setfield!(obj, field, cval, path)
 end
 
-function create_result(tocopy::T, path, 
-                        result_stores,
-                        path_to_shard_info,
-                        to_unreshard_results,
-                        unresharded_code::Vector{Expr},
-                        unresharded_arrays_cache,
-                        used_shardinfo,
-                        result_cache,
-                        var_idx,
-                        resultgen_code) where {T}
-    if !isstructtype(typeof(tocopy))
-        error("cannot copy $tocopy of type $(Core.Typeof(tocopy))")
-    end
-
-    args = (result_stores,
+function create_result(
+    tocopy::T,
+    path,
+    result_stores,
     path_to_shard_info,
     to_unreshard_results,
     unresharded_code::Vector{Expr},
@@ -235,7 +224,23 @@ function create_result(tocopy::T, path,
     used_shardinfo,
     result_cache,
     var_idx,
-    resultgen_code)
+    resultgen_code,
+) where {T}
+    if !isstructtype(typeof(tocopy))
+        error("cannot copy $tocopy of type $(Core.Typeof(tocopy))")
+    end
+
+    args = (
+        result_stores,
+        path_to_shard_info,
+        to_unreshard_results,
+        unresharded_code::Vector{Expr},
+        unresharded_arrays_cache,
+        used_shardinfo,
+        result_cache,
+        var_idx,
+        resultgen_code,
+    )
 
     if !haskey(result_cache, tocopy)
         sym = Symbol("result", var_idx[])
@@ -253,9 +258,12 @@ function create_result(tocopy::T, path,
 
         result = Expr(:new, T, elems...)
 
-        push!(resultgen_code, quote
-            $sym = $result
-        end)
+        push!(
+            resultgen_code,
+            quote
+                $sym = $result
+            end,
+        )
         result_cache[tocopy] = sym
     end
 
@@ -275,7 +283,6 @@ function create_result(
     var_idx,
     resultgen_code,
 ) where {T,D,S}
-
     if !haskey(result_cache, tocopy)
         sym = Symbol("result", var_idx[])
         var_idx[] += 1
@@ -293,9 +300,12 @@ function create_result(
         else
             result = :(ConcretePJRTNumber{$T}($restore))
         end
-        push!(resultgen_code, quote
-            $sym = $result
-        end)
+        push!(
+            resultgen_code,
+            quote
+                $sym = $result
+            end,
+        )
         result_cache[tocopy] = sym
     end
 
@@ -332,9 +342,12 @@ function create_result(
         else
             result = :(ConcreteIFRTNumber{$T}($restore))
         end
-        push!(resultgen_code, quote
-            $sym = $result
-        end)
+        push!(
+            resultgen_code,
+            quote
+                $sym = $result
+            end,
+        )
         result_cache[tocopy] = sym
     end
 
@@ -367,13 +380,17 @@ function create_result(
             end
             sharding = pop!(path_to_shard_info, path)
             push!(used_shardinfo, sharding)
-            result = :(ConcretePJRTArray{$T,$N}(($(restore)...,), $(tocopy.shape), $sharding))
+            result =
+                :(ConcretePJRTArray{$T,$N}(($(restore)...,), $(tocopy.shape), $sharding))
         else
             result = :(ConcretePJRTArray{$T,$N}($restore, $(tocopy.shape)))
         end
-        push!(resultgen_code, quote
-            $sym = $result
-        end)
+        push!(
+            resultgen_code,
+            quote
+                $sym = $result
+            end,
+        )
         result_cache[tocopy] = sym
     end
 
@@ -427,9 +444,12 @@ function create_result(
         else
             result = :(ConcreteIFRTArray{$T,$N}($(restore), $(tocopy.shape)))
         end
-        push!(resultgen_code, quote
-            $sym = $result
-        end)
+        push!(
+            resultgen_code,
+            quote
+                $sym = $result
+            end,
+        )
         result_cache[tocopy] = sym
     end
 
@@ -463,18 +483,10 @@ function generate_unresharded_ifrt_array(
     return res_arr
 end
 
-function create_result(tocopy::Array{T,N}, path, 
-                        result_stores,
-                        path_to_shard_info,
-                        to_unreshard_results,
-                        unresharded_code::Vector{Expr},
-                        unresharded_arrays_cache,
-                        used_shardinfo,
-                        result_cache,
-                        var_idx,
-                        resultgen_code) where {T,N}
-
-    args = (result_stores,
+function create_result(
+    tocopy::Array{T,N},
+    path,
+    result_stores,
     path_to_shard_info,
     to_unreshard_results,
     unresharded_code::Vector{Expr},
@@ -482,40 +494,51 @@ function create_result(tocopy::Array{T,N}, path,
     used_shardinfo,
     result_cache,
     var_idx,
-    resultgen_code)
+    resultgen_code,
+) where {T,N}
+    args = (
+        result_stores,
+        path_to_shard_info,
+        to_unreshard_results,
+        unresharded_code::Vector{Expr},
+        unresharded_arrays_cache,
+        used_shardinfo,
+        result_cache,
+        var_idx,
+        resultgen_code,
+    )
 
     if !haskey(result_cache, tocopy)
         sym = Symbol("result", var_idx[])
         var_idx[] += 1
 
-        push!(resultgen_code, quote
-            $sym = $(Array{T, N})(undef, $(size(tocopy)...,))
-        end)
+        push!(
+            resultgen_code,
+            quote
+                $sym = $(Array{T,N})(undef, $(size(tocopy)...,))
+            end,
+        )
 
         result_cache[tocopy] = sym
 
         for (i, v) in enumerate(tocopy)
             subexpr = create_result(v, append_path(path, i), args...)
-            push!(resultgen_code, quote
-                @inbounds $sym[$i] = $subexpr
-            end)
+            push!(
+                resultgen_code,
+                quote
+                    @inbounds $sym[$i] = $subexpr
+                end,
+            )
         end
     end
 
     return result_cache[tocopy]
 end
 
-function create_result(tocopy::Tuple, path, 
-                        result_stores,
-                        path_to_shard_info,
-                        to_unreshard_results,
-                        unresharded_code::Vector{Expr},
-                        unresharded_arrays_cache,
-                        used_shardinfo,
-                        result_cache,
-                        var_idx,
-                        resultgen_code)
-    args = (result_stores,
+function create_result(
+    tocopy::Tuple,
+    path,
+    result_stores,
     path_to_shard_info,
     to_unreshard_results,
     unresharded_code::Vector{Expr},
@@ -523,7 +546,19 @@ function create_result(tocopy::Tuple, path,
     used_shardinfo,
     result_cache,
     var_idx,
-    resultgen_code)
+    resultgen_code,
+)
+    args = (
+        result_stores,
+        path_to_shard_info,
+        to_unreshard_results,
+        unresharded_code::Vector{Expr},
+        unresharded_arrays_cache,
+        used_shardinfo,
+        result_cache,
+        var_idx,
+        resultgen_code,
+    )
     elems = Union{Symbol,Expr}[]
     for (k, v) in pairs(tocopy)
         push!(elems, create_result(v, append_path(path, k), args...))
@@ -531,17 +566,10 @@ function create_result(tocopy::Tuple, path,
     return :(($(elems...),))
 end
 
-function create_result(tocopy::NamedTuple{K,T}, path, 
-                        result_stores,
-                        path_to_shard_info,
-                        to_unreshard_results,
-                        unresharded_code::Vector{Expr},
-                        unresharded_arrays_cache,
-                        used_shardinfo,
-                        result_cache,
-                        var_idx,
-                        resultgen_code) where {K,T}
-    args = (result_stores,
+function create_result(
+    tocopy::NamedTuple{K,T},
+    path,
+    result_stores,
     path_to_shard_info,
     to_unreshard_results,
     unresharded_code::Vector{Expr},
@@ -549,7 +577,19 @@ function create_result(tocopy::NamedTuple{K,T}, path,
     used_shardinfo,
     result_cache,
     var_idx,
-    resultgen_code)
+    resultgen_code,
+) where {K,T}
+    args = (
+        result_stores,
+        path_to_shard_info,
+        to_unreshard_results,
+        unresharded_code::Vector{Expr},
+        unresharded_arrays_cache,
+        used_shardinfo,
+        result_cache,
+        var_idx,
+        resultgen_code,
+    )
     elems = Union{Symbol,Expr}[]
     for (i, (k, v)) in enumerate(pairs(tocopy))
         push!(elems, create_result(v, append_path(path, i), args...))
@@ -557,18 +597,10 @@ function create_result(tocopy::NamedTuple{K,T}, path,
     return :(NamedTuple{$K}(($(elems...),)))
 end
 
-function create_result(tocopy::D, path, 
-                        result_stores,
-                        path_to_shard_info,
-                        to_unreshard_results,
-                        unresharded_code::Vector{Expr},
-                        unresharded_arrays_cache,
-                        used_shardinfo,
-                        result_cache,
-                        var_idx,
-                        resultgen_code) where {K,V,D<:AbstractDict{K,V}}
-
-    args = (result_stores,
+function create_result(
+    tocopy::D,
+    path,
+    result_stores,
     path_to_shard_info,
     to_unreshard_results,
     unresharded_code::Vector{Expr},
@@ -576,16 +608,31 @@ function create_result(tocopy::D, path,
     used_shardinfo,
     result_cache,
     var_idx,
-    resultgen_code)
+    resultgen_code,
+) where {K,V,D<:AbstractDict{K,V}}
+    args = (
+        result_stores,
+        path_to_shard_info,
+        to_unreshard_results,
+        unresharded_code::Vector{Expr},
+        unresharded_arrays_cache,
+        used_shardinfo,
+        result_cache,
+        var_idx,
+        resultgen_code,
+    )
 
     if !haskey(result_cache, tocopy)
         ar = create_result(pairs(tocopy), path, args...)
         sym = Symbol("result", var_idx[])
         var_idx[] += 1
 
-        push!(resultgen_code, quote
-            $sym = $D($ar)
-        end)
+        push!(
+            resultgen_code,
+            quote
+                $sym = $D($ar)
+            end,
+        )
         result_cache[tocopy] = sym
     end
 
@@ -594,30 +641,35 @@ function create_result(tocopy::D, path,
     end
 end
 
-function create_result(tocopy::Reactant.XLA.AbstractDevice, path, 
-                        result_stores,
-                        path_to_shard_info,
-                        to_unreshard_results,
-                        unresharded_code::Vector{Expr},
-                        unresharded_arrays_cache,
-                        used_shardinfo,
-                        result_cache,
-                        var_idx,
-                        resultgen_code)
+function create_result(
+    tocopy::Reactant.XLA.AbstractDevice,
+    path,
+    result_stores,
+    path_to_shard_info,
+    to_unreshard_results,
+    unresharded_code::Vector{Expr},
+    unresharded_arrays_cache,
+    used_shardinfo,
+    result_cache,
+    var_idx,
+    resultgen_code,
+)
     return Meta.quot(:($(tocopy)))
 end
 
 function create_result(
-    tocopy::Union{Integer,AbstractFloat,AbstractString,Nothing,Type,Symbol,Char}, path, 
-                        result_stores,
-                        path_to_shard_info,
-                        to_unreshard_results,
-                        unresharded_code::Vector{Expr},
-                        unresharded_arrays_cache,
-                        used_shardinfo,
-                        result_cache,
-                        var_idx,
-                        resultgen_code)
+    tocopy::Union{Integer,AbstractFloat,AbstractString,Nothing,Type,Symbol,Char},
+    path,
+    result_stores,
+    path_to_shard_info,
+    to_unreshard_results,
+    unresharded_code::Vector{Expr},
+    unresharded_arrays_cache,
+    used_shardinfo,
+    result_cache,
+    var_idx,
+    resultgen_code,
+)
     return Meta.quot(tocopy)
 end
 
@@ -2807,9 +2859,12 @@ function codegen_unflatten!(
             sym = Symbol("result", var_idx[])
             var_idx[] += 1
 
-            push!(resultgen_code, quote
-                $sym = $argres.data
-            end)
+            push!(
+                resultgen_code,
+                quote
+                    $sym = $argres.data
+                end,
+            )
 
             result_stores[path] = sym
         end
@@ -2878,7 +2933,9 @@ function codegen_unflatten!(
     end
 
     # generate return object which stores the concrete results in some arbitrary way
-    return Expr[unresharded_code..., resultgen_code..., :(result = $result_code), unflatten_code...],
+    return Expr[
+        unresharded_code..., resultgen_code..., :(result = $result_code), unflatten_code...
+    ],
     used_shardinfo
 end
 

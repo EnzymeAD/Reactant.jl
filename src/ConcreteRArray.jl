@@ -25,7 +25,7 @@ end
 
 # deepcopy
 function Base.deepcopy(x::Union{AbstractConcreteArray,AbstractConcreteNumber})
-    Base.copy(x)
+    return Base.copy(x)
 end
 
 # One more reason why users shouldn't call `deepcopy`
@@ -118,11 +118,11 @@ function write_to_host_buffer!(data::Array, X::ConcretePJRTArray{T,N}) where {T,
 end
 
 function Base.copy(X::ConcretePJRTArray)
-    Core.Typeof(X)(Base.copy.(X.data), X.shape, X.sharding)
+    return Core.Typeof(X)(Base.copy.(X.data), X.shape, X.sharding)
 end
 
 function Base.copy(X::ConcretePJRTNumber)
-    Core.Typeof(X)(Base.copy.(X.data), X.sharding)
+    return Core.Typeof(X)(Base.copy.(X.data), X.sharding)
 end
 
 function write_to_host_buffer!(data::Array, X::ConcreteIFRTArray{T,N}) where {T,N}
