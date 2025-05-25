@@ -3192,7 +3192,7 @@ end
             )
         end
     end
-    body = __thunk_body_cache[tag]
+    body = __thunk_fwd_body_cache[tag]
     if IsClosure
         return quote
             args = (thunk.f, args...)
