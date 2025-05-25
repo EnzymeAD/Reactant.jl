@@ -213,10 +213,29 @@ function traced_setfield_buffer!(
     return traced_setfield!(obj, field, cval, path)
 end
 
-function create_result(tocopy::T, path, args...) where {T}
+function create_result(tocopy::T, path, 
+                        result_stores,
+                        path_to_shard_info,
+                        to_unreshard_results,
+                        unresharded_code::Vector{Expr},
+                        unresharded_arrays_cache,
+                        used_shardinfo,
+                        result_cache,
+                        var_idx,
+                        resultgen_code) where {T}
     if !isstructtype(typeof(tocopy))
         error("cannot copy $tocopy of type $(Core.Typeof(tocopy))")
     end
+
+    args = (result_stores,
+    path_to_shard_info,
+    to_unreshard_results,
+    unresharded_code::Vector{Expr},
+    unresharded_arrays_cache,
+    used_shardinfo,
+    result_cache,
+    var_idx,
+    resultgen_code)
 
     if !haskey(result_cache, tocopy)
         sym = Symbol("result", var_idx[])
@@ -234,7 +253,7 @@ function create_result(tocopy::T, path, args...) where {T}
 
         result = Expr(:new, T, elems...)
 
-        push!(unflatten_code, quote
+        push!(resultgen_code, quote
             $sym = $result
         end)
         result_cache[tocopy] = sym
@@ -283,7 +302,7 @@ function create_result(
             else
                 result = ConcretePJRTNumber{T}(tocopy.data)
             end
-            result = Meta.quote(result)
+            result = Meta.quot(result)
         end
         push!(resultgen_code, quote
             $sym = $result
@@ -333,7 +352,7 @@ function create_result(
             else
                 result = ConcreteIFRTNumber{T}(tocopy.data)
             end
-            result = Meta.quote(result)
+            result = Meta.quot(result)
         end
         push!(resultgen_code, quote
             $sym = $result
@@ -488,12 +507,32 @@ function generate_unresharded_ifrt_array(
     return res_arr
 end
 
-function create_result(tocopy::Array{T,N}, path, args...) where {T,N}
+function create_result(tocopy::Array{T,N}, path, 
+                        result_stores,
+                        path_to_shard_info,
+                        to_unreshard_results,
+                        unresharded_code::Vector{Expr},
+                        unresharded_arrays_cache,
+                        used_shardinfo,
+                        result_cache,
+                        var_idx,
+                        resultgen_code) where {T,N}
+
+    args = (result_stores,
+    path_to_shard_info,
+    to_unreshard_results,
+    unresharded_code::Vector{Expr},
+    unresharded_arrays_cache,
+    used_shardinfo,
+    result_cache,
+    var_idx,
+    resultgen_code)
+
     if !haskey(result_cache, tocopy)
         sym = Symbol("result", var_idx[])
         var_idx[] += 1
 
-        push!(unflatten_code, quote
+        push!(resultgen_code, quote
             $sym = $(Array{T, N})(undef, $(size(tocopy)...,))
         end)
 
@@ -501,7 +540,7 @@ function create_result(tocopy::Array{T,N}, path, args...) where {T,N}
 
         for (i, v) in enumerate(tocopy)
             subexpr = create_result(v, append_path(path, i), args...)
-            push!(unflatten_code, quote
+            push!(resultgen_code, quote
                 @inbounds $sym[$i] = $subexpr
             end)
         end
@@ -510,7 +549,25 @@ function create_result(tocopy::Array{T,N}, path, args...) where {T,N}
     return result_cache[tocopy]
 end
 
-function create_result(tocopy::Tuple, path, args...)
+function create_result(tocopy::Tuple, path, 
+                        result_stores,
+                        path_to_shard_info,
+                        to_unreshard_results,
+                        unresharded_code::Vector{Expr},
+                        unresharded_arrays_cache,
+                        used_shardinfo,
+                        result_cache,
+                        var_idx,
+                        resultgen_code)
+    args = (result_stores,
+    path_to_shard_info,
+    to_unreshard_results,
+    unresharded_code::Vector{Expr},
+    unresharded_arrays_cache,
+    used_shardinfo,
+    result_cache,
+    var_idx,
+    resultgen_code)
     elems = Union{Symbol,Expr}[]
     for (k, v) in pairs(tocopy)
         push!(elems, create_result(v, append_path(path, k), args...))
@@ -518,7 +575,25 @@ function create_result(tocopy::Tuple, path, args...)
     return :(($(elems...),))
 end
 
-function create_result(tocopy::NamedTuple{K,T}, path, args...) where {K,T}
+function create_result(tocopy::NamedTuple{K,T}, path, 
+                        result_stores,
+                        path_to_shard_info,
+                        to_unreshard_results,
+                        unresharded_code::Vector{Expr},
+                        unresharded_arrays_cache,
+                        used_shardinfo,
+                        result_cache,
+                        var_idx,
+                        resultgen_code) where {K,T}
+    args = (result_stores,
+    path_to_shard_info,
+    to_unreshard_results,
+    unresharded_code::Vector{Expr},
+    unresharded_arrays_cache,
+    used_shardinfo,
+    result_cache,
+    var_idx,
+    resultgen_code)
     elems = Union{Symbol,Expr}[]
     for (i, (k, v)) in enumerate(pairs(tocopy))
         push!(elems, create_result(v, append_path(path, i), args...))
@@ -526,13 +601,33 @@ function create_result(tocopy::NamedTuple{K,T}, path, args...) where {K,T}
     return :(NamedTuple{$K}(($(elems...),)))
 end
 
-function create_result(tocopy::D, path, args...) where {K,V,D<:AbstractDict{K,V}}
+function create_result(tocopy::D, path, 
+                        result_stores,
+                        path_to_shard_info,
+                        to_unreshard_results,
+                        unresharded_code::Vector{Expr},
+                        unresharded_arrays_cache,
+                        used_shardinfo,
+                        result_cache,
+                        var_idx,
+                        resultgen_code) where {K,V,D<:AbstractDict{K,V}}
+
+    args = (result_stores,
+    path_to_shard_info,
+    to_unreshard_results,
+    unresharded_code::Vector{Expr},
+    unresharded_arrays_cache,
+    used_shardinfo,
+    result_cache,
+    var_idx,
+    resultgen_code)
+
     if !haskey(result_cache, tocopy)
         ar = create_result(pairs(tocopy), path, args...)
         sym = Symbol("result", var_idx[])
         var_idx[] += 1
 
-        push!(unflatten_code, quote
+        push!(resultgen_code, quote
             $sym = $D($ar)
         end)
     end
@@ -542,13 +637,30 @@ function create_result(tocopy::D, path, args...) where {K,V,D<:AbstractDict{K,V}
     end
 end
 
-function create_result(tocopy::Reactant.XLA.AbstractDevice, args...)
+function create_result(tocopy::Reactant.XLA.AbstractDevice, path, 
+                        result_stores,
+                        path_to_shard_info,
+                        to_unreshard_results,
+                        unresharded_code::Vector{Expr},
+                        unresharded_arrays_cache,
+                        used_shardinfo,
+                        result_cache,
+                        var_idx,
+                        resultgen_code)
     return Meta.quot(:($(tocopy)))
 end
 
 function create_result(
-    tocopy::Union{Integer,AbstractFloat,AbstractString,Nothing,Type,Symbol,Char}, args...
-)
+    tocopy::Union{Integer,AbstractFloat,AbstractString,Nothing,Type,Symbol,Char}, path, 
+                        result_stores,
+                        path_to_shard_info,
+                        to_unreshard_results,
+                        unresharded_code::Vector{Expr},
+                        unresharded_arrays_cache,
+                        used_shardinfo,
+                        result_cache,
+                        var_idx,
+                        resultgen_code)
     return Meta.quot(tocopy)
 end
 
@@ -2694,7 +2806,7 @@ function codegen_unflatten!(
     if needs_cache_dict
         pushfirst!(
             unflatten_code,
-            :($cache_dict = $(IdDict{Union{TracedRArray,TracedRNumber},ctypes}())),
+            :($cache_dict = IdDict{Union{TracedRArray,TracedRNumber},$ctypes}()),
         )
     end
 
