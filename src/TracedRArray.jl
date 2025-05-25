@@ -885,9 +885,6 @@ for (minT, maxT) in Iterators.product((Number, TracedRNumber), (Number, TracedRN
     end
 end
 
-overloaded_all(f, x::AnyTracedRArray, dims) = mapreduce(f, &, x; dims)
-overloaded_any(f, x::AnyTracedRArray, dims) = mapreduce(f, |, x; dims)
-
 # outer repeat
 function Base._RepeatInnerOuter.repeat_outer(
     x::AnyTracedRArray{T,N}, counts::NTuple{N,Any}
