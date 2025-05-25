@@ -623,17 +623,27 @@ function create_result(
     )
 
     if !haskey(result_cache, tocopy)
-        ar = create_result(pairs(tocopy), path, args...)
         sym = Symbol("result", var_idx[])
         var_idx[] += 1
 
         push!(
             resultgen_code,
             quote
-                $sym = $D($ar)
+                $sym = $D()
             end,
         )
+
         result_cache[tocopy] = sym
+
+        for (k, v) in pairs(tocopy)
+            subexpr = create_result(v, append_path(path, k), args...)
+            push!(
+                resultgen_code,
+                quote
+                    @inbounds $sym[$k] = $subexpr
+                end,
+            )
+        end
     end
 
     return quote
