@@ -121,6 +121,10 @@ function Base.copy(X::ConcretePJRTArray)
     Core.Typeof(X)(Base.copy.(X.data), X.shape, X.sharding)
 end
 
+function Base.copy(X::ConcretePJRTNumber)
+    Core.Typeof(X)(Base.copy.(X.data), X.sharding)
+end
+
 function write_to_host_buffer!(data::Array, X::ConcreteIFRTArray{T,N}) where {T,N}
     XLA.to_host(X.data, data, X.sharding)
     return nothing
