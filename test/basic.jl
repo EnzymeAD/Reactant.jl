@@ -1295,3 +1295,35 @@ accum_fn(x, y) = abs2(x) + abs2(y)
         end ≈ accumulate(accum_fn, b; dims=3, init=0.0f0)
     end
 end
+
+sameunitrange(x, y) = first(x) == first(y) && last(x) == last(y)
+
+@testset "searchsorted" begin
+    x = [1, 2, 4, 5, 5, 7]
+    x_ra = Reactant.to_rarray(x)
+
+    @testset "searchsortedfirst" begin
+        @testset for val in (4, 5, 3, 9, 0)
+            @test @jit(searchsortedfirst(x_ra, val)) == searchsortedfirst(x, val)
+            @test @jit(searchsortedfirst(x_ra, ConcreteRNumber(val))) ==
+                searchsortedfirst(x, val)
+        end
+    end
+
+    @testset "searchsortedlast" begin
+        @testset for val in (4, 5, 3, 9, 0)
+            @test @jit(searchsortedlast(x_ra, val)) == searchsortedlast(x, val)
+            @test @jit(searchsortedlast(x_ra, ConcreteRNumber(val))) ==
+                searchsortedlast(x, val)
+        end
+    end
+
+    @testset "searchsorted" begin
+        @testset for val in (4, 5, 3, 9, 0)
+            @test sameunitrange(@jit(searchsorted(x_ra, val)), searchsorted(x, val))
+            @test sameunitrange(
+                @jit(searchsorted(x_ra, ConcreteRNumber(val))), searchsorted(x, val)
+            )
+        end
+    end
+end
