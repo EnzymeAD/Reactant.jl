@@ -22,6 +22,16 @@ using InteractiveUtils
     @test @jit(sum(a)) ≈ r_res
 end
 
+@testset "Julia Compilation cache" begin
+    x = @compile -(Reactant.to_rarray(ones(2)))
+    y = @compile -(Reactant.to_rarray(ones(2)))
+
+    @test typeof(x) == typeof(y)
+    # TODO, currently x and y are not equal as x.exec != y.exec
+    # as the executable we generate is itself not cached
+    # (which clearly we should do to improve jit time)
+end
+
 @testset "Basic reduce max" begin
     x = rand(2, 10)
 
