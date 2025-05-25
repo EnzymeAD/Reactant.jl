@@ -2504,7 +2504,7 @@ function codegen_unflatten!(
     client,
     resharded_inputs,
 )
-    cache_dict = gensym("cache_dict")
+    cache_dict = Symbol("cache_dict")
     needs_cache_dict = false
     unresharded_arrays_cache = Dict{Symbol,Symbol}()
     unresharded_code = Expr[]
