@@ -280,29 +280,18 @@ function create_result(
         sym = Symbol("result", var_idx[])
         var_idx[] += 1
 
-        if haskey(result_stores, path)
-            restore = result_stores[path]
-            delete!(result_stores, path)
-            if path_to_shard_info !== nothing && haskey(path_to_shard_info, path)
-                if haskey(to_unreshard_results, path)
-                    error("TODO: Not yet Implemented. Use IFRT for this.")
-                end
-                sharding = pop!(path_to_shard_info, path)
-                push!(used_shardinfo, sharding)
-                result = :(ConcretePJRTNumber{$T}(($(restore)...,), $sharding))
-            else
-                result = :(ConcretePJRTNumber{$T}($restore))
+        @assert haskey(result_stores, path)
+        restore = result_stores[path]
+        delete!(result_stores, path)
+        if path_to_shard_info !== nothing && haskey(path_to_shard_info, path)
+            if haskey(to_unreshard_results, path)
+                error("TODO: Not yet Implemented. Use IFRT for this.")
             end
+            sharding = pop!(path_to_shard_info, path)
+            push!(used_shardinfo, sharding)
+            result = :(ConcretePJRTNumber{$T}(($(restore)...,), $sharding))
         else
-            # We will set the data for this later
-            if path_to_shard_info !== nothing && haskey(path_to_shard_info, path)
-                sharding = pop!(path_to_shard_info, path)
-                push!(used_shardinfo, sharding)
-                result = ConcretePJRTNumber{T}(tocopy.data, sharding)
-            else
-                result = ConcretePJRTNumber{T}(tocopy.data)
-            end
-            result = Meta.quot(result)
+            result = :(ConcretePJRTNumber{$T}($restore))
         end
         push!(resultgen_code, quote
             $sym = $result
@@ -330,29 +319,18 @@ function create_result(
         sym = Symbol("result", var_idx[])
         var_idx[] += 1
 
-        if haskey(result_stores, path)
-            restore = result_stores[path]
-            delete!(result_stores, path)
-            if path_to_shard_info !== nothing && haskey(path_to_shard_info, path)
-                if haskey(to_unreshard_results, path)
-                    error("TODO: Not yet Implemented.")
-                end
-                sharding = pop!(path_to_shard_info, path)
-                push!(used_shardinfo, sharding)
-                result = :(ConcreteIFRTNumber{$T}($(restore), $sharding))
-            else
-                result = :(ConcreteIFRTNumber{$T}($restore))
+        @assert haskey(result_stores, path)
+        restore = result_stores[path]
+        delete!(result_stores, path)
+        if path_to_shard_info !== nothing && haskey(path_to_shard_info, path)
+            if haskey(to_unreshard_results, path)
+                error("TODO: Not yet Implemented.")
             end
+            sharding = pop!(path_to_shard_info, path)
+            push!(used_shardinfo, sharding)
+            result = :(ConcreteIFRTNumber{$T}($(restore), $sharding))
         else
-            # We will set the data for this later
-            if path_to_shard_info !== nothing && haskey(path_to_shard_info, path)
-                sharding = pop!(path_to_shard_info, path)
-                push!(used_shardinfo, sharding)
-                result = ConcreteIFRTNumber{T}(tocopy.data, sharding)
-            else
-                result = ConcreteIFRTNumber{T}(tocopy.data)
-            end
-            result = Meta.quot(result)
+            result = :(ConcreteIFRTNumber{$T}($restore))
         end
         push!(resultgen_code, quote
             $sym = $result
@@ -380,29 +358,18 @@ function create_result(
         sym = Symbol("result", var_idx[])
         var_idx[] += 1
 
-        if haskey(result_stores, path)
-            restore = result_stores[path]
-            delete!(result_stores, path)
-            if path_to_shard_info !== nothing && haskey(path_to_shard_info, path)
-                if haskey(to_unreshard_results, path)
-                    error("TODO: Not yet Implemented. Use IFRT for this.")
-                end
-                sharding = pop!(path_to_shard_info, path)
-                push!(used_shardinfo, sharding)
-                result = :(ConcretePJRTArray{$T,$N}(($(restore)...,), $(tocopy.shape), $sharding))
-            else
-                result = :(ConcretePJRTArray{$T,$N}($restore, $(tocopy.shape)))
+        @assert haskey(result_stores, path)
+        restore = result_stores[path]
+        delete!(result_stores, path)
+        if path_to_shard_info !== nothing && haskey(path_to_shard_info, path)
+            if haskey(to_unreshard_results, path)
+                error("TODO: Not yet Implemented. Use IFRT for this.")
             end
+            sharding = pop!(path_to_shard_info, path)
+            push!(used_shardinfo, sharding)
+            result = :(ConcretePJRTArray{$T,$N}(($(restore)...,), $(tocopy.shape), $sharding))
         else
-            # We will set the data for this later
-            if path_to_shard_info !== nothing && haskey(path_to_shard_info, path)
-                sharding = pop!(path_to_shard_info, path)
-                push!(used_shardinfo, sharding)
-                result = ConcretePJRTArray{T,N}(tocopy.data, tocopy.shape, sharding)
-            else
-                result = ConcretePJRTArray{T,N,D,S}(tocopy.data, tocopy.shape, tocopy.sharding)
-            end
-            result = Meta.quot(result)
+            result = :(ConcretePJRTArray{$T,$N}($restore, $(tocopy.shape)))
         end
         push!(resultgen_code, quote
             $sym = $result
@@ -430,46 +397,35 @@ function create_result(
         sym = Symbol("result", var_idx[])
         var_idx[] += 1
 
-        if haskey(result_stores, path)
-            restore = result_stores[path]
-            delete!(result_stores, path)
-            if path_to_shard_info !== nothing && haskey(path_to_shard_info, path)
-                if haskey(to_unreshard_results, path)
-                    if !haskey(unresharded_arrays_cache, restore)
-                        unresharded_array_sym = gensym(:unresharded_array)
-                        push!(
-                            unresharded_code,
-                            :(
-                                $unresharded_array_sym = generate_unresharded_ifrt_array(
-                                    $(restore),
-                                    $(to_unreshard_results[path][1]),
-                                    $(to_unreshard_results[path][2]),
-                                    global_mesh,
-                                )
-                            ),
-                        )
-                        unresharded_arrays_cache[restore] = unresharded_array_sym
-                    end
-                    return :(ConcreteIFRTArray{$T,$N}(
-                        $(unresharded_arrays_cache[restore]), $(tocopy.shape)
-                    ))
+        @assert haskey(result_stores, path)
+        restore = result_stores[path]
+        delete!(result_stores, path)
+        if path_to_shard_info !== nothing && haskey(path_to_shard_info, path)
+            if haskey(to_unreshard_results, path)
+                if !haskey(unresharded_arrays_cache, restore)
+                    unresharded_array_sym = gensym(:unresharded_array)
+                    push!(
+                        unresharded_code,
+                        :(
+                            $unresharded_array_sym = generate_unresharded_ifrt_array(
+                                $(restore),
+                                $(to_unreshard_results[path][1]),
+                                $(to_unreshard_results[path][2]),
+                                global_mesh,
+                            )
+                        ),
+                    )
+                    unresharded_arrays_cache[restore] = unresharded_array_sym
                 end
-                sharding = pop!(path_to_shard_info, path)
-                push!(used_shardinfo, sharding)
-                result = :(ConcreteIFRTArray{$T,$N}($(restore), $(tocopy.shape), $sharding))
-            else
-                result = :(ConcreteIFRTArray{$T,$N}($(restore), $(tocopy.shape)))
+                return :(ConcreteIFRTArray{$T,$N}(
+                    $(unresharded_arrays_cache[restore]), $(tocopy.shape)
+                ))
             end
+            sharding = pop!(path_to_shard_info, path)
+            push!(used_shardinfo, sharding)
+            result = :(ConcreteIFRTArray{$T,$N}($(restore), $(tocopy.shape), $sharding))
         else
-            # We will set the data for this later
-            if path_to_shard_info !== nothing && haskey(path_to_shard_info, path)
-                sharding = pop!(path_to_shard_info, path)
-                push!(used_shardinfo, sharding)
-                result = ConcreteIFRTArray{T,N}(tocopy.data, tocopy.shape, sharding)
-            else
-                result = ConcreteIFRTArray{T,N,S}(tocopy.data, tocopy.shape, tocopy.sharding)
-            end
-            result = Meta.quot(result)
+            result = :(ConcreteIFRTArray{$T,$N}($(restore), $(tocopy.shape)))
         end
         push!(resultgen_code, quote
             $sym = $result
@@ -630,6 +586,7 @@ function create_result(tocopy::D, path,
         push!(resultgen_code, quote
             $sym = $D($ar)
         end)
+        result_cache[tocopy] = sym
     end
 
     return quote
