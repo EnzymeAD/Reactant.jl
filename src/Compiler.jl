@@ -2989,7 +2989,6 @@ function compile_xla(f, args; client=nothing, serializable::Bool=false, kwargs..
     return results
 end
 
-
 # inspired by RuntimeGeneratedFunction.jl
 const __thunk_fwd_body_cache = Dict{Symbol,Expr}()
 const __thunk_rev_body_cache = Dict{Expr,Symbol}()
