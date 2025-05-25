@@ -200,7 +200,7 @@ end
             var_idx[] += 1
 
             push!(resultgen_code, quote
-                $sym = MockTestCustomPath($ar)
+                $sym = ($MockTestCustomPath)($ar)
             end)
             result_cache[tocopy] = sym
         end
