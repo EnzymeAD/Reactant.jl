@@ -81,9 +81,8 @@ end
     res_reactant, dps_reactant = compiled_gradient(cmodel, cnoisy, ctarget, cps, cst2)
 
     @test res ≈ res_reactant atol = 1e-3 rtol = 1e-2
-    # See https://github.com/EnzymeAD/Reactant.jl/issues/578
     for (dps1, dps2) in zip(fleaves(dps), fleaves(dps_reactant))
-        @test_skip dps1 ≈ dps2 atol = 1e-3 rtol = 1e-2
+        @test dps1 ≈ dps2 atol = 1e-3 rtol = 1e-2
     end
 end
 
