@@ -25,8 +25,7 @@ end
 
 # deepcopy
 function Base.deepcopy(x::Union{AbstractConcreteArray,AbstractConcreteNumber})
-    fn = Reactant.compile(copy, (x,))
-    return fn(x)
+    Base.copy(x)
 end
 
 # One more reason why users shouldn't call `deepcopy`
@@ -116,6 +115,10 @@ function write_to_host_buffer!(data::Array, X::ConcretePJRTArray{T,N}) where {T,
         XLA.to_host(XLA.synced_buffer(only(X.data)), data, Reactant.Sharding.NoSharding())
     end
     return nothing
+end
+
+function Base.copy(X::ConcretePJRTArray)
+    Core.Typeof(X)(Base.copy.(X.data), X.shape, X.sharding)
 end
 
 function write_to_host_buffer!(data::Array, X::ConcreteIFRTArray{T,N}) where {T,N}
