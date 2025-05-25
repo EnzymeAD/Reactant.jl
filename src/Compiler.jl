@@ -2989,6 +2989,11 @@ function compile_xla(f, args; client=nothing, serializable::Bool=false, kwargs..
     return results
 end
 
+
+# inspired by RuntimeGeneratedFunction.jl
+const __thunk_fwd_body_cache = Dict{Symbol,Expr}()
+const __thunk_rev_body_cache = Dict{Expr,Symbol}()
+
 function compile(f, args; sync=false, kwargs...)
     _, exec, mlir_fn_res, device, client, str = compile_xla(f, args; kwargs...)
     (;
@@ -3077,8 +3082,6 @@ function compile(f, args; sync=false, kwargs...)
         :()
     end
 
-    fname = gensym(Symbol(Symbol(f), :_reactant))
-
     donated_buffers_set = if XLA.runtime(client) isa Val{:PJRT}
         :(Base.IdSet{NTuple{<:Any,XLA.PJRT.Buffer}}())
     else
@@ -3102,10 +3105,21 @@ function compile(f, args; sync=false, kwargs...)
         display(mlir_fn_res.donated_args_mask)
     end
 
+    @show body
+    @show body in keys(__thunk_rev_body_cache)
+    @show  keys(__thunk_rev_body_cache)
+    fname = if body in keys(__thunk_rev_body_cache)
+        __thunk_rev_body_cache[body]
+    else
+        fname2 = gensym(Symbol(Symbol(f), :_reactant))
+        __thunk_rev_body_cache[body] = fname2
+        __thunk_fwd_body_cache[fname2] = body
+        fname2
+    end
+
     return register_thunk(
         fname,
         Tuple{map(Core.Typeof, args)...},
-        body,
         f,
         mlir_fn_res.fnwrapped,
         exec,
@@ -3116,9 +3130,6 @@ function compile(f, args; sync=false, kwargs...)
         mlir_fn_res.donated_args_mask,
     )
 end
-
-# inspired by RuntimeGeneratedFunction.jl
-const __thunk_body_cache = Dict{Symbol,Expr}()
 
 struct Thunk{FTy,tag,IsClosure,ArgTypes,ExecTy,DeviceTy,ClientTy,GD,DAM}
     f::FTy
@@ -3198,7 +3209,6 @@ end
 function register_thunk(
     tag::Symbol,
     @nospecialize(argtys::Type),
-    body::Expr,
     @nospecialize(f),
     isclosure::Bool,
     exec,
@@ -3208,7 +3218,6 @@ function register_thunk(
     global_device_ids,
     donated_args_mask,
 )
-    __thunk_body_cache[tag] = body
     return Thunk{
         Core.Typeof(f),
         tag,
