@@ -635,7 +635,7 @@ function create_result(
 
         result_cache[tocopy] = sym
 
-	for (k, v) in pairs(tocopy)
+        for (k, v) in pairs(tocopy)
             subexpr = create_result(v, append_path(path, k), args...)
             push!(
                 resultgen_code,
@@ -2781,7 +2781,7 @@ function codegen_unflatten!(
                     unflatcode = :(traced_getfield($unflatcode, $(Meta.quot(p))))
                 end
 
-     		concrete_res_name_final = concrete_res_name
+                concrete_res_name_final = concrete_res_name
                 if need_to_unreshard !== nothing
                     if !haskey(unresharded_arrays_cache, concrete_res_name)
                         unreshard_sym = gensym(:unresharded_buffer)
