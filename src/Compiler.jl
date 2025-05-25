@@ -3105,9 +3105,6 @@ function compile(f, args; sync=false, kwargs...)
         display(mlir_fn_res.donated_args_mask)
     end
 
-    @show body
-    @show body in keys(__thunk_rev_body_cache)
-    @show  keys(__thunk_rev_body_cache)
     fname = if body in keys(__thunk_rev_body_cache)
         __thunk_rev_body_cache[body]
     else
