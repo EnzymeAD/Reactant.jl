@@ -6,7 +6,7 @@ If you see this error with the CUDA backend, use a scoped value to increase the 
 of the dot-general algorithm.
 
 ```julia
-Reactant.with_config(; dot_general_precision=DotGeneralPrecision.HIGH) do
+Reactant.with_config(; dot_general_precision=PrecisionConfig.HIGH) do
     @compile ...
 end
 ```

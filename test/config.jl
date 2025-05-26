@@ -9,20 +9,20 @@ using Reactant, Test
         @test contains(repr(hlo), "precision = [DEFAULT, DEFAULT]")
         @test !contains(repr(hlo), "algorithm")
 
-        hlo = with_config(; dot_general_precision=DotGeneralPrecision.HIGH) do
+        hlo = with_config(; dot_general_precision=PrecisionConfig.HIGH) do
             @code_hlo *(x_ra, y_ra)
         end
         @test contains(repr(hlo), "precision = [HIGH, HIGH]")
         @test !contains(repr(hlo), "algorithm")
 
-        hlo = with_config(; dot_general_precision=DotGeneralPrecision.HIGHEST) do
+        hlo = with_config(; dot_general_precision=PrecisionConfig.HIGHEST) do
             @code_hlo *(x_ra, y_ra)
         end
         @test contains(repr(hlo), "precision = [HIGHEST, HIGHEST]")
         @test !contains(repr(hlo), "algorithm")
 
         hlo = with_config(;
-            dot_general_precision=(DotGeneralPrecision.HIGH, DotGeneralPrecision.DEFAULT),
+            dot_general_precision=(PrecisionConfig.HIGH, PrecisionConfig.DEFAULT),
         ) do
             @code_hlo *(x_ra, y_ra)
         end

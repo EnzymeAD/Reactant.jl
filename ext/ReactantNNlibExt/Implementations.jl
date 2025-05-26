@@ -316,6 +316,9 @@ function overloaded_∇conv_data!(
         dimension_numbers,
         feature_group_count,
         batch_group_count=1,
+        precision_config=(
+            Reactant.CONVOLUTION_PRECISION[], Reactant.CONVOLUTION_PRECISION[]
+        ),
     )
     set_mlir_data!(dx, MLIR.IR.result(conv))
 
