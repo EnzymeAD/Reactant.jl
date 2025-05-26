@@ -87,26 +87,23 @@ end
             dy = ones(Float32, output_size)
             dy_reactant = Reactant.to_rarray(dy)
 
-            conv_compiled = Reactant.compile(
-                NNlib.conv, (x_reactant, weight_reactant, conv_dims)
-            )
+            Reactant.with_config(; convolution_precision=PrecisionConfig.HIGHEST) do
+                @test @jit(NNlib.conv(x_reactant, weight_reactant, conv_dims)) ≈
+                    NNlib.conv(x, weight, conv_dims)
 
-            @test conv_compiled(x_reactant, weight_reactant, conv_dims) ≈
-                NNlib.conv(x, weight, conv_dims)
+                ∇data = NNlib.∇conv_data(dy, weight, conv_dims)
+                @test @jit(NNlib.∇conv_data(dy_reactant, weight_reactant, conv_dims)) ≈
+                    ∇data
 
-            ∇data = NNlib.∇conv_data(dy, weight, conv_dims)
-            @test Reactant.@jit(NNlib.∇conv_data(dy_reactant, weight_reactant, conv_dims)) ≈
-                ∇data
+                ∇filter = NNlib.∇conv_filter(x, dy, conv_dims)
+                @test @jit(NNlib.∇conv_filter(x_reactant, dy_reactant, conv_dims)) ≈ ∇filter
 
-            ∇filter = NNlib.∇conv_filter(x, dy, conv_dims)
-            @test Reactant.@jit(NNlib.∇conv_filter(x_reactant, dy_reactant, conv_dims)) ≈
-                ∇filter
-
-            ∇data_enzyme, ∇filter_enzyme = Reactant.@jit ∇conv_data_filter(
-                x_reactant, weight_reactant, conv_dims
-            )
-            @test ∇data_enzyme ≈ ∇data
-            @test ∇filter_enzyme ≈ ∇filter
+                ∇data_enzyme, ∇filter_enzyme = @jit ∇conv_data_filter(
+                    x_reactant, weight_reactant, conv_dims
+                )
+                @test ∇data_enzyme ≈ ∇data
+                @test ∇filter_enzyme ≈ ∇filter
+            end
         end
     end
 
@@ -408,9 +405,9 @@ end
         dy = randn(Float32, output_size)
         dy_reactant = Reactant.to_rarray(dy)
 
-        @test Reactant.@jit(NNlib.∇conv_data(dy_reactant, w_reactant, conv_dims)) ≈
+        @test @jit(NNlib.∇conv_data(dy_reactant, w_reactant, conv_dims)) ≈
             NNlib.∇conv_data(dy, w, conv_dims)
-        @test Reactant.@jit(NNlib.∇conv_filter(x_reactant, dy_reactant, conv_dims)) ≈
+        @test @jit(NNlib.∇conv_filter(x_reactant, dy_reactant, conv_dims)) ≈
             NNlib.∇conv_filter(x, dy, conv_dims)
     end
 end

@@ -215,10 +215,14 @@ function trace_for(mod, expr; track_numbers)
             end
         ) for (s, ref) in zip(external_syms, ref_syms)
     ]
+    body_fn_sym = gensym(:body_fn)
+    cond_fn_sym = gensym(:cond_fn)
+    args_sym = gensym(:args)
+    verify_arg_names_sym = gensym(:verify_arg_names)
 
     reactant_code_block = quote
-        let args = $(args_init)
-            cond_fn =
+        let $(args_sym) = $(args_init)
+            $(cond_fn_sym) =
                 $(arg_syms) -> begin
                     $(to_locals...)
                     local num_iters = div($limit - $start, $step, RoundDown)
@@ -227,7 +231,7 @@ function trace_for(mod, expr; track_numbers)
                     )
                     $counter[] < num_iters + 1
                 end
-            body_fn =
+            $(body_fn_sym) =
                 $(arg_syms) -> begin
                     local step_ = $step
                     local start_ = $start
@@ -238,13 +242,17 @@ function trace_for(mod, expr; track_numbers)
                     $counter[].mlir_data = ($counter[] + 1).mlir_data
                     nothing
                 end
-
+            $(verify_arg_names_sym) = if sizeof($(cond_fn_sym)) != 0
+                (Symbol($cond_fn_sym), $(QuoteNode.(args_names.args)...))
+            else
+                ($(QuoteNode.(args_names.args)...),)
+            end
             $(ReactantCore).traced_while(
-                cond_fn,
-                body_fn,
-                args;
+                $(cond_fn_sym),
+                $(body_fn_sym),
+                $(args_sym);
                 track_numbers=$(track_numbers),
-                verify_arg_names=$(QuoteNode(args_names)),
+                verify_arg_names=$(verify_arg_names_sym),
             )
         end
     end
