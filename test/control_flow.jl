@@ -889,7 +889,6 @@ function different_branch_returns(cond, a, b)
     return a, b
 end
 
-
 @testset "one branch mutates variable" begin
     cond = true
     a = 3 .* ones(Float32, 2, 3)
