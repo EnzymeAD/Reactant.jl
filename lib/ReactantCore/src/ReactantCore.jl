@@ -325,8 +325,10 @@ function trace_if(mod, expr; store_last_line=nothing, depth=0, track_numbers)
             $(store_last_line) = $(true_last_line)
         end
     else
-        expr.args[2]
-        nothing # explicitly return nothing to prevent branches from returning different types
+        quote
+            $(expr.args[2])
+            nothing # explicitly return nothing to prevent branches from returning different types
+        end
     end
 
     true_branch_symbols = ExpressionExplorer.compute_symbols_state(true_block)
@@ -369,8 +371,10 @@ function trace_if(mod, expr; store_last_line=nothing, depth=0, track_numbers)
             $(store_last_line) = $(false_last_line)
         end
     else
-        else_block
-        nothing # explicitly return nothing to prevent branches from returning different types
+        quote
+            $else_block
+            nothing # explicitly return nothing to prevent branches from returning different types
+        end
     end
 
     false_branch_symbols = ExpressionExplorer.compute_symbols_state(false_block)
