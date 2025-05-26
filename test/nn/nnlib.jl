@@ -418,3 +418,12 @@ end
 
     @test @jit(NNlib.upsample_nearest(x_ra, (2, 2))) ≈ NNlib.upsample_nearest(x, (2, 2))
 end
+
+@testset "softmax/logsoftmax reshaped input" begin
+    x = rand(Float32, 3, 4, 5)
+    x_ra = reshape(Reactant.to_rarray(x), 12, 5)
+    x = reshape(x, 12, 5)
+
+    @test @jit(NNlib.softmax(x_ra)) ≈ NNlib.softmax(x)
+    @test @jit(NNlib.logsoftmax(x_ra)) ≈ NNlib.logsoftmax(x)
+end
