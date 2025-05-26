@@ -23,6 +23,22 @@ function Base.copy(x::Union{AbstractConcreteArray,AbstractConcreteNumber})
     return fn(x)
 end
 
+function Base.copy(X::ConcreteIFRTArray{T,D,S,P}) where {T,D,S,P}
+    return ConcreteIFRTArray{T,D,S}(Base.copy(X.data), X.shape, X.sharding, X.padding)
+end
+
+function Base.copy(X::ConcretePJRTArray)
+    return Core.Typeof(X)(Base.copy.(X.data), X.shape, X.sharding)
+end
+
+function Base.copy(X::ConcreteIFRTNumber)
+    return Core.Typeof(X)(Base.copy(X.data), X.sharding)
+end
+
+function Base.copy(X::ConcretePJRTNumber)
+    return Core.Typeof(X)(Base.copy.(X.data), X.sharding)
+end
+
 # deepcopy
 function Base.deepcopy(x::Union{AbstractConcreteArray,AbstractConcreteNumber})
     return Base.copy(x)
@@ -115,14 +131,6 @@ function write_to_host_buffer!(data::Array, X::ConcretePJRTArray{T,N}) where {T,
         XLA.to_host(XLA.synced_buffer(only(X.data)), data, Reactant.Sharding.NoSharding())
     end
     return nothing
-end
-
-function Base.copy(X::ConcretePJRTArray)
-    return Core.Typeof(X)(Base.copy.(X.data), X.shape, X.sharding)
-end
-
-function Base.copy(X::ConcretePJRTNumber)
-    return Core.Typeof(X)(Base.copy.(X.data), X.sharding)
 end
 
 function write_to_host_buffer!(data::Array, X::ConcreteIFRTArray{T,N}) where {T,N}
