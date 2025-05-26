@@ -101,6 +101,10 @@ function overloaded_conv!(
         rhs_dilation=collect(dilation),
         feature_group_count,
         batch_group_count=1,
+        precision_config=MLIR.IR.Attribute([
+            MLIR.IR.Attribute(Reactant.CONVOLUTION_PRECISION[]),
+            MLIR.IR.Attribute(Reactant.CONVOLUTION_PRECISION[]),
+        ]),
     )
     set_mlir_data!(y, Reactant.MLIR.IR.result(conv))
     return y
@@ -196,6 +200,10 @@ function overloaded_∇conv_filter!(
         rhs_dilation=collect(stride),
         feature_group_count,
         batch_group_count,
+        precision_config=MLIR.IR.Attribute([
+            MLIR.IR.Attribute(Reactant.CONVOLUTION_PRECISION[]),
+            MLIR.IR.Attribute(Reactant.CONVOLUTION_PRECISION[]),
+        ]),
     )
     set_mlir_data!(dw, MLIR.IR.result(conv))
 
@@ -316,9 +324,10 @@ function overloaded_∇conv_data!(
         dimension_numbers,
         feature_group_count,
         batch_group_count=1,
-        precision_config=(
-            Reactant.CONVOLUTION_PRECISION[], Reactant.CONVOLUTION_PRECISION[]
-        ),
+        precision_config=MLIR.IR.Attribute([
+            MLIR.IR.Attribute(Reactant.CONVOLUTION_PRECISION[]),
+            MLIR.IR.Attribute(Reactant.CONVOLUTION_PRECISION[]),
+        ]),
     )
     set_mlir_data!(dx, MLIR.IR.result(conv))
 
