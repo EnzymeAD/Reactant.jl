@@ -84,7 +84,7 @@ end
 const DOT_GENERAL_PRECISION = ScopedValue{
     Union{DotGeneralPrecision.T,Nothing,Tuple{DotGeneralPrecision.T,DotGeneralPrecision.T}}
 }(
-    DotGeneralPrecision.HIGH
+    DotGeneralPrecision.DEFAULT
 )
 
 function MLIR.IR.Attribute(precision::DotGeneralPrecision.T)
