@@ -91,11 +91,12 @@ end
                 @test @jit(NNlib.conv(x_reactant, weight_reactant, conv_dims)) ≈
                     NNlib.conv(x, weight, conv_dims)
 
+                ∇data = NNlib.∇conv_data(dy, weight, conv_dims)
                 @test @jit(NNlib.∇conv_data(dy_reactant, weight_reactant, conv_dims)) ≈
-                    NNlib.∇conv_data(dy, weight, conv_dims)
+                    ∇data
 
-                @test @jit(NNlib.∇conv_filter(x_reactant, dy_reactant, conv_dims)) ≈
-                    NNlib.∇conv_filter(x, dy, conv_dims)
+                ∇filter = NNlib.∇conv_filter(x, dy, conv_dims)
+                @test @jit(NNlib.∇conv_filter(x_reactant, dy_reactant, conv_dims)) ≈ ∇filter
 
                 ∇data_enzyme, ∇filter_enzyme = @jit ∇conv_data_filter(
                     x_reactant, weight_reactant, conv_dims
