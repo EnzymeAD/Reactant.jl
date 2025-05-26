@@ -85,6 +85,69 @@ struct TracedRNG <: Random.AbstractRNG
     algorithm::String
 end
 
+## TracedUnitRange
+struct TracedUnitRange{T} <: AbstractUnitRange{T}
+    start::T
+    stop::T
+    function TracedUnitRange{T}(start::T, stop::T) where {T}
+        return new(start, __unitrange_last(start, stop))
+    end
+end
+
+function __unitrange_last(start::Integer, stop::Integer)
+    return ifelse(stop >= start, stop, convert(typeof(stop), start - oneunit(start - stop)))
+end
+
+function __unitrange_last(start, stop)
+    return ifelse(
+        stop >= start,
+        convert(typeof(stop), start + floor(stop - start)),
+        convert(typeof(stop), start - oneunit(start - stop)),
+    )
+end
+
+function TracedUnitRange{T}(start, stop) where {T}
+    return TracedUnitRange{T}(convert(T, start), convert(T, stop))
+end
+
+TracedUnitRange(start::T, stop::T) where {T} = TracedUnitRange{T}(start, stop)
+
+function TracedUnitRange(start, stop)
+    startstop_promoted = promote(start, stop)
+    Base.not_sametype((start, stop), startstop_promoted)
+    return TracedUnitRange(startstop_promoted...)
+end
+
+@leaf TracedUnitRange
+Adapt.parent_type(::Type{TracedUnitRange{T}}) where {T} = TracedUnitRange{T}
+
+## TracedStepRangeLen
+struct TracedStepRangeLen{T,R,S,L} <: AbstractRange{T}
+    ref::R
+    step::S
+    len::L
+    offset::L
+end
+
+function TracedStepRangeLen{T,R,S}(ref::R, step::S, len, offset=1) where {T,R,S}
+    return TracedStepRangeLen{T,R,S,typeof(len)}(ref, step, len, offset)
+end
+function TracedStepRangeLen(ref::R, step::S, len, offset=1) where {R,S}
+    return TracedStepRangeLen{typeof(ref + zero(step)),R,S,typeof(len)}(
+        ref, step, len, offset
+    )
+end
+function TracedStepRangeLen{T}(
+    ref::R, step::S, len::Integer, offset::Integer=1
+) where {T,R,S}
+    return TracedStepRangeLen{T,R,S,typeof(len)}(ref, step, len, offset)
+end
+
+@leaf TracedStepRangeLen
+function Adapt.parent_type(::Type{TracedStepRangeLen{T,R,S,L}}) where {T,R,S,L}
+    return TracedStepRangeLen{T,R,S,L}
+end
+
 # Concrete Types
 ## ConcretePJRTNumber
 mutable struct ConcretePJRTNumber{T,D,S<:Sharding.ShardInfo} <: AbstractConcreteNumber{T}

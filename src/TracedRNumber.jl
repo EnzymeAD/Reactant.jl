@@ -1,6 +1,14 @@
 module TracedRNumberOverrides
 
-using ..Reactant: Reactant, TracedRNumber, TracedRArray, TracedUtils, Ops, unwrapped_eltype
+using ..Reactant:
+    Reactant,
+    TracedRNumber,
+    TracedRArray,
+    TracedUtils,
+    Ops,
+    unwrapped_eltype,
+    TracedUnitRange,
+    TracedStepRangeLen
 using ReactantCore: ReactantCore, @trace
 using Adapt: Adapt
 
@@ -506,36 +514,6 @@ function Base.getindex(
     return Base.unsafe_getindex(r, i)
 end
 
-function unitrange_last(start::Integer, stop::Integer)
-    return ifelse(stop >= start, stop, convert(typeof(stop), start - oneunit(start - stop)))
-end
-function unitrange_last(start, stop)
-    return ifelse(
-        stop >= start,
-        convert(typeof(stop), start + floor(stop - start)),
-        convert(typeof(stop), start - oneunit(start - stop)),
-    )
-end
-
-struct TracedUnitRange{T} <: AbstractUnitRange{T}
-    start::T
-    stop::T
-    function TracedUnitRange{T}(start::T, stop::T) where {T}
-        return new(start, unitrange_last(start, stop))
-    end
-end
-function Adapt.parent_type(::Type{TracedUnitRange{T}}) where {T}
-    return TracedUnitRange{T}
-end
-function TracedUnitRange{T}(start, stop) where {T}
-    return TracedUnitRange{T}(convert(T, start), convert(T, stop))
-end
-TracedUnitRange(start::T, stop::T) where {T} = TracedUnitRange{T}(start, stop)
-function TracedUnitRange(start, stop)
-    startstop_promoted = promote(start, stop)
-    not_sametype((start, stop), startstop_promoted)
-    return TracedUnitRange(startstop_promoted...)
-end
 function Base._in_unit_range(
     v::TracedUnitRange, val, i::Union{Integer,TracedRNumber{<:Integer}}
 )
@@ -566,18 +544,20 @@ function Base.promote_rule(
 ) where {T1,T2}
     return el_same(promote_type(T1, T2), a, b)
 end
-TracedUnitRange{T}(r::TracedUnitRange{T}) where {T<:Real} = r
-TracedUnitRange{T}(r::TracedUnitRange) where {T<:Real} = TracedUnitRange{T}(r.start, r.stop)
+Reactant.TracedUnitRange{T}(r::TracedUnitRange{T}) where {T<:Real} = r
+function Reactant.TracedUnitRange{T}(r::TracedUnitRange) where {T<:Real}
+    return TracedUnitRange{T}(r.start, r.stop)
+end
 
 function Base.promote_rule(
     a::Type{TracedUnitRange{T1}}, ::Type{UR}
 ) where {T1,UR<:AbstractUnitRange}
     return promote_rule(a, TracedUnitRange{eltype(UR)})
 end
-function TracedUnitRange{T}(r::AbstractUnitRange) where {T<:Real}
+function Reactant.TracedUnitRange{T}(r::AbstractUnitRange) where {T<:Real}
     return TracedUnitRange{T}(first(r), last(r))
 end
-TracedUnitRange(r::AbstractUnitRange) = TracedUnitRange(first(r), last(r))
+Reactant.TracedUnitRange(r::AbstractUnitRange) = TracedUnitRange(first(r), last(r))
 
 @inline function Base.length(r::TracedUnitRange{TracedRNumber{T}}) where {T}
     start, stop = first(r), last(r)
@@ -606,13 +586,6 @@ end
 
 AbstractUnitRange{T}(r::TracedUnitRange) where {T} = TracedUnitRange{T}(r)
 
-struct TracedStepRangeLen{T,R,S,L} <: AbstractRange{T}
-    ref::R
-    step::S
-    len::L
-    offset::L
-end
-
 function Base.Array(x::TracedStepRangeLen{<:Reactant.AbstractConcreteNumber})
     return StepRangeLen(
         Reactant.to_number(x.ref),
@@ -622,25 +595,7 @@ function Base.Array(x::TracedStepRangeLen{<:Reactant.AbstractConcreteNumber})
     )
 end
 
-function Adapt.parent_type(::Type{TracedStepRangeLen{T,R,S,L}}) where {T,R,S,L}
-    return TracedStepRangeLen{T,R,S,L}
-end
-
 # constructors and interface implementation copied from range.jl
-function TracedStepRangeLen{T,R,S}(ref::R, step::S, len, offset=1) where {T,R,S}
-    return TracedStepRangeLen{T,R,S,typeof(len)}(ref, step, len, offset)
-end
-function TracedStepRangeLen(ref::R, step::S, len, offset=1) where {R,S}
-    return TracedStepRangeLen{typeof(ref + zero(step)),R,S,typeof(len)}(
-        ref, step, len, offset
-    )
-end
-function TracedStepRangeLen{T}(
-    ref::R, step::S, len::Integer, offset::Integer=1
-) where {T,R,S}
-    return TracedStepRangeLen{T,R,S,typeof(len)}(ref, step, len, offset)
-end
-
 Base.isempty(r::TracedStepRangeLen) = length(r) == 0
 Base.step(r::TracedStepRangeLen) = r.step
 Base.step_hp(r::TracedStepRangeLen) = r.step
@@ -733,13 +688,13 @@ function Base.promote_rule(
         promote_type(T1, T2), TracedStepRangeLen{T1,R,S,L}, TracedStepRangeLen{T2,R,S,L}
     )
 end
-TracedStepRangeLen{T,R,S,L}(r::TracedStepRangeLen{T,R,S,L}) where {T,R,S,L} = r
-function TracedStepRangeLen{T,R,S,L}(r::TracedStepRangeLen) where {T,R,S,L}
+Reactant.TracedStepRangeLen{T,R,S,L}(r::TracedStepRangeLen{T,R,S,L}) where {T,R,S,L} = r
+function Reactant.TracedStepRangeLen{T,R,S,L}(r::TracedStepRangeLen) where {T,R,S,L}
     return TracedStepRangeLen{T,R,S,L}(
         convert(R, r.ref), convert(S, r.step), convert(L, r.len), convert(L, r.offset)
     )
 end
-function TracedStepRangeLen{T}(r::TracedStepRangeLen) where {T}
+function Reactant.TracedStepRangeLen{T}(r::TracedStepRangeLen) where {T}
     return TracedStepRangeLen(convert(T, r.ref), convert(T, r.step), r.len, r.offset)
 end
 function Base.promote_rule(
@@ -747,13 +702,13 @@ function Base.promote_rule(
 ) where {T,R,S,L,OR<:AbstractRange}
     return promote_rule(a, TracedStepRangeLen{eltype(OR),eltype(OR),eltype(OR),Int})
 end
-function TracedStepRangeLen{T,R,S,L}(r::AbstractRange) where {T,R,S,L}
+function Reactant.TracedStepRangeLen{T,R,S,L}(r::AbstractRange) where {T,R,S,L}
     return TracedStepRangeLen{T,R,S,L}(R(first(r)), S(step(r)), length(r))
 end
-function TracedStepRangeLen{T}(r::AbstractRange) where {T}
+function Reactant.TracedStepRangeLen{T}(r::AbstractRange) where {T}
     return TracedStepRangeLen(T(first(r)), T(step(r)), length(r))
 end
-TracedStepRangeLen(r::AbstractRange) = TracedStepRangeLen{eltype(r)}(r)
+Reactant.TracedStepRangeLen(r::AbstractRange) = TracedStepRangeLen{eltype(r)}(r)
 
 function Base.promote_rule(
     ::Type{LinRange{A,L}}, b::Type{TracedStepRangeLen{T2,R2,S2,L2}}
