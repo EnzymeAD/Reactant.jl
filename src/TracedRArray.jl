@@ -13,7 +13,6 @@ using ..Reactant:
     Ops,
     MLIR,
     ancestor,
-    allowscalar,
     aos_to_soa,
     unwrapped_eltype
 using ..TracedUtils: TracedUtils, get_mlir_data, set_mlir_data!, materialize_traced_array
@@ -690,7 +689,7 @@ function Base.similar(
     return Ops.fill(zero(T), dims)
 end
 
-function Broadcast.copy(bc::Broadcasted{<:AbstractReactantArrayStyle{0}})
+function Base.copy(bc::Broadcasted{<:AbstractReactantArrayStyle{0}})
     ElType = Broadcast.combine_eltypes(bc.f, bc.args)
     dest = copyto!(similar(bc, ElType), bc)
     return dest[CartesianIndex()]  # 0D broadcast needs to unwrap results
@@ -704,7 +703,7 @@ end
 
 # we need to override the outer copy method to make sure we never fall back to scalar
 # iteration (see, e.g., CUDA.jl#145)
-function Broadcast.copy(bc::Broadcasted{<:AbstractReactantArrayStyle})
+function Base.copy(bc::Broadcasted{<:AbstractReactantArrayStyle})
     fn = if bc.f isa Type && bc.f <: Reactant.ReactantPrimitive
         TracedUtils.TypeCast{bc.f}()
     else

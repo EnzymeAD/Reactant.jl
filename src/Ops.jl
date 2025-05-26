@@ -2038,7 +2038,7 @@ end
 
     false_fn_args = false_fn_names[1]
     MLIR.IR.activate!(false_fn_body)
-    Ops.activate_constant_context!(false_fn_body)
+    activate_constant_context!(false_fn_body)
     fb_result = try
         for (i, arg) in enumerate(fb_linear_args)
             # find the right path to index the traced arg.
@@ -2062,7 +2062,7 @@ end
         end
         Reactant.call_with_reactant(false_fn, fb_traced_args...)
     finally
-        Ops.deactivate_constant_context!(false_fn_body)
+        deactivate_constant_context!(false_fn_body)
         MLIR.IR.deactivate!(false_fn_body)
     end
 
@@ -2144,7 +2144,7 @@ end
 
     # finalize the true branch by adding the missing values
     MLIR.IR.activate!(true_fn_body)
-    Ops.activate_constant_context!(true_fn_body)
+    activate_constant_context!(true_fn_body)
     tb_corrected_linear_results = Reactant.TracedType[]
     try
         for (i, path) in enumerate(tb_paths)
@@ -2156,12 +2156,12 @@ end
         end
     finally
         MLIR.IR.deactivate!(true_fn_body)
-        Ops.deactivate_constant_context!(true_fn_body)
+        deactivate_constant_context!(true_fn_body)
     end
 
     # finalize the false branch by adding the missing values
     MLIR.IR.activate!(false_fn_body)
-    Ops.activate_constant_context!(false_fn_body)
+    activate_constant_context!(false_fn_body)
     fb_corrected_linear_results = Reactant.TracedType[]
     try
         for (i, path) in enumerate(fb_paths)
@@ -2173,7 +2173,7 @@ end
         end
     finally
         MLIR.IR.deactivate!(false_fn_body)
-        Ops.deactivate_constant_context!(false_fn_body)
+        deactivate_constant_context!(false_fn_body)
     end
 
     # All MissingTracedValues must be replaced with zeroes
@@ -2194,23 +2194,23 @@ end
         elseif tr isa MissingTracedValue
             @assert !(fr isa MissingTracedValue)
             MLIR.IR.activate!(true_fn_body)
-            Ops.activate_constant_context!(true_fn_body)
+            activate_constant_context!(true_fn_body)
             try
                 tb_corrected_linear_results[i] = zero(fr)
             finally
                 MLIR.IR.deactivate!(true_fn_body)
-                Ops.deactivate_constant_context!(true_fn_body)
+                deactivate_constant_context!(true_fn_body)
             end
             fr
         elseif fr isa MissingTracedValue
             @assert !(tr isa MissingTracedValue)
             MLIR.IR.activate!(false_fn_body)
-            Ops.activate_constant_context!(false_fn_body)
+            activate_constant_context!(false_fn_body)
             try
                 fb_corrected_linear_results[i] = zero(tr)
             finally
                 MLIR.IR.deactivate!(false_fn_body)
-                Ops.deactivate_constant_context!(false_fn_body)
+                deactivate_constant_context!(false_fn_body)
             end
             tr
         else
@@ -2225,7 +2225,7 @@ end
     @assert length(all_paths) == length(result_types) + length(both_missing)
 
     MLIR.IR.activate!(true_fn_body)
-    Ops.activate_constant_context!(true_fn_body)
+    activate_constant_context!(true_fn_body)
     try
         vals = MLIR.IR.Value[
             Reactant.TracedUtils.get_mlir_data(res) for
@@ -2234,11 +2234,11 @@ end
         MLIR.Dialects.stablehlo.return_(vals)
     finally
         MLIR.IR.deactivate!(true_fn_body)
-        Ops.deactivate_constant_context!(true_fn_body)
+        deactivate_constant_context!(true_fn_body)
     end
 
     MLIR.IR.activate!(false_fn_body)
-    Ops.activate_constant_context!(false_fn_body)
+    activate_constant_context!(false_fn_body)
     try
         vals = MLIR.IR.Value[
             Reactant.TracedUtils.get_mlir_data(res) for
@@ -2247,7 +2247,7 @@ end
         MLIR.Dialects.stablehlo.return_(vals)
     finally
         MLIR.IR.deactivate!(false_fn_body)
-        Ops.deactivate_constant_context!(false_fn_body)
+        deactivate_constant_context!(false_fn_body)
     end
 
     # With the corrected results, we can compile the true and false branches
@@ -2743,14 +2743,14 @@ end
         permutation[i + length(batch_dims)] = d
     end
 
-    res = only(batch(f, [Ops.transpose(A, permutation; location)], batch_shape; location))
+    res = only(batch(f, [transpose(A, permutation; location)], batch_shape; location))
     if ndims(res) != length(permutation)
-        res = Ops.reshape(
+        res = reshape(
             res,
             vcat(collect(Int64, size(res)), ones(Int64, length(permutation) - ndims(res))),
         )
     end
-    return Ops.transpose(res, invperm(permutation); location)
+    return transpose(res, invperm(permutation); location)
 end
 
 @noinline function batch(
@@ -2800,7 +2800,7 @@ end
     fn,
     location=mlir_stacktrace("batch", @__FILE__, @__LINE__),
 )
-    op = MLIR.Dialects.enzyme.batch(
+    op = enzyme.batch(
         [i isa TracedRArray ? i.mlir_data : i for i in inputs];
         outputs=output_types,
         fn=MLIR.IR.FlatSymbolRefAttribute(

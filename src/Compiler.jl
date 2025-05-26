@@ -1,8 +1,8 @@
 module Compiler
 
-using Reactant_jll
+using Reactant_jll: Reactant_jll
 using Libdl: dlsym
-using LinearAlgebra: LinearAlgebra, BLAS
+using LinearAlgebra: LinearAlgebra
 
 import ..Reactant:
     Reactant,
@@ -16,7 +16,6 @@ import ..Reactant:
     TracedRArray,
     TracedRNumber,
     RArray,
-    RNumber,
     OrderedIdDict,
     make_tracer,
     TracedToConcrete,

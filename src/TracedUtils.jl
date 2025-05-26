@@ -6,7 +6,6 @@ module TracedUtils
 using ..Reactant:
     Reactant,
     MLIR,
-    RNumber,
     TracedRArray,
     TracedRNumber,
     AnyTracedRArray,

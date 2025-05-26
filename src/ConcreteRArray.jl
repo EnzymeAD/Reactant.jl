@@ -19,7 +19,7 @@ end
 
 # copy
 function Base.copy(x::Union{AbstractConcreteArray,AbstractConcreteNumber})
-    fn = Reactant.compile(copy, (x,))
+    fn = compile(copy, (x,))
     return fn(x)
 end
 
@@ -108,11 +108,11 @@ function write_to_host_buffer!(data::Array, X::ConcretePJRTArray{T,N}) where {T,
                 continue
             end
             data_slice = data[slice...]
-            XLA.to_host(X.data[idx], data_slice, Reactant.Sharding.NoSharding())
+            XLA.to_host(X.data[idx], data_slice, Sharding.NoSharding())
             data[slice...] .= data_slice
         end
     else
-        XLA.to_host(XLA.synced_buffer(only(X.data)), data, Reactant.Sharding.NoSharding())
+        XLA.to_host(XLA.synced_buffer(only(X.data)), data, Sharding.NoSharding())
     end
     return nothing
 end
@@ -614,7 +614,7 @@ function Base.fill(
     sharding::Sharding.AbstractSharding=Sharding.NoSharding(),
 )
     output_shardings = Sharding.is_sharded(sharding) ? Dict(1 => sharding) : nothing
-    fn = Reactant.compile((); output_shardings) do
+    fn = compile((); output_shardings) do
         return Ops.fill(val, collect(Int64, dims))
     end
     return fn()

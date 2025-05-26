@@ -108,10 +108,10 @@ function should_rewrite_call(@nospecialize(ft))
         if hasfield(typeof(ft), :name) && hasfield(typeof(ft.name), :module)
             mod = ft.name.module
             # Don't rewrite primitive ops, tracing utilities, or any MLIR-based functions
-            if has_ancestor(mod, Reactant.Ops) ||
-                has_ancestor(mod, Reactant.TracedUtils) ||
-                has_ancestor(mod, Reactant.MLIR) ||
-                has_ancestor(mod, Reactant.TracedRandom)
+            if has_ancestor(mod, Ops) ||
+                has_ancestor(mod, TracedUtils) ||
+                has_ancestor(mod, MLIR) ||
+                has_ancestor(mod, TracedRandom)
                 return false
             end
             if string(mod) == "CUDA"
@@ -154,7 +154,7 @@ function should_rewrite_call(@nospecialize(ft))
         ft === Type{MLIR.IR.Block} ||
         # TODO: perhaps problematic calls in `traced_call`
         # should be moved to TracedUtils.jl:
-        ft <: typeof(Reactant.ReactantCore.traced_call)
+        ft <: typeof(ReactantCore.traced_call)
         return false
     end
 
@@ -603,7 +603,7 @@ function call_with_reactant_generator(
         ir, any_changed = rewrite_insts!(ir, interp, guaranteed_error)
     end
 
-    src = ccall(:jl_new_code_info_uninit, Ref{CC.CodeInfo}, ())
+    src = ccall(:jl_new_code_info_uninit, Ref{Core.CodeInfo}, ())
     src.slotnames = fill(:none, length(ir.argtypes) + 1)
     src.slotflags = fill(zero(UInt8), length(ir.argtypes))
     src.slottypes = copy(ir.argtypes)

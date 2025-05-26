@@ -17,7 +17,31 @@ using ReactantCore: materialize_traced_array
 
 using ..TracedUtils: TracedUtils, get_mlir_data, set_mlir_data!
 
-using LinearAlgebra
+using LinearAlgebra:
+    LinearAlgebra,
+    Adjoint,
+    Bidiagonal,
+    Diagonal,
+    Factorization,
+    I,
+    LowerTriangular,
+    RowMaximum,
+    SymTridiagonal,
+    Symmetric,
+    Transpose,
+    Tridiagonal,
+    UnitLowerTriangular,
+    UnitUpperTriangular,
+    UpperTriangular,
+    adjoint,
+    convert,
+    copyto!,
+    diag,
+    diagm,
+    ldiv!,
+    lu,
+    lu!,
+    transpose
 using Libdl: Libdl
 
 function __init__()
@@ -334,7 +358,7 @@ end
 function LinearAlgebra.ldiv!(
     B::Union{AnyTracedRArray{T,1},AnyTracedRArray{T,2}}, D::Diagonal, A::AbstractVecOrMat
 ) where {T}
-    LinearAlgebra.require_one_based_indexing(A, B)
+    Base.require_one_based_indexing(A, B)
     dd = D.diag
     d = length(dd)
     m, n = size(A, 1), size(A, 2)
