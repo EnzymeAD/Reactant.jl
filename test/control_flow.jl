@@ -877,3 +877,37 @@ end
 
     @test h_ra ≈ h
 end
+
+function different_branch_returns(cond, a, b)
+    @trace if cond
+        a .= sin.(a)
+        nothing
+    else
+        b .= sin.(b)
+        nothing
+    end
+    return a, b
+end
+
+
+@testset "one branch mutates variable" begin
+    cond = true
+    a = 3 .* ones(Float32, 2, 3)
+    b = 4 .* ones(Float64, 2, 3)
+
+    cond_ra = ConcreteRNumber{Bool}(cond)
+    a_ra = Reactant.to_rarray(a)
+    b_ra = Reactant.to_rarray(b)
+
+    result_ra = @jit(different_branch_returns(cond_ra, a_ra, b_ra))
+    result = different_branch_returns(cond, a, b)
+
+    @test result_ra[1] == a_ra
+    @test result_ra[2] == b_ra
+
+    @test result[1] == a
+    @test result[2] == b
+
+    @test a_ra ≈ a
+    @test b_ra ≈ b
+end
