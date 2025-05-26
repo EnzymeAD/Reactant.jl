@@ -22,7 +22,7 @@ using Reactant, Test
         @test !contains(repr(hlo), "algorithm")
 
         hlo = with_config(;
-            dot_general_precision=(PrecisionConfig.HIGH, PrecisionConfig.DEFAULT),
+            dot_general_precision=(PrecisionConfig.HIGH, PrecisionConfig.DEFAULT)
         ) do
             @code_hlo *(x_ra, y_ra)
         end
