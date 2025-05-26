@@ -15,12 +15,12 @@ export @allowscalar # re-exported from GPUArraysCore
 
 is_extension_loaded(::Val) = false
 
-# auxiliary types and functions
-include("OrderedIdDict.jl")
-
 function precompiling()
     return (@ccall jl_generating_output()::Cint) == 1
 end
+
+# auxiliary types and functions
+include("OrderedIdDict.jl")
 
 using Enzyme
 

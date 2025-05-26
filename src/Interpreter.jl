@@ -17,8 +17,6 @@ import Core.Compiler:
     CallMeta,
     Effects,
     NoCallInfo,
-    widenconst,
-    mapany,
     MethodResultPure
 
 Base.Experimental.@MethodTable(REACTANT_METHOD_TABLE)

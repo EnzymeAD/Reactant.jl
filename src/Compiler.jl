@@ -2,7 +2,7 @@ module Compiler
 
 using Reactant_jll
 using Libdl: dlsym
-using LinearAlgebra: BLAS
+using LinearAlgebra: LinearAlgebra, BLAS
 
 import ..Reactant:
     Reactant,
@@ -1480,7 +1480,7 @@ function compile_mlir!(
         "canonicalize"
     end
 
-    blas_int_width = sizeof(BLAS.BlasInt) * 8
+    blas_int_width = sizeof(LinearAlgebra.BlasInt) * 8
     lower_enzymexla_linalg_pass = "lower-enzymexla-linalg{backend=$backend \
                                    blas_int_width=$blas_int_width}"
 
