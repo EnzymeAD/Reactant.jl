@@ -6,12 +6,29 @@ using ReactantCore:
 using LinearAlgebra: LinearAlgebra
 using Random: Random, AbstractRNG
 using EnumX: @enumx
+using EnzymeCore:
+    Active,
+    Annotation,
+    BatchDuplicated,
+    BatchDuplicatedNoNeed,
+    Const,
+    Duplicated,
+    DuplicatedNoNeed,
+    EnzymeRules,
+    Reverse
+using Enzyme: Enzyme
 using Functors: @leaf
+
+using Libdl: Libdl
+using Reactant_jll: Reactant_jll
+using LLVMOpenMP_jll: LLVMOpenMP_jll
 
 using Adapt: Adapt, WrappedArray
 using GPUArraysCore: GPUArraysCore, @allowscalar, allowscalar # keep this import to allow users to do `Reactant.allowscalar(false)`
 
 export @allowscalar # re-exported from GPUArraysCore
+
+struct ReactantABI <: Enzyme.EnzymeCore.ABI end
 
 is_extension_loaded(::Val) = false
 
@@ -21,10 +38,6 @@ end
 
 # auxiliary types and functions
 include("OrderedIdDict.jl")
-
-using Enzyme
-
-struct ReactantABI <: Enzyme.EnzymeCore.ABI end
 
 include("PrimitiveTypes.jl")
 
@@ -226,9 +239,6 @@ function deinitialize_dialect()
     return registry[] = nothing
 end
 
-using Libdl
-using Reactant_jll
-using LLVMOpenMP_jll
 function initialize_ptrs()
     for name in (
         "__kmpc_barrier",
