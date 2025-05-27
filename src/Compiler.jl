@@ -3,6 +3,7 @@ module Compiler
 using Reactant_jll
 using Libdl: dlsym
 using LinearAlgebra: BLAS
+using Bijections
 
 import ..Reactant:
     Reactant,
@@ -3238,8 +3239,7 @@ function compile_xla(f, args; client=nothing, serializable::Bool=false, kwargs..
 end
 
 # inspired by RuntimeGeneratedFunction.jl
-const __thunk_fwd_body_cache = Dict{Symbol,Expr}()
-const __thunk_rev_body_cache = Dict{Expr,Symbol}()
+const __thunk_body_cache = Bijection{Symbol,Expr}()
 
 function compile(f, args; sync=false, kwargs...)
     _, exec, mlir_fn_res, device, client, str = compile_xla(f, args; kwargs...)
@@ -3352,12 +3352,11 @@ function compile(f, args; sync=false, kwargs...)
         display(mlir_fn_res.donated_args_mask)
     end
 
-    fname = if body in keys(__thunk_rev_body_cache)
-        __thunk_rev_body_cache[body]
+    fname = if hasvalue(__thunk_body_cache, body)
+        __thunk_body_cache(body)
     else
         fname2 = gensym(Symbol(Symbol(f), :_reactant))
-        __thunk_rev_body_cache[body] = fname2
-        __thunk_fwd_body_cache[fname2] = body
+        __thunk_body_cache[fname2] = body
         fname2
     end
 
@@ -3439,7 +3438,7 @@ end
             )
         end
     end
-    body = __thunk_fwd_body_cache[tag]
+    body = __thunk_body_cache[tag]
     if IsClosure
         return quote
             args = (thunk.f, args...)
