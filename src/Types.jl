@@ -52,6 +52,10 @@ mutable struct TracedRNumber{T} <: RNumber{T}
     end
 end
 
+function repath(x::TracedRNumber{T}, paths) where {T}
+    return TracedRNumber{T}(paths, x.mlir_data)
+end
+
 @leaf TracedRNumber
 
 ## TracedRArray
@@ -69,6 +73,10 @@ mutable struct TracedRArray{T,N} <: RArray{TracedRNumber{T},N}
         end
         return new{T,N}(paths, mlir_data, shape)
     end
+end
+
+function repath(x::TracedRArray{T,N}, paths) where {T,N}
+    return TracedRArray{T,N}(paths, x.mlir_data, x.shape)
 end
 
 @leaf TracedRArray

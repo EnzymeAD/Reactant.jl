@@ -189,20 +189,6 @@ include("Compiler.jl")
 
 include("Overlay.jl")
 
-function Enzyme.make_zero(
-    ::Type{RT}, seen::IdDict, prev::RT, ::Val{copy_if_inactive}=Val(false)
-)::RT where {copy_if_inactive,RT<:Union{RArray,RNumber}}
-    if haskey(seen, prev)
-        return seen[prev]
-    end
-    if Enzyme.Compiler.guaranteed_const_nongen(eltype(RT), nothing)
-        return copy_if_inactive ? Base.deepcopy_internal(prev, seen) : prev
-    end
-    res = zero(prev)
-    seen[prev] = res
-    return res
-end
-
 using .Compiler: @compile, @code_hlo, @code_mhlo, @jit, @code_xla, traced_getfield, compile
 export ConcreteRArray,
     ConcreteRNumber,

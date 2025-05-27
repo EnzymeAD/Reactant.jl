@@ -7,6 +7,7 @@ for (jlop, hloop) in (
 end
 
 function NNlib.softmax!(out::AnyTracedRArray{T,N}, x::AbstractArray; dims=1) where {T,N}
+    x = T.(Reactant.materialize_traced_array(x))
     max_ = maximum(x; dims)
     diff = exp.(x .- max_)
     @trace if all(isfinite, max_)
@@ -19,6 +20,7 @@ function NNlib.softmax!(out::AnyTracedRArray{T,N}, x::AbstractArray; dims=1) whe
 end
 
 function NNlib.logsoftmax!(out::AnyTracedRArray{T}, x::AbstractArray; dims=1) where {T}
+    x = T.(Reactant.materialize_traced_array(x))
     max_ = maximum(x; dims)
     diff = x .- max_
     @trace if all(isfinite, max_)
