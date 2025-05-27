@@ -3002,7 +3002,7 @@ end
                 offset.mlir_data,
                 mean.mlir_data,
                 variance.mlir_data;
-                epsilon=T(epsilon),
+                epsilon=Float32(epsilon),
                 feature_index=feature_index - 1,
                 location,
             ),
@@ -3038,7 +3038,7 @@ end
         operand.mlir_data,
         scale.mlir_data,
         offset.mlir_data;
-        epsilon=T(epsilon),
+        epsilon=Float32(epsilon),
         feature_index=feature_index - 1,
         location,
     )

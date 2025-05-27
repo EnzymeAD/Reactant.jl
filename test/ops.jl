@@ -1192,3 +1192,71 @@ end
         @test @jit(recon_from_lu(lu_ra)) ≈ @jit(apply_permutation(x_ra, perm))
     end
 end
+
+@testset "batch norm" begin
+    @testset "training" begin
+        @testset for affine in [false, true]
+            x = Reactant.to_rarray(randn(2, 3, 4, 5))
+            if affine
+                scale = Reactant.to_rarray(randn(3))
+                offset = Reactant.to_rarray(randn(3))
+            else
+                scale, offset = nothing, nothing
+            end
+
+            hlo = @code_hlo Ops.batch_norm_training(
+                x, scale, offset; epsilon=1e-5, feature_index=2
+            )
+            @test occursin("stablehlo.batch_norm_training", repr(hlo))
+
+            if !affine
+                @test occursin(
+                    "stablehlo.constant dense<0.000000e+00> : tensor<3xf64>", repr(hlo)
+                )
+                @test occursin(
+                    "stablehlo.constant dense<1.000000e+00> : tensor<3xf64>", repr(hlo)
+                )
+            end
+
+            res, m, v = @jit Ops.batch_norm_training(
+                x, scale, offset; epsilon=1e-5, feature_index=2
+            )
+            @test size(res) == size(x)
+            @test size(m) == (3,)
+            @test size(v) == (3,)
+        end
+    end
+
+    @testset "inference" begin
+        @testset for affine in [false, true]
+            x = Reactant.to_rarray(randn(2, 3, 4, 5))
+            if affine
+                scale = Reactant.to_rarray(randn(3))
+                offset = Reactant.to_rarray(randn(3))
+            else
+                scale, offset = nothing, nothing
+            end
+
+            rm = Reactant.to_rarray(randn(3))
+            rv = Reactant.to_rarray(rand(3))
+
+            hlo = @code_hlo Ops.batch_norm_inference(
+                x, scale, offset, rm, rv; epsilon=1e-5, feature_index=2
+            )
+            @test occursin("stablehlo.batch_norm_inference", repr(hlo))
+            if !affine
+                @test occursin(
+                    "stablehlo.constant dense<0.000000e+00> : tensor<3xf64>", repr(hlo)
+                )
+                @test occursin(
+                    "stablehlo.constant dense<1.000000e+00> : tensor<3xf64>", repr(hlo)
+                )
+            end
+
+            res = @jit Ops.batch_norm_inference(
+                x, scale, offset, rm, rv; epsilon=1e-5, feature_index=2
+            )
+            @test size(res) == size(x)
+        end
+    end
+end
