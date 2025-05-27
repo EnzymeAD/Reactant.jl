@@ -52,7 +52,7 @@ mutable struct TracedRNumber{T} <: RNumber{T}
     end
 end
 
-function repath(x::TracedRNumber{T}, paths) where T
+function repath(x::TracedRNumber{T}, paths) where {T}
     return TracedRNumber{T}(paths, x.mlir_data)
 end
 

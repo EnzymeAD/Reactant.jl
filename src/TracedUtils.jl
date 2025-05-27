@@ -655,7 +655,13 @@ function finalize_mlir_fn(
                     for p in path[3:end]
                         original_arg = Reactant.Compiler.traced_getfield(original_arg, p)
                     end
-                    if !(original_arg isa Union{Reactant.ConcreteRNumber, Reactant.ConcreteRArray, Reactant.TracedType})
+                    if !(
+                        original_arg isa Union{
+                            Reactant.ConcreteRNumber,
+                            Reactant.ConcreteRArray,
+                            Reactant.TracedType,
+                        }
+                    )
                         continue
                     end
                     push!(newpaths, path)

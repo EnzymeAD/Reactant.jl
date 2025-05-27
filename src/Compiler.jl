@@ -2809,12 +2809,12 @@ function codegen_unflatten!(
                     # XXX: we might need to handle sharding here
                     unflatcode = quote
                         traced_setfield_buffer!(
-                        $(runtime),
-                        $(cache_dict),
-                        $(concrete_res_name_final),
-                        $(unflatcode),
-                        $(Meta.quot(path[end])),
-                        $(path),
+                            $(runtime),
+                            $(cache_dict),
+                            $(concrete_res_name_final),
+                            $(unflatcode),
+                            $(Meta.quot(path[end])),
+                            $(path),
                         )
                     end
                 else

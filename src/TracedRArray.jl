@@ -1,7 +1,7 @@
 module TracedRArrayOverrides
 
 using Adapt: WrappedArray
-import Adapt
+using Adapt: Adapt
 using Base.Broadcast
 using Base.Broadcast: BroadcastStyle, Broadcasted, AbstractArrayStyle, instantiate
 
@@ -512,7 +512,7 @@ function Base.show(io::IOty, X::AnyTracedRArray) where {IOty<:Union{IO,IOContext
     if Adapt.parent(X) !== X
         Base.show(io, Adapt.parent(X))
     end
-    print(io, ")")
+    return print(io, ")")
 end
 
 function Base.show(io::IOty, X::TracedRArray{T,N}) where {T,N,IOty<:Union{IO,IOContext}}
@@ -520,8 +520,6 @@ function Base.show(io::IOty, X::TracedRArray{T,N}) where {T,N,IOty<:Union{IO,IOC
     # TODO this line segfaults if MLIR IR has not correctly been generated
     # return print(io, X.mlir_data, ")")
 end
-
-
 
 function Base.permutedims(A::AnyTracedRArray{T,N}, perm) where {T,N}
     return Ops.transpose(materialize_traced_array(A), Int64[perm...])
