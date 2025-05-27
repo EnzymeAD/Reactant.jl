@@ -2968,4 +2968,130 @@ end
     ]
 end
 
+@noinline function batch_norm_inference(
+    operand::TracedRArray{T,N},
+    scale::Union{TracedRArray{T,1},Nothing},
+    offset::Union{TracedRArray{T,1},Nothing},
+    mean::TracedRArray{T,1},
+    variance::TracedRArray{T,1};
+    epsilon,
+    feature_index::Int64,
+    location=mlir_stacktrace("batch_norm_inference", @__FILE__, @__LINE__),
+) where {T,N}
+    len = size(operand, feature_index)
+    @assert length(mean) == length(variance) == len
+
+    if scale === nothing
+        scale = fill(T(1), len; location)
+    else
+        @assert size(scale) == (len,)
+    end
+
+    if offset === nothing
+        offset = fill(T(0), len; location)
+    else
+        @assert size(offset) == (len,)
+    end
+
+    return TracedRArray{T,N}(
+        (),
+        MLIR.IR.result(
+            stablehlo.batch_norm_inference(
+                operand.mlir_data,
+                scale.mlir_data,
+                offset.mlir_data,
+                mean.mlir_data,
+                variance.mlir_data;
+                epsilon=Float32(epsilon),
+                feature_index=feature_index - 1,
+                location,
+            ),
+            1,
+        ),
+        size(operand),
+    )
+end
+
+@noinline function batch_norm_training(
+    operand::TracedRArray{T,N},
+    scale::Union{TracedRArray{T,1},Nothing},
+    offset::Union{TracedRArray{T,1},Nothing};
+    epsilon,
+    feature_index::Int64,
+    location=mlir_stacktrace("batch_norm_training", @__FILE__, @__LINE__),
+) where {T,N}
+    len = size(operand, feature_index)
+
+    if scale === nothing
+        scale = fill(T(1), len; location)
+    else
+        @assert size(scale) == (len,)
+    end
+
+    if offset === nothing
+        offset = fill(T(0), len; location)
+    else
+        @assert size(offset) == (len,)
+    end
+
+    batch_norm_train_op = stablehlo.batch_norm_training(
+        operand.mlir_data,
+        scale.mlir_data,
+        offset.mlir_data;
+        epsilon=Float32(epsilon),
+        feature_index=feature_index - 1,
+        location,
+    )
+
+    return (
+        TracedRArray{T,N}((), MLIR.IR.result(batch_norm_train_op, 1), size(operand)),
+        TracedRArray{T,1}((), MLIR.IR.result(batch_norm_train_op, 2), (len,)),
+        TracedRArray{T,1}((), MLIR.IR.result(batch_norm_train_op, 3), (len,)),
+    )
+end
+
+@noinline function batch_norm_grad(
+    operand::TracedRArray{T,N},
+    scale::Union{TracedRArray{T,1},Nothing},
+    mean::TracedRArray{T,1},
+    variance::TracedRArray{T,1},
+    grad_output::TracedRArray{T,N};
+    epsilon,
+    feature_index::Int64,
+    location=mlir_stacktrace("batch_norm_grad", @__FILE__, @__LINE__),
+) where {T,N}
+    len = size(operand, feature_index)
+    @assert length(mean) == length(variance) == len
+    @assert size(grad_output) == size(operand)
+
+    has_affine = scale !== nothing
+
+    if !has_affine
+        scale = fill(T(1), len; location)
+    else
+        @assert size(scale) == (len,)
+    end
+
+    batch_norm_grad_op = stablehlo.batch_norm_grad(
+        operand.mlir_data,
+        scale.mlir_data,
+        mean.mlir_data,
+        variance.mlir_data,
+        grad_output.mlir_data;
+        epsilon=Float32(epsilon),
+        feature_index=feature_index - 1,
+        location,
+    )
+
+    grad_operand = TracedRArray{T,N}(
+        (), MLIR.IR.result(batch_norm_grad_op, 1), size(operand)
+    )
+    grad_scale = TracedRArray{T,1}((), MLIR.IR.result(batch_norm_grad_op, 2), (len,))
+    grad_offset = TracedRArray{T,1}((), MLIR.IR.result(batch_norm_grad_op, 3), (len,))
+
+    return (
+        grad_operand, has_affine ? grad_scale : nothing, has_affine ? grad_offset : nothing
+    )
+end
+
 end # module Ops
