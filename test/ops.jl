@@ -1259,4 +1259,37 @@ end
             @test size(res) == size(x)
         end
     end
+
+    @testset "batch_norm_grad" begin
+        @testset for affine in [false, true]
+            x = Reactant.to_rarray(randn(2, 3, 4, 5))
+            scale = affine ? Reactant.to_rarray(randn(3)) : nothing
+            rm = Reactant.to_rarray(randn(3))
+            rv = Reactant.to_rarray(rand(3))
+            gx = Reactant.to_rarray(randn(2, 3, 4, 5))
+
+            hlo = @code_hlo Ops.batch_norm_grad(
+                x, scale, rm, rv, gx; epsilon=1e-5, feature_index=2
+            )
+            @test occursin("stablehlo.batch_norm_grad", repr(hlo))
+
+            if !affine
+                @test occursin(
+                    "stablehlo.constant dense<1.000000e+00> : tensor<3xf64>", repr(hlo)
+                )
+            end
+
+            gres, gscale, goffset = @jit Ops.batch_norm_grad(
+                x, scale, rm, rv, gx; epsilon=1e-5, feature_index=2
+            )
+            @test size(gres) == size(x)
+            if !affine
+                @test gscale === nothing
+                @test goffset === nothing
+            else
+                @test size(gscale) == (3,)
+                @test size(goffset) == (3,)
+            end
+        end
+    end
 end
