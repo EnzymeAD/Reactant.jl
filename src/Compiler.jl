@@ -1378,8 +1378,10 @@ function compile_mlir!(
         seen_args,
         ret,
         linear_args,
+        skipped_args,
         in_tys,
         linear_results,
+        skipped_results,
         is_sharded,
     ) = mlir_fn_res
     compiled_f = mlir_fn_res.f
@@ -2107,8 +2109,10 @@ function compile_mlir!(
         seen_args,
         ret,
         linear_args,
+        skipped_args,
         in_tys,
         linear_results2,
+        skipped_results,
         mlir_fn_res.num_partitions,
         mlir_fn_res.num_replicas,
         mlir_fn_res.is_sharded,
@@ -2399,7 +2403,6 @@ The _linearized arguments_ do not directly refer to the  are the arguments that 
 function codegen_flatten!(
     linear_args,
     seen_args,
-    result_stores,
     is_sharded::Bool,
     linear_parameter_shardings,
     client,
@@ -2804,14 +2807,16 @@ function codegen_unflatten!(
                 if length(path) > 0
                     needs_cache_dict = true
                     # XXX: we might need to handle sharding here
-                    unflatcode = :(traced_setfield_buffer!(
+                    unflatcode = quote
+                        traced_setfield_buffer!(
                         $(runtime),
                         $(cache_dict),
                         $(concrete_res_name_final),
                         $(unflatcode),
                         $(Meta.quot(path[end])),
                         $(path),
-                    ))
+                        )
+                    end
                 else
                     unflatcode = :(traced_setfield!(
                         $(unflatcode), :data, $(concrete_res_name_final), $(path)
@@ -3280,7 +3285,6 @@ function compile(f, args; sync=false, kwargs...)
     flatten_arg_names, flatten_code, resharded_inputs = codegen_flatten!(
         linear_args,
         seen_args,
-        result_stores,
         mlir_fn_res.is_sharded,
         XLA.get_parameter_shardings(exec), # TODO: use the same workflow as output shardings to parse the tensor sharding attributes directly if possible
         client,

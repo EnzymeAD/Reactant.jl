@@ -2329,7 +2329,7 @@ end
 end
 
 @noinline function call(f, args...)
-    seen = Dict()
+    seen = Reactant.OrderedIdDict()
     cache_key = []
     Reactant.make_tracer(seen, (f, args...), cache_key, Reactant.TracedToTypes)
     cache = Reactant.Compiler.callcache()
