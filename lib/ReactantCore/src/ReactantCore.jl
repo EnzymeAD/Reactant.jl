@@ -19,6 +19,8 @@ function is_traced((@nospecialize x::T), seen=Base.IdSet()) where {T}
     return false
 end
 
+is_traced(T::Type) = false
+
 # New Type signifying that a value is missing
 mutable struct MissingTracedValue
     paths::Tuple

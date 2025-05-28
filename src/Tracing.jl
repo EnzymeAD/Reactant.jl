@@ -895,7 +895,7 @@ const traced_type_cache = Dict{Tuple{TraceMode,Type,Any},Dict{Type,Type}}()
 Base.@assume_effects :total @inline function traced_type(
     T::Type, ::Val{mode}, track_numbers::Type, sharding, runtime
 ) where {mode}
-    if mode == TracedSetPath || mode == TracedTrack
+    if mode == TracedSetPath || mode == TracedTrack || mode == TracedToTypes
         return T
     end
 

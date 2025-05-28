@@ -154,7 +154,8 @@ function should_rewrite_call(@nospecialize(ft))
         ft === Type{MLIR.IR.Block} ||
         # TODO: perhaps problematic calls in `traced_call`
         # should be moved to TracedUtils.jl:
-        ft <: typeof(Reactant.ReactantCore.traced_call)
+        ft <: typeof(Reactant.ReactantCore.traced_call) ||
+        ft <: typeof(ReactantCore.is_traced)
         return false
     end
 
