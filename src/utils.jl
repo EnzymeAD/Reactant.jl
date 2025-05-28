@@ -110,8 +110,7 @@ function should_rewrite_call(@nospecialize(ft))
             # Don't rewrite primitive ops, tracing utilities, or any MLIR-based functions
             if has_ancestor(mod, Reactant.Ops) ||
                 has_ancestor(mod, Reactant.TracedUtils) ||
-                has_ancestor(mod, Reactant.MLIR) ||
-                has_ancestor(mod, Reactant.TracedRandom)
+                has_ancestor(mod, Reactant.MLIR)
                 return false
             end
             if string(mod) == "CUDA"
