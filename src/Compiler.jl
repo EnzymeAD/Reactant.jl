@@ -2127,29 +2127,85 @@ function compile_mlir!(
     )
 end
 
+const COMMON_COMPILE_OPTIONS = Dict{Symbol,Any}(
+    :optimize => true,
+    :no_nan => false,
+    :client => nothing,
+    :raise => false,
+    :raise_first => false,
+    :shardy_passes => :(:to_mhlo_shardings),
+    :assert_nonallocating => false,
+    :donated_args => :(:auto),
+    :transpose_propagate => :(:up),
+    :reshape_propagate => :(:up),
+    :optimize_then_pad => true,
+    :optimize_communications => true,
+    :cudnn_hlo_optimize => false,
+)
+
+const COMMON_COMPILE_OPTIONS_DOCS = """
+  - `optimize`: Optimizations passes to run on the traced MLIR code. For most users the
+    default value of `true` (or `:all`) should be sufficient. If you want to disable
+    optimizations, you can set it to `false` or `:none`. Other options are: `:before_kernel`,
+    `:before_jit`, `:before_raise`, `:before_enzyme`, `:after_enzyme`, `:just_batch`,
+    `:canonicalize`, `:only_enzyme`, or a custom string with the passes to run.
+  - `no_nan`: If `true`, the optimization passes will assume that the function does not
+    produce NaN values. This can lead to more aggressive optimizations **(and potentially
+    incorrect results if the function does produce NaN values)**.
+  - `client`: XLA Client used for compilation. If not specified, the default client is used.
+  - `raise`: If `true`, the function will be compiled with the raising pass, which raises
+    CUDA and KernelAbstractions kernels to HLO. Defaults to `false`, but is automatically
+    activated if the inputs are sharded.
+  - `raise_first`: If `true`, the raising pass will be run before the optimization passes.
+    Defaults to `false`.
+  - `shardy_passes`: Defaults to `:to_mhlo_shardings`. Other options are:
+    - `:none`: No sharding passes will be run. Shardy + MHLO shardings are handled by XLA.
+    - `:post_sdy_propagation`: Runs the Shardy propagation passes. MHLO shardings are
+      handled by XLA.
+    - [`Sharding.ShardyPropagationOptions`](@ref): Custom sharding propagation options.
+      MHLO shardings are handled by XLA.
+    - `:to_mhlo_shardings`: Runs the Shardy propagation passes and then exports the
+      shardings to MHLO. All passes are run via MLIR pass pipeline and don't involve XLA.
+  - `assert_nonallocating`: If `true`, we make sure that no new buffers are
+    returned by the function. Any buffer returned must be donated from the inputs. Defaults
+    to `false`.
+  - `donated_args`: If `:auto`, the function will automatically donate the arguments that
+    are not preserved in the function body. If `:none`, no arguments will be donated.
+    Defaults to `:auto`.
+  - `transpose_propagate`: If `:up`, `stablehlo.transpose` operations will be
+    propagated up the computation graph. If `:down`, they will be propagated down. Defaults
+    to `:up`.
+  - `reshape_propagate`: If `:up`, `stablehlo.reshape` operations will be propagated up
+    the computation graph. If `:down`, they will be propagated down. Defaults to `:up`.
+  - `optimize_then_pad`: If `true`, the function will be optimized before padding (for
+    non-divisible sharding axes) is applied. Defaults to `true`. _(Only for Sharded Inputs)_
+  - `optimize_communications`: If `true`, additional passes for optimizing communication
+    in sharded computations will be run. Defaults to `true`. _(Only for Sharded Inputs)_
+  - `cudnn_hlo_optimize`: Run cuDNN specific HLO optimizations. This is only relevant for
+    GPU backends and is `false` by default. **Experimental and not heavily tested.**
+    _(Only for CUDA backend)_
+"""
+
+const SYNC_DOCS = """
+  - `sync`: Reactant computations are asynchronous by default. If `true`, the computation
+    will be executed synchronously, blocking till the computation is complete. This is
+    recommended when benchmarking.
+"""
+
 """
     @code_hlo [optimize = ...] [no_nan = <true/false>] f(args...)
+
+Prints the compiled MLIR module for the function `f` with arguments `args`.
+
+## Options
+
+$(COMMON_COMPILE_OPTIONS_DOCS)
 
 See also [`@code_xla`](@ref), [`@code_mhlo`](@ref).
 """
 macro code_hlo(args...)
-    default_options = Dict{Symbol,Any}(
-        :optimize => true,
-        :no_nan => false,
-        :client => nothing,
-        :raise => false,
-        :raise_first => false,
-        :shardy_passes => :(:to_mhlo_shardings),
-        :assert_nonallocating => false,
-        :donated_args => :(:auto),
-        :transpose_propagate => :(:up),
-        :reshape_propagate => :(:up),
-        :optimize_then_pad => true,
-        :optimize_communications => true,
-        :cudnn_hlo_optimize => false,
-    )
     compile_expr, (; compiled) = compile_call_expr(
-        __module__, compile_mlir, default_options, args...
+        __module__, compile_mlir, COMMON_COMPILE_OPTIONS, args...
     )
     #! format: off
     return esc(
@@ -2164,28 +2220,17 @@ end
 """
     @code_mhlo [optimize = ...] [no_nan = <true/false>] f(args...)
 
-Similar to `@code_hlo`, but prints the module after running the XLA compiler.
+Similar to `@code_hlo`, but runs additional passes to export the stablehlo module to MHLO.
+
+## Options
+
+$(COMMON_COMPILE_OPTIONS_DOCS)
 
 See also [`@code_xla`](@ref), [`@code_hlo`](@ref).
 """
 macro code_mhlo(args...)
-    default_options = Dict{Symbol,Any}(
-        :optimize => true,
-        :no_nan => false,
-        :client => nothing,
-        :raise => false,
-        :raise_first => false,
-        :shardy_passes => :(:to_mhlo_shardings),
-        :assert_nonallocating => false,
-        :donated_args => :(:auto),
-        :transpose_propagate => :(:up),
-        :reshape_propagate => :(:up),
-        :optimize_then_pad => true,
-        :optimize_communications => true,
-        :cudnn_hlo_optimize => false,
-    )
     compile_expr, (; compiled) = compile_call_expr(
-        __module__, compile_xla, default_options, args...
+        __module__, compile_xla, COMMON_COMPILE_OPTIONS, args...
     )
     #! format: off
     return esc(
@@ -2200,28 +2245,18 @@ end
 """
     @code_xla [optimize = ...] [no_nan = <true/false>] f(args...)
 
-Similar to `@code_hlo`, but prints the HLO module.
+Similar to [`@code_hlo`](@ref), but runs additional XLA passes and exports MLIR to XLA HLO.
+This is the post optimizations XLA HLO module.
+
+## Options
+
+$(COMMON_COMPILE_OPTIONS_DOCS)
 
 See also [`@code_mhlo`](@ref), [`@code_hlo`](@ref).
 """
 macro code_xla(args...)
-    default_options = Dict{Symbol,Any}(
-        :optimize => true,
-        :no_nan => false,
-        :client => nothing,
-        :raise => false,
-        :raise_first => false,
-        :shardy_passes => :(:to_mhlo_shardings),
-        :assert_nonallocating => false,
-        :donated_args => :(:auto),
-        :transpose_propagate => :(:up),
-        :reshape_propagate => :(:up),
-        :optimize_then_pad => true,
-        :optimize_communications => true,
-        :cudnn_hlo_optimize => false,
-    )
     compile_expr, (; compiled) = compile_call_expr(
-        __module__, compile_xla, default_options, args...
+        __module__, compile_xla, COMMON_COMPILE_OPTIONS, args...
     )
     #! format: off
     return esc(
@@ -2237,50 +2272,36 @@ end
 
 """
     @compile [optimize = ...] [no_nan = <true/false>] [sync = <true/false>] f(args...)
+
+Compile the function `f` with arguments `args` and return the compiled function.
+
+## Options
+
+$(COMMON_COMPILE_OPTIONS_DOCS)
+$(SYNC_DOCS)
+
+See also [`@jit`](@ref), [`@code_hlo`](@ref), [`@code_mhlo`](@ref), [`@code_xla`](@ref).
 """
 macro compile(args...)
-    default_options = Dict{Symbol,Any}(
-        :optimize => true,
-        :sync => false,
-        :no_nan => false,
-        :client => nothing,
-        :raise => false,
-        :raise_first => false,
-        :shardy_passes => :(:to_mhlo_shardings),
-        :assert_nonallocating => false,
-        :serializable => false,
-        :donated_args => :(:auto),
-        :transpose_propagate => :(:up),
-        :reshape_propagate => :(:up),
-        :optimize_then_pad => true,
-        :optimize_communications => true,
-        :cudnn_hlo_optimize => false,
-    )
+    default_options = merge(COMMON_COMPILE_OPTIONS, Dict{Symbol,Any}(:sync => false))
     return esc(first(compile_call_expr(__module__, compile, default_options, args...)))
 end
 
 """
     @jit [optimize = ...] [no_nan = <true/false>] [sync = <true/false>] f(args...)
 
-Run @compile f(args..) then immediately execute it
+Run @compile f(args..) then immediately execute it. Most users should use [`@compile`](@ref)
+instead to cache the compiled function and execute it later.
+
+## Options
+
+$(COMMON_COMPILE_OPTIONS_DOCS)
+$(SYNC_DOCS)
+
+See also [`@compile`](@ref), [`@code_hlo`](@ref), [`@code_mhlo`](@ref), [`@code_xla`](@ref).
 """
 macro jit(args...)
-    default_options = Dict{Symbol,Any}(
-        :optimize => true,
-        :sync => false,
-        :no_nan => false,
-        :client => nothing,
-        :raise => false,
-        :raise_first => false,
-        :shardy_passes => :(:to_mhlo_shardings),
-        :assert_nonallocating => false,
-        :donated_args => :(:auto),
-        :transpose_propagate => :(:up),
-        :reshape_propagate => :(:up),
-        :optimize_then_pad => true,
-        :optimize_communications => true,
-        :cudnn_hlo_optimize => false,
-    )
+    default_options = merge(COMMON_COMPILE_OPTIONS, Dict{Symbol,Any}(:sync => false))
     compile_expr, (; compiled, args) = compile_call_expr(
         __module__, compile, default_options, args...
     )
