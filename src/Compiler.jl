@@ -2144,11 +2144,18 @@ const COMMON_COMPILE_OPTIONS = Dict{Symbol,Any}(
 )
 
 const COMMON_COMPILE_OPTIONS_DOCS = """
-  - `optimize`: Optimizations passes to run on the traced MLIR code. For most users the
-    default value of `true` (or `:all`) should be sufficient. If you want to disable
-    optimizations, you can set it to `false` or `:none`. Other options are: `:before_kernel`,
-    `:before_jit`, `:before_raise`, `:before_enzyme`, `:after_enzyme`, `:just_batch`,
-    `:canonicalize`, `:only_enzyme`, or a custom string with the passes to run.
+  - `optimize`: Optimizations passes to run on the traced MLIR code. Valid types of values
+    are:
+    - Bool (true/false): whether to run the optimization passes or not. Defaults to `true`.
+    - String: a custom string with the passes to run. The string should be a comma-separated
+      list of MLIR passes. For example, `"canonicalize,enzyme-hlo-opt"`.
+    - Symbol: a predefined set of passes to run. Valid options are:
+       1. `:all`: Default set of optimization passes. The exact set of passes are not fixed
+          and may change in future versions of Reactant. It is recommended to use this
+          option for most users.
+       2. `:none`: No optimization passes will be run.
+       3.  Other predefined options are: `:before_kernel`, `:before_jit`, `:before_raise`,
+          `:before_enzyme`, `:after_enzyme`, `:just_batch`, `:canonicalize`, `:only_enzyme`.
   - `no_nan`: If `true`, the optimization passes will assume that the function does not
     produce NaN values. This can lead to more aggressive optimizations **(and potentially
     incorrect results if the function does produce NaN values)**.
