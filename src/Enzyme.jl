@@ -243,6 +243,14 @@ function set_act!(inp, path, reverse, tostore; emptypath=false)
     return nothing
 end
 
+function marked_const_along_path(res, path)
+    for p in path
+        res = traced_getfield(res, p)
+        res isa Enzyme.Const && return true
+    end
+    return res isa Enzyme.Const
+end
+
 function overload_autodiff(
     ::CMode, f::FA, ::Type{A}, args::Vararg{Enzyme.Annotation,Nargs}
 ) where {CMode<:Enzyme.Mode,FA<:Enzyme.Annotation,A<:Enzyme.Annotation,Nargs}
@@ -346,9 +354,15 @@ function overload_autodiff(
             act = act_from_type(A, reverse, needs_primal(CMode))
             push!(ret_activity, act)
             if act == enzyme_out || act == enzyme_outnoneed
-                attr = MLIR.IR.DenseElementsAttribute(
-                    fill(one(unwrapped_eltype(a)), size(a))
-                )
+                fill_value =
+                    if marked_const_along_path(
+                        result, TracedUtils.get_idx(a, resprefix)[2:end]
+                    )
+                        zero(unwrapped_eltype(a))
+                    else
+                        one(unwrapped_eltype(a))
+                    end
+                attr = MLIR.IR.DenseElementsAttribute(fill(fill_value, size(a)))
                 cst = MLIR.IR.result(MLIR.Dialects.stablehlo.constant(; value=attr), 1)
                 push!(ad_inputs, cst)
             end
