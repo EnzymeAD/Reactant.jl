@@ -1,4 +1,4 @@
-using Enzyme, Reactant, Test
+using Enzyme, Reactant, Test, Random
 
 square(x) = x * 2
 
@@ -227,4 +227,31 @@ vector_forward_ad(x) = Enzyme.autodiff(Forward, fn, BatchDuplicated(x, Enzyme.on
     @test res[1][2] ≈ res_enz[1][2]
     @test res[1][3] ≈ res_enz[1][3]
     @test res[1][4] ≈ res_enz[1][4]
+end
+
+function simple_forward(x, st)
+    rng = copy(st.rng)
+    y = similar(x)
+    rand!(rng, y)
+    return x .+ y, (; rng)
+end
+
+function gradient_fn(x, st)
+    stₙ = Ref{Any}(nothing)
+    function lfn(x, st_old)
+        y, st_new = simple_forward(x, st_old)
+        stₙ[] = st_new
+        return sum(abs2, y)
+    end
+    return Enzyme.gradient(Reverse, lfn, x, Const(st)), stₙ[]
+end
+
+@testset "seed" begin
+    x = Reactant.to_rarray(rand(2, 2))
+    st = (; rng=Reactant.ConcreteRNG())
+
+    @test begin
+        hlo = @code_hlo gradient_fn(x, st)
+        contains(repr(hlo), "stablehlo.rng_bit_generator")
+    end
 end
