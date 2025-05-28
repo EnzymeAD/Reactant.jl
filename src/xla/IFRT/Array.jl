@@ -236,7 +236,7 @@ function XLA.to_host(buffer::Array, data, reactant_sharding)
     client = XLA.client(buffer)
     all_devices = XLA.get_device.((client,), reactant_sharding.mesh.device_ids)
 
-    if any(XLA.is_addressable, all_devices)
+    if all(XLA.is_addressable, all_devices)
         # Take a fast path if all devices are addressable
         array_slices, _ = XLA.sharding_to_concrete_array_indices(
             convert(XLA.CondensedOpSharding, hlo_sharding),
