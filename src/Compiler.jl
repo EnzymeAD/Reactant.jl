@@ -2127,21 +2127,23 @@ function compile_mlir!(
     )
 end
 
-const COMMON_COMPILE_OPTIONS = Dict{Symbol,Any}(
-    :optimize => true,
-    :no_nan => false,
-    :client => nothing,
-    :raise => false,
-    :raise_first => false,
-    :shardy_passes => :(:to_mhlo_shardings),
-    :assert_nonallocating => false,
-    :donated_args => :(:auto),
-    :transpose_propagate => :(:up),
-    :reshape_propagate => :(:up),
-    :optimize_then_pad => true,
-    :optimize_communications => true,
-    :cudnn_hlo_optimize => false,
-)
+function get_common_compile_options()
+    return Dict{Symbol,Any}(
+        :optimize => true,
+        :no_nan => false,
+        :client => nothing,
+        :raise => false,
+        :raise_first => false,
+        :shardy_passes => :(:to_mhlo_shardings),
+        :assert_nonallocating => false,
+        :donated_args => :(:auto),
+        :transpose_propagate => :(:up),
+        :reshape_propagate => :(:up),
+        :optimize_then_pad => true,
+        :optimize_communications => true,
+        :cudnn_hlo_optimize => false,
+    )
+end
 
 const COMMON_COMPILE_OPTIONS_DOCS = """
   - `optimize`: Optimizations passes to run on the traced MLIR code. Valid types of values
@@ -2212,7 +2214,7 @@ See also [`@code_xla`](@ref), [`@code_mhlo`](@ref).
 """
 macro code_hlo(args...)
     compile_expr, (; compiled) = compile_call_expr(
-        __module__, compile_mlir, COMMON_COMPILE_OPTIONS, args...
+        __module__, compile_mlir, get_common_compile_options(), args...
     )
     #! format: off
     return esc(
@@ -2237,7 +2239,7 @@ See also [`@code_xla`](@ref), [`@code_hlo`](@ref).
 """
 macro code_mhlo(args...)
     compile_expr, (; compiled) = compile_call_expr(
-        __module__, compile_xla, COMMON_COMPILE_OPTIONS, args...
+        __module__, compile_xla, get_common_compile_options(), args...
     )
     #! format: off
     return esc(
@@ -2263,7 +2265,7 @@ See also [`@code_mhlo`](@ref), [`@code_hlo`](@ref).
 """
 macro code_xla(args...)
     compile_expr, (; compiled) = compile_call_expr(
-        __module__, compile_xla, COMMON_COMPILE_OPTIONS, args...
+        __module__, compile_xla, get_common_compile_options(), args...
     )
     #! format: off
     return esc(
@@ -2290,7 +2292,7 @@ $(SYNC_DOCS)
 See also [`@jit`](@ref), [`@code_hlo`](@ref), [`@code_mhlo`](@ref), [`@code_xla`](@ref).
 """
 macro compile(args...)
-    default_options = merge(COMMON_COMPILE_OPTIONS, Dict{Symbol,Any}(:sync => false))
+    default_options = merge(get_common_compile_options(), Dict{Symbol,Any}(:sync => false))
     return esc(first(compile_call_expr(__module__, compile, default_options, args...)))
 end
 
@@ -2308,7 +2310,7 @@ $(SYNC_DOCS)
 See also [`@compile`](@ref), [`@code_hlo`](@ref), [`@code_mhlo`](@ref), [`@code_xla`](@ref).
 """
 macro jit(args...)
-    default_options = merge(COMMON_COMPILE_OPTIONS, Dict{Symbol,Any}(:sync => false))
+    default_options = merge(get_common_compile_options(), Dict{Symbol,Any}(:sync => false))
     compile_expr, (; compiled, args) = compile_call_expr(
         __module__, compile, default_options, args...
     )
