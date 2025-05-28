@@ -88,9 +88,9 @@ const AnyTracedRMatrix{T} = AnyTracedRArray{T,2}
 const AnyTracedRVecOrMat{T} = Union{AnyTracedRVector{T},AnyTracedRMatrix{T}}
 
 ## TracedRNG
-struct TracedRNG <: Random.AbstractRNG
+mutable struct TracedRNG <: Random.AbstractRNG
     seed::TracedRArray{UInt64,1}
-    algorithm::String
+    const algorithm::String
 end
 
 # Concrete Types
