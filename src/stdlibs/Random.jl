@@ -5,80 +5,45 @@ module TracedRandom
 # 2. https://github.com/JuliaRandom/Random123.jl/blob/master/src/common.jl
 
 using ..Reactant:
-    Reactant,
-    TracedRArray,
-    TracedRNumber,
-    ConcreteRNG,
-    TracedRNG,
-    AnyTracedRArray,
-    Reactant,
-    TracedUtils,
-    Ops,
-    AbstractConcreteArray,
-    AbstractConcreteNumber,
-    unwrapped_eltype
+    Reactant, TracedRArray, TracedRNumber, ReactantRNG, AnyTracedRArray, TracedUtils, Ops
 using Random: Random, AbstractRNG
 
 @noinline make_seed(rng::AbstractRNG=Random.RandomDevice()) =
     Random.rand!(rng, Vector{UInt64}(undef, 2))
 
-@noinline function Random.seed!(rng::TracedRNG, seed::Number)
+@noinline function Random.seed!(rng::ReactantRNG, seed::Number)
     if seed isa TracedRNumber
         error("Passing in `TracedRNumber` as a seed is not supported. Please pass in a \
                `TracedRArray` of the appropriate size instead.")
     end
 
     seed = reinterpret(UInt64, Random.hash_seed(seed))
-    return Random.seed!(
-        rng, TracedUtils.promote_to(TracedRArray{UInt64,1}, seed[1:length(rng.seed)])
-    )
+    return Random.seed!(rng, seed[1:length(rng.seed)])
 end
 
-@noinline function Random.seed!(rng::TracedRNG, seed::AbstractVector{<:Integer})
-    return Random.seed!(rng, UInt64.(seed))
-end
-
-@noinline function Random.seed!(rng::TracedRNG, seed::AbstractVector{UInt64})
-    return Random.seed!(rng, TracedUtils.promote_to(TracedRArray{UInt64,1}, seed))
-end
-
-@noinline function Random.seed!(rng::TracedRNG, seed::TracedRArray{UInt64,1})
-    copyto!(rng.seed, seed)
+@noinline function Random.seed!(rng::ReactantRNG, seed::AbstractVector)
+    rng.seed .= seed
     return rng
 end
 
-@noinline function Random.seed!(rng::ConcreteRNG, seed::Number)
-    seed isa AbstractConcreteNumber && (seed = unwrapped_eltype(seed)(seed))
-    seed = reinterpret(UInt64, Random.hash_seed(seed))
-    return Random.seed!(rng, Reactant.to_rarray(seed))
+Base.copy(rng::ReactantRNG) = ReactantRNG(copy(rng.seed), rng.algorithm)
+
+@noinline function ReactantRNG()
+    if Reactant.within_compile()
+        return ReactantRNG(TracedUtils.promote_to(TracedRArray{UInt64,1}, make_seed()))
+    else
+        return ReactantRNG(Reactant.to_rarray(make_seed()))
+    end
 end
+@noinline ReactantRNG(seed::AbstractVector) = ReactantRNG(seed, "DEFAULT")
 
-@noinline function Random.seed!(rng::ConcreteRNG, seed::AbstractVector{<:Integer})
-    return Random.seed!(rng, seed)
-end
+@noinline default_rng() = ReactantRNG()
 
-@noinline function Random.seed!(rng::ConcreteRNG, seed::AbstractVector{UInt64})
-    return Random.seed!(rng, Reactant.to_rarray(seed))
-end
-
-@noinline function Random.seed!(rng::ConcreteRNG, seed::AbstractConcreteArray{UInt64,1})
-    Base.copyto!(rng.seed, seed)
-    return rng
-end
-
-Base.copy(rng::ConcreteRNG) = ConcreteRNG(copy(rng.seed), rng.algorithm)
-Base.copy(rng::TracedRNG) = TracedRNG(copy(rng.seed), rng.algorithm)
-
-@noinline ConcreteRNG() = ConcreteRNG(Reactant.to_rarray(make_seed()))
-@noinline ConcreteRNG(seed::AbstractConcreteArray{UInt64,1}) = ConcreteRNG(seed, "DEFAULT")
-
-@noinline default_rng() = ConcreteRNG()
-
-@noinline rng_algorithm(rng::TracedRNG) = rng.algorithm
+@noinline rng_algorithm(rng::ReactantRNG) = rng.algorithm
 @noinline rng_algorithm(::AbstractRNG) = "DEFAULT"
 
 @noinline function internal_overload_rand!(
-    rng::TracedRNG, A::AnyTracedRArray{T,N}
+    rng::ReactantRNG{<:TracedRArray}, A::AnyTracedRArray{T,N}
 ) where {T,N}
     length(A) == 0 && return A
     res = Ops.rng_bit_generator(T, rng.seed, [size(A)...]; rng.algorithm)
@@ -88,7 +53,7 @@ Base.copy(rng::TracedRNG) = TracedRNG(copy(rng.seed), rng.algorithm)
 end
 
 @noinline function internal_overload_randn!(
-    rng::TracedRNG, A::AnyTracedRArray{T,N}
+    rng::ReactantRNG{<:TracedRArray}, A::AnyTracedRArray{T,N}
 ) where {T,N}
     length(A) == 0 && return A
     res = Ops.randn(T, rng.seed, [size(A)...]; rng.algorithm)
@@ -98,7 +63,7 @@ end
 end
 
 @noinline function internal_overload_randexp!(
-    rng::TracedRNG, A::AnyTracedRArray{T,N}
+    rng::ReactantRNG{<:TracedRArray}, A::AnyTracedRArray{T,N}
 ) where {T,N}
     length(A) == 0 && return A
     res = Ops.randexp(T, rng.seed, [size(A)...]; rng.algorithm)
@@ -114,25 +79,25 @@ for randfun in (:rand, :randn, :randexp)
 
     @eval begin
         @noinline function $(overload_randfun)(
-            rng::TracedRNG, ::Type{T}, dims::Dims
+            rng::ReactantRNG{<:TracedRArray}, ::Type{T}, dims::Dims
         ) where {T}
             return $(overload_randfun!)(
                 rng, TracedRArray{T,length(dims)}((), nothing, dims)
             )
         end
 
-        @noinline function $(overload_randfun)(rng::TracedRNG, dims::Dims)
+        @noinline function $(overload_randfun)(rng::ReactantRNG{<:TracedRArray}, dims::Dims)
             return $(overload_randfun)(rng, Float64, dims)
         end
 
         @noinline function $(overload_randfun)(
-            rng::TracedRNG, dim1::Integer, dims::Integer...
+            rng::ReactantRNG{<:TracedRArray}, dim1::Integer, dims::Integer...
         )
             return $(overload_randfun)(rng, Dims((dim1, dims...)))
         end
 
         @noinline function $(overload_randfun)(
-            rng::TracedRNG, ::Type{T}, dim1::Integer, dims::Integer...
+            rng::ReactantRNG{<:TracedRArray}, ::Type{T}, dim1::Integer, dims::Integer...
         ) where {T}
             return $(overload_randfun)(rng, T, Dims((dim1, dims...)))
         end
@@ -142,7 +107,9 @@ for randfun in (:rand, :randn, :randexp)
         end
 
         # scalars
-        @noinline function $(overload_randfun)(rng::TracedRNG, ::Type{T}=Float64) where {T}
+        @noinline function $(overload_randfun)(
+            rng::ReactantRNG{<:TracedRArray}, ::Type{T}=Float64
+        ) where {T}
             A = TracedUtils.promote_to(TracedRArray{T,0}, fill(T(0)))
             $(overload_randfun!)(rng, A)
             return TracedRNumber{T}((), A.mlir_data)
@@ -157,14 +124,14 @@ for randfun in (:rand, :randn, :randexp, :rand!, :randn!, :randexp!)
     internal_overload_randfun = Symbol(:internal_overload_, randfun)
     @eval begin
         @noinline function $(overload_randfun)(rng::AbstractRNG, args...)
-            rng = TracedRNG(
+            rng = ReactantRNG(
                 TracedUtils.promote_to(TracedRArray{UInt64,1}, make_seed(rng)),
                 rng_algorithm(rng),
             )
             return $(internal_overload_randfun)(rng, args...)
         end
 
-        @noinline function $(overload_randfun)(rng::TracedRNG, args...)
+        @noinline function $(overload_randfun)(rng::ReactantRNG, args...)
             return $(internal_overload_randfun)(rng, args...)
         end
     end

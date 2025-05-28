@@ -87,12 +87,6 @@ const AnyTracedRVector{T} = AnyTracedRArray{T,1}
 const AnyTracedRMatrix{T} = AnyTracedRArray{T,2}
 const AnyTracedRVecOrMat{T} = Union{AnyTracedRVector{T},AnyTracedRMatrix{T}}
 
-## TracedRNG
-struct TracedRNG <: Random.AbstractRNG
-    seed::TracedRArray{UInt64,1}
-    algorithm::String
-end
-
 # Concrete Types
 ## ConcretePJRTNumber
 mutable struct ConcretePJRTNumber{T,D,S<:Sharding.ShardInfo} <: AbstractConcreteNumber{T}
@@ -442,11 +436,15 @@ function ConcreteIFRTArray{T,N}(x::AnyConcreteIFRTArray; kwargs...) where {T,N}
     )
 end
 
-## ConcreteRNG
-mutable struct ConcreteRNG{S<:AbstractConcreteArray} <: Random.AbstractRNG
+# RNGs
+struct ReactantRNG{S<:Union{<:AbstractConcreteArray{UInt64,1},TracedRArray{UInt64,1}}} <:
+       Random.AbstractRNG
     seed::S
-    const algorithm::String
+    algorithm::String
 end
+
+Base.@deprecate_binding ConcreteRNG ReactantRNG
+Base.@deprecate_binding TracedRNG ReactantRNG
 
 ## Aliases based on the set preferences
 if XLA.REACTANT_XLA_RUNTIME == "PJRT"
