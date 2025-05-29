@@ -255,3 +255,23 @@ end
         contains(repr(hlo), "stablehlo.rng_bit_generator")
     end
 end
+
+function simple_grad_with_no_ret_annotation(x::AbstractArray{T}) where {T}
+    return sum(x; dims=1), sum(abs2, x)
+end
+
+function simple_grad_with_ret_annotation(x::AbstractArray{T}) where {T}
+    return Const(sum(x; dims=1)), sum(abs2, x)
+end
+
+@testset "return annotation" begin
+    x = Reactant.to_rarray(rand(Float32, 4, 4))
+
+    res1 = only(@jit(Enzyme.gradient(Reverse, simple_grad_with_no_ret_annotation, x)))
+
+    @test res1 ≈ (2 .* Array(x) .+ 1)
+
+    res2 = only(@jit(Enzyme.gradient(Reverse, simple_grad_with_ret_annotation, x)))
+
+    @test res2 ≈ (2 .* Array(x))
+end
