@@ -32,7 +32,7 @@ end
 function Reactant.TracedUtils.materialize_traced_array(
     r::OneHotArrays.OneHotArray{T,N,Np1,<:Reactant.TracedRArray}
 ) where {T,N,Np1}
-    return reshape(r.indices, 1, size(r.indices)...) .== 1:r.nlabels
+    return reshape(r.indices, 1, size(r.indices)...) .== 1:(r.nlabels)
 end
 
 end
