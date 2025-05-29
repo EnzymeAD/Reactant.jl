@@ -261,12 +261,15 @@ function divinf(x)
 end
 
 function grad_divinf(x)
-    return Enzyme.gradient(Reverse, f, x)
+    return Enzyme.gradient(Reverse, divinf, x)
 end
 
 function grad_divinf_sz(x)
-    Reactant.@strongzero Enzyme.gradient(Reverse, f, x)
+    Reactant.@strongzero Enzyme.gradient(Reverse, divinf, x)
 end
 
 @testset "Strong zero" begin
+    x = ConcreteRNumber(0.0)
+    @test isnan((@jit grad_divinf(x))[1])
+    @test iszero((@jit grad_divinf_sz(x))[1])
 end
