@@ -1019,6 +1019,9 @@ function optimization_passes(;
                 "transpose_rotate",
                 "transpose_dynamic_slice",
                 "transpose_reverse",
+                "transpose_batch_norm_training",
+                "transpose_batch_norm_inference",
+                "transpose_batch_norm_grad",
             ],
         )
         if AGGRESSIVE_PROPAGATION[]
