@@ -440,7 +440,7 @@ function overload_autodiff(
         outputs=outtys,
         fn=fname,
         width,
-        strong_zero = get_strongzero(),
+        strong_zero=get_strongzero(),
         activity=MLIR.IR.Attribute([act_attr(a) for a in activity]),
         ret_activity=MLIR.IR.Attribute([act_attr(a) for a in ret_activity]),
     )
