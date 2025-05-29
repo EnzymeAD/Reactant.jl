@@ -5,6 +5,52 @@ const enzyme_dupnoneed = 3
 const enzyme_outnoneed = 4
 const enzyme_constnoneed = 5
 
+function activate_strongzero!(strongzero::Bool)
+    stack = get!(task_local_storage(), :reactant_strongzero) do
+        Bool[]
+    end
+    push!(stack, strongzero)
+    return nothing
+end
+
+function deactivate_strongzero!(strongzero::Bool)
+    key = :reactant_strongzero
+    strongzero === last(task_local_storage(key)) ||
+        error("Deactivating wrong strong zerocontext")
+    return pop!(task_local_storage(key))
+end
+
+function get_strongzero()
+    key = :reactant_strongzero
+    if !(haskey(task_local_storage(), key) && !Base.isempty(task_local_storage(key)))
+        return false
+    end
+    return last(task_local_storage(key)::Vector{Bool})
+end
+
+"""
+    @strongzero() begin
+        # Derivative calls that require Enzyme to use string zeroing
+    end
+
+Whether to enforce multiplication by zero as enforcing a zero result even if multiplying
+against a NaN or infinity. Necessary for some programs in which a value has a zero
+derivative since it is unused, even if it has an otherwise infinite or nan derivative.
+
+Outside of reactant this is equivalent to setting the global flag Enzyme.API.strong_zero!(true)
+before differentiation. This should be moved into the mode in both cases.
+"""
+macro strongzero(ex)
+    quote
+        activate_strongzero!(true)
+        try
+            $(esc(ex))
+        finally
+            deactivate_strongzero!(true)
+        end
+    end
+end
+
 function Enzyme.make_zero(
     ::Type{RT}, seen::IdDict, prev::RT, ::Val{copy_if_inactive}=Val(false)
 )::RT where {copy_if_inactive,RT<:Union{RArray,RNumber}}
@@ -394,6 +440,7 @@ function overload_autodiff(
         outputs=outtys,
         fn=fname,
         width,
+        strong_zero = get_strongzero(),
         activity=MLIR.IR.Attribute([act_attr(a) for a in activity]),
         ret_activity=MLIR.IR.Attribute([act_attr(a) for a in ret_activity]),
     )

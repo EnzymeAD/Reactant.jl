@@ -255,3 +255,20 @@ end
         contains(repr(hlo), "stablehlo.rng_bit_generator")
     end
 end
+
+
+function divinf(x)
+   min(1.0, 1 / x)
+end
+
+function grad_divinf(x)
+   Enzyme.gradient(Reverse, f, x)
+end
+
+function grad_divinf_sz(x)
+   Reactant.@strongzero Enzyme.gradient(Reverse, f, x)
+end
+
+@testset "Strong zero" begin
+    
+end
