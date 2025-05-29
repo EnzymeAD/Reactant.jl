@@ -19,4 +19,6 @@ end
     res_ra = @jit r_m .+ x_ra
     res = m .+ x
     @test res_ra ≈ res
+
+    @test Array(r_m) isa Matrix{Bool}
 end

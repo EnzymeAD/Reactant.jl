@@ -29,10 +29,14 @@ function Reactant.TracedUtils.broadcast_to_size(
     )
 end
 
-function Reactant.TracedUtils.materialize_traced_array(
-    r::OneHotArrays.OneHotArray{T,N,Np1,<:Reactant.TracedRArray}
-) where {T,N,Np1}
+function Reactant.TracedUtils.materialize_traced_array(r::OneHotArrays.OneHotArray)
     return reshape(r.indices, 1, size(r.indices)...) .== 1:(r.nlabels)
+end
+
+function Base.Array(
+    r::OneHotArrays.OneHotArray{T,N,Np1,<:Reactant.AbstractConcreteArray}
+) where {T,N,Np1}
+    return Array(reshape(Array(r.indices), 1, size(r.indices)...) .== 1:(r.nlabels))
 end
 
 end
