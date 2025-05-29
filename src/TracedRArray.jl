@@ -376,7 +376,7 @@ function _setindex_linear!(a::TracedRArray{T,N}, v, indices::AbstractArray) wher
     res = Ops.scatter_setindex(
         a,
         scalar_index_to_cartesian(vec(indices), size(a)),
-        materialize_traced_array(vec(v)),
+        TracedUtils.promote_to(TracedRArray{T,1}, materialize_traced_array(vec(v))),
     )
     set_mlir_data!(a, get_mlir_data(res))
     return a
