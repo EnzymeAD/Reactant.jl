@@ -2624,6 +2624,7 @@ struct ClientHolder {
 	if (getenv("USE_TPU")) {
 	if (device == 0) {
 	client = MakeTPUClient(nullptr, &error);
+	if (error) << " error: " << error << "\n";
 	}
 	} else
 	client = MakeCPUClient(1, 0);
@@ -2631,6 +2632,8 @@ struct ClientHolder {
 	if (client) {
 	  device = min(device, client->device_count()-1);
 	}
+	llvm::errs() << " client: " << client << "\n";
+	llvm::errs() <<" device: " << device << "\n";
   }
 };
 
@@ -3429,6 +3432,7 @@ extern "C" void dgemm_(char* transA, char* transB, int32_t* M, int32_t* N, int32
      int64_t num_replicas = 1;
      int64_t num_partitions = 1;
      bool use_spmd_partitioning = false;
+     llvm::errs() <<  " client: " << client.client << "\n";
      exec = ClientCompile(client.client, wrap(module.get()), device_id, mesh_ids, num_mesh_ids, xla_gpu_cuda_data_dir, use_shardy_partitioner, num_replicas, num_partitions, use_spmd_partitioning);
      executables[key] = exec;
   } else {
