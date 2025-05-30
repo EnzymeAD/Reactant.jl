@@ -2624,7 +2624,7 @@ struct ClientHolder {
 	if (getenv("USE_TPU")) {
 	if (device == 0) {
 	client = MakeTPUClient(nullptr, &error);
-	if (error) << " error: " << error << "\n";
+	if (error) llvm::errs() << " error: " << error << "\n";
 	}
 	} else
 	client = MakeCPUClient(1, 0);
