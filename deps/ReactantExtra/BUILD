@@ -1008,7 +1008,7 @@ cc_library(
         "@xla//xla/backends/profiler/cpu:metadata_utils",
         "@xla//xla/backends/profiler/tpu:tpu_tracer",
         "@xla//xla/python:profiler_utils",
-        "@xla//xla/backends/cpu/collectives:mpi_collectives",
+        # "@xla//xla/backends/cpu/collectives:mpi_collectives",
 
         "@tsl//tsl/platform:env_impl",
         "@xla//xla/stream_executor:stream_executor_impl",

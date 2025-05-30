@@ -77,7 +77,7 @@
 #include "xla/pjrt/pjrt_executable.h"
 
 // CPU collectives
-#include "xla/backends/cpu/collectives/mpi_collectives.h"
+// #include "xla/backends/cpu/collectives/mpi_collectives.h"
 #if defined(__linux__)
 #include "gloo/transport/tcp/attr.h"
 #include "gloo/transport/tcp/device.h"
@@ -1632,6 +1632,7 @@ ifrt_make_pjrt_cpu_client(uint8_t asynchronous, int node_id, int num_nodes,
   std::optional<std::shared_ptr<KeyValueStoreInterface>> kv_store;
 
   if (distributed_runtime_client != nullptr) {
+	  /*
     auto mpi_trampoline_path = llvm::sys::Process::GetEnv(kMpiTrampolineLibEnv);
     if (mpi_trampoline_path) {
       // Use MPI
@@ -1639,7 +1640,9 @@ ifrt_make_pjrt_cpu_client(uint8_t asynchronous, int node_id, int num_nodes,
       auto mpi_collectives = std::make_shared<xla::cpu::MpiCollectives>();
       collectives = mpi_collectives;
       static_cast<xla::cpu::MpiCollectives *>(mpi_collectives.get())->Init();
-    } else {
+    } else
+	   */ 
+    {
       // Use Gloo
       auto typed_distributed_runtime_client = static_cast<
           HeldValue<std::shared_ptr<xla::DistributedRuntimeClient>> *>(
@@ -2628,3 +2631,477 @@ extern "C" void addSdyPropagationPipeline(
                                                   0};
   mlir::sdy::addPropagationPipeline(pm, options);
 }
+
+struct RegistryHolder {
+mlir::DialectRegistry registry;
+  RegistryHolder() : registry() {
+    InitializeRegistry(wrap(&registry));
+    InitializePasses(wrap(&registry));
+  }
+};
+
+RegistryHolder registry;
+
+struct ClientHolder {
+  xla::PjRtClient* client;
+  ClientHolder() {
+	InitializeLogs();
+	const char* error = NULL;
+	if (getenv("USE_TPU"))
+	client = MakeTPUClient(nullptr, &error);
+	else
+	client = MakeCPUClient(true, 0);
+	assert(client);
+  }
+};
+
+ClientHolder client;
+
+#define TRUE_ true
+#define FALSE_ false
+#define doublereal double
+#define integer int32_t
+#define logical bool
+int xerbla_(const char *srname, integer *info, int len)
+{
+    static char fmt_9999[] = "(\002 ** On entry to \002,a,\002 parameter num"
+	    "ber \002,i2,\002 had \002,\002an illegal value\002)";
+
+	printf("** On entry to %6s, parameter number %2i had an illegal value\n",
+		srname, *info);
+	assert(0 &&" error");
+	exit(1);
+    return 0;
+}
+logical dlaisnan_(doublereal *din1, doublereal *din2)
+{
+    /* System generated locals */
+    logical ret_val;
+
+
+/*  -- LAPACK auxiliary routine (version 3.2) -- */
+/*     Univ. of Tennessee, Univ. of California Berkeley and NAG Ltd.. */
+/*     November 2006 */
+
+/*     .. Scalar Arguments .. */
+/*     .. */
+
+/*  Purpose */
+/*  ======= */
+
+/*  This routine is not for general use.  It exists solely to avoid */
+/*  over-optimization in DISNAN. */
+
+/*  DLAISNAN checks for NaNs by comparing its two arguments for */
+/*  inequality.  NaN is the only floating-point value where NaN != NaN */
+/*  returns .TRUE.  To check for NaNs, pass the same variable as both */
+/*  arguments. */
+
+/*  A compiler must assume that the two arguments are */
+/*  not the same variable, and the test will not be optimized away. */
+/*  Interprocedural or whole-program optimization may delete this */
+/*  test.  The ISNAN functions will be replaced by the correct */
+/*  Fortran 03 intrinsic once the intrinsic is widely available. */
+
+/*  Arguments */
+/*  ========= */
+
+/*  DIN1     (input) DOUBLE PRECISION */
+/*  DIN2     (input) DOUBLE PRECISION */
+/*          Two numbers to compare for inequality. */
+
+/*  ===================================================================== */
+
+/*  .. Executable Statements .. */
+    ret_val = *din1 != *din2;
+    return ret_val;
+} /* dlaisnan_ */
+
+logical disnan_(doublereal *din)
+{
+    /* System generated locals */
+    logical ret_val;
+
+    /* Local variables */
+
+/*  -- LAPACK auxiliary routine (version 3.2) -- */
+/*     Univ. of Tennessee, Univ. of California Berkeley and NAG Ltd.. */
+/*     November 2006 */
+
+/*     .. Scalar Arguments .. */
+/*     .. */
+
+/*  Purpose */
+/*  ======= */
+
+/*  DISNAN returns .TRUE. if its argument is NaN, and .FALSE. */
+/*  otherwise.  To be replaced by the Fortran 2003 intrinsic in the */
+/*  future. */
+
+/*  Arguments */
+/*  ========= */
+
+/*  DIN      (input) DOUBLE PRECISION */
+/*          Input to test for NaN. */
+
+/*  ===================================================================== */
+
+/*  .. External Functions .. */
+/*  .. */
+/*  .. Executable Statements .. */
+    ret_val = dlaisnan_(din, din);
+    return ret_val;
+} /* disnan_ */
+
+logical lsame_(char *ca, char *cb, int ca_size, int cb_size)
+{
+    /* System generated locals */
+    logical ret_val;
+
+    /* Local variables */
+    integer inta, intb, zcode;
+
+
+/*  -- LAPACK auxiliary routine (version 3.1) -- */
+/*     Univ. of Tennessee, Univ. of California Berkeley and NAG Ltd.. */
+/*     November 2006 */
+
+/*     .. Scalar Arguments .. */
+/*     .. */
+
+/*  Purpose */
+/*  ======= */
+
+/*  LSAME returns .TRUE. if CA is the same letter as CB regardless of */
+/*  case. */
+
+/*  Arguments */
+/*  ========= */
+
+/*  CA      (input) CHARACTER*1 */
+
+/*  CB      (input) CHARACTER*1 */
+/*          CA and CB specify the single characters to be compared. */
+
+/* ===================================================================== */
+
+/*     .. Intrinsic Functions .. */
+/*     .. */
+/*     .. Local Scalars .. */
+/*     .. */
+
+/*     Test if the characters are equal */
+
+    ret_val = *(unsigned char *)ca == *(unsigned char *)cb;
+    if (ret_val) {
+	return ret_val;
+    }
+
+/*     Now test for equivalence if both characters are alphabetic. */
+
+    zcode = 'Z';
+
+/*     Use 'Z' rather than 'A' so that ASCII can be detected on Prime */
+/*     machines, on which ICHAR returns a value with bit 8 set. */
+/*     ICHAR('A') on Prime machines returns 193 which is the same as */
+/*     ICHAR('A') on an EBCDIC machine. */
+
+    inta = *(unsigned char *)ca;
+    intb = *(unsigned char *)cb;
+
+    if (zcode == 90 || zcode == 122) {
+
+/*        ASCII is assumed - ZCODE is the ASCII code of either lower or */
+/*        upper case 'Z'. */
+
+	if (inta >= 97 && inta <= 122) {
+	    inta += -32;
+	}
+	if (intb >= 97 && intb <= 122) {
+	    intb += -32;
+	}
+
+    } else if (zcode == 233 || zcode == 169) {
+
+/*        EBCDIC is assumed - ZCODE is the EBCDIC code of either lower or */
+/*        upper case 'Z'. */
+
+	if (inta >= 129 && inta <= 137 || inta >= 145 && inta <= 153 || inta 
+		>= 162 && inta <= 169) {
+	    inta += 64;
+	}
+	if (intb >= 129 && intb <= 137 || intb >= 145 && intb <= 153 || intb 
+		>= 162 && intb <= 169) {
+	    intb += 64;
+	}
+
+    } else if (zcode == 218 || zcode == 250) {
+
+/*        ASCII is assumed, on Prime machines - ZCODE is the ASCII code */
+/*        plus 128 of either lower or upper case 'Z'. */
+
+	if (inta >= 225 && inta <= 250) {
+	    inta += -32;
+	}
+	if (intb >= 225 && intb <= 250) {
+	    intb += -32;
+	}
+    }
+    ret_val = inta == intb;
+
+/*     RETURN */
+
+/*     End of LSAME */
+
+    return ret_val;
+} /* lsame_ */
+
+/* Subroutine */ void dlacpy_(char *uplo, integer *m, integer *n, const doublereal *
+	a, integer *lda, doublereal *b, integer *ldb)
+{
+    /* System generated locals */
+    integer a_dim1, a_offset, b_dim1, b_offset, i__1, i__2;
+
+    /* Local variables */
+    integer i__, j;
+
+
+/*  -- LAPACK auxiliary routine (version 3.2) -- */
+/*     Univ. of Tennessee, Univ. of California Berkeley and NAG Ltd.. */
+/*     November 2006 */
+
+/*     .. Scalar Arguments .. */
+/*     .. */
+/*     .. Array Arguments .. */
+/*     .. */
+
+/*  Purpose */
+/*  ======= */
+
+/*  DLACPY copies all or part of a two-dimensional matrix A to another */
+/*  matrix B. */
+
+/*  Arguments */
+/*  ========= */
+
+/*  UPLO    (input) CHARACTER*1 */
+/*          Specifies the part of the matrix A to be copied to B. */
+/*          = 'U':      Upper triangular part */
+/*          = 'L':      Lower triangular part */
+/*          Otherwise:  All of the matrix A */
+
+/*  M       (input) INTEGER */
+/*          The number of rows of the matrix A.  M >= 0. */
+
+/*  N       (input) INTEGER */
+/*          The number of columns of the matrix A.  N >= 0. */
+
+/*  A       (input) DOUBLE PRECISION array, dimension (LDA,N) */
+/*          The m by n matrix A.  If UPLO = 'U', only the upper triangle */
+/*          or trapezoid is accessed; if UPLO = 'L', only the lower */
+/*          triangle or trapezoid is accessed. */
+
+/*  LDA     (input) INTEGER */
+/*          The leading dimension of the array A.  LDA >= max(1,M). */
+
+/*  B       (output) DOUBLE PRECISION array, dimension (LDB,N) */
+/*          On exit, B = A in the locations specified by UPLO. */
+
+/*  LDB     (input) INTEGER */
+/*          The leading dimension of the array B.  LDB >= max(1,M). */
+
+/*  ===================================================================== */
+
+/*     .. Local Scalars .. */
+/*     .. */
+/*     .. External Functions .. */
+/*     .. */
+/*     .. Intrinsic Functions .. */
+/*     .. */
+/*     .. Executable Statements .. */
+
+    /* Parameter adjustments */
+    a_dim1 = *lda;
+    a_offset = 1 + a_dim1;
+    a -= a_offset;
+    b_dim1 = *ldb;
+    b_offset = 1 + b_dim1;
+    b -= b_offset;
+
+    /* Function Body */
+    if (lsame_(uplo, (char*)"U", 1, 1)) {
+	i__1 = *n;
+	for (j = 1; j <= i__1; ++j) {
+	    i__2 = min(j,*m);
+	    for (i__ = 1; i__ <= i__2; ++i__) {
+		b[i__ + j * b_dim1] = a[i__ + j * a_dim1];
+/* L10: */
+	    }
+/* L20: */
+	}
+    } else if (lsame_(uplo, (char*)"L", 1, 1)) {
+	i__1 = *n;
+	for (j = 1; j <= i__1; ++j) {
+	    i__2 = *m;
+	    for (i__ = j; i__ <= i__2; ++i__) {
+		b[i__ + j * b_dim1] = a[i__ + j * a_dim1];
+/* L30: */
+	    }
+/* L40: */
+	}
+    } else {
+	i__1 = *n;
+	for (j = 1; j <= i__1; ++j) {
+	    i__2 = *m;
+	    for (i__ = 1; i__ <= i__2; ++i__) {
+		b[i__ + j * b_dim1] = a[i__ + j * a_dim1];
+/* L50: */
+	    }
+/* L60: */
+	}
+    }
+    return;
+
+/*     End of DLACPY */
+
+} /* dlacpy_ */
+
+
+template <typename T> 
+static
+Attribute makeAttr(mlir::Type elemType, T val) {
+  if (auto TT = dyn_cast<RankedTensorType>(elemType))
+    return SplatElementsAttr::get(
+        TT, ArrayRef(makeAttr<T>(TT.getElementType(), val)));
+  if (isa<FloatType>(elemType))
+    return FloatAttr::get(elemType, val);
+  else
+    return IntegerAttr::get(elemType, val);
+}
+
+template <> 
+Attribute makeAttr(mlir::Type elemType, APFloat val) {
+  if (auto TT = dyn_cast<RankedTensorType>(elemType))
+    return SplatElementsAttr::get(
+        TT, ArrayRef(makeAttr<APFloat>(TT.getElementType(), val)));
+  return FloatAttr::get(elemType, val);
+}
+
+extern "C" void dgemm_(char* transA, char* transB, int32_t* M, int32_t* N, int32_t* K, double* alpha,
+		  double* a,
+		  int32_t *lda,
+		  double* b,
+		  int32_t *ldb,
+		  double* beta,
+		  double* c,
+		  int32_t* ldc) {
+   bool transa = *transA == 'T' || *transA == 't';
+   bool transb = *transB == 'T' || *transB == 't';
+   std::tuple<bool, bool, int32_t, int32_t, int32_t> key { transa, transb, *M, *N, *K};
+  static std::map<decltype(key), xla::PjRtLoadedExecutable *> executables;
+  auto found = executables.find(key);
+   xla::PjRtLoadedExecutable * exec;
+     int64_t ATy[] = {(!transa) ? *M : *K, (!transa) ? *K : *M};
+     std::swap(ATy[0], ATy[1]);
+     int64_t BTy[] = {(!transb) ? *K : *N, (!transb) ? *N : *K};
+     std::swap(BTy[0], BTy[1]);
+     int64_t CTy[] = {*M, *N};
+     std::swap(CTy[0], CTy[1]);
+  if (found == executables.end()) {
+     MLIRContext context(registry.registry);
+     RegisterDialects(wrap(&context));
+
+     mlir::OwningOpRef<mlir::ModuleOp> module(
+      mlir::ModuleOp::create(mlir::OpBuilder(&context).getUnknownLoc()));
+     
+  mlir::OpBuilder builder(module->getContext());
+     auto dty = builder.getF64Type();
+     mlir::Type types[] = { RankedTensorType::get(ATy, dty), RankedTensorType::get(BTy, dty), RankedTensorType::get(CTy, dty), RankedTensorType::get({}, dty), RankedTensorType::get({}, dty) };
+     mlir::Type rettypes[] = { RankedTensorType::get(CTy, dty) };
+     auto funcType = builder.getFunctionType(types, rettypes);
+
+     auto loc = builder.getUnknownLoc();
+      mlir::func::FuncOp function = mlir::func::FuncOp(mlir::func::FuncOp::create(loc, "main", funcType));
+     module->push_back(function);
+     builder.setInsertionPointToStart(function.addEntryBlock());
+     auto ra = builder.create<stablehlo::TransposeOp>(loc, function.getArgument(0), std::vector<int64_t>{1, 0});
+     auto rb = builder.create<stablehlo::TransposeOp>(loc, function.getArgument(1), std::vector<int64_t>{1, 0});
+     auto rc = builder.create<stablehlo::TransposeOp>(loc, function.getArgument(2), std::vector<int64_t>{1, 0});
+
+     auto res = builder.create<stablehlo::DotGeneralOp>(loc, rc.getType(), (mlir::Value)ra, (mlir::Value)rb,
+	  stablehlo::DotDimensionNumbersAttr::get(
+      		&context,
+      /*lhsBatchingDimensions=*/{},
+      /*rhsBatchingDimensions=*/{},
+      /*lhsContractingDimensions=*/
+		    std::vector<int64_t>{transa ? 0 : 1},
+      /*rhsContractingDimensions=*/ 
+		    std::vector<int64_t>{transb ? 1 : 0}), nullptr, nullptr);
+     auto alphabc = builder.create<stablehlo::BroadcastInDimOp>(loc, res.getType(), function.getArgument(3), std::vector<int64_t>{});
+     auto betabc = builder.create<stablehlo::BroadcastInDimOp>(loc, res.getType(), function.getArgument(3), std::vector<int64_t>{});
+     auto res2 = builder.create<stablehlo::MulOp>(loc, res, alphabc);
+     auto res3 = builder.create<stablehlo::MulOp>(loc, rc, betabc);
+     auto res4 = builder.create<stablehlo::AddOp>(loc, res2, res3);
+     auto fres = builder.create<stablehlo::TransposeOp>(loc, res4, std::vector<int64_t>{1, 0});
+     Value resv[] = {fres};
+     builder.create<stablehlo::ReturnOp>(loc, resv);
+
+     int device_id = 0;
+     int64_t* mesh_ids = nullptr;
+     int num_mesh_ids = 0;
+     const char *xla_gpu_cuda_data_dir = "";
+     bool use_shardy_partitioner = false;
+     int64_t num_replicas = 0;
+     int64_t num_partitions = 0;
+     bool use_spmd_partitioning = false;
+     exec = ClientCompile(client.client, wrap(module.get()), device_id, mesh_ids, num_mesh_ids, xla_gpu_cuda_data_dir, use_shardy_partitioner, num_replicas, num_partitions, use_spmd_partitioning);
+     executables[key] = exec;
+  } else {
+     exec = found->second;
+  }
+
+  // TODO avoid copy if contiguous
+  double *Abuf = (double*)malloc(sizeof(double)*(*M)*(*K));
+  char layout = '\0';
+  dlacpy_(&layout, (!transa) ? M : K, (!transa) ? K : M, a, lda, Abuf, (!transa) ? M : K);
+  
+  double *Bbuf = (double*)malloc(sizeof(double)*(*K)*(*N));
+  dlacpy_(&layout, (!transb) ? K : N, (!transb) ? N : K, b, ldb, Bbuf, (!transb) ? K : N);
+  
+  double *Cbuf = (double*)malloc(sizeof(double)*(*K)*(*N));
+  dlacpy_(&layout, M, N, c, ldc, Cbuf, M);
+  
+  int device_id = 0;
+  PjRtDevice *device = ClientGetDevice(client.client, device_id);
+
+  int num_args = 5;
+  int dtype = 12;
+  PjRtBuffer *args[] = { 
+	  ArrayFromHostBuffer(client.client, Abuf, dtype, 2, ATy, device),
+	  ArrayFromHostBuffer(client.client, Bbuf, dtype, 2, BTy, device),
+	  ArrayFromHostBuffer(client.client, Cbuf, dtype, 2, CTy, device),
+	  ArrayFromHostBuffer(client.client, alpha, dtype, 0, CTy, device),
+	  ArrayFromHostBuffer(client.client, beta, dtype, 0, CTy, device)
+  };
+  
+  uint8_t is_arg_donatable[5] = {true, true, true, true, true};
+  int num_results = 1;
+  PjRtBuffer *results[1];
+  uint8_t futures[1] = { 0 };
+  FutureType * future_results[1] = { 0 };
+  XLAExecuteSharded(exec, num_args, args, device, is_arg_donatable, num_results, results, futures, future_results);
+
+  if (futures[0]) {
+    FutureAwait(future_results[0]);
+    FreeFuture(future_results[0]);
+  }
+  BufferToHost(results[0], Cbuf);
+  PjRtBufferFree(results[0]);
+
+  dlacpy_(&layout, M, N, Cbuf, M, c, ldc);
+
+  free(Abuf);
+  free(Bbuf);
+  free(Cbuf);
+}
+
