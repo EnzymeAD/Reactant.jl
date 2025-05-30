@@ -3368,7 +3368,7 @@ extern "C" void dgemm_(char* transA, char* transB, int32_t* M, int32_t* N, int32
 		  double* beta,
 		  double* c,
 		  int32_t* ldc) {
-   if (client.client) {
+   if (!client.client) {
      dgemmbase_(transA, transB, M, N, K, alpha, a, lda, b, ldb, beta, c, ldc);
      return;
    }
