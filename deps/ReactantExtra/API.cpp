@@ -2610,19 +2610,27 @@ RegistryHolder registry;
 
 struct ClientHolder {
   xla::PjRtClient* client;
+  int device;
   ClientHolder() {
 	InitializeLogs();
 	const char* error = NULL;
 	auto mpi = getenv("OMPI_COMM_WORLD_RANK");
-	if (mpi)
+	device = 0;
+	if (mpi) {
 		llvm::errs() << " mpi : " << mpi << "\n";
-	else llvm::errs() << " mpi: null\n";
-	
-	if (getenv("USE_TPU"))
+		device = atoi(mpi);
+	} else llvm::errs() << " mpi: null\n";
+	client = nullptr;
+	if (getenv("USE_TPU")) {
+	if (device == 0) {
 	client = MakeTPUClient(nullptr, &error);
-	else
+	}
+	} else
 	client = MakeCPUClient(1, 0);
 	assert(client);
+	if (client) {
+	  device = min(device, client->device_count()-1);
+	}
   }
 };
 
@@ -3413,7 +3421,7 @@ extern "C" void dgemm_(char* transA, char* transB, int32_t* M, int32_t* N, int32
      Value resv[] = {fres};
      builder.create<stablehlo::ReturnOp>(loc, resv);
 
-     int device_id = 0;
+     int device_id = client.device;
      int64_t* mesh_ids = nullptr;
      int num_mesh_ids = 0;
      const char *xla_gpu_cuda_data_dir = "";
@@ -3438,10 +3446,7 @@ extern "C" void dgemm_(char* transA, char* transB, int32_t* M, int32_t* N, int32
   double *Cbuf = (double*)malloc(sizeof(double)*(*K)*(*N));
   dlacpy_(&layout, M, N, c, ldc, Cbuf, M);
   
-  int device_id = 0;
-  auto dev0 = client.client->addressable_devices()[0];
-
-  llvm::errs() << "dev0: " << dev0->ToString() << "\n";
+  int device_id = client.device;
   
   PjRtDevice *device = ClientGetDevice(client.client, device_id);
 
