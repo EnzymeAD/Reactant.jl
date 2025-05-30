@@ -719,10 +719,13 @@ extern "C" PjRtBuffer *ArrayFromHostBuffer(PjRtClient *client, void *data,
   // auto buffer = xla::MyValueOrThrow(client->BufferFromHostBuffer(data,
   // primtype, shape, /*byte_strides*/{},  semantics, /*ondone*/{}, device,
   // &layout));
+  llvm::errs() << " from host buffer\n";
+  llvm::errs() << " dev: " << device->ToString() << "\n";
+  llvm::errs() << " ms: " << *device->default_memory_space() << "\n";
   const xla::Layout *layout = nullptr;
   auto buffer = MyValueOrThrow(client->BufferFromHostBuffer(
       data, primtype, shape, /*byte_strides*/ {}, semantics, /*ondone*/ {},
-      *device->default_memory_space(), layout));
+      MyValueOrThrow(device->default_memory_space()), layout));
   auto bres = buffer.release();
   return bres;
 }
@@ -1422,40 +1425,6 @@ ifrt_pjrt_array_create(ifrt::PjRtClient *client,
       MyValueOrThrow(xla::ifrt::PjRtArray::Create(client, buffer->obj()))));
 }
 
-// we might me interested in the `Compiler::Compile` method variant that accepts
-// `Topology`
-extern "C" xla::ifrt::LoadedExecutable *
-ifrt_compile(ifrt::Client *client, MlirModule cmod, int64_t device_id,
-             const int64_t *mesh_ids, int64_t num_mesh_ids,
-             const char *xla_gpu_cuda_data_dir, bool use_shardy_partitioner,
-             int64_t num_replicas, int64_t num_partitions,
-             bool use_spmd_partitioning) {
-  xla::CompileOptions compile_options = GenerateCompileOptions(
-      device_id, mesh_ids, num_mesh_ids, xla_gpu_cuda_data_dir,
-      use_shardy_partitioner, num_replicas, num_partitions,
-      use_spmd_partitioning);
-  xla::ifrt::DeviceListRef devices = MyValueOrThrow(
-      xla::ifrt::GetDeviceListFromXlaCompileOptions(client, compile_options));
-  auto options = std::make_unique<xla::ifrt::XlaCompileOptions>(
-      compile_options, std::move(devices));
-
-  mlir::ModuleOp cmod_op = cast<ModuleOp>(*unwrap(cmod));
-  if (use_spmd_partitioning && use_shardy_partitioner) {
-    // https://github.com/openxla/xla/blob/b3c641b05692f3712fb3c272e38665fdfa28bdf8/xla/python/py_client.cc#L460
-    auto status = xla::ExportShardyForHloRoundTrip(cmod_op);
-    if (!status.ok()) {
-      ReactantThrowError(status.ToString().c_str());
-    }
-  }
-
-  auto program =
-      std::make_unique<xla::ifrt::HloProgram>(xla::ifrt::HloProgram(cmod_op));
-  auto compiler = client->GetDefaultCompiler();
-
-  return MyValueOrThrow(
-             compiler->Compile(std::move(program), std::move(options)))
-      .release();
-}
 
 extern "C" void
 ifrt_pjrt_loaded_executable_dtor(xla::ifrt::PjRtLoadedExecutable *exec) {
@@ -2326,9 +2295,6 @@ extern "C" mlir::sdy::TensorShardingAttr hloShardingToTensorShardingAttr(
                                                  isClosed[i], dimPriority));
   }
 
-  return mlir::sdy::TensorShardingAttr::get(
-      context, meshName, tensorShardingAttr.getDimShardings(),
-      tensorShardingAttr.getReplicatedAxes());
 }
 
 #pragma endregion
@@ -2647,10 +2613,15 @@ struct ClientHolder {
   ClientHolder() {
 	InitializeLogs();
 	const char* error = NULL;
+	auto mpi = getenv("OMPI_COMM_WORLD_RANK");
+	if (mpi)
+		llvm::errs() << " mpi : " << mpi << "\n";
+	else llvm::errs() << " mpi: null\n";
+	
 	if (getenv("USE_TPU"))
 	client = MakeTPUClient(nullptr, &error);
 	else
-	client = MakeCPUClient(true, 0);
+	client = MakeCPUClient(1, 0);
 	assert(client);
   }
 };
@@ -2966,6 +2937,397 @@ logical lsame_(char *ca, char *cb, int ca_size, int cb_size)
 
 } /* dlacpy_ */
 
+/* Subroutine */ int dgemmbase_(const char *transa_t, const char *transb_t, const integer *m, const integer *
+	n, const integer *k, const doublereal *alpha, const doublereal *a, const integer *lda,
+	const doublereal *b, const integer *ldb, const doublereal *beta, doublereal *c, const integer
+	*ldc)
+{
+
+    char transa_v = *transa_t;
+    char* transa = &transa_v;
+
+    char transb_v = *transb_t;
+    char* transb = &transb_v;
+
+    /* System generated locals */
+    integer a_dim1, a_offset, b_dim1, b_offset, c_dim1, c_offset, i__1, i__2,
+	    i__3;
+
+    /* Local variables */
+    integer info;
+    logical nota, notb;
+    doublereal temp;
+    integer i, j, l, ncola;
+    integer nrowa, nrowb;
+
+
+/*  Purpose
+    =======
+
+    DGEMM  performs one of the matrix-matrix operations
+
+       C := alpha*op( A )*op( B ) + beta*C,
+
+    where  op( X ) is one of
+
+       op( X ) = X   or   op( X ) = X',
+
+    alpha and beta are scalars, and A, B and C are matrices, with op( A )
+
+    an m by k matrix,  op( B )  a  k by n matrix and  C an m by n matrix.
+
+
+    Parameters
+    ==========
+
+    TRANSA - CHARACTER*1.
+             On entry, TRANSA specifies the form of op( A ) to be used in
+
+             the matrix multiplication as follows:
+
+                TRANSA = 'N' or 'n',  op( A ) = A.
+
+                TRANSA = 'T' or 't',  op( A ) = A'.
+
+                TRANSA = 'C' or 'c',  op( A ) = A'.
+
+             Unchanged on exit.
+
+    TRANSB - CHARACTER*1.
+             On entry, TRANSB specifies the form of op( B ) to be used in
+
+             the matrix multiplication as follows:
+
+                TRANSB = 'N' or 'n',  op( B ) = B.
+
+                TRANSB = 'T' or 't',  op( B ) = B'.
+
+                TRANSB = 'C' or 'c',  op( B ) = B'.
+
+             Unchanged on exit.
+
+    M      - INTEGER.
+             On entry,  M  specifies  the number  of rows  of the  matrix
+
+             op( A )  and of the  matrix  C.  M  must  be at least  zero.
+
+             Unchanged on exit.
+
+    N      - INTEGER.
+             On entry,  N  specifies the number  of columns of the matrix
+
+             op( B ) and the number of columns of the matrix C. N must be
+
+             at least zero.
+             Unchanged on exit.
+
+    K      - INTEGER.
+             On entry,  K  specifies  the number of columns of the matrix
+
+             op( A ) and the number of rows of the matrix op( B ). K must
+
+             be at least  zero.
+             Unchanged on exit.
+
+    ALPHA  - DOUBLE PRECISION.
+             On entry, ALPHA specifies the scalar alpha.
+             Unchanged on exit.
+
+    A      - DOUBLE PRECISION array of DIMENSION ( LDA, ka ), where ka is
+
+             k  when  TRANSA = 'N' or 'n',  and is  m  otherwise.
+             Before entry with  TRANSA = 'N' or 'n',  the leading  m by k
+
+             part of the array  A  must contain the matrix  A,  otherwise
+
+             the leading  k by m  part of the array  A  must contain  the
+
+             matrix A.
+             Unchanged on exit.
+
+    LDA    - INTEGER.
+             On entry, LDA specifies the first dimension of A as declared
+
+             in the calling (sub) program. When  TRANSA = 'N' or 'n' then
+
+             LDA must be at least  max( 1, m ), otherwise  LDA must be at
+
+             least  max( 1, k ).
+             Unchanged on exit.
+
+    B      - DOUBLE PRECISION array of DIMENSION ( LDB, kb ), where kb is
+
+             n  when  TRANSB = 'N' or 'n',  and is  k  otherwise.
+             Before entry with  TRANSB = 'N' or 'n',  the leading  k by n
+
+             part of the array  B  must contain the matrix  B,  otherwise
+
+             the leading  n by k  part of the array  B  must contain  the
+
+             matrix B.
+             Unchanged on exit.
+
+    LDB    - INTEGER.
+             On entry, LDB specifies the first dimension of B as declared
+
+             in the calling (sub) program. When  TRANSB = 'N' or 'n' then
+
+             LDB must be at least  max( 1, k ), otherwise  LDB must be at
+
+             least  max( 1, n ).
+             Unchanged on exit.
+
+    BETA   - DOUBLE PRECISION.
+             On entry,  BETA  specifies the scalar  beta.  When  BETA  is
+
+             supplied as zero then C need not be set on input.
+             Unchanged on exit.
+
+    C      - DOUBLE PRECISION array of DIMENSION ( LDC, n ).
+             Before entry, the leading  m by n  part of the array  C must
+
+             contain the matrix  C,  except when  beta  is zero, in which
+
+             case C need not be set on entry.
+             On exit, the array  C  is overwritten by the  m by n  matrix
+
+             ( alpha*op( A )*op( B ) + beta*C ).
+
+    LDC    - INTEGER.
+             On entry, LDC specifies the first dimension of C as declared
+
+             in  the  calling  (sub)  program.   LDC  must  be  at  least
+
+             max( 1, m ).
+             Unchanged on exit.
+
+
+    Level 3 Blas routine.
+
+    -- Written on 8-February-1989.
+       Jack Dongarra, Argonne National Laboratory.
+       Iain Duff, AERE Harwell.
+       Jeremy Du Croz, Numerical Algorithms Group Ltd.
+       Sven Hammarling, Numerical Algorithms Group Ltd.
+
+
+
+       Set  NOTA  and  NOTB  as  true if  A  and  B  respectively are not
+
+       transposed and set  NROWA, NCOLA and  NROWB  as the number of rows
+
+       and  columns of  A  and the  number of  rows  of  B  respectively.
+
+
+
+   Parameter adjustments
+       Function Body */
+
+#define A(I,J) a[(I)-1 + ((J)-1)* ( *lda)]
+#define B(I,J) b[(I)-1 + ((J)-1)* ( *ldb)]
+#define C(I,J) c[(I)-1 + ((J)-1)* ( *ldc)]
+
+    nota = lsame_((char*)transa, (char*)"N", 1, 1);
+    notb = lsame_((char*)transb, (char*)"N", 1, 1);
+    if (nota) {
+	nrowa = *m;
+	ncola = *k;
+    } else {
+	nrowa = *k;
+	ncola = *m;
+    }
+    if (notb) {
+	nrowb = *k;
+    } else {
+	nrowb = *n;
+    }
+
+/*     Test the input parameters. */
+
+    info = 0;
+    if (! nota && ! lsame_((char*)transa, (char*)"C", 1, 1) && ! lsame_((char*)transa, (char*)"T", 1, 1)) {
+	info = 1;
+    } else if (! notb && ! lsame_((char*)transb, (char*)"C", 1, 1) && ! lsame_((char*)transb,
+	    (char*)"T", 1, 1)) {
+	info = 2;
+    } else if (*m < 0) {
+	info = 3;
+    } else if (*n < 0) {
+	info = 4;
+    } else if (*k < 0) {
+	info = 5;
+    } else if (*lda < max(1,nrowa)) {
+	info = 8;
+    } else if (*ldb < max(1,nrowb)) {
+	info = 10;
+    } else if (*ldc < max(1,*m)) {
+	info = 13;
+    }
+    if (info != 0) {
+	xerbla_("DGEMM ", &info, 0);
+	return 0;
+    }
+
+/*     Quick return if possible. */
+
+    if (*m == 0 || *n == 0 || (*alpha == 0. || *k == 0) && *beta == 1.) {
+	return 0;
+    }
+
+/*     And if  alpha.eq.zero. */
+
+    if (*alpha == 0.) {
+	if (*beta == 0.) {
+	    i__1 = *n;
+	    for (j = 1; j <= *n; ++j) {
+		i__2 = *m;
+		for (i = 1; i <= *m; ++i) {
+		    C(i,j) = 0.;
+/* L10: */
+		}
+/* L20: */
+	    }
+	} else {
+	    i__1 = *n;
+	    for (j = 1; j <= *n; ++j) {
+		i__2 = *m;
+		for (i = 1; i <= *m; ++i) {
+		    C(i,j) = *beta * C(i,j);
+/* L30: */
+		}
+/* L40: */
+	    }
+	}
+	return 0;
+    }
+
+/*     Start the operations. */
+
+    if (notb) {
+	if (nota) {
+
+/*           Form  C := alpha*A*B + beta*C. */
+
+	    i__1 = *n;
+	    for (j = 1; j <= *n; ++j) {
+		if (*beta == 0.) {
+		    i__2 = *m;
+		    for (i = 1; i <= *m; ++i) {
+			C(i,j) = 0.;
+/* L50: */
+		    }
+		} else if (*beta != 1.) {
+		    i__2 = *m;
+		    for (i = 1; i <= *m; ++i) {
+			C(i,j) = *beta * C(i,j);
+/* L60: */
+		    }
+		}
+		i__2 = *k;
+		for (l = 1; l <= *k; ++l) {
+		    if (B(l,j) != 0.) {
+			temp = *alpha * B(l,j);
+			i__3 = *m;
+			for (i = 1; i <= *m; ++i) {
+			    C(i,j) += temp * A(i,l);
+/* L70: */
+			}
+		    }
+/* L80: */
+		}
+/* L90: */
+	    }
+	} else {
+
+/*           Form  C := alpha*A'*B + beta*C */
+
+	    i__1 = *n;
+	    for (j = 1; j <= *n; ++j) {
+		i__2 = *m;
+		for (i = 1; i <= *m; ++i) {
+		    temp = 0.;
+		    i__3 = *k;
+		    for (l = 1; l <= *k; ++l) {
+			temp += A(l,i) * B(l,j);
+/* L100: */
+		    }
+		    if (*beta == 0.) {
+			C(i,j) = *alpha * temp;
+		    } else {
+			C(i,j) = *alpha * temp + *beta * C(i,j);
+		    }
+/* L110: */
+		}
+/* L120: */
+	    }
+	}
+    } else {
+	if (nota) {
+
+/*           Form  C := alpha*A*B' + beta*C */
+
+	    i__1 = *n;
+	    for (j = 1; j <= *n; ++j) {
+		if (*beta == 0.) {
+		    i__2 = *m;
+		    for (i = 1; i <= *m; ++i) {
+			C(i,j) = 0.;
+/* L130: */
+		    }
+		} else if (*beta != 1.) {
+		    i__2 = *m;
+		    for (i = 1; i <= *m; ++i) {
+			C(i,j) = *beta * C(i,j);
+/* L140: */
+		    }
+		}
+		i__2 = *k;
+		for (l = 1; l <= *k; ++l) {
+		    if (B(j,l) != 0.) {
+			temp = *alpha * B(j,l);
+			i__3 = *m;
+			for (i = 1; i <= *m; ++i) {
+			    C(i,j) += temp * A(i,l);
+/* L150: */
+			}
+		    }
+/* L160: */
+		}
+/* L170: */
+	    }
+	} else {
+
+/*           Form  C := alpha*A'*B' + beta*C */
+
+	    i__1 = *n;
+	    for (j = 1; j <= *n; ++j) {
+		i__2 = *m;
+		for (i = 1; i <= *m; ++i) {
+		    temp = 0.;
+		    i__3 = *k;
+		    for (l = 1; l <= *k; ++l) {
+			temp += A(l,i) * B(j,l);
+/* L180: */
+		    }
+		    if (*beta == 0.) {
+			C(i,j) = *alpha * temp;
+		    } else {
+			C(i,j) = *alpha * temp + *beta * C(i,j);
+		    }
+/* L190: */
+		}
+/* L200: */
+	    }
+	}
+    }
+
+    return 0;
+#undef A
+#undef B
+#undef C
+/*     End of DGEMM . */
+
+} /* dgemm_ */
 
 template <typename T> 
 static
@@ -2995,6 +3357,11 @@ extern "C" void dgemm_(char* transA, char* transB, int32_t* M, int32_t* N, int32
 		  double* beta,
 		  double* c,
 		  int32_t* ldc) {
+   if (client.client) {
+     dgemmbase_(transA, transB, M, N, K, alpha, a, lda, b, ldb, beta, c, ldc);
+     return;
+   }
+
    bool transa = *transA == 'T' || *transA == 't';
    bool transb = *transB == 'T' || *transB == 't';
    std::tuple<bool, bool, int32_t, int32_t, int32_t> key { transa, transb, *M, *N, *K};
@@ -3051,8 +3418,8 @@ extern "C" void dgemm_(char* transA, char* transB, int32_t* M, int32_t* N, int32
      int num_mesh_ids = 0;
      const char *xla_gpu_cuda_data_dir = "";
      bool use_shardy_partitioner = false;
-     int64_t num_replicas = 0;
-     int64_t num_partitions = 0;
+     int64_t num_replicas = 1;
+     int64_t num_partitions = 1;
      bool use_spmd_partitioning = false;
      exec = ClientCompile(client.client, wrap(module.get()), device_id, mesh_ids, num_mesh_ids, xla_gpu_cuda_data_dir, use_shardy_partitioner, num_replicas, num_partitions, use_spmd_partitioning);
      executables[key] = exec;
@@ -3072,8 +3439,13 @@ extern "C" void dgemm_(char* transA, char* transB, int32_t* M, int32_t* N, int32
   dlacpy_(&layout, M, N, c, ldc, Cbuf, M);
   
   int device_id = 0;
+  auto dev0 = client.client->addressable_devices()[0];
+
+  llvm::errs() << "dev0: " << dev0->ToString() << "\n";
+  
   PjRtDevice *device = ClientGetDevice(client.client, device_id);
 
+  llvm::errs() << "device: " << device->ToString() << "\n";
   int num_args = 5;
   int dtype = 12;
   PjRtBuffer *args[] = { 
