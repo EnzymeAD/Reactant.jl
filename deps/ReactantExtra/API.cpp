@@ -3439,15 +3439,21 @@ extern "C" void dgemm_(char* transA, char* transB, int32_t* M, int32_t* N, int32
      exec = found->second;
   }
 
+  llvm::errs() << " M=" << *M << " " << *N << " " << *K << "\n";
+  llvm::errs() << " transa=" << transa << " transb=" << transb << "\n";
+  llvm::errs() <<" lda: " << *lda << " ldb: " << *ldb << " ldc: " << *ldc << "\n";
   // TODO avoid copy if contiguous
   double *Abuf = (double*)malloc(sizeof(double)*(*M)*(*K));
   char layout = '\0';
+  llvm::errs() <<" into A copy\n";
   dlacpy_(&layout, (!transa) ? M : K, (!transa) ? K : M, a, lda, Abuf, (!transa) ? M : K);
   
   double *Bbuf = (double*)malloc(sizeof(double)*(*K)*(*N));
+  llvm::errs() <<" into B copy\n";
   dlacpy_(&layout, (!transb) ? K : N, (!transb) ? N : K, b, ldb, Bbuf, (!transb) ? K : N);
   
-  double *Cbuf = (double*)malloc(sizeof(double)*(*K)*(*N));
+  double *Cbuf = (double*)malloc(sizeof(double)*(*M)*(*N));
+  llvm::errs() <<" into C copy\n";
   dlacpy_(&layout, M, N, c, ldc, Cbuf, M);
   
   int device_id = client.device;
@@ -3486,6 +3492,7 @@ extern "C" void dgemm_(char* transA, char* transB, int32_t* M, int32_t* N, int32
   PjRtBufferFree(results[0]);
 
 	  llvm::errs() << " copying back\n";
+  llvm::errs() <<" out of C copy\n";
   dlacpy_(&layout, M, N, Cbuf, M, c, ldc);
 	  llvm::errs() << " freeing all\n";
 
