@@ -3470,19 +3470,28 @@ extern "C" void dgemm_(char* transA, char* transB, int32_t* M, int32_t* N, int32
   PjRtBuffer *results[1];
   uint8_t futures[1] = { 0 };
   FutureType * future_results[1] = { 0 };
+  llvm::errs() << " executing sharded\n";
   XLAExecuteSharded(exec, num_args, args, device, is_arg_donatable, num_results, results, futures, future_results);
+  llvm::errs() << " done executing sharded\n";
 
   if (futures[0]) {
+	  llvm::errs() << " awaiting future\n";
     FutureAwait(future_results[0]);
+	  llvm::errs() << " freeing future\n";
     FreeFuture(future_results[0]);
   }
+	  llvm::errs() << " buffer to host\n";
   BufferToHost(results[0], Cbuf);
+	  llvm::errs() << " freeing buffer\n";
   PjRtBufferFree(results[0]);
 
+	  llvm::errs() << " copying back\n";
   dlacpy_(&layout, M, N, Cbuf, M, c, ldc);
+	  llvm::errs() << " freeing all\n";
 
   free(Abuf);
   free(Bbuf);
   free(Cbuf);
+	  llvm::errs() << " done\n";
 }
 
