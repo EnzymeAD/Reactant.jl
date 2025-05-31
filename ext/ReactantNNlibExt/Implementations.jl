@@ -7,36 +7,28 @@ for (jlop, hloop) in (
 end
 
 function NNlib.softmax!(out::AnyTracedRArray{T,N}, x::AbstractArray; dims=1) where {T,N}
-    max_ = NNlib.fast_maximum(x; dims)
-    # XXX: Once reverse mode of if is properly supported, we can make it @trace
-    # zero_num = TracedUtils.promote_to(TracedRNumber{T}, 0)
-    # one_num = TracedUtils.promote_to(TracedRNumber{T}, 1)
-    # @trace if all(isfinite, max_)
-    @. out = exp(x - max_)
-    # else
-    #     cond = max_ .== Inf
-    #     true_pred = ifelse.(x .== Inf, one_num, zero_num)
-    #     @. out = ifelse(cond, true_pred, exp(x - max_))
-    # end
-    tmp = dims isa Colon ? sum(out) : sum!(max_, out)
-    out ./= tmp
+    x = T.(Reactant.materialize_traced_array(x))
+    max_ = maximum(x; dims)
+    diff = exp.(x .- max_)
+    @trace if all(isfinite, max_)
+        @. out = diff
+    else
+        @. out = ifelse(isinf(max_), ifelse(isinf(x), T(1), T(0)), diff)
+    end
+    out ./= sum(out; dims)
     return out
 end
 
 function NNlib.logsoftmax!(out::AnyTracedRArray{T}, x::AbstractArray; dims=1) where {T}
-    max_ = NNlib.fast_maximum(x; dims)
-    # XXX: Once reverse mode of if is properly supported, we can make it @trace
-    # inf_num = TracedUtils.promote_to(TracedRNumber{T}, Inf)
-    # zero_num = TracedUtils.promote_to(TracedRNumber{T}, 0)
-    # @trace if all(isfinite, max_)
-    @. out = x - max_
-    # else
-    #     cond = max_ .== Inf
-    #     true_pred = ifelse.(x .== Inf, zero_num, -inf_num)
-    #     @. out = ifelse(cond, true_pred, x - max_)
-    # end
-    @fastmath log_ = log.(sum(exp, out; dims))
-    out .-= log_
+    x = T.(Reactant.materialize_traced_array(x))
+    max_ = maximum(x; dims)
+    diff = x .- max_
+    @trace if all(isfinite, max_)
+        @. out = diff
+    else
+        @. out = ifelse(isinf(max_), ifelse(isinf(x), T(0), -T(Inf)), diff)
+    end
+    out .-= log.(sum(exp, out; dims))
     return out
 end
 
@@ -111,6 +103,10 @@ function overloaded_conv!(
         rhs_dilation=collect(dilation),
         feature_group_count,
         batch_group_count=1,
+        precision_config=MLIR.IR.Attribute([
+            MLIR.IR.Attribute(Reactant.CONVOLUTION_PRECISION[]),
+            MLIR.IR.Attribute(Reactant.CONVOLUTION_PRECISION[]),
+        ]),
     )
     set_mlir_data!(y, Reactant.MLIR.IR.result(conv))
     return y
@@ -206,6 +202,10 @@ function overloaded_∇conv_filter!(
         rhs_dilation=collect(stride),
         feature_group_count,
         batch_group_count,
+        precision_config=MLIR.IR.Attribute([
+            MLIR.IR.Attribute(Reactant.CONVOLUTION_PRECISION[]),
+            MLIR.IR.Attribute(Reactant.CONVOLUTION_PRECISION[]),
+        ]),
     )
     set_mlir_data!(dw, MLIR.IR.result(conv))
 
@@ -326,6 +326,10 @@ function overloaded_∇conv_data!(
         dimension_numbers,
         feature_group_count,
         batch_group_count=1,
+        precision_config=MLIR.IR.Attribute([
+            MLIR.IR.Attribute(Reactant.CONVOLUTION_PRECISION[]),
+            MLIR.IR.Attribute(Reactant.CONVOLUTION_PRECISION[]),
+        ]),
     )
     set_mlir_data!(dx, MLIR.IR.result(conv))
 
@@ -337,7 +341,7 @@ function overloaded_maxpool!(
     y::AnyTracedRArray{T,N}, x::AnyTracedRArray{T2,N}, pdims::NNlib.PoolDims;
 ) where {T,T2,N}
     res = reduce_window(
-        Reactant.MLIR.Dialects.stablehlo.maximum,
+        max,
         T.(x);
         init=typemin(T),
         dilation=NNlib.dilation(pdims),
@@ -353,7 +357,7 @@ function overloaded_meanpool!(
     y::AnyTracedRArray{T,N}, x::AnyTracedRArray{T2,N}, pdims::NNlib.PoolDims;
 ) where {T,T2,N}
     res = reduce_window(
-        Reactant.MLIR.Dialects.stablehlo.add,
+        +,
         T.(x);
         init=zero(T),
         dilation=NNlib.dilation(pdims),

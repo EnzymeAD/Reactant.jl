@@ -213,22 +213,61 @@ function traced_setfield_buffer!(
     return traced_setfield!(obj, field, cval, path)
 end
 
-function create_result(tocopy::T, path, args...) where {T}
+function create_result(
+    tocopy::T,
+    path,
+    result_stores,
+    path_to_shard_info,
+    to_unreshard_results,
+    unresharded_code::Vector{Expr},
+    unresharded_arrays_cache,
+    used_shardinfo,
+    result_cache,
+    var_idx,
+    resultgen_code,
+) where {T}
     if !isstructtype(typeof(tocopy))
         error("cannot copy $tocopy of type $(Core.Typeof(tocopy))")
     end
 
-    elems = Union{Symbol,Expr}[]
+    args = (
+        result_stores,
+        path_to_shard_info,
+        to_unreshard_results,
+        unresharded_code::Vector{Expr},
+        unresharded_arrays_cache,
+        used_shardinfo,
+        result_cache,
+        var_idx,
+        resultgen_code,
+    )
 
-    for i in 1:fieldcount(T)
-        # If the field is undefined we don't set it. A common example for this is `du2`
-        # for Tridiagonal
-        isdefined(tocopy, i) || continue
-        ev = create_result(getfield(tocopy, i), append_path(path, i), args...)
-        push!(elems, ev)
+    if !haskey(result_cache, tocopy)
+        sym = Symbol("result", var_idx[])
+        var_idx[] += 1
+
+        elems = Union{Symbol,Expr}[]
+
+        for i in 1:fieldcount(T)
+            # If the field is undefined we don't set it. A common example for this is `du2`
+            # for Tridiagonal
+            isdefined(tocopy, i) || continue
+            ev = create_result(getfield(tocopy, i), append_path(path, i), args...)
+            push!(elems, ev)
+        end
+
+        result = Expr(:new, T, elems...)
+
+        push!(
+            resultgen_code,
+            quote
+                $sym = $result
+            end,
+        )
+        result_cache[tocopy] = sym
     end
 
-    return Expr(:new, T, elems...)
+    return result_cache[tocopy]
 end
 
 function create_result(
@@ -241,8 +280,14 @@ function create_result(
     unresharded_arrays_cache,
     used_shardinfo,
     result_cache,
+    var_idx,
+    resultgen_code,
 ) where {T,D,S}
-    if haskey(result_stores, path)
+    if !haskey(result_cache, tocopy)
+        sym = Symbol("result", var_idx[])
+        var_idx[] += 1
+
+        @assert haskey(result_stores, path)
         restore = result_stores[path]
         delete!(result_stores, path)
         if path_to_shard_info !== nothing && haskey(path_to_shard_info, path)
@@ -251,24 +296,20 @@ function create_result(
             end
             sharding = pop!(path_to_shard_info, path)
             push!(used_shardinfo, sharding)
-            return :(ConcretePJRTNumber{$T}(($(restore)...,), $sharding))
+            result = :(ConcretePJRTNumber{$T}(($(restore)...,), $sharding))
         else
-            return :(ConcretePJRTNumber{$T}($restore))
+            result = :(ConcretePJRTNumber{$T}($restore))
         end
+        push!(
+            resultgen_code,
+            quote
+                $sym = $result
+            end,
+        )
+        result_cache[tocopy] = sym
     end
 
-    # We will set the data for this later
-    haskey(result_cache, tocopy) && return Meta.quot(result_cache[tocopy])
-
-    if path_to_shard_info !== nothing && haskey(path_to_shard_info, path)
-        sharding = pop!(path_to_shard_info, path)
-        push!(used_shardinfo, sharding)
-        result = ConcretePJRTNumber{T}(tocopy.data, sharding)
-    else
-        result = ConcretePJRTNumber{T}(tocopy.data)
-    end
-    result_cache[tocopy] = result
-    return Meta.quot(result)
+    return result_cache[tocopy]
 end
 
 function create_result(
@@ -281,8 +322,14 @@ function create_result(
     unresharded_arrays_cache,
     used_shardinfo,
     result_cache,
+    var_idx,
+    resultgen_code,
 ) where {T,S}
-    if haskey(result_stores, path)
+    if !haskey(result_cache, tocopy)
+        sym = Symbol("result", var_idx[])
+        var_idx[] += 1
+
+        @assert haskey(result_stores, path)
         restore = result_stores[path]
         delete!(result_stores, path)
         if path_to_shard_info !== nothing && haskey(path_to_shard_info, path)
@@ -291,24 +338,20 @@ function create_result(
             end
             sharding = pop!(path_to_shard_info, path)
             push!(used_shardinfo, sharding)
-            return :(ConcreteIFRTNumber{$T}($(restore), $sharding))
+            result = :(ConcreteIFRTNumber{$T}($(restore), $sharding))
         else
-            return :(ConcreteIFRTNumber{$T}($restore))
+            result = :(ConcreteIFRTNumber{$T}($restore))
         end
+        push!(
+            resultgen_code,
+            quote
+                $sym = $result
+            end,
+        )
+        result_cache[tocopy] = sym
     end
 
-    # We will set the data for this later
-    haskey(result_cache, tocopy) && return Meta.quot(result_cache[tocopy])
-
-    if path_to_shard_info !== nothing && haskey(path_to_shard_info, path)
-        sharding = pop!(path_to_shard_info, path)
-        push!(used_shardinfo, sharding)
-        result = ConcreteIFRTNumber{T}(tocopy.data, sharding)
-    else
-        result = ConcreteIFRTNumber{T}(tocopy.data)
-    end
-    result_cache[tocopy] = result
-    return Meta.quot(result)
+    return result_cache[tocopy]
 end
 
 function create_result(
@@ -321,8 +364,14 @@ function create_result(
     unresharded_arrays_cache,
     used_shardinfo,
     result_cache,
+    var_idx,
+    resultgen_code,
 ) where {T,N,D,S}
-    if haskey(result_stores, path)
+    if !haskey(result_cache, tocopy)
+        sym = Symbol("result", var_idx[])
+        var_idx[] += 1
+
+        @assert haskey(result_stores, path)
         restore = result_stores[path]
         delete!(result_stores, path)
         if path_to_shard_info !== nothing && haskey(path_to_shard_info, path)
@@ -331,24 +380,21 @@ function create_result(
             end
             sharding = pop!(path_to_shard_info, path)
             push!(used_shardinfo, sharding)
-            return :(ConcretePJRTArray{$T,$N}(($(restore)...,), $(tocopy.shape), $sharding))
+            result =
+                :(ConcretePJRTArray{$T,$N}(($(restore)...,), $(tocopy.shape), $sharding))
         else
-            return :(ConcretePJRTArray{$T,$N}($restore, $(tocopy.shape)))
+            result = :(ConcretePJRTArray{$T,$N}($restore, $(tocopy.shape)))
         end
+        push!(
+            resultgen_code,
+            quote
+                $sym = $result
+            end,
+        )
+        result_cache[tocopy] = sym
     end
 
-    # We will set the data for this later
-    haskey(result_cache, tocopy) && return Meta.quot(result_cache[tocopy])
-
-    if path_to_shard_info !== nothing && haskey(path_to_shard_info, path)
-        sharding = pop!(path_to_shard_info, path)
-        push!(used_shardinfo, sharding)
-        result = ConcretePJRTArray{T,N}(tocopy.data, tocopy.shape, sharding)
-    else
-        result = ConcretePJRTArray{T,N,D,S}(tocopy.data, tocopy.shape, tocopy.sharding)
-    end
-    result_cache[tocopy] = result
-    return Meta.quot(result)
+    return result_cache[tocopy]
 end
 
 function create_result(
@@ -361,8 +407,14 @@ function create_result(
     unresharded_arrays_cache,
     used_shardinfo,
     result_cache,
+    var_idx,
+    resultgen_code,
 ) where {T,N,S}
-    if haskey(result_stores, path)
+    if !haskey(result_cache, tocopy)
+        sym = Symbol("result", var_idx[])
+        var_idx[] += 1
+
+        @assert haskey(result_stores, path)
         restore = result_stores[path]
         delete!(result_stores, path)
         if path_to_shard_info !== nothing && haskey(path_to_shard_info, path)
@@ -388,24 +440,20 @@ function create_result(
             end
             sharding = pop!(path_to_shard_info, path)
             push!(used_shardinfo, sharding)
-            return :(ConcreteIFRTArray{$T,$N}($(restore), $(tocopy.shape), $sharding))
+            result = :(ConcreteIFRTArray{$T,$N}($(restore), $(tocopy.shape), $sharding))
         else
-            return :(ConcreteIFRTArray{$T,$N}($(restore), $(tocopy.shape)))
+            result = :(ConcreteIFRTArray{$T,$N}($(restore), $(tocopy.shape)))
         end
+        push!(
+            resultgen_code,
+            quote
+                $sym = $result
+            end,
+        )
+        result_cache[tocopy] = sym
     end
 
-    # We will set the data for this later
-    haskey(result_cache, tocopy) && return Meta.quot(result_cache[tocopy])
-
-    if path_to_shard_info !== nothing && haskey(path_to_shard_info, path)
-        sharding = pop!(path_to_shard_info, path)
-        push!(used_shardinfo, sharding)
-        result = ConcreteIFRTArray{T,N}(tocopy.data, tocopy.shape, sharding)
-    else
-        result = ConcreteIFRTArray{T,N,S}(tocopy.data, tocopy.shape, tocopy.sharding)
-    end
-    result_cache[tocopy] = result
-    return Meta.quot(result)
+    return result_cache[tocopy]
 end
 
 function generate_unresharded_ifrt_array(
@@ -435,16 +483,82 @@ function generate_unresharded_ifrt_array(
     return res_arr
 end
 
-function create_result(tocopy::Array{T,N}, path, args...) where {T,N}
-    elems = Expr[]
-    for (i, v) in enumerate(tocopy)
-        push!(elems, create_result(v, append_path(path, i), args...))
+function create_result(
+    tocopy::Array{T,N},
+    path,
+    result_stores,
+    path_to_shard_info,
+    to_unreshard_results,
+    unresharded_code::Vector{Expr},
+    unresharded_arrays_cache,
+    used_shardinfo,
+    result_cache,
+    var_idx,
+    resultgen_code,
+) where {T,N}
+    args = (
+        result_stores,
+        path_to_shard_info,
+        to_unreshard_results,
+        unresharded_code::Vector{Expr},
+        unresharded_arrays_cache,
+        used_shardinfo,
+        result_cache,
+        var_idx,
+        resultgen_code,
+    )
+
+    if !haskey(result_cache, tocopy)
+        sym = Symbol("result", var_idx[])
+        var_idx[] += 1
+
+        push!(
+            resultgen_code,
+            quote
+                $sym = $(Array{T,N})(undef, $(size(tocopy)...,))
+            end,
+        )
+
+        result_cache[tocopy] = sym
+
+        for (i, v) in enumerate(tocopy)
+            subexpr = create_result(v, append_path(path, i), args...)
+            push!(
+                resultgen_code,
+                quote
+                    @inbounds $sym[$i] = $subexpr
+                end,
+            )
+        end
     end
-    # TODO is there a way to not call `reshape` here? what expr is used for array literals?
-    return :(reshape($T[$(elems...)], $(size(tocopy))...))
+
+    return result_cache[tocopy]
 end
 
-function create_result(tocopy::Tuple, path, args...)
+function create_result(
+    tocopy::Tuple,
+    path,
+    result_stores,
+    path_to_shard_info,
+    to_unreshard_results,
+    unresharded_code::Vector{Expr},
+    unresharded_arrays_cache,
+    used_shardinfo,
+    result_cache,
+    var_idx,
+    resultgen_code,
+)
+    args = (
+        result_stores,
+        path_to_shard_info,
+        to_unreshard_results,
+        unresharded_code::Vector{Expr},
+        unresharded_arrays_cache,
+        used_shardinfo,
+        result_cache,
+        var_idx,
+        resultgen_code,
+    )
     elems = Union{Symbol,Expr}[]
     for (k, v) in pairs(tocopy)
         push!(elems, create_result(v, append_path(path, k), args...))
@@ -452,7 +566,30 @@ function create_result(tocopy::Tuple, path, args...)
     return :(($(elems...),))
 end
 
-function create_result(tocopy::NamedTuple{K,T}, path, args...) where {K,T}
+function create_result(
+    tocopy::NamedTuple{K,T},
+    path,
+    result_stores,
+    path_to_shard_info,
+    to_unreshard_results,
+    unresharded_code::Vector{Expr},
+    unresharded_arrays_cache,
+    used_shardinfo,
+    result_cache,
+    var_idx,
+    resultgen_code,
+) where {K,T}
+    args = (
+        result_stores,
+        path_to_shard_info,
+        to_unreshard_results,
+        unresharded_code::Vector{Expr},
+        unresharded_arrays_cache,
+        used_shardinfo,
+        result_cache,
+        var_idx,
+        resultgen_code,
+    )
     elems = Union{Symbol,Expr}[]
     for (i, (k, v)) in enumerate(pairs(tocopy))
         push!(elems, create_result(v, append_path(path, i), args...))
@@ -460,20 +597,88 @@ function create_result(tocopy::NamedTuple{K,T}, path, args...) where {K,T}
     return :(NamedTuple{$K}(($(elems...),)))
 end
 
-function create_result(tocopy::D, path, args...) where {K,V,D<:AbstractDict{K,V}}
-    elems = Expr[]
-    for (i, p) in enumerate(pairs(tocopy))
-        push!(elems, create_result(p, append_path(path, i), args...))
+function create_result(
+    tocopy::D,
+    path,
+    result_stores,
+    path_to_shard_info,
+    to_unreshard_results,
+    unresharded_code::Vector{Expr},
+    unresharded_arrays_cache,
+    used_shardinfo,
+    result_cache,
+    var_idx,
+    resultgen_code,
+) where {K,V,D<:AbstractDict{K,V}}
+    args = (
+        result_stores,
+        path_to_shard_info,
+        to_unreshard_results,
+        unresharded_code::Vector{Expr},
+        unresharded_arrays_cache,
+        used_shardinfo,
+        result_cache,
+        var_idx,
+        resultgen_code,
+    )
+
+    if !haskey(result_cache, tocopy)
+        sym = Symbol("result", var_idx[])
+        var_idx[] += 1
+
+        push!(
+            resultgen_code,
+            quote
+                $sym = $D()
+            end,
+        )
+
+        result_cache[tocopy] = sym
+
+        for (k, v) in pairs(tocopy)
+            subexpr = create_result(v, append_path(path, k), args...)
+            push!(
+                resultgen_code,
+                quote
+                    @inbounds $sym[$k] = $subexpr
+                end,
+            )
+        end
     end
-    return :($D([$(elems...)]))
+
+    return quote
+        $(result_cache[tocopy])
+    end
 end
 
-function create_result(tocopy::Reactant.XLA.AbstractDevice, args...)
+function create_result(
+    tocopy::Reactant.XLA.AbstractDevice,
+    path,
+    result_stores,
+    path_to_shard_info,
+    to_unreshard_results,
+    unresharded_code::Vector{Expr},
+    unresharded_arrays_cache,
+    used_shardinfo,
+    result_cache,
+    var_idx,
+    resultgen_code,
+)
     return Meta.quot(:($(tocopy)))
 end
 
 function create_result(
-    tocopy::Union{Integer,AbstractFloat,AbstractString,Nothing,Type,Symbol,Char}, args...
+    tocopy::Union{Integer,AbstractFloat,AbstractString,Nothing,Type,Symbol,Char},
+    path,
+    result_stores,
+    path_to_shard_info,
+    to_unreshard_results,
+    unresharded_code::Vector{Expr},
+    unresharded_arrays_cache,
+    used_shardinfo,
+    result_cache,
+    var_idx,
+    resultgen_code,
 )
     return Meta.quot(tocopy)
 end
@@ -814,6 +1019,9 @@ function optimization_passes(;
                 "transpose_rotate",
                 "transpose_dynamic_slice",
                 "transpose_reverse",
+                "transpose_batch_norm_training",
+                "transpose_batch_norm_inference",
+                "transpose_batch_norm_grad",
             ],
         )
         if AGGRESSIVE_PROPAGATION[]
@@ -1173,8 +1381,10 @@ function compile_mlir!(
         seen_args,
         ret,
         linear_args,
+        skipped_args,
         in_tys,
         linear_results,
+        skipped_results,
         is_sharded,
     ) = mlir_fn_res
     compiled_f = mlir_fn_res.f
@@ -1918,8 +2128,10 @@ function compile_mlir!(
         seen_args,
         ret,
         linear_args,
+        skipped_args,
         in_tys,
         linear_results2,
+        skipped_results,
         mlir_fn_res.num_partitions,
         mlir_fn_res.num_replicas,
         mlir_fn_res.is_sharded,
@@ -1934,13 +2146,8 @@ function compile_mlir!(
     )
 end
 
-"""
-    @code_hlo [optimize = ...] [no_nan = <true/false>] f(args...)
-
-See also [`@code_xla`](@ref), [`@code_mhlo`](@ref).
-"""
-macro code_hlo(args...)
-    default_options = Dict{Symbol,Any}(
+function get_common_compile_options()
+    return Dict{Symbol,Any}(
         :optimize => true,
         :no_nan => false,
         :client => nothing,
@@ -1955,8 +2162,78 @@ macro code_hlo(args...)
         :optimize_communications => true,
         :cudnn_hlo_optimize => false,
     )
+end
+
+const COMMON_COMPILE_OPTIONS_DOCS = """
+  - `optimize`: Optimizations passes to run on the traced MLIR code. Valid types of values
+    are:
+    - Bool (true/false): whether to run the optimization passes or not. Defaults to `true`.
+    - String: a custom string with the passes to run. The string should be a comma-separated
+      list of MLIR passes. For example, `"canonicalize,enzyme-hlo-opt"`.
+    - Symbol: a predefined set of passes to run. Valid options are:
+       1. `:all`: Default set of optimization passes. The exact set of passes are not fixed
+          and may change in future versions of Reactant. It is recommended to use this
+          option for most users.
+       2. `:none`: No optimization passes will be run.
+       3.  Other predefined options are: `:before_kernel`, `:before_jit`, `:before_raise`,
+          `:before_enzyme`, `:after_enzyme`, `:just_batch`, `:canonicalize`, `:only_enzyme`.
+  - `no_nan`: If `true`, the optimization passes will assume that the function does not
+    produce NaN values. This can lead to more aggressive optimizations **(and potentially
+    incorrect results if the function does produce NaN values)**.
+  - `client`: XLA Client used for compilation. If not specified, the default client is used.
+  - `raise`: If `true`, the function will be compiled with the raising pass, which raises
+    CUDA and KernelAbstractions kernels to HLO. Defaults to `false`, but is automatically
+    activated if the inputs are sharded.
+  - `raise_first`: If `true`, the raising pass will be run before the optimization passes.
+    Defaults to `false`.
+  - `shardy_passes`: Defaults to `:to_mhlo_shardings`. Other options are:
+    - `:none`: No sharding passes will be run. Shardy + MHLO shardings are handled by XLA.
+    - `:post_sdy_propagation`: Runs the Shardy propagation passes. MHLO shardings are
+      handled by XLA.
+    - [`Sharding.ShardyPropagationOptions`](@ref): Custom sharding propagation options.
+      MHLO shardings are handled by XLA.
+    - `:to_mhlo_shardings`: Runs the Shardy propagation passes and then exports the
+      shardings to MHLO. All passes are run via MLIR pass pipeline and don't involve XLA.
+  - `assert_nonallocating`: If `true`, we make sure that no new buffers are
+    returned by the function. Any buffer returned must be donated from the inputs. Defaults
+    to `false`.
+  - `donated_args`: If `:auto`, the function will automatically donate the arguments that
+    are not preserved in the function body. If `:none`, no arguments will be donated.
+    Defaults to `:auto`.
+  - `transpose_propagate`: If `:up`, `stablehlo.transpose` operations will be
+    propagated up the computation graph. If `:down`, they will be propagated down. Defaults
+    to `:up`.
+  - `reshape_propagate`: If `:up`, `stablehlo.reshape` operations will be propagated up
+    the computation graph. If `:down`, they will be propagated down. Defaults to `:up`.
+  - `optimize_then_pad`: If `true`, the function will be optimized before padding (for
+    non-divisible sharding axes) is applied. Defaults to `true`. _(Only for Sharded Inputs)_
+  - `optimize_communications`: If `true`, additional passes for optimizing communication
+    in sharded computations will be run. Defaults to `true`. _(Only for Sharded Inputs)_
+  - `cudnn_hlo_optimize`: Run cuDNN specific HLO optimizations. This is only relevant for
+    GPU backends and is `false` by default. **Experimental and not heavily tested.**
+    _(Only for CUDA backend)_
+"""
+
+const SYNC_DOCS = """
+  - `sync`: Reactant computations are asynchronous by default. If `true`, the computation
+    will be executed synchronously, blocking till the computation is complete. This is
+    recommended when benchmarking.
+"""
+
+"""
+    @code_hlo [optimize = ...] [no_nan = <true/false>] f(args...)
+
+Prints the compiled MLIR module for the function `f` with arguments `args`.
+
+## Options
+
+$(COMMON_COMPILE_OPTIONS_DOCS)
+
+See also [`@code_xla`](@ref), [`@code_mhlo`](@ref).
+"""
+macro code_hlo(args...)
     compile_expr, (; compiled) = compile_call_expr(
-        __module__, compile_mlir, default_options, args...
+        __module__, compile_mlir, get_common_compile_options(), args...
     )
     #! format: off
     return esc(
@@ -1971,28 +2248,17 @@ end
 """
     @code_mhlo [optimize = ...] [no_nan = <true/false>] f(args...)
 
-Similar to `@code_hlo`, but prints the module after running the XLA compiler.
+Similar to `@code_hlo`, but runs additional passes to export the stablehlo module to MHLO.
+
+## Options
+
+$(COMMON_COMPILE_OPTIONS_DOCS)
 
 See also [`@code_xla`](@ref), [`@code_hlo`](@ref).
 """
 macro code_mhlo(args...)
-    default_options = Dict{Symbol,Any}(
-        :optimize => true,
-        :no_nan => false,
-        :client => nothing,
-        :raise => false,
-        :raise_first => false,
-        :shardy_passes => :(:to_mhlo_shardings),
-        :assert_nonallocating => false,
-        :donated_args => :(:auto),
-        :transpose_propagate => :(:up),
-        :reshape_propagate => :(:up),
-        :optimize_then_pad => true,
-        :optimize_communications => true,
-        :cudnn_hlo_optimize => false,
-    )
     compile_expr, (; compiled) = compile_call_expr(
-        __module__, compile_xla, default_options, args...
+        __module__, compile_xla, get_common_compile_options(), args...
     )
     #! format: off
     return esc(
@@ -2007,28 +2273,18 @@ end
 """
     @code_xla [optimize = ...] [no_nan = <true/false>] f(args...)
 
-Similar to `@code_hlo`, but prints the HLO module.
+Similar to [`@code_hlo`](@ref), but runs additional XLA passes and exports MLIR to XLA HLO.
+This is the post optimizations XLA HLO module.
+
+## Options
+
+$(COMMON_COMPILE_OPTIONS_DOCS)
 
 See also [`@code_mhlo`](@ref), [`@code_hlo`](@ref).
 """
 macro code_xla(args...)
-    default_options = Dict{Symbol,Any}(
-        :optimize => true,
-        :no_nan => false,
-        :client => nothing,
-        :raise => false,
-        :raise_first => false,
-        :shardy_passes => :(:to_mhlo_shardings),
-        :assert_nonallocating => false,
-        :donated_args => :(:auto),
-        :transpose_propagate => :(:up),
-        :reshape_propagate => :(:up),
-        :optimize_then_pad => true,
-        :optimize_communications => true,
-        :cudnn_hlo_optimize => false,
-    )
     compile_expr, (; compiled) = compile_call_expr(
-        __module__, compile_xla, default_options, args...
+        __module__, compile_xla, get_common_compile_options(), args...
     )
     #! format: off
     return esc(
@@ -2044,50 +2300,36 @@ end
 
 """
     @compile [optimize = ...] [no_nan = <true/false>] [sync = <true/false>] f(args...)
+
+Compile the function `f` with arguments `args` and return the compiled function.
+
+## Options
+
+$(COMMON_COMPILE_OPTIONS_DOCS)
+$(SYNC_DOCS)
+
+See also [`@jit`](@ref), [`@code_hlo`](@ref), [`@code_mhlo`](@ref), [`@code_xla`](@ref).
 """
 macro compile(args...)
-    default_options = Dict{Symbol,Any}(
-        :optimize => true,
-        :sync => false,
-        :no_nan => false,
-        :client => nothing,
-        :raise => false,
-        :raise_first => false,
-        :shardy_passes => :(:to_mhlo_shardings),
-        :assert_nonallocating => false,
-        :serializable => false,
-        :donated_args => :(:auto),
-        :transpose_propagate => :(:up),
-        :reshape_propagate => :(:up),
-        :optimize_then_pad => true,
-        :optimize_communications => true,
-        :cudnn_hlo_optimize => false,
-    )
+    default_options = merge(get_common_compile_options(), Dict{Symbol,Any}(:sync => false))
     return esc(first(compile_call_expr(__module__, compile, default_options, args...)))
 end
 
 """
     @jit [optimize = ...] [no_nan = <true/false>] [sync = <true/false>] f(args...)
 
-Run @compile f(args..) then immediately execute it
+Run @compile f(args..) then immediately execute it. Most users should use [`@compile`](@ref)
+instead to cache the compiled function and execute it later.
+
+## Options
+
+$(COMMON_COMPILE_OPTIONS_DOCS)
+$(SYNC_DOCS)
+
+See also [`@compile`](@ref), [`@code_hlo`](@ref), [`@code_mhlo`](@ref), [`@code_xla`](@ref).
 """
 macro jit(args...)
-    default_options = Dict{Symbol,Any}(
-        :optimize => true,
-        :sync => false,
-        :no_nan => false,
-        :client => nothing,
-        :raise => false,
-        :raise_first => false,
-        :shardy_passes => :(:to_mhlo_shardings),
-        :assert_nonallocating => false,
-        :donated_args => :(:auto),
-        :transpose_propagate => :(:up),
-        :reshape_propagate => :(:up),
-        :optimize_then_pad => true,
-        :optimize_communications => true,
-        :cudnn_hlo_optimize => false,
-    )
+    default_options = merge(get_common_compile_options(), Dict{Symbol,Any}(:sync => false))
     compile_expr, (; compiled, args) = compile_call_expr(
         __module__, compile, default_options, args...
     )
@@ -2210,7 +2452,6 @@ The _linearized arguments_ do not directly refer to the  are the arguments that 
 function codegen_flatten!(
     linear_args,
     seen_args,
-    result_stores,
     is_sharded::Bool,
     linear_parameter_shardings,
     client,
@@ -2520,7 +2761,7 @@ function codegen_unflatten!(
     client,
     resharded_inputs,
 )
-    cache_dict = gensym("cache_dict")
+    cache_dict = Symbol("cache_dict")
     needs_cache_dict = false
     unresharded_arrays_cache = Dict{Symbol,Symbol}()
     unresharded_code = Expr[]
@@ -2615,14 +2856,16 @@ function codegen_unflatten!(
                 if length(path) > 0
                     needs_cache_dict = true
                     # XXX: we might need to handle sharding here
-                    unflatcode = :(traced_setfield_buffer!(
-                        $(runtime),
-                        $(cache_dict),
-                        $(concrete_res_name_final),
-                        $(unflatcode),
-                        $(Meta.quot(path[end])),
-                        $(path),
-                    ))
+                    unflatcode = quote
+                        traced_setfield_buffer!(
+                            $(runtime),
+                            $(cache_dict),
+                            $(concrete_res_name_final),
+                            $(unflatcode),
+                            $(Meta.quot(path[end])),
+                            $(path),
+                        )
+                    end
                 else
                     unflatcode = :(traced_setfield!(
                         $(unflatcode), :data, $(concrete_res_name_final), $(path)
@@ -2636,32 +2879,19 @@ function codegen_unflatten!(
     if needs_cache_dict
         pushfirst!(
             unflatten_code,
-            :($cache_dict = $(IdDict{Union{TracedRArray,TracedRNumber},ctypes}())),
+            :($cache_dict = IdDict{Union{TracedRArray,TracedRNumber},$ctypes}()),
         )
     end
 
-    prevkeys = collect(keys(result_stores))
-    result_cache = IdDict{ctypes,ctypes}()
-    result_code = create_result(
-        concrete_result,
-        (),
-        result_stores,
-        path_to_shard_info,
-        to_unreshard_results,
-        unresharded_code,
-        unresharded_arrays_cache,
-        used_shardinfo,
-        result_cache,
-    )
-    postkeys = collect(keys(result_stores))
-    used = [t for t in prevkeys if !in(t, postkeys)]
+    result_cache = IdDict{Any,Symbol}()
+    var_idx = Ref(0)
+    resultgen_code = Expr[]
 
-    # if some argument is mutated, change them to point to the correct concrete results
     for (result, arg_idx) in preserved_args
         paths = (
             (
                 p for p in Reactant.TracedUtils.get_paths(result) if
-                length(p) > 0 && (p[1] == :result || p[1] == :resargs || p[1] == :args)
+                length(p) > 0 && (p[1] == :result)
             )...,
         )
 
@@ -2672,21 +2902,75 @@ function codegen_unflatten!(
                 p in Reactant.TracedUtils.get_paths(arg) if length(p) > 0 && p[1] == :args
             ))
 
-            if path[1] == :result
-                res = :result
-                path = path[2:end]
-                if in(path, used) # TODO
-                    continue
-                end
-            else
-                @assert path[1] == :resargs || path[1] == :args "Expected :resargs or :args, got $(path[1])"
-                # We can optimize cases where we set the arg to itself
-                if path[2:end] == argpath[2:end]
-                    continue
-                end
-                res = :(args[$(path[2])])
-                path = path[3:end]
+            res = :result
+            path = path[2:end]
+
+            if in(path, keys(result_stores))
+                continue
             end
+
+            need_to_unreshard = get(resharded_inputs, (:args, argpath[2:end]...), nothing)
+            if need_to_unreshard !== nothing
+                # TODO(@avik-pal): I need an MWE to debug this codepath
+                error("TODO: Not yet Implemented. Open an issue on Reactant.jl.")
+            end
+
+            argres = :(args[$(argpath[2])])
+            for p in argpath[3:end]
+                argres = :(traced_getfield($argres, $(Meta.quot(p))))
+            end
+
+            sym = Symbol("result", var_idx[])
+            var_idx[] += 1
+
+            push!(
+                resultgen_code,
+                quote
+                    $sym = $argres.data
+                end,
+            )
+
+            result_stores[path] = sym
+        end
+    end
+
+    result_code = create_result(
+        concrete_result,
+        (),
+        result_stores,
+        path_to_shard_info,
+        to_unreshard_results,
+        unresharded_code,
+        unresharded_arrays_cache,
+        used_shardinfo,
+        result_cache,
+        var_idx,
+        resultgen_code,
+    )
+
+    # if some argument is mutated, change them to point to the correct concrete results
+    for (result, arg_idx) in preserved_args
+        paths = (
+            (
+                p for p in Reactant.TracedUtils.get_paths(result) if
+                length(p) > 0 && (p[1] == :resargs || p[1] == :args)
+            )...,
+        )
+
+        for path in paths
+            arg = linear_args[arg_idx + 1]
+            argpath = only((
+                p for
+                p in Reactant.TracedUtils.get_paths(arg) if length(p) > 0 && p[1] == :args
+            ))
+
+            @assert path[1] == :resargs || path[1] == :args "Expected :resargs or :args, got $(path[1])"
+            # We can optimize cases where we set the arg to itself
+            if path[2:end] == argpath[2:end]
+                continue
+            end
+            res = :(args[$(path[2])])
+            path = path[3:end]
 
             for p in path
                 res = :(traced_getfield($res, $(Meta.quot(p))))
@@ -2713,7 +2997,9 @@ function codegen_unflatten!(
     end
 
     # generate return object which stores the concrete results in some arbitrary way
-    return [unresharded_code..., :(result = $result_code), unflatten_code...],
+    return Expr[
+        unresharded_code..., resultgen_code..., :(result = $result_code), unflatten_code...
+    ],
     used_shardinfo
 end
 
@@ -3005,6 +3291,10 @@ function compile_xla(f, args; client=nothing, serializable::Bool=false, kwargs..
     return results
 end
 
+# inspired by RuntimeGeneratedFunction.jl
+const __thunk_fwd_body_cache = Dict{Symbol,Expr}()
+const __thunk_rev_body_cache = Dict{Expr,Symbol}()
+
 function compile(f, args; sync=false, kwargs...)
     _, exec, mlir_fn_res, device, client, str = compile_xla(f, args; kwargs...)
     (;
@@ -3044,7 +3334,6 @@ function compile(f, args; sync=false, kwargs...)
     flatten_arg_names, flatten_code, resharded_inputs = codegen_flatten!(
         linear_args,
         seen_args,
-        result_stores,
         mlir_fn_res.is_sharded,
         XLA.get_parameter_shardings(exec), # TODO: use the same workflow as output shardings to parse the tensor sharding attributes directly if possible
         client,
@@ -3093,8 +3382,6 @@ function compile(f, args; sync=false, kwargs...)
         :()
     end
 
-    fname = gensym(Symbol(Symbol(f), :_reactant))
-
     donated_buffers_set = if XLA.runtime(client) isa Val{:PJRT}
         :(Base.IdSet{NTuple{<:Any,XLA.PJRT.Buffer}}())
     else
@@ -3118,10 +3405,18 @@ function compile(f, args; sync=false, kwargs...)
         display(mlir_fn_res.donated_args_mask)
     end
 
+    fname = if body in keys(__thunk_rev_body_cache)
+        __thunk_rev_body_cache[body]
+    else
+        fname2 = gensym(Symbol(Symbol(f), :_reactant))
+        __thunk_rev_body_cache[body] = fname2
+        __thunk_fwd_body_cache[fname2] = body
+        fname2
+    end
+
     return register_thunk(
         fname,
         Tuple{map(Core.Typeof, args)...},
-        body,
         f,
         mlir_fn_res.fnwrapped,
         exec,
@@ -3132,9 +3427,6 @@ function compile(f, args; sync=false, kwargs...)
         mlir_fn_res.donated_args_mask,
     )
 end
-
-# inspired by RuntimeGeneratedFunction.jl
-const __thunk_body_cache = Dict{Symbol,Expr}()
 
 struct Thunk{FTy,tag,IsClosure,ArgTypes,ExecTy,DeviceTy,ClientTy,GD,DAM}
     f::FTy
@@ -3200,7 +3492,7 @@ end
             )
         end
     end
-    body = __thunk_body_cache[tag]
+    body = __thunk_fwd_body_cache[tag]
     if IsClosure
         return quote
             args = (thunk.f, args...)
@@ -3214,7 +3506,6 @@ end
 function register_thunk(
     tag::Symbol,
     @nospecialize(argtys::Type),
-    body::Expr,
     @nospecialize(f),
     isclosure::Bool,
     exec,
@@ -3224,7 +3515,6 @@ function register_thunk(
     global_device_ids,
     donated_args_mask,
 )
-    __thunk_body_cache[tag] = body
     return Thunk{
         Core.Typeof(f),
         tag,

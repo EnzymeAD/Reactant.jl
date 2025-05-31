@@ -27,7 +27,7 @@ end
 end
 
 @reactant_overlay @noinline function TracedRandom.default_rng()
-    return TracedRNG(
+    return ReactantRNG(
         TracedUtils.promote_to(TracedRArray{UInt64,1}, TracedRandom.make_seed()), "DEFAULT"
     )
 end
@@ -165,7 +165,7 @@ end
 
 @reactant_overlay @noinline function Base._all(f, x::AbstractArray{T}, dims) where {T}
     if T <: TracedRNumber && T !== Union{}
-        return TracedRArrayOverrides.overloaded_all(f, x, dims)
+        return TracedRArrayOverrides.overloaded_mapreduce(f, &, x; dims)
     else
         return Base.inferencebarrier(Base._all)(f, x, dims)
     end
@@ -173,7 +173,7 @@ end
 
 @reactant_overlay @noinline function Base.any(f, x::AbstractArray{T}, dims) where {T}
     if T <: TracedRNumber && T !== Union{}
-        return TracedRArrayOverrides.overloaded_any(f, x, dims)
+        return TracedRArrayOverrides.overloaded_mapreduce(f, |, x; dims)
     else
         return Base.inferencebarrier(Base.any)(f, x, dims)
     end

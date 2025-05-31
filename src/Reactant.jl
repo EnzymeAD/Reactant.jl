@@ -160,8 +160,8 @@ use_overlayed_version(::TracedRArray) = true
 use_overlayed_version(::TracedRNumber) = true
 use_overlayed_version(::Number) = false
 use_overlayed_version(::MissingTracedValue) = true
-use_overlayed_version(::TracedRNG) = true
 use_overlayed_version(::AbstractArray{<:TracedRNumber}) = true
+use_overlayed_version(rng::ReactantRNG) = use_overlayed_version(rng.seed)
 
 function use_overlayed_version(x::AbstractArray)
     a = ancestor(x)
@@ -189,20 +189,6 @@ export OptimizeCommunicationOptions
 include("Compiler.jl")
 
 include("Overlay.jl")
-
-function Enzyme.make_zero(
-    ::Type{RT}, seen::IdDict, prev::RT, ::Val{copy_if_inactive}=Val(false)
-)::RT where {copy_if_inactive,RT<:Union{RArray,RNumber}}
-    if haskey(seen, prev)
-        return seen[prev]
-    end
-    if Enzyme.Compiler.guaranteed_const_nongen(eltype(RT), nothing)
-        return copy_if_inactive ? Base.deepcopy_internal(prev, seen) : prev
-    end
-    res = zero(prev)
-    seen[prev] = res
-    return res
-end
 
 using .Compiler: @compile, @code_hlo, @code_mhlo, @jit, @code_xla, traced_getfield, compile
 export ConcreteRArray,
