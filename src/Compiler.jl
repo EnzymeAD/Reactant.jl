@@ -934,6 +934,8 @@ function optimization_passes(;
         "concat_elementwise",
         "reduce_reduce",
         "conj_real",
+        "select_broadcast_in_dim",
+        "if_op_lift_common_ops",
         # TODO we want to enable but may cause an infinite compile time
         # "concat_to_onedim_dusslice",
     ]
@@ -1022,6 +1024,7 @@ function optimization_passes(;
                 "transpose_batch_norm_training",
                 "transpose_batch_norm_inference",
                 "transpose_batch_norm_grad",
+                "transpose_if",
             ],
         )
         if AGGRESSIVE_PROPAGATION[]
