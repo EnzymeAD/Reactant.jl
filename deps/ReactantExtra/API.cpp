@@ -3416,7 +3416,7 @@ extern "C" void dgemm_(char* transA, char* transB, int32_t* M, int32_t* N, int32
       /*rhsContractingDimensions=*/ 
 		    std::vector<int64_t>{transb ? 1 : 0}), nullptr, nullptr);
      auto alphabc = builder.create<stablehlo::BroadcastInDimOp>(loc, res.getType(), function.getArgument(3), std::vector<int64_t>{});
-     auto betabc = builder.create<stablehlo::BroadcastInDimOp>(loc, res.getType(), function.getArgument(3), std::vector<int64_t>{});
+     auto betabc = builder.create<stablehlo::BroadcastInDimOp>(loc, res.getType(), function.getArgument(4), std::vector<int64_t>{});
      auto res2 = builder.create<stablehlo::MulOp>(loc, res, alphabc);
      auto res3 = builder.create<stablehlo::MulOp>(loc, rc, betabc);
      auto res4 = builder.create<stablehlo::AddOp>(loc, res2, res3);
