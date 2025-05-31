@@ -719,9 +719,6 @@ extern "C" PjRtBuffer *ArrayFromHostBuffer(PjRtClient *client, void *data,
   // auto buffer = xla::MyValueOrThrow(client->BufferFromHostBuffer(data,
   // primtype, shape, /*byte_strides*/{},  semantics, /*ondone*/{}, device,
   // &layout));
-  llvm::errs() << " from host buffer\n";
-  llvm::errs() << " dev: " << device->ToString() << "\n";
-  llvm::errs() << " ms: " << *device->default_memory_space() << "\n";
   const xla::Layout *layout = nullptr;
   auto buffer = MyValueOrThrow(client->BufferFromHostBuffer(
       data, primtype, shape, /*byte_strides*/ {}, semantics, /*ondone*/ {},
@@ -2632,8 +2629,6 @@ struct ClientHolder {
 	if (client) {
 	  device = min(device, client->device_count()-1);
 	}
-	llvm::errs() << " client: " << client << "\n";
-	llvm::errs() <<" device: " << device << "\n";
   }
 };
 
@@ -3432,35 +3427,27 @@ extern "C" void dgemm_(char* transA, char* transB, int32_t* M, int32_t* N, int32
      int64_t num_replicas = 1;
      int64_t num_partitions = 1;
      bool use_spmd_partitioning = false;
-     llvm::errs() <<  " client: " << client.client << "\n";
      exec = ClientCompile(client.client, wrap(module.get()), device_id, mesh_ids, num_mesh_ids, xla_gpu_cuda_data_dir, use_shardy_partitioner, num_replicas, num_partitions, use_spmd_partitioning);
      executables[key] = exec;
   } else {
      exec = found->second;
   }
 
-  llvm::errs() << " M=" << *M << " " << *N << " " << *K << "\n";
-  llvm::errs() << " transa=" << transa << " transb=" << transb << "\n";
-  llvm::errs() <<" lda: " << *lda << " ldb: " << *ldb << " ldc: " << *ldc << "\n";
   // TODO avoid copy if contiguous
   double *Abuf = (double*)malloc(sizeof(double)*(*M)*(*K));
   char layout = '\0';
-  llvm::errs() <<" into A copy\n";
   dlacpy_(&layout, (!transa) ? M : K, (!transa) ? K : M, a, lda, Abuf, (!transa) ? M : K);
   
   double *Bbuf = (double*)malloc(sizeof(double)*(*K)*(*N));
-  llvm::errs() <<" into B copy\n";
   dlacpy_(&layout, (!transb) ? K : N, (!transb) ? N : K, b, ldb, Bbuf, (!transb) ? K : N);
   
   double *Cbuf = (double*)malloc(sizeof(double)*(*M)*(*N));
-  llvm::errs() <<" into C copy\n";
   dlacpy_(&layout, M, N, c, ldc, Cbuf, M);
   
   int device_id = client.device;
   
   PjRtDevice *device = ClientGetDevice(client.client, device_id);
 
-  llvm::errs() << "device: " << device->ToString() << "\n";
   int num_args = 5;
   int dtype = 12;
   PjRtBuffer *args[] = { 
@@ -3476,29 +3463,19 @@ extern "C" void dgemm_(char* transA, char* transB, int32_t* M, int32_t* N, int32
   PjRtBuffer *results[1];
   uint8_t futures[1] = { 0 };
   FutureType * future_results[1] = { 0 };
-  llvm::errs() << " executing sharded\n";
   XLAExecuteSharded(exec, num_args, args, device, is_arg_donatable, num_results, results, futures, future_results);
-  llvm::errs() << " done executing sharded\n";
 
   if (futures[0]) {
-	  llvm::errs() << " awaiting future\n";
     FutureAwait(future_results[0]);
-	  llvm::errs() << " freeing future\n";
     FreeFuture(future_results[0]);
   }
-	  llvm::errs() << " buffer to host\n";
   BufferToHost(results[0], Cbuf);
-	  llvm::errs() << " freeing buffer\n";
   PjRtBufferFree(results[0]);
 
-	  llvm::errs() << " copying back\n";
-  llvm::errs() <<" out of C copy\n";
   dlacpy_(&layout, M, N, Cbuf, M, c, ldc);
-	  llvm::errs() << " freeing all\n";
 
   free(Abuf);
   free(Bbuf);
   free(Cbuf);
-	  llvm::errs() << " done\n";
 }
 
