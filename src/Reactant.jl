@@ -176,6 +176,7 @@ include("stdlibs/Base.jl")
 
 # Other Integrations
 include("Enzyme.jl")
+include("ProbProg.jl")
 
 const TracedType = Union{TracedRArray,TracedRNumber,MissingTracedValue}
 
