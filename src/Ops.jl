@@ -666,6 +666,7 @@ end
     return TracedRNumber{U}((), res)
 end
 
+# TODO: See https://github.com/jax-ml/jax/blob/6c18aa8a468e35b8c11b101dceaa43d05b497177/jax/_src/numpy/fft.py#L106
 @noinline function fft(
     x::TracedRArray{T,N};
     type::String,
@@ -675,8 +676,10 @@ end
     @assert 1 <= Base.length(length) <= 3 "fft only supports up to rank 3"
 
     if type ∈ ("FFT", "IFFT")
-        @assert T <: Complex
-        Tout = T
+        if !(T <: Complex)
+            x = Ops.complex(x, fill(T(0), size(x); location); location)
+        end
+        Tout = Base.complex(T)
         rsize = size(x)
     elseif type == "RFFT"
         @assert T <: Real
@@ -686,8 +689,10 @@ end
             Tuple(rsize)
         end
     elseif type == "IRFFT"
-        @assert T <: Complex
-        Tout = Base.Base.real(T)
+        if !(T <: Complex)
+            x = Ops.complex(x, fill(T(0), size(x); location); location)
+        end
+        Tout = Base.real(T)
         rsize = let rsize = collect(Int64, size(x))
             rsize[(end - Base.length(length) + 1):end] = length
             Tuple(rsize)
