@@ -1,3 +1,5 @@
+using Bijections
+
 @enum TraceMode begin
     ConcreteToTraced = 1
     TracedTrack = 2
@@ -234,6 +236,21 @@ Base.@nospecializeinfer function traced_type_inner(
             return (dictty{KT,V2} where {KT})
         end
     end
+end
+
+Base.@nospecializeinfer function traced_type_inner(
+    @nospecialize(T::Type{Bijection{K,V,F,Finv}}),
+    seen,
+    @nospecialize(mode::TracedMode),
+    @nospecialize(track_numbers::Type),
+    @nospecialize(sharding),
+    @nospecialize(runtime)
+  ) where {K,V,F,Finv}
+    K_traced = traced_type_inner(K, seen, mode, track_numbers, sharding, runtime)
+    V_traced = traced_type_inner(V, seen, mode, track_numbers, sharding, runtime)
+    F_traced = traced_type_inner(F, seen, mode, track_numbers, sharding, runtime)
+    Finv_traced = traced_type_inner(Finv, seen, mode, track_numbers, sharding, runtime)
+    return Bijection{K_traced, V_traced, F_traced, Finv_traced}
 end
 
 Base.@nospecializeinfer function traced_type_inner(
