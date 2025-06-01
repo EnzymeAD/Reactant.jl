@@ -33,7 +33,7 @@ const DEBUG_ALIASED_BUFFER_ASSIGNMENT_ERROR = Ref(false)
 
 const DEBUG_BUFFER_POINTERS_STORE_DICT = Base.IdDict()
 
-@inline function traced_getfield(@nospecialize(obj::Dict), field)
+@inline function traced_getfield(@nospecialize(obj::AbstractDict), field)
     return Base.getindex(obj, field)
 end
 
@@ -110,7 +110,7 @@ end
     return setfield_carray!(obj, field, val, path)
 end
 
-@inline function traced_setfield!(@nospecialize(obj::Dict), field, val, path)
+@inline function traced_setfield!(@nospecialize(obj::AbstractDict), field, val, path)
     return Base.setindex!(obj, field, val)
 end
 
