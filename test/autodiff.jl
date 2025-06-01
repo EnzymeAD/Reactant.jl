@@ -265,7 +265,7 @@ function grad_divinf(x)
 end
 
 function grad_divinf_sz(x)
-    Reactant.@strongzero Enzyme.gradient(Reverse, divinf, x)
+    Enzyme.gradient(Enzyme.set_strong_zero(Reverse), divinf, x)
 end
 
 @testset "Strong zero" begin
