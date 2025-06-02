@@ -1,6 +1,7 @@
 module TracedRArrayOverrides
 
 using Adapt: WrappedArray
+using Adapt: Adapt
 using Base.Broadcast
 using Base.Broadcast: BroadcastStyle, Broadcasted, AbstractArrayStyle, instantiate
 
@@ -375,7 +376,7 @@ function _setindex_linear!(a::TracedRArray{T,N}, v, indices::AbstractArray) wher
     res = Ops.scatter_setindex(
         a,
         scalar_index_to_cartesian(vec(indices), size(a)),
-        materialize_traced_array(vec(v)),
+        TracedUtils.promote_to(TracedRArray{T,1}, materialize_traced_array(vec(v))),
     )
     set_mlir_data!(a, get_mlir_data(res))
     return a
@@ -504,6 +505,14 @@ Base.copy(A::TracedRArray{T,N}) where {T,N} = TracedRArray{T,N}((), A.mlir_data,
 
 function Base.similar(::TracedRArray, ::Type{T}, dims::Dims{N}) where {T,N}
     return Ops.fill(zero(unwrapped_eltype(T)), dims)
+end
+
+function Base.show(io::IOty, X::AnyTracedRArray) where {IOty<:Union{IO,IOContext}}
+    print(io, Core.Typeof(X), "(")
+    if Adapt.parent(X) !== X
+        Base.show(io, Adapt.parent(X))
+    end
+    return print(io, ")")
 end
 
 function Base.show(io::IOty, X::TracedRArray{T,N}) where {T,N,IOty<:Union{IO,IOContext}}

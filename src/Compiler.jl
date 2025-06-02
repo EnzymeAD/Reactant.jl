@@ -935,6 +935,13 @@ function optimization_passes(;
         "concat_elementwise",
         "reduce_reduce",
         "conj_real",
+        "select_broadcast_in_dim",
+        "if_op_lift_common_ops",
+        "involution_neg_simplify",
+        "involution_conj_simplify",
+        "involution_not_simplify",
+        "real_conj_simplify",
+        "conj_complex_simplify",
         # TODO we want to enable but may cause an infinite compile time
         # "concat_to_onedim_dusslice",
     ]
@@ -1020,6 +1027,10 @@ function optimization_passes(;
                 "transpose_rotate",
                 "transpose_dynamic_slice",
                 "transpose_reverse",
+                "transpose_batch_norm_training",
+                "transpose_batch_norm_inference",
+                "transpose_batch_norm_grad",
+                "transpose_if",
             ],
         )
         if AGGRESSIVE_PROPAGATION[]
@@ -1379,8 +1390,10 @@ function compile_mlir!(
         seen_args,
         ret,
         linear_args,
+        skipped_args,
         in_tys,
         linear_results,
+        skipped_results,
         is_sharded,
     ) = mlir_fn_res
     compiled_f = mlir_fn_res.f
@@ -2108,8 +2121,10 @@ function compile_mlir!(
         seen_args,
         ret,
         linear_args,
+        skipped_args,
         in_tys,
         linear_results2,
+        skipped_results,
         mlir_fn_res.num_partitions,
         mlir_fn_res.num_replicas,
         mlir_fn_res.is_sharded,
@@ -2124,13 +2139,8 @@ function compile_mlir!(
     )
 end
 
-"""
-    @code_hlo [optimize = ...] [no_nan = <true/false>] f(args...)
-
-See also [`@code_xla`](@ref), [`@code_mhlo`](@ref).
-"""
-macro code_hlo(args...)
-    default_options = Dict{Symbol,Any}(
+function get_common_compile_options()
+    return Dict{Symbol,Any}(
         :optimize => true,
         :no_nan => false,
         :client => nothing,
@@ -2145,8 +2155,78 @@ macro code_hlo(args...)
         :optimize_communications => true,
         :cudnn_hlo_optimize => false,
     )
+end
+
+const COMMON_COMPILE_OPTIONS_DOCS = """
+  - `optimize`: Optimizations passes to run on the traced MLIR code. Valid types of values
+    are:
+    - Bool (true/false): whether to run the optimization passes or not. Defaults to `true`.
+    - String: a custom string with the passes to run. The string should be a comma-separated
+      list of MLIR passes. For example, `"canonicalize,enzyme-hlo-opt"`.
+    - Symbol: a predefined set of passes to run. Valid options are:
+       1. `:all`: Default set of optimization passes. The exact set of passes are not fixed
+          and may change in future versions of Reactant. It is recommended to use this
+          option for most users.
+       2. `:none`: No optimization passes will be run.
+       3.  Other predefined options are: `:before_kernel`, `:before_jit`, `:before_raise`,
+          `:before_enzyme`, `:after_enzyme`, `:just_batch`, `:canonicalize`, `:only_enzyme`.
+  - `no_nan`: If `true`, the optimization passes will assume that the function does not
+    produce NaN values. This can lead to more aggressive optimizations **(and potentially
+    incorrect results if the function does produce NaN values)**.
+  - `client`: XLA Client used for compilation. If not specified, the default client is used.
+  - `raise`: If `true`, the function will be compiled with the raising pass, which raises
+    CUDA and KernelAbstractions kernels to HLO. Defaults to `false`, but is automatically
+    activated if the inputs are sharded.
+  - `raise_first`: If `true`, the raising pass will be run before the optimization passes.
+    Defaults to `false`.
+  - `shardy_passes`: Defaults to `:to_mhlo_shardings`. Other options are:
+    - `:none`: No sharding passes will be run. Shardy + MHLO shardings are handled by XLA.
+    - `:post_sdy_propagation`: Runs the Shardy propagation passes. MHLO shardings are
+      handled by XLA.
+    - [`Sharding.ShardyPropagationOptions`](@ref): Custom sharding propagation options.
+      MHLO shardings are handled by XLA.
+    - `:to_mhlo_shardings`: Runs the Shardy propagation passes and then exports the
+      shardings to MHLO. All passes are run via MLIR pass pipeline and don't involve XLA.
+  - `assert_nonallocating`: If `true`, we make sure that no new buffers are
+    returned by the function. Any buffer returned must be donated from the inputs. Defaults
+    to `false`.
+  - `donated_args`: If `:auto`, the function will automatically donate the arguments that
+    are not preserved in the function body. If `:none`, no arguments will be donated.
+    Defaults to `:auto`.
+  - `transpose_propagate`: If `:up`, `stablehlo.transpose` operations will be
+    propagated up the computation graph. If `:down`, they will be propagated down. Defaults
+    to `:up`.
+  - `reshape_propagate`: If `:up`, `stablehlo.reshape` operations will be propagated up
+    the computation graph. If `:down`, they will be propagated down. Defaults to `:up`.
+  - `optimize_then_pad`: If `true`, the function will be optimized before padding (for
+    non-divisible sharding axes) is applied. Defaults to `true`. _(Only for Sharded Inputs)_
+  - `optimize_communications`: If `true`, additional passes for optimizing communication
+    in sharded computations will be run. Defaults to `true`. _(Only for Sharded Inputs)_
+  - `cudnn_hlo_optimize`: Run cuDNN specific HLO optimizations. This is only relevant for
+    GPU backends and is `false` by default. **Experimental and not heavily tested.**
+    _(Only for CUDA backend)_
+"""
+
+const SYNC_DOCS = """
+  - `sync`: Reactant computations are asynchronous by default. If `true`, the computation
+    will be executed synchronously, blocking till the computation is complete. This is
+    recommended when benchmarking.
+"""
+
+"""
+    @code_hlo [optimize = ...] [no_nan = <true/false>] f(args...)
+
+Prints the compiled MLIR module for the function `f` with arguments `args`.
+
+## Options
+
+$(COMMON_COMPILE_OPTIONS_DOCS)
+
+See also [`@code_xla`](@ref), [`@code_mhlo`](@ref).
+"""
+macro code_hlo(args...)
     compile_expr, (; compiled) = compile_call_expr(
-        __module__, compile_mlir, default_options, args...
+        __module__, compile_mlir, get_common_compile_options(), args...
     )
     #! format: off
     return esc(
@@ -2161,28 +2241,17 @@ end
 """
     @code_mhlo [optimize = ...] [no_nan = <true/false>] f(args...)
 
-Similar to `@code_hlo`, but prints the module after running the XLA compiler.
+Similar to `@code_hlo`, but runs additional passes to export the stablehlo module to MHLO.
+
+## Options
+
+$(COMMON_COMPILE_OPTIONS_DOCS)
 
 See also [`@code_xla`](@ref), [`@code_hlo`](@ref).
 """
 macro code_mhlo(args...)
-    default_options = Dict{Symbol,Any}(
-        :optimize => true,
-        :no_nan => false,
-        :client => nothing,
-        :raise => false,
-        :raise_first => false,
-        :shardy_passes => :(:to_mhlo_shardings),
-        :assert_nonallocating => false,
-        :donated_args => :(:auto),
-        :transpose_propagate => :(:up),
-        :reshape_propagate => :(:up),
-        :optimize_then_pad => true,
-        :optimize_communications => true,
-        :cudnn_hlo_optimize => false,
-    )
     compile_expr, (; compiled) = compile_call_expr(
-        __module__, compile_xla, default_options, args...
+        __module__, compile_xla, get_common_compile_options(), args...
     )
     #! format: off
     return esc(
@@ -2197,28 +2266,18 @@ end
 """
     @code_xla [optimize = ...] [no_nan = <true/false>] f(args...)
 
-Similar to `@code_hlo`, but prints the HLO module.
+Similar to [`@code_hlo`](@ref), but runs additional XLA passes and exports MLIR to XLA HLO.
+This is the post optimizations XLA HLO module.
+
+## Options
+
+$(COMMON_COMPILE_OPTIONS_DOCS)
 
 See also [`@code_mhlo`](@ref), [`@code_hlo`](@ref).
 """
 macro code_xla(args...)
-    default_options = Dict{Symbol,Any}(
-        :optimize => true,
-        :no_nan => false,
-        :client => nothing,
-        :raise => false,
-        :raise_first => false,
-        :shardy_passes => :(:to_mhlo_shardings),
-        :assert_nonallocating => false,
-        :donated_args => :(:auto),
-        :transpose_propagate => :(:up),
-        :reshape_propagate => :(:up),
-        :optimize_then_pad => true,
-        :optimize_communications => true,
-        :cudnn_hlo_optimize => false,
-    )
     compile_expr, (; compiled) = compile_call_expr(
-        __module__, compile_xla, default_options, args...
+        __module__, compile_xla, get_common_compile_options(), args...
     )
     #! format: off
     return esc(
@@ -2234,50 +2293,36 @@ end
 
 """
     @compile [optimize = ...] [no_nan = <true/false>] [sync = <true/false>] f(args...)
+
+Compile the function `f` with arguments `args` and return the compiled function.
+
+## Options
+
+$(COMMON_COMPILE_OPTIONS_DOCS)
+$(SYNC_DOCS)
+
+See also [`@jit`](@ref), [`@code_hlo`](@ref), [`@code_mhlo`](@ref), [`@code_xla`](@ref).
 """
 macro compile(args...)
-    default_options = Dict{Symbol,Any}(
-        :optimize => true,
-        :sync => false,
-        :no_nan => false,
-        :client => nothing,
-        :raise => false,
-        :raise_first => false,
-        :shardy_passes => :(:to_mhlo_shardings),
-        :assert_nonallocating => false,
-        :serializable => false,
-        :donated_args => :(:auto),
-        :transpose_propagate => :(:up),
-        :reshape_propagate => :(:up),
-        :optimize_then_pad => true,
-        :optimize_communications => true,
-        :cudnn_hlo_optimize => false,
-    )
+    default_options = merge(get_common_compile_options(), Dict{Symbol,Any}(:sync => false))
     return esc(first(compile_call_expr(__module__, compile, default_options, args...)))
 end
 
 """
     @jit [optimize = ...] [no_nan = <true/false>] [sync = <true/false>] f(args...)
 
-Run @compile f(args..) then immediately execute it
+Run @compile f(args..) then immediately execute it. Most users should use [`@compile`](@ref)
+instead to cache the compiled function and execute it later.
+
+## Options
+
+$(COMMON_COMPILE_OPTIONS_DOCS)
+$(SYNC_DOCS)
+
+See also [`@compile`](@ref), [`@code_hlo`](@ref), [`@code_mhlo`](@ref), [`@code_xla`](@ref).
 """
 macro jit(args...)
-    default_options = Dict{Symbol,Any}(
-        :optimize => true,
-        :sync => false,
-        :no_nan => false,
-        :client => nothing,
-        :raise => false,
-        :raise_first => false,
-        :shardy_passes => :(:to_mhlo_shardings),
-        :assert_nonallocating => false,
-        :donated_args => :(:auto),
-        :transpose_propagate => :(:up),
-        :reshape_propagate => :(:up),
-        :optimize_then_pad => true,
-        :optimize_communications => true,
-        :cudnn_hlo_optimize => false,
-    )
+    default_options = merge(get_common_compile_options(), Dict{Symbol,Any}(:sync => false))
     compile_expr, (; compiled, args) = compile_call_expr(
         __module__, compile, default_options, args...
     )
@@ -2400,7 +2445,6 @@ The _linearized arguments_ do not directly refer to the  are the arguments that 
 function codegen_flatten!(
     linear_args,
     seen_args,
-    result_stores,
     is_sharded::Bool,
     linear_parameter_shardings,
     client,
@@ -2805,14 +2849,16 @@ function codegen_unflatten!(
                 if length(path) > 0
                     needs_cache_dict = true
                     # XXX: we might need to handle sharding here
-                    unflatcode = :(traced_setfield_buffer!(
-                        $(runtime),
-                        $(cache_dict),
-                        $(concrete_res_name_final),
-                        $(unflatcode),
-                        $(Meta.quot(path[end])),
-                        $(path),
-                    ))
+                    unflatcode = quote
+                        traced_setfield_buffer!(
+                            $(runtime),
+                            $(cache_dict),
+                            $(concrete_res_name_final),
+                            $(unflatcode),
+                            $(Meta.quot(path[end])),
+                            $(path),
+                        )
+                    end
                 else
                     unflatcode = :(traced_setfield!(
                         $(unflatcode), :data, $(concrete_res_name_final), $(path)
@@ -3280,7 +3326,6 @@ function compile(f, args; sync=false, kwargs...)
     flatten_arg_names, flatten_code, resharded_inputs = codegen_flatten!(
         linear_args,
         seen_args,
-        result_stores,
         mlir_fn_res.is_sharded,
         XLA.get_parameter_shardings(exec), # TODO: use the same workflow as output shardings to parse the tensor sharding attributes directly if possible
         client,
