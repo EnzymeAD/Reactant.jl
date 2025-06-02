@@ -241,7 +241,7 @@ end
 Base.@nospecializeinfer function traced_type_inner(
     @nospecialize(T::Type{Bijection{K,V,F,Finv}}),
     seen,
-    @nospecialize(mode::TracedMode),
+    @nospecialize(mode::TraceMode),
     @nospecialize(track_numbers::Type),
     @nospecialize(sharding),
     @nospecialize(runtime)
