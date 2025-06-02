@@ -935,8 +935,12 @@ function optimization_passes(;
         "reduce_reduce",
         "conj_real",
         "select_broadcast_in_dim",
-        # XXX: seems to be busted
-        # "if_op_lift_common_ops",
+        "if_op_lift_common_ops",
+        "involution_neg_simplify",
+        "involution_conj_simplify",
+        "involution_not_simplify",
+        "real_conj_simplify",
+        "conj_complex_simplify",
         # TODO we want to enable but may cause an infinite compile time
         # "concat_to_onedim_dusslice",
     ]
