@@ -382,56 +382,78 @@ end
     end
 end
 
-function test_scatter(dsts, srcs, idxs, res; dims)
-    @testset "scatter Float32 $op" for op in (+, -, max, min, *, /, mean)
-        for idx in values(idxs), dim in dims
-            dst = copy(dsts[dim])
-            target_y = res[(op, dim, true)]
-            src = srcs[(dim, true)]
-            if op == /
-                src = src .* 2.0f0
-            end
+# Adapted from https://github.com/FluxML/NNlib.jl/blob/1468582c4db5f18149cc8fff6fb4633c5debe5c5/test/testsuite/scatter.jl#L108
+# mean is omitted as operation to avoid the ambiguity error
+@testset "NNlib scatter" begin
+    function test_scatter(dsts, srcs, idxs, res; dims)
+        @testset "scatter Float32 $op" for op in (+, -, max, min, *, /)
+            for idx in values(idxs), dim in dims
+                dst = copy(dsts[dim])
+                target_y = res[(op, dim, true)]
+                src = srcs[(dim, true)]
+                if op == /
+                    src = src .* 2.0f0
+                end
 
-            y1 = @jit(
-                NNlib.scatter!(op, Reactant.to_rarray(dst), Reactant.to_rarray(src), idx)
-            )
-            @test y1 ≈ target_y
-            @test y1 isa ConcreteRArray{Float32,ndims(dst)}
-            @test size(y1) == size(dsts[dim])
-            dst = copy(dsts[dim])
-            y2 = @jit(
-                NNlib.scatter!(
-                    op,
-                    Reactant.to_rarray(dst),
-                    Reactant.to_rarray(src),
-                    Reactant.to_rarray(idx),
+                y1 = @jit(
+                    NNlib.scatter!(
+                        op, Reactant.to_rarray(dst), Reactant.to_rarray(src), idx
+                    )
                 )
-            )
-            @test y2 ≈ target_y
-            @test y2 isa ConcreteRArray{Float32,ndims(dst)}
-            @test size(y2) == size(dsts[dim])
+                @test y1 ≈ target_y
+                @test y1 isa ConcreteRArray{Float32,ndims(dst)}
+                @test size(y1) == size(dsts[dim])
+                dst = copy(dsts[dim])
+                y2 = @jit(
+                    NNlib.scatter!(
+                        op,
+                        Reactant.to_rarray(dst),
+                        Reactant.to_rarray(src),
+                        Reactant.to_rarray(idx),
+                    )
+                )
+                @test y2 ≈ target_y
+                @test y2 isa ConcreteRArray{Float32,ndims(dst)}
+                @test size(y2) == size(dsts[dim])
 
-            target_y = res[(op, dim, false)]
-            src = srcs[(dim, false)]
-            if op == /
-                src = src .* 2.0f0
+                target_y = res[(op, dim, false)]
+                src = srcs[(dim, false)]
+                if op == /
+                    src = src .* 2.0f0
+                end
+
+                y3 = @jit(NNlib.scatter(op, Reactant.to_rarray(src), idx))
+                @test y3 ≈ target_y
+                @test y3 isa ConcreteRArray{Float32,ndims(dst)}
+                @test size(y3) == size(dsts[dim])
+                y4 = @jit(
+                    NNlib.scatter(
+                        op,
+                        Reactant.to_rarray(src),
+                        Reactant.to_rarray(idx);
+                        dstsize=size(dsts[dim]),
+                    )
+                )
+                @test y4 ≈ target_y
+                @test y4 isa ConcreteRArray{Float32,ndims(dst)}
+                @test size(y4) == size(dsts[dim])
+
+                ridx = Reactant.to_rarray(idx)
+                if ridx isa Reactant.AbstractConcreteArray
+                    @test_throws ArgumentError @jit(
+                        NNlib.scatter(op, Reactant.to_rarray(src), ridx)
+                    )
+                else
+                    y5 = @jit(NNlib.scatter(op, Reactant.to_rarray(src), ridx))
+                    @test y5 ≈ target_y
+                    @test y5 isa ConcreteRArray{Float32,ndims(dst)}
+                    @test size(y5) == size(dsts[dim])
+                end
             end
-
-            y3 = @jit(NNlib.scatter(op, Reactant.to_rarray(src), idx))
-            @test y3 ≈ target_y
-            @test y3 isa ConcreteRArray{Float32,ndims(dst)}
-            @test size(y3) == size(dsts[dim])
-            # y4 = @jit(NNlib.scatter(op, Reactant.to_rarray(src), Reactant.to_rarray(idx)))
-            # @test y4 ≈ target_y
-            # @test y4 isa ConcreteRArray{Float32,ndims(dst)}
-            # @test size(y4) == size(dsts[dim])
         end
     end
-end
 
-# Adapted from https://github.com/FluxML/NNlib.jl/blob/1468582c4db5f18149cc8fff6fb4633c5debe5c5/test/testsuite/scatter.jl#L108
-@testset "NNlib scatter" begin
-    @testset "scatter 1d src, 1d idx => 1d output" begin
+    @testset "scatter 1d src, 1d index => 1d output" begin
         #! format: off
         dsts = Dict(
             0 => Float32[3, 4, 5, 6, 7]
@@ -474,65 +496,65 @@ end
         test_scatter(dsts, srcs, idxs, res; dims=[0])
     end
 
-    @testset "scatter 2d src, 1d idx => 2d output" begin
-        #! format: off
-        dsts = Dict(
-            0 => Float32[3 3 4 4 5
-                         5 5 6 6 7]
-        )
+    @testset "scatter 2d src, 1d index => 2d output" begin
+            #! format: off
+            dsts = Dict(
+                  0 => Float32[3 3 4 4 5
+                               5 5 6 6 7]
+            )
 
-        srcs = Dict(
-            (0, true) => ones(Float32, 2, 5),
-            (0, false) => ones(Float32, 2) * collect(1:5)',
-        )
+            srcs = Dict(
+                (0, true) => ones(Float32, 2, 5),
+                (0, false) => ones(Float32, 2) * collect(1:5)',
+            )
 
-        idxs = Dict(
-            :int => [4, 2, 1, 5, 3],
-            :tup => [(4,), (2,), (1,), (5,), (3,)],
-            :car => CartesianIndex.([(4,), (2,), (1,), (5,), (3,)]),
-        )
+            idxs = Dict(
+                :int => [4, 2, 1, 5, 3],
+                :tup => [(4,), (2,), (1,), (5,), (3,)],
+                :car => CartesianIndex.([(4,), (2,), (1,), (5,), (3,)]),
+            )
 
-        res = Dict(
-            (+, 0, true) => Float32[4 4 5 5 6;
-                                    6 6 7 7 8],
-            (+, 0, false) => Float32[3 2 5 1 4;
-                                     3 2 5 1 4],
+            res = Dict(
+                (+, 0, true) => Float32[4 4 5 5 6;
+                                        6 6 7 7 8],
+                (+, 0, false) => Float32[3 2 5 1 4;
+                                         3 2 5 1 4],
 
-            (-, 0, true) => Float32[2 2 3 3 4;
-                                    4 4 5 5 6],
-            (-, 0, false) => Float32[-3 -2 -5 -1 -4;
-                                     -3 -2 -5 -1 -4],
+                (-, 0, true) => Float32[2 2 3 3 4;
+                                        4 4 5 5 6],
+                (-, 0, false) => Float32[-3 -2 -5 -1 -4;
+                                         -3 -2 -5 -1 -4],
 
-            (max, 0, true) => Float32[3 3 4 4 5;
-                                      5 5 6 6 7],
-            (max, 0, false) => Float32[3 2 5 1 4;
-                                       3 2 5 1 4],
+                (max, 0, true) => Float32[3 3 4 4 5;
+                                          5 5 6 6 7],
+                (max, 0, false) => Float32[3 2 5 1 4;
+                                           3 2 5 1 4],
 
-            (min, 0, true) => Float32[1 1 1 1 1;
-                                      1 1 1 1 1],
-            (min, 0, false) => Float32[3 2 5 1 4;
-                                       3 2 5 1 4],
+                (min, 0, true) => Float32[1 1 1 1 1;
+                                          1 1 1 1 1],
+                (min, 0, false) => Float32[3 2 5 1 4;
+                                           3 2 5 1 4],
 
-            (*, 0, true) => Float32[3 3 4 4 5;
-                                    5 5 6 6 7],
-            (*, 0, false) => Float32[3 2 5 1 4;
-                                     3 2 5 1 4],
+                (*, 0, true) => Float32[3 3 4 4 5;
+                                        5 5 6 6 7],
+                (*, 0, false) => Float32[3 2 5 1 4;
+                                         3 2 5 1 4],
 
-            (/, 0, true) => Float32[1.5 1.5 2.0 2.0 2.5;
-                                    2.5 2.5 3.0 3.0 3.5],
-            (/, 0, false) => Float32[1//6 1//4 1//10 1//2 1//8;
-                                     1//6 1//4 1//10 1//2 1//8],
+                (/, 0, true) => Float32[1.5 1.5 2.0 2.0 2.5;
+                                        2.5 2.5 3.0 3.0 3.5],
+                (/, 0, false) => Float32[1//6 1//4 1//10 1//2 1//8;
+                                         1//6 1//4 1//10 1//2 1//8],
 
-            (mean, 0, true) => Float32[4 4 5 5 6;
-                                       6 6 7 7 8],
-            (mean, 0, false) => Float32[3 2 5 1 4;
-                                        3 2 5 1 4],
-        )
-        #! format: on
+                (mean, 0, true) => Float32[4 4 5 5 6;
+                                           6 6 7 7 8],
+                (mean, 0, false) => Float32[3 2 5 1 4;
+                                            3 2 5 1 4],
+            )
+            #! format: on
         test_scatter(dsts, srcs, idxs, res; dims=[0])
     end
 
-    @testset "scatter 2d+3d src, 2d idx => 1d+2d output" begin
+    @testset "scatter 2d+3d src, 2d index => 1d+2d output" begin
         #! format: off
         dsts = Dict(
             0 => Float32[3, 4, 5, 6, 7],
@@ -594,9 +616,9 @@ end
             (/, 0, true) => Float32[0.75, 1., 0.3125, 1.5, 1.75],
             (/, 1, true) => Float32[0.75 0.75 0.25 1. 1.25;
                                     1.25 1.25 0.375 1.5 1.75],
-            (/, 0, false) => Float32[1//3, 1//4, 1//48, 1//4, 1//6],
-            (/, 1, false) => Float32[1//3 1//4 1//48 1//4 1//6;
-                                     1//12 1//16 1//768 1//16 1//24],
+            (/, 0, false) => Float32[1//12, 1//16, 1//768, 1//16, 1//24],
+            (/, 1, false) => Float32[1//12 1//16 1//768 1//16 1//24;
+                                     1//48 1//64 1//12288 1//64 1//96],
             (mean, 0, true) => Float32[4., 5., 6., 7., 8.],
             (mean, 1, true) => Float32[4. 4. 5. 5. 6.;
                                        6. 6. 7. 7. 8.],
@@ -606,7 +628,7 @@ end
         )
         #! format: on
 
-        test_scatter(dsts, srcs, idxs, res; dims=[0])
+        test_scatter(dsts, srcs, idxs, res; dims=[0, 1])
     end
 end
 

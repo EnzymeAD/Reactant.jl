@@ -476,112 +476,117 @@ function _nnlib_gather_impl(src::AnyTracedRArray, idxs::AbstractArray, n_dims::I
 end
 
 # Scatter
-for OP in (+, -, max, min, *, /)
-    @eval function NNlib.scatter(
-        op::typeof($OP),
-        src::AnyTracedRArray{T},
-        idx::AbstractArray;
-        init=nothing,
-        dstsize=nothing,
-    ) where {T}
-        dims = ndims(src) - ndims(idx)
-        dstsz = if isnothing(dstsize)
-            (size(src)[1:dims]..., NNlib.maximum_dims(idx)...)
+# The mean function currently produces an ambiguity due to
+# https://github.com/FluxML/NNlib.jl/blob/1468582c4db5f18149cc8fff6fb4633c5debe5c5/src/scatter.jl#L85
+# This could be resolved by an explicit dispatch which would require Statistics as dependency
+function NNlib.scatter(
+    op::OP, src::AnyTracedRArray{T}, idx::AbstractArray; init=nothing, dstsize=nothing
+) where {OP,T}
+    dims = ndims(src) - ndims(idx)
+    dstsz = if isnothing(dstsize)
+        (size(src)[1:dims]..., NNlib.maximum_dims(idx)...)
+    else
+        dstsize
+    end
+    if any(d -> d isa TracedRNumber, dstsz)
+        throw(
+            ArgumentError(
+                "dstsize must be specified when idx is a TracedRArray or contains a TracedRNumber.",
+            ),
+        )
+    end
+    xinit = isnothing(init) ? NNlib.scatter_empty(op, T) : init
+    dst = Ops.fill(xinit, dstsz)
+
+    NNlib.scatter!(op, dst, src, idx)
+    return dst
+end
+
+function NNlib.scatter!(
+    op::OP, dst::AnyTracedRArray, src::AnyTracedRArray, idx::AbstractArray
+) where {OP}
+    dims = NNlib.scatter_dims(dst, src, idx)
+    idx = reshape(_stack_indices(idx), prod(size(idx)), 1)
+    res = _nnlib_scatter_impl(op, dst, src, idx, dims)
+    res = Ops.reshape(res, size(dst)...)
+    set_mlir_data!(dst, get_mlir_data(res))
+    return dst
+end
+
+function NNlib.scatter!(
+    op::OP, dst::AnyTracedRArray, src::AnyTracedRArray, idx::AbstractArray{<:Number}
+) where {OP}
+    dims = NNlib.scatter_dims(dst, src, idx)
+    idx = reshape(idx, prod(size(idx)), 1)
+    res = _nnlib_scatter_impl(op, dst, src, idx, dims)
+    res = Ops.reshape(res, size(dst)...)
+    set_mlir_data!(dst, get_mlir_data(res))
+    return dst
+end
+
+function _nnlib_scatter_impl(
+    op::OP,
+    dst::AnyTracedRArray{T},
+    src::AnyTracedRArray{T},
+    idx::AbstractArray,
+    n_dims::Int,
+) where {OP,T}
+    inputs = if ndims(dst) == 1
+        Ops.reshape(dst, length(dst), 1)
+    else
+        Ops.transpose(dst, Int64[ndims(dst):-1:1...])
+    end
+    scatter_indices = TracedUtils.promote_to(TracedRArray{Int,ndims(idx)}, idx)
+    updates = if ndims(src) == 1
+        Ops.reshape(src, length(src), 1)
+    else
+        if n_dims == 0
+            Ops.reshape(src, size(idx, 1), 1)
         else
-            dstsize
+            src1 = Ops.reshape(src, size(src)[1:n_dims]..., prod(size(src)[(n_dims + 1):end]))
+            Ops.transpose(src1, Int64[ndims(src1):-1:1...])
         end
-        xinit = isnothing(init) ? NNlib.scatter_empty(op, T) : init
-        dst = Ops.fill(xinit, dstsz)
-
-        NNlib.scatter!(op, dst, src, idx)
-        return dst
     end
 
-    @eval function NNlib.scatter!(
-        op::typeof($OP),
-        dst::AnyTracedRArray{T},
-        src::AnyTracedRArray{T},
-        idx::AbstractArray,
-    ) where {T}
-        NNlib.scatter_dims(dst, src, idx)
-        res = _nnlib_scatter_impl(op, dst, src, transpose(_stack_indices(idx)))
-        res = Ops.reshape(res, size(dst)...)
-        set_mlir_data!(dst, get_mlir_data(res))
-        return dst
-    end
+    sample_inputs = [
+        TracedUtils.promote_to(TracedRNumber{T}, 0),
+        TracedUtils.promote_to(TracedRNumber{T}, 0),
+    ]
 
-    @eval function NNlib.scatter!(
-        op::typeof($OP),
-        dst::AnyTracedRArray{T},
-        src::AnyTracedRArray{T},
-        idxs::AbstractArray{<:Number},
-    ) where {T}
-        NNlib.scatter_dims(dst, src, idxs)
-        idx = ndims(idxs) == 1 ? reshape(idxs, size(idxs)..., 1) : idxs
-        res = _nnlib_scatter_impl(op, dst, src, idx)
-        res = Ops.reshape(res, size(dst)...)
-        set_mlir_data!(dst, get_mlir_data(res))
-        return dst
-    end
+    func =
+        TracedUtils.make_mlir_fn(
+            op,
+            (sample_inputs),
+            (),
+            "scatter_reduce_fn",
+            false;
+            args_in_result=:result,
+            return_dialect=:stablehlo,
+        ).f
+    update_computation = MLIR.IR.Region()
+    MLIR.API.mlirRegionTakeBody(update_computation, MLIR.IR.region(func, 1))
+    MLIR.IR.rmfromparent!(func)
 
-    @eval function _nnlib_scatter_impl(
-        op::typeof($OP),
-        dst::AnyTracedRArray{T},
-        src::AnyTracedRArray{T},
-        idx::AbstractArray,
-    ) where {T}
-        inputs = if ndims(dst) == 1
-            Ops.reshape(dst, length(dst), 1)
-        else
-            Ops.transpose(dst, Int64[ndims(dst):-1:1...])
-        end
-        scatter_indices = TracedUtils.promote_to(TracedRArray{Int,ndims(idx)}, idx)
-        updates = if ndims(src) == 1
-            Ops.reshape(src, length(src), 1)
-        else
-            Ops.transpose(src, Int64[ndims(src):-1:1...])
-        end
+    update_window_dims = Int64[2]
+    inserted_window_dims = Int64[1]
+    input_batching_dims = Int64[]
+    scatter_indices_batching_dims = Int64[]
+    scatter_dims_to_operand_dims = Int64[1]
+    index_vector_dim = Int64(2)
 
-        sample_inputs = [
-            TracedUtils.promote_to(TracedRNumber{T}, 0),
-            TracedUtils.promote_to(TracedRNumber{T}, 0),
-        ]
-
-        func =
-            TracedUtils.make_mlir_fn(
-                op,
-                (sample_inputs),
-                (),
-                "scatter_reduce_fn",
-                false;
-                args_in_result=:result,
-                return_dialect=:stablehlo,
-            ).f
-        update_computation = MLIR.IR.Region()
-        MLIR.API.mlirRegionTakeBody(update_computation, MLIR.IR.region(func, 1))
-        MLIR.IR.rmfromparent!(func)
-
-        update_window_dims = Int64[2]
-        inserted_window_dims = Int64[1]
-        input_batching_dims = Int64[]
-        scatter_indices_batching_dims = Int64[]
-        scatter_dims_to_operand_dims = Int64[1]
-        index_vector_dim = Int64(2)
-
-        scatter_res = Ops.scatter(
-            [inputs],
-            scatter_indices,
-            [updates];
-            update_computation=update_computation,
-            update_window_dims=update_window_dims,
-            inserted_window_dims=inserted_window_dims,
-            input_batching_dims=input_batching_dims,
-            scatter_indices_batching_dims=scatter_indices_batching_dims,
-            scatter_dims_to_operand_dims=scatter_dims_to_operand_dims,
-            index_vector_dim=index_vector_dim,
-        )[1]
-        return Ops.transpose(scatter_res, Int64[ndims(scatter_res):-1:1...])
-    end
+    scatter_res = Ops.scatter(
+        [inputs],
+        scatter_indices,
+        [updates];
+        update_computation=update_computation,
+        update_window_dims=update_window_dims,
+        inserted_window_dims=inserted_window_dims,
+        input_batching_dims=input_batching_dims,
+        scatter_indices_batching_dims=scatter_indices_batching_dims,
+        scatter_dims_to_operand_dims=scatter_dims_to_operand_dims,
+        index_vector_dim=index_vector_dim,
+    )[1]
+    return Ops.transpose(scatter_res, Int64[ndims(scatter_res):-1:1...])
 end
 
 function NNlib.maximum_dims(dims::AnyTracedRArray{<:Integer})
