@@ -219,12 +219,12 @@ Base.@nospecializeinfer function traced_type_inner(
     K = dict_key(T)
     V = dict_value(T)
 
-    K_traced = if K !== Nothing
+    K_traced = if !isnothing(K)
         traced_type_inner(K, seen, mode, track_numbers, sharding, runtime)
     else
         nothing
     end
-    V_traced = if V !== Nothing
+    V_traced = if !isnothing(V)
         traced_type_inner(V, seen, mode, track_numbers, sharding, runtime)
     else
         nothing
@@ -240,22 +240,73 @@ Base.@nospecializeinfer function traced_type_inner(
         T.name.wrapper
     end
 
-    return dictty{K_traced,V_traced}
+    if isnothing(K_traced) && isnothing(V_traced)
+        return (dictty{Kt,Vt} where {Kt,Vt})
+    elseif isnothing(K_traced)
+        return (dictty{Kt,V_traced} where {Kt})
+    elseif isnothing(V_traced)
+        return (dictty{K_traced,Vt} where {Vt})
+    else
+        return dictty{K_traced,V_traced}
+    end
+end
+
+Base.@nospecializeinfer @inline bijection_fwd_type(::Type{<:Bijection}) = nothing
+Base.@nospecializeinfer @inline function bijection_fwd_type(
+    ::Type{<:(Bijection{K,V,F} where {K,V})}
+) where {F}
+    return F
+end
+Base.@nospecializeinfer @inline bijection_bwd_type(::Type{<:Bijection}) = nothing
+Base.@nospecializeinfer @inline function bijection_bwd_type(
+    ::Type{<:(Bijection{K,V,F,Finv} where {K,V,F})}
+) where {Finv}
+    return Finv
 end
 
 Base.@nospecializeinfer function traced_type_inner(
-    @nospecialize(T::Type{Bijection{K,V,F,Finv}}),
+    @nospecialize(T::Type{<:Bijection}),
     seen,
     @nospecialize(mode::TraceMode),
     @nospecialize(track_numbers::Type),
     @nospecialize(sharding),
     @nospecialize(runtime)
-) where {K,V,F,Finv}
-    K_traced = traced_type_inner(K, seen, mode, track_numbers, sharding, runtime)
-    V_traced = traced_type_inner(V, seen, mode, track_numbers, sharding, runtime)
-    F_traced = traced_type_inner(F, seen, mode, track_numbers, sharding, runtime)
-    Finv_traced = traced_type_inner(Finv, seen, mode, track_numbers, sharding, runtime)
-    return Bijection{K_traced,V_traced,F_traced,Finv_traced}
+)
+    B = Bijection
+
+    K = dict_key(T)
+    if !isnothing(K)
+        K = traced_type_inner(K, seen, mode, track_numbers, sharding, runtime)
+        B = B{K}
+    else
+        B = (B{Kt} where {Kt})
+    end
+
+    V = dict_value(T)
+    if !isnothing(V)
+        V = traced_type_inner(V, seen, mode, track_numbers, sharding, runtime)
+        B = B{V}
+    else
+        B = (B{Vt} where {Vt})
+    end
+
+    F = bijection_fwd_type(T)
+    if !isnothing(F)
+        F = traced_type_inner(F, seen, mode, track_numbers, sharding, runtime)
+        B = B{F}
+    else
+        B = (B{Ft} where {Ft})
+    end
+
+    Finv = bijection_bwd_type(T)
+    if !isnothing(Finv)
+        Finv = traced_type_inner(Finv, seen, mode, track_numbers, sharding, runtime)
+        B = B{Finv}
+    else
+        B = (B{Finvt} where {Finvt})
+    end
+
+    return B
 end
 
 Base.@nospecializeinfer function traced_type_inner(
