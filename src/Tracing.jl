@@ -216,26 +216,23 @@ Base.@nospecializeinfer function traced_type_inner(
     @nospecialize(sharding),
     @nospecialize(runtime)
 )
+    K = dict_key(T)
     V = dict_value(T)
-    if V === nothing
+
+    K_traced = traced_type_inner(K, seen, mode, track_numbers, sharding, runtime)
+    V_traced = traced_type_inner(V, seen, mode, track_numbers, sharding, runtime)
+
+    if K == K_traced && V == V_traced
         return T
-    else
-        K = dict_key(T)
-        V2 = traced_type_inner(V, seen, mode, track_numbers, sharding, runtime)
-        if V == V2
-            return T
-        end
-        dictty = if T isa UnionAll
-            T.body.name.wrapper
-        else
-            T.name.wrapper
-        end
-        if K !== nothing
-            return dictty{K,V2}
-        else
-            return (dictty{KT,V2} where {KT})
-        end
     end
+
+    dictty = if T isa UnionAll
+        T.body.name.wrapper
+    else
+        T.name.wrapper
+    end
+
+    return dictty{K_traced,V_traced}
 end
 
 Base.@nospecializeinfer function traced_type_inner(
