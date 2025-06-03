@@ -641,7 +641,7 @@ function create_result(
             push!(
                 resultgen_code,
                 quote
-                    @inbounds $sym[$k] = $subexpr
+                    @inbounds $sym[$(Meta.quot(k))] = $subexpr
                 end,
             )
         end
