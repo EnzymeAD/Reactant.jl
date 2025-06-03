@@ -52,9 +52,3 @@ Reactant.addressable_devices
 ```@docs
 ReactantCore.materialize_traced_array
 ```
-
-## Differentiation Specific
-
-```@docs
-Reactant.@strongzero
-```
