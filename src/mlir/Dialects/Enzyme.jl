@@ -44,6 +44,7 @@ function autodiff(
     activity,
     ret_activity,
     width=nothing,
+    strong_zero=nothing,
     location=Location(),
 )
     op_ty_results = IR.Type[outputs...,]
@@ -56,6 +57,7 @@ function autodiff(
         namedattribute("ret_activity", ret_activity),
     ]
     !isnothing(width) && push!(attributes, namedattribute("width", width))
+    !isnothing(strong_zero) && push!(attributes, namedattribute("strong_zero", strong_zero))
 
     return create_operation(
         "enzyme.autodiff",
@@ -126,6 +128,7 @@ function fwddiff(
     activity,
     ret_activity,
     width=nothing,
+    strong_zero=nothing,
     location=Location(),
 )
     op_ty_results = IR.Type[outputs...,]
@@ -138,6 +141,7 @@ function fwddiff(
         namedattribute("ret_activity", ret_activity),
     ]
     !isnothing(width) && push!(attributes, namedattribute("width", width))
+    !isnothing(strong_zero) && push!(attributes, namedattribute("strong_zero", strong_zero))
 
     return create_operation(
         "enzyme.fwddiff",

@@ -292,13 +292,9 @@ function overload_autodiff(
     end
 
     outtys = MLIR.IR.Type[]
-    @inline needs_primal(::Type{<:Enzyme.ReverseMode{ReturnPrimal}}) where {ReturnPrimal} =
-        ReturnPrimal
-    @inline needs_primal(::Type{<:Enzyme.ForwardMode{ReturnPrimal}}) where {ReturnPrimal} =
-        ReturnPrimal
     for a in linear_results
         if TracedUtils.has_idx(a, resprefix)
-            if needs_primal(CMode)
+            if Enzyme.needs_primal(CMode)
                 push!(
                     outtys,
                     TracedUtils.transpose_ty(MLIR.IR.type(TracedUtils.get_mlir_data(a))),
@@ -343,7 +339,7 @@ function overload_autodiff(
     ret_activity = Int32[]
     for a in linear_results
         if TracedUtils.has_idx(a, resprefix)
-            act = act_from_type(A, reverse, needs_primal(CMode))
+            act = act_from_type(A, reverse, Enzyme.needs_primal(CMode))
             push!(ret_activity, act)
             if act == enzyme_out || act == enzyme_outnoneed
                 attr = MLIR.IR.DenseElementsAttribute(
@@ -394,6 +390,7 @@ function overload_autodiff(
         outputs=outtys,
         fn=fname,
         width,
+        strong_zero=Enzyme.strong_zero(CMode),
         activity=MLIR.IR.Attribute([act_attr(a) for a in activity]),
         ret_activity=MLIR.IR.Attribute([act_attr(a) for a in ret_activity]),
     )
@@ -415,7 +412,7 @@ function overload_autodiff(
 
     for a in linear_results
         if TracedUtils.has_idx(a, resprefix)
-            if needs_primal(CMode)
+            if Enzyme.needs_primal(CMode)
                 path = TracedUtils.get_idx(a, resprefix)
                 tval = TracedUtils.transpose_val(MLIR.IR.result(res, residx))
                 TracedUtils.set!(result, path[2:end], tval)
@@ -520,14 +517,14 @@ function overload_autodiff(
     func2.operation = MLIR.API.MlirOperation(C_NULL)
 
     if reverse
-        resv = if needs_primal(CMode)
+        resv = if Enzyme.needs_primal(CMode)
             result
         else
             nothing
         end
         return ((restup...,), resv)
     else
-        if needs_primal(CMode)
+        if Enzyme.needs_primal(CMode)
             if CMode <: Enzyme.ForwardMode && !(A <: Enzyme.Const)
                 (dresult, result)
             else

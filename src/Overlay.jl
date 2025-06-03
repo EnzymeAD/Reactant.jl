@@ -27,7 +27,7 @@ end
 end
 
 @reactant_overlay @noinline function TracedRandom.default_rng()
-    return TracedRNG(
+    return ReactantRNG(
         TracedUtils.promote_to(TracedRArray{UInt64,1}, TracedRandom.make_seed()), "DEFAULT"
     )
 end
