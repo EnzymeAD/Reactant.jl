@@ -223,8 +223,16 @@ Base.@nospecializeinfer function traced_type_inner(
     K = dict_key(T)
     V = dict_value(T)
 
-    K_traced = traced_type_inner(K, seen, mode, track_numbers, sharding, runtime)
-    V_traced = traced_type_inner(V, seen, mode, track_numbers, sharding, runtime)
+    K_traced = if K !== Nothing
+        traced_type_inner(K, seen, mode, track_numbers, sharding, runtime)
+    else
+        nothing
+    end
+    V_traced = if V !== Nothing
+        traced_type_inner(V, seen, mode, track_numbers, sharding, runtime)
+    else
+        nothing
+    end
 
     if K == K_traced && V == V_traced
         return T
