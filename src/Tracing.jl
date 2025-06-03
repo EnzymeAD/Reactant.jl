@@ -25,10 +25,6 @@ Base.@nospecializeinfer function traced_type_inner(
     return T
 end
 
-Base.@nospecializeinfer function traced_type_inner(::Type{Nothing}, @nospecialize(args...))
-    return Nothing
-end
-
 for T in (
     DataType,
     Module,
