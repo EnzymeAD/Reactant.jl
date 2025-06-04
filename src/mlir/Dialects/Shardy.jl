@@ -79,8 +79,14 @@ affect the order of the corresponding replica groups.
 
 **Constraints:**
 - Must satisfy the constraints listed in `Sdy_CollectiveOpInterface`.
-- `reduction_axes` must satisfy the constraints listed in `AxisRefListAttr`;
-- `reduction_axes` must not overlap with the operand sharding axes;
+- `reduction_axes` must satisfy the constraints listed in `AxisRefListAttr`.
+- The operand sharding and `out_sharding` must have equivalent dimension
+  shardings.
+- `reduction_axes` must not overlap with the operand dimension sharding and
+  replicated axes (it can overlap with unreduced axes).
+- `reduction_axes` must not overlap with the unreduced axes of
+  `out_sharding`. In other words, `out_sharding` must be be replicated along
+  `reduction_axes` (implicitly or explicitly).
 """
 function all_reduce(
     tensor::Value;
@@ -135,9 +141,9 @@ inferred sharding.
 ```
 
 **Constraints:**
+- Must satisfy the constraints listed in `Sdy_CollectiveOpInterface`.
 - Elements in `slicing_axes` must satisfy the constraints listed in
   `AxisRefListAttr`.
-- Must satisfy the constraints listed in `Sdy_CollectiveOpInterface`.
 - Applying `slicing_axes` to the operand sharding gets `out_sharding`.
 """
 function all_slice(
@@ -421,6 +427,9 @@ communication.
 The body is local wrt the manual_axes. Propagation will occur through
 the body on any free axes - those not in the manual_axes list.
 
+Note that any unranked tensors are expected to have a sharding with rank 0,
+i.e. fully replicated.
+
 **Constraints:**
 - Elements in `in_shardings` and `out_shardings` must satisfy the constraints listed in `TensorShardingAttr`.
 - The number of global and local tensor inputs/outputs of the op region must match.
@@ -572,6 +581,50 @@ function propagation_barrier(
 
     return create_operation(
         "sdy.propagation_barrier",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
+    )
+end
+
+"""
+`reduce_scatter`
+
+Reduces chunks of a tensor along axes specified in `reduce_scatter_axes`,
+and then scatters the result along the same axes. This operation is
+essentially a combination of an `sdy.all_reduce` followed by an
+`sdy.all_slice` along the same `reduce_scatter_axes`.
+
+**Constraints:**
+- Must satisfy the constraints listed in `Sdy_CollectiveOpInterface`.
+- Elements in `reduce_scatter_axes` must satisfy the constraints listed in
+  `AxisRefListAttr`.
+- Applying `reduce_scatter_axes` to the operand sharding gets
+  `out_sharding`.
+"""
+function reduce_scatter(
+    tensor::Value;
+    result=nothing::Union{Nothing,IR.Type},
+    reduce_scatter_axes,
+    out_sharding,
+    location=Location(),
+)
+    op_ty_results = IR.Type[]
+    operands = Value[tensor,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[
+        namedattribute("reduce_scatter_axes", reduce_scatter_axes),
+        namedattribute("out_sharding", out_sharding),
+    ]
+    !isnothing(result) && push!(op_ty_results, result)
+
+    return create_operation(
+        "sdy.reduce_scatter",
         location;
         operands,
         owned_regions,
