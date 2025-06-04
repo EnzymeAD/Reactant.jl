@@ -87,6 +87,7 @@ export default defineConfig({
           {text: "Profiling", link: "/tutorials/profiling"},
           {text: "Distributed", link: "/tutorials/multihost"},
           {text: "Local build", link: "/tutorials/local-build"},
+          {text: "Sharding", link: "/tutorials/sharding"},
         ],
       },
       {
@@ -154,6 +155,7 @@ export default defineConfig({
           { text: "Profiling", link: "/tutorials/profiling" },
           { text: "Distributed", link: "/tutorials/multihost" },
           { text: "Local build", link: "/tutorials/local-build" },
+          { text: "Sharding", link: "/tutorials/sharding" },
         ],
       }
     ],
