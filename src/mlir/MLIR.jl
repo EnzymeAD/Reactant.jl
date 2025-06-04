@@ -10,7 +10,8 @@ module API
     const mlir_c = if Reactant_jll.is_available()
         Reactant_jll.libReactantExtra
     else
-        ""
+        @error "No compatible Reactant_jll found for $(Reactant_jll.host_platform)"
+        missing
     end
 
     # MLIR C API
