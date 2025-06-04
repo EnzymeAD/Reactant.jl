@@ -1028,6 +1028,9 @@ cc_library(
         "@xla//xla/stream_executor/cuda:cuda_compute_capability_proto_cc_impl",
         "@xla//xla/service:gpu_plugin",
         "@xla//xla/pjrt/c:pjrt_c_api_gpu",
+        "@xla//xla/pjrt/plugin/xla_cpu:xla_cpu_pjrt_client",
+        "@xla//xla/pjrt/plugin/xla_gpu:xla_gpu_pjrt_client",
+        "@xla//xla/pjrt/plugin/xla_tpu:xla_tpu_pjrt_client",
     ] + select({
         "@xla//xla/tsl:is_cuda_enabled_and_oss":[
             "@xla//xla/stream_executor:cuda_platform",
