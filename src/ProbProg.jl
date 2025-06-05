@@ -20,12 +20,12 @@ end
 function addSampleToTraceLowered(
     trace_ptr_ptr::Ptr{Ptr{Cvoid}},
     symbol_ptr_ptr::Ptr{Ptr{Cvoid}},
-    sample_ptr_ptr::Ptr{Cvoid},
+    sample_ptr::Ptr{Cvoid},
 )
     trace = unsafe_pointer_to_objref(unsafe_load(trace_ptr_ptr))
     symbol = unsafe_pointer_to_objref(unsafe_load(symbol_ptr_ptr))
 
-    trace[symbol] = 888
+    trace[symbol] = unsafe_load(reinterpret(Ptr{Float64}, sample_ptr))
 
     return nothing
 end

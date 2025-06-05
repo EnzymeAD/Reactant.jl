@@ -8,8 +8,8 @@ function simulate_model(seed, μ, σ, shape)
     function model(seed, μ, σ, shape)
         rng = Random.default_rng()
         Random.seed!(rng, seed)
-        s = ProbProg.sample!(normal, rng, μ, σ, shape)
-        t = ProbProg.sample!(normal, rng, s, σ, shape)
+        s = ProbProg.sample!(normal, rng, μ, σ, shape; symbol = :s)
+        t = ProbProg.sample!(normal, rng, s, σ, shape; symbol = :t)
         return t
     end
 
