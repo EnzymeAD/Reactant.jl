@@ -654,7 +654,7 @@ end
 end
 
 function for_eachindex(s, x)
-    for i in eachindex(x)
+    @trace for i in eachindex(x)
         s += i
     end
     return s
