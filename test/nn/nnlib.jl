@@ -87,26 +87,23 @@ end
             dy = ones(Float32, output_size)
             dy_reactant = Reactant.to_rarray(dy)
 
-            conv_compiled = Reactant.compile(
-                NNlib.conv, (x_reactant, weight_reactant, conv_dims)
-            )
+            Reactant.with_config(; convolution_precision=PrecisionConfig.HIGHEST) do
+                @test @jit(NNlib.conv(x_reactant, weight_reactant, conv_dims)) ≈
+                    NNlib.conv(x, weight, conv_dims)
 
-            @test conv_compiled(x_reactant, weight_reactant, conv_dims) ≈
-                NNlib.conv(x, weight, conv_dims)
+                ∇data = NNlib.∇conv_data(dy, weight, conv_dims)
+                @test @jit(NNlib.∇conv_data(dy_reactant, weight_reactant, conv_dims)) ≈
+                    ∇data
 
-            ∇data = NNlib.∇conv_data(dy, weight, conv_dims)
-            @test Reactant.@jit(NNlib.∇conv_data(dy_reactant, weight_reactant, conv_dims)) ≈
-                ∇data
+                ∇filter = NNlib.∇conv_filter(x, dy, conv_dims)
+                @test @jit(NNlib.∇conv_filter(x_reactant, dy_reactant, conv_dims)) ≈ ∇filter
 
-            ∇filter = NNlib.∇conv_filter(x, dy, conv_dims)
-            @test Reactant.@jit(NNlib.∇conv_filter(x_reactant, dy_reactant, conv_dims)) ≈
-                ∇filter
-
-            ∇data_enzyme, ∇filter_enzyme = Reactant.@jit ∇conv_data_filter(
-                x_reactant, weight_reactant, conv_dims
-            )
-            @test ∇data_enzyme ≈ ∇data
-            @test ∇filter_enzyme ≈ ∇filter
+                ∇data_enzyme, ∇filter_enzyme = @jit ∇conv_data_filter(
+                    x_reactant, weight_reactant, conv_dims
+                )
+                @test ∇data_enzyme ≈ ∇data
+                @test ∇filter_enzyme ≈ ∇filter
+            end
         end
     end
 
@@ -408,9 +405,9 @@ end
         dy = randn(Float32, output_size)
         dy_reactant = Reactant.to_rarray(dy)
 
-        @test Reactant.@jit(NNlib.∇conv_data(dy_reactant, w_reactant, conv_dims)) ≈
+        @test @jit(NNlib.∇conv_data(dy_reactant, w_reactant, conv_dims)) ≈
             NNlib.∇conv_data(dy, w, conv_dims)
-        @test Reactant.@jit(NNlib.∇conv_filter(x_reactant, dy_reactant, conv_dims)) ≈
+        @test @jit(NNlib.∇conv_filter(x_reactant, dy_reactant, conv_dims)) ≈
             NNlib.∇conv_filter(x, dy, conv_dims)
     end
 end
@@ -420,4 +417,13 @@ end
     x_ra = Reactant.to_rarray(x)
 
     @test @jit(NNlib.upsample_nearest(x_ra, (2, 2))) ≈ NNlib.upsample_nearest(x, (2, 2))
+end
+
+@testset "softmax/logsoftmax reshaped input" begin
+    x = rand(Float32, 3, 4, 5)
+    x_ra = reshape(Reactant.to_rarray(x), 12, 5)
+    x = reshape(x, 12, 5)
+
+    @test @jit(NNlib.softmax(x_ra)) ≈ NNlib.softmax(x)
+    @test @jit(NNlib.logsoftmax(x_ra)) ≈ NNlib.logsoftmax(x)
 end

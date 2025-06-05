@@ -42,6 +42,13 @@ function ReactantCore.materialize_traced_array(x::SubArray)
 end
 
 function ReactantCore.materialize_traced_array(x::Base.ReshapedArray)
+    if Base.prod(size(parent(x))) != Base.prod(size(x))
+        throw(
+            AssertionError(
+                "Invalid reshape array, original size $(size(parent(x))) not compatible with new size $(size(x))",
+            ),
+        )
+    end
     return Ops.reshape(materialize_traced_array(parent(x)), size(x)...)
 end
 
@@ -221,8 +228,10 @@ mutable struct CompiledMlirFnResult{F,TR,Re,Rt,LA,LR,PA,CR,M,MA,RS,GD,DA}
     seen_args::OrderedIdDict
     ret::Rt
     linear_args::Vector{LA}
+    skipped_args::Vector{LA}
     in_tys::Vector{MLIR.IR.Type}
     linear_results::Vector{LR}
+    skipped_results::Vector{LR}
     num_partitions::Int
     num_replicas::Int
     is_sharded::Bool
@@ -326,7 +335,7 @@ function make_mlir_fn(
         end
     end
 
-    (func2, traced_result, ret, linear_args, in_tys, linear_results, num_partitions, is_sharded, unique_meshes, mutated_args, global_device_ids) = finalize_mlir_fn(
+    (func2, traced_result, ret, linear_args, in_tys, linear_results, skipped_results, num_partitions, is_sharded, unique_meshes, mutated_args, global_device_ids) = finalize_mlir_fn(
         result,
         traced_args,
         linear_args,
@@ -366,8 +375,10 @@ function make_mlir_fn(
         seen_args,
         ret,
         linear_args,
+        skipped_args,
         in_tys,
         linear_results,
+        skipped_results,
         num_partitions,
         num_replicas,
         is_sharded,
@@ -488,7 +499,7 @@ function prepare_mlir_fn_args(
         stridx = if verify_arg_names isa Nothing
             "arg" * string(path[2])
         else
-            string(verify_arg_names.args[path[2]])
+            string(verify_arg_names[path[2]])
         end
         aval = args[path[2]]
         for (cidx, idx) in enumerate(path[3:end])
@@ -621,9 +632,49 @@ function finalize_mlir_fn(
     end
 
     linear_results = Reactant.TracedType[]
+    skipped_results = Reactant.TracedType[]
     for (k, v) in seen_results
         v isa Reactant.TracedType || continue
         if any(Base.Fix1(===, k), skipped_args)
+            push!(skipped_results, v)
+
+            _, argpath = get_argidx(v, argprefix)
+
+            @assert has_idx(v, argprefix)
+
+            newpaths = Tuple[]
+            for path in v.paths
+                if length(path) == 0
+                    continue
+                end
+                if path[1] == argprefix
+                    continue
+                end
+                if path[1] == resargprefix
+                    original_arg = args[path[2]]
+                    for p in path[3:end]
+                        original_arg = Reactant.Compiler.traced_getfield(original_arg, p)
+                    end
+                    if !(
+                        original_arg isa Union{
+                            Reactant.ConcreteRNumber,
+                            Reactant.ConcreteRArray,
+                            Reactant.TracedType,
+                        }
+                    )
+                        continue
+                    end
+                    push!(newpaths, path)
+                end
+                if path[1] == resprefix
+                    push!(newpaths, path)
+                end
+            end
+
+            if length(newpaths) != 0
+                push!(linear_results, Reactant.repath(v, (newpaths...,)))
+            end
+
             continue
         end
         if args_in_result != :all
@@ -673,7 +724,7 @@ function finalize_mlir_fn(
         for (errs, prev, post) in ((err1, resis, argis), (err2, argis, resis))
             conflicts = setdiff(prev, post)
             for conflict in conflicts
-                stridx = string(verify_arg_names.args[conflict[1]])
+                stridx = string(verify_arg_names[conflict[1]])
                 aval = args[conflict[1]]
                 for (cidx, idx) in enumerate(Base.tail(conflict))
                     if aval isa Array || aval isa Dict
@@ -914,6 +965,7 @@ function finalize_mlir_fn(
         linear_args,
         in_tys,
         linear_results,
+        skipped_results,
         num_partitions,
         is_sharded,
         unique_meshes,

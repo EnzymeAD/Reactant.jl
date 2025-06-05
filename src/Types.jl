@@ -52,6 +52,10 @@ mutable struct TracedRNumber{T} <: RNumber{T}
     end
 end
 
+function repath(x::TracedRNumber{T}, paths) where {T}
+    return TracedRNumber{T}(paths, x.mlir_data)
+end
+
 @leaf TracedRNumber
 
 ## TracedRArray
@@ -71,6 +75,10 @@ mutable struct TracedRArray{T,N} <: RArray{TracedRNumber{T},N}
     end
 end
 
+function repath(x::TracedRArray{T,N}, paths) where {T,N}
+    return TracedRArray{T,N}(paths, x.mlir_data, x.shape)
+end
+
 @leaf TracedRArray
 Adapt.parent_type(::Type{TracedRArray{T,N}}) where {T,N} = TracedRArray{T,N}
 
@@ -78,12 +86,6 @@ const AnyTracedRArray{T,N} = AbstractArray{TracedRNumber{T},N}
 const AnyTracedRVector{T} = AnyTracedRArray{T,1}
 const AnyTracedRMatrix{T} = AnyTracedRArray{T,2}
 const AnyTracedRVecOrMat{T} = Union{AnyTracedRVector{T},AnyTracedRMatrix{T}}
-
-## TracedRNG
-struct TracedRNG <: Random.AbstractRNG
-    seed::TracedRArray{UInt64,1}
-    algorithm::String
-end
 
 # Concrete Types
 ## ConcretePJRTNumber
@@ -434,11 +436,15 @@ function ConcreteIFRTArray{T,N}(x::AnyConcreteIFRTArray; kwargs...) where {T,N}
     )
 end
 
-## ConcreteRNG
-mutable struct ConcreteRNG{S<:AbstractConcreteArray} <: Random.AbstractRNG
+# RNGs
+struct ReactantRNG{S<:Union{<:AbstractConcreteArray{UInt64,1},TracedRArray{UInt64,1}}} <:
+       Random.AbstractRNG
     seed::S
-    const algorithm::String
+    algorithm::String
 end
+
+Base.@deprecate_binding ConcreteRNG ReactantRNG
+Base.@deprecate_binding TracedRNG ReactantRNG
 
 ## Aliases based on the set preferences
 if XLA.REACTANT_XLA_RUNTIME == "PJRT"
