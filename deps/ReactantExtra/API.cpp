@@ -2326,7 +2326,7 @@ extern "C" mlir::sdy::TensorShardingAttr hloShardingToTensorShardingAttr(
 
   return mlir::sdy::TensorShardingAttr::get(
       context, meshName, tensorShardingAttr.getDimShardings(),
-      tensorShardingAttr.getReplicatedAxes(), {});
+      tensorShardingAttr.getReplicatedAxes(), tensorShardingAttr.getUnreducedAxes());
 }
 
 #pragma endregion
