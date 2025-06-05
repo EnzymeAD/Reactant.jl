@@ -16,19 +16,26 @@ import ...API
 """
 `assume_alignment`
 
-The `assume_alignment` operation takes a memref and an integer of alignment
-value, and internally annotates the buffer with the given alignment. If
-the buffer isn\'t aligned to the given alignment, the behavior is undefined.
+The `assume_alignment` operation takes a memref and an integer alignment
+value. It returns a new SSA value of the same memref type, but associated
+with the assumption that the underlying buffer is aligned to the given
+alignment. 
 
-This operation doesn\'t affect the semantics of a correct program. It\'s for
-optimization only, and the optimization is best-effort.
+If the buffer isn\'t aligned to the given alignment, its result is poison.
+This operation doesn\'t affect the semantics of a program where the
+alignment assumption holds true. It is intended for optimization purposes,
+allowing the compiler to generate more efficient code based on the
+alignment assumption. The optimization is best-effort.
 """
-function assume_alignment(memref::Value; alignment, location=Location())
+function assume_alignment(
+    memref::Value; result=nothing::Union{Nothing,IR.Type}, alignment, location=Location()
+)
     op_ty_results = IR.Type[]
     operands = Value[memref,]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[namedattribute("alignment", alignment),]
+    !isnothing(result) && push!(op_ty_results, result)
 
     return create_operation(
         "memref.assume_alignment",
@@ -37,8 +44,8 @@ function assume_alignment(memref::Value; alignment, location=Location())
         owned_regions,
         successors,
         attributes,
-        results=op_ty_results,
-        result_inference=false,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
     )
 end
 
@@ -199,7 +206,12 @@ end
 The `load` op reads an element from a memref at the specified indices.
 
 The number of indices must match the rank of the memref. The indices must
-be in-bounds: `0 <= idx < dim_size`
+be in-bounds: `0 <= idx < dim_size`.
+
+Lowerings of `memref.load` may emit attributes, e.g. `inbouds` + `nuw`
+when converting to LLVM\'s `llvm.getelementptr`, that would cause undefined
+behavior if indices are out of bounds or if computing the offset in the
+memref would cause signed overflow of the `index` type.
 
 The single result of `memref.load` is a value with the same type as the
 element type of the memref.
@@ -1308,14 +1320,14 @@ they appear in the contiguous memory of the memref — and the
 according to specified offsets, sizes, and strides.
 
 ```mlir
-%result1 = memref.reinterpret_cast %arg0 to 
+%result1 = memref.reinterpret_cast %arg0 to
   offset: [9],
   sizes: [4, 4],
   strides: [16, 2]
 : memref<8x8xf32, strided<[8, 1], offset: 0>> to
   memref<4x4xf32, strided<[16, 2], offset: 9>>
 
-%result2 = memref.reinterpret_cast %result1 to 
+%result2 = memref.reinterpret_cast %result1 to
   offset: [0],
   sizes: [2, 2],
   strides: [4, 2]
@@ -1499,7 +1511,12 @@ end
 The `store` op stores an element into a memref at the specified indices.
 
 The number of indices must match the rank of the memref. The indices must
-be in-bounds: `0 <= idx < dim_size`
+be in-bounds: `0 <= idx < dim_size`.
+
+Lowerings of `memref.store` may emit attributes, e.g. `inbouds` + `nuw`
+when converting to LLVM\'s `llvm.getelementptr`, that would cause undefined
+behavior if indices are out of bounds or if computing the offset in the
+memref would cause signed overflow of the `index` type.
 
 A set `nontemporal` attribute indicates that this store is not expected to
 be reused in the cache. For details, refer to the

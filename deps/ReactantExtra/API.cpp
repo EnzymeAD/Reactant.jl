@@ -75,6 +75,7 @@
 #include "xla/pjrt/pjrt_api.h"
 #include "xla/pjrt/pjrt_c_api_client.h"
 #include "xla/pjrt/pjrt_executable.h"
+#include "xla/pjrt/plugin/xla_cpu/xla_cpu_pjrt_client.h"
 
 // CPU collectives
 #include "xla/backends/cpu/collectives/mpi_collectives.h"
@@ -213,6 +214,8 @@ using HeldPjRtBuffer = HeldValue<std::shared_ptr<xla::PjRtBuffer>>;
 using HeldIfrtArray = HeldValue<tsl::RCReference<xla::ifrt::Array>>;
 using HeldHloModule = HeldValue<std::shared_ptr<xla::HloModule>>;
 using HeldIfrtSharding = HeldValue<std::shared_ptr<xla::ifrt::Sharding>>;
+using HeldIfrtLoadedExecutable =
+    HeldValue<std::shared_ptr<xla::ifrt::LoadedExecutable>>;
 
 extern "C" void (*ReactantThrowError)(const char *) = nullptr;
 
@@ -409,8 +412,7 @@ PjRtClient *MakeCPUClientInternal(
   if (collectives.has_value())
     options.collectives = collectives.value();
 
-  auto client = MyValueOrThrow(GetTfrtCpuClient(options));
-  return client.release();
+  return MyValueOrThrow(GetPjRtCpuClient(options)).release();
 }
 
 extern "C" PjRtClient *MakeCPUClient(uint8_t asynchronous, int node_id) {
@@ -1424,7 +1426,7 @@ ifrt_pjrt_array_create(ifrt::PjRtClient *client,
 
 // we might me interested in the `Compiler::Compile` method variant that accepts
 // `Topology`
-extern "C" xla::ifrt::LoadedExecutable *
+extern "C" HeldIfrtLoadedExecutable *
 ifrt_compile(ifrt::Client *client, MlirModule cmod, int64_t device_id,
              const int64_t *mesh_ids, int64_t num_mesh_ids,
              const char *xla_gpu_cuda_data_dir, bool use_shardy_partitioner,
@@ -1452,9 +1454,8 @@ ifrt_compile(ifrt::Client *client, MlirModule cmod, int64_t device_id,
       std::make_unique<xla::ifrt::HloProgram>(xla::ifrt::HloProgram(cmod_op));
   auto compiler = client->GetDefaultCompiler();
 
-  return MyValueOrThrow(
-             compiler->Compile(std::move(program), std::move(options)))
-      .release();
+  return reactant::capture(MyValueOrThrow(
+      compiler->CompileAndLoad(std::move(program), std::move(options))));
 }
 
 extern "C" void
@@ -2325,19 +2326,19 @@ extern "C" mlir::sdy::TensorShardingAttr hloShardingToTensorShardingAttr(
 
   return mlir::sdy::TensorShardingAttr::get(
       context, meshName, tensorShardingAttr.getDimShardings(),
-      tensorShardingAttr.getReplicatedAxes());
+      tensorShardingAttr.getReplicatedAxes(), tensorShardingAttr.getUnreducedAxes());
 }
 
 #pragma endregion
 
 #pragma region ifrt::LoadedExecutable
 
-extern "C" void ifrt_loaded_executable_dtor(ifrt::LoadedExecutable *exec) {
+extern "C" void ifrt_loaded_executable_dtor(HeldIfrtLoadedExecutable *exec) {
   delete exec;
 }
 
 extern "C" void ifrt_loaded_executable_execute(
-    ifrt::LoadedExecutable *exec, int num_args,
+    HeldIfrtLoadedExecutable *exec, int num_args,
     HeldValue<tsl::RCReference<ifrt::Array>> **op_args,
     uint8_t *is_arg_donatable, int num_results,
     HeldValue<tsl::RCReference<ifrt::Array>> **op_results, uint8_t *futures,
@@ -2355,7 +2356,7 @@ extern "C" void ifrt_loaded_executable_execute(
   }
   options.fill_status = true;
 
-  auto result = MyValueOrThrow(exec->Execute(
+  auto result = MyValueOrThrow(exec->obj()->Execute(
       static_cast<absl::Span<tsl::RCReference<xla::ifrt::Array>>>(args),
       options, /* devices */ std::nullopt));
 
@@ -2376,16 +2377,16 @@ extern "C" void ifrt_loaded_executable_execute(
 }
 
 extern "C" ifrt::Client *
-ifrt_loaded_executable_client(ifrt::LoadedExecutable *exec) {
-  return exec->client();
+ifrt_loaded_executable_client(HeldIfrtLoadedExecutable *exec) {
+  return exec->obj()->client();
 }
 
 extern "C" void
-ifrt_loaded_executable_get_parameter_shardings(ifrt::LoadedExecutable *exec,
+ifrt_loaded_executable_get_parameter_shardings(HeldIfrtLoadedExecutable *exec,
                                                xla::OpSharding **op_shardings,
                                                int32_t num_op_shardings) {
   std::optional<std::vector<xla::OpSharding>> shardings =
-      exec->GetParameterShardings();
+      exec->obj()->GetParameterShardings();
   if (!shardings.has_value()) {
     ReactantThrowError(
         "No sharding found for the output of the loaded executable");
@@ -2405,11 +2406,11 @@ ifrt_loaded_executable_get_parameter_shardings(ifrt::LoadedExecutable *exec,
 }
 
 extern "C" void
-ifrt_loaded_executable_get_output_shardings(ifrt::LoadedExecutable *exec,
+ifrt_loaded_executable_get_output_shardings(HeldIfrtLoadedExecutable *exec,
                                             xla::OpSharding **op_shardings,
                                             int32_t num_op_shardings) {
   std::optional<std::vector<xla::OpSharding>> shardings =
-      exec->GetOutputShardings();
+      exec->obj()->GetOutputShardings();
   if (!shardings.has_value()) {
     ReactantThrowError(
         "No sharding found for the output of the loaded executable");
@@ -2429,9 +2430,9 @@ ifrt_loaded_executable_get_output_shardings(ifrt::LoadedExecutable *exec,
 }
 
 extern "C" void
-ifrt_loaded_executable_get_hlo_modules(ifrt::LoadedExecutable *exec,
+ifrt_loaded_executable_get_hlo_modules(HeldIfrtLoadedExecutable *exec,
                                        void **hlo_modules, int32_t *nmodules) {
-  auto hlo_modules_vec = MyValueOrThrow(exec->GetHloModules());
+  auto hlo_modules_vec = MyValueOrThrow(exec->obj()->GetHloModules());
   *nmodules = hlo_modules_vec.size();
   for (int32_t i = 0; i < *nmodules; i++) {
     hlo_modules[i] = reactant::capture(hlo_modules_vec[i]);
@@ -2439,8 +2440,8 @@ ifrt_loaded_executable_get_hlo_modules(ifrt::LoadedExecutable *exec,
 }
 
 extern "C" int32_t
-ifrt_loaded_executable_num_devices(ifrt::LoadedExecutable *exec) {
-  return static_cast<int32_t>(exec->num_devices());
+ifrt_loaded_executable_num_devices(HeldIfrtLoadedExecutable *exec) {
+  return static_cast<int32_t>(exec->obj()->num_devices());
 }
 
 #pragma endregion

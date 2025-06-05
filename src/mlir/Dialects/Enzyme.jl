@@ -210,6 +210,25 @@ function get(gradient::Value; result_0::IR.Type, location=Location())
     )
 end
 
+function ignore_derivatives(input::Value; output::IR.Type, location=Location())
+    op_ty_results = IR.Type[output,]
+    operands = Value[input,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+
+    return create_operation(
+        "enzyme.ignore_derivatives",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
 function init(; result_0::IR.Type, location=Location())
     op_ty_results = IR.Type[result_0,]
     operands = Value[]
