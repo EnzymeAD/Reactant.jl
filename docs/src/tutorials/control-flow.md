@@ -1,4 +1,4 @@
-# [Control Flow](@id control_flow)
+# [Control Flow](@id control-flow)
 
 Reactant currently uses a tracing system to capture array operations into a new
 program. As such, the provided function is executed with [`TracedRArray`](@ref)
