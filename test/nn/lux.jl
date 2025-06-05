@@ -74,16 +74,16 @@ end
 
     res, dps = gradient_loss_function(model, noisy, target, ps, st)
 
-    compiled_gradient = Reactant.compile(
-        gradient_loss_function, (cmodel, cnoisy, ctarget, cps, cst2)
-    )
+    compiled_gradient =
+        Reactant.with_config(; dot_general_precision=PrecisionConfig.HIGHEST) do
+            Reactant.compile(gradient_loss_function, (cmodel, cnoisy, ctarget, cps, cst2))
+        end
 
     res_reactant, dps_reactant = compiled_gradient(cmodel, cnoisy, ctarget, cps, cst2)
 
     @test res ≈ res_reactant atol = 1e-3 rtol = 1e-2
-    # See https://github.com/EnzymeAD/Reactant.jl/issues/578
     for (dps1, dps2) in zip(fleaves(dps), fleaves(dps_reactant))
-        @test_skip dps1 ≈ dps2 atol = 1e-3 rtol = 1e-2
+        @test dps1 ≈ dps2 atol = 1e-3 rtol = 1e-2
     end
 end
 

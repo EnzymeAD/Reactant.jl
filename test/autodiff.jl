@@ -1,8 +1,66 @@
-using Enzyme, Reactant, Test
+using Enzyme, Reactant, Test, Random
 
 square(x) = x * 2
 
 fwd(Mode, RT, x, y) = Enzyme.autodiff(Mode, square, RT, Duplicated(x, y))
+
+@testset "Activity" begin
+    @test Enzyme.guess_activity(
+        Reactant.ConcretePJRTArray{
+            Float32,2,1,Reactant.Sharding.ShardInfo{Reactant.Sharding.NoSharding,Nothing}
+        },
+        Enzyme.Reverse,
+    ) <: Enzyme.Duplicated
+
+    @test Enzyme.guess_activity(Reactant.ConcretePJRTArray{Float32}, Enzyme.Reverse) <:
+        Enzyme.Duplicated
+
+    @test Enzyme.guess_activity(
+        Reactant.ConcreteIFRTArray{
+            Float32,2,Reactant.Sharding.ShardInfo{Reactant.Sharding.NoSharding,Nothing}
+        },
+        Enzyme.Reverse,
+    ) <: Enzyme.Duplicated
+
+    @test Enzyme.guess_activity(
+        Reactant.ConcretePJRTNumber{
+            Float32,1,Reactant.Sharding.ShardInfo{Reactant.Sharding.NoSharding,Nothing}
+        },
+        Enzyme.Reverse,
+    ) <: Enzyme.Duplicated
+
+    @test Enzyme.guess_activity(Reactant.ConcretePJRTNumber{Float32}, Enzyme.Reverse) <:
+        Enzyme.Duplicated
+
+    @test Enzyme.guess_activity(
+        Reactant.ConcretePJRTNumber{
+            Float32,1,Reactant.Sharding.ShardInfo{Reactant.Sharding.NoSharding,Nothing}
+        },
+        Enzyme.Reverse,
+    ) <: Enzyme.Duplicated
+
+    @test Enzyme.guess_activity(Reactant.ConcretePJRTNumber{Float32}, Enzyme.Reverse) <:
+        Enzyme.Duplicated
+
+    @test Enzyme.guess_activity(
+        Reactant.ConcreteIFRTNumber{
+            Float32,Reactant.Sharding.ShardInfo{Reactant.Sharding.NoSharding,Nothing}
+        },
+        Enzyme.Reverse,
+    ) <: Enzyme.Duplicated
+
+    @test Enzyme.guess_activity(Reactant.ConcreteIFRTNumber{Float32}, Enzyme.Reverse) <:
+        Enzyme.Duplicated
+
+    @test Enzyme.guess_activity(Reactant.TracedRArray{Float32,2}, Enzyme.Reverse) <:
+        Enzyme.Duplicated
+
+    @test Enzyme.guess_activity(Reactant.TracedRArray{Float32}, Enzyme.Reverse) <:
+        Enzyme.Duplicated
+
+    @test Enzyme.guess_activity(Reactant.TracedRNumber{Float32}, Enzyme.Reverse) <:
+        Enzyme.Duplicated
+end
 
 @testset "Basic Forward Mode" begin
     ores1 = fwd(Forward, Duplicated, ones(3, 2), 3.1 * ones(3, 2))
@@ -169,4 +227,49 @@ vector_forward_ad(x) = Enzyme.autodiff(Forward, fn, BatchDuplicated(x, Enzyme.on
     @test res[1][2] ≈ res_enz[1][2]
     @test res[1][3] ≈ res_enz[1][3]
     @test res[1][4] ≈ res_enz[1][4]
+end
+
+function simple_forward(x, st)
+    rng = copy(st.rng)
+    y = similar(x)
+    rand!(rng, y)
+    return x .+ y, (; rng)
+end
+
+function gradient_fn(x, st)
+    stₙ = Ref{Any}(nothing)
+    function lfn(x, st_old)
+        y, st_new = simple_forward(x, st_old)
+        stₙ[] = st_new
+        return sum(abs2, y)
+    end
+    return Enzyme.gradient(Reverse, lfn, x, Const(st)), stₙ[]
+end
+
+@testset "seed" begin
+    x = Reactant.to_rarray(rand(2, 2))
+    st = (; rng=Reactant.ConcreteRNG())
+
+    @test begin
+        hlo = @code_hlo gradient_fn(x, st)
+        contains(repr(hlo), "stablehlo.rng_bit_generator")
+    end
+end
+
+function divinf(x)
+    return min(1.0, 1 / x)
+end
+
+function grad_divinf(x)
+    return Enzyme.gradient(Reverse, divinf, x)
+end
+
+function grad_divinf_sz(x)
+    return Enzyme.gradient(Enzyme.set_strong_zero(Reverse), divinf, x)
+end
+
+@testset "Strong zero" begin
+    x = ConcreteRNumber(0.0)
+    @test isnan((@jit grad_divinf(x))[1])
+    @test iszero((@jit grad_divinf_sz(x))[1])
 end

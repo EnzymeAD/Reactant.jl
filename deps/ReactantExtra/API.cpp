@@ -2628,3 +2628,15 @@ extern "C" void addSdyPropagationPipeline(
                                                   0};
   mlir::sdy::addPropagationPipeline(pm, options);
 }
+
+extern "C" HeldIfrtArray *ifrt_copy_array(HeldIfrtArray *array) {
+  auto pjrtArray = dyn_cast<ifrt::PjRtArray>(array->obj().get());
+  if (pjrtArray) {
+    std::optional<ifrt::DeviceListRef> devices;
+    std::optional<ifrt::MemoryKind> memory_kind;
+    auto res = MyValueOrThrow(pjrtArray->Copy(
+        devices, memory_kind, static_cast<ifrt::ArrayCopySemantics>(0)));
+    return reactant::capture(res);
+  }
+  ReactantThrowError("Only ifrt-pjrt arrays are supported for now");
+}

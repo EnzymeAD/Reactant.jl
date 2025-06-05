@@ -29,7 +29,7 @@ Reactant.with_config
 
 ```@docs
 Reactant.DotGeneralAlgorithmPreset
-Reactant.DotGeneralPrecision
+Reactant.PrecisionConfig
 Reactant.DotGeneralAlgorithm
 ```
 

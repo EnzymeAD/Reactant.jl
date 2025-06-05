@@ -172,11 +172,49 @@ end
     end
 
     function Reactant.Compiler.create_result(
-        tocopy::MockTestCustomPath, path, result_stores
+        tocopy::MockTestCustomPath,
+        path,
+        result_stores,
+        path_to_shard_info,
+        to_unreshard_results,
+        unresharded_code::Vector{Expr},
+        unresharded_arrays_cache,
+        used_shardinfo,
+        result_cache,
+        var_idx,
+        resultgen_code,
     )
         custom_path = Reactant.append_path(path, (; custom_id=1))
-        res_x = Reactant.Compiler.create_result(tocopy.x, custom_path, result_stores)
-        return :($MockTestCustomPath($res_x))
+
+        args = (
+            result_stores,
+            path_to_shard_info,
+            to_unreshard_results,
+            unresharded_code::Vector{Expr},
+            unresharded_arrays_cache,
+            used_shardinfo,
+            result_cache,
+            var_idx,
+            resultgen_code,
+        )
+
+        if !haskey(result_cache, tocopy)
+            ar = Reactant.Compiler.create_result(tocopy.x, custom_path, args...)
+            sym = Symbol("result", var_idx[])
+            var_idx[] += 1
+
+            push!(
+                resultgen_code,
+                quote
+                    $sym = ($MockTestCustomPath)($ar)
+                end,
+            )
+            result_cache[tocopy] = sym
+        end
+
+        return quote
+            $(result_cache[tocopy])
+        end
     end
 
     fcustom_path(x) = MockTestCustomPath(x.x)

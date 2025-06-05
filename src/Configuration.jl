@@ -1,7 +1,7 @@
 using ScopedValues: ScopedValues, ScopedValue
 
 export with_config
-export DotGeneralAlgorithmPreset, DotGeneralPrecision, DotGeneralAlgorithm
+export DotGeneralAlgorithmPreset, PrecisionConfig, DotGeneralAlgorithm
 
 """
     with_config(f; kwargs...)
@@ -27,12 +27,15 @@ scope will use the provided values.
     [`DotGeneralAlgorithm`](@ref) or [`DotGeneralAlgorithmPreset`](@ref). Defaults to
     `DotGeneralAlgorithmPreset.DEFAULT`.
   - `dot_general_precision`: Precision for `stablehlo.dot_general`. Can be `nothing`,
-    or [`DotGeneralPrecision`](@ref). Defaults to `DotGeneralPrecision.DEFAULT`.
+    or [`PrecisionConfig`](@ref). Defaults to `PrecisionConfig.DEFAULT`.
+  - `convolution_precision`: Precision for `stablehlo.convolution`. Can be `nothing`,
+    or [`PrecisionConfig`](@ref). Defaults to `PrecisionConfig.DEFAULT`.
 """
 function with_config(
     f;
     dot_general_algorithm=missing,
     dot_general_precision=missing,
+    convolution_precision=missing,
     lower_partialsort_to_approx_top_k=missing,
     fallback_approx_top_k_lowering=missing,
 )
@@ -41,6 +44,8 @@ function with_config(
         (config_vars = (config_vars..., DOT_GENERAL_ALGORITHM => dot_general_algorithm))
     dot_general_precision !== missing &&
         (config_vars = (config_vars..., DOT_GENERAL_PRECISION => dot_general_precision))
+    convolution_precision !== missing &&
+        (config_vars = (config_vars..., CONVOLUTION_PRECISION => convolution_precision))
     lower_partialsort_to_approx_top_k !== missing && (
         config_vars = (
             config_vars...,
@@ -63,7 +68,7 @@ const FALLBACK_APPROX_TOP_K_LOWERING = ScopedValue(true)
 
 # DotGeneral Attributes Configuration
 """
-    DotGeneralPrecision
+    PrecisionConfig
 
 Controls the `precision_config` for `stablehlo.dot_general`. Valid values are:
 
@@ -73,26 +78,34 @@ Controls the `precision_config` for `stablehlo.dot_general`. Valid values are:
 
 The following functions are available:
 
-  `MLIR.IR.Attribute(precision::DotGeneralPrecision.T)`
+  `MLIR.IR.Attribute(precision::PrecisionConfig.T)`
 """
-@enumx DotGeneralPrecision begin
+@enumx PrecisionConfig begin
     DEFAULT
     HIGH
     HIGHEST
 end
 
+Base.@deprecate_binding DotGeneralPrecision PrecisionConfig
+
 const DOT_GENERAL_PRECISION = ScopedValue{
-    Union{DotGeneralPrecision.T,Nothing,Tuple{DotGeneralPrecision.T,DotGeneralPrecision.T}}
+    Union{PrecisionConfig.T,Nothing,Tuple{PrecisionConfig.T,PrecisionConfig.T}}
 }(
-    DotGeneralPrecision.DEFAULT
+    PrecisionConfig.DEFAULT
 )
 
-function MLIR.IR.Attribute(precision::DotGeneralPrecision.T)
-    precision_str = if precision == DotGeneralPrecision.DEFAULT
+const CONVOLUTION_PRECISION = ScopedValue{
+    Union{PrecisionConfig.T,Nothing,Tuple{PrecisionConfig.T,PrecisionConfig.T}}
+}(
+    PrecisionConfig.DEFAULT
+)
+
+function MLIR.IR.Attribute(precision::PrecisionConfig.T)
+    precision_str = if precision == PrecisionConfig.DEFAULT
         "DEFAULT"
-    elseif precision == DotGeneralPrecision.HIGH
+    elseif precision == PrecisionConfig.HIGH
         "HIGH"
-    elseif precision == DotGeneralPrecision.HIGHEST
+    elseif precision == PrecisionConfig.HIGHEST
         "HIGHEST"
     end
     return MLIR.IR.Attribute(

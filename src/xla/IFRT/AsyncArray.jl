@@ -25,3 +25,8 @@ function XLA.to_host(array::AsyncArray, data, reactant_sharding)
 end
 
 XLA.sharding(x::AsyncArray) = XLA.sharding(x.buffer)
+
+function Base.copy(b::AsyncArray)
+    Base.wait(b)
+    return AsyncArray(Base.copy(b.buffer), nothing)
+end
