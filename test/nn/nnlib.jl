@@ -386,7 +386,7 @@ end
 # mean is omitted as operation to avoid the ambiguity error
 @testset "NNlib scatter" begin
     function test_scatter(dsts, srcs, idxs, res; dims)
-        @testset "scatter Float32 $op" for op in (+, -, max, min, *, /)
+        @testset "scatter Float32 $op" for op in (+, -, max, min, *, /, mean)
             for idx in values(idxs), dim in dims
                 dst = copy(dsts[dim])
                 target_y = res[(op, dim, true)]

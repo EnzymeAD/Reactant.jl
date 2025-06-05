@@ -537,6 +537,18 @@ function NNlib.scatter!(
     return dst
 end
 
+for AT in (AbstractArray, AbstractArray{<:Number})
+    @eval function NNlib.scatter!(
+        ::typeof(mean), dst::AnyTracedRArray, src::AnyTracedRArray, idx::$AT
+    )
+        Ns = NNlib.scatter!(+, zero(dst), one.(src), idx)
+        dst_ = NNlib.scatter!(+, zero(dst), src, idx)
+        res = dst .+ NNlib.safe_div.(dst_, Ns)
+        set_mlir_data!(dst, get_mlir_data(res))
+        return dst
+    end
+end
+
 function _nnlib_scatter_impl(
     op::OP,
     dst::AnyTracedRArray{T},
