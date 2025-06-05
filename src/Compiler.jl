@@ -924,6 +924,7 @@ function optimization_passes(;
         "involution_not_simplify",
         "real_conj_simplify",
         "conj_complex_simplify",
+        "split_convolution_into_reverse_convolution",
         # TODO we want to enable but may cause an infinite compile time
         # "concat_to_onedim_dusslice",
     ]
