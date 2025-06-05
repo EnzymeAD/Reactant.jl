@@ -10673,6 +10673,16 @@ function sdyTensorShardingAttrGetReplicatedAxesElem(attr, pos)
     )::MlirAttribute
 end
 
+function sdyTensorShardingAttrGetUnreducedAxesSize(attr)
+    @ccall mlir_c.sdyTensorShardingAttrGetUnreducedAxesSize(attr::MlirAttribute)::intptr_t
+end
+
+function sdyTensorShardingAttrGetUnreducedAxesElem(attr, pos)
+    @ccall mlir_c.sdyTensorShardingAttrGetUnreducedAxesElem(
+        attr::MlirAttribute, pos::intptr_t
+    )::MlirAttribute
+end
+
 function sdyAttributeIsATensorShardingPerValueAttr(attr)
     @ccall mlir_c.sdyAttributeIsATensorShardingPerValueAttr(attr::MlirAttribute)::Bool
 end
