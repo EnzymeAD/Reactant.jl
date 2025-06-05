@@ -11,7 +11,7 @@ function sample1(seed, μ, σ, shape)
         return s
     end
 
-    return ProbProg.generate(model, seed, μ, σ, shape)
+    return ProbProg.generate!(model, seed, μ, σ, shape)
 end
 
 function sample2(seed, μ, σ, shape)
@@ -23,7 +23,7 @@ function sample2(seed, μ, σ, shape)
         return t
     end
 
-    return ProbProg.generate(model, seed, μ, σ, shape)
+    return ProbProg.generate!(model, seed, μ, σ, shape)
 end
 
 @testset "test" begin

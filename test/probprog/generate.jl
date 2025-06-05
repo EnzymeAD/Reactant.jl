@@ -12,7 +12,7 @@ function generate_model(seed, μ, σ, shape)
         return t
     end
 
-    return ProbProg.generate(model, seed, μ, σ, shape)
+    return ProbProg.generate!(model, seed, μ, σ, shape)
 end
 
 @testset "Generate" begin

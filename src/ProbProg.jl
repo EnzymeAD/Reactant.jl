@@ -45,7 +45,7 @@ function __init__()
     return nothing
 end
 
-@noinline function generate(f::Function, args::Vararg{Any,Nargs}) where {Nargs}
+@noinline function generate!(f::Function, args::Vararg{Any,Nargs}) where {Nargs}
     argprefix::Symbol = gensym("generatearg")
     resprefix::Symbol = gensym("generateresult")
     resargprefix::Symbol = gensym("generateresarg")
@@ -181,7 +181,7 @@ end
     return result
 end
 
-@noinline function simulate(f::Function, args::Vararg{Any,Nargs}) where {Nargs}
+@noinline function simulate!(f::Function, args::Vararg{Any,Nargs}) where {Nargs}
     argprefix::Symbol = gensym("simulatearg")
     resprefix::Symbol = gensym("simulateresult")
     resargprefix::Symbol = gensym("simulateresarg")

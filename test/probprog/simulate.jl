@@ -13,7 +13,7 @@ function simulate_model(seed, μ, σ, shape)
         return t
     end
 
-    return ProbProg.simulate(model, seed, μ, σ, shape)
+    return ProbProg.simulate!(model, seed, μ, σ, shape)
 end
 
 
