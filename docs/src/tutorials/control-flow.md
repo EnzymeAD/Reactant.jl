@@ -36,7 +36,12 @@ maybe_square_compiled(false, x) == maybe_square_compiled(true, x)
 ```
 
 But instead, it depends on the value that was provided during tracing to the
-initial `@compile` invocation.
+initial `@compile` invocation. This is also confirmed when looking at the
+code generated during tracing which does not contain any conditional.
+
+```@example control_flow_tutorial
+@code_hlo maybe_square(false, x)
+```
 
 The same behaviour can be observed when using loops.
 
@@ -53,7 +58,7 @@ end
 
 During tracing the arrays contain no data and only information about their shape
 and data type. As such, it is not possible to execute conditions that would
-depend on the value of an array. For this cases, ReactantCore provides the
+depend on the value of an array. For these cases, ReactantCore provides the
 [`@trace`](@ref) macro to allow capturing control flow expressions in the
 compiled program.
 
