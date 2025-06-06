@@ -33,8 +33,8 @@ const DEBUG_ALIASED_BUFFER_ASSIGNMENT_ERROR = Ref(false)
 
 const DEBUG_BUFFER_POINTERS_STORE_DICT = Base.IdDict()
 
-@inline function traced_getfield(@nospecialize(obj::AbstractDict), field)
-    return Base.getindex(obj, field)
+@inline function traced_getfield(@nospecialize(obj::AbstractDict), idx)
+    return first(Iterators.drop(obj, idx - 1))
 end
 
 @inline function traced_getfield(@nospecialize(obj), field)
@@ -636,12 +636,15 @@ function create_result(
 
         result_cache[tocopy] = sym
 
-        for (k, v) in pairs(tocopy)
-            subexpr = create_result(v, append_path(path, k), args...)
+        for (i, (k, v)) in enumerate(pairs(tocopy))
+            path_k = append_path(append_path(path, i), 1)
+            k_expr = create_result(k, path_k, args...)
+            path_v = append_path(append_path(path, i), 2)
+            v_expr = create_result(v, path_v, args...)
             push!(
                 resultgen_code,
                 quote
-                    @inbounds $sym[$(Meta.quot(k))] = $subexpr
+                    @inbounds $sym[$k_expr] = $v_expr
                 end,
             )
         end

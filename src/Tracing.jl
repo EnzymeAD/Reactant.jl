@@ -1654,14 +1654,14 @@ end
 
 Base.@nospecializeinfer function make_tracer(
     seen,
-    @nospecialize(prev::Dict{Key,Value}),
+    prev::D,
     @nospecialize(path),
     mode;
     @nospecialize(track_numbers::Type = Union{}),
     @nospecialize(sharding = Sharding.NoSharding()),
     @nospecialize(runtime = nothing),
     kwargs...,
-) where {Key,Value}
+) where {D<:AbstractDict}
     RT = Core.Typeof(prev)
     if mode != NoStopTracedTrack && haskey(seen, prev)
         if mode == TracedToTypes
@@ -1692,99 +1692,41 @@ Base.@nospecializeinfer function make_tracer(
         end
         return nothing
     end
-    Value2 = traced_type(Value, Val(mode), track_numbers, sharding, runtime)
-    newa = Dict{Key,Value2}()
-    seen[prev] = newa
+    Dt = traced_type(D, Val(mode), track_numbers, sharding, runtime)
+    dict_traced = Dt()
+    seen[prev] = dict_traced
     same = true
-    for (k, v) in prev
-        nv = make_tracer(
+    for (i, (k, v)) in enumerate(prev)
+        kt = make_tracer(
             seen,
-            v,
-            append_path(path, k),
+            k,
+            append_path(append_path(path, i), 1),
             mode;
             track_numbers,
             sharding=Base.getproperty(sharding, k),
             runtime,
             kwargs...,
         )
-        if v !== nv
-            same = false
-        end
-        newa[k] = nv
-    end
-    if same
-        seen[prev] = prev
-        return prev
-    end
-    return newa
-end
-
-Base.@nospecializeinfer function make_tracer(
-    seen,
-    @nospecialize(prev::B),
-    @nospecialize(path),
-    mode;
-    @nospecialize(track_numbers::Type = Union{}),
-    @nospecialize(sharding = Sharding.NoSharding()),
-    @nospecialize(runtime = nothing),
-    kwargs...,
-) where {K,V,F,Finv,B<:Bijection{K,V,F,Finv}}
-    RT = Core.Typeof(prev)
-    if mode != NoStopTracedTrack && haskey(seen, prev)
-        if mode == TracedToTypes
-            visited = seen[prev]
-            push!(path, visited)
-            return nothing
-        end
-        return seen[prev]
-    end
-    # NOTE `eltype(RT)` is a `Pair` so it should never enter?
-    # if eltype(RT) <: ReactantPrimitive
-    #     if mode == ArrayToConcrete
-    #         runtime isa Val{:PJRT} &&
-    #             (return seen[prev] = ConcretePJRTArray(prev; sharding))
-    #         runtime isa Val{:IFRT} &&
-    #             (return seen[prev] = ConcreteIFRTArray(prev; sharding))
-    #         error("Unsupported runtime $runtime")
-    #     elseif mode == TracedToTypes
-    #         # Original array can get mutated so we store a copy:
-    #         push!(path, copy(prev))
-    #         seen[prev] = VisitedObject(length(seen) + 1)
-    #         return nothing
-    #     end
-    if mode == TracedToTypes
-        push!(path, RT)
-        for (k, v) in prev
-            make_tracer(seen, k, path, mode; track_numbers, sharding, runtime, kwargs...)
-            make_tracer(seen, v, path, mode; track_numbers, sharding, runtime, kwargs...)
-        end
-        return nothing
-    end
-    Bt = traced_type(B, Val(mode), track_numbers, sharding, runtime)
-    newa = Bt()
-    seen[prev] = newa
-    same = true
-    for (k, v) in prev
-        nv = make_tracer(
+        vt = make_tracer(
             seen,
             v,
-            append_path(path, k),
+            append_path(append_path(path, i), 2),
             mode;
             track_numbers,
             sharding=Base.getproperty(sharding, k),
             runtime,
             kwargs...,
         )
-        if v !== nv
+        if k !== kt || v !== vt
             same = false
         end
-        newa[k] = nv
+        dict_traced[kt] = vt
     end
     if same
         seen[prev] = prev
         return prev
     end
-    return newa
+    return dict_traced
 end
 
 Base.@nospecializeinfer function make_tracer(

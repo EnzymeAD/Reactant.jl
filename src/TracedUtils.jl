@@ -503,8 +503,12 @@ function prepare_mlir_fn_args(
         end
         aval = args[path[2]]
         for (cidx, idx) in enumerate(path[3:end])
-            if aval isa Array || aval isa Dict
+            if aval isa Array #|| aval isa Dict
                 aval = getindex(aval, idx)
+                stridx = stridx * "[" * string(idx) * "]"
+            elseif aval isa AbstractDict
+                # TODO maybe we want a way to customize this behavior like we did with `traced_getfield`? or a more powerfull `traced_getfield`?
+                aval = Reactant.Compiler.traced_getfield(aval, idx)
                 stridx = stridx * "[" * string(idx) * "]"
             else
                 fldname = if idx isa Integer
