@@ -12,7 +12,7 @@ captured by Reactant.
 Consider the following function which has a conditional control flow depending
 on one of its argument which is a boolean:
 
-```julia
+```@example control_flow_tutorial
 using Reactant
 
 function maybe_square(cond, x)
@@ -28,7 +28,7 @@ end
 We can confirm by compiling our function and noticing that the result does not
 depend on the argument provided to the compiled function.
 
-```julia
+```@example control_flow_tutorial
 x = Reactant.ConcreteRArray(randn(Float32, 100))
 
 maybe_square_compiled = @compile maybe_square(true, x)
