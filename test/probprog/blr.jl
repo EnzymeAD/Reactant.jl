@@ -3,26 +3,38 @@ using Reactant: ProbProg
 using Libdl: Libdl
 
 normal(rng, μ, σ, shape) = μ .+ σ .* randn(rng, shape)
+bernoulli_logit(rng, logit, shape) = rand(rng, shape...) .< (1 ./ (1 .+ exp.(-logit)))
 
-function blr(seed, xs)
-    function model(seed, xs)
+function blr(seed, N, K)
+    function model(seed, N, K)
         rng = Random.default_rng()
         Random.seed!(rng, seed)
-        slope = ProbProg.sample!(normal, rng, 0, 2, (1,); symbol=:slope)
-        intercept = ProbProg.sample!(normal, rng, 0, 10, (1,); symbol=:intercept)
-        for (i, x) in enumerate(xs)
-            ProbProg.sample!(normal, rng, slope * x + intercept, 1, (1,); symbol=Symbol("y-$i"))
-        end
-        return intercept
+
+        # α ~ Normal(0, 10, size = 1)
+        α = ProbProg.sample!(normal, rng, 0, 10, (1,); symbol=:α)
+
+        # β ~ Normal(0, 2.5, size = K)
+        β = ProbProg.sample!(normal, rng, 0, 2.5, (K,); symbol=:β)
+
+        # X ~ Normal(0, 10, size = (N, K))
+        X = ProbProg.sample!(normal, rng, 0, 10, (N, K); symbol=:X) # TODO: double check transpose 
+
+        # μ = α .+ X * β
+        μ = α .+ X * β
+
+        ProbProg.sample!(bernoulli_logit, rng, μ, (N,); symbol=:Y)
+
+        return μ
     end
 
-    return ProbProg.simulate(model, seed, xs)
+    return ProbProg.simulate!(model, seed, N, K)
 end
 
 @testset "BLR" begin
-    xs = [1, 2, 3, 4, 5]
+    N = 5  # number of observations
+    K = 3  # number of features
     seed = Reactant.to_rarray(UInt64[1, 4])
-    X = ProbProg.getTrace(@jit optimize = :probprog blr(seed, xs))
-    @test X[:_integrity_check] == 0x123456789abcdef
-    @show X
+
+    X = ProbProg.getTrace(@jit optimize = :probprog blr(seed, N, K))
+    ProbProg.print_trace(X)
 end
