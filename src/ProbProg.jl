@@ -6,7 +6,20 @@ using Libdl: Libdl
 
 using Enzyme
 
-const Trace = Dict{Symbol,Any}(:_integrity_check => 0x123456789abcdef)
+struct SampleMetadata
+    shape::NTuple{N,Int} where {N}
+    element_type::Type
+    is_scalar::Bool
+
+    function SampleMetadata(
+        shape::NTuple{N,Int}, element_type::Type, is_scalar::Bool
+    ) where {N}
+        return new(shape, element_type, is_scalar)
+    end
+end
+
+const SAMPLE_METADATA_CACHE = IdDict{Symbol,SampleMetadata}()
+const Trace = IdDict{Symbol,Any}(:_integrity_check => 0x123456789abcdef)
 
 function initTraceLowered(trace_ptr_ptr::Ptr{Ptr{Cvoid}})
     trace_ptr = unsafe_load(trace_ptr_ptr)
@@ -18,14 +31,28 @@ function initTraceLowered(trace_ptr_ptr::Ptr{Ptr{Cvoid}})
 end
 
 function addSampleToTraceLowered(
-    trace_ptr_ptr::Ptr{Ptr{Cvoid}},
-    symbol_ptr_ptr::Ptr{Ptr{Cvoid}},
-    sample_ptr::Ptr{Cvoid},
+    trace_ptr_ptr::Ptr{Ptr{Cvoid}}, symbol_ptr_ptr::Ptr{Ptr{Cvoid}}, sample_ptr::Ptr{Cvoid}
 )
     trace = unsafe_pointer_to_objref(unsafe_load(trace_ptr_ptr))
     symbol = unsafe_pointer_to_objref(unsafe_load(symbol_ptr_ptr))
 
-    trace[symbol] = unsafe_load(reinterpret(Ptr{Float64}, sample_ptr))
+    @assert haskey(SAMPLE_METADATA_CACHE, symbol) "Symbol $symbol not found in metadata cache"
+
+    metadata = SAMPLE_METADATA_CACHE[symbol]
+    shape = metadata.shape
+    element_type = metadata.element_type
+    is_scalar = metadata.is_scalar
+
+    if is_scalar
+        value = unsafe_load(reinterpret(Ptr{element_type}, sample_ptr))
+    else
+        value = unsafe_wrap(
+            Array{element_type}, reinterpret(Ptr{element_type}, sample_ptr), prod(shape)
+        )
+        value = reshape(value, shape) # TODO: GC'd?
+    end
+
+    trace[symbol] = value
 
     return nothing
 end
@@ -145,9 +172,22 @@ end
     sym = TracedUtils.get_attribute_by_name(func2, "sym_name")
     fn_attr = MLIR.IR.FlatSymbolRefAttribute(Base.String(sym))
 
+    if !isempty(linear_results)
+        sample_result = linear_results[1] # TODO: consider multiple results
+        sample_mlir_data = TracedUtils.get_mlir_data(sample_result)
+        @assert sample_mlir_data isa MLIR.IR.Value "Sample $sample_result is not a MLIR.IR.Value"
+
+        sample_type = MLIR.IR.type(sample_mlir_data)
+        sample_shape = size(sample_type)
+        sample_element_type = MLIR.IR.julia_type(eltype(sample_type))
+
+        SAMPLE_METADATA_CACHE[symbol] = SampleMetadata(
+            sample_shape, sample_element_type, length(sample_shape) == 0
+        )
+    end
+
     symbol_ptr = pointer_from_objref(symbol)
     symbol_addr = reinterpret(UInt64, symbol_ptr)
-
     addr_attr = MLIR.IR.DenseElementsAttribute([symbol_addr])
 
     sample_op = MLIR.Dialects.enzyme.sample(
@@ -268,6 +308,24 @@ end
 
 function getTrace(t::ConcretePJRTArray)
     return unsafe_pointer_to_objref(reinterpret(Ptr{Cvoid}, Array{UInt64,1}(t)[1]))
+end
+
+function print_trace(trace::IdDict)
+    println("Probabilistic Program Trace:")
+    for (symbol, sample) in trace
+        symbol == :_integrity_check && continue
+        metadata = SAMPLE_METADATA_CACHE[symbol]
+
+        println("  $symbol:")
+        println("    Sample: $(sample)")
+        println("    Shape: $(metadata.shape)")
+        println("    Element Type: $(metadata.element_type)")
+    end
+end
+
+function clear_sample_metadata_cache!()
+    empty!(SAMPLE_METADATA_CACHE)
+    return nothing
 end
 
 end

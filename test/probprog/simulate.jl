@@ -36,11 +36,12 @@ end
     end
 
     @testset "normal_simulate" begin
-        shape = (10000,)
+        shape = (10,)
         seed = Reactant.to_rarray(UInt64[1, 4])
         μ = Reactant.ConcreteRArray(0.0)
         σ = Reactant.ConcreteRArray(1.0)
         X = ProbProg.getTrace(@jit optimize = :probprog simulate_model(seed, μ, σ, shape))
         @test X[:_integrity_check] == 0x123456789abcdef
+        ProbProg.print_trace(X)
     end
 end
