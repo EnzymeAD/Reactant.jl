@@ -1,3 +1,5 @@
+using Bijections
+
 @enum TraceMode begin
     ConcreteToTraced = 1
     TracedTrack = 2
@@ -214,26 +216,97 @@ Base.@nospecializeinfer function traced_type_inner(
     @nospecialize(sharding),
     @nospecialize(runtime)
 )
+    K = dict_key(T)
     V = dict_value(T)
-    if V === nothing
-        return T
+
+    K_traced = if !isnothing(K)
+        traced_type_inner(K, seen, mode, track_numbers, sharding, runtime)
     else
-        K = dict_key(T)
-        V2 = traced_type_inner(V, seen, mode, track_numbers, sharding, runtime)
-        if V == V2
-            return T
-        end
-        dictty = if T isa UnionAll
-            T.body.name.wrapper
-        else
-            T.name.wrapper
-        end
-        if K !== nothing
-            return dictty{K,V2}
-        else
-            return (dictty{KT,V2} where {KT})
-        end
+        nothing
     end
+    V_traced = if !isnothing(V)
+        traced_type_inner(V, seen, mode, track_numbers, sharding, runtime)
+    else
+        nothing
+    end
+
+    if K == K_traced && V == V_traced
+        return T
+    end
+
+    dictty = if T isa UnionAll
+        T.body.name.wrapper
+    else
+        T.name.wrapper
+    end
+
+    if isnothing(K_traced) && isnothing(V_traced)
+        return (dictty{Kt,Vt} where {Kt,Vt})
+    elseif isnothing(K_traced)
+        return (dictty{Kt,V_traced} where {Kt})
+    elseif isnothing(V_traced)
+        return (dictty{K_traced,Vt} where {Vt})
+    else
+        return dictty{K_traced,V_traced}
+    end
+end
+
+Base.@nospecializeinfer @inline bijection_fwd_type(::Type{<:Bijection}) = nothing
+Base.@nospecializeinfer @inline function bijection_fwd_type(
+    ::Type{<:(Bijection{K,V,F} where {K,V})}
+) where {F}
+    return F
+end
+Base.@nospecializeinfer @inline bijection_bwd_type(::Type{<:Bijection}) = nothing
+Base.@nospecializeinfer @inline function bijection_bwd_type(
+    ::Type{<:(Bijection{K,V,F,Finv} where {K,V,F})}
+) where {Finv}
+    return Finv
+end
+
+Base.@nospecializeinfer function traced_type_inner(
+    @nospecialize(T::Type{<:Bijection}),
+    seen,
+    @nospecialize(mode::TraceMode),
+    @nospecialize(track_numbers::Type),
+    @nospecialize(sharding),
+    @nospecialize(runtime)
+)
+    B = Bijection
+
+    K = dict_key(T)
+    if !isnothing(K)
+        K = traced_type_inner(K, seen, mode, track_numbers, sharding, runtime)
+        B = B{K}
+    else
+        B = (B{Kt} where {Kt})
+    end
+
+    V = dict_value(T)
+    if !isnothing(V)
+        V = traced_type_inner(V, seen, mode, track_numbers, sharding, runtime)
+        B = B{V}
+    else
+        B = (B{Vt} where {Vt})
+    end
+
+    F = bijection_fwd_type(T)
+    if !isnothing(F)
+        F = traced_type_inner(F, seen, mode, track_numbers, sharding, runtime)
+        B = B{F}
+    else
+        B = (B{Ft} where {Ft})
+    end
+
+    Finv = bijection_bwd_type(T)
+    if !isnothing(Finv)
+        Finv = traced_type_inner(Finv, seen, mode, track_numbers, sharding, runtime)
+        B = B{Finv}
+    else
+        B = (B{Finvt} where {Finvt})
+    end
+
+    return B
 end
 
 Base.@nospecializeinfer function traced_type_inner(
@@ -1581,14 +1654,14 @@ end
 
 Base.@nospecializeinfer function make_tracer(
     seen,
-    @nospecialize(prev::Dict{Key,Value}),
+    prev::D,
     @nospecialize(path),
     mode;
     @nospecialize(track_numbers::Type = Union{}),
     @nospecialize(sharding = Sharding.NoSharding()),
     @nospecialize(runtime = nothing),
     kwargs...,
-) where {Key,Value}
+) where {D<:AbstractDict}
     RT = Core.Typeof(prev)
     if mode != NoStopTracedTrack && haskey(seen, prev)
         if mode == TracedToTypes
@@ -1619,31 +1692,41 @@ Base.@nospecializeinfer function make_tracer(
         end
         return nothing
     end
-    Value2 = traced_type(Value, Val(mode), track_numbers, sharding, runtime)
-    newa = Dict{Key,Value2}()
-    seen[prev] = newa
+    Dt = traced_type(D, Val(mode), track_numbers, sharding, runtime)
+    dict_traced = Dt()
+    seen[prev] = dict_traced
     same = true
-    for (k, v) in prev
-        nv = make_tracer(
+    for (i, (k, v)) in enumerate(prev)
+        kt = make_tracer(
             seen,
-            v,
-            append_path(path, k),
+            k,
+            append_path(append_path(path, i), 1),
             mode;
             track_numbers,
             sharding=Base.getproperty(sharding, k),
             runtime,
             kwargs...,
         )
-        if v !== nv
+        vt = make_tracer(
+            seen,
+            v,
+            append_path(append_path(path, i), 2),
+            mode;
+            track_numbers,
+            sharding=Base.getproperty(sharding, k),
+            runtime,
+            kwargs...,
+        )
+        if k !== kt || v !== vt
             same = false
         end
-        newa[k] = nv
+        dict_traced[kt] = vt
     end
     if same
         seen[prev] = prev
         return prev
     end
-    return newa
+    return dict_traced
 end
 
 Base.@nospecializeinfer function make_tracer(

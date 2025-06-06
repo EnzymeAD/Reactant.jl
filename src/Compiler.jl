@@ -3,6 +3,7 @@ module Compiler
 using Reactant_jll
 using Libdl: dlsym
 using LinearAlgebra: BLAS
+using Bijections
 
 import ..Reactant:
     Reactant,
@@ -32,8 +33,8 @@ const DEBUG_ALIASED_BUFFER_ASSIGNMENT_ERROR = Ref(false)
 
 const DEBUG_BUFFER_POINTERS_STORE_DICT = Base.IdDict()
 
-@inline function traced_getfield(@nospecialize(obj::Dict), field)
-    return Base.getindex(obj, field)
+@inline function traced_getfield(@nospecialize(obj::AbstractDict), idx)
+    return first(Iterators.drop(obj, idx - 1))
 end
 
 @inline function traced_getfield(@nospecialize(obj), field)
@@ -109,7 +110,7 @@ end
     return setfield_carray!(obj, field, val, path)
 end
 
-@inline function traced_setfield!(@nospecialize(obj::Dict), field, val, path)
+@inline function traced_setfield!(@nospecialize(obj::AbstractDict), field, val, path)
     return Base.setindex!(obj, field, val)
 end
 
@@ -635,12 +636,15 @@ function create_result(
 
         result_cache[tocopy] = sym
 
-        for (k, v) in pairs(tocopy)
-            subexpr = create_result(v, append_path(path, k), args...)
+        for (i, (k, v)) in enumerate(pairs(tocopy))
+            path_k = append_path(append_path(path, i), 1)
+            k_expr = create_result(k, path_k, args...)
+            path_v = append_path(append_path(path, i), 2)
+            v_expr = create_result(v, path_v, args...)
             push!(
                 resultgen_code,
                 quote
-                    @inbounds $sym[$k] = $subexpr
+                    @inbounds $sym[$k_expr] = $v_expr
                 end,
             )
         end
@@ -3321,8 +3325,7 @@ function compile_xla(f, args; client=nothing, serializable::Bool=false, kwargs..
 end
 
 # inspired by RuntimeGeneratedFunction.jl
-const __thunk_fwd_body_cache = Dict{Symbol,Expr}()
-const __thunk_rev_body_cache = Dict{Expr,Symbol}()
+const __thunk_body_cache = Bijection{Symbol,Expr}()
 
 function compile(f, args; sync=false, kwargs...)
     _, exec, mlir_fn_res, device, client, str = compile_xla(f, args; kwargs...)
@@ -3434,12 +3437,11 @@ function compile(f, args; sync=false, kwargs...)
         display(mlir_fn_res.donated_args_mask)
     end
 
-    fname = if body in keys(__thunk_rev_body_cache)
-        __thunk_rev_body_cache[body]
+    fname = if hasvalue(__thunk_body_cache, body)
+        __thunk_body_cache(body)
     else
         fname2 = gensym(Symbol(Symbol(f), :_reactant))
-        __thunk_rev_body_cache[body] = fname2
-        __thunk_fwd_body_cache[fname2] = body
+        __thunk_body_cache[fname2] = body
         fname2
     end
 
@@ -3521,7 +3523,7 @@ end
             )
         end
     end
-    body = __thunk_fwd_body_cache[tag]
+    body = __thunk_body_cache[tag]
     if IsClosure
         return quote
             args = (thunk.f, args...)
