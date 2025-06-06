@@ -47,8 +47,13 @@ function addSampleToTraceLowered(
         trace[symbol] = unsafe_load(reinterpret(Ptr{element_type}, sample_ptr))
     else
         trace[symbol] = Base.deepcopy(
-            unsafe_wrap(
-                Array{element_type}, reinterpret(Ptr{element_type}, sample_ptr), prod(shape)
+            reshape(
+                unsafe_wrap(
+                    Array{element_type},
+                    reinterpret(Ptr{element_type}, sample_ptr),
+                    prod(shape),
+                ),
+                shape,
             ),
         )
     end

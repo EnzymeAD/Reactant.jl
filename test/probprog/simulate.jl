@@ -8,14 +8,13 @@ function simulate_model(seed, μ, σ, shape)
     function model(seed, μ, σ, shape)
         rng = Random.default_rng()
         Random.seed!(rng, seed)
-        s = ProbProg.sample!(normal, rng, μ, σ, shape; symbol = :s)
-        t = ProbProg.sample!(normal, rng, s, σ, shape; symbol = :t)
+        s = ProbProg.sample!(normal, rng, μ, σ, shape; symbol=:s)
+        t = ProbProg.sample!(normal, rng, s, σ, shape; symbol=:t)
         return t
     end
 
     return ProbProg.simulate!(model, seed, μ, σ, shape)
 end
-
 
 @testset "Simulate" begin
     @testset "normal_hlo" begin
@@ -36,7 +35,7 @@ end
     end
 
     @testset "normal_simulate" begin
-        shape = (10,)
+        shape = (3, 3, 3)
         seed = Reactant.to_rarray(UInt64[1, 4])
         μ = Reactant.ConcreteRArray(0.0)
         σ = Reactant.ConcreteRArray(1.0)
