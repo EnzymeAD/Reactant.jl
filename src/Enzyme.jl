@@ -539,3 +539,22 @@ function overload_autodiff(
         end
     end
 end
+
+"""
+    ignore_derivatives(args...)
+
+Prevents the flow of gradients (and higher-order derivatives) by creating a new value that
+is detached from the original value. This is an identity operation on the primal. This can
+be applied on a nested structure of arrays and we will apply the operation on each of the
+leaves.
+"""
+function ignore_derivatives(args...)
+    return map(args) do arg
+        return Functors.fmap(arg) do argᵢ
+            if argᵢ isa TracedType || argᵢ isa AnyTracedRArray
+                return Ops.ignore_derivatives(materialize_traced_array(argᵢ))
+            end
+            return argᵢ
+        end
+    end
+end

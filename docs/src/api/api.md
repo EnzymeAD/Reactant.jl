@@ -47,6 +47,12 @@ Reactant.devices
 Reactant.addressable_devices
 ```
 
+## Differentiation Specific API
+
+```@docs
+Reactant.ignore_derivatives
+```
+
 ## Internal utils
 
 ```@docs
