@@ -44,15 +44,14 @@ function addSampleToTraceLowered(
     is_scalar = metadata.is_scalar
 
     if is_scalar
-        value = unsafe_load(reinterpret(Ptr{element_type}, sample_ptr))
+        trace[symbol] = unsafe_load(reinterpret(Ptr{element_type}, sample_ptr))
     else
-        value = unsafe_wrap(
-            Array{element_type}, reinterpret(Ptr{element_type}, sample_ptr), prod(shape)
+        trace[symbol] = Base.deepcopy(
+            unsafe_wrap(
+                Array{element_type}, reinterpret(Ptr{element_type}, sample_ptr), prod(shape)
+            ),
         )
-        value = reshape(value, shape) # TODO: GC'd?
     end
-
-    trace[symbol] = value
 
     return nothing
 end
