@@ -184,3 +184,9 @@ sum(π)
 ```
 
 This implementation runs the algorithm until convergence (the transport plan has seen little change in the last iteration). Without [`@trace`](@ref) this would not be possible to implement since the termination condition is depending on traced values (in this case, the value of the transport plan).
+
+!!! warning "Current limitations"
+
+    This is currently not allowed to include mutations as part of the while loop condition.
+
+    The for loop tracing does not support any arbitrary iterable. It supports integer ranges.
