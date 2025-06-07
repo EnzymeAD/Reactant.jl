@@ -220,7 +220,7 @@ Base.@nospecializeinfer function unpad_val_op(
     )
 end
 
-mutable struct CompiledMlirFnResult{F,TR,Re,Rt,LA,LR,PA,CR,M,MA,RS,GD,DA}
+mutable struct CompiledMlirFnResult{F,TR,Re,Rt,LA,LR,PA,M,MA,RS,GD,DA}
     fnwrapped::Bool
     f::F
     traced_result::TR
@@ -236,7 +236,6 @@ mutable struct CompiledMlirFnResult{F,TR,Re,Rt,LA,LR,PA,CR,M,MA,RS,GD,DA}
     num_replicas::Int
     is_sharded::Bool
     preserved_args::PA
-    concrete_result::CR
     unique_meshes::M
     mutated_args::MA
     use_shardy_partitioner::Bool
@@ -382,7 +381,6 @@ function make_mlir_fn(
         num_partitions,
         num_replicas,
         is_sharded,
-        nothing,
         nothing,
         unique_meshes,
         mutated_args,
