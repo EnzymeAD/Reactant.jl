@@ -493,7 +493,6 @@ function prepare_mlir_fn_args(
         )
     end
 
-    arglocs = MLIR.IR.Location[]
     for (i, arg) in enumerate(linear_args)
         path = get_idx(arg, argprefix)
         stridx = if verify_arg_names isa Nothing
@@ -502,7 +501,7 @@ function prepare_mlir_fn_args(
             string(verify_arg_names[path[2]])
         end
         aval = args[path[2]]
-        for (cidx, idx) in enumerate(path[3:end])
+        for idx in path[3:end]
             if aval isa Array || aval isa Dict
                 aval = getindex(aval, idx)
                 stridx = stridx * "[" * string(idx) * "]"

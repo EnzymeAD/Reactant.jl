@@ -87,6 +87,7 @@ export default defineConfig({
           {text: "Profiling", link: "/tutorials/profiling"},
           {text: "Distributed", link: "/tutorials/multihost"},
           {text: "Local build", link: "/tutorials/local-build"},
+          {text: "Control Flow", link: "/tutorials/control-flow"},
         ],
       },
       {
