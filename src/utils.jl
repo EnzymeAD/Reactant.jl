@@ -89,6 +89,42 @@ function has_ancestor(query::Module, target::Module)
     end
 end
 
+const __skip_rewrite_func_set = Set([
+    # Avoid the 1.10 stackoverflow
+    typeof(Base.typed_hvcat),
+    typeof(Base.hvcat),
+    typeof(Core.Compiler.concrete_eval_eligible),
+    typeof(Core.Compiler.typeinf_type),
+    typeof(Core.Compiler.typeinf_ext),
+    # Perf optimization
+    typeof(Base.typemax),
+    typeof(Base.typemin),
+    typeof(Base.getproperty),
+    typeof(Base.vect),
+    typeof(Base.eltype),
+    typeof(Base.argtail),
+    typeof(Base.identity),
+    typeof(Base.print),
+    typeof(Base.println),
+    typeof(Base.show),
+    typeof(Base.show_delim_array),
+    typeof(Base.sprint),
+    typeof(Adapt.adapt_structure),
+    typeof(Core.is_top_bit_set),
+    typeof(Base.setindex_widen_up_to),
+    typeof(Base.typejoin),
+    typeof(Base.argtype_decl),
+    typeof(Base.arg_decl_parts),
+    typeof(Base.StackTraces.show_spec_sig),
+    typeof(Core.Compiler.return_type),
+])
+
+macro skip_rewrite(fname)
+    quote
+        push!($(Reactant.__skip_rewrite_func_set), typeof($(esc(fname))))
+    end
+end
+
 function should_rewrite_call(@nospecialize(ft))
     # Don't rewrite builtin or intrinsics
     if ft <: Core.IntrinsicFunction || ft <: Core.Builtin
@@ -132,19 +168,18 @@ function should_rewrite_call(@nospecialize(ft))
         return false
     end
 
-    # Avoid the 1.10 stackoverflow
-    if ft <: typeof(Base.typed_hvcat)
-        return false
-    end
-    if ft <: typeof(Base.hvcat)
-        return false
-    end
-    if ft <: typeof(Core.Compiler.concrete_eval_eligible)
-        return false
-    end
-    if ft <: typeof(Core.Compiler.typeinf_type) || ft <: typeof(Core.Compiler.typeinf_ext)
-        return false
-    end
+    # if ft <: typeof(Base.typed_hvcat)
+    #     return false
+    # end
+    # if ft <: typeof(Base.hvcat)
+    #     return false
+    # end
+    # if ft <: typeof(Core.Compiler.concrete_eval_eligible)
+    #     return false
+    # end
+    # if ft <: typeof(Core.Compiler.typeinf_type) || ft <: typeof(Core.Compiler.typeinf_ext)
+    #     return false
+    # end
 
     # Don't rewrite traced constructors
     if ft <: Type{<:TracedRArray} ||
@@ -158,31 +193,7 @@ function should_rewrite_call(@nospecialize(ft))
         return false
     end
 
-    # Perf optimizations
-    if ft <: typeof(Core.Compiler.return_type)
-        return false
-    end
-
-    # Perf optimizations
-    if ft <: typeof(Base.typemax) ||
-        ft <: typeof(Base.typemin) ||
-        ft <: typeof(Base.getproperty) ||
-        ft <: typeof(Base.vect) ||
-        ft <: typeof(Base.eltype) ||
-        ft <: typeof(Base.argtail) ||
-        ft <: typeof(Base.identity) ||
-        ft <: typeof(Base.print) ||
-        ft <: typeof(Base.println) ||
-        ft <: typeof(Base.show) ||
-        ft <: typeof(Base.show_delim_array) ||
-        ft <: typeof(Base.sprint) ||
-        ft <: typeof(Adapt.adapt_structure) ||
-        ft <: typeof(Core.is_top_bit_set) ||
-        ft <: typeof(Base.setindex_widen_up_to) ||
-        ft <: typeof(Base.typejoin) ||
-        ft <: typeof(Base.argtype_decl) ||
-        ft <: typeof(Base.arg_decl_parts) ||
-        ft <: typeof(Base.StackTraces.show_spec_sig)
+    if ft in __skip_rewrite_func_set
         return false
     end
 
