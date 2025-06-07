@@ -1700,9 +1700,9 @@ end
 Returns the linear coordinates array for a sparse tensor with
 a trailing COO region with at least two levels.  It is an error
 if the tensor doesn\'t contain such a COO region.  This is similar
-to the `bufferization.to_memref` operation in the sense that it
+to the `bufferization.to_buffer` operation in the sense that it
 provides a bridge between a tensor world view and a bufferized
-world view.  Unlike the `bufferization.to_memref` operation,
+world view.  Unlike the `bufferization.to_buffer` operation,
 however, this operation actually lowers into code that extracts
 the linear coordinates array from the sparse storage scheme that
 stores the coordinates for the COO region as an array of structures.
@@ -1745,9 +1745,9 @@ end
 `coordinates`
 
 Returns the coordinates array of the tensor\'s storage at the given
-level.  This is similar to the `bufferization.to_memref` operation
+level.  This is similar to the `bufferization.to_buffer` operation
 in the sense that it provides a bridge between a tensor world view
-and a bufferized world view.  Unlike the `bufferization.to_memref`
+and a bufferized world view.  Unlike the `bufferization.to_buffer`
 operation, however, this sparse operation actually lowers into code
 that extracts the coordinates array from the sparse storage itself
 (either by calling a support library or through direct code).
@@ -1787,9 +1787,9 @@ end
 `positions`
 
 Returns the positions array of the tensor\'s storage at the given
-level.  This is similar to the `bufferization.to_memref` operation
+level.  This is similar to the `bufferization.to_buffer` operation
 in the sense that it provides a bridge between a tensor world view
-and a bufferized world view.  Unlike the `bufferization.to_memref`
+and a bufferized world view.  Unlike the `bufferization.to_buffer`
 operation, however, this sparse operation actually lowers into code
 that extracts the positions array from the sparse storage itself
 (either by calling a support library or through direct code).
@@ -1917,9 +1917,9 @@ end
 
 Returns the values array of the sparse storage format for the given
 sparse tensor, independent of the actual dimension. This is similar to
-the `bufferization.to_memref` operation in the sense that it provides a bridge
+the `bufferization.to_buffer` operation in the sense that it provides a bridge
 between a tensor world view and a bufferized world view. Unlike the
-`bufferization.to_memref` operation, however, this sparse operation actually
+`bufferization.to_buffer` operation, however, this sparse operation actually
 lowers into code that extracts the values array from the sparse storage
 scheme (either by calling a support library or through direct code).
 

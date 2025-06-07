@@ -273,3 +273,21 @@ end
     @test isnan((@jit grad_divinf(x))[1])
     @test iszero((@jit grad_divinf_sz(x))[1])
 end
+
+function simple_grad_without_ignore(x::AbstractArray{T}) where {T}
+    return (sum(x; dims=1), x .- 1, (x, x .+ 2)), sum(abs2, x)
+end
+
+function simple_grad_with_ignore(x::AbstractArray{T}) where {T}
+    return Reactant.ignore_derivatives(sum(x; dims=1), x .- 1, (x, x .+ 2)), sum(abs2, x)
+end
+
+@testset "ignore_derivatives" begin
+    x = Reactant.to_rarray(rand(Float32, 4, 4))
+
+    res1 = @jit Enzyme.gradient(Reverse, simple_grad_without_ignore, x)
+    @test res1[1] ≈ (2 .* Array(x) .+ 4)
+
+    res2 = @jit Enzyme.gradient(Reverse, simple_grad_with_ignore, x)
+    @test res2[1] ≈ (2 .* Array(x))
+end

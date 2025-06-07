@@ -3099,4 +3099,19 @@ end
     )
 end
 
+@noinline function ignore_derivatives(
+    input::Union{TracedRArray,TracedRNumber};
+    location=mlir_stacktrace("ignore_derivatives", @__FILE__, @__LINE__),
+)
+    res = MLIR.IR.result(
+        enzyme.ignore_derivatives(input.mlir_data; output=mlir_type(input), location), 1
+    )
+
+    if input isa TracedRArray
+        return TracedRArray{unwrapped_eltype(input),ndims(input)}((), res, size(res))
+    else
+        return TracedRNumber{unwrapped_eltype(input)}((), res)
+    end
+end
+
 end # module Ops
