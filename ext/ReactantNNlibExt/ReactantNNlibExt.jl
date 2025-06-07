@@ -10,6 +10,7 @@ using Reactant.TracedUtils:
 
 using ReactantCore: @trace
 using LinearAlgebra: LinearAlgebra, triu
+using Statistics: mean
 
 include("Overlay.jl")
 include("Ops.jl")
