@@ -96,6 +96,10 @@ const __skip_rewrite_func_set = Set([
     typeof(Core.Compiler.concrete_eval_eligible),
     typeof(Core.Compiler.typeinf_type),
     typeof(Core.Compiler.typeinf_ext),
+    # TODO: perhaps problematic calls in `traced_call`
+    # should be moved to TracedUtils.jl:
+    typeof(Reactant.ReactantCore.traced_call),
+    typeof(ReactantCore.is_traced),
     # Perf optimization
     typeof(Base.typemax),
     typeof(Base.typemin),
@@ -117,11 +121,66 @@ const __skip_rewrite_func_set = Set([
     typeof(Base.arg_decl_parts),
     typeof(Base.StackTraces.show_spec_sig),
     typeof(Core.Compiler.return_type),
+    typeof(Base.memoryref),
+    typeof(Core.throw_inexacterror),
+    typeof(Base.throw_boundserror),
+    typeof(Base._shrink),
+    typeof(Base._shrink!),
+    typeof(Base.ht_keyindex),
+    typeof(Base.checkindex),
+    typeof(Base.to_index),
+    typeof(Reactant.materialize_traced_array),
 ])
 
-macro skip_rewrite(fname)
+"""
+    @skip_rewrite_func f
+
+Mark function `f` so that Reactant's IR rewrite mechanism will skip it.
+This can improve compilation time if it's safe to assume that no call inside `f`
+will need a `@reactant_overlay` method.
+
+Note that this marks the whole function, not a specific method with a type
+signature.
+
+See also: [`@skip_rewrite_type`](@ref)
+"""
+macro skip_rewrite_func(fname)
     quote
         push!($(Reactant.__skip_rewrite_func_set), typeof($(esc(fname))))
+    end
+end
+
+const __skip_rewrite_type_constructor_list = [
+    # Don't rewrite Val
+    Type{Base.Val},
+    # Don't rewrite exception constructors
+    Type{<:Core.Exception},
+    # Don't rewrite traced constructors
+    Type{<:TracedRArray},
+    Type{<:TracedRNumber},
+    Type{MLIR.IR.Location},
+    Type{MLIR.IR.Block},
+]
+
+"""
+    @skip_rewrite_type MyStruct
+    @skip_rewrite_type Type{<:MyStruct}
+
+Mark the construct function of `MyStruct` so that Reactant's IR rewrite mechanism
+will skip it. It does the same as [`@skip_rewrite_func`](@ref) but for type
+constructors.
+
+If you want to mark the set of constructors over it's type parameters or over its
+abstract type, you should use then the `Type{<:MyStruct}` syntax.
+"""
+macro skip_rewrite_type(typ)
+    typ = if Base.isexpr(typ, :curly) && typ.args[1] === :Type
+        typ
+    else
+        Expr(:curly, :Type, typ)
+    end
+    return quote
+        push!($(Reactant.__skip_rewrite_type_constructor_list), $(esc(typ)))
     end
 end
 
@@ -159,37 +218,9 @@ function should_rewrite_call(@nospecialize(ft))
             end
         end
     end
-    # Don't rewrite Val
-    if ft === Type{Base.Val}
-        return false
-    end
-    # Don't rewrite exception constructors
-    if ft <: Type{<:Core.Exception}
-        return false
-    end
 
-    # if ft <: typeof(Base.typed_hvcat)
-    #     return false
-    # end
-    # if ft <: typeof(Base.hvcat)
-    #     return false
-    # end
-    # if ft <: typeof(Core.Compiler.concrete_eval_eligible)
-    #     return false
-    # end
-    # if ft <: typeof(Core.Compiler.typeinf_type) || ft <: typeof(Core.Compiler.typeinf_ext)
-    #     return false
-    # end
-
-    # Don't rewrite traced constructors
-    if ft <: Type{<:TracedRArray} ||
-        ft <: Type{<:TracedRNumber} ||
-        ft === Type{MLIR.IR.Location} ||
-        ft === Type{MLIR.IR.Block} ||
-        # TODO: perhaps problematic calls in `traced_call`
-        # should be moved to TracedUtils.jl:
-        ft <: typeof(Reactant.ReactantCore.traced_call) ||
-        ft <: typeof(ReactantCore.is_traced)
+    # `ft isa Type` is for performance as it avoids checking against all the list, but can be removed if problematic
+    if ft isa Type && any(t -> ft <: t, __skip_rewrite_type_constructor_list)
         return false
     end
 
@@ -203,6 +234,7 @@ end
 
 # by default, same as `should_rewrite_call`
 function should_rewrite_invoke(@nospecialize(ft), @nospecialize(args))
+    # TODO how can we extend `@skip_rewrite` to methods?
     if ft <: typeof(repeat) && (args == Tuple{String,Int64} || args == Tuple{Char,Int64})
         return false
     end
