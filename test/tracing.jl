@@ -286,4 +286,20 @@ end
         @test opt_traced.epsilon isa ConcreteRNumber{Float64}
         @test opt_traced.centred isa Bool
     end
+
+    @testset "@skip_rewrite_func" begin
+        a = ConcreteRArray([1.0 2.0; 3.0 4.0])
+
+        add_skip_rewrite(x) = x + x
+        Reactant.@skip_rewrite_func add_skip_rewrite
+
+        # wrapper because `@skip_rewrite_*` doesn't work with top-functions
+        f(x) = add_skip_rewrite(x)
+
+        # warmup
+        @code_hlo optimize = false f(a)
+
+        t = @timed @code_hlo optimize = false f(a)
+        @test iszero(t.compile_time)
+    end
 end
