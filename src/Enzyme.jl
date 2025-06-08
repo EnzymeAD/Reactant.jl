@@ -549,12 +549,15 @@ be applied on a nested structure of arrays and we will apply the operation on ea
 leaves.
 """
 function ignore_derivatives(args...)
-    return map(args) do arg
-        return Functors.fmap(arg) do argᵢ
-            if argᵢ isa TracedType || argᵢ isa AnyTracedRArray
-                return Ops.ignore_derivatives(materialize_traced_array(argᵢ))
-            end
-            return argᵢ
-        end
+    res = map(ignore_derivatives_internal, args)
+    length(args) == 1 && return only(res)
+    return res
+end
+
+function ignore_derivatives_internal(arg)
+    return Functors.fmap(arg) do argᵢ
+        argᵢ isa AnyTracedRArray && (argᵢ = materialize_traced_array(argᵢ))
+        argᵢ isa TracedType && return Ops.ignore_derivatives(argᵢ)
+        return argᵢ
     end
 end
