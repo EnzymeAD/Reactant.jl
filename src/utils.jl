@@ -121,7 +121,6 @@ const __skip_rewrite_func_set = Set([
     typeof(Base.arg_decl_parts),
     typeof(Base.StackTraces.show_spec_sig),
     typeof(Core.Compiler.return_type),
-    typeof(Base.memoryref),
     typeof(Core.throw_inexacterror),
     typeof(Base.throw_boundserror),
     typeof(Base._shrink),
@@ -129,6 +128,11 @@ const __skip_rewrite_func_set = Set([
     typeof(Base.ht_keyindex),
     typeof(Base.checkindex),
     typeof(Base.to_index),
+    @static(
+        if VERSION >= v"1.11.0"
+            typeof(Base.memoryref)
+        end
+    ),
     typeof(Reactant.materialize_traced_array),
 ])
 
