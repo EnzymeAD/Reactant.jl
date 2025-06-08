@@ -143,8 +143,14 @@ Mark function `f` so that Reactant's IR rewrite mechanism will skip it.
 This can improve compilation time if it's safe to assume that no call inside `f`
 will need a `@reactant_overlay` method.
 
-Note that this marks the whole function, not a specific method with a type
-signature.
+!!! info
+    Note that this marks the whole function, not a specific method with a type
+    signature.
+
+!!! warning
+    The macro call should be inside the `__init__` function. If you want to
+    mark it for precompilation, you must add the macro call in the global scope 
+    too.
 
 See also: [`@skip_rewrite_type`](@ref)
 """
@@ -176,6 +182,11 @@ constructors.
 
 If you want to mark the set of constructors over it's type parameters or over its
 abstract type, you should use then the `Type{<:MyStruct}` syntax.
+
+!!! warning
+    The macro call should be inside the `__init__` function. If you want to
+    mark it for precompilation, you must add the macro call in the global scope 
+    too.
 """
 macro skip_rewrite_type(typ)
     typ = if Base.isexpr(typ, :curly) && typ.args[1] === :Type
