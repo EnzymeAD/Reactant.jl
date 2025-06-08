@@ -301,6 +301,10 @@ end
         @code_hlo optimize = false f(a)
 
         t = @timed @code_hlo optimize = false f(a)
-        @test iszero(t.compile_time)
+
+        # `@timed` only measures compile time from v1.11.0 onward
+        @static if VERSION >= v"1.11.0"
+            @test iszero(t.compile_time)
+        end
     end
 end
