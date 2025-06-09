@@ -653,6 +653,38 @@ end
     @test x.c ≈ x_ra.c
 end
 
+function for_eachindex(s, x)
+    @trace for i in eachindex(x)
+        s += i
+    end
+    return s
+end
+
+@testset "for: eachindex" begin
+    s = Reactant.ConcreteRNumber(0)
+    x = Reactant.to_rarray([1, 2, 3])
+
+    @test @jit(for_eachindex(s, x)) == 6
+end
+
+function while_convergence(x, y)
+    diff = x .- y
+    @trace while sum(diff) >= 10
+        x .= x .- diff ./ 2
+        diff = x .- y
+    end
+    return diff
+end
+
+@testset "while: convergence" begin
+    x = [1.0, 10.0, 20.0]
+    y = [0.0, -2.0, -3.0]
+    x_ra = Reactant.to_rarray(x)
+    y_ra = Reactant.to_rarray(y)
+
+    @test @jit(while_convergence(x_ra, y_ra)) ≈ while_convergence(x, y)
+end
+
 _call1(a, b) = a
 function call1(a, b)
     x = @trace _call1(a, b)
