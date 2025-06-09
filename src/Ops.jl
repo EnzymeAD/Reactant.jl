@@ -85,6 +85,24 @@ macro opcall(expr)
     return esc(new_expr)
 end
 
+using Reactant_jll: Reactant_jll
+
+function __init__()
+    if Reactant_jll.is_available()
+        error_fn_ptr = @cfunction(error, Union{}, (String,))
+        println_fn_ptr = @cfunction(println, Nothing, (String,))
+
+        for (ptr, enzymexla_name) in
+            [(error_fn_ptr, :enzymexla_error), (println_fn_ptr, :enzymexla_println)]
+            @ccall MLIR.API.mlir_c.EnzymeJaXMapSymbol(
+                enzymexla_name::Cstring, ptr::Ptr{Cvoid}
+            )::Cvoid
+        end
+    end
+
+    return nothing
+end
+
 function mlir_type(x::Union{RNumber,RArray})::MLIR.IR.Type
     return MLIR.IR.TensorType(collect(Int, size(x)), MLIR.IR.Type(unwrapped_eltype(x)))
 end
