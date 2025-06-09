@@ -231,15 +231,15 @@ function trace_while(expr; track_numbers, first_arg=nothing)
                 $(cond_fn_sym),
                 $(body_fn_sym),
                 $(args_sym);
-                track_numbers=$(track_numbers),
-                verify_arg_names=$(verify_arg_names_sym),
+                track_numbers=($(track_numbers)),
+                verify_arg_names=($(verify_arg_names_sym)),
             )
         end
     end
 
     return quote
         if $(within_compile)() &&
-           $(any)($(is_traced), $(Expr(:tuple, cond_val.(all_syms.args)...)))
+            $(any)($(is_traced), $(Expr(:tuple, cond_val.(all_syms.args)...)))
             $(reactant_code_block)
         else
             $(expr)
@@ -289,14 +289,23 @@ function trace_for(expr; track_numbers)
         end
     end
 
-    quote
+    return quote
         local $start_sym, $limit_sym, $step_sym
         $bounds_defs
 
         if within_compile()
-            $start_sym = Reactant.TracedUtils.promote_to(Reactant.TracedRNumber{Reactant.unwrapped_eltype(typeof($start_sym))}, $start_sym)
-            $limit_sym = Reactant.TracedUtils.promote_to(Reactant.TracedRNumber{Reactant.unwrapped_eltype(typeof($limit_sym))}, $limit_sym)
-            $step_sym = Reactant.TracedUtils.promote_to(Reactant.TracedRNumber{Reactant.unwrapped_eltype(typeof($step_sym))}, $step_sym)
+            $start_sym = Reactant.TracedUtils.promote_to(
+                Reactant.TracedRNumber{Reactant.unwrapped_eltype(typeof($start_sym))},
+                $start_sym,
+            )
+            $limit_sym = Reactant.TracedUtils.promote_to(
+                Reactant.TracedRNumber{Reactant.unwrapped_eltype(typeof($limit_sym))},
+                $limit_sym,
+            )
+            $step_sym = Reactant.TracedUtils.promote_to(
+                Reactant.TracedRNumber{Reactant.unwrapped_eltype(typeof($step_sym))},
+                $step_sym,
+            )
         end
 
         local $counter = zero($start_sym)
@@ -365,7 +374,7 @@ function trace_if(expr; store_last_line=nothing, depth=0, track_numbers)
             @assert expr.args[2].head == :block "currently we only support blocks"
             expr.args[2] = Expr(:block, expr.args[2].args...)
             true_last_line = expr.args[2].args[end]
-            remaining_lines = expr.args[2].args[1:(end-1)]
+            remaining_lines = expr.args[2].args[1:(end - 1)]
         else
             true_last_line = expr.args[2]
             remaining_lines = []
@@ -408,7 +417,7 @@ function trace_if(expr; store_last_line=nothing, depth=0, track_numbers)
         if else_block isa Expr
             @assert else_block.head == :block "currently we only support blocks"
             false_last_line = else_block.args[end]
-            remaining_lines = else_block.args[1:(end-1)]
+            remaining_lines = else_block.args[1:(end - 1)]
         else
             false_last_line = else_block
             remaining_lines = []
@@ -478,7 +487,7 @@ function trace_if(expr; store_last_line=nothing, depth=0, track_numbers)
             $(true_branch_fn_name),
             $(false_branch_fn_name),
             ($(all_input_vars...),);
-            track_numbers=$(track_numbers),
+            track_numbers=($(track_numbers)),
         )
     end
 
@@ -562,7 +571,7 @@ function cleanup_expr_to_avoid_boxing(expr, prepend::Symbol, all_vars)
             if startswith(string(x.args[1]), string(prepend))
                 return Expr(
                     :kw,
-                    Symbol(string(x.args[1])[(length(string(prepend))+1):end]),
+                    Symbol(string(x.args[1])[(length(string(prepend)) + 1):end]),
                     x.args[2],
                 )
             end
