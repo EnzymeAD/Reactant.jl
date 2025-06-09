@@ -231,8 +231,8 @@ function trace_while(expr; track_numbers, first_arg=nothing)
                 $(cond_fn_sym),
                 $(body_fn_sym),
                 $(args_sym);
-                track_numbers=$(track_numbers),
-                verify_arg_names=$(verify_arg_names_sym),
+                track_numbers=($(track_numbers)),
+                verify_arg_names=($(verify_arg_names_sym)),
             )
         end
     end
@@ -289,10 +289,26 @@ function trace_for(expr; track_numbers)
         end
     end
 
-    quote
+    return quote
         local $start_sym, $limit_sym, $step_sym
         $bounds_defs
-        local $counter = 0
+
+        if $(within_compile)()
+            $start_sym = Reactant.TracedUtils.promote_to(
+                Reactant.TracedRNumber{Reactant.unwrapped_eltype(typeof($start_sym))},
+                $start_sym,
+            )
+            $limit_sym = Reactant.TracedUtils.promote_to(
+                Reactant.TracedRNumber{Reactant.unwrapped_eltype(typeof($limit_sym))},
+                $limit_sym,
+            )
+            $step_sym = Reactant.TracedUtils.promote_to(
+                Reactant.TracedRNumber{Reactant.unwrapped_eltype(typeof($step_sym))},
+                $step_sym,
+            )
+        end
+
+        local $counter = zero($start_sym)
 
         $(trace_while(
             Expr(
@@ -471,7 +487,7 @@ function trace_if(expr; store_last_line=nothing, depth=0, track_numbers)
             $(true_branch_fn_name),
             $(false_branch_fn_name),
             ($(all_input_vars...),);
-            track_numbers=$(track_numbers),
+            track_numbers=($(track_numbers)),
         )
     end
 
