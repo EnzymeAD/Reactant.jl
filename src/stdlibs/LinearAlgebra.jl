@@ -19,17 +19,65 @@ using Reactant_jll: Reactant_jll
 using ..TracedUtils: TracedUtils, get_mlir_data, set_mlir_data!
 
 using LinearAlgebra
+using LinearAlgebra.BLAS: @blasfunc
 using Libdl: Libdl
 
 function __init__()
     if Reactant_jll.is_available()
         libblastrampoline_handle = Libdl.dlopen(LinearAlgebra.BLAS.libblas)
 
+        # notes:
+        # - straight names (e.g. `sgeqrf_`) are LAPACK (i.e. Fortran) symbols
+        #   - they should finish WITH `_` as the 32-bit symbols are `sgeqrf_` and 64-bit symbols are `sgeqrf_64_`
+        # - LAPACKE names (e.g. `LAPACKE_sgeqrf_`) are LAPACKE (i.e. C) symbols and WITHOUT explicit workspace
+        #   - they should finish WITHOUT `_` as the 32-bit symbols are `LAPACKE_sgeqrf` and 64-bit symbols are `LAPACKE_sgeqrf64_`
+        # - LAPACKE names with `_work` suffix (e.g. `LAPACKE_sgeqrf_work`) are LAPACKE symbols WITH explicit workspace
         for (cname, enzymexla_name) in [
-            (LinearAlgebra.BLAS.@blasfunc(sgetrf_), :enzymexla_lapack_sgetrf_),
-            (LinearAlgebra.BLAS.@blasfunc(dgetrf_), :enzymexla_lapack_dgetrf_),
-            (LinearAlgebra.BLAS.@blasfunc(cgetrf_), :enzymexla_lapack_cgetrf_),
-            (LinearAlgebra.BLAS.@blasfunc(zgetrf_), :enzymexla_lapack_zgetrf_),
+            # getrf
+            (@blasfunc(sgetrf_), :enzymexla_lapack_sgetrf_),
+            (@blasfunc(dgetrf_), :enzymexla_lapack_dgetrf_),
+            (@blasfunc(cgetrf_), :enzymexla_lapack_cgetrf_),
+            (@blasfunc(zgetrf_), :enzymexla_lapack_zgetrf_),
+            # geqrf
+            (@blasfunc(sgeqrf_), :enzymexla_lapack_sgeqrf_),
+            (@blasfunc(dgeqrf_), :enzymexla_lapack_dgeqrf_),
+            (@blasfunc(cgeqrf_), :enzymexla_lapack_cgeqrf_),
+            (@blasfunc(zgeqrf_), :enzymexla_lapack_zgeqrf_),
+            (@blasfunc(LAPACKE_sgeqrf), :enzymexla_lapacke_sgeqrf_),
+            (@blasfunc(LAPACKE_dgeqrf), :enzymexla_lapacke_dgeqrf_),
+            (@blasfunc(LAPACKE_cgeqrf), :enzymexla_lapacke_cgeqrf_),
+            (@blasfunc(LAPACKE_zgeqrf), :enzymexla_lapacke_zgeqrf_),
+            (@blasfunc(LAPACKE_sgeqrf_work), :enzymexla_lapacke_sgeqrf_work_),
+            (@blasfunc(LAPACKE_dgeqrf_work), :enzymexla_lapacke_dgeqrf_work_),
+            (@blasfunc(LAPACKE_cgeqrf_work), :enzymexla_lapacke_cgeqrf_work_),
+            (@blasfunc(LAPACKE_zgeqrf_work), :enzymexla_lapacke_zgeqrf_work_),
+            # geqrt
+            (@blasfunc(sgeqrt_), :enzymexla_lapack_sgeqrt_),
+            (@blasfunc(dgeqrt_), :enzymexla_lapack_dgeqrt_),
+            (@blasfunc(cgeqrt_), :enzymexla_lapack_cgeqrt_),
+            (@blasfunc(zgeqrt_), :enzymexla_lapack_zgeqrt_),
+            (@blasfunc(LAPACKE_sgeqrt), :enzymexla_lapacke_sgeqrt_),
+            (@blasfunc(LAPACKE_dgeqrt), :enzymexla_lapacke_dgeqrt_),
+            (@blasfunc(LAPACKE_cgeqrt), :enzymexla_lapacke_cgeqrt_),
+            (@blasfunc(LAPACKE_zgeqrt), :enzymexla_lapacke_zgeqrt_),
+            (@blasfunc(LAPACKE_sgeqrt_work), :enzymexla_lapacke_sgeqrt_work_),
+            (@blasfunc(LAPACKE_dgeqrt_work), :enzymexla_lapacke_dgeqrt_work_),
+            (@blasfunc(LAPACKE_cgeqrt_work), :enzymexla_lapacke_cgeqrt_work_),
+            (@blasfunc(LAPACKE_zgeqrt_work), :enzymexla_lapacke_zgeqrt_work_),
+            # orgqr
+            (@blasfunc(sorgqr_), :enzymexla_lapack_sorgqr_),
+            (@blasfunc(dorgqr_), :enzymexla_lapack_dorgqr_),
+            (@blasfunc(LAPACKE_sorgqr), :enzymexla_lapacke_sorgqr_),
+            (@blasfunc(LAPACKE_dorgqr), :enzymexla_lapacke_dorgqr_),
+            (@blasfunc(LAPACKE_sorgqr_work), :enzymexla_lapacke_sorgqr_work_),
+            (@blasfunc(LAPACKE_dorgqr_work), :enzymexla_lapacke_dorgqr_work_),
+            # ungqr
+            (@blasfunc(cungqr_), :enzymexla_lapack_cungqr_),
+            (@blasfunc(zungqr_), :enzymexla_lapack_zungqr_),
+            (@blasfunc(LAPACKE_cungqr), :enzymexla_lapacke_cungqr_),
+            (@blasfunc(LAPACKE_zungqr), :enzymexla_lapacke_zungqr_),
+            (@blasfunc(LAPACKE_cungqr_work), :enzymexla_lapacke_cungqr_work_),
+            (@blasfunc(LAPACKE_zungqr_work), :enzymexla_lapacke_zungqr_work_),
         ]
             sym = Libdl.dlsym(libblastrampoline_handle, cname)
             @ccall MLIR.API.mlir_c.EnzymeJaXMapSymbol(
