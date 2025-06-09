@@ -443,7 +443,7 @@ end
     z_ra = Reactant.to_rarray(z)
 
     @test @jit(condition12_compile_test(x_ra, y_ra, z_ra)) ≈
-        condition12_compile_test(x, y, z)
+          condition12_compile_test(x, y, z)
 
     x = -rand(2, 10)
     y = -rand(2, 10)
@@ -453,7 +453,7 @@ end
     z_ra = Reactant.to_rarray(z)
 
     @test @jit(condition12_compile_test(x_ra, y_ra, z_ra)) ≈
-        condition12_compile_test(x, y, z)
+          condition12_compile_test(x, y, z)
 end
 
 function condition_with_structure(x)
@@ -674,6 +674,26 @@ function while_convergence(x, y)
         diff = x .- y
     end
     return diff
+end
+
+
+function for_no_track_numbers(x, n)
+    @trace track_numbers = false for i in n:16
+        x = x .+ 1
+    end
+    return x
+end
+
+@testset "for: track_numbers=false" begin
+    x = [1, 2, 3]
+    x_ra = Reactant.to_rarray(x)
+
+    n = 12
+    n_ra = Reactant.ConcreteRNumber(n)
+
+    # set optimize to only do enzyme-batch to prevent crash in opt
+    for_no_track_numbers_ra = @compile optimize="enzyme-batch" for_no_track_numbers(x_ra, n_ra)
+    for_no_track_numbers_ra(x_ra, n_ra) == for_no_track_numbers(x, n)
 end
 
 @testset "while: convergence" begin
