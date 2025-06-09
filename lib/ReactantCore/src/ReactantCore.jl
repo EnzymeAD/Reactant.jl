@@ -293,7 +293,7 @@ function trace_for(expr; track_numbers)
         local $start_sym, $limit_sym, $step_sym
         $bounds_defs
 
-        if within_compile()
+        if $(within_compile)()
             $start_sym = Reactant.TracedUtils.promote_to(
                 Reactant.TracedRNumber{Reactant.unwrapped_eltype(typeof($start_sym))},
                 $start_sym,
