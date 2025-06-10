@@ -1337,3 +1337,13 @@ sameunitrange(x, y) = first(x) == first(y) && last(x) == last(y)
         end
     end
 end
+
+@testset "circshift" begin
+    x = reshape(collect(Float32, 1:36), 2, 6, 3)
+    x_ra = Reactant.to_rarray(x)
+
+    @test @jit(circshift(x_ra, (1, 2))) ≈ circshift(x, (1, 2))
+    @test @jit(circshift(x_ra, (1, 2, 3))) ≈ circshift(x, (1, 2, 3))
+    @test @jit(circshift(x_ra, (-3, 2))) ≈ circshift(x, (-3, 2))
+    @test @jit(circshift(x_ra, (5, 2))) ≈ circshift(x, (5, 2))
+end
