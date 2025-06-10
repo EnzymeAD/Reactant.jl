@@ -19,7 +19,7 @@ function maybe_square(cond, x)
     if cond
         x = x .^ 2
     else
-        x = x
+        x = x .^ 3
     end
     return x
 end
