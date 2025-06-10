@@ -383,3 +383,12 @@ end
         return call_with_native(LinearAlgebra.dot, x, A, y)
     end
 end
+
+# Exception Handling
+
+## Ideally we would want to overlay `throw` but that is built-in function and overlaying it
+## doesn't work
+## @reactant_overlay @noinline Base.throw(err) = Ops.throw(sprint(showerror, err))
+
+@reactant_overlay @noinline Base.error(s::AbstractString) = Ops.throw(String(s))
+@reactant_overlay @noinline Base.error(s::Vararg{Any,N}) where {N} = Ops.throw(string(s...))

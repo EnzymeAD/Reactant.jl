@@ -87,13 +87,16 @@ end
 
 using Reactant_jll: Reactant_jll
 
+function unsafe_print(x)
+    print(unsafe_string(x))
+    return nothing
+end
+
 function __init__()
     if Reactant_jll.is_available()
-        error_fn_ptr = @cfunction(error, Union{}, (String,))
-        println_fn_ptr = @cfunction(println, Nothing, (String,))
+        print_fn_ptr = @cfunction(unsafe_print, Nothing, (Cstring,))
 
-        for (ptr, enzymexla_name) in
-            [(error_fn_ptr, :enzymexla_error), (println_fn_ptr, :enzymexla_println)]
+        for (ptr, enzymexla_name) in [(print_fn_ptr, :enzymexla_print)]
             @ccall MLIR.API.mlir_c.EnzymeJaXMapSymbol(
                 enzymexla_name::Cstring, ptr::Ptr{Cvoid}
             )::Cvoid
@@ -4176,6 +4179,36 @@ end
         end
     end
 
+    return nothing
+end
+
+"""
+    throw(
+        msg::String,
+        condition::Union{TracedRNumber{Bool},Nothing}=nothing;
+        location=mlir_stacktrace("throw", @__FILE__, @__LINE__)
+    )
+
+Throw a runtime error with the given `msg` if `condition` is `true`. If `condition` is not provided, it defaults to `true`.
+"""
+@noinline function throw(
+    msg::String,
+    condition::Union{TracedRNumber{Bool},Nothing}=nothing;
+    location=mlir_stacktrace("throw", @__FILE__, @__LINE__),
+)
+    stablehlo.custom_call(
+        condition === nothing ? MLIR.IR.Value[] : MLIR.IR.Value[condition.mlir_data];
+        result_0=MLIR.IR.Type[],
+        has_side_effect=true,
+        call_target_name=if condition === nothing
+            "xla_always_throw_error"
+        else
+            "xla_throw_error"
+        end,
+        backend_config=MLIR.IR.Attribute(Dict("message" => MLIR.IR.Attribute(msg))),
+        api_version=MLIR.IR.Attribute(Int32(4)),
+        location,
+    )
     return nothing
 end
 
