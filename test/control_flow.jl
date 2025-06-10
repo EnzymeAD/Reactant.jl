@@ -691,7 +691,7 @@ end
     n_ra = Reactant.ConcreteRNumber(n)
 
     # set optimize to only do enzyme-batch to prevent crash in opt
-    for_no_track_numbers_ra = @compile optimize="enzyme-batch" for_no_track_numbers(
+    for_no_track_numbers_ra = @compile optimize = "enzyme-batch" for_no_track_numbers(
         x_ra, n_ra
     )
     for_no_track_numbers_ra(x_ra, n_ra) == for_no_track_numbers(x, n)
