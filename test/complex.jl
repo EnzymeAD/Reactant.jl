@@ -103,3 +103,18 @@ end
     x_ra = Reactant.to_rarray(x)
     @test @jit(sum(abs2, x_ra)) ≈ sum(abs2, x)
 end
+
+@testset "create complex numbers" begin
+    x = randn(ComplexF32)
+    x_ra = Reactant.to_rarray(x; track_numbers=true)
+    @test @jit(Complex(x_ra)) == x_ra
+
+    x = randn(Float32)
+    y = randn(Float64)
+    x_ra = Reactant.to_rarray(x; track_numbers=true)
+    y_ra = Reactant.to_rarray(y; track_numbers=true)
+    @test @jit(Complex(x_ra, y_ra)) == Complex(x, y)
+    @test @jit(Complex(x_ra, y)) == Complex(x, y)
+    @test @jit(Complex(x, y_ra)) == Complex(x, y)
+    @test @jit(Complex(x_ra)) == Complex(x) == @jit(Complex(x_ra, 0))
+end

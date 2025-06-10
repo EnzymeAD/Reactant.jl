@@ -119,6 +119,22 @@ function TracedUtils.promote_to(::TracedRNumber{T}, rhs) where {T}
     return TracedUtils.promote_to(TracedRNumber{T}, rhs)
 end
 
+for (aT, bT) in (
+    (TracedRNumber{<:Real}, Real),
+    (Real, TracedRNumber{<:Real}),
+    (TracedRNumber{<:Real}, TracedRNumber{<:Real}),
+)
+    @eval function Base.Complex(a::$aT, b::$bT)
+        T = promote_type(unwrapped_eltype(a), unwrapped_eltype(b))
+        a = TracedUtils.promote_to(TracedRNumber{T}, a)
+        b = TracedUtils.promote_to(TracedRNumber{T}, b)
+        return Ops.complex(a, b)
+    end
+end
+
+Base.Complex(x::TracedRNumber{<:Real}) = Ops.complex(x, zero(x))
+Base.Complex(x::TracedRNumber{<:Complex}) = x
+
 for (jlop, hloop) in (
     (:(Base.min), :minimum),
     (:(Base.max), :maximum),
