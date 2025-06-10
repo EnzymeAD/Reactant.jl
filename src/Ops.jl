@@ -17,13 +17,16 @@ using Functors: fmap
 
 using Reactant_jll: Reactant_jll
 
+function unsafe_print(x)
+    print(unsafe_string(x))
+    return nothing
+end
+
 function __init__()
     if Reactant_jll.is_available()
-        error_fn_ptr = @cfunction(error, Union{}, (String,))
-        println_fn_ptr = @cfunction(println, Nothing, (String,))
+        print_fn_ptr = @cfunction(unsafe_print, Nothing, (Cstring,))
 
-        for (ptr, enzymexla_name) in
-            [(error_fn_ptr, :enzymexla_error), (println_fn_ptr, :enzymexla_println)]
+        for (ptr, enzymexla_name) in [(print_fn_ptr, :enzymexla_print)]
             @ccall MLIR.API.mlir_c.EnzymeJaXMapSymbol(
                 enzymexla_name::Cstring, ptr::Ptr{Cvoid}
             )::Cvoid
@@ -3146,27 +3149,13 @@ end
         verify=true,
     )
 
-    if MLIR.IR.mlirIsNull(
-        MLIR.API.mlirSymbolTableLookup(
-            MLIR.IR.SymbolTable(MLIR.IR.Operation(mod)), "enzymexla_println"
-        ),
-    )
-        MLIR.IR.inject!(
-            "enzymexla_println",
-            "llvm.func external @enzymexla_println(!llvm.ptr)";
-            mod,
-            location,
-        )
-    end
-
     error_fn = string(Reactant.TracedUtils.__lookup_unique_name_in_module(mod, "error"))
     MLIR.IR.inject!(
         error_fn,
         """
-        func.func @$(error_fn)() attributes {no_inline} {
+        func.func @$(error_fn)() -> (!llvm.ptr) {
             %err_msg_ptr = llvm.mlir.addressof @$(sym_name) : !llvm.ptr
-            llvm.call @enzymexla_println(%err_msg_ptr) : (!llvm.ptr) -> ()
-            func.return
+            return %err_msg_ptr : !llvm.ptr
         }
         """;
         mod,
