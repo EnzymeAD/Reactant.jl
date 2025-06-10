@@ -146,7 +146,8 @@ x = Reactant.to_rarray([1., 2., 3.])
 ```
 
 Similarly, one can trace while loops. The following is a minimal implementation of the
-[Sinkhorn-Knopp algorithm]() which aims to solve the entropic optimal transport problem:
+[Sinkhorn-Knopp algorithm](https://en.wikipedia.org/wiki/Sinkhorn's_theorem) which aims
+to solve the entropic optimal transport problem:
 
 ```@example control_flow_tutorial
 using LinearAlgebra: Diagonal
