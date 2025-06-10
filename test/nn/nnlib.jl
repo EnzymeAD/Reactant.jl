@@ -427,7 +427,7 @@ end
 
     @test @jit(NNlib.pixel_shuffle(x_ra, 2)) ≈ NNlib.pixel_shuffle(x, 2)
 
-    y = [i + channel/10 for i in 1:3, channel in 1:6, batch in 1:1]
+    y = [i + channel / 10 for i in 1:3, channel in 1:6, batch in 1:1]
     y_ra = Reactant.to_rarray(y)
 
     @test @jit(NNlib.pixel_shuffle(y_ra, 2)) ≈ NNlib.pixel_shuffle(y, 2)
