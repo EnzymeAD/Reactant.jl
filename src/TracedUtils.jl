@@ -26,6 +26,13 @@ function ReactantCore.materialize_traced_array(x::AbstractRange)
     return Reactant.aos_to_soa(collect(x))
 end
 
+function ReactantCore.materialize_traced_array(r::LinRange)
+    T = Reactant.unwrapped_eltype(r)
+    idxs = Ops.iota(T, [length(r)]; iota_dimension=1)
+    t = idxs ./ r.lendiv
+    return T.((1 .- t) .* r.start .+ t .* r.stop)
+end
+
 function ReactantCore.materialize_traced_array(x::Base.OneTo)
     return Ops.iota(Reactant.unwrapped_eltype(x), [length(x)]; iota_dimension=1)
 end
