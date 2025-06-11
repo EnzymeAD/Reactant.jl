@@ -761,7 +761,6 @@ cc_library(
         ],
 
     ) + [
-        "@enzyme_ad//src/enzyme_ad/jax:RegistryUtils",
         "@enzyme_ad//src/enzyme_ad/jax:gpu.cc",
         "@enzyme_ad//src/enzyme_ad/jax:cpu.cc",
         # "@com_google_protobuf//:src/google/protobuf/io/coded_stream.cc",
@@ -903,6 +902,7 @@ cc_library(
 "-Wl,-exported_symbol,_addSdyPropagationPipeline",
     ]}),
     deps = [
+        "@enzyme_ad//src/enzyme_ad/jax:RegistryUtils",
         "@enzyme//:EnzymeMLIR",
         "@llvm-project//mlir:AffineDialect",
         "@llvm-project//mlir:AllPassesAndDialects",
