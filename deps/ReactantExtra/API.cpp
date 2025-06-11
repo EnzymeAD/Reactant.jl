@@ -1134,8 +1134,7 @@ extern "C" void RegisterDialects(MlirContext cctx) {
 #include "xla/service/spmd/shardy/sdy_round_trip/pipelines.h"
 
 extern "C" void InitializePasses(MlirDialectRegistry creg) {
-  mlir::DialectRegistry &registry = *unwrap(creg);
-  mlir::enzyme::initializePasses(registry);
+  mlir::enzyme::initializePasses();
 }
 
 extern "C" void InitializeRegistry(MlirDialectRegistry creg) {
