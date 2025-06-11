@@ -676,8 +676,17 @@ function while_convergence(x, y)
     return diff
 end
 
+@testset "while: convergence" begin
+    x = [1.0, 10.0, 20.0]
+    y = [0.0, -2.0, -3.0]
+    x_ra = Reactant.to_rarray(x)
+    y_ra = Reactant.to_rarray(y)
+
+    @test @jit(while_convergence(x_ra, y_ra)) ≈ while_convergence(x, y)
+end
+
 function for_no_track_numbers(x, n)
-    @trace track_numbers = false for i in n:16
+    @trace mincut = false checkpointing = true track_numbers = false for i in n:16
         x = x .+ 1
     end
     return x
@@ -694,16 +703,11 @@ end
     for_no_track_numbers_ra = @compile optimize = "enzyme-batch" for_no_track_numbers(
         x_ra, n_ra
     )
-    for_no_track_numbers_ra(x_ra, n_ra) == for_no_track_numbers(x, n)
-end
+    @test for_no_track_numbers_ra(x_ra, n_ra) == for_no_track_numbers(x, n)
 
-@testset "while: convergence" begin
-    x = [1.0, 10.0, 20.0]
-    y = [0.0, -2.0, -3.0]
-    x_ra = Reactant.to_rarray(x)
-    y_ra = Reactant.to_rarray(y)
-
-    @test @jit(while_convergence(x_ra, y_ra)) ≈ while_convergence(x, y)
+    ir = sprint(show, @code_hlo optimize = "enzyme-batch" for_no_track_numbers(x_ra, n_ra))
+    @test contains(ir, "enzymexla.disable_min_cut")
+    @test contains(ir, "enzymexla.enable_checkpointing")
 end
 
 _call1(a, b) = a

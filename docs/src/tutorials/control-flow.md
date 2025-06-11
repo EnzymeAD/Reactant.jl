@@ -126,7 +126,7 @@ In addition to conditional evaluations, [`@trace`](@ref) also supports capturing
 loops. This is possible in the form of both for and while loops.
 This enables one to write algorithm that would not be possible otherwise such as
 performing computations until convergence or running a computation for an certain
-number of iterations which is only known during runtime. 
+number of iterations which is only known during runtime.
 
 Here is an example of a function which computes the cumsum in non-optimized manner
 using a for loop:

@@ -43,7 +43,7 @@ Returns true if this function is executed in a Reactant compilation context, oth
 
 # Code generation
 """
-    @trace <expr>
+    @trace [key = val,...] <expr>
 
 Converts certain expressions like control flow into a Reactant friendly form. Importantly,
 if no traced value is found inside the expression, then there is no overhead.
@@ -53,7 +53,8 @@ if no traced value is found inside the expression, then there is no overhead.
 - `if` conditions (with `elseif` and other niceties) (`@trace if ...`)
 - `if` statements with a preceeding assignment (`@trace a = if ...`) (note the positioning
   of the macro needs to be before the assignment and not before the `if`)
-- `for` statements with a single induction variable iterating over a syntactic `StepRange` of integers.
+- `for` statements with a single induction variable iterating over integers with known `step`
+- `while` statements
 
 ## Special Considerations
 
@@ -129,20 +130,42 @@ function fn(x)
     return y, nothing
 end
 ```
+
+### Configuration
+
+The behavior of loops can be configured with the following configuration options:
+
+ - `track_numbers::Union{Bool,Datatype}` - whether Julia numbers should be automatically promoted to traced numbers upon entering the loop.
+ - `checkpointing::Bool` - whether or not to enable checkpointing when performing reverse mode differentiation (default: `false`).
+ - `mincut::Bool` - whether or not to enable the mincut algorithm when performing reverse mode differentiation (default: `false`).
 """
 macro trace(args...)
     track_numbers = true
-    expr = first(args)
-    if length(args) > 1 && Meta.isexpr(args[1], :(=))
-        tn_expr = args[1]
-        tn_expr.args[1] == :track_numbers ||
-            error("@trace supports setting track_numbers, but got $(tn_expr)")
+    checkpointing = false
+    mincut = false
 
-        track_numbers = tn_expr.args[2]
-        expr = only(args[2:end])
-    else
-        expr = only(args)
+    expr = first(args)
+    while length(args) > 1
+        if Meta.isexpr(args[1], :(=))
+            tn_expr = args[1]
+            key, val = tn_expr.args
+            key ∈ (:track_numbers, :checkpointing, :mincut) ||
+                error("@trace supports setting track_numbers, checkpointing or mincut, but got $(tn_expr)")
+
+            if key === :track_numbers
+                track_numbers = val
+            elseif key === :checkpointing
+                checkpointing = val
+            elseif key === :mincut
+                mincut = val
+            end
+            args = args[2:end]
+        else
+            break
+        end
     end
+    expr = only(args)
+
     track_numbers = track_numbers ? Number : Union{}
     expr = macroexpand(__module__, expr)
 
@@ -159,14 +182,14 @@ macro trace(args...)
         return esc(trace_call(__module__, call))
     end
     Meta.isexpr(expr, :if) && return esc(trace_if(expr; track_numbers))
-    Meta.isexpr(expr, :for) && return (esc(trace_for(expr; track_numbers)))
-    Meta.isexpr(expr, :while) && return (esc(trace_while(expr; track_numbers)))
+    Meta.isexpr(expr, :for) && return (esc(trace_for(expr; track_numbers, checkpointing, mincut)))
+    Meta.isexpr(expr, :while) && return (esc(trace_while(expr; track_numbers, checkpointing, mincut)))
     return error(
         "Only `if-elseif-else` blocks, `for` and `while` loops are currently supported by `@trace`",
     )
 end
 
-function trace_while(expr; track_numbers, first_arg=nothing)
+function trace_while(expr; track_numbers, mincut, checkpointing, first_arg=nothing)
     Meta.isexpr(expr, :while, 2) || error("expected while expr")
     cond, body = expr.args
 
@@ -233,13 +256,15 @@ function trace_while(expr; track_numbers, first_arg=nothing)
                 $(args_sym);
                 track_numbers=($(track_numbers)),
                 verify_arg_names=($(verify_arg_names_sym)),
+                mincut=($(mincut)),
+                checkpointing=($(checkpointing)),
             )
         end
     end
 
     return quote
         if $(within_compile)() &&
-            $(any)($(is_traced), $(Expr(:tuple, cond_val.(all_syms.args)...)))
+           $(any)($(is_traced), $(Expr(:tuple, cond_val.(all_syms.args)...)))
             $(reactant_code_block)
         else
             $(expr)
@@ -247,7 +272,7 @@ function trace_while(expr; track_numbers, first_arg=nothing)
     end
 end
 
-function trace_for(expr; track_numbers)
+function trace_for(expr; track_numbers, checkpointing, mincut)
     Meta.isexpr(expr, :for, 2) || error("expected for expr")
     assign, body = expr.args
 
@@ -325,6 +350,7 @@ function trace_for(expr; track_numbers)
             );
             track_numbers,
             first_arg=counter,
+            checkpointing, mincut,
         ))
     end
 end
@@ -374,7 +400,7 @@ function trace_if(expr; store_last_line=nothing, depth=0, track_numbers)
             @assert expr.args[2].head == :block "currently we only support blocks"
             expr.args[2] = Expr(:block, expr.args[2].args...)
             true_last_line = expr.args[2].args[end]
-            remaining_lines = expr.args[2].args[1:(end - 1)]
+            remaining_lines = expr.args[2].args[1:(end-1)]
         else
             true_last_line = expr.args[2]
             remaining_lines = []
@@ -417,7 +443,7 @@ function trace_if(expr; store_last_line=nothing, depth=0, track_numbers)
         if else_block isa Expr
             @assert else_block.head == :block "currently we only support blocks"
             false_last_line = else_block.args[end]
-            remaining_lines = else_block.args[1:(end - 1)]
+            remaining_lines = else_block.args[1:(end-1)]
         else
             false_last_line = else_block
             remaining_lines = []
@@ -571,7 +597,7 @@ function cleanup_expr_to_avoid_boxing(expr, prepend::Symbol, all_vars)
             if startswith(string(x.args[1]), string(prepend))
                 return Expr(
                     :kw,
-                    Symbol(string(x.args[1])[(length(string(prepend)) + 1):end]),
+                    Symbol(string(x.args[1])[(length(string(prepend))+1):end]),
                     x.args[2],
                 )
             end
