@@ -39,6 +39,7 @@
 #include "src/enzyme_ad/jax/Dialect/Dialect.h"
 #include "src/enzyme_ad/jax/Implementations/XLADerivatives.h"
 #include "src/enzyme_ad/jax/Passes/Passes.h"
+#include "src/enzyme_ad/jax/RegistryUtils.h"
 #include "llvm/Support/TargetSelect.h"
 
 #include "mlir/Dialect/LLVMIR/Transforms/InlinerInterfaceImpl.h"
@@ -152,10 +153,6 @@
 
 #include "jaxlib/mosaic/dialect/tpu/tpu_dialect.h"
 
-// Triton did a dumb thing and their import is incompatible
-// We don't use so disabling until upstream fix
-// #include "triton/Dialect/Triton/IR/Dialect.h"
-
 #include "llvm/Support/ExtensibleRTTI.h"
 #include <llvm/Support/FileSystem.h>
 #include <llvm/Support/raw_ostream.h>
@@ -168,10 +165,6 @@ namespace enzyme {
 void registerRemoveTransformPass();
 void registerGenerateApplyPatternsPass();
 } // namespace enzyme
-
-namespace triton {
-class TritonDialect;
-}
 
 } // namespace mlir
 
@@ -1124,25 +1117,15 @@ extern "C" int PjRtLoadedExecutableNumPartitions(PjRtLoadedExecutable *exec) {
   return exec->num_partitions();
 }
 
-void prepareRegistry(mlir::DialectRegistry &registry);
-
 extern "C" void RegisterDialects(MlirContext cctx) {
   mlir::MLIRContext &context = *unwrap(cctx);
   DialectRegistry registry;
-  prepareRegistry(registry);
+  mlir::enzyme::prepareRegistry(registry);
+  mlir::enzyme::registerDialects(registry);
+  mlir::enzyme::registerInterfaces(registry);
+
   context.appendDialectRegistry(registry);
-  context.loadDialect<mlir::arith::ArithDialect>();
-  context.loadDialect<mlir::enzyme::EnzymeDialect>();
-  context.loadDialect<mlir::enzymexla::EnzymeXLADialect>();
-  // context.loadDialect<mlir::triton::TritonDialect>();
-  context.loadDialect<mlir::tpu::TPUDialect>();
-  context.loadDialect<mlir::tensor::TensorDialect>();
-  context.loadDialect<mlir::func::FuncDialect>();
-  context.loadDialect<mlir::mhlo::MhloDialect>();
-  context.loadDialect<mlir::stablehlo::StablehloDialect>();
-  context.loadDialect<mlir::chlo::ChloDialect>();
-  context.loadDialect<mlir::sdy::SdyDialect>();
-  context.loadDialect<mlir::LLVM::LLVMDialect>();
+  mlir::enzyme::loadAllRegisteredDialects(context);
 }
 
 #include "mlir/Dialect/LLVMIR/Transforms/InlinerInterfaceImpl.h"
@@ -1151,80 +1134,15 @@ extern "C" void RegisterDialects(MlirContext cctx) {
 #include "xla/service/spmd/shardy/sdy_round_trip/pipelines.h"
 
 extern "C" void InitializePasses(MlirDialectRegistry creg) {
-  mlir::registerenzymePasses();
-  enzyme::registerenzymexlaPasses();
-
-  // Register the standard passes we want.
-  mlir::registerTransformsPasses();
-  mlir::registerLowerAffinePass();
-  mlir::registerSCCPPass();
-  mlir::registerInlinerPass();
-  mlir::registerSymbolDCEPass();
-  mlir::registerLoopInvariantCodeMotionPass();
-  mlir::registerConvertSCFToOpenMPPass();
-  mlir::affine::registerAffinePasses();
-  mlir::registerReconcileUnrealizedCastsPass();
-
-  /*
-    registry.addExtension(+[](MLIRContext *ctx, LLVM::LLVMDialect *dialect) {
-      LLVM::LLVMFunctionType::attachInterface<MemRefInsider>(*ctx);
-      LLVM::LLVMArrayType::attachInterface<MemRefInsider>(*ctx);
-      LLVM::LLVMPointerType::attachInterface<MemRefInsider>(*ctx);
-      LLVM::LLVMStructType::attachInterface<MemRefInsider>(*ctx);
-      MemRefType::attachInterface<PtrElementModel<MemRefType>>(*ctx);
-      LLVM::LLVMStructType::attachInterface<
-          PtrElementModel<LLVM::LLVMStructType>>(*ctx);
-      LLVM::LLVMPointerType::attachInterface<
-          PtrElementModel<LLVM::LLVMPointerType>>(*ctx);
-      LLVM::LLVMArrayType::attachInterface<PtrElementModel<LLVM::LLVMArrayType>>(
-          *ctx);
-    });
-    */
-
-  // Transform dialect and extensions.
-  mlir::transform::registerInterpreterPass();
-  mlir::enzyme::registerGenerateApplyPatternsPass();
-  mlir::enzyme::registerRemoveTransformPass();
-
-  // xla + shardy specific passes
-  xla::sdy::registerSdyRoundTripExportPipeline();
-  xla::sdy::registerSdyRoundTripImportPipeline();
-  mlir::sdy::registerAllSdyPassesAndPipelines();
-  xla::sdy::registerStablehloExportPipeline();
-  xla::sdy::registerStablehloImportPipeline();
-  xla::sdy::registerStablehloImportShardingsPass();
-
-  // SHLO passes
-  stablehlo::registerStablehloAggressiveSimplificationPass();
-  stablehlo::registerStablehloAggressiveFolderPass();
-  stablehlo::registerStablehloTargetIndependentOptimizationPass();
-  stablehlo::registerChloLegalizeToStablehloPass();
-  stablehlo::registerShapeLegalizeToStablehloPass();
-  stablehlo::registerStablehloCanonicalizeDynamismPass();
-  stablehlo::registerStablehloCompatibilityExpanderPass();
-  stablehlo::registerStablehloComplexMathExpanderPass();
-  stablehlo::registerStablehloConvertToSignlessPass();
-  stablehlo::registerStablehloLegalizeCompositeToCallPass();
-  stablehlo::registerStablehloLegalizeDeprecatedOpsPass();
-  stablehlo::registerStablehloLegalizeQDQToQuantizedOpPass();
-  stablehlo::registerStablehloLegalizeQuantizedOpToQDQPass();
-  stablehlo::registerStablehloLegalizeQuantToMathPass();
-  stablehlo::registerStablehloLegalizeToVhloPass();
-  stablehlo::registerStablehloRefineArgumentsPass();
-  stablehlo::registerStablehloRefineShapesPass();
-  stablehlo::registerVhloLegalizeToStablehloPass();
-  stablehlo::registerVhloToVersionPass();
-  stablehlo::registerStablehloWrapInCompositePass();
-  stablehlo::registerStablehloLegalizeToLinalgPass();
-  mlir::tosa::registerStablehloLegalizeToTosaPass();
-  mlir::tosa::registerStablehloPrepareForTosaPass();
-  mlir::tosa::registerStablehloQuantLegalizeToTosaRescalePass();
-  mlir::tosa::registerTosaRescaleLegalizeToStablehloPass();
+  mlir::DialectRegistry &registry = *unwrap(creg);
+  mlir::enzyme::initializePasses(registry);
 }
 
 extern "C" void InitializeRegistry(MlirDialectRegistry creg) {
   mlir::DialectRegistry &registry = *unwrap(creg);
-  prepareRegistry(registry);
+  mlir::enzyme::prepareRegistry(registry);
+  mlir::enzyme::registerDialects(registry);
+  mlir::enzyme::registerInterfaces(registry);
 
   mlir::registerLLVMDialectImport(registry);
   mlir::registerNVVMDialectImport(registry);

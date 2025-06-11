@@ -761,7 +761,7 @@ cc_library(
         ],
 
     ) + [
-        "@enzyme_ad//src/enzyme_ad/jax:RegistryUtils.cpp",
+        "@enzyme_ad//src/enzyme_ad/jax:RegistryUtils",
         "@enzyme_ad//src/enzyme_ad/jax:gpu.cc",
         "@enzyme_ad//src/enzyme_ad/jax:cpu.cc",
         # "@com_google_protobuf//:src/google/protobuf/io/coded_stream.cc",
@@ -779,7 +779,9 @@ cc_library(
         ],
     hdrs = glob([
         "*.h",
-    ]),
+    ]) + [
+        "@enzyme_ad//src/enzyme_ad/jax:RegistryUtils.h",
+    ],
     copts = [
         "-Werror=unused-variable",
         "-Werror=unused-but-set-variable",
