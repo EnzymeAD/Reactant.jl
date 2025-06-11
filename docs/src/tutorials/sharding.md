@@ -82,7 +82,12 @@ compiled_big_sin_sharded_both = @compile big_sin(x_sharded_both)
 compiled_big_sin_sharded_both(x_sharded_both)
 ```
 
-Sharding in reactant requires you to specify how the data is sharded across devices on a mesh. We start by specifying the mesh [`Sharding.Mesh`](@ref) which is a collection of the devices reshaped into an N-D grid. Additionally, we can specify names 
+Sharding in reactant requires you to specify how the data is sharded across devices on a mesh. We start by specifying the mesh [`Sharding.Mesh`](@ref) which is a collection of the devices reshaped into an N-D grid. Additionally, we can specify names for each axis of the mesh, that are then referenced when specifying how the data is sharded.
+
+1. `Sharding.Mesh(reshape(Reactant.devices()[1:4], 2, 2), (:x, :y))`: Creates a 2D grid of 4 devices arranged in a 2x2 grid. The first axis is named `:x` and the second axis is named `:y`.
+2. `Sharding.Mesh(reshape(Reactant.devices()[1:4], 4, 1), (:x, :y))`: Creates a 2D grid of 4 devices arranged in a 4x1 grid. The first axis is named `:x` and the second axis is named `:y`.
+
+Given the mesh, we will specify how the data is sharded across the devices. 
 
 <!-- TODO describe how arrays are the "global data arrays, even though data is itself only stored on relevant device and computation is performed only devices with the required data (effectively showing under the hood how execution occurs) -->
 
@@ -103,6 +108,11 @@ TODO we should animate the above -- and even more ideally have one we generate o
 To keep things simple, let's implement a 1-dimensional heat equation here. We start off with an array for the temperature at each point, and will compute the next version of the temperatures according to the equation `x[i, t] = 0.x * [i, t-1] + 0.25 * x[i-1, t-1] + 0.25 * x[i+1, t-1]`.
 
 Let's consider how this can be implemented with explicit MPI communication. Each node will contain a subset of the total data. For example, if we simulate with 100 points, and have 4 devices, each device will contain 25 data points. We're going to allocate some extra room at each end of the buffer to store the ``halo'', or the data at the boundary. Each time step that we take will first copy in the data from its neighbors into the halo via an explicit MPI send and recv call. We'll then compute the updated data for our slice of the data.
+
+With sharding, things are a bit more simple. We can write the code as if we only had one device. No explicit send or recv's are necessary
+as they will be added automatically by Reactant when it deduces they are needed. In fact, Reactant will attempt to optimize the placement of the communicatinos to minimize total runtime. While Reactant tries to do a good job (which could be faster than an initial implementation -- especially for complex codebases), an expert may be able to find a better placement of the communication.
+
+The only difference for the sharded code again occurs during allocation. Here we explicitly specify that we want to subdivide the initial grid of 100 amongst all devices. Analagously if we had 4 devices to work with, each device would have 25 elements in its local storage. From the user's standpoint, however, all arrays give access to the entire dataset.
 
 ::: code-group
 
@@ -147,11 +157,6 @@ end
 simulate(data, 100)
 ```
 
-With sharding, things are a bit more simple. We can write the code as if we only had one device. No explicit send or recv's are necessary
-as they will be added automatically by Reactant when it deduces they are needed. In fact, Reactant will attempt to optimize the placement of the communicatinos to minimize total runtime. While Reactant tries to do a good job (which could be faster than an initial implementation -- especially for complex codebases), an expert may be able to find a better placement of the communication.
-
-The only difference for the sharded code again occurs during allocation. Here we explicitly specify that we want to subdivide the initial grid of 100 amongst all devices. Analagously if we had 4 devices to work with, each device would have 25 elements in its local storage. From the user's standpoint, however, all arrays give access to the entire dataset.
-
 ```julia [Sharded Parallelism]
 function one_dim_heat_equation_time_step_sharded!(data)
     # No send recv's required
@@ -185,18 +190,33 @@ end
 @jit simulate(data, 100)
 ```
 
+:::
 
 ## Devices
 
-You can query the available devices that Reactant can access as follows:
+You can query the available devices that Reactant can access as follows using
+[`Reactant.devices`](@ref).
+
+```@example sharding_tutorial
+Reactant.devices()
 ```
-TODO
+
+Not all devices are accessible from each process for [multi-node execution](@ref multihost).
+To query the devices accessible from the current process, use
+[`Reactant.addressable_devices`](@ref).
+
+```@example sharding_tutorial
+Reactant.addressable_devices()
 ```
 
 You can inspect the type of the device, as well as its properties.
 
-One nice feature about how Reactant's handling of multiple devices is that you don't need to s handles sharding is that 
-:::
+MPI to send the data.  between computers When using GPUs on different devices, one needs to copy the data through the network via NCCL instead of the `cuda.
+
+All devices from all nodes are available for use by Reactant. Given the topology of the devices, Reactant will automatically determine the right type of communication primitive to use to send data between the relevant nodes. For example, between GPUs on the same host Reactant may use the faster `cudaMemcpy` whereas for GPUs on different nodes Reactant will use NCCL.
+
+The fact that you doesn't need to specify how the communication is occuring enables code written with Reactant to be run on a different topology (e.g. moving fro
+One nice feature about how Reactant's handling of multiple devices is that you don't need to specify how the data is transfered. For example, when using multiple GPUs on the same host it might be efficient to copy data using a `cudaMemcpy` to transfer between devices directly. When using CPUs on multiple different nodes, one can use
 
 ## Generating Distributed Data by Concatenating Local-Worker Data
 
