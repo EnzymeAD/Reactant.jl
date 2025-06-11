@@ -1037,6 +1037,7 @@ cc_library(
         "@stablehlo//:tosa_passes",
         "@stablehlo//:stablehlo_passes",
         "@stablehlo//:stablehlo_passes_optimization",
+        "@stablehlo//stablehlo/tests:check_ops",
     ] + select({
         "@xla//xla/tsl:is_cuda_enabled_and_oss":[
             "@xla//xla/stream_executor:cuda_platform",

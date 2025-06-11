@@ -43,8 +43,6 @@
 #include "llvm/Support/TargetSelect.h"
 
 #include "mlir/Dialect/LLVMIR/Transforms/InlinerInterfaceImpl.h"
-#include "stablehlo/conversions/linalg/transforms/Passes.h"
-#include "stablehlo/conversions/tosa/transforms/Passes.h"
 #include "stablehlo/dialect/ChloOps.h"
 #include "stablehlo/dialect/StablehloOps.h"
 #include "stablehlo/transforms/Passes.h"
