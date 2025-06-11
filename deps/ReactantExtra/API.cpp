@@ -42,8 +42,12 @@
 #include "llvm/Support/TargetSelect.h"
 
 #include "mlir/Dialect/LLVMIR/Transforms/InlinerInterfaceImpl.h"
+#include "stablehlo/conversions/linalg/transforms/Passes.h"
+#include "stablehlo/conversions/tosa/transforms/Passes.h"
 #include "stablehlo/dialect/ChloOps.h"
 #include "stablehlo/dialect/StablehloOps.h"
+#include "stablehlo/transforms/Passes.h"
+#include "stablehlo/transforms/optimization/Passes.h"
 
 #include "absl/log/globals.h"
 #include "absl/log/initialize.h"
@@ -1189,6 +1193,33 @@ extern "C" void InitializePasses(MlirDialectRegistry creg) {
   xla::sdy::registerStablehloExportPipeline();
   xla::sdy::registerStablehloImportPipeline();
   xla::sdy::registerStablehloImportShardingsPass();
+
+  // SHLO passes
+  stablehlo::registerStablehloAggressiveSimplificationPass();
+  stablehlo::registerStablehloAggressiveFolderPass();
+  stablehlo::registerStablehloTargetIndependentOptimizationPass();
+  stablehlo::registerChloLegalizeToStablehloPass();
+  stablehlo::registerShapeLegalizeToStablehloPass();
+  stablehlo::registerStablehloCanonicalizeDynamismPass();
+  stablehlo::registerStablehloCompatibilityExpanderPass();
+  stablehlo::registerStablehloComplexMathExpanderPass();
+  stablehlo::registerStablehloConvertToSignlessPass();
+  stablehlo::registerStablehloLegalizeCompositeToCallPass();
+  stablehlo::registerStablehloLegalizeDeprecatedOpsPass();
+  stablehlo::registerStablehloLegalizeQDQToQuantizedOpPass();
+  stablehlo::registerStablehloLegalizeQuantizedOpToQDQPass();
+  stablehlo::registerStablehloLegalizeQuantToMathPass();
+  stablehlo::registerStablehloLegalizeToVhloPass();
+  stablehlo::registerStablehloRefineArgumentsPass();
+  stablehlo::registerStablehloRefineShapesPass();
+  stablehlo::registerVhloLegalizeToStablehloPass();
+  stablehlo::registerVhloToVersionPass();
+  stablehlo::registerStablehloWrapInCompositePass();
+  stablehlo::registerStablehloLegalizeToLinalgPass();
+  mlir::tosa::registerStablehloLegalizeToTosaPass();
+  mlir::tosa::registerStablehloPrepareForTosaPass();
+  mlir::tosa::registerStablehloQuantLegalizeToTosaRescalePass();
+  mlir::tosa::registerTosaRescaleLegalizeToStablehloPass();
 }
 
 extern "C" void InitializeRegistry(MlirDialectRegistry creg) {
@@ -2326,7 +2357,8 @@ extern "C" mlir::sdy::TensorShardingAttr hloShardingToTensorShardingAttr(
 
   return mlir::sdy::TensorShardingAttr::get(
       context, meshName, tensorShardingAttr.getDimShardings(),
-      tensorShardingAttr.getReplicatedAxes(), tensorShardingAttr.getUnreducedAxes());
+      tensorShardingAttr.getReplicatedAxes(),
+      tensorShardingAttr.getUnreducedAxes());
 }
 
 #pragma endregion
