@@ -419,6 +419,38 @@ end
     @testset "Nearest" begin
         @test @jit(NNlib.upsample_nearest(x_ra, (2, 2))) ≈ NNlib.upsample_nearest(x, (2, 2))
     end
+
+    @testset "Linear" begin
+        x = randn(Float32, 4, 3, 2)
+        x_ra = Reactant.to_rarray(x)
+
+        @test @jit(NNlib.upsample_linear(x_ra, (2,))) ≈ NNlib.upsample_linear(x, (2,))
+
+        @test @jit(NNlib.upsample_linear(x_ra, (2,); align_corners=false)) ≈
+            NNlib.upsample_linear(x, (2,); align_corners=false)
+    end
+
+    @testset "Bi-Linear" begin
+        x = randn(Float32, 4, 4, 3, 2)
+        x_ra = Reactant.to_rarray(x)
+
+        @test @jit(NNlib.upsample_bilinear(x_ra, (2, 2))) ≈
+            NNlib.upsample_bilinear(x, (2, 2))
+
+        @test @jit(NNlib.upsample_bilinear(x_ra, (2, 2); align_corners=false)) ≈
+            NNlib.upsample_bilinear(x, (2, 2); align_corners=false)
+    end
+
+    @testset "Tri-Linear" begin
+        x = randn(Float32, 4, 4, 4, 3, 2)
+        x_ra = Reactant.to_rarray(x)
+
+        @test @jit(NNlib.upsample_trilinear(x_ra, (2, 2, 2))) ≈
+            NNlib.upsample_trilinear(x, (2, 2, 2))
+
+        @test @jit(NNlib.upsample_trilinear(x_ra, (2, 2, 2); align_corners=false)) ≈
+            NNlib.upsample_trilinear(x, (2, 2, 2); align_corners=false)
+    end
 end
 
 @testset "Pixel shuffle" begin
