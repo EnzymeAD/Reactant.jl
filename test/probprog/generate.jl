@@ -20,10 +20,10 @@ end
         shape = (10000,)
         seed1 = Reactant.to_rarray(UInt64[1, 4])
         seed2 = Reactant.to_rarray(UInt64[1, 4])
-        μ1 = Reactant.ConcreteRArray(0.0)
-        μ2 = Reactant.ConcreteRArray(1000.0)
-        σ1 = Reactant.ConcreteRArray(1.0)
-        σ2 = Reactant.ConcreteRArray(1.0)
+        μ1 = Reactant.ConcreteRNumber(0.0)
+        μ2 = Reactant.ConcreteRNumber(1000.0)
+        σ1 = Reactant.ConcreteRNumber(1.0)
+        σ2 = Reactant.ConcreteRNumber(1.0)
 
         model_compiled = @compile optimize = :probprog generate_model(seed1, μ1, σ1, shape)
 
@@ -41,8 +41,8 @@ end
     @testset "normal_hlo" begin
         shape = (10000,)
         seed = Reactant.to_rarray(UInt64[1, 4])
-        μ = Reactant.ConcreteRArray(0.0)
-        σ = Reactant.ConcreteRArray(1.0)
+        μ = Reactant.ConcreteRNumber(0.0)
+        σ = Reactant.ConcreteRNumber(1.0)
 
         before = @code_hlo optimize = :no_enzyme generate_model(seed, μ, σ, shape)
         @test contains(repr(before), "enzyme.generate")
@@ -56,8 +56,8 @@ end
     @testset "normal_generate" begin
         shape = (10000,)
         seed = Reactant.to_rarray(UInt64[1, 4])
-        μ = Reactant.ConcreteRArray(0.0)
-        σ = Reactant.ConcreteRArray(1.0)
+        μ = Reactant.ConcreteRNumber(0.0)
+        σ = Reactant.ConcreteRNumber(1.0)
         X = Array(@jit optimize = :probprog generate_model(seed, μ, σ, shape))
         @test mean(X) ≈ 0.0 atol = 0.05 rtol = 0.05
     end
