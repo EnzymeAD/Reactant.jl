@@ -763,14 +763,6 @@ cc_library(
     ) + [
         "@enzyme_ad//src/enzyme_ad/jax:gpu.cc",
         "@enzyme_ad//src/enzyme_ad/jax:cpu.cc",
-        # "@com_google_protobuf//:src/google/protobuf/io/coded_stream.cc",
-        # "@xla//xla:xla.pb.cc",
-        "@xla//xla:xla_data.pb.cc",
-        # "@xla//xla/stream_executor:device_description.pb.cc",
-        "@xla//xla/service:hlo.pb.cc",
-        #  # "@tsl//tsl/protobuf:dnn.pb.cc",
-        #"@tsl//tsl/protobuf:histogram.pb.cc",
-        #"@tsl//tsl/protobuf:bfc_memory_map_proto",bfc_memory_map.pb.cc",
         "@xla//xla/service/gpu:backend_configs.pb.cc",
         "@xla//xla:autotuning.pb.cc",
         "@xla//xla:autotune_results.pb.cc",
@@ -1038,6 +1030,16 @@ cc_library(
         "@stablehlo//:stablehlo_passes",
         "@stablehlo//:stablehlo_passes_optimization",
         "@stablehlo//stablehlo/tests:check_ops",
+
+        "@tsl//tsl/platform:env",
+        "@xla//xla/tsl/protobuf:dnn_proto_cc_impl",
+        "@xla//xla/tsl/protobuf:histogram_proto_cc",
+        "@xla//xla/tsl/protobuf:histogram_proto_cc_impl",
+        "@xla//xla:xla_data_proto_cc_impl",
+        "@xla//xla/tsl/platform:env",
+        "@xla//xla/tsl/platform:errors",
+        "@xla//xla/service:hlo_proto_cc_impl",
+        "@com_google_absl//absl/status:statusor",
     ] + select({
         "@xla//xla/tsl:is_cuda_enabled_and_oss":[
             "@xla//xla/stream_executor:cuda_platform",
