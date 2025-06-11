@@ -82,11 +82,9 @@ compiled_big_sin_sharded_both = @compile big_sin(x_sharded_both)
 compiled_big_sin_sharded_both(x_sharded_both)
 ```
 
-Sharding in reactant requires you to specify how the data is s
+Sharding in reactant requires you to specify how the data is sharded across devices on a mesh. We start by specifying the mesh [`Sharding.Mesh`](@ref) which is a collection of the devices reshaped into an N-D grid. Additionally, we can specify names 
 
 <!-- TODO describe how arrays are the "global data arrays, even though data is itself only stored on relevant device and computation is performed only devices with the required data (effectively showing under the hood how execution occurs) -->
-
-<!-- TODO simple case that demonstrates send/recv within (e.g. a simple neighbor add) -->
 
 <!-- TODO make a simple conway's game of life, or heat equation using sharding simulation example to show how a ``typical MPI'' simulation can be written using sharding. -->
 
@@ -187,11 +185,22 @@ end
 @jit simulate(data, 100)
 ```
 
+
+## Devices
+
+You can query the available devices that Reactant can access as follows:
+```
+TODO
+```
+
+You can inspect the type of the device, as well as its properties.
+
+One nice feature about how Reactant's handling of multiple devices is that you don't need to s handles sharding is that 
 :::
 
-<!-- TODO describe generation of distributed array by concatenating local-worker data -->
+## Generating Distributed Data by Concatenating Local-Worker Data
 
-<!-- TODO more complex tutorial describing replicated -->
+## Handling Replicated Tensors
 
 ## Sharding in Neural Networks
 
