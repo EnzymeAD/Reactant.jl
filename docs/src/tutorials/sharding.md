@@ -15,6 +15,8 @@
     )
     ```
 
+## Basics
+
 Sharding is one mechanism supported within Reactant that tries to make it easy to program for multiple devices (including [multiple nodes](@ref distributed)).
 
 ```@example sharding_tutorial
@@ -34,8 +36,8 @@ function big_sin(data)
     return nothing
 end
 
-N = 100
-x = Reactant.to_array(collect(1:N))
+N = 1600
+x = Reactant.to_array(reshape(collect(1:N), 40, 40))
 
 compiled_big_sin = @compile big_sin(x)
 
@@ -46,14 +48,63 @@ This successfully allocates the array `x` on one device, and executes it on the 
 
 Unlike more explicit communication libraries like MPI, the sharding model used by Reactant aims to let you execute a program on multiple devices without significant modifications to the single-device program. In particular, you do not need to write explicit communication calls (e.g. `MPI.Send` or `MPI.Recv`). Instead you write your program as if it executes on a very large single-node and Reactant will automatically determine how to subdivide the data, computation, and required communication.
 
-# TODO describe how arrays are the "global data arrays, even though data is itself only stored on relevant device and computation is performed only devices with the required data (effectively showing under the hood how execution occurs)
+When using sharding, the one thing you need to change about your code is how arrays are allocated. In particular, you need to specify how the array is partitioned amongst available devices. For example, suppose you are on a machine with 4 GPUs. In the example above, we computed `sin` for all elements of a 40x40 grid. One partitioning we could select is to have it partitioned along the first axis, such that each GPU has a slice of 10x40 elements. We could accomplish this as follows. No change is required to the original function. However, the compiled function is specific to the sharding so we need to compile a new version for our sharded array.
 
-# TODO simple case that demonstrates send/recv within (e.g. a simple neighbor add)
+```@example sharding_tutorial
+N = 1600
+x_sharded_first = Reactant.to_array(
+    reshape(collect(1:N), 40, 40),
+    sharding=Sharding.NamedSharding(
+        Sharding.Mesh(reshape(Reactant.devices()[1:4], 4, 1), (:x, :y)),
+        (:x, nothing)
+    )
+)
 
+compiled_big_sin_sharded_first = @compile big_sin(x_sharded_first)
 
-# TODO make a simple conway's game of life, or heat equation using sharding simulation example to show how a ``typical MPI'' simulation can be written using sharding.
+compiled_big_sin_sharded_first(x_sharded_first)
+```
+
+Alternatively, we can parition the data in a different form. In particular, we could subdivide the data on both axes. As a result each GPU would have a slice of 20x20 elements. Again no change is required to the original function, but we would change the allocation as follows:
+
+```@example sharding_tutorial
+N = 1600
+x_sharded_both = Reactant.to_array(
+    reshape(collect(1:N), 40, 40),
+    sharding=Sharding.NamedSharding(
+        Sharding.Mesh(reshape(Reactant.devices()[1:4], 2, 2), (:x, :y)),
+        (:x, :y)
+    )
+)
+
+compiled_big_sin_sharded_both = @compile big_sin(x_sharded_both)
+
+compiled_big_sin_sharded_both(x_sharded_both)
+```
+
+Sharding in reactant requires you to specify how the data is s
+
+<!-- TODO describe how arrays are the "global data arrays, even though data is itself only stored on relevant device and computation is performed only devices with the required data (effectively showing under the hood how execution occurs) -->
+
+<!-- TODO simple case that demonstrates send/recv within (e.g. a simple neighbor add) -->
+
+<!-- TODO make a simple conway's game of life, or heat equation using sharding simulation example to show how a ``typical MPI'' simulation can be written using sharding. -->
 
 ## Simple 1-Dimensional Heat Equation
+
+So far we chose a function which was perfectly parallelizable (e.g. each elemnt of the array only accesses its own data). Let's consider a more realistic example where an updated element requires data from its neighbors. In the distributed case, this requires communicating the data along the boundaries.
+
+In particular, let's implement a one-dimensional [heat equation](https://en.wikipedia.org/wiki/Heat_equation) simulation. In this code you initialize the temperature of all points of the simulation and over time the code will simulate how the heat is transfered across space. In particular points of high temperature will transfer energy to points of low energy.
+
+As an example, here is a visualization of a 2-dimensional heat equation:
+
+![Heat Equation Animation](https://upload.wikimedia.org/wikipedia/commons/a/a9/Heat_eqn.gif)
+
+TODO we should animate the above -- and even more ideally have one we generate ourselves.
+
+To keep things simple, let's implement a 1-dimensional heat equation here. We start off with an array for the temperature at each point, and will compute the next version of the temperatures according to the equation `x[i, t] = 0.x * [i, t-1] + 0.25 * x[i-1, t-1] + 0.25 * x[i+1, t-1]`.
+
+Let's consider how this can be implemented with explicit MPI communication. Each node will contain a subset of the total data. For example, if we simulate with 100 points, and have 4 devices, each device will contain 25 data points. We're going to allocate some extra room at each end of the buffer to store the ``halo'', or the data at the boundary. Each time step that we take will first copy in the data from its neighbors into the halo via an explicit MPI send and recv call. We'll then compute the updated data for our slice of the data.
 
 ::: code-group
 
@@ -98,6 +149,11 @@ end
 simulate(data, 100)
 ```
 
+With sharding, things are a bit more simple. We can write the code as if we only had one device. No explicit send or recv's are necessary
+as they will be added automatically by Reactant when it deduces they are needed. In fact, Reactant will attempt to optimize the placement of the communicatinos to minimize total runtime. While Reactant tries to do a good job (which could be faster than an initial implementation -- especially for complex codebases), an expert may be able to find a better placement of the communication.
+
+The only difference for the sharded code again occurs during allocation. Here we explicitly specify that we want to subdivide the initial grid of 100 amongst all devices. Analagously if we had 4 devices to work with, each device would have 25 elements in its local storage. From the user's standpoint, however, all arrays give access to the entire dataset.
+
 ```julia [Sharded Parallelism]
 function one_dim_heat_equation_time_step_sharded!(data)
     # No send recv's required
@@ -108,7 +164,6 @@ function one_dim_heat_equation_time_step_sharded!(data)
 
     return nothing
 end
-
 
 # Total size of grid we want to simulate
 N = 100
@@ -134,10 +189,9 @@ end
 
 :::
 
-# TODO describe generation of distributed array by concatenating local-worker data
+<!-- TODO describe generation of distributed array by concatenating local-worker data -->
 
-
-# TODO more complex tutorial describing replicated
+<!-- TODO more complex tutorial describing replicated -->
 
 ## Sharding in Neural Networks
 
@@ -147,6 +201,7 @@ end
 
 ## Related links
 
-<!-- shardy? https://openxla.org/shardy -->
-<!-- https://docs.jax.dev/en/latest/notebooks/Distributed_arrays_and_automatic_parallelization.html -->
-<!-- https://colab.research.google.com/drive/1UobcFjfwDI3N2EXvH3KbRS5ZxY9Riy4y#scrollTo=IiR7-0nDLPKK -->
+1. [Shardy Documentation](https://openxla.org/shardy)
+2. [Jax Documentation](https://docs.jax.dev/en/latest/notebooks/Distributed_arrays_and_automatic_parallelization.html)
+3. [Jax Scaling Book](https://jax-ml.github.io/scaling-book/sharding/)
+4. [HuggingFace Ultra Scale Playbook](https://huggingface.co/spaces/nanotron/ultrascale-playbook)
