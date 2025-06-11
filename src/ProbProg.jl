@@ -81,7 +81,7 @@ end
     resprefix::Symbol = gensym("generateresult")
     resargprefix::Symbol = gensym("generateresarg")
 
-    mlir_fn_res = TracedUtils.make_mlir_fn(
+    mlir_fn_res = invokelatest(TracedUtils.make_mlir_fn,
         f,
         args,
         (),
@@ -145,7 +145,7 @@ end
     resprefix::Symbol = gensym("sampleresult")
     resargprefix::Symbol = gensym("sampleresarg")
 
-    mlir_fn_res = TracedUtils.make_mlir_fn(
+    mlir_fn_res = invokelatest(TracedUtils.make_mlir_fn,
         f,
         args,
         (),
