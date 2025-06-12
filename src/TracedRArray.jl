@@ -439,22 +439,11 @@ function Base.setindex!(a::TracedRArray{T,N}, v, indices::Vararg{Any,N}) where {
         ]
         updates = Ops.reshape(updates, updates_shape)
 
-        # simply set the 2nd block argument as a result
-        update_computation = MLIR.IR.Region()
-        block = MLIR.IR.Block(
-            [Ops.mlir_type(TracedRNumber{T}), Ops.mlir_type(TracedRNumber{T})],
-            [MLIR.IR.Location(), MLIR.IR.Location()],
-        )
-        return_op = MLIR.Dialects.stablehlo.return_([MLIR.IR.argument(block, 2)])
-        MLIR.IR.rmfromparent!(return_op)
-        push!(block, return_op)
-        pushfirst!(update_computation, block)
-
         res = Ops.scatter(
+            (xᵢ, xⱼ) -> xⱼ,
             [a],
             gather_dims.start_indices,
             [updates];
-            update_computation,
             update_window_dims=gather_dims.offset_dims,
             inserted_window_dims=gather_dims.collapsed_slice_dims,
             input_batching_dims=Int64[],
