@@ -1388,6 +1388,7 @@ function compile_mlir!(
     donated_args::Symbol=:auto, # :auto | :none
     optimize_then_pad::Bool=true,
     runtime::Union{Val{:PJRT},Val{:IFRT}},
+    legalize_chlo_to_stablehlo::Bool=false,
     kwargs...,
 )
     @assert donated_args ∈ (:auto, :none)
@@ -1552,6 +1553,9 @@ function compile_mlir!(
                         "canonicalize",
                         "remove-unnecessary-enzyme-ops",
                         "enzyme-simplify-math",
+                        (
+                            legalize_chlo_to_stablehlo ? ["chlo-legalize-to-stablehlo"] : []
+                        )...,
                         opt_passes2,
                         lower_enzymexla_linalg_pass,
                         jit,
@@ -1567,6 +1571,9 @@ function compile_mlir!(
                         "canonicalize",
                         "remove-unnecessary-enzyme-ops",
                         "enzyme-simplify-math",
+                        (
+                            legalize_chlo_to_stablehlo ? ["chlo-legalize-to-stablehlo"] : []
+                        )...,
                         opt_passes2,
                         kern,
                         raise_passes,
@@ -1595,6 +1602,9 @@ function compile_mlir!(
                         "canonicalize",
                         "remove-unnecessary-enzyme-ops",
                         "enzyme-simplify-math",
+                        (
+                            legalize_chlo_to_stablehlo ? ["chlo-legalize-to-stablehlo"] : []
+                        )...,
                         opt_passes2,
                     ]
                 end,
@@ -1619,6 +1629,9 @@ function compile_mlir!(
                         "canonicalize",
                         "remove-unnecessary-enzyme-ops",
                         "enzyme-simplify-math",
+                        (
+                            legalize_chlo_to_stablehlo ? ["chlo-legalize-to-stablehlo"] : []
+                        )...,
                         opt_passes2,
                     ]
                 else
@@ -1632,6 +1645,9 @@ function compile_mlir!(
                         "canonicalize",
                         "remove-unnecessary-enzyme-ops",
                         "enzyme-simplify-math",
+                        (
+                            legalize_chlo_to_stablehlo ? ["chlo-legalize-to-stablehlo"] : []
+                        )...,
                         opt_passes2,
                         kern,
                         raise_passes,
@@ -1658,6 +1674,9 @@ function compile_mlir!(
                         "canonicalize",
                         "remove-unnecessary-enzyme-ops",
                         "enzyme-simplify-math",
+                        (
+                            legalize_chlo_to_stablehlo ? ["chlo-legalize-to-stablehlo"] : []
+                        )...,
                         opt_passes2,
                         kern,
                     ]
@@ -1680,6 +1699,7 @@ function compile_mlir!(
                     "canonicalize",
                     "remove-unnecessary-enzyme-ops",
                     "enzyme-simplify-math",
+                    (legalize_chlo_to_stablehlo ? ["chlo-legalize-to-stablehlo"] : [])...,
                     opt_passes2,
                 ],
                 ',',
@@ -1716,6 +1736,9 @@ function compile_mlir!(
                         "canonicalize",
                         "remove-unnecessary-enzyme-ops",
                         "enzyme-simplify-math",
+                        (
+                            legalize_chlo_to_stablehlo ? ["chlo-legalize-to-stablehlo"] : []
+                        )...,
                         opt_passes2,
                         lower_enzymexla_linalg_pass,
                         jit,
@@ -1728,6 +1751,9 @@ function compile_mlir!(
                         "canonicalize",
                         "remove-unnecessary-enzyme-ops",
                         "enzyme-simplify-math",
+                        (
+                            legalize_chlo_to_stablehlo ? ["chlo-legalize-to-stablehlo"] : []
+                        )...,
                         opt_passes2,
                         kern,
                         raise_passes,
@@ -2191,6 +2217,7 @@ function get_common_compile_options()
         :optimize_then_pad => true,
         :optimize_communications => true,
         :cudnn_hlo_optimize => false,
+        :legalize_chlo_to_stablehlo => false,
     )
 end
 
@@ -2242,6 +2269,8 @@ const COMMON_COMPILE_OPTIONS_DOCS = """
   - `cudnn_hlo_optimize`: Run cuDNN specific HLO optimizations. This is only relevant for
     GPU backends and is `false` by default. **Experimental and not heavily tested.**
     _(Only for CUDA backend)_
+  - `legalize_chlo_to_stablehlo`: If `true`, `chlo` dialect ops will be converted to
+    `stablehlo` ops. This is `false` by default.
 """
 
 const SYNC_DOCS = """
