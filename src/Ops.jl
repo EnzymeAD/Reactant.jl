@@ -15,6 +15,27 @@ using ..Reactant:
 using ReactantCore: ReactantCore
 using Functors: fmap
 
+using Reactant_jll: Reactant_jll
+
+function unsafe_print(x)
+    print(unsafe_string(x))
+    return nothing
+end
+
+function __init__()
+    if Reactant_jll.is_available()
+        print_fn_ptr = @cfunction(unsafe_print, Nothing, (Cstring,))
+
+        for (ptr, enzymexla_name) in [(print_fn_ptr, :enzymexla_print)]
+            @ccall MLIR.API.mlir_c.EnzymeJaXMapSymbol(
+                enzymexla_name::Cstring, ptr::Ptr{Cvoid}
+            )::Cvoid
+        end
+    end
+
+    return nothing
+end
+
 function mlir_type(x::Union{RNumber,RArray})::MLIR.IR.Type
     return MLIR.IR.TensorType(collect(Int, size(x)), MLIR.IR.Type(unwrapped_eltype(x)))
 end
@@ -3148,6 +3169,43 @@ end
     else
         return TracedRNumber{unwrapped_eltype(input)}((), res)
     end
+end
+
+@noinline function throw(
+    msg::String; location=mlir_stacktrace("throw", @__FILE__, @__LINE__)
+)
+    mod = MLIR.IR.mmodule()
+
+    sym_name = string(Reactant.TracedUtils.__lookup_unique_name_in_module(mod, "error_msg"))
+    MLIR.IR.inject!(
+        sym_name,
+        "llvm.mlir.global constant @$(sym_name)(\"$(msg)\")";
+        mod,
+        location,
+        verify=true,
+    )
+
+    error_fn = string(Reactant.TracedUtils.__lookup_unique_name_in_module(mod, "error"))
+    MLIR.IR.inject!(
+        error_fn,
+        """
+        func.func @$(error_fn)() -> (!llvm.ptr) {
+            %err_msg_ptr = llvm.mlir.addressof @$(sym_name) : !llvm.ptr
+            return %err_msg_ptr : !llvm.ptr
+        }
+        """;
+        mod,
+        location,
+    )
+
+    MLIR.Dialects.enzymexla.jit_call(
+        MLIR.IR.Value[];
+        fn=MLIR.IR.FlatSymbolRefAttribute(error_fn),
+        result_0=MLIR.IR.Type[],
+        location,
+    )
+
+    return nothing
 end
 
 end # module Ops
