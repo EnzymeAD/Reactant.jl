@@ -383,7 +383,6 @@ end
 end
 
 # Adapted from https://github.com/FluxML/NNlib.jl/blob/1468582c4db5f18149cc8fff6fb4633c5debe5c5/test/testsuite/scatter.jl#L108
-# mean is omitted as operation to avoid the ambiguity error
 @testset "NNlib scatter" begin
     function test_scatter(dsts, srcs, idxs, res; dims)
         @testset "scatter Float32 $op" for op in (+, -, max, min, *, /, mean)
@@ -497,60 +496,60 @@ end
     end
 
     @testset "scatter 2d src, 1d index => 2d output" begin
-            #! format: off
-            dsts = Dict(
-                  0 => Float32[3 3 4 4 5
-                               5 5 6 6 7]
-            )
+        #! format: off
+        dsts = Dict(
+                0 => Float32[3 3 4 4 5
+                            5 5 6 6 7]
+        )
 
-            srcs = Dict(
-                (0, true) => ones(Float32, 2, 5),
-                (0, false) => ones(Float32, 2) * collect(1:5)',
-            )
+        srcs = Dict(
+            (0, true) => ones(Float32, 2, 5),
+            (0, false) => ones(Float32, 2) * collect(1:5)',
+        )
 
-            idxs = Dict(
-                :int => [4, 2, 1, 5, 3],
-                :tup => [(4,), (2,), (1,), (5,), (3,)],
-                :car => CartesianIndex.([(4,), (2,), (1,), (5,), (3,)]),
-            )
+        idxs = Dict(
+            :int => [4, 2, 1, 5, 3],
+            :tup => [(4,), (2,), (1,), (5,), (3,)],
+            :car => CartesianIndex.([(4,), (2,), (1,), (5,), (3,)]),
+        )
 
-            res = Dict(
-                (+, 0, true) => Float32[4 4 5 5 6;
-                                        6 6 7 7 8],
-                (+, 0, false) => Float32[3 2 5 1 4;
-                                         3 2 5 1 4],
+        res = Dict(
+            (+, 0, true) => Float32[4 4 5 5 6;
+                                    6 6 7 7 8],
+            (+, 0, false) => Float32[3 2 5 1 4;
+                                        3 2 5 1 4],
 
-                (-, 0, true) => Float32[2 2 3 3 4;
-                                        4 4 5 5 6],
-                (-, 0, false) => Float32[-3 -2 -5 -1 -4;
-                                         -3 -2 -5 -1 -4],
+            (-, 0, true) => Float32[2 2 3 3 4;
+                                    4 4 5 5 6],
+            (-, 0, false) => Float32[-3 -2 -5 -1 -4;
+                                        -3 -2 -5 -1 -4],
 
-                (max, 0, true) => Float32[3 3 4 4 5;
-                                          5 5 6 6 7],
-                (max, 0, false) => Float32[3 2 5 1 4;
-                                           3 2 5 1 4],
-
-                (min, 0, true) => Float32[1 1 1 1 1;
-                                          1 1 1 1 1],
-                (min, 0, false) => Float32[3 2 5 1 4;
-                                           3 2 5 1 4],
-
-                (*, 0, true) => Float32[3 3 4 4 5;
+            (max, 0, true) => Float32[3 3 4 4 5;
                                         5 5 6 6 7],
-                (*, 0, false) => Float32[3 2 5 1 4;
-                                         3 2 5 1 4],
+            (max, 0, false) => Float32[3 2 5 1 4;
+                                        3 2 5 1 4],
 
-                (/, 0, true) => Float32[1.5 1.5 2.0 2.0 2.5;
-                                        2.5 2.5 3.0 3.0 3.5],
-                (/, 0, false) => Float32[1//6 1//4 1//10 1//2 1//8;
-                                         1//6 1//4 1//10 1//2 1//8],
+            (min, 0, true) => Float32[1 1 1 1 1;
+                                        1 1 1 1 1],
+            (min, 0, false) => Float32[3 2 5 1 4;
+                                        3 2 5 1 4],
 
-                (mean, 0, true) => Float32[4 4 5 5 6;
-                                           6 6 7 7 8],
-                (mean, 0, false) => Float32[3 2 5 1 4;
-                                            3 2 5 1 4],
-            )
-            #! format: on
+            (*, 0, true) => Float32[3 3 4 4 5;
+                                    5 5 6 6 7],
+            (*, 0, false) => Float32[3 2 5 1 4;
+                                        3 2 5 1 4],
+
+            (/, 0, true) => Float32[1.5 1.5 2.0 2.0 2.5;
+                                    2.5 2.5 3.0 3.0 3.5],
+            (/, 0, false) => Float32[1//6 1//4 1//10 1//2 1//8;
+                                        1//6 1//4 1//10 1//2 1//8],
+
+            (mean, 0, true) => Float32[4 4 5 5 6;
+                                        6 6 7 7 8],
+            (mean, 0, false) => Float32[3 2 5 1 4;
+                                        3 2 5 1 4],
+        )
+        #! format: on
         test_scatter(dsts, srcs, idxs, res; dims=[0])
     end
 

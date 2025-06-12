@@ -1734,6 +1734,8 @@ end
     scatter_indices_batching_dims::Vector{Int64},
     scatter_dims_to_operand_dims::Vector{Int64},
     index_vector_dim::Int64,
+    unique_indices::Union{Bool,Nothing}=nothing,
+    indices_are_sorted::Union{Bool,Nothing}=nothing,
     location=mlir_stacktrace("scatter", @__FILE__, @__LINE__),
 ) where {T,N}
     scatter_indices = subtract(
@@ -1768,6 +1770,8 @@ end
         update_computation,
         scatter_dimension_numbers,
         result_0=[mlir_type(TracedRArray{T,N}, size(d)) for d in dest],
+        unique_indices,
+        indices_are_sorted,
         location,
     )
 
