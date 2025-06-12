@@ -414,7 +414,10 @@ function trace_if(expr; store_last_line=nothing, depth=0, track_numbers)
             $(store_last_line) = $(true_last_line)
         end
     else
-        expr.args[2]
+        quote
+            $(expr.args[2])
+            nothing # explicitly return nothing to prevent branches from returning different types
+        end
     end
 
     true_branch_symbols = ExpressionExplorer.compute_symbols_state(true_block)
@@ -457,7 +460,10 @@ function trace_if(expr; store_last_line=nothing, depth=0, track_numbers)
             $(store_last_line) = $(false_last_line)
         end
     else
-        else_block
+        quote
+            $else_block
+            nothing # explicitly return nothing to prevent branches from returning different types
+        end
     end
 
     false_branch_symbols = ExpressionExplorer.compute_symbols_state(false_block)
@@ -473,10 +479,12 @@ function trace_if(expr; store_last_line=nothing, depth=0, track_numbers)
 
     all_vars = all_input_vars ∪ all_output_vars
 
-    non_existant_true_branch_vars = setdiff(all_output_vars, all_true_branch_vars)
+    non_existent_true_branch_vars = setdiff(
+        all_output_vars, all_true_branch_vars, all_input_vars
+    )
     true_branch_extras = Expr(
         :block,
-        [:($(var) = $(MissingTracedValue)()) for var in non_existant_true_branch_vars]...,
+        [:($(var) = $(MissingTracedValue)()) for var in non_existent_true_branch_vars]...,
     )
 
     true_branch_fn = :(($(all_input_vars...),) -> begin
@@ -489,12 +497,12 @@ function trace_if(expr; store_last_line=nothing, depth=0, track_numbers)
     )
     true_branch_fn = :($(true_branch_fn_name) = $(true_branch_fn))
 
-    non_existant_false_branch_vars = setdiff(
-        setdiff(all_output_vars, all_false_branch_vars), all_input_vars
+    non_existent_false_branch_vars = setdiff(
+        all_output_vars, all_false_branch_vars, all_input_vars
     )
     false_branch_extras = Expr(
         :block,
-        [:($(var) = $(MissingTracedValue)()) for var in non_existant_false_branch_vars]...,
+        [:($(var) = $(MissingTracedValue)()) for var in non_existent_false_branch_vars]...,
     )
 
     false_branch_fn = :(($(all_input_vars...),) -> begin
