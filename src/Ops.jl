@@ -1867,7 +1867,13 @@ end
 end
 
 @noinline function while_loop(
-    cond_fn::CFn, body_fn::BFn, args...; track_numbers, verify_arg_names=nothing
+    cond_fn::CFn,
+    body_fn::BFn,
+    args...;
+    track_numbers,
+    verify_arg_names=nothing,
+    checkpointing=false,
+    mincut=false,
 ) where {CFn,BFn}
     # TODO: detect and prevent mutation within the condition
 
@@ -1933,7 +1939,15 @@ end
         cond=cond_reg,
         body=body_reg,
     )
-    MLIR.IR.attr!(while_op, "enzymexla.disable_min_cut", MLIR.IR.UnitAttribute())
+
+    if !mincut
+        MLIR.IR.attr!(while_op, "enzymexla.disable_min_cut", MLIR.IR.UnitAttribute())
+    end
+
+    if checkpointing
+        MLIR.IR.attr!(while_op, "enzymexla.enable_checkpointing", MLIR.IR.Attribute(true))
+    end
+
     return map(enumerate(linear_args)) do (i, arg)
         Reactant.TracedUtils.set_mlir_data!(arg, MLIR.IR.result(while_op, i))
     end
