@@ -265,19 +265,44 @@ end
 end
 
 @testset "Dot" begin
-    x = collect(Float32, 1:10)
-    y = collect(Float32, 10:-1:1)
-    x_ra = Reactant.to_rarray(x)
-    y_ra = Reactant.to_rarray(y)
+    @testset "2-arg real" begin
+        x = collect(Float32, 1:10)
+        y = collect(Float32, 10:-1:1)
+        x_ra = Reactant.to_rarray(x)
+        y_ra = Reactant.to_rarray(y)
 
-    @test @jit(dot(x_ra, y_ra)) ≈ dot(x, y)
+        @test @jit(dot(x_ra, y_ra)) ≈ dot(x, y)
 
-    x = rand(Complex{Float32}, 4)
-    y = rand(Complex{Float32}, 4)
-    x_ra = Reactant.to_rarray(x)
-    y_ra = Reactant.to_rarray(y)
+        x = reshape(collect(Float32, 1:10), 2, 5)
+        x_ra = Reactant.to_rarray(x)
 
-    @test @jit(dot(x_ra, y_ra)) ≈ dot(x, y)
+        @test @jit(dot(x_ra, x_ra)) ≈ dot(x, x)
+    end
+
+    @testset "2-arg complex" begin
+        x = rand(Complex{Float32}, 4)
+        y = rand(Complex{Float32}, 4)
+        x_ra = Reactant.to_rarray(x)
+        y_ra = Reactant.to_rarray(y)
+
+        @test @jit(dot(x_ra, y_ra)) ≈ dot(x, y)
+
+        x = rand(Complex{Float32}, 2, 2)
+        x_ra = Reactant.to_rarray(x)
+
+        @test @jit(dot(x_ra, x_ra)) ≈ dot(x, x)
+    end
+
+    @testset "3-arg" begin
+        x = rand(Float32, 2, 2)
+        y = rand(Float32, 4, 5)
+        z = rand(Float32, 5)
+        x_ra = Reactant.to_rarray(x)
+        y_ra = Reactant.to_rarray(y)
+        z_ra = Reactant.to_rarray(z)
+
+        @test @jit(dot(x_ra, y_ra, z_ra)) ≈ dot(x, y, z)
+    end
 end
 
 @testset "Triangular ldiv and rdiv" begin

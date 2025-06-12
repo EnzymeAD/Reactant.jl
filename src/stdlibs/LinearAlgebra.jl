@@ -491,6 +491,12 @@ function LinearAlgebra.dot(x::AnyTracedRVector, y::AnyTracedRVector)
     return TracedRNumber{unwrapped_eltype(res)}((), res.mlir_data)
 end
 
+LinearAlgebra.dot(x::AnyTracedRArray, y::AnyTracedRArray) = dot(vec(x), vec(y))
+
+function LinearAlgebra.dot(x::AnyTracedRVector, A::AnyTracedRMatrix, y::AnyTracedRVector)
+    return dot(x, A * y)
+end
+
 # ldiv & rdiv interfaces
 tfun_to_char(::typeof(identity)) = 'N'
 tfun_to_char(::typeof(transpose)) = 'T'
