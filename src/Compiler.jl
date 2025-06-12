@@ -838,7 +838,8 @@ function optimization_passes(;
         "divide_sqrt_to_multiply_rsqrt<16>",
         "associative_binary_op_reordering<1>",
         "transpose_broadcast_in_dim_to_broadcast_in_dim<16>",
-        "scatter_indices_are_unique",
+        # XXX: needs upstream fix
+        # "scatter_indices_are_unique",
         "replace_neg_add_with_subtract",
         "binop_const_simplify",
         "not_select_simplify",

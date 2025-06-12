@@ -487,3 +487,90 @@ function NNlib.upsample_linear_kernel!(
     copyto!(y, upsample_linear(x, size(y)[1:(end - 2)], ratios..., align_corners))
     return y
 end
+
+# Scatter
+function NNlib.scatter(
+    op::OP, src::AnyTracedRArray{T}, idx::AbstractArray; init=nothing, dstsize=nothing
+) where {OP,T}
+    dims = ndims(src) - ndims(idx)
+    dstsz = if isnothing(dstsize)
+        (size(src)[1:dims]..., NNlib.maximum_dims(idx)...)
+    else
+        dstsize
+    end
+    if any(d -> d isa TracedRNumber, dstsz)
+        throw(
+            ArgumentError(
+                "dstsize must be specified when idx is a TracedRArray or contains a TracedRNumber.",
+            ),
+        )
+    end
+    xinit = isnothing(init) ? NNlib.scatter_empty(op, T) : init
+    dst = Ops.fill(xinit, dstsz)
+
+    NNlib.scatter!(op, dst, src, idx)
+    return dst
+end
+
+function NNlib.scatter!(
+    op::OP, dst::AnyTracedRArray, src::AnyTracedRArray, idx::AbstractArray
+) where {OP}
+    dims = NNlib.scatter_dims(dst, src, idx)
+    res = _nnlib_scatter_impl(op, dst, src, _stack_indices(idx), dims)
+    set_mlir_data!(dst, get_mlir_data(res))
+    return dst
+end
+
+function NNlib.scatter!(
+    op::OP, dst::AnyTracedRArray, src::AnyTracedRArray, idx::AbstractArray{<:Number}
+) where {OP}
+    dims = NNlib.scatter_dims(dst, src, idx)
+    res = _nnlib_scatter_impl(op, dst, src, reshape(idx, 1, size(idx)...), dims)
+    set_mlir_data!(dst, get_mlir_data(res))
+    return dst
+end
+
+for AT in (AbstractArray, AbstractArray{<:Number})
+    @eval function NNlib.scatter!(
+        ::typeof(mean), dst::AnyTracedRArray, src::AnyTracedRArray, idx::$AT
+    )
+        Ns = NNlib.scatter!(+, zero(dst), one.(src), idx)
+        dst_ = NNlib.scatter!(+, zero(dst), src, idx)
+        res = dst .+ NNlib.safe_div.(dst_, Ns)
+        set_mlir_data!(dst, get_mlir_data(res))
+        return dst
+    end
+end
+
+function _nnlib_scatter_impl(
+    op::OP,
+    dst::AnyTracedRArray{T},
+    src::AnyTracedRArray{T},
+    idx::AbstractArray,
+    n_dims::Int,
+) where {OP,T}
+    scatter_indices = TracedUtils.promote_to(TracedRArray{Int,ndims(idx)}, idx)
+    n_idxs = size(scatter_indices, 1)
+    return Ops.scatter(
+        op,
+        [dst],
+        scatter_indices,
+        [src];
+        update_window_dims=collect(Int64, 1:n_dims),
+        inserted_window_dims=collect(Int64, (n_dims + 1):ndims(dst)),
+        input_batching_dims=Int64[],
+        scatter_indices_batching_dims=Int64[],
+        scatter_dims_to_operand_dims=collect(Int64, (ndims(dst) - n_idxs + 1):ndims(dst)),
+        index_vector_dim=Int64(1),
+    )[1]
+end
+
+function NNlib.maximum_dims(dims::AnyTracedRArray{<:Integer})
+    return (maximum(dims),)
+end
+function NNlib.maximum_dims(dims::AnyTracedRArray{NTuple{N,T}}) where {N,T}
+    return ntuple(i -> maximum(x -> x[i], dims), N)
+end
+function NNlib.maximum_dims(dims::AnyTracedRArray{CartesianIndex{N}}) where {N}
+    return ntuple(i -> maximum(x -> x[i], dims), N)
+end
