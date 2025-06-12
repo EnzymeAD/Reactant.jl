@@ -1,9 +1,6 @@
 module ProbProg
 
-using ..Reactant: Reactant, XLA, MLIR, TracedUtils, TracedRArray, ConcretePJRTArray
-using ReactantCore: ReactantCore
-using Libdl: Libdl
-
+using ..Reactant: MLIR, TracedUtils, AbstractConcreteArray
 using Enzyme
 
 struct SampleMetadata
@@ -18,16 +15,10 @@ struct SampleMetadata
     end
 end
 
-const SAMPLE_METADATA_CACHE = IdDict{Symbol,SampleMetadata}()
-const Trace = IdDict{Symbol,Any}(:_integrity_check => 0x123456789abcdef)
+const SAMPLE_METADATA_CACHE = Dict{Symbol,SampleMetadata}()
 
-function initTraceLowered(trace_ptr_ptr::Ptr{Ptr{Cvoid}})
-    trace_ptr = unsafe_load(trace_ptr_ptr)
-    @assert reinterpret(UInt64, trace_ptr) == 42
-
-    unsafe_store!(trace_ptr_ptr, pointer_from_objref(Trace))
-
-    return nothing
+function createTrace()
+    return Dict{Symbol,Any}(:_integrity_check => 0x123456789abcdef)
 end
 
 function addSampleToTraceLowered(
@@ -46,7 +37,7 @@ function addSampleToTraceLowered(
     if is_scalar
         trace[symbol] = unsafe_load(reinterpret(Ptr{element_type}, sample_ptr))
     else
-        trace[symbol] = Base.deepcopy(
+        trace[symbol] = copy(
             reshape(
                 unsafe_wrap(
                     Array{element_type},
@@ -62,10 +53,6 @@ function addSampleToTraceLowered(
 end
 
 function __init__()
-    init_trace_ptr = @cfunction(initTraceLowered, Cvoid, (Ptr{Ptr{Cvoid}},))
-    @ccall MLIR.API.mlir_c.EnzymeJaXMapSymbol(
-        :enzyme_probprog_init_trace::Cstring, init_trace_ptr::Ptr{Cvoid}
-    )::Cvoid
     add_sample_to_trace_ptr = @cfunction(
         addSampleToTraceLowered, Cvoid, (Ptr{Ptr{Cvoid}}, Ptr{Ptr{Cvoid}}, Ptr{Cvoid})
     )
@@ -81,7 +68,8 @@ end
     resprefix::Symbol = gensym("generateresult")
     resargprefix::Symbol = gensym("generateresarg")
 
-    mlir_fn_res = invokelatest(TracedUtils.make_mlir_fn,
+    mlir_fn_res = invokelatest(
+        TracedUtils.make_mlir_fn,
         f,
         args,
         (),
@@ -139,13 +127,17 @@ end
 end
 
 @noinline function sample!(
-    f::Function, args::Vararg{Any,Nargs}; symbol::Symbol=gensym("sample")
+    f::Function,
+    args::Vararg{Any,Nargs};
+    symbol::Symbol=gensym("sample"),
+    trace::Union{Dict,Nothing}=nothing,
 ) where {Nargs}
     argprefix::Symbol = gensym("samplearg")
     resprefix::Symbol = gensym("sampleresult")
     resargprefix::Symbol = gensym("sampleresarg")
 
-    mlir_fn_res = invokelatest(TracedUtils.make_mlir_fn,
+    mlir_fn_res = invokelatest(
+        TracedUtils.make_mlir_fn,
         f,
         args,
         (),
@@ -191,47 +183,44 @@ end
         )
     end
 
-    symbol_ptr = pointer_from_objref(symbol)
-    symbol_addr = reinterpret(UInt64, symbol_ptr)
-    addr_attr = MLIR.IR.DenseElementsAttribute([symbol_addr])
+    symbol_addr = reinterpret(UInt64, pointer_from_objref(symbol))
 
     sample_op = MLIR.Dialects.enzyme.sample(
-        MLIR.IR.result(MLIR.Dialects.stablehlo.constant(; value=addr_attr), 1),
-        batch_inputs;
-        outputs=out_tys,
-        fn=fn_attr,
+        batch_inputs; outputs=out_tys, fn=fn_attr, symbol=symbol_addr
     )
 
     for (i, res) in enumerate(linear_results)
         resv = MLIR.IR.result(sample_op, i)
-
-        for path in res.paths
-            isempty(path) && continue
-            if path[1] == resprefix
-                TracedUtils.set!(result, path[2:end], resv)
-            elseif path[1] == argprefix
-                idx = path[2]::Int
-                if idx == 1 && fnwrap
-                    TracedUtils.set!(f, path[3:end], resv)
-                else
-                    if fnwrap
-                        idx -= 1
-                    end
-                    TracedUtils.set!(args[idx], path[3:end], resv)
+        if TracedUtils.has_idx(res, resprefix)
+            path = TracedUtils.get_idx(res, resprefix)
+            TracedUtils.set!(result, path[2:end], TracedUtils.transpose_val(resv))
+        elseif TracedUtils.has_idx(res, argprefix)
+            idx, path = TracedUtils.get_argidx(res, argprefix)
+            if idx == 1 && fnwrap
+                TracedUtils.set!(f, path[3:end], TracedUtils.transpose_val(resv))
+            else
+                if fnwrap
+                    idx -= 1
                 end
+                TracedUtils.set!(args[idx], path[3:end], TracedUtils.transpose_val(resv))
             end
+        else
+            TracedUtils.set!(res, (), TracedUtils.transpose_val(resv))
         end
     end
 
     return result
 end
 
-@noinline function simulate!(f::Function, args::Vararg{Any,Nargs}) where {Nargs}
+@noinline function simulate!(
+    f::Function, args::Vararg{Any,Nargs}; trace::Dict
+) where {Nargs}
     argprefix::Symbol = gensym("simulatearg")
     resprefix::Symbol = gensym("simulateresult")
     resargprefix::Symbol = gensym("simulateresarg")
 
-    mlir_fn_res = TracedUtils.make_mlir_fn(
+    mlir_fn_res = invokelatest(
+        TracedUtils.make_mlir_fn,
         f,
         args,
         (),
@@ -242,9 +231,13 @@ end
         resprefix,
         resargprefix,
     )
-    (; linear_args, linear_results) = mlir_fn_res
+    (; result, linear_args, in_tys, linear_results) = mlir_fn_res
     fnwrap = mlir_fn_res.fnwrapped
     func2 = mlir_fn_res.f
+
+    out_tys = [MLIR.IR.type(TracedUtils.get_mlir_data(res)) for res in linear_results]
+    fname = TracedUtils.get_attribute_by_name(func2, "sym_name")
+    fname = MLIR.IR.FlatSymbolRefAttribute(Base.String(fname))
 
     batch_inputs = MLIR.IR.Value[]
     for a in linear_args
@@ -259,63 +252,36 @@ end
         end
     end
 
-    out_tys = MLIR.IR.Type[]
-    supress_rest = false
-    for res in linear_results
-        if TracedUtils.has_idx(res, resprefix) && !supress_rest
-            push!(out_tys, MLIR.IR.TensorType([1], MLIR.IR.Type(UInt64)))
-            supress_rest = true
-        else
-            # push!(out_tys, MLIR.IR.type(TracedUtils.get_mlir_data(res)))
-        end
-    end
+    trace_addr = reinterpret(UInt64, pointer_from_objref(trace))
 
-    fname = TracedUtils.get_attribute_by_name(func2, "sym_name")
-    fname = MLIR.IR.FlatSymbolRefAttribute(Base.String(fname))
+    simulate_op = MLIR.Dialects.enzyme.simulate(
+        batch_inputs; outputs=out_tys, fn=fname, trace=trace_addr
+    )
 
-    simulate_op = MLIR.Dialects.enzyme.simulate(batch_inputs; outputs=out_tys, fn=fname)
-
-    result = nothing
     for (i, res) in enumerate(linear_results)
         resv = MLIR.IR.result(simulate_op, i)
-
         if TracedUtils.has_idx(res, resprefix)
-            # casted = MLIR.IR.result(
-            #     MLIR.Dialects.builtin.unrealized_conversion_cast(
-            #         resv; to=MLIR.IR.TensorType([1], MLIR.IR.Type(UInt64))
-            #     ),
-            #     1,
-            # )
-            # result = TracedRArray(casted)
-            result = TracedRArray(resv)
-            break
-            # continue
+            path = TracedUtils.get_idx(res, resprefix)
+            TracedUtils.set!(result, path[2:end], TracedUtils.transpose_val(resv))
+        elseif TracedUtils.has_idx(res, argprefix)
+            idx, path = TracedUtils.get_argidx(res, argprefix)
+            if idx == 1 && fnwrap
+                TracedUtils.set!(f, path[3:end], TracedUtils.transpose_val(resv))
+            else
+                if fnwrap
+                    idx -= 1
+                end
+                TracedUtils.set!(args[idx], path[3:end], TracedUtils.transpose_val(resv))
+            end
+        else
+            TracedUtils.set!(res, (), TracedUtils.transpose_val(resv))
         end
-
-        # for path in res.paths
-        #     isempty(path) && continue
-        #     if path[1] == argprefix
-        #         idx = path[2]::Int
-        #         if idx == 1 && fnwrap
-        #             TracedUtils.set!(f, path[3:end], resv)
-        #         else
-        #             if fnwrap
-        #                 idx -= 1
-        #             end
-        #             TracedUtils.set!(args[idx], path[3:end], resv)
-        #         end
-        #     end
-        # end
     end
 
-    return result
+    return trace, result
 end
 
-function getTrace(t::ConcretePJRTArray)
-    return unsafe_pointer_to_objref(reinterpret(Ptr{Cvoid}, Array{UInt64,1}(t)[1]))
-end
-
-function print_trace(trace::IdDict)
+function print_trace(trace::Dict)
     println("Probabilistic Program Trace:")
     for (symbol, sample) in trace
         symbol == :_integrity_check && continue
