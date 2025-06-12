@@ -573,43 +573,17 @@ function _nnlib_scatter_impl(
         end
     end
 
-    sample_inputs = [
-        TracedUtils.promote_to(TracedRNumber{T}, 0),
-        TracedUtils.promote_to(TracedRNumber{T}, 0),
-    ]
-
-    func =
-        TracedUtils.make_mlir_fn(
-            op,
-            (sample_inputs),
-            (),
-            "scatter_reduce_fn",
-            false;
-            args_in_result=:result,
-            return_dialect=:stablehlo,
-        ).f
-    update_computation = MLIR.IR.Region()
-    MLIR.API.mlirRegionTakeBody(update_computation, MLIR.IR.region(func, 1))
-    MLIR.IR.rmfromparent!(func)
-
-    update_window_dims = Int64[2]
-    inserted_window_dims = Int64[1]
-    input_batching_dims = Int64[]
-    scatter_indices_batching_dims = Int64[]
-    scatter_dims_to_operand_dims = Int64[1]
-    index_vector_dim = Int64(2)
-
     scatter_res = Ops.scatter(
+        op,
         [inputs],
         scatter_indices,
         [updates];
-        update_computation=update_computation,
-        update_window_dims=update_window_dims,
-        inserted_window_dims=inserted_window_dims,
-        input_batching_dims=input_batching_dims,
-        scatter_indices_batching_dims=scatter_indices_batching_dims,
-        scatter_dims_to_operand_dims=scatter_dims_to_operand_dims,
-        index_vector_dim=index_vector_dim,
+        update_window_dims=Int64[2],
+        inserted_window_dims=Int64[1],
+        input_batching_dims=Int64[],
+        scatter_indices_batching_dims=Int64[],
+        scatter_dims_to_operand_dims=Int64[1],
+        index_vector_dim=Int64(2),
     )[1]
     return Ops.transpose(scatter_res, Int64[ndims(scatter_res):-1:1...])
 end
