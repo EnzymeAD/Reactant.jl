@@ -474,3 +474,16 @@ function _nnlib_gather_impl(src::AnyTracedRArray, idxs::AbstractArray, n_dims::I
         slice_sizes=Int64[size(src)[1:n_dims]..., ones(Int64, ndims(src) - n_dims)...],
     )
 end
+
+function NNlib.upsample_linear_kernel!(
+    y::AnyTracedRArray{T,N}, x::AnyTracedRArray{T,N}; align_corners::Bool=true
+) where {T,N}
+    wT = real(Reactant.unwrapped_eltype(T))
+    ratios = if align_corners
+        ntuple(i -> wT((size(x, i) - 1) / (size(y, i) - 1)), N - 2)
+    else
+        ntuple(i -> wT(size(x, i) / size(y, i)), N - 2)
+    end
+    copyto!(y, upsample_linear(x, size(y)[1:(end - 2)], ratios..., align_corners))
+    return y
+end

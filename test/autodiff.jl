@@ -1,4 +1,4 @@
-using Enzyme, Reactant, Test
+using Enzyme, Reactant, Test, Random
 
 square(x) = x * 2
 
@@ -227,4 +227,83 @@ vector_forward_ad(x) = Enzyme.autodiff(Forward, fn, BatchDuplicated(x, Enzyme.on
     @test res[1][2] ≈ res_enz[1][2]
     @test res[1][3] ≈ res_enz[1][3]
     @test res[1][4] ≈ res_enz[1][4]
+end
+
+function simple_forward(x, st)
+    rng = copy(st.rng)
+    y = similar(x)
+    rand!(rng, y)
+    return x .+ y, (; rng)
+end
+
+function gradient_fn(x, st)
+    stₙ = Ref{Any}(nothing)
+    function lfn(x, st_old)
+        y, st_new = simple_forward(x, st_old)
+        stₙ[] = st_new
+        return sum(abs2, y)
+    end
+    return Enzyme.gradient(Reverse, lfn, x, Const(st)), stₙ[]
+end
+
+@testset "seed" begin
+    x = Reactant.to_rarray(rand(2, 2))
+    st = (; rng=Reactant.ConcreteRNG())
+
+    @test begin
+        hlo = @code_hlo gradient_fn(x, st)
+        contains(repr(hlo), "stablehlo.rng_bit_generator")
+    end
+end
+
+function divinf(x)
+    return min(1.0, 1 / x)
+end
+
+function grad_divinf(x)
+    return Enzyme.gradient(Reverse, divinf, x)
+end
+
+function grad_divinf_sz(x)
+    return Enzyme.gradient(Enzyme.set_strong_zero(Reverse), divinf, x)
+end
+
+@testset "Strong zero" begin
+    x = ConcreteRNumber(0.0)
+    @test isnan((@jit grad_divinf(x))[1])
+    @test iszero((@jit grad_divinf_sz(x))[1])
+end
+
+function simple_grad_without_ignore(x::AbstractArray{T}) where {T}
+    return (sum(x; dims=1), x .- 1, (x, x .+ 2)), sum(abs2, x)
+end
+
+function simple_grad_with_ignore(x::AbstractArray{T}) where {T}
+    return Reactant.ignore_derivatives(sum(x; dims=1), x .- 1, (x, x .+ 2)), sum(abs2, x)
+end
+
+function zero_grad(x)
+    return Reactant.ignore_derivatives(sum(x))
+end
+
+function zero_grad2(x)
+    return Reactant.ignore_derivatives(sum(x), x)
+end
+
+@testset "ignore_derivatives" begin
+    x = Reactant.to_rarray(rand(Float32, 4, 4))
+
+    res1 = @jit Enzyme.gradient(Reverse, simple_grad_without_ignore, x)
+    @test res1[1] ≈ (2 .* Array(x) .+ 4)
+
+    res2 = @jit Enzyme.gradient(Reverse, simple_grad_with_ignore, x)
+    @test res2[1] ≈ (2 .* Array(x))
+
+    ∂x, result = @jit Enzyme.gradient(ReverseWithPrimal, zero_grad, x)
+    @test result isa ConcreteRNumber{Float32}
+    @test ∂x[1] ≈ zeros(Float32, 4, 4)
+
+    ∂x2, result2 = @jit Enzyme.gradient(ReverseWithPrimal, zero_grad2, x)
+    @test result2 isa Tuple{<:ConcreteRNumber{Float32},<:ConcreteRArray{Float32,2}}
+    @test ∂x2[1] ≈ zeros(Float32, 4, 4)
 end

@@ -10,7 +10,7 @@ module API
     const mlir_c = if Reactant_jll.is_available()
         Reactant_jll.libReactantExtra
     else
-        ""
+        missing
     end
 
     # MLIR C API

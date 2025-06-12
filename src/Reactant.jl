@@ -6,7 +6,7 @@ using ReactantCore:
 using LinearAlgebra: LinearAlgebra
 using Random: Random, AbstractRNG
 using EnumX: @enumx
-using Functors: @leaf
+using Functors: Functors, @leaf
 
 using Adapt: Adapt, WrappedArray
 using GPUArraysCore: GPUArraysCore, @allowscalar, allowscalar # keep this import to allow users to do `Reactant.allowscalar(false)`
@@ -160,8 +160,8 @@ use_overlayed_version(::TracedRArray) = true
 use_overlayed_version(::TracedRNumber) = true
 use_overlayed_version(::Number) = false
 use_overlayed_version(::MissingTracedValue) = true
-use_overlayed_version(::TracedRNG) = true
 use_overlayed_version(::AbstractArray{<:TracedRNumber}) = true
+use_overlayed_version(rng::ReactantRNG) = use_overlayed_version(rng.seed)
 
 function use_overlayed_version(x::AbstractArray)
     a = ancestor(x)

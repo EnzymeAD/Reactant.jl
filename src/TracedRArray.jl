@@ -376,7 +376,7 @@ function _setindex_linear!(a::TracedRArray{T,N}, v, indices::AbstractArray) wher
     res = Ops.scatter_setindex(
         a,
         scalar_index_to_cartesian(vec(indices), size(a)),
-        materialize_traced_array(vec(v)),
+        TracedUtils.promote_to(TracedRArray{T,1}, materialize_traced_array(vec(v))),
     )
     set_mlir_data!(a, get_mlir_data(res))
     return a
@@ -439,22 +439,11 @@ function Base.setindex!(a::TracedRArray{T,N}, v, indices::Vararg{Any,N}) where {
         ]
         updates = Ops.reshape(updates, updates_shape)
 
-        # simply set the 2nd block argument as a result
-        update_computation = MLIR.IR.Region()
-        block = MLIR.IR.Block(
-            [Ops.mlir_type(TracedRNumber{T}), Ops.mlir_type(TracedRNumber{T})],
-            [MLIR.IR.Location(), MLIR.IR.Location()],
-        )
-        return_op = MLIR.Dialects.stablehlo.return_([MLIR.IR.argument(block, 2)])
-        MLIR.IR.rmfromparent!(return_op)
-        push!(block, return_op)
-        pushfirst!(update_computation, block)
-
         res = Ops.scatter(
+            (xᵢ, xⱼ) -> xⱼ,
             [a],
             gather_dims.start_indices,
             [updates];
-            update_computation,
             update_window_dims=gather_dims.offset_dims,
             inserted_window_dims=gather_dims.collapsed_slice_dims,
             input_batching_dims=Int64[],
@@ -1408,6 +1397,29 @@ function Base._reverse!(a::AnyTracedRArray{T,N}, dims::NTuple{M,Int}) where {T,N
     a_mat = materialize_traced_array(a)
     copyto!(a, Ops.reverse(a_mat; dimensions=dims))
     return a
+end
+
+function Base.circshift!(
+    dest::AnyTracedRArray{T,N}, src, shiftamt::Base.DimsInteger
+) where {T,N}
+    src = TracedUtils.promote_to(TracedRArray{T,N}, materialize_traced_array(src))
+    shiftamt = Base.fill_to_length(shiftamt, 0, Val(N))
+
+    for i in 1:N
+        amt = shiftamt[i] % size(src, i)
+        amt == 0 && continue
+        if amt > 0
+            src1 = selectdim(src, i, (size(src, i) - amt + 1):size(src, i))
+            src2 = selectdim(src, i, 1:(size(src, i) - amt))
+        else
+            src1 = selectdim(src, i, (-amt + 1):size(src, i))
+            src2 = selectdim(src, i, 1:(-amt))
+        end
+        src = cat(src1, src2; dims=i)
+    end
+
+    copyto!(dest, src)
+    return dest
 end
 
 end

@@ -1337,3 +1337,26 @@ sameunitrange(x, y) = first(x) == first(y) && last(x) == last(y)
         end
     end
 end
+
+@testset "circshift" begin
+    x = reshape(collect(Float32, 1:36), 2, 6, 3)
+    x_ra = Reactant.to_rarray(x)
+
+    @test @jit(circshift(x_ra, (1, 2))) ≈ circshift(x, (1, 2))
+    @test @jit(circshift(x_ra, (1, 2, 3))) ≈ circshift(x, (1, 2, 3))
+    @test @jit(circshift(x_ra, (-3, 2))) ≈ circshift(x, (-3, 2))
+    @test @jit(circshift(x_ra, (5, 2))) ≈ circshift(x, (5, 2))
+end
+
+linrange_mat(x1, x2) = Reactant.materialize_traced_array(LinRange(x1, x2, 10024))
+
+@testset "LinRange" begin
+    x1 = 0.0f0
+    x2 = 1.0f0
+    x1_ra = Reactant.to_rarray(x1; track_numbers=Number)
+    x2_ra = Reactant.to_rarray(x2; track_numbers=Number)
+
+    @test @jit(linrange_mat(x1_ra, x2_ra)) ≈ collect(LinRange(x1, x2, 10024))
+    hlo = repr(@code_hlo(linrange_mat(x1_ra, x2_ra)))
+    @test contains(hlo, "stablehlo.iota")
+end

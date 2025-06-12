@@ -287,14 +287,30 @@ function device_id(; result=nothing::Union{Nothing,IR.Type}, location=Location()
     )
 end
 
+"""
+`dynamic_gather`
+
+Gathers elements from `source` using `indices`.
+
+Given a shape `N0 x N1 x ...`, `output[i0, i1, ...]` is given by
+`input[j0, j1, ...]` where `jn = indices[i0, i1, ...] mod Ni` for
+`n = dimension` and `jn = in` otherwise.
+
+Similar to `np.take_along_axis`, except that OOB indices wrap.
+"""
 function dynamic_gather(
-    source::Value, indices::Value; output::IR.Type, dimension, location=Location()
+    source::Value,
+    indices::Value;
+    output=nothing::Union{Nothing,IR.Type},
+    dimension,
+    location=Location(),
 )
-    op_ty_results = IR.Type[output,]
+    op_ty_results = IR.Type[]
     operands = Value[source, indices]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[namedattribute("dimension", dimension),]
+    !isnothing(output) && push!(op_ty_results, output)
 
     return create_operation(
         "tpu.dynamic_gather",
@@ -303,8 +319,8 @@ function dynamic_gather(
         owned_regions,
         successors,
         attributes,
-        results=op_ty_results,
-        result_inference=false,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
     )
 end
 
@@ -971,6 +987,25 @@ function rotate(
     )
 end
 
+function sitofp(in::Value; output::IR.Type, rounding_mode, location=Location())
+    op_ty_results = IR.Type[output,]
+    operands = Value[in,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[namedattribute("rounding_mode", rounding_mode),]
+
+    return create_operation(
+        "tpu.sitofp",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
 function sem_read(
     semaphore::Value; result=nothing::Union{Nothing,IR.Type}, location=Location()
 )
@@ -1185,6 +1220,32 @@ function strided_store(
     )
 end
 
+function sublane_shuffle(
+    lhs::Value,
+    rhs::Value;
+    result=nothing::Union{Nothing,IR.Type},
+    pattern,
+    location=Location(),
+)
+    op_ty_results = IR.Type[]
+    operands = Value[lhs, rhs]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[namedattribute("pattern", pattern),]
+    !isnothing(result) && push!(op_ty_results, result)
+
+    return create_operation(
+        "tpu.sublane_shuffle",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
+    )
+end
+
 function trace(;
     results::Vector{IR.Type}, message, level, region::Region, location=Location()
 )
@@ -1248,6 +1309,25 @@ function trace_stop(; location=Location())
     )
 end
 
+function transpose(vector::Value; result::IR.Type, permutation, location=Location())
+    op_ty_results = IR.Type[result,]
+    operands = Value[vector,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[namedattribute("permutation", permutation),]
+
+    return create_operation(
+        "tpu.transpose",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
 function unpack_subelements(
     source::Value; output::IR.Type, index, pack_format, location=Location()
 )
@@ -1280,6 +1360,34 @@ function unroll_vectors(input::Value; output::Vector{IR.Type}, location=Location
 
     return create_operation(
         "tpu.unroll_vectors",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+function vector_load(
+    base::Value,
+    indices::Vector{Value},
+    mask=nothing::Union{Nothing,Value};
+    result::IR.Type,
+    strides,
+    location=Location(),
+)
+    op_ty_results = IR.Type[result,]
+    operands = Value[base, indices...]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[namedattribute("strides", strides),]
+    !isnothing(mask) && push!(operands, mask)
+    push!(attributes, operandsegmentsizes([1, length(indices), (mask == nothing) ? 0 : 1]))
+
+    return create_operation(
+        "tpu.vector_load",
         location;
         operands,
         owned_regions,

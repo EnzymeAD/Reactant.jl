@@ -10628,7 +10628,14 @@ function sdyAttributeIsATensorShardingAttr(attr)
 end
 
 function sdyTensorShardingAttrGet(
-    ctx, meshOrRef, nDimShardings, dimShardings, nReplicatedAxes, replicatedAxes
+    ctx,
+    meshOrRef,
+    nDimShardings,
+    dimShardings,
+    nReplicatedAxes,
+    replicatedAxes,
+    nUnreducedAxes,
+    unreducedAxes,
 )
     @ccall mlir_c.sdyTensorShardingAttrGet(
         ctx::MlirContext,
@@ -10637,6 +10644,8 @@ function sdyTensorShardingAttrGet(
         dimShardings::Ptr{MlirAttribute},
         nReplicatedAxes::intptr_t,
         replicatedAxes::Ptr{MlirAttribute},
+        nUnreducedAxes::intptr_t,
+        unreducedAxes::Ptr{MlirAttribute},
     )::MlirAttribute
 end
 
@@ -10660,6 +10669,16 @@ end
 
 function sdyTensorShardingAttrGetReplicatedAxesElem(attr, pos)
     @ccall mlir_c.sdyTensorShardingAttrGetReplicatedAxesElem(
+        attr::MlirAttribute, pos::intptr_t
+    )::MlirAttribute
+end
+
+function sdyTensorShardingAttrGetUnreducedAxesSize(attr)
+    @ccall mlir_c.sdyTensorShardingAttrGetUnreducedAxesSize(attr::MlirAttribute)::intptr_t
+end
+
+function sdyTensorShardingAttrGetUnreducedAxesElem(attr, pos)
+    @ccall mlir_c.sdyTensorShardingAttrGetUnreducedAxesElem(
         attr::MlirAttribute, pos::intptr_t
     )::MlirAttribute
 end
