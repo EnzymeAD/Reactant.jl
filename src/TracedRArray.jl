@@ -440,7 +440,7 @@ function Base.setindex!(a::TracedRArray{T,N}, v, indices::Vararg{Any,N}) where {
         updates = Ops.reshape(updates, updates_shape)
 
         res = Ops.scatter(
-            (xᵢ, xⱼ) -> xᵢ,
+            (xᵢ, xⱼ) -> xⱼ,
             [a],
             gather_dims.start_indices,
             [updates];
