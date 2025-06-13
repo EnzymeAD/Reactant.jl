@@ -19,7 +19,7 @@ function maybe_square(cond, x)
     if cond
         x = x .^ 2
     else
-        x = x
+        x = x .^ 3
     end
     return x
 end
@@ -126,7 +126,7 @@ In addition to conditional evaluations, [`@trace`](@ref) also supports capturing
 loops. This is possible in the form of both for and while loops.
 This enables one to write algorithm that would not be possible otherwise such as
 performing computations until convergence or running a computation for an certain
-number of iterations which is only known during runtime. 
+number of iterations which is only known during runtime.
 
 Here is an example of a function which computes the cumsum in non-optimized manner
 using a for loop:
@@ -146,7 +146,8 @@ x = Reactant.to_rarray([1., 2., 3.])
 ```
 
 Similarly, one can trace while loops. The following is a minimal implementation of the
-[Sinkhorn-Knopp algorithm]() which aims to solve the entropic optimal transport problem:
+[Sinkhorn-Knopp algorithm](https://en.wikipedia.org/wiki/Sinkhorn's_theorem) which aims
+to solve the entropic optimal transport problem:
 
 ```@example control_flow_tutorial
 using LinearAlgebra: Diagonal

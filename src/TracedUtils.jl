@@ -26,6 +26,13 @@ function ReactantCore.materialize_traced_array(x::AbstractRange)
     return Reactant.aos_to_soa(collect(x))
 end
 
+function ReactantCore.materialize_traced_array(r::LinRange)
+    T = Reactant.unwrapped_eltype(r)
+    idxs = Ops.iota(T, [length(r)]; iota_dimension=1)
+    t = idxs ./ r.lendiv
+    return T.((1 .- t) .* r.start .+ t .* r.stop)
+end
+
 function ReactantCore.materialize_traced_array(x::Base.OneTo)
     return Ops.iota(Reactant.unwrapped_eltype(x), [length(x)]; iota_dimension=1)
 end
@@ -678,10 +685,7 @@ function finalize_mlir_fn(
         end
         if args_in_result != :all
             if has_idx(v, argprefix)
-                if !(
-                    (args_in_result == :result_and_mutated || args_in_result == :result) &&
-                    has_idx(v, resprefix)
-                )
+                if !(args_in_result == :result && has_idx(v, resprefix))
                     continue
                 end
             end
@@ -689,7 +693,7 @@ function finalize_mlir_fn(
         push!(linear_results, v)
     end
 
-    if args_in_result == :mutated || args_in_result == :result_and_mutated
+    if args_in_result == :mutated
         append!(linear_results, linear_args[mutated_args])
     end
     if !isnothing(verify_arg_names) && typeof.(linear_args) != typeof.(linear_results)

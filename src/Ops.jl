@@ -1678,23 +1678,11 @@ instead.
     @assert length(updates) == size(scatter_indices, 1)
     @assert size(scatter_indices, 2) == N
 
-    updates = convert(TracedRArray{T,1}, updates)
-
-    update_computation = MLIR.IR.Region()
-    block = MLIR.IR.Block(
-        [mlir_type(TracedRNumber{T}), mlir_type(TracedRNumber{T})],
-        [MLIR.IR.Location(), MLIR.IR.Location()],
-    )
-    return_op = MLIR.Dialects.stablehlo.return_([MLIR.IR.argument(block, 2)])
-    MLIR.IR.rmfromparent!(return_op)
-    push!(block, return_op)
-    pushfirst!(update_computation, block)
-
     return scatter(
+        (a, b) -> b,
         [dest],
         scatter_indices,
-        [updates];
-        update_computation,
+        [convert(TracedRArray{T,1}, updates)];
         update_window_dims=Int64[],
         inserted_window_dims=collect(Int64, 1:N),
         input_batching_dims=Int64[],
@@ -1703,6 +1691,36 @@ instead.
         index_vector_dim=Int64(2),
         location,
     )[1]
+end
+
+@noinline function scatter(
+    f::F,
+    dest::Vector{TracedRArray{T,N}},
+    scatter_indices::TracedRArray{Int64},
+    updates::Vector{<:TracedRArray{T}};
+    location=mlir_stacktrace("scatter", @__FILE__, @__LINE__),
+    kwargs...,
+) where {F,T,N}
+    sample_inputs = (
+        Reactant.TracedUtils.promote_to(TracedRNumber{T}, zero(T)),
+        Reactant.TracedUtils.promote_to(TracedRNumber{T}, zero(T)),
+    )
+
+    compiled_fn =
+        Reactant.TracedUtils.make_mlir_fn(
+            f,
+            sample_inputs,
+            (),
+            "update_computation",
+            false;
+            args_in_result=:result,
+            return_dialect=:stablehlo,
+        ).f
+    update_computation = MLIR.IR.Region()
+    MLIR.API.mlirRegionTakeBody(update_computation, MLIR.IR.region(compiled_fn, 1))
+    MLIR.IR.rmfromparent!(compiled_fn)
+
+    return scatter(dest, scatter_indices, updates; update_computation, location, kwargs...)
 end
 
 @noinline function scatter(
@@ -1716,6 +1734,8 @@ end
     scatter_indices_batching_dims::Vector{Int64},
     scatter_dims_to_operand_dims::Vector{Int64},
     index_vector_dim::Int64,
+    unique_indices::Union{Bool,Nothing}=nothing,
+    indices_are_sorted::Union{Bool,Nothing}=nothing,
     location=mlir_stacktrace("scatter", @__FILE__, @__LINE__),
 ) where {T,N}
     scatter_indices = subtract(
@@ -1750,6 +1770,8 @@ end
         update_computation,
         scatter_dimension_numbers,
         result_0=[mlir_type(TracedRArray{T,N}, size(d)) for d in dest],
+        unique_indices,
+        indices_are_sorted,
         location,
     )
 
@@ -1849,7 +1871,13 @@ end
 end
 
 @noinline function while_loop(
-    cond_fn::CFn, body_fn::BFn, args...; track_numbers, verify_arg_names=nothing
+    cond_fn::CFn,
+    body_fn::BFn,
+    args...;
+    track_numbers,
+    verify_arg_names=nothing,
+    checkpointing=false,
+    mincut=false,
 ) where {CFn,BFn}
     # TODO: detect and prevent mutation within the condition
 
@@ -1915,7 +1943,15 @@ end
         cond=cond_reg,
         body=body_reg,
     )
-    MLIR.IR.attr!(while_op, "enzymexla.disable_min_cut", MLIR.IR.UnitAttribute())
+
+    if !mincut
+        MLIR.IR.attr!(while_op, "enzymexla.disable_min_cut", MLIR.IR.UnitAttribute())
+    end
+
+    if checkpointing
+        MLIR.IR.attr!(while_op, "enzymexla.enable_checkpointing", MLIR.IR.Attribute(true))
+    end
+
     return map(enumerate(linear_args)) do (i, arg)
         Reactant.TracedUtils.set_mlir_data!(arg, MLIR.IR.result(while_op, i))
     end
@@ -2354,7 +2390,7 @@ end
             (),
             f_name,
             false;
-            args_in_result=:result_and_mutated,
+            args_in_result=:all,
             do_transpose=false,
             argprefix,
             resprefix,
