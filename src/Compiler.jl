@@ -1539,6 +1539,7 @@ function compile_mlir!(
     blas_int_width = sizeof(BLAS.BlasInt) * 8
     lower_enzymexla_linalg_pass = "lower-enzymexla-linalg{backend=$backend \
                                    blas_int_width=$blas_int_width}"
+    lower_enzyme_probprog_pass = "lower-enzyme-probprog{backend=$backend}"
 
     if optimize === :all
         run_pass_pipeline!(
@@ -1739,6 +1740,24 @@ function compile_mlir!(
                 ',',
             ),
             "only_enzyme",
+        )
+    elseif optimize === :probprog
+        run_pass_pipeline!(
+            mod,
+            join(
+                [
+                    "mark-func-memory-effects",
+                    "enzyme-batch",
+                    "probprog",
+                    "canonicalize",
+                    "remove-unnecessary-enzyme-ops",
+                    "enzyme-simplify-math",
+                    lower_enzyme_probprog_pass,
+                    jit
+                ],
+                ',',
+            ),
+            "probprog",
         )
     elseif optimize === :only_enzyme
         run_pass_pipeline!(
