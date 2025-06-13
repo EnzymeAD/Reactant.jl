@@ -928,6 +928,8 @@ function optimization_passes(;
         "split_convolution_into_reverse_convolution",
         # TODO we want to enable but may cause an infinite compile time
         # "concat_to_onedim_dusslice",
+        "scatter_multiply_simplify",
+        "unary_elementwise_scatter_simplify",
     ]
 
     # constant prop patterns
@@ -980,6 +982,7 @@ function optimization_passes(;
             "concat_const_prop<1>($max_constant_threshold)",
             "dynamic_update_slice_const_prop($max_constant_threshold)",
             "scatter_update_computation_const_prop",
+            "gather_const_prop",
         ],
     )
 
