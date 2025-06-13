@@ -35,7 +35,7 @@ function TracedUtils.materialize_traced_array(r::OneHotArrays.OneHotArray)
 
     linear_indices =
         TracedUtils.promote_to(TracedRArray{Int64,ndims(r.indices)}, indices) .+
-        (0:(B - 1)) .* N
+        Ops.iota(Int64, [B]; iota_dimension=1) .* N
 
     z = Ops.fill(false, (N, B))
     z[linear_indices] = fill(true, length(linear_indices))
