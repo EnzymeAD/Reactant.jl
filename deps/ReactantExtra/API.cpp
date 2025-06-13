@@ -39,11 +39,14 @@
 #include "src/enzyme_ad/jax/Dialect/Dialect.h"
 #include "src/enzyme_ad/jax/Implementations/XLADerivatives.h"
 #include "src/enzyme_ad/jax/Passes/Passes.h"
+#include "src/enzyme_ad/jax/RegistryUtils.h"
 #include "llvm/Support/TargetSelect.h"
 
 #include "mlir/Dialect/LLVMIR/Transforms/InlinerInterfaceImpl.h"
 #include "stablehlo/dialect/ChloOps.h"
 #include "stablehlo/dialect/StablehloOps.h"
+#include "stablehlo/transforms/Passes.h"
+#include "stablehlo/transforms/optimization/Passes.h"
 
 #include "absl/log/globals.h"
 #include "absl/log/initialize.h"
@@ -75,6 +78,7 @@
 #include "xla/pjrt/pjrt_api.h"
 #include "xla/pjrt/pjrt_c_api_client.h"
 #include "xla/pjrt/pjrt_executable.h"
+#include "xla/pjrt/plugin/xla_cpu/xla_cpu_pjrt_client.h"
 
 // CPU collectives
 #include "xla/backends/cpu/collectives/mpi_collectives.h"
@@ -147,10 +151,6 @@
 
 #include "jaxlib/mosaic/dialect/tpu/tpu_dialect.h"
 
-// Triton did a dumb thing and their import is incompatible
-// We don't use so disabling until upstream fix
-// #include "triton/Dialect/Triton/IR/Dialect.h"
-
 #include "llvm/Support/ExtensibleRTTI.h"
 #include <llvm/Support/FileSystem.h>
 #include <llvm/Support/raw_ostream.h>
@@ -163,10 +163,6 @@ namespace enzyme {
 void registerRemoveTransformPass();
 void registerGenerateApplyPatternsPass();
 } // namespace enzyme
-
-namespace triton {
-class TritonDialect;
-}
 
 } // namespace mlir
 
@@ -213,6 +209,8 @@ using HeldPjRtBuffer = HeldValue<std::shared_ptr<xla::PjRtBuffer>>;
 using HeldIfrtArray = HeldValue<tsl::RCReference<xla::ifrt::Array>>;
 using HeldHloModule = HeldValue<std::shared_ptr<xla::HloModule>>;
 using HeldIfrtSharding = HeldValue<std::shared_ptr<xla::ifrt::Sharding>>;
+using HeldIfrtLoadedExecutable =
+    HeldValue<std::shared_ptr<xla::ifrt::LoadedExecutable>>;
 
 extern "C" void (*ReactantThrowError)(const char *) = nullptr;
 
@@ -409,8 +407,7 @@ PjRtClient *MakeCPUClientInternal(
   if (collectives.has_value())
     options.collectives = collectives.value();
 
-  auto client = MyValueOrThrow(GetTfrtCpuClient(options));
-  return client.release();
+  return MyValueOrThrow(GetPjRtCpuClient(options)).release();
 }
 
 extern "C" PjRtClient *MakeCPUClient(uint8_t asynchronous, int node_id) {
@@ -1118,25 +1115,15 @@ extern "C" int PjRtLoadedExecutableNumPartitions(PjRtLoadedExecutable *exec) {
   return exec->num_partitions();
 }
 
-void prepareRegistry(mlir::DialectRegistry &registry);
-
 extern "C" void RegisterDialects(MlirContext cctx) {
   mlir::MLIRContext &context = *unwrap(cctx);
   DialectRegistry registry;
-  prepareRegistry(registry);
+  mlir::enzyme::prepareRegistry(registry);
+  mlir::enzyme::registerDialects(registry);
+  mlir::enzyme::registerInterfaces(registry);
+
   context.appendDialectRegistry(registry);
-  context.loadDialect<mlir::arith::ArithDialect>();
-  context.loadDialect<mlir::enzyme::EnzymeDialect>();
-  context.loadDialect<mlir::enzymexla::EnzymeXLADialect>();
-  // context.loadDialect<mlir::triton::TritonDialect>();
-  context.loadDialect<mlir::tpu::TPUDialect>();
-  context.loadDialect<mlir::tensor::TensorDialect>();
-  context.loadDialect<mlir::func::FuncDialect>();
-  context.loadDialect<mlir::mhlo::MhloDialect>();
-  context.loadDialect<mlir::stablehlo::StablehloDialect>();
-  context.loadDialect<mlir::chlo::ChloDialect>();
-  context.loadDialect<mlir::sdy::SdyDialect>();
-  context.loadDialect<mlir::LLVM::LLVMDialect>();
+  mlir::enzyme::loadAllRegisteredDialects(context);
 }
 
 #include "mlir/Dialect/LLVMIR/Transforms/InlinerInterfaceImpl.h"
@@ -1145,53 +1132,14 @@ extern "C" void RegisterDialects(MlirContext cctx) {
 #include "xla/service/spmd/shardy/sdy_round_trip/pipelines.h"
 
 extern "C" void InitializePasses(MlirDialectRegistry creg) {
-  mlir::registerenzymePasses();
-  enzyme::registerenzymexlaPasses();
-
-  // Register the standard passes we want.
-  mlir::registerTransformsPasses();
-  mlir::registerLowerAffinePass();
-  mlir::registerSCCPPass();
-  mlir::registerInlinerPass();
-  mlir::registerSymbolDCEPass();
-  mlir::registerLoopInvariantCodeMotionPass();
-  mlir::registerConvertSCFToOpenMPPass();
-  mlir::affine::registerAffinePasses();
-  mlir::registerReconcileUnrealizedCastsPass();
-
-  /*
-    registry.addExtension(+[](MLIRContext *ctx, LLVM::LLVMDialect *dialect) {
-      LLVM::LLVMFunctionType::attachInterface<MemRefInsider>(*ctx);
-      LLVM::LLVMArrayType::attachInterface<MemRefInsider>(*ctx);
-      LLVM::LLVMPointerType::attachInterface<MemRefInsider>(*ctx);
-      LLVM::LLVMStructType::attachInterface<MemRefInsider>(*ctx);
-      MemRefType::attachInterface<PtrElementModel<MemRefType>>(*ctx);
-      LLVM::LLVMStructType::attachInterface<
-          PtrElementModel<LLVM::LLVMStructType>>(*ctx);
-      LLVM::LLVMPointerType::attachInterface<
-          PtrElementModel<LLVM::LLVMPointerType>>(*ctx);
-      LLVM::LLVMArrayType::attachInterface<PtrElementModel<LLVM::LLVMArrayType>>(
-          *ctx);
-    });
-    */
-
-  // Transform dialect and extensions.
-  mlir::transform::registerInterpreterPass();
-  mlir::enzyme::registerGenerateApplyPatternsPass();
-  mlir::enzyme::registerRemoveTransformPass();
-
-  // xla + shardy specific passes
-  xla::sdy::registerSdyRoundTripExportPipeline();
-  xla::sdy::registerSdyRoundTripImportPipeline();
-  mlir::sdy::registerAllSdyPassesAndPipelines();
-  xla::sdy::registerStablehloExportPipeline();
-  xla::sdy::registerStablehloImportPipeline();
-  xla::sdy::registerStablehloImportShardingsPass();
+  mlir::enzyme::initializePasses();
 }
 
 extern "C" void InitializeRegistry(MlirDialectRegistry creg) {
   mlir::DialectRegistry &registry = *unwrap(creg);
-  prepareRegistry(registry);
+  mlir::enzyme::prepareRegistry(registry);
+  mlir::enzyme::registerDialects(registry);
+  mlir::enzyme::registerInterfaces(registry);
 
   mlir::registerLLVMDialectImport(registry);
   mlir::registerNVVMDialectImport(registry);
@@ -1424,7 +1372,7 @@ ifrt_pjrt_array_create(ifrt::PjRtClient *client,
 
 // we might me interested in the `Compiler::Compile` method variant that accepts
 // `Topology`
-extern "C" xla::ifrt::LoadedExecutable *
+extern "C" HeldIfrtLoadedExecutable *
 ifrt_compile(ifrt::Client *client, MlirModule cmod, int64_t device_id,
              const int64_t *mesh_ids, int64_t num_mesh_ids,
              const char *xla_gpu_cuda_data_dir, bool use_shardy_partitioner,
@@ -1452,9 +1400,8 @@ ifrt_compile(ifrt::Client *client, MlirModule cmod, int64_t device_id,
       std::make_unique<xla::ifrt::HloProgram>(xla::ifrt::HloProgram(cmod_op));
   auto compiler = client->GetDefaultCompiler();
 
-  return MyValueOrThrow(
-             compiler->Compile(std::move(program), std::move(options)))
-      .release();
+  return reactant::capture(MyValueOrThrow(
+      compiler->CompileAndLoad(std::move(program), std::move(options))));
 }
 
 extern "C" void
@@ -2325,19 +2272,20 @@ extern "C" mlir::sdy::TensorShardingAttr hloShardingToTensorShardingAttr(
 
   return mlir::sdy::TensorShardingAttr::get(
       context, meshName, tensorShardingAttr.getDimShardings(),
-      tensorShardingAttr.getReplicatedAxes());
+      tensorShardingAttr.getReplicatedAxes(),
+      tensorShardingAttr.getUnreducedAxes());
 }
 
 #pragma endregion
 
 #pragma region ifrt::LoadedExecutable
 
-extern "C" void ifrt_loaded_executable_dtor(ifrt::LoadedExecutable *exec) {
+extern "C" void ifrt_loaded_executable_dtor(HeldIfrtLoadedExecutable *exec) {
   delete exec;
 }
 
 extern "C" void ifrt_loaded_executable_execute(
-    ifrt::LoadedExecutable *exec, int num_args,
+    HeldIfrtLoadedExecutable *exec, int num_args,
     HeldValue<tsl::RCReference<ifrt::Array>> **op_args,
     uint8_t *is_arg_donatable, int num_results,
     HeldValue<tsl::RCReference<ifrt::Array>> **op_results, uint8_t *futures,
@@ -2355,7 +2303,7 @@ extern "C" void ifrt_loaded_executable_execute(
   }
   options.fill_status = true;
 
-  auto result = MyValueOrThrow(exec->Execute(
+  auto result = MyValueOrThrow(exec->obj()->Execute(
       static_cast<absl::Span<tsl::RCReference<xla::ifrt::Array>>>(args),
       options, /* devices */ std::nullopt));
 
@@ -2376,16 +2324,16 @@ extern "C" void ifrt_loaded_executable_execute(
 }
 
 extern "C" ifrt::Client *
-ifrt_loaded_executable_client(ifrt::LoadedExecutable *exec) {
-  return exec->client();
+ifrt_loaded_executable_client(HeldIfrtLoadedExecutable *exec) {
+  return exec->obj()->client();
 }
 
 extern "C" void
-ifrt_loaded_executable_get_parameter_shardings(ifrt::LoadedExecutable *exec,
+ifrt_loaded_executable_get_parameter_shardings(HeldIfrtLoadedExecutable *exec,
                                                xla::OpSharding **op_shardings,
                                                int32_t num_op_shardings) {
   std::optional<std::vector<xla::OpSharding>> shardings =
-      exec->GetParameterShardings();
+      exec->obj()->GetParameterShardings();
   if (!shardings.has_value()) {
     ReactantThrowError(
         "No sharding found for the output of the loaded executable");
@@ -2405,11 +2353,11 @@ ifrt_loaded_executable_get_parameter_shardings(ifrt::LoadedExecutable *exec,
 }
 
 extern "C" void
-ifrt_loaded_executable_get_output_shardings(ifrt::LoadedExecutable *exec,
+ifrt_loaded_executable_get_output_shardings(HeldIfrtLoadedExecutable *exec,
                                             xla::OpSharding **op_shardings,
                                             int32_t num_op_shardings) {
   std::optional<std::vector<xla::OpSharding>> shardings =
-      exec->GetOutputShardings();
+      exec->obj()->GetOutputShardings();
   if (!shardings.has_value()) {
     ReactantThrowError(
         "No sharding found for the output of the loaded executable");
@@ -2429,9 +2377,9 @@ ifrt_loaded_executable_get_output_shardings(ifrt::LoadedExecutable *exec,
 }
 
 extern "C" void
-ifrt_loaded_executable_get_hlo_modules(ifrt::LoadedExecutable *exec,
+ifrt_loaded_executable_get_hlo_modules(HeldIfrtLoadedExecutable *exec,
                                        void **hlo_modules, int32_t *nmodules) {
-  auto hlo_modules_vec = MyValueOrThrow(exec->GetHloModules());
+  auto hlo_modules_vec = MyValueOrThrow(exec->obj()->GetHloModules());
   *nmodules = hlo_modules_vec.size();
   for (int32_t i = 0; i < *nmodules; i++) {
     hlo_modules[i] = reactant::capture(hlo_modules_vec[i]);
@@ -2439,8 +2387,8 @@ ifrt_loaded_executable_get_hlo_modules(ifrt::LoadedExecutable *exec,
 }
 
 extern "C" int32_t
-ifrt_loaded_executable_num_devices(ifrt::LoadedExecutable *exec) {
-  return static_cast<int32_t>(exec->num_devices());
+ifrt_loaded_executable_num_devices(HeldIfrtLoadedExecutable *exec) {
+  return static_cast<int32_t>(exec->obj()->num_devices());
 }
 
 #pragma endregion

@@ -725,8 +725,6 @@ function optimization_passes(;
         "merge_consecutive_reshapes<16>",
         "transpose_is_reshape<16>",
         "zero_extent_tensor_canon<16>",
-        "chlo_inf_const_prop<16>",
-        "gamma_const_prop<16>",
         "cse_broadcast_in_dim<16>",
         "cse_slice<16>",
         "cse_transpose<16>",
@@ -752,8 +750,6 @@ function optimization_passes(;
         "min_simplify<16>",
         "or_simplify<16>",
         "xor_simplify<16>",
-        "abs_const_prop<16>",
-        "negate_simplify<16>",
         "mul_simplify<16>",
         "div_simplify<16>",
         "rem_simplify<16>",
@@ -761,20 +757,14 @@ function optimization_passes(;
         "simplify_extend<16>",
         "simplify_wrap<16>",
         "simplify_rotate<16>",
-        "sqrt_simplify<16>",
-        "cos_simplify<16>",
-        "sin_simplify<16>",
         "noop_slice<16>",
         "noop_reverse<16>",
-        "const_prop_through_barrier<16>",
         "slice_slice<16>",
         "shift_right_logical_simplify<16>",
         "pad_simplify<16>($max_constant_threshold)",
         "select_pad_to_dus<1>",
         "and_pad_pad<1>",
         "negative_pad_to_slice<16>",
-        "tanh_simplify<16>",
-        "exp_simplify<16>",
         "slice_simplify<16>",
         "convert_simplify<16>",
         "dynamic_slice_to_static<16>",
@@ -792,7 +782,6 @@ function optimization_passes(;
         "slice_elementwise<1>",
         "slice_pad<1>",
         "dot_reshape_dot<1>",
-        "concat_const_prop<1>($max_constant_threshold)",
         "concat_fuse<1>",
         "pad_reshape_pad<1>",
         "pad_pad<1>",
@@ -845,20 +834,15 @@ function optimization_passes(;
         "slice_dot_general<1>",
         "if_inline<1>",
         "if_to_select<1>",
-        "dynamic_update_slice_const_prop($max_constant_threshold)",
         "dynamic_gather_op_is_not_dynamic<16>",
         "divide_sqrt_to_multiply_rsqrt<16>",
         "associative_binary_op_reordering<1>",
         "transpose_broadcast_in_dim_to_broadcast_in_dim<16>",
-        "scatter_indices_are_unique",
+        # XXX: needs upstream fix
+        # "scatter_indices_are_unique",
         "replace_neg_add_with_subtract",
-        "log_const_prop<1>",
-        "log_plus_one_const_prop<1>",
         "binop_const_simplify",
-        "is_finite_const_prop",
-        "not_const_prop",
         "not_select_simplify",
-        "scatter_update_computation_const_prop",
         "common_compare_expression_rewrite",
         "compare_select_simplify",
         "while_simplify<1>(1)",
@@ -934,9 +918,73 @@ function optimization_passes(;
         "concat_elementwise",
         "reduce_reduce",
         "conj_real",
+        "select_broadcast_in_dim",
+        "if_op_lift_common_ops",
+        "involution_neg_simplify",
+        "involution_conj_simplify",
+        "involution_not_simplify",
+        "real_conj_simplify",
+        "conj_complex_simplify",
+        "split_convolution_into_reverse_convolution",
         # TODO we want to enable but may cause an infinite compile time
         # "concat_to_onedim_dusslice",
+        "scatter_multiply_simplify",
+        "unary_elementwise_scatter_simplify",
     ]
+
+    # constant prop patterns
+    append!(
+        transform_passes_list,
+        [
+            # unary constant propagation
+            "chlo_inf_const_prop<16>",
+            "gamma_const_prop<16>",
+            "abs_const_prop<16>",
+            "log_const_prop<1>",
+            "log_plus_one_const_prop<1>",
+            "is_finite_const_prop",
+            "not_const_prop",
+            "neg_const_prop",
+            "sqrt_const_prop",
+            "rsqrt_const_prop",
+            "cos_const_prop",
+            "sin_const_prop",
+            "exp_const_prop",
+            "expm1_const_prop",
+            "tanh_const_prop",
+            "logistic_const_prop",
+            "conj_const_prop",
+            "ceil_const_prop",
+            "cbrt_const_prop",
+            "real_const_prop",
+            "imag_const_prop",
+            "round_const_prop",
+            "round_nearest_even_const_prop",
+            "sign_const_prop",
+            "floor_const_prop",
+            "tan_const_prop",
+            # binary constant propagation
+            "add_const_prop",
+            "and_const_prop",
+            "atan2_const_prop",
+            "complex_const_prop",
+            "div_const_prop",
+            "max_const_prop",
+            "min_const_prop",
+            "mul_const_prop",
+            "or_const_prop",
+            "pow_const_prop",
+            "rem_const_prop",
+            "sub_const_prop",
+            "xor_const_prop",
+            # other constant propagations
+            "const_prop_through_barrier<16>",
+            "concat_const_prop<1>($max_constant_threshold)",
+            "dynamic_update_slice_const_prop($max_constant_threshold)",
+            "scatter_update_computation_const_prop",
+            "gather_const_prop",
+        ],
+    )
 
     if DUS_SLICE_SIMPLIFY[]
         push!(transform_passes_list, "dus_slice_simplify")
@@ -1022,6 +1070,7 @@ function optimization_passes(;
                 "transpose_batch_norm_training",
                 "transpose_batch_norm_inference",
                 "transpose_batch_norm_grad",
+                "transpose_if",
             ],
         )
         if AGGRESSIVE_PROPAGATION[]
@@ -1342,6 +1391,7 @@ function compile_mlir!(
     donated_args::Symbol=:auto, # :auto | :none
     optimize_then_pad::Bool=true,
     runtime::Union{Val{:PJRT},Val{:IFRT}},
+    legalize_chlo_to_stablehlo::Bool=false,
     kwargs...,
 )
     @assert donated_args ∈ (:auto, :none)
@@ -1507,6 +1557,13 @@ function compile_mlir!(
                         "canonicalize",
                         "remove-unnecessary-enzyme-ops",
                         "enzyme-simplify-math",
+                        (
+                            if legalize_chlo_to_stablehlo
+                                ["func.func(chlo-legalize-to-stablehlo)"]
+                            else
+                                []
+                            end
+                        )...,
                         opt_passes2,
                         lower_enzymexla_linalg_pass,
                         jit,
@@ -1522,6 +1579,13 @@ function compile_mlir!(
                         "canonicalize",
                         "remove-unnecessary-enzyme-ops",
                         "enzyme-simplify-math",
+                        (
+                            if legalize_chlo_to_stablehlo
+                                ["func.func(chlo-legalize-to-stablehlo)"]
+                            else
+                                []
+                            end
+                        )...,
                         opt_passes2,
                         kern,
                         raise_passes,
@@ -1550,6 +1614,13 @@ function compile_mlir!(
                         "canonicalize",
                         "remove-unnecessary-enzyme-ops",
                         "enzyme-simplify-math",
+                        (
+                            if legalize_chlo_to_stablehlo
+                                ["func.func(chlo-legalize-to-stablehlo)"]
+                            else
+                                []
+                            end
+                        )...,
                         opt_passes2,
                     ]
                 end,
@@ -1574,6 +1645,13 @@ function compile_mlir!(
                         "canonicalize",
                         "remove-unnecessary-enzyme-ops",
                         "enzyme-simplify-math",
+                        (
+                            if legalize_chlo_to_stablehlo
+                                ["func.func(chlo-legalize-to-stablehlo)"]
+                            else
+                                []
+                            end
+                        )...,
                         opt_passes2,
                     ]
                 else
@@ -1587,6 +1665,13 @@ function compile_mlir!(
                         "canonicalize",
                         "remove-unnecessary-enzyme-ops",
                         "enzyme-simplify-math",
+                        (
+                            if legalize_chlo_to_stablehlo
+                                ["func.func(chlo-legalize-to-stablehlo)"]
+                            else
+                                []
+                            end
+                        )...,
                         opt_passes2,
                         kern,
                         raise_passes,
@@ -1613,6 +1698,13 @@ function compile_mlir!(
                         "canonicalize",
                         "remove-unnecessary-enzyme-ops",
                         "enzyme-simplify-math",
+                        (
+                            if legalize_chlo_to_stablehlo
+                                ["func.func(chlo-legalize-to-stablehlo)"]
+                            else
+                                []
+                            end
+                        )...,
                         opt_passes2,
                         kern,
                     ]
@@ -1635,6 +1727,13 @@ function compile_mlir!(
                     "canonicalize",
                     "remove-unnecessary-enzyme-ops",
                     "enzyme-simplify-math",
+                    (
+                        if legalize_chlo_to_stablehlo
+                            ["func.func(chlo-legalize-to-stablehlo)"]
+                        else
+                            []
+                        end
+                    )...,
                     opt_passes2,
                 ],
                 ',',
@@ -1689,6 +1788,13 @@ function compile_mlir!(
                         "canonicalize",
                         "remove-unnecessary-enzyme-ops",
                         "enzyme-simplify-math",
+                        (
+                            if legalize_chlo_to_stablehlo
+                                ["func.func(chlo-legalize-to-stablehlo)"]
+                            else
+                                []
+                            end
+                        )...,
                         opt_passes2,
                         lower_enzymexla_linalg_pass,
                         jit,
@@ -1701,6 +1807,13 @@ function compile_mlir!(
                         "canonicalize",
                         "remove-unnecessary-enzyme-ops",
                         "enzyme-simplify-math",
+                        (
+                            if legalize_chlo_to_stablehlo
+                                ["func.func(chlo-legalize-to-stablehlo)"]
+                            else
+                                []
+                            end
+                        )...,
                         opt_passes2,
                         kern,
                         raise_passes,
@@ -2164,6 +2277,7 @@ function get_common_compile_options()
         :optimize_then_pad => true,
         :optimize_communications => true,
         :cudnn_hlo_optimize => false,
+        :legalize_chlo_to_stablehlo => false,
     )
 end
 
@@ -2215,6 +2329,8 @@ const COMMON_COMPILE_OPTIONS_DOCS = """
   - `cudnn_hlo_optimize`: Run cuDNN specific HLO optimizations. This is only relevant for
     GPU backends and is `false` by default. **Experimental and not heavily tested.**
     _(Only for CUDA backend)_
+  - `legalize_chlo_to_stablehlo`: If `true`, `chlo` dialect ops will be converted to
+    `stablehlo` ops. This is `false` by default.
 """
 
 const SYNC_DOCS = """

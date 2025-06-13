@@ -532,6 +532,8 @@ function get_tensor_sharding_attribute(
             do_transpose ? reverse(dimension_sharding_attrs) : dimension_sharding_attrs,
             0,
             MLIR.API.MlirAttribute[],
+            0,
+            MLIR.API.MlirAttribute[],
         ),
     )
     return tensor_sharding_attr, :sdy

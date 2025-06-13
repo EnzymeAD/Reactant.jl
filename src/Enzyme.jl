@@ -5,52 +5,6 @@ const enzyme_dupnoneed = 3
 const enzyme_outnoneed = 4
 const enzyme_constnoneed = 5
 
-function activate_strongzero!(strongzero::Bool)
-    stack = get!(task_local_storage(), :reactant_strongzero) do
-        Bool[]
-    end
-    push!(stack, strongzero)
-    return nothing
-end
-
-function deactivate_strongzero!(strongzero::Bool)
-    key = :reactant_strongzero
-    strongzero === last(task_local_storage(key)) ||
-        error("Deactivating wrong strong zerocontext")
-    return pop!(task_local_storage(key))
-end
-
-function get_strongzero()
-    key = :reactant_strongzero
-    if !(haskey(task_local_storage(), key) && !Base.isempty(task_local_storage(key)))
-        return false
-    end
-    return last(task_local_storage(key)::Vector{Bool})
-end
-
-"""
-    @strongzero() begin
-        # Derivative calls that require Enzyme to use string zeroing
-    end
-
-Whether to enforce multiplication by zero as enforcing a zero result even if multiplying
-against a NaN or infinity. Necessary for some programs in which a value has a zero
-derivative since it is unused, even if it has an otherwise infinite or nan derivative.
-
-Outside of reactant this is equivalent to setting the global flag Enzyme.API.strong_zero!(true)
-before differentiation. This should be moved into the mode in both cases.
-"""
-macro strongzero(ex)
-    quote
-        activate_strongzero!(true)
-        try
-            $(esc(ex))
-        finally
-            deactivate_strongzero!(true)
-        end
-    end
-end
-
 function Enzyme.make_zero(
     ::Type{RT}, seen::IdDict, prev::RT, ::Val{copy_if_inactive}=Val(false)
 )::RT where {copy_if_inactive,RT<:Union{RArray,RNumber}}
@@ -338,13 +292,9 @@ function overload_autodiff(
     end
 
     outtys = MLIR.IR.Type[]
-    @inline needs_primal(::Type{<:Enzyme.ReverseMode{ReturnPrimal}}) where {ReturnPrimal} =
-        ReturnPrimal
-    @inline needs_primal(::Type{<:Enzyme.ForwardMode{ReturnPrimal}}) where {ReturnPrimal} =
-        ReturnPrimal
     for a in linear_results
         if TracedUtils.has_idx(a, resprefix)
-            if needs_primal(CMode)
+            if Enzyme.needs_primal(CMode)
                 push!(
                     outtys,
                     TracedUtils.transpose_ty(MLIR.IR.type(TracedUtils.get_mlir_data(a))),
@@ -389,7 +339,7 @@ function overload_autodiff(
     ret_activity = Int32[]
     for a in linear_results
         if TracedUtils.has_idx(a, resprefix)
-            act = act_from_type(A, reverse, needs_primal(CMode))
+            act = act_from_type(A, reverse, Enzyme.needs_primal(CMode))
             push!(ret_activity, act)
             if act == enzyme_out || act == enzyme_outnoneed
                 attr = MLIR.IR.DenseElementsAttribute(
@@ -440,7 +390,7 @@ function overload_autodiff(
         outputs=outtys,
         fn=fname,
         width,
-        strong_zero=get_strongzero(),
+        strong_zero=Enzyme.strong_zero(CMode),
         activity=MLIR.IR.Attribute([act_attr(a) for a in activity]),
         ret_activity=MLIR.IR.Attribute([act_attr(a) for a in ret_activity]),
     )
@@ -462,7 +412,7 @@ function overload_autodiff(
 
     for a in linear_results
         if TracedUtils.has_idx(a, resprefix)
-            if needs_primal(CMode)
+            if Enzyme.needs_primal(CMode)
                 path = TracedUtils.get_idx(a, resprefix)
                 tval = TracedUtils.transpose_val(MLIR.IR.result(res, residx))
                 TracedUtils.set!(result, path[2:end], tval)
@@ -567,14 +517,14 @@ function overload_autodiff(
     func2.operation = MLIR.API.MlirOperation(C_NULL)
 
     if reverse
-        resv = if needs_primal(CMode)
+        resv = if Enzyme.needs_primal(CMode)
             result
         else
             nothing
         end
         return ((restup...,), resv)
     else
-        if needs_primal(CMode)
+        if Enzyme.needs_primal(CMode)
             if CMode <: Enzyme.ForwardMode && !(A <: Enzyme.Const)
                 (dresult, result)
             else
@@ -587,5 +537,27 @@ function overload_autodiff(
                 ()
             end
         end
+    end
+end
+
+"""
+    ignore_derivatives(args...)
+
+Prevents the flow of gradients (and higher-order derivatives) by creating a new value that
+is detached from the original value. This is an identity operation on the primal. This can
+be applied on a nested structure of arrays and we will apply the operation on each of the
+leaves.
+"""
+function ignore_derivatives(args...)
+    res = map(ignore_derivatives_internal, args)
+    length(args) == 1 && return only(res)
+    return res
+end
+
+function ignore_derivatives_internal(arg)
+    return Functors.fmap(arg) do argᵢ
+        argᵢ isa AnyTracedRArray && (argᵢ = materialize_traced_array(argᵢ))
+        argᵢ isa TracedType && return Ops.ignore_derivatives(argᵢ)
+        return argᵢ
     end
 end
