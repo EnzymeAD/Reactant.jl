@@ -1360,3 +1360,14 @@ linrange_mat(x1, x2) = Reactant.materialize_traced_array(LinRange(x1, x2, 10024)
     hlo = repr(@code_hlo(linrange_mat(x1_ra, x2_ra)))
     @test contains(hlo, "stablehlo.iota")
 end
+
+@testset "chlo legalize to stablehlo" begin
+    x = rand(ComplexF32, 4, 4)
+    x_ra = Reactant.to_rarray(x)
+
+    hlo1 = repr(@code_hlo Reactant.Ops.conj(x_ra))
+    hlo2 = repr(@code_hlo legalize_chlo_to_stablehlo = true Reactant.Ops.conj(x_ra))
+
+    @test contains(hlo1, "chlo.conj")
+    @test !contains(hlo2, "chlo")
+end
