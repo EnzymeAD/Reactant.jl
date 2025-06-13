@@ -930,6 +930,7 @@ function optimization_passes(;
         # "concat_to_onedim_dusslice",
         "scatter_multiply_simplify",
         "unary_elementwise_scatter_simplify",
+        "gather_elementwise",
     ]
 
     # constant prop patterns
