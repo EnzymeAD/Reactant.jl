@@ -89,6 +89,7 @@ function has_ancestor(query::Module, target::Module)
     end
 end
 
+const __skip_rewrite_func_set_lock = ReentrantLock()
 const __skip_rewrite_func_set = Set([
     # Avoid the 1.10 stackoverflow
     typeof(Base.typed_hvcat),
@@ -156,10 +157,13 @@ See also: [`@skip_rewrite_type`](@ref)
 """
 macro skip_rewrite_func(fname)
     quote
-        push!($(Reactant.__skip_rewrite_func_set), typeof($(esc(fname))))
+        @lock $(Reactant.__skip_rewrite_func_set_lock) push!(
+            $(Reactant.__skip_rewrite_func_set), typeof($(esc(fname)))
+        )
     end
 end
 
+const __skip_rewrite_type_constructor_list_lock = ReentrantLock()
 const __skip_rewrite_type_constructor_list = [
     # Don't rewrite Val
     Type{Base.Val},
@@ -195,7 +199,9 @@ macro skip_rewrite_type(typ)
         Expr(:curly, :Type, typ)
     end
     return quote
-        push!($(Reactant.__skip_rewrite_type_constructor_list), $(esc(typ)))
+        @lock $(Reactant.__skip_rewrite_type_constructor_list_lock) push!(
+            $(Reactant.__skip_rewrite_type_constructor_list), $(esc(typ))
+        )
     end
 end
 
