@@ -15,8 +15,13 @@ using ..Reactant:
     ReactantPrimitive,
     Ops
 using ReactantCore: ReactantCore
-using ReactantCore: MissingTracedValue, is_traced, materialize_traced_array
+using ReactantCore: MissingTracedValue, is_traced, materialize_traced_array, promote_to_traced
 using Functors: Functors
+
+function ReactantCore.promote_to_traced(x)
+    return promote_to(Reactant.TracedRNumber{Reactant.unwrapped_eltype(typeof(x))}, x)
+end
+
 
 ReactantCore.materialize_traced_array(x::AbstractArray) = x
 
