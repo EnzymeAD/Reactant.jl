@@ -1740,21 +1740,91 @@ function compile_mlir!(
             ),
             "only_enzyme",
         )
+    elseif optimize === :probprog_no_lowering
+        run_pass_pipeline!(
+            mod,
+            join(
+                if raise_first
+                    [
+                        "mark-func-memory-effects",
+                        opt_passes,
+                        kern,
+                        raise_passes,
+                        "enzyme-batch",
+                        opt_passes2,
+                        enzyme_pass,
+                        "probprog",
+                        opt_passes2,
+                        "canonicalize",
+                        "remove-unnecessary-enzyme-ops",
+                        "enzyme-simplify-math",
+                        opt_passes2,
+                    ]
+                else
+                    [
+                        "mark-func-memory-effects",
+                        opt_passes,
+                        "enzyme-batch",
+                        opt_passes2,
+                        enzyme_pass,
+                        "probprog",
+                        opt_passes2,
+                        "canonicalize",
+                        "remove-unnecessary-enzyme-ops",
+                        "enzyme-simplify-math",
+                        opt_passes2,
+                        kern,
+                        raise_passes,
+                    ]
+                end,
+                ",",
+            ),
+            "probprog_no_lowering",
+        )
     elseif optimize === :probprog
         run_pass_pipeline!(
             mod,
             join(
-                [
-                    "mark-func-memory-effects",
-                    "enzyme-batch",
-                    "probprog",
-                    "canonicalize",
-                    "remove-unnecessary-enzyme-ops",
-                    "enzyme-simplify-math",
-                    lower_enzyme_probprog_pass,
-                    jit
-                ],
-                ',',
+                if raise_first
+                    [
+                        "mark-func-memory-effects",
+                        opt_passes,
+                        kern,
+                        raise_passes,
+                        "enzyme-batch",
+                        opt_passes2,
+                        enzyme_pass,
+                        "probprog",
+                        opt_passes2,
+                        "canonicalize",
+                        "remove-unnecessary-enzyme-ops",
+                        "enzyme-simplify-math",
+                        opt_passes2,
+                        lower_enzymexla_linalg_pass,
+                        lower_enzyme_probprog_pass,
+                        jit,
+                    ]
+                else
+                    [
+                        "mark-func-memory-effects",
+                        opt_passes,
+                        "enzyme-batch",
+                        opt_passes2,
+                        enzyme_pass,
+                        "probprog",
+                        opt_passes2,
+                        "canonicalize",
+                        "remove-unnecessary-enzyme-ops",
+                        "enzyme-simplify-math",
+                        opt_passes2,
+                        kern,
+                        raise_passes,
+                        lower_enzymexla_linalg_pass,
+                        lower_enzyme_probprog_pass,
+                        jit,
+                    ]
+                end,
+                ",",
             ),
             "probprog",
         )

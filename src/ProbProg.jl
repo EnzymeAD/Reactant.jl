@@ -3,50 +3,38 @@ module ProbProg
 using ..Reactant: MLIR, TracedUtils, AbstractConcreteArray
 using Enzyme
 
-struct SampleMetadata
-    shape::NTuple{N,Int} where {N}
-    element_type::Type
-    is_scalar::Bool
-
-    function SampleMetadata(
-        shape::NTuple{N,Int}, element_type::Type, is_scalar::Bool
-    ) where {N}
-        return new(shape, element_type, is_scalar)
-    end
-end
-
-const SAMPLE_METADATA_CACHE = Dict{Symbol,SampleMetadata}()
-
 function createTrace()
-    return Dict{Symbol,Any}(:_integrity_check => 0x123456789abcdef)
+    return Dict{Symbol,Any}()
 end
 
 function addSampleToTraceLowered(
-    trace_ptr_ptr::Ptr{Ptr{Cvoid}}, symbol_ptr_ptr::Ptr{Ptr{Cvoid}}, sample_ptr::Ptr{Cvoid}
+    trace_ptr_ptr::Ptr{Ptr{Any}},
+    symbol_ptr_ptr::Ptr{Ptr{Any}},
+    sample_ptr::Ptr{Any},
+    num_dims_ptr::Ptr{Int64},
+    shape_array_ptr::Ptr{Int64},
+    datatype_width_ptr::Ptr{Int64},
 )
     trace = unsafe_pointer_to_objref(unsafe_load(trace_ptr_ptr))
     symbol = unsafe_pointer_to_objref(unsafe_load(symbol_ptr_ptr))
 
-    @assert haskey(SAMPLE_METADATA_CACHE, symbol) "Symbol $symbol not found in metadata cache"
+    num_dims = unsafe_load(num_dims_ptr)
+    shape_array = unsafe_wrap(Array, shape_array_ptr, num_dims)
+    datatype_width = unsafe_load(datatype_width_ptr)
 
-    metadata = SAMPLE_METADATA_CACHE[symbol]
-    shape = metadata.shape
-    element_type = metadata.element_type
-    is_scalar = metadata.is_scalar
-
-    if is_scalar
-        trace[symbol] = unsafe_load(reinterpret(Ptr{element_type}, sample_ptr))
+    julia_type = if datatype_width == 32
+        Float32
+    elseif datatype_width == 64
+        Float64
     else
-        trace[symbol] = copy(
-            reshape(
-                unsafe_wrap(
-                    Array{element_type},
-                    reinterpret(Ptr{element_type}, sample_ptr),
-                    prod(shape),
-                ),
-                shape,
-            ),
-        )
+        error("Unsupported datatype width: $datatype_width")
+    end
+
+    typed_ptr = Ptr{julia_type}(sample_ptr)
+    if num_dims == 0
+        trace[symbol] = unsafe_load(typed_ptr)
+    else
+        trace[symbol] = copy(unsafe_wrap(Array, typed_ptr, Tuple(shape_array)))
     end
 
     return nothing
@@ -54,7 +42,9 @@ end
 
 function __init__()
     add_sample_to_trace_ptr = @cfunction(
-        addSampleToTraceLowered, Cvoid, (Ptr{Ptr{Cvoid}}, Ptr{Ptr{Cvoid}}, Ptr{Cvoid})
+        addSampleToTraceLowered,
+        Cvoid,
+        (Ptr{Ptr{Any}}, Ptr{Ptr{Any}}, Ptr{Any}, Ptr{Int64}, Ptr{Int64}, Ptr{Int64})
     )
     @ccall MLIR.API.mlir_c.EnzymeJaXMapSymbol(
         :enzyme_probprog_add_sample_to_trace::Cstring, add_sample_to_trace_ptr::Ptr{Cvoid}
@@ -105,21 +95,21 @@ end
 
     for (i, res) in enumerate(linear_results)
         resv = MLIR.IR.result(gen_op, i)
-        for path in res.paths
-            isempty(path) && continue
-            if path[1] == resprefix
-                TracedUtils.set!(result, path[2:end], resv)
-            elseif path[1] == argprefix
-                idx = path[2]::Int
-                if idx == 1 && fnwrap
-                    TracedUtils.set!(f, path[3:end], resv)
-                else
-                    if fnwrap
-                        idx -= 1
-                    end
-                    TracedUtils.set!(args[idx], path[3:end], resv)
+        if TracedUtils.has_idx(res, resprefix)
+            path = TracedUtils.get_idx(res, resprefix)
+            TracedUtils.set!(result, path[2:end], TracedUtils.transpose_val(resv))
+        elseif TracedUtils.has_idx(res, argprefix)
+            idx, path = TracedUtils.get_argidx(res, argprefix)
+            if idx == 1 && fnwrap
+                TracedUtils.set!(f, path[3:end], TracedUtils.transpose_val(resv))
+            else
+                if fnwrap
+                    idx -= 1
                 end
+                TracedUtils.set!(args[idx], path[3:end], TracedUtils.transpose_val(resv))
             end
+        else
+            TracedUtils.set!(res, (), TracedUtils.transpose_val(resv))
         end
     end
 
@@ -127,10 +117,7 @@ end
 end
 
 @noinline function sample!(
-    f::Function,
-    args::Vararg{Any,Nargs};
-    symbol::Symbol=gensym("sample"),
-    trace::Union{Dict,Nothing}=nothing,
+    f::Function, args::Vararg{Any,Nargs}; symbol::Symbol=gensym("sample")
 ) where {Nargs}
     argprefix::Symbol = gensym("samplearg")
     resprefix::Symbol = gensym("sampleresult")
@@ -169,24 +156,21 @@ end
     sym = TracedUtils.get_attribute_by_name(func2, "sym_name")
     fn_attr = MLIR.IR.FlatSymbolRefAttribute(Base.String(sym))
 
-    if !isempty(linear_results)
-        sample_result = linear_results[1] # TODO: consider multiple results
-        sample_mlir_data = TracedUtils.get_mlir_data(sample_result)
-        @assert sample_mlir_data isa MLIR.IR.Value "Sample $sample_result is not a MLIR.IR.Value"
-
-        sample_type = MLIR.IR.type(sample_mlir_data)
-        sample_shape = size(sample_type)
-        sample_element_type = MLIR.IR.julia_type(eltype(sample_type))
-
-        SAMPLE_METADATA_CACHE[symbol] = SampleMetadata(
-            sample_shape, sample_element_type, length(sample_shape) == 0
-        )
+    traced_output_indices = Int[]
+    for (i, res) in enumerate(linear_results)
+        if TracedUtils.has_idx(res, resprefix)
+            push!(traced_output_indices, i - 1)
+        end
     end
 
     symbol_addr = reinterpret(UInt64, pointer_from_objref(symbol))
 
     sample_op = MLIR.Dialects.enzyme.sample(
-        batch_inputs; outputs=out_tys, fn=fn_attr, symbol=symbol_addr
+        batch_inputs;
+        outputs=out_tys,
+        fn=fn_attr,
+        symbol=symbol_addr,
+        traced_output_indices=traced_output_indices,
     )
 
     for (i, res) in enumerate(linear_results)
@@ -213,7 +197,7 @@ end
 end
 
 @noinline function simulate!(
-    f::Function, args::Vararg{Any,Nargs}; trace::Dict
+    f::Function, args::Vararg{Any,Nargs}; trace::Dict{Symbol,Any}
 ) where {Nargs}
     argprefix::Symbol = gensym("simulatearg")
     resprefix::Symbol = gensym("simulateresult")
@@ -278,25 +262,16 @@ end
         end
     end
 
-    return trace, result
+    return result
 end
 
-function print_trace(trace::Dict)
-    println("Probabilistic Program Trace:")
+function print_trace(trace::Dict{Symbol,Any})
+    println("### Probabilistic Program Trace ###")
     for (symbol, sample) in trace
-        symbol == :_integrity_check && continue
-        metadata = SAMPLE_METADATA_CACHE[symbol]
-
         println("  $symbol:")
         println("    Sample: $(sample)")
-        println("    Shape: $(metadata.shape)")
-        println("    Element Type: $(metadata.element_type)")
     end
-end
-
-function clear_sample_metadata_cache!()
-    empty!(SAMPLE_METADATA_CACHE)
-    return nothing
+    println("### End of Trace ###")
 end
 
 end
