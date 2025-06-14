@@ -54,6 +54,15 @@ struct Mesh{D,ID<:AbstractVector{Int}}
         axis_names::NTuple{D,Union{String,Symbol}},
         axis_sizes::Dims{D},
     ) where {D}
+        @assert length(logical_device_ids) ≥ 1
+        if length(logical_device_ids) == 1
+            @warn "Constructing a single device mesh is not well supported and is \
+                   equivalent to not specifying any sharding. If you want to mock \
+                   multi-device setup on a single cpu host, set the environment variable \
+                   XLA_FLAGS=\"--xla_force_host_platform_device_count=12\" before loading \
+                   Reactant.jl and force reactant to use `cpu` devices using \
+                   `Reactant.set_default_backend(\"cpu\")`." maxlog = 1
+        end
         return new{D,typeof(logical_device_ids)}(
             sorted_device_ids, logical_device_ids, Symbol.(axis_names), axis_sizes
         )
@@ -521,6 +530,8 @@ function get_tensor_sharding_attribute(
             mesh_name,
             length(dimension_sharding_attrs),
             do_transpose ? reverse(dimension_sharding_attrs) : dimension_sharding_attrs,
+            0,
+            MLIR.API.MlirAttribute[],
             0,
             MLIR.API.MlirAttribute[],
         ),
@@ -1104,7 +1115,26 @@ end
 """
     ShardyPropagationOptions
 
-Fine-grained control over the sharding propagation pipeline.
+Fine-grained control over the sharding propagation pipeline. For more information on
+sharding propagation, see the
+[Shardy Docs](https://openxla.org/shardy/sdy_propagation_passes).
+
+## Options
+
+  - `keep_sharding_rules::Bool`: whether to keep existing and created op sharding rules.
+  - `conservative_propagation::Bool`: whether to disallow split axes and non-divisible
+    sharding axes during propagation.
+  - `debug_sharding_origins::Bool`: whether to save information about the origin of a
+    sharding on the MLIR module. These would be the shardings on the function inputs,
+    outputs, sharding constraints and manual computations before propagation.
+  - `debug_propagation_edge_sharding::Bool`: whether to save information about the edge
+    source of a sharding on the MLIR module. These are what operand/result introduced a
+    sharding on some op result.
+  - `skip_convert_to_reshard::Bool`
+  - `skip_inline::Bool`
+  - `enable_insert_explicit_collectives::Bool`: whether to insert explicit collectives
+    for sharding propagation. This is useful for debugging and checking the location of
+    the communication ops.
 """
 @kwdef struct ShardyPropagationOptions
     keep_sharding_rules::Bool = false

@@ -12,6 +12,9 @@ struct VisitedObject
     id::Int
 end
 
+is_traced_number(x::Type) = false
+Base.@nospecializeinfer is_traced_number(@nospecialize(T::Type{<:TracedRNumber})) = true
+
 function traced_type_inner end
 
 Base.@nospecializeinfer function traced_type_inner(
@@ -346,23 +349,6 @@ Base.@nospecializeinfer function traced_type_inner(
 end
 
 Base.@nospecializeinfer function traced_type_inner(
-    @nospecialize(T::Type{<:ConcreteRNG}),
-    seen,
-    mode::TraceMode,
-    @nospecialize(track_numbers::Type),
-    @nospecialize(sharding),
-    @nospecialize(runtime)
-)
-    if mode == ConcreteToTraced
-        return TracedRNG
-    elseif mode == TracedToConcrete
-        return T
-    else
-        throw("Unsupported mode: $mode")
-    end
-end
-
-Base.@nospecializeinfer function traced_type_inner(
     @nospecialize(T::Type{<:MissingTracedValue}), @nospecialize(args...)
 )
     return error("This should not happen")
@@ -445,29 +431,6 @@ Base.@nospecializeinfer function traced_type_inner(
         return T
     else
         throw("Abstract RNumber cannot be made concrete in mode $mode")
-    end
-end
-
-Base.@nospecializeinfer function traced_type_inner(
-    @nospecialize(T::Type{<:TracedRNG}),
-    seen,
-    mode::TraceMode,
-    @nospecialize(track_numbers::Type),
-    @nospecialize(sharding),
-    @nospecialize(runtime)
-)
-    if mode == ConcreteToTraced
-        throw("TracedRNG cannot be traced")
-    elseif mode == TracedToConcrete
-        return ConcreteRNG{
-            traced_type_inner(
-                TracedRArray{UInt64,1}, seen, mode, track_numbers, sharding, runtime
-            ),
-        }
-    elseif mode == TracedTrack || mode == NoStopTracedTrack || mode == TracedSetPath
-        return T
-    else
-        throw("Unsupported mode: $mode")
     end
 end
 
@@ -892,7 +855,7 @@ const traced_type_cache = Dict{Tuple{TraceMode,Type,Any},Dict{Type,Type}}()
 Base.@assume_effects :total @inline function traced_type(
     T::Type, ::Val{mode}, track_numbers::Type, sharding, runtime
 ) where {mode}
-    if mode == TracedSetPath || mode == TracedTrack
+    if mode == TracedSetPath || mode == TracedTrack || mode == TracedToTypes
         return T
     end
 
@@ -1018,7 +981,7 @@ Base.@nospecializeinfer function make_tracer_via_immutable_constructor(
             end
             FT = fieldtype(TT, i)
             if mode != TracedToTypes && !(Core.Typeof(xi2) <: FT)
-                if FT <: TracedRNumber && xi2 isa unwrapped_eltype(FT)
+                if is_traced_number(FT) && xi2 isa unwrapped_eltype(FT)
                     xi2 = FT(xi2)
                     xi2 = Core.Typeof(xi2)((newpath,), xi2.mlir_data)
                     seen[xi2] = xi2
@@ -1139,7 +1102,7 @@ Base.@nospecializeinfer function make_tracer_unknown(
             end
             FT = fieldtype(TT, i)
             if mode != TracedToTypes && !(Core.Typeof(xi2) <: FT)
-                if FT <: TracedRNumber && xi2 isa unwrapped_eltype(FT)
+                if is_traced_number(FT) && xi2 isa unwrapped_eltype(FT)
                     xi2 = FT(xi2)
                     xi2 = Core.Typeof(xi2)((newpath,), xi2.mlir_data)
                     seen[xi2] = xi2
@@ -1754,6 +1717,8 @@ Base.@nospecializeinfer function make_tracer(
     ))
 end
 
+struct UndefinedBox end
+
 Base.@nospecializeinfer function make_tracer(
     seen,
     @nospecialize(prev::Core.Box),
@@ -1762,14 +1727,25 @@ Base.@nospecializeinfer function make_tracer(
     @nospecialize(sharding = Sharding.NoSharding()),
     kwargs...,
 )
+    prev2 = if isdefined(prev, :contents)
+        prev.contents
+    else
+        UndefinedBox()
+    end
+
     if mode == TracedToTypes
         push!(path, Core.Box)
-        return make_tracer(seen, prev.contents, path, mode; sharding, kwargs...)
+        return make_tracer(seen, prev2, path, mode; sharding, kwargs...)
     end
     if mode != NoStopTracedTrack && haskey(seen, prev)
         return seen[prev]
     end
-    prev2 = prev.contents
+    if prev2 isa UndefinedBox
+        seen[prev] = prev
+        return prev
+    end
+    res = Core.Box(prev2)
+    seen[prev] = res
     tr = make_tracer(
         seen,
         prev2,
@@ -1782,8 +1758,7 @@ Base.@nospecializeinfer function make_tracer(
         seen[prev] = prev
         return prev
     end
-    res = Core.Box(tr)
-    seen[prev] = res
+    res.contents = prev2
     return res
 end
 

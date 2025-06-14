@@ -18,7 +18,7 @@ export default defineConfig({
   outDir: 'REPLACE_ME_DOCUMENTER_VITEPRESS', // This is required for MarkdownVitepress to work correctly...
   ignoreDeadLinks: true, // tested in Documenter.jl directly
   lastUpdated: true,
-  
+
   head: [
     ['link', { rel: "icon", href: `${baseTemp.base}favicon.ico` }],
     ['script', {src: `/versions.js` }],
@@ -31,18 +31,18 @@ export default defineConfig({
       }
     },
     optimizeDeps: {
-      exclude: [ 
+      exclude: [
         '@nolebase/vitepress-plugin-enhanced-readabilities/client',
         'vitepress',
         '@nolebase/ui',
-      ], 
-    }, 
-    ssr: { 
-      noExternal: [ 
+      ],
+    },
+    ssr: {
+      noExternal: [
         // If there are other packages that need to be processed by Vite, you can add them here.
         '@nolebase/vitepress-plugin-enhanced-readabilities',
         '@nolebase/ui',
-      ], 
+      ],
     },
   },
   markdown: {
@@ -76,6 +76,7 @@ export default defineConfig({
         items: [
           { text: "Introduction", link: "/introduction" },
           { text: "Configuration", link: "/introduction/configuration" },
+          { text: "FAQs", link: "/introduction/FAQs" },
         ],
       },
       { text: "Benchmarks", link: "https://enzymead.github.io/Reactant.jl/benchmarks/" },
@@ -86,6 +87,7 @@ export default defineConfig({
           {text: "Profiling", link: "/tutorials/profiling"},
           {text: "Distributed", link: "/tutorials/multihost"},
           {text: "Local build", link: "/tutorials/local-build"},
+          {text: "Control Flow", link: "/tutorials/control-flow"},
         ],
       },
       {
@@ -140,6 +142,7 @@ export default defineConfig({
         items: [
           { text: "Introduction", link: "/introduction" },
           { text: "Configuration", link: "/introduction/configuration" },
+          { text: "FAQs", link: "/introduction/FAQs" },
         ],
       }
     ],
@@ -152,6 +155,7 @@ export default defineConfig({
           { text: "Profiling", link: "/tutorials/profiling" },
           { text: "Distributed", link: "/tutorials/multihost" },
           { text: "Local build", link: "/tutorials/local-build" },
+          { text: "Control Flow", link: "/tutorials/control-flow" },
         ],
       }
     ],

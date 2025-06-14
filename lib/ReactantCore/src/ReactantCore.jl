@@ -19,6 +19,8 @@ function is_traced((@nospecialize x::T), seen=Base.IdSet()) where {T}
     return false
 end
 
+is_traced(T::Type) = false
+
 # New Type signifying that a value is missing
 mutable struct MissingTracedValue
     paths::Tuple
@@ -41,7 +43,7 @@ Returns true if this function is executed in a Reactant compilation context, oth
 
 # Code generation
 """
-    @trace <expr>
+    @trace [key = val,...] <expr>
 
 Converts certain expressions like control flow into a Reactant friendly form. Importantly,
 if no traced value is found inside the expression, then there is no overhead.
@@ -51,7 +53,8 @@ if no traced value is found inside the expression, then there is no overhead.
 - `if` conditions (with `elseif` and other niceties) (`@trace if ...`)
 - `if` statements with a preceeding assignment (`@trace a = if ...`) (note the positioning
   of the macro needs to be before the assignment and not before the `if`)
-- `for` statements with a single induction variable iterating over a syntactic `StepRange` of integers.
+- `for` statements with a single induction variable iterating over integers with known `step`
+- `while` statements
 
 ## Special Considerations
 
@@ -127,26 +130,49 @@ function fn(x)
     return y, nothing
 end
 ```
+
+### Configuration
+
+The behavior of loops can be configured with the following configuration options:
+
+ - `track_numbers::Union{Bool,Datatype}` - whether Julia numbers should be automatically promoted to traced numbers upon entering the loop.
+ - `checkpointing::Bool` - whether or not to enable checkpointing when performing reverse mode differentiation (default: `false`).
+ - `mincut::Bool` - whether or not to enable the mincut algorithm when performing reverse mode differentiation (default: `false`).
 """
 macro trace(args...)
     track_numbers = true
-    expr = first(args)
-    if length(args) > 1 && Meta.isexpr(args[1], :(=))
-        tn_expr = args[1]
-        tn_expr.args[1] == :track_numbers ||
-            error("@trace supports setting track_numbers, but got $(tn_expr)")
+    checkpointing = false
+    mincut = false
 
-        track_numbers = tn_expr.args[2]
-        expr = only(args[2:end])
-    else
-        expr = only(args)
+    expr = first(args)
+    while length(args) > 1
+        if Meta.isexpr(args[1], :(=))
+            tn_expr = args[1]
+            key, val = tn_expr.args
+            key ∈ (:track_numbers, :checkpointing, :mincut) || error(
+                "@trace supports setting track_numbers, checkpointing or mincut, but got $(tn_expr)",
+            )
+
+            if key === :track_numbers
+                track_numbers = val
+            elseif key === :checkpointing
+                checkpointing = val
+            elseif key === :mincut
+                mincut = val
+            end
+            args = args[2:end]
+        else
+            break
+        end
     end
+    expr = only(args)
+
     track_numbers = track_numbers ? Number : Union{}
     expr = macroexpand(__module__, expr)
 
     if Meta.isexpr(expr, :(=))
         if Meta.isexpr(expr.args[2], :if)
-            return esc(trace_if_with_returns(__module__, expr; track_numbers))
+            return esc(trace_if_with_returns(expr; track_numbers))
         end
     end
     Meta.isexpr(expr, :call) && return esc(trace_call(__module__, expr))
@@ -156,103 +182,92 @@ macro trace(args...)
         call = Expr(:call, fname, args...)
         return esc(trace_call(__module__, call))
     end
-    Meta.isexpr(expr, :if) && return esc(trace_if(__module__, expr; track_numbers))
-    Meta.isexpr(expr, :for) && return (esc(trace_for(__module__, expr; track_numbers)))
-    return error("Only `if-elseif-else` blocks are currently supported by `@trace`")
+    Meta.isexpr(expr, :if) && return esc(trace_if(expr; track_numbers))
+    Meta.isexpr(expr, :for) &&
+        return (esc(trace_for(expr; track_numbers, checkpointing, mincut)))
+    Meta.isexpr(expr, :while) &&
+        return (esc(trace_while(expr; track_numbers, checkpointing, mincut)))
+    return error(
+        "Only `if-elseif-else` blocks, `for` and `while` loops are currently supported by `@trace`",
+    )
 end
 
-function trace_for(mod, expr; track_numbers)
-    Meta.isexpr(expr, :for, 2) || error("expected for expr")
-    assign, body = expr.args
+function trace_while(expr; track_numbers, mincut, checkpointing, first_arg=nothing)
+    Meta.isexpr(expr, :while, 2) || error("expected while expr")
+    cond, body = expr.args
 
     error_if_any_control_flow(body)
-    if !Meta.isexpr(assign, :(=)) ||
-        !(assign.args[1] isa Symbol) ||
-        !Meta.isexpr(assign.args[2], :call) ||
-        assign.args[2].args[1] !== :(:)
-        error("malformed for loop assignment")
+
+    cond_symbols = ExpressionExplorer.compute_symbols_state(cond)
+    body_symbols = ExpressionExplorer.compute_symbols_state(body)
+
+    external_syms = Symbol[]
+    if !isnothing(first_arg)
+        push!(external_syms, first_arg)
     end
-
-    induction, range = assign.args
-
-    counter = gensym(:i)
-    num_iters = gensym(:num_iters)
-
-    start = range.args[2]
-    step = length(range.args) == 3 ? 1 : range.args[3]
-    limit = range.args[end]
-
-    body_symbols = ExpressionExplorer.compute_symbols_state(
-        quote
-            $(Expr(:local, assign))
-            $body
-        end,
-    )
-
-    external_syms = body_symbols.assignments ∪ body_symbols.references
+    union!(external_syms, cond_symbols.references)
+    union!(external_syms, cond_symbols.assignments)
+    union!(external_syms, body_symbols.references)
+    union!(external_syms, body_symbols.assignments)
     filter!(∉(SPECIAL_SYMBOLS), external_syms)
 
-    all_syms = Expr(:tuple, counter, external_syms...)
+    all_syms = Expr(:tuple, external_syms...)
+    args_names = Expr(:tuple, external_syms...)
 
-    args_names = Expr(:tuple, counter, external_syms...)
     cond_val(s) = :(@isdefined($s) ? $s : nothing)
-    args_init = Expr(
-        :tuple,
-        :(Ref(Reactant.TracedUtils.promote_to(Reactant.TracedRNumber{Int}, 0))),
-        (:(Ref($(cond_val(s)))) for s in external_syms)...,
-    )
+    args_init = Expr(:tuple, (:(Ref($(cond_val(s)))) for s in external_syms)...)
 
-    ref_syms = Symbol[Symbol(string(sym) * "_ref") for sym in external_syms]
-    arg_syms = Expr(:tuple, counter, ref_syms...)
+    ref_syms = Symbol[Symbol(string(sym), "_ref") for sym in external_syms]
+    arg_syms = Expr(:tuple, ref_syms...)
 
     to_locals = [:(local $s = $ref[]) for (s, ref) in zip(external_syms, ref_syms)]
-    from_locals = [
-        (
-            quote
-                if !($ref[] isa Nothing)
-                    $ref[] = $s
-                end
+    from_locals = [(
+        quote
+            if !isnothing($ref[])
+                $ref[] = $s
             end
-        ) for (s, ref) in zip(external_syms, ref_syms)
-    ]
+        end
+    ) for (s, ref) in zip(external_syms, ref_syms)]
+
+    body_fn_sym = gensym(:body_fn)
+    cond_fn_sym = gensym(:cond_fn)
+    args_sym = gensym(:args)
+    verify_arg_names_sym = gensym(:verify_arg_names)
 
     reactant_code_block = quote
-        let args = $(args_init)
-            cond_fn =
-                $(arg_syms) -> begin
-                    $(to_locals...)
-                    local num_iters = div($limit - $start, $step, RoundDown)
-                    local num_iters = Reactant.TracedUtils.promote_to(
-                        Reactant.TracedRNumber{Int64}, num_iters
-                    )
-                    $counter[] < num_iters + 1
-                end
-            body_fn =
-                $(arg_syms) -> begin
-                    local step_ = $step
-                    local start_ = $start
-                    local $induction = start_ + $counter[] * step_
-                    $(to_locals...)
-                    $body
-                    $(from_locals...)
-                    $counter[].mlir_data = ($counter[] + 1).mlir_data
-                    nothing
-                end
+        let $args_sym = $(args_init)
+            $cond_fn_sym = $(arg_syms) -> begin
+                $(to_locals...)
+                $cond
+            end
+            $body_fn_sym = $(arg_syms) -> begin
+                $(to_locals...)
+                $body
+                $(from_locals...)
+                nothing
+            end
+
+            $(verify_arg_names_sym) = if sizeof($(cond_fn_sym)) != 0
+                (Symbol($cond_fn_sym), $(QuoteNode.(args_names.args)...))
+            else
+                ($(QuoteNode.(args_names.args)...),)
+            end
 
             $(ReactantCore).traced_while(
-                cond_fn,
-                body_fn,
-                args;
-                track_numbers=$(track_numbers),
-                verify_arg_names=$(QuoteNode(args_names)),
+                $(cond_fn_sym),
+                $(body_fn_sym),
+                $(args_sym);
+                track_numbers=($(track_numbers)),
+                verify_arg_names=($(verify_arg_names_sym)),
+                mincut=($(mincut)),
+                checkpointing=($(checkpointing)),
             )
         end
     end
 
     return quote
-        if $(within_compile)() && $(any)(
-            $(is_traced), $(Expr(:tuple, cond_val.(all_syms.args[(begin + 1):end])...))
-        )
+        if $(within_compile)() &&
+            $(any)($(is_traced), $(Expr(:tuple, cond_val.(all_syms.args)...)))
             $(reactant_code_block)
         else
             $(expr)
@@ -260,10 +275,94 @@ function trace_for(mod, expr; track_numbers)
     end
 end
 
+function trace_for(expr; track_numbers, checkpointing, mincut)
+    Meta.isexpr(expr, :for, 2) || error("expected for expr")
+    assign, body = expr.args
+
+    error_if_any_control_flow(body)
+    if !Meta.isexpr(assign, :(=)) || !(assign.args[1] isa Symbol)
+        error(
+            "malformed for loop assignment, expected a single induction variable, got $assign",
+        )
+    end
+
+    induction, range = assign.args
+
+    counter = gensym(:i)
+    num_iters = gensym(:num_iters)
+    range_sym = gensym(:range)
+
+    start_sym = gensym(:start)
+    step_sym = gensym(:step)
+    limit_sym = gensym(:limit)
+
+    # Unwrap the start:step:limit syntax since we cannot create such a range with tracedrnumbers
+    # because its length would be unknown.
+    bounds_defs = if Meta.isexpr(range, :call) && range.args[begin] == :(:)
+        local start = range.args[2]
+        local step = length(range.args) == 3 ? :(one($start_sym)) : range.args[3]
+        local limit = range.args[end]
+        quote
+            $start_sym = $start
+            $step_sym = $step
+            $limit_sym = $limit
+        end
+    else
+        quote
+            local $range_sym = $range
+
+            $start_sym = first($range_sym)
+            $step_sym = step($range_sym)
+            $limit_sym = last($range_sym)
+        end
+    end
+
+    return quote
+        local $start_sym, $limit_sym, $step_sym
+        $bounds_defs
+
+        if $(within_compile)()
+            $start_sym = Reactant.TracedUtils.promote_to(
+                Reactant.TracedRNumber{Reactant.unwrapped_eltype(typeof($start_sym))},
+                $start_sym,
+            )
+            $limit_sym = Reactant.TracedUtils.promote_to(
+                Reactant.TracedRNumber{Reactant.unwrapped_eltype(typeof($limit_sym))},
+                $limit_sym,
+            )
+            $step_sym = Reactant.TracedUtils.promote_to(
+                Reactant.TracedRNumber{Reactant.unwrapped_eltype(typeof($step_sym))},
+                $step_sym,
+            )
+        end
+
+        local $counter = zero($start_sym)
+
+        $(trace_while(
+            Expr(
+                :while,
+                quote
+                    local $num_iters = div($limit_sym - $start_sym, $step_sym)
+                    $counter < $num_iters + one($num_iters)
+                end,
+                quote
+                    local $induction = $start_sym + $counter * $step_sym
+                    $counter = $counter + one($counter)
+                    $body
+                end,
+            );
+            track_numbers,
+            first_arg=counter,
+            checkpointing,
+            mincut,
+        ))
+    end
+end
+
 # ... = if ... style expressions
-function trace_if_with_returns(mod, expr; track_numbers)
+function trace_if_with_returns(expr; track_numbers)
     new_expr, _, all_check_vars = trace_if(
-        mod, expr.args[2]; store_last_line=expr.args[1], depth=1, track_numbers
+        expr.args[2]; store_last_line=expr.args[1], depth=1, track_numbers
     )
     cond_name = first(all_check_vars)
     original_cond = expr.args[2].args[1]
@@ -278,7 +377,7 @@ function trace_if_with_returns(mod, expr; track_numbers)
     end
 end
 
-function trace_if(mod, expr; store_last_line=nothing, depth=0, track_numbers)
+function trace_if(expr; store_last_line=nothing, depth=0, track_numbers)
     discard_vars_from_expansion = []
     original_expr = expr
 
@@ -289,9 +388,7 @@ function trace_if(mod, expr; store_last_line=nothing, depth=0, track_numbers)
         expr = MacroTools.prewalk(expr) do x
             counter += 1
             if x isa Expr && x.head == :if && counter > 1
-                ex_new, dv, _ = trace_if(
-                    mod, x; store_last_line, depth=depth + 1, track_numbers
-                )
+                ex_new, dv, _ = trace_if(x; store_last_line, depth=depth + 1, track_numbers)
                 append!(discard_vars_from_expansion, dv)
                 return ex_new
             end
@@ -317,7 +414,10 @@ function trace_if(mod, expr; store_last_line=nothing, depth=0, track_numbers)
             $(store_last_line) = $(true_last_line)
         end
     else
-        expr.args[2]
+        quote
+            $(expr.args[2])
+            nothing # explicitly return nothing to prevent branches from returning different types
+        end
     end
 
     true_branch_symbols = ExpressionExplorer.compute_symbols_state(true_block)
@@ -331,7 +431,7 @@ function trace_if(mod, expr; store_last_line=nothing, depth=0, track_numbers)
         if !(expr.args[3] isa Expr) || expr.args[3].head != :elseif
             expr.args[3], [], nothing
         else
-            trace_if(mod, expr.args[3]; store_last_line, depth=depth + 1, track_numbers)
+            trace_if(expr.args[3]; store_last_line, depth=depth + 1, track_numbers)
         end
     elseif length(expr.args) == 2
         tmp_expr = []
@@ -360,7 +460,10 @@ function trace_if(mod, expr; store_last_line=nothing, depth=0, track_numbers)
             $(store_last_line) = $(false_last_line)
         end
     else
-        else_block
+        quote
+            $else_block
+            nothing # explicitly return nothing to prevent branches from returning different types
+        end
     end
 
     false_branch_symbols = ExpressionExplorer.compute_symbols_state(false_block)
@@ -376,10 +479,12 @@ function trace_if(mod, expr; store_last_line=nothing, depth=0, track_numbers)
 
     all_vars = all_input_vars ∪ all_output_vars
 
-    non_existant_true_branch_vars = setdiff(all_output_vars, all_true_branch_vars)
+    non_existent_true_branch_vars = setdiff(
+        all_output_vars, all_true_branch_vars, all_input_vars
+    )
     true_branch_extras = Expr(
         :block,
-        [:($(var) = $(MissingTracedValue)()) for var in non_existant_true_branch_vars]...,
+        [:($(var) = $(MissingTracedValue)()) for var in non_existent_true_branch_vars]...,
     )
 
     true_branch_fn = :(($(all_input_vars...),) -> begin
@@ -392,12 +497,12 @@ function trace_if(mod, expr; store_last_line=nothing, depth=0, track_numbers)
     )
     true_branch_fn = :($(true_branch_fn_name) = $(true_branch_fn))
 
-    non_existant_false_branch_vars = setdiff(
-        setdiff(all_output_vars, all_false_branch_vars), all_input_vars
+    non_existent_false_branch_vars = setdiff(
+        all_output_vars, all_false_branch_vars, all_input_vars
     )
     false_branch_extras = Expr(
         :block,
-        [:($(var) = $(MissingTracedValue)()) for var in non_existant_false_branch_vars]...,
+        [:($(var) = $(MissingTracedValue)()) for var in non_existent_false_branch_vars]...,
     )
 
     false_branch_fn = :(($(all_input_vars...),) -> begin
@@ -420,7 +525,7 @@ function trace_if(mod, expr; store_last_line=nothing, depth=0, track_numbers)
             $(true_branch_fn_name),
             $(false_branch_fn_name),
             ($(all_input_vars...),);
-            track_numbers=$(track_numbers),
+            track_numbers=($(track_numbers)),
         )
     end
 

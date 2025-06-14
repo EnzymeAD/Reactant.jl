@@ -237,37 +237,6 @@ end
     @test Array(a)' * Array(b) == @jit f1(a, b)
 end
 
-@testset "einsum" begin
-    f1(a, b) = Ops.einsum(a, b; equation="i,i->i")
-    f2(a, b) = Ops.einsum(a, b; equation="i,j->ij")
-    f3(a, b) = Ops.einsum(a, b; equation="ij,ij->ij")
-    f4(a, b) = Ops.einsum(a, b; equation="ik,kj->ij")
-
-    for (a, b) in [
-        (Reactant.to_rarray([1, 2, 3, 4]), Reactant.to_rarray([5, 6, -7, -8])),
-        (
-            Reactant.to_rarray([1.0, 2.0, 3.0, 4.0]),
-            Reactant.to_rarray([5.0, 6.0, -7.0, -8.0]),
-        ),
-        (
-            Reactant.to_rarray([1.0 + 1im, 2.0 + 2im, 3.0 - 3im, 4.0 - 4im]),
-            Reactant.to_rarray([5.0 + 5im, 6.0 + 6im, -7.0 - 7im, -8.0 - 8im]),
-        ),
-    ]
-        @test a .* b ≈
-            @test_warn r"`stablehlo.einsum` is on deprecation process" @jit f1(a, b)
-        @test reshape(kron(Array(b), Array(a)), 4, 4) ≈
-            @test_warn r"`stablehlo.einsum` is on deprecation process" @jit f2(a, b)
-
-        x = ConcreteRArray(reshape(a, (2, 2)))
-        y = ConcreteRArray(reshape(b, (2, 2)))
-        @test x .* y ≈
-            @test_warn r"`stablehlo.einsum` is on deprecation process" @jit f3(x, y)
-        @test Array(x) * Array(y) ≈
-            @test_warn r"`stablehlo.einsum` is on deprecation process" @jit f4(x, y)
-    end
-end
-
 @testset "exponential" begin
     x = Reactant.to_rarray([1.0, 2.0, 3.0, 4.0])
     @test exp.(Array(x)) ≈ @jit Ops.exponential(x)
@@ -1135,6 +1104,9 @@ end
     mod = @code_hlo optimize = false const_dedup(x)
     hlo_ir = repr(mod)
     csts = collect(x for x in eachsplit(hlo_ir, "\n") if occursin("stablehlo.constant", x))
+    # calls to similar give rise to dense<0> constants (that are not deduplicated):
+    csts = filter(x -> !occursin("dense<0>", x), csts)
+
     @test length(csts) == 2
     idx = findfirst(x -> occursin("1, 2, 3, 4", x), csts)
     @test idx !== nothing
@@ -1178,5 +1150,146 @@ end
         y_ra = @jit fn(x_ra)
         @test y_ra isa ConcreteRArray{Float32,2}
         @test Array(y_ra) == ones(Float32, 2, 3)
+    end
+end
+
+function recon_from_lu(lu_res::AbstractArray{T,4}) where {T}
+    y = similar(lu_res)
+    for i in 1:size(lu_res, 1), j in 1:size(lu_res, 2)
+        y[i, j, :, :] .= recon_from_lu(lu_res[i, j, :, :])
+    end
+    return y
+end
+
+function apply_permutation(x::AbstractArray{T,4}, perm) where {T}
+    y = similar(x)
+    for i in 1:size(x, 1), j in 1:size(x, 2)
+        y[i, j, :, :] .= x[i, j, perm[i, j, :], :]
+    end
+    return y
+end
+
+function recon_from_lu(lu_res::AbstractMatrix)
+    return UnitLowerTriangular(lu_res) * UpperTriangular(lu_res)
+end
+
+@testset "lu factorization" begin
+    @testset "unbatched" begin
+        x_ra = Reactant.to_rarray(randn(6, 6))
+        lu_ra, ipiv, perm, info = @jit Ops.lu(x_ra)
+
+        @test @jit(recon_from_lu(lu_ra)) ≈ @jit(getindex(x_ra, perm, :))
+    end
+
+    @testset "batched" begin
+        x_ra = Reactant.to_rarray(randn(4, 3, 6, 6))
+        lu_ra, ipiv, perm, info = @jit Ops.lu(x_ra)
+        @test size(lu_ra) == (4, 3, 6, 6)
+        @test size(ipiv) == (4, 3, 6)
+        @test size(perm) == (4, 3, 6)
+        @test size(info) == (4, 3)
+
+        @test @jit(recon_from_lu(lu_ra)) ≈ @jit(apply_permutation(x_ra, perm))
+    end
+end
+
+@testset "batch norm" begin
+    @testset "training" begin
+        @testset for affine in [false, true]
+            x = Reactant.to_rarray(randn(2, 3, 4, 5))
+            if affine
+                scale = Reactant.to_rarray(randn(3))
+                offset = Reactant.to_rarray(randn(3))
+            else
+                scale, offset = nothing, nothing
+            end
+
+            hlo = @code_hlo Ops.batch_norm_training(
+                x, scale, offset; epsilon=1e-5, feature_index=2
+            )
+            @test occursin("stablehlo.batch_norm_training", repr(hlo))
+
+            if !affine
+                @test occursin(
+                    "stablehlo.constant dense<0.000000e+00> : tensor<3xf64>", repr(hlo)
+                )
+                @test occursin(
+                    "stablehlo.constant dense<1.000000e+00> : tensor<3xf64>", repr(hlo)
+                )
+            end
+
+            res, m, v = @jit Ops.batch_norm_training(
+                x, scale, offset; epsilon=1e-5, feature_index=2
+            )
+            @test size(res) == size(x)
+            @test size(m) == (3,)
+            @test size(v) == (3,)
+        end
+    end
+
+    @testset "inference" begin
+        @testset for affine in [false, true]
+            x = Reactant.to_rarray(randn(2, 3, 4, 5))
+            if affine
+                scale = Reactant.to_rarray(randn(3))
+                offset = Reactant.to_rarray(randn(3))
+            else
+                scale, offset = nothing, nothing
+            end
+
+            rm = Reactant.to_rarray(randn(3))
+            rv = Reactant.to_rarray(rand(3))
+
+            hlo = @code_hlo Ops.batch_norm_inference(
+                x, scale, offset, rm, rv; epsilon=1e-5, feature_index=2
+            )
+            @test occursin("stablehlo.batch_norm_inference", repr(hlo))
+            if !affine
+                @test occursin(
+                    "stablehlo.constant dense<0.000000e+00> : tensor<3xf64>", repr(hlo)
+                )
+                @test occursin(
+                    "stablehlo.constant dense<1.000000e+00> : tensor<3xf64>", repr(hlo)
+                )
+            end
+
+            res = @jit Ops.batch_norm_inference(
+                x, scale, offset, rm, rv; epsilon=1e-5, feature_index=2
+            )
+            @test size(res) == size(x)
+        end
+    end
+
+    @testset "batch_norm_grad" begin
+        @testset for affine in [false, true]
+            x = Reactant.to_rarray(randn(2, 3, 4, 5))
+            scale = affine ? Reactant.to_rarray(randn(3)) : nothing
+            rm = Reactant.to_rarray(randn(3))
+            rv = Reactant.to_rarray(rand(3))
+            gx = Reactant.to_rarray(randn(2, 3, 4, 5))
+
+            hlo = @code_hlo Ops.batch_norm_grad(
+                x, scale, rm, rv, gx; epsilon=1e-5, feature_index=2
+            )
+            @test occursin("stablehlo.batch_norm_grad", repr(hlo))
+
+            if !affine
+                @test occursin(
+                    "stablehlo.constant dense<1.000000e+00> : tensor<3xf64>", repr(hlo)
+                )
+            end
+
+            gres, gscale, goffset = @jit Ops.batch_norm_grad(
+                x, scale, rm, rv, gx; epsilon=1e-5, feature_index=2
+            )
+            @test size(gres) == size(x)
+            if !affine
+                @test gscale === nothing
+                @test goffset === nothing
+            else
+                @test size(gscale) == (3,)
+                @test size(goffset) == (3,)
+            end
+        end
     end
 end

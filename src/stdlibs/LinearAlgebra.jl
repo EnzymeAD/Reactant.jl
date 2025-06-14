@@ -14,10 +14,32 @@ using ..Reactant:
 
 using ReactantCore: ReactantCore
 using ReactantCore: materialize_traced_array
+using Reactant_jll: Reactant_jll
 
 using ..TracedUtils: TracedUtils, get_mlir_data, set_mlir_data!
 
 using LinearAlgebra
+using Libdl: Libdl
+
+function __init__()
+    if Reactant_jll.is_available()
+        libblastrampoline_handle = Libdl.dlopen(LinearAlgebra.BLAS.libblas)
+
+        for (cname, enzymexla_name) in [
+            (LinearAlgebra.BLAS.@blasfunc(sgetrf_), :enzymexla_lapack_sgetrf_),
+            (LinearAlgebra.BLAS.@blasfunc(dgetrf_), :enzymexla_lapack_dgetrf_),
+            (LinearAlgebra.BLAS.@blasfunc(cgetrf_), :enzymexla_lapack_cgetrf_),
+            (LinearAlgebra.BLAS.@blasfunc(zgetrf_), :enzymexla_lapack_zgetrf_),
+        ]
+            sym = Libdl.dlsym(libblastrampoline_handle, cname)
+            @ccall MLIR.API.mlir_c.EnzymeJaXMapSymbol(
+                enzymexla_name::Cstring, sym::Ptr{Cvoid}
+            )::Cvoid
+        end
+    end
+
+    return nothing
+end
 
 # Various Wrapper Arrays defined in LinearAlgebra
 function ReactantCore.materialize_traced_array(
@@ -467,6 +489,213 @@ function LinearAlgebra.dot(x::AnyTracedRVector, y::AnyTracedRVector)
         contracting_dimensions=([1], [1]),
     )
     return TracedRNumber{unwrapped_eltype(res)}((), res.mlir_data)
+end
+
+LinearAlgebra.dot(x::AnyTracedRArray, y::AnyTracedRArray) = dot(vec(x), vec(y))
+
+function LinearAlgebra.dot(x::AnyTracedRVector, A::AnyTracedRMatrix, y::AnyTracedRVector)
+    return dot(x, A * y)
+end
+
+# ldiv & rdiv interfaces
+tfun_to_char(::typeof(identity)) = 'N'
+tfun_to_char(::typeof(transpose)) = 'T'
+tfun_to_char(::typeof(adjoint)) = 'C'
+
+function LinearAlgebra.generic_trimatdiv!(
+    C::AbstractVecOrMat{TracedRNumber{T}},
+    uploc,
+    isunitc,
+    tfun::Function,
+    A::AbstractMatrix,
+    B::AbstractVecOrMat,
+) where {T}
+    @assert uploc in ('L', 'U')
+    @assert isunitc in ('N', 'U')
+
+    res = Ops.triangular_solve(
+        TracedUtils.promote_to(TracedRArray{T,2}, materialize_traced_array(A)),
+        TracedUtils.promote_to(TracedRArray{T,ndims(B)}, materialize_traced_array(B));
+        left_side=true,
+        lower=(uploc == 'L'),
+        transpose_a=tfun_to_char(tfun),
+        unit_diagonal=(isunitc == 'U'),
+    )
+    set_mlir_data!(C, get_mlir_data(res))
+    return C
+end
+
+function LinearAlgebra.generic_mattridiv!(
+    C::AbstractMatrix{TracedRNumber{T}},
+    uploc,
+    isunitc,
+    tfun::Function,
+    A::AbstractMatrix,
+    B::AbstractMatrix,
+) where {T}
+    @assert uploc in ('L', 'U')
+    @assert isunitc in ('N', 'U')
+
+    res = Ops.triangular_solve(
+        TracedUtils.promote_to(TracedRArray{T,2}, materialize_traced_array(B)),
+        TracedUtils.promote_to(TracedRArray{T,2}, materialize_traced_array(A));
+        left_side=false,
+        lower=(uploc == 'L'),
+        transpose_a=tfun_to_char(tfun),
+        unit_diagonal=(isunitc == 'U'),
+    )
+    set_mlir_data!(C, get_mlir_data(res))
+    return C
+end
+
+# Supports batched factorization
+abstract type GeneralizedFactorization{T} <: Factorization{T} end
+
+function LinearAlgebra.TransposeFactorization(f::GeneralizedFactorization)
+    return LinearAlgebra.TransposeFactorization{eltype(f),typeof(f)}(f)
+end
+
+function LinearAlgebra.AdjointFactorization(f::GeneralizedFactorization)
+    return LinearAlgebra.AdjointFactorization{eltype(f),typeof(f)}(f)
+end
+
+const GeneralizedTransposeFactorization{T} =
+    LinearAlgebra.TransposeFactorization{T,<:GeneralizedFactorization{T}} where {T}
+const GeneralizedAdjointFactorization{T} =
+    LinearAlgebra.AdjointFactorization{T,<:GeneralizedFactorization{T}} where {T}
+
+# LU Factorization
+struct GeneralizedLU{T,S<:AbstractArray,P<:AbstractArray,I<:Union{AbstractArray,Number}} <:
+       GeneralizedFactorization{T}
+    factors::S
+    ipiv::P
+    perm::P
+    info::I
+end
+
+Base.ndims(lu::GeneralizedLU) = ndims(lu.factors)
+
+function GeneralizedLU(factors::S, ipiv::P, perm::P, info::I) where {S,P,I}
+    @assert ndims(ipiv) == ndims(perm) == ndims(factors) - 1
+    @assert ndims(info) == ndims(factors) - 2
+    return GeneralizedLU{eltype(factors),S,P,I}(factors, ipiv, perm, info)
+end
+
+## allow > 2 dimensions as inputs
+function LinearAlgebra.lu(A::AnyTracedRArray{T,2}, ::RowMaximum; kwargs...) where {T}
+    return lu!(copy(A), RowMaximum(); kwargs...)
+end
+function LinearAlgebra.lu(
+    A::AnyTracedRArray{T,N}, ::RowMaximum=RowMaximum(); kwargs...
+) where {T,N}
+    return lu!(copy(A), RowMaximum(); kwargs...)
+end
+
+function LinearAlgebra.lu!(A::AnyTracedRArray{T,2}, ::RowMaximum; kwargs...) where {T}
+    return _lu_overload(A, RowMaximum(); kwargs...)
+end
+function LinearAlgebra.lu!(A::AnyTracedRArray{T,N}, ::RowMaximum; kwargs...) where {T,N}
+    return _lu_overload(A, RowMaximum(); kwargs...)
+end
+
+function _lu_overload(
+    A::AnyTracedRArray{T,N}, ::RowMaximum; check::Bool=false, allowsingular::Bool=false
+) where {T,N}
+    # TODO: don't ignore the check and allowsingular flags
+    # Batching here is in the last dimensions. `Ops.lu` expects the last dimensions
+    permdims = vcat(collect(Int64, 3:N), 1, 2)
+    A = Ops.transpose(materialize_traced_array(A), permdims)
+    factors, ipiv, perm, info = Reactant.Ops.lu(A)
+
+    # Permute back to the original dimensions
+    perm_perm = vcat(N - 1, collect(Int64, 1:(N - 2)))
+    factors = Ops.transpose(factors, invperm(permdims))
+    ipiv = Ops.transpose(ipiv, perm_perm)
+    perm = Ops.transpose(perm, perm_perm)
+    return GeneralizedLU(factors, ipiv, perm, info)
+end
+
+function LinearAlgebra.ldiv!(
+    lu::GeneralizedLU{T,<:AbstractArray{T,N},P,I}, B::AbstractArray{T,M}
+) where {T,P,I,N,M}
+    @assert N == M + 1
+    ldiv!(lu, reshape(B, size(B, 1), 1, size(B)[2:end]...))
+    return B
+end
+
+function LinearAlgebra.ldiv!(
+    lu::GeneralizedLU{T,<:AbstractArray{T,2},P,I}, B::AbstractArray{T,2}
+) where {T,P,I}
+    B .= _lu_solve_core(lu.factors, B, lu.perm)
+    return B
+end
+
+function LinearAlgebra.ldiv!(
+    lu::GeneralizedLU{T,<:AbstractArray{T,N},P,I}, B::AbstractArray{T,N}
+) where {T,P,I,N}
+    batch_shape = size(lu.factors)[3:end]
+    @assert batch_shape == size(B)[3:end]
+
+    permutation = vcat(collect(Int64, 3:N), 1, 2)
+
+    factors = Ops.transpose(materialize_traced_array(lu.factors), permutation)
+    B_permuted = Ops.transpose(materialize_traced_array(B), permutation)
+    perm = Ops.transpose(
+        materialize_traced_array(lu.perm), vcat(collect(Int64, 2:(N - 1)), 1)
+    )
+
+    res = Ops.transpose(
+        only(
+            Ops.batch(
+                _lu_solve_core, [factors, B_permuted, perm], collect(Int64, batch_shape)
+            ),
+        ),
+        invperm(permutation),
+    )
+    B .= res
+    return B
+end
+
+for f_wrapper in (LinearAlgebra.TransposeFactorization, LinearAlgebra.AdjointFactorization),
+    aType in (:AbstractVecOrMat, :AbstractArray)
+
+    @eval function LinearAlgebra.ldiv!(lu::$(f_wrapper){<:Any,<:GeneralizedLU}, B::$aType)
+        # TODO: implement this
+        error("`$(f_wrapper)` is not supported yet for LU.")
+        return nothing
+    end
+end
+
+function _lu_solve_core(factors::AbstractMatrix, B::AbstractMatrix, perm::AbstractVector)
+    permuted_B = B[Int64.(perm), :]
+    return UpperTriangular(factors) \ (UnitLowerTriangular(factors) \ permuted_B)
+end
+
+# Overload \ to support batched factorization
+for T in (
+        :GeneralizedFactorization,
+        :GeneralizedTransposeFactorization,
+        :GeneralizedAdjointFactorization,
+    ),
+    aType in (:AbstractVecOrMat, :AbstractArray)
+
+    @eval Base.:(\)(F::$T, B::$aType) = _overloaded_backslash(F, B)
+end
+
+function _overloaded_backslash(F::GeneralizedFactorization, B::AbstractArray)
+    return ldiv!(
+        F, LinearAlgebra.copy_similar(B, typeof(oneunit(eltype(F)) \ oneunit(eltype(B))))
+    )
+end
+
+function _overloaded_backslash(F::GeneralizedTransposeFactorization, B::AbstractArray)
+    return conj!(adjoint(F.parent) \ conj.(B))
+end
+
+function _overloaded_backslash(F::GeneralizedAdjointFactorization, B::AbstractArray)
+    return ldiv!(
+        F, LinearAlgebra.copy_similar(B, typeof(oneunit(eltype(F)) \ oneunit(eltype(B))))
+    )
 end
 
 end

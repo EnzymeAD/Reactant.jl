@@ -304,7 +304,7 @@ end
 
 @noinline function conj(
     x::TracedRArray{T,N}; location=mlir_stacktrace("conj", @__FILE__, @__LINE__)
-) where {T<:Complex,N}
+) where {T,N}
     res = MLIR.IR.result(
         chlo.conj(x.mlir_data; result=mlir_type(TracedRArray{T,N}, size(x)), location)
     )
@@ -313,7 +313,7 @@ end
 
 @noinline function conj(
     x::TracedRNumber{T}; location=mlir_stacktrace("conj", @__FILE__, @__LINE__)
-) where {T<:Complex}
+) where {T}
     res = MLIR.IR.result(
         chlo.conj(x.mlir_data; result=mlir_type(TracedRArray{T,0}, ()), location)
     )
@@ -532,16 +532,24 @@ end
 
 @noinline function slice(
     x::TracedRArray{T,N},
-    start_indices,
-    limit_indices;
-    strides=nothing,
+    start_indices::Vector{<:Integer},
+    limit_indices::Vector{<:Integer};
+    strides::Union{Nothing,Vector{<:Integer}}=nothing,
     location=mlir_stacktrace("slice", @__FILE__, @__LINE__),
 ) where {T,N}
     start_indices = start_indices .- 1
     limit_indices = limit_indices
-    rsize = limit_indices .- start_indices
-    @assert all(rsize .> 0) "Invalid slice dimensions"
+    @assert all(Base.Fix2(≥, 0), start_indices) "Invalid start indices: $(start_indices)"
+    @assert all(s < l for (s, l) in zip(start_indices, limit_indices)) "Invalid slice indices: $(start_indices), $(limit_indices)"
+
     strides = isnothing(strides) ? ones(Int64, N) : strides
+    @assert all(s > 0 for s in strides) "Invalid strides: $(strides)"
+    rsize = [
+        length((start + 1):st:stop) for
+        (start, stop, st) in zip(start_indices, limit_indices, strides)
+    ]
+    @assert all(rsize .> 0) "Invalid slice dimensions"
+
     res = MLIR.IR.result(
         stablehlo.slice(
             x.mlir_data;
@@ -589,39 +597,47 @@ end
 end
 
 @noinline function real(
-    x::TracedRArray{Complex{T},N}; location=mlir_stacktrace("real", @__FILE__, @__LINE__)
+    x::TracedRArray{T,N}; location=mlir_stacktrace("real", @__FILE__, @__LINE__)
 ) where {T,N}
     res = MLIR.IR.result(
-        stablehlo.real(x.mlir_data; result=mlir_type(TracedRArray{T,N}, size(x)), location)
+        stablehlo.real(
+            x.mlir_data; result=mlir_type(TracedRArray{Base.real(T),N}, size(x)), location
+        ),
     )
-    return TracedRArray{T,N}((), res, size(x))
+    return TracedRArray{Base.real(T),N}((), res, size(x))
 end
 
 @noinline function real(
-    x::TracedRNumber{Complex{T}}; location=mlir_stacktrace("real", @__FILE__, @__LINE__)
+    x::TracedRNumber{T}; location=mlir_stacktrace("real", @__FILE__, @__LINE__)
 ) where {T}
     res = MLIR.IR.result(
-        stablehlo.real(x.mlir_data; result=mlir_type(TracedRArray{T,0}, ()), location)
+        stablehlo.real(
+            x.mlir_data; result=mlir_type(TracedRArray{Base.real(T),0}, ()), location
+        ),
     )
-    return TracedRNumber{T}((), res)
+    return TracedRNumber{Base.real(T)}((), res)
 end
 
 @noinline function imag(
-    x::TracedRArray{Complex{T},N}; location=mlir_stacktrace("imag", @__FILE__, @__LINE__)
+    x::TracedRArray{T,N}; location=mlir_stacktrace("imag", @__FILE__, @__LINE__)
 ) where {T,N}
     res = MLIR.IR.result(
-        stablehlo.imag(x.mlir_data; result=mlir_type(TracedRArray{T,N}, size(x)), location)
+        stablehlo.imag(
+            x.mlir_data; result=mlir_type(TracedRArray{Base.real(T),N}, size(x)), location
+        ),
     )
-    return TracedRArray{T,N}((), res, size(x))
+    return TracedRArray{Base.real(T),N}((), res, size(x))
 end
 
 @noinline function imag(
-    x::TracedRNumber{Complex{T}}; location=mlir_stacktrace("imag", @__FILE__, @__LINE__)
+    x::TracedRNumber{T}; location=mlir_stacktrace("imag", @__FILE__, @__LINE__)
 ) where {T}
     res = MLIR.IR.result(
-        stablehlo.imag(x.mlir_data; result=mlir_type(TracedRArray{T,0}, ()), location)
+        stablehlo.imag(
+            x.mlir_data; result=mlir_type(TracedRArray{Base.real(T),0}, ()), location
+        ),
     )
-    return TracedRNumber{T}((), res)
+    return TracedRNumber{Base.real(T)}((), res)
 end
 
 function bitcast_convert(
@@ -650,6 +666,7 @@ end
     return TracedRNumber{U}((), res)
 end
 
+# TODO: See https://github.com/jax-ml/jax/blob/6c18aa8a468e35b8c11b101dceaa43d05b497177/jax/_src/numpy/fft.py#L106
 @noinline function fft(
     x::TracedRArray{T,N};
     type::String,
@@ -659,8 +676,10 @@ end
     @assert 1 <= Base.length(length) <= 3 "fft only supports up to rank 3"
 
     if type ∈ ("FFT", "IFFT")
-        @assert T <: Complex
-        Tout = T
+        if !(T <: Complex)
+            x = Ops.complex(x, fill(T(0), size(x); location); location)
+        end
+        Tout = Base.complex(T)
         rsize = size(x)
     elseif type == "RFFT"
         @assert T <: Real
@@ -670,7 +689,9 @@ end
             Tuple(rsize)
         end
     elseif type == "IRFFT"
-        @assert T <: Complex
+        if !(T <: Complex)
+            x = Ops.complex(x, fill(T(0), size(x); location); location)
+        end
         Tout = Base.real(T)
         rsize = let rsize = collect(Int64, size(x))
             rsize[(end - Base.length(length) + 1):end] = length
@@ -778,9 +799,9 @@ end
 #     return TracedRArray{T,N}((), res, size(lhs))
 # end
 
-@noinline function dot_general(
-    lhs::TracedRArray{T1},
-    rhs::TracedRArray{T2};
+Base.@nospecializeinfer @noinline function dot_general(
+    @nospecialize(lhs::TracedRArray{T1}),
+    @nospecialize(rhs::TracedRArray{T2});
     contracting_dimensions,
     batching_dimensions=(Int[], Int[]),
     precision_config=Reactant.DOT_GENERAL_PRECISION[],
@@ -903,63 +924,6 @@ end
     )
     return TracedRArray{resT,length(ressize)}((), res, ressize)
 end
-
-@noinline function einsum(
-    lhs::TracedRArray{T},
-    rhs::TracedRArray{T};
-    equation::String,
-    location=mlir_stacktrace("einsum", @__FILE__, @__LINE__),
-) where {T}
-    Base.depwarn(
-        "`stablehlo.einsum` is on deprecation process; use `dot_general` instead", :einsum
-    )
-    ins, ic = split(equation, "->")
-    ia, ib = split(ins, ",")
-
-    sizea = Dict(c => d for (c, d) in zip(ia, size(lhs)))
-    sizeb = Dict(c => d for (c, d) in zip(ib, size(rhs)))
-    sizes = mergewith(sizea, sizeb) do da, db
-        da == db ? da : error("Invalid dimensions in einsum equation")
-    end
-
-    rsize = Tuple(sizes[i] for i in ic)
-    result_0 = mlir_type(TracedRArray{T,length(ic)}, rsize)
-
-    res = MLIR.IR.result(
-        stablehlo.einsum(
-            lhs.mlir_data,
-            rhs.mlir_data;
-            result_0,
-            einsum_config=MLIR.IR.Attribute(equation),
-            location,
-        ),
-    )
-    return TracedRArray{T,length(rsize)}((), res, rsize)
-end
-
-# function unary_einsum(
-#     x::TracedRArray{T};
-#     equation::String,
-#     location=mlir_stacktrace(
-#         "unary_einsum", @__FILE__, @__LINE__
-#     ),
-# ) where {T}
-#     ia, ic = split(equation, "->")
-#     sizes = Dict(c => d for (c, d) in zip(ia, size(x)))
-#     rsize = Tuple(sizes[i] for i in ic)
-#     result_0 = mlir_type(TracedRArray{T,length(ic)}, rsize)
-
-#     res = MLIR.IR.result(
-#         stablehlo.unary_einsum(
-#             x.mlir_data; result_0, einsum_config=MLIR.IR.Attribute(equation), location
-#         ),
-#     )
-#     if length(rsize) == 0
-#         return TracedRNumber{T}((), res)
-#     else
-#         return TracedRArray{T,length(rsize)}((), res, rsize)
-#     end
-# end
 
 # parallel ops
 @noinline function partition_id(;
@@ -1714,36 +1678,54 @@ instead.
     @assert length(updates) == size(scatter_indices, 1)
     @assert size(scatter_indices, 2) == N
 
-    updates = convert(TracedRArray{T,1}, updates)
-
-    update_computation = MLIR.IR.Region()
-    block = MLIR.IR.Block(
-        [mlir_type(TracedRNumber{T}), mlir_type(TracedRNumber{T})],
-        [MLIR.IR.Location(), MLIR.IR.Location()],
-    )
-    return_op = MLIR.Dialects.stablehlo.return_([MLIR.IR.argument(block, 2)])
-    MLIR.IR.rmfromparent!(return_op)
-    push!(block, return_op)
-    pushfirst!(update_computation, block)
-
     return scatter(
+        (a, b) -> b,
         [dest],
         scatter_indices,
-        [updates];
-        update_computation,
+        [convert(TracedRArray{T,1}, updates)];
         update_window_dims=Int64[],
-        inserted_window_dims=collect(Int64, 0:(N - 1)),
+        inserted_window_dims=collect(Int64, 1:N),
         input_batching_dims=Int64[],
         scatter_indices_batching_dims=Int64[],
-        scatter_dims_to_operand_dims=collect(Int64, 0:(N - 1)),
-        index_vector_dim=Int64(1),
+        scatter_dims_to_operand_dims=collect(Int64, 1:N),
+        index_vector_dim=Int64(2),
         location,
     )[1]
 end
 
 @noinline function scatter(
+    f::F,
     dest::Vector{TracedRArray{T,N}},
-    scatter_indices::TracedRArray{Int64,2},
+    scatter_indices::TracedRArray{Int64},
+    updates::Vector{<:TracedRArray{T}};
+    location=mlir_stacktrace("scatter", @__FILE__, @__LINE__),
+    kwargs...,
+) where {F,T,N}
+    sample_inputs = (
+        Reactant.TracedUtils.promote_to(TracedRNumber{T}, zero(T)),
+        Reactant.TracedUtils.promote_to(TracedRNumber{T}, zero(T)),
+    )
+
+    compiled_fn =
+        Reactant.TracedUtils.make_mlir_fn(
+            f,
+            sample_inputs,
+            (),
+            "update_computation",
+            false;
+            args_in_result=:result,
+            return_dialect=:stablehlo,
+        ).f
+    update_computation = MLIR.IR.Region()
+    MLIR.API.mlirRegionTakeBody(update_computation, MLIR.IR.region(compiled_fn, 1))
+    MLIR.IR.rmfromparent!(compiled_fn)
+
+    return scatter(dest, scatter_indices, updates; update_computation, location, kwargs...)
+end
+
+@noinline function scatter(
+    dest::Vector{TracedRArray{T,N}},
+    scatter_indices::TracedRArray{Int64},
     updates::Vector{<:TracedRArray{T}};
     update_computation::MLIR.IR.Region,
     update_window_dims::Vector{Int64},
@@ -1752,11 +1734,20 @@ end
     scatter_indices_batching_dims::Vector{Int64},
     scatter_dims_to_operand_dims::Vector{Int64},
     index_vector_dim::Int64,
+    unique_indices::Union{Bool,Nothing}=nothing,
+    indices_are_sorted::Union{Bool,Nothing}=nothing,
     location=mlir_stacktrace("scatter", @__FILE__, @__LINE__),
 ) where {T,N}
     scatter_indices = subtract(
         scatter_indices, fill(Int64(1), size(scatter_indices)); location
     )
+
+    update_window_dims = update_window_dims .- 1
+    inserted_window_dims = inserted_window_dims .- 1
+    input_batching_dims = input_batching_dims .- 1
+    scatter_indices_batching_dims = scatter_indices_batching_dims .- 1
+    scatter_dims_to_operand_dims = scatter_dims_to_operand_dims .- 1
+    index_vector_dim -= 1
 
     #! format: off
     scatter_dimension_numbers = MLIR.API.stablehloScatterDimensionNumbersGet(
@@ -1779,6 +1770,8 @@ end
         update_computation,
         scatter_dimension_numbers,
         result_0=[mlir_type(TracedRArray{T,N}, size(d)) for d in dest],
+        unique_indices,
+        indices_are_sorted,
         location,
     )
 
@@ -1813,11 +1806,11 @@ use [`MLIR.Dialects.stablehlo.dynamic_slice`](@ref) instead.
             src,
             gather_indices;
             offset_dims=Int64[1],
-            collapsed_slice_dims=collect(Int64, 0:(N - 2)),
+            collapsed_slice_dims=collect(Int64, 1:(N - 1)),
             operand_batching_dims=Int64[],
             start_indices_batching_dims=Int64[],
-            start_index_map=collect(Int64, 0:(N - 1)),
-            index_vector_dim=Int64(1),
+            start_index_map=collect(Int64, 1:N),
+            index_vector_dim=Int64(2),
             slice_sizes=ones(Int64, N),
             indices_are_sorted=false,
             location,
@@ -1828,7 +1821,7 @@ end
 
 @noinline function gather(
     src::TracedRArray{T,N},
-    gather_indices::TracedRArray{Int64,2};
+    gather_indices::TracedRArray{Int64};
     offset_dims::Vector{Int64},
     collapsed_slice_dims::Vector{Int64},
     operand_batching_dims::Vector{Int64},
@@ -1842,6 +1835,13 @@ end
     gather_indices = subtract(
         gather_indices, fill(Int64(1), size(gather_indices)); location
     )
+
+    offset_dims = offset_dims .- 1
+    start_indices_batching_dims = start_indices_batching_dims .- 1
+    start_index_map = start_index_map .- 1
+    operand_batching_dims = operand_batching_dims .- 1
+    collapsed_slice_dims = collapsed_slice_dims .- 1
+    index_vector_dim -= 1
 
     #! format: off
     dimension_numbers = MLIR.API.stablehloGatherDimensionNumbersGet(
@@ -1871,7 +1871,13 @@ end
 end
 
 @noinline function while_loop(
-    cond_fn::CFn, body_fn::BFn, args...; track_numbers, verify_arg_names=nothing
+    cond_fn::CFn,
+    body_fn::BFn,
+    args...;
+    track_numbers,
+    verify_arg_names=nothing,
+    checkpointing=false,
+    mincut=false,
 ) where {CFn,BFn}
     # TODO: detect and prevent mutation within the condition
 
@@ -1937,7 +1943,15 @@ end
         cond=cond_reg,
         body=body_reg,
     )
-    MLIR.IR.attr!(while_op, "enzymexla.disable_min_cut", MLIR.IR.UnitAttribute())
+
+    if !mincut
+        MLIR.IR.attr!(while_op, "enzymexla.disable_min_cut", MLIR.IR.UnitAttribute())
+    end
+
+    if checkpointing
+        MLIR.IR.attr!(while_op, "enzymexla.enable_checkpointing", MLIR.IR.Attribute(true))
+    end
+
     return map(enumerate(linear_args)) do (i, arg)
         Reactant.TracedUtils.set_mlir_data!(arg, MLIR.IR.result(while_op, i))
     end
@@ -2356,7 +2370,7 @@ end
 end
 
 @noinline function call(f, args...)
-    seen = Dict()
+    seen = Reactant.OrderedIdDict()
     cache_key = []
     Reactant.make_tracer(seen, (f, args...), cache_key, Reactant.TracedToTypes)
     cache = Reactant.Compiler.callcache()
@@ -2376,7 +2390,7 @@ end
             (),
             f_name,
             false;
-            args_in_result=:result_and_mutated,
+            args_in_result=:all,
             do_transpose=false,
             argprefix,
             resprefix,
@@ -2617,6 +2631,32 @@ Produces a [`Reactant.MLIR.Dialects.sdy.sharding_constraint`](@ref) operation wi
     end
 end
 
+function _construct_reduce_function(f::F, ::Type{T}) where {F,T}
+    func =
+        Reactant.TracedUtils.make_mlir_fn(
+            f,
+            (
+                Reactant.TracedUtils.promote_to(TracedRNumber{T}, 0),
+                Reactant.TracedUtils.promote_to(TracedRNumber{T}, 0),
+            ),
+            (),
+            "reduce_fn" * string(f),
+            false;
+            args_in_result=:none,
+            return_dialect=:stablehlo,
+        ).f
+    @assert MLIR.IR.nregions(func) == 1
+    ftype_attr = MLIR.IR.attr(func, "function_type")
+    ftype = MLIR.IR.Type(ftype_attr)
+    @assert MLIR.IR.result(ftype) == MLIR.IR.TensorType(Int[], MLIR.IR.Type(T)) "$(fn) return type is not of tensor<$(T)>"
+
+    fn = MLIR.IR.Region()
+    MLIR.API.mlirRegionTakeBody(fn, MLIR.IR.region(func, 1))
+    MLIR.IR.rmfromparent!(func)
+
+    return fn
+end
+
 """
     reduce(
         x::TracedRArray{T},
@@ -2668,45 +2708,13 @@ Applies a reduction function `fn` along the specified `dimensions` of input `x`,
 ) where {T}
     reduced_shape = Tuple(deleteat!(collect(Int64, size(x)), dimensions))
 
-    result_type = mlir_type(TracedRArray{T,length(reduced_shape)}, reduced_shape)
-
-    sample_inputs = [
-        Reactant.TracedUtils.promote_to(TracedRNumber{T}, 0),
-        Reactant.TracedUtils.promote_to(TracedRNumber{T}, 0),
-    ]
-
-    func =
-        Reactant.TracedUtils.make_mlir_fn(
-            fn,
-            (sample_inputs),
-            (),
-            "reduce_fn",
-            false;
-            args_in_result=:none,
-            return_dialect=:stablehlo,
-        ).f
-    @assert MLIR.IR.nregions(func) == 1
-    fn_name = String(
-        MLIR.IR.attr(func, String(MLIR.API.mlirSymbolTableGetSymbolAttributeName()))
-    )
-    ftype_attr = MLIR.IR.attr(func, "function_type")
-    ftype = MLIR.IR.Type(ftype_attr)
-    @assert MLIR.IR.result(ftype) == MLIR.IR.TensorType(Int[], MLIR.IR.Type(T)) error (
-        "$fn return type is not tensor<i1>"
-    )
-    fn = MLIR.IR.Region()
-    MLIR.API.mlirRegionTakeBody(fn, MLIR.IR.region(func, 1))
-    MLIR.IR.rmfromparent!(func)
-
-    dimensions = MLIR.IR.Attribute(dimensions .- 1)
-
     res = MLIR.IR.result(
         stablehlo.reduce(
             [x.mlir_data],
             [init_values.mlir_data];
-            result_0=[result_type],
-            dimensions=dimensions,
-            body=fn,
+            result_0=[mlir_type(TracedRArray{T,length(reduced_shape)}, reduced_shape)],
+            dimensions=MLIR.IR.Attribute(dimensions .- 1),
+            body=_construct_reduce_function(fn, T),
             location=location,
         ),
     )
@@ -2767,6 +2775,7 @@ end
 
     # First we permute and make sure the batch dims are at the beginning
     batch_dims = Int64[i for i in 1:N if i ∉ dims]
+    batch_shape = [size(A, i) for i in batch_dims]
     permutation = zeros(Int64, N)
     for (i, d) in enumerate(batch_dims)
         permutation[i] = d
@@ -2775,51 +2784,54 @@ end
         permutation[i + length(batch_dims)] = d
     end
 
-    A = Ops.transpose(A, permutation; location)
+    res = only(batch(f, [Ops.transpose(A, permutation; location)], batch_shape; location))
+    if ndims(res) != length(permutation)
+        res = Ops.reshape(
+            res,
+            vcat(collect(Int64, size(res)), ones(Int64, length(permutation) - ndims(res))),
+        )
+    end
+    return Ops.transpose(res, invperm(permutation); location)
+end
 
-    sample_input = fill(T(0), [size(A, i) for i in (length(batch_dims) + 1):N]; location)
-    # TODO: detect and forbid internal mutations
+@noinline function batch(
+    f::F,
+    inputs::Vector{<:TracedRArray},
+    batch_shape::Vector{Int64};
+    location=mlir_stacktrace("batch", @__FILE__, @__LINE__),
+) where {F}
+    sample_inputs = [
+        fill(
+            unwrapped_eltype(input)(0),
+            [size(input, i) for i in (length(batch_shape) + 1):ndims(input)]...,
+        ) for input in inputs
+    ]
     mlir_fn_res = Reactant.TracedUtils.make_mlir_fn(
         f,
-        (sample_input,),
+        (sample_inputs...,),
         (),
         "unbatched_" * string(f),
         false;
         args_in_result=:none,
         do_transpose=false,
     )
-
     @assert !mlir_fn_res.fnwrapped "Currently we don't support batching closures."
 
     func = mlir_fn_res.f
     @assert MLIR.IR.nregions(func) == 1
 
-    result = only(mlir_fn_res.linear_results)
-    batch_shape = [size(A, i) for i in 1:length(batch_dims)]
-
-    if result isa TracedRArray
-        @assert ndims(result) == ndims(sample_input)
-        output_type = MLIR.IR.TensorType(
-            vcat(batch_shape, collect(Int64, size(result))),
-            MLIR.IR.Type(unwrapped_eltype(result)),
-        )
-    elseif result isa TracedRNumber
-        output_type = MLIR.IR.TensorType(
-            batch_shape, MLIR.IR.Type(unwrapped_eltype(result))
-        )
-    else
-        error("Unsupported result type $(typeof(result))")
-    end
-
-    batched_result = batch([A], [output_type], batch_shape; fn=func, location)[1]
-
-    if result isa TracedRNumber
-        batched_result = Ops.reshape(
-            batched_result, vcat(batch_shape, ones(Int64, ndims(sample_input))); location
+    output_types = MLIR.IR.Type[]
+    for result in mlir_fn_res.linear_results
+        push!(
+            output_types,
+            MLIR.IR.TensorType(
+                vcat(batch_shape, collect(Int64, size(result))),
+                MLIR.IR.Type(unwrapped_eltype(result)),
+            ),
         )
     end
 
-    return Ops.transpose(batched_result, invperm(permutation); location)
+    return batch(inputs, output_types, batch_shape; fn=func, location)
 end
 
 @noinline function batch(
@@ -2844,6 +2856,298 @@ end
             (), MLIR.IR.result(op, i), size(out_type)
         ) for (i, out_type) in enumerate(output_types)
     ]
+end
+
+function triangular_solve(
+    a::TracedRArray{T,N},
+    b::TracedRArray{T,M};
+    left_side::Bool,
+    location=mlir_stacktrace("triangular_solve", @__FILE__, @__LINE__),
+    kwargs...,
+) where {T,N,M}
+    @assert M == N - 1
+
+    if left_side
+        b = reshape(b, size(b)..., 1)
+    else
+        b = reshape(b, size(b)[1:(M - 1)]..., 1, size(b, M))
+    end
+
+    return dropdims(
+        triangular_solve(a, b; location, left_side, kwargs...); dims=(N - 1 + left_side)
+    )
+end
+
+function triangular_solve(
+    a::TracedRArray{T,N},
+    b::TracedRArray{T,N};
+    left_side::Bool,
+    lower::Bool,
+    transpose_a::Char,
+    unit_diagonal::Bool,
+    location=mlir_stacktrace("triangular_solve", @__FILE__, @__LINE__),
+) where {T,N}
+    @assert N >= 2
+    @assert size(a, N - 1) == size(a, N) == size(b, N - left_side)
+    @assert size(a)[1:(N - 2)] == size(b)[1:(N - 2)] "a and b must have the same leading \
+                                                      dimensions"
+
+    @assert transpose_a in ('N', 'T', 'C') "transpose_a must be one of 'N', 'T', or 'C'"
+    transpose_attr = MLIR.API.stablehloTransposeAttrGet(
+        MLIR.IR.context(),
+        if transpose_a == 'N'
+            "NO_TRANSPOSE"
+        elseif transpose_a == 'T'
+            "TRANSPOSE"
+        else
+            "ADJOINT"
+        end,
+    )
+
+    res = MLIR.IR.result(
+        MLIR.Dialects.stablehlo.triangular_solve(
+            a.mlir_data,
+            b.mlir_data;
+            left_side=left_side,
+            lower=lower,
+            transpose_a=transpose_attr,
+            unit_diagonal=unit_diagonal,
+            location,
+        ),
+        1,
+    )
+
+    return TracedRArray{T,N}((), res, size(res))
+end
+
+"""
+    lu(
+        x::TracedRArray{T},
+        ::Type{pT}=Int32;
+        location=mlir_stacktrace("lu", @__FILE__, @__LINE__)
+    ) where {T,pT}
+
+Compute the row maximum pivoted LU factorization of `x` and return the factors `LU`,
+`ipiv`, `permutation` tensor, and `info`.
+"""
+@noinline function lu(
+    x::TracedRArray{T},
+    ::Type{pT}=Int32;
+    location=mlir_stacktrace("lu", @__FILE__, @__LINE__),
+) where {T,pT}
+    @assert ndims(x) >= 2
+
+    output_shape = collect(Int64, size(x))
+    batch_shape = output_shape[1:(end - 2)]
+    pivots_shape = vcat(batch_shape, min(size(x, ndims(x) - 1), size(x, ndims(x))))
+    permutation_shape = vcat(batch_shape, size(x, ndims(x) - 1))
+    info_shape = batch_shape
+
+    op = MLIR.Dialects.enzymexla.linalg_lu(
+        x.mlir_data;
+        output=MLIR.IR.TensorType(output_shape, MLIR.IR.Type(unwrapped_eltype(T))),
+        pivots=MLIR.IR.TensorType(pivots_shape, MLIR.IR.Type(pT)),
+        permutation=MLIR.IR.TensorType(permutation_shape, MLIR.IR.Type(pT)),
+        info=MLIR.IR.TensorType(info_shape, MLIR.IR.Type(pT)),
+        location,
+    )
+
+    res = TracedRArray{T,ndims(x)}((), MLIR.IR.result(op, 1), size(x))
+    ipiv = TracedRArray{pT,ndims(x) - 1}((), MLIR.IR.result(op, 2), pivots_shape)
+    perm = TracedRArray{pT,ndims(x) - 1}((), MLIR.IR.result(op, 3), permutation_shape)
+
+    if ndims(x) == 2
+        info = TracedRNumber{pT}((), MLIR.IR.result(op, 4))
+    else
+        info = TracedRArray{pT,ndims(x) - 2}((), MLIR.IR.result(op, 4), info_shape)
+    end
+    return (res, ipiv, perm, info)
+end
+
+@noinline function reduce_window(
+    f::F,
+    inputs::Vector{TracedRArray{T,N}},
+    init_values::Vector{TracedRNumber{T}};
+    window_dimensions::Vector{Int},
+    window_strides::Vector{Int},
+    base_dilations::Vector{Int},
+    window_dilations::Vector{Int},
+    padding_low::Vector{Int},
+    padding_high::Vector{Int},
+    output_shape::Vector{Int},
+    location=mlir_stacktrace("reduce_window", @__FILE__, @__LINE__),
+) where {F,T,N}
+    @assert length(inputs) == length(init_values)
+    @assert length(window_dimensions) ==
+        length(window_strides) ==
+        length(base_dilations) ==
+        length(window_dilations) ==
+        length(padding_low) ==
+        length(padding_high) ==
+        N
+
+    reduction = stablehlo.reduce_window(
+        [inp.mlir_data for inp in inputs],
+        [init.mlir_data for init in init_values];
+        result_0=[
+            mlir_type(TracedRArray{T,length(output_shape)}, output_shape) for
+            _ in 1:length(inputs)
+        ],
+        window_dimensions,
+        window_strides,
+        base_dilations,
+        window_dilations,
+        padding=MLIR.IR.DenseElementsAttribute(hcat(padding_low, padding_high)),
+        body=_construct_reduce_function(f, T),
+        location,
+    )
+
+    return [
+        TracedRArray{T,length(output_shape)}(
+            (), MLIR.IR.result(reduction, i), output_shape
+        ) for i in 1:length(inputs)
+    ]
+end
+
+@noinline function batch_norm_inference(
+    operand::TracedRArray{T,N},
+    scale::Union{TracedRArray{T,1},Nothing},
+    offset::Union{TracedRArray{T,1},Nothing},
+    mean::TracedRArray{T,1},
+    variance::TracedRArray{T,1};
+    epsilon,
+    feature_index::Int64,
+    location=mlir_stacktrace("batch_norm_inference", @__FILE__, @__LINE__),
+) where {T,N}
+    len = size(operand, feature_index)
+    @assert length(mean) == length(variance) == len
+
+    if scale === nothing
+        scale = fill(T(1), len; location)
+    else
+        @assert size(scale) == (len,)
+    end
+
+    if offset === nothing
+        offset = fill(T(0), len; location)
+    else
+        @assert size(offset) == (len,)
+    end
+
+    return TracedRArray{T,N}(
+        (),
+        MLIR.IR.result(
+            stablehlo.batch_norm_inference(
+                operand.mlir_data,
+                scale.mlir_data,
+                offset.mlir_data,
+                mean.mlir_data,
+                variance.mlir_data;
+                epsilon=Float32(epsilon),
+                feature_index=feature_index - 1,
+                location,
+            ),
+            1,
+        ),
+        size(operand),
+    )
+end
+
+@noinline function batch_norm_training(
+    operand::TracedRArray{T,N},
+    scale::Union{TracedRArray{T,1},Nothing},
+    offset::Union{TracedRArray{T,1},Nothing};
+    epsilon,
+    feature_index::Int64,
+    location=mlir_stacktrace("batch_norm_training", @__FILE__, @__LINE__),
+) where {T,N}
+    len = size(operand, feature_index)
+
+    if scale === nothing
+        scale = fill(T(1), len; location)
+    else
+        @assert size(scale) == (len,)
+    end
+
+    if offset === nothing
+        offset = fill(T(0), len; location)
+    else
+        @assert size(offset) == (len,)
+    end
+
+    batch_norm_train_op = stablehlo.batch_norm_training(
+        operand.mlir_data,
+        scale.mlir_data,
+        offset.mlir_data;
+        epsilon=Float32(epsilon),
+        feature_index=feature_index - 1,
+        location,
+    )
+
+    return (
+        TracedRArray{T,N}((), MLIR.IR.result(batch_norm_train_op, 1), size(operand)),
+        TracedRArray{T,1}((), MLIR.IR.result(batch_norm_train_op, 2), (len,)),
+        TracedRArray{T,1}((), MLIR.IR.result(batch_norm_train_op, 3), (len,)),
+    )
+end
+
+@noinline function batch_norm_grad(
+    operand::TracedRArray{T,N},
+    scale::Union{TracedRArray{T,1},Nothing},
+    mean::TracedRArray{T,1},
+    variance::TracedRArray{T,1},
+    grad_output::TracedRArray{T,N};
+    epsilon,
+    feature_index::Int64,
+    location=mlir_stacktrace("batch_norm_grad", @__FILE__, @__LINE__),
+) where {T,N}
+    len = size(operand, feature_index)
+    @assert length(mean) == length(variance) == len
+    @assert size(grad_output) == size(operand)
+
+    has_affine = scale !== nothing
+
+    if !has_affine
+        scale = fill(T(1), len; location)
+    else
+        @assert size(scale) == (len,)
+    end
+
+    batch_norm_grad_op = stablehlo.batch_norm_grad(
+        operand.mlir_data,
+        scale.mlir_data,
+        mean.mlir_data,
+        variance.mlir_data,
+        grad_output.mlir_data;
+        epsilon=Float32(epsilon),
+        feature_index=feature_index - 1,
+        location,
+    )
+
+    grad_operand = TracedRArray{T,N}(
+        (), MLIR.IR.result(batch_norm_grad_op, 1), size(operand)
+    )
+    grad_scale = TracedRArray{T,1}((), MLIR.IR.result(batch_norm_grad_op, 2), (len,))
+    grad_offset = TracedRArray{T,1}((), MLIR.IR.result(batch_norm_grad_op, 3), (len,))
+
+    return (
+        grad_operand, has_affine ? grad_scale : nothing, has_affine ? grad_offset : nothing
+    )
+end
+
+@noinline function ignore_derivatives(
+    input::Union{TracedRArray,TracedRNumber};
+    location=mlir_stacktrace("ignore_derivatives", @__FILE__, @__LINE__),
+)
+    res = MLIR.IR.result(
+        enzyme.ignore_derivatives(input.mlir_data; output=mlir_type(input), location), 1
+    )
+
+    if input isa TracedRArray
+        return TracedRArray{unwrapped_eltype(input),ndims(input)}((), res, size(res))
+    else
+        return TracedRNumber{unwrapped_eltype(input)}((), res)
+    end
 end
 
 end # module Ops

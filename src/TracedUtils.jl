@@ -22,10 +22,15 @@ ReactantCore.materialize_traced_array(x::AbstractArray) = x
 
 ReactantCore.materialize_traced_array(x::TracedRArray) = x
 
-ReactantCore.materialize_traced_array(x::AnyTracedRArray) = x[axes(x)...]
-
 function ReactantCore.materialize_traced_array(x::AbstractRange)
     return Reactant.aos_to_soa(collect(x))
+end
+
+function ReactantCore.materialize_traced_array(r::LinRange)
+    T = Reactant.unwrapped_eltype(r)
+    idxs = Ops.iota(T, [length(r)]; iota_dimension=1)
+    t = idxs ./ r.lendiv
+    return T.((1 .- t) .* r.start .+ t .* r.stop)
 end
 
 function ReactantCore.materialize_traced_array(x::Base.OneTo)
@@ -44,6 +49,13 @@ function ReactantCore.materialize_traced_array(x::SubArray)
 end
 
 function ReactantCore.materialize_traced_array(x::Base.ReshapedArray)
+    if Base.prod(size(parent(x))) != Base.prod(size(x))
+        throw(
+            AssertionError(
+                "Invalid reshape array, original size $(size(parent(x))) not compatible with new size $(size(x))",
+            ),
+        )
+    end
     return Ops.reshape(materialize_traced_array(parent(x)), size(x)...)
 end
 
@@ -54,7 +66,11 @@ function ReactantCore.materialize_traced_array(
 end
 
 function ReactantCore.materialize_traced_array(x::AbstractArray{TracedRNumber{T}}) where {T}
-    return Reactant.aos_to_soa(x)
+    as = Reactant.aos_to_soa(x)
+    if as === x
+        as = x[axes(x)...]
+    end
+    return ReactantCore.materialize_traced_array(as)
 end
 
 get_mlir_data(x::TracedRNumber) = x.mlir_data
@@ -219,8 +235,10 @@ mutable struct CompiledMlirFnResult{F,TR,Re,Rt,LA,LR,PA,CR,M,MA,RS,GD,DA}
     seen_args::OrderedIdDict
     ret::Rt
     linear_args::Vector{LA}
+    skipped_args::Vector{LA}
     in_tys::Vector{MLIR.IR.Type}
     linear_results::Vector{LR}
+    skipped_results::Vector{LR}
     num_partitions::Int
     num_replicas::Int
     is_sharded::Bool
@@ -324,7 +342,7 @@ function make_mlir_fn(
         end
     end
 
-    (func2, traced_result, ret, linear_args, in_tys, linear_results, num_partitions, is_sharded, unique_meshes, mutated_args, global_device_ids) = finalize_mlir_fn(
+    (func2, traced_result, ret, linear_args, in_tys, linear_results, skipped_results, num_partitions, is_sharded, unique_meshes, mutated_args, global_device_ids) = finalize_mlir_fn(
         result,
         traced_args,
         linear_args,
@@ -364,8 +382,10 @@ function make_mlir_fn(
         seen_args,
         ret,
         linear_args,
+        skipped_args,
         in_tys,
         linear_results,
+        skipped_results,
         num_partitions,
         num_replicas,
         is_sharded,
@@ -480,16 +500,15 @@ function prepare_mlir_fn_args(
         )
     end
 
-    arglocs = MLIR.IR.Location[]
     for (i, arg) in enumerate(linear_args)
         path = get_idx(arg, argprefix)
         stridx = if verify_arg_names isa Nothing
             "arg" * string(path[2])
         else
-            string(verify_arg_names.args[path[2]])
+            string(verify_arg_names[path[2]])
         end
         aval = args[path[2]]
-        for (cidx, idx) in enumerate(path[3:end])
+        for idx in path[3:end]
             if aval isa Array || aval isa Dict
                 aval = getindex(aval, idx)
                 stridx = stridx * "[" * string(idx) * "]"
@@ -500,7 +519,7 @@ function prepare_mlir_fn_args(
                     string(idx)
                 end
                 stridx *= "." * fldname
-                aval = getfield(aval, idx)
+                aval = Reactant.Compiler.traced_getfield(aval, idx)
             end
         end
         MLIR.IR.push_argument!(
@@ -619,17 +638,54 @@ function finalize_mlir_fn(
     end
 
     linear_results = Reactant.TracedType[]
+    skipped_results = Reactant.TracedType[]
     for (k, v) in seen_results
         v isa Reactant.TracedType || continue
         if any(Base.Fix1(===, k), skipped_args)
+            push!(skipped_results, v)
+
+            _, argpath = get_argidx(v, argprefix)
+
+            @assert has_idx(v, argprefix)
+
+            newpaths = Tuple[]
+            for path in v.paths
+                if length(path) == 0
+                    continue
+                end
+                if path[1] == argprefix
+                    continue
+                end
+                if path[1] == resargprefix
+                    original_arg = args[path[2]]
+                    for p in path[3:end]
+                        original_arg = Reactant.Compiler.traced_getfield(original_arg, p)
+                    end
+                    if !(
+                        original_arg isa Union{
+                            Reactant.ConcreteRNumber,
+                            Reactant.ConcreteRArray,
+                            Reactant.TracedType,
+                        }
+                    )
+                        continue
+                    end
+                    push!(newpaths, path)
+                end
+                if path[1] == resprefix
+                    push!(newpaths, path)
+                end
+            end
+
+            if length(newpaths) != 0
+                push!(linear_results, Reactant.repath(v, (newpaths...,)))
+            end
+
             continue
         end
         if args_in_result != :all
             if has_idx(v, argprefix)
-                if !(
-                    (args_in_result == :result_and_mutated || args_in_result == :result) &&
-                    has_idx(v, resprefix)
-                )
+                if !(args_in_result == :result && has_idx(v, resprefix))
                     continue
                 end
             end
@@ -637,7 +693,7 @@ function finalize_mlir_fn(
         push!(linear_results, v)
     end
 
-    if args_in_result == :mutated || args_in_result == :result_and_mutated
+    if args_in_result == :mutated
         append!(linear_results, linear_args[mutated_args])
     end
     if !isnothing(verify_arg_names) && typeof.(linear_args) != typeof.(linear_results)
@@ -674,7 +730,7 @@ function finalize_mlir_fn(
         for (errs, prev, post) in ((err1, resis, argis), (err2, argis, resis))
             conflicts = setdiff(prev, post)
             for conflict in conflicts
-                stridx = string(verify_arg_names.args[conflict[1]])
+                stridx = string(verify_arg_names[conflict[1]])
                 aval = args[conflict[1]]
                 for (cidx, idx) in enumerate(Base.tail(conflict))
                     if aval isa Array || aval isa Dict
@@ -915,6 +971,7 @@ function finalize_mlir_fn(
         linear_args,
         in_tys,
         linear_results,
+        skipped_results,
         num_partitions,
         is_sharded,
         unique_meshes,
@@ -1198,6 +1255,119 @@ function traced_indices(indices...)
         result_size,
         preddim_result_size,
         flattened_size,
+    )
+end
+
+_isone(x) = isone(x)
+_isone(::CartesianIndex) = false
+
+__contiguous_indices(::Base.LogicalIndex) = false
+__contiguous_indices(x) = all(_isone, diff(x))
+
+_get_slice_stride(::Base.LogicalIndex) = -1
+_get_slice_stride(x::CartesianIndex) = -1
+function _get_slice_stride(x)
+    length(x) == 1 && return 1
+    strides = diff(x)
+    isempty(strides) && return -1
+    allequal(strides) || return -1
+    val = first(strides)
+    val isa Number || return -1
+    return val
+end
+
+function create_index_mesh(idxs::AbstractVector...)
+    lens = map(length, idxs)
+    inner_repeats = cumprod(lens) .÷ lens
+    outer_repeats = reverse(cumprod(reverse(lens)) .÷ reverse(lens))
+    return [
+        repeat(idx; inner, outer) for
+        (idx, inner, outer) in zip(idxs, inner_repeats, outer_repeats)
+    ]
+end
+
+function indices_to_gather_dims(indices...)
+    non_contiguous_indices = TracedRArray{Int,1}[]
+    contiguous_indices = Tuple{Int,Int}[]
+    non_contiguous_indices_idxs = Int[]
+    contiguous_indices_idxs = Int[]
+    ddims = Int[]
+    result_shape = Int64[]
+    for (i, index) in enumerate(indices)
+        if index isa Number
+            push!(ddims, i)
+            if index isa TracedRNumber
+                push!(non_contiguous_indices_idxs, i)
+                push!(non_contiguous_indices, broadcast_to_size(index, (1,)))
+            else
+                push!(contiguous_indices_idxs, i)
+                push!(contiguous_indices, (index, 1))
+            end
+        else
+            append!(result_shape, [size(index)...])
+            if !(index isa TracedRArray)
+                if __contiguous_indices(vec(index))
+                    push!(contiguous_indices_idxs, i)
+                    push!(contiguous_indices, (first(index), length(index)))
+                    continue
+                end
+                index = promote_to(TracedRArray{Int,ndims(index)}, index)
+            end
+            push!(non_contiguous_indices_idxs, i)
+            push!(non_contiguous_indices, materialize_traced_array(vec(index)))
+        end
+    end
+
+    expanded_non_contiguous_indices = create_index_mesh(non_contiguous_indices...)
+    L = length(first(expanded_non_contiguous_indices))
+    new_indices = TracedRArray{Int,1}[]
+    slice_sizes = ones(Int, length(indices))
+    start_index_map = Int64[]
+
+    for i in 1:length(indices)
+        cont_idx = findfirst(==(i), contiguous_indices_idxs)
+        if cont_idx !== nothing
+            if !isone(contiguous_indices[cont_idx][1])
+                push!(new_indices, broadcast_to_size(contiguous_indices[cont_idx][1], (L,)))
+                push!(start_index_map, i)
+            end
+            slice_sizes[i] = contiguous_indices[cont_idx][2]
+            continue
+        end
+
+        non_cont_idx = findfirst(==(i), non_contiguous_indices_idxs)
+        @assert non_cont_idx !== nothing
+        push!(new_indices, expanded_non_contiguous_indices[non_cont_idx])
+        push!(start_index_map, i)
+    end
+
+    collapsed_slice_dims = vcat(non_contiguous_indices_idxs, ddims)
+    sort!(collapsed_slice_dims)
+    unique!(collapsed_slice_dims)
+    start_indices = hcat(new_indices...)
+    offset_dims = collect(Int64, 2:(length(indices) - length(collapsed_slice_dims) + 1))
+
+    gather_reshape_shape = Int64[]
+    perm = Int64[]
+    for i in non_contiguous_indices_idxs
+        push!(gather_reshape_shape, length(indices[i]))
+        push!(perm, i)
+    end
+    for i in contiguous_indices_idxs
+        push!(gather_reshape_shape, length(indices[i]))
+        push!(perm, i)
+    end
+
+    return (;
+        start_indices,
+        slice_sizes,
+        index_vector_dim=ndims(start_indices),
+        start_index_map,
+        collapsed_slice_dims,
+        offset_dims,
+        result_shape,
+        permutation=invperm(perm),
+        gather_reshape_shape,
     )
 end
 

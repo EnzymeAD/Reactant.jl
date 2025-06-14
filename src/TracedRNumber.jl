@@ -119,6 +119,22 @@ function TracedUtils.promote_to(::TracedRNumber{T}, rhs) where {T}
     return TracedUtils.promote_to(TracedRNumber{T}, rhs)
 end
 
+for (aT, bT) in (
+    (TracedRNumber{<:Real}, Real),
+    (Real, TracedRNumber{<:Real}),
+    (TracedRNumber{<:Real}, TracedRNumber{<:Real}),
+)
+    @eval function Base.Complex(a::$aT, b::$bT)
+        T = promote_type(unwrapped_eltype(a), unwrapped_eltype(b))
+        a = TracedUtils.promote_to(TracedRNumber{T}, a)
+        b = TracedUtils.promote_to(TracedRNumber{T}, b)
+        return Ops.complex(a, b)
+    end
+end
+
+Base.Complex(x::TracedRNumber{<:Real}) = Ops.complex(x, zero(x))
+Base.Complex(x::TracedRNumber{<:Complex}) = x
+
 for (jlop, hloop) in (
     (:(Base.min), :minimum),
     (:(Base.max), :maximum),
@@ -393,6 +409,9 @@ for (jlop, hloop) in (
     (:(Base.atan), :atan),
     (:(Base.atanh), :atanh),
     (:(Base.sign), :sign),
+    (:(Base.conj), :conj),
+    (:(Base.real), :real),
+    (:(Base.imag), :imag),
 )
     @eval $(jlop)(@nospecialize(lhs::TracedRNumber)) = Ops.$(hloop)(lhs)
 end
@@ -404,17 +423,8 @@ end
 
 Base.sincospi(x::TracedRNumber{T}) where {T} = Ops.sine(T(π) * x), Ops.cosine(T(π) * x)
 
-Base.conj(x::TracedRNumber) = x
-Base.conj(x::TracedRNumber{<:Complex}) = Ops.conj(x)
-
-Base.real(x::TracedRNumber) = x
-Base.real(x::TracedRNumber{<:Complex}) = Ops.real(x)
-
 Base.isreal(::TracedRNumber) = false
 Base.isreal(::TracedRNumber{<:Real}) = true
-
-Base.imag(x::TracedRNumber) = zero(x)
-Base.imag(x::TracedRNumber{<:Complex}) = Ops.imag(x)
 
 Base.iseven(x::TracedRNumber) = iseven(real(x))
 function Base.iseven(x::TracedRNumber{<:Real})

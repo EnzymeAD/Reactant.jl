@@ -147,3 +147,83 @@ end
     x = [:a, :b, :a]
     @test @jit(unique(x)) == [:a, :b]
 end
+
+@testset "custom trace path" begin
+    struct MockTestCustomPath{T}
+        x::T
+    end
+
+    function Reactant.Compiler.make_tracer(
+        seen, prev::MockTestCustomPath, path, mode; kwargs...
+    )
+        custom_path = Reactant.append_path(path, (; custom_id=1))
+        traced_x = Reactant.make_tracer(seen, prev.x, custom_path, mode; kwargs...)
+        return MockTestCustomPath(traced_x)
+    end
+
+    function Reactant.traced_getfield(
+        x::MockTestCustomPath, fld::@NamedTuple{custom_id::Int}
+    )
+        return if fld.custom_id == 1
+            x.x
+        else
+            error("this is awkward... shouldn't have reach here")
+        end
+    end
+
+    function Reactant.Compiler.create_result(
+        tocopy::MockTestCustomPath,
+        path,
+        result_stores,
+        path_to_shard_info,
+        to_unreshard_results,
+        unresharded_code::Vector{Expr},
+        unresharded_arrays_cache,
+        used_shardinfo,
+        result_cache,
+        var_idx,
+        resultgen_code,
+    )
+        custom_path = Reactant.append_path(path, (; custom_id=1))
+
+        args = (
+            result_stores,
+            path_to_shard_info,
+            to_unreshard_results,
+            unresharded_code::Vector{Expr},
+            unresharded_arrays_cache,
+            used_shardinfo,
+            result_cache,
+            var_idx,
+            resultgen_code,
+        )
+
+        if !haskey(result_cache, tocopy)
+            ar = Reactant.Compiler.create_result(tocopy.x, custom_path, args...)
+            sym = Symbol("result", var_idx[])
+            var_idx[] += 1
+
+            push!(
+                resultgen_code,
+                quote
+                    $sym = ($MockTestCustomPath)($ar)
+                end,
+            )
+            result_cache[tocopy] = sym
+        end
+
+        return quote
+            $(result_cache[tocopy])
+        end
+    end
+
+    fcustom_path(x) = MockTestCustomPath(x.x)
+
+    x = MockTestCustomPath(ones(Int))
+    xre = MockTestCustomPath(Reactant.to_rarray(x.x))
+
+    y = @jit fcustom_path(xre)
+    @test y isa MockTestCustomPath
+    @test y.x isa Reactant.RArray
+    @test y.x == fcustom_path(x).x
+end

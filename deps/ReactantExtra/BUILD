@@ -761,17 +761,8 @@ cc_library(
         ],
 
     ) + [
-        "@enzyme_ad//src/enzyme_ad/jax:RegistryUtils.cpp",
         "@enzyme_ad//src/enzyme_ad/jax:gpu.cc",
         "@enzyme_ad//src/enzyme_ad/jax:cpu.cc",
-        # "@com_google_protobuf//:src/google/protobuf/io/coded_stream.cc",
-        # "@xla//xla:xla.pb.cc",
-        "@xla//xla:xla_data.pb.cc",
-        # "@xla//xla/stream_executor:device_description.pb.cc",
-        "@xla//xla/service:hlo.pb.cc",
-        #  # "@tsl//tsl/protobuf:dnn.pb.cc",
-        #"@tsl//tsl/protobuf:histogram.pb.cc",
-        #"@tsl//tsl/protobuf:bfc_memory_map_proto",bfc_memory_map.pb.cc",
         "@xla//xla/service/gpu:backend_configs.pb.cc",
         "@xla//xla:autotuning.pb.cc",
         "@xla//xla:autotune_results.pb.cc",
@@ -779,7 +770,9 @@ cc_library(
         ],
     hdrs = glob([
         "*.h",
-    ]),
+    ]) + [
+        "@enzyme_ad//src/enzyme_ad/jax:RegistryUtils.h",
+    ],
     copts = [
         "-Werror=unused-variable",
         "-Werror=unused-but-set-variable",
@@ -901,6 +894,7 @@ cc_library(
 "-Wl,-exported_symbol,_addSdyPropagationPipeline",
     ]}),
     deps = [
+        "@enzyme_ad//src/enzyme_ad/jax:RegistryUtils",
         "@enzyme//:EnzymeMLIR",
         "@llvm-project//mlir:AffineDialect",
         "@llvm-project//mlir:AllPassesAndDialects",
@@ -1028,6 +1022,24 @@ cc_library(
         "@xla//xla/stream_executor/cuda:cuda_compute_capability_proto_cc_impl",
         "@xla//xla/service:gpu_plugin",
         "@xla//xla/pjrt/c:pjrt_c_api_gpu",
+        "@xla//xla/pjrt/plugin/xla_cpu:xla_cpu_pjrt_client",
+        "@xla//xla/pjrt/plugin/xla_gpu:xla_gpu_pjrt_client",
+        "@xla//xla/pjrt/plugin/xla_tpu:xla_tpu_pjrt_client",
+        "@stablehlo//:linalg_passes",
+        "@stablehlo//:tosa_passes",
+        "@stablehlo//:stablehlo_passes",
+        "@stablehlo//:stablehlo_passes_optimization",
+        "@stablehlo//stablehlo/tests:check_ops",
+
+        "@tsl//tsl/platform:env",
+        "@xla//xla/tsl/protobuf:dnn_proto_cc_impl",
+        "@xla//xla/tsl/protobuf:histogram_proto_cc",
+        "@xla//xla/tsl/protobuf:histogram_proto_cc_impl",
+        "@xla//xla:xla_data_proto_cc_impl",
+        "@xla//xla/tsl/platform:env",
+        "@xla//xla/tsl/platform:errors",
+        "@xla//xla/service:hlo_proto_cc_impl",
+        "@com_google_absl//absl/status:statusor",
     ] + select({
         "@xla//xla/tsl:is_cuda_enabled_and_oss":[
             "@xla//xla/stream_executor:cuda_platform",
@@ -1040,6 +1052,7 @@ cc_library(
             "@xla//xla/backends/profiler/gpu:device_tracer",
             "@xla//xla/backends/profiler:profiler_backends",
             "@xla//xla/pjrt/c:pjrt_c_api_gpu_internal",
+            "@jax//jaxlib/cuda:cuda_gpu_kernels"
         ],
         "//conditions:default": [
         ],
