@@ -424,3 +424,11 @@ function copy_arrays_to_device_with_sharding(buffers::Vector{Array}, sharding::S
     end
     return dst_arrays
 end
+
+function Base.copy(b::Array)
+    GC.@preserve b begin
+        return Array(
+            @ccall MLIR.API.mlir_c.ifrt_copy_array(b.buffer::Ptr{Cvoid})::Ptr{Cvoid}
+        )
+    end
+end

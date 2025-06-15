@@ -76,6 +76,7 @@ export default defineConfig({
         items: [
           { text: "Introduction", link: "/introduction" },
           { text: "Configuration", link: "/introduction/configuration" },
+          { text: "FAQs", link: "/introduction/FAQs" },
         ],
       },
       { text: "Benchmarks", link: "https://enzymead.github.io/Reactant.jl/benchmarks/" },
@@ -86,6 +87,7 @@ export default defineConfig({
           {text: "Profiling", link: "/tutorials/profiling"},
           {text: "Distributed", link: "/tutorials/multihost"},
           {text: "Local build", link: "/tutorials/local-build"},
+          {text: "Control Flow", link: "/tutorials/control-flow"},
         ],
       },
       {
@@ -140,6 +142,7 @@ export default defineConfig({
         items: [
           { text: "Introduction", link: "/introduction" },
           { text: "Configuration", link: "/introduction/configuration" },
+          { text: "FAQs", link: "/introduction/FAQs" },
         ],
       }
     ],
@@ -152,6 +155,7 @@ export default defineConfig({
           { text: "Profiling", link: "/tutorials/profiling" },
           { text: "Distributed", link: "/tutorials/multihost" },
           { text: "Local build", link: "/tutorials/local-build" },
+          { text: "Control Flow", link: "/tutorials/control-flow" },
         ],
       }
     ],

@@ -23,10 +23,25 @@ function Base.copy(x::Union{AbstractConcreteArray,AbstractConcreteNumber})
     return fn(x)
 end
 
+function Base.copy(X::ConcreteIFRTArray{T,D,S,P}) where {T,D,S,P}
+    return ConcreteIFRTArray{T,D,S}(Base.copy(X.data), X.shape, X.sharding, X.padding)
+end
+
+function Base.copy(X::ConcretePJRTArray)
+    return Core.Typeof(X)(Base.copy.(X.data), X.shape, X.sharding)
+end
+
+function Base.copy(X::ConcreteIFRTNumber)
+    return Core.Typeof(X)(Base.copy(X.data), X.sharding)
+end
+
+function Base.copy(X::ConcretePJRTNumber)
+    return Core.Typeof(X)(Base.copy.(X.data), X.sharding)
+end
+
 # deepcopy
 function Base.deepcopy(x::Union{AbstractConcreteArray,AbstractConcreteNumber})
-    fn = Reactant.compile(copy, (x,))
-    return fn(x)
+    return Base.copy(x)
 end
 
 # One more reason why users shouldn't call `deepcopy`

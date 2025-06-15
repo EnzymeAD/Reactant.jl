@@ -14,6 +14,7 @@ using ..Reactant:
 
 using ReactantCore: ReactantCore
 using ReactantCore: materialize_traced_array
+using Reactant_jll: Reactant_jll
 
 using ..TracedUtils: TracedUtils, get_mlir_data, set_mlir_data!
 
@@ -21,18 +22,20 @@ using LinearAlgebra
 using Libdl: Libdl
 
 function __init__()
-    libblastrampoline_handle = Libdl.dlopen(LinearAlgebra.BLAS.libblas)
+    if Reactant_jll.is_available()
+        libblastrampoline_handle = Libdl.dlopen(LinearAlgebra.BLAS.libblas)
 
-    for (cname, enzymexla_name) in [
-        (LinearAlgebra.BLAS.@blasfunc(sgetrf_), :enzymexla_lapack_sgetrf_),
-        (LinearAlgebra.BLAS.@blasfunc(dgetrf_), :enzymexla_lapack_dgetrf_),
-        (LinearAlgebra.BLAS.@blasfunc(cgetrf_), :enzymexla_lapack_cgetrf_),
-        (LinearAlgebra.BLAS.@blasfunc(zgetrf_), :enzymexla_lapack_zgetrf_),
-    ]
-        sym = Libdl.dlsym(libblastrampoline_handle, cname)
-        @ccall MLIR.API.mlir_c.EnzymeJaXMapSymbol(
-            enzymexla_name::Cstring, sym::Ptr{Cvoid}
-        )::Cvoid
+        for (cname, enzymexla_name) in [
+            (LinearAlgebra.BLAS.@blasfunc(sgetrf_), :enzymexla_lapack_sgetrf_),
+            (LinearAlgebra.BLAS.@blasfunc(dgetrf_), :enzymexla_lapack_dgetrf_),
+            (LinearAlgebra.BLAS.@blasfunc(cgetrf_), :enzymexla_lapack_cgetrf_),
+            (LinearAlgebra.BLAS.@blasfunc(zgetrf_), :enzymexla_lapack_zgetrf_),
+        ]
+            sym = Libdl.dlsym(libblastrampoline_handle, cname)
+            @ccall MLIR.API.mlir_c.EnzymeJaXMapSymbol(
+                enzymexla_name::Cstring, sym::Ptr{Cvoid}
+            )::Cvoid
+        end
     end
 
     return nothing
@@ -488,6 +491,12 @@ function LinearAlgebra.dot(x::AnyTracedRVector, y::AnyTracedRVector)
     return TracedRNumber{unwrapped_eltype(res)}((), res.mlir_data)
 end
 
+LinearAlgebra.dot(x::AnyTracedRArray, y::AnyTracedRArray) = dot(vec(x), vec(y))
+
+function LinearAlgebra.dot(x::AnyTracedRVector, A::AnyTracedRMatrix, y::AnyTracedRVector)
+    return dot(x, A * y)
+end
+
 # ldiv & rdiv interfaces
 tfun_to_char(::typeof(identity)) = 'N'
 tfun_to_char(::typeof(transpose)) = 'T'
@@ -594,7 +603,7 @@ function _lu_overload(
 ) where {T,N}
     # TODO: don't ignore the check and allowsingular flags
     # Batching here is in the last dimensions. `Ops.lu` expects the last dimensions
-    permdims = vcat(Int64[N - 1, N], collect(Int64, 1:(N - 2)))
+    permdims = vcat(collect(Int64, 3:N), 1, 2)
     A = Ops.transpose(materialize_traced_array(A), permdims)
     factors, ipiv, perm, info = Reactant.Ops.lu(A)
 

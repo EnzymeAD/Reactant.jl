@@ -1,4 +1,5 @@
 using NNlib, Reactant, Enzyme
+using Statistics
 
 @testset "Activation Functions" begin
     sumabs2(f, x) = sum(abs2, f.(x))
@@ -87,26 +88,23 @@ end
             dy = ones(Float32, output_size)
             dy_reactant = Reactant.to_rarray(dy)
 
-            conv_compiled = Reactant.compile(
-                NNlib.conv, (x_reactant, weight_reactant, conv_dims)
-            )
+            Reactant.with_config(; convolution_precision=PrecisionConfig.HIGHEST) do
+                @test @jit(NNlib.conv(x_reactant, weight_reactant, conv_dims)) ≈
+                    NNlib.conv(x, weight, conv_dims)
 
-            @test conv_compiled(x_reactant, weight_reactant, conv_dims) ≈
-                NNlib.conv(x, weight, conv_dims)
+                ∇data = NNlib.∇conv_data(dy, weight, conv_dims)
+                @test @jit(NNlib.∇conv_data(dy_reactant, weight_reactant, conv_dims)) ≈
+                    ∇data
 
-            ∇data = NNlib.∇conv_data(dy, weight, conv_dims)
-            @test Reactant.@jit(NNlib.∇conv_data(dy_reactant, weight_reactant, conv_dims)) ≈
-                ∇data
+                ∇filter = NNlib.∇conv_filter(x, dy, conv_dims)
+                @test @jit(NNlib.∇conv_filter(x_reactant, dy_reactant, conv_dims)) ≈ ∇filter
 
-            ∇filter = NNlib.∇conv_filter(x, dy, conv_dims)
-            @test Reactant.@jit(NNlib.∇conv_filter(x_reactant, dy_reactant, conv_dims)) ≈
-                ∇filter
-
-            ∇data_enzyme, ∇filter_enzyme = Reactant.@jit ∇conv_data_filter(
-                x_reactant, weight_reactant, conv_dims
-            )
-            @test ∇data_enzyme ≈ ∇data
-            @test ∇filter_enzyme ≈ ∇filter
+                ∇data_enzyme, ∇filter_enzyme = @jit ∇conv_data_filter(
+                    x_reactant, weight_reactant, conv_dims
+                )
+                @test ∇data_enzyme ≈ ∇data
+                @test ∇filter_enzyme ≈ ∇filter
+            end
         end
     end
 
@@ -384,6 +382,255 @@ end
     end
 end
 
+# Adapted from https://github.com/FluxML/NNlib.jl/blob/1468582c4db5f18149cc8fff6fb4633c5debe5c5/test/testsuite/scatter.jl#L108
+@testset "NNlib scatter" begin
+    function test_scatter(dsts, srcs, idxs, res; dims)
+        @testset "scatter Float32 $op" for op in (+, -, max, min, *, /, mean)
+            for idx in values(idxs), dim in dims
+                dst = copy(dsts[dim])
+                target_y = res[(op, dim, true)]
+                src = srcs[(dim, true)]
+                if op == /
+                    src = src .* 2.0f0
+                end
+
+                y1 = @jit(
+                    NNlib.scatter!(
+                        op, Reactant.to_rarray(dst), Reactant.to_rarray(src), idx
+                    )
+                )
+                @test y1 ≈ target_y
+                @test y1 isa ConcreteRArray{Float32,ndims(dst)}
+                @test size(y1) == size(dsts[dim])
+                dst = copy(dsts[dim])
+                y2 = @jit(
+                    NNlib.scatter!(
+                        op,
+                        Reactant.to_rarray(dst),
+                        Reactant.to_rarray(src),
+                        Reactant.to_rarray(idx),
+                    )
+                )
+                @test y2 ≈ target_y
+                @test y2 isa ConcreteRArray{Float32,ndims(dst)}
+                @test size(y2) == size(dsts[dim])
+
+                target_y = res[(op, dim, false)]
+                src = srcs[(dim, false)]
+                if op == /
+                    src = src .* 2.0f0
+                end
+
+                y3 = @jit(NNlib.scatter(op, Reactant.to_rarray(src), idx))
+                @test y3 ≈ target_y
+                @test y3 isa ConcreteRArray{Float32,ndims(dst)}
+                @test size(y3) == size(dsts[dim])
+                y4 = @jit(
+                    NNlib.scatter(
+                        op,
+                        Reactant.to_rarray(src),
+                        Reactant.to_rarray(idx);
+                        dstsize=size(dsts[dim]),
+                    )
+                )
+                @test y4 ≈ target_y
+                @test y4 isa ConcreteRArray{Float32,ndims(dst)}
+                @test size(y4) == size(dsts[dim])
+
+                ridx = Reactant.to_rarray(idx)
+                if ridx isa Reactant.AbstractConcreteArray
+                    @test_throws ArgumentError @jit(
+                        NNlib.scatter(op, Reactant.to_rarray(src), ridx)
+                    )
+                else
+                    y5 = @jit(NNlib.scatter(op, Reactant.to_rarray(src), ridx))
+                    @test y5 ≈ target_y
+                    @test y5 isa ConcreteRArray{Float32,ndims(dst)}
+                    @test size(y5) == size(dsts[dim])
+                end
+            end
+        end
+    end
+
+    @testset "scatter 1d src, 1d index => 1d output" begin
+        #! format: off
+        dsts = Dict(
+            0 => Float32[3, 4, 5, 6, 7]
+        )
+
+        srcs = Dict(
+            (0, true) => ones(Float32, 5),
+            (0, false) => collect(Float32, 1:5),
+        )
+
+        idxs = Dict(
+            :int => [4, 2, 1, 5, 3],
+            :tup => [(4,), (2,), (1,), (5,), (3,)],
+            :car => CartesianIndex.([(4,), (2,), (1,), (5,), (3,)]),
+        )
+
+        res = Dict(
+            (+, 0, true) => Float32[4, 5, 6, 7, 8],
+            (+, 0, false) => Float32[3, 2, 5, 1, 4],
+
+            (-, 0, true) => Float32[2, 3, 4, 5, 6],
+            (-, 0, false) => Float32[-3, -2, -5, -1, -4],
+
+            (max, 0, true) => Float32[3, 4, 5, 6, 7],
+            (max, 0, false) => Float32[3, 2, 5, 1, 4],
+
+            (min, 0, true) => Float32[1, 1, 1, 1, 1],
+            (min, 0, false) => Float32[3, 2, 5, 1, 4],
+
+            (*, 0, true) => Float32[3, 4, 5, 6, 7],
+            (*, 0, false) => Float32[3, 2, 5, 1, 4],
+
+            (/, 0, true) => Float32[1.5, 2.0, 2.5, 3.0, 3.5],
+            (/, 0, false) => Float32[1//6, 1//4, 1//10, 1//2, 1//8],
+
+            (mean, 0, true) => Float32[4, 5, 6, 7, 8],
+            (mean, 0, false) => Float32[3, 2, 5, 1, 4],
+        )
+        #! format: on
+        test_scatter(dsts, srcs, idxs, res; dims=[0])
+    end
+
+    @testset "scatter 2d src, 1d index => 2d output" begin
+        #! format: off
+        dsts = Dict(
+                0 => Float32[3 3 4 4 5
+                            5 5 6 6 7]
+        )
+
+        srcs = Dict(
+            (0, true) => ones(Float32, 2, 5),
+            (0, false) => ones(Float32, 2) * collect(1:5)',
+        )
+
+        idxs = Dict(
+            :int => [4, 2, 1, 5, 3],
+            :tup => [(4,), (2,), (1,), (5,), (3,)],
+            :car => CartesianIndex.([(4,), (2,), (1,), (5,), (3,)]),
+        )
+
+        res = Dict(
+            (+, 0, true) => Float32[4 4 5 5 6;
+                                    6 6 7 7 8],
+            (+, 0, false) => Float32[3 2 5 1 4;
+                                        3 2 5 1 4],
+
+            (-, 0, true) => Float32[2 2 3 3 4;
+                                    4 4 5 5 6],
+            (-, 0, false) => Float32[-3 -2 -5 -1 -4;
+                                        -3 -2 -5 -1 -4],
+
+            (max, 0, true) => Float32[3 3 4 4 5;
+                                        5 5 6 6 7],
+            (max, 0, false) => Float32[3 2 5 1 4;
+                                        3 2 5 1 4],
+
+            (min, 0, true) => Float32[1 1 1 1 1;
+                                        1 1 1 1 1],
+            (min, 0, false) => Float32[3 2 5 1 4;
+                                        3 2 5 1 4],
+
+            (*, 0, true) => Float32[3 3 4 4 5;
+                                    5 5 6 6 7],
+            (*, 0, false) => Float32[3 2 5 1 4;
+                                        3 2 5 1 4],
+
+            (/, 0, true) => Float32[1.5 1.5 2.0 2.0 2.5;
+                                    2.5 2.5 3.0 3.0 3.5],
+            (/, 0, false) => Float32[1//6 1//4 1//10 1//2 1//8;
+                                        1//6 1//4 1//10 1//2 1//8],
+
+            (mean, 0, true) => Float32[4 4 5 5 6;
+                                        6 6 7 7 8],
+            (mean, 0, false) => Float32[3 2 5 1 4;
+                                        3 2 5 1 4],
+        )
+        #! format: on
+        test_scatter(dsts, srcs, idxs, res; dims=[0])
+    end
+
+    @testset "scatter 2d+3d src, 2d index => 1d+2d output" begin
+        #! format: off
+        dsts = Dict(
+            0 => Float32[3, 4, 5, 6, 7],
+            1 => Float32[3 3 4 4 5;
+                         5 5 6 6 7],
+        )
+
+        srcs = Dict(
+            (0, true) => ones(Float32, 3, 4),
+            (0, false) => ones(Float32, 3) * collect(1:4)',
+            (1, true) => ones(Float32, 2, 3, 4),
+            (1, false) => Float32[1, 2] .* reshape(ones(Float32, 3) * collect(1:4)', 1,3,4),
+        )
+
+        idxs = Dict(
+            :int => [1 2 3 4;
+                     4 2 1 3;
+                     3 5 5 3],
+            :tup => [(1,) (2,) (3,) (4,);
+                     (4,) (2,) (1,) (3,);
+                     (3,) (5,) (5,) (3,)],
+            :car => CartesianIndex.(
+                    [(1,) (2,) (3,) (4,);
+                     (4,) (2,) (1,) (3,);
+                     (3,) (5,) (5,) (3,)]),
+        )
+
+        res = Dict(
+            (+, 0, true) => Float32[5, 6, 9, 8, 9],
+            (+, 1, true) => Float32[5 5 8 6 7;
+                                    7 7 10 8 9],
+            (+, 0, false) => Float32[4, 4, 12, 5, 5],
+            (+, 1, false) => Float32[4 4 12 5 5;
+                                     8 8 24 10 10],
+            (-, 0, true) => Float32[1, 2, 1, 4, 5],
+            (-, 1, true) => Float32[1 1 0 2 3;
+                                    3 3 2 4 5],
+            (-, 0, false) => Float32[-4, -4, -12, -5, -5],
+            (-, 1, false) => Float32[-4 -4 -12 -5 -5;
+                                     -8 -8 -24 -10 -10],
+            (max, 0, true) => Float32[3, 4, 5, 6, 7],
+            (max, 1, true) => Float32[3 3 4 4 5;
+                                      5 5 6 6 7],
+            (max, 0, false) => Float32[3, 2, 4, 4, 3],
+            (max, 1, false) => Float32[3 2 4 4 3;
+                                       6 4 8 8 6],
+            (min, 0, true) => Float32[1, 1, 1, 1, 1],
+            (min, 1, true) => Float32[1 1 1 1 1;
+                                      1 1 1 1 1],
+            (min, 0, false) => Float32[1, 2, 1, 1, 2],
+            (min, 1, false) => Float32[1 2 1 1 2;
+                                       2 4 2 2 4],
+            (*, 0, true) => Float32[3, 4, 5, 6, 7],
+            (*, 1, true) => Float32[3 3 4 4 5;
+                                    5 5 6 6 7],
+            (*, 0, false) => Float32[3, 4, 48, 4, 6],
+            (*, 1, false) => Float32[3 4 48 4 6;
+                                     12 16 768 16 24],
+            (/, 0, true) => Float32[0.75, 1., 0.3125, 1.5, 1.75],
+            (/, 1, true) => Float32[0.75 0.75 0.25 1. 1.25;
+                                    1.25 1.25 0.375 1.5 1.75],
+            (/, 0, false) => Float32[1//12, 1//16, 1//768, 1//16, 1//24],
+            (/, 1, false) => Float32[1//12 1//16 1//768 1//16 1//24;
+                                     1//48 1//64 1//12288 1//64 1//96],
+            (mean, 0, true) => Float32[4., 5., 6., 7., 8.],
+            (mean, 1, true) => Float32[4. 4. 5. 5. 6.;
+                                       6. 6. 7. 7. 8.],
+            (mean, 0, false) => Float32[2, 2, 3, 2.5, 2.5],
+            (mean, 1, false) => Float32[2. 2. 3. 2.5 2.5;
+                                        4. 4. 6. 5. 5.],
+        )
+        #! format: on
+
+        test_scatter(dsts, srcs, idxs, res; dims=[0, 1])
+    end
+end
+
 @testset "∇conv(D = $ndim)" for ndim in 1:3
     x_spatial_dim = 4
     batch_size = 2
@@ -408,9 +655,9 @@ end
         dy = randn(Float32, output_size)
         dy_reactant = Reactant.to_rarray(dy)
 
-        @test Reactant.@jit(NNlib.∇conv_data(dy_reactant, w_reactant, conv_dims)) ≈
+        @test @jit(NNlib.∇conv_data(dy_reactant, w_reactant, conv_dims)) ≈
             NNlib.∇conv_data(dy, w, conv_dims)
-        @test Reactant.@jit(NNlib.∇conv_filter(x_reactant, dy_reactant, conv_dims)) ≈
+        @test @jit(NNlib.∇conv_filter(x_reactant, dy_reactant, conv_dims)) ≈
             NNlib.∇conv_filter(x, dy, conv_dims)
     end
 end
@@ -419,5 +666,60 @@ end
     x = randn(Float32, 4, 4, 3, 2)
     x_ra = Reactant.to_rarray(x)
 
-    @test @jit(NNlib.upsample_nearest(x_ra, (2, 2))) ≈ NNlib.upsample_nearest(x, (2, 2))
+    @testset "Nearest" begin
+        @test @jit(NNlib.upsample_nearest(x_ra, (2, 2))) ≈ NNlib.upsample_nearest(x, (2, 2))
+    end
+
+    @testset "Linear" begin
+        x = randn(Float32, 4, 3, 2)
+        x_ra = Reactant.to_rarray(x)
+
+        @test @jit(NNlib.upsample_linear(x_ra, (2,))) ≈ NNlib.upsample_linear(x, (2,))
+
+        @test @jit(NNlib.upsample_linear(x_ra, (2,); align_corners=false)) ≈
+            NNlib.upsample_linear(x, (2,); align_corners=false)
+    end
+
+    @testset "Bi-Linear" begin
+        x = randn(Float32, 4, 4, 3, 2)
+        x_ra = Reactant.to_rarray(x)
+
+        @test @jit(NNlib.upsample_bilinear(x_ra, (2, 2))) ≈
+            NNlib.upsample_bilinear(x, (2, 2))
+
+        @test @jit(NNlib.upsample_bilinear(x_ra, (2, 2); align_corners=false)) ≈
+            NNlib.upsample_bilinear(x, (2, 2); align_corners=false)
+    end
+
+    @testset "Tri-Linear" begin
+        x = randn(Float32, 4, 4, 4, 3, 2)
+        x_ra = Reactant.to_rarray(x)
+
+        @test @jit(NNlib.upsample_trilinear(x_ra, (2, 2, 2))) ≈
+            NNlib.upsample_trilinear(x, (2, 2, 2))
+
+        @test @jit(NNlib.upsample_trilinear(x_ra, (2, 2, 2); align_corners=false)) ≈
+            NNlib.upsample_trilinear(x, (2, 2, 2); align_corners=false)
+    end
+end
+
+@testset "Pixel shuffle" begin
+    x = [10i + j + channel / 10 for i in 1:2, j in 1:3, channel in 1:4, batch in 1:1]
+    x_ra = Reactant.to_rarray(x)
+
+    @test @jit(NNlib.pixel_shuffle(x_ra, 2)) ≈ NNlib.pixel_shuffle(x, 2)
+
+    y = [i + channel / 10 for i in 1:3, channel in 1:6, batch in 1:1]
+    y_ra = Reactant.to_rarray(y)
+
+    @test @jit(NNlib.pixel_shuffle(y_ra, 2)) ≈ NNlib.pixel_shuffle(y, 2)
+end
+
+@testset "softmax/logsoftmax reshaped input" begin
+    x = rand(Float32, 3, 4, 5)
+    x_ra = reshape(Reactant.to_rarray(x), 12, 5)
+    x = reshape(x, 12, 5)
+
+    @test @jit(NNlib.softmax(x_ra)) ≈ NNlib.softmax(x)
+    @test @jit(NNlib.logsoftmax(x_ra)) ≈ NNlib.logsoftmax(x)
 end
