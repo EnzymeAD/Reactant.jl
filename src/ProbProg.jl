@@ -27,7 +27,8 @@ function addSampleToTraceLowered(
     elseif datatype_width == 64
         Float64
     else
-        error("Unsupported datatype width: $datatype_width")
+        @ccall printf("Unsupported datatype width: %d\n"::Cstring, datatype_width::Cint)::Cvoid
+        return nothing
     end
 
     typed_ptr = Ptr{julia_type}(sample_ptr)
@@ -65,6 +66,7 @@ end
         (),
         string(f),
         false;
+        do_transpose=false,
         args_in_result=:all,
         argprefix,
         resprefix,
@@ -97,19 +99,19 @@ end
         resv = MLIR.IR.result(gen_op, i)
         if TracedUtils.has_idx(res, resprefix)
             path = TracedUtils.get_idx(res, resprefix)
-            TracedUtils.set!(result, path[2:end], TracedUtils.transpose_val(resv))
+            TracedUtils.set!(result, path[2:end], resv)
         elseif TracedUtils.has_idx(res, argprefix)
             idx, path = TracedUtils.get_argidx(res, argprefix)
             if idx == 1 && fnwrap
-                TracedUtils.set!(f, path[3:end], TracedUtils.transpose_val(resv))
+                TracedUtils.set!(f, path[3:end], resv)
             else
                 if fnwrap
                     idx -= 1
                 end
-                TracedUtils.set!(args[idx], path[3:end], TracedUtils.transpose_val(resv))
+                TracedUtils.set!(args[idx], path[3:end], resv)
             end
         else
-            TracedUtils.set!(res, (), TracedUtils.transpose_val(resv))
+            TracedUtils.set!(res, (), resv)
         end
     end
 
@@ -130,8 +132,8 @@ end
         (),
         string(f),
         false;
+        do_transpose=false,
         args_in_result=:all,
-        do_transpose=false,  # TODO: double check transpose
         argprefix,
         resprefix,
         resargprefix,
@@ -177,19 +179,19 @@ end
         resv = MLIR.IR.result(sample_op, i)
         if TracedUtils.has_idx(res, resprefix)
             path = TracedUtils.get_idx(res, resprefix)
-            TracedUtils.set!(result, path[2:end], TracedUtils.transpose_val(resv))
+            TracedUtils.set!(result, path[2:end], resv)
         elseif TracedUtils.has_idx(res, argprefix)
             idx, path = TracedUtils.get_argidx(res, argprefix)
             if idx == 1 && fnwrap
-                TracedUtils.set!(f, path[3:end], TracedUtils.transpose_val(resv))
+                TracedUtils.set!(f, path[3:end], resv)
             else
                 if fnwrap
                     idx -= 1
                 end
-                TracedUtils.set!(args[idx], path[3:end], TracedUtils.transpose_val(resv))
+                TracedUtils.set!(args[idx], path[3:end], resv)
             end
         else
-            TracedUtils.set!(res, (), TracedUtils.transpose_val(resv))
+            TracedUtils.set!(res, (), resv)
         end
     end
 
@@ -210,6 +212,7 @@ end
         (),
         string(f),
         false;
+        do_transpose=false,
         args_in_result=:all,
         argprefix,
         resprefix,
@@ -246,19 +249,19 @@ end
         resv = MLIR.IR.result(simulate_op, i)
         if TracedUtils.has_idx(res, resprefix)
             path = TracedUtils.get_idx(res, resprefix)
-            TracedUtils.set!(result, path[2:end], TracedUtils.transpose_val(resv))
+            TracedUtils.set!(result, path[2:end], resv)
         elseif TracedUtils.has_idx(res, argprefix)
             idx, path = TracedUtils.get_argidx(res, argprefix)
             if idx == 1 && fnwrap
-                TracedUtils.set!(f, path[3:end], TracedUtils.transpose_val(resv))
+                TracedUtils.set!(f, path[3:end], resv)
             else
                 if fnwrap
                     idx -= 1
                 end
-                TracedUtils.set!(args[idx], path[3:end], TracedUtils.transpose_val(resv))
+                TracedUtils.set!(args[idx], path[3:end], resv)
             end
         else
-            TracedUtils.set!(res, (), TracedUtils.transpose_val(resv))
+            TracedUtils.set!(res, (), resv)
         end
     end
 
@@ -271,7 +274,7 @@ function print_trace(trace::Dict{Symbol,Any})
         println("  $symbol:")
         println("    Sample: $(sample)")
     end
-    println("### End of Trace ###")
+    return println("### End of Trace ###")
 end
 
 end

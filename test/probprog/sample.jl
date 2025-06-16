@@ -18,7 +18,7 @@ function sample2(seed, μ, σ, shape)
     function model(seed, μ, σ, shape)
         rng = Random.default_rng()
         Random.seed!(rng, seed)
-        s = ProbProg.sample!(normal, rng, μ, σ, shape)
+        _ = ProbProg.sample!(normal, rng, μ, σ, shape)
         t = ProbProg.sample!(normal, rng, μ, σ, shape)
         return t
     end

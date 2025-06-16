@@ -42,11 +42,32 @@ using Reactant: ProbProg
 
         trace = ProbProg.createTrace()
 
-        result = Array(
-            @jit optimize = :probprog sync = true simulate_model(trace, seed, μ, σ, shape)
-        )
+        result = Array(@jit optimize = :probprog simulate_model(trace, seed, μ, σ, shape))
 
-        ProbProg.print_trace(trace)
         @test size(result) == shape
+        @test haskey(trace, :s)
+        @test haskey(trace, :t)
+        @test size(trace[:s]) == shape
+        @test size(trace[:t]) == shape
+    end
+
+    @testset "correctness" begin
+        op(x, y) = x * y'
+        function fake_model(x, y)
+            return ProbProg.sample!(op, x, y; symbol=:matmul)
+        end
+
+        trace = ProbProg.createTrace()
+        x = reshape(collect(Float64, 1:12), (4, 3))
+        y = reshape(collect(Float64, 1:12), (4, 3))
+        x_ra = Reactant.to_rarray(x)
+        y_ra = Reactant.to_rarray(y)
+
+        @test Array(
+            @jit optimize = :probprog ProbProg.simulate!(fake_model, x_ra, y_ra; trace)
+        ) == op(x, y)
+
+        @test haskey(trace, :matmul)
+        @test trace[:matmul] == op(x, y)
     end
 end
