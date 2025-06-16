@@ -326,15 +326,9 @@ function trace_for(expr; track_numbers, checkpointing, mincut)
         $bounds_defs
 
         if $(within_compile)()
-            $start_sym = $(ReactantCore.promote_to_traced)(
-                $start_sym,
-            )
-            $limit_sym = $(ReactantCore.promote_to_traced)(
-                $limit_sym,
-            )
-            $step_sym = $(ReactantCore.promote_to_traced)(
-                $step_sym,
-            )
+            $start_sym = $(ReactantCore.promote_to_traced)($start_sym)
+            $limit_sym = $(ReactantCore.promote_to_traced)($limit_sym)
+            $step_sym = $(ReactantCore.promote_to_traced)($step_sym)
         end
 
         local $counter = zero($start_sym)
