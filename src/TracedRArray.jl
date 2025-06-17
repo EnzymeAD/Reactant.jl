@@ -743,7 +743,13 @@ function Base.copyto!(
 end
 
 function Base.copyto!(dest::TracedRArray{T,N}, src::TracedRArray{T2,N}) where {T,T2,N}
-    return copyto!(dest, Ops.convert(TracedRArray{T,N}, src))
+    src2 = if T1 != T2
+        Ops.convert(TracedRArray{T,N}, src)
+    else
+        src
+    end
+    TracedUtils.set_mlir_data!(dest, src2.mlir_data)
+    return dest
 end
 
 function Base.copyto!(dest::AnyTracedRArray, src::AnyTracedRArray)
