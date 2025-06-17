@@ -743,7 +743,7 @@ function Base.copyto!(
 end
 
 function Base.copyto!(dest::TracedRArray{T,N}, src::TracedRArray{T2,N}) where {T,T2,N}
-    src2 = if T1 != T2
+    src2 = if T != T2
         Ops.convert(TracedRArray{T,N}, src)
     else
         src
