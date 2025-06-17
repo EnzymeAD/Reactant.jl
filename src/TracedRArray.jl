@@ -752,7 +752,9 @@ function Base.copyto!(dest::TracedRArray{T,N}, src::TracedRArray{T2,N}) where {T
     return dest
 end
 
-function Base.copyto!(dest::AnyTracedRArray{T1, N} where T1, src::AnyTracedRArray{T2, N} where T2) where N
+function Base.copyto!(
+    dest::AnyTracedRArray{T1,N} where {T1}, src::AnyTracedRArray{T2,N} where {T2}
+) where {N}
     return copyto!(dest, materialize_traced_array(src))
 end
 
