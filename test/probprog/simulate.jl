@@ -22,7 +22,7 @@ using Reactant: ProbProg
         μ = Reactant.ConcreteRNumber(0.0)
         σ = Reactant.ConcreteRNumber(1.0)
 
-        trace = ProbProg.createTrace()
+        trace = ProbProg.create_trace()
 
         before = @code_hlo optimize = :no_enzyme simulate_model(trace, seed, μ, σ, shape)
         @test contains(repr(before), "enzyme.simulate")
@@ -40,7 +40,7 @@ using Reactant: ProbProg
         μ = Reactant.ConcreteRNumber(0.0)
         σ = Reactant.ConcreteRNumber(1.0)
 
-        trace = ProbProg.createTrace()
+        trace = ProbProg.create_trace()
 
         result = Array(@jit optimize = :probprog simulate_model(trace, seed, μ, σ, shape))
 
@@ -57,7 +57,7 @@ using Reactant: ProbProg
             return ProbProg.sample!(op, x, y; symbol=:matmul)
         end
 
-        trace = ProbProg.createTrace()
+        trace = ProbProg.create_trace()
         x = reshape(collect(Float64, 1:12), (4, 3))
         y = reshape(collect(Float64, 1:12), (4, 3))
         x_ra = Reactant.to_rarray(x)

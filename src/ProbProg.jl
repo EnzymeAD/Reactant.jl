@@ -3,10 +3,6 @@ module ProbProg
 using ..Reactant: MLIR, TracedUtils, AbstractConcreteArray
 using Enzyme
 
-function createTrace()
-    return Dict{Symbol,Any}()
-end
-
 function addSampleToTraceLowered(
     trace_ptr_ptr::Ptr{Ptr{Any}},
     symbol_ptr_ptr::Ptr{Ptr{Any}},
@@ -26,6 +22,8 @@ function addSampleToTraceLowered(
         Float32
     elseif datatype_width == 64
         Float64
+    elseif datatype_width == 1
+        Bool
     else
         @ccall printf("Unsupported datatype width: %d\n"::Cstring, datatype_width::Cint)::Cvoid
         return nothing
@@ -266,6 +264,10 @@ end
     end
 
     return result
+end
+
+function create_trace()
+    return Dict{Symbol,Any}()
 end
 
 function print_trace(trace::Dict{Symbol,Any})

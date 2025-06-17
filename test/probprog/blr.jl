@@ -1,33 +1,33 @@
-using Reactant, Test, Random, StableRNGs, Statistics
+using Reactant, Test, Random
 using Reactant: ProbProg
-using Libdl: Libdl
 
-normal(rng, μ, σ, shape) = μ .+ σ .* randn(rng, shape)
-bernoulli_logit(rng, logit, shape) = rand(rng, shape...) .< (1 ./ (1 .+ exp.(-logit)))
+function normal(rng, μ, σ, shape)
+    return μ .+ σ .* randn(rng, shape)
+end
+
+function bernoulli_logit(rng, logit, shape)
+    return rand(rng, shape...) .< (1 ./ (1 .+ exp.(-logit)))
+end
 
 function blr(seed, N, K)
-    function model(seed, N, K)
-        rng = Random.default_rng()
-        Random.seed!(rng, seed)
+    rng = Random.default_rng()
+    Random.seed!(rng, seed)
 
-        # α ~ Normal(0, 10, size = 1)
-        α = ProbProg.sample!(normal, rng, 0, 10, (1,); symbol=:α)
+    # α ~ Normal(0, 10, size = 1)
+    α = ProbProg.sample!(normal, rng, 0, 10, (1,); symbol=:α)
 
-        # β ~ Normal(0, 2.5, size = K)
-        β = ProbProg.sample!(normal, rng, 0, 2.5, (K,); symbol=:β)
+    # β ~ Normal(0, 2.5, size = K)
+    β = ProbProg.sample!(normal, rng, 0, 2.5, (K,); symbol=:β)
 
-        # X ~ Normal(0, 10, size = (N, K))
-        X = ProbProg.sample!(normal, rng, 0, 10, (N, K); symbol=:X) # TODO: double check transpose 
+    # X ~ Normal(0, 10, size = (N, K))
+    X = ProbProg.sample!(normal, rng, 0, 10, (N, K); symbol=:X)
 
-        # μ = α .+ X * β
-        μ = α .+ X * β
+    # μ = α .+ X * β
+    μ = α .+ X * β
 
-        ProbProg.sample!(bernoulli_logit, rng, μ, (N,); symbol=:Y)
+    Y = ProbProg.sample!(bernoulli_logit, rng, μ, (N,); symbol=:Y)
 
-        return μ
-    end
-
-    return ProbProg.simulate!(model, seed, N, K)
+    return Y
 end
 
 @testset "BLR" begin
@@ -35,6 +35,11 @@ end
     K = 3  # number of features
     seed = Reactant.to_rarray(UInt64[1, 4])
 
-    X = ProbProg.getTrace(@jit optimize = :probprog blr(seed, N, K))
-    ProbProg.print_trace(X)
+    trace = ProbProg.create_trace()
+
+    @test size(
+        Array(@jit optimize = :probprog ProbProg.simulate!(blr, seed, N, K; trace))
+    ) == (N,)
+
+    ProbProg.print_trace(trace)
 end
