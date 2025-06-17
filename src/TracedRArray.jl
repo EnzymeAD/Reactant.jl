@@ -726,13 +726,9 @@ end
 
 Base.copyto!(dest::AnyTracedRArray, bc::Broadcasted{Nothing}) = _copyto!(dest, bc) # Keep it for ArrayConflict
 
-function Base.copyto!(dest::TracedRArray{T,N}, src::TracedRArray{T,N}) where {T,N}
-    dest.mlir_data = src.mlir_data
+function Base.copyto!(dest::AnyTracedRArray{T,N}, src::TracedRArray{T,N}) where {T,N}
+    TracedUtils.set_mlir_data!(dest, src.mlir_data)
     return dest
-end
-
-function Base.copyto!(dest::TracedRArray, src::AnyTracedRArray)
-    return copyto!(dest, materialize_traced_array(src))
 end
 
 function Base.copyto!(
@@ -754,7 +750,7 @@ function Base.copyto!(dest::AnyTracedRArray, src::AnyTracedRArray)
     return copyto!(dest, materialize_traced_array(src))
 end
 
-function Base.copyto!(dest::TracedRArray{T,N}, src::Array{T2,N}) where {T,T2,N}
+function Base.copyto!(dest::AnyTracedRArray{T,N}, src::Array{T2,N}) where {T,T2,N}
     return copyto!(dest, TracedUtils.promote_to(TracedRArray{T2,N}, src))
 end
 
