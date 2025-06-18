@@ -3414,8 +3414,12 @@ end
 const __thunk_fwd_body_cache = Dict{Symbol,Expr}()
 const __thunk_rev_body_cache = Dict{Expr,Symbol}()
 
-function compile(f, args; sync=false, kwargs...)
-    _, exec, mlir_fn_res, device, client, str = compile_xla(f, args; kwargs...)
+function compile(f, args; kwargs...)
+    compile_options, kwargs = __get_compile_options_and_kwargs(; kwargs...)
+
+    _, exec, mlir_fn_res, device, client, str = compile_xla(
+        f, args; compile_options, kwargs...
+    )
     (;
         linear_args,
         seen_args,
@@ -3491,7 +3495,7 @@ function compile(f, args; sync=false, kwargs...)
         end
     end
 
-    sync_call = if sync
+    sync_call = if compile_options.sync
         calls = []
         for name in concretized_res_names
             push!(calls, :(XLA.synced_buffer($(name))))
