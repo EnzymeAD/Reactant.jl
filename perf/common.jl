@@ -91,7 +91,7 @@ function benchmark_nn_primal(
         )
     end
 
-    sort!(results, by=x -> x[3])
+    sort!(results; by=x -> x[3])
     return results
 end
 
