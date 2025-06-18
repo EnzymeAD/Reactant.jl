@@ -1291,6 +1291,7 @@ function __get_compile_options_and_kwargs(;
     optimize_communications::Union{Bool,OptimizeCommunicationOptions}=true,
     assert_nonallocating::Bool=false,
     donated_args::Symbol=:auto,
+    sync::Bool=false,
     kwargs...,
 )
     return (
@@ -1312,6 +1313,7 @@ function __get_compile_options_and_kwargs(;
             optimize_communications,
             assert_nonallocating,
             donated_args,
+            sync,
         ),
         kwargs,
     )
