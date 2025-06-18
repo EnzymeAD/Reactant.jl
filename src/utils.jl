@@ -1145,9 +1145,18 @@ function call_with_reactant_generator(
             is_not_cached = push_inst!(
                 Expr(:call, GlobalRef(Base, :isnothing), cached_or_nothing)
             )
-            # TODO: conditional jump to cached block
-            # cached_dest = 0
-            # push_inst!(Core.GotoIfNot(is_not_cached, cached_dest))
+
+            # Check if any argument is traced using any(is_traced, (args...))
+            args_tuple = push_inst!(
+                Expr(:call, GlobalRef(Core, :tuple), fn_args[2:end]...)
+            )
+            has_traced_args = push_inst!(
+                Expr(:call, GlobalRef(Base, :any), GlobalRef(ReactantCore, :is_traced), args_tuple)
+            )
+
+            # If no traced args, just call the opaque closure directly
+            no_trace_dest = length(overdubbed_code) + 33
+            push_inst!(Core.GotoIfNot(has_traced_args, no_trace_dest))
 
             prologue_result = push_inst!(
                 Expr(
@@ -1313,7 +1322,17 @@ function call_with_reactant_generator(
                     ),
                 ),
             )
-            traced_result
+            
+            push_inst!(Expr(:(=), ocres_slot, traced_result))
+                        # Jump over the no-trace path
+            end_dest = length(overdubbed_code) + 4
+            push_inst!(Core.GotoNode(end_dest))
+
+            # No-trace path: just call the opaque closure directly
+            traced_result = push_inst!(Expr(:call, oc, fn_args[2:end]...))
+            push_inst!(Expr(:(=), ocres_slot, traced_result))
+
+            push_inst!(ocres_slot)
         else
             traced_result = push_inst!(Expr(:call, oc, fn_args[2:end]...))
             traced_result
