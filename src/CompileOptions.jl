@@ -138,9 +138,6 @@ Fine-grained control over the compilation options for the Reactant compiler.
   - `assert_nonallocating`: If `true`, we make sure that no new buffers are
     returned by the function. Any buffer returned must be donated from the inputs. Defaults
     to `false`.
-  - `sync`: Reactant computations are asynchronous by default. If `true`, the computation
-    will be executed synchronously, blocking till the computation is complete. This is
-    recommended when benchmarking.
 
 # Extended Help
 
@@ -178,7 +175,6 @@ struct CompileOptions
     # julia codegen options
     assert_nonallocating::Bool
     donated_args::Symbol
-    sync::Bool
     ## private options for ablation studies
     disable_scatter_gather_optimization_passes::Bool
     disable_pad_optimization_passes::Bool
@@ -201,7 +197,6 @@ function CompileOptions(;
     optimize_communications::Union{Bool,OptimizeCommunicationOptions}=true,
     assert_nonallocating::Bool=false,
     donated_args::Symbol=:auto,
-    sync::Bool=false,
     disable_scatter_gather_optimization_passes::Bool=false,
     disable_pad_optimization_passes::Bool=false,
 )
@@ -248,7 +243,6 @@ function CompileOptions(;
         optimize_communications,
         assert_nonallocating,
         donated_args,
-        sync,
         disable_scatter_gather_optimization_passes,
         disable_pad_optimization_passes,
     )
@@ -288,7 +282,6 @@ function __compile_options_with_reversed_propagation(compile_options::CompileOpt
         compile_options.optimize_communications,
         compile_options.assert_nonallocating,
         compile_options.donated_args,
-        compile_options.sync,
         compile_options.disable_scatter_gather_optimization_passes,
         compile_options.disable_pad_optimization_passes,
     )
