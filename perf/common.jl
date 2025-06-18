@@ -1,4 +1,4 @@
-using BenchmarkTools: @belapsed
+using BenchmarkTools: @benchmark
 using Reactant, Enzyme, PrettyTables, Statistics
 
 function simple_mse_loss(model, x, ps, st)
