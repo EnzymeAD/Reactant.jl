@@ -1,27 +1,33 @@
 using BenchmarkTools: @benchmark
 using Reactant, Enzyme, PrettyTables, Statistics
 
-function simple_mse_loss(model, x, ps, st)
+function simple_mse_loss(model, x, z, ps, st)
     y, _ = Lux.apply(model, x, ps, st)
-    return sum(abs2, y)
+    return MSELoss()(y, z)
+end
+
+function simple_mse_loss_gradient(model, x, z, ps, st)
+    return Enzyme.gradient(
+        Reverse, simple_mse_loss, Const(model), Const(x), Const(z), ps, Const(st)
+    )
 end
 
 function benchmark_nn_primal(
-    model, x, ps, st; disable_scatter_gather_bench=true, disable_pad_bench=true
+    model, x, z, ps, st; disable_scatter_gather_bench=true, disable_pad_bench=true
 )
     results = Vector{Tuple{String,String,Float64,Float64,Float64}}()
 
     # Only XLA
     compiled_fwd_xla = @compile sync = true compile_options = Reactant.DefaultXLACompileOptions() simple_mse_loss(
-        model, x, ps, st
+        model, x, z, ps, st
     )
-    bench = @benchmark $compiled_fwd_xla($model, $x, $ps, $st)
+    bench = @benchmark $compiled_fwd_xla($model, $x, $z, $ps, $st) setup = (GC.gc(true))
     push!(results, ("Primal", "Only XLA", median(bench).time, std(bench).time, 1.0))
     baseline = median(bench).time
 
     # Default
-    compiled_fwd = @compile sync = true simple_mse_loss(model, x, ps, st)
-    bench = @benchmark $compiled_fwd($model, $x, $ps, $st)
+    compiled_fwd = @compile sync = true simple_mse_loss(model, x, z, ps, st)
+    bench = @benchmark $compiled_fwd($model, $x, $z, $ps, $st) setup = (GC.gc(true))
     push!(
         results,
         (
@@ -37,8 +43,10 @@ function benchmark_nn_primal(
     if disable_scatter_gather_bench
         compiled_fwd_no_scatter = @compile sync = true compile_options = CompileOptions(;
             disable_scatter_gather_optimization_passes=true
-        ) simple_mse_loss(model, x, ps, st)
-        bench = @benchmark $compiled_fwd_no_scatter($model, $x, $ps, $st)
+        ) simple_mse_loss(model, x, z, ps, st)
+        bench = @benchmark $compiled_fwd_no_scatter($model, $x, $z, $ps, $st) setup = (GC.gc(
+            true
+        ))
 
         push!(
             results,
@@ -56,8 +64,10 @@ function benchmark_nn_primal(
     if disable_pad_bench
         compiled_fwd_no_pad = @compile sync = true compile_options = CompileOptions(;
             disable_pad_optimization_passes=true
-        ) simple_mse_loss(model, x, ps, st)
-        bench = @benchmark $compiled_fwd_no_pad($model, $x, $ps, $st)
+        ) simple_mse_loss(model, x, z, ps, st)
+        bench = @benchmark $compiled_fwd_no_pad($model, $x, $z, $ps, $st) setup = (GC.gc(
+            true
+        ))
 
         push!(
             results,
@@ -76,8 +86,10 @@ function benchmark_nn_primal(
         compiled_fwd_no_scatter_pad = @compile sync = true compile_options = CompileOptions(;
             disable_scatter_gather_optimization_passes=true,
             disable_pad_optimization_passes=true,
-        ) simple_mse_loss(model, x, ps, st)
-        bench = @benchmark $compiled_fwd_no_scatter_pad($model, $x, $ps, $st)
+        ) simple_mse_loss(model, x, z, ps, st)
+        bench = @benchmark $compiled_fwd_no_scatter_pad($model, $x, $z, $ps, $st) setup = (GC.gc(
+            true
+        ))
 
         push!(
             results,
@@ -89,6 +101,127 @@ function benchmark_nn_primal(
                 median(bench).time / baseline,
             ),
         )
+    end
+
+    sort!(results; by=x -> x[3])
+    return results
+end
+
+function benchmark_nn_gradient(model, x, z, ps, st; kwargs...)
+    return vcat(
+        [
+            benchmark_nn_gradient_internal(model, x, z, ps, st, mode; kwargs...) for
+            mode in [:all, :before_enzyme, :after_enzyme]
+        ]...,
+    )
+end
+
+function benchmark_nn_gradient_internal(
+    model, x, z, ps, st, mode; disable_scatter_gather_bench=true, disable_pad_bench=true
+)
+    @info "Benchmarking gradient with mode: $(Meta.quot(mode))"
+
+    results = Vector{Tuple{String,String,Float64,Float64,Float64}}()
+
+    # Only XLA
+    compiled_grad_xla = @compile sync = true compile_options = Reactant.DefaultXLACompileOptions() simple_mse_loss_gradient(
+        model, x, z, ps, st
+    )
+    bench = @benchmark $compiled_grad_xla($model, $x, $z, $ps, $st) setup = (GC.gc(true))
+    push!(
+        results, ("Gradient ($mode)", "Only XLA", median(bench).time, std(bench).time, 1.0)
+    )
+    baseline = median(bench).time
+
+    display(results[end])
+
+    # Default
+    compiled_grad = @compile sync = true optimize = mode simple_mse_loss_gradient(
+        model, x, z, ps, st
+    )
+    bench = @benchmark $compiled_grad($model, $x, $z, $ps, $st) setup = (GC.gc(true))
+    push!(
+        results,
+        (
+            "Gradient ($mode)",
+            "All",
+            median(bench).time,
+            std(bench).time,
+            median(bench).time / baseline,
+        ),
+    )
+
+    display(results[end])
+
+    # Disable Scatter
+    if disable_scatter_gather_bench
+        compiled_grad_no_scatter = @compile sync = true compile_options = CompileOptions(;
+            disable_scatter_gather_optimization_passes=true, optimization_passes=mode
+        ) simple_mse_loss_gradient(model, x, z, ps, st)
+        bench = @benchmark $compiled_grad_no_scatter($model, $x, $z, $ps, $st) setup = (GC.gc(
+            true
+        ))
+
+        push!(
+            results,
+            (
+                "Gradient ($mode)",
+                "No Scatter/Gather Optimizations",
+                median(bench).time,
+                std(bench).time,
+                median(bench).time / baseline,
+            ),
+        )
+
+        display(results[end])
+    end
+
+    # Disable Pad
+    if disable_pad_bench
+        compiled_grad_no_pad = @compile sync = true compile_options = CompileOptions(;
+            disable_pad_optimization_passes=true, optimization_passes=mode
+        ) simple_mse_loss_gradient(model, x, z, ps, st)
+        bench = @benchmark $compiled_grad_no_pad($model, $x, $z, $ps, $st) setup = (GC.gc(
+            true
+        ))
+
+        push!(
+            results,
+            (
+                "Gradient ($mode)",
+                "No Pad Optimizations",
+                median(bench).time,
+                std(bench).time,
+                median(bench).time / baseline,
+            ),
+        )
+
+        display(results[end])
+    end
+
+    # Disable Pad and Scatter
+    if disable_scatter_gather_bench && disable_pad_bench
+        compiled_grad_no_scatter_no_pad = @compile sync = true compile_options = CompileOptions(;
+            disable_scatter_gather_optimization_passes=true,
+            disable_pad_optimization_passes=true,
+            optimization_passes=mode,
+        ) simple_mse_loss_gradient(model, x, z, ps, st)
+        bench = @benchmark $compiled_grad_no_scatter_no_pad($model, $x, $z, $ps, $st) setup = (GC.gc(
+            true
+        ))
+
+        push!(
+            results,
+            (
+                "Gradient ($mode)",
+                "No Scatter/Gather/Pad Optimizations",
+                median(bench).time,
+                std(bench).time,
+                median(bench).time / baseline,
+            ),
+        )
+
+        display(results[end])
     end
 
     sort!(results; by=x -> x[3])
