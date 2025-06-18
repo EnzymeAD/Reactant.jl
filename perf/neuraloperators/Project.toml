@@ -1,0 +1,21 @@
+[deps]
+BenchmarkTools = "6e4b80f9-dd63-53aa-95a3-0cdb28fa8baf"
+CSV = "336ed68f-0bac-5ca0-87d4-7b16caf5d00b"
+Enzyme = "7da242da-08ed-463a-9acd-ee780be4f1d9"
+Lux = "b2108857-7c20-44ae-9111-449ecde12c47"
+NeuralOperators = "ea5c82af-86e5-48da-8ee1-382d6ad7af4b"
+PrettyTables = "08abe8d2-0d0c-5749-adfa-8a2ac140af0d"
+Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
+Reactant = "3c362404-f566-11ee-1572-e11a4b42c853"
+
+[sources]
+Reactant = {path = "../../"}
+
+[compat]
+BenchmarkTools = "1.6"
+CSV = "0.10.15"
+Lux = "1.13.4"
+NeuralOperators = "0.6"
+PrettyTables = "2.4.0"
+Random = "1.11"
+julia = "1.11"
