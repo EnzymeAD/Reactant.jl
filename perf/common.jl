@@ -18,9 +18,9 @@ function benchmark_nn_primal(
     results = Vector{Tuple{String,String,Float64,Float64,Float64}}()
 
     # Only XLA
-    compiled_fwd_xla = @compile sync = true compile_options = Reactant.DefaultXLACompileOptions() simple_mse_loss(
-        model, x, z, ps, st
-    )
+    compiled_fwd_xla = @compile compile_options = Reactant.DefaultXLACompileOptions(;
+        sync=true
+    ) simple_mse_loss(model, x, z, ps, st)
     bench = @benchmark $compiled_fwd_xla($model, $x, $z, $ps, $st) setup = (GC.gc(true))
     push!(results, ("Primal", "Only XLA", median(bench).time, std(bench).time, 1.0))
     baseline = median(bench).time
@@ -41,8 +41,8 @@ function benchmark_nn_primal(
 
     # Disable Scatter
     if disable_scatter_gather_bench
-        compiled_fwd_no_scatter = @compile sync = true compile_options = CompileOptions(;
-            disable_scatter_gather_optimization_passes=true
+        compiled_fwd_no_scatter = @compile compile_options = CompileOptions(;
+            disable_scatter_gather_optimization_passes=true, sync=true
         ) simple_mse_loss(model, x, z, ps, st)
         bench = @benchmark $compiled_fwd_no_scatter($model, $x, $z, $ps, $st) setup = (GC.gc(
             true
@@ -62,8 +62,8 @@ function benchmark_nn_primal(
 
     # Disable Pad
     if disable_pad_bench
-        compiled_fwd_no_pad = @compile sync = true compile_options = CompileOptions(;
-            disable_pad_optimization_passes=true
+        compiled_fwd_no_pad = @compile compile_options = CompileOptions(;
+            disable_pad_optimization_passes=true, sync=true
         ) simple_mse_loss(model, x, z, ps, st)
         bench = @benchmark $compiled_fwd_no_pad($model, $x, $z, $ps, $st) setup = (GC.gc(
             true
@@ -83,9 +83,10 @@ function benchmark_nn_primal(
 
     # Disable Scatter and Pad
     if disable_scatter_gather_bench && disable_pad_bench
-        compiled_fwd_no_scatter_pad = @compile sync = true compile_options = CompileOptions(;
+        compiled_fwd_no_scatter_pad = @compile compile_options = CompileOptions(;
             disable_scatter_gather_optimization_passes=true,
             disable_pad_optimization_passes=true,
+            sync=true,
         ) simple_mse_loss(model, x, z, ps, st)
         bench = @benchmark $compiled_fwd_no_scatter_pad($model, $x, $z, $ps, $st) setup = (GC.gc(
             true
@@ -124,9 +125,9 @@ function benchmark_nn_gradient_internal(
     results = Vector{Tuple{String,String,Float64,Float64,Float64}}()
 
     # Only XLA
-    compiled_grad_xla = @compile sync = true compile_options = Reactant.DefaultXLACompileOptions() simple_mse_loss_gradient(
-        model, x, z, ps, st
-    )
+    compiled_grad_xla = @compile compile_options = Reactant.DefaultXLACompileOptions(;
+        sync=true
+    ) simple_mse_loss_gradient(model, x, z, ps, st)
     bench = @benchmark $compiled_grad_xla($model, $x, $z, $ps, $st) setup = (GC.gc(true))
     push!(
         results, ("Gradient ($mode)", "Only XLA", median(bench).time, std(bench).time, 1.0)
@@ -155,8 +156,10 @@ function benchmark_nn_gradient_internal(
 
     # Disable Scatter
     if disable_scatter_gather_bench
-        compiled_grad_no_scatter = @compile sync = true compile_options = CompileOptions(;
-            disable_scatter_gather_optimization_passes=true, optimization_passes=mode
+        compiled_grad_no_scatter = @compile compile_options = CompileOptions(;
+            disable_scatter_gather_optimization_passes=true,
+            optimization_passes=mode,
+            sync=true,
         ) simple_mse_loss_gradient(model, x, z, ps, st)
         bench = @benchmark $compiled_grad_no_scatter($model, $x, $z, $ps, $st) setup = (GC.gc(
             true
@@ -178,8 +181,8 @@ function benchmark_nn_gradient_internal(
 
     # Disable Pad
     if disable_pad_bench
-        compiled_grad_no_pad = @compile sync = true compile_options = CompileOptions(;
-            disable_pad_optimization_passes=true, optimization_passes=mode
+        compiled_grad_no_pad = @compile compile_options = CompileOptions(;
+            disable_pad_optimization_passes=true, optimization_passes=mode, sync=true
         ) simple_mse_loss_gradient(model, x, z, ps, st)
         bench = @benchmark $compiled_grad_no_pad($model, $x, $z, $ps, $st) setup = (GC.gc(
             true
@@ -201,10 +204,11 @@ function benchmark_nn_gradient_internal(
 
     # Disable Pad and Scatter
     if disable_scatter_gather_bench && disable_pad_bench
-        compiled_grad_no_scatter_no_pad = @compile sync = true compile_options = CompileOptions(;
+        compiled_grad_no_scatter_no_pad = @compile compile_options = CompileOptions(;
             disable_scatter_gather_optimization_passes=true,
             disable_pad_optimization_passes=true,
             optimization_passes=mode,
+            sync=true,
         ) simple_mse_loss_gradient(model, x, z, ps, st)
         bench = @benchmark $compiled_grad_no_scatter_no_pad($model, $x, $z, $ps, $st) setup = (GC.gc(
             true
