@@ -2,7 +2,7 @@ using NeuralOperators, Lux, Random
 
 include("../common.jl")
 
-const xdev = reactant_device()
+const xdev = reactant_device(; force=true)
 
 function run_deeponet_benchmarks()
     @info "Running DeepONet benchmarks"
