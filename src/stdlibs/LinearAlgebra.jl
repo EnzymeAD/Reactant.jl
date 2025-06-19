@@ -99,6 +99,32 @@ function __init__()
             (@blasfunc(LAPACKE_zungqr), :enzymexla_lapacke_zungqr_),
             (@blasfunc(LAPACKE_cungqr_work), :enzymexla_lapacke_cungqr_work_),
             (@blasfunc(LAPACKE_zungqr_work), :enzymexla_lapacke_zungqr_work_),
+            # gesvd
+            (@blasfunc(sgesvd_), :enzymexla_lapack_sgesvd_),
+            (@blasfunc(dgesvd_), :enzymexla_lapack_dgesvd_),
+            (@blasfunc(cgesvd_), :enzymexla_lapack_cgesvd_),
+            (@blasfunc(zgesvd_), :enzymexla_lapack_zgesvd_),
+            (@blasfunc(LAPACKE_sgesvd), :enzymexla_lapacke_sgesvd_),
+            (@blasfunc(LAPACKE_dgesvd), :enzymexla_lapacke_dgesvd_),
+            (@blasfunc(LAPACKE_cgesvd), :enzymexla_lapacke_cgesvd_),
+            (@blasfunc(LAPACKE_zgesvd), :enzymexla_lapacke_zgesvd_),
+            (@blasfunc(LAPACKE_sgesvd_work), :enzymexla_lapacke_sgesvd_work_),
+            (@blasfunc(LAPACKE_dgesvd_work), :enzymexla_lapacke_dgesvd_work_),
+            (@blasfunc(LAPACKE_cgesvd_work), :enzymexla_lapacke_cgesvd_work_),
+            (@blasfunc(LAPACKE_zgesvd_work), :enzymexla_lapacke_zgesvd_work_),
+            # gesdd
+            (@blasfunc(sgesdd_), :enzymexla_lapack_sgesdd_),
+            (@blasfunc(dgesdd_), :enzymexla_lapack_dgesdd_),
+            (@blasfunc(cgesdd_), :enzymexla_lapack_cgesdd_),
+            (@blasfunc(zgesdd_), :enzymexla_lapack_zgesdd_),
+            (@blasfunc(LAPACKE_sgesdd), :enzymexla_lapacke_sgesdd_),
+            (@blasfunc(LAPACKE_dgesdd), :enzymexla_lapacke_dgesdd_),
+            (@blasfunc(LAPACKE_cgesdd), :enzymexla_lapacke_cgesdd_),
+            (@blasfunc(LAPACKE_zgesdd), :enzymexla_lapacke_zgesdd_),
+            (@blasfunc(LAPACKE_sgesdd_work), :enzymexla_lapacke_sgesdd_work_),
+            (@blasfunc(LAPACKE_dgesdd_work), :enzymexla_lapacke_dgesdd_work_),
+            (@blasfunc(LAPACKE_cgesdd_work), :enzymexla_lapacke_cgesdd_work_),
+            (@blasfunc(LAPACKE_zgesdd_work), :enzymexla_lapacke_zgesdd_work_),
         ]
             sym = Libdl.dlsym(libblastrampoline_handle, cname)
             @ccall MLIR.API.mlir_c.EnzymeJaXMapSymbol(
