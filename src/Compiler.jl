@@ -1785,7 +1785,7 @@ function compile_mlir!(
                 ],
                 ',',
             ),
-            "only_enzyme",
+            "no_enzyme",
         )
     elseif compile_options.optimization_passes === :only_enzyme
         run_pass_pipeline!(
@@ -1801,7 +1801,7 @@ function compile_mlir!(
                 ],
                 ',',
             ),
-            "after_enzyme",
+            "only_enzyme",
         )
     elseif compile_options.optimization_passes === :after_enzyme
         run_pass_pipeline!(
@@ -1852,7 +1852,7 @@ function compile_mlir!(
                 end,
                 ',',
             ),
-            "before_enzyme",
+            "after_enzyme",
         )
     elseif compile_options.optimization_passes === :before_enzyme
         run_pass_pipeline!(
@@ -1887,7 +1887,7 @@ function compile_mlir!(
                 end,
                 ',',
             ),
-            "after_enzyme",
+            "before_enzyme",
         )
     elseif compile_options.optimization_passes === :canonicalize
         run_pass_pipeline!(mod, "mark-func-memory-effects,canonicalize", "canonicalize")
@@ -1897,23 +1897,23 @@ function compile_mlir!(
         run_pass_pipeline!(mod, compile_options.optimization_passes, "custom_pass")
     end
 
-    if !(compile_options.optimization_passes isa String)
-        if compile_options.optimization_passes ∉ (:none, :just_batch, :canonicalize) && (
+    if compile_options.optimization_passes isa Symbol &&
+        compile_options.optimization_passes === :all &&
+        (
             compile_options.transpose_propagate === :up ||
             compile_options.reshape_propagate === :up
         )
-            # We tried propagating reshapes and transposes up. If at this point we are left
-            # with them, we propagate them down to minimize the number of Ops in the IR.
-            run_pass_pipeline!(
-                mod,
-                optimization_passes(
-                    Reactant.__compile_options_with_reversed_propagation(compile_options);
-                    recognize_comms,
-                    lower_comms,
-                ),
-                "post_op_transpose_reshape",
-            )
-        end
+        # We tried propagating reshapes and transposes up. If at this point we are left
+        # with them, we propagate them down to minimize the number of Ops in the IR.
+        run_pass_pipeline!(
+            mod,
+            optimization_passes(
+                Reactant.__compile_options_with_reversed_propagation(compile_options);
+                recognize_comms,
+                lower_comms,
+            ),
+            "post_op_transpose_reshape",
+        )
     end
 
     if backend == "cuda" && compile_options.cudnn_hlo_optimize

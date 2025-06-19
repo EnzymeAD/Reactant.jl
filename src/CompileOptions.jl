@@ -295,16 +295,28 @@ function __compile_options_with_reversed_propagation(compile_options::CompileOpt
 end
 
 """
-    DefaultXLACompileOptions()
+    DefaultXLACompileOptions(;
+        donated_args=:auto, sync=false, optimize_then_pad=true, assert_nonallocating=false
+    )
 
 Runs specific Enzyme-JAX passes to ensure that the generated code is compatible with
-XLA compilation.
+XLA compilation. For the documentation of the allowed kwargs see [`CompileOptions`](@ref).
 
 !!! warning
 
     This is mostly a benchmarking option, and the default [`CompileOptions`](@ref) is almost
     certainly a better option.
 """
-function DefaultXLACompileOptions()
-    return CompileOptions(; optimization_passes=:only_enzyme, inline=false)
+function DefaultXLACompileOptions(;
+    donated_args=:auto, sync=false, optimize_then_pad=true, assert_nonallocating=false
+)
+    return CompileOptions(;
+        optimization_passes=:only_enzyme,
+        inline=false,
+        donated_args,
+        sync,
+        optimize_then_pad,
+        assert_nonallocating,
+        optimize_communications=false,
+    )
 end
