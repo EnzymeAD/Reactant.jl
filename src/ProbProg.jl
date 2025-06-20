@@ -1,7 +1,17 @@
 module ProbProg
 
-using ..Reactant: MLIR, TracedUtils, AbstractConcreteArray
+using ..Reactant: MLIR, TracedUtils, AbstractConcreteArray, AbstractConcreteNumber
+using ..Compiler: @jit
 using Enzyme
+
+mutable struct ProbProgTrace
+    choices::Dict{Symbol,Any}
+    retval::Any
+
+    function ProbProgTrace()
+        return new(Dict{Symbol,Any}(), nothing)
+    end
+end
 
 function addSampleToTraceLowered(
     trace_ptr_ptr::Ptr{Ptr{Any}},
@@ -31,9 +41,9 @@ function addSampleToTraceLowered(
 
     typed_ptr = Ptr{julia_type}(sample_ptr)
     if num_dims == 0
-        trace[symbol] = unsafe_load(typed_ptr)
+        trace.choices[symbol] = unsafe_load(typed_ptr)
     else
-        trace[symbol] = copy(unsafe_wrap(Array, typed_ptr, Tuple(shape_array)))
+        trace.choices[symbol] = copy(unsafe_wrap(Array, typed_ptr, Tuple(shape_array)))
     end
 
     return nothing
@@ -52,7 +62,7 @@ function __init__()
     return nothing
 end
 
-@noinline function sample!(
+function sample(
     f::Function, args::Vararg{Any,Nargs}; symbol::Symbol=gensym("sample")
 ) where {Nargs}
     argprefix::Symbol = gensym("samplearg")
@@ -132,7 +142,12 @@ end
     return result
 end
 
-@noinline function generate!(f::Function, args::Vararg{Any,Nargs}) where {Nargs}
+function generate(f::Function, args::Vararg{Any,Nargs}) where {Nargs}
+    res = @jit optimize = :probprog generate_internal(f, args...)
+    return res isa AbstractConcreteArray ? Array(res) : res
+end
+
+function generate_internal(f::Function, args::Vararg{Any,Nargs}) where {Nargs}
     argprefix::Symbol = gensym("generatearg")
     resprefix::Symbol = gensym("generateresult")
     resargprefix::Symbol = gensym("generateresarg")
@@ -196,8 +211,18 @@ end
     return result
 end
 
-@noinline function simulate!(
-    f::Function, args::Vararg{Any,Nargs}; trace::Dict{Symbol,Any}
+function simulate(f::Function, args::Vararg{Any,Nargs}) where {Nargs}
+    trace = ProbProgTrace()
+
+    res = @jit optimize = :probprog sync = true simulate_internal(f, args...; trace)
+
+    trace.retval = res isa AbstractConcreteArray ? Array(res) : res
+
+    return trace
+end
+
+function simulate_internal(
+    f::Function, args::Vararg{Any,Nargs}; trace::ProbProgTrace
 ) where {Nargs}
     argprefix::Symbol = gensym("simulatearg")
     resprefix::Symbol = gensym("simulateresult")
@@ -266,16 +291,5 @@ end
     return result
 end
 
-function create_trace()
-    return Dict{Symbol,Any}()
-end
 
-function print_trace(trace::Dict{Symbol,Any})
-    println("### Probabilistic Program Trace ###")
-    for (symbol, sample) in trace
-        println("  $symbol:")
-        println("    Sample: $(sample)")
-    end
-    return println("### End of Trace ###")
-end
 end

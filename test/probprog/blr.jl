@@ -14,18 +14,18 @@ function blr(seed, N, K)
     Random.seed!(rng, seed)
 
     # α ~ Normal(0, 10, size = 1)
-    α = ProbProg.sample!(normal, rng, 0, 10, (1,); symbol=:α)
+    α = ProbProg.sample(normal, rng, 0, 10, (1,); symbol=:α)
 
     # β ~ Normal(0, 2.5, size = K)
-    β = ProbProg.sample!(normal, rng, 0, 2.5, (K,); symbol=:β)
+    β = ProbProg.sample(normal, rng, 0, 2.5, (K,); symbol=:β)
 
     # X ~ Normal(0, 10, size = (N, K))
-    X = ProbProg.sample!(normal, rng, 0, 10, (N, K); symbol=:X)
+    X = ProbProg.sample(normal, rng, 0, 10, (N, K); symbol=:X)
 
     # μ = α .+ X * β
     μ = α .+ X * β
 
-    Y = ProbProg.sample!(bernoulli_logit, rng, μ, (N,); symbol=:Y)
+    Y = ProbProg.sample(bernoulli_logit, rng, μ, (N,); symbol=:Y)
 
     return Y
 end
@@ -35,11 +35,9 @@ end
     K = 3  # number of features
     seed = Reactant.to_rarray(UInt64[1, 4])
 
-    trace = ProbProg.create_trace()
+    trace = ProbProg.simulate(blr, seed, N, K)
 
-    @test size(
-        Array(@jit optimize = :probprog ProbProg.simulate!(blr, seed, N, K; trace))
-    ) == (N,)
+    @test size(Array(trace.retval)) == (N,)
 
-    ProbProg.print_trace(trace)
+    println(trace)
 end

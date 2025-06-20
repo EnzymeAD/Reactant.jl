@@ -1,18 +1,14 @@
-using Reactant, Test, Random, StableRNGs, Statistics
+using Reactant, Test, Random, Statistics
 using Reactant: ProbProg
 
 normal(rng, μ, σ, shape) = μ .+ σ .* randn(rng, shape)
 
-function generate_model(seed, μ, σ, shape)
-    function model(seed, μ, σ, shape)
-        rng = Random.default_rng()
-        Random.seed!(rng, seed)
-        s = ProbProg.sample!(normal, rng, μ, σ, shape)
-        t = ProbProg.sample!(normal, rng, s, σ, shape)
-        return t
-    end
-
-    return ProbProg.generate!(model, seed, μ, σ, shape)
+function model(seed, μ, σ, shape)
+    rng = Random.default_rng()
+    Random.seed!(rng, seed)
+    s = ProbProg.sample(normal, rng, μ, σ, shape)
+    t = ProbProg.sample(normal, rng, s, σ, shape)
+    return t
 end
 
 @testset "Generate" begin
@@ -24,6 +20,9 @@ end
         μ2 = Reactant.ConcreteRNumber(1000.0)
         σ1 = Reactant.ConcreteRNumber(1.0)
         σ2 = Reactant.ConcreteRNumber(1.0)
+
+        generate_model(seed, μ, σ, shape) =
+            ProbProg.generate_internal(model, seed, μ, σ, shape)
 
         model_compiled = @compile optimize = :probprog generate_model(seed1, μ1, σ1, shape)
 
@@ -44,11 +43,15 @@ end
         μ = Reactant.ConcreteRNumber(0.0)
         σ = Reactant.ConcreteRNumber(1.0)
 
-        before = @code_hlo optimize = :no_enzyme generate_model(seed, μ, σ, shape)
+        before = @code_hlo optimize = :no_enzyme ProbProg.generate_internal(
+            model, seed, μ, σ, shape
+        )
         @test contains(repr(before), "enzyme.generate")
         @test contains(repr(before), "enzyme.sample")
 
-        after = @code_hlo optimize = :probprog generate_model(seed, μ, σ, shape)
+        after = @code_hlo optimize = :probprog ProbProg.generate_internal(
+            model, seed, μ, σ, shape
+        )
         @test !contains(repr(after), "enzyme.generate")
         @test !contains(repr(after), "enzyme.sample")
     end
@@ -58,7 +61,7 @@ end
         seed = Reactant.to_rarray(UInt64[1, 4])
         μ = Reactant.ConcreteRNumber(0.0)
         σ = Reactant.ConcreteRNumber(1.0)
-        X = Array(@jit optimize = :probprog generate_model(seed, μ, σ, shape))
+        X = ProbProg.generate(model, seed, μ, σ, shape)
         @test mean(X) ≈ 0.0 atol = 0.05 rtol = 0.05
     end
 
@@ -66,7 +69,7 @@ end
         op(x, y) = x * y'
 
         function fake_model(x, y)
-            return ProbProg.sample!(op, x, y)
+            return ProbProg.sample(op, x, y)
         end
 
         x = reshape(collect(Float64, 1:12), (4, 3))
@@ -74,7 +77,6 @@ end
         x_ra = Reactant.to_rarray(x)
         y_ra = Reactant.to_rarray(y)
 
-        @test Array(@jit optimize = :probprog ProbProg.generate!(fake_model, x_ra, y_ra)) ==
-            op(x, y)
+        @test ProbProg.generate(fake_model, x_ra, y_ra) == op(x, y)
     end
 end

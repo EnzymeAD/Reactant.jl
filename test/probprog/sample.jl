@@ -1,29 +1,21 @@
-using Reactant, Test, Random, StableRNGs, Statistics
+using Reactant, Test, Random
 using Reactant: ProbProg
 
-@noinline normal(rng, μ, σ, shape) = μ .+ σ .* randn(rng, shape)
+normal(rng, μ, σ, shape) = μ .+ σ .* randn(rng, shape)
 
-function sample1(seed, μ, σ, shape)
-    function model(seed, μ, σ, shape)
-        rng = Random.default_rng()
-        Random.seed!(rng, seed)
-        s = ProbProg.sample!(normal, rng, μ, σ, shape)
-        return s
-    end
-
-    return ProbProg.generate!(model, seed, μ, σ, shape)
+function one_sample(seed, μ, σ, shape)
+    rng = Random.default_rng()
+    Random.seed!(rng, seed)
+    s = ProbProg.sample(normal, rng, μ, σ, shape)
+    return s
 end
 
-function sample2(seed, μ, σ, shape)
-    function model(seed, μ, σ, shape)
-        rng = Random.default_rng()
-        Random.seed!(rng, seed)
-        _ = ProbProg.sample!(normal, rng, μ, σ, shape)
-        t = ProbProg.sample!(normal, rng, μ, σ, shape)
-        return t
-    end
-
-    return ProbProg.generate!(model, seed, μ, σ, shape)
+function two_samples(seed, μ, σ, shape)
+    rng = Random.default_rng()
+    Random.seed!(rng, seed)
+    _ = ProbProg.sample(normal, rng, μ, σ, shape)
+    t = ProbProg.sample(normal, rng, μ, σ, shape)
+    return t
 end
 
 @testset "test" begin
@@ -32,19 +24,19 @@ end
         seed = Reactant.to_rarray(UInt64[1, 4])
         μ = Reactant.ConcreteRNumber(0.0)
         σ = Reactant.ConcreteRNumber(1.0)
-        before = @code_hlo optimize = false sample2(seed, μ, σ, shape)
+        before = @code_hlo optimize = false ProbProg.generate_internal(one_sample, seed, μ, σ, shape)
         @test contains(repr(before), "enzyme.sample")
-        after = @code_hlo optimize = :probprog sample2(seed, μ, σ, shape)
+        after = @code_hlo optimize = :probprog ProbProg.generate_internal(two_samples, seed, μ, σ, shape)
         @test !contains(repr(after), "enzyme.sample")
     end
 
-    @testset "sample_normal" begin
+    @testset "rng_state" begin
         shape = (10,)
         seed = Reactant.to_rarray(UInt64[1, 4])
         μ = Reactant.ConcreteRNumber(0.0)
         σ = Reactant.ConcreteRNumber(1.0)
-        X = Array(@jit optimize = :probprog sample1(seed, μ, σ, shape))
-        Y = Array(@jit optimize = :probprog sample2(seed, μ, σ, shape))
+        X = ProbProg.generate(one_sample, seed, μ, σ, shape)
+        Y = ProbProg.generate(two_samples, seed, μ, σ, shape)
         @test !all(X .≈ Y)
     end
 end
