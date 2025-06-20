@@ -9,6 +9,7 @@ export @trace, within_compile, MissingTracedValue, promote_to_traced
 function is_traced((@nospecialize x::T), seen=Base.IdSet()) where {T}
     if !isprimitivetype(x)
         for fn in fieldnames(T)
+            isdefined(x, fn) || continue
             f = getfield(x, fn)
             if !(f in seen)
                 push!(seen, f)
