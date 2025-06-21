@@ -34,6 +34,44 @@ function scope(
     )
 end
 
+function alternatives(; regions::Vector{Region}, location=Location())
+    op_ty_results = IR.Type[]
+    operands = Value[]
+    owned_regions = Region[regions...,]
+    successors = Block[]
+    attributes = NamedAttribute[]
+
+    return create_operation(
+        "enzymexla.alternatives",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+function barrier(indices::Vector{Value}; location=Location())
+    op_ty_results = IR.Type[]
+    operands = Value[indices...,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+
+    return create_operation(
+        "enzymexla.barrier",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
 function comm_region(; result_0::Vector{IR.Type}, body::Region, location=Location())
     op_ty_results = IR.Type[result_0...,]
     operands = Value[]
@@ -81,6 +119,103 @@ function extend(
         attributes,
         results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
         result_inference=(length(op_ty_results) == 0 ? true : false),
+    )
+end
+
+function gpu_block(
+    blockIndexX::Value,
+    blockIndexY::Value,
+    blockIndexZ::Value;
+    region::Region,
+    location=Location(),
+)
+    op_ty_results = IR.Type[]
+    operands = Value[blockIndexX, blockIndexY, blockIndexZ]
+    owned_regions = Region[region,]
+    successors = Block[]
+    attributes = NamedAttribute[]
+
+    return create_operation(
+        "enzymexla.gpu_block",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+function gpu_error(; result::IR.Type, region::Region, location=Location())
+    op_ty_results = IR.Type[result,]
+    operands = Value[]
+    owned_regions = Region[region,]
+    successors = Block[]
+    attributes = NamedAttribute[]
+
+    return create_operation(
+        "enzymexla.gpu_error",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+function gpu_thread(
+    threadIndexX::Value,
+    threadIndexY::Value,
+    threadIndexZ::Value;
+    region::Region,
+    location=Location(),
+)
+    op_ty_results = IR.Type[]
+    operands = Value[threadIndexX, threadIndexY, threadIndexZ]
+    owned_regions = Region[region,]
+    successors = Block[]
+    attributes = NamedAttribute[]
+
+    return create_operation(
+        "enzymexla.gpu_thread",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+"""
+`gpu_wrapper`
+
+The optional arguments to this operation are suggestions about what block
+dimensions this gpu kernel should have - usually taken from kernel launch
+params
+"""
+function gpu_wrapper(
+    blockDims::Vector{Value}; result::IR.Type, region::Region, location=Location()
+)
+    op_ty_results = IR.Type[result,]
+    operands = Value[blockDims...,]
+    owned_regions = Region[region,]
+    successors = Block[]
+    attributes = NamedAttribute[]
+
+    return create_operation(
+        "enzymexla.gpu_wrapper",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
     )
 end
 
@@ -214,6 +349,51 @@ function linalg_lu(
     )
 end
 
+"""
+`memcpy`
+
+The `gpu.memcpy` operation copies the content of one memref to another.
+
+The op does not execute before all async dependencies have finished
+executing.
+
+If the `async` keyword is present, the op is executed asynchronously (i.e.
+it does not block until the execution has finished on the device). In
+that case, it returns a !gpu.async.token.
+
+# Example
+
+```mlir
+%token = gpu.memcpy async [%dep] %dst, %src : memref<?xf32, 1>, memref<?xf32>
+```
+"""
+function memcpy(
+    asyncDependencies::Vector{Value},
+    target::Value,
+    source::Value,
+    size::Value;
+    asyncToken=nothing::Union{Nothing,IR.Type},
+    location=Location(),
+)
+    op_ty_results = IR.Type[]
+    operands = Value[asyncDependencies..., target, source, size]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+    !isnothing(asyncToken) && push!(op_ty_results, asyncToken)
+
+    return create_operation(
+        "enzymexla.memcpy",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
 function memref2pointer(source::Value; result::IR.Type, location=Location())
     op_ty_results = IR.Type[result,]
     operands = Value[source,]
@@ -233,6 +413,25 @@ function memref2pointer(source::Value; result::IR.Type, location=Location())
     )
 end
 
+function noop(blockDims::Vector{Value}; location=Location())
+    op_ty_results = IR.Type[]
+    operands = Value[blockDims...,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+
+    return create_operation(
+        "enzymexla.noop",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
 function pointer2memref(source::Value; result::IR.Type, location=Location())
     op_ty_results = IR.Type[result,]
     operands = Value[source,]
@@ -242,6 +441,46 @@ function pointer2memref(source::Value; result::IR.Type, location=Location())
 
     return create_operation(
         "enzymexla.pointer2memref",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+function polygeist_yield(; location=Location())
+    op_ty_results = IR.Type[]
+    operands = Value[]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+
+    return create_operation(
+        "enzymexla.polygeist_yield",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+function linalg_qr(
+    input::Value; output::IR.Type, tau::IR.Type, info::IR.Type, location=Location()
+)
+    op_ty_results = IR.Type[output, tau, info]
+    operands = Value[input,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+
+    return create_operation(
+        "enzymexla.linalg.qr",
         location;
         operands,
         owned_regions,
@@ -280,6 +519,25 @@ function rotate(
     )
 end
 
+function stream2token(source::Value; result::IR.Type, location=Location())
+    op_ty_results = IR.Type[result,]
+    operands = Value[source,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+
+    return create_operation(
+        "enzymexla.stream2token",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
 function wrap(
     operand::Value;
     result=nothing::Union{Nothing,IR.Type},
@@ -308,6 +566,25 @@ function wrap(
         attributes,
         results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
         result_inference=(length(op_ty_results) == 0 ? true : false),
+    )
+end
+
+function xla_wrapper(inputs::Vector{Value}; fn, location=Location())
+    op_ty_results = IR.Type[]
+    operands = Value[inputs...,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[namedattribute("fn", fn),]
+
+    return create_operation(
+        "enzymexla.xla_wrapper",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
     )
 end
 
