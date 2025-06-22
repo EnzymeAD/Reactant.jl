@@ -881,6 +881,12 @@ function optimization_passes(
         "split_convolution_into_reverse_convolution",
         # TODO we want to enable but may cause an infinite compile time
         # "concat_to_onedim_dusslice",
+        # TODO expose an option to enable this
+        # "chained_multiply_to_power",
+        "power_multiply_to_power",
+        "log_simplify",
+        "neg_mul_const_simplify",
+        "neg_div_const_simplify",
     ]
 
     if !compile_options.disable_scatter_gather_optimization_passes
@@ -1129,7 +1135,15 @@ function optimization_passes(
     end
 
     if compile_options.all_finite
-        push!(transform_passes_list, "all_finite")
+        append!(
+            transform_passes_list,
+            [
+                "all_finite_is_finite",
+                "all_finite_is_inf",
+                "all_finite_is_pos_inf",
+                "all_finite_is_neg_inf",
+            ],
+        )
     end
 
     lower_transform_passes = copy(transform_passes_list)
