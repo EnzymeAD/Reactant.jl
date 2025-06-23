@@ -1,0 +1,13 @@
+[deps]
+EinExprs = "b1794770-133b-4de1-afb4-526377e9f4c5"
+Enzyme = "7da242da-08ed-463a-9acd-ee780be4f1d9"
+Reactant = "3c362404-f566-11ee-1572-e11a4b42c853"
+Tenet = "85d41934-b9cd-44e1-8730-56d86f15f3ec"
+YaoBlocks = "418bc28f-b43b-5e0b-a6e7-61bbc1a2c1df"
+
+[compat]
+EinExprs = "0.6.10"
+Enzyme = "0.13.51"
+Reactant = "0.2.138"
+Tenet = "0.9.1"
+YaoBlocks = "0.13.15"
