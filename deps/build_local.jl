@@ -138,6 +138,7 @@ push!(build_cmd_list, "--check_visibility=false")
 push!(build_cmd_list, "--verbose_failures")
 push!(build_cmd_list, "--jobs=$(parsed_args["jobs"])")
 push!(build_cmd_list, "--experimental_ui_max_stdouterr_bytes=-1")
+push!(build_cmd_list, "-s")
 for opt in parsed_args["copt"]
     push!(build_cmd_list, "--copt=$(opt)")
 end
