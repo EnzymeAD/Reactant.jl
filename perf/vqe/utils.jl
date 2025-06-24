@@ -1,4 +1,5 @@
 using YaoBlocks
+using Tangles
 
 # simplified from `qiskit.circuit.library.efficient_su2`
 function efficient_su2(nqubits, nlayers)
@@ -19,4 +20,28 @@ function efficient_su2(nqubits, nlayers)
     end
 
     return chain(nqubits, gates...)
+end
+
+struct StackTag{T}
+    id::T
+    t::Int
+end
+
+function generic_stack(tns...)
+    tn = GenericTensorNetwork()
+    tns = copy.(tns)
+
+    for (i, tni) in enumerate(tns)
+        for ind in inds(tni)
+            replace!(tni, ind => Index(StackTag(ind.tag, i)))
+        end
+    end
+
+    append!(tn, all_tensors(tns[1]))
+    for i in 2:length(tns)
+        @align! outputs(tns[i - 1]) => inputs(tns[i])
+        append!(tn, all_tensors(tns[i]))
+    end
+
+    return tn
 end
