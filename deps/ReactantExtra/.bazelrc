@@ -1,6 +1,7 @@
 build --announce_rc
 
 # TODO: Migrate for https://github.com/bazelbuild/bazel/issues/7260
+common --repo_env=USE_PYWRAP_RULES=True
 common --noincompatible_enable_cc_toolchain_resolution
 common --experimental_repo_remote_exec
 common --cxxopt=-std=c++17 --host_cxxopt=-std=c++17
