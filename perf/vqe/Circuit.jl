@@ -5,8 +5,9 @@ using YaoBlocks
 using DelegatorTraits
 import DelegatorTraits: DelegatorTrait
 
-struct Circuit <: Tangles.AbstractTensorNetwork
+@kwdef struct Circuit <: Tangles.AbstractTensorNetwork
     tn::Tangles.GenericTensorNetwork
+    last_t::Dict{Site,Int} = Dict{Site,Int}()
 end
 
 DelegatorTrait(::Networks.Network, ::Circuit) = DelegateToField{:tn}()
@@ -15,7 +16,7 @@ DelegatorTrait(::Tangles.TensorNetwork, ::Circuit) = DelegateToField{:tn}()
 DelegatorTrait(::Tangles.Pluggable, ::Circuit) = DelegateToField{:tn}()
 DelegatorTrait(::Tangles.Lattice, ::Circuit) = DelegateToField{:tn}()
 
-Base.copy(circ::Circuit) = Circuit(copy(circ.tn))
+Base.copy(circ::Circuit) = Circuit(copy(circ.tn), Dict{Site,Int}())
 
 function flatten_circuit(x)
     if any(i -> i isa ChainBlock, subblocks(x))
@@ -25,12 +26,24 @@ function flatten_circuit(x)
     end
 end
 
+struct LaneAt{S}
+    site::S
+    t::Int
+end
+
+function Base.show(io::IO, lane::LaneAt)
+    print(io, lane.site)
+    return print(io, "@$(lane.t)")
+end
+
+moment(circuit::Circuit, site::Site) = circuit.last_t[site]
+
 """
     Convert a Yao circuit to a Circuit.
 """
 function Base.convert(::Type{Circuit}, yaocirc::AbstractBlock)
     tn = GenericTensorNetwork()
-    circuit = Circuit(tn)
+    circuit = Circuit(tn, Dict{Site,Int}())
 
     for gate in flatten_circuit(yaocirc)
         # if gate isa Swap
@@ -45,7 +58,7 @@ function Base.convert(::Type{Circuit}, yaocirc::AbstractBlock)
         # NOTE `YaoBlocks.mat` on m-site qubits still returns the operator on the full Hilbert space
         m = length(occupied_locs(gate))
         operator = if gate isa YaoBlocks.ControlBlock
-            control((1:(m-1))..., m => content(gate))(m)
+            control((1:(m - 1))..., m => content(gate))(m)
         else
             content(gate)
         end
@@ -60,27 +73,45 @@ end
 
 function Tangles.addtensor!(circuit::Circuit, tensor::Tensor)
     target_plugs = plugs(tensor)
+    target_plugs_in = filter(isdual, target_plugs)
+    target_plugs_out = filter(!isdual, target_plugs)
+    target_sites = unique!(site.(target_plugs))
 
-    for plug in filter(isdual, target_plugs) .|> adjoint
+    # if lane is not present, add an identity gate
+    for plug in adjoint.(target_plugs_in)
         if !hasplug(circuit, plug)
-            input, out = Index(gensym(:tmp)), Index(gensym(:tmp))
+            input, out = Index(LaneAt(site(plug), 1)), Index(LaneAt(site(plug), 2))
             addtensor!(circuit.tn, Tensor([1 0; 0 1], [input, out]))
             setplug!(circuit, input, plug')
             setplug!(circuit, out, plug)
+            circuit.last_t[site(plug)] = 2
         end
     end
 
-    tensor = replace(tensor, [Index(plug"i'") => ind_at(circuit, plug"i") for i in unique(site.(plugs(tensor)))]...)
-    # for all the normal plugs in the operator
-    # new_ind = Index(gensym(:tmp)) # Index((; layer=..., site=...))
-    new_inds = Dict(plug"i" => Index(gensym(:tmp)) for i in unique(site.(plugs(tensor))))
-    tensor = replace(tensor, [Index(k) => v for (k, v) in new_inds]...)
+    # align gate tensor with the circuit
+    tensor = replace(
+        tensor,
+        [
+            Index(plug) => Index(LaneAt(site(plug), moment(circuit, site(plug)))) for
+            plug in target_plugs_in
+        ]...,
+        [
+            Index(plug) => Index(LaneAt(site(plug), moment(circuit, site(plug)) + 1)) for
+            plug in target_plugs_out
+        ]...,
+    )
 
     addtensor!(circuit.tn, tensor)
 
-    for (plug, new_ind) in new_inds
+    # update plug tags mapping
+    for plug in target_plugs_out
         unsetplug!(circuit, plug)
-        setplug!(circuit, new_ind, plug)
+        setplug!(circuit, Index(LaneAt(site(plug), moment(circuit, site(plug)) + 1)), plug)
+    end
+
+    # update the last_t for each site
+    for site in target_sites
+        circuit.last_t[site] = circuit.last_t[site] + 1
     end
 
     return circuit
