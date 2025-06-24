@@ -763,10 +763,10 @@ cc_library(
     ) + [
         "@enzyme_ad//src/enzyme_ad/jax:gpu.cc",
         "@enzyme_ad//src/enzyme_ad/jax:cpu.cc",
-        "@xla//xla/service/gpu:backend_configs.pb.cc",
-        "@xla//xla:autotuning.pb.cc",
-        "@xla//xla:autotune_results.pb.cc",
-        "@xla//xla/service:buffer_assignment.pb.cc",
+        # "@xla//xla/service/gpu:backend_configs.pb.cc",
+        # "@xla//xla:autotuning.pb.cc",
+        # "@xla//xla:autotune_results.pb.cc",
+        # "@xla//xla/service:buffer_assignment.pb.cc",
         ],
     hdrs = glob([
         "*.h",
