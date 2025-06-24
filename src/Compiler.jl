@@ -1092,6 +1092,7 @@ function optimization_passes(
                 "transpose_batch_norm_inference",
                 "transpose_batch_norm_grad",
                 "transpose_if",
+                "transpose_scatter",
             ],
         )
         if AGGRESSIVE_PROPAGATION[]
