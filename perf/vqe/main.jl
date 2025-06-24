@@ -14,11 +14,11 @@ using Unitful
 include("utils.jl")
 include("Circuit.jl")
 
-# numbe of qubits
+# number of qubits
 N = 20
 
 # number of layers
-L = 4
+L = 6
 
 # generate parametric circuit
 ansatz = efficient_su2(N, L)
@@ -69,28 +69,15 @@ function expectation(params, obs, coef)
     U_dagger = adjoint(U)
     bra = adjoint(ket)
 
-    # rename index labels to avoid conflicts
-    resetinds!(ket)
-    resetinds!(U)
-    resetinds!(obs)
-    resetinds!(U_dagger)
-    resetinds!(bra)
+    tn = generic_stack(ket, U, obs, U_dagger, bra)
 
-    # align the indices
-    @align! outputs(ket) => inputs(U)
-    @align! outputs(U) => inputs(obs)
-    @align! outputs(obs) => inputs(U_dagger)
-    @align! outputs(U_dagger) => inputs(bra)
-
-    # construct the tensor network for the expectation value
-    tn = GenericTensorNetwork()
-    append!(tn, all_tensors(ket))
-    append!(tn, all_tensors(U))
-    append!(tn, all_tensors(obs))
-    append!(tn, all_tensors(U_dagger))
-    append!(tn, all_tensors(bra))
-
-    res = contract(tn; optimizer=LineGraph())
+    # print path flops and max rank to consistenly check that the same contraction path is used
+    # (exponentially big changes can be seen if not)
+    path = einexpr(tn; optimizer=Greedy())
+    @info "Contraction path" max_rank = maximum(ndims, Branches(path)) total_flops = mapreduce(
+        EinExprs.flops, +, Branches(path)
+    )
+    res = contract(tn; path)
     return real(coef * res[]) # ⟨ψ|U† O U|ψ⟩
 end
 
@@ -123,7 +110,7 @@ results = Vector{Tuple{String,String,T,T,Float64}}()
 f_xla = @compile compile_options = Reactant.DefaultXLACompileOptions(; sync=true) expectation(
     params_re, observable_re, coef_re
 )
-b = @benchmark f_xla($params_re, $observable_re, $coef_re) setup = (GC.gc(true))
+b = @benchmark $f_xla($params_re, $observable_re, $coef_re) setup = (GC.gc(true))
 baseline = median(b).time
 push!(
     results, ("Primal", "Only XLA", median(b).time * 1.0u"ns", std(b).time * 1.0u"ns", 1.0)
@@ -131,7 +118,7 @@ push!(
 
 ## default
 f_default = @compile sync = true expectation(params_re, observable_re, coef_re)
-b = @benchmark f_default($params_re, $observable_re, $coef_re) setup = (GC.gc(true))
+b = @benchmark $f_default($params_re, $observable_re, $coef_re) setup = (GC.gc(true))
 push!(
     results,
     (
