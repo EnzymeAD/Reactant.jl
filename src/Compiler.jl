@@ -887,6 +887,8 @@ function optimization_passes(
         "log_simplify",
         "neg_mul_const_simplify",
         "neg_div_const_simplify",
+        "reshape_deletions_broadcast_in_dim_simplify",
+        "reshape_insertions_broadcast_in_dim_simplify",
     ]
 
     if !compile_options.disable_scatter_gather_optimization_passes
@@ -1092,6 +1094,8 @@ function optimization_passes(
                 "transpose_batch_norm_inference",
                 "transpose_batch_norm_grad",
                 "transpose_if",
+                "transpose_fft",
+                "transpose_reshape",
             ],
         )
         if AGGRESSIVE_PROPAGATION[]
@@ -1128,10 +1132,23 @@ function optimization_passes(
     if compile_options.no_nan
         append!(
             transform_passes_list,
-            ["no_nan", "no_nan_self_sub_simplify", "no_nan_add_sub_simplify(1)"],
+            [
+                "no_nan",
+                "no_nan_self_sub_simplify",
+                "no_nan_add_sub_simplify(1)",
+                "no_nan_mul_simplify(1)",
+                "no_nan_div_simplify(1)",
+            ],
         )
     else
-        push!(transform_passes_list, "no_nan_add_sub_simplify(0)")
+        append!(
+            transform_passes_list,
+            [
+                "no_nan_add_sub_simplify(0)",
+                "no_nan_mul_simplify(0)",
+                "no_nan_div_simplify(0)",
+            ],
+        )
     end
 
     if compile_options.all_finite
