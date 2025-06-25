@@ -1,15 +1,22 @@
 module ProbProg
 
-using ..Reactant: MLIR, TracedUtils, AbstractConcreteArray, AbstractConcreteNumber
+using ..Reactant:
+    MLIR,
+    TracedUtils,
+    AbstractConcreteArray,
+    AbstractConcreteNumber,
+    AbstractRNG,
+    TracedRArray
 using ..Compiler: @jit
 using Enzyme
 
 mutable struct ProbProgTrace
     choices::Dict{Symbol,Any}
     retval::Any
+    weight::Any
 
     function ProbProgTrace()
-        return new(Dict{Symbol,Any}(), nothing)
+        return new(Dict{Symbol,Any}(), nothing, nothing)
     end
 end
 
@@ -63,7 +70,10 @@ function __init__()
 end
 
 function sample(
-    f::Function, args::Vararg{Any,Nargs}; symbol::Symbol=gensym("sample")
+    f::Function,
+    args::Vararg{Any,Nargs};
+    symbol::Symbol=gensym("sample"),
+    logpdf::Union{Nothing,Function}=nothing,
 ) where {Nargs}
     argprefix::Symbol = gensym("samplearg")
     resprefix::Symbol = gensym("sampleresult")
@@ -102,6 +112,7 @@ function sample(
     sym = TracedUtils.get_attribute_by_name(func2, "sym_name")
     fn_attr = MLIR.IR.FlatSymbolRefAttribute(Base.String(sym))
 
+    # Specify which outputs to add to the trace.
     traced_output_indices = Int[]
     for (i, res) in enumerate(linear_results)
         if TracedUtils.has_idx(res, resprefix)
@@ -109,13 +120,60 @@ function sample(
         end
     end
 
+    # Specify which inputs to pass to logpdf.
+    traced_input_indices = Int[]
+    for (i, a) in enumerate(linear_args)
+        idx, _ = TracedUtils.get_argidx(a, argprefix)
+        if fnwrap && idx == 1  # TODO: add test for fnwrap
+            continue
+        end
+
+        if fnwrap
+            idx -= 1
+        end
+
+        if !(args[idx] isa AbstractRNG)
+            push!(traced_input_indices, i - 1)
+        end
+    end
+
     symbol_addr = reinterpret(UInt64, pointer_from_objref(symbol))
+
+    # Construct MLIR attribute if Julia logpdf function is provided.
+    logpdf_attr = nothing
+    if logpdf !== nothing
+        # Just to get static information about the sample. TODO: kwargs?
+        example_sample = f(args...)
+
+        # Remove AbstractRNG from `f`'s argument list if present, assuming that
+        # logpdf parameters follows `(sample, args...)` convention.
+        logpdf_args = (example_sample,)
+        if !isempty(args) && args[1] isa AbstractRNG
+            logpdf_args = (example_sample, Base.tail(args)...)  # TODO: kwargs?
+        end
+
+        logpdf_mlir = invokelatest(
+            TracedUtils.make_mlir_fn,
+            logpdf,
+            logpdf_args,
+            (),
+            string(logpdf),
+            false;
+            do_transpose=false,
+            args_in_result=:all,
+        )
+
+        logpdf_sym = TracedUtils.get_attribute_by_name(logpdf_mlir.f, "sym_name")
+        logpdf_attr = MLIR.IR.FlatSymbolRefAttribute(Base.String(logpdf_sym))
+    end
 
     sample_op = MLIR.Dialects.enzyme.sample(
         batch_inputs;
         outputs=out_tys,
         fn=fn_attr,
+        logpdf=logpdf_attr,
         symbol=symbol_addr,
+        traced_input_indices=traced_input_indices,
         traced_output_indices=traced_output_indices,
     )
 
@@ -143,11 +201,19 @@ function sample(
 end
 
 function generate(f::Function, args::Vararg{Any,Nargs}) where {Nargs}
-    res = @jit optimize = :probprog generate_internal(f, args...)
-    return res isa AbstractConcreteArray ? Array(res) : res
+    trace = ProbProgTrace()
+
+    weight, res = @jit optimize = :probprog generate_internal(f, args...; trace)
+
+    trace.retval = res isa AbstractConcreteArray ? Array(res) : res
+    trace.weight = Array(weight)[1]
+
+    return trace, trace.weight
 end
 
-function generate_internal(f::Function, args::Vararg{Any,Nargs}) where {Nargs}
+function generate_internal(
+    f::Function, args::Vararg{Any,Nargs}; trace::ProbProgTrace
+) where {Nargs}
     argprefix::Symbol = gensym("generatearg")
     resprefix::Symbol = gensym("generateresult")
     resargprefix::Symbol = gensym("generateresarg")
@@ -169,7 +235,8 @@ function generate_internal(f::Function, args::Vararg{Any,Nargs}) where {Nargs}
     fnwrap = mlir_fn_res.fnwrapped
     func2 = mlir_fn_res.f
 
-    out_tys = [MLIR.IR.type(TracedUtils.get_mlir_data(res)) for res in linear_results]
+    f_out_tys = [MLIR.IR.type(TracedUtils.get_mlir_data(res)) for res in linear_results]
+    out_tys = [MLIR.IR.TensorType(Int64[], MLIR.IR.Type(Float64)); f_out_tys]
     fname = TracedUtils.get_attribute_by_name(func2, "sym_name")
     fname = MLIR.IR.FlatSymbolRefAttribute(Base.String(fname))
 
@@ -186,10 +253,17 @@ function generate_internal(f::Function, args::Vararg{Any,Nargs}) where {Nargs}
         end
     end
 
-    gen_op = MLIR.Dialects.enzyme.generate(batch_inputs; outputs=out_tys, fn=fname)
+    trace_addr = reinterpret(UInt64, pointer_from_objref(trace))
+
+    # Output: (weight, f's outputs...)
+    gen_op = MLIR.Dialects.enzyme.generate(
+        batch_inputs; outputs=out_tys, fn=fname, trace=trace_addr
+    )
+
+    weight = TracedRArray(MLIR.IR.result(gen_op, 1))
 
     for (i, res) in enumerate(linear_results)
-        resv = MLIR.IR.result(gen_op, i)
+        resv = MLIR.IR.result(gen_op, i + 1)  # to skip weight
         if TracedUtils.has_idx(res, resprefix)
             path = TracedUtils.get_idx(res, resprefix)
             TracedUtils.set!(result, path[2:end], resv)
@@ -208,7 +282,7 @@ function generate_internal(f::Function, args::Vararg{Any,Nargs}) where {Nargs}
         end
     end
 
-    return result
+    return weight, result
 end
 
 function simulate(f::Function, args::Vararg{Any,Nargs}) where {Nargs}
@@ -299,7 +373,6 @@ function _show_pretty(io::IO, trace::ProbProgTrace, pre::Int, vert_bars::Tuple)
     LAST = '\u2514'
 
     indent_vert = vcat(Char[' ' for _ in 1:pre], Char[VERT, '\n'])
-    indent_vert_last = vcat(Char[' ' for _ in 1:pre], Char[VERT, '\n'])
     indent = vcat(Char[' ' for _ in 1:pre], Char[PLUS, HORZ, HORZ, ' '])
     indent_last = vcat(Char[' ' for _ in 1:pre], Char[LAST, HORZ, HORZ, ' '])
 
@@ -320,11 +393,21 @@ function _show_pretty(io::IO, trace::ProbProgTrace, pre::Int, vert_bars::Tuple)
         n += 1
     end
 
+    if trace.weight !== nothing
+        n += 1
+    end
+
     cur = 1
 
     if trace.retval !== nothing
         print(io, indent_vert_str)
         print(io, (cur == n ? indent_last_str : indent_str) * "retval : $(trace.retval)\n")
+        cur += 1
+    end
+
+    if trace.weight !== nothing
+        print(io, indent_vert_str)
+        print(io, (cur == n ? indent_last_str : indent_str) * "weight : $(trace.weight)\n")
         cur += 1
     end
 
@@ -337,7 +420,7 @@ end
 
 function Base.show(io::IO, ::MIME"text/plain", trace::ProbProgTrace)
     println(io, "ProbProgTrace:")
-    if isempty(trace.choices) && trace.retval === nothing
+    if isempty(trace.choices) && trace.retval === nothing && trace.weight === nothing
         println(io, "  (empty)")
     else
         _show_pretty(io, trace, 0, ())
@@ -350,7 +433,7 @@ function Base.show(io::IO, trace::ProbProgTrace)
         has_retval = trace.retval !== nothing
         print(io, "ProbProgTrace($(choices_count) choices")
         if has_retval
-            print(io, ", retval=$(trace.retval)")
+            print(io, ", retval=$(trace.retval), weight=$(trace.weight)")
         end
         print(io, ")")
     else
