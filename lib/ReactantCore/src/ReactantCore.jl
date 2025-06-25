@@ -248,7 +248,10 @@ function trace_while(expr; track_numbers, mincut, checkpointing, first_arg=nothi
             $body_fn_sym = $(arg_syms) -> begin
                 $(to_locals...)
                 $body
+                temp = Reactant.TRACE_CALLS[]
+                Reactant.TRACE_CALLS[] = false
                 $(from_locals...)
+                Reactant.TRACE_CALLS[] = temp
                 nothing
             end
 
@@ -257,7 +260,6 @@ function trace_while(expr; track_numbers, mincut, checkpointing, first_arg=nothi
             else
                 ($(QuoteNode.(args_names.args)...),)
             end
-
             $(ReactantCore).traced_while(
                 $(cond_fn_sym),
                 $(body_fn_sym),
