@@ -932,11 +932,13 @@ function call_with_reactant_generator(
         "Found method from module $(method.module) with name $(method.name), TRACE_CALLS[] = $(TRACE_CALLS[])",
     )
     trace_call_within =
-        TRACE_CALLS[] && !(
-            has_ancestor(method.module, Reactant.TracedRNumberOverrides) ||
-            has_ancestor(method.module, Reactant.TracedRArrayOverrides) ||
-            has_ancestor(method.module, Core)
-        )
+        TRACE_CALLS[]
+        # && !(
+        #     has_ancestor(method.module, Reactant.ReactantCore) ||
+        #     has_ancestor(method.module, Reactant.TracedRNumberOverrides) ||
+        #     has_ancestor(method.module, Reactant.TracedRArrayOverrides) ||
+        #     has_ancestor(method.module, Core)
+        # )
     if TRACE_CALLS[] &&
         !(!(fn <: Function) || sizeof(fn) != 0 || fn <: Base.BroadcastFunction)
         Core.println("About to trace call to $fn.")
