@@ -284,6 +284,10 @@ function make_mlir_fn(
     optimize_then_pad::Bool=true,
 )
     if sizeof(typeof(f)) != 0 || f isa Base.BroadcastFunction
+        if !isnothing(verify_arg_names)
+            verify_arg_names = (nameof(f), verify_arg_names...)
+        end
+
         mlir_fn_res = make_mlir_fn(
             Reactant.apply,
             (f, args...),
