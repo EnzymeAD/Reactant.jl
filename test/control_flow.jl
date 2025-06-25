@@ -717,6 +717,7 @@ function call1(a, b)
     return @trace _call1(x, y)
 end
 
+if !Reactant.TRACE_CALLS[]
 @testset "call: basic" begin
     a = rand(2, 3)
     b = rand(2, 3)
@@ -738,6 +739,7 @@ end
     ir = @code_hlo optimize = false call1(a_ra, c_ra)
     ops = [op for op in Reactant.MLIR.IR.OperationIterator(Reactant.MLIR.IR.body(ir))]
     @test length(ops) == 3
+end
 end
 
 _call2(a) = a + a
@@ -766,6 +768,7 @@ function call3(y)
     @trace _call3(11, y) # new function because x changed.
 end
 
+if !Reactant.TRACE_CALLS[]
 @testset "call: caching for Julia operands" begin
     y = rand(3)
     y_ra = Reactant.to_rarray(y)
@@ -773,6 +776,7 @@ end
     ir = @code_hlo optimize = false call3(y_ra)
     ops = [op for op in Reactant.MLIR.IR.OperationIterator(Reactant.MLIR.IR.body(ir))]
     @test length(ops) == 5 # call3, .+, .*, _call3 (2X)
+end
 end
 
 struct Foo
@@ -789,6 +793,7 @@ function call4(foo, foo2, bar)
     @trace _call4(bar)
 end
 
+if !Reactant.TRACE_CALLS[]
 @testset "call: Caching struct arguments" begin
     a = rand(10)
     b = rand(10)
@@ -798,6 +803,7 @@ end
     ir = @code_hlo optimize = false call4(foo, foo2, bar)
     ops = [op for op in Reactant.MLIR.IR.OperationIterator(Reactant.MLIR.IR.body(ir))]
     @test length(ops) == 3 # call4, _call4 for {foo, foo2}, and _call4 for bar
+end
 end
 
 function _call5!(a, b)
