@@ -22,7 +22,7 @@ L = 6
 
 # generate parametric circuit
 ansatz = efficient_su2(N, L)
-params_re = adapt(ConcreteRArray, parameters(ansatz))
+params_re = adapt(ConcreteRArray, rand(Float64, nparameters(ansatz)) .* 2π)
 
 hamiltonian_terms = open(joinpath(@__DIR__, "hamiltonian-terms-n$N.txt")) do io
     map(eachline(io)) do line
