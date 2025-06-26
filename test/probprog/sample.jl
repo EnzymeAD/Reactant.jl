@@ -24,9 +24,9 @@ end
         seed = Reactant.to_rarray(UInt64[1, 4])
         μ = Reactant.ConcreteRNumber(0.0)
         σ = Reactant.ConcreteRNumber(1.0)
-        before = @code_hlo optimize = false ProbProg.generate_internal(one_sample, seed, μ, σ, shape)
+        before = @code_hlo optimize = false ProbProg.call_internal(one_sample, seed, μ, σ, shape)
         @test contains(repr(before), "enzyme.sample")
-        after = @code_hlo optimize = :probprog ProbProg.generate_internal(two_samples, seed, μ, σ, shape)
+        after = @code_hlo optimize = :probprog ProbProg.call_internal(two_samples, seed, μ, σ, shape)
         @test !contains(repr(after), "enzyme.sample")
     end
 
@@ -35,8 +35,8 @@ end
         seed = Reactant.to_rarray(UInt64[1, 4])
         μ = Reactant.ConcreteRNumber(0.0)
         σ = Reactant.ConcreteRNumber(1.0)
-        X = ProbProg.generate(one_sample, seed, μ, σ, shape)
-        Y = ProbProg.generate(two_samples, seed, μ, σ, shape)
+        X = ProbProg.call(one_sample, seed, μ, σ, shape)
+        Y = ProbProg.call(two_samples, seed, μ, σ, shape)
         @test !all(X .≈ Y)
     end
 end
