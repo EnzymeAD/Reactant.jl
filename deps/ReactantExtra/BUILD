@@ -1024,7 +1024,6 @@ cc_library(
         "@xla//xla/pjrt/c:pjrt_c_api_gpu",
         "@xla//xla/pjrt/plugin/xla_cpu:xla_cpu_pjrt_client",
         "@xla//xla/pjrt/plugin/xla_gpu:xla_gpu_pjrt_client",
-        "@xla//xla/pjrt/plugin/xla_tpu:xla_tpu_pjrt_client",
         "@stablehlo//:linalg_passes",
         "@stablehlo//:tosa_passes",
         "@stablehlo//:stablehlo_passes",
