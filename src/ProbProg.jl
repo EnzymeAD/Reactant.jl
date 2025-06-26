@@ -146,7 +146,8 @@ function sample(
             in_idx = nothing
             for (i, arg) in enumerate(linear_args)
                 if TracedUtils.has_idx(arg, argprefix) &&
-                    TracedUtils.get_idx(arg, argprefix) == TracedUtils.get_idx(res, argprefix)
+                    TracedUtils.get_idx(arg, argprefix) ==
+                   TracedUtils.get_idx(res, argprefix)
                     in_idx = i - 1
                     break
                 end
@@ -221,10 +222,12 @@ function sample(
     return result
 end
 
-function generate(f::Function, args::Vararg{Any,Nargs}) where {Nargs}
+function generate(f::Function, args::Vararg{Any,Nargs}; constraints=nothing) where {Nargs}
     trace = ProbProgTrace()
 
-    weight, res = @jit optimize = :probprog generate_internal(f, args...; trace)
+    weight, res = @jit sync = true optimize = :probprog generate_internal(
+        f, args...; trace, constraints
+    )
 
     trace.retval = res isa AbstractConcreteArray ? Array(res) : res
     trace.weight = Array(weight)[1]
@@ -233,7 +236,7 @@ function generate(f::Function, args::Vararg{Any,Nargs}) where {Nargs}
 end
 
 function generate_internal(
-    f::Function, args::Vararg{Any,Nargs}; trace::ProbProgTrace
+    f::Function, args::Vararg{Any,Nargs}; trace::ProbProgTrace, constraints=nothing
 ) where {Nargs}
     argprefix::Symbol = gensym("generatearg")
     resprefix::Symbol = gensym("generateresult")
@@ -276,9 +279,46 @@ function generate_internal(
 
     trace_addr = reinterpret(UInt64, pointer_from_objref(trace))
 
-    # Output: (weight, f's outputs...)
+    constraints_attr = nothing
+    if constraints !== nothing && !isempty(constraints)
+        constraint_attrs = MLIR.IR.Attribute[]
+
+        for (sym, constraint) in constraints
+            sym_addr = reinterpret(UInt64, pointer_from_objref(sym))
+
+            if !(constraint isa AbstractArray)
+                error(
+                    "Constraints must be an array (one element per traced output) of arrays"
+                )
+            end
+
+            sym_constraint_attrs = MLIR.IR.Attribute[]
+            for oc in constraint
+                if !(oc isa AbstractArray)
+                    error("Per-output constraints must be arrays")
+                end
+
+                push!(sym_constraint_attrs, MLIR.IR.DenseElementsAttribute(oc))
+            end
+
+            cattr_ptr = @ccall MLIR.API.mlir_c.enzymeConstraintAttrGet(
+                MLIR.IR.context()::MLIR.API.MlirContext,
+                sym_addr::UInt64,
+                MLIR.IR.Attribute(sym_constraint_attrs)::MLIR.API.MlirAttribute,
+            )::MLIR.API.MlirAttribute
+
+            push!(constraint_attrs, MLIR.IR.Attribute(cattr_ptr))
+        end
+
+        constraints_attr = MLIR.IR.Attribute(constraint_attrs)
+    end
+
     gen_op = MLIR.Dialects.enzyme.generate(
-        batch_inputs; outputs=out_tys, fn=fname, trace=trace_addr
+        batch_inputs;
+        outputs=out_tys,
+        fn=fname,
+        trace=trace_addr,
+        constraints=constraints_attr,
     )
 
     weight = TracedRArray(MLIR.IR.result(gen_op, 1))
