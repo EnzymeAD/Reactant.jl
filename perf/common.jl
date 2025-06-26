@@ -1,5 +1,9 @@
 using BenchmarkTools: @benchmark
 using Reactant, Enzyme, PrettyTables, Statistics
+using CairoMakie, AlgebraOfGraphics, CSV, DataFrames, Dates
+const AoG = AlgebraOfGraphics
+
+AoG.set_aog_theme!()
 
 function simple_mse_loss(model, x, z, ps, st)
     y, _ = Lux.apply(model, x, ps, st)
@@ -8,7 +12,7 @@ end
 
 function simple_mse_loss_gradient(model, x, z, ps, st)
     return Enzyme.gradient(
-        Reverse, simple_mse_loss, Const(model), Const(x), Const(z), ps, Const(st)
+        Enzyme.Reverse, simple_mse_loss, Const(model), Const(x), Const(z), ps, Const(st)
     )
 end
 
@@ -97,7 +101,7 @@ function benchmark_nn_primal(
             results,
             (
                 "Primal",
-                "No Scatter/Gather and Pad Optimizations",
+                "No Scatter/Gather/Pad Optimizations",
                 mean(bench).time,
                 std(bench).time,
                 mean(bench).time / baseline,
@@ -133,8 +137,6 @@ function benchmark_nn_gradient_internal(
     push!(results, ("Gradient ($mode)", "Only XLA", mean(bench).time, std(bench).time, 1.0))
     baseline = mean(bench).time
 
-    display(results[end])
-
     # Default
     compiled_grad = @compile compile_options = CompileOptions(;
         sync=true, no_nan=true, all_finite=true, optimization_passes=mode
@@ -150,8 +152,6 @@ function benchmark_nn_gradient_internal(
             mean(bench).time / baseline,
         ),
     )
-
-    display(results[end])
 
     # Disable Scatter
     if disable_scatter_gather_bench
@@ -176,8 +176,6 @@ function benchmark_nn_gradient_internal(
                 mean(bench).time / baseline,
             ),
         )
-
-        display(results[end])
     end
 
     # Disable Pad
@@ -203,8 +201,6 @@ function benchmark_nn_gradient_internal(
                 mean(bench).time / baseline,
             ),
         )
-
-        display(results[end])
     end
 
     # Disable Pad and Scatter
@@ -231,8 +227,6 @@ function benchmark_nn_gradient_internal(
                 mean(bench).time / baseline,
             ),
         )
-
-        display(results[end])
     end
 
     sort!(results; by=x -> x[3])
@@ -260,5 +254,85 @@ function pretty_print_table(results)
             tf=tf_unicode_rounded,
         ),
     )
+    return nothing
+end
+
+function save_benchmark_results(
+    results::Matrix,
+    tag;
+    savedir=tempname(; cleanup=false),
+    device_tag=lowercase(
+        replace(Reactant.XLA.device_kind(Reactant.devices()[1]), " " => "_")
+    ),
+    plot_title="",
+)
+    IN_VSCODE = isdefined(Main, :VSCodeServer)
+
+    short_forms = Dict(
+        "All" => "All",
+        "Only XLA" => "Only XLA",
+        "No Pad Optimizations" => "- Pad Opt",
+        "No Scatter/Gather Optimizations" => "- S.G. Opt",
+        "No Scatter/Gather/Pad Optimizations" => "- S.G. + Pad Opt",
+        "No Scatter/Gather and Pad Optimizations" => "- S.G. + Pad Opt",
+    )
+
+    mkpath(savedir)
+    file_name_base = "$(tag)_$(device_tag)_$(Dates.format(now(), "yyyy_mm_dd_HH_MM_SS"))"
+
+    df = DataFrame(
+        results,
+        ["Mode", "Optimization Passes", "Mean Time", "Std. Dev. Time", "Relative Timing"],
+    )
+
+    csv_results_file_name = joinpath(savedir, "$(file_name_base).csv")
+    # CSV.write(csv_results_file_name, df) # XXX: enable
+
+    @info "Saving timings to $(csv_results_file_name)"
+
+    df[!, "μ - σ"] = df[!, "Mean Time"] .- df[!, "Std. Dev. Time"]
+    df[!, "μ + σ"] = df[!, "Mean Time"] .+ df[!, "Std. Dev. Time"]
+
+    fig = Figure(; size=(1000, 500), title="Reactant XLA Timings")
+    draw!(
+        fig,
+        (
+            data(df) *
+            mapping(
+                "Optimization Passes" => x -> short_forms[x],
+                "Mean Time";
+                color="Optimization Passes" => "",
+                col="Mode",
+            ) *
+            visual(BarPlot; strokewidth=2)
+        ) + (
+            data(df) *
+            mapping(
+                "Optimization Passes" => x -> short_forms[x], "μ - σ", "μ + σ"; col="Mode"
+            ) *
+            visual(Rangebars; linewidth=2)
+        ),
+        scales(; Color=(; palette=:tab10));
+        axis=(; xticklabelrotation=π / 3),
+    )
+
+    if !isempty(plot_title)
+        Label(
+            fig[begin - 1, :],
+            plot_title;
+            tellwidth=false,
+            font=:bold,
+            fontsize=1.15 * Makie.theme(fig.scene).fontsize[],
+            halign=:center,
+        )
+    end
+
+    IN_VSCODE && display(fig)
+
+    plots_file_name = joinpath(savedir, "$(file_name_base).pdf")
+    save(plots_file_name, fig)
+
+    @info "Saving plots to $(plots_file_name)"
+
     return nothing
 end

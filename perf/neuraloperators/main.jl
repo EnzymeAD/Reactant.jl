@@ -49,7 +49,10 @@ function run_deeponet_benchmarks()
     end
 
     timings = vcat(primal_timings, gradient_timings)
-    pretty_print_table(permutedims(hcat([[t...] for t in timings]...), (2, 1)))
+    results = permutedims(hcat([[t...] for t in timings]...), (2, 1))
+    pretty_print_table(results)
+
+    save_benchmark_results(results, "deeponet"; plot_title="DeepONet")
 
     return nothing
 end
@@ -93,7 +96,10 @@ function run_fno_benchmarks()
     end
 
     timings = vcat(primal_timings, gradient_timings)
-    pretty_print_table(permutedims(hcat([[t...] for t in timings]...), (2, 1)))
+    results = permutedims(hcat([[t...] for t in timings]...), (2, 1))
+    pretty_print_table(results)
+
+    save_benchmark_results(results, "fno"; plot_title="FourierNeuralOperator")
 
     return nothing
 end
