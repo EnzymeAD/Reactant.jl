@@ -13,7 +13,7 @@ if isdefined(NNlib, :gelu_tanh)
         α = NNlib.oftf(x, 0.044715)
         half = NNlib.oftf(x, 0.5)
         λ = sqrt(NNlib.oftf(x, 2 / pi))
-        return x * half * (1 + tanh(λ * (x + α * x^3)))
+        return x * (half * (1 + tanh(λ * (x + α * x^3))))
     end
 else
     # Older versions of NNlib do not have gelu_tanh (gelu refers to the tanh version)
@@ -21,7 +21,7 @@ else
         α = NNlib.oftf(x, 0.044715)
         half = NNlib.oftf(x, 0.5)
         λ = sqrt(NNlib.oftf(x, 2 / pi))
-        return x * half * (1 + tanh(λ * (x + α * x^3)))
+        return x * (half * (1 + tanh(λ * (x + α * x^3))))
     end
 end
 
