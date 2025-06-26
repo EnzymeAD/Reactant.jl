@@ -763,10 +763,10 @@ cc_library(
     ) + [
         "@enzyme_ad//src/enzyme_ad/jax:gpu.cc",
         "@enzyme_ad//src/enzyme_ad/jax:cpu.cc",
-        "@xla//xla/service/gpu:backend_configs.pb.cc",
-        "@xla//xla:autotuning.pb.cc",
-        "@xla//xla:autotune_results.pb.cc",
-        "@xla//xla/service:buffer_assignment.pb.cc",
+        # "@xla//xla/service/gpu:backend_configs.pb.cc",
+        # "@xla//xla:autotuning.pb.cc",
+        # "@xla//xla:autotune_results.pb.cc",
+        # "@xla//xla/service:buffer_assignment.pb.cc",
         ],
     hdrs = glob([
         "*.h",
@@ -944,8 +944,8 @@ cc_library(
         "@xla//xla/service/spmd/shardy/stablehlo_round_trip:export_shardings",
         "@xla//xla/service/spmd/shardy/stablehlo_round_trip:stablehlo_import",
 
-        "@xla//xla:xla_proto_cc",
-        "@xla//xla:xla_proto_cc_impl",
+        # "@xla//xla:xla_proto_cc",
+        # "@xla//xla:xla_proto_cc_impl",
         "@xla//xla/stream_executor:device_description_proto_cc_impl",
 
         "@xla//xla/tsl/platform/default:platform_port",
@@ -976,7 +976,7 @@ cc_library(
         "@xla//xla/python/ifrt/hlo:hlo_program",
         "@xla//xla/python/ifrt/ir:ifrt_ir_program",
         "@xla//xla/ffi:call_frame",
-        "@com_google_protobuf//:protobuf",
+        # "@com_google_protobuf//:protobuf",
 
         "@tsl//tsl/profiler/lib:profiler_session_impl",
         "@tsl//tsl/profiler/lib:profiler_factory_impl",
