@@ -14,10 +14,14 @@ mutable struct ProbProgTrace
     choices::Dict{Symbol,Any}
     retval::Any
     weight::Any
+    fn::Union{Nothing,Function}
+    args::Union{Nothing,Tuple}
 
-    function ProbProgTrace()
-        return new(Dict{Symbol,Any}(), nothing, nothing)
+    function ProbProgTrace(fn::Function, args::Tuple)
+        return new(Dict{Symbol,Any}(), nothing, nothing, fn, args)
     end
+
+    ProbProgTrace() = new(Dict{Symbol,Any}(), nothing, nothing, nothing, ())
 end
 
 function addSampleToTraceLowered(
@@ -292,7 +296,7 @@ function call_internal(f::Function, args::Vararg{Any,Nargs}) where {Nargs}
 end
 
 function generate(f::Function, args::Vararg{Any,Nargs}; constraints=nothing) where {Nargs}
-    trace = ProbProgTrace()
+    trace = ProbProgTrace(f, (args...,))
 
     weight, res = @jit sync = true optimize = :probprog generate_internal(
         f, args...; trace, constraints
@@ -416,7 +420,7 @@ function generate_internal(
 end
 
 function simulate(f::Function, args::Vararg{Any,Nargs}) where {Nargs}
-    trace = ProbProgTrace()
+    trace = ProbProgTrace(f, (args...,))
 
     res = @jit optimize = :probprog sync = true simulate_internal(f, args...; trace)
 
@@ -568,6 +572,40 @@ function Base.show(io::IO, trace::ProbProgTrace)
         print(io, ")")
     else
         show(io, MIME"text/plain"(), trace)
+    end
+end
+
+struct Selection
+    symbols::Vector{Symbol}
+end
+
+select(symbol::Symbol) = Selection([symbol])
+
+choicemap() = Dict{Symbol,Any}()
+get_choices(trace::ProbProgTrace) = trace.choices
+
+function metropolis_hastings(trace::ProbProgTrace, sel::Selection)
+    if trace.fn === nothing
+        error("MH requires a trace with fn and args recorded")
+    end
+
+    constraints = Dict{Symbol,Any}()
+    for (sym, val) in trace.choices
+        sym in sel.symbols && continue
+        constraints[sym] = [val]
+    end
+
+    new_trace, _ = generate(trace.fn, trace.args...; constraints)
+    rng_state = new_trace.retval[1] # TODO: this is a temporary hack
+
+    log_alpha = new_trace.weight - trace.weight
+
+    if log(rand()) < log_alpha
+        new_trace.args = (rng_state, new_trace.args[2:end]...)
+        return (new_trace, true)
+    else
+        trace.args = (rng_state, trace.args[2:end]...)
+        return (trace, false)
     end
 end
 
