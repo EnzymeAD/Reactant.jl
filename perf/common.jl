@@ -286,46 +286,32 @@ function save_benchmark_results(
     )
 
     csv_results_file_name = joinpath(savedir, "$(file_name_base).csv")
-    # CSV.write(csv_results_file_name, df) # XXX: enable
+    CSV.write(csv_results_file_name, df)
 
     @info "Saving timings to $(csv_results_file_name)"
 
     df[!, "μ - σ"] = df[!, "Mean Time"] .- df[!, "Std. Dev. Time"]
     df[!, "μ + σ"] = df[!, "Mean Time"] .+ df[!, "Std. Dev. Time"]
 
-    fig = Figure(; size=(1000, 500), title="Reactant XLA Timings")
-    draw!(
-        fig,
+    fig = draw(
         (
             data(df) *
             mapping(
-                "Optimization Passes" => x -> short_forms[x],
+                "Mode",
                 "Mean Time";
-                color="Optimization Passes" => "",
-                col="Mode",
+                dodge="Optimization Passes" => "",
+                color="Optimization Passes" => x -> short_forms[x],
             ) *
             visual(BarPlot; strokewidth=2)
         ) + (
             data(df) *
-            mapping(
-                "Optimization Passes" => x -> short_forms[x], "μ - σ", "μ + σ"; col="Mode"
-            ) *
-            visual(Rangebars; linewidth=2)
+            mapping("Mode", "μ - σ", "μ + σ"; dodge_x="Optimization Passes" => "") *
+            visual(Rangebars; linewidth=2, whiskerwidth=10)
         ),
         scales(; Color=(; palette=:tab10));
-        axis=(; xticklabelrotation=π / 3),
+        figure=(; size=(1000, 500), title=plot_title, titlealign=:center),
+        legend=(; position=:bottom),
     )
-
-    if !isempty(plot_title)
-        Label(
-            fig[begin - 1, :],
-            plot_title;
-            tellwidth=false,
-            font=:bold,
-            fontsize=1.15 * Makie.theme(fig.scene).fontsize[],
-            halign=:center,
-        )
-    end
 
     IN_VSCODE && display(fig)
 
