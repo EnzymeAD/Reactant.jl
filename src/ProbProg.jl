@@ -139,6 +139,25 @@ function sample(
 
     symbol_addr = reinterpret(UInt64, pointer_from_objref(symbol))
 
+    # (out_idx1, in_idx1, out_idx2, in_idx2, ...)
+    alias_pairs = Int64[]
+    for (out_idx, res) in enumerate(linear_results)
+        if TracedUtils.has_idx(res, argprefix)
+            in_idx = nothing
+            for (i, arg) in enumerate(linear_args)
+                if TracedUtils.has_idx(arg, argprefix) &&
+                    TracedUtils.get_idx(arg, argprefix) == TracedUtils.get_idx(res, argprefix)
+                    in_idx = i - 1
+                    break
+                end
+            end
+            @assert in_idx !== nothing "Unable to find operand for aliased result"
+            push!(alias_pairs, out_idx - 1)
+            push!(alias_pairs, in_idx)
+        end
+    end
+    alias_attr = MLIR.IR.DenseArrayAttribute(alias_pairs)
+
     # Construct MLIR attribute if Julia logpdf function is provided.
     logpdf_attr = nothing
     if logpdf !== nothing
@@ -175,6 +194,8 @@ function sample(
         symbol=symbol_addr,
         traced_input_indices=traced_input_indices,
         traced_output_indices=traced_output_indices,
+        alias_map=alias_attr,
+        name=Base.String(symbol),
     )
 
     for (i, res) in enumerate(linear_results)
