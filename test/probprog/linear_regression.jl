@@ -45,7 +45,7 @@ function my_inference_program(xs, ys, num_iters)
         trace, _ = ProbProg.metropolis_hastings(trace, ProbProg.select(:slope))
         trace, _ = ProbProg.metropolis_hastings(trace, ProbProg.select(:intercept))
         choices = ProbProg.get_choices(trace)
-        @show i, choices[:slope], choices[:intercept]
+        # @show i, choices[:slope], choices[:intercept]
     end
 
     choices = ProbProg.get_choices(trace)
@@ -71,8 +71,8 @@ end
         xs = [1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0]
         ys = [8.23, 5.87, 3.99, 2.59, 0.23, -0.66, -3.53, -6.91, -7.24, -9.90]
 
-        slope, intercept = my_inference_program(xs, ys, 1000)
+        slope, intercept = my_inference_program(xs, ys, 5)
 
-        @show slope, intercept
+        # @show slope, intercept
     end
 end
