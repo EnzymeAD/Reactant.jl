@@ -1,9 +1,9 @@
 load("@llvm-project//mlir:tblgen.bzl", "gentbl_cc_library", "td_library")
+load("@local_config_rocm//rocm:build_defs.bzl", "if_rocm")
 load("@xla//tools/toolchains/cross_compile/cc:cc_toolchain_config.bzl", "cc_toolchain_config")
+
 # load("//toolchain:yggdrasil.bzl", "ygg_cc_toolchain")
 licenses(["notice"])
-
-load("@local_config_rocm//rocm:build_defs.bzl", "if_rocm")
 
 package(
     default_applicable_licenses = [],
@@ -44,8 +44,6 @@ cc_toolchain(
 
 toolchain(
     name = "cc_toolchain_for_ygg_host",
-    toolchain = ":ygg_host_toolchain",
-    toolchain_type = "@bazel_tools//tools/cpp:toolchain_type",
     exec_compatible_with = [
         "@platforms//cpu:x86_64",
         "@platforms//os:linux",
@@ -54,6 +52,8 @@ toolchain(
         "@platforms//cpu:x86_64",
         "@platforms//os:linux",
     ],
+    toolchain = ":ygg_host_toolchain",
+    toolchain_type = "@bazel_tools//tools/cpp:toolchain_type",
 )
 
 cc_toolchain_config(
@@ -103,7 +103,7 @@ cc_toolchain_config(
         "-DNDEBUG",
         "-ffunction-sections",
         "-fdata-sections",
-        "-stdlib=libstdc++"
+        "-stdlib=libstdc++",
     ],
     opt_link_flags = ["-Wl,--gc-sections"],
     supports_start_end_lib = True,
@@ -113,10 +113,10 @@ cc_toolchain_config(
         #"gcc": "/opt/bin/x86_64-linux-musl-cxx11/x86_64-linux-musl-gcc",
         #"cpp": "/opt/bin/x86_64-linux-musl-cxx11/x86_64-linux-musl-g++",
         #"ld": "/opt/bin/x86_64-linux-musl-cxx11/x86_64-linux-musl-ld",
-		"gcc": "/opt/bin/x86_64-linux-musl-cxx11/x86_64-linux-musl-clang",
-		"g++": "/opt/bin/x86_64-linux-musl-cxx11/x86_64-linux-musl-clang++",
-		"cpp": "/opt/bin/x86_64-linux-musl-cxx11/x86_64-linux-musl-clang++",
-		"ld": "/opt/bin/x86_64-linux-musl-cxx11/x86_64-linux-musl-ld.lld",
+        "gcc": "/opt/bin/x86_64-linux-musl-cxx11/x86_64-linux-musl-clang",
+        "g++": "/opt/bin/x86_64-linux-musl-cxx11/x86_64-linux-musl-clang++",
+        "cpp": "/opt/bin/x86_64-linux-musl-cxx11/x86_64-linux-musl-clang++",
+        "ld": "/opt/bin/x86_64-linux-musl-cxx11/x86_64-linux-musl-ld.lld",
         #"gcc": "/opt/x86_64-linux-musl/bin/clang",
         #"ld": "/opt/x86_64-linux-musl/bin/ld.lld",
         #"cpp": "/opt/x86_64-linux-musl/bin/clang++",
@@ -153,8 +153,6 @@ cc_toolchain(
 
 toolchain(
     name = "cc_toolchain_for_ygg_x86",
-    toolchain = ":ygg_x86_toolchain",
-    toolchain_type = "@bazel_tools//tools/cpp:toolchain_type",
     exec_compatible_with = [
         "@platforms//cpu:x86_64",
         "@platforms//os:linux",
@@ -163,18 +161,36 @@ toolchain(
         "@platforms//cpu:x86_64",
         "@platforms//os:linux",
     ],
+    toolchain = ":ygg_x86_toolchain",
+    toolchain_type = "@bazel_tools//tools/cpp:toolchain_type",
 )
 
 # TODO distinguish between clang and gcc toolchains?
 cc_toolchain_config(
     name = "ygg_x86_toolchain_config",
-    cpu = "x86",
-    compiler = "compiler",
-    toolchain_identifier = "ygg_x86",
-    target_system_name = "x86-unknown-linux-gnu",
-    target_libc = "",
     abi_libc_version = "local",
     abi_version = "local",
+    builtin_sysroot = "/opt/BB_TARGET/BB_TARGET/sys-root/",
+    compile_flags = [
+        "-fstack-protector",
+        "-Wall",
+        "-Wunused-but-set-parameter",
+        "-Wno-free-nonheap-object",
+        "-fno-omit-frame-pointer",
+        # TODO cxx_builtin_include_directories doesn't seem to be working, so we add the INCLUDE_PATHs manually
+        "-isystem /opt/BB_TARGET/lib/gcc/BB_TARGET/GCC_VERSION/include",
+        "-isystem /opt/BB_TARGET/lib/gcc/BB_TARGET/GCC_VERSION/include-fixed",
+        "-isystem /opt/BB_TARGET/BB_TARGET/include",
+        "-isystem /opt/BB_TARGET/BB_TARGET/sys-root/usr/include",
+        "-isystem /opt/BB_TARGET/BB_TARGET/include/c++/GCC_VERSION",
+        "-isystem /opt/BB_TARGET/BB_TARGET/include/c++/GCC_VERSION/BB_TARGET",
+        "-isystem /opt/BB_TARGET/BB_TARGET/include/c++/GCC_VERSION/backward",
+        "-isystem /opt/BB_TARGET/BB_TARGET/include/c++/GCC_VERSION/parallel",
+    ],
+    compiler = "compiler",
+    coverage_compile_flags = ["--coverage"],
+    coverage_link_flags = ["--coverage"],
+    cpu = "x86",
     cxx_builtin_include_directories = [
         "/opt/BB_TARGET/lib/gcc/BB_TARGET/GCC_VERSION/include",
         "/opt/BB_TARGET/lib/gcc/BB_TARGET/GCC_VERSION/include-fixed",
@@ -189,6 +205,27 @@ cc_toolchain_config(
         "/opt/x86_64-linux-musl/lib/clang/17/include",
         "/opt/x86_64-linux-musl/lib/clang/18/include",
     ],
+    dbg_compile_flags = ["-g"],
+    host_system_name = "linux",
+    link_flags = [],
+    link_libs = [
+        "-lstdc++",
+        "-lm",
+    ],
+    opt_compile_flags = [
+        "-g0",
+        "-O2",
+        "-D_FORTIFY_SOURCE=1",
+        "-DNDEBUG",
+        "-ffunction-sections",
+        "-fdata-sections",
+        # "-stdlib=libstdc++",
+    ],
+    opt_link_flags = ["-Wl,--gc-sections"],
+    # TODO gcc doesn't support it, only put it on clang (maybe even only for clang on aarch64-darwin?)
+    supports_start_end_lib = False,
+    target_libc = "",
+    target_system_name = "x86-unknown-linux-gnu",
     tool_paths = {
         "ar": "/opt/bin/BB_FULL_TARGET/ar",
         "as": "/opt/bin/BB_FULL_TARGET/as",
@@ -217,38 +254,7 @@ cc_toolchain_config(
         "llvm-profdata": "/opt/x86_64-linux-musl/bin/llvm-profdata",
         "objdump": "/usr/bin/objdump",
     },
-    compile_flags = [
-        "-fstack-protector",
-        "-Wall",
-        "-Wunused-but-set-parameter",
-        "-Wno-free-nonheap-object",
-        "-fno-omit-frame-pointer",
-        # TODO cxx_builtin_include_directories doesn't seem to be working, so we add the INCLUDE_PATHs manually
-        "-isystem /opt/BB_TARGET/lib/gcc/BB_TARGET/GCC_VERSION/include",
-        "-isystem /opt/BB_TARGET/lib/gcc/BB_TARGET/GCC_VERSION/include-fixed",
-        "-isystem /opt/BB_TARGET/BB_TARGET/include",
-        "-isystem /opt/BB_TARGET/BB_TARGET/sys-root/usr/include",
-        "-isystem /opt/BB_TARGET/BB_TARGET/include/c++/GCC_VERSION",
-        "-isystem /opt/BB_TARGET/BB_TARGET/include/c++/GCC_VERSION/BB_TARGET",
-        "-isystem /opt/BB_TARGET/BB_TARGET/include/c++/GCC_VERSION/backward",
-        "-isystem /opt/BB_TARGET/BB_TARGET/include/c++/GCC_VERSION/parallel",
-    ],
-    opt_compile_flags = [
-        "-g0",
-        "-O2",
-        "-D_FORTIFY_SOURCE=1",
-        "-DNDEBUG",
-        "-ffunction-sections",
-        "-fdata-sections",
-        # "-stdlib=libstdc++",
-    ],
-    dbg_compile_flags = ["-g"],
-    link_flags = [],
-    link_libs = [
-        "-lstdc++",
-        "-lm",
-    ],
-    opt_link_flags = ["-Wl,--gc-sections"],
+    toolchain_identifier = "ygg_x86",
     unfiltered_compile_flags = [
         "-no-canonical-prefixes",
         "-Wno-builtin-macro-redefined",
@@ -258,12 +264,6 @@ cc_toolchain_config(
         "-Wno-unused-command-line-argument",
         "-Wno-gnu-offsetof-extensions",
     ],
-    builtin_sysroot = "/opt/BB_TARGET/BB_TARGET/sys-root/",
-    coverage_compile_flags = ["--coverage"],
-    coverage_link_flags = ["--coverage"],
-    host_system_name = "linux",
-    # TODO gcc doesn't support it, only put it on clang (maybe even only for clang on aarch64-darwin?)
-    supports_start_end_lib = False,
 )
 
 cc_toolchain(
@@ -281,8 +281,6 @@ cc_toolchain(
 
 toolchain(
     name = "cc_toolchain_for_ygg_aarch64",
-    toolchain = ":ygg_aarch64_toolchain",
-    toolchain_type = "@bazel_tools//tools/cpp:toolchain_type",
     exec_compatible_with = [
         "@platforms//cpu:x86_64",
         "@platforms//os:linux",
@@ -291,18 +289,36 @@ toolchain(
         "@platforms//cpu:aarch64",
         "@platforms//os:linux",
     ],
+    toolchain = ":ygg_aarch64_toolchain",
+    toolchain_type = "@bazel_tools//tools/cpp:toolchain_type",
 )
 
 # TODO distinguish between clang and gcc toolchains?
 cc_toolchain_config(
     name = "ygg_aarch64_toolchain_config",
-    cpu = "aarch64",
-    compiler = "compiler",
-    toolchain_identifier = "ygg_aarch64",
-    target_system_name = "aarch64-unknown-linux-gnu",
-    target_libc = "",
     abi_libc_version = "local",
     abi_version = "local",
+    builtin_sysroot = "/opt/BB_TARGET/BB_TARGET/sys-root/",
+    compile_flags = [
+        "-fstack-protector",
+        "-Wall",
+        "-Wunused-but-set-parameter",
+        "-Wno-free-nonheap-object",
+        "-fno-omit-frame-pointer",
+        # TODO cxx_builtin_include_directories doesn't seem to be working, so we add the INCLUDE_PATHs manually
+        "-isystem /opt/BB_TARGET/lib/gcc/BB_TARGET/GCC_VERSION/include",
+        "-isystem /opt/BB_TARGET/lib/gcc/BB_TARGET/GCC_VERSION/include-fixed",
+        "-isystem /opt/BB_TARGET/BB_TARGET/include",
+        "-isystem /opt/BB_TARGET/BB_TARGET/sys-root/usr/include",
+        "-isystem /opt/BB_TARGET/BB_TARGET/include/c++/GCC_VERSION",
+        "-isystem /opt/BB_TARGET/BB_TARGET/include/c++/GCC_VERSION/BB_TARGET",
+        "-isystem /opt/BB_TARGET/BB_TARGET/include/c++/GCC_VERSION/backward",
+        "-isystem /opt/BB_TARGET/BB_TARGET/include/c++/GCC_VERSION/parallel",
+    ],
+    compiler = "compiler",
+    coverage_compile_flags = ["--coverage"],
+    coverage_link_flags = ["--coverage"],
+    cpu = "aarch64",
     cxx_builtin_include_directories = [
         "/opt/BB_TARGET/lib/gcc/BB_TARGET/GCC_VERSION/include",
         "/opt/BB_TARGET/lib/gcc/BB_TARGET/GCC_VERSION/include-fixed",
@@ -317,6 +333,27 @@ cc_toolchain_config(
         "/opt/x86_64-linux-musl/lib/clang/17/include",
         "/opt/x86_64-linux-musl/lib/clang/18/include",
     ],
+    dbg_compile_flags = ["-g"],
+    host_system_name = "linux",
+    link_flags = [],
+    link_libs = [
+        "-lstdc++",
+        "-lm",
+    ],
+    opt_compile_flags = [
+        "-g0",
+        "-O2",
+        "-D_FORTIFY_SOURCE=1",
+        "-DNDEBUG",
+        "-ffunction-sections",
+        "-fdata-sections",
+        # "-stdlib=libstdc++",
+    ],
+    opt_link_flags = ["-Wl,--gc-sections"],
+    # TODO gcc doesn't support it, only put it on clang (maybe even only for clang on aarch64-darwin?)
+    supports_start_end_lib = False,
+    target_libc = "",
+    target_system_name = "aarch64-unknown-linux-gnu",
     tool_paths = {
         "ar": "/opt/bin/BB_FULL_TARGET/ar",
         "as": "/opt/bin/BB_FULL_TARGET/as",
@@ -345,38 +382,7 @@ cc_toolchain_config(
         "llvm-profdata": "/opt/x86_64-linux-musl/bin/llvm-profdata",
         "objdump": "/usr/bin/objdump",
     },
-    compile_flags = [
-        "-fstack-protector",
-        "-Wall",
-        "-Wunused-but-set-parameter",
-        "-Wno-free-nonheap-object",
-        "-fno-omit-frame-pointer",
-        # TODO cxx_builtin_include_directories doesn't seem to be working, so we add the INCLUDE_PATHs manually
-        "-isystem /opt/BB_TARGET/lib/gcc/BB_TARGET/GCC_VERSION/include",
-        "-isystem /opt/BB_TARGET/lib/gcc/BB_TARGET/GCC_VERSION/include-fixed",
-        "-isystem /opt/BB_TARGET/BB_TARGET/include",
-        "-isystem /opt/BB_TARGET/BB_TARGET/sys-root/usr/include",
-        "-isystem /opt/BB_TARGET/BB_TARGET/include/c++/GCC_VERSION",
-        "-isystem /opt/BB_TARGET/BB_TARGET/include/c++/GCC_VERSION/BB_TARGET",
-        "-isystem /opt/BB_TARGET/BB_TARGET/include/c++/GCC_VERSION/backward",
-        "-isystem /opt/BB_TARGET/BB_TARGET/include/c++/GCC_VERSION/parallel",
-    ],
-    opt_compile_flags = [
-        "-g0",
-        "-O2",
-        "-D_FORTIFY_SOURCE=1",
-        "-DNDEBUG",
-        "-ffunction-sections",
-        "-fdata-sections",
-        # "-stdlib=libstdc++",
-    ],
-    dbg_compile_flags = ["-g"],
-    link_flags = [],
-    link_libs = [
-        "-lstdc++",
-        "-lm",
-    ],
-    opt_link_flags = ["-Wl,--gc-sections"],
+    toolchain_identifier = "ygg_aarch64",
     unfiltered_compile_flags = [
         "-no-canonical-prefixes",
         "-Wno-builtin-macro-redefined",
@@ -386,12 +392,6 @@ cc_toolchain_config(
         "-Wno-unused-command-line-argument",
         "-Wno-gnu-offsetof-extensions",
     ],
-    builtin_sysroot = "/opt/BB_TARGET/BB_TARGET/sys-root/",
-    coverage_compile_flags = ["--coverage"],
-    coverage_link_flags = ["--coverage"],
-    host_system_name = "linux",
-    # TODO gcc doesn't support it, only put it on clang (maybe even only for clang on aarch64-darwin?)
-    supports_start_end_lib = False,
 )
 
 cc_toolchain(
@@ -409,8 +409,6 @@ cc_toolchain(
 
 toolchain(
     name = "cc_toolchain_for_ygg_darwin_x86",
-    toolchain = ":ygg_darwin_x86_toolchain",
-    toolchain_type = "@bazel_tools//tools/cpp:toolchain_type",
     exec_compatible_with = [
         "@platforms//cpu:x86_64",
         "@platforms//os:linux",
@@ -419,18 +417,23 @@ toolchain(
         "@platforms//cpu:x86_64",
         "@platforms//os:macos",
     ],
+    toolchain = ":ygg_darwin_x86_toolchain",
+    toolchain_type = "@bazel_tools//tools/cpp:toolchain_type",
 )
 
 # TODO distinguish between clang and gcc toolchains?
 cc_toolchain_config(
     name = "ygg_darwin_x86_toolchain_config",
-    cpu = "k8",
-    compiler = "compiler",
-    toolchain_identifier = "ygg_darwin_x86",
-    target_system_name = "x86_64-apple-macos",
-    target_libc = "",
     abi_libc_version = "local",
     abi_version = "local",
+    builtin_sysroot = "/opt/BB_TARGET/BB_TARGET/sys-root/",
+    compile_flags = [
+        "-stdlib=libc++",
+    ],
+    compiler = "compiler",
+    coverage_compile_flags = ["--coverage"],
+    coverage_link_flags = ["--coverage"],
+    cpu = "k8",
     cxx_builtin_include_directories = [
         "/opt/BB_TARGET/lib/gcc/BB_TARGET/GCC_VERSION/include",
         "/opt/BB_TARGET/lib/gcc/BB_TARGET/GCC_VERSION/include-fixed",
@@ -445,6 +448,32 @@ cc_toolchain_config(
         "/opt/x86_64-linux-musl/lib/clang/17/include",
         "/opt/x86_64-linux-musl/lib/clang/18/include",
     ],
+    dbg_compile_flags = [
+        "-g",
+        "-stdlib=libc++",
+    ],
+    host_system_name = "linux",
+    link_flags = [
+        "-fuse-ld=lld",
+        "-stdlib=libc++",
+    ],
+    link_libs = [
+        "-lc++",
+        "-lm",
+    ],
+    opt_compile_flags = [
+        "-g0",
+        "-O2",
+        "-D_FORTIFY_SOURCE=1",
+        "-DNDEBUG",
+        "-ffunction-sections",
+        "-fdata-sections",
+        "-stdlib=libc++",
+    ],
+    opt_link_flags = ["-Wl,--gc-sections"],
+    supports_start_end_lib = True,
+    target_libc = "",
+    target_system_name = "x86_64-apple-macos",
     tool_paths = {
         "ar": "/opt/bin/BB_FULL_TARGET/ar",
         "as": "/opt/bin/BB_FULL_TARGET/as",
@@ -475,31 +504,7 @@ cc_toolchain_config(
         "llvm-profdata": "/opt/x86_64-linux-musl/bin/llvm-profdata",
         "objdump": "/usr/bin/objdump",
     },
-    compile_flags = [
-        "-stdlib=libc++",
-    ],
-    opt_compile_flags = [
-        "-g0",
-        "-O2",
-        "-D_FORTIFY_SOURCE=1",
-        "-DNDEBUG",
-        "-ffunction-sections",
-        "-fdata-sections",
-        "-stdlib=libc++",
-    ],
-    dbg_compile_flags = [
-        "-g",
-        "-stdlib=libc++",
-    ],
-    link_flags = [
-        "-fuse-ld=lld",
-        "-stdlib=libc++",
-    ],
-    link_libs = [
-        "-lc++",
-        "-lm",
-    ],
-    opt_link_flags = ["-Wl,--gc-sections"],
+    toolchain_identifier = "ygg_darwin_x86",
     unfiltered_compile_flags = [
         "-no-canonical-prefixes",
         "-Wno-builtin-macro-redefined",
@@ -509,11 +514,6 @@ cc_toolchain_config(
         "-Wno-unused-command-line-argument",
         "-Wno-gnu-offsetof-extensions",
     ],
-    builtin_sysroot = "/opt/BB_TARGET/BB_TARGET/sys-root/",
-    coverage_compile_flags = ["--coverage"],
-    coverage_link_flags = ["--coverage"],
-    host_system_name = "linux",
-    supports_start_end_lib = True,
 )
 
 cc_toolchain(
@@ -531,8 +531,6 @@ cc_toolchain(
 
 toolchain(
     name = "cc_toolchain_for_ygg_darwin_arm64",
-    toolchain = ":ygg_darwin_arm64_toolchain",
-    toolchain_type = "@bazel_tools//tools/cpp:toolchain_type",
     exec_compatible_with = [
         "@platforms//cpu:x86_64",
         "@platforms//os:linux",
@@ -541,18 +539,23 @@ toolchain(
         "@platforms//cpu:arm64",
         "@platforms//os:macos",
     ],
+    toolchain = ":ygg_darwin_arm64_toolchain",
+    toolchain_type = "@bazel_tools//tools/cpp:toolchain_type",
 )
 
 # TODO distinguish between clang and gcc toolchains?
 cc_toolchain_config(
     name = "ygg_darwin_arm64_toolchain_config",
-    cpu = "arm64",
-    compiler = "compiler",
-    toolchain_identifier = "ygg_darwin_arm64",
-    target_system_name = "arm64-apple-macos",
-    target_libc = "",
     abi_libc_version = "local",
     abi_version = "local",
+    builtin_sysroot = "/opt/BB_TARGET/BB_TARGET/sys-root/",
+    compile_flags = [
+        "-stdlib=libc++",
+    ],
+    compiler = "compiler",
+    coverage_compile_flags = ["--coverage"],
+    coverage_link_flags = ["--coverage"],
+    cpu = "arm64",
     cxx_builtin_include_directories = [
         "/opt/BB_TARGET/lib/gcc/BB_TARGET/GCC_VERSION/include",
         "/opt/BB_TARGET/lib/gcc/BB_TARGET/GCC_VERSION/include-fixed",
@@ -567,6 +570,31 @@ cc_toolchain_config(
         "/opt/x86_64-linux-musl/lib/clang/17/include",
         "/opt/x86_64-linux-musl/lib/clang/18/include",
     ],
+    dbg_compile_flags = [
+        "-g",
+        "-stdlib=libc++",
+    ],
+    host_system_name = "linux",
+    link_flags = [
+        "-stdlib=libc++",
+    ],
+    link_libs = [
+        "-lc++",
+        "-lm",
+    ],
+    opt_compile_flags = [
+        "-g0",
+        "-O2",
+        "-D_FORTIFY_SOURCE=1",
+        "-DNDEBUG",
+        "-ffunction-sections",
+        "-fdata-sections",
+        "-stdlib=libc++",
+    ],
+    opt_link_flags = ["-Wl,--gc-sections"],
+    supports_start_end_lib = True,
+    target_libc = "",
+    target_system_name = "arm64-apple-macos",
     tool_paths = {
         "ar": "/opt/bin/BB_FULL_TARGET/ar",
         "as": "/opt/bin/BB_FULL_TARGET/as",
@@ -597,29 +625,7 @@ cc_toolchain_config(
         "llvm-profdata": "/opt/x86_64-linux-musl/bin/llvm-profdata",
         "objdump": "/usr/bin/objdump",
     },
-    compile_flags = [
-        "-stdlib=libc++",
-    ],
-    opt_compile_flags = [
-        "-g0",
-        "-O2",
-        "-D_FORTIFY_SOURCE=1",
-        "-DNDEBUG",
-        "-ffunction-sections",
-        "-fdata-sections",
-        "-stdlib=libc++",
-    ],
-    dbg_compile_flags = ["-g",
-        "-stdlib=libc++",
-    ],
-    link_flags = [
-        "-stdlib=libc++",
-    ],
-    link_libs = [
-        "-lc++",
-        "-lm",
-    ],
-    opt_link_flags = ["-Wl,--gc-sections"],
+    toolchain_identifier = "ygg_darwin_arm64",
     unfiltered_compile_flags = [
         "-no-canonical-prefixes",
         "-Wno-builtin-macro-redefined",
@@ -629,11 +635,6 @@ cc_toolchain_config(
         "-Wno-unused-command-line-argument",
         "-Wno-gnu-offsetof-extensions",
     ],
-    builtin_sysroot = "/opt/BB_TARGET/BB_TARGET/sys-root/",
-    coverage_compile_flags = ["--coverage"],
-    coverage_link_flags = ["--coverage"],
-    host_system_name = "linux",
-    supports_start_end_lib = True,
 )
 
 cc_toolchain(
@@ -669,7 +670,8 @@ cc_toolchain_config(
         "/usr/include/c++/11",
         "/usr/include/x86_64-linux-gnu/c++/11",
     ],
-    dbg_compile_flags = ["-g",
+    dbg_compile_flags = [
+        "-g",
         "-I/usr/include/c++/11",
     ],
     host_system_name = "linux",
@@ -677,7 +679,7 @@ cc_toolchain_config(
         "-fuse-ld=lld",
         "--ld-path=/home/wmoses/llvms/llvm16/install/bin/ld.lld",
         "-stdlib=libstdc++",
-        "-static-libstdc++"
+        "-static-libstdc++",
     ],
     link_libs = [
         "-lstdc++",
@@ -702,9 +704,9 @@ cc_toolchain_config(
         # "/usr/bin/gcc": "/home/wmoses/git/Reactant.jl/deps/clang",
         # "gcc": "/home/wmoses/git/Reactant.jl/deps/clang",
         "gcc": "/home/wmoses/llvms/llvm16/install/bin/clang",
-		"g++": "/home/wmoses/llvms/llvm16/install/bin/clang++",
-		"cpp": "/home/wmoses/llvms/llvm16/install/bin/clang++",
-		"ld": "/home/wmoses/llvms/llvm16/install/bin/ld.lld",
+        "g++": "/home/wmoses/llvms/llvm16/install/bin/clang++",
+        "cpp": "/home/wmoses/llvms/llvm16/install/bin/clang++",
+        "ld": "/home/wmoses/llvms/llvm16/install/bin/ld.lld",
     },
     toolchain_identifier = "beast_x86_toolchain",
     unfiltered_compile_flags = [
@@ -718,8 +720,6 @@ cc_toolchain_config(
     ],
 )
 
-
-
 platform(
     name = "darwin_x86_64",
     constraint_values = [
@@ -727,7 +727,6 @@ platform(
         "@platforms//cpu:x86_64",
     ],
 )
-
 
 platform(
     name = "darwin_arm64",
@@ -759,7 +758,6 @@ cc_library(
         [
             "*.cpp",
         ],
-
     ) + [
         "@enzyme_ad//src/enzyme_ad/jax:gpu.cc",
         "@enzyme_ad//src/enzyme_ad/jax:cpu.cc",
@@ -767,7 +765,7 @@ cc_library(
         # "@xla//xla:autotuning.pb.cc",
         # "@xla//xla:autotune_results.pb.cc",
         # "@xla//xla/service:buffer_assignment.pb.cc",
-        ],
+    ],
     hdrs = glob([
         "*.h",
     ]) + [
@@ -778,121 +776,121 @@ cc_library(
         "-Werror=unused-but-set-variable",
         "-Werror=return-type",
         "-Werror=unused-result",
-        "-Wno-error=stringop-truncation"
+        "-Wno-error=stringop-truncation",
     ] + select({
-    "@xla//xla/tsl:is_cuda_enabled_and_oss":[
-        "-DREACTANT_CUDA=1",
-    ],
-    "//conditions:default": [],
+        "@xla//xla/tsl:is_cuda_enabled_and_oss": [
+            "-DREACTANT_CUDA=1",
+        ],
+        "//conditions:default": [],
     }),
-    alwayslink = True,
-    linkstatic = True,
     linkopts = select({
-    "//conditions:default": [],
-    "@bazel_tools//src/conditions:darwin": [
-"-Wl,-exported_symbol,_stablehlo*",
-"-Wl,-exported_symbol,_mlir*",
-"-Wl,-exported_symbol,_sdy*",
-"-Wl,-exported_symbol,_EnzymeJaXMapSymbol",
-"-Wl,-exported_symbol,_InitializeLogs",
-"-Wl,-exported_symbol,_SetLogLevel",
-"-Wl,-exported_symbol,_SetModuleLogLevel",
-"-Wl,-exported_symbol,_GetDefaultTargetTriple",
-"-Wl,-exported_symbol,_enzymeActivityAttrGet",
-"-Wl,-exported_symbol,_MakeCPUClient",
-"-Wl,-exported_symbol,_MakeGPUClient",
-"-Wl,-exported_symbol,_MakeTPUClient",
-"-Wl,-exported_symbol,_LoadPjrtPlugin",
-"-Wl,-exported_symbol,_InitializePjrtPlugin",
-"-Wl,-exported_symbol,_MakeClientUsingPluginAPI",
-"-Wl,-exported_symbol,_GetCApiClient",
-"-Wl,-exported_symbol,_ClientNumDevices",
-"-Wl,-exported_symbol,_ClientNumAddressableDevices",
-"-Wl,-exported_symbol,_ClientProcessIndex",
-"-Wl,-exported_symbol,_ClientGetDevice",
-"-Wl,-exported_symbol,_ClientGetAddressableDevice",
-"-Wl,-exported_symbol,_PjRtDeviceGetAllocatorStats",
-"-Wl,-exported_symbol,_ExecutableFree",
-"-Wl,-exported_symbol,_BufferToDevice",
-"-Wl,-exported_symbol,_BufferToClient",
-"-Wl,-exported_symbol,_DeviceToClient",
-"-Wl,-exported_symbol,_PjRtBufferFree",
-"-Wl,-exported_symbol,_UnsafeBufferPointer",
-"-Wl,-exported_symbol,_ArrayFromHostBuffer",
-"-Wl,-exported_symbol,_BufferOnCPU",
-"-Wl,-exported_symbol,_CopyBufferToDevice",
-"-Wl,-exported_symbol,_BufferToHost",
-"-Wl,-exported_symbol,_FreeClient",
-"-Wl,-exported_symbol,_ClientCompile",
-"-Wl,-exported_symbol,_ConvertLLVMStrToMLIR",
-"-Wl,-exported_symbol,_LinkInModule",
-"-Wl,-exported_symbol,_FreeFuture",
-"-Wl,-exported_symbol,_FutureIsReady",
-"-Wl,-exported_symbol,_FutureAwait",
-"-Wl,-exported_symbol,_XLAExecute",
-"-Wl,-exported_symbol,_RegisterDialects",
-"-Wl,-exported_symbol,_InitializeRegistry",
-"-Wl,-exported_symbol,_InitializePasses",
-"-Wl,-exported_symbol,_RegisterCustomCallTarget",
-"-Wl,-exported_symbol,_ConvertLLVMToMLIR",
-"-Wl,-exported_symbol,_RegisterEnzymeXLAGPUHandler",
-"-Wl,-exported_symbol,_ReactantThrowError",
-"-Wl,-exported_symbol,_ReactantHandleCuResult",
-"-Wl,-exported_symbol,_CreateProfilerSession",
-"-Wl,-exported_symbol,_ProfilerSessionCollectData",
-"-Wl,-exported_symbol,_ProfilerSessionDelete",
-"-Wl,-exported_symbol,_ProfilerServerStart",
-"-Wl,-exported_symbol,_ProfilerServerStop",
-"-Wl,-exported_symbol,_ProfilerActivityStart",
-"-Wl,-exported_symbol,_ProfilerActivityEnd",
-"-Wl,-exported_symbol,_ReactantFuncSetArgAttr",
-"-Wl,-exported_symbol,_ReactantHermeticCudaGetVersion",
-"-Wl,-exported_symbol,_ReactantCudaDriverGetVersion",
-"-Wl,-exported_symbol,_ReactantLLVMParseCommandLineOptions",
-"-Wl,-exported_symbol,_PjRtDeviceGetLocalDeviceId",
-"-Wl,-exported_symbol,_PjRtDeviceGetGlobalDeviceId",
-"-Wl,-exported_symbol,_PjRtDeviceGetLocalHardwareId",
-"-Wl,-exported_symbol,_XLAExecuteSharded",
-"-Wl,-exported_symbol,_ClientGetPlatformName",
-"-Wl,-exported_symbol,_RegisterEnzymeXLACPUHandler",
-"-Wl,-exported_symbol,_PjRtLoadedExecutableGetClient",
-"-Wl,-exported_symbol,_ReactantFuncSetResultAttr",
-"-Wl,-exported_symbol,_BufferShape",
-"-Wl,-exported_symbol,_BufferNDimensions",
-"-Wl,-exported_symbol,_BufferPrimitiveType",
-"-Wl,-exported_symbol,_PjRtLoadedExecutableGetOuputShardings",
-"-Wl,-exported_symbol,_PjRtLoadedExecutableGetParameterShardings",
-"-Wl,-exported_symbol,_PjRtLoadedExecutableGetHloModules",
-"-Wl,-exported_symbol,_HloModuleToString",
-"-Wl,-exported_symbol,_FreeHloModule",
-"-Wl,-exported_symbol,_PjRtLoadedExecutableNumReplicas",
-"-Wl,-exported_symbol,_PjRtLoadedExecutableNumPartitions",
-"-Wl,-exported_symbol,_ifrt_*",
-"-Wl,-exported_symbol,_pjrt_*",
-"-Wl,-exported_symbol,_reactant_*",
-"-Wl,-exported_symbol,_free_op_sharding",
-"-Wl,-exported_symbol,_free_hlo_sharding",
-"-Wl,-exported_symbol,_hlo_sharding_from_op_sharding",
-"-Wl,-exported_symbol,_hlo_sharding_to_op_sharding",
-"-Wl,-exported_symbol,_hlo_sharding_to_string",
-"-Wl,-exported_symbol,_DeviceGetKind",
-"-Wl,-exported_symbol,_GetDistributedRuntimeClient",
-"-Wl,-exported_symbol,_free_distributed_runtime_client",
-"-Wl,-exported_symbol,_distributed_runtime_client_connect",
-"-Wl,-exported_symbol,_distributed_runtime_client_shutdown",
-"-Wl,-exported_symbol,_GetDistributedRuntimeService",
-"-Wl,-exported_symbol,_free_distributed_runtime_service",
-"-Wl,-exported_symbol,_distributed_runtime_service_shutdown",
-"-Wl,-exported_symbol,_ClientGetDevices",
-"-Wl,-exported_symbol,_ClientGetAddressableDevices",
-"-Wl,-exported_symbol,_hloShardingFromTensorShardingAttr",
-"-Wl,-exported_symbol,_op_sharding_*",
-"-Wl,-exported_symbol,_hloShardingToTensorShardingAttr",
-"-Wl,-exported_symbol,_dump_operation",
-"-Wl,-exported_symbol,_hlo_sharding_*",
-"-Wl,-exported_symbol,_free_ifrt_sharding",
-"-Wl,-exported_symbol,_addSdyPropagationPipeline",
-    ]}),
+        "//conditions:default": [],
+        "@bazel_tools//src/conditions:darwin": [
+            "-Wl,-exported_symbol,_stablehlo*",
+            "-Wl,-exported_symbol,_mlir*",
+            "-Wl,-exported_symbol,_sdy*",
+            "-Wl,-exported_symbol,_EnzymeJaXMapSymbol",
+            "-Wl,-exported_symbol,_InitializeLogs",
+            "-Wl,-exported_symbol,_SetLogLevel",
+            "-Wl,-exported_symbol,_SetModuleLogLevel",
+            "-Wl,-exported_symbol,_GetDefaultTargetTriple",
+            "-Wl,-exported_symbol,_enzymeActivityAttrGet",
+            "-Wl,-exported_symbol,_MakeCPUClient",
+            "-Wl,-exported_symbol,_MakeGPUClient",
+            "-Wl,-exported_symbol,_MakeTPUClient",
+            "-Wl,-exported_symbol,_LoadPjrtPlugin",
+            "-Wl,-exported_symbol,_InitializePjrtPlugin",
+            "-Wl,-exported_symbol,_MakeClientUsingPluginAPI",
+            "-Wl,-exported_symbol,_GetCApiClient",
+            "-Wl,-exported_symbol,_ClientNumDevices",
+            "-Wl,-exported_symbol,_ClientNumAddressableDevices",
+            "-Wl,-exported_symbol,_ClientProcessIndex",
+            "-Wl,-exported_symbol,_ClientGetDevice",
+            "-Wl,-exported_symbol,_ClientGetAddressableDevice",
+            "-Wl,-exported_symbol,_PjRtDeviceGetAllocatorStats",
+            "-Wl,-exported_symbol,_ExecutableFree",
+            "-Wl,-exported_symbol,_BufferToDevice",
+            "-Wl,-exported_symbol,_BufferToClient",
+            "-Wl,-exported_symbol,_DeviceToClient",
+            "-Wl,-exported_symbol,_PjRtBufferFree",
+            "-Wl,-exported_symbol,_UnsafeBufferPointer",
+            "-Wl,-exported_symbol,_ArrayFromHostBuffer",
+            "-Wl,-exported_symbol,_BufferOnCPU",
+            "-Wl,-exported_symbol,_CopyBufferToDevice",
+            "-Wl,-exported_symbol,_BufferToHost",
+            "-Wl,-exported_symbol,_FreeClient",
+            "-Wl,-exported_symbol,_ClientCompile",
+            "-Wl,-exported_symbol,_ConvertLLVMStrToMLIR",
+            "-Wl,-exported_symbol,_LinkInModule",
+            "-Wl,-exported_symbol,_FreeFuture",
+            "-Wl,-exported_symbol,_FutureIsReady",
+            "-Wl,-exported_symbol,_FutureAwait",
+            "-Wl,-exported_symbol,_XLAExecute",
+            "-Wl,-exported_symbol,_RegisterDialects",
+            "-Wl,-exported_symbol,_InitializeRegistry",
+            "-Wl,-exported_symbol,_InitializePasses",
+            "-Wl,-exported_symbol,_RegisterCustomCallTarget",
+            "-Wl,-exported_symbol,_ConvertLLVMToMLIR",
+            "-Wl,-exported_symbol,_RegisterEnzymeXLAGPUHandler",
+            "-Wl,-exported_symbol,_ReactantThrowError",
+            "-Wl,-exported_symbol,_ReactantHandleCuResult",
+            "-Wl,-exported_symbol,_CreateProfilerSession",
+            "-Wl,-exported_symbol,_ProfilerSessionCollectData",
+            "-Wl,-exported_symbol,_ProfilerSessionDelete",
+            "-Wl,-exported_symbol,_ProfilerServerStart",
+            "-Wl,-exported_symbol,_ProfilerServerStop",
+            "-Wl,-exported_symbol,_ProfilerActivityStart",
+            "-Wl,-exported_symbol,_ProfilerActivityEnd",
+            "-Wl,-exported_symbol,_ReactantFuncSetArgAttr",
+            "-Wl,-exported_symbol,_ReactantHermeticCudaGetVersion",
+            "-Wl,-exported_symbol,_ReactantCudaDriverGetVersion",
+            "-Wl,-exported_symbol,_ReactantLLVMParseCommandLineOptions",
+            "-Wl,-exported_symbol,_PjRtDeviceGetLocalDeviceId",
+            "-Wl,-exported_symbol,_PjRtDeviceGetGlobalDeviceId",
+            "-Wl,-exported_symbol,_PjRtDeviceGetLocalHardwareId",
+            "-Wl,-exported_symbol,_XLAExecuteSharded",
+            "-Wl,-exported_symbol,_ClientGetPlatformName",
+            "-Wl,-exported_symbol,_RegisterEnzymeXLACPUHandler",
+            "-Wl,-exported_symbol,_PjRtLoadedExecutableGetClient",
+            "-Wl,-exported_symbol,_ReactantFuncSetResultAttr",
+            "-Wl,-exported_symbol,_BufferShape",
+            "-Wl,-exported_symbol,_BufferNDimensions",
+            "-Wl,-exported_symbol,_BufferPrimitiveType",
+            "-Wl,-exported_symbol,_PjRtLoadedExecutableGetOuputShardings",
+            "-Wl,-exported_symbol,_PjRtLoadedExecutableGetParameterShardings",
+            "-Wl,-exported_symbol,_PjRtLoadedExecutableGetHloModules",
+            "-Wl,-exported_symbol,_HloModuleToString",
+            "-Wl,-exported_symbol,_FreeHloModule",
+            "-Wl,-exported_symbol,_PjRtLoadedExecutableNumReplicas",
+            "-Wl,-exported_symbol,_PjRtLoadedExecutableNumPartitions",
+            "-Wl,-exported_symbol,_ifrt_*",
+            "-Wl,-exported_symbol,_pjrt_*",
+            "-Wl,-exported_symbol,_reactant_*",
+            "-Wl,-exported_symbol,_free_op_sharding",
+            "-Wl,-exported_symbol,_free_hlo_sharding",
+            "-Wl,-exported_symbol,_hlo_sharding_from_op_sharding",
+            "-Wl,-exported_symbol,_hlo_sharding_to_op_sharding",
+            "-Wl,-exported_symbol,_hlo_sharding_to_string",
+            "-Wl,-exported_symbol,_DeviceGetKind",
+            "-Wl,-exported_symbol,_GetDistributedRuntimeClient",
+            "-Wl,-exported_symbol,_free_distributed_runtime_client",
+            "-Wl,-exported_symbol,_distributed_runtime_client_connect",
+            "-Wl,-exported_symbol,_distributed_runtime_client_shutdown",
+            "-Wl,-exported_symbol,_GetDistributedRuntimeService",
+            "-Wl,-exported_symbol,_free_distributed_runtime_service",
+            "-Wl,-exported_symbol,_distributed_runtime_service_shutdown",
+            "-Wl,-exported_symbol,_ClientGetDevices",
+            "-Wl,-exported_symbol,_ClientGetAddressableDevices",
+            "-Wl,-exported_symbol,_hloShardingFromTensorShardingAttr",
+            "-Wl,-exported_symbol,_op_sharding_*",
+            "-Wl,-exported_symbol,_hloShardingToTensorShardingAttr",
+            "-Wl,-exported_symbol,_dump_operation",
+            "-Wl,-exported_symbol,_hlo_sharding_*",
+            "-Wl,-exported_symbol,_free_ifrt_sharding",
+            "-Wl,-exported_symbol,_addSdyPropagationPipeline",
+        ],
+    }),
+    linkstatic = True,
     deps = [
         "@enzyme_ad//src/enzyme_ad/jax:RegistryUtils",
         "@enzyme//:EnzymeMLIR",
@@ -918,11 +916,9 @@ cc_library(
         "@llvm-project//mlir:SCFDialect",
         "@llvm-project//mlir:TransformDialect",
         "@llvm-project//mlir:Transforms",
-
         "@llvm-project//mlir:LLVMIRToLLVMTranslation",
         "@llvm-project//mlir:LLVMIRToNVVMTranslation",
         "@llvm-project//mlir:LLVMIRTransforms",
-
         "@llvm-project//llvm:IRReader",
         "@llvm-project//llvm:Support",
         "@llvm-project//llvm:AArch64AsmParser",
@@ -938,7 +934,7 @@ cc_library(
         "@xla//xla/pjrt:pjrt_api",
         "@xla//xla/pjrt:pjrt_c_api_client",
         "@xla//xla/pjrt/cpu:cpu_client",
-        "@xla//xla/pjrt/distributed:distributed",
+        "@xla//xla/pjrt/distributed",
         "@xla//xla/pjrt/distributed:client",
         "@xla//xla/pjrt/distributed:service",
         "@xla//xla/service/spmd/shardy/stablehlo_round_trip:export_shardings",
@@ -947,27 +943,21 @@ cc_library(
         # "@xla//xla:xla_proto_cc",
         # "@xla//xla:xla_proto_cc_impl",
         "@xla//xla/stream_executor:device_description_proto_cc_impl",
-
         "@xla//xla/tsl/platform/default:platform_port",
-
         "@xla//xla/service:metrics_proto_cc",
         "@xla//xla/service:metrics_proto_cc_impl",
-
         "@xla//xla/service:custom_call_target_registry",
         "@xla//xla/service/cpu:cpu_compiler",
         "@xla//xla/stream_executor/tpu:tpu_on_demand_compiler",
         "@xla//xla/stream_executor/tpu:tpu_executor",
         "@xla//xla/stream_executor/tpu:tpu_transfer_manager",
-
         "@xla//xla/service/cpu:cpu_transfer_manager",
         "@xla//xla/pjrt/gpu:se_gpu_pjrt_client",
-
         "@xla//xla/tsl/protobuf:protos_all_cc_impl",
         "@xla//xla/tsl/framework:allocator_registry_impl",
-
         "@xla//xla/pjrt:status_casters",
-        "@xla//xla/python/ifrt:ifrt",
-        "@xla//xla/python/pjrt_ifrt:pjrt_ifrt",
+        "@xla//xla/python/ifrt",
+        "@xla//xla/python/pjrt_ifrt",
         "@xla//xla/python/ifrt_proxy/server:grpc_server",
         "@xla//xla/python/ifrt_proxy/client:grpc_client",
         "@xla//xla/python/ifrt_proxy/client:registry",
@@ -977,7 +967,6 @@ cc_library(
         "@xla//xla/python/ifrt/ir:ifrt_ir_program",
         "@xla//xla/ffi:call_frame",
         # "@com_google_protobuf//:protobuf",
-
         "@tsl//tsl/profiler/lib:profiler_session_impl",
         "@tsl//tsl/profiler/lib:profiler_factory_impl",
         "@tsl//tsl/profiler/lib:profiler_controller",
@@ -995,7 +984,6 @@ cc_library(
         "@tsl//tsl/profiler/protobuf:profile_proto_cc_impl",
         "@tsl//tsl/profiler/protobuf:xplane_proto_cc_impl",
         "@tsl//tsl/profiler/protobuf:trace_events_proto_cc_impl",
-
         "@xla//xla/backends/profiler/cpu:host_tracer",
         "@xla//xla/backends/profiler/cpu:host_tracer_impl",
         "@xla//xla/backends/profiler/cpu:metadata_collector",
@@ -1003,7 +991,6 @@ cc_library(
         "@xla//xla/backends/profiler/tpu:tpu_tracer",
         "@xla//xla/python:profiler_utils",
         "@xla//xla/backends/cpu/collectives:mpi_collectives",
-
         "@tsl//tsl/platform:env_impl",
         "@xla//xla/stream_executor:stream_executor_impl",
         "@xla//xla/mlir/utils:type_util",
@@ -1012,7 +999,7 @@ cc_library(
         "@shardy//shardy/integrations/c:sdy_capi_objects",
         "@shardy//shardy/dialect/sdy/transforms:passes",
         "@shardy//shardy/dialect/sdy/transforms/propagation:passes",
-        "@com_google_absl//absl/hash:hash",
+        "@com_google_absl//absl/hash",
         "@com_google_absl//absl/log:initialize",
         "@com_google_absl//absl/log:globals",
         "@llvm-project//mlir:CAPIIRObjects",
@@ -1029,7 +1016,6 @@ cc_library(
         "@stablehlo//:stablehlo_passes",
         "@stablehlo//:stablehlo_passes_optimization",
         "@stablehlo//stablehlo/tests:check_ops",
-
         "@tsl//tsl/platform:env",
         "@xla//xla/tsl/protobuf:dnn_proto_cc_impl",
         "@xla//xla/tsl/protobuf:histogram_proto_cc",
@@ -1040,18 +1026,18 @@ cc_library(
         "@xla//xla/service:hlo_proto_cc_impl",
         "@com_google_absl//absl/status:statusor",
     ] + select({
-        "@xla//xla/tsl:is_cuda_enabled_and_oss":[
-            "@xla//xla/stream_executor:cuda_platform",
-            "@xla//xla/stream_executor/cuda:all_runtime",
-            "@xla//xla/service/gpu/model:hlo_op_profiles",
-            "@xla//xla/service/gpu/model:hlo_op_profile_proto_cc_impl",
-            "@xla//xla/service/gpu:nvptx_compiler",
-            "@xla//xla/service/gpu:gpu_transfer_manager",
-            "@xla//xla/stream_executor:kernel",
-            "@xla//xla/backends/profiler/gpu:device_tracer",
+        "@xla//xla/tsl:is_cuda_enabled_and_oss": [
+            "@jax//jaxlib/cuda:cuda_gpu_kernels",
             "@xla//xla/backends/profiler:profiler_backends",
+            "@xla//xla/backends/profiler/gpu:device_tracer",
             "@xla//xla/pjrt/c:pjrt_c_api_gpu_internal",
-            "@jax//jaxlib/cuda:cuda_gpu_kernels"
+            "@xla//xla/service/gpu:gpu_transfer_manager",
+            "@xla//xla/service/gpu:nvptx_compiler",
+            "@xla//xla/service/gpu/model:hlo_op_profile_proto_cc_impl",
+            "@xla//xla/service/gpu/model:hlo_op_profiles",
+            "@xla//xla/stream_executor:cuda_platform",
+            "@xla//xla/stream_executor:kernel",
+            "@xla//xla/stream_executor/cuda:all_runtime",
         ],
         "//conditions:default": [
         ],
@@ -1062,30 +1048,37 @@ cc_library(
     ]) + select({
         # gloo tcp transport only builds on linux
         "@xla//xla/tsl:macos": [
+            "@gloo//:transport_uv",
             "@xla//xla/backends/cpu/collectives:gloo_collectives",
             "@xla//xla/backends/cpu/collectives:gloo_kv_store",
-            "@gloo//:transport_uv",
         ],
         "@xla//xla/tsl:windows": [],
         "//conditions:default": [
+            "@gloo//:transport_tcp",
             "@xla//xla/backends/cpu/collectives:gloo_collectives",
             "@xla//xla/backends/cpu/collectives:gloo_kv_store",
-            "@gloo//:transport_tcp",
         ],
     }),
+    alwayslink = True,
 )
 
 # cc_shared_library(
 cc_binary(
     name = "libReactantExtra.so",
-    linkshared = 1,     ## important
-    linkstatic = 1,     ## important
+    linkshared = 1,  ## important
+    linkstatic = 1,  ## important
     deps = [":ReactantExtraLib"],
 )
 
 cc_binary(
     name = "mlir-jl-tblgen",
-    srcs = ["//tblgen:mlir-jl-tblgen.cc", "//tblgen:jl-generators.cc"],
+    srcs = [
+        "//tblgen:jl-generators.cc",
+        "//tblgen:mlir-jl-tblgen.cc",
+    ],
+    tags = [
+        "optional",
+    ],
     visibility = ["//visibility:public"],
     deps = [
         "@llvm-project//llvm:Support",
@@ -1093,274 +1086,340 @@ cc_binary(
         "@llvm-project//llvm:config",
         "@llvm-project//mlir:TableGen",
     ],
-    tags = [
-        "optional"
-    ],
 )
 
 gentbl_cc_library(
     name = "BuiltinJLIncGen",
-    tbl_outs = [(
-            ["--generator=jl-op-defs", "--disable-module-wrap=0"],
-            "Builtin.jl"
-        )
+    tbl_outs = [
+        (
+            [
+                "--generator=jl-op-defs",
+                "--disable-module-wrap=0",
+            ],
+            "Builtin.jl",
+        ),
     ],
+    tblgen = "//:mlir-jl-tblgen",
     td_file = "@llvm-project//mlir:include/mlir/IR/BuiltinOps.td",
     deps = [
         "@llvm-project//mlir:BuiltinDialectTdFiles",
     ],
-    tblgen = "//:mlir-jl-tblgen",
 )
 
 gentbl_cc_library(
     name = "ArithJLIncGen",
-    tbl_outs = [(
-            ["--generator=jl-op-defs", "--disable-module-wrap=0"],
-            "Arith.jl"
-        )
+    tbl_outs = [
+        (
+            [
+                "--generator=jl-op-defs",
+                "--disable-module-wrap=0",
+            ],
+            "Arith.jl",
+        ),
     ],
+    tblgen = "//:mlir-jl-tblgen",
     td_file = "@llvm-project//mlir:include/mlir/Dialect/Arith/IR/ArithOps.td",
     deps = [
         "@llvm-project//mlir:ArithOpsTdFiles",
     ],
-    tblgen = "//:mlir-jl-tblgen",
 )
 
 gentbl_cc_library(
     name = "AffineJLIncGen",
-    tbl_outs = [(
-            ["--generator=jl-op-defs", "--disable-module-wrap=0"],
-            "Affine.jl"
-        )
+    tbl_outs = [
+        (
+            [
+                "--generator=jl-op-defs",
+                "--disable-module-wrap=0",
+            ],
+            "Affine.jl",
+        ),
     ],
+    tblgen = "//:mlir-jl-tblgen",
     td_file = "@llvm-project//mlir:include/mlir/Dialect/Affine/IR/AffineOps.td",
     deps = [
         "@llvm-project//mlir:AffineOpsTdFiles",
     ],
-    tblgen = "//:mlir-jl-tblgen",
 )
 
 gentbl_cc_library(
     name = "FuncJLIncGen",
-    tbl_outs = [(
-            ["--generator=jl-op-defs", "--disable-module-wrap=0"],
-            "Func.jl"
-        )
+    tbl_outs = [
+        (
+            [
+                "--generator=jl-op-defs",
+                "--disable-module-wrap=0",
+            ],
+            "Func.jl",
+        ),
     ],
+    tblgen = "//:mlir-jl-tblgen",
     td_file = "@llvm-project//mlir:include/mlir/Dialect/Func/IR/FuncOps.td",
     deps = [
         "@llvm-project//mlir:FuncTdFiles",
     ],
-    tblgen = "//:mlir-jl-tblgen",
 )
 
 gentbl_cc_library(
     name = "LlvmJLIncGen",
-    tbl_outs = [(
-            ["--generator=jl-op-defs", "--disable-module-wrap=0"],
-            "Llvm.jl"
-        )
+    tbl_outs = [
+        (
+            [
+                "--generator=jl-op-defs",
+                "--disable-module-wrap=0",
+            ],
+            "Llvm.jl",
+        ),
     ],
+    tblgen = "//:mlir-jl-tblgen",
     td_file = "@llvm-project//mlir:include/mlir/Dialect/LLVMIR/LLVMOps.td",
     deps = [
         "@llvm-project//mlir:LLVMOpsTdFiles",
     ],
-    tblgen = "//:mlir-jl-tblgen",
 )
 
 gentbl_cc_library(
     name = "MemRefJLIncGen",
-    tbl_outs = [(
-            ["--generator=jl-op-defs", "--disable-module-wrap=0"],
-            "MemRef.jl"
-        )
+    tbl_outs = [
+        (
+            [
+                "--generator=jl-op-defs",
+                "--disable-module-wrap=0",
+            ],
+            "MemRef.jl",
+        ),
     ],
+    tblgen = "//:mlir-jl-tblgen",
     td_file = "@llvm-project//mlir:include/mlir/Dialect/MemRef/IR/MemRefOps.td",
     deps = [
         "@llvm-project//mlir:MemRefOpsTdFiles",
     ],
-    tblgen = "//:mlir-jl-tblgen",
 )
 
 gentbl_cc_library(
     name = "NvvmIncJLGen",
-    tbl_outs = [(
-            ["--generator=jl-op-defs", "--disable-module-wrap=0"],
-            "Nvvm.jl"
-        )
+    tbl_outs = [
+        (
+            [
+                "--generator=jl-op-defs",
+                "--disable-module-wrap=0",
+            ],
+            "Nvvm.jl",
+        ),
     ],
+    tblgen = "//:mlir-jl-tblgen",
     td_file = "@llvm-project//mlir:include/mlir/Dialect/LLVMIR/NVVMOps.td",
     deps = [
         "@llvm-project//mlir:NVVMOpsTdFiles",
     ],
-    tblgen = "//:mlir-jl-tblgen",
 )
 
 gentbl_cc_library(
     name = "GpuIncJLGen",
-    tbl_outs = [(
-            ["--generator=jl-op-defs", "--disable-module-wrap=0"],
-            "Gpu.jl"
-        )
+    tbl_outs = [
+        (
+            [
+                "--generator=jl-op-defs",
+                "--disable-module-wrap=0",
+            ],
+            "Gpu.jl",
+        ),
     ],
+    tblgen = "//:mlir-jl-tblgen",
     td_file = "@llvm-project//mlir:include/mlir/Dialect/GPU/IR/GPUOps.td",
     deps = [
         "@llvm-project//mlir:GPUOpsTdFiles",
     ],
-    tblgen = "//:mlir-jl-tblgen",
 )
 
 gentbl_cc_library(
     name = "MPIIncJLGen",
-    tbl_outs = [(
-            ["--generator=jl-op-defs", "--disable-module-wrap=0"],
-            "MPI.jl"
-        )
+    tbl_outs = [
+        (
+            [
+                "--generator=jl-op-defs",
+                "--disable-module-wrap=0",
+            ],
+            "MPI.jl",
+        ),
     ],
+    tblgen = "//:mlir-jl-tblgen",
     td_file = "@llvm-project//mlir:include/mlir/Dialect/MPI/IR/MPIOps.td",
     deps = [
         "@llvm-project//mlir:MPITdFiles",
     ],
-    tblgen = "//:mlir-jl-tblgen",
 )
 
 gentbl_cc_library(
     name = "EnzymeJLIncGen",
-    tbl_outs = [(
-            ["--generator=jl-op-defs", "--disable-module-wrap=0"],
-            "Enzyme.jl"
-        )
+    tbl_outs = [
+        (
+            [
+                "--generator=jl-op-defs",
+                "--disable-module-wrap=0",
+            ],
+            "Enzyme.jl",
+        ),
     ],
+    tblgen = "//:mlir-jl-tblgen",
     td_file = "@enzyme//:Enzyme/MLIR/Dialect/EnzymeOps.td",
     deps = [
         "@enzyme//:EnzymeDialectTdFiles",
     ],
-    tblgen = "//:mlir-jl-tblgen",
 )
 
 gentbl_cc_library(
     name = "EnzymeXLAJLIncGen",
-    tbl_outs = [(
-            ["--generator=jl-op-defs", "--disable-module-wrap=0"],
-            "EnzymeXLA.jl"
-        )
+    tbl_outs = [
+        (
+            [
+                "--generator=jl-op-defs",
+                "--disable-module-wrap=0",
+            ],
+            "EnzymeXLA.jl",
+        ),
     ],
+    tblgen = "//:mlir-jl-tblgen",
     td_file = "@enzyme_ad//src/enzyme_ad/jax:Dialect/EnzymeXLAOps.td",
     deps = [
         "@enzyme//:EnzymeDialectTdFiles",
         "@enzyme_ad//src/enzyme_ad/jax:EnzymeXLADialectTdFiles",
-        "@stablehlo//:stablehlo_ops_td_files",
         "@llvm-project//mlir:CopyOpInterfaceTdFiles",
         "@llvm-project//mlir:GPUOpsTdFiles",
+        "@stablehlo//:stablehlo_ops_td_files",
     ],
-    tblgen = "//:mlir-jl-tblgen",
 )
 
 gentbl_cc_library(
     name = "TPUJLIncGen",
-    tbl_outs = [(
-            ["--generator=jl-op-defs", "--disable-module-wrap=0"],
-            "TPU.jl"
-        )
+    tbl_outs = [
+        (
+            [
+                "--generator=jl-op-defs",
+                "--disable-module-wrap=0",
+            ],
+            "TPU.jl",
+        ),
     ],
+    tblgen = "//:mlir-jl-tblgen",
     td_file = "@jax//jaxlib/mosaic:dialect/tpu/tpu.td",
     deps = [
         "@jax//jaxlib/mosaic:tpu_td_files",
     ],
-    tblgen = "//:mlir-jl-tblgen",
 )
 
 gentbl_cc_library(
     name = "TritonJLIncGen",
-    tbl_outs = [(
-            ["--generator=jl-op-defs", "--disable-module-wrap=0"],
-            "Triton.jl"
-        )
+    tbl_outs = [
+        (
+            [
+                "--generator=jl-op-defs",
+                "--disable-module-wrap=0",
+            ],
+            "Triton.jl",
+        ),
     ],
+    tblgen = "//:mlir-jl-tblgen",
     td_file = "@jax//jaxlib/triton:triton.td",
     deps = [
         "@llvm-project//mlir:OpBaseTdFiles",
         "@triton//:td_files",
     ],
-    tblgen = "//:mlir-jl-tblgen",
 )
 
 gentbl_cc_library(
     name = "StableHLOJLIncGen",
-    tbl_outs = [(
-            ["--generator=jl-op-defs", "--disable-module-wrap=0"],
-            "StableHLO.jl"
-        )
+    tbl_outs = [
+        (
+            [
+                "--generator=jl-op-defs",
+                "--disable-module-wrap=0",
+            ],
+            "StableHLO.jl",
+        ),
     ],
+    tblgen = "//:mlir-jl-tblgen",
     td_file = "@stablehlo//:stablehlo/dialect/StablehloOps.td",
     deps = [
         "@stablehlo//:stablehlo_ops_td_files",
     ],
-    tblgen = "//:mlir-jl-tblgen",
 )
 
 gentbl_cc_library(
     name = "CHLOJLIncGen",
-    tbl_outs = [(
-            ["--generator=jl-op-defs", "--disable-module-wrap=0"],
-            "CHLO.jl"
-        )
+    tbl_outs = [
+        (
+            [
+                "--generator=jl-op-defs",
+                "--disable-module-wrap=0",
+            ],
+            "CHLO.jl",
+        ),
     ],
+    tblgen = "//:mlir-jl-tblgen",
     td_file = "@stablehlo//:stablehlo/dialect/ChloOps.td",
     deps = [
         "@stablehlo//:chlo_ops_td_files",
     ],
-    tblgen = "//:mlir-jl-tblgen",
 )
 
 gentbl_cc_library(
     name = "VHLOJLIncGen",
-    tbl_outs = [(
-            ["--generator=jl-op-defs", "--disable-module-wrap=0"],
-            "VHLO.jl"
-        )
+    tbl_outs = [
+        (
+            [
+                "--generator=jl-op-defs",
+                "--disable-module-wrap=0",
+            ],
+            "VHLO.jl",
+        ),
     ],
+    tblgen = "//:mlir-jl-tblgen",
     td_file = "@stablehlo//:stablehlo/dialect/VhloOps.td",
     deps = [
         "@stablehlo//:vhlo_ops_td_files",
     ],
-    tblgen = "//:mlir-jl-tblgen",
 )
 
 gentbl_cc_library(
     name = "ShardyJLIncGen",
-    tbl_outs = [(
-            ["--generator=jl-op-defs", "--disable-module-wrap=0"],
-            "Shardy.jl"
-        )
+    includes = ["external/shardy"],
+    tbl_outs = [
+        (
+            [
+                "--generator=jl-op-defs",
+                "--disable-module-wrap=0",
+            ],
+            "Shardy.jl",
+        ),
     ],
+    tblgen = "//:mlir-jl-tblgen",
     td_file = "@shardy//shardy/dialect/sdy/ir:ops.td",
     deps = [
         "@shardy//shardy/dialect/sdy/ir:sdy_td_files",
     ],
-    tblgen = "//:mlir-jl-tblgen",
-    includes = ["external/shardy"],
 )
 
 gentbl_cc_library(
     name = "SparseTensorJLIncGen",
-    tbl_outs = [(
-            ["--generator=jl-op-defs", "--disable-module-wrap=0"],
-            "SparseTensor.jl"
-        )
+    tbl_outs = [
+        (
+            [
+                "--generator=jl-op-defs",
+                "--disable-module-wrap=0",
+            ],
+            "SparseTensor.jl",
+        ),
     ],
+    tblgen = "//:mlir-jl-tblgen",
     td_file = "@llvm-project//mlir:include/mlir/Dialect/SparseTensor/IR/SparseTensorOps.td",
     deps = [
         "@llvm-project//mlir:SparseTensorTdFiles",
     ],
-    tblgen = "//:mlir-jl-tblgen",
 )
 
 genrule(
     name = "libMLIR_h.jl",
-    tags = [
-        "jlrule"
-    ],
     srcs = [
         "@llvm-project//mlir:include/mlir-c/Bindings/Python/Interop.h",
         "@llvm-project//llvm:include/llvm-c/Support.h",
@@ -1380,8 +1439,11 @@ genrule(
         "//:Manifest.toml",
         "//:wrap.toml",
         "//:missing_defs.jl",
-        "//:make.jl"
+        "//:make.jl",
     ],
     outs = ["libMLIR_h.jl"],
     cmd = "$$JULIA \"--project=$(location //:Project.toml)\" \"$(location //:make.jl)\" \"$(location @llvm-project//mlir:include/mlir-c/Bindings/Python/Interop.h)\" \"$(location @llvm-project//llvm:include/llvm-c/Support.h)\" \"$(locations @llvm-project//mlir:ConversionPassIncGen_filegroup)\" \"$(location @stablehlo//:stablehlo/integrations/c/StablehloAttributes.h)\" \"$(location @shardy//shardy/integrations/c:attributes.h)\" \"$@\"",
+    tags = [
+        "jlrule",
+    ],
 )

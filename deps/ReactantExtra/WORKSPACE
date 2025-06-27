@@ -1,7 +1,9 @@
 load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
 
 NSYNC_COMMIT = "82b118aa7ace3132e517e2c467f8732978cf4023"
+
 NSYNC_SHA256 = ""
+
 http_archive(
     name = "nsync",
     sha256 = NSYNC_SHA256,
@@ -10,6 +12,7 @@ http_archive(
 )
 
 ENZYMEXLA_COMMIT = "e52dc6b096213e21940693cda860c99ada2de247"
+
 ENZYMEXLA_SHA256 = ""
 
 http_archive(
@@ -23,59 +26,77 @@ http_archive(
 # https://github.com/hedronvision/bazel-compile-commands-extractor
 http_archive(
     name = "hedron_compile_commands",
+    strip_prefix = "bazel-compile-commands-extractor-4f28899228fb3ad0126897876f147ca15026151e",
 
     # Replace the commit hash (0e990032f3c5a866e72615cf67e5ce22186dcb97) in both places (below) with the latest (https://github.com/hedronvision/bazel-compile-commands-extractor/commits/main), rather than using the stale one here.
     # Even better, set up Renovate and let it do the work for you (see "Suggestion: Updates" in the README).
     url = "https://github.com/hedronvision/bazel-compile-commands-extractor/archive/4f28899228fb3ad0126897876f147ca15026151e.tar.gz",
-    strip_prefix = "bazel-compile-commands-extractor-4f28899228fb3ad0126897876f147ca15026151e",
     # When you first run this tool, it'll recommend a sha256 hash to put here with a message like: "DEBUG: Rule 'hedron_compile_commands' indicated that a canonical reproducible form can be obtained by modifying arguments sha256 = ..."
 )
+
 load("@hedron_compile_commands//:workspace_setup.bzl", "hedron_compile_commands_setup")
+
 hedron_compile_commands_setup()
+
 load("@hedron_compile_commands//:workspace_setup_transitive.bzl", "hedron_compile_commands_setup_transitive")
+
 hedron_compile_commands_setup_transitive()
+
 load("@hedron_compile_commands//:workspace_setup_transitive_transitive.bzl", "hedron_compile_commands_setup_transitive_transitive")
+
 hedron_compile_commands_setup_transitive_transitive()
+
 load("@hedron_compile_commands//:workspace_setup_transitive_transitive_transitive.bzl", "hedron_compile_commands_setup_transitive_transitive_transitive")
+
 hedron_compile_commands_setup_transitive_transitive_transitive()
 
-load("@enzyme_ad//:workspace.bzl", "JAX_COMMIT", "JAX_SHA256", "ENZYME_COMMIT", "ENZYME_SHA256", "XLA_PATCHES")
+load("@enzyme_ad//:workspace.bzl", "ENZYME_COMMIT", "ENZYME_SHA256", "JAX_COMMIT", "JAX_SHA256", "XLA_PATCHES")
 
 XLA_PATCHES = XLA_PATCHES + [
-"""
+    """
 sed -i.bak0 "s/patch_cmds = \\[/patch_cmds = \\[\\\"find . -type f -name config.bzl -exec sed -i.bak0 's\\/HAVE_LINK_H=1\\/HAVE_LINK_H=0\\/g' {} +\\\",/g" third_party/llvm/workspace.bzl
 """,
-"""
+    """
 sed -i.bak0 "s/patch_cmds = \\[/patch_cmds = \\[\\\"find . -type f -name config.bzl -exec sed -i.bak0 's\\/LLVM_ENABLE_THREADS=1\\/LLVM_ENABLE_THREADS=0\\/g' {} +\\\",/g" third_party/llvm/workspace.bzl
 """,
-"""
+    """
 sed -i.bak0 "s/patch_cmds = \\[/patch_cmds = \\[\\\"find . -type f -name config.bzl -exec sed -i.bak0 's\\/HAVE_MALLINFO=1\\/DONT_HAVE_ANY_MALLINFO=0\\/g' {} +\\\",/g" third_party/llvm/workspace.bzl
 """,
-"""
+    """
 sed -i.bak0 "s/patch_cmds = \\[/patch_cmds = \\[\\\"find . -type f -name config.bzl -exec sed -i.bak0 's\\/HAVE_PTHREAD_GETNAME_NP=1\\/FAKE_HAVE_PTHREAD_GETNAME_NP=0\\/g' {} +\\\",/g" third_party/llvm/workspace.bzl
 """,
-"""
+    """
 sed -i.bak0 "s/patch_cmds = \\[/patch_cmds = \\[\\\"find . -type f -name config.bzl -exec sed -i.bak0 's\\/HAVE_PTHREAD_SETNAME_NP=1\\/FAKE_HAVE_PTHREAD_SETNAME_NP=0\\/g' {} +\\\",/g" third_party/llvm/workspace.bzl
 """,
-"""
+    """
 sed -i.bak0 "s/patch_cmds = \\[/patch_cmds = \\[\\\"find . -type f -name config.h -exec sed -i.bak0 's\\/ENABLE_CRASH_OVERRIDES 1\\/ENABLE_CRASH_OVERRIDES 0\\/g' {} +\\\",/g" third_party/llvm/workspace.bzl
 """,
-"""
+    """
 sed -i.bak0 "s/patch_cmds = \\[/patch_cmds = \\[\\\"find . -type f -name config.h -exec sed -i.bak0 's\\/HAVE_PTHREAD_GETNAME_NP\\/FAKE_HAVE_PTHREAD_GETNAME_NP\\/g' {} +\\\",/g" third_party/llvm/workspace.bzl
 """,
-"""
+    """
 sed -i.bak0 "s/patch_cmds = \\[/patch_cmds = \\[\\\"find . -type f -name config.h -exec sed -i.bak0 's\\/HAVE_PTHREAD_SETNAME_NP\\/FAKE_HAVE_PTHREAD_SETNAME_NP\\/g' {} +\\\",/g" third_party/llvm/workspace.bzl
 """,
-# """
-# sed -i.bak0 "s/patch_cmds = \\[/patch_cmds = \\['find . -type f -name BUILD.bazel -exec sed -i.bak0 \\\\\\'s\\/\\\"CAPIIR\\\",\\/\\\"CAPIIR\\\",alwayslink=1,\\/g\\\\\\\\' {} +',/g" third_party/llvm/workspace.bzl
-# """,
+    # """
+    # sed -i.bak0 "s/patch_cmds = \\[/patch_cmds = \\['find . -type f -name BUILD.bazel -exec sed -i.bak0 \\\\\\'s\\/\\\"CAPIIR\\\",\\/\\\"CAPIIR\\\",alwayslink=1,\\/g\\\\\\\\' {} +',/g" third_party/llvm/workspace.bzl
+    # """,
 ]
 
 LLVM_TARGETS = select({
-    "@bazel_tools//src/conditions:windows": ["AMDGPU", "NVPTX"],
+    "@bazel_tools//src/conditions:windows": [
+        "AMDGPU",
+        "NVPTX",
+    ],
     "@bazel_tools//src/conditions:darwin": [],
-    "//conditions:default": ["AMDGPU", "NVPTX"],
-}) + ["AArch64", "X86", "ARM"]
+    "//conditions:default": [
+        "AMDGPU",
+        "NVPTX",
+    ],
+}) + [
+    "AArch64",
+    "X86",
+    "ARM",
+]
 
 # Uncomment these lines to use a custom LLVM commit
 # LLVM_COMMIT = "b39c5cb6977f35ad727d86b2dd6232099734ffd3"
@@ -87,8 +108,8 @@ LLVM_TARGETS = select({
 #     strip_prefix = "llvm-project-" + LLVM_COMMIT,
 #     urls = ["https://github.com/llvm/llvm-project/archive/{commit}.tar.gz".format(commit = LLVM_COMMIT)],
 # )
-# 
-# 
+#
+#
 # load("@bazel_tools//tools/build_defs/repo:utils.bzl", "maybe")
 # maybe(
 #     http_archive,
@@ -100,7 +121,7 @@ LLVM_TARGETS = select({
 #         "https://github.com/zlib-ng/zlib-ng/archive/refs/tags/2.0.7.zip",
 #     ],
 # )
-# 
+#
 # maybe(
 #     http_archive,
 #     name = "llvm_zstd",
@@ -114,11 +135,11 @@ LLVM_TARGETS = select({
 
 http_archive(
     name = "jax",
+    patch_args = ["-p1"],
+    patches = ["@enzyme_ad//:patches/jax.patch"],
     sha256 = JAX_SHA256,
     strip_prefix = "jax-" + JAX_COMMIT,
     urls = ["https://github.com/google/jax/archive/{commit}.tar.gz".format(commit = JAX_COMMIT)],
-    patch_args = ["-p1"],
-    patches = ["@enzyme_ad//:patches/jax.patch"],
 )
 
 load("@jax//third_party/xla:revision.bzl", "XLA_COMMIT", "XLA_SHA256")
@@ -127,16 +148,18 @@ load("@jax//third_party/xla:revision.bzl", "XLA_COMMIT", "XLA_SHA256")
 
 http_archive(
     name = "xla",
+    patch_cmds = XLA_PATCHES,
     sha256 = XLA_SHA256,
     strip_prefix = "xla-" + XLA_COMMIT,
     urls = ["https://github.com/giordano/xla/archive/{commit}.tar.gz".format(commit = XLA_COMMIT)],
-    patch_cmds = XLA_PATCHES
 )
 
 load("@xla//third_party/py:python_init_rules.bzl", "python_init_rules")
+
 python_init_rules()
- 
+
 load("@xla//third_party/py:python_init_repositories.bzl", "python_init_repositories")
+
 python_init_repositories(
     requirements = {
         "3.9": "//build:requirements_lock_3_9.txt",
@@ -146,22 +169,23 @@ python_init_repositories(
         "3.13": "//build:requirements_lock_3_13.txt",
     },
 )
- 
+
 load("@xla//third_party/py:python_init_toolchains.bzl", "python_init_toolchains")
+
 python_init_toolchains()
-# 
+#
 # load("@xla//third_party/py:python_init_pip.bzl", "python_init_pip")
 # python_init_pip()
-# 
+#
 # load("@xla//third_party/py:python_init_rules.bzl", "python_init_rules")
 # python_init_rules()
-# 
+#
 # load("@rules_python//python:repositories.bzl", "py_repositories")
-# 
+#
 # py_repositories()
-# 
+#
 # load("@rules_python//python/pip_install:repositories.bzl", "pip_install_dependencies")
-# 
+#
 # pip_install_dependencies()
 
 http_archive(
@@ -183,28 +207,37 @@ http_archive(
 # )
 
 load("@jax//third_party/xla:workspace.bzl", jax_xla_workspace = "repo")
+
 jax_xla_workspace()
 
-
 load("@xla//:workspace4.bzl", "xla_workspace4")
+
 xla_workspace4()
 
 load("@xla//:workspace3.bzl", "xla_workspace3")
+
 xla_workspace3()
 
+load("@llvm-raw//utils/bazel:configure.bzl", "llvm_configure")
 load("@xla//:workspace2.bzl", "xla_workspace2")
 
-load("@llvm-raw//utils/bazel:configure.bzl", "llvm_configure")
-llvm_configure(name = "llvm-project", targets = LLVM_TARGETS)
+llvm_configure(
+    name = "llvm-project",
+    targets = LLVM_TARGETS,
+)
+
 xla_workspace2()
 
 load("@xla//:workspace1.bzl", "xla_workspace1")
+
 xla_workspace1()
 
 load("@xla//:workspace0.bzl", "xla_workspace0")
+
 xla_workspace0()
 
 load("@jax//jaxlib:jax_python_wheel.bzl", "jax_python_wheel_repository")
+
 jax_python_wheel_repository(
     name = "jax_wheel",
     version_key = "_version",
@@ -215,11 +248,13 @@ load(
     "@xla//third_party/py:python_wheel.bzl",
     "python_wheel_version_suffix_repository",
 )
+
 python_wheel_version_suffix_repository(
     name = "jax_wheel_version_suffix",
 )
 
 load("@jax//third_party/flatbuffers:workspace.bzl", flatbuffers = "repo")
+
 flatbuffers()
 
 load(
