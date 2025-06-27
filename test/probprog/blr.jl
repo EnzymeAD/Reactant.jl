@@ -38,6 +38,4 @@ end
     trace = ProbProg.simulate(blr, seed, N, K)
 
     @test size(Array(trace.retval)) == (N,)
-
-    println(trace)
 end
