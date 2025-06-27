@@ -49,6 +49,10 @@ include("accelerators/Accelerators.jl")
 
 using .Accelerators.TPU: has_tpu
 
+include("CompileOptions.jl")
+
+export OptimizeCommunicationOptions, ShardyPropagationOptions, CompileOptions
+
 include("mlir/MLIR.jl")
 include("xla/XLA.jl")
 
@@ -181,9 +185,6 @@ const TracedType = Union{TracedRArray,TracedRNumber,MissingTracedValue}
 
 include("ControlFlow.jl")
 include("Tracing.jl")
-
-include("CompileOptions.jl")
-export OptimizeCommunicationOptions
 
 include("Compiler.jl")
 

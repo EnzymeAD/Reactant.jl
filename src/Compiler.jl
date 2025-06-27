@@ -23,6 +23,7 @@ import ..Reactant:
     append_path,
     ancestor,
     TracedType
+import Reactant: OptimizeCommunicationOptions, ShardyPropagationOptions, CompileOptions
 
 import ..ReactantCore: correct_maybe_bcast_call
 
@@ -693,12 +694,9 @@ const DUS_SLICE_SIMPLIFY = Ref(true)
 const CONCATS_TO_DUS = Ref(false)
 
 # Optimization passes via transform dialect
-function optimization_passes(;
-    no_nan::Bool=false,
+function optimization_passes(
+    compile_options::CompileOptions;
     sroa::Bool=false,
-    inline::Bool=true,
-    transpose_propagate::Symbol=:up,
-    reshape_propagate::Symbol=:up,
     dus_to_concat::Bool=false,
     recognize_comms::Bool=true,
     lower_comms::Bool=true,
@@ -720,7 +718,6 @@ function optimization_passes(;
         "imag_op_canon<16>",
         "conj_complex_negate<16>",
         "get_dimension_size_op_canon<16>",
-        "gather_op_canon<16>",
         "reshape_op_canon<16>",
         "merge_consecutive_reshapes<16>",
         "transpose_is_reshape<16>",
@@ -729,7 +726,6 @@ function optimization_passes(;
         "cse_slice<16>",
         "cse_transpose<16>",
         "cse_convert<16>",
-        "cse_pad<16>",
         "cse_dot_general<16>",
         "cse_reshape<16>",
         "cse_mul<16>",
@@ -761,10 +757,6 @@ function optimization_passes(;
         "noop_reverse<16>",
         "slice_slice<16>",
         "shift_right_logical_simplify<16>",
-        "pad_simplify<16>($max_constant_threshold)",
-        "select_pad_to_dus<1>",
-        "and_pad_pad<1>",
-        "negative_pad_to_slice<16>",
         "slice_simplify<16>",
         "convert_simplify<16>",
         "dynamic_slice_to_static<16>",
@@ -772,7 +764,6 @@ function optimization_passes(;
         "concat_to_broadcast<16>",
         "reduce_to_reshape<16>",
         "broadcast_to_reshape<16>",
-        "gather_simplify<16>",
         "slice_internal",
         "iota_simplify<16>($max_constant_threshold)",
         "broadcast_in_dim_simplify<16>($max_constant_threshold)",
@@ -780,14 +771,10 @@ function optimization_passes(;
         "dynamic_update_to_concat<1>",
         "slice_of_dynamic_update<1>",
         "slice_elementwise<1>",
-        "slice_pad<1>",
         "dot_reshape_dot<1>",
         "concat_fuse<1>",
-        "pad_reshape_pad<1>",
-        "pad_pad<1>",
         "concat_push_binop_add<1>",
         "concat_push_binop_mul<1>",
-        "scatter_to_dynamic_update_slice<1>",
         "reduce_concat<1>",
         "slice_concat<1>",
         "concat_slice<1>",
@@ -799,47 +786,20 @@ function optimization_passes(;
         "dot_general_simplify<16>",
         "transpose_simplify<16>",
         "reshape_empty_broadcast<1>",
-        "add_pad_pad_to_concat<1>",
         "broadcast_reshape<1>",
-        "concat_pad<1>",
-        "reduce_pad<1>",
-        "broadcast_pad<1>",
-        "zero_product_reshape_pad<1>",
-        "mul_zero_pad<1>",
-        "div_zero_pad<1>",
-        "binop_const_reshape_pad<1>",
-        "binop_const_pad_add<1>",
-        "binop_const_pad_subtract<1>",
-        "binop_const_pad_mul<1>",
-        "binop_const_pad_div<1>",
-        "binop_binop_pad_pad_add<1>",
-        "binop_binop_pad_pad_mul<1>",
-        "binop_pad_pad_add<1>",
-        "binop_pad_pad_subtract<1>",
-        "binop_pad_pad_mul<1>",
-        "binop_pad_pad_div<1>",
-        "binop_pad_pad_min<1>",
-        "binop_pad_pad_max<1>",
-        "unary_pad_push_convert<1>",
-        "unary_pad_push_tanh<1>",
-        "unary_pad_push_exp<1>",
         "transpose_dot_reorder<1>",
         "dot_transpose<1>",
         "transpose_convolution<1>",
         "convolution_transpose<1>",
         "convert_convert_float<1>",
-        "concat_to_pad<1>",
         "reshape_iota<1>",
         "broadcast_reduce<1>",
         "slice_dot_general<1>",
         "if_inline<1>",
         "if_to_select<1>",
-        "dynamic_gather_op_is_not_dynamic<16>",
         "divide_sqrt_to_multiply_rsqrt<16>",
         "associative_binary_op_reordering<1>",
         "transpose_broadcast_in_dim_to_broadcast_in_dim<16>",
-        # XXX: needs upstream fix
-        # "scatter_indices_are_unique",
         "replace_neg_add_with_subtract",
         "binop_const_simplify",
         "not_select_simplify",
@@ -874,23 +834,18 @@ function optimization_passes(;
         "while_dus",
         "dus_licm(0)",
         "while_op_induction_replacement",
-        "dus_pad",
         "dus_concat",
         "slice_dus_to_concat",
         "while_induction_reduction",
         "slice_licm(0)",
-        "pad_licm(0)",
         "elementwise_licm(0)",
         "concatenate_licm(0)",
         "slice_broadcast",
-        "while_pad_induction_reduction",
         "while_licm<1>(1)",
         "associative_common_mul_op_reordering",
         "slice_select_to_select_slice",
-        "pad_concat_to_concat_pad",
         "slice_if",
         "dus_to_i32",
-        "rotate_pad",
         "slice_extend",
         "concat_wrap",
         "cse_extend<16>",
@@ -898,9 +853,7 @@ function optimization_passes(;
         "cse_rotate<16>",
         "cse_rotate<16>",
         "concat_concat_axis_swap",
-        "concat_multipad",
         "concat_concat_to_dus",
-        "speculate_if_pad_to_select",
         "broadcast_iota_simplify",
         "select_comp_iota_to_dus",
         "compare_cleanup",
@@ -928,9 +881,83 @@ function optimization_passes(;
         "split_convolution_into_reverse_convolution",
         # TODO we want to enable but may cause an infinite compile time
         # "concat_to_onedim_dusslice",
-        "scatter_multiply_simplify",
-        "unary_elementwise_scatter_simplify",
+        # TODO expose an option to enable this
+        # "chained_multiply_to_power",
+        "power_multiply_to_power",
+        "log_simplify",
+        "neg_mul_const_simplify",
+        "neg_div_const_simplify",
+        "reshape_deletions_broadcast_in_dim_simplify",
+        "reshape_insertions_broadcast_in_dim_simplify",
     ]
+
+    if !compile_options.disable_scatter_gather_optimization_passes
+        append!(
+            transform_passes_list,
+            [
+                # scatter patterns
+                "scatter_to_dynamic_update_slice<1>",
+                "scatter_multiply_simplify",
+                "unary_elementwise_scatter_simplify",
+                "scatter_indices_are_unique",
+                ## const prop patterns
+                "scatter_update_computation_const_prop",
+                # gather patterns
+                "dynamic_gather_op_is_not_dynamic<16>",
+                "gather_op_canon<16>",
+                "gather_elementwise",
+                ## const prop patterns
+                "gather_const_prop",
+            ],
+        )
+    end
+
+    if !compile_options.disable_pad_optimization_passes
+        append!(
+            transform_passes_list,
+            [
+                "dus_pad",
+                "cse_pad<16>",
+                "pad_simplify<16>($max_constant_threshold)",
+                "select_pad_to_dus<1>",
+                "and_pad_pad<1>",
+                "negative_pad_to_slice<16>",
+                "slice_pad<1>",
+                "pad_reshape_pad<1>",
+                "pad_pad<1>",
+                "add_pad_pad_to_concat<1>",
+                "concat_pad<1>",
+                "reduce_pad<1>",
+                "broadcast_pad<1>",
+                "zero_product_reshape_pad<1>",
+                "mul_zero_pad<1>",
+                "div_zero_pad<1>",
+                "binop_const_reshape_pad<1>",
+                "binop_const_pad_add<1>",
+                "binop_const_pad_subtract<1>",
+                "binop_const_pad_mul<1>",
+                "binop_const_pad_div<1>",
+                "binop_binop_pad_pad_add<1>",
+                "binop_binop_pad_pad_mul<1>",
+                "binop_pad_pad_add<1>",
+                "binop_pad_pad_subtract<1>",
+                "binop_pad_pad_mul<1>",
+                "binop_pad_pad_div<1>",
+                "binop_pad_pad_min<1>",
+                "binop_pad_pad_max<1>",
+                "unary_pad_push_convert<1>",
+                "unary_pad_push_tanh<1>",
+                "unary_pad_push_exp<1>",
+                "concat_to_pad<1>",
+                "pad_licm(0)",
+                "while_pad_induction_reduction",
+                "pad_concat_to_concat_pad",
+                "rotate_pad",
+                "concat_multipad",
+                "speculate_if_pad_to_select",
+            ],
+        )
+    end
 
     # constant prop patterns
     append!(
@@ -981,8 +1008,6 @@ function optimization_passes(;
             "const_prop_through_barrier<16>",
             "concat_const_prop<1>($max_constant_threshold)",
             "dynamic_update_slice_const_prop($max_constant_threshold)",
-            "scatter_update_computation_const_prop",
-            "gather_const_prop",
         ],
     )
 
@@ -1008,7 +1033,7 @@ function optimization_passes(;
         push!(transform_passes_list, "dus_to_concat")
     end
 
-    if reshape_propagate === :up
+    if compile_options.reshape_propagate === :up
         append!(
             transform_passes_list,
             [
@@ -1030,7 +1055,7 @@ function optimization_passes(;
             push!(transform_passes_list, "reshape_slice(1)")
             push!(transform_passes_list, "reshape_elementwise(1)")
         end
-    elseif reshape_propagate === :down
+    elseif compile_options.reshape_propagate === :down
         append!(
             transform_passes_list,
             [
@@ -1044,11 +1069,9 @@ function optimization_passes(;
                 "elementwise_reshape_like",
             ],
         )
-    else
-        error("Invalid value for reshape_propagate. Must be :up or :down.")
     end
 
-    if transpose_propagate === :up
+    if compile_options.transpose_propagate === :up
         append!(
             transform_passes_list,
             [
@@ -1071,6 +1094,8 @@ function optimization_passes(;
                 "transpose_batch_norm_inference",
                 "transpose_batch_norm_grad",
                 "transpose_if",
+                "transpose_fft",
+                "transpose_reshape",
             ],
         )
         if AGGRESSIVE_PROPAGATION[]
@@ -1078,7 +1103,7 @@ function optimization_passes(;
         else
             push!(transform_passes_list, "transpose_elementwise(1)")
         end
-    elseif transpose_propagate === :down
+    elseif compile_options.transpose_propagate === :down
         append!(
             transform_passes_list,
             [
@@ -1102,17 +1127,40 @@ function optimization_passes(;
                 "transpose_all_users_slice",
             ],
         )
-    else
-        error("Invalid value for transpose_propagate. Must be :up or :down.")
     end
 
-    if no_nan
+    if compile_options.no_nan
         append!(
             transform_passes_list,
-            ["no_nan", "no_nan_self_sub_simplify", "no_nan_add_sub_simplify(1)"],
+            [
+                "no_nan",
+                "no_nan_self_sub_simplify",
+                "no_nan_add_sub_simplify(1)",
+                "no_nan_mul_simplify(1)",
+                "no_nan_div_simplify(1)",
+            ],
         )
     else
-        push!(transform_passes_list, "no_nan_add_sub_simplify(0)")
+        append!(
+            transform_passes_list,
+            [
+                "no_nan_add_sub_simplify(0)",
+                "no_nan_mul_simplify(0)",
+                "no_nan_div_simplify(0)",
+            ],
+        )
+    end
+
+    if compile_options.all_finite
+        append!(
+            transform_passes_list,
+            [
+                "all_finite_is_finite",
+                "all_finite_is_inf",
+                "all_finite_is_pos_inf",
+                "all_finite_is_neg_inf",
+            ],
+        )
     end
 
     lower_transform_passes = copy(transform_passes_list)
@@ -1151,7 +1199,7 @@ function optimization_passes(;
         )
     end
     passes = String[]
-    if inline
+    if compile_options.inline
         push!(passes, "inline{default-pipeline=canonicalize max-iterations=4}")
     end
     if sroa
@@ -1195,7 +1243,7 @@ function run_pass_pipeline!(mod, pass_pipeline, key=""; enable_verifier=true)
 end
 
 function run_pass_pipeline!(
-    mod, propagation_options::Sharding.ShardyPropagationOptions; enable_verifier=true
+    mod, propagation_options::ShardyPropagationOptions; enable_verifier=true
 )
     pm = MLIR.IR.PassManager()
     MLIR.IR.enable_verifier!(pm, enable_verifier)
@@ -1226,6 +1274,52 @@ function run_pass_pipeline_on_source(source, pass_pipeline; enable_verifier=true
     end
 end
 
+function __get_compile_options_and_kwargs(;
+    compile_options::Union{Missing,CompileOptions}=missing,
+    optimize::Union{Bool,Symbol,String}=true,
+    no_nan::Bool=false,
+    all_finite::Bool=false,
+    inline::Bool=true,
+    transpose_propagate::Symbol=:up,
+    reshape_propagate::Symbol=:up,
+    max_constant_threshold::Int=1024,
+    raise::Union{Bool,String}=false,
+    raise_first::Bool=false,
+    legalize_chlo_to_stablehlo::Bool=false,
+    cudnn_hlo_optimize::Bool=false,
+    shardy_passes::Union{Symbol,ShardyPropagationOptions}=:to_mhlo_shardings,
+    optimize_then_pad::Bool=true,
+    optimize_communications::Union{Bool,OptimizeCommunicationOptions}=true,
+    assert_nonallocating::Bool=false,
+    donated_args::Symbol=:auto,
+    sync::Bool=false,
+    kwargs...,
+)
+    return (
+        Reactant.__compile_options_from_kwags(;
+            compile_options,
+            optimize,
+            no_nan,
+            all_finite,
+            inline,
+            transpose_propagate,
+            reshape_propagate,
+            max_constant_threshold,
+            raise,
+            raise_first,
+            legalize_chlo_to_stablehlo,
+            cudnn_hlo_optimize,
+            shardy_passes,
+            optimize_then_pad,
+            optimize_communications,
+            assert_nonallocating,
+            donated_args,
+            sync,
+        ),
+        kwargs,
+    )
+end
+
 function compile_mlir(f, args; client=nothing, kwargs...)
     backend = XLA.platform_name(client !== nothing ? client : XLA.default_backend())
 
@@ -1238,8 +1332,15 @@ function compile_mlir(f, args; client=nothing, kwargs...)
     results = MLIR.IR.with_context() do ctx
         mod = MLIR.IR.Module(MLIR.IR.Location())
 
+        compile_options, kwargs = __get_compile_options_and_kwargs(; kwargs...)
         mlir_fn_res = compile_mlir!(
-            mod, f, args; backend, runtime=XLA.runtime(client), kwargs...
+            mod,
+            f,
+            args,
+            compile_options;
+            backend,
+            runtime=XLA.runtime(client),
+            kwargs...,
         )
 
         # Attach a name, and partitioning attributes to the module
@@ -1348,10 +1449,10 @@ end
 
 function get_optimize_comms_passes(options::Bool)
     options || return String[]
-    return get_optimize_comms_passes(Reactant.OptimizeCommunicationOptions())
+    return get_optimize_comms_passes(OptimizeCommunicationOptions())
 end
 
-function get_optimize_comms_passes(options::Reactant.OptimizeCommunicationOptions)
+function get_optimize_comms_passes(options::OptimizeCommunicationOptions)
     options_str = String(options)
     res = [
         "enzyme-hlo-generate-td{patterns=lower_rotate;concat_to_onedim_dus;concat_to_onedim_dusslice;concatreshape_to_onedim_dus}",
@@ -1373,30 +1474,14 @@ function compile_mlir!(
     mod,
     f,
     args,
+    compile_options::CompileOptions,
     callcache=default_callcache(),
     sdycache=default_sdycache();
     fn_kwargs=(),
-    optimize::Union{Bool,Symbol,String}=true,
-    cudnn_hlo_optimize::Bool=false,
-    # :none | :to_mhlo_shardings or Sharding.ShardyPropagationOptions
-    shardy_passes::Union{Symbol,Sharding.ShardyPropagationOptions}=:to_mhlo_shardings,
-    no_nan::Bool=false,
-    transpose_propagate::Symbol=:up,
-    reshape_propagate::Symbol=:up,
-    optimize_communications::Bool=true,
-    assert_nonallocating::Bool=false,
     backend="gpu",
-    raise::Union{Bool,String}=false,
-    raise_first::Bool=false,
-    # TODO: allow more fine-grained options to control the donation of specific arguments
-    donated_args::Symbol=:auto, # :auto | :none
-    optimize_then_pad::Bool=true,
     runtime::Union{Val{:PJRT},Val{:IFRT}},
-    legalize_chlo_to_stablehlo::Bool=false,
     kwargs...,
 )
-    @assert donated_args ∈ (:auto, :none)
-
     # Explicitly don't use block! to avoid creating a closure, which creates
     # both compile-time and relocatability issues
 
@@ -1408,6 +1493,7 @@ function compile_mlir!(
     # Save in the TLS whether we are raising.  We identify that condition by
     # checking whether the user set an explicit list of passes, or chose
     # `raise=true` to use the default passes.
+    raise = compile_options.raise
     if backend == "tpu" && raise isa Bool
         raise = true
     end
@@ -1417,7 +1503,14 @@ function compile_mlir!(
     fnname = string(f)
     mlir_fn_res = try
         Reactant.TracedUtils.make_mlir_fn(
-            f, args, fn_kwargs, fnname, true; runtime, optimize_then_pad, kwargs...
+            f,
+            args,
+            fn_kwargs,
+            fnname,
+            true;
+            runtime,
+            compile_options.optimize_then_pad,
+            kwargs...,
         )
     finally
         deactivate_raising!(is_raising)
@@ -1453,8 +1546,6 @@ function compile_mlir!(
         concrete_seen, traced_result, ("result",), TracedToConcrete; runtime
     )
 
-    optimize isa Bool && (optimize = ifelse(optimize, :all, :none))
-
     toolkit = XLA.CUDA_DATA_DIR[]
 
     if backend == "cpu" || backend == "tpu"
@@ -1487,25 +1578,15 @@ function compile_mlir!(
 
     recognize_comms = true
     lower_comms = true
-    if is_sharded && shardy_passes == :to_mhlo_shardings
+    if is_sharded && compile_options.shardy_passes == :to_mhlo_shardings
         lower_comms = false
     end
 
-    opt_passes = optimization_passes(;
-        no_nan,
-        sroa=true,
-        transpose_propagate,
-        reshape_propagate,
-        recognize_comms,
-        lower_comms,
+    opt_passes = optimization_passes(
+        compile_options; sroa=true, recognize_comms, lower_comms
     )
-    opt_passes2 = optimization_passes(;
-        no_nan,
-        sroa=false,
-        transpose_propagate,
-        reshape_propagate,
-        recognize_comms,
-        lower_comms,
+    opt_passes2 = optimization_passes(
+        compile_options; sroa=false, recognize_comms, lower_comms
     )
 
     raise_passes = if raise isa String
@@ -1520,11 +1601,9 @@ function compile_mlir!(
             opt_passes2
 
         if DUS_TO_CONCAT[]
-            opt_passes3 = optimization_passes(;
-                no_nan,
+            opt_passes3 = optimization_passes(
+                compile_options;
                 sroa=false,
-                transpose_propagate,
-                reshape_propagate,
                 dus_to_concat=true,
                 recognize_comms,
                 lower_comms,
@@ -1541,11 +1620,11 @@ function compile_mlir!(
                                    blas_int_width=$blas_int_width}"
     lower_enzyme_probprog_pass = "lower-enzyme-probprog{backend=$backend}"
 
-    if optimize === :all
+    if compile_options.optimization_passes === :all
         run_pass_pipeline!(
             mod,
             join(
-                if raise_first
+                if compile_options.raise_first
                     [
                         "mark-func-memory-effects",
                         opt_passes,
@@ -1559,7 +1638,7 @@ function compile_mlir!(
                         "remove-unnecessary-enzyme-ops",
                         "enzyme-simplify-math",
                         (
-                            if legalize_chlo_to_stablehlo
+                            if compile_options.legalize_chlo_to_stablehlo
                                 ["func.func(chlo-legalize-to-stablehlo)"]
                             else
                                 []
@@ -1581,7 +1660,7 @@ function compile_mlir!(
                         "remove-unnecessary-enzyme-ops",
                         "enzyme-simplify-math",
                         (
-                            if legalize_chlo_to_stablehlo
+                            if compile_options.legalize_chlo_to_stablehlo
                                 ["func.func(chlo-legalize-to-stablehlo)"]
                             else
                                 []
@@ -1598,11 +1677,11 @@ function compile_mlir!(
             ),
             "all",
         )
-    elseif optimize === :before_kernel
+    elseif compile_options.optimization_passes === :before_kernel
         run_pass_pipeline!(
             mod,
             join(
-                if raise_first
+                if compile_options.raise_first
                     ["mark-func-memory-effects", opt_passes]
                 else
                     [
@@ -1616,7 +1695,7 @@ function compile_mlir!(
                         "remove-unnecessary-enzyme-ops",
                         "enzyme-simplify-math",
                         (
-                            if legalize_chlo_to_stablehlo
+                            if compile_options.legalize_chlo_to_stablehlo
                                 ["func.func(chlo-legalize-to-stablehlo)"]
                             else
                                 []
@@ -1629,11 +1708,11 @@ function compile_mlir!(
             ),
             "before_kernel",
         )
-    elseif optimize === :before_jit
+    elseif compile_options.optimization_passes === :before_jit
         run_pass_pipeline!(
             mod,
             join(
-                if raise_first
+                if compile_options.raise_first
                     [
                         "mark-func-memory-effects",
                         opt_passes,
@@ -1647,7 +1726,7 @@ function compile_mlir!(
                         "remove-unnecessary-enzyme-ops",
                         "enzyme-simplify-math",
                         (
-                            if legalize_chlo_to_stablehlo
+                            if compile_options.legalize_chlo_to_stablehlo
                                 ["func.func(chlo-legalize-to-stablehlo)"]
                             else
                                 []
@@ -1667,7 +1746,7 @@ function compile_mlir!(
                         "remove-unnecessary-enzyme-ops",
                         "enzyme-simplify-math",
                         (
-                            if legalize_chlo_to_stablehlo
+                            if compile_options.legalize_chlo_to_stablehlo
                                 ["func.func(chlo-legalize-to-stablehlo)"]
                             else
                                 []
@@ -1682,11 +1761,11 @@ function compile_mlir!(
             ),
             "before_jit",
         )
-    elseif optimize === :before_raise
+    elseif compile_options.optimization_passes === :before_raise
         run_pass_pipeline!(
             mod,
             join(
-                if raise_first
+                if compile_options.raise_first
                     ["mark-func-memory-effects", opt_passes]
                 else
                     [
@@ -1700,7 +1779,7 @@ function compile_mlir!(
                         "remove-unnecessary-enzyme-ops",
                         "enzyme-simplify-math",
                         (
-                            if legalize_chlo_to_stablehlo
+                            if compile_options.legalize_chlo_to_stablehlo
                                 ["func.func(chlo-legalize-to-stablehlo)"]
                             else
                                 []
@@ -1714,7 +1793,7 @@ function compile_mlir!(
             ),
             "before_raise",
         )
-    elseif optimize === :no_enzyme
+    elseif compile_options.optimization_passes === :no_enzyme
         run_pass_pipeline!(
             mod,
             join(
@@ -1729,7 +1808,7 @@ function compile_mlir!(
                     "remove-unnecessary-enzyme-ops",
                     "enzyme-simplify-math",
                     (
-                        if legalize_chlo_to_stablehlo
+                        if compile_options.legalize_chlo_to_stablehlo
                             ["func.func(chlo-legalize-to-stablehlo)"]
                         else
                             []
@@ -1739,13 +1818,13 @@ function compile_mlir!(
                 ],
                 ',',
             ),
-            "only_enzyme",
+            "no_enzyme",
         )
-    elseif optimize === :probprog_no_lowering
+    elseif compile_options.optimization_passes === :probprog_no_lowering
         run_pass_pipeline!(
             mod,
             join(
-                if raise_first
+                if compile_options.raise_first
                     [
                         "mark-func-memory-effects",
                         opt_passes,
@@ -1759,6 +1838,13 @@ function compile_mlir!(
                         "canonicalize",
                         "remove-unnecessary-enzyme-ops",
                         "enzyme-simplify-math",
+                        (
+                            if compile_options.legalize_chlo_to_stablehlo
+                                ["func.func(chlo-legalize-to-stablehlo)"]
+                            else
+                                []
+                            end
+                        )...,
                         opt_passes2,
                     ]
                 else
@@ -1773,6 +1859,13 @@ function compile_mlir!(
                         "canonicalize",
                         "remove-unnecessary-enzyme-ops",
                         "enzyme-simplify-math",
+                        (
+                            if compile_options.legalize_chlo_to_stablehlo
+                                ["func.func(chlo-legalize-to-stablehlo)"]
+                            else
+                                []
+                            end
+                        )...,
                         opt_passes2,
                         kern,
                         raise_passes,
@@ -1782,11 +1875,11 @@ function compile_mlir!(
             ),
             "probprog_no_lowering",
         )
-    elseif optimize === :probprog
+    elseif compile_options.optimization_passes === :probprog
         run_pass_pipeline!(
             mod,
             join(
-                if raise_first
+                if compile_options.raise_first
                     [
                         "mark-func-memory-effects",
                         opt_passes,
@@ -1800,6 +1893,13 @@ function compile_mlir!(
                         "canonicalize",
                         "remove-unnecessary-enzyme-ops",
                         "enzyme-simplify-math",
+                        (
+                            if compile_options.legalize_chlo_to_stablehlo
+                                ["func.func(chlo-legalize-to-stablehlo)"]
+                            else
+                                []
+                            end
+                        )...,
                         opt_passes2,
                         lower_enzymexla_linalg_pass,
                         lower_enzyme_probprog_pass,
@@ -1817,6 +1917,13 @@ function compile_mlir!(
                         "canonicalize",
                         "remove-unnecessary-enzyme-ops",
                         "enzyme-simplify-math",
+                        (
+                            if compile_options.legalize_chlo_to_stablehlo
+                                ["func.func(chlo-legalize-to-stablehlo)"]
+                            else
+                                []
+                            end
+                        )...,
                         opt_passes2,
                         kern,
                         raise_passes,
@@ -1829,7 +1936,7 @@ function compile_mlir!(
             ),
             "probprog",
         )
-    elseif optimize === :only_enzyme
+    elseif compile_options.optimization_passes === :only_enzyme
         run_pass_pipeline!(
             mod,
             join(
@@ -1843,13 +1950,13 @@ function compile_mlir!(
                 ],
                 ',',
             ),
-            "after_enzyme",
+            "only_enzyme",
         )
-    elseif optimize === :after_enzyme
+    elseif compile_options.optimization_passes === :after_enzyme
         run_pass_pipeline!(
             mod,
             join(
-                if raise_first
+                if compile_options.raise_first
                     [
                         "mark-func-memory-effects",
                         kern,
@@ -1860,7 +1967,7 @@ function compile_mlir!(
                         "remove-unnecessary-enzyme-ops",
                         "enzyme-simplify-math",
                         (
-                            if legalize_chlo_to_stablehlo
+                            if compile_options.legalize_chlo_to_stablehlo
                                 ["func.func(chlo-legalize-to-stablehlo)"]
                             else
                                 []
@@ -1879,13 +1986,48 @@ function compile_mlir!(
                         "remove-unnecessary-enzyme-ops",
                         "enzyme-simplify-math",
                         (
-                            if legalize_chlo_to_stablehlo
+                            if compile_options.legalize_chlo_to_stablehlo
                                 ["func.func(chlo-legalize-to-stablehlo)"]
                             else
                                 []
                             end
                         )...,
                         opt_passes2,
+                        kern,
+                        raise_passes,
+                        lower_enzymexla_linalg_pass,
+                        jit,
+                    ]
+                end,
+                ',',
+            ),
+            "after_enzyme",
+        )
+    elseif compile_options.optimization_passes === :before_enzyme
+        run_pass_pipeline!(
+            mod,
+            join(
+                if compile_options.raise_first
+                    [
+                        "mark-func-memory-effects",
+                        opt_passes,
+                        kern,
+                        raise_passes,
+                        "enzyme-batch",
+                        opt_passes2,
+                        enzyme_pass,
+                        "canonicalize,remove-unnecessary-enzyme-ops,enzyme-simplify-math",
+                        lower_enzymexla_linalg_pass,
+                        jit,
+                    ]
+                else
+                    [
+                        "mark-func-memory-effects",
+                        opt_passes,
+                        "enzyme-batch",
+                        opt_passes2,
+                        enzyme_pass,
+                        "canonicalize,remove-unnecessary-enzyme-ops,enzyme-simplify-math",
                         kern,
                         raise_passes,
                         lower_enzymexla_linalg_pass,
@@ -1896,75 +2038,39 @@ function compile_mlir!(
             ),
             "before_enzyme",
         )
-    elseif optimize === :before_enzyme
+    elseif compile_options.optimization_passes === :canonicalize
+        run_pass_pipeline!(mod, "mark-func-memory-effects,canonicalize", "canonicalize")
+    elseif compile_options.optimization_passes === :just_batch
+        run_pass_pipeline!(mod, "enzyme-batch", "enzyme-batch")
+    elseif compile_options.optimization_passes isa String
+        run_pass_pipeline!(mod, compile_options.optimization_passes, "custom_pass")
+    end
+
+    if compile_options.optimization_passes isa Symbol &&
+        compile_options.optimization_passes === :all &&
+        (
+            compile_options.transpose_propagate === :up ||
+            compile_options.reshape_propagate === :up
+        )
+        # We tried propagating reshapes and transposes up. If at this point we are left
+        # with them, we propagate them down to minimize the number of Ops in the IR.
         run_pass_pipeline!(
             mod,
-            join(
-                if raise_first
-                    [
-                        "mark-func-memory-effects",
-                        opt_passes,
-                        kern,
-                        raise_passes,
-                        "enzyme-batch",
-                        opt_passes2,
-                        enzyme_pass,
-                        "canonicalize,remove-unnecessary-enzyme-ops,enzyme-simplify-math",
-                        lower_enzymexla_linalg_pass,
-                        jit,
-                    ]
-                else
-                    [
-                        "mark-func-memory-effects",
-                        opt_passes,
-                        "enzyme-batch",
-                        opt_passes2,
-                        enzyme_pass,
-                        "canonicalize,remove-unnecessary-enzyme-ops,enzyme-simplify-math",
-                        kern,
-                        raise_passes,
-                        lower_enzymexla_linalg_pass,
-                        jit,
-                    ]
-                end,
-                ',',
+            optimization_passes(
+                Reactant.__compile_options_with_reversed_propagation(compile_options);
+                recognize_comms,
+                lower_comms,
             ),
-            "after_enzyme",
+            "post_op_transpose_reshape",
         )
-    elseif optimize === :canonicalize
-        run_pass_pipeline!(mod, "mark-func-memory-effects,canonicalize", "canonicalize")
-    elseif optimize === :just_batch
-        run_pass_pipeline!(mod, "enzyme-batch", "enzyme-batch")
-    elseif optimize isa String
-        run_pass_pipeline!(mod, optimize, optimize)
-    elseif optimize !== :none
-        error("Invalid optimize option: $(Meta.quot(optimize))")
     end
 
-    if !(optimize isa String)
-        if optimize ∉ (:none, :just_batch, :canonicalize) &&
-            (transpose_propagate === :up || reshape_propagate === :up)
-            # We tried propagating reshapes and transposes up. If at this point we are left with
-            # them, we propagate them down to minimize the number of Ops in the IR.
-            run_pass_pipeline!(
-                mod,
-                optimization_passes(;
-                    transpose_propagate=:down,
-                    reshape_propagate=:down,
-                    recognize_comms,
-                    lower_comms,
-                ),
-                "post_op_transpose_reshape",
-            )
-        end
-    end
-
-    if backend == "cuda" && cudnn_hlo_optimize
+    if backend == "cuda" && compile_options.cudnn_hlo_optimize
         run_pass_pipeline!(mod, "enzymexla-cudnn-hlo-opt", "cudnn-hlo-opt")
     end
 
     # Now we resolve paddings if `optimize_then_pad`
-    if optimize_then_pad
+    if compile_options.optimize_then_pad
         padded_inputs = IdDict()
         has_padded_inputs = false
         for (k, v) in seen_args
@@ -2092,7 +2198,7 @@ function compile_mlir!(
             end
 
             # we just need the ops to potentially remove slices / paddings
-            if optimize === :all
+            if compile_options.optimization_passes === :all
                 run_pass_pipeline!(
                     mod,
                     join(
@@ -2122,8 +2228,8 @@ function compile_mlir!(
         module_op = copy(MLIR.IR.Operation(mod))
         mod_copied = MLIR.IR.Module(module_op)
 
-        if shardy_passes isa Sharding.ShardyPropagationOptions
-            run_pass_pipeline!(mod_copied, shardy_passes)
+        if compile_options.shardy_passes isa ShardyPropagationOptions
+            run_pass_pipeline!(mod_copied, compile_options.shardy_passes)
             run_pass_pipeline!(mod_copied, "sdy-close-shardings", "sdy_close_shardings")
         else
             run_pass_pipeline!(
@@ -2151,9 +2257,9 @@ function compile_mlir!(
             result_shardings = [Sharding.Replicated() for _ in 1:length(linear_results)]
         end
 
-        if shardy_passes === :none
+        if compile_options.shardy_passes === :none
             use_shardy_partitioner = true
-        elseif shardy_passes === :post_sdy_propagation
+        elseif compile_options.shardy_passes === :post_sdy_propagation
             use_shardy_partitioner = true
             run_pass_pipeline!(
                 mod,
@@ -2161,14 +2267,16 @@ function compile_mlir!(
                     [
                         "sdy-propagation-pipeline",
                         "sdy-close-shardings",
-                        get_optimize_comms_passes(optimize_communications)...,
+                        get_optimize_comms_passes(
+                            compile_options.optimize_communications
+                        )...,
                     ],
                     ",",
                 ),
                 "post_sdy_propagation",
             )
-        elseif shardy_passes isa Sharding.ShardyPropagationOptions
-            run_pass_pipeline!(mod, shardy_passes)
+        elseif compile_options.shardy_passes isa ShardyPropagationOptions
+            run_pass_pipeline!(mod, compile_options.shardy_passes)
             # sdy passes are run deep inside the XLA compiler. So the only way to respect
             # the options is to export them to MHLO shardings
             run_pass_pipeline!(
@@ -2176,29 +2284,31 @@ function compile_mlir!(
                 join(
                     [
                         "sdy-close-shardings",
-                        get_optimize_comms_passes(optimize_communications)...,
+                        get_optimize_comms_passes(
+                            compile_options.optimize_communications
+                        )...,
                         "xla-sdy-stablehlo-export-pipeline",
                     ],
                     ",",
                 ),
                 "sdy_export",
             )
-        elseif shardy_passes === :to_mhlo_shardings
+        elseif compile_options.shardy_passes === :to_mhlo_shardings
             run_pass_pipeline!(
                 mod,
                 join(
                     [
                         "sdy-propagation-pipeline",
                         "sdy-close-shardings",
-                        get_optimize_comms_passes(optimize_communications)...,
+                        get_optimize_comms_passes(
+                            compile_options.optimize_communications
+                        )...,
                         "xla-sdy-stablehlo-export-pipeline",
                     ],
                     ",",
                 ),
                 "to_mhlo_shardings",
             )
-        else
-            error("Invalid shardy_passes option: $(Meta.quot(shardy_passes))")
         end
     end
 
@@ -2255,7 +2365,7 @@ function compile_mlir!(
     preserved_args_idx = last.(preserved_args)
     donated_args_mask = Vector{Bool}(undef, length(linear_args))
     for (i, arg) in enumerate(linear_args)
-        if donated_args == :auto
+        if compile_options.donated_args == :auto
             if (i - 1) ∉ preserved_args_idx
                 donated_args_mask[i] = true
 
@@ -2286,7 +2396,7 @@ function compile_mlir!(
         end
     end
 
-    if assert_nonallocating
+    if compile_options.assert_nonallocating
         if length(linear_args) - length(preserved_args_idx) != length(nresults)
             str = sprint() do io
                 Base.show(IOContext(io, :debug => true), func3)
@@ -2349,59 +2459,19 @@ function get_common_compile_options()
         :optimize_communications => true,
         :cudnn_hlo_optimize => false,
         :legalize_chlo_to_stablehlo => false,
+        :compile_options => missing,
     )
 end
 
 const COMMON_COMPILE_OPTIONS_DOCS = """
-  - `optimize`: Optimizations passes to run on the traced MLIR code. Valid types of values
-    are:
-    - Bool (true/false): whether to run the optimization passes or not. Defaults to `true`.
-    - String: a custom string with the passes to run. The string should be a comma-separated
-      list of MLIR passes. For example, `"canonicalize,enzyme-hlo-opt"`.
-    - Symbol: a predefined set of passes to run. Valid options are:
-       1. `:all`: Default set of optimization passes. The exact set of passes are not fixed
-          and may change in future versions of Reactant. It is recommended to use this
-          option for most users.
-       2. `:none`: No optimization passes will be run.
-       3.  Other predefined options are: `:before_kernel`, `:before_jit`, `:before_raise`,
-          `:before_enzyme`, `:after_enzyme`, `:just_batch`, `:canonicalize`, `:only_enzyme`.
-  - `no_nan`: If `true`, the optimization passes will assume that the function does not
-    produce NaN values. This can lead to more aggressive optimizations **(and potentially
-    incorrect results if the function does produce NaN values)**.
+  - `compile_options`: If provided, then all other compilation options will be ignored.
+    This should be an object of type [`CompileOptions`](@ref).
+  - `optimize`: This option maps to the `optimization_passes` field of
+    [`CompileOptions`](@ref). See the documentation of `CompileOptions` for more details.
   - `client`: XLA Client used for compilation. If not specified, the default client is used.
-  - `raise`: If `true`, the function will be compiled with the raising pass, which raises
-    CUDA and KernelAbstractions kernels to HLO. Defaults to `false`, but is automatically
-    activated if the inputs are sharded.
-  - `raise_first`: If `true`, the raising pass will be run before the optimization passes.
-    Defaults to `false`.
-  - `shardy_passes`: Defaults to `:to_mhlo_shardings`. Other options are:
-    - `:none`: No sharding passes will be run. Shardy + MHLO shardings are handled by XLA.
-    - `:post_sdy_propagation`: Runs the Shardy propagation passes. MHLO shardings are
-      handled by XLA.
-    - [`Sharding.ShardyPropagationOptions`](@ref): Custom sharding propagation options.
-      MHLO shardings are handled by XLA.
-    - `:to_mhlo_shardings`: Runs the Shardy propagation passes and then exports the
-      shardings to MHLO. All passes are run via MLIR pass pipeline and don't involve XLA.
-  - `assert_nonallocating`: If `true`, we make sure that no new buffers are
-    returned by the function. Any buffer returned must be donated from the inputs. Defaults
-    to `false`.
-  - `donated_args`: If `:auto`, the function will automatically donate the arguments that
-    are not preserved in the function body. If `:none`, no arguments will be donated.
-    Defaults to `:auto`.
-  - `transpose_propagate`: If `:up`, `stablehlo.transpose` operations will be
-    propagated up the computation graph. If `:down`, they will be propagated down. Defaults
-    to `:up`.
-  - `reshape_propagate`: If `:up`, `stablehlo.reshape` operations will be propagated up
-    the computation graph. If `:down`, they will be propagated down. Defaults to `:up`.
-  - `optimize_then_pad`: If `true`, the function will be optimized before padding (for
-    non-divisible sharding axes) is applied. Defaults to `true`. _(Only for Sharded Inputs)_
-  - `optimize_communications`: If `true`, additional passes for optimizing communication
-    in sharded computations will be run. Defaults to `true`. _(Only for Sharded Inputs)_
-  - `cudnn_hlo_optimize`: Run cuDNN specific HLO optimizations. This is only relevant for
-    GPU backends and is `false` by default. **Experimental and not heavily tested.**
-    _(Only for CUDA backend)_
-  - `legalize_chlo_to_stablehlo`: If `true`, `chlo` dialect ops will be converted to
-    `stablehlo` ops. This is `false` by default.
+
+For details about other compilation options see the documentation of
+[`CompileOptions`](@ref).
 """
 
 const SYNC_DOCS = """
@@ -2495,8 +2565,8 @@ Compile the function `f` with arguments `args` and return the compiled function.
 
 ## Options
 
-$(COMMON_COMPILE_OPTIONS_DOCS)
 $(SYNC_DOCS)
+$(COMMON_COMPILE_OPTIONS_DOCS)
 
 See also [`@jit`](@ref), [`@code_hlo`](@ref), [`@code_mhlo`](@ref), [`@code_xla`](@ref).
 """
@@ -2513,8 +2583,8 @@ instead to cache the compiled function and execute it later.
 
 ## Options
 
-$(COMMON_COMPILE_OPTIONS_DOCS)
 $(SYNC_DOCS)
+$(COMMON_COMPILE_OPTIONS_DOCS)
 
 See also [`@compile`](@ref), [`@code_hlo`](@ref), [`@code_mhlo`](@ref), [`@code_xla`](@ref).
 """
@@ -3429,8 +3499,16 @@ function compile_xla(f, args; client=nothing, serializable::Bool=false, kwargs..
     results = try
         # compile function to MLIR module
         mod = MLIR.IR.Module(MLIR.IR.Location())
+
+        compile_options, kwargs = __get_compile_options_and_kwargs(; kwargs...)
         mlir_fn_res = compile_mlir!(
-            mod, f, args; backend, runtime=XLA.runtime(client), kwargs...
+            mod,
+            f,
+            args,
+            compile_options;
+            backend,
+            runtime=XLA.runtime(client),
+            kwargs...,
         )
 
         # Resolve client and device
@@ -3485,8 +3563,12 @@ end
 const __thunk_fwd_body_cache = Dict{Symbol,Expr}()
 const __thunk_rev_body_cache = Dict{Expr,Symbol}()
 
-function compile(f, args; sync=false, kwargs...)
-    _, exec, mlir_fn_res, device, client, str = compile_xla(f, args; kwargs...)
+function compile(f, args; kwargs...)
+    compile_options, kwargs = __get_compile_options_and_kwargs(; kwargs...)
+
+    _, exec, mlir_fn_res, device, client, str = compile_xla(
+        f, args; compile_options, kwargs...
+    )
     (;
         linear_args,
         seen_args,
@@ -3562,7 +3644,7 @@ function compile(f, args; sync=false, kwargs...)
         end
     end
 
-    sync_call = if sync
+    sync_call = if compile_options.sync
         calls = []
         for name in concretized_res_names
             push!(calls, :(XLA.synced_buffer($(name))))

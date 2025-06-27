@@ -1495,18 +1495,72 @@ function cp_async_wait_group(; n, location=Location())
 end
 
 """
+`dot_accumulate_2way`
+
+Performs a two-way 16-bit to 8-bit dot-product which is accumulated in a 
+32-bit result.
+Operand `a` is a vector of two 16-bit elements and operand `b` a vector 
+of four 8-bit elements between which the dot product is computed.
+
+The `a_type` and `b_type` attributes specify the type of the elements in `a`
+and `b` respectively.
+If `a_type` or `b_type` is `s`, then the elements in the corresponding 
+vector are sign-extended to 32-bit before the dot product is computed.
+If `a_type` or `b_type` is `u`, then the elements in the corresponding 
+vector are zero-extended to 32-bit instead.
+
+The `b_hi` boolean attribute specifies which two bytes of `b` are used for 
+the dot product. If `b_hi` is true, then the dot product is computed 
+between  `a` and elements at indices 2 and 3 of `b`. If `b_hi` is false, 
+then the dot product is computed between `a` and elements at indices 0 and 
+1 of `b`.
+
+Operand `c` is a 32-bit integer to which the result is accumulated. It is
+treated as holding a signed integer if any of `a_type` or `b_type` is 
+signed.
+
+[For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/#integer-arithmetic-instructions-dp2a)
+"""
+function dot_accumulate_2way(
+    a::Value, b::Value, c::Value; res::IR.Type, a_type, b_type, b_hi, location=Location()
+)
+    op_ty_results = IR.Type[res,]
+    operands = Value[a, b, c]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[
+        namedattribute("a_type", a_type),
+        namedattribute("b_type", b_type),
+        namedattribute("b_hi", b_hi),
+    ]
+
+    return create_operation(
+        "nvvm.dot.accumulate.2way",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+"""
 `dot_accumulate_4way`
 
 Performs a four-way byte dot-product which is accumulated in a 32-bit
 result.
 Operand `a` and `b` are vectors of 4 bytes between which the dot product is 
 computed.
+
 The `a_type` and `b_type` attributes specify the type of the elements in `a`
 and `b` respectively.
-If `a_type` or `b_type` is `s8`, then the elements in the corresponding 
+If `a_type` or `b_type` is `signed`, then the elements in the corresponding 
 vector are sign-extended to 32-bit before the dot product is computed.
-If `a_type` or `b_type` is `u8`, then the elements in the corresponding 
-vector are zero-extended to 32-bit instead.
+If `a_type` or `b_type` is `unsigned`, then the elements in the 
+corresponding vector are zero-extended to 32-bit instead.
+
 Operand `c` is a 32-bit integer to which the result is accumulated. It is
 treated as holding a signed integer if any of `a_type` or `b_type` is `s8`.
 
@@ -3172,6 +3226,49 @@ function mma_sync(
     )
 end
 
+"""
+`prefetch`
+
+Operand `addr` can be a global, local or generic address pointer. No 
+operation is performed if `addr` maps to a `shared` memory location.
+
+The `cacheLevel` attribute specifies the cache level to which the cache line
+containing the specified address is brought.
+
+`uniform` can be specified after the `cacheLevel` to indicate that the 
+prefetch is performed to the specified uniform cache level. If `uniform` is 
+specified, `addr` must be a generic address pointer and no operation is 
+performed if `addr` maps to a `const`, `local`, or `shared` memory location.
+
+The `evictPriority` attribute is optional and specifies the cache eviction
+priority when `cacheLevel` is L2.
+
+[For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/#data-movement-and-conversion-instructions-prefetch-prefetchu)
+"""
+function prefetch(
+    addr::Value; cacheLevel, uniform=nothing, evictPriority=nothing, location=Location()
+)
+    op_ty_results = IR.Type[]
+    operands = Value[addr,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[namedattribute("cacheLevel", cacheLevel),]
+    !isnothing(uniform) && push!(attributes, namedattribute("uniform", uniform))
+    !isnothing(evictPriority) &&
+        push!(attributes, namedattribute("evictPriority", evictPriority))
+
+    return create_operation(
+        "nvvm.prefetch",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
 function prefetch_tensormap(
     tmaDescriptor::Value, predicate=nothing::Union{Nothing,Value}; location=Location()
 )
@@ -3608,7 +3705,8 @@ The unit attribute `pack` can be used to pack two 16-bit
 elements from adjacent columns into a single 32-bit element during the load.
 
 The following table describes the size of the vector for various combinations
-of `num` and `shape` attributes
+of `num` and `shape` attributes:
+```
 |=====================================================================|
 | num/shape      |     16x32bx2/16x64b/32x32b |  16x128b   | 16x256b  |
 |=====================================================================|
@@ -3621,6 +3719,7 @@ of `num` and `shape` attributes
 | x64            |          64                |    128     |    NA    |
 | x128           |          128               |    NA      |    NA    |
 |=====================================================================|
+```
 
 # Example
 ```mlir
@@ -3667,6 +3766,7 @@ for tcgen05.mma. This descriptor is a 64-bit value which describes the
 properties of multiplicand matrix in shared memory including its location
 in the shared memory of the current CTA.
 
+```
 +-----------+------+------------------------------------------------------+
 | Bit-field | Size | Description                                          |
 +-----------+------+------------------------------------------------------+
@@ -3689,6 +3789,7 @@ in the shared memory of the current CTA.
 |           |      |   6: 32-Byte swizzling                               |
 |           |      |   (Values 3, 5 and 7 are invalid)                    |
 +-----------+------+------------------------------------------------------+    
+```
 
 # Example
 ```mlir
@@ -3813,7 +3914,8 @@ The unit attribute `unpack` can be used to unpack a 32-bit element
 in the register into two 16-bit elements and store them in adjacent columns.
 
 The following table describes the size of the vector for various combinations
-of `num` and `shape` attributes
+of `num` and `shape` attributes:
+```
 |=====================================================================|
 | num/shape      |     16x32bx2/16x64b/32x32b |  16x128b   | 16x256b  |
 |=====================================================================|
@@ -3826,6 +3928,7 @@ of `num` and `shape` attributes
 | x64            |          64                |    128     |    NA    |
 | x128           |          128               |    NA      |    NA    |
 |=====================================================================|
+```
 
 # Example
 ```mlir

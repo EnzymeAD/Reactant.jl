@@ -3,7 +3,7 @@ module ReactantCore
 using ExpressionExplorer: ExpressionExplorer
 using MacroTools: MacroTools
 
-export @trace, within_compile, MissingTracedValue
+export @trace, within_compile, MissingTracedValue, promote_to_traced
 
 # Traits
 function is_traced((@nospecialize x::T), seen=Base.IdSet()) where {T}
@@ -33,6 +33,10 @@ Base.zero(::MissingTracedValue) = MissingTracedValue()
 const SPECIAL_SYMBOLS = [
     :(:), :nothing, :missing, :Inf, :Inf16, :Inf32, :Inf64, :Base, :Core
 ]
+
+# Function definitions needed to be defined for loop tracing
+# Defined in TracedUtils.jl
+function promote_to_traced end
 
 """
     within_compile()
@@ -322,18 +326,9 @@ function trace_for(expr; track_numbers, checkpointing, mincut)
         $bounds_defs
 
         if $(within_compile)()
-            $start_sym = Reactant.TracedUtils.promote_to(
-                Reactant.TracedRNumber{Reactant.unwrapped_eltype(typeof($start_sym))},
-                $start_sym,
-            )
-            $limit_sym = Reactant.TracedUtils.promote_to(
-                Reactant.TracedRNumber{Reactant.unwrapped_eltype(typeof($limit_sym))},
-                $limit_sym,
-            )
-            $step_sym = Reactant.TracedUtils.promote_to(
-                Reactant.TracedRNumber{Reactant.unwrapped_eltype(typeof($step_sym))},
-                $step_sym,
-            )
+            $start_sym = $(ReactantCore.promote_to_traced)($start_sym)
+            $limit_sym = $(ReactantCore.promote_to_traced)($limit_sym)
+            $step_sym = $(ReactantCore.promote_to_traced)($step_sym)
         end
 
         local $counter = zero($start_sym)
