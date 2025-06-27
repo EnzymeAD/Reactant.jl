@@ -292,24 +292,30 @@ end
 
 Gathers elements from `source` using `indices`.
 
-Given a shape `N0 x N1 x ...`, `output[i0, i1, ...]` is given by
-`input[j0, j1, ...]` where `jn = indices[i0, i1, ...] mod Ni` for
-`n = dimension` and `jn = in` otherwise.
+The specified `dimensions` of `source` are collapsed together and indexed by
+`indices`.
 
-Similar to `np.take_along_axis`, except that OOB indices wrap.
+Given a shape `N0 x N1 x ...`,  the `output[i0, i1, ...]` is given by
+`collapsed_source[j0, j1, ..., indices[i0, i1, ...] mod M]` where
+- `collapsed_source` is the result of collapsing `dimensions` of `source`
+  into a new trailing dimension of size `M`.
+- `jk` is the subsequence of `in` for `n` not in `dimensions`.
+
+When a single dimension is specified, this is similar to
+`np.take_along_axis`.
 """
 function dynamic_gather(
     source::Value,
     indices::Value;
     output=nothing::Union{Nothing,IR.Type},
-    dimension,
+    dimensions,
     location=Location(),
 )
     op_ty_results = IR.Type[]
     operands = Value[source, indices]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("dimension", dimension),]
+    attributes = NamedAttribute[namedattribute("dimensions", dimensions),]
     !isnothing(output) && push!(op_ty_results, output)
 
     return create_operation(
@@ -391,6 +397,36 @@ function enqueue_dma(
 
     return create_operation(
         "tpu.enqueue_dma",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+function enqueue_indirect_dma(
+    source::Value,
+    target::Value,
+    offsets::Value,
+    semaphore::Value;
+    add=nothing,
+    offset_filter=nothing,
+    location=Location(),
+)
+    op_ty_results = IR.Type[]
+    operands = Value[source, target, offsets, semaphore]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+    !isnothing(add) && push!(attributes, namedattribute("add", add))
+    !isnothing(offset_filter) &&
+        push!(attributes, namedattribute("offset_filter", offset_filter))
+
+    return create_operation(
+        "tpu.enqueue_indirect_dma",
         location;
         operands,
         owned_regions,
@@ -518,13 +554,31 @@ function iteration_bound(; result=nothing::Union{Nothing,IR.Type}, dim, location
     )
 end
 
-function iota(; output::IR.Type, dimension=nothing, location=Location())
+"""
+`iota`
+
+Creates a vector that with values that start at 0 and increase along a
+dimension resulting from collapsing the given `dimensions` together in
+row-major order.
+
+# Example
+```
+tpu.iota {dimensions = array<i32: 2, 0>} : vector<4x3x2xi16>
+```
+This produces a vector with the following values:
+```
+[[[0, 4], [0, 4], [0, 4]]
+ [[1, 5], [1, 5], [1, 5]]
+ [[2, 6], [2, 6], [2, 6]]
+ [[3, 7], [3, 7], [3, 7]]]
+```
+"""
+function iota(; output::IR.Type, dimensions, location=Location())
     op_ty_results = IR.Type[output,]
     operands = Value[]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[]
-    !isnothing(dimension) && push!(attributes, namedattribute("dimension", dimension))
+    attributes = NamedAttribute[namedattribute("dimensions", dimensions),]
 
     return create_operation(
         "tpu.iota",
@@ -1428,12 +1482,33 @@ function vector_store(
     )
 end
 
-function wait_dma2(semaphore::Value, src::Value, dst::Value; location=Location())
+function wait_dma2(
+    semaphore::Value,
+    src::Value,
+    dst::Value,
+    device_id=nothing::Union{Nothing,Value};
+    core_id=nothing::Union{Nothing,Value},
+    location=Location(),
+)
     op_ty_results = IR.Type[]
     operands = Value[semaphore, src, dst]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
+    !isnothing(device_id) && push!(operands, device_id)
+    !isnothing(core_id) && push!(operands, core_id)
+    push!(attributes, operandsegmentsizes([
+        1,
+        1,
+        1,
+        if (device_id == nothing)
+            0
+        elseif 1(core_id == nothing)
+            0
+        else
+            1
+        end,
+    ]))
 
     return create_operation(
         "tpu.wait_dma2",

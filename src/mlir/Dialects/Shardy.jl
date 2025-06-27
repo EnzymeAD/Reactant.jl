@@ -436,7 +436,6 @@ i.e. fully replicated.
 - The manual axes must come before any free axes in each dim sharding.
 - The manual axes cannot introduce padding. Namely, the dimension size must be divisible by the corresponding manual axes size.
 - The global and local shapes of the op regions arguments/results must match.
-- No manual axes are split.
 """
 function manual_computation(
     tensors::Vector{Value};
