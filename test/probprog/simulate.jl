@@ -19,12 +19,12 @@ end
         σ = Reactant.ConcreteRNumber(1.0)
 
         before = @code_hlo optimize = false ProbProg.simulate_internal(
-            model, seed, μ, σ, shape; trace = ProbProg.ProbProgTrace()
+            model, seed, μ, σ, shape; trace=ProbProg.ProbProgTrace()
         )
         @test contains(repr(before), "enzyme.simulate")
 
         after = @code_hlo optimize = :probprog ProbProg.simulate_internal(
-            model, seed, μ, σ, shape; trace = ProbProg.ProbProgTrace()
+            model, seed, μ, σ, shape; trace=ProbProg.ProbProgTrace()
         )
         @test !contains(repr(after), "enzyme.simulate")
     end
