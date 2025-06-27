@@ -580,7 +580,6 @@ function call(
     var_callee_type=nothing,
     callee=nothing,
     fastmathFlags=nothing,
-    branch_weights=nothing,
     CConv=nothing,
     TailCallKind=nothing,
     memory_effects=nothing,
@@ -615,8 +614,6 @@ function call(
     !isnothing(callee) && push!(attributes, namedattribute("callee", callee))
     !isnothing(fastmathFlags) &&
         push!(attributes, namedattribute("fastmathFlags", fastmathFlags))
-    !isnothing(branch_weights) &&
-        push!(attributes, namedattribute("branch_weights", branch_weights))
     !isnothing(CConv) && push!(attributes, namedattribute("CConv", CConv))
     !isnothing(TailCallKind) &&
         push!(attributes, namedattribute("TailCallKind", TailCallKind))
@@ -1854,6 +1851,8 @@ function func(;
     frame_pointer=nothing,
     target_cpu=nothing,
     tune_cpu=nothing,
+    reciprocal_estimates=nothing,
+    prefer_vector_width=nothing,
     target_features=nothing,
     unsafe_fp_math=nothing,
     no_infs_fp_math=nothing,
@@ -1927,6 +1926,10 @@ function func(;
         push!(attributes, namedattribute("frame_pointer", frame_pointer))
     !isnothing(target_cpu) && push!(attributes, namedattribute("target_cpu", target_cpu))
     !isnothing(tune_cpu) && push!(attributes, namedattribute("tune_cpu", tune_cpu))
+    !isnothing(reciprocal_estimates) &&
+        push!(attributes, namedattribute("reciprocal_estimates", reciprocal_estimates))
+    !isnothing(prefer_vector_width) &&
+        push!(attributes, namedattribute("prefer_vector_width", prefer_vector_width))
     !isnothing(target_features) &&
         push!(attributes, namedattribute("target_features", target_features))
     !isnothing(unsafe_fp_math) &&

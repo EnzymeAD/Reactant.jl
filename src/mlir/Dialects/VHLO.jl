@@ -2311,6 +2311,38 @@ function recv_v1(
     )
 end
 
+function recv_v2(
+    token::Value;
+    results::Vector{IR.Type},
+    channel_id,
+    channel_type,
+    is_host_transfer,
+    source_target_pairs,
+    location=Location(),
+)
+    op_ty_results = IR.Type[results...,]
+    operands = Value[token,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[
+        namedattribute("channel_id", channel_id),
+        namedattribute("channel_type", channel_type),
+        namedattribute("is_host_transfer", is_host_transfer),
+        namedattribute("source_target_pairs", source_target_pairs),
+    ]
+
+    return create_operation(
+        "vhlo.recv_v2",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
 function reduce_v1(
     inputs::Vector{Value},
     init_values::Vector{Value};
@@ -2805,6 +2837,39 @@ function send_v1(
 
     return create_operation(
         "vhlo.send_v1",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+function send_v2(
+    inputs::Vector{Value},
+    token::Value;
+    result::IR.Type,
+    channel_id,
+    channel_type,
+    is_host_transfer,
+    source_target_pairs,
+    location=Location(),
+)
+    op_ty_results = IR.Type[result,]
+    operands = Value[inputs..., token]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[
+        namedattribute("channel_id", channel_id),
+        namedattribute("channel_type", channel_type),
+        namedattribute("is_host_transfer", is_host_transfer),
+        namedattribute("source_target_pairs", source_target_pairs),
+    ]
+
+    return create_operation(
+        "vhlo.send_v2",
         location;
         operands,
         owned_regions,
