@@ -10,7 +10,7 @@ jobs:
     name: Formatting Bazel files check
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
 
     - name: Setup buildifier
       uses: jbajic/setup-buildifier@v1
