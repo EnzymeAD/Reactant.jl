@@ -43,7 +43,7 @@ function __init__()
 
     try
         tfptr[] = pyimport("tensorflow")
-        tfptr[].config.set_visible_devices(pylist(), device_type="GPU")
+        tfptr[].config.set_visible_devices(pylist(); device_type="GPU")
         tf2xlaptr[] = pyimport("tensorflow.compiler.tf2xla.python.xla")
         SAVED_MODEL_EXPORT_SUPPORTED[] = true
     catch err
@@ -55,5 +55,6 @@ function __init__()
 end
 
 include("pycall.jl")
+include("saved_model.jl")
 
 end

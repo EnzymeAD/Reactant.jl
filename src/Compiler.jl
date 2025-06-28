@@ -2449,11 +2449,16 @@ Compile the function `f` with arguments `args` and return the compiled function.
 
 $(SYNC_DOCS)
 $(COMMON_COMPILE_OPTIONS_DOCS)
+  - `serializable`: If `true`, the compiled function will be serializable. This is needed
+    for saving the compiled function to disk and loading it later. Defaults to `false`.
 
 See also [`@jit`](@ref), [`@code_hlo`](@ref), [`@code_mhlo`](@ref), [`@code_xla`](@ref).
 """
 macro compile(args...)
-    default_options = merge(get_common_compile_options(), Dict{Symbol,Any}(:sync => false))
+    default_options = merge(
+        get_common_compile_options(),
+        Dict{Symbol,Any}(:sync => false, :serializable => false),
+    )
     return esc(first(compile_call_expr(__module__, compile, default_options, args...)))
 end
 
@@ -3413,7 +3418,7 @@ function compile_xla(f, args; client=nothing, serializable::Bool=false, kwargs..
         # XLA.compile mutates the module, for serialization we need to keep a copy
         if serializable
             iobuffer = IOBuffer()
-            show(IOContext(iobuffer, :debug => debug), mod)
+            show(IOContext(iobuffer, :debug => true), mod)
             module_string = String(take!(iobuffer))
         else
             module_string = ""
