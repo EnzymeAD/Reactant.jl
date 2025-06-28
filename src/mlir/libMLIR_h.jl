@@ -10507,6 +10507,93 @@ function stablehloResultAccuracyAttrGetMode(attr)
     @ccall mlir_c.stablehloResultAccuracyAttrGetMode(attr::MlirAttribute)::MlirAttribute
 end
 
+function mlirGetDialectHandle__stablehlo__()
+    @ccall mlir_c.mlirGetDialectHandle__stablehlo__()::MlirDialectHandle
+end
+
+function stablehloGetApiVersion()
+    @ccall mlir_c.stablehloGetApiVersion()::Cint
+end
+
+@cenum MlirStablehloCompatibilityRequirement::UInt32 begin
+    NONE = 0x0000000000000000
+    WEEK_4 = 0x0000000000000001
+    WEEK_12 = 0x0000000000000002
+    MAX = 0x0000000000000003
+end
+
+function stablehloVersionFromCompatibilityRequirement(requirement, callback, userData)
+    @ccall mlir_c.stablehloVersionFromCompatibilityRequirement(
+        requirement::MlirStablehloCompatibilityRequirement,
+        callback::MlirStringCallback,
+        userData::Ptr{Cvoid},
+    )::Cvoid
+end
+
+function stablehloGetCurrentVersion(callback, userData)
+    @ccall mlir_c.stablehloGetCurrentVersion(
+        callback::MlirStringCallback, userData::Ptr{Cvoid}
+    )::Cvoid
+end
+
+function stablehloGetMinimumVersion(callback, userData)
+    @ccall mlir_c.stablehloGetMinimumVersion(
+        callback::MlirStringCallback, userData::Ptr{Cvoid}
+    )::Cvoid
+end
+
+function stablehloGetSmallerVersion(version1, version2, callback, userData)
+    @ccall mlir_c.stablehloGetSmallerVersion(
+        version1::MlirStringRef,
+        version2::MlirStringRef,
+        callback::MlirStringCallback,
+        userData::Ptr{Cvoid},
+    )::MlirLogicalResult
+end
+
+function stablehloSerializePortableArtifactFromStringRef(
+    moduleStr, targetVersion, callback, userData
+)
+    @ccall mlir_c.stablehloSerializePortableArtifactFromStringRef(
+        moduleStr::MlirStringRef,
+        targetVersion::MlirStringRef,
+        callback::MlirStringCallback,
+        userData::Ptr{Cvoid},
+    )::MlirLogicalResult
+end
+
+function stablehloSerializePortableArtifactFromModule(
+    moduleStr, targetVersion, callback, userData, allowOtherDialects
+)
+    @ccall mlir_c.stablehloSerializePortableArtifactFromModule(
+        moduleStr::MlirModule,
+        targetVersion::MlirStringRef,
+        callback::MlirStringCallback,
+        userData::Ptr{Cvoid},
+        allowOtherDialects::Bool,
+    )::MlirLogicalResult
+end
+
+function stablehloDeserializePortableArtifact(artifactStr, callback, userData)
+    @ccall mlir_c.stablehloDeserializePortableArtifact(
+        artifactStr::MlirStringRef, callback::MlirStringCallback, userData::Ptr{Cvoid}
+    )::MlirLogicalResult
+end
+
+function stablehloDeserializePortableArtifactNoError(artifactStr, ctx)
+    @ccall mlir_c.stablehloDeserializePortableArtifactNoError(
+        artifactStr::MlirStringRef, ctx::MlirContext
+    )::MlirModule
+end
+
+function stablehloTokenTypeGet(ctx)
+    @ccall mlir_c.stablehloTokenTypeGet(ctx::MlirContext)::MlirType
+end
+
+function stablehloTypeIsAToken(type)
+    @ccall mlir_c.stablehloTypeIsAToken(type::MlirType)::Bool
+end
+
 function sdyAttributeIsAMeshAxisAttr(attr)
     @ccall mlir_c.sdyAttributeIsAMeshAxisAttr(attr::MlirAttribute)::Bool
 end
