@@ -1,3 +1,4 @@
 [pip.deps]
 jax = ">= 0.6"
 tensorflow = ">= 2.17"
+numpy = ">= 2"

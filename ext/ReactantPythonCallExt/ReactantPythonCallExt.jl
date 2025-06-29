@@ -10,6 +10,7 @@ const JAX_TRACING_SUPPORTED = Ref{Bool}(false)
 
 const tfptr = Ref{Py}()
 const tf2xlaptr = Ref{Py}()
+const npptr = Ref{Py}()
 
 const SAVED_MODEL_EXPORT_SUPPORTED = Ref{Bool}(false)
 
@@ -26,9 +27,9 @@ const NUMPY_SIMPLE_TYPES = Dict(
     Float16 => :float16,
     Float32 => :float32,
     Float64 => :float64,
-    ComplexF16 => :complex32,
-    ComplexF32 => :complex64,
-    ComplexF64 => :complex128,
+    ComplexF16 => :complex16,
+    ComplexF32 => :complex32,
+    ComplexF64 => :complex64,
 )
 
 function __init__()
@@ -45,6 +46,7 @@ function __init__()
         tfptr[] = pyimport("tensorflow")
         tfptr[].config.set_visible_devices(pylist(); device_type="GPU")
         tf2xlaptr[] = pyimport("tensorflow.compiler.tf2xla.python.xla")
+        npptr[] = pyimport("numpy")
         SAVED_MODEL_EXPORT_SUPPORTED[] = true
     catch err
         @warn "Failed to import tensorflow. Exporting Reactant compiled functions as \
