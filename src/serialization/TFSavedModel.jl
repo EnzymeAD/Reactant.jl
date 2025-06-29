@@ -50,8 +50,8 @@ function export_as_saved_model(
     thunk::Compiler.Thunk,
     saved_model_path::String,
     target_version::VersionNumber,
-    input_locations::Vector,
-    state_dict::Dict,
+    input_locations::Vector=[],
+    state_dict::Dict=Dict(),
 )
     isempty(thunk.module_string) && error(
         "To export a thunk, ensure that it has been compiled with `serializable=true`."
@@ -70,16 +70,14 @@ function export_as_saved_model(
 
     input_signature = [
         VariableSignature(
-            reverse(collect(Int64, size(MLIR.IR.input(ftype, i)))),
-            # collect(Int64, size(MLIR.IR.input(ftype, i))),
+            collect(Int64, size(MLIR.IR.input(ftype, i))),
             NUMPY_SIMPLE_TYPES[MLIR.IR.julia_type(eltype(MLIR.IR.input(ftype, i)))],
         ) for i in 1:MLIR.IR.ninputs(ftype)
     ]
 
     output_signature = [
         VariableSignature(
-            reverse(collect(Int64, size(MLIR.IR.result(ftype, i)))),
-            # collect(Int64, size(MLIR.IR.result(ftype, i))),
+            collect(Int64, size(MLIR.IR.result(ftype, i))),
             NUMPY_SIMPLE_TYPES[MLIR.IR.julia_type(eltype(MLIR.IR.result(ftype, i)))],
         ) for i in 1:MLIR.IR.nresults(ftype)
     ]
@@ -87,6 +85,10 @@ function export_as_saved_model(
     if isempty(input_locations)
         input_locations = [InputArgument(i) for i in 1:length(input_signature)]
     end
+
+    @assert length(input_locations) == length(input_signature) "The number of input \
+                                                                locations must match the \
+                                                                number of input signatures."
 
     c_print_callback = @cfunction(
         MLIR.IR.print_callback, Cvoid, (MLIR.API.MlirStringRef, Any)
