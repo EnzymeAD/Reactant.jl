@@ -6,7 +6,8 @@ function PythonCall.pycall(f::Py, arg0::TracedRArray, argNs::TracedRArray...; kw
 
     inputs = map((arg0, argNs...)) do arg
         jax.ShapeDtypeStruct(
-            size(arg), jnp.dtype(string(NUMPY_SIMPLE_TYPES[Reactant.unwrapped_eltype(arg)]))
+            size(arg),
+            jnp.dtype(string(NUMPY_SIMPLE_TYPES[Reactant.unwrapped_eltype(arg)])),
         )
     end
 
