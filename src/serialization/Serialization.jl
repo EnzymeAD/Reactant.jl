@@ -7,6 +7,8 @@ module Serialization
 
 using ..Reactant: Reactant, MLIR
 
+serialization_supported(::Val) = false
+
 include("TFSavedModel.jl")
 
 end
