@@ -189,6 +189,7 @@ include("Tracing.jl")
 include("Compiler.jl")
 
 include("Overlay.jl")
+include("ProbProg.jl")
 
 using .Compiler: @compile, @code_hlo, @code_mhlo, @jit, @code_xla, traced_getfield, compile
 export ConcreteRArray,

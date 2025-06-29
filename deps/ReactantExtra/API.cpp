@@ -353,6 +353,20 @@ enzymeActivityAttrGet(MlirContext ctx, int32_t val) {
                                               (mlir::enzyme::Activity)val));
 }
 
+extern "C" MLIR_CAPI_EXPORTED MlirAttribute enzymeConstraintAttrGet(
+    MlirContext ctx, uint64_t symbol, MlirAttribute values) {
+  mlir::Attribute vals = unwrap(values);
+  auto arr = llvm::dyn_cast<mlir::ArrayAttr>(vals);
+  if (!arr) {
+    ReactantThrowError(
+        "enzymeConstraintAttrGet: `values` must be an ArrayAttr");
+    return MlirAttribute{nullptr};
+  }
+  mlir::Attribute attr =
+      mlir::enzyme::ConstraintAttr::get(unwrap(ctx), symbol, arr);
+  return wrap(attr);
+}
+
 // Create profiler session and start profiling
 extern "C" tsl::ProfilerSession *
 CreateProfilerSession(uint32_t device_tracer_level,
