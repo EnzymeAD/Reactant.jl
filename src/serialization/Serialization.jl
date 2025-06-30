@@ -103,11 +103,7 @@ function export_as_tf_saved_model(
     end
 
     return TFSavedModel.export_as_saved_model(
-        thunk,
-        saved_model_path,
-        target_version,
-        _input_locations,
-        state_dict,
+        thunk, saved_model_path, target_version, _input_locations, state_dict
     )
 end
 
