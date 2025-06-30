@@ -519,6 +519,34 @@ function rotate(
     )
 end
 
+function linalg_svd(
+    input::Value;
+    U::IR.Type,
+    S::IR.Type,
+    Vt::IR.Type,
+    info::IR.Type,
+    full=nothing,
+    location=Location(),
+)
+    op_ty_results = IR.Type[U, S, Vt, info]
+    operands = Value[input,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+    !isnothing(full) && push!(attributes, namedattribute("full", full))
+
+    return create_operation(
+        "enzymexla.linalg.svd",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
 function stream2token(source::Value; result::IR.Type, location=Location())
     op_ty_results = IR.Type[result,]
     operands = Value[source,]

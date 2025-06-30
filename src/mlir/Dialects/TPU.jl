@@ -456,6 +456,25 @@ function erase_memref_layout(operand::Value; result::IR.Type, location=Location(
     )
 end
 
+function extf(in::Value; out::IR.Type, location=Location())
+    op_ty_results = IR.Type[out,]
+    operands = Value[in,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+
+    return create_operation(
+        "tpu.extf",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
 function fptosi(input::Value; output::IR.Type, rounding_mode, location=Location())
     op_ty_results = IR.Type[output,]
     operands = Value[input,]
@@ -1372,6 +1391,25 @@ function transpose(vector::Value; result::IR.Type, permutation, location=Locatio
 
     return create_operation(
         "tpu.transpose",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+function truncf(in::Value; out::IR.Type, rounding_mode, location=Location())
+    op_ty_results = IR.Type[out,]
+    operands = Value[in,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[namedattribute("rounding_mode", rounding_mode),]
+
+    return create_operation(
+        "tpu.truncf",
         location;
         operands,
         owned_regions,
