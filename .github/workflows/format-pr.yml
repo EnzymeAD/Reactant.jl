@@ -35,8 +35,8 @@ jobs:
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           commit-message: Format code
-          title: 'Format code of branch "main"'
-          branch: format-main
+          title: 'Format Julia code of branch "main"'
+          branch: format-main-julia
           delete-branch: true
           labels: format
           author: enzyme-ci-bot[bot] <78882869+enzyme-ci-bot[bot]@users.noreply.github.com>
