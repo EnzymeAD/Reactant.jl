@@ -53,9 +53,6 @@ hedron_compile_commands_setup_transitive_transitive_transitive()
 load("@enzyme_ad//:workspace.bzl", "ENZYME_COMMIT", "ENZYME_SHA256", "JAX_COMMIT", "JAX_SHA256", "XLA_PATCHES")
 
 XLA_PATCHES = XLA_PATCHES + [
-"""
-sed -i.bak0 "/cupti_driver_cbid/d" xla/backends/profiler/gpu/cupti_tracer.cc
-""",
     """
 sed -i.bak0 "s/patch_cmds = \\[/patch_cmds = \\[\\\"find . -type f -name config.bzl -exec sed -i.bak0 's\\/HAVE_LINK_H=1\\/HAVE_LINK_H=0\\/g' {} +\\\",/g" third_party/llvm/workspace.bzl
 """,
