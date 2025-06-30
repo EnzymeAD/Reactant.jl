@@ -95,6 +95,7 @@ export default defineConfig({
         items: [
           { text: "Core Reactant API", link: "/api/api" },
           { text: "Sharding", link: "/api/sharding" },
+          { text: "Serialization", link: "/api/serialization" },
           { text: "Ops", link: "/api/ops" },
           { text: "Configuration", link: "/api/config" },
           {
@@ -169,6 +170,7 @@ export default defineConfig({
             link: "/api/api",
           },
           { text: "Sharding", link: "/api/sharding" },
+          { text: "Serialization", link: "/api/serialization" },
           { text: "Ops", link: "/api/ops" },
           { text: "Configuration", link: "/api/config" },
           {

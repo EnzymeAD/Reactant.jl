@@ -368,3 +368,18 @@ function create_operation_at_front(args...; kwargs...)
     Base.pushfirst!(block(), res)
     return res
 end
+
+function FunctionType(op::Operation)
+    is_function_op = @ccall API.mlir_c.mlirIsFunctionOpInterface(
+        op::API.MlirOperation
+    )::Bool
+    if is_function_op
+        return Type(
+            @ccall API.mlir_c.mlirGetFunctionTypeFromOperation(
+                op::API.MlirOperation
+            )::API.MlirType
+        )
+    else
+        throw("operation is not a function operation")
+    end
+end
