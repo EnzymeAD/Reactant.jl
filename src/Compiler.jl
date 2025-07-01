@@ -1447,7 +1447,13 @@ function raising!(f, is_raising::Bool)
 end
 
 function get_optimize_comms_passes(options::Bool)
-    options || return String[]
+    if options
+       return [
+               "enzyme-hlo-generate-td{patterns=lower_rotate;lower_wrap;lower_extend}",
+               "transform-interpreter",
+               "enzyme-hlo-remove-transform",
+           ]
+    end
     return get_optimize_comms_passes(OptimizeCommunicationOptions())
 end
 
