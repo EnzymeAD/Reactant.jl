@@ -53,13 +53,13 @@ hedron_compile_commands_setup_transitive_transitive_transitive()
 load("@enzyme_ad//:workspace.bzl", "ENZYME_COMMIT", "ENZYME_SHA256", "JAX_COMMIT", "JAX_SHA256", "XLA_PATCHES")
 
 CUPTI_OLD = [
-"""
+    """
 sed -i.bak0 "s/cupti_driver_cbid/cupti/g" xla/backends/profiler/gpu/cupti_tracer.cc
 """,
-"""
+    """
 sed -i.bak0 "/CUPTI_DRIVER_TRACE_CBID_cuGraphAddNode/d" xla/backends/profiler/gpu/cupti_tracer.cc
 """,
-"""
+    """
 sed -i.bak0 "/CUPTI_DRIVER_TRACE_CBID_cuGraphAddNode_v2/d" xla/backends/profiler/gpu/cupti_tracer.cc
 """,
 ]
@@ -67,7 +67,7 @@ sed -i.bak0 "/CUPTI_DRIVER_TRACE_CBID_cuGraphAddNode_v2/d" xla/backends/profiler
 CUPTI_NEW = []
 
 XLA_PATCHES = XLA_PATCHES + CUPTI_NEW + [
-"""
+    """
 sed -i.bak0 "s/cupti_driver_cbid/cupti/g" xla/backends/profiler/gpu/cupti_tracer.cc
 """,
     """
