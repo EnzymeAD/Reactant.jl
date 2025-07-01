@@ -1,4 +1,4 @@
-name: Format 'main'
+name: Format Julia code on 'main'
 
 on:
   schedule:
@@ -34,7 +34,7 @@ jobs:
         uses: peter-evans/create-pull-request@v7
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-          commit-message: Format code
+          commit-message: Format Julia code
           title: 'Format Julia code of branch "main"'
           branch: format-main-julia
           delete-branch: true

@@ -24,7 +24,7 @@ jobs:
       uses: peter-evans/create-pull-request@v7
       with:
         token: ${{ secrets.GITHUB_TOKEN }}
-        commit-message: Format code
+        commit-message: Format Bazel code
         title: 'Format Bazel code of branch "main"'
         branch: format-main-bazel
         delete-branch: true
