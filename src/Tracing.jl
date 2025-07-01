@@ -1154,12 +1154,14 @@ Base.@nospecializeinfer function make_tracer(
     @nospecialize(path),
     mode;
     @nospecialize(sharding = Sharding.NoSharding()),
+    @nospecialize(device = nothing),
+    @nospecialize(client = nothing),
     kwargs...,
 ) where {T,N}
     if mode == TracedToTypes
         throw("Cannot have ConcretePJRTArray as function call argument.")
     end
-    mode == ArrayToConcrete && return ConcretePJRTArray(prev; sharding)
+    mode == ArrayToConcrete && return ConcretePJRTArray(prev; sharding, device, client)
     mode != ConcreteToTraced && throw("Cannot trace concrete")
     haskey(seen, prev) && return seen[prev]::TracedRArray{T,N}
     res = TracedRArray{T,N}((path,), nothing, size(prev))
@@ -1173,12 +1175,14 @@ Base.@nospecializeinfer function make_tracer(
     @nospecialize(path),
     mode;
     @nospecialize(sharding = Sharding.NoSharding()),
+    @nospecialize(device = nothing),
+    @nospecialize(client = nothing),
     kwargs...,
 ) where {T,N}
     if mode == TracedToTypes
         throw("Cannot have ConcreteIFRTArray as function call argument.")
     end
-    mode == ArrayToConcrete && return ConcreteIFRTArray(prev; sharding)
+    mode == ArrayToConcrete && return ConcreteIFRTArray(prev; sharding, device, client)
     mode != ConcreteToTraced && throw("Cannot trace concrete")
     haskey(seen, prev) && return seen[prev]::TracedRArray{T,N}
     res = TracedRArray{T,N}((path,), nothing, size(prev))
@@ -1192,12 +1196,14 @@ Base.@nospecializeinfer function make_tracer(
     @nospecialize(path),
     mode;
     @nospecialize(sharding = Sharding.NoSharding()),
+    @nospecialize(device = nothing),
+    @nospecialize(client = nothing),
     kwargs...,
 ) where {T}
     if mode == TracedToTypes
         throw("Cannot have ConcretePJRTNumber as function call argument.")
     end
-    mode == ArrayToConcrete && return ConcretePJRTNumber(prev; sharding)
+    mode == ArrayToConcrete && return ConcretePJRTNumber(prev; sharding, device, client)
     mode != ConcreteToTraced && throw("Cannot trace existing trace type")
     haskey(seen, prev) && return seen[prev]::TracedRNumber{T}
     res = TracedRNumber{T}((path,), nothing)
@@ -1211,12 +1217,14 @@ Base.@nospecializeinfer function make_tracer(
     @nospecialize(path),
     mode;
     @nospecialize(sharding = Sharding.NoSharding()),
+    @nospecialize(device = nothing),
+    @nospecialize(client = nothing),
     kwargs...,
 ) where {T}
     if mode == TracedToTypes
         throw("Cannot have ConcreteIFRTNumber as function call argument.")
     end
-    mode == ArrayToConcrete && return ConcreteIFRTNumber(prev; sharding)
+    mode == ArrayToConcrete && return ConcreteIFRTNumber(prev; sharding, device, client)
     mode != ConcreteToTraced && throw("Cannot trace existing trace type")
     haskey(seen, prev) && return seen[prev]::TracedRNumber{T}
     res = TracedRNumber{T}((path,), nothing)
@@ -1511,6 +1519,8 @@ Base.@nospecializeinfer function make_tracer(
     @nospecialize(track_numbers::Type = Union{}),
     @nospecialize(sharding = Sharding.NoSharding()),
     @nospecialize(runtime = nothing),
+    @nospecialize(device = nothing),
+    @nospecialize(client = nothing),
     kwargs...,
 )
     RT = Core.Typeof(prev)
@@ -1527,9 +1537,9 @@ Base.@nospecializeinfer function make_tracer(
     if eltype(RT) <: ReactantPrimitive
         if mode == ArrayToConcrete
             runtime isa Val{:PJRT} &&
-                (return seen[prev] = ConcretePJRTArray(prev; sharding))
+                (return seen[prev] = ConcretePJRTArray(prev; sharding, device, client))
             runtime isa Val{:IFRT} &&
-                (return seen[prev] = ConcreteIFRTArray(prev; sharding))
+                (return seen[prev] = ConcreteIFRTArray(prev; sharding, device, client))
             error("Unsupported runtime $runtime")
         elseif mode == TracedToTypes
             # Original array can get mutated so we store a copy:
@@ -1543,7 +1553,16 @@ Base.@nospecializeinfer function make_tracer(
             if isassigned(prev, I)
                 pv = prev[I]
                 make_tracer(
-                    seen, pv, path, mode; track_numbers, sharding, runtime, kwargs...
+                    seen,
+                    pv,
+                    path,
+                    mode;
+                    track_numbers,
+                    sharding,
+                    runtime,
+                    device,
+                    client,
+                    kwargs...,
                 )
             end
         end
@@ -1564,6 +1583,8 @@ Base.@nospecializeinfer function make_tracer(
                 track_numbers,
                 sharding=Base.getproperty(sharding, I),
                 runtime,
+                device,
+                client,
                 kwargs...,
             )
             if pv !== nv
@@ -1587,6 +1608,8 @@ Base.@nospecializeinfer function make_tracer(
     @nospecialize(track_numbers::Type = Union{}),
     @nospecialize(sharding = Sharding.NoSharding()),
     @nospecialize(runtime = nothing),
+    @nospecialize(device = nothing),
+    @nospecialize(client = nothing),
     kwargs...,
 ) where {Key,Value}
     RT = Core.Typeof(prev)
@@ -1601,9 +1624,9 @@ Base.@nospecializeinfer function make_tracer(
     if eltype(RT) <: ReactantPrimitive
         if mode == ArrayToConcrete
             runtime isa Val{:PJRT} &&
-                (return seen[prev] = ConcretePJRTArray(prev; sharding))
+                (return seen[prev] = ConcretePJRTArray(prev; sharding, device, client))
             runtime isa Val{:IFRT} &&
-                (return seen[prev] = ConcreteIFRTArray(prev; sharding))
+                (return seen[prev] = ConcreteIFRTArray(prev; sharding, device, client))
             error("Unsupported runtime $runtime")
         elseif mode == TracedToTypes
             # Original array can get mutated so we store a copy:
@@ -1614,8 +1637,30 @@ Base.@nospecializeinfer function make_tracer(
     elseif mode == TracedToTypes
         push!(path, RT)
         for (k, v) in prev
-            make_tracer(seen, k, path, mode; track_numbers, sharding, runtime, kwargs...)
-            make_tracer(seen, v, path, mode; track_numbers, sharding, runtime, kwargs...)
+            make_tracer(
+                seen,
+                k,
+                path,
+                mode;
+                track_numbers,
+                sharding,
+                runtime,
+                device,
+                client,
+                kwargs...,
+            )
+            make_tracer(
+                seen,
+                v,
+                path,
+                mode;
+                track_numbers,
+                sharding,
+                runtime,
+                device,
+                client,
+                kwargs...,
+            )
         end
         return nothing
     end
@@ -1780,20 +1825,32 @@ end
     runtime::Union{Nothing,Val{:IFRT},Val{:PJRT}}=nothing,
     track_numbers::Union{Bool,Type}=false,
     sharding=Sharding.Sharding.NoSharding(),
+    device=nothing,
+    client=nothing,
 )
     runtime === nothing && (runtime = XLA.runtime())
     track_numbers isa Bool && (track_numbers = track_numbers ? Number : Union{})
-    return to_rarray_internal(x, track_numbers, sharding, runtime)
+    return to_rarray_internal(x, track_numbers, sharding, runtime, device, client)
 end
 
 @inline function to_rarray_internal(
     @nospecialize(x),
     @nospecialize(track_numbers::Type),
     @nospecialize(sharding),
-    @nospecialize(runtime)
+    @nospecialize(runtime),
+    @nospecialize(device),
+    @nospecialize(client)
 )
     return make_tracer(
-        OrderedIdDict(), x, (), ArrayToConcrete; track_numbers, sharding, runtime
+        OrderedIdDict(),
+        x,
+        (),
+        ArrayToConcrete;
+        track_numbers,
+        sharding,
+        runtime,
+        device,
+        client,
     )
 end
 
@@ -1802,7 +1859,9 @@ function to_rarray_internal(
     @nospecialize(::TracedRArray),
     @nospecialize(track_numbers::Type),
     @nospecialize(sharding),
-    @nospecialize(runtime)
+    @nospecialize(runtime),
+    @nospecialize(device),
+    @nospecialize(client)
 )
     return error("Cannot convert TracedRArray to ConcreteArray")
 end
@@ -1812,8 +1871,10 @@ end
     @nospecialize(track_numbers::Type),
     @nospecialize(sharding),
     ::Val{:PJRT},
+    @nospecialize(device),
+    @nospecialize(client)
 )
-    return ConcretePJRTArray(x; sharding)
+    return ConcretePJRTArray(x; sharding, device, client)
 end
 
 @inline function to_rarray_internal(
@@ -1821,18 +1882,22 @@ end
     @nospecialize(track_numbers::Type),
     @nospecialize(sharding),
     ::Val{:IFRT},
+    @nospecialize(device),
+    @nospecialize(client)
 )
-    return ConcreteIFRTArray(x; sharding)
+    return ConcreteIFRTArray(x; sharding, device, client)
 end
 
 @inline function to_rarray_internal(
     @nospecialize(x::Array{<:ReactantPrimitive}),
     @nospecialize(track_numbers::Type),
     @nospecialize(sharding),
-    @nospecialize(runtime)
+    @nospecialize(runtime),
+    @nospecialize(device),
+    @nospecialize(client)
 )
-    runtime isa Val{:PJRT} && return ConcretePJRTArray(x; sharding)
-    runtime isa Val{:IFRT} && return ConcreteIFRTArray(x; sharding)
+    runtime isa Val{:PJRT} && return ConcretePJRTArray(x; sharding, device, client)
+    runtime isa Val{:IFRT} && return ConcreteIFRTArray(x; sharding, device, client)
     return error("Unsupported runtime $runtime")
 end
 
@@ -1841,16 +1906,20 @@ end
     @nospecialize(track_numbers::Type),
     @nospecialize(sharding),
     runtime,
+    @nospecialize(device),
+    @nospecialize(client)
 ) where {T<:Number}
     if reactant_primitive(T) !== nothing
         if runtime isa Val{:PJRT}
-            return ConcretePJRTArray(to_reactant_primitive.(x); sharding)
+            return ConcretePJRTArray(to_reactant_primitive.(x); sharding, device, client)
         elseif runtime isa Val{:IFRT}
-            return ConcreteIFRTArray(to_reactant_primitive.(x); sharding)
+            return ConcreteIFRTArray(to_reactant_primitive.(x); sharding, device, client)
         end
         error("Unsupported runtime $runtime")
     end
-    return @invoke to_rarray_internal(x::Any, track_numbers::Type, sharding, runtime)
+    return @invoke to_rarray_internal(
+        x::Any, track_numbers::Type, sharding, runtime, device, client
+    )
 end
 
 @inline function to_rarray_internal(
@@ -1858,8 +1927,10 @@ end
     @nospecialize(track_numbers::Type),
     @nospecialize(sharding),
     ::Val{:PJRT},
+    @nospecialize(device),
+    @nospecialize(client)
 )
-    return ConcretePJRTNumber(x; sharding)
+    return ConcretePJRTNumber(x; sharding, device, client)
 end
 
 @inline function to_rarray_internal(
@@ -1867,8 +1938,10 @@ end
     @nospecialize(track_numbers::Type),
     @nospecialize(sharding),
     ::Val{:IFRT},
+    @nospecialize(device),
+    @nospecialize(client)
 )
-    return ConcreteIFRTNumber(x; sharding)
+    return ConcreteIFRTNumber(x; sharding, device, client)
 end
 
 @inline function to_rarray_internal(
@@ -1876,10 +1949,12 @@ end
     @nospecialize(track_numbers::Type),
     @nospecialize(sharding),
     runtime,
+    @nospecialize(device),
+    @nospecialize(client)
 )
     if typeof(x) <: track_numbers
-        runtime isa Val{:PJRT} && return ConcretePJRTNumber(x; sharding)
-        runtime isa Val{:IFRT} && return ConcreteIFRTNumber(x; sharding)
+        runtime isa Val{:PJRT} && return ConcretePJRTNumber(x; sharding, device, client)
+        runtime isa Val{:IFRT} && return ConcreteIFRTNumber(x; sharding, device, client)
         error("Unsupported runtime $runtime")
     end
     return x
@@ -1890,15 +1965,19 @@ end
     @nospecialize(track_numbers::Type),
     @nospecialize(sharding),
     runtime,
+    @nospecialize(device),
+    @nospecialize(client)
 )
     if reactant_primitive(typeof(x)) !== nothing
         runtime isa Val{:PJRT} &&
-            return ConcretePJRTArray(to_reactant_primitive(x); sharding)
+            return ConcretePJRTArray(to_reactant_primitive(x); sharding, device, client)
         runtime isa Val{:IFRT} &&
-            return ConcreteIFRTArray(to_reactant_primitive(x); sharding)
+            return ConcreteIFRTArray(to_reactant_primitive(x); sharding, device, client)
         error("Unsupported runtime $runtime")
     end
-    return @invoke to_rarray_internal(x::Any, track_numbers::Type, sharding, runtime)
+    return @invoke to_rarray_internal(
+        x::Any, track_numbers::Type, sharding, runtime, device, client
+    )
 end
 
 function Reactant.traced_type_inner(
