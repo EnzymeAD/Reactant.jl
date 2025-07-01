@@ -180,11 +180,13 @@ end
 
 function ConcretePJRTArray(
     data::Array{T,N};
-    client::XLA.PJRT.Client=XLA.default_backend(),
+    client::Union{Nothing,XLA.PJRT.Client}=nothing,
     idx::Union{Int,Nothing}=nothing,
     device::Union{Nothing,XLA.PJRT.Device}=nothing,
     sharding::Sharding.AbstractSharding=Sharding.NoSharding(),
 ) where {T,N}
+    client = client === nothing ? XLA.default_backend() : client
+
     if !Sharding.is_sharded(sharding)
         if device === nothing
             if idx === nothing
@@ -328,11 +330,13 @@ end
 
 function ConcreteIFRTArray(
     data::Array{T,N};
-    client::XLA.IFRT.Client=XLA.default_backend(),
+    client::Union{Nothing,XLA.IFRT.Client}=nothing,
     idx::Union{Int,Nothing}=nothing,
     device::Union{Nothing,XLA.IFRT.Device}=nothing,
     sharding::Sharding.AbstractSharding=Sharding.NoSharding(),
 ) where {T,N}
+    client = client === nothing ? XLA.default_backend() : client
+
     if !Sharding.is_sharded(sharding)
         if device === nothing
             if idx === nothing
@@ -367,11 +371,13 @@ function ConcreteIFRTArray(
     data::Vector{Array{T,N}},
     array_size::Dims{N},
     data_to_addressable_shard::Vector{Vector{Int64}}=[[i] for i in 1:length(data)];
-    client::XLA.IFRT.Client=XLA.default_backend(),
+    client::Union{Nothing,XLA.IFRT.Client}=nothing,
     sharding::Sharding.AbstractSharding,
 ) where {T,N}
     @assert Sharding.is_sharded(sharding)
     @assert length(data) == length(data_to_addressable_shard)
+
+    client = client === nothing ? XLA.default_backend() : client
 
     (; hlo_sharding) = Sharding.HloSharding(sharding, array_size)
     all_devices = XLA.get_device.((client,), sharding.mesh.device_ids)
