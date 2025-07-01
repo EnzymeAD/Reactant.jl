@@ -3340,7 +3340,7 @@ function __resolve_device_and_client(client, seen_args, linear_args, is_sharded)
         if !isempty(devices_list)
             if !allequal(devices_list)
                 msg = "Expected all arguments to be on the same device, got:\n"
-                for (i, device) in enumerate(devices_list)
+                for (i, device) in enumerate(unique(devices_list))
                     msg *= "    Device $(i): $(string(device))\n"
                 end
                 throw(ArgumentError(msg))

@@ -1433,6 +1433,8 @@ Base.@nospecializeinfer function make_tracer(
     @nospecialize(track_numbers::Type = Union{}),
     @nospecialize(sharding = Sharding.NoSharding()),
     @nospecialize(runtime = nothing),
+    @nospecialize(device = nothing),
+    @nospecialize(client = nothing),
     kwargs...,
 )
     if mode == TracedToTypes
@@ -1442,8 +1444,10 @@ Base.@nospecializeinfer function make_tracer(
     RT = Core.Typeof(prev)
     if RT <: track_numbers && mode != TracedSetPath && mode != TracedTrack
         if mode == ArrayToConcrete
-            runtime isa Val{:PJRT} && return ConcretePJRTNumber(prev; sharding)
-            runtime isa Val{:IFRT} && return ConcreteIFRTNumber(prev; sharding)
+            runtime isa Val{:PJRT} &&
+                return ConcretePJRTNumber(prev; sharding, device, client)
+            runtime isa Val{:IFRT} &&
+                return ConcreteIFRTNumber(prev; sharding, device, client)
             error("Unsupported runtime $runtime")
         else
             if mode == TracedTrack || mode == NoStopTracedTrack
