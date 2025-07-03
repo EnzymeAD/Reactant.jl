@@ -1006,6 +1006,28 @@ function typevar_dict(t)
     return d
 end
 
+"""
+    transmute_type(args...; kwargs...)
+
+Return the adapted typed used for tracing.
+
+!!! warning
+    This is the new name for the `traced_type` function, which is deprecated and will be removed on v0.3 release.
+    If you extend it with new methods, transition to this new function instead on the next breaking release.
+"""
+transmute_type(args...; kwargs...) = traced_type(args...; kwargs...)
+
+"""
+    transmute(args...; kwargs...)
+
+Adapt the object to be suitable for tracing, returning a new object if needed.
+
+!!! warning
+    This is the new name for the `make_tracer` function, which is deprecated and will be removed on v0.3 release.
+    If you extend it with new methods, transition to this new function instead on the next breaking release.
+"""
+transmute(args...; kwargs...) = make_tracer(args...; kwargs...)
+
 Base.@assume_effects :total @inline function traced_type(
     T::Type, ::Val{mode}, track_numbers::Type, sharding, runtime
 ) where {mode}
