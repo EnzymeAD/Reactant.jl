@@ -2876,7 +2876,6 @@ end
         args_in_result=:none,
         do_transpose=false,
     )
-    @assert !mlir_fn_res.fnwrapped "Currently we don't support batching closures."
 
     func = mlir_fn_res.f
     @assert MLIR.IR.nregions(func) == 1
