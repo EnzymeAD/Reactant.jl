@@ -1275,7 +1275,7 @@ end
         ],
         [dimension],
         function (a₁, i₁, a₂, i₂)
-            cond = a₁ > a₂
+            cond = a₁ ≥ a₂
             return ifelse(cond, a₁, a₂), ifelse(cond, i₁, i₂)
         end;
         location,
