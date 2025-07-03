@@ -1121,7 +1121,7 @@ Base.@nospecializeinfer function make_tracer_via_immutable_constructor(
         push!(path, RT)
         seen[prev] = VisitedObject(length(seen) + 1)
     end
-    TT = traced_type(RT, Val(mode), track_numbers, sharding, runtime)
+    TT = transmute_type(RT, Val(mode), track_numbers, sharding, runtime)
     @assert !Base.isabstracttype(RT)
     @assert Base.isconcretetype(RT)
     nf = fieldcount(RT)
@@ -1142,7 +1142,7 @@ Base.@nospecializeinfer function make_tracer_via_immutable_constructor(
         if isdefined(prev, i)
             newpath = mode == TracedToTypes ? path : append_path(path, i)
             xi = Base.getfield(prev, i)
-            xi2 = make_tracer(
+            xi2 = transmute(
                 seen,
                 xi,
                 newpath,
@@ -1205,7 +1205,7 @@ Base.@nospecializeinfer function make_tracer_unknown(
         push!(path, RT)
         seen[prev] = VisitedObject(length(seen) + 1)
     end
-    TT = traced_type(RT, Val(mode), track_numbers, sharding, runtime)
+    TT = transmute_type(RT, Val(mode), track_numbers, sharding, runtime)
     @assert !Base.isabstracttype(RT)
     @assert Base.isconcretetype(RT)
     nf = fieldcount(RT)
@@ -1226,7 +1226,7 @@ Base.@nospecializeinfer function make_tracer_unknown(
             if isdefined(prev, i)
                 newpath = mode == TracedToTypes ? path : append_path(path, i)
                 xi = Base.getfield(prev, i)
-                xi2 = make_tracer(
+                xi2 = transmute(
                     seen,
                     xi,
                     newpath,
@@ -1263,7 +1263,7 @@ Base.@nospecializeinfer function make_tracer_unknown(
         if isdefined(prev, i)
             newpath = mode == TracedToTypes ? path : append_path(path, i)
             xi = Base.getfield(prev, i)
-            xi2 = make_tracer(
+            xi2 = transmute(
                 seen,
                 xi,
                 newpath,
@@ -1743,13 +1743,13 @@ Base.@nospecializeinfer function make_tracer(
     Sharding.is_sharded(sharding) && error("Cannot specify sharding for Complex")
     if mode == TracedToTypes
         push!(path, Core.Typeof(prev))
-        make_tracer(seen, prev.re, path, mode; kwargs...)
-        make_tracer(seen, prev.im, path, mode; kwargs...)
+        transmute(seen, prev.re, path, mode; kwargs...)
+        transmute(seen, prev.im, path, mode; kwargs...)
         return nothing
     end
     return Complex(
-        make_tracer(seen, prev.re, append_path(path, :re), mode; kwargs...),
-        make_tracer(seen, prev.im, append_path(path, :im), mode; kwargs...),
+        transmute(seen, prev.re, append_path(path, :re), mode; kwargs...),
+        transmute(seen, prev.im, append_path(path, :im), mode; kwargs...),
     )
 end
 
@@ -1794,7 +1794,7 @@ Base.@nospecializeinfer function make_tracer(
         for I in eachindex(prev)
             if isassigned(prev, I)
                 pv = prev[I]
-                make_tracer(
+                transmute(
                     seen,
                     pv,
                     path,
@@ -1810,14 +1810,14 @@ Base.@nospecializeinfer function make_tracer(
         end
         return nothing
     end
-    TT = traced_type(eltype(RT), Val(mode), track_numbers, sharding, runtime)
+    TT = transmute_type(eltype(RT), Val(mode), track_numbers, sharding, runtime)
     newa = Array{TT,ndims(RT)}(undef, size(prev))
     seen[prev] = newa
     same = true
     for I in eachindex(prev)
         if isassigned(prev, I)
             pv = prev[I]
-            nv = make_tracer(
+            nv = transmute(
                 seen,
                 pv,
                 append_path(path, I),
@@ -1879,7 +1879,7 @@ Base.@nospecializeinfer function make_tracer(
     elseif mode == TracedToTypes
         push!(path, RT)
         for (k, v) in prev
-            make_tracer(
+            transmute(
                 seen,
                 k,
                 path,
@@ -1891,7 +1891,7 @@ Base.@nospecializeinfer function make_tracer(
                 client,
                 kwargs...,
             )
-            make_tracer(
+            transmute(
                 seen,
                 v,
                 path,
@@ -1906,12 +1906,12 @@ Base.@nospecializeinfer function make_tracer(
         end
         return nothing
     end
-    Value2 = traced_type(Value, Val(mode), track_numbers, sharding, runtime)
+    Value2 = transmute_type(Value, Val(mode), track_numbers, sharding, runtime)
     newa = Dict{Key,Value2}()
     seen[prev] = newa
     same = true
     for (k, v) in prev
-        nv = make_tracer(
+        nv = transmute(
             seen,
             v,
             append_path(path, k),
@@ -1945,7 +1945,7 @@ Base.@nospecializeinfer function make_tracer(
     if mode == TracedToTypes
         push!(path, RT)
         for (i, v) in enumerate(prev)
-            make_tracer(
+            transmute(
                 seen, v, path, mode; sharding=Base.getproperty(sharding, i), kwargs...
             )
         end
@@ -1953,7 +1953,7 @@ Base.@nospecializeinfer function make_tracer(
     end
     return (
         (
-            make_tracer(
+            transmute(
                 seen,
                 v,
                 append_path(path, i),
@@ -1982,15 +1982,15 @@ Base.@nospecializeinfer function make_tracer(
     if mode == TracedToTypes
         push!(path, NT)
         for i in 1:length(A)
-            make_tracer(
+            transmute(
                 seen, Base.getfield(prev, i), path, mode; track_numbers, sharding, kwargs...
             )
         end
         return nothing
     end
-    return NamedTuple{A,traced_type(RT, Val(mode), track_numbers, sharding, runtime)}((
+    return NamedTuple{A,transmute_type(RT, Val(mode), track_numbers, sharding, runtime)}((
         (
-            make_tracer(
+            transmute(
                 seen,
                 Base.getfield(prev, i),
                 append_path(path, i),
@@ -2022,7 +2022,7 @@ Base.@nospecializeinfer function make_tracer(
 
     if mode == TracedToTypes
         push!(path, Core.Box)
-        return make_tracer(seen, prev2, path, mode; sharding, kwargs...)
+        return transmute(seen, prev2, path, mode; sharding, kwargs...)
     end
     if mode != NoStopTracedTrack && haskey(seen, prev)
         return seen[prev]
@@ -2033,7 +2033,7 @@ Base.@nospecializeinfer function make_tracer(
     end
     res = Core.Box(prev2)
     seen[prev] = res
-    tr = make_tracer(
+    tr = transmute(
         seen,
         prev2,
         append_path(path, :contents),
@@ -2108,7 +2108,7 @@ end
     @nospecialize(device),
     @nospecialize(client)
 )
-    return make_tracer(
+    return transmute(
         OrderedIdDict(),
         x,
         (),
@@ -2275,12 +2275,14 @@ function make_tracer(
     Sharding.is_sharded(sharding) && error("Cannot specify sharding for UnitRange")
     if mode == TracedToTypes
         push!(path, Core.Typeof(prev))
-        make_tracer(seen, prev.start, path, mode; kwargs...)
-        make_tracer(seen, prev.stop, path, mode; kwargs...)
+        transmute(seen, prev.start, path, mode; kwargs...)
+        transmute(seen, prev.stop, path, mode; kwargs...)
         return nothing
     end
-    newstart = make_tracer(seen, prev.start, append_path(path, :start), mode; kwargs...)
-    newstop = make_tracer(seen, prev.stop, append_path(path, :stop), mode; kwargs...)
+
+    newstart = transmute(seen, prev.start, append_path(path, :start), mode; kwargs...)
+    newstop = transmute(seen, prev.stop, append_path(path, :stop), mode; kwargs...)
+
     if typeof(newstart) == typeof(prev.start) && typeof(newstop) == typeof(prev.stop)
         return prev
     else
@@ -2319,18 +2321,18 @@ function make_tracer(
     Sharding.is_sharded(sharding) && error("Cannot specify sharding for StepRangeLen")
     if mode == TracedToTypes
         push!(path, Core.Typeof(prev))
-        make_tracer(seen, prev.ref, path, mode; sharding, kwargs...)
-        make_tracer(seen, prev.step, path, mode; sharding, kwargs...)
-        make_tracer(seen, prev.len, path, mode; sharding, kwargs...)
-        make_tracer(seen, prev.offset, path, mode; sharding, kwargs...)
+        transmute(seen, prev.ref, path, mode; sharding, kwargs...)
+        transmute(seen, prev.step, path, mode; sharding, kwargs...)
+        transmute(seen, prev.len, path, mode; sharding, kwargs...)
+        transmute(seen, prev.offset, path, mode; sharding, kwargs...)
         return nothing
     end
-    newref = make_tracer(seen, prev.ref, append_path(path, :ref), mode; sharding, kwargs...)
-    newstep = make_tracer(
+    newref = transmute(seen, prev.ref, append_path(path, :ref), mode; sharding, kwargs...)
+    newstep = transmute(
         seen, prev.step, append_path(path, :step), mode; sharding, kwargs...
     )
-    newlen = make_tracer(seen, prev.len, append_path(path, :len), mode; sharding, kwargs...)
-    newoffset = make_tracer(
+    newlen = transmute(seen, prev.len, append_path(path, :len), mode; sharding, kwargs...)
+    newoffset = transmute(
         seen, prev.offset, append_path(path, :offset), mode; sharding, kwargs...
     )
     if typeof(newref) == typeof(prev.ref) &&

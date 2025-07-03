@@ -204,7 +204,7 @@ end
                 ),
                 (Wrapper, Wrapper, Wrapper),
             ]
-                tracedty = traced_type(
+                tracedty = transmute_type(
                     origty,
                     Val(ConcreteToTraced),
                     Union{},
@@ -213,7 +213,7 @@ end
                 )
                 @test tracedty == targetty
 
-                tracedty2 = traced_type(
+                tracedty2 = transmute_type(
                     origty,
                     Val(ConcreteToTraced),
                     ReactantPrimitive,
@@ -229,7 +229,7 @@ end
                 TracedRArray{Float64,2},
                 TracedRArray{Float64,3},
             ]
-                @test_throws Union{ErrorException,String} traced_type(
+                @test_throws Union{ErrorException,String} transmute_type(
                     type,
                     Val(ConcreteToTraced),
                     Union{},
@@ -243,7 +243,7 @@ end
                 x::Vector{Float64}
                 y::Union{Nothing,Node}
             end
-            @test_throws NoFieldMatchError traced_type(
+            @test_throws NoFieldMatchError transmute_type(
                 Node,
                 Val(ArrayToConcrete),
                 Union{},

@@ -2158,7 +2158,7 @@ end
     traced_args = Vector{Any}(undef, N)
 
     for (i, prev) in enumerate(args)
-        @inbounds traced_args[i] = Reactant.make_tracer(
+        @inbounds traced_args[i] = Reactant.transmute(
             seen_args, prev, (), Reactant.NoStopTracedTrack; track_numbers
         )
     end
@@ -2249,14 +2249,14 @@ end
     tb_traced_args = Vector{Any}(undef, N)
     fb_traced_args = Vector{Any}(undef, N)
     for i in 1:N
-        @inbounds tb_traced_args[i] = Reactant.make_tracer(
+        @inbounds tb_traced_args[i] = Reactant.transmute(
             tb_seen_args,
             args[i],
             (true_fn_names[1], i),
             Reactant.TracedSetPath;
             track_numbers,
         )
-        @inbounds fb_traced_args[i] = Reactant.make_tracer(
+        @inbounds fb_traced_args[i] = Reactant.transmute(
             fb_seen_args,
             args[i],
             (false_fn_names[1], i),
@@ -2320,7 +2320,7 @@ end
     end
 
     seen_true_results = Reactant.OrderedIdDict()
-    traced_true_results = Reactant.make_tracer(
+    traced_true_results = Reactant.transmute(
         seen_true_results,
         tb_result,
         (true_fn_names[2],),
@@ -2328,7 +2328,7 @@ end
         track_numbers,
     )
     for (i, arg) in enumerate(tb_traced_args)
-        Reactant.make_tracer(
+        Reactant.transmute(
             seen_true_results,
             arg,
             (true_fn_names[3], i),
@@ -2385,7 +2385,7 @@ end
     end
 
     seen_false_results = Reactant.OrderedIdDict()
-    traced_false_results = Reactant.make_tracer(
+    traced_false_results = Reactant.transmute(
         seen_false_results,
         fb_result,
         (false_fn_names[2],),
@@ -2393,7 +2393,7 @@ end
         track_numbers,
     )
     for (i, arg) in enumerate(fb_traced_args)
-        Reactant.make_tracer(
+        Reactant.transmute(
             seen_false_results,
             arg,
             (false_fn_names[3], i),
@@ -2654,7 +2654,7 @@ end
 @noinline function call(f, args...; location=mlir_stacktrace("call", @__FILE__, @__LINE__))
     seen = Reactant.OrderedIdDict()
     cache_key = []
-    Reactant.make_tracer(seen, (f, args...), cache_key, Reactant.TracedToTypes)
+    Reactant.transmute(seen, (f, args...), cache_key, Reactant.TracedToTypes)
     cache = Reactant.Compiler.callcache()
     if haskey(cache, cache_key)
         # cache lookup:
@@ -2696,7 +2696,7 @@ end
     end
 
     seen_cache = Reactant.OrderedIdDict()
-    Reactant.make_tracer(
+    Reactant.transmute(
         seen_cache,
         fnwrapped ? (f, args) : args,
         (), # we have to insert something here, but we remove it immediately below.
@@ -2721,7 +2721,7 @@ end
     )
 
     seen_results = Reactant.OrderedIdDict()
-    traced_result = Reactant.make_tracer(
+    traced_result = Reactant.transmute(
         seen_results,
         traced_result,
         (), # we have to insert something here, but we remove it immediately below.

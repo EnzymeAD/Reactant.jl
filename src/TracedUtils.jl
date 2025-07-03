@@ -450,7 +450,7 @@ function prepare_mlir_fn_args(
     seen_args0 = OrderedIdDict()
     try
         for i in 1:N
-            @inbounds traced_args[i] = Reactant.make_tracer(
+            @inbounds traced_args[i] = Reactant.transmute(
                 seen_args0, args[i], (argprefix, i), inmode; toscalar, runtime
             )
         end
@@ -642,13 +642,11 @@ function finalize_mlir_fn(
     seen_results = OrderedIdDict()
     MLIR.IR.activate!(fnbody)
     traced_result = try
-        traced_result = Reactant.make_tracer(
-            seen_results, result, (resprefix,), outmode; runtime
-        )
+        traced_result = Reactant.transmute(seen_results, result, (resprefix,), outmode; runtime)
 
         # marks buffers to be donated
         for i in 1:N
-            Reactant.make_tracer(
+            Reactant.transmute(
                 seen_results,
                 traced_args[i],
                 (resargprefix, i),
@@ -1235,7 +1233,7 @@ function elem_apply(f, args::Vararg{Any,Nargs}) where {Nargs}
     end
 
     seen_results = OrderedIdDict()
-    traced2_result = Reactant.make_tracer(
+    traced2_result = Reactant.transmute(
         seen_results, result, (), Reactant.TracedSetPath; tobatch=OutShape
     )
 

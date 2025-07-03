@@ -2457,7 +2457,7 @@ function compile_mlir!(
         end
     end
 
-    concrete_result = make_tracer(
+    concrete_result = transmute(
         OrderedIdDict(), traced_result, ("result",), TracedToConcrete; runtime
     )
 

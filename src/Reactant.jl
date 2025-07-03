@@ -134,6 +134,8 @@ function TracedRArray(data::MLIR.IR.Value)
     return TracedRArray{eltype(MLIR.IR.julia_type(MLIR.IR.type(data)))}(data)
 end
 
+# TODO replace `promote_trace_type` with `promote_transmute_type` on v0.3 release
+promote_transmute_type(a::Type, b::Type) = promote_traced_type(a, b)
 promote_traced_type(a::Type, b::Type) = Base.promote_type(a, b)
 
 aos_to_soa(x::AbstractArray) = x

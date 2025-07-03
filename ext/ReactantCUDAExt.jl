@@ -1026,7 +1026,7 @@ function Reactant.make_tracer(
 )
     x = Base.unsafe_pointer_to_objref(Base.reinterpret(Ptr{Cvoid}, prev.ptr))
     x = x::TracedRArray
-    Reactant.make_tracer(seen, x, path, mode; kwargs...)
+    Reactant.transmute(seen, x, path, mode; kwargs...)
     return prev
 end
 
@@ -1035,7 +1035,7 @@ function Reactant.make_tracer(
 )
     x = Base.unsafe_pointer_to_objref(Base.reinterpret(Ptr{Cvoid}, prev.ptr))
     x = x::TracedRNumber
-    Reactant.make_tracer(seen, x, path, mode; kwargs...)
+    Reactant.transmute(seen, x, path, mode; kwargs...)
     return prev
 end
 
@@ -1101,7 +1101,7 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
     kernelargsym = gensym("kernelarg")
 
     for (i, prev) in enumerate(Any[func.f, args...])
-        Reactant.make_tracer(seen, prev, (kernelargsym, i), Reactant.NoStopTracedTrack)
+        Reactant.transmute(seen, prev, (kernelargsym, i), Reactant.NoStopTracedTrack)
     end
     wrapper_tys = MLIR.IR.Type[]
     for arg in values(seen)
@@ -1420,7 +1420,7 @@ function Reactant.make_tracer(
         end
         error("Unsupported runtime $runtime")
     end
-    TT = Reactant.traced_type(eltype(RT), Val(mode), track_numbers, sharding, runtime)
+    TT = Reactant.transmute_type(eltype(RT), Val(mode), track_numbers, sharding, runtime)
     if TT === eltype(RT)
         return prev
     end
@@ -1430,7 +1430,7 @@ function Reactant.make_tracer(
     for I in eachindex(prev)
         if isassigned(prev, I)
             pv = prev[I]
-            nv = Reactant.make_tracer(
+            nv = Reactant.transmute(
                 seen,
                 pv,
                 append_path(path, I),
