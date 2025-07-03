@@ -1,6 +1,6 @@
 using Reactant
 using Reactant:
-    traced_type,
+    transmute_type,
     TracedRArray,
     TracedRNumber,
     ConcreteToTraced,
@@ -239,7 +239,7 @@ end
                 )
             end
         end
-        @testset "traced_type exceptions" begin
+        @testset "transmute_type exceptions" begin
             struct Node
                 x::Vector{Float64}
                 y::Union{Nothing,Node}
