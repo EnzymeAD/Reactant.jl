@@ -171,10 +171,10 @@ end
     end
 end
 
-@reactant_overlay @noinline function Base.any(f, x::AbstractArray{T}, dims) where {T}
+@reactant_overlay @noinline function Base._any(f, x::AbstractArray{T}, dims) where {T}
     if T <: TracedRNumber && T !== Union{}
         return TracedRArrayOverrides.overloaded_mapreduce(f, |, x; dims)
     else
-        return Base.inferencebarrier(Base.any)(f, x, dims)
+        return Base.inferencebarrier(Base._any)(f, x, dims)
     end
 end
