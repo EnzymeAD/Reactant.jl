@@ -171,9 +171,11 @@ function sample(
 
         # Remove AbstractRNG from `f`'s argument list if present, assuming that
         # logpdf parameters follows `(sample, args...)` convention.
-        logpdf_args = (example_sample,)
+        logpdf_args = nothing
         if !isempty(args) && args[1] isa AbstractRNG
             logpdf_args = (example_sample, Base.tail(args)...)  # TODO: kwargs?
+        else
+            logpdf_args = (example_sample, args...)
         end
 
         logpdf_mlir = invokelatest(
