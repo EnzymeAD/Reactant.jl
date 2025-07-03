@@ -1371,3 +1371,8 @@ end
     @test contains(hlo1, "chlo.conj")
     @test !contains(hlo2, "chlo")
 end
+
+@testset "scalar indexing in any #1434" begin
+    xr = Reactant.to_rarray(ones(4, 4))
+    @test @jit(any(<(0), xr)) == any(<(0), Array(xr))
+end

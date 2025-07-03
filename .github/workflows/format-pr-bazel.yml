@@ -24,9 +24,9 @@ jobs:
       uses: peter-evans/create-pull-request@v7
       with:
         token: ${{ secrets.GITHUB_TOKEN }}
-        commit-message: Format code
-        title: 'Format code of branch "main"'
-        branch: format-main
+        commit-message: Format Bazel code
+        title: 'Format Bazel code of branch "main"'
+        branch: format-main-bazel
         delete-branch: true
         labels: format
         author: enzyme-ci-bot[bot] <78882869+enzyme-ci-bot[bot]@users.noreply.github.com>

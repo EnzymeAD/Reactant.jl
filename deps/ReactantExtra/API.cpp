@@ -270,6 +270,17 @@ extern "C" MlirOperation mlirOperationParse(MlirContext ctx, MlirBlock block,
           .release()};
 }
 
+extern "C" MlirType mlirGetFunctionTypeFromOperation(MlirOperation op) {
+  if (auto funcOp = dyn_cast<mlir::FunctionOpInterface>(unwrap(op))) {
+    return wrap(funcOp.getFunctionType());
+  }
+  ReactantThrowError("Not a function op");
+}
+
+extern "C" bool mlirIsFunctionOpInterface(MlirOperation op) {
+  return llvm::isa<mlir::FunctionOpInterface>(unwrap(op));
+}
+
 // TODO mlirComplexAttrGetnValue
 // TODO extern "C" MlirTypeID mlirComplexAttrGetTypeID(void) { return
 // wrap(complex::NumberAttr::getTypeID()); }
