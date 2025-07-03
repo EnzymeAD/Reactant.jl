@@ -1229,7 +1229,9 @@ end
     # XLA codegen for top.k is extremely sub-optimal. For special cases we can bypass that
     if k isa Integer && k == 1
         values, indices = argmax(x; dimension, location)
-        return (; values, indices)
+        return (;
+            values, indices=add(indices, fill(Int64(1), Tuple(size(indices))); location)
+        )
     end
 
     if dimension != N # chlo.top_k performs the operation along the last dimension
@@ -1281,8 +1283,7 @@ end
     new_shape = collect(Int64, size(x))
     new_shape[dimension] = 1
     return (
-        Ops.reshape(values, new_shape; location),
-        Ops.reshape(indices, new_shape; location)
+        Ops.reshape(values, new_shape; location), Ops.reshape(indices, new_shape; location)
     )
 end
 
