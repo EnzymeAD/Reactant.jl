@@ -118,6 +118,69 @@ function addSubtrace(
     return nothing
 end
 
+function addWeightToTrace(trace_ptr_ptr::Ptr{Ptr{Any}}, weight_ptr::Ptr{Any})
+    trace = unsafe_pointer_to_objref(unsafe_load(trace_ptr_ptr))::ProbProgTrace
+    trace.weight = unsafe_load(Ptr{Float64}(weight_ptr))
+    return nothing
+end
+
+function addRetvalToTrace(
+    trace_ptr_ptr::Ptr{Ptr{Any}},
+    retval_ptr_array::Ptr{Ptr{Any}},
+    num_results_ptr::Ptr{UInt64},
+    ndims_array::Ptr{UInt64},
+    shape_ptr_array::Ptr{Ptr{UInt64}},
+    width_array::Ptr{UInt64},
+)
+    trace = unsafe_pointer_to_objref(unsafe_load(trace_ptr_ptr))::ProbProgTrace
+
+    num_results = unsafe_load(num_results_ptr)
+
+    if num_results == 0
+        return nothing
+    end
+
+    ndims_array = unsafe_wrap(Array, ndims_array, num_results)
+    width_array = unsafe_wrap(Array, width_array, num_results)
+    shape_ptr_array = unsafe_wrap(Array, shape_ptr_array, num_results)
+    retval_ptr_array = unsafe_wrap(Array, retval_ptr_array, num_results)
+
+    vals = Any[]
+    for i in 1:num_results
+        ndims = ndims_array[i]
+        width = width_array[i]
+        shape_ptr = shape_ptr_array[i]
+        retval_ptr = retval_ptr_array[i]
+
+        julia_type = if width == 32
+            Float32
+        elseif width == 64
+            Float64
+        elseif width == 1
+            Bool
+        else
+            nothing
+        end
+
+        if julia_type === nothing
+            @ccall printf(
+                "Unsupported datatype width: %lld\n"::Cstring, width::Int64
+            )::Cvoid
+            return nothing
+        end
+
+        if ndims == 0
+            push!(vals, unsafe_load(Ptr{julia_type}(retval_ptr)))
+        else
+            shape = unsafe_wrap(Array, shape_ptr, ndims)
+            push!(vals, copy(unsafe_wrap(Array, Ptr{julia_type}(retval_ptr), Tuple(shape))))
+        end
+    end
+
+    trace.retval = length(vals) == 1 ? vals[1] : vals
+    return nothing
+end
+
 function __init__()
     init_trace_ptr = @cfunction(initTrace, Cvoid, (Ptr{Ptr{Any}},))
     @ccall MLIR.API.mlir_c.EnzymeJaXMapSymbol(
@@ -146,6 +209,27 @@ function __init__()
     )
     @ccall MLIR.API.mlir_c.EnzymeJaXMapSymbol(
         :enzyme_probprog_add_subtrace::Cstring, add_subtrace_ptr::Ptr{Cvoid}
+    )::Cvoid
+
+    add_weight_to_trace_ptr = @cfunction(addWeightToTrace, Cvoid, (Ptr{Ptr{Any}}, Ptr{Any}))
+    @ccall MLIR.API.mlir_c.EnzymeJaXMapSymbol(
+        :enzyme_probprog_add_weight_to_trace::Cstring, add_weight_to_trace_ptr::Ptr{Cvoid}
+    )::Cvoid
+
+    add_retval_to_trace_ptr = @cfunction(
+        addRetvalToTrace,
+        Cvoid,
+        (
+            Ptr{Ptr{Any}},
+            Ptr{Ptr{Any}},
+            Ptr{UInt64},
+            Ptr{UInt64},
+            Ptr{Ptr{UInt64}},
+            Ptr{UInt64},
+        ),
+    )
+    @ccall MLIR.API.mlir_c.EnzymeJaXMapSymbol(
+        :enzyme_probprog_add_retval_to_trace::Cstring, add_retval_to_trace_ptr::Ptr{Cvoid}
     )::Cvoid
 
     return nothing
@@ -392,8 +476,6 @@ function simulate(f::Function, args::Vararg{Any,Nargs}) where {Nargs}
     end
 
     trace = unsafe_pointer_to_objref(Ptr{Any}(Array(trace)[1]))
-    trace.retval = res isa AbstractConcreteArray ? Array(res) : res
-    trace.weight = Array(weight)[1]
 
     return trace, trace.weight
 end
