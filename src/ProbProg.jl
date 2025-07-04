@@ -422,7 +422,7 @@ function call_internal(f::Function, args::Vararg{Any,Nargs}) where {Nargs}
 
     out_tys = [MLIR.IR.type(TracedUtils.get_mlir_data(res)) for res in linear_results]
     fname = TracedUtils.get_attribute_by_name(func2, "sym_name")
-    fname = MLIR.IR.FlatSymbolRefAttribute(Base.String(fname))
+    fn_attr = MLIR.IR.FlatSymbolRefAttribute(Base.String(fname))
 
     batch_inputs = MLIR.IR.Value[]
     for a in linear_args
@@ -437,7 +437,7 @@ function call_internal(f::Function, args::Vararg{Any,Nargs}) where {Nargs}
         end
     end
 
-    call_op = MLIR.Dialects.enzyme.untracedCall(batch_inputs; outputs=out_tys, fn=fname)
+    call_op = MLIR.Dialects.enzyme.untracedCall(batch_inputs; outputs=out_tys, fn=fn_attr)
 
     for (i, res) in enumerate(linear_results)
         resv = MLIR.IR.result(call_op, i)
@@ -504,7 +504,15 @@ function simulate_internal(f::Function, args::Vararg{Any,Nargs}) where {Nargs}
 
     out_tys = [MLIR.IR.type(TracedUtils.get_mlir_data(res)) for res in linear_results]
     fname = TracedUtils.get_attribute_by_name(func2, "sym_name")
-    fname = MLIR.IR.FlatSymbolRefAttribute(Base.String(fname))
+    fn_attr = MLIR.IR.FlatSymbolRefAttribute(Base.String(fname))
+
+    # Specify which outputs to add to the trace.
+    traced_output_indices = Int[]
+    for (i, res) in enumerate(linear_results)
+        if TracedUtils.has_idx(res, resprefix)
+            push!(traced_output_indices, i - 1)
+        end
+    end
 
     batch_inputs = MLIR.IR.Value[]
     for a in linear_args
@@ -524,7 +532,12 @@ function simulate_internal(f::Function, args::Vararg{Any,Nargs}) where {Nargs}
     )::MLIR.IR.Type
     weight_ty = MLIR.IR.TensorType(Int64[], MLIR.IR.Type(Float64))
     simulate_op = MLIR.Dialects.enzyme.simulate(
-        batch_inputs; trace=trace_ty, weight=weight_ty, outputs=out_tys, fn=fname
+        batch_inputs;
+        trace=trace_ty,
+        weight=weight_ty,
+        outputs=out_tys,
+        fn=fn_attr,
+        traced_output_indices=traced_output_indices,
     )
 
     for (i, res) in enumerate(linear_results)
