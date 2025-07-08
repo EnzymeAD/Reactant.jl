@@ -10,7 +10,7 @@ using ..Reactant:
     TracedRNumber,
     ConcreteRNumber,
     Ops
-using ..Compiler: @jit
+using ..Compiler: @jit, @compile
 using Enzyme
 using Base: ReentrantLock
 
@@ -705,10 +705,15 @@ function generate(
     weight = nothing
     res = nothing
 
+    constraint_ptr = ConcreteRNumber(reinterpret(UInt64, pointer_from_objref(constraint)))
+
+    function wrapper_fn(constraint_ptr, args...)
+        return generate_internal(f, args...; constraint_ptr, constraint)
+    end
+
     try
-        trace, weight, res = @jit optimize = :probprog generate_internal(
-            f, args...; constraint
-        )
+        compiled_fn = @compile optimize = :probprog wrapper_fn(constraint_ptr, args...)
+        trace, weight, res = compiled_fn(constraint_ptr, args...)
     finally
         GC.enable(old_gc_state)
     end
@@ -719,7 +724,10 @@ function generate(
 end
 
 function generate_internal(
-    f::Function, args::Vararg{Any,Nargs}; constraint::Constraint=Dict{Symbol,Any}()
+    f::Function,
+    args::Vararg{Any,Nargs};
+    constraint_ptr::TracedRNumber,
+    constraint::Constraint=Dict{Symbol,Any}(),
 ) where {Nargs}
     argprefix::Symbol = gensym("generatearg")
     resprefix::Symbol = gensym("generateresult")
@@ -771,12 +779,9 @@ function generate_internal(
         MLIR.IR.context()::MLIR.API.MlirContext
     )::MLIR.IR.Type
 
-    constraint_addr = ConcreteRNumber(reinterpret(UInt64, pointer_from_objref(constraint)))
-    constraint_mlir_val = TracedUtils.get_mlir_data(Ops.constant(constraint_addr))
-
     constraint_val = MLIR.IR.result(
         MLIR.Dialects.builtin.unrealized_conversion_cast(
-            [constraint_mlir_val]; outputs=[constraint_ty]
+            [TracedUtils.get_mlir_data(constraint_ptr)]; outputs=[constraint_ty]
         ),
         1,
     )

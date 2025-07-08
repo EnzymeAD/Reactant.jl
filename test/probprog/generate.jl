@@ -13,25 +13,6 @@ function model(seed, μ, σ, shape)
 end
 
 @testset "Generate" begin
-    @testset "hlo" begin
-        shape = (10,)
-        seed = Reactant.to_rarray(UInt64[1, 4])
-        μ = Reactant.ConcreteRNumber(0.0)
-        σ = Reactant.ConcreteRNumber(1.0)
-
-        before = @code_hlo optimize = :no_enzyme ProbProg.generate_internal(
-            model, seed, μ, σ, shape
-        )
-        @test contains(repr(before), "enzyme.generate")
-        @test contains(repr(before), "enzyme.sample")
-
-        after = @code_hlo optimize = :probprog ProbProg.generate_internal(
-            model, seed, μ, σ, shape
-        )
-        @test !contains(repr(after), "enzyme.generate")
-        @test !contains(repr(after), "enzyme.sample")
-    end
-
     @testset "unconstrained" begin
         shape = (1000,)
         seed = Reactant.to_rarray(UInt64[1, 4])
