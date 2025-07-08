@@ -20,19 +20,19 @@ end
         σ = Reactant.ConcreteRNumber(1.0)
 
         before = @code_hlo optimize = :no_enzyme ProbProg.generate_internal(
-            model, seed, μ, σ, shape; trace=ProbProg.ProbProgTrace()
+            model, seed, μ, σ, shape
         )
         @test contains(repr(before), "enzyme.generate")
         @test contains(repr(before), "enzyme.sample")
 
         after = @code_hlo optimize = :probprog ProbProg.generate_internal(
-            model, seed, μ, σ, shape; trace=ProbProg.ProbProgTrace()
+            model, seed, μ, σ, shape
         )
         @test !contains(repr(after), "enzyme.generate")
         @test !contains(repr(after), "enzyme.sample")
     end
 
-    @testset "normal" begin
+    @testset "unconstrained" begin
         shape = (1000,)
         seed = Reactant.to_rarray(UInt64[1, 4])
         μ = Reactant.ConcreteRNumber(0.0)
@@ -41,22 +41,21 @@ end
         @test mean(trace.retval) ≈ 0.0 atol = 0.05 rtol = 0.05
     end
 
-    @testset "constraints" begin
+    @testset "constrained" begin
         shape = (10,)
         seed = Reactant.to_rarray(UInt64[1, 4])
         μ = Reactant.ConcreteRNumber(0.0)
         σ = Reactant.ConcreteRNumber(1.0)
 
-        s_constraint = fill(0.1, shape)
-        constraints = Dict(:s => [s_constraint])
+        constraint = Dict{Symbol,Any}(:s => (fill(0.1, shape),))
 
-        trace, weight = ProbProg.generate(model, seed, μ, σ, shape; constraints)
+        trace, weight = ProbProg.generate(model, seed, μ, σ, shape; constraint)
 
-        @test trace.choices[:s] == s_constraint
+        @test trace.choices[:s] == constraint[:s]
 
         expected_weight =
-            normal_logpdf(s_constraint, 0.0, 1.0, shape) +
-            normal_logpdf(trace.choices[:t], s_constraint, 1.0, shape)
+            normal_logpdf(constraint[:s][1], 0.0, 1.0, shape) +
+            normal_logpdf(trace.choices[:t][1], constraint[:s][1], 1.0, shape)
         @test weight ≈ expected_weight atol = 1e-6
     end
 end

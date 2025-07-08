@@ -7,7 +7,9 @@ using ..Reactant:
     AbstractConcreteNumber,
     AbstractRNG,
     TracedRArray,
-    TracedRNumber
+    TracedRNumber,
+    ConcreteRNumber,
+    Ops
 using ..Compiler: @jit
 using Enzyme
 using Base: ReentrantLock
@@ -28,6 +30,8 @@ mutable struct ProbProgTrace
         return new(nothing, (), Dict{Symbol,Any}(), nothing, nothing, Dict{Symbol,Any}())
     end
 end
+
+const Constraint = Dict{Symbol,Any}
 
 const _trace_ref_lock = ReentrantLock()
 const _trace_refs = Vector{Any}()
@@ -54,20 +58,21 @@ function addSampleToTrace(
     trace_ptr_ptr::Ptr{Ptr{Any}},
     symbol_ptr_ptr::Ptr{Ptr{Any}},
     sample_ptr_array::Ptr{Ptr{Any}},
-    num_samples_ptr::Ptr{UInt64},
+    num_outputs_ptr::Ptr{UInt64},
     ndims_array::Ptr{UInt64},
     shape_ptr_array::Ptr{Ptr{UInt64}},
     width_array::Ptr{UInt64},
 )
     trace = unsafe_pointer_to_objref(unsafe_load(trace_ptr_ptr))::ProbProgTrace
     symbol = unsafe_pointer_to_objref(unsafe_load(symbol_ptr_ptr))::Symbol
-    num_samples = unsafe_load(num_samples_ptr)
-    ndims_array = unsafe_wrap(Array, ndims_array, num_samples)
-    width_array = unsafe_wrap(Array, width_array, num_samples)
-    shape_ptr_array = unsafe_wrap(Array, shape_ptr_array, num_samples)
-    sample_ptr_array = unsafe_wrap(Array, sample_ptr_array, num_samples)
+    num_outputs = unsafe_load(num_outputs_ptr)
+    ndims_array = unsafe_wrap(Array, ndims_array, num_outputs)
+    width_array = unsafe_wrap(Array, width_array, num_outputs)
+    shape_ptr_array = unsafe_wrap(Array, shape_ptr_array, num_outputs)
+    sample_ptr_array = unsafe_wrap(Array, sample_ptr_array, num_outputs)
 
-    for i in 1:num_samples
+    tostore = Any[]
+    for i in 1:num_outputs
         ndims = ndims_array[i]
         width = width_array[i]
         shape_ptr = shape_ptr_array[i]
@@ -92,14 +97,16 @@ function addSampleToTrace(
 
         if ndims == 0
             val = unsafe_load(Ptr{julia_type}(sample_ptr))
-            trace.choices[symbol] = val
+            push!(tostore, val)
         else
             shape = unsafe_wrap(Array, shape_ptr, ndims)
-            trace.choices[symbol] = copy(
-                unsafe_wrap(Array, Ptr{julia_type}(sample_ptr), Tuple(shape))
+            push!(
+                tostore, copy(unsafe_wrap(Array, Ptr{julia_type}(sample_ptr), Tuple(shape)))
             )
         end
     end
+
+    trace.choices[symbol] = tuple(tostore...)
 
     return nothing
 end
@@ -181,6 +188,94 @@ function addRetvalToTrace(
     return nothing
 end
 
+function getSampleFromConstraint(
+    constraint_ptr_ptr::Ptr{Ptr{Any}},
+    symbol_ptr_ptr::Ptr{Ptr{Any}},
+    sample_ptr_array::Ptr{Ptr{Any}},
+    num_samples_ptr::Ptr{UInt64},
+    ndims_array::Ptr{UInt64},
+    shape_ptr_array::Ptr{Ptr{UInt64}},
+    width_array::Ptr{UInt64},
+)
+    constraint = unsafe_pointer_to_objref(unsafe_load(constraint_ptr_ptr))::Constraint
+    symbol = unsafe_pointer_to_objref(unsafe_load(symbol_ptr_ptr))::Symbol
+    num_samples = unsafe_load(num_samples_ptr)
+    ndims_array = unsafe_wrap(Array, ndims_array, num_samples)
+    width_array = unsafe_wrap(Array, width_array, num_samples)
+    shape_ptr_array = unsafe_wrap(Array, shape_ptr_array, num_samples)
+    sample_ptr_array = unsafe_wrap(Array, sample_ptr_array, num_samples)
+
+    tostore = get(constraint, symbol, nothing)
+
+    for i in 1:num_samples
+        ndims = ndims_array[i]
+        width = width_array[i]
+        shape_ptr = shape_ptr_array[i]
+        sample_ptr = sample_ptr_array[i]
+
+        julia_type = if width == 32
+            Float32
+        elseif width == 64
+            Float64
+        elseif width == 1
+            Bool
+        else
+            nothing
+        end
+
+        if julia_type === nothing
+            @ccall printf(
+                "Unsupported datatype width: %zd\n"::Cstring, width::Csize_t
+            )::Cvoid
+            return nothing
+        end
+
+        if julia_type != eltype(tostore[i])
+            @ccall printf(
+                "Type mismatch in constrained sample: %s != %s\n"::Cstring,
+                string(julia_type)::Cstring,
+                string(eltype(tostore[i]))::Cstring,
+            )::Cvoid
+            return nothing
+        end
+
+        if ndims == 0
+            unsafe_store!(Ptr{julia_type}(sample_ptr), tostore[i])
+        else
+            shape = unsafe_wrap(Array, shape_ptr, ndims)
+            dest = unsafe_wrap(Array, Ptr{julia_type}(sample_ptr), Tuple(shape))
+
+            if size(dest) != size(tostore[i])
+                if length(size(dest)) != length(size(tostore[i]))
+                    @ccall printf(
+                        "Shape size mismatch in constrained sample: %zd != %zd\n"::Cstring,
+                        length(size(dest))::Csize_t,
+                        length(size(tostore[i]))::Csize_t,
+                    )::Cvoid
+                    return nothing
+                end
+                for i in 1:length(size(dest))
+                    d = size(dest)[i]
+                    t = size(tostore[i])[i]
+                    if d != t
+                        @ccall printf(
+                            "Shape mismatch in `%zd`th dimension of constrained sample: %zd != %zd\n"::Cstring,
+                            i::Csize_t,
+                            size(dest)[i]::Csize_t,
+                            size(tostore[i])[i]::Csize_t,
+                        )::Cvoid
+                        return nothing
+                    end
+                end
+            end
+
+            dest .= tostore[i]
+        end
+    end
+
+    return nothing
+end
+
 function __init__()
     init_trace_ptr = @cfunction(initTrace, Cvoid, (Ptr{Ptr{Any}},))
     @ccall MLIR.API.mlir_c.EnzymeJaXMapSymbol(
@@ -232,6 +327,24 @@ function __init__()
         :enzyme_probprog_add_retval_to_trace::Cstring, add_retval_to_trace_ptr::Ptr{Cvoid}
     )::Cvoid
 
+    get_sample_from_constraint_ptr = @cfunction(
+        getSampleFromConstraint,
+        Cvoid,
+        (
+            Ptr{Ptr{Any}},
+            Ptr{Ptr{Any}},
+            Ptr{Ptr{Any}},
+            Ptr{UInt64},
+            Ptr{UInt64},
+            Ptr{Ptr{UInt64}},
+            Ptr{UInt64},
+        )
+    )
+    @ccall MLIR.API.mlir_c.EnzymeJaXMapSymbol(
+        :enzyme_probprog_get_sample_from_constraint::Cstring,
+        get_sample_from_constraint_ptr::Ptr{Cvoid},
+    )::Cvoid
+
     return nothing
 end
 
@@ -262,14 +375,14 @@ function sample(
     fnwrap = mlir_fn_res.fnwrapped
     func2 = mlir_fn_res.f
 
-    batch_inputs = MLIR.IR.Value[]
+    inputs = MLIR.IR.Value[]
     for a in linear_args
         idx, path = TracedUtils.get_argidx(a, argprefix)
         if idx == 1 && fnwrap
-            TracedUtils.push_val!(batch_inputs, f, path[3:end])
+            TracedUtils.push_val!(inputs, f, path[3:end])
         else
             idx -= fnwrap ? 1 : 0
-            TracedUtils.push_val!(batch_inputs, args[idx], path[3:end])
+            TracedUtils.push_val!(inputs, args[idx], path[3:end])
         end
     end
 
@@ -359,7 +472,7 @@ function sample(
     end
 
     sample_op = MLIR.Dialects.enzyme.sample(
-        batch_inputs;
+        inputs;
         outputs=out_tys,
         fn=fn_attr,
         logpdf=logpdf_attr,
@@ -424,20 +537,20 @@ function call_internal(f::Function, args::Vararg{Any,Nargs}) where {Nargs}
     fname = TracedUtils.get_attribute_by_name(func2, "sym_name")
     fn_attr = MLIR.IR.FlatSymbolRefAttribute(Base.String(fname))
 
-    batch_inputs = MLIR.IR.Value[]
+    inputs = MLIR.IR.Value[]
     for a in linear_args
         idx, path = TracedUtils.get_argidx(a, argprefix)
         if idx == 1 && fnwrap
-            TracedUtils.push_val!(batch_inputs, f, path[3:end])
+            TracedUtils.push_val!(inputs, f, path[3:end])
         else
             if fnwrap
                 idx -= 1
             end
-            TracedUtils.push_val!(batch_inputs, args[idx], path[3:end])
+            TracedUtils.push_val!(inputs, args[idx], path[3:end])
         end
     end
 
-    call_op = MLIR.Dialects.enzyme.untracedCall(batch_inputs; outputs=out_tys, fn=fn_attr)
+    call_op = MLIR.Dialects.enzyme.untracedCall(inputs; outputs=out_tys, fn=fn_attr)
 
     for (i, res) in enumerate(linear_results)
         resv = MLIR.IR.result(call_op, i)
@@ -514,16 +627,16 @@ function simulate_internal(f::Function, args::Vararg{Any,Nargs}) where {Nargs}
         end
     end
 
-    batch_inputs = MLIR.IR.Value[]
+    inputs = MLIR.IR.Value[]
     for a in linear_args
         idx, path = TracedUtils.get_argidx(a, argprefix)
         if idx == 1 && fnwrap
-            TracedUtils.push_val!(batch_inputs, f, path[3:end])
+            TracedUtils.push_val!(inputs, f, path[3:end])
         else
             if fnwrap
                 idx -= 1
             end
-            TracedUtils.push_val!(batch_inputs, args[idx], path[3:end])
+            TracedUtils.push_val!(inputs, args[idx], path[3:end])
         end
     end
 
@@ -531,8 +644,9 @@ function simulate_internal(f::Function, args::Vararg{Any,Nargs}) where {Nargs}
         MLIR.IR.context()::MLIR.API.MlirContext
     )::MLIR.IR.Type
     weight_ty = MLIR.IR.TensorType(Int64[], MLIR.IR.Type(Float64))
+
     simulate_op = MLIR.Dialects.enzyme.simulate(
-        batch_inputs;
+        inputs;
         trace=trace_ty,
         weight=weight_ty,
         outputs=out_tys,
@@ -571,6 +685,160 @@ function simulate_internal(f::Function, args::Vararg{Any,Nargs}) where {Nargs}
     weight = MLIR.IR.result(
         MLIR.Dialects.builtin.unrealized_conversion_cast(
             [MLIR.IR.result(simulate_op, 2)];
+            outputs=[MLIR.IR.TensorType(Int64[], MLIR.IR.Type(Float64))],
+        ),
+        1,
+    )
+
+    trace = TracedRArray{UInt64,0}((), trace, ())
+    weight = TracedRArray{Float64,0}((), weight, ())
+
+    return trace, weight, result
+end
+
+function generate(
+    f::Function, args::Vararg{Any,Nargs}; constraint::Constraint=Dict{Symbol,Any}()
+) where {Nargs}
+    old_gc_state = GC.enable(false)
+
+    trace = nothing
+    weight = nothing
+    res = nothing
+
+    try
+        trace, weight, res = @jit optimize = :probprog generate_internal(
+            f, args...; constraint
+        )
+    finally
+        GC.enable(old_gc_state)
+    end
+
+    trace = unsafe_pointer_to_objref(Ptr{Any}(Array(trace)[1]))
+
+    return trace, trace.weight
+end
+
+function generate_internal(
+    f::Function, args::Vararg{Any,Nargs}; constraint::Constraint=Dict{Symbol,Any}()
+) where {Nargs}
+    argprefix::Symbol = gensym("generatearg")
+    resprefix::Symbol = gensym("generateresult")
+    resargprefix::Symbol = gensym("generateresarg")
+
+    mlir_fn_res = invokelatest(
+        TracedUtils.make_mlir_fn,
+        f,
+        args,
+        (),
+        string(f),
+        false;
+        do_transpose=false,
+        args_in_result=:all,
+        argprefix,
+        resprefix,
+        resargprefix,
+    )
+    (; result, linear_args, in_tys, linear_results) = mlir_fn_res
+    fnwrap = mlir_fn_res.fnwrapped
+    func2 = mlir_fn_res.f
+
+    out_tys = [MLIR.IR.type(TracedUtils.get_mlir_data(res)) for res in linear_results]
+    fname = TracedUtils.get_attribute_by_name(func2, "sym_name")
+    fn_attr = MLIR.IR.FlatSymbolRefAttribute(Base.String(fname))
+
+    # Specify which outputs to add to the trace.
+    traced_output_indices = Int[]
+    for (i, res) in enumerate(linear_results)
+        if TracedUtils.has_idx(res, resprefix)
+            push!(traced_output_indices, i - 1)
+        end
+    end
+
+    inputs = MLIR.IR.Value[]
+    for a in linear_args
+        idx, path = TracedUtils.get_argidx(a, argprefix)
+        if idx == 1 && fnwrap
+            TracedUtils.push_val!(inputs, f, path[3:end])
+        else
+            if fnwrap
+                idx -= 1
+            end
+            TracedUtils.push_val!(inputs, args[idx], path[3:end])
+        end
+    end
+
+    constraint_ty = @ccall MLIR.API.mlir_c.enzymeConstraintTypeGet(
+        MLIR.IR.context()::MLIR.API.MlirContext
+    )::MLIR.IR.Type
+
+    constraint_addr = ConcreteRNumber(reinterpret(UInt64, pointer_from_objref(constraint)))
+    constraint_mlir_val = TracedUtils.get_mlir_data(Ops.constant(constraint_addr))
+
+    constraint_val = MLIR.IR.result(
+        MLIR.Dialects.builtin.unrealized_conversion_cast(
+            [constraint_mlir_val]; outputs=[constraint_ty]
+        ),
+        1,
+    )
+
+    constrained_symbols_attr = MLIR.IR.Attribute[]
+    for sym in keys(constraint)
+        addr = reinterpret(UInt64, pointer_from_objref(sym))
+        push!(
+            constrained_symbols_attr,
+            @ccall MLIR.API.mlir_c.enzymeSymbolAttrGet(
+                MLIR.IR.context()::MLIR.API.MlirContext, addr::UInt64
+            )::MLIR.IR.Attribute
+        )
+    end
+
+    trace_ty = @ccall MLIR.API.mlir_c.enzymeTraceTypeGet(
+        MLIR.IR.context()::MLIR.API.MlirContext
+    )::MLIR.IR.Type
+    weight_ty = MLIR.IR.TensorType(Int64[], MLIR.IR.Type(Float64))
+
+    generate_op = MLIR.Dialects.enzyme.generate(
+        inputs,
+        constraint_val;
+        trace=trace_ty,
+        weight=weight_ty,
+        outputs=out_tys,
+        fn=fn_attr,
+        constrained_symbols=MLIR.IR.Attribute(constrained_symbols_attr),
+        traced_output_indices,
+    )
+
+    for (i, res) in enumerate(linear_results)
+        resv = MLIR.IR.result(generate_op, i + 2)
+        if TracedUtils.has_idx(res, resprefix)
+            path = TracedUtils.get_idx(res, resprefix)
+            TracedUtils.set!(result, path[2:end], resv)
+        elseif TracedUtils.has_idx(res, argprefix)
+            idx, path = TracedUtils.get_argidx(res, argprefix)
+            if idx == 1 && fnwrap
+                TracedUtils.set!(f, path[3:end], resv)
+            else
+                if fnwrap
+                    idx -= 1
+                end
+                TracedUtils.set!(args[idx], path[3:end], resv)
+            end
+        else
+            TracedUtils.set!(res, (), resv)
+        end
+    end
+
+    trace = MLIR.IR.result(
+        MLIR.Dialects.builtin.unrealized_conversion_cast(
+            [MLIR.IR.result(generate_op, 1)];
+            outputs=[MLIR.IR.TensorType(Int64[], MLIR.IR.Type(UInt64))],
+        ),
+        1,
+    )
+
+    weight = MLIR.IR.result(
+        MLIR.Dialects.builtin.unrealized_conversion_cast(
+            [MLIR.IR.result(generate_op, 2)];
             outputs=[MLIR.IR.TensorType(Int64[], MLIR.IR.Type(Float64))],
         ),
         1,
