@@ -219,6 +219,31 @@ function gpu_wrapper(
     )
 end
 
+function ml_gelu(
+    input::Value;
+    result=nothing::Union{Nothing,IR.Type},
+    gelu_approximation,
+    location=Location(),
+)
+    op_ty_results = IR.Type[]
+    operands = Value[input,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[namedattribute("gelu_approximation", gelu_approximation),]
+    !isnothing(result) && push!(op_ty_results, result)
+
+    return create_operation(
+        "enzymexla.ml.gelu",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
+    )
+end
+
 function get_stream(; result::IR.Type, location=Location())
     op_ty_results = IR.Type[result,]
     operands = Value[]
@@ -488,6 +513,26 @@ function linalg_qr(
         attributes,
         results=op_ty_results,
         result_inference=false,
+    )
+end
+
+function ml_relu(input::Value; result=nothing::Union{Nothing,IR.Type}, location=Location())
+    op_ty_results = IR.Type[]
+    operands = Value[input,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+    !isnothing(result) && push!(op_ty_results, result)
+
+    return create_operation(
+        "enzymexla.ml.relu",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
     )
 end
 
