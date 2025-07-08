@@ -706,9 +706,10 @@ function generate(
     res = nothing
 
     constraint_ptr = ConcreteRNumber(reinterpret(UInt64, pointer_from_objref(constraint)))
+    constrained_symbols = collect(keys(constraint))
 
     function wrapper_fn(constraint_ptr, args...)
-        return generate_internal(f, args...; constraint_ptr, constraint)
+        return generate_internal(f, args...; constraint_ptr, constrained_symbols)
     end
 
     try
@@ -727,7 +728,7 @@ function generate_internal(
     f::Function,
     args::Vararg{Any,Nargs};
     constraint_ptr::TracedRNumber,
-    constraint::Constraint=Dict{Symbol,Any}(),
+    constrained_symbols::Vector{Symbol},
 ) where {Nargs}
     argprefix::Symbol = gensym("generatearg")
     resprefix::Symbol = gensym("generateresult")
@@ -787,7 +788,7 @@ function generate_internal(
     )
 
     constrained_symbols_attr = MLIR.IR.Attribute[]
-    for sym in keys(constraint)
+    for sym in constrained_symbols
         addr = reinterpret(UInt64, pointer_from_objref(sym))
         push!(
             constrained_symbols_attr,
