@@ -3406,18 +3406,21 @@ end
 end
 
 @noinline function gelu(
-    x::TracedRArray{T,N},
+    x::Union{TracedRArray{T,N},TracedRNumber{T}},
     approximation::String;
     location=mlir_stacktrace("gelu", @__FILE__, @__LINE__),
 ) where {T,N}
     @assert approximation in ("NONE", "TANH", "SIGMOID")
-    return TracedRArray{T,N}(
-        (),
-        MLIR.IR.result(
-            enzymexla.ml_gelu(x.mlir_data; gelu_approximation=approximation, location), 1
-        ),
-        size(x),
+
+    res = MLIR.IR.result(
+        enzymexla.ml_gelu(x.mlir_data; gelu_approximation=approximation, location), 1
     )
+
+    if x isa TracedRArray
+        return TracedRArray{T,N}((), res, size(x))
+    else
+        return TracedRNumber{T}((), res)
+    end
 end
 
 @noinline function wrap(
