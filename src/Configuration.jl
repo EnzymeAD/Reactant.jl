@@ -20,6 +20,8 @@ scope will use the provided values.
     `ApproxTopK` for TPUs unless `fallback_approx_top_k_lowering` is set to `true`.
   - `fallback_approx_top_k_lowering`: Whether to lower `Ops.approx_top_k` to
     `stablehlo.top_k` if the XLA backend doesn't support `ApproxTopK`. Defaults to `true`.
+  - `nnlib_gelu_approximation`: Controls the approximation used for `NNlib.gelu_tanh`. Can
+    be `"TANH"` or `"SIGMOID"`. Defaults to `"SIGMOID"`.
 
 ### DotGeneral
 
@@ -44,6 +46,7 @@ function with_config(
     lower_partialsort_to_approx_top_k=missing,
     fallback_approx_top_k_lowering=missing,
     overlay_zygote_calls=missing,
+    nnlib_gelu_approximation=missing,
 )
     config_vars = ()
     dot_general_algorithm !== missing &&
@@ -66,6 +69,10 @@ function with_config(
     )
     overlay_zygote_calls !== missing &&
         (config_vars = (config_vars..., OVERLAY_ZYGOTE_CALLS => overlay_zygote_calls))
+    if nnlib_gelu_approximation !== missing
+        @assert nnlib_gelu_approximation in ("TANH", "SIGMOID") "Invalid nnlib_gelu_approximation: $nnlib_gelu_approximation. Expected \"TANH\" or \"SIGMOID\"."
+        config_vars = (config_vars..., NNLIB_GELU_APPROXIMATION => nnlib_gelu_approximation)
+    end
 
     return ScopedValues.with(f, config_vars...)
 end
@@ -73,6 +80,7 @@ end
 # Lower to ApproxTopK
 const LOWER_PARTIALSORT_TO_APPROX_TOP_K = ScopedValue(false)
 const FALLBACK_APPROX_TOP_K_LOWERING = ScopedValue(true)
+const NNLIB_GELU_APPROXIMATION = ScopedValue("SIGMOID")
 
 # DotGeneral Attributes Configuration
 """
