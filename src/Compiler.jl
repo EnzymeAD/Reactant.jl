@@ -1623,6 +1623,7 @@ function compile_mlir!(
     blas_int_width = sizeof(BLAS.BlasInt) * 8
     lower_enzymexla_linalg_pass = "lower-enzymexla-linalg{backend=$backend \
                                    blas_int_width=$blas_int_width}"
+    lower_enzymexla_ml_pass = "lower-enzymexla-ml"
 
     if compile_options.optimization_passes === :all
         run_pass_pipeline!(
@@ -1650,6 +1651,7 @@ function compile_mlir!(
                         )...,
                         opt_passes2,
                         lower_enzymexla_linalg_pass,
+                        lower_enzymexla_ml_pass,
                         jit,
                     ]
                 else
@@ -1674,6 +1676,7 @@ function compile_mlir!(
                         kern,
                         raise_passes,
                         lower_enzymexla_linalg_pass,
+                        lower_enzymexla_ml_pass,
                         jit,
                     ]
                 end,
@@ -1863,6 +1866,7 @@ function compile_mlir!(
                         )...,
                         opt_passes2,
                         lower_enzymexla_linalg_pass,
+                        lower_enzymexla_ml_pass,
                         jit,
                     ]
                 else
@@ -1884,6 +1888,7 @@ function compile_mlir!(
                         kern,
                         raise_passes,
                         lower_enzymexla_linalg_pass,
+                        lower_enzymexla_ml_pass,
                         jit,
                     ]
                 end,
@@ -1906,6 +1911,7 @@ function compile_mlir!(
                         enzyme_pass,
                         "canonicalize,remove-unnecessary-enzyme-ops,enzyme-simplify-math",
                         lower_enzymexla_linalg_pass,
+                        lower_enzymexla_ml_pass,
                         jit,
                     ]
                 else
@@ -1919,6 +1925,7 @@ function compile_mlir!(
                         kern,
                         raise_passes,
                         lower_enzymexla_linalg_pass,
+                        lower_enzymexla_ml_pass,
                         jit,
                     ]
                 end,

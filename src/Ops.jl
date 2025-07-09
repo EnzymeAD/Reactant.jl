@@ -3,7 +3,7 @@
 # Julia and Reactant semantics should be considered on the higher abstractions that use these ops.
 module Ops
 using ..MLIR: MLIR
-using ..MLIR.Dialects: stablehlo, chlo, enzyme
+using ..MLIR.Dialects: stablehlo, chlo, enzyme, enzymexla
 using ..Reactant:
     Reactant,
     TracedRArray,
@@ -3003,7 +3003,7 @@ Compute the row maximum pivoted LU factorization of `x` and return the factors `
     permutation_shape = vcat(batch_shape, size(x, ndims(x) - 1))
     info_shape = batch_shape
 
-    op = MLIR.Dialects.enzymexla.linalg_lu(
+    op = enzymexla.linalg_lu(
         x.mlir_data;
         output=MLIR.IR.TensorType(output_shape, MLIR.IR.Type(unwrapped_eltype(T))),
         pivots=MLIR.IR.TensorType(pivots_shape, MLIR.IR.Type(pT)),
@@ -3208,6 +3208,21 @@ end
     else
         return TracedRNumber{unwrapped_eltype(input)}((), res)
     end
+end
+
+@noinline function gelu(
+    x::TracedRArray{T,N},
+    approximation::String;
+    location=mlir_stacktrace("gelu", @__FILE__, @__LINE__),
+) where {T,N}
+    @assert approximation in ("NONE", "TANH", "SIGMOID")
+    return TracedRArray{T,N}(
+        (),
+        MLIR.IR.result(
+            enzymexla.ml_gelu(x.mlir_data; gelu_approximation=approximation, location), 1
+        ),
+        size(x),
+    )
 end
 
 end # module Ops
