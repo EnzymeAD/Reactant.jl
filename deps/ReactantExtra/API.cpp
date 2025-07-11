@@ -80,6 +80,8 @@
 #include "xla/pjrt/pjrt_executable.h"
 #include "xla/pjrt/plugin/xla_cpu/xla_cpu_pjrt_client.h"
 
+#include "xla/hlo/translate/hlo_to_mhlo/hlo_utils.h"
+
 // CPU collectives
 #include "xla/backends/cpu/collectives/mpi_collectives.h"
 #if defined(__linux__)
@@ -713,6 +715,85 @@ extern "C" int32_t ReactantHermeticCudaGetVersion() { return 0; }
 extern "C" void *UnsafeBufferPointer(PjRtBuffer *buffer) {
   auto unsafe = MyValueOrThrow(buffer->client()->UnsafeBufferPointer(buffer));
   return (void *)unsafe;
+}
+
+extern "C" void CopyToBuffer(PjRtClient* client, PjRtBuffer *buffer, void* data, size_t offset, size_t size) {
+  auto raw_buffer = MyValueOrThrow(PjRtRawBuffer::CreateRawAliasOfBuffer(buffer));
+  auto future = raw_buffer->CopyRawHostToDevice(data, offset, size);
+  future.Await();
+#if 0
+  if (buffer->IsOnCpu()) {
+    memcpy((char*)client->UnsafeBufferPointer(buffer) + offset, data, size);
+    return;
+  }
+
+  auto pid = client->platform_id();
+  if (pid == xla::CudaId()) {
+    auto stream_client = (xla::PjRtStreamExecutorClient*)lrt->client;
+
+
+    auto memory_space = *memory_device->default_memory_space();
+    auto shape = MyValueOrThrow(cpu_client->MakeDefaultShapeForMemorySpace(memory_space));
+    auto on_device_bytes = MyValueOrThrow(cpu_client->GetOnDeviceBytesCount(memory_space, shape));
+    auto buf = MyValueOrThrow(cpu_client->AllocateRawBuffer(memory_space, on_device_bytes_count, /*retry_on_oom*/true, /*allocateafter*/{}));
+    lrt->allocations.try_emplace(buf, on_device_bytes);
+
+    cpu_client->LinearizeHostBufferInfo(data, 
+    return buf;
+  }
+
+  } else if (pid == xla::CudaId()) {
+  } else if (pid == xla::TpuId()) {
+  }
+  switch(client->platform_id()) {
+    case xla::CpuId();
+  }
+  absl::
+  auto atm = MyValueOrThrow(client->CreateBuffersForAsyncHostToDevice({buffer->on_device_shape()}, buffer->memory_space()));
+#endif
+
+}
+
+extern "C" void CopyFromBuffer(PjRtClient* client, PjRtBuffer *buffer, void* data, size_t offset, size_t size) {
+  auto future = buffer->CopyRawToHost(data, offset, size);
+  future.Await();
+#if 0
+  if (buffer->IsOnCpu()) {
+    memcpy((char*)client->UnsafeBufferPointer(buffer) + offset, data, size);
+    return;
+  }
+
+  auto pid = client->platform_id();
+  if (pid == xla::CudaId()) {
+    auto stream_client = (xla::PjRtStreamExecutorClient*)lrt->client;
+
+
+    auto memory_space = *memory_device->default_memory_space();
+    auto shape = MyValueOrThrow(cpu_client->MakeDefaultShapeForMemorySpace(memory_space));
+    auto on_device_bytes = MyValueOrThrow(cpu_client->GetOnDeviceBytesCount(memory_space, shape));
+    auto buf = MyValueOrThrow(cpu_client->AllocateRawBuffer(memory_space, on_device_bytes_count, /*retry_on_oom*/true, /*allocateafter*/{}));
+    lrt->allocations.try_emplace(buf, on_device_bytes);
+
+    cpu_client->LinearizeHostBufferInfo(data, 
+    return buf;
+  }
+
+  } else if (pid == xla::CudaId()) {
+  } else if (pid == xla::TpuId()) {
+  }
+  switch(client->platform_id()) {
+    case xla::CpuId();
+  }
+  absl::
+  auto atm = MyValueOrThrow(client->CreateBuffersForAsyncHostToDevice({buffer->on_device_shape()}, buffer->memory_space()));
+#endif
+}
+
+extern "C" PjRtBuffer* UninitPJRTBuffer(PjRtClient *client, PjRtDevice *device, uint64_t ptype, uint64_t shapeLen, uint64_t* __restrict__ shape) {
+  auto memory_space = *device->default_memory_space();
+  xla::Shape xlashape((xla::PrimitiveType)ptype, absl::Span<const int64_t>((const int64_t*)shape, shapeLen));
+  auto xbuffer = MyValueOrThrow(client->CreateUninitializedBuffer(xlashape, memory_space));
+  return xbuffer.release();
 }
 
 extern "C" PjRtBuffer *ArrayFromHostBuffer(PjRtClient *client, void *data,
@@ -2598,4 +2679,238 @@ extern "C" HeldIfrtArray *ifrt_copy_array(HeldIfrtArray *array) {
     return reactant::capture(res);
   }
   ReactantThrowError("Only ifrt-pjrt arrays are supported for now");
+}
+
+
+struct LinkableRuntime {
+  mlir::DialectRegistry registry;
+  xla::PjRtClient* client;
+  int device;
+  DenseMap<const char*, std::map<std::vector<std::vector<int64_t>>, xla::PjRtLoadedExecutable *>> executables;
+
+  // Set of allocated pointers to size
+  std::set<void*> allocations;
+  
+  LinkableRuntime(const std::string &backend) : registry() {
+    InitializeRegistry(wrap(&registry));
+    InitializePasses(wrap(&registry));
+	
+    InitializeLogs();
+	const char* error = NULL;
+	auto mpi = getenv("OMPI_COMM_WORLD_RANK");
+	device = 0;
+	if (mpi) {
+		llvm::errs() << " mpi : " << mpi << "\n";
+		device = atoi(mpi);
+	} else llvm::errs() << " mpi: null\n";
+	client = nullptr;
+
+	if (backend == "xla-tpu") {
+	  if (device == 0) {
+	    client = MakeTPUClient(nullptr, &error);
+	    if (error) llvm::errs() << " error: " << error << "\n";
+	  }
+	} else if (backend == "xla-gpu") {
+      int node_id = 0;
+      int num_nodes = 1;
+      int64_t *allowed_devices = NULL;
+      int num_allowed_devices = 0;
+      double mem_fraction = 0.75;
+      bool gpu_preallocate = true;
+      const char* refstr;
+      const char* platform = "gpu";
+      void* distributed_runtime_client = NULL;
+      client = MakeGPUClient(
+            node_id,
+            num_nodes,
+            allowed_devices,
+            num_allowed_devices,
+            mem_fraction,
+            gpu_preallocate,
+            platform,
+            &refstr,
+            distributed_runtime_client);
+	  if (!client) llvm::errs() << " error: " << refstr << "\n";
+      assert(client);
+    } else {
+      client = MakeCPUClient(1, 0);
+      assert(client);
+    }
+    
+    if (client) {
+      device = min(device, client->device_count()-1);
+    }
+  }
+
+  ~LinkableRuntime() {
+    if (client) {
+      delete client;
+    }
+  }
+
+};
+
+static std::pair<PjRtBuffer*, /*offset*/size_t> bufferAndOffset(LinkableRuntime* __restrict__ lrt, void* ptr) {
+  auto found = lrt->allocations.lower_bound(ptr);
+  assert(found != lrt->allocations.end());
+  auto start = (PjRtBuffer*)(*found);
+  return std::pair<PjRtBuffer*, /*offset*/size_t>(start, (size_t)ptr - (size_t)start);
+}
+
+extern "C" void reactantXLAInit(LinkableRuntime** __restrict__ lrt, const char* __restrict__ backend) {
+  *lrt = new LinkableRuntime(backend);
+}
+
+extern "C" void reactantXLADeInit(LinkableRuntime** __restrict__ lrt) {
+  delete *lrt;
+}
+
+extern "C" void reactantXLAMemcpy(LinkableRuntime** __restrict__ lrtP, void* __restrict__ dst, void* __restrict__ src, size_t size, int32_t direction) {
+  auto lrt = *lrtP;
+  switch (direction) {
+      case 0: // cudaMemcpyHostToHost = 0
+        llvm_unreachable("host to host copy unsupported");
+        break;
+      case 1: // cudaMemcpyHostToDevice
+      {
+        auto &&[dstB, dstO] = bufferAndOffset(lrt, dst); 
+        /*
+        if (dstO != 0) {
+          llvm::errs() << "only zero-offset memcpy supported\n";
+          exit(1);
+        }
+        if (dstSize != size) {
+          llvm::errs() << "only whole buffer copies are supported\n";
+          exit(1);
+        }
+        */
+        CopyToBuffer(lrt->client, dstB, src, dstO, size);
+        break;
+      }
+      case 2: // cudaMemcpyDeviceToHost
+      {
+        auto &&[srcB, srcO] = bufferAndOffset(lrt, src); 
+        CopyFromBuffer(lrt->client, srcB, dst, srcO, size);
+        /*
+        if (srcO != 0) {
+          llvm::errs() << "only zero-offset memcpy supported\n";
+          exit(1);
+        }
+        if (srcSize != size) {
+          llvm::errs() << "only whole buffer copies are supported\n";
+          exit(1);
+        }
+        BufferToHost(srcB, dst);
+        */
+        break;
+      }
+      case 3: // cudaMemcpyDeviceToDevice
+        llvm_unreachable("device to device copy unsupported");
+        break;
+      default: // cudaMemcpyDeviceToDevice
+        llvm_unreachable("unknown copy unsupported");
+        break;
+  }
+}
+
+extern "C" void* reactantXLAMalloc(LinkableRuntime** __restrict__ lrtP, uint64_t ptype, uint64_t shapeLen, uint64_t* __restrict__ shape) {
+  auto lrt = *lrtP;
+  PjRtDevice *device = ClientGetDevice(lrt->client, lrt->device);
+
+  auto xbuffer = UninitPJRTBuffer(lrt->client, device, ptype, shapeLen, shape);
+  lrt->allocations.insert((void*)xbuffer);
+  return xbuffer;
+}
+
+extern "C" void reactantXLAFree(LinkableRuntime** __restrict__ lrtP, void* __restrict__ buffer) {
+  PjRtBufferFree((PjRtBuffer*)buffer);
+}
+
+extern "C" void reactantXLAExec(LinkableRuntime** __restrict__ lrtP, const char* modstr, int64_t argcnt, void** args) {
+  auto lrt = *lrtP;
+  auto &cache = lrt->executables[modstr];
+  std::vector<PjRtBuffer*> baseArrays(argcnt);
+
+  std::vector<std::vector<int64_t>> sizeKey;
+  sizeKey.reserve(argcnt);
+  for (int64_t i=0; i<argcnt; i++) {
+      auto &&[argB, argO] = bufferAndOffset(lrt, args[i]);
+      if (argO != 0) {
+          llvm::errs() << "only zero-offset execution supported\n";
+          exit(1);
+      }
+      baseArrays[i] = argB;
+      auto dims = argB->on_device_shape().dimensions();
+      sizeKey.emplace_back(dims.begin(), dims.end());
+  }
+
+  auto iter = cache.find(sizeKey);
+
+  if (iter == cache.end()) { 
+     MLIRContext context(lrt->registry);
+     RegisterDialects(wrap(&context));
+
+     mlir::OwningOpRef<mlir::ModuleOp> module(mlir::ModuleOp::create(mlir::OpBuilder(&context).getUnknownLoc()));
+
+      ParserConfig config(&context, /*verify_after_parse*/true);
+      if (failed(parseSourceString(modstr, module->getBody(), config))) {
+        llvm::errs() << " failed to parse module:\n";
+        exit(1);
+      }
+
+      auto funcOp = cast<func::FuncOp>(&module->getBody()->back());
+      
+      mlir::OpBuilder builder(module->getContext());
+      funcOp.setSymName(builder.getStringAttr("main"));
+
+      PassManager pm(module->getContext());
+
+      SmallVector<mlir::Type> types;
+      for (int64_t i=0; i<argcnt; i++) {
+         auto RTT = MyValueOrThrow(xla::ConvertShapeToType<mlir::RankedTensorType>(baseArrays[i]->on_device_shape(), builder));
+         types.push_back(RTT);
+      }
+      pm.addPass(mlir::stablehlo::createStablehloRefineArgumentsPass(types));
+      pm.addPass(mlir::stablehlo::createStablehloRefineShapesPass());
+      pm.addNestedPass<mlir::func::FuncOp>(stablehlo::createStablehloCanonicalizeDynamismPass());
+      pm.addPass(mlir::enzyme::createEnzymeHLOOptPass());
+    
+      if (!mlir::succeeded(pm.run(*module))) {
+        llvm::errs() << " failed to run passes\n";
+        exit(1);
+      }
+
+      int device_id = lrt->device;
+      int64_t* mesh_ids = nullptr;
+      int num_mesh_ids = 0;
+      const char *xla_gpu_cuda_data_dir = "";
+      bool use_shardy_partitioner = false;
+      int64_t num_replicas = 1;
+      int64_t num_partitions = 1;
+      bool use_spmd_partitioning = false;
+      auto exec = ClientCompile(lrt->client, wrap(module.get()), device_id, mesh_ids, num_mesh_ids, xla_gpu_cuda_data_dir, use_shardy_partitioner, num_replicas, num_partitions, use_spmd_partitioning);
+
+      iter = cache.try_emplace(sizeKey, exec).first;
+  }
+
+  auto exec = iter->second;
+
+
+  uint8_t* is_arg_donatable = (uint8_t*)malloc(argcnt);
+  for (int i=0; i<argcnt; i++)
+      is_arg_donatable[i] = 1;
+  int num_results = argcnt;
+  std::vector<PjRtBuffer *> results(argcnt);
+  std::vector<uint8_t> futures(argcnt, 0);
+  std::vector<FutureType *> future_results(argcnt, nullptr);
+  PjRtDevice *device = ClientGetDevice(lrt->client, lrt->device);
+  XLAExecuteSharded(exec, argcnt, baseArrays.data(), device, is_arg_donatable, num_results, results.data(), futures.data(), future_results.data());
+  free(is_arg_donatable);
+  for (int64_t i=0; i<argcnt; i++) {
+  if (futures[i]) {
+    FutureAwait(future_results[i]);
+    FreeFuture(future_results[i]);
+  }
+  }
+
 }
