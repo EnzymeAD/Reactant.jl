@@ -2650,6 +2650,7 @@ int xerbla_(const char *srname, integer *info, int len)
 	exit(1);
     return 0;
 }
+<<<<<<< Updated upstream
 logical dlaisnan_(doublereal *din1, doublereal *din2)
 {
     /* System generated locals */
@@ -3479,3 +3480,8 @@ extern "C" void dgemm_(char* transA, char* transB, int32_t* M, int32_t* N, int32
   free(Cbuf);
 }
 
+=======
+
+extern "C" void* InitCache() {
+}
+>>>>>>> Stashed changes
