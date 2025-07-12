@@ -3,7 +3,7 @@
 # Julia and Reactant semantics should be considered on the higher abstractions that use these ops.
 module Ops
 using ..MLIR: MLIR
-using ..MLIR.Dialects: stablehlo, chlo, enzyme
+using ..MLIR.Dialects: stablehlo, chlo, enzyme, enzymexla
 using ..Reactant:
     Reactant,
     TracedRArray,
@@ -3003,7 +3003,7 @@ Compute the row maximum pivoted LU factorization of `x` and return the factors `
     permutation_shape = vcat(batch_shape, size(x, ndims(x) - 1))
     info_shape = batch_shape
 
-    op = MLIR.Dialects.enzymexla.linalg_lu(
+    op = enzymexla.linalg_lu(
         x.mlir_data;
         output=MLIR.IR.TensorType(output_shape, MLIR.IR.Type(unwrapped_eltype(T))),
         pivots=MLIR.IR.TensorType(pivots_shape, MLIR.IR.Type(pT)),
@@ -3208,6 +3208,75 @@ end
     else
         return TracedRNumber{unwrapped_eltype(input)}((), res)
     end
+end
+
+@noinline function wrap(
+    input::TracedRArray{T,N},
+    lhs::Integer,
+    rhs::Integer;
+    dimension::Int,
+    location=mlir_stacktrace("wrap", @__FILE__, @__LINE__),
+) where {T,N}
+    @assert 1 ≤ dimension ≤ N "dimension must be between 1 and $(N) (got $(dimension))"
+    @assert 0 ≤ lhs ≤ size(input, dimension) "lhs must be between 0 and \
+                                              $(size(input, dimension)) (got $(lhs))"
+    @assert 0 ≤ rhs ≤ size(input, dimension) "rhs must be between 0 and \
+                                              $(size(input, dimension)) (got $(rhs))"
+    return TracedRArray{T,N}(
+        (),
+        MLIR.IR.result(
+            enzymexla.wrap(input.mlir_data; lhs, rhs, dimension=dimension - 1, location), 1
+        ),
+        size(input),
+    )
+end
+
+@noinline function extend(
+    input::TracedRArray{T,N},
+    lhs::Integer,
+    rhs::Integer;
+    dimension::Int,
+    location=mlir_stacktrace("extend", @__FILE__, @__LINE__),
+) where {T,N}
+    @assert 1 ≤ dimension ≤ N "dimension must be between 1 and $(N) (got $(dimension))"
+    @assert 0 ≤ lhs ≤ size(input, dimension) "lhs must be between 0 and \
+                                              $(size(input, dimension)) (got $(lhs))"
+    @assert 0 ≤ rhs ≤ size(input, dimension) "rhs must be between 0 and \
+                                              $(size(input, dimension)) (got $(rhs))"
+    sz = collect(Int64, size(input))
+    sz[dimension] = sz[dimension] + lhs + rhs
+    return TracedRArray{T,N}(
+        (),
+        MLIR.IR.result(
+            enzymexla.extend(input.mlir_data; lhs, rhs, dimension=dimension - 1, location),
+            1,
+        ),
+        sz,
+    )
+end
+
+@noinline function rotate(
+    input::TracedRArray{T,N},
+    amount::Integer;
+    dimension::Int,
+    location=mlir_stacktrace("rotate", @__FILE__, @__LINE__),
+) where {T,N}
+    @assert 1 ≤ dimension ≤ N "dimension must be between 1 and $(N) (got $(dimension))"
+    @assert 0 ≤ amount ≤ size(input, dimension) "amount must be between 0 and \
+                                                 $(size(input, dimension)) (got $(amount))"
+    return TracedRArray{T,N}(
+        (),
+        MLIR.IR.result(
+            enzymexla.rotate(
+                input.mlir_data;
+                amount=Int32(amount),
+                dimension=Int32(dimension - 1),
+                location,
+            ),
+            1,
+        ),
+        size(input),
+    )
 end
 
 end # module Ops
