@@ -2793,6 +2793,7 @@ extern "C" void reactantXLAMemcpy(LinkableRuntime **__restrict__ lrtP,
       exit(1);
     }
     */
+    llvm::errs() <<" dst: " << dst << " dstB: " << dstB << " dstO: " << dstO <<" size: " << size << " src: " << src << "\n";
     CopyToBuffer(lrt->client, dstB, src, dstO, size);
     break;
   }
@@ -2829,6 +2830,7 @@ extern "C" void *reactantXLAMalloc(LinkableRuntime **__restrict__ lrtP,
   PjRtDevice *device = ClientGetDevice(lrt->client, lrt->device);
 
   auto xbuffer = UninitPJRTBuffer(lrt->client, device, ptype, shapeLen, shape);
+  llvm::errs() << " alloc: " << xbuffer << "\n";
   lrt->allocations.insert((void *)xbuffer);
   return xbuffer;
 }
