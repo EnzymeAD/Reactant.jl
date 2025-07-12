@@ -364,17 +364,18 @@ enzymeActivityAttrGet(MlirContext ctx, int32_t val) {
                                               (mlir::enzyme::Activity)val));
 }
 
-extern "C" MLIR_CAPI_EXPORTED MlirAttribute enzymeConstraintAttrGet(
-    MlirContext ctx, uint64_t symbol, MlirAttribute values) {
-  mlir::Attribute vals = unwrap(values);
-  auto arr = llvm::dyn_cast<mlir::ArrayAttr>(vals);
-  if (!arr) {
-    ReactantThrowError(
-        "enzymeConstraintAttrGet: `values` must be an ArrayAttr");
-    return MlirAttribute{nullptr};
-  }
-  mlir::Attribute attr =
-      mlir::enzyme::ConstraintAttr::get(unwrap(ctx), symbol, arr);
+extern "C" MLIR_CAPI_EXPORTED MlirType enzymeTraceTypeGet(MlirContext ctx) {
+  return wrap(mlir::enzyme::TraceType::get(unwrap(ctx)));
+}
+
+extern "C" MLIR_CAPI_EXPORTED MlirType
+enzymeConstraintTypeGet(MlirContext ctx) {
+  return wrap(mlir::enzyme::ConstraintType::get(unwrap(ctx)));
+}
+
+extern "C" MLIR_CAPI_EXPORTED MlirAttribute
+enzymeSymbolAttrGet(MlirContext ctx, uint64_t symbol) {
+  mlir::Attribute attr = mlir::enzyme::SymbolAttr::get(unwrap(ctx), symbol);
   return wrap(attr);
 }
 
