@@ -39,6 +39,8 @@ function MPI.Send(buf::TracedRArray, dest::Integer, tag::Integer, comm::MPI.Comm
 end
 
 # TODO use `make_tracer` to linearize arbitrary types? check out `MPI.Buffer`
+# NOTE unlike MPI.jl's `MPI.Send`, we return the errcode to generate the data dep
+# that prevents it from being optimized away
 function MPI.Send(
     buf::TracedRArray, dest::TracedRNumber, tag::TracedRNumber, comm::MPI.Comm
 )

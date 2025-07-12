@@ -322,29 +322,41 @@ function send(
     #! format: off
     # TODO
     IR.inject!(sym_name, """
-        func.func @$sym_name(%buf : !llvm.ptr, %count_ptr : !llvm.ptr, %dest_ptr : !llvm.ptr, %tag_ptr : !llvm.ptr) -> () {
+        func.func @$sym_name(%errcode : !llvm.ptr, %buf : !llvm.ptr, %count_ptr : !llvm.ptr, %dest_ptr : !llvm.ptr, %tag_ptr : !llvm.ptr) -> () {
             %comm = llvm.mlir.addressof @MPI_COMM_WORLD : !llvm.ptr
             %datatype = llvm.mlir.addressof @$(mpi_datatype_name) : !llvm.ptr
             %count = llvm.load %count_ptr : !llvm.ptr -> i32
             %dest = llvm.load %dest_ptr : !llvm.ptr -> i32
             %tag = llvm.load %tag_ptr : !llvm.ptr -> i32
-            %errcode = llvm.call @MPI_Send(%buf, %count, %datatype, %dest, %tag, %comm) : (!llvm.ptr, i32, !llvm.ptr, i32, i32, !llvm.ptr) -> (i32)
+            %res = llvm.call @MPI_Send(%buf, %count, %datatype, %dest, %tag, %comm) : (!llvm.ptr, i32, !llvm.ptr, i32, i32, !llvm.ptr) -> (i32)
+            llvm.store %res, %errcode : i32, !llvm.ptr
             func.return
         }
     """)
     #! format: on
 
-    count = Reactant.Ops.constant(length(buf))
+    count = Reactant.Ops.constant(Int32(length(buf)))
+    errcode = Reactant.Ops.constant(fill(Cint(0)))
 
-    enzymexla.jit_call(
-        IR.Value[buf.mlir_data, count.mlir_data, tag.mlir_data, dest.mlir_data];
+    output_operand_aliases = IR.Attribute([
+        IR.Attribute(
+            MLIR.API.stablehloOutputOperandAliasGet(
+                MLIR.IR.context(), 0, C_NULL, 0, 0, C_NULL
+            ),
+        ),
+    ])
+
+    ret = enzymexla.jit_call(
+        IR.Value[
+            errcode.mlir_data, buf.mlir_data, count.mlir_data, dest.mlir_data, tag.mlir_data
+        ];
         fn=sym_attr,
-        result_0=IR.Type[mlir_type(buf), mlir_type(count), mlir_type(tag), mlir_type(dest)],
-        output_operand_aliases=IR.Attribute(IR.Attribute[]),
+        result_0=IR.Type[mlir_type(errcode)],
+        output_operand_aliases=output_operand_aliases,
         location,
     )
-
-    return nothing
+    errcode.mlir_data = IR.result(ret)
+    return errcode
 end
 
 # TODO need c-function for creating MLIR `mpi.request` type?
@@ -392,43 +404,54 @@ function recv!(
 
     #! format: off
     IR.inject!(sym_name, """
-        func.func @$sym_name(%buf : !llvm.ptr, %count_ptr : !llvm.ptr, %source_ptr : !llvm.ptr, %tag_ptr : !llvm.ptr) -> () {
+        func.func @$sym_name(%errcode : !llvm.ptr, %buf : !llvm.ptr, %count_ptr : !llvm.ptr, %source_ptr : !llvm.ptr, %tag_ptr : !llvm.ptr) -> () {
             %comm = llvm.mlir.addressof @MPI_COMM_WORLD : !llvm.ptr
             %datatype = llvm.mlir.addressof @$mpi_datatype_name : !llvm.ptr
             %status = llvm.mlir.addressof @MPI_STATUS_IGNORE : !llvm.ptr
             %count = llvm.load %count_ptr : !llvm.ptr -> i32
             %source = llvm.load %source_ptr : !llvm.ptr -> i32
             %tag = llvm.load %tag_ptr : !llvm.ptr -> i32
-            %errcode = llvm.call @MPI_Recv(%buf, %count, %datatype, %source, %tag, %comm, %status) : (!llvm.ptr, i32, !llvm.ptr, i32, i32, !llvm.ptr, !llvm.ptr) -> (i32)
+            %res = llvm.call @MPI_Recv(%buf, %count, %datatype, %source, %tag, %comm, %status) : (!llvm.ptr, i32, !llvm.ptr, i32, i32, !llvm.ptr, !llvm.ptr) -> (i32)
+            llvm.store %res, %errcode : i32, !llvm.ptr
             func.return
         }
     """)
     #! format: on
 
-    count = Reactant.Ops.constant(fill(length(recvbuf)))
+    count = Reactant.Ops.constant(Int32(length(recvbuf)))
+    errcode = Reactant.Ops.constant(fill(Cint(0)))
 
     output_operand_aliases = IR.Attribute([
         IR.Attribute(
             MLIR.API.stablehloOutputOperandAliasGet(
-                MLIR.IR.context(), 0, C_NULL, 0, 0, C_NULL
+                MLIR.IR.context(), 1, Ref{Int64}(0), 0, 0, C_NULL
+            ),
+        ),
+        IR.Attribute(
+            MLIR.API.stablehloOutputOperandAliasGet(
+                MLIR.IR.context(), 1, Ref{Int64}(1), 1, 0, C_NULL
             ),
         ),
     ])
 
-    res = IR.result(
-        enzymexla.jit_call(
-            IR.Value[recvbuf.mlir_data, count.mlir_data, src.mlir_data, tag.mlir_data];
-            fn=sym_attr,
-            result_0=[mlir_type(recvbuf)],
-            output_operand_aliases,
-            location,
-        ),
-        1,
+    ret = enzymexla.jit_call(
+        IR.Value[
+            errcode.mlir_data,
+            recvbuf.mlir_data,
+            count.mlir_data,
+            src.mlir_data,
+            tag.mlir_data,
+        ];
+        fn=sym_attr,
+        result_0=[mlir_type(errcode), mlir_type(recvbuf)],
+        output_operand_aliases,
+        location,
     )
 
-    recvbuf.mlir_data = res
+    errcode.mlir_data = IR.result(ret, 1)
+    recvbuf.mlir_data = IR.result(ret, 2)
 
-    return recvbuf
+    return errcode, recvbuf
 end
 
 # TODO need c-function for creating MLIR `mpi.request` type?
