@@ -719,6 +719,12 @@ extern "C" void *UnsafeBufferPointer(PjRtBuffer *buffer) {
 
 extern "C" void CopyToBuffer(PjRtClient *client, PjRtBuffer *buffer, void *data,
                              size_t offset, size_t size) {
+  if (buffer->IsOnCpu()) {
+    auto unsafe = (char*) MyValueOrThrow(buffer->client()->UnsafeBufferPointer(buffer));
+    memcpy(unsafe + offset, data, size);
+    //memcpy((char*) ((AbstractCpuBuffer*)buffer)->untyped_data() + offset, data, size);
+    return;
+  }
   auto raw_buffer =
       MyValueOrThrow(PjRtRawBuffer::CreateRawAliasOfBuffer(buffer));
   auto future = raw_buffer->CopyRawHostToDevice(data, offset, size);
@@ -2259,17 +2265,16 @@ extern "C" HeldIfrtArray **ifrt_array_disassemble_into_single_device_arrays(
 extern "C" HeldValue<std::shared_ptr<xla::DistributedRuntimeClient>> *
 GetDistributedRuntimeClient(char *c_address, int32_t node_id,
                             int32_t rpc_timeout_in_seconds,
-                            // int32_t init_timeout,
+                            int32_t init_timeout,
                             int32_t shutdown_timeout_in_minutes,
-                            int32_t heartbeat_interval_in_seconds,
-                            int max_missing_heartbeats, bool use_compression) {
+                            int32_t heartbeat_timeout_in_seconds,
+                            bool use_compression) {
   xla::DistributedRuntimeClient::Options options;
   options.node_id = node_id;
   options.rpc_timeout = absl::Seconds(rpc_timeout_in_seconds);
-  // options.init_timeout = absl::Seconds(init_timeout);
+  options.init_timeout = absl::Seconds(init_timeout);
   options.shutdown_timeout = absl::Minutes(shutdown_timeout_in_minutes);
-  options.heartbeat_interval = absl::Seconds(heartbeat_interval_in_seconds);
-  options.max_missing_heartbeats = max_missing_heartbeats;
+  options.heartbeat_timeout = absl::Seconds(heartbeat_timeout_in_seconds);
 
   std::string address = c_address;
 
@@ -2297,13 +2302,12 @@ extern "C" void distributed_runtime_client_shutdown(
 }
 
 extern "C" xla::DistributedRuntimeService *GetDistributedRuntimeService(
-    char *c_address, int num_nodes, int32_t heartbeat_interval_in_seconds,
-    int max_missing_heartbeats, int32_t cluster_register_timeout_in_minutes,
+    char *c_address, int num_nodes, int32_t heartbeat_timeout_in_seconds,
+    int32_t cluster_register_timeout_in_minutes,
     int32_t shutdown_timeout_in_minutes) {
   xla::CoordinationServiceImpl::Options options;
   options.num_nodes = num_nodes;
-  options.heartbeat_interval = absl::Seconds(heartbeat_interval_in_seconds);
-  options.max_missing_heartbeats = max_missing_heartbeats;
+  options.heartbeat_timeout = absl::Seconds(heartbeat_timeout_in_seconds);
   options.cluster_register_timeout =
       absl::Minutes(cluster_register_timeout_in_minutes);
   options.shutdown_timeout = absl::Minutes(shutdown_timeout_in_minutes);
@@ -2753,18 +2757,24 @@ struct LinkableRuntime {
   }
 };
 
-static std::pair<PjRtBuffer *, /*offset*/ size_t>
+static std::tuple<PjRtBuffer *, /*offset*/ size_t, PjRtBuffer**>
 bufferAndOffset(LinkableRuntime *__restrict__ lrt, void *ptr) {
   auto found = lrt->allocations.lower_bound(ptr);
   assert(found != lrt->allocations.end());
-  auto start = (PjRtBuffer *)(*found);
-  return std::pair<PjRtBuffer *, /*offset*/ size_t>(start, (size_t)ptr -
-                                                               (size_t)start);
+  auto start = (PjRtBuffer **)(*found);
+  return std::tuple<PjRtBuffer *, /*offset*/ size_t, PjRtBuffer**>(*start, (size_t)ptr -
+                                                               (size_t)start, start);
 }
 
-extern "C" void reactantXLAInit(LinkableRuntime **__restrict__ lrt,
+extern "C" void reactantXLAThrow(const char* str) {
+  printf("Error: %s\n", str);
+  exit(1);
+}
+
+extern "C" void reactantXLAInit(LinkableRuntime **__restrict__ lrtP,
                                 const char *__restrict__ backend) {
-  *lrt = new LinkableRuntime(backend);
+  *lrtP = new LinkableRuntime(backend);
+  ReactantThrowError = reactantXLAThrow;
 }
 
 extern "C" void reactantXLADeInit(LinkableRuntime **__restrict__ lrt) {
@@ -2782,36 +2792,14 @@ extern "C" void reactantXLAMemcpy(LinkableRuntime **__restrict__ lrtP,
     break;
   case 1: // cudaMemcpyHostToDevice
   {
-    auto &&[dstB, dstO] = bufferAndOffset(lrt, dst);
-    /*
-    if (dstO != 0) {
-      llvm::errs() << "only zero-offset memcpy supported\n";
-      exit(1);
-    }
-    if (dstSize != size) {
-      llvm::errs() << "only whole buffer copies are supported\n";
-      exit(1);
-    }
-    */
-    llvm::errs() <<" dst: " << dst << " dstB: " << dstB << " dstO: " << dstO <<" size: " << size << " src: " << src << "\n";
+    auto &&[dstB, dstO, _] = bufferAndOffset(lrt, dst);
     CopyToBuffer(lrt->client, dstB, src, dstO, size);
     break;
   }
   case 2: // cudaMemcpyDeviceToHost
   {
-    auto &&[srcB, srcO] = bufferAndOffset(lrt, src);
+    auto &&[srcB, srcO, _] = bufferAndOffset(lrt, src);
     CopyFromBuffer(lrt->client, srcB, dst, srcO, size);
-    /*
-    if (srcO != 0) {
-      llvm::errs() << "only zero-offset memcpy supported\n";
-      exit(1);
-    }
-    if (srcSize != size) {
-      llvm::errs() << "only whole buffer copies are supported\n";
-      exit(1);
-    }
-    BufferToHost(srcB, dst);
-    */
     break;
   }
   case 3: // cudaMemcpyDeviceToDevice
@@ -2829,14 +2817,17 @@ extern "C" void *reactantXLAMalloc(LinkableRuntime **__restrict__ lrtP,
   auto lrt = *lrtP;
   PjRtDevice *device = ClientGetDevice(lrt->client, lrt->device);
 
-  auto xbuffer = UninitPJRTBuffer(lrt->client, device, ptype, shapeLen, shape);
-  llvm::errs() << " alloc: " << xbuffer << "\n";
+  auto xbuffer0 = UninitPJRTBuffer(lrt->client, device, ptype, shapeLen, shape);
+  void** xbuffer = (void**)malloc(sizeof(void*));
+  xbuffer[0] = xbuffer0;
   lrt->allocations.insert((void *)xbuffer);
   return xbuffer;
 }
 
 extern "C" void reactantXLAFree(LinkableRuntime **__restrict__ lrtP,
-                                void *__restrict__ buffer) {
+                                void *__restrict__ buffer0) {
+  void* buffer = *(void**)buffer0;
+  free(buffer0);
   PjRtBufferFree((PjRtBuffer *)buffer);
 }
 
@@ -2846,16 +2837,18 @@ extern "C" void reactantXLAExec(LinkableRuntime **__restrict__ lrtP,
   auto lrt = *lrtP;
   auto &cache = lrt->executables[modstr];
   std::vector<PjRtBuffer *> baseArrays(argcnt);
+  std::vector<PjRtBuffer **> basePtrs(argcnt);
 
   std::vector<std::vector<int64_t>> sizeKey;
   sizeKey.reserve(argcnt);
   for (int64_t i = 0; i < argcnt; i++) {
-    auto &&[argB, argO] = bufferAndOffset(lrt, args[i]);
+    auto &&[argB, argO, argP] = bufferAndOffset(lrt, args[i]);
     if (argO != 0) {
       llvm::errs() << "only zero-offset execution supported\n";
       exit(1);
     }
     baseArrays[i] = argB;
+    basePtrs[i] = argP;
     auto dims = argB->on_device_shape().dimensions();
     sizeKey.emplace_back(dims.begin(), dims.end());
   }
@@ -2879,6 +2872,11 @@ extern "C" void reactantXLAExec(LinkableRuntime **__restrict__ lrtP,
 
     mlir::OpBuilder builder(module->getContext());
     funcOp.setSymName(builder.getStringAttr("main"));
+    funcOp.setVisibility(SymbolTable::Visibility::Public);
+
+    for (int64_t i = 0; i < argcnt; i++) {
+      funcOp.setArgAttr(i, "tf.aliasing_output", builder.getI64IntegerAttr(i));
+    }
 
     PassManager pm(module->getContext());
 
@@ -2930,6 +2928,7 @@ extern "C" void reactantXLAExec(LinkableRuntime **__restrict__ lrtP,
                     future_results.data());
   free(is_arg_donatable);
   for (int64_t i = 0; i < argcnt; i++) {
+    *basePtrs[i] = results[i];
     if (futures[i]) {
       FutureAwait(future_results[i]);
       FreeFuture(future_results[i]);
