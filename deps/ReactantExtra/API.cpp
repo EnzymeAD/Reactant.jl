@@ -2699,6 +2699,7 @@ struct LinkableRuntime {
   mlir::DialectRegistry registry;
   xla::PjRtClient *client;
   int device;
+  bool shouldFreeClient;
   DenseMap<const char *, std::map<std::vector<std::vector<int64_t>>,
                                   xla::PjRtLoadedExecutable *>>
       executables;
@@ -2709,8 +2710,8 @@ struct LinkableRuntime {
   LinkableRuntime(const std::string &backend) : registry() {
     InitializeRegistry(wrap(&registry));
     InitializePasses(wrap(&registry));
-
     InitializeLogs();
+    shouldFreeClient = true;
     const char *error = NULL;
     auto mpi = getenv("OMPI_COMM_WORLD_RANK");
     device = 0;
@@ -2743,6 +2744,8 @@ struct LinkableRuntime {
       if (!client)
         llvm::errs() << " error: " << refstr << "\n";
       assert(client);
+      // Weird stream issue in freeing cuda client.
+      shouldFreeClient = false;
     } else {
       client = MakeCPUClient(1, 0);
       assert(client);
