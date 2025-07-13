@@ -150,10 +150,17 @@ LLVM_TARGETS = select({
 #     ],
 # )
 
+JAX_PATCHES = [
+    """
+sed -i.bak0 "s/ cast/ llvm::cast/g" jaxlib/mosaic/dialect/gpu/mosaic_gpu.cc
+"""
+]
+
 http_archive(
     name = "jax",
     patch_args = ["-p1"],
     patches = ["@enzyme_ad//:patches/jax.patch"],
+    patch_cmds = JAX_PATCHES,
     sha256 = JAX_SHA256,
     strip_prefix = "jax-" + JAX_COMMIT,
     urls = ["https://github.com/google/jax/archive/{commit}.tar.gz".format(commit = JAX_COMMIT)],
