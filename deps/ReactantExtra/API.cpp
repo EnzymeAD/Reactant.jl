@@ -720,9 +720,11 @@ extern "C" void *UnsafeBufferPointer(PjRtBuffer *buffer) {
 extern "C" void CopyToBuffer(PjRtClient *client, PjRtBuffer *buffer, void *data,
                              size_t offset, size_t size) {
   if (buffer->IsOnCpu()) {
-    auto unsafe = (char*) MyValueOrThrow(buffer->client()->UnsafeBufferPointer(buffer));
+    auto unsafe =
+        (char *)MyValueOrThrow(buffer->client()->UnsafeBufferPointer(buffer));
     memcpy(unsafe + offset, data, size);
-    //memcpy((char*) ((AbstractCpuBuffer*)buffer)->untyped_data() + offset, data, size);
+    // memcpy((char*) ((AbstractCpuBuffer*)buffer)->untyped_data() + offset,
+    // data, size);
     return;
   }
   auto raw_buffer =
@@ -2301,10 +2303,11 @@ extern "C" void distributed_runtime_client_shutdown(
     ReactantThrowError(status.ToString().c_str());
 }
 
-extern "C" xla::DistributedRuntimeService *GetDistributedRuntimeService(
-    char *c_address, int num_nodes, int32_t heartbeat_timeout_in_seconds,
-    int32_t cluster_register_timeout_in_minutes,
-    int32_t shutdown_timeout_in_minutes) {
+extern "C" xla::DistributedRuntimeService *
+GetDistributedRuntimeService(char *c_address, int num_nodes,
+                             int32_t heartbeat_timeout_in_seconds,
+                             int32_t cluster_register_timeout_in_minutes,
+                             int32_t shutdown_timeout_in_minutes) {
   xla::CoordinationServiceImpl::Options options;
   options.num_nodes = num_nodes;
   options.heartbeat_timeout = absl::Seconds(heartbeat_timeout_in_seconds);
@@ -2757,16 +2760,16 @@ struct LinkableRuntime {
   }
 };
 
-static std::tuple<PjRtBuffer *, /*offset*/ size_t, PjRtBuffer**>
+static std::tuple<PjRtBuffer *, /*offset*/ size_t, PjRtBuffer **>
 bufferAndOffset(LinkableRuntime *__restrict__ lrt, void *ptr) {
   auto found = lrt->allocations.lower_bound(ptr);
   assert(found != lrt->allocations.end());
   auto start = (PjRtBuffer **)(*found);
-  return std::tuple<PjRtBuffer *, /*offset*/ size_t, PjRtBuffer**>(*start, (size_t)ptr -
-                                                               (size_t)start, start);
+  return std::tuple<PjRtBuffer *, /*offset*/ size_t, PjRtBuffer **>(
+      *start, (size_t)ptr - (size_t)start, start);
 }
 
-extern "C" void reactantXLAThrow(const char* str) {
+extern "C" void reactantXLAThrow(const char *str) {
   printf("Error: %s\n", str);
   exit(1);
 }
@@ -2818,7 +2821,7 @@ extern "C" void *reactantXLAMalloc(LinkableRuntime **__restrict__ lrtP,
   PjRtDevice *device = ClientGetDevice(lrt->client, lrt->device);
 
   auto xbuffer0 = UninitPJRTBuffer(lrt->client, device, ptype, shapeLen, shape);
-  void** xbuffer = (void**)malloc(sizeof(void*));
+  void **xbuffer = (void **)malloc(sizeof(void *));
   xbuffer[0] = xbuffer0;
   lrt->allocations.insert((void *)xbuffer);
   return xbuffer;
@@ -2826,7 +2829,7 @@ extern "C" void *reactantXLAMalloc(LinkableRuntime **__restrict__ lrtP,
 
 extern "C" void reactantXLAFree(LinkableRuntime **__restrict__ lrtP,
                                 void *__restrict__ buffer0) {
-  void* buffer = *(void**)buffer0;
+  void *buffer = *(void **)buffer0;
   free(buffer0);
   PjRtBufferFree((PjRtBuffer *)buffer);
 }
