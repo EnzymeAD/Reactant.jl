@@ -68,6 +68,9 @@ CUPTI_NEW = []
 
 XLA_PATCHES = XLA_PATCHES + CUPTI_NEW + [
     """
+sed -i.bak0 "s/kSupportedOpcodes({/kSupportedOpcodes(absl::flat_hash_set<HloOpcode>{/g" xla/service/gpu/gpu_memory_space_assignment.h
+""",
+    """
 sed -i.bak0 "s/cupti_driver_cbid/cupti/g" xla/backends/profiler/gpu/cupti_tracer.cc
 """,
     """
