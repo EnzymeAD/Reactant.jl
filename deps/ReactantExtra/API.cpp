@@ -2757,7 +2757,7 @@ struct LinkableRuntime {
   }
 
   ~LinkableRuntime() {
-    if (client) {
+    if (client && shouldFreeClient) {
       delete client;
     }
   }
