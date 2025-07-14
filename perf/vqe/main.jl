@@ -107,7 +107,7 @@ results = Vector{Tuple{String,String,T,T,Float64}}()
 
 # primal
 ## only XLA
-f_xla = @compile compile_options = Reactant.DefaultXLACompileOptions(; sync=true) expectation(
+f_xla = @time @compile compile_options = Reactant.DefaultXLACompileOptions(; sync=true) expectation(
     params_re, observable_re, coef_re
 )
 b = @benchmark $f_xla($params_re, $observable_re, $coef_re) setup = (GC.gc(true))
