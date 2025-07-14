@@ -553,8 +553,11 @@ function rewrite_insts!(ir, interp, guaranteed_error)
     return ir, any_changed
 end
 
+function rewrite_argnumbers_by_one!(ir)
+    # Add one dummy argument at the beginning
+    pushfirst!(ir.argtypes, Nothing)
 
-function increment_arguments!(ir::Core.Compiler.IRCode)
+    # Re-write all references to existing arguments to their new index (N + 1)
     for idx = 1:length(ir.stmts)
         urs = Core.Compiler.userefs(ir.stmts[idx][:inst])
         changed = false
@@ -563,29 +566,21 @@ function increment_arguments!(ir::Core.Compiler.IRCode)
             (ur, next) = it
             old = Core.Compiler.getindex(ur)
             if old isa Core.Argument
+                # Replace the Argument(n) with Argument(n + 1)
                 Core.Compiler.setindex!(ur, Core.Argument(old.n + 1))
                 changed = true
             end
             it = Core.Compiler.iterate(urs, next)
         end
-        if !changed
-            continue
-        end
-        @static if VERSION < v"1.11"
-            Core.Compiler.setindex!(ir.stmts[idx], Core.Compiler.getindex(urs), :inst)
-        else
-           Core.Compiler.setindex!(ir.stmts[idx], Core.Compiler.getindex(urs), :stmt)
+        if changed
+            @static if VERSION < v"1.11"
+                Core.Compiler.setindex!(ir.stmts[idx], Core.Compiler.getindex(urs), :inst)
+            else
+                Core.Compiler.setindex!(ir.stmts[idx], Core.Compiler.getindex(urs), :stmt)
+            end
         end
     end
-end
 
-
-function rewrite_argnumbers_by_one!(ir)
-    pushfirst!(ir.argtypes, Nothing)
-    #pushfirst!(ir.slotnames, :dummy)
-    # pushfirst!(ir.slotflags, UInt8(0))
-    increment_arguments!(ir)
-    ir
     return nothing
 end
 
