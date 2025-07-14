@@ -11,7 +11,7 @@ http_archive(
     urls = ["https://github.com/wsmoses/nsync/archive/{commit}.tar.gz".format(commit = NSYNC_COMMIT)],
 )
 
-ENZYMEXLA_COMMIT = "d95dbb25bac5b01b4c96816234eff81c00e2513e"
+ENZYMEXLA_COMMIT = "20aff0cfd430339ca01c9febb96675d62a4a7995"
 
 ENZYMEXLA_SHA256 = ""
 
@@ -67,6 +67,9 @@ sed -i.bak0 "/CUPTI_DRIVER_TRACE_CBID_cuGraphAddNode_v2/d" xla/backends/profiler
 CUPTI_NEW = []
 
 XLA_PATCHES = XLA_PATCHES + CUPTI_NEW + [
+    """
+sed -i.bak0 "s/kSupportedOpcodes({/kSupportedOpcodes(absl::flat_hash_set<HloOpcode>{/g" xla/service/gpu/gpu_memory_space_assignment.h
+""",
     """
 sed -i.bak0 "s/cupti_driver_cbid/cupti/g" xla/backends/profiler/gpu/cupti_tracer.cc
 """,
@@ -150,9 +153,16 @@ LLVM_TARGETS = select({
 #     ],
 # )
 
+JAX_PATCHES = [
+    """
+sed -i.bak0 "s/ cast/ llvm::cast/g" jaxlib/mosaic/dialect/gpu/mosaic_gpu.cc
+""",
+]
+
 http_archive(
     name = "jax",
     patch_args = ["-p1"],
+    patch_cmds = JAX_PATCHES,
     patches = ["@enzyme_ad//:patches/jax.patch"],
     sha256 = JAX_SHA256,
     strip_prefix = "jax-" + JAX_COMMIT,

@@ -2062,6 +2062,44 @@ function mlirBlockPrint(block, callback, userData)
 end
 
 """
+    mlirBlockGetNumSuccessors(block)
+
+Returns the number of successor blocks of the block.
+"""
+function mlirBlockGetNumSuccessors(block)
+    @ccall mlir_c.mlirBlockGetNumSuccessors(block::MlirBlock)::intptr_t
+end
+
+"""
+    mlirBlockGetSuccessor(block, pos)
+
+Returns `pos`-th successor of the block.
+"""
+function mlirBlockGetSuccessor(block, pos)
+    @ccall mlir_c.mlirBlockGetSuccessor(block::MlirBlock, pos::intptr_t)::MlirBlock
+end
+
+"""
+    mlirBlockGetNumPredecessors(block)
+
+Returns the number of predecessor blocks of the block.
+"""
+function mlirBlockGetNumPredecessors(block)
+    @ccall mlir_c.mlirBlockGetNumPredecessors(block::MlirBlock)::intptr_t
+end
+
+"""
+    mlirBlockGetPredecessor(block, pos)
+
+Returns `pos`-th predecessor of the block.
+
+WARNING: This getter is more expensive than the others here because the impl actually iterates the use-def chain (of block operands) anew for each indexed access.
+"""
+function mlirBlockGetPredecessor(block, pos)
+    @ccall mlir_c.mlirBlockGetPredecessor(block::MlirBlock, pos::intptr_t)::MlirBlock
+end
+
+"""
     mlirValueIsNull(value)
 
 Returns whether the value is null.

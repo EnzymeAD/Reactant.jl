@@ -1593,19 +1593,22 @@ end
 `elect_sync`
 
 The `elect.sync` instruction elects one predicated active leader
-thread from among a set of threads specified in membermask.
-The membermask is set to `0xFFFFFFFF` for the current version
-of this Op. The predicate result is set to `True` for the
-leader thread, and `False` for all other threads.
+thread from among a set of threads specified in the `membermask`.
+When the `membermask` is not provided explicitly, a default value
+of `0xFFFFFFFF` is used. The predicate result is set to `True` for
+the leader thread, and `False` for all other threads.
 
 [For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#parallel-synchronization-and-communication-instructions-elect-sync)
 """
-function elect_sync(; pred::IR.Type, location=Location())
+function elect_sync(
+    membermask=nothing::Union{Nothing,Value}; pred::IR.Type, location=Location()
+)
     op_ty_results = IR.Type[pred,]
     operands = Value[]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
+    !isnothing(membermask) && push!(operands, membermask)
 
     return create_operation(
         "nvvm.elect.sync",
