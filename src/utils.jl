@@ -499,7 +499,7 @@ function make_oc_ref(
 )::Core.OpaqueClosure
     if Base.isassigned(oc_captures)
         return oc_captures[]
-    else
+    else     
         ores = ccall(
             :jl_new_opaque_closure_from_code_info,
             Any,
@@ -551,6 +551,42 @@ function rewrite_insts!(ir, interp, guaranteed_error)
         end
     end
     return ir, any_changed
+end
+
+
+function increment_arguments!(ir::Core.Compiler.IRCode)
+    for idx = 1:length(ir.stmts)
+        urs = Core.Compiler.userefs(ir.stmts[idx][:inst])
+        changed = false
+        it = Core.Compiler.iterate(urs)
+        while it !== nothing
+            (ur, next) = it
+            old = Core.Compiler.getindex(ur)
+            if old isa Core.Argument
+                Core.Compiler.setindex!(ur, Core.Argument(old.n + 1))
+                changed = true
+            end
+            it = Core.Compiler.iterate(urs, next)
+        end
+        if !changed
+            continue
+        end
+        @static if VERSION < v"1.11"
+            Core.Compiler.setindex!(ir.stmts[idx], Core.Compiler.getindex(urs), :inst)
+        else
+           Core.Compiler.setindex!(ir.stmts[idx], Core.Compiler.getindex(urs), :stmt)
+        end
+    end
+end
+
+
+function rewrite_argnumbers_by_one!(ir)
+    pushfirst!(ir.argtypes, Nothing)
+    #pushfirst!(ir.slotnames, :dummy)
+    # pushfirst!(ir.slotflags, UInt8(0))
+    increment_arguments!(ir)
+    ir
+    return nothing
 end
 
 # Generator function which ensures that all calls to the function are executed within the ReactantInterpreter
@@ -666,6 +702,9 @@ function call_with_reactant_generator(
     ) || guaranteed_error
         ir, any_changed = rewrite_insts!(ir, interp, guaranteed_error)
     end
+  
+
+    rewrite_argnumbers_by_one!(ir)  
 
     src = ccall(:jl_new_code_info_uninit, Ref{CC.CodeInfo}, ())
     src.slotnames = fill(:none, length(ir.argtypes) + 1)
@@ -673,6 +712,7 @@ function call_with_reactant_generator(
     src.slottypes = copy(ir.argtypes)
     src.rettype = rt
     src = CC.ir_to_codeinf!(src, ir)
+
 
     if DEBUG_INTERP[]
         safe_print("src", src)
@@ -784,10 +824,10 @@ function call_with_reactant_generator(
 
     ocva = false # method.isva
 
-    ocnargs = method.nargs - 1
+    ocnargs = Int(method.nargs)
     # octup = Tuple{mi.specTypes.parameters[2:end]...}
     # octup = Tuple{method.sig.parameters[2:end]...}
-    octup = Tuple{tys[2:end]...}
+    octup = Tuple{tys[1:end]...}
     ocva = false
 
     # jl_new_opaque_closure forcibly executes in the current world... This means that we won't get the right
@@ -795,11 +835,7 @@ function call_with_reactant_generator(
     # Opaque closures also require taking the function argument. We can work around the latter
     # if the function is stateless. But regardless, to work around this we sadly create/compile the opaque closure
 
-    dict, make_oc = if Base.issingletontype(fn)
-        Base.Ref{Core.OpaqueClosure}(), make_oc_ref
-    else
-        Dict{fn,Core.OpaqueClosure}(), make_oc_dict
-    end
+    dict, make_oc = (Base.Ref{Core.OpaqueClosure}(), make_oc_ref)
 
     push!(oc_capture_vec, dict)
 
@@ -807,15 +843,15 @@ function call_with_reactant_generator(
         res = Core._call_in_world_total(
             world, make_oc, dict, octup, rt, src, ocnargs, ocva, fn.instance
         )::Core.OpaqueClosure
-
     else
         farg = fn_args[1]
+        farg = nothing
         rep = Expr(:call, make_oc, dict, octup, rt, src, ocnargs, ocva, farg)
         push_inst!(rep)
         Core.SSAValue(length(overdubbed_code))
     end
 
-    push_inst!(Expr(:call, oc, fn_args[2:end]...))
+    push_inst!(Expr(:call, oc, fn_args[1:end]...))
 
     ocres = Core.SSAValue(length(overdubbed_code))
 
