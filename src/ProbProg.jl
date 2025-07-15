@@ -699,8 +699,6 @@ end
 function generate(
     f::Function, args::Vararg{Any,Nargs}; constraint::Constraint=Dict{Symbol,Any}()
 ) where {Nargs}
-    old_gc_state = GC.enable(false)
-
     trace = nothing
     weight = nothing
     res = nothing
@@ -712,8 +710,10 @@ function generate(
         return generate_internal(f, args...; constraint_ptr, constrained_symbols)
     end
 
+    compiled_fn = @compile optimize = :probprog wrapper_fn(constraint_ptr, args...)
+
+    old_gc_state = GC.enable(false)
     try
-        compiled_fn = @compile optimize = :probprog wrapper_fn(constraint_ptr, args...)
         trace, weight, res = compiled_fn(constraint_ptr, args...)
     finally
         GC.enable(old_gc_state)
