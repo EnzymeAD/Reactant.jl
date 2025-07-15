@@ -450,7 +450,7 @@ end
             randn(Float32, 4, 4); sharding=Sharding.NamedSharding(mesh, (:x, :y))
         )
 
-        shardy_options = Sharding.ShardyPropagationOptions(;
+        shardy_options = Reactant.ShardyPropagationOptions(;
             enable_insert_explicit_collectives=true, conservative_propagation=true
         )
 

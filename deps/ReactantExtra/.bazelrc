@@ -6,24 +6,30 @@ common --experimental_repo_remote_exec
 common --cxxopt=-std=c++17 --host_cxxopt=-std=c++17
 common --cxxopt=-w --host_cxxopt=-w
 common --define=grpc_no_ares=true
-common --define=tsl_link_protobuf=true
-common --define open_source_build=true
-common
-common --define framework_shared_object=true
-common --define tsl_protobuf_header_only=true
-common --define=use_fast_cpp_protos=true
-common --define=allow_oversize_protos=true
+common --noenable_bzlmod
+
+build --repo_env=USE_PYWRAP_RULES=True
+build --copt=-DGRPC_BAZEL_BUILD
+build --host_copt=-DGRPC_BAZEL_BUILD
+build --action_env=GRPC_BAZEL_RUNTIME=1
+build --repo_env=PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=upb
+build --action_env=PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=upb
+build --repo_env=RULES_PYTHON_ENABLE_PYSTAR=0
+# Do not do this. This is how gRPC builds itself by default, but we don't want
+# that as it would link protobuf into its own set of dynamic libraries, which
+# would conflict with our protobuf linkage.
+#build --define=use_fast_cpp_protos=true
 
 build -c opt
 
 build:cuda --repo_env TF_NEED_CUDA=1
 build:cuda --repo_env TF_NVCC_CLANG=1
 build:cuda --repo_env TF_NCCL_USE_STUB=1
-build:cuda --repo_env=HERMETIC_CUDA_VERSION="12.6.2"
-build:cuda --repo_env=HERMETIC_CUDNN_VERSION="9.4.0"
+build:cuda --repo_env=HERMETIC_CUDA_VERSION="12.8.1"
+build:cuda --repo_env=HERMETIC_CUDNN_VERSION="9.8.0"
 # "sm" means we emit only cubin, which is forward compatible within a GPU generation.
 # "compute" means we emit both cubin and PTX, which is larger but also forward compatible to future GPU generations.
-build:cuda --repo_env HERMETIC_CUDA_COMPUTE_CAPABILITIES="sm_50,sm_60,sm_70,sm_80,compute_90"
+build:cuda --repo_env HERMETIC_CUDA_COMPUTE_CAPABILITIES="sm_60,sm_70,sm_80,compute_90"
 build:cuda --crosstool_top="@local_config_cuda//crosstool:toolchain"
 build:cuda --@local_config_cuda//:enable_cuda
 # Default hermetic CUDA and CUDNN versions.

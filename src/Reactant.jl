@@ -6,7 +6,7 @@ using ReactantCore:
 using LinearAlgebra: LinearAlgebra
 using Random: Random, AbstractRNG
 using EnumX: @enumx
-using Functors: @leaf
+using Functors: Functors, @leaf
 
 using Adapt: Adapt, WrappedArray
 using GPUArraysCore: GPUArraysCore, @allowscalar, allowscalar # keep this import to allow users to do `Reactant.allowscalar(false)`
@@ -48,6 +48,10 @@ end
 include("accelerators/Accelerators.jl")
 
 using .Accelerators.TPU: has_tpu
+
+include("CompileOptions.jl")
+
+export OptimizeCommunicationOptions, ShardyPropagationOptions, CompileOptions
 
 include("mlir/MLIR.jl")
 include("xla/XLA.jl")
@@ -160,8 +164,8 @@ use_overlayed_version(::TracedRArray) = true
 use_overlayed_version(::TracedRNumber) = true
 use_overlayed_version(::Number) = false
 use_overlayed_version(::MissingTracedValue) = true
-use_overlayed_version(::TracedRNG) = true
 use_overlayed_version(::AbstractArray{<:TracedRNumber}) = true
+use_overlayed_version(rng::ReactantRNG) = use_overlayed_version(rng.seed)
 
 function use_overlayed_version(x::AbstractArray)
     a = ancestor(x)
@@ -182,26 +186,12 @@ const TracedType = Union{TracedRArray,TracedRNumber,MissingTracedValue}
 include("ControlFlow.jl")
 include("Tracing.jl")
 
-include("CompileOptions.jl")
-export OptimizeCommunicationOptions
-
 include("Compiler.jl")
 
 include("Overlay.jl")
 
-function Enzyme.make_zero(
-    ::Type{RT}, seen::IdDict, prev::RT, ::Val{copy_if_inactive}=Val(false)
-)::RT where {copy_if_inactive,RT<:Union{RArray,RNumber}}
-    if haskey(seen, prev)
-        return seen[prev]
-    end
-    if Enzyme.Compiler.guaranteed_const_nongen(eltype(RT), nothing)
-        return copy_if_inactive ? Base.deepcopy_internal(prev, seen) : prev
-    end
-    res = zero(prev)
-    seen[prev] = res
-    return res
-end
+# Serialization
+include("serialization/Serialization.jl")
 
 using .Compiler: @compile, @code_hlo, @code_mhlo, @jit, @code_xla, traced_getfield, compile
 export ConcreteRArray,

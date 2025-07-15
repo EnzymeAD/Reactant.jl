@@ -16,9 +16,17 @@ jobs:
         with:
           version: '1.10'
       - uses: julia-actions/cache@v2
-      - uses: actions/checkout@v4
+      - uses: bazel-contrib/setup-bazel@0.15.0
+        name: Set up Bazel
         with:
-          ref: main
+          # Avoid downloading Bazel every time.
+          bazelisk-cache: true
+          # Store build cache per workflow.
+          disk-cache: ${{ github.workflow }}-${{ matrix.os }}-${{ matrix.version }}
+          # Share repository cache between workflows.
+          repository-cache: true
+          bazelisk-version: 1.x
+      - uses: actions/checkout@v4
       - name: Install JuliaFormatter.jl
         shell: julia --color=yes {0}
         run: |

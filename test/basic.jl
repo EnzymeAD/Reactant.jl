@@ -22,6 +22,16 @@ using InteractiveUtils
     @test @jit(sum(a)) ≈ r_res
 end
 
+@testset "Julia Compilation cache" begin
+    x = @compile -(Reactant.to_rarray(ones(2)))
+    y = @compile -(Reactant.to_rarray(ones(2)))
+
+    @test typeof(x) == typeof(y)
+    # TODO, currently x and y are not equal as x.exec != y.exec
+    # as the executable we generate is itself not cached
+    # (which clearly we should do to improve jit time)
+end
+
 @testset "Basic reduce max" begin
     x = rand(2, 10)
 
@@ -1061,6 +1071,23 @@ end
     @test Array(x_ra) == x
 end
 
+function reshapecopy!(x, y)
+    Base.copyto!(x, reshape(y, size(x)))
+    return nothing
+end
+@testset "copyto! Reshaped TracedRArray" begin
+    x = zeros(3, 4, 5)
+    y = collect(reshape(1:60, (3, 20)))
+
+    xr = Reactant.to_rarray(x)
+    yr = Reactant.to_rarray(y)
+
+    @jit reshapecopy!(xr, yr)
+
+    reshapecopy!(x, y)
+    @test Array(xr) == x
+end
+
 @testset "copy(::Broadcast.Broadcasted{ArrayStyle{ConcreteRArray}})" begin
     x_ra = Reactant.to_rarray(ones(4, 4))
     res = copy(Broadcast.broadcasted(-, Broadcast.broadcasted(+, x_ra, 1)))
@@ -1174,4 +1201,178 @@ end
     res = @jit test_aliased_numbers(ps, x)
 
     @test res[1] === res[2] === res[3]
+end
+
+accum_fn(x, y) = abs2(x) + abs2(y)
+
+@testset "accumulate" begin
+    a = collect(Float32, 1:10) ./ 10
+    a_ra = Reactant.to_rarray(a)
+
+    b = reshape(collect(Float32, 1:60), (3, 4, 5)) ./ 60
+    b_ra = Reactant.to_rarray(b)
+
+    @testset "cumsum" begin
+        @test @jit(cumsum(a_ra)) ≈ cumsum(a)
+
+        @test @jit(cumsum(b_ra; dims=1)) ≈ cumsum(b; dims=1)
+        @test @jit(cumsum(b_ra; dims=2)) ≈ cumsum(b; dims=2)
+        @test @jit(cumsum(b_ra; dims=3)) ≈ cumsum(b; dims=3)
+
+        @test begin
+            z = similar(a_ra)
+            @jit(cumsum!(z, a_ra))
+            z
+        end ≈ cumsum(a)
+
+        @test begin
+            z = similar(b_ra)
+            @jit(cumsum!(z, b_ra; dims=1))
+            z
+        end ≈ cumsum(b; dims=1)
+        @test begin
+            z = similar(b_ra)
+            @jit(cumsum!(z, b_ra; dims=2))
+            z
+        end ≈ cumsum(b; dims=2)
+        @test begin
+            z = similar(b_ra)
+            @jit(cumsum!(z, b_ra; dims=3))
+            z
+        end ≈ cumsum(b; dims=3)
+    end
+
+    @testset "cumprod" begin
+        @test @jit(cumprod(a_ra)) ≈ cumprod(a)
+
+        @test @jit(cumprod(b_ra; dims=1)) ≈ cumprod(b; dims=1)
+        @test @jit(cumprod(b_ra; dims=2)) ≈ cumprod(b; dims=2)
+        @test @jit(cumprod(b_ra; dims=3)) ≈ cumprod(b; dims=3)
+
+        @test begin
+            z = similar(a_ra)
+            @jit(cumprod!(z, a_ra))
+            z
+        end ≈ cumprod(a)
+        @test begin
+            z = similar(b_ra)
+            @jit(cumprod!(z, b_ra; dims=1))
+            z
+        end ≈ cumprod(b; dims=1)
+        @test begin
+            z = similar(b_ra)
+            @jit(cumprod!(z, b_ra; dims=2))
+            z
+        end ≈ cumprod(b; dims=2)
+        @test begin
+            z = similar(b_ra)
+            @jit(cumprod!(z, b_ra; dims=3))
+            z
+        end ≈ cumprod(b; dims=3)
+    end
+
+    @testset "accumulate" begin
+        @test @jit(accumulate(accum_fn, a_ra; init=0.0f0)) ≈
+            accumulate(accum_fn, a; init=0.0f0)
+
+        @test @jit(accumulate(accum_fn, b_ra; init=0.0f0, dims=1)) ≈
+            accumulate(accum_fn, b; dims=1, init=0.0f0)
+        @test @jit(accumulate(accum_fn, b_ra; init=0.0f0, dims=2)) ≈
+            accumulate(accum_fn, b; dims=2, init=0.0f0)
+        @test @jit(accumulate(accum_fn, b_ra; init=0.0f0, dims=3)) ≈
+            accumulate(accum_fn, b; dims=3, init=0.0f0)
+
+        @test begin
+            z = similar(a_ra)
+            @jit(accumulate!(accum_fn, z, a_ra; init=0.0f0))
+            z
+        end ≈ accumulate(accum_fn, a; init=0.0f0)
+
+        @test begin
+            z = similar(b_ra)
+            @jit(accumulate!(accum_fn, z, b_ra; init=0.0f0, dims=1))
+            z
+        end ≈ accumulate(accum_fn, b; dims=1, init=0.0f0)
+        @test begin
+            z = similar(b_ra)
+            @jit(accumulate!(accum_fn, z, b_ra; init=0.0f0, dims=2))
+            z
+        end ≈ accumulate(accum_fn, b; dims=2, init=0.0f0)
+        @test begin
+            z = similar(b_ra)
+            @jit(accumulate!(accum_fn, z, b_ra; init=0.0f0, dims=3))
+            z
+        end ≈ accumulate(accum_fn, b; dims=3, init=0.0f0)
+    end
+end
+
+sameunitrange(x, y) = first(x) == first(y) && last(x) == last(y)
+
+@testset "searchsorted" begin
+    x = [1, 2, 4, 5, 5, 7]
+    x_ra = Reactant.to_rarray(x)
+
+    @testset "searchsortedfirst" begin
+        @testset for val in (4, 5, 3, 9, 0)
+            @test @jit(searchsortedfirst(x_ra, val)) == searchsortedfirst(x, val)
+            @test @jit(searchsortedfirst(x_ra, ConcreteRNumber(val))) ==
+                searchsortedfirst(x, val)
+        end
+    end
+
+    @testset "searchsortedlast" begin
+        @testset for val in (4, 5, 3, 9, 0)
+            @test @jit(searchsortedlast(x_ra, val)) == searchsortedlast(x, val)
+            @test @jit(searchsortedlast(x_ra, ConcreteRNumber(val))) ==
+                searchsortedlast(x, val)
+        end
+    end
+
+    @testset "searchsorted" begin
+        @testset for val in (4, 5, 3, 9, 0)
+            @test sameunitrange(@jit(searchsorted(x_ra, val)), searchsorted(x, val))
+            @test sameunitrange(
+                @jit(searchsorted(x_ra, ConcreteRNumber(val))), searchsorted(x, val)
+            )
+        end
+    end
+end
+
+@testset "circshift" begin
+    x = reshape(collect(Float32, 1:36), 2, 6, 3)
+    x_ra = Reactant.to_rarray(x)
+
+    @test @jit(circshift(x_ra, (1, 2))) ≈ circshift(x, (1, 2))
+    @test @jit(circshift(x_ra, (1, 2, 3))) ≈ circshift(x, (1, 2, 3))
+    @test @jit(circshift(x_ra, (-3, 2))) ≈ circshift(x, (-3, 2))
+    @test @jit(circshift(x_ra, (5, 2))) ≈ circshift(x, (5, 2))
+end
+
+linrange_mat(x1, x2) = Reactant.materialize_traced_array(LinRange(x1, x2, 10024))
+
+@testset "LinRange" begin
+    x1 = 0.0f0
+    x2 = 1.0f0
+    x1_ra = Reactant.to_rarray(x1; track_numbers=Number)
+    x2_ra = Reactant.to_rarray(x2; track_numbers=Number)
+
+    @test @jit(linrange_mat(x1_ra, x2_ra)) ≈ collect(LinRange(x1, x2, 10024))
+    hlo = repr(@code_hlo(linrange_mat(x1_ra, x2_ra)))
+    @test contains(hlo, "stablehlo.iota")
+end
+
+@testset "chlo legalize to stablehlo" begin
+    x = rand(ComplexF32, 4, 4)
+    x_ra = Reactant.to_rarray(x)
+
+    hlo1 = repr(@code_hlo Reactant.Ops.conj(x_ra))
+    hlo2 = repr(@code_hlo legalize_chlo_to_stablehlo = true Reactant.Ops.conj(x_ra))
+
+    @test contains(hlo1, "chlo.conj")
+    @test !contains(hlo2, "chlo")
+end
+
+@testset "scalar indexing in any #1434" begin
+    xr = Reactant.to_rarray(ones(4, 4))
+    @test @jit(any(<(0), xr)) == any(<(0), Array(xr))
 end

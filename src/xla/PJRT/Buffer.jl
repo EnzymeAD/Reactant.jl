@@ -87,6 +87,17 @@ function XLA.unsafe_buffer_pointer(buffer::Buffer)
     @ccall MLIR.API.mlir_c.UnsafeBufferPointer(buffer.buffer::Ptr{Cvoid})::Ptr{Cvoid}
 end
 
+function Base.copy(buffer::Buffer)
+    dev = XLA.device(buffer)
+    GC.@preserve buffer dev begin
+        Buffer(
+            @ccall MLIR.API.mlir_c.CopyBufferToDevice(
+                buffer.buffer::Ptr{Cvoid}, dev.device::Ptr{Cvoid}
+            )::Ptr{Cvoid}
+        )
+    end
+end
+
 function XLA.copy_buffer_to_device(buffer::Buffer, dev::Device)
     XLA.device(buffer) == dev && return buffer
     GC.@preserve buffer dev begin

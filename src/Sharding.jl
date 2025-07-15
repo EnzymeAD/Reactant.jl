@@ -1,6 +1,7 @@
 module Sharding
 
-using ..Reactant: Reactant, XLA, MLIR
+# XXX: Import ShardyPropagationOptions here to avoid breaking old code
+using ..Reactant: Reactant, XLA, MLIR, ShardyPropagationOptions
 using ReactantCore: ReactantCore
 
 """
@@ -530,6 +531,8 @@ function get_tensor_sharding_attribute(
             mesh_name,
             length(dimension_sharding_attrs),
             do_transpose ? reverse(dimension_sharding_attrs) : dimension_sharding_attrs,
+            0,
+            MLIR.API.MlirAttribute[],
             0,
             MLIR.API.MlirAttribute[],
         ),
@@ -1108,21 +1111,6 @@ function sdy_sharding_to_reactant_sharding(attr, global_device_ids, mod)
         sdy_mesh_to_reactant_mesh(MLIR.IR.attr(mesh_op, "mesh"), global_device_ids),
         MLIR.IR.Attribute(mlir_attr),
     )
-end
-
-"""
-    ShardyPropagationOptions
-
-Fine-grained control over the sharding propagation pipeline.
-"""
-@kwdef struct ShardyPropagationOptions
-    keep_sharding_rules::Bool = false
-    conservative_propagation::Bool = false
-    debug_sharding_origins::Bool = false
-    debug_propagation_edge_sharding::Bool = false
-    skip_convert_to_reshard::Bool = false
-    skip_inline::Bool = false
-    enable_insert_explicit_collectives::Bool = false
 end
 
 end

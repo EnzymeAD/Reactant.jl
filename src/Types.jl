@@ -52,6 +52,10 @@ mutable struct TracedRNumber{T} <: RNumber{T}
     end
 end
 
+function repath(x::TracedRNumber{T}, paths) where {T}
+    return TracedRNumber{T}(paths, x.mlir_data)
+end
+
 @leaf TracedRNumber
 
 ## TracedRArray
@@ -71,6 +75,10 @@ mutable struct TracedRArray{T,N} <: RArray{TracedRNumber{T},N}
     end
 end
 
+function repath(x::TracedRArray{T,N}, paths) where {T,N}
+    return TracedRArray{T,N}(paths, x.mlir_data, x.shape)
+end
+
 @leaf TracedRArray
 Adapt.parent_type(::Type{TracedRArray{T,N}}) where {T,N} = TracedRArray{T,N}
 
@@ -78,12 +86,6 @@ const AnyTracedRArray{T,N} = AbstractArray{TracedRNumber{T},N}
 const AnyTracedRVector{T} = AnyTracedRArray{T,1}
 const AnyTracedRMatrix{T} = AnyTracedRArray{T,2}
 const AnyTracedRVecOrMat{T} = Union{AnyTracedRVector{T},AnyTracedRMatrix{T}}
-
-## TracedRNG
-struct TracedRNG <: Random.AbstractRNG
-    seed::TracedRArray{UInt64,1}
-    algorithm::String
-end
 
 # Concrete Types
 ## ConcretePJRTNumber
@@ -178,11 +180,13 @@ end
 
 function ConcretePJRTArray(
     data::Array{T,N};
-    client::XLA.PJRT.Client=XLA.default_backend(),
+    client::Union{Nothing,XLA.PJRT.Client}=nothing,
     idx::Union{Int,Nothing}=nothing,
     device::Union{Nothing,XLA.PJRT.Device}=nothing,
     sharding::Sharding.AbstractSharding=Sharding.NoSharding(),
 ) where {T,N}
+    client = client === nothing ? XLA.default_backend() : client
+
     if !Sharding.is_sharded(sharding)
         if device === nothing
             if idx === nothing
@@ -326,11 +330,13 @@ end
 
 function ConcreteIFRTArray(
     data::Array{T,N};
-    client::XLA.IFRT.Client=XLA.default_backend(),
+    client::Union{Nothing,XLA.IFRT.Client}=nothing,
     idx::Union{Int,Nothing}=nothing,
     device::Union{Nothing,XLA.IFRT.Device}=nothing,
     sharding::Sharding.AbstractSharding=Sharding.NoSharding(),
 ) where {T,N}
+    client = client === nothing ? XLA.default_backend() : client
+
     if !Sharding.is_sharded(sharding)
         if device === nothing
             if idx === nothing
@@ -365,11 +371,13 @@ function ConcreteIFRTArray(
     data::Vector{Array{T,N}},
     array_size::Dims{N},
     data_to_addressable_shard::Vector{Vector{Int64}}=[[i] for i in 1:length(data)];
-    client::XLA.IFRT.Client=XLA.default_backend(),
+    client::Union{Nothing,XLA.IFRT.Client}=nothing,
     sharding::Sharding.AbstractSharding,
 ) where {T,N}
     @assert Sharding.is_sharded(sharding)
     @assert length(data) == length(data_to_addressable_shard)
+
+    client = client === nothing ? XLA.default_backend() : client
 
     (; hlo_sharding) = Sharding.HloSharding(sharding, array_size)
     all_devices = XLA.get_device.((client,), sharding.mesh.device_ids)
@@ -434,11 +442,15 @@ function ConcreteIFRTArray{T,N}(x::AnyConcreteIFRTArray; kwargs...) where {T,N}
     )
 end
 
-## ConcreteRNG
-mutable struct ConcreteRNG{S<:AbstractConcreteArray} <: Random.AbstractRNG
+# RNGs
+struct ReactantRNG{S<:Union{<:AbstractConcreteArray{UInt64,1},TracedRArray{UInt64,1}}} <:
+       Random.AbstractRNG
     seed::S
-    const algorithm::String
+    algorithm::String
 end
+
+Base.@deprecate_binding ConcreteRNG ReactantRNG
+Base.@deprecate_binding TracedRNG ReactantRNG
 
 ## Aliases based on the set preferences
 if XLA.REACTANT_XLA_RUNTIME == "PJRT"
