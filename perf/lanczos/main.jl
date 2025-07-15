@@ -4,6 +4,8 @@ using LinearAlgebra
 using Random
 using Statistics
 using BenchmarkTools
+using PrettyTables
+using Unitful
 
 # setup
 Random.seed!(0)
@@ -81,10 +83,56 @@ linf_error = maximum(abs.(eigvals(A) - eigvals(T)))
 @info "Error" l1 = l1_error l2 = l2_error linf = linf_error
 
 # benchmarking
+krylovdim = 16 # considered constant
 
-# @benchmark lanczos($A, $b, 16) setup = (GC.gc())
-@benchmark lanczos($A, $b, 16)
+T = typeof(1.0u"ns")
+results = Vector{Tuple{String,String,T,T,Float64}}()
 
-# compile with Reactant
-f = @compile sync = true lanczos(A_re, b_re, 16)
-@benchmark $f($A_re, $b_re, 16)
+# primal
+## only XLA
+f_xla = @compile compile_options = Reactant.DefaultXLACompileOptions(; sync=true) lanczos(
+    A_re, b_re, krylovdim
+)
+b = @benchmark $f_xla($A_re, $b_re, krylovdim) setup = (GC.gc(true))
+baseline = median(b).time
+push!(
+    results, ("Primal", "Only XLA", median(b).time * 1.0u"ns", std(b).time * 1.0u"ns", 1.0)
+)
+
+## default
+f_default = @compile sync = true lanczos(A_re, b_re, krylovdim)
+b = @benchmark $f_default($A_re, $b_re, krylovdim) setup = (GC.gc(true))
+push!(
+    results,
+    (
+        "Primal",
+        "Default",
+        median(b).time * 1u"ns",
+        std(b).time * 1u"ns",
+        median(b).time / baseline,
+    ),
+)
+
+# print results
+header = (
+    ["Mode", "Optimization Passes", "Median Time", "Std. Dev. Time", "Relative Timing"],
+    ["", "", "μs", "μs", "Time / XLA Time"],
+)
+
+let results = copy(results)
+    results = permutedims(stack(collect.(results)), (2, 1))
+    results[:, 3] .= uconvert.(u"μs", results[:, 3])
+    results[:, 4] .= uconvert.(u"μs", results[:, 4])
+
+    hl_r = Highlighter((data, i, j) -> j == 5 && data[i, j] > 1.0, crayon"bold red")
+    hl_g = Highlighter((data, i, j) -> j == 5 && data[i, j] < 1.0, crayon"bold green")
+    display(
+        pretty_table(
+            results;
+            header,
+            header_crayon=crayon"yellow bold",
+            highlighters=(hl_r, hl_g),
+            tf=tf_unicode_rounded,
+        ),
+    )
+end
