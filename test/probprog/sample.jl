@@ -1,46 +1,80 @@
 using Reactant, Test, Random
-using Reactant: ProbProg
+using Reactant: ProbProg, ReactantRNG
 
 normal(rng, μ, σ, shape) = μ .+ σ .* randn(rng, shape)
 
-function one_sample(seed, μ, σ, shape)
-    rng = Random.default_rng()
-    Random.seed!(rng, seed)
-    s = ProbProg.sample(normal, rng, μ, σ, shape)
+function one_sample(rng, μ, σ, shape)
+    s = ProbProg.sample(rng, normal, μ, σ, shape)
     return s
 end
 
-function two_samples(seed, μ, σ, shape)
-    rng = Random.default_rng()
-    Random.seed!(rng, seed)
-    _ = ProbProg.sample(normal, rng, μ, σ, shape)
-    t = ProbProg.sample(normal, rng, μ, σ, shape)
+function two_samples(rng, μ, σ, shape)
+    _ = ProbProg.sample(rng, normal, μ, σ, shape)
+    t = ProbProg.sample(rng, normal, μ, σ, shape)
+    return t
+end
+
+function compose(rng, μ, σ, shape)
+    s = ProbProg.sample(rng, normal, μ, σ, shape)
+    t = ProbProg.sample(rng, normal, s, σ, shape)
     return t
 end
 
 @testset "test" begin
-    @testset "sample_hlo" begin
+    @testset "normal_hlo" begin
         shape = (10,)
         seed = Reactant.to_rarray(UInt64[1, 4])
+        rng = ReactantRNG(seed)
         μ = Reactant.ConcreteRNumber(0.0)
         σ = Reactant.ConcreteRNumber(1.0)
-        before = @code_hlo optimize = false ProbProg.call_internal(
-            one_sample, seed, μ, σ, shape
-        )
+
+        code = @code_hlo optimize = false ProbProg.sample(rng, normal, μ, σ, shape)
+        @test contains(repr(code), "enzyme.sample")
+    end
+
+    @testset "two_samples_hlo" begin
+        shape = (10,)
+        seed = Reactant.to_rarray(UInt64[1, 4])
+        rng = ReactantRNG(seed)
+        μ = Reactant.ConcreteRNumber(0.0)
+        σ = Reactant.ConcreteRNumber(1.0)
+
+        code = @code_hlo optimize = false ProbProg.sample(rng, two_samples, μ, σ, shape)
+        @test contains(repr(code), "enzyme.sample")
+    end
+
+    @testset "compose" begin
+        shape = (10,)
+        seed = Reactant.to_rarray(UInt64[1, 4])
+        rng = ReactantRNG(seed)
+        μ = Reactant.ConcreteRNumber(0.0)
+        σ = Reactant.ConcreteRNumber(1.0)
+
+        before = @code_hlo optimize = false ProbProg.call(rng, compose, μ, σ, shape)
         @test contains(repr(before), "enzyme.sample")
-        after = @code_hlo optimize = :probprog ProbProg.call_internal(
-            two_samples, seed, μ, σ, shape
-        )
+
+        after = @code_hlo optimize = :probprog ProbProg.call(rng, compose, μ, σ, shape)
         @test !contains(repr(after), "enzyme.sample")
     end
 
     @testset "rng_state" begin
         shape = (10,)
+
         seed = Reactant.to_rarray(UInt64[1, 4])
         μ = Reactant.ConcreteRNumber(0.0)
         σ = Reactant.ConcreteRNumber(1.0)
-        X = ProbProg.call(one_sample, seed, μ, σ, shape)
-        Y = ProbProg.call(two_samples, seed, μ, σ, shape)
+
+        rng1 = ReactantRNG(copy(seed))
+
+        X = ProbProg.call(rng1, one_sample, μ, σ, shape)
+        @test !all(rng1.seed .== seed)
+
+        rng2 = ReactantRNG(copy(seed))
+        Y = ProbProg.call(rng2, two_samples, μ, σ, shape)
+
+        @test !all(rng2.seed .== seed)
+        @test !all(rng2.seed .== rng1.seed)
+
         @test !all(X .≈ Y)
     end
 end

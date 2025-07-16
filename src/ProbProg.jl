@@ -349,6 +349,23 @@ function __init__()
 end
 
 function sample(
+    rng::AbstractRNG,
+    f::Function,
+    args::Vararg{Any,Nargs};
+    symbol::Symbol=gensym("sample"),
+    logpdf::Union{Nothing,Function}=nothing,
+) where {Nargs}
+    res = sample_internal(rng, f, args...; symbol, logpdf)
+
+    @assert res isa Tuple && length(res) >= 1 && res[1] isa AbstractRNG "Expected first result to be RNG"
+
+    res = res[2:end]
+
+    return length(res) == 1 ? res[1] : res
+end
+
+function sample_internal(
+    rng::AbstractRNG,
     f::Function,
     args::Vararg{Any,Nargs};
     symbol::Symbol=gensym("sample"),
@@ -358,15 +375,22 @@ function sample(
     resprefix::Symbol = gensym("sampleresult")
     resargprefix::Symbol = gensym("sampleresarg")
 
+    wrapper_fn = (all_args...) -> begin
+        res = f(all_args...)
+        (all_args[1], (res isa Tuple ? res : (res,))...)
+    end
+
+    args = (rng, args...)
+
     mlir_fn_res = invokelatest(
         TracedUtils.make_mlir_fn,
-        f,
+        wrapper_fn,
         args,
         (),
         string(f),
         false;
         do_transpose=false,
-        args_in_result=:all,
+        args_in_result=:result,
         argprefix,
         resprefix,
         resargprefix,
@@ -378,10 +402,13 @@ function sample(
     inputs = MLIR.IR.Value[]
     for a in linear_args
         idx, path = TracedUtils.get_argidx(a, argprefix)
-        if idx == 1 && fnwrap
+        if idx == 2 && fnwrap
             TracedUtils.push_val!(inputs, f, path[3:end])
         else
-            idx -= fnwrap ? 1 : 0
+            if fnwrap && idx > 1
+                idx -= 1
+            end
+
             TracedUtils.push_val!(inputs, args[idx], path[3:end])
         end
     end
@@ -464,7 +491,7 @@ function sample(
             string(logpdf),
             false;
             do_transpose=false,
-            args_in_result=:all,
+            args_in_result=:result,
         )
 
         logpdf_sym = TracedUtils.get_attribute_by_name(logpdf_mlir.f, "sym_name")
@@ -485,20 +512,25 @@ function sample(
 
     for (i, res) in enumerate(linear_results)
         resv = MLIR.IR.result(sample_op, i)
+
         if TracedUtils.has_idx(res, resprefix)
             path = TracedUtils.get_idx(res, resprefix)
             TracedUtils.set!(result, path[2:end], resv)
-        elseif TracedUtils.has_idx(res, argprefix)
+        end
+
+        if TracedUtils.has_idx(res, argprefix)
             idx, path = TracedUtils.get_argidx(res, argprefix)
-            if idx == 1 && fnwrap
+            if fnwrap && idx == 2
                 TracedUtils.set!(f, path[3:end], resv)
             else
-                if fnwrap
+                if fnwrap && idx > 2
                     idx -= 1
                 end
                 TracedUtils.set!(args[idx], path[3:end], resv)
             end
-        else
+        end
+
+        if !TracedUtils.has_idx(res, resprefix) && !TracedUtils.has_idx(res, argprefix)
             TracedUtils.set!(res, (), resv)
         end
     end
@@ -506,25 +538,41 @@ function sample(
     return result
 end
 
-function call(f::Function, args::Vararg{Any,Nargs}) where {Nargs}
-    res = @jit optimize = :probprog call_internal(f, args...)
-    return res isa AbstractConcreteArray ? Array(res) : res
+function call(rng::AbstractRNG, f::Function, args::Vararg{Any,Nargs}) where {Nargs}
+    res = @jit optimize = :probprog call_internal(rng, f, args...)
+
+    @assert res isa Tuple && length(res) >= 1 && res[1] isa AbstractRNG "Expected first result to be RNG"
+
+    res = map(res[2:end]) do r
+        r isa AbstractConcreteArray ? Array(r) : r
+    end
+
+    @show res
+
+    return length(res) == 1 ? res[1] : res
 end
 
-function call_internal(f::Function, args::Vararg{Any,Nargs}) where {Nargs}
+function call_internal(rng::AbstractRNG, f::Function, args::Vararg{Any,Nargs}) where {Nargs}
     argprefix::Symbol = gensym("callarg")
     resprefix::Symbol = gensym("callresult")
     resargprefix::Symbol = gensym("callresarg")
 
+    wrapper_fn = (all_args...) -> begin
+        res = f(all_args...)
+        (all_args[1], (res isa Tuple ? res : (res,))...)
+    end
+
+    args = (rng, args...)
+
     mlir_fn_res = invokelatest(
         TracedUtils.make_mlir_fn,
-        f,
+        wrapper_fn,
         args,
         (),
         string(f),
         false;
         do_transpose=false,
-        args_in_result=:all,
+        args_in_result=:result,
         argprefix,
         resprefix,
         resargprefix,
@@ -532,6 +580,8 @@ function call_internal(f::Function, args::Vararg{Any,Nargs}) where {Nargs}
     (; result, linear_args, in_tys, linear_results) = mlir_fn_res
     fnwrap = mlir_fn_res.fnwrapped
     func2 = mlir_fn_res.f
+
+    @show length(linear_results), linear_results
 
     out_tys = [MLIR.IR.type(TracedUtils.get_mlir_data(res)) for res in linear_results]
     fname = TracedUtils.get_attribute_by_name(func2, "sym_name")
@@ -557,17 +607,21 @@ function call_internal(f::Function, args::Vararg{Any,Nargs}) where {Nargs}
         if TracedUtils.has_idx(res, resprefix)
             path = TracedUtils.get_idx(res, resprefix)
             TracedUtils.set!(result, path[2:end], resv)
-        elseif TracedUtils.has_idx(res, argprefix)
+        end
+
+        if TracedUtils.has_idx(res, argprefix)
             idx, path = TracedUtils.get_argidx(res, argprefix)
-            if idx == 1 && fnwrap
+            if fnwrap && idx == 2
                 TracedUtils.set!(f, path[3:end], resv)
             else
-                if fnwrap
+                if fnwrap && idx > 2
                     idx -= 1
                 end
                 TracedUtils.set!(args[idx], path[3:end], resv)
             end
-        else
+        end
+
+        if !TracedUtils.has_idx(res, resprefix) && !TracedUtils.has_idx(res, argprefix)
             TracedUtils.set!(res, (), resv)
         end
     end
