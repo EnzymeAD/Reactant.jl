@@ -14,7 +14,6 @@ function DistributedRuntimeClient(
     rpc_timeout_in_seconds::Integer=120,
     shutdown_timeout_in_minutes::Integer=5,
     heartbeat_interval_in_seconds::Integer=10,
-    max_missing_heartbeats::Integer=10,
     use_compression::Bool=true,
 )
     GC.@preserve coordinator_bind_address begin
@@ -24,7 +23,6 @@ function DistributedRuntimeClient(
             Int32(rpc_timeout_in_seconds)::Int32,
             Int32(shutdown_timeout_in_minutes)::Int32,
             Int32(heartbeat_interval_in_seconds)::Int32,
-            Cint(max_missing_heartbeats)::Cint,
             use_compression::Bool,
         )::Ptr{Cvoid}
     end
@@ -69,7 +67,6 @@ function DistributedRuntimeService(
     coordinator_bind_address::String,
     num_nodes::Integer;
     heartbeat_interval_in_seconds::Integer=10,
-    max_missing_heartbeats::Integer=10,
     cluster_register_timeout_in_minutes::Integer=60,
     shutdown_timeout_in_minutes::Integer=5,
 )
@@ -78,7 +75,6 @@ function DistributedRuntimeService(
             coordinator_bind_address::Cstring,
             Cint(num_nodes)::Cint,
             Int32(heartbeat_interval_in_seconds)::Int32,
-            Cint(max_missing_heartbeats)::Cint,
             Int32(cluster_register_timeout_in_minutes)::Int32,
             Int32(shutdown_timeout_in_minutes)::Int32,
         )::Ptr{Cvoid}
@@ -135,7 +131,6 @@ function update!(
     rpc_timeout_in_seconds::Integer=120,
     shutdown_timeout_in_minutes::Integer=5,
     heartbeat_interval_in_seconds::Integer=10,
-    max_missing_heartbeats::Integer=10,
     use_compression::Bool=true,
 )
     @assert 0 ≤ process_id < num_processes
@@ -166,7 +161,6 @@ function update!(
             coordinator_bind_address,
             num_processes;
             heartbeat_interval_in_seconds,
-            max_missing_heartbeats,
             cluster_register_timeout_in_minutes,
             shutdown_timeout_in_minutes,
         )
@@ -189,7 +183,6 @@ function update!(
         rpc_timeout_in_seconds,
         shutdown_timeout_in_minutes,
         heartbeat_interval_in_seconds,
-        max_missing_heartbeats,
         use_compression,
     )
     @debug "[PID $(process_id)] Connecting to Reactant distributed service on \

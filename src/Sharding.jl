@@ -1,6 +1,7 @@
 module Sharding
 
-using ..Reactant: Reactant, XLA, MLIR
+# XXX: Import ShardyPropagationOptions here to avoid breaking old code
+using ..Reactant: Reactant, XLA, MLIR, ShardyPropagationOptions
 using ReactantCore: ReactantCore
 
 """
@@ -1110,40 +1111,6 @@ function sdy_sharding_to_reactant_sharding(attr, global_device_ids, mod)
         sdy_mesh_to_reactant_mesh(MLIR.IR.attr(mesh_op, "mesh"), global_device_ids),
         MLIR.IR.Attribute(mlir_attr),
     )
-end
-
-"""
-    ShardyPropagationOptions
-
-Fine-grained control over the sharding propagation pipeline. For more information on
-sharding propagation, see the
-[Shardy Docs](https://openxla.org/shardy/sdy_propagation_passes).
-
-## Options
-
-  - `keep_sharding_rules::Bool`: whether to keep existing and created op sharding rules.
-  - `conservative_propagation::Bool`: whether to disallow split axes and non-divisible
-    sharding axes during propagation.
-  - `debug_sharding_origins::Bool`: whether to save information about the origin of a
-    sharding on the MLIR module. These would be the shardings on the function inputs,
-    outputs, sharding constraints and manual computations before propagation.
-  - `debug_propagation_edge_sharding::Bool`: whether to save information about the edge
-    source of a sharding on the MLIR module. These are what operand/result introduced a
-    sharding on some op result.
-  - `skip_convert_to_reshard::Bool`
-  - `skip_inline::Bool`
-  - `enable_insert_explicit_collectives::Bool`: whether to insert explicit collectives
-    for sharding propagation. This is useful for debugging and checking the location of
-    the communication ops.
-"""
-@kwdef struct ShardyPropagationOptions
-    keep_sharding_rules::Bool = false
-    conservative_propagation::Bool = false
-    debug_sharding_origins::Bool = false
-    debug_propagation_edge_sharding::Bool = false
-    skip_convert_to_reshard::Bool = false
-    skip_inline::Bool = false
-    enable_insert_explicit_collectives::Bool = false
 end
 
 end

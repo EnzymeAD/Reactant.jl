@@ -130,7 +130,7 @@ end
 """
 `barrier`
 
-The \"barrier\" op synchronizes all work items of a workgroup. It is used
+The `barrier` op synchronizes all work items of a workgroup. It is used
 to coordinate communication between the work items of the workgroup.
 
 ```mlir
@@ -322,7 +322,7 @@ Returns the block id within the cluster along the x, y, or z `dimension`.
 ```
 
 If `upper_bound` is set, then executing (a lowering of) this operation in an
-environment where the number of thread blocks per cluster  along `dimension`
+environment where the number of thread blocks per cluster along `dimension`
 is greater than `upper_bound` causes undefined behavior.
 
 There is an implicit upper bound of `kMaxClusterDim` (currently 8).
@@ -1905,7 +1905,7 @@ end
 """
 `return_`
 
-A terminator operation for regions that appear in the body of  `gpu.func`
+A terminator operation for regions that appear in the body of `gpu.func`
 functions. The operands to the `gpu.return` are the result values returned
 by an invocation of the `gpu.func`.
 """
@@ -2141,7 +2141,8 @@ trades value with exactly one other lane.
 %3, %4 = gpu.shuffle down %0, %cst1, %width : f32
 ```
 
-For lane `k`, returns the value from lane `(k + 1) % width`.
+For lane `k`, returns the value from lane `(k + cst1)`. If `(k + cst1)` is
+bigger than or equal to `width`, the value is poison and `valid` is `false`.
 
 `up` example:
 
@@ -2150,7 +2151,8 @@ For lane `k`, returns the value from lane `(k + 1) % width`.
 %5, %6 = gpu.shuffle up %0, %cst1, %width : f32
 ```
 
-For lane `k`, returns the value from lane `(k - 1) % width`.
+For lane `k`, returns the value from lane `(k - cst1)`. If `(k - cst1)` is
+smaller than `0`, the value is poison and `valid` is `false`.
 
 `idx` example:
 
@@ -3412,7 +3414,7 @@ end
 """
 `yield`
 
-gpu.yield` is a special terminator operation for blocks inside regions
+`gpu.yield` is a special terminator operation for blocks inside regions
 in gpu ops. It returns values to the immediately enclosing gpu op.
 
 # Example

@@ -6,13 +6,19 @@ common --experimental_repo_remote_exec
 common --cxxopt=-std=c++17 --host_cxxopt=-std=c++17
 common --cxxopt=-w --host_cxxopt=-w
 common --define=grpc_no_ares=true
-common --define=tsl_link_protobuf=true
-common --define open_source_build=true
-common
-common --define framework_shared_object=true
-common --define tsl_protobuf_header_only=true
-common --define=use_fast_cpp_protos=true
-common --define=allow_oversize_protos=true
+common --noenable_bzlmod
+
+build --repo_env=USE_PYWRAP_RULES=True
+build --copt=-DGRPC_BAZEL_BUILD
+build --host_copt=-DGRPC_BAZEL_BUILD
+build --action_env=GRPC_BAZEL_RUNTIME=1
+build --repo_env=PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=upb
+build --action_env=PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=upb
+build --repo_env=RULES_PYTHON_ENABLE_PYSTAR=0
+# Do not do this. This is how gRPC builds itself by default, but we don't want
+# that as it would link protobuf into its own set of dynamic libraries, which
+# would conflict with our protobuf linkage.
+#build --define=use_fast_cpp_protos=true
 
 build -c opt
 

@@ -327,7 +327,7 @@ end
 The `alloca` operation allocates memory on the stack, to be automatically
 released when control transfers back from the region of its closest
 surrounding operation with an
-[`AutomaticAllocationScope`](../Traits.md/#automaticallocationscope) trait.
+[`AutomaticAllocationScope`](../Traits/#automaticallocationscope) trait.
 The amount of memory allocated is specified by its memref and additional
 operands. For example:
 

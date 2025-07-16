@@ -839,6 +839,38 @@ function call_epilogue(
     return traced_result
 end
 
+
+function rewrite_argnumbers_by_one!(ir)
+    # Add one dummy argument at the beginning
+    pushfirst!(ir.argtypes, Nothing)
+
+    # Re-write all references to existing arguments to their new index (N + 1)
+    for idx in 1:length(ir.stmts)
+        urs = Core.Compiler.userefs(ir.stmts[idx][:inst])
+        changed = false
+        it = Core.Compiler.iterate(urs)
+        while it !== nothing
+            (ur, next) = it
+            old = Core.Compiler.getindex(ur)
+            if old isa Core.Argument
+                # Replace the Argument(n) with Argument(n + 1)
+                Core.Compiler.setindex!(ur, Core.Argument(old.n + 1))
+                changed = true
+            end
+            it = Core.Compiler.iterate(urs, next)
+        end
+        if changed
+            @static if VERSION < v"1.11"
+                Core.Compiler.setindex!(ir.stmts[idx], Core.Compiler.getindex(urs), :inst)
+            else
+                Core.Compiler.setindex!(ir.stmts[idx], Core.Compiler.getindex(urs), :stmt)
+            end
+        end
+    end
+
+    return nothing
+end
+
 # Generator function which ensures that all calls to the function are executed within the ReactantInterpreter
 # In particular this entails two pieces:
 #   1) We enforce the use of the ReactantInterpreter method table when generating the original methodinstance
@@ -983,6 +1015,8 @@ function call_with_reactant_generator(
         ir, any_changed = rewrite_insts!(ir, interp, guaranteed_error)
     end
 
+    rewrite_argnumbers_by_one!(ir)
+
     src = ccall(:jl_new_code_info_uninit, Ref{CC.CodeInfo}, ())
     src.slotnames = fill(:none, length(ir.argtypes) + 1)
     src.slotflags = fill(zero(UInt8), length(ir.argtypes))
@@ -1100,10 +1134,10 @@ function call_with_reactant_generator(
 
     ocva = false # method.isva
 
-    ocnargs = method.nargs - 1
+    ocnargs = Int(method.nargs)
     # octup = Tuple{mi.specTypes.parameters[2:end]...}
     # octup = Tuple{method.sig.parameters[2:end]...}
-    octup = Tuple{tys[2:end]...}
+    octup = Tuple{tys[1:end]...}
     ocva = false
 
     # jl_new_opaque_closure forcibly executes in the current world... This means that we won't get the right
@@ -1111,11 +1145,7 @@ function call_with_reactant_generator(
     # Opaque closures also require taking the function argument. We can work around the latter
     # if the function is stateless. But regardless, to work around this we sadly create/compile the opaque closure
 
-    dict, make_oc = if Base.issingletontype(fn)
-        Base.Ref{Core.OpaqueClosure}(), make_oc_ref
-    else
-        Dict{fn,Core.OpaqueClosure}(), make_oc_dict
-    end
+    dict, make_oc = (Base.Ref{Core.OpaqueClosure}(), make_oc_ref)
 
     push!(oc_capture_vec, dict)
 
@@ -1125,6 +1155,7 @@ function call_with_reactant_generator(
         )::Core.OpaqueClosure
     else
         farg = fn_args[1]
+        farg = nothing
         rep = Expr(:call, make_oc, dict, octup, rt, src, ocnargs, ocva, farg)
         res = push_inst!(rep)
     end
@@ -1310,7 +1341,7 @@ function call_with_reactant_generator(
                             GlobalRef(Core, :tuple),
                             fn_args[1],
                             push_inst!(
-                                Expr(:call, GlobalRef(Core, :tuple), fn_args[2:end]...)
+                                Expr(:call, GlobalRef(Core, :tuple), fn_args[1:end]...)
                             ),
                         ),
                     ),
@@ -1331,12 +1362,12 @@ function call_with_reactant_generator(
             push_inst!(Core.GotoNode(end_dest))
 
             # No-trace path: just call the opaque closure directly
-            traced_result = push_inst!(Expr(:call, oc, fn_args[2:end]...))
+            traced_result = push_inst!(Expr(:call, oc, fn_args[1:end]...))
             push_inst!(Expr(:(=), ocres_slot, traced_result))
 
             push_inst!(ocres_slot)
         else
-            traced_result = push_inst!(Expr(:call, oc, fn_args[2:end]...))
+            traced_result = push_inst!(Expr(:call, oc, fn_args[1:end]...))
             traced_result
         end
 

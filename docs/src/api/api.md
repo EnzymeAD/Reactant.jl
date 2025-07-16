@@ -29,6 +29,20 @@ within_compile
 @code_xla
 ```
 
+## Compile Options
+
+```@docs
+CompileOptions
+Reactant.DefaultXLACompileOptions
+```
+
+### Sharding Specific Options
+
+```@docs
+OptimizeCommunicationOptions
+ShardyPropagationOptions
+```
+
 ## Tracing customization
 
 ```@docs
