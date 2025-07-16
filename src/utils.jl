@@ -499,7 +499,7 @@ function make_oc_ref(
 )::Core.OpaqueClosure
     if Base.isassigned(oc_captures)
         return oc_captures[]
-    else     
+    else
         ores = ccall(
             :jl_new_opaque_closure_from_code_info,
             Any,
@@ -558,7 +558,7 @@ function rewrite_argnumbers_by_one!(ir)
     pushfirst!(ir.argtypes, Nothing)
 
     # Re-write all references to existing arguments to their new index (N + 1)
-    for idx = 1:length(ir.stmts)
+    for idx in 1:length(ir.stmts)
         urs = Core.Compiler.userefs(ir.stmts[idx][:inst])
         changed = false
         it = Core.Compiler.iterate(urs)
@@ -697,9 +697,8 @@ function call_with_reactant_generator(
     ) || guaranteed_error
         ir, any_changed = rewrite_insts!(ir, interp, guaranteed_error)
     end
-  
 
-    rewrite_argnumbers_by_one!(ir)  
+    rewrite_argnumbers_by_one!(ir)
 
     src = ccall(:jl_new_code_info_uninit, Ref{CC.CodeInfo}, ())
     src.slotnames = fill(:none, length(ir.argtypes) + 1)
@@ -707,7 +706,6 @@ function call_with_reactant_generator(
     src.slottypes = copy(ir.argtypes)
     src.rettype = rt
     src = CC.ir_to_codeinf!(src, ir)
-
 
     if DEBUG_INTERP[]
         safe_print("src", src)
