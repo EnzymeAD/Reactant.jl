@@ -1196,7 +1196,7 @@ function call_with_reactant_generator(
                     :call,
                     GlobalRef(Reactant, :call_prologue),
                     fn_args[1],
-                    push_inst!(Expr(:call, GlobalRef(Core, :tuple), fn_args[2:end]...)),
+                    push_inst!(Expr(:call, GlobalRef(Core, :tuple), fn_args[1:end]...)),
                 ),
             )
 
