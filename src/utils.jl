@@ -839,7 +839,6 @@ function call_epilogue(
     return traced_result
 end
 
-
 function rewrite_argnumbers_by_one!(ir)
     # Add one dummy argument at the beginning
     pushfirst!(ir.argtypes, Nothing)
@@ -963,14 +962,13 @@ function call_with_reactant_generator(
     Core.println(
         "Found method from module $(method.module) with name $(method.name), TRACE_CALLS[] = $(TRACE_CALLS[])",
     )
-    trace_call_within =
-        TRACE_CALLS[]
-        # && !(
-        #     has_ancestor(method.module, Reactant.ReactantCore) ||
-        #     has_ancestor(method.module, Reactant.TracedRNumberOverrides) ||
-        #     has_ancestor(method.module, Reactant.TracedRArrayOverrides) ||
-        #     has_ancestor(method.module, Core)
-        # )
+    trace_call_within = TRACE_CALLS[]
+    # && !(
+    #     has_ancestor(method.module, Reactant.ReactantCore) ||
+    #     has_ancestor(method.module, Reactant.TracedRNumberOverrides) ||
+    #     has_ancestor(method.module, Reactant.TracedRArrayOverrides) ||
+    #     has_ancestor(method.module, Core)
+    # )
     if TRACE_CALLS[] &&
         !(!(fn <: Function) || sizeof(fn) != 0 || fn <: Base.BroadcastFunction)
         Core.println("About to trace call to $fn.")
@@ -1180,11 +1178,14 @@ function call_with_reactant_generator(
             )
 
             # Check if any argument is traced using any(is_traced, (args...))
-            args_tuple = push_inst!(
-                Expr(:call, GlobalRef(Core, :tuple), fn_args[2:end]...)
-            )
+            args_tuple = push_inst!(Expr(:call, GlobalRef(Core, :tuple), fn_args[2:end]...))
             has_traced_args = push_inst!(
-                Expr(:call, GlobalRef(Base, :any), GlobalRef(ReactantCore, :is_traced), args_tuple)
+                Expr(
+                    :call,
+                    GlobalRef(Base, :any),
+                    GlobalRef(ReactantCore, :is_traced),
+                    args_tuple,
+                ),
             )
 
             # If no traced args, just call the opaque closure directly
@@ -1355,9 +1356,9 @@ function call_with_reactant_generator(
                     ),
                 ),
             )
-            
+
             push_inst!(Expr(:(=), ocres_slot, traced_result))
-                        # Jump over the no-trace path
+            # Jump over the no-trace path
             end_dest = length(overdubbed_code) + 4
             push_inst!(Core.GotoNode(end_dest))
 
