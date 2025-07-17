@@ -71,7 +71,7 @@ function addSampleToTrace(
     shape_ptr_array = unsafe_wrap(Array, shape_ptr_array, num_outputs)
     sample_ptr_array = unsafe_wrap(Array, sample_ptr_array, num_outputs)
 
-    tostore = Any[]
+    vals = Any[]
     for i in 1:num_outputs
         ndims = ndims_array[i]
         width = width_array[i]
@@ -96,17 +96,14 @@ function addSampleToTrace(
         end
 
         if ndims == 0
-            val = unsafe_load(Ptr{julia_type}(sample_ptr))
-            push!(tostore, val)
+            push!(vals, unsafe_load(Ptr{julia_type}(sample_ptr)))
         else
             shape = unsafe_wrap(Array, shape_ptr, ndims)
-            push!(
-                tostore, copy(unsafe_wrap(Array, Ptr{julia_type}(sample_ptr), Tuple(shape)))
-            )
+            push!(vals, copy(unsafe_wrap(Array, Ptr{julia_type}(sample_ptr), Tuple(shape))))
         end
     end
 
-    trace.choices[symbol] = tuple(tostore...)
+    trace.choices[symbol] = tuple(vals...)
 
     return nothing
 end
@@ -184,7 +181,8 @@ function addRetvalToTrace(
         end
     end
 
-    trace.retval = length(vals) == 1 ? vals[1] : vals
+    trace.retval = tuple(vals...)
+
     return nothing
 end
 
@@ -418,55 +416,10 @@ function sample_internal(
     sym = TracedUtils.get_attribute_by_name(func2, "sym_name")
     fn_attr = MLIR.IR.FlatSymbolRefAttribute(Base.String(sym))
 
-    # Specify which outputs to add to the trace.
-    traced_output_indices = Int[]
-    for (i, res) in enumerate(linear_results)
-        if TracedUtils.has_idx(res, resprefix)
-            push!(traced_output_indices, i - 1)
-        end
-    end
-
-    # Specify which inputs to pass to logpdf.
-    traced_input_indices = Int[]
-    for (i, a) in enumerate(linear_args)
-        idx, _ = TracedUtils.get_argidx(a, argprefix)
-        if fnwrap && idx == 1  # TODO: add test for fnwrap
-            continue
-        end
-
-        if fnwrap
-            idx -= 1
-        end
-
-        if !(args[idx] isa AbstractRNG)
-            push!(traced_input_indices, i - 1)
-        end
-    end
-
     symbol_addr = reinterpret(UInt64, pointer_from_objref(symbol))
     symbol_attr = @ccall MLIR.API.mlir_c.enzymeSymbolAttrGet(
         MLIR.IR.context()::MLIR.API.MlirContext, symbol_addr::UInt64
     )::MLIR.IR.Attribute
-
-    # (out_idx1, in_idx1, out_idx2, in_idx2, ...)
-    alias_pairs = Int64[]
-    for (out_idx, res) in enumerate(linear_results)
-        if TracedUtils.has_idx(res, argprefix)
-            in_idx = nothing
-            for (i, arg) in enumerate(linear_args)
-                if TracedUtils.has_idx(arg, argprefix) &&
-                    TracedUtils.get_idx(arg, argprefix) ==
-                   TracedUtils.get_idx(res, argprefix)
-                    in_idx = i - 1
-                    break
-                end
-            end
-            @assert in_idx !== nothing "Unable to find operand for aliased result"
-            push!(alias_pairs, out_idx - 1)
-            push!(alias_pairs, in_idx)
-        end
-    end
-    alias_attr = MLIR.IR.DenseArrayAttribute(alias_pairs)
 
     # Construct MLIR attribute if Julia logpdf function is provided.
     logpdf_attr = nothing
@@ -504,9 +457,6 @@ function sample_internal(
         fn=fn_attr,
         logpdf=logpdf_attr,
         symbol=symbol_attr,
-        traced_input_indices=traced_input_indices,
-        traced_output_indices=traced_output_indices,
-        alias_map=alias_attr,
         name=Base.String(symbol),
     )
 
@@ -547,8 +497,6 @@ function call(rng::AbstractRNG, f::Function, args::Vararg{Any,Nargs}) where {Nar
         r isa AbstractConcreteArray ? Array(r) : r
     end
 
-    @show res
-
     return length(res) == 1 ? res[1] : res
 end
 
@@ -581,8 +529,6 @@ function call_internal(rng::AbstractRNG, f::Function, args::Vararg{Any,Nargs}) w
     fnwrap = mlir_fn_res.fnwrapped
     func2 = mlir_fn_res.f
 
-    @show length(linear_results), linear_results
-
     out_tys = [MLIR.IR.type(TracedUtils.get_mlir_data(res)) for res in linear_results]
     fname = TracedUtils.get_attribute_by_name(func2, "sym_name")
     fn_attr = MLIR.IR.FlatSymbolRefAttribute(Base.String(fname))
@@ -590,10 +536,10 @@ function call_internal(rng::AbstractRNG, f::Function, args::Vararg{Any,Nargs}) w
     inputs = MLIR.IR.Value[]
     for a in linear_args
         idx, path = TracedUtils.get_argidx(a, argprefix)
-        if idx == 1 && fnwrap
+        if idx == 2 && fnwrap
             TracedUtils.push_val!(inputs, f, path[3:end])
         else
-            if fnwrap
+            if fnwrap && idx > 2
                 idx -= 1
             end
             TracedUtils.push_val!(inputs, args[idx], path[3:end])
@@ -629,15 +575,14 @@ function call_internal(rng::AbstractRNG, f::Function, args::Vararg{Any,Nargs}) w
     return result
 end
 
-function simulate(f::Function, args::Vararg{Any,Nargs}) where {Nargs}
-    old_gc_state = GC.enable(false)
-
+function simulate(rng::AbstractRNG, f::Function, args::Vararg{Any,Nargs}) where {Nargs}
     trace = nothing
-    weight = nothing
-    res = nothing
 
+    compiled_fn = @compile optimize = :probprog simulate_internal(rng, f, args...)
+
+    old_gc_state = GC.enable(false)
     try
-        trace, weight, res = @jit optimize = :probprog simulate_internal(f, args...)
+        trace, _, _ = compiled_fn(rng, f, args...)
     finally
         GC.enable(old_gc_state)
     end
@@ -647,20 +592,29 @@ function simulate(f::Function, args::Vararg{Any,Nargs}) where {Nargs}
     return trace, trace.weight
 end
 
-function simulate_internal(f::Function, args::Vararg{Any,Nargs}) where {Nargs}
+function simulate_internal(
+    rng::AbstractRNG, f::Function, args::Vararg{Any,Nargs}
+) where {Nargs}
     argprefix::Symbol = gensym("simulatearg")
     resprefix::Symbol = gensym("simulateresult")
     resargprefix::Symbol = gensym("simulateresarg")
 
+    wrapper_fn = (all_args...) -> begin
+        res = f(all_args...)
+        (all_args[1], (res isa Tuple ? res : (res,))...)
+    end
+
+    args = (rng, args...)
+
     mlir_fn_res = invokelatest(
         TracedUtils.make_mlir_fn,
-        f,
+        wrapper_fn,
         args,
         (),
         string(f),
         false;
         do_transpose=false,
-        args_in_result=:all,
+        args_in_result=:result,
         argprefix,
         resprefix,
         resargprefix,
@@ -673,21 +627,13 @@ function simulate_internal(f::Function, args::Vararg{Any,Nargs}) where {Nargs}
     fname = TracedUtils.get_attribute_by_name(func2, "sym_name")
     fn_attr = MLIR.IR.FlatSymbolRefAttribute(Base.String(fname))
 
-    # Specify which outputs to add to the trace.
-    traced_output_indices = Int[]
-    for (i, res) in enumerate(linear_results)
-        if TracedUtils.has_idx(res, resprefix)
-            push!(traced_output_indices, i - 1)
-        end
-    end
-
     inputs = MLIR.IR.Value[]
     for a in linear_args
         idx, path = TracedUtils.get_argidx(a, argprefix)
-        if idx == 1 && fnwrap
+        if idx == 2 && fnwrap
             TracedUtils.push_val!(inputs, f, path[3:end])
         else
-            if fnwrap
+            if fnwrap && idx > 2
                 idx -= 1
             end
             TracedUtils.push_val!(inputs, args[idx], path[3:end])
@@ -700,12 +646,7 @@ function simulate_internal(f::Function, args::Vararg{Any,Nargs}) where {Nargs}
     weight_ty = MLIR.IR.TensorType(Int64[], MLIR.IR.Type(Float64))
 
     simulate_op = MLIR.Dialects.enzyme.simulate(
-        inputs;
-        trace=trace_ty,
-        weight=weight_ty,
-        outputs=out_tys,
-        fn=fn_attr,
-        traced_output_indices=traced_output_indices,
+        inputs; trace=trace_ty, weight=weight_ty, outputs=out_tys, fn=fn_attr
     )
 
     for (i, res) in enumerate(linear_results)
@@ -713,17 +654,21 @@ function simulate_internal(f::Function, args::Vararg{Any,Nargs}) where {Nargs}
         if TracedUtils.has_idx(res, resprefix)
             path = TracedUtils.get_idx(res, resprefix)
             TracedUtils.set!(result, path[2:end], resv)
-        elseif TracedUtils.has_idx(res, argprefix)
+        end
+
+        if TracedUtils.has_idx(res, argprefix)
             idx, path = TracedUtils.get_argidx(res, argprefix)
-            if idx == 1 && fnwrap
+            if idx == 2 && fnwrap
                 TracedUtils.set!(f, path[3:end], resv)
             else
-                if fnwrap
+                if fnwrap && idx > 2
                     idx -= 1
                 end
                 TracedUtils.set!(args[idx], path[3:end], resv)
             end
-        else
+        end
+
+        if !TracedUtils.has_idx(res, resprefix) && !TracedUtils.has_idx(res, argprefix)
             TracedUtils.set!(res, (), resv)
         end
     end
@@ -751,24 +696,25 @@ function simulate_internal(f::Function, args::Vararg{Any,Nargs}) where {Nargs}
 end
 
 function generate(
-    f::Function, args::Vararg{Any,Nargs}; constraint::Constraint=Dict{Symbol,Any}()
+    rng::AbstractRNG,
+    f::Function,
+    args::Vararg{Any,Nargs};
+    constraint::Constraint=Dict{Symbol,Any}(),
 ) where {Nargs}
     trace = nothing
-    weight = nothing
-    res = nothing
 
     constraint_ptr = ConcreteRNumber(reinterpret(UInt64, pointer_from_objref(constraint)))
     constrained_symbols = collect(keys(constraint))
 
-    function wrapper_fn(constraint_ptr, args...)
-        return generate_internal(f, args...; constraint_ptr, constrained_symbols)
+    function wrapper_fn(rng, constraint_ptr, args...)
+        return generate_internal(rng, f, args...; constraint_ptr, constrained_symbols)
     end
 
-    compiled_fn = @compile optimize = :probprog wrapper_fn(constraint_ptr, args...)
+    compiled_fn = @compile optimize = :probprog wrapper_fn(rng, constraint_ptr, args...)
 
     old_gc_state = GC.enable(false)
     try
-        trace, weight, res = compiled_fn(constraint_ptr, args...)
+        trace, _, _ = compiled_fn(rng, constraint_ptr, args...)
     finally
         GC.enable(old_gc_state)
     end
@@ -779,6 +725,7 @@ function generate(
 end
 
 function generate_internal(
+    rng::AbstractRNG,
     f::Function,
     args::Vararg{Any,Nargs};
     constraint_ptr::TracedRNumber,
@@ -788,15 +735,22 @@ function generate_internal(
     resprefix::Symbol = gensym("generateresult")
     resargprefix::Symbol = gensym("generateresarg")
 
+    wrapper_fn = (all_args...) -> begin
+        res = f(all_args...)
+        (all_args[1], (res isa Tuple ? res : (res,))...)
+    end
+
+    args = (rng, args...)
+
     mlir_fn_res = invokelatest(
         TracedUtils.make_mlir_fn,
-        f,
+        wrapper_fn,
         args,
         (),
         string(f),
         false;
         do_transpose=false,
-        args_in_result=:all,
+        args_in_result=:result,
         argprefix,
         resprefix,
         resargprefix,
@@ -809,21 +763,13 @@ function generate_internal(
     fname = TracedUtils.get_attribute_by_name(func2, "sym_name")
     fn_attr = MLIR.IR.FlatSymbolRefAttribute(Base.String(fname))
 
-    # Specify which outputs to add to the trace.
-    traced_output_indices = Int[]
-    for (i, res) in enumerate(linear_results)
-        if TracedUtils.has_idx(res, resprefix)
-            push!(traced_output_indices, i - 1)
-        end
-    end
-
     inputs = MLIR.IR.Value[]
     for a in linear_args
         idx, path = TracedUtils.get_argidx(a, argprefix)
-        if idx == 1 && fnwrap
+        if idx == 2 && fnwrap
             TracedUtils.push_val!(inputs, f, path[3:end])
         else
-            if fnwrap
+            if fnwrap && idx > 2
                 idx -= 1
             end
             TracedUtils.push_val!(inputs, args[idx], path[3:end])
@@ -865,7 +811,6 @@ function generate_internal(
         outputs=out_tys,
         fn=fn_attr,
         constrained_symbols=MLIR.IR.Attribute(constrained_symbols_attr),
-        traced_output_indices,
     )
 
     for (i, res) in enumerate(linear_results)
@@ -873,17 +818,21 @@ function generate_internal(
         if TracedUtils.has_idx(res, resprefix)
             path = TracedUtils.get_idx(res, resprefix)
             TracedUtils.set!(result, path[2:end], resv)
-        elseif TracedUtils.has_idx(res, argprefix)
+        end
+
+        if TracedUtils.has_idx(res, argprefix)
             idx, path = TracedUtils.get_argidx(res, argprefix)
-            if idx == 1 && fnwrap
+            if idx == 2 && fnwrap
                 TracedUtils.set!(f, path[3:end], resv)
             else
-                if fnwrap
+                if fnwrap && idx > 2
                     idx -= 1
                 end
                 TracedUtils.set!(args[idx], path[3:end], resv)
             end
-        else
+        end
+
+        if !TracedUtils.has_idx(res, resprefix) && !TracedUtils.has_idx(res, argprefix)
             TracedUtils.set!(res, (), resv)
         end
     end
