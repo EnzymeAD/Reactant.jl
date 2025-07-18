@@ -227,3 +227,19 @@ end
     @test y.x isa Reactant.RArray
     @test y.x == fcustom_path(x).x
 end
+
+# CHLO legalize options
+# test that we are running some mhlo passes first before legalizing, else we will end up
+# decomposing some necessary ops
+function fn_test(x)
+    y = Reactant.Ops.top_k(x, 16).values
+    y_complex = Complex.(y, -y .+ 1)
+    conj!(y_complex)
+    return y_complex
+end
+
+@testset "chlo legalize" begin
+    x_ra = Reactant.to_rarray(rand(Float32, 128))
+    hlo = @code_hlo legalize_chlo_to_stablehlo=true fn_test(x_ra)
+    @test occursin("mhlo.topk", repr(hlo))
+end

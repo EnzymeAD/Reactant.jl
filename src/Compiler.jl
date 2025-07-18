@@ -1475,6 +1475,22 @@ function get_optimize_comms_passes(options::OptimizeCommunicationOptions)
     return res
 end
 
+function get_stablehlo_to_hlo_passes(; stablehlo_to_mhlo::Bool=true)
+    passes = (
+        "func.func(stablehlo-ext-chlo-recompose-ops)",
+        "symbol-dce",
+        "func.func(chlo-legalize-to-high-level-mhlo)",
+        "func.func(chlo-legalize-to-stablehlo)",
+    )
+    if stablehlo_to_mhlo
+        passes = (passes..., "stablehlo-legalize-to-hlo")
+    end
+    passes = (
+        passes..., "canonicalize", "func.func(stablehlo-ext-sink-constants-to-control-flow)"
+    )
+    return passes
+end
+
 function compile_mlir!(
     mod,
     f,
@@ -1624,6 +1640,12 @@ function compile_mlir!(
     lower_enzymexla_linalg_pass = "lower-enzymexla-linalg{backend=$backend \
                                    blas_int_width=$blas_int_width}"
 
+    legalize_chlo_to_stablehlo = if compile_options.legalize_chlo_to_stablehlo
+        get_stablehlo_to_hlo_passes(; stablehlo_to_mhlo=false)
+    else
+        ()
+    end
+
     if compile_options.optimization_passes === :all
         run_pass_pipeline!(
             mod,
@@ -1641,13 +1663,7 @@ function compile_mlir!(
                         "canonicalize",
                         "remove-unnecessary-enzyme-ops",
                         "enzyme-simplify-math",
-                        (
-                            if compile_options.legalize_chlo_to_stablehlo
-                                ["func.func(chlo-legalize-to-stablehlo)"]
-                            else
-                                []
-                            end
-                        )...,
+                        legalize_chlo_to_stablehlo...,
                         opt_passes2,
                         lower_enzymexla_linalg_pass,
                         jit,
@@ -1663,13 +1679,7 @@ function compile_mlir!(
                         "canonicalize",
                         "remove-unnecessary-enzyme-ops",
                         "enzyme-simplify-math",
-                        (
-                            if compile_options.legalize_chlo_to_stablehlo
-                                ["func.func(chlo-legalize-to-stablehlo)"]
-                            else
-                                []
-                            end
-                        )...,
+                        legalize_chlo_to_stablehlo...,
                         opt_passes2,
                         kern,
                         raise_passes,
@@ -1698,13 +1708,7 @@ function compile_mlir!(
                         "canonicalize",
                         "remove-unnecessary-enzyme-ops",
                         "enzyme-simplify-math",
-                        (
-                            if compile_options.legalize_chlo_to_stablehlo
-                                ["func.func(chlo-legalize-to-stablehlo)"]
-                            else
-                                []
-                            end
-                        )...,
+                        legalize_chlo_to_stablehlo...,
                         opt_passes2,
                     ]
                 end,
@@ -1729,13 +1733,7 @@ function compile_mlir!(
                         "canonicalize",
                         "remove-unnecessary-enzyme-ops",
                         "enzyme-simplify-math",
-                        (
-                            if compile_options.legalize_chlo_to_stablehlo
-                                ["func.func(chlo-legalize-to-stablehlo)"]
-                            else
-                                []
-                            end
-                        )...,
+                        legalize_chlo_to_stablehlo...,
                         opt_passes2,
                     ]
                 else
@@ -1749,13 +1747,7 @@ function compile_mlir!(
                         "canonicalize",
                         "remove-unnecessary-enzyme-ops",
                         "enzyme-simplify-math",
-                        (
-                            if compile_options.legalize_chlo_to_stablehlo
-                                ["func.func(chlo-legalize-to-stablehlo)"]
-                            else
-                                []
-                            end
-                        )...,
+                        legalize_chlo_to_stablehlo...,
                         opt_passes2,
                         kern,
                         raise_passes,
@@ -1782,13 +1774,7 @@ function compile_mlir!(
                         "canonicalize",
                         "remove-unnecessary-enzyme-ops",
                         "enzyme-simplify-math",
-                        (
-                            if compile_options.legalize_chlo_to_stablehlo
-                                ["func.func(chlo-legalize-to-stablehlo)"]
-                            else
-                                []
-                            end
-                        )...,
+                        legalize_chlo_to_stablehlo...,
                         opt_passes2,
                         kern,
                     ]
@@ -1811,13 +1797,7 @@ function compile_mlir!(
                     "canonicalize",
                     "remove-unnecessary-enzyme-ops",
                     "enzyme-simplify-math",
-                    (
-                        if compile_options.legalize_chlo_to_stablehlo
-                            ["func.func(chlo-legalize-to-stablehlo)"]
-                        else
-                            []
-                        end
-                    )...,
+                    legalize_chlo_to_stablehlo...,
                     opt_passes2,
                 ],
                 ',',
@@ -1854,13 +1834,7 @@ function compile_mlir!(
                         "canonicalize",
                         "remove-unnecessary-enzyme-ops",
                         "enzyme-simplify-math",
-                        (
-                            if compile_options.legalize_chlo_to_stablehlo
-                                ["func.func(chlo-legalize-to-stablehlo)"]
-                            else
-                                []
-                            end
-                        )...,
+                        legalize_chlo_to_stablehlo...,
                         opt_passes2,
                         lower_enzymexla_linalg_pass,
                         jit,
@@ -1873,13 +1847,7 @@ function compile_mlir!(
                         "canonicalize",
                         "remove-unnecessary-enzyme-ops",
                         "enzyme-simplify-math",
-                        (
-                            if compile_options.legalize_chlo_to_stablehlo
-                                ["func.func(chlo-legalize-to-stablehlo)"]
-                            else
-                                []
-                            end
-                        )...,
+                        legalize_chlo_to_stablehlo...,
                         opt_passes2,
                         kern,
                         raise_passes,
