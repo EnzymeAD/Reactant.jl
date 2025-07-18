@@ -240,6 +240,6 @@ end
 
 @testset "chlo legalize" begin
     x_ra = Reactant.to_rarray(rand(Float32, 128))
-    hlo = @code_hlo legalize_chlo_to_stablehlo=true fn_test(x_ra)
+    hlo = @code_hlo legalize_chlo_to_stablehlo = true fn_test(x_ra)
     @test occursin("mhlo.topk", repr(hlo))
 end
