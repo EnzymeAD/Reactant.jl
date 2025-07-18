@@ -1501,6 +1501,7 @@ function compile_mlir!(
     fn_kwargs=(),
     backend="gpu",
     runtime::Union{Val{:PJRT},Val{:IFRT}},
+    legalize_stablehlo_to_mhlo::Bool=false,
     kwargs...,
 )
     # Explicitly don't use block! to avoid creating a closure, which creates
@@ -1640,11 +1641,12 @@ function compile_mlir!(
     lower_enzymexla_linalg_pass = "lower-enzymexla-linalg{backend=$backend \
                                    blas_int_width=$blas_int_width}"
 
-    legalize_chlo_to_stablehlo = if compile_options.legalize_chlo_to_stablehlo
-        get_stablehlo_to_hlo_passes(; stablehlo_to_mhlo=false)
-    else
-        ()
-    end
+    legalize_chlo_to_stablehlo =
+        if legalize_stablehlo_to_mhlo || compile_options.legalize_chlo_to_stablehlo
+            get_stablehlo_to_hlo_passes(; stablehlo_to_mhlo=legalize_stablehlo_to_mhlo)
+        else
+            ()
+        end
 
     if compile_options.optimization_passes === :all
         run_pass_pipeline!(
@@ -2374,7 +2376,13 @@ See also [`@code_xla`](@ref), [`@code_hlo`](@ref).
 """
 macro code_mhlo(args...)
     compile_expr, (; compiled) = compile_call_expr(
-        __module__, compile_xla, get_common_compile_options(), args...
+        __module__,
+        compile_mlir,
+        merge(
+            get_common_compile_options(),
+            Dict{Symbol,Any}(:legalize_stablehlo_to_mhlo => true),
+        ),
+        args...,
     )
     #! format: off
     return esc(
