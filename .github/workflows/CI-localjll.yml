@@ -43,12 +43,9 @@ jobs:
         uses: jlumbroso/free-disk-space@main
         with:
           tool-cache: false
-          android: true
-          dotnet: true
-          haskell: true
-          large-packages: true
-          docker-images: true
-          swap-storage: true
+        if: ${{ startsWith(matrix.os, 'ubuntu-') }}
+      - name: Clean `/opt`
+        run: sudo rm -rf /opt/*
       - uses: actions/checkout@v4
       - name: Create TMPDIR
         run: |
