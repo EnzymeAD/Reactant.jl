@@ -491,8 +491,6 @@ end
 function call(rng::AbstractRNG, f::Function, args::Vararg{Any,Nargs}) where {Nargs}
     res = @jit optimize = :probprog call_internal(rng, f, args...)
 
-    @assert res isa Tuple && length(res) >= 1 && res[1] isa AbstractRNG "Expected first result to be RNG"
-
     res = map(res[2:end]) do r
         r isa AbstractConcreteArray ? Array(r) : r
     end
