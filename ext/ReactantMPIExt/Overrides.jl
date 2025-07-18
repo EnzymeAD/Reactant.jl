@@ -32,7 +32,12 @@ function MPI.Wait(req::TracedRequest)
 end
 
 # TODO use `make_tracer` to linearize arbitrary types? check out `MPI.Buffer`
-function MPI.Send(buf::TracedRArray, dest::Integer, tag::Integer, comm::MPI.Comm)
+function MPI.Send(
+    buf::TracedRArray, 
+    dest::Integer, 
+    tag::Integer, 
+    comm::MPI.Comm
+)
     tag = Reactant.Ops.constant(tag)
     dest = Reactant.Ops.constant(dest)
     return MPI.Send(buf, dest, tag, comm)
@@ -42,40 +47,63 @@ end
 # NOTE unlike MPI.jl's `MPI.Send`, we return the errcode to generate the data dep
 # that prevents it from being optimized away
 function MPI.Send(
-    buf::TracedRArray, dest::TracedRNumber, tag::TracedRNumber, comm::MPI.Comm
+    buf::TracedRArray, 
+    dest::TracedRNumber, 
+    tag::TracedRNumber, 
+    comm::MPI.Comm
 )
     @assert comm == MPI.COMM_WORLD "Only MPI.COMM_WORLD is supported currently"
     return Ops.send(buf, tag, dest)
 end
 
-# TODO use `make_tracer` to linearize arbitrary types? check out `MPI.Buffer`
-function MPI.Isend(
-    buf::TracedRArray,
-    dest::Union{T,TracedRNumber{T}},
-    tag::Union{T,TracedRNumber{T}},
-    comm::MPI.Comm,
-) where {T<:Integer}
-    @assert comm == MPI.COMM_WORLD "Only MPI.COMM_WORLD is supported currently"
-
-    tag = if !(tag isa TracedRNumber)
-        Reactant.Ops.constant(tag)
-    end
-
-    dest = if !(dest isa TracedRNumber)
-        Reactant.Ops.constant(dest)
-    end
-
-    return Ops.isend(buf, tag, dest)
-end
-
 # TODO should we error if other `AbstractRequest` types are passed in?
 function MPI.Isend(
-    buf::TracedRArray, dest::Number, tag::Number, comm::MPI.Comm, req::TracedRequest
+    buf::TracedRArray, 
+    dest::Integer, 
+    tag::Integer, 
+    comm::MPI.Comm, 
+    req::TracedRequest
 )
+    tag = Reactant.Ops.constant(tag)
+    dest = Reactant.Ops.constant(dest)
+
     gen_req = MPI.Isend(buf, dest, tag, comm)
     req.mlir_data = gen_req.mlir_data
     return req
 end
+
+# TODO use `make_tracer` to linearize arbitrary types? check out `MPI.Buffer`
+function MPI.Isend(
+    buf::TracedRArray,
+    dest::TracedRNumber,
+    tag::TracedRNumber,
+    comm::MPI.Comm,
+)
+    @assert comm == MPI.COMM_WORLD "Only MPI.COMM_WORLD is supported currently"
+
+    return Ops.isend(buf, tag, dest)
+end
+
+# TODO ROMAN do we want to use this signature, or the one in MPI.Send? Either way, they should be the same
+# # TODO use `make_tracer` to linearize arbitrary types? check out `MPI.Buffer`
+# function MPI.Isend(
+#     buf::TracedRArray,
+#     dest::Union{T,TracedRNumber{T}},
+#     tag::Union{T,TracedRNumber{T}},
+#     comm::MPI.Comm,
+# ) where {T<:Integer}
+#     @assert comm == MPI.COMM_WORLD "Only MPI.COMM_WORLD is supported currently"
+
+#     tag = if !(tag isa TracedRNumber)
+#         Reactant.Ops.constant(tag)
+#     end
+
+#     dest = if !(dest isa TracedRNumber)
+#         Reactant.Ops.constant(dest)
+#     end
+
+#     return Ops.isend(buf, tag, dest)
+# end
 
 function MPI.Recv!(buf::TracedRArray, source::Integer, tag::Integer, comm::MPI.Comm)
     tag = Reactant.Ops.constant(tag)
