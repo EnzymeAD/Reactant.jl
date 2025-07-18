@@ -2403,20 +2403,25 @@ This is the post optimizations XLA HLO module.
 ## Options
 
 $(COMMON_COMPILE_OPTIONS_DOCS)
+  - `before_xla_optimizations`: If `true`, return the `before_optimizations` HLO module.
 
 See also [`@code_mhlo`](@ref), [`@code_hlo`](@ref).
 """
 macro code_xla(args...)
     compile_expr, (; compiled) = compile_call_expr(
-        __module__, compile_xla, get_common_compile_options(), args...
+        __module__,
+        compile_xla,
+        merge(
+            get_common_compile_options(),
+            Dict{Symbol,Any}(:before_xla_optimizations => false),
+        ),
+        args...,
     )
     #! format: off
     return esc(
         :(
             $(compile_expr);
-            exec = $(compiled)[2];
-            hlo_modules = $(XLA.get_hlo_modules)(exec);
-            length(hlo_modules) == 1 ? only(hlo_modules) : hlo_modules
+            $(compiled)[3]
         )
     )
     #! format: on
@@ -3350,7 +3355,14 @@ function __resolve_device_and_client(client, seen_args, linear_args, is_sharded)
     return (client, device)
 end
 
-function compile_xla(f, args; client=nothing, serializable::Bool=false, kwargs...)
+function compile_xla(
+    f,
+    args;
+    before_xla_optimizations::Bool=false,
+    client=nothing,
+    serializable::Bool=false,
+    kwargs...,
+)
     # register MLIR dialects
     ctx = MLIR.IR.Context(Reactant.registry[], false)
     context_gc_vector[ctx] = Vector{Union{TracedRArray,TracedRNumber}}(undef, 0)
@@ -3406,20 +3418,27 @@ function compile_xla(f, args; client=nothing, serializable::Bool=false, kwargs..
             module_string = ""
         end
 
-        exec = XLA.compile(
-            client,
-            device,
-            mod;
-            num_outputs=length(mlir_fn_res.linear_results),
-            num_parameters=length(mlir_fn_res.linear_args),
-            mlir_fn_res.is_sharded,
-            global_device_ids,
-            mlir_fn_res.num_replicas,
-            mlir_fn_res.num_partitions,
-            mlir_fn_res.use_shardy_partitioner,
-        )
+        if before_xla_optimizations
+            exec = nothing
+            hlo_modules = XLA.HloModule(mod)
+        else
+            exec = XLA.compile(
+                client,
+                device,
+                mod;
+                num_outputs=length(mlir_fn_res.linear_results),
+                num_parameters=length(mlir_fn_res.linear_args),
+                mlir_fn_res.is_sharded,
+                global_device_ids,
+                mlir_fn_res.num_replicas,
+                mlir_fn_res.num_partitions,
+                mlir_fn_res.use_shardy_partitioner,
+            )
+            hlo_modules = XLA.get_hlo_modules(exec)
+            hlo_modules = length(hlo_modules) == 1 ? only(hlo_modules) : hlo_modules
+        end
 
-        return mod, exec, mlir_fn_res, device, client, module_string
+        return mod, exec, hlo_modules, mlir_fn_res, device, client, module_string
     finally
         MLIR.IR.deactivate!(ctx)
     end
@@ -3435,7 +3454,7 @@ const __thunk_rev_body_cache = Dict{Expr,Symbol}()
 function compile(f, args; kwargs...)
     compile_options, kwargs = __get_compile_options_and_kwargs(; kwargs...)
 
-    _, exec, mlir_fn_res, device, client, str = compile_xla(
+    _, exec, _, mlir_fn_res, device, client, str = compile_xla(
         f, args; compile_options, kwargs...
     )
     (;
