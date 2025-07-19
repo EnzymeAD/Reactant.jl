@@ -39,6 +39,13 @@ jobs:
     env:
       TMPDIR: ${{ github.workspace }}/tmp
     steps:
+      - name: Free Disk Space
+        uses: jlumbroso/free-disk-space@main
+        with:
+          tool-cache: false
+        if: ${{ startsWith(matrix.os, 'ubuntu-') }}
+      - name: Clean `/opt`
+        run: sudo rm -rf /opt/*
       - uses: actions/checkout@v4
       - name: Create TMPDIR
         run: |
