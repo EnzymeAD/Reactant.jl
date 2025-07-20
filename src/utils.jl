@@ -316,7 +316,7 @@ function certain_error()
     )
 end
 
-function rewrite_inst(inst, ir, interp, RT, guaranteed_error)
+function rewrite_inst(inst, ir::CC.IRCode, interp, RT, guaranteed_error)
     if Meta.isexpr(inst, :call)
         # Even if type unstable we do not want (or need) to replace intrinsic
         # calls or builtins with our version.
@@ -532,7 +532,7 @@ const DEBUG_INTERP = Ref(false)
 # to Any if our interpreter would change the return type of any result.
 # Also rewrite invoke (type stable call) to be :call, since otherwise apparently
 # screws up type inference after this (TODO this should be fixed).
-function rewrite_insts!(ir, interp, guaranteed_error)
+function rewrite_insts!(ir::CC.IRCode, interp, guaranteed_error)
     any_changed = false
     for (i, inst) in enumerate(ir.stmts)
         # Explicitly skip any code which returns Union{} so that we throw the error
@@ -839,11 +839,11 @@ function call_with_reactant_generator(
     if DEBUG_INTERP[]
         safe_print("code_info", code_info)
     end
-
+    #@lk code_info oc
     return code_info
 end
 
-@eval function call_with_reactant($REDUB_ARGUMENTS_NAME...)
+@eval function call_with_reactant0($REDUB_ARGUMENTS_NAME...)
     $(Expr(:meta, :generated_only))
     return $(Expr(:meta, :generated, call_with_reactant_generator))
 end
@@ -854,3 +854,109 @@ end
 nmantissa(::Type{Float16}) = 10
 nmantissa(::Type{Float32}) = 23
 nmantissa(::Type{Float64}) = 52
+
+using GPUCompiler
+using GPUCompiler: AbstractCompilerParams, CompilerJob, NativeCompilerTarget
+
+Base.Experimental.@MethodTable(test_method_table)
+
+struct CompilerParams <: AbstractCompilerParams
+    entry_safepoint::Bool
+    method_table
+
+    function CompilerParams(entry_safepoint::Bool=false, method_table=test_method_table)
+        return new(entry_safepoint, method_table)
+    end
+end
+
+NativeCompilerJob = CompilerJob{NativeCompilerTarget,CompilerParams}
+
+function GPUCompiler.method_table(@nospecialize(job::NativeCompilerJob))
+    return job.config.params.method_table
+end
+function GPUCompiler.can_safepoint(@nospecialize(job::NativeCompilerJob))
+    return job.config.params.entry_safepoint
+end
+
+GPUCompiler.can_throw(@nospecialize(job::NativeCompilerJob)) = true
+GPUCompiler.needs_byval(@nospecialize(job::NativeCompilerJob)) = false
+
+function GPUCompiler.optimize!(
+    @nospecialize(job::NativeCompilerJob), mod::GPUCompiler.LLVM.Module; opt_level
+)
+    return nothing #TODO: add all except GPU stuff passes
+end
+
+function create_job(
+    @nospecialize(func),
+    @nospecialize(types);
+    entry_safepoint::Bool=false,
+    method_table=test_method_table,
+    kwargs...,
+)
+    config_kwargs, kwargs = split_kwargs(kwargs, GPUCompiler.CONFIG_KWARGS)
+    source = methodinstance(
+        typeof(func), Base.to_tuple_type(types), Base.get_world_counter()
+    )
+    target = NativeCompilerTarget()
+    params = CompilerParams(entry_safepoint, method_table)
+    config = CompilerConfig(
+        target, params; kernel=false, libraries=false, toplevel=true, config_kwargs...
+    )
+    return CompilerJob(source, config), kwargs
+end
+
+using Enzyme
+ReactantInter = Enzyme.Compiler.Interpreter.EnzymeInterpreter{
+    typeof(Reactant.set_reactant_abi)
+}
+
+GPUCompiler.get_interpreter(::NativeCompilerJob) = Reactant.ReactantInterpreter()
+
+
+function CC.optimize(
+    interp::ReactantInter, opt::CC.OptimizationState, caller::CC.InferenceResult
+)
+    CC.@timeit "optimizer" ir = CC.run_passes_ipo_safe(opt.src, opt, caller)
+    CC.ipo_dataflow_analysis!(interp, ir, caller)
+
+    mi = caller.linfo
+    if false && !(
+        is_reactant_method(mi) || (
+            mi.def.sig isa DataType &&
+            !should_rewrite_invoke(
+                mi.def.sig.parameters[1], Tuple{mi.def.sig.parameters[2:end]...}
+            )
+        )
+    )
+        @info ir
+        ir, has_changed = rewrite_insts!(ir, interp, false)
+        @info ir
+        has_changed && @info "rewrite instruction $mi"
+    end
+
+
+    return CC.finish(interp, opt, ir, caller)
+end
+
+function call_with_reactant(@nospecialize(args...))
+    f = args[1]
+    types = typeof.(args[2:end])
+
+    job, meta = Reactant.create_job(f, types; validate=false)
+    llvm_module, meta_ = Reactant.JuliaContext() do ctx
+        GPUCompiler.compile(:llvm, job)
+    end
+    mm = meta_.compiled[job.source]
+    @error mm.ci.def types args
+    expr = Expr(
+        :call,
+        GlobalRef(Base, :llvmcall),
+        (string(llvm_module), mm.specfunc),
+        mm.ci.rettype,
+        Tuple{types...},
+        args[2:end]...,
+    )
+    #TODO: replace with a generated function
+    @eval $expr
+end
