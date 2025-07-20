@@ -890,6 +890,7 @@ cc_library(
             "-Wl,-exported_symbol,_addSdyPropagationPipeline",
             "-Wl,-exported_symbol,_mlirGetFunctionTypeFromOperation",
             "-Wl,-exported_symbol,_mlirIsFunctionOpInterface",
+            "-Wl,-exported_symbol,_convertMlirModuleToHloModule",
         ],
     }),
     linkstatic = True,
@@ -960,6 +961,7 @@ cc_library(
         "@xla//xla/pjrt:status_casters",
         "@xla//xla/python/ifrt",
         "@xla//xla/python/pjrt_ifrt",
+        "@xla//xla/hlo/translate:stablehlo",
         "@xla//xla/python/ifrt_proxy/server:grpc_server",
         "@xla//xla/python/ifrt_proxy/client:grpc_client",
         "@xla//xla/python/ifrt_proxy/client:registry",
@@ -1311,6 +1313,24 @@ gentbl_cc_library(
 )
 
 gentbl_cc_library(
+    name = "MosaicGPUJLIncGen",
+    tbl_outs = [
+        (
+            [
+                "--generator=jl-op-defs",
+                "--disable-module-wrap=0",
+            ],
+            "MosaicGPU.jl",
+        ),
+    ],
+    tblgen = "//:mlir-jl-tblgen",
+    td_file = "@jax//jaxlib/mosaic/dialect/gpu:mosaic_gpu.td",
+    deps = [
+        "@jax//jaxlib/mosaic/dialect/gpu:mosaic_gpu_td_files",
+    ],
+)
+
+gentbl_cc_library(
     name = "TritonJLIncGen",
     tbl_outs = [
         (
@@ -1440,6 +1460,11 @@ genrule(
         "@stablehlo//:stablehlo/integrations/c/StablehloDialectApi.h",
         "@stablehlo//:stablehlo/integrations/c/StablehloTypes.h",
         "@shardy//shardy/integrations/c:attributes.h",
+        "@jax//jaxlib/triton:triton_dialect_capi.h",
+        "@jax//jaxlib/mosaic:dialect/tpu/integrations/c/tpu_dialect.h",
+        "@jax//jaxlib/mosaic:dialect/tpu/integrations/c/tpu_passes.capi.h.inc",
+        "@jax//jaxlib/mosaic/dialect/gpu:integrations/c/attributes.h",
+        "@jax//jaxlib/mosaic/dialect/gpu:integrations/c/gpu_dialect.h",
         "//:Project.toml",
         "//:Manifest.toml",
         "//:wrap.toml",
@@ -1447,7 +1472,7 @@ genrule(
         "//:make.jl",
     ],
     outs = ["libMLIR_h.jl"],
-    cmd = "$$JULIA \"--color=yes\" \"--project=$(location //:Project.toml)\" \"$(location //:make.jl)\" \"$(location @llvm-project//mlir:include/mlir-c/Bindings/Python/Interop.h)\" \"$(location @llvm-project//llvm:include/llvm-c/Support.h)\" \"$(locations @llvm-project//mlir:ConversionPassIncGen_filegroup)\" \"$(location @stablehlo//:stablehlo/integrations/c/StablehloAttributes.h)\" \"$(location @shardy//shardy/integrations/c:attributes.h)\" \"$@\"",
+    cmd = "$$JULIA \"--color=yes\" \"--project=$(location //:Project.toml)\" \"$(location //:make.jl)\" \"$(location @llvm-project//mlir:include/mlir-c/Bindings/Python/Interop.h)\" \"$(location @llvm-project//llvm:include/llvm-c/Support.h)\" \"$(locations @llvm-project//mlir:ConversionPassIncGen_filegroup)\" \"$(location @stablehlo//:stablehlo/integrations/c/StablehloAttributes.h)\" \"$(location @shardy//shardy/integrations/c:attributes.h)\" \"$(location @jax//jaxlib/triton:triton_dialect_capi.h)\" \"$(location @jax//jaxlib/mosaic:dialect/tpu/integrations/c/tpu_dialect.h)\" \"$(location @jax//jaxlib/mosaic/dialect/gpu:integrations/c/gpu_dialect.h)\" \"$@\"",
     tags = [
         "jlrule",
     ],

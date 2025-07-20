@@ -1476,6 +1476,22 @@ function get_optimize_comms_passes(options::OptimizeCommunicationOptions)
     return res
 end
 
+function get_stablehlo_to_hlo_passes(; stablehlo_to_mhlo::Bool=true)
+    passes = (
+        "func.func(stablehlo-ext-chlo-recompose-ops)",
+        "symbol-dce",
+        "func.func(chlo-legalize-to-high-level-mhlo)",
+        "func.func(chlo-legalize-to-stablehlo)",
+    )
+    if stablehlo_to_mhlo
+        passes = (passes..., "stablehlo-legalize-to-hlo")
+    end
+    passes = (
+        passes..., "canonicalize", "func.func(stablehlo-ext-sink-constants-to-control-flow)"
+    )
+    return passes
+end
+
 function compile_mlir!(
     mod,
     f,
@@ -1486,6 +1502,7 @@ function compile_mlir!(
     fn_kwargs=(),
     backend="gpu",
     runtime::Union{Val{:PJRT},Val{:IFRT}},
+    legalize_stablehlo_to_mhlo::Bool=false,
     kwargs...,
 )
     # Explicitly don't use block! to avoid creating a closure, which creates
@@ -1626,6 +1643,13 @@ function compile_mlir!(
                                    blas_int_width=$blas_int_width}"
     lower_enzyme_probprog_pass = "lower-enzyme-probprog{backend=$backend}"
 
+    legalize_chlo_to_stablehlo =
+        if legalize_stablehlo_to_mhlo || compile_options.legalize_chlo_to_stablehlo
+            get_stablehlo_to_hlo_passes(; stablehlo_to_mhlo=legalize_stablehlo_to_mhlo)
+        else
+            ()
+        end
+
     if compile_options.optimization_passes === :all
         run_pass_pipeline!(
             mod,
@@ -1643,13 +1667,7 @@ function compile_mlir!(
                         "canonicalize",
                         "remove-unnecessary-enzyme-ops",
                         "enzyme-simplify-math",
-                        (
-                            if compile_options.legalize_chlo_to_stablehlo
-                                ["func.func(chlo-legalize-to-stablehlo)"]
-                            else
-                                []
-                            end
-                        )...,
+                        legalize_chlo_to_stablehlo...,
                         opt_passes2,
                         lower_enzymexla_linalg_pass,
                         jit,
@@ -1665,13 +1683,7 @@ function compile_mlir!(
                         "canonicalize",
                         "remove-unnecessary-enzyme-ops",
                         "enzyme-simplify-math",
-                        (
-                            if compile_options.legalize_chlo_to_stablehlo
-                                ["func.func(chlo-legalize-to-stablehlo)"]
-                            else
-                                []
-                            end
-                        )...,
+                        legalize_chlo_to_stablehlo...,
                         opt_passes2,
                         kern,
                         raise_passes,
@@ -1700,13 +1712,7 @@ function compile_mlir!(
                         "canonicalize",
                         "remove-unnecessary-enzyme-ops",
                         "enzyme-simplify-math",
-                        (
-                            if compile_options.legalize_chlo_to_stablehlo
-                                ["func.func(chlo-legalize-to-stablehlo)"]
-                            else
-                                []
-                            end
-                        )...,
+                        legalize_chlo_to_stablehlo...,
                         opt_passes2,
                     ]
                 end,
@@ -1731,13 +1737,7 @@ function compile_mlir!(
                         "canonicalize",
                         "remove-unnecessary-enzyme-ops",
                         "enzyme-simplify-math",
-                        (
-                            if compile_options.legalize_chlo_to_stablehlo
-                                ["func.func(chlo-legalize-to-stablehlo)"]
-                            else
-                                []
-                            end
-                        )...,
+                        legalize_chlo_to_stablehlo...,
                         opt_passes2,
                     ]
                 else
@@ -1751,13 +1751,7 @@ function compile_mlir!(
                         "canonicalize",
                         "remove-unnecessary-enzyme-ops",
                         "enzyme-simplify-math",
-                        (
-                            if compile_options.legalize_chlo_to_stablehlo
-                                ["func.func(chlo-legalize-to-stablehlo)"]
-                            else
-                                []
-                            end
-                        )...,
+                        legalize_chlo_to_stablehlo...,
                         opt_passes2,
                         kern,
                         raise_passes,
@@ -1784,13 +1778,7 @@ function compile_mlir!(
                         "canonicalize",
                         "remove-unnecessary-enzyme-ops",
                         "enzyme-simplify-math",
-                        (
-                            if compile_options.legalize_chlo_to_stablehlo
-                                ["func.func(chlo-legalize-to-stablehlo)"]
-                            else
-                                []
-                            end
-                        )...,
+                        legalize_chlo_to_stablehlo...,
                         opt_passes2,
                         kern,
                     ]
@@ -1813,13 +1801,7 @@ function compile_mlir!(
                     "canonicalize",
                     "remove-unnecessary-enzyme-ops",
                     "enzyme-simplify-math",
-                    (
-                        if compile_options.legalize_chlo_to_stablehlo
-                            ["func.func(chlo-legalize-to-stablehlo)"]
-                        else
-                            []
-                        end
-                    )...,
+                    legalize_chlo_to_stablehlo...,
                     opt_passes2,
                 ],
                 ',',
@@ -1972,13 +1954,7 @@ function compile_mlir!(
                         "canonicalize",
                         "remove-unnecessary-enzyme-ops",
                         "enzyme-simplify-math",
-                        (
-                            if compile_options.legalize_chlo_to_stablehlo
-                                ["func.func(chlo-legalize-to-stablehlo)"]
-                            else
-                                []
-                            end
-                        )...,
+                        legalize_chlo_to_stablehlo...,
                         opt_passes2,
                         lower_enzymexla_linalg_pass,
                         jit,
@@ -1991,13 +1967,7 @@ function compile_mlir!(
                         "canonicalize",
                         "remove-unnecessary-enzyme-ops",
                         "enzyme-simplify-math",
-                        (
-                            if compile_options.legalize_chlo_to_stablehlo
-                                ["func.func(chlo-legalize-to-stablehlo)"]
-                            else
-                                []
-                            end
-                        )...,
+                        legalize_chlo_to_stablehlo...,
                         opt_passes2,
                         kern,
                         raise_passes,
@@ -2524,7 +2494,13 @@ See also [`@code_xla`](@ref), [`@code_hlo`](@ref).
 """
 macro code_mhlo(args...)
     compile_expr, (; compiled) = compile_call_expr(
-        __module__, compile_xla, get_common_compile_options(), args...
+        __module__,
+        compile_mlir,
+        merge(
+            get_common_compile_options(),
+            Dict{Symbol,Any}(:legalize_stablehlo_to_mhlo => true),
+        ),
+        args...,
     )
     #! format: off
     return esc(
@@ -2545,20 +2521,25 @@ This is the post optimizations XLA HLO module.
 ## Options
 
 $(COMMON_COMPILE_OPTIONS_DOCS)
+  - `before_xla_optimizations`: If `true`, return the `before_optimizations` HLO module.
 
 See also [`@code_mhlo`](@ref), [`@code_hlo`](@ref).
 """
 macro code_xla(args...)
     compile_expr, (; compiled) = compile_call_expr(
-        __module__, compile_xla, get_common_compile_options(), args...
+        __module__,
+        compile_xla,
+        merge(
+            get_common_compile_options(),
+            Dict{Symbol,Any}(:before_xla_optimizations => false),
+        ),
+        args...,
     )
     #! format: off
     return esc(
         :(
             $(compile_expr);
-            exec = $(compiled)[2];
-            hlo_modules = $(XLA.get_hlo_modules)(exec);
-            length(hlo_modules) == 1 ? only(hlo_modules) : hlo_modules
+            $(compiled)[3]
         )
     )
     #! format: on
@@ -3492,7 +3473,14 @@ function __resolve_device_and_client(client, seen_args, linear_args, is_sharded)
     return (client, device)
 end
 
-function compile_xla(f, args; client=nothing, serializable::Bool=false, kwargs...)
+function compile_xla(
+    f,
+    args;
+    before_xla_optimizations::Bool=false,
+    client=nothing,
+    serializable::Bool=false,
+    kwargs...,
+)
     # register MLIR dialects
     ctx = MLIR.IR.Context(Reactant.registry[], false)
     context_gc_vector[ctx] = Vector{Union{TracedRArray,TracedRNumber}}(undef, 0)
@@ -3548,20 +3536,27 @@ function compile_xla(f, args; client=nothing, serializable::Bool=false, kwargs..
             module_string = ""
         end
 
-        exec = XLA.compile(
-            client,
-            device,
-            mod;
-            num_outputs=length(mlir_fn_res.linear_results),
-            num_parameters=length(mlir_fn_res.linear_args),
-            mlir_fn_res.is_sharded,
-            global_device_ids,
-            mlir_fn_res.num_replicas,
-            mlir_fn_res.num_partitions,
-            mlir_fn_res.use_shardy_partitioner,
-        )
+        if before_xla_optimizations
+            exec = nothing
+            hlo_modules = XLA.HloModule(mod)
+        else
+            exec = XLA.compile(
+                client,
+                device,
+                mod;
+                num_outputs=length(mlir_fn_res.linear_results),
+                num_parameters=length(mlir_fn_res.linear_args),
+                mlir_fn_res.is_sharded,
+                global_device_ids,
+                mlir_fn_res.num_replicas,
+                mlir_fn_res.num_partitions,
+                mlir_fn_res.use_shardy_partitioner,
+            )
+            hlo_modules = XLA.get_hlo_modules(exec)
+            hlo_modules = length(hlo_modules) == 1 ? only(hlo_modules) : hlo_modules
+        end
 
-        return mod, exec, mlir_fn_res, device, client, module_string
+        return mod, exec, hlo_modules, mlir_fn_res, device, client, module_string
     finally
         MLIR.IR.deactivate!(ctx)
     end
@@ -3577,7 +3572,7 @@ const __thunk_rev_body_cache = Dict{Expr,Symbol}()
 function compile(f, args; kwargs...)
     compile_options, kwargs = __get_compile_options_and_kwargs(; kwargs...)
 
-    _, exec, mlir_fn_res, device, client, str = compile_xla(
+    _, exec, _, mlir_fn_res, device, client, str = compile_xla(
         f, args; compile_options, kwargs...
     )
     (;

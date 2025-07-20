@@ -81,6 +81,7 @@
 #include "xla/pjrt/plugin/xla_cpu/xla_cpu_pjrt_client.h"
 
 #include "xla/hlo/translate/hlo_to_mhlo/hlo_utils.h"
+#include "xla/hlo/translate/stablehlo.h"
 
 // CPU collectives
 #include "xla/backends/cpu/collectives/mpi_collectives.h"
@@ -2955,4 +2956,11 @@ extern "C" void reactantXLAExec(LinkableRuntime **__restrict__ lrtP,
       FreeFuture(future_results[i]);
     }
   }
+}
+
+extern "C" HeldHloModule *convertMlirModuleToHloModule(MlirModule mod) {
+  mlir::ModuleOp cmod_op = cast<ModuleOp>(*unwrap(mod));
+  std::shared_ptr<xla::HloModule> hlo_module =
+      std::move(MyValueOrThrow(xla::ConvertStablehloToHlo(cmod_op)));
+  return reactant::capture(hlo_module);
 }
