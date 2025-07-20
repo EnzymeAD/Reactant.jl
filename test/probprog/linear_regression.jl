@@ -38,15 +38,17 @@ function my_inference_program(xs, ys, num_iters)
 
     trace, _ = ProbProg.generate(rng, my_model, xs_r; constraint)
 
-    compiled_cache = ProbProg.CompiledFnCache()
-
-    for i in 1:num_iters
-        trace, _ = ProbProg.metropolis_hastings(
-            trace, ProbProg.select(:slope); compiled_cache
-        )
-        trace, _ = ProbProg.metropolis_hastings(
-            trace, ProbProg.select(:intercept); compiled_cache
-        )
+    trace = ProbProg.with_compiled_cache() do cache
+        local t = trace
+        for _ in 1:num_iters
+            t, _ = ProbProg.metropolis_hastings(
+                t, ProbProg.select(:slope); compiled_cache=cache
+            )
+            t, _ = ProbProg.metropolis_hastings(
+                t, ProbProg.select(:intercept); compiled_cache=cache
+            )
+        end
+        return t
     end
 
     choices = ProbProg.get_choices(trace)

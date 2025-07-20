@@ -966,6 +966,11 @@ select(syms::Symbol...) = Set(syms)
 choicemap() = Constraint()
 const CompiledFnCache = Dict{Tuple{Type,Set{Symbol}},Any}
 
+function with_compiled_cache(f)
+    cache = CompiledFnCache()
+    return f(cache)
+end
+
 function metropolis_hastings(
     trace::ProbProgTrace,
     sel::Selection;
