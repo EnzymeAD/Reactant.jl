@@ -1442,6 +1442,7 @@ genrule(
         "@stablehlo//:stablehlo/integrations/c/StablehloDialectApi.h",
         "@stablehlo//:stablehlo/integrations/c/StablehloTypes.h",
         "@shardy//shardy/integrations/c:attributes.h",
+        "@jax//jaxlib/triton:triton_dialect_capi.h",
         "//:Project.toml",
         "//:Manifest.toml",
         "//:wrap.toml",
@@ -1449,7 +1450,7 @@ genrule(
         "//:make.jl",
     ],
     outs = ["libMLIR_h.jl"],
-    cmd = "$$JULIA \"--color=yes\" \"--project=$(location //:Project.toml)\" \"$(location //:make.jl)\" \"$(location @llvm-project//mlir:include/mlir-c/Bindings/Python/Interop.h)\" \"$(location @llvm-project//llvm:include/llvm-c/Support.h)\" \"$(locations @llvm-project//mlir:ConversionPassIncGen_filegroup)\" \"$(location @stablehlo//:stablehlo/integrations/c/StablehloAttributes.h)\" \"$(location @shardy//shardy/integrations/c:attributes.h)\" \"$@\"",
+    cmd = "$$JULIA \"--color=yes\" \"--project=$(location //:Project.toml)\" \"$(location //:make.jl)\" \"$(location @llvm-project//mlir:include/mlir-c/Bindings/Python/Interop.h)\" \"$(location @llvm-project//llvm:include/llvm-c/Support.h)\" \"$(locations @llvm-project//mlir:ConversionPassIncGen_filegroup)\" \"$(location @stablehlo//:stablehlo/integrations/c/StablehloAttributes.h)\" \"$(location @shardy//shardy/integrations/c:attributes.h)\" \"$(location @jax//jaxlib/triton:triton_dialect_capi.h)\" \"$@\"",
     tags = [
         "jlrule",
     ],
