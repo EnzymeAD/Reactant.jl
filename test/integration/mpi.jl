@@ -26,18 +26,12 @@ end
     rank = MPI.Comm_rank(comm)
     nranks = MPI.Comm_size(comm)
 
-    if nranks < 2
-        @warn "Need at least 2 MPI processes for send tests. Skipping."
-        return
-    end
-
     # test MPI.jl Send / Reactant Recv
     @testset "MPI.jl Send / Reactant Recv!" begin
         send_buf = fill(1)
         tag = 43
         if rank == 0
             MPI.Send(send_buf, comm; dest=1, tag=tag)
-            @test true
         elseif rank == 1
             recv_buf = ConcreteRArray(fill(12))
             source = 0
@@ -53,7 +47,6 @@ end
         if rank == 0
             dest = 1
             @jit MPI.Send(send_buf, dest, tag, comm)
-            @test true
         elseif rank == 1
             recv_buf = fill(12)
             MPI.Recv!(recv_buf, comm; source=0, tag=tag)
@@ -69,7 +62,6 @@ end
             # Send: pass on cpu, pass on gpu
             dest = 1
             @jit MPI.Send(send_buf, dest, tag, comm)
-            @test true  # Send completed
         elseif rank == 1
             # hang on cpu
             # segfault on gpu upon trying to reference res
