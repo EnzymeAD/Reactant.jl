@@ -364,8 +364,7 @@ end
 function isend(
     buf::TracedRArray,
     tag::TracedRNumber,
-    dest::TracedRNumber,
-    req::TracedRequest; # TODO ROMAN shouldn't we pass this in??
+    dest::TracedRNumber;
     location=mlir_stacktrace("mpi.isend", @__FILE__, @__LINE__),
 )
     T = Reactant.unwrapped_eltype(buf)
@@ -381,9 +380,9 @@ function isend(
         "llvm.func @MPI_Isend(!llvm.ptr, i32, !llvm.ptr, i32, i32, !llvm.ptr, !llvm.ptr) -> i32",
     )
 
-    #! format: off
     # int MPI_Isend(const void* buf, int count, MPI_Datatype datatype, 
     #               int dest, int tag, MPI_Comm comm, MPI_Request* request)
+    #! format: off
     IR.inject!(sym_name, """
         func.func @$sym_name(%buf : !llvm.ptr, %count_ptr : !llvm.ptr, %dest_ptr : !llvm.ptr, %tag_ptr : !llvm.ptr, %req_ptr : !llvm.ptr) -> () {
             %comm = llvm.mlir.addressof @MPI_COMM_WORLD : !llvm.ptr
@@ -398,44 +397,28 @@ function isend(
     #! format: on
 
     count = Reactant.Ops.constant(Int32(length(buf)))
+    request = Reactant.Ops.constant(Int64(-1))
 
-    # TODO ROMAN need to use output_operand_aliases to get the reutnr values?
-    # how the hell does this thing work
     output_operand_aliases = IR.Attribute([
         IR.Attribute(
             MLIR.API.stablehloOutputOperandAliasGet(
-                MLIR.IR.context(), 0, C_NULL, 0, 0, C_NULL
+                MLIR.IR.context(), 0, C_NULL, 4, 0, C_NULL
             ),
         ),
     ])
 
     ret = enzymexla.jit_call(
         IR.Value[
-            buf.mlir_data, count.mlir_data, dest.mlir_data, tag.mlir_data, req.mlir_data
+            buf.mlir_data, count.mlir_data, dest.mlir_data, tag.mlir_data, request.mlir_data
         ];
         fn=sym_attr,
-        result_0=IR.Type[mlir_type(req)], # TODO ROMAN: need to define a function mlir_type(::TracedRequest)?
+        result_0=IR.Type[mlir_type(request)],
         output_operand_aliases=output_operand_aliases,
         location,
     )
 
-    # TODO ROMAN how to return the request?
-    return TracedRequest( IR.result(ret) )
-
-
-    # # Sergio's stuff
-    # # return TracedRequest(
-    # #     IR.result(mpi.isend(buf.mlir_data, tag.mlir_data, dest.mlir_data; location))
-    # # )
-
-    # # TODO emit constant for size and datatype, and pass as args
-    # inputs = IR.Value[buf.mlir_data, tag.mlir_data, dest.mlir_data]
-    # sym = IR.FlatSymbolRefAttribute("enzymexla_wrapper_MPI_Isend")
-    # rettype = IR.Type[] # TODO return MPI_Request -> use i32 or opaque?
-
-    # return TracedRequest(
-    #     IR.result(enzymexla.jit_call(inputs; fn=sym, result_0=rettype, location))
-    # )
+    request.mlir_data = IR.result(ret)
+    return request
 end
 
 function recv!(
