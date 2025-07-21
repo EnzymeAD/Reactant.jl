@@ -222,6 +222,8 @@ struct TracedRequest <: MPI.AbstractRequest
     mlir_data::Union{Nothing,Reactant.MLIR.IR.Value}
 end
 
+TracedRequest() = TracedRequest(nothing)
+
 include("Ops.jl")
 include("Overrides.jl")
 
