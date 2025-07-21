@@ -1,31 +1,32 @@
 using Reactant, Test, Random
-using Reactant: ProbProg
+using Reactant: ProbProg, ReactantRNG
 
-function normal(rng, μ, σ, shape)
-    return μ .+ σ .* randn(rng, shape)
+normal(rng, μ, σ, shape) = μ .+ σ .* randn(rng, shape)
+
+function normal_logpdf(x, μ, σ, _)
+    return -sum(log.(σ)) - length(x) / 2 * log(2π) - sum((x .- μ) .^ 2 ./ (2 .* (σ .^ 2)))
 end
 
-function bernoulli_logit(rng, logit, shape)
-    return rand(rng, shape...) .< (1 ./ (1 .+ exp.(-logit)))
-end
+bernoulli_logit(rng, logit, shape) = rand(rng, shape...) .< (1 ./ (1 .+ exp.(-logit)))
+bernoulli_logit_logpdf(x, logit, _) = sum(x .* logit .- log1p.(exp.(logit)))
 
-function blr(seed, N, K)
-    rng = Random.default_rng()
-    Random.seed!(rng, seed)
-
+# https://github.com/facebookresearch/pplbench/blob/main/pplbench/models/logistic_regression.py
+function blr(rng, N, K)
     # α ~ Normal(0, 10, size = 1)
-    α = ProbProg.sample(normal, rng, 0, 10, (1,); symbol=:α)
+    α = ProbProg.sample(rng, normal, 0, 10, (1,); symbol=:α, logpdf=normal_logpdf)
 
     # β ~ Normal(0, 2.5, size = K)
-    β = ProbProg.sample(normal, rng, 0, 2.5, (K,); symbol=:β)
+    β = ProbProg.sample(rng, normal, 0, 2.5, (K,); symbol=:β, logpdf=normal_logpdf)
 
     # X ~ Normal(0, 10, size = (N, K))
-    X = ProbProg.sample(normal, rng, 0, 10, (N, K); symbol=:X)
+    X = ProbProg.sample(rng, normal, 0, 10, (N, K); symbol=:X, logpdf=normal_logpdf)
 
     # μ = α .+ X * β
     μ = α .+ X * β
 
-    Y = ProbProg.sample(bernoulli_logit, rng, μ, (N,); symbol=:Y)
+    Y = ProbProg.sample(
+        rng, bernoulli_logit, μ, (N,); symbol=:Y, logpdf=bernoulli_logit_logpdf
+    )
 
     return Y
 end
@@ -35,7 +36,10 @@ end
     K = 3  # number of features
     seed = Reactant.to_rarray(UInt64[1, 4])
 
-    trace = ProbProg.simulate(blr, seed, N, K)
+    rng = ReactantRNG(seed)
 
-    @test size(Array(trace.retval)) == (N,)
+    trace, _ = ProbProg.simulate(rng, blr, N, K)
+    println(trace)
+
+    @test size(trace.retval[1]) == (N,)
 end

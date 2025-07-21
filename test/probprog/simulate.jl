@@ -2,7 +2,10 @@ using Reactant, Test, Random
 using Reactant: ProbProg, ReactantRNG
 
 normal(rng, μ, σ, shape) = μ .+ σ .* randn(rng, shape)
-normal_logpdf(x, μ, σ, _) = -sum(log.(σ)) - sum((μ .- x) .^ 2) / (2 * σ^2)
+
+function normal_logpdf(x, μ, σ, _)
+    return -sum(log.(σ)) - length(x) / 2 * log(2π) - sum((x .- μ) .^ 2 ./ (2 .* (σ .^ 2)))
+end
 
 function product_two_normals(rng, μ, σ, shape)
     a = ProbProg.sample(rng, normal, μ, σ, shape; symbol=:a, logpdf=normal_logpdf)
