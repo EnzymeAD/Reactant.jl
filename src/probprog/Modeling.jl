@@ -339,16 +339,8 @@ function simulate_internal(
         1,
     )
 
-    weight = MLIR.IR.result(
-        MLIR.Dialects.builtin.unrealized_conversion_cast(
-            [MLIR.IR.result(simulate_op, 2)];
-            outputs=[MLIR.IR.TensorType(Int64[], MLIR.IR.Type(Float64))],
-        ),
-        1,
-    )
-
     trace = TracedRArray{UInt64,0}((), trace, ())
-    weight = TracedRArray{Float64,0}((), weight, ())
+    weight = TracedRArray{Float64,0}((), MLIR.IR.result(simulate_op, 2), ())
 
     return trace, weight, result
 end
@@ -507,16 +499,8 @@ function generate_internal(
         1,
     )
 
-    weight = MLIR.IR.result(
-        MLIR.Dialects.builtin.unrealized_conversion_cast(
-            [MLIR.IR.result(generate_op, 2)];
-            outputs=[MLIR.IR.TensorType(Int64[], MLIR.IR.Type(Float64))],
-        ),
-        1,
-    )
-
     trace = TracedRArray{UInt64,0}((), trace, ())
-    weight = TracedRArray{Float64,0}((), weight, ())
+    weight = TracedRArray{Float64,0}((), MLIR.IR.result(generate_op, 2), ())
 
     return trace, weight, result
 end
