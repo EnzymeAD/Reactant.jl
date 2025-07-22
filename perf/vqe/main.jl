@@ -18,7 +18,7 @@ include("Circuit.jl")
 dbg_logger = ConsoleLogger(stderr, Logging.Info)
 
 # number of qubits
-N = 30
+N = 50
 
 # number of layers
 L = 6
