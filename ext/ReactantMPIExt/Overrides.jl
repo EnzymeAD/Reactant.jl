@@ -62,14 +62,14 @@ function MPI.Isend(
     dest::Integer, 
     tag::Integer, 
     comm::MPI.Comm, 
-    req::TracedRequest
+    request::TracedRequest=TracedRequest()
 )
     tag = Reactant.Ops.constant(tag)
     dest = Reactant.Ops.constant(dest)
 
-    gen_req = MPI.Isend(buf, dest, tag, comm)
-    req.mlir_data = gen_req.mlir_data
-    return req
+    gen_request = MPI.Isend(buf, dest, tag, comm)
+    request.mlir_data = gen_request.mlir_data
+    return request
 end
 
 # TODO use `make_tracer` to linearize arbitrary types? check out `MPI.Buffer`
@@ -84,7 +84,7 @@ function MPI.Isend(
     return Ops.isend(buf, tag, dest)
 end
 
-# TODO ROMAN do we want to use this signature, or the one in MPI.Send? Either way, they should be the same
+# TODO possible to use this signature? As is, ambiguous with the ones defined by MPI.jl
 # # TODO use `make_tracer` to linearize arbitrary types? check out `MPI.Buffer`
 # function MPI.Isend(
 #     buf::TracedRArray,

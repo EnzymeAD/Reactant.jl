@@ -218,7 +218,7 @@ function __init__()
     end
 end
 
-struct TracedRequest <: MPI.AbstractRequest
+mutable struct TracedRequest <: MPI.AbstractRequest
     mlir_data::Union{Nothing,Reactant.MLIR.IR.Value}
 end
 
