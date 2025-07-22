@@ -99,17 +99,10 @@ sed -i.bak0 "s/patch_cmds = \\[/patch_cmds = \\[\\\"find . -type f -name config.
     # """,
 ]
 
-LLVM_TARGETS = select({
-    "@bazel_tools//src/conditions:windows": [
+LLVM_TARGETS = [
         "AMDGPU",
         "NVPTX",
-    ],
-    "@bazel_tools//src/conditions:darwin": [],
-    "//conditions:default": [
-        "AMDGPU",
-        "NVPTX",
-    ],
-}) + [
+] + [
     "AArch64",
     "X86",
     "ARM",
@@ -234,6 +227,18 @@ load("@jax//third_party/xla:workspace.bzl", jax_xla_workspace = "repo")
 
 jax_xla_workspace()
 
+
+load("@xla//third_party/llvm:workspace.bzl", llvm = "repo")
+
+llvm("llvm-raw")
+
+load("@llvm-raw//utils/bazel:configure.bzl", "llvm_configure")
+
+llvm_configure(
+    name = "llvm-project",
+    targets = LLVM_TARGETS,
+)
+
 load("@xla//:workspace4.bzl", "xla_workspace4")
 
 xla_workspace4()
@@ -242,13 +247,7 @@ load("@xla//:workspace3.bzl", "xla_workspace3")
 
 xla_workspace3()
 
-load("@llvm-raw//utils/bazel:configure.bzl", "llvm_configure")
 load("@xla//:workspace2.bzl", "xla_workspace2")
-
-llvm_configure(
-    name = "llvm-project",
-    targets = LLVM_TARGETS,
-)
 
 xla_workspace2()
 
