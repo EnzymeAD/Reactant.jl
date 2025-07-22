@@ -68,6 +68,9 @@ CUPTI_NEW = []
 
 XLA_PATCHES = XLA_PATCHES + CUPTI_NEW + [
     """
+sed -i.bak0 "s/kStableFlags({/kStableFlags(absl::flat_hash_set<std::string>{/g" xla/debug_options_flags.cc
+""",
+"""
 sed -i.bak0 "s/cupti_driver_cbid/cupti/g" xla/backends/profiler/gpu/cupti_tracer.cc
 """,
     """
