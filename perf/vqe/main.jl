@@ -15,14 +15,16 @@ include("utils.jl")
 include("Circuit.jl")
 
 # number of qubits
-N = 20
+N = 30
 
 # number of layers
-L = 6
+L = 4
 
 # generate parametric circuit
 ansatz = efficient_su2(N, L)
 params_re = adapt(ConcreteRArray, rand(Float64, nparameters(ansatz)) .* 2π)
+
+@info "Reading hamiltonian terms from file \"hamiltonian-terms-n$N.txt\""
 
 hamiltonian_terms = open(joinpath(@__DIR__, "hamiltonian-terms-n$N.txt")) do io
     map(eachline(io)) do line
@@ -57,7 +59,7 @@ hamiltonian_terms = open(joinpath(@__DIR__, "hamiltonian-terms-n$N.txt")) do io
         (; weight=parse(Float64, weight), term, observable)
     end
 end;
-numterms = length(hamiltonian_terms)
+@show numterms = length(hamiltonian_terms)
 
 # we are just taking one term, but terms can be batched together (just technically more difficult to describe from the Julia / Tensor Network side)
 function expectation(params, obs, coef)
@@ -105,6 +107,8 @@ results = Vector{Tuple{String,String,T,T,Float64}}()
 
 # NOTE first compilation still takes a while...
 
+@info "Benchmarking 'primal' with 'only XLA' pipeline..."
+
 # primal
 ## only XLA
 f_xla = @time @compile compile_options = Reactant.DefaultXLACompileOptions(; sync=true) expectation(
@@ -115,6 +119,8 @@ baseline = median(b).time
 push!(
     results, ("Primal", "Only XLA", median(b).time * 1.0u"ns", std(b).time * 1.0u"ns", 1.0)
 )
+
+@info "Benchmarking 'primal' with 'default' pipeline..."
 
 ## default
 f_default = @compile sync = true expectation(params_re, observable_re, coef_re)
@@ -131,9 +137,9 @@ push!(
 )
 
 # gradient
-## only XLA
 for mode in [:all, :before_enzyme, :after_enzyme]
-    @info "Benchmarking gradient with mode = $(Meta.quot(mode))"
+    ## only XLA
+    @info "Benchmarking 'gradient' with 'only XLA' pipeline and $(Meta.quot(mode)) mode..."
 
     ∇f_xla = @compile compile_options = Reactant.DefaultXLACompileOptions(; sync=true) ∇expectation(
         params_re, observable_re, coef_re
@@ -152,6 +158,8 @@ for mode in [:all, :before_enzyme, :after_enzyme]
     )
 
     ## default
+    @info "Benchmarking 'gradient' with 'default' pipeline and $(Meta.quot(mode)) mode..."
+
     ∇f_default = @compile sync = true optimize = mode ∇expectation(
         params_re, observable_re, coef_re
     )
