@@ -1,4 +1,4 @@
-abstract type RNumber{T<:ReactantPrimitive} <: Number end
+abstract type RNumber{T<:ReactantAllPrimitive} <: Number end
 
 abstract type AbstractConcreteNumber{T} <: RNumber{T} end
 

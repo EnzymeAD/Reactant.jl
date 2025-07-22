@@ -3,7 +3,7 @@
 # Julia and Reactant semantics should be considered on the higher abstractions that use these ops.
 module Ops
 using ..MLIR: MLIR
-using ..MLIR.Dialects: stablehlo, chlo, enzyme, enzymexla
+using ..MLIR.Dialects: stablehlo, chlo, enzyme, enzymexla, tt, arith
 using ..Reactant:
     Reactant,
     TracedRArray,
@@ -11,6 +11,7 @@ using ..Reactant:
     RArray,
     RNumber,
     MissingTracedValue,
+    TTPtr,
     unwrapped_eltype
 using ReactantCore: ReactantCore
 
@@ -357,7 +358,7 @@ for (dialect, op) in [
             a::TracedRArray{T,N},
             b::TracedRArray{T,N};
             location=mlir_stacktrace($(string(op)), @__FILE__, @__LINE__),
-        ) where {T,N}
+        ) where {T<:Reactant.ReactantPrimitive,N}
             res = MLIR.IR.result(
                 $(:($dialect.$op))(
                     a.mlir_data,
@@ -373,7 +374,7 @@ for (dialect, op) in [
             a::TracedRNumber{T},
             b::TracedRNumber{T};
             location=mlir_stacktrace($(string(op)), @__FILE__, @__LINE__),
-        ) where {T}
+        ) where {T<:Reactant.ReactantPrimitive}
             res = MLIR.IR.result(
                 $(:($dialect.$op))(
                     a.mlir_data,
@@ -395,7 +396,7 @@ for (dialect, op) in
         @noinline function $op(
             x::TracedRArray{T,N};
             location=mlir_stacktrace($(string(op)), @__FILE__, @__LINE__),
-        ) where {T,N}
+        ) where {T<:Reactant.ReactantPrimitive,N}
             res = MLIR.IR.result(
                 $(:($dialect.$op))(
                     x.mlir_data;
@@ -409,7 +410,7 @@ for (dialect, op) in
         @noinline function $op(
             x::TracedRNumber{T};
             location=mlir_stacktrace($(string(op)), @__FILE__, @__LINE__),
-        ) where {T}
+        ) where {T<:Reactant.ReactantPrimitive}
             res = MLIR.IR.result(
                 $(:($dialect.$op))(
                     x.mlir_data; $(result)=mlir_type(TracedRArray{Bool,0}, ()), location
@@ -1550,6 +1551,9 @@ end
     location=mlir_stacktrace("convert", @__FILE__, @__LINE__),
 ) where {T,N}
     @assert N == ndims(x)
+    if T == unwrapped_eltype(x)
+        return TracedRArray{T,N}((), x.mlir_data, size(x))
+    end
     return TracedRArray{T,N}(
         (),
         MLIR.IR.result(
@@ -1566,6 +1570,9 @@ end
     x::TracedRNumber;
     location=mlir_stacktrace("convert", @__FILE__, @__LINE__),
 ) where {T}
+    if T == unwrapped_eltype(x)
+        return TracedRNumber{T}((), x.mlir_data)
+    end
     return TracedRNumber{T}(
         (),
         MLIR.IR.result(
@@ -3276,6 +3283,99 @@ end
             1,
         ),
         size(input),
+    )
+end
+
+@noinline function triton_get_program_id(
+    axis::Int; location=mlir_stacktrace("triton_get_program_id", @__FILE__, @__LINE__)
+)
+    @assert axis in (1, 2, 3)
+    return TracedRNumber{Int32}(
+        (),
+        MLIR.IR.result(
+            tt.splat(
+                MLIR.IR.result(
+                    tt.get_program_id(;
+                        location,
+                        axis=MLIR.IR.Attribute(Int32(axis - 1)),
+                        result=MLIR.IR.Type(Int32),
+                    ),
+                );
+                result=MLIR.IR.TensorType(Int64[], MLIR.IR.Type(Int32)),
+            ),
+        ),
+    )
+end
+
+@noinline function triton_splat(
+    value::TracedRNumber{TTPtr{T}},
+    sz::Dims{N};
+    location=mlir_stacktrace("triton_splat", @__FILE__, @__LINE__),
+) where {T,N}
+    return TracedRArray{TTPtr{T},N}(
+        (),
+        MLIR.IR.result(
+            tt.splat(
+                value.mlir_data;
+                location,
+                result=MLIR.IR.TensorType(collect(Int, sz), MLIR.IR.Type(TTPtr{T})),
+            ),
+        ),
+        sz,
+    )
+end
+
+@noinline function add(
+    a::TracedRNumber{TTPtr{T}},
+    b::TracedRNumber{<:Integer};
+    location=mlir_stacktrace("add", @__FILE__, @__LINE__),
+) where {T}
+    return TracedRNumber{TTPtr{T}}(
+        (),
+        MLIR.IR.result(
+            tt.addptr(
+                a.mlir_data,
+                b.mlir_data;
+                location,
+                result=MLIR.IR.TensorType(Int64[], MLIR.IR.Type(TTPtr{T})),
+            ),
+        ),
+    )
+end
+
+@noinline function add(
+    a::TracedRNumber{<:Integer},
+    b::TracedRNumber{TTPtr{T}};
+    location=mlir_stacktrace("add", @__FILE__, @__LINE__),
+) where {T}
+    return TracedRNumber{TTPtr{T}}(
+        (),
+        MLIR.IR.result(
+            tt.addptr(
+                b.mlir_data,
+                a.mlir_data;
+                location,
+                result=MLIR.IR.TensorType(Int64[], MLIR.IR.Type(TTPtr{T})),
+            ),
+        ),
+    )
+end
+
+@noinline function subtract(
+    a::TracedRNumber{TTPtr{T}},
+    b::TracedRNumber{<:Integer};
+    location=mlir_stacktrace("add", @__FILE__, @__LINE__),
+) where {T}
+    return TracedRNumber{T}(
+        (),
+        MLIR.IR.result(
+            tt.addptr(
+                a.mlir_data,
+                negate(b; location).mlir_data;
+                location,
+                result=MLIR.IR.TensorType(Int64[], MLIR.IR.Type(TTPtr{T})),
+            ),
+        ),
     )
 end
 

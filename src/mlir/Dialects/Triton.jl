@@ -1051,16 +1051,23 @@ function load(
     attributes = NamedAttribute[]
     !isnothing(mask) && push!(operands, mask)
     !isnothing(other) && push!(operands, other)
-    push!(attributes, operandsegmentsizes([
-        1,
-        if (mask == nothing)
-            0
-        elseif 1(other == nothing)
-            0
-        else
-            1
-        end,
-    ]))
+    # XXX: Fix autogeneration???
+    push!(
+        attributes,
+        operandsegmentsizes([
+            1,
+            if (mask == nothing)
+                0
+            else
+                1
+            end,
+            if (other == nothing)
+                0
+            else
+                1
+            end,
+        ]),
+    )
     !isnothing(result) && push!(op_ty_results, result)
     !isnothing(boundaryCheck) &&
         push!(attributes, namedattribute("boundaryCheck", boundaryCheck))

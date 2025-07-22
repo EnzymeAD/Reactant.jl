@@ -88,6 +88,7 @@ isa_traced_soa(::TracedRArray) = true
 isa_traced_soa(::AbstractRange{<:TracedRNumber}) = true
 
 unwrapped_eltype(::Type{T}) where {T<:Number} = T
+unwrapped_eltype(::Type{T}) where {T<:TTPtr} = T
 unwrapped_eltype(::Type{<:RNumber{T}}) where {T} = T
 unwrapped_eltype(::Type{TracedRNumber{T}}) where {T} = T
 
@@ -283,6 +284,9 @@ function set_default_backend(backend::Union{String,XLA.AbstractClient})
     XLA.set_default_backend(backend)
     return nothing
 end
+
+# Our Kernel Language
+include("kernels/Lattice.jl")
 
 include("Precompile.jl")
 

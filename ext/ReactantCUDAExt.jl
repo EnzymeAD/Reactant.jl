@@ -1370,7 +1370,7 @@ Base.@nospecializeinfer function Reactant.traced_type_inner(
 )
     T = eltype(A)
     N = ndims(A)
-    if mode == Reactant.ArrayToConcrete && T <: Reactant.ReactantPrimitive
+    if mode == Reactant.ArrayToConcrete && T <: Reactant.ReactantAllPrimitive
         if runtime isa Val{:PJRT}
             return Reactant.ConcretePJRTArray{
                 T,
@@ -1412,7 +1412,7 @@ function Reactant.make_tracer(
     if haskey(seen, prev)
         return seen[prev]
     end
-    if mode == Reactant.ArrayToConcrete && eltype(RT) <: Reactant.ReactantPrimitive
+    if mode == Reactant.ArrayToConcrete && eltype(RT) <: Reactant.ReactantAllPrimitive
         if runtime isa Val{:PJRT}
             return seen[prev] = Reactant.ConcretePJRTArray(Array(prev); sharding)
         elseif runtime isa Val{:IFRT}

@@ -13,6 +13,7 @@ using ..Reactant:
     MissingTracedValue,
     OrderedIdDict,
     ReactantPrimitive,
+    TTPtr,
     Ops
 using ReactantCore: ReactantCore
 using ReactantCore:
@@ -1218,6 +1219,7 @@ end
 
 function broadcast_to_size(arg::TracedRNumber{T}, rsize) where {T}
     length(rsize) == 0 && return arg
+    T <: TTPtr && return Ops.triton_splat(arg, Tuple(rsize))
     return broadcast_to_size_internal(TracedRArray{T,0}((), get_mlir_data(arg), ()), rsize)
 end
 
@@ -1234,6 +1236,7 @@ function broadcast_to_size(arg::Broadcast.Extruded, rsize)
 end
 
 @noinline function broadcast_to_size_internal(x::TracedRArray{T}, rsize) where {T}
+    T <: TTPtr && error("TODO: implement for TTPtr")
     return Ops.broadcast_in_dim(x, collect(Int64, 1:ndims(x)), collect(Int64, rsize))
 end
 

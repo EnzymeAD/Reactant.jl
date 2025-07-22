@@ -9,7 +9,7 @@ end
 
 function Array(
     client::Client,
-    array::Reactant.ReactantPrimitive,
+    array::Reactant.ReactantAllPrimitive,
     device::Device=XLA.default_device(client),
     memory_kind::AbstractString=string(convert(MemoryKind, XLA.default_memory(device))),
 )
@@ -21,7 +21,7 @@ function Array(
     array::Base.Array{T,N},
     device::Device=XLA.default_device(client),
     memory_kind::AbstractString=string(convert(MemoryKind, XLA.default_memory(device))),
-) where {T<:Reactant.ReactantPrimitive,N}
+) where {T<:Reactant.ReactantAllPrimitive,N}
     sizear = collect(Int64, reverse(size(array)))
     buffer = GC.@preserve array sizear begin
         @ccall MLIR.API.mlir_c.ifrt_client_make_single_shard_array_from_host_buffer(
@@ -40,7 +40,7 @@ end
 
 function Array(
     client::Client, array::Base.Array{T,N}, sharding::Sharding
-) where {T<:Reactant.ReactantPrimitive,N}
+) where {T<:Reactant.ReactantAllPrimitive,N}
     all_devices = XLA.devices(sharding)
     all_logical_device_ids = collect(Int64, 0:(length(all_devices) - 1))
     hlo_sharding = convert(XLA.HloSharding, sharding)
@@ -81,7 +81,7 @@ function Array(
     addressable_shard_indices::Vector{Vector{Int64}},
     array_shape,
     sharding::Sharding,
-) where {T<:Reactant.ReactantPrimitive,N}
+) where {T<:Reactant.ReactantAllPrimitive,N}
     # Construct using the slower path, the faster path is only implemented for IFRT-Proxy
     # and seems to cause issues with IFRT-PJRT
     all_addressable_devices = filter(XLA.is_addressable, XLA.devices(sharding))
@@ -145,7 +145,7 @@ end
 
 function Array(
     client::Client, array::Base.Array{T,N}, sharding
-) where {T<:Reactant.ReactantPrimitive,N}
+) where {T<:Reactant.ReactantAllPrimitive,N}
     @assert sharding isa Reactant.Sharding.AbstractSharding
     if !(sharding isa Reactant.Sharding.HloSharding)
         sharding = Reactant.Sharding.HloSharding(sharding, size(array))

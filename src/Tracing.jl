@@ -50,7 +50,7 @@ for T in (
 end
 
 Base.@nospecializeinfer function traced_type_inner(
-    @nospecialize(T::Type{<:ReactantPrimitive}),
+    @nospecialize(T::Type{<:ReactantAllPrimitive}),
     seen,
     @nospecialize(mode::TraceMode),
     @nospecialize(track_numbers::Type),
@@ -489,7 +489,7 @@ Base.@nospecializeinfer function traced_type_inner(
 )
     T = eltype(A)
     if A isa UnionAll
-        if mode == ArrayToConcrete && T <: Reactant.ReactantPrimitive
+        if mode == ArrayToConcrete && T <: Reactant.ReactantAllPrimitive
             runtime isa Val{:PJRT} && return ConcretePJRTArray{T}
             runtime isa Val{:IFRT} && return ConcreteIFRTArray{T}
             error("Unsupported runtime $runtime")
@@ -502,7 +502,7 @@ Base.@nospecializeinfer function traced_type_inner(
         end
     else
         N = ndims(A)
-        if mode == ArrayToConcrete && T <: Reactant.ReactantPrimitive
+        if mode == ArrayToConcrete && T <: Reactant.ReactantAllPrimitive
             runtime isa Val{:PJRT} && return ConcretePJRTArray{
                 T,N,Sharding.ndevices(sharding),Sharding.shard_type(typeof(sharding), N)
             }
@@ -691,7 +691,7 @@ Base.@nospecializeinfer function traced_type_inner(
 
     subParms = []
     for (i, SST) in enumerate(T.parameters)
-        if wrapped_cpjrt_array && i == 1 && SST isa Type && SST <: ReactantPrimitive
+        if wrapped_cpjrt_array && i == 1 && SST isa Type && SST <: ReactantAllPrimitive
             # XXX: Sharding???
             TrT = traced_type_inner(
                 ConcretePJRTNumber{
@@ -704,7 +704,7 @@ Base.@nospecializeinfer function traced_type_inner(
                 runtime,
             )
             push!(subParms, TrT)
-        elseif wrapped_cifrt_array && i == 1 && SST isa Type && SST <: ReactantPrimitive
+        elseif wrapped_cifrt_array && i == 1 && SST isa Type && SST <: ReactantAllPrimitive
             # XXX: Sharding???
             TrT = traced_type_inner(
                 ConcreteIFRTNumber{SST,Sharding.shard_type(typeof(sharding), 0)},
@@ -1538,7 +1538,7 @@ Base.@nospecializeinfer function make_tracer(
         end
         return seen[prev]
     end
-    if eltype(RT) <: ReactantPrimitive
+    if eltype(RT) <: ReactantAllPrimitive
         if mode == ArrayToConcrete
             runtime isa Val{:PJRT} &&
                 (return seen[prev] = ConcretePJRTArray(prev; sharding, device, client))
@@ -1625,7 +1625,7 @@ Base.@nospecializeinfer function make_tracer(
         end
         return seen[prev]
     end
-    if eltype(RT) <: ReactantPrimitive
+    if eltype(RT) <: ReactantAllPrimitive
         if mode == ArrayToConcrete
             runtime isa Val{:PJRT} &&
                 (return seen[prev] = ConcretePJRTArray(prev; sharding, device, client))
@@ -1893,7 +1893,7 @@ end
 end
 
 @inline function to_rarray_internal(
-    @nospecialize(x::Array{<:ReactantPrimitive}),
+    @nospecialize(x::Array{<:ReactantAllPrimitive}),
     @nospecialize(track_numbers::Type),
     @nospecialize(sharding),
     @nospecialize(runtime),
@@ -1949,7 +1949,7 @@ end
 end
 
 @inline function to_rarray_internal(
-    @nospecialize(x::ReactantPrimitive),
+    @nospecialize(x::ReactantAllPrimitive),
     @nospecialize(track_numbers::Type),
     @nospecialize(sharding),
     runtime,
@@ -1985,7 +1985,7 @@ end
 end
 
 function Reactant.traced_type_inner(
-    @nospecialize(RT::Type{<:UnitRange{<:ReactantPrimitive}}),
+    @nospecialize(RT::Type{<:UnitRange{<:ReactantAllPrimitive}}),
     seen,
     mode::Reactant.TraceMode,
     track_numbers::Type,

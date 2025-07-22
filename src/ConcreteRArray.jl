@@ -78,7 +78,7 @@ for numType in (:ConcretePJRTNumber, :ConcreteIFRTNumber)
 end
 
 # written like this to avoid ambiguity errors
-for T in Base.uniontypes(ReactantPrimitive)
+for T in Base.uniontypes(ReactantAllPrimitive)
     @eval (::Type{$(T)})(x::AbstractConcreteNumber) = convert($T, x)
 end
 
@@ -470,7 +470,7 @@ end
 
 for aType in (:ConcretePJRTArray, :ConcreteIFRTArray)
     anyaType = Symbol(:Any, aType)
-    @eval function Base.copyto!(dest::$(anyaType), src::Array{<:ReactantPrimitive})
+    @eval function Base.copyto!(dest::$(anyaType), src::Array{<:ReactantAllPrimitive})
         ancestor_dest = ancestor(dest)
         return copyto!(
             dest,

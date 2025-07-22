@@ -101,6 +101,10 @@ Creates an unsigned integer type of the given bitwidth in the context. The type 
 Type(T::Core.Type{<:Unsigned}; context::Context=context()) =
     Type(API.mlirIntegerTypeUnsignedGet(context, sizeof(T) * 8))
 
+function Type(::Core.Type{Reactant.TTPtr{T2}}; context::Context=context()) where {T2}
+    return Type(API.mlirTritonPointerTypeGet(Type(T2), 1))
+end
+
 """
     isinteger(type)
 

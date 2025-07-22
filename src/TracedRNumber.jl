@@ -1,7 +1,7 @@
 module TracedRNumberOverrides
 
 using ..Reactant:
-    Reactant, TracedRNumber, TracedRArray, TracedUtils, Ops, MLIR, unwrapped_eltype
+    Reactant, TracedRNumber, TracedRArray, TracedUtils, Ops, MLIR, TTPtr, unwrapped_eltype
 using ReactantCore
 using Adapt
 
@@ -147,6 +147,16 @@ for (jlop, hloop) in (
 )
     @eval function $(jlop)(
         @nospecialize(lhs::TracedRNumber{T}), @nospecialize(rhs::TracedRNumber{T})
+    ) where {T}
+        return Ops.$(hloop)(lhs, rhs)
+    end
+end
+
+# ptr math
+for (jlop, hloop) in ((:(Base.:+), :add), (:(Base.:-), :subtract))
+    @eval function $(jlop)(
+        @nospecialize(lhs::TracedRNumber{TTPtr{T}}),
+        @nospecialize(rhs::TracedRNumber{<:Integer})
     ) where {T}
         return Ops.$(hloop)(lhs, rhs)
     end

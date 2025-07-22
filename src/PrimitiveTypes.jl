@@ -73,10 +73,20 @@ const ReactantPrimitive = Union{
     Base.uniontypes(ReactantComplexFloat)...,
 }
 
+struct TTPtr{T} end # Corresponds to `!tt.ptr<T>`.
+
+const ReactantPtrPrimitive = Union{
+    [TTPtr{T} for T in Base.uniontypes(ReactantPrimitive)]...
+}
+
+const ReactantAllPrimitive = Union{
+    Base.uniontypes(ReactantPrimitive)...,Base.uniontypes(ReactantPtrPrimitive)...
+}
+
 @inline to_reactant_primitive(v::T) where {T} = reinterpret(reactant_primitive(T), v)
 @inline reactant_primitive(::Type{T}) where {T} = nothing
 
-for T in Base.uniontypes(ReactantPrimitive)
+for T in Base.uniontypes(ReactantAllPrimitive)
     @eval @inline to_reactant_primitive(val::$(T)) = val
     @eval @inline reactant_primitive(::Type{$(T)}) = $(T)
 end
