@@ -10,9 +10,12 @@ using BenchmarkTools
 using Statistics
 using PrettyTables
 using Unitful
+using Logging
 
 include("utils.jl")
 include("Circuit.jl")
+
+dbg_logger = ConsoleLogger(stderr, Logging.Debug)
 
 # number of qubits
 N = 30
@@ -76,7 +79,7 @@ function expectation(params, obs, coef)
     # print path flops and max rank to consistenly check that the same contraction path is used
     # (exponentially big changes can be seen if not)
     path = einexpr(tn; optimizer=Greedy())
-    @info "Contraction path" max_rank = maximum(ndims, Branches(path)) total_flops = mapreduce(
+    @debug "Contraction path" max_rank = maximum(ndims, Branches(path)) total_flops = mapreduce(
         EinExprs.flops, +, Branches(path)
     )
     res = contract(tn; path)
@@ -111,9 +114,11 @@ results = Vector{Tuple{String,String,T,T,Float64}}()
 
 # primal
 ## only XLA
-f_xla = @time @compile compile_options = Reactant.DefaultXLACompileOptions(; sync=true) expectation(
-    params_re, observable_re, coef_re
-)
+f_xla = Base.with_logger(dbg_logger) do
+    @time @compile compile_options = Reactant.DefaultXLACompileOptions(; sync=true) expectation(
+        params_re, observable_re, coef_re
+    )
+end
 b = @benchmark $f_xla($params_re, $observable_re, $coef_re) setup = (GC.gc(true))
 baseline = median(b).time
 push!(
@@ -123,7 +128,9 @@ push!(
 @info "Benchmarking 'primal' with 'default' pipeline..."
 
 ## default
-f_default = @compile sync = true expectation(params_re, observable_re, coef_re)
+f_default = Base.with_logger(dbg_logger) do
+    @compile sync = true expectation(params_re, observable_re, coef_re)
+end
 b = @benchmark $f_default($params_re, $observable_re, $coef_re) setup = (GC.gc(true))
 push!(
     results,
@@ -141,11 +148,13 @@ for mode in [:all, :before_enzyme, :after_enzyme]
     ## only XLA
     @info "Benchmarking 'gradient' with 'only XLA' pipeline and $(Meta.quot(mode)) mode..."
 
-    ∇f_xla = @compile compile_options = Reactant.DefaultXLACompileOptions(; sync=true) ∇expectation(
-        params_re, observable_re, coef_re
-    )
-    b = @benchmark $∇f_xla($params_re, $observable_re, $coef_re) setup = (GC.gc(true))
-    baseline = median(b).time
+    ∇f_xla = Base.with_logger(dbg_logger) do
+        @compile compile_options = Reactant.DefaultXLACompileOptions(; sync=true) ∇expectation(
+            params_re, observable_re, coef_re
+        )
+    end
+    local b = @benchmark $∇f_xla($params_re, $observable_re, $coef_re) setup = (GC.gc(true))
+    local baseline = median(b).time
     push!(
         results,
         @show((
@@ -160,9 +169,9 @@ for mode in [:all, :before_enzyme, :after_enzyme]
     ## default
     @info "Benchmarking 'gradient' with 'default' pipeline and $(Meta.quot(mode)) mode..."
 
-    ∇f_default = @compile sync = true optimize = mode ∇expectation(
-        params_re, observable_re, coef_re
-    )
+    ∇f_default = Base.with_logger(dbg_logger) do
+        @compile sync = true optimize = mode ∇expectation(params_re, observable_re, coef_re)
+    end
     b = @benchmark $∇f_default($params_re, $observable_re, $coef_re) setup = (GC.gc(true))
     push!(
         results,
