@@ -13,7 +13,6 @@ using ..Reactant:
     MissingTracedValue,
     unwrapped_eltype
 using ReactantCore: ReactantCore
-using Functors: fmap
 
 function mlir_type(x::Union{RNumber,RArray})::MLIR.IR.Type
     return MLIR.IR.TensorType(collect(Int, size(x)), MLIR.IR.Type(unwrapped_eltype(x)))
@@ -2376,15 +2375,16 @@ end
         cond.mlir_data; true_branch=tb_region, false_branch=fb_region, result_0=result_types
     )
 
-    corrected_traced_results = fmap(traced_false_results, traced_true_results) do fr, tr
-        if fr isa MissingTracedValue && tr isa MissingTracedValue
-            return fr
-        elseif fr isa MissingTracedValue
-            return tr
-        else
-            return fr
+    corrected_traced_results =
+        map(zip(traced_false_results, traced_true_results)) do (fr, tr)
+            if fr isa MissingTracedValue && tr isa MissingTracedValue
+                return fr
+            elseif fr isa MissingTracedValue
+                return tr
+            else
+                return fr
+            end
         end
-    end
 
     @assert length(all_paths) == length(result_types)
 
