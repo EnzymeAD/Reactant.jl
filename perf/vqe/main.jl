@@ -15,7 +15,7 @@ using Logging
 include("utils.jl")
 include("Circuit.jl")
 
-dbg_logger = ConsoleLogger(stderr, Logging.Debug)
+dbg_logger = ConsoleLogger(stderr, Logging.Info)
 
 # number of qubits
 N = 30
@@ -79,7 +79,7 @@ function expectation(params, obs, coef)
     # print path flops and max rank to consistenly check that the same contraction path is used
     # (exponentially big changes can be seen if not)
     path = einexpr(tn; optimizer=Greedy())
-    @debug "Contraction path" max_rank = maximum(ndims, Branches(path)) total_flops = mapreduce(
+    @info "Contraction path" max_rank = maximum(ndims, Branches(path)) total_flops = mapreduce(
         EinExprs.flops, +, Branches(path)
     )
     res = contract(tn; path)
