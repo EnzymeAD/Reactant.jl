@@ -1,5 +1,7 @@
 program_id(axis::Int) = Ops.triton_get_program_id(axis)
 
+get_num_programs(axis::Int) = Ops.triton_get_num_programs(axis)
+
 # TODO: for TracedRNumber
 function load(ptrs::TracedRArray{TTPtr{T},N}; mask=nothing) where {T,N}
     return TracedRArray{T,N}(

@@ -3307,6 +3307,27 @@ end
     )
 end
 
+@noinline function triton_get_num_programs(
+    axis::Int; location=mlir_stacktrace("triton_get_num_programs", @__FILE__, @__LINE__)
+)
+    @assert axis in (1, 2, 3)
+    return TracedRNumber{Int32}(
+        (),
+        MLIR.IR.result(
+            tt.splat(
+                MLIR.IR.result(
+                    tt.get_num_programs(;
+                        location,
+                        axis=MLIR.IR.Attribute(Int32(axis - 1)),
+                        result=MLIR.IR.Type(Int32),
+                    ),
+                );
+                result=MLIR.IR.TensorType(Int64[], MLIR.IR.Type(Int32)),
+            ),
+        ),
+    )
+end
+
 @noinline function triton_splat(
     value::TracedRNumber{TTPtr{T}},
     sz::Dims{N};
