@@ -21,7 +21,7 @@ dbg_logger = ConsoleLogger(stderr, Logging.Debug)
 N = 30
 
 # number of layers
-L = 4
+L = 6
 
 # generate parametric circuit
 ansatz = efficient_su2(N, L)
