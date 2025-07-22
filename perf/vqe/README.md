@@ -10,6 +10,9 @@ It uses a "Efficient SU(2)" circuit ansatz for the VQE.
 Tenet.jl and Tangles.jl are not registered in the General registry of packages.
 You need to add the Quantic registry of packages for Julia to find them:
 
-````julia
+```julia
 ]registry add https://github.com/bsc-quantic/Registry.git
 ```
+
+> [!WARNING]
+> Reactant.jl version is fixed to 0.2.138 due to a bug with the rev diff rule of `stablehlo.dynamic_update_slice`
