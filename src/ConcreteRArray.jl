@@ -376,7 +376,7 @@ function Base.similar(a::ConcretePJRTArray{T, N, D, Sh}, ::Type{S}=T, dims::Dims
 
     client = XLA.client(a)
 
-    sdata = if a.sharding == nothing
+    sdata = if a.sharding === nothing
         ntuple(Val(D)) do i
             Base.@_inline_meta
             Base.similar(a.data[i], S, dims)
