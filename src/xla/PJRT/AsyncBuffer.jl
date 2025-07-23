@@ -13,5 +13,5 @@ function Base.copy(b::AsyncBuffer)
 end
 
 function Base.similar(a::AsyncBuffer, args...)
-    AsyncBuffer(Base.similar(a.buffer, args...), nothing)
+    AsyncBuffer(Base.similar(a.buffer, args...)::Buffer, nothing)
 end

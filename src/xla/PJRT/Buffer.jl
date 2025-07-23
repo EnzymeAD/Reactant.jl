@@ -23,7 +23,7 @@ end
 
 function Base.similar(a::Buffer)
     buffer = GC.@preserve a begin
-        return @ccall MLIR.API.mlir_c.UninitPJRTBuffer(
+        @ccall MLIR.API.mlir_c.UninitPJRTBuffer(
             XLA.client(a).client::Ptr{Cvoid},
             XLA.device(a).device::Ptr{Cvoid},
             (@ccall MLIR.API.mlir_c.BufferPrimitiveType(buffer.buffer::Ptr{Cvoid})::Cint)::UInt64,
@@ -36,7 +36,7 @@ end
 
 function Base.similar(a::Buffer, ::Type{S}) where S
     buffer = GC.@preserve a begin
-        return @ccall MLIR.API.mlir_c.UninitPJRTBuffer(
+        @ccall MLIR.API.mlir_c.UninitPJRTBuffer(
             XLA.client(a).client::Ptr{Cvoid},
             XLA.device(a).device::Ptr{Cvoid},
             XLA.primitive_type(S)::UInt64,
@@ -50,7 +50,7 @@ end
 function Base.similar(a::Buffer, dims::Dims)
     sizear = collect(Int64, reverse(dims))
     buffer = GC.@preserve a sizear begin
-        return @ccall MLIR.API.mlir_c.UninitPJRTBuffer(
+        @ccall MLIR.API.mlir_c.UninitPJRTBuffer(
             XLA.client(a).client::Ptr{Cvoid},
             XLA.device(a).device::Ptr{Cvoid},
             (@ccall MLIR.API.mlir_c.BufferPrimitiveType(buffer.buffer::Ptr{Cvoid})::Cint)::UInt64,
@@ -64,7 +64,7 @@ end
 function Base.similar(a::Buffer, ::Type{S}, dims::Dims) where S
     sizear = collect(Int64, reverse(dims))
     buffer = GC.@preserve a sizear begin
-        return @ccall MLIR.API.mlir_c.UninitPJRTBuffer(
+        @ccall MLIR.API.mlir_c.UninitPJRTBuffer(
             XLA.client(a).client::Ptr{Cvoid},
             XLA.device(a).device::Ptr{Cvoid},
             XLA.primitive_type(S)::UInt64,
