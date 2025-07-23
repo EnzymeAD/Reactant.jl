@@ -391,7 +391,7 @@ function Base.similar(a::ConcretePJRTArray{T, N, D, Sh}, ::Type{S}=T, dims::Dims
         end
     end
 
-    return ConcretePJRTArray{S,N,D,Sh}(sdata, a.shape, a.sharding)
+    return ConcretePJRTArray{S,N,D,Sh}(sdata, dims, a.sharding)
 end
 
 Base.similar(a::ConcretePJRTArray, dims::Dims) = similar(a, eltype(a), dims)
