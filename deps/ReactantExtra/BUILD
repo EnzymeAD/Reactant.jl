@@ -752,6 +752,22 @@ platform(
     ],
 )
 
+platform(
+    name = "win_x86_64",
+    constraint_values = [
+        "@platforms//os:linux",
+        "@platforms//cpu:x86_64",
+    ],
+)
+
+platform(
+    name = "win_aarch64",
+    constraint_values = [
+        "@platforms//os:linux",
+        "@platforms//cpu:aarch64",
+    ],
+)
+
 cc_library(
     name = "ReactantExtraLib",
     srcs = glob(
