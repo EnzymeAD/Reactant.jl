@@ -21,6 +21,60 @@ function Buffer(client::Client, array::Array{T,N}, device::Device) where {T,N}
     return Buffer(buffer)
 end
 
+function Base.similar(a::Buffer)
+    buffer = GC.@preserve buffer begin
+        return @ccall MLIR.API.mlir_c.UninitPJRTBuffer(
+            XLA.client(a)::Ptr{Cvoid},
+            XLA.device(a)::Ptr{Cvoid},
+            (@ccall MLIR.API.mlir_c.BufferPrimitiveType(buffer.buffer::Ptr{Cvoid})::Cint)::UInt64,
+            (@ccall MLIR.API.mlir_c.BufferNDimensions(buffer.buffer::Ptr{Cvoid})::Cint)::UInt64,
+            (@ccall MLIR.API.mlir_c.BufferShape(buffer.buffer::Ptr{Cvoid})::Ptr{Int64})::Ptr{Int64}
+        )::Ptr{Cvoid}
+    end
+    return Buffer(buffer)
+end
+
+function Base.similar(a::Buffer, ::Type{S}) where S
+    buffer = GC.@preserve buffer begin
+        return @ccall MLIR.API.mlir_c.UninitPJRTBuffer(
+            XLA.client(a)::Ptr{Cvoid},
+            XLA.device(a)::Ptr{Cvoid},
+            primitive_type(S)::UInt64,
+            (@ccall MLIR.API.mlir_c.BufferNDimensions(buffer.buffer::Ptr{Cvoid})::Cint)::UInt64
+            (@ccall MLIR.API.mlir_c.BufferShape(buffer.buffer::Ptr{Cvoid})::Ptr{Int64})::Ptr{Int64}
+        )::Ptr{Cvoid}
+    end
+    return Buffer(buffer)
+end
+
+function Base.similar(a::Buffer, dims::Dims)
+    sizear = collect(Int64, reverse(dims))
+    buffer = GC.@preserve buffer sizear begin
+        return @ccall MLIR.API.mlir_c.UninitPJRTBuffer(
+            XLA.client(a)::Ptr{Cvoid},
+            XLA.device(a)::Ptr{Cvoid},
+            @ccall MLIR.API.mlir_c.BufferPrimitiveType(buffer.buffer::Ptr{Cvoid})::Cint,
+            length(dims)::UInt64
+            pointer(sizear)::Ptr{Int64}
+        )::Ptr{Cvoid}
+    end
+    return Buffer(buffer)
+end
+
+function Base.similar(a::Buffer, ::Type{S}, dims::Dims) where S
+    sizear = collect(Int64, reverse(dims))
+    buffer = GC.@preserve buffer sizear begin
+        return @ccall MLIR.API.mlir_c.UninitPJRTBuffer(
+            XLA.client(a)::Ptr{Cvoid},
+            XLA.device(a)::Ptr{Cvoid},
+            primitive_type(S)::UInt64,
+            length(dims)::UInt64
+            pointer(sizear)::Ptr{Int64}
+        )::Ptr{Cvoid}
+    end
+    return Buffer(buffer)
+end
+
 @inline function free_buffer(buffer::Buffer)
     sbuffer = buffer.buffer
     if sbuffer != C_NULL
