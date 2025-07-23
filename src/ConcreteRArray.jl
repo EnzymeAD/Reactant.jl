@@ -382,8 +382,8 @@ function Base.similar(a::ConcretePJRTArray{T, N, D, Sh}, ::Type{S}=T, dims::Dims
             Base.similar(a.data[i], S, dims)
         end
     else
-        device_to_array_slices, sharding = Sharding.sharding_to_array_slices(
-            s.sharding, dims; return_updated_sharding=Val(true)
+        device_to_array_slices, _ = Sharding.sharding_to_array_slices(
+            a.sharding, dims; return_updated_sharding=Val(true)
         )
         ntuple(Val(D)) do i
             Base.@_inline_meta
