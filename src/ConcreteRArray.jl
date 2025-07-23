@@ -501,9 +501,6 @@ for aType in (:ConcreteIFRTArray, )
     end
 end
 
-"""
-Synchronously copies data from a `Reactant.ConcreteIFRTArray` to a `Vector`. Allocation-free.
-"""
 function Base.copyto!(dest::Vector{T}, doffs::Int64, src::Reactant.ConcreteIFRTArray{T}, soffs::Int64, n::Int64) where {T}
     n == 0 && return dest
     n > 0 || Base._throw_argerror("Number of elements to copy must be non-negative.")
@@ -532,9 +529,6 @@ function Base.copyto!(dest::Vector{T}, doffs::Int64, src::Reactant.ConcreteIFRTA
     dest
 end
 
-"""
-Synchronously copies data from a `Reactant.ConcretePJRTArray` to a `Vector`. Allocation-free.
-"""
 function Base.copyto!(dest::Vector{T}, doffs::Int64, src::Reactant.ConcretePJRTArray{T}, soffs::Int64, n::Int64) where {T}
     n == 0 && return dest
     n > 0 || _throw_argerror("Number of elements to copy must be non-negative.")
@@ -564,9 +558,6 @@ function Base.copyto!(dest::Vector{T}, src::Union{Reactant.ConcretePJRTArray{T},
     copyto!(dest, 1, src, 1, length(src))
 end
 
-"""
-Synchronously copies data from a `Vector` to a `Reactant.ConcretePJRTArray`. Allocation-free.
-"""
 function Base.copyto!(dest::Reactant.ConcretePJRTArray{T}, doffs::Int64, src::Vector{T}, soffs::Int64, n::Int64) where {T}
     n == 0 && return dest
     n > 0 || _throw_argerror("Number of elements to copy must be non-negative.")
