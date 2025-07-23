@@ -358,6 +358,160 @@ function slice_smem(offset::Value; result_0::IR.Type, location=Location())
 end
 
 """
+`tcgen05_mma`
+
+Schedules `tcgen05.mma` instructions that perform the following matrix
+multiply and accumulate:
+
+  accumulator = a * b + accumulator
+
+This operation supports larger inputs than the PTX-level MMA instruction
+and will schedule as many PTX-level MMA instructions as needed to
+accomplish the calculation.
+
+The inputs should have the following shapes:
+  - a: [groups_m * m, groups_k * s]
+  - b: [groups_k * s, groups_n * s]
+  - accumulator: [groups_m * m, groups_n * s]
+where `s == swizzle / element_bytewidth` and `m` is specified according to
+https://docs.nvidia.com/cuda/parallel-thread-execution/#tcgen05-matrix-shape.
+
+The output has an identical shape and type as the input accumulator.
+
+The `accumulator`, `a` and `b` matrices need to be provided as 2-dimensional
+memrefs. The `accumulator` is always in TMEM and `b` is always in SMEM.
+`a` can be in TMEM or SMEM. `a` and `b` must have the same element
+type and when `a` is in TMEM only F16 or BF16 are supported.
+
+`a_scale` and `b_scale` are optional scaling matrices that reside in TMEM.
+When set the operation is defined as:
+
+  accumulator = (a * a_scale) * (b * b_scale) + accumulator
+
+`accumulate` is a boolean that indicates whether to perform the accumulate
+step.
+"""
+function tcgen05_mma(
+    accumulator::Value,
+    a::Value,
+    b::Value,
+    accumulate::Value,
+    a_scaled=nothing::Union{Nothing,Value};
+    b_scaled=nothing::Union{Nothing,Value},
+    result_0=nothing::Union{Nothing,IR.Type},
+    collective=nothing,
+    location=Location(),
+)
+    op_ty_results = IR.Type[]
+    operands = Value[accumulator, a, b, accumulate]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+    !isnothing(a_scaled) && push!(operands, a_scaled)
+    !isnothing(b_scaled) && push!(operands, b_scaled)
+    push!(attributes, operandsegmentsizes([
+        1,
+        1,
+        1,
+        1,
+        if (a_scaled == nothing)
+            0
+        elseif 1(b_scaled == nothing)
+            0
+        else
+            1
+        end,
+    ]))
+    !isnothing(result_0) && push!(op_ty_results, result_0)
+    !isnothing(collective) && push!(attributes, namedattribute("collective", collective))
+
+    return create_operation(
+        "mosaic_gpu.tcgen05_mma",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
+    )
+end
+
+"""
+`tmem_alloc`
+
+This op allocates a chunk of TMEM and stores the pointer to the memory
+in the provided SMEM memref.
+
+The `smem_ptr` is a pointer in SMEM where a pointer to the allocated
+TMEM will be stored. The op returns a memref to the allocated TMEM. The
+result must have a shape with dimensions [rows, logical_columns]. If
+`packing` is 1, then the number of logical (unpacked) columns is equal to
+the number of allocated columns in TMEM. Otherwise, these equations
+must hold:
+
+    packing = 32 / bitwidth(element type of result)
+    unpacked_columns = allocated_columns * packing
+
+The number of allocated columns in TMEM can be any power of two in the
+range [32, 512]. If `exact` is `true`, then the calculated
+number of allocated columns must match that restriction. If `exact` is
+`false` and the calculated number of allocated columns is less than 32 or
+not a power of two, then it will be rounded up to the nearest power of two
+larger or equal to 32.
+
+If `collective` is `true` 2 CTAs will perform the allocation collectively,
+otherwise, only one CTA will perform the allocation.
+"""
+function tmem_alloc(
+    smem_ptr::Value;
+    result_0::IR.Type,
+    collective=nothing,
+    exact=nothing,
+    packing=nothing,
+    location=Location(),
+)
+    op_ty_results = IR.Type[result_0,]
+    operands = Value[smem_ptr,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+    !isnothing(collective) && push!(attributes, namedattribute("collective", collective))
+    !isnothing(exact) && push!(attributes, namedattribute("exact", exact))
+    !isnothing(packing) && push!(attributes, namedattribute("packing", packing))
+
+    return create_operation(
+        "mosaic_gpu.tmem_alloc",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+function tmem_dealloc(tmem_ref::Value; location=Location())
+    op_ty_results = IR.Type[]
+    operands = Value[tmem_ref,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+
+    return create_operation(
+        "mosaic_gpu.tmem_dealloc",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+"""
 `wgmma`
 
 Schedules WGMMA operations that perform the following matrix multiply and
