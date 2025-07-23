@@ -53,7 +53,7 @@ function Base.similar(a::Buffer, dims::Dims)
         return @ccall MLIR.API.mlir_c.UninitPJRTBuffer(
             XLA.client(a)::Ptr{Cvoid},
             XLA.device(a)::Ptr{Cvoid},
-            @ccall MLIR.API.mlir_c.BufferPrimitiveType(buffer.buffer::Ptr{Cvoid})::Cint,
+            (@ccall MLIR.API.mlir_c.BufferPrimitiveType(buffer.buffer::Ptr{Cvoid})::Cint)::UInt64,
             length(dims)::UInt64,
             pointer(sizear)::Ptr{Int64}
         )::Ptr{Cvoid}
