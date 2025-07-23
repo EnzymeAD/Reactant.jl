@@ -379,7 +379,7 @@ function Base.similar(a::ConcretePJRTArray{T, N, D, Sh}, ::Type{S}=T, dims::Dims
     sdata = if s.sharding == nothing
         ntuple(Val(D)) do i
             Base.@_inline_meta
-            Base.similar(s.data[i], S, dims
+            Base.similar(s.data[i], S, dims)
         end
     else
         device_to_array_slices, sharding = Sharding.sharding_to_array_slices(
@@ -387,7 +387,7 @@ function Base.similar(a::ConcretePJRTArray{T, N, D, Sh}, ::Type{S}=T, dims::Dims
         )
         ntuple(Val(D)) do i
             Base.@_inline_meta
-            Base.similar(s.data[i], S, Dims(device_to_array_slices[i])
+            Base.similar(s.data[i], S, Dims(device_to_array_slices[i]))
         end
     end
 
