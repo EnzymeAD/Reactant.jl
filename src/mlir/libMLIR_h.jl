@@ -5568,10 +5568,19 @@ end
 """
     mlirShapedTypeIsDynamicDim(type, dim)
 
-Checks wither the dim-th dimension of the given shaped type is dynamic.
+Checks whether the dim-th dimension of the given shaped type is dynamic.
 """
 function mlirShapedTypeIsDynamicDim(type, dim)
     @ccall mlir_c.mlirShapedTypeIsDynamicDim(type::MlirType, dim::intptr_t)::Bool
+end
+
+"""
+    mlirShapedTypeIsStaticDim(type, dim)
+
+Checks whether the dim-th dimension of the given shaped type is static.
+"""
+function mlirShapedTypeIsStaticDim(type, dim)
+    @ccall mlir_c.mlirShapedTypeIsStaticDim(type::MlirType, dim::intptr_t)::Bool
 end
 
 """
@@ -5593,9 +5602,18 @@ function mlirShapedTypeIsDynamicSize(size)
 end
 
 """
+    mlirShapedTypeIsStaticSize(size)
+
+Checks whether the given shaped type dimension value is statically-sized.
+"""
+function mlirShapedTypeIsStaticSize(size)
+    @ccall mlir_c.mlirShapedTypeIsStaticSize(size::Int64)::Bool
+end
+
+"""
     mlirShapedTypeGetDynamicSize()
 
-Returns the value indicating a dynamic size in a shaped type. Prefer [`mlirShapedTypeIsDynamicSize`](@ref) to direct comparisons with this value.
+Returns the value indicating a dynamic size in a shaped type. Prefer [`mlirShapedTypeIsDynamicSize`](@ref) and [`mlirShapedTypeIsStaticSize`](@ref) to direct comparisons with this value.
 """
 function mlirShapedTypeGetDynamicSize()
     @ccall mlir_c.mlirShapedTypeGetDynamicSize()::Int64
@@ -5611,9 +5629,18 @@ function mlirShapedTypeIsDynamicStrideOrOffset(val)
 end
 
 """
+    mlirShapedTypeIsStaticStrideOrOffset(val)
+
+Checks whether the given dimension value of a stride or an offset is statically-sized.
+"""
+function mlirShapedTypeIsStaticStrideOrOffset(val)
+    @ccall mlir_c.mlirShapedTypeIsStaticStrideOrOffset(val::Int64)::Bool
+end
+
+"""
     mlirShapedTypeGetDynamicStrideOrOffset()
 
-Returns the value indicating a dynamic stride or offset in a shaped type. Prefer [`mlirShapedTypeGetDynamicStrideOrOffset`](@ref) to direct comparisons with this value.
+Returns the value indicating a dynamic stride or offset in a shaped type. Prefer [`mlirShapedTypeIsDynamicStrideOrOffset`](@ref) and [`mlirShapedTypeIsStaticStrideOrOffset`](@ref) to direct comparisons with this value.
 """
 function mlirShapedTypeGetDynamicStrideOrOffset()
     @ccall mlir_c.mlirShapedTypeGetDynamicStrideOrOffset()::Int64
@@ -9739,54 +9766,18 @@ llvm::DbgRecord
 """
 const LLVMDbgRecordRef = Ptr{LLVMOpaqueDbgRecord}
 
-"""
-    LLVMLoadLibraryPermanently(Filename)
-
-This function permanently loads the dynamic library at the given path. It is safe to call this function multiple times for the same library.
-
-# See also
-sys::DynamicLibrary::LoadLibraryPermanently()
-"""
-function LLVMLoadLibraryPermanently(Filename)
-    @ccall mlir_c.LLVMLoadLibraryPermanently(Filename::Cstring)::LLVMBool
-end
-
-"""
-    LLVMParseCommandLineOptions(argc, argv, Overview)
-
-This function parses the given arguments using the LLVM command line parser. Note that the only stable thing about this function is its signature; you cannot rely on any particular set of command line arguments being interpreted the same way across LLVM versions.
-
-# See also
-llvm::cl::ParseCommandLineOptions()
-"""
 function LLVMParseCommandLineOptions(argc, argv, Overview)
     @ccall mlir_c.LLVMParseCommandLineOptions(
         argc::Cint, argv::Ptr{Cstring}, Overview::Cstring
-    )::Cvoid
+    )::Cint
 end
 
-"""
-    LLVMSearchForAddressOfSymbol(symbolName)
-
-This function will search through all previously loaded dynamic libraries for the symbol `symbolName`. If it is found, the address of that symbol is returned. If not, null is returned.
-
-# See also
-sys::DynamicLibrary::SearchForAddressOfSymbol()
-"""
 function LLVMSearchForAddressOfSymbol(symbolName)
-    @ccall mlir_c.LLVMSearchForAddressOfSymbol(symbolName::Cstring)::Ptr{Cvoid}
+    @ccall mlir_c.LLVMSearchForAddressOfSymbol(symbolName::Cstring)::Ptr{Cint}
 end
 
-"""
-    LLVMAddSymbol(symbolName, symbolValue)
-
-This functions permanently adds the symbol `symbolName` with the value `symbolValue`. These symbols are searched before any libraries.
-
-# See also
-sys::DynamicLibrary::AddSymbol()
-"""
 function LLVMAddSymbol(symbolName, symbolValue)
-    @ccall mlir_c.LLVMAddSymbol(symbolName::Cstring, symbolValue::Ptr{Cvoid})::Cvoid
+    @ccall mlir_c.LLVMAddSymbol(symbolName::Cstring, symbolValue::Ptr{Cvoid})::Cint
 end
 
 """

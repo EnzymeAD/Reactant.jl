@@ -610,6 +610,13 @@ function iota(; output::IR.Type, dimensions, location=Location())
     )
 end
 
+"""
+`load`
+
+Similar to `vector::LoadOp` but with `sublane_mask` and `sublane_stride`.
+When `indices` are negative, it means loading from negative offset
+of `base` address.
+"""
 function load(
     base::Value,
     indices::Vector{Value};
