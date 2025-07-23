@@ -22,7 +22,7 @@ function Buffer(client::Client, array::Array{T,N}, device::Device) where {T,N}
 end
 
 function Base.similar(a::Buffer)
-    buffer = GC.@preserve buffer begin
+    buffer = GC.@preserve a begin
         return @ccall MLIR.API.mlir_c.UninitPJRTBuffer(
             XLA.client(a)::Ptr{Cvoid},
             XLA.device(a)::Ptr{Cvoid},
@@ -35,7 +35,7 @@ function Base.similar(a::Buffer)
 end
 
 function Base.similar(a::Buffer, ::Type{S}) where S
-    buffer = GC.@preserve buffer begin
+    buffer = GC.@preserve a begin
         return @ccall MLIR.API.mlir_c.UninitPJRTBuffer(
             XLA.client(a)::Ptr{Cvoid},
             XLA.device(a)::Ptr{Cvoid},
@@ -49,7 +49,7 @@ end
 
 function Base.similar(a::Buffer, dims::Dims)
     sizear = collect(Int64, reverse(dims))
-    buffer = GC.@preserve buffer sizear begin
+    buffer = GC.@preserve a sizear begin
         return @ccall MLIR.API.mlir_c.UninitPJRTBuffer(
             XLA.client(a)::Ptr{Cvoid},
             XLA.device(a)::Ptr{Cvoid},
@@ -63,7 +63,7 @@ end
 
 function Base.similar(a::Buffer, ::Type{S}, dims::Dims) where S
     sizear = collect(Int64, reverse(dims))
-    buffer = GC.@preserve buffer sizear begin
+    buffer = GC.@preserve a sizear begin
         return @ccall MLIR.API.mlir_c.UninitPJRTBuffer(
             XLA.client(a)::Ptr{Cvoid},
             XLA.device(a)::Ptr{Cvoid},
