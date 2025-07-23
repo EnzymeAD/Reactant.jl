@@ -374,7 +374,6 @@ end
 # TODO is there any way to allocate an uninitialized buffer in XLA?
 function Base.similar(a::ConcretePJRTArray{T, N, D, Sh}, ::Type{S}=T, dims::Dims=size(a)) where {S, T, Sh, N, D}
 
-    client = XLA.client(a)
 
     sdata = if a.sharding === nothing
         ntuple(Val(length(dims))) do i
@@ -382,8 +381,9 @@ function Base.similar(a::ConcretePJRTArray{T, N, D, Sh}, ::Type{S}=T, dims::Dims
 	    Base.similar(a.data[min(i, N)], S, dims)
         end
     else
+    	client = XLA.client(a)
         device_to_array_slices, _ = Sharding.sharding_to_array_slices(
-            a.sharding, dims; return_updated_sharding=Val(true)
+            a.sharding, dims; return_updated_sharding=Val(true), client
         )
 	ntuple(Val(length(dims))) do i
             Base.@_inline_meta
