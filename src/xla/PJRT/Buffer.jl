@@ -40,7 +40,7 @@ function Base.similar(a::Buffer, ::Type{S}) where S
             XLA.client(a)::Ptr{Cvoid},
             XLA.device(a)::Ptr{Cvoid},
             primitive_type(S)::UInt64,
-            (@ccall MLIR.API.mlir_c.BufferNDimensions(buffer.buffer::Ptr{Cvoid})::Cint)::UInt64
+            (@ccall MLIR.API.mlir_c.BufferNDimensions(buffer.buffer::Ptr{Cvoid})::Cint)::UInt64,
             (@ccall MLIR.API.mlir_c.BufferShape(buffer.buffer::Ptr{Cvoid})::Ptr{Int64})::Ptr{Int64}
         )::Ptr{Cvoid}
     end
@@ -54,7 +54,7 @@ function Base.similar(a::Buffer, dims::Dims)
             XLA.client(a)::Ptr{Cvoid},
             XLA.device(a)::Ptr{Cvoid},
             @ccall MLIR.API.mlir_c.BufferPrimitiveType(buffer.buffer::Ptr{Cvoid})::Cint,
-            length(dims)::UInt64
+            length(dims)::UInt64,
             pointer(sizear)::Ptr{Int64}
         )::Ptr{Cvoid}
     end
@@ -68,7 +68,7 @@ function Base.similar(a::Buffer, ::Type{S}, dims::Dims) where S
             XLA.client(a)::Ptr{Cvoid},
             XLA.device(a)::Ptr{Cvoid},
             primitive_type(S)::UInt64,
-            length(dims)::UInt64
+            length(dims)::UInt64,
             pointer(sizear)::Ptr{Int64}
         )::Ptr{Cvoid}
     end
