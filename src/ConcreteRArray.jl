@@ -377,21 +377,21 @@ function Base.similar(a::ConcretePJRTArray{T, N, D, Sh}, ::Type{S}=T, dims::Dims
     client = XLA.client(a)
 
     sdata = if a.sharding === nothing
-        ntuple(Val(D)) do i
+        ntuple(Val(length(dims))) do i
             Base.@_inline_meta
-            Base.similar(a.data[i], S, dims)
+	    Base.similar(a.data[min(i, N)], S, dims)
         end
     else
         device_to_array_slices, _ = Sharding.sharding_to_array_slices(
             a.sharding, dims; return_updated_sharding=Val(true)
         )
-        ntuple(Val(D)) do i
+	ntuple(Val(length(dims))) do i
             Base.@_inline_meta
-	    Base.similar(a.data[i], S, Dims(size(device_to_array_slices[i])))
+	    Base.similar(a.data[min(i, N)], S, Dims(size(device_to_array_slices[i])))
         end
     end
 
-    return ConcretePJRTArray{S,N,D,Sh}(sdata, dims, a.sharding)
+    return ConcretePJRTArray{S,length(dims),D, Sh}(sdata, dims, a.sharding)
 end
 
 Base.similar(a::ConcretePJRTArray, dims::Dims) = similar(a, eltype(a), dims)
