@@ -795,6 +795,8 @@ cc_library(
             "-Wl,-exported_symbol,_SetModuleLogLevel",
             "-Wl,-exported_symbol,_GetDefaultTargetTriple",
             "-Wl,-exported_symbol,_enzymeActivityAttrGet",
+            "-Wl,-exported_symbol,_CopyToBuffer",
+            "-Wl,-exported_symbol,_CopyFromBuffer",
             "-Wl,-exported_symbol,_MakeCPUClient",
             "-Wl,-exported_symbol,_MakeGPUClient",
             "-Wl,-exported_symbol,_MakeTPUClient",
