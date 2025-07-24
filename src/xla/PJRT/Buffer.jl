@@ -73,18 +73,42 @@ function Base.similar(a::Buffer, dims::Dims)
     return Buffer(buffer)
 end
 
-function Base.similar(a::Buffer, ::Type{S}, dims::Dims) where {S}
+@inline function Base.similar(::Type{Buffer}, ::Type{S}, dims::Dims;
+                      client::Union{Nothing,XLA.PJRT.Client}=nothing,
+                      idx::Union{Int,Nothing}=nothing,
+                      device::Union{Nothing,XLA.PJRT.Device}=nothing,
+                      ) where {S}
+    client = client === nothing ? XLA.default_backend() : client
+
+    if device === nothing
+        if idx === nothing
+            device = XLA.default_device(client)
+        else
+            device = XLA.get_device(client, idx)
+        end
+    else
+        if idx !== nothing
+            device_from_idx = XLA.get_device(client, idx)
+            @assert device_from_idx == device "If both `idx` and `device` are \
+                                               specified, `idx` must match `device`"
+        end
+    end
+
     sizear = collect(Int64, reverse(dims))
-    buffer = GC.@preserve a sizear begin
+    buffer = GC.@preserve sizear begin
         @ccall MLIR.API.mlir_c.UninitPJRTBuffer(
-            XLA.client(a).client::Ptr{Cvoid},
-            XLA.device(a).device::Ptr{Cvoid},
+            client.client::Ptr{Cvoid},
+            device.device::Ptr{Cvoid},
             XLA.primitive_type(S)::UInt64,
             length(dims)::UInt64,
             pointer(sizear)::Ptr{Int64},
         )::Ptr{Cvoid}
     end
     return Buffer(buffer)
+end
+
+function Base.similar(a::Buffer, ::Type{S}, dims::Dims) where {S}
+    Base.similar(Buffer, S, dims; client=XLA.client(a), device=XLA.device(a))
 end
 
 @inline function free_buffer(buffer::Buffer)

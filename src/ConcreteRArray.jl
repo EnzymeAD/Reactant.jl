@@ -371,6 +371,26 @@ function Base.setindex!(a::ConcreteIFRTArray, v, args::Vararg{Int,N}) where {N}
     return a
 end
 
+@inline function Base.similar(::Type{<:ConcretePJRTArray}, ::Type{S}, dims::Dims;
+                      client::Union{Nothing,XLA.PJRT.Client}=nothing,
+                      idx::Union{Int,Nothing}=nothing,
+                      device::Union{Nothing,XLA.PJRT.Device}=nothing,
+                      sharding::Sharding.AbstractSharding=Sharding.NoSharding()
+    ) where {S}
+
+    client = client === nothing ? XLA.default_backend() : client
+
+    device_to_array_slices, sharding = Sharding.sharding_to_array_slices(
+        sharding, dims; return_updated_sharding=Val(true), client
+    )
+
+    sdata = ntuple(Val(length(device_to_array_slices))) do i
+        Base.@_inline_meta
+        Base.similar(XLA.PJRT.Buffer, S, Dims(length.(device_to_array_slices[i])); client, device, idx)
+    end
+    return ConcretePJRTArray{S,length(dims),length(device_to_array_slices),typeof(sharding)}(sdata, dims, sharding)
+end
+
 function Base.similar(
     a::ConcretePJRTArray{T,N,D,Sh}, ::Type{S}=T, dims::Dims=size(a)
 ) where {S,T,Sh,N,D}
@@ -386,8 +406,9 @@ function Base.similar(
 end
 
 Base.similar(a::ConcretePJRTArray, dims::Dims) = similar(a, eltype(a), dims)
-function Base.similar(::Type{ConcretePJRTArray{T}}, dims) where {T}
-    return ConcretePJRTArray(similar(Array{T}, dims))
+
+@inline function Base.similar(AT::Type{<:ConcretePJRTArray{T}}, dims; kwargs...) where {T}
+    return Base.similar(AT, T, dims; kwargs...)
 end
 
 function Base.similar(a::ConcreteIFRTArray{T}, ::Type{S}=T, dims::Dims=size(a)) where {T,S}
@@ -404,16 +425,16 @@ end
 Base.BroadcastStyle(::Type{<:ConcretePJRTArray}) = Broadcast.ArrayStyle{ConcretePJRTArray}()
 Base.BroadcastStyle(::Type{<:ConcreteIFRTArray}) = Broadcast.ArrayStyle{ConcreteIFRTArray}()
 
-# XXX: correct device + sharding?
-function Base.similar(
-    bc::Broadcast.Broadcasted{Broadcast.ArrayStyle{ConcretePJRTArray}}, ::Type{T}
+@inline function Base.similar(
+    bc::Broadcast.Broadcasted{Broadcast.ArrayStyle{ConcretePJRTArray}}, ::Type{T}; kwargs...
 ) where {T}
-    return ConcretePJRTArray(similar(Array{T}, axes(bc)))
+    return similar(ConcretePJRTArray, T, axes(bc); kwargs...)
 end
-function Base.similar(
-    bc::Broadcast.Broadcasted{Broadcast.ArrayStyle{ConcreteIFRTArray}}, ::Type{T}
+
+@inline function Base.similar(
+    bc::Broadcast.Broadcasted{Broadcast.ArrayStyle{ConcreteIFRTArray}}, ::Type{T}; kwargs...
 ) where {T}
-    return ConcreteIFRTArray(similar(Array{T}, axes(bc)))
+    return similar(ConcreteIFRTArray, T, axes(bc); kwargs...)
 end
 
 # TODO replace this copy for `setindex!` maybe? how to copy data to already existing buffer? (i.e. `copyto!`)
@@ -437,9 +458,10 @@ function Base.copy(bc::Base.Broadcast.Broadcasted{Broadcast.ArrayStyle{ConcreteP
                 ),
             )
         end
-        aux = copyto!(
-            similar(Array{ElType}, axes(bc)), convert(Broadcast.Broadcasted{Nothing}, bc)
-        )
+
+        aux = similar(ConcretePJRTArray, ElType, length.(axes(bc)))
+
+        copyto!(aux, convert(Broadcast.Broadcasted{Nothing}, bc))
         return ConcretePJRTArray(aux) # XXX: result should be on correct device?
     end
 
