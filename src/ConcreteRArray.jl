@@ -372,25 +372,26 @@ function Base.setindex!(a::ConcreteIFRTArray, v, args::Vararg{Int,N}) where {N}
 end
 
 # TODO is there any way to allocate an uninitialized buffer in XLA?
-function Base.similar(a::ConcretePJRTArray{T, N, D, Sh}, ::Type{S}=T, dims::Dims=size(a)) where {S, T, Sh, N, D}
+function Base.similar(
+    a::ConcretePJRTArray{T,N,D,Sh}, ::Type{S}=T, dims::Dims=size(a)
+) where {S,T,Sh,N,D}
     if a.sharding === nothing
         sdata = ntuple(Val(D)) do i
             Base.@_inline_meta
-	    Base.similar(a.data[i], S, dims)
+            Base.similar(a.data[i], S, dims)
         end
-        return ConcretePJRTArray{S,length(dims),D, Sh}(sdata, dims, a.sharding)
+        return ConcretePJRTArray{S,length(dims),D,Sh}(sdata, dims, a.sharding)
     else
-    	client = XLA.client(a)
+        client = XLA.client(a)
         device_to_array_slices, sharding = Sharding.sharding_to_array_slices(
             a.sharding, dims; return_updated_sharding=Val(true), client
         )
-	sdata = ntuple(Val(D)) do i
+        sdata = ntuple(Val(D)) do i
             Base.@_inline_meta
-	    Base.similar(a.data[i], S, Dims(size(device_to_array_slices[i])))
+            Base.similar(a.data[i], S, Dims(size(device_to_array_slices[i])))
         end
-        return ConcretePJRTArray{S,length(dims),D, Sh}(sdata, dims, sharding)
+        return ConcretePJRTArray{S,length(dims),D,Sh}(sdata, dims, sharding)
     end
-
 end
 
 Base.similar(a::ConcretePJRTArray, dims::Dims) = similar(a, eltype(a), dims)
@@ -484,7 +485,7 @@ function Base.copyto!(
     return dest
 end
 
-for aType in (:ConcreteIFRTArray, )
+for aType in (:ConcreteIFRTArray,)
     anyaType = Symbol(:Any, aType)
     @eval function Base.copyto!(dest::$(anyaType), src::Array{<:ReactantPrimitive})
         ancestor_dest = ancestor(dest)
@@ -500,11 +501,17 @@ for aType in (:ConcreteIFRTArray, )
     end
 end
 
-function Base.copyto!(dest::Vector{T}, doffs::Int64, src::Reactant.ConcreteIFRTArray{T}, soffs::Int64, n::Int64) where {T}
+function Base.copyto!(
+    dest::Vector{T},
+    doffs::Int64,
+    src::Reactant.ConcreteIFRTArray{T},
+    soffs::Int64,
+    n::Int64,
+) where {T}
     n == 0 && return dest
     n > 0 || Base._throw_argerror("Number of elements to copy must be non-negative.")
-    @boundscheck checkbounds(dest, doffs:doffs+n-1)
-    @boundscheck checkbounds(src, soffs:soffs+n-1)
+    @boundscheck checkbounds(dest, doffs:(doffs + n - 1))
+    @boundscheck checkbounds(src, soffs:(soffs + n - 1))
 
     if (len * sizeof(T)) != length(src)
         throw(AssertionError("Only full array copyto! supported from ConcreteIFRTArray"))
@@ -525,14 +532,20 @@ function Base.copyto!(dest::Vector{T}, doffs::Int64, src::Reactant.ConcreteIFRTA
         )::Ptr{Cvoid}
     end
 
-    dest
+    return dest
 end
 
-function Base.copyto!(dest::Vector{T}, doffs::Int64, src::Reactant.ConcretePJRTArray{T}, soffs::Int64, n::Int64) where {T}
+function Base.copyto!(
+    dest::Vector{T},
+    doffs::Int64,
+    src::Reactant.ConcretePJRTArray{T},
+    soffs::Int64,
+    n::Int64,
+) where {T}
     n == 0 && return dest
     n > 0 || _throw_argerror("Number of elements to copy must be non-negative.")
-    @boundscheck checkbounds(dest, doffs:doffs+n-1)
-    @boundscheck checkbounds(src, soffs:soffs+n-1)
+    @boundscheck checkbounds(dest, doffs:(doffs + n - 1))
+    @boundscheck checkbounds(src, soffs:(soffs + n - 1))
 
     client = XLA.client(dest)
     @assert length(src.data) == 1
@@ -546,22 +559,30 @@ function Base.copyto!(dest::Vector{T}, doffs::Int64, src::Reactant.ConcretePJRTA
             src_sync.buffer::Ptr{Cvoid},
             pointer(dest, doffs)::Ptr{T},
             ((soffs - 1) * sizeof(T))::Int64,
-            (len * sizeof(T))::Int64
+            (len * sizeof(T))::Int64,
         )::Ptr{Cvoid}
     end
 
-    dest
+    return dest
 end
 
-function Base.copyto!(dest::Vector{T}, src::Union{Reactant.ConcretePJRTArray{T}, Reactant.ConcreteIFRTArray{T}}) where {T}
-    copyto!(dest, 1, src, 1, length(src))
+function Base.copyto!(
+    dest::Vector{T}, src::Union{Reactant.ConcretePJRTArray{T},Reactant.ConcreteIFRTArray{T}}
+) where {T}
+    return copyto!(dest, 1, src, 1, length(src))
 end
 
-function Base.copyto!(dest::Reactant.ConcretePJRTArray{T}, doffs::Int64, src::Vector{T}, soffs::Int64, n::Int64) where {T}
+function Base.copyto!(
+    dest::Reactant.ConcretePJRTArray{T},
+    doffs::Int64,
+    src::Vector{T},
+    soffs::Int64,
+    n::Int64,
+) where {T}
     n == 0 && return dest
     n > 0 || _throw_argerror("Number of elements to copy must be non-negative.")
-    @boundscheck checkbounds(dest, doffs:doffs+n-1)
-    @boundscheck checkbounds(src, soffs:soffs+n-1)
+    @boundscheck checkbounds(dest, doffs:(doffs + n - 1))
+    @boundscheck checkbounds(src, soffs:(soffs + n - 1))
 
     client = XLA.client(dest)
     dest_async = dest.data[1]
@@ -574,15 +595,15 @@ function Base.copyto!(dest::Reactant.ConcretePJRTArray{T}, doffs::Int64, src::Ve
             dest_sync.buffer::Ptr{Cvoid},
             pointer(src, soffs)::Ptr{T},
             ((doffs - 1) * sizeof(T))::Int64,
-            (n * sizeof(T))::Int64
+            (n * sizeof(T))::Int64,
         )::Ptr{Cvoid}
     end
 
-    dest
+    return dest
 end
 
 function Base.copyto!(dest::Reactant.ConcretePJRTArray{T}, src::Vector{T}) where {T}
-    copyto!(dest, 1, src, 1, length(src))
+    return copyto!(dest, 1, src, 1, length(src))
 end
 
 for aType in (:ConcretePJRTArray, :ConcreteIFRTArray)

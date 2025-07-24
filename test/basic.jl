@@ -1406,7 +1406,7 @@ end
     dest = fill(0.0f0, alen)
     src = Reactant.@jit Reactant.Ops.fill(0.0f0, (blen,))
 
-    for desto in 1:alen, srco in 1:blen, l in 1:min(blen-srco + 1, alen-desto + 1)
+    for desto in 1:alen, srco in 1:blen, l in 1:min(blen - srco + 1, alen - desto + 1)
 
         # TODO offset-enabled copy not implemented for IFRTArray
         if src isa ConcretePJRTArray
@@ -1423,7 +1423,7 @@ end
     dest = Reactant.@jit Reactant.Ops.fill(0.0f0, (alen,))
     if dst isa ConcretePJRTArray
         src = fill(0.0f0, blen)
-        for desto in 1:alen, srco in 1:blen, l in 1:min(blen-srco + 1, alen-desto + 1)
+        for desto in 1:alen, srco in 1:blen, l in 1:min(blen - srco + 1, alen - desto + 1)
             expected = copyto!(copy(a), desto, b, srco, l)
 
             dest .= a
