@@ -503,7 +503,7 @@ function Base.copyto!(
     @boundscheck checkbounds(dest, doffs:(doffs + n - 1))
     @boundscheck checkbounds(src, soffs:(soffs + n - 1))
 
-    if (len * sizeof(T)) != length(src)
+    if (n * sizeof(T)) != length(src)
         throw(AssertionError("Only full array copyto! supported from ConcreteIFRTArray"))
     end
     if doffs != 1
@@ -549,7 +549,7 @@ function Base.copyto!(
             src_sync.buffer::Ptr{Cvoid},
             pointer(dest, doffs)::Ptr{T},
             ((soffs - 1) * sizeof(T))::Int64,
-            (len * sizeof(T))::Int64,
+            (n * sizeof(T))::Int64,
         )::Ptr{Cvoid}
     end
 
