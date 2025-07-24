@@ -427,7 +427,7 @@ end
 
 function (sharding::NamedSharding)(
     client::XLA.PJRT.Client, _, ::Type{S}, dims::Dims
-)
+) where S
     if !issorted(sharding.mesh.logical_device_ids)
         error("PJRT doesn't support non-iota meshes. Use IFRT instead.")
     end
@@ -959,7 +959,7 @@ end
 
 function (sharding::HloSharding)(
     client::XLA.PJRT.Client, ::Nothing, ::Type{S}, dims::Dims
-)
+) where S
     device_to_array_slices = sharding_to_array_slices(sharding, dims; client)
 
     data = ntuple(length(sharding.mesh)) do i    
