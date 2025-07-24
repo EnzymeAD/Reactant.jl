@@ -503,7 +503,7 @@ function Base.copyto!(
     @boundscheck checkbounds(dest, doffs:(doffs + n - 1))
     @boundscheck checkbounds(src, soffs:(soffs + n - 1))
 
-    if (n * sizeof(T)) != length(src)
+    if n != length(src)
         throw(AssertionError("Only full array copyto! supported from ConcreteIFRTArray"))
     end
     if doffs != 1
