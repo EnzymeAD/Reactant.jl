@@ -533,11 +533,11 @@ function Base.copyto!(
     n::Int64,
 ) where {T}
     n == 0 && return dest
-    n > 0 || _throw_argerror("Number of elements to copy must be non-negative.")
+    n > 0 || Base._throw_argerror("Number of elements to copy must be non-negative.")
     @boundscheck checkbounds(dest, doffs:(doffs + n - 1))
     @boundscheck checkbounds(src, soffs:(soffs + n - 1))
 
-    client = XLA.client(dest)
+    client = XLA.client(src)
     @assert length(src.data) == 1
     src_async = src.data[1]
     src_sync = src_async.buffer
@@ -570,7 +570,7 @@ function Base.copyto!(
     n::Int64,
 ) where {T}
     n == 0 && return dest
-    n > 0 || _throw_argerror("Number of elements to copy must be non-negative.")
+    n > 0 || Base._throw_argerror("Number of elements to copy must be non-negative.")
     @boundscheck checkbounds(dest, doffs:(doffs + n - 1))
     @boundscheck checkbounds(src, soffs:(soffs + n - 1))
 
