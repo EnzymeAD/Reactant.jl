@@ -208,7 +208,7 @@ end
 function sharding_to_array_slices(
     sharding::NoSharding, size_x; client=nothing, return_updated_sharding=Val(false)
 )
-    slices = Base.OneTo.(size_x)
+    slices = (Base.OneTo.(size_x),)
     return_updated_sharding isa Val{true} && return (slices, sharding)
     return slices
 end

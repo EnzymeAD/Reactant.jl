@@ -377,9 +377,10 @@ function Base.similar(
     device_to_array_slices, sharding = Sharding.sharding_to_array_slices(
         a.sharding, dims; return_updated_sharding=Val(true), client=XLA.client(a)
     )
+    @assert length(device_to_array_slices) == D
     sdata = ntuple(Val(D)) do i
         Base.@_inline_meta
-        Base.similar(a.data[i], S, Dims(size(device_to_array_slices[i])))
+        Base.similar(a.data[i], S, Dims(length.(device_to_array_slices[i])))
     end
     return ConcretePJRTArray{S,length(dims),D,Sh}(sdata, dims, a.sharding)
 end
