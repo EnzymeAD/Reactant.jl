@@ -198,6 +198,12 @@ function (::NoSharding)(client::XLA.PJRT.Client, device, x::Union{AbstractArray,
     return (buffer,), ShardInfo(NoSharding(), nothing)
 end
 
+function (::NoSharding)(client::XLA.PJRT.Client, device, ::Type{S}, dims::Dims) where S
+    device === nothing && (device = XLA.default_device(client))
+    buffer = similar(XLA.PJRT.AsyncBuffer, S, dims; client, device)
+    return (buffer,), ShardInfo(NoSharding(), nothing)
+end
+
 function (::NoSharding)(client::XLA.IFRT.Client, device, x::Union{AbstractArray,Number})
     device === nothing && (device = XLA.default_device(client))
     return (
@@ -414,6 +420,25 @@ function (sharding::NamedSharding)(
             x[device_to_array_slices[i]...],
             XLA.get_device(client, sharding.mesh.device_ids[i]),
         )
+    end
+
+    return data, ShardInfo(sharding, device_to_array_slices)
+end
+
+function (sharding::NamedSharding)(
+    client::XLA.PJRT.Client, _, ::Type{S}, dims::Dims
+)
+    if !issorted(sharding.mesh.logical_device_ids)
+        error("PJRT doesn't support non-iota meshes. Use IFRT instead.")
+    end
+
+    device_to_array_slices, sharding = sharding_to_array_slices(
+        sharding, dims; client, return_updated_sharding=Val(true)
+    )
+
+    data = ntuple(length(sharding.mesh)) do i
+        Base.@_inline_meta
+        Base.similar(XLA.PJRT.AsyncBuffer, S, Dims(length.(device_to_array_slices[i])); client, device=XLA.get_device(client, sharding.mesh.device_ids[i]))
     end
 
     return data, ShardInfo(sharding, device_to_array_slices)
@@ -698,10 +723,8 @@ function NamedSharding(sharding::DimsSharding, N)
     return NamedSharding(sharding.mesh, partition_spec; is_closed, priority)
 end
 
-function (sharding::DimsSharding)(
-    client::XLA.AbstractClient, device, x::Union{AbstractArray,Number}
-)
-    return (NamedSharding(sharding, ndims(x)))(client, device, x)
+function (sharding::DimsSharding)(args...)
+    return (NamedSharding(sharding, ndims(x)))(args...)
 end
 
 function sharding_to_array_slices(sharding::DimsSharding, size_x; kwargs...)
@@ -742,10 +765,8 @@ function NamedSharding(sharding::Replicated, ndims::Int)
     return NamedSharding(sharding.mesh, ntuple(Returns(nothing), ndims))
 end
 
-function (sharding::Replicated)(
-    client::XLA.AbstractClient, device, x::Union{AbstractArray,Number}
-)
-    return (NamedSharding(sharding, ndims(x)))(client, device, x)
+function (sharding::Replicated)(args...)
+    return (NamedSharding(sharding, ndims(x)))(args...)
 end
 
 function sharding_to_array_slices(sharding::Replicated, size_x; kwargs...)
@@ -931,6 +952,18 @@ function (sharding::HloSharding)(
             x[device_to_array_slices[i]...],
             XLA.get_device(client, sharding.mesh.device_ids[i]),
         )
+    end
+
+    return data, ShardInfo(sharding, device_to_array_slices)
+end
+
+function (sharding::HloSharding)(
+    client::XLA.PJRT.Client, ::Nothing, ::Type{S}, dims::Dims
+)
+    device_to_array_slices = sharding_to_array_slices(sharding, dims; client)
+
+    data = ntuple(length(sharding.mesh)) do i    
+        Base.similar(XLA.PJRT.AsyncBuffer, S, Dims(length.(device_to_array_slices[i])); client, device=XLA.get_device(client, sharding.mesh.device_ids[i]))
     end
 
     return data, ShardInfo(sharding, device_to_array_slices)

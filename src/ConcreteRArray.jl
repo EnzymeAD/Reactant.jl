@@ -377,18 +377,15 @@ end
                       device::Union{Nothing,XLA.PJRT.Device}=nothing,
                       sharding::Sharding.AbstractSharding=Sharding.NoSharding()
     ) where {S}
-
     client = client === nothing ? XLA.default_backend() : client
 
-    device_to_array_slices, sharding = Sharding.sharding_to_array_slices(
-        sharding, dims; return_updated_sharding=Val(true), client
-    )
-
-    sdata = ntuple(Val(length(device_to_array_slices))) do i
-        Base.@_inline_meta
-        Base.similar(XLA.PJRT.AsyncBuffer, S, Dims(length.(device_to_array_slices[i])); client, device, idx)
+    if idx isa Int && device === nothing
+        device = XLA.get_device(client, idx)
     end
-    return ConcretePJRTArray{S,length(dims),length(device_to_array_slices),Sharding.shard_type(typeof(sharding), length(dims))}(sdata, dims, sharding)
+
+    sdata, sharding = sharding(client, device, S, dims)
+
+    return ConcretePJRTArray{S,length(dims),length(device_to_array_slices),typeof(sharding)}(sdata, dims, sharding)
 end
 
 function Base.similar(
