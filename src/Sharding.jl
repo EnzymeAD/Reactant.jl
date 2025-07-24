@@ -152,13 +152,6 @@ Base.in(axis::Union{String,Symbol}, mesh::Mesh) = Symbol(axis) ∈ mesh.axis_nam
 
 abstract type AbstractSharding end
 
-function (T::AbstractSharding)(::XLA.AbstractClient, device, ::Union{AbstractArray,Number})
-    return error(
-        "(::$(T))(::XLA.AbstractClient, device, ::Union{AbstractArray,Number}) is \
-         not implemented"
-    )
-end
-
 # By default we use same sharding for all leaf nodes
 Base.getproperty(sharding::AbstractSharding, name) = sharding
 function Base.getproperty(sharding::AbstractSharding, name::Symbol)
