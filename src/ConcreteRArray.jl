@@ -385,7 +385,7 @@ end
 
     sdata, sharding = sharding(client, device, S, dims)
 
-    return ConcretePJRTArray{S,length(dims),length(device_to_array_slices),typeof(sharding)}(sdata, dims, sharding)
+    return ConcretePJRTArray{S,length(dims),length(sdata),typeof(sharding)}(sdata, dims, sharding)
 end
 
 function Base.similar(
