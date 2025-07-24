@@ -386,7 +386,7 @@ end
 
     sdata = ntuple(Val(length(device_to_array_slices))) do i
         Base.@_inline_meta
-        Base.similar(XLA.PJRT.Buffer, S, Dims(length.(device_to_array_slices[i])); client, device, idx)
+        Base.similar(XLA.PJRT.AsyncBuffer, S, Dims(length.(device_to_array_slices[i])); client, device, idx)
     end
     return ConcretePJRTArray{S,length(dims),length(device_to_array_slices),Sharding.shard_type(typeof(sharding), length(dims))}(sdata, dims, sharding)
 end
