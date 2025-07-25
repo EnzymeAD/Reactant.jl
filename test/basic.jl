@@ -1376,3 +1376,60 @@ end
     xr = Reactant.to_rarray(ones(4, 4))
     @test @jit(any(<(0), xr)) == any(<(0), Array(xr))
 end
+
+@testset "copyto!, no offsets" begin
+    a = Float32[10, 20, 30, 40, 50]
+    len = length(a)
+    b = Float32[111, 222, 333, 444, 555]
+    cpu = fill(0.0f0, len)
+    gpu = (Reactant.@jit Reactant.Ops.fill(0.0f0, (len,)))
+
+    cpu .= a
+    gpu .= b
+    copyto!(cpu, gpu)
+    @test gpu == b
+    @test cpu == b
+
+    cpu .= a
+    gpu .= b
+    copyto!(gpu, cpu)
+    @test gpu == a
+    @test cpu == a
+end
+
+@testset "copyto!, with offsets" begin
+    a = Float32[10, 20, 30, 40, 50, 60, 70]
+    alen = length(a)
+    b = Float32[111, 222, 333, 444, 555]
+    blen = length(b)
+
+    dest = fill(0.0f0, alen)
+    src = Reactant.@jit Reactant.Ops.fill(0.0f0, (blen,))
+
+    for desto in 1:alen, srco in 1:blen, l in 1:min(blen - srco + 1, alen - desto + 1)
+
+        # TODO offset-enabled copy not implemented for IFRTArray
+        if src isa ConcretePJRTArray
+            expected = copyto!(copy(a), desto, b, srco, l)
+
+            dest .= a
+            src .= b
+            copyto!(dest, desto, src, srco, l)
+            @test dest == expected
+        end
+    end
+
+    # TODO direct copy not implemented for IFRTArray
+    dest = Reactant.@jit Reactant.Ops.fill(0.0f0, (alen,))
+    if dest isa ConcretePJRTArray
+        src = fill(0.0f0, blen)
+        for desto in 1:alen, srco in 1:blen, l in 1:min(blen - srco + 1, alen - desto + 1)
+            expected = copyto!(copy(a), desto, b, srco, l)
+
+            dest .= a
+            src .= b
+            copyto!(dest, desto, src, srco, l)
+            @test dest == expected
+        end
+    end
+end
