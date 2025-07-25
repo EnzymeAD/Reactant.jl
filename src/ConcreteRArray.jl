@@ -495,7 +495,7 @@ function Base.copyto!(
     return dest
 end
 
-for aType in (:ConcreteIFRTArray,)
+for aType in (:ConcretePJRTArray, :ConcreteIFRTArray)
     anyaType = Symbol(:Any, aType)
     @eval function Base.copyto!(dest::$(anyaType), src::Array{<:ReactantPrimitive})
         ancestor_dest = ancestor(dest)
