@@ -716,8 +716,14 @@ function NamedSharding(sharding::DimsSharding, N)
     return NamedSharding(sharding.mesh, partition_spec; is_closed, priority)
 end
 
-function (sharding::DimsSharding)(args...)
-    return (NamedSharding(sharding, ndims(x)))(args...)
+function (sharding::DimsSharding)(
+    client::XLA.AbstractClient, device, x::Union{AbstractArray,Number}
+)
+    return (NamedSharding(sharding, ndims(x)))(client, device, x)
+end
+
+function (sharding::DimsSharding)(client::XLA.PJRT.Client, dev, ::Type{S}, dims::Dims)
+    return (NamedSharding(sharding, length(dims)))(client, dev, S, dims)
 end
 
 function sharding_to_array_slices(sharding::DimsSharding, size_x; kwargs...)
@@ -758,9 +764,16 @@ function NamedSharding(sharding::Replicated, ndims::Int)
     return NamedSharding(sharding.mesh, ntuple(Returns(nothing), ndims))
 end
 
-function (sharding::Replicated)(args...)
-    return (NamedSharding(sharding, ndims(x)))(args...)
+function (sharding::Replicated)(
+    client::XLA.AbstractClient, device, x::Union{AbstractArray,Number}
+)
+    return (NamedSharding(sharding, ndims(x)))(client, device, x)
 end
+
+function (sharding::Replicated)(client::XLA.PJRT.Client, dev, ::Type{S}, dims::Dims)
+    return (NamedSharding(sharding, length(dims)))(client, dev, S, dims)
+end
+
 
 function sharding_to_array_slices(sharding::Replicated, size_x; kwargs...)
     return sharding_to_array_slices(
