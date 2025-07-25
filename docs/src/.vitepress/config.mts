@@ -88,6 +88,7 @@ export default defineConfig({
           {text: "Distributed", link: "/tutorials/multihost"},
           {text: "Local build", link: "/tutorials/local-build"},
           {text: "Control Flow", link: "/tutorials/control-flow"},
+          {text: "Sharding", link: "/tutorials/sharding"},
         ],
       },
       {
@@ -158,6 +159,7 @@ export default defineConfig({
           { text: "Distributed", link: "/tutorials/multihost" },
           { text: "Local build", link: "/tutorials/local-build" },
           { text: "Control Flow", link: "/tutorials/control-flow" },
+          { text: "Sharding", link: "/tutorials/sharding" },
         ],
       }
     ],
