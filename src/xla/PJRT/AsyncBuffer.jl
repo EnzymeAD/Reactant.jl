@@ -16,6 +16,6 @@ function Base.similar(a::AsyncBuffer, args...)
     return AsyncBuffer(Base.similar(a.buffer, args...)::Buffer, nothing)
 end
 
-@inline function Base.similar(::Type{AsyncBuffer}, args...; kwargs...) where {S}
+@inline function Base.similar(::Type{AsyncBuffer}, args...; kwargs...)
     return AsyncBuffer(Base.similar(Buffer, args...; kwargs...)::Buffer, nothing)
 end

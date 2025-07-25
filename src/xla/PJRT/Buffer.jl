@@ -40,7 +40,7 @@ function Base.similar(a::Buffer)
     return Buffer(buffer)
 end
 
-function Base.similar(a::Buffer, ::Type{S}) where {S}
+function Base.similar(a::Buffer, S::Type)
     buffer = GC.@preserve a begin
         @ccall MLIR.API.mlir_c.UninitPJRTBuffer(
             XLA.client(a).client::Ptr{Cvoid},
@@ -73,11 +73,11 @@ function Base.similar(a::Buffer, dims::Dims)
     return Buffer(buffer)
 end
 
-@inline function Base.similar(::Type{Buffer}, ::Type{S}, dims::Dims;
+@inline function Base.similar(::Type{Buffer}, S::Type, dims::Dims;
                       client::Union{Nothing,XLA.PJRT.Client}=nothing,
                       idx::Union{Int,Nothing}=nothing,
                       device::Union{Nothing,XLA.PJRT.Device}=nothing,
-                      ) where {S}
+                      )
     client = client === nothing ? XLA.default_backend() : client
 
     if device === nothing
@@ -107,7 +107,7 @@ end
     return Buffer(buffer)
 end
 
-function Base.similar(a::Buffer, ::Type{S}, dims::Dims) where {S}
+function Base.similar(a::Buffer, S::Type, dims::Dims)
     Base.similar(Buffer, S, dims; client=XLA.client(a), device=XLA.device(a))
 end
 

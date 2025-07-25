@@ -191,7 +191,7 @@ function (::NoSharding)(client::XLA.PJRT.Client, device, x::Union{AbstractArray,
     return (buffer,), ShardInfo(NoSharding(), nothing)
 end
 
-function (::NoSharding)(client::XLA.PJRT.Client, device, ::Type{S}, dims::Dims) where S
+function (::NoSharding)(client::XLA.PJRT.Client, device, S::Type, dims::Dims)
     device === nothing && (device = XLA.default_device(client))
     buffer = similar(XLA.PJRT.AsyncBuffer, S, dims; client, device)
     return (buffer,), ShardInfo(NoSharding(), nothing)
@@ -419,8 +419,8 @@ function (sharding::NamedSharding)(
 end
 
 function (sharding::NamedSharding)(
-    client::XLA.PJRT.Client, _, ::Type{S}, dims::Dims
-) where S
+    client::XLA.PJRT.Client, _, S::Type, dims::Dims
+)
     if !issorted(sharding.mesh.logical_device_ids)
         error("PJRT doesn't support non-iota meshes. Use IFRT instead.")
     end
@@ -722,7 +722,7 @@ function (sharding::DimsSharding)(
     return (NamedSharding(sharding, ndims(x)))(client, device, x)
 end
 
-function (sharding::DimsSharding)(client::XLA.PJRT.Client, dev, ::Type{S}, dims::Dims)
+function (sharding::DimsSharding)(client::XLA.PJRT.Client, dev, S::Type, dims::Dims)
     return (NamedSharding(sharding, length(dims)))(client, dev, S, dims)
 end
 
@@ -770,7 +770,7 @@ function (sharding::Replicated)(
     return (NamedSharding(sharding, ndims(x)))(client, device, x)
 end
 
-function (sharding::Replicated)(client::XLA.PJRT.Client, dev, ::Type{S}, dims::Dims)
+function (sharding::Replicated)(client::XLA.PJRT.Client, dev, S::Type, dims::Dims)
     return (NamedSharding(sharding, length(dims)))(client, dev, S, dims)
 end
 
@@ -964,8 +964,8 @@ function (sharding::HloSharding)(
 end
 
 function (sharding::HloSharding)(
-    client::XLA.PJRT.Client, ::Nothing, ::Type{S}, dims::Dims
-) where S
+    client::XLA.PJRT.Client, ::Nothing, S::Type, dims::Dims
+)
     device_to_array_slices = sharding_to_array_slices(sharding, dims; client)
 
     data = ntuple(length(sharding.mesh)) do i    
