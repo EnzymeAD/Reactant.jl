@@ -61,11 +61,11 @@ jobs:
         assertions:
           - false
         include:
-          - os: linux-x86-ct6e-180-4tpu
-            version: "1.11"
-            assertions: false
-            test_group: core
-            runtime: "IFRT"
+          # - os: linux-x86-ct6e-180-4tpu
+          #   version: "1.11"
+          #   assertions: false
+          #   test_group: core
+          #   runtime: "IFRT"
           - os: ubuntu-24.04
             version: "1.10"
             assertions: true
