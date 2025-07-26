@@ -73,11 +73,14 @@ function Base.similar(a::Buffer, dims::Dims)
     return Buffer(buffer)
 end
 
-@inline function Base.similar(::Type{Buffer}, S::Type, dims::Dims;
-                      client::Union{Nothing,XLA.PJRT.Client}=nothing,
-                      idx::Union{Int,Nothing}=nothing,
-                      device::Union{Nothing,XLA.PJRT.Device}=nothing,
-                      )
+@inline function Base.similar(
+    ::Type{Buffer},
+    S::Type,
+    dims::Dims;
+    client::Union{Nothing,XLA.PJRT.Client}=nothing,
+    idx::Union{Int,Nothing}=nothing,
+    device::Union{Nothing,XLA.PJRT.Device}=nothing,
+)
     client = client === nothing ? XLA.default_backend() : client
 
     if device === nothing
@@ -108,7 +111,7 @@ end
 end
 
 function Base.similar(a::Buffer, S::Type, dims::Dims)
-    Base.similar(Buffer, S, dims; client=XLA.client(a), device=XLA.device(a))
+    return Base.similar(Buffer, S, dims; client=XLA.client(a), device=XLA.device(a))
 end
 
 @inline function free_buffer(buffer::Buffer)

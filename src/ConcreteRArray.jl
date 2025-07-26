@@ -371,12 +371,15 @@ function Base.setindex!(a::ConcreteIFRTArray, v, args::Vararg{Int,N}) where {N}
     return a
 end
 
-@inline function Base.similar(::Type{<:ConcretePJRTArray}, ::Type{S}, dims::Dims;
-                      client::Union{Nothing,XLA.PJRT.Client}=nothing,
-                      idx::Union{Int,Nothing}=nothing,
-                      device::Union{Nothing,XLA.PJRT.Device}=nothing,
-                      sharding::Sharding.AbstractSharding=Sharding.NoSharding()
-    ) where {S}
+@inline function Base.similar(
+    ::Type{<:ConcretePJRTArray},
+    ::Type{S},
+    dims::Dims;
+    client::Union{Nothing,XLA.PJRT.Client}=nothing,
+    idx::Union{Int,Nothing}=nothing,
+    device::Union{Nothing,XLA.PJRT.Device}=nothing,
+    sharding::Sharding.AbstractSharding=Sharding.NoSharding(),
+) where {S}
     client = client === nothing ? XLA.default_backend() : client
 
     if idx isa Int && device === nothing
@@ -385,7 +388,9 @@ end
 
     sdata, sharding = sharding(client, device, S, dims)
 
-    return ConcretePJRTArray{S,length(dims),length(sdata),typeof(sharding)}(sdata, dims, sharding)
+    return ConcretePJRTArray{S,length(dims),length(sdata),typeof(sharding)}(
+        sdata, dims, sharding
+    )
 end
 
 function Base.similar(
