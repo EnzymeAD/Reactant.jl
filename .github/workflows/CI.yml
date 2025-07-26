@@ -33,6 +33,8 @@ jobs:
     timeout-minutes: 90
     name: Julia ${{ matrix.version }} - ${{ matrix.test_group }} - ${{ matrix.os }} - ${{ matrix.runtime }} - assertions=${{ matrix.assertions }} - ${{ github.event_name }}
     runs-on: ${{ matrix.os }}
+    container:
+      image: ${{ contains(matrix.os, 'linux') && 'ghcr.io/enzymead/reactant-docker-images:main' || '' }}
     strategy:
       fail-fast: false
       matrix:
@@ -41,10 +43,8 @@ jobs:
           - "1.11"
           # - 'nightly'
         os:
-          - ubuntu-24.04
-          # `ubuntu-22.04-arm` is considered more stable than `ubuntu-24.04-arm`:
-          # <https://github.com/orgs/community/discussions/148648#discussioncomment-12099554>.
-          - ubuntu-22.04-arm
+          - linux-x86-n2-32
+          - linux-arm64-c4a-32
           # Disable `macOS-13` until
           # <https://github.com/EnzymeAD/Reactant.jl/issues/867> is resolved.
           # - macOS-13
@@ -59,36 +59,40 @@ jobs:
         assertions:
           - false
         include:
-          - os: ubuntu-24.04
+          - os: linux-x86-n2-32
             version: "1.10"
             assertions: true
             test_group: core
             runtime: "PJRT"
-          - os: ubuntu-24.04
+          - os: linux-x86-n2-32
             version: "1.10"
             assertions: true
             test_group: neural_networks
             runtime: "PJRT"
-          - os: ubuntu-24.04
+          - os: linux-x86-n2-32
             version: "1.10"
             assertions: true
             test_group: integration
             runtime: "PJRT"
-          # - os: ubuntu-24.04
+          # - os: linux-x86-n2-32
           #   libReactant: packaged
           #   version: '1.10'
           #   test_group: core
-          # - os: ubuntu-24.04
+          # - os: linux-x86-n2-32
           #   libReactant: packaged
           #   version: '1.10'
           #   test_group: neural_networks
-          # - os: ubuntu-24.04
+          # - os: linux-x86-n2-32
           #   libReactant: packaged
           #   version: '1.10'
           #   test_group: integration
-    env:
-      TMPDIR: ${{ github.workspace }}/tmp
     steps:
+      - name: Set TMPDIR
+        # We have to use `${GITHUB_WORKSPACE}` instead of `github.workspace` because GitHub
+        # is terrible and the two don't match inside containers:
+        # https://github.com/actions/runner/issues/2058
+        run: |
+          echo "TMPDIR=${GITHUB_WORKSPACE}/tmp" >> ${GITHUB_ENV}
       - uses: actions/checkout@v4
       - name: Create TMPDIR
         run: |
