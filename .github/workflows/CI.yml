@@ -86,9 +86,13 @@ jobs:
         #   #   libReactant: packaged
         #   #   version: '1.10'
         #   #   test_group: integration
-    env:
-      TMPDIR: ${{ github.workspace }}/tmp
     steps:
+      - name: Set TMPDIR
+        # We have to use `${GITHUB_WORKSPACE}` instead of `github.workspace` because GitHub
+        # is terrible and the two don't match inside containers:
+        # https://github.com/actions/runner/issues/2058
+        run: |
+          echo "TMPDIR=${GITHUB_WORKSPACE}/tmp" >> ${GITHUB_ENV}
       - uses: actions/checkout@v4
       - name: Create TMPDIR
         run: |
