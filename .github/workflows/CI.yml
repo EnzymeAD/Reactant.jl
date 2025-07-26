@@ -33,6 +33,8 @@ jobs:
     timeout-minutes: 90
     name: Julia ${{ matrix.version }} - ${{ matrix.test_group }} - ${{ matrix.os }} - ${{ matrix.runtime }} - assertions=${{ matrix.assertions }} - ${{ github.event_name }}
     runs-on: ${{ matrix.os }}
+    container:
+      image: ubuntu:24.04
     strategy:
       fail-fast: false
       matrix:
@@ -41,14 +43,12 @@ jobs:
           - "1.11"
           # - 'nightly'
         os:
-          - ubuntu-24.04
-          # `ubuntu-22.04-arm` is considered more stable than `ubuntu-24.04-arm`:
-          # <https://github.com/orgs/community/discussions/148648#discussioncomment-12099554>.
-          - ubuntu-22.04-arm
+          - linux-x86-n2-32
+          - linux-arm64-c4a-32
           # Disable `macOS-13` until
           # <https://github.com/EnzymeAD/Reactant.jl/issues/867> is resolved.
           # - macOS-13
-          - macOS-latest
+          # - macOS-latest
         test_group:
           - core
           - neural_networks
@@ -58,37 +58,42 @@ jobs:
           - "IFRT"
         assertions:
           - false
-        include:
-          - os: ubuntu-24.04
-            version: "1.10"
-            assertions: true
-            test_group: core
-            runtime: "PJRT"
-          - os: ubuntu-24.04
-            version: "1.10"
-            assertions: true
-            test_group: neural_networks
-            runtime: "PJRT"
-          - os: ubuntu-24.04
-            version: "1.10"
-            assertions: true
-            test_group: integration
-            runtime: "PJRT"
-          # - os: ubuntu-24.04
-          #   libReactant: packaged
-          #   version: '1.10'
-          #   test_group: core
-          # - os: ubuntu-24.04
-          #   libReactant: packaged
-          #   version: '1.10'
-          #   test_group: neural_networks
-          # - os: ubuntu-24.04
-          #   libReactant: packaged
-          #   version: '1.10'
-          #   test_group: integration
+        # include:
+        #   - os: ubuntu-24.04
+        #     version: "1.10"
+        #     assertions: true
+        #     test_group: core
+        #     runtime: "PJRT"
+        #   - os: ubuntu-24.04
+        #     version: "1.10"
+        #     assertions: true
+        #     test_group: neural_networks
+        #     runtime: "PJRT"
+        #   - os: ubuntu-24.04
+        #     version: "1.10"
+        #     assertions: true
+        #     test_group: integration
+        #     runtime: "PJRT"
+        #   # - os: ubuntu-24.04
+        #   #   libReactant: packaged
+        #   #   version: '1.10'
+        #   #   test_group: core
+        #   # - os: ubuntu-24.04
+        #   #   libReactant: packaged
+        #   #   version: '1.10'
+        #   #   test_group: neural_networks
+        #   # - os: ubuntu-24.04
+        #   #   libReactant: packaged
+        #   #   version: '1.10'
+        #   #   test_group: integration
     env:
       TMPDIR: ${{ github.workspace }}/tmp
     steps:
+      - name: Install dependencies
+        run: |
+          apt-get update
+          apt-get install -y ca-certificates
+          apt-get install -y jq
       - uses: actions/checkout@v4
       - name: Create TMPDIR
         run: |
