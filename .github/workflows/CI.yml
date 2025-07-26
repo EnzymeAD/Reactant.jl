@@ -34,7 +34,7 @@ jobs:
     name: Julia ${{ matrix.version }} - ${{ matrix.test_group }} - ${{ matrix.os }} - ${{ matrix.runtime }} - assertions=${{ matrix.assertions }} - ${{ github.event_name }}
     runs-on: ${{ matrix.os }}
     container:
-      image: ubuntu:24.04
+      image: ghcr.io/enzymead/reactant-docker-images:main
     strategy:
       fail-fast: false
       matrix:
@@ -89,11 +89,6 @@ jobs:
     env:
       TMPDIR: ${{ github.workspace }}/tmp
     steps:
-      - name: Install dependencies
-        run: |
-          apt-get update
-          apt-get install -y ca-certificates
-          apt-get install -y jq
       - uses: actions/checkout@v4
       - name: Create TMPDIR
         run: |
