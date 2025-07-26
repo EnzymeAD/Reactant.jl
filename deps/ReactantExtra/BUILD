@@ -1,5 +1,6 @@
 load("@llvm-project//mlir:tblgen.bzl", "gentbl_cc_library", "td_library")
 load("@local_config_rocm//rocm:build_defs.bzl", "if_rocm")
+load("@local_config_cuda//cuda:build_defs.bzl", "if_cuda")
 load("@xla//tools/toolchains/cross_compile/cc:cc_toolchain_config.bzl", "cc_toolchain_config")
 
 # load("//toolchain:yggdrasil.bzl", "ygg_cc_toolchain")
@@ -793,12 +794,7 @@ cc_library(
         "-Werror=return-type",
         "-Werror=unused-result",
         "-Wno-error=stringop-truncation",
-    ] + select({
-        "@xla//xla/tsl:is_cuda_enabled_and_oss": [
-            "-DREACTANT_CUDA=1",
-        ],
-        "//conditions:default": [],
-    }),
+    ] + if_cuda(["-DREACTANT_CUDA=1"]),
     linkopts = select({
         "//conditions:default": [],
         "@bazel_tools//src/conditions:darwin": [
@@ -1048,8 +1044,7 @@ cc_library(
         "@xla//xla/tsl/platform:errors",
         "@xla//xla/service:hlo_proto_cc_impl",
         "@com_google_absl//absl/status:statusor",
-    ] + select({
-        "@xla//xla/tsl:is_cuda_enabled_and_oss": [
+    ] + if_cuda([
             "@jax//jaxlib/cuda:cuda_gpu_kernels",
             "@xla//xla/backends/profiler:profiler_backends",
             "@xla//xla/backends/profiler/gpu:device_tracer",
@@ -1061,10 +1056,7 @@ cc_library(
             "@xla//xla/stream_executor:cuda_platform",
             "@xla//xla/stream_executor:kernel",
             "@xla//xla/stream_executor/cuda:all_runtime",
-        ],
-        "//conditions:default": [
-        ],
-    }) + if_rocm([
+    ]) + if_rocm([
         "@xla//xla/stream_executor:rocm_platform",
         "@xla//xla/service/gpu:amdgpu_compiler",
         "@xla//xla/backends/profiler/gpu:device_tracer",
