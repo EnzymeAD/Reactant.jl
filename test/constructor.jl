@@ -111,7 +111,6 @@ end
     res = @jit selfreturn(rg)
     @test convert(Array, res.data) == [3.14, 1.59]
     @test res.radius == 2.7
-    @show typeof(res)
     @test typeof(res.radius) <: ConcreteRNumber
 
     rg = Reactant.to_rarray(g)
@@ -123,7 +122,6 @@ end
     res = @jit call_selfreturn(rg)
     @test convert(Array, res.data) == [3.14, 1.59]
     @test res.radius == 2.7
-    @show typeof(res)
     @test typeof(res.radius) <: ConcreteRNumber
 end
 
