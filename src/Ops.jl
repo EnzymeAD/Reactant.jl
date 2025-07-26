@@ -224,6 +224,15 @@ function _fill_element_attr(x::Complex)
     ])
 end
 
+@noinline function concatenate(inputs::Vector{TracedRArray{T,N}}, dimension::Int; location=mlir_stacktrace("fill", @__FILE__, @__LINE__)) where {T,N}
+     concat_inputs = Vector{MLIR.IR.Value}(undef, length(inputs))
+     for (i, inp) in enumerate(inputs)
+       @inbounds concat_inputs[i] = inp.mlir_data
+     end
+     res = MLIR.IR.result(MLIR.Dialects.stablehlo.concatenate(concat_inputs; dimension=(dimension-1)), 1)
+     return TracedRArray{T,N}((), res, size(MLIR.IR.type(res)))
+end
+
 @noinline function fill(
     element::T, shape::Vector{Int}; location=mlir_stacktrace("fill", @__FILE__, @__LINE__)
 ) where {T}
