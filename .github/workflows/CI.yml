@@ -34,7 +34,7 @@ jobs:
     name: Julia ${{ matrix.version }} - ${{ matrix.test_group }} - ${{ matrix.os }} - ${{ matrix.runtime }} - assertions=${{ matrix.assertions }} - ${{ github.event_name }}
     runs-on: ${{ matrix.os }}
     container:
-      image: ghcr.io/enzymead/reactant-docker-images:main
+      image: ${{ contains(matrix.os, 'linux') && 'ghcr.io/enzymead/reactant-docker-images:main' || '' }}
     strategy:
       fail-fast: false
       matrix:
@@ -48,7 +48,7 @@ jobs:
           # Disable `macOS-13` until
           # <https://github.com/EnzymeAD/Reactant.jl/issues/867> is resolved.
           # - macOS-13
-          # - macOS-latest
+          - macOS-latest
         test_group:
           - core
           - neural_networks
@@ -58,34 +58,34 @@ jobs:
           - "IFRT"
         assertions:
           - false
-        # include:
-        #   - os: ubuntu-24.04
-        #     version: "1.10"
-        #     assertions: true
-        #     test_group: core
-        #     runtime: "PJRT"
-        #   - os: ubuntu-24.04
-        #     version: "1.10"
-        #     assertions: true
-        #     test_group: neural_networks
-        #     runtime: "PJRT"
-        #   - os: ubuntu-24.04
-        #     version: "1.10"
-        #     assertions: true
-        #     test_group: integration
-        #     runtime: "PJRT"
-        #   # - os: ubuntu-24.04
-        #   #   libReactant: packaged
-        #   #   version: '1.10'
-        #   #   test_group: core
-        #   # - os: ubuntu-24.04
-        #   #   libReactant: packaged
-        #   #   version: '1.10'
-        #   #   test_group: neural_networks
-        #   # - os: ubuntu-24.04
-        #   #   libReactant: packaged
-        #   #   version: '1.10'
-        #   #   test_group: integration
+        include:
+          - os: linux-x86-n2-32
+            version: "1.10"
+            assertions: true
+            test_group: core
+            runtime: "PJRT"
+          - os: linux-x86-n2-32
+            version: "1.10"
+            assertions: true
+            test_group: neural_networks
+            runtime: "PJRT"
+          - os: linux-x86-n2-32
+            version: "1.10"
+            assertions: true
+            test_group: integration
+            runtime: "PJRT"
+          # - os: linux-x86-n2-32
+          #   libReactant: packaged
+          #   version: '1.10'
+          #   test_group: core
+          # - os: linux-x86-n2-32
+          #   libReactant: packaged
+          #   version: '1.10'
+          #   test_group: neural_networks
+          # - os: linux-x86-n2-32
+          #   libReactant: packaged
+          #   version: '1.10'
+          #   test_group: integration
     steps:
       - name: Set TMPDIR
         # We have to use `${GITHUB_WORKSPACE}` instead of `github.workspace` because GitHub
