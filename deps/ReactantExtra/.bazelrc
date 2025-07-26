@@ -2,6 +2,7 @@ build --announce_rc
 
 # TODO: Migrate for https://github.com/bazelbuild/bazel/issues/7260
 common --noincompatible_enable_cc_toolchain_resolution
+common --repo_env USE_HERMETIC_CC_TOOLCHAIN=0
 common --experimental_repo_remote_exec
 common --cxxopt=-std=c++17 --host_cxxopt=-std=c++17
 common --cxxopt=-w --host_cxxopt=-w
