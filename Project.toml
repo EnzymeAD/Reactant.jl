@@ -25,6 +25,7 @@ Reactant_jll = "0192cb87-2b54-54ad-80e0-3be72ad8a3c0"
 ScopedValues = "7e506255-f358-4e82-b7e4-beb19740aa63"
 Scratch = "6c6a2e73-6563-6170-7368-637461726353"
 Sockets = "6462fe0b-24de-5631-8697-dd941f90decc"
+unzip_jll = "88f77b66-78eb-5ed0-bc16-ebba0796830d"
 
 [weakdeps]
 AbstractFFTs = "621f4979-c628-5d54-868e-fcf4e3e8185c"
@@ -102,6 +103,7 @@ Scratch = "1.2"
 Sockets = "1.10"
 SpecialFunctions = "2.4"
 Statistics = "1.10"
+unzip_jll = "6"
 YaoBlocks = "0.13, 0.14"
 julia = "1.10"
 
