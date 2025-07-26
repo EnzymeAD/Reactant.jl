@@ -306,10 +306,10 @@ function LinearAlgebra._diagm(
         end
     end
 
-    scatter_inds = TracedRArray{Int, 2}[]
+    scatter_inds = TracedRArray{Int,2}[]
     concat_inputs = MLIR.IR.Value[]
     for (k, v) in pairs(kv_updated)
-	ind = diagonal_indices(m, n, k, length(v))
+        ind = diagonal_indices(m, n, k, length(v))
         push!(scatter_inds, ind)
         push!(concat_inputs, get_mlir_data(v))
     end
@@ -330,14 +330,14 @@ function diagonal_indices(m::Integer, n::Integer, k::Integer, v::Integer)
     L = min(L, v)
 
     if idx1 == idx2
-      iota = Ops.iota(Int, [L, 2]; iota_dimension=1)
-      op1 = Ops.add(iota, Ops.fill(idx1, (L, 2)))
-      return op1
+        iota = Ops.iota(Int, [L, 2]; iota_dimension=1)
+        op1 = Ops.add(iota, Ops.fill(idx1, (L, 2)))
+        return op1
     else
-      iota = Ops.iota(Int, [L, 1]; iota_dimension=1)
-      op1 = Ops.add(iota, Ops.fill(idx1, (L, 1)))
-      op2 = Ops.add(iota, Ops.fill(idx2, (L, 1)))
-      return Ops.concatenate([op1, op2], dimension=2)
+        iota = Ops.iota(Int, [L, 1]; iota_dimension=1)
+        op1 = Ops.add(iota, Ops.fill(idx1, (L, 1)))
+        op2 = Ops.add(iota, Ops.fill(idx2, (L, 1)))
+        return Ops.concatenate([op1, op2]; dimension=2)
     end
 end
 
