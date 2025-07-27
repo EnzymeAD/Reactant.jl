@@ -337,7 +337,7 @@ function diagonal_indices(m::Integer, n::Integer, k::Integer, v::Integer)
         iota = Ops.iota(Int, [L, 1]; iota_dimension=1)
         op1 = Ops.add(iota, Ops.fill(idx1, (L, 1)))
         op2 = Ops.add(iota, Ops.fill(idx2, (L, 1)))
-        return Ops.concatenate([op1, op2]; dimension=2)
+        return Ops.concatenate([op1, op2], 2)
     end
 end
 
