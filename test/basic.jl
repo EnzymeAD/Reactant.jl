@@ -1433,3 +1433,24 @@ end
         end
     end
 end
+
+zip_iterator(a, b) = mapreduce(splat(*), +, zip(a, b))
+enumerate_iterator(a) = mapreduce(splat(*), +, enumerate(a))
+
+@testset "Base.Iterators" begin
+    @testset "zip" begin
+        N = 10
+        a = range(1.0, 5.0; length=N)
+        x = range(10.0, 15.0; length=N + 2)
+        x_ra = Reactant.to_rarray(x)
+
+        @test @jit(zip_iterator(a, x_ra)) ≈ zip_iterator(a, x)
+    end
+
+    @testset "enumerate" begin
+        x = range(1.0, 5.0; length=10)
+        x_ra = Reactant.to_rarray(x)
+
+        @test @jit(enumerate_iterator(x_ra)) ≈ enumerate_iterator(x)
+    end
+end
