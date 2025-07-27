@@ -1375,8 +1375,9 @@ function cubinFeatures()
     major, ver = divrem(ver, 1000)
     minor, patch = divrem(ver, 10)
     version = VersionNumber(major, minor, patch)
-    # From https://github.com/llvm/llvm-project/blob/106c483a102e1328f11e2b1d9398f4ad2826b59f/clang/lib/Driver/ToolChains/Cuda.cpp#L685
+    # From https://github.com/llvm/llvm-project/blob/b60aed6fbabc291a7afbcb460453f9dcdce76f34/clang/lib/Driver/ToolChains/Cuda.cpp#L686
     cuver_map = Dict([
+        (128, 87),
         (126, 85),
         (125, 85),
         (124, 84),
@@ -1401,7 +1402,7 @@ function cubinFeatures()
         (90, 60),
     ])
     mver = major * 10 + minor
-    if mver > 126
+    if !in(mver, keys(cuver_map))
         return 86
     end
     ptx = cuver_map[mver]
