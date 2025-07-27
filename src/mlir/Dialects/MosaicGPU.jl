@@ -396,8 +396,8 @@ function tcgen05_mma(
     a::Value,
     b::Value,
     accumulate::Value,
-    a_scaled=nothing::Union{Nothing,Value};
-    b_scaled=nothing::Union{Nothing,Value},
+    a_scale=nothing::Union{Nothing,Value};
+    b_scale=nothing::Union{Nothing,Value},
     result_0=nothing::Union{Nothing,IR.Type},
     collective=nothing,
     location=Location(),
@@ -407,16 +407,16 @@ function tcgen05_mma(
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
-    !isnothing(a_scaled) && push!(operands, a_scaled)
-    !isnothing(b_scaled) && push!(operands, b_scaled)
+    !isnothing(a_scale) && push!(operands, a_scale)
+    !isnothing(b_scale) && push!(operands, b_scale)
     push!(attributes, operandsegmentsizes([
         1,
         1,
         1,
         1,
-        if (a_scaled == nothing)
+        if (a_scale == nothing)
             0
-        elseif 1(b_scaled == nothing)
+        elseif 1(b_scale == nothing)
             0
         else
             1
