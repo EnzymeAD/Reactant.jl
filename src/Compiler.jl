@@ -691,7 +691,7 @@ const SUM_TO_CONV = Ref(false)
 const AGGRESSIVE_SUM_TO_CONV = Ref(false)
 const AGGRESSIVE_PROPAGATION = Ref(false)
 const DUS_SLICE_SIMPLIFY = Ref(true)
-const CONCATS_TO_DUS = Ref(false)
+const CONCATS_TO_DUS = Ref(true)
 
 # Optimization passes via transform dialect
 function optimization_passes(
@@ -768,7 +768,6 @@ function optimization_passes(
         "iota_simplify<16>($max_constant_threshold)",
         "broadcast_in_dim_simplify<16>($max_constant_threshold)",
         "convert_concat<1>",
-        "dynamic_update_to_concat<1>",
         "slice_of_dynamic_update<1>",
         "slice_elementwise<1>",
         "dot_reshape_dot<1>",
@@ -1163,7 +1162,15 @@ function optimization_passes(
         )
     end
 
+    if !CONCATS_TO_DUS[]
+      push!(transform_passes_list, "dynamic_update_to_concat<1>")
+    end
+
     lower_transform_passes = copy(transform_passes_list)
+
+    if CONCATS_TO_DUS[]
+      push!(transform_passes_list, "dynamic_update_to_concat<1>")
+    end
 
     if recognize_comms
         append!(
@@ -1184,6 +1191,12 @@ function optimization_passes(
         ],
         ",",
     )
+    if CONCATS_TO_DUS[]
+        transform_passes = transform_passes * ",enzyme-hlo-generate-td{patterns=concat_to_onedim_dus},transform-interpreter,enzyme-hlo-remove-transform"
+        if lower_comms
+           push!(lower_transform_passes, "concat_to_onedim_dus")
+        end
+    end
     func_passes = join(["canonicalize", "cse", "canonicalize", transform_passes], ",")
     if lower_comms
         func_passes =
@@ -1191,12 +1204,6 @@ function optimization_passes(
             ",enzyme-hlo-generate-td{" *
             join(lower_transform_passes, ';') *
             "},transform-interpreter,enzyme-hlo-remove-transform"
-    end
-    if CONCATS_TO_DUS[]
-        push!(
-            transform_passes_list,
-            "enzyme-hlo-generate-td{patterns=concat_to_onedim_dus},transform-interpreter,enzyme-hlo-remove-transform",
-        )
     end
     passes = String[]
     if compile_options.inline
