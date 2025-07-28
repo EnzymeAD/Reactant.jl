@@ -1455,7 +1455,7 @@ end
 
 function __init__()
     if CUDA.functional() && !Reactant.precompiling()
-	cap =  CUDA.capability(CUDA.device())
+        cap = CUDA.capability(CUDA.device())
         Reactant.Compiler.cubinChip[] = "sm_$(cap.major)$(cap.minor)"
     end
     return nothing
