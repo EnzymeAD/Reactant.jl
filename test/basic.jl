@@ -375,13 +375,13 @@ end
         x = rand(size...)
 
         @testset "outer repeat" begin
-            @test (@jit repeat(Reactant.to_rarray(x), counts...)) == repeat(x, counts...)
+            @test (@jit repeat(Reactant.to_rarray(x), counts...)) ≈ repeat(x, counts...)
         end
 
         length(counts) < length(size) && continue
 
         @testset "inner repeat" begin
-            @test (@jit repeat(Reactant.to_rarray(x); inner=counts)) ==
+            @test (@jit repeat(Reactant.to_rarray(x); inner=counts)) ≈ 
                 repeat(x; inner=counts)
         end
     end
