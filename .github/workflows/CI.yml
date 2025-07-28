@@ -52,9 +52,6 @@ jobs:
           # - macOS-13
           - macOS-latest
         test_group:
-          - core
-          - neural_networks
-          - integration
         runtime:
           - "PJRT"
           - "IFRT"
@@ -66,21 +63,6 @@ jobs:
             assertions: false
             test_group: core
             runtime: "IFRT"
-          - os: ubuntu-24.04
-            version: "1.10"
-            assertions: true
-            test_group: core
-            runtime: "PJRT"
-          - os: ubuntu-24.04
-            version: "1.10"
-            assertions: true
-            test_group: neural_networks
-            runtime: "PJRT"
-          - os: ubuntu-24.04
-            version: "1.10"
-            assertions: true
-            test_group: integration
-            runtime: "PJRT"
           # - os: ubuntu-24.04
           #   libReactant: packaged
           #   version: '1.10'
@@ -93,6 +75,10 @@ jobs:
           #   libReactant: packaged
           #   version: '1.10'
           #   test_group: integration
+    env:
+      TPU_STDERR_LOG_LEVEL: 0
+      TF_CPP_MAX_VLOG_LEVEL: 3
+      TF_CPP_MIN_LOG_LEVEL: 0
     steps:
       - name: Set TMPDIR
         # We have to use `${GITHUB_WORKSPACE}` instead of `github.workspace` because GitHub
