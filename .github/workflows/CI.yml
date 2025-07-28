@@ -52,6 +52,7 @@ jobs:
           # - macOS-13
           - macOS-latest
         test_group:
+          - core
         runtime:
           - "PJRT"
           - "IFRT"
