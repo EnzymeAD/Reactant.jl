@@ -419,10 +419,13 @@ end
 end
 
 @testset "Complex runtime: $CT" for CT in (ComplexF32, ComplexF64)
-    a = Reactant.to_rarray(ones(CT, 2))
-    b = Reactant.to_rarray(ones(CT, 2))
-    c = Reactant.compile(+, (a, b))(a, b)
-    @test c == ones(CT, 2) + ones(CT, 2)
+    # complex f64 not supported on tpu
+    if CT == ComplexF32 || !contains(string(Reactant.devices()[1]), "Tpu")
+        a = Reactant.to_rarray(ones(CT, 2))
+        b = Reactant.to_rarray(ones(CT, 2))
+        c = Reactant.compile(+, (a, b))(a, b)
+        @test c == ones(CT, 2) + ones(CT, 2)
+    end
 end
 
 @testset "Scalars" begin
