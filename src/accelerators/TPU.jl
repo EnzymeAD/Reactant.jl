@@ -43,7 +43,7 @@ function download_libtpu_if_needed(path=nothing)
         zip_file_path = joinpath(path, "tpu.zip")
         tmp_dir = joinpath(path, "tmp")
         Downloads.download(
-            "https://storage.googleapis.com/libtpu-nightly-releases/wheels/libtpu-nightly/libtpu_nightly-0.1.dev20250415+nightly-py3-none-manylinux_2_31_x86_64.whl",
+            "https://storage.googleapis.com/libtpu-nightly-releases/wheels/libtpu-nightly/libtpu_nightly-0.1.dev20250727+nightly-py3-none-manylinux_2_31_x86_64.whl",
             zip_file_path,
         )
         run(`$(unzip()) -qq $(zip_file_path) -d $(tmp_dir)`)
