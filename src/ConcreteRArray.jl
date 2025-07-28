@@ -419,7 +419,7 @@ function Base.similar(a::ConcreteIFRTArray{T}, ::Type{S}=T, dims::Dims=size(a)) 
     )
 end
 Base.similar(a::ConcreteIFRTArray, dims::Dims) = similar(a, eltype(a), dims)
-function Base.similar(::Type{ConcreteIFRTArray{T}}, dims) where {T}
+function Base.similar(::Type{ConcreteIFRTArray{T}}, dims::Dims) where {T}
     return ConcreteIFRTArray(similar(Array{T}, dims))
 end
 
