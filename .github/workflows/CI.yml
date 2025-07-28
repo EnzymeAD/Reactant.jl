@@ -34,7 +34,7 @@ jobs:
     name: Julia ${{ matrix.version }} - ${{ matrix.test_group }} - ${{ matrix.os }} - ${{ matrix.runtime }} - assertions=${{ matrix.assertions }} - ${{ github.event_name }}
     runs-on: ${{ matrix.os }}
     container:
-      image: ${{ contains(matrix.os, 'linux') && 'ghcr.io/enzymead/reactant-docker-images:main' || '' }}
+      image: ${{ contains(matrix.os, 'tpu') && 'ghcr.io/enzymead/reactant-docker-images:main' || '' }}
     strategy:
       fail-fast: false
       matrix:
@@ -61,11 +61,11 @@ jobs:
         assertions:
           - false
         include:
-          # - os: linux-x86-ct6e-180-4tpu
-          #   version: "1.11"
-          #   assertions: false
-          #   test_group: core
-          #   runtime: "IFRT"
+          - os: linux-x86-ct6e-180-4tpu
+            version: "1.11"
+            assertions: false
+            test_group: core
+            runtime: "IFRT"
           - os: ubuntu-24.04
             version: "1.10"
             assertions: true
