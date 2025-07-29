@@ -577,6 +577,8 @@ function call_with_reactant_generator(
     @nospecialize
     args = redub_arguments
 
+    @warn args
+
     stub = Core.GeneratedFunctionStub(
         identity, Core.svec(:call_with_reactant, Reactant.REDUB_ARGUMENTS_NAME), Core.svec()
     )
