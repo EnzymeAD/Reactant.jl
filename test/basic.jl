@@ -420,7 +420,7 @@ end
 
 @testset "Complex runtime: $CT" for CT in (ComplexF32, ComplexF64)
     # complex f64 not supported on tpu
-    if CT == ComplexF32 || !contains(string(Reactant.devices()[1]), "tpu")
+    if CT == ComplexF32 || !contains(string(Reactant.devices()[1]), "TPU")
         a = Reactant.to_rarray(ones(CT, 2))
         b = Reactant.to_rarray(ones(CT, 2))
         c = Reactant.compile(+, (a, b))(a, b)
@@ -784,7 +784,7 @@ end
     x = Reactant.to_rarray([1.0, NaN, Inf, -Inf, NaN])
     @test @jit(isfinite.(x)) == [true, false, false, false, false]
 
-    if !contains(string(Reactant.devices()[1]), "tpu")
+    if !contains(string(Reactant.devices()[1]), "TPU")
         x = Reactant.to_rarray([1.0, NaN, Inf, -Inf, NaN] .* im)
         @test @jit(isfinite.(x)) == [true, false, false, false, false]
     end
