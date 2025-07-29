@@ -1,5 +1,6 @@
 load("@llvm-project//mlir:tblgen.bzl", "gentbl_cc_library", "td_library")
 load("@local_config_rocm//rocm:build_defs.bzl", "if_rocm")
+load("@local_config_cuda//cuda:build_defs.bzl", "if_cuda")
 load("@xla//tools/toolchains/cross_compile/cc:cc_toolchain_config.bzl", "cc_toolchain_config")
 
 # load("//toolchain:yggdrasil.bzl", "ygg_cc_toolchain")
@@ -752,6 +753,22 @@ platform(
     ],
 )
 
+platform(
+    name = "win_x86_64",
+    constraint_values = [
+        "@platforms//os:linux",
+        "@platforms//cpu:x86_64",
+    ],
+)
+
+platform(
+    name = "win_aarch64",
+    constraint_values = [
+        "@platforms//os:linux",
+        "@platforms//cpu:aarch64",
+    ],
+)
+
 cc_library(
     name = "ReactantExtraLib",
     srcs = glob(
@@ -777,12 +794,7 @@ cc_library(
         "-Werror=return-type",
         "-Werror=unused-result",
         "-Wno-error=stringop-truncation",
-    ] + select({
-        "@xla//xla/tsl:is_cuda_enabled_and_oss": [
-            "-DREACTANT_CUDA=1",
-        ],
-        "//conditions:default": [],
-    }),
+    ] + if_cuda(["-DREACTANT_CUDA=1"]),
     linkopts = select({
         "//conditions:default": [],
         "@bazel_tools//src/conditions:darwin": [
@@ -795,6 +807,9 @@ cc_library(
             "-Wl,-exported_symbol,_SetModuleLogLevel",
             "-Wl,-exported_symbol,_GetDefaultTargetTriple",
             "-Wl,-exported_symbol,_enzymeActivityAttrGet",
+            "-Wl,-exported_symbol,_UninitPJRTBuffer",
+            "-Wl,-exported_symbol,_CopyToBuffer",
+            "-Wl,-exported_symbol,_CopyFromBuffer",
             "-Wl,-exported_symbol,_MakeCPUClient",
             "-Wl,-exported_symbol,_MakeGPUClient",
             "-Wl,-exported_symbol,_MakeTPUClient",
@@ -1029,23 +1044,19 @@ cc_library(
         "@xla//xla/tsl/platform:errors",
         "@xla//xla/service:hlo_proto_cc_impl",
         "@com_google_absl//absl/status:statusor",
-    ] + select({
-        "@xla//xla/tsl:is_cuda_enabled_and_oss": [
-            "@jax//jaxlib/cuda:cuda_gpu_kernels",
-            "@xla//xla/backends/profiler:profiler_backends",
-            "@xla//xla/backends/profiler/gpu:device_tracer",
-            "@xla//xla/pjrt/c:pjrt_c_api_gpu_internal",
-            "@xla//xla/service/gpu:gpu_transfer_manager",
-            "@xla//xla/service/gpu:nvptx_compiler",
-            "@xla//xla/service/gpu/model:hlo_op_profile_proto_cc_impl",
-            "@xla//xla/service/gpu/model:hlo_op_profiles",
-            "@xla//xla/stream_executor:cuda_platform",
-            "@xla//xla/stream_executor:kernel",
-            "@xla//xla/stream_executor/cuda:all_runtime",
-        ],
-        "//conditions:default": [
-        ],
-    }) + if_rocm([
+    ] + if_cuda([
+        "@jax//jaxlib/cuda:cuda_gpu_kernels",
+        "@xla//xla/backends/profiler:profiler_backends",
+        "@xla//xla/backends/profiler/gpu:device_tracer",
+        "@xla//xla/pjrt/c:pjrt_c_api_gpu_internal",
+        "@xla//xla/service/gpu:gpu_transfer_manager",
+        "@xla//xla/service/gpu:nvptx_compiler",
+        "@xla//xla/service/gpu/model:hlo_op_profile_proto_cc_impl",
+        "@xla//xla/service/gpu/model:hlo_op_profiles",
+        "@xla//xla/stream_executor:cuda_platform",
+        "@xla//xla/stream_executor:kernel",
+        "@xla//xla/stream_executor/cuda:all_runtime",
+    ]) + if_rocm([
         "@xla//xla/stream_executor:rocm_platform",
         "@xla//xla/service/gpu:amdgpu_compiler",
         "@xla//xla/backends/profiler/gpu:device_tracer",

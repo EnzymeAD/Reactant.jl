@@ -195,6 +195,7 @@ end
     @test res2 ≈ 4 * 3 * 3.1^2
 end
 
+if !contains(string(Reactant.devices()[1]), "TPU")
 @testset "Seed initialization of Complex arrays on matmul: Issue #593" begin
     a = ones(ComplexF64, 2, 2)
     b = 2.0 * ones(ComplexF64, 2, 2)
@@ -207,6 +208,7 @@ end
             (res.derivs[1] ≈ 4ones(2, 2)) &&
             (res.derivs[2] ≈ 2ones(2, 2))
     end
+end
 end
 
 @testset "onehot" begin

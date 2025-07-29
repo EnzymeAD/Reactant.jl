@@ -13,7 +13,6 @@ using ..Reactant:
     MissingTracedValue,
     unwrapped_eltype
 using ReactantCore: ReactantCore
-using Functors: fmap
 
 function mlir_type(x::Union{RNumber,RArray})::MLIR.IR.Type
     return MLIR.IR.TensorType(collect(Int, size(x)), MLIR.IR.Type(unwrapped_eltype(x)))
@@ -223,6 +222,21 @@ function _fill_element_attr(x::Complex)
     return MLIR.IR.Attribute([
         MLIR.IR.Attribute(Base.real(x)), MLIR.IR.Attribute(Base.imag(x))
     ])
+end
+
+@noinline function concatenate(
+    inputs::Vector{TracedRArray{T,N}},
+    dimension::Int;
+    location=mlir_stacktrace("fill", @__FILE__, @__LINE__),
+) where {T,N}
+    concat_inputs = Vector{MLIR.IR.Value}(undef, length(inputs))
+    for (i, inp) in enumerate(inputs)
+        @inbounds concat_inputs[i] = inp.mlir_data
+    end
+    res = MLIR.IR.result(
+        MLIR.Dialects.stablehlo.concatenate(concat_inputs; dimension=(dimension - 1)), 1
+    )
+    return TracedRArray{T,N}((), res, size(MLIR.IR.type(res)))
 end
 
 @noinline function fill(
@@ -2376,15 +2390,16 @@ end
         cond.mlir_data; true_branch=tb_region, false_branch=fb_region, result_0=result_types
     )
 
-    corrected_traced_results = fmap(traced_false_results, traced_true_results) do fr, tr
-        if fr isa MissingTracedValue && tr isa MissingTracedValue
-            return fr
-        elseif fr isa MissingTracedValue
-            return tr
-        else
-            return fr
+    corrected_traced_results =
+        map(zip(traced_false_results, traced_true_results)) do (fr, tr)
+            if fr isa MissingTracedValue && tr isa MissingTracedValue
+                return fr
+            elseif fr isa MissingTracedValue
+                return tr
+            else
+                return fr
+            end
         end
-    end
 
     @assert length(all_paths) == length(result_types)
 

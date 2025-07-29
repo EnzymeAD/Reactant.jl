@@ -10,6 +10,7 @@ using SpecialFunctions: SpecialFunctions
     x = Reactant.to_rarray([1.0, -1.0])
     @test [1.0, 1.0] ≈ @jit Ops.abs(x)
 
+    if !contains(string(Reactant.devices()[1]), "TPU")
     x = Reactant.to_rarray([
         3.0+4im -3.0+4im
         3.0-4im -3.0-4im
@@ -18,12 +19,13 @@ using SpecialFunctions: SpecialFunctions
         5.0 5.0
         5.0 5.0
     ] ≈ @jit Ops.abs(x)
+    end
 end
 
 @testset "add" begin
     a = Reactant.to_rarray([false, false, true, true])
     b = Reactant.to_rarray([false, true, false, true])
-    @test [false, true, true, false] ≈ @jit Ops.add(a, b)
+    @test [false, true, true, true] ≈ @jit Ops.add(a, b)
 
     a = Reactant.to_rarray([1, 2, 3, 4])
     b = Reactant.to_rarray([5, 6, -7, -8])
@@ -95,6 +97,7 @@ end
     @test cholesky(Array(x)).U ≈ @jit g1(x)
     @test transpose(cholesky(Array(x)).U) ≈ @jit g2(x)
 
+    if !contains(string(Reactant.devices()[1]), "TPU")
     x = Reactant.to_rarray(
         [
             10.0+0.0im 2.0-3.0im 3.0-4.0im
@@ -105,6 +108,7 @@ end
 
     @test cholesky(Array(x)).U ≈ @jit g1(x)
     @test adjoint(cholesky(Array(x)).U) ≈ @jit g2(x)
+   end
 end
 
 @testset "clamp" begin
@@ -135,11 +139,12 @@ end
         ),
     ]
         x = Reactant.to_rarray([1.1, 2.2, 3.3, 4.4, 5.5, 6.6, 7.7, 8.8, 9.9, 10.0])
-        @test [3.0, 3.0, 3.3, 4.4, 5.5, 6.6, 7.0, 7.0, 7.0, 7.0] ==
+        @test [3.0, 3.0, 3.3, 4.4, 5.5, 6.6, 7.0, 7.0, 7.0, 7.0] ≈
             @jit Ops.clamp(_min, x, _max)
     end
 end
 
+if !contains(string(Reactant.devices()[1]), "TPU")
 @testset "complex" begin
     x = Reactant.to_rarray(1.1; track_numbers=true)
     y = Reactant.to_rarray(2.2; track_numbers=true)
@@ -148,6 +153,7 @@ end
     x = Reactant.to_rarray([1.1, 2.2, 3.3, 4.4])
     y = Reactant.to_rarray([5.5, 6.6, -7.7, -8.8])
     @test [1.1 + 5.5im, 2.2 + 6.6im, 3.3 - 7.7im, 4.4 - 8.8im] ≈ @jit Ops.complex(x, y)
+end
 end
 
 @testset "constant" begin

@@ -1455,8 +1455,8 @@ end
 
 function __init__()
     if CUDA.functional() && !Reactant.precompiling()
-        target = CUDA._compiler_config(CUDA.device()).target
-        Reactant.Compiler.cubinChip[] = "sm_$(target.cap.major)$(target.cap.minor)"
+        cap = CUDA.capability(CUDA.device())
+        Reactant.Compiler.cubinChip[] = "sm_$(cap.major)$(cap.minor)"
     end
     return nothing
 end
