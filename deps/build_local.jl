@@ -135,9 +135,7 @@ push!(build_cmd_list, "--repo_env=HERMETIC_PYTHON_VERSION=$(hermetic_python_vers
 if !isempty(gcc_host_compiler_path)
     push!(build_cmd_list, "--repo_env=GCC_HOST_COMPILER_PATH=$(gcc_host_compiler_path)")
 end
-if !isempty(cc)
-    push!(build_cmd_list, "--repo_env=CC=$(cc)")
-end
+push!(build_cmd_list, "--repo_env=CC=$(cc)")
 push!(build_cmd_list, "--check_visibility=false")
 push!(build_cmd_list, "--verbose_failures")
 push!(build_cmd_list, "--jobs=$(parsed_args["jobs"])")
