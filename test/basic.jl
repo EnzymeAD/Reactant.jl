@@ -381,7 +381,7 @@ end
         length(counts) < length(size) && continue
 
         @testset "inner repeat" begin
-            @test (@jit repeat(Reactant.to_rarray(x); inner=counts)) ≈ 
+            @test (@jit repeat(Reactant.to_rarray(x); inner=counts)) ≈
                 repeat(x; inner=counts)
         end
     end
