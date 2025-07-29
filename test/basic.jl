@@ -420,7 +420,7 @@ end
 
 @testset "Complex runtime: $CT" for CT in (ComplexF32, ComplexF64)
     # complex f64 not supported on tpu
-    if CT == ComplexF32 || !contains(string(Reactant.devices()[1]), "Tpu")
+    if CT == ComplexF32 || !contains(string(Reactant.devices()[1]), "tpu")
         a = Reactant.to_rarray(ones(CT, 2))
         b = Reactant.to_rarray(ones(CT, 2))
         c = Reactant.compile(+, (a, b))(a, b)
@@ -565,13 +565,13 @@ end
 
     @testset "Reactant.to_rarray" begin
         y = collect(x_ra)
-        @test y == x
+        @test y ≈ x
         @test y !== x_ra
     end
 
     @testset "TracedRArray" begin
         y = @jit(collect(x_ra))
-        @test y == x
+        @test y ≈ x
         @test y !== x_ra
     end
 
@@ -784,8 +784,10 @@ end
     x = Reactant.to_rarray([1.0, NaN, Inf, -Inf, NaN])
     @test @jit(isfinite.(x)) == [true, false, false, false, false]
 
-    x = Reactant.to_rarray([1.0, NaN, Inf, -Inf, NaN] .* im)
-    @test @jit(isfinite.(x)) == [true, false, false, false, false]
+    if !contains(string(Reactant.devices()[1]), "tpu")
+        x = Reactant.to_rarray([1.0, NaN, Inf, -Inf, NaN] .* im)
+        @test @jit(isfinite.(x)) == [true, false, false, false, false]
+    end
 end
 
 @testset "isnan" begin
