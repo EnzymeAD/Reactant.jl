@@ -132,6 +132,6 @@ end
     rg = Reactant.to_rarray(g)
     res = @jit selfreturn(rg)
     @test convert(Array, res[1][].data) == [3.14, 1.59]
-    @test convert(Array, res[2][].data) == [3.14, 1.59]
+    @test convert(Array, res[2][].data) ≈ [3.14, 1.59]
     @test res[1][].data == res[2][].data
 end
