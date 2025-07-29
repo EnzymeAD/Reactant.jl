@@ -22,26 +22,68 @@ mutable struct ProbProgTrace
     end
 end
 
-const Constraint = Dict{Symbol,Any}
+struct Address
+    path::Vector{Symbol}
+
+    Address(path::Vector{Symbol}) = new(path)
+end
+Address(sym::Symbol) = Address([sym])
+Address(syms::Symbol...) = Address([syms...])
+
+Base.:(==)(a::Address, b::Address) = a.path == b.path
+Base.hash(a::Address, h::UInt) = hash(a.path, h)
+
+mutable struct Constraint <: AbstractDict{Address,Any}
+    dict::Dict{Address,Any}
+
+    function Constraint(pairs::Pair...)
+        dict = Dict{Address,Any}()
+        for pair in pairs
+            symbols = Symbol[]
+            current = pair
+            while isa(current, Pair) && isa(current.first, Symbol)
+                push!(symbols, current.first)
+                current = current.second
+            end
+            dict[Address(symbols...)] = current
+        end
+        return new(dict)
+    end
+
+    Constraint() = new(Dict{Address,Any}())
+    Constraint(d::Dict{Address,Any}) = new(d)
+end
+
+Base.getindex(c::Constraint, k::Address) = c.dict[k]
+Base.setindex!(c::Constraint, v, k::Address) = (c.dict[k] = v)
+Base.delete!(c::Constraint, k::Address) = delete!(c.dict, k)
+Base.keys(c::Constraint) = keys(c.dict)
+Base.values(c::Constraint) = values(c.dict)
+Base.iterate(c::Constraint) = iterate(c.dict)
+Base.iterate(c::Constraint, state) = iterate(c.dict, state)
+Base.length(c::Constraint) = length(c.dict)
+Base.isempty(c::Constraint) = isempty(c.dict)
+Base.haskey(c::Constraint, k::Address) = haskey(c.dict, k)
+Base.get(c::Constraint, k::Address, default) = get(c.dict, k, default)
+
 const Selection = Set{Symbol}
 const CompiledFnCache = Dict{Tuple{Type,Set{Symbol}},Any}
 
-const _trace_ref_lock = ReentrantLock()
-const _trace_refs = Vector{Any}()
+const _probprog_ref_lock = ReentrantLock()
+const _probprog_refs = IdDict()
 
-function _keepalive!(tr::ProbProgTrace)
-    lock(_trace_ref_lock)
+function _keepalive!(tr::Any)
+    lock(_probprog_ref_lock)
     try
-        push!(_trace_refs, tr)
+        _probprog_refs[tr] = tr
     finally
-        unlock(_trace_ref_lock)
+        unlock(_probprog_ref_lock)
     end
     return tr
 end
 
 get_choices(trace::ProbProgTrace) = trace.choices
 select(syms::Symbol...) = Set(syms)
-choicemap() = Constraint()
 
 function with_compiled_cache(f)
     cache = CompiledFnCache()

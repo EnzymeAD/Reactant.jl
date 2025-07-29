@@ -19,7 +19,7 @@ include("Modeling.jl")
 include("Inference.jl")
 include("Display.jl")
 
-export ProbProgTrace, Constraint, Selection, CompiledFnCache
+export ProbProgTrace, Constraint, Selection, CompiledFnCache, Address
 export get_choices, select, choicemap, with_compiled_cache
 
 export sample, call, simulate, generate

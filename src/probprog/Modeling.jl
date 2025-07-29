@@ -349,15 +349,16 @@ function generate(
     rng::AbstractRNG,
     f::Function,
     args::Vararg{Any,Nargs};
-    constraint::Constraint=Dict{Symbol,Any}(),
+    constraint::Constraint=Constraint(),
 ) where {Nargs}
     trace = nothing
 
     constraint_ptr = ConcreteRNumber(reinterpret(UInt64, pointer_from_objref(constraint)))
-    constrained_symbols = Set(keys(constraint))
+
+    constrained_addresses = _extract_addresses(constraint)
 
     function wrapper_fn(rng, constraint_ptr, args...)
-        return generate_internal(rng, f, args...; constraint_ptr, constrained_symbols)
+        return generate_internal(rng, f, args...; constraint_ptr, constrained_addresses)
     end
 
     compiled_fn = @compile optimize = :probprog wrapper_fn(rng, constraint_ptr, args...)
@@ -378,12 +379,18 @@ function generate(
     return trace, trace.weight
 end
 
+function _extract_addresses(constraint::Constraint)
+    addresses = Set(keys(constraint))
+
+    return addresses
+end
+
 function generate_internal(
     rng::AbstractRNG,
     f::Function,
     args::Vararg{Any,Nargs};
     constraint_ptr::TracedRNumber,
-    constrained_symbols::Set{Symbol},
+    constrained_addresses::Set{Address},
 ) where {Nargs}
     argprefix::Symbol = gensym("generatearg")
     resprefix::Symbol = gensym("generateresult")
@@ -441,15 +448,19 @@ function generate_internal(
         1,
     )
 
-    constrained_symbols_attr = MLIR.IR.Attribute[]
-    for sym in constrained_symbols
-        addr = reinterpret(UInt64, pointer_from_objref(sym))
-        push!(
-            constrained_symbols_attr,
-            @ccall MLIR.API.mlir_c.enzymeSymbolAttrGet(
-                MLIR.IR.context()::MLIR.API.MlirContext, addr::UInt64
-            )::MLIR.IR.Attribute
-        )
+    constrained_addresses_attr = MLIR.IR.Attribute[]
+    for address in constrained_addresses
+        address_attr = MLIR.IR.Attribute[]
+        for sym in address.path
+            sym_addr = reinterpret(UInt64, pointer_from_objref(sym))
+            push!(
+                address_attr,
+                @ccall MLIR.API.mlir_c.enzymeSymbolAttrGet(
+                    MLIR.IR.context()::MLIR.API.MlirContext, sym_addr::UInt64
+                )::MLIR.IR.Attribute
+            )
+        end
+        push!(constrained_addresses_attr, MLIR.IR.Attribute(address_attr))
     end
 
     trace_ty = @ccall MLIR.API.mlir_c.enzymeTraceTypeGet(
@@ -464,7 +475,7 @@ function generate_internal(
         weight=weight_ty,
         outputs=out_tys,
         fn=fn_attr,
-        constrained_symbols=MLIR.IR.Attribute(constrained_symbols_attr),
+        constrained_addresses=MLIR.IR.Attribute(constrained_addresses_attr),
     )
 
     for (i, res) in enumerate(linear_results)

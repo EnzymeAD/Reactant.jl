@@ -157,7 +157,14 @@ function getSampleFromConstraint(
     shape_ptr_array = unsafe_wrap(Array, shape_ptr_array, num_samples)
     sample_ptr_array = unsafe_wrap(Array, sample_ptr_array, num_samples)
 
-    tostore = get(constraint, symbol, nothing)
+    tostore = get(constraint, Address(symbol), nothing)
+
+    if tostore === nothing
+        @ccall printf(
+            "No constraint found for symbol: %s\n"::Cstring, string(symbol)::Cstring
+        )::Cvoid
+        return nothing
+    end
 
     for i in 1:num_samples
         ndims = ndims_array[i]
@@ -228,6 +235,37 @@ function getSampleFromConstraint(
     return nothing
 end
 
+function getSubconstraint(
+    constraint_ptr_ptr::Ptr{Ptr{Any}},
+    symbol_ptr_ptr::Ptr{Ptr{Any}},
+    subconstraint_ptr_ptr::Ptr{Ptr{Any}},
+)
+    constraint = unsafe_pointer_to_objref(unsafe_load(constraint_ptr_ptr))::Constraint
+    symbol = unsafe_pointer_to_objref(unsafe_load(symbol_ptr_ptr))::Symbol
+
+    subconstraint = Constraint()
+
+    for (key, value) in constraint
+        if key.path[1] == symbol
+            @assert isa(key, Address) "Expected Address type for constraint key"
+            @assert length(key.path) > 1 "Expected composite address with length > 1"
+            tail_address = Address(key.path[2:end])
+            subconstraint[tail_address] = value
+        end
+    end
+
+    if isempty(subconstraint)
+        @ccall printf(
+            "No subconstraint found for symbol: %s\n"::Cstring, string(symbol)::Cstring
+        )::Cvoid
+        return nothing
+    end
+
+    _keepalive!(subconstraint)
+    unsafe_store!(subconstraint_ptr_ptr, pointer_from_objref(subconstraint))
+    return nothing
+end
+
 function __init__()
     init_trace_ptr = @cfunction(initTrace, Cvoid, (Ptr{Ptr{Any}},))
     @ccall MLIR.API.mlir_c.EnzymeJaXMapSymbol(
@@ -295,6 +333,13 @@ function __init__()
     @ccall MLIR.API.mlir_c.EnzymeJaXMapSymbol(
         :enzyme_probprog_get_sample_from_constraint::Cstring,
         get_sample_from_constraint_ptr::Ptr{Cvoid},
+    )::Cvoid
+
+    get_subconstraint_ptr = @cfunction(
+        getSubconstraint, Cvoid, (Ptr{Ptr{Any}}, Ptr{Ptr{Any}}, Ptr{Ptr{Any}})
+    )
+    @ccall MLIR.API.mlir_c.EnzymeJaXMapSymbol(
+        :enzyme_probprog_get_subconstraint::Cstring, get_subconstraint_ptr::Ptr{Cvoid}
     )::Cvoid
 
     return nothing
