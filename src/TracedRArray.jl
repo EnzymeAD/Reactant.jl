@@ -541,6 +541,12 @@ function __default_init(::Type{T}, op::F) where {T,F}
 end
 
 function overloaded_mapreduce(
+    @nospecialize(f), @nospecialize(op), @nospecialize(A); dims=:, init=nothing
+)
+    return overloaded_mapreduce(identity, op, unwrapped_broadcast(f, A); dims, init)
+end
+
+function overloaded_mapreduce(
     @nospecialize(f),
     @nospecialize(op),
     @nospecialize(A::AnyTracedRArray{T,N});
@@ -1424,6 +1430,22 @@ function Base.circshift!(
 
     copyto!(dest, src)
     return dest
+end
+
+struct BroadcastIterator{F}
+    f::F
+end
+
+(fn::BroadcastIterator)(args...) = fn.f((args...,))
+
+function unwrapped_broadcast(f::F, x::Base.Iterators.Zip) where {F}
+    min_length = Base.inferencebarrier(minimum)(length, x.is)
+    itrs = [length(itr) > min_length ? itr[1:min_length] : itr for itr in x.is]
+    return (BroadcastIterator(f)).(itrs...)
+end
+
+function unwrapped_broadcast(f::F, x::Base.Iterators.Enumerate) where {F}
+    return (BroadcastIterator(f)).(1:length(x.itr), x.itr)
 end
 
 end

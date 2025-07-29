@@ -551,7 +551,6 @@ function GPUCompiler.ci_cache_populate(interp::Reactant.ReactantInter, cache::CC
     @invoke GPUCompiler.ci_cache_populate(interp::CC.AbstractInterpreter, cache, mi, min_world, max_world)
 end
 
-
 # Generator function which ensures that all calls to the function are executed within the ReactantInterpreter
 # In particular this entails two pieces:
 #   1) We enforce the use of the ReactantInterpreter method table when generating the original methodinstance
@@ -613,8 +612,7 @@ function call_with_reactant_generator(
     mm = meta_.compiled[job.source]
     @warn typeof(mm)
     code_instance = mm.ci
-
-
+    
     #CodeInfo placehold
     code_info = begin
         ir = CC.IRCode()
@@ -702,7 +700,6 @@ function call_with_reactant_generator(
             },
         )
     end
-
 
     push_inst!(Expr(
         :call,

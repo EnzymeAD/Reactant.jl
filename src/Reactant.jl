@@ -158,15 +158,17 @@ include("TracedRArray.jl")
 
 include("ConcreteRArray.jl")
 
-use_overlayed_version(iter) = any(use_overlayed_version, iter)
-
+use_overlayed_version(x) = false
+use_overlayed_version(x::Base.Iterators.Zip) = any(use_overlayed_version, x.is)
+use_overlayed_version(x::Base.Iterators.Enumerate) = use_overlayed_version(x.itr)
+use_overlayed_version(iter::Tuple) = any(use_overlayed_version, iter)
+use_overlayed_version(iter::NamedTuple) = any(use_overlayed_version, values(iter))
 use_overlayed_version(::TracedRArray) = true
 use_overlayed_version(::TracedRNumber) = true
 use_overlayed_version(::Number) = false
 use_overlayed_version(::MissingTracedValue) = true
 use_overlayed_version(::AbstractArray{<:TracedRNumber}) = true
 use_overlayed_version(rng::ReactantRNG) = use_overlayed_version(rng.seed)
-
 function use_overlayed_version(x::AbstractArray)
     a = ancestor(x)
     a === x && return false

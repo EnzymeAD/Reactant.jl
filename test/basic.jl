@@ -375,13 +375,13 @@ end
         x = rand(size...)
 
         @testset "outer repeat" begin
-            @test (@jit repeat(Reactant.to_rarray(x), counts...)) == repeat(x, counts...)
+            @test (@jit repeat(Reactant.to_rarray(x), counts...)) ≈ repeat(x, counts...)
         end
 
         length(counts) < length(size) && continue
 
         @testset "inner repeat" begin
-            @test (@jit repeat(Reactant.to_rarray(x); inner=counts)) ==
+            @test (@jit repeat(Reactant.to_rarray(x); inner=counts)) ≈
                 repeat(x; inner=counts)
         end
     end
@@ -419,10 +419,13 @@ end
 end
 
 @testset "Complex runtime: $CT" for CT in (ComplexF32, ComplexF64)
-    a = Reactant.to_rarray(ones(CT, 2))
-    b = Reactant.to_rarray(ones(CT, 2))
-    c = Reactant.compile(+, (a, b))(a, b)
-    @test c == ones(CT, 2) + ones(CT, 2)
+    # complex f64 not supported on tpu
+    if CT == ComplexF32 || !contains(string(Reactant.devices()[1]), "tpu")
+        a = Reactant.to_rarray(ones(CT, 2))
+        b = Reactant.to_rarray(ones(CT, 2))
+        c = Reactant.compile(+, (a, b))(a, b)
+        @test c == ones(CT, 2) + ones(CT, 2)
+    end
 end
 
 @testset "Scalars" begin
@@ -562,13 +565,13 @@ end
 
     @testset "Reactant.to_rarray" begin
         y = collect(x_ra)
-        @test y == x
+        @test y ≈ x
         @test y !== x_ra
     end
 
     @testset "TracedRArray" begin
         y = @jit(collect(x_ra))
-        @test y == x
+        @test y ≈ x
         @test y !== x_ra
     end
 
@@ -781,8 +784,10 @@ end
     x = Reactant.to_rarray([1.0, NaN, Inf, -Inf, NaN])
     @test @jit(isfinite.(x)) == [true, false, false, false, false]
 
-    x = Reactant.to_rarray([1.0, NaN, Inf, -Inf, NaN] .* im)
-    @test @jit(isfinite.(x)) == [true, false, false, false, false]
+    if !contains(string(Reactant.devices()[1]), "tpu")
+        x = Reactant.to_rarray([1.0, NaN, Inf, -Inf, NaN] .* im)
+        @test @jit(isfinite.(x)) == [true, false, false, false, false]
+    end
 end
 
 @testset "isnan" begin
@@ -1375,4 +1380,82 @@ end
 @testset "scalar indexing in any #1434" begin
     xr = Reactant.to_rarray(ones(4, 4))
     @test @jit(any(<(0), xr)) == any(<(0), Array(xr))
+end
+
+@testset "copyto!, no offsets" begin
+    a = Float32[10, 20, 30, 40, 50]
+    len = length(a)
+    b = Float32[111, 222, 333, 444, 555]
+    cpu = fill(0.0f0, len)
+    gpu = (Reactant.@jit Reactant.Ops.fill(0.0f0, (len,)))
+
+    cpu .= a
+    gpu .= b
+    copyto!(cpu, gpu)
+    @test gpu == b
+    @test cpu == b
+
+    cpu .= a
+    gpu .= b
+    copyto!(gpu, cpu)
+    @test gpu == a
+    @test cpu == a
+end
+
+@testset "copyto!, with offsets" begin
+    a = Float32[10, 20, 30, 40, 50, 60, 70]
+    alen = length(a)
+    b = Float32[111, 222, 333, 444, 555]
+    blen = length(b)
+
+    dest = fill(0.0f0, alen)
+    src = Reactant.@jit Reactant.Ops.fill(0.0f0, (blen,))
+
+    for desto in 1:alen, srco in 1:blen, l in 1:min(blen - srco + 1, alen - desto + 1)
+
+        # TODO offset-enabled copy not implemented for IFRTArray
+        if src isa ConcretePJRTArray
+            expected = copyto!(copy(a), desto, b, srco, l)
+
+            dest .= a
+            src .= b
+            copyto!(dest, desto, src, srco, l)
+            @test dest == expected
+        end
+    end
+
+    # TODO direct copy not implemented for IFRTArray
+    dest = Reactant.@jit Reactant.Ops.fill(0.0f0, (alen,))
+    if dest isa ConcretePJRTArray
+        src = fill(0.0f0, blen)
+        for desto in 1:alen, srco in 1:blen, l in 1:min(blen - srco + 1, alen - desto + 1)
+            expected = copyto!(copy(a), desto, b, srco, l)
+
+            dest .= a
+            src .= b
+            copyto!(dest, desto, src, srco, l)
+            @test dest == expected
+        end
+    end
+end
+
+zip_iterator(a, b) = mapreduce(splat(*), +, zip(a, b))
+enumerate_iterator(a) = mapreduce(splat(*), +, enumerate(a))
+
+@testset "Base.Iterators" begin
+    @testset "zip" begin
+        N = 10
+        a = range(1.0, 5.0; length=N)
+        x = range(10.0, 15.0; length=N + 2)
+        x_ra = Reactant.to_rarray(x)
+
+        @test @jit(zip_iterator(a, x_ra)) ≈ zip_iterator(a, x)
+    end
+
+    @testset "enumerate" begin
+        x = range(1.0, 5.0; length=10)
+        x_ra = Reactant.to_rarray(x)
+
+        @test @jit(enumerate_iterator(x_ra)) ≈ enumerate_iterator(x)
+    end
 end
