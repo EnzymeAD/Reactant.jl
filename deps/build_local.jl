@@ -147,6 +147,7 @@ push!(build_cmd_list, "--verbose_failures")
 push!(build_cmd_list, "--jobs=$(parsed_args["jobs"])")
 push!(build_cmd_list, "--experimental_ui_max_stdouterr_bytes=-1")
 push!(build_cmd_list, "--sandbox_debug")
+
 for opt in parsed_args["copt"]
     push!(build_cmd_list, "--copt=$(opt)")
 end
@@ -175,6 +176,7 @@ else
     # Assume the compiler is clang if not GCC. `using_clang` is an option
     # introduced by Enzyme-JAX.
     push!(build_cmd_list, "--define=using_clang=true")
+    push!(build_cmd_list, "--copt=\"-Wno-error=unused-command-line-argument\"")
 end
 push!(build_cmd_list, "--color=$(parsed_args["color"])")
 push!(build_cmd_list, ":libReactantExtra.so")
