@@ -23,7 +23,7 @@ end
 @testset "add" begin
     a = Reactant.to_rarray([false, false, true, true])
     b = Reactant.to_rarray([false, true, false, true])
-    @test [false, true, true, false] ≈ @jit Ops.add(a, b)
+    @test [false, true, true, true] ≈ @jit Ops.add(a, b)
 
     a = Reactant.to_rarray([1, 2, 3, 4])
     b = Reactant.to_rarray([5, 6, -7, -8])

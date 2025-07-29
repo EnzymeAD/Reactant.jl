@@ -3,7 +3,7 @@
 # Julia and Reactant semantics should be considered on the higher abstractions that use these ops.
 module Ops
 using ..MLIR: MLIR
-using ..MLIR.Dialects: stablehlo, chlo, enzyme
+using ..MLIR.Dialects: stablehlo, chlo, enzyme, enzymexla
 using ..Reactant:
     Reactant,
     TracedRArray,
@@ -13,7 +13,6 @@ using ..Reactant:
     MissingTracedValue,
     unwrapped_eltype
 using ReactantCore: ReactantCore
-using Functors: fmap
 
 function mlir_type(x::Union{RNumber,RArray})::MLIR.IR.Type
     return MLIR.IR.TensorType(collect(Int, size(x)), MLIR.IR.Type(unwrapped_eltype(x)))
@@ -223,6 +222,21 @@ function _fill_element_attr(x::Complex)
     return MLIR.IR.Attribute([
         MLIR.IR.Attribute(Base.real(x)), MLIR.IR.Attribute(Base.imag(x))
     ])
+end
+
+@noinline function concatenate(
+    inputs::Vector{TracedRArray{T,N}},
+    dimension::Int;
+    location=mlir_stacktrace("fill", @__FILE__, @__LINE__),
+) where {T,N}
+    concat_inputs = Vector{MLIR.IR.Value}(undef, length(inputs))
+    for (i, inp) in enumerate(inputs)
+        @inbounds concat_inputs[i] = inp.mlir_data
+    end
+    res = MLIR.IR.result(
+        MLIR.Dialects.stablehlo.concatenate(concat_inputs; dimension=(dimension - 1)), 1
+    )
+    return TracedRArray{T,N}((), res, size(MLIR.IR.type(res)))
 end
 
 @noinline function fill(
@@ -2376,15 +2390,16 @@ end
         cond.mlir_data; true_branch=tb_region, false_branch=fb_region, result_0=result_types
     )
 
-    corrected_traced_results = fmap(traced_false_results, traced_true_results) do fr, tr
-        if fr isa MissingTracedValue && tr isa MissingTracedValue
-            return fr
-        elseif fr isa MissingTracedValue
-            return tr
-        else
-            return fr
+    corrected_traced_results =
+        map(zip(traced_false_results, traced_true_results)) do (fr, tr)
+            if fr isa MissingTracedValue && tr isa MissingTracedValue
+                return fr
+            elseif fr isa MissingTracedValue
+                return tr
+            else
+                return fr
+            end
         end
-    end
 
     @assert length(all_paths) == length(result_types)
 
@@ -3003,7 +3018,7 @@ Compute the row maximum pivoted LU factorization of `x` and return the factors `
     permutation_shape = vcat(batch_shape, size(x, ndims(x) - 1))
     info_shape = batch_shape
 
-    op = MLIR.Dialects.enzymexla.linalg_lu(
+    op = enzymexla.linalg_lu(
         x.mlir_data;
         output=MLIR.IR.TensorType(output_shape, MLIR.IR.Type(unwrapped_eltype(T))),
         pivots=MLIR.IR.TensorType(pivots_shape, MLIR.IR.Type(pT)),
@@ -3208,6 +3223,75 @@ end
     else
         return TracedRNumber{unwrapped_eltype(input)}((), res)
     end
+end
+
+@noinline function wrap(
+    input::TracedRArray{T,N},
+    lhs::Integer,
+    rhs::Integer;
+    dimension::Int,
+    location=mlir_stacktrace("wrap", @__FILE__, @__LINE__),
+) where {T,N}
+    @assert 1 ≤ dimension ≤ N "dimension must be between 1 and $(N) (got $(dimension))"
+    @assert 0 ≤ lhs ≤ size(input, dimension) "lhs must be between 0 and \
+                                              $(size(input, dimension)) (got $(lhs))"
+    @assert 0 ≤ rhs ≤ size(input, dimension) "rhs must be between 0 and \
+                                              $(size(input, dimension)) (got $(rhs))"
+    return TracedRArray{T,N}(
+        (),
+        MLIR.IR.result(
+            enzymexla.wrap(input.mlir_data; lhs, rhs, dimension=dimension - 1, location), 1
+        ),
+        size(input),
+    )
+end
+
+@noinline function extend(
+    input::TracedRArray{T,N},
+    lhs::Integer,
+    rhs::Integer;
+    dimension::Int,
+    location=mlir_stacktrace("extend", @__FILE__, @__LINE__),
+) where {T,N}
+    @assert 1 ≤ dimension ≤ N "dimension must be between 1 and $(N) (got $(dimension))"
+    @assert 0 ≤ lhs ≤ size(input, dimension) "lhs must be between 0 and \
+                                              $(size(input, dimension)) (got $(lhs))"
+    @assert 0 ≤ rhs ≤ size(input, dimension) "rhs must be between 0 and \
+                                              $(size(input, dimension)) (got $(rhs))"
+    sz = collect(Int64, size(input))
+    sz[dimension] = sz[dimension] + lhs + rhs
+    return TracedRArray{T,N}(
+        (),
+        MLIR.IR.result(
+            enzymexla.extend(input.mlir_data; lhs, rhs, dimension=dimension - 1, location),
+            1,
+        ),
+        sz,
+    )
+end
+
+@noinline function rotate(
+    input::TracedRArray{T,N},
+    amount::Integer;
+    dimension::Int,
+    location=mlir_stacktrace("rotate", @__FILE__, @__LINE__),
+) where {T,N}
+    @assert 1 ≤ dimension ≤ N "dimension must be between 1 and $(N) (got $(dimension))"
+    @assert 0 ≤ amount ≤ size(input, dimension) "amount must be between 0 and \
+                                                 $(size(input, dimension)) (got $(amount))"
+    return TracedRArray{T,N}(
+        (),
+        MLIR.IR.result(
+            enzymexla.rotate(
+                input.mlir_data;
+                amount=Int32(amount),
+                dimension=Int32(dimension - 1),
+                location,
+            ),
+            1,
+        ),
+        size(input),
+    )
 end
 
 end # module Ops

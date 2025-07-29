@@ -1929,6 +1929,66 @@ function return_(operands::Vector{Value}; location=Location())
 end
 
 """
+`rotate`
+
+The \"rotate\" op moves values across lanes in a subgroup (a.k.a., local
+invocations) within the same subgroup. The `width` argument specifies the
+number of lanes that participate in the rotation, and must be uniform across
+all participating lanes. Further, the first `width` lanes of the subgroup
+must be active.
+
+`width` must be a power of two, and `offset` must be in the range
+`[0, width)`.
+
+Return the `rotateResult` of the invocation whose id within the group is
+calculated as follows:
+
+```mlir
+Invocation ID = ((LaneId + offset) & (width - 1)) + (LaneId & ~(width - 1))
+```
+
+Returns the `rotateResult` and `true` if the current lane id is smaller than
+`width`, and poison value and `false` otherwise.
+
+example:
+
+```mlir
+%offset = arith.constant 1 : i32
+%width = arith.constant 16 : i32
+%1, %2 = gpu.rotate %0, %offset, %width : f32
+```
+
+For lane `k`, returns the value from lane `(k + cst1) % width`.
+"""
+function rotate(
+    value::Value,
+    offset::Value,
+    width::Value;
+    rotateResult=nothing::Union{Nothing,IR.Type},
+    valid=nothing::Union{Nothing,IR.Type},
+    location=Location(),
+)
+    op_ty_results = IR.Type[]
+    operands = Value[value, offset, width]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+    !isnothing(rotateResult) && push!(op_ty_results, rotateResult)
+    !isnothing(valid) && push!(op_ty_results, valid)
+
+    return create_operation(
+        "gpu.rotate",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
+    )
+end
+
+"""
 `sddmm_buffer_size`
 
 The `gpu.sddmm_buffer_size` operation returns the buffer size required
@@ -2113,8 +2173,8 @@ end
 """
 `shuffle`
 
-The \"shuffle\" op moves values to a across lanes (a.k.a., invocations,
-work items) within the same subgroup. The `width` argument specifies the
+The \"shuffle\" op moves values across lanes in a subgroup (a.k.a., local
+invocation) within the same subgroup. The `width` argument specifies the
 number of lanes that participate in the shuffle, and must be uniform
 across all lanes. Further, the first `width` lanes of the subgroup must
 be active.

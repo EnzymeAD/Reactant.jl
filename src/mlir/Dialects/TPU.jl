@@ -411,9 +411,9 @@ function enqueue_indirect_dma(
     source::Value,
     target::Value,
     offsets::Value,
-    semaphore::Value;
+    semaphore::Value,
+    offset_filter=nothing::Union{Nothing,Value};
     add=nothing,
-    offset_filter=nothing,
     location=Location(),
 )
     op_ty_results = IR.Type[]
@@ -421,9 +421,8 @@ function enqueue_indirect_dma(
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
+    !isnothing(offset_filter) && push!(operands, offset_filter)
     !isnothing(add) && push!(attributes, namedattribute("add", add))
-    !isnothing(offset_filter) &&
-        push!(attributes, namedattribute("offset_filter", offset_filter))
 
     return create_operation(
         "tpu.enqueue_indirect_dma",
@@ -611,6 +610,13 @@ function iota(; output::IR.Type, dimensions, location=Location())
     )
 end
 
+"""
+`load`
+
+Similar to `vector::LoadOp` but with `sublane_mask` and `sublane_stride`.
+When `indices` are negative, it means loading from negative offset
+of `base` address.
+"""
 function load(
     base::Value,
     indices::Vector{Value};
@@ -1569,6 +1575,25 @@ function wait_dma(semaphore::Value, ref::Value; location=Location())
 
     return create_operation(
         "tpu.wait_dma",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+function wait_indirect_dma(semaphore::Value, src::Value, dst::Value; location=Location())
+    op_ty_results = IR.Type[]
+    operands = Value[semaphore, src, dst]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+
+    return create_operation(
+        "tpu.wait_indirect_dma",
         location;
         operands,
         owned_regions,
