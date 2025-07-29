@@ -176,7 +176,7 @@ else
     # Assume the compiler is clang if not GCC. `using_clang` is an option
     # introduced by Enzyme-JAX.
     push!(build_cmd_list, "--define=using_clang=true")
-    push!(build_cmd_list, "--copt=\"-Wno-error=unused-command-line-argument\"")
+    push!(build_cmd_list, "--copt=-Wno-error=unused-command-line-argument")
 end
 push!(build_cmd_list, "--color=$(parsed_args["color"])")
 push!(build_cmd_list, ":libReactantExtra.so")
