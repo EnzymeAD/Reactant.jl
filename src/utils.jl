@@ -499,7 +499,6 @@ end
 
 NativeCompilerJob = CompilerJob{NativeCompilerTarget,CompilerParams}
 
-
 GPUCompiler.can_safepoint(@nospecialize(job::NativeCompilerJob)) = false
 GPUCompiler.can_throw(@nospecialize(job::NativeCompilerJob)) = true
 GPUCompiler.needs_byval(@nospecialize(job::NativeCompilerJob)) = false
@@ -515,9 +514,12 @@ ReactantInter = Enzyme.Compiler.Interpreter.EnzymeInterpreter{
     typeof(Reactant.set_reactant_abi)
 }
 
-GPUCompiler.get_interpreter(@nospecialize(job::NativeCompilerJob)) = Reactant.ReactantInterpreter(; world = job.world)
-GPUCompiler.method_table(@nospecialize(job::NativeCompilerJob)) = CC.method_table(GPUCompiler.get_interpreter(job))
-
+function GPUCompiler.get_interpreter(@nospecialize(job::NativeCompilerJob))
+    return Reactant.ReactantInterpreter(; world=job.world)
+end
+function GPUCompiler.method_table(@nospecialize(job::NativeCompilerJob))
+    return CC.method_table(GPUCompiler.get_interpreter(job))
+end
 
 function CC.optimize(
     interp::ReactantInter, opt::CC.OptimizationState, caller::CC.InferenceResult
@@ -526,14 +528,16 @@ function CC.optimize(
     CC.ipo_dataflow_analysis!(interp, ir, caller)
 
     mi = caller.linfo
-    if false && mi in mi_set && !(
-        is_reactant_method(mi) || (
-            mi.def.sig isa DataType &&
-            !should_rewrite_invoke(
-                mi.def.sig.parameters[1], Tuple{mi.def.sig.parameters[2:end]...}
+    if false &&
+        mi in mi_set &&
+        !(
+            is_reactant_method(mi) || (
+                mi.def.sig isa DataType &&
+                !should_rewrite_invoke(
+                    mi.def.sig.parameters[1], Tuple{mi.def.sig.parameters[2:end]...}
+                )
             )
         )
-    )
         @info ir
         ir, has_changed = rewrite_insts!(ir, interp, false)
         @info ir
@@ -546,9 +550,17 @@ end
 using GPUCompiler
 CC = Core.Compiler
 
-function GPUCompiler.ci_cache_populate(interp::Reactant.ReactantInter, cache::CC.WorldView{CC.InternalCodeCache}, mi::Core.MethodInstance, min_world::UInt64, max_world::UInt64)
+function GPUCompiler.ci_cache_populate(
+    interp::Reactant.ReactantInter,
+    cache::CC.WorldView{CC.InternalCodeCache},
+    mi::Core.MethodInstance,
+    min_world::UInt64,
+    max_world::UInt64,
+)
     @warn mi min_world max_world CC.get_inference_world(interp)
-    @invoke GPUCompiler.ci_cache_populate(interp::CC.AbstractInterpreter, cache, mi, min_world, max_world)
+    @invoke GPUCompiler.ci_cache_populate(
+        interp::CC.AbstractInterpreter, cache, mi, min_world, max_world
+    )
 end
 
 # Generator function which ensures that all calls to the function are executed within the ReactantInterpreter
@@ -577,7 +589,8 @@ function call_with_reactant_generator(
     fn = args[1 + offset_error]
 
     if fn <: Core.Builtin
-        builtin_error = :(throw(AssertionError("Unsupported call_with_reactant of builtin $fn")))
+        builtin_error =
+            :(throw(AssertionError("Unsupported call_with_reactant of builtin $fn")))
         return stub(world, source, builtin_error)
     end
 
@@ -591,17 +604,27 @@ function call_with_reactant_generator(
         rt = Union{}
     end
 
-    source = GPUCompiler.methodinstance(fn, Base.to_tuple_type(args[2 + offset_error:end]), world)
+    source = GPUCompiler.methodinstance(
+        fn, Base.to_tuple_type(args[(2 + offset_error):end]), world
+    )
     if source === nothing
         method_error = :(throw(
-            MethodError($REDUB_ARGUMENTS_NAME[1+offset_error], $REDUB_ARGUMENTS_NAME[2+offset_error:end], $world)
+            MethodError(
+                $REDUB_ARGUMENTS_NAME[1 + offset_error],
+                $REDUB_ARGUMENTS_NAME[(2 + offset_error):end],
+                $world,
+            ),
         ))
         return stub(world, source, method_error)
-    end 
+    end
     config = CompilerConfig(
         Reactant.NativeCompilerTarget(),
-        Reactant.CompilerParams()
-        ; kernel=false, libraries=false, toplevel=true, validate=false, strip=true
+        Reactant.CompilerParams();
+        kernel=false,
+        libraries=false,
+        toplevel=true,
+        validate=false,
+        strip=true,
     )
 
     job = GPUCompiler.CompilerJob(source, config, world)
@@ -612,11 +635,11 @@ function call_with_reactant_generator(
     mm = meta_.compiled[job.source]
     @warn typeof(mm)
     code_instance = mm.ci
-    
+
     #CodeInfo placehold
     code_info = begin
         ir = CC.IRCode()
-        src = ccall(:jl_new_code_info_uninit, Ref{CC.CodeInfo}, ());
+        src = ccall(:jl_new_code_info_uninit, Ref{CC.CodeInfo}, ())
         src.slotnames = fill(:none, length(ir.argtypes) + 1)
         src.slotflags = fill(zero(UInt8), length(ir.argtypes))
         src.slottypes = copy(ir.argtypes)
@@ -701,14 +724,16 @@ function call_with_reactant_generator(
         )
     end
 
-    push_inst!(Expr(
-        :call,
-        GlobalRef(Base, :llvmcall),
-        (string(llvm_module), mm.specfunc),
-        rt,
-        Tuple{args[2:end]...},
-        fn_args...,
-    ))
+    push_inst!(
+        Expr(
+            :call,
+            GlobalRef(Base, :llvmcall),
+            (string(llvm_module), mm.specfunc),
+            rt,
+            Tuple{args[2:end]...},
+            fn_args...,
+        ),
+    )
 
     push_inst!(Core.ReturnNode(Core.SSAValue(length(overdubbed_code))))
 
@@ -730,8 +755,3 @@ end
     $(Expr(:meta, :generated_only))
     return $(Expr(:meta, :generated, call_with_reactant_generator))
 end
-
-
-
-
-
