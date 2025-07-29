@@ -243,9 +243,9 @@ function simulate(rng::AbstractRNG, f::Function, args::Vararg{Any,Nargs}) where 
 
     trace = unsafe_pointer_to_objref(Ptr{Any}(Array(trace)[1]))
 
+    trace.rng = rng
     trace.fn = f
     trace.args = args
-    trace.rng = rng
 
     return trace, trace.weight
 end
@@ -355,7 +355,7 @@ function generate(
 
     constraint_ptr = ConcreteRNumber(reinterpret(UInt64, pointer_from_objref(constraint)))
 
-    constrained_addresses = _extract_addresses(constraint)
+    constrained_addresses = extract_addresses(constraint)
 
     function wrapper_fn(rng, constraint_ptr, args...)
         return generate_internal(rng, f, args...; constraint_ptr, constrained_addresses)
@@ -372,17 +372,11 @@ function generate(
 
     trace = unsafe_pointer_to_objref(Ptr{Any}(Array(trace)[1]))
 
+    trace.rng = rng
     trace.fn = f
     trace.args = args
-    trace.rng = rng
 
     return trace, trace.weight
-end
-
-function _extract_addresses(constraint::Constraint)
-    addresses = Set(keys(constraint))
-
-    return addresses
 end
 
 function generate_internal(

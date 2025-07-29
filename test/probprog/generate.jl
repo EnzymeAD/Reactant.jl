@@ -105,7 +105,7 @@ end
 
         constraint1 = ProbProg.Constraint(:s => (fill(0.1, shape),))
 
-        constrained_addresses = ProbProg._extract_addresses(constraint1)
+        constrained_addresses = ProbProg.extract_addresses(constraint1)
 
         constraint_ptr1 = Reactant.ConcreteRNumber(
             reinterpret(UInt64, pointer_from_objref(constraint1))

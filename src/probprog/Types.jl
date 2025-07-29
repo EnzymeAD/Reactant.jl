@@ -1,23 +1,23 @@
 using Base: ReentrantLock
 
 mutable struct ProbProgTrace
-    fn::Union{Nothing,Function}
-    args::Union{Nothing,Tuple}
     choices::Dict{Symbol,Any}
     retval::Any
     weight::Any
     subtraces::Dict{Symbol,Any}
     rng::Union{Nothing,AbstractRNG}
-
-    function ProbProgTrace(fn::Function, args::Tuple)
-        return new(
-            fn, args, Dict{Symbol,Any}(), nothing, nothing, Dict{Symbol,Any}(), nothing
-        )
-    end
+    fn::Union{Nothing,Function}
+    args::Union{Nothing,Tuple}
 
     function ProbProgTrace()
         return new(
-            nothing, (), Dict{Symbol,Any}(), nothing, nothing, Dict{Symbol,Any}(), nothing
+            Dict{Symbol,Any}(),
+            nothing,
+            nothing,
+            Dict{Symbol,Any}(),
+            nothing,
+            nothing,
+            nothing,
         )
     end
 end
@@ -27,6 +27,7 @@ struct Address
 
     Address(path::Vector{Symbol}) = new(path)
 end
+
 Address(sym::Symbol) = Address([sym])
 Address(syms::Symbol...) = Address([syms...])
 
@@ -65,6 +66,8 @@ Base.length(c::Constraint) = length(c.dict)
 Base.isempty(c::Constraint) = isempty(c.dict)
 Base.haskey(c::Constraint, k::Address) = haskey(c.dict, k)
 Base.get(c::Constraint, k::Address, default) = get(c.dict, k, default)
+
+extract_addresses(constraint::Constraint) = Set(keys(constraint))
 
 const Selection = Set{Symbol}
 const CompiledFnCache = Dict{Tuple{Type,Set{Symbol}},Any}
