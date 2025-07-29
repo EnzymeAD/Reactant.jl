@@ -2051,7 +2051,7 @@ function compile_mlir!(
                     results[i] = MLIR.IR.result(pad_op, 1)
                 end
 
-                ret = MLIR.Dialects.func.return_(results)
+                MLIR.Dialects.func.return_(results)
             finally
                 MLIR.IR.deactivate!(fnbody)
             end
@@ -2100,7 +2100,7 @@ function compile_mlir!(
 
         func_op = MLIR.API.mlirSymbolTableLookup(MLIR.IR.SymbolTable(module_op), fnname)
         @assert func_op.ptr !== C_NULL
-        func_op_new_module = MLIR.IR.Operation(func_op)
+        func_op_new_module = MLIR.IR.Operation(func_op, false)
 
         result_attrs = MLIR.IR.attr(func_op_new_module, "res_attrs")
         if result_attrs !== nothing
@@ -2170,6 +2170,12 @@ function compile_mlir!(
             )
         end
     end
+        
+    func_op = MLIR.API.mlirSymbolTableLookup(MLIR.IR.SymbolTable(MLIR.IR.Operation(mod)), fnname)
+    @assert func_op.ptr !== C_NULL
+    func_op = MLIR.IR.Operation(func_op, false)
+    fnbody = MLIR.IR.first_block(MLIR.IR.region(func_op, 1))::MLIR.IR.Block
+    ret = MLIR.IR.terminator(fnbody)::MLIR.IR.Operation
 
     preserved_args = Tuple{TracedType,Int}[]
     results = [MLIR.IR.operand(ret, i) for i in 1:MLIR.IR.noperands(ret)]
@@ -2188,7 +2194,6 @@ function compile_mlir!(
         push!(preserved_args, (linear_results[i], MLIR.IR.block_arg_num(op)))
     end
 
-    fnbody = MLIR.IR.block(ret)
     MLIR.API.mlirOperationDestroy(ret.operation)
     ret.operation = MLIR.API.MlirOperation(C_NULL)
     MLIR.IR.block!(fnbody) do
