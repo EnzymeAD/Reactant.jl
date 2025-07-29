@@ -111,19 +111,23 @@ hermetic_python_version = parsed_args["hermetic_python_version"]
 
 # Try to guess if `cc` is GCC and get its version number.
 cc_is_gcc, gcc_version = let
-    io = IOBuffer()
-    run(pipeline(ignorestatus(`$(cc) --version`); stdout=io))
-    version_string = String(take!(io))
-    # Detecing GCC is hard, the name "gcc" may not appear anywhere in the
-    # version string, but on the second line there should be FSF.
-    m = match(
-        r"\([^)]+\) (\d+\.\d+\.\d+).*\n.*Free Software Foundation, Inc\.",
-        version_string,
-    )
-    if !isnothing(m)
-        true, VersionNumber(m[1])
-    else
+    if isempty(cc)
         false, v"0"
+    else
+        io = IOBuffer()
+        run(pipeline(ignorestatus(`$(cc) --version`); stdout=io))
+        version_string = String(take!(io))
+        # Detecing GCC is hard, the name "gcc" may not appear anywhere in the
+        # version string, but on the second line there should be FSF.
+        m = match(
+            r"\([^)]+\) (\d+\.\d+\.\d+).*\n.*Free Software Foundation, Inc\.",
+            version_string,
+        )
+        if !isnothing(m)
+            true, VersionNumber(m[1])
+        else
+            false, v"0"
+        end
     end
 end
 
