@@ -83,8 +83,6 @@ function sample(
 ) where {Nargs}
     res = sample_internal(rng, f, args...; symbol, logpdf)
 
-    @assert res isa Tuple && length(res) >= 1 && res[1] isa AbstractRNG "Expected first result to be RNG"
-
     res = res[2:end]
 
     return length(res) == 1 ? res[1] : res
