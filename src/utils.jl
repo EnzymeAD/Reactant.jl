@@ -449,78 +449,6 @@ function rewrite_inst(inst, ir::CC.IRCode, interp, RT, guaranteed_error)
     return false, inst, RT
 end
 
-const oc_capture_vec = Vector{Any}()
-
-# Caching is both good to reducing compile times and necessary to work around julia bugs
-# in OpaqueClosure's: https://github.com/JuliaLang/julia/issues/56833
-function make_oc_dict(
-    @nospecialize(oc_captures::Dict{FT,Core.OpaqueClosure}),
-    @nospecialize(sig::Type),
-    @nospecialize(rt::Type),
-    @nospecialize(src::Core.CodeInfo),
-    nargs::Int,
-    isva::Bool,
-    @nospecialize(f::FT)
-)::Core.OpaqueClosure where {FT}
-    key = f
-    if haskey(oc_captures, key)
-        oc = oc_captures[key]
-        oc
-    else
-        ores = ccall(
-            :jl_new_opaque_closure_from_code_info,
-            Any,
-            (Any, Any, Any, Any, Any, Cint, Any, Cint, Cint, Any, Cint),
-            sig,
-            rt,
-            rt,
-            @__MODULE__,
-            src,
-            0,
-            nothing,
-            nargs,
-            isva,
-            f,
-            true,
-        )::Core.OpaqueClosure
-        oc_captures[key] = ores
-        return ores
-    end
-end
-
-function make_oc_ref(
-    oc_captures::Base.RefValue{Core.OpaqueClosure},
-    @nospecialize(sig::Type),
-    @nospecialize(rt::Type),
-    @nospecialize(src::Core.CodeInfo),
-    nargs::Int,
-    isva::Bool,
-    @nospecialize(f)
-)::Core.OpaqueClosure
-    if Base.isassigned(oc_captures)
-        return oc_captures[]
-    else
-        ores = ccall(
-            :jl_new_opaque_closure_from_code_info,
-            Any,
-            (Any, Any, Any, Any, Any, Cint, Any, Cint, Cint, Any, Cint),
-            sig,
-            rt,
-            rt,
-            @__MODULE__,
-            src,
-            0,
-            nothing,
-            nargs,
-            isva,
-            f,
-            true,
-        )::Core.OpaqueClosure
-        oc_captures[] = ores
-        return ores
-    end
-end
-
 function safe_print(name, x)
     return ccall(:jl_, Cvoid, (Any,), name * " " * string(x))
 end
@@ -553,6 +481,77 @@ function rewrite_insts!(ir::CC.IRCode, interp, guaranteed_error)
     return ir, any_changed
 end
 
+@static if isdefined(Core, :BFloat16)
+    nmantissa(::Type{Core.BFloat16}) = 7
+end
+nmantissa(::Type{Float16}) = 10
+nmantissa(::Type{Float32}) = 23
+nmantissa(::Type{Float64}) = 52
+
+using GPUCompiler
+using GPUCompiler: AbstractCompilerParams, CompilerJob, NativeCompilerTarget
+
+struct CompilerParams <: AbstractCompilerParams
+    function CompilerParams()
+        return new()
+    end
+end
+
+NativeCompilerJob = CompilerJob{NativeCompilerTarget,CompilerParams}
+
+
+GPUCompiler.can_safepoint(@nospecialize(job::NativeCompilerJob)) = false
+GPUCompiler.can_throw(@nospecialize(job::NativeCompilerJob)) = true
+GPUCompiler.needs_byval(@nospecialize(job::NativeCompilerJob)) = false
+
+function GPUCompiler.optimize!(
+    @nospecialize(job::NativeCompilerJob), mod::GPUCompiler.LLVM.Module; opt_level
+)
+    return nothing #TODO: add all except GPU stuff passes
+end
+
+using Enzyme
+ReactantInter = Enzyme.Compiler.Interpreter.EnzymeInterpreter{
+    typeof(Reactant.set_reactant_abi)
+}
+
+GPUCompiler.get_interpreter(@nospecialize(job::NativeCompilerJob)) = Reactant.ReactantInterpreter(; world = job.world)
+GPUCompiler.method_table(@nospecialize(job::NativeCompilerJob)) = CC.method_table(GPUCompiler.get_interpreter(job))
+
+
+function CC.optimize(
+    interp::ReactantInter, opt::CC.OptimizationState, caller::CC.InferenceResult
+)
+    CC.@timeit "optimizer" ir = CC.run_passes_ipo_safe(opt.src, opt, caller)
+    CC.ipo_dataflow_analysis!(interp, ir, caller)
+
+    mi = caller.linfo
+    if false && mi in mi_set && !(
+        is_reactant_method(mi) || (
+            mi.def.sig isa DataType &&
+            !should_rewrite_invoke(
+                mi.def.sig.parameters[1], Tuple{mi.def.sig.parameters[2:end]...}
+            )
+        )
+    )
+        @info ir
+        ir, has_changed = rewrite_insts!(ir, interp, false)
+        @info ir
+        has_changed && @info "rewrite instruction $mi"
+    end
+
+    return CC.finish(interp, opt, ir, caller)
+end
+
+using GPUCompiler
+CC = Core.Compiler
+
+function GPUCompiler.ci_cache_populate(interp::Reactant.ReactantInter, cache::CC.WorldView{CC.InternalCodeCache}, mi::Core.MethodInstance, min_world::UInt64, max_world::UInt64)
+    @warn mi min_world max_world CC.get_inference_world(interp)
+    @invoke GPUCompiler.ci_cache_populate(interp::CC.AbstractInterpreter, cache, mi, min_world, max_world)
+end
+
+
 # Generator function which ensures that all calls to the function are executed within the ReactantInterpreter
 # In particular this entails two pieces:
 #   1) We enforce the use of the ReactantInterpreter method table when generating the original methodinstance
@@ -560,88 +559,31 @@ end
 #      replaced with calls to `call_with_reactant`. This allows us to circumvent long standing issues in Julia
 #      using a custom interpreter in type unstable code.
 # `redub_arguments` is `(typeof(original_function), map(typeof, original_args_tuple)...)`
+
 function call_with_reactant_generator(
     world::UInt, source::LineNumberNode, self, @nospecialize(redub_arguments)
 )
     @nospecialize
     args = redub_arguments
-    if DEBUG_INTERP[]
-        safe_print("args", args)
-    end
 
     stub = Core.GeneratedFunctionStub(
-        identity, Core.svec(:call_with_reactant, REDUB_ARGUMENTS_NAME), Core.svec()
+        identity, Core.svec(:call_with_reactant, Reactant.REDUB_ARGUMENTS_NAME), Core.svec()
     )
 
-    fn = args[1]
-    sig = Tuple{args...}
-
     guaranteed_error = false
-    if fn === MustThrowError
+    if args[1] === Reactant.MustThrowError
         guaranteed_error = true
-        fn = args[2]
-        sig = Tuple{args[2:end]...}
     end
-
-    # look up the method match
-    builtin_error =
-        :(throw(AssertionError("Unsupported call_with_reactant of builtin $fn")))
+    offset_error = guaranteed_error ? 1 : 0
+    fn = args[1 + offset_error]
 
     if fn <: Core.Builtin
+        builtin_error = :(throw(AssertionError("Unsupported call_with_reactant of builtin $fn")))
         return stub(world, source, builtin_error)
     end
 
-    if guaranteed_error
-        method_error = :(throw(
-            MethodError($REDUB_ARGUMENTS_NAME[2], $REDUB_ARGUMENTS_NAME[3:end], $world)
-        ))
-    else
-        method_error = :(throw(
-            MethodError($REDUB_ARGUMENTS_NAME[1], $REDUB_ARGUMENTS_NAME[2:end], $world)
-        ))
-    end
-
-    interp = ReactantInterpreter(; world)
-
-    min_world = Ref{UInt}(typemin(UInt))
-    max_world = Ref{UInt}(typemax(UInt))
-
-    lookup_result = lookup_world(
-        sig, world, Core.Compiler.method_table(interp), min_world, max_world
-    )
-
     overdubbed_code = Any[]
     overdubbed_codelocs = Int32[]
-
-    # No method could be found (including in our method table), bail with an error
-    if lookup_result === nothing
-        return stub(world, source, method_error)
-    end
-
-    match = lookup_result::Core.MethodMatch
-    # look up the method and code instance
-    mi = ccall(
-        :jl_specializations_get_linfo,
-        Ref{Core.MethodInstance},
-        (Any, Any, Any),
-        match.method,
-        match.spec_types,
-        match.sparams,
-    )
-    method = mi.def
-
-    @static if VERSION < v"1.11"
-        # For older Julia versions, we vendor in some of the code to prevent
-        # having to build the MethodInstance twice.
-        result = CC.InferenceResult(mi, CC.typeinf_lattice(interp))
-        frame = CC.InferenceState(result, :no, interp)
-        @assert !isnothing(frame)
-        CC.typeinf(interp, frame)
-        ir = CC.run_passes(frame.src, CC.OptimizationState(frame, interp), result, nothing)
-        rt = CC.widenconst(CC.ignorelimited(result.result))
-    else
-        ir, rt = CC.typeinf_ircode(interp, mi, nothing)
-    end
 
     if guaranteed_error
         if rt !== Union{}
@@ -650,48 +592,52 @@ function call_with_reactant_generator(
         rt = Union{}
     end
 
-    if DEBUG_INTERP[]
-        safe_print("ir", ir)
+    source = GPUCompiler.methodinstance(fn, Base.to_tuple_type(args[2 + offset_error:end]), world)
+    if source === nothing
+        method_error = :(throw(
+            MethodError($REDUB_ARGUMENTS_NAME[1+offset_error], $REDUB_ARGUMENTS_NAME[2+offset_error:end], $world)
+        ))
+        return stub(world, source, method_error)
+    end 
+    config = CompilerConfig(
+        Reactant.NativeCompilerTarget(),
+        Reactant.CompilerParams()
+        ; kernel=false, libraries=false, toplevel=true, validate=false, strip=true
+    )
+
+    job = GPUCompiler.CompilerJob(source, config, world)
+
+    llvm_module, meta_ = Reactant.JuliaContext() do ctx
+        GPUCompiler.compile(:llvm, job)
+    end
+    mm = meta_.compiled[job.source]
+    @warn typeof(mm)
+    code_instance = mm.ci
+
+
+    #CodeInfo placehold
+    code_info = begin
+        ir = CC.IRCode()
+        src = ccall(:jl_new_code_info_uninit, Ref{CC.CodeInfo}, ());
+        src.slotnames = fill(:none, length(ir.argtypes) + 1)
+        src.slotflags = fill(zero(UInt8), length(ir.argtypes))
+        src.slottypes = copy(ir.argtypes)
+        src.rettype = Int
+        CC.ir_to_codeinf!(src, ir)
     end
 
-    mi = mi::Core.MethodInstance
-
-    if !(
-        is_reactant_method(mi) || (
-            mi.def.sig isa DataType &&
-            !should_rewrite_invoke(
-                mi.def.sig.parameters[1], Tuple{mi.def.sig.parameters[2:end]...}
-            )
-        )
-    ) || guaranteed_error
-        ir, any_changed = rewrite_insts!(ir, interp, guaranteed_error)
-    end
-
-    src = ccall(:jl_new_code_info_uninit, Ref{CC.CodeInfo}, ())
-    src.slotnames = fill(:none, length(ir.argtypes) + 1)
-    src.slotflags = fill(zero(UInt8), length(ir.argtypes))
-    src.slottypes = copy(ir.argtypes)
-    src.rettype = rt
-    src = CC.ir_to_codeinf!(src, ir)
-
-    if DEBUG_INTERP[]
-        safe_print("src", src)
-    end
-
-    # prepare a new code info
-    code_info = copy(src)
-    static_params = match.sparams
-    signature = sig
+    rt = code_instance.rettype
+    code_info.rettype = rt
 
     # propagate edge metadata, this method is invalidated if the original function we are calling
     # is invalidated
-    code_info.edges = Core.MethodInstance[mi]
-    code_info.min_world = min_world[]
-    code_info.max_world = max_world[]
+    code_info.edges = Core.MethodInstance[job.source]
+    code_info.min_world = typemin(UInt)
+    code_info.max_world = typemax(UInt)
 
     # Rewrite the arguments to this function, to prepend the two new arguments, the function :call_with_reactant,
     # and the REDUB_ARGUMENTS_NAME tuple of input arguments
-    code_info.slotnames = Any[:call_with_reactant, REDUB_ARGUMENTS_NAME]
+    code_info.slotnames = Any[:call_with_reactant, Reactant.REDUB_ARGUMENTS_NAME]
     code_info.slotflags = UInt8[0x00, 0x00]
     n_prepended_slots = 2
     overdub_args_slot = Core.SlotNumber(n_prepended_slots)
@@ -711,14 +657,13 @@ function call_with_reactant_generator(
 
     # destructure the generated argument slots into the overdubbed method's argument slots.
 
-    offset = 1
+    offset = 2
     fn_args = Any[]
+    method = job.source.def
     n_method_args = method.nargs
     n_actual_args = length(redub_arguments)
-    if guaranteed_error
-        offset += 1
-        n_actual_args -= 1
-    end
+    offset += offset_error
+    n_actual_args -= offset_error
 
     tys = []
 
@@ -727,7 +672,7 @@ function call_with_reactant_generator(
         iter_args = min(n_actual_args, n_method_args - 1)
     end
 
-    for i in 1:iter_args
+    for i in 2:iter_args
         actual_argument = Expr(
             :call, Core.GlobalRef(Core, :getfield), overdub_args_slot, offset
         )
@@ -735,24 +680,13 @@ function call_with_reactant_generator(
         offset += 1
         push!(fn_args, arg)
         push!(tys, redub_arguments[i + (guaranteed_error ? 1 : 0)])
-
-        if DEBUG_INTERP[]
-            push_inst!(
-                Expr(
-                    :call,
-                    safe_print,
-                    "fn arg[" * string(length(fn_args)) * "]",
-                    fn_args[end],
-                ),
-            )
-        end
     end
 
     # If `method` is a varargs method, we have to restructure the original method call's
     # trailing arguments into a tuple and assign that tuple to the expected argument slot.
     if method.isva
         trailing_arguments = Expr(:call, Core.GlobalRef(Core, :tuple))
-        for i in n_method_args:n_actual_args
+        for _ in n_method_args:n_actual_args
             arg = push_inst!(
                 Expr(:call, Core.GlobalRef(Core, :getfield), overdub_args_slot, offset)
             )
@@ -767,63 +701,19 @@ function call_with_reactant_generator(
                 redub_arguments[(n_method_args:n_actual_args) .+ (guaranteed_error ? 1 : 0)]...,
             },
         )
-
-        if DEBUG_INTERP[]
-            push_inst!(
-                Expr(
-                    :call,
-                    safe_print,
-                    "fn arg[" * string(length(fn_args)) * "]",
-                    fn_args[end],
-                ),
-            )
-        end
     end
 
-    # ocva = method.isva
 
-    ocva = false # method.isva
+    push_inst!(Expr(
+        :call,
+        GlobalRef(Base, :llvmcall),
+        (string(llvm_module), mm.specfunc),
+        rt,
+        Tuple{args[2:end]...},
+        fn_args...,
+    ))
 
-    ocnargs = method.nargs - 1
-    # octup = Tuple{mi.specTypes.parameters[2:end]...}
-    # octup = Tuple{method.sig.parameters[2:end]...}
-    octup = Tuple{tys[2:end]...}
-    ocva = false
-
-    # jl_new_opaque_closure forcibly executes in the current world... This means that we won't get the right
-    # inner code during compilation without special handling (i.e. call_in_world_total).
-    # Opaque closures also require taking the function argument. We can work around the latter
-    # if the function is stateless. But regardless, to work around this we sadly create/compile the opaque closure
-
-    dict, make_oc = if Base.issingletontype(fn)
-        Base.Ref{Core.OpaqueClosure}(), make_oc_ref
-    else
-        Dict{fn,Core.OpaqueClosure}(), make_oc_dict
-    end
-
-    push!(oc_capture_vec, dict)
-
-    oc = if false && Base.issingletontype(fn)
-        res = Core._call_in_world_total(
-            world, make_oc, dict, octup, rt, src, ocnargs, ocva, fn.instance
-        )::Core.OpaqueClosure
-
-    else
-        farg = fn_args[1]
-        rep = Expr(:call, make_oc, dict, octup, rt, src, ocnargs, ocva, farg)
-        push_inst!(rep)
-        Core.SSAValue(length(overdubbed_code))
-    end
-
-    push_inst!(Expr(:call, oc, fn_args[2:end]...))
-
-    ocres = Core.SSAValue(length(overdubbed_code))
-
-    if DEBUG_INTERP[]
-        push_inst!(Expr(:call, safe_print, "ocres", ocres))
-    end
-
-    push_inst!(Core.ReturnNode(ocres))
+    push_inst!(Core.ReturnNode(Core.SSAValue(length(overdubbed_code))))
 
     #=== set `code_info`/`reflection` fields accordingly ===#
 
@@ -836,127 +726,15 @@ function call_with_reactant_generator(
     code_info.ssavaluetypes = length(overdubbed_code)
     code_info.ssaflags = [0x00 for _ in 1:length(overdubbed_code)] # XXX we need to copy flags that are set for the original code
 
-    if DEBUG_INTERP[]
-        safe_print("code_info", code_info)
-    end
-    #@lk code_info oc
     return code_info
 end
 
-@eval function call_with_reactant0($REDUB_ARGUMENTS_NAME...)
+@eval function call_with_reactant($(Reactant.REDUB_ARGUMENTS_NAME)...)
     $(Expr(:meta, :generated_only))
     return $(Expr(:meta, :generated, call_with_reactant_generator))
 end
 
-@static if isdefined(Core, :BFloat16)
-    nmantissa(::Type{Core.BFloat16}) = 7
-end
-nmantissa(::Type{Float16}) = 10
-nmantissa(::Type{Float32}) = 23
-nmantissa(::Type{Float64}) = 52
-
-using GPUCompiler
-using GPUCompiler: AbstractCompilerParams, CompilerJob, NativeCompilerTarget
-
-Base.Experimental.@MethodTable(test_method_table)
-
-struct CompilerParams <: AbstractCompilerParams
-    entry_safepoint::Bool
-    method_table
-
-    function CompilerParams(entry_safepoint::Bool=false, method_table=test_method_table)
-        return new(entry_safepoint, method_table)
-    end
-end
-
-NativeCompilerJob = CompilerJob{NativeCompilerTarget,CompilerParams}
-
-function GPUCompiler.method_table(@nospecialize(job::NativeCompilerJob))
-    return job.config.params.method_table
-end
-function GPUCompiler.can_safepoint(@nospecialize(job::NativeCompilerJob))
-    return job.config.params.entry_safepoint
-end
-
-GPUCompiler.can_throw(@nospecialize(job::NativeCompilerJob)) = true
-GPUCompiler.needs_byval(@nospecialize(job::NativeCompilerJob)) = false
-
-function GPUCompiler.optimize!(
-    @nospecialize(job::NativeCompilerJob), mod::GPUCompiler.LLVM.Module; opt_level
-)
-    return nothing #TODO: add all except GPU stuff passes
-end
-
-function create_job(
-    @nospecialize(func),
-    @nospecialize(types);
-    entry_safepoint::Bool=false,
-    method_table=test_method_table,
-    kwargs...,
-)
-    config_kwargs, kwargs = split_kwargs(kwargs, GPUCompiler.CONFIG_KWARGS)
-    source = methodinstance(
-        typeof(func), Base.to_tuple_type(types), Base.get_world_counter()
-    )
-    target = NativeCompilerTarget()
-    params = CompilerParams(entry_safepoint, method_table)
-    config = CompilerConfig(
-        target, params; kernel=false, libraries=false, toplevel=true, config_kwargs...
-    )
-    return CompilerJob(source, config), kwargs
-end
-
-using Enzyme
-ReactantInter = Enzyme.Compiler.Interpreter.EnzymeInterpreter{
-    typeof(Reactant.set_reactant_abi)
-}
-
-GPUCompiler.get_interpreter(::NativeCompilerJob) = Reactant.ReactantInterpreter()
 
 
-function CC.optimize(
-    interp::ReactantInter, opt::CC.OptimizationState, caller::CC.InferenceResult
-)
-    CC.@timeit "optimizer" ir = CC.run_passes_ipo_safe(opt.src, opt, caller)
-    CC.ipo_dataflow_analysis!(interp, ir, caller)
-
-    mi = caller.linfo
-    if false && !(
-        is_reactant_method(mi) || (
-            mi.def.sig isa DataType &&
-            !should_rewrite_invoke(
-                mi.def.sig.parameters[1], Tuple{mi.def.sig.parameters[2:end]...}
-            )
-        )
-    )
-        @info ir
-        ir, has_changed = rewrite_insts!(ir, interp, false)
-        @info ir
-        has_changed && @info "rewrite instruction $mi"
-    end
 
 
-    return CC.finish(interp, opt, ir, caller)
-end
-
-function call_with_reactant(@nospecialize(args...))
-    f = args[1]
-    types = typeof.(args[2:end])
-
-    job, meta = Reactant.create_job(f, types; validate=false)
-    llvm_module, meta_ = Reactant.JuliaContext() do ctx
-        GPUCompiler.compile(:llvm, job)
-    end
-    mm = meta_.compiled[job.source]
-    @error mm.ci.def types args
-    expr = Expr(
-        :call,
-        GlobalRef(Base, :llvmcall),
-        (string(llvm_module), mm.specfunc),
-        mm.ci.rettype,
-        Tuple{types...},
-        args[2:end]...,
-    )
-    #TODO: replace with a generated function
-    @eval $expr
-end
