@@ -33,13 +33,12 @@ end
 function my_inference_program(xs, ys, num_iters)
     xs_r = Reactant.to_rarray(xs)
 
-    constraint = ProbProg.choicemap()
-    constraint[:ys] = [ys]
+    observations = ProbProg.Constraint(:ys => (ys,))
 
     seed = Reactant.to_rarray(UInt64[1, 4])
     rng = ReactantRNG(seed)
 
-    trace, _ = ProbProg.generate(rng, my_model, xs_r; constraint)
+    trace, _ = ProbProg.generate(rng, my_model, xs_r; constraint=observations)
 
     trace = ProbProg.with_compiled_cache() do cache
         local t = trace

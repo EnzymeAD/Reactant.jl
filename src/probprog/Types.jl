@@ -70,7 +70,7 @@ Base.get(c::Constraint, k::Address, default) = get(c.dict, k, default)
 extract_addresses(constraint::Constraint) = Set(keys(constraint))
 
 const Selection = Set{Symbol}
-const CompiledFnCache = Dict{Tuple{Type,Set{Symbol}},Any}
+const CompiledFnCache = Dict{Tuple{Type,Set{Address}},Any}
 
 const _probprog_ref_lock = ReentrantLock()
 const _probprog_refs = IdDict()

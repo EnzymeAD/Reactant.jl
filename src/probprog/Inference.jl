@@ -10,17 +10,17 @@ function metropolis_hastings(
         error("MH requires a trace with fn and rng recorded (use generate to create trace)")
     end
 
-    constraints = Dict{Symbol,Any}()
-    constrained_symbols = Set{Symbol}()
-
+    constraint_pairs = Pair{Symbol,Any}[]
     for (sym, val) in trace.choices
         if !(sym in sel)
-            constraints[sym] = val
-            push!(constrained_symbols, sym)
+            push!(constraint_pairs, sym => val)
         end
     end
+    constraint = Constraint(constraint_pairs...)
 
-    cache_key = (typeof(trace.fn), constrained_symbols)
+    constrained_addresses = extract_addresses(constraint)
+
+    cache_key = (typeof(trace.fn), constrained_addresses)
 
     compiled_fn = nothing
     if compiled_cache !== nothing
@@ -30,12 +30,12 @@ function metropolis_hastings(
     if compiled_fn === nothing
         function wrapper_fn(rng, constraint_ptr, args...)
             return generate_internal(
-                rng, trace.fn, args...; constraint_ptr, constrained_symbols
+                rng, trace.fn, args...; constraint_ptr, constrained_addresses
             )
         end
 
         constraint_ptr = ConcreteRNumber(
-            reinterpret(UInt64, pointer_from_objref(constraints))
+            reinterpret(UInt64, pointer_from_objref(constraint))
         )
 
         compiled_fn = @compile optimize = :probprog wrapper_fn(
@@ -47,7 +47,7 @@ function metropolis_hastings(
         end
     end
 
-    constraint_ptr = ConcreteRNumber(reinterpret(UInt64, pointer_from_objref(constraints)))
+    constraint_ptr = ConcreteRNumber(reinterpret(UInt64, pointer_from_objref(constraint)))
 
     old_gc_state = GC.enable(false)
     new_trace_ptr = nothing
