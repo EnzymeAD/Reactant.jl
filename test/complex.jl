@@ -1,6 +1,8 @@
 using Test
 using Reactant
 
+if !contains(string(Reactant.devices()[1]), "TPU")
+
 @testset "conj" begin
     @testset "$(typeof(x))" for x in (1.0, 1.0 + 2.0im)
         x_concrete = Reactant.to_rarray(x)
@@ -117,4 +119,6 @@ end
     @test @jit(Complex(x_ra, y)) == Complex(x, y)
     @test @jit(Complex(x, y_ra)) == Complex(x, y)
     @test @jit(Complex(x_ra)) == Complex(x) == @jit(Complex(x_ra, 0))
+end
+
 end
