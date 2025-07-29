@@ -45,8 +45,8 @@ function Base.getindex(
 end
 
 function Base.getindex(
-    x::OffsetVector{Reactant.TracedRNumber{T}, Reactant.TracedRArray{T, 1}}, indices::Base.OneTo{Int}
-) where {T}
+    a::OffsetVector{Reactant.TracedRNumber{T}, Reactant.TracedRArray{T, 1}}, indices::Vararg{Union{Int,AbstractArray, Base.OneTo{Int}},N}
+) where {N}
     offset_indices = indices .- x.offsets[1]
     return getindex(parent(x), offset_indices)
 end
