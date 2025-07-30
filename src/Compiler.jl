@@ -2170,8 +2170,10 @@ function compile_mlir!(
             )
         end
     end
-        
-    func_op = MLIR.API.mlirSymbolTableLookup(MLIR.IR.SymbolTable(MLIR.IR.Operation(mod)), fnname)
+
+    func_op = MLIR.API.mlirSymbolTableLookup(
+        MLIR.IR.SymbolTable(MLIR.IR.Operation(mod)), fnname
+    )
     @assert func_op.ptr !== C_NULL
     func_op = MLIR.IR.Operation(func_op, false)
     fnbody = MLIR.IR.first_block(MLIR.IR.region(func_op, 1))::MLIR.IR.Block
