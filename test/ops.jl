@@ -11,14 +11,14 @@ using SpecialFunctions: SpecialFunctions
     @test [1.0, 1.0] ≈ @jit Ops.abs(x)
 
     if !contains(string(Reactant.devices()[1]), "TPU")
-    x = Reactant.to_rarray([
-        3.0+4im -3.0+4im
-        3.0-4im -3.0-4im
-    ])
-    @test [
-        5.0 5.0
-        5.0 5.0
-    ] ≈ @jit Ops.abs(x)
+        x = Reactant.to_rarray([
+            3.0+4im -3.0+4im
+            3.0-4im -3.0-4im
+        ])
+        @test [
+            5.0 5.0
+            5.0 5.0
+        ] ≈ @jit Ops.abs(x)
     end
 end
 
@@ -98,17 +98,17 @@ end
     @test transpose(cholesky(Array(x)).U) ≈ @jit g2(x)
 
     if !contains(string(Reactant.devices()[1]), "TPU")
-    x = Reactant.to_rarray(
-        [
-            10.0+0.0im 2.0-3.0im 3.0-4.0im
-            2.0+3.0im 5.0+0.0im 3.0-2.0im
-            3.0+4.0im 3.0+2.0im 9.0+0.0im
-        ],
-    )
+        x = Reactant.to_rarray(
+            [
+                10.0+0.0im 2.0-3.0im 3.0-4.0im
+                2.0+3.0im 5.0+0.0im 3.0-2.0im
+                3.0+4.0im 3.0+2.0im 9.0+0.0im
+            ],
+        )
 
-    @test cholesky(Array(x)).U ≈ @jit g1(x)
-    @test adjoint(cholesky(Array(x)).U) ≈ @jit g2(x)
-   end
+        @test cholesky(Array(x)).U ≈ @jit g1(x)
+        @test adjoint(cholesky(Array(x)).U) ≈ @jit g2(x)
+    end
 end
 
 @testset "clamp" begin
@@ -145,15 +145,15 @@ end
 end
 
 if !contains(string(Reactant.devices()[1]), "TPU")
-@testset "complex" begin
-    x = Reactant.to_rarray(1.1; track_numbers=true)
-    y = Reactant.to_rarray(2.2; track_numbers=true)
-    @test 1.1 + 2.2im ≈ @jit Ops.complex(x, y)
+    @testset "complex" begin
+        x = Reactant.to_rarray(1.1; track_numbers=true)
+        y = Reactant.to_rarray(2.2; track_numbers=true)
+        @test 1.1 + 2.2im ≈ @jit Ops.complex(x, y)
 
-    x = Reactant.to_rarray([1.1, 2.2, 3.3, 4.4])
-    y = Reactant.to_rarray([5.5, 6.6, -7.7, -8.8])
-    @test [1.1 + 5.5im, 2.2 + 6.6im, 3.3 - 7.7im, 4.4 - 8.8im] ≈ @jit Ops.complex(x, y)
-end
+        x = Reactant.to_rarray([1.1, 2.2, 3.3, 4.4])
+        y = Reactant.to_rarray([5.5, 6.6, -7.7, -8.8])
+        @test [1.1 + 5.5im, 2.2 + 6.6im, 3.3 - 7.7im, 4.4 - 8.8im] ≈ @jit Ops.complex(x, y)
+    end
 end
 
 @testset "constant" begin

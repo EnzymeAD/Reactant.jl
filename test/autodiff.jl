@@ -196,19 +196,19 @@ end
 end
 
 if !contains(string(Reactant.devices()[1]), "TPU")
-@testset "Seed initialization of Complex arrays on matmul: Issue #593" begin
-    a = ones(ComplexF64, 2, 2)
-    b = 2.0 * ones(ComplexF64, 2, 2)
-    a_re = Reactant.to_rarray(a)
-    b_re = Reactant.to_rarray(b)
-    df(x, y) = Enzyme.gradient(ReverseWithPrimal, *, x, y)
-    @test begin
-        res = @jit df(a_re, b_re) # before, this segfaulted
-        (res.val ≈ 4ones(2, 2)) &&
-            (res.derivs[1] ≈ 4ones(2, 2)) &&
-            (res.derivs[2] ≈ 2ones(2, 2))
+    @testset "Seed initialization of Complex arrays on matmul: Issue #593" begin
+        a = ones(ComplexF64, 2, 2)
+        b = 2.0 * ones(ComplexF64, 2, 2)
+        a_re = Reactant.to_rarray(a)
+        b_re = Reactant.to_rarray(b)
+        df(x, y) = Enzyme.gradient(ReverseWithPrimal, *, x, y)
+        @test begin
+            res = @jit df(a_re, b_re) # before, this segfaulted
+            (res.val ≈ 4ones(2, 2)) &&
+                (res.derivs[1] ≈ 4ones(2, 2)) &&
+                (res.derivs[2] ≈ 2ones(2, 2))
+        end
     end
-end
 end
 
 @testset "onehot" begin
