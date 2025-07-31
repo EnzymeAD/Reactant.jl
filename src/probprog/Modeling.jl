@@ -199,11 +199,13 @@ function simulate(rng::AbstractRNG, f::Function, args::Vararg{Any,Nargs}) where 
 
     compiled_fn = @compile optimize = :probprog simulate_internal(rng, f, args...)
 
-    old_gc_state = GC.enable(false)
-    try
+    seed_buffer = only(rng.seed.data).buffer
+    GC.@preserve seed_buffer begin
         trace, _, _ = compiled_fn(rng, f, args...)
-    finally
-        GC.enable(old_gc_state)
+
+        while !isready(trace)
+            yield()
+        end
     end
 
     trace = unsafe_pointer_to_objref(Ptr{Any}(Array(trace)[1]))
@@ -278,11 +280,13 @@ function generate(
 
     compiled_fn = @compile optimize = :probprog wrapper_fn(rng, constraint_ptr, args...)
 
-    old_gc_state = GC.enable(false)
-    try
+    seed_buffer = only(rng.seed.data).buffer
+    GC.@preserve seed_buffer constraint begin
         trace, _, _ = compiled_fn(rng, constraint_ptr, args...)
-    finally
-        GC.enable(old_gc_state)
+
+        while !isready(trace)
+            yield()
+        end
     end
 
     trace = unsafe_pointer_to_objref(Ptr{Any}(Array(trace)[1]))
