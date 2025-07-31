@@ -1029,6 +1029,7 @@ function optimization_passes(
     if WHILE_CONCAT[]
         push!(transform_passes_list, "while_concat")
         push!(transform_passes_list, "while_wrap")
+        push!(transform_passes_list, "while_extend")
     end
 
     if dus_to_concat
