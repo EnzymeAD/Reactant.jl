@@ -39,7 +39,6 @@ end
     rng = ReactantRNG(seed)
 
     trace, _ = ProbProg.simulate(rng, blr, N, K)
-    println(trace)
 
     @test size(trace.retval[1]) == (N,)
 end

@@ -63,7 +63,6 @@ end
         σ = Reactant.ConcreteRNumber(1.0)
 
         trace, weight = ProbProg.simulate(rng, model, μ, σ, shape)
-        println(trace)
 
         @test size(trace.retval[1]) == shape
         @test haskey(trace.choices, :s)
