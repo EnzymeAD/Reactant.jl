@@ -111,13 +111,21 @@ end
             reinterpret(UInt64, pointer_from_objref(constraint1))
         )
 
-        wrapper_fn(constraint_ptr, rng, μ, σ) = ProbProg.generate_internal(
+        wrapper_fn(rng, constraint_ptr, μ, σ) = ProbProg.generate_internal(
             rng, model, μ, σ, shape; constraint_ptr, constrained_addresses
         )
 
-        compiled_fn = @compile optimize = :probprog wrapper_fn(constraint_ptr1, rng, μ, σ)
+        compiled_fn = @compile optimize = :probprog wrapper_fn(rng, constraint_ptr1, μ, σ)
 
-        trace1, weight = compiled_fn(constraint_ptr1, rng, μ, σ)
+        trace1 = nothing
+        seed_buffer = only(rng.seed.data).buffer
+        GC.@preserve seed_buffer constraint1 begin
+            trace1, _ = compiled_fn(rng, constraint_ptr1, μ, σ)
+
+            while !isready(trace1)
+                yield()
+            end
+        end
         trace1 = unsafe_pointer_to_objref(Ptr{Any}(Array(trace1)[1]))
 
         constraint2 = ProbProg.Constraint(:s => (fill(0.2, shape),))
@@ -125,7 +133,15 @@ end
             reinterpret(UInt64, pointer_from_objref(constraint2))
         )
 
-        trace2, _ = compiled_fn(constraint_ptr2, rng, μ, σ)
+        trace2 = nothing
+        seed_buffer = only(rng.seed.data).buffer
+        GC.@preserve seed_buffer constraint2 begin
+            trace2, _ = compiled_fn(rng, constraint_ptr2, μ, σ)
+
+            while !isready(trace2)
+                yield()
+            end
+        end
         trace2 = unsafe_pointer_to_objref(Ptr{Any}(Array(trace2)[1]))
 
         @test trace1.choices[:s][1] != trace2.choices[:s][1]
