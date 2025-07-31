@@ -889,6 +889,8 @@ function optimization_passes(
         "neg_div_const_simplify",
         "reshape_deletions_broadcast_in_dim_simplify",
         "reshape_insertions_broadcast_in_dim_simplify",
+        "dot_general_reshape",
+        "diagonal_tensor_dot_general_rewrite",
     ]
 
     if !compile_options.disable_scatter_gather_optimization_passes
