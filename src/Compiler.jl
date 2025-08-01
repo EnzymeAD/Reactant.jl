@@ -1011,6 +1011,7 @@ function optimization_passes(
             "concat_const_prop<1>($max_constant_threshold)",
             "dynamic_update_slice_const_prop($max_constant_threshold)",
             "widen_wrap",
+            "widen_extend",
         ],
     )
 
