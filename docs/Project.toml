@@ -1,8 +1,11 @@
 [deps]
 Documenter = "e30172f5-a6a5-5a46-863b-614d45cd2de4"
 DocumenterVitepress = "4710194d-e776-4893-9690-8d956a29c365"
+Lux = "b2108857-7c20-44ae-9111-449ecde12c47"
+Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
 Reactant = "3c362404-f566-11ee-1572-e11a4b42c853"
 ReactantCore = "a3311ec8-5e00-46d5-b541-4f83e724a433"
+Reactant_jll = "0192cb87-2b54-54ad-80e0-3be72ad8a3c0"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 
 [sources]
