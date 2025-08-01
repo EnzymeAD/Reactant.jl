@@ -43,8 +43,8 @@ for randfun in (:rand, :randn, :randexp)
         @reactant_overlay @noinline function Random.$(randfun)(
             rng::AbstractRNG, ::Type{T}, dims::Dims
         ) where {T}
-            if T <: ReactantPrimitive
-                return TracedRandom.$(overload_randfun)(rng, T, dims)
+            if unwrapped_eltype(T) <: ReactantPrimitive
+                return TracedRandom.$(overload_randfun)(rng, unwrapped_eltype(T), dims)
             end
             @warn "Reactant doesn't support sampling of $(T) with the current \
                    interpreter. Falling back to native interpreter." maxlog = 1
@@ -60,8 +60,10 @@ for randfun in (:rand, :randn, :randexp)
         @reactant_overlay @noinline function Random.$(randfun)(
             rng::AbstractRNG, ::Type{T}, dim1::Integer, dims::Integer...
         ) where {T}
-            if T <: ReactantPrimitive
-                return TracedRandom.$(overload_randfun)(rng, T, dim1, dims...)
+            if unwrapped_eltype(T) <: ReactantPrimitive
+                return TracedRandom.$(overload_randfun)(
+                    rng, unwrapped_eltype(T), dim1, dims...
+                )
             end
             @warn "Reactant doesn't support sampling of $(T) with the current \
                    interpreter. Falling back to native interpreter." maxlog = 1
@@ -72,8 +74,8 @@ for randfun in (:rand, :randn, :randexp)
         @reactant_overlay @noinline function Random.$(randfun)(
             rng::AbstractRNG, ::Type{T}=Float64
         ) where {T}
-            if T <: ReactantPrimitive
-                return TracedRandom.$(overload_randfun)(rng, T)
+            if unwrapped_eltype(T) <: ReactantPrimitive
+                return TracedRandom.$(overload_randfun)(rng, unwrapped_eltype(T))
             end
             @warn "Reactant doesn't support sampling of $(T) with the current \
                    interpreter. Falling back to native interpreter." maxlog = 1
@@ -85,6 +87,9 @@ for randfun in (:rand, :randn, :randexp)
             rng::AbstractRNG, A::AnyTracedRArray
         )
             return TracedRandom.$(overload_randfun!)(rng, A)
+        end
+        @reactant_overlay @noinline function Random.$(randfun!)(A::AnyTracedRArray)
+            return TracedRandom.$(overload_randfun!)(TracedRandom.default_rng(), A)
         end
     end
 end
