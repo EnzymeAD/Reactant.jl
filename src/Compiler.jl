@@ -1012,8 +1012,8 @@ function optimization_passes(
             "dynamic_update_slice_const_prop($max_constant_threshold)",
             "widen_wrap",
             "widen_extend",
-            "elementwise_pad",
-            "compare_negate_const_simplify",
+            # "elementwise_pad",
+            # "compare_negate_const_simplify",
             # "select_simplify",
 	    # "concatenate_subtract_to_subtract_pad",
 	    # "concatenate_broadcast_in_dim"
