@@ -1012,6 +1012,9 @@ function optimization_passes(
             "dynamic_update_slice_const_prop($max_constant_threshold)",
             "widen_wrap",
             "widen_extend",
+            "elementwise_pad",
+            "compare_negate_const_simplify",
+            "select_simplify",
         ],
     )
 
