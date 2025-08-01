@@ -1435,8 +1435,7 @@ extern "C" HeldIfrtArray *ifrt_client_make_array_from_host_buffer(
       std::nullopt, // byte_strides
       sharding->obj(),
       static_cast<ifrt::Client::HostBufferSemantics>(c_semantics),
-      [] {}, // on_done_with_host_buffer,
-      client->CreateUserContext())));
+      [] {})));
 }
 
 extern "C" HeldIfrtArray *ifrt_client_make_single_shard_array_from_host_buffer(
@@ -1846,7 +1845,7 @@ ifrt_CreateDeviceListFromDevices(ifrt::Client *client,
                                  ifrt::Device **device_list,
                                  int32_t num_devices) {
   absl::Span<ifrt::Device *const> devices(device_list, num_devices);
-  return client->MakeDeviceList(devices);
+  return MyValueOrThrow(client->MakeDeviceList(devices));
 }
 
 extern "C" ifrt::Memory *ifrt_DeviceGetDefaultMemory(ifrt::Device *device) {
@@ -2660,8 +2659,7 @@ extern "C" HeldIfrtArray *ifrt_make_array_from_host_buffer_shards(
       sharding);
   auto arrays = MyValueOrThrow(client->MakeArraysFromHostBufferShards(
       absl::MakeSpan(&spec, 1),
-      static_cast<ifrt::Client::HostBufferSemantics>(c_host_buffer_semantics),
-      client->CreateUserContext()));
+      static_cast<ifrt::Client::HostBufferSemantics>(c_host_buffer_semantics)));
   return reactant::capture(arrays[0]);
 }
 
