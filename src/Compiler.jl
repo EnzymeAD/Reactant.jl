@@ -1289,7 +1289,7 @@ function __get_compile_options_and_kwargs(;
     raise_first::Bool=false,
     legalize_chlo_to_stablehlo::Bool=false,
     cudnn_hlo_optimize::Bool=false,
-    shardy_passes::Union{Symbol,ShardyPropagationOptions}=:to_mhlo_shardings,
+    shardy_passes::Union{Symbol,ShardyPropagationOptions}=:post_sdy_propagation,
     optimize_then_pad::Bool=true,
     optimize_communications::Union{Bool,OptimizeCommunicationOptions}=true,
     assert_nonallocating::Bool=false,
@@ -2132,6 +2132,7 @@ function compile_mlir!(
                         get_optimize_comms_passes(
                             compile_options.optimize_communications
                         )...,
+                        "func.func(sdy-reshard-to-collectives)",
                     ],
                     ",",
                 ),
@@ -2165,6 +2166,7 @@ function compile_mlir!(
                         get_optimize_comms_passes(
                             compile_options.optimize_communications
                         )...,
+                        "func.func(sdy-reshard-to-collectives)",
                         "xla-sdy-stablehlo-export-pipeline",
                     ],
                     ",",
@@ -2319,7 +2321,7 @@ function get_common_compile_options()
         :client => nothing,
         :raise => false,
         :raise_first => false,
-        :shardy_passes => :(:to_mhlo_shardings),
+        :shardy_passes => :(:post_sdy_propagation),
         :assert_nonallocating => false,
         :donated_args => :(:auto),
         :transpose_propagate => :(:up),
@@ -2362,7 +2364,10 @@ See also [`@code_xla`](@ref), [`@code_mhlo`](@ref).
 """
 macro code_hlo(args...)
     compile_expr, (; compiled) = compile_call_expr(
-        __module__, compile_mlir, get_common_compile_options(), args...
+        __module__,
+        compile_mlir,
+        merge(get_common_compile_options(), Dict{Symbol,Any}(:shardy_passes => :(:none))),
+        args...,
     )
     #! format: off
     return esc(
@@ -2391,7 +2396,9 @@ macro code_mhlo(args...)
         compile_mlir,
         merge(
             get_common_compile_options(),
-            Dict{Symbol,Any}(:legalize_stablehlo_to_mhlo => true),
+            Dict{Symbol,Any}(
+                :legalize_stablehlo_to_mhlo => true, :shardy_passes => :(:to_mhlo_shardings)
+            ),
         ),
         args...,
     )
