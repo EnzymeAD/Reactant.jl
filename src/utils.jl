@@ -150,7 +150,7 @@ will need a `@reactant_overlay` method.
 
 !!! warning
     The macro call should be inside the `__init__` function. If you want to
-    mark it for precompilation, you must add the macro call in the global scope 
+    mark it for precompilation, you must add the macro call in the global scope
     too.
 
 See also: [`@skip_rewrite_type`](@ref)
@@ -189,7 +189,7 @@ abstract type, you should use then the `Type{<:MyStruct}` syntax.
 
 !!! warning
     The macro call should be inside the `__init__` function. If you want to
-    mark it for precompilation, you must add the macro call in the global scope 
+    mark it for precompilation, you must add the macro call in the global scope
     too.
 """
 macro skip_rewrite_type(typ)
@@ -481,13 +481,6 @@ function rewrite_insts!(ir::CC.IRCode, interp, guaranteed_error)
     return ir, any_changed
 end
 
-@static if isdefined(Core, :BFloat16)
-    nmantissa(::Type{Core.BFloat16}) = 7
-end
-nmantissa(::Type{Float16}) = 10
-nmantissa(::Type{Float32}) = 23
-nmantissa(::Type{Float64}) = 52
-
 using GPUCompiler
 using GPUCompiler: AbstractCompilerParams, CompilerJob, NativeCompilerTarget
 
@@ -521,6 +514,8 @@ function GPUCompiler.method_table(@nospecialize(job::NativeCompilerJob))
     return CC.method_table(GPUCompiler.get_interpreter(job))
 end
 
+GPUCompiler.llvm_debug_info(@nospecialize(::NativeCompilerJob)) = GPUCompiler.LLVM.API.LLVMDebugEmissionKindNoDebug
+
 function CC.optimize(
     interp::ReactantInter, opt::CC.OptimizationState, caller::CC.InferenceResult
 )
@@ -547,8 +542,7 @@ function CC.optimize(
     return CC.finish(interp, opt, ir, caller)
 end
 
-using GPUCompiler
-CC = Core.Compiler
+
 
 function GPUCompiler.ci_cache_populate(
     interp::Reactant.ReactantInter,
@@ -577,8 +571,6 @@ function call_with_reactant_generator(
     @nospecialize
     args = redub_arguments
 
-    @warn args
-
     stub = Core.GeneratedFunctionStub(
         identity, Core.svec(:call_with_reactant, Reactant.REDUB_ARGUMENTS_NAME), Core.svec()
     )
@@ -606,10 +598,10 @@ function call_with_reactant_generator(
         rt = Union{}
     end
 
-    source = GPUCompiler.methodinstance(
+    mi = GPUCompiler.methodinstance(
         fn, Base.to_tuple_type(args[(2 + offset_error):end]), world
     )
-    if source === nothing
+    if mi === nothing
         method_error = :(throw(
             MethodError(
                 $REDUB_ARGUMENTS_NAME[1 + offset_error],
@@ -617,7 +609,7 @@ function call_with_reactant_generator(
                 $world,
             ),
         ))
-        return stub(world, source, method_error)
+        return stub(world, mi, method_error)
     end
     config = CompilerConfig(
         Reactant.NativeCompilerTarget(),
@@ -627,16 +619,15 @@ function call_with_reactant_generator(
         toplevel=true,
         validate=false,
         strip=true,
+        entry_abi=:func,
     )
 
-    job = GPUCompiler.CompilerJob(source, config, world)
+    job = GPUCompiler.CompilerJob(mi, config, world)
 
-    llvm_module, meta_ = Reactant.JuliaContext() do ctx
+    llvm_module, meta_ = Reactant.JuliaContext() do _ctx
         GPUCompiler.compile(:llvm, job)
     end
     mm = meta_.compiled[job.source]
-    @warn typeof(mm)
-    code_instance = mm.ci
 
     #CodeInfo placehold
     code_info = begin
@@ -649,7 +640,7 @@ function call_with_reactant_generator(
         CC.ir_to_codeinf!(src, ir)
     end
 
-    rt = code_instance.rettype
+    rt = mm.ci.rettype
     code_info.rettype = rt
 
     # propagate edge metadata, this method is invalidated if the original function we are calling
@@ -683,61 +674,37 @@ function call_with_reactant_generator(
     offset = 2
     fn_args = Any[]
     method = job.source.def
-    n_method_args = method.nargs
     n_actual_args = length(redub_arguments)
     offset += offset_error
     n_actual_args -= offset_error
 
     tys = []
-
-    iter_args = n_actual_args
-    if method.isva
-        iter_args = min(n_actual_args, n_method_args - 1)
-    end
-
-    for i in 2:iter_args
+    for i in 2:n_actual_args
+        type = redub_arguments[i + (guaranteed_error ? 1 : 0)]
         actual_argument = Expr(
             :call, Core.GlobalRef(Core, :getfield), overdub_args_slot, offset
         )
         arg = push_inst!(actual_argument)
-        offset += 1
         push!(fn_args, arg)
-        push!(tys, redub_arguments[i + (guaranteed_error ? 1 : 0)])
+        push!(tys,  Base.RefValue{type})
+        offset += 1
     end
 
-    # If `method` is a varargs method, we have to restructure the original method call's
-    # trailing arguments into a tuple and assign that tuple to the expected argument slot.
-    if method.isva
-        trailing_arguments = Expr(:call, Core.GlobalRef(Core, :tuple))
-        for _ in n_method_args:n_actual_args
-            arg = push_inst!(
-                Expr(:call, Core.GlobalRef(Core, :getfield), overdub_args_slot, offset)
-            )
-            push!(trailing_arguments.args, arg)
-            offset += 1
-        end
-
-        push!(fn_args, push_inst!(trailing_arguments))
-        push!(
-            tys,
-            Tuple{
-                redub_arguments[(n_method_args:n_actual_args) .+ (guaranteed_error ? 1 : 0)]...,
-            },
-        )
-    end
-
-    push_inst!(
+    #TODO: replace 0 with function pointer using mi.cache.invoke
+    @warn mi.cache.invoke
+    fn_args_tuple = push_inst!(Expr(:call, GlobalRef(Base, :vect), fn_args...))
+    boxed_res = push_inst!(
         Expr(
             :call,
             GlobalRef(Base, :llvmcall),
-            (string(llvm_module), mm.specfunc),
-            rt,
-            Tuple{args[2:end]...},
-            fn_args...,
+            (string(llvm_module), mm.func),
+            Base.RefValue{rt},
+            Tuple{Base.RefValue{fn},Vector{Any}, Int32},
+            0, fn_args_tuple, Int32(length(fn_args))
         ),
     )
-
-    push_inst!(Core.ReturnNode(Core.SSAValue(length(overdubbed_code))))
+    res = push_inst!(Expr(:call, GlobalRef(Base, :getfield), boxed_res, QuoteNode(:x)))
+    push_inst!(Core.ReturnNode(res))
 
     #=== set `code_info`/`reflection` fields accordingly ===#
 
@@ -749,7 +716,6 @@ function call_with_reactant_generator(
     code_info.codelocs = overdubbed_codelocs
     code_info.ssavaluetypes = length(overdubbed_code)
     code_info.ssaflags = [0x00 for _ in 1:length(overdubbed_code)] # XXX we need to copy flags that are set for the original code
-
     return code_info
 end
 
@@ -757,3 +723,11 @@ end
     $(Expr(:meta, :generated_only))
     return $(Expr(:meta, :generated, call_with_reactant_generator))
 end
+
+
+@static if isdefined(Core, :BFloat16)
+    nmantissa(::Type{Core.BFloat16}) = 7
+end
+nmantissa(::Type{Float16}) = 10
+nmantissa(::Type{Float32}) = 23
+nmantissa(::Type{Float64}) = 52
