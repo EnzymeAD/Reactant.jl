@@ -357,7 +357,6 @@ function replicate_array_to_all_devices(array::Array, sharding, mesh, size_arr)
                 [
                     "sdy-propagation-pipeline",
                     "sdy-close-shardings",
-                    "xla-sdy-stablehlo-export-pipeline",
                     "canonicalize",
                     "cse",
                 ],
@@ -375,7 +374,7 @@ function replicate_array_to_all_devices(array::Array, sharding, mesh, size_arr)
             num_partitions=length(mesh.device_ids),
             num_outputs=1,                # unused
             num_parameters=1,             # unused
-            use_shardy_partitioner=false, # unused
+            use_shardy_partitioner=true,  # unused
         )
 
         only(XLA.execute(exec, (array.buffer,), (UInt8(0),), Val(1)))
