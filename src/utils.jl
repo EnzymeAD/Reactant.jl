@@ -514,7 +514,9 @@ function GPUCompiler.method_table(@nospecialize(job::NativeCompilerJob))
     return CC.method_table(GPUCompiler.get_interpreter(job))
 end
 
-GPUCompiler.llvm_debug_info(@nospecialize(::NativeCompilerJob)) = GPUCompiler.LLVM.API.LLVMDebugEmissionKindNoDebug
+function GPUCompiler.llvm_debug_info(@nospecialize(::NativeCompilerJob))
+    return GPUCompiler.LLVM.API.LLVMDebugEmissionKindNoDebug
+end
 
 function CC.optimize(
     interp::ReactantInter, opt::CC.OptimizationState, caller::CC.InferenceResult
@@ -541,8 +543,6 @@ function CC.optimize(
 
     return CC.finish(interp, opt, ir, caller)
 end
-
-
 
 function GPUCompiler.ci_cache_populate(
     interp::Reactant.ReactantInter,
@@ -686,25 +686,30 @@ function call_with_reactant_generator(
         )
         arg = push_inst!(actual_argument)
         push!(fn_args, arg)
-        push!(tys,  Base.RefValue{type})
+        push!(tys, Base.RefValue{type})
         offset += 1
     end
 
     #TODO: replace 0 with function pointer using mi.cache.invoke
     @warn mi.cache.invoke
-    fn_args_tuple = push_inst!(Expr(:call, GlobalRef(Base, :vect), fn_args...))
+    #force the creation of Any[fn_args...]
+    fn_args_vec = push_inst!(
+        Expr(:call, GlobalRef(Base, :getindex), GlobalRef(Base, :Any), fn_args...)
+    )
+    pointer = push_inst!(Expr(:call, GlobalRef(Base, :pointer), fn_args_vec))
     boxed_res = push_inst!(
         Expr(
             :call,
             GlobalRef(Base, :llvmcall),
             (string(llvm_module), mm.func),
-            Base.RefValue{rt},
-            Tuple{Base.RefValue{fn},Vector{Any}, Int32},
-            0, fn_args_tuple, Int32(length(fn_args))
+            Any,
+            Tuple{Base.RefValue{fn},Ptr{Any},Int32},
+            fn,
+            pointer,
+            Int32(length(fn_args)),
         ),
     )
-    res = push_inst!(Expr(:call, GlobalRef(Base, :getfield), boxed_res, QuoteNode(:x)))
-    push_inst!(Core.ReturnNode(res))
+    push_inst!(Core.ReturnNode(boxed_res))
 
     #=== set `code_info`/`reflection` fields accordingly ===#
 
@@ -723,7 +728,6 @@ end
     $(Expr(:meta, :generated_only))
     return $(Expr(:meta, :generated, call_with_reactant_generator))
 end
-
 
 @static if isdefined(Core, :BFloat16)
     nmantissa(::Type{Core.BFloat16}) = 7
