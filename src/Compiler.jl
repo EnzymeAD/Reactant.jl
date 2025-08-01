@@ -1014,9 +1014,9 @@ function optimization_passes(
             "widen_extend",
             "elementwise_pad",
             "compare_negate_const_simplify",
-            "select_simplify",
-	    "concatenate_subtract_to_subtract_pad",
-	    "concatenate_broadcast_in_dim"
+            # "select_simplify",
+	    # "concatenate_subtract_to_subtract_pad",
+	    # "concatenate_broadcast_in_dim"
         ],
     )
 
