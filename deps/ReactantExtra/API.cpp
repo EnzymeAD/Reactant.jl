@@ -1845,7 +1845,7 @@ ifrt_CreateDeviceListFromDevices(ifrt::Client *client,
                                  ifrt::Device **device_list,
                                  int32_t num_devices) {
   absl::Span<ifrt::Device *const> devices(device_list, num_devices);
-  return client->MakeDeviceList(devices);
+  return MyValueOrThrow(client->MakeDeviceList(devices));
 }
 
 extern "C" ifrt::Memory *ifrt_DeviceGetDefaultMemory(ifrt::Device *device) {
