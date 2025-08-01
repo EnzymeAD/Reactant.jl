@@ -2132,6 +2132,7 @@ function compile_mlir!(
                         get_optimize_comms_passes(
                             compile_options.optimize_communications
                         )...,
+                        "func.func(sdy-reshard-to-collectives)",
                     ],
                     ",",
                 ),
@@ -2165,6 +2166,7 @@ function compile_mlir!(
                         get_optimize_comms_passes(
                             compile_options.optimize_communications
                         )...,
+                        "func.func(sdy-reshard-to-collectives)",
                         "xla-sdy-stablehlo-export-pipeline",
                     ],
                     ",",
