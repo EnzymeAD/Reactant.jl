@@ -690,8 +690,6 @@ function call_with_reactant_generator(
         offset += 1
     end
 
-    #TODO: replace 0 with function pointer using mi.cache.invoke
-    @warn mi.cache.invoke
     #force the creation of Any[fn_args...]
     fn_args_vec = push_inst!(
         Expr(:call, GlobalRef(Base, :getindex), GlobalRef(Base, :Any), fn_args...)
