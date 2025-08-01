@@ -354,12 +354,7 @@ function replicate_array_to_all_devices(array::Array, sharding, mesh, size_arr)
         Reactant.Compiler.run_pass_pipeline!(
             mod,
             join(
-                [
-                    "sdy-propagation-pipeline",
-                    "sdy-close-shardings",
-                    "canonicalize",
-                    "cse",
-                ],
+                ["sdy-propagation-pipeline", "sdy-close-shardings", "canonicalize", "cse"],
                 ",",
             ),
         )
