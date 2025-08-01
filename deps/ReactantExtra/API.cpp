@@ -1435,8 +1435,7 @@ extern "C" HeldIfrtArray *ifrt_client_make_array_from_host_buffer(
       std::nullopt, // byte_strides
       sharding->obj(),
       static_cast<ifrt::Client::HostBufferSemantics>(c_semantics),
-      [] {}, // on_done_with_host_buffer,
-      client->CreateUserContext())));
+      [] {}, // on_done_with_host_buffer)));
 }
 
 extern "C" HeldIfrtArray *ifrt_client_make_single_shard_array_from_host_buffer(
