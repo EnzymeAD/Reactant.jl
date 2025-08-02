@@ -69,9 +69,11 @@ if Reactant_jll.is_available()
             @static if precompilation_supported()
                 x = ConcreteRNumber(2.0; client)
                 Reactant.compile(sin, (x,); client, optimize=:all)
+                finalize(x)
 
                 y = ConcreteRArray([2.0]; client)
                 Reactant.compile(Base.sum, (y,); client, optimize=:all)
+                finalize(y)
             end
         end
 
