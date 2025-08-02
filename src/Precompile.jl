@@ -35,19 +35,6 @@ function infer_sig(sig)
     end
 end
 
-function clear_oc_cache()
-    # Opaque closures capture the worldage of their compilation and thus are not relocatable
-    # Therefore we explicitly purge all OC's we have created here
-    for v in oc_capture_vec
-        if v isa Base.RefValue
-            p = Ptr{Ptr{Cvoid}}(pointer_from_objref(v))
-            Base.atomic_pointerset(p, C_NULL, :monotonic)
-        else
-            empty!(v)
-        end
-    end
-end
-
 # Precompilation on 1.10 hits an apparent bug: https://github.com/JuliaLang/julia/issues/56947
 function precompilation_supported()
     return VERSION >= v"1.11" || VERSION >= v"1.10.8"
@@ -78,6 +65,5 @@ if Reactant_jll.is_available()
         XLA.free_client(client)
         client.client = C_NULL
         deinitialize_dialect()
-        clear_oc_cache()
     end
 end
