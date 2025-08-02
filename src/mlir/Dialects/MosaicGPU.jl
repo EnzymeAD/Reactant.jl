@@ -101,6 +101,28 @@ function async_load(
     )
 end
 
+function async_load_tmem(
+    source::Value; result_0=nothing::Union{Nothing,IR.Type}, location=Location()
+)
+    op_ty_results = IR.Type[]
+    operands = Value[source,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+    !isnothing(result_0) && push!(op_ty_results, result_0)
+
+    return create_operation(
+        "mosaic_gpu.async_load_tmem",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
+    )
+end
+
 """
 `async_store`
 
@@ -147,6 +169,25 @@ function async_store(
 
     return create_operation(
         "mosaic_gpu.async_store",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+function async_store_tmem(source::Value, destination::Value; location=Location())
+    op_ty_results = IR.Type[]
+    operands = Value[source, destination]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+
+    return create_operation(
+        "mosaic_gpu.async_store_tmem",
         location;
         operands,
         owned_regions,
@@ -501,6 +542,36 @@ function tmem_dealloc(tmem_ref::Value; location=Location())
 
     return create_operation(
         "mosaic_gpu.tmem_dealloc",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+"""
+`tmem_relinquish_alloc_permit`
+
+The instruction specifies that the CTA of the executing thread is
+relinquishing the right to allocate Tensor Memory. So, it is illegal for a
+CTA to perform `tmem_alloc` after any of its constituent threads execute
+`tmem_relinquish_alloc_permit`.
+
+If `collective` is `true`, applies to collective TMEM allocations.
+"""
+function tmem_relinquish_alloc_permit(; collective=nothing, location=Location())
+    op_ty_results = IR.Type[]
+    operands = Value[]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+    !isnothing(collective) && push!(attributes, namedattribute("collective", collective))
+
+    return create_operation(
+        "mosaic_gpu.tmem_relinquish_alloc_permit",
         location;
         operands,
         owned_regions,
