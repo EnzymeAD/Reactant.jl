@@ -225,7 +225,6 @@ llvm_configure(
     targets = LLVM_TARGETS,
 )
 
-
 load("@xla//:workspace2.bzl", "xla_workspace2")
 
 xla_workspace2()
@@ -375,4 +374,3 @@ hedron_compile_commands_setup_transitive_transitive()
 load("@hedron_compile_commands//:workspace_setup_transitive_transitive_transitive.bzl", "hedron_compile_commands_setup_transitive_transitive_transitive")
 
 hedron_compile_commands_setup_transitive_transitive_transitive()
-
