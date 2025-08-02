@@ -1444,6 +1444,20 @@ end
 zip_iterator(a, b) = mapreduce(splat(*), +, zip(a, b))
 enumerate_iterator(a) = mapreduce(splat(*), +, enumerate(a))
 
+function nested_mapreduce_zip(x, y)
+    return mapreduce(+, zip(eachcol(x), eachcol(y)); init=0.0f0) do (x, y)
+        return sum(abs2, x) + sum(abs2, y)
+    end
+end
+
+function nested_mapreduce_hcat(x, y)
+    return mapreduce(
+        hcat, zip(eachcol(x), eachcol(y)); init=similar(x, size(x, 1), 0)
+    ) do (x, y)
+        return x .+ y
+    end
+end
+
 @testset "Base.Iterators" begin
     @testset "zip" begin
         N = 10
@@ -1459,5 +1473,25 @@ enumerate_iterator(a) = mapreduce(splat(*), +, enumerate(a))
         x_ra = Reactant.to_rarray(x)
 
         @test @jit(enumerate_iterator(x_ra)) ≈ enumerate_iterator(x)
+    end
+
+    @testset "nested mapreduce" begin
+        x = rand(Float32, 4, 3)
+        y = rand(Float32, 4, 3)
+
+        x_ra = Reactant.to_rarray(x)
+        y_ra = Reactant.to_rarray(y)
+
+        @test @jit(nested_mapreduce_zip(x_ra, y_ra)) ≈ nested_mapreduce_zip(x, y)
+    end
+
+    @testset "nested mapreduce hcat" begin
+        x = rand(Float32, 4, 3)
+        y = rand(Float32, 4, 3)
+
+        x_ra = Reactant.to_rarray(x)
+        y_ra = Reactant.to_rarray(y)
+
+        @test @jit(nested_mapreduce_hcat(x_ra, y_ra)) ≈ nested_mapreduce_hcat(x, y)
     end
 end
