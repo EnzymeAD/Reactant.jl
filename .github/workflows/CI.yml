@@ -158,8 +158,6 @@ jobs:
       - uses: codecov/codecov-action@v5
         with:
           files: lcov.info
-            - name: Setup tmate session
       - uses: mxschmitt/action-tmate@v3
-        if: ${{ !cancelled() }}
         with:
           limit-access-to-actor: false
