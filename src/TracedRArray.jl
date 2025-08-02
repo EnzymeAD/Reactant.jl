@@ -543,7 +543,14 @@ end
 function overloaded_mapreduce(
     @nospecialize(f), @nospecialize(op), @nospecialize(A); dims=:, init=nothing
 )
-    return overloaded_mapreduce(identity, op, unwrapped_broadcast(f, A); dims, init)
+    res = unwrapped_broadcast(f, A)
+    # This means we are unable to use the optimized dispatches. For now we will
+    # unroll the mapreduce.
+    if typeof(res) == typeof(A)
+        @assert dims == Colon() "dims not supported for mapreduce currently."
+        return foldl(op, res; init)
+    end
+    return overloaded_mapreduce(identity, op, res; dims=:, init)
 end
 
 function overloaded_mapreduce(
@@ -1436,16 +1443,27 @@ struct BroadcastIterator{F}
     f::F
 end
 
-(fn::BroadcastIterator)(args...) = fn.f((args...,))
+(fn::BroadcastIterator)(args...) = Reactant.call_with_reactant(fn.f, (args...,))
 
 function unwrapped_broadcast(f::F, x::Base.Iterators.Zip) where {F}
     min_length = Base.inferencebarrier(minimum)(length, x.is)
     itrs = [length(itr) > min_length ? itr[1:min_length] : itr for itr in x.is]
-    return (BroadcastIterator(f)).(itrs...)
+    if any(Base.Fix2(isa, AnyTracedRArray), itrs)
+        return (BroadcastIterator(f)).(itrs...)
+    else
+        fn = BroadcastIterator(f)
+        return [fn(Base.Fix2(getindex, i).(itrs)...) for i in 1:min_length]
+    end
 end
 
 function unwrapped_broadcast(f::F, x::Base.Iterators.Enumerate) where {F}
-    return (BroadcastIterator(f)).(1:length(x.itr), x.itr)
+    if x.itr isa AnyTracedRArray
+        return (BroadcastIterator(f)).(1:length(x.itr), x.itr)
+    else
+        return [f((i, x.itr[i])) for i in 1:length(x.itr)]
+    end
 end
+
+unwrapped_broadcast(f::F, xs::Vector) where {F} = [f(x) for x in xs]
 
 end
