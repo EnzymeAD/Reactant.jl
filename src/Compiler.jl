@@ -1015,8 +1015,8 @@ function optimization_passes(
             "elementwise_pad",
             "compare_negate_const_simplify",
             "select_simplify",
-	    "concatenate_subtract_to_subtract_pad",
-	    "concatenate_broadcast_in_dim"
+            "concatenate_subtract_to_subtract_pad",
+            "concatenate_broadcast_in_dim",
         ],
     )
 
@@ -1611,7 +1611,11 @@ function compile_mlir!(
 
     recognize_comms = true
     lower_comms = true
-    if is_sharded && (compile_options.shardy_passes == :to_mhlo_shardings || compile_options.shardy_passes == :post_sdy_propagation || compile_options.shardy_passes isa ShardyPropagationOptions)
+    if is_sharded && (
+        compile_options.shardy_passes == :to_mhlo_shardings ||
+        compile_options.shardy_passes == :post_sdy_propagation ||
+        compile_options.shardy_passes isa ShardyPropagationOptions
+    )
         lower_comms = false
     end
 
