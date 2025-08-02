@@ -2715,17 +2715,18 @@ struct LinkableRuntime {
     auto mpi = getenv("OMPI_COMM_WORLD_RANK");
     device = 0;
     if (mpi) {
-      llvm::errs() << " mpi : " << mpi << "\n";
       device = atoi(mpi);
-    } else
-      llvm::errs() << " mpi: null\n";
+    }
+
     client = nullptr;
 
     if (backend == "xla-tpu") {
       if (device == 0) {
         client = MakeTPUClient(nullptr, &error);
-        if (error)
+        if (error) {
           llvm::errs() << " error: " << error << "\n";
+	  exit(1);
+	}
       }
     } else if (backend == "xla-gpu") {
       int node_id = 0;
@@ -2740,8 +2741,10 @@ struct LinkableRuntime {
       client = MakeGPUClient(node_id, num_nodes, allowed_devices,
                              num_allowed_devices, mem_fraction, gpu_preallocate,
                              platform, &refstr, distributed_runtime_client);
-      if (!client)
+      if (!client) {
         llvm::errs() << " error: " << refstr << "\n";
+	exit(1);
+      }
       assert(client);
       // Weird stream issue in freeing cuda client.
       shouldFreeClient = false;
