@@ -159,5 +159,6 @@ jobs:
         with:
           files: lcov.info
       - uses: mxschmitt/action-tmate@v3
+        if: ${{ !cancelled() }}
         with:
           limit-access-to-actor: false
