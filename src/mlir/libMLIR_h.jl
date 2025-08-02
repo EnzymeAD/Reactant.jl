@@ -8917,6 +8917,15 @@ function mlirPassManagerEnableVerifier(passManager, enable)
 end
 
 """
+    mlirPassManagerEnableTiming(passManager)
+
+Enable pass timing.
+"""
+function mlirPassManagerEnableTiming(passManager)
+    @ccall mlir_c.mlirPassManagerEnableTiming(passManager::MlirPassManager)::Cvoid
+end
+
+"""
     mlirPassManagerGetNestedUnder(passManager, operationName)
 
 Nest an OpPassManager under the top-level PassManager, the nested passmanager will only run on operations matching the provided name. The returned OpPassManager will be destroyed when the parent is destroyed. To further nest more OpPassManager under the newly returned one, see `mlirOpPassManagerNest` below.
