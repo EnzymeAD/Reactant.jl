@@ -73,7 +73,7 @@ our sharded array.
 ```@example sharding_tutorial
 N = 1600
 
-x_sharded_first = Reactant.to_array(
+x_sharded_first = Reactant.to_rarray(
     reshape(collect(1:N), 40, 40),
     sharding=Sharding.NamedSharding(
         Sharding.Mesh(reshape(Reactant.devices()[1:4], 4, 1), (:x, :y)),
@@ -93,7 +93,7 @@ follows:
 
 ```@example sharding_tutorial
 N = 1600
-x_sharded_both = Reactant.to_array(
+x_sharded_both = Reactant.to_rarray(
     reshape(collect(1:N), 40, 40),
     sharding=Sharding.NamedSharding(
         Sharding.Mesh(reshape(Reactant.devices()[1:4], 2, 2), (:x, :y)),

@@ -53,10 +53,9 @@ jobs:
             using Reactant
             DocMeta.setdocmeta!(Reactant, :DocTestSetup, :(using Reactant); recursive=true)
             doctest(Reactant)'
-        env:
-          XLA_FLAGS: --xla_force_host_platform_device_count=8
       - name: Build documentation
         run: julia --color=yes --project=docs docs/make.jl
         env:
+          XLA_FLAGS: --xla_force_host_platform_device_count=8
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           DOCUMENTER_KEY: ${{ secrets.DOCUMENTER_KEY }}
