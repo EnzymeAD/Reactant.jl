@@ -3,7 +3,7 @@ mutable struct AsyncArray <: XLA.AbstractAsyncBuffer
     future::Union{Future,Nothing}
 end
 
-const AsyncEmptyArray = AsyncArray(Array(C_NULL), nothing)
+const AsyncEmptyArray = AsyncArray(Array(C_NULL, false), nothing)
 
 AsyncArray(args...; kwargs...) = AsyncArray(Array(args...; kwargs...), nothing)
 
