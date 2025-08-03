@@ -1669,7 +1669,7 @@ extern "C" ifrt::Client *ifrt_pjrt_make_client(
 extern "C" ifrt::Client *ifrt_pjrt_make_client_with_default_kv_store(
     PjRtClient *pjrt_client, int node_id, int num_nodes,
     void *distributed_runtime_client, const char **error,
-    std::string key_prefix) {
+    const char* key_prefix) {
   std::optional<std::shared_ptr<KeyValueStoreInterface>> kv_store;
   return ifrt_pjrt_make_client(pjrt_client, node_id, num_nodes,
                                distributed_runtime_client, error, key_prefix,
