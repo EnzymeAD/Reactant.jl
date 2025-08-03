@@ -120,9 +120,16 @@ mesh, that are then referenced when specifying how the data is sharded.
 
 Given the mesh, we will specify how the data is sharded across the devices.
 
-<!-- TODO describe how arrays are the "global data arrays, even though data is itself only stored on relevant device and computation is performed only devices with the required data (effectively showing under the hood how execution occurs) -->
+<!--
+TODO describe how arrays are the "global data arrays, even though data is itself only stored
+on relevant device and computation is performed only devices with the required data
+(effectively showing under the hood how execution occurs)
+-->
 
-<!-- TODO make a simple conway's game of life, or heat equation using sharding simulation example to show how a ``typical MPI'' simulation can be written using sharding. -->
+<!--
+TODO make a simple conway's game of life, or heat equation using sharding simulation example
+to show how a ``typical MPI'' simulation can be written using sharding.
+-->
 
 ## Simple 1-Dimensional Heat Equation
 
@@ -245,12 +252,20 @@ end
 
 :::
 
-MPI to send the data. between computers When using GPUs on different devices, one needs to copy the data through the network via NCCL instead of the `cuda.
+MPI to send the data. between computers When using GPUs on different devices, one needs to
+copy the data through the network via NCCL instead of the `cuda.
 
-All devices from all nodes are available for use by Reactant. Given the topology of the devices, Reactant will automatically determine the right type of communication primitive to use to send data between the relevant nodes. For example, between GPUs on the same host Reactant may use the faster `cudaMemcpy` whereas for GPUs on different nodes Reactant will use NCCL.
+All devices from all nodes are available for use by Reactant. Given the topology of the
+devices, Reactant will automatically determine the right type of communication primitive to
+use to send data between the relevant nodes. For example, between GPUs on the same host
+Reactant may use the faster `cudaMemcpy` whereas for GPUs on different nodes Reactant will
+use NCCL.
 
-The fact that you doesn't need to specify how the communication is occuring enables code written with Reactant to be run on a different topology (e.g. moving fro
-One nice feature about how Reactant's handling of multiple devices is that you don't need to specify how the data is transfered. For example, when using multiple GPUs on the same host it might be efficient to copy data using a `cudaMemcpy` to transfer between devices directly. When using CPUs on multiple different nodes, one can use
+One nice feature about how Reactant's handling of multiple devices is that you don't need to
+specify how the data is transfered. The fact that you doesn't need to specify how the
+communication is occuring enables code written with Reactant to be run on a different
+topology. For example, when using multiple GPUs on the same host it might be efficient to
+copy data using a `cudaMemcpy` to transfer between devices directly.
 
 ## Devices
 
@@ -271,15 +286,15 @@ Reactant.addressable_devices()
 
 You can inspect the type of the device, as well as its properties.
 
-<!-- ## Generating Distributed Data by Concatenating Local-Worker Data
+<!-- TODO: Generating Distributed Data by Concatenating Local-Worker Data -->
 
-## Handling Replicated Tensors
+<!-- TODO: Handling Replicated Tensors -->
 
-## Sharding in Neural Networks
+<!-- TODO: Sharding in Neural Networks -->
 
-### 8-way Batch Parallelism
+<!-- TODO: 8-way Batch Parallelism -->
 
-### 4-way Batch & 2-way Model Parallelism -->
+<!-- TODO: 4-way Batch & 2-way Model Parallelism -->
 
 ## Related links
 
