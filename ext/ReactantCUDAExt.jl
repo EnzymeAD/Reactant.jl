@@ -1490,13 +1490,13 @@ end
                 y = Reactant.ConcreteRArray([2.0]; client)
                 Reactant.Compiler.compile_mlir(square!, (y,); optimize=false)
 
-                if y isa ConcreteIFRTArray
-                    XLA.free_buffer(y.data.buffer)
+                if y isa Reactant.ConcreteIFRTArray
+                    Reactant.XLA.free_buffer(y.data.buffer)
                     y.data.buffer.buffer = C_NULL
                 else
                     ntuple(Val(length(y.data))) do i
                         Base.@_inline_meta
-                        XLA.free_buffer(y.data[i].buffer)
+                        Reactant.XLA.free_buffer(y.data[i].buffer)
                         y.data[i].buffer.buffer = C_NULL
                     end
                 end
