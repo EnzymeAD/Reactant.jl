@@ -416,6 +416,28 @@ for (jlop, hloop) in (
     @eval $(jlop)(@nospecialize(lhs::TracedRNumber)) = Ops.$(hloop)(lhs)
 end
 
+for (jlop, hloop) in (
+    (:(Base.sin), :sine),
+    (:(Base.cos), :cosine),
+    (:(Base.tan), :tan),
+    (:(Base.tanh), :tanh),
+    (:(Base.FastMath.tanh_fast), :tanh),
+    (:(Base.exp), :exponential),
+    (:(Base.FastMath.exp_fast), :exponential),
+    (:(Base.expm1), :exponential_minus_one),
+    (:(Base.log), :log),
+    (:(Base.log1p), :log_plus_one),
+    (:(Base.sqrt), :sqrt),
+    (:(Base.acos), :acos),
+    (:(Base.acosh), :acosh),
+    (:(Base.asin), :asin),
+    (:(Base.asinh), :asinh),
+    (:(Base.atan), :atan),
+    (:(Base.atanh), :atanh),
+)
+    @eval $(jlop)(@nospecialize(lhs::TracedRNumber{<:Integer})) = Ops.$(hloop)(float(lhs))
+end
+
 for (jlop, hloop) in
     ((:(Base.sinpi), :sine), (:(Base.cospi), :cosine), (:(Base.tanpi), :tan))
     @eval $(jlop)(@nospecialize(lhs::TracedRNumber{T})) where {T} = Ops.$(hloop)(T(π) * lhs)

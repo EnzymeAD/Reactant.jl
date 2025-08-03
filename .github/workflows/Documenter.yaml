@@ -3,19 +3,19 @@ name: Documentation
 on:
   pull_request:
     paths:
-      - '.github/workflows/Documenter.yaml'
-      - 'docs/**'
-      - 'lib/**'
-      - 'src/**'
+      - ".github/workflows/Documenter.yaml"
+      - "docs/**"
+      - "lib/**"
+      - "src/**"
   push:
     branches:
       - main
-    tags: '*'
+    tags: "*"
     paths:
-      - '.github/workflows/Documenter.yaml'
-      - 'docs/**'
-      - 'lib/**'
-      - 'src/**'
+      - ".github/workflows/Documenter.yaml"
+      - "docs/**"
+      - "lib/**"
+      - "src/**"
 
 concurrency:
   # Same group concurrency as the `PreviewCleanup.yml` workflow, because they both
@@ -37,22 +37,14 @@ jobs:
       - uses: actions/checkout@v4
       - uses: julia-actions/setup-julia@v2
         with:
-          version: '1'
+          version: "1"
       - uses: julia-actions/cache@v2
       - name: Instantiate docs environment
+        shell: julia --color=yes --project=docs {0}
         run: |
-          julia --color=yes --project=docs -e '
-            using Pkg
-            Pkg.instantiate()'
-        env:
-          JULIA_PKG_SERVER_REGISTRY_PREFERENCE: eager
-      - name: Run doctests
-        run: |
-          julia --color=yes --project=docs -e '
-            using Documenter: DocMeta, doctest
-            using Reactant
-            DocMeta.setdocmeta!(Reactant, :DocTestSetup, :(using Reactant); recursive=true)
-            doctest(Reactant)'
+          using Pkg
+          Pkg.develop(PackageSpec(path=pwd()))
+          Pkg.instantiate()
       - name: Build documentation
         run: julia --color=yes --project=docs docs/make.jl
         env:

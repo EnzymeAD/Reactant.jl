@@ -271,7 +271,7 @@ Reactant.addressable_devices()
 
 You can inspect the type of the device, as well as its properties.
 
-## Generating Distributed Data by Concatenating Local-Worker Data
+<!-- ## Generating Distributed Data by Concatenating Local-Worker Data
 
 ## Handling Replicated Tensors
 
@@ -279,7 +279,7 @@ You can inspect the type of the device, as well as its properties.
 
 ### 8-way Batch Parallelism
 
-### 4-way Batch & 2-way Model Parallelism
+### 4-way Batch & 2-way Model Parallelism -->
 
 ## Related links
 
