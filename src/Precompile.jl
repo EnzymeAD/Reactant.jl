@@ -69,7 +69,7 @@ if Reactant_jll.is_available()
             @static if precompilation_supported()
                 x = ConcreteRNumber(2.0; client)
                 Reactant.compile(sin, (x,); client, optimize=:all)
-                if x isa ConcreteIFRTArray
+                if x isa ConcreteIFRTNumber
                     XLA.free_buffer(x.data.buffer)
                     x.data.buffer.buffer = C_NULL
                 else
