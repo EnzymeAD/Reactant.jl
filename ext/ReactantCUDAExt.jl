@@ -1489,6 +1489,7 @@ end
                 end
                 y = Reactant.ConcreteRArray([2.0]; client)
                 Reactant.Compiler.compile_mlir(square!, (y,); optimize=false)
+                finalize(y)
             end
         end
 

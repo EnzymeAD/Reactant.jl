@@ -1,5 +1,6 @@
 abstract type AbstractBuffer end
 
+function free_buffer end
 function synced_buffer end
 function buffer_on_cpu end
 function to_host end
