@@ -1494,10 +1494,9 @@ end
                     Reactant.XLA.free_buffer(y.data.buffer)
                     y.data.buffer.buffer = C_NULL
                 else
-                    ntuple(Val(length(y.data))) do i
-                        Base.@_inline_meta
-                        Reactant.XLA.free_buffer(y.data[i].buffer)
-                        y.data[i].buffer.buffer = C_NULL
+                    for dat in y.data
+                        Reactant.XLA.free_buffer(dat.buffer)
+                        dat.buffer.buffer = C_NULL
                     end
                 end
             end
