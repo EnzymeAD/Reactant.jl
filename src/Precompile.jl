@@ -73,10 +73,10 @@ if Reactant_jll.is_available()
                     XLA.free_buffer(x.data.buffer)
                     x.data.buffer.buffer = C_NULL
                 else
-                    ntuple(Val(len(y.data))) do i
+                    ntuple(Val(length(x.data))) do i
                         Base.@_inline_meta
-                        XLA.free_buffer(y.data[i].buffer)
-                        y.data[i].buffer.buffer = C_NULL
+                        XLA.free_buffer(x.data[i].buffer)
+                        x.data[i].buffer.buffer = C_NULL
                     end
                 end
 
@@ -86,7 +86,7 @@ if Reactant_jll.is_available()
                     XLA.free_buffer(y.data.buffer)
                     y.data.buffer.buffer = C_NULL
                 else
-                    ntuple(Val(len(y.data))) do i
+                    ntuple(Val(length(y.data))) do i
                         Base.@_inline_meta
                         XLA.free_buffer(y.data[i].buffer)
                         y.data[i].buffer.buffer = C_NULL
