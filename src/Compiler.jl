@@ -900,8 +900,8 @@ function optimization_passes(
         "concatenate_broadcast_in_dim",
         "compare_abs",
         "compare_mul",
-        "compare_convert",
-        "add_selects",
+        # "compare_convert",
+        # "add_selects",
     ]
 
     if !compile_options.disable_scatter_gather_optimization_passes
