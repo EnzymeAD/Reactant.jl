@@ -69,11 +69,27 @@ if Reactant_jll.is_available()
             @static if precompilation_supported()
                 x = ConcreteRNumber(2.0; client)
                 Reactant.compile(sin, (x,); client, optimize=:all)
-                finalize(x)
+                if x isa ConcreteIFRTNumber
+                    XLA.free_buffer(x.data.buffer)
+                    x.data.buffer.buffer = C_NULL
+                else
+                    for dat in x.data
+                        XLA.free_buffer(dat.buffer)
+                        dat.buffer.buffer = C_NULL
+                    end
+                end
 
                 y = ConcreteRArray([2.0]; client)
                 Reactant.compile(Base.sum, (y,); client, optimize=:all)
-                finalize(y)
+                if y isa ConcreteIFRTArray
+                    XLA.free_buffer(y.data.buffer)
+                    y.data.buffer.buffer = C_NULL
+                else
+                    for dat in y.data
+                        XLA.free_buffer(dat.buffer)
+                        dat.buffer.buffer = C_NULL
+                    end
+                end
             end
         end
 
