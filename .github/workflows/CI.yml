@@ -44,7 +44,7 @@ jobs:
           version: ${{ matrix.version }}
       - uses: julia-actions/cache@v2
         with:
-          cache-name: julia-cache;workflow=${{ github.workflow }};job=${{ github.job }};version=${{ matrix.version }};os=${{ matrix.os }};runtime=${{ matrix.runtime }};assertions=${{ matrix.assertions }}
+          cache-name: julia-cache;workflow=${{ github.workflow }};version=${{ matrix.version }};os=${{ matrix.os }};runtime=${{ matrix.runtime }};assertions=${{ matrix.assertions }}
           include-matrix: false
       - name: Warm cache
         run: |
@@ -135,7 +135,7 @@ jobs:
           version: ${{ matrix.version }}
       - uses: julia-actions/cache@v2
         with:
-          cache-name: julia-cache;workflow=${{ github.workflow }};job=${{ github.job }};version=${{ matrix.version }};os=${{ matrix.os }};runtime=${{ matrix.runtime }};assertions=${{ matrix.assertions }}
+          cache-name: julia-cache;workflow=${{ github.workflow }};version=${{ matrix.version }};os=${{ matrix.os }};runtime=${{ matrix.runtime }};assertions=${{ matrix.assertions }}
           include-matrix: false
       - uses: actions/checkout@v4
         if: ${{ matrix.assertions }}
