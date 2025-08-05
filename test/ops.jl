@@ -212,7 +212,7 @@ end
             ],
         ),
     ]
-        if x isa AbstractArray{ComplexF64} && contains(string(Reactant.devices()[1]), "TPU")
+        if a isa AbstractArray{ComplexF64} && contains(string(Reactant.devices()[1]), "TPU")
             continue
         end
         a = Reactant.to_rarray(a)
@@ -234,16 +234,21 @@ end
     )
 
     for (a, b) in [
-        (Reactant.to_rarray([1, 2, 3, 4]), Reactant.to_rarray([5, 6, -7, -8])),
+        ([1, 2, 3, 4], [5, 6, -7, -8]),
         (
-            Reactant.to_rarray([1.0, 2.0, 3.0, 4.0]),
-            Reactant.to_rarray([5.0, 6.0, -7.0, -8.0]),
+            [1.0, 2.0, 3.0, 4.0],
+            [5.0, 6.0, -7.0, -8.0],
         ),
         (
-            Reactant.to_rarray([1.0, 2.0im, 3.0, 4.0im]),
-            Reactant.to_rarray([5.0, 6.0im, -7.0im, -8.0]),
+            [1.0, 2.0im, 3.0, 4.0im],
+            [5.0, 6.0im, -7.0im, -8.0],
         ),
     ]
+        if a isa AbstractArray{ComplexF64} && contains(string(Reactant.devices()[1]), "TPU")
+            continue
+        end
+        a = Reactant.to_rarray(a)
+        b = Reactant.to_rarray(b)
         # NOTE `LinearAlgebra.dot` is not equal to `sum(a .* b)` on complex numbers due to conjugation
         @test sum(a .* b) ≈ @jit f1(a, b)
         @test kron(reshape(Array(a), length(a), 1), reshape(Array(b), 1, length(b))) ≈
