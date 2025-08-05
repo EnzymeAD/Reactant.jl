@@ -898,7 +898,7 @@ function optimization_passes(
         "select_simplify",
         "concatenate_subtract_to_subtract_pad",
         "concatenate_broadcast_in_dim",
-        # "compare_abs",
+        "compare_abs",
         # "compare_mul",
         "compare_convert",
         "add_selects",
