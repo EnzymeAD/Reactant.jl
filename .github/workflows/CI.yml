@@ -46,6 +46,19 @@ jobs:
         with:
           cache-name: julia-cache;workflow=${{ github.workflow }};version=${{ matrix.version }};os=${{ matrix.os }};runtime=${{ matrix.runtime }};assertions=${{ matrix.assertions }}
           include-matrix: false
+      - name: "Run Tests to warm cache"
+        run: |
+          import Pkg
+          Pkg.Registry.update()
+          Pkg.test()
+        shell: julia --color=yes --depwarn=yes --project=. {0}
+        env:
+          JULIA_PKG_SERVER_REGISTRY_PREFERENCE: eager
+          ENABLE_PJRT_COMPATIBILITY: 1
+          REACTANT_TEST_GROUP: "none"
+          XLA_FLAGS: "--xla_force_host_platform_device_count=12"
+          JULIA_DEBUG: "Reactant,Reactant_jll"
+
       - name: Warm cache
         run: |
           import Pkg
