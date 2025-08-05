@@ -562,89 +562,30 @@ function overloaded_mapreduce(
 ) where {T,N}
     A = materialize_traced_array(A)
 
-    if dims isa Int
-        dims = [dims]
-    end
+    original_dims = dims
+    dims isa Int && (dims = Int64[dims])
+    dims isa Colon && (dims = collect(Int64, 1:N))
+    dims isa AbstractVector{<:Integer} || (dims = collect(Int64, dims))
 
     op_in_T = Core.Compiler.return_type(f, Tuple{T})
-
-    if init === nothing
-        init = __default_init(op_in_T, op)
-
-        if typeof(init) != op_in_T
-            op_in_T = typeof(init)
-            A = typeof(init).(A)
-        end
+    reduce_init = __default_init(op_in_T, op)
+    if typeof(reduce_init) != op_in_T
+        op_in_T = typeof(reduce_init)
+        A = typeof(reduce_init).(A)
     end
+    reduce_init = TracedUtils.promote_to(TracedRNumber{op_in_T}, reduce_init)
 
-    init = [TracedUtils.broadcast_to_size(init, ()).mlir_data]
+    reduce_input = materialize_traced_array(broadcast(f, A))
 
-    inp = [broadcast(f, A).mlir_data]
+    res = Ops.reduce(reduce_input, reduce_init, dims, op)
 
-    rdims = Int64[]
+    init !== nothing && (res = op.(res, init))
 
-    if dims == (:)
-        for i in 0:(N - 1)
-            push!(rdims, i)
-        end
-    else
-        for i in dims
-            push!(rdims, i - 1)
-        end
+    original_dims isa Colon && return res
+    if res isa TracedRNumber
+        res = TracedRArray{unwrapped_eltype(res),0}((), res.mlir_data, ())
     end
-
-    in_tys = [
-        MLIR.IR.TensorType(Int64[], eltype(MLIR.IR.type(inp[1]))),
-        MLIR.IR.TensorType(Int64[], eltype(MLIR.IR.type(init[1]))),
-    ]
-
-    fnbody = MLIR.IR.Block(in_tys, [MLIR.IR.Location(), MLIR.IR.Location()])
-
-    args = (
-        TracedRNumber{Reactant.unwrapped_eltype(op_in_T)}((), MLIR.IR.argument(fnbody, 1)),
-        TracedRNumber{Reactant.unwrapped_eltype(op_in_T)}((), MLIR.IR.argument(fnbody, 2)),
-    )
-
-    resty = MLIR.IR.block!(fnbody) do
-        tmp = TracedUtils.broadcast_to_size(op(args...), ())
-        Ops.return_(tmp)
-        return eltype(MLIR.IR.type(tmp.mlir_data))
-    end
-
-    toonedims = Int[]
-    outdims = Int[]
-    for i in 1:N
-        tmp = if in(i - 1, rdims)
-            1
-        else
-            sz = size(A, i)
-            push!(outdims, sz)
-            sz
-        end
-        push!(toonedims, tmp)
-    end
-
-    TT = MLIR.IR.Type[MLIR.IR.TensorType(outdims, resty)]
-
-    body = MLIR.IR.Region()
-    push!(body, fnbody)
-    red = MLIR.Dialects.stablehlo.reduce(
-        inp, init; result_0=TT, dimensions=MLIR.IR.DenseArrayAttribute(rdims), body
-    )
-
-    red = MLIR.IR.result(red, 1)
-    redT = eltype(MLIR.IR.julia_type(MLIR.IR.type(red)))
-
-    if dims != (:)
-        red = Ops.reshape(TracedRArray(red), toonedims...)
-    else
-        if length(outdims) == 0
-            red = TracedRNumber{redT}((), red)
-        else
-            red = TracedRArray{redT,length(outdims)}((), red, (outdims...,))
-        end
-    end
-    return red
+    return Ops.reshape(res, [ifelse(i in dims, 1, size(A, i)) for i in 1:N])
 end
 
 function Base.mapreducedim!(
