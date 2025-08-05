@@ -6,6 +6,13 @@ end
 
 const REACTANT_TEST_GROUP = lowercase(get(ENV, "REACTANT_TEST_GROUP", "all"))
 
+# this is for the CI to precompile everything before running tests
+if REACTANT_TEST_GROUP == "none"
+    println("Skipping all tests as REACTANT_TEST_GROUP is set to 'none'")
+    exit(0)
+end
+
+
 @testset "Reactant.jl Tests" begin
     if REACTANT_TEST_GROUP == "all" || REACTANT_TEST_GROUP == "core"
         if Sys.isapple() && haskey(Reactant.XLA.global_backend_state.clients, "metal")
