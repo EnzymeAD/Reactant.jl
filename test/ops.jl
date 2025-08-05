@@ -179,11 +179,14 @@ end
         x = Reactant.to_rarray([0.0, π / 2, π, 3π / 2, 2π])
         @test [1.0, 0.0, -1.0, 0.0, 1.0] ≈ @jit Ops.cosine(x)
 
+
+        if !contains(string(Reactant.devices()[1]), "TPU")
         x = Reactant.to_rarray([
             0.0 + 0.0im, π / 2 + 0.0im, π + 0.0im, 3π / 2 + 0.0im, 2π + 0.0im
         ])
         @test [1.0 + 0.0im, 0.0 + 0.0im, -1.0 + 0.0im, 0.0 + 0.0im, 1.0 + 0.0im] ≈
             @jit Ops.cosine(x)
+        end
     end
 end
 
@@ -199,16 +202,21 @@ end
 
     for (a, b) in [
         (
-            Reactant.to_rarray([1.1, 2.2, 3.3, 4.4]),
-            Reactant.to_rarray([5.5, 6.6, -7.7, -8.8]),
+            [1.1, 2.2, 3.3, 4.4],
+            [5.5, 6.6, -7.7, -8.8],
         ),
         (
-            Reactant.to_rarray([1.1 + 2.2im, 3.3 + 4.4im, 5.5 + 6.6im, 7.7 + 8.8im]),
-            Reactant.to_rarray([
+            [1.1 + 2.2im, 3.3 + 4.4im, 5.5 + 6.6im, 7.7 + 8.8im],
+            [
                 9.9 + 10.10im, 11.11 + 12.12im, -13.13 + -14.14im, -15.15 + -16.16im
-            ]),
+            ],
         ),
     ]
+        if x isa AbstractArray{ComplexF64} && contains(string(Reactant.devices()[1]), "TPU")
+            continue
+        end
+        a = Reactant.to_rarray(a)
+        b = Reactant.to_rarray(b)
         @test Array(a) ./ Array(b) ≈ @jit Ops.divide(a, b)
     end
 end
