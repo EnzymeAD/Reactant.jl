@@ -51,6 +51,7 @@ jobs:
           import Pkg
           Pkg.Registry.update()
           Pkg.instantiate()
+          Pkg.resolve()
           Pkg.precompile()
         shell: julia --project=. {0}
   test:
