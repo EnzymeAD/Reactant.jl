@@ -93,8 +93,6 @@ jobs:
           #   libReactant: packaged
           #   version: '1.10'
           #   test_group: integration
-        TMPDIR: ${{ github.workspace }}/tmp
-        JULIA_DEPOT_PATH: "${{ github.workspace }}/.julia_depot:"
     steps:
       - name: Set TMPDIR
         # We have to use `${GITHUB_WORKSPACE}` instead of `github.workspace` because GitHub
@@ -106,22 +104,14 @@ jobs:
       - name: Create TMPDIR
         run: |
           mkdir -p ${{ env.TMPDIR }}
-      - name: Create Julia Depot Directory
-        run: |
-            mkdir -p ${{ github.workspace }}/.julia_depot
-      - name: Cache Julia Depot
-        uses: actions/cache@v4
-        with:
-            path: ${{ github.workspace }}/.julia_depot
-            key: julia-depot-${{ runner.os }}-${{ runner.arch }}-${{ matrix.version }}-${{ hashFiles('**/Project.toml', '**/Manifest.toml') }}
-            restore-keys: |
-                julia-depot-${{ runner.os }}-${{ runner.arch }}-${{ matrix.version }}-
-                julia-depot-${{ runner.os }}-${{ runner.arch }}-
       - uses: julia-actions/setup-julia@v2
         if: ${{ ! matrix.assertions }}
         with:
           version: ${{ matrix.version }}
       - uses: julia-actions/cache@v2
+        with:
+          cache-name: julia-cache;workflow=${{ github.workflow }};job=${{ github.job }};version=${{ matrix.version }};os=${{ matrix.os }};runtime=${{ matrix.runtime }};assertions=${{ matrix.assertions }}
+          include-matrix: false
       - uses: actions/checkout@v4
         if: ${{ matrix.assertions }}
         with:
