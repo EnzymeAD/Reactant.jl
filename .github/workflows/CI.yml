@@ -29,7 +29,32 @@ concurrency:
   cancel-in-progress: ${{ startsWith(github.ref, 'refs/pull/') }}
 
 jobs:
+  cache-warmup:
+    runs-on: ubuntu-24.04
+    strategy:
+      matrix:
+        version: ["1.10", "1.11"]
+        os: [ubuntu-24.04, ubuntu-22.04-arm, macOS-latest]
+        runtime: ["PJRT", "IFRT"]
+        assertions: [false, true]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: julia-actions/setup-julia@v2
+        with:
+          version: ${{ matrix.version }}
+      - uses: julia-actions/cache@v2
+        with:
+          cache-name: julia-cache;workflow=${{ github.workflow }};job=${{ github.job }};version=${{ matrix.version }};os=${{ matrix.os }};runtime=${{ matrix.runtime }};assertions=${{ matrix.assertions }}
+          include-matrix: false
+      - name: Warm cache
+        run: |
+          import Pkg
+          Pkg.Registry.update()
+          Pkg.instantiate()
+          Pkg.precompile()
+        shell: julia --project=. {0}
   test:
+    needs: cache-warmup
     timeout-minutes: 90
     name: Julia ${{ matrix.version }} - ${{ matrix.test_group }} - ${{ matrix.os }} - ${{ matrix.runtime }} - assertions=${{ matrix.assertions }} - ${{ github.event_name }}
     runs-on: ${{ matrix.os }}
