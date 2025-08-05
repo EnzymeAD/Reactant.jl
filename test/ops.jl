@@ -160,7 +160,7 @@ end
 
 @testset "constant" begin
     for x in [[1, 2, 3], [1.1, 2.2, 3.3], [1.1 + 2.2im, 3.3 + 4.4im, 5.5 + 6.6im]]
-        if CT == ComplexF64 && contains(string(Reactant.devices()[1]), "TPU")
+        if x isa ComplexF64 && contains(string(Reactant.devices()[1]), "TPU")
             continue
         end
         @test x ≈ @jit Ops.constant(x)
