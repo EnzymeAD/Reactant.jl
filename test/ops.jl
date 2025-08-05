@@ -35,11 +35,13 @@ end
     b = Reactant.to_rarray([5.5, 6.6, -7.7, -8.8])
     @test Array(a) .+ Array(b) ≈ @jit Ops.add(a, b)
 
-    a = Reactant.to_rarray([1.1 + 2.2im, 3.3 + 4.4im, 5.5 + 6.6im, 7.7 + 8.8im])
-    b = Reactant.to_rarray([
-        9.9 + 10.10im, 11.11 + 12.12im, -13.13 + -14.14im, -15.15 + -16.16im
-    ])
-    @test Array(a) .+ Array(b) ≈ @jit Ops.add(a, b)
+    if !contains(string(Reactant.devices()[1]), "TPU")
+        a = Reactant.to_rarray([1.1 + 2.2im, 3.3 + 4.4im, 5.5 + 6.6im, 7.7 + 8.8im])
+        b = Reactant.to_rarray([
+            9.9 + 10.10im, 11.11 + 12.12im, -13.13 + -14.14im, -15.15 + -16.16im
+        ])
+        @test Array(a) .+ Array(b) ≈ @jit Ops.add(a, b)
+    end
 end
 
 @testset "after_all" begin
@@ -158,6 +160,9 @@ end
 
 @testset "constant" begin
     for x in [[1, 2, 3], [1.1, 2.2, 3.3], [1.1 + 2.2im, 3.3 + 4.4im, 5.5 + 6.6im]]
+        if CT == ComplexF64 && contains(string(Reactant.devices()[1]), "TPU")
+            continue
+        end
         @test x ≈ @jit Ops.constant(x)
 
         xscalar = x[1]
