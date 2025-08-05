@@ -539,6 +539,9 @@ __default_init(::Type{T}, ::typeof(Base.max)) where {T} = typemin(T)
 function __default_init(::Type{T}, op::F) where {T,F}
     return Base.reduce_empty(Base.BottomRF(op), T)
 end
+function __default_init(T::Type{<:Reactant.ReactantFloat8}, op::F) where {F}
+    return T(__default_init(Float16, op))
+end
 
 function overloaded_mapreduce(
     @nospecialize(f), @nospecialize(op), @nospecialize(A); dims=:, init=nothing
@@ -567,9 +570,9 @@ function overloaded_mapreduce(
     dims isa Colon && (dims = collect(Int64, 1:N))
     dims isa AbstractVector{<:Integer} || (dims = collect(Int64, dims))
 
-    op_in_T = Core.Compiler.return_type(f, Tuple{T})
+    op_in_T = unwrapped_eltype(Core.Compiler.return_type(f, Tuple{T}))
     reduce_init = __default_init(op_in_T, op)
-    if typeof(reduce_init) != op_in_T
+    if unwrapped_eltype(typeof(reduce_init)) != op_in_T
         op_in_T = typeof(reduce_init)
         A = typeof(reduce_init).(A)
     end
@@ -581,7 +584,10 @@ function overloaded_mapreduce(
 
     init !== nothing && (res = op.(res, init))
 
-    original_dims isa Colon && return res
+    if original_dims isa Colon
+        @assert size(res) == () "expected size of result to be (), got $(size(res))"
+        return TracedRNumber{unwrapped_eltype(res)}((), res.mlir_data)
+    end
     if res isa TracedRNumber
         res = TracedRArray{unwrapped_eltype(res),0}((), res.mlir_data, ())
     end
