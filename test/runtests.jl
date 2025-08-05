@@ -12,7 +12,6 @@ if REACTANT_TEST_GROUP == "none"
     exit(0)
 end
 
-
 @testset "Reactant.jl Tests" begin
     if REACTANT_TEST_GROUP == "all" || REACTANT_TEST_GROUP == "core"
         if Sys.isapple() && haskey(Reactant.XLA.global_backend_state.clients, "metal")
