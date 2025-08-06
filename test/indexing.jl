@@ -288,23 +288,22 @@ function issue_617(outf, fr, pr, I)
     return outf
 end
 
-
 if !contains(string(Reactant.devices()[1]), "TPU")
-@testset "issue #617" begin
-    N, M = 4, 6
+    @testset "issue #617" begin
+        N, M = 4, 6
 
-    f = rand(ComplexF64, N, N)
-    p = rand(ComplexF64, N * N)
-    I = 1:(N^2)
-    out = rand(ComplexF64, M, M)
+        f = rand(ComplexF64, N, N)
+        p = rand(ComplexF64, N * N)
+        I = 1:(N^2)
+        out = rand(ComplexF64, M, M)
 
-    fr = Reactant.to_rarray(f)
-    pr = Reactant.to_rarray(p)
-    outr = Reactant.to_rarray(out)
-    Ir = Reactant.to_rarray(I)
+        fr = Reactant.to_rarray(f)
+        pr = Reactant.to_rarray(p)
+        outr = Reactant.to_rarray(out)
+        Ir = Reactant.to_rarray(I)
 
-    @test @jit(issue_617(outr, fr, pr, Ir)) ≈ issue_617(out, f, p, I)
-end
+        @test @jit(issue_617(outr, fr, pr, Ir)) ≈ issue_617(out, f, p, I)
+    end
 end
 
 function scalar_setindex(x, idx, val)
