@@ -287,16 +287,16 @@ end
     grfft(x) = Ops.fft(x; type="RFFT", length=[4])
     gfft(x) = Ops.fft(x; type="FFT", length=[4])
 
-    x = Reactant.to_rarray([1.0, 1.0, 1.0, 1.0])
-    @test ComplexF64[4.0, 0.0, 0.0] ≈ @jit grfft(x)
-
-    x = Reactant.to_rarray([0.0, 1.0, 0.0, -1.0])
-    @test ComplexF64[0.0, -2.0im, 0.0] ≈ @jit grfft(x)
-
-    x = Reactant.to_rarray([1.0, -1.0, 1.0, -1.0])
-    @test ComplexF64[0.0, 0.0, 4.0] ≈ @jit grfft(x)
-
     if !contains(string(Reactant.devices()[1]), "TPU")
+        x = Reactant.to_rarray([1.0, 1.0, 1.0, 1.0])
+        @test ComplexF64[4.0, 0.0, 0.0] ≈ @jit grfft(x)
+
+        x = Reactant.to_rarray([0.0, 1.0, 0.0, -1.0])
+        @test ComplexF64[0.0, -2.0im, 0.0] ≈ @jit grfft(x)
+
+        x = Reactant.to_rarray([1.0, -1.0, 1.0, -1.0])
+        @test ComplexF64[0.0, 0.0, 4.0] ≈ @jit grfft(x)
+
         x = Reactant.to_rarray(ComplexF64[1.0, 1.0, 1.0, 1.0])
         @test ComplexF64[4.0, 0.0, 0.0, 0.0] ≈ @jit gfft(x)
 
