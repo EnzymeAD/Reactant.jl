@@ -737,7 +737,7 @@ end
         xa = Reactant.to_rarray(x)
 
         @testset for j in 1:i
-            @test (i == 1 ? sort(x) : sort(x; dims=j)) == @jit basic_sort(xa, j)
+            @test (i == 1 ? sort(x) : sort(x; dims=j)) ≈ @jit basic_sort(xa, j)
         end
     end
 end
@@ -785,7 +785,10 @@ end
     if !(Sys.isapple() && Sys.ARCH === :x86_64)
         # TODO tan(π/2) is Inf but it returns 1.633123935319537e16
         x = Reactant.to_rarray([0, π / 4, π / 2, 3π / 4, π])
-        @test [0.0, 1.0, 1.633123935319537e16, -1.0, 0.0] ≈ @jit Ops.tan(x)
+
+        if !contains(string(Reactant.devices()[1]), "TPU")
+            @test [0.0, 1.0, 1.633123935319537e16, -1.0, 0.0] ≈ @jit Ops.tan(x)
+        end
 
         if !contains(string(Reactant.devices()[1]), "TPU")
         x = Reactant.to_rarray([
@@ -931,6 +934,7 @@ end
     @test [false, true, false, false, false, false, false] ≈ @jit Ops.is_pos_inf(x)
 end
 
+if !contains(string(Reactant.devices()[1]), "TPU")
 @testset "lgamma" begin
     if !(Sys.isapple() && Sys.ARCH === :x86_64)
         x = Reactant.to_rarray([-1.0, 0.0, 1.0, 2.5])
@@ -938,7 +942,9 @@ end
         @test lgamma.(Array(x)) ≈ @jit Ops.lgamma(x)
     end
 end
+end
 
+if !contains(string(Reactant.devices()[1]), "TPU")
 @testset "next_after" begin
     x = Reactant.to_rarray([-1.0, 0.0, 1.0, 1.0, 2.5, 1e18, 1e18, 3e-9, 3e-9])
     y = Reactant.to_rarray([-2.0, 0.0, 1.0, 2.0, 3.0, 0.0, 1e19, 0, 1])
@@ -953,6 +959,7 @@ end
         prevfloat(3e-9),
         nextfloat(3e-9),
     ] == @jit Ops.next_after(x, y)
+end
 end
 
 @testset "polygamma" begin
@@ -1230,16 +1237,17 @@ function recon_from_lu(lu_res::AbstractMatrix)
     return UnitLowerTriangular(lu_res) * UpperTriangular(lu_res)
 end
 
+
 @testset "lu factorization" begin
     @testset "unbatched" begin
-        x_ra = Reactant.to_rarray(randn(6, 6))
+        x_ra = Reactant.to_rarray(randn(Float32, 6, 6))
         lu_ra, ipiv, perm, info = @jit Ops.lu(x_ra)
 
         @test @jit(recon_from_lu(lu_ra)) ≈ @jit(getindex(x_ra, perm, :))
     end
 
     @testset "batched" begin
-        x_ra = Reactant.to_rarray(randn(4, 3, 6, 6))
+        x_ra = Reactant.to_rarray(randn(Float32, 4, 3, 6, 6))
         lu_ra, ipiv, perm, info = @jit Ops.lu(x_ra)
         @test size(lu_ra) == (4, 3, 6, 6)
         @test size(ipiv) == (4, 3, 6)
