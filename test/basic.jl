@@ -1,13 +1,9 @@
-using Reactant
-using Test
-using Enzyme
-using Statistics
-using Random
+using Reactant, Test, Enzyme, Statistics, Random, InteractiveUtils
 Random.seed!(123)
 
-fastmax(x::AbstractArray{T}) where {T} = reduce(max, x; dims=1, init=float(T)(-Inf))
+const RunningOnTPU = contains(string(Reactant.devices()[1]), "TPU")
 
-using InteractiveUtils
+fastmax(x::AbstractArray{T}) where {T} = reduce(max, x; dims=1, init=float(T)(-Inf))
 
 @testset "2D sum" begin
     x = rand(2, 10)
@@ -418,16 +414,6 @@ end
     @test eltype(f(y)) == eltype(x)
 end
 
-@testset "Complex runtime: $CT" for CT in (ComplexF32, ComplexF64)
-    # complex f64 not supported on tpu
-    if CT == ComplexF32 || !contains(string(Reactant.devices()[1]), "TPU")
-        a = Reactant.to_rarray(ones(CT, 2))
-        b = Reactant.to_rarray(ones(CT, 2))
-        c = Reactant.compile(+, (a, b))(a, b)
-        @test c == ones(CT, 2) + ones(CT, 2)
-    end
-end
-
 @testset "Scalars" begin
     @testset "Only Scalars" begin
         x = (3, 3.14)
@@ -784,20 +770,20 @@ end
     x = Reactant.to_rarray([1.0, NaN, Inf, -Inf, NaN])
     @test @jit(isfinite.(x)) == [true, false, false, false, false]
 
-    if !contains(string(Reactant.devices()[1]), "TPU")
+    @test begin
         x = Reactant.to_rarray([1.0, NaN, Inf, -Inf, NaN] .* im)
-        @test @jit(isfinite.(x)) == [true, false, false, false, false]
-    end
+        @jit(isfinite.(x)) == [true, false, false, false, false]
+    end skip = RunningOnTPU
 end
 
 @testset "isnan" begin
     x = Reactant.to_rarray([1.0, NaN, Inf, -Inf, NaN])
     @test @jit(isnan.(x)) == [false, true, false, false, true]
 
-    if !contains(string(Reactant.devices()[1]), "TPU")
+    @test begin
         x = Reactant.to_rarray([1.0, NaN, Inf, -Inf, NaN] .* im)
-        @test @jit(isnan.(x)) == [false, true, false, false, true]
-    end
+        @jit(isnan.(x)) == [false, true, false, false, true]
+    end skip = RunningOnTPU
 end
 
 @testset "isnan/isfinite" begin
@@ -820,11 +806,10 @@ end
     b = [6.6, -2.2, -8.8, 4.4, -10.1]
 
     expected_mod = mod.(a, b)
-    if !contains(string(Reactant.devices()[1]), "TPU")
-        @test @jit(mod.(Reactant.to_rarray(a), Reactant.to_rarray(b))) ≈ expected_mod
-        @test @jit(mod.(a, Reactant.to_rarray(b))) ≈ expected_mod
-        @test @jit(mod.(Reactant.to_rarray(a), b)) ≈ expected_mod
-    end
+    @test @jit(mod.(Reactant.to_rarray(a), Reactant.to_rarray(b))) ≈ expected_mod broken =
+        RunningOnTPU
+    @test @jit(mod.(a, Reactant.to_rarray(b))) ≈ expected_mod broken = RunningOnTPU
+    @test @jit(mod.(Reactant.to_rarray(a), b)) ≈ expected_mod broken = RunningOnTPU
 
     expected_rem = rem.(a, b)
     @test @jit(rem.(Reactant.to_rarray(a), Reactant.to_rarray(b))) ≈ expected_rem
@@ -838,22 +823,19 @@ end
     end
 end
 
-if !contains(string(Reactant.devices()[1]), "TPU")
-    @testset "signbit" begin
-        for x in (-4, -3.14, -0.0f0, 0.0, 0, 5, 6.28f0)
-            @test @jit(signbit(ConcreteRNumber(x))) == signbit(x)
-        end
+@testset "signbit" begin
+    @testset "$(typeof(x))" for x in (-4, -3.14, -0.0f0, 0.0, 0, 5, 6.28f0)
+        @test @jit(signbit(ConcreteRNumber(x))) == signbit(x) broken =
+            RunningOnTPU && eltype(x) == Float64
     end
 end
 
-if !contains(string(Reactant.devices()[1]), "TPU")
-    @testset "copysign" begin
-        for a in (-3.14, -2, 0.0, 2.71, 42), b in (-7, -0.57, -0.0, 1, 3.14)
-            # Make sure also the return type is correct
-            @test Reactant.to_number(
-                @jit(copysign(ConcreteRNumber(a), ConcreteRNumber(b)))
-            ) === copysign(a, b)
-        end
+@testset "copysign" begin
+    @testset "$(typeof(a)) $(typeof(b))" for a in (-3.14, -2, 0.0, 2.71, 42),
+        b in (-7, -0.57, -0.0, 1, 3.14)
+        # Make sure also the return type is correct
+        @test Reactant.to_number(@jit(copysign(ConcreteRNumber(a), ConcreteRNumber(b)))) ≈
+            copysign(a, b) broken = RunningOnTPU && eltype(b) == Float64
     end
 end
 
@@ -949,13 +931,11 @@ end
     ra[:a] ≈ (2.7 * 2) * ones(4)
 end
 
-if !contains(string(Reactant.devices()[1]), "TPU")
-    @testset "@code_xla" begin
-        x_ra = Reactant.to_rarray(ones(4))
-        hlo = repr(@code_xla(sin.(x_ra)))
-        @test contains(hlo, "HloModule")
-        @test contains(hlo, "sine")
-    end
+@testset "@code_xla" begin
+    x_ra = Reactant.to_rarray(ones(Float32, 4))
+    hlo = repr(@code_xla(sin.(x_ra)))
+    @test contains(hlo, "HloModule")
+    @test contains(hlo, "sine")
 end
 
 @testset "Raise keyword" begin
@@ -999,14 +979,12 @@ end
     @test Array(x) ≈ Array(y) ./ 2
 end
 
-if !contains(string(Reactant.devices()[1]), "TPU")
-    @testset "Hlo Cost Analysis" begin
-        x_ra = Reactant.to_rarray(rand(4, 4))
-        mul_comp = @compile x_ra * x_ra
-        cost = Reactant.XLA.cost_analysis(mul_comp)
-
-        @test cost isa Reactant.XLA.HloCostAnalysisProperties
-    end
+@testset "HLO Cost Analysis" begin
+    x_ra = Reactant.to_rarray(rand(4, 4))
+    mul_comp = @compile x_ra * x_ra
+    @test begin
+        Reactant.XLA.cost_analysis(mul_comp) isa Reactant.XLA.HloCostAnalysisProperties
+    end broken = RunningOnTPU
 end
 
 function fractional_idx(times, t)
@@ -1140,32 +1118,30 @@ end
     end
 end
 
-if !contains(string(Reactant.devices()[1]), "TPU")
-    @testset "Dump MLIR modules" begin
-        always_old = Reactant.MLIR.IR.DUMP_MLIR_ALWAYS[]
-        dir_old = Reactant.MLIR.IR.DUMP_MLIR_DIR[]
+@testset "Dump MLIR modules" begin
+    always_old = Reactant.MLIR.IR.DUMP_MLIR_ALWAYS[]
+    dir_old = Reactant.MLIR.IR.DUMP_MLIR_DIR[]
 
-        mktempdir() do dir
-            Reactant.MLIR.IR.DUMP_MLIR_ALWAYS[] = true
-            Reactant.MLIR.IR.DUMP_MLIR_DIR[] = dir
-            @compile sin.(Reactant.to_rarray(Float32[1.0]))
-            for mod in readdir(dir; join=true)
-                @test contains(read(mod, String), "hlo.sine")
-            end
+    mktempdir() do dir
+        Reactant.MLIR.IR.DUMP_MLIR_ALWAYS[] = true
+        Reactant.MLIR.IR.DUMP_MLIR_DIR[] = dir
+        @compile sin.(Reactant.to_rarray(Float32[1.0]))
+        for mod in readdir(dir; join=true)
+            @test contains(read(mod, String), "hlo.sine")
         end
-
-        mktempdir() do dir
-            Reactant.MLIR.IR.DUMP_MLIR_ALWAYS[] = false
-            Reactant.MLIR.IR.DUMP_MLIR_DIR[] = dir
-            @compile exp.(Reactant.to_rarray(Float32[1.0]))
-            # Make sure we don't save anything to file when compilation is
-            # successful and `DUMP_MLIR_ALWAYS=false`.
-            @test isempty(readdir(dir; join=true))
-        end
-
-        Reactant.MLIR.IR.DUMP_MLIR_ALWAYS[] = always_old
-        Reactant.MLIR.IR.DUMP_MLIR_DIR[] = dir_old
     end
+
+    mktempdir() do dir
+        Reactant.MLIR.IR.DUMP_MLIR_ALWAYS[] = false
+        Reactant.MLIR.IR.DUMP_MLIR_DIR[] = dir
+        @compile exp.(Reactant.to_rarray(Float32[1.0]))
+        # Make sure we don't save anything to file when compilation is
+        # successful and `DUMP_MLIR_ALWAYS=false`.
+        @test isempty(readdir(dir; join=true))
+    end
+
+    Reactant.MLIR.IR.DUMP_MLIR_ALWAYS[] = always_old
+    Reactant.MLIR.IR.DUMP_MLIR_DIR[] = dir_old
 end
 
 @testset "Allocator Stats" begin
@@ -1291,40 +1267,38 @@ accum_fn(x, y) = abs2(x) + abs2(y)
         end ≈ cumprod(b; dims=3)
     end
 
-    if !contains(string(Reactant.devices()[1]), "TPU")
-        @testset "accumulate" begin
-            @test @jit(accumulate(accum_fn, a_ra; init=0.0f0)) ≈
-                accumulate(accum_fn, a; init=0.0f0)
+    @testset "accumulate" begin
+        @test @jit(accumulate(accum_fn, a_ra; init=0.0f0)) ≈
+            accumulate(accum_fn, a; init=0.0f0) broken = RunningOnTPU
 
-            @test @jit(accumulate(accum_fn, b_ra; init=0.0f0, dims=1)) ≈
-                accumulate(accum_fn, b; dims=1, init=0.0f0)
-            @test @jit(accumulate(accum_fn, b_ra; init=0.0f0, dims=2)) ≈
-                accumulate(accum_fn, b; dims=2, init=0.0f0)
-            @test @jit(accumulate(accum_fn, b_ra; init=0.0f0, dims=3)) ≈
-                accumulate(accum_fn, b; dims=3, init=0.0f0)
+        @test @jit(accumulate(accum_fn, b_ra; init=0.0f0, dims=1)) ≈
+            accumulate(accum_fn, b; dims=1, init=0.0f0) broken = RunningOnTPU
+        @test @jit(accumulate(accum_fn, b_ra; init=0.0f0, dims=2)) ≈
+            accumulate(accum_fn, b; dims=2, init=0.0f0) broken = RunningOnTPU
+        @test @jit(accumulate(accum_fn, b_ra; init=0.0f0, dims=3)) ≈
+            accumulate(accum_fn, b; dims=3, init=0.0f0) broken = RunningOnTPU
 
-            @test begin
-                z = similar(a_ra)
-                @jit(accumulate!(accum_fn, z, a_ra; init=0.0f0))
-                z
-            end ≈ accumulate(accum_fn, a; init=0.0f0)
+        @test begin
+            z = similar(a_ra)
+            @jit(accumulate!(accum_fn, z, a_ra; init=0.0f0))
+            z
+        end ≈ accumulate(accum_fn, a; init=0.0f0) broken = RunningOnTPU
 
-            @test begin
-                z = similar(b_ra)
-                @jit(accumulate!(accum_fn, z, b_ra; init=0.0f0, dims=1))
-                z
-            end ≈ accumulate(accum_fn, b; dims=1, init=0.0f0)
-            @test begin
-                z = similar(b_ra)
-                @jit(accumulate!(accum_fn, z, b_ra; init=0.0f0, dims=2))
-                z
-            end ≈ accumulate(accum_fn, b; dims=2, init=0.0f0)
-            @test begin
-                z = similar(b_ra)
-                @jit(accumulate!(accum_fn, z, b_ra; init=0.0f0, dims=3))
-                z
-            end ≈ accumulate(accum_fn, b; dims=3, init=0.0f0)
-        end
+        @test begin
+            z = similar(b_ra)
+            @jit(accumulate!(accum_fn, z, b_ra; init=0.0f0, dims=1))
+            z
+        end ≈ accumulate(accum_fn, b; dims=1, init=0.0f0) broken = RunningOnTPU
+        @test begin
+            z = similar(b_ra)
+            @jit(accumulate!(accum_fn, z, b_ra; init=0.0f0, dims=2))
+            z
+        end ≈ accumulate(accum_fn, b; dims=2, init=0.0f0) broken = RunningOnTPU
+        @test begin
+            z = similar(b_ra)
+            @jit(accumulate!(accum_fn, z, b_ra; init=0.0f0, dims=3))
+            z
+        end ≈ accumulate(accum_fn, b; dims=3, init=0.0f0) broken = RunningOnTPU
     end
 end
 

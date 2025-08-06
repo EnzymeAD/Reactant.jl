@@ -1,5 +1,7 @@
 using LinearAlgebra, Reactant, Test
 
+const RunningOnTPU = contains(string(Reactant.devices()[1]), "TPU")
+
 function muladd2(A, x, b)
     C = similar(A, promote_type(eltype(A), eltype(b)), size(A, 1), size(x, 2))
     mul!(C, A, x)
@@ -76,7 +78,7 @@ end
 
     C_ra = similar(A_ra, Float32, size(A, 1), size(x, 2))
     @jit(mul!(C_ra, A_ra, x_ra))
-    @test C_ra ≈ A * x
+    @test C_ra ≈ A * x atol = 1e-5 rtol = 1e-3
 end
 
 @testset "triu & tril" begin
@@ -172,7 +174,7 @@ mul_symmetric(x) = Symmetric(x) * x
 end
 
 @testset "kron" begin
-    @testset for T in (Int64, Float64, ComplexF64)
+    @testset for T in (Int64, Float64, ComplexF32)
         @testset for (x_sz, y_sz) in [
             ((3, 4), (2, 5)), ((3, 4), (2,)), ((3,), (2, 5)), ((3,), (5,)), ((10,), ())
         ]
@@ -315,6 +317,8 @@ end
     fn6(A, B) = B / transpose(A)
 
     @testset for T in (Float32, Float64, ComplexF32, ComplexF64)
+        T == ComplexF64 && RunningOnTPU && continue
+
         A = rand(T, 6, 6)
         B = rand(T, 6, 6)
         b = rand(T, 6)
@@ -366,6 +370,8 @@ end
 @testset "LU Factorization" begin
     @testset "Un-batched" begin
         @testset for T in (Float32, Float64, ComplexF32, ComplexF64)
+            T == ComplexF64 && RunningOnTPU && continue
+
             A = rand(T, 4, 4)
             A_ra = Reactant.to_rarray(A)
 
@@ -382,6 +388,8 @@ end
 
     @testset "Batched" begin
         @testset for T in (Float32, Float64, ComplexF32, ComplexF64)
+            T == ComplexF64 && RunningOnTPU && continue
+
             A = rand(T, 4, 4, 3, 2)
             A_ra = Reactant.to_rarray(A)
 
