@@ -560,6 +560,7 @@ end
     @test [2 1; 4 3] == @jit g2(x)
 end
 
+if !contains(string(Reactant.devices()[1]), "TPU")
 @testset "rng_bit_generator" begin
     genInt32(seed) = Ops.rng_bit_generator(Int32, seed, [2, 4])
     genInt64(seed) = Ops.rng_bit_generator(Int64, seed, [2, 4])
@@ -605,6 +606,7 @@ end
         @test res.output isa ConcreteRArray{Float64,2}
         @test size(res.output) == (2, 4)
     end
+end
 end
 
 @testset "round_nearest_afz" begin

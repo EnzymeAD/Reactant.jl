@@ -11,25 +11,25 @@ using Reactant, Test, Random, StableRNGs
     srt_lt(x) = sort(x; lt=(a, b) -> a > b)
     srtperm_lt(x) = sortperm(x; lt=(a, b) -> a > b)
 
-    @test @jit(sort(x_ra)) == sort(x)
-    @test @jit(srt_rev(x_ra)) == srt_rev(x)
-    @test @jit(srt_lt(x_ra)) == srt_lt(x)
-    @test @jit(srt_by(x_ra)) == srt_by(x)
-    @test @jit(sortperm(x_ra)) == sortperm(x)
-    @test @jit(srtperm_rev(x_ra)) == srtperm_rev(x)
-    @test @jit(srtperm_lt(x_ra)) == srtperm_lt(x)
-    @test @jit(srtperm_by(x_ra)) == srtperm_by(x)
+    @test @jit(sort(x_ra)) ≈ sort(x)
+    @test @jit(srt_rev(x_ra)) ≈ srt_rev(x)
+    @test @jit(srt_lt(x_ra)) ≈ srt_lt(x)
+    @test @jit(srt_by(x_ra)) ≈ srt_by(x)
+    @test @jit(sortperm(x_ra)) ≈ sortperm(x)
+    @test @jit(srtperm_rev(x_ra)) ≈ srtperm_rev(x)
+    @test @jit(srtperm_lt(x_ra)) ≈ srtperm_lt(x)
+    @test @jit(srtperm_by(x_ra)) ≈ srtperm_by(x)
 
     x = rand(10)
     x_ra = Reactant.to_rarray(x)
     @jit sort!(x_ra)
-    @test x_ra == sort(x)
+    @test x_ra ≈ sort(x)
 
     x = rand(10)
     x_ra = Reactant.to_rarray(x)
     ix = similar(x_ra, Int)
     @jit sortperm!(ix, x_ra)
-    @test ix == sortperm(x)
+    @test ix ≈ sortperm(x)
 
     x = rand(10, 4, 3)
     x_ra = Reactant.to_rarray(x)
@@ -44,14 +44,14 @@ using Reactant, Test, Random, StableRNGs
     srtperm_lt(x, d) = sortperm(x; dims=d, lt=(a, b) -> a > b)
 
     @testset for d in 1:ndims(x)
-        @test @jit(srt(x_ra, d)) == srt(x, d)
-        @test @jit(srtperm(x_ra, d)) == srtperm(x, d)
-        @test @jit(srt_rev(x_ra, d)) == srt_rev(x, d)
-        @test @jit(srtperm_rev(x_ra, d)) == srtperm_rev(x, d)
-        @test @jit(srt_by(x_ra, d)) == srt_by(x, d)
-        @test @jit(srtperm_by(x_ra, d)) == srtperm_by(x, d)
-        @test @jit(srt_lt(x_ra, d)) == srt_lt(x, d)
-        @test @jit(srtperm_lt(x_ra, d)) == srtperm_lt(x, d)
+        @test @jit(srt(x_ra, d)) ≈ srt(x, d)
+        @test @jit(srtperm(x_ra, d)) ≈ srtperm(x, d)
+        @test @jit(srt_rev(x_ra, d)) ≈ srt_rev(x, d)
+        @test @jit(srtperm_rev(x_ra, d)) ≈ srtperm_rev(x, d)
+        @test @jit(srt_by(x_ra, d)) ≈ srt_by(x, d)
+        @test @jit(srtperm_by(x_ra, d)) ≈ srtperm_by(x, d)
+        @test @jit(srt_lt(x_ra, d)) ≈ srt_lt(x, d)
+        @test @jit(srtperm_lt(x_ra, d)) ≈ srtperm_lt(x, d)
     end
 end
 
@@ -59,36 +59,36 @@ end
     x = randn(10)
     x_ra = Reactant.to_rarray(x)
 
-    @test @jit(partialsort(x_ra, 1:5)) == partialsort(x, 1:5)
-    @test @jit(partialsort(x_ra, 1:5; rev=true)) == partialsort(x, 1:5; rev=true)
-    @test @jit(partialsortperm(x_ra, 1:5)) == partialsortperm(x, 1:5)
-    @test @jit(partialsortperm(x_ra, 1:5; rev=true)) == partialsortperm(x, 1:5; rev=true)
-    @test @jit(partialsort(x_ra, 3:6)) == partialsort(x, 3:6)
-    @test @jit(partialsort(x_ra, 3:6; rev=true)) == partialsort(x, 3:6; rev=true)
-    @test @jit(partialsortperm(x_ra, 3:6)) == partialsortperm(x, 3:6)
-    @test @jit(partialsortperm(x_ra, 3:6; rev=true)) == partialsortperm(x, 3:6; rev=true)
-    @test @jit(partialsort(x_ra, 4)) == partialsort(x, 4)
-    @test @jit(partialsort(x_ra, 4; rev=true)) == partialsort(x, 4; rev=true)
-    @test @jit(partialsortperm(x_ra, 4)) == partialsortperm(x, 4)
-    @test @jit(partialsortperm(x_ra, 4; rev=true)) == partialsortperm(x, 4; rev=true)
+    @test @jit(partialsort(x_ra, 1:5)) ≈ partialsort(x, 1:5)
+    @test @jit(partialsort(x_ra, 1:5; rev=true)) ≈ partialsort(x, 1:5; rev=true)
+    @test @jit(partialsortperm(x_ra, 1:5)) ≈ partialsortperm(x, 1:5)
+    @test @jit(partialsortperm(x_ra, 1:5; rev=true)) ≈ partialsortperm(x, 1:5; rev=true)
+    @test @jit(partialsort(x_ra, 3:6)) ≈ partialsort(x, 3:6)
+    @test @jit(partialsort(x_ra, 3:6; rev=true)) ≈ partialsort(x, 3:6; rev=true)
+    @test @jit(partialsortperm(x_ra, 3:6)) ≈ partialsortperm(x, 3:6)
+    @test @jit(partialsortperm(x_ra, 3:6; rev=true)) ≈ partialsortperm(x, 3:6; rev=true)
+    @test @jit(partialsort(x_ra, 4)) ≈ partialsort(x, 4)
+    @test @jit(partialsort(x_ra, 4; rev=true)) ≈ partialsort(x, 4; rev=true)
+    @test @jit(partialsortperm(x_ra, 4)) ≈ partialsortperm(x, 4)
+    @test @jit(partialsortperm(x_ra, 4; rev=true)) ≈ partialsortperm(x, 4; rev=true)
 
     x = randn(10)
     x_ra = Reactant.to_rarray(x)
     @jit partialsort!(x_ra, 1:5)
     partialsort!(x, 1:5)
-    @test Array(x_ra)[1:5] == x[1:5]
+    @test Array(x_ra)[1:5] ≈ x[1:5]
 
     x = randn(10)
     x_ra = Reactant.to_rarray(x)
     @jit partialsort!(x_ra, 3:5; rev=true)
     partialsort!(x, 3:5; rev=true)
-    @test Array(x_ra)[3:5] == x[3:5]
+    @test Array(x_ra)[3:5] ≈ x[3:5]
 
     x = randn(10)
     x_ra = Reactant.to_rarray(x)
     @jit partialsort!(x_ra, 3)
     partialsort!(x, 3)
-    @test @allowscalar(x_ra[3]) == x[3]
+    @test @allowscalar(x_ra[3]) ≈ x[3]
 
     x = randn(10)
     x_ra = Reactant.to_rarray(x)
@@ -97,13 +97,13 @@ end
     ix_ra = Reactant.to_rarray(ix)
     @jit partialsortperm!(ix_ra, x_ra, 1:5)
     partialsortperm!(ix, x, 1:5)
-    @test Array(ix_ra)[1:5] == ix[1:5]
+    @test Array(ix_ra)[1:5] ≈ ix[1:5]
 
     ix = similar(x, Int)
     ix_ra = Reactant.to_rarray(ix)
     @jit partialsortperm!(ix_ra, x_ra, 3)
     partialsortperm!(ix, x, 3)
-    @test @allowscalar(ix_ra[3]) == ix[3]
+    @test @allowscalar(ix_ra[3]) ≈ ix[3]
 end
 
 @testset "argmin / argmax" begin

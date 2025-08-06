@@ -1282,20 +1282,22 @@ function scan_impl!(
 
     dims > ndims(input) && return copyto!(output, input)
 
-    if init === nothing
-        op_in_T = Core.Compiler.return_type(op, Tuple{T,T})
-        op_in_T === Union{} && (op_in_T = T)
+    op_in_T = Core.Compiler.return_type(op, Tuple{T,T})
+    op_in_T === Union{} && (op_in_T = T)
 
+    if init === nothing
         init = __default_init(T, op)
-        if typeof(init) != op_in_T
-            op_in_T = typeof(init)
-            input = typeof(init).(input)
-        end
     else
+        initT = __default_init(T, op)
         # TODO: fix this for TPUs
-        if contains(string(first(Reactant.devices())), "TPU")
+        if initT != init && contains(string(first(Reactant.devices())), "TPU")
             throw(AssertionError("Currently, `init` is not supported on TPUs."))
         end
+    end
+
+    if typeof(init) != op_in_T
+        op_in_T = typeof(init)
+        input = typeof(init).(input)
     end
     init = something(init) # unwrap Some
     init = TracedUtils.promote_to(TracedRNumber{unwrapped_eltype(init)}, init)
