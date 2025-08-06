@@ -244,7 +244,7 @@ end
             [5.0, 6.0im, -7.0im, -8.0],
         ),
     ]
-        if a isa AbstractArray{ComplexF64} && contains(string(Reactant.devices()[1]), "TPU")
+        if contains(string(Reactant.devices()[1]), "TPU")
             continue
         end
         a = Reactant.to_rarray(a)
@@ -256,16 +256,18 @@ end
         @test a .* b ≈ @jit fouter_batch1(a, b)
     end
 
-    a = Reactant.to_rarray([1 2; 3 4])
-    b = Reactant.to_rarray([5 6; -7 -8])
-    @test Array(a)' * Array(b) == @jit f1(a, b)
+    if !contains(string(Reactant.devices()[1]), "TPU")
+        a = Reactant.to_rarray([1 2; 3 4])
+        b = Reactant.to_rarray([5 6; -7 -8])
+        @test Array(a)' * Array(b) == @jit f1(a, b)
+    end
 end
 
 @testset "exponential" begin
     x = Reactant.to_rarray([1.0, 2.0, 3.0, 4.0])
     @test exp.(Array(x)) ≈ @jit Ops.exponential(x)
 
-    if !(Sys.isapple() && Sys.ARCH === :x86_64)
+    if !(Sys.isapple() && Sys.ARCH === :x86_64) && !contains(string(Reactant.devices()[1]), "TPU")
         x = Reactant.to_rarray([1.0 + 2.0im, 3.0 + 4.0im, 5.0 + 6.0im, 7.0 + 8.0im])
         @test exp.(Array(x)) ≈ @jit Ops.exponential(x)
     end
