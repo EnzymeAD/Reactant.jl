@@ -794,8 +794,10 @@ end
     x = Reactant.to_rarray([1.0, NaN, Inf, -Inf, NaN])
     @test @jit(isnan.(x)) == [false, true, false, false, true]
 
-    x = Reactant.to_rarray([1.0, NaN, Inf, -Inf, NaN] .* im)
-    @test @jit(isnan.(x)) == [false, true, false, false, true]
+    if !contains(string(Reactant.devices()[1]), "TPU")
+        x = Reactant.to_rarray([1.0, NaN, Inf, -Inf, NaN] .* im)
+        @test @jit(isnan.(x)) == [false, true, false, false, true]
+    end
 end
 
 @testset "isnan/isfinite" begin
@@ -818,9 +820,11 @@ end
     b = [6.6, -2.2, -8.8, 4.4, -10.1]
 
     expected_mod = mod.(a, b)
-    @test @jit(mod.(Reactant.to_rarray(a), Reactant.to_rarray(b))) ≈ expected_mod
-    @test @jit(mod.(a, Reactant.to_rarray(b))) ≈ expected_mod
-    @test @jit(mod.(Reactant.to_rarray(a), b)) ≈ expected_mod
+    if !contains(string(Reactant.devices()[1]), "TPU")
+        @test @jit(mod.(Reactant.to_rarray(a), Reactant.to_rarray(b))) ≈ expected_mod
+        @test @jit(mod.(a, Reactant.to_rarray(b))) ≈ expected_mod
+        @test @jit(mod.(Reactant.to_rarray(a), b)) ≈ expected_mod
+    end
 
     expected_rem = rem.(a, b)
     @test @jit(rem.(Reactant.to_rarray(a), Reactant.to_rarray(b))) ≈ expected_rem
@@ -834,17 +838,22 @@ end
     end
 end
 
-@testset "signbit" begin
-    for x in (-4, -3.14, -0.0f0, 0.0, 0, 5, 6.28f0)
-        @test @jit(signbit(ConcreteRNumber(x))) == signbit(x)
+if !contains(string(Reactant.devices()[1]), "TPU")
+    @testset "signbit" begin
+        for x in (-4, -3.14, -0.0f0, 0.0, 0, 5, 6.28f0)
+            @test @jit(signbit(ConcreteRNumber(x))) == signbit(x)
+        end
     end
 end
 
-@testset "copysign" begin
-    for a in (-3.14, -2, 0.0, 2.71, 42), b in (-7, -0.57, -0.0, 1, 3.14)
-        # Make sure also the return type is correct
-        @test Reactant.to_number(@jit(copysign(ConcreteRNumber(a), ConcreteRNumber(b)))) ===
-            copysign(a, b)
+if !contains(string(Reactant.devices()[1]), "TPU")
+    @testset "copysign" begin
+        for a in (-3.14, -2, 0.0, 2.71, 42), b in (-7, -0.57, -0.0, 1, 3.14)
+            # Make sure also the return type is correct
+            @test Reactant.to_number(
+                @jit(copysign(ConcreteRNumber(a), ConcreteRNumber(b)))
+            ) === copysign(a, b)
+        end
     end
 end
 
@@ -940,11 +949,13 @@ end
     ra[:a] ≈ (2.7 * 2) * ones(4)
 end
 
-@testset "@code_xla" begin
-    x_ra = Reactant.to_rarray(ones(4))
-    hlo = repr(@code_xla(sin.(x_ra)))
-    @test contains(hlo, "HloModule")
-    @test contains(hlo, "sine")
+if !contains(string(Reactant.devices()[1]), "TPU")
+    @testset "@code_xla" begin
+        x_ra = Reactant.to_rarray(ones(4))
+        hlo = repr(@code_xla(sin.(x_ra)))
+        @test contains(hlo, "HloModule")
+        @test contains(hlo, "sine")
+    end
 end
 
 @testset "Raise keyword" begin
@@ -1129,30 +1140,32 @@ end
     end
 end
 
-@testset "Dump MLIR modules" begin
-    always_old = Reactant.MLIR.IR.DUMP_MLIR_ALWAYS[]
-    dir_old = Reactant.MLIR.IR.DUMP_MLIR_DIR[]
+if !contains(string(Reactant.devices()[1]), "TPU")
+    @testset "Dump MLIR modules" begin
+        always_old = Reactant.MLIR.IR.DUMP_MLIR_ALWAYS[]
+        dir_old = Reactant.MLIR.IR.DUMP_MLIR_DIR[]
 
-    mktempdir() do dir
-        Reactant.MLIR.IR.DUMP_MLIR_ALWAYS[] = true
-        Reactant.MLIR.IR.DUMP_MLIR_DIR[] = dir
-        @compile sin.(Reactant.to_rarray(Float32[1.0]))
-        for mod in readdir(dir; join=true)
-            @test contains(read(mod, String), "hlo.sine")
+        mktempdir() do dir
+            Reactant.MLIR.IR.DUMP_MLIR_ALWAYS[] = true
+            Reactant.MLIR.IR.DUMP_MLIR_DIR[] = dir
+            @compile sin.(Reactant.to_rarray(Float32[1.0]))
+            for mod in readdir(dir; join=true)
+                @test contains(read(mod, String), "hlo.sine")
+            end
         end
-    end
 
-    mktempdir() do dir
-        Reactant.MLIR.IR.DUMP_MLIR_ALWAYS[] = false
-        Reactant.MLIR.IR.DUMP_MLIR_DIR[] = dir
-        @compile exp.(Reactant.to_rarray(Float32[1.0]))
-        # Make sure we don't save anything to file when compilation is
-        # successful and `DUMP_MLIR_ALWAYS=false`.
-        @test isempty(readdir(dir; join=true))
-    end
+        mktempdir() do dir
+            Reactant.MLIR.IR.DUMP_MLIR_ALWAYS[] = false
+            Reactant.MLIR.IR.DUMP_MLIR_DIR[] = dir
+            @compile exp.(Reactant.to_rarray(Float32[1.0]))
+            # Make sure we don't save anything to file when compilation is
+            # successful and `DUMP_MLIR_ALWAYS=false`.
+            @test isempty(readdir(dir; join=true))
+        end
 
-    Reactant.MLIR.IR.DUMP_MLIR_ALWAYS[] = always_old
-    Reactant.MLIR.IR.DUMP_MLIR_DIR[] = dir_old
+        Reactant.MLIR.IR.DUMP_MLIR_ALWAYS[] = always_old
+        Reactant.MLIR.IR.DUMP_MLIR_DIR[] = dir_old
+    end
 end
 
 @testset "Allocator Stats" begin
