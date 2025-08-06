@@ -1,5 +1,7 @@
 using LinearAlgebra, Reactant, Test
 
+const RunningOnTPU = contains(string(Reactant.devices()[1]), "TPU")
+
 function update_on_copy(x)
     y = x[1:2, 2:4, :]
     y[1:1, 1:1, :] = ones(1, 1, 3)

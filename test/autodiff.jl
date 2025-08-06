@@ -248,7 +248,7 @@ end
 
 @testset "seed" begin
     x = Reactant.to_rarray(rand(2, 2))
-    st = (; rng=Reactant.ConcreteRNG())
+    st = (; rng=Reactant.ReactantRNG())
 
     @test begin
         hlo = @code_hlo gradient_fn(x, st)

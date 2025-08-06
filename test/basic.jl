@@ -416,9 +416,9 @@ end
 
 @testset "Complex runtime: $CT" for CT in (ComplexF32, ComplexF64)
     # complex f64 not supported on tpu
-    a = Reactant.to_rarray(ones(CT, 2))
-    b = Reactant.to_rarray(ones(CT, 2))
     @test begin
+        a = Reactant.to_rarray(ones(CT, 2))
+        b = Reactant.to_rarray(ones(CT, 2))
         c = Reactant.compile(+, (a, b))(a, b)
         c == ones(CT, 2) + ones(CT, 2)
     end broken = CT != ComplexF32 && RunningOnTPU
@@ -987,11 +987,12 @@ end
     @test Array(x) ≈ Array(y) ./ 2
 end
 
-@test "HLO Cost Analysis" begin
+@testset "HLO Cost Analysis" begin
     x_ra = Reactant.to_rarray(rand(4, 4))
     mul_comp = @compile x_ra * x_ra
-    @test Reactant.XLA.cost_analysis(mul_comp) isa Reactant.XLA.HloCostAnalysisProperties broken =
-        RunningOnTPU
+    @test begin
+        Reactant.XLA.cost_analysis(mul_comp) isa Reactant.XLA.HloCostAnalysisProperties
+    end broken = RunningOnTPU
 end
 
 function fractional_idx(times, t)

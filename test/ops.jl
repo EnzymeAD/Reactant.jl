@@ -17,10 +17,12 @@ const RunningOnAppleX86 = Sys.isapple() && Sys.ARCH === :x86_64
         3.0+4im -3.0+4im
         3.0-4im -3.0-4im
     ])
-    @test [
-        5.0 5.0
-        5.0 5.0
-    ] ≈ @jit Ops.abs(x) broken = RunningOnTPU
+    @test begin
+        [
+            5.0 5.0
+            5.0 5.0
+        ] ≈ @jit(Ops.abs(x))
+    end broken = RunningOnTPU
 end
 
 @testset "add" begin
@@ -40,7 +42,7 @@ end
     b = Reactant.to_rarray([
         9.9 + 10.10im, 11.11 + 12.12im, -13.13 + -14.14im, -15.15 + -16.16im
     ])
-    @test Array(a) .+ Array(b) ≈ @jit Ops.add(a, b) broken = RunningOnTPU
+    @test Array(a) .+ Array(b) ≈ @jit(Ops.add(a, b)) broken = RunningOnTPU
 end
 
 @testset "after_all" begin
