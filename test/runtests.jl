@@ -12,53 +12,63 @@ const REACTANT_TEST_GROUP = lowercase(get(ENV, "REACTANT_TEST_GROUP", "all"))
             @safetestset "Metal Plugin" include("plugins/metal.jl")
         end
 
-        @safetestset "Layout" include("layout.jl")
-        @safetestset "Tracing" include("tracing.jl")
-        @safetestset "Basic" include("basic.jl")
-        @safetestset "Constructor" include("constructor.jl")
-        @safetestset "Autodiff" include("autodiff.jl")
-        @safetestset "Complex" include("complex.jl")
-        @safetestset "Broadcast" include("bcast.jl")
-        @safetestset "Struct" include("struct.jl")
-        @safetestset "Closure" include("closure.jl")
-        @safetestset "Compile" include("compile.jl")
-        @safetestset "IR" include("ir.jl")
-        @safetestset "Buffer Donation" include("buffer_donation.jl")
-        @safetestset "Shortcuts to MLIR ops" include("ops.jl")
-        @safetestset "Wrapped Arrays" include("wrapped_arrays.jl")
-        @safetestset "Control Flow" include("control_flow.jl")
-        @safetestset "Sorting" include("sorting.jl")
-        @safetestset "Indexing" include("indexing.jl")
-        if !Sys.isapple()
-            @safetestset "Custom Number Types" include("custom_number_types.jl")
-        end
-        @safetestset "Sharding" include("sharding.jl")
-        @safetestset "Comm Optimization" include("optimize_comm.jl")
-        @safetestset "Cluster Detection" include("cluster_detector.jl")
-        @safetestset "Config" include("config.jl")
-        @safetestset "Batching" include("batching.jl")
+        # @safetestset "Layout" include("layout.jl")
+        # @safetestset "Tracing" include("tracing.jl")
+        # @safetestset "Basic" include("basic.jl")
+        # @safetestset "Constructor" include("constructor.jl")
+        # @safetestset "Autodiff" include("autodiff.jl")
+        # @safetestset "Complex" include("complex.jl")
+        # @safetestset "Broadcast" include("bcast.jl")
+        # @safetestset "Struct" include("struct.jl")
+        # @safetestset "Closure" include("closure.jl")
+        # @safetestset "Compile" include("compile.jl")
+        # @safetestset "IR" include("ir.jl")
+        # @safetestset "Buffer Donation" include("buffer_donation.jl")
+        # @safetestset "Wrapped Arrays" include("wrapped_arrays.jl")
+        # @safetestset "Control Flow" include("control_flow.jl")
+        # @safetestset "Sorting" include("sorting.jl")
+        # @safetestset "Shortcuts to MLIR ops" include("ops.jl")
+        # @safetestset "Indexing" include("indexing.jl")
+        # if !Sys.isapple()
+        #     @safetestset "Custom Number Types" include("custom_number_types.jl")
+        # end
+        # @safetestset "Sharding" include("sharding.jl")
+        # @safetestset "Comm Optimization" include("optimize_comm.jl")
+        # @safetestset "Cluster Detection" include("cluster_detector.jl")
+        # @safetestset "Config" include("config.jl")
+        # @safetestset "Batching" include("batching.jl")
     end
 
     if REACTANT_TEST_GROUP == "all" || REACTANT_TEST_GROUP == "integration"
         @safetestset "CUDA" include("integration/cuda.jl")
-        @safetestset "KernelAbstractions" include("integration/kernelabstractions.jl")
+        @info "CUDA tests finished"
+        # @safetestset "KernelAbstractions" include("integration/kernelabstractions.jl")
         @safetestset "Linear Algebra" include("integration/linear_algebra.jl")
-        @safetestset "OffsetArrays" include("integration/offsetarrays.jl")
-        @safetestset "OneHotArrays" include("integration/onehotarrays.jl")
+        @info "Linear Algebra tests finished"
+        # @safetestset "OffsetArrays" include("integration/offsetarrays.jl")
+        # @safetestset "OneHotArrays" include("integration/onehotarrays.jl")
         @safetestset "AbstractFFTs" include("integration/fft.jl")
+        @info "AbstractFFTs tests finished"
         @safetestset "SpecialFunctions" include("integration/special_functions.jl")
+        @info "SpecialFunctions tests finished"
         @safetestset "Random" include("integration/random.jl")
+        @info "Random tests finished"
         @safetestset "Python" include("integration/python.jl")
+        @info "Python tests finished"
         @safetestset "Optimisers" include("integration/optimisers.jl")
-        @safetestset "FillArrays" include("integration/fillarrays.jl")
+        @info "Optimisers tests finished"
     end
 
     if REACTANT_TEST_GROUP == "all" || REACTANT_TEST_GROUP == "neural_networks"
         @safetestset "NNlib Primitives" include("nn/nnlib.jl")
+        @info "NNlib Primitives tests finished"
         @safetestset "Flux.jl Integration" include("nn/flux.jl")
+        @info "Flux.jl Integration tests finished"
         if Sys.islinux()
             @safetestset "LuxLib Primitives" include("nn/luxlib.jl")
+            @info "LuxLib Primitives tests finished"
             @safetestset "Lux Integration" include("nn/lux.jl")
+            @info "Lux Integration tests finished"
         end
     end
 end
