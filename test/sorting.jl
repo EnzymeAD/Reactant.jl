@@ -155,10 +155,10 @@ end
         return values, LinearIndices(x)[indices]
     end
 
-    @test fwithlinindices(findmin, identity, x) == @jit(findmin(x_ra))
-    @test fwithlinindices(findmax, identity, x) == @jit(findmax(x_ra))
-    @test fwithlinindices(findmin, identity, xvec) ≈ @jit(findmin(xvec_ra))
-    @test fwithlinindices(findmax, identity, xvec) ≈ @jit(findmax(xvec_ra))
+    dual_approx(fwithlinindices(findmin, identity, x), @jit(findmin(x_ra)))
+    dual_approx(fwithlinindices(findmax, identity, x), @jit(findmax(x_ra)))
+    dual_approx(fwithlinindices(findmin, identity, xvec), @jit(findmin(xvec_ra)))
+    dual_approx(fwithlinindices(findmax, identity, xvec), @jit(findmax(xvec_ra)))
 
     fmindims(x, d) = findmin(x; dims=d)
     fmindims(f, x, d) = findmin(f, x; dims=d)
