@@ -4,6 +4,10 @@ NSYNC_COMMIT = "82b118aa7ace3132e517e2c467f8732978cf4023"
 
 NSYNC_SHA256 = ""
 
+ENZYMEXLA_COMMIT = "6d35a269ccdad42c170cbc660d9c00bfe270ce02"
+
+ENZYMEXLA_SHA256 = ""
+
 http_archive(
     name = "nsync",
     sha256 = NSYNC_SHA256,
@@ -11,44 +15,12 @@ http_archive(
     urls = ["https://github.com/wsmoses/nsync/archive/{commit}.tar.gz".format(commit = NSYNC_COMMIT)],
 )
 
-ENZYMEXLA_COMMIT = "fec4f6a25c046ff6acc29161656745fefa2fccda"
-
-ENZYMEXLA_SHA256 = ""
-
 http_archive(
     name = "enzyme_ad",
     sha256 = ENZYMEXLA_SHA256,
     strip_prefix = "Enzyme-JAX-" + ENZYMEXLA_COMMIT,
     urls = ["https://github.com/EnzymeAD/Enzyme-JAX/archive/{commit}.tar.gz".format(commit = ENZYMEXLA_COMMIT)],
 )
-
-# Hedron's Compile Commands Extractor for Bazel
-# https://github.com/hedronvision/bazel-compile-commands-extractor
-http_archive(
-    name = "hedron_compile_commands",
-    strip_prefix = "bazel-compile-commands-extractor-4f28899228fb3ad0126897876f147ca15026151e",
-
-    # Replace the commit hash (0e990032f3c5a866e72615cf67e5ce22186dcb97) in both places (below) with the latest (https://github.com/hedronvision/bazel-compile-commands-extractor/commits/main), rather than using the stale one here.
-    # Even better, set up Renovate and let it do the work for you (see "Suggestion: Updates" in the README).
-    url = "https://github.com/hedronvision/bazel-compile-commands-extractor/archive/4f28899228fb3ad0126897876f147ca15026151e.tar.gz",
-    # When you first run this tool, it'll recommend a sha256 hash to put here with a message like: "DEBUG: Rule 'hedron_compile_commands' indicated that a canonical reproducible form can be obtained by modifying arguments sha256 = ..."
-)
-
-load("@hedron_compile_commands//:workspace_setup.bzl", "hedron_compile_commands_setup")
-
-hedron_compile_commands_setup()
-
-load("@hedron_compile_commands//:workspace_setup_transitive.bzl", "hedron_compile_commands_setup_transitive")
-
-hedron_compile_commands_setup_transitive()
-
-load("@hedron_compile_commands//:workspace_setup_transitive_transitive.bzl", "hedron_compile_commands_setup_transitive_transitive")
-
-hedron_compile_commands_setup_transitive_transitive()
-
-load("@hedron_compile_commands//:workspace_setup_transitive_transitive_transitive.bzl", "hedron_compile_commands_setup_transitive_transitive_transitive")
-
-hedron_compile_commands_setup_transitive_transitive_transitive()
 
 load("@enzyme_ad//:workspace.bzl", "ENZYME_COMMIT", "ENZYME_SHA256", "JAX_COMMIT", "JAX_SHA256", "XLA_PATCHES")
 
@@ -177,25 +149,6 @@ http_archive(
     urls = ["https://github.com/giordano/xla/archive/{commit}.tar.gz".format(commit = XLA_COMMIT)],
 )
 
-load("@xla//third_party/py:python_init_rules.bzl", "python_init_rules")
-
-python_init_rules()
-
-load("@xla//third_party/py:python_init_repositories.bzl", "python_init_repositories")
-
-python_init_repositories(
-    requirements = {
-        "3.9": "//build:requirements_lock_3_9.txt",
-        "3.10": "//build:requirements_lock_3_10.txt",
-        "3.11": "//build:requirements_lock_3_11.txt",
-        "3.12": "//build:requirements_lock_3_12.txt",
-        "3.13": "//build:requirements_lock_3_13.txt",
-    },
-)
-
-load("@xla//third_party/py:python_init_toolchains.bzl", "python_init_toolchains")
-
-python_init_toolchains()
 #
 # load("@xla//third_party/py:python_init_pip.bzl", "python_init_pip")
 # python_init_pip()
@@ -233,6 +186,34 @@ load("@jax//third_party/xla:workspace.bzl", jax_xla_workspace = "repo")
 
 jax_xla_workspace()
 
+load("@xla//:workspace4.bzl", "xla_workspace4")
+
+xla_workspace4()
+
+load("@xla//:workspace3.bzl", "xla_workspace3")
+
+xla_workspace3()
+
+load("@xla//third_party/py:python_init_rules.bzl", "python_init_rules")
+
+python_init_rules()
+
+load("@xla//third_party/py:python_init_repositories.bzl", "python_init_repositories")
+
+python_init_repositories(
+    requirements = {
+        "3.9": "//build:requirements_lock_3_9.txt",
+        "3.10": "//build:requirements_lock_3_10.txt",
+        "3.11": "//build:requirements_lock_3_11.txt",
+        "3.12": "//build:requirements_lock_3_12.txt",
+        "3.13": "//build:requirements_lock_3_13.txt",
+    },
+)
+
+load("@xla//third_party/py:python_init_toolchains.bzl", "python_init_toolchains")
+
+python_init_toolchains()
+
 load("@xla//third_party/llvm:workspace.bzl", llvm = "repo")
 
 llvm("llvm-raw")
@@ -243,14 +224,6 @@ llvm_configure(
     name = "llvm-project",
     targets = LLVM_TARGETS,
 )
-
-load("@xla//:workspace4.bzl", "xla_workspace4")
-
-xla_workspace4()
-
-load("@xla//:workspace3.bzl", "xla_workspace3")
-
-xla_workspace3()
 
 load("@xla//:workspace2.bzl", "xla_workspace2")
 
@@ -284,6 +257,12 @@ python_wheel_version_suffix_repository(
 load("@jax//third_party/flatbuffers:workspace.bzl", flatbuffers = "repo")
 
 flatbuffers()
+
+load("@jax//:test_shard_count.bzl", "test_shard_count_repository")
+
+test_shard_count_repository(
+    name = "test_shard_count",
+)
 
 load(
     "@rules_ml_toolchain//cc_toolchain/deps:cc_toolchain_deps.bzl",
@@ -367,3 +346,31 @@ load(
 nvshmem_redist_init_repository(
     nvshmem_redistributions = NVSHMEM_REDISTRIBUTIONS,
 )
+
+# Hedron's Compile Commands Extractor for Bazel
+# https://github.com/hedronvision/bazel-compile-commands-extractor
+http_archive(
+    name = "hedron_compile_commands",
+    strip_prefix = "bazel-compile-commands-extractor-4f28899228fb3ad0126897876f147ca15026151e",
+
+    # Replace the commit hash (0e990032f3c5a866e72615cf67e5ce22186dcb97) in both places (below) with the latest (https://github.com/hedronvision/bazel-compile-commands-extractor/commits/main), rather than using the stale one here.
+    # Even better, set up Renovate and let it do the work for you (see "Suggestion: Updates" in the README).
+    url = "https://github.com/hedronvision/bazel-compile-commands-extractor/archive/4f28899228fb3ad0126897876f147ca15026151e.tar.gz",
+    # When you first run this tool, it'll recommend a sha256 hash to put here with a message like: "DEBUG: Rule 'hedron_compile_commands' indicated that a canonical reproducible form can be obtained by modifying arguments sha256 = ..."
+)
+
+load("@hedron_compile_commands//:workspace_setup.bzl", "hedron_compile_commands_setup")
+
+hedron_compile_commands_setup()
+
+load("@hedron_compile_commands//:workspace_setup_transitive.bzl", "hedron_compile_commands_setup_transitive")
+
+hedron_compile_commands_setup_transitive()
+
+load("@hedron_compile_commands//:workspace_setup_transitive_transitive.bzl", "hedron_compile_commands_setup_transitive_transitive")
+
+hedron_compile_commands_setup_transitive_transitive()
+
+load("@hedron_compile_commands//:workspace_setup_transitive_transitive_transitive.bzl", "hedron_compile_commands_setup_transitive_transitive_transitive")
+
+hedron_compile_commands_setup_transitive_transitive_transitive()

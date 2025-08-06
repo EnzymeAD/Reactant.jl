@@ -220,6 +220,11 @@ A set `nontemporal` attribute indicates that this load is not expected to
 be reused in the cache. For details, refer to the
 [https://llvm.org/docs/LangRef.html#load-instruction](LLVM load instruction).
 
+An optional `alignment` attribute allows to specify the byte alignment of the
+load operation. It must be a positive power of 2. The operation must access
+memory at an address aligned to this boundary. Violations may lead to
+architecture-specific faults or performance penalties.
+A value of 0 indicates no specific alignment requirement.
 # Example
 
 ```mlir
@@ -231,6 +236,7 @@ function load(
     indices::Vector{Value};
     result=nothing::Union{Nothing,IR.Type},
     nontemporal=nothing,
+    alignment=nothing,
     location=Location(),
 )
     op_ty_results = IR.Type[]
@@ -240,6 +246,7 @@ function load(
     attributes = NamedAttribute[]
     !isnothing(result) && push!(op_ty_results, result)
     !isnothing(nontemporal) && push!(attributes, namedattribute("nontemporal", nontemporal))
+    !isnothing(alignment) && push!(attributes, namedattribute("alignment", alignment))
 
     return create_operation(
         "memref.load",
@@ -1522,6 +1529,11 @@ A set `nontemporal` attribute indicates that this store is not expected to
 be reused in the cache. For details, refer to the
 [https://llvm.org/docs/LangRef.html#store-instruction](LLVM store instruction).
 
+An optional `alignment` attribute allows to specify the byte alignment of the
+store operation. It must be a positive power of 2. The operation must access
+memory at an address aligned to this boundary. Violations may lead to
+architecture-specific faults or performance penalties.
+A value of 0 indicates no specific alignment requirement.
 # Example
 
 ```mlir
@@ -1533,6 +1545,7 @@ function store(
     memref::Value,
     indices::Vector{Value};
     nontemporal=nothing,
+    alignment=nothing,
     location=Location(),
 )
     op_ty_results = IR.Type[]
@@ -1541,6 +1554,7 @@ function store(
     successors = Block[]
     attributes = NamedAttribute[]
     !isnothing(nontemporal) && push!(attributes, namedattribute("nontemporal", nontemporal))
+    !isnothing(alignment) && push!(attributes, namedattribute("alignment", alignment))
 
     return create_operation(
         "memref.store",

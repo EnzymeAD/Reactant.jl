@@ -1435,8 +1435,7 @@ extern "C" HeldIfrtArray *ifrt_client_make_array_from_host_buffer(
       std::nullopt, // byte_strides
       sharding->obj(),
       static_cast<ifrt::Client::HostBufferSemantics>(c_semantics),
-      [] {}, // on_done_with_host_buffer,
-      client->CreateUserContext())));
+      [] {})));
 }
 
 extern "C" HeldIfrtArray *ifrt_client_make_single_shard_array_from_host_buffer(
@@ -1670,7 +1669,7 @@ extern "C" ifrt::Client *ifrt_pjrt_make_client(
 extern "C" ifrt::Client *ifrt_pjrt_make_client_with_default_kv_store(
     PjRtClient *pjrt_client, int node_id, int num_nodes,
     void *distributed_runtime_client, const char **error,
-    std::string key_prefix) {
+    const char* key_prefix) {
   std::optional<std::shared_ptr<KeyValueStoreInterface>> kv_store;
   return ifrt_pjrt_make_client(pjrt_client, node_id, num_nodes,
                                distributed_runtime_client, error, key_prefix,
@@ -1846,7 +1845,7 @@ ifrt_CreateDeviceListFromDevices(ifrt::Client *client,
                                  ifrt::Device **device_list,
                                  int32_t num_devices) {
   absl::Span<ifrt::Device *const> devices(device_list, num_devices);
-  return client->MakeDeviceList(devices);
+  return MyValueOrThrow(client->MakeDeviceList(devices));
 }
 
 extern "C" ifrt::Memory *ifrt_DeviceGetDefaultMemory(ifrt::Device *device) {
@@ -2660,8 +2659,7 @@ extern "C" HeldIfrtArray *ifrt_make_array_from_host_buffer_shards(
       sharding);
   auto arrays = MyValueOrThrow(client->MakeArraysFromHostBufferShards(
       absl::MakeSpan(&spec, 1),
-      static_cast<ifrt::Client::HostBufferSemantics>(c_host_buffer_semantics),
-      client->CreateUserContext()));
+      static_cast<ifrt::Client::HostBufferSemantics>(c_host_buffer_semantics)));
   return reactant::capture(arrays[0]);
 }
 
@@ -2717,17 +2715,18 @@ struct LinkableRuntime {
     auto mpi = getenv("OMPI_COMM_WORLD_RANK");
     device = 0;
     if (mpi) {
-      llvm::errs() << " mpi : " << mpi << "\n";
       device = atoi(mpi);
-    } else
-      llvm::errs() << " mpi: null\n";
+    }
+
     client = nullptr;
 
     if (backend == "xla-tpu") {
       if (device == 0) {
         client = MakeTPUClient(nullptr, &error);
-        if (error)
+        if (error) {
           llvm::errs() << " error: " << error << "\n";
+	  exit(1);
+	}
       }
     } else if (backend == "xla-gpu") {
       int node_id = 0;
@@ -2742,8 +2741,10 @@ struct LinkableRuntime {
       client = MakeGPUClient(node_id, num_nodes, allowed_devices,
                              num_allowed_devices, mem_fraction, gpu_preallocate,
                              platform, &refstr, distributed_runtime_client);
-      if (!client)
+      if (!client) {
         llvm::errs() << " error: " << refstr << "\n";
+	exit(1);
+      }
       assert(client);
       // Weird stream issue in freeing cuda client.
       shouldFreeClient = false;

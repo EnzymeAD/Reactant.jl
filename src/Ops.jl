@@ -1064,6 +1064,7 @@ function broadcast_in_dim(
     location=mlir_stacktrace("broadcast_in_dim", @__FILE__, @__LINE__),
 ) where {T,N}
     @assert length(dims) == N
+    @assert length(result_size) ≥ N
 
     res = MLIR.IR.result(
         stablehlo.broadcast_in_dim(

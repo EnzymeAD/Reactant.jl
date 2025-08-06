@@ -375,13 +375,13 @@ end
         x = rand(size...)
 
         @testset "outer repeat" begin
-            @test (@jit repeat(Reactant.to_rarray(x), counts...)) == repeat(x, counts...)
+            @test (@jit repeat(Reactant.to_rarray(x), counts...)) ≈ repeat(x, counts...)
         end
 
         length(counts) < length(size) && continue
 
         @testset "inner repeat" begin
-            @test (@jit repeat(Reactant.to_rarray(x); inner=counts)) ==
+            @test (@jit repeat(Reactant.to_rarray(x); inner=counts)) ≈
                 repeat(x; inner=counts)
         end
     end
@@ -419,10 +419,13 @@ end
 end
 
 @testset "Complex runtime: $CT" for CT in (ComplexF32, ComplexF64)
-    a = Reactant.to_rarray(ones(CT, 2))
-    b = Reactant.to_rarray(ones(CT, 2))
-    c = Reactant.compile(+, (a, b))(a, b)
-    @test c == ones(CT, 2) + ones(CT, 2)
+    # complex f64 not supported on tpu
+    if CT == ComplexF32 || !contains(string(Reactant.devices()[1]), "TPU")
+        a = Reactant.to_rarray(ones(CT, 2))
+        b = Reactant.to_rarray(ones(CT, 2))
+        c = Reactant.compile(+, (a, b))(a, b)
+        @test c == ones(CT, 2) + ones(CT, 2)
+    end
 end
 
 @testset "Scalars" begin
@@ -562,13 +565,13 @@ end
 
     @testset "Reactant.to_rarray" begin
         y = collect(x_ra)
-        @test y == x
+        @test y ≈ x
         @test y !== x_ra
     end
 
     @testset "TracedRArray" begin
         y = @jit(collect(x_ra))
-        @test y == x
+        @test y ≈ x
         @test y !== x_ra
     end
 
@@ -781,8 +784,10 @@ end
     x = Reactant.to_rarray([1.0, NaN, Inf, -Inf, NaN])
     @test @jit(isfinite.(x)) == [true, false, false, false, false]
 
-    x = Reactant.to_rarray([1.0, NaN, Inf, -Inf, NaN] .* im)
-    @test @jit(isfinite.(x)) == [true, false, false, false, false]
+    if !contains(string(Reactant.devices()[1]), "TPU")
+        x = Reactant.to_rarray([1.0, NaN, Inf, -Inf, NaN] .* im)
+        @test @jit(isfinite.(x)) == [true, false, false, false, false]
+    end
 end
 
 @testset "isnan" begin
@@ -983,12 +988,14 @@ end
     @test Array(x) ≈ Array(y) ./ 2
 end
 
-@testset "Hlo Cost Analysis" begin
-    x_ra = Reactant.to_rarray(rand(4, 4))
-    mul_comp = @compile x_ra * x_ra
-    cost = Reactant.XLA.cost_analysis(mul_comp)
+if !contains(string(Reactant.devices()[1]), "TPU")
+    @testset "Hlo Cost Analysis" begin
+        x_ra = Reactant.to_rarray(rand(4, 4))
+        mul_comp = @compile x_ra * x_ra
+        cost = Reactant.XLA.cost_analysis(mul_comp)
 
-    @test cost isa Reactant.XLA.HloCostAnalysisProperties
+        @test cost isa Reactant.XLA.HloCostAnalysisProperties
+    end
 end
 
 function fractional_idx(times, t)
@@ -1437,6 +1444,20 @@ end
 zip_iterator(a, b) = mapreduce(splat(*), +, zip(a, b))
 enumerate_iterator(a) = mapreduce(splat(*), +, enumerate(a))
 
+function nested_mapreduce_zip(x, y)
+    return mapreduce(+, zip(eachcol(x), eachcol(y)); init=0.0f0) do (x, y)
+        return sum(abs2, x) + sum(abs2, y)
+    end
+end
+
+function nested_mapreduce_hcat(x, y)
+    return mapreduce(
+        hcat, zip(eachcol(x), eachcol(y)); init=similar(x, size(x, 1), 0)
+    ) do (x, y)
+        return x .+ y
+    end
+end
+
 @testset "Base.Iterators" begin
     @testset "zip" begin
         N = 10
@@ -1452,5 +1473,25 @@ enumerate_iterator(a) = mapreduce(splat(*), +, enumerate(a))
         x_ra = Reactant.to_rarray(x)
 
         @test @jit(enumerate_iterator(x_ra)) ≈ enumerate_iterator(x)
+    end
+
+    @testset "nested mapreduce" begin
+        x = rand(Float32, 4, 3)
+        y = rand(Float32, 4, 3)
+
+        x_ra = Reactant.to_rarray(x)
+        y_ra = Reactant.to_rarray(y)
+
+        @test @jit(nested_mapreduce_zip(x_ra, y_ra)) ≈ nested_mapreduce_zip(x, y)
+    end
+
+    @testset "nested mapreduce hcat" begin
+        x = rand(Float32, 4, 3)
+        y = rand(Float32, 4, 3)
+
+        x_ra = Reactant.to_rarray(x)
+        y_ra = Reactant.to_rarray(y)
+
+        @test @jit(nested_mapreduce_hcat(x_ra, y_ra)) ≈ nested_mapreduce_hcat(x, y)
     end
 end

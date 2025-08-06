@@ -756,7 +756,7 @@ platform(
 platform(
     name = "win_x86_64",
     constraint_values = [
-        "@platforms//os:linux",
+        "@platforms//os:windows",
         "@platforms//cpu:x86_64",
     ],
 )
@@ -764,7 +764,7 @@ platform(
 platform(
     name = "win_aarch64",
     constraint_values = [
-        "@platforms//os:linux",
+        "@platforms//os:windows",
         "@platforms//cpu:aarch64",
     ],
 )
