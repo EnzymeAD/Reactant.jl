@@ -1290,6 +1290,11 @@ function scan_impl!(
             op_in_T = typeof(init)
             input = typeof(init).(input)
         end
+    else
+        # TODO: fix this for TPUs
+        if contains(string(first(Reactant.devices())), "TPU")
+            throw(AssertionError("Currently, `init` is not supported on TPUs."))
+        end
     end
     init = something(init) # unwrap Some
     init = TracedUtils.promote_to(TracedRNumber{unwrapped_eltype(init)}, init)
