@@ -1177,13 +1177,13 @@ function optimization_passes(
     end
 
     if !CONCATS_TO_DUS[]
-      push!(transform_passes_list, "dynamic_update_to_concat<1>")
+        push!(transform_passes_list, "dynamic_update_to_concat<1>")
     end
 
     lower_transform_passes = copy(transform_passes_list)
 
     if CONCATS_TO_DUS[]
-      push!(transform_passes_list, "dynamic_update_to_concat<1>")
+        push!(transform_passes_list, "dynamic_update_to_concat<1>")
     end
 
     if recognize_comms
@@ -1206,9 +1206,11 @@ function optimization_passes(
         ",",
     )
     if CONCATS_TO_DUS[]
-        transform_passes = transform_passes * ",enzyme-hlo-generate-td{patterns=concat_to_onedim_dus},transform-interpreter,enzyme-hlo-remove-transform"
+        transform_passes =
+            transform_passes *
+            ",enzyme-hlo-generate-td{patterns=concat_to_onedim_dus},transform-interpreter,enzyme-hlo-remove-transform"
         if lower_comms
-           push!(lower_transform_passes, "concat_to_onedim_dus")
+            push!(lower_transform_passes, "concat_to_onedim_dus")
         end
     end
     func_passes = join(["canonicalize", "cse", "canonicalize", transform_passes], ",")

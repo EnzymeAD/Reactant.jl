@@ -406,7 +406,9 @@ end
 
 Base.similar(a::ConcretePJRTArray, dims::Dims) = similar(a, eltype(a), dims)
 
-@inline function Base.similar(AT::Type{<:ConcretePJRTArray{T}}, dims::Dims; kwargs...) where {T}
+@inline function Base.similar(
+    AT::Type{<:ConcretePJRTArray{T}}, dims::Dims; kwargs...
+) where {T}
     return Base.similar(AT, T, dims; kwargs...)
 end
 

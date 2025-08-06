@@ -48,10 +48,9 @@ end
 end
 
 function write_row_simple!(xs_mut, i, v)
-   xs_mut[:, i] = v
-   nothing
+    xs_mut[:, i] = v
+    return nothing
 end
-   
 @testset "setindex: DUS" begin
     x_ra = similar(ConcreteRArray{Float64}, (76, 100))
     y_ra = similar(ConcreteRArray{Float64}, 76)
