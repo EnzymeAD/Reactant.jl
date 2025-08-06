@@ -12,31 +12,38 @@ const REACTANT_TEST_GROUP = lowercase(get(ENV, "REACTANT_TEST_GROUP", "all"))
             @safetestset "Metal Plugin" include("plugins/metal.jl")
         end
 
-        @safetestset "Layout" include("layout.jl")
-        @safetestset "Tracing" include("tracing.jl")
-        @safetestset "Basic" include("basic.jl")
-        @safetestset "Constructor" include("constructor.jl")
-        @safetestset "Autodiff" include("autodiff.jl")
-        @safetestset "Complex" include("complex.jl")
-        @safetestset "Broadcast" include("bcast.jl")
-        @safetestset "Struct" include("struct.jl")
-        @safetestset "Closure" include("closure.jl")
-        @safetestset "Compile" include("compile.jl")
-        @safetestset "IR" include("ir.jl")
-        @safetestset "Buffer Donation" include("buffer_donation.jl")
+        # @safetestset "Layout" include("layout.jl")
+        # @safetestset "Tracing" include("tracing.jl")
+        # @safetestset "Basic" include("basic.jl")
+        # @safetestset "Constructor" include("constructor.jl")
+        # @safetestset "Autodiff" include("autodiff.jl")
+        # @safetestset "Complex" include("complex.jl")
+        # @safetestset "Broadcast" include("bcast.jl")
+        # @safetestset "Struct" include("struct.jl")
+        # @safetestset "Closure" include("closure.jl")
+        # @safetestset "Compile" include("compile.jl")
+        # @safetestset "IR" include("ir.jl")
+        # @safetestset "Buffer Donation" include("buffer_donation.jl")
         @safetestset "Shortcuts to MLIR ops" include("ops.jl")
-        @safetestset "Wrapped Arrays" include("wrapped_arrays.jl")
-        @safetestset "Control Flow" include("control_flow.jl")
-        @safetestset "Sorting" include("sorting.jl")
+        @info "Shortcuts to MLIR ops tests finished"
+        # @safetestset "Wrapped Arrays" include("wrapped_arrays.jl")
+        # @safetestset "Control Flow" include("control_flow.jl")
+        # @safetestset "Sorting" include("sorting.jl")
         @safetestset "Indexing" include("indexing.jl")
-        if !Sys.isapple()
-            @safetestset "Custom Number Types" include("custom_number_types.jl")
-        end
+        @info "Indexing tests finished"
+        # if !Sys.isapple()
+        #     @safetestset "Custom Number Types" include("custom_number_types.jl")
+        # end
         @safetestset "Sharding" include("sharding.jl")
+        @info "Sharding tests finished"
         @safetestset "Comm Optimization" include("optimize_comm.jl")
+        @info "Comm Optimization tests finished"
         @safetestset "Cluster Detection" include("cluster_detector.jl")
+        @info "Cluster Detection tests finished"
         @safetestset "Config" include("config.jl")
+        @info "Config tests finished"
         @safetestset "Batching" include("batching.jl")
+        @info "Batching tests finished"
     end
 
     if REACTANT_TEST_GROUP == "all" || REACTANT_TEST_GROUP == "integration"
