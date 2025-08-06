@@ -138,6 +138,11 @@ end
     @test argmax(abs2, x) ≈ @jit(argmax(abs2, x_ra))
 end
 
+function dual_approx(x, y)
+    @test (x[1] ≈ y[1])
+    @test (x[2] ≈ y[2])
+end
+
 @testset "findmin / findmax" begin
     xvec = randn(10)
     xvec_ra = Reactant.to_rarray(xvec)
@@ -160,14 +165,14 @@ end
     fmaxdims(x, d) = findmax(x; dims=d)
     fmaxdims(f, x, d) = findmax(f, x; dims=d)
 
-    @test fwithlinindices(findmin, identity, x; dims=1) ≈ @jit(fmindims(x_ra, 1))
-    @test fwithlinindices(findmax, identity, x; dims=1) ≈ @jit(fmaxdims(x_ra, 1))
-    @test fwithlinindices(findmin, identity, x; dims=2) ≈ @jit(fmindims(x_ra, 2))
-    @test fwithlinindices(findmax, identity, x; dims=2) ≈ @jit(fmaxdims(x_ra, 2))
-    @test fwithlinindices(findmin, abs2, x; dims=1) ≈ @jit(fmindims(abs2, x_ra, 1))
-    @test fwithlinindices(findmax, abs2, x; dims=1) ≈ @jit(fmaxdims(abs2, x_ra, 1))
-    @test fwithlinindices(findmin, abs2, x; dims=2) ≈ @jit(fmindims(abs2, x_ra, 2))
-    @test fwithlinindices(findmax, abs2, x; dims=2) ≈ @jit(fmaxdims(abs2, x_ra, 2))
+    dual_approx(fwithlinindices(findmin, identity, x; dims=1), @jit(fmindims(x_ra, 1)))
+    dual_approx(fwithlinindices(findmax, identity, x; dims=1), @jit(fmaxdims(x_ra, 1)))
+    dual_approx(fwithlinindices(findmin, identity, x; dims=2), @jit(fmindims(x_ra, 2)))
+    dual_approx(fwithlinindices(findmax, identity, x; dims=2), @jit(fmaxdims(x_ra, 2)))
+    dual_approx(fwithlinindices(findmin, abs2, x; dims=1), @jit(fmindims(abs2, x_ra, 1)))
+    dual_approx(fwithlinindices(findmax, abs2, x; dims=1), @jit(fmaxdims(abs2, x_ra, 1)))
+    dual_approx(fwithlinindices(findmin, abs2, x; dims=2), @jit(fmindims(abs2, x_ra, 2)))
+    dual_approx(fwithlinindices(findmax, abs2, x; dims=2), @jit(fmaxdims(abs2, x_ra, 2)))
 end
 
 @testset "findfirst / findlast" begin
