@@ -206,7 +206,7 @@ end
         (res.val ≈ 4ones(2, 2)) &&
             (res.derivs[1] ≈ 4ones(2, 2)) &&
             (res.derivs[2] ≈ 2ones(2, 2))
-    end broken=contains(string(Reactant.devices()[1]), "TPU")
+    end broken = contains(string(Reactant.devices()[1]), "TPU")
 end
 
 @testset "onehot" begin
