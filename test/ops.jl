@@ -3,6 +3,9 @@ using Reactant: Ops
 using LinearAlgebra
 using SpecialFunctions: SpecialFunctions
 
+const RunningOnTPU = contains(string(Reactant.devices()[1]), "TPU")
+const RunningOnAppleX86 = Sys.isapple() && Sys.ARCH === :x86_64
+
 @testset "abs" begin
     x = Reactant.to_rarray([1, -1])
     @test [1, 1] ≈ @jit Ops.abs(x)
@@ -10,16 +13,14 @@ using SpecialFunctions: SpecialFunctions
     x = Reactant.to_rarray([1.0, -1.0])
     @test [1.0, 1.0] ≈ @jit Ops.abs(x)
 
-    if !contains(string(Reactant.devices()[1]), "TPU")
-        x = Reactant.to_rarray([
-            3.0+4im -3.0+4im
-            3.0-4im -3.0-4im
-        ])
-        @test [
-            5.0 5.0
-            5.0 5.0
-        ] ≈ @jit Ops.abs(x)
-    end
+    x = Reactant.to_rarray([
+        3.0+4im -3.0+4im
+        3.0-4im -3.0-4im
+    ])
+    @test [
+        5.0 5.0
+        5.0 5.0
+    ] ≈ @jit Ops.abs(x) broken = RunningOnTPU
 end
 
 @testset "add" begin
@@ -35,13 +36,11 @@ end
     b = Reactant.to_rarray([5.5, 6.6, -7.7, -8.8])
     @test Array(a) .+ Array(b) ≈ @jit Ops.add(a, b)
 
-    if !contains(string(Reactant.devices()[1]), "TPU")
-        a = Reactant.to_rarray([1.1 + 2.2im, 3.3 + 4.4im, 5.5 + 6.6im, 7.7 + 8.8im])
-        b = Reactant.to_rarray([
-            9.9 + 10.10im, 11.11 + 12.12im, -13.13 + -14.14im, -15.15 + -16.16im
-        ])
-        @test Array(a) .+ Array(b) ≈ @jit Ops.add(a, b)
-    end
+    a = Reactant.to_rarray([1.1 + 2.2im, 3.3 + 4.4im, 5.5 + 6.6im, 7.7 + 8.8im])
+    b = Reactant.to_rarray([
+        9.9 + 10.10im, 11.11 + 12.12im, -13.13 + -14.14im, -15.15 + -16.16im
+    ])
+    @test Array(a) .+ Array(b) ≈ @jit Ops.add(a, b) broken = RunningOnTPU
 end
 
 @testset "after_all" begin
@@ -99,18 +98,16 @@ end
     @test cholesky(Array(x)).U ≈ @jit g1(x)
     @test transpose(cholesky(Array(x)).U) ≈ @jit g2(x)
 
-    if !contains(string(Reactant.devices()[1]), "TPU")
-        x = Reactant.to_rarray(
-            [
-                10.0+0.0im 2.0-3.0im 3.0-4.0im
-                2.0+3.0im 5.0+0.0im 3.0-2.0im
-                3.0+4.0im 3.0+2.0im 9.0+0.0im
-            ],
-        )
+    x = Reactant.to_rarray(
+        [
+            10.0+0.0im 2.0-3.0im 3.0-4.0im
+            2.0+3.0im 5.0+0.0im 3.0-2.0im
+            3.0+4.0im 3.0+2.0im 9.0+0.0im
+        ],
+    )
 
-        @test cholesky(Array(x)).U ≈ @jit g1(x)
-        @test adjoint(cholesky(Array(x)).U) ≈ @jit g2(x)
-    end
+    @test cholesky(Array(x)).U ≈ @jit g1(x) broken = RunningOnTPU
+    @test adjoint(cholesky(Array(x)).U) ≈ @jit g2(x) broken = RunningOnTPU
 end
 
 @testset "clamp" begin
@@ -146,16 +143,15 @@ end
     end
 end
 
-if !contains(string(Reactant.devices()[1]), "TPU")
-    @testset "complex" begin
-        x = Reactant.to_rarray(1.1; track_numbers=true)
-        y = Reactant.to_rarray(2.2; track_numbers=true)
-        @test 1.1 + 2.2im ≈ @jit Ops.complex(x, y)
+@testset "complex" begin
+    x = Reactant.to_rarray(1.1; track_numbers=true)
+    y = Reactant.to_rarray(2.2; track_numbers=true)
+    @test 1.1 + 2.2im ≈ @jit Ops.complex(x, y) broken = RunningOnTPU
 
-        x = Reactant.to_rarray([1.1, 2.2, 3.3, 4.4])
-        y = Reactant.to_rarray([5.5, 6.6, -7.7, -8.8])
-        @test [1.1 + 5.5im, 2.2 + 6.6im, 3.3 - 7.7im, 4.4 - 8.8im] ≈ @jit Ops.complex(x, y)
-    end
+    x = Reactant.to_rarray([1.1, 2.2, 3.3, 4.4])
+    y = Reactant.to_rarray([5.5, 6.6, -7.7, -8.8])
+    @test [1.1 + 5.5im, 2.2 + 6.6im, 3.3 - 7.7im, 4.4 - 8.8im] ≈
+        @jit Ops.complex(x, y) broken = RunningOnTPU
 end
 
 @testset "constant" begin
@@ -172,21 +168,17 @@ end
 
 @testset "cosine" begin
     # it crashes in apple x86_64 and it's a deprecated platform so we don't need to care a lot...
-    if !(Sys.isapple() && Sys.ARCH === :x86_64)
-        x = Reactant.to_rarray([0, π / 2, π, 3π / 2, 2π])
-        @test [1, 0, -1, 0, 1] ≈ @jit Ops.cosine(x)
+    x = Reactant.to_rarray([0, π / 2, π, 3π / 2, 2π])
+    @test [1, 0, -1, 0, 1] ≈ @jit Ops.cosine(x) broken = RunningOnAppleX86
 
-        x = Reactant.to_rarray([0.0, π / 2, π, 3π / 2, 2π])
-        @test [1.0, 0.0, -1.0, 0.0, 1.0] ≈ @jit Ops.cosine(x)
+    x = Reactant.to_rarray([0.0, π / 2, π, 3π / 2, 2π])
+    @test [1.0, 0.0, -1.0, 0.0, 1.0] ≈ @jit Ops.cosine(x) broken = RunningOnAppleX86
 
-        if !contains(string(Reactant.devices()[1]), "TPU")
-            x = Reactant.to_rarray([
-                0.0 + 0.0im, π / 2 + 0.0im, π + 0.0im, 3π / 2 + 0.0im, 2π + 0.0im
-            ])
-            @test [1.0 + 0.0im, 0.0 + 0.0im, -1.0 + 0.0im, 0.0 + 0.0im, 1.0 + 0.0im] ≈
-                @jit Ops.cosine(x)
-        end
-    end
+    x = Reactant.to_rarray([
+        0.0 + 0.0im, π / 2 + 0.0im, π + 0.0im, 3π / 2 + 0.0im, 2π + 0.0im
+    ])
+    @test [1.0 + 0.0im, 0.0 + 0.0im, -1.0 + 0.0im, 0.0 + 0.0im, 1.0 + 0.0im] ≈
+        @jit Ops.cosine(x) broken = RunningOnTPU || RunningOnAppleX86
 end
 
 @testset "count_leading_zeros" begin
@@ -244,58 +236,50 @@ end
         @test a .* b ≈ @jit fouter_batch1(a, b)
     end
 
-    if !contains(string(Reactant.devices()[1]), "TPU")
-        a = Reactant.to_rarray([1 2; 3 4])
-        b = Reactant.to_rarray([5 6; -7 -8])
-        @test Array(a)' * Array(b) == @jit f1(a, b)
-    end
+    a = Reactant.to_rarray([1 2; 3 4])
+    b = Reactant.to_rarray([5 6; -7 -8])
+    @test Array(a)' * Array(b) == @jit f1(a, b) broken = RunningOnTPU
 end
 
 @testset "exponential" begin
     x = Reactant.to_rarray([1.0, 2.0, 3.0, 4.0])
     @test exp.(Array(x)) ≈ @jit Ops.exponential(x)
 
-    if !(Sys.isapple() && Sys.ARCH === :x86_64) &&
-        !contains(string(Reactant.devices()[1]), "TPU")
-        x = Reactant.to_rarray([1.0 + 2.0im, 3.0 + 4.0im, 5.0 + 6.0im, 7.0 + 8.0im])
-        @test exp.(Array(x)) ≈ @jit Ops.exponential(x)
-    end
+    x = Reactant.to_rarray([1.0 + 2.0im, 3.0 + 4.0im, 5.0 + 6.0im, 7.0 + 8.0im])
+    @test exp.(Array(x)) ≈
+        @jit Ops.exponential(x) broken = RunningOnTPU || RunningOnAppleX86
 end
 
 @testset "exponential_minus_one" begin
     x = Reactant.to_rarray([1.0, 2.0, 3.0, 4.0])
     @test expm1.(Array(x)) ≈ @jit Ops.exponential_minus_one(x)
 
-    if !(Sys.isapple() && Sys.ARCH === :x86_64) &&
-        !contains(string(Reactant.devices()[1]), "TPU")
-        x = Reactant.to_rarray([1.0 + 2.0im, 3.0 + 4.0im, 5.0 + 6.0im, 7.0 + 8.0im])
-        @test expm1.(Array(x)) ≈ @jit Ops.exponential_minus_one(x)
-    end
+    x = Reactant.to_rarray([1.0 + 2.0im, 3.0 + 4.0im, 5.0 + 6.0im, 7.0 + 8.0im])
+    @test expm1.(Array(x)) ≈
+        @jit Ops.exponential_minus_one(x) broken = RunningOnTPU || RunningOnAppleX86
 end
 
 @testset "fft" begin
     grfft(x) = Ops.fft(x; type="RFFT", length=[4])
     gfft(x) = Ops.fft(x; type="FFT", length=[4])
 
-    if !contains(string(Reactant.devices()[1]), "TPU")
-        x = Reactant.to_rarray([1.0, 1.0, 1.0, 1.0])
-        @test ComplexF64[4.0, 0.0, 0.0] ≈ @jit grfft(x)
+    x = Reactant.to_rarray([1.0, 1.0, 1.0, 1.0])
+    @test ComplexF64[4.0, 0.0, 0.0] ≈ @jit grfft(x) broken = RunningOnTPU
 
-        x = Reactant.to_rarray([0.0, 1.0, 0.0, -1.0])
-        @test ComplexF64[0.0, -2.0im, 0.0] ≈ @jit grfft(x)
+    x = Reactant.to_rarray([0.0, 1.0, 0.0, -1.0])
+    @test ComplexF64[0.0, -2.0im, 0.0] ≈ @jit grfft(x) broken = RunningOnTPU
 
-        x = Reactant.to_rarray([1.0, -1.0, 1.0, -1.0])
-        @test ComplexF64[0.0, 0.0, 4.0] ≈ @jit grfft(x)
+    x = Reactant.to_rarray([1.0, -1.0, 1.0, -1.0])
+    @test ComplexF64[0.0, 0.0, 4.0] ≈ @jit grfft(x) broken = RunningOnTPU
 
-        x = Reactant.to_rarray(ComplexF64[1.0, 1.0, 1.0, 1.0])
-        @test ComplexF64[4.0, 0.0, 0.0, 0.0] ≈ @jit gfft(x)
+    x = Reactant.to_rarray(ComplexF64[1.0, 1.0, 1.0, 1.0])
+    @test ComplexF64[4.0, 0.0, 0.0, 0.0] ≈ @jit gfft(x) broken = RunningOnTPU
 
-        x = Reactant.to_rarray(ComplexF64[0.0, 1.0, 0.0, -1.0])
-        @test ComplexF64[0.0, -2.0im, 0.0, 2.0im] ≈ @jit gfft(x)
+    x = Reactant.to_rarray(ComplexF64[0.0, 1.0, 0.0, -1.0])
+    @test ComplexF64[0.0, -2.0im, 0.0, 2.0im] ≈ @jit gfft(x) broken = RunningOnTPU
 
-        x = Reactant.to_rarray(ComplexF64[1.0, -1.0, 1.0, -1.0])
-        @test ComplexF64[0.0, 0.0, 4.0, 0.0] ≈ @jit gfft(x)
-    end
+    x = Reactant.to_rarray(ComplexF64[1.0, -1.0, 1.0, -1.0])
+    @test ComplexF64[0.0, 0.0, 4.0, 0.0] ≈ @jit gfft(x) broken = RunningOnTPU
 
     # TODO test with complex numbers and inverse FFT
 end
@@ -317,11 +301,9 @@ end
     end
 end
 
-if !contains(string(Reactant.devices()[1]), "TPU")
-    @testset "imag" begin
-        x = Reactant.to_rarray([1.1 + 2.2im, 3.3 + 4.4im, 5.5 + 6.6im, 7.7 + 8.8im])
-        @test [2.2, 4.4, 6.6, 8.8] ≈ @jit Ops.imag(x)
-    end
+@testset "imag" begin
+    x = Reactant.to_rarray([1.1 + 2.2im, 3.3 + 4.4im, 5.5 + 6.6im, 7.7 + 8.8im])
+    @test [2.2, 4.4, 6.6, 8.8] ≈ @jit Ops.imag(x) broken = RunningOnTPU
 end
 
 @testset "iota" begin
@@ -351,20 +333,16 @@ end
     x = Reactant.to_rarray([1.0, 2.0, 3.0, 4.0])
     @test log.(Array(x)) ≈ @jit Ops.log(x)
 
-    if !contains(string(Reactant.devices()[1]), "TPU")
-        x = Reactant.to_rarray([1.0 + 0.0im, 2.0 + 0.0im, -3.0 + 0.0im, -4.0 + 0.0im])
-        @test log.(Array(x)) ≈ @jit Ops.log(x)
-    end
+    x = Reactant.to_rarray([1.0 + 0.0im, 2.0 + 0.0im, -3.0 + 0.0im, -4.0 + 0.0im])
+    @test log.(Array(x)) ≈ @jit Ops.log(x) broken = RunningOnTPU
 end
 
 @testset "log_plus_one" begin
     x = Reactant.to_rarray([1.0, 2.0, 3.0, 4.0])
     @test log.(Array(x)) ≈ @jit Ops.log(x)
 
-    if !contains(string(Reactant.devices()[1]), "TPU")
-        x = Reactant.to_rarray([1.0 + 0.0im, 2.0 + 0.0im, -3.0 + 0.0im, -4.0 + 0.0im])
-        @test log.(Array(x)) ≈ @jit Ops.log(x)
-    end
+    x = Reactant.to_rarray([1.0 + 0.0im, 2.0 + 0.0im, -3.0 + 0.0im, -4.0 + 0.0im])
+    @test log.(Array(x)) ≈ @jit Ops.log(x) broken = RunningOnTPU
 end
 
 @testset "logistic" begin
@@ -435,10 +413,9 @@ end
     x = Reactant.to_rarray([-1.0, 0.0, 1.0, 10.0])
     @test [1.0, 0.0, -1.0, -10.0] ≈ @jit Ops.negate(x)
 
-    if !contains(string(Reactant.devices()[1]), "TPU")
-        x = Reactant.to_rarray([-1.0 + 2im, 0.0 - 3im, 1.0 + 4im, 10.0 - 5im])
-        @test [1.0 - 2im, 0.0 + 3im, -1.0 - 4im, -10.0 + 5im] ≈ @jit Ops.negate(x)
-    end
+    x = Reactant.to_rarray([-1.0 + 2im, 0.0 - 3im, 1.0 + 4im, 10.0 - 5im])
+    @test [1.0 - 2im, 0.0 + 3im, -1.0 - 4im, -10.0 + 5im] ≈
+        @jit Ops.negate(x) broken = RunningOnTPU
 end
 
 @testset "not" begin
@@ -508,19 +485,15 @@ end
     p = Reactant.to_rarray([0, 1, 2, 3])
     @test Array(x) .^ Array(p) == @jit Ops.power(x, p)
 
-    if !(Sys.isapple() && Sys.ARCH === :x86_64) &&
-        !contains(string(Reactant.devices()[1]), "TPU")
-        x = Reactant.to_rarray([0.0 + 1.0im, 0.0 + 1.0im, 0.0 + 1.0im, 0.0 + 1.0im])
-        p = Reactant.to_rarray([0.0 + 0.0im, 1.0 + 0.0im, 2.0 + 0.0im, 3.0 + 0.0im])
-        @test Array(x) .^ Array(p) ≈ @jit Ops.power(x, p)
-    end
+    x = Reactant.to_rarray([0.0 + 1.0im, 0.0 + 1.0im, 0.0 + 1.0im, 0.0 + 1.0im])
+    p = Reactant.to_rarray([0.0 + 0.0im, 1.0 + 0.0im, 2.0 + 0.0im, 3.0 + 0.0im])
+    @test Array(x) .^ Array(p) ≈
+        @jit Ops.power(x, p) broken = RunningOnTPU || RunningOnAppleX86
 end
 
-if !contains(string(Reactant.devices()[1]), "TPU")
-    @testset "real" begin
-        x = Reactant.to_rarray([1.1 + 2.2im, 3.3 + 4.4im, 5.5 + 6.6im, 7.7 + 8.8im])
-        @test [1.1, 3.3, 5.5, 7.7] ≈ @jit Ops.real(x)
-    end
+@testset "real" begin
+    x = Reactant.to_rarray([1.1 + 2.2im, 3.3 + 4.4im, 5.5 + 6.6im, 7.7 + 8.8im])
+    @test [1.1, 3.3, 5.5, 7.7] ≈ @jit Ops.real(x) broken = RunningOnTPU
 end
 
 @testset "recv" begin end
@@ -621,11 +594,9 @@ end
     x = Reactant.to_rarray([1.0 4.0; 9.0 25.0])
     @test 1 ./ sqrt.(Array(x)) ≈ @jit Ops.rsqrt(x)
 
-    if !(Sys.isapple() && Sys.ARCH === :x86_64) &&
-        !contains(string(Reactant.devices()[1]), "TPU")
-        x = Reactant.to_rarray([1.0+1im 4.0+2im; 9.0+3im 25.0+4im])
-        @test 1 ./ sqrt.(Array(x)) ≈ @jit Ops.rsqrt(x)
-    end
+    x = Reactant.to_rarray([1.0+1im 4.0+2im; 9.0+3im 25.0+4im])
+    @test 1 ./ sqrt.(Array(x)) ≈
+        @jit Ops.rsqrt(x) broken = RunningOnTPU || RunningOnAppleX86
 end
 
 @testset "select" begin
@@ -683,37 +654,31 @@ end
     x = Reactant.to_rarray([Inf, -Inf, NaN, -NaN, -1.0, -0.0, +0.0, 1.0])
     @test [1.0, -1.0, NaN, NaN, -1.0, -0.0, 0.0, 1.0] ≈ @jit(Ops.sign(x)) nans = true
 
-    if !contains(string(Reactant.devices()[1]), "TPU")
-        x = Reactant.to_rarray([
-            NaN + 1.0im, 1.0 + NaN, 0.0 + 0.0im, -1.0 + 2.0im, 0.0 - 3.0im, 1.0 + 4.0im
-        ])
-        @test [
-            NaN + NaN * im,
-            NaN + NaN * im,
-            0.0 + 0.0im,
-            -0.4472135954999579 + 0.8944271909999159im,
-            0.0 - 1.0im,
-            0.24253562503633297 + 0.9701425001453319im,
-        ] ≈ @jit(Ops.sign(x)) nans = true
-    end
+    x = Reactant.to_rarray([
+        NaN + 1.0im, 1.0 + NaN, 0.0 + 0.0im, -1.0 + 2.0im, 0.0 - 3.0im, 1.0 + 4.0im
+    ])
+    @test [
+        NaN + NaN * im,
+        NaN + NaN * im,
+        0.0 + 0.0im,
+        -0.4472135954999579 + 0.8944271909999159im,
+        0.0 - 1.0im,
+        0.24253562503633297 + 0.9701425001453319im,
+    ] ≈ @jit(Ops.sign(x)) nans = true broken = RunningOnTPU
 end
 
 @testset "sine" begin
-    if !(Sys.isapple() && Sys.ARCH === :x86_64)
-        x = Reactant.to_rarray([0, π / 2, π, 3π / 2, 2π])
-        @test [0, 1, 0, -1, 0] ≈ @jit Ops.sine(x)
+    x = Reactant.to_rarray([0, π / 2, π, 3π / 2, 2π])
+    @test [0, 1, 0, -1, 0] ≈ @jit Ops.sine(x) broken = RunningOnAppleX86
 
-        x = Reactant.to_rarray([0.0, π / 2, π, 3π / 2, 2π])
-        @test [0.0, 1.0, 0.0, -1.0, 0.0] ≈ @jit Ops.sine(x)
+    x = Reactant.to_rarray([0.0, π / 2, π, 3π / 2, 2π])
+    @test [0.0, 1.0, 0.0, -1.0, 0.0] ≈ @jit Ops.sine(x) broken = RunningOnTPU
 
-        if !contains(string(Reactant.devices()[1]), "TPU")
-            x = Reactant.to_rarray([
-                0.0 + 0.0im, π / 2 + 0.0im, π + 0.0im, 3π / 2 + 0.0im, 2π + 0.0im
-            ])
-            @test [0.0 + 0.0im, 1.0 + 0.0im, 0.0 + 0.0im, -1.0 + 0.0im, 0.0 + 0.0im] ≈
-                @jit Ops.sine(x)
-        end
-    end
+    x = Reactant.to_rarray([
+        0.0 + 0.0im, π / 2 + 0.0im, π + 0.0im, 3π / 2 + 0.0im, 2π + 0.0im
+    ])
+    @test [0.0 + 0.0im, 1.0 + 0.0im, 0.0 + 0.0im, -1.0 + 0.0im, 0.0 + 0.0im] ≈
+        @jit Ops.sine(x) broken = RunningOnTPU || RunningOnAppleX86
 end
 
 @testset "sort" begin
@@ -739,11 +704,9 @@ end
     x = Reactant.to_rarray([1.0, 4.0, 9.0, 16.0])
     @test [1.0, 2.0, 3.0, 4.0] ≈ @jit Ops.sqrt(x)
 
-    if !(Sys.isapple() && Sys.ARCH === :x86_64) &&
-        !contains(string(Reactant.devices()[1]), "TPU")
-        x = Reactant.to_rarray([1.0 + 0im, 0.0 + 1im])
-        @test [1.0 + 0im, 1 / √2 * (1 + im)] ≈ @jit Ops.sqrt(x)
-    end
+    x = Reactant.to_rarray([1.0 + 0im, 0.0 + 1im])
+    @test [1.0 + 0im, 1 / √2 * (1 + im)] ≈
+        @jit Ops.sqrt(x) broken = RunningOnTPU || RunningOnAppleX86
 end
 
 @testset "subtract" begin
@@ -765,32 +728,26 @@ end
 end
 
 @testset "tan" begin
-    if !(Sys.isapple() && Sys.ARCH === :x86_64)
-        # TODO tan(π/2) is Inf but it returns 1.633123935319537e16
-        x = Reactant.to_rarray([0, π / 4, π / 2, 3π / 4, π])
+    # TODO tan(π/2) is Inf but it returns 1.633123935319537e16
+    x = Reactant.to_rarray([0, π / 4, π / 2, 3π / 4, π])
 
-        if !contains(string(Reactant.devices()[1]), "TPU")
-            @test [0.0, 1.0, 1.633123935319537e16, -1.0, 0.0] ≈ @jit Ops.tan(x)
-        end
+    @test [0.0, 1.0, 1.633123935319537e16, -1.0, 0.0] ≈
+        @jit Ops.tan(x) broken = RunningOnTPU || RunningOnAppleX86
 
-        if !contains(string(Reactant.devices()[1]), "TPU")
-            x = Reactant.to_rarray([
-                0.0 + 0.0im, π / 4 + 0.0im, π / 2 + 0.0im, 3π / 4 + 0.0im, π + 0.0im
-            ])
-            @test ComplexF64[0.0, 1.0, 1.633123935319537e16, -1.0, 0.0] ≈ @jit Ops.tan(x)
-        end
-    end
+    x = Reactant.to_rarray([
+        0.0 + 0.0im, π / 4 + 0.0im, π / 2 + 0.0im, 3π / 4 + 0.0im, π + 0.0im
+    ])
+    @test ComplexF64[0.0, 1.0, 1.633123935319537e16, -1.0, 0.0] ≈
+        @jit Ops.tan(x) broken = RunningOnTPU || RunningOnAppleX86
 end
 
 @testset "tanh" begin
     x = Reactant.to_rarray([-1.0, 0.0, 1.0])
     @test [-0.7615941559557649, 0.0, 0.7615941559557649] ≈ @jit Ops.tanh(x)
 
-    if !(Sys.isapple() && Sys.ARCH === :x86_64) &&
-        !contains(string(Reactant.devices()[1]), "TPU")
-        x = Reactant.to_rarray(ComplexF64[-1.0, 0.0, 1.0])
-        @test ComplexF64[-0.7615941559557649, 0.0, 0.7615941559557649] ≈ @jit Ops.tanh(x)
-    end
+    x = Reactant.to_rarray(ComplexF64[-1.0, 0.0, 1.0])
+    @test ComplexF64[-0.7615941559557649, 0.0, 0.7615941559557649] ≈
+        @jit Ops.tanh(x) broken = RunningOnTPU || RunningOnAppleX86
 end
 
 @testset "transpose" begin
@@ -866,11 +823,9 @@ end
     @test SpecialFunctions.besselix.(1, Array(x)) ≈ @jit Ops.bessel_i1e(x)
 end
 
-if !contains(string(Reactant.devices()[1]), "TPU")
-    @testset "conj" begin
-        x = Reactant.to_rarray([-1.0 + 2im, 0.0 - 1im, 1.0 + 4im])
-        @test conj(Array(x)) ≈ @jit Ops.conj(x)
-    end
+@testset "conj" begin
+    x = Reactant.to_rarray([-1.0 + 2im, 0.0 - 1im, 1.0 + 4im])
+    @test conj(Array(x)) ≈ @jit Ops.conj(x) broken = RunningOnTPU
 end
 
 @testset "cosh" begin
@@ -881,10 +836,9 @@ end
 @testset "digamma" begin
     # small divergence between chlo.digamma and SpecialFunctions.digamma:
     # on <=0, chlo.digamma returns NaN, SpecialFunctions.digamma returns Inf
-    if !(Sys.isapple() && Sys.ARCH === :x86_64)
-        x = Reactant.to_rarray([-1.0, 0.0, 1.0])
-        @test [NaN, NaN, SpecialFunctions.digamma(1.0)] ≈ @jit(Ops.digamma(x)) nans = true
-    end
+    x = Reactant.to_rarray([-1.0, 0.0, 1.0])
+    @test [NaN, NaN, SpecialFunctions.digamma(1.0)] ≈ @jit(Ops.digamma(x)) nans = true broken =
+        RunningOnAppleX86
 end
 
 @testset "erf_inv" begin
@@ -917,41 +871,33 @@ end
     @test [false, true, false, false, false, false, false] ≈ @jit Ops.is_pos_inf(x)
 end
 
-if !contains(string(Reactant.devices()[1]), "TPU")
-    @testset "lgamma" begin
-        if !(Sys.isapple() && Sys.ARCH === :x86_64)
-            x = Reactant.to_rarray([-1.0, 0.0, 1.0, 2.5])
-            lgamma(x) = (SpecialFunctions.logabsgamma(x))[1]
-            @test lgamma.(Array(x)) ≈ @jit Ops.lgamma(x)
-        end
-    end
+@testset "lgamma" begin
+    x = Reactant.to_rarray([-1.0, 0.0, 1.0, 2.5])
+    lgamma(x) = (SpecialFunctions.logabsgamma(x))[1]
+    @test lgamma.(Array(x)) ≈ @jit Ops.lgamma(x) broken = RunningOnTPU || RunningOnAppleX86
 end
 
-if !contains(string(Reactant.devices()[1]), "TPU")
-    @testset "next_after" begin
-        x = Reactant.to_rarray([-1.0, 0.0, 1.0, 1.0, 2.5, 1e18, 1e18, 3e-9, 3e-9])
-        y = Reactant.to_rarray([-2.0, 0.0, 1.0, 2.0, 3.0, 0.0, 1e19, 0, 1])
-        @test [
-            prevfloat(-1.0),
-            0.0,
-            1.0,
-            nextfloat(1.0),
-            nextfloat(2.5),
-            prevfloat(1e18),
-            nextfloat(1e18),
-            prevfloat(3e-9),
-            nextfloat(3e-9),
-        ] == @jit Ops.next_after(x, y)
-    end
+@testset "next_after" begin
+    x = Reactant.to_rarray([-1.0, 0.0, 1.0, 1.0, 2.5, 1e18, 1e18, 3e-9, 3e-9])
+    y = Reactant.to_rarray([-2.0, 0.0, 1.0, 2.0, 3.0, 0.0, 1e19, 0, 1])
+    @test [
+        prevfloat(-1.0),
+        0.0,
+        1.0,
+        nextfloat(1.0),
+        nextfloat(2.5),
+        prevfloat(1e18),
+        nextfloat(1e18),
+        prevfloat(3e-9),
+        nextfloat(3e-9),
+    ] == @jit Ops.next_after(x, y) broken = RunningOnTPU
 end
 
 @testset "polygamma" begin
-    if !(Sys.isapple() && Sys.ARCH === :x86_64)
-        x = Reactant.to_rarray([-1.0, 0.0, 1.0, 1.0, 2.5])
-        m = Reactant.to_rarray([3.0, 3.0, 2.0, 3.0, 4.0])
-        @test SpecialFunctions.polygamma.(Int.(Array(m)), Array(x)) ≈
-            @jit Ops.polygamma(m, x)
-    end
+    x = Reactant.to_rarray([-1.0, 0.0, 1.0, 1.0, 2.5])
+    m = Reactant.to_rarray([3.0, 3.0, 2.0, 3.0, 4.0])
+    @test SpecialFunctions.polygamma.(Int.(Array(m)), Array(x)) ≈
+        @jit Ops.polygamma(m, x) broken = RunningOnAppleX86
 end
 
 @testset "sinh" begin
