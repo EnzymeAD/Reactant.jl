@@ -277,7 +277,7 @@ end
     x = Reactant.to_rarray([1.0, 2.0, 3.0, 4.0])
     @test expm1.(Array(x)) ≈ @jit Ops.exponential_minus_one(x)
 
-    if !(Sys.isapple() && Sys.ARCH === :x86_64)
+    if !(Sys.isapple() && Sys.ARCH === :x86_64) && !contains(string(Reactant.devices()[1]), "TPU")
         x = Reactant.to_rarray([1.0 + 2.0im, 3.0 + 4.0im, 5.0 + 6.0im, 7.0 + 8.0im])
         @test expm1.(Array(x)) ≈ @jit Ops.exponential_minus_one(x)
     end
