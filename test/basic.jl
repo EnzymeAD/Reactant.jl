@@ -1224,6 +1224,7 @@ end
 end
 
 accum_fn(x, y) = abs2(x) + abs2(y)
+Base.reduce_empty(::typeof(accum_fn), ::Type{T}) where {T} = zero(T)
 
 @testset "accumulate" begin
     a = collect(Float32, 1:10) ./ 10
