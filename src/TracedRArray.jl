@@ -1296,7 +1296,7 @@ function scan_impl!(
         if contains(string(first(Reactant.devices())), "TPU")        
             initT = __default_init(T, op)
             if initT != init
-                throw(AssertionError("Currently, `init` is not supported on TPUs."))
+                throw(AssertionError("Currently, `init` is not supported on TPUs, provided value $init does not match identity $initT."))
             end
         end
     end
