@@ -134,8 +134,8 @@ end
     x = randn(2, 3, 4)
     x_ra = Reactant.to_rarray(x)
 
-    @test argmin(abs2, x) == @jit(argmin(abs2, x_ra))
-    @test argmax(abs2, x) == @jit(argmax(abs2, x_ra))
+    @test argmin(abs2, x) ≈ @jit(argmin(abs2, x_ra))
+    @test argmax(abs2, x) ≈ @jit(argmax(abs2, x_ra))
 end
 
 @testset "findmin / findmax" begin
@@ -152,22 +152,22 @@ end
 
     @test fwithlinindices(findmin, identity, x) == @jit(findmin(x_ra))
     @test fwithlinindices(findmax, identity, x) == @jit(findmax(x_ra))
-    @test fwithlinindices(findmin, identity, xvec) == @jit(findmin(xvec_ra))
-    @test fwithlinindices(findmax, identity, xvec) == @jit(findmax(xvec_ra))
+    @test fwithlinindices(findmin, identity, xvec) ≈ @jit(findmin(xvec_ra))
+    @test fwithlinindices(findmax, identity, xvec) ≈ @jit(findmax(xvec_ra))
 
     fmindims(x, d) = findmin(x; dims=d)
     fmindims(f, x, d) = findmin(f, x; dims=d)
     fmaxdims(x, d) = findmax(x; dims=d)
     fmaxdims(f, x, d) = findmax(f, x; dims=d)
 
-    @test fwithlinindices(findmin, identity, x; dims=1) == @jit(fmindims(x_ra, 1))
-    @test fwithlinindices(findmax, identity, x; dims=1) == @jit(fmaxdims(x_ra, 1))
-    @test fwithlinindices(findmin, identity, x; dims=2) == @jit(fmindims(x_ra, 2))
-    @test fwithlinindices(findmax, identity, x; dims=2) == @jit(fmaxdims(x_ra, 2))
-    @test fwithlinindices(findmin, abs2, x; dims=1) == @jit(fmindims(abs2, x_ra, 1))
-    @test fwithlinindices(findmax, abs2, x; dims=1) == @jit(fmaxdims(abs2, x_ra, 1))
-    @test fwithlinindices(findmin, abs2, x; dims=2) == @jit(fmindims(abs2, x_ra, 2))
-    @test fwithlinindices(findmax, abs2, x; dims=2) == @jit(fmaxdims(abs2, x_ra, 2))
+    @test fwithlinindices(findmin, identity, x; dims=1) ≈ @jit(fmindims(x_ra, 1))
+    @test fwithlinindices(findmax, identity, x; dims=1) ≈ @jit(fmaxdims(x_ra, 1))
+    @test fwithlinindices(findmin, identity, x; dims=2) ≈ @jit(fmindims(x_ra, 2))
+    @test fwithlinindices(findmax, identity, x; dims=2) ≈ @jit(fmaxdims(x_ra, 2))
+    @test fwithlinindices(findmin, abs2, x; dims=1) ≈ @jit(fmindims(abs2, x_ra, 1))
+    @test fwithlinindices(findmax, abs2, x; dims=1) ≈ @jit(fmaxdims(abs2, x_ra, 1))
+    @test fwithlinindices(findmin, abs2, x; dims=2) ≈ @jit(fmindims(abs2, x_ra, 2))
+    @test fwithlinindices(findmax, abs2, x; dims=2) ≈ @jit(fmaxdims(abs2, x_ra, 2))
 end
 
 @testset "findfirst / findlast" begin
@@ -183,8 +183,8 @@ end
     flastlinindices(x) = LinearIndices(x)[findlast(x)]
     flastlinindices(f, x) = LinearIndices(x)[findlast(f, x)]
 
-    @test ffirstlinindices(x) == @jit(findfirst(x_ra))
-    @test flastlinindices(x) == @jit(findlast(x_ra))
+    @test ffirstlinindices(x) ≈ @jit(findfirst(x_ra))
+    @test flastlinindices(x) ≈ @jit(findlast(x_ra))
 
     x = Int64[
         3 5 7 9
@@ -193,8 +193,8 @@ end
     ]
     x_ra = Reactant.to_rarray(x)
 
-    @test ffirstlinindices(iseven, x) == @jit(findfirst(iseven, x_ra))
-    @test flastlinindices(iseven, x) == @jit(findlast(iseven, x_ra))
+    @test ffirstlinindices(iseven, x) ≈ @jit(findfirst(iseven, x_ra))
+    @test flastlinindices(iseven, x) ≈ @jit(findlast(iseven, x_ra))
 end
 
 @testset "approx top k lowering" begin

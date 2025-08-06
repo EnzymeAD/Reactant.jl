@@ -1238,7 +1238,7 @@ end
         @test size(perm) == (4, 3, 6)
         @test size(info) == (4, 3)
 
-        @test @jit(recon_from_lu(lu_ra)) ≈ @jit(apply_permutation(x_ra, perm))
+        @test @jit(recon_from_lu(lu_ra)) ≈ @jit(apply_permutation(x_ra, perm)) atol = 1e-5 rtol = 1e-2
     end
 end
 

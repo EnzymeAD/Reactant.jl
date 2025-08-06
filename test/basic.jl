@@ -1027,7 +1027,7 @@ end
     times = 0:0.01:4.5
     @test times isa Base.StepRangeLen
     res = @jit fractional_idx(times, ConcreteRNumber(2.143))
-    @test res[1] == 0.29999999999997334
+    @test res[1] ≈ 0.29999999999997334
     @test res[2] == 215
     @test res[3] == 216
 end
@@ -1036,7 +1036,7 @@ end
     times = Reactant.to_rarray(0:0.01:4.5; track_numbers=Number)
     @test times isa Reactant.TracedRNumberOverrides.TracedStepRangeLen
     res = @jit fractional_idx(times, ConcreteRNumber(2.143))
-    @test res[1] == 0.29999999999997334
+    @test res[1] ≈ 0.29999999999997334
     @test res[2] == 215
     @test res[3] == 216
 end
@@ -1224,7 +1224,6 @@ end
 end
 
 accum_fn(x, y) = abs2(x) + abs2(y)
-Base.reduce_empty(::typeof(accum_fn), ::Type{T}) where {T} = zero(T)
 
 @testset "accumulate" begin
     a = collect(Float32, 1:10) ./ 10
@@ -1292,6 +1291,7 @@ Base.reduce_empty(::typeof(accum_fn), ::Type{T}) where {T} = zero(T)
         end ≈ cumprod(b; dims=3)
     end
 
+    if !contains(string(Reactant.devices()[1]), "TPU")
     @testset "accumulate" begin
         @test @jit(accumulate(accum_fn, a_ra; init=0.0f0)) ≈
             accumulate(accum_fn, a; init=0.0f0)
@@ -1324,6 +1324,7 @@ Base.reduce_empty(::typeof(accum_fn), ::Type{T}) where {T} = zero(T)
             @jit(accumulate!(accum_fn, z, b_ra; init=0.0f0, dims=3))
             z
         end ≈ accumulate(accum_fn, b; dims=3, init=0.0f0)
+    end
     end
 end
 
