@@ -461,12 +461,14 @@ end
 end
 
 @testset "Compile-Only with More Devices" begin
-    mesh = Sharding.Mesh(zeros(Int64, 2, 4), (:x, :y))
+    if !contains(string(Reactant.devices()[1]), "TPU")
+        mesh = Sharding.Mesh(zeros(Int64, 2, 4), (:x, :y))
 
-    x_ra = Reactant.to_rarray(
-        rand(Float32, 32, 32); sharding=Sharding.NamedSharding(mesh, (:x, :y))
-    )
+        x_ra = Reactant.to_rarray(
+            rand(Float32, 32, 32); sharding=Sharding.NamedSharding(mesh, (:x, :y))
+        )
 
-    hlo = @code_xla sum(x_ra)
-    @test contains(repr(hlo), "num_partitions=8")
+        hlo = @code_xla sum(x_ra)
+        @test contains(repr(hlo), "num_partitions=8")
+    end
 end

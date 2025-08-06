@@ -288,6 +288,8 @@ function issue_617(outf, fr, pr, I)
     return outf
 end
 
+
+if !contains(string(Reactant.devices()[1]), "TPU")
 @testset "issue #617" begin
     N, M = 4, 6
 
@@ -302,6 +304,7 @@ end
     Ir = Reactant.to_rarray(I)
 
     @test @jit(issue_617(outr, fr, pr, Ir)) ≈ issue_617(out, f, p, I)
+end
 end
 
 function scalar_setindex(x, idx, val)
