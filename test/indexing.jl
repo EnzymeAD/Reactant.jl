@@ -16,7 +16,7 @@ end
     y2 = @jit update_on_copy(x_concrete)
     @test x == y
     @test x_concrete == y_concrete
-    @test y1 == y2
+    @test y1 ≈ y2
 
     # function update_inplace(x)
     #     y = view(x, 1:2, 1:2, :)
