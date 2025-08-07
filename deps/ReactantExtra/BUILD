@@ -749,7 +749,7 @@ cc_toolchain_config(
         "llvm-profdata": "/opt/x86_64-linux-musl/bin/llvm-profdata",
         "objdump": "/usr/bin/objdump",
     },
-    toolchain_identifier = "ygg_darwin_x86",
+    toolchain_identifier = "ygg_win_x86",
     unfiltered_compile_flags = [
         "-no-canonical-prefixes",
         "-Wno-builtin-macro-redefined",
