@@ -1122,7 +1122,7 @@ end
 function Base.findlast(f::Function, x::AnyTracedRArray)
     fA = Ops.reverse(materialize_traced_array(vec(f.(x))); dimensions=[1])
     idx = Ops.findfirst(fA)
-    return length(x)  + 1 - TracedRNumber{Int}((), idx.mlir_data)
+    return length(x) + 1 - TracedRNumber{Int}((), idx.mlir_data)
 end
 
 Base.findmin(x::AnyTracedRVector) = findmin(identity, x; dims=1)
