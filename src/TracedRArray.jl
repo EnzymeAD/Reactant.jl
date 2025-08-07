@@ -1114,11 +1114,13 @@ Base.argmax(x::AnyTracedRArray; kwargs...) = findmax(identity, x; kwargs...)[2]
 Base.findfirst(x::AnyTracedRArray) = findfirst(identity, x)
 Base.findlast(x::AnyTracedRArray) = findlast(identity, x)
 
+# FIXME: we need to conditionally return `nothing` here if idx < 0
 function Base.findfirst(f::Function, x::AnyTracedRArray)
     idx = Ops.findfirst(materialize_traced_array(vec(f.(x))))
     return TracedRNumber{Int}((), idx.mlir_data)
 end
 
+# FIXME: we need to conditionally return `nothing` here if idx < 0
 function Base.findlast(f::Function, x::AnyTracedRArray)
     fA = Ops.reverse(materialize_traced_array(vec(f.(x))); dimensions=[1])
     idx = Ops.findfirst(fA)

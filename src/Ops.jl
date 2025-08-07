@@ -1288,12 +1288,12 @@ end
         ],
         TracedRNumber[
             Reactant.TracedUtils.promote_to(TracedRNumber{Bool}, false),
-            Reactant.TracedUtils.promote_to(TracedRNumber{Int64}, typemax(Int64)),
+            Reactant.TracedUtils.promote_to(TracedRNumber{Int64}, -1),
         ],
         [dimension],
         function (x, i, y, j)
             cond_val = x | y
-            idx = ifelse(x, ifelse(i < j, i, j), j)
+            idx = ifelse(x, ifelse(i < j, i, j), ifelse(y, j, -1))
             return cond_val, idx
         end;
         location,
