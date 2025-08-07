@@ -902,6 +902,9 @@ function optimization_passes(
         # "compare_mul",
         "compare_convert",
         "add_selects",
+        "self_subtract_to_convolution_like",
+        "self_add_to_convolution_like",
+        "self_mul_to_convolution_like",
     ]
 
     if !compile_options.disable_scatter_gather_optimization_passes
