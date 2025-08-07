@@ -678,7 +678,7 @@ cc_toolchain_config(
     compiler = "compiler",
     coverage_compile_flags = ["--coverage"],
     coverage_link_flags = ["--coverage"],
-    cpu = "k8",
+    cpu = "x64_windows",
     cxx_builtin_include_directories = [
         "/opt/BB_TARGET/lib/gcc/BB_TARGET/GCC_VERSION/include",
         "/opt/BB_TARGET/lib/gcc/BB_TARGET/GCC_VERSION/include-fixed",
