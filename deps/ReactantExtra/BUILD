@@ -662,7 +662,7 @@ toolchain(
         "@platforms//cpu:x86_64",
         "@platforms//os:windows",
     ],
-    toolchain = ":ygg_darwin_win_toolchain",
+    toolchain = ":ygg_win_x86_toolchain",
     toolchain_type = "@bazel_tools//tools/cpp:toolchain_type",
 )
 
