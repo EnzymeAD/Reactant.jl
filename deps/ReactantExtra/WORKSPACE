@@ -4,7 +4,7 @@ NSYNC_COMMIT = "82b118aa7ace3132e517e2c467f8732978cf4023"
 
 NSYNC_SHA256 = ""
 
-ENZYMEXLA_COMMIT = "343924ba7741abf6cac5bcff76e6db9173ff0a30"
+ENZYMEXLA_COMMIT = "213f6d65aea9ddbb6cbcd1b8cd2cd16c08f972ae"
 
 ENZYMEXLA_SHA256 = ""
 
@@ -138,7 +138,7 @@ http_archive(
 )
 
 # load("@jax//third_party/xla:revision.bzl", "XLA_COMMIT", "XLA_SHA256")
-XLA_COMMIT = "e6d83dad9568a9f8c1ac5898ecb9231e5a581bd5"
+XLA_COMMIT = "070c4370a2f20036adeab116e2209877d743fdcc"
 XLA_SHA256 = ""
 
 http_archive(
