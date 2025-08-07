@@ -12,8 +12,7 @@ using ..Reactant:
     RNumber,
     MissingTracedValue,
     unwrapped_eltype
-using ReactantCore: ReactantCore, @trace
-using GPUArraysCore: @allowscalar
+using ReactantCore: ReactantCore
 
 function mlir_type(x::Union{RNumber,RArray})::MLIR.IR.Type
     return MLIR.IR.TensorType(collect(Int, size(x)), MLIR.IR.Type(unwrapped_eltype(x)))
