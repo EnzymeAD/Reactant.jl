@@ -137,9 +137,9 @@ http_archive(
     urls = ["https://github.com/google/jax/archive/{commit}.tar.gz".format(commit = JAX_COMMIT)],
 )
 
-load("@jax//third_party/xla:revision.bzl", "XLA_COMMIT", "XLA_SHA256")
-# XLA_COMMIT = "fb977e8b9ce1a02fbdc3955cc9ab6a6702a120d0"
-# XLA_SHA256 = ""
+# load("@jax//third_party/xla:revision.bzl", "XLA_COMMIT", "XLA_SHA256")
+XLA_COMMIT = "c7a7db0a48f7ed6e0a6d7a957a71e715b9689fc1"
+XLA_SHA256 = ""
 
 http_archive(
     name = "xla",
