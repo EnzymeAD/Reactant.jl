@@ -108,8 +108,8 @@ end
         ],
     )
 
-    @test cholesky(Array(x)).U ≈ @jit g1(x) broken = RunningOnTPU
-    @test adjoint(cholesky(Array(x)).U) ≈ @jit g2(x) broken = RunningOnTPU
+    @test cholesky(Array(x)).U ≈ @jit(g1(x)) broken = RunningOnTPU
+    @test adjoint(cholesky(Array(x)).U) ≈ @jit(g2(x)) broken = RunningOnTPU
 end
 
 @testset "clamp" begin
