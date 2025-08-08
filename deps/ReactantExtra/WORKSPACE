@@ -256,6 +256,13 @@ test_shard_count_repository(
     name = "test_shard_count",
 )
 
+load("@jax//:nvidia_wheel_versions.bzl", "nvidia_wheel_versions_repository")
+
+nvidia_wheel_versions_repository(
+    name = "nvidia_wheel_versions",
+    versions_source = "@jax//build:nvidia-requirements.txt",
+)
+
 load(
     "@rules_ml_toolchain//cc_toolchain/deps:cc_toolchain_deps.bzl",
     "cc_toolchain_deps",
