@@ -191,6 +191,7 @@ include("Tracing.jl")
 include("Compiler.jl")
 
 include("Overlay.jl")
+include("ProbProg.jl")
 
 # Serialization
 include("serialization/Serialization.jl")
