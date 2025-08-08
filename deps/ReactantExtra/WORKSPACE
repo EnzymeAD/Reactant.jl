@@ -40,7 +40,7 @@ CUPTI_NEW = []
 
 XLA_PATCHES = XLA_PATCHES + CUPTI_NEW + [
 	    """
-        sed -i.bak0 "s/namespace xla/#undef CreateEvent\\nnamespace xla/g" pjrt/gpu/tfrt/tfrt_gpu_client.cc
+        sed -i.bak0 "s/namespace xla/#undef CreateEvent\\nnamespace xla/g" xla/pjrt/gpu/tfrt/tfrt_gpu_client.cc
             """,
 	    """
         sed -i.bak0 "s/e07debd5e257ec1e118f18c54068977b89f03b2f/e4f2b22718e0ab2a97ac6c571a9f06c9bfce3da7/g" third_party/stablehlo/workspace.bzl
