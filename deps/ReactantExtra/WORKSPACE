@@ -4,7 +4,7 @@ NSYNC_COMMIT = "82b118aa7ace3132e517e2c467f8732978cf4023"
 
 NSYNC_SHA256 = ""
 
-ENZYMEXLA_COMMIT = "09fa45e39eb458ac33e957826a0c17409f6e3fc7"
+ENZYMEXLA_COMMIT = "531dfe3e48d65e5838437e593b04e09a783a5f39"
 
 ENZYMEXLA_SHA256 = ""
 
@@ -22,8 +22,6 @@ http_archive(
     urls = ["https://github.com/EnzymeAD/Enzyme-JAX/archive/{commit}.tar.gz".format(commit = ENZYMEXLA_COMMIT)],
 )
 
-load("@enzyme_ad//:workspace.bzl", "ENZYME_COMMIT", "ENZYME_SHA256", "JAX_COMMIT", "JAX_SHA256", "XLA_PATCHES")
-
 CUPTI_OLD = [
     """
 sed -i.bak0 "s/cupti_driver_cbid/cupti/g" xla/backends/profiler/gpu/cupti_tracer.cc
@@ -38,7 +36,7 @@ sed -i.bak0 "/CUPTI_DRIVER_TRACE_CBID_cuGraphAddNode_v2/d" xla/backends/profiler
 
 CUPTI_NEW = []
 
-XLA_PATCHES = XLA_PATCHES + CUPTI_NEW + [
+NEW_XLA_PATCHES = CUPTI_NEW + [
     """
 sed -i.bak0 "s/Shlwapi/shlwapi/g" xla/tsl/platform/windows/load_library.cc xla/tsl/platform/windows/windows_file_system.cc xla/tsl/platform/windows/env.cc
 """,
@@ -139,33 +137,11 @@ LLVM_TARGETS = [
 #     ],
 # )
 
-JAX_PATCHES = [
-    """
-sed -i.bak0 "s/ cast/ llvm::cast/g" jaxlib/mosaic/dialect/gpu/mosaic_gpu.cc
-""",
-]
+load("@enzyme_ad//third_party/jax:workspace.bzl", jax_workspace = "repo")
+jax_workspace()
 
-http_archive(
-    name = "jax",
-    patch_args = ["-p1"],
-    patch_cmds = JAX_PATCHES,
-    patches = ["@enzyme_ad//:patches/jax.patch"],
-    sha256 = JAX_SHA256,
-    strip_prefix = "jax-" + JAX_COMMIT,
-    urls = ["https://github.com/google/jax/archive/{commit}.tar.gz".format(commit = JAX_COMMIT)],
-)
-
-# load("@jax//third_party/xla:revision.bzl", "XLA_COMMIT", "XLA_SHA256")
-XLA_COMMIT = "3db2ac3bf43c3e250ef7614eb5c8594e716ecc48"
-XLA_SHA256 = ""
-
-http_archive(
-    name = "xla",
-    patch_cmds = XLA_PATCHES,
-    sha256 = XLA_SHA256,
-    strip_prefix = "xla-" + XLA_COMMIT,
-    urls = ["https://github.com/giordano/xla/archive/{commit}.tar.gz".format(commit = XLA_COMMIT)],
-)
+load("@enzyme_ad//third_party/xla:workspace.bzl", xla_workspace = "repo")
+xla_workspace(NEW_XLA_PATCHES, override_commit = "3db2ac3bf43c3e250ef7614eb5c8594e716ecc48")
 
 #
 # load("@xla//third_party/py:python_init_pip.bzl", "python_init_pip")
@@ -182,12 +158,10 @@ http_archive(
 #
 # pip_install_dependencies()
 
-http_archive(
-    name = "enzyme",
-    sha256 = ENZYME_SHA256,
-    strip_prefix = "Enzyme-" + ENZYME_COMMIT + "/enzyme",
-    urls = ["https://github.com/EnzymeAD/Enzyme/archive/{commit}.tar.gz".format(commit = ENZYME_COMMIT)],
-)
+
+load("@enzyme_ad//third_party/enzyme:workspace.bzl", enzyme_workspace = "repo")
+enzyme_workspace()
+
 
 # http_archive(
 #     name = "upb",
