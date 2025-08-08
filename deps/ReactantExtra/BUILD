@@ -673,9 +673,9 @@ cc_toolchain_config(
     abi_version = "local",
     builtin_sysroot = "/opt/BB_TARGET/BB_TARGET/sys-root/",
     compile_flags = [
-        "-stdlib=libc++",
+        "-stdlib=libstdc++",
     ],
-    compiler = "compiler",
+    compiler = "clang",
     coverage_compile_flags = ["--coverage"],
     coverage_link_flags = ["--coverage"],
     cpu = "x64_windows",
@@ -695,7 +695,7 @@ cc_toolchain_config(
     ],
     dbg_compile_flags = [
         "-g",
-        "-stdlib=libc++",
+        "-stdlib=libstdc++",
     ],
     host_system_name = "linux",
     link_flags = [
@@ -703,7 +703,7 @@ cc_toolchain_config(
         "-stdlib=libc++",
     ],
     link_libs = [
-        "-lc++",
+        "-lstdc++",
         "-lm",
     ],
     opt_compile_flags = [
@@ -716,7 +716,7 @@ cc_toolchain_config(
         "-stdlib=libc++",
     ],
     opt_link_flags = ["-Wl,--gc-sections"],
-    supports_start_end_lib = True,
+    supports_start_end_lib = False,
     target_libc = "",
     target_system_name = "x86_64-apple-macos",
     tool_paths = {
@@ -758,6 +758,7 @@ cc_toolchain_config(
         "-D__TIME__=\"redacted\"",
         "-Wno-unused-command-line-argument",
         "-Wno-gnu-offsetof-extensions",
+	"-mxsave",
     ],
 )
 
@@ -1084,7 +1085,6 @@ cc_library(
         # "@xla//xla:xla_proto_cc",
         # "@xla//xla:xla_proto_cc_impl",
         "@xla//xla/stream_executor:device_description_proto_cc_impl",
-        "@xla//xla/tsl/platform/default:platform_port",
         "@xla//xla/service:metrics_proto_cc",
         "@xla//xla/service:metrics_proto_cc_impl",
         "@xla//xla/service:custom_call_target_registry",
@@ -1132,7 +1132,6 @@ cc_library(
         "@xla//xla/backends/profiler/cpu:metadata_utils",
         "@xla//xla/backends/profiler/tpu:tpu_tracer",
         "@xla//xla/python:profiler_utils",
-        "@xla//xla/backends/cpu/collectives:mpi_collectives",
         "@tsl//tsl/platform:env_impl",
         "@xla//xla/stream_executor:stream_executor_impl",
         "@xla//xla/mlir/utils:type_util",
@@ -1189,12 +1188,18 @@ cc_library(
             "@gloo//:transport_uv",
             "@xla//xla/backends/cpu/collectives:gloo_collectives",
             "@xla//xla/backends/cpu/collectives:gloo_kv_store",
+            "@xla//xla/backends/cpu/collectives:mpi_collectives",
+            "@xla//xla/tsl/platform/default:platform_port",
         ],
-        "@xla//xla/tsl:windows": [],
+        "@xla//xla/tsl:windows": [
+            "@xla//xla/tsl/platform/windows:platform_port",
+	],
         "//conditions:default": [
             "@gloo//:transport_tcp",
             "@xla//xla/backends/cpu/collectives:gloo_collectives",
             "@xla//xla/backends/cpu/collectives:gloo_kv_store",
+            "@xla//xla/backends/cpu/collectives:mpi_collectives",
+            "@xla//xla/tsl/platform/default:platform_port",
         ],
     }),
     alwayslink = True,

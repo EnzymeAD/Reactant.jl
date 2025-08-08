@@ -84,16 +84,17 @@
 #include "xla/hlo/translate/stablehlo.h"
 
 // CPU collectives
-#include "xla/backends/cpu/collectives/mpi_collectives.h"
 #if defined(__linux__)
 #include "gloo/transport/tcp/attr.h"
 #include "gloo/transport/tcp/device.h"
 #include "xla/backends/cpu/collectives/gloo_collectives.h"
 #include "xla/backends/cpu/collectives/gloo_kv_store.h"
+#include "xla/backends/cpu/collectives/mpi_collectives.h"
 #elif defined(__APPLE__)
 #include "gloo/transport/uv/device.h"
 #include "xla/backends/cpu/collectives/gloo_collectives.h"
 #include "xla/backends/cpu/collectives/gloo_kv_store.h"
+#include "xla/backends/cpu/collectives/mpi_collectives.h"
 #endif // defined(__linux__)
 
 // shardy
@@ -1688,11 +1689,16 @@ ifrt_make_pjrt_cpu_client(uint8_t asynchronous, int node_id, int num_nodes,
   if (distributed_runtime_client != nullptr) {
     auto mpi_trampoline_path = llvm::sys::Process::GetEnv(kMpiTrampolineLibEnv);
     if (mpi_trampoline_path) {
+#if defined(__linux__) || defined(__APPLE__)
       // Use MPI
       // TODO: How do we Finalize??
       auto mpi_collectives = std::make_shared<xla::cpu::MpiCollectives>();
       collectives = mpi_collectives;
       static_cast<xla::cpu::MpiCollectives *>(mpi_collectives.get())->Init();
+#else
+      ReactantThrowError(
+          "MPI TCP Collectives only implemented for linux and macos");
+#endif
     } else {
       // Use Gloo
       auto typed_distributed_runtime_client = static_cast<
@@ -1701,14 +1707,16 @@ ifrt_make_pjrt_cpu_client(uint8_t asynchronous, int node_id, int num_nodes,
       kv_store =
           GetDistributedKeyValueStore(typed_distributed_runtime_client->obj(),
                                       /*key_prefix=*/"cpu:");
+#if defined(__linux__)
       auto gloo_kv_store =
           std::make_unique<xla::cpu::GlooKeyValueStore>(kv_store.value());
-#if defined(__linux__)
       auto tcp_attrs = gloo::transport::tcp::attr();
       auto tcp_device = gloo::transport::tcp::CreateDevice(tcp_attrs);
       collectives = std::make_shared<xla::cpu::GlooCollectives>(
           std::move(gloo_kv_store), std::move(tcp_device));
 #elif defined(__APPLE__)
+      auto gloo_kv_store =
+          std::make_unique<xla::cpu::GlooKeyValueStore>(kv_store.value());
       auto uv_attrs = gloo::transport::uv::attr();
       auto uv_device = gloo::transport::uv::CreateDevice(uv_attrs);
       collectives = std::make_shared<xla::cpu::GlooCollectives>(

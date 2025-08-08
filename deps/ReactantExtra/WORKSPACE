@@ -4,7 +4,7 @@ NSYNC_COMMIT = "82b118aa7ace3132e517e2c467f8732978cf4023"
 
 NSYNC_SHA256 = ""
 
-ENZYMEXLA_COMMIT = "213f6d65aea9ddbb6cbcd1b8cd2cd16c08f972ae"
+ENZYMEXLA_COMMIT = "8c4af4f5de40ed32e8636061df85e21de536e0dc"
 
 ENZYMEXLA_SHA256 = ""
 
@@ -39,6 +39,27 @@ sed -i.bak0 "/CUPTI_DRIVER_TRACE_CBID_cuGraphAddNode_v2/d" xla/backends/profiler
 CUPTI_NEW = []
 
 XLA_PATCHES = XLA_PATCHES + CUPTI_NEW + [
+	    """
+        sed -i.bak0 "s/e07debd5e257ec1e118f18c54068977b89f03b2f/e4f2b22718e0ab2a97ac6c571a9f06c9bfce3da7/g" third_party/stablehlo/workspace.bzl
+            """,
+    """
+sed -i.bak0 "s/Shlwapi/shlwapi/g" xla/tsl/platform/windows/load_library.cc xla/tsl/platform/windows/windows_file_system.cc xla/tsl/platform/windows/env.cc
+""",
+"""
+sed -i.bak0 "1s/^/#ifdef PLATFORM_WINDOWS\\n#include <immintrin.h>\\n#include <intrin.h>\\n#endif/g" third_party/tsl/tsl/platform/cpu_info.cc
+""",
+"""
+sed -i.bak0 "1s/^/#define _USE_MATH_DEFINES\\n/g" xla/fp_util.h xla/hlo/builder/lib/prng.cc xla/literal_comparison.cc xla/hlo/builder/lib/math.cc xla/service/spmd/fft_handler.cc xla/service/cpu/onednn_contraction_rewriter.cc xla/hlo/evaluator/hlo_evaluator.cc
+""",
+    """
+sed -i.bak0 "s/Windows\\.h/windows\\.h/g" xla/tsl/platform/windows/port.cc xla/tsl/platform/windows/wide_char.cc xla/tsl/platform/windows/env.cc xla/tsl/platform/windows/windows_file_system.cc
+""",
+    """
+sed -i.bak0 "s/i64/LL/g" xla/tsl/platform/windows/env_time.cc
+""",
+    """
+sed -i.bak0 "s/\\/D/-D/g" third_party/farmhash/farmhash.BUILD
+""",
     """
 sed -i.bak0 "s/kDeprecatedFlags({/kDeprecatedFlags(absl::flat_hash_set<std::string>{/g" xla/debug_options_flags.cc
 """,
