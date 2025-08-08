@@ -761,7 +761,6 @@ cc_toolchain_config(
     ],
 )
 
-
 cc_toolchain(
     name = "beast_x86_toolchain",
     all_files = ":empty",
