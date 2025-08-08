@@ -39,9 +39,6 @@ sed -i.bak0 "/CUPTI_DRIVER_TRACE_CBID_cuGraphAddNode_v2/d" xla/backends/profiler
 CUPTI_NEW = []
 
 XLA_PATCHES = XLA_PATCHES + CUPTI_NEW + [
-	    """
-        sed -i.bak0 "s/namespace xla/#undef CreateEvent\\nnamespace xla/g" xla/pjrt/gpu/tfrt/tfrt_gpu_client.cc
-            """,
     """
 sed -i.bak0 "s/Shlwapi/shlwapi/g" xla/tsl/platform/windows/load_library.cc xla/tsl/platform/windows/windows_file_system.cc xla/tsl/platform/windows/env.cc
 """,
