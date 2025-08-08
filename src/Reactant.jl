@@ -98,6 +98,8 @@ unwrapped_eltype(::TracedRNumber{T}) where {T} = T
 unwrapped_eltype(::Type{<:AbstractArray{T,N}}) where {T,N} = unwrapped_eltype(T)
 unwrapped_eltype(::AbstractArray{T,N}) where {T,N} = unwrapped_eltype(T)
 
+# TODO replace `promote_trace_type` with `promote_transmute_type` on v0.3 release
+promote_transmute_type(a::Type, b::Type) = promote_traced_type(a, b)
 promote_traced_type(a::Type, b::Type) = Base.promote_type(a, b)
 
 aos_to_soa(x::AbstractArray) = x
