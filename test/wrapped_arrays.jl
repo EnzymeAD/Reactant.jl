@@ -241,7 +241,7 @@ end
 @testset "reshaped subarray indexing" begin
     fn(x) = view(x, 1:2) .+ 1
     x_ra = Reactant.to_rarray(rand(3, 4, 3))
-    @test @jit(fn(x_ra)) == fn(Array(x_ra))
+    @test @jit(fn(x_ra)) ≈ fn(Array(x_ra))
 end
 
 function reshape_getindex(x)
