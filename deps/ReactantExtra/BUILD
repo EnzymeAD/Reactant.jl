@@ -758,7 +758,7 @@ cc_toolchain_config(
         "-D__TIME__=\"redacted\"",
         "-Wno-unused-command-line-argument",
         "-Wno-gnu-offsetof-extensions",
-	"-mxsave",
+        "-mxsave",
     ],
 )
 
@@ -1193,7 +1193,7 @@ cc_library(
         ],
         "@xla//xla/tsl:windows": [
             "@xla//xla/tsl/platform/windows:platform_port",
-	],
+        ],
         "//conditions:default": [
             "@gloo//:transport_tcp",
             "@xla//xla/backends/cpu/collectives:gloo_collectives",
