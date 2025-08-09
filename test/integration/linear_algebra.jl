@@ -1,4 +1,5 @@
 using LinearAlgebra, Reactant, Test
+using Reactant: Ops
 
 function muladd2(A, x, b)
     C = similar(A, promote_type(eltype(A), eltype(b)), size(A, 1), size(x, 2))
@@ -403,5 +404,113 @@ end
         B_ra = Reactant.to_rarray(B)
 
         @test @jit(solve_with_lu(A_ra, B_ra)) ≈ solve_with_lu_batched(A, B)
+    end
+end
+
+@testset "geqrf" begin
+    @testset "square - $T" for T in (Float32, Float64, ComplexF32, ComplexF64)
+        A = T[1 2; -3 4]
+        Are = Reactant.to_rarray(A)
+
+        R, tau = LAPACK.geqrf!(copy(A))
+        Rre, taure, info = @jit Ops.geqrf(Are)
+
+        @test isapprox(Rre, R)
+        @test isapprox(taure, tau)
+    end
+
+    @testset "tall - $T" for T in (Float32, Float64, ComplexF32, ComplexF64)
+        A = T[1 2; -3 4; 5 -6; 7 8]
+        Are = Reactant.to_rarray(A)
+
+        R, tau = LAPACK.geqrf!(copy(A))
+        Rre, taure, info = @jit Ops.geqrf(Are)
+
+        @test isapprox(Rre, R)
+        @test isapprox(taure, tau)
+    end
+
+    @testset "wide - $T" for T in (Float32, Float64, ComplexF32, ComplexF64)
+        A = T[1 2 -3 4; 5 -6 7 8]
+        Are = Reactant.to_rarray(A)
+
+        R, tau = LAPACK.geqrf!(copy(A))
+        Rre, taure, info = @jit Ops.geqrf(Are)
+
+        @test isapprox(Rre, R)
+        @test isapprox(taure, tau)
+    end
+end
+
+@testset "geqrt" begin
+    @testset "square - $T" for T in (Float32, Float64, ComplexF32, ComplexF64)
+        A = T[1 2; -3 4]
+        Are = Reactant.to_rarray(A)
+
+        V, Tm = LAPACK.geqrt!(copy(A), 2)
+        Vre, Tmre, info = @jit Ops.geqrt(Are)
+
+        @test isapprox(Vre, V)
+        @test isapprox(Tmre, Tm)
+    end
+
+    @testset "tall - $T" for T in (Float32, Float64, ComplexF32, ComplexF64)
+        A = T[1 2; -3 4; 5 -6; 7 8]
+        Are = Reactant.to_rarray(A)
+
+        V, Tm = LAPACK.geqrt!(copy(A), 2)
+        Vre, Tmre, info = @jit Ops.geqrt(Are)
+
+        @test isapprox(Vre, V)
+        @test isapprox(Tmre, Tm)
+    end
+
+    @testset "wide - $T" for T in (Float32, Float64, ComplexF32, ComplexF64)
+        A = T[1 2 -3 4; 5 -6 7 8]
+        Are = Reactant.to_rarray(A)
+
+        V, Tm = LAPACK.geqrt!(copy(A), 2)
+        Vre, Tmre, info = @jit Ops.geqrt(Are)
+
+        @test isapprox(Vre, V)
+        @test isapprox(Tmre, Tm)
+    end
+end
+
+@testset "orgqr" begin
+    @testset "square - $T" for T in (Float32, Float64, ComplexF32, ComplexF64)
+        A = T[1 2; -3 4]
+        R, tau = LAPACK.geqrf!(copy(A))
+        Rre = Reactant.to_rarray(R)
+        taure = Reactant.to_rarray(tau)
+
+        Q = LAPACK.orgqr!(copy(R), tau)
+        Qre = @jit Ops.orgqr(Rre, taure)
+
+        @test isapprox(Qre, Q)
+    end
+
+    @testset "tall - $T" for T in (Float32, Float64, ComplexF32, ComplexF64)
+        A = T[1 2; -3 4; 5 -6; 7 8]
+        R, tau = LAPACK.geqrf!(copy(A))
+        Rre = Reactant.to_rarray(R)
+        taure = Reactant.to_rarray(tau)
+
+        Q = LAPACK.orgqr!(copy(R), tau)
+        Qre = @jit Ops.orgqr(Rre, taure)
+
+        @test isapprox(Qre, Q)
+    end
+
+    @testset "wide - $T" for T in (Float32, Float64, ComplexF32, ComplexF64)
+        A = T[1 2 -3 4; 5 -6 7 8]
+        R, tau = LAPACK.geqrf!(copy(A))
+        Rre = Reactant.to_rarray(R)
+        taure = Reactant.to_rarray(tau)
+
+        Q = LAPACK.orgqr!(copy(R), tau)
+        Qre = @jit Ops.orgqr(Rre, taure)
+
+        @test isapprox(Qre, Q)
     end
 end

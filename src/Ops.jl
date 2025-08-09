@@ -3295,4 +3295,82 @@ end
     )
 end
 
+@noinline function geqrf(
+    x::TracedRArray{T}; location=mlir_stacktrace("geqrf", @__FILE__, @__LINE__)
+) where {T}
+    @assert ndims(x) == 2
+
+    output_shape = collect(Int64, size(x))
+    k = min(size(x)...)
+
+    op = enzymexla.lapack_geqrf(
+        x.mlir_data;
+        output=MLIR.IR.TensorType(output_shape, MLIR.IR.Type(unwrapped_eltype(T))),
+        tau=MLIR.IR.TensorType([k], MLIR.IR.Type(unwrapped_eltype(T))),
+        info=MLIR.IR.TensorType(Int[], MLIR.IR.Type(Int64)),
+        location,
+    )
+
+    R = TracedRArray{T,2}((), MLIR.IR.result(op, 1), size(x))
+    tau = TracedRArray{T,1}((), MLIR.IR.result(op, 2), (k,))
+    info = TracedRNumber{Int64}((), MLIR.IR.result(op, 3))
+
+    return R, tau, info
+end
+
+@noinline function geqrt(
+    x::TracedRArray{T};
+    blocksize::Union{Nothing,Int}=nothing,
+    location=mlir_stacktrace("geqrt", @__FILE__, @__LINE__),
+) where {T}
+    @assert ndims(x) == 2
+
+    output_shape = collect(Int64, size(x))
+    k = min(size(x)...)
+
+    blocksize = if !isnothing(blocksize)
+        blocksize
+    else
+        min(size(x)...)
+    end
+    blocksize_attr = MLIR.IR.Attribute(blocksize)
+
+    op = enzymexla.lapack_geqrt(
+        x.mlir_data;
+        output=MLIR.IR.TensorType(output_shape, MLIR.IR.Type(unwrapped_eltype(T))),
+        T=MLIR.IR.TensorType(
+            [blocksize, min(size(x)...)], MLIR.IR.Type(unwrapped_eltype(T))
+        ),
+        info=MLIR.IR.TensorType(Int[], MLIR.IR.Type(Int64)),
+        blocksize=blocksize_attr,
+        location,
+    )
+
+    R = TracedRArray{T,2}((), MLIR.IR.result(op, 1), size(x))
+    tau = TracedRArray{T,2}((), MLIR.IR.result(op, 2), (blocksize, min(size(x)...)))
+    info = TracedRNumber{Int64}((), MLIR.IR.result(op, 3))
+
+    return R, tau, info
+end
+
+@noinline function orgqr(
+    R::TracedRArray{T},
+    tau::TracedRArray{T};
+    location=mlir_stacktrace("orgqr", @__FILE__, @__LINE__),
+) where {T}
+    @assert ndims(R) == 2
+    @assert ndims(tau) == 1
+
+    output_shape = collect(Int64, size(R))
+
+    res = enzymexla.lapack_orgqr(
+        R.mlir_data,
+        tau.mlir_data;
+        output=MLIR.IR.TensorType(output_shape, MLIR.IR.Type(unwrapped_eltype(T))),
+        location,
+    )
+
+    return TracedRArray{T,2}((), MLIR.IR.result(res), size(R))
+end
+
 end # module Ops
