@@ -40,10 +40,10 @@ NEW_XLA_PATCHES = CUPTI_NEW + [
     """
 sed -i.bak0 "s/Shlwapi/shlwapi/g" xla/tsl/platform/windows/load_library.cc xla/tsl/platform/windows/windows_file_system.cc xla/tsl/platform/windows/env.cc
 """,
-"""
+    """
 sed -i.bak0 "1s/^/#ifdef PLATFORM_WINDOWS\\n#include <immintrin.h>\\n#include <intrin.h>\\n#endif/g" third_party/tsl/tsl/platform/cpu_info.cc
 """,
-"""
+    """
 sed -i.bak0 "1s/^/#define _USE_MATH_DEFINES\\n/g" xla/fp_util.h xla/hlo/builder/lib/prng.cc xla/literal_comparison.cc xla/hlo/builder/lib/math.cc xla/service/spmd/fft_handler.cc xla/service/cpu/onednn_contraction_rewriter.cc xla/hlo/evaluator/hlo_evaluator.cc
 """,
     """
@@ -138,9 +138,11 @@ LLVM_TARGETS = [
 # )
 
 load("@enzyme_ad//third_party/jax:workspace.bzl", jax_workspace = "repo")
+
 jax_workspace([])
 
 load("@enzyme_ad//third_party/xla:workspace.bzl", xla_workspace = "repo")
+
 xla_workspace(NEW_XLA_PATCHES)
 
 #
@@ -158,10 +160,9 @@ xla_workspace(NEW_XLA_PATCHES)
 #
 # pip_install_dependencies()
 
-
 load("@enzyme_ad//third_party/enzyme:workspace.bzl", enzyme_workspace = "repo")
-enzyme_workspace()
 
+enzyme_workspace()
 
 # http_archive(
 #     name = "upb",
