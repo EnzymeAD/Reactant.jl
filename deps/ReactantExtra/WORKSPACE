@@ -138,7 +138,7 @@ LLVM_TARGETS = [
 # )
 
 load("@enzyme_ad//third_party/jax:workspace.bzl", jax_workspace = "repo")
-jax_workspace()
+jax_workspace([])
 
 load("@enzyme_ad//third_party/xla:workspace.bzl", xla_workspace = "repo")
 xla_workspace(NEW_XLA_PATCHES)
