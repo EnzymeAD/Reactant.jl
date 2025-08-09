@@ -404,7 +404,7 @@ end
 Schedules `tcgen05.mma` instructions that perform the following matrix
 multiply and accumulate:
 
-  accumulator = a * b + accumulator
+  accumulator += a * b
 
 This operation supports larger inputs than the PTX-level MMA instruction
 and will schedule as many PTX-level MMA instructions as needed to
@@ -417,8 +417,6 @@ The inputs should have the following shapes:
 where `s == swizzle / element_bytewidth` and `m` is specified according to
 https://docs.nvidia.com/cuda/parallel-thread-execution/#tcgen05-matrix-shape.
 
-The output has an identical shape and type as the input accumulator.
-
 The `accumulator`, `a` and `b` matrices need to be provided as 2-dimensional
 memrefs. The `accumulator` is always in TMEM and `b` is always in SMEM.
 `a` can be in TMEM or SMEM. `a` and `b` must have the same element
@@ -427,7 +425,7 @@ type and when `a` is in TMEM only F16 or BF16 are supported.
 `a_scale` and `b_scale` are optional scaling matrices that reside in TMEM.
 When set the operation is defined as:
 
-  accumulator = (a * a_scale) * (b * b_scale) + accumulator
+  accumulator += (a * a_scale) * (b * b_scale)
 
 `accumulate` is a boolean that indicates whether to perform the accumulate
 step.
@@ -439,7 +437,6 @@ function tcgen05_mma(
     accumulate::Value,
     a_scale=nothing::Union{Nothing,Value};
     b_scale=nothing::Union{Nothing,Value},
-    result_0=nothing::Union{Nothing,IR.Type},
     collective=nothing,
     location=Location(),
 )
@@ -463,7 +460,6 @@ function tcgen05_mma(
             1
         end,
     ]))
-    !isnothing(result_0) && push!(op_ty_results, result_0)
     !isnothing(collective) && push!(attributes, namedattribute("collective", collective))
 
     return create_operation(
@@ -473,8 +469,8 @@ function tcgen05_mma(
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=op_ty_results,
+        result_inference=false,
     )
 end
 
