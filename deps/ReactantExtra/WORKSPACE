@@ -4,7 +4,7 @@ NSYNC_COMMIT = "82b118aa7ace3132e517e2c467f8732978cf4023"
 
 NSYNC_SHA256 = ""
 
-ENZYMEXLA_COMMIT = "1db9c56481219eb35992b1b62e3849480c42872e"
+ENZYMEXLA_COMMIT = "15d5dab32f0eb9da1c26b7b934148aa430bdb144"
 
 ENZYMEXLA_SHA256 = ""
 
@@ -141,7 +141,7 @@ load("@enzyme_ad//third_party/jax:workspace.bzl", jax_workspace = "repo")
 jax_workspace()
 
 load("@enzyme_ad//third_party/xla:workspace.bzl", xla_workspace = "repo")
-xla_workspace(NEW_XLA_PATCHES, override_commit = "3db2ac3bf43c3e250ef7614eb5c8594e716ecc48")
+xla_workspace(NEW_XLA_PATCHES)
 
 #
 # load("@xla//third_party/py:python_init_pip.bzl", "python_init_pip")
