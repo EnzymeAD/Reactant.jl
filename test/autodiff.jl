@@ -235,7 +235,7 @@ end
     x = Reactant.to_rarray([3.1])
     @jit Enzyme.make_zero!(x)
 
-    @test x[1] ≈ 0.0
+    @test @allowscalar x[1] ≈ 0.0
 end
 
 function simple_forward(x, st)
