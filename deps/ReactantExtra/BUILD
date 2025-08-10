@@ -700,7 +700,7 @@ cc_toolchain_config(
     host_system_name = "linux",
     link_flags = [
         "-fuse-ld=lld",
-        "-stdlib=libc++",
+        "-stdlib=libstdc++",
     ],
     link_libs = [
         "-lstdc++",
@@ -713,7 +713,7 @@ cc_toolchain_config(
         "-DNDEBUG",
         "-ffunction-sections",
         "-fdata-sections",
-        "-stdlib=libc++",
+        "-stdlib=libstdc++",
     ],
     opt_link_flags = ["-Wl,--gc-sections"],
     supports_start_end_lib = False,
