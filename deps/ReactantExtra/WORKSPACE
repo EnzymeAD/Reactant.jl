@@ -38,6 +38,10 @@ CUPTI_NEW = []
 
 NEW_XLA_PATCHES = CUPTI_NEW + [
     """
+sed -i.bak0 "s/__chkstk/__chkstk_ms/g" xla/service/cpu/runtime_symbol_generator.cc
+""",
+
+    """
 sed -i.bak0 "s/Shlwapi/shlwapi/g" xla/tsl/platform/windows/load_library.cc xla/tsl/platform/windows/windows_file_system.cc xla/tsl/platform/windows/env.cc
 """,
     """
