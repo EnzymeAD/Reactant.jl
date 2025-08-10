@@ -231,6 +231,13 @@ vector_forward_ad(x) = Enzyme.autodiff(Forward, fn, BatchDuplicated(x, Enzyme.on
     @test res[1][4] ≈ res_enz[1][4]
 end
 
+@testset "make_zero!" begin
+    x = Reactant.to_rarray([3.1])
+    @jit Enzyme.make_zero!(x)
+
+    @test x[1] ≈ 0.0
+end
+
 function simple_forward(x, st)
     rng = copy(st.rng)
     y = similar(x)
