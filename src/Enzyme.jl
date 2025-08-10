@@ -24,7 +24,7 @@ end
 
 macro register_make_zero_inplace(sym)
     quote
-        @inline function $sym(prev::Array{T,N})::Nothing where {T<:AbstractFloat,N}
+        @inline function $sym(prev::RArray{T,N})::Nothing where {T<:AbstractFloat,N}
             $sym(prev, nothing)
             return nothing
         end
