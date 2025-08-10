@@ -5,6 +5,53 @@ const enzyme_dupnoneed = 3
 const enzyme_outnoneed = 4
 const enzyme_constnoneed = 5
 
+@inline function Enzyme.make_zero(x::RNumber)
+    return zero(Core.Typeof(x))
+end
+
+@inline function Enzyme.make_zero(
+    x::RArray{FT,N},
+)::RArray{FT,N} where {FT<:AbstractFloat,N}
+    return Base.zero(x)
+end
+
+@inline function Enzyme.make_zero(
+    x::RArray{Complex{FT},N},
+)::RArray{Complex{FT},N} where {FT<:AbstractFloat,N}
+    return Base.zero(x)
+end
+
+
+macro register_make_zero_inplace(sym)
+    quote
+        @inline function $sym(prev::Array{T,N})::Nothing where {T<:AbstractFloat,N}
+            $sym(prev, nothing)
+            return nothing
+        end
+
+        @inline function $sym(
+            prev::RArray{T,N},
+            seen::ST,
+        )::Nothing where {T,N,ST}
+            if Enzyme.Compiler.guaranteed_const_nongen(T, nothing)
+                return
+            end
+            if !isnothing(seen)
+                if prev in seen
+                    return nothing
+                end
+                push!(seen, prev)
+            end
+            fill!(prev, zero(T))
+            return nothing
+        end
+    end
+end
+
+@register_make_zero_inplace(Enzyme.make_zero!)
+@register_make_zero_inplace(Enzyme.remake_zero!)
+
+    
 function Enzyme.make_zero(
     ::Type{RT}, seen::IdDict, prev::RT, ::Val{copy_if_inactive}=Val(false)
 )::RT where {copy_if_inactive,RT<:Union{RArray,RNumber}}
