@@ -644,7 +644,7 @@ end
         idx_ca = Reactant.to_rarray(idx)
 
         function test_scatter(dsts, srcs, idxs)
-            return sum(NNlib.scatter!(-, dsts, srcs, idxs))
+            return sum(NNlib.scatter!(+, dsts, srcs, idxs))
         end
 
         function test_gradient(objective_function, dsts, srcs, idxs)
