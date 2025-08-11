@@ -38,6 +38,9 @@ CUPTI_NEW = []
 
 NEW_XLA_PATCHES = CUPTI_NEW + [
     """
+sed -i.bak0 "s/def main():/def main():\\n  if TMPDIR: os.environ['TMPDIR'] = TMPDIR/g" third_party/gpus/crosstool/clang/bin/crosstool_wrapper_driver_is_not_gcc.tpl
+""",
+    """
 sed -i.bak0 "s/__chkstk/__chkstk_ms/g" xla/service/cpu/runtime_symbol_generator.cc
 """,
     """
