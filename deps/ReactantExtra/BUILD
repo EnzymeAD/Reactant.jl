@@ -64,6 +64,7 @@ cc_toolchain_config(
     abi_version = "local",
     builtin_sysroot = "/opt/x86_64-linux-musl/bin/../x86_64-linux-musl/sys-root",
     compile_flags = [
+        "-stdlib=libstdc++",
     ],
     compiler = "clang",
     coverage_compile_flags = ["--coverage"],
@@ -105,7 +106,6 @@ cc_toolchain_config(
         "-DNDEBUG",
         "-ffunction-sections",
         "-fdata-sections",
-        "-stdlib=libstdc++",
     ],
     opt_link_flags = ["-Wl,--gc-sections"],
     supports_start_end_lib = True,
@@ -452,7 +452,6 @@ cc_toolchain_config(
     ],
     dbg_compile_flags = [
         "-g",
-        "-stdlib=libc++",
     ],
     host_system_name = "linux",
     link_flags = [
@@ -470,7 +469,6 @@ cc_toolchain_config(
         "-DNDEBUG",
         "-ffunction-sections",
         "-fdata-sections",
-        "-stdlib=libc++",
     ],
     opt_link_flags = ["-Wl,--gc-sections"],
     supports_start_end_lib = True,
@@ -695,7 +693,6 @@ cc_toolchain_config(
     ],
     dbg_compile_flags = [
         "-g",
-        "-stdlib=libstdc++",
     ],
     host_system_name = "linux",
     link_flags = [
@@ -713,7 +710,6 @@ cc_toolchain_config(
         "-DNDEBUG",
         "-ffunction-sections",
         "-fdata-sections",
-        "-stdlib=libstdc++",
     ],
     opt_link_flags = ["-Wl,--gc-sections"],
     supports_start_end_lib = False,
