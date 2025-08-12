@@ -51,7 +51,6 @@ build:rocm --repo_env TF_NEED_ROCM=1
 build:rocm --action_env TF_ROCM_AMDGPU_TARGETS="gfx900,gfx906,gfx908,gfx90a,gfx940,gfx941,gfx942,gfx1030,gfx1100,gfx1200,gfx1201"
 
 # Build with hipcc for ROCm and clang for the host.
-build:rocm --config=rocm_base
 build:rocm --action_env=TF_ROCM_CLANG="1"
 build:rocm --action_env=CLANG_COMPILER_PATH="/usr/lib/llvm-18/bin/clang"
 build:rocm --copt=-Wno-gnu-offsetof-extensions
