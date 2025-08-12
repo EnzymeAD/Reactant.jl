@@ -1,6 +1,7 @@
 module Sharding
 
-using ..Reactant: Reactant, XLA, MLIR
+# XXX: Import ShardyPropagationOptions here to avoid breaking old code
+using ..Reactant: Reactant, XLA, MLIR, ShardyPropagationOptions
 using ReactantCore: ReactantCore
 
 """
@@ -151,13 +152,6 @@ Base.in(axis::Union{String,Symbol}, mesh::Mesh) = Symbol(axis) ∈ mesh.axis_nam
 
 abstract type AbstractSharding end
 
-function (T::AbstractSharding)(::XLA.AbstractClient, device, ::Union{AbstractArray,Number})
-    return error(
-        "(::$(T))(::XLA.AbstractClient, device, ::Union{AbstractArray,Number}) is \
-         not implemented"
-    )
-end
-
 # By default we use same sharding for all leaf nodes
 Base.getproperty(sharding::AbstractSharding, name) = sharding
 function Base.getproperty(sharding::AbstractSharding, name::Symbol)
@@ -197,6 +191,12 @@ function (::NoSharding)(client::XLA.PJRT.Client, device, x::Union{AbstractArray,
     return (buffer,), ShardInfo(NoSharding(), nothing)
 end
 
+function (::NoSharding)(client::XLA.PJRT.Client, device, S::Type, dims::Dims)
+    device === nothing && (device = XLA.default_device(client))
+    buffer = similar(XLA.PJRT.AsyncBuffer, S, dims; client, device)
+    return (buffer,), ShardInfo(NoSharding(), nothing)
+end
+
 function (::NoSharding)(client::XLA.IFRT.Client, device, x::Union{AbstractArray,Number})
     device === nothing && (device = XLA.default_device(client))
     return (
@@ -207,7 +207,7 @@ end
 function sharding_to_array_slices(
     sharding::NoSharding, size_x; client=nothing, return_updated_sharding=Val(false)
 )
-    slices = Base.OneTo.(size_x)
+    slices = (Base.OneTo.(size_x),)
     return_updated_sharding isa Val{true} && return (slices, sharding)
     return slices
 end
@@ -418,6 +418,29 @@ function (sharding::NamedSharding)(
     return data, ShardInfo(sharding, device_to_array_slices)
 end
 
+function (sharding::NamedSharding)(client::XLA.PJRT.Client, _, S::Type, dims::Dims)
+    if !issorted(sharding.mesh.logical_device_ids)
+        error("PJRT doesn't support non-iota meshes. Use IFRT instead.")
+    end
+
+    device_to_array_slices, sharding = sharding_to_array_slices(
+        sharding, dims; client, return_updated_sharding=Val(true)
+    )
+
+    data = ntuple(length(sharding.mesh)) do i
+        Base.@_inline_meta
+        Base.similar(
+            XLA.PJRT.AsyncBuffer,
+            S,
+            Dims(length.(device_to_array_slices[i]));
+            client,
+            device=XLA.get_device(client, sharding.mesh.device_ids[i]),
+        )
+    end
+
+    return data, ShardInfo(sharding, device_to_array_slices)
+end
+
 function (sharding::NamedSharding)(
     client::XLA.IFRT.Client, _, x::Union{AbstractArray,Number}
 )
@@ -530,6 +553,8 @@ function get_tensor_sharding_attribute(
             mesh_name,
             length(dimension_sharding_attrs),
             do_transpose ? reverse(dimension_sharding_attrs) : dimension_sharding_attrs,
+            0,
+            MLIR.API.MlirAttribute[],
             0,
             MLIR.API.MlirAttribute[],
         ),
@@ -701,6 +726,10 @@ function (sharding::DimsSharding)(
     return (NamedSharding(sharding, ndims(x)))(client, device, x)
 end
 
+function (sharding::DimsSharding)(client::XLA.PJRT.Client, dev, S::Type, dims::Dims)
+    return (NamedSharding(sharding, length(dims)))(client, dev, S, dims)
+end
+
 function sharding_to_array_slices(sharding::DimsSharding, size_x; kwargs...)
     return sharding_to_array_slices(
         NamedSharding(sharding, length(size_x)), size_x; kwargs...
@@ -743,6 +772,10 @@ function (sharding::Replicated)(
     client::XLA.AbstractClient, device, x::Union{AbstractArray,Number}
 )
     return (NamedSharding(sharding, ndims(x)))(client, device, x)
+end
+
+function (sharding::Replicated)(client::XLA.PJRT.Client, dev, S::Type, dims::Dims)
+    return (NamedSharding(sharding, length(dims)))(client, dev, S, dims)
 end
 
 function sharding_to_array_slices(sharding::Replicated, size_x; kwargs...)
@@ -933,6 +966,22 @@ function (sharding::HloSharding)(
     return data, ShardInfo(sharding, device_to_array_slices)
 end
 
+function (sharding::HloSharding)(client::XLA.PJRT.Client, ::Nothing, S::Type, dims::Dims)
+    device_to_array_slices = sharding_to_array_slices(sharding, dims; client)
+
+    data = ntuple(length(sharding.mesh)) do i
+        Base.similar(
+            XLA.PJRT.AsyncBuffer,
+            S,
+            Dims(length.(device_to_array_slices[i]));
+            client,
+            device=XLA.get_device(client, sharding.mesh.device_ids[i]),
+        )
+    end
+
+    return data, ShardInfo(sharding, device_to_array_slices)
+end
+
 function (sharding::HloSharding)(
     client::XLA.IFRT.Client, ::Nothing, x::Union{AbstractArray,Number}
 )
@@ -1108,40 +1157,6 @@ function sdy_sharding_to_reactant_sharding(attr, global_device_ids, mod)
         sdy_mesh_to_reactant_mesh(MLIR.IR.attr(mesh_op, "mesh"), global_device_ids),
         MLIR.IR.Attribute(mlir_attr),
     )
-end
-
-"""
-    ShardyPropagationOptions
-
-Fine-grained control over the sharding propagation pipeline. For more information on
-sharding propagation, see the
-[Shardy Docs](https://openxla.org/shardy/sdy_propagation_passes).
-
-## Options
-
-  - `keep_sharding_rules::Bool`: whether to keep existing and created op sharding rules.
-  - `conservative_propagation::Bool`: whether to disallow split axes and non-divisible
-    sharding axes during propagation.
-  - `debug_sharding_origins::Bool`: whether to save information about the origin of a
-    sharding on the MLIR module. These would be the shardings on the function inputs,
-    outputs, sharding constraints and manual computations before propagation.
-  - `debug_propagation_edge_sharding::Bool`: whether to save information about the edge
-    source of a sharding on the MLIR module. These are what operand/result introduced a
-    sharding on some op result.
-  - `skip_convert_to_reshard::Bool`
-  - `skip_inline::Bool`
-  - `enable_insert_explicit_collectives::Bool`: whether to insert explicit collectives
-    for sharding propagation. This is useful for debugging and checking the location of
-    the communication ops.
-"""
-@kwdef struct ShardyPropagationOptions
-    keep_sharding_rules::Bool = false
-    conservative_propagation::Bool = false
-    debug_sharding_origins::Bool = false
-    debug_propagation_edge_sharding::Bool = false
-    skip_convert_to_reshard::Bool = false
-    skip_inline::Bool = false
-    enable_insert_explicit_collectives::Bool = false
 end
 
 end

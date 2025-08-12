@@ -6,7 +6,7 @@ using ReactantCore:
 using LinearAlgebra: LinearAlgebra
 using Random: Random, AbstractRNG
 using EnumX: @enumx
-using Functors: @leaf
+using Functors: Functors, @leaf
 
 using Adapt: Adapt, WrappedArray
 using GPUArraysCore: GPUArraysCore, @allowscalar, allowscalar # keep this import to allow users to do `Reactant.allowscalar(false)`
@@ -48,6 +48,10 @@ end
 include("accelerators/Accelerators.jl")
 
 using .Accelerators.TPU: has_tpu
+
+include("CompileOptions.jl")
+
+export OptimizeCommunicationOptions, ShardyPropagationOptions, CompileOptions
 
 include("mlir/MLIR.jl")
 include("xla/XLA.jl")
@@ -154,15 +158,17 @@ include("TracedRArray.jl")
 
 include("ConcreteRArray.jl")
 
-use_overlayed_version(iter) = any(use_overlayed_version, iter)
-
+use_overlayed_version(x) = false
+use_overlayed_version(x::Base.Iterators.Zip) = any(use_overlayed_version, x.is)
+use_overlayed_version(x::Base.Iterators.Enumerate) = use_overlayed_version(x.itr)
+use_overlayed_version(iter::Tuple) = any(use_overlayed_version, iter)
+use_overlayed_version(iter::NamedTuple) = any(use_overlayed_version, values(iter))
 use_overlayed_version(::TracedRArray) = true
 use_overlayed_version(::TracedRNumber) = true
 use_overlayed_version(::Number) = false
 use_overlayed_version(::MissingTracedValue) = true
 use_overlayed_version(::AbstractArray{<:TracedRNumber}) = true
 use_overlayed_version(rng::ReactantRNG) = use_overlayed_version(rng.seed)
-
 function use_overlayed_version(x::AbstractArray)
     a = ancestor(x)
     a === x && return false
@@ -182,12 +188,12 @@ const TracedType = Union{TracedRArray,TracedRNumber,MissingTracedValue}
 include("ControlFlow.jl")
 include("Tracing.jl")
 
-include("CompileOptions.jl")
-export OptimizeCommunicationOptions
-
 include("Compiler.jl")
 
 include("Overlay.jl")
+
+# Serialization
+include("serialization/Serialization.jl")
 
 using .Compiler: @compile, @code_hlo, @code_mhlo, @jit, @code_xla, traced_getfield, compile
 export ConcreteRArray,

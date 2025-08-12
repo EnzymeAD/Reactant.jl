@@ -77,7 +77,7 @@ The `addi` operation takes two operands and returns one result, each of
 these is required to be the same type. This type may be an integer scalar type, 
 a vector whose element type is integer, or a tensor of integers.
 
-This op supports `nuw`/`nsw` overflow flags which stands stand for
+This op supports `nuw`/`nsw` overflow flags which stands for
 \"No Unsigned Wrap\" and \"No Signed Wrap\", respectively. If the `nuw` and/or
 `nsw` flags are present, and an unsigned/signed overflow occurs
 (respectively), the result is poison.
@@ -1193,7 +1193,7 @@ The `muli` operation takes two operands and returns one result, each of
 these is required to be the same type. This type may be an integer scalar type,
 a vector whose element type is integer, or a tensor of integers.
 
-This op supports `nuw`/`nsw` overflow flags which stands stand for
+This op supports `nuw`/`nsw` overflow flags which stands for
 \"No Unsigned Wrap\" and \"No Signed Wrap\", respectively. If the `nuw` and/or
 `nsw` flags are present, and an unsigned/signed overflow occurs
 (respectively), the result is poison.
@@ -1579,6 +1579,129 @@ function sitofp(in::Value; out::IR.Type, location=Location())
 end
 
 """
+`scaling_extf`
+
+This operation upcasts input floating-point values using provided scale 
+values. It expects both scales and the input operand to be of the same shape, 
+making the operation elementwise. Scales are usually calculated per block 
+following the OCP MXFP spec as described in https://arxiv.org/abs/2310.10537.
+
+If scales are calculated per block where blockSize != 1, then scales may 
+require broadcasting to make this operation elementwise. For example, let\'s 
+say the input is of shape `<dim1 x dim2 x ... dimN>`. Given blockSize != 1 and 
+assuming quantization happens on the last axis, the input can be reshaped to 
+`<dim1 x dim2 x ... (dimN/blockSize) x blockSize>`. Scales will be calculated 
+per block on the last axis. Therefore, scales will be of shape 
+`<dim1 x dim2 x ... (dimN/blockSize) x 1>`. Scales could also be of some other 
+shape as long as it is broadcast compatible with the input, e.g., 
+`<1 x 1 x ... (dimN/blockSize) x 1>`.
+
+In this example, before calling into `arith.scaling_extf`, scales must be 
+broadcasted to `<dim1 x dim2 x dim3 ... (dimN/blockSize) x blockSize>`. Note 
+that there could be multiple quantization axes. Internally, 
+`arith.scaling_extf` would perform the following:
+ 
+  ```
+  resultTy = get_type(result) 
+  scaleTy  = get_type(scale)
+  inputTy = get_type(input)
+  scale.exponent = arith.truncf(scale) : scaleTy to f8E8M0
+  scale.extf = arith.extf(scale.exponent) : f8E8M0 to resultTy
+  input.extf = arith.extf(input) : inputTy to resultTy
+  result = arith.mulf(scale.extf, input.extf)
+  ```
+  It propagates NaN values. Therefore, if either scale or the input element 
+  contains NaN, then the output element value will also be a NaN.
+"""
+function scaling_extf(
+    in::Value, scale::Value; out::IR.Type, fastmath=nothing, location=Location()
+)
+    op_ty_results = IR.Type[out,]
+    operands = Value[in, scale]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+    !isnothing(fastmath) && push!(attributes, namedattribute("fastmath", fastmath))
+
+    return create_operation(
+        "arith.scaling_extf",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+"""
+`scaling_truncf`
+
+This operation downcasts input using the provided scale values. It expects 
+both scales and the input operand to be of the same shape and, therefore, 
+makes the operation elementwise. Scales are usually calculated per block 
+following the OCP MXFP spec as described in https://arxiv.org/abs/2310.10537.
+Users are required to normalize and clamp the scales as necessary before calling
+passing them to this operation.  OCP MXFP spec also does the flushing of denorms
+on the input operand, which should be handled during lowering by passing appropriate 
+fastMath flag to this operation. 
+
+If scales are calculated per block where blockSize != 1, scales may require 
+broadcasting to make this operation elementwise. For example, let\'s say the 
+input is of shape `<dim1 x dim2 x ... dimN>`. Given blockSize != 1 and 
+assuming quantization happens on the last axis, the input can be reshaped to 
+`<dim1 x dim2 x ... (dimN/blockSize) x blockSize>`. Scales will be calculated 
+per block on the last axis. Therefore, scales will be of shape 
+`<dim1 x dim2 x ... (dimN/blockSize) x 1>`. Scales could also be of some other 
+shape as long as it is broadcast compatible with the input, e.g., 
+`<1 x 1 x ... (dimN/blockSize) x 1>`.
+
+In this example, before calling into `arith.scaling_truncf`, scales must be 
+broadcasted to `<dim1 x dim2 x dim3 ... (dimN/blockSize) x blockSize>`. Note 
+that there could be multiple quantization axes. Internally, 
+`arith.scaling_truncf` would perform the following:
+
+```
+scaleTy = get_type(scale)
+inputTy = get_type(input)
+resultTy = get_type(result)
+scale.exponent = arith.truncf(scale) : scaleTy to f8E8M0
+scale.extf = arith.extf(scale.exponent) : f8E8M0 to inputTy
+result = arith.divf(input, scale.extf)
+result.cast = arith.truncf(result, resultTy)
+```
+"""
+function scaling_truncf(
+    in::Value,
+    scale::Value;
+    out::IR.Type,
+    roundingmode=nothing,
+    fastmath=nothing,
+    location=Location(),
+)
+    op_ty_results = IR.Type[out,]
+    operands = Value[in, scale]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+    !isnothing(roundingmode) &&
+        push!(attributes, namedattribute("roundingmode", roundingmode))
+    !isnothing(fastmath) && push!(attributes, namedattribute("fastmath", fastmath))
+
+    return create_operation(
+        "arith.scaling_truncf",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+"""
 `shli`
 
 The `shli` operation shifts the integer value of the first operand to the left 
@@ -1587,7 +1710,7 @@ unsigned. The low order bits are filled with zeros. If the value of the second
 operand is greater or equal than the bitwidth of the first operand, then the
 operation returns poison.
 
-This op supports `nuw`/`nsw` overflow flags which stands stand for
+This op supports `nuw`/`nsw` overflow flags which stands for
 \"No Unsigned Wrap\" and \"No Signed Wrap\", respectively. If the `nuw` and/or
 `nsw` flags are present, and an unsigned/signed overflow occurs
 (respectively), the result is poison.
@@ -1775,7 +1898,7 @@ The `subi` operation takes two operands and returns one result, each of
 these is required to be the same type. This type may be an integer scalar type,
 a vector whose element type is integer, or a tensor of integers.
 
-This op supports `nuw`/`nsw` overflow flags which stands stand for
+This op supports `nuw`/`nsw` overflow flags which stands for
 \"No Unsigned Wrap\" and \"No Signed Wrap\", respectively. If the `nuw` and/or
 `nsw` flags are present, and an unsigned/signed overflow occurs
 (respectively), the result is poison.
@@ -1865,22 +1988,35 @@ width M and an integer destination type of width N. The destination
 bit-width must be smaller than the input bit-width (N < M).
 The top-most (N - M) bits of the input are discarded.
 
+This op supports `nuw`/`nsw` overflow flags which stands for \"No Unsigned
+Wrap\" and \"No Signed Wrap\", respectively. If the nuw keyword is present,
+and any of the truncated bits are non-zero, the result is a poison value.
+If the nsw keyword is present, and any of the truncated bits are not the
+same as the top bit of the truncation result, the result is a poison value.
+
 # Example
 
 ```mlir
+  // Scalar truncation.
   %1 = arith.constant 21 : i5     // %1 is 0b10101
   %2 = arith.trunci %1 : i5 to i4 // %2 is 0b0101
   %3 = arith.trunci %1 : i5 to i3 // %3 is 0b101
 
-  %5 = arith.trunci %0 : vector<2 x i32> to vector<2 x i16>
+  // Vector truncation.
+  %4 = arith.trunci %0 : vector<2 x i32> to vector<2 x i16>
+
+  // Scalar truncation with overflow flags.
+  %5 = arith.trunci %a overflow<nsw, nuw> : i32 to i16
 ```
 """
-function trunci(in::Value; out::IR.Type, location=Location())
+function trunci(in::Value; out::IR.Type, overflowFlags=nothing, location=Location())
     op_ty_results = IR.Type[out,]
     operands = Value[in,]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
+    !isnothing(overflowFlags) &&
+        push!(attributes, namedattribute("overflowFlags", overflowFlags))
 
     return create_operation(
         "arith.trunci",

@@ -14,6 +14,7 @@ using ..Reactant:
 
 using ReactantCore: ReactantCore
 using ReactantCore: materialize_traced_array
+using Reactant_jll: Reactant_jll
 
 using ..TracedUtils: TracedUtils, get_mlir_data, set_mlir_data!
 
@@ -21,18 +22,20 @@ using LinearAlgebra
 using Libdl: Libdl
 
 function __init__()
-    libblastrampoline_handle = Libdl.dlopen(LinearAlgebra.BLAS.libblas)
+    if Reactant_jll.is_available()
+        libblastrampoline_handle = Libdl.dlopen(LinearAlgebra.BLAS.libblas)
 
-    for (cname, enzymexla_name) in [
-        (LinearAlgebra.BLAS.@blasfunc(sgetrf_), :enzymexla_lapack_sgetrf_),
-        (LinearAlgebra.BLAS.@blasfunc(dgetrf_), :enzymexla_lapack_dgetrf_),
-        (LinearAlgebra.BLAS.@blasfunc(cgetrf_), :enzymexla_lapack_cgetrf_),
-        (LinearAlgebra.BLAS.@blasfunc(zgetrf_), :enzymexla_lapack_zgetrf_),
-    ]
-        sym = Libdl.dlsym(libblastrampoline_handle, cname)
-        @ccall MLIR.API.mlir_c.EnzymeJaXMapSymbol(
-            enzymexla_name::Cstring, sym::Ptr{Cvoid}
-        )::Cvoid
+        for (cname, enzymexla_name) in [
+            (LinearAlgebra.BLAS.@blasfunc(sgetrf_), :enzymexla_lapack_sgetrf_),
+            (LinearAlgebra.BLAS.@blasfunc(dgetrf_), :enzymexla_lapack_dgetrf_),
+            (LinearAlgebra.BLAS.@blasfunc(cgetrf_), :enzymexla_lapack_cgetrf_),
+            (LinearAlgebra.BLAS.@blasfunc(zgetrf_), :enzymexla_lapack_zgetrf_),
+        ]
+            sym = Libdl.dlsym(libblastrampoline_handle, cname)
+            @ccall MLIR.API.mlir_c.EnzymeJaXMapSymbol(
+                enzymexla_name::Cstring, sym::Ptr{Cvoid}
+            )::Cvoid
+        end
     end
 
     return nothing
@@ -303,13 +306,14 @@ function LinearAlgebra._diagm(
         end
     end
 
-    scatter_indices = Matrix{Int64}[]
+    scatter_inds = TracedRArray{Int,2}[]
     concat_inputs = MLIR.IR.Value[]
     for (k, v) in pairs(kv_updated)
-        push!(scatter_indices, diagonal_indices(m, n, k)[1:length(v), :])
+        ind = diagonal_indices(m, n, k, length(v))
+        push!(scatter_inds, ind)
         push!(concat_inputs, get_mlir_data(v))
     end
-    scatter_indices = Ops.constant(reduce(vcat, scatter_indices))
+    scatter_indices = Ops.concatenate(scatter_inds, 1)
     values = TracedRArray{T,1}(
         (),
         MLIR.IR.result(MLIR.Dialects.stablehlo.concatenate(concat_inputs; dimension=0), 1),
@@ -320,15 +324,21 @@ end
 
 # Common Utilities
 ## The cartesian version doesn't exist in julia 1.10
-function diagonal_indices(m::Integer, n::Integer, k::Integer=0)
+function diagonal_indices(m::Integer, n::Integer, k::Integer, v::Integer)
     idx1, idx2 = 1 + max(0, -k), 1 + max(0, k)
     L = max(0, k ≤ 0 ? min(m + k, n) : min(m, n - k))
-    indices = Matrix{Int}(undef, (L, 2))
-    for i in axes(indices, 1)
-        indices[i, 1] = idx1 + i - 1
-        indices[i, 2] = idx2 + i - 1
+    L = min(L, v)
+
+    if idx1 == idx2
+        iota = Ops.iota(Int, [L, 2]; iota_dimension=1)
+        op1 = Ops.add(iota, Ops.fill(idx1, (L, 2)))
+        return op1
+    else
+        iota = Ops.iota(Int, [L, 1]; iota_dimension=1)
+        op1 = Ops.add(iota, Ops.fill(idx1, (L, 1)))
+        op2 = Ops.add(iota, Ops.fill(idx2, (L, 1)))
+        return Ops.concatenate([op1, op2], 2)
     end
-    return indices
 end
 
 function LinearAlgebra.ldiv!(
@@ -486,6 +496,12 @@ function LinearAlgebra.dot(x::AnyTracedRVector, y::AnyTracedRVector)
         contracting_dimensions=([1], [1]),
     )
     return TracedRNumber{unwrapped_eltype(res)}((), res.mlir_data)
+end
+
+LinearAlgebra.dot(x::AnyTracedRArray, y::AnyTracedRArray) = dot(vec(x), vec(y))
+
+function LinearAlgebra.dot(x::AnyTracedRVector, A::AnyTracedRMatrix, y::AnyTracedRVector)
+    return dot(x, A * y)
 end
 
 # ldiv & rdiv interfaces

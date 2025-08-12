@@ -3163,8 +3163,9 @@ https://github.com/openxla/stablehlo/blob/main/docs/spec.md#recv
 # Example
 ```mlir
 %results:2 = \"stablehlo.recv\"(%token) {
-  channel_handle = #stablehlo.channel_handle<handle = 1, type = 3>,
-  is_host_transfer = true
+  channel_handle = #stablehlo.channel_handle<handle = 0, type = 1>,
+  is_host_transfer = false,
+  source_target_pairs = dense<[[0, 1], [1, 2]]> : tensor<2x2xi64>
 } : (!stablehlo.token) -> (tensor<2x2xi64>, !stablehlo.token)
 ```
 """
@@ -3173,6 +3174,7 @@ function recv(
     result_0::Vector{IR.Type},
     channel_handle,
     is_host_transfer=nothing,
+    source_target_pairs=nothing,
     location=Location(),
 )
     op_ty_results = IR.Type[result_0...,]
@@ -3182,6 +3184,8 @@ function recv(
     attributes = NamedAttribute[namedattribute("channel_handle", channel_handle),]
     !isnothing(is_host_transfer) &&
         push!(attributes, namedattribute("is_host_transfer", is_host_transfer))
+    !isnothing(source_target_pairs) &&
+        push!(attributes, namedattribute("source_target_pairs", source_target_pairs))
 
     return create_operation(
         "stablehlo.recv",
@@ -3934,8 +3938,9 @@ https://github.com/openxla/stablehlo/blob/main/docs/spec.md#send
 # Example
 ```mlir
 %result = \"stablehlo.send\"(%operand, %token) {
-  channel_handle = #stablehlo.channel_handle<handle = 1, type = 2>,
-  is_host_transfer = true
+  channel_handle = #stablehlo.channel_handle<handle = 0, type = 1>,
+  is_host_transfer = false,
+  source_target_pairs = dense<[[0, 1], [1, 2]]> : tensor<2x2xi64>
 } : (tensor<2x2xi64>, !stablehlo.token) -> !stablehlo.token
 ```
 """
@@ -3945,6 +3950,7 @@ function send(
     result_0=nothing::Union{Nothing,IR.Type},
     channel_handle,
     is_host_transfer=nothing,
+    source_target_pairs=nothing,
     location=Location(),
 )
     op_ty_results = IR.Type[]
@@ -3955,6 +3961,8 @@ function send(
     !isnothing(result_0) && push!(op_ty_results, result_0)
     !isnothing(is_host_transfer) &&
         push!(attributes, namedattribute("is_host_transfer", is_host_transfer))
+    !isnothing(source_target_pairs) &&
+        push!(attributes, namedattribute("source_target_pairs", source_target_pairs))
 
     return create_operation(
         "stablehlo.send",

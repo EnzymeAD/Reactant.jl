@@ -29,6 +29,27 @@ within_compile
 @code_xla
 ```
 
+## Compile Options
+
+```@docs
+CompileOptions
+Reactant.DefaultXLACompileOptions
+```
+
+### Sharding Specific Options
+
+```@docs
+OptimizeCommunicationOptions
+ShardyPropagationOptions
+```
+
+## Tracing customization
+
+```@docs
+Reactant.@skip_rewrite_func
+Reactant.@skip_rewrite_type
+```
+
 ## Profile XLA
 
 Reactant can hook into XLA's profiler to generate compilation and execution traces.
@@ -45,6 +66,12 @@ Reactant.Profiler.@annotate
 ```@docs
 Reactant.devices
 Reactant.addressable_devices
+```
+
+## Differentiation Specific API
+
+```@docs
+Reactant.ignore_derivatives
 ```
 
 ## Internal utils
