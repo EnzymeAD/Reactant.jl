@@ -119,6 +119,22 @@ function TracedUtils.promote_to(::TracedRNumber{T}, rhs) where {T}
     return TracedUtils.promote_to(TracedRNumber{T}, rhs)
 end
 
+for (aT, bT) in (
+    (TracedRNumber{<:Real}, Real),
+    (Real, TracedRNumber{<:Real}),
+    (TracedRNumber{<:Real}, TracedRNumber{<:Real}),
+)
+    @eval function Base.Complex(a::$aT, b::$bT)
+        T = promote_type(unwrapped_eltype(a), unwrapped_eltype(b))
+        a = TracedUtils.promote_to(TracedRNumber{T}, a)
+        b = TracedUtils.promote_to(TracedRNumber{T}, b)
+        return Ops.complex(a, b)
+    end
+end
+
+Base.Complex(x::TracedRNumber{<:Real}) = Ops.complex(x, zero(x))
+Base.Complex(x::TracedRNumber{<:Complex}) = x
+
 for (jlop, hloop) in (
     (:(Base.min), :minimum),
     (:(Base.max), :maximum),
@@ -398,6 +414,28 @@ for (jlop, hloop) in (
     (:(Base.imag), :imag),
 )
     @eval $(jlop)(@nospecialize(lhs::TracedRNumber)) = Ops.$(hloop)(lhs)
+end
+
+for (jlop, hloop) in (
+    (:(Base.sin), :sine),
+    (:(Base.cos), :cosine),
+    (:(Base.tan), :tan),
+    (:(Base.tanh), :tanh),
+    (:(Base.FastMath.tanh_fast), :tanh),
+    (:(Base.exp), :exponential),
+    (:(Base.FastMath.exp_fast), :exponential),
+    (:(Base.expm1), :exponential_minus_one),
+    (:(Base.log), :log),
+    (:(Base.log1p), :log_plus_one),
+    (:(Base.sqrt), :sqrt),
+    (:(Base.acos), :acos),
+    (:(Base.acosh), :acosh),
+    (:(Base.asin), :asin),
+    (:(Base.asinh), :asinh),
+    (:(Base.atan), :atan),
+    (:(Base.atanh), :atanh),
+)
+    @eval $(jlop)(@nospecialize(lhs::TracedRNumber{<:Integer})) = Ops.$(hloop)(float(lhs))
 end
 
 for (jlop, hloop) in

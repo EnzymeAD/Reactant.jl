@@ -16,9 +16,18 @@ end
     x = rand(Float32, 4, 5)
     x_ra = Reactant.to_rarray(x)
 
-    res_ra = @jit r_m .+ x_ra
-    res = m .+ x
-    @test res_ra ≈ res
+    @testset "addition" begin
+        res_ra = @jit r_m .+ x_ra
+        res = m .+ x
+        @test res_ra ≈ res
 
-    @test Array(r_m) isa Matrix{Bool}
+        @test Array(r_m) isa Matrix{Bool}
+    end
+
+    @testset "multiplication" begin
+        # Broadcasting a multiplication has special passes
+        res_ra = @jit r_m .* x_ra
+        res = m .* x
+        @test res_ra ≈ res
+    end
 end

@@ -43,8 +43,8 @@ for randfun in (:rand, :randn, :randexp)
         @reactant_overlay @noinline function Random.$(randfun)(
             rng::AbstractRNG, ::Type{T}, dims::Dims
         ) where {T}
-            if T <: ReactantPrimitive
-                return TracedRandom.$(overload_randfun)(rng, T, dims)
+            if unwrapped_eltype(T) <: ReactantPrimitive
+                return TracedRandom.$(overload_randfun)(rng, unwrapped_eltype(T), dims)
             end
             @warn "Reactant doesn't support sampling of $(T) with the current \
                    interpreter. Falling back to native interpreter." maxlog = 1
@@ -60,8 +60,10 @@ for randfun in (:rand, :randn, :randexp)
         @reactant_overlay @noinline function Random.$(randfun)(
             rng::AbstractRNG, ::Type{T}, dim1::Integer, dims::Integer...
         ) where {T}
-            if T <: ReactantPrimitive
-                return TracedRandom.$(overload_randfun)(rng, T, dim1, dims...)
+            if unwrapped_eltype(T) <: ReactantPrimitive
+                return TracedRandom.$(overload_randfun)(
+                    rng, unwrapped_eltype(T), dim1, dims...
+                )
             end
             @warn "Reactant doesn't support sampling of $(T) with the current \
                    interpreter. Falling back to native interpreter." maxlog = 1
@@ -72,8 +74,8 @@ for randfun in (:rand, :randn, :randexp)
         @reactant_overlay @noinline function Random.$(randfun)(
             rng::AbstractRNG, ::Type{T}=Float64
         ) where {T}
-            if T <: ReactantPrimitive
-                return TracedRandom.$(overload_randfun)(rng, T)
+            if unwrapped_eltype(T) <: ReactantPrimitive
+                return TracedRandom.$(overload_randfun)(rng, unwrapped_eltype(T))
             end
             @warn "Reactant doesn't support sampling of $(T) with the current \
                    interpreter. Falling back to native interpreter." maxlog = 1
@@ -85,6 +87,9 @@ for randfun in (:rand, :randn, :randexp)
             rng::AbstractRNG, A::AnyTracedRArray
         )
             return TracedRandom.$(overload_randfun!)(rng, A)
+        end
+        @reactant_overlay @noinline function Random.$(randfun!)(A::AnyTracedRArray)
+            return TracedRandom.$(overload_randfun!)(TracedRandom.default_rng(), A)
         end
     end
 end
@@ -108,9 +113,9 @@ for (cT, aT, bT) in (
                     C .= C2
                 end
             else
-                # Inference barrier is required when calling function recursively within overload
-                # This is required since otherwise type inference will think this is a recursive edge
-                # rather than a call to the base method
+                # Inference barrier is required when calling function recursively within
+                # overload. This is required since otherwise type inference will think this
+                # is a recursive edge rather than a call to the base method
                 Base.inferencebarrier(LinearAlgebra.mul!)(C, A, B, α, β)
             end
             return C
@@ -133,9 +138,9 @@ end
         if any(use_overlayed_version, iter2)
             return TracedRArrayOverrides.overloaded_stack(dims, iter2)
         else
-            # Inference barrier is required when calling function recursively within overload
-            # This is required since otherwise type inference will think this is a recursive edge
-            # rather than a call to the base method
+            # Inference barrier is required when calling function recursively within
+            # overload. This is required since otherwise type inference will think this is
+            # a recursive edge rather than a call to the base method
             return Base.inferencebarrier(Base._stack)(dims, iter2)
         end
     end
@@ -150,31 +155,28 @@ end
     end
 end
 
-# overlay mapreduce since users often do a reduction over empty collections which can have a
-# Union{} type. Since Union{} <: TracedRNumber it goes through our dispatch, and here we
-# explicitly prevent it from going through our dispatch.
 @reactant_overlay @noinline function Base.mapreduce(
-    f, op, A::AbstractArray{T}; kwargs...
-) where {T}
-    if T <: TracedRNumber && T !== Union{}
+    f, op, A::Union{AbstractArray,Base.Iterators.Zip,Base.Iterators.Enumerate}; kwargs...
+)
+    if use_overlayed_version(A)
         return TracedRArrayOverrides.overloaded_mapreduce(f, op, A; kwargs...)
     else
         return Base.inferencebarrier(Base.mapreduce)(f, op, A; kwargs...)
     end
 end
 
-@reactant_overlay @noinline function Base._all(f, x::AbstractArray{T}, dims) where {T}
-    if T <: TracedRNumber && T !== Union{}
+@reactant_overlay @noinline function Base._all(f, x::AbstractArray, dims)
+    if use_overlayed_version(x)
         return TracedRArrayOverrides.overloaded_mapreduce(f, &, x; dims)
     else
         return Base.inferencebarrier(Base._all)(f, x, dims)
     end
 end
 
-@reactant_overlay @noinline function Base.any(f, x::AbstractArray{T}, dims) where {T}
-    if T <: TracedRNumber && T !== Union{}
+@reactant_overlay @noinline function Base._any(f, x::AbstractArray, dims)
+    if use_overlayed_version(x)
         return TracedRArrayOverrides.overloaded_mapreduce(f, |, x; dims)
     else
-        return Base.inferencebarrier(Base.any)(f, x, dims)
+        return Base.inferencebarrier(Base._any)(f, x, dims)
     end
 end

@@ -36,6 +36,7 @@ for file in [
     "Gpu.jl",
     "Affine.jl",
     "TPU.jl",
+    "MosaicGPU.jl",
     "Triton.jl",
     "Shardy.jl",
     "MPI.jl",

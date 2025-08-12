@@ -87,6 +87,8 @@ export default defineConfig({
           {text: "Profiling", link: "/tutorials/profiling"},
           {text: "Distributed", link: "/tutorials/multihost"},
           {text: "Local build", link: "/tutorials/local-build"},
+          {text: "Control Flow", link: "/tutorials/control-flow"},
+          {text: "Sharding", link: "/tutorials/sharding"},
         ],
       },
       {
@@ -94,6 +96,7 @@ export default defineConfig({
         items: [
           { text: "Core Reactant API", link: "/api/api" },
           { text: "Sharding", link: "/api/sharding" },
+          { text: "Serialization", link: "/api/serialization" },
           { text: "Ops", link: "/api/ops" },
           { text: "Configuration", link: "/api/config" },
           {
@@ -110,6 +113,7 @@ export default defineConfig({
               { text: "LLVM", link: "/api/dialects/llvm" },
               { text: "MPI", link: "/api/dialects/mpi" },
               { text: "MemRef", link: "/api/dialects/memref" },
+              { text: "Mosaic GPU", link: "/api/dialects/mosaicgpu" },
               { text: "NVVM", link: "/api/dialects/nvvm" },
               { text: "Shardy", link: "/api/dialects/shardy" },
               { text: "SparseTensor", link: "/api/dialects/sparsetensor" },
@@ -154,6 +158,8 @@ export default defineConfig({
           { text: "Profiling", link: "/tutorials/profiling" },
           { text: "Distributed", link: "/tutorials/multihost" },
           { text: "Local build", link: "/tutorials/local-build" },
+          { text: "Control Flow", link: "/tutorials/control-flow" },
+          { text: "Sharding", link: "/tutorials/sharding" },
         ],
       }
     ],
@@ -167,6 +173,7 @@ export default defineConfig({
             link: "/api/api",
           },
           { text: "Sharding", link: "/api/sharding" },
+          { text: "Serialization", link: "/api/serialization" },
           { text: "Ops", link: "/api/ops" },
           { text: "Configuration", link: "/api/config" },
           {
@@ -184,6 +191,7 @@ export default defineConfig({
               { text: "LLVM", link: "/api/dialects/llvm" },
               { text: "MPI", link: "/api/dialects/mpi" },
               { text: "MemRef", link: "/api/dialects/memref" },
+              { text: "Mosaic GPU", link: "/api/dialects/mosaicgpu" },
               { text: "NVVM", link: "/api/dialects/nvvm" },
               { text: "Shardy", link: "/api/dialects/shardy" },
               { text: "SparseTensor", link: "/api/dialects/sparsetensor" },

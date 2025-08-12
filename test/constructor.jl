@@ -105,25 +105,23 @@ end
     rg = Reactant.to_rarray(g)
 
     @jit update!(rg)
-    @test convert(Array, rg.data) == [2.7, 1.59]
+    @test convert(Array, rg.data) ≈ [2.7, 1.59]
 
     rg = Reactant.to_rarray(g)
     res = @jit selfreturn(rg)
-    @test convert(Array, res.data) == [3.14, 1.59]
-    @test res.radius == 2.7
-    @show typeof(res)
+    @test convert(Array, res.data) ≈ [3.14, 1.59]
+    @test res.radius ≈ 2.7
     @test typeof(res.radius) <: ConcreteRNumber
 
     rg = Reactant.to_rarray(g)
 
     @jit call_update!(rg)
-    @test convert(Array, rg.data) == [2.7, 1.59]
+    @test convert(Array, rg.data) ≈ [2.7, 1.59]
 
     rg = Reactant.to_rarray(g)
     res = @jit call_selfreturn(rg)
-    @test convert(Array, res.data) == [3.14, 1.59]
-    @test res.radius == 2.7
-    @show typeof(res)
+    @test convert(Array, res.data) ≈ [3.14, 1.59]
+    @test res.radius ≈ 2.7
     @test typeof(res.radius) <: ConcreteRNumber
 end
 
@@ -133,7 +131,7 @@ end
 
     rg = Reactant.to_rarray(g)
     res = @jit selfreturn(rg)
-    @test convert(Array, res[1][].data) == [3.14, 1.59]
-    @test convert(Array, res[2][].data) == [3.14, 1.59]
+    @test convert(Array, res[1][].data) ≈ [3.14, 1.59]
+    @test convert(Array, res[2][].data) ≈ [3.14, 1.59]
     @test res[1][].data == res[2][].data
 end

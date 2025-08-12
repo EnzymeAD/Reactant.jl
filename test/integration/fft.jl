@@ -21,6 +21,10 @@ using FFTW, Reactant, Test
     y_ra = @jit(fft(x_ra))
     @test @jit(ifft(y_ra)) ≈ x
 
+    shifted_fft = @jit(fftshift(y_ra))
+    @test shifted_fft ≈ fftshift(Array(y_ra))
+    @test @jit(ifftshift(shifted_fft)) ≈ Array(y_ra)
+
     @testset "fft real input" begin
         x = rand(Float32, 2, 3, 4)
         x_ra = Reactant.to_rarray(x)

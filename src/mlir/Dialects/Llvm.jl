@@ -548,9 +548,9 @@ optional indirect callee type and the MLIR function type, which differs from
 the LLVM function type that uses an explicit void type to model functions
 that do not return a value.
 
-If this operatin has the `no_inline` attribute, then this specific function call 
-will never be inlined. The opposite behavior will occur if the call has `always_inline` 
-attribute. The `inline_hint` attribute indicates that it is desirable to inline 
+If this operatin has the `no_inline` attribute, then this specific function call
+will never be inlined. The opposite behavior will occur if the call has `always_inline`
+attribute. The `inline_hint` attribute indicates that it is desirable to inline
 this function call.
 
 Examples:
@@ -580,7 +580,6 @@ function call(
     var_callee_type=nothing,
     callee=nothing,
     fastmathFlags=nothing,
-    branch_weights=nothing,
     CConv=nothing,
     TailCallKind=nothing,
     memory_effects=nothing,
@@ -615,8 +614,6 @@ function call(
     !isnothing(callee) && push!(attributes, namedattribute("callee", callee))
     !isnothing(fastmathFlags) &&
         push!(attributes, namedattribute("fastmathFlags", fastmathFlags))
-    !isnothing(branch_weights) &&
-        push!(attributes, namedattribute("branch_weights", branch_weights))
     !isnothing(CConv) && push!(attributes, namedattribute("CConv", CConv))
     !isnothing(TailCallKind) &&
         push!(attributes, namedattribute("TailCallKind", TailCallKind))
@@ -761,9 +758,9 @@ end
 Unlike LLVM IR, MLIR does not have first-class constant values. Therefore,
 all constants must be created as SSA values before being used in other
 operations. `llvm.mlir.constant` creates such values for scalars, vectors,
-strings, and structs. It has a mandatory `value` attribute whose type
-depends on the type of the constant value. The type of the constant value
-must correspond to the attribute type converted to LLVM IR type.
+strings, structs, and array of structs. It has a mandatory `value` attribute
+whose type depends on the type of the constant value. The type of the constant
+value must correspond to the attribute type converted to LLVM IR type.
 
 When creating constant scalars, the `value` attribute must be either an
 integer attribute or a floating point attribute. The type of the attribute
@@ -784,6 +781,11 @@ an LLVM struct type. The number of fields in the struct must match the
 number of elements in the attribute, and the type of each LLVM struct field
 must correspond to the type of the corresponding attribute element converted
 to LLVM IR.
+
+When creating an array of structs, the `value` attribute must be an array
+attribute, itself containing zero, or undef, or array attributes for each
+potential nested array type, and the elements of the leaf array attributes
+for must match the struct element types or be zero or undef attributes.
 
 Examples:
 
@@ -1541,6 +1543,82 @@ function icmp(
 end
 
 """
+`mlir_ifunc`
+
+`llvm.mlir.ifunc` is a top level operation that defines a global ifunc.
+It defines a new symbol and takes a symbol refering to a resolver function.
+IFuncs can be called as regular functions. The function type is the same
+as the IFuncType. The symbol is resolved at runtime by calling a resolver
+function.
+
+Examples:
+
+```mlir
+// IFuncs resolve a symbol at runtime using a resovler function.
+llvm.mlir.ifunc external @foo: !llvm.func<f32 (i64)>, !llvm.ptr @resolver
+
+llvm.func @foo_1(i64) -> f32
+llvm.func @foo_2(i64) -> f32
+
+llvm.func @resolve_foo() -> !llvm.ptr attributes {
+  %0 = llvm.mlir.addressof @foo_2 : !llvm.ptr
+  %1 = llvm.mlir.addressof @foo_1 : !llvm.ptr
+
+  // ... Logic selecting from foo_{1, 2}
+
+  // Return function pointer to the selected function
+  llvm.return %7 : !llvm.ptr
+}
+
+llvm.func @use_foo() {
+  // IFuncs are called as regular functions
+  %res = llvm.call @foo(%value) : i64 -> f32
+}
+```
+"""
+function mlir_ifunc(;
+    sym_name,
+    i_func_type,
+    resolver,
+    resolver_type,
+    linkage,
+    dso_local=nothing,
+    address_space=nothing,
+    unnamed_addr=nothing,
+    visibility_=nothing,
+    location=Location(),
+)
+    op_ty_results = IR.Type[]
+    operands = Value[]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[
+        namedattribute("sym_name", sym_name),
+        namedattribute("i_func_type", i_func_type),
+        namedattribute("resolver", resolver),
+        namedattribute("resolver_type", resolver_type),
+        namedattribute("linkage", linkage),
+    ]
+    !isnothing(dso_local) && push!(attributes, namedattribute("dso_local", dso_local))
+    !isnothing(address_space) &&
+        push!(attributes, namedattribute("address_space", address_space))
+    !isnothing(unnamed_addr) &&
+        push!(attributes, namedattribute("unnamed_addr", unnamed_addr))
+    !isnothing(visibility_) && push!(attributes, namedattribute("visibility_", visibility_))
+
+    return create_operation(
+        "llvm.mlir.ifunc",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+"""
 `indirectbr`
 
 Transfer control flow to address in `\$addr`. A list of possible target
@@ -1608,6 +1686,9 @@ any symbol or any global variable: only the operands of the op may be read,
 written, or referenced.
 Attempting to define or reference any symbol or any global behavior is
 considered undefined behavior at this time.
+If `tail_call_kind` is used, the operation behaves like the specified
+tail call kind. The `musttail` kind it\'s not available for this operation,
+since it isn\'t supported by LLVM\'s inline asm.
 """
 function inline_asm(
     operands::Vector{Value};
@@ -1616,6 +1697,7 @@ function inline_asm(
     constraints,
     has_side_effects=nothing,
     is_align_stack=nothing,
+    tail_call_kind=nothing,
     asm_dialect=nothing,
     operand_attrs=nothing,
     location=Location(),
@@ -1632,6 +1714,8 @@ function inline_asm(
         push!(attributes, namedattribute("has_side_effects", has_side_effects))
     !isnothing(is_align_stack) &&
         push!(attributes, namedattribute("is_align_stack", is_align_stack))
+    !isnothing(tail_call_kind) &&
+        push!(attributes, namedattribute("tail_call_kind", tail_call_kind))
     !isnothing(asm_dialect) && push!(attributes, namedattribute("asm_dialect", asm_dialect))
     !isnothing(operand_attrs) &&
         push!(attributes, namedattribute("operand_attrs", operand_attrs))
@@ -1843,6 +1927,8 @@ function func(;
     frame_pointer=nothing,
     target_cpu=nothing,
     tune_cpu=nothing,
+    reciprocal_estimates=nothing,
+    prefer_vector_width=nothing,
     target_features=nothing,
     unsafe_fp_math=nothing,
     no_infs_fp_math=nothing,
@@ -1852,6 +1938,8 @@ function func(;
     denormal_fp_math=nothing,
     denormal_fp_math_f32=nothing,
     fp_contract=nothing,
+    instrument_function_entry=nothing,
+    instrument_function_exit=nothing,
     no_inline=nothing,
     always_inline=nothing,
     no_unwind=nothing,
@@ -1914,6 +2002,10 @@ function func(;
         push!(attributes, namedattribute("frame_pointer", frame_pointer))
     !isnothing(target_cpu) && push!(attributes, namedattribute("target_cpu", target_cpu))
     !isnothing(tune_cpu) && push!(attributes, namedattribute("tune_cpu", tune_cpu))
+    !isnothing(reciprocal_estimates) &&
+        push!(attributes, namedattribute("reciprocal_estimates", reciprocal_estimates))
+    !isnothing(prefer_vector_width) &&
+        push!(attributes, namedattribute("prefer_vector_width", prefer_vector_width))
     !isnothing(target_features) &&
         push!(attributes, namedattribute("target_features", target_features))
     !isnothing(unsafe_fp_math) &&
@@ -1932,6 +2024,13 @@ function func(;
     !isnothing(denormal_fp_math_f32) &&
         push!(attributes, namedattribute("denormal_fp_math_f32", denormal_fp_math_f32))
     !isnothing(fp_contract) && push!(attributes, namedattribute("fp_contract", fp_contract))
+    !isnothing(instrument_function_entry) && push!(
+        attributes,
+        namedattribute("instrument_function_entry", instrument_function_entry),
+    )
+    !isnothing(instrument_function_exit) && push!(
+        attributes, namedattribute("instrument_function_exit", instrument_function_exit)
+    )
     !isnothing(no_inline) && push!(attributes, namedattribute("no_inline", no_inline))
     !isnothing(always_inline) &&
         push!(attributes, namedattribute("always_inline", always_inline))

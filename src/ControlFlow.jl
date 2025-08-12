@@ -9,7 +9,15 @@ function ReactantCore.traced_call(f::Function, args...)
 end
 
 function ReactantCore.traced_while(
-    cond_fn::CFn, body_fn::BFn, args; track_numbers=Number, verify_arg_names=nothing
+    cond_fn::CFn,
+    body_fn::BFn,
+    args;
+    track_numbers=Number,
+    verify_arg_names=nothing,
+    checkpointing=false,
+    mincut=false,
 ) where {CFn,BFn}
-    return Ops.while_loop(cond_fn, body_fn, args...; track_numbers, verify_arg_names)
+    return Ops.while_loop(
+        cond_fn, body_fn, args...; track_numbers, verify_arg_names, checkpointing, mincut
+    )
 end

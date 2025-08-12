@@ -14,6 +14,84 @@ import ..Dialects: namedattribute, operandsegmentsizes
 import ...API
 
 """
+`addRetvalToTrace`
+
+Add the function\'s return value(s) into the execution trace.
+"""
+function addRetvalToTrace(
+    trace::Value, retval::Vector{Value}; updated_trace::IR.Type, location=Location()
+)
+    op_ty_results = IR.Type[updated_trace,]
+    operands = Value[trace, retval...]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+
+    return create_operation(
+        "enzyme.addRetvalToTrace",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+"""
+`addSampleToTrace`
+
+Add a sampled value into the execution trace.
+"""
+function addSampleToTrace(
+    trace::Value, sample::Vector{Value}; updated_trace::IR.Type, symbol, location=Location()
+)
+    op_ty_results = IR.Type[updated_trace,]
+    operands = Value[trace, sample...]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[namedattribute("symbol", symbol),]
+
+    return create_operation(
+        "enzyme.addSampleToTrace",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+"""
+`addSubtrace`
+
+Insert a subtrace into a parent trace.
+"""
+function addSubtrace(
+    subtrace::Value, trace::Value; updated_trace::IR.Type, symbol, location=Location()
+)
+    op_ty_results = IR.Type[updated_trace,]
+    operands = Value[subtrace, trace]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[namedattribute("symbol", symbol),]
+
+    return create_operation(
+        "enzyme.addSubtrace",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+"""
 `addTo`
 
 TODO
@@ -27,6 +105,32 @@ function addTo(values::Vector{Value}; location=Location())
 
     return create_operation(
         "enzyme.addTo",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+"""
+`addWeightToTrace`
+
+Add the aggregated log-probability weight to the execution trace.
+"""
+function addWeightToTrace(
+    trace::Value, weight::Value; updated_trace::IR.Type, location=Location()
+)
+    op_ty_results = IR.Type[updated_trace,]
+    operands = Value[trace, weight]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+
+    return create_operation(
+        "enzyme.addWeightToTrace",
         location;
         operands,
         owned_regions,
@@ -155,6 +259,49 @@ function fwddiff(
     )
 end
 
+"""
+`generate`
+
+Generate an execution trace and weight from a probabilistic function.
+If a `constraint` dict is provided AND the sample op\'s `symbol` is in the
+`constrained_symbols` array, we will use the corresponding constraint value
+instead of generating new samples from the probabilistic function.
+By convention, the 0th operand in `inputs` or `outputs` is the initial RNG
+state (seed).
+"""
+function generate(
+    inputs::Vector{Value},
+    constraint::Value;
+    trace::IR.Type,
+    weight::IR.Type,
+    outputs::Vector{IR.Type},
+    fn,
+    constrained_addresses,
+    name=nothing,
+    location=Location(),
+)
+    op_ty_results = IR.Type[trace, weight, outputs...]
+    operands = Value[inputs..., constraint]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[
+        namedattribute("fn", fn),
+        namedattribute("constrained_addresses", constrained_addresses),
+    ]
+    !isnothing(name) && push!(attributes, namedattribute("name", name))
+
+    return create_operation(
+        "enzyme.generate",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
 function genericAdjoint(
     inputs::Vector{Value},
     outputs::Vector{Value};
@@ -210,6 +357,77 @@ function get(gradient::Value; result_0::IR.Type, location=Location())
     )
 end
 
+"""
+`getSampleFromConstraint`
+
+Get sampled values from a constraint for a given symbol.
+"""
+function getSampleFromConstraint(
+    constraint::Value; outputs::Vector{IR.Type}, symbol, location=Location()
+)
+    op_ty_results = IR.Type[outputs...,]
+    operands = Value[constraint,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[namedattribute("symbol", symbol),]
+
+    return create_operation(
+        "enzyme.getSampleFromConstraint",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+"""
+`getSubconstraint`
+
+Get a subconstraint from a constraint for a given symbol.
+"""
+function getSubconstraint(
+    constraint::Value; subconstraint::IR.Type, symbol, location=Location()
+)
+    op_ty_results = IR.Type[subconstraint,]
+    operands = Value[constraint,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[namedattribute("symbol", symbol),]
+
+    return create_operation(
+        "enzyme.getSubconstraint",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+function ignore_derivatives(input::Value; output::IR.Type, location=Location())
+    op_ty_results = IR.Type[output,]
+    operands = Value[input,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+
+    return create_operation(
+        "enzyme.ignore_derivatives",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
 function init(; result_0::IR.Type, location=Location())
     op_ty_results = IR.Type[result_0,]
     operands = Value[]
@@ -219,6 +437,30 @@ function init(; result_0::IR.Type, location=Location())
 
     return create_operation(
         "enzyme.init",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+"""
+`initTrace`
+
+Initialize an execution trace for a probabilistic function.
+"""
+function initTrace(; trace::IR.Type, location=Location())
+    op_ty_results = IR.Type[trace,]
+    operands = Value[]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+
+    return create_operation(
+        "enzyme.initTrace",
         location;
         operands,
         owned_regions,
@@ -286,14 +528,28 @@ function push(cache::Value, value::Value; location=Location())
     )
 end
 
+"""
+`sample`
+
+Sample from a distribution. By convention, the 0th operand in `inputs`
+or `outputs` is the initial RNG state (seed).
+"""
 function sample(
-    inputs::Vector{Value}; outputs::Vector{IR.Type}, fn, name=nothing, location=Location()
+    inputs::Vector{Value};
+    outputs::Vector{IR.Type},
+    fn,
+    logpdf=nothing,
+    symbol=nothing,
+    name=nothing,
+    location=Location(),
 )
     op_ty_results = IR.Type[outputs...,]
     operands = Value[inputs...,]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[namedattribute("fn", fn),]
+    !isnothing(logpdf) && push!(attributes, namedattribute("logpdf", logpdf))
+    !isnothing(symbol) && push!(attributes, namedattribute("symbol", symbol))
     !isnothing(name) && push!(attributes, namedattribute("name", name))
 
     return create_operation(
@@ -317,6 +573,71 @@ function set(gradient::Value, value::Value; location=Location())
 
     return create_operation(
         "enzyme.set",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+"""
+`simulate`
+
+Simulate a probabilistic function to generate execution trace
+by replacing all SampleOps with distribution calls and recording
+all sampled values into the trace. This op returns the trace, the weight
+(accumulated log-probability), and the other outputs. By convention,
+the 0th operand in `inputs` or `outputs` is the initial RNG state (seed).
+"""
+function simulate(
+    inputs::Vector{Value};
+    trace::IR.Type,
+    weight::IR.Type,
+    outputs::Vector{IR.Type},
+    fn,
+    name=nothing,
+    location=Location(),
+)
+    op_ty_results = IR.Type[trace, weight, outputs...]
+    operands = Value[inputs...,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[namedattribute("fn", fn),]
+    !isnothing(name) && push!(attributes, namedattribute("name", name))
+
+    return create_operation(
+        "enzyme.simulate",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+"""
+`untracedCall`
+
+Call a probabilistic function without tracing. By convention, the 0th operand in `inputs`
+or `outputs` is the initial RNG state (seed).
+"""
+function untracedCall(
+    inputs::Vector{Value}; outputs::Vector{IR.Type}, fn, name=nothing, location=Location()
+)
+    op_ty_results = IR.Type[outputs...,]
+    operands = Value[inputs...,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[namedattribute("fn", fn),]
+    !isnothing(name) && push!(attributes, namedattribute("name", name))
+
+    return create_operation(
+        "enzyme.untracedCall",
         location;
         operands,
         owned_regions,

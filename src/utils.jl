@@ -89,6 +89,122 @@ function has_ancestor(query::Module, target::Module)
     end
 end
 
+const __skip_rewrite_func_set_lock = ReentrantLock()
+const __skip_rewrite_func_set = Set([
+    # Avoid the 1.10 stackoverflow
+    typeof(Base.typed_hvcat),
+    typeof(Base.hvcat),
+    typeof(Core.Compiler.concrete_eval_eligible),
+    typeof(Core.Compiler.typeinf_type),
+    typeof(Core.Compiler.typeinf_ext),
+    # TODO: perhaps problematic calls in `traced_call`
+    # should be moved to TracedUtils.jl:
+    typeof(Reactant.ReactantCore.traced_call),
+    typeof(ReactantCore.is_traced),
+    # Perf optimization
+    typeof(Base.typemax),
+    typeof(Base.typemin),
+    typeof(Base.getproperty),
+    typeof(Base.vect),
+    typeof(Base.eltype),
+    typeof(Base.argtail),
+    typeof(Base.identity),
+    typeof(Base.print),
+    typeof(Base.println),
+    typeof(Base.show),
+    typeof(Base.show_delim_array),
+    typeof(Base.sprint),
+    typeof(Adapt.adapt_structure),
+    typeof(Core.is_top_bit_set),
+    typeof(Base.setindex_widen_up_to),
+    typeof(Base.typejoin),
+    typeof(Base.argtype_decl),
+    typeof(Base.arg_decl_parts),
+    typeof(Base.StackTraces.show_spec_sig),
+    typeof(Core.Compiler.return_type),
+    typeof(Core.throw_inexacterror),
+    typeof(Base.throw_boundserror),
+    typeof(Base._shrink),
+    typeof(Base._shrink!),
+    typeof(Base.ht_keyindex),
+    typeof(Base.checkindex),
+    typeof(Base.to_index),
+    @static(
+        if VERSION >= v"1.11.0"
+            typeof(Base.memoryref)
+        end
+    ),
+    typeof(Reactant.materialize_traced_array),
+])
+
+"""
+    @skip_rewrite_func f
+
+Mark function `f` so that Reactant's IR rewrite mechanism will skip it.
+This can improve compilation time if it's safe to assume that no call inside `f`
+will need a `@reactant_overlay` method.
+
+!!! info
+    Note that this marks the whole function, not a specific method with a type
+    signature.
+
+!!! warning
+    The macro call should be inside the `__init__` function. If you want to
+    mark it for precompilation, you must add the macro call in the global scope 
+    too.
+
+See also: [`@skip_rewrite_type`](@ref)
+"""
+macro skip_rewrite_func(fname)
+    quote
+        @lock $(Reactant.__skip_rewrite_func_set_lock) push!(
+            $(Reactant.__skip_rewrite_func_set), typeof($(esc(fname)))
+        )
+    end
+end
+
+const __skip_rewrite_type_constructor_list_lock = ReentrantLock()
+const __skip_rewrite_type_constructor_list = [
+    # Don't rewrite Val
+    Type{Base.Val},
+    # Don't rewrite exception constructors
+    Type{<:Core.Exception},
+    # Don't rewrite traced constructors
+    Type{<:TracedRArray},
+    Type{<:TracedRNumber},
+    Type{MLIR.IR.Location},
+    Type{MLIR.IR.Block},
+]
+
+"""
+    @skip_rewrite_type MyStruct
+    @skip_rewrite_type Type{<:MyStruct}
+
+Mark the construct function of `MyStruct` so that Reactant's IR rewrite mechanism
+will skip it. It does the same as [`@skip_rewrite_func`](@ref) but for type
+constructors.
+
+If you want to mark the set of constructors over it's type parameters or over its
+abstract type, you should use then the `Type{<:MyStruct}` syntax.
+
+!!! warning
+    The macro call should be inside the `__init__` function. If you want to
+    mark it for precompilation, you must add the macro call in the global scope 
+    too.
+"""
+macro skip_rewrite_type(typ)
+    typ = if Base.isexpr(typ, :curly) && typ.args[1] === :Type
+        typ
+    else
+        Expr(:curly, :Type, typ)
+    end
+    return quote
+        @lock $(Reactant.__skip_rewrite_type_constructor_list_lock) push!(
+            $(Reactant.__skip_rewrite_type_constructor_list), $(esc(typ))
+        )
+    end
+end
+
 function should_rewrite_call(@nospecialize(ft))
     # Don't rewrite builtin or intrinsics
     if ft <: Core.IntrinsicFunction || ft <: Core.Builtin
@@ -123,66 +239,13 @@ function should_rewrite_call(@nospecialize(ft))
             end
         end
     end
-    # Don't rewrite Val
-    if ft === Type{Base.Val}
-        return false
-    end
-    # Don't rewrite exception constructors
-    if ft <: Type{<:Core.Exception}
+
+    # `ft isa Type` is for performance as it avoids checking against all the list, but can be removed if problematic
+    if ft isa Type && any(t -> ft <: t, __skip_rewrite_type_constructor_list)
         return false
     end
 
-    # Avoid the 1.10 stackoverflow
-    if ft <: typeof(Base.typed_hvcat)
-        return false
-    end
-    if ft <: typeof(Base.hvcat)
-        return false
-    end
-    if ft <: typeof(Core.Compiler.concrete_eval_eligible)
-        return false
-    end
-    if ft <: typeof(Core.Compiler.typeinf_type) || ft <: typeof(Core.Compiler.typeinf_ext)
-        return false
-    end
-
-    # Don't rewrite traced constructors
-    if ft <: Type{<:TracedRArray} ||
-        ft <: Type{<:TracedRNumber} ||
-        ft === Type{MLIR.IR.Location} ||
-        ft === Type{MLIR.IR.Block} ||
-        # TODO: perhaps problematic calls in `traced_call`
-        # should be moved to TracedUtils.jl:
-        ft <: typeof(Reactant.ReactantCore.traced_call) ||
-        ft <: typeof(ReactantCore.is_traced)
-        return false
-    end
-
-    # Perf optimizations
-    if ft <: typeof(Core.Compiler.return_type)
-        return false
-    end
-
-    # Perf optimizations
-    if ft <: typeof(Base.typemax) ||
-        ft <: typeof(Base.typemin) ||
-        ft <: typeof(Base.getproperty) ||
-        ft <: typeof(Base.vect) ||
-        ft <: typeof(Base.eltype) ||
-        ft <: typeof(Base.argtail) ||
-        ft <: typeof(Base.identity) ||
-        ft <: typeof(Base.print) ||
-        ft <: typeof(Base.println) ||
-        ft <: typeof(Base.show) ||
-        ft <: typeof(Base.show_delim_array) ||
-        ft <: typeof(Base.sprint) ||
-        ft <: typeof(Adapt.adapt_structure) ||
-        ft <: typeof(Core.is_top_bit_set) ||
-        ft <: typeof(Base.setindex_widen_up_to) ||
-        ft <: typeof(Base.typejoin) ||
-        ft <: typeof(Base.argtype_decl) ||
-        ft <: typeof(Base.arg_decl_parts) ||
-        ft <: typeof(Base.StackTraces.show_spec_sig)
+    if ft in __skip_rewrite_func_set
         return false
     end
 
@@ -192,6 +255,7 @@ end
 
 # by default, same as `should_rewrite_call`
 function should_rewrite_invoke(@nospecialize(ft), @nospecialize(args))
+    # TODO how can we extend `@skip_rewrite` to methods?
     if ft <: typeof(repeat) && (args == Tuple{String,Int64} || args == Tuple{Char,Int64})
         return false
     end
@@ -489,6 +553,37 @@ function rewrite_insts!(ir, interp, guaranteed_error)
     return ir, any_changed
 end
 
+function rewrite_argnumbers_by_one!(ir)
+    # Add one dummy argument at the beginning
+    pushfirst!(ir.argtypes, Nothing)
+
+    # Re-write all references to existing arguments to their new index (N + 1)
+    for idx in 1:length(ir.stmts)
+        urs = Core.Compiler.userefs(ir.stmts[idx][:inst])
+        changed = false
+        it = Core.Compiler.iterate(urs)
+        while it !== nothing
+            (ur, next) = it
+            old = Core.Compiler.getindex(ur)
+            if old isa Core.Argument
+                # Replace the Argument(n) with Argument(n + 1)
+                Core.Compiler.setindex!(ur, Core.Argument(old.n + 1))
+                changed = true
+            end
+            it = Core.Compiler.iterate(urs, next)
+        end
+        if changed
+            @static if VERSION < v"1.11"
+                Core.Compiler.setindex!(ir.stmts[idx], Core.Compiler.getindex(urs), :inst)
+            else
+                Core.Compiler.setindex!(ir.stmts[idx], Core.Compiler.getindex(urs), :stmt)
+            end
+        end
+    end
+
+    return nothing
+end
+
 # Generator function which ensures that all calls to the function are executed within the ReactantInterpreter
 # In particular this entails two pieces:
 #   1) We enforce the use of the ReactantInterpreter method table when generating the original methodinstance
@@ -602,6 +697,8 @@ function call_with_reactant_generator(
     ) || guaranteed_error
         ir, any_changed = rewrite_insts!(ir, interp, guaranteed_error)
     end
+
+    rewrite_argnumbers_by_one!(ir)
 
     src = ccall(:jl_new_code_info_uninit, Ref{CC.CodeInfo}, ())
     src.slotnames = fill(:none, length(ir.argtypes) + 1)
@@ -720,10 +817,10 @@ function call_with_reactant_generator(
 
     ocva = false # method.isva
 
-    ocnargs = method.nargs - 1
+    ocnargs = Int(method.nargs)
     # octup = Tuple{mi.specTypes.parameters[2:end]...}
     # octup = Tuple{method.sig.parameters[2:end]...}
-    octup = Tuple{tys[2:end]...}
+    octup = Tuple{tys[1:end]...}
     ocva = false
 
     # jl_new_opaque_closure forcibly executes in the current world... This means that we won't get the right
@@ -731,11 +828,7 @@ function call_with_reactant_generator(
     # Opaque closures also require taking the function argument. We can work around the latter
     # if the function is stateless. But regardless, to work around this we sadly create/compile the opaque closure
 
-    dict, make_oc = if Base.issingletontype(fn)
-        Base.Ref{Core.OpaqueClosure}(), make_oc_ref
-    else
-        Dict{fn,Core.OpaqueClosure}(), make_oc_dict
-    end
+    dict, make_oc = (Base.Ref{Core.OpaqueClosure}(), make_oc_ref)
 
     push!(oc_capture_vec, dict)
 
@@ -743,15 +836,15 @@ function call_with_reactant_generator(
         res = Core._call_in_world_total(
             world, make_oc, dict, octup, rt, src, ocnargs, ocva, fn.instance
         )::Core.OpaqueClosure
-
     else
         farg = fn_args[1]
+        farg = nothing
         rep = Expr(:call, make_oc, dict, octup, rt, src, ocnargs, ocva, farg)
         push_inst!(rep)
         Core.SSAValue(length(overdubbed_code))
     end
 
-    push_inst!(Expr(:call, oc, fn_args[2:end]...))
+    push_inst!(Expr(:call, oc, fn_args[1:end]...))
 
     ocres = Core.SSAValue(length(overdubbed_code))
 

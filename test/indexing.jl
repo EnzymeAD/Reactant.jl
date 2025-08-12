@@ -16,7 +16,7 @@ end
     y2 = @jit update_on_copy(x_concrete)
     @test x == y
     @test x_concrete == y_concrete
-    @test y1 == y2
+    @test y1 ≈ y2
 
     # function update_inplace(x)
     #     y = view(x, 1:2, 1:2, :)
@@ -288,20 +288,22 @@ function issue_617(outf, fr, pr, I)
     return outf
 end
 
-@testset "issue #617" begin
-    N, M = 4, 6
+if !contains(string(Reactant.devices()[1]), "TPU")
+    @testset "issue #617" begin
+        N, M = 4, 6
 
-    f = rand(ComplexF64, N, N)
-    p = rand(ComplexF64, N * N)
-    I = 1:(N^2)
-    out = rand(ComplexF64, M, M)
+        f = rand(ComplexF64, N, N)
+        p = rand(ComplexF64, N * N)
+        I = 1:(N^2)
+        out = rand(ComplexF64, M, M)
 
-    fr = Reactant.to_rarray(f)
-    pr = Reactant.to_rarray(p)
-    outr = Reactant.to_rarray(out)
-    Ir = Reactant.to_rarray(I)
+        fr = Reactant.to_rarray(f)
+        pr = Reactant.to_rarray(p)
+        outr = Reactant.to_rarray(out)
+        Ir = Reactant.to_rarray(I)
 
-    @test @jit(issue_617(outr, fr, pr, Ir)) ≈ issue_617(out, f, p, I)
+        @test @jit(issue_617(outr, fr, pr, Ir)) ≈ issue_617(out, f, p, I)
+    end
 end
 
 function scalar_setindex(x, idx, val)

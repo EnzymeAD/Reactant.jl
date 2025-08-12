@@ -688,6 +688,209 @@ function cluster_wait(; aligned=nothing, location=Location())
 end
 
 """
+`convert_bf16x2_to_f8x2`
+
+This Op converts the given bf16 inputs in a bf16x2 vector to the specified 
+f8 type.
+The result `dst` is represented as an i16 type or as a vector
+of two i8 types.
+If `dst` is returned as an i16 type, the converted values from `a`
+are packed such that the value converted from the first element of `a`
+is stored in the upper 8 bits of `dst` and the value converted from the
+second element of `a` is stored in the lower 8 bits of `dst`.
+If `dst` is returned as a vector type, each converted value is stored as an 
+i8 element in the vector.
+The `rnd` and `sat` attributes specify the rounding and saturation modes 
+respectively.
+
+[For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-cvt)
+"""
+function convert_bf16x2_to_f8x2(
+    a::Value; dst::IR.Type, type, rnd=nothing, sat=nothing, location=Location()
+)
+    op_ty_results = IR.Type[dst,]
+    operands = Value[a,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[namedattribute("type", type),]
+    !isnothing(rnd) && push!(attributes, namedattribute("rnd", rnd))
+    !isnothing(sat) && push!(attributes, namedattribute("sat", sat))
+
+    return create_operation(
+        "nvvm.convert.bf16x2.to.f8x2",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+"""
+`convert_f16x2_to_f8x2`
+
+This Op converts the given f16 inputs in an f16x2 vector to the specified 
+f8 type.
+The result `dst` is represented as an i16 type or as a vector
+of two i8 types.
+If `dst` is returned as an i16 type, the converted values from `a`
+are packed such that the value converted from the first element of `a`
+is stored in the upper 8 bits of `dst` and the value converted from the
+second element of `a` is stored in the lower 8 bits of `dst`.
+If `dst` is returned as a vector type, each converted value is stored as an 
+i8 element in the vector.
+The `relu` attribute, when set, lowers to the \'.relu\' variant of
+the cvt instruction.
+
+[For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-cvt)
+"""
+function convert_f16x2_to_f8x2(
+    a::Value; dst::IR.Type, type, relu=nothing, location=Location()
+)
+    op_ty_results = IR.Type[dst,]
+    operands = Value[a,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[namedattribute("type", type),]
+    !isnothing(relu) && push!(attributes, namedattribute("relu", relu))
+
+    return create_operation(
+        "nvvm.convert.f16x2.to.f8x2",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+"""
+`convert_f32x2_to_f6x2`
+
+This Op converts each of the given float inputs to the specified fp6 type.
+The result `dst` is represented either as an i16 type or as a vector
+of two i8 types.
+If `dst` is returned as an i16 type, the converted values are packed such 
+that the value converted from `a` is stored in the upper 8 bits of `dst` 
+with 2 MSB bits padded with zeros and the value converted from `b` is 
+stored in the lower 8 bits of `dst` with 2 MSB bits padded with zeros.
+If `dst` is returned as a vector type, each converted value is stored as an 
+i8 element in the vector.
+The `relu` attribute, when set, lowers to the \'.relu\' variant of
+the cvt instruction.
+
+[For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-cvt)
+"""
+function convert_f32x2_to_f6x2(
+    a::Value, b::Value; dst::IR.Type, type, relu=nothing, location=Location()
+)
+    op_ty_results = IR.Type[dst,]
+    operands = Value[a, b]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[namedattribute("type", type),]
+    !isnothing(relu) && push!(attributes, namedattribute("relu", relu))
+
+    return create_operation(
+        "nvvm.convert.f32x2.to.f6x2",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+"""
+`convert_f32x2_to_f8x2`
+
+This Op converts each of the given float inputs to the specified fp8 type.
+The result `dst` is represented as an i16 type or as a vector
+of two i8 types.
+If `dst` is returned as an i16 type, the converted values are packed such 
+that the value converted from `a` is stored in the upper 8 bits of `dst` 
+and the value converted from `b` is stored in the lower 8 bits of `dst`.
+If `dst` is returned as a vector type, each converted value is stored as an 
+i8 element in the vector.
+The `rnd` and `sat` attributes specify the rounding and saturation modes respectively.
+The `relu` attribute, when set, lowers to the \'.relu\' variant of
+the cvt instruction.
+
+[For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-cvt)
+"""
+function convert_f32x2_to_f8x2(
+    a::Value,
+    b::Value;
+    dst::IR.Type,
+    type,
+    rnd=nothing,
+    sat=nothing,
+    relu=nothing,
+    location=Location(),
+)
+    op_ty_results = IR.Type[dst,]
+    operands = Value[a, b]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[namedattribute("type", type),]
+    !isnothing(rnd) && push!(attributes, namedattribute("rnd", rnd))
+    !isnothing(sat) && push!(attributes, namedattribute("sat", sat))
+    !isnothing(relu) && push!(attributes, namedattribute("relu", relu))
+
+    return create_operation(
+        "nvvm.convert.f32x2.to.f8x2",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+"""
+`convert_float_to_tf32`
+
+This Op converts the given f32 input to tf32.
+The result `res` is represented as an i32 type.
+The `relu` attribute, when set, lowers to the \'.relu\' variant of
+the cvt instruction. The `rnd` and `sat` attributes specify the
+the rounding and saturation modes respectively.
+
+[For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-cvt)
+"""
+function convert_float_to_tf32(
+    src::Value; res::IR.Type, rnd=nothing, sat=nothing, relu=nothing, location=Location()
+)
+    op_ty_results = IR.Type[res,]
+    operands = Value[src,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+    !isnothing(rnd) && push!(attributes, namedattribute("rnd", rnd))
+    !isnothing(sat) && push!(attributes, namedattribute("sat", sat))
+    !isnothing(relu) && push!(attributes, namedattribute("relu", relu))
+
+    return create_operation(
+        "nvvm.convert.float.to.tf32",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+"""
 `cp_async_bulk_commit_group`
 
 This Op commits all prior initiated but uncommitted cp.async.bulk
@@ -774,13 +977,79 @@ function cp_async_bulk_shared_cluster_global(
 end
 
 """
-`cp_async_bulk_global_shared_cta`
+`cp_async_bulk_prefetch`
 
-Initiates an asynchronous copy operation from Shared CTA memory to
-global memory.
+Initiates an asynchronous prefetch of data from the location
+specified by `srcMem` to the L2 cache.
 
 The `l2CacheHint` operand is optional, and it is used to specify cache
 eviction policy that may be used during the memory access.
+
+# Example
+```mlir
+  nvvm.cp.async.bulk.prefetch %src, %size : !llvm.ptr<1>
+
+  // with l2_cache_hint
+  nvvm.cp.async.bulk.prefetch %src, %size l2_cache_hint = %ch : !llvm.ptr<1>
+```
+
+[For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-cp-async-bulk-prefetch)
+"""
+function cp_async_bulk_prefetch(
+    srcMem::Value,
+    size::Value,
+    l2CacheHint=nothing::Union{Nothing,Value};
+    location=Location(),
+)
+    op_ty_results = IR.Type[]
+    operands = Value[srcMem, size]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+    !isnothing(l2CacheHint) && push!(operands, l2CacheHint)
+
+    return create_operation(
+        "nvvm.cp.async.bulk.prefetch",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+"""
+`cp_async_bulk_global_shared_cta`
+
+Initiates an asynchronous copy operation from Shared CTA memory to
+global memory. The 32-bit operand `size` specifies the amount of
+memory to be copied, in terms of number of bytes. `size` must be a
+multiple of 16. The `l2CacheHint` operand is optional, and it is used
+to specify cache eviction policy that may be used during the memory
+access. The `byteMask` operand is optional. The i-th bit in the 16-bit
+wide `byteMask` specifies whether the i-th byte of each 16-byte wide
+chunk of source data is copied to the destination. If the bit is set,
+the byte is copied.
+
+# Example
+```mlir
+  nvvm.cp.async.bulk.global.shared.cta %dst, %src, %size
+      : !llvm.ptr<1>, !llvm.ptr<3>
+
+  // with l2_cache_hint
+  nvvm.cp.async.bulk.global.shared.cta %dst, %src, %size l2_cache_hint = %ch
+      : !llvm.ptr<1>, !llvm.ptr<3>
+
+  // with byte_mask
+  nvvm.cp.async.bulk.global.shared.cta %dst, %src, %size byte_mask = %mask
+      : !llvm.ptr<1>, !llvm.ptr<3>
+
+  // with both l2_cache_hint and byte_mask
+  nvvm.cp.async.bulk.global.shared.cta %dst, %src, %size l2_cache_hint = %ch byte_mask = %mask
+      : !llvm.ptr<1>, !llvm.ptr<3>
+```
 
 [For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-cp-async-bulk)
 """
@@ -789,6 +1058,7 @@ function cp_async_bulk_global_shared_cta(
     srcMem::Value,
     size::Value,
     l2CacheHint=nothing::Union{Nothing,Value};
+    byteMask=nothing::Union{Nothing,Value},
     location=Location(),
 )
     op_ty_results = IR.Type[]
@@ -797,6 +1067,19 @@ function cp_async_bulk_global_shared_cta(
     successors = Block[]
     attributes = NamedAttribute[]
     !isnothing(l2CacheHint) && push!(operands, l2CacheHint)
+    !isnothing(byteMask) && push!(operands, byteMask)
+    push!(attributes, operandsegmentsizes([
+        1,
+        1,
+        1,
+        if (l2CacheHint == nothing)
+            0
+        elseif 1(byteMask == nothing)
+            0
+        else
+            1
+        end,
+    ]))
 
     return create_operation(
         "nvvm.cp.async.bulk.global.shared.cta",
@@ -1212,30 +1495,47 @@ function cp_async_wait_group(; n, location=Location())
 end
 
 """
-`cvt_float_to_tf32`
+`dot_accumulate_2way`
 
-This Op converts the given f32 input to tf32.
-The result `res` is represented as an i32 type.
-The `relu` attribute, when set, lowers to the \'.relu\' variant of
-the cvt instruction. The `rnd` and `sat` attributes specify the
-the rounding and saturation modes respectively.
+Performs a two-way 16-bit to 8-bit dot-product which is accumulated in a 
+32-bit result.
+Operand `a` is a vector of two 16-bit elements and operand `b` a vector 
+of four 8-bit elements between which the dot product is computed.
 
-[For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-cvt)
+The `a_type` and `b_type` attributes specify the type of the elements in `a`
+and `b` respectively.
+If `a_type` or `b_type` is `s`, then the elements in the corresponding 
+vector are sign-extended to 32-bit before the dot product is computed.
+If `a_type` or `b_type` is `u`, then the elements in the corresponding 
+vector are zero-extended to 32-bit instead.
+
+The `b_hi` boolean attribute specifies which two bytes of `b` are used for 
+the dot product. If `b_hi` is true, then the dot product is computed 
+between  `a` and elements at indices 2 and 3 of `b`. If `b_hi` is false, 
+then the dot product is computed between `a` and elements at indices 0 and 
+1 of `b`.
+
+Operand `c` is a 32-bit integer to which the result is accumulated. It is
+treated as holding a signed integer if any of `a_type` or `b_type` is 
+signed.
+
+[For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/#integer-arithmetic-instructions-dp2a)
 """
-function cvt_float_to_tf32(
-    src::Value; res::IR.Type, rnd=nothing, sat=nothing, relu=nothing, location=Location()
+function dot_accumulate_2way(
+    a::Value, b::Value, c::Value; res::IR.Type, a_type, b_type, b_hi, location=Location()
 )
     op_ty_results = IR.Type[res,]
-    operands = Value[src,]
+    operands = Value[a, b, c]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[]
-    !isnothing(rnd) && push!(attributes, namedattribute("rnd", rnd))
-    !isnothing(sat) && push!(attributes, namedattribute("sat", sat))
-    !isnothing(relu) && push!(attributes, namedattribute("relu", relu))
+    attributes = NamedAttribute[
+        namedattribute("a_type", a_type),
+        namedattribute("b_type", b_type),
+        namedattribute("b_hi", b_hi),
+    ]
 
     return create_operation(
-        "nvvm.cvt.float.to.tf32",
+        "nvvm.dot.accumulate.2way",
         location;
         operands,
         owned_regions,
@@ -1247,34 +1547,38 @@ function cvt_float_to_tf32(
 end
 
 """
-`cvt_to_f6x2`
+`dot_accumulate_4way`
 
-This Op converts each of the given float inputs to the specified fp6 type.
-The result `dst` is represented either as an i16 type or as a vector
-of two i8 types.
-If `dst` is returned as an i16 type, the converted values are packed such 
-that the value converted from `a` is stored in the upper 8 bits of `dst` 
-with 2 MSB bits padded with zeros and the value converted from `b` is 
-stored in the lower 8 bits of `dst` with 2 MSB bits padded with zeros.
-If `dst` is returned as a vector type, each converted value is stored as an 
-i8 element in the vector.
-The `relu` attribute, when set, lowers to the \'.relu\' variant of
-the cvt instruction.
+Performs a four-way byte dot-product which is accumulated in a 32-bit
+result.
+Operand `a` and `b` are vectors of 4 bytes between which the dot product is 
+computed.
 
-[For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-cvt)
+The `a_type` and `b_type` attributes specify the type of the elements in `a`
+and `b` respectively.
+If `a_type` or `b_type` is `signed`, then the elements in the corresponding 
+vector are sign-extended to 32-bit before the dot product is computed.
+If `a_type` or `b_type` is `unsigned`, then the elements in the 
+corresponding vector are zero-extended to 32-bit instead.
+
+Operand `c` is a 32-bit integer to which the result is accumulated. It is
+treated as holding a signed integer if any of `a_type` or `b_type` is `s8`.
+
+[For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/#integer-arithmetic-instructions-dp4a)
 """
-function cvt_to_f6x2(
-    a::Value, b::Value; dst::IR.Type, type, relu=nothing, location=Location()
+function dot_accumulate_4way(
+    a::Value, b::Value, c::Value; res::IR.Type, a_type, b_type, location=Location()
 )
-    op_ty_results = IR.Type[dst,]
-    operands = Value[a, b]
+    op_ty_results = IR.Type[res,]
+    operands = Value[a, b, c]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("type", type),]
-    !isnothing(relu) && push!(attributes, namedattribute("relu", relu))
+    attributes = NamedAttribute[
+        namedattribute("a_type", a_type), namedattribute("b_type", b_type)
+    ]
 
     return create_operation(
-        "nvvm.cvt.to.f6x2",
+        "nvvm.dot.accumulate.4way",
         location;
         operands,
         owned_regions,
@@ -1289,19 +1593,22 @@ end
 `elect_sync`
 
 The `elect.sync` instruction elects one predicated active leader
-thread from among a set of threads specified in membermask.
-The membermask is set to `0xFFFFFFFF` for the current version
-of this Op. The predicate result is set to `True` for the
-leader thread, and `False` for all other threads.
+thread from among a set of threads specified in the `membermask`.
+When the `membermask` is not provided explicitly, a default value
+of `0xFFFFFFFF` is used. The predicate result is set to `True` for
+the leader thread, and `False` for all other threads.
 
 [For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#parallel-synchronization-and-communication-instructions-elect-sync)
 """
-function elect_sync(; pred::IR.Type, location=Location())
+function elect_sync(
+    membermask=nothing::Union{Nothing,Value}; pred::IR.Type, location=Location()
+)
     op_ty_results = IR.Type[pred,]
     operands = Value[]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
+    !isnothing(membermask) && push!(operands, membermask)
 
     return create_operation(
         "nvvm.elect.sync",
@@ -2251,6 +2558,77 @@ function griddepcontrol_wait(; location=Location())
     )
 end
 
+"""
+`inline_ptx`
+This op allows using PTX directly within the NVVM 
+    dialect, while greatly simplifying llvm.inline_asm generation. It 
+    automatically handles register size selection and sets the correct 
+    read/write access for each operand. The operation leverages the 
+    `BasicPtxBuilderInterface` to abstract away low-level details of 
+    PTX assembly formatting.
+
+    The `predicate` attribute is used to specify a predicate for the 
+    PTX instruction.
+
+    Example 1: Read-only Parameters
+    ```mlir
+    nvvm.inline_ptx \"mbarrier.init.b64 [\$0], \$1;\" (%barrier_gen, %count) : !llvm.ptr, i32
+
+    // Lowers to:
+    llvm.inline_asm has_side_effects asm_dialect = att 
+      \"mbarrier.init.b64 [\$0], \$1;\", \"l,r\" %arg0, %arg2 : (!llvm.ptr, i32) -> ()
+    ```
+
+    Example 2: Read-only and Write-only Parameters
+    ```mlir
+    %0 = nvvm.inline_ptx \"ex2.approx.ftz.f32 \$0, \$1;\" (%input) : f32 -> f32
+
+    // Lowers to:
+    %0 = llvm.inline_asm has_side_effects asm_dialect = att 
+      \"ex2.approx.ftz.f32 \$0, \$1;\", \"=f,f\" %arg0 : (f32) -> f32
+    ```
+
+    Example 3: Predicate Usage
+    ```mlir
+    nvvm.inline_ptx \"mbarrier.init.b64 [\$0], \$1;\" (%barrier_gen, %count), 
+      predicate = %pred : !llvm.ptr, i32, i1
+
+    // Lowers to:
+    llvm.inline_asm has_side_effects asm_dialect = att 
+      \"@\$2 mbarrier.init.b64 [\$0], \$1;\", \"l,r,b\" %arg0, %arg2, %arg3 
+      : (!llvm.ptr, i32, i1) -> ()
+    ```
+"""
+function inline_ptx(
+    readOnlyArgs::Vector{Value},
+    predicate=nothing::Union{Nothing,Value};
+    writeOnlyArgs::Vector{IR.Type},
+    ptxCode,
+    location=Location(),
+)
+    op_ty_results = IR.Type[writeOnlyArgs...,]
+    operands = Value[readOnlyArgs...,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[namedattribute("ptxCode", ptxCode),]
+    !isnothing(predicate) && push!(operands, predicate)
+    push!(
+        attributes,
+        operandsegmentsizes([length(readOnlyArgs), (predicate == nothing) ? 0 : 1]),
+    )
+
+    return create_operation(
+        "nvvm.inline_ptx",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
 function read_ptx_sreg_laneid(; res::IR.Type, range=nothing, location=Location())
     op_ty_results = IR.Type[res,]
     operands = Value[]
@@ -2851,6 +3229,49 @@ function mma_sync(
     )
 end
 
+"""
+`prefetch`
+
+Operand `addr` can be a global, local or generic address pointer. No 
+operation is performed if `addr` maps to a `shared` memory location.
+
+The `cacheLevel` attribute specifies the cache level to which the cache line
+containing the specified address is brought.
+
+`uniform` can be specified after the `cacheLevel` to indicate that the 
+prefetch is performed to the specified uniform cache level. If `uniform` is 
+specified, `addr` must be a generic address pointer and no operation is 
+performed if `addr` maps to a `const`, `local`, or `shared` memory location.
+
+The `evictPriority` attribute is optional and specifies the cache eviction
+priority when `cacheLevel` is L2.
+
+[For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/#data-movement-and-conversion-instructions-prefetch-prefetchu)
+"""
+function prefetch(
+    addr::Value; cacheLevel, uniform=nothing, evictPriority=nothing, location=Location()
+)
+    op_ty_results = IR.Type[]
+    operands = Value[addr,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[namedattribute("cacheLevel", cacheLevel),]
+    !isnothing(uniform) && push!(attributes, namedattribute("uniform", uniform))
+    !isnothing(evictPriority) &&
+        push!(attributes, namedattribute("evictPriority", evictPriority))
+
+    return create_operation(
+        "nvvm.prefetch",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
 function prefetch_tensormap(
     tmaDescriptor::Value, predicate=nothing::Union{Nothing,Value}; location=Location()
 )
@@ -3287,7 +3708,8 @@ The unit attribute `pack` can be used to pack two 16-bit
 elements from adjacent columns into a single 32-bit element during the load.
 
 The following table describes the size of the vector for various combinations
-of `num` and `shape` attributes
+of `num` and `shape` attributes:
+```
 |=====================================================================|
 | num/shape      |     16x32bx2/16x64b/32x32b |  16x128b   | 16x256b  |
 |=====================================================================|
@@ -3300,6 +3722,7 @@ of `num` and `shape` attributes
 | x64            |          64                |    128     |    NA    |
 | x128           |          128               |    NA      |    NA    |
 |=====================================================================|
+```
 
 # Example
 ```mlir
@@ -3328,6 +3751,81 @@ function tcgen05_ld(
 
     return create_operation(
         "nvvm.tcgen05.ld",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+"""
+`tcgen05_mma_smem_desc`
+
+The `nvvm.tcgen05_mma_smem_desc` constructs a Shared Memory descriptor
+for tcgen05.mma. This descriptor is a 64-bit value which describes the
+properties of multiplicand matrix in shared memory including its location
+in the shared memory of the current CTA.
+
+```
++-----------+------+------------------------------------------------------+
+| Bit-field | Size | Description                                          |
++-----------+------+------------------------------------------------------+
+| 0-13      | 14   | Matrix start address                                 |
+| 14-15     | 2    | Reserved                                             |
+| 16-29     | 14   | Leading dim relative-offset (or) absolute-address    |
+| 30-31     | 2    | Reserved                                             |
+| 32-45     | 14   | Stride dimension byte offset                         |
+| 46-48     | 3    | Fixed constant value of 0b001                        |
+| 49-51     | 3    | Matrix base offset                                   |
+| 52        | 1    | Leading dimension stride mode:                       |
+|           |      |   0: byte offset relative                            |
+|           |      |   1: byte address absolute                           |
+| 53-60     | 8    | Fixed constant value of 0xb00000000                  |
+| 61-63     | 3    | Swizzling mode:                                      |
+|           |      |   0: No swizzling                                    |
+|           |      |   1: 128-Byte with 32B atomic swizzling              |
+|           |      |   2: 128-Byte swizzling                              |
+|           |      |   4: 64-Byte swizzling                               |
+|           |      |   6: 32-Byte swizzling                               |
+|           |      |   (Values 3, 5 and 7 are invalid)                    |
++-----------+------+------------------------------------------------------+    
+```
+
+# Example
+```mlir
+  %desc = nvvm.tcgen05.mma_smem_desc (%startAddr, %leadingDimOffset, %strideDimOffset,
+                                      %baseOffset, %leadingDimMode, %swizzleMode) : (i32, i32, i32, i8, i1, i8) -> i64
+```
+[For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/#tcgen05-shared-memory-descriptor)
+"""
+function tcgen05_mma_smem_desc(
+    startAddr::Value,
+    leadingDimOffset::Value,
+    strideDimOffset::Value,
+    baseOffset::Value,
+    leadingDimMode::Value,
+    swizzleMode::Value;
+    res::IR.Type,
+    location=Location(),
+)
+    op_ty_results = IR.Type[res,]
+    operands = Value[
+        startAddr,
+        leadingDimOffset,
+        strideDimOffset,
+        baseOffset,
+        leadingDimMode,
+        swizzleMode,
+    ]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+
+    return create_operation(
+        "nvvm.tcgen05.mma_smem_desc",
         location;
         operands,
         owned_regions,
@@ -3419,7 +3917,8 @@ The unit attribute `unpack` can be used to unpack a 32-bit element
 in the register into two 16-bit elements and store them in adjacent columns.
 
 The following table describes the size of the vector for various combinations
-of `num` and `shape` attributes
+of `num` and `shape` attributes:
+```
 |=====================================================================|
 | num/shape      |     16x32bx2/16x64b/32x32b |  16x128b   | 16x256b  |
 |=====================================================================|
@@ -3432,6 +3931,7 @@ of `num` and `shape` attributes
 | x64            |          64                |    128     |    NA    |
 | x128           |          128               |    NA      |    NA    |
 |=====================================================================|
+```
 
 # Example
 ```mlir

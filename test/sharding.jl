@@ -209,7 +209,7 @@ end
         @test contains(repr(hlo), "sharding_constraint")
         hlo = @code_hlo shardy_passes = :to_mhlo_shardings fn_with_constraint(x_ra)
         @test !contains(repr(hlo), "sharding_constraint")
-        @test length(collect(eachmatch(r"mhlo.sharding", repr(hlo)))) == 6
+        @test length(collect(eachmatch(r"mhlo.sharding", repr(hlo)))) == 5
 
         z = Reactant.to_rarray(x; sharding=constraint)
         res = @jit fn_with_constraint(x_ra)
@@ -234,7 +234,7 @@ end
             x_ra_no_sharding
         )
         @test !contains(repr(hlo), "sharding_constraint")
-        @test length(collect(eachmatch(r"mhlo.sharding", repr(hlo)))) == 6
+        @test length(collect(eachmatch(r"mhlo.sharding", repr(hlo)))) == 5
 
         res = @jit fn_with_constraint(x_ra_no_sharding)
         @test x .+ x ≈ Array(res)
@@ -450,12 +450,25 @@ end
             randn(Float32, 4, 4); sharding=Sharding.NamedSharding(mesh, (:x, :y))
         )
 
-        shardy_options = Sharding.ShardyPropagationOptions(;
+        shardy_options = Reactant.ShardyPropagationOptions(;
             enable_insert_explicit_collectives=true, conservative_propagation=true
         )
 
         @test (@jit shardy_passes = shardy_options fn_test2(x_ra)) ≈ fn_test2(x_ra)
     else
         @warn "Not enough addressable devices to run sharding tests"
+    end
+end
+
+@testset "Compile-Only with More Devices" begin
+    if !contains(string(Reactant.devices()[1]), "TPU")
+        mesh = Sharding.Mesh(zeros(Int64, 2, 4), (:x, :y))
+
+        x_ra = Reactant.to_rarray(
+            rand(Float32, 32, 32); sharding=Sharding.NamedSharding(mesh, (:x, :y))
+        )
+
+        hlo = @code_xla sum(x_ra)
+        @test contains(repr(hlo), "num_partitions=8")
     end
 end

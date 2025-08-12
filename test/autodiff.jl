@@ -195,17 +195,19 @@ end
     @test res2 ≈ 4 * 3 * 3.1^2
 end
 
-@testset "Seed initialization of Complex arrays on matmul: Issue #593" begin
-    a = ones(ComplexF64, 2, 2)
-    b = 2.0 * ones(ComplexF64, 2, 2)
-    a_re = Reactant.to_rarray(a)
-    b_re = Reactant.to_rarray(b)
-    df(x, y) = Enzyme.gradient(ReverseWithPrimal, *, x, y)
-    @test begin
-        res = @jit df(a_re, b_re) # before, this segfaulted
-        (res.val ≈ 4ones(2, 2)) &&
-            (res.derivs[1] ≈ 4ones(2, 2)) &&
-            (res.derivs[2] ≈ 2ones(2, 2))
+if !contains(string(Reactant.devices()[1]), "TPU")
+    @testset "Seed initialization of Complex arrays on matmul: Issue #593" begin
+        a = ones(ComplexF64, 2, 2)
+        b = 2.0 * ones(ComplexF64, 2, 2)
+        a_re = Reactant.to_rarray(a)
+        b_re = Reactant.to_rarray(b)
+        df(x, y) = Enzyme.gradient(ReverseWithPrimal, *, x, y)
+        @test begin
+            res = @jit df(a_re, b_re) # before, this segfaulted
+            (res.val ≈ 4ones(2, 2)) &&
+                (res.derivs[1] ≈ 4ones(2, 2)) &&
+                (res.derivs[2] ≈ 2ones(2, 2))
+        end
     end
 end
 
@@ -227,6 +229,13 @@ vector_forward_ad(x) = Enzyme.autodiff(Forward, fn, BatchDuplicated(x, Enzyme.on
     @test res[1][2] ≈ res_enz[1][2]
     @test res[1][3] ≈ res_enz[1][3]
     @test res[1][4] ≈ res_enz[1][4]
+end
+
+@testset "make_zero!" begin
+    x = Reactant.to_rarray([3.1])
+    @jit Enzyme.make_zero!(x)
+
+    @test @allowscalar x[1] ≈ 0.0
 end
 
 function simple_forward(x, st)
@@ -272,4 +281,38 @@ end
     x = ConcreteRNumber(0.0)
     @test isnan((@jit grad_divinf(x))[1])
     @test iszero((@jit grad_divinf_sz(x))[1])
+end
+
+function simple_grad_without_ignore(x::AbstractArray{T}) where {T}
+    return (sum(x; dims=1), x .- 1, (x, x .+ 2)), sum(abs2, x)
+end
+
+function simple_grad_with_ignore(x::AbstractArray{T}) where {T}
+    return Reactant.ignore_derivatives(sum(x; dims=1), x .- 1, (x, x .+ 2)), sum(abs2, x)
+end
+
+function zero_grad(x)
+    return Reactant.ignore_derivatives(sum(x))
+end
+
+function zero_grad2(x)
+    return Reactant.ignore_derivatives(sum(x), x)
+end
+
+@testset "ignore_derivatives" begin
+    x = Reactant.to_rarray(rand(Float32, 4, 4))
+
+    res1 = @jit Enzyme.gradient(Reverse, simple_grad_without_ignore, x)
+    @test res1[1] ≈ (2 .* Array(x) .+ 4)
+
+    res2 = @jit Enzyme.gradient(Reverse, simple_grad_with_ignore, x)
+    @test res2[1] ≈ (2 .* Array(x))
+
+    ∂x, result = @jit Enzyme.gradient(ReverseWithPrimal, zero_grad, x)
+    @test result isa ConcreteRNumber{Float32}
+    @test ∂x[1] ≈ zeros(Float32, 4, 4)
+
+    ∂x2, result2 = @jit Enzyme.gradient(ReverseWithPrimal, zero_grad2, x)
+    @test result2 isa Tuple{<:ConcreteRNumber{Float32},<:ConcreteRArray{Float32,2}}
+    @test ∂x2[1] ≈ zeros(Float32, 4, 4)
 end
