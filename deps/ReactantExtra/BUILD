@@ -64,6 +64,7 @@ cc_toolchain_config(
     abi_version = "local",
     builtin_sysroot = "/opt/x86_64-linux-musl/bin/../x86_64-linux-musl/sys-root",
     compile_flags = [
+        "-stdlib=libstdc++",
     ],
     compiler = "clang",
     coverage_compile_flags = ["--coverage"],
@@ -93,6 +94,7 @@ cc_toolchain_config(
         #"--ld-path=/opt/x86_64-linux-musl/bin/ld.lld",
         "--ld-path=/opt/bin/x86_64-linux-musl-cxx11/x86_64-linux-musl-ld.lld",
         "-stdlib=libstdc++",
+        "-static-libstdc++",
     ],
     link_libs = [
         "-lstdc++",
@@ -105,7 +107,6 @@ cc_toolchain_config(
         "-DNDEBUG",
         "-ffunction-sections",
         "-fdata-sections",
-        "-stdlib=libstdc++",
     ],
     opt_link_flags = ["-Wl,--gc-sections"],
     supports_start_end_lib = True,
@@ -188,6 +189,7 @@ cc_toolchain_config(
         "-isystem /opt/BB_TARGET/BB_TARGET/include/c++/GCC_VERSION/BB_TARGET",
         "-isystem /opt/BB_TARGET/BB_TARGET/include/c++/GCC_VERSION/backward",
         "-isystem /opt/BB_TARGET/BB_TARGET/include/c++/GCC_VERSION/parallel",
+        "-stdlib=libstdc++",
     ],
     compiler = "compiler",
     coverage_compile_flags = ["--coverage"],
@@ -209,7 +211,10 @@ cc_toolchain_config(
     ],
     dbg_compile_flags = ["-g"],
     host_system_name = "linux",
-    link_flags = [],
+    link_flags = [
+        "-stdlib=libstdc++",
+        "-static-libstdc++",
+    ],
     link_libs = [
         "-lstdc++",
         "-lm",
@@ -221,7 +226,6 @@ cc_toolchain_config(
         "-DNDEBUG",
         "-ffunction-sections",
         "-fdata-sections",
-        # "-stdlib=libstdc++",
     ],
     opt_link_flags = ["-Wl,--gc-sections"],
     # TODO gcc doesn't support it, only put it on clang (maybe even only for clang on aarch64-darwin?)
@@ -349,7 +353,6 @@ cc_toolchain_config(
         "-DNDEBUG",
         "-ffunction-sections",
         "-fdata-sections",
-        # "-stdlib=libstdc++",
     ],
     opt_link_flags = ["-Wl,--gc-sections"],
     # TODO gcc doesn't support it, only put it on clang (maybe even only for clang on aarch64-darwin?)
@@ -452,7 +455,6 @@ cc_toolchain_config(
     ],
     dbg_compile_flags = [
         "-g",
-        "-stdlib=libc++",
     ],
     host_system_name = "linux",
     link_flags = [
@@ -470,7 +472,6 @@ cc_toolchain_config(
         "-DNDEBUG",
         "-ffunction-sections",
         "-fdata-sections",
-        "-stdlib=libc++",
     ],
     opt_link_flags = ["-Wl,--gc-sections"],
     supports_start_end_lib = True,
@@ -695,12 +696,11 @@ cc_toolchain_config(
     ],
     dbg_compile_flags = [
         "-g",
-        "-stdlib=libstdc++",
     ],
     host_system_name = "linux",
     link_flags = [
         "-fuse-ld=lld",
-        "-stdlib=libc++",
+        "-stdlib=libstdc++",
     ],
     link_libs = [
         "-lstdc++",
@@ -713,7 +713,6 @@ cc_toolchain_config(
         "-DNDEBUG",
         "-ffunction-sections",
         "-fdata-sections",
-        "-stdlib=libc++",
     ],
     opt_link_flags = ["-Wl,--gc-sections"],
     supports_start_end_lib = False,
@@ -758,7 +757,7 @@ cc_toolchain_config(
         "-D__TIME__=\"redacted\"",
         "-Wno-unused-command-line-argument",
         "-Wno-gnu-offsetof-extensions",
-	"-mxsave",
+        "-mxsave",
     ],
 )
 
@@ -781,6 +780,7 @@ cc_toolchain_config(
     abi_version = "local",
     compile_flags = [
         "-I/usr/include/c++/11",
+        "-stdlib=libstdc++",
     ],
     compiler = "clang",
     coverage_compile_flags = ["--coverage"],
@@ -817,7 +817,6 @@ cc_toolchain_config(
         "-DNDEBUG",
         "-ffunction-sections",
         "-fdata-sections",
-        "-stdlib=libstdc++",
         "-I/usr/include/c++/11",
     ],
     opt_link_flags = ["-Wl,--gc-sections"],
@@ -1193,7 +1192,7 @@ cc_library(
         ],
         "@xla//xla/tsl:windows": [
             "@xla//xla/tsl/platform/windows:platform_port",
-	],
+        ],
         "//conditions:default": [
             "@gloo//:transport_tcp",
             "@xla//xla/backends/cpu/collectives:gloo_collectives",
