@@ -177,16 +177,16 @@ LLVM_TARGETS = [
 
 http_archive(
     name = "rules_ml_toolchain",
+    patch_cmds = [
+        """
+	sed -i.bak0 "/D_FORTIFY_SOURCE/d" cc/features/BUILD third_party/gpus/crosstool/cc_toolchain_config.bzl.tpl
+""",
+    ],
     sha256 = "59d7eb36a02cbe3c2e2fa67fda5e8f1ab7e274bc4773bbd207c51fe199e11c19",
     strip_prefix = "rules_ml_toolchain-ffd9e3d7b84e43c2686c803cb08ce790ffd58baa",
     urls = [
         "https://github.com/google-ml-infra/rules_ml_toolchain/archive/ffd9e3d7b84e43c2686c803cb08ce790ffd58baa.tar.gz",
     ],
-    patch_cmds = [
-"""
-	sed -i.bak0 "/D_FORTIFY_SOURCE/d" cc/features/BUILD third_party/gpus/crosstool/cc_toolchain_config.bzl.tpl
-"""
-    ]
 )
 
 load("@enzyme_ad//third_party/jax:workspace.bzl", jax_workspace = "repo")
