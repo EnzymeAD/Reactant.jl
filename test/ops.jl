@@ -875,7 +875,8 @@ end
 @testset "lgamma" begin
     x = Reactant.to_rarray([-1.0, 0.0, 1.0, 2.5])
     lgamma(x) = (SpecialFunctions.logabsgamma(x))[1]
-    @test lgamma.(Array(x)) ≈ @jit(Ops.lgamma(x))  atol=1e-5 rtol=1e-3 skip = RunningOnAppleX86
+    @test lgamma.(Array(x)) ≈ @jit(Ops.lgamma(x)) atol = 1e-5 rtol = 1e-3 skip =
+        RunningOnAppleX86
 end
 
 @testset "next_after" begin

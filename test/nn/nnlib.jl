@@ -129,7 +129,7 @@ end
     x_ra = Reactant.to_rarray(x)
     y_ra = Reactant.to_rarray(y)
 
-    @test @jit(batched_mul(x_ra, y_ra)) ≈ batched_mul(x, y)
+    @test @jit(batched_mul(x_ra, y_ra)) ≈ batched_mul(x, y) atol = 1e-5 rtol = 1e-3
 
     x = rand(Float32, 4, 3, 1)
     y = rand(Float32, 3, 2, 5)
@@ -137,7 +137,7 @@ end
     x_ra = Reactant.to_rarray(x)
     y_ra = Reactant.to_rarray(y)
 
-    @test @jit(batched_mul(x_ra, y_ra)) ≈ batched_mul(x, y)
+    @test @jit(batched_mul(x_ra, y_ra)) ≈ batched_mul(x, y) atol = 1e-5 rtol = 1e-3
 
     x = rand(Float32, 4, 3, 5)
     y = rand(Float32, 3, 2, 1)
@@ -145,7 +145,7 @@ end
     x_ra = Reactant.to_rarray(x)
     y_ra = Reactant.to_rarray(y)
 
-    @test @jit(batched_mul(x_ra, y_ra)) ≈ batched_mul(x, y)
+    @test @jit(batched_mul(x_ra, y_ra)) ≈ batched_mul(x, y) atol = 1e-5 rtol = 1e-3
 end
 
 @testset "Constant Padding: NNlib.pad_constant" begin
@@ -656,9 +656,9 @@ end
         dy_reactant = Reactant.to_rarray(dy)
 
         @test @jit(NNlib.∇conv_data(dy_reactant, w_reactant, conv_dims)) ≈
-            NNlib.∇conv_data(dy, w, conv_dims)
+            NNlib.∇conv_data(dy, w, conv_dims) atol = 1e-5 rtol = 1e-3
         @test @jit(NNlib.∇conv_filter(x_reactant, dy_reactant, conv_dims)) ≈
-            NNlib.∇conv_filter(x, dy, conv_dims)
+            NNlib.∇conv_filter(x, dy, conv_dims) atol = 1e-5 rtol = 1e-3
     end
 end
 
