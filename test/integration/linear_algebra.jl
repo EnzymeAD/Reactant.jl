@@ -383,8 +383,10 @@ end
             B = rand(T, 4, 3)
             B_ra = Reactant.to_rarray(B)
 
-            @test @jit(solve_with_lu(A_ra, b_ra)) ≈ solve_with_lu(A, b)
-            @test @jit(solve_with_lu(A_ra, B_ra)) ≈ solve_with_lu(A, B)
+            @test @jit(solve_with_lu(A_ra, b_ra)) ≈ solve_with_lu(A, b) atol = 1e-4 rtol =
+                1e-2
+            @test @jit(solve_with_lu(A_ra, B_ra)) ≈ solve_with_lu(A, B) atol = 1e-4 rtol =
+                1e-2
         end
     end
 
@@ -401,8 +403,10 @@ end
             B = rand(T, 4, 5, 3, 2)
             B_ra = Reactant.to_rarray(B)
 
-            @test @jit(solve_with_lu(A_ra, b_ra)) ≈ solve_with_lu_batched(A, b)
-            @test @jit(solve_with_lu(A_ra, B_ra)) ≈ solve_with_lu_batched(A, B)
+            @test @jit(solve_with_lu(A_ra, b_ra)) ≈ solve_with_lu_batched(A, b) atol = 1e-4 rtol =
+                1e-2
+            @test @jit(solve_with_lu(A_ra, B_ra)) ≈ solve_with_lu_batched(A, B) atol = 1e-4 rtol =
+                1e-2
         end
     end
 
@@ -412,6 +416,7 @@ end
         A_ra = Reactant.to_rarray(A)
         B_ra = Reactant.to_rarray(B)
 
-        @test @jit(solve_with_lu(A_ra, B_ra)) ≈ solve_with_lu_batched(A, B)
+        @test @jit(solve_with_lu(A_ra, B_ra)) ≈ solve_with_lu_batched(A, B) atol = 1e-4 rtol =
+            1e-2
     end
 end

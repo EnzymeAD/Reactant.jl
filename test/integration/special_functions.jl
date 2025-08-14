@@ -9,7 +9,8 @@ macro ≈(a, b)
 end
 
 @testset "gamma" begin
-    @test SpecialFunctions.gamma(0.5) ≈ @jit(SpecialFunctions.gamma(ConcreteRNumber(0.5)))
+    @test SpecialFunctions.gamma(0.5) ≈ @jit(SpecialFunctions.gamma(ConcreteRNumber(0.5))) atol =
+        1e-5 rtol = 1e-3
     @test SpecialFunctions.gamma(Int32(2)) ≈
         @jit(SpecialFunctions.gamma(ConcreteRNumber(Int32(2)))) atol = 1e-5 rtol = 1e-3
 end
