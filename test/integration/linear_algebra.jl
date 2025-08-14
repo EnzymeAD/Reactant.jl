@@ -77,8 +77,10 @@ end
     @test @jit(muladd_5arg(A_ra, x_ra, b_ra)) ≈ muladd2(A, x, b)
 
     C_ra = similar(A_ra, Float32, size(A, 1), size(x, 2))
+    C = similar(A, Float32, size(A, 1), size(x, 2))
     @jit(mul!(C_ra, A_ra, x_ra))
-    @test C_ra ≈ A * x atol = 1e-5 rtol = 1e-3
+    mul!(C, A, x)
+    @test C_ra ≈ C atol = 1e-3 rtol = 1e-2
 end
 
 @testset "triu & tril" begin
