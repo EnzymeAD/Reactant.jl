@@ -184,7 +184,7 @@ http_archive(
     ],
     patch_cmds = [
 """
-	sed -i.bak0 "/D_FORTIFY_SOURCE/d" cc/features/BUILD
+	sed -i.bak0 "/D_FORTIFY_SOURCE/d" cc/features/BUILD third_party/gpus/crosstool/cc_toolchain_config.bzl.tpl
 """
     ]
 )
