@@ -212,7 +212,6 @@ cc_toolchain_config(
     host_system_name = "linux",
     link_flags = [
         "-stdlib=libstdc++",
-        "-static-libstdc++",
     ],
     link_libs = [
         "-lstdc++",
