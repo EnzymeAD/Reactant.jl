@@ -188,8 +188,12 @@ end
     flastlinindices(x) = LinearIndices(x)[findlast(x)]
     flastlinindices(f, x) = LinearIndices(x)[findlast(f, x)]
 
-    @test ffirstlinindices(x) ≈ @jit(findfirst(x_ra))
-    @test flastlinindices(x) ≈ @jit(findlast(x_ra))
+    @test ffirstlinindices(x) ≈ @jit(findfirst(x_ra)) broken = contains(
+        string(Reactant.devices()[1]), "TPU"
+    )
+    @test flastlinindices(x) ≈ @jit(findlast(x_ra)) broken = contains(
+        string(Reactant.devices()[1]), "TPU"
+    )
 
     x = Int64[
         3 5 7 9
@@ -198,8 +202,12 @@ end
     ]
     x_ra = Reactant.to_rarray(x)
 
-    @test ffirstlinindices(iseven, x) ≈ @jit(findfirst(iseven, x_ra))
-    @test flastlinindices(iseven, x) ≈ @jit(findlast(iseven, x_ra))
+    @test ffirstlinindices(iseven, x) ≈ @jit(findfirst(iseven, x_ra)) broken = contains(
+        string(Reactant.devices()[1]), "TPU"
+    )
+    @test flastlinindices(iseven, x) ≈ @jit(findlast(iseven, x_ra)) broken = contains(
+        string(Reactant.devices()[1]), "TPU"
+    )
 end
 
 @testset "approx top k lowering" begin

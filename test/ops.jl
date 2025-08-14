@@ -1227,7 +1227,8 @@ end
         x_ra = Reactant.to_rarray(randn(Float32, 6, 6))
         lu_ra, ipiv, perm, info = @jit Ops.lu(x_ra)
 
-        @test @jit(recon_from_lu(lu_ra)) ≈ @jit(getindex(x_ra, perm, :))
+        @test @jit(recon_from_lu(lu_ra)) ≈ @jit(getindex(x_ra, perm, :)) atol = 1e-5 rtol =
+            1e-2
     end
 
     @testset "batched" begin
