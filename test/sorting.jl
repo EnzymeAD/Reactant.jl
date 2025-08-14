@@ -171,7 +171,11 @@ end
 end
 
 @testset "findfirst / findlast" begin
-    x = rand(Bool, 3, 4)
+    x = Bool[
+        0 0 0 0
+        1 0 1 0
+        0 1 0 1
+    ]
     x_ra = Reactant.to_rarray(x)
 
     ffirstlinindices(x) = LinearIndices(x)[findfirst(x)]
@@ -182,7 +186,11 @@ end
     @test ffirstlinindices(x) == @jit(findfirst(x_ra))
     @test flastlinindices(x) == @jit(findlast(x_ra))
 
-    x = rand(1:256, 3, 4)
+    x = Int64[
+        3 5 7 9
+        4 6 7 8
+        5 7 8 9
+    ]
     x_ra = Reactant.to_rarray(x)
 
     @test ffirstlinindices(iseven, x) == @jit(findfirst(iseven, x_ra))
