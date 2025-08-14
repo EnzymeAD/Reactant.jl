@@ -1285,7 +1285,6 @@ function scan_impl!(
     if init === nothing
         op_in_T = Core.Compiler.return_type(op, Tuple{T,T})
         op_in_T === Union{} && (op_in_T = T)
-
         init = __default_init(T, op)
         if typeof(init) != op_in_T
             op_in_T = typeof(init)
@@ -1294,9 +1293,17 @@ function scan_impl!(
     else
         # TODO: fix this for TPUs
         if contains(string(first(Reactant.devices())), "TPU")
-            throw(AssertionError("Currently, `init` is not supported on TPUs."))
+            initT = __default_init(T, op)
+            if initT != init && initT != something(init)
+                throw(
+                    AssertionError(
+                        "Currently, `init` is not supported on TPUs, provided value $init does not match identity $initT.",
+                    ),
+                )
+            end
         end
     end
+
     init = something(init) # unwrap Some
     init = TracedUtils.promote_to(TracedRNumber{unwrapped_eltype(init)}, init)
 
