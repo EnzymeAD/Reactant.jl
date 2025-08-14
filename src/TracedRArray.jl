@@ -1282,7 +1282,6 @@ function scan_impl!(
 
     dims > ndims(input) && return copyto!(output, input)
 
-
     if init === nothing
         op_in_T = Core.Compiler.return_type(op, Tuple{T,T})
         op_in_T === Union{} && (op_in_T = T)
@@ -1293,10 +1292,14 @@ function scan_impl!(
         end
     else
         # TODO: fix this for TPUs
-        if contains(string(first(Reactant.devices())), "TPU")        
+        if contains(string(first(Reactant.devices())), "TPU")
             initT = __default_init(T, op)
             if initT != init && initT != something(init)
-                throw(AssertionError("Currently, `init` is not supported on TPUs, provided value $init does not match identity $initT."))
+                throw(
+                    AssertionError(
+                        "Currently, `init` is not supported on TPUs, provided value $init does not match identity $initT.",
+                    ),
+                )
             end
         end
     end

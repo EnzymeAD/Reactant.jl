@@ -1292,39 +1292,39 @@ accum_fn(x, y) = abs2(x) + abs2(y)
     end
 
     if !contains(string(Reactant.devices()[1]), "TPU")
-    @testset "accumulate" begin
-        @test @jit(accumulate(accum_fn, a_ra; init=0.0f0)) ≈
-            accumulate(accum_fn, a; init=0.0f0)
+        @testset "accumulate" begin
+            @test @jit(accumulate(accum_fn, a_ra; init=0.0f0)) ≈
+                accumulate(accum_fn, a; init=0.0f0)
 
-        @test @jit(accumulate(accum_fn, b_ra; init=0.0f0, dims=1)) ≈
-            accumulate(accum_fn, b; dims=1, init=0.0f0)
-        @test @jit(accumulate(accum_fn, b_ra; init=0.0f0, dims=2)) ≈
-            accumulate(accum_fn, b; dims=2, init=0.0f0)
-        @test @jit(accumulate(accum_fn, b_ra; init=0.0f0, dims=3)) ≈
-            accumulate(accum_fn, b; dims=3, init=0.0f0)
+            @test @jit(accumulate(accum_fn, b_ra; init=0.0f0, dims=1)) ≈
+                accumulate(accum_fn, b; dims=1, init=0.0f0)
+            @test @jit(accumulate(accum_fn, b_ra; init=0.0f0, dims=2)) ≈
+                accumulate(accum_fn, b; dims=2, init=0.0f0)
+            @test @jit(accumulate(accum_fn, b_ra; init=0.0f0, dims=3)) ≈
+                accumulate(accum_fn, b; dims=3, init=0.0f0)
 
-        @test begin
-            z = similar(a_ra)
-            @jit(accumulate!(accum_fn, z, a_ra; init=0.0f0))
-            z
-        end ≈ accumulate(accum_fn, a; init=0.0f0)
+            @test begin
+                z = similar(a_ra)
+                @jit(accumulate!(accum_fn, z, a_ra; init=0.0f0))
+                z
+            end ≈ accumulate(accum_fn, a; init=0.0f0)
 
-        @test begin
-            z = similar(b_ra)
-            @jit(accumulate!(accum_fn, z, b_ra; init=0.0f0, dims=1))
-            z
-        end ≈ accumulate(accum_fn, b; dims=1, init=0.0f0)
-        @test begin
-            z = similar(b_ra)
-            @jit(accumulate!(accum_fn, z, b_ra; init=0.0f0, dims=2))
-            z
-        end ≈ accumulate(accum_fn, b; dims=2, init=0.0f0)
-        @test begin
-            z = similar(b_ra)
-            @jit(accumulate!(accum_fn, z, b_ra; init=0.0f0, dims=3))
-            z
-        end ≈ accumulate(accum_fn, b; dims=3, init=0.0f0)
-    end
+            @test begin
+                z = similar(b_ra)
+                @jit(accumulate!(accum_fn, z, b_ra; init=0.0f0, dims=1))
+                z
+            end ≈ accumulate(accum_fn, b; dims=1, init=0.0f0)
+            @test begin
+                z = similar(b_ra)
+                @jit(accumulate!(accum_fn, z, b_ra; init=0.0f0, dims=2))
+                z
+            end ≈ accumulate(accum_fn, b; dims=2, init=0.0f0)
+            @test begin
+                z = similar(b_ra)
+                @jit(accumulate!(accum_fn, z, b_ra; init=0.0f0, dims=3))
+                z
+            end ≈ accumulate(accum_fn, b; dims=3, init=0.0f0)
+        end
     end
 end
 
