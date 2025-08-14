@@ -4,7 +4,7 @@ NSYNC_COMMIT = "82b118aa7ace3132e517e2c467f8732978cf4023"
 
 NSYNC_SHA256 = ""
 
-ENZYMEXLA_COMMIT = "ced80ad0634e2f30f0d8bef2eaaff3cad1b97664"
+ENZYMEXLA_COMMIT = "a3a570dccbe5635f953dcfe2c1010360b759f7da"
 
 ENZYMEXLA_SHA256 = ""
 
@@ -83,6 +83,9 @@ sed -i.bak0 "1s/^/#define _USE_MATH_DEFINES\\n/g" xla/fp_util.h xla/hlo/builder/
 """,
     """
 sed -i.bak0 "s/Windows\\.h/windows\\.h/g" xla/tsl/platform/windows/port.cc xla/tsl/platform/windows/wide_char.cc xla/tsl/platform/windows/env.cc xla/tsl/platform/windows/windows_file_system.cc
+""",
+    """
+sed -i.bak0 "/D_FORTIFY_SOURCE/d" third_party/gpus/crosstool/cc_toolchain_config.bzl.tpl tools/toolchains/cross_compile/cc/BUILD tools/toolchains/clang6/CROSSTOOL.tpl
 """,
     """
 sed -i.bak0 "s/i64/LL/g" xla/tsl/platform/windows/env_time.cc
@@ -171,6 +174,20 @@ LLVM_TARGETS = [
 #         "https://github.com/facebook/zstd/releases/download/v1.5.2/zstd-1.5.2.tar.gz"
 #     ],
 # )
+
+http_archive(
+    name = "rules_ml_toolchain",
+    sha256 = "59d7eb36a02cbe3c2e2fa67fda5e8f1ab7e274bc4773bbd207c51fe199e11c19",
+    strip_prefix = "rules_ml_toolchain-ffd9e3d7b84e43c2686c803cb08ce790ffd58baa",
+    urls = [
+        "https://github.com/google-ml-infra/rules_ml_toolchain/archive/ffd9e3d7b84e43c2686c803cb08ce790ffd58baa.tar.gz",
+    ],
+    patch_cmds = [
+"""
+	sed -i.bak0 "/D_FORTIFY_SOURCE/d" cc/features/BUILD third_party/gpus/crosstool/cc_toolchain_config.bzl.tpl
+"""
+    ]
+)
 
 load("@enzyme_ad//third_party/jax:workspace.bzl", jax_workspace = "repo")
 

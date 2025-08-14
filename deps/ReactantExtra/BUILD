@@ -94,7 +94,6 @@ cc_toolchain_config(
         #"--ld-path=/opt/x86_64-linux-musl/bin/ld.lld",
         "--ld-path=/opt/bin/x86_64-linux-musl-cxx11/x86_64-linux-musl-ld.lld",
         "-stdlib=libstdc++",
-        "-static-libstdc++",
     ],
     link_libs = [
         "-lstdc++",
@@ -213,7 +212,6 @@ cc_toolchain_config(
     host_system_name = "linux",
     link_flags = [
         "-stdlib=libstdc++",
-        "-static-libstdc++",
     ],
     link_libs = [
         "-lstdc++",
@@ -222,7 +220,6 @@ cc_toolchain_config(
     opt_compile_flags = [
         "-g0",
         "-O2",
-        "-D_FORTIFY_SOURCE=1",
         "-DNDEBUG",
         "-ffunction-sections",
         "-fdata-sections",
