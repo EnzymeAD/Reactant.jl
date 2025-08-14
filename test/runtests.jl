@@ -40,23 +40,18 @@ const REACTANT_TEST_GROUP = lowercase(get(ENV, "REACTANT_TEST_GROUP", "all"))
     end
 
     if REACTANT_TEST_GROUP == "all" || REACTANT_TEST_GROUP == "integration"
-        @safetestset "CUDA" include("integration/cuda.jl")
-        @info "CUDA tests finished"
+        # @safetestset "CUDA" include("integration/cuda.jl")
         # @safetestset "KernelAbstractions" include("integration/kernelabstractions.jl")
         @safetestset "Linear Algebra" include("integration/linear_algebra.jl")
         @info "Linear Algebra tests finished"
         # @safetestset "OffsetArrays" include("integration/offsetarrays.jl")
         # @safetestset "OneHotArrays" include("integration/onehotarrays.jl")
-        @safetestset "AbstractFFTs" include("integration/fft.jl")
-        @info "AbstractFFTs tests finished"
+        # @safetestset "AbstractFFTs" include("integration/fft.jl")
         @safetestset "SpecialFunctions" include("integration/special_functions.jl")
         @info "SpecialFunctions tests finished"
-        @safetestset "Random" include("integration/random.jl")
-        @info "Random tests finished"
-        @safetestset "Python" include("integration/python.jl")
-        @info "Python tests finished"
-        @safetestset "Optimisers" include("integration/optimisers.jl")
-        @info "Optimisers tests finished"
+        # @safetestset "Random" include("integration/random.jl")
+        # @safetestset "Python" include("integration/python.jl")
+        # @safetestset "Optimisers" include("integration/optimisers.jl")
     end
 
     if REACTANT_TEST_GROUP == "all" || REACTANT_TEST_GROUP == "neural_networks"

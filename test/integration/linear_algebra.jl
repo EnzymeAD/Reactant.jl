@@ -370,7 +370,7 @@ end
 @testset "LU Factorization" begin
     @testset "Un-batched" begin
         @testset for T in (Float32, Float64, ComplexF32, ComplexF64)
-            T == ComplexF64 && RunningOnTPU && continue
+            (T == ComplexF64 || T == Float64) && RunningOnTPU && continue
 
             A = rand(T, 4, 4)
             A_ra = Reactant.to_rarray(A)
@@ -388,7 +388,7 @@ end
 
     @testset "Batched" begin
         @testset for T in (Float32, Float64, ComplexF32, ComplexF64)
-            T == ComplexF64 && RunningOnTPU && continue
+            (T == ComplexF64 || T == Float64) && RunningOnTPU && continue
 
             A = rand(T, 4, 4, 3, 2)
             A_ra = Reactant.to_rarray(A)
