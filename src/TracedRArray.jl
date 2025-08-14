@@ -1282,30 +1282,35 @@ function scan_impl!(
 
     dims > ndims(input) && return copyto!(output, input)
 
-    if init === nothing
-        op_in_T = Core.Compiler.return_type(op, Tuple{T,T})
-        op_in_T === Union{} && (op_in_T = T)
-        init = __default_init(T, op)
-        if typeof(init) != op_in_T
-            op_in_T = typeof(init)
-            input = typeof(init).(input)
-        end
-    else
-        # TODO: fix this for TPUs
-        if contains(string(first(Reactant.devices())), "TPU")
-            initT = __default_init(T, op)
-            if initT != init && initT != something(init)
-                throw(
-                    AssertionError(
-                        "Currently, `init` is not supported on TPUs, provided value $init does not match identity $initT.",
-                    ),
-                )
-            end
-        end
+    op_in_T = unwrapped_eltype(Core.Compiler.return_type(op, Tuple{T,T}))
+    reduce_init = __default_init(op_in_T, op)
+    if unwrapped_eltype(typeof(reduce_init)) != op_in_T
+        op_in_T = typeof(reduce_init)
+        input = typeof(reduce_init).(input)
     end
+    reduce_init = TracedUtils.promote_to(TracedRNumber{op_in_T}, reduce_init)
 
-    init = something(init) # unwrap Some
-    init = TracedUtils.promote_to(TracedRNumber{unwrapped_eltype(init)}, init)
+    # if init === nothing
+    #     op_in_T = Core.Compiler.return_type(op, Tuple{T,T})
+    #     op_in_T === Union{} && (op_in_T = T)
+    #     init = __default_init(T, op)
+    #     if typeof(init) != op_in_T
+    #         op_in_T = typeof(init)
+    #         input = typeof(init).(input)
+    #     end
+    # else
+    #     # TODO: fix this for TPUs
+    #     if contains(string(first(Reactant.devices())), "TPU")
+    #         initT = __default_init(T, op)
+    #         if initT != init && initT != something(init)
+    #             throw(
+    #                 AssertionError(
+    #                     "Currently, `init` is not supported on TPUs, provided value $init does not match identity $initT.",
+    #                 ),
+    #             )
+    #         end
+    #     end
+    # end
 
     window_dimensions = ones(Int64, N)
     window_dimensions[dims] = size(input, dims)
@@ -1316,15 +1321,15 @@ function scan_impl!(
     reduction_result = Ops.reduce_window(
         op,
         [materialize_traced_array(input)],
-        [init];
+        [reduce_init];
         window_dimensions=window_dimensions,
-        window_strides=ones(Int64, N),
-        base_dilations=ones(Int64, N),
-        window_dilations=ones(Int64, N),
         padding_low=padding_low,
-        padding_high=zeros(Int64, N),
         output_shape=collect(Int64, size(output)),
     )[1]
+
+    init = something(init) # unwrap Some
+    init = TracedUtils.promote_to(TracedRNumber{unwrapped_eltype(init)}, init)
+
     copyto!(output, reduction_result)
 
     return output

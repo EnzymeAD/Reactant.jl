@@ -3069,22 +3069,35 @@ end
     inputs::Vector{TracedRArray{T,N}},
     init_values::Vector{TracedRNumber{T}};
     window_dimensions::Vector{Int},
-    window_strides::Vector{Int},
-    base_dilations::Vector{Int},
-    window_dilations::Vector{Int},
-    padding_low::Vector{Int},
-    padding_high::Vector{Int},
+    window_strides::Union{Vector{Int},Nothing}=nothing,
+    base_dilations::Union{Vector{Int},Nothing}=nothing,
+    window_dilations::Union{Vector{Int},Nothing}=nothing,
+    padding_low::Union{Vector{Int},Nothing}=nothing,
+    padding_high::Union{Vector{Int},Nothing}=nothing,
     output_shape::Vector{Int},
     location=mlir_stacktrace("reduce_window", @__FILE__, @__LINE__),
 ) where {F,T,N}
     @assert length(inputs) == length(init_values)
-    @assert length(window_dimensions) ==
-        length(window_strides) ==
-        length(base_dilations) ==
-        length(window_dilations) ==
-        length(padding_low) ==
-        length(padding_high) ==
-        N
+    @assert length(window_dimensions) == N
+    window_strides !== nothing && @assert length(window_strides) == N
+    base_dilations !== nothing && @assert length(base_dilations) == N
+    window_dilations !== nothing && @assert length(window_dilations) == N
+    padding_low !== nothing && @assert length(padding_low) == N
+    padding_high !== nothing && @assert length(padding_high) == N
+
+    padding = if padding_low === nothing
+        if padding_high === nothing
+            nothing
+        else
+            MLIR.IR.DenseElementsAttribute(hcat(zeros(Int64, N), padding_high))
+        end
+    else
+        if padding_high === nothing
+            MLIR.IR.DenseElementsAttribute(hcat(padding_low, zeros(Int64, N)))
+        else
+            MLIR.IR.DenseElementsAttribute(hcat(padding_low, padding_high))
+        end
+    end
 
     reduction = stablehlo.reduce_window(
         [inp.mlir_data for inp in inputs],
@@ -3097,7 +3110,7 @@ end
         window_strides,
         base_dilations,
         window_dilations,
-        padding=MLIR.IR.DenseElementsAttribute(hcat(padding_low, padding_high)),
+        padding,
         body=_construct_reduce_function(f, T),
         location,
     )
