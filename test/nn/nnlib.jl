@@ -123,29 +123,34 @@ end
 end
 
 @testset "Batched Matrix Multiplication" begin
-    x = rand(Float32, 4, 3, 5)
-    y = rand(Float32, 3, 2, 5)
+    Reactant.with_config(;
+        convolution_precision=PrecisionConfig.HIGHEST,
+        dot_general_precision=PrecisionConfig.HIGHEST,
+    ) do
+        x = rand(Float32, 4, 3, 5)
+        y = rand(Float32, 3, 2, 5)
 
-    x_ra = Reactant.to_rarray(x)
-    y_ra = Reactant.to_rarray(y)
+        x_ra = Reactant.to_rarray(x)
+        y_ra = Reactant.to_rarray(y)
 
-    @test @jit(batched_mul(x_ra, y_ra)) ≈ batched_mul(x, y) atol = 1e-5 rtol = 1e-3
+        @test @jit(batched_mul(x_ra, y_ra)) ≈ batched_mul(x, y)
 
-    x = rand(Float32, 4, 3, 1)
-    y = rand(Float32, 3, 2, 5)
+        x = rand(Float32, 4, 3, 1)
+        y = rand(Float32, 3, 2, 5)
 
-    x_ra = Reactant.to_rarray(x)
-    y_ra = Reactant.to_rarray(y)
+        x_ra = Reactant.to_rarray(x)
+        y_ra = Reactant.to_rarray(y)
 
-    @test @jit(batched_mul(x_ra, y_ra)) ≈ batched_mul(x, y) atol = 1e-5 rtol = 1e-3
+        @test @jit(batched_mul(x_ra, y_ra)) ≈ batched_mul(x, y)
 
-    x = rand(Float32, 4, 3, 5)
-    y = rand(Float32, 3, 2, 1)
+        x = rand(Float32, 4, 3, 5)
+        y = rand(Float32, 3, 2, 1)
 
-    x_ra = Reactant.to_rarray(x)
-    y_ra = Reactant.to_rarray(y)
+        x_ra = Reactant.to_rarray(x)
+        y_ra = Reactant.to_rarray(y)
 
-    @test @jit(batched_mul(x_ra, y_ra)) ≈ batched_mul(x, y) atol = 1e-5 rtol = 1e-3
+        @test @jit(batched_mul(x_ra, y_ra)) ≈ batched_mul(x, y)
+    end
 end
 
 @testset "Constant Padding: NNlib.pad_constant" begin
@@ -649,16 +654,18 @@ end
     ) in Iterators.product(
         (0, 2), (1, 2), (1,), (1,)
     )
-        conv_dims = NNlib.DenseConvDims(x, w; padding, stride, dilation, groups)
+        Reactant.with_config(; convolution_precision=PrecisionConfig.HIGHEST) do
+            conv_dims = NNlib.DenseConvDims(x, w; padding, stride, dilation, groups)
 
-        output_size = (NNlib.output_size(conv_dims)..., n_out_features, batch_size)
-        dy = randn(Float32, output_size)
-        dy_reactant = Reactant.to_rarray(dy)
+            output_size = (NNlib.output_size(conv_dims)..., n_out_features, batch_size)
+            dy = randn(Float32, output_size)
+            dy_reactant = Reactant.to_rarray(dy)
 
-        @test @jit(NNlib.∇conv_data(dy_reactant, w_reactant, conv_dims)) ≈
-            NNlib.∇conv_data(dy, w, conv_dims) atol = 1e-5 rtol = 1e-3
-        @test @jit(NNlib.∇conv_filter(x_reactant, dy_reactant, conv_dims)) ≈
-            NNlib.∇conv_filter(x, dy, conv_dims) atol = 1e-5 rtol = 1e-3
+            @test @jit(NNlib.∇conv_data(dy_reactant, w_reactant, conv_dims)) ≈
+                NNlib.∇conv_data(dy, w, conv_dims)
+            @test @jit(NNlib.∇conv_filter(x_reactant, dy_reactant, conv_dims)) ≈
+                NNlib.∇conv_filter(x, dy, conv_dims)
+        end
     end
 end
 
@@ -704,12 +711,12 @@ end
 end
 
 @testset "Pixel shuffle" begin
-    x = [10i + j + channel / 10 for i in 1:2, j in 1:3, channel in 1:4, batch in 1:1]
+    x = Int32[10i + j + channel / 10 for i in 1:2, j in 1:3, channel in 1:4, batch in 1:1]
     x_ra = Reactant.to_rarray(x)
 
     @test @jit(NNlib.pixel_shuffle(x_ra, 2)) ≈ NNlib.pixel_shuffle(x, 2)
 
-    y = [i + channel / 10 for i in 1:3, channel in 1:6, batch in 1:1]
+    y = Int32[i + channel / 10 for i in 1:3, channel in 1:6, batch in 1:1]
     y_ra = Reactant.to_rarray(y)
 
     @test @jit(NNlib.pixel_shuffle(y_ra, 2)) ≈ NNlib.pixel_shuffle(y, 2)
