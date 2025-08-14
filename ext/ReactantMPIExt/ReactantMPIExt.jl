@@ -218,11 +218,39 @@ function __init__()
     end
 end
 
+
 mutable struct TracedRequest <: MPI.AbstractRequest
     mlir_data::Union{Nothing,Reactant.MLIR.IR.Value}
 end
 
+
 TracedRequest() = TracedRequest(nothing)
+
+
+Base.@nospecializeinfer function Reactant.make_tracer(
+    seen,
+    @nospecialize(prev::TracedRequest),
+    @nospecialize(path),
+    mode;
+    tobatch=nothing,
+    toscalar=false,
+    @nospecialize(sharding = Sharding.NoSharding()),
+    @nospecialize(runtime = nothing),
+    kwargs...,
+)
+    if mode == Reactant.TracedToConcrete
+        haskey(seen, prev) && return seen[prev]::MPI.Request
+        if !Sharding.is_sharded(sharding)
+            res = MPI.Request
+        else
+            error("you probably shouldnt be using sharding and mpi...")
+        end
+        seen[prev] = res
+        return res
+    end
+    throw("Trace mode $mode not implemented")
+end
+
 
 include("Ops.jl")
 include("Overrides.jl")
