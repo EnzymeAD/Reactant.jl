@@ -13,6 +13,7 @@ common --define=grpc_no_ares=true
 common --noenable_bzlmod
 
 build --copt=-DMLIR_CAPI_BUILDING_LIBRARY=1
+build --copt=-DMLIR_CAPI_ENABLE_WINDOWS_DLL_DECLSPEC=1
 
 build --repo_env=USE_PYWRAP_RULES=True
 build --copt=-DGRPC_BAZEL_BUILD
