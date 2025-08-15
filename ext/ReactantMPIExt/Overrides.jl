@@ -62,7 +62,7 @@ function MPI.Isend(
     dest::Integer, 
     tag::Integer, 
     comm::MPI.Comm, 
-    request::TracedRequest=TracedRequest()
+    request::TracedRequest=TracedRequest((), nothing)
 )
     tag = Reactant.Ops.constant(tag)
     dest = Reactant.Ops.constant(dest)

@@ -220,11 +220,24 @@ end
 
 
 mutable struct TracedRequest <: MPI.AbstractRequest
+    paths::Tuple
     mlir_data::Union{Nothing,Reactant.MLIR.IR.Value}
+
+    function TracedRequest(
+        paths::Tuple, mlir_data::Union{Nothing,Reactant.MLIR.IR.Value}
+    )
+        if !isnothing(mlir_data)
+            @assert size(Reactant.MLIR.IR.type(mlir_data)) == ()
+        end
+        return new(paths, mlir_data)
+    end
 end
 
-
-TracedRequest() = TracedRequest(nothing)
+# # presumably gonna have to write these at som epoint too
+# get_mlir_data(x::TracedRequest) = x.mlir_data
+# set_mlir_data!(x::TracedRequest, data) = (x.mlir_data = data; return x)
+get_paths(x::TracedRequest) = x.paths
+set_paths!(x::TracedRequest, paths) = (x.paths = paths; return x)
 
 
 Base.@nospecializeinfer function Reactant.make_tracer(
@@ -238,6 +251,14 @@ Base.@nospecializeinfer function Reactant.make_tracer(
     @nospecialize(runtime = nothing),
     kwargs...,
 )
+    println("IN make_tracer{TracedRequest}")
+    if mode == Reactant.NoStopTracedTrack
+        set_paths!(prev, (get_paths(prev)..., path))
+        if !haskey(seen, prev)
+            seen[prev] = prev # don't return!
+        end
+        return prev
+    end
     if mode == Reactant.TracedToConcrete
         haskey(seen, prev) && return seen[prev]::MPI.Request
         if !Sharding.is_sharded(sharding)
