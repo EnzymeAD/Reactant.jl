@@ -95,7 +95,7 @@ function XLA.compile(
                 Reactant.PersistentCompileCache.get_kernel_cache_path()::Cstring,
                 Reactant.PersistentCompileCache.autotune_cache_enabled()::Bool,
                 Reactant.PersistentCompileCache.get_autotune_cache_directory()::Cstring,
-                Reactant.Distributed.local_rank()::Cint
+                Reactant.Distributed.local_rank()::Cint,
             )::Ptr{Cvoid}
         end
     end
