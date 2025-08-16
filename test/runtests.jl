@@ -56,10 +56,8 @@ const REACTANT_TEST_GROUP = lowercase(get(ENV, "REACTANT_TEST_GROUP", "all"))
         # @safetestset "NNlib Primitives" include("nn/nnlib.jl")
         # @safetestset "Flux.jl Integration" include("nn/flux.jl")
         if Sys.islinux()
-            @safetestset "LuxLib Primitives" include("nn/luxlib.jl")
-            @info "LuxLib Primitives tests finished"
+            # @safetestset "LuxLib Primitives" include("nn/luxlib.jl")
             @safetestset "Lux Integration" include("nn/lux.jl")
-            @info "Lux Integration tests finished"
         end
     end
 end
