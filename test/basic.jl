@@ -1510,3 +1510,17 @@ end
         @test @jit(nested_mapreduce_hcat(x_ra, y_ra)) ≈ nested_mapreduce_hcat(x, y)
     end
 end
+
+@testset "compilation cache" begin
+    if Reactant.PersistentCompileCache.autotune_cache_enabled() &&
+        contains(string(Reactant.devices()[1]), "CUDA")
+        A = Reactant.to_rarray(rand(Float32, 2, 5))
+        B = Reactant.to_rarray(rand(Float32, 5, 1000))
+        @jit A * B # This should populate the cache dir
+
+        @test any(
+            endswith(".textproto"),
+            readdir(Reactant.PersistentCompileCache.get_autotune_cache_directory()),
+        )
+    end
+end
