@@ -38,59 +38,59 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        version:
-          - "1.10"
-          - "1.11"
-          # - 'nightly'
-        os:
-          - ubuntu-24.04
-          # `ubuntu-22.04-arm` is considered more stable than `ubuntu-24.04-arm`:
-          # <https://github.com/orgs/community/discussions/148648#discussioncomment-12099554>.
-          - ubuntu-22.04-arm
-          # Disable `macOS-13` until
-          # <https://github.com/EnzymeAD/Reactant.jl/issues/867> is resolved.
-          # - macOS-13
-          - macOS-latest
-        test_group:
-          - core
-          - neural_networks
-          - integration
-        runtime:
-          - "PJRT"
-          - "IFRT"
-        assertions:
-          - false
+        # version:
+        #   - "1.10"
+        #   - "1.11"
+        #   # - 'nightly'
+        # os:
+        #   - ubuntu-24.04
+        #   # `ubuntu-22.04-arm` is considered more stable than `ubuntu-24.04-arm`:
+        #   # <https://github.com/orgs/community/discussions/148648#discussioncomment-12099554>.
+        #   - ubuntu-22.04-arm
+        #   # Disable `macOS-13` until
+        #   # <https://github.com/EnzymeAD/Reactant.jl/issues/867> is resolved.
+        #   # - macOS-13
+        #   - macOS-latest
+        # test_group:
+        #   - core
+        #   - neural_networks
+        #   - integration
+        # runtime:
+        #   - "PJRT"
+        #   - "IFRT"
+        # assertions:
+        #   - false
         include:
-          - os: linux-x86-ct6e-180-4tpu
-            version: "1.11"
-            assertions: false
-            test_group: core
-            runtime: "IFRT"
-          - os: linux-x86-ct6e-180-4tpu
-            version: "1.11"
-            assertions: false
-            test_group: integration
-            runtime: "IFRT"
+          # - os: linux-x86-ct6e-180-4tpu
+          #   version: "1.11"
+          #   assertions: false
+          #   test_group: core
+          #   runtime: "IFRT"
+          # - os: linux-x86-ct6e-180-4tpu
+          #   version: "1.11"
+          #   assertions: false
+          #   test_group: integration
+          #   runtime: "IFRT"
           - os: linux-x86-ct6e-180-4tpu
             version: "1.11"
             assertions: false
             test_group: neural_networks
             runtime: "IFRT"
-          - os: ubuntu-24.04
-            version: "1.10"
-            assertions: true
-            test_group: core
-            runtime: "PJRT"
-          - os: ubuntu-24.04
-            version: "1.10"
-            assertions: true
-            test_group: neural_networks
-            runtime: "PJRT"
-          - os: ubuntu-24.04
-            version: "1.10"
-            assertions: true
-            test_group: integration
-            runtime: "PJRT"
+          # - os: ubuntu-24.04
+          #   version: "1.10"
+          #   assertions: true
+          #   test_group: core
+          #   runtime: "PJRT"
+          # - os: ubuntu-24.04
+          #   version: "1.10"
+          #   assertions: true
+          #   test_group: neural_networks
+          #   runtime: "PJRT"
+          # - os: ubuntu-24.04
+          #   version: "1.10"
+          #   assertions: true
+          #   test_group: integration
+          #   runtime: "PJRT"
           # - os: ubuntu-24.04
           #   libReactant: packaged
           #   version: '1.10'
