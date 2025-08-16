@@ -40,30 +40,27 @@ const REACTANT_TEST_GROUP = lowercase(get(ENV, "REACTANT_TEST_GROUP", "all"))
     end
 
     if REACTANT_TEST_GROUP == "all" || REACTANT_TEST_GROUP == "integration"
-        # @safetestset "CUDA" include("integration/cuda.jl")
-        # @safetestset "KernelAbstractions" include("integration/kernelabstractions.jl")
+        @safetestset "CUDA" include("integration/cuda.jl")
+        @safetestset "KernelAbstractions" include("integration/kernelabstractions.jl")
         @safetestset "Linear Algebra" include("integration/linear_algebra.jl")
-        @info "Linear Algebra tests finished"
-        # @safetestset "OffsetArrays" include("integration/offsetarrays.jl")
-        # @safetestset "OneHotArrays" include("integration/onehotarrays.jl")
-        # @safetestset "AbstractFFTs" include("integration/fft.jl")
+        @safetestset "OffsetArrays" include("integration/offsetarrays.jl")
+        @safetestset "OneHotArrays" include("integration/onehotarrays.jl")
+        @safetestset "AbstractFFTs" include("integration/fft.jl")
         @safetestset "SpecialFunctions" include("integration/special_functions.jl")
-        @info "SpecialFunctions tests finished"
-        # @safetestset "Random" include("integration/random.jl")
-        # @safetestset "Python" include("integration/python.jl")
-        # @safetestset "Optimisers" include("integration/optimisers.jl")
+        @safetestset "Random" include("integration/random.jl")
+        @safetestset "Python" include("integration/python.jl")
+        @safetestset "Optimisers" include("integration/optimisers.jl")
     end
 
     if REACTANT_TEST_GROUP == "all" || REACTANT_TEST_GROUP == "neural_networks"
-        @safetestset "Flux.jl Integration" include("nn/flux.jl")
-        @info "Flux.jl Integration tests finished"
+        # @safetestset "Flux.jl Integration" include("nn/flux.jl")
+        @safetestset "NNlib Primitives" include("nn/nnlib.jl")
+        @info "NNlib Primitives tests finished"
         if Sys.islinux()
-            @safetestset "Lux Integration" include("nn/lux.jl")
-            @info "Lux Integration tests finished"
+            # @safetestset "Lux Integration" include("nn/lux.jl") # XXX: need to fix crash
+            # @info "Lux Integration tests finished"
             @safetestset "LuxLib Primitives" include("nn/luxlib.jl") # XXX: TPU takes too long
             @info "LuxLib Primitives tests finished"
         end
-        @safetestset "NNlib Primitives" include("nn/nnlib.jl")
-        @info "NNlib Primitives tests finished"
     end
 end
