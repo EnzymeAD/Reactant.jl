@@ -22,7 +22,7 @@ function Base.getproperty(x::ReactantBackend, sym::Symbol)
     end
 end
 
-KA.allocate(n::ReactantBackend, ::Type{T}, dims::Tuple) where {T} = KA.zeros(b, T, dims)
+KA.allocate(b::ReactantBackend, ::Type{T}, dims::Tuple) where {T} = KA.zeros(b, T, dims)
 function KA.zeros(::ReactantBackend, ::Type{T}, dims::Tuple) where {T}
     return Reactant.to_rarray(zeros(T, dims))
 end
