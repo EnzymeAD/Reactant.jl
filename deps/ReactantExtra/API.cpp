@@ -240,23 +240,23 @@ REACTANT_ABI void ReactantHandleCuResult(uint32_t curesult) {
 // MLIR C-API extras
 #pragma region MLIR Extra
 REACTANT_ABI MlirAttribute mlirComplexAttrDoubleGet(MlirContext ctx,
-                                                  MlirType type, double real,
-                                                  double imag) {
+                                                    MlirType type, double real,
+                                                    double imag) {
   return wrap(
       complex::NumberAttr::get(cast<ComplexType>(unwrap(type)), real, imag));
 }
 
 REACTANT_ABI MlirAttribute mlirComplexAttrDoubleGetChecked(MlirLocation loc,
-                                                         MlirType type,
-                                                         double real,
-                                                         double imag) {
+                                                           MlirType type,
+                                                           double real,
+                                                           double imag) {
   return wrap(complex::NumberAttr::getChecked(
       unwrap(loc), cast<ComplexType>(unwrap(type)), real, imag));
 }
 
 REACTANT_ABI bool mlirOperationInject(MlirContext ctx, MlirBlock block,
-                                    MlirStringRef code, MlirLocation location,
-                                    bool verify_after_parse) {
+                                      MlirStringRef code, MlirLocation location,
+                                      bool verify_after_parse) {
   ParserConfig config(unwrap(ctx), verify_after_parse);
   if (failed(parseSourceString(unwrap(code), unwrap(block), config)))
     return false;
@@ -264,9 +264,9 @@ REACTANT_ABI bool mlirOperationInject(MlirContext ctx, MlirBlock block,
 }
 
 REACTANT_ABI MlirOperation mlirOperationParse(MlirContext ctx, MlirBlock block,
-                                            MlirStringRef code,
-                                            MlirLocation location,
-                                            bool verify_after_parse) {
+                                              MlirStringRef code,
+                                              MlirLocation location,
+                                              bool verify_after_parse) {
   ParserConfig config(unwrap(ctx), verify_after_parse);
   if (failed(parseSourceString(unwrap(code), unwrap(block), config)))
     return MlirOperation{nullptr};
@@ -292,14 +292,15 @@ REACTANT_ABI bool mlirIsFunctionOpInterface(MlirOperation op) {
 // wrap(complex::NumberAttr::getTypeID()); }
 
 REACTANT_ABI void ReactantFuncSetResultAttr(MlirOperation op, intptr_t pos,
-                                          MlirStringRef name,
-                                          MlirAttribute attr) {
+                                            MlirStringRef name,
+                                            MlirAttribute attr) {
   llvm::cast<mlir::FunctionOpInterface>(unwrap(op))
       .setResultAttr(pos, unwrap(name), unwrap(attr));
 }
 
 REACTANT_ABI void ReactantFuncSetArgAttr(MlirOperation op, intptr_t pos,
-                                       MlirStringRef name, MlirAttribute attr) {
+                                         MlirStringRef name,
+                                         MlirAttribute attr) {
   llvm::cast<mlir::FunctionOpInterface>(unwrap(op))
       .setArgAttr(pos, unwrap(name), unwrap(attr));
 }
@@ -382,7 +383,7 @@ CreateProfilerSession(uint32_t device_tracer_level,
 }
 
 REACTANT_ABI void ProfilerSessionCollectData(tsl::ProfilerSession *session,
-                                           const char *path) {
+                                             const char *path) {
   tensorflow::profiler::XSpace xspace;
   auto status = session->CollectData(&xspace);
   if (!status.ok())
@@ -487,8 +488,8 @@ MakeGPUClient(int node_id, int num_nodes, int64_t *allowed_devices,
 const char *const kEnvTpuLibraryPath = "TPU_LIBRARY_PATH";
 
 REACTANT_ABI const PJRT_Api *LoadPjrtPlugin(const char *device_type,
-                                          const char *library_path,
-                                          const char **error) {
+                                            const char *library_path,
+                                            const char **error) {
   absl::StatusOr<const PJRT_Api *> pluginLoad =
       pjrt::LoadPjrtPlugin(std::string(device_type), std::string(library_path));
   if (!pluginLoad.ok()) {
@@ -502,7 +503,7 @@ REACTANT_ABI const PJRT_Api *LoadPjrtPlugin(const char *device_type,
 }
 
 REACTANT_ABI int InitializePjrtPlugin(const char *device_type,
-                                    const char **error) {
+                                      const char **error) {
   absl::Status tpu_status = pjrt::InitializePjrtPlugin(device_type);
   if (!tpu_status.ok()) {
     auto str = tpu_status.message();
@@ -523,9 +524,9 @@ REACTANT_ABI void pjrt_client_register_profiler(const PJRT_Api *api) {
 }
 
 REACTANT_ABI PjRtClient *MakeClientUsingPluginAPI(const char *device_type,
-                                                const char *library_path,
-                                                const char *client_name,
-                                                const char **error) {
+                                                  const char *library_path,
+                                                  const char *client_name,
+                                                  const char **error) {
   const PJRT_Api *pluginLoad = LoadPjrtPlugin(device_type, library_path, error);
   if (pluginLoad == nullptr)
     return nullptr;
@@ -536,7 +537,8 @@ REACTANT_ABI PjRtClient *MakeClientUsingPluginAPI(const char *device_type,
   return GetCApiClient(client_name);
 }
 
-REACTANT_ABI PjRtClient *MakeTPUClient(const char *tpu_path, const char **error) {
+REACTANT_ABI PjRtClient *MakeTPUClient(const char *tpu_path,
+                                       const char **error) {
   // Prefer $TPU_LIBRARY_PATH if set
   std::string tpu_library_path;
   if (auto path = llvm::sys::Process::GetEnv(kEnvTpuLibraryPath)) {
@@ -569,7 +571,7 @@ REACTANT_ABI PjRtDevice *ClientGetDevice(PjRtClient *client, int device_id) {
 }
 
 REACTANT_ABI PjRtDevice *ClientGetAddressableDevice(PjRtClient *client,
-                                                  int device_id) {
+                                                    int device_id) {
   return MyValueOrThrow(
       client->LookupAddressableDevice(PjRtLocalDeviceId(device_id)));
 }
@@ -582,7 +584,8 @@ REACTANT_ABI const char *DeviceGetKind(PjRtDevice *device) {
   return cstr_from_string(device->device_kind());
 }
 
-REACTANT_ABI void ClientGetDevices(PjRtClient *client, PjRtDevice **out_devices) {
+REACTANT_ABI void ClientGetDevices(PjRtClient *client,
+                                   PjRtDevice **out_devices) {
   auto span = client->devices();
   for (int i = 0; i < span.size(); i++) {
     out_devices[i] = span[i];
@@ -590,7 +593,7 @@ REACTANT_ABI void ClientGetDevices(PjRtClient *client, PjRtDevice **out_devices)
 }
 
 REACTANT_ABI void ClientGetAddressableDevices(PjRtClient *client,
-                                            PjRtDevice **out_devices) {
+                                              PjRtDevice **out_devices) {
   auto span = client->addressable_devices();
   for (int i = 0; i < span.size(); i++) {
     out_devices[i] = span[i];
@@ -613,7 +616,7 @@ struct JLAllocatorStats {
 };
 
 REACTANT_ABI void PjRtDeviceGetAllocatorStats(PjRtDevice *device,
-                                            JLAllocatorStats *jlstats) {
+                                              JLAllocatorStats *jlstats) {
   auto stats = MyValueOrThrow(device->GetAllocatorStats());
   int64_t optnull = std::numeric_limits<int64_t>::min();
 
@@ -632,7 +635,7 @@ REACTANT_ABI void PjRtDeviceGetAllocatorStats(PjRtDevice *device,
 }
 
 REACTANT_ABI void ifrt_device_get_allocator_stats(ifrt::Device *device,
-                                                JLAllocatorStats *jlstats) {
+                                                  JLAllocatorStats *jlstats) {
   if (!llvm::isa<ifrt::PjRtDevice>(device)) {
     ReactantThrowError(
         "ifrt_device_get_allocator_stats: only supported for ifrt-pjrt.");
@@ -641,7 +644,9 @@ REACTANT_ABI void ifrt_device_get_allocator_stats(ifrt::Device *device,
   PjRtDeviceGetAllocatorStats(ifrt_pjrt_device->pjrt_device(), jlstats);
 }
 
-REACTANT_ABI void ExecutableFree(xla::PjRtLoadedExecutable *exec) { delete exec; }
+REACTANT_ABI void ExecutableFree(xla::PjRtLoadedExecutable *exec) {
+  delete exec;
+}
 
 REACTANT_ABI PjRtDevice *BufferToDevice(PjRtBuffer *Buffer) {
   return Buffer->device();
@@ -688,8 +693,8 @@ std::vector<int64_t> col_major(int64_t dim) {
 }
 
 REACTANT_ABI void ReactantLLVMParseCommandLineOptions(int argc,
-                                                    const char *const *argv,
-                                                    const char *Overview) {
+                                                      const char *const *argv,
+                                                      const char *Overview) {
   llvm::cl::ParseCommandLineOptions(argc, argv, StringRef(Overview),
                                     &llvm::nulls());
 }
@@ -721,8 +726,8 @@ REACTANT_ABI void *UnsafeBufferPointer(PjRtBuffer *buffer) {
   return (void *)unsafe;
 }
 
-REACTANT_ABI void CopyToBuffer(PjRtClient *client, PjRtBuffer *buffer, void *data,
-                             size_t offset, size_t size) {
+REACTANT_ABI void CopyToBuffer(PjRtClient *client, PjRtBuffer *buffer,
+                               void *data, size_t offset, size_t size) {
   if (buffer->IsOnCpu()) {
     auto unsafe =
         (char *)MyValueOrThrow(buffer->client()->UnsafeBufferPointer(buffer));
@@ -768,7 +773,7 @@ REACTANT_ABI void CopyToBuffer(PjRtClient *client, PjRtBuffer *buffer, void *dat
 }
 
 REACTANT_ABI void CopyFromBuffer(PjRtClient *client, PjRtBuffer *buffer,
-                               void *data, size_t offset, size_t size) {
+                                 void *data, size_t offset, size_t size) {
   auto future = buffer->CopyRawToHost(data, offset, size);
   future.Await();
 #if 0
@@ -803,9 +808,10 @@ REACTANT_ABI void CopyFromBuffer(PjRtClient *client, PjRtBuffer *buffer,
 #endif
 }
 
-REACTANT_ABI PjRtBuffer *UninitPJRTBuffer(PjRtClient *client, PjRtDevice *device,
-                                        uint64_t ptype, uint64_t shapeLen,
-                                        uint64_t *__restrict__ shape) {
+REACTANT_ABI PjRtBuffer *UninitPJRTBuffer(PjRtClient *client,
+                                          PjRtDevice *device, uint64_t ptype,
+                                          uint64_t shapeLen,
+                                          uint64_t *__restrict__ shape) {
   auto memory_space = *device->default_memory_space();
   xla::Shape xlashape(
       (xla::PrimitiveType)ptype,
@@ -816,9 +822,9 @@ REACTANT_ABI PjRtBuffer *UninitPJRTBuffer(PjRtClient *client, PjRtDevice *device
 }
 
 REACTANT_ABI PjRtBuffer *ArrayFromHostBuffer(PjRtClient *client, void *data,
-                                           uint64_t ptype, size_t dim,
-                                           int64_t *cshape,
-                                           PjRtDevice *device) {
+                                             uint64_t ptype, size_t dim,
+                                             int64_t *cshape,
+                                             PjRtDevice *device) {
   auto primtype = (xla::PrimitiveType)ptype;
   absl::Span<const int64_t> shape(cshape, dim);
   PjRtClient::HostBufferSemantics semantics =
@@ -835,10 +841,12 @@ REACTANT_ABI PjRtBuffer *ArrayFromHostBuffer(PjRtClient *client, void *data,
   return bres;
 }
 
-REACTANT_ABI uint8_t BufferOnCPU(PjRtBuffer *buffer) { return buffer->IsOnCpu(); }
+REACTANT_ABI uint8_t BufferOnCPU(PjRtBuffer *buffer) {
+  return buffer->IsOnCpu();
+}
 
 REACTANT_ABI PjRtBuffer *CopyBufferToDevice(PjRtBuffer *buffer,
-                                          PjRtDevice *dst_device) {
+                                            PjRtDevice *dst_device) {
   auto res = MyValueOrThrow(
       buffer->CopyToMemorySpace(*dst_device->default_memory_space()));
   return res.release();
@@ -873,13 +881,14 @@ REACTANT_ABI int64_t PjRtDeviceGetLocalHardwareId(PjRtDevice *device) {
 
 #include "xla/service/custom_call_target_registry.h"
 REACTANT_ABI void RegisterCustomCallTarget(const char *name, void *address,
-                                         const char *platform) {
+                                           const char *platform) {
   CustomCallTargetRegistry::Global()->Register(std::string(name), address,
                                                std::string(platform));
 }
 
 #include "mlir/Target/LLVMIR/Import.h"
-REACTANT_ABI MlirModule ConvertLLVMToMLIR(LLVMModuleRef lmod, MlirContext cctx) {
+REACTANT_ABI MlirModule ConvertLLVMToMLIR(LLVMModuleRef lmod,
+                                          MlirContext cctx) {
   auto llvmModule = std::unique_ptr<llvm::Module>(llvm::unwrap(lmod));
   mlir::MLIRContext &context = *unwrap(cctx);
 
@@ -891,7 +900,8 @@ REACTANT_ABI MlirModule ConvertLLVMToMLIR(LLVMModuleRef lmod, MlirContext cctx) 
 }
 
 #include "llvm/IRReader/IRReader.h"
-REACTANT_ABI MlirModule ConvertLLVMStrToMLIR(const char *lmod, MlirContext cctx) {
+REACTANT_ABI MlirModule ConvertLLVMStrToMLIR(const char *lmod,
+                                             MlirContext cctx) {
   llvm::LLVMContext Context;
   llvm::SMDiagnostic Err;
   auto llvmModule =
@@ -932,10 +942,34 @@ xla::CompileOptions
 GenerateCompileOptions(int64_t device_id, const int64_t *mesh_ids,
                        int64_t num_mesh_ids, const char *xla_gpu_cuda_data_dir,
                        bool use_shardy_partitioner, int64_t num_replicas,
-                       int64_t num_partitions, bool use_spmd_partitioning) {
+                       int64_t num_partitions, bool use_spmd_partitioning,
+                       bool kernel_cache_enabled, const char *kernel_cache_path,
+                       bool autotune_cache_enabled,
+                       const char *autotune_cache_path, int process_id) {
   xla::CompileOptions options;
-  options.executable_build_options.mutable_debug_options()
-      ->set_xla_gpu_cuda_data_dir(xla_gpu_cuda_data_dir);
+  auto debug_options = options.executable_build_options.mutable_debug_options();
+
+  debug_options->set_xla_gpu_cuda_data_dir(xla_gpu_cuda_data_dir);
+
+  if (kernel_cache_enabled) {
+    debug_options->set_xla_gpu_kernel_cache_file(kernel_cache_path);
+    debug_options->set_xla_gpu_enable_llvm_module_compilation_parallelism(true);
+  }
+
+  if (autotune_cache_enabled) {
+    debug_options->set_xla_gpu_per_fusion_autotune_cache_dir(
+        autotune_cache_path);
+
+    if (process_id <= 0) {
+      debug_options->set_xla_gpu_experimental_autotune_cache_mode(
+          xla::DebugOptions::AutotuneCacheMode::
+              DebugOptions_AutotuneCacheMode_AUTOTUNE_CACHE_MODE_UPDATE);
+    } else {
+      debug_options->set_xla_gpu_experimental_autotune_cache_mode(
+          xla::DebugOptions::AutotuneCacheMode::
+              DebugOptions_AutotuneCacheMode_AUTOTUNE_CACHE_MODE_READ);
+    }
+  }
 
   options.executable_build_options.set_num_replicas(num_replicas);
   options.executable_build_options.set_num_partitions(num_partitions);
@@ -997,11 +1031,14 @@ ClientCompile(PjRtClient *client, MlirModule cmod, int64_t device_id,
               const int64_t *mesh_ids, int64_t num_mesh_ids,
               const char *xla_gpu_cuda_data_dir, bool use_shardy_partitioner,
               int64_t num_replicas, int64_t num_partitions,
-              bool use_spmd_partitioning) {
-  CompileOptions options = GenerateCompileOptions(
+              bool use_spmd_partitioning, bool kernel_cache_enabled,
+              const char *kernel_cache_path, bool autotune_cache_enabled,
+              const char *autotune_cache_path, int process_id) {
+  xla::CompileOptions options = GenerateCompileOptions(
       device_id, mesh_ids, num_mesh_ids, xla_gpu_cuda_data_dir,
       use_shardy_partitioner, num_replicas, num_partitions,
-      use_spmd_partitioning);
+      use_spmd_partitioning, kernel_cache_enabled, kernel_cache_path,
+      autotune_cache_enabled, autotune_cache_path, process_id);
 
   mlir::ModuleOp cmod_op = cast<ModuleOp>(*unwrap(cmod));
 
@@ -1072,11 +1109,12 @@ PjRtLoadedExecutableGetParameterShardings(xla::PjRtLoadedExecutable *exec,
   }
 }
 
-REACTANT_ABI void XLAExecuteSharded(xla::PjRtLoadedExecutable *exec, int num_args,
-                                  PjRtBuffer **op_args, PjRtDevice *device,
-                                  uint8_t *is_arg_donatable, int num_results,
-                                  PjRtBuffer **op_results, uint8_t *futures,
-                                  FutureType **future_results) {
+REACTANT_ABI void XLAExecuteSharded(xla::PjRtLoadedExecutable *exec,
+                                    int num_args, PjRtBuffer **op_args,
+                                    PjRtDevice *device,
+                                    uint8_t *is_arg_donatable, int num_results,
+                                    PjRtBuffer **op_results, uint8_t *futures,
+                                    FutureType **future_results) {
   // Create a vector of PjRtBuffer* from the input array.
   std::vector<PjRtBuffer *> argument_handles(op_args, op_args + num_args);
 
@@ -1141,9 +1179,9 @@ void PrintPjRtBuffer(PjRtBuffer *buffer) {
 }
 
 REACTANT_ABI void XLAExecute(xla::PjRtLoadedExecutable *exec, int op_args_len,
-                           PjRtBuffer **op_args, uint8_t *is_arg_donatable,
-                           int num_results, PjRtBuffer **op_results,
-                           uint8_t *futures, FutureType **future_results) {
+                             PjRtBuffer **op_args, uint8_t *is_arg_donatable,
+                             int num_results, PjRtBuffer **op_results,
+                             uint8_t *futures, FutureType **future_results) {
   xla::DeviceAssignment device_assignment = exec->device_assignment();
   int num_devices = device_assignment.computation_count();
 
@@ -1310,7 +1348,7 @@ static mlir::LogicalResult updateSymbolAndAllUses(mlir::SymbolOpInterface op,
 }
 
 REACTANT_ABI MlirOperation LinkInModule(MlirModule prevModC, MlirModule newModC,
-                                      const char *entryfn) {
+                                        const char *entryfn) {
   auto prevMod = cast<ModuleOp>(*unwrap(prevModC));
   auto newMod = cast<ModuleOp>(*unwrap(newModC));
 
@@ -1360,7 +1398,7 @@ REACTANT_ABI int pjrt_client_pid(HeldPjRtClient *client) {
 }
 
 REACTANT_ABI PjRtDevice *pjrt_client_get_device(HeldPjRtClient *client,
-                                              int device_id) {
+                                                int device_id) {
   return ClientGetDevice(client->ptr(), device_id);
 }
 
@@ -1380,9 +1418,9 @@ REACTANT_ABI const char *pjrt_client_platform_name(HeldPjRtClient *client) {
 // }
 
 REACTANT_ABI HeldPjRtBuffer *pjrt_buffer_from_host(HeldPjRtClient *client,
-                                                 void *data, uint64_t ptype,
-                                                 size_t dim, int64_t *cshape,
-                                                 PjRtDevice *device) {
+                                                   void *data, uint64_t ptype,
+                                                   size_t dim, int64_t *cshape,
+                                                   PjRtDevice *device) {
   PjRtBuffer *buffer =
       ArrayFromHostBuffer(client->ptr(), data, ptype, dim, cshape, device);
   return reactant::capture(std::shared_ptr<PjRtBuffer>(buffer));
@@ -1398,8 +1436,8 @@ REACTANT_ABI bool pjrt_buffer_is_on_cpu(HeldPjRtBuffer *buffer) {
   return buffer->ptr()->IsOnCpu();
 }
 
-REACTANT_ABI HeldPjRtBuffer *pjrt_buffer_copy_to_device(HeldPjRtBuffer *buffer,
-                                                      PjRtDevice *dst_device) {
+REACTANT_ABI HeldPjRtBuffer *
+pjrt_buffer_copy_to_device(HeldPjRtBuffer *buffer, PjRtDevice *dst_device) {
   PjRtBuffer *ret = CopyBufferToDevice(buffer->ptr(), dst_device);
   return reactant::capture(std::shared_ptr<PjRtBuffer>(ret));
 }
@@ -1437,11 +1475,11 @@ REACTANT_ABI HeldIfrtArray *ifrt_client_make_array_from_host_buffer(
       data, dtype, shape,
       std::nullopt, // byte_strides
       sharding->obj(),
-      static_cast<ifrt::Client::HostBufferSemantics>(c_semantics),
-      [] {})));
+      static_cast<ifrt::Client::HostBufferSemantics>(c_semantics), [] {})));
 }
 
-REACTANT_ABI HeldIfrtArray *ifrt_client_make_single_shard_array_from_host_buffer(
+REACTANT_ABI HeldIfrtArray *
+ifrt_client_make_single_shard_array_from_host_buffer(
     ifrt::Client *client, void *data,
     int dtype_kind, // int
     int ndims, const int64_t *c_shape, int c_semantics, ifrt::Device *device,
@@ -1487,11 +1525,14 @@ ifrt_compile(ifrt::Client *client, MlirModule cmod, int64_t device_id,
              const int64_t *mesh_ids, int64_t num_mesh_ids,
              const char *xla_gpu_cuda_data_dir, bool use_shardy_partitioner,
              int64_t num_replicas, int64_t num_partitions,
-             bool use_spmd_partitioning) {
+             bool use_spmd_partitioning, bool kernel_cache_enabled,
+             const char *kernel_cache_path, bool autotune_cache_enabled,
+             const char *autotune_cache_path, int process_id) {
   xla::CompileOptions compile_options = GenerateCompileOptions(
       device_id, mesh_ids, num_mesh_ids, xla_gpu_cuda_data_dir,
       use_shardy_partitioner, num_replicas, num_partitions,
-      use_spmd_partitioning);
+      use_spmd_partitioning, kernel_cache_enabled, kernel_cache_path,
+      autotune_cache_enabled, autotune_cache_path, process_id);
   xla::ifrt::DeviceListRef devices = MyValueOrThrow(
       xla::ifrt::GetDeviceListFromXlaCompileOptions(client, compile_options));
   auto options = std::make_unique<xla::ifrt::XlaCompileOptions>(
@@ -1543,7 +1584,9 @@ REACTANT_ABI const char *HloModuleToString(HeldHloModule *hlo_module) {
   return cstr_from_string(hlo_module->obj()->ToString());
 }
 
-REACTANT_ABI void FreeHloModule(HeldHloModule *hlo_module) { delete hlo_module; }
+REACTANT_ABI void FreeHloModule(HeldHloModule *hlo_module) {
+  delete hlo_module;
+}
 
 #pragma region IfRtClient
 
@@ -1672,7 +1715,7 @@ REACTANT_ABI ifrt::Client *ifrt_pjrt_make_client(
 REACTANT_ABI ifrt::Client *ifrt_pjrt_make_client_with_default_kv_store(
     PjRtClient *pjrt_client, int node_id, int num_nodes,
     void *distributed_runtime_client, const char **error,
-    const char* key_prefix) {
+    const char *key_prefix) {
   std::optional<std::shared_ptr<KeyValueStoreInterface>> kv_store;
   return ifrt_pjrt_make_client(pjrt_client, node_id, num_nodes,
                                distributed_runtime_client, error, key_prefix,
@@ -1779,7 +1822,7 @@ REACTANT_ABI int ifrt_client_addressable_device_count(ifrt::Client *client) {
 }
 
 REACTANT_ABI void ifrt_client_devices(ifrt::Client *client,
-                                    ifrt::Device **out_devices) {
+                                      ifrt::Device **out_devices) {
   auto span = client->devices();
   for (int i = 0; i < span.size(); i++) {
     out_devices[i] = span[i];
@@ -1787,7 +1830,7 @@ REACTANT_ABI void ifrt_client_devices(ifrt::Client *client,
 }
 
 REACTANT_ABI void ifrt_client_addressable_devices(ifrt::Client *client,
-                                                ifrt::Device **out_devices) {
+                                                  ifrt::Device **out_devices) {
   auto span = client->addressable_devices();
   for (int i = 0; i < span.size(); i++) {
     out_devices[i] = span[i];
@@ -1795,7 +1838,7 @@ REACTANT_ABI void ifrt_client_addressable_devices(ifrt::Client *client,
 }
 
 REACTANT_ABI void ifrt_client_all_devices(ifrt::Client *client,
-                                        ifrt::Device **out_devices) {
+                                          ifrt::Device **out_devices) {
   auto span = client->GetAllDevices();
   for (int i = 0; i < span.size(); i++) {
     out_devices[i] = span[i];
@@ -1803,7 +1846,7 @@ REACTANT_ABI void ifrt_client_all_devices(ifrt::Client *client,
 }
 
 REACTANT_ABI ifrt::Device *ifrt_client_lookup_device(ifrt::Client *client,
-                                                   int dev_id) {
+                                                     int dev_id) {
   return MyValueOrThrow(
       client->LookupDevice(static_cast<ifrt::DeviceId>(dev_id)));
 }
@@ -1826,7 +1869,7 @@ REACTANT_ABI ifrt::Device *ifrt_ClientGetDevice(ifrt::Client *client, int idx) {
 }
 
 REACTANT_ABI ifrt::Device *ifrt_ClientGetAddressableDevice(ifrt::Client *client,
-                                                         int idx) {
+                                                           int idx) {
   return MyValueOrThrow(client->LookupAddressableDevice(idx));
 }
 
@@ -1863,7 +1906,7 @@ REACTANT_ABI ifrt::Memory *ifrt_DeviceGetDefaultMemory(ifrt::Device *device) {
 }
 
 REACTANT_ABI ifrt::Memory **ifrt_DeviceGetMemories(ifrt::Device *device,
-                                                 int32_t *size) {
+                                                   int32_t *size) {
   auto memory_list = device->Memories();
   *size = memory_list.size();
   return const_cast<ifrt::Memory **>(memory_list.data());
@@ -1878,7 +1921,8 @@ REACTANT_ABI const char *ifrt_MemoryToString(ifrt::Memory *memory) {
   return cstr_from_string(memory->ToString());
 }
 
-REACTANT_ABI const char *ifrt_MemoryKindToString(ifrt::MemoryKind *memory_kind) {
+REACTANT_ABI const char *
+ifrt_MemoryKindToString(ifrt::MemoryKind *memory_kind) {
   auto memkind = memory_kind->memory_kind();
   if (!memkind.has_value())
     return "";
@@ -1886,7 +1930,7 @@ REACTANT_ABI const char *ifrt_MemoryKindToString(ifrt::MemoryKind *memory_kind) 
 }
 
 REACTANT_ABI bool ifrt_MemoryKindsAreEqual(ifrt::MemoryKind *a,
-                                         ifrt::MemoryKind *b) {
+                                           ifrt::MemoryKind *b) {
   return *a == *b;
 }
 
@@ -1908,7 +1952,8 @@ op_sharding_to_shard_group_type(xla::OpSharding *op_sharding) {
   return static_cast<int32_t>(op_sharding->shard_group_type());
 }
 
-REACTANT_ABI int32_t op_sharding_to_shard_group_id(xla::OpSharding *op_sharding) {
+REACTANT_ABI int32_t
+op_sharding_to_shard_group_id(xla::OpSharding *op_sharding) {
   return static_cast<int32_t>(op_sharding->shard_group_id());
 }
 
@@ -1931,7 +1976,7 @@ op_sharding_last_tile_dims_size(xla::OpSharding *op_sharding) {
 }
 
 REACTANT_ABI void op_sharding_last_tile_dims(xla::OpSharding *op_sharding,
-                                           int32_t *last_tile_dims) {
+                                             int32_t *last_tile_dims) {
   std::vector<int32_t> last_tile_dims_vec(op_sharding->last_tile_dims().begin(),
                                           op_sharding->last_tile_dims().end());
   std::copy(last_tile_dims_vec.begin(), last_tile_dims_vec.end(),
@@ -1950,7 +1995,7 @@ op_sharding_iota_reshape_dims_size(xla::OpSharding *op_sharding) {
 }
 
 REACTANT_ABI void op_sharding_iota_reshape_dims(xla::OpSharding *op_sharding,
-                                              int32_t *iota_reshape_dims) {
+                                                int32_t *iota_reshape_dims) {
   std::vector<int32_t> iota_reshape_dims_vec(
       op_sharding->iota_reshape_dims().begin(),
       op_sharding->iota_reshape_dims().end());
@@ -1969,8 +2014,9 @@ op_sharding_iota_transpose_perm_size(xla::OpSharding *op_sharding) {
   return static_cast<int32_t>(op_sharding->iota_transpose_perm_size());
 }
 
-REACTANT_ABI void op_sharding_iota_transpose_perm(xla::OpSharding *op_sharding,
-                                                int32_t *iota_transpose_perm) {
+REACTANT_ABI void
+op_sharding_iota_transpose_perm(xla::OpSharding *op_sharding,
+                                int32_t *iota_transpose_perm) {
   std::vector<int32_t> iota_transpose_perm_vec(
       op_sharding->iota_transpose_perm().begin(),
       op_sharding->iota_transpose_perm().end());
@@ -2093,7 +2139,8 @@ ifrt_sharding_is_single_device_sharding(HeldIfrtSharding *sharding) {
   return llvm::isa<const ifrt::SingleDeviceSharding>(sharding->obj().get());
 }
 
-REACTANT_ABI bool ifrt_sharding_is_fully_replicated(HeldIfrtSharding *sharding) {
+REACTANT_ABI bool
+ifrt_sharding_is_fully_replicated(HeldIfrtSharding *sharding) {
   return sharding->obj()->IsFullyReplicated();
 }
 
@@ -2106,7 +2153,7 @@ REACTANT_ABI int32_t ifrt_sharding_devices_size(HeldIfrtSharding *sharding) {
 }
 
 REACTANT_ABI void ifrt_sharding_to_device_list(HeldIfrtSharding *sharding,
-                                             ifrt::Device **devices) {
+                                               ifrt::Device **devices) {
   auto device_list = sharding->obj()->devices()->devices();
   for (int i = 0; i < device_list.size(); i++) {
     devices[i] = device_list[i];
@@ -2114,10 +2161,10 @@ REACTANT_ABI void ifrt_sharding_to_device_list(HeldIfrtSharding *sharding,
 }
 
 REACTANT_ABI void ifrt_sharding_to_index_domains(HeldIfrtSharding *sharding,
-                                               int64_t *array_size_list,
-                                               int32_t array_size_len,
-                                               int64_t *index_domain_origins,
-                                               int64_t *index_domain_shapes) {
+                                                 int64_t *array_size_list,
+                                                 int32_t array_size_len,
+                                                 int64_t *index_domain_origins,
+                                                 int64_t *index_domain_shapes) {
   std::vector<int64_t> array_size(array_size_len);
   for (int i = 0; i < array_size_len; i++) {
     array_size[i] = array_size_list[i];
@@ -2199,7 +2246,7 @@ hlo_sharding_tile_assignment_devices(xla::HloSharding *hloSharding,
 }
 
 REACTANT_ABI bool hlo_sharding_check_eq(xla::HloSharding *hloSharding,
-                                      xla::HloSharding *other) {
+                                        xla::HloSharding *other) {
   return *hloSharding == *other;
 }
 
@@ -2245,7 +2292,7 @@ ifrt_array_to_sharding(HeldIfrtArray *array) {
 }
 
 REACTANT_ABI void ifrt_array_copy_to_host_buffer(HeldIfrtArray *array,
-                                               void *data) {
+                                                 void *data) {
   std::optional<absl::Span<const int64_t>> byte_strides;
   auto future = array->obj()->CopyToHostBuffer(
       data, byte_strides, static_cast<ifrt::ArrayCopySemantics>(0));
@@ -2582,7 +2629,8 @@ REACTANT_ABI bool pjrt_device_is_addressable(PjRtDevice *device) {
   return device->IsAddressable();
 }
 
-REACTANT_ABI mlir::Operation *mlirGetParentOfTypeFunctionOp(mlir::Operation *op) {
+REACTANT_ABI mlir::Operation *
+mlirGetParentOfTypeFunctionOp(mlir::Operation *op) {
   return op->getParentOfType<mlir::FunctionOpInterface>();
 }
 
@@ -2735,8 +2783,8 @@ struct LinkableRuntime {
         client = MakeTPUClient(nullptr, &error);
         if (error) {
           llvm::errs() << " error: " << error << "\n";
-	  exit(1);
-	}
+          exit(1);
+        }
       }
     } else if (backend == "xla-gpu") {
       int node_id = 0;
@@ -2753,7 +2801,7 @@ struct LinkableRuntime {
                              platform, &refstr, distributed_runtime_client);
       if (!client) {
         llvm::errs() << " error: " << refstr << "\n";
-	exit(1);
+        exit(1);
       }
       assert(client);
       // Weird stream issue in freeing cuda client.
@@ -2790,7 +2838,7 @@ REACTANT_ABI void reactantXLAThrow(const char *str) {
 }
 
 REACTANT_ABI void reactantXLAInit(LinkableRuntime **__restrict__ lrtP,
-                                const char *__restrict__ backend) {
+                                  const char *__restrict__ backend) {
   *lrtP = new LinkableRuntime(backend);
   ReactantThrowError = reactantXLAThrow;
 }
@@ -2800,9 +2848,9 @@ REACTANT_ABI void reactantXLADeInit(LinkableRuntime **__restrict__ lrt) {
 }
 
 REACTANT_ABI void reactantXLAMemcpy(LinkableRuntime **__restrict__ lrtP,
-                                  void *__restrict__ dst,
-                                  void *__restrict__ src, size_t size,
-                                  int32_t direction) {
+                                    void *__restrict__ dst,
+                                    void *__restrict__ src, size_t size,
+                                    int32_t direction) {
   auto lrt = *lrtP;
   switch (direction) {
   case 0: // cudaMemcpyHostToHost = 0
@@ -2830,8 +2878,8 @@ REACTANT_ABI void reactantXLAMemcpy(LinkableRuntime **__restrict__ lrtP,
 }
 
 REACTANT_ABI void *reactantXLAMalloc(LinkableRuntime **__restrict__ lrtP,
-                                   uint64_t ptype, uint64_t shapeLen,
-                                   uint64_t *__restrict__ shape) {
+                                     uint64_t ptype, uint64_t shapeLen,
+                                     uint64_t *__restrict__ shape) {
   auto lrt = *lrtP;
   PjRtDevice *device = ClientGetDevice(lrt->client, lrt->device);
 
@@ -2843,15 +2891,15 @@ REACTANT_ABI void *reactantXLAMalloc(LinkableRuntime **__restrict__ lrtP,
 }
 
 REACTANT_ABI void reactantXLAFree(LinkableRuntime **__restrict__ lrtP,
-                                void *__restrict__ buffer0) {
+                                  void *__restrict__ buffer0) {
   void *buffer = *(void **)buffer0;
   free(buffer0);
   PjRtBufferFree((PjRtBuffer *)buffer);
 }
 
 REACTANT_ABI void reactantXLAExec(LinkableRuntime **__restrict__ lrtP,
-                                const char *modstr, int64_t argcnt,
-                                void **args) {
+                                  const char *modstr, int64_t argcnt,
+                                  void **args) {
   auto lrt = *lrtP;
   auto &cache = lrt->executables[modstr];
   std::vector<PjRtBuffer *> baseArrays(argcnt);
@@ -2923,10 +2971,11 @@ REACTANT_ABI void reactantXLAExec(LinkableRuntime **__restrict__ lrtP,
     int64_t num_replicas = 1;
     int64_t num_partitions = 1;
     bool use_spmd_partitioning = false;
-    auto exec = ClientCompile(lrt->client, wrap(module.get()), device_id,
-                              mesh_ids, num_mesh_ids, xla_gpu_cuda_data_dir,
-                              use_shardy_partitioner, num_replicas,
-                              num_partitions, use_spmd_partitioning);
+    auto exec =
+        ClientCompile(lrt->client, wrap(module.get()), device_id, mesh_ids,
+                      num_mesh_ids, xla_gpu_cuda_data_dir,
+                      use_shardy_partitioner, num_replicas, num_partitions,
+                      use_spmd_partitioning, false, nullptr, false, nullptr, 0);
 
     iter = cache.try_emplace(sizeKey, exec).first;
   }
