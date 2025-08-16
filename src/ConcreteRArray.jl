@@ -406,7 +406,9 @@ end
 
 Base.similar(a::ConcretePJRTArray, dims::Dims) = similar(a, eltype(a), dims)
 
-@inline function Base.similar(AT::Type{<:ConcretePJRTArray{T}}, dims; kwargs...) where {T}
+@inline function Base.similar(
+    AT::Type{<:ConcretePJRTArray{T}}, dims::Dims; kwargs...
+) where {T}
     return Base.similar(AT, T, dims; kwargs...)
 end
 
@@ -416,7 +418,7 @@ function Base.similar(a::ConcreteIFRTArray{T}, ::Type{S}=T, dims::Dims=size(a)) 
     )
 end
 Base.similar(a::ConcreteIFRTArray, dims::Dims) = similar(a, eltype(a), dims)
-function Base.similar(::Type{ConcreteIFRTArray{T}}, dims) where {T}
+function Base.similar(::Type{ConcreteIFRTArray{T}}, dims::Dims) where {T}
     return ConcreteIFRTArray(similar(Array{T}, dims))
 end
 
