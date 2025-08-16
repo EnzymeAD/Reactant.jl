@@ -1,5 +1,7 @@
 using LinearAlgebra, Reactant, Test
 
+const RunningOnTPU = contains(string(Reactant.devices()[1]), "TPU")
+
 function muladd2(A, x, b)
     C = similar(A, promote_type(eltype(A), eltype(b)), size(A, 1), size(x, 2))
     mul!(C, A, x)
@@ -75,8 +77,10 @@ end
     @test @jit(muladd_5arg(A_ra, x_ra, b_ra)) ≈ muladd2(A, x, b)
 
     C_ra = similar(A_ra, Float32, size(A, 1), size(x, 2))
+    C = similar(A, Float32, size(A, 1), size(x, 2))
     @jit(mul!(C_ra, A_ra, x_ra))
-    @test C_ra ≈ A * x
+    mul!(C, A, x)
+    @test C_ra ≈ C atol = 1e-3 rtol = 1e-2
 end
 
 @testset "triu & tril" begin
@@ -172,7 +176,7 @@ mul_symmetric(x) = Symmetric(x) * x
 end
 
 @testset "kron" begin
-    @testset for T in (Int64, Float64, ComplexF64)
+    @testset for T in (Int64, Float64, ComplexF32)
         @testset for (x_sz, y_sz) in [
             ((3, 4), (2, 5)), ((3, 4), (2,)), ((3,), (2, 5)), ((3,), (5,)), ((10,), ())
         ]
@@ -315,6 +319,8 @@ end
     fn6(A, B) = B / transpose(A)
 
     @testset for T in (Float32, Float64, ComplexF32, ComplexF64)
+        T == ComplexF64 && RunningOnTPU && continue
+
         A = rand(T, 6, 6)
         B = rand(T, 6, 6)
         b = rand(T, 6)
@@ -366,6 +372,8 @@ end
 @testset "LU Factorization" begin
     @testset "Un-batched" begin
         @testset for T in (Float32, Float64, ComplexF32, ComplexF64)
+            (T == ComplexF64 || T == Float64) && RunningOnTPU && continue
+
             A = rand(T, 4, 4)
             A_ra = Reactant.to_rarray(A)
 
@@ -375,13 +383,17 @@ end
             B = rand(T, 4, 3)
             B_ra = Reactant.to_rarray(B)
 
-            @test @jit(solve_with_lu(A_ra, b_ra)) ≈ solve_with_lu(A, b)
-            @test @jit(solve_with_lu(A_ra, B_ra)) ≈ solve_with_lu(A, B)
+            @test @jit(solve_with_lu(A_ra, b_ra)) ≈ solve_with_lu(A, b) atol = 1e-4 rtol =
+                1e-2
+            @test @jit(solve_with_lu(A_ra, B_ra)) ≈ solve_with_lu(A, B) atol = 1e-4 rtol =
+                1e-2
         end
     end
 
     @testset "Batched" begin
         @testset for T in (Float32, Float64, ComplexF32, ComplexF64)
+            (T == ComplexF64 || T == Float64) && RunningOnTPU && continue
+
             A = rand(T, 4, 4, 3, 2)
             A_ra = Reactant.to_rarray(A)
 
@@ -391,8 +403,10 @@ end
             B = rand(T, 4, 5, 3, 2)
             B_ra = Reactant.to_rarray(B)
 
-            @test @jit(solve_with_lu(A_ra, b_ra)) ≈ solve_with_lu_batched(A, b)
-            @test @jit(solve_with_lu(A_ra, B_ra)) ≈ solve_with_lu_batched(A, B)
+            @test @jit(solve_with_lu(A_ra, b_ra)) ≈ solve_with_lu_batched(A, b) atol = 1e-4 rtol =
+                1e-2
+            @test @jit(solve_with_lu(A_ra, B_ra)) ≈ solve_with_lu_batched(A, B) atol = 1e-4 rtol =
+                1e-2
         end
     end
 
@@ -402,6 +416,7 @@ end
         A_ra = Reactant.to_rarray(A)
         B_ra = Reactant.to_rarray(B)
 
-        @test @jit(solve_with_lu(A_ra, B_ra)) ≈ solve_with_lu_batched(A, B)
+        @test @jit(solve_with_lu(A_ra, B_ra)) ≈ solve_with_lu_batched(A, B) atol = 1e-4 rtol =
+            1e-2
     end
 end

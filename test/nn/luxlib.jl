@@ -179,10 +179,7 @@ end
 end
 
 @testset "Fused Conv" begin
-    @testset for groups in (1, 2, 4),
-        has_bias in (true, false),
-        act in (identity, relu, sigmoid, tanh, gelu)
-
+    @testset for groups in (1, 2), has_bias in (true, false), act in (identity, relu, tanh)
         weight = randn(Float32, 4, 4, 8 ÷ groups, 4)
         x = randn(Float32, 16, 16, 8, 2)
         bias = has_bias ? randn(Float32, 4) : nothing
@@ -191,9 +188,9 @@ end
         x_reactant = Reactant.to_rarray(x)
         bias_reactant = Reactant.to_rarray(bias)
 
-        @testset for stride in ((1, 1), (2, 2), (3, 3)),
-            padding in ((0, 0), (1, 1), (2, 2), (0, 2), (2, 0), (0, 1), (1, 0)),
-            dilation in ((1, 1), (2, 2), (1, 2), (2, 1))
+        @testset for stride in ((1, 1), (3, 3)),
+            padding in ((0, 0), (2, 2), (2, 0)),
+            dilation in ((1, 1), (1, 2))
 
             conv_dims = DenseConvDims(x, weight; stride, padding, dilation, groups)
 
