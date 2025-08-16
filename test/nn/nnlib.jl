@@ -78,6 +78,8 @@ end
             padding in ((0, 0), (1, 1), (2, 2), (0, 2), (2, 0), (0, 1), (1, 0)),
             dilation in ((1, 1), (2, 2), (1, 2), (2, 1))
 
+            @show groups, stride, padding, dilation
+
             conv_dims = DenseConvDims(x, weight; stride, padding, dilation, groups)
 
             output_size = (
