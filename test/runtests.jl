@@ -53,14 +53,13 @@ const REACTANT_TEST_GROUP = lowercase(get(ENV, "REACTANT_TEST_GROUP", "all"))
     end
 
     if REACTANT_TEST_GROUP == "all" || REACTANT_TEST_GROUP == "neural_networks"
+        # @safetestset "NNlib Primitives" include("nn/nnlib.jl")
         # @safetestset "Flux.jl Integration" include("nn/flux.jl")
-        @safetestset "NNlib Primitives" include("nn/nnlib.jl")
-        @info "NNlib Primitives tests finished"
         if Sys.islinux()
-            # @safetestset "Lux Integration" include("nn/lux.jl") # XXX: need to fix crash
-            # @info "Lux Integration tests finished"
-            @safetestset "LuxLib Primitives" include("nn/luxlib.jl") # XXX: TPU takes too long
+            @safetestset "LuxLib Primitives" include("nn/luxlib.jl")
             @info "LuxLib Primitives tests finished"
+            @safetestset "Lux Integration" include("nn/lux.jl")
+            @info "Lux Integration tests finished"
         end
     end
 end

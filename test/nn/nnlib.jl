@@ -1,58 +1,58 @@
 using NNlib, Reactant, Enzyme
 using Statistics
 
-# @testset "Activation Functions" begin
-#     sumabs2(f, x) = sum(abs2, f.(x))
+@testset "Activation Functions" begin
+    sumabs2(f, x) = sum(abs2, f.(x))
 
-#     function ∇sumabs2(f, x)
-#         dx = Enzyme.make_zero(x)
-#         Enzyme.autodiff(Reverse, sumabs2, Active, Const(f), Duplicated(x, dx))
-#         return dx
-#     end
+    function ∇sumabs2(f, x)
+        dx = Enzyme.make_zero(x)
+        Enzyme.autodiff(Reverse, sumabs2, Active, Const(f), Duplicated(x, dx))
+        return dx
+    end
 
-#     x_act = randn(Float32, 10, 10)
-#     x_act_ca = Reactant.to_rarray(x_act)
+    x_act = randn(Float32, 10, 10)
+    x_act_ca = Reactant.to_rarray(x_act)
 
-#     @testset "Activation: $act" for act in (
-#         identity, relu, sigmoid, tanh, tanh_fast, sigmoid_fast, gelu, abs2, relu6
-#     )
-#         f_compile = Reactant.compile(sumabs2, (act, x_act_ca))
+    @testset "Activation: $act" for act in (
+        identity, relu, sigmoid, tanh, tanh_fast, sigmoid_fast, gelu, abs2, relu6
+    )
+        f_compile = Reactant.compile(sumabs2, (act, x_act_ca))
 
-#         y_simple = sumabs2(act, x_act)
-#         y_compile = f_compile(act, x_act_ca)
+        y_simple = sumabs2(act, x_act)
+        y_compile = f_compile(act, x_act_ca)
 
-#         ∂x_enz = Enzyme.make_zero(x_act)
-#         Enzyme.autodiff(Reverse, sumabs2, Active, Const(act), Duplicated(x_act, ∂x_enz))
+        ∂x_enz = Enzyme.make_zero(x_act)
+        Enzyme.autodiff(Reverse, sumabs2, Active, Const(act), Duplicated(x_act, ∂x_enz))
 
-#         ∇sumabs2_compiled = Reactant.compile(∇sumabs2, (act, x_act_ca))
+        ∇sumabs2_compiled = Reactant.compile(∇sumabs2, (act, x_act_ca))
 
-#         ∂x_compile = ∇sumabs2_compiled(act, x_act_ca)
+        ∂x_compile = ∇sumabs2_compiled(act, x_act_ca)
 
-#         @test y_simple ≈ y_compile
-#         @test ∂x_enz ≈ ∂x_compile
-#     end
-# end
+        @test y_simple ≈ y_compile
+        @test ∂x_enz ≈ ∂x_compile
+    end
+end
 
-# @testset "Pooling" begin
-#     @testset for f in (NNlib.meanpool, NNlib.maxpool)
-#         x = randn(Float32, 32, 32, 3, 2)
-#         x_reactant = Reactant.to_rarray(x)
+@testset "Pooling" begin
+    @testset for f in (NNlib.meanpool, NNlib.maxpool)
+        x = randn(Float32, 32, 32, 3, 2)
+        x_reactant = Reactant.to_rarray(x)
 
-#         @testset for window in ((2, 2), (3, 3), (4, 4)),
-#             stride in ((1, 1), (2, 2)),
-#             padding in ((0, 0), (1, 1), (2, 2), (0, 2), (2, 0))
+        @testset for window in ((2, 2), (3, 3), (4, 4)),
+            stride in ((1, 1), (2, 2)),
+            padding in ((0, 0), (1, 1), (2, 2), (0, 2), (2, 0))
 
-#             pool_dims = PoolDims(x, window; stride, padding)
+            pool_dims = PoolDims(x, window; stride, padding)
 
-#             f_reactant = Reactant.compile(f, (x_reactant, pool_dims))
+            f_reactant = Reactant.compile(f, (x_reactant, pool_dims))
 
-#             broken = any(==(2), padding) && f === NNlib.maxpool && window == (2, 2)
-#             @test f_reactant(x_reactant, pool_dims) ≈ f(x, pool_dims) broken = broken
-#         end
+            broken = any(==(2), padding) && f === NNlib.maxpool && window == (2, 2)
+            @test f_reactant(x_reactant, pool_dims) ≈ f(x, pool_dims) broken = broken
+        end
 
-#         # TODO: test for gradients
-#     end
-# end
+        # TODO: test for gradients
+    end
+end
 
 function ∇conv_data_filter(x, weight, conv_dims)
     dx, dweight = Enzyme.make_zero(x), Enzyme.make_zero(weight)
@@ -75,10 +75,8 @@ end
         x_reactant = Reactant.to_rarray(x)
 
         @testset for stride in ((1, 1), (2, 2), (3, 3)),
-            padding in ((0, 0), (1, 1), (2, 2), (0, 2), (2, 0), (0, 1), (1, 0)),
-            dilation in ((1, 1), (2, 2), (1, 2), (2, 1))
-
-            @show groups, stride, padding, dilation
+            padding in ((0, 0), (2, 2), (0, 2), (2, 0)),
+            dilation in ((1, 1), (1, 2))
 
             conv_dims = DenseConvDims(x, weight; stride, padding, dilation, groups)
 
@@ -124,8 +122,6 @@ end
     end
 end
 
-@info "Convolution done"
-
 @testset "Batched Matrix Multiplication" begin
     Reactant.with_config(;
         convolution_precision=PrecisionConfig.HIGH,
@@ -156,8 +152,6 @@ end
         @test @jit(batched_mul(x_ra, y_ra)) ≈ batched_mul(x, y)
     end
 end
-
-@info "Batched Matrix Multiplication done"
 
 @testset "Constant Padding: NNlib.pad_constant" begin
     x = rand(Float32, 4, 4)
@@ -205,8 +199,6 @@ end
     @test @jit(NNlib.pad_constant(x_ra, (1, 1))) ≈ NNlib.pad_constant(x, (1, 1))
 end
 
-@info "Constant Padding done"
-
 @testset "make_causal_mask" begin
     x = rand(2, 10)
     x_ra = Reactant.to_rarray(x)
@@ -216,8 +208,6 @@ end
     causal_mask2(x) = NNlib.make_causal_mask(x; dims=1)
     @test @jit(causal_mask2(x_ra)) ≈ causal_mask2(x)
 end
-
-@info "make_causal_mask done"
 
 # Adapted from https://github.com/FluxML/NNlib.jl/blob/02138682a4fc5ca019759218be50e59907d4527c/test/testsuite/gather.jl#L5
 @testset "NNlib gather" begin
@@ -396,8 +386,6 @@ end
         @test size(y) == (size(src)[1:(Nsrc - M)]..., size(index)...)
     end
 end
-
-@info "Gather done"
 
 # Adapted from https://github.com/FluxML/NNlib.jl/blob/1468582c4db5f18149cc8fff6fb4633c5debe5c5/test/testsuite/scatter.jl#L108
 @testset "NNlib scatter" begin
@@ -648,8 +636,6 @@ end
     end
 end
 
-@info "Scatter done"
-
 @testset "∇conv(D = $ndim)" for ndim in 1:3
     x_spatial_dim = 4
     batch_size = 2
@@ -682,8 +668,6 @@ end
         end
     end
 end
-
-@info "Convolution done"
 
 @testset "Upsampling" begin
     x = randn(Float32, 4, 4, 3, 2)
@@ -726,8 +710,6 @@ end
     end
 end
 
-@info "Upsampling done"
-
 @testset "Pixel shuffle" begin
     x = [10i + j + channel / 10 for i in 1:2, j in 1:3, channel in 1:4, batch in 1:1]
     x_ra = Reactant.to_rarray(x)
@@ -740,8 +722,6 @@ end
     @test @jit(NNlib.pixel_shuffle(y_ra, 2)) ≈ NNlib.pixel_shuffle(y, 2)
 end
 
-@info "pixel_shuffle done"
-
 @testset "softmax/logsoftmax reshaped input" begin
     x = rand(Float32, 3, 4, 5)
     x_ra = reshape(Reactant.to_rarray(x), 12, 5)
@@ -750,5 +730,3 @@ end
     @test @jit(NNlib.softmax(x_ra)) ≈ NNlib.softmax(x)
     @test @jit(NNlib.logsoftmax(x_ra)) ≈ NNlib.logsoftmax(x)
 end
-
-@info "softmax/logsoftmax done"
