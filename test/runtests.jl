@@ -50,13 +50,14 @@ const REACTANT_TEST_GROUP = lowercase(get(ENV, "REACTANT_TEST_GROUP", "all"))
         @safetestset "Random" include("integration/random.jl")
         @safetestset "Python" include("integration/python.jl")
         @safetestset "Optimisers" include("integration/optimisers.jl")
+        @safetestset "FillArrays" include("integration/fillarrays.jl")
     end
 
     if REACTANT_TEST_GROUP == "all" || REACTANT_TEST_GROUP == "neural_networks"
-        # @safetestset "NNlib Primitives" include("nn/nnlib.jl")
-        # @safetestset "Flux.jl Integration" include("nn/flux.jl")
+        @safetestset "NNlib Primitives" include("nn/nnlib.jl")
+        @safetestset "Flux.jl Integration" include("nn/flux.jl")
         if Sys.islinux()
-            # @safetestset "LuxLib Primitives" include("nn/luxlib.jl")
+            @safetestset "LuxLib Primitives" include("nn/luxlib.jl")
             @safetestset "Lux Integration" include("nn/lux.jl")
         end
     end
