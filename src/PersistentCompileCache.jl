@@ -1,5 +1,8 @@
 module PersistentCompileCache
 
+using ..Reactant: Reactant
+
+using Preferences: load_preference
 using Scratch: @get_scratch!
 using Reactant_jll: Reactant_jll
 
@@ -7,20 +10,36 @@ const CACHE_DIR = Ref{Union{Nothing,String}}(nothing)
 const KERNEL_CACHE_ENABLED = Ref(false)
 const AUTOTUNE_CACHE_ENABLED = Ref(false)
 
-# TODO: preference to disable persistent caching
-# TODO: preference to control what is being cached.
-# TODO: preference for cache dir
-# TODO: clear cache function
-
 function __init__()
-    # We version our cache directory based on Reactant_jll version (technically we need to
-    # version according to XLA, but this is a good enough proxy)
-    version = pkgversion(Reactant_jll)
-    CACHE_DIR[] = @get_scratch!(
-        "xla_persistent_cache_$(version.major)_$(version.minor)_$(version.patch)"
-    )
-    KERNEL_CACHE_ENABLED[] = true
-    AUTOTUNE_CACHE_ENABLED[] = true
+    persistent_cache_enabled = load_preference(Reactant, "persistent_cache_enabled", true)
+    persistent_cache_directory = load_preference(Reactant, "persistent_cache_directory", "")
+
+    if persistent_cache_enabled
+        if isempty(persistent_cache_directory)
+            # We version our cache directory based on Reactant_jll version (technically we
+            # need to version according to XLA, but this is a good enough proxy)
+            version = pkgversion(Reactant_jll)
+            CACHE_DIR[] = @get_scratch!(
+                "xla_persistent_cache_$(version.major)_$(version.minor)_$(version.patch)"
+            )
+        else
+            CACHE_DIR[] = persistent_cache_directory
+        end
+        @debug "Persistent compilation cache enabled. Using base directory: $(CACHE_DIR[])"
+
+        KERNEL_CACHE_ENABLED[] = load_preference(
+            Reactant, "persistent_kernel_cache_enabled", false
+        )
+        @debug "Kernel cache enabled: $(KERNEL_CACHE_ENABLED[])"
+
+        AUTOTUNE_CACHE_ENABLED[] = load_preference(
+            Reactant, "persistent_autotune_cache_enabled", true
+        )
+        @debug "Autotune cache enabled: $(AUTOTUNE_CACHE_ENABLED[])"
+    else
+        @debug "Persistent compilation cache disabled..."
+    end
+
     return nothing
 end
 
