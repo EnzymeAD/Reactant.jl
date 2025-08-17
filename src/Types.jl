@@ -453,12 +453,114 @@ Base.@deprecate_binding ConcreteRNG ReactantRNG
 Base.@deprecate_binding TracedRNG ReactantRNG
 
 ## Aliases based on the set preferences
-if XLA.REACTANT_XLA_RUNTIME == "PJRT"
+@static if XLA.REACTANT_XLA_RUNTIME == "PJRT"
+    """
+        const ConcreteRArray = ConcretePJRTArray
+
+        ConcreteRArray(
+            undef, ::Type{T}, shape::Dims;
+            client::Union{Nothing,XLA.AbstractClient} = nothing,
+            device::Union{Nothing,XLA.AbstractDevice} = nothing,
+            sharding::Sharding.AbstractSharding = Sharding.NoSharding(),
+        )
+
+    Allocate an uninitialized ConcreteRArray of element type `T` and shape `dims`.
+    """
     const ConcreteRArray = ConcretePJRTArray
+
     const ConcreteRNumber = ConcretePJRTNumber
     const AnyConcreteRArray = AnyConcretePJRTArray
 elseif XLA.REACTANT_XLA_RUNTIME == "IFRT"
+    """
+        const ConcreteRArray = ConcreteIFRTArray
+
+        ConcreteRArray(
+            undef, ::Type{T}, shape::Dims;
+            client::Union{Nothing,XLA.AbstractClient} = nothing,
+            device::Union{Nothing,XLA.AbstractDevice} = nothing,
+            sharding::Sharding.AbstractSharding = Sharding.NoSharding(),
+        )
+
+    Allocate an uninitialized ConcreteRArray of element type `T` and shape `dims`.
+    """
     const ConcreteRArray = ConcreteIFRTArray
+
     const ConcreteRNumber = ConcreteIFRTNumber
     const AnyConcreteRArray = AnyConcreteIFRTArray
+end
+
+function ConcretePJRTArray(
+    ::UndefInitializer,
+    ::Type{T},
+    shape::Dims;
+    client::Union{Nothing,XLA.AbstractClient}=nothing,
+    idx::Union{Int,Nothing}=nothing,
+    device::Union{Nothing,XLA.AbstractDevice}=nothing,
+    sharding::Sharding.AbstractSharding=Sharding.NoSharding(),
+) where {T}
+    theclient, thedevice = _select_client_and_device(client, idx, device, sharding)
+    sharded_data, shardinfo = sharding(theclient, thedevice, T, shape)
+    N = length(shape)
+    nsharded = length(sharded_data)
+    return ConcretePJRTArray{T,N,nsharded,typeof(shardinfo)}(sharded_data, shape, shardinfo)
+end
+
+function ConcreteIFRTArray(
+    ::UndefInitializer,
+    ::Type{T},
+    shape::Dims;
+    client::Union{Nothing,XLA.AbstractClient}=nothing,
+    idx::Union{Int,Nothing}=nothing,
+    device::Union{Nothing,XLA.AbstractDevice}=nothing,
+    sharding::Sharding.AbstractSharding=Sharding.NoSharding(),
+) where {T}
+    theclient, thedevice = _select_client_and_device(client, idx, device, sharding)
+    N = length(shape)
+    # ToDo: How to avoid allocating dummy array on host?
+    dummy_array = Array{T}(undef, shape)
+    # ToDo: How to use specified device (non-sharded case)?
+    sharded_data, shardinfo, padding = sharding(theclient, nothing, dummy_array)
+    return ConcreteIFRTArray{T,N,typeof(shardinfo)}(sharded_data, shape, shardinfo, padding)
+end
+
+function _select_client_and_device(
+    client::Union{Nothing,XLA.AbstractClient},
+    idx::Union{Int,Nothing},
+    device::Union{Nothing,XLA.AbstractDevice},
+    sharding::Sharding.AbstractSharding,
+)
+    if Sharding.is_sharded(sharding)
+        # ToDo: Throw ArgumentError instead of just warning?
+        idx isa Nothing ||
+            @warn "device index should not be specified for sharded XLA arrays, ignoring it."
+        device isa Nothing ||
+            @warn "device should not be specified for sharded XLA arrays, ignoring it."
+        theclient = something(client, XLA.default_backend())
+        thedevice = nothing
+    else
+        if device isa Nothing
+            theclient = something(client, XLA.default_backend())
+            if idx isa Nothing
+                thedevice = XLA.default_device(theclient)
+            else
+                thedevice = XLA.get_device(theclient, idx)
+            end
+        else
+            thedevice = device
+            if client isa Nothing
+                theclient = XLA.client(thedevice)
+            else
+                theclient = client
+                XLA.client(thedevice) == theclient ||
+                    throw(ArgumentError("XLA device does not match XLA client"))
+            end
+            if !(idx isa Nothing)
+                XLA.get_device(theclient, idx) === thedevice || throw(
+                    ArgumentError("XLA device does not match XLA client and device index"),
+                )
+            end
+        end
+    end
+
+    return theclient, thedevice
 end
