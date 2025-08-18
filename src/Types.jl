@@ -487,11 +487,11 @@ function _select_client_and_device(
             @warn "device index should not be specified for sharded XLA arrays, ignoring it."
         device isa Nothing ||
             @warn "device should not be specified for sharded XLA arrays, ignoring it."
-        theclient = something(client, XLA.default_backend())
+        theclient = client isa Nothing ? XLA.default_backend() : client
         thedevice = nothing
     else
         if device isa Nothing
-            theclient = something(client, XLA.default_backend())
+            theclient = client isa Nothing ? XLA.default_backend() : client
             if idx isa Nothing
                 thedevice = XLA.default_device(theclient)
             else
