@@ -36,6 +36,10 @@ function Distributed.get_local_process_id(::Distributed.MPIEnvDetector)
 end
 
 function __init__()
+    # TODO improve this, temporary hack
+    # when  you fix it, remember to possibly make TracedType const again
+    Reactant.TracedType = Union{Reactant.TracedRArray,Reactant.TracedRNumber,Reactant.MissingTracedValue,TracedRequest}
+
     # TODO maybe it's more efficient if we use `RTLD_NOW` instead of `RTLD_LAZY`?
     libmpi_handle = Libdl.dlopen(MPI.API.libmpi, RTLD_LAZY | RTLD_GLOBAL)
 
@@ -233,11 +237,21 @@ mutable struct TracedRequest <: MPI.AbstractRequest
     end
 end
 
-# # presumably gonna have to write these at som epoint too
-# get_mlir_data(x::TracedRequest) = x.mlir_data
-# set_mlir_data!(x::TracedRequest, data) = (x.mlir_data = data; return x)
-get_paths(x::TracedRequest) = x.paths
-set_paths!(x::TracedRequest, paths) = (x.paths = paths; return x)
+function Base.show(io::IOty, X::TracedRequest) where {IOty<:Union{IO,IOContext}}
+    return print(io, "TracedRequest(", X.paths, ")")
+end
+
+Reactant.TracedUtils.get_mlir_data(x::TracedRequest) = x.mlir_data
+# Reactant.TracedUtils.set_mlir_data!(x::TracedRequest, data) = (x.mlir_data = data; return x) # guess this one was never needed...? Maybe it happens in create_result
+Reactant.TracedUtils.get_paths(x::TracedRequest) = x.paths
+Reactant.TracedUtils.set_paths!(x::TracedRequest, paths) = (x.paths = paths; return x)
+
+# TODO not sure how to implement this for TracedRequest
+# probably just want to hardcode the types and dims?
+function Reactant.Ops.mlir_type(x::TracedRequest)::MLIR.IR.Type
+    # return MLIR.IR.TensorType(collect(Int, size(x)), MLIR.IR.Type(unwrapped_eltype(x)))
+    return MLIR.IR.TensorType(collect(Int, ()), MLIR.IR.Type(Int64))
+end
 
 
 Base.@nospecializeinfer function Reactant.make_tracer(
@@ -251,9 +265,8 @@ Base.@nospecializeinfer function Reactant.make_tracer(
     @nospecialize(runtime = nothing),
     kwargs...,
 )
-    println("IN make_tracer{TracedRequest}")
     if mode == Reactant.NoStopTracedTrack
-        set_paths!(prev, (get_paths(prev)..., path))
+        Reactant.TracedUtils.set_paths!(prev, (Reactant.TracedUtils.get_paths(prev)..., path))
         if !haskey(seen, prev)
             seen[prev] = prev # don't return!
         end
