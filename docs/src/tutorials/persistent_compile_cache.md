@@ -20,9 +20,9 @@ for this purpose. By default, the autotuning cache is enabled.
 
 ## Clearing the cache
 
-To clear the cache, you can reuse `Scratch.jl`'s `clear_scclear_scratchspaces!` function:
+To clear the cache, you can use [`Reactant.clear_compilation_cache!`](@ref):
 
 ```julia
-using Scratch, Reactant
-Scratch.clear_scratchspaces!(Reactant)
+using Reactant
+clear_compilation_cache!()
 ```

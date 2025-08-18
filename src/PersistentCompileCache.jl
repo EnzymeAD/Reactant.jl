@@ -63,4 +63,29 @@ function get_autotune_cache_directory()
     return dir
 end
 
+"""
+    clear_compilation_cache!()
+
+Deletes the compilation cache directory. This removes all cached compilation artifacts for
+all past versions of Reactant_jll.
+"""
+function clear_compilation_cache!()
+    (CACHE_DIR[] !== nothing) && rm(CACHE_DIR[]; recursive=true, force=true)
+
+    for dir in readdir(dirname(@get_scratch!("test_dir")); join=true)
+        if isdir(dir) && startswith(basename(dir), "xla_persistent_cache")
+            @debug "Removing cache directory: $dir"
+            rm(dir; recursive=true, force=true)
+        end
+    end
+
+    return nothing
 end
+
+export clear_compilation_cache!
+
+end
+
+using .PersistentCompileCache
+
+export clear_compilation_cache!
