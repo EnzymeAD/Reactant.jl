@@ -1932,7 +1932,7 @@ end
 `rotate`
 
 The \"rotate\" op moves values across lanes in a subgroup (a.k.a., local
-invocations) within the same subgroup. The `width` argument specifies the
+invocations) within the same subgroup. The `width` attribute specifies the
 number of lanes that participate in the rotation, and must be uniform across
 all participating lanes. Further, the first `width` lanes of the subgroup
 must be active.
@@ -1953,26 +1953,26 @@ Returns the `rotateResult` and `true` if the current lane id is smaller than
 example:
 
 ```mlir
-%offset = arith.constant 1 : i32
-%width = arith.constant 16 : i32
-%1, %2 = gpu.rotate %0, %offset, %width : f32
+%1, %2 = gpu.rotate %0, 1, 16 : f32
 ```
 
 For lane `k`, returns the value from lane `(k + cst1) % width`.
 """
 function rotate(
-    value::Value,
-    offset::Value,
-    width::Value;
+    value::Value;
     rotateResult=nothing::Union{Nothing,IR.Type},
     valid=nothing::Union{Nothing,IR.Type},
+    offset,
+    width,
     location=Location(),
 )
     op_ty_results = IR.Type[]
-    operands = Value[value, offset, width]
+    operands = Value[value,]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[]
+    attributes = NamedAttribute[
+        namedattribute("offset", offset), namedattribute("width", width)
+    ]
     !isnothing(rotateResult) && push!(op_ty_results, rotateResult)
     !isnothing(valid) && push!(op_ty_results, valid)
 

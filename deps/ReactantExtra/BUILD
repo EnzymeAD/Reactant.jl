@@ -15,6 +15,7 @@ cc_toolchain_suite(
     name = "ygg_cross_compile_toolchain_suite",
     toolchains = {
         "k8": ":ygg_host_toolchain",
+        "x64_windows": ":ygg_win_x86_toolchain",
         "darwin": ":ygg_darwin_x86_toolchain",
         "darwin_arm64": ":ygg_darwin_arm64_toolchain",
         "aarch64": ":ygg_aarch64_toolchain",
@@ -63,6 +64,7 @@ cc_toolchain_config(
     abi_version = "local",
     builtin_sysroot = "/opt/x86_64-linux-musl/bin/../x86_64-linux-musl/sys-root",
     compile_flags = [
+        "-stdlib=libstdc++",
     ],
     compiler = "clang",
     coverage_compile_flags = ["--coverage"],
@@ -104,7 +106,6 @@ cc_toolchain_config(
         "-DNDEBUG",
         "-ffunction-sections",
         "-fdata-sections",
-        "-stdlib=libstdc++",
     ],
     opt_link_flags = ["-Wl,--gc-sections"],
     supports_start_end_lib = True,
@@ -187,6 +188,7 @@ cc_toolchain_config(
         "-isystem /opt/BB_TARGET/BB_TARGET/include/c++/GCC_VERSION/BB_TARGET",
         "-isystem /opt/BB_TARGET/BB_TARGET/include/c++/GCC_VERSION/backward",
         "-isystem /opt/BB_TARGET/BB_TARGET/include/c++/GCC_VERSION/parallel",
+        "-stdlib=libstdc++",
     ],
     compiler = "compiler",
     coverage_compile_flags = ["--coverage"],
@@ -208,7 +210,9 @@ cc_toolchain_config(
     ],
     dbg_compile_flags = ["-g"],
     host_system_name = "linux",
-    link_flags = [],
+    link_flags = [
+        "-stdlib=libstdc++",
+    ],
     link_libs = [
         "-lstdc++",
         "-lm",
@@ -216,11 +220,9 @@ cc_toolchain_config(
     opt_compile_flags = [
         "-g0",
         "-O2",
-        "-D_FORTIFY_SOURCE=1",
         "-DNDEBUG",
         "-ffunction-sections",
         "-fdata-sections",
-        # "-stdlib=libstdc++",
     ],
     opt_link_flags = ["-Wl,--gc-sections"],
     # TODO gcc doesn't support it, only put it on clang (maybe even only for clang on aarch64-darwin?)
@@ -348,7 +350,6 @@ cc_toolchain_config(
         "-DNDEBUG",
         "-ffunction-sections",
         "-fdata-sections",
-        # "-stdlib=libstdc++",
     ],
     opt_link_flags = ["-Wl,--gc-sections"],
     # TODO gcc doesn't support it, only put it on clang (maybe even only for clang on aarch64-darwin?)
@@ -451,7 +452,6 @@ cc_toolchain_config(
     ],
     dbg_compile_flags = [
         "-g",
-        "-stdlib=libc++",
     ],
     host_system_name = "linux",
     link_flags = [
@@ -469,7 +469,6 @@ cc_toolchain_config(
         "-DNDEBUG",
         "-ffunction-sections",
         "-fdata-sections",
-        "-stdlib=libc++",
     ],
     opt_link_flags = ["-Wl,--gc-sections"],
     supports_start_end_lib = True,
@@ -639,6 +638,127 @@ cc_toolchain_config(
 )
 
 cc_toolchain(
+    name = "ygg_win_x86_toolchain",
+    all_files = ":empty",
+    compiler_files = ":empty",
+    dwp_files = ":empty",
+    linker_files = ":empty",
+    objcopy_files = ":empty",
+    strip_files = ":empty",
+    supports_param_files = 1,
+    toolchain_config = ":ygg_win_x86_toolchain_config",
+    toolchain_identifier = "ygg_win_x86_toolchain",
+)
+
+toolchain(
+    name = "cc_toolchain_for_ygg_win_x86",
+    exec_compatible_with = [
+        "@platforms//cpu:x86_64",
+        "@platforms//os:linux",
+    ],
+    target_compatible_with = [
+        "@platforms//cpu:x86_64",
+        "@platforms//os:windows",
+    ],
+    toolchain = ":ygg_win_x86_toolchain",
+    toolchain_type = "@bazel_tools//tools/cpp:toolchain_type",
+)
+
+# TODO distinguish between clang and gcc toolchains?
+cc_toolchain_config(
+    name = "ygg_win_x86_toolchain_config",
+    abi_libc_version = "local",
+    abi_version = "local",
+    builtin_sysroot = "/opt/BB_TARGET/BB_TARGET/sys-root/",
+    compile_flags = [
+        "-stdlib=libstdc++",
+    ],
+    compiler = "clang",
+    coverage_compile_flags = ["--coverage"],
+    coverage_link_flags = ["--coverage"],
+    cpu = "x64_windows",
+    cxx_builtin_include_directories = [
+        "/opt/BB_TARGET/lib/gcc/BB_TARGET/GCC_VERSION/include",
+        "/opt/BB_TARGET/lib/gcc/BB_TARGET/GCC_VERSION/include-fixed",
+        "/opt/BB_TARGET/BB_TARGET/include",
+        "/opt/BB_TARGET/BB_TARGET/sys-root",
+        "/opt/BB_TARGET/BB_TARGET/sys-root/usr/include",
+        "/opt/BB_TARGET/BB_TARGET/include/c++/GCC_VERSION",
+        "/opt/BB_TARGET/BB_TARGET/include/c++/GCC_VERSION/BB_TARGET",
+        "/opt/BB_TARGET/BB_TARGET/include/c++/GCC_VERSION/backward",
+        "/opt/BB_TARGET/BB_TARGET/include/c++/GCC_VERSION/parallel",
+        "/opt/x86_64-linux-musl/lib/clang/16/include",
+        "/opt/x86_64-linux-musl/lib/clang/17/include",
+        "/opt/x86_64-linux-musl/lib/clang/18/include",
+    ],
+    dbg_compile_flags = [
+        "-g",
+    ],
+    host_system_name = "linux",
+    link_flags = [
+        "-fuse-ld=lld",
+        "-stdlib=libstdc++",
+    ],
+    link_libs = [
+        "-lstdc++",
+        "-lm",
+    ],
+    opt_compile_flags = [
+        "-g0",
+        "-O2",
+        "-D_FORTIFY_SOURCE=1",
+        "-DNDEBUG",
+        "-ffunction-sections",
+        "-fdata-sections",
+    ],
+    opt_link_flags = ["-Wl,--gc-sections"],
+    supports_start_end_lib = False,
+    target_libc = "",
+    target_system_name = "x86_64-apple-macos",
+    tool_paths = {
+        "ar": "/opt/bin/BB_FULL_TARGET/ar",
+        "as": "/opt/bin/BB_FULL_TARGET/as",
+        "c++": "/opt/bin/BB_FULL_TARGET/c++",
+        "c++filt": "/opt/bin/BB_FULL_TARGET/c++filt",
+        "cc": "/opt/bin/BB_FULL_TARGET/cc",
+        "clang": "/opt/bin/BB_FULL_TARGET/clang",
+        "clang++": "/opt/bin/BB_FULL_TARGET/clang++",
+        "cpp": "/opt/bin/BB_FULL_TARGET/cpp",
+        "f77": "/opt/bin/BB_FULL_TARGET/f77",
+        "gcc": "/opt/bin/BB_FULL_TARGET/clang",
+        "g++": "/opt/bin/BB_FULL_TARGET/clang++",
+        # "g++": "/opt/bin/BB_FULL_TARGET/g++",
+        # "gcc": "/opt/bin/BB_FULL_TARGET/gcc",
+        "gfortran": "/opt/bin/BB_FULL_TARGET/gfortran",
+        "ld": "/opt/bin/BB_FULL_TARGET/ld",
+        "ld.lld": "/opt/bin/BB_FULL_TARGET/ld.lld",
+        "libtool": "/opt/bin/BB_FULL_TARGET/libtool",
+        "lld": "/opt/bin/BB_FULL_TARGET/lld",
+        "nm": "/opt/bin/BB_FULL_TARGET/nm",
+        "objcopy": "/opt/bin/BB_FULL_TARGET/objcopy",
+        "patchelf": "/opt/bin/BB_FULL_TARGET/patchelf",
+        "ranlib": "/opt/bin/BB_FULL_TARGET/ranlib",
+        "readelf": "/opt/bin/BB_FULL_TARGET/readelf",
+        "strip": "/opt/bin/BB_FULL_TARGET/strip",
+        # from host
+        "llvm-cov": "/opt/x86_64-linux-musl/bin/llvm-cov",
+        "llvm-profdata": "/opt/x86_64-linux-musl/bin/llvm-profdata",
+        "objdump": "/usr/bin/objdump",
+    },
+    toolchain_identifier = "ygg_win_x86",
+    unfiltered_compile_flags = [
+        "-no-canonical-prefixes",
+        "-Wno-builtin-macro-redefined",
+        "-D__DATE__=\"redacted\"",
+        "-D__TIMESTAMP__=\"redacted\"",
+        "-D__TIME__=\"redacted\"",
+        "-Wno-unused-command-line-argument",
+        "-Wno-gnu-offsetof-extensions",
+        "-mxsave",
+    ],
+)
+
+cc_toolchain(
     name = "beast_x86_toolchain",
     all_files = ":empty",
     compiler_files = ":empty",
@@ -657,6 +777,7 @@ cc_toolchain_config(
     abi_version = "local",
     compile_flags = [
         "-I/usr/include/c++/11",
+        "-stdlib=libstdc++",
     ],
     compiler = "clang",
     coverage_compile_flags = ["--coverage"],
@@ -693,7 +814,6 @@ cc_toolchain_config(
         "-DNDEBUG",
         "-ffunction-sections",
         "-fdata-sections",
-        "-stdlib=libstdc++",
         "-I/usr/include/c++/11",
     ],
     opt_link_flags = ["-Wl,--gc-sections"],
@@ -756,7 +876,7 @@ platform(
 platform(
     name = "win_x86_64",
     constraint_values = [
-        "@platforms//os:linux",
+        "@platforms//os:windows",
         "@platforms//cpu:x86_64",
     ],
 )
@@ -764,7 +884,7 @@ platform(
 platform(
     name = "win_aarch64",
     constraint_values = [
-        "@platforms//os:linux",
+        "@platforms//os:windows",
         "@platforms//cpu:aarch64",
     ],
 )
@@ -961,7 +1081,6 @@ cc_library(
         # "@xla//xla:xla_proto_cc",
         # "@xla//xla:xla_proto_cc_impl",
         "@xla//xla/stream_executor:device_description_proto_cc_impl",
-        "@xla//xla/tsl/platform/default:platform_port",
         "@xla//xla/service:metrics_proto_cc",
         "@xla//xla/service:metrics_proto_cc_impl",
         "@xla//xla/service:custom_call_target_registry",
@@ -1009,7 +1128,6 @@ cc_library(
         "@xla//xla/backends/profiler/cpu:metadata_utils",
         "@xla//xla/backends/profiler/tpu:tpu_tracer",
         "@xla//xla/python:profiler_utils",
-        "@xla//xla/backends/cpu/collectives:mpi_collectives",
         "@tsl//tsl/platform:env_impl",
         "@xla//xla/stream_executor:stream_executor_impl",
         "@xla//xla/mlir/utils:type_util",
@@ -1066,12 +1184,18 @@ cc_library(
             "@gloo//:transport_uv",
             "@xla//xla/backends/cpu/collectives:gloo_collectives",
             "@xla//xla/backends/cpu/collectives:gloo_kv_store",
+            "@xla//xla/backends/cpu/collectives:mpi_collectives",
+            "@xla//xla/tsl/platform/default:platform_port",
         ],
-        "@xla//xla/tsl:windows": [],
+        "@xla//xla/tsl:windows": [
+            "@xla//xla/tsl/platform/windows:platform_port",
+        ],
         "//conditions:default": [
             "@gloo//:transport_tcp",
             "@xla//xla/backends/cpu/collectives:gloo_collectives",
             "@xla//xla/backends/cpu/collectives:gloo_kv_store",
+            "@xla//xla/backends/cpu/collectives:mpi_collectives",
+            "@xla//xla/tsl/platform/default:platform_port",
         ],
     }),
     alwayslink = True,

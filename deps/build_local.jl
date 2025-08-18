@@ -111,23 +111,19 @@ hermetic_python_version = parsed_args["hermetic_python_version"]
 
 # Try to guess if `cc` is GCC and get its version number.
 cc_is_gcc, gcc_version = let
-    if isempty(cc)
-        false, v"0"
+    io = IOBuffer()
+    run(pipeline(ignorestatus(`$(cc) --version`); stdout=io))
+    version_string = String(take!(io))
+    # Detecing GCC is hard, the name "gcc" may not appear anywhere in the
+    # version string, but on the second line there should be FSF.
+    m = match(
+        r"\([^)]+\) (\d+\.\d+\.\d+).*\n.*Free Software Foundation, Inc\.",
+        version_string,
+    )
+    if !isnothing(m)
+        true, VersionNumber(m[1])
     else
-        io = IOBuffer()
-        run(pipeline(ignorestatus(`$(cc) --version`); stdout=io))
-        version_string = String(take!(io))
-        # Detecing GCC is hard, the name "gcc" may not appear anywhere in the
-        # version string, but on the second line there should be FSF.
-        m = match(
-            r"\([^)]+\) (\d+\.\d+\.\d+).*\n.*Free Software Foundation, Inc\.",
-            version_string,
-        )
-        if !isnothing(m)
-            true, VersionNumber(m[1])
-        else
-            false, v"0"
-        end
+        false, v"0"
     end
 end
 
@@ -139,9 +135,7 @@ push!(build_cmd_list, "--repo_env=HERMETIC_PYTHON_VERSION=$(hermetic_python_vers
 if !isempty(gcc_host_compiler_path)
     push!(build_cmd_list, "--repo_env=GCC_HOST_COMPILER_PATH=$(gcc_host_compiler_path)")
 end
-if !isempty(cc)
-    push!(build_cmd_list, "--repo_env=CC=$(cc)")
-end
+push!(build_cmd_list, "--repo_env=CC=$(cc)")
 push!(build_cmd_list, "--check_visibility=false")
 push!(build_cmd_list, "--verbose_failures")
 push!(build_cmd_list, "--jobs=$(parsed_args["jobs"])")
@@ -176,8 +170,9 @@ else
     # Assume the compiler is clang if not GCC. `using_clang` is an option
     # introduced by Enzyme-JAX.
     push!(build_cmd_list, "--define=using_clang=true")
-    push!(build_cmd_list, "--copt=-Wno-error=unused-command-line-argument")
+    push!(build_cmd_list, "--copt=-Wno-unused-command-line-argument")
 end
+push!(build_cmd_list, "--copt=-Wno-private-header")
 push!(build_cmd_list, "--color=$(parsed_args["color"])")
 push!(build_cmd_list, ":libReactantExtra.so")
 

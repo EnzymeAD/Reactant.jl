@@ -2,7 +2,7 @@ mutable struct Buffer <: XLA.AbstractBuffer
     buffer::Ptr{Cvoid}
 
     function Buffer(buffer::Ptr{Cvoid})
-        return finalizer(free_buffer, new(buffer))
+        return finalizer(XLA.free_buffer, new(buffer))
     end
 end
 
@@ -114,7 +114,7 @@ function Base.similar(a::Buffer, S::Type, dims::Dims)
     return Base.similar(Buffer, S, dims; client=XLA.client(a), device=XLA.device(a))
 end
 
-@inline function free_buffer(buffer::Buffer)
+@inline function XLA.free_buffer(buffer::Buffer)
     sbuffer = buffer.buffer
     if sbuffer != C_NULL
         @ccall MLIR.API.mlir_c.PjRtBufferFree(sbuffer::Ptr{Cvoid})::Cvoid

@@ -3,7 +3,7 @@ mutable struct Array <: XLA.AbstractBuffer
 
     function Array(buffer::Ptr{Cvoid}, owned::Bool=true)
         !owned && return new(buffer)
-        return finalizer(free_ifrt_array, new(buffer))
+        return finalizer(XLA.free_buffer, new(buffer))
     end
 end
 
@@ -158,7 +158,7 @@ function Array(
     return Array(client, array, ifrt_sharding)
 end
 
-@inline function free_ifrt_array(buffer::Array)
+@inline function XLA.free_buffer(buffer::Array)
     if buffer.buffer != C_NULL
         @ccall MLIR.API.mlir_c.ifrt_free_array(buffer.buffer::Ptr{Cvoid})::Cvoid
     end
@@ -354,13 +354,7 @@ function replicate_array_to_all_devices(array::Array, sharding, mesh, size_arr)
         Reactant.Compiler.run_pass_pipeline!(
             mod,
             join(
-                [
-                    "sdy-propagation-pipeline",
-                    "sdy-close-shardings",
-                    "xla-sdy-stablehlo-export-pipeline",
-                    "canonicalize",
-                    "cse",
-                ],
+                ["sdy-propagation-pipeline", "sdy-close-shardings", "canonicalize", "cse"],
                 ",",
             ),
         )
@@ -375,7 +369,7 @@ function replicate_array_to_all_devices(array::Array, sharding, mesh, size_arr)
             num_partitions=length(mesh.device_ids),
             num_outputs=1,                # unused
             num_parameters=1,             # unused
-            use_shardy_partitioner=false, # unused
+            use_shardy_partitioner=true,  # unused
         )
 
         only(XLA.execute(exec, (array.buffer,), (UInt8(0),), Val(1)))

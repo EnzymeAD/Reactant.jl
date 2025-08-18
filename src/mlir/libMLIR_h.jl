@@ -1711,6 +1711,17 @@ function mlirOperationMoveBefore(op, other)
 end
 
 """
+    mlirOperationIsBeforeInBlock(op, other)
+
+Given an operation 'other' that is within the same parent block, return whether the current operation is before 'other' in the operation list of the parent block. Note: This function has an average complexity of O(1), but worst case may take O(N) where N is the number of operations within the parent block.
+"""
+function mlirOperationIsBeforeInBlock(op, other)
+    @ccall mlir_c.mlirOperationIsBeforeInBlock(
+        op::MlirOperation, other::MlirOperation
+    )::Bool
+end
+
+"""
     MlirWalkResult
 
 Operation walk result.
@@ -8914,6 +8925,15 @@ function mlirPassManagerEnableVerifier(passManager, enable)
     @ccall mlir_c.mlirPassManagerEnableVerifier(
         passManager::MlirPassManager, enable::Bool
     )::Cvoid
+end
+
+"""
+    mlirPassManagerEnableTiming(passManager)
+
+Enable pass timing.
+"""
+function mlirPassManagerEnableTiming(passManager)
+    @ccall mlir_c.mlirPassManagerEnableTiming(passManager::MlirPassManager)::Cvoid
 end
 
 """

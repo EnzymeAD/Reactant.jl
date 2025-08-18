@@ -117,7 +117,7 @@ Fine-grained control over the compilation options for the Reactant compiler.
 
 ## Sharding Options
 
-  - `shardy_passes`: Defaults to `:to_mhlo_shardings`. Other options are:
+  - `shardy_passes`: Defaults to `:post_sdy_propagation`. Other options are:
     - `:none`: No sharding passes will be run. Shardy + MHLO shardings are handled by XLA.
     - `:post_sdy_propagation`: Runs the Shardy propagation passes. MHLO shardings are
       handled by XLA.

@@ -118,11 +118,8 @@ function write_to_host_buffer!(data::Array, X::ConcretePJRTArray{T,N}) where {T,
         completed = Set{eltype(X.sharding.device_to_array_slices)}()
         for idx in 1:length(X.data)
             slice = X.sharding.device_to_array_slices[idx]
-            if slice ∉ completed
-                push!(completed, slice)
-            else
-                continue
-            end
+            slice ∈ completed && continue
+            push!(completed, slice)
             data_slice = data[slice...]
             XLA.to_host(X.data[idx], data_slice, Reactant.Sharding.NoSharding())
             data[slice...] .= data_slice

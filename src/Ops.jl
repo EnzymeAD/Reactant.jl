@@ -1064,6 +1064,7 @@ function broadcast_in_dim(
     location=mlir_stacktrace("broadcast_in_dim", @__FILE__, @__LINE__),
 ) where {T,N}
     @assert length(dims) == N
+    @assert length(result_size) ≥ N
 
     res = MLIR.IR.result(
         stablehlo.broadcast_in_dim(
@@ -1272,6 +1273,30 @@ end
     end
 
     return (; values, indices)
+end
+
+# Taken from https://github.com/JuliaGPU/GPUArrays.jl/blob/49a339c63a50f1a00ac84844675bcb3a11070cb0/src/host/indexing.jl#L193
+@noinline function findfirst(
+    x::TracedRArray{Bool,N};
+    dimension::Integer=N,
+    location=mlir_stacktrace("findfirst", @__FILE__, @__LINE__),
+) where {N}
+    return reduce(
+        TracedRArray[
+            x, iota(Int64, collect(Int64, size(x)); iota_dimension=dimension, location)
+        ],
+        TracedRNumber[
+            Reactant.TracedUtils.promote_to(TracedRNumber{Bool}, false),
+            Reactant.TracedUtils.promote_to(TracedRNumber{Int64}, typemax(Int64)),
+        ],
+        [dimension],
+        function (x, i, y, j)
+            cond_val = x | y
+            idx = ifelse(x, ifelse(i < j, i, j), ifelse(y, j, typemax(Int64)))
+            return cond_val, idx
+        end;
+        location,
+    )[2] .+ 1
 end
 
 @noinline function argmax(

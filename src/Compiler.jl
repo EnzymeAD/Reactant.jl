@@ -889,6 +889,19 @@ function optimization_passes(
         "neg_div_const_simplify",
         "reshape_deletions_broadcast_in_dim_simplify",
         "reshape_insertions_broadcast_in_dim_simplify",
+        "dot_general_reshape",
+        "diagonal_tensor_dot_general_rewrite",
+        "widen_wrap",
+        "widen_extend",
+        "elementwise_pad",
+        "compare_negate_const_simplify",
+        "select_simplify",
+        "concatenate_subtract_to_subtract_pad",
+        "concatenate_broadcast_in_dim",
+        "compare_abs",
+        # "compare_mul",
+        "compare_convert",
+        "add_selects",
     ]
 
     if !compile_options.disable_scatter_gather_optimization_passes
@@ -1027,6 +1040,7 @@ function optimization_passes(
     if WHILE_CONCAT[]
         push!(transform_passes_list, "while_concat")
         push!(transform_passes_list, "while_wrap")
+        push!(transform_passes_list, "while_extend")
     end
 
     if dus_to_concat
@@ -1133,8 +1147,8 @@ function optimization_passes(
         append!(
             transform_passes_list,
             [
-                "no_nan",
-                "no_nan_self_sub_simplify",
+                "no_nan_compare_simplify(1)",
+                "no_nan_self_sub_simplify(1)",
                 "no_nan_add_sub_simplify(1)",
                 "no_nan_mul_simplify(1)",
                 "no_nan_div_simplify(1)",
@@ -1144,6 +1158,8 @@ function optimization_passes(
         append!(
             transform_passes_list,
             [
+                "no_nan_compare_simplify(0)",
+                "no_nan_self_sub_simplify(0)",
                 "no_nan_add_sub_simplify(0)",
                 "no_nan_mul_simplify(0)",
                 "no_nan_div_simplify(0)",
@@ -1287,7 +1303,7 @@ function __get_compile_options_and_kwargs(;
     raise_first::Bool=false,
     legalize_chlo_to_stablehlo::Bool=false,
     cudnn_hlo_optimize::Bool=false,
-    shardy_passes::Union{Symbol,ShardyPropagationOptions}=:to_mhlo_shardings,
+    shardy_passes::Union{Symbol,ShardyPropagationOptions}=:post_sdy_propagation,
     optimize_then_pad::Bool=true,
     optimize_communications::Union{Bool,OptimizeCommunicationOptions}=true,
     assert_nonallocating::Bool=false,
@@ -1602,7 +1618,11 @@ function compile_mlir!(
 
     recognize_comms = true
     lower_comms = true
-    if is_sharded && compile_options.shardy_passes == :to_mhlo_shardings
+    if is_sharded && (
+        compile_options.shardy_passes == :to_mhlo_shardings ||
+        compile_options.shardy_passes == :post_sdy_propagation ||
+        compile_options.shardy_passes isa ShardyPropagationOptions
+    )
         lower_comms = false
     end
 
@@ -2247,6 +2267,7 @@ function compile_mlir!(
                         get_optimize_comms_passes(
                             compile_options.optimize_communications
                         )...,
+                        "func.func(sdy-reshard-to-collectives)",
                     ],
                     ",",
                 ),
@@ -2280,6 +2301,7 @@ function compile_mlir!(
                         get_optimize_comms_passes(
                             compile_options.optimize_communications
                         )...,
+                        "func.func(sdy-reshard-to-collectives)",
                         "xla-sdy-stablehlo-export-pipeline",
                     ],
                     ",",
@@ -2288,8 +2310,10 @@ function compile_mlir!(
             )
         end
     end
-        
-    func_op = MLIR.API.mlirSymbolTableLookup(MLIR.IR.SymbolTable(MLIR.IR.Operation(mod)), fnname)
+
+    func_op = MLIR.API.mlirSymbolTableLookup(
+        MLIR.IR.SymbolTable(MLIR.IR.Operation(mod)), fnname
+    )
     @assert func_op.ptr !== C_NULL
     func_op = MLIR.IR.Operation(func_op, false)
     fnbody = MLIR.IR.first_block(MLIR.IR.region(func_op, 1))::MLIR.IR.Block
@@ -2432,7 +2456,7 @@ function get_common_compile_options()
         :client => nothing,
         :raise => false,
         :raise_first => false,
-        :shardy_passes => :(:to_mhlo_shardings),
+        :shardy_passes => :(:post_sdy_propagation),
         :assert_nonallocating => false,
         :donated_args => :(:auto),
         :transpose_propagate => :(:up),
@@ -2475,7 +2499,10 @@ See also [`@code_xla`](@ref), [`@code_mhlo`](@ref).
 """
 macro code_hlo(args...)
     compile_expr, (; compiled) = compile_call_expr(
-        __module__, compile_mlir, get_common_compile_options(), args...
+        __module__,
+        compile_mlir,
+        merge(get_common_compile_options(), Dict{Symbol,Any}(:shardy_passes => :(:none))),
+        args...,
     )
     #! format: off
     return esc(
@@ -2504,7 +2531,9 @@ macro code_mhlo(args...)
         compile_mlir,
         merge(
             get_common_compile_options(),
-            Dict{Symbol,Any}(:legalize_stablehlo_to_mhlo => true),
+            Dict{Symbol,Any}(
+                :legalize_stablehlo_to_mhlo => true, :shardy_passes => :(:to_mhlo_shardings)
+            ),
         ),
         args...,
     )

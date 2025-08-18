@@ -1489,6 +1489,16 @@ end
                 end
                 y = Reactant.ConcreteRArray([2.0]; client)
                 Reactant.Compiler.compile_mlir(square!, (y,); optimize=false)
+
+                if y isa Reactant.ConcreteIFRTArray
+                    Reactant.XLA.free_buffer(y.data.buffer)
+                    y.data.buffer.buffer = C_NULL
+                else
+                    for dat in y.data
+                        Reactant.XLA.free_buffer(dat.buffer)
+                        dat.buffer.buffer = C_NULL
+                    end
+                end
             end
         end
 

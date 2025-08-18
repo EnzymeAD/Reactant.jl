@@ -128,31 +128,6 @@ function func(;
 end
 
 """
-`reinterpret_tensor_descriptor`
-
-This Op exists to help the transition from untyped raw TMA objects to typed Tensor descriptor objects.
-Ideally, we can remove this once the APIs are fully fleshed out.
-"""
-function reinterpret_tensor_descriptor(rawDesc::Value; result::IR.Type, location=Location())
-    op_ty_results = IR.Type[result,]
-    operands = Value[rawDesc,]
-    owned_regions = Region[]
-    successors = Block[]
-    attributes = NamedAttribute[]
-
-    return create_operation(
-        "tt.reinterpret_tensor_descriptor",
-        location;
-        operands,
-        owned_regions,
-        successors,
-        attributes,
-        results=op_ty_results,
-        result_inference=false,
-    )
-end
-
-"""
 `return_`
 
 The `tt.return` operation represents a return operation within a function.
@@ -736,79 +711,6 @@ function expand_dims(
     )
 end
 
-function experimental_tensormap_create(
-    desc_ptr::Value,
-    global_address::Value,
-    box_dim::Vector{Value},
-    global_dim::Vector{Value},
-    global_stride::Vector{Value},
-    element_stride::Vector{Value};
-    elem_type,
-    interleave_layout,
-    swizzle_mode,
-    fill_mode,
-    location=Location(),
-)
-    op_ty_results = IR.Type[]
-    operands = Value[
-        desc_ptr,
-        global_address,
-        box_dim...,
-        global_dim...,
-        global_stride...,
-        element_stride...,
-    ]
-    owned_regions = Region[]
-    successors = Block[]
-    attributes = NamedAttribute[
-        namedattribute("elem_type", elem_type),
-        namedattribute("interleave_layout", interleave_layout),
-        namedattribute("swizzle_mode", swizzle_mode),
-        namedattribute("fill_mode", fill_mode),
-    ]
-    push!(
-        attributes,
-        operandsegmentsizes([
-            1,
-            1,
-            length(box_dim),
-            length(global_dim),
-            length(global_stride),
-            length(element_stride),
-        ]),
-    )
-
-    return create_operation(
-        "tt.experimental_tensormap_create",
-        location;
-        operands,
-        owned_regions,
-        successors,
-        attributes,
-        results=op_ty_results,
-        result_inference=false,
-    )
-end
-
-function experimental_tensormap_fenceproxy_acquire(desc_ptr::Value; location=Location())
-    op_ty_results = IR.Type[]
-    operands = Value[desc_ptr,]
-    owned_regions = Region[]
-    successors = Block[]
-    attributes = NamedAttribute[]
-
-    return create_operation(
-        "tt.experimental_tensormap_fenceproxy_acquire",
-        location;
-        operands,
-        owned_regions,
-        successors,
-        attributes,
-        results=op_ty_results,
-        result_inference=false,
-    )
-end
-
 """
 `extern_elementwise`
 
@@ -966,12 +868,15 @@ Return the histogram of the input tensor. The number of bins is equal to
 the dimension of the output tensor. Each bins has a width of 1 and bins
 start at 0.
 """
-function histogram(src::Value; result::IR.Type, location=Location())
+function histogram(
+    src::Value, mask=nothing::Union{Nothing,Value}; result::IR.Type, location=Location()
+)
     op_ty_results = IR.Type[result,]
     operands = Value[src,]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
+    !isnothing(mask) && push!(operands, mask)
 
     return create_operation(
         "tt.histogram",
@@ -1556,6 +1461,26 @@ function trans(
 
     return create_operation(
         "tt.trans",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
+    )
+end
+
+function unsplat(src::Value; result=nothing::Union{Nothing,IR.Type}, location=Location())
+    op_ty_results = IR.Type[]
+    operands = Value[src,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+    !isnothing(result) && push!(op_ty_results, result)
+
+    return create_operation(
+        "tt.unsplat",
         location;
         operands,
         owned_regions,
