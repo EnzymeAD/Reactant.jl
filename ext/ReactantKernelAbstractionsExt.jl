@@ -10,6 +10,9 @@ using Adapt: Adapt
 
 export ReactantBackend
 
+# ToDo: Include XLA client, device and sharding in ReactantBackend struct, to
+# support more complex applications? If so, need to adapt implementation of
+# `KA.get_backend` and `KA.allocate` accordingly.
 struct ReactantBackend <: KA.GPU end
 
 function Base.getproperty(x::ReactantBackend, sym::Symbol)
@@ -22,7 +25,10 @@ function Base.getproperty(x::ReactantBackend, sym::Symbol)
     end
 end
 
-KA.allocate(b::ReactantBackend, ::Type{T}, dims::Tuple) where {T} = KA.zeros(b, T, dims)
+function KA.allocate(::ReactantBackend, ::Type{T}, dims::Tuple) where {T}
+    return ConcreteRArray(undef, T, dims)
+end
+
 function KA.zeros(::ReactantBackend, ::Type{T}, dims::Tuple) where {T}
     return Reactant.to_rarray(zeros(T, dims))
 end
