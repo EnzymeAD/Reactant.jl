@@ -47,6 +47,18 @@ end
     @test y ≈ Array(y_ra)
 end
 
+function write_row_simple!(xs_mut, i, v)
+    xs_mut[:, i] = v
+    return nothing
+end
+@testset "setindex: DUS" begin
+    x_ra = similar(ConcreteRArray{Float64}, (76, 100))
+    y_ra = similar(ConcreteRArray{Float64}, 76)
+    hlo = @code_hlo write_row_simple!(x_ra, 1, y_ra)
+    @test contains(repr(hlo), "dynamic_update_slice")
+    @test !contains(repr(hlo), "concatenate")
+end
+
 function maskset!(y, x)
     y[:] = x
     return nothing
