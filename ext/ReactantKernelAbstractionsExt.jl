@@ -29,11 +29,15 @@ function KA.allocate(::ReactantBackend, ::Type{T}, dims::Tuple) where {T}
     return ConcreteRArray(undef, T, dims)
 end
 
-function KA.zeros(::ReactantBackend, ::Type{T}, dims::Tuple) where {T}
-    return Reactant.to_rarray(zeros(T, dims))
+function KA.zeros(b::ReactantBackend, ::Type{T}, dims::Tuple) where {T}
+    A = KA.allocate(b, T, dims)
+    isempty(A) || fill!(A, zero(T))
+    return A
 end
-function KA.ones(::ReactantBackend, ::Type{T}, dims::Tuple) where {T}
-    return Reactant.to_rarray(ones(T, dims))
+function KA.ones(b::ReactantBackend, ::Type{T}, dims::Tuple) where {T}
+    A = KA.allocate(b, T, dims)
+    isempty(A) || fill!(A, one(T))
+    return A
 end
 
 KA.get_backend(::Reactant.AnyTracedRArray) = ReactantBackend()
