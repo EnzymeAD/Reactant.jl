@@ -185,33 +185,11 @@ function ConcretePJRTArray(
     device::Union{Nothing,XLA.PJRT.Device}=nothing,
     sharding::Sharding.AbstractSharding=Sharding.NoSharding(),
 ) where {T,N}
-    client = client === nothing ? XLA.default_backend() : client
-
-    if !Sharding.is_sharded(sharding)
-        if device === nothing
-            if idx === nothing
-                device = XLA.default_device(client)
-            else
-                device = XLA.get_device(client, idx)
-            end
-        else
-            if idx !== nothing
-                device_from_idx = XLA.get_device(client, idx)
-                @assert device_from_idx == device "If both `idx` and `device` are \
-                                                   specified, `idx` must match `device`"
-            end
-        end
-        sdata, sharding = sharding(client, device, data)
-        return ConcretePJRTArray{T,N,1,typeof(sharding)}(sdata, size(data), sharding)
-    end
-    if device !== nothing || idx !== nothing
-        @warn "`device` and `idx` specified for non-`NoSharding` sharding. These arguments \
-               will be ignored."
-    end
-    sharded_data, sharding = sharding(client, nothing, data)
-    return ConcretePJRTArray{T,N,length(sharded_data),typeof(sharding)}(
-        sharded_data, size(data), sharding
-    )
+    theclient, thedevice = _select_client_and_device(client, idx, device, sharding)
+    sharded_data, shardinfo = sharding(theclient, thedevice, data)
+    shape = size(data)
+    nsharded = length(sharded_data)
+    return ConcretePJRTArray{T,N,nsharded,typeof(shardinfo)}(sharded_data, shape, shardinfo)
 end
 
 Base.wait(x::Union{ConcretePJRTArray,ConcretePJRTNumber}) = foreach(wait, x.data)
@@ -335,32 +313,11 @@ function ConcreteIFRTArray(
     device::Union{Nothing,XLA.IFRT.Device}=nothing,
     sharding::Sharding.AbstractSharding=Sharding.NoSharding(),
 ) where {T,N}
-    client = client === nothing ? XLA.default_backend() : client
-
-    if !Sharding.is_sharded(sharding)
-        if device === nothing
-            if idx === nothing
-                device = XLA.default_device(client)
-            else
-                device = XLA.get_device(client, idx)
-            end
-        else
-            if idx !== nothing
-                device_from_idx = XLA.get_device(client, idx)
-                @assert device_from_idx == device "If both `idx` and `device` are \
-                                                   specified, `idx` must match `device`"
-            end
-        end
-    else
-        if device !== nothing || idx !== nothing
-            @warn "`device` and `idx` specified for non-`NoSharding` sharding. These \
-                   arguments will be ignored."
-        end
-    end
-    sharded_data, sharding, padding = sharding(client, nothing, data)
-    return ConcreteIFRTArray{T,N,typeof(sharding)}(
-        sharded_data, size(data), sharding, padding
-    )
+    theclient, thedevice = _select_client_and_device(client, idx, device, sharding)
+    shape = size(data)
+    # ToDo: How to use specified device (non-sharded case)?
+    sharded_data, shardinfo, padding = sharding(theclient, nothing, data)
+    return ConcreteIFRTArray{T,N,typeof(shardinfo)}(sharded_data, shape, shardinfo, padding)
 end
 
 # Assemble data from multiple arrays. Needed in distributed setting where each process wont
