@@ -165,7 +165,7 @@ jobs:
         run: |
           import Pkg
           Pkg.Registry.update()
-          Pkg.test(; coverage="user")
+          Pkg.test(; allow_reresolve=false, coverage="user")
         shell: julia --color=yes --code-coverage=user --depwarn=yes --project=. {0}
         id: run_tests
         env:
