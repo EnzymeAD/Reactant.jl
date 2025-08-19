@@ -30,47 +30,6 @@ concurrency:
 
 jobs:
   cache-warmup:
-    runs-on: ubuntu-24.04
-    strategy:
-      matrix:
-        version: ["1.10"]
-        os: [ubuntu-24.04]
-        runtime: ["PJRT"]
-        assertions: [false]
-    steps:
-      - uses: actions/checkout@v4
-      - uses: julia-actions/setup-julia@v2
-        with:
-          version: ${{ matrix.version }}
-      - uses: julia-actions/cache@v2
-        with:
-          cache-name: julia-cache;workflow=${{ github.workflow }};version=${{ matrix.version }};os=${{ matrix.os }};runtime=${{ matrix.runtime }};assertions=${{ matrix.assertions }}
-          include-matrix: false
-      - name: "Run Tests to warm cache"
-        run: |
-          import Pkg
-          Pkg.Registry.update()
-          Pkg.test(allow_reresolve=false)
-        shell: julia --color=yes --depwarn=yes --project=. {0}
-        env:
-          JULIA_PKG_SERVER_REGISTRY_PREFERENCE: eager
-          ENABLE_PJRT_COMPATIBILITY: 1
-          REACTANT_TEST_GROUP: "none"
-          XLA_FLAGS: "--xla_force_host_platform_device_count=12"
-          JULIA_DEBUG: "Reactant,Reactant_jll"
-
-      - name: Warm cache
-        run: |
-          import Pkg
-          Pkg.Registry.update()
-          Pkg.instantiate()
-          Pkg.resolve()
-          Pkg.precompile()
-        shell: julia --project=. {0}
-  test:
-    needs: cache-warmup
-    timeout-minutes: 90
-    name: Julia ${{ matrix.version }} - ${{ matrix.test_group }} - ${{ matrix.os }} - ${{ matrix.runtime }} - assertions=${{ matrix.assertions }} - ${{ github.event_name }}
     runs-on: ${{ matrix.os }}
     container:
       image: ${{ contains(matrix.os, 'linux') && 'ghcr.io/enzymead/reactant-docker-images:main' || '' }}
@@ -94,18 +53,6 @@ jobs:
             assertions: true
             test_group: core
             runtime: "PJRT"
-          # - os: ubuntu-24.04
-          #   libReactant: packaged
-          #   version: '1.10'
-          #   test_group: core
-          # - os: ubuntu-24.04
-          #   libReactant: packaged
-          #   version: '1.10'
-          #   test_group: neural_networks
-          # - os: ubuntu-24.04
-          #   libReactant: packaged
-          #   version: '1.10'
-          #   test_group: integration
     steps:
       - name: Set TMPDIR
         # We have to use `${GITHUB_WORKSPACE}` instead of `github.workspace` because GitHub
@@ -136,7 +83,13 @@ jobs:
         run: |
           sed -i.bak 's/exit 2/exit 0/g' julia/deps/tools/jlchecksum
           make -C julia -j $(nproc) FORCE_ASSERTIONS=1 LLVM_ASSERTIONS=1 JULIA_PRECOMPILE=0
-          echo $PWD/julia/usr/bin >> $GITHUB_PATH
+      - name: Create Julia binary artifact
+        if: ${{ matrix.assertions }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: julia-binary-${{ matrix.version }}-${{ matrix.os }}-${{ matrix.runtime }}-assertions=${{ matrix.assertions }}
+          path: julia/usr/bin/julia
+          retention-days: 1
       - name: "Setup Runtime Preferences"
         uses: "DamianReeves/write-file-action@master"
         with:
@@ -160,11 +113,72 @@ jobs:
         if: ${{ matrix.version == '1.10' }}
         env:
           JULIA_PKG_SERVER_REGISTRY_PREFERENCE: eager
+      - name: Warm cache
+        run: |
+          import Pkg
+          import Pkg
+          Pkg.Registry.update()
+          Pkg.test(allow_reresolve=false)
+        shell: julia --project=. {0}
+        env:
+          JULIA_PKG_SERVER_REGISTRY_PREFERENCE: eager
+          ENABLE_PJRT_COMPATIBILITY: 1
+          REACTANT_TEST_GROUP: "none"
+          XLA_FLAGS: "--xla_force_host_platform_device_count=12"
+          JULIA_DEBUG: "Reactant,Reactant_jll"
+
+  test:
+    needs: cache-warmup
+    timeout-minutes: 90
+    name: Julia ${{ matrix.version }} - ${{ matrix.test_group }} - ${{ matrix.os }} - ${{ matrix.runtime }} - assertions=${{ matrix.assertions }} - ${{ github.event_name }}
+    runs-on: ${{ matrix.os }}
+    container:
+      image: ${{ contains(matrix.os, 'linux') && 'ghcr.io/enzymead/reactant-docker-images:main' || '' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        version:
+          - "1.10"
+        os:
+          - ubuntu-24.04
+        test_group:
+          - core
+        runtime:
+          - "PJRT"
+        assertions:
+          - false
+        include:
+          # Keep just one include for testing
+          - os: ubuntu-24.04
+            version: "1.10"
+            assertions: true
+            test_group: core
+            runtime: "PJRT"
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download Julia binary artifact
+        if: ${{ matrix.assertions }}
+        uses: actions/download-artifact@v4
+        with:
+          name: julia-binary-${{ matrix.version }}-${{ matrix.os }}-${{ matrix.runtime }}-assertions=${{ matrix.assertions }}
+          path: julia-bin
+      - name: Setup custom Julia path
+        if: ${{ matrix.assertions }}
+        run: |
+          chmod +x julia-bin/julia
+          echo "$PWD/julia-bin" >> $GITHUB_PATH
+      - uses: julia-actions/setup-julia@v2
+        if: ${{ ! matrix.assertions }}
+        with:
+          version: ${{ matrix.version }}
+      - uses: julia-actions/cache@v2
+        with:
+          cache-name: julia-cache;workflow=${{ github.workflow }};version=${{ matrix.version }};os=${{ matrix.os }};runtime=${{ matrix.runtime }};assertions=${{ matrix.assertions }}
+          include-matrix: false
       - name: "Run Tests"
         timeout-minutes: 60
         run: |
           import Pkg
-          Pkg.Registry.update()
           Pkg.test(; allow_reresolve=false, coverage="user")
         shell: julia --color=yes --code-coverage=user --depwarn=yes --project=. {0}
         id: run_tests
