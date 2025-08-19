@@ -452,39 +452,34 @@ end
 Base.@deprecate_binding ConcreteRNG ReactantRNG
 Base.@deprecate_binding TracedRNG ReactantRNG
 
-## Aliases based on the set preferences
+"""
+    ConcreteRArray(
+        undef, ::Type{T}, shape::Dims;
+        client::Union{Nothing,XLA.AbstractClient} = nothing,
+        device::Union{Nothing,XLA.AbstractDevice} = nothing,
+        sharding::Sharding.AbstractSharding = Sharding.NoSharding(),
+    )
+
+Allocate an uninitialized `ConcreteRArray` of element type `T` and size
+`shape`.
+
+# Implementation
+
+Depending on the Reactant `xla_runtime` preference setting, `ConcreteRArray`
+is an alias for `ConcretePJRTArray` or `ConcreteIFRTArray`. User code should
+use `ConcreteRArray`.
+"""
+const ConcreteRArray = @static if XLA.REACTANT_XLA_RUNTIME == "PJRT"
+    ConcretePJRTArray
+elseif XLA.REACTANT_XLA_RUNTIME == "IFRT"
+    ConcreteIFRTArray
+end
+
+## Other Aliases based on the set preferences
 @static if XLA.REACTANT_XLA_RUNTIME == "PJRT"
-    """
-        const ConcreteRArray = ConcretePJRTArray
-
-        ConcreteRArray(
-            undef, ::Type{T}, shape::Dims;
-            client::Union{Nothing,XLA.AbstractClient} = nothing,
-            device::Union{Nothing,XLA.AbstractDevice} = nothing,
-            sharding::Sharding.AbstractSharding = Sharding.NoSharding(),
-        )
-
-    Allocate an uninitialized ConcreteRArray of element type `T` and shape `dims`.
-    """
-    const ConcreteRArray = ConcretePJRTArray
-
     const ConcreteRNumber = ConcretePJRTNumber
     const AnyConcreteRArray = AnyConcretePJRTArray
 elseif XLA.REACTANT_XLA_RUNTIME == "IFRT"
-    """
-        const ConcreteRArray = ConcreteIFRTArray
-
-        ConcreteRArray(
-            undef, ::Type{T}, shape::Dims;
-            client::Union{Nothing,XLA.AbstractClient} = nothing,
-            device::Union{Nothing,XLA.AbstractDevice} = nothing,
-            sharding::Sharding.AbstractSharding = Sharding.NoSharding(),
-        )
-
-    Allocate an uninitialized ConcreteRArray of element type `T` and shape `dims`.
-    """
-    const ConcreteRArray = ConcreteIFRTArray
-
     const ConcreteRNumber = ConcreteIFRTNumber
     const AnyConcreteRArray = AnyConcreteIFRTArray
 end
