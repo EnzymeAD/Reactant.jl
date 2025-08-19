@@ -417,8 +417,10 @@ Base.@deprecate_binding TracedRNG ReactantRNG
         sharding::Sharding.AbstractSharding = Sharding.NoSharding(),
     )
 
+    ConcretePJRTArray(data::Array, kwargs...)
+
 Allocate an uninitialized `ConcreteRArray` of element type `T` and size
-`shape`.
+`shape` or convert an `Array` to a `ConcreteRArray`.
 
 # Implementation
 
