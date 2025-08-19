@@ -42,10 +42,19 @@ function ancestor(T::Type{<:AbstractArray})
         p_T == T && return T
         return ancestor(p_T)
     end
+    if applicable(_parent_type, T)
+        p_T = _parent_type(T)
+        p_T == T && return T
+        return ancestor(p_T)
+    end
     @warn "`Adapt.parent_type` is not implemented for $(T). Assuming $T isn't a wrapped \
            array." maxlog = 1
     return T
 end
+
+# A lot of packages don't define `Adapt.parent_type`. We use `_parent_type` as a way to
+# define the parent type of an array without type-piracy.
+function _parent_type end
 
 include("accelerators/Accelerators.jl")
 

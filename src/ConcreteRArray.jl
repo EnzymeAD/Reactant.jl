@@ -83,6 +83,7 @@ for T in Base.uniontypes(ReactantPrimitive)
 end
 
 function Base.convert(::Type{T}, x::AbstractConcreteNumber) where {T<:Number}
+    T == typeof(x) && return x
     return convert(T, to_number(x))
 end
 

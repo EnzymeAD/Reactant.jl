@@ -288,7 +288,7 @@ function create_result(
         sym = Symbol("result", var_idx[])
         var_idx[] += 1
 
-        @assert haskey(result_stores, path)
+        @assert haskey(result_stores, path) "Expected $(path) in $(keys(result_stores))"
         restore = result_stores[path]
         delete!(result_stores, path)
         if path_to_shard_info !== nothing && haskey(path_to_shard_info, path)
