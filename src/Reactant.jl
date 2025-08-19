@@ -15,6 +15,8 @@ export @allowscalar # re-exported from GPUArraysCore
 
 is_extension_loaded(::Val) = false
 
+include("PersistentCompileCache.jl")
+
 # auxiliary types and functions
 include("OrderedIdDict.jl")
 

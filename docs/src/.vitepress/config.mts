@@ -89,6 +89,7 @@ export default defineConfig({
           {text: "Local build", link: "/tutorials/local-build"},
           {text: "Control Flow", link: "/tutorials/control-flow"},
           {text: "Sharding", link: "/tutorials/sharding"},
+          {text: "Persistent Compilation Cache", link: "/tutorials/persistent_compile_cache"},
         ],
       },
       {
@@ -160,6 +161,7 @@ export default defineConfig({
           { text: "Local build", link: "/tutorials/local-build" },
           { text: "Control Flow", link: "/tutorials/control-flow" },
           { text: "Sharding", link: "/tutorials/sharding" },
+          { text: "Persistent Compilation Cache", link: "/tutorials/persistent_compile_cache" },
         ],
       }
     ],

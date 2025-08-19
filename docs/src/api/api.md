@@ -74,6 +74,12 @@ Reactant.addressable_devices
 Reactant.ignore_derivatives
 ```
 
+## Persistent Compilation Cache
+
+```@docs
+clear_compilation_cache!
+```
+
 ## Internal utils
 
 ```@docs
