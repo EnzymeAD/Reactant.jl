@@ -48,11 +48,11 @@ jobs:
           - false
         include:
           # Keep just one include for testing
-          - os: ubuntu-24.04
-            version: "1.10"
-            assertions: true
+          - version: "1.10"
+            os: ubuntu-24.04
             test_group: core
             runtime: "PJRT"
+            assertions: true
     steps:
       - name: Set TMPDIR
         # We have to use `${GITHUB_WORKSPACE}` instead of `github.workspace` because GitHub
@@ -83,12 +83,12 @@ jobs:
         run: |
           sed -i.bak 's/exit 2/exit 0/g' julia/deps/tools/jlchecksum
           make -C julia -j $(nproc) FORCE_ASSERTIONS=1 LLVM_ASSERTIONS=1 JULIA_PRECOMPILE=0
-      - name: Create Julia binary artifact
+      - name: Create Julia installation artifact
         if: ${{ matrix.assertions }}
         uses: actions/upload-artifact@v4
         with:
-          name: julia-binary-${{ matrix.version }}-${{ matrix.os }}-${{ matrix.runtime }}-assertions=${{ matrix.assertions }}
-          path: julia/usr/bin/julia
+          name: julia-installation-${{ matrix.version }}-${{ matrix.os }}-${{ matrix.runtime }}-assertions=${{ matrix.assertions }}
+          path: julia/usr/
           retention-days: 1
       - name: "Setup Runtime Preferences"
         uses: "DamianReeves/write-file-action@master"
@@ -116,9 +116,8 @@ jobs:
       - name: Warm cache
         run: |
           import Pkg
-          import Pkg
           Pkg.Registry.update()
-          Pkg.test(allow_reresolve=false)
+          Pkg.test(; allow_reresolve=false)
         shell: julia --project=. {0}
         env:
           JULIA_PKG_SERVER_REGISTRY_PREFERENCE: eager
@@ -149,24 +148,23 @@ jobs:
           - false
         include:
           # Keep just one include for testing
-          - os: ubuntu-24.04
-            version: "1.10"
-            assertions: true
+          - version: "1.10"
+            os: ubuntu-24.04
             test_group: core
             runtime: "PJRT"
+            assertions: true
     steps:
       - uses: actions/checkout@v4
-      - name: Download Julia binary artifact
+      - name: Download Julia installation artifact
         if: ${{ matrix.assertions }}
         uses: actions/download-artifact@v4
         with:
-          name: julia-binary-${{ matrix.version }}-${{ matrix.os }}-${{ matrix.runtime }}-assertions=${{ matrix.assertions }}
-          path: julia-bin
+          name: julia-installation-${{ matrix.version }}-${{ matrix.os }}-${{ matrix.runtime }}-assertions=${{ matrix.assertions }}
+          path: julia/usr
       - name: Setup custom Julia path
         if: ${{ matrix.assertions }}
         run: |
-          chmod +x julia-bin/julia
-          echo "$PWD/julia-bin" >> $GITHUB_PATH
+          echo "$PWD/julia/usr/bin" >> $GITHUB_PATH
       - uses: julia-actions/setup-julia@v2
         if: ${{ ! matrix.assertions }}
         with:
@@ -179,6 +177,7 @@ jobs:
         timeout-minutes: 60
         run: |
           import Pkg
+          Pkg.Registry.update()
           Pkg.test(; allow_reresolve=false, coverage="user")
         shell: julia --color=yes --code-coverage=user --depwarn=yes --project=. {0}
         id: run_tests
