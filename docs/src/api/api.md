@@ -25,6 +25,7 @@ within_compile
 
 ```@docs
 ConcreteRArray
+ConcreteRNumber
 ```
 
 ## Inspect Generated HLO

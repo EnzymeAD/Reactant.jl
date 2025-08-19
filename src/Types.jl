@@ -434,6 +434,30 @@ elseif XLA.REACTANT_XLA_RUNTIME == "IFRT"
     ConcreteIFRTArray
 end
 
+"""
+    ConcreteRNumber(
+        x::Number;
+        client::Union{Nothing,XLA.AbstractClient} = nothing,
+        device::Union{Nothing,XLA.AbstractDevice} = nothing,
+        sharding::Sharding.AbstractSharding = Sharding.NoSharding(),
+    )
+
+    ConcreteRNumber{T<:Number}(x; kwargs...)
+
+Wrap a `Number` in a `ConcreteRNumber`.
+
+# Implementation
+
+Depending on the Reactant `xla_runtime` preference setting, `ConcreteRArray`
+is an alias for `ConcretePJRTNumber` or `ConcreteIFRTNumber`. User code should
+use `ConcreteRNumber`.
+"""
+const ConcreteRNumber = @static if XLA.REACTANT_XLA_RUNTIME == "PJRT"
+    ConcretePJRTNumber
+elseif XLA.REACTANT_XLA_RUNTIME == "IFRT"
+    ConcreteIFRTNumber
+end
+
 ## Other Aliases based on the set preferences
 @static if XLA.REACTANT_XLA_RUNTIME == "PJRT"
     const ConcreteRNumber = ConcretePJRTNumber
