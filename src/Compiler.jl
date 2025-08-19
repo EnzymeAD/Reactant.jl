@@ -903,9 +903,9 @@ function optimization_passes(
         # "compare_mul",
         "compare_convert",
         "add_selects",
-        "self_subtract_to_convolution_like($(backend == "tpu"))",
-        "self_add_to_convolution_like($(backend == "tpu"))",
-        "self_mul_to_convolution_like($(backend == "tpu"))",
+        "self_subtract_to_convolution_like($(Int(backend == "tpu")))",
+        "self_add_to_convolution_like($(Int(backend == "tpu")))",
+        "self_mul_to_convolution_like($(Int(backend == "tpu")))",
         "subtract_multiply_const_to_add_mul_const",
     ]
 
