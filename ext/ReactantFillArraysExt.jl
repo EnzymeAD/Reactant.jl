@@ -9,16 +9,20 @@ using GPUArraysCore: @allowscalar
 Reactant._parent_type(T::Type{<:AbstractFill}) = T
 Reactant._parent_type(T::Type{<:OneElement}) = T
 
-Base.@nospecializeinfer function Reactant.traced_type_inner(
-    @nospecialize(FA::Type{Fill{T,N,Axes}}),
-    seen,
-    mode::Reactant.TraceMode,
-    @nospecialize(track_numbers::Type),
-    @nospecialize(sharding),
-    @nospecialize(runtime)
-) where {T,N,Axes}
-    # T will be a number so we need to trace it
-    return Fill{Reactant.traced_type_inner(T, seen, mode, Number, sharding, runtime),N,Axes}
+for AT in (Fill, Ones, Zeros)
+    @eval Base.@nospecializeinfer function Reactant.traced_type_inner(
+        @nospecialize(FA::Type{$(AT){T,N,Axes}}),
+        seen,
+        mode::Reactant.TraceMode,
+        @nospecialize(track_numbers::Type),
+        @nospecialize(sharding),
+        @nospecialize(runtime)
+    ) where {T,N,Axes}
+        # T will be a number so we need to trace it
+        return $(AT){
+            Reactant.traced_type_inner(T, seen, mode, Number, sharding, runtime),N,Axes
+        }
+    end
 end
 
 Base.@nospecializeinfer function Reactant.make_tracer(
@@ -29,6 +33,34 @@ Base.@nospecializeinfer function Reactant.make_tracer(
             seen, prev.value, (path..., 1), mode; kwargs..., track_numbers=Number
         ),
         prev.axes,
+    )
+end
+
+Base.@nospecializeinfer function Reactant.make_tracer(
+    seen,
+    @nospecialize(prev::Ones{T,N,Axes}),
+    @nospecialize(path),
+    mode;
+    @nospecialize(sharding = Sharding.NoSharding()),
+    @nospecialize(runtime = nothing),
+    kwargs...,
+) where {T,N,Axes}
+    return Ones(
+        Reactant.traced_type_inner(T, seen, mode, Number, sharding, runtime), prev.axes
+    )
+end
+
+Base.@nospecializeinfer function Reactant.make_tracer(
+    seen,
+    @nospecialize(prev::Zeros{T,N,Axes}),
+    @nospecialize(path),
+    mode;
+    @nospecialize(sharding = Sharding.NoSharding()),
+    @nospecialize(runtime = nothing),
+    kwargs...,
+) where {T,N,Axes}
+    return Zeros(
+        Reactant.traced_type_inner(T, seen, mode, Number, sharding, runtime), prev.axes
     )
 end
 
@@ -80,8 +112,10 @@ function ReactantCore.materialize_traced_array(x::OneElement{T}) where {T}
 end
 
 # some functions to avoid bad performance
-function Base.similar(::OneElement{<:TracedRNumber}, ::Type{T}, dims::Dims) where {T}
-    return TracedUtils.broadcast_to_size(unwrapped_eltype(T)(0), dims)
+for AT in (Fill, Ones, Zeros, OneElement)
+    @eval function Base.similar(x::$AT{<:TracedRNumber}, ::Type{T}, dims::Dims) where {T}
+        return TracedUtils.broadcast_to_size(unwrapped_eltype(T)(0), dims)
+    end
 end
 
 end
