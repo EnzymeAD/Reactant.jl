@@ -440,10 +440,6 @@ end
     ::UndefInitializer, shape::Integer...; kwargs...
 ) where {T<:Number} = ConcreteRArray{T}(undef, Dims(shape); kwargs...)
 
-@deprecate ConcreteRArray(
-    ::UndefInitializer, ::Type{T}, shape::Dims; kwargs...
-) where {T<:Number} ConcreteRArray{T}(undef, shape; kwargs...)
-
 """
     ConcreteRNumber(
         x::Number;

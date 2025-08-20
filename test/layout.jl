@@ -17,10 +17,6 @@ using Test
         undef, Int32(100), Int16(10); client=client, idx=idx, device=device
     ) isa ConcreteRArray{Float32,2}
 
-    @test_deprecated ConcreteRArray(
-        undef, Float32, (100, 10); client=client, idx=idx, device=device
-    ) isa ConcreteRArray{Float32,2}
-
     @test ConcreteRNumber(Float32(4.2)) isa ConcreteRNumber{Float32}
 
     @test ConcreteRNumber(Float16(4.2); client=client, idx=idx, device=device) isa
