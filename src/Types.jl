@@ -452,18 +452,16 @@ Depending on the Reactant `xla_runtime` preference setting, `ConcreteRArray`
 is an alias for `ConcretePJRTNumber` or `ConcreteIFRTNumber`. User code should
 use `ConcreteRNumber`.
 """
-const ConcreteRNumber = @static if XLA.REACTANT_XLA_RUNTIME == "PJRT"
-    ConcretePJRTNumber
+const ConcreteRNumber{T} = @static if XLA.REACTANT_XLA_RUNTIME == "PJRT"
+    ConcretePJRTNumber{T}
 elseif XLA.REACTANT_XLA_RUNTIME == "IFRT"
-    ConcreteIFRTNumber
+    ConcreteIFRTNumber{T}
 end
 
 ## Other Aliases based on the set preferences
 @static if XLA.REACTANT_XLA_RUNTIME == "PJRT"
-    const ConcreteRNumber = ConcretePJRTNumber
     const AnyConcreteRArray = AnyConcretePJRTArray
 elseif XLA.REACTANT_XLA_RUNTIME == "IFRT"
-    const ConcreteRNumber = ConcreteIFRTNumber
     const AnyConcreteRArray = AnyConcreteIFRTArray
 end
 
