@@ -1431,6 +1431,8 @@ end
 end
 
 zip_iterator(a, b) = mapreduce(splat(*), +, zip(a, b))
+nary_mapreduce(a, b) = mapreduce(*, +, a, b)
+nary_mapreduce_dims(a, b) = mapreduce(*, +, a, b; dims = 2)
 enumerate_iterator(a) = mapreduce(splat(*), +, enumerate(a))
 
 function nested_mapreduce_zip(x, y)
@@ -1482,6 +1484,20 @@ end
         y_ra = Reactant.to_rarray(y)
 
         @test @jit(nested_mapreduce_hcat(x_ra, y_ra)) ≈ nested_mapreduce_hcat(x, y)
+    end
+
+    @testset "n-ary mapreduce" begin
+        x = rand(Float32, 12)
+        y = rand(Float32, 12)
+        z = rand(Float32, 4, 3)
+        w = rand(Float32, 4, 3)
+
+        rx, ry, rz, rw = Reactant.to_rarray.((x, y, z, w))
+        @test @jit(nary_mapreduce(rx, ry)) ≈ nary_mapreduce(x, y)
+        @test @jit(nary_mapreduce(rx, rz)) ≈ nary_mapreduce(x, z)
+        @test @jit(nary_mapreduce(rz, rw)) ≈ nary_mapreduce(z, w)
+        @test @jit(nary_mapreduce_dims(rz, rw)) ≈ nary_mapreduce_dims(z, w)
+        @test @jit(nary_mapreduce(rz, rx)) ≈ nary_mapreduce(z, x)
     end
 end
 
