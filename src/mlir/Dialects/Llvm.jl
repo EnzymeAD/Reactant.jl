@@ -1543,6 +1543,82 @@ function icmp(
 end
 
 """
+`mlir_ifunc`
+
+`llvm.mlir.ifunc` is a top level operation that defines a global ifunc.
+It defines a new symbol and takes a symbol refering to a resolver function.
+IFuncs can be called as regular functions. The function type is the same
+as the IFuncType. The symbol is resolved at runtime by calling a resolver
+function.
+
+Examples:
+
+```mlir
+// IFuncs resolve a symbol at runtime using a resovler function.
+llvm.mlir.ifunc external @foo: !llvm.func<f32 (i64)>, !llvm.ptr @resolver
+
+llvm.func @foo_1(i64) -> f32
+llvm.func @foo_2(i64) -> f32
+
+llvm.func @resolve_foo() -> !llvm.ptr attributes {
+  %0 = llvm.mlir.addressof @foo_2 : !llvm.ptr
+  %1 = llvm.mlir.addressof @foo_1 : !llvm.ptr
+
+  // ... Logic selecting from foo_{1, 2}
+
+  // Return function pointer to the selected function
+  llvm.return %7 : !llvm.ptr
+}
+
+llvm.func @use_foo() {
+  // IFuncs are called as regular functions
+  %res = llvm.call @foo(%value) : i64 -> f32
+}
+```
+"""
+function mlir_ifunc(;
+    sym_name,
+    i_func_type,
+    resolver,
+    resolver_type,
+    linkage,
+    dso_local=nothing,
+    address_space=nothing,
+    unnamed_addr=nothing,
+    visibility_=nothing,
+    location=Location(),
+)
+    op_ty_results = IR.Type[]
+    operands = Value[]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[
+        namedattribute("sym_name", sym_name),
+        namedattribute("i_func_type", i_func_type),
+        namedattribute("resolver", resolver),
+        namedattribute("resolver_type", resolver_type),
+        namedattribute("linkage", linkage),
+    ]
+    !isnothing(dso_local) && push!(attributes, namedattribute("dso_local", dso_local))
+    !isnothing(address_space) &&
+        push!(attributes, namedattribute("address_space", address_space))
+    !isnothing(unnamed_addr) &&
+        push!(attributes, namedattribute("unnamed_addr", unnamed_addr))
+    !isnothing(visibility_) && push!(attributes, namedattribute("visibility_", visibility_))
+
+    return create_operation(
+        "llvm.mlir.ifunc",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+"""
 `indirectbr`
 
 Transfer control flow to address in `\$addr`. A list of possible target

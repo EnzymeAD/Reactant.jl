@@ -4,6 +4,10 @@ NSYNC_COMMIT = "82b118aa7ace3132e517e2c467f8732978cf4023"
 
 NSYNC_SHA256 = ""
 
+ENZYMEXLA_COMMIT = "ad1e0392bcea0afaf75d12445608a08550055ea6"
+
+ENZYMEXLA_SHA256 = ""
+
 http_archive(
     name = "nsync",
     sha256 = NSYNC_SHA256,
@@ -11,46 +15,12 @@ http_archive(
     urls = ["https://github.com/wsmoses/nsync/archive/{commit}.tar.gz".format(commit = NSYNC_COMMIT)],
 )
 
-ENZYMEXLA_COMMIT = "85adc0201b0e605ce1bc89cf235ac0bfc23e77ab"
-
-ENZYMEXLA_SHA256 = ""
-
 http_archive(
     name = "enzyme_ad",
     sha256 = ENZYMEXLA_SHA256,
     strip_prefix = "Enzyme-JAX-" + ENZYMEXLA_COMMIT,
     urls = ["https://github.com/EnzymeAD/Enzyme-JAX/archive/{commit}.tar.gz".format(commit = ENZYMEXLA_COMMIT)],
 )
-
-# Hedron's Compile Commands Extractor for Bazel
-# https://github.com/hedronvision/bazel-compile-commands-extractor
-http_archive(
-    name = "hedron_compile_commands",
-    strip_prefix = "bazel-compile-commands-extractor-4f28899228fb3ad0126897876f147ca15026151e",
-
-    # Replace the commit hash (0e990032f3c5a866e72615cf67e5ce22186dcb97) in both places (below) with the latest (https://github.com/hedronvision/bazel-compile-commands-extractor/commits/main), rather than using the stale one here.
-    # Even better, set up Renovate and let it do the work for you (see "Suggestion: Updates" in the README).
-    url = "https://github.com/hedronvision/bazel-compile-commands-extractor/archive/4f28899228fb3ad0126897876f147ca15026151e.tar.gz",
-    # When you first run this tool, it'll recommend a sha256 hash to put here with a message like: "DEBUG: Rule 'hedron_compile_commands' indicated that a canonical reproducible form can be obtained by modifying arguments sha256 = ..."
-)
-
-load("@hedron_compile_commands//:workspace_setup.bzl", "hedron_compile_commands_setup")
-
-hedron_compile_commands_setup()
-
-load("@hedron_compile_commands//:workspace_setup_transitive.bzl", "hedron_compile_commands_setup_transitive")
-
-hedron_compile_commands_setup_transitive()
-
-load("@hedron_compile_commands//:workspace_setup_transitive_transitive.bzl", "hedron_compile_commands_setup_transitive_transitive")
-
-hedron_compile_commands_setup_transitive_transitive()
-
-load("@hedron_compile_commands//:workspace_setup_transitive_transitive_transitive.bzl", "hedron_compile_commands_setup_transitive_transitive_transitive")
-
-hedron_compile_commands_setup_transitive_transitive_transitive()
-
-load("@enzyme_ad//:workspace.bzl", "ENZYME_COMMIT", "ENZYME_SHA256", "JAX_COMMIT", "JAX_SHA256", "XLA_PATCHES")
 
 CUPTI_OLD = [
     """
@@ -66,9 +36,68 @@ sed -i.bak0 "/CUPTI_DRIVER_TRACE_CBID_cuGraphAddNode_v2/d" xla/backends/profiler
 
 CUPTI_NEW = []
 
-XLA_PATCHES = XLA_PATCHES + CUPTI_NEW + [
+NEW_XLA_PATCHES = CUPTI_NEW + [
     """
-sed -i.bak0 "s/kSupportedOpcodes({/kSupportedOpcodes(absl::flat_hash_set<HloOpcode>{/g" xla/service/gpu/gpu_memory_space_assignment.h
+echo "--- a/src/google/protobuf/stubs/port.h" >> third_party/proto.patch
+echo "+++ b/src/google/protobuf/stubs/port.h" >> third_party/proto.patch
+echo "@@ -27,7 +27,7 @@" >> third_party/proto.patch
+echo " #include <intrin.h>" >> third_party/proto.patch
+echo " #elif defined(__APPLE__)" >> third_party/proto.patch
+echo " #include <libkern/OSByteOrder.h>" >> third_party/proto.patch
+echo "-#elif defined(__linux__) || defined(__ANDROID__) || defined(__CYGWIN__)" >> third_party/proto.patch
+echo "+#elif !defined(__NVCC__) && (defined(__linux__) || defined(__ANDROID__) || defined(__CYGWIN__))" >> third_party/proto.patch
+echo " #include <byteswap.h>  // IWYU pragma: export" >> third_party/proto.patch
+echo " #endif" >> third_party/proto.patch
+echo "" >> third_party/proto.patch
+echo "@@ -143,7 +143,7 @@" >> third_party/proto.patch
+echo " #define bswap_32(x) OSSwapInt32(x)" >> third_party/proto.patch
+echo " #define bswap_64(x) OSSwapInt64(x)" >> third_party/proto.patch
+echo "" >> third_party/proto.patch
+echo "-#elif !defined(__linux__) && !defined(__ANDROID__) && !defined(__CYGWIN__)" >> third_party/proto.patch
+echo "+#elif defined(__NVCC__) || (!defined(__linux__) && !defined(__ANDROID__) && !defined(__CYGWIN__))" >> third_party/proto.patch
+echo "" >> third_party/proto.patch
+echo " #ifndef bswap_16" >> third_party/proto.patch
+echo " static inline uint16_t bswap_16(uint16_t x) {" >> third_party/proto.patch
+sed -i.bak0 "s/protobuf-6.31.1.patch\\"/protobuf-6.31.1.patch\\", \\":proto.patch\\"/g" workspace2.bzl
+""",
+    """
+sed -i.bak0 "s/def main():/def main():\\n  if TMPDIR: os.environ['TMPDIR'] = TMPDIR/g" third_party/gpus/crosstool/clang/bin/crosstool_wrapper_driver_is_not_gcc.tpl
+""",
+    """
+sed -i.bak0 "s/__chkstk/__chkstk_ms/g" xla/service/cpu/runtime_symbol_generator.cc
+""",
+    """
+sed -i.bak0 "1s/^/#include \\"llvm\\/Support\\/DynamicLibrary.h\\"\\n/g" xla/service/cpu/runtime_symbol_generator.cc
+""",
+    """
+sed -i.bak0 "s/(__chkstk_ms)/(llvm::sys::DynamicLibrary::SearchForAddressOfSymbol(\\"__chkstk_ms\\"))/g" xla/service/cpu/runtime_symbol_generator.cc
+""",
+    """
+sed -i.bak0 "s/Shlwapi/shlwapi/g" xla/tsl/platform/windows/load_library.cc xla/tsl/platform/windows/windows_file_system.cc xla/tsl/platform/windows/env.cc
+""",
+    """
+sed -i.bak0 "1s/^/#ifdef PLATFORM_WINDOWS\\n#include <immintrin.h>\\n#include <intrin.h>\\n#endif/g" third_party/tsl/tsl/platform/cpu_info.cc
+""",
+    """
+sed -i.bak0 "1s/^/#define _USE_MATH_DEFINES\\n/g" xla/fp_util.h xla/hlo/builder/lib/prng.cc xla/literal_comparison.cc xla/hlo/builder/lib/math.cc xla/service/spmd/fft_handler.cc xla/service/cpu/onednn_contraction_rewriter.cc xla/hlo/evaluator/hlo_evaluator.cc
+""",
+    """
+sed -i.bak0 "s/Windows\\.h/windows\\.h/g" xla/tsl/platform/windows/port.cc xla/tsl/platform/windows/wide_char.cc xla/tsl/platform/windows/env.cc xla/tsl/platform/windows/windows_file_system.cc
+""",
+    """
+sed -i.bak0 "/D_FORTIFY_SOURCE/d" third_party/gpus/crosstool/cc_toolchain_config.bzl.tpl tools/toolchains/cross_compile/cc/BUILD tools/toolchains/clang6/CROSSTOOL.tpl
+""",
+    """
+sed -i.bak0 "s/i64/LL/g" xla/tsl/platform/windows/env_time.cc
+""",
+    """
+sed -i.bak0 "s/\\/D/-D/g" third_party/farmhash/farmhash.BUILD
+""",
+    """
+sed -i.bak0 "s/kDeprecatedFlags({/kDeprecatedFlags(absl::flat_hash_set<std::string>{/g" xla/debug_options_flags.cc
+""",
+    """
+sed -i.bak0 "s/kStableFlags({/kStableFlags(absl::flat_hash_set<std::string>{/g" xla/debug_options_flags.cc
 """,
     """
 sed -i.bak0 "s/cupti_driver_cbid/cupti/g" xla/backends/profiler/gpu/cupti_tracer.cc
@@ -102,17 +131,10 @@ sed -i.bak0 "s/patch_cmds = \\[/patch_cmds = \\[\\\"find . -type f -name config.
     # """,
 ]
 
-LLVM_TARGETS = select({
-    "@bazel_tools//src/conditions:windows": [
-        "AMDGPU",
-        "NVPTX",
-    ],
-    "@bazel_tools//src/conditions:darwin": [],
-    "//conditions:default": [
-        "AMDGPU",
-        "NVPTX",
-    ],
-}) + [
+LLVM_TARGETS = [
+    "AMDGPU",
+    "NVPTX",
+] + [
     "AArch64",
     "X86",
     "ARM",
@@ -153,53 +175,28 @@ LLVM_TARGETS = select({
 #     ],
 # )
 
-JAX_PATCHES = [
-    """
-sed -i.bak0 "s/ cast/ llvm::cast/g" jaxlib/mosaic/dialect/gpu/mosaic_gpu.cc
+http_archive(
+    name = "rules_ml_toolchain",
+    patch_cmds = [
+        """
+	sed -i.bak0 "/D_FORTIFY_SOURCE/d" cc/features/BUILD third_party/gpus/crosstool/cc_toolchain_config.bzl.tpl
 """,
-]
-
-http_archive(
-    name = "jax",
-    patch_args = ["-p1"],
-    patch_cmds = JAX_PATCHES,
-    patches = ["@enzyme_ad//:patches/jax.patch"],
-    sha256 = JAX_SHA256,
-    strip_prefix = "jax-" + JAX_COMMIT,
-    urls = ["https://github.com/google/jax/archive/{commit}.tar.gz".format(commit = JAX_COMMIT)],
+    ],
+    sha256 = "59d7eb36a02cbe3c2e2fa67fda5e8f1ab7e274bc4773bbd207c51fe199e11c19",
+    strip_prefix = "rules_ml_toolchain-ffd9e3d7b84e43c2686c803cb08ce790ffd58baa",
+    urls = [
+        "https://github.com/google-ml-infra/rules_ml_toolchain/archive/ffd9e3d7b84e43c2686c803cb08ce790ffd58baa.tar.gz",
+    ],
 )
 
-load("@jax//third_party/xla:revision.bzl", "XLA_COMMIT", "XLA_SHA256")
-# XLA_COMMIT = "fb977e8b9ce1a02fbdc3955cc9ab6a6702a120d0"
-# XLA_SHA256 = ""
+load("@enzyme_ad//third_party/jax:workspace.bzl", jax_workspace = "repo")
 
-http_archive(
-    name = "xla",
-    patch_cmds = XLA_PATCHES,
-    sha256 = XLA_SHA256,
-    strip_prefix = "xla-" + XLA_COMMIT,
-    urls = ["https://github.com/giordano/xla/archive/{commit}.tar.gz".format(commit = XLA_COMMIT)],
-)
+jax_workspace([])
 
-load("@xla//third_party/py:python_init_rules.bzl", "python_init_rules")
+load("@enzyme_ad//third_party/xla:workspace.bzl", xla_workspace = "repo")
 
-python_init_rules()
+xla_workspace(NEW_XLA_PATCHES)
 
-load("@xla//third_party/py:python_init_repositories.bzl", "python_init_repositories")
-
-python_init_repositories(
-    requirements = {
-        "3.9": "//build:requirements_lock_3_9.txt",
-        "3.10": "//build:requirements_lock_3_10.txt",
-        "3.11": "//build:requirements_lock_3_11.txt",
-        "3.12": "//build:requirements_lock_3_12.txt",
-        "3.13": "//build:requirements_lock_3_13.txt",
-    },
-)
-
-load("@xla//third_party/py:python_init_toolchains.bzl", "python_init_toolchains")
-
-python_init_toolchains()
 #
 # load("@xla//third_party/py:python_init_pip.bzl", "python_init_pip")
 # python_init_pip()
@@ -215,12 +212,9 @@ python_init_toolchains()
 #
 # pip_install_dependencies()
 
-http_archive(
-    name = "enzyme",
-    sha256 = ENZYME_SHA256,
-    strip_prefix = "Enzyme-" + ENZYME_COMMIT + "/enzyme",
-    urls = ["https://github.com/EnzymeAD/Enzyme/archive/{commit}.tar.gz".format(commit = ENZYME_COMMIT)],
-)
+load("@enzyme_ad//third_party/enzyme:workspace.bzl", enzyme_workspace = "repo")
+
+enzyme_workspace()
 
 # http_archive(
 #     name = "upb",
@@ -245,13 +239,38 @@ load("@xla//:workspace3.bzl", "xla_workspace3")
 
 xla_workspace3()
 
+load("@xla//third_party/py:python_init_rules.bzl", "python_init_rules")
+
+python_init_rules()
+
+load("@xla//third_party/py:python_init_repositories.bzl", "python_init_repositories")
+
+python_init_repositories(
+    requirements = {
+        "3.9": "//build:requirements_lock_3_9.txt",
+        "3.10": "//build:requirements_lock_3_10.txt",
+        "3.11": "//build:requirements_lock_3_11.txt",
+        "3.12": "//build:requirements_lock_3_12.txt",
+        "3.13": "//build:requirements_lock_3_13.txt",
+    },
+)
+
+load("@xla//third_party/py:python_init_toolchains.bzl", "python_init_toolchains")
+
+python_init_toolchains()
+
+load("@xla//third_party/llvm:workspace.bzl", llvm = "repo")
+
+llvm("llvm-raw")
+
 load("@llvm-raw//utils/bazel:configure.bzl", "llvm_configure")
-load("@xla//:workspace2.bzl", "xla_workspace2")
 
 llvm_configure(
     name = "llvm-project",
     targets = LLVM_TARGETS,
 )
+
+load("@xla//:workspace2.bzl", "xla_workspace2")
 
 xla_workspace2()
 
@@ -284,8 +303,32 @@ load("@jax//third_party/flatbuffers:workspace.bzl", flatbuffers = "repo")
 
 flatbuffers()
 
+load("@jax//:test_shard_count.bzl", "test_shard_count_repository")
+
+test_shard_count_repository(
+    name = "test_shard_count",
+)
+
+load("@jax//:nvidia_wheel_versions.bzl", "nvidia_wheel_versions_repository")
+
+nvidia_wheel_versions_repository(
+    name = "nvidia_wheel_versions",
+    versions_source = "@jax//build:nvidia-requirements.txt",
+)
+
 load(
-    "@xla//third_party/gpus/cuda/hermetic:cuda_json_init_repository.bzl",
+    "@rules_ml_toolchain//cc_toolchain/deps:cc_toolchain_deps.bzl",
+    "cc_toolchain_deps",
+)
+
+cc_toolchain_deps()
+
+register_toolchains("@rules_ml_toolchain//cc_toolchain:lx64_lx64")
+
+register_toolchains("@rules_ml_toolchain//cc_toolchain:lx64_lx64_cuda")
+
+load(
+    "@rules_ml_toolchain//third_party/gpus/cuda/hermetic:cuda_json_init_repository.bzl",
     "cuda_json_init_repository",
 )
 
@@ -297,7 +340,12 @@ load(
     "CUDNN_REDISTRIBUTIONS",
 )
 load(
-    "@xla//third_party/gpus/cuda/hermetic:cuda_redist_init_repositories.bzl",
+    "@cuda_redist_json//:distributions.bzl",
+    "CUDA_REDISTRIBUTIONS",
+    "CUDNN_REDISTRIBUTIONS",
+)
+load(
+    "@rules_ml_toolchain//third_party/gpus/cuda/hermetic:cuda_redist_init_repositories.bzl",
     "cuda_redist_init_repositories",
     "cudnn_redist_init_repository",
 )
@@ -311,28 +359,28 @@ cudnn_redist_init_repository(
 )
 
 load(
-    "@xla//third_party/gpus/cuda/hermetic:cuda_configure.bzl",
+    "@rules_ml_toolchain//third_party/gpus/cuda/hermetic:cuda_configure.bzl",
     "cuda_configure",
 )
 
 cuda_configure(name = "local_config_cuda")
 
 load(
-    "@xla//third_party/nccl/hermetic:nccl_redist_init_repository.bzl",
+    "@rules_ml_toolchain//third_party/nccl/hermetic:nccl_redist_init_repository.bzl",
     "nccl_redist_init_repository",
 )
 
 nccl_redist_init_repository()
 
 load(
-    "@xla//third_party/nccl/hermetic:nccl_configure.bzl",
+    "@rules_ml_toolchain//third_party/nccl/hermetic:nccl_configure.bzl",
     "nccl_configure",
 )
 
 nccl_configure(name = "local_config_nccl")
 
 load(
-    "@xla//third_party/nvshmem/hermetic:nvshmem_json_init_repository.bzl",
+    "@rules_ml_toolchain//third_party/nvshmem/hermetic:nvshmem_json_init_repository.bzl",
     "nvshmem_json_init_repository",
 )
 
@@ -343,7 +391,7 @@ load(
     "NVSHMEM_REDISTRIBUTIONS",
 )
 load(
-    "@xla//third_party/nvshmem/hermetic:nvshmem_redist_init_repository.bzl",
+    "@rules_ml_toolchain//third_party/nvshmem/hermetic:nvshmem_redist_init_repository.bzl",
     "nvshmem_redist_init_repository",
 )
 
@@ -351,9 +399,30 @@ nvshmem_redist_init_repository(
     nvshmem_redistributions = NVSHMEM_REDISTRIBUTIONS,
 )
 
-load(
-    "@xla//third_party/nvshmem/hermetic:nvshmem_configure.bzl",
-    "nvshmem_configure",
+# Hedron's Compile Commands Extractor for Bazel
+# https://github.com/hedronvision/bazel-compile-commands-extractor
+http_archive(
+    name = "hedron_compile_commands",
+    strip_prefix = "bazel-compile-commands-extractor-4f28899228fb3ad0126897876f147ca15026151e",
+
+    # Replace the commit hash (0e990032f3c5a866e72615cf67e5ce22186dcb97) in both places (below) with the latest (https://github.com/hedronvision/bazel-compile-commands-extractor/commits/main), rather than using the stale one here.
+    # Even better, set up Renovate and let it do the work for you (see "Suggestion: Updates" in the README).
+    url = "https://github.com/hedronvision/bazel-compile-commands-extractor/archive/4f28899228fb3ad0126897876f147ca15026151e.tar.gz",
+    # When you first run this tool, it'll recommend a sha256 hash to put here with a message like: "DEBUG: Rule 'hedron_compile_commands' indicated that a canonical reproducible form can be obtained by modifying arguments sha256 = ..."
 )
 
-nvshmem_configure(name = "local_config_nvshmem")
+load("@hedron_compile_commands//:workspace_setup.bzl", "hedron_compile_commands_setup")
+
+hedron_compile_commands_setup()
+
+load("@hedron_compile_commands//:workspace_setup_transitive.bzl", "hedron_compile_commands_setup_transitive")
+
+hedron_compile_commands_setup_transitive()
+
+load("@hedron_compile_commands//:workspace_setup_transitive_transitive.bzl", "hedron_compile_commands_setup_transitive_transitive")
+
+hedron_compile_commands_setup_transitive_transitive()
+
+load("@hedron_compile_commands//:workspace_setup_transitive_transitive_transitive.bzl", "hedron_compile_commands_setup_transitive_transitive_transitive")
+
+hedron_compile_commands_setup_transitive_transitive_transitive()

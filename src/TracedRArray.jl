@@ -539,6 +539,22 @@ __default_init(::Type{T}, ::typeof(Base.max)) where {T} = typemin(T)
 function __default_init(::Type{T}, op::F) where {T,F}
     return Base.reduce_empty(Base.BottomRF(op), T)
 end
+function __default_init(T::Type{<:Reactant.ReactantFloat8}, op::F) where {F}
+    return T(__default_init(Float16, op))
+end
+
+function overloaded_mapreduce(
+    @nospecialize(f), @nospecialize(op), @nospecialize(A); dims=:, init=nothing
+)
+    res = unwrapped_broadcast(f, A)
+    # This means we are unable to use the optimized dispatches. For now we will
+    # unroll the mapreduce.
+    if typeof(res) == typeof(A)
+        @assert dims == Colon() "dims not supported for mapreduce currently."
+        return foldl(op, res; init)
+    end
+    return overloaded_mapreduce(identity, op, res; dims=:, init)
+end
 
 function overloaded_mapreduce(
     @nospecialize(f),
@@ -549,89 +565,33 @@ function overloaded_mapreduce(
 ) where {T,N}
     A = materialize_traced_array(A)
 
-    if dims isa Int
-        dims = [dims]
+    original_dims = dims
+    dims isa Int && (dims = Int64[dims])
+    dims isa Colon && (dims = collect(Int64, 1:N))
+    dims isa AbstractVector{<:Integer} || (dims = collect(Int64, dims))
+
+    op_in_T = unwrapped_eltype(Core.Compiler.return_type(f, Tuple{T}))
+    reduce_init = __default_init(op_in_T, op)
+    if unwrapped_eltype(typeof(reduce_init)) != op_in_T
+        op_in_T = typeof(reduce_init)
+        A = typeof(reduce_init).(A)
     end
+    reduce_init = TracedUtils.promote_to(TracedRNumber{op_in_T}, reduce_init)
 
-    op_in_T = Core.Compiler.return_type(f, Tuple{T})
+    reduce_input = materialize_traced_array(broadcast(f, A))
 
-    if init === nothing
-        init = __default_init(op_in_T, op)
+    res = Ops.reduce(reduce_input, reduce_init, dims, op)
 
-        if typeof(init) != op_in_T
-            op_in_T = typeof(init)
-            A = typeof(init).(A)
-        end
+    init !== nothing && (res = op.(res, init))
+
+    if original_dims isa Colon
+        @assert size(res) == () "expected size of result to be (), got $(size(res))"
+        return TracedRNumber{unwrapped_eltype(res)}((), res.mlir_data)
     end
-
-    init = [TracedUtils.broadcast_to_size(init, ()).mlir_data]
-
-    inp = [broadcast(f, A).mlir_data]
-
-    rdims = Int64[]
-
-    if dims == (:)
-        for i in 0:(N - 1)
-            push!(rdims, i)
-        end
-    else
-        for i in dims
-            push!(rdims, i - 1)
-        end
+    if res isa TracedRNumber
+        res = TracedRArray{unwrapped_eltype(res),0}((), res.mlir_data, ())
     end
-
-    in_tys = [
-        MLIR.IR.TensorType(Int64[], eltype(MLIR.IR.type(inp[1]))),
-        MLIR.IR.TensorType(Int64[], eltype(MLIR.IR.type(init[1]))),
-    ]
-
-    fnbody = MLIR.IR.Block(in_tys, [MLIR.IR.Location(), MLIR.IR.Location()])
-
-    args = (
-        TracedRNumber{Reactant.unwrapped_eltype(op_in_T)}((), MLIR.IR.argument(fnbody, 1)),
-        TracedRNumber{Reactant.unwrapped_eltype(op_in_T)}((), MLIR.IR.argument(fnbody, 2)),
-    )
-
-    resty = MLIR.IR.block!(fnbody) do
-        tmp = TracedUtils.broadcast_to_size(op(args...), ())
-        Ops.return_(tmp)
-        return eltype(MLIR.IR.type(tmp.mlir_data))
-    end
-
-    toonedims = Int[]
-    outdims = Int[]
-    for i in 1:N
-        tmp = if in(i - 1, rdims)
-            1
-        else
-            sz = size(A, i)
-            push!(outdims, sz)
-            sz
-        end
-        push!(toonedims, tmp)
-    end
-
-    TT = MLIR.IR.Type[MLIR.IR.TensorType(outdims, resty)]
-
-    body = MLIR.IR.Region()
-    push!(body, fnbody)
-    red = MLIR.Dialects.stablehlo.reduce(
-        inp, init; result_0=TT, dimensions=MLIR.IR.DenseArrayAttribute(rdims), body
-    )
-
-    red = MLIR.IR.result(red, 1)
-    redT = eltype(MLIR.IR.julia_type(MLIR.IR.type(red)))
-
-    if dims != (:)
-        red = Ops.reshape(TracedRArray(red), toonedims...)
-    else
-        if length(outdims) == 0
-            red = TracedRNumber{redT}((), red)
-        else
-            red = TracedRArray{redT,length(outdims)}((), red, (outdims...,))
-        end
-    end
-    return red
+    return Ops.reshape(res, [ifelse(i in dims, 1, size(A, i)) for i in 1:N])
 end
 
 function Base.mapreducedim!(
@@ -1158,16 +1118,17 @@ Base.argmax(x::AnyTracedRArray; kwargs...) = findmax(identity, x; kwargs...)[2]
 Base.findfirst(x::AnyTracedRArray) = findfirst(identity, x)
 Base.findlast(x::AnyTracedRArray) = findlast(identity, x)
 
+# FIXME: we need to conditionally return `nothing` here if idx < 0
 function Base.findfirst(f::Function, x::AnyTracedRArray)
-    fA = materialize_traced_array(vec(f.(x)))
-    (; indices) = Ops.top_k(fA, 1)
-    return @allowscalar indices[1]
+    idx = Ops.findfirst(materialize_traced_array(vec(f.(x))))
+    return TracedRNumber{Int}((), idx.mlir_data)
 end
 
+# FIXME: we need to conditionally return `nothing` here if idx < 0
 function Base.findlast(f::Function, x::AnyTracedRArray)
     fA = Ops.reverse(materialize_traced_array(vec(f.(x))); dimensions=[1])
-    (; indices) = Ops.top_k(fA, 1)
-    return length(x) - @allowscalar(indices[1]) + 1
+    idx = Ops.findfirst(fA)
+    return length(x) + 1 - TracedRNumber{Int}((), idx.mlir_data)
 end
 
 Base.findmin(x::AnyTracedRVector) = findmin(identity, x; dims=1)
@@ -1328,13 +1289,25 @@ function scan_impl!(
     if init === nothing
         op_in_T = Core.Compiler.return_type(op, Tuple{T,T})
         op_in_T === Union{} && (op_in_T = T)
-
         init = __default_init(T, op)
         if typeof(init) != op_in_T
             op_in_T = typeof(init)
             input = typeof(init).(input)
         end
+    else
+        # TODO: fix this for TPUs
+        if contains(string(first(Reactant.devices())), "TPU")
+            initT = __default_init(T, op)
+            if initT != init && initT != something(init)
+                throw(
+                    AssertionError(
+                        "Currently, `init` is not supported on TPUs, provided value $init does not match identity $initT.",
+                    ),
+                )
+            end
+        end
     end
+
     init = something(init) # unwrap Some
     init = TracedUtils.promote_to(TracedRNumber{unwrapped_eltype(init)}, init)
 
@@ -1429,5 +1402,32 @@ function Base.circshift!(
     copyto!(dest, src)
     return dest
 end
+
+struct BroadcastIterator{F}
+    f::F
+end
+
+(fn::BroadcastIterator)(args...) = Reactant.call_with_reactant(fn.f, (args...,))
+
+function unwrapped_broadcast(f::F, x::Base.Iterators.Zip) where {F}
+    min_length = Base.inferencebarrier(minimum)(length, x.is)
+    itrs = [length(itr) > min_length ? itr[1:min_length] : itr for itr in x.is]
+    if any(Base.Fix2(isa, AnyTracedRArray), itrs)
+        return (BroadcastIterator(f)).(itrs...)
+    else
+        fn = BroadcastIterator(f)
+        return [fn(Base.Fix2(getindex, i).(itrs)...) for i in 1:min_length]
+    end
+end
+
+function unwrapped_broadcast(f::F, x::Base.Iterators.Enumerate) where {F}
+    if x.itr isa AnyTracedRArray
+        return (BroadcastIterator(f)).(1:length(x.itr), x.itr)
+    else
+        return [f((i, x.itr[i])) for i in 1:length(x.itr)]
+    end
+end
+
+unwrapped_broadcast(f::F, xs::Vector) where {F} = [f(x) for x in xs]
 
 end

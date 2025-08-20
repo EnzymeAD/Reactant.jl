@@ -121,7 +121,7 @@ end
 
 ### Certain Symbols are Reserved
 
-Symbols like $(SPECIAL_SYMBOLS) are not allowed as variables in `@trace` expressions. While certain cases might work but these are not guaranteed to work. For
+Symbols like `$(SPECIAL_SYMBOLS)` are not allowed as variables in `@trace` expressions. While certain cases might work but these are not guaranteed to work. For
 example, the following will not work:
 
 ```julia
