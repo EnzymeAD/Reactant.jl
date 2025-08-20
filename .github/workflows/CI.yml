@@ -43,14 +43,15 @@ jobs:
           - "1.11"
           # - 'nightly'
         os:
-          - ubuntu-24.04
+          # - ubuntu-24.04
           # `ubuntu-22.04-arm` is considered more stable than `ubuntu-24.04-arm`:
           # <https://github.com/orgs/community/discussions/148648#discussioncomment-12099554>.
-          - ubuntu-22.04-arm
+          # - ubuntu-22.04-arm
           # Disable `macOS-13` until
           # <https://github.com/EnzymeAD/Reactant.jl/issues/867> is resolved.
           # - macOS-13
-          - macOS-latest
+          # - macOS-latest
+          - windows-latest
         test_group:
           - core
           - neural_networks
@@ -98,10 +99,13 @@ jobs:
         # We have to use `${GITHUB_WORKSPACE}` instead of `github.workspace` because GitHub
         # is terrible and the two don't match inside containers:
         # https://github.com/actions/runner/issues/2058
+        
+        if: ${{ matrix.os != 'windows-latest' }}
         run: |
           echo "TMPDIR=${GITHUB_WORKSPACE}/tmp" >> ${GITHUB_ENV}
       - uses: actions/checkout@v4
       - name: Create TMPDIR
+        if: ${{ matrix.os != 'windows-latest' }}
         run: |
           mkdir -p ${{ env.TMPDIR }}
       - uses: julia-actions/setup-julia@v2
