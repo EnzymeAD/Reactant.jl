@@ -478,7 +478,7 @@ function ConcretePJRTArray{T}(
     idx::Union{Int,Nothing}=nothing,
     device::Union{Nothing,XLA.AbstractDevice}=nothing,
     sharding::Sharding.AbstractSharding=Sharding.NoSharding(),
-) where {T<:Number}
+) where {T}
     theclient, thedevice = _select_client_and_device(client, idx, device, sharding)
     sharded_data, shardinfo = sharding(theclient, thedevice, T, shape)
     N = length(shape)
@@ -493,7 +493,7 @@ function ConcreteIFRTArray{T}(
     idx::Union{Int,Nothing}=nothing,
     device::Union{Nothing,XLA.AbstractDevice}=nothing,
     sharding::Sharding.AbstractSharding=Sharding.NoSharding(),
-) where {T<:Number}
+) where {T}
     theclient, thedevice = _select_client_and_device(client, idx, device, sharding)
     N = length(shape)
     # ToDo: How to avoid allocating dummy array on host?
