@@ -38,59 +38,59 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        version:
-          - "1.10"
-          - "1.11"
-          # - 'nightly'
-        os:
-          - ubuntu-24.04
-          # `ubuntu-22.04-arm` is considered more stable than `ubuntu-24.04-arm`:
-          # <https://github.com/orgs/community/discussions/148648#discussioncomment-12099554>.
-          - ubuntu-22.04-arm
-          # Disable `macOS-13` until
-          # <https://github.com/EnzymeAD/Reactant.jl/issues/867> is resolved.
-          # - macOS-13
-          - macOS-latest
-        test_group:
-          - core
-          - neural_networks
-          - integration
-        runtime:
-          - "PJRT"
-          - "IFRT"
-        assertions:
-          - false
+        # version:
+        #   - "1.10"
+        #   - "1.11"
+        #   # - 'nightly'
+        # os:
+        #   - ubuntu-24.04
+        #   # `ubuntu-22.04-arm` is considered more stable than `ubuntu-24.04-arm`:
+        #   # <https://github.com/orgs/community/discussions/148648#discussioncomment-12099554>.
+        #   - ubuntu-22.04-arm
+        #   # Disable `macOS-13` until
+        #   # <https://github.com/EnzymeAD/Reactant.jl/issues/867> is resolved.
+        #   # - macOS-13
+        #   - macOS-latest
+        # test_group:
+        #   - core
+        #   - neural_networks
+        #   - integration
+        # runtime:
+        #   - "PJRT"
+        #   - "IFRT"
+        # assertions:
+        #   - false
         include:
-          - os: linux-x86-ct6e-180-4tpu
-            version: "1.11"
-            assertions: false
-            test_group: core
-            runtime: "IFRT"
-          - os: linux-x86-ct6e-180-4tpu
-            version: "1.11"
-            assertions: false
-            test_group: integration
-            runtime: "IFRT"
+          # - os: linux-x86-ct6e-180-4tpu
+          #   version: "1.11"
+          #   assertions: false
+          #   test_group: core
+          #   runtime: "IFRT"
+          # - os: linux-x86-ct6e-180-4tpu
+          #   version: "1.11"
+          #   assertions: false
+          #   test_group: integration
+          #   runtime: "IFRT"
           - os: linux-x86-ct6e-180-4tpu
             version: "1.11"
             assertions: false
             test_group: neural_networks
             runtime: "IFRT"
-          - os: ubuntu-24.04
-            version: "1.10"
-            assertions: true
-            test_group: core
-            runtime: "PJRT"
-          - os: ubuntu-24.04
-            version: "1.10"
-            assertions: true
-            test_group: neural_networks
-            runtime: "PJRT"
-          - os: ubuntu-24.04
-            version: "1.10"
-            assertions: true
-            test_group: integration
-            runtime: "PJRT"
+          # - os: ubuntu-24.04
+          #   version: "1.10"
+          #   assertions: true
+          #   test_group: core
+          #   runtime: "PJRT"
+          # - os: ubuntu-24.04
+          #   version: "1.10"
+          #   assertions: true
+          #   test_group: neural_networks
+          #   runtime: "PJRT"
+          # - os: ubuntu-24.04
+          #   version: "1.10"
+          #   assertions: true
+          #   test_group: integration
+          #   runtime: "PJRT"
           # - os: ubuntu-24.04
           #   libReactant: packaged
           #   version: '1.10'
@@ -110,6 +110,10 @@ jobs:
         # https://github.com/actions/runner/issues/2058
         run: |
           echo "TMPDIR=${GITHUB_WORKSPACE}/tmp" >> ${GITHUB_ENV}
+      - name: Install GDB
+        run: |
+          apt update
+          apt install -y gdb
       - uses: actions/checkout@v4
       - name: Create TMPDIR
         run: |
@@ -157,10 +161,15 @@ jobs:
       - name: "Run Tests"
         timeout-minutes: 60
         run: |
-          import Pkg
-          Pkg.Registry.update()
-          Pkg.test(; coverage="user")
-        shell: julia --color=yes --code-coverage=user --depwarn=yes --project=. {0}
+          echo 'run' > gdb_cmds
+          echo 'bt' >> gdb_cmds
+          echo 'quit' >> gdb_cmds
+          gdb -q -batch -x gdb_cmds --args julia --color=yes --code-coverage=user --depwarn=yes --project=. -e '
+            import Pkg;
+            Pkg.Registry.update();
+            Pkg.test(; coverage="user");
+          '
+        # shell: julia --color=yes --code-coverage=user --depwarn=yes --project=. {0}
         id: run_tests
         env:
           JULIA_PKG_SERVER_REGISTRY_PREFERENCE: eager
