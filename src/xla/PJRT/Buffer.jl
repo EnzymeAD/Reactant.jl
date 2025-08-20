@@ -167,7 +167,9 @@ function XLA.buffer_on_cpu(buffer::Buffer)
 end
 
 function XLA.to_host(buffer::Buffer, data, sharding)
-    GC.@preserve buffer begin
+    @assert data !== C_NULL
+    @assert buffer.buffer !== C_NULL
+    GC.@preserve buffer data begin
         @ccall MLIR.API.mlir_c.BufferToHost(
             buffer.buffer::Ptr{Cvoid}, data::Ptr{Cvoid}
         )::Cvoid

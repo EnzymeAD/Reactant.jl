@@ -21,6 +21,13 @@ within_compile
 @trace
 ```
 
+## Reactant data types
+
+```@docs
+ConcreteRArray
+ConcreteRNumber
+```
+
 ## Inspect Generated HLO
 
 ```@docs
