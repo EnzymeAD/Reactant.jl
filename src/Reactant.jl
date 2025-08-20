@@ -185,7 +185,8 @@ include("stdlibs/Base.jl")
 # Other Integrations
 include("Enzyme.jl")
 
-const TracedType = Union{TracedRArray,TracedRNumber,MissingTracedValue}
+# const TracedType = Union{TracedRArray,TracedRNumber,MissingTracedValue}
+TracedType = Union{TracedRArray,TracedRNumber,MissingTracedValue}
 
 include("ControlFlow.jl")
 include("Tracing.jl")
