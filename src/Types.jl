@@ -430,15 +430,14 @@ Depending on the Reactant `xla_runtime` preference setting, `ConcreteRArray`
 is an alias for `ConcretePJRTArray` or `ConcreteIFRTArray`. User code should
 use `ConcreteRArray`.
 """
-const ConcreteRArray{T,N} = @static if XLA.REACTANT_XLA_RUNTIME == "PJRT"
-    ConcretePJRTArray{T,N}
+const ConcreteRArray = @static if XLA.REACTANT_XLA_RUNTIME == "PJRT"
+    ConcretePJRTArray
 elseif XLA.REACTANT_XLA_RUNTIME == "IFRT"
-    ConcreteIFRTArray{T,N}
+    ConcreteIFRTArray
 end
 
-@inline ConcreteRArray{T}(
-    ::UndefInitializer, shape::Integer...; kwargs...
-) where {T<:Number} = ConcreteRArray{T}(undef, Dims(shape); kwargs...)
+@inline ConcreteRArray{T}(::UndefInitializer, shape::Integer...; kwargs...) where {T} =
+    ConcreteRArray{T}(undef, Dims(shape); kwargs...)
 
 """
     ConcreteRNumber(
@@ -458,10 +457,10 @@ Depending on the Reactant `xla_runtime` preference setting, `ConcreteRArray`
 is an alias for `ConcretePJRTNumber` or `ConcreteIFRTNumber`. User code should
 use `ConcreteRNumber`.
 """
-const ConcreteRNumber{T} = @static if XLA.REACTANT_XLA_RUNTIME == "PJRT"
-    ConcretePJRTNumber{T}
+const ConcreteRNumber = @static if XLA.REACTANT_XLA_RUNTIME == "PJRT"
+    ConcretePJRTNumber
 elseif XLA.REACTANT_XLA_RUNTIME == "IFRT"
-    ConcreteIFRTNumber{T}
+    ConcreteIFRTNumber
 end
 
 ## Other Aliases based on the set preferences
