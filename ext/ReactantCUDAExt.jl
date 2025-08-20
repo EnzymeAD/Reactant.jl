@@ -1208,10 +1208,10 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
                 MLIR.API.stablehloOutputOperandAliasGet(
                     MLIR.IR.context(),
                     length(wrapper_tys) == 1 ? 0 : 1,
-                    length(wrapper_tys) == 1 ? C_NULL : Ref{Int64}(argidx - 1),
+                    length(wrapper_tys) == 1 ? Int64[] : Int64[argidx - 1],
                     argidx - 1,
                     0,
-                    C_NULL,
+                    Int64[],
                 ),
             ),
         )
