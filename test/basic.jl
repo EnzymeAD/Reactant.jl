@@ -1524,3 +1524,10 @@ end
         )
     end
 end
+
+@testset "mapreduce with unitrange dims" begin
+    x = reshape(collect(Float32, 1:64), 2, 4, 8)
+    x_ra = Reactant.to_rarray(x)
+
+    @test @jit(sum(x_ra; dims=1:2)) ≈ sum(x; dims=1:2)
+end
