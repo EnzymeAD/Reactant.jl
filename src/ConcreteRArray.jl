@@ -378,8 +378,8 @@ end
     device::Union{Nothing,XLA.PJRT.Device}=nothing,
     sharding::Sharding.AbstractSharding=Sharding.NoSharding(),
 ) where {S}
-    return ConcretePJRTArray(
-        undef, S, dims; client=client, idx=idx, device=device, sharding=sharding
+    return ConcretePJRTArray{S}(
+        undef, dims; client=client, idx=idx, device=device, sharding=sharding
     )
 end
 
@@ -410,7 +410,7 @@ function Base.similar(a::ConcreteIFRTArray{T}, ::Type{S}=T, dims::Dims=size(a)) 
 end
 Base.similar(a::ConcreteIFRTArray, dims::Dims) = similar(a, eltype(a), dims)
 function Base.similar(::Type{ConcreteIFRTArray{T}}, dims) where {T}
-    return ConcreteIFRTArray(undef, T, dims)
+    return ConcreteIFRTArray{T}(undef, dims)
 end
 
 # Broadcasting interface
