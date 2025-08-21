@@ -1945,7 +1945,7 @@ function compile_mlir!(
                 Reactant.__compile_options_with_reversed_propagation(compile_options);
                 recognize_comms,
                 lower_comms,
-                backend
+                backend,
             ),
             "post_op_transpose_reshape",
         )
