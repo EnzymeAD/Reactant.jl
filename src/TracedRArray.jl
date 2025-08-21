@@ -1353,18 +1353,20 @@ function scan_impl!(
     padding_low = zeros(Int64, N)
     padding_low[dims] = size(input, dims) - 1
 
-    reduction_result = @opcall(reduce_window(
-        op,
-        [materialize_traced_array(input)],
-        [init];
-        window_dimensions=window_dimensions,
-        window_strides=ones(Int64, N),
-        base_dilations=ones(Int64, N),
-        window_dilations=ones(Int64, N),
-        padding_low=padding_low,
-        padding_high=zeros(Int64, N),
-        output_shape=collect(Int64, size(output)),
-    ))[1]
+    reduction_result = @opcall(
+        reduce_window(
+            op,
+            [materialize_traced_array(input)],
+            [init];
+            window_dimensions=window_dimensions,
+            window_strides=ones(Int64, N),
+            base_dilations=ones(Int64, N),
+            window_dilations=ones(Int64, N),
+            padding_low=padding_low,
+            padding_high=zeros(Int64, N),
+            output_shape=collect(Int64, size(output)),
+        )
+    )[1]
     copyto!(output, reduction_result)
 
     return output
