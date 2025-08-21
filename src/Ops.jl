@@ -844,9 +844,9 @@ end
 end
 
 @noinline function clamp(
-    min::T, x::Union{TracedRArray{T,N},TracedRNumber{T}}, max::T
+    min::T, x::Union{TracedRArray{T,N},TracedRNumber{T}}, max::T; kwargs...
 ) where {T,N}
-    return clamp(constant(min), x, constant(max))
+    return clamp(constant(min), x, constant(max); kwargs...)
 end
 
 # function convolution(
