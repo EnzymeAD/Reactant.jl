@@ -10,6 +10,8 @@ import KernelAbstractions as KA
 using LLVM: LLVM
 using Libdl
 
+using Reactant.Ops: @opcall
+
 const ReactantKernelAbstractionsExt = Base.get_extension(
     Reactant, :ReactantKernelAbstractionsExt
 )
@@ -469,7 +471,7 @@ function Adapt.adapt_storage(ka::ReactantKernelAdaptor, xs::DenseCuArray)
     return Adapt.adapt_storage(ka, Array(xs))
 end
 function Adapt.adapt_storage(ka::ReactantKernelAdaptor, xs::Array)
-    return Adapt.adapt_storage(ka, Reactant.Ops.constant(xs))
+    return Adapt.adapt_storage(ka, @opcall(constant(xs)))
 end
 function Adapt.adapt_structure(
     to::ReactantKernelAdaptor, bc::Broadcast.Broadcasted{Style,<:Any,Type{T}}

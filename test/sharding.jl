@@ -202,7 +202,7 @@ end
 
         function fn_with_constraint(x)
             y = x .+ x
-            return Reactant.Ops.sharding_constraint(y, constraint)
+            return Reactant.@opcall sharding_constraint(y, constraint)
         end
 
         hlo = @code_hlo shardy_passes = :none fn_with_constraint(x_ra)

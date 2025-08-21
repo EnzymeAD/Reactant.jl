@@ -7,6 +7,7 @@ using Reactant:
 
 using Reactant.TracedUtils:
     TracedUtils, materialize_traced_array, get_mlir_data, set_mlir_data!
+using Reactant.Ops: @opcall
 
 using ReactantCore: @trace
 using LinearAlgebra: LinearAlgebra, triu

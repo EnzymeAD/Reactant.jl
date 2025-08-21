@@ -189,7 +189,7 @@ end
 rand_sample(rng, x) = rand(rng, eltype(x), size(x))
 
 function rand_on_device()
-    x = Reactant.Ops.fill(0.0f0, (3, 4, 5))
+    x = Reactant.@opcall fill(0.0f0, (3, 4, 5))
     rand!(x)
     return x
 end

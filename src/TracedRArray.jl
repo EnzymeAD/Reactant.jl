@@ -17,6 +17,7 @@ using ..Reactant:
     allowscalar,
     aos_to_soa,
     unwrapped_eltype
+using ..Reactant.Ops: @opcall
 using ..TracedUtils: TracedUtils, get_mlir_data, set_mlir_data!, materialize_traced_array
 
 using ReactantCore: ReactantCore
@@ -52,12 +53,12 @@ function Base.convert(::Type{TracedRArray{T,N}}, x::AbstractArray) where {T,N}
     @assert ndims(x) == N
     if x isa TracedRArray
         eltype(x) == T && return x
-        return Ops.convert(TracedRArray{T,N}, x)
+        return @opcall convert(TracedRArray{T,N}, x)
     end
     if eltype(x) <: TracedRNumber
         return convert(TracedRArray{T,N}, aos_to_soa(materialize_traced_array(x)))
     end
-    return convert(TracedRArray{T,N}, Ops.constant(collect(x)))
+    return convert(TracedRArray{T,N}, @opcall constant(collect(x)))
 end
 
 TracedRArray{T,N}(x::AbstractArray) where {T,N} = convert(TracedRArray{T,N}, x)
@@ -66,7 +67,7 @@ function Base.getindex(
     a::TracedRArray{T,N}, index::Vararg{Union{Int,TracedRNumber{Int}},N}
 ) where {T,N}
     GPUArraysCore.assertscalar("getindex(::TracedRArray, ::Vararg{Int, N})")
-    res = Ops.reshape(Ops.dynamic_slice(a, [index...], ones(Int32, N)), Int[])
+    res = @opcall(reshape(@opcall(dynamic_slice(a, [index...], ones(Int32, N))), Int[]))
     return TracedRNumber{T}((), res.mlir_data)
 end
 
@@ -91,16 +92,16 @@ function scalar_index_to_cartesian(
     idx::AbstractVector{TracedRNumber{T}}, sz::NTuple{N,Int}
 ) where {T,N}
     idx = materialize_traced_array(idx)
-    idx = Ops.subtract(idx, Ops.fill(T(1), size(idx)))
+    idx = @opcall(subtract(idx, @opcall(fill(T(1), size(idx)))))
     idxs = materialize_traced_array(
-        reshape(Ops.remainder(idx, Ops.fill(T(sz[1]), size(idx))), :, 1)
+        reshape(@opcall(remainder(idx, @opcall(fill(T(sz[1]), size(idx))))), :, 1)
     )
-    idx = Ops.divide(idx, Ops.fill(T(sz[1]), size(idx)))
+    idx = @opcall(divide(idx, @opcall(fill(T(sz[1]), size(idx)))))
     for i in 2:N
-        idxs = hcat(idxs, Ops.remainder(idx, Ops.fill(T(sz[i]), size(idx))))
-        idx = Ops.divide(idx, Ops.fill(T(sz[i]), size(idx)))
+        idxs = hcat(idxs, @opcall(remainder(idx, @opcall(fill(T(sz[i]), size(idx))))))
+        idx = @opcall(divide(idx, @opcall(fill(T(sz[i]), size(idx)))))
     end
-    return Ops.add(idxs, Ops.fill(T(1), size(idxs)))
+    return @opcall(add(idxs, @opcall(fill(T(1), size(idxs)))))
 end
 
 function scalar_index_to_cartesian(idx::T, sz::NTuple{N,Int}) where {T<:Number,N}
@@ -120,11 +121,17 @@ function Base.getindex(
     GPUArraysCore.assertscalar("getindex(::TracedRArray, ::Union{Int, TracedRNumber{Int}})")
     return TracedRNumber{T}(
         (),
-        Ops.reshape(
-            Ops.dynamic_slice(
-                a, collect(scalar_index_to_cartesian(index, size(a))), ones(Int32, N)
-            ),
-            Int64[],
+        @opcall(
+            reshape(
+                @opcall(
+                    dynamic_slice(
+                        a,
+                        collect(scalar_index_to_cartesian(index, size(a))),
+                        ones(Int32, N),
+                    )
+                ),
+                Int64[],
+            )
         ).mlir_data,
     )
 end
@@ -133,8 +140,10 @@ function _getindex_cartesian(a::TracedRArray{T,N}, index::CartesianIndex{N}) whe
     GPUArraysCore.assertscalar("getindex(::TracedRArray, ::CartesianIndex{N})")
     return TracedRNumber{T}(
         (),
-        Ops.reshape(
-            Ops.dynamic_slice(a, collect(Int64, index.I), ones(Int32, N)), Int64[]
+        @opcall(
+            reshape(
+                @opcall(dynamic_slice(a, collect(Int64, index.I), ones(Int32, N))), Int64[]
+            )
         ).mlir_data,
     )
 end
@@ -158,14 +167,18 @@ function _getindex_linear(a::TracedRArray{T,N}, indices::AbstractArray) where {T
         if stride > 0
             a_flat = materialize_traced_array(vec(a))
             indices_flat = vec(indices)
-            return Ops.reshape(
-                Ops.slice(
-                    a_flat,
-                    Int64[first(indices_flat)],
-                    Int64[last(indices_flat)];
-                    strides=Int64[stride],
-                ),
-                collect(Int64, size(indices)),
+            return @opcall(
+                reshape(
+                    @opcall(
+                        slice(
+                            a_flat,
+                            Int64[first(indices_flat)],
+                            Int64[last(indices_flat)];
+                            strides=Int64[stride],
+                        )
+                    ),
+                    collect(Int64, size(indices)),
+                )
             )
         end
     end
@@ -175,9 +188,11 @@ function _getindex_linear(a::TracedRArray{T,N}, indices::AbstractArray) where {T
         eltype(indices) <: CartesianIndex && (indices = LinearIndices(size(a))[indices])
         indices = TracedUtils.promote_to(TracedRArray{Int,ndims(indices)}, indices)
     end
-    return Ops.reshape(
-        Ops.gather_getindex(a, scalar_index_to_cartesian(vec(indices), size(a))),
-        collect(size(indices)),
+    return @opcall(
+        reshape(
+            @opcall(gather_getindex(a, scalar_index_to_cartesian(vec(indices), size(a)))),
+            collect(size(indices)),
+        )
     )
 end
 
@@ -223,33 +238,41 @@ function Base.getindex(a::TracedRArray{T,N}, indices::Vararg{Any,N}) where {T,N}
 
         gather_dims = TracedUtils.indices_to_gather_dims(indices...)
 
-        return Ops.reshape(
-            Ops.transpose(
-                Ops.reshape(
-                    Ops.gather(
-                        a,
-                        gather_dims.start_indices;
-                        gather_dims.offset_dims,
-                        gather_dims.collapsed_slice_dims,
-                        operand_batching_dims=Int64[],
-                        start_indices_batching_dims=Int64[],
-                        gather_dims.start_index_map,
-                        gather_dims.index_vector_dim,
-                        gather_dims.slice_sizes,
-                    ),
-                    gather_dims.gather_reshape_shape,
+        return @opcall(
+            reshape(
+                @opcall(
+                    transpose(
+                        @opcall(
+                            reshape(
+                                @opcall(
+                                    gather(
+                                        a,
+                                        gather_dims.start_indices;
+                                        gather_dims.offset_dims,
+                                        gather_dims.collapsed_slice_dims,
+                                        operand_batching_dims=Int64[],
+                                        start_indices_batching_dims=Int64[],
+                                        gather_dims.start_index_map,
+                                        gather_dims.index_vector_dim,
+                                        gather_dims.slice_sizes,
+                                    )
+                                ),
+                                gather_dims.gather_reshape_shape,
+                            )
+                        ),
+                        gather_dims.permutation,
+                    )
                 ),
-                gather_dims.permutation,
-            ),
-            gather_dims.result_shape,
+                gather_dims.result_shape,
+            )
         )
     end
 
     if use_dynamic_slice
         @assert all(isone, strides) "This should not happen, please report a bug"
-        x = Ops.dynamic_slice(a, [first.(indices)...], [length.(indices)...])
+        x = @opcall dynamic_slice(a, [first.(indices)...], [length.(indices)...])
     else
-        x = Ops.slice(a, [first.(indices)...], [last.(indices)...]; strides)
+        x = @opcall slice(a, [first.(indices)...], [last.(indices)...]; strides)
     end
 
     ddims = findall(indices) do idx
@@ -312,15 +335,19 @@ function _setindex_scalar!(
         "setindex!(::TracedRArray, v, ::Union{Int, TracedRNumber{Int}})"
     )
 
-    res = Ops.reshape(
-        Ops.dynamic_update_slice(
-            a,
-            TracedUtils.broadcast_to_size(
-                TracedUtils.promote_to(TracedRNumber{T}, v), ntuple(Returns(1), N)
+    res = @opcall(
+        reshape(
+            @opcall(
+                dynamic_update_slice(
+                    a,
+                    TracedUtils.broadcast_to_size(
+                        TracedUtils.promote_to(TracedRNumber{T}, v), ntuple(Returns(1), N)
+                    ),
+                    collect(scalar_index_to_cartesian(index, size(a))),
+                )
             ),
-            collect(scalar_index_to_cartesian(index, size(a))),
-        ),
-        collect(size(a)),
+            collect(size(a)),
+        )
     )
     set_mlir_data!(a, get_mlir_data(res))
     return a
@@ -340,13 +367,17 @@ end
 function Base.setindex!(a::TracedRArray{T,N}, v, index::CartesianIndex{N}) where {T,N}
     GPUArraysCore.assertscalar("setindex!(::TracedRArray, v, ::CartesianIndex{N})")
 
-    res = Ops.reshape(
-        Ops.dynamic_update_slice(
-            a,
-            TracedUtils.broadcast_to_size(T(v), ntuple(Returns(1), N)),
-            collect(Int64, index.I),
-        ),
-        collect(size(a)),
+    res = @opcall(
+        reshape(
+            @opcall(
+                dynamic_update_slice(
+                    a,
+                    TracedUtils.broadcast_to_size(T(v), ntuple(Returns(1), N)),
+                    collect(Int64, index.I),
+                )
+            ),
+            collect(size(a)),
+        )
     )
     set_mlir_data!(a, get_mlir_data(res))
     return a
@@ -354,15 +385,20 @@ end
 
 function _setindex_linear!(a::TracedRArray{T,N}, v, indices::AbstractArray) where {T,N}
     if !(indices isa Reactant.TracedType) && TracedUtils.__contiguous_indices(vec(indices))
-        res = Ops.reshape(
-            Ops.dynamic_update_slice(
-                materialize_traced_array(vec(a)),
-                TracedUtils.broadcast_to_size(
-                    TracedUtils.promote_to(TracedRArray{T,1}, vec(v)), (length(indices),)
+        res = @opcall(
+            reshape(
+                @opcall(
+                    dynamic_update_slice(
+                        materialize_traced_array(vec(a)),
+                        TracedUtils.broadcast_to_size(
+                            TracedUtils.promote_to(TracedRArray{T,1}, vec(v)),
+                            (length(indices),),
+                        ),
+                        [first(indices)],
+                    )
                 ),
-                [first(indices)],
-            ),
-            collect(size(a)),
+                collect(size(a)),
+            )
         )
         set_mlir_data!(a, get_mlir_data(res))
         return a
@@ -373,7 +409,7 @@ function _setindex_linear!(a::TracedRArray{T,N}, v, indices::AbstractArray) wher
         eltype(indices) <: CartesianIndex && (indices = LinearIndices(size(a))[indices])
         indices = TracedUtils.promote_to(TracedRArray{Int,ndims(indices)}, indices)
     end
-    res = Ops.scatter_setindex(
+    res = @opcall scatter_setindex(
         a,
         scalar_index_to_cartesian(vec(indices), size(a)),
         TracedUtils.promote_to(TracedRArray{T,1}, materialize_traced_array(vec(v))),
@@ -427,29 +463,31 @@ function Base.setindex!(a::TracedRArray{T,N}, v, indices::Vararg{Any,N}) where {
 
         gather_dims = TracedUtils.indices_to_gather_dims(indices...)
 
-        v = Ops.convert(
+        v = @opcall convert(
             TracedRArray{T,ndims(v)},
             TracedUtils.promote_to(TracedRArray{unwrapped_eltype(v),ndims(v)}, v),
         )
 
-        updates = Ops.transpose(v, invperm(gather_dims.permutation))
+        updates = @opcall transpose(v, invperm(gather_dims.permutation))
         n_collapsed = length(gather_dims.collapsed_slice_dims)
         updates_shape = Int64[
             prod(size(updates)[1:n_collapsed]), size(updates)[(n_collapsed + 1):end]...
         ]
-        updates = Ops.reshape(updates, updates_shape)
+        updates = @opcall reshape(updates, updates_shape)
 
-        res = Ops.scatter(
-            (xᵢ, xⱼ) -> xⱼ,
-            [a],
-            gather_dims.start_indices,
-            [updates];
-            update_window_dims=gather_dims.offset_dims,
-            inserted_window_dims=gather_dims.collapsed_slice_dims,
-            input_batching_dims=Int64[],
-            scatter_indices_batching_dims=Int64[],
-            scatter_dims_to_operand_dims=gather_dims.start_index_map,
-            index_vector_dim=gather_dims.index_vector_dim,
+        res = @opcall(
+            scatter(
+                (xᵢ, xⱼ) -> xⱼ,
+                [a],
+                gather_dims.start_indices,
+                [updates];
+                update_window_dims=gather_dims.offset_dims,
+                inserted_window_dims=gather_dims.collapsed_slice_dims,
+                input_batching_dims=Int64[],
+                scatter_indices_batching_dims=Int64[],
+                scatter_dims_to_operand_dims=gather_dims.start_index_map,
+                index_vector_dim=gather_dims.index_vector_dim,
+            )
         )[1]
         set_mlir_data!(a, get_mlir_data(res))
         return v
@@ -467,7 +505,7 @@ function Base.setindex!(a::TracedRArray{T,N}, v, indices::Vararg{Any,N}) where {
         if length(broadcast_dims) == N
             v = TracedUtils.broadcast_to_size(v, length.(indices))
         else
-            v = Ops.broadcast_in_dim(
+            v = @opcall broadcast_in_dim(
                 materialize_traced_array(v),
                 broadcast_dims,
                 collect(Int64, length.(indices)),
@@ -477,8 +515,8 @@ function Base.setindex!(a::TracedRArray{T,N}, v, indices::Vararg{Any,N}) where {
 
     set_mlir_data!(
         a,
-        Ops.dynamic_update_slice(
-            a, v, [i isa Colon ? 1 : first(i) for i in indices]
+        @opcall(
+            dynamic_update_slice(a, v, [i isa Colon ? 1 : first(i) for i in indices])
         ).mlir_data,
     )
     return v
@@ -493,7 +531,7 @@ Base.collect(x::TracedRArray) = copy(x) # XXX: Is this correct?
 Base.copy(A::TracedRArray{T,N}) where {T,N} = TracedRArray{T,N}((), A.mlir_data, size(A))
 
 function Base.similar(::TracedRArray, ::Type{T}, dims::Dims{N}) where {T,N}
-    return Ops.fill(zero(unwrapped_eltype(T)), dims)
+    return @opcall fill(zero(unwrapped_eltype(T)), dims)
 end
 
 function Base.show(io::IOty, X::AnyTracedRArray) where {IOty<:Union{IO,IOContext}}
@@ -511,7 +549,7 @@ function Base.show(io::IOty, X::TracedRArray{T,N}) where {T,N,IOty<:Union{IO,IOC
 end
 
 function Base.permutedims(A::AnyTracedRArray{T,N}, perm) where {T,N}
-    return Ops.transpose(materialize_traced_array(A), Int64[perm...])
+    return @opcall transpose(materialize_traced_array(A), Int64[perm...])
 end
 
 TracedUtils.promote_to(::Type{TracedRArray{T,N}}, rhs) where {T,N} = TracedRArray{T,N}(rhs)
@@ -521,7 +559,7 @@ end
 function TracedUtils.promote_to(
     ::Type{TracedRArray{T,0}}, rhs::TracedRNumber{T2}
 ) where {T,T2}
-    return TracedRArray{T,0}((), Ops.convert(TracedRNumber{T}, rhs).mlir_data, ())
+    return TracedRArray{T,0}((), @opcall(convert(TracedRNumber{T}, rhs)).mlir_data, ())
 end
 
 for (jlop, hloop, hlocomp, merge) in
@@ -580,7 +618,7 @@ function overloaded_mapreduce(
 
     reduce_input = materialize_traced_array(broadcast(f, A))
 
-    res = Ops.reduce(reduce_input, reduce_init, dims, op)
+    res = @opcall reduce(reduce_input, reduce_init, dims, op)
 
     init !== nothing && (res = op.(res, init))
 
@@ -591,7 +629,7 @@ function overloaded_mapreduce(
     if res isa TracedRNumber
         res = TracedRArray{unwrapped_eltype(res),0}((), res.mlir_data, ())
     end
-    return Ops.reshape(res, [ifelse(i in dims, 1, size(A, i)) for i in 1:N])
+    return @opcall reshape(res, [ifelse(i in dims, 1, size(A, i)) for i in 1:N])
 end
 
 function Base.mapreducedim!(
@@ -638,14 +676,14 @@ function Base.similar(
     ::Broadcasted{AbstractReactantArrayStyle{N}}, ::Type{T}, dims
 ) where {T<:Reactant.ReactantPrimitive,N}
     @assert N isa Int
-    return Ops.fill(zero(unwrapped_eltype(T)), dims)
+    return @opcall fill(zero(unwrapped_eltype(T)), dims)
 end
 
 function Base.similar(
     ::Broadcasted{AbstractReactantArrayStyle{N}}, ::Type{TracedRNumber{T}}, dims
 ) where {T<:Reactant.ReactantPrimitive,N}
     @assert N isa Int
-    return Ops.fill(zero(T), dims)
+    return @opcall fill(zero(T), dims)
 end
 
 function Broadcast.copy(bc::Broadcasted{<:AbstractReactantArrayStyle{0}})
@@ -704,7 +742,7 @@ end
 
 function Base.copyto!(dest::TracedRArray{T,N}, src::TracedRArray{T2,N}) where {T,T2,N}
     src2 = if T != T2
-        Ops.convert(TracedRArray{T,N}, src)
+        @opcall convert(TracedRArray{T,N}, src)
     else
         src
     end
@@ -841,7 +879,7 @@ end
 
 for (minT, maxT) in Iterators.product((Number, TracedRNumber), (Number, TracedRNumber))
     @eval function Base.clamp!(x::AnyTracedRArray, min::$(minT), max::$(maxT))
-        y = Ops.clamp(min, materialize_traced_array(x), max)
+        y = @opcall clamp(min, materialize_traced_array(x), max)
         TracedUtils.set_mlir_data!(x, y.mlir_data)
         return x
     end
@@ -927,7 +965,7 @@ function Base.sort!(
     ordering = Base.ord(lt, by, rev, order)
     comparator = (a, b) -> __lt(ordering, a, b)
 
-    res = only(Ops.sort(materialize_traced_array(x); comparator, dimension=1))
+    res = only(@opcall(sort(materialize_traced_array(x); comparator, dimension=1)))
     set_mlir_data!(x, get_mlir_data(res))
     return x
 end
@@ -946,7 +984,7 @@ function Base.sort!(
     ordering = Base.ord(lt, by, rev, order)
     comparator = (a, b) -> __lt(ordering, a, b)
 
-    res = only(Ops.sort(materialize_traced_array(x); dimension=dims, comparator))
+    res = only(@opcall(sort(materialize_traced_array(x); dimension=dims, comparator)))
     set_mlir_data!(x, get_mlir_data(res))
     return x
 end
@@ -978,8 +1016,8 @@ function Base.sortperm!(
     ordering = Base.ord(lt, by, rev, order)
     comparator = (a, b, i1, i2) -> __lt(ordering, a, b)
 
-    idxs = Ops.constant(collect(LinearIndices(x)))
-    _, res = Ops.sort(materialize_traced_array(x), idxs; dimension=dims, comparator)
+    idxs = @opcall constant(collect(LinearIndices(x)))
+    _, res = @opcall sort(materialize_traced_array(x), idxs; dimension=dims, comparator)
     set_mlir_data!(ix, get_mlir_data(res))
     return ix
 end
@@ -1044,9 +1082,9 @@ function overloaded_partialsort_descending(
     x::AnyTracedRVector{T}, k::Union{Integer,OrdinalRange}; by=identity, lt=isless
 ) where {T}
     if lt !== isless || by !== identity
-        sorted_x, sorted_idxs = Ops.sort(
+        sorted_x, sorted_idxs = @opcall sort(
             materialize_traced_array(x),
-            Ops.constant(collect(LinearIndices(x)));
+            @opcall(constant(collect(LinearIndices(x))));
             dimension=1,
             comparator=(a, b, i1, i2) -> !lt(by(a), by(b)),
         )
@@ -1054,7 +1092,7 @@ function overloaded_partialsort_descending(
     end
 
     if Reactant.LOWER_PARTIALSORT_TO_APPROX_TOP_K[] && T <: Reactant.ReactantFloat
-        result = Ops.approx_top_k(
+        result = @opcall approx_top_k(
             materialize_traced_array(x),
             maximum(k);
             comparator=(a, b, i1, i2) -> a > b,
@@ -1064,7 +1102,7 @@ function overloaded_partialsort_descending(
         return result.values[1:maximum(k)], result.indices[1:maximum(k)]
     end
 
-    (; values, indices) = Ops.top_k(materialize_traced_array(x), maximum(k))
+    (; values, indices) = @opcall top_k(materialize_traced_array(x), maximum(k))
     return values, indices
 end
 
@@ -1072,9 +1110,9 @@ function overloaded_partialsort_ascending(
     x::AnyTracedRVector{T}, k::Union{Integer,OrdinalRange}; by=identity, lt=isless
 ) where {T}
     if lt !== isless || by !== identity || T <: Unsigned
-        sorted_x, sorted_idxs = Ops.sort(
+        sorted_x, sorted_idxs = @opcall sort(
             materialize_traced_array(x),
-            Ops.constant(collect(LinearIndices(x)));
+            @opcall(constant(collect(LinearIndices(x))));
             dimension=1,
             comparator=(a, b, i1, i2) -> !lt(by(a), by(b)),
         )
@@ -1082,7 +1120,7 @@ function overloaded_partialsort_ascending(
     end
 
     if Reactant.LOWER_PARTIALSORT_TO_APPROX_TOP_K[] && T <: Reactant.ReactantFloat
-        result = Ops.approx_top_k(
+        result = @opcall approx_top_k(
             materialize_traced_array(x),
             maximum(k);
             comparator=(a, b, i1, i2) -> a < b,
@@ -1092,8 +1130,10 @@ function overloaded_partialsort_ascending(
         return result.values[1:maximum(k)], result.indices[1:maximum(k)]
     end
 
-    (; values, indices) = Ops.top_k(Ops.negate(materialize_traced_array(x)), maximum(k))
-    return Ops.negate(values), indices
+    (; values, indices) = @opcall top_k(
+        @opcall(negate(materialize_traced_array(x))), maximum(k)
+    )
+    return @opcall(negate(values)), indices
 end
 
 # arg* functions
@@ -1116,14 +1156,14 @@ Base.findlast(x::AnyTracedRArray) = findlast(identity, x)
 
 # FIXME: we need to conditionally return `nothing` here if idx < 0
 function Base.findfirst(f::Function, x::AnyTracedRArray)
-    idx = Ops.findfirst(materialize_traced_array(vec(f.(x))))
+    idx = @opcall findfirst(materialize_traced_array(vec(f.(x))))
     return TracedRNumber{Int}((), idx.mlir_data)
 end
 
 # FIXME: we need to conditionally return `nothing` here if idx < 0
 function Base.findlast(f::Function, x::AnyTracedRArray)
-    fA = Ops.reverse(materialize_traced_array(vec(f.(x))); dimensions=[1])
-    idx = Ops.findfirst(fA)
+    fA = @opcall reverse(materialize_traced_array(vec(f.(x))); dimensions=[1])
+    idx = @opcall findfirst(fA)
     return length(x) + 1 - TracedRNumber{Int}((), idx.mlir_data)
 end
 
@@ -1148,22 +1188,22 @@ function Base.findmin(f, x::AnyTracedRArray; dims::Union{Integer,Nothing}=nothin
         end
     end
 
-    fx = Ops.negate(materialize_traced_array(f.(x)))
-    (; values, indices) = Ops.top_k(fx, 1; dimension=dims)
+    fx = @opcall negate(materialize_traced_array(f.(x)))
+    (; values, indices) = @opcall top_k(fx, 1; dimension=dims)
 
     # Compute linear indices
     strds = strides(x)
-    iotas = [Ops.iota(Int64, [size(indices)...]; iota_dimension=i) for i in 1:ndims(x)]
-    iotas[dims] = Ops.subtract(indices, Ops.fill(Int64(1), size(indices)))
-    linear_indices = Ops.fill(Int64(1), size(indices))
+    iotas = [@opcall(iota(Int64, [size(indices)...]; iota_dimension=i)) for i in 1:ndims(x)]
+    iotas[dims] = @opcall subtract(indices, @opcall(fill(Int64(1), size(indices))))
+    linear_indices = @opcall fill(Int64(1), size(indices))
     for d in eachindex(iotas)
-        linear_indices = Ops.add(
+        linear_indices = @opcall add(
             linear_indices,
-            Ops.multiply(iotas[d], Ops.fill(Int64(strds[d]), size(iotas[d]))),
+            @opcall(multiply(iotas[d], @opcall(fill(Int64(strds[d]), size(iotas[d]))))),
         )
     end
 
-    values = Ops.negate(values)
+    values = @opcall negate(values)
     ndims(x) == 1 && return @allowscalar (values[1], linear_indices[1])
     return (values, linear_indices)
 end
@@ -1178,17 +1218,17 @@ function Base.findmax(f, x::AnyTracedRArray; dims::Union{Integer,Nothing}=nothin
     end
 
     fx = materialize_traced_array(f.(x))
-    (; values, indices) = Ops.top_k(fx, 1; dimension=dims)
+    (; values, indices) = @opcall top_k(fx, 1; dimension=dims)
 
     # Compute linear indices
     strds = strides(x)
-    iotas = [Ops.iota(Int64, [size(indices)...]; iota_dimension=i) for i in 1:ndims(x)]
-    iotas[dims] = Ops.subtract(indices, Ops.fill(Int64(1), size(indices)))
-    linear_indices = Ops.fill(Int64(1), size(indices))
+    iotas = [@opcall(iota(Int64, [size(indices)...]; iota_dimension=i)) for i in 1:ndims(x)]
+    iotas[dims] = @opcall subtract(indices, @opcall(fill(Int64(1), size(indices))))
+    linear_indices = @opcall fill(Int64(1), size(indices))
     for d in eachindex(iotas)
-        linear_indices = Ops.add(
+        linear_indices = @opcall add(
             linear_indices,
-            Ops.multiply(iotas[d], Ops.fill(Int64(strds[d]), size(iotas[d]))),
+            @opcall(multiply(iotas[d], @opcall(fill(Int64(strds[d]), size(iotas[d]))))),
         )
     end
 
@@ -1210,7 +1250,7 @@ end
 function Base.mapslices(f::F, A::TracedRArray; dims) where {F}
     dims isa Integer && (dims = Int64[dims])
     dims isa AbstractVector || (dims = collect(Int64, dims))
-    return Ops.batch(f, A, dims)
+    return @opcall batch(f, A, dims)
 end
 
 # accumulate interface
@@ -1313,7 +1353,7 @@ function scan_impl!(
     padding_low = zeros(Int64, N)
     padding_low[dims] = size(input, dims) - 1
 
-    reduction_result = Ops.reduce_window(
+    reduction_result = @opcall(reduce_window(
         op,
         [materialize_traced_array(input)],
         [init];
@@ -1324,7 +1364,7 @@ function scan_impl!(
         padding_low=padding_low,
         padding_high=zeros(Int64, N),
         output_shape=collect(Int64, size(output)),
-    )[1]
+    ))[1]
     copyto!(output, reduction_result)
 
     return output
@@ -1366,13 +1406,13 @@ end
 
 function Base.reverse!(v::AnyTracedRVector{T}) where {T}
     v_mat = materialize_traced_array(v)
-    copyto!(v, Ops.reverse(v_mat; dimensions=1))
+    copyto!(v, @opcall(reverse(v_mat; dimensions=1)))
     return v
 end
 
 function Base._reverse!(a::AnyTracedRArray{T,N}, dims::NTuple{M,Int}) where {T,N,M}
     a_mat = materialize_traced_array(a)
-    copyto!(a, Ops.reverse(a_mat; dimensions=dims))
+    copyto!(a, @opcall(reverse(a_mat; dimensions=dims)))
     return a
 end
 
