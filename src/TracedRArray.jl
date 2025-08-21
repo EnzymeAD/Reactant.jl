@@ -568,7 +568,7 @@ function overloaded_mapreduce(
     original_dims = dims
     dims isa Int && (dims = Int64[dims])
     dims isa Colon && (dims = collect(Int64, 1:N))
-    dims isa AbstractVector{<:Integer} || (dims = collect(Int64, dims))
+    dims isa Vector{Int64} || (dims = collect(Int64, dims))
 
     op_in_T = unwrapped_eltype(Core.Compiler.return_type(f, Tuple{T}))
     reduce_init = __default_init(op_in_T, op)
