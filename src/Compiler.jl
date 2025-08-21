@@ -1655,7 +1655,7 @@ function compile_mlir!(
                 dus_to_concat=true,
                 recognize_comms,
                 lower_comms,
-                backend
+                backend,
             )
             result = result * "," * opt_passes3
         end
