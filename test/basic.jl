@@ -1531,3 +1531,12 @@ end
 
     @test @jit(sum(x_ra; dims=1:2)) ≈ sum(x; dims=1:2)
 end
+
+stack_numbers(x) = stack([sum(x[:, i]) for i in axes(x, 2)])
+
+@testset "stack numbers" begin
+    x = rand(Float32, 2, 4)
+    x_ra = Reactant.to_rarray(x)
+
+    @test @jit(stack_numbers(x_ra)) ≈ stack_numbers(x)
+end

@@ -895,15 +895,22 @@ end
 
 # stack
 function overloaded_stack(dims::Union{Integer,Colon}, xs)
-    @assert allequal(ndims.(xs)) "All arrays must have the same number of dimensions..."
+    @assert allequal([ndims(x) for x in xs]) "All arrays must have the same number of \
+                                              dimensions..."
     dims = dims isa Colon ? ndims(first(xs)) + 1 : dims
-    res = map(xs) do x
+    res = []
+    for x in xs
         new_shape = ntuple(
             i -> i == dims ? 1 : (i < dims ? size(x, i) : size(x, i - 1)), ndims(x) + 1
         )
-        return materialize_traced_array(reshape(x, new_shape))
+        push!(res, materialize_traced_array(internal_stack_reshape(x, new_shape)))
     end
     return cat(res...; dims)
+end
+
+internal_stack_reshape(x, new_shape) = reshape(x, new_shape)
+function internal_stack_reshape(x::TracedRNumber{T}, new_shape) where {T}
+    return internal_stack_reshape(TracedRArray{T,0}((), x.mlir_data, ()), new_shape)
 end
 
 # sort
