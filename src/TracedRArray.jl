@@ -543,42 +543,55 @@ function __default_init(T::Type{<:Reactant.ReactantFloat8}, op::F) where {F}
     return T(__default_init(Float16, op))
 end
 
-function overloaded_mapreduce(
-    @nospecialize(f), @nospecialize(op), @nospecialize(A); dims=:, init=nothing
-)
-    res = unwrapped_broadcast(f, A)
-    # This means we are unable to use the optimized dispatches. For now we will
-    # unroll the mapreduce.
-    if typeof(res) == typeof(A)
-        @assert dims == Colon() "dims not supported for mapreduce currently."
-        return foldl(op, res; init)
-    end
-    return overloaded_mapreduce(identity, op, res; dims=:, init)
-end
+_maybe_materialize_traced_array(x::AbstractArray) = materialize_traced_array(x)
+_maybe_materialize_traced_array(x) = x
+
+_change_traced_type(::Type{T}, x::AnyTracedRArray) where {T} = T.(x)
+_change_traced_type(::Type{T}, x) where {T} = x
 
 function overloaded_mapreduce(
     @nospecialize(f),
     @nospecialize(op),
-    @nospecialize(A::AnyTracedRArray{T,N});
+    @nospecialize(A...);
     dims=:,
     init=nothing,
-) where {T,N}
-    A = materialize_traced_array(A)
+)
+    if all(x -> !(x isa AnyTracedRArray), A)
+        res = f.(A...)
+        # This means we are unable to use the optimized dispatches. For now we will
+        # unroll the mapreduce.
+        if typeof(res) == typeof(A[1])
+            @assert dims == Colon() "dims not supported for mapreduce currently."
+            return foldl(op, res; init)
+        end
+        return overloaded_mapreduce(identity, op, res; dims=:, init)
+    end
+
+    A = _maybe_materialize_traced_array.(A)
+    mapped_shape = allequal(map(size, A)) ? size(A[1]) : (minimum(length, A),)
+    N = length(mapped_shape)
+    A = map(x -> reshape(x, length(x)), A)
 
     original_dims = dims
     dims isa Int && (dims = Int64[dims])
     dims isa Colon && (dims = collect(Int64, 1:N))
     dims isa Vector{Int64} || (dims = collect(Int64, dims))
 
-    op_in_T = unwrapped_eltype(Core.Compiler.return_type(f, Tuple{T}))
+    op_in_T = unwrapped_eltype(Core.Compiler.return_type(f, Broadcast.eltypes(A)))
     reduce_init = __default_init(op_in_T, op)
     if unwrapped_eltype(typeof(reduce_init)) != op_in_T
         op_in_T = typeof(reduce_init)
-        A = typeof(reduce_init).(A)
+        A = _change_traced_type.(typeof(reduce_init), A)
     end
     reduce_init = TracedUtils.promote_to(TracedRNumber{op_in_T}, reduce_init)
 
-    reduce_input = materialize_traced_array(broadcast(f, A))
+    res = reshape(f.(A...), mapped_shape)
+    if !(res isa AnyTracedRArray)
+        @assert dims == Colon() "dims not supported for mapreduce currently."
+        return foldl(op, res; init)
+    end
+
+    reduce_input = materialize_traced_array(res)
 
     res = Ops.reduce(reduce_input, reduce_init, dims, op)
 
@@ -591,7 +604,7 @@ function overloaded_mapreduce(
     if res isa TracedRNumber
         res = TracedRArray{unwrapped_eltype(res),0}((), res.mlir_data, ())
     end
-    return Ops.reshape(res, [ifelse(i in dims, 1, size(A, i)) for i in 1:N])
+    return Ops.reshape(res, [ifelse(i in dims, 1, mapped_shape[i]) for i in 1:N])
 end
 
 function Base.mapreducedim!(
