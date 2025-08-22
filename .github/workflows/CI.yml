@@ -110,10 +110,6 @@ jobs:
         # https://github.com/actions/runner/issues/2058
         run: |
           echo "TMPDIR=${GITHUB_WORKSPACE}/tmp" >> ${GITHUB_ENV}
-      - name: Install GDB
-        run: |
-          apt update
-          apt install -y gdb
       - uses: actions/checkout@v4
       - name: Create TMPDIR
         run: |
@@ -161,15 +157,10 @@ jobs:
       - name: "Run Tests"
         timeout-minutes: 60
         run: |
-          echo 'run' > gdb_cmds
-          echo 'bt' >> gdb_cmds
-          echo 'quit' >> gdb_cmds
-          gdb -q -batch -x gdb_cmds --args julia --color=yes --code-coverage=user --depwarn=yes --project=. -e '
-            import Pkg;
-            Pkg.Registry.update();
-            Pkg.test(; coverage="user");
-          '
-        # shell: julia --color=yes --code-coverage=user --depwarn=yes --project=. {0}
+          import Pkg
+          Pkg.Registry.update()
+          Pkg.test(; coverage="user")
+        shell: julia --color=yes --code-coverage=user --depwarn=yes --project=. {0}
         id: run_tests
         env:
           JULIA_PKG_SERVER_REGISTRY_PREFERENCE: eager
