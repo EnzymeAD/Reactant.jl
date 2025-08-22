@@ -83,6 +83,14 @@ for jlop in (
     end
 end
 
+@inline Base.ifelse(cond, a, b::CuTracedRNumber) = Base.ifelse(cond, a, b[])
+@inline Base.ifelse(cond, a::CuTracedRNumber, b) = Base.ifelse(cond, a[], b)
+@inline Base.ifelse(cond, a::CuTracedRNumber, b::CuTracedRNumber) = Base.ifelse(cond, a[], b[])
+@inline Base.ifelse(cond::CuTracedRNumber, a, b) = Base.ifelse(cond[], a, b)
+@inline Base.ifelse(cond::CuTracedRNumber, a::CuTracedRNumber, b) = Base.ifelse(cond[], a[], b)
+@inline Base.ifelse(cond::CuTracedRNumber, a, b::CuTracedRNumber) = Base.ifelse(cond[], a, b[])
+@inline Base.ifelse(cond::CuTracedRNumber, a::CuTracedRNumber, b::CuTracedRNumber) = Base.ifelse(cond[], a[], b[])
+
 Base.@constprop :aggressive @inline Base.:^(
     a::CuTracedRNumber{T,A}, b::Integer
 ) where {T,A} = ^(a[], b)
