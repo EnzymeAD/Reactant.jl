@@ -12,7 +12,7 @@ function PythonCall.pycall(f::Py, arg0::TracedRArray, argNs::TracedRArray...; kw
     end
 
     lowered = jax.jit(f).lower(inputs...)
-    res = Reactant.Ops.hlo_call(pyconvert(String, lowered.as_text()), arg0, argNs...)
+    res = @opcall hlo_call(pyconvert(String, lowered.as_text()), arg0, argNs...)
 
     return length(res) == 0 ? nothing : res[1]
 end

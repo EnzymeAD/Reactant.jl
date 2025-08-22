@@ -9,7 +9,7 @@ function rotate(x)
     return nothing
 end
 function pad(x)
-    return Reactant.Ops.pad(x, eltype(x)(0); low=[5, 0], high=[15, 0], interior=[0, 0])
+    return Reactant.@opcall pad(x, eltype(x)(0); low=[5, 0], high=[15, 0], interior=[0, 0])
 end
 
 function dus(x, y)

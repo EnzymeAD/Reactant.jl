@@ -17,6 +17,7 @@ using ReactantCore: materialize_traced_array
 using Reactant_jll: Reactant_jll
 
 using ..TracedUtils: TracedUtils, get_mlir_data, set_mlir_data!
+using ..Ops: @opcall
 
 using LinearAlgebra
 using Libdl: Libdl
@@ -53,7 +54,7 @@ end
 function ReactantCore.materialize_traced_array(
     x::Adjoint{TracedRNumber{T},<:AnyTracedRArray}
 ) where {T}
-    return Ops.conj(
+    return @opcall conj(
         materialize_traced_array(transpose(materialize_traced_array(parent(x))))
     )
 end
@@ -78,10 +79,10 @@ for (AT, comp) in ((:LowerTriangular, "GE"), (:UpperTriangular, "LE"))
         ) where {T}
             m, n = size(x)
             px = materialize_traced_array(parent(x))
-            row_idxs = Ops.iota(Int, [m, n]; iota_dimension=1)
-            col_idxs = Ops.iota(Int, [m, n]; iota_dimension=2)
-            indicator = Ops.compare(row_idxs, col_idxs; comparison_direction=$(comp))
-            return Ops.select(indicator, px, zero(px))
+            row_idxs = @opcall iota(Int, [m, n]; iota_dimension=1)
+            col_idxs = @opcall iota(Int, [m, n]; iota_dimension=2)
+            indicator = @opcall compare(row_idxs, col_idxs; comparison_direction=$(comp))
+            return @opcall select(indicator, px, zero(px))
         end
 
         function ReactantCore.materialize_traced_array(
@@ -89,11 +90,13 @@ for (AT, comp) in ((:LowerTriangular, "GE"), (:UpperTriangular, "LE"))
         ) where {T}
             m, n = size(x)
             px = materialize_traced_array(parent(x))
-            row_idxs = Ops.iota(Int, [m, n]; iota_dimension=1)
-            col_idxs = Ops.iota(Int, [m, n]; iota_dimension=2)
-            nondiag_indicator = Ops.compare(row_idxs, col_idxs; comparison_direction="NE")
+            row_idxs = @opcall iota(Int, [m, n]; iota_dimension=1)
+            col_idxs = @opcall iota(Int, [m, n]; iota_dimension=2)
+            nondiag_indicator = @opcall compare(
+                row_idxs, col_idxs; comparison_direction="NE"
+            )
             x = materialize_traced_array($(AT)(px))
-            return Ops.select(nondiag_indicator, x, one.(x))
+            return @opcall select(nondiag_indicator, x, one.(x))
         end
     end
 end
@@ -102,18 +105,18 @@ function ReactantCore.materialize_traced_array(
     x::Symmetric{TracedRNumber{T},<:AnyTracedRMatrix}
 ) where {T}
     m, n = size(x)
-    row_idxs = Ops.iota(Int, [m, n]; iota_dimension=1)
-    col_idxs = Ops.iota(Int, [m, n]; iota_dimension=2)
+    row_idxs = @opcall iota(Int, [m, n]; iota_dimension=1)
+    col_idxs = @opcall iota(Int, [m, n]; iota_dimension=2)
     if x.uplo == 'L'
-        indicator = Ops.compare(row_idxs, col_idxs; comparison_direction="GT")
-        x_lt = Ops.select(indicator, parent(x), zero(parent(x)))
+        indicator = @opcall compare(row_idxs, col_idxs; comparison_direction="GT")
+        x_lt = @opcall select(indicator, parent(x), zero(parent(x)))
         x_ltd = materialize_traced_array(LowerTriangular(parent(x)))
-        return Ops.add(x_lt, Ops.transpose(x_ltd, [2, 1]))
+        return @opcall add(x_lt, @opcall(transpose(x_ltd, [2, 1])))
     else
-        indicator = Ops.compare(row_idxs, col_idxs; comparison_direction="LT")
-        x_ut = Ops.select(indicator, parent(x), zero(parent(x)))
+        indicator = @opcall compare(row_idxs, col_idxs; comparison_direction="LT")
+        x_ut = @opcall select(indicator, parent(x), zero(parent(x)))
         x_utd = materialize_traced_array(UpperTriangular(parent(x)))
-        return Ops.add(Ops.transpose(x_utd, [2, 1]), x_ut)
+        return @opcall add(@opcall(transpose(x_utd, [2, 1])), x_ut)
     end
 end
 
@@ -124,9 +127,9 @@ function TracedUtils.set_mlir_data!(
     px = parent(x)
     px.mlir_data = (
         if ndims(px) == 1
-            Ops.reshape(tdata, length(tdata))
+            @opcall reshape(tdata, length(tdata))
         else
-            Ops.transpose(tdata, [2, 1])
+            @opcall transpose(tdata, [2, 1])
         end
     ).mlir_data
     return x
@@ -137,9 +140,12 @@ function TracedUtils.set_mlir_data!(
 ) where {T,N}
     tdata = TracedRArray{T}(data)
     px = parent(x)
-    transposed_data =
-        ndims(px) == 1 ? Ops.reshape(tdata, length(tdata)) : Ops.transpose(tdata, [2, 1])
-    px.mlir_data = (T <: Real ? transposed_data : Ops.conj(transposed_data)).mlir_data
+    transposed_data = if ndims(px) == 1
+        @opcall(reshape(tdata, length(tdata)))
+    else
+        @opcall(transpose(tdata, [2, 1]))
+    end
+    px.mlir_data = (T <: Real ? transposed_data : @opcall(conj(transposed_data))).mlir_data
     return x
 end
 
@@ -162,12 +168,15 @@ for (AT, dcomp, ocomp) in (
         tdata = TracedRArray{T}(data)
         z = zero(tdata)
         m, n = size(x)
-        row_idxs = Ops.iota(Int, [m, n]; iota_dimension=1)
-        col_idxs = Ops.iota(Int, [m, n]; iota_dimension=2)
-        data_indicator = Ops.compare(row_idxs, col_idxs; comparison_direction=$(dcomp))
-        original_indicator = Ops.compare(row_idxs, col_idxs; comparison_direction=$(ocomp))
-        res = Ops.add(
-            Ops.select(data_indicator, tdata, z), Ops.select(original_indicator, x.data, z)
+        row_idxs = @opcall iota(Int, [m, n]; iota_dimension=1)
+        col_idxs = @opcall iota(Int, [m, n]; iota_dimension=2)
+        data_indicator = @opcall compare(row_idxs, col_idxs; comparison_direction=$(dcomp))
+        original_indicator = @opcall compare(
+            row_idxs, col_idxs; comparison_direction=$(ocomp)
+        )
+        res = @opcall add(
+            @opcall(select(data_indicator, tdata, z)),
+            @opcall(select(original_indicator, x.data, z)),
         )
         set_mlir_data!(parent(x), res.mlir_data)
         return x
@@ -207,7 +216,7 @@ function overloaded_mul!(
 ) where {T}
     # TODO: The reshape operations are not getting optimized, we should directly call
     #       dot_general
-    rC = Ops.reshape(C, length(C), 1)
+    rC = @opcall reshape(C, length(C), 1)
     overloaded_mul!(rC, A, reshape(B, :, 1), α, β)
     C.mlir_data = get_mlir_data(vec(rC))
     return C
@@ -246,42 +255,46 @@ function overloaded_mul!(
     end
 
     T = unwrapped_eltype(C)
-    tmp = Ops.dot_general(
+    tmp = @opcall dot_general(
         T.(materialize_traced_array(A)),
         T.(materialize_traced_array(B));
         contracting_dimensions=([2], [1]),
     )
 
     res = if iszero(β)
-        isone(α) ? tmp : Ops.multiply(tmp, TracedUtils.broadcast_to_size(T(α), size(C)))
+        if isone(α)
+            tmp
+        else
+            @opcall(multiply(tmp, TracedUtils.broadcast_to_size(T(α), size(C))))
+        end
     else
-        α_res = Ops.multiply(tmp, TracedUtils.broadcast_to_size(T(α), size(C)))
-        β_C = Ops.multiply(C, TracedUtils.broadcast_to_size(T(β), size(C)))
-        Ops.add(α_res, β_C)
+        α_res = @opcall multiply(tmp, TracedUtils.broadcast_to_size(T(α), size(C)))
+        β_C = @opcall multiply(C, TracedUtils.broadcast_to_size(T(β), size(C)))
+        @opcall add(α_res, β_C)
     end
     set_mlir_data!(C, get_mlir_data(res))
     return C
 end
 
 function LinearAlgebra.triu!(@nospecialize(X::TracedRArray{T,2}), k::Integer) where {T}
-    iota_1 = Ops.iota(Int64, [size(X)...]; iota_dimension=1)
-    iota_2 = Ops.subtract(
-        Ops.iota(Int64, [size(X)...]; iota_dimension=2),
+    iota_1 = @opcall iota(Int64, [size(X)...]; iota_dimension=1)
+    iota_2 = @opcall subtract(
+        @opcall(iota(Int64, [size(X)...]; iota_dimension=2)),
         TracedUtils.broadcast_to_size(k, size(X)),
     )
-    idxs = Ops.compare(iota_1, iota_2; comparison_direction="LE")
-    X.mlir_data = Ops.select(idxs, X, zero(X)).mlir_data
+    idxs = @opcall compare(iota_1, iota_2; comparison_direction="LE")
+    X.mlir_data = @opcall(select(idxs, X, zero(X))).mlir_data
     return X
 end
 
 function LinearAlgebra.tril!(@nospecialize(X::TracedRArray{T,2}), k::Integer) where {T}
-    iota_1 = Ops.iota(Int64, [size(X)...]; iota_dimension=1)
-    iota_2 = Ops.subtract(
-        Ops.iota(Int64, [size(X)...]; iota_dimension=2),
+    iota_1 = @opcall iota(Int64, [size(X)...]; iota_dimension=1)
+    iota_2 = @opcall subtract(
+        @opcall(iota(Int64, [size(X)...]; iota_dimension=2)),
         TracedUtils.broadcast_to_size(k, size(X)),
     )
-    idxs = Ops.compare(iota_1, iota_2; comparison_direction="GE")
-    X.mlir_data = Ops.select(idxs, X, zero(X)).mlir_data
+    idxs = @opcall compare(iota_1, iota_2; comparison_direction="GE")
+    X.mlir_data = @opcall(select(idxs, X, zero(X))).mlir_data
     return X
 end
 
@@ -313,13 +326,13 @@ function LinearAlgebra._diagm(
         push!(scatter_inds, ind)
         push!(concat_inputs, get_mlir_data(v))
     end
-    scatter_indices = Ops.concatenate(scatter_inds, 1)
+    scatter_indices = @opcall concatenate(scatter_inds, 1)
     values = TracedRArray{T,1}(
         (),
         MLIR.IR.result(MLIR.Dialects.stablehlo.concatenate(concat_inputs; dimension=0), 1),
         (size(scatter_indices, 1),),
     )
-    return Ops.scatter_setindex(Ops.fill(zero(T), (m, n)), scatter_indices, values)
+    return @opcall scatter_setindex(@opcall(fill(zero(T), (m, n))), scatter_indices, values)
 end
 
 # Common Utilities
@@ -330,14 +343,14 @@ function diagonal_indices(m::Integer, n::Integer, k::Integer, v::Integer)
     L = min(L, v)
 
     if idx1 == idx2
-        iota = Ops.iota(Int, [L, 2]; iota_dimension=1)
-        op1 = Ops.add(iota, Ops.fill(idx1, (L, 2)))
+        iota = @opcall iota(Int, [L, 2]; iota_dimension=1)
+        op1 = @opcall add(iota, @opcall(fill(idx1, (L, 2))))
         return op1
     else
-        iota = Ops.iota(Int, [L, 1]; iota_dimension=1)
-        op1 = Ops.add(iota, Ops.fill(idx1, (L, 1)))
-        op2 = Ops.add(iota, Ops.fill(idx2, (L, 1)))
-        return Ops.concatenate([op1, op2], 2)
+        iota = @opcall iota(Int, [L, 1]; iota_dimension=1)
+        op1 = @opcall add(iota, @opcall(fill(idx1, (L, 1))))
+        op2 = @opcall add(iota, @opcall(fill(idx2, (L, 1))))
+        return @opcall concatenate([op1, op2], 2)
     end
 end
 
@@ -394,10 +407,10 @@ function LinearAlgebra._kron!(C::AnyTracedRMatrix, A::AnyTracedRMatrix, B::AnyTr
 
     final_shape = Int64[size(B, 1), size(A, 1), size(B, 2), size(A, 2)]
 
-    A = Ops.broadcast_in_dim(A, Int64[2, 4], final_shape)
-    B = Ops.broadcast_in_dim(B, Int64[1, 3], final_shape)
+    A = @opcall broadcast_in_dim(A, Int64[2, 4], final_shape)
+    B = @opcall broadcast_in_dim(B, Int64[1, 3], final_shape)
 
-    C_tmp = Ops.reshape(Ops.multiply(A, B), size(C)...)
+    C_tmp = @opcall reshape(@opcall(multiply(A, B)), size(C)...)
     set_mlir_data!(C, get_mlir_data(C_tmp))
 
     return C
@@ -421,9 +434,9 @@ function LinearAlgebra.axpy!(α::Number, x::TracedRArray{T}, y::TracedRArray{T})
             ),
         )
     end
-    ax = Ops.multiply(x, TracedUtils.broadcast_to_size(T(α), size(x)))
+    ax = @opcall multiply(x, TracedUtils.broadcast_to_size(T(α), size(x)))
 
-    set_mlir_data!(y, get_mlir_data(Ops.add(y, ax)))
+    set_mlir_data!(y, get_mlir_data(@opcall add(y, ax)))
     return y
 end
 
@@ -437,10 +450,10 @@ function LinearAlgebra.axpby!(
             ),
         )
     end
-    ax = Ops.multiply(x, TracedUtils.broadcast_to_size(T(α), size(x)))
-    by = Ops.multiply(y, TracedUtils.broadcast_to_size(T(β), size(y)))
+    ax = @opcall multiply(x, TracedUtils.broadcast_to_size(T(α), size(x)))
+    by = @opcall multiply(y, TracedUtils.broadcast_to_size(T(β), size(y)))
 
-    set_mlir_data!(y, get_mlir_data(Ops.add(ax, by)))
+    set_mlir_data!(y, get_mlir_data(@opcall add(ax, by)))
     return y
 end
 
@@ -490,8 +503,8 @@ function LinearAlgebra.dot(x::AnyTracedRVector, y::AnyTracedRVector)
         )
     end
 
-    res = Ops.dot_general(
-        Ops.conj(materialize_traced_array(x)),
+    res = @opcall dot_general(
+        @opcall(conj(materialize_traced_array(x))),
         materialize_traced_array(y);
         contracting_dimensions=([1], [1]),
     )
@@ -520,7 +533,7 @@ function LinearAlgebra.generic_trimatdiv!(
     @assert uploc in ('L', 'U')
     @assert isunitc in ('N', 'U')
 
-    res = Ops.triangular_solve(
+    res = @opcall triangular_solve(
         TracedUtils.promote_to(TracedRArray{T,2}, materialize_traced_array(A)),
         TracedUtils.promote_to(TracedRArray{T,ndims(B)}, materialize_traced_array(B));
         left_side=true,
@@ -543,7 +556,7 @@ function LinearAlgebra.generic_mattridiv!(
     @assert uploc in ('L', 'U')
     @assert isunitc in ('N', 'U')
 
-    res = Ops.triangular_solve(
+    res = @opcall triangular_solve(
         TracedUtils.promote_to(TracedRArray{T,2}, materialize_traced_array(B)),
         TracedUtils.promote_to(TracedRArray{T,2}, materialize_traced_array(A));
         left_side=false,
@@ -611,14 +624,14 @@ function _lu_overload(
     # TODO: don't ignore the check and allowsingular flags
     # Batching here is in the last dimensions. `Ops.lu` expects the last dimensions
     permdims = vcat(collect(Int64, 3:N), 1, 2)
-    A = Ops.transpose(materialize_traced_array(A), permdims)
-    factors, ipiv, perm, info = Reactant.Ops.lu(A)
+    A = @opcall transpose(materialize_traced_array(A), permdims)
+    factors, ipiv, perm, info = @opcall lu(A)
 
     # Permute back to the original dimensions
     perm_perm = vcat(N - 1, collect(Int64, 1:(N - 2)))
-    factors = Ops.transpose(factors, invperm(permdims))
-    ipiv = Ops.transpose(ipiv, perm_perm)
-    perm = Ops.transpose(perm, perm_perm)
+    factors = @opcall transpose(factors, invperm(permdims))
+    ipiv = @opcall transpose(ipiv, perm_perm)
+    perm = @opcall transpose(perm, perm_perm)
     return GeneralizedLU(factors, ipiv, perm, info)
 end
 
@@ -645,16 +658,18 @@ function LinearAlgebra.ldiv!(
 
     permutation = vcat(collect(Int64, 3:N), 1, 2)
 
-    factors = Ops.transpose(materialize_traced_array(lu.factors), permutation)
-    B_permuted = Ops.transpose(materialize_traced_array(B), permutation)
-    perm = Ops.transpose(
+    factors = @opcall transpose(materialize_traced_array(lu.factors), permutation)
+    B_permuted = @opcall transpose(materialize_traced_array(B), permutation)
+    perm = @opcall transpose(
         materialize_traced_array(lu.perm), vcat(collect(Int64, 2:(N - 1)), 1)
     )
 
-    res = Ops.transpose(
+    res = @opcall transpose(
         only(
-            Ops.batch(
-                _lu_solve_core, [factors, B_permuted, perm], collect(Int64, batch_shape)
+            @opcall(
+                batch(
+                    _lu_solve_core, [factors, B_permuted, perm], collect(Int64, batch_shape)
+                )
             ),
         ),
         invperm(permutation),

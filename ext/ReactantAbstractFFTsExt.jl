@@ -2,6 +2,7 @@ module ReactantAbstractFFTsExt
 
 using AbstractFFTs: AbstractFFTs
 using Reactant: Reactant, MLIR, Ops, AnyTracedRArray, TracedRArray, TracedUtils
+using Reactant.Ops: @opcall
 
 function __permutation_to_move_dims_to_end(dims, N::Integer)
     perm = [i for i in 1:N if i ∉ Set(dims)]
@@ -21,7 +22,7 @@ for op in (:rfft, :fft, :ifft)
 
         fft_lengths = Int64[size(x, dim) for dim in reverse(dims)]
         if __is_valid_stablehlo_fft_dims(dims, ndims(x))
-            return Ops.fft(
+            return @opcall fft(
                 TracedUtils.materialize_traced_array(x);
                 type=$(uppercase(string(op))),
                 length=fft_lengths,
@@ -29,10 +30,12 @@ for op in (:rfft, :fft, :ifft)
         end
         perm = __permutation_to_move_dims_to_end(dims, ndims(x))
         return permutedims(
-            Ops.fft(
-                TracedUtils.materialize_traced_array(permutedims(x, perm));
-                type=$(uppercase(string(op))),
-                length=fft_lengths,
+            @opcall(
+                fft(
+                    TracedUtils.materialize_traced_array(permutedims(x, perm));
+                    type=$(uppercase(string(op))),
+                    length=fft_lengths,
+                )
             ),
             invperm(perm),
         )
@@ -48,7 +51,7 @@ for op in (:irfft,)
         fft_lengths = vcat(Int64[size(x, dim) for dim in reverse(dims[2:end])], d)
 
         if __is_valid_stablehlo_fft_dims(dims, ndims(x))
-            return Ops.fft(
+            return @opcall fft(
                 TracedUtils.materialize_traced_array(x);
                 type=$(uppercase(string(op))),
                 length=fft_lengths,
@@ -57,10 +60,12 @@ for op in (:irfft,)
 
         perm = __permutation_to_move_dims_to_end(dims, ndims(x))
         return permutedims(
-            Ops.fft(
-                TracedUtils.materialize_traced_array(permutedims(x, perm));
-                type=$(uppercase(string(op))),
-                length=fft_lengths,
+            @opcall(
+                fft(
+                    TracedUtils.materialize_traced_array(permutedims(x, perm));
+                    type=$(uppercase(string(op))),
+                    length=fft_lengths,
+                )
             ),
             invperm(perm),
         )

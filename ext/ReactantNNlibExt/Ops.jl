@@ -12,17 +12,19 @@ function reduce_window(
 
     padding = collect(Int64, reshape([padding..., 0, 0, 0, 0], (2, N))')
 
-    return Ops.reduce_window(
-        f,
-        [materialize_traced_array(x)],
-        [Ops.constant(T(init))];
-        window_dimensions=[kernel_size..., 1, 1],
-        window_strides=[stride..., 1, 1],
-        window_dilations=[dilation..., 1, 1],
-        padding_low=padding[:, 1],
-        padding_high=padding[:, 2],
-        output_shape=Int[output_spatial_shapes..., size(x, N - 1), size(x, N)],
-        base_dilations=ones(Int, N),
+    return @opcall(
+        reduce_window(
+            f,
+            [materialize_traced_array(x)],
+            [@opcall(constant(T(init)))];
+            window_dimensions=[kernel_size..., 1, 1],
+            window_strides=[stride..., 1, 1],
+            window_dilations=[dilation..., 1, 1],
+            padding_low=padding[:, 1],
+            padding_high=padding[:, 2],
+            output_shape=Int[output_spatial_shapes..., size(x, N - 1), size(x, N)],
+            base_dilations=ones(Int, N),
+        )
     )[1]
 end
 
@@ -31,7 +33,7 @@ function upsample_linear(
 ) where {T}
     W, _, _ = size(x)
 
-    out_idxs = Ops.iota(Int32, [out_size[1]]; iota_dimension=1)
+    out_idxs = @opcall iota(Int32, [out_size[1]]; iota_dimension=1)
     iw0, iw1, w0_λ, w1_λ = source_idx_and_λ(rwidth, out_idxs, align_corners, W)
 
     x0 = x[iw0, :, :]
@@ -45,8 +47,8 @@ function upsample_linear(
 ) where {T}
     W, H, _, _ = size(x)
 
-    out_width = Ops.iota(Int32, [out_size[1]]; iota_dimension=1)
-    out_height = Ops.iota(Int32, [out_size[2]]; iota_dimension=1)
+    out_width = @opcall iota(Int32, [out_size[1]]; iota_dimension=1)
+    out_height = @opcall iota(Int32, [out_size[2]]; iota_dimension=1)
 
     iw0, iw1, w0_λ, w1_λ = source_idx_and_λ(rwidth, out_width, align_corners, W)
     ih0, ih1, h0_λ, h1_λ = source_idx_and_λ(rheight, out_height, align_corners, H)
@@ -72,9 +74,9 @@ function upsample_linear(
 ) where {T}
     W, H, D, _, _ = size(x)
 
-    out_width = Ops.iota(Int32, [out_size[1]]; iota_dimension=1)
-    out_height = Ops.iota(Int32, [out_size[2]]; iota_dimension=1)
-    out_depth = Ops.iota(Int32, [out_size[3]]; iota_dimension=1)
+    out_width = @opcall iota(Int32, [out_size[1]]; iota_dimension=1)
+    out_height = @opcall iota(Int32, [out_size[2]]; iota_dimension=1)
+    out_depth = @opcall iota(Int32, [out_size[3]]; iota_dimension=1)
 
     iw0, iw1, w0_λ, w1_λ = source_idx_and_λ(rwidth, out_width, align_corners, W)
     ih0, ih1, h0_λ, h1_λ = source_idx_and_λ(rheight, out_height, align_corners, H)

@@ -750,7 +750,7 @@ function Base.fill(
 )
     output_shardings = Sharding.is_sharded(sharding) ? Dict(1 => sharding) : nothing
     fn = Reactant.compile((); output_shardings) do
-        return Ops.fill(val, collect(Int64, dims))
+        return @opcall fill(val, collect(Int64, dims))
     end
     return fn()
 end

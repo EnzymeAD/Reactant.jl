@@ -6,6 +6,7 @@ module TracedRandom
 
 using ..Reactant:
     Reactant, TracedRArray, TracedRNumber, ReactantRNG, AnyTracedRArray, TracedUtils, Ops
+using ..Reactant.Ops: @opcall
 using Random: Random, AbstractRNG
 
 @noinline make_seed(rng::AbstractRNG=Random.RandomDevice()) =
@@ -46,7 +47,7 @@ end
     rng::ReactantRNG{<:TracedRArray}, A::AnyTracedRArray{T,N}
 ) where {T,N}
     length(A) == 0 && return A
-    res = Ops.rng_bit_generator(T, rng.seed, [size(A)...]; rng.algorithm)
+    res = @opcall rng_bit_generator(T, rng.seed, [size(A)...]; rng.algorithm)
     copyto!(rng.seed, res.output_state)
     TracedUtils.set_mlir_data!(A, res.output.mlir_data)
     return A
@@ -56,7 +57,7 @@ end
     rng::ReactantRNG{<:TracedRArray}, A::AnyTracedRArray{T,N}
 ) where {T,N}
     length(A) == 0 && return A
-    res = Ops.randn(T, rng.seed, [size(A)...]; rng.algorithm)
+    res = @opcall randn(T, rng.seed, [size(A)...]; rng.algorithm)
     copyto!(rng.seed, res.output_state)
     TracedUtils.set_mlir_data!(A, res.output.mlir_data)
     return A
@@ -66,7 +67,7 @@ end
     rng::ReactantRNG{<:TracedRArray}, A::AnyTracedRArray{T,N}
 ) where {T,N}
     length(A) == 0 && return A
-    res = Ops.randexp(T, rng.seed, [size(A)...]; rng.algorithm)
+    res = @opcall randexp(T, rng.seed, [size(A)...]; rng.algorithm)
     copyto!(rng.seed, res.output_state)
     TracedUtils.set_mlir_data!(A, res.output.mlir_data)
     return A
