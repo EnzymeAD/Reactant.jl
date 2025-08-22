@@ -187,19 +187,21 @@ lib_path = joinpath(source_dir, "bazel-bin", only(built_libs))
 isfile(lib_path) || error("Could not find library $lib_path in build directory")
 
 if build_backend == "cuda"
-    if !Base.Filesystem.ispath(joinpath(source_dir, "bazel-bin", "cuda", "bin", "ptxas"))
-        Base.Filesystem.mkpath(joinpath(source_dir, "bazel-bin", "cuda", "bin"))
-        Base.Filesystem.symlink(
-            joinpath(
-                source_dir,
-                "bazel-bin",
-                "libReactantExtra.so.runfiles",
-                "cuda_nvcc",
-                "bin",
-                "ptxas",
-            ),
-            joinpath(source_dir, "bazel-bin", "cuda", "bin", "ptxas"),
-        )
+    for path in (joinpath("bin", "ptxas"), joinpath("nvvm", "libdevice", "libdevice.10.bc"))
+        full_path = joinpath(source_dir, "bazel-bin", "cuda", path)
+        if !Base.Filesystem.ispath(full_path)
+            Base.Filesystem.mkpath(dirname(full_path))
+            Base.Filesystem.symlink(
+                joinpath(
+                    source_dir,
+                    "bazel-bin",
+                    "libReactantExtra.so.runfiles",
+                    "cuda_nvcc",
+                    path,
+                ),
+                full_path,
+            )
+        end
     end
 end
 
