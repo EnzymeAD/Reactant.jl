@@ -110,7 +110,7 @@ jobs:
         # https://github.com/actions/runner/issues/2058
         run: |
           echo "TMPDIR=${GITHUB_WORKSPACE}/tmp" >> ${GITHUB_ENV}
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Create TMPDIR
         run: |
           mkdir -p ${{ env.TMPDIR }}
@@ -119,7 +119,7 @@ jobs:
         with:
           version: ${{ matrix.version }}
       - uses: julia-actions/cache@v2
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         if: ${{ matrix.assertions }}
         with:
           repository: "JuliaLang/julia"
