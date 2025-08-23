@@ -907,6 +907,9 @@ function optimization_passes(
         "self_add_to_convolution_like($(Int(backend == "tpu")))",
         "self_mul_to_convolution_like($(Int(backend == "tpu")))",
         "subtract_multiply_const_to_add_mul_const",
+        "concat_insert_dim_dot_general",
+        "concat_insert_dim_gather",
+        "concat_insert_dim_iota",
     ]
 
     if !compile_options.disable_scatter_gather_optimization_passes
