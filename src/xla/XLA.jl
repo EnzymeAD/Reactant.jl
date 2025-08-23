@@ -131,7 +131,8 @@ function __init__()
             XLA_REACTANT_GPU_MEM_FRACTION[] = parse(
                 Float64, ENV["XLA_REACTANT_GPU_MEM_FRACTION"]
             )
-            @debug "XLA_REACTANT_GPU_MEM_FRACTION: " XLA_REACTANT_GPU_MEM_FRACTION[]
+            @debug "XLA_REACTANT_GPU_MEM_FRACTION: " XLA_REACTANT_GPU_MEM_FRACTION[] maxlog =
+                1
             if XLA_REACTANT_GPU_MEM_FRACTION[] > 1 || XLA_REACTANT_GPU_MEM_FRACTION[] < 0
                 error("XLA_REACTANT_GPU_MEM_FRACTION must be between 0 and 1")
             end
@@ -141,16 +142,18 @@ function __init__()
             XLA_REACTANT_GPU_PREALLOCATE[] = parse(
                 Bool, ENV["XLA_REACTANT_GPU_PREALLOCATE"]
             )
-            @debug "XLA_REACTANT_GPU_PREALLOCATE: " XLA_REACTANT_GPU_PREALLOCATE[]
+            @debug "XLA_REACTANT_GPU_PREALLOCATE: " XLA_REACTANT_GPU_PREALLOCATE[] maxlog =
+                1
         end
 
         if haskey(ENV, "REACTANT_VISIBLE_GPU_DEVICES")
             global_state.local_gpu_device_ids =
                 parse.(Int, split(ENV["REACTANT_VISIBLE_GPU_DEVICES"], ","))
-            @debug "REACTANT_VISIBLE_GPU_DEVICES: " global_state.local_gpu_device_ids
+            @debug "REACTANT_VISIBLE_GPU_DEVICES: " global_state.local_gpu_device_ids maxlog =
+                1
         end
 
-        @debug "REACTANT_XLA_RUNTIME: " REACTANT_XLA_RUNTIME
+        @debug "REACTANT_XLA_RUNTIME: " REACTANT_XLA_RUNTIME maxlog = 1
 
         @ccall MLIR.API.mlir_c.RegisterEnzymeXLACPUHandler()::Cvoid
         @ccall MLIR.API.mlir_c.RegisterEnzymeXLAGPUHandler()::Cvoid

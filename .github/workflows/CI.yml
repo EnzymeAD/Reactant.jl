@@ -66,6 +66,16 @@ jobs:
             assertions: false
             test_group: core
             runtime: "IFRT"
+          - os: linux-x86-ct6e-180-4tpu
+            version: "1.11"
+            assertions: false
+            test_group: integration
+            runtime: "IFRT"
+          - os: linux-x86-ct6e-180-4tpu
+            version: "1.11"
+            assertions: false
+            test_group: neural_networks
+            runtime: "IFRT"
           - os: ubuntu-24.04
             version: "1.10"
             assertions: true
@@ -81,18 +91,18 @@ jobs:
             assertions: true
             test_group: integration
             runtime: "PJRT"
-          # - os: ubuntu-24.04
-          #   libReactant: packaged
-          #   version: '1.10'
-          #   test_group: core
-          # - os: ubuntu-24.04
-          #   libReactant: packaged
-          #   version: '1.10'
-          #   test_group: neural_networks
-          # - os: ubuntu-24.04
-          #   libReactant: packaged
-          #   version: '1.10'
-          #   test_group: integration
+          - os: ubuntu-24.04
+            libReactant: packaged
+            version: '1.10'
+            test_group: core
+          - os: ubuntu-24.04
+            libReactant: packaged
+            version: '1.10'
+            test_group: neural_networks
+          - os: ubuntu-24.04
+            libReactant: packaged
+            version: '1.10'
+            test_group: integration
     steps:
       - name: Set TMPDIR
         # We have to use `${GITHUB_WORKSPACE}` instead of `github.workspace` because GitHub

@@ -74,10 +74,15 @@ end
 
     res, dps = gradient_loss_function(model, noisy, target, ps, st)
 
-    compiled_gradient =
-        Reactant.with_config(; dot_general_precision=PrecisionConfig.HIGHEST) do
-            Reactant.compile(gradient_loss_function, (cmodel, cnoisy, ctarget, cps, cst2))
-        end
+    dot_general_precision = if contains(string(Reactant.devices()[1]), "CUDA")
+        PrecisionConfig.HIGHEST
+    else
+        PrecisionConfig.DEFAULT
+    end
+
+    compiled_gradient = Reactant.with_config(; dot_general_precision) do
+        @compile gradient_loss_function(cmodel, cnoisy, ctarget, cps, cst2)
+    end
 
     res_reactant, dps_reactant = compiled_gradient(cmodel, cnoisy, ctarget, cps, cst2)
 
