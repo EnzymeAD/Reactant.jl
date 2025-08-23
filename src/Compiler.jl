@@ -910,6 +910,9 @@ function optimization_passes(
         "concat_insert_dim_dot_general",
         "concat_insert_dim_gather",
         "concat_insert_dim_iota",
+        "concat_insert_dim_reduce",
+        "concat_insert_dim_sort",
+        "concat_insert_dim_reduce_window",
     ]
 
     if !compile_options.disable_scatter_gather_optimization_passes
