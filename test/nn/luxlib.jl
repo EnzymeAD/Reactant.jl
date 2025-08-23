@@ -30,9 +30,12 @@ using LuxLib, Reactant, Enzyme, NNlib
         x_ra = Reactant.to_rarray(x)
         bias_ra = Reactant.to_rarray(bias)
 
-        f_compile = Reactant.compile(
-            fused_dense_bias_activation, (act, weight_ra, x_ra, bias_ra)
-        )
+        f_compile = Reactant.with_config(;
+            dot_general_precision=PrecisionConfig.HIGHEST,
+            convolution_precision=PrecisionConfig.HIGHEST,
+        ) do
+            @compile fused_dense_bias_activation(act, weight_ra, x_ra, bias_ra)
+        end
 
         y_res = fused_dense_bias_activation(act, weight, x, bias)
         y_compile = f_compile(act, weight_ra, x_ra, bias_ra)
@@ -41,9 +44,13 @@ using LuxLib, Reactant, Enzyme, NNlib
 
         @testset "Enzyme: fused_dense_bias_activation" begin
             dw, dx, db = ∇fuseddense(act, weight, x, bias)
-            ∇fuseddense_compiled = Reactant.compile(
-                ∇fuseddense, (act, weight_ra, x_ra, bias_ra)
-            )
+
+            ∇fuseddense_compiled = Reactant.with_config(;
+                dot_general_precision=PrecisionConfig.HIGHEST,
+                convolution_precision=PrecisionConfig.HIGHEST,
+            ) do
+                @compile ∇fuseddense(act, weight_ra, x_ra, bias_ra)
+            end
             dw_compile, dx_compile, db_compile = ∇fuseddense_compiled(
                 act, weight_ra, x_ra, bias_ra
             )
@@ -96,8 +103,19 @@ end
         x_ra = Reactant.to_rarray(x)
         b_ra = Reactant.to_rarray(b)
 
-        f_compile = Reactant.compile(biasact, (act, x_ra, b_ra))
-        f_compile!! = Reactant.compile(biasact!!, (act, x_ra, b_ra))
+        f_compile = Reactant.with_config(;
+            dot_general_precision=PrecisionConfig.HIGHEST,
+            convolution_precision=PrecisionConfig.HIGHEST,
+        ) do
+            @compile biasact(act, x_ra, b_ra)
+        end
+
+        f_compile!! = Reactant.with_config(;
+            dot_general_precision=PrecisionConfig.HIGHEST,
+            convolution_precision=PrecisionConfig.HIGHEST,
+        ) do
+            @compile biasact!!(act, x_ra, b_ra)
+        end
 
         y_simple = biasact(act, x, b)
         y_simple!! = biasact!!(act, x, b)
@@ -109,7 +127,12 @@ end
 
         @testset "Enzyme: bias_activation" begin
             ∂x_enz, ∂b_enz = ∇biasact(act, x, b)
-            ∇biasact_compiled = Reactant.compile(∇biasact, (act, x_ra, b_ra))
+            ∇biasact_compiled = Reactant.with_config(;
+                dot_general_precision=PrecisionConfig.HIGHEST,
+                convolution_precision=PrecisionConfig.HIGHEST,
+            ) do
+                @compile ∇biasact(act, x_ra, b_ra)
+            end
             ∂x_compile, ∂b_compile = ∇biasact_compiled(act, x_ra, b_ra)
 
             @test ∂x_enz ≈ ∂x_compile atol = 1e-5 rtol = 1e-2
@@ -118,7 +141,12 @@ end
 
         @testset "Enzyme: bias_activation!!" begin
             ∂x_enz!!, ∂b_enz!! = ∇biasact!!(act, x, b)
-            ∇biasact!!_compiled = Reactant.compile(∇biasact!!, (act, x_ra, b_ra))
+            ∇biasact!!_compiled = Reactant.with_config(;
+                dot_general_precision=PrecisionConfig.HIGHEST,
+                convolution_precision=PrecisionConfig.HIGHEST,
+            ) do
+                @compile ∇biasact!!(act, x_ra, b_ra)
+            end
             ∂x_compile!!, ∂b_compile!! = ∇biasact!!_compiled(act, x_ra, b_ra)
 
             @test ∂x_enz!! ≈ ∂x_compile!! atol = 1e-5 rtol = 1e-2
@@ -150,8 +178,18 @@ end
     @testset "Activation: $act" for act in (
         identity, relu, sigmoid, tanh, tanh_fast, sigmoid_fast, gelu, abs2
     )
-        f_compile = Reactant.compile(sumabs2, (act, x_act_ca))
-        f_compile!! = Reactant.compile(sumabs2!!, (act, x_act_ca))
+        f_compile = Reactant.with_config(;
+            dot_general_precision=PrecisionConfig.HIGHEST,
+            convolution_precision=PrecisionConfig.HIGHEST,
+        ) do
+            @compile sumabs2(act, x_act_ca)
+        end
+        f_compile!! = Reactant.with_config(;
+            dot_general_precision=PrecisionConfig.HIGHEST,
+            convolution_precision=PrecisionConfig.HIGHEST,
+        ) do
+            @compile sumabs2!!(act, x_act_ca)
+        end
 
         y_simple = sumabs2(act, x_act)
         y_simple!! = sumabs2!!(act, x_act)
@@ -167,11 +205,21 @@ end
         ∂x_enz!! = Enzyme.make_zero(x_act)
         Enzyme.autodiff(Reverse, sumabs2!!, Active, Const(act), Duplicated(x_act, ∂x_enz!!))
 
-        ∇sumabs2_compiled = Reactant.compile(∇sumabs2, (act, x_act_ca))
-        ∂x_compile = ∇sumabs2_compiled(act, x_act_ca)
+        ∇sumabs2 = Reactant.with_config(;
+            dot_general_precision=PrecisionConfig.HIGHEST,
+            convolution_precision=PrecisionConfig.HIGHEST,
+        ) do
+            @compile ∇sumabs2(act, x_act_ca)
+        end
+        ∂x_compile = ∇sumabs2(act, x_act_ca)
 
-        ∇sumabs2!!_compiled = Reactant.compile(∇sumabs2!!, (act, x_act_ca))
-        ∂x_compile!! = ∇sumabs2!!_compiled(act, x_act_ca)
+        ∇sumabs2!! = Reactant.with_config(;
+            dot_general_precision=PrecisionConfig.HIGHEST,
+            convolution_precision=PrecisionConfig.HIGHEST,
+        ) do
+            @compile ∇sumabs2!!(act, x_act_ca)
+        end
+        ∂x_compile!! = ∇sumabs2!!(act, x_act_ca)
 
         @test ∂x_enz ≈ ∂x_compile atol = 1e-5 rtol = 1e-2
         @test ∂x_enz!! ≈ ∂x_compile!! atol = 1e-5 rtol = 1e-2
@@ -194,10 +242,12 @@ end
 
             conv_dims = DenseConvDims(x, weight; stride, padding, dilation, groups)
 
-            fused_conv_compiled = Reactant.compile(
-                fused_conv_bias_activation,
-                (act, weight_reactant, x_reactant, bias_reactant, conv_dims),
-            )
+            fused_conv_compiled = Reactant.with_config(;
+                dot_general_precision=PrecisionConfig.HIGHEST,
+                convolution_precision=PrecisionConfig.HIGHEST,
+            ) do
+                @compile fused_conv_bias_activation(act, weight_reactant, x_reactant, bias_reactant, conv_dims)
+            end
 
             reactant_res = fused_conv_compiled(
                 act, weight_reactant, x_reactant, bias_reactant, conv_dims
