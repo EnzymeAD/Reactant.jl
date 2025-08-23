@@ -187,7 +187,11 @@ lib_path = joinpath(source_dir, "bazel-bin", only(built_libs))
 isfile(lib_path) || error("Could not find library $lib_path in build directory")
 
 if build_backend == "cuda"
-    for path in (joinpath("bin", "ptxas"), joinpath("nvvm", "libdevice", "libdevice.10.bc"))
+    for path in (
+        joinpath("bin", "ptxas"),
+        joinpath("bin", "fatbinary"),
+        joinpath("nvvm", "libdevice", "libdevice.10.bc"),
+    )
         full_path = joinpath(source_dir, "bazel-bin", "cuda", path)
         if !Base.Filesystem.ispath(full_path)
             Base.Filesystem.mkpath(dirname(full_path))
