@@ -154,6 +154,11 @@ function set_mlir_data!(x::AnyTracedRArray{T}, data) where {T}
     return x
 end
 
+function set_mlir_data!(x::T, data) where {T}
+    @warn "Setting mlir data on a $T is a no-op."
+    return x
+end
+
 get_ancestor_indices(::TracedRArray, indices) = indices
 get_ancestor_indices(::TracedRArray, indices, args...) = (indices, args...)
 
@@ -281,6 +286,10 @@ function make_mlir_fn(
     optimize_then_pad::Bool=true,
 )
     if sizeof(typeof(f)) != 0 || f isa Base.BroadcastFunction
+        if !isnothing(verify_arg_names)
+            verify_arg_names = (nameof(f), verify_arg_names...)
+        end
+
         mlir_fn_res = make_mlir_fn(
             Reactant.apply,
             (f, args...),
@@ -309,6 +318,7 @@ function make_mlir_fn(
         args,
         name,
         concretein,
+        false, # mutate_args
         toscalar,
         argprefix,
         runtime,
@@ -349,7 +359,7 @@ function make_mlir_fn(
         end
     end
 
-    (func2, traced_result, ret, linear_args, in_tys, linear_results, skipped_results, num_partitions, is_sharded, unique_meshes, mutated_args, global_device_ids) = finalize_mlir_fn(
+    (; func2, traced_result, ret, linear_args, in_tys, linear_results, skipped_results, num_partitions, is_sharded, unique_meshes, mutated_args, global_device_ids) = finalize_mlir_fn(
         result,
         traced_args,
         linear_args,
@@ -411,6 +421,7 @@ function prepare_mlir_fn_args(
     args,
     name,
     concretein,
+    mutate_args,
     toscalar,
     argprefix,
     runtime,
@@ -425,7 +436,11 @@ function prepare_mlir_fn_args(
         @assert !toscalar
         Reactant.ConcreteToTraced
     else
-        Reactant.TracedSetPath
+        if mutate_args
+            Reactant.TracedTrack
+        else
+            Reactant.TracedSetPath
+        end
     end
     fnbody = MLIR.IR.Block(MLIR.IR.Type[], MLIR.IR.Location[])
     MLIR.IR.activate!(fnbody)
@@ -838,9 +853,11 @@ function finalize_mlir_fn(
         MLIR.IR.deactivate!(fnbody)
     end
 
+    f_name = __lookup_unique_name_in_module(mod, name)
+
     func2 = MLIR.IR.block!(MLIR.IR.body(mod)) do
         return MLIR.Dialects.func.func_(;
-            sym_name=__lookup_unique_name_in_module(mod, name),
+            sym_name=f_name,
             function_type=MLIR.IR.FunctionType(in_tys, out_tys),
             body=MLIR.IR.Region(),
             arg_attrs=MLIR.IR.attr(func, "arg_attrs"),
@@ -971,8 +988,9 @@ function finalize_mlir_fn(
     MLIR.API.mlirOperationDestroy(func.operation)
     func.operation = MLIR.API.MlirOperation(C_NULL)
 
-    return (
+    return (;
         func2,
+        f_name,
         traced_result,
         ret,
         linear_args,
