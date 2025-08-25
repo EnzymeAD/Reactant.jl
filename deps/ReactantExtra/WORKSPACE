@@ -17,14 +17,14 @@ http_archive(
 
 http_archive(
     name = "enzyme_ad",
+    patch_cmds = [
+        """
+sed -i.bak0 "s/\\\\\\\\\\\\\\\\\\/\\\\\\\\\\\\\\\\\\/:patches/@enzyme_ad\\\\\\\\\\\\\\\\\\/\\\\\\\\\\\\\\\\\\/:patches/g" workspace.bzl
+""",
+    ],
     sha256 = ENZYMEXLA_SHA256,
     strip_prefix = "Enzyme-JAX-" + ENZYMEXLA_COMMIT,
     urls = ["https://github.com/EnzymeAD/Enzyme-JAX/archive/{commit}.tar.gz".format(commit = ENZYMEXLA_COMMIT)],
-    patch_cmds = [
-    """
-sed -i.bak0 "s/\\\\\\\\\\\\\\\\\\/\\\\\\\\\\\\\\\\\\/:patches/@enzyme_ad\\\\\\\\\\\\\\\\\\/\\\\\\\\\\\\\\\\\\/:patches/g" workspace.bzl
-""",
-    ]
 )
 
 CUPTI_OLD = [
