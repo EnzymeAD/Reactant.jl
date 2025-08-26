@@ -171,15 +171,27 @@ function Base.mod(
     r = rem(x, y)
     return ifelse(r == 0, copysign(r, y), ifelse((r > 0) ⊻ (y > 0), r + y, r))
 end
-function Base.mod(
-    @nospecialize(lhs::TracedRNumber{T}), @nospecialize(rhs::Number)
+
+function Base.mod1(
+    @nospecialize(x::Reactant.TracedRNumber{T}), @nospecialize(y::Reactant.TracedRNumber{T})
 ) where {T}
-    return mod(lhs, TracedUtils.promote_to(TracedRNumber{T}, rhs))
+    m = mod(x, y)
+    return ifelse(m == 0, y, m)
 end
-function Base.mod(
-    @nospecialize(lhs::Number), @nospecialize(rhs::TracedRNumber{T})
-) where {T}
-    return mod(TracedUtils.promote_to(TracedRNumber{T}, lhs), rhs)
+
+for op in (:mod, :mod1)
+    @eval begin
+        function Base.$op(
+            @nospecialize(lhs::TracedRNumber{T}), @nospecialize(rhs::Number)
+        ) where {T}
+            return mod(lhs, TracedUtils.promote_to(TracedRNumber{T}, rhs))
+        end
+        function Base.$op(
+            @nospecialize(lhs::Number), @nospecialize(rhs::TracedRNumber{T})
+        ) where {T}
+            return mod(TracedUtils.promote_to(TracedRNumber{T}, lhs), rhs)
+        end
+    end
 end
 
 function Base.div(@nospecialize(lhs::TracedRNumber{T}), rhs) where {T<:Integer}
@@ -938,7 +950,9 @@ for (Ti, Tf) in ((Int16, Float16), (Int32, Float32), (Int64, Float64))
 end
 Base.signbit(::TracedRNumber{<:Unsigned}) = ConcretePJRTNumber(false)
 
-Base.copysign(x::TracedRNumber, y::TracedRNumber) = ifelse(signbit(y), -1, 1) * abs(x)
+function Base.copysign(x::TracedRNumber, y::TracedRNumber)
+    return ifelse(signbit(y), -one(x), one(x)) * abs(x)
+end
 function Base.copysign(x::TracedRNumber{T}, y::S) where {T,S<:Number}
     return copysign(x, TracedUtils.promote_to(TracedRNumber{S}, y))
 end
