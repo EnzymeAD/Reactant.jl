@@ -1514,3 +1514,21 @@ stack_numbers(x) = stack([sum(x[:, i]) for i in axes(x, 2)])
 
     @test @jit(stack_numbers(x_ra)) ≈ stack_numbers(x)
 end
+
+@testset "copysign/mod type check" begin
+    x = ConcreteRNumber(Int32(5))
+    y = ConcreteRNumber(Int32(3))
+    @test @jit(copysign(x, y)) isa ConcreteRNumber{Int32}
+    @test @jit(mod(x, y)) isa ConcreteRNumber{Int32}
+end
+
+@testset "mod1" begin
+    x = collect(Int32, 1:12)
+    y = Int32(10)
+
+    @testset for xᵢ in x
+        res = @jit mod1(ConcreteRNumber(xᵢ), ConcreteRNumber(y))
+        @test res isa ConcreteRNumber{Int32}
+        @test res == mod1(xᵢ, y)
+    end
+end
