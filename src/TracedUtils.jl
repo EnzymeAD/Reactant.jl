@@ -372,6 +372,7 @@ function make_mlir_fn(
         optimize_then_pad,
         inv_map,
         args_in_result,
+        false, # linear_args_in_result
         resprefix,
         argprefix,
         resargprefix,
@@ -601,6 +602,7 @@ function finalize_mlir_fn(
     optimize_then_pad,
     inv_map,
     args_in_result,
+    linear_args_in_result,
     resprefix,
     argprefix,
     resargprefix,
@@ -651,6 +653,14 @@ function finalize_mlir_fn(
                 Reactant.NoStopTracedTrack;
                 runtime,
             )
+        end
+        if linear_args_in_result
+            for arg in linear_args
+                if haskey(seen_results, arg)
+                    continue
+                end
+                seen_results[arg] = arg
+            end
         end
         traced_result
     finally

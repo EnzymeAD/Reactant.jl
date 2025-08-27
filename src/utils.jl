@@ -583,6 +583,7 @@ function get_args_for(target_func::Symbol, prologue_result)
             pr.traced_args,
             pr.linear_args,
             pr.mlir_caller_args,
+            pr.skipped_args,
             pr.seen_args,
             pr.fnbody,
             pr.func,
@@ -678,6 +679,7 @@ function finalize_function(
     traced_args,
     linear_args,
     mlir_caller_args,
+    skipped_args,
     seen_args,
     fnbody,
     func,
@@ -721,8 +723,8 @@ function finalize_function(
         result,
         traced_args,
         linear_args,
+        skipped_args,
         seen_args,
-        seen_results,
         fnbody,
         func,
         mod,
@@ -732,6 +734,7 @@ function finalize_function(
         optimize_then_pad,
         inv_map,
         args_in_result,
+        true, # linear_args_in_result
         resprefix,
         argprefix,
         resargprefix,
@@ -822,7 +825,7 @@ function call_epilogue(
             end
             if path[1] == resprefix
                 Reactant.TracedUtils.set!(traced_result, path[2:end], resv)
-            elseif path[1] == argprefix || path[1] == resargprefix
+            elseif path[1] == resargprefix
                 idx = path[2]::Int
                 if idx == 1 && fnwrapped
                     Reactant.TracedUtils.set!(f, path[3:end], resv)
@@ -832,6 +835,17 @@ function call_epilogue(
                     end
                     Reactant.TracedUtils.set!(args[idx], path[3:end], resv)
                 end
+            elseif path[1] == argprefix
+                # It is possible that an argument in traced_args has been mutated.
+                # Still, we want to update the MLIR data for these original arguments.
+                # They can be found in `linear_args`:
+                idx = nothing
+                for (i, arg) in enumerate(linear_args)
+                    arg === res || continue
+                    idx = i
+                end
+                @assert !isnothing(idx) "Could not find index of linear arg matching result"
+                Reactant.TracedUtils.set_mlir_data!(linear_args[idx], resv)
             end
         end
     end
@@ -959,9 +973,9 @@ function call_with_reactant_generator(
         match.sparams,
     )
     method = mi.def
-    Core.println(
-        "Found method from module $(method.module) with name $(method.name), TRACE_CALLS[] = $(TRACE_CALLS[])",
-    )
+    # Core.println(
+    #     "Found method from module $(method.module) with name $(method.name), TRACE_CALLS[] = $(TRACE_CALLS[])",
+    # )
     trace_call_within = TRACE_CALLS[]
     # && !(
     #     has_ancestor(method.module, Reactant.ReactantCore) ||
@@ -971,7 +985,7 @@ function call_with_reactant_generator(
     # )
     if TRACE_CALLS[] &&
         !(!(fn <: Function) || sizeof(fn) != 0 || fn <: Base.BroadcastFunction)
-        Core.println("About to trace call to $fn.")
+        # Core.println("About to trace call to $fn.")
     else
         Core.println("Not tracing call to $fn.")
     end
