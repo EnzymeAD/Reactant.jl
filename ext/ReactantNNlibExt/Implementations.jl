@@ -6,6 +6,8 @@ for (jlop, hloop) in (
     @eval $(jlop)(x::TracedRNumber) = @opcall $(hloop)(x)
 end
 
+Reactant.MLIR.IR.DUMP_MLIR_ALWAYS[] = true
+
 function NNlib.softmax!(out::AnyTracedRArray{T,N}, x::AbstractArray; dims=1) where {T,N}
     x = T.(materialize_traced_array(x))
     max_ = maximum(x; dims)
