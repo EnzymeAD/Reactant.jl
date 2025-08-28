@@ -730,3 +730,12 @@ end
     @test @jit(NNlib.softmax(x_ra)) ≈ NNlib.softmax(x)
     @test @jit(NNlib.logsoftmax(x_ra)) ≈ NNlib.logsoftmax(x)
 end
+
+@testset "logsumexp #1593" begin
+    x = collect(Float32, 1:16)
+    x_ra = Reactant.to_rarray(x)
+
+    y = logsumexp(x)
+    y_ra = @jit(logsumexp(x_ra))
+    @test Float32(y_ra) ≈ y
+end
