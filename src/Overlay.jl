@@ -204,3 +204,33 @@ end
         return Base.inferencebarrier(Base._any)(CallWithReactant(f), x, dims)
     end
 end
+
+@reactant_overlay @noinline function Base.searchsortedfirst(
+    v::AbstractVector, x::Number, lo::T, hi::T, o::Base.Ordering
+) where {T<:Integer}
+    if use_overlayed_version((v, x))
+        return TracedRArrayOverrides.overloaded_searchsortedfirst(v, x, lo, hi, o)
+    else
+        return Base.inferencebarrier(Base.searchsortedfirst)(v, x, lo, hi, o)
+    end
+end
+
+@reactant_overlay @noinline function Base.searchsortedlast(
+    v::AbstractVector, x::Number, lo::T, hi::T, o::Base.Ordering
+) where {T<:Integer}
+    if use_overlayed_version((v, x))
+        return TracedRArrayOverrides.overloaded_searchsortedlast(v, x, lo, hi, o)
+    else
+        return Base.inferencebarrier(Base.searchsortedlast)(v, x, lo, hi, o)
+    end
+end
+
+@reactant_overlay @noinline function Base.searchsorted(
+    v::AbstractVector, x::Number, lo::T, hi::T, o::Base.Ordering
+) where {T<:Integer}
+    if use_overlayed_version((v, x))
+        return TracedRArrayOverrides.overloaded_searchsorted(v, x, lo, hi, o)
+    else
+        return Base.inferencebarrier(Base.searchsorted)(v, x, lo, hi, o)
+    end
+end

@@ -1414,23 +1414,21 @@ function scan_impl!(
     return output
 end
 
-function Base.searchsortedfirst(
-    v::AnyTracedRVector, x, lo::T, hi::T, o::Base.Ordering
+function overloaded_searchsortedfirst(
+    v, x, lo::T, hi::T, o::Base.Ordering
 ) where {T<:Integer}
     return sum(T.(__lt(o, v[lo:hi], x)); init=lo)
 end
 
-function Base.searchsortedlast(
-    v::AnyTracedRVector, x, lo::T, hi::T, o::Base.Ordering
+function overloaded_searchsortedlast(
+    v, x, lo::T, hi::T, o::Base.Ordering
 ) where {T<:Integer}
     return sum(T.(.!(__lt(o, x, v[lo:hi]))); init=lo - 1)
 end
 
-function Base.searchsorted(
-    v::AnyTracedRVector, x, lo::T, hi::T, o::Base.Ordering
-) where {T<:Integer}
-    firstidx = searchsortedfirst(v, x, lo, hi, o)
-    lastidx = searchsortedlast(v, x, lo, hi, o)
+function overloaded_searchsorted(v, x, lo::T, hi::T, o::Base.Ordering) where {T<:Integer}
+    firstidx = overloaded_searchsortedfirst(v, x, lo, hi, o)
+    lastidx = overloaded_searchsortedlast(v, x, lo, hi, o)
     return Reactant.TracedRNumberOverrides.TracedUnitRange(firstidx, lastidx)
 end
 
