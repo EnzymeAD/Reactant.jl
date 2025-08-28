@@ -914,7 +914,7 @@ cc_library(
         "-Werror=return-type",
         "-Werror=unused-result",
         "-Wno-error=stringop-truncation",
-    ] + if_cuda(["-DREACTANT_CUDA=1"]),
+    ] + if_cuda(["-DREACTANT_CUDA=1"]) + if_rocm(["-DREACTANT_ROCM=1"]),
     linkopts = select({
         "//conditions:default": [],
         "@bazel_tools//src/conditions:darwin": [

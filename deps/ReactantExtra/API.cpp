@@ -74,7 +74,9 @@
 #include "xla/pjrt/distributed/client.h"
 #include "xla/pjrt/distributed/distributed.h"
 #include "xla/pjrt/distributed/service.h"
+#if defined(REACTANT_CUDA) || defined(REACTANT_ROCM)
 #include "xla/pjrt/gpu/se_gpu_pjrt_client.h"
+#endif
 #include "xla/pjrt/pjrt_api.h"
 #include "xla/pjrt/pjrt_c_api_client.h"
 #include "xla/pjrt/pjrt_executable.h"
@@ -439,6 +441,7 @@ MakeGPUClient(int node_id, int num_nodes, int64_t *allowed_devices,
               int64_t num_allowed_devices, double memory_fraction,
               bool preallocate, const char *platform_name, const char **error,
               void *distributed_runtime_client) {
+#if defined(REACTANT_CUDA) || defined(REACTANT_ROCM)
   GpuClientOptions options;
 
   if (num_nodes > 1) {
@@ -483,6 +486,10 @@ MakeGPUClient(int node_id, int num_nodes, int64_t *allowed_devices,
     auto client = std::move(clientErr).value();
     return client.release();
   }
+#else
+      *error = "ReactantExtra was not built with GPU support";
+      return nullptr;
+#endif
 }
 
 const char *const kEnvTpuLibraryPath = "TPU_LIBRARY_PATH";
