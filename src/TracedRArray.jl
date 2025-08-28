@@ -573,7 +573,9 @@ for (jlop, hloop, hlocomp, merge) in
 end
 
 __default_init(::Type{T}, ::typeof(Base.min)) where {T} = typemax(T)
+__default_init(::Type{T}, ::typeof(Base.FastMath.min_fast)) where {T} = typemax(T)
 __default_init(::Type{T}, ::typeof(Base.max)) where {T} = typemin(T)
+__default_init(::Type{T}, ::typeof(Base.FastMath.max_fast)) where {T} = typemin(T)
 function __default_init(::Type{T}, op::F) where {T,F}
     return Base.reduce_empty(Base.BottomRF(op), T)
 end
