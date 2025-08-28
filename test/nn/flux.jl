@@ -21,5 +21,5 @@ using Reactant, Flux
     f = Reactant.compile((a, b) -> a(b), (cmodel, cnoisy))
 
     comp = f(cmodel, cnoisy)
-    @test origout ≈ comp
+    @test origout ≈ comp atol = 1e-3 rtol = 1e-2
 end

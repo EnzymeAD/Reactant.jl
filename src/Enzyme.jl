@@ -67,9 +67,13 @@ function Enzyme.onehot(x::TracedRArray{T,N}) where {T,N}
     pad_value = TracedUtils.promote_to(TracedRNumber{T}, 0)
     base_value = TracedUtils.broadcast_to_size(T(1), (1,))
     for i in eachindex(x)
-        results[i] = Ops.reshape(
-            Ops.pad(base_value, pad_value; low=Int64[i - 1], high=Int64[length(x) - i]),
-            collect(Int64, size(x)),
+        results[i] = @opcall(
+            reshape(
+                @opcall(
+                    pad(base_value, pad_value; low=Int64[i - 1], high=Int64[length(x) - i])
+                ),
+                collect(Int64, size(x)),
+            )
         )
     end
     return Tuple(results)
@@ -236,7 +240,7 @@ function push_acts!(ad_inputs, x::BatchDuplicated, path, reverse)
         cval = MLIR.IR.result(
             MLIR.Dialects.stablehlo.concatenate(
                 [
-                    TracedUtils.get_mlir_data(Ops.reshape(v, Int64[1, predims...])) for
+                    TracedUtils.get_mlir_data(@opcall(reshape(v, Int64[1, predims...]))) for
                     v in x.dval
                 ];
                 dimension=Int64(0),
@@ -254,7 +258,8 @@ function push_acts!(ad_inputs, x::BatchDuplicatedNoNeed, path, reverse)
         predims = size(x.val)
         cval = MLIR.IR.result(
             MLIR.Dialects.stablehlo.concatenate(
-                [Ops.reshape(v, Int64[1, predims...]) for v in x.dval]; dimension=Int64(0)
+                [@opcall(reshape(v, Int64[1, predims...])) for v in x.dval];
+                dimension=Int64(0),
             ),
         )
         tval = TracedRArray{ET,length(predims) + 1}((), cval, (length(x.dval), predims...))
@@ -473,8 +478,8 @@ function overload_autodiff(
                             push!(starts, 0)
                             push!(limits, v)
                         end
-                        sval = Ops.slice(TracedRArray(tval), starts, limits)
-                        sval = Ops.reshape(sval, collect(Int64, sz))
+                        sval = @opcall slice(TracedRArray(tval), starts, limits)
+                        sval = @opcall reshape(sval, collect(Int64, sz))
                         TracedUtils.set!(
                             dresult[i], path[2:end], TracedUtils.get_mlir_data(sval)
                         )
@@ -597,7 +602,7 @@ end
 function ignore_derivatives_internal(arg)
     return Functors.fmap(arg) do argᵢ
         argᵢ isa AnyTracedRArray && (argᵢ = materialize_traced_array(argᵢ))
-        argᵢ isa TracedType && return Ops.ignore_derivatives(argᵢ)
+        argᵢ isa TracedType && return @opcall ignore_derivatives(argᵢ)
         return argᵢ
     end
 end

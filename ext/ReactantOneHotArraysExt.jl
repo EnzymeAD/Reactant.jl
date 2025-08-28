@@ -3,6 +3,7 @@ module ReactantOneHotArraysExt
 using OneHotArrays
 using Reactant
 using Reactant: TracedRArray, TracedRNumber, TracedUtils, Ops
+using Reactant.Ops: @opcall
 
 function Reactant.traced_type_inner(
     @nospecialize(_::Type{OneHotArrays.OneHotArray{T,N,Np1,I}}),
@@ -35,9 +36,9 @@ function TracedUtils.materialize_traced_array(r::OneHotArrays.OneHotArray)
 
     linear_indices =
         TracedUtils.promote_to(TracedRArray{Int64,ndims(r.indices)}, indices) .+
-        Ops.iota(Int64, [B]; iota_dimension=1) .* N
+        @opcall(iota(Int64, [B]; iota_dimension=1)) .* N
 
-    z = Ops.fill(false, (N, B))
+    z = @opcall(fill(false, (N, B)))
     z[linear_indices] = fill(true, length(linear_indices))
     return reshape(z, size(r))
 end

@@ -10,6 +10,8 @@ import KernelAbstractions as KA
 using LLVM: LLVM
 using Libdl
 
+using Reactant.Ops: @opcall
+
 const ReactantKernelAbstractionsExt = Base.get_extension(
     Reactant, :ReactantKernelAbstractionsExt
 )
@@ -82,6 +84,18 @@ for jlop in (
         @inline $jlop(a::Number, b::CuTracedRNumber{T,A}) where {T,A} = $jlop(a, b[])
     end
 end
+
+@inline Base.ifelse(cond::Bool, a, b::CuTracedRNumber) = Base.ifelse(cond, a, b[])
+@inline Base.ifelse(cond::Bool, a::CuTracedRNumber, b) = Base.ifelse(cond, a[], b)
+@inline Base.ifelse(cond::Bool, a::CuTracedRNumber, b::CuTracedRNumber) =
+    Base.ifelse(cond, a[], b[])
+@inline Base.ifelse(cond::CuTracedRNumber, a, b) = Base.ifelse(cond[], a, b)
+@inline Base.ifelse(cond::CuTracedRNumber, a::CuTracedRNumber, b) =
+    Base.ifelse(cond[], a[], b)
+@inline Base.ifelse(cond::CuTracedRNumber, a, b::CuTracedRNumber) =
+    Base.ifelse(cond[], a, b[])
+@inline Base.ifelse(cond::CuTracedRNumber, a::CuTracedRNumber, b::CuTracedRNumber) =
+    Base.ifelse(cond[], a[], b[])
 
 Base.@constprop :aggressive @inline Base.:^(
     a::CuTracedRNumber{T,A}, b::Integer
@@ -469,7 +483,7 @@ function Adapt.adapt_storage(ka::ReactantKernelAdaptor, xs::DenseCuArray)
     return Adapt.adapt_storage(ka, Array(xs))
 end
 function Adapt.adapt_storage(ka::ReactantKernelAdaptor, xs::Array)
-    return Adapt.adapt_storage(ka, Reactant.Ops.constant(xs))
+    return Adapt.adapt_storage(ka, @opcall(constant(xs)))
 end
 function Adapt.adapt_structure(
     to::ReactantKernelAdaptor, bc::Broadcast.Broadcasted{Style,<:Any,Type{T}}

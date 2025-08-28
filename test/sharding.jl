@@ -1,6 +1,7 @@
 using Reactant, Test
 
 const addressable_devices = Reactant.addressable_devices()
+const RunningOnTPU = contains(string(Reactant.devices()[1]), "TPU")
 
 function fn_test1(x)
     y = x .+ x
@@ -202,7 +203,7 @@ end
 
         function fn_with_constraint(x)
             y = x .+ x
-            return Reactant.Ops.sharding_constraint(y, constraint)
+            return Reactant.@opcall sharding_constraint(y, constraint)
         end
 
         hlo = @code_hlo shardy_passes = :none fn_with_constraint(x_ra)
@@ -461,14 +462,13 @@ end
 end
 
 @testset "Compile-Only with More Devices" begin
-    if !contains(string(Reactant.devices()[1]), "TPU")
-        mesh = Sharding.Mesh(zeros(Int64, 2, 4), (:x, :y))
+    mesh = Sharding.Mesh(zeros(Int64, 2, 4), (:x, :y))
 
+    @test begin
         x_ra = Reactant.to_rarray(
             rand(Float32, 32, 32); sharding=Sharding.NamedSharding(mesh, (:x, :y))
         )
-
         hlo = @code_xla sum(x_ra)
-        @test contains(repr(hlo), "num_partitions=8")
-    end
+        contains(repr(hlo), "num_partitions=8")
+    end skip = RunningOnTPU
 end

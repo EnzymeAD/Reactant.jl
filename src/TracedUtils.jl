@@ -14,6 +14,7 @@ using ..Reactant:
     OrderedIdDict,
     ReactantPrimitive,
     Ops
+using ..Ops: @opcall
 using ReactantCore: ReactantCore
 using ReactantCore:
     MissingTracedValue, is_traced, materialize_traced_array, promote_to_traced
@@ -33,19 +34,19 @@ end
 
 function ReactantCore.materialize_traced_array(r::LinRange)
     T = Reactant.unwrapped_eltype(r)
-    idxs = Ops.iota(T, [length(r)]; iota_dimension=1)
+    idxs = @opcall iota(T, [length(r)]; iota_dimension=1)
     t = idxs ./ r.lendiv
     return T.((1 .- t) .* r.start .+ t .* r.stop)
 end
 
 function ReactantCore.materialize_traced_array(x::Base.OneTo)
-    return Ops.iota(Reactant.unwrapped_eltype(x), [length(x)]; iota_dimension=1)
+    return @opcall iota(Reactant.unwrapped_eltype(x), [length(x)]; iota_dimension=1)
 end
 
 function ReactantCore.materialize_traced_array(x::UnitRange)
-    return Ops.add(
-        Ops.iota(Reactant.unwrapped_eltype(x), [length(x)]; iota_dimension=1),
-        Ops.fill(first(x), [length(x)]),
+    return @opcall add(
+        @opcall(iota(Reactant.unwrapped_eltype(x), [length(x)]; iota_dimension=1)),
+        @opcall(fill(first(x), [length(x)])),
     )
 end
 
@@ -61,7 +62,7 @@ function ReactantCore.materialize_traced_array(x::Base.ReshapedArray)
             ),
         )
     end
-    return Ops.reshape(materialize_traced_array(parent(x)), size(x)...)
+    return @opcall reshape(materialize_traced_array(parent(x)), size(x)...)
 end
 
 function ReactantCore.materialize_traced_array(
@@ -98,7 +99,8 @@ end
 
 function set_mlir_data!(x::Base.ReshapedArray{TracedRNumber{T}}, data) where {T}
     set_mlir_data!(
-        parent(x), get_mlir_data(Ops.reshape(TracedRArray{T}(data), size(parent(x))...))
+        parent(x),
+        get_mlir_data(@opcall(reshape(TracedRArray{T}(data), size(parent(x))...))),
     )
     return x
 end
@@ -113,7 +115,7 @@ function get_ancestor_indices(
             indices...
         )
         linear_indices = mapreduce(+, enumerate(indices)) do (i, idx)
-            bcasted_idxs = Ops.broadcast_in_dim(
+            bcasted_idxs = @opcall broadcast_in_dim(
                 idx, ndims(idx) == 0 ? Int64[] : Int64[i], flattened_size
             )
             Base.stride(x, i) .* (bcasted_idxs .- 1)
@@ -128,7 +130,7 @@ function get_ancestor_indices(
                 dropdims(parent_linear_indices; dims=integer_indices)
             )
         )
-        parent_linear_indices = Ops.reshape(parent_linear_indices, result_size)
+        parent_linear_indices = @opcall reshape(parent_linear_indices, result_size)
         return (parent_linear_indices,)
     else
         # Have this as a separate code-path since we can generate non-dynamic indexing
@@ -488,10 +490,10 @@ function prepare_mlir_fn_args(
     for (k, v) in seen_args
         if k isa Reactant.AbstractConcreteNumber || k isa Reactant.AbstractConcreteArray
             if Reactant.Sharding.is_sharded(k)
-                Reactant.Ops.mesh(k.sharding.mesh)
+                @opcall mesh(k.sharding.mesh)
                 traced_args_to_shardings[v] = k.sharding
             elseif input_shardings !== nothing && haskey(input_shardings, k)
-                Reactant.Ops.mesh(input_shardings[k].mesh)
+                @opcall mesh(input_shardings[k].mesh)
                 traced_args_to_shardings[v] = input_shardings[k]
             end
         end
@@ -804,7 +806,7 @@ function finalize_mlir_fn(
                     sz = reverse(sz)
                 end
 
-                res = Ops.pad(
+                res = @opcall pad(
                     res,
                     promote_to(TracedRNumber{Reactant.unwrapped_eltype(res)}, 0);
                     high=collect(Int, padding),
@@ -939,7 +941,7 @@ function finalize_mlir_fn(
                         sharding.mesh.axis_names,
                         size(sharding.mesh),
                     )
-                    haskey(mesh_cache, key) || Reactant.Ops.mesh(sharding.mesh)
+                    haskey(mesh_cache, key) || @opcall(mesh(sharding.mesh))
                     (; sym_name, mesh_attr) = mesh_cache[key]
                     attr, dialect = Reactant.Sharding.get_tensor_sharding_attribute(
                         sharding, ctx, sym_name, mesh_attr, size(arg)
@@ -1182,7 +1184,9 @@ end
 
 broadcast_to_size(arg::TracedRArray, rsize) = broadcast_to_size_internal(arg, rsize)
 
-broadcast_to_size(arg::AbstractArray, rsize) = broadcast_to_size(Ops.constant(arg), rsize)
+function broadcast_to_size(arg::AbstractArray, rsize)
+    return broadcast_to_size(@opcall(constant(arg)), rsize)
+end
 
 function broadcast_to_size(arg::AbstractRange{<:TracedRNumber}, rsize)
     return broadcast_to_size(collect(arg), rsize)
@@ -1195,9 +1199,9 @@ end
 function broadcast_to_size(arg::UnitRange, rsize)
     # For small inputs this will be automatically optimized away, and for large ranges
     # helps reduce the IR size
-    x = Ops.add(
-        Ops.iota(eltype(arg), [length(arg)]; iota_dimension=1),
-        Ops.fill(first(arg), [length(arg)]),
+    x = @opcall add(
+        @opcall(iota(eltype(arg), [length(arg)]; iota_dimension=1)),
+        @opcall(fill(first(arg), [length(arg)])),
     )
     return broadcast_to_size(x, rsize)
 end
@@ -1213,7 +1217,7 @@ function broadcast_to_size(arg::AbstractIrrational, rsize)
 end
 
 function broadcast_to_size(arg::ReactantPrimitive, rsize)
-    return Ops.fill(arg, rsize)
+    return @opcall fill(arg, rsize)
 end
 
 function broadcast_to_size(arg::TracedRNumber{T}, rsize) where {T}
@@ -1234,7 +1238,7 @@ function broadcast_to_size(arg::Broadcast.Extruded, rsize)
 end
 
 @noinline function broadcast_to_size_internal(x::TracedRArray{T}, rsize) where {T}
-    return Ops.broadcast_in_dim(x, collect(Int64, 1:ndims(x)), collect(Int64, rsize))
+    return @opcall broadcast_in_dim(x, collect(Int64, 1:ndims(x)), collect(Int64, rsize))
 end
 
 function traced_indices(indices...)

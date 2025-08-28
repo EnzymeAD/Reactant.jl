@@ -3,18 +3,20 @@ for (jlop, hloop) in (
     (:(NNlib.sigmoid_fast), :logistic),
     (:(NNlib.sigmoid), :logistic),
 )
-    @eval $(jlop)(x::TracedRNumber) = Ops.$(hloop)(x)
+    @eval $(jlop)(x::TracedRNumber) = @opcall $(hloop)(x)
 end
 
 function NNlib.softmax!(out::AnyTracedRArray{T,N}, x::AbstractArray; dims=1) where {T,N}
     x = T.(Reactant.materialize_traced_array(x))
     max_ = maximum(x; dims)
     diff = exp.(x .- max_)
-    @trace if all(isfinite, max_)
-        @. out = diff
-    else
-        @. out = ifelse(isinf(max_), ifelse(isinf(x), T(1), T(0)), diff)
-    end
+    # TOOD: re-enable conditional once https://github.com/EnzymeAD/Reactant.jl/issues/1581
+    # fixed
+    # @trace if all(isfinite, max_)
+    @. out = diff
+    # else
+    #     @. out = ifelse(isinf(max_), ifelse(isinf(x), T(1), T(0)), diff)
+    # end
     out ./= sum(out; dims)
     return out
 end
@@ -23,11 +25,13 @@ function NNlib.logsoftmax!(out::AnyTracedRArray{T}, x::AbstractArray; dims=1) wh
     x = T.(Reactant.materialize_traced_array(x))
     max_ = maximum(x; dims)
     diff = x .- max_
-    @trace if all(isfinite, max_)
-        @. out = diff
-    else
-        @. out = ifelse(isinf(max_), ifelse(isinf(x), T(0), -T(Inf)), diff)
-    end
+    # TOOD: re-enable conditional once https://github.com/EnzymeAD/Reactant.jl/issues/1581
+    # fixed
+    # @trace if all(isfinite, max_)
+    @. out = diff
+    # else
+    #     @. out = ifelse(isinf(max_), ifelse(isinf(x), T(0), -T(Inf)), diff)
+    # end
     out .-= log.(sum(exp, out; dims))
     return out
 end
@@ -89,7 +93,7 @@ function overloaded_conv!(
 
     weight = W
     if !flipkernel
-        weight = Reactant.Ops.reverse(weight; dimensions=kernel_spatial_dims)
+        weight = @opcall reverse(weight; dimensions=kernel_spatial_dims)
     end
 
     conv = Reactant.MLIR.Dialects.stablehlo.convolution(
@@ -211,7 +215,7 @@ function overloaded_∇conv_filter!(
 
     if !NNlib.flipkernel(cdims)
         set_mlir_data!(
-            dw, get_mlir_data(Reactant.Ops.reverse(dw; dimensions=output_spatial_dims))
+            dw, get_mlir_data(@opcall(reverse(dw; dimensions=output_spatial_dims)))
         )
     end
 
@@ -312,7 +316,7 @@ function overloaded_∇conv_data!(
     )
 
     if NNlib.flipkernel(cdims)
-        w = Reactant.Ops.reverse(w; dimensions=kernel_spatial_dims)
+        w = @opcall reverse(w; dimensions=kernel_spatial_dims)
     end
 
     conv = MLIR.Dialects.stablehlo.convolution(
@@ -411,7 +415,7 @@ function NNlib.batched_mul!(
         end
     end
 
-    tmp = Ops.dot_general(
+    tmp = @opcall dot_general(
         T1.(materialize_traced_array(x)),
         T1.(materialize_traced_array(y));
         contracting_dimensions=([3], [2]),
@@ -430,7 +434,7 @@ function NNlib.pad_constant(
     low = [i[1] for i in pad]
     high = [i[2] for i in pad]
     interior = [0 for i in pad]
-    return Ops.pad(materialize_traced_array(x), value; low, high, interior)
+    return @opcall pad(materialize_traced_array(x), value; low, high, interior)
 end
 
 # Gather
@@ -462,7 +466,7 @@ end
 function _nnlib_gather_impl(src::AnyTracedRArray, idxs::AbstractArray, n_dims::Int)
     idxs = TracedUtils.promote_to(TracedRArray{Int,ndims(idxs)}, idxs)
     n_idxs = size(idxs, 1)
-    return Ops.gather(
+    return @opcall gather(
         src,
         idxs;
         offset_dims=collect(Int64, 1:n_dims),
@@ -506,7 +510,7 @@ function NNlib.scatter(
         )
     end
     xinit = isnothing(init) ? NNlib.scatter_empty(op, T) : init
-    dst = Ops.fill(xinit, dstsz)
+    dst = @opcall fill(xinit, dstsz)
 
     NNlib.scatter!(op, dst, src, idx)
     return dst
@@ -551,17 +555,21 @@ function _nnlib_scatter_impl(
 ) where {OP,T}
     scatter_indices = TracedUtils.promote_to(TracedRArray{Int,ndims(idx)}, idx)
     n_idxs = size(scatter_indices, 1)
-    return Ops.scatter(
-        op,
-        [dst],
-        scatter_indices,
-        [src];
-        update_window_dims=collect(Int64, 1:n_dims),
-        inserted_window_dims=collect(Int64, (n_dims + 1):ndims(dst)),
-        input_batching_dims=Int64[],
-        scatter_indices_batching_dims=Int64[],
-        scatter_dims_to_operand_dims=collect(Int64, (ndims(dst) - n_idxs + 1):ndims(dst)),
-        index_vector_dim=Int64(1),
+    return @opcall(
+        scatter(
+            op,
+            [dst],
+            scatter_indices,
+            [src];
+            update_window_dims=collect(Int64, 1:n_dims),
+            inserted_window_dims=collect(Int64, (n_dims + 1):ndims(dst)),
+            input_batching_dims=Int64[],
+            scatter_indices_batching_dims=Int64[],
+            scatter_dims_to_operand_dims=collect(
+                Int64, (ndims(dst) - n_idxs + 1):ndims(dst)
+            ),
+            index_vector_dim=Int64(1),
+        )
     )[1]
 end
 

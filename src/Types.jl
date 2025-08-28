@@ -410,14 +410,16 @@ Base.@deprecate_binding ConcreteRNG ReactantRNG
 Base.@deprecate_binding TracedRNG ReactantRNG
 
 """
-    ConcreteRArray(
-        undef, ::Type{T}, shape::Dims;
+    ConcreteRArray{T}(
+        undef, shape::Dims;
         client::Union{Nothing,XLA.AbstractClient} = nothing,
         device::Union{Nothing,XLA.AbstractDevice} = nothing,
         sharding::Sharding.AbstractSharding = Sharding.NoSharding(),
     )
 
-    ConcretePJRTArray(data::Array, kwargs...)
+    ConcretePJRTArray{T}(undef, shape::Integer...; kwargs...)
+
+    ConcretePJRTArray(data::Array; kwargs...)
 
 Allocate an uninitialized `ConcreteRArray` of element type `T` and size
 `shape` or convert an `Array` to a `ConcreteRArray`.
@@ -433,6 +435,9 @@ const ConcreteRArray = @static if XLA.REACTANT_XLA_RUNTIME == "PJRT"
 elseif XLA.REACTANT_XLA_RUNTIME == "IFRT"
     ConcreteIFRTArray
 end
+
+@inline ConcreteRArray{T}(::UndefInitializer, shape::Integer...; kwargs...) where {T} =
+    ConcreteRArray{T}(undef, Dims(shape); kwargs...)
 
 """
     ConcreteRNumber(
@@ -460,16 +465,13 @@ end
 
 ## Other Aliases based on the set preferences
 @static if XLA.REACTANT_XLA_RUNTIME == "PJRT"
-    const ConcreteRNumber = ConcretePJRTNumber
     const AnyConcreteRArray = AnyConcretePJRTArray
 elseif XLA.REACTANT_XLA_RUNTIME == "IFRT"
-    const ConcreteRNumber = ConcreteIFRTNumber
     const AnyConcreteRArray = AnyConcreteIFRTArray
 end
 
-function ConcretePJRTArray(
+function ConcretePJRTArray{T}(
     ::UndefInitializer,
-    ::Type{T},
     shape::Dims;
     client::Union{Nothing,XLA.AbstractClient}=nothing,
     idx::Union{Int,Nothing}=nothing,
@@ -483,9 +485,8 @@ function ConcretePJRTArray(
     return ConcretePJRTArray{T,N,nsharded,typeof(shardinfo)}(sharded_data, shape, shardinfo)
 end
 
-function ConcreteIFRTArray(
+function ConcreteIFRTArray{T}(
     ::UndefInitializer,
-    ::Type{T},
     shape::Dims;
     client::Union{Nothing,XLA.AbstractClient}=nothing,
     idx::Union{Int,Nothing}=nothing,

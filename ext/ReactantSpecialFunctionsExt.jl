@@ -2,16 +2,17 @@ module ReactantSpecialFunctionsExt
 using SpecialFunctions
 using Reactant: Ops, Reactant, TracedRNumber, ReactantFloat, ReactantInt, ReactantFloatInt
 using Reactant.TracedRNumberOverrides: float
+using Reactant.Ops: @opcall
 
 for fn in [:digamma, :erf, :erfc, (:loggamma, :lgamma)]
     (fns, fno) = fn isa Tuple ? fn : (fn, fn)
     @eval(function SpecialFunctions.$fns(x::TracedRNumber{<:ReactantFloatInt})
-        return Ops.$fno(float(x))
+        return @opcall $fno(float(x))
     end)
 end
 
 function SpecialFunctions.gamma(x::TracedRNumber{<:ReactantFloat})
-    return exp(Ops.lgamma(float(x)))
+    return exp(@opcall(lgamma(float(x))))
 end
 
 function SpecialFunctions.gamma(n::TracedRNumber{<:ReactantInt})
@@ -29,13 +30,14 @@ end
 # SpecialFunctions.invdigamma
 
 function SpecialFunctions.trigamma(x::TracedRNumber{<:ReactantFloatInt})
-    return Ops.polygamma(Ops.constant(Float64(1)), float(x))#TODO: change Ops definition
+    #TODO: change Ops definition
+    return @opcall(polygamma(@opcall(constant(Float64(1))), float(x)))
 end
 
 function SpecialFunctions.polygamma(
     n::TracedRNumber{<:ReactantFloatInt}, x::TracedRNumber{<:ReactantFloatInt}
 )
-    return Ops.polygamma(float(n), float(x))
+    return @opcall polygamma(float(n), float(x))
 end
 
 # SpecialFunctions.gamma_inc
@@ -112,7 +114,7 @@ end
 function SpecialFunctions.zeta(
     z::TracedRNumber{T}, s::TracedRNumber{T}
 ) where {T<:ReactantFloatInt}
-    return Ops.zeta(z, s)
+    return @opcall zeta(z, s)
 end
 
 end # module ReactantSpecialFunctionsExt

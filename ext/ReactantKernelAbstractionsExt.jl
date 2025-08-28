@@ -26,7 +26,7 @@ function Base.getproperty(x::ReactantBackend, sym::Symbol)
 end
 
 function KA.allocate(::ReactantBackend, ::Type{T}, dims::Tuple) where {T}
-    return ConcreteRArray(undef, T, dims)
+    return ConcreteRArray{T}(undef, dims)
 end
 
 function KA.zeros(b::ReactantBackend, ::Type{T}, dims::Tuple) where {T}
