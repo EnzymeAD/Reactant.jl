@@ -739,3 +739,15 @@ end
     y_ra = @jit(logsumexp(x_ra))
     @test Float32(y_ra) ≈ y
 end
+
+@testset "gather 32bit indexing" begin
+    x = rand(Float32, 10, 10)
+    x_ra = Reactant.to_rarray(x)
+
+    idxs = Int32.(rand(1:10, 32))
+    idxs_ra = Reactant.to_rarray(idxs)
+
+    @test @jit(NNlib.gather(x_ra, idxs_ra)) ≈ NNlib.gather(x, idxs)
+    hlo = repr(@code_hlo(NNlib.gather(x_ra, idxs_ra)))
+    @test !contains(hlo, "i64>")
+end
