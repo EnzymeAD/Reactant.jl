@@ -1218,17 +1218,16 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
 
         ctx = MLIR.IR.context()
         out_tup = Ref{Int64}(argidx - 1)
-        op_tup = Ref{Int64}(0)
         push!(
             aliases,
             MLIR.IR.Attribute(
-                GC.@preserve ctx out_tup op_tup MLIR.API.stablehloOutputOperandAliasGet(
+                GC.@preserve ctx out_tup MLIR.API.stablehloOutputOperandAliasGet(
                     ctx,
                     length(wrapper_tys) == 1 ? 0 : 1,
                     pointer_from_objref(out_tup),
                     argidx - 1,
                     0,
-                    pointer_from_objref(op_tup)
+		    C_NULL
                 )
             )
         )
