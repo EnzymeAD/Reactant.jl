@@ -1216,18 +1216,20 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
         push!(restys, MLIR.IR.type(arg))
         push!(mlir_args, arg)
 
+        ctx = MLIR.IR.context()
+        out_tup = Ref{Int64}(argidx - 1)
         push!(
             aliases,
             MLIR.IR.Attribute(
-                MLIR.API.stablehloOutputOperandAliasGet(
-                    MLIR.IR.context(),
+                GC.@preserve ctx out_tup MLIR.API.stablehloOutputOperandAliasGet(
+                    ctx,
                     length(wrapper_tys) == 1 ? 0 : 1,
-                    length(wrapper_tys) == 1 ? C_NULL : Ref{Int64}(argidx - 1),
+                    out_tup,
                     argidx - 1,
                     0,
-                    C_NULL,
-                ),
-            ),
+                    C_NULL
+                )
+            )
         )
 
         for p in paths

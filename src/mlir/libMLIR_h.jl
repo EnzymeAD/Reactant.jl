@@ -10334,16 +10334,14 @@ function stablehloOutputOperandAliasGet(
     nOperandTupleIndices,
     operandTupleIndices,
 )
-    GC.@preserve ctx outputTupleIndices operandTupleIndices begin
-        @ccall mlir_c.stablehloOutputOperandAliasGet(
-            ctx::MlirContext,
-            nOutputTupleIndices::intptr_t,
-            outputTupleIndices::Ptr{Int64},
-            operandIndex::Int64,
-            nOperandTupleIndices::intptr_t,
-            operandTupleIndices::Ptr{Int64},
-        )::MlirAttribute
-    end
+    @ccall mlir_c.stablehloOutputOperandAliasGet(
+        ctx::MlirContext,
+        nOutputTupleIndices::intptr_t,
+        outputTupleIndices::Ptr{Int64},
+        operandIndex::Int64,
+        nOperandTupleIndices::intptr_t,
+        operandTupleIndices::Ptr{Int64},
+    )::MlirAttribute
 end
 
 function stablehloAttributeIsAOutputOperandAlias(attr)
