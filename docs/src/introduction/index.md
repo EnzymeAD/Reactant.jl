@@ -13,8 +13,8 @@ Pkg.add("Reactant")
 
 ## Quick Start
 
-Reactant provides two new array types at its core, a ConcreteRArray and a TracedRArray. A
-ConcreteRArray is an underlying buffer to whatever device data you wish to store and can be
+Reactant provides two new array types at its core, a [`ConcreteRArray`](@ref) and a `TracedRArray`. A
+`ConcreteRArray` is an underlying buffer to whatever device data you wish to store and can be
 created by converting from a regular Julia Array.
 
 ```@example quickstart

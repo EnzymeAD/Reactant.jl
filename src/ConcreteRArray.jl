@@ -83,6 +83,7 @@ for T in Base.uniontypes(ReactantPrimitive)
 end
 
 function Base.convert(::Type{T}, x::AbstractConcreteNumber) where {T<:Number}
+    T == typeof(x) && return x
     return convert(T, to_number(x))
 end
 
@@ -377,16 +378,8 @@ end
     device::Union{Nothing,XLA.PJRT.Device}=nothing,
     sharding::Sharding.AbstractSharding=Sharding.NoSharding(),
 ) where {S}
-    client = client === nothing ? XLA.default_backend() : client
-
-    if idx isa Int && device === nothing
-        device = XLA.get_device(client, idx)
-    end
-
-    sdata, sharding = sharding(client, device, S, dims)
-
-    return ConcretePJRTArray{S,length(dims),length(sdata),typeof(sharding)}(
-        sdata, dims, sharding
+    return ConcretePJRTArray{S}(
+        undef, dims; client=client, idx=idx, device=device, sharding=sharding
     )
 end
 
@@ -417,7 +410,7 @@ function Base.similar(a::ConcreteIFRTArray{T}, ::Type{S}=T, dims::Dims=size(a)) 
 end
 Base.similar(a::ConcreteIFRTArray, dims::Dims) = similar(a, eltype(a), dims)
 function Base.similar(::Type{ConcreteIFRTArray{T}}, dims) where {T}
-    return ConcreteIFRTArray(similar(Array{T}, dims))
+    return ConcreteIFRTArray{T}(undef, dims)
 end
 
 # Broadcasting interface
@@ -757,7 +750,7 @@ function Base.fill(
 )
     output_shardings = Sharding.is_sharded(sharding) ? Dict(1 => sharding) : nothing
     fn = Reactant.compile((); output_shardings) do
-        return Ops.fill(val, collect(Int64, dims))
+        return @opcall fill(val, collect(Int64, dims))
     end
     return fn()
 end

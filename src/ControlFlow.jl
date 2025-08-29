@@ -1,11 +1,11 @@
 function ReactantCore.traced_if(
     cond::TracedRNumber{Bool}, true_fn::TFn, false_fn::FFn, args; track_numbers=Number
 ) where {TFn,FFn}
-    return Ops.if_condition(cond, true_fn, false_fn, args...; track_numbers)
+    return @opcall if_condition(cond, true_fn, false_fn, args...; track_numbers)
 end
 
 function ReactantCore.traced_call(f::Function, args...)
-    return Ops.call(f, args...)
+    return @opcall call(f, args...)
 end
 
 function ReactantCore.traced_while(
@@ -17,7 +17,7 @@ function ReactantCore.traced_while(
     checkpointing=false,
     mincut=false,
 ) where {CFn,BFn}
-    return Ops.while_loop(
+    return @opcall while_loop(
         cond_fn, body_fn, args...; track_numbers, verify_arg_names, checkpointing, mincut
     )
 end

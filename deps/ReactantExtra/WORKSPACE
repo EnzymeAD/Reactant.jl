@@ -4,7 +4,7 @@ NSYNC_COMMIT = "82b118aa7ace3132e517e2c467f8732978cf4023"
 
 NSYNC_SHA256 = ""
 
-ENZYMEXLA_COMMIT = "55c525aff4986497e923a95d6110974052679c81"
+ENZYMEXLA_COMMIT = "6cef09efae7c8c1c7f17314469f1b4d9ace91c96"
 
 ENZYMEXLA_SHA256 = ""
 
@@ -17,6 +17,11 @@ http_archive(
 
 http_archive(
     name = "enzyme_ad",
+    patch_cmds = [
+        """
+sed -i.bak0 "s/\\\\\\\\\\\\\\\\\\/\\\\\\\\\\\\\\\\\\/:patches/@enzyme_ad\\\\\\\\\\\\\\\\\\/\\\\\\\\\\\\\\\\\\/:patches/g" workspace.bzl
+""",
+    ],
     sha256 = ENZYMEXLA_SHA256,
     strip_prefix = "Enzyme-JAX-" + ENZYMEXLA_COMMIT,
     urls = ["https://github.com/EnzymeAD/Enzyme-JAX/archive/{commit}.tar.gz".format(commit = ENZYMEXLA_COMMIT)],
@@ -58,7 +63,7 @@ echo "+#elif defined(__NVCC__) || (!defined(__linux__) && !defined(__ANDROID__) 
 echo "" >> third_party/proto.patch
 echo " #ifndef bswap_16" >> third_party/proto.patch
 echo " static inline uint16_t bswap_16(uint16_t x) {" >> third_party/proto.patch
-sed -i.bak0 "s/protobuf-6.31.1.patch\\"/protobuf-6.31.1.patch\\", \\":proto.patch\\"/g" workspace2.bzl
+sed -i.bak0 "s/protobuf.patch\\"/protobuf.patch\\", \\":proto.patch\\"/g" workspace2.bzl
 """,
     """
 sed -i.bak0 "s/def main():/def main():\\n  if TMPDIR: os.environ['TMPDIR'] = TMPDIR/g" third_party/gpus/crosstool/clang/bin/crosstool_wrapper_driver_is_not_gcc.tpl
@@ -182,10 +187,10 @@ http_archive(
 	sed -i.bak0 "/D_FORTIFY_SOURCE/d" cc/features/BUILD third_party/gpus/crosstool/cc_toolchain_config.bzl.tpl
 """,
     ],
-    sha256 = "59d7eb36a02cbe3c2e2fa67fda5e8f1ab7e274bc4773bbd207c51fe199e11c19",
-    strip_prefix = "rules_ml_toolchain-ffd9e3d7b84e43c2686c803cb08ce790ffd58baa",
+    sha256 = "e7e44c4e349a1c1f31398bd2257c51432e73ea0e7e24cce67090b68b0b50007e",
+    strip_prefix = "rules_ml_toolchain-55dcd0a52c7e0f9eec9927a32512229c09ac3b3e",
     urls = [
-        "https://github.com/google-ml-infra/rules_ml_toolchain/archive/ffd9e3d7b84e43c2686c803cb08ce790ffd58baa.tar.gz",
+        "https://github.com/google-ml-infra/rules_ml_toolchain/archive/55dcd0a52c7e0f9eec9927a32512229c09ac3b3e.tar.gz",
     ],
 )
 
@@ -317,15 +322,15 @@ nvidia_wheel_versions_repository(
 )
 
 load(
-    "@rules_ml_toolchain//cc_toolchain/deps:cc_toolchain_deps.bzl",
+    "@rules_ml_toolchain//cc/deps:cc_toolchain_deps.bzl",
     "cc_toolchain_deps",
 )
 
 cc_toolchain_deps()
 
-register_toolchains("@rules_ml_toolchain//cc_toolchain:lx64_lx64")
+register_toolchains("@rules_ml_toolchain//cc:linux_x86_64_linux_x86_64")
 
-register_toolchains("@rules_ml_toolchain//cc_toolchain:lx64_lx64_cuda")
+register_toolchains("@rules_ml_toolchain//cc:linux_x86_64_linux_x86_64_cuda")
 
 load(
     "@rules_ml_toolchain//third_party/gpus/cuda/hermetic:cuda_json_init_repository.bzl",

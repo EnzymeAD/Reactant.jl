@@ -185,33 +185,11 @@ function ConcretePJRTArray(
     device::Union{Nothing,XLA.PJRT.Device}=nothing,
     sharding::Sharding.AbstractSharding=Sharding.NoSharding(),
 ) where {T,N}
-    client = client === nothing ? XLA.default_backend() : client
-
-    if !Sharding.is_sharded(sharding)
-        if device === nothing
-            if idx === nothing
-                device = XLA.default_device(client)
-            else
-                device = XLA.get_device(client, idx)
-            end
-        else
-            if idx !== nothing
-                device_from_idx = XLA.get_device(client, idx)
-                @assert device_from_idx == device "If both `idx` and `device` are \
-                                                   specified, `idx` must match `device`"
-            end
-        end
-        sdata, sharding = sharding(client, device, data)
-        return ConcretePJRTArray{T,N,1,typeof(sharding)}(sdata, size(data), sharding)
-    end
-    if device !== nothing || idx !== nothing
-        @warn "`device` and `idx` specified for non-`NoSharding` sharding. These arguments \
-               will be ignored."
-    end
-    sharded_data, sharding = sharding(client, nothing, data)
-    return ConcretePJRTArray{T,N,length(sharded_data),typeof(sharding)}(
-        sharded_data, size(data), sharding
-    )
+    theclient, thedevice = _select_client_and_device(client, idx, device, sharding)
+    sharded_data, shardinfo = sharding(theclient, thedevice, data)
+    shape = size(data)
+    nsharded = length(sharded_data)
+    return ConcretePJRTArray{T,N,nsharded,typeof(shardinfo)}(sharded_data, shape, shardinfo)
 end
 
 Base.wait(x::Union{ConcretePJRTArray,ConcretePJRTNumber}) = foreach(wait, x.data)
@@ -336,32 +314,11 @@ function ConcreteIFRTArray(
     device::Union{Nothing,XLA.IFRT.Device}=nothing,
     sharding::Sharding.AbstractSharding=Sharding.NoSharding(),
 ) where {T,N}
-    client = client === nothing ? XLA.default_backend() : client
-
-    if !Sharding.is_sharded(sharding)
-        if device === nothing
-            if idx === nothing
-                device = XLA.default_device(client)
-            else
-                device = XLA.get_device(client, idx)
-            end
-        else
-            if idx !== nothing
-                device_from_idx = XLA.get_device(client, idx)
-                @assert device_from_idx == device "If both `idx` and `device` are \
-                                                   specified, `idx` must match `device`"
-            end
-        end
-    else
-        if device !== nothing || idx !== nothing
-            @warn "`device` and `idx` specified for non-`NoSharding` sharding. These \
-                   arguments will be ignored."
-        end
-    end
-    sharded_data, sharding, padding = sharding(client, nothing, data)
-    return ConcreteIFRTArray{T,N,typeof(sharding)}(
-        sharded_data, size(data), sharding, padding
-    )
+    theclient, thedevice = _select_client_and_device(client, idx, device, sharding)
+    shape = size(data)
+    # ToDo: How to use specified device (non-sharded case)?
+    sharded_data, shardinfo, padding = sharding(theclient, nothing, data)
+    return ConcreteIFRTArray{T,N,typeof(shardinfo)}(sharded_data, shape, shardinfo, padding)
 end
 
 # Assemble data from multiple arrays. Needed in distributed setting where each process wont
@@ -454,13 +411,137 @@ end
 Base.@deprecate_binding ConcreteRNG ReactantRNG
 Base.@deprecate_binding TracedRNG ReactantRNG
 
-## Aliases based on the set preferences
-if XLA.REACTANT_XLA_RUNTIME == "PJRT"
-    const ConcreteRArray = ConcretePJRTArray
-    const ConcreteRNumber = ConcretePJRTNumber
+"""
+    ConcreteRArray{T}(
+        undef, shape::Dims;
+        client::Union{Nothing,XLA.AbstractClient} = nothing,
+        device::Union{Nothing,XLA.AbstractDevice} = nothing,
+        sharding::Sharding.AbstractSharding = Sharding.NoSharding(),
+    )
+
+    ConcretePJRTArray{T}(undef, shape::Integer...; kwargs...)
+
+    ConcretePJRTArray(data::Array; kwargs...)
+
+Allocate an uninitialized `ConcreteRArray` of element type `T` and size
+`shape` or convert an `Array` to a `ConcreteRArray`.
+
+# Implementation
+
+Depending on the Reactant `xla_runtime` preference setting, `ConcreteRArray`
+is an alias for `ConcretePJRTArray` or `ConcreteIFRTArray`. User code should
+use `ConcreteRArray`.
+"""
+const ConcreteRArray = @static if XLA.REACTANT_XLA_RUNTIME == "PJRT"
+    ConcretePJRTArray
+elseif XLA.REACTANT_XLA_RUNTIME == "IFRT"
+    ConcreteIFRTArray
+end
+
+@inline ConcreteRArray{T}(::UndefInitializer, shape::Integer...; kwargs...) where {T} =
+    ConcreteRArray{T}(undef, Dims(shape); kwargs...)
+
+"""
+    ConcreteRNumber(
+        x::Number;
+        client::Union{Nothing,XLA.AbstractClient} = nothing,
+        device::Union{Nothing,XLA.AbstractDevice} = nothing,
+        sharding::Sharding.AbstractSharding = Sharding.NoSharding(),
+    )
+
+    ConcreteRNumber{T<:Number}(x; kwargs...)
+
+Wrap a `Number` in a `ConcreteRNumber`.
+
+# Implementation
+
+Depending on the Reactant `xla_runtime` preference setting, `ConcreteRArray`
+is an alias for `ConcretePJRTNumber` or `ConcreteIFRTNumber`. User code should
+use `ConcreteRNumber`.
+"""
+const ConcreteRNumber = @static if XLA.REACTANT_XLA_RUNTIME == "PJRT"
+    ConcretePJRTNumber
+elseif XLA.REACTANT_XLA_RUNTIME == "IFRT"
+    ConcreteIFRTNumber
+end
+
+## Other Aliases based on the set preferences
+@static if XLA.REACTANT_XLA_RUNTIME == "PJRT"
     const AnyConcreteRArray = AnyConcretePJRTArray
 elseif XLA.REACTANT_XLA_RUNTIME == "IFRT"
-    const ConcreteRArray = ConcreteIFRTArray
-    const ConcreteRNumber = ConcreteIFRTNumber
     const AnyConcreteRArray = AnyConcreteIFRTArray
+end
+
+function ConcretePJRTArray{T}(
+    ::UndefInitializer,
+    shape::Dims;
+    client::Union{Nothing,XLA.AbstractClient}=nothing,
+    idx::Union{Int,Nothing}=nothing,
+    device::Union{Nothing,XLA.AbstractDevice}=nothing,
+    sharding::Sharding.AbstractSharding=Sharding.NoSharding(),
+) where {T}
+    theclient, thedevice = _select_client_and_device(client, idx, device, sharding)
+    sharded_data, shardinfo = sharding(theclient, thedevice, T, shape)
+    N = length(shape)
+    nsharded = length(sharded_data)
+    return ConcretePJRTArray{T,N,nsharded,typeof(shardinfo)}(sharded_data, shape, shardinfo)
+end
+
+function ConcreteIFRTArray{T}(
+    ::UndefInitializer,
+    shape::Dims;
+    client::Union{Nothing,XLA.AbstractClient}=nothing,
+    idx::Union{Int,Nothing}=nothing,
+    device::Union{Nothing,XLA.AbstractDevice}=nothing,
+    sharding::Sharding.AbstractSharding=Sharding.NoSharding(),
+) where {T}
+    theclient, thedevice = _select_client_and_device(client, idx, device, sharding)
+    N = length(shape)
+    # ToDo: How to avoid allocating dummy array on host?
+    dummy_array = Array{T}(undef, shape)
+    # ToDo: How to use specified device (non-sharded case)?
+    sharded_data, shardinfo, padding = sharding(theclient, nothing, dummy_array)
+    return ConcreteIFRTArray{T,N,typeof(shardinfo)}(sharded_data, shape, shardinfo, padding)
+end
+
+function _select_client_and_device(
+    client::Union{Nothing,XLA.AbstractClient},
+    idx::Union{Int,Nothing},
+    device::Union{Nothing,XLA.AbstractDevice},
+    sharding::Sharding.AbstractSharding,
+)
+    if Sharding.is_sharded(sharding)
+        # ToDo: Throw ArgumentError instead of just warning?
+        idx isa Nothing ||
+            @warn "device index should not be specified for sharded XLA arrays, ignoring it."
+        device isa Nothing ||
+            @warn "device should not be specified for sharded XLA arrays, ignoring it."
+        theclient = client isa Nothing ? XLA.default_backend() : client
+        thedevice = nothing
+    else
+        if device isa Nothing
+            theclient = client isa Nothing ? XLA.default_backend() : client
+            if idx isa Nothing
+                thedevice = XLA.default_device(theclient)
+            else
+                thedevice = XLA.get_device(theclient, idx)
+            end
+        else
+            thedevice = device
+            if client isa Nothing
+                theclient = XLA.client(thedevice)
+            else
+                theclient = client
+                XLA.client(thedevice) == theclient ||
+                    throw(ArgumentError("XLA device does not match XLA client"))
+            end
+            if !(idx isa Nothing)
+                XLA.get_device(theclient, idx) === thedevice || throw(
+                    ArgumentError("XLA device does not match XLA client and device index"),
+                )
+            end
+        end
+    end
+
+    return theclient, thedevice
 end

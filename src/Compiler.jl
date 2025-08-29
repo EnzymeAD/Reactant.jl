@@ -288,7 +288,7 @@ function create_result(
         sym = Symbol("result", var_idx[])
         var_idx[] += 1
 
-        @assert haskey(result_stores, path)
+        @assert haskey(result_stores, path) "Expected $(path) in $(keys(result_stores))"
         restore = result_stores[path]
         delete!(result_stores, path)
         if path_to_shard_info !== nothing && haskey(path_to_shard_info, path)
@@ -701,6 +701,7 @@ function optimization_passes(
     recognize_comms::Bool=true,
     lower_comms::Bool=true,
     max_constant_threshold::Int=1024,
+    backend::String="gpu",
 )
     transform_passes_list = [
         "patterns=compare_op_canon<16>",
@@ -902,6 +903,16 @@ function optimization_passes(
         # "compare_mul",
         "compare_convert",
         "add_selects",
+        "self_subtract_to_convolution_like($(Int(backend == "tpu")))",
+        "self_add_to_convolution_like($(Int(backend == "tpu")))",
+        "self_mul_to_convolution_like($(Int(backend == "tpu")))",
+        "subtract_multiply_const_to_add_mul_const",
+        "concat_insert_dim_dot_general",
+        "concat_insert_dim_gather",
+        "concat_insert_dim_iota",
+        "concat_insert_dim_reduce",
+        "concat_insert_dim_sort",
+        "concat_insert_dim_reduce_window",
     ]
 
     if !compile_options.disable_scatter_gather_optimization_passes
@@ -1627,10 +1638,10 @@ function compile_mlir!(
     end
 
     opt_passes = optimization_passes(
-        compile_options; sroa=true, recognize_comms, lower_comms
+        compile_options; sroa=true, recognize_comms, lower_comms, backend
     )
     opt_passes2 = optimization_passes(
-        compile_options; sroa=false, recognize_comms, lower_comms
+        compile_options; sroa=false, recognize_comms, lower_comms, backend
     )
 
     raise_passes = if raise isa String
@@ -1651,6 +1662,7 @@ function compile_mlir!(
                 dus_to_concat=true,
                 recognize_comms,
                 lower_comms,
+                backend,
             )
             result = result * "," * opt_passes3
         end
@@ -2057,6 +2069,7 @@ function compile_mlir!(
                 Reactant.__compile_options_with_reversed_propagation(compile_options);
                 recognize_comms,
                 lower_comms,
+                backend,
             ),
             "post_op_transpose_reshape",
         )

@@ -39,7 +39,7 @@ elseif Sys.iswindows() && Sys.ARCH === :x86_64
     const off_t = off32_t
 end
 
-const intptr_t = Clong
+const intptr_t = Cptrdiff_t
 
 struct MlirDialectHandle
     ptr::Ptr{Cvoid}

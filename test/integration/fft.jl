@@ -36,12 +36,12 @@ using FFTW, Reactant, Test
 end
 
 @testset "rfft" begin
-    x = rand(2, 2, 3, 4)
+    x = rand(Float32, 2, 2, 3, 4)
     x_ra = Reactant.to_rarray(x)
 
     @test_throws AssertionError @jit(rfft(x_ra)) # TODO: support this
 
-    x = rand(2, 3, 4)
+    x = rand(Float32, 2, 3, 4)
     x_ra = Reactant.to_rarray(x)
 
     @test @jit(rfft(x_ra)) ≈ rfft(x)
