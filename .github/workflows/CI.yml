@@ -51,6 +51,7 @@ jobs:
           # <https://github.com/EnzymeAD/Reactant.jl/issues/867> is resolved.
           # - macOS-13
           - macOS-latest
+          - windows-latest
         test_group:
           - core
           - neural_networks
@@ -108,10 +109,13 @@ jobs:
         # We have to use `${GITHUB_WORKSPACE}` instead of `github.workspace` because GitHub
         # is terrible and the two don't match inside containers:
         # https://github.com/actions/runner/issues/2058
+        
+        if: ${{ matrix.os != 'windows-latest' }}
         run: |
           echo "TMPDIR=${GITHUB_WORKSPACE}/tmp" >> ${GITHUB_ENV}
       - uses: actions/checkout@v4
       - name: Create TMPDIR
+        if: ${{ matrix.os != 'windows-latest' }}
         run: |
           mkdir -p ${{ env.TMPDIR }}
       - uses: julia-actions/setup-julia@v2

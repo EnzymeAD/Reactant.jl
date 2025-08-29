@@ -966,11 +966,12 @@ Base.@nospecializeinfer @noinline function dot_general(
     rhs_batching_dimensions = rhs_batching_dimensions .- 1
     lhs_contracting_dimensions = lhs_contracting_dimensions .- 1
     rhs_contracting_dimensions = rhs_contracting_dimensions .- 1
+    ctx = MLIR.IR.context()
 
-    dot_dimension_numbers = GC.@preserve lhs_contracting_dimensions rhs_contracting_dimensions lhs_batching_dimensions rhs_batching_dimensions begin
+    dot_dimension_numbers = GC.@preserve ctx lhs_contracting_dimensions rhs_contracting_dimensions lhs_batching_dimensions rhs_batching_dimensions begin
         MLIR.IR.Attribute(
             MLIR.API.stablehloDotDimensionNumbersGet(
-                MLIR.IR.context(),
+                ctx,
                 length(lhs_batching_dimensions),
                 lhs_batching_dimensions,
                 length(rhs_batching_dimensions),
