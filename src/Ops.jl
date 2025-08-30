@@ -1820,10 +1820,10 @@ instead.
 """
 @noinline function scatter_setindex(
     dest::TracedRArray{T,N},
-    scatter_indices::TracedRArray{Int64,2},
+    scatter_indices::TracedRArray{T1,2},
     updates::TracedRArray{T2,1};
     location=mlir_stacktrace("scatter_setindex", @__FILE__, @__LINE__),
-) where {T,N,T2}
+) where {T,N,T1,T2}
     @assert length(updates) == size(scatter_indices, 1)
     @assert size(scatter_indices, 2) == N
 
@@ -1874,7 +1874,7 @@ end
 
 @noinline function scatter(
     dest::Vector{TracedRArray{T,N}},
-    scatter_indices::TracedRArray{Int64},
+    scatter_indices::TracedRArray{TI},
     updates::Vector{<:TracedRArray{T}};
     update_computation::MLIR.IR.Region,
     update_window_dims::Vector{Int64},
@@ -1886,9 +1886,9 @@ end
     unique_indices::Union{Bool,Nothing}=nothing,
     indices_are_sorted::Union{Bool,Nothing}=nothing,
     location=mlir_stacktrace("scatter", @__FILE__, @__LINE__),
-) where {T,N}
+) where {T,TI,N}
     scatter_indices = subtract(
-        scatter_indices, fill(Int64(1), size(scatter_indices)); location
+        scatter_indices, fill(TI(1), size(scatter_indices)); location
     )
 
     update_window_dims = update_window_dims .- 1
@@ -1939,9 +1939,9 @@ use [`MLIR.Dialects.stablehlo.dynamic_slice`](@ref) instead.
 """
 @noinline function gather_getindex(
     src::TracedRArray{T,N},
-    gather_indices::TracedRArray{Int64,2};
+    gather_indices::TracedRArray{TI,2};
     location=mlir_stacktrace("gather_getindex", @__FILE__, @__LINE__),
-) where {T,N}
+) where {T,TI,N}
     @assert size(gather_indices, 2) == N
 
     if GATHER_GETINDEX_DISABLED[]
@@ -1970,7 +1970,7 @@ end
 
 @noinline function gather(
     src::TracedRArray{T,N},
-    gather_indices::TracedRArray{Int64};
+    gather_indices::TracedRArray{TI};
     offset_dims::Vector{Int64},
     collapsed_slice_dims::Vector{Int64},
     operand_batching_dims::Vector{Int64},
@@ -1980,10 +1980,8 @@ end
     slice_sizes::Vector{Int64},
     indices_are_sorted::Bool=false,
     location=mlir_stacktrace("gather", @__FILE__, @__LINE__),
-) where {T,N}
-    gather_indices = subtract(
-        gather_indices, fill(Int64(1), size(gather_indices)); location
-    )
+) where {T,TI,N}
+    gather_indices = subtract(gather_indices, fill(TI(1), size(gather_indices)); location)
 
     offset_dims = offset_dims .- 1
     start_indices_batching_dims = start_indices_batching_dims .- 1

@@ -464,8 +464,9 @@ function _stack_indices(idxs::AbstractArray{<:CartesianIndex})
 end
 
 function _nnlib_gather_impl(src::AnyTracedRArray, idxs::AbstractArray, n_dims::Int)
-    idxs = TracedUtils.promote_to(TracedRArray{Int,ndims(idxs)}, idxs)
-    n_idxs = size(idxs, 1)
+    idxs = TracedUtils.promote_to(
+        TracedRArray{Reactant.unwrapped_eltype(idxs),ndims(idxs)}, idxs
+    )
     return @opcall gather(
         src,
         idxs;
@@ -473,7 +474,7 @@ function _nnlib_gather_impl(src::AnyTracedRArray, idxs::AbstractArray, n_dims::I
         collapsed_slice_dims=collect(Int64, (n_dims + 1):ndims(src)),
         operand_batching_dims=Int64[],
         start_indices_batching_dims=Int64[],
-        start_index_map=collect(Int64, (ndims(src) - n_idxs + 1):ndims(src)),
+        start_index_map=collect(Int64, (ndims(src) - size(idxs, 1) + 1):ndims(src)),
         index_vector_dim=1,
         slice_sizes=Int64[size(src)[1:n_dims]..., ones(Int64, ndims(src) - n_dims)...],
     )
@@ -553,7 +554,9 @@ function _nnlib_scatter_impl(
     idx::AbstractArray,
     n_dims::Int,
 ) where {OP,T}
-    scatter_indices = TracedUtils.promote_to(TracedRArray{Int,ndims(idx)}, idx)
+    scatter_indices = TracedUtils.promote_to(
+        TracedRArray{Reactant.unwrapped_eltype(idx),ndims(idx)}, idx
+    )
     n_idxs = size(scatter_indices, 1)
     return @opcall(
         scatter(
