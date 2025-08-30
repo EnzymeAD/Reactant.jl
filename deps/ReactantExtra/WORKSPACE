@@ -99,6 +99,9 @@ sed -i.bak0 "s/i64/LL/g" xla/tsl/platform/windows/env_time.cc
 sed -i.bak0 "s/\\/D/-D/g" third_party/farmhash/farmhash.BUILD
 """,
     """
+sed -i.bak0 "s/Node::Leaf(std::forward<decltype(pair.second)>/Node::Leaf(std::forward<T>/g" xla/tuple_tree.h
+""",
+    """
 sed -i.bak0 "s/kDeprecatedFlags({/kDeprecatedFlags(absl::flat_hash_set<std::string>{/g" xla/debug_options_flags.cc
 """,
     """
