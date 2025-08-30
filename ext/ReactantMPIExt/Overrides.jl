@@ -64,8 +64,8 @@ function MPI.Isend(
     comm::MPI.Comm, 
     request::TracedRequest=TracedRequest((), nothing)
 )
-    tag = Reactant.Ops.constant(tag)
     dest = Reactant.Ops.constant(dest)
+    tag = Reactant.Ops.constant(tag)
 
     gen_request = MPI.Isend(buf, dest, tag, comm)
     request.mlir_data = gen_request.mlir_data
@@ -135,27 +135,31 @@ function MPI.Recv!(
     return Ops.recv!(recvbuf, tag, source)
 end
 
-# TODO use `make_tracer` to delinearize arbitrary types? check out `MPI.Buffer`
-function MPI.Irecv!(recvbuf::TracedRArray, source::Number, tag::Number, comm::MPI.Comm)
-    @assert comm == MPI.COMM_WORLD "Only MPI.COMM_WORLD is supported currently"
+function MPI.Irecv!(
+    buf::TracedRArray,
+    source::Integer,
+    tag::Integer,
+    comm::MPI.Comm,
+    request::TracedRequest
+)
+    source = Reactant.Ops.constant(dest)
+    tag = Reactant.Ops.constant(tag)
 
-    tag = if !(tag isa TracedRNumber)
-        Reactant.Ops.constant(tag)
-    end
-
-    source = if !(source isa TracedRNumber)
-        Reactant.Ops.constant(source)
-    end
-
-    return Ops.irecv!(recvbuf, tag, source)
+    gen_request = MPI.Irecv!(buf, source, tag, comm)
+    request.mlir_data = gen_request.mlir_data
+    return request
 end
 
+# TODO use `make_tracer` to delinearize arbitrary types? check out `MPI.Buffer`
 function MPI.Irecv!(
-    recvbuf::TracedRArray, source::Number, tag::Number, comm::MPI.Comm, req::TracedRequest
+    buf::TracedRArray,
+    source::TracedRNumber,
+    tag::TracedRNumber,
+    comm::MPI.Comm
 )
-    gen_req = MPI.Irecv!(recvbuf, source, tag, comm)
-    req.mlir_data = gen_req.mlir_data
-    return req
+    @assert comm == MPI.COMM_WORLD "Only MPI.COMM_WORLD is supported currently"
+
+    return Ops.irecv!(buf, tag, source)
 end
 
 function MPI.Allreduce!(sendbuf::TracedRArray, recvbuf::TracedRArray, op, comm::MPI.Comm)

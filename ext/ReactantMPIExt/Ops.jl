@@ -496,22 +496,83 @@ function recv!(
     return errcode, recvbuf
 end
 
-# TODO need c-function for creating MLIR `mpi.request` type?
+# # TODO need c-function for creating MLIR `mpi.request` type?
+# function irecv!(
+#     ref::TracedRArray,
+#     tag::TracedRNumber,
+#     src::TracedRNumber;
+#     location=mlir_stacktrace("mpi.irecv", @__FILE__, @__LINE__),
+# )
+#     # return TracedRequest(
+#     #     MLIR.IR.result(mpi.irecv(ref.mlir_data, tag.mlir_data, src.mlir_data; location))
+#     # )
+#     inputs = IR.Value[ref.mlir_data, tag.mlir_data, src.mlir_data]
+#     sym = IR.FlatSymbolRefAttribute("enzymexla_wrapper_MPI_Irecv")
+#     rettype = IR.Type[]
+#
+#     IR.result(enzymexla.jit_call(inputs; fn=sym, result_0=rettype, location))
+#     return ref
+# end
+
 function irecv!(
-    ref::TracedRArray,
+    buf::TracedRArray,
     tag::TracedRNumber,
     src::TracedRNumber;
-    location=mlir_stacktrace("mpi.irecv", @__FILE__, @__LINE__),
+    location=mlir_stacktrace("mpi.isend", @__FILE__, @__LINE__),
 )
-    # return TracedRequest(
-    #     MLIR.IR.result(mpi.irecv(ref.mlir_data, tag.mlir_data, src.mlir_data; location))
-    # )
-    inputs = IR.Value[ref.mlir_data, tag.mlir_data, src.mlir_data]
-    sym = IR.FlatSymbolRefAttribute("enzymexla_wrapper_MPI_Irecv")
-    rettype = IR.Type[]
+    T = Reactant.unwrapped_eltype(buf)
+    mpi_datatype = convert_julia_type_to_mpi_datatype(T)
+    mpi_datatype_name = inject_mpi_datatype!(mpi_datatype)
 
-    IR.result(enzymexla.jit_call(inputs; fn=sym, result_0=rettype, location))
-    return ref
+    sym_name = "enzymexla_wrapper_MPI_Irecv_$(mpi_datatype_name)"
+    sym_attr = IR.FlatSymbolRefAttribute(sym_name)
+
+    IR.inject!("MPI_COMM_WORLD", "llvm.mlir.global constant @MPI_COMM_WORLD() : !llvm.ptr")
+    IR.inject!(
+        "MPI_Irecv",
+        "llvm.func @MPI_Irecv(!llvm.ptr, i32, !llvm.ptr, i32, i32, !llvm.ptr, !llvm.ptr) -> i32",
+    )
+
+    # int MPI_Irecv(void* buf, int count, MPI_Datatype datatype,
+    #               int source, int tag, MPI_Comm comm, MPI_Request* request)
+    #! format: off
+    IR.inject!(sym_name, """
+        func.func @$sym_name(%buf : !llvm.ptr, %count_ptr : !llvm.ptr, %src_ptr : !llvm.ptr, %tag_ptr : !llvm.ptr, %req_ptr : !llvm.ptr) -> () {
+            %comm = llvm.mlir.addressof @MPI_COMM_WORLD : !llvm.ptr
+            %datatype = llvm.mlir.addressof @$(mpi_datatype_name) : !llvm.ptr
+            %count = llvm.load %count_ptr : !llvm.ptr -> i32
+            %src = llvm.load %src_ptr : !llvm.ptr -> i32
+            %tag = llvm.load %tag_ptr : !llvm.ptr -> i32
+            %res = llvm.call @MPI_Irecv(%buf, %count, %datatype, %src, %tag, %comm, %req_ptr) : (!llvm.ptr, i32, !llvm.ptr, i32, i32, !llvm.ptr, !llvm.ptr) -> (i32)
+            func.return
+        }
+    """)
+    #! format: on
+
+    count = Reactant.Ops.constant(Int32(length(buf)))
+    request = Reactant.Ops.constant(Int64(-1))
+
+    output_operand_aliases = IR.Attribute([
+        IR.Attribute(
+            MLIR.API.stablehloOutputOperandAliasGet(
+                MLIR.IR.context(), 0, C_NULL, 4, 0, C_NULL
+            ),
+        ),
+    ])
+
+    ret = enzymexla.jit_call(
+        IR.Value[
+            buf.mlir_data, count.mlir_data, src.mlir_data, tag.mlir_data, request.mlir_data
+        ];
+        fn=sym_attr,
+        result_0=IR.Type[mlir_type(request)],
+        output_operand_aliases=output_operand_aliases,
+        location,
+    )
+
+    # return TracedRNumber
+    request.mlir_data = IR.result(ret)
+    return request
 end
 
 function wait(
@@ -520,7 +581,7 @@ function wait(
     sym_name = "enzymexla_wrapper_MPI_Wait"
     sym_attr = IR.FlatSymbolRefAttribute(sym_name)
 
-    IR.inject!("MPI_COMM_WORLD", "llvm.mlir.global constant @MPI_COMM_WORLD() : !llvm.ptr")
+    # IR.inject!("MPI_COMM_WORLD", "llvm.mlir.global constant @MPI_COMM_WORLD() : !llvm.ptr")
     IR.inject!("MPI_Wait", "llvm.func @MPI_Wait(!llvm.ptr, !llvm.ptr) -> i32")
 
     #! format: off
