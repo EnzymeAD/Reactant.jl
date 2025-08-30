@@ -61,6 +61,10 @@ function Base.convert(::Type{TracedRArray{T,N}}, x::AbstractArray) where {T,N}
     return convert(TracedRArray{T,N}, @opcall constant(collect(x)))
 end
 
+# Base.complex
+Base.complex(x::TracedRArray{<:Real}) = complex.(x)
+Base.complex(x::TracedRArray{<:Complex}) = x
+
 TracedRArray{T,N}(x::AbstractArray) where {T,N} = convert(TracedRArray{T,N}, x)
 
 function Base.getindex(

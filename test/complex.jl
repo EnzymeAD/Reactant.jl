@@ -82,3 +82,15 @@ end
     @test @jit(Complex(x, y_ra)) == Complex(x, y) skip = RunningOnTPU
     @test @jit(Complex(x_ra)) == Complex(x) == @jit(Complex(x_ra, 0))
 end
+
+@testset "Base.complex" begin
+    @test ComplexF32(@jit(complex(ConcreteRNumber(1.0f0)))) == complex(1.0f0)
+    @test ComplexF32(@jit(complex(ConcreteRNumber(1.0f0), ConcreteRNumber(2.0f0)))) ==
+        complex(1.0f0, 2.0f0)
+    @test ComplexF32(@jit(complex(ConcreteRNumber(1.0f0 + 2.0f0im)))) ==
+        complex(1.0f0 + 2.0f0im)
+
+    @test Array(@jit(complex(ConcreteRArray(ones(Float32, 2))))) ≈ complex(ones(Float32, 2))
+    @test Array(@jit(complex(ConcreteRArray(ones(ComplexF32, 2))))) ≈
+        complex(ones(ComplexF32, 2))
+end

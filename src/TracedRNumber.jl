@@ -136,6 +136,35 @@ end
 Base.Complex(x::TracedRNumber{<:Real}) = @opcall complex(x, zero(x))
 Base.Complex(x::TracedRNumber{<:Complex}) = x
 
+# Base.complex
+Base.complex(::Type{TracedRNumber{T}}) where {T} = TracedRNumber{complex(T)}
+Base.complex(x::TracedRNumber{<:Real}) = complex(x, zero(x))
+function Base.complex(x::TracedRNumber{<:Real}, y::TracedRNumber{<:Real})
+    T = promote_type(unwrapped_eltype(x), unwrapped_eltype(y))
+    return complex(
+        TracedUtils.promote_to(TracedRNumber{T}, x),
+        TracedUtils.promote_to(TracedRNumber{T}, y),
+    )
+end
+function Base.complex(x::TracedRNumber{<:Real}, y::Real)
+    T = promote_type(unwrapped_eltype(x), typeof(y))
+    return complex(
+        TracedUtils.promote_to(TracedRNumber{T}, x),
+        TracedUtils.promote_to(TracedRNumber{T}, y),
+    )
+end
+function Base.complex(x::Real, y::TracedRNumber{<:Real})
+    T = promote_type(typeof(x), unwrapped_eltype(y))
+    return complex(
+        TracedUtils.promote_to(TracedRNumber{T}, x),
+        TracedUtils.promote_to(TracedRNumber{T}, y),
+    )
+end
+function Base.complex(x::TracedRNumber{T}, y::TracedRNumber{T}) where {T<:Real}
+    return @opcall complex(x, y)
+end
+Base.complex(x::TracedRNumber{T}) where {T<:Complex} = x
+
 for (jlop, hloop) in (
     (:(Base.min), :minimum),
     (:(Base.max), :maximum),
