@@ -346,17 +346,6 @@ function make_mlir_fn(
         Ops.deactivate_constant_context!(fnbody)
     end
 
-    # check which arguments have been mutated
-    mutated_args = Int[]
-    if !construct_function_without_args
-        for (i, arg) in enumerate(linear_args)
-            if get_mlir_data(arg) != MLIR.IR.argument(fnbody, i)
-                # mutation occured!
-                push!(mutated_args, i)
-            end
-        end
-    end
-
     (; func2, traced_result, ret, linear_args, in_tys, linear_results, skipped_results, num_partitions, is_sharded, unique_meshes, mutated_args, global_device_ids) = finalize_mlir_fn(
         result,
         traced_args,
@@ -372,7 +361,6 @@ function make_mlir_fn(
         optimize_then_pad,
         inv_map,
         args_in_result,
-        false, # linear_args_in_result
         resprefix,
         argprefix,
         resargprefix,
@@ -602,7 +590,6 @@ function finalize_mlir_fn(
     optimize_then_pad,
     inv_map,
     args_in_result,
-    linear_args_in_result,
     resprefix,
     argprefix,
     resargprefix,
@@ -620,15 +607,15 @@ function finalize_mlir_fn(
     toscalar,
 )
     # check which arguments have been mutated
-    mutated_args = Int[]
-    if !construct_function_without_args
-        for (i, arg) in enumerate(linear_args)
-            if get_mlir_data(arg) != MLIR.IR.argument(fnbody, i)
-                # mutation occured!
-                push!(mutated_args, i)
+        mutated_args = Int[]
+        if !construct_function_without_args
+            for (i, arg) in enumerate(linear_args)
+                if get_mlir_data(arg) != MLIR.IR.argument(fnbody, i)
+                    # mutation occured!
+                    push!(mutated_args, i)
+                end
             end
         end
-    end
 
     outmode = if concretein
         @assert !toscalar
@@ -653,14 +640,6 @@ function finalize_mlir_fn(
                 Reactant.NoStopTracedTrack;
                 runtime,
             )
-        end
-        if linear_args_in_result
-            for arg in linear_args
-                if haskey(seen_results, arg)
-                    continue
-                end
-                seen_results[arg] = arg
-            end
         end
         traced_result
     finally

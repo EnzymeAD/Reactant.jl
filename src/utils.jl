@@ -613,6 +613,7 @@ function get_args_from_finalize_function(finalize_function_result)
         ffr.argprefix,
         ffr.resprefix,
         ffr.resargprefix,
+        ffr.mutated_args
     )
 end
 
@@ -708,16 +709,6 @@ function finalize_function(
     construct_function_without_args = false
     output_shardings = nothing
 
-    # check which arguments have been mutated
-    mutated_args = Int[]
-    for (i, arg) in enumerate(linear_args)
-        if TracedUtils.get_mlir_data(arg) != MLIR.IR.argument(fnbody, i)
-            # mutation occured!
-            push!(mutated_args, i)
-        end
-    end
-
-    seen_results = OrderedIdDict()
 
     (; func2, f_name, traced_result, ret, linear_args, in_tys, linear_results, num_partitions, is_sharded, unique_meshes, mutated_args, global_device_ids) = TracedUtils.finalize_mlir_fn(
         result,
@@ -734,7 +725,6 @@ function finalize_function(
         optimize_then_pad,
         inv_map,
         args_in_result,
-        true, # linear_args_in_result
         resprefix,
         argprefix,
         resargprefix,
@@ -788,6 +778,7 @@ function call_epilogue(
     argprefix,
     resprefix,
     resargprefix,
+    mutated_args
 )
     fnwrapped = false # TODO: should this sometimes be true (look at start of `make_mlir_fn`)?
     mlir_result_types = [
@@ -817,6 +808,11 @@ function call_epilogue(
         callee=MLIR.IR.FlatSymbolRefAttribute(f_name),
     )
 
+    # By default, reset all linear args to their original, caller-side value:
+    for (i, arg) in enumerate(linear_args)
+        Reactant.TracedUtils.set_mlir_data!(arg, mlir_caller_args[i])
+    end
+
     for (i, res) in enumerate(linear_results)
         resv = MLIR.IR.result(call_op, i)
         for path in res.paths
@@ -827,6 +823,15 @@ function call_epilogue(
                 Reactant.TracedUtils.set!(traced_result, path[2:end], resv)
             elseif path[1] == resargprefix
                 idx = path[2]::Int
+                no_replacement = false
+                for (i_arg, arg) in enumerate(linear_args)
+                    if arg === res && !(i_arg in mutated_args)
+                        no_replacement = true
+                    end
+                end
+                # if the function didn't mutate the value, we don't put
+                # the call result in the argument's mlir_data:
+                no_replacement && continue
                 if idx == 1 && fnwrapped
                     Reactant.TracedUtils.set!(f, path[3:end], resv)
                 else
@@ -835,17 +840,6 @@ function call_epilogue(
                     end
                     Reactant.TracedUtils.set!(args[idx], path[3:end], resv)
                 end
-            elseif path[1] == argprefix
-                # It is possible that an argument in traced_args has been mutated.
-                # Still, we want to update the MLIR data for these original arguments.
-                # They can be found in `linear_args`:
-                idx = nothing
-                for (i, arg) in enumerate(linear_args)
-                    arg === res || continue
-                    idx = i
-                end
-                @assert !isnothing(idx) "Could not find index of linear arg matching result"
-                Reactant.TracedUtils.set_mlir_data!(linear_args[idx], resv)
             end
         end
     end
