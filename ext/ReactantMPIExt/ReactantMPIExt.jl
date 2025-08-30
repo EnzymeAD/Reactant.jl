@@ -242,88 +242,90 @@ function Base.show(io::IOty, X::TracedRequest) where {IOty<:Union{IO,IOContext}}
 end
 
 Reactant.TracedUtils.get_mlir_data(x::TracedRequest) = x.mlir_data
-# Reactant.TracedUtils.set_mlir_data!(x::TracedRequest, data) = (x.mlir_data = data; return x) # TODO maybe we should be using this in Isend to set the mlir data...
-Reactant.TracedUtils.get_paths(x::TracedRequest) = x.paths
-Reactant.TracedUtils.set_paths!(x::TracedRequest, paths) = (x.paths = paths; return x)
+# Reactant.TracedUtils.set_mlir_data!(x::TracedRequest, data) = (x.mlir_data = data; return x)
 
-# TODO not sure how to implement this for TracedRequest
-# probably just want to hardcode the types and dims?
-function Reactant.Ops.mlir_type(x::TracedRequest)::MLIR.IR.Type
-    # return MLIR.IR.TensorType(collect(Int, size(x)), MLIR.IR.Type(unwrapped_eltype(x)))
-    return MLIR.IR.TensorType(collect(Int, ()), MLIR.IR.Type(Int64))
-end
-
-Base.@nospecializeinfer function Reactant.make_tracer(
-    seen,
-    @nospecialize(prev::TracedRequest),
-    @nospecialize(path),
-    mode;
-    tobatch=nothing,
-    toscalar=false,
-    @nospecialize(sharding = Sharding.NoSharding()),
-    @nospecialize(runtime = nothing),
-    kwargs...,
-)
-    if mode == Reactant.NoStopTracedTrack
-        Reactant.TracedUtils.set_paths!(prev, (Reactant.TracedUtils.get_paths(prev)..., path))
-        if !haskey(seen, prev)
-            seen[prev] = prev # don't return!
-        end
-        return prev
-    end
-    if mode == Reactant.TracedToConcrete
-        haskey(seen, prev) && return seen[prev]::MPI.Request
-        if !Sharding.is_sharded(sharding)
-            res = MPI.Request()
-        else
-            error("Attempting to use sharding and MPI simultaneously")
-        end
-        seen[prev] = res
-        return res
-    end
-    throw("Trace mode $mode not implemented")
-end
-
-function Reactant.Compiler.create_result(
-    tocopy::MPI.Request,
-    path,
-    result_stores,
-    path_to_shard_info,
-    to_unreshard_results,
-    unresharded_code::Vector{Expr},
-    unresharded_arrays_cache,
-    used_shardinfo,
-    result_cache,
-    var_idx,
-    resultgen_code,
-)
-    if !haskey(result_cache, tocopy)
-        sym = Symbol("result", var_idx[])
-        var_idx[] += 1
-
-        @assert haskey(result_stores, path)
-        restore = result_stores[path]
-        delete!(result_stores, path)
-        if path_to_shard_info !== nothing && haskey(path_to_shard_info, path)
-            error("Attempting to use sharding and MPI simultaneously")
-        else
-            # TODO
-            # restore = result_buffer1 = linearized_results[1] = result of XLA.executesharded()
-            # but what is actually returned from XLA.executesharded? 
-            # Same thing as returned from MPI.Isend (ie, TracedRequest)?
-            result = :(MPI.Request($restore))
-        end
-        push!(
-            resultgen_code,
-            quote
-                $sym = $result
-            end,
-        )
-        result_cache[tocopy] = sym
-    end
-
-    return result_cache[tocopy]
-end
+# # May need these later, but for now we assume that no request needs to pass the compile boundary
+# Reactant.TracedUtils.get_paths(x::TracedRequest) = x.paths
+# Reactant.TracedUtils.set_paths!(x::TracedRequest, paths) = (x.paths = paths; return x)
+#
+# # TODO not sure how to implement this for TracedRequest
+# # probably just want to hardcode the types and dims?
+# function Reactant.Ops.mlir_type(x::TracedRequest)::MLIR.IR.Type
+#     # return MLIR.IR.TensorType(collect(Int, size(x)), MLIR.IR.Type(unwrapped_eltype(x)))
+#     return MLIR.IR.TensorType(collect(Int, ()), MLIR.IR.Type(Int64))
+# end
+#
+# Base.@nospecializeinfer function Reactant.make_tracer(
+#     seen,
+#     @nospecialize(prev::TracedRequest),
+#     @nospecialize(path),
+#     mode;
+#     tobatch=nothing,
+#     toscalar=false,
+#     @nospecialize(sharding = Sharding.NoSharding()),
+#     @nospecialize(runtime = nothing),
+#     kwargs...,
+# )
+#     if mode == Reactant.NoStopTracedTrack
+#         Reactant.TracedUtils.set_paths!(prev, (Reactant.TracedUtils.get_paths(prev)..., path))
+#         if !haskey(seen, prev)
+#             seen[prev] = prev # don't return!
+#         end
+#         return prev
+#     end
+#     if mode == Reactant.TracedToConcrete
+#         haskey(seen, prev) && return seen[prev]::MPI.Request
+#         if !Sharding.is_sharded(sharding)
+#             res = MPI.Request()
+#         else
+#             error("Attempting to use sharding and MPI simultaneously")
+#         end
+#         seen[prev] = res
+#         return res
+#     end
+#     throw("Trace mode $mode not implemented")
+# end
+#
+# function Reactant.Compiler.create_result(
+#     tocopy::MPI.Request,
+#     path,
+#     result_stores,
+#     path_to_shard_info,
+#     to_unreshard_results,
+#     unresharded_code::Vector{Expr},
+#     unresharded_arrays_cache,
+#     used_shardinfo,
+#     result_cache,
+#     var_idx,
+#     resultgen_code,
+# )
+#     if !haskey(result_cache, tocopy)
+#         sym = Symbol("result", var_idx[])
+#         var_idx[] += 1
+#
+#         @assert haskey(result_stores, path)
+#         restore = result_stores[path]
+#         delete!(result_stores, path)
+#         if path_to_shard_info !== nothing && haskey(path_to_shard_info, path)
+#             error("Attempting to use sharding and MPI simultaneously")
+#         else
+#             # TODO
+#             # restore = result_buffer1 = linearized_results[1] = result of XLA.executesharded()
+#             # but what is actually returned from XLA.executesharded? 
+#             # Same thing as returned from MPI.Isend (ie, TracedRequest)?
+#             result = :(MPI.Request($restore))
+#         end
+#         push!(
+#             resultgen_code,
+#             quote
+#                 $sym = $result
+#             end,
+#         )
+#         result_cache[tocopy] = sym
+#     end
+#
+#     return result_cache[tocopy]
+# end
 
 
 include("Ops.jl")
