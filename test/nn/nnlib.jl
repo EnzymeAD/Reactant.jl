@@ -636,9 +636,10 @@ end
     end
 
     @testset "scatter gradient" begin
-
-        dst = Float32[3 3 4 4 5
-            5 5 6 6 7]
+        dst = Float32[
+            3 3 4 4 5
+            5 5 6 6 7
+        ]
         dst_ca = Reactant.to_rarray(dst)
 
         src = ones(Float32, 2, 5)
@@ -648,7 +649,7 @@ end
         idx_ca = Reactant.to_rarray(idx)
 
         function test_scatter(dsts, srcs, idxs)
-            return sum(NNlib.scatter!(-, dsts, srcs, idxs))
+            return sum(NNlib.scatter!(+, dsts, srcs, idxs))
         end
 
         function test_gradient(objective_function, dsts, srcs, idxs)
@@ -662,14 +663,12 @@ end
             return derivs, val
         end
 
-        test_gradient_compiled = @compile test_gradient(test_scatter, dst_ca, src_ca, idx_ca)
+        test_gradient_compiled = @compile test_gradient(
+            test_scatter, dst_ca, src_ca, idx_ca
+        )
 
         grads_enz, loss_enz = Enzyme.gradient(
-            Enzyme.ReverseWithPrimal,
-            Const(test_scatter),
-            dst,
-            src,
-            idx
+            Enzyme.ReverseWithPrimal, Const(test_scatter), dst, src, idx
         )
         grads_ca, loss_ca = test_gradient_compiled(test_scatter, dst_ca, src_ca, idx_ca)
 
