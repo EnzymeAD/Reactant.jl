@@ -4,3 +4,6 @@ BinaryBuilderBase = "7f725544-6523-48cd-82d1-3fa08ff4056e"
 
 [compat]
 Clang = "0.18"
+
+[sources]
+Clang = {url = "https://github.com/wsmoses/Clang.jl", rev = "patch-1"}
