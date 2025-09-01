@@ -140,9 +140,9 @@ function MPI.Irecv!(
     source::Integer,
     tag::Integer,
     comm::MPI.Comm,
-    request::TracedRequest
+    request::TracedRequest=TracedRequest((), nothing)
 )
-    source = Reactant.Ops.constant(dest)
+    source = Reactant.Ops.constant(source)
     tag = Reactant.Ops.constant(tag)
 
     gen_request = MPI.Irecv!(buf, source, tag, comm)
