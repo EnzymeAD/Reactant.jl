@@ -14,7 +14,7 @@ jobs:
     steps:
       - uses: julia-actions/setup-julia@v2
         with:
-          version: '1.10'
+          version: '1.11'
       - uses: julia-actions/cache@v2
       - uses: bazel-contrib/setup-bazel@0.15.0
         name: Set up Bazel
