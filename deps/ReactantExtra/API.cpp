@@ -309,6 +309,49 @@ REACTANT_ABI void ReactantFuncSetArgAttr(MlirOperation op, intptr_t pos,
 
 #pragma endregion
 
+
+#include "stablehlo/dialect/TypeInference.h"
+
+
+typedef struct {
+    MlirAttribute windowStrides;
+    MlirAttribute padding;
+    MlirAttribute lhsDilation;
+    MlirAttribute rhsDilation;
+    MlirAttribute windowReversal;
+    MlirAttribute dimensionNumber;
+    int64_t featureGroupCount;
+    int64_t batchGroupCount;
+} ConvolutionParams;
+
+
+extern "C" MlirType
+inferConvolutionOp(MlirLocation location, MlirType lhsType, MlirType rhsType, ConvolutionParams *cp) {
+  auto windowStrides = dyn_cast<DenseI64ArrayAttr>(unwrap(cp->windowStrides));
+  auto lhsDilation = dyn_cast<DenseI64ArrayAttr>(unwrap(cp->lhsDilation));
+  auto rhsDilation = dyn_cast<DenseI64ArrayAttr>(unwrap(cp->rhsDilation));
+  auto windowReversal = dyn_cast<DenseBoolArrayAttr>(unwrap(cp->windowReversal));
+  
+  std::optional<DenseIntElementsAttr> padding_mlir = dyn_cast_if_present<DenseIntElementsAttr>(unwrap(cp->padding));
+  auto dn_mlir = cast<stablehlo::ConvDimensionNumbersAttr>(unwrap(cp->dimensionNumber));
+  auto lhsType_ = dyn_cast<RankedTensorType>(unwrap(lhsType));
+
+  SmallVector<ShapedTypeComponents> inferredReturnShapes;
+  auto result = mlir::hlo::inferConvolutionOp(
+      unwrap(location), lhsType_, unwrap(rhsType), windowStrides, padding_mlir,
+      lhsDilation, rhsDilation, windowReversal, dn_mlir.getInputBatchDimension(),
+      dn_mlir.getInputFeatureDimension(), dn_mlir.getInputSpatialDimensions(),
+      dn_mlir.getKernelInputFeatureDimension(),
+      dn_mlir.getKernelOutputFeatureDimension(),
+      dn_mlir.getKernelSpatialDimensions(), dn_mlir.getOutputBatchDimension(),
+      dn_mlir.getOutputFeatureDimension(), dn_mlir.getOutputSpatialDimensions(),
+      cp->featureGroupCount, cp->batchGroupCount, nullptr, inferredReturnShapes);
+  if (result.failed())
+    return MlirType();
+  return wrap(RankedTensorType::get(inferredReturnShapes[0].getDims(),
+                                    lhsType_.getElementType()));
+}
+
 // auxiliar functions
 #pragma region utils
 template <typename T> const char *cstr_from_string(T text) {
