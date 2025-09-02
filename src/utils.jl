@@ -156,7 +156,7 @@ will need a `@reactant_overlay` method.
 See also: [`@skip_rewrite_type`](@ref)
 """
 macro skip_rewrite_func(fname)
-    quote
+    return quote
         @lock $(Reactant.__skip_rewrite_func_set_lock) push!(
             $(Reactant.__skip_rewrite_func_set), typeof($(esc(fname)))
         )
@@ -288,7 +288,7 @@ struct MustThrowError end
     for i in 1:N
         @inbounds newargs[i] = :(args[$i]...)
     end
-    quote
+    return quote
         Base.@_inline_meta
         call_with_reactant(applyfn, $(newargs...))
     end
@@ -302,7 +302,7 @@ end
     for i in 1:N
         @inbounds newargs[i] = :(args[$i]...)
     end
-    quote
+    return quote
         Base.@_inline_meta
         call_with_reactant(mt, applyfn, $(newargs...))
     end
@@ -827,6 +827,7 @@ function call_epilogue(
                 for (i_arg, arg) in enumerate(linear_args)
                     if arg === res && !(i_arg in mutated_args)
                         no_replacement = true
+                        break
                     end
                 end
                 # if the function didn't mutate the value, we don't put
