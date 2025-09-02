@@ -1,4 +1,4 @@
-using ScopedValues: ScopedValues, ScopedValue
+using ScopedValues: ScopedValues
 
 export with_config
 export DotGeneralAlgorithmPreset, PrecisionConfig, DotGeneralAlgorithm
@@ -63,8 +63,12 @@ function with_config(
 end
 
 # Lower to ApproxTopK
-const LOWER_PARTIALSORT_TO_APPROX_TOP_K = ScopedValue(false)
-const FALLBACK_APPROX_TOP_K_LOWERING = ScopedValue(true)
+const LOWER_PARTIALSORT_TO_APPROX_TOP_K = ScopedSetting(
+    GetPreference(Reactant, "lower_partialsort_to_approx_top_k", false)
+)
+const FALLBACK_APPROX_TOP_K_LOWERING = ScopedSetting(
+    GetPreference(Reactant, "fallback_approx_top_k_lowering", true)
+)
 
 # DotGeneral Attributes Configuration
 """
@@ -88,13 +92,13 @@ end
 
 Base.@deprecate_binding DotGeneralPrecision PrecisionConfig
 
-const DOT_GENERAL_PRECISION = ScopedValue{
+const DOT_GENERAL_PRECISION = ScopedSetting{
     Union{PrecisionConfig.T,Nothing,Tuple{PrecisionConfig.T,PrecisionConfig.T}}
 }(
     PrecisionConfig.DEFAULT
 )
 
-const CONVOLUTION_PRECISION = ScopedValue{
+const CONVOLUTION_PRECISION = ScopedSetting{
     Union{PrecisionConfig.T,Nothing,Tuple{PrecisionConfig.T,PrecisionConfig.T}}
 }(
     PrecisionConfig.DEFAULT
@@ -224,7 +228,7 @@ The following functions are available:
     TF32_TF32_F32_X3
 end
 
-const DOT_GENERAL_ALGORITHM = ScopedValue{
+const DOT_GENERAL_ALGORITHM = ScopedSetting{
     Union{DotGeneralAlgorithmPreset.T,Nothing,DotGeneralAlgorithm}
 }(
     DotGeneralAlgorithmPreset.DEFAULT

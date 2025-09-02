@@ -525,7 +525,7 @@ function safe_print(name, x)
     return ccall(:jl_, Cvoid, (Any,), name * " " * string(x))
 end
 
-const DEBUG_INTERP = Ref(false)
+const DEBUG_INTERP = ScopedSetting(GetPreference(Reactant, "debug_interpreter", false))
 
 # Rewrite type unstable calls to recurse into call_with_reactant to ensure
 # they continue to use our interpreter. Reset the derived return type
