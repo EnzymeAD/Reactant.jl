@@ -1532,3 +1532,23 @@ end
         @test res == mod1(xᵢ, y)
     end
 end
+
+map_test_1(i, xᵢ, yᵢ) = xᵢ + yᵢ + max(xᵢ, yᵢ)
+
+@testset "multi-argument map" begin
+    x = collect(Float32, 1:10)
+    y = collect(Float32, 31:40)
+
+    x_ra = Reactant.to_rarray(x)
+    y_ra = Reactant.to_rarray(y)
+
+    gt = map(map_test_1, 1:length(x), x, y)
+    @test @jit(map(map_test_1, 1:length(x), x_ra, y_ra)) ≈ gt
+
+    z = similar(x)
+    z_ra = Reactant.to_rarray(z)
+    map!(map_test_1, z, 1:length(x), x, y)
+    @jit map!(map_test_1, z_ra, 1:length(x), x_ra, y_ra)
+    @test z ≈ z_ra
+    @test z_ra ≈ gt
+end
