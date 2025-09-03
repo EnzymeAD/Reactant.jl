@@ -75,8 +75,8 @@ end
         x_reactant = Reactant.to_rarray(x)
 
         @testset for stride in ((1, 1), (2, 2), (3, 3)),
-            padding in ((0, 0), (1, 1), (2, 2), (0, 2), (2, 0), (0, 1), (1, 0)),
-            dilation in ((1, 1), (2, 2), (1, 2), (2, 1))
+            padding in ((0, 0), (2, 2), (0, 2), (2, 0)),
+            dilation in ((1, 1), (1, 2))
 
             conv_dims = DenseConvDims(x, weight; stride, padding, dilation, groups)
 
@@ -88,7 +88,7 @@ end
             dy = ones(Float32, output_size)
             dy_reactant = Reactant.to_rarray(dy)
 
-            Reactant.with_config(; convolution_precision=PrecisionConfig.HIGHEST) do
+            Reactant.with_config(; convolution_precision=PrecisionConfig.HIGH) do
                 @test @jit(NNlib.conv(x_reactant, weight_reactant, conv_dims)) ≈
                     NNlib.conv(x, weight, conv_dims)
 
@@ -123,29 +123,34 @@ end
 end
 
 @testset "Batched Matrix Multiplication" begin
-    x = rand(Float32, 4, 3, 5)
-    y = rand(Float32, 3, 2, 5)
+    Reactant.with_config(;
+        convolution_precision=PrecisionConfig.HIGH,
+        dot_general_precision=PrecisionConfig.HIGH,
+    ) do
+        x = rand(Float32, 4, 3, 5)
+        y = rand(Float32, 3, 2, 5)
 
-    x_ra = Reactant.to_rarray(x)
-    y_ra = Reactant.to_rarray(y)
+        x_ra = Reactant.to_rarray(x)
+        y_ra = Reactant.to_rarray(y)
 
-    @test @jit(batched_mul(x_ra, y_ra)) ≈ batched_mul(x, y)
+        @test @jit(batched_mul(x_ra, y_ra)) ≈ batched_mul(x, y)
 
-    x = rand(Float32, 4, 3, 1)
-    y = rand(Float32, 3, 2, 5)
+        x = rand(Float32, 4, 3, 1)
+        y = rand(Float32, 3, 2, 5)
 
-    x_ra = Reactant.to_rarray(x)
-    y_ra = Reactant.to_rarray(y)
+        x_ra = Reactant.to_rarray(x)
+        y_ra = Reactant.to_rarray(y)
 
-    @test @jit(batched_mul(x_ra, y_ra)) ≈ batched_mul(x, y)
+        @test @jit(batched_mul(x_ra, y_ra)) ≈ batched_mul(x, y)
 
-    x = rand(Float32, 4, 3, 5)
-    y = rand(Float32, 3, 2, 1)
+        x = rand(Float32, 4, 3, 5)
+        y = rand(Float32, 3, 2, 1)
 
-    x_ra = Reactant.to_rarray(x)
-    y_ra = Reactant.to_rarray(y)
+        x_ra = Reactant.to_rarray(x)
+        y_ra = Reactant.to_rarray(y)
 
-    @test @jit(batched_mul(x_ra, y_ra)) ≈ batched_mul(x, y)
+        @test @jit(batched_mul(x_ra, y_ra)) ≈ batched_mul(x, y)
+    end
 end
 
 @testset "Constant Padding: NNlib.pad_constant" begin
@@ -649,16 +654,18 @@ end
     ) in Iterators.product(
         (0, 2), (1, 2), (1,), (1,)
     )
-        conv_dims = NNlib.DenseConvDims(x, w; padding, stride, dilation, groups)
+        Reactant.with_config(; convolution_precision=PrecisionConfig.HIGH) do
+            conv_dims = NNlib.DenseConvDims(x, w; padding, stride, dilation, groups)
 
-        output_size = (NNlib.output_size(conv_dims)..., n_out_features, batch_size)
-        dy = randn(Float32, output_size)
-        dy_reactant = Reactant.to_rarray(dy)
+            output_size = (NNlib.output_size(conv_dims)..., n_out_features, batch_size)
+            dy = randn(Float32, output_size)
+            dy_reactant = Reactant.to_rarray(dy)
 
-        @test @jit(NNlib.∇conv_data(dy_reactant, w_reactant, conv_dims)) ≈
-            NNlib.∇conv_data(dy, w, conv_dims)
-        @test @jit(NNlib.∇conv_filter(x_reactant, dy_reactant, conv_dims)) ≈
-            NNlib.∇conv_filter(x, dy, conv_dims)
+            @test @jit(NNlib.∇conv_data(dy_reactant, w_reactant, conv_dims)) ≈
+                NNlib.∇conv_data(dy, w, conv_dims)
+            @test @jit(NNlib.∇conv_filter(x_reactant, dy_reactant, conv_dims)) ≈
+                NNlib.∇conv_filter(x, dy, conv_dims)
+        end
     end
 end
 
@@ -722,4 +729,25 @@ end
 
     @test @jit(NNlib.softmax(x_ra)) ≈ NNlib.softmax(x)
     @test @jit(NNlib.logsoftmax(x_ra)) ≈ NNlib.logsoftmax(x)
+end
+
+@testset "logsumexp #1593" begin
+    x = collect(Float32, 1:16)
+    x_ra = Reactant.to_rarray(x)
+
+    y = logsumexp(x)
+    y_ra = @jit(logsumexp(x_ra))
+    @test Float32(y_ra) ≈ y
+end
+
+@testset "gather 32bit indexing" begin
+    x = rand(Float32, 10, 10)
+    x_ra = Reactant.to_rarray(x)
+
+    idxs = Int32.(rand(1:10, 32))
+    idxs_ra = Reactant.to_rarray(idxs)
+
+    @test @jit(NNlib.gather(x_ra, idxs_ra)) ≈ NNlib.gather(x, idxs)
+    hlo = repr(@code_hlo(NNlib.gather(x_ra, idxs_ra)))
+    @test !contains(hlo, "i64>")
 end

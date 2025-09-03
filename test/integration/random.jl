@@ -185,3 +185,19 @@ end
         @test μ ≈ 1.0 atol = 0.05 rtol = 0.05
     end
 end
+
+rand_sample(rng, x) = rand(rng, eltype(x), size(x))
+
+function rand_on_device()
+    x = Reactant.@opcall fill(0.0f0, (3, 4, 5))
+    rand!(x)
+    return x
+end
+
+@testset "TracedTypes in Sampling" begin
+    @test @jit(rand_sample(Reactant.ReactantRNG(), rand(3, 4))) isa
+        ConcreteRArray{Float64,2}
+    @test @jit(rand_sample(Reactant.ReactantRNG(), Reactant.to_rarray(rand(3, 4)))) isa
+        ConcreteRArray{Float64,2}
+    @test @jit(rand_on_device()) isa ConcreteRArray{Float32,3}
+end

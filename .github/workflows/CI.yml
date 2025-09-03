@@ -33,6 +33,8 @@ jobs:
     timeout-minutes: 90
     name: Julia ${{ matrix.version }} - ${{ matrix.test_group }} - ${{ matrix.os }} - ${{ matrix.runtime }} - assertions=${{ matrix.assertions }} - ${{ github.event_name }}
     runs-on: ${{ matrix.os }}
+    container:
+      image: ${{ contains(matrix.os, 'linux') && 'ghcr.io/enzymead/reactant-docker-images:main' || '' }}
     strategy:
       fail-fast: false
       matrix:
@@ -49,6 +51,7 @@ jobs:
           # <https://github.com/EnzymeAD/Reactant.jl/issues/867> is resolved.
           # - macOS-13
           - macOS-latest
+          - windows-latest
         test_group:
           - core
           - neural_networks
@@ -59,6 +62,21 @@ jobs:
         assertions:
           - false
         include:
+          - os: linux-x86-ct6e-180-4tpu
+            version: "1.11"
+            assertions: false
+            test_group: core
+            runtime: "IFRT"
+          - os: linux-x86-ct6e-180-4tpu
+            version: "1.11"
+            assertions: false
+            test_group: integration
+            runtime: "IFRT"
+          - os: linux-x86-ct6e-180-4tpu
+            version: "1.11"
+            assertions: false
+            test_group: neural_networks
+            runtime: "IFRT"
           - os: ubuntu-24.04
             version: "1.10"
             assertions: true
@@ -74,23 +92,30 @@ jobs:
             assertions: true
             test_group: integration
             runtime: "PJRT"
-          # - os: ubuntu-24.04
-          #   libReactant: packaged
-          #   version: '1.10'
-          #   test_group: core
-          # - os: ubuntu-24.04
-          #   libReactant: packaged
-          #   version: '1.10'
-          #   test_group: neural_networks
-          # - os: ubuntu-24.04
-          #   libReactant: packaged
-          #   version: '1.10'
-          #   test_group: integration
-    env:
-      TMPDIR: ${{ github.workspace }}/tmp
+          - os: ubuntu-24.04
+            libReactant: packaged
+            version: '1.10'
+            test_group: core
+          - os: ubuntu-24.04
+            libReactant: packaged
+            version: '1.10'
+            test_group: neural_networks
+          - os: ubuntu-24.04
+            libReactant: packaged
+            version: '1.10'
+            test_group: integration
     steps:
+      - name: Set TMPDIR
+        # We have to use `${GITHUB_WORKSPACE}` instead of `github.workspace` because GitHub
+        # is terrible and the two don't match inside containers:
+        # https://github.com/actions/runner/issues/2058
+        
+        if: ${{ matrix.os != 'windows-latest' }}
+        run: |
+          echo "TMPDIR=${GITHUB_WORKSPACE}/tmp" >> ${GITHUB_ENV}
       - uses: actions/checkout@v4
       - name: Create TMPDIR
+        if: ${{ matrix.os != 'windows-latest' }}
         run: |
           mkdir -p ${{ env.TMPDIR }}
       - uses: julia-actions/setup-julia@v2
@@ -160,3 +185,4 @@ jobs:
       - uses: codecov/codecov-action@v5
         with:
           files: lcov.info
+          token: ${{ secrets.CODECOV_TOKEN }}

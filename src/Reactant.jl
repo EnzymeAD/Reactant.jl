@@ -15,6 +15,8 @@ export @allowscalar # re-exported from GPUArraysCore
 
 is_extension_loaded(::Val) = false
 
+include("PersistentCompileCache.jl")
+
 # auxiliary types and functions
 include("OrderedIdDict.jl")
 
@@ -40,10 +42,19 @@ function ancestor(T::Type{<:AbstractArray})
         p_T == T && return T
         return ancestor(p_T)
     end
+    if applicable(_parent_type, T)
+        p_T = _parent_type(T)
+        p_T == T && return T
+        return ancestor(p_T)
+    end
     @warn "`Adapt.parent_type` is not implemented for $(T). Assuming $T isn't a wrapped \
            array." maxlog = 1
     return T
 end
+
+# A lot of packages don't define `Adapt.parent_type`. We use `_parent_type` as a way to
+# define the parent type of an array without type-piracy.
+function _parent_type end
 
 include("accelerators/Accelerators.jl")
 
@@ -70,19 +81,6 @@ export Sharding
 
 include("utils.jl")
 
-function TracedRArray{T}(data::MLIR.IR.Value) where {T}
-    data_type = MLIR.IR.type(data)
-    if T == eltype(MLIR.IR.julia_type(data_type))
-        return TracedRArray{T,ndims(data_type)}((), data, size(data_type))
-    end
-    tdata = TracedRArray(data)
-    return Ops.convert(TracedRArray{T,ndims(data_type)}, tdata)
-end
-
-function TracedRArray(data::MLIR.IR.Value)
-    return TracedRArray{eltype(MLIR.IR.julia_type(MLIR.IR.type(data)))}(data)
-end
-
 isa_traced_soa(_) = false
 isa_traced_soa(::TracedRArray) = true
 isa_traced_soa(::AbstractRange{<:TracedRNumber}) = true
@@ -98,6 +96,23 @@ unwrapped_eltype(::TracedRNumber{T}) where {T} = T
 unwrapped_eltype(::Type{<:AbstractArray{T,N}}) where {T,N} = unwrapped_eltype(T)
 unwrapped_eltype(::AbstractArray{T,N}) where {T,N} = unwrapped_eltype(T)
 
+include("Ops.jl")
+
+using .Ops: @opcall
+
+function TracedRArray{T}(data::MLIR.IR.Value) where {T}
+    data_type = MLIR.IR.type(data)
+    if T == eltype(MLIR.IR.julia_type(data_type))
+        return TracedRArray{T,ndims(data_type)}((), data, size(data_type))
+    end
+    tdata = TracedRArray(data)
+    return @opcall convert(TracedRArray{T,ndims(data_type)}, tdata)
+end
+
+function TracedRArray(data::MLIR.IR.Value)
+    return TracedRArray{eltype(MLIR.IR.julia_type(MLIR.IR.type(data)))}(data)
+end
+
 promote_traced_type(a::Type, b::Type) = Base.promote_type(a, b)
 
 aos_to_soa(x::AbstractArray) = x
@@ -112,7 +127,7 @@ function aos_to_soa(x::Array{TracedRNumber{T}}) where {T}
             x[i] = TracedUtils.promote_to(TracedRNumber{T}, 0)
         end
     end
-    return Ops.reshape(vcat(x...), size(x)...)
+    return @opcall reshape(vcat(x...), size(x)...)
 end
 
 function aos_to_soa(x::AbstractArray{<:ConcretePJRTNumber{T}}) where {T}
@@ -150,7 +165,6 @@ function aos_to_soa(x::AbstractArray{<:ConcreteIFRTNumber{T}}) where {T}
     return x_c
 end
 
-include("Ops.jl")
 include("TracedUtils.jl")
 
 include("TracedRNumber.jl")
@@ -158,15 +172,17 @@ include("TracedRArray.jl")
 
 include("ConcreteRArray.jl")
 
-use_overlayed_version(iter) = any(use_overlayed_version, iter)
-
+use_overlayed_version(x) = false
+use_overlayed_version(x::Base.Iterators.Zip) = any(use_overlayed_version, x.is)
+use_overlayed_version(x::Base.Iterators.Enumerate) = use_overlayed_version(x.itr)
+use_overlayed_version(iter::Tuple) = any(use_overlayed_version, iter)
+use_overlayed_version(iter::NamedTuple) = any(use_overlayed_version, values(iter))
 use_overlayed_version(::TracedRArray) = true
 use_overlayed_version(::TracedRNumber) = true
 use_overlayed_version(::Number) = false
 use_overlayed_version(::MissingTracedValue) = true
 use_overlayed_version(::AbstractArray{<:TracedRNumber}) = true
 use_overlayed_version(rng::ReactantRNG) = use_overlayed_version(rng.seed)
-
 function use_overlayed_version(x::AbstractArray)
     a = ancestor(x)
     a === x && return false

@@ -2,6 +2,7 @@ module TracedRNumberOverrides
 
 using ..Reactant:
     Reactant, TracedRNumber, TracedRArray, TracedUtils, Ops, MLIR, unwrapped_eltype
+using ..Ops: @opcall
 using ReactantCore
 using Adapt
 
@@ -38,7 +39,7 @@ end
 function Base.isfinite(x::TracedRNumber{<:Complex})
     return isfinite(real(x)) & isfinite(imag(x))
 end
-Base.isfinite(x::TracedRNumber{<:AbstractFloat}) = Ops.is_finite(x)
+Base.isfinite(x::TracedRNumber{<:AbstractFloat}) = @opcall is_finite(x)
 
 function Base.isnan(x::TracedRNumber{<:Complex})
     return isnan(real(x)) | isnan(imag(x))
@@ -48,7 +49,7 @@ function Base.isnan(x::TracedRNumber{T}) where {T<:AbstractFloat}
 end
 
 Base.isinf(x::TracedRNumber{<:Complex}) = isinf(real(x)) | isinf(imag(x))
-Base.isinf(x::TracedRNumber{<:AbstractFloat}) = Ops.is_inf(x)
+Base.isinf(x::TracedRNumber{<:AbstractFloat}) = @opcall is_inf(x)
 Base.isinf(::TracedRNumber{<:Integer}) = false
 
 function Base.show(io::IOty, X::TracedRNumber{T}) where {T,IOty<:Union{IO,IOContext}}
@@ -103,7 +104,7 @@ end
 function TracedUtils.promote_to(::Type{TracedRNumber{T}}, rhs) where {T}
     if rhs isa TracedRNumber
         rhs isa TracedRNumber{T} && return rhs
-        return Ops.convert(TracedRNumber{T}, rhs)
+        return @opcall convert(TracedRNumber{T}, rhs)
     end
     if rhs isa TracedRArray{<:Any,0}
         return TracedUtils.promote_to(
@@ -111,8 +112,8 @@ function TracedUtils.promote_to(::Type{TracedRNumber{T}}, rhs) where {T}
             TracedRNumber{Reactant.unwrapped_eltype(rhs)}((), rhs.mlir_data),
         )
     end
-    rhs isa Number && return TracedUtils.promote_to(TracedRNumber{T}, Ops.fill(T(rhs)))
-    return TracedUtils.promote_to(TracedRNumber{T}, Ops.constant(collect(rhs)))
+    rhs isa Number && return TracedUtils.promote_to(TracedRNumber{T}, @opcall fill(T(rhs)))
+    return TracedUtils.promote_to(TracedRNumber{T}, @opcall constant(collect(rhs)))
 end
 
 function TracedUtils.promote_to(::TracedRNumber{T}, rhs) where {T}
@@ -128,12 +129,41 @@ for (aT, bT) in (
         T = promote_type(unwrapped_eltype(a), unwrapped_eltype(b))
         a = TracedUtils.promote_to(TracedRNumber{T}, a)
         b = TracedUtils.promote_to(TracedRNumber{T}, b)
-        return Ops.complex(a, b)
+        return @opcall complex(a, b)
     end
 end
 
-Base.Complex(x::TracedRNumber{<:Real}) = Ops.complex(x, zero(x))
+Base.Complex(x::TracedRNumber{<:Real}) = @opcall complex(x, zero(x))
 Base.Complex(x::TracedRNumber{<:Complex}) = x
+
+# Base.complex
+Base.complex(::Type{TracedRNumber{T}}) where {T} = TracedRNumber{complex(T)}
+Base.complex(x::TracedRNumber{<:Real}) = complex(x, zero(x))
+function Base.complex(x::TracedRNumber{<:Real}, y::TracedRNumber{<:Real})
+    T = promote_type(unwrapped_eltype(x), unwrapped_eltype(y))
+    return complex(
+        TracedUtils.promote_to(TracedRNumber{T}, x),
+        TracedUtils.promote_to(TracedRNumber{T}, y),
+    )
+end
+function Base.complex(x::TracedRNumber{<:Real}, y::Real)
+    T = promote_type(unwrapped_eltype(x), typeof(y))
+    return complex(
+        TracedUtils.promote_to(TracedRNumber{T}, x),
+        TracedUtils.promote_to(TracedRNumber{T}, y),
+    )
+end
+function Base.complex(x::Real, y::TracedRNumber{<:Real})
+    T = promote_type(typeof(x), unwrapped_eltype(y))
+    return complex(
+        TracedUtils.promote_to(TracedRNumber{T}, x),
+        TracedUtils.promote_to(TracedRNumber{T}, y),
+    )
+end
+function Base.complex(x::TracedRNumber{T}, y::TracedRNumber{T}) where {T<:Real}
+    return @opcall complex(x, y)
+end
+Base.complex(x::TracedRNumber{T}) where {T<:Complex} = x
 
 for (jlop, hloop) in (
     (:(Base.min), :minimum),
@@ -148,19 +178,19 @@ for (jlop, hloop) in (
     @eval function $(jlop)(
         @nospecialize(lhs::TracedRNumber{T}), @nospecialize(rhs::TracedRNumber{T})
     ) where {T}
-        return Ops.$(hloop)(lhs, rhs)
+        return @opcall $(hloop)(lhs, rhs)
     end
 end
 
 function Base.rem(
     @nospecialize(lhs::TracedRNumber{T}), @nospecialize(rhs::Number)
 ) where {T}
-    return Ops.remainder(lhs, TracedUtils.promote_to(TracedRNumber{T}, rhs))
+    return @opcall remainder(lhs, TracedUtils.promote_to(TracedRNumber{T}, rhs))
 end
 function Base.rem(
     @nospecialize(lhs::Number), @nospecialize(rhs::TracedRNumber{T})
 ) where {T}
-    return Ops.remainder(TracedUtils.promote_to(TracedRNumber{T}, lhs), rhs)
+    return @opcall remainder(TracedUtils.promote_to(TracedRNumber{T}, lhs), rhs)
 end
 
 # Based on https://github.com/JuliaLang/julia/blob/39255d47db7657950ff1c82137ecec5a70bae622/base/float.jl#L608-L617
@@ -170,25 +200,37 @@ function Base.mod(
     r = rem(x, y)
     return ifelse(r == 0, copysign(r, y), ifelse((r > 0) ⊻ (y > 0), r + y, r))
 end
-function Base.mod(
-    @nospecialize(lhs::TracedRNumber{T}), @nospecialize(rhs::Number)
+
+function Base.mod1(
+    @nospecialize(x::Reactant.TracedRNumber{T}), @nospecialize(y::Reactant.TracedRNumber{T})
 ) where {T}
-    return mod(lhs, TracedUtils.promote_to(TracedRNumber{T}, rhs))
+    m = mod(x, y)
+    return ifelse(m == 0, y, m)
 end
-function Base.mod(
-    @nospecialize(lhs::Number), @nospecialize(rhs::TracedRNumber{T})
-) where {T}
-    return mod(TracedUtils.promote_to(TracedRNumber{T}, lhs), rhs)
+
+for op in (:mod, :mod1)
+    @eval begin
+        function Base.$op(
+            @nospecialize(lhs::TracedRNumber{T}), @nospecialize(rhs::Number)
+        ) where {T}
+            return mod(lhs, TracedUtils.promote_to(TracedRNumber{T}, rhs))
+        end
+        function Base.$op(
+            @nospecialize(lhs::Number), @nospecialize(rhs::TracedRNumber{T})
+        ) where {T}
+            return mod(TracedUtils.promote_to(TracedRNumber{T}, lhs), rhs)
+        end
+    end
 end
 
 function Base.div(@nospecialize(lhs::TracedRNumber{T}), rhs) where {T<:Integer}
-    return Ops.divide(lhs, TracedUtils.promote_to(TracedRNumber{T}, rhs))
+    return @opcall divide(lhs, TracedUtils.promote_to(TracedRNumber{T}, rhs))
 end
 
 function Base.div(
     @nospecialize(lhs::TracedRNumber{T}), rhs, ::typeof(RoundDown)
 ) where {T<:Integer}
-    return Ops.divide(lhs, TracedUtils.promote_to(TracedRNumber{T}, rhs))
+    return @opcall divide(lhs, TracedUtils.promote_to(TracedRNumber{T}, rhs))
 end
 
 function Base.:/(
@@ -210,7 +252,7 @@ for (jlop, hloop, hlocomp) in (
         function $(jlop)(
             @nospecialize(lhs::TracedRNumber{T}), @nospecialize(rhs::TracedRNumber{T})
         ) where {T}
-            return Ops.compare(lhs, rhs; comparison_direction=$(hlocomp))
+            return @opcall compare(lhs, rhs; comparison_direction=$(hlocomp))
         end
 
         function $(jlop)(@nospecialize(lhs::TracedRNumber{T}), @nospecialize(rhs)) where {T}
@@ -271,7 +313,7 @@ function Base.ifelse(
     @nospecialize(x::TracedRNumber{T}),
     @nospecialize(y::TracedRNumber{T})
 ) where {T}
-    return Ops.select(pred, x, y)
+    return @opcall select(pred, x, y)
 end
 
 function Base.ifelse(
@@ -325,60 +367,60 @@ for (T1, T2) in zip((Bool, Integer), (Bool, Integer))
     T = promote_type(T1, T2)
     @eval begin
         function Base.:&(x::TracedRNumber{<:$(T1)}, y::TracedRNumber{<:$(T2)})
-            return Ops.and(
+            return @opcall and(
                 TracedUtils.promote_to(TracedRNumber{$(T)}, x),
                 TracedUtils.promote_to(TracedRNumber{$(T)}, y),
             )
         end
         function Base.:&(x::TracedRNumber{<:$(T1)}, y::$(T2))
-            return Ops.and(
+            return @opcall and(
                 TracedUtils.promote_to(TracedRNumber{$(T)}, x),
                 TracedUtils.promote_to(TracedRNumber{$(T)}, y),
             )
         end
         function Base.:&(x::$(T1), y::TracedRNumber{<:$(T2)})
-            return Ops.and(
+            return @opcall and(
                 TracedUtils.promote_to(TracedRNumber{$(T)}, x),
                 TracedUtils.promote_to(TracedRNumber{$(T)}, y),
             )
         end
         function Base.:|(x::TracedRNumber{<:$(T1)}, y::TracedRNumber{<:$(T2)})
-            return Ops.or(
+            return @opcall or(
                 TracedUtils.promote_to(TracedRNumber{$(T)}, x),
                 TracedUtils.promote_to(TracedRNumber{$(T)}, y),
             )
         end
         function Base.:|(x::TracedRNumber{<:$(T1)}, y::$(T2))
-            return Ops.or(
+            return @opcall or(
                 TracedUtils.promote_to(TracedRNumber{$(T)}, x),
                 TracedUtils.promote_to(TracedRNumber{$(T)}, y),
             )
         end
         function Base.:|(x::$(T1), y::TracedRNumber{<:$(T2)})
-            return Ops.or(
+            return @opcall or(
                 TracedUtils.promote_to(TracedRNumber{$(T)}, x),
                 TracedUtils.promote_to(TracedRNumber{$(T)}, y),
             )
         end
         function Base.xor(x::TracedRNumber{<:$(T1)}, y::TracedRNumber{<:$(T2)})
-            return Ops.xor(
+            return @opcall xor(
                 TracedUtils.promote_to(TracedRNumber{$(T)}, x),
                 TracedUtils.promote_to(TracedRNumber{$(T)}, y),
             )
         end
         function Base.xor(x::TracedRNumber{<:$(T1)}, y::$(T2))
-            return Ops.xor(
+            return @opcall xor(
                 TracedUtils.promote_to(TracedRNumber{$(T)}, x),
                 TracedUtils.promote_to(TracedRNumber{$(T)}, y),
             )
         end
         function Base.xor(x::$(T1), y::TracedRNumber{<:$(T2)})
-            return Ops.xor(
+            return @opcall xor(
                 TracedUtils.promote_to(TracedRNumber{$(T)}, x),
                 TracedUtils.promote_to(TracedRNumber{$(T)}, y),
             )
         end
-        Base.:!(x::TracedRNumber{<:$(T1)}) = Ops.not(x)
+        Base.:!(x::TracedRNumber{<:$(T1)}) = @opcall not(x)
     end
 end
 
@@ -413,15 +455,41 @@ for (jlop, hloop) in (
     (:(Base.real), :real),
     (:(Base.imag), :imag),
 )
-    @eval $(jlop)(@nospecialize(lhs::TracedRNumber)) = Ops.$(hloop)(lhs)
+    @eval $(jlop)(@nospecialize(lhs::TracedRNumber)) = @opcall $(hloop)(lhs)
+end
+
+for (jlop, hloop) in (
+    (:(Base.sin), :sine),
+    (:(Base.cos), :cosine),
+    (:(Base.tan), :tan),
+    (:(Base.tanh), :tanh),
+    (:(Base.FastMath.tanh_fast), :tanh),
+    (:(Base.exp), :exponential),
+    (:(Base.FastMath.exp_fast), :exponential),
+    (:(Base.expm1), :exponential_minus_one),
+    (:(Base.log), :log),
+    (:(Base.log1p), :log_plus_one),
+    (:(Base.sqrt), :sqrt),
+    (:(Base.acos), :acos),
+    (:(Base.acosh), :acosh),
+    (:(Base.asin), :asin),
+    (:(Base.asinh), :asinh),
+    (:(Base.atan), :atan),
+    (:(Base.atanh), :atanh),
+)
+    @eval $(jlop)(@nospecialize(lhs::TracedRNumber{<:Integer})) =
+        @opcall $(hloop)(float(lhs))
 end
 
 for (jlop, hloop) in
     ((:(Base.sinpi), :sine), (:(Base.cospi), :cosine), (:(Base.tanpi), :tan))
-    @eval $(jlop)(@nospecialize(lhs::TracedRNumber{T})) where {T} = Ops.$(hloop)(T(π) * lhs)
+    @eval $(jlop)(@nospecialize(lhs::TracedRNumber{T})) where {T} =
+        @opcall $(hloop)(T(π) * lhs)
 end
 
-Base.sincospi(x::TracedRNumber{T}) where {T} = Ops.sine(T(π) * x), Ops.cosine(T(π) * x)
+function Base.sincospi(x::TracedRNumber{T}) where {T}
+    return @opcall(sine(T(π) * x)), @opcall(cosine(T(π) * x))
+end
 
 Base.isreal(::TracedRNumber) = false
 Base.isreal(::TracedRNumber{<:Real}) = true
@@ -439,7 +507,7 @@ end
 for (minT, maxT) in Iterators.product((Number, TracedRNumber), (Number, TracedRNumber))
     @eval function Base.clamp(x::TracedRNumber, min::$(minT), max::$(maxT))
         T = promote_type(unwrapped_eltype(x), unwrapped_eltype(min), unwrapped_eltype(max))
-        return Ops.clamp(
+        return @opcall clamp(
             TracedUtils.promote_to(TracedRNumber{T}, min),
             TracedUtils.promote_to(TracedRNumber{T}, x),
             TracedUtils.promote_to(TracedRNumber{T}, max),
@@ -460,17 +528,17 @@ end
 
 using Reactant: ReactantFloat, ReactantInt
 
-Base.round(A::TracedRNumber{<:ReactantFloat}) = Ops.round_nearest_even(A)
+Base.round(A::TracedRNumber{<:ReactantFloat}) = @opcall round_nearest_even(A)
 Base.round(A::TracedRNumber{<:ReactantInt}) = A
-Base.floor(A::TracedRNumber{<:ReactantFloat}) = Ops.floor(A)
+Base.floor(A::TracedRNumber{<:ReactantFloat}) = @opcall floor(A)
 Base.floor(A::TracedRNumber{<:ReactantInt}) = A
-Base.ceil(A::TracedRNumber{<:ReactantFloat}) = Ops.ceil(A)
+Base.ceil(A::TracedRNumber{<:ReactantFloat}) = @opcall ceil(A)
 Base.ceil(A::TracedRNumber{<:ReactantInt}) = A
 
 function Base.unsafe_trunc(
     T::Type{<:Reactant.ReactantInt}, x::TracedRNumber{<:Reactant.ReactantFloat}
 )
-    return Ops.convert(TracedRNumber{T}, x)
+    return @opcall convert(TracedRNumber{T}, x)
 end
 
 for Ti in (Int8, Int16, Int32, Int64, Int128, UInt8, UInt16, UInt32, UInt64, UInt128)
@@ -601,9 +669,9 @@ TracedUnitRange(r::AbstractUnitRange) = TracedUnitRange(first(r), last(r))
     a = Base.oneunit(Base.zero(stop) - Base.zero(start))
     if a isa Signed
         # Signed are allowed to go negative
-        Ops.select(stop >= start, a + stop - start, a)
+        @opcall select(stop >= start, a + stop - start, a)
     else
-        Ops.select(stop >= start, a + stop - start, zero(a))
+        @opcall select(stop >= start, a + stop - start, zero(a))
     end
 end
 
@@ -906,12 +974,14 @@ end
 for (Ti, Tf) in ((Int16, Float16), (Int32, Float32), (Int64, Float64))
     @eval begin
         Base.signbit(x::TracedRNumber{$(Ti)}) = x < 0
-        Base.signbit(x::TracedRNumber{$(Tf)}) = signbit(Ops.bitcast_convert($(Ti), x))
+        Base.signbit(x::TracedRNumber{$(Tf)}) = signbit(@opcall(bitcast_convert($(Ti), x)))
     end
 end
 Base.signbit(::TracedRNumber{<:Unsigned}) = ConcretePJRTNumber(false)
 
-Base.copysign(x::TracedRNumber, y::TracedRNumber) = ifelse(signbit(y), -1, 1) * abs(x)
+function Base.copysign(x::TracedRNumber, y::TracedRNumber)
+    return ifelse(signbit(y), -one(x), one(x)) * abs(x)
+end
 function Base.copysign(x::TracedRNumber{T}, y::S) where {T,S<:Number}
     return copysign(x, TracedUtils.promote_to(TracedRNumber{S}, y))
 end

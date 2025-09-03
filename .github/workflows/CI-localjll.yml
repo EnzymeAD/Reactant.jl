@@ -24,6 +24,8 @@ jobs:
   test:
     name: Julia ${{ matrix.version }} - ${{ matrix.os }} - local libReactant - ${{ github.event_name }}
     runs-on: ${{ matrix.os }}
+    container:
+      image: ${{ contains(matrix.os, 'linux') && 'ghcr.io/enzymead/reactant-docker-images@sha256:7004a6ebbdd77bd047900b2bffc542e8576864056dc27a9c94d30666d6f7ea01' || '' }}
     strategy:
       fail-fast: false
       matrix:
@@ -31,22 +33,36 @@ jobs:
           - '1.10'
           - '1.11'
         os:
-          - ubuntu-24.04
+          - linux-x86-n2-32
           - macOS-latest
         exclude:
           - os: macOS-latest
             version: '1.10'
-    env:
-      TMPDIR: ${{ github.workspace }}/tmp
     steps:
+      - name: Free Disk Space
+        uses: jlumbroso/free-disk-space@main
+        with:
+          tool-cache: false
+        if: ${{ startsWith(matrix.os, 'ubuntu-') }}
+      - name: Clean `/opt`
+        run: sudo rm -rf /opt/*
+        if: ${{ startsWith(matrix.os, 'ubuntu-') }}
       - uses: actions/checkout@v4
-      - name: Create TMPDIR
+      - name: Set and create TMPDIR
+        # We have to use `${GITHUB_WORKSPACE}` instead of `github.workspace` because GitHub
+        # is terrible and the two don't match inside containers:
+        # https://github.com/actions/runner/issues/2058
         run: |
-          mkdir -p ${{ env.TMPDIR }}
+          export TMPDIR="${GITHUB_WORKSPACE}/tmp"
+          echo "TMPDIR=${TMPDIR}" >> "${GITHUB_ENV}"
+
+          mkdir -pv "${TMPDIR}"
       - uses: julia-actions/setup-julia@v2
         with:
           version: ${{ matrix.version }}
-      - uses: julia-actions/cache@v2
+      - name: Load Julia packages from cache
+        id: julia-cache
+        uses: julia-actions/cache@v2
       - uses: bazel-contrib/setup-bazel@0.15.0
         name: Set up Bazel
         with:
@@ -61,9 +77,13 @@ jobs:
         if: ${{ startsWith(matrix.os, 'macOS-') }}
         run: |
           echo "SDKROOT=$(xcrun --show-sdk-path)" >> "${GITHUB_ENV}"
-      - name: Build libReactant
+      - name: Install numpy
+        if: ${{ startsWith(matrix.os, 'macOS-') }}
         run: |
           python -m pip install numpy
+      - name: Build libReactant
+        timeout-minutes: 120
+        run: |
           julia --color=yes --project=deps -e 'using Pkg; Pkg.instantiate()'
           julia --color=yes --project=deps deps/build_local.jl
           cp LocalPreferences.toml test/
@@ -93,6 +113,7 @@ jobs:
         env:
           JULIA_PKG_SERVER_REGISTRY_PREFERENCE: eager
       - name: "Run Tests: PJRT"
+        timeout-minutes: 200
         run: |
           import Pkg
           Pkg.Registry.update()
@@ -122,6 +143,7 @@ jobs:
         env:
           JULIA_PKG_PRECOMPILE_AUTO: 0
       - name: "Run Tests: IFRT"
+        timeout-minutes: 200
         run: |
           import Pkg
           Pkg.Registry.update()
@@ -140,7 +162,16 @@ jobs:
           path: "**/*.mlir"
           retention-days: 90
           overwrite: false
+      - name: Save Julia depot cache on cancel or failure
+        id: julia-cache-save
+        if: cancelled() || failure()
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            ${{ steps.julia-cache.outputs.cache-paths }}
+          key: ${{ steps.julia-cache.outputs.cache-key }}
       - uses: julia-actions/julia-processcoverage@v1
       - uses: codecov/codecov-action@v5
         with:
           files: lcov.info
+          token: ${{ secrets.CODECOV_TOKEN }}

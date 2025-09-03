@@ -21,6 +21,13 @@ within_compile
 @trace
 ```
 
+## Reactant data types
+
+```@docs
+ConcreteRArray
+ConcreteRNumber
+```
+
 ## Inspect Generated HLO
 
 ```@docs
@@ -72,6 +79,12 @@ Reactant.addressable_devices
 
 ```@docs
 Reactant.ignore_derivatives
+```
+
+## Persistent Compilation Cache
+
+```@docs
+clear_compilation_cache!
 ```
 
 ## Internal utils

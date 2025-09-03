@@ -13,15 +13,12 @@ import ...IR:
 import ..Dialects: namedattribute, operandsegmentsizes
 import ...API
 
-function all_reduce(
-    input::Value; output=nothing::Union{Nothing,IR.Type}, dim, kind, location=Location()
-)
-    op_ty_results = IR.Type[]
+function all_reduce(input::Value; output::IR.Type, dim, kind, location=Location())
+    op_ty_results = IR.Type[output,]
     operands = Value[input,]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[namedattribute("dim", dim), namedattribute("kind", kind)]
-    !isnothing(output) && push!(op_ty_results, output)
 
     return create_operation(
         "tpu.all_reduce",
@@ -30,8 +27,8 @@ function all_reduce(
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=op_ty_results,
+        result_inference=false,
     )
 end
 
@@ -610,6 +607,13 @@ function iota(; output::IR.Type, dimensions, location=Location())
     )
 end
 
+"""
+`load`
+
+Similar to `vector::LoadOp` but with `sublane_mask` and `sublane_stride`.
+When `indices` are negative, it means loading from negative offset
+of `base` address.
+"""
 function load(
     base::Value,
     indices::Vector{Value};
@@ -921,6 +925,25 @@ function reciprocal(
     )
 end
 
+function reduce_index(input::Value; output::IR.Type, axis, kind, location=Location())
+    op_ty_results = IR.Type[output,]
+    operands = Value[input,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[namedattribute("axis", axis), namedattribute("kind", kind)]
+
+    return create_operation(
+        "tpu.reduce_index",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
 function region(; results::Vector{IR.Type}, region::Region, location=Location())
     op_ty_results = IR.Type[results...,]
     operands = Value[]
@@ -1075,6 +1098,49 @@ function sitofp(in::Value; output::IR.Type, rounding_mode, location=Location())
         attributes,
         results=op_ty_results,
         result_inference=false,
+    )
+end
+
+"""
+`scan_count`
+
+ScanCountOp calculates the running duplicate occurrence count of the elements
+in the input vector, %values. The output vector, %counts, contains the running
+duplicate occurrence count for the corresponding element in
+the input vector, where the count is performed in ascending order of element
+indices. For example, if the elements of %values at indices 0, 5, and 7 had
+duplicate values, then the elements of %counts at indices 0, 5, and 7 would
+be 1, 2, and 3, respectively.
+
+A mask vector, %in_mask, specifies which of the elements in the input vector
+are eligible for counting. An element in %values that has its mask set to 0
+will always have a count of 1 in %counts, regardless of the position in the
+vector, or whether there were duplicates or not.
+"""
+function scan_count(
+    in_mask::Value,
+    values::Value;
+    out_mask=nothing::Union{Nothing,IR.Type},
+    counts=nothing::Union{Nothing,IR.Type},
+    location=Location(),
+)
+    op_ty_results = IR.Type[]
+    operands = Value[in_mask, values]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+    !isnothing(out_mask) && push!(op_ty_results, out_mask)
+    !isnothing(counts) && push!(op_ty_results, counts)
+
+    return create_operation(
+        "tpu.scan_count",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
     )
 end
 
@@ -1461,6 +1527,33 @@ function unroll_vectors(input::Value; output::Vector{IR.Type}, location=Location
     )
 end
 
+function vector_load_idx(
+    base::Value,
+    indices::Vector{Value},
+    mask=nothing::Union{Nothing,Value};
+    value::IR.Type,
+    location=Location(),
+)
+    op_ty_results = IR.Type[value,]
+    operands = Value[base, indices...]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+    !isnothing(mask) && push!(operands, mask)
+    push!(attributes, operandsegmentsizes([1, length(indices), (mask == nothing) ? 0 : 1]))
+
+    return create_operation(
+        "tpu.vector_load_idx",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
 function vector_load(
     base::Value,
     indices::Vector{Value},
@@ -1489,12 +1582,44 @@ function vector_load(
     )
 end
 
+function vector_store_idx(
+    valueToStore::Value,
+    base::Value,
+    indices::Vector{Value},
+    mask=nothing::Union{Nothing,Value};
+    add=nothing,
+    location=Location(),
+)
+    op_ty_results = IR.Type[]
+    operands = Value[valueToStore, base, indices...]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+    !isnothing(mask) && push!(operands, mask)
+    push!(
+        attributes, operandsegmentsizes([1, 1, length(indices), (mask == nothing) ? 0 : 1])
+    )
+    !isnothing(add) && push!(attributes, namedattribute("add", add))
+
+    return create_operation(
+        "tpu.vector_store_idx",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
 function vector_store(
     valueToStore::Value,
     base::Value,
     indices::Vector{Value},
     mask=nothing::Union{Nothing,Value};
     strides,
+    add=nothing,
     location=Location(),
 )
     op_ty_results = IR.Type[]
@@ -1506,6 +1631,7 @@ function vector_store(
     push!(
         attributes, operandsegmentsizes([1, 1, length(indices), (mask == nothing) ? 0 : 1])
     )
+    !isnothing(add) && push!(attributes, namedattribute("add", add))
 
     return create_operation(
         "tpu.vector_store",

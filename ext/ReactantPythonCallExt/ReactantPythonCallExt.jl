@@ -2,6 +2,7 @@ module ReactantPythonCallExt
 
 using PythonCall
 using Reactant: Reactant, TracedRArray
+using Reactant.Ops: @opcall
 
 const jaxptr = Ref{Py}()
 const jnpptr = Ref{Py}()

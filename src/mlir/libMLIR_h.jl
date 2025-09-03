@@ -39,7 +39,7 @@ elseif Sys.iswindows() && Sys.ARCH === :x86_64
     const off_t = off32_t
 end
 
-const intptr_t = Clong
+const intptr_t = Cptrdiff_t
 
 struct MlirDialectHandle
     ptr::Ptr{Cvoid}
@@ -1708,6 +1708,17 @@ Moves the given operation immediately before the other operation in its parent b
 """
 function mlirOperationMoveBefore(op, other)
     @ccall mlir_c.mlirOperationMoveBefore(op::MlirOperation, other::MlirOperation)::Cvoid
+end
+
+"""
+    mlirOperationIsBeforeInBlock(op, other)
+
+Given an operation 'other' that is within the same parent block, return whether the current operation is before 'other' in the operation list of the parent block. Note: This function has an average complexity of O(1), but worst case may take O(N) where N is the number of operations within the parent block.
+"""
+function mlirOperationIsBeforeInBlock(op, other)
+    @ccall mlir_c.mlirOperationIsBeforeInBlock(
+        op::MlirOperation, other::MlirOperation
+    )::Bool
 end
 
 """
@@ -5568,10 +5579,19 @@ end
 """
     mlirShapedTypeIsDynamicDim(type, dim)
 
-Checks wither the dim-th dimension of the given shaped type is dynamic.
+Checks whether the dim-th dimension of the given shaped type is dynamic.
 """
 function mlirShapedTypeIsDynamicDim(type, dim)
     @ccall mlir_c.mlirShapedTypeIsDynamicDim(type::MlirType, dim::intptr_t)::Bool
+end
+
+"""
+    mlirShapedTypeIsStaticDim(type, dim)
+
+Checks whether the dim-th dimension of the given shaped type is static.
+"""
+function mlirShapedTypeIsStaticDim(type, dim)
+    @ccall mlir_c.mlirShapedTypeIsStaticDim(type::MlirType, dim::intptr_t)::Bool
 end
 
 """
@@ -5593,9 +5613,18 @@ function mlirShapedTypeIsDynamicSize(size)
 end
 
 """
+    mlirShapedTypeIsStaticSize(size)
+
+Checks whether the given shaped type dimension value is statically-sized.
+"""
+function mlirShapedTypeIsStaticSize(size)
+    @ccall mlir_c.mlirShapedTypeIsStaticSize(size::Int64)::Bool
+end
+
+"""
     mlirShapedTypeGetDynamicSize()
 
-Returns the value indicating a dynamic size in a shaped type. Prefer [`mlirShapedTypeIsDynamicSize`](@ref) to direct comparisons with this value.
+Returns the value indicating a dynamic size in a shaped type. Prefer [`mlirShapedTypeIsDynamicSize`](@ref) and [`mlirShapedTypeIsStaticSize`](@ref) to direct comparisons with this value.
 """
 function mlirShapedTypeGetDynamicSize()
     @ccall mlir_c.mlirShapedTypeGetDynamicSize()::Int64
@@ -5611,9 +5640,18 @@ function mlirShapedTypeIsDynamicStrideOrOffset(val)
 end
 
 """
+    mlirShapedTypeIsStaticStrideOrOffset(val)
+
+Checks whether the given dimension value of a stride or an offset is statically-sized.
+"""
+function mlirShapedTypeIsStaticStrideOrOffset(val)
+    @ccall mlir_c.mlirShapedTypeIsStaticStrideOrOffset(val::Int64)::Bool
+end
+
+"""
     mlirShapedTypeGetDynamicStrideOrOffset()
 
-Returns the value indicating a dynamic stride or offset in a shaped type. Prefer [`mlirShapedTypeGetDynamicStrideOrOffset`](@ref) to direct comparisons with this value.
+Returns the value indicating a dynamic stride or offset in a shaped type. Prefer [`mlirShapedTypeIsDynamicStrideOrOffset`](@ref) and [`mlirShapedTypeIsStaticStrideOrOffset`](@ref) to direct comparisons with this value.
 """
 function mlirShapedTypeGetDynamicStrideOrOffset()
     @ccall mlir_c.mlirShapedTypeGetDynamicStrideOrOffset()::Int64
@@ -8890,6 +8928,15 @@ function mlirPassManagerEnableVerifier(passManager, enable)
 end
 
 """
+    mlirPassManagerEnableTiming(passManager)
+
+Enable pass timing.
+"""
+function mlirPassManagerEnableTiming(passManager)
+    @ccall mlir_c.mlirPassManagerEnableTiming(passManager::MlirPassManager)::Cvoid
+end
+
+"""
     mlirPassManagerGetNestedUnder(passManager, operationName)
 
 Nest an OpPassManager under the top-level PassManager, the nested passmanager will only run on operations matching the provided name. The returned OpPassManager will be destroyed when the parent is destroyed. To further nest more OpPassManager under the newly returned one, see `mlirOpPassManagerNest` below.
@@ -9739,54 +9786,18 @@ llvm::DbgRecord
 """
 const LLVMDbgRecordRef = Ptr{LLVMOpaqueDbgRecord}
 
-"""
-    LLVMLoadLibraryPermanently(Filename)
-
-This function permanently loads the dynamic library at the given path. It is safe to call this function multiple times for the same library.
-
-# See also
-sys::DynamicLibrary::LoadLibraryPermanently()
-"""
-function LLVMLoadLibraryPermanently(Filename)
-    @ccall mlir_c.LLVMLoadLibraryPermanently(Filename::Cstring)::LLVMBool
-end
-
-"""
-    LLVMParseCommandLineOptions(argc, argv, Overview)
-
-This function parses the given arguments using the LLVM command line parser. Note that the only stable thing about this function is its signature; you cannot rely on any particular set of command line arguments being interpreted the same way across LLVM versions.
-
-# See also
-llvm::cl::ParseCommandLineOptions()
-"""
 function LLVMParseCommandLineOptions(argc, argv, Overview)
     @ccall mlir_c.LLVMParseCommandLineOptions(
         argc::Cint, argv::Ptr{Cstring}, Overview::Cstring
-    )::Cvoid
+    )::Cint
 end
 
-"""
-    LLVMSearchForAddressOfSymbol(symbolName)
-
-This function will search through all previously loaded dynamic libraries for the symbol `symbolName`. If it is found, the address of that symbol is returned. If not, null is returned.
-
-# See also
-sys::DynamicLibrary::SearchForAddressOfSymbol()
-"""
 function LLVMSearchForAddressOfSymbol(symbolName)
-    @ccall mlir_c.LLVMSearchForAddressOfSymbol(symbolName::Cstring)::Ptr{Cvoid}
+    @ccall mlir_c.LLVMSearchForAddressOfSymbol(symbolName::Cstring)::Ptr{Cint}
 end
 
-"""
-    LLVMAddSymbol(symbolName, symbolValue)
-
-This functions permanently adds the symbol `symbolName` with the value `symbolValue`. These symbols are searched before any libraries.
-
-# See also
-sys::DynamicLibrary::AddSymbol()
-"""
 function LLVMAddSymbol(symbolName, symbolValue)
-    @ccall mlir_c.LLVMAddSymbol(symbolName::Cstring, symbolValue::Ptr{Cvoid})::Cvoid
+    @ccall mlir_c.LLVMAddSymbol(symbolName::Cstring, symbolValue::Ptr{Cvoid})::Cint
 end
 
 """
@@ -11016,6 +11027,393 @@ function sdyManualAxesAttrGetAxesElem(attr, pos)
     @ccall mlir_c.sdyManualAxesAttrGetAxesElem(
         attr::MlirAttribute, pos::intptr_t
     )::MlirStringRef
+end
+
+function mlirGetDialectHandle__triton__()
+    @ccall mlir_c.mlirGetDialectHandle__triton__()::MlirDialectHandle
+end
+
+function mlirTritonPointerTypeGet(pointeeType, addressSpace)
+    @ccall mlir_c.mlirTritonPointerTypeGet(
+        pointeeType::MlirType, addressSpace::Cint
+    )::MlirType
+end
+
+function mlirTritonIsAPointer(type)
+    @ccall mlir_c.mlirTritonIsAPointer(type::MlirType)::Bool
+end
+
+function mlirTritonPointerTypeGetPointeeType(pointerType)
+    @ccall mlir_c.mlirTritonPointerTypeGetPointeeType(pointerType::MlirType)::MlirType
+end
+
+function mlirTritonPointerTypeGetAddressSpace(pointerType)
+    @ccall mlir_c.mlirTritonPointerTypeGetAddressSpace(pointerType::MlirType)::Cint
+end
+
+function mlirTritonInferReduceOpEncoding(operandEncoding, axis)
+    @ccall mlir_c.mlirTritonInferReduceOpEncoding(
+        operandEncoding::MlirAttribute, axis::Cint
+    )::MlirAttribute
+end
+
+function mlirGetDialectHandle__tpu__()
+    @ccall mlir_c.mlirGetDialectHandle__tpu__()::MlirDialectHandle
+end
+
+function mlirTPUAttributeIsATiledLayoutAttr(attr)
+    @ccall mlir_c.mlirTPUAttributeIsATiledLayoutAttr(attr::MlirAttribute)::Bool
+end
+
+"""
+    mlirTPUTiledLayoutAttrGetTiles(attr)
+
+Encodes the tiles as an ArrayAttr of DenseI64ArrayAttrs.
+"""
+function mlirTPUTiledLayoutAttrGetTiles(attr)
+    @ccall mlir_c.mlirTPUTiledLayoutAttrGetTiles(attr::MlirAttribute)::MlirAttribute
+end
+
+function mlirTPUAnalyzePotentialCommunication(op, has_communication, has_custom_barrier)
+    @ccall mlir_c.mlirTPUAnalyzePotentialCommunication(
+        op::MlirOperation, has_communication::Ptr{Bool}, has_custom_barrier::Ptr{Bool}
+    )::Cvoid
+end
+
+@cenum MlirTpuImplicitDim::UInt32 begin
+    MlirTpuImplicitDimNone = 0x0000000000000000
+    MlirTpuImplicitDimMinor = 0x0000000000000001
+    MlirTpuImplicitDimSecondMinor = 0x0000000000000002
+end
+
+@cenum MlirTpuDirection::UInt32 begin
+    MlirTpuDirectionSublanes = 0x0000000000000000
+    MlirTpuDirectionLanes = 0x0000000000000001
+    MlirTpuDirectionSubelements = 0x0000000000000002
+end
+
+struct MlirTpuVectorLayout
+    ptr::Ptr{Cvoid}
+end
+
+struct MlirTpuVregDataBounds
+    ptr::Ptr{Cvoid}
+end
+
+struct MlirTpuI64ArrayRef
+    ptr::Ptr{Int64}
+    size::Csize_t
+end
+
+struct MlirTpuValueArray
+    shape::MlirTpuI64ArrayRef
+    vals::Ptr{MlirValue}
+end
+
+struct MlirTpuLayoutOffsets
+    sublane::Int64
+    lane::Int64
+end
+
+struct MlirTpuI64TargetTuple
+    sublane::Int64
+    lane::Int64
+end
+
+struct MlirTpuMxuShape
+    contracting_size::Int64
+    non_contracting_size::Int64
+end
+
+struct MlirTpuBoolTargetTuple
+    sublane::Bool
+    lane::Bool
+end
+
+struct MlirTpuInsertionPoint
+    block::MlirBlock
+    ref_operation::MlirOperation
+end
+
+struct MlirTpuApplyVectorLayoutContext
+    hardware_generation::Cint
+    target_shape::MlirTpuI64TargetTuple
+    mxu_shape::MlirTpuMxuShape
+    max_sublanes_in_scratch::Int64
+end
+
+function mlirTpuVectorLayoutCreate(bitwidth, offsets, tiling, implicit_dim)
+    @ccall mlir_c.mlirTpuVectorLayoutCreate(
+        bitwidth::Cint,
+        offsets::MlirTpuLayoutOffsets,
+        tiling::MlirTpuI64TargetTuple,
+        implicit_dim::MlirTpuImplicitDim,
+    )::MlirTpuVectorLayout
+end
+
+function mlirTpuVectorLayoutDestroy(arg1)
+    @ccall mlir_c.mlirTpuVectorLayoutDestroy(arg1::MlirTpuVectorLayout)::Cvoid
+end
+
+function mlirTpuVectorLayoutGetBitwidth(layout)
+    @ccall mlir_c.mlirTpuVectorLayoutGetBitwidth(layout::MlirTpuVectorLayout)::Cint
+end
+
+function mlirTpuVectorLayoutGetOffsets(layout)
+    @ccall mlir_c.mlirTpuVectorLayoutGetOffsets(
+        layout::MlirTpuVectorLayout
+    )::MlirTpuLayoutOffsets
+end
+
+function mlirTpuVectorLayoutGetTiling(layout)
+    @ccall mlir_c.mlirTpuVectorLayoutGetTiling(
+        layout::MlirTpuVectorLayout
+    )::MlirTpuI64TargetTuple
+end
+
+function mlirTpuVectorLayoutGetImplicitDim(layout)
+    @ccall mlir_c.mlirTpuVectorLayoutGetImplicitDim(
+        layout::MlirTpuVectorLayout
+    )::MlirTpuImplicitDim
+end
+
+function mlirTpuVectorLayoutGetPacking(layout)
+    @ccall mlir_c.mlirTpuVectorLayoutGetPacking(layout::MlirTpuVectorLayout)::Cint
+end
+
+function mlirTpuVectorLayoutGetLayoutRank(layout)
+    @ccall mlir_c.mlirTpuVectorLayoutGetLayoutRank(layout::MlirTpuVectorLayout)::Cint
+end
+
+function mlirTpuVectorLayoutEquals(lhs, rhs)
+    @ccall mlir_c.mlirTpuVectorLayoutEquals(
+        lhs::MlirTpuVectorLayout, rhs::MlirTpuVectorLayout
+    )::Bool
+end
+
+function mlirTpuVectorLayoutTilesPerVreg(layout, target_shape)
+    @ccall mlir_c.mlirTpuVectorLayoutTilesPerVreg(
+        layout::MlirTpuVectorLayout, target_shape::MlirTpuI64TargetTuple
+    )::Int64
+end
+
+function mlirTpuVectorLayoutSublanesPerTile(layout, target_shape)
+    @ccall mlir_c.mlirTpuVectorLayoutSublanesPerTile(
+        layout::MlirTpuVectorLayout, target_shape::MlirTpuI64TargetTuple
+    )::Int64
+end
+
+function mlirTpuVectorLayoutVregSlice(layout, target_shape)
+    @ccall mlir_c.mlirTpuVectorLayoutVregSlice(
+        layout::MlirTpuVectorLayout, target_shape::MlirTpuI64TargetTuple
+    )::MlirTpuI64TargetTuple
+end
+
+function mlirTpuVectorLayoutImplicitShape(layout, shape)
+    @ccall mlir_c.mlirTpuVectorLayoutImplicitShape(
+        layout::MlirTpuVectorLayout, shape::MlirTpuI64ArrayRef
+    )::MlirTpuI64ArrayRef
+end
+
+function mlirTpuVectorLayoutTileArrayShape(layout, shape, target_shape)
+    @ccall mlir_c.mlirTpuVectorLayoutTileArrayShape(
+        layout::MlirTpuVectorLayout,
+        shape::MlirTpuI64ArrayRef,
+        target_shape::MlirTpuI64TargetTuple,
+    )::MlirTpuI64ArrayRef
+end
+
+function mlirTpuVectorLayoutTileDataBounds(
+    layout, ctx, full_shape, idxs, size, target_shape, allow_replicated
+)
+    @ccall mlir_c.mlirTpuVectorLayoutTileDataBounds(
+        layout::MlirTpuVectorLayout,
+        ctx::MlirContext,
+        full_shape::Ptr{Int64},
+        idxs::Ptr{Int64},
+        size::Csize_t,
+        target_shape::MlirTpuI64TargetTuple,
+        allow_replicated::MlirTpuBoolTargetTuple,
+    )::MlirTpuVregDataBounds
+end
+
+function mlirTpuVectorLayoutHasNaturalTopology(layout, target_shape)
+    @ccall mlir_c.mlirTpuVectorLayoutHasNaturalTopology(
+        layout::MlirTpuVectorLayout, target_shape::MlirTpuI64TargetTuple
+    )::Bool
+end
+
+function mlirTpuVectorLayoutHasNativeTiling(layout, target_shape)
+    @ccall mlir_c.mlirTpuVectorLayoutHasNativeTiling(
+        layout::MlirTpuVectorLayout, target_shape::MlirTpuI64TargetTuple
+    )::Bool
+end
+
+function mlirTpuVectorLayoutGeneralizes(layout, other, shape, target_shape)
+    @ccall mlir_c.mlirTpuVectorLayoutGeneralizes(
+        layout::MlirTpuVectorLayout,
+        other::MlirTpuVectorLayout,
+        shape::MlirTpuI64ArrayRef,
+        target_shape::MlirTpuI64TargetTuple,
+    )::Bool
+end
+
+function mlirTpuVectorLayoutEquivalentTo(layout, other, shape, target_shape)
+    @ccall mlir_c.mlirTpuVectorLayoutEquivalentTo(
+        layout::MlirTpuVectorLayout,
+        other::MlirTpuVectorLayout,
+        shape::MlirTpuI64ArrayRef,
+        target_shape::MlirTpuI64TargetTuple,
+    )::Bool
+end
+
+function mlirTpuVectorLayoutPrint(layout, callback, user_data)
+    @ccall mlir_c.mlirTpuVectorLayoutPrint(
+        layout::MlirTpuVectorLayout, callback::MlirStringCallback, user_data::Ptr{Cvoid}
+    )::Cvoid
+end
+
+function mlirTpuVectorLayoutIsValid(layout, target_shape)
+    @ccall mlir_c.mlirTpuVectorLayoutIsValid(
+        layout::MlirTpuVectorLayout, target_shape::MlirTpuI64TargetTuple
+    )::Bool
+end
+
+function mlirTpuVregDataBoundsDestroy(data_bounds)
+    @ccall mlir_c.mlirTpuVregDataBoundsDestroy(data_bounds::MlirTpuVregDataBounds)::Cvoid
+end
+
+function mlirTpuVregDataBoundsMaskVariesAlong(data_bounds, direction, target_shape)
+    @ccall mlir_c.mlirTpuVregDataBoundsMaskVariesAlong(
+        data_bounds::MlirTpuVregDataBounds,
+        direction::MlirTpuDirection,
+        target_shape::MlirTpuI64TargetTuple,
+    )::Bool
+end
+
+function mlirTpuVregDataBoundsIsComplete(data_bounds, target_shape)
+    @ccall mlir_c.mlirTpuVregDataBoundsIsComplete(
+        data_bounds::MlirTpuVregDataBounds, target_shape::MlirTpuI64TargetTuple
+    )::Bool
+end
+
+function mlirTpuVregDataBoundsGetVectorMask(
+    data_bounds, insertion_point, location, generation, target_shape
+)
+    @ccall mlir_c.mlirTpuVregDataBoundsGetVectorMask(
+        data_bounds::MlirTpuVregDataBounds,
+        insertion_point::MlirTpuInsertionPoint,
+        location::MlirLocation,
+        generation::Cint,
+        target_shape::MlirTpuI64TargetTuple,
+    )::MlirValue
+end
+
+function mlirTpuVregDataBoundsGetSublaneMask(data_bounds, ctx, target_shape)
+    @ccall mlir_c.mlirTpuVregDataBoundsGetSublaneMask(
+        data_bounds::MlirTpuVregDataBounds,
+        ctx::MlirContext,
+        target_shape::MlirTpuI64TargetTuple,
+    )::MlirAttribute
+end
+
+function mlirTpuAssemble(insertion_point, vector_type, layout, vals, target_shape)
+    @ccall mlir_c.mlirTpuAssemble(
+        insertion_point::MlirTpuInsertionPoint,
+        vector_type::MlirType,
+        layout::MlirTpuVectorLayout,
+        vals::MlirTpuValueArray,
+        target_shape::MlirTpuI64TargetTuple,
+    )::MlirOperation
+end
+
+function mlirTpuDisassemble(insertion_point, layout, val, target_shape)
+    @ccall mlir_c.mlirTpuDisassemble(
+        insertion_point::MlirTpuInsertionPoint,
+        layout::MlirTpuVectorLayout,
+        val::MlirValue,
+        target_shape::MlirTpuI64TargetTuple,
+    )::MlirTpuValueArray
+end
+
+function mlirTpuApplyLayoutOp(ctx, op)
+    @ccall mlir_c.mlirTpuApplyLayoutOp(
+        ctx::MlirTpuApplyVectorLayoutContext, op::MlirOperation
+    )::MlirLogicalResult
+end
+
+function mlirTpuRelayout(insertion_point, val, src, dst, ctx)
+    @ccall mlir_c.mlirTpuRelayout(
+        insertion_point::MlirTpuInsertionPoint,
+        val::MlirValue,
+        src::MlirTpuVectorLayout,
+        dst::MlirTpuVectorLayout,
+        ctx::MlirTpuApplyVectorLayoutContext,
+    )::MlirValue
+end
+
+function mlirTpuRegisterMosaicSerdePass()
+    @ccall mlir_c.mlirTpuRegisterMosaicSerdePass()::Cvoid
+end
+
+function mlirMosaicGpuIsATileTransformAttr(attr)
+    @ccall mlir_c.mlirMosaicGpuIsATileTransformAttr(attr::MlirAttribute)::Bool
+end
+
+function mlirMosaicGpuTileTransformAttrGet(ctx, tiling, tiling_size)
+    @ccall mlir_c.mlirMosaicGpuTileTransformAttrGet(
+        ctx::MlirContext, tiling::Ptr{Int32}, tiling_size::Int32
+    )::MlirAttribute
+end
+
+function mlirMosaicGpuTileTransformAttrGetTilingSize(attr)
+    @ccall mlir_c.mlirMosaicGpuTileTransformAttrGetTilingSize(attr::MlirAttribute)::Int32
+end
+
+function mlirMosaicGpuTileTransformAttrGetTiling(attr, index)
+    @ccall mlir_c.mlirMosaicGpuTileTransformAttrGetTiling(
+        attr::MlirAttribute, index::Int32
+    )::Int32
+end
+
+function mlirMosaicGpuIsATransposeTransformAttr(attr)
+    @ccall mlir_c.mlirMosaicGpuIsATransposeTransformAttr(attr::MlirAttribute)::Bool
+end
+
+function mlirMosaicGpuTransposeTransformAttrGet(ctx, permutation, permutation_size)
+    @ccall mlir_c.mlirMosaicGpuTransposeTransformAttrGet(
+        ctx::MlirContext, permutation::Ptr{Int32}, permutation_size::Int32
+    )::MlirAttribute
+end
+
+function mlirMosaicGpuTransposeTransformAttrGetPermutationSize(attr)
+    @ccall mlir_c.mlirMosaicGpuTransposeTransformAttrGetPermutationSize(
+        attr::MlirAttribute
+    )::Int32
+end
+
+function mlirMosaicGpuTransposeTransformAttrGetPermutation(attr, index)
+    @ccall mlir_c.mlirMosaicGpuTransposeTransformAttrGetPermutation(
+        attr::MlirAttribute, index::Int32
+    )::Int32
+end
+
+function mlirMosaicGpuIsASwizzleTransformAttr(attr)
+    @ccall mlir_c.mlirMosaicGpuIsASwizzleTransformAttr(attr::MlirAttribute)::Bool
+end
+
+function mlirMosaicGpuSwizzleTransformAttrGet(ctx, swizzle)
+    @ccall mlir_c.mlirMosaicGpuSwizzleTransformAttrGet(
+        ctx::MlirContext, swizzle::Int32
+    )::MlirAttribute
+end
+
+function mlirMosaicGpuSwizzleTransformAttrGetSwizzle(attr)
+    @ccall mlir_c.mlirMosaicGpuSwizzleTransformAttrGetSwizzle(attr::MlirAttribute)::Int32
+end
+
+function mlirGetDialectHandle__mosaic_gpu__()
+    @ccall mlir_c.mlirGetDialectHandle__mosaic_gpu__()::MlirDialectHandle
 end
 
 const MLIR_CAPI_DWARF_ADDRESS_SPACE_NULL = -1

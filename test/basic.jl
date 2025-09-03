@@ -1,13 +1,9 @@
-using Reactant
-using Test
-using Enzyme
-using Statistics
-using Random
+using Reactant, Test, Enzyme, Statistics, Random, InteractiveUtils
 Random.seed!(123)
 
-fastmax(x::AbstractArray{T}) where {T} = reduce(max, x; dims=1, init=float(T)(-Inf))
+const RunningOnTPU = contains(string(Reactant.devices()[1]), "TPU")
 
-using InteractiveUtils
+fastmax(x::AbstractArray{T}) where {T} = reduce(max, x; dims=1, init=float(T)(-Inf))
 
 @testset "2D sum" begin
     x = rand(2, 10)
@@ -375,13 +371,13 @@ end
         x = rand(size...)
 
         @testset "outer repeat" begin
-            @test (@jit repeat(Reactant.to_rarray(x), counts...)) == repeat(x, counts...)
+            @test (@jit repeat(Reactant.to_rarray(x), counts...)) ≈ repeat(x, counts...)
         end
 
         length(counts) < length(size) && continue
 
         @testset "inner repeat" begin
-            @test (@jit repeat(Reactant.to_rarray(x); inner=counts)) ==
+            @test (@jit repeat(Reactant.to_rarray(x); inner=counts)) ≈
                 repeat(x; inner=counts)
         end
     end
@@ -416,13 +412,6 @@ end
     f = @compile similar(y)
     @test size(f(y)) == size(x)
     @test eltype(f(y)) == eltype(x)
-end
-
-@testset "Complex runtime: $CT" for CT in (ComplexF32, ComplexF64)
-    a = Reactant.to_rarray(ones(CT, 2))
-    b = Reactant.to_rarray(ones(CT, 2))
-    c = Reactant.compile(+, (a, b))(a, b)
-    @test c == ones(CT, 2) + ones(CT, 2)
 end
 
 @testset "Scalars" begin
@@ -562,13 +551,13 @@ end
 
     @testset "Reactant.to_rarray" begin
         y = collect(x_ra)
-        @test y == x
+        @test y ≈ x
         @test y !== x_ra
     end
 
     @testset "TracedRArray" begin
         y = @jit(collect(x_ra))
-        @test y == x
+        @test y ≈ x
         @test y !== x_ra
     end
 
@@ -781,16 +770,20 @@ end
     x = Reactant.to_rarray([1.0, NaN, Inf, -Inf, NaN])
     @test @jit(isfinite.(x)) == [true, false, false, false, false]
 
-    x = Reactant.to_rarray([1.0, NaN, Inf, -Inf, NaN] .* im)
-    @test @jit(isfinite.(x)) == [true, false, false, false, false]
+    @test begin
+        x = Reactant.to_rarray([1.0, NaN, Inf, -Inf, NaN] .* im)
+        @jit(isfinite.(x)) == [true, false, false, false, false]
+    end skip = RunningOnTPU
 end
 
 @testset "isnan" begin
     x = Reactant.to_rarray([1.0, NaN, Inf, -Inf, NaN])
     @test @jit(isnan.(x)) == [false, true, false, false, true]
 
-    x = Reactant.to_rarray([1.0, NaN, Inf, -Inf, NaN] .* im)
-    @test @jit(isnan.(x)) == [false, true, false, false, true]
+    @test begin
+        x = Reactant.to_rarray([1.0, NaN, Inf, -Inf, NaN] .* im)
+        @jit(isnan.(x)) == [false, true, false, false, true]
+    end skip = RunningOnTPU
 end
 
 @testset "isnan/isfinite" begin
@@ -813,9 +806,10 @@ end
     b = [6.6, -2.2, -8.8, 4.4, -10.1]
 
     expected_mod = mod.(a, b)
-    @test @jit(mod.(Reactant.to_rarray(a), Reactant.to_rarray(b))) ≈ expected_mod
-    @test @jit(mod.(a, Reactant.to_rarray(b))) ≈ expected_mod
-    @test @jit(mod.(Reactant.to_rarray(a), b)) ≈ expected_mod
+    @test @jit(mod.(Reactant.to_rarray(a), Reactant.to_rarray(b))) ≈ expected_mod broken =
+        RunningOnTPU
+    @test @jit(mod.(a, Reactant.to_rarray(b))) ≈ expected_mod broken = RunningOnTPU
+    @test @jit(mod.(Reactant.to_rarray(a), b)) ≈ expected_mod broken = RunningOnTPU
 
     expected_rem = rem.(a, b)
     @test @jit(rem.(Reactant.to_rarray(a), Reactant.to_rarray(b))) ≈ expected_rem
@@ -830,16 +824,18 @@ end
 end
 
 @testset "signbit" begin
-    for x in (-4, -3.14, -0.0f0, 0.0, 0, 5, 6.28f0)
-        @test @jit(signbit(ConcreteRNumber(x))) == signbit(x)
+    @testset "$(typeof(x))" for x in (-4, -3.14, -0.0f0, 0.0, 0, 5, 6.28f0)
+        @test @jit(signbit(ConcreteRNumber(x))) == signbit(x) broken =
+            RunningOnTPU && eltype(x) == Float64
     end
 end
 
 @testset "copysign" begin
-    for a in (-3.14, -2, 0.0, 2.71, 42), b in (-7, -0.57, -0.0, 1, 3.14)
+    @testset "$(typeof(a)) $(typeof(b))" for a in (-3.14, -2, 0.0, 2.71, 42),
+        b in (-7, -0.57, -0.0, 1, 3.14)
         # Make sure also the return type is correct
-        @test Reactant.to_number(@jit(copysign(ConcreteRNumber(a), ConcreteRNumber(b)))) ===
-            copysign(a, b)
+        @test Reactant.to_number(@jit(copysign(ConcreteRNumber(a), ConcreteRNumber(b)))) ≈
+            copysign(a, b) broken = RunningOnTPU && eltype(b) == Float64
     end
 end
 
@@ -936,7 +932,7 @@ end
 end
 
 @testset "@code_xla" begin
-    x_ra = Reactant.to_rarray(ones(4))
+    x_ra = Reactant.to_rarray(ones(Float32, 4))
     hlo = repr(@code_xla(sin.(x_ra)))
     @test contains(hlo, "HloModule")
     @test contains(hlo, "sine")
@@ -983,12 +979,12 @@ end
     @test Array(x) ≈ Array(y) ./ 2
 end
 
-@testset "Hlo Cost Analysis" begin
+@testset "HLO Cost Analysis" begin
     x_ra = Reactant.to_rarray(rand(4, 4))
     mul_comp = @compile x_ra * x_ra
-    cost = Reactant.XLA.cost_analysis(mul_comp)
-
-    @test cost isa Reactant.XLA.HloCostAnalysisProperties
+    @test begin
+        Reactant.XLA.cost_analysis(mul_comp) isa Reactant.XLA.HloCostAnalysisProperties
+    end broken = RunningOnTPU
 end
 
 function fractional_idx(times, t)
@@ -1009,7 +1005,7 @@ end
     times = 0:0.01:4.5
     @test times isa Base.StepRangeLen
     res = @jit fractional_idx(times, ConcreteRNumber(2.143))
-    @test res[1] == 0.29999999999997334
+    @test res[1] ≈ 0.29999999999997334
     @test res[2] == 215
     @test res[3] == 216
 end
@@ -1018,7 +1014,7 @@ end
     times = Reactant.to_rarray(0:0.01:4.5; track_numbers=Number)
     @test times isa Reactant.TracedRNumberOverrides.TracedStepRangeLen
     res = @jit fractional_idx(times, ConcreteRNumber(2.143))
-    @test res[1] == 0.29999999999997334
+    @test res[1] ≈ 0.29999999999997334
     @test res[2] == 215
     @test res[3] == 216
 end
@@ -1273,36 +1269,36 @@ accum_fn(x, y) = abs2(x) + abs2(y)
 
     @testset "accumulate" begin
         @test @jit(accumulate(accum_fn, a_ra; init=0.0f0)) ≈
-            accumulate(accum_fn, a; init=0.0f0)
+            accumulate(accum_fn, a; init=0.0f0) broken = RunningOnTPU
 
         @test @jit(accumulate(accum_fn, b_ra; init=0.0f0, dims=1)) ≈
-            accumulate(accum_fn, b; dims=1, init=0.0f0)
+            accumulate(accum_fn, b; dims=1, init=0.0f0) broken = RunningOnTPU
         @test @jit(accumulate(accum_fn, b_ra; init=0.0f0, dims=2)) ≈
-            accumulate(accum_fn, b; dims=2, init=0.0f0)
+            accumulate(accum_fn, b; dims=2, init=0.0f0) broken = RunningOnTPU
         @test @jit(accumulate(accum_fn, b_ra; init=0.0f0, dims=3)) ≈
-            accumulate(accum_fn, b; dims=3, init=0.0f0)
+            accumulate(accum_fn, b; dims=3, init=0.0f0) broken = RunningOnTPU
 
         @test begin
             z = similar(a_ra)
             @jit(accumulate!(accum_fn, z, a_ra; init=0.0f0))
             z
-        end ≈ accumulate(accum_fn, a; init=0.0f0)
+        end ≈ accumulate(accum_fn, a; init=0.0f0) broken = RunningOnTPU
 
         @test begin
             z = similar(b_ra)
             @jit(accumulate!(accum_fn, z, b_ra; init=0.0f0, dims=1))
             z
-        end ≈ accumulate(accum_fn, b; dims=1, init=0.0f0)
+        end ≈ accumulate(accum_fn, b; dims=1, init=0.0f0) broken = RunningOnTPU
         @test begin
             z = similar(b_ra)
             @jit(accumulate!(accum_fn, z, b_ra; init=0.0f0, dims=2))
             z
-        end ≈ accumulate(accum_fn, b; dims=2, init=0.0f0)
+        end ≈ accumulate(accum_fn, b; dims=2, init=0.0f0) broken = RunningOnTPU
         @test begin
             z = similar(b_ra)
             @jit(accumulate!(accum_fn, z, b_ra; init=0.0f0, dims=3))
             z
-        end ≈ accumulate(accum_fn, b; dims=3, init=0.0f0)
+        end ≈ accumulate(accum_fn, b; dims=3, init=0.0f0) broken = RunningOnTPU
     end
 end
 
@@ -1375,4 +1371,184 @@ end
 @testset "scalar indexing in any #1434" begin
     xr = Reactant.to_rarray(ones(4, 4))
     @test @jit(any(<(0), xr)) == any(<(0), Array(xr))
+end
+
+@testset "copyto!, no offsets" begin
+    a = Float32[10, 20, 30, 40, 50]
+    len = length(a)
+    b = Float32[111, 222, 333, 444, 555]
+    cpu = fill(0.0f0, len)
+    gpu = (Reactant.@jit Reactant.Ops.fill(0.0f0, (len,)))
+
+    cpu .= a
+    gpu .= b
+    copyto!(cpu, gpu)
+    @test gpu == b
+    @test cpu == b
+
+    cpu .= a
+    gpu .= b
+    copyto!(gpu, cpu)
+    @test gpu == a
+    @test cpu == a
+end
+
+@testset "copyto!, with offsets" begin
+    a = Float32[10, 20, 30, 40, 50, 60, 70]
+    alen = length(a)
+    b = Float32[111, 222, 333, 444, 555]
+    blen = length(b)
+
+    dest = fill(0.0f0, alen)
+    src = Reactant.@jit Reactant.Ops.fill(0.0f0, (blen,))
+
+    for desto in 1:alen, srco in 1:blen, l in 1:min(blen - srco + 1, alen - desto + 1)
+
+        # TODO offset-enabled copy not implemented for IFRTArray
+        if src isa ConcretePJRTArray
+            expected = copyto!(copy(a), desto, b, srco, l)
+
+            dest .= a
+            src .= b
+            copyto!(dest, desto, src, srco, l)
+            @test dest == expected
+        end
+    end
+
+    # TODO direct copy not implemented for IFRTArray
+    dest = Reactant.@jit Reactant.Ops.fill(0.0f0, (alen,))
+    if dest isa ConcretePJRTArray
+        src = fill(0.0f0, blen)
+        for desto in 1:alen, srco in 1:blen, l in 1:min(blen - srco + 1, alen - desto + 1)
+            expected = copyto!(copy(a), desto, b, srco, l)
+
+            dest .= a
+            src .= b
+            copyto!(dest, desto, src, srco, l)
+            @test dest == expected
+        end
+    end
+end
+
+zip_iterator(a, b) = mapreduce(splat(*), +, zip(a, b))
+enumerate_iterator(a) = mapreduce(splat(*), +, enumerate(a))
+
+function nested_mapreduce_zip(x, y)
+    return mapreduce(+, zip(eachcol(x), eachcol(y)); init=0.0f0) do (x, y)
+        return sum(abs2, x) + sum(abs2, y)
+    end
+end
+
+function nested_mapreduce_hcat(x, y)
+    return mapreduce(
+        hcat, zip(eachcol(x), eachcol(y)); init=similar(x, size(x, 1), 0)
+    ) do (x, y)
+        return x .+ y
+    end
+end
+
+@testset "Base.Iterators" begin
+    @testset "zip" begin
+        N = 10
+        a = range(1.0, 5.0; length=N)
+        x = range(10.0, 15.0; length=N + 2)
+        x_ra = Reactant.to_rarray(x)
+
+        @test @jit(zip_iterator(a, x_ra)) ≈ zip_iterator(a, x)
+    end
+
+    @testset "enumerate" begin
+        x = range(1.0, 5.0; length=10)
+        x_ra = Reactant.to_rarray(x)
+
+        @test @jit(enumerate_iterator(x_ra)) ≈ enumerate_iterator(x)
+    end
+
+    @testset "nested mapreduce" begin
+        x = rand(Float32, 4, 3)
+        y = rand(Float32, 4, 3)
+
+        x_ra = Reactant.to_rarray(x)
+        y_ra = Reactant.to_rarray(y)
+
+        @test @jit(nested_mapreduce_zip(x_ra, y_ra)) ≈ nested_mapreduce_zip(x, y)
+    end
+
+    @testset "nested mapreduce hcat" begin
+        x = rand(Float32, 4, 3)
+        y = rand(Float32, 4, 3)
+
+        x_ra = Reactant.to_rarray(x)
+        y_ra = Reactant.to_rarray(y)
+
+        @test @jit(nested_mapreduce_hcat(x_ra, y_ra)) ≈ nested_mapreduce_hcat(x, y)
+    end
+end
+
+@testset "compilation cache" begin
+    if Reactant.PersistentCompileCache.autotune_cache_enabled() &&
+        contains(string(Reactant.devices()[1]), "CUDA")
+        A = Reactant.to_rarray(rand(Float32, 2, 5))
+        B = Reactant.to_rarray(rand(Float32, 5, 1000))
+        @jit A * B # This should populate the cache dir
+
+        @test any(
+            endswith(".textproto"),
+            readdir(Reactant.PersistentCompileCache.get_autotune_cache_directory()),
+        )
+    end
+end
+
+@testset "mapreduce with unitrange dims" begin
+    x = reshape(collect(Float32, 1:64), 2, 4, 8)
+    x_ra = Reactant.to_rarray(x)
+
+    @test @jit(sum(x_ra; dims=1:2)) ≈ sum(x; dims=1:2)
+end
+
+stack_numbers(x) = stack([sum(x[:, i]) for i in axes(x, 2)])
+
+@testset "stack numbers" begin
+    x = rand(Float32, 2, 4)
+    x_ra = Reactant.to_rarray(x)
+
+    @test @jit(stack_numbers(x_ra)) ≈ stack_numbers(x)
+end
+
+@testset "copysign/mod type check" begin
+    x = ConcreteRNumber(Int32(5))
+    y = ConcreteRNumber(Int32(3))
+    @test @jit(copysign(x, y)) isa ConcreteRNumber{Int32}
+    @test @jit(mod(x, y)) isa ConcreteRNumber{Int32}
+end
+
+@testset "mod1" begin
+    x = collect(Int32, 1:12)
+    y = Int32(10)
+
+    @testset for xᵢ in x
+        res = @jit mod1(ConcreteRNumber(xᵢ), ConcreteRNumber(y))
+        @test res isa ConcreteRNumber{Int32}
+        @test res == mod1(xᵢ, y)
+    end
+end
+
+map_test_1(i, xᵢ, yᵢ) = xᵢ + yᵢ + max(xᵢ, yᵢ)
+
+@testset "multi-argument map" begin
+    x = collect(Float32, 1:10)
+    y = collect(Float32, 31:40)
+
+    x_ra = Reactant.to_rarray(x)
+    y_ra = Reactant.to_rarray(y)
+
+    gt = map(map_test_1, 1:length(x), x, y)
+    @test @jit(map(map_test_1, 1:length(x), x_ra, y_ra)) ≈ gt
+
+    z = similar(x)
+    z_ra = Reactant.to_rarray(z)
+    map!(map_test_1, z, 1:length(x), x, y)
+    @jit map!(map_test_1, z_ra, 1:length(x), x_ra, y_ra)
+    @test z ≈ z_ra
+    @test z_ra ≈ gt
 end

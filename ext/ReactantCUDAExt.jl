@@ -10,6 +10,8 @@ import KernelAbstractions as KA
 using LLVM: LLVM
 using Libdl
 
+using Reactant.Ops: @opcall
+
 const ReactantKernelAbstractionsExt = Base.get_extension(
     Reactant, :ReactantKernelAbstractionsExt
 )
@@ -82,6 +84,18 @@ for jlop in (
         @inline $jlop(a::Number, b::CuTracedRNumber{T,A}) where {T,A} = $jlop(a, b[])
     end
 end
+
+@inline Base.ifelse(cond::Bool, a, b::CuTracedRNumber) = Base.ifelse(cond, a, b[])
+@inline Base.ifelse(cond::Bool, a::CuTracedRNumber, b) = Base.ifelse(cond, a[], b)
+@inline Base.ifelse(cond::Bool, a::CuTracedRNumber, b::CuTracedRNumber) =
+    Base.ifelse(cond, a[], b[])
+@inline Base.ifelse(cond::CuTracedRNumber, a, b) = Base.ifelse(cond[], a, b)
+@inline Base.ifelse(cond::CuTracedRNumber, a::CuTracedRNumber, b) =
+    Base.ifelse(cond[], a[], b)
+@inline Base.ifelse(cond::CuTracedRNumber, a, b::CuTracedRNumber) =
+    Base.ifelse(cond[], a, b[])
+@inline Base.ifelse(cond::CuTracedRNumber, a::CuTracedRNumber, b::CuTracedRNumber) =
+    Base.ifelse(cond[], a[], b[])
 
 Base.@constprop :aggressive @inline Base.:^(
     a::CuTracedRNumber{T,A}, b::Integer
@@ -469,7 +483,7 @@ function Adapt.adapt_storage(ka::ReactantKernelAdaptor, xs::DenseCuArray)
     return Adapt.adapt_storage(ka, Array(xs))
 end
 function Adapt.adapt_storage(ka::ReactantKernelAdaptor, xs::Array)
-    return Adapt.adapt_storage(ka, Reactant.Ops.constant(xs))
+    return Adapt.adapt_storage(ka, @opcall(constant(xs)))
 end
 function Adapt.adapt_structure(
     to::ReactantKernelAdaptor, bc::Broadcast.Broadcasted{Style,<:Any,Type{T}}
@@ -1202,17 +1216,19 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
         push!(restys, MLIR.IR.type(arg))
         push!(mlir_args, arg)
 
+        ctx = MLIR.IR.context()
+        out_tup = Ref{Int64}(argidx - 1)
         push!(
             aliases,
             MLIR.IR.Attribute(
-                MLIR.API.stablehloOutputOperandAliasGet(
-                    MLIR.IR.context(),
+                GC.@preserve ctx out_tup MLIR.API.stablehloOutputOperandAliasGet(
+                    ctx,
                     length(wrapper_tys) == 1 ? 0 : 1,
-                    length(wrapper_tys) == 1 ? C_NULL : Ref{Int64}(argidx - 1),
+                    pointer_from_objref(out_tup),
                     argidx - 1,
                     0,
                     C_NULL,
-                ),
+                )
             ),
         )
 
@@ -1455,8 +1471,8 @@ end
 
 function __init__()
     if CUDA.functional() && !Reactant.precompiling()
-        target = CUDA._compiler_config(CUDA.device()).target
-        Reactant.Compiler.cubinChip[] = "sm_$(target.cap.major)$(target.cap.minor)"
+        cap = CUDA.capability(CUDA.device())
+        Reactant.Compiler.cubinChip[] = "sm_$(cap.major)$(cap.minor)"
     end
     return nothing
 end
@@ -1489,6 +1505,16 @@ end
                 end
                 y = Reactant.ConcreteRArray([2.0]; client)
                 Reactant.Compiler.compile_mlir(square!, (y,); optimize=false)
+
+                if y isa Reactant.ConcreteIFRTArray
+                    Reactant.XLA.free_buffer(y.data.buffer)
+                    y.data.buffer.buffer = C_NULL
+                else
+                    for dat in y.data
+                        Reactant.XLA.free_buffer(dat.buffer)
+                        dat.buffer.buffer = C_NULL
+                    end
+                end
             end
         end
 

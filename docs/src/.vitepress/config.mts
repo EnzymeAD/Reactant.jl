@@ -88,6 +88,8 @@ export default defineConfig({
           {text: "Distributed", link: "/tutorials/multihost"},
           {text: "Local build", link: "/tutorials/local-build"},
           {text: "Control Flow", link: "/tutorials/control-flow"},
+          {text: "Sharding", link: "/tutorials/sharding"},
+          {text: "Persistent Compilation Cache", link: "/tutorials/persistent_compile_cache"},
         ],
       },
       {
@@ -112,6 +114,7 @@ export default defineConfig({
               { text: "LLVM", link: "/api/dialects/llvm" },
               { text: "MPI", link: "/api/dialects/mpi" },
               { text: "MemRef", link: "/api/dialects/memref" },
+              { text: "Mosaic GPU", link: "/api/dialects/mosaicgpu" },
               { text: "NVVM", link: "/api/dialects/nvvm" },
               { text: "Shardy", link: "/api/dialects/shardy" },
               { text: "SparseTensor", link: "/api/dialects/sparsetensor" },
@@ -157,6 +160,8 @@ export default defineConfig({
           { text: "Distributed", link: "/tutorials/multihost" },
           { text: "Local build", link: "/tutorials/local-build" },
           { text: "Control Flow", link: "/tutorials/control-flow" },
+          { text: "Sharding", link: "/tutorials/sharding" },
+          { text: "Persistent Compilation Cache", link: "/tutorials/persistent_compile_cache" },
         ],
       }
     ],
@@ -188,6 +193,7 @@ export default defineConfig({
               { text: "LLVM", link: "/api/dialects/llvm" },
               { text: "MPI", link: "/api/dialects/mpi" },
               { text: "MemRef", link: "/api/dialects/memref" },
+              { text: "Mosaic GPU", link: "/api/dialects/mosaicgpu" },
               { text: "NVVM", link: "/api/dialects/nvvm" },
               { text: "Shardy", link: "/api/dialects/shardy" },
               { text: "SparseTensor", link: "/api/dialects/sparsetensor" },

@@ -288,7 +288,7 @@ function create_result(
         sym = Symbol("result", var_idx[])
         var_idx[] += 1
 
-        @assert haskey(result_stores, path)
+        @assert haskey(result_stores, path) "Expected $(path) in $(keys(result_stores))"
         restore = result_stores[path]
         delete!(result_stores, path)
         if path_to_shard_info !== nothing && haskey(path_to_shard_info, path)
@@ -701,6 +701,7 @@ function optimization_passes(
     recognize_comms::Bool=true,
     lower_comms::Bool=true,
     max_constant_threshold::Int=1024,
+    backend::String="gpu",
 )
     transform_passes_list = [
         "patterns=compare_op_canon<16>",
@@ -889,6 +890,29 @@ function optimization_passes(
         "neg_div_const_simplify",
         "reshape_deletions_broadcast_in_dim_simplify",
         "reshape_insertions_broadcast_in_dim_simplify",
+        "dot_general_reshape",
+        "diagonal_tensor_dot_general_rewrite",
+        "widen_wrap",
+        "widen_extend",
+        "elementwise_pad",
+        "compare_negate_const_simplify",
+        "select_simplify",
+        "concatenate_subtract_to_subtract_pad",
+        "concatenate_broadcast_in_dim",
+        "compare_abs",
+        # "compare_mul",
+        "compare_convert",
+        "add_selects",
+        "self_subtract_to_convolution_like($(Int(backend == "tpu")))",
+        "self_add_to_convolution_like($(Int(backend == "tpu")))",
+        "self_mul_to_convolution_like($(Int(backend == "tpu")))",
+        "subtract_multiply_const_to_add_mul_const",
+        "concat_insert_dim_dot_general",
+        "concat_insert_dim_gather",
+        "concat_insert_dim_iota",
+        "concat_insert_dim_reduce",
+        "concat_insert_dim_sort",
+        "concat_insert_dim_reduce_window",
     ]
 
     if !compile_options.disable_scatter_gather_optimization_passes
@@ -1027,6 +1051,7 @@ function optimization_passes(
     if WHILE_CONCAT[]
         push!(transform_passes_list, "while_concat")
         push!(transform_passes_list, "while_wrap")
+        push!(transform_passes_list, "while_extend")
     end
 
     if dus_to_concat
@@ -1133,8 +1158,8 @@ function optimization_passes(
         append!(
             transform_passes_list,
             [
-                "no_nan",
-                "no_nan_self_sub_simplify",
+                "no_nan_compare_simplify(1)",
+                "no_nan_self_sub_simplify(1)",
                 "no_nan_add_sub_simplify(1)",
                 "no_nan_mul_simplify(1)",
                 "no_nan_div_simplify(1)",
@@ -1144,6 +1169,8 @@ function optimization_passes(
         append!(
             transform_passes_list,
             [
+                "no_nan_compare_simplify(0)",
+                "no_nan_self_sub_simplify(0)",
                 "no_nan_add_sub_simplify(0)",
                 "no_nan_mul_simplify(0)",
                 "no_nan_div_simplify(0)",
@@ -1286,7 +1313,7 @@ function __get_compile_options_and_kwargs(;
     raise_first::Bool=false,
     legalize_chlo_to_stablehlo::Bool=false,
     cudnn_hlo_optimize::Bool=false,
-    shardy_passes::Union{Symbol,ShardyPropagationOptions}=:to_mhlo_shardings,
+    shardy_passes::Union{Symbol,ShardyPropagationOptions}=:post_sdy_propagation,
     optimize_then_pad::Bool=true,
     optimize_communications::Union{Bool,OptimizeCommunicationOptions}=true,
     assert_nonallocating::Bool=false,
@@ -1375,8 +1402,9 @@ function cubinFeatures()
     major, ver = divrem(ver, 1000)
     minor, patch = divrem(ver, 10)
     version = VersionNumber(major, minor, patch)
-    # From https://github.com/llvm/llvm-project/blob/106c483a102e1328f11e2b1d9398f4ad2826b59f/clang/lib/Driver/ToolChains/Cuda.cpp#L685
+    # From https://github.com/llvm/llvm-project/blob/b60aed6fbabc291a7afbcb460453f9dcdce76f34/clang/lib/Driver/ToolChains/Cuda.cpp#L686
     cuver_map = Dict([
+        (128, 87),
         (126, 85),
         (125, 85),
         (124, 84),
@@ -1401,7 +1429,7 @@ function cubinFeatures()
         (90, 60),
     ])
     mver = major * 10 + minor
-    if mver > 126
+    if !in(mver, keys(cuver_map))
         return 86
     end
     ptx = cuver_map[mver]
@@ -1475,6 +1503,22 @@ function get_optimize_comms_passes(options::OptimizeCommunicationOptions)
     return res
 end
 
+function get_stablehlo_to_hlo_passes(; stablehlo_to_mhlo::Bool=true)
+    passes = (
+        "func.func(stablehlo-ext-chlo-recompose-ops)",
+        "symbol-dce",
+        "func.func(chlo-legalize-to-high-level-mhlo)",
+        "func.func(chlo-legalize-to-stablehlo)",
+    )
+    if stablehlo_to_mhlo
+        passes = (passes..., "stablehlo-legalize-to-hlo")
+    end
+    passes = (
+        passes..., "canonicalize", "func.func(stablehlo-ext-sink-constants-to-control-flow)"
+    )
+    return passes
+end
+
 function compile_mlir!(
     mod,
     f,
@@ -1485,6 +1529,7 @@ function compile_mlir!(
     fn_kwargs=(),
     backend="gpu",
     runtime::Union{Val{:PJRT},Val{:IFRT}},
+    legalize_stablehlo_to_mhlo::Bool=false,
     kwargs...,
 )
     # Explicitly don't use block! to avoid creating a closure, which creates
@@ -1583,15 +1628,19 @@ function compile_mlir!(
 
     recognize_comms = true
     lower_comms = true
-    if is_sharded && compile_options.shardy_passes == :to_mhlo_shardings
+    if is_sharded && (
+        compile_options.shardy_passes == :to_mhlo_shardings ||
+        compile_options.shardy_passes == :post_sdy_propagation ||
+        compile_options.shardy_passes isa ShardyPropagationOptions
+    )
         lower_comms = false
     end
 
     opt_passes = optimization_passes(
-        compile_options; sroa=true, recognize_comms, lower_comms
+        compile_options; sroa=true, recognize_comms, lower_comms, backend
     )
     opt_passes2 = optimization_passes(
-        compile_options; sroa=false, recognize_comms, lower_comms
+        compile_options; sroa=false, recognize_comms, lower_comms, backend
     )
 
     raise_passes = if raise isa String
@@ -1612,6 +1661,7 @@ function compile_mlir!(
                 dus_to_concat=true,
                 recognize_comms,
                 lower_comms,
+                backend,
             )
             result = result * "," * opt_passes3
         end
@@ -1623,6 +1673,13 @@ function compile_mlir!(
     blas_int_width = sizeof(BLAS.BlasInt) * 8
     lower_enzymexla_linalg_pass = "lower-enzymexla-linalg{backend=$backend \
                                    blas_int_width=$blas_int_width}"
+
+    legalize_chlo_to_stablehlo =
+        if legalize_stablehlo_to_mhlo || compile_options.legalize_chlo_to_stablehlo
+            get_stablehlo_to_hlo_passes(; stablehlo_to_mhlo=legalize_stablehlo_to_mhlo)
+        else
+            ()
+        end
 
     if compile_options.optimization_passes === :all
         run_pass_pipeline!(
@@ -1641,13 +1698,7 @@ function compile_mlir!(
                         "canonicalize",
                         "remove-unnecessary-enzyme-ops",
                         "enzyme-simplify-math",
-                        (
-                            if compile_options.legalize_chlo_to_stablehlo
-                                ["func.func(chlo-legalize-to-stablehlo)"]
-                            else
-                                []
-                            end
-                        )...,
+                        legalize_chlo_to_stablehlo...,
                         opt_passes2,
                         lower_enzymexla_linalg_pass,
                         jit,
@@ -1663,13 +1714,7 @@ function compile_mlir!(
                         "canonicalize",
                         "remove-unnecessary-enzyme-ops",
                         "enzyme-simplify-math",
-                        (
-                            if compile_options.legalize_chlo_to_stablehlo
-                                ["func.func(chlo-legalize-to-stablehlo)"]
-                            else
-                                []
-                            end
-                        )...,
+                        legalize_chlo_to_stablehlo...,
                         opt_passes2,
                         kern,
                         raise_passes,
@@ -1698,13 +1743,7 @@ function compile_mlir!(
                         "canonicalize",
                         "remove-unnecessary-enzyme-ops",
                         "enzyme-simplify-math",
-                        (
-                            if compile_options.legalize_chlo_to_stablehlo
-                                ["func.func(chlo-legalize-to-stablehlo)"]
-                            else
-                                []
-                            end
-                        )...,
+                        legalize_chlo_to_stablehlo...,
                         opt_passes2,
                     ]
                 end,
@@ -1729,13 +1768,7 @@ function compile_mlir!(
                         "canonicalize",
                         "remove-unnecessary-enzyme-ops",
                         "enzyme-simplify-math",
-                        (
-                            if compile_options.legalize_chlo_to_stablehlo
-                                ["func.func(chlo-legalize-to-stablehlo)"]
-                            else
-                                []
-                            end
-                        )...,
+                        legalize_chlo_to_stablehlo...,
                         opt_passes2,
                     ]
                 else
@@ -1749,13 +1782,7 @@ function compile_mlir!(
                         "canonicalize",
                         "remove-unnecessary-enzyme-ops",
                         "enzyme-simplify-math",
-                        (
-                            if compile_options.legalize_chlo_to_stablehlo
-                                ["func.func(chlo-legalize-to-stablehlo)"]
-                            else
-                                []
-                            end
-                        )...,
+                        legalize_chlo_to_stablehlo...,
                         opt_passes2,
                         kern,
                         raise_passes,
@@ -1782,13 +1809,7 @@ function compile_mlir!(
                         "canonicalize",
                         "remove-unnecessary-enzyme-ops",
                         "enzyme-simplify-math",
-                        (
-                            if compile_options.legalize_chlo_to_stablehlo
-                                ["func.func(chlo-legalize-to-stablehlo)"]
-                            else
-                                []
-                            end
-                        )...,
+                        legalize_chlo_to_stablehlo...,
                         opt_passes2,
                         kern,
                     ]
@@ -1811,13 +1832,7 @@ function compile_mlir!(
                     "canonicalize",
                     "remove-unnecessary-enzyme-ops",
                     "enzyme-simplify-math",
-                    (
-                        if compile_options.legalize_chlo_to_stablehlo
-                            ["func.func(chlo-legalize-to-stablehlo)"]
-                        else
-                            []
-                        end
-                    )...,
+                    legalize_chlo_to_stablehlo...,
                     opt_passes2,
                 ],
                 ',',
@@ -1854,13 +1869,7 @@ function compile_mlir!(
                         "canonicalize",
                         "remove-unnecessary-enzyme-ops",
                         "enzyme-simplify-math",
-                        (
-                            if compile_options.legalize_chlo_to_stablehlo
-                                ["func.func(chlo-legalize-to-stablehlo)"]
-                            else
-                                []
-                            end
-                        )...,
+                        legalize_chlo_to_stablehlo...,
                         opt_passes2,
                         lower_enzymexla_linalg_pass,
                         jit,
@@ -1873,13 +1882,7 @@ function compile_mlir!(
                         "canonicalize",
                         "remove-unnecessary-enzyme-ops",
                         "enzyme-simplify-math",
-                        (
-                            if compile_options.legalize_chlo_to_stablehlo
-                                ["func.func(chlo-legalize-to-stablehlo)"]
-                            else
-                                []
-                            end
-                        )...,
+                        legalize_chlo_to_stablehlo...,
                         opt_passes2,
                         kern,
                         raise_passes,
@@ -1948,6 +1951,7 @@ function compile_mlir!(
                 Reactant.__compile_options_with_reversed_propagation(compile_options);
                 recognize_comms,
                 lower_comms,
+                backend,
             ),
             "post_op_transpose_reshape",
         )
@@ -2080,7 +2084,7 @@ function compile_mlir!(
                     results[i] = MLIR.IR.result(pad_op, 1)
                 end
 
-                ret = MLIR.Dialects.func.return_(results)
+                MLIR.Dialects.func.return_(results)
             finally
                 MLIR.IR.deactivate!(fnbody)
             end
@@ -2129,7 +2133,7 @@ function compile_mlir!(
 
         func_op = MLIR.API.mlirSymbolTableLookup(MLIR.IR.SymbolTable(module_op), fnname)
         @assert func_op.ptr !== C_NULL
-        func_op_new_module = MLIR.IR.Operation(func_op)
+        func_op_new_module = MLIR.IR.Operation(func_op, false)
 
         result_attrs = MLIR.IR.attr(func_op_new_module, "res_attrs")
         if result_attrs !== nothing
@@ -2158,6 +2162,7 @@ function compile_mlir!(
                         get_optimize_comms_passes(
                             compile_options.optimize_communications
                         )...,
+                        "func.func(sdy-reshard-to-collectives)",
                     ],
                     ",",
                 ),
@@ -2191,6 +2196,7 @@ function compile_mlir!(
                         get_optimize_comms_passes(
                             compile_options.optimize_communications
                         )...,
+                        "func.func(sdy-reshard-to-collectives)",
                         "xla-sdy-stablehlo-export-pipeline",
                     ],
                     ",",
@@ -2199,6 +2205,14 @@ function compile_mlir!(
             )
         end
     end
+
+    func_op = MLIR.API.mlirSymbolTableLookup(
+        MLIR.IR.SymbolTable(MLIR.IR.Operation(mod)), fnname
+    )
+    @assert func_op.ptr !== C_NULL
+    func_op = MLIR.IR.Operation(func_op, false)
+    fnbody = MLIR.IR.first_block(MLIR.IR.region(func_op, 1))::MLIR.IR.Block
+    ret = MLIR.IR.terminator(fnbody)::MLIR.IR.Operation
 
     preserved_args = Tuple{TracedType,Int}[]
     results = [MLIR.IR.operand(ret, i) for i in 1:MLIR.IR.noperands(ret)]
@@ -2217,7 +2231,6 @@ function compile_mlir!(
         push!(preserved_args, (linear_results[i], MLIR.IR.block_arg_num(op)))
     end
 
-    fnbody = MLIR.IR.block(ret)
     MLIR.API.mlirOperationDestroy(ret.operation)
     ret.operation = MLIR.API.MlirOperation(C_NULL)
     MLIR.IR.block!(fnbody) do
@@ -2338,7 +2351,7 @@ function get_common_compile_options()
         :client => nothing,
         :raise => false,
         :raise_first => false,
-        :shardy_passes => :(:to_mhlo_shardings),
+        :shardy_passes => :(:post_sdy_propagation),
         :assert_nonallocating => false,
         :donated_args => :(:auto),
         :transpose_propagate => :(:up),
@@ -2381,7 +2394,10 @@ See also [`@code_xla`](@ref), [`@code_mhlo`](@ref).
 """
 macro code_hlo(args...)
     compile_expr, (; compiled) = compile_call_expr(
-        __module__, compile_mlir, get_common_compile_options(), args...
+        __module__,
+        compile_mlir,
+        merge(get_common_compile_options(), Dict{Symbol,Any}(:shardy_passes => :(:none))),
+        args...,
     )
     #! format: off
     return esc(
@@ -2406,7 +2422,15 @@ See also [`@code_xla`](@ref), [`@code_hlo`](@ref).
 """
 macro code_mhlo(args...)
     compile_expr, (; compiled) = compile_call_expr(
-        __module__, compile_xla, get_common_compile_options(), args...
+        __module__,
+        compile_mlir,
+        merge(
+            get_common_compile_options(),
+            Dict{Symbol,Any}(
+                :legalize_stablehlo_to_mhlo => true, :shardy_passes => :(:to_mhlo_shardings)
+            ),
+        ),
+        args...,
     )
     #! format: off
     return esc(
@@ -2427,20 +2451,25 @@ This is the post optimizations XLA HLO module.
 ## Options
 
 $(COMMON_COMPILE_OPTIONS_DOCS)
+  - `before_xla_optimizations`: If `true`, return the `before_optimizations` HLO module.
 
 See also [`@code_mhlo`](@ref), [`@code_hlo`](@ref).
 """
 macro code_xla(args...)
     compile_expr, (; compiled) = compile_call_expr(
-        __module__, compile_xla, get_common_compile_options(), args...
+        __module__,
+        compile_xla,
+        merge(
+            get_common_compile_options(),
+            Dict{Symbol,Any}(:before_xla_optimizations => false),
+        ),
+        args...,
     )
     #! format: off
     return esc(
         :(
             $(compile_expr);
-            exec = $(compiled)[2];
-            hlo_modules = $(XLA.get_hlo_modules)(exec);
-            length(hlo_modules) == 1 ? only(hlo_modules) : hlo_modules
+            $(compiled)[3]
         )
     )
     #! format: on
@@ -3374,7 +3403,14 @@ function __resolve_device_and_client(client, seen_args, linear_args, is_sharded)
     return (client, device)
 end
 
-function compile_xla(f, args; client=nothing, serializable::Bool=false, kwargs...)
+function compile_xla(
+    f,
+    args;
+    before_xla_optimizations::Bool=false,
+    client=nothing,
+    serializable::Bool=false,
+    kwargs...,
+)
     # register MLIR dialects
     ctx = MLIR.IR.Context(Reactant.registry[], false)
     context_gc_vector[ctx] = Vector{Union{TracedRArray,TracedRNumber}}(undef, 0)
@@ -3430,20 +3466,27 @@ function compile_xla(f, args; client=nothing, serializable::Bool=false, kwargs..
             module_string = ""
         end
 
-        exec = XLA.compile(
-            client,
-            device,
-            mod;
-            num_outputs=length(mlir_fn_res.linear_results),
-            num_parameters=length(mlir_fn_res.linear_args),
-            mlir_fn_res.is_sharded,
-            global_device_ids,
-            mlir_fn_res.num_replicas,
-            mlir_fn_res.num_partitions,
-            mlir_fn_res.use_shardy_partitioner,
-        )
+        if before_xla_optimizations
+            exec = nothing
+            hlo_modules = XLA.HloModule(mod)
+        else
+            exec = XLA.compile(
+                client,
+                device,
+                mod;
+                num_outputs=length(mlir_fn_res.linear_results),
+                num_parameters=length(mlir_fn_res.linear_args),
+                mlir_fn_res.is_sharded,
+                global_device_ids,
+                mlir_fn_res.num_replicas,
+                mlir_fn_res.num_partitions,
+                mlir_fn_res.use_shardy_partitioner,
+            )
+            hlo_modules = XLA.get_hlo_modules(exec)
+            hlo_modules = length(hlo_modules) == 1 ? only(hlo_modules) : hlo_modules
+        end
 
-        return mod, exec, mlir_fn_res, device, client, module_string
+        return mod, exec, hlo_modules, mlir_fn_res, device, client, module_string
     finally
         MLIR.IR.deactivate!(ctx)
     end
@@ -3459,7 +3502,7 @@ const __thunk_rev_body_cache = Dict{Expr,Symbol}()
 function compile(f, args; kwargs...)
     compile_options, kwargs = __get_compile_options_and_kwargs(; kwargs...)
 
-    _, exec, mlir_fn_res, device, client, str = compile_xla(
+    _, exec, _, mlir_fn_res, device, client, str = compile_xla(
         f, args; compile_options, kwargs...
     )
     (;

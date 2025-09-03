@@ -5,6 +5,46 @@ const enzyme_dupnoneed = 3
 const enzyme_outnoneed = 4
 const enzyme_constnoneed = 5
 
+@inline function Enzyme.make_zero(x::RNumber)
+    return zero(Core.Typeof(x))
+end
+
+@inline function Enzyme.make_zero(x::RArray{FT,N})::RArray{FT,N} where {FT<:AbstractFloat,N}
+    return Base.zero(x)
+end
+
+@inline function Enzyme.make_zero(
+    x::RArray{Complex{FT},N}
+)::RArray{Complex{FT},N} where {FT<:AbstractFloat,N}
+    return Base.zero(x)
+end
+
+macro register_make_zero_inplace(sym)
+    quote
+        @inline function $sym(prev::RArray{T,N})::Nothing where {T<:AbstractFloat,N}
+            $sym(prev, nothing)
+            return nothing
+        end
+
+        @inline function $sym(prev::RArray{T,N}, seen::ST)::Nothing where {T,N,ST}
+            if Enzyme.Compiler.guaranteed_const_nongen(T, nothing)
+                return nothing
+            end
+            if !isnothing(seen)
+                if prev in seen
+                    return nothing
+                end
+                push!(seen, prev)
+            end
+            fill!(prev, zero(T))
+            return nothing
+        end
+    end
+end
+
+@register_make_zero_inplace(Enzyme.make_zero!)
+@register_make_zero_inplace(Enzyme.remake_zero!)
+
 function Enzyme.make_zero(
     ::Type{RT}, seen::IdDict, prev::RT, ::Val{copy_if_inactive}=Val(false)
 )::RT where {copy_if_inactive,RT<:Union{RArray,RNumber}}
@@ -27,9 +67,13 @@ function Enzyme.onehot(x::TracedRArray{T,N}) where {T,N}
     pad_value = TracedUtils.promote_to(TracedRNumber{T}, 0)
     base_value = TracedUtils.broadcast_to_size(T(1), (1,))
     for i in eachindex(x)
-        results[i] = Ops.reshape(
-            Ops.pad(base_value, pad_value; low=Int64[i - 1], high=Int64[length(x) - i]),
-            collect(Int64, size(x)),
+        results[i] = @opcall(
+            reshape(
+                @opcall(
+                    pad(base_value, pad_value; low=Int64[i - 1], high=Int64[length(x) - i])
+                ),
+                collect(Int64, size(x)),
+            )
         )
     end
     return Tuple(results)
@@ -196,7 +240,7 @@ function push_acts!(ad_inputs, x::BatchDuplicated, path, reverse)
         cval = MLIR.IR.result(
             MLIR.Dialects.stablehlo.concatenate(
                 [
-                    TracedUtils.get_mlir_data(Ops.reshape(v, Int64[1, predims...])) for
+                    TracedUtils.get_mlir_data(@opcall(reshape(v, Int64[1, predims...]))) for
                     v in x.dval
                 ];
                 dimension=Int64(0),
@@ -214,7 +258,8 @@ function push_acts!(ad_inputs, x::BatchDuplicatedNoNeed, path, reverse)
         predims = size(x.val)
         cval = MLIR.IR.result(
             MLIR.Dialects.stablehlo.concatenate(
-                [Ops.reshape(v, Int64[1, predims...]) for v in x.dval]; dimension=Int64(0)
+                [@opcall(reshape(v, Int64[1, predims...])) for v in x.dval];
+                dimension=Int64(0),
             ),
         )
         tval = TracedRArray{ET,length(predims) + 1}((), cval, (length(x.dval), predims...))
@@ -433,8 +478,8 @@ function overload_autodiff(
                             push!(starts, 0)
                             push!(limits, v)
                         end
-                        sval = Ops.slice(TracedRArray(tval), starts, limits)
-                        sval = Ops.reshape(sval, collect(Int64, sz))
+                        sval = @opcall slice(TracedRArray(tval), starts, limits)
+                        sval = @opcall reshape(sval, collect(Int64, sz))
                         TracedUtils.set!(
                             dresult[i], path[2:end], TracedUtils.get_mlir_data(sval)
                         )
@@ -557,7 +602,7 @@ end
 function ignore_derivatives_internal(arg)
     return Functors.fmap(arg) do argᵢ
         argᵢ isa AnyTracedRArray && (argᵢ = materialize_traced_array(argᵢ))
-        argᵢ isa TracedType && return Ops.ignore_derivatives(argᵢ)
+        argᵢ isa TracedType && return @opcall ignore_derivatives(argᵢ)
         return argᵢ
     end
 end

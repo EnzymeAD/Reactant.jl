@@ -196,17 +196,17 @@ end
 end
 
 @testset "Seed initialization of Complex arrays on matmul: Issue #593" begin
-    a = ones(ComplexF64, 2, 2)
-    b = 2.0 * ones(ComplexF64, 2, 2)
-    a_re = Reactant.to_rarray(a)
-    b_re = Reactant.to_rarray(b)
     df(x, y) = Enzyme.gradient(ReverseWithPrimal, *, x, y)
     @test begin
+        a = ones(ComplexF64, 2, 2)
+        b = 2.0 * ones(ComplexF64, 2, 2)
+        a_re = Reactant.to_rarray(a)
+        b_re = Reactant.to_rarray(b)
         res = @jit df(a_re, b_re) # before, this segfaulted
         (res.val ≈ 4ones(2, 2)) &&
             (res.derivs[1] ≈ 4ones(2, 2)) &&
             (res.derivs[2] ≈ 2ones(2, 2))
-    end
+    end skip = contains(string(Reactant.devices()[1]), "TPU")
 end
 
 @testset "onehot" begin
@@ -229,6 +229,13 @@ vector_forward_ad(x) = Enzyme.autodiff(Forward, fn, BatchDuplicated(x, Enzyme.on
     @test res[1][4] ≈ res_enz[1][4]
 end
 
+@testset "make_zero!" begin
+    x = Reactant.to_rarray([3.1])
+    @jit Enzyme.make_zero!(x)
+
+    @test @allowscalar x[1] ≈ 0.0
+end
+
 function simple_forward(x, st)
     rng = copy(st.rng)
     y = similar(x)
@@ -248,7 +255,7 @@ end
 
 @testset "seed" begin
     x = Reactant.to_rarray(rand(2, 2))
-    st = (; rng=Reactant.ConcreteRNG())
+    st = (; rng=Reactant.ReactantRNG())
 
     @test begin
         hlo = @code_hlo gradient_fn(x, st)

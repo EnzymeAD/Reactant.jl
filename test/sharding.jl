@@ -1,6 +1,7 @@
 using Reactant, Test
 
 const addressable_devices = Reactant.addressable_devices()
+const RunningOnTPU = contains(string(Reactant.devices()[1]), "TPU")
 
 function fn_test1(x)
     y = x .+ x
@@ -202,14 +203,14 @@ end
 
         function fn_with_constraint(x)
             y = x .+ x
-            return Reactant.Ops.sharding_constraint(y, constraint)
+            return Reactant.@opcall sharding_constraint(y, constraint)
         end
 
         hlo = @code_hlo shardy_passes = :none fn_with_constraint(x_ra)
         @test contains(repr(hlo), "sharding_constraint")
         hlo = @code_hlo shardy_passes = :to_mhlo_shardings fn_with_constraint(x_ra)
         @test !contains(repr(hlo), "sharding_constraint")
-        @test length(collect(eachmatch(r"mhlo.sharding", repr(hlo)))) == 6
+        @test length(collect(eachmatch(r"mhlo.sharding", repr(hlo)))) == 5
 
         z = Reactant.to_rarray(x; sharding=constraint)
         res = @jit fn_with_constraint(x_ra)
@@ -234,7 +235,7 @@ end
             x_ra_no_sharding
         )
         @test !contains(repr(hlo), "sharding_constraint")
-        @test length(collect(eachmatch(r"mhlo.sharding", repr(hlo)))) == 6
+        @test length(collect(eachmatch(r"mhlo.sharding", repr(hlo)))) == 5
 
         res = @jit fn_with_constraint(x_ra_no_sharding)
         @test x .+ x ≈ Array(res)
@@ -458,4 +459,16 @@ end
     else
         @warn "Not enough addressable devices to run sharding tests"
     end
+end
+
+@testset "Compile-Only with More Devices" begin
+    mesh = Sharding.Mesh(zeros(Int64, 2, 4), (:x, :y))
+
+    @test begin
+        x_ra = Reactant.to_rarray(
+            rand(Float32, 32, 32); sharding=Sharding.NamedSharding(mesh, (:x, :y))
+        )
+        hlo = @code_xla sum(x_ra)
+        contains(repr(hlo), "num_partitions=8")
+    end skip = RunningOnTPU
 end

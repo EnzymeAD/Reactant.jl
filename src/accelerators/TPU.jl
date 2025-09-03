@@ -5,6 +5,7 @@ using EnumX: @enumx
 using Scratch: @get_scratch!
 using HTTP
 using Downloads
+using unzip_jll: unzip
 
 const libtpu_dir = Ref{Union{Nothing,String}}(nothing)
 const RUNNING_IN_CLOUD_TPU_VM = Ref(false)
@@ -42,10 +43,10 @@ function download_libtpu_if_needed(path=nothing)
         zip_file_path = joinpath(path, "tpu.zip")
         tmp_dir = joinpath(path, "tmp")
         Downloads.download(
-            "https://storage.googleapis.com/libtpu-nightly-releases/wheels/libtpu-nightly/libtpu_nightly-0.1.dev20250415+nightly-py3-none-manylinux_2_31_x86_64.whl",
+            "https://storage.googleapis.com/libtpu-nightly-releases/wheels/libtpu-nightly/libtpu_nightly-0.1.dev20250811+nightly-py3-none-manylinux_2_31_x86_64.whl",
             zip_file_path,
         )
-        run(`unzip -qq $(zip_file_path) -d $(tmp_dir)`)
+        run(`$(unzip()) -qq $(zip_file_path) -d $(tmp_dir)`)
         mv(joinpath(tmp_dir, "libtpu", "libtpu.so"), libtpu_path)
         rm(tmp_dir; recursive=true)
         rm(zip_file_path; recursive=true)

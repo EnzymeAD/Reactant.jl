@@ -57,6 +57,23 @@ end
 @static if !Sys.isapple()
     @testset "KernelAbstractions Square" begin
         x = Reactant.to_rarray(collect(1:1:64) ./ 64)
+
+        b = get_backend(x)
+        @test b isa
+            Base.get_extension(Reactant, :ReactantKernelAbstractionsExt).ReactantBackend
+        let y = allocate(b, Float32, (100, 10))
+            @test y isa ConcreteRArray{Float32,2}
+            @test size(y) == (100, 10)
+        end
+        let y = KernelAbstractions.zeros(b, Float32, (100, 10))
+            @test y isa ConcreteRArray{Float32,2}
+            @test Array(y) == zeros(Float32, 100, 10)
+        end
+        let y = KernelAbstractions.ones(b, Float32, (100, 10))
+            @test y isa ConcreteRArray{Float32,2}
+            @test Array(y) == ones(Float32, 100, 10)
+        end
+
         if CUDA.functional()
             @test all(Array(@jit(square(x))) .≈ Array(x) .* Array(x))
         else

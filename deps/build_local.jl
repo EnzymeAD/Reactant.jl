@@ -132,13 +132,16 @@ build_cmd_list = [bazel_cmd, "build"]
 append!(build_cmd_list, ["-c", "$(build_kind)"])
 push!(build_cmd_list, "--action_env=JULIA=$(Base.julia_cmd().exec[1])")
 push!(build_cmd_list, "--repo_env=HERMETIC_PYTHON_VERSION=$(hermetic_python_version)")
-push!(build_cmd_list, "--repo_env=GCC_HOST_COMPILER_PATH=$(gcc_host_compiler_path)")
+if !isempty(gcc_host_compiler_path)
+    push!(build_cmd_list, "--repo_env=GCC_HOST_COMPILER_PATH=$(gcc_host_compiler_path)")
+end
 push!(build_cmd_list, "--repo_env=CC=$(cc)")
 push!(build_cmd_list, "--check_visibility=false")
 push!(build_cmd_list, "--verbose_failures")
 push!(build_cmd_list, "--jobs=$(parsed_args["jobs"])")
 push!(build_cmd_list, "--experimental_ui_max_stdouterr_bytes=-1")
 push!(build_cmd_list, "--sandbox_debug")
+
 for opt in parsed_args["copt"]
     push!(build_cmd_list, "--copt=$(opt)")
 end
@@ -167,7 +170,9 @@ else
     # Assume the compiler is clang if not GCC. `using_clang` is an option
     # introduced by Enzyme-JAX.
     push!(build_cmd_list, "--define=using_clang=true")
+    push!(build_cmd_list, "--copt=-Wno-unused-command-line-argument")
 end
+push!(build_cmd_list, "--copt=-Wno-private-header")
 push!(build_cmd_list, "--color=$(parsed_args["color"])")
 push!(build_cmd_list, ":libReactantExtra.so")
 
@@ -182,19 +187,25 @@ lib_path = joinpath(source_dir, "bazel-bin", only(built_libs))
 isfile(lib_path) || error("Could not find library $lib_path in build directory")
 
 if build_backend == "cuda"
-    if !Base.Filesystem.ispath(joinpath(source_dir, "bazel-bin", "cuda", "bin", "ptxas"))
-        Base.Filesystem.mkpath(joinpath(source_dir, "bazel-bin", "cuda", "bin"))
-        Base.Filesystem.symlink(
-            joinpath(
-                source_dir,
-                "bazel-bin",
-                "libReactantExtra.so.runfiles",
-                "cuda_nvcc",
-                "bin",
-                "ptxas",
-            ),
-            joinpath(source_dir, "bazel-bin", "cuda", "bin", "ptxas"),
-        )
+    for path in (
+        joinpath("bin", "ptxas"),
+        joinpath("bin", "fatbinary"),
+        joinpath("nvvm", "libdevice", "libdevice.10.bc"),
+    )
+        full_path = joinpath(source_dir, "bazel-bin", "cuda", path)
+        if !Base.Filesystem.ispath(full_path)
+            Base.Filesystem.mkpath(dirname(full_path))
+            Base.Filesystem.symlink(
+                joinpath(
+                    source_dir,
+                    "bazel-bin",
+                    "libReactantExtra.so.runfiles",
+                    "cuda_nvcc",
+                    path,
+                ),
+                full_path,
+            )
+        end
     end
 end
 
