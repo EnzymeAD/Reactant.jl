@@ -1,7 +1,7 @@
 # [Partial Evaluation](@id partial-evaluation)
 
 When compiling functions with Reactant, the function arguments (and possible
-closure fields) may contain non-Reactant values, so numbers and arrays that
+closure fields) may contain non-Reactant values, i.e. numbers and arrays that
 are not of type `Reactant.AbstractConcreteNumber` or
 `Reactant.AbstractConcreteArray`.
 
