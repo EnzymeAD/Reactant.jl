@@ -12,15 +12,20 @@ on this.
 For example, the function
 
 
-```@example partial_evaluation_tutorial
+```jldoctest partial_evaluation_tutorial
+using Reactant
 function add(a, b)
    a + b
-end
+end;
+
+# output
+
+add (generic function with 1 method)
 ```
 
 when compiled with two `ConcreteRNumber` arguments
 
-```@example partial_evaluation_tutorial
+```jldoctest partial_evaluation_tutorial; filter = r"I000.*" => s""
 using Reactant
 
 x = ConcreteRNumber(3)
@@ -29,42 +34,83 @@ y = ConcreteRNumber(4)
 addxy = @compile add(x, y)
 
 addxy(x, y)
+
+# output
+
+I0000
+I0000
+ConcretePJRTNumber{Int64, 1, Reactant.Sharding.ShardInfo{Reactant.Sharding.NoSharding, Nothing}}(7)
 ```
 
-returns a result that depends on both arguments:
+returns a result that depends on both arguments `x` and `y`:
 
 
-```@example partial_evaluation_tutorial
+```jldoctest partial_evaluation_tutorial
 addxy(ConcreteRNumber(7), ConcreteRNumber(8))
+
+# output
+
+ConcretePJRTNumber{Int64, 1, Reactant.Sharding.ShardInfo{Reactant.Sharding.NoSharding, Nothing}}(15)
 ```
 
 The StableHLO IR code generated here is:
 
-```@example partial_evaluation_tutorial
+```jldoctest partial_evaluation_tutorial
 @code_hlo add(x, y)
+
+# output
+
+module @reactant_add attributes {mhlo.num_partitions = 1 : i64, mhlo.num_replicas = 1 : i64} {
+  func.func @main(%arg0: tensor<i64>, %arg1: tensor<i64>) -> tensor<i64> {
+    %0 = stablehlo.add %arg0, %arg1 : tensor<i64>
+    return %0 : tensor<i64>
+  }
+}
 ```
 
-and shows two variable inputs.
+So at HLO-level, there a are two variable inputs `%arg0` and `%arg1`.
 
-However, if one of the arguments is a non-Reactant value, then the result
+However, if argument `y` has a non-Reactant value during compilation, (`4` in
+this example) then the result when executing the compiled function
 
-```@example partial_evaluation_tutorial
+```jldoctest partial_evaluation_tutorial; filter = r"I000.*" => s""
 addx4 = @compile add(x, 4)
 
 addx4(x, 4)
+
+# output
+
+I0000
+I0000
+ConcretePJRTNumber{Int64, 1, Reactant.Sharding.ShardInfo{Reactant.Sharding.NoSharding, Nothing}}(7)
 ```
 
-will only change based on the first argument, not the second (non-Reactant)
-argument:
+will only change based on `x`, not on the non-Reactant argument `y`, we get
+`7 + 4 == 11`, not `7 + 8 == 15`:
 
-```@example partial_evaluation_tutorial
+```jldoctest partial_evaluation_tutorial
 addx4(ConcreteRNumber(7), 8)
+
+# output
+
+ConcretePJRTNumber{Int64, 1, Reactant.Sharding.ShardInfo{Reactant.Sharding.NoSharding, Nothing}}(11)
 ```
 
 The StableHLO code shows that the second argument has been replaced by a
-constant during partial evaluation and is ignored during execution of the
-compiled function:
+constant `%c` during partial evaluation. When the compiled function is
+executed, the value of `y` is ignored - at HLO-level, there is only one
+variable input `%arg0`:
 
-```@example partial_evaluation_tutorial
+```jldoctest partial_evaluation_tutorial
 @code_hlo add(x, 4)
+
+# output
+
+module @reactant_add attributes {mhlo.num_partitions = 1 : i64, mhlo.num_replicas = 1 : i64} {
+  func.func @main(%arg0: tensor<i64>) -> tensor<i64> {
+    %c = stablehlo.constant dense<4> : tensor<i64>
+    %0 = stablehlo.add %arg0, %c : tensor<i64>
+    return %0 : tensor<i64>
+  }
+}
 ```
