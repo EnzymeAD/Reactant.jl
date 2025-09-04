@@ -221,6 +221,22 @@ for runtime in (:PJRT, :IFRT)
                     catch e
                         println(stdout, e)
                     end
+                elseif Accelerators.ROCm.has_rocm()
+                    try
+                        if was_initialized && haskey(state.clients, "rocm")
+                            XLA.free_client(state.clients["rocm"])
+                            XLA.$(runtime).rocm_client_count[] -= 1
+                        end
+                        gpu = $(runtime).ROCmClient(
+                            ;
+                            rocm_pjrt_plugin_path=Accelerators.ROCm.get_rocm_pjrt_plugin_path(),
+                            common_kwargs...
+                        )
+                        state.clients["rocm"] = gpu
+                        state.default_client = gpu
+                    catch e
+                        println(stdout, e)
+                    end
                 else
                     try
                         if was_initialized && haskey(state.clients, "cuda")
