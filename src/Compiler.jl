@@ -908,16 +908,23 @@ function optimization_passes(
         "concat_insert_dim_reduce",
         "concat_insert_dim_sort",
         "concat_insert_dim_reduce_window",
-        # licm patterns
-        "dus_licm(0)",
-        "slice_licm(0)",
-        "elementwise_licm(0)",
-        "concatenate_licm(0)",
-        "while_licm<1>(1)",
-        "transpose_licm(0)",
-        "broadcastindim_licm(0)",
-        "reshape_licm(0)",
     ]
+
+    if !compile_options.disable_licm_optimization_passes
+        append!(
+            transform_passes_list,
+            [
+                "dus_licm(0)",
+                "slice_licm(0)",
+                "elementwise_licm(0)",
+                "concatenate_licm(0)",
+                "while_licm<1>(1)",
+                "transpose_licm(0)",
+                "broadcastindim_licm(0)",
+                "reshape_licm(0)",
+            ],
+        )
+    end
 
     if !compile_options.disable_scatter_gather_optimization_passes
         append!(
@@ -977,7 +984,6 @@ function optimization_passes(
                 "unary_pad_push_tanh<1>",
                 "unary_pad_push_exp<1>",
                 "concat_to_pad<1>",
-                "pad_licm(0)",
                 "while_pad_induction_reduction",
                 "pad_concat_to_concat_pad",
                 "rotate_pad",
@@ -985,6 +991,10 @@ function optimization_passes(
                 "speculate_if_pad_to_select",
             ],
         )
+
+        if !compile_options.disable_licm_optimization_passes
+            push!(transform_passes_list, "pad_licm(0)")
+        end
     end
 
     # constant prop patterns
