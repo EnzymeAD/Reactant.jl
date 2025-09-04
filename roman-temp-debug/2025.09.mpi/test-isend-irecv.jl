@@ -91,7 +91,7 @@ nranks = MPI.Comm_size(comm)
 #     MPI.Wait(req)
 #     return nothing
 # end
-# # @jit Isend_Wait(send_buf, dest, tag, comm)
+# @jit Isend_Wait(send_buf, dest, tag, comm)
 # println(@code_hlo optimize=false Isend_Wait(send_buf, dest, tag, comm))
 
 
@@ -135,56 +135,80 @@ nranks = MPI.Comm_size(comm)
 
 
 # # hangs
-# # send_buf = ConcreteRArray(fill(1))
-# # recv_buf = ConcreteRArray(fill(12))
 # send_buf = ConcreteRArray([1, 2, 3, 4, 5])
 # recv_buf = ConcreteRArray([-1, -2, -3, -4, -5])
 # tag = 43
 # function aaa(comm, rank, send_buf, recv_buf, tag)
 #     if rank == 0
-#         # dest = 1
-#         dest = 333
+#         dest = 1
 #         MPI.Send(send_buf, dest, tag, comm)
 #     elseif rank == 1
-#         # src = 0
-#         src = 555
+#         src = 0
 #         MPI.Recv!(recv_buf, src, tag, comm)
 #         # println( recv_buf == send_buf )
 #     end
 #     return nothing
 # end
-# # @jit aaa(comm, rank, send_buf, recv_buf, tag)
-# rank==1 && sleep(5)
+# @jit aaa(comm, rank, send_buf, recv_buf, tag)
 # println("\nRank: $rank")
-# # println(@code_hlo optimize=false aaa(comm, rank, send_buf, recv_buf, tag))
 
-# # bbb = @compile aaa(comm, rank, send_buf, recv_buf, tag)
-# # if rank==0
-# #     println("\nlowered")
-# #     println(@code_lowered bbb(comm, rank, send_buf, recv_buf, tag))
-# #     println("\ntyped")
-# #     println(@code_typed bbb(comm, rank, send_buf, recv_buf, tag))
-# #     println("\nllvm")
-# #     println(@code_llvm bbb(comm, rank, send_buf, recv_buf, tag))
-# # end
+
+send_buf = ConcreteRArray([1, 2, 3, 4, 5])
+recv_buf = ConcreteRArray([-1, -2, -3, -4, -5])
+tag = 43
+function aaa(comm, rank, send_buf, recv_buf, tag)
+    if rank == 0
+        dest = 333
+        MPI.Send(send_buf, dest, tag, comm)
+    elseif rank == 1
+        src = 555
+        MPI.Recv!(recv_buf, src, tag, comm)
+        # println( recv_buf == send_buf )
+    end
+    return nothing
+end
+# @jit aaa(comm, rank, send_buf, recv_buf, tag)
+rank==1 && sleep(5)
+# println("\nRank $rank:\n", @code_hlo optimize=false aaa(comm, rank, send_buf, recv_buf, tag))
+println("\nRank $rank:\n", @code_xla aaa(comm, rank, send_buf, recv_buf, tag))
+
+# # # bbb = @compile aaa(comm, rank, send_buf, recv_buf, tag)
+# # # if rank==0
+# # #     println("\nlowered")
+# # #     println(@code_lowered bbb(comm, rank, send_buf, recv_buf, tag))
+# # #     println("\ntyped")
+# # #     println(@code_typed bbb(comm, rank, send_buf, recv_buf, tag))
+# # #     println("\nllvm")
+# # #     println(@code_llvm bbb(comm, rank, send_buf, recv_buf, tag))
+# # # end
 
 
 # # works
-# # send_buf = ConcreteRArray(fill(1))
-# # recv_buf = ConcreteRArray(fill(12))
 # send_buf = ConcreteRArray([1, 2, 3, 4, 5])
 # recv_buf = ConcreteRArray([-1, -2, -3, -4, -5])
 # tag = 43
 # if rank == 0
-#     # dest = 1
-#     dest = 333
-#     # @jit MPI.Send(send_buf, dest, tag, comm)
-#     println(@code_hlo optimize=false MPI.Send(send_buf, dest, tag, comm))
+#     dest = 1
+#     @jit MPI.Send(send_buf, dest, tag, comm)
 # elseif rank == 1
-#     # src = 0
-#     src = 555
-#     # @jit MPI.Recv!(recv_buf, src, tag, comm)
-#     println(@code_hlo optimize=false MPI.Recv!(recv_buf, src, tag, comm))
+#     src = 0
+#     @jit MPI.Recv!(recv_buf, src, tag, comm)
+#     println( recv_buf == send_buf )
+# end
+
+# send_buf = ConcreteRArray([1, 2, 3, 4, 5])
+# recv_buf = ConcreteRArray([-1, -2, -3, -4, -5])
+# tag = 43
+# if rank == 0
+#     dest = 1
+#     # dest = 333
+#     @jit MPI.Send(send_buf, dest, tag, comm)
+#     # println(@code_hlo optimize=false MPI.Send(send_buf, dest, tag, comm))
+# elseif rank == 1
+#     src = 0
+#     # src = 555
+#     @jit MPI.Recv!(recv_buf, src, tag, comm)
+#     # println(@code_hlo optimize=false MPI.Recv!(recv_buf, src, tag, comm))
 #     println( recv_buf == send_buf )
 # end
 
@@ -217,4 +241,4 @@ nranks = MPI.Comm_size(comm)
 # end
 
 
-MPI.Finalize()
+# MPI.Finalize()
