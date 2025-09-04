@@ -568,6 +568,10 @@ function LinearAlgebra.generic_mattridiv!(
     return C
 end
 
+LinearAlgebra.transpose!(B::AnyTracedRMatrix, A::AnyTracedRMatrix) = copy!(B, transpose(A))
+
+LinearAlgebra.adjoint!(B::AnyTracedRMatrix, A::AnyTracedRMatrix) = copy!(B, adjoint(A))
+
 # Supports batched factorization
 abstract type GeneralizedFactorization{T} <: Factorization{T} end
 

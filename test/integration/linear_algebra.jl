@@ -410,6 +410,18 @@ end
         end
     end
 
+    @testset "transpose! and adjoint!" begin
+        A = rand(Complex{Float32}, 7, 13)
+        B = similar(A')::Matrix
+        A_ra = Reactant.to_rarray(A)
+
+        B_ra = Reactant.to_rarray(B)
+        @test Array(@jit(transpose!(B_ra, A_ra))) ≈ transpose(A)
+
+        B_ra = Reactant.to_rarray(B)
+        @test Array(@jit(adjoint!(B_ra, A_ra))) ≈ adjoint(A)
+    end
+
     @testset "Input Permutation" begin
         A = rand(Float32, 10, 10, 32)
         B = rand(Float32, 10, 32)
