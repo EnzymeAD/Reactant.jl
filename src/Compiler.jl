@@ -27,9 +27,42 @@ import Reactant: OptimizeCommunicationOptions, ShardyPropagationOptions, Compile
 
 import ..ReactantCore: correct_maybe_bcast_call
 
-const DEBUG_PRINT_CODEGEN = Ref(false)
-const DEBUG_DISABLE_RESHARDING = Ref(false)
-const DEBUG_ALIASED_BUFFER_ASSIGNMENT_ERROR = Ref(false)
+using ScopedSettings: ScopedSetting, GetPreference
+
+const DEBUG_PRINT_CODEGEN = ScopedSetting(
+    GetPreference(Reactant, "debug_print_codegen", false)
+)
+const DEBUG_DISABLE_RESHARDING = ScopedSetting(
+    GetPreference(Reactant, "debug_disable_resharding", false)
+)
+const DEBUG_ALIASED_BUFFER_ASSIGNMENT_ERROR = ScopedSetting(
+    GetPreference(Reactant, "debug_aliased_buffer_assignment_error", false)
+)
+const DEBUG_KERNEL = ScopedSetting(GetPreference(Reactant, "debug_kernel", false))
+const DUMP_LLVMIR = ScopedSetting(GetPreference(Reactant, "debug_dump_llvmir", false))
+const DUMP_FAILED_LOCKSTEP = ScopedSetting(
+    GetPreference(Reactant, "debug_dump_failed_lockstep", false)
+)
+const SROA_ATTRIBUTOR = ScopedSetting(GetPreference(Reactant, "sroa_attributor", false))
+
+const WHILE_CONCAT = ScopedSetting(GetPreference(Reactant, "while_concat_passes", false))
+const DUS_TO_CONCAT = ScopedSetting(GetPreference(Reactant, "dus_to_concat_passes", false))
+const SUM_TO_REDUCEWINDOW = ScopedSetting(
+    GetPreference(Reactant, "sum_to_reducewindow_passes", false)
+)
+const SUM_TO_CONV = ScopedSetting(GetPreference(Reactant, "sum_to_conv_passes", false))
+const AGGRESSIVE_SUM_TO_CONV = ScopedSetting(
+    GetPreference(Reactant, "aggressive_sum_to_conv_passes", false)
+)
+const AGGRESSIVE_PROPAGATION = ScopedSetting(
+    GetPreference(Reactant, "aggressive_propagation_passes", false)
+)
+const DUS_SLICE_SIMPLIFY = ScopedSetting(
+    GetPreference(Reactant, "dus_slice_simplify_passes", true)
+)
+const CONCATS_TO_DUS = ScopedSetting(GetPreference(Reactant, "concats_to_dus_passes", true))
+
+const OpenMP = ScopedSetting(GetPreference(Reactant, "lower_jit_to_openmp", true))
 
 const DEBUG_BUFFER_POINTERS_STORE_DICT = Base.IdDict()
 
@@ -683,15 +716,6 @@ function create_result(
 )
     return Meta.quot(tocopy)
 end
-
-const WHILE_CONCAT = Ref(false)
-const DUS_TO_CONCAT = Ref(false)
-const SUM_TO_REDUCEWINDOW = Ref(false)
-const SUM_TO_CONV = Ref(false)
-const AGGRESSIVE_SUM_TO_CONV = Ref(false)
-const AGGRESSIVE_PROPAGATION = Ref(false)
-const DUS_SLICE_SIMPLIFY = Ref(true)
-const CONCATS_TO_DUS = Ref(false)
 
 # Optimization passes via transform dialect
 function optimization_passes(
@@ -1449,12 +1473,6 @@ function cubinFeatures()
     ptx = cuver_map[mver]
     return "+ptx$ptx"
 end
-
-const DEBUG_KERNEL = Ref{Bool}(false)
-const DUMP_LLVMIR = Ref{Bool}(false)
-const DUMP_FAILED_LOCKSTEP = Ref{Bool}(false)
-const OpenMP = Ref{Bool}(true)
-const SROA_ATTRIBUTOR = Ref{Bool}(true)
 
 function activate_raising!(is_raising::Bool)
     stack = get!(task_local_storage(), :reactant_is_raising) do

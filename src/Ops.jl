@@ -99,10 +99,16 @@ function mlir_type(::Type{<:MissingTracedValue})::MLIR.IR.Type
     return MLIR.IR.TensorType(Int[], MLIR.IR.Type(Bool))
 end
 
-const DEBUG_MODE::Ref{Bool} = Ref(false)
-const LARGE_CONSTANT_THRESHOLD = Ref(100 << 20) # 100 MiB
-const LARGE_CONSTANT_RAISE_ERROR = Ref(true)
-const GATHER_GETINDEX_DISABLED = Ref(false)
+const DEBUG_MODE = ScopedSetting(false)
+const LARGE_CONSTANT_THRESHOLD = ScopedSetting(
+    GetPreference(Reactant, "large_constant_threshold", 100 << 20) # 100 MiB
+)
+const LARGE_CONSTANT_RAISE_ERROR = ScopedSetting(
+    GetPreference(Reactant, "large_constant_raise_error", true)
+)
+const GATHER_GETINDEX_DISABLED = ScopedSetting(
+    GetPreference(Reactant, "gather_getindex_disabled", false)
+)
 
 function with_debug(f)
     old = DEBUG_MODE[]

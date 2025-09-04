@@ -26,6 +26,8 @@ export @affinemap
 
 using Random: randstring
 
+using ScopedSettings: ScopedSetting, GetPreference
+
 function mlirIsNull(val)
     return val.ptr == C_NULL
 end

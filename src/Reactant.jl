@@ -11,6 +11,8 @@ using Functors: Functors, @leaf
 using Adapt: Adapt, WrappedArray
 using GPUArraysCore: GPUArraysCore, @allowscalar, allowscalar # keep this import to allow users to do `Reactant.allowscalar(false)`
 
+using ScopedSettings: ScopedSetting, GetPreference
+
 export @allowscalar # re-exported from GPUArraysCore
 
 is_extension_loaded(::Val) = false

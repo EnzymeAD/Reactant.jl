@@ -65,9 +65,11 @@ function enable_verifier!(pm, enable=true)
 end
 
 # Where to dump the MLIR modules
-const DUMP_MLIR_DIR = Ref{Union{Nothing,String}}(nothing)
+const DUMP_MLIR_DIR = ScopedSetting{Union{Nothing,String}}(
+    GetPreference(Reactant, "dump_mlir_dir", nothing)
+)
 # Whether to always dump MLIR, regardless of failure
-const DUMP_MLIR_ALWAYS = Ref{Bool}(false)
+const DUMP_MLIR_ALWAYS = ScopedSetting(GetPreference(Reactant, "dump_mlir_always", false))
 # Counter for dumping MLIR modules
 const MLIR_DUMP_COUNTER = Threads.Atomic{Int}(0)
 

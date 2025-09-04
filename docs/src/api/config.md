@@ -6,11 +6,6 @@ CollapsedDocStrings = true
 
 ## Scoped Values
 
-!!! warning
-
-    Currently options are scattered in the form of global variables and scoped values. We
-    are in the process of migrating all of them into scoped values.
-
 ```@docs
 Reactant.with_config
 ```
