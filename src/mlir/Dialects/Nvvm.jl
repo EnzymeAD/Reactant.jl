@@ -3230,6 +3230,42 @@ function mma_sync(
 end
 
 """
+`pmevent`
+
+Triggers one or more of a fixed number of performance monitor events, with
+event index or mask specified by immediate operand.
+
+Without `mask` it triggers a single performance monitor event indexed by
+immediate operand a, in the range 0..15.
+
+With `mask` it triggers one or more of the performance monitor events. Each
+bit in the 16-bit immediate operand controls an event.
+
+[For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#miscellaneous-instructions-pmevent)
+"""
+function pmevent(; maskedEventId=nothing, eventId=nothing, location=Location())
+    op_ty_results = IR.Type[]
+    operands = Value[]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+    !isnothing(maskedEventId) &&
+        push!(attributes, namedattribute("maskedEventId", maskedEventId))
+    !isnothing(eventId) && push!(attributes, namedattribute("eventId", eventId))
+
+    return create_operation(
+        "nvvm.pmevent",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+"""
 `prefetch`
 
 Operand `addr` can be a global, local or generic address pointer. No 
@@ -3471,12 +3507,18 @@ location indicated by the address operand \$ptr in shared memory.
 
 [For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#warp-level-matrix-store-instruction-stmatrix)
 """
-function stmatrix(ptr::Value, sources::Vector{Value}; layout, location=Location())
+function stmatrix(
+    ptr::Value, sources::Vector{Value}; layout, shape, eltType, location=Location()
+)
     op_ty_results = IR.Type[]
     operands = Value[ptr, sources...]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("layout", layout),]
+    attributes = NamedAttribute[
+        namedattribute("layout", layout),
+        namedattribute("shape", shape),
+        namedattribute("eltType", eltType),
+    ]
 
     return create_operation(
         "nvvm.stmatrix",
