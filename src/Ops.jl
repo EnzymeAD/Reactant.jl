@@ -2932,8 +2932,9 @@ end
     location=mlir_stacktrace("dynamic_slice", @__FILE__, @__LINE__),
 ) where {T,N}
     start_indices = [
-        Reactant.TracedUtils.promote_to(TracedRNumber{Int32}, index - 1).mlir_data for
-        index in start_indices
+        Reactant.TracedUtils.promote_to(
+            TracedRNumber{Int32}, index - Reactant.unwrapped_eltype(index)(1)
+        ).mlir_data for index in start_indices
     ]
     res = MLIR.IR.result(
         stablehlo.dynamic_slice(

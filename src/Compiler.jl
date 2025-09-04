@@ -833,16 +833,11 @@ function optimization_passes(
         "slice_reduce_window<1>",
         "while_deadresult",
         "while_dus",
-        "dus_licm(0)",
         "while_op_induction_replacement",
         "dus_concat",
         "slice_dus_to_concat",
         "while_induction_reduction",
-        "slice_licm(0)",
-        "elementwise_licm(0)",
-        "concatenate_licm(0)",
         "slice_broadcast",
-        "while_licm<1>(1)",
         "associative_common_mul_op_reordering",
         "slice_select_to_select_slice",
         "slice_if",
@@ -913,6 +908,15 @@ function optimization_passes(
         "concat_insert_dim_reduce",
         "concat_insert_dim_sort",
         "concat_insert_dim_reduce_window",
+        # licm patterns
+        "dus_licm(0)",
+        "slice_licm(0)",
+        "elementwise_licm(0)",
+        "concatenate_licm(0)",
+        "while_licm<1>(1)",
+        "transpose_licm(0)",
+        "broadcastindim_licm(0)",
+        "reshape_licm(0)",
     ]
 
     if !compile_options.disable_scatter_gather_optimization_passes
