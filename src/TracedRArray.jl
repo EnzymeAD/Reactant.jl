@@ -1249,10 +1249,25 @@ function Base.findmax(f, x::AnyTracedRArray; dims::Union{Integer,Nothing}=nothin
     return (values, linear_indices)
 end
 
-Base.map(f, x::AnyTracedRArray) = f.(x)
+function overloaded_map(f, x::AbstractArray, xs::AbstractArray...)
+    @assert allequal((axes(x), axes.(xs)...)) "Expected axes of all inputs to map to be \
+                                               equal"
 
-function Base.map!(f, y::AnyTracedRArray, x::AbstractArray)
-    y .= f.(x)
+    inputs = ()
+    for input in (x, xs...)
+        if input isa AnyTracedRArray
+            input = Reactant.materialize_traced_array(input)
+        else
+            input = TracedUtils.promote_to(TracedRArray{eltype(input),ndims(input)}, input)
+        end
+        inputs = (inputs..., input)
+    end
+
+    return TracedUtils.elem_apply(f, inputs...)
+end
+
+function overloaded_map!(f, y::AnyTracedRArray, x::AbstractArray, xs::AbstractArray...)
+    copyto!(y, overloaded_map(f, x, xs...))
     return y
 end
 
