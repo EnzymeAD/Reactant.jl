@@ -7,16 +7,12 @@ permissions:
   pull-requests: write
 
 on:
+  schedule:
+    - cron: '0 3 * * *' # Nightly at 3am UTC
+  workflow_dispatch:
+    # Manual trigger
   pull_request:
-    paths:
-      - ".github/workflows/benchmark.yml"
-      - "ext/**"
-      - "lib/**"
-      - "src/**"
-      - "Project.toml"
-  push:
-    branches:
-      - main
+    types: [labeled, unlabeled, synchronize, opened, reopened]
     paths:
       - ".github/workflows/benchmark.yml"
       - "ext/**"
@@ -26,7 +22,7 @@ on:
 
 jobs:
   benchmark:
-    if: ${{ (github.event_name != 'pull_request') || (!github.event.pull_request.draft && !contains(github.event.head_commit.message, '[skip benchmarks]') && !github.event.pull_request.head.repo.fork) }}
+    if: ${{ (github.ref == 'refs/heads/main' && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')) || (github.event_name == 'pull_request' && contains(join(github.event.pull_request.labels.*.name, ','), 'run benchmarks')) }}
     runs-on: ${{ matrix.os }}
     container:
       image: ${{ contains(matrix.os, 'linux') && 'ghcr.io/enzymead/reactant-docker-images@sha256:7004a6ebbdd77bd047900b2bffc542e8576864056dc27a9c94d30666d6f7ea01' || '' }}
@@ -62,7 +58,7 @@ jobs:
           overwrite: false
 
   benchmark-aggregate:
-    if: ${{ (github.event_name != 'pull_request') || (!github.event.pull_request.draft && !contains(github.event.head_commit.message, '[skip benchmarks]') && !github.event.pull_request.head.repo.fork) }}
+    if: ${{ (github.ref == 'refs/heads/main' && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')) || (github.event_name == 'pull_request' && contains(join(github.event.pull_request.labels.*.name, ','), 'run benchmarks')) }}
     needs: benchmark
     runs-on: ubuntu-latest
     steps:
