@@ -1552,3 +1552,10 @@ map_test_1(i, xᵢ, yᵢ) = xᵢ + yᵢ + max(xᵢ, yᵢ)
     @test z ≈ z_ra
     @test z_ra ≈ gt
 end
+
+@testset "repeat specialize" begin
+    x_ra = Reactant.to_rarray(rand(Float32, 2, 3))
+
+    hlo = repr(@code_hlo(repeat(x_ra, 2, 3)))
+    @test !contains(hlo, "stablehlo.dynamic_update_slice")
+end

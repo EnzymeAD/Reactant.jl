@@ -892,14 +892,12 @@ for (minT, maxT) in Iterators.product((Number, TracedRNumber), (Number, TracedRN
 end
 
 # outer repeat
-function Base._RepeatInnerOuter.repeat_outer(
-    x::AnyTracedRArray{T,N}, counts::NTuple{N,Any}
-) where {T,N}
+function repeat_outer_overloaded(x::AnyTracedRArray{T,N}, counts::Dims{N}) where {T,N}
     # (d1, d2, ..., dP) -> (d1, 1, d2, 1, ..., dP, 1)
     interleaved_size = ones(Int, 2N)
     interleaved_size[1:2:(2N)] .= size(x)
 
-    x_interleaved = reshape(materialize_traced_array(x), interleaved_size...)
+    x_interleaved = @opcall reshape(materialize_traced_array(x), interleaved_size...)
 
     # (d1, 1, d2, 1, ..., dP, 1) -> (d1, r1, d2, r2, ..., dP, rP)
     broadcast_target_size = interleaved_size
@@ -911,6 +909,22 @@ function Base._RepeatInnerOuter.repeat_outer(
     final_size = vec(prod(reshape(broadcast_target_size, 2, :); dims=1))
 
     return materialize_traced_array(reshape(x_broadcasted, final_size...))
+end
+
+function Base._RepeatInnerOuter.repeat_outer(
+    x::AnyTracedRArray{T,1}, counts::Tuple{Any}
+) where {T}
+    return repeat_outer_overloaded(x, counts)
+end
+function Base._RepeatInnerOuter.repeat_outer(
+    x::AnyTracedRArray{T,2}, counts::NTuple{2,Any}
+) where {T}
+    return repeat_outer_overloaded(x, counts)
+end
+function Base._RepeatInnerOuter.repeat_outer(
+    x::AnyTracedRArray{T,N}, counts::NTuple{N,Any}
+) where {T,N}
+    return repeat_outer_overloaded(x, counts)
 end
 
 # inner repeat
