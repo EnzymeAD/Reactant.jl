@@ -1074,7 +1074,7 @@ function elem_apply(f, args::Vararg{Any,Nargs}) where {Nargs}
         scalar_args = map(args) do arg
             return promote_to(TracedRNumber{Reactant.unwrapped_eltype(arg)}, arg)
         end
-        return f(scalar_args...)
+        return Reactant.call_with_reactant(f, scalar_args...)
     end
 
     argprefix::Symbol = gensym("broadcastarg")

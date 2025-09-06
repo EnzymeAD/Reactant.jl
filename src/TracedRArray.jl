@@ -622,11 +622,11 @@ function overloaded_mapreduce(
     end
     reduce_init = TracedUtils.promote_to(TracedRNumber{op_in_T}, reduce_init)
 
-    reduce_input = materialize_traced_array(broadcast(f, A))
+    reduce_input = materialize_traced_array(TracedUtils.elem_apply(f, A))
 
     res = @opcall reduce(reduce_input, reduce_init, dims, op)
 
-    init !== nothing && (res = op.(res, init))
+    init !== nothing && (res = Reactant.call_with_reactant(broadcast, op, res, init))
 
     if original_dims isa Colon
         @assert size(res) == () "expected size of result to be (), got $(size(res))"
@@ -650,8 +650,8 @@ function Base.mapreducedim!(
         @assert sR == 1
         return i
     end
-    tmp = mapreduce(f, op, A; dims=filter(!isnothing, dims))
-    R .= op.(R, tmp) # match native Julia's behavior
+    tmp = overloaded_mapreduce(f, op, A; dims=filter(!isnothing, dims), init=R)
+    copyto!(R, tmp)
     return R
 end
 

@@ -1559,3 +1559,14 @@ end
     hlo = repr(@code_hlo(repeat(x_ra, 2, 3)))
     @test !contains(hlo, "stablehlo.dynamic_update_slice")
 end
+
+@testset "call through inference barrier" begin
+    points = [rand(Float32, 2), rand(Float32, 2)]
+    params = rand(Float32, 4, 2)
+    points_ra = Reactant.to_rarray(points)
+    params_ra = Reactant.to_rarray(params)
+
+    f(params, points) = mapreduce(Base.Fix1(*, params), +, points)
+
+    @test @jit(f(params_ra, points_ra)) ≈ f(params, points)
+end

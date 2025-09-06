@@ -1,3 +1,15 @@
+struct CallWithReactant{F}
+    f::F
+end
+
+function (f::CallWithReactant{F})(args...; kwargs...) where {F}
+    if isempty(kwargs)
+        return call_with_reactant(f.f, args...)
+    else
+        return call_with_reactant(Core.kwcall, NamedTuple(kwargs), f.f, args...)
+    end
+end
+
 function apply(f::F, args...; kwargs...) where {F}
     return f(args...; kwargs...)
 end
