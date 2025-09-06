@@ -24,7 +24,8 @@ function setup_benchmarks!(suite::BenchmarkGroup, backend::String)
 
     ## neural operator benchmarks
     NN.setup_deeponet_benchmark!(suite, backend)
-    NN.setup_fno_benchmark!(suite, backend)
+    # XXX: some pass broke this
+    # NN.setup_fno_benchmark!(suite, backend)
 
     return nothing
 end
