@@ -115,8 +115,10 @@
         <a id="repository-link" rel="noopener"></a>
       </div>
       <div class="option-container">
-  <strong class="option-label">Option:</strong>
-  <a id="option-time" class="option">time</a>
+        <strong class="option-label">Option:</strong>
+        <a id="option-time" class="option">time</a>
+        <a id="option-memory" class="option">memory</a>
+        <a id="option-allocations" class="option">allocations</a>
       </div>
     </header>
     <main id="main"></main>
@@ -218,9 +220,17 @@
           repoLink.href = data.repoUrl;
           repoLink.textContent = data.repoUrl;
 
-          // Render option link (only 'time')
-          const optionLink = document.getElementById("option-time");
-          optionLink.classList.add("disabled");
+          // Render option links
+          const options = ["time", "memory", "allocations"];
+          for (const option of options) {
+            const optionLink = document.getElementById("option-" + option);
+            if (option === pageOption) {
+              optionLink.classList.add("disabled");
+            } else {
+              optionLink.href =
+                window.location.href.split("?")[0] + "?option=" + option;
+            }
+          }
 
           // Render footer
           document.getElementById("dl-button").onclick = () => {
