@@ -1,5 +1,5 @@
 function setup_vit_benchmark!(suite::BenchmarkGroup, backend)
-    for mode in (:tiny, :small), bsize in (32,)
+    for mode in (:tiny, :small), bsize in (4,)
         benchmark_name = "ViT $(mode) (256 x 256 x 3 x $(bsize))"
 
         setup_lux_benchmark!(
@@ -9,7 +9,7 @@ function setup_vit_benchmark!(suite::BenchmarkGroup, backend)
 end
 
 function setup_vgg_benchmark!(suite::BenchmarkGroup, backend)
-    for depth in (16,), bsize in (32,)
+    for depth in (16,), bsize in (4,)
         benchmark_name = "VGG$(depth) bn=true (224 x 224 x 3 x $(bsize))"
 
         setup_lux_benchmark!(
