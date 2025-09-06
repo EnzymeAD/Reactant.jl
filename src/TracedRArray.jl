@@ -626,7 +626,7 @@ function overloaded_mapreduce(
 
     res = @opcall reduce(reduce_input, reduce_init, dims, op)
 
-    init !== nothing && (res = Reactant.call_with_reactant(broadcast, op, res, init))
+    init !== nothing && (res = op.(res, init))
 
     if original_dims isa Colon
         @assert size(res) == () "expected size of result to be (), got $(size(res))"
