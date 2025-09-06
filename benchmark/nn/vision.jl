@@ -1,5 +1,5 @@
 function setup_vit_benchmark!(suite::BenchmarkGroup, backend)
-    for mode in (:tiny, :small), bsize in (4,)
+    for mode in (:small,), bsize in (4,)
         benchmark_name = "ViT $(mode) (256 x 256 x 3 x $(bsize))"
 
         setup_lux_benchmark!(
