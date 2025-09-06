@@ -1414,19 +1414,28 @@ function scan_impl!(
     return output
 end
 
-function overloaded_searchsortedfirst(
-    v, x, lo::T, hi::T, o::Base.Ordering
-) where {T<:Integer}
-    return sum(T.(__lt(o, v[lo:hi], x)); init=lo)
+for op in (:searchsortedfirst, :searchsortedlast, :searchsorted)
+    rop = Symbol(:overloaded_, op)
+    @eval function $(rop)(v, x, o::Base.Ordering)
+        return $(rop)(v, x, firstindex(v), lastindex(v), o)
+    end
 end
 
-function overloaded_searchsortedlast(
-    v, x, lo::T, hi::T, o::Base.Ordering
-) where {T<:Integer}
-    return sum(T.(.!(__lt(o, x, v[lo:hi]))); init=lo - 1)
+function overloaded_searchsortedfirst(v, x, lo::T, hi::T, o::Base.Ordering) where {T}
+    v = TracedUtils.broadcast_to_size(v, size(v))
+    x = TracedUtils.promote_to(TracedRNumber{Reactant.unwrapped_eltype(v)}, x)
+    return Reactant.CallWithReactant(sum)(T.(__lt(o, v[lo:hi], x)); init=lo)
 end
 
-function overloaded_searchsorted(v, x, lo::T, hi::T, o::Base.Ordering) where {T<:Integer}
+function overloaded_searchsortedlast(v, x, lo::T, hi::T, o::Base.Ordering) where {T}
+    v = TracedUtils.broadcast_to_size(v, size(v))
+    x = TracedUtils.promote_to(TracedRNumber{Reactant.unwrapped_eltype(v)}, x)
+    return Reactant.CallWithReactant(sum)(T.(.!(__lt(o, x, v[lo:hi]))); init=lo - 1)
+end
+
+function overloaded_searchsorted(v, x, lo::T, hi::T, o::Base.Ordering) where {T}
+    v = TracedUtils.broadcast_to_size(v, size(v))
+    x = TracedUtils.promote_to(TracedRNumber{Reactant.unwrapped_eltype(v)}, x)
     firstidx = overloaded_searchsortedfirst(v, x, lo, hi, o)
     lastidx = overloaded_searchsortedlast(v, x, lo, hi, o)
     return Reactant.TracedRNumberOverrides.TracedUnitRange(firstidx, lastidx)

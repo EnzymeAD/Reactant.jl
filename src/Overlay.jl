@@ -205,32 +205,24 @@ end
     end
 end
 
-@reactant_overlay @noinline function Base.searchsortedfirst(
-    v::AbstractVector, x::Number, lo::T, hi::T, o::Base.Ordering
-) where {T<:Integer}
-    if use_overlayed_version((v, x))
-        return TracedRArrayOverrides.overloaded_searchsortedfirst(v, x, lo, hi, o)
-    else
-        return Base.inferencebarrier(Base.searchsortedfirst)(v, x, lo, hi, o)
-    end
-end
+for op in (:searchsortedfirst, :searchsortedlast, :searchsorted)
+    rop = Symbol(:overloaded_, op)
 
-@reactant_overlay @noinline function Base.searchsortedlast(
-    v::AbstractVector, x::Number, lo::T, hi::T, o::Base.Ordering
-) where {T<:Integer}
-    if use_overlayed_version((v, x))
-        return TracedRArrayOverrides.overloaded_searchsortedlast(v, x, lo, hi, o)
-    else
-        return Base.inferencebarrier(Base.searchsortedlast)(v, x, lo, hi, o)
-    end
-end
+    @eval begin
+        @reactant_overlay @noinline function Base.$op(v, x, o::Base.Ordering)
+            if use_overlayed_version((v, x))
+                return TracedRArrayOverrides.$rop(v, x, o)
+            else
+                return Base.inferencebarrier(Base.$op)(v, x, o)
+            end
+        end
 
-@reactant_overlay @noinline function Base.searchsorted(
-    v::AbstractVector, x::Number, lo::T, hi::T, o::Base.Ordering
-) where {T<:Integer}
-    if use_overlayed_version((v, x))
-        return TracedRArrayOverrides.overloaded_searchsorted(v, x, lo, hi, o)
-    else
-        return Base.inferencebarrier(Base.searchsorted)(v, x, lo, hi, o)
+        @reactant_overlay @noinline function Base.$op(v, x, lo, hi, o::Base.Ordering)
+            if use_overlayed_version((v, x))
+                return TracedRArrayOverrides.$rop(v, x, lo, hi, o)
+            else
+                return Base.inferencebarrier(Base.$op)(v, x, lo, hi, o)
+            end
+        end
     end
 end
