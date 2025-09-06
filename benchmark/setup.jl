@@ -19,8 +19,8 @@ end
 function setup_benchmarks!(suite::BenchmarkGroup, backend::String)
     # neural network benchmarks
     ## vision models
-    NN.setup_vit_benchmark!(suite, backend)
     NN.setup_vgg_benchmark!(suite, backend)
+    NN.setup_vit_benchmark!(suite, backend)
 
     ## neural operator benchmarks
     NN.setup_deeponet_benchmark!(suite, backend)
