@@ -20,6 +20,10 @@ on:
       - "src/**"
       - "Project.toml"
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   benchmark:
     if: ${{ (github.ref == 'refs/heads/main' && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')) || (github.event_name == 'pull_request' && contains(join(github.event.pull_request.labels.*.name, ','), 'run benchmarks')) }}
