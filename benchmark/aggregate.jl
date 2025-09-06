@@ -1,6 +1,6 @@
 using BenchmarkTools
 
-const BACKENDS = ["CPU", "CUDA"]
+const BACKENDS = ["CPU", "CUDA", "TPU"]
 
 const CPU_Results = joinpath(dirname(@__FILE__), "results", "CPUbenchmarks.json")
 @assert(ispath(CPU_Results))
