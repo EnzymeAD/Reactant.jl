@@ -21,9 +21,10 @@ init_array(rng, dims::Dims) = randn(rng, Float32, dims)
 function general_lux_setup(model, x_dims)
     rng = Random.default_rng()  # don't use any other rng
     Random.seed!(rng, 0)
-    ps, st = Lux.setup(rng, model)
+    xdev = reactant_device(; force=true)
+    ps, st = xdev(Lux.setup(rng, model))
     x_dims === nothing && return ps, st
-    x = init_array(rng, x_dims)
+    x = xdev(init_array(rng, x_dims))
     return x, ps, st
 end
 
@@ -160,26 +161,24 @@ function add_benchmark!(
 )
     if fwd_or_bwd == "forward"
         suite[benchmark_name][fwd_or_bwd][backend][tag] = @benchmarkable begin
-            compiled_fwd($model, x_ra, ps_ra, st_test_ra)
+            compiled_fwd($model, x, ps, st_test)
         end setup = begin
             GC.gc(true)
             x, ps, st = general_lux_setup($model, $x_dims)
             st_test = Lux.testmode(st)
-            x_ra, ps_ra, st_test_ra = Reactant.to_rarray((x, ps, st_test))
             compiled_fwd = @compile compile_options = $compile_options Lux.apply(
-                $model, x_ra, ps_ra, st_test_ra
+                $model, x, ps, st_test
             )
             GC.gc(true)
         end
     elseif fwd_or_bwd == "backward"
         suite[benchmark_name][fwd_or_bwd][backend][tag] = @benchmarkable begin
-            compiled_fwd($model, x_ra, ps_ra, st_ra)
+            compiled_bwd($model, x, ps, st)
         end setup = begin
             GC.gc(true)
             x, ps, st = general_lux_setup($model, $x_dims)
-            x_ra, ps_ra, st_ra = Reactant.to_rarray((x, ps, st))
-            compiled_fwd = @compile compile_options = $compile_options simple_gradient(
-                $model, x_ra, ps_ra, st_ra
+            compiled_bwd = @compile compile_options = $compile_options simple_gradient(
+                $model, x, ps, st
             )
             GC.gc(true)
         end
