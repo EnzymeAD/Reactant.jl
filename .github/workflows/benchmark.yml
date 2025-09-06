@@ -36,7 +36,9 @@ jobs:
         os:
           - linux-x86-n2-32
           - linux-x86-ct6e-180-4tpu
-          - linux-x86-a2-48-a100-4gpu
+        # XXX: temporarily disabled since the JLLs are failing
+        #      https://github.com/EnzymeAD/Reactant.jl/actions/runs/17509546097/job/49739166333?pr=1632#step:6:423
+        #   - linux-x86-a2-48-a100-4gpu
     steps:
       - uses: actions/checkout@v4
       - uses: julia-actions/setup-julia@v2
