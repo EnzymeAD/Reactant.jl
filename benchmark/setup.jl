@@ -2,7 +2,7 @@
 module NN
 
 using Boltz: Vision
-using Lux: Lux, gelu
+using Lux: Lux, gelu, reactant_device
 using Reactant: Reactant, @compile
 using NeuralOperators: DeepONet, FourierNeuralOperator
 using Enzyme: Enzyme
