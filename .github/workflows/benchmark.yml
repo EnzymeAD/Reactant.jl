@@ -47,7 +47,7 @@ jobs:
       - uses: julia-actions/cache@v2
       - name: "Run Benchmarks"
         run: |
-          julia --color=yes --project=benchmark -e 'println("--- :julia: Instantiating project")
+          julia --color=yes --project=benchmark -e '@info "Instantiating project"
             using Pkg
             Pkg.instantiate()'
 
@@ -77,12 +77,13 @@ jobs:
           path: benchmark/results
           merge-multiple: true
       - name: Combine benchmarks
+        id: locate
         run: |
-          julia -e 'println("--- :julia: Instantiating project")
+          julia --color=yes -e '@info "Instantiating project"
             using Pkg
             Pkg.add("BenchmarkTools")
 
-            println("--- :julia: Combining Benchmarks")
+            @info "Combining Benchmarks"
             include("benchmark/aggregate.jl")'
 
            echo "path=$(find benchmark -type f -name combinedbenchmarks.json 2>/dev/null)" >> $GITHUB_OUTPUT

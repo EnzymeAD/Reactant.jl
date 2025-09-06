@@ -166,18 +166,20 @@ function add_benchmark!(
             )
             GC.gc(true)
         end
+    elseif fwd_or_bwd == "backward"
+        # suite[benchmark_name][fwd_or_bwd][backend][tag] = @benchmarkable begin
+        #     compiled_fwd($model, x_ra, ps_ra, st_ra)
+        # end setup = begin
+        #     GC.gc(true)
+        #     x, ps, st = general_lux_setup($model, $x_dims)
+        #     x_ra, ps_ra, st_ra = Reactant.to_rarray((x, ps, st))
+        #     compiled_fwd = @compile compile_options = $compile_options simple_gradient(
+        #         $model, x_ra, ps_ra, st_ra
+        #     )
+        #     GC.gc(true)
+        # end
     else
-        suite[benchmark_name][fwd_or_bwd][backend][tag] = @benchmarkable begin
-            compiled_fwd($model, x_ra, ps_ra, st_ra)
-        end setup = begin
-            GC.gc(true)
-            x, ps, st = general_lux_setup($model, $x_dims)
-            x_ra, ps_ra, st_ra = Reactant.to_rarray((x, ps, st))
-            compiled_fwd = @compile compile_options = $compile_options simple_gradient(
-                $model, x_ra, ps_ra, st_ra
-            )
-            GC.gc(true)
-        end
+        @error "Unknown fwd_or_bwd: $(fwd_or_bwd)"
     end
     return nothing
 end
