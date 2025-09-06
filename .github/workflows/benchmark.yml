@@ -26,6 +26,7 @@ concurrency:
 
 jobs:
   benchmark:
+    timeout-minutes: 90
     if: ${{ (github.ref == 'refs/heads/main' && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')) || (github.event_name == 'pull_request' && contains(join(github.event.pull_request.labels.*.name, ','), 'run benchmarks')) }}
     runs-on: ${{ matrix.os }}
     container:
