@@ -1,0 +1,100 @@
+name: Benchmarks
+
+permissions:
+  contents: write # contents permission to update benchmark contents in gh-pages branch
+  statuses: read
+  deployments: write # deployments permission to deploy GitHub pages website
+  pull-requests: write
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/benchmark.yml"
+      - "ext/**"
+      - "lib/**"
+      - "src/**"
+      - "Project.toml"
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/benchmark.yml"
+      - "ext/**"
+      - "lib/**"
+      - "src/**"
+      - "Project.toml"
+
+jobs:
+  benchmark:
+    if: ${{ !contains(github.event.head_commit.message, '[skip benchmarks]') && ! github.event.pull_request.head.repo.fork }}
+    runs-on: ${{ matrix.os }}
+    container:
+      image: ${{ contains(matrix.os, 'linux') && 'ghcr.io/enzymead/reactant-docker-images@sha256:7004a6ebbdd77bd047900b2bffc542e8576864056dc27a9c94d30666d6f7ea01' || '' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - linux-x86-n2-32
+          - linux-x86-ct6e-180-4tpu
+          - linux-x86-a2-48-a100-4gpu
+    steps:
+      - uses: actions/checkout@v4
+      - uses: julia-actions/setup-julia@v2
+        with:
+          version: "1"
+      - uses: julia-actions/cache@v2
+      - name: "Run Benchmarks"
+        run: |
+          julia --color=yes --project=benchmark -e 'println("--- :julia: Instantiating project")
+            using Pkg
+            Pkg.instantiate()'
+
+          julia --color=yes --project=benchmark benchmark/runbenchmarks.jl
+      - name: Upload Benchmark Results
+        uses: actions/upload-artifact@v4
+        timeout-minutes: 10
+        with:
+          name: benchmark-results-${{ matrix.os }}
+          path: "benchmark/results/*"
+          retention-days: 90
+          overwrite: false
+
+  benchmark-aggregate:
+    if: ${{ !contains(github.event.head_commit.message, '[skip benchmarks]') && ! github.event.pull_request.head.repo.fork }}
+    needs: benchmark
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: julia-actions/setup-julia@v2
+        with:
+          version: "1"
+      - uses: julia-actions/cache@v2
+      - uses: actions/download-artifact@v5
+        with:
+          pattern: benchmark-results-*
+          path: benchmark/results
+          merge-multiple: true
+      - name: Combine benchmarks
+        run: |
+          julia -e 'println("--- :julia: Instantiating project")
+            using Pkg
+            Pkg.add("BenchmarkTools")
+
+            println("--- :julia: Combining Benchmarks")
+            include("benchmark/aggregate.jl")'
+
+           echo "path=$(find benchmark -type f -name combinedbenchmarks.json 2>/dev/null)" >> $GITHUB_OUTPUT
+
+      - name: Upload Benchmark Results
+        uses: benchmark-action/github-action-benchmark@v1
+        with:
+          name: Reactant.jl Benchmarks
+          tool: "julia"
+          output-file-path: ${{ steps.locate.outputs.path }}
+          benchmark-data-dir-path: "benchmarks"
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          comment-always: true
+          summary-always: true
+          alert-threshold: "150%"
+          fail-on-alert: false
+          auto-push: ${{ github.event_name != 'pull_request' }}
