@@ -650,8 +650,8 @@ function Base.mapreducedim!(
         @assert sR == 1
         return i
     end
-    tmp = overloaded_mapreduce(f, op, A; dims=filter(!isnothing, dims), init=R)
-    copyto!(R, tmp)
+    tmp = mapreduce(f, op, A; dims=filter(!isnothing, dims))
+    copyto!(R, op.(R, tmp))
     return R
 end
 
