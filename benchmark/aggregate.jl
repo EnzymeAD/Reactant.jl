@@ -17,11 +17,11 @@ for backend in BACKENDS[2:end]
     else
         backend_results = BenchmarkTools.load(filepath)[1]
         if backend_results isa BenchmarkTools.BenchmarkGroup
-            # <benchmark name>/<forward or reverse>/<backend>/<reactant or package>
+            # <benchmark name>/<forward or reverse>/<backend>/pass options>
             for benchmark in keys(RESULTS)
                 for pass in keys(RESULTS[benchmark])
-                    for pkg in keys(backend_results[benchmark][pass][backend])
-                        RESULTS[benchmark][pass][backend][pkg] = backend_results[benchmark][pass][backend][pkg]
+                    for pass_options in keys(backend_results[benchmark][pass][backend])
+                        RESULTS[benchmark][pass][backend][pass_options] = backend_results[benchmark][pass][backend][pass_options]
                     end
                 end
             end
