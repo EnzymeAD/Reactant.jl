@@ -7,7 +7,7 @@ using Statistics: median
 # to benchmarks/Project.toml and change BENCHMARK_GROUP to the backend name
 BENCHMARK_GROUP = get(ENV, "BENCHMARK_GROUP", nothing)
 
-BenchmarkTools.DEFAULT_PARAMETERS.seconds = 20
+BenchmarkTools.DEFAULT_PARAMETERS.seconds = 5
 
 if BENCHMARK_GROUP == "CUDA"
     Reactant.set_default_backend("gpu")
