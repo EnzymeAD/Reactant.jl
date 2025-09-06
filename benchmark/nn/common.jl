@@ -33,7 +33,6 @@ function setup_lux_benchmark!(
 )
     common_opts = (; sync=true, no_nan=true, all_finite=true)
 
-    # XXX: enable once we have finished the initial tests
     fwd_options = [
         ("XLA", Reactant.DefaultXLACompileOptions(; sync=true)),
         ("Default", Reactant.CompileOptions(; common_opts...)),
@@ -49,84 +48,84 @@ function setup_lux_benchmark!(
         ]...,
     ]
 
-    # if disable_scatter_gather_bench
-    #     push!(
-    #         fwd_options,
-    #         (
-    #             "DisableScatterGather",
-    #             Reactant.CompileOptions(;
-    #                 disable_scatter_gather_optimization_passes=true, common_opts...
-    #             ),
-    #         ),
-    #     )
-    #     append!(
-    #         bwd_options,
-    #         [
-    #             (
-    #                 "DisableScatterGather" *
-    #                 join(uppercasefirst.(split(string(pass), "_")), ""),
-    #                 Reactant.CompileOptions(;
-    #                     disable_scatter_gather_optimization_passes=true,
-    #                     optimization_passes=pass,
-    #                     common_opts...,
-    #                 ),
-    #             ) for pass in (:all, :before_enzyme, :after_enzyme)
-    #         ],
-    #     )
-    # end
+    if disable_scatter_gather_bench
+        push!(
+            fwd_options,
+            (
+                "DisableScatterGather",
+                Reactant.CompileOptions(;
+                    disable_scatter_gather_optimization_passes=true, common_opts...
+                ),
+            ),
+        )
+        append!(
+            bwd_options,
+            [
+                (
+                    "DisableScatterGather" *
+                    join(uppercasefirst.(split(string(pass), "_")), ""),
+                    Reactant.CompileOptions(;
+                        disable_scatter_gather_optimization_passes=true,
+                        optimization_passes=pass,
+                        common_opts...,
+                    ),
+                ) for pass in (:all, :before_enzyme, :after_enzyme)
+            ],
+        )
+    end
 
-    # if disable_pad_bench
-    #     push!(
-    #         fwd_options,
-    #         (
-    #             "DisablePad",
-    #             Reactant.CompileOptions(;
-    #                 disable_pad_optimization_passes=true, common_opts...
-    #             ),
-    #         ),
-    #     )
-    #     append!(
-    #         bwd_options,
-    #         [
-    #             (
-    #                 "DisablePad" * join(uppercasefirst.(split(string(pass), "_")), ""),
-    #                 Reactant.CompileOptions(;
-    #                     disable_pad_optimization_passes=true, optimization_passes=pass,
-    #                     common_opts...,
-    #                 ),
-    #             ) for pass in (:all, :before_enzyme, :after_enzyme)
-    #         ],
-    #     )
-    # end
+    if disable_pad_bench
+        push!(
+            fwd_options,
+            (
+                "DisablePad",
+                Reactant.CompileOptions(;
+                    disable_pad_optimization_passes=true, common_opts...
+                ),
+            ),
+        )
+        append!(
+            bwd_options,
+            [
+                (
+                    "DisablePad" * join(uppercasefirst.(split(string(pass), "_")), ""),
+                    Reactant.CompileOptions(;
+                        disable_pad_optimization_passes=true, optimization_passes=pass,
+                        common_opts...,
+                    ),
+                ) for pass in (:all, :before_enzyme, :after_enzyme)
+            ],
+        )
+    end
 
-    # if disable_scatter_gather_bench && disable_pad_bench
-    #     push!(
-    #         fwd_options,
-    #         (
-    #             "DisableScatterGatherPad",
-    #             Reactant.CompileOptions(;
-    #                 disable_scatter_gather_optimization_passes=true,
-    #                 disable_pad_optimization_passes=true,
-    #                 common_opts...,
-    #             ),
-    #         ),
-    #     )
-    #     append!(
-    #         bwd_options,
-    #         [
-    #             (
-    #                 "DisableScatterGatherPad" *
-    #                 join(uppercasefirst.(split(string(pass), "_")), ""),
-    #                 Reactant.CompileOptions(;
-    #                     disable_scatter_gather_optimization_passes=true,
-    #                     disable_pad_optimization_passes=true,
-    #                     optimization_passes=pass,
-    #                     common_opts...,
-    #                 ),
-    #             ) for pass in (:all, :before_enzyme, :after_enzyme)
-    #         ],
-    #     )
-    # end
+    if disable_scatter_gather_bench && disable_pad_bench
+        push!(
+            fwd_options,
+            (
+                "DisableScatterGatherPad",
+                Reactant.CompileOptions(;
+                    disable_scatter_gather_optimization_passes=true,
+                    disable_pad_optimization_passes=true,
+                    common_opts...,
+                ),
+            ),
+        )
+        append!(
+            bwd_options,
+            [
+                (
+                    "DisableScatterGatherPad" *
+                    join(uppercasefirst.(split(string(pass), "_")), ""),
+                    Reactant.CompileOptions(;
+                        disable_scatter_gather_optimization_passes=true,
+                        disable_pad_optimization_passes=true,
+                        optimization_passes=pass,
+                        common_opts...,
+                    ),
+                ) for pass in (:all, :before_enzyme, :after_enzyme)
+            ],
+        )
+    end
 
     for (tag, compile_options) in fwd_options
         add_benchmark!(
@@ -167,17 +166,17 @@ function add_benchmark!(
             GC.gc(true)
         end
     elseif fwd_or_bwd == "backward"
-        # suite[benchmark_name][fwd_or_bwd][backend][tag] = @benchmarkable begin
-        #     compiled_fwd($model, x_ra, ps_ra, st_ra)
-        # end setup = begin
-        #     GC.gc(true)
-        #     x, ps, st = general_lux_setup($model, $x_dims)
-        #     x_ra, ps_ra, st_ra = Reactant.to_rarray((x, ps, st))
-        #     compiled_fwd = @compile compile_options = $compile_options simple_gradient(
-        #         $model, x_ra, ps_ra, st_ra
-        #     )
-        #     GC.gc(true)
-        # end
+        suite[benchmark_name][fwd_or_bwd][backend][tag] = @benchmarkable begin
+            compiled_fwd($model, x_ra, ps_ra, st_ra)
+        end setup = begin
+            GC.gc(true)
+            x, ps, st = general_lux_setup($model, $x_dims)
+            x_ra, ps_ra, st_ra = Reactant.to_rarray((x, ps, st))
+            compiled_fwd = @compile compile_options = $compile_options simple_gradient(
+                $model, x_ra, ps_ra, st_ra
+            )
+            GC.gc(true)
+        end
     else
         @error "Unknown fwd_or_bwd: $(fwd_or_bwd)"
     end

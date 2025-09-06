@@ -16,9 +16,12 @@ include("nn/vgg.jl")
 end
 
 function setup_benchmarks!(suite::BenchmarkGroup, backend::String)
-    # vision models
+    # neural network benchmarks
+    ## vision models
     NN.setup_vit_benchmark!(suite, backend)
     NN.setup_vgg_benchmark!(suite, backend)
+
+    ## neural operator benchmarks
 
     return nothing
 end
