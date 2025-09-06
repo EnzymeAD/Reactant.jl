@@ -26,7 +26,7 @@ on:
 
 jobs:
   benchmark:
-    if: ${{ !contains(github.event.head_commit.message, '[skip benchmarks]') && ! github.event.pull_request.head.repo.fork }}
+    if: ${{ (github.event_name != 'pull_request') || (!github.event.pull_request.draft && !contains(github.event.head_commit.message, '[skip benchmarks]') && !github.event.pull_request.head.repo.fork) }}
     runs-on: ${{ matrix.os }}
     container:
       image: ${{ contains(matrix.os, 'linux') && 'ghcr.io/enzymead/reactant-docker-images@sha256:7004a6ebbdd77bd047900b2bffc542e8576864056dc27a9c94d30666d6f7ea01' || '' }}
@@ -62,7 +62,7 @@ jobs:
           overwrite: false
 
   benchmark-aggregate:
-    if: ${{ !contains(github.event.head_commit.message, '[skip benchmarks]') && ! github.event.pull_request.head.repo.fork }}
+    if: ${{ (github.event_name != 'pull_request') || (!github.event.pull_request.draft && !contains(github.event.head_commit.message, '[skip benchmarks]') && !github.event.pull_request.head.repo.fork) }}
     needs: benchmark
     runs-on: ubuntu-latest
     steps:
