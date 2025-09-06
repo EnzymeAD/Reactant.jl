@@ -14,11 +14,16 @@ function simple_gradient(model, x, ps, st)
     )
 end
 
+init_array(rng, dims::Tuple) = init_array.(Ref(rng), dims)
+init_array(rng, dims::Integer) = randn(rng, Float32, dims)
+init_array(rng, dims::Dims) = randn(rng, Float32, dims)
+
 function general_lux_setup(model, x_dims)
     rng = Random.default_rng()  # don't use any other rng
+    Random.seed!(rng, 0)
     ps, st = Lux.setup(rng, model)
     x_dims === nothing && return ps, st
-    x = randn(rng, Float32, x_dims)
+    x = init_array(rng, x_dims)
     return x, ps, st
 end
 
@@ -90,7 +95,8 @@ function setup_lux_benchmark!(
                 (
                     "DisablePad" * join(uppercasefirst.(split(string(pass), "_")), ""),
                     Reactant.CompileOptions(;
-                        disable_pad_optimization_passes=true, optimization_passes=pass,
+                        disable_pad_optimization_passes=true,
+                        optimization_passes=pass,
                         common_opts...,
                     ),
                 ) for pass in (:all, :before_enzyme, :after_enzyme)
