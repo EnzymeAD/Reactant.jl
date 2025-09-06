@@ -1414,6 +1414,29 @@ function scan_impl!(
     return output
 end
 
+function overloaded_searchsortedfirst(
+    a::AbstractRange{<:Union{<:Real,Reactant.TracedRNumber{<:Real}}},
+    x::Union{<:Real,Reactant.TracedRNumber{<:Real}},
+    o::Base.DirectOrdering,
+)
+    x = TracedUtils.promote_to(TracedRNumber{Reactant.unwrapped_eltype(a)}, x)
+
+    f, h, l = first(a), step(a), last(a)
+    a = TracedUtils.broadcast_to_size(a, size(a))
+
+    n = round(Int, (x - f) / h + 1)
+
+    return ifelse(
+        !Base.Order.lt(o, f, x),
+        1,
+        ifelse(
+            (h == 0) | Base.Order.lt(o, l, x),
+            length(a) + 1,
+            ifelse(Base.Order.lt(o, @allowscalar(a[n]), x), n + 1, n),
+        ),
+    )
+end
+
 for op in (:searchsortedfirst, :searchsortedlast, :searchsorted)
     rop = Symbol(:overloaded_, op)
     @eval function $(rop)(v, x, o::Base.Ordering)
