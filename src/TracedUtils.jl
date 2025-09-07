@@ -179,21 +179,26 @@ end
 function get_ancestor_indices_inner(
     x::AnyTracedRArray{T,N}, linear_indices::AbstractArray
 ) where {T,N}
-    return _get_ancestor_indices_linear(x, linear_indices)
+    idxs = _get_ancestor_indices_linear(x, linear_indices)
+    return idxs isa Tuple ? idxs : (idxs,)
 end
 function get_ancestor_indices_inner(
     x::AnyTracedRArray{T,1}, linear_indices::AbstractArray
 ) where {T}
-    return _get_ancestor_indices_linear(x, linear_indices)
+    idxs = _get_ancestor_indices_linear(x, linear_indices)
+    return idxs isa Tuple ? idxs : (idxs,)
 end
 
 function _get_ancestor_indices_linear(x::AnyTracedRArray, indices::AbstractArray)
+    @show indices
     indices = CartesianIndices(x)[indices]
+    @show indices
     pidxs = parentindices(x)
     parent_indices = map(indices) do idx
         CartesianIndex(Base.reindex(pidxs, (idx.I...,)))
     end
-    return get_ancestor_indices(parent(x), parent_indices)
+    @show parent_indices
+    return @show get_ancestor_indices(parent(x), parent_indices)
 end
 
 Base.@nospecializeinfer function batch_ty(
