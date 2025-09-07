@@ -903,33 +903,6 @@ function Base.unsafe_getindex(
     return T2(x_hi + (x_lo + (shift_lo + r.ref.lo)))
 end
 
-function Base.searchsortedfirst(
-    a::AbstractRange{<:Union{Real,TracedRNumber}},
-    x::TracedRNumber{<:Real},
-    o::Base.DirectOrdering,
-)::TracedRNumber{keytype(a)}
-
-    # require_one_based_indexing(a)
-    f, h, l = first(a), step(a), last(a)
-    n = round(Int, (x - f) / h + 1)
-
-    return ifelse(
-        !Base.Order.lt(o, f, x),
-        1,
-        ifelse(
-            (h == 0) | Base.Order.lt(o, l, x),
-            length(a) + 1,
-            ifelse(Base.Order.lt(o, a[n], x), n + 1, n),
-        ),
-    )
-end
-
-function Base.searchsortedfirst(
-    a::AbstractRange{<:TracedRNumber}, x::Real, o::Base.DirectOrdering
-)::TracedRNumber{keytype(a)}
-    return Base.searchsortedfirst(a, TracedRNumber{typeof(x)}(x), o)
-end
-
 function Base.round(::Type{T}, x::TracedRNumber{<:AbstractFloat}) where {T<:Integer}
     return trunc(T, Base.round(x))
 end

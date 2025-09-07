@@ -123,8 +123,6 @@ end
     @test all(Array(a) .== 9)
 end
 
-using Reactant, CUDA
-
 function cmul!(a, b)
     b[1] *= a[1]
     return nothing

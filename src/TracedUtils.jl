@@ -1193,6 +1193,25 @@ function broadcast_to_size(arg::AbstractRange{<:TracedRNumber}, rsize)
 end
 broadcast_to_size(arg::AbstractRange, rsize) = broadcast_to_size(collect(arg), rsize)
 
+function broadcast_to_size(arg::Union{StepRange,StepRangeLen}, rsize)
+    x = @opcall(
+        add(
+            @opcall(
+                multiply(
+                    broadcast_to_size(step(arg), (length(arg),)),
+                    @opcall(
+                        iota(
+                            Reactant.unwrapped_eltype(arg), [length(arg)]; iota_dimension=1
+                        )
+                    )
+                )
+            ),
+            broadcast_to_size(first(arg), (length(arg),)),
+        )
+    )
+    return broadcast_to_size(x, rsize)
+end
+
 function broadcast_to_size(arg::UnitRange{<:TracedRNumber}, rsize)
     return @invoke broadcast_to_size(arg::UnitRange, rsize)
 end
