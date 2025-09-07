@@ -1452,7 +1452,7 @@ Base.@nospecializeinfer function make_tracer(
         else
             if mode == TracedTrack || mode == NoStopTracedTrack
                 res = TracedRNumber{RT}(
-                    (path,), TracedUtils.broadcast_to_size(prev, ()).mlir_data
+                    (path,), Reactant.broadcast_to_size(prev, ()).mlir_data
                 )
                 if Base.ismutable(prev) && !haskey(seen, prev)
                     return seen[prev] = res
@@ -1462,7 +1462,7 @@ Base.@nospecializeinfer function make_tracer(
             elseif mode == TracedSetPath
                 haskey(seen, prev) && return seen[prev]
                 res = TracedRNumber{RT}(
-                    (path,), TracedUtils.broadcast_to_size(prev, ()).mlir_data
+                    (path,), Reactant.broadcast_to_size(prev, ()).mlir_data
                 )
                 seen[prev] = res
                 return res

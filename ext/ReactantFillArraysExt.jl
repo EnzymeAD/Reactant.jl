@@ -92,21 +92,19 @@ end
 
 # Materialize into a dense array
 function ReactantCore.materialize_traced_array(x::Fill{T}) where {T}
-    return TracedUtils.broadcast_to_size(
-        TracedUtils.promote_to(TracedRNumber{unwrapped_eltype(T)}, x.value), size(x)
-    )
+    return Reactant.broadcast_to_size(unwrapped_eltype(T)(x.value), size(x))
 end
 
 function ReactantCore.materialize_traced_array(x::Ones{T}) where {T}
-    return TracedUtils.broadcast_to_size(unwrapped_eltype(T)(1), size(x))
+    return Reactant.broadcast_to_size(unwrapped_eltype(T)(1), size(x))
 end
 
 function ReactantCore.materialize_traced_array(x::Zeros{T}) where {T}
-    return TracedUtils.broadcast_to_size(unwrapped_eltype(T)(0), size(x))
+    return Reactant.broadcast_to_size(unwrapped_eltype(T)(0), size(x))
 end
 
 function ReactantCore.materialize_traced_array(x::OneElement{T}) where {T}
-    y = TracedUtils.broadcast_to_size(unwrapped_eltype(T)(0), size(x))
+    y = Reactant.broadcast_to_size(unwrapped_eltype(T)(0), size(x))
     @allowscalar setindex!(y, x.val, x.ind...)
     return y
 end
@@ -114,7 +112,7 @@ end
 # some functions to avoid bad performance
 for AT in (Fill, Ones, Zeros, OneElement)
     @eval function Base.similar(x::$AT{<:TracedRNumber}, ::Type{T}, dims::Dims) where {T}
-        return TracedUtils.broadcast_to_size(unwrapped_eltype(T)(0), dims)
+        return Reactant.broadcast_to_size(unwrapped_eltype(T)(0), dims)
     end
 end
 

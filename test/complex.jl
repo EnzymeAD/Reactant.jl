@@ -54,7 +54,7 @@ end
     y = ConcreteRNumber(x)
 
     f = Reactant.compile((y,)) do z
-        z + Reactant.TracedUtils.promote_to(
+        z + Reactant.promote_to(
             Reactant.TracedRNumber{ComplexF32}, ComplexF32(1.0 - 3.0im)
         )
     end

@@ -124,7 +124,7 @@ function aos_to_soa(x::Array{TracedRNumber{T}}) where {T}
     isa_traced_soa(ancestor(x)) && return x
     for i in eachindex(x)
         if !isassigned(x, i)
-            x[i] = TracedUtils.promote_to(TracedRNumber{T}, 0)
+            x[i] = Reactant.promote_to(TracedRNumber{T}, 0)
         end
     end
     return @opcall reshape(vcat(x...), size(x)...)
@@ -165,6 +165,7 @@ function aos_to_soa(x::AbstractArray{<:ConcreteIFRTNumber{T}}) where {T}
     return x_c
 end
 
+include("TracedPromotion.jl")
 include("TracedUtils.jl")
 
 include("TracedRNumber.jl")

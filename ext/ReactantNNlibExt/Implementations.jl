@@ -418,7 +418,7 @@ end
 function NNlib.pad_constant(
     x::AnyTracedRArray{T,N}, pad::NTuple{N,Tuple{Int,Int}}, value
 ) where {T,N}
-    value = TracedUtils.promote_to(TracedRNumber{T}, value)
+    value = Reactant.promote_to(TracedRNumber{T}, value)
     low = [i[1] for i in pad]
     high = [i[2] for i in pad]
     interior = [0 for i in pad]
@@ -452,12 +452,9 @@ function _stack_indices(idxs::AbstractArray{<:CartesianIndex})
 end
 
 function _nnlib_gather_impl(src::AnyTracedRArray, idxs::AbstractArray, n_dims::Int)
-    idxs = TracedUtils.promote_to(
-        TracedRArray{Reactant.unwrapped_eltype(idxs),ndims(idxs)}, idxs
-    )
     return @opcall gather(
         src,
-        idxs;
+        Reactant.promote_to(TracedRArray, idxs);
         offset_dims=collect(Int64, 1:n_dims),
         collapsed_slice_dims=collect(Int64, (n_dims + 1):ndims(src)),
         operand_batching_dims=Int64[],
@@ -542,22 +539,18 @@ function _nnlib_scatter_impl(
     idx::AbstractArray,
     n_dims::Int,
 ) where {OP,T}
-    scatter_indices = TracedUtils.promote_to(
-        TracedRArray{Reactant.unwrapped_eltype(idx),ndims(idx)}, idx
-    )
-    n_idxs = size(scatter_indices, 1)
     return @opcall(
         scatter(
             op,
             [dst],
-            scatter_indices,
+            Reactant.promote_to(TracedRArray, idx),
             [src];
             update_window_dims=collect(Int64, 1:n_dims),
             inserted_window_dims=collect(Int64, (n_dims + 1):ndims(dst)),
             input_batching_dims=Int64[],
             scatter_indices_batching_dims=Int64[],
             scatter_dims_to_operand_dims=collect(
-                Int64, (ndims(dst) - n_idxs + 1):ndims(dst)
+                Int64, (ndims(dst) - size(idx, 1) + 1):ndims(dst)
             ),
             index_vector_dim=Int64(1),
         )
