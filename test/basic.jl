@@ -579,9 +579,7 @@ end
 function f_row_major(x::AbstractArray{T}) where {T}
     y = [1 2; 3 4; 5 6]
     if x isa Reactant.TracedRArray
-        y = Reactant.TracedUtils.promote_to(
-            Reactant.TracedRArray{Reactant.unwrapped_eltype(T),2}, y
-        )
+        y = Reactant.promote_to(Reactant.TracedRArray{Reactant.unwrapped_eltype(T),2}, y)
     end
     return x .+ y
 end
@@ -893,7 +891,7 @@ end
 end
 
 @testset "don't expand ranges by default" begin
-    fn(x) = Reactant.TracedUtils.broadcast_to_size(x, (length(x),))
+    fn(x) = Reactant.broadcast_to_size(x, (length(x),))
 
     hlo = repr(@code_hlo(fn(1:10000)))
     @test contains(hlo, "stablehlo.iota")

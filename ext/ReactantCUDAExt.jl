@@ -1287,10 +1287,7 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
     blk_operands = MLIR.IR.Value[]
     for idx in
         (blockdim.x, blockdim.y, blockdim.z, threaddim.x, threaddim.y, threaddim.z, shmem)
-        push!(
-            blk_operands,
-            Reactant.TracedUtils.promote_to(Reactant.TracedRNumber{Int}, idx).mlir_data,
-        )
+        push!(blk_operands, Reactant.promote_to(Reactant.TracedRNumber{Int}, idx).mlir_data)
     end
 
     @assert length(restys) == length(aliases)

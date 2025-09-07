@@ -31,7 +31,7 @@ struct ReactantABI <: Enzyme.EnzymeCore.ABI end
 include("PrimitiveTypes.jl")
 
 function ancestor(x::AbstractArray)
-    p_x = parent(x)
+    p_x = applicable(_parent, x) ? _parent(x) : parent(x)
     p_x === x && return x
     return ancestor(p_x)
 end
@@ -55,6 +55,11 @@ end
 # A lot of packages don't define `Adapt.parent_type`. We use `_parent_type` as a way to
 # define the parent type of an array without type-piracy.
 function _parent_type end
+function _parent end
+
+_parent_type(::Type{Array}) = Array
+_parent_type(::Type{Array{T}}) where {T} = Array{T}
+_parent_type(::Type{Array{T,N}}) where {T,N} = Array{T,N}
 
 include("accelerators/Accelerators.jl")
 
@@ -124,7 +129,7 @@ function aos_to_soa(x::Array{TracedRNumber{T}}) where {T}
     isa_traced_soa(ancestor(x)) && return x
     for i in eachindex(x)
         if !isassigned(x, i)
-            x[i] = TracedUtils.promote_to(TracedRNumber{T}, 0)
+            x[i] = Reactant.promote_to(TracedRNumber{T}, 0)
         end
     end
     return @opcall reshape(vcat(x...), size(x)...)
@@ -165,6 +170,7 @@ function aos_to_soa(x::AbstractArray{<:ConcreteIFRTNumber{T}}) where {T}
     return x_c
 end
 
+include("TracedPromotion.jl")
 include("TracedUtils.jl")
 
 include("TracedRNumber.jl")

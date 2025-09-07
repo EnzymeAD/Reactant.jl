@@ -1,4 +1,3 @@
-
 using Reactant
 using Test
 using CUDA

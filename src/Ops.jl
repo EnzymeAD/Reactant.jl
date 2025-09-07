@@ -1178,8 +1178,8 @@ end
     sample_inputs = Vector{TracedRNumber}(undef, length(xs) * 2)
     for i in eachindex(xs)
         T = Reactant.unwrapped_eltype(xs[i])
-        sample_inputs[2i - 1] = Reactant.TracedUtils.promote_to(TracedRNumber{T}, 0)
-        sample_inputs[2i] = Reactant.TracedUtils.promote_to(TracedRNumber{T}, 0)
+        sample_inputs[2i - 1] = Reactant.promote_to(TracedRNumber{T}, 0)
+        sample_inputs[2i] = Reactant.promote_to(TracedRNumber{T}, 0)
     end
     func =
         Reactant.TracedUtils.make_mlir_fn(
@@ -1243,10 +1243,10 @@ end
         Reactant.TracedUtils.make_mlir_fn(
             comparator,
             (
-                Reactant.TracedUtils.promote_to(TracedRNumber{T}, 0),
-                Reactant.TracedUtils.promote_to(TracedRNumber{T}, 0),
-                Reactant.TracedUtils.promote_to(TracedRNumber{Int32}, 0),
-                Reactant.TracedUtils.promote_to(TracedRNumber{Int32}, 0),
+                Reactant.promote_to(TracedRNumber{T}, 0),
+                Reactant.promote_to(TracedRNumber{T}, 0),
+                Reactant.promote_to(TracedRNumber{Int32}, 0),
+                Reactant.promote_to(TracedRNumber{Int32}, 0),
             ),
             (),
             "comparator",
@@ -1353,8 +1353,8 @@ end
             x, iota(Int64, collect(Int64, size(x)); iota_dimension=dimension, location)
         ],
         TracedRNumber[
-            Reactant.TracedUtils.promote_to(TracedRNumber{Bool}, false),
-            Reactant.TracedUtils.promote_to(TracedRNumber{Int64}, typemax(Int64)),
+            Reactant.promote_to(TracedRNumber, false),
+            Reactant.promote_to(TracedRNumber, typemax(Int64)),
         ],
         [dimension],
         function (x, i, y, j)
@@ -1376,8 +1376,8 @@ end
             x, iota(Int64, collect(Int64, size(x)); iota_dimension=dimension, location)
         ],
         TracedRNumber[
-            Reactant.TracedUtils.promote_to(TracedRNumber{T}, typemin(T)),
-            Reactant.TracedUtils.promote_to(TracedRNumber{Int64}, -1),
+            Reactant.promote_to(TracedRNumber{T}, typemin(T)),
+            Reactant.promote_to(TracedRNumber{Int64}, -1),
         ],
         [dimension],
         function (a₁, i₁, a₂, i₂)
@@ -1851,8 +1851,8 @@ end
     kwargs...,
 ) where {F,T,N}
     sample_inputs = (
-        Reactant.TracedUtils.promote_to(TracedRNumber{T}, zero(T)),
-        Reactant.TracedUtils.promote_to(TracedRNumber{T}, zero(T)),
+        Reactant.promote_to(TracedRNumber, zero(T)),
+        Reactant.promote_to(TracedRNumber, zero(T)),
     )
 
     compiled_fn =
@@ -2792,8 +2792,8 @@ Produces a [`Reactant.MLIR.Dialects.sdy.sharding_constraint`](@ref) operation wi
 end
 
 function _construct_reduce_function(f::F, Ts::Type...) where {F}
-    inputs_1 = [Reactant.TracedUtils.promote_to(TracedRNumber{T}, 0) for T in Ts]
-    inputs_2 = [Reactant.TracedUtils.promote_to(TracedRNumber{T}, 0) for T in Ts]
+    inputs_1 = [Reactant.promote_to(TracedRNumber{T}, 0) for T in Ts]
+    inputs_2 = [Reactant.promote_to(TracedRNumber{T}, 0) for T in Ts]
     func =
         Reactant.TracedUtils.make_mlir_fn(
             f,
@@ -2910,11 +2910,9 @@ function standardize_start_index(
     sz::Int, start_index::Union{Integer,TracedRNumber{<:Integer}}
 )
     if (start_index isa Integer && start_index ≤ typemax(Int32)) || sz ≤ typemax(Int32)
-        start_index = Reactant.TracedUtils.promote_to(TracedRNumber{Int32}, start_index)
+        start_index = Reactant.promote_to(TracedRNumber{Int32}, start_index)
     elseif start_index isa Integer
-        start_index = Reactant.TracedUtils.promote_to(
-            TracedRNumber{eltype(start_index)}, start_index
-        )
+        start_index = Reactant.promote_to(TracedRNumber, start_index)
     end
 
     start_index = start_index - Reactant.unwrapped_eltype(start_index)(1)
