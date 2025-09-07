@@ -179,10 +179,23 @@ include("TracedRArray.jl")
 include("ConcreteRArray.jl")
 
 use_overlayed_version(x) = false
-use_overlayed_version(x::Base.Iterators.Zip) = any(use_overlayed_version, x.is)
+function use_overlayed_version(x::F) where {F<:Function}
+    return Base.inferencebarrier(any)(
+        use_overlayed_version, getfield.(Ref(x), fieldnames(F))
+    )
+end
+function use_overlayed_version(x::Base.Generator)
+    return use_overlayed_version(x.f) || use_overlayed_version(x.iter)
+end
+function use_overlayed_version(x::Base.Iterators.Zip)
+    return Base.inferencebarrier(any)(use_overlayed_version, x.is)
+end
 use_overlayed_version(x::Base.Iterators.Enumerate) = use_overlayed_version(x.itr)
-use_overlayed_version(iter::Tuple) = any(use_overlayed_version, iter)
-use_overlayed_version(iter::NamedTuple) = any(use_overlayed_version, values(iter))
+use_overlayed_version(x::Vector) = Base.inferencebarrier(any)(use_overlayed_version, x)
+use_overlayed_version(iter::Tuple) = Base.inferencebarrier(any)(use_overlayed_version, iter)
+function use_overlayed_version(iter::NamedTuple)
+    return Base.inferencebarrier(any)(use_overlayed_version, values(iter))
+end
 use_overlayed_version(::TracedRArray) = true
 use_overlayed_version(::TracedRNumber) = true
 use_overlayed_version(::Number) = false

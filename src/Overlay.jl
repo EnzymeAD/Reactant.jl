@@ -156,7 +156,10 @@ end
 end
 
 @reactant_overlay @noinline function Base.mapreduce(
-    f, op, A::Union{AbstractArray,Base.Iterators.Zip,Base.Iterators.Enumerate}; kwargs...
+    f,
+    op,
+    A::Union{AbstractArray,Base.Iterators.Zip,Base.Iterators.Enumerate,Base.Generator};
+    kwargs...,
 )
     if use_overlayed_version(A)
         return TracedRArrayOverrides.overloaded_mapreduce(f, op, A; kwargs...)

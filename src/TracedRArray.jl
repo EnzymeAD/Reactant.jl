@@ -686,7 +686,7 @@ function Broadcast.copy(bc::Broadcasted{<:AbstractReactantArrayStyle})
     elseif ElType == Any
         ElType = eltype(fn(map(first_scalar, bc.args)...))
     end
-    @assert ElType != Any && ElType != Union{}
+    @assert ElType != Union{} && ElType != Any
     sim = similar(bc, ElType)
     return copyto!(sim, bc)
 end
@@ -1525,6 +1525,10 @@ function unwrapped_broadcast(f::F, x::Base.Iterators.Enumerate) where {F}
     else
         return unwrapped_broadcast_with_iterate(f, x)
     end
+end
+
+function unwrapped_broadcast(f::F, x::Base.Generator) where {F}
+    return unwrapped_broadcast_with_iterate(f, Base.Generator(TracedCall(x.f), x.iter))
 end
 
 unwrapped_broadcast(f::F, xs) where {F} = unwrapped_broadcast_with_iterate(f, xs)
