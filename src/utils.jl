@@ -1,3 +1,19 @@
+struct CallWithReactant{F}
+    f::F
+end
+
+function Base.reducedim_init(f::F, op::CallWithReactant, A::AbstractArray, region) where {F}
+    return Base.reducedim_init(f, op.f, A, region)
+end
+
+function (f::CallWithReactant{F})(args...; kwargs...) where {F}
+    if isempty(kwargs)
+        return call_with_reactant(f.f, args...)
+    else
+        return call_with_reactant(Core.kwcall, NamedTuple(kwargs), f.f, args...)
+    end
+end
+
 function apply(f::F, args...; kwargs...) where {F}
     return f(args...; kwargs...)
 end

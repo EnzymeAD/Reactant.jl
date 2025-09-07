@@ -161,7 +161,9 @@ end
     if use_overlayed_version(A)
         return TracedRArrayOverrides.overloaded_mapreduce(f, op, A; kwargs...)
     else
-        return Base.inferencebarrier(Base.mapreduce)(f, op, A; kwargs...)
+        return Base.inferencebarrier(Base.mapreduce)(
+            CallWithReactant(f), CallWithReactant(op), A; kwargs...
+        )
     end
 end
 
@@ -169,7 +171,7 @@ end
     if use_overlayed_version(x) || any(use_overlayed_version, ys)
         return TracedRArrayOverrides.overloaded_map(f, x, ys...)
     else
-        return Base.inferencebarrier(Base.map)(f, x, ys...)
+        return Base.inferencebarrier(Base.map)(CallWithReactant(f), x, ys...)
     end
 end
 
@@ -183,7 +185,7 @@ end
     )
         return TracedRArrayOverrides.overloaded_map!(f, y, x, xs...)
     else
-        return Base.inferencebarrier(Base.map!)(f, y, x, xs...)
+        return Base.inferencebarrier(Base.map!)(CallWithReactant(f), y, x, xs...)
     end
 end
 
@@ -191,7 +193,7 @@ end
     if use_overlayed_version(x)
         return TracedRArrayOverrides.overloaded_mapreduce(f, &, x; dims)
     else
-        return Base.inferencebarrier(Base._all)(f, x, dims)
+        return Base.inferencebarrier(Base._all)(CallWithReactant(f), x, dims)
     end
 end
 
@@ -199,6 +201,6 @@ end
     if use_overlayed_version(x)
         return TracedRArrayOverrides.overloaded_mapreduce(f, |, x; dims)
     else
-        return Base.inferencebarrier(Base._any)(f, x, dims)
+        return Base.inferencebarrier(Base._any)(CallWithReactant(f), x, dims)
     end
 end
