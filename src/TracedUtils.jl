@@ -106,6 +106,14 @@ function set_mlir_data!(x::Base.ReshapedArray{TracedRNumber{T}}, data) where {T}
 end
 
 function get_ancestor_indices(
+    x::Base.ReshapedArray{TracedRNumber{T},N}, indices::Vector{CartesianIndex{N}}
+) where {T,N}
+    linear_indices = LinearIndices(size(x))[indices]
+    parent_linear_indices = LinearIndices(size(parent(x)))[linear_indices]
+    return (parent_linear_indices,)
+end
+
+function get_ancestor_indices(
     x::Base.ReshapedArray{TracedRNumber{T},N}, indices...
 ) where {T,N}
     @assert length(indices) == N "Expected $N indices, got $(length(indices))"
@@ -190,15 +198,12 @@ function get_ancestor_indices_inner(
 end
 
 function _get_ancestor_indices_linear(x::AnyTracedRArray, indices::AbstractArray)
-    @show indices
     indices = CartesianIndices(x)[indices]
-    @show indices
     pidxs = parentindices(x)
     parent_indices = map(indices) do idx
         CartesianIndex(Base.reindex(pidxs, (idx.I...,)))
     end
-    @show parent_indices
-    return @show get_ancestor_indices(parent(x), parent_indices)
+    return get_ancestor_indices(parent(x), parent_indices)
 end
 
 Base.@nospecializeinfer function batch_ty(
