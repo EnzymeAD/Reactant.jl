@@ -1600,7 +1600,7 @@ end
 end
 
 @testset "Base.Generator" begin
-    points = [rand(Float32, 2) for _ in 1:5]
+    points = eachcol(rand(Float32, 2, 6))
     params = rand(Float32, 4, 2)
     points_ra = Reactant.to_rarray(points)
     params_ra = Reactant.to_rarray(params)
@@ -1609,5 +1609,5 @@ end
         return sum(params * point for point in points)
     end
 
-    @code_hlo f_generator(points_ra, params_ra)
+    @test @jit(f_generator(points_ra, params_ra)) ≈ f_generator(points, params)
 end

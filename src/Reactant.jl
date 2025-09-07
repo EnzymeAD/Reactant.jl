@@ -178,22 +178,27 @@ include("TracedRArray.jl")
 
 include("ConcreteRArray.jl")
 
-use_overlayed_version(x) = false
-function use_overlayed_version(x::F) where {F<:Function}
+Base.@nospecializeinfer use_overlayed_version(x) = false
+Base.@nospecializeinfer function use_overlayed_version(
+    @nospecialize(x::F)
+) where {F<:Function}
     return Base.inferencebarrier(any)(
         use_overlayed_version, getfield.(Ref(x), fieldnames(F))
     )
 end
-function use_overlayed_version(x::Base.Generator)
+Base.@nospecializeinfer function use_overlayed_version(@nospecialize(x::Base.Generator))
     return use_overlayed_version(x.f) || use_overlayed_version(x.iter)
 end
-function use_overlayed_version(x::Base.Iterators.Zip)
+Base.@nospecializeinfer function use_overlayed_version(@nospecialize(x::Base.Iterators.Zip))
     return Base.inferencebarrier(any)(use_overlayed_version, x.is)
 end
-use_overlayed_version(x::Base.Iterators.Enumerate) = use_overlayed_version(x.itr)
-use_overlayed_version(x::Vector) = Base.inferencebarrier(any)(use_overlayed_version, x)
-use_overlayed_version(iter::Tuple) = Base.inferencebarrier(any)(use_overlayed_version, iter)
-function use_overlayed_version(iter::NamedTuple)
+Base.@nospecializeinfer use_overlayed_version(@nospecialize(x::Base.Iterators.Enumerate)) =
+    use_overlayed_version(x.itr)
+Base.@nospecializeinfer use_overlayed_version(@nospecialize(x::Vector)) =
+    Base.inferencebarrier(any)(use_overlayed_version, x)
+Base.@nospecializeinfer use_overlayed_version(@nospecialize(iter::Tuple)) =
+    Base.inferencebarrier(any)(use_overlayed_version, iter)
+Base.@nospecializeinfer function use_overlayed_version(@nospecialize(iter::NamedTuple))
     return Base.inferencebarrier(any)(use_overlayed_version, values(iter))
 end
 use_overlayed_version(::TracedRArray) = true
