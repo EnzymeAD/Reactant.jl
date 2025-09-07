@@ -408,3 +408,14 @@ end
 
     @test parent_ra ≈ parent
 end
+
+function test_slice_copy!(x)
+    @view(x[1, :]) .= 0
+    return x
+end
+
+@testset "slice copy" begin
+    x = Reactant.to_rarray(rand(2, 10))
+    @jit test_slice_copy!(x)
+    @test all(Array(x)[1, :] .== 0)
+end

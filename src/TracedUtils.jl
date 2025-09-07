@@ -179,12 +179,12 @@ end
 function get_ancestor_indices_inner(
     x::AnyTracedRArray{T,N}, linear_indices::AbstractArray
 ) where {T,N}
-    return _get_ancestor_indices_linear(x, linear_indices)
+    return (_get_ancestor_indices_linear(x, linear_indices),)
 end
 function get_ancestor_indices_inner(
     x::AnyTracedRArray{T,1}, linear_indices::AbstractArray
 ) where {T}
-    return _get_ancestor_indices_linear(x, linear_indices)
+    return (_get_ancestor_indices_linear(x, linear_indices),)
 end
 
 function _get_ancestor_indices_linear(x::AnyTracedRArray, indices::AbstractArray)
