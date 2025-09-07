@@ -579,9 +579,7 @@ end
 function f_row_major(x::AbstractArray{T}) where {T}
     y = [1 2; 3 4; 5 6]
     if x isa Reactant.TracedRArray
-        y = Reactant.promote_to(
-            Reactant.TracedRArray{Reactant.unwrapped_eltype(T),2}, y
-        )
+        y = Reactant.promote_to(Reactant.TracedRArray{Reactant.unwrapped_eltype(T),2}, y)
     end
     return x .+ y
 end
