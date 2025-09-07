@@ -1106,7 +1106,7 @@ function elem_apply(f, args::Vararg{Any,Nargs}) where {Nargs}
         invmap[v] = k
     end
 
-    keys_seen = [k for k in keys(seen_args) if k isa Reactant.TracedType]
+    keys_seen = Reactant.TracedType[k for k in keys(seen_args) if k isa Reactant.TracedType]
     input_shapes = size.(keys_seen)
     # by the time we reach here all args must have same size
     @assert allequal(input_shapes) "input shapes are $(input_shapes)"

@@ -65,7 +65,7 @@ function Enzyme.onehot(x::TracedRArray{T,N}) where {T,N}
     #       folding for scatter yet.
     results = Vector{TracedRArray{T,N}}(undef, length(x))
     pad_value = Reactant.promote_to(TracedRNumber{T}, 0)
-    base_value = Reactant.promote_to(TracedRArray{T,1}, one(T))
+    base_value = Reactant.broadcast_to_size(one(T), (1,))
     for i in eachindex(x)
         results[i] = @opcall(
             reshape(

@@ -57,7 +57,9 @@ end
 function _parent_type end
 function _parent end
 
-_parent_type(::Array{T,N}) where {T,N} = Array{T,N}
+_parent_type(::Type{Array}) = Array
+_parent_type(::Type{Array{T}}) where {T} = Array{T}
+_parent_type(::Type{Array{T,N}}) where {T,N} = Array{T,N}
 
 include("accelerators/Accelerators.jl")
 

@@ -57,7 +57,8 @@ end
 
 ## Number types
 function promote_to(::Type{TracedRNumber}, rhs)
-    return promote_to(TracedRNumber{unwrapped_eltype(rhs)}, rhs)
+    T = rhs isa AbstractIrrational ? Float64 : unwrapped_eltype(rhs)
+    return promote_to(TracedRNumber{T}, rhs)
 end
 
 promote_to(::Type{TracedRNumber{T}}, rhs::TracedRNumber{T}) where {T} = rhs

@@ -418,11 +418,13 @@ end
 function NNlib.pad_constant(
     x::AnyTracedRArray{T,N}, pad::NTuple{N,Tuple{Int,Int}}, value
 ) where {T,N}
-    value = Reactant.promote_to(TracedRNumber{T}, value)
-    low = [i[1] for i in pad]
-    high = [i[2] for i in pad]
-    interior = [0 for i in pad]
-    return @opcall pad(materialize_traced_array(x), value; low, high, interior)
+    return @opcall pad(
+        materialize_traced_array(x),
+        Reactant.promote_to(TracedRNumber{T}, value);
+        low=[i[1] for i in pad],
+        high=[i[2] for i in pad],
+        interior=[0 for i in pad],
+    )
 end
 
 # Gather

@@ -2080,12 +2080,20 @@ function compile_mlir!(
                     res = linear_results[i]
                     padding = padded_inputs[res]
 
-                    pad_op = Reactant.@opcall pad(
+                    pad_op = MLIR.Dialects.stablehlo.pad(
                         results[i],
-                        Reactant.promote_to(
+                        Reactant.TracedUtils.promote_to(
                             TracedRNumber{Reactant.unwrapped_eltype(res)}, 0
-                        );
-                        high=collect(reverse(padding)),
+                        ).mlir_data;
+                        edge_padding_low=MLIR.IR.DenseArrayAttribute(
+                            fill(0, length(padding))
+                        ),
+                        edge_padding_high=MLIR.IR.DenseArrayAttribute(
+                            collect(reverse(padding))
+                        ),
+                        interior_padding=MLIR.IR.DenseArrayAttribute(
+                            fill(0, length(padding))
+                        ),
                     )
 
                     results[i] = MLIR.IR.result(pad_op, 1)
