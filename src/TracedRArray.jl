@@ -1414,16 +1414,14 @@ function scan_impl!(
     return output
 end
 
-function overloaded_searchsortedfirst(
-    a::AbstractRange{<:Union{<:Real,Reactant.TracedRNumber{<:Real}}},
-    x::Union{<:Real,Reactant.TracedRNumber{<:Real}},
+function Base.searchsortedfirst(
+    a::AbstractRange{<:Union{Real,TracedRNumber}},
+    x::Union{Real,Reactant.TracedRNumber{<:Real}},
     o::Base.DirectOrdering,
-)
+)::TracedRNumber{keytype(a)}
     x = TracedUtils.promote_to(TracedRNumber{Reactant.unwrapped_eltype(a)}, x)
 
     f, h, l = first(a), step(a), last(a)
-    a = TracedUtils.broadcast_to_size(a, size(a))
-
     n = round(Int, (x - f) / h + 1)
 
     return ifelse(
@@ -1437,23 +1435,16 @@ function overloaded_searchsortedfirst(
     )
 end
 
-for op in (:searchsortedfirst, :searchsortedlast, :searchsorted)
-    rop = Symbol(:overloaded_, op)
-    @eval function $(rop)(v, x, o::Base.Ordering)
-        return $(rop)(v, x, firstindex(v), lastindex(v), o)
-    end
-end
-
 function overloaded_searchsortedfirst(v, x, lo::T, hi::T, o::Base.Ordering) where {T}
     v = TracedUtils.broadcast_to_size(v, size(v))
     x = TracedUtils.promote_to(TracedRNumber{Reactant.unwrapped_eltype(v)}, x)
-    return Reactant.CallWithReactant(sum)(T.(__lt(o, v[lo:hi], x)); init=lo)
+    return sum(T.(__lt(o, v[lo:hi], x)); init=lo)
 end
 
 function overloaded_searchsortedlast(v, x, lo::T, hi::T, o::Base.Ordering) where {T}
     v = TracedUtils.broadcast_to_size(v, size(v))
     x = TracedUtils.promote_to(TracedRNumber{Reactant.unwrapped_eltype(v)}, x)
-    return Reactant.CallWithReactant(sum)(T.(.!(__lt(o, x, v[lo:hi]))); init=lo - 1)
+    return sum(T.(.!(__lt(o, x, v[lo:hi]))); init=lo - 1)
 end
 
 function overloaded_searchsorted(v, x, lo::T, hi::T, o::Base.Ordering) where {T}
@@ -1462,6 +1453,28 @@ function overloaded_searchsorted(v, x, lo::T, hi::T, o::Base.Ordering) where {T}
     firstidx = overloaded_searchsortedfirst(v, x, lo, hi, o)
     lastidx = overloaded_searchsortedlast(v, x, lo, hi, o)
     return Reactant.TracedRNumberOverrides.TracedUnitRange(firstidx, lastidx)
+end
+
+for op in (:searchsortedfirst, :searchsortedlast, :searchsorted)
+    rop = Symbol(:overloaded_, op)
+
+    @eval begin
+        function Base.$(op)(
+            x::AnyTracedRVector, v, lo::T, hi::T, o::Base.Ordering
+        ) where {T<:Integer}
+            return $(rop)(x, v, lo, hi, o)
+        end
+        function Base.$(op)(
+            x::AbstractVector, v::TracedRNumber, lo::T, hi::T, o::Base.Ordering
+        ) where {T<:Integer}
+            return $(rop)(x, v, lo, hi, o)
+        end
+        function Base.$(op)(
+            x::AnyTracedRVector, v::TracedRNumber, lo::T, hi::T, o::Base.Ordering
+        ) where {T<:Integer}
+            return $(rop)(x, v, lo, hi, o)
+        end
+    end
 end
 
 function Base.reverse(

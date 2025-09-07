@@ -204,25 +204,3 @@ end
         return Base.inferencebarrier(Base._any)(CallWithReactant(f), x, dims)
     end
 end
-
-for op in (:searchsortedfirst, :searchsortedlast, :searchsorted)
-    rop = Symbol(:overloaded_, op)
-
-    @eval begin
-        @reactant_overlay @noinline function Base.$op(v, x, o::Base.Ordering)
-            if use_overlayed_version((v, x))
-                return TracedRArrayOverrides.$rop(v, x, o)
-            else
-                return Base.inferencebarrier(Base.$op)(v, x, o)
-            end
-        end
-
-        @reactant_overlay @noinline function Base.$op(v, x, lo, hi, o::Base.Ordering)
-            if use_overlayed_version((v, x))
-                return TracedRArrayOverrides.$rop(v, x, lo, hi, o)
-            else
-                return Base.inferencebarrier(Base.$op)(v, x, lo, hi, o)
-            end
-        end
-    end
-end
