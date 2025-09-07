@@ -38,6 +38,8 @@ function ReactantCore.materialize_traced_array(r::OneHotArrays.OneHotArray)
     return reshape(z, size(r))
 end
 
+Reactant._parent(r::OneHotArrays.OneHotArray) = r.indices
+
 function Base.Array(
     r::OneHotArrays.OneHotArray{T,N,Np1,<:Reactant.AbstractConcreteArray}
 ) where {T,N,Np1}

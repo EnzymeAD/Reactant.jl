@@ -31,7 +31,7 @@ struct ReactantABI <: Enzyme.EnzymeCore.ABI end
 include("PrimitiveTypes.jl")
 
 function ancestor(x::AbstractArray)
-    p_x = parent(x)
+    p_x = applicable(_parent, x) ? _parent(x) : parent(x)
     p_x === x && return x
     return ancestor(p_x)
 end
@@ -55,6 +55,9 @@ end
 # A lot of packages don't define `Adapt.parent_type`. We use `_parent_type` as a way to
 # define the parent type of an array without type-piracy.
 function _parent_type end
+function _parent end
+
+_parent_type(::Array{T,N}) where {T,N} = Array{T,N}
 
 include("accelerators/Accelerators.jl")
 

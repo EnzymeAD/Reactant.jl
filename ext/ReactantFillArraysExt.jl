@@ -92,7 +92,9 @@ end
 
 # Materialize into a dense array
 function ReactantCore.materialize_traced_array(x::Fill{T}) where {T}
-    return Reactant.broadcast_to_size(unwrapped_eltype(T)(x.value), size(x))
+    return Reactant.broadcast_to_size(
+        Reactant.promote_to(TracedRNumber{unwrapped_eltype(T)}, x.value), size(x)
+    )
 end
 
 function ReactantCore.materialize_traced_array(x::Ones{T}) where {T}
