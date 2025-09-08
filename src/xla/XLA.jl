@@ -221,7 +221,7 @@ for runtime in (:PJRT, :IFRT)
                     catch e
                         println(stdout, e)
                     end
-                else
+                elseif Reactant_jll.host_platform.tags["gpu"] != "none"
                     try
                         if was_initialized && haskey(state.clients, "cuda")
                             XLA.free_client(state.clients["cuda"])
