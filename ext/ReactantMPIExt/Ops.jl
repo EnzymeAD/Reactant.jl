@@ -581,6 +581,8 @@ function wait(
     sym_name = "enzymexla_wrapper_MPI_Wait"
     sym_attr = IR.FlatSymbolRefAttribute(sym_name)
 
+    # # TODO Temporarily commented out bc otherwise can't compile together with any other 
+    # # func that tries to inject the same thing (e.g., isend, irecv)
     # IR.inject!("MPI_COMM_WORLD", "llvm.mlir.global constant @MPI_COMM_WORLD() : !llvm.ptr")
     IR.inject!("MPI_Wait", "llvm.func @MPI_Wait(!llvm.ptr, !llvm.ptr) -> i32")
 

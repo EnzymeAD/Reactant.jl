@@ -105,34 +105,43 @@ end
 #     return Ops.isend(buf, tag, dest)
 # end
 
-function MPI.Recv!(buf::TracedRArray, source::Integer, tag::Integer, comm::MPI.Comm)
+function MPI.Recv!(
+    buf::TracedRArray,
+    source::Integer,
+    tag::Integer,
+    comm::MPI.Comm
+)
     tag = Reactant.Ops.constant(tag)
     source = Reactant.Ops.constant(source)
     return MPI.Recv!(buf, source, tag, comm)
 end
 
-function MPI.Recv!(
-    recvbuf::TracedRArray,
-    source::Integer,
-    tag::Integer,
-    comm::MPI.Comm,
-    ::Type{MPI.API.MPI_Status},
-)
-    return MPI.Recv!(recvbuf, source, tag, comm)
-end
+# TODO Do we need these? Comment out at least until everything is working
+# function MPI.Recv!(
+#     buf::TracedRArray,
+#     source::Integer,
+#     tag::Integer,
+#     comm::MPI.Comm,
+#     ::Type{MPI.API.MPI_Status},
+# )
+#     return MPI.Recv!(buf, source, tag, comm)
+# end
 
-function MPI.Recv!(
-    recvbuf::TracedRArray, source::Integer, tag::Integer, comm::MPI.Comm, ::Nothing
-)
-    return MPI.Recv!(recvbuf, source, tag, comm)
-end
+# function MPI.Recv!(
+#     buf::TracedRArray, source::Integer, tag::Integer, comm::MPI.Comm, ::Nothing
+# )
+#     return MPI.Recv!(buf, source, tag, comm)
+# end
 
 # TODO use `make_tracer` to delinearize arbitrary types? check out `MPI.Buffer`
 function MPI.Recv!(
-    recvbuf::TracedRArray, source::TracedRNumber, tag::TracedRNumber, comm::MPI.Comm
+    buf::TracedRArray,
+    source::TracedRNumber,
+    tag::TracedRNumber,
+    comm::MPI.Comm
 )
     @assert comm == MPI.COMM_WORLD "Only MPI.COMM_WORLD is supported currently"
-    return Ops.recv!(recvbuf, tag, source)
+    return Ops.recv!(buf, tag, source)
 end
 
 function MPI.Irecv!(
