@@ -28,6 +28,7 @@ result = @jit sq_fwd(x)
 
 println("Result: ", result)
 @test result ≈ 2 .* Array(x) # hide
+nothing # hide
 ```
 
 The `Duplicated` activity type means both the primal value and its derivative are computed.
@@ -50,6 +51,7 @@ println("Primal: ", primal)
 println("Tangent: ", tangent)
 @test primal ≈ Array(x) .^ 2 # hide
 @test tangent ≈ 2 .* Array(x) # hide
+nothing # hide
 ```
 
 ### Computing Gradients
@@ -69,6 +71,7 @@ x_arr = Array(x) # hide
 @test grad_result[1][1] ≈ 2 * x_arr[1] # hide
 @test grad_result[1][2] ≈ 2 * x_arr[2] # hide
 @test grad_result[1][3] ≈ 2 * x_arr[3] # hide
+nothing # hide
 ```
 
 ## Reverse Mode Automatic Differentiation
@@ -85,6 +88,7 @@ grad = @jit Enzyme.gradient(Reverse, loss_function, x)
 
 println("Gradient: ", grad[1])
 @test grad[1] ≈ 3 .* Array(x) .^ 2 # hide
+nothing # hide
 ```
 
 ### Reverse Mode with Primal
@@ -99,6 +103,7 @@ println("Value: ", result.val)
 println("Gradient: ", result.derivs[1])
 @test result.val ≈ loss_function(Array(x)) # hide
 @test result.derivs[1] ≈ 3 .* Array(x) .^ 2 # hide
+nothing # hide
 ```
 
 ## More Examples
@@ -120,6 +125,7 @@ println("∂f/∂x: ", grad[1])
 println("∂f/∂y: ", grad[2])
 @test grad[1] ≈ Array(y) .^ 2 # hide
 @test grad[2] ≈ Array(x) .* Array(y) .* 2 # hide
+nothing # hide
 ```
 
 ### Vector Mode AD
@@ -138,6 +144,7 @@ onehot_vectors = @jit Enzyme.onehot(x)
 result = @jit Enzyme.autodiff(Forward, vector_func, BatchDuplicated(x, onehot_vectors))
 
 println("Vector gradients: ", result[1])
+nothing # hide
 ```
 
 ### Nested Automatic Differentiation
@@ -160,6 +167,7 @@ result = @jit second_deriv(x)
 result_enz = second_deriv(Float32(x))
 println("Second derivative: ", result)
 @test result ≈ result_enz # hide
+nothing # hide
 ```
 
 ### Division by Zero with Strong Zero
@@ -175,8 +183,9 @@ regular_grad = @jit Enzyme.gradient(Reverse, div_by_zero, x)
 # Strong zero gradient (handles singularities better)
 strong_zero_grad = @jit Enzyme.gradient(Enzyme.set_strong_zero(Reverse), div_by_zero, x)
 
-println("Regular gradient: ", Float32(regular_grad[1]))     # May be NaN
-println("Strong zero gradient: ", Float32(strong_zero_grad[1]))  # 0.0
+println("Regular gradient: ", Float32(regular_grad[1]))
+println("Strong zero gradient: ", Float32(strong_zero_grad[1]))
+nothing # hide
 ```
 
 ### Ignoring Derivatives
@@ -196,6 +205,7 @@ x = Reactant.to_rarray([1.0, 2.0, 3.0])
 grad = @jit Enzyme.gradient(Reverse, func_with_ignore, x)
 println("Gradient: ", grad[1])
 @test grad[1] ≈ Array(x) .* 2 # hide
+nothing # hide
 ```
 
 ### Complex Numbers and Special Arrays
@@ -213,6 +223,7 @@ end
 grad_complex = @jit Enzyme.gradient(Reverse, complex_func, x_complex)
 println("Complex gradient: ", grad_complex[1])
 @test grad_complex[1] ≈ Array(x_complex) .* 2 # hide
+nothing # hide
 ```
 
 ### Complete Example: Neural Network Training
@@ -270,4 +281,5 @@ for epoch in 1:100
 end
 
 println("Training completed!")
+nothing # hide
 ```
