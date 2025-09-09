@@ -1,6 +1,7 @@
 # Tutorials
 
 - [Partial evaluation](@ref partial-evaluation).
+- [Automatic Differentiation](@ref automatic-differentiation).
 - [Control flow](@ref control-flow).
 - [Sharding](@ref sharding).
 - [Profiling](@ref profiling).
