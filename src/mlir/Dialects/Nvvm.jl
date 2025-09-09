@@ -2501,53 +2501,29 @@ function read_ptx_sreg_gridid(; res::IR.Type, range=nothing, location=Location()
 end
 
 """
-`griddepcontrol_launch_dependents`
+`griddepcontrol`
 
-Signals that specific dependents the runtime system designated to react to 
-this instruction can be scheduled as soon as all other CTAs in the grid 
-issue the same instruction or have completed.
-
-
-[For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/#parallel-synchronization-and-communication-instructions-griddepcontrol)
-"""
-function griddepcontrol_launch_dependents(; location=Location())
-    op_ty_results = IR.Type[]
-    operands = Value[]
-    owned_regions = Region[]
-    successors = Block[]
-    attributes = NamedAttribute[]
-
-    return create_operation(
-        "nvvm.griddepcontrol.launch.dependents",
-        location;
-        operands,
-        owned_regions,
-        successors,
-        attributes,
-        results=op_ty_results,
-        result_inference=false,
-    )
-end
-
-"""
-`griddepcontrol_wait`
-
-Causes the executing thread to wait until all prerequisite grids in flight 
+If the \$kind attribute is set to `wait`, it causes the 
+executing thread to wait until all prerequisite grids in flight 
 have completed and all the memory operations from the prerequisite grids 
 are performed and made visible to the current grid.
 
+When the \$kind is launch_dependents, it signals that specific dependents 
+the runtime system designated to react to this instruction can be scheduled 
+as soon as all other CTAs in the grid issue the same instruction or have 
+completed.
 
 [For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/#parallel-synchronization-and-communication-instructions-griddepcontrol)
 """
-function griddepcontrol_wait(; location=Location())
+function griddepcontrol(; kind, location=Location())
     op_ty_results = IR.Type[]
     operands = Value[]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[]
+    attributes = NamedAttribute[namedattribute("kind", kind),]
 
     return create_operation(
-        "nvvm.griddepcontrol.wait",
+        "nvvm.griddepcontrol",
         location;
         operands,
         owned_regions,
@@ -2744,13 +2720,18 @@ function read_ptx_sreg_lanemask_lt(; res::IR.Type, location=Location())
     )
 end
 
-function ldmatrix(ptr::Value; res::IR.Type, num, layout, location=Location())
+function ldmatrix(
+    ptr::Value; res::IR.Type, num, layout, shape, eltType, location=Location()
+)
     op_ty_results = IR.Type[res,]
     operands = Value[ptr,]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[
-        namedattribute("num", num), namedattribute("layout", layout)
+        namedattribute("num", num),
+        namedattribute("layout", layout),
+        namedattribute("shape", shape),
+        namedattribute("eltType", eltType),
     ]
 
     return create_operation(
