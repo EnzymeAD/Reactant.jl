@@ -493,6 +493,7 @@ function recv!(
     errcode.mlir_data = IR.result(ret, 1)
     recvbuf.mlir_data = IR.result(ret, 2)
 
+    # TODO is returning recvbuf the best choice here stylistically?
     return errcode, recvbuf
 end
 
