@@ -8633,6 +8633,15 @@ function mlirExecutionEngineCreate(op, optLevel, numPaths, sharedLibPaths, enabl
 end
 
 """
+    mlirExecutionEngineInitialize(jit)
+
+Initialize the ExecutionEngine. Global constructors specified by `llvm.mlir.global\\_ctors` will be run. One common scenario is that kernel binary compiled from `gpu.module` gets loaded during initialization. Make sure all symbols are resolvable before initialization by calling [`mlirExecutionEngineRegisterSymbol`](@ref) or including shared libraries.
+"""
+function mlirExecutionEngineInitialize(jit)
+    @ccall mlir_c.mlirExecutionEngineInitialize(jit::MlirExecutionEngine)::Cvoid
+end
+
+"""
     mlirExecutionEngineDestroy(jit)
 
 Destroy an ExecutionEngine instance.
