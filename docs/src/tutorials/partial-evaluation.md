@@ -11,7 +11,6 @@ on this.
 
 For example, the function
 
-
 ```jldoctest partial_evaluation_tutorial
 using Reactant
 function add(a, b)
@@ -25,7 +24,7 @@ add (generic function with 1 method)
 
 when compiled with two `ConcreteRNumber` arguments
 
-```jldoctest partial_evaluation_tutorial; filter = r"I000.*" => s""
+```jldoctest partial_evaluation_tutorial
 using Reactant
 
 x = ConcreteRNumber(3)
@@ -37,13 +36,10 @@ addxy(x, y)
 
 # output
 
-I0000
-I0000
 ConcretePJRTNumber{Int64, 1, Reactant.Sharding.ShardInfo{Reactant.Sharding.NoSharding, Nothing}}(7)
 ```
 
 returns a result that depends on both arguments `x` and `y`:
-
 
 ```jldoctest partial_evaluation_tutorial
 addxy(ConcreteRNumber(7), ConcreteRNumber(8))
@@ -73,15 +69,13 @@ So at HLO-level, there a are two variable inputs `%arg0` and `%arg1`.
 However, if argument `y` has a non-Reactant value during compilation, (`4` in
 this example) then the result when executing the compiled function
 
-```jldoctest partial_evaluation_tutorial; filter = r"I000.*" => s""
+```jldoctest partial_evaluation_tutorial
 addx4 = @compile add(x, 4)
 
 addx4(x, 4)
 
 # output
 
-I0000
-I0000
 ConcretePJRTNumber{Int64, 1, Reactant.Sharding.ShardInfo{Reactant.Sharding.NoSharding, Nothing}}(7)
 ```
 
