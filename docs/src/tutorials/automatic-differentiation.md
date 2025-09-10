@@ -37,7 +37,7 @@ The `Duplicated` activity type means both the primal value and its derivative ar
 
 You can also get both the function value and its derivative:
 
-```julia
+```@example autodiff_tutorial
 # Forward mode with primal value
 function sq_fwd_primal(x)
     return Enzyme.autodiff(
@@ -58,7 +58,7 @@ nothing # hide
 
 For computing gradients of scalar-valued functions:
 
-```julia
+```@example autodiff_tutorial
 sum_squares(x) = sum(abs2, x)
 
 x = Reactant.to_rarray(Float32[1.0, 2.0, 3.0])
@@ -78,7 +78,7 @@ nothing # hide
 
 ### Basic Reverse Mode
 
-```julia
+```@example autodiff_tutorial
 loss_function(x) = sum(x .^ 3)
 
 x = Reactant.to_rarray(Float32[1.0, 2.0, 3.0])
@@ -95,7 +95,7 @@ nothing # hide
 
 Get both the function value and gradient:
 
-```julia
+```@example autodiff_tutorial
 # Reverse mode with primal
 result = @jit Enzyme.gradient(ReverseWithPrimal, loss_function, x)
 
@@ -110,7 +110,7 @@ nothing # hide
 
 ### Multi-argument Functions
 
-```julia
+```@example autodiff_tutorial
 function multi_arg_func(x, y)
     return sum(x .* y .^ 2)
 end
@@ -132,7 +132,7 @@ nothing # hide
 
 Vector mode computes multiple derivatives simultaneously:
 
-```julia
+```@example autodiff_tutorial
 vector_func(x) = sum(abs2, x)
 
 x = Reactant.to_rarray(collect(Float32, 1:4))
@@ -151,7 +151,7 @@ nothing # hide
 
 Compute higher-order derivatives:
 
-```julia
+```@example autodiff_tutorial
 power4(x) = x^4
 
 x = Reactant.ConcreteRNumber(3.1)
@@ -172,7 +172,7 @@ nothing # hide
 
 ### Division by Zero with Strong Zero
 
-```julia
+```@example autodiff_tutorial
 div_by_zero(x) = min(1.0, 1 / x)
 
 x = Reactant.ConcreteRNumber(0.0)
@@ -192,7 +192,7 @@ nothing # hide
 
 Use [`Reactant.ignore_derivatives`](@ref) to exclude parts of computation from gradient:
 
-```julia
+```@example autodiff_tutorial
 function func_with_ignore(x)
     # This part won't contribute to gradient
     ignored_sum = Reactant.ignore_derivatives(sum(x))
@@ -212,7 +212,7 @@ nothing # hide
 
 Reactant supports complex numbers and various array types:
 
-```julia
+```@example autodiff_tutorial
 # Complex arrays
 x_complex = Reactant.to_rarray([1.0 + 2.0im, 3.0 + 4.0im])
 
@@ -230,7 +230,7 @@ nothing # hide
 
 Here's a complete example of training a simple neural network:
 
-```julia
+```@example autodiff_tutorial
 # Define network
 function neural_net(x, w1, w2, b1, b2)
     h = tanh.(w1 * x .+ b1)
