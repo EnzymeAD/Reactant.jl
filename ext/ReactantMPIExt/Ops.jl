@@ -519,7 +519,7 @@ function irecv!(
     buf::TracedRArray,
     tag::TracedRNumber,
     src::TracedRNumber;
-    location=mlir_stacktrace("mpi.isend", @__FILE__, @__LINE__),
+    location=mlir_stacktrace("mpi.irecv", @__FILE__, @__LINE__),
 )
     T = Reactant.unwrapped_eltype(buf)
     mpi_datatype = convert_julia_type_to_mpi_datatype(T)
@@ -585,27 +585,43 @@ function wait(
     # # TODO Temporarily commented out bc otherwise can't compile together with any other 
     # # func that tries to inject the same thing (e.g., isend, irecv)
     # IR.inject!("MPI_COMM_WORLD", "llvm.mlir.global constant @MPI_COMM_WORLD() : !llvm.ptr")
+
     IR.inject!("MPI_Wait", "llvm.func @MPI_Wait(!llvm.ptr, !llvm.ptr) -> i32")
 
     #! format: off
     IR.inject!(sym_name, """
-        func.func @$sym_name(%req : !llvm.ptr) -> () {
+        func.func @$sym_name(%errcode : !llvm.ptr, %req : !llvm.ptr) -> () {
             %comm = llvm.mlir.addressof @MPI_COMM_WORLD : !llvm.ptr
-            %errcode = llvm.call @MPI_Wait(%req, %comm) : (!llvm.ptr, !llvm.ptr) -> (i32)
+            %res = llvm.call @MPI_Wait(%req, %comm) : (!llvm.ptr, !llvm.ptr) -> (i32)
+            llvm.store %res, %errcode : i32, !llvm.ptr
             func.return
         }
     """)
     #! format: on
 
-    enzymexla.jit_call(
-        IR.Value[req.mlir_data];
+    errcode = Reactant.Ops.constant(fill(Cint(0)))
+
+    output_operand_aliases = IR.Attribute([
+        IR.Attribute(
+            MLIR.API.stablehloOutputOperandAliasGet(
+                MLIR.IR.context(), 0, C_NULL, 0, 0, C_NULL
+            ),
+        ),
+    ])
+
+    ret = enzymexla.jit_call(
+        IR.Value[errcode.mlir_data, req.mlir_data];
         fn=sym_attr,
-        result_0=IR.Type[],
+        # result_0=IR.Type[],
+        result_0=IR.Type[mlir_type(errcode)],
         location,
-        output_operand_aliases=IR.Attribute(IR.Attribute[]),
+        # output_operand_aliases=IR.Attribute(IR.Attribute[]),
+        output_operand_aliases=output_operand_aliases,
     )
 
-    return nothing
+    # return nothing
+    errcode.mlir_data = IR.result(ret)
+    return errcode
 end
 
 function inject_mpi_op!(op)
