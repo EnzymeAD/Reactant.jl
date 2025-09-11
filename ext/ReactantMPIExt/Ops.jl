@@ -556,7 +556,12 @@ function irecv!(
     output_operand_aliases = IR.Attribute([
         IR.Attribute(
             MLIR.API.stablehloOutputOperandAliasGet(
-                MLIR.IR.context(), 0, C_NULL, 4, 0, C_NULL
+                MLIR.IR.context(), 1, Ref{Int64}(0), 0, 0, C_NULL
+            ),
+        ),
+        IR.Attribute(
+            MLIR.API.stablehloOutputOperandAliasGet(
+                MLIR.IR.context(), 1, Ref{Int64}(1), 4, 0, C_NULL
             ),
         ),
     ])
@@ -566,14 +571,14 @@ function irecv!(
             buf.mlir_data, count.mlir_data, src.mlir_data, tag.mlir_data, request.mlir_data
         ];
         fn=sym_attr,
-        result_0=IR.Type[mlir_type(request)],
+        result_0=[mlir_type(buf), mlir_type(request)],
         output_operand_aliases=output_operand_aliases,
         location,
     )
 
-    # return TracedRNumber
-    request.mlir_data = IR.result(ret)
-    return request
+    buf.mlir_data = IR.result(ret, 1)
+    request.mlir_data = IR.result(ret, 2)
+    return request # we return a TracedRNumber, converted to TracedRequest in Overrides.jl
 end
 
 function wait(
@@ -612,14 +617,11 @@ function wait(
     ret = enzymexla.jit_call(
         IR.Value[errcode.mlir_data, req.mlir_data];
         fn=sym_attr,
-        # result_0=IR.Type[],
         result_0=IR.Type[mlir_type(errcode)],
         location,
-        # output_operand_aliases=IR.Attribute(IR.Attribute[]),
         output_operand_aliases=output_operand_aliases,
     )
 
-    # return nothing
     errcode.mlir_data = IR.result(ret)
     return errcode
 end
