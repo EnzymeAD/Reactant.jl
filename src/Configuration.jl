@@ -30,6 +30,11 @@ scope will use the provided values.
     or [`PrecisionConfig`](@ref). Defaults to `PrecisionConfig.DEFAULT`.
   - `convolution_precision`: Precision for `stablehlo.convolution`. Can be `nothing`,
     or [`PrecisionConfig`](@ref). Defaults to `PrecisionConfig.DEFAULT`.
+
+### Zygote Overlay
+
+  - `overlay_zygote_calls`: Whether to overlay `Zygote.gradient` calls with
+    `Enzyme.autodiff` calls. Defaults to `true`.
 """
 function with_config(
     f;
@@ -38,6 +43,7 @@ function with_config(
     convolution_precision=missing,
     lower_partialsort_to_approx_top_k=missing,
     fallback_approx_top_k_lowering=missing,
+    overlay_zygote_calls=missing,
 )
     config_vars = ()
     dot_general_algorithm !== missing &&
@@ -57,6 +63,9 @@ function with_config(
             config_vars...,
             FALLBACK_APPROX_TOP_K_LOWERING => fallback_approx_top_k_lowering,
         )
+    )
+    overlay_zygote_calls !== missing && (
+        config_vars = (config_vars..., OVERLAY_ZYGOTE_CALLS => overlay_zygote_calls)
     )
 
     return ScopedValues.with(f, config_vars...)
@@ -379,3 +388,6 @@ function DotGeneralAlgorithm(
 
     return nothing
 end
+
+# Overlay Zygote.jl
+const OVERLAY_ZYGOTE_CALLS = ScopedValue(true)

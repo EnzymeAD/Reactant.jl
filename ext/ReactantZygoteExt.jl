@@ -12,7 +12,7 @@ using Enzyme: Enzyme, Reverse, Active, Const, Duplicated
 
 @reactant_overlay function Zygote.gradient(f::F, args...) where {F}
     # TODO: check `f` as well once #1642 is merged
-    if use_overlayed_version(args)
+    if use_overlayed_version(args) && Reactant.OVERLAY_ZYGOTE_CALLS[]
         @warn "Reactant doesn't support using Zygote for computing gradients. Replacing \
                `Zygote.gradient` with `Enzyme.autodiff` call. Please update your code to \
                not use `Zygote.gradient` and instead use `Enzyme.gradient` inside \
