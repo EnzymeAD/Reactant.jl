@@ -64,9 +64,8 @@ function with_config(
             FALLBACK_APPROX_TOP_K_LOWERING => fallback_approx_top_k_lowering,
         )
     )
-    overlay_zygote_calls !== missing && (
-        config_vars = (config_vars..., OVERLAY_ZYGOTE_CALLS => overlay_zygote_calls)
-    )
+    overlay_zygote_calls !== missing &&
+        (config_vars = (config_vars..., OVERLAY_ZYGOTE_CALLS => overlay_zygote_calls))
 
     return ScopedValues.with(f, config_vars...)
 end
