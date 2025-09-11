@@ -17,7 +17,9 @@ using Enzyme: Enzyme, Reverse, Active, Const, Duplicated
                `Zygote.gradient` with `Enzyme.autodiff` call. Please update your code to \
                not use `Zygote.gradient` and instead use `Enzyme.gradient` inside \
                `Reactant.@compile`. If this behavior is undesirable, set the \
-               `overlay_zygote_calls` scoped value via `Reactant.with_config` to `false`."
+               `overlay_zygote_calls` scoped value via `Reactant.with_config` to \
+               `false`.\n\nReactant can remove this switching without any breaking change \
+               and hence reliance on this behavior is strongly discouraged."
         return Enzyme.gradient(Reverse, Const(f), args...)
     else
         return Base.inferencebarrier(Zygote.gradient)(CallWithReactant(f), args...)
