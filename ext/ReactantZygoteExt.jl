@@ -15,7 +15,8 @@ using Enzyme: Enzyme, Reverse, Active, Const, Duplicated
     if use_overlayed_version(args)
         @warn "Reactant doesn't support using Zygote for computing gradients. Replacing \
                `Zygote.gradient` with `Enzyme.autodiff` call. Please update your code to \
-               not use `Zygote.gradient` inside `Reactant.@compile`." maxlog = 1
+               not use `Zygote.gradient` and instead use `Enzyme.gradient` inside \
+               `Reactant.@compile`." maxlog = 1
         dargs = map(Enzyme.make_zero, args)
         duplicated = map(Duplicated, args, dargs)
         Reactant.overload_autodiff(Reverse, Const(f), Active, duplicated...)
