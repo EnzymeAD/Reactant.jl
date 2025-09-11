@@ -18,10 +18,7 @@ using Enzyme: Enzyme, Reverse, Active, Const, Duplicated
                not use `Zygote.gradient` and instead use `Enzyme.gradient` inside \
                `Reactant.@compile`. If this behavior is undesirable, set the \
                `overlay_zygote_calls` scoped value via `Reactant.with_config` to `false`."
-        dargs = map(Enzyme.make_zero, args)
-        duplicated = map(Duplicated, args, dargs)
-        Reactant.overload_autodiff(Reverse, Const(f), Active, duplicated...)
-        return dargs
+        return Enzyme.gradient(Reverse, Const(f), args...)
     else
         return Base.inferencebarrier(Zygote.gradient)(CallWithReactant(f), args...)
     end
