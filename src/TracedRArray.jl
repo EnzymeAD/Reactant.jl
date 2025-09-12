@@ -550,6 +550,12 @@ function __default_init(T::Type{<:Reactant.ReactantFloat8}, op::F) where {F}
     return T(__default_init(Float16, op))
 end
 
+struct TracedCall{F} <: Function
+    f::F
+end
+
+(fn::TracedCall)(args...) = @opcall call(fn.f, args...)
+
 function overloaded_mapreduce(
     @nospecialize(f), @nospecialize(op), @nospecialize(A); dims=:, init=Base._InitialValue()
 )
@@ -558,7 +564,7 @@ function overloaded_mapreduce(
     # unroll the mapreduce.
     if typeof(res) == typeof(A)
         @assert dims == Colon() "dims not supported for mapreduce currently."
-        return foldl(op, res; init)
+        return foldl(TracedCall(op), res; init)
     end
     return overloaded_mapreduce(identity, op, res; dims=:, init)
 end
