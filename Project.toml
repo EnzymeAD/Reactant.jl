@@ -25,6 +25,10 @@ Reactant_jll = "0192cb87-2b54-54ad-80e0-3be72ad8a3c0"
 ScopedValues = "7e506255-f358-4e82-b7e4-beb19740aa63"
 Scratch = "6c6a2e73-6563-6170-7368-637461726353"
 Sockets = "6462fe0b-24de-5631-8697-dd941f90decc"
+oneAPI_Level_Zero_Loader_jll = "13eca655-d68d-5b81-8367-6d99d727ab01"
+oneAPI_Level_Zero_jll = "0038a6a5-a77d-50b4-8f67-3bd55e463950"
+oneAPI_Support_jll = "b049733a-a71d-5ed3-8eba-7d323ac00b36"
+oneDNN_jll = "3523a63d-8698-5b6f-b2c2-68eaa6bde0f0"
 unzip_jll = "88f77b66-78eb-5ed0-bc16-ebba0796830d"
 
 [weakdeps]
@@ -108,6 +112,10 @@ SpecialFunctions = "2.4"
 Statistics = "1.10"
 YaoBlocks = "0.13, 0.14"
 julia = "1.10"
+oneAPI_Level_Zero_Loader_jll = "1.22.4"
+oneAPI_Level_Zero_jll = "0.91.10"
+oneAPI_Support_jll = "0.9.1"
+oneDNN_jll = "3.5.3"
 unzip_jll = "6"
 
 [extras]

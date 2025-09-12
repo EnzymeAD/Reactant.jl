@@ -74,13 +74,10 @@ const global_state = State()
 
 function client(backend::String)
     if backend == "gpu"
-        if haskey(global_backend_state.clients, "cuda")
-            backend = "cuda"
-        elseif haskey(global_backend_state.clients, "metal")
-            backend = "metal"
-        else
-            error("No GPU client found")
-        end
+        backend = findfirst(
+            Base.Fix1(haskey, global_backend_state.clients), ("cuda", "metal", "sycl")
+        )
+        @assert backend !== nothing "No GPU client found"
     end
     return global_backend_state.clients[backend]
 end
@@ -219,9 +216,11 @@ for runtime in (:PJRT, :IFRT)
                         state.clients["tpu"] = tpu
                         state.default_client = tpu
                     catch e
-                        println(stdout, e)
+                        @debug "Failed to load TPU client: $e"
                     end
-                elseif Reactant_jll.host_platform.tags["gpu"] != "none"
+                end
+
+                if Reactant_jll.host_platform.tags["gpu"] != "none"
                     try
                         if was_initialized && haskey(state.clients, "cuda")
                             XLA.free_client(state.clients["cuda"])
@@ -234,11 +233,28 @@ for runtime in (:PJRT, :IFRT)
                         state.clients["cuda"] = gpu
                         state.default_client = gpu
                     catch e
-                        println(stdout, e)
+                        @debug "Failed to load CUDA client: $e"
+                    end
+                end
+
+                if Accelerators.IntelXPU.has_intel_xpu()
+                    try
+                        if was_initialized && haskey(state.clients, "sycl")
+                            XLA.free_client(state.clients["sycl"])
+                            XLA.$(runtime).sycl_client_count[] -= 1
+                        end
+                        gpu = $(runtime).SYCLClient(;
+                            sycl_pjrt_plugin_path=Accelerators.IntelXPU.get_intel_xpu_pjrt_plugin_path(),
+                            common_kwargs...,
+                        )
+                        state.clients["sycl"] = gpu
+                    catch e
+                        @debug "Failed to load SYCL client: $e"
                     end
                 end
             else
                 try
+                    # XXX: Metal PJRT plugin is not yet compatible with latest OpenXLA
                     #=
                     if was_initialized && haskey(state.clients, "metal")
                         XLA.free_client(state.clients["metal"])
@@ -252,9 +268,8 @@ for runtime in (:PJRT, :IFRT)
                     # Don't put this in the default_client since metal support is fairly
                     # limited
                     =#
-                    # Metal PJRT plugin is not yet compatible with latest OpenXLA
                 catch e
-                    println(stdout, e)
+                    @debug "Failed to load Metal client: $e"
                 end
             end
         end
