@@ -1568,3 +1568,9 @@ end
 
     @test @jit(f(params_ra, points_ra)) ≈ f(params, points)
 end
+
+@testset "clamp!" begin
+    x = rand(Float32, 32, 32)
+    x_ra = Reactant.to_rarray(x)
+    @test @jit(clamp!(x_ra, 0.5, Inf32)) ≈ clamp!(x, 0.5, Inf32)
+end

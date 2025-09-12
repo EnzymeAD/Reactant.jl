@@ -846,6 +846,9 @@ end
 
 for (minT, maxT) in Iterators.product((Number, TracedRNumber), (Number, TracedRNumber))
     @eval function Base.clamp!(x::AnyTracedRArray, min::$(minT), max::$(maxT))
+        T = unwrapped_eltype(x)
+        min = Reactant.promote_to(TracedRNumber{T}, min)
+        max = Reactant.promote_to(TracedRNumber{T}, max)
         y = @opcall clamp(min, materialize_traced_array(x), max)
         TracedUtils.set_mlir_data!(x, y.mlir_data)
         return x
