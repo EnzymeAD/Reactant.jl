@@ -1509,6 +1509,9 @@ end
 
 struct BroadcastIterator{F}
     f::F
+
+    BroadcastIterator{F}(f::F) where {F} = new{F}(f)
+    BroadcastIterator(f::F) where {F} = new{F}(f)
 end
 
 (fn::BroadcastIterator)(args...) = fn.f((args...,))
@@ -1536,7 +1539,7 @@ function unrolled_map(f::F, itr) where {F}
     y === nothing && return []
 
     first, state = y
-    res_first = Reactant.call_with_reactant(f, first)
+    res_first = @opcall call(f, first)
     result = [res_first]
 
     while true
@@ -1544,7 +1547,7 @@ function unrolled_map(f::F, itr) where {F}
         y === nothing && break
 
         val, state = y
-        res = Reactant.call_with_reactant(f, val)
+        res = @opcall call(f, val)
         push!(result, res)
     end
 

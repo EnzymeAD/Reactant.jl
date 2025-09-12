@@ -193,6 +193,7 @@ use_overlayed_version(::TracedRArray) = true
 use_overlayed_version(::TracedRNumber) = true
 use_overlayed_version(::Number) = false
 use_overlayed_version(::MissingTracedValue) = true
+use_overlayed_version(::Vector{<:AnyTracedRArray}) = true
 use_overlayed_version(::AbstractArray{<:TracedRNumber}) = true
 use_overlayed_version(rng::ReactantRNG) = use_overlayed_version(rng.seed)
 function use_overlayed_version(x::AbstractArray)
