@@ -491,11 +491,9 @@ must hold:
     unpacked_columns = allocated_columns * packing
 
 The number of allocated columns in TMEM can be any power of two in the
-range [32, 512]. If `exact` is `true`, then the calculated
-number of allocated columns must match that restriction. If `exact` is
-`false` and the calculated number of allocated columns is less than 32 or
-not a power of two, then it will be rounded up to the nearest power of two
-larger or equal to 32.
+range [32, 512]. If the calculated number of allocated columns is less than
+32 or not a power of two, then it will be rounded up to the nearest power of
+two larger or equal to 32.
 
 If `collective` is `true` 2 CTAs will perform the allocation collectively,
 otherwise, only one CTA will perform the allocation.
@@ -504,7 +502,6 @@ function tmem_alloc(
     smem_ptr::Value;
     result_0::IR.Type,
     collective=nothing,
-    exact=nothing,
     packing=nothing,
     location=Location(),
 )
@@ -514,7 +511,6 @@ function tmem_alloc(
     successors = Block[]
     attributes = NamedAttribute[]
     !isnothing(collective) && push!(attributes, namedattribute("collective", collective))
-    !isnothing(exact) && push!(attributes, namedattribute("exact", exact))
     !isnothing(packing) && push!(attributes, namedattribute("packing", packing))
 
     return create_operation(
@@ -545,6 +541,28 @@ function tmem_dealloc(tmem_ref::Value; location=Location())
         attributes,
         results=op_ty_results,
         result_inference=false,
+    )
+end
+
+function tmem_layout_cast(
+    ref::Value; result_0=nothing::Union{Nothing,IR.Type}, new_layout, location=Location()
+)
+    op_ty_results = IR.Type[]
+    operands = Value[ref,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[namedattribute("new_layout", new_layout),]
+    !isnothing(result_0) && push!(op_ty_results, result_0)
+
+    return create_operation(
+        "mosaic_gpu.tmem_layout_cast",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
     )
 end
 

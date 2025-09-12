@@ -579,9 +579,7 @@ end
 function f_row_major(x::AbstractArray{T}) where {T}
     y = [1 2; 3 4; 5 6]
     if x isa Reactant.TracedRArray
-        y = Reactant.TracedUtils.promote_to(
-            Reactant.TracedRArray{Reactant.unwrapped_eltype(T),2}, y
-        )
+        y = Reactant.promote_to(Reactant.TracedRArray{Reactant.unwrapped_eltype(T),2}, y)
     end
     return x .+ y
 end
@@ -893,7 +891,7 @@ end
 end
 
 @testset "don't expand ranges by default" begin
-    fn(x) = Reactant.TracedUtils.broadcast_to_size(x, (length(x),))
+    fn(x) = Reactant.broadcast_to_size(x, (length(x),))
 
     hlo = repr(@code_hlo(fn(1:10000)))
     @test contains(hlo, "stablehlo.iota")
@@ -1531,4 +1529,42 @@ end
         @test res isa ConcreteRNumber{Int32}
         @test res == mod1(xᵢ, y)
     end
+end
+
+map_test_1(i, xᵢ, yᵢ) = xᵢ + yᵢ + max(xᵢ, yᵢ)
+
+@testset "multi-argument map" begin
+    x = collect(Float32, 1:10)
+    y = collect(Float32, 31:40)
+
+    x_ra = Reactant.to_rarray(x)
+    y_ra = Reactant.to_rarray(y)
+
+    gt = map(map_test_1, 1:length(x), x, y)
+    @test @jit(map(map_test_1, 1:length(x), x_ra, y_ra)) ≈ gt
+
+    z = similar(x)
+    z_ra = Reactant.to_rarray(z)
+    map!(map_test_1, z, 1:length(x), x, y)
+    @jit map!(map_test_1, z_ra, 1:length(x), x_ra, y_ra)
+    @test z ≈ z_ra
+    @test z_ra ≈ gt
+end
+
+@testset "repeat specialize" begin
+    x_ra = Reactant.to_rarray(rand(Float32, 2, 3))
+
+    hlo = repr(@code_hlo(repeat(x_ra, 2, 3)))
+    @test !contains(hlo, "stablehlo.dynamic_update_slice")
+end
+
+@testset "call through inference barrier" begin
+    points = [rand(Float32, 2), rand(Float32, 2)]
+    params = rand(Float32, 4, 2)
+    points_ra = Reactant.to_rarray(points)
+    params_ra = Reactant.to_rarray(params)
+
+    f(params, points) = mapreduce(Base.Fix1(*, params), +, points)
+
+    @test @jit(f(params_ra, points_ra)) ≈ f(params, points)
 end

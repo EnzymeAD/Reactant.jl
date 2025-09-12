@@ -240,8 +240,8 @@ function overloaded_mul!(
     α::Number=true,
     β::Number=false,
 )
-    A = TracedUtils.promote_to(TracedRArray{unwrapped_eltype(A),2}, A)
-    B = TracedUtils.promote_to(TracedRArray{unwrapped_eltype(B),2}, B)
+    A = Reactant.promote_to(TracedRArray, A)
+    B = Reactant.promote_to(TracedRArray, B)
 
     if size(C) != (size(A, 1), size(B, 2))
         throw(
@@ -265,11 +265,11 @@ function overloaded_mul!(
         if isone(α)
             tmp
         else
-            @opcall(multiply(tmp, TracedUtils.broadcast_to_size(T(α), size(C))))
+            @opcall(multiply(tmp, Reactant.broadcast_to_size(T(α), size(C))))
         end
     else
-        α_res = @opcall multiply(tmp, TracedUtils.broadcast_to_size(T(α), size(C)))
-        β_C = @opcall multiply(C, TracedUtils.broadcast_to_size(T(β), size(C)))
+        α_res = @opcall multiply(tmp, Reactant.broadcast_to_size(T(α), size(C)))
+        β_C = @opcall multiply(C, Reactant.broadcast_to_size(T(β), size(C)))
         @opcall add(α_res, β_C)
     end
     set_mlir_data!(C, get_mlir_data(res))
@@ -280,7 +280,7 @@ function LinearAlgebra.triu!(@nospecialize(X::TracedRArray{T,2}), k::Integer) wh
     iota_1 = @opcall iota(Int64, [size(X)...]; iota_dimension=1)
     iota_2 = @opcall subtract(
         @opcall(iota(Int64, [size(X)...]; iota_dimension=2)),
-        TracedUtils.broadcast_to_size(k, size(X)),
+        Reactant.broadcast_to_size(k, size(X)),
     )
     idxs = @opcall compare(iota_1, iota_2; comparison_direction="LE")
     X.mlir_data = @opcall(select(idxs, X, zero(X))).mlir_data
@@ -291,7 +291,7 @@ function LinearAlgebra.tril!(@nospecialize(X::TracedRArray{T,2}), k::Integer) wh
     iota_1 = @opcall iota(Int64, [size(X)...]; iota_dimension=1)
     iota_2 = @opcall subtract(
         @opcall(iota(Int64, [size(X)...]; iota_dimension=2)),
-        TracedUtils.broadcast_to_size(k, size(X)),
+        Reactant.broadcast_to_size(k, size(X)),
     )
     idxs = @opcall compare(iota_1, iota_2; comparison_direction="GE")
     X.mlir_data = @opcall(select(idxs, X, zero(X))).mlir_data
@@ -434,7 +434,7 @@ function LinearAlgebra.axpy!(α::Number, x::TracedRArray{T}, y::TracedRArray{T})
             ),
         )
     end
-    ax = @opcall multiply(x, TracedUtils.broadcast_to_size(T(α), size(x)))
+    ax = @opcall multiply(x, Reactant.broadcast_to_size(T(α), size(x)))
 
     set_mlir_data!(y, get_mlir_data(@opcall add(y, ax)))
     return y
@@ -450,8 +450,8 @@ function LinearAlgebra.axpby!(
             ),
         )
     end
-    ax = @opcall multiply(x, TracedUtils.broadcast_to_size(T(α), size(x)))
-    by = @opcall multiply(y, TracedUtils.broadcast_to_size(T(β), size(y)))
+    ax = @opcall multiply(x, Reactant.broadcast_to_size(T(α), size(x)))
+    by = @opcall multiply(y, Reactant.broadcast_to_size(T(β), size(y)))
 
     set_mlir_data!(y, get_mlir_data(@opcall add(ax, by)))
     return y
@@ -534,8 +534,8 @@ function LinearAlgebra.generic_trimatdiv!(
     @assert isunitc in ('N', 'U')
 
     res = @opcall triangular_solve(
-        TracedUtils.promote_to(TracedRArray{T,2}, materialize_traced_array(A)),
-        TracedUtils.promote_to(TracedRArray{T,ndims(B)}, materialize_traced_array(B));
+        Reactant.promote_to(TracedRArray{T}, A),
+        Reactant.promote_to(TracedRArray{T}, B);
         left_side=true,
         lower=(uploc == 'L'),
         transpose_a=tfun_to_char(tfun),
@@ -557,8 +557,8 @@ function LinearAlgebra.generic_mattridiv!(
     @assert isunitc in ('N', 'U')
 
     res = @opcall triangular_solve(
-        TracedUtils.promote_to(TracedRArray{T,2}, materialize_traced_array(B)),
-        TracedUtils.promote_to(TracedRArray{T,2}, materialize_traced_array(A));
+        Reactant.promote_to(TracedRArray{T}, B),
+        Reactant.promote_to(TracedRArray{T}, A);
         left_side=false,
         lower=(uploc == 'L'),
         transpose_a=tfun_to_char(tfun),
@@ -567,6 +567,10 @@ function LinearAlgebra.generic_mattridiv!(
     set_mlir_data!(C, get_mlir_data(res))
     return C
 end
+
+LinearAlgebra.transpose!(B::AnyTracedRMatrix, A::AnyTracedRMatrix) = copy!(B, transpose(A))
+
+LinearAlgebra.adjoint!(B::AnyTracedRMatrix, A::AnyTracedRMatrix) = copy!(B, adjoint(A))
 
 # Supports batched factorization
 abstract type GeneralizedFactorization{T} <: Factorization{T} end

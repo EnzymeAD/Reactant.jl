@@ -4,7 +4,7 @@ NSYNC_COMMIT = "82b118aa7ace3132e517e2c467f8732978cf4023"
 
 NSYNC_SHA256 = ""
 
-ENZYMEXLA_COMMIT = "6cef09efae7c8c1c7f17314469f1b4d9ace91c96"
+ENZYMEXLA_COMMIT = "c86fef218f895f0a03d9ebb40e81b7ca7005f05e"
 
 ENZYMEXLA_SHA256 = ""
 
@@ -97,6 +97,9 @@ sed -i.bak0 "s/i64/LL/g" xla/tsl/platform/windows/env_time.cc
 """,
     """
 sed -i.bak0 "s/\\/D/-D/g" third_party/farmhash/farmhash.BUILD
+""",
+    """
+sed -i.bak0 "s/Node::Leaf(std::forward<decltype(pair.second)>/Node::Leaf(std::forward<T>/g" xla/tuple_tree.h
 """,
     """
 sed -i.bak0 "s/kDeprecatedFlags({/kDeprecatedFlags(absl::flat_hash_set<std::string>{/g" xla/debug_options_flags.cc
@@ -297,7 +300,13 @@ jax_python_wheel_repository(
 
 load(
     "@xla//third_party/py:python_wheel.bzl",
+    "nvidia_wheel_versions_repository",
     "python_wheel_version_suffix_repository",
+)
+
+nvidia_wheel_versions_repository(
+    name = "nvidia_wheel_versions",
+    versions_source = "@jax//build:nvidia-requirements.txt",
 )
 
 python_wheel_version_suffix_repository(
@@ -312,13 +321,6 @@ load("@jax//:test_shard_count.bzl", "test_shard_count_repository")
 
 test_shard_count_repository(
     name = "test_shard_count",
-)
-
-load("@jax//:nvidia_wheel_versions.bzl", "nvidia_wheel_versions_repository")
-
-nvidia_wheel_versions_repository(
-    name = "nvidia_wheel_versions",
-    versions_source = "@jax//build:nvidia-requirements.txt",
 )
 
 load(

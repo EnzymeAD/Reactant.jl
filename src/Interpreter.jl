@@ -87,6 +87,7 @@ end
             false,            #=reverse_rules=#
             false,            #=inactive_rules=#
             false,            #=broadcast_rewrite=#
+            false,            #=within_autodiff_rewrite=#
             set_reactant_abi,
         )
     end
@@ -104,6 +105,7 @@ else
             false,            #=reverse_rules=#
             false,            #=inactive_rules=#
             false,            #=broadcast_rewrite=#
+            false,            #=within_autodiff_rewrite=#
             set_reactant_abi,
         )
     end

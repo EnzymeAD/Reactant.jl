@@ -28,7 +28,7 @@ end
 
 @reactant_overlay @noinline function TracedRandom.default_rng()
     return ReactantRNG(
-        TracedUtils.promote_to(TracedRArray{UInt64,1}, TracedRandom.make_seed()), "DEFAULT"
+        Reactant.promote_to(TracedRArray{UInt64,1}, TracedRandom.make_seed()), "DEFAULT"
     )
 end
 
@@ -161,7 +161,31 @@ end
     if use_overlayed_version(A)
         return TracedRArrayOverrides.overloaded_mapreduce(f, op, A; kwargs...)
     else
-        return Base.inferencebarrier(Base.mapreduce)(f, op, A; kwargs...)
+        return Base.inferencebarrier(Base.mapreduce)(
+            CallWithReactant(f), CallWithReactant(op), A; kwargs...
+        )
+    end
+end
+
+@reactant_overlay @noinline function Base.map(f, x::AbstractArray, ys::AbstractArray...)
+    if use_overlayed_version(x) || any(use_overlayed_version, ys)
+        return TracedRArrayOverrides.overloaded_map(f, x, ys...)
+    else
+        return Base.inferencebarrier(Base.map)(CallWithReactant(f), x, ys...)
+    end
+end
+
+@reactant_overlay @noinline function Base.map!(
+    f, y::AbstractArray, x::AbstractArray, xs::AbstractArray...
+)
+    if (
+        use_overlayed_version(y) ||
+        use_overlayed_version(x) ||
+        any(use_overlayed_version, xs)
+    )
+        return TracedRArrayOverrides.overloaded_map!(f, y, x, xs...)
+    else
+        return Base.inferencebarrier(Base.map!)(CallWithReactant(f), y, x, xs...)
     end
 end
 
@@ -169,7 +193,7 @@ end
     if use_overlayed_version(x)
         return TracedRArrayOverrides.overloaded_mapreduce(f, &, x; dims)
     else
-        return Base.inferencebarrier(Base._all)(f, x, dims)
+        return Base.inferencebarrier(Base._all)(CallWithReactant(f), x, dims)
     end
 end
 
@@ -177,6 +201,6 @@ end
     if use_overlayed_version(x)
         return TracedRArrayOverrides.overloaded_mapreduce(f, |, x; dims)
     else
-        return Base.inferencebarrier(Base._any)(f, x, dims)
+        return Base.inferencebarrier(Base._any)(CallWithReactant(f), x, dims)
     end
 end

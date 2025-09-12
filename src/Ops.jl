@@ -1178,8 +1178,8 @@ end
     sample_inputs = Vector{TracedRNumber}(undef, length(xs) * 2)
     for i in eachindex(xs)
         T = Reactant.unwrapped_eltype(xs[i])
-        sample_inputs[2i - 1] = Reactant.TracedUtils.promote_to(TracedRNumber{T}, 0)
-        sample_inputs[2i] = Reactant.TracedUtils.promote_to(TracedRNumber{T}, 0)
+        sample_inputs[2i - 1] = Reactant.promote_to(TracedRNumber{T}, 0)
+        sample_inputs[2i] = Reactant.promote_to(TracedRNumber{T}, 0)
     end
     func =
         Reactant.TracedUtils.make_mlir_fn(
@@ -1243,10 +1243,10 @@ end
         Reactant.TracedUtils.make_mlir_fn(
             comparator,
             (
-                Reactant.TracedUtils.promote_to(TracedRNumber{T}, 0),
-                Reactant.TracedUtils.promote_to(TracedRNumber{T}, 0),
-                Reactant.TracedUtils.promote_to(TracedRNumber{Int32}, 0),
-                Reactant.TracedUtils.promote_to(TracedRNumber{Int32}, 0),
+                Reactant.promote_to(TracedRNumber{T}, 0),
+                Reactant.promote_to(TracedRNumber{T}, 0),
+                Reactant.promote_to(TracedRNumber{Int32}, 0),
+                Reactant.promote_to(TracedRNumber{Int32}, 0),
             ),
             (),
             "comparator",
@@ -1353,8 +1353,8 @@ end
             x, iota(Int64, collect(Int64, size(x)); iota_dimension=dimension, location)
         ],
         TracedRNumber[
-            Reactant.TracedUtils.promote_to(TracedRNumber{Bool}, false),
-            Reactant.TracedUtils.promote_to(TracedRNumber{Int64}, typemax(Int64)),
+            Reactant.promote_to(TracedRNumber, false),
+            Reactant.promote_to(TracedRNumber, typemax(Int64)),
         ],
         [dimension],
         function (x, i, y, j)
@@ -1376,8 +1376,8 @@ end
             x, iota(Int64, collect(Int64, size(x)); iota_dimension=dimension, location)
         ],
         TracedRNumber[
-            Reactant.TracedUtils.promote_to(TracedRNumber{T}, typemin(T)),
-            Reactant.TracedUtils.promote_to(TracedRNumber{Int64}, -1),
+            Reactant.promote_to(TracedRNumber{T}, typemin(T)),
+            Reactant.promote_to(TracedRNumber{Int64}, -1),
         ],
         [dimension],
         function (a₁, i₁, a₂, i₂)
@@ -1820,10 +1820,10 @@ instead.
 """
 @noinline function scatter_setindex(
     dest::TracedRArray{T,N},
-    scatter_indices::TracedRArray{Int64,2},
+    scatter_indices::TracedRArray{T1,2},
     updates::TracedRArray{T2,1};
     location=mlir_stacktrace("scatter_setindex", @__FILE__, @__LINE__),
-) where {T,N,T2}
+) where {T,N,T1,T2}
     @assert length(updates) == size(scatter_indices, 1)
     @assert size(scatter_indices, 2) == N
 
@@ -1851,8 +1851,8 @@ end
     kwargs...,
 ) where {F,T,N}
     sample_inputs = (
-        Reactant.TracedUtils.promote_to(TracedRNumber{T}, zero(T)),
-        Reactant.TracedUtils.promote_to(TracedRNumber{T}, zero(T)),
+        Reactant.promote_to(TracedRNumber, zero(T)),
+        Reactant.promote_to(TracedRNumber, zero(T)),
     )
 
     compiled_fn =
@@ -1874,7 +1874,7 @@ end
 
 @noinline function scatter(
     dest::Vector{TracedRArray{T,N}},
-    scatter_indices::TracedRArray{Int64},
+    scatter_indices::TracedRArray{TI},
     updates::Vector{<:TracedRArray{T}};
     update_computation::MLIR.IR.Region,
     update_window_dims::Vector{Int64},
@@ -1886,9 +1886,9 @@ end
     unique_indices::Union{Bool,Nothing}=nothing,
     indices_are_sorted::Union{Bool,Nothing}=nothing,
     location=mlir_stacktrace("scatter", @__FILE__, @__LINE__),
-) where {T,N}
+) where {T,TI,N}
     scatter_indices = subtract(
-        scatter_indices, fill(Int64(1), size(scatter_indices)); location
+        scatter_indices, fill(TI(1), size(scatter_indices)); location
     )
 
     update_window_dims = update_window_dims .- 1
@@ -1939,9 +1939,9 @@ use [`MLIR.Dialects.stablehlo.dynamic_slice`](@ref) instead.
 """
 @noinline function gather_getindex(
     src::TracedRArray{T,N},
-    gather_indices::TracedRArray{Int64,2};
+    gather_indices::TracedRArray{TI,2};
     location=mlir_stacktrace("gather_getindex", @__FILE__, @__LINE__),
-) where {T,N}
+) where {T,TI,N}
     @assert size(gather_indices, 2) == N
 
     if GATHER_GETINDEX_DISABLED[]
@@ -1970,7 +1970,7 @@ end
 
 @noinline function gather(
     src::TracedRArray{T,N},
-    gather_indices::TracedRArray{Int64};
+    gather_indices::TracedRArray{TI};
     offset_dims::Vector{Int64},
     collapsed_slice_dims::Vector{Int64},
     operand_batching_dims::Vector{Int64},
@@ -1980,10 +1980,8 @@ end
     slice_sizes::Vector{Int64},
     indices_are_sorted::Bool=false,
     location=mlir_stacktrace("gather", @__FILE__, @__LINE__),
-) where {T,N}
-    gather_indices = subtract(
-        gather_indices, fill(Int64(1), size(gather_indices)); location
-    )
+) where {T,TI,N}
+    gather_indices = subtract(gather_indices, fill(TI(1), size(gather_indices)); location)
 
     offset_dims = offset_dims .- 1
     start_indices_batching_dims = start_indices_batching_dims .- 1
@@ -2794,8 +2792,8 @@ Produces a [`Reactant.MLIR.Dialects.sdy.sharding_constraint`](@ref) operation wi
 end
 
 function _construct_reduce_function(f::F, Ts::Type...) where {F}
-    inputs_1 = [Reactant.TracedUtils.promote_to(TracedRNumber{T}, 0) for T in Ts]
-    inputs_2 = [Reactant.TracedUtils.promote_to(TracedRNumber{T}, 0) for T in Ts]
+    inputs_1 = [Reactant.promote_to(TracedRNumber{T}, 0) for T in Ts]
+    inputs_2 = [Reactant.promote_to(TracedRNumber{T}, 0) for T in Ts]
     func =
         Reactant.TracedUtils.make_mlir_fn(
             f,
@@ -2908,19 +2906,40 @@ end
     ]
 end
 
+function standardize_start_index(
+    sz::Int, start_index::Union{Integer,TracedRNumber{<:Integer}}
+)
+    if (start_index isa Integer && start_index ≤ typemax(Int32)) || sz ≤ typemax(Int32)
+        start_index = Reactant.promote_to(TracedRNumber{Int32}, start_index)
+    elseif start_index isa Integer
+        start_index = Reactant.promote_to(TracedRNumber, start_index)
+    end
+
+    start_index = start_index - Reactant.unwrapped_eltype(start_index)(1)
+    return start_index
+end
+
+function standardize_start_indices(
+    operand::TracedRArray{T,N}, start_indices::Vector
+) where {T,N}
+    @assert length(start_indices) == N
+    return [
+        standardize_start_index(size(operand, i), start_indices[i]).mlir_data for i in 1:N
+    ]
+end
+
 @noinline function dynamic_update_slice(
     operand::TracedRArray{T,N},
     update::TracedRArray{T},
     start_indices::Vector;
     location=mlir_stacktrace("dynamic_update_slice", @__FILE__, @__LINE__),
 ) where {T,N}
-    start_indices = [
-        Reactant.TracedUtils.promote_to(TracedRNumber{Int32}, index - 1).mlir_data for
-        index in start_indices
-    ]
     res = MLIR.IR.result(
         stablehlo.dynamic_update_slice(
-            operand.mlir_data, update.mlir_data, start_indices; location
+            operand.mlir_data,
+            update.mlir_data,
+            standardize_start_indices(operand, start_indices);
+            location,
         ),
         1,
     )
@@ -2933,14 +2952,10 @@ end
     slice_sizes::Vector;
     location=mlir_stacktrace("dynamic_slice", @__FILE__, @__LINE__),
 ) where {T,N}
-    start_indices = [
-        Reactant.TracedUtils.promote_to(TracedRNumber{Int32}, index - 1).mlir_data for
-        index in start_indices
-    ]
     res = MLIR.IR.result(
         stablehlo.dynamic_slice(
             operand.mlir_data,
-            start_indices;
+            standardize_start_indices(operand, start_indices);
             slice_sizes=collect(Int64, slice_sizes),
             location,
         ),

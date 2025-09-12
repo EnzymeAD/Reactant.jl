@@ -793,6 +793,7 @@ function optimization_passes(
         "transpose_convolution<1>",
         "convolution_transpose<1>",
         "convert_convert_float<1>",
+        "convert_convert_int<1>",
         "reshape_iota<1>",
         "broadcast_reduce<1>",
         "slice_dot_general<1>",
@@ -833,16 +834,11 @@ function optimization_passes(
         "slice_reduce_window<1>",
         "while_deadresult",
         "while_dus",
-        "dus_licm(0)",
         "while_op_induction_replacement",
         "dus_concat",
         "slice_dus_to_concat",
         "while_induction_reduction",
-        "slice_licm(0)",
-        "elementwise_licm(0)",
-        "concatenate_licm(0)",
         "slice_broadcast",
-        "while_licm<1>(1)",
         "associative_common_mul_op_reordering",
         "slice_select_to_select_slice",
         "slice_if",
@@ -915,6 +911,22 @@ function optimization_passes(
         "concat_insert_dim_reduce_window",
     ]
 
+    if !compile_options.disable_licm_optimization_passes
+        append!(
+            transform_passes_list,
+            [
+                "dus_licm(0)",
+                "slice_licm(0)",
+                "elementwise_licm(0)",
+                "concatenate_licm(0)",
+                "while_licm<1>(1)",
+                "transpose_licm(0)",
+                "broadcastindim_licm(0)",
+                "reshape_licm(0)",
+            ],
+        )
+    end
+
     if !compile_options.disable_scatter_gather_optimization_passes
         append!(
             transform_passes_list,
@@ -973,7 +985,6 @@ function optimization_passes(
                 "unary_pad_push_tanh<1>",
                 "unary_pad_push_exp<1>",
                 "concat_to_pad<1>",
-                "pad_licm(0)",
                 "while_pad_induction_reduction",
                 "pad_concat_to_concat_pad",
                 "rotate_pad",
@@ -981,6 +992,10 @@ function optimization_passes(
                 "speculate_if_pad_to_select",
             ],
         )
+
+        if !compile_options.disable_licm_optimization_passes
+            push!(transform_passes_list, "pad_licm(0)")
+        end
     end
 
     # constant prop patterns

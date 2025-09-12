@@ -1,4 +1,3 @@
-
 using Reactant
 using Test
 using CUDA
@@ -122,8 +121,6 @@ end
     @jit aliased(a)
     @test all(Array(a) .== 9)
 end
-
-using Reactant, CUDA
 
 function cmul!(a, b)
     b[1] *= a[1]

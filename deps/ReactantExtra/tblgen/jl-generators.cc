@@ -365,7 +365,7 @@ end
 
       if (optional) {
         optionals += llvm::formatv(
-            R"(!isnothing({0}) && push!(attributes, namedattribute("{0}", {1}))
+            R"(!isnothing({1}) && push!(attributes, namedattribute("{0}", {1}))
     )",
             attributename, sanitizedname);
         defaultvalue = "=nothing";
