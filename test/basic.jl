@@ -926,7 +926,7 @@ end
 
     ra = Reactant.to_rarray(x)
     @jit dip!(ra)
-    ra[:a] ≈ (2.7 * 2) * ones(4)
+    @test ra[:a] ≈ (2.7 * 3.1) * ones(4)
 end
 
 @testset "@code_xla" begin
@@ -1429,7 +1429,10 @@ end
 end
 
 zip_iterator(a, b) = mapreduce(splat(*), +, zip(a, b))
+zip_iterator2(a, b) = mapreduce(splat(.-), +, zip(a, b))
 enumerate_iterator(a) = mapreduce(splat(*), +, enumerate(a))
+enumerate_iterator2(a) = mapreduce(splat(.-), +, enumerate(a))
+mapreduce_vector(a) = mapreduce(-, +, a)
 
 function nested_mapreduce_zip(x, y)
     return mapreduce(+, zip(eachcol(x), eachcol(y)); init=0.0f0) do (x, y)
@@ -1448,18 +1451,30 @@ end
 @testset "Base.Iterators" begin
     @testset "zip" begin
         N = 10
-        a = range(1.0, 5.0; length=N)
-        x = range(10.0, 15.0; length=N + 2)
+        a = collect(range(1.0, 5.0; length=N))
+        x = collect(range(10.0, 15.0; length=N + 2))
         x_ra = Reactant.to_rarray(x)
 
         @test @jit(zip_iterator(a, x_ra)) ≈ zip_iterator(a, x)
+
+        a = [rand(Float32, 2, 3) for _ in 1:10]
+        x = [rand(Float32, 2, 3) for _ in 1:10]
+        a_ra = Reactant.to_rarray(a)
+        x_ra = Reactant.to_rarray(x)
+
+        @test @jit(zip_iterator2(a_ra, x_ra)) ≈ zip_iterator2(a, x)
     end
 
     @testset "enumerate" begin
-        x = range(1.0, 5.0; length=10)
+        x = collect(range(1.0, 5.0; length=10))
         x_ra = Reactant.to_rarray(x)
 
         @test @jit(enumerate_iterator(x_ra)) ≈ enumerate_iterator(x)
+
+        x = [rand(Float32, 2, 3) for _ in 1:10]
+        x_ra = Reactant.to_rarray(x)
+
+        @test @jit(enumerate_iterator2(x_ra)) ≈ enumerate_iterator2(x)
     end
 
     @testset "nested mapreduce" begin
@@ -1480,6 +1495,15 @@ end
         y_ra = Reactant.to_rarray(y)
 
         @test @jit(nested_mapreduce_hcat(x_ra, y_ra)) ≈ nested_mapreduce_hcat(x, y)
+    end
+
+    @testset "mapreduce vector" begin
+        x = [rand(Float32, 2, 3) for _ in 1:10]
+        x_ra = Reactant.to_rarray(x)
+
+        @test @jit(mapreduce_vector(x_ra)) ≈ mapreduce_vector(x)
+        hlo = repr(@code_hlo optimize = false mapreduce_vector(x_ra))
+        @test contains(hlo, "call")
     end
 end
 

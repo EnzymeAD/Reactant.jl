@@ -1500,29 +1500,53 @@ end
 
 struct BroadcastIterator{F}
     f::F
+
+    BroadcastIterator{F}(f::F) where {F} = new{F}(f)
+    BroadcastIterator(f::F) where {F} = new{F}(f)
 end
 
-(fn::BroadcastIterator)(args...) = Reactant.call_with_reactant(fn.f, (args...,))
+(fn::BroadcastIterator)(args...) = fn.f((args...,))
 
 function unwrapped_broadcast(f::F, x::Base.Iterators.Zip) where {F}
     min_length = Base.inferencebarrier(minimum)(length, x.is)
     itrs = [length(itr) > min_length ? itr[1:min_length] : itr for itr in x.is]
     if any(Base.Fix2(isa, AnyTracedRArray), itrs)
-        return (BroadcastIterator(f)).(itrs...)
+        return broadcast(BroadcastIterator(f), itrs...)
     else
-        fn = BroadcastIterator(f)
-        return [fn(Base.Fix2(getindex, i).(itrs)...) for i in 1:min_length]
+        return unwrapped_broadcast_with_iterate(f, x)
     end
 end
 
 function unwrapped_broadcast(f::F, x::Base.Iterators.Enumerate) where {F}
     if x.itr isa AnyTracedRArray
-        return (BroadcastIterator(f)).(1:length(x.itr), x.itr)
+        return broadcast(
+            BroadcastIterator(f), Reactant.promote_to(TracedRArray, 1:length(x.itr)), x.itr
+        )
     else
-        return [f((i, x.itr[i])) for i in 1:length(x.itr)]
+        return unwrapped_broadcast_with_iterate(f, x)
     end
 end
 
-unwrapped_broadcast(f::F, xs::Vector) where {F} = [f(x) for x in xs]
+unwrapped_broadcast(f::F, xs) where {F} = unwrapped_broadcast_with_iterate(f, xs)
+
+function unwrapped_broadcast_with_iterate(f::F, itr) where {F}
+    y = Reactant.call_with_reactant(iterate, itr)
+    y === nothing && return []
+
+    first, state = y
+    res_first = @opcall call(f, first)
+    result = [res_first]
+
+    while true
+        y = Reactant.call_with_reactant(iterate, itr, state)
+        y === nothing && break
+
+        val, state = y
+        res = @opcall call(f, val)
+        push!(result, res)
+    end
+
+    return result
+end
 
 end
