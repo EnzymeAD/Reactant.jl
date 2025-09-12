@@ -218,7 +218,9 @@ for runtime in (:PJRT, :IFRT)
                     catch e
                         @debug "Failed to load TPU client: $e"
                     end
-                elseif Reactant_jll.host_platform.tags["gpu"] != "none"
+                end
+
+                if Reactant_jll.host_platform.tags["gpu"] != "none"
                     try
                         if was_initialized && haskey(state.clients, "cuda")
                             XLA.free_client(state.clients["cuda"])
@@ -233,21 +235,21 @@ for runtime in (:PJRT, :IFRT)
                     catch e
                         @debug "Failed to load CUDA client: $e"
                     end
+                end
 
-                    if Sys.ARCH == :x86_64
-                        try
-                            if was_initialized && haskey(state.clients, "sycl")
-                                XLA.free_client(state.clients["sycl"])
-                                XLA.$(runtime).sycl_client_count[] -= 1
-                            end
-                            gpu = $(runtime).SYCLClient(;
-                                sycl_pjrt_plugin_path=Accelerators.IntelXPU.get_intel_xpu_pjrt_plugin_path(),
-                                common_kwargs...,
-                            )
-                            state.clients["sycl"] = gpu
-                        catch e
-                            @debug "Failed to load SYCL client: $e"
+                if Accelerators.IntelXPU.has_intel_xpu()
+                    try
+                        if was_initialized && haskey(state.clients, "sycl")
+                            XLA.free_client(state.clients["sycl"])
+                            XLA.$(runtime).sycl_client_count[] -= 1
                         end
+                        gpu = $(runtime).SYCLClient(;
+                            sycl_pjrt_plugin_path=Accelerators.IntelXPU.get_intel_xpu_pjrt_plugin_path(),
+                            common_kwargs...,
+                        )
+                        state.clients["sycl"] = gpu
+                    catch e
+                        @debug "Failed to load SYCL client: $e"
                     end
                 end
             else

@@ -5,6 +5,9 @@ using Scratch: @get_scratch!
 using Downloads
 using Libdl
 
+# XXX: we can't have these as hard deps
+using oneAPI_Level_Zero_Loader_jll, oneAPI_Level_Zero_jll, oneAPI_Support_jll, oneDNN_jll
+
 const intel_xpu_pjrt_plugin_dir = Ref{Union{Nothing,String}}(nothing)
 
 function __init__()
@@ -13,12 +16,20 @@ function __init__()
             setup_intel_xpu_pjrt_plugin!()
 
             try
-                Libdl.dlopen(joinpath(get_intel_xpu_pjrt_plugin_dir(), "sycl_onednn.so");)
+                Libdl.dlopen(
+                    joinpath(
+                        get_intel_xpu_pjrt_plugin_dir(), "service", "gpu", "sycl_onednn.so"
+                    );
+                )
             catch e
                 @debug "Failed to load sycl_onednn.so: $e"
             end
         end
     end
+end
+
+function has_intel_xpu()
+    return Sys.ARCH === :x86_64 # TODO: more checks
 end
 
 function setup_intel_xpu_pjrt_plugin!()
@@ -61,6 +72,7 @@ function download_intel_xpu_pjrt_plugin_if_needed(path=nothing)
             ),
             intel_xpu_pjrt_plugin_path;
         )
+        mkpath(joinpath(path, "service", "gpu"))
         mv(
             joinpath(
                 tmp_dir,
@@ -70,10 +82,10 @@ function download_intel_xpu_pjrt_plugin_if_needed(path=nothing)
                 "gpu",
                 "sycl_onednn.so",
             ),
-            joinpath(path, "sycl_onednn.so");
+            joinpath(path, "service", "gpu", "sycl_onednn.so");
         )
         rm(tmp_dir; recursive=true)
-        rm(zip_file_path; recursive=true)
+        return rm(zip_file_path; recursive=true)
     end
 end
 
