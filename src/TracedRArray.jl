@@ -550,15 +550,21 @@ function __default_init(T::Type{<:Reactant.ReactantFloat8}, op::F) where {F}
     return T(__default_init(Float16, op))
 end
 
+struct TracedCall{F} <: Function
+    f::F
+end
+
+(fn::TracedCall)(args...) = @opcall call(fn.f, args...)
+
 function overloaded_mapreduce(
-    @nospecialize(f), @nospecialize(op), @nospecialize(A); dims=:, init=nothing
+    @nospecialize(f), @nospecialize(op), @nospecialize(A); dims=:, init=Base._InitialValue()
 )
     res = unwrapped_broadcast(f, A)
     # This means we are unable to use the optimized dispatches. For now we will
     # unroll the mapreduce.
     if typeof(res) == typeof(A)
         @assert dims == Colon() "dims not supported for mapreduce currently."
-        return foldl(op, res; init)
+        return foldl(TracedCall(op), res; init)
     end
     return overloaded_mapreduce(identity, op, res; dims=:, init)
 end
@@ -568,7 +574,7 @@ function overloaded_mapreduce(
     @nospecialize(op),
     @nospecialize(A::AnyTracedRArray{T,N});
     dims=:,
-    init=nothing,
+    init=Base._InitialValue(),
 ) where {T,N}
     A = materialize_traced_array(A)
 
@@ -589,7 +595,7 @@ function overloaded_mapreduce(
 
     res = @opcall reduce(reduce_input, reduce_init, dims, op)
 
-    init !== nothing && (res = op.(res, init))
+    (init isa Base._InitialValue || init === nothing) || (res = op.(res, init))
 
     if original_dims isa Colon
         @assert size(res) == () "expected size of result to be (), got $(size(res))"
@@ -677,6 +683,8 @@ function Broadcast.copy(bc::Broadcasted{<:AbstractReactantArrayStyle})
     # Special case a union{} return so we can see the better error message
     if ElType === Union{}
         fn(map(first_scalar, bc.args)...)
+    elseif ElType == Any
+        ElType = eltype(fn(map(first_scalar, bc.args)...))
     end
     @assert ElType != Any && ElType != Union{}
     sim = similar(bc, ElType)
@@ -1321,14 +1329,14 @@ function scan_impl!(
     output::AnyTracedRArray{T,N},
     input::AnyTracedRArray{T,N};
     dims::Integer,
-    init=nothing,
+    init=Base._InitialValue(),
 ) where {T,N}
     @assert dims > 0 "dims must be a positive integer"
     @assert axes(output) == axes(input) "output and input must have the same shape"
 
     dims > ndims(input) && return copyto!(output, input)
 
-    if init === nothing
+    if init isa Base._InitialValue
         op_in_T = Core.Compiler.return_type(op, Tuple{T,T})
         op_in_T === Union{} && (op_in_T = T)
         init = __default_init(T, op)
