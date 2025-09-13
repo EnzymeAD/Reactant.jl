@@ -6,6 +6,7 @@ JSON3 = "0f8b85d8-7281-11e9-16c2-39a750bddbf1"
 LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
 Lux = "b2108857-7c20-44ae-9111-449ecde12c47"
 NeuralOperators = "ea5c82af-86e5-48da-8ee1-382d6ad7af4b"
+PProf = "e4faabce-9ead-11e9-39d9-4379958e3056"
 Printf = "de0858da-6303-5e67-8744-51eddeeeb8d7"
 Reactant = "3c362404-f566-11ee-1572-e11a4b42c853"
 

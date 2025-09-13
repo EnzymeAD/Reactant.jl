@@ -51,6 +51,14 @@ jobs:
             Pkg.instantiate()'
 
           julia --color=yes --project=benchmark benchmark/runbenchmarks.jl
+      - name: Upload PProf Results
+        uses: actions/upload-artifact@v4
+        timeout-minutes: 10
+        with:
+          name: pprof-results-${{ matrix.os }}
+          path: "**/*pb.gz"
+          retention-days: 90
+          overwrite: false
       - name: Upload Benchmark Results
         uses: actions/upload-artifact@v4
         timeout-minutes: 10
