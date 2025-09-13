@@ -2,6 +2,8 @@ using InteractiveUtils: versioninfo
 using Reactant: Reactant
 using JSON3: JSON3
 
+@info sprint(io -> versioninfo(io; verbose=true))
+
 # To run benchmarks on a specific backend
 BENCHMARK_GROUP = get(ENV, "BENCHMARK_GROUP", nothing)
 
