@@ -173,21 +173,21 @@ function run_benchmark!(
     if fwd_or_bwd == "forward"
         x, ps, st = general_lux_setup(model, x_dims)
         st_test = Lux.testmode(st)
-        compiled_fwd = @compile compile_options = compile_options Lux.apply(
+        compiled_fwd = @time "compile time" @compile compile_options = compile_options Lux.apply(
             model, x, ps, st_test
         )
 
-        bench = @b compiled_fwd(model, x, ps, st_test) seconds=5 evals=1 samples=10
+        bench = @b compiled_fwd(model, x, ps, st_test) seconds = 5 evals = 1 samples = 10
         results[full_benchmark_name] = bench.time
         GC.gc(true)
     elseif fwd_or_bwd == "backward"
         x, ps, st = general_lux_setup(model, x_dims)
         st_test = Lux.testmode(st)
-        compiled_bwd = @compile compile_options = compile_options simple_gradient(
+        compiled_bwd = @time "compile time" @compile compile_options = compile_options simple_gradient(
             model, x, ps, st
         )
 
-        bench = @b compiled_bwd(model, x, ps, st) seconds=5 evals=1 samples=10
+        bench = @b compiled_bwd(model, x, ps, st) seconds = 5 evals = 1 samples = 10
         results[full_benchmark_name] = bench.time
         GC.gc(true)
     else

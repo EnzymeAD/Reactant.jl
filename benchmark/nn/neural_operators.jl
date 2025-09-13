@@ -15,8 +15,8 @@ end
 function run_fno_benchmark!(results, backend)
     model = FourierNeuralOperator((16, 16), 3, 8, 64)
 
-    benchmark_name = "FNO [64, 64, 1, 256]"
-    run_lux_benchmark!(results, benchmark_name, backend, model, (64, 64, 1, 256))
+    benchmark_name = "FNO [64, 64, 1, 4]"
+    run_lux_benchmark!(results, benchmark_name, backend, model, (64, 64, 1, 4))
 
     return nothing
 end
