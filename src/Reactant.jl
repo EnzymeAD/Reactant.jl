@@ -60,6 +60,7 @@ function _parent end
 _parent_type(::Type{Array}) = Array
 _parent_type(::Type{Array{T}}) where {T} = Array{T}
 _parent_type(::Type{Array{T,N}}) where {T,N} = Array{T,N}
+_parent_type(::Type{<:Slices{P}}) where {P} = P
 
 include("accelerators/Accelerators.jl")
 
@@ -209,7 +210,6 @@ function looped_any(f::F, itr) where {F}
 end
 
 # StdLib Overloads
-
 include("stdlibs/LinearAlgebra.jl")
 include("stdlibs/Random.jl")
 include("stdlibs/Base.jl")
