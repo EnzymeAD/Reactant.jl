@@ -1,13 +1,9 @@
-using BenchmarkTools: BenchmarkTools, BenchmarkGroup, @btime, @benchmarkable
 using InteractiveUtils: versioninfo
 using Reactant: Reactant
-using Statistics: median
+using JSON3: JSON3
 
-# To run benchmarks on a specific GPU backend, add AMDGPU / CUDA / Metal / oneAPI
-# to benchmarks/Project.toml and change BENCHMARK_GROUP to the backend name
+# To run benchmarks on a specific backend
 BENCHMARK_GROUP = get(ENV, "BENCHMARK_GROUP", nothing)
-
-BenchmarkTools.DEFAULT_PARAMETERS.seconds = 5
 
 if BENCHMARK_GROUP == "CUDA"
     Reactant.set_default_backend("gpu")
@@ -24,17 +20,24 @@ end
 
 @assert BENCHMARK_GROUP in ("CPU", "CUDA", "TPU")
 
-const SUITE = BenchmarkGroup()
-
 # Main benchmark files
 include("setup.jl")
-setup_benchmarks!(SUITE, BENCHMARK_GROUP)
 
-results = BenchmarkTools.run(SUITE; verbose=true)
+results = run_benchmarks(BENCHMARK_GROUP)
 
 filepath = joinpath(dirname(@__FILE__), "results")
 mkpath(filepath)
 filename = string(BENCHMARK_GROUP, "benchmarks.json")
-BenchmarkTools.save(joinpath(filepath, filename), median(results))
+
+standardized_results = Vector{Dict{String,Union{String,Float64}}}(
+    undef, length(keys(results))
+)
+for (i, (k, v)) in enumerate(results)
+    standardized_results[i] = Dict("name" => k, "time" => v, "unit" => "s")
+end
+
+open(joinpath(filepath, filename), "w") do io
+    JSON3.pretty(io, JSON3.write(standardized_results))
+end
 
 @info "Saved results to $(joinpath(filepath, filename))"

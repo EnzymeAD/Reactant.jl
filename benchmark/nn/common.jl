@@ -28,8 +28,8 @@ function general_lux_setup(model, x_dims)
     return x, ps, st
 end
 
-function setup_lux_benchmark!(
-    suite::BenchmarkGroup,
+function run_lux_benchmark!(
+    results::Dict,
     benchmark_name::String,
     backend::String,
     model,
@@ -135,22 +135,29 @@ function setup_lux_benchmark!(
     end
 
     for (tag, compile_options) in fwd_options
-        add_benchmark!(
-            suite, benchmark_name, backend, "forward", tag, compile_options, model, x_dims
+        run_benchmark!(
+            results, benchmark_name, backend, "forward", tag, compile_options, model, x_dims
         )
     end
 
     for (tag, compile_options) in bwd_options
-        add_benchmark!(
-            suite, benchmark_name, backend, "backward", tag, compile_options, model, x_dims
+        run_benchmark!(
+            results,
+            benchmark_name,
+            backend,
+            "backward",
+            tag,
+            compile_options,
+            model,
+            x_dims,
         )
     end
 
     return nothing
 end
 
-function add_benchmark!(
-    suite::BenchmarkGroup,
+function run_benchmark!(
+    results::Dict,
     benchmark_name::String,
     backend::String,
     fwd_or_bwd::String,
@@ -159,31 +166,36 @@ function add_benchmark!(
     model,
     x_dims,
 )
+    full_benchmark_name = string(benchmark_name, "/", fwd_or_bwd, "/", backend, "/", tag)
+    @assert !haskey(results, full_benchmark_name) "Benchmark already exists: \
+                                                   $(full_benchmark_name)"
+
     if fwd_or_bwd == "forward"
-        suite[benchmark_name][fwd_or_bwd][backend][tag] = @benchmarkable begin
-            compiled_fwd($model, x, ps, st_test)
-        end setup = begin
-            GC.gc(true)
-            x, ps, st = general_lux_setup($model, $x_dims)
-            st_test = Lux.testmode(st)
-            compiled_fwd = @compile compile_options = $compile_options Lux.apply(
-                $model, x, ps, st_test
-            )
-            GC.gc(true)
-        end
+        x, ps, st = general_lux_setup(model, x_dims)
+        st_test = Lux.testmode(st)
+        compiled_fwd = @compile compile_options = compile_options Lux.apply(
+            model, x, ps, st_test
+        )
+
+        bench = @b compiled_fwd(model, x, ps, st_test) seconds=5 evals=1 samples=10
+        results[full_benchmark_name] = bench.time
+        GC.gc(true)
     elseif fwd_or_bwd == "backward"
-        suite[benchmark_name][fwd_or_bwd][backend][tag] = @benchmarkable begin
-            compiled_bwd($model, x, ps, st)
-        end setup = begin
-            GC.gc(true)
-            x, ps, st = general_lux_setup($model, $x_dims)
-            compiled_bwd = @compile compile_options = $compile_options simple_gradient(
-                $model, x, ps, st
-            )
-            GC.gc(true)
-        end
+        x, ps, st = general_lux_setup(model, x_dims)
+        st_test = Lux.testmode(st)
+        compiled_bwd = @compile compile_options = compile_options simple_gradient(
+            model, x, ps, st
+        )
+
+        bench = @b compiled_bwd(model, x, ps, st) seconds=5 evals=1 samples=10
+        results[full_benchmark_name] = bench.time
+        GC.gc(true)
     else
         @error "Unknown fwd_or_bwd: $(fwd_or_bwd)"
     end
+
+    print_stmt = @sprintf "%100s     :     %.5gs" full_benchmark_name bench.time
+    @info print_stmt
+
     return nothing
 end

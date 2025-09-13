@@ -79,9 +79,8 @@ jobs:
         id: locate
         run: |
           julia --color=yes -e '@info "Instantiating project"
-            using Pkg
-            Pkg.add("BenchmarkTools")
-
+            using Pkg;
+            Pkg.add("JSON3");
             @info "Combining Benchmarks"
             include("benchmark/aggregate.jl")'
 
@@ -91,7 +90,7 @@ jobs:
         uses: benchmark-action/github-action-benchmark@v1
         with:
           name: Reactant.jl Benchmarks
-          tool: "julia"
+          tool: "customSmallerIsBetter"
           output-file-path: ${{ steps.locate.outputs.path }}
           benchmark-data-dir-path: "benchmarks"
           github-token: ${{ secrets.GITHUB_TOKEN }}

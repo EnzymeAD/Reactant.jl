@@ -3,11 +3,12 @@ module NN
 
 using Boltz: Vision
 using Lux: Lux, gelu, reactant_device
+using Printf: @sprintf
 using Reactant: Reactant, @compile
 using NeuralOperators: DeepONet, FourierNeuralOperator
 using Enzyme: Enzyme
 
-using BenchmarkTools: BenchmarkGroup, @benchmarkable
+using Chairmarks: @b
 using Random: Random
 
 include("nn/common.jl")
@@ -16,15 +17,17 @@ include("nn/neural_operators.jl")
 
 end
 
-function setup_benchmarks!(suite::BenchmarkGroup, backend::String)
+function run_benchmarks(backend::String)
+    results = Dict()
+
     # neural network benchmarks
     ## vision models
-    NN.setup_vgg_benchmark!(suite, backend)
-    NN.setup_vit_benchmark!(suite, backend)
+    NN.run_vgg_benchmark!(results, backend)
+    NN.run_vit_benchmark!(results, backend)
 
     ## neural operator benchmarks
-    NN.setup_deeponet_benchmark!(suite, backend)
-    NN.setup_fno_benchmark!(suite, backend)
+    NN.run_deeponet_benchmark!(results, backend)
+    NN.run_fno_benchmark!(results, backend)
 
-    return nothing
+    return results
 end
