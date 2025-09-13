@@ -686,7 +686,7 @@ function Broadcast.copy(bc::Broadcasted{<:AbstractReactantArrayStyle})
     elseif ElType == Any
         ElType = eltype(fn(map(first_scalar, bc.args)...))
     end
-    @assert ElType != Union{} && ElType != Any
+    @assert ElType != Any && ElType != Union{}
     sim = similar(bc, ElType)
     return copyto!(sim, bc)
 end

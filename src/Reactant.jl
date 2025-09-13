@@ -180,33 +180,18 @@ include("ConcreteRArray.jl")
 
 use_overlayed_version(x) = false
 function use_overlayed_version(x::F) where {F<:Function}
-    return Base.inferencebarrier(any)(
-        use_overlayed_version, getfield.(Ref(x), fieldnames(F))
-    )
+    return use_overlayed_version(getfield.(Ref(x), fieldnames(F)))
 end
-function use_overlayed_version(x::Base.Generator)
-    return use_overlayed_version(x.f) || use_overlayed_version(x.iter)
-end
-function use_overlayed_version(x::Base.Iterators.Zip)
-    return Base.inferencebarrier(any)(use_overlayed_version, x.is)
-end
-function use_overlayed_version(x::Base.Iterators.Enumerate)
-    return use_overlayed_version(x.itr)
-end
-function use_overlayed_version(x::Vector)
-    return Base.inferencebarrier(any)(use_overlayed_version, x)
-end
-function use_overlayed_version(iter::Tuple)
-    return Base.inferencebarrier(any)(use_overlayed_version, iter)
-end
-function use_overlayed_version(iter::NamedTuple)
-    return Base.inferencebarrier(any)(use_overlayed_version, values(iter))
-end
+use_overlayed_version(x::Base.Generator) = use_overlayed_version((x.f, x.iter))
+use_overlayed_version(x::Base.Iterators.Zip) = use_overlayed_version(x.is)
+use_overlayed_version(x::Base.Iterators.Enumerate) = use_overlayed_version(x.itr)
+use_overlayed_version(x::Vector) = looped_any(use_overlayed_version, x)
+use_overlayed_version(iter::Tuple) = looped_any(use_overlayed_version, iter)
+use_overlayed_version(iter::NamedTuple) = looped_any(use_overlayed_version, values(iter))
 use_overlayed_version(::TracedRArray) = true
 use_overlayed_version(::TracedRNumber) = true
 use_overlayed_version(::Number) = false
 use_overlayed_version(::MissingTracedValue) = true
-use_overlayed_version(::Vector{<:AnyTracedRArray}) = true
 use_overlayed_version(::AbstractArray{<:TracedRNumber}) = true
 use_overlayed_version(rng::ReactantRNG) = use_overlayed_version(rng.seed)
 function use_overlayed_version(x::AbstractArray)
@@ -215,7 +200,16 @@ function use_overlayed_version(x::AbstractArray)
     return use_overlayed_version(a)
 end
 
+## We avoid calling into `any` to avoid triggering the `any` overlay
+function looped_any(f::F, itr) where {F}
+    @inbounds for x in itr
+        f(x) && return true
+    end
+    return false
+end
+
 # StdLib Overloads
+
 include("stdlibs/LinearAlgebra.jl")
 include("stdlibs/Random.jl")
 include("stdlibs/Base.jl")
