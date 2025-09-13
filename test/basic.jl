@@ -1598,3 +1598,16 @@ end
     x_ra = Reactant.to_rarray(x)
     @test @jit(clamp!(x_ra, 0.5, Inf32)) ≈ clamp!(x, 0.5, Inf32)
 end
+
+@testset "Base.Generator" begin
+    points = eachcol(rand(Float32, 2, 6))
+    params = rand(Float32, 4, 2)
+    points_ra = Reactant.to_rarray(points)
+    params_ra = Reactant.to_rarray(params)
+
+    function f_generator(points, params)
+        return sum(params * point for point in points)
+    end
+
+    @test @jit(f_generator(points_ra, params_ra)) ≈ f_generator(points, params)
+end

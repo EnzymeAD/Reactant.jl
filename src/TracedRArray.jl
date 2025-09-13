@@ -1527,6 +1527,10 @@ function unwrapped_broadcast(f::F, x::Base.Iterators.Enumerate) where {F}
     end
 end
 
+function unwrapped_broadcast(f::F, x::Base.Generator) where {F}
+    return unwrapped_broadcast_with_iterate(f, Base.Generator(TracedCall(x.f), x.iter))
+end
+
 unwrapped_broadcast(f::F, xs) where {F} = unwrapped_broadcast_with_iterate(f, xs)
 
 function unwrapped_broadcast_with_iterate(f::F, itr) where {F}
