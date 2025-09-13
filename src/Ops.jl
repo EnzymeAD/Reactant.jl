@@ -46,7 +46,11 @@ macro opcall(expr)
 
     # Generate location info at the callsite
     location_expr = :($(mlir_stacktrace)(
-        joinpath(string(var"#self#"), $(string(func))),
+        if @isdefined(var"#self#")
+            joinpath(string(var"#self#"), $(string(func)))
+        else
+            $(string(func))
+        end,
         $(string(__source__.file)),
         $(__source__.line),
     ))
@@ -2575,7 +2579,7 @@ end
     seen_cache = Reactant.OrderedIdDict()
     Reactant.make_tracer(
         seen_cache,
-        args,
+        fnwrapped ? (f, args) : args,
         (), # we have to insert something here, but we remove it immediately below.
         Reactant.TracedTrack;
         toscalar=false,

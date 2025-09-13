@@ -1,4 +1,4 @@
-struct CallWithReactant{F}
+struct CallWithReactant{F} <: Function
     f::F
 end
 

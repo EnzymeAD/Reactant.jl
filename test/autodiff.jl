@@ -132,7 +132,7 @@ end
 
 @testset "Forward Gradient" begin
     x = Reactant.to_rarray(3.1 * ones(2, 2))
-    res = @test_warn r"`Adapt.parent_type` is not implemented for" @jit gw(x)
+    res = @jit gw(x)
     # TODO we should probably override https://github.com/EnzymeAD/Enzyme.jl/blob/5e6a82dd08e74666822b9d7b2b46c36b075668ca/src/Enzyme.jl#L2132
     # to make sure this gets merged as a tracedrarray
     @test res isa Tuple{<:Enzyme.TupleArray{<:ConcreteRNumber{Float64},(2, 2),4,2}}

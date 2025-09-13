@@ -60,6 +60,7 @@ function _parent end
 _parent_type(::Type{Array}) = Array
 _parent_type(::Type{Array{T}}) where {T} = Array{T}
 _parent_type(::Type{Array{T,N}}) where {T,N} = Array{T,N}
+_parent_type(::Type{<:Slices{P}}) where {P} = P
 
 include("accelerators/Accelerators.jl")
 
@@ -179,10 +180,15 @@ include("TracedRArray.jl")
 include("ConcreteRArray.jl")
 
 use_overlayed_version(x) = false
-use_overlayed_version(x::Base.Iterators.Zip) = any(use_overlayed_version, x.is)
+function use_overlayed_version(x::F) where {F<:Function}
+    return use_overlayed_version(getfield.(Ref(x), fieldnames(F)))
+end
+use_overlayed_version(x::Base.Generator) = use_overlayed_version((x.f, x.iter))
+use_overlayed_version(x::Base.Iterators.Zip) = use_overlayed_version(x.is)
 use_overlayed_version(x::Base.Iterators.Enumerate) = use_overlayed_version(x.itr)
-use_overlayed_version(iter::Tuple) = any(use_overlayed_version, iter)
-use_overlayed_version(iter::NamedTuple) = any(use_overlayed_version, values(iter))
+use_overlayed_version(x::Vector) = looped_any(use_overlayed_version, x)
+use_overlayed_version(iter::Tuple) = looped_any(use_overlayed_version, iter)
+use_overlayed_version(iter::NamedTuple) = looped_any(use_overlayed_version, values(iter))
 use_overlayed_version(::TracedRArray) = true
 use_overlayed_version(::TracedRNumber) = true
 use_overlayed_version(::Number) = false
@@ -193,6 +199,14 @@ function use_overlayed_version(x::AbstractArray)
     a = ancestor(x)
     a === x && return false
     return use_overlayed_version(a)
+end
+
+## We avoid calling into `any` to avoid triggering the `any` overlay
+function looped_any(f::F, itr) where {F}
+    @inbounds for x in itr
+        f(x) && return true
+    end
+    return false
 end
 
 # StdLib Overloads
