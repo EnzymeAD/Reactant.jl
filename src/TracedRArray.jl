@@ -1532,7 +1532,6 @@ end
 
 unwrapped_broadcast(f::F, xs) where {F} = unrolled_map(f, xs)
 
-# TODO: once traced_call supports internal mutations, we can use traced_call here
 # TODO: we should overload this for Slices and use mapslices instead
 function unrolled_map(f::F, itr) where {F}
     y = Reactant.call_with_reactant(iterate, itr)
