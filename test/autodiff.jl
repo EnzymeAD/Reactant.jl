@@ -126,6 +126,8 @@ end
     @test res1[1] ≈ ores1[1]
 end
 
+using Enzyme, Reactant, Test, Random
+
 function error_not_within_autodiff()
     !Enzyme.within_autodiff() && error("Not within autodiff")
     return nothing
@@ -133,13 +135,13 @@ end
 
 fwd_within_autodiff(Mode, RT) = Enzyme.autodiff(Mode, error_not_within_autodiff, RT)
 
-@testset "within_autodiff" begin
-    @test_throws ErrorException error_not_within_autodiff()
-    @test fwd_within_autodiff(Forward, Const) == ()
+# @testset "within_autodiff" begin
+@test_throws ErrorException error_not_within_autodiff()
+@test fwd_within_autodiff(Forward, Const) == ()
 
-    @test_throws ErrorException @jit error_not_within_autodiff()
-    @test (@jit fwd_within_autodiff(Forward, Const)) == ()
-end
+@test_throws ErrorException @jit error_not_within_autodiff()
+@test (@jit fwd_within_autodiff(Forward, Const)) == ()
+# end
 
 function gw(z)
     return Enzyme.gradient(Forward, sum, z; chunk=Val(1))

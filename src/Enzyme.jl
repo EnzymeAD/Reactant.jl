@@ -288,7 +288,15 @@ function set_act!(inp, path, reverse, tostore; emptypath=false)
     return nothing
 end
 
-function overload_autodiff(
+const REACTANT_WITHIN_AUTODIFF = ScopedValue(false)
+
+function overload_autodiff(args...)
+    return ScopedValues.with(REACTANT_WITHIN_AUTODIFF => true) do
+        return call_with_reactant(overload_autodiff_inner, args...)
+    end
+end
+
+function overload_autodiff_inner(
     ::CMode, f::FA, ::Type{A}, args::Vararg{Enzyme.Annotation,Nargs}
 ) where {CMode<:Enzyme.Mode,FA<:Enzyme.Annotation,A<:Enzyme.Annotation,Nargs}
     reverse = CMode <: Enzyme.ReverseMode
@@ -314,7 +322,6 @@ function overload_autodiff(
         argprefix,
         resprefix,
         resargprefix,
-        within_autodiff=true,
     )
     (; result, linear_args, in_tys, linear_results) = mlir_fn_res
     fnwrap = mlir_fn_res.fnwrapped

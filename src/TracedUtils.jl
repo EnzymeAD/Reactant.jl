@@ -282,7 +282,6 @@ function make_mlir_fn(
     args_in_result::Symbol=:all,
     construct_function_without_args::Bool=false,
     do_transpose=true,
-    within_autodiff=false,
     input_shardings=nothing,  # This is not meant to be used by the user.
     output_shardings=nothing, # This is not meant to be used by the user.
     runtime=nothing,
@@ -342,19 +341,9 @@ function make_mlir_fn(
         process_linear_args!(linear_args, fnbody, do_transpose, optimize_then_pad, inv_map)
 
         if isempty(kwargs)
-            if within_autodiff
-                Reactant.call_with_reactant_within_autodiff(f, traced_args...)
-            else
-                Reactant.call_with_reactant(f, traced_args...)
-            end
+            Reactant.call_with_reactant(f, traced_args...)
         else
-            if within_autodiff
-                Reactant.call_with_reactant_within_autodiff(
-                    Core.kwcall, kwargs, f, traced_args...
-                )
-            else
-                Reactant.call_with_reactant(Core.kwcall, kwargs, f, traced_args...)
-            end
+            Reactant.call_with_reactant(Core.kwcall, kwargs, f, traced_args...)
         end
     finally
         MLIR.IR.deactivate!(fnbody)

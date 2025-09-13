@@ -19,7 +19,6 @@ function apply(f::F, args...; kwargs...) where {F}
 end
 
 function call_with_reactant end
-function call_with_reactant_within_autodiff end
 
 function maybe_argextype(@nospecialize(x), src)
     return try
@@ -648,9 +647,9 @@ function call_with_reactant_generator(
         ))
     end
 
-    interp = ReactantInterpreter(;
-        world, within_autodiff=self == typeof(Reactant.call_with_reactant_within_autodiff)
-    )
+    @info "Here"
+    @show REACTANT_WITHIN_AUTODIFF[]
+    interp = ReactantInterpreter(; world)
 
     min_world = Ref{UInt}(typemin(UInt))
     max_world = Ref{UInt}(typemax(UInt))
@@ -891,10 +890,6 @@ function call_with_reactant_generator(
 end
 
 @eval function call_with_reactant($REDUB_ARGUMENTS_NAME...)
-    $(Expr(:meta, :generated_only))
-    return $(Expr(:meta, :generated, call_with_reactant_generator))
-end
-@eval function call_with_reactant_within_autodiff($REDUB_ARGUMENTS_NAME...)
     $(Expr(:meta, :generated_only))
     return $(Expr(:meta, :generated, call_with_reactant_generator))
 end
