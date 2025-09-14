@@ -13,6 +13,7 @@ function run_deeponet_benchmark!(results, backend)
 end
 
 function run_fno_benchmark!(results, backend)
+    lowercase(backend) == "cpu" && return nothing
     model = FourierNeuralOperator((16, 16), 3, 8, 64)
 
     benchmark_name = "FNO [64, 64, 1, 4]"

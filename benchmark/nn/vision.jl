@@ -1,4 +1,5 @@
 function run_vit_benchmark!(results, backend)
+    lowercase(backend) == "cpu" && return nothing
     for mode in (:tiny,), bsize in (4,)
         benchmark_name = "ViT $(mode) [256, 256, 3, $(bsize)]"
 
@@ -17,6 +18,7 @@ function run_vit_benchmark!(results, backend)
 end
 
 function run_vgg_benchmark!(results, backend)
+    lowercase(backend) == "cpu" && return nothing
     for depth in (11,), bsize in (4,)
         benchmark_name = "VGG$(depth) bn=true [224, 224, 3, $(bsize)]"
 
