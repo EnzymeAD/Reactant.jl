@@ -40,7 +40,7 @@ standardized_results = Vector{Dict{String,Union{String,Float64}}}(
     undef, length(keys(results))
 )
 for (i, (k, v)) in enumerate(results)
-    standardized_results[i] = Dict("name" => k, "time" => v, "unit" => "s")
+    standardized_results[i] = Dict("name" => k, "value" => v, "unit" => "s")
 end
 
 open(joinpath(filepath, filename), "w") do io

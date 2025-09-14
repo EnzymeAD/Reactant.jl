@@ -38,6 +38,8 @@ function run_lux_benchmark!(
     disable_bwd_scatter_gather_bench=true,
     disable_pad_bench=true,
     disable_bwd_pad_bench=true,
+    disable_transpose_bench=true,
+    disable_bwd_transpose_bench=true,
     bwd_enzyme_pass_options=(:all, :before_enzyme, :after_enzyme),
 )
     common_opts = (; sync=true, no_nan=true, all_finite=true)
@@ -56,6 +58,36 @@ function run_lux_benchmark!(
             ) for pass in bwd_enzyme_pass_options
         ]...,
     ]
+
+    if disable_transpose_bench
+        push!(
+            fwd_options,
+            (
+                "DisableTransposeReshape",
+                Reactant.CompileOptions(;
+                    transpose_propagate=:none, reshape_propagate=:none, common_opts...
+                ),
+            ),
+        )
+    end
+
+    if disable_bwd_transpose_bench
+        append!(
+            bwd_options,
+            [
+                (
+                    "DisableTransposeReshape" *
+                    join(uppercasefirst.(split(string(pass), "_")), ""),
+                    Reactant.CompileOptions(;
+                        transpose_propagate=:none,
+                        reshape_propagate=:none,
+                        optimization_passes=pass,
+                        common_opts...,
+                    ),
+                ) for pass in bwd_enzyme_pass_options
+            ],
+        )
+    end
 
     if disable_scatter_gather_bench
         push!(
