@@ -1,4 +1,4 @@
-using BenchmarkTools
+using JSON3
 
 const BACKENDS = ["CPU", "CUDA", "TPU"]
 

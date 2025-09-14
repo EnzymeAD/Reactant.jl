@@ -27,6 +27,7 @@ end
 # Main benchmark files
 include("setup.jl")
 
+Profile.init(; n=10^7)
 Profile.clear()
 results = @profile run_benchmarks(BENCHMARK_GROUP)
 pprof()

@@ -35,7 +35,10 @@ function run_lux_benchmark!(
     model,
     x_dims;
     disable_scatter_gather_bench=true,
+    disable_bwd_scatter_gather_bench=true,
     disable_pad_bench=true,
+    disable_bwd_pad_bench=true,
+    bwd_enzyme_pass_options=(:all, :before_enzyme, :after_enzyme),
 )
     common_opts = (; sync=true, no_nan=true, all_finite=true)
 
@@ -50,7 +53,7 @@ function run_lux_benchmark!(
             (
                 "Default" * join(uppercasefirst.(split(string(pass), "_")), ""),
                 Reactant.CompileOptions(; common_opts..., optimization_passes=pass),
-            ) for pass in (:all, :before_enzyme, :after_enzyme)
+            ) for pass in bwd_enzyme_pass_options
         ]...,
     ]
 
@@ -64,6 +67,9 @@ function run_lux_benchmark!(
                 ),
             ),
         )
+    end
+
+    if disable_bwd_scatter_gather_bench
         append!(
             bwd_options,
             [
@@ -75,7 +81,7 @@ function run_lux_benchmark!(
                         optimization_passes=pass,
                         common_opts...,
                     ),
-                ) for pass in (:all, :before_enzyme, :after_enzyme)
+                ) for pass in bwd_enzyme_pass_options
             ],
         )
     end
@@ -90,6 +96,9 @@ function run_lux_benchmark!(
                 ),
             ),
         )
+    end
+
+    if disable_bwd_pad_bench
         append!(
             bwd_options,
             [
@@ -100,7 +109,7 @@ function run_lux_benchmark!(
                         optimization_passes=pass,
                         common_opts...,
                     ),
-                ) for pass in (:all, :before_enzyme, :after_enzyme)
+                ) for pass in bwd_enzyme_pass_options
             ],
         )
     end
@@ -117,6 +126,9 @@ function run_lux_benchmark!(
                 ),
             ),
         )
+    end
+
+    if disable_bwd_scatter_gather_bench && disable_bwd_pad_bench
         append!(
             bwd_options,
             [
@@ -129,7 +141,7 @@ function run_lux_benchmark!(
                         optimization_passes=pass,
                         common_opts...,
                     ),
-                ) for pass in (:all, :before_enzyme, :after_enzyme)
+                ) for pass in bwd_enzyme_pass_options
             ],
         )
     end
@@ -173,7 +185,7 @@ function run_benchmark!(
     if fwd_or_bwd == "forward"
         x, ps, st = general_lux_setup(model, x_dims)
         st_test = Lux.testmode(st)
-        compiled_fwd = @time "compile time" @compile compile_options = compile_options Lux.apply(
+        compiled_fwd = @compile compile_options = compile_options Lux.apply(
             model, x, ps, st_test
         )
 
@@ -183,7 +195,7 @@ function run_benchmark!(
     elseif fwd_or_bwd == "backward"
         x, ps, st = general_lux_setup(model, x_dims)
         st_test = Lux.testmode(st)
-        compiled_bwd = @time "compile time" @compile compile_options = compile_options simple_gradient(
+        compiled_bwd = @compile compile_options = compile_options simple_gradient(
             model, x, ps, st
         )
 
