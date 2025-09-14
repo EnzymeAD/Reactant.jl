@@ -93,7 +93,13 @@ jobs:
             include("benchmark/aggregate.jl")'
 
            echo "path=$(find benchmark -type f -name combinedbenchmarks.json 2>/dev/null)" >> $GITHUB_OUTPUT
-
+      - name: Upload benchmark results as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-results
+          path: ${{ steps.locate.outputs.path }}
+          retention-days: 90
+          overwrite: false
       - name: Upload Benchmark Results
         uses: benchmark-action/github-action-benchmark@v1
         with:
@@ -107,3 +113,4 @@ jobs:
           alert-threshold: "150%"
           fail-on-alert: false
           auto-push: ${{ github.event_name != 'pull_request' }}
+          max-items-in-chart: 50
