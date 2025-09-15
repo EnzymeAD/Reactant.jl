@@ -702,6 +702,7 @@ function optimization_passes(
     lower_comms::Bool=true,
     max_constant_threshold::Int=1024,
     backend::String="gpu",
+    auto_batching::Bool=true,
 )
     transform_passes_list = [
         "patterns=compare_op_canon<16>",
@@ -903,12 +904,11 @@ function optimization_passes(
         "self_add_to_convolution_like($(Int(backend == "tpu")))",
         "self_mul_to_convolution_like($(Int(backend == "tpu")))",
         "subtract_multiply_const_to_add_mul_const",
-        "concat_insert_dim_dot_general",
-        "concat_insert_dim_gather",
-        "concat_insert_dim_iota",
-        "concat_insert_dim_reduce",
-        "concat_insert_dim_sort",
-        "concat_insert_dim_reduce_window",
+        "add_reduce_slice_fusion",
+        "mul_reduce_slice_fusion",
+        "min_reduce_slice_fusion",
+        "max_reduce_slice_fusion",
+        "trivial_reduce_window_to_reduce_op",
     ]
 
     if !compile_options.disable_licm_optimization_passes
@@ -1267,6 +1267,9 @@ function optimization_passes(
         push!(passes, "remove-duplicate-func-def")
     end
     push!(passes, func_passes)
+    if auto_batching
+        push!(passes, "auto-batching")
+    end
     return join(passes, ',')
 end
 

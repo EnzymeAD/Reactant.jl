@@ -29,3 +29,35 @@ end
 
     @test @jit(f3(A_ra, 1)) ≈ A .+ 1
 end
+
+# Autobatching testing
+struct TupleStruct{T1,T2}
+    A::T1
+    B::T2
+end
+
+struct NestedTupleStruct{T1,T2}
+    C::T1
+    foo::T2
+end
+
+function update(bar::NestedTupleStruct)
+    A = bar.C * bar.foo.A
+    B = bar.C * bar.foo.B
+    return NestedTupleStruct(bar.C, TupleStruct(A, B))
+end
+
+@testset "Auto-Batching DotGeneral" begin
+    A = rand(Float32, 32, 32, 4)
+    B = rand(Float32, 32, 32, 4)
+    C = rand(Float32, 32, 32, 4)
+    structs = [
+        NestedTupleStruct(
+            @view(C[:, :, i]), TupleStruct(@view(A[:, :, i]), @view(B[:, :, i]))
+        ) for i in 1:size(A, 3)
+    ]
+    structs_ra = Reactant.to_rarray(structs)
+
+    hlo = repr(@code_hlo broadcast(update, structs_ra))
+    @test count("dot_general", hlo) == 2
+end
