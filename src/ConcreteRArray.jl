@@ -650,7 +650,7 @@ function Base.mapreduce(
     @nospecialize(op),
     @nospecialize(A::AbstractConcreteArray{T,N});
     dims=:,
-    init=nothing,
+    init=Base._InitialValue(),
 ) where {T,N}
     fn = compile(CallMapReduce(f, op, dims, init), (A,))
     return fn(A)
