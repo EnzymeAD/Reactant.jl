@@ -269,6 +269,22 @@ mutable struct CompiledMlirFnResult{F,TR,Re,Rt,LA,LR,PA,CR,M,MA,RS,GD,DA}
     result_shardings::RS
     global_device_ids::GD # only populated if is_sharded
     donated_args_mask::DA
+    is_pure::Bool
+end
+
+function is_pure(func)
+    attr = MLIR.IR.attr(func, "enzymexla.memory_effects")
+    # conservatively assume is not pure
+    if attr isa Nothing
+        return false
+    end
+    for i in 1:length(attr)
+        sa = Base.String(attr[i])
+        if sa == "write"
+            return true
+        end
+    end
+    return false
 end
 
 function make_mlir_fn(
@@ -416,6 +432,7 @@ function make_mlir_fn(
         missing,
         global_device_ids,
         nothing, # populated later in `compile_mlir!`
+        is_pure(func2)
     )
 end
 
@@ -861,6 +878,12 @@ function finalize_mlir_fn(
             sym_visibility,
         )
     end
+
+    mem = MLIR.IR.attr(func, "enzymexla.memory_effects")
+    if !(mem isa Nothing)
+        MLIR.IR.attr!(func2, "enzymexla.memory_effects", mem)
+    end
+
     MLIR.API.mlirRegionTakeBody(MLIR.IR.region(func2, 1), MLIR.IR.region(func, 1))
 
     mesh_cache = Reactant.Compiler.sdycache()
