@@ -904,6 +904,11 @@ function optimization_passes(
         "self_add_to_convolution_like($(Int(backend == "tpu")))",
         "self_mul_to_convolution_like($(Int(backend == "tpu")))",
         "subtract_multiply_const_to_add_mul_const",
+        "add_reduce_slice_fusion",
+        "mul_reduce_slice_fusion",
+        "min_reduce_slice_fusion",
+        "max_reduce_slice_fusion",
+        "trivial_reduce_window_to_reduce_op",
     ]
 
     if !compile_options.disable_licm_optimization_passes
