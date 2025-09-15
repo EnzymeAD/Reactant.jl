@@ -551,7 +551,7 @@ function __default_init(T::Type{<:Reactant.ReactantFloat8}, op::F) where {F}
 end
 
 function overloaded_mapreduce(
-    @nospecialize(f), @nospecialize(op), @nospecialize(A); dims=:, init=nothing
+    @nospecialize(f), @nospecialize(op), @nospecialize(A); dims=:, init=Base._InitialValue()
 )
     res = unwrapped_broadcast(f, A)
     # This means we are unable to use the optimized dispatches. For now we will
@@ -568,7 +568,7 @@ function overloaded_mapreduce(
     @nospecialize(op),
     @nospecialize(A::AnyTracedRArray{T,N});
     dims=:,
-    init=nothing,
+    init=Base._InitialValue(),
 ) where {T,N}
     A = materialize_traced_array(A)
 
@@ -589,7 +589,7 @@ function overloaded_mapreduce(
 
     res = @opcall reduce(reduce_input, reduce_init, dims, op)
 
-    init !== nothing && (res = op.(res, init))
+    (init isa Base._InitialValue || init === nothing) || (res = op.(res, init))
 
     if original_dims isa Colon
         @assert size(res) == () "expected size of result to be (), got $(size(res))"
@@ -677,6 +677,8 @@ function Broadcast.copy(bc::Broadcasted{<:AbstractReactantArrayStyle})
     # Special case a union{} return so we can see the better error message
     if ElType === Union{}
         fn(map(first_scalar, bc.args)...)
+    elseif ElType == Any
+        ElType = eltype(fn(map(first_scalar, bc.args)...))
     end
     @assert ElType != Any && ElType != Union{}
     sim = similar(bc, ElType)
@@ -1231,16 +1233,25 @@ function overloaded_map(f, x::AbstractArray, xs::AbstractArray...)
     @assert allequal((axes(x), axes.(xs)...)) "Expected axes of all inputs to map to be \
                                                equal"
 
+    needs_unrolling = falses(length(xs) + 1)
     inputs = ()
-    for input in (x, xs...)
+    for (i, input) in enumerate((x, xs...))
         if input isa AnyTracedRArray
             input = Reactant.materialize_traced_array(input)
-        else
+        elseif eltype(input) <: Reactant.ReactantPrimitive
             input = Reactant.promote_to(TracedRArray{eltype(input),ndims(input)}, input)
+        else
+            needs_unrolling[i] = true
         end
         inputs = (inputs..., input)
     end
 
+    @assert allequal(needs_unrolling) "All inputs to `overloaded_map` must be \
+                                       unrolled or none of them. Open an issue."
+    if needs_unrolling[1]
+        length(inputs) == 1 && return unrolled_map(f, only(inputs))
+        return unrolled_map(splat(f), zip(inputs...))
+    end
     return TracedUtils.elem_apply(f, inputs...)
 end
 
@@ -1321,14 +1332,14 @@ function scan_impl!(
     output::AnyTracedRArray{T,N},
     input::AnyTracedRArray{T,N};
     dims::Integer,
-    init=nothing,
+    init=Base._InitialValue(),
 ) where {T,N}
     @assert dims > 0 "dims must be a positive integer"
     @assert axes(output) == axes(input) "output and input must have the same shape"
 
     dims > ndims(input) && return copyto!(output, input)
 
-    if init === nothing
+    if init isa Base._InitialValue
         op_in_T = Core.Compiler.return_type(op, Tuple{T,T})
         op_in_T === Union{} && (op_in_T = T)
         init = __default_init(T, op)
@@ -1494,27 +1505,44 @@ struct BroadcastIterator{F}
     f::F
 end
 
-(fn::BroadcastIterator)(args...) = Reactant.call_with_reactant(fn.f, (args...,))
+(fn::BroadcastIterator)(args...) = fn.f((args...,))
 
 function unwrapped_broadcast(f::F, x::Base.Iterators.Zip) where {F}
     min_length = Base.inferencebarrier(minimum)(length, x.is)
     itrs = [length(itr) > min_length ? itr[1:min_length] : itr for itr in x.is]
-    if any(Base.Fix2(isa, AnyTracedRArray), itrs)
-        return (BroadcastIterator(f)).(itrs...)
-    else
-        fn = BroadcastIterator(f)
-        return [fn(Base.Fix2(getindex, i).(itrs)...) for i in 1:min_length]
-    end
+    any(Base.Fix2(isa, AnyTracedRArray), itrs) || return unrolled_map(f, x)
+    return broadcast(BroadcastIterator(f), itrs...)
 end
 
 function unwrapped_broadcast(f::F, x::Base.Iterators.Enumerate) where {F}
-    if x.itr isa AnyTracedRArray
-        return (BroadcastIterator(f)).(1:length(x.itr), x.itr)
-    else
-        return [f((i, x.itr[i])) for i in 1:length(x.itr)]
-    end
+    x.itr isa AnyTracedRArray || return unrolled_map(f, x)
+    return broadcast(
+        BroadcastIterator(f), Reactant.promote_to(TracedRArray, 1:length(x.itr)), x.itr
+    )
 end
 
-unwrapped_broadcast(f::F, xs::Vector) where {F} = [f(x) for x in xs]
+unwrapped_broadcast(f::F, xs) where {F} = unrolled_map(f, xs)
+
+# TODO: once traced_call supports internal mutations, we can use traced_call here
+# TODO: we should overload this for Slices and use mapslices instead
+function unrolled_map(f::F, itr) where {F}
+    y = Reactant.call_with_reactant(iterate, itr)
+    y === nothing && return []
+
+    first, state = y
+    res_first = Reactant.call_with_reactant(f, first)
+    result = [res_first]
+
+    while true
+        y = Reactant.call_with_reactant(iterate, itr, state)
+        y === nothing && break
+
+        val, state = y
+        res = Reactant.call_with_reactant(f, val)
+        push!(result, res)
+    end
+
+    return result
+end
 
 end
