@@ -1233,16 +1233,25 @@ function overloaded_map(f, x::AbstractArray, xs::AbstractArray...)
     @assert allequal((axes(x), axes.(xs)...)) "Expected axes of all inputs to map to be \
                                                equal"
 
+    needs_unrolling = falses(length(xs) + 1)
     inputs = ()
-    for input in (x, xs...)
+    for (i, input) in enumerate((x, xs...))
         if input isa AnyTracedRArray
             input = Reactant.materialize_traced_array(input)
-        else
+        elseif eltype(input) <: Reactant.ReactantPrimitive
             input = Reactant.promote_to(TracedRArray{eltype(input),ndims(input)}, input)
+        else
+            needs_unrolling[i] = true
         end
         inputs = (inputs..., input)
     end
 
+    @assert allequal(needs_unrolling) "All inputs to `overloaded_map` must be \
+                                       unrolled or none of them. Open an issue."
+    if needs_unrolling[1]
+        length(inputs) == 1 && return unrolled_map(f, only(inputs))
+        return unrolled_map(splat(f), zip(inputs...))
+    end
     return TracedUtils.elem_apply(f, inputs...)
 end
 
@@ -1501,31 +1510,22 @@ end
 function unwrapped_broadcast(f::F, x::Base.Iterators.Zip) where {F}
     min_length = Base.inferencebarrier(minimum)(length, x.is)
     itrs = [length(itr) > min_length ? itr[1:min_length] : itr for itr in x.is]
-    if any(Base.Fix2(isa, AnyTracedRArray), itrs)
-        return broadcast(BroadcastIterator(f), itrs...)
-    else
-        return unwrapped_broadcast_with_iterate(f, x)
-    end
+    any(Base.Fix2(isa, AnyTracedRArray), itrs) || return unrolled_map(f, x)
+    return broadcast(BroadcastIterator(f), itrs...)
 end
 
 function unwrapped_broadcast(f::F, x::Base.Iterators.Enumerate) where {F}
-    if x.itr isa AnyTracedRArray
-        return broadcast(
-            BroadcastIterator(f), Reactant.promote_to(TracedRArray, 1:length(x.itr)), x.itr
-        )
-    else
-        return unwrapped_broadcast_with_iterate(f, x)
-    end
+    x.itr isa AnyTracedRArray || return unrolled_map(f, x)
+    return broadcast(
+        BroadcastIterator(f), Reactant.promote_to(TracedRArray, 1:length(x.itr)), x.itr
+    )
 end
 
-function unwrapped_broadcast(f::F, x::Base.Generator) where {F}
-    return unwrapped_broadcast_with_iterate(f, x)
-end
-
-unwrapped_broadcast(f::F, xs) where {F} = unwrapped_broadcast_with_iterate(f, xs)
+unwrapped_broadcast(f::F, xs) where {F} = unrolled_map(f, xs)
 
 # TODO: once traced_call supports internal mutations, we can use traced_call here
-function unwrapped_broadcast_with_iterate(f::F, itr) where {F}
+# TODO: we should overload this for Slices and use mapslices instead
+function unrolled_map(f::F, itr) where {F}
     y = Reactant.call_with_reactant(iterate, itr)
     y === nothing && return []
 

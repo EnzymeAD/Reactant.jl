@@ -1598,3 +1598,31 @@ end
     x_ra = Reactant.to_rarray(x)
     @test @jit(clamp!(x_ra, 0.5, Inf32)) ≈ clamp!(x, 0.5, Inf32)
 end
+
+mapped_sub(xs...) = stack(map(-, xs...))
+
+@testset "map of slices" begin
+    # We shouldn't be using `elem_apply` in this case and instead unroll the map
+    # our passes will fuse them backup if needed.
+    @testset "Vector of Slices" begin
+        x_full = rand(Float32, 10, 5, 3)
+        y_full = rand(Float32, 10, 5, 3)
+        x = [view(x_full, :, i, :) for i in 1:size(x_full, 2)]
+        y = [view(y_full, :, i, :) for i in 1:size(y_full, 2)]
+        x_ra = Reactant.to_rarray(x)
+        y_ra = Reactant.to_rarray(y)
+
+        @test @jit(mapped_sub(x_ra, y_ra)) ≈ mapped_sub(x, y) atol = 1e-5 rtol = 1e-5
+    end
+
+    @testset "Slices" begin
+        x_full = rand(Float32, 10, 5)
+
+        @testset "ColumnSlices" begin
+            x_sliced = eachcol(x_full)
+            x_ra = Reactant.to_rarray(x_sliced)
+
+            @test @jit(mapped_sub(x_ra)) ≈ mapped_sub(x_sliced) atol = 1e-5 rtol = 1e-5
+        end
+    end
+end
