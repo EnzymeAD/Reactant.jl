@@ -283,31 +283,31 @@ end
 function __default_init(
     ::Type{T}, ::Union{typeof(Base.min),typeof(Base.FastMath.min_fast)}
 ) where {T}
-    return typemax(T)
+    return Reactant.promote_to(TracedRNumber{T}, typemax(T))
 end
 function __default_init(
     ::Type{T}, ::Union{typeof(Base.max),typeof(Base.FastMath.max_fast)}
 ) where {T}
-    return typemin(T)
+    return Reactant.promote_to(TracedRNumber{T}, typemin(T))
 end
 function __default_init(::Type{T}, op::F) where {T,F}
-    return Base.reduce_empty(Base.BottomRF(op), T)
+    return Reactant.promote_to(TracedRNumber{T}, Base.reduce_empty(Base.BottomRF(op), T))
 end
 
 function __default_init(
     T::Type{<:Reactant.ReactantFloat8},
     ::Union{typeof(Base.min),typeof(Base.FastMath.min_fast)},
 )
-    return T(typemax(Float16))
+    return Reactant.promote_to(TracedRNumber{T}, typemax(Float16))
 end
 function __default_init(
     T::Type{<:Reactant.ReactantFloat8},
     ::Union{typeof(Base.max),typeof(Base.FastMath.max_fast)},
 )
-    return T(typemin(Float16))
+    return Reactant.promote_to(TracedRNumber{T}, typemin(Float16))
 end
 function __default_init(T::Type{<:Reactant.ReactantFloat8}, op::F) where {F}
-    return T(__default_init(Float16, op))
+    return Reactant.promote_to(TracedRNumber{T}, __default_init(Float16, op))
 end
 
 function overloaded_mapreduce(

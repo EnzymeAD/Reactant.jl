@@ -86,6 +86,10 @@ function Base.convert(::Type{T}, x::AbstractConcreteNumber) where {T<:Number}
     T == typeof(x) && return x
     return convert(T, to_number(x))
 end
+function Base.convert(::Type{T}, x::AbstractConcreteNumber) where {T<:ReactantFloat8}
+    T == typeof(x) && return x
+    return convert(T, to_number(x))
+end
 
 Adapt.adapt_storage(::Type{T}, x::AbstractArray) where {T<:AbstractConcreteArray} = T(x)
 
@@ -175,6 +179,11 @@ end
 function Base.convert(
     ::Type{T}, x::Union{ConcretePJRTScalar{T},ConcreteIFRTScalar{T}}
 ) where {T<:Number}
+    return to_number(x)
+end
+function Base.convert(
+    ::Type{T}, x::Union{ConcretePJRTScalar{T},ConcreteIFRTScalar{T}}
+) where {T<:ReactantFloat8}
     return to_number(x)
 end
 
@@ -297,7 +306,7 @@ end
 
 function Base.getindex(
     a::ConcretePJRTArray{T,N}, args::Vararg{Int,N}
-) where {T<:Reactant.ReactantPrimitive,N}
+) where {T<:ReactantPrimitive,N}
     isempty(a) && throw("Cannot getindex from empty buffer")
 
     wait(a)
@@ -321,14 +330,14 @@ end
 
 function Base.getindex(
     a::ConcreteIFRTArray{T,N}, args::Vararg{Int,N}
-) where {T<:Reactant.ReactantPrimitive,N}
+) where {T<:ReactantPrimitive,N}
     GPUArraysCore.assertscalar("getindex(::ConcreteIFRTArray, ::Vararg{Int, N})")
     return convert(Array, a)[args...]
 end
 
 function Base.getindex(
     a::Union{ConcreteIFRTArray{T,N},ConcretePJRTArray{T,N}}, args::Vararg{Any,N}
-) where {T<:Reactant.ReactantPrimitive,N}
+) where {T<:ReactantPrimitive,N}
     return compile(getindex, (a, args...))(a, args...)
 end
 

@@ -28,24 +28,26 @@ for T in (:F8E5M2, :F8E4M3FN, :F8E4M3B11FNUZ, :F8E5M2FNUZ, :F8E4M3FNUZ)
             Base.promote_rule(::Type{$(T)}, ::Type{Core.BFloat16}) = Core.BFloat16
             Base.promote_rule(::Type{Core.BFloat16}, ::Type{$(T)}) = Core.BFloat16
         end
-
-        # function Base.convert(::Type{inT}, x::$(T)) where {inT<:Number}
-        #     @assert MLIR.IR._has_context() "currently only supported inside compiled functions"
-        #     x isa TracedRNumber || (x = Ops.constant(x))
-        #     return Ops.convert(TracedRNumber{inT}, x)
-        # end
-
-        # function Base.convert(::Type{$(T)}, x::inT) where {inT<:Number}
-        #     @assert MLIR.IR._has_context() "currently only supported inside compiled functions"
-        #     x isa TracedRNumber || (x = Ops.constant(x))
-        #     return Ops.convert(TracedRNumber{unwrapped_eltype($(T))}, x)
-        # end
     end
 end
 
 primitive type TF32 <: AbstractFloat 32 end # currently only used to set precision
 
 const ReactantFloat8 = Union{F8E5M2,F8E4M3FN,F8E4M3B11FNUZ,F8E5M2FNUZ,F8E4M3FNUZ}
+
+function Base.convert(::Type{T}, x::inT) where {T<:ReactantFloat8,inT<:Number}
+    @assert MLIR.IR._has_context() "currently only supported inside compiled functions"
+    return promote_to(TracedRNumber{T}, x)
+end
+function Base.convert(::Type{inT}, x::T) where {T<:ReactantFloat8,inT<:Number}
+    @assert MLIR.IR._has_context() "currently only supported inside compiled functions"
+    return promote_to(TracedRNumber{inT}, x)
+end
+function Base.convert(::Type{inT}, x::T) where {T<:ReactantFloat8,inT<:ReactantFloat8}
+    @assert MLIR.IR._has_context() "currently only supported inside compiled functions"
+    return promote_to(TracedRNumber{inT}, x)
+end
+Base.convert(::Type{T}, x::T) where {T<:ReactantFloat8} = x
 
 # TODO: Quantized types
 

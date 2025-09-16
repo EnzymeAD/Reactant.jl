@@ -79,7 +79,10 @@ function promote_to(::Type{TracedRNumber{T}}, rhs::TracedRArray{T2,0}) where {T,
 end
 
 function promote_to(::Type{TracedRNumber{T}}, rhs::Number) where {T}
-    return promote_to(TracedRNumber{T}, @opcall(fill(T(rhs))))
+    res = @opcall(fill(rhs))
+    return @opcall convert(
+        TracedRNumber{T}, TracedRNumber{unwrapped_eltype(typeof(rhs))}((), res.mlir_data)
+    )
 end
 
 function ReactantCore.promote_to_traced(x)

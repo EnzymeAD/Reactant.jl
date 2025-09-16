@@ -5,7 +5,6 @@ using ..Reactant: AnyTracedRArray, AnyTracedRVector, ancestor, unwrapped_eltype
 using ..Ops: @opcall
 using ..TracedUtils: TracedUtils
 
-using Adapt: WrappedArray
 using GPUArraysCore: @allowscalar, assertscalar
 using ReactantCore: materialize_traced_array
 

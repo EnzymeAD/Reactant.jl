@@ -88,7 +88,7 @@ function SpecialFunctions.logerf(
 end
 
 function SpecialFunctions.erfcx(x::TracedRNumber{<:ReactantFloatInt})
-    return SpecialFunctions.exp(float(x^2)) * SpecialFunctions.erfc(x)
+    return exp(float(x^2)) * SpecialFunctions.erfc(x)
 end
 
 function SpecialFunctions.logerfc(x::TracedRNumber{<:ReactantFloatInt})
