@@ -594,10 +594,12 @@ function wait(
     IR.inject!("MPI_Wait", "llvm.func @MPI_Wait(!llvm.ptr, !llvm.ptr) -> i32")
 
     #! format: off
+    #     int MPI_Wait(MPI_Request* request, MPI_Status* status)
     IR.inject!(sym_name, """
         func.func @$sym_name(%errcode : !llvm.ptr, %req : !llvm.ptr) -> () {
-            %comm = llvm.mlir.addressof @MPI_COMM_WORLD : !llvm.ptr
-            %res = llvm.call @MPI_Wait(%req, %comm) : (!llvm.ptr, !llvm.ptr) -> (i32)
+            %c1_i32 = arith.constant 1 : i32
+            %status = llvm.alloca %c1_i32 x !llvm.array<4 x i32>  : (i32) -> !llvm.ptr
+            %res = llvm.call @MPI_Wait(%req, %status) : (!llvm.ptr, !llvm.ptr) -> (i32)
             llvm.store %res, %errcode : i32, !llvm.ptr
             func.return
         }
