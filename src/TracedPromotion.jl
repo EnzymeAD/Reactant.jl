@@ -77,6 +77,10 @@ function promote_to(::Type{TracedRNumber{T}}, rhs::Number) where {T}
     return promote_to(TracedRNumber{T}, @opcall(fill(T(rhs))))
 end
 
+function ReactantCore.promote_to_traced(x)
+    return promote_to(TracedRNumber{unwrapped_eltype(typeof(x))}, x)
+end
+
 ## Promote to a Traced Type and broadcast to a given size
 function broadcast_to_size(arg::AbstractArray, rsize)
     return broadcast_to_size(promote_to(TracedRArray, arg), rsize)

@@ -1,10 +1,9 @@
 module TracedRNumberOverrides
 
-using ..Reactant:
-    Reactant, TracedRNumber, TracedRArray, TracedUtils, Ops, MLIR, unwrapped_eltype
+using ..Reactant: Reactant, TracedRNumber, TracedRArray, Ops, unwrapped_eltype
 using ..Ops: @opcall
-using ReactantCore
-using Adapt
+using ReactantCore: ReactantCore, @trace
+using Adapt: Adapt
 
 import Base.TwicePrecision
 

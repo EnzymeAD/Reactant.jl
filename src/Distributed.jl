@@ -1,7 +1,7 @@
 module Distributed
 
 using ..Reactant: Reactant, Accelerators
-using Sockets
+using Sockets: Sockets, IPv4, getaddrinfo
 
 const initialized = Ref(false)
 

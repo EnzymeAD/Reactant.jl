@@ -6,25 +6,18 @@ module TracedUtils
 using ..Reactant:
     Reactant,
     MLIR,
-    RNumber,
     TracedRArray,
     TracedRNumber,
     AnyTracedRArray,
     MissingTracedValue,
     OrderedIdDict,
-    ReactantPrimitive,
     Ops,
     promote_to, # keep this to avoid breaking external code
     broadcast_to_size # keep this to avoid breaking external code
 using ..Ops: @opcall
 using ReactantCore: ReactantCore
-using ReactantCore:
-    MissingTracedValue, is_traced, materialize_traced_array, promote_to_traced
+using ReactantCore: MissingTracedValue, is_traced, materialize_traced_array
 using Functors: Functors
-
-function ReactantCore.promote_to_traced(x)
-    return promote_to(Reactant.TracedRNumber{Reactant.unwrapped_eltype(typeof(x))}, x)
-end
 
 ReactantCore.materialize_traced_array(x::AbstractArray) = x
 

@@ -19,7 +19,27 @@ using Reactant_jll: Reactant_jll
 using ..TracedUtils: TracedUtils, get_mlir_data, set_mlir_data!
 using ..Ops: @opcall
 
-using LinearAlgebra
+using LinearAlgebra:
+    LinearAlgebra,
+    Adjoint,
+    Bidiagonal,
+    Diagonal,
+    Factorization,
+    I,
+    LowerTriangular,
+    RowMaximum,
+    SymTridiagonal,
+    Symmetric,
+    Transpose,
+    Tridiagonal,
+    UnitLowerTriangular,
+    UpperTriangular,
+    diag,
+    diagm,
+    dot,
+    ldiv!,
+    lu,
+    lu!
 using Libdl: Libdl
 
 function __init__()

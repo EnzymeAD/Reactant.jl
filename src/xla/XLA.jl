@@ -1,11 +1,11 @@
 module XLA
 
 using ..Reactant: Reactant, MLIR, Accelerators
-using Reactant_jll
-using Libdl
+using Reactant_jll: Reactant_jll
+using LLVM: LLVM
+using Libdl: Libdl
 using EnumX: @enumx
 using Preferences: load_preference
-using Enzyme
 
 const XLA_REACTANT_GPU_MEM_FRACTION = Ref{Float64}(0.75)
 const XLA_REACTANT_GPU_PREALLOCATE = Ref{Bool}(true)
@@ -159,16 +159,16 @@ function __init__()
         @ccall MLIR.API.mlir_c.RegisterEnzymeXLAGPUHandler()::Cvoid
 
         @static if !Sys.isapple()
-            lljit = Enzyme.LLVM.JuliaOJIT()
-            jd_main = Enzyme.LLVM.JITDylib(lljit)
+            lljit = LLVM.JuliaOJIT()
+            jd_main = LLVM.JITDylib(lljit)
 
             for name in
                 ("XLAExecute", "XLAExecuteSharded", "ifrt_loaded_executable_execute")
                 ptr = Libdl.dlsym(Reactant_jll.libReactantExtra_handle, name)
-                Enzyme.LLVM.define(
+                LLVM.define(
                     jd_main,
                     Enzyme.Compiler.JIT.absolute_symbol_materialization(
-                        Enzyme.LLVM.mangle(lljit, name), ptr
+                        LLVM.mangle(lljit, name), ptr
                     ),
                 )
             end

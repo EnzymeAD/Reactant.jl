@@ -8,6 +8,10 @@ using Random: Random, AbstractRNG
 using EnumX: @enumx
 using Functors: Functors, @leaf
 
+using Libdl: Libdl
+using Reactant_jll: Reactant_jll
+using LLVMOpenMP_jll: LLVMOpenMP_jll
+
 using Adapt: Adapt, WrappedArray
 using GPUArraysCore: GPUArraysCore, @allowscalar, allowscalar # keep this import to allow users to do `Reactant.allowscalar(false)`
 
@@ -63,8 +67,6 @@ _parent_type(::Type{Array{T,N}}) where {T,N} = Array{T,N}
 _parent_type(::Type{<:Slices{P}}) where {P} = P
 
 include("accelerators/Accelerators.jl")
-
-using .Accelerators.TPU: has_tpu
 
 include("CompileOptions.jl")
 
@@ -266,9 +268,6 @@ function deinitialize_dialect()
     return registry[] = nothing
 end
 
-using Libdl
-using Reactant_jll
-using LLVMOpenMP_jll
 function initialize_ptrs()
     for name in (
         "__kmpc_barrier",

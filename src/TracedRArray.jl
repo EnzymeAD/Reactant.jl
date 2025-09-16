@@ -1,7 +1,6 @@
 module TracedRArrayOverrides
 
 using Adapt: WrappedArray
-using Adapt: Adapt
 using Base.Broadcast
 using Base.Broadcast: BroadcastStyle, Broadcasted, AbstractArrayStyle, instantiate
 
@@ -14,8 +13,6 @@ using ..Reactant:
     Ops,
     MLIR,
     ancestor,
-    allowscalar,
-    aos_to_soa,
     unwrapped_eltype
 using ..Reactant.Ops: @opcall
 using ..TracedUtils: TracedUtils, get_mlir_data, set_mlir_data!, materialize_traced_array

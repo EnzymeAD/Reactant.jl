@@ -1,7 +1,7 @@
 module TFSavedModel
 
 using ..Serialization: serialization_supported
-using ..Reactant: AbstractConcreteArray, AbstractConcreteNumber, Compiler, MLIR
+using ..Reactant: Compiler, MLIR
 
 # https://github.com/openxla/stablehlo/blob/955fa7e6e3b0a6411edc8ff6fcce1e644440acbd/stablehlo/integrations/python/stablehlo/savedmodel/stablehlo_to_tf_saved_model.py
 
