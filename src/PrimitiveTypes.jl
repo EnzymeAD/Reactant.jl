@@ -27,6 +27,7 @@ for T in (:F8E5M2, :F8E4M3FN, :F8E4M3B11FNUZ, :F8E5M2FNUZ, :F8E4M3FNUZ)
         # For type conversion we simply rely on XLA
         (::Type{inT})(x::$(T)) where {inT<:Number} = convert(inT, x)
         (::Type{$(T)})(x::inT) where {inT<:Number} = convert($(T), x)
+        Base.Complex(x::$(T)) = complex(x, zero(x))
 
         function Base.convert(::Type{inT}, x::$(T)) where {inT<:Number}
             @assert MLIR.IR._has_context() "currently only supported inside compiled functions"

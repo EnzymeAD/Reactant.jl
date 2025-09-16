@@ -102,6 +102,10 @@ mutable struct ConcretePJRTNumber{T,D,S<:Sharding.ShardInfo} <: AbstractConcrete
 end
 
 ConcretePJRTNumber{T,1,Sharding.NoShardInfo}(x::Number) where {T} = ConcretePJRTNumber{T}(x)
+for f8T in Base.uniontypes(ReactantFloat8)
+    @eval ConcretePJRTNumber{T,1,Sharding.NoShardInfo}(x::$f8T) where {T} =
+        ConcretePJRTNumber{T}(to_number(x))
+end
 
 function ConcretePJRTNumber{T}(data::Tuple{XLA.PJRT.AsyncBuffer}) where {T}
     return ConcretePJRTNumber{T,1,Sharding.NoShardInfo}(data, Sharding.NoShardInfo())

@@ -300,13 +300,12 @@ function LinearAlgebra.norm(x::TracedRArray{T,N}, p::Real=2) where {T,N}
     return mapreduce(Base.Fix2(^, p), +, x)^(1 / p)
 end
 
-function LinearAlgebra._diagm(
-    shape, kv::Pair{<:Integer,<:AnyTracedRArray{T,1}}...
-) where {T}
+function LinearAlgebra._diagm(shape, kv::Pair{<:Integer,<:AnyTracedRVector}...)
+    T = unwrapped_eltype(last(first(kv)))
     m, n = LinearAlgebra.diagm_size(shape, kv...)
 
     # For repeated indices we need to aggregate the values
-    kv_updated = Dict{Integer,AnyTracedRArray{T,1}}()
+    kv_updated = Dict{Integer,AnyTracedRVector}()
     for (k, v) in kv
         if haskey(kv_updated, k)
             kv_updated[k] = kv_updated[k] + v

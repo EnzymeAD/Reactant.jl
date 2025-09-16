@@ -20,8 +20,8 @@ Given the device, return the corresponding global device ordinal in the client.
 function device_ordinal end
 
 function Base.string(device::AbstractDevice)
-    client = client(device)
-    pname = platform_name(client)
+    _client = client(device)
+    pname = platform_name(_client)
     return "$(uppercase(pname)):$(device_ordinal(device)) $(device_kind(device))"
 end
 

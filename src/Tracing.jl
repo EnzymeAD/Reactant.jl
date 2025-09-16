@@ -349,7 +349,12 @@ Base.@nospecializeinfer function traced_type_inner(
 end
 
 Base.@nospecializeinfer function traced_type_inner(
-    @nospecialize(T::Type{<:MissingTracedValue}), @nospecialize(args...)
+    @nospecialize(T::Type{MissingTracedValue}),
+    seen,
+    mode::TraceMode,
+    @nospecialize(track_numbers::Type),
+    @nospecialize(sharding),
+    @nospecialize(runtime)
 )
     return error("This should not happen")
 end

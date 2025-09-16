@@ -99,7 +99,7 @@ function mlir_type(RT::Type{<:RNumber})::MLIR.IR.Type
     return MLIR.IR.TensorType(Int[], MLIR.IR.Type(unwrapped_eltype(RT)))
 end
 
-function mlir_type(::Type{<:MissingTracedValue})::MLIR.IR.Type
+function mlir_type(::Type{MissingTracedValue})::MLIR.IR.Type
     return MLIR.IR.TensorType(Int[], MLIR.IR.Type(Bool))
 end
 
@@ -848,8 +848,8 @@ end
 end
 
 @noinline function clamp(
-    min::T, x::Union{TracedRArray{T,N},TracedRNumber{T}}, max::T; kwargs...
-) where {T,N}
+    min::T, x::Union{TracedRArray{T},TracedRNumber{T}}, max::T; kwargs...
+) where {T}
     return clamp(constant(min), x, constant(max); kwargs...)
 end
 

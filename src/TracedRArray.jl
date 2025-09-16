@@ -4,16 +4,8 @@ using Adapt: WrappedArray
 using Base: Broadcast
 using Base.Broadcast: Broadcasted, AbstractArrayStyle, instantiate
 
-using ..Reactant:
-    Reactant,
-    TracedRArray,
-    TracedRNumber,
-    AnyTracedRArray,
-    AnyTracedRVector,
-    Ops,
-    MLIR,
-    ancestor,
-    unwrapped_eltype
+using ..Reactant: Reactant, TracedRArray, TracedRNumber, AnyTracedRArray, AnyTracedRVector
+using ..Reactant: Ops, MLIR, ancestor, unwrapped_eltype
 using ..Reactant.Ops: @opcall
 using ..TracedUtils: TracedUtils, get_mlir_data, set_mlir_data!, materialize_traced_array
 
@@ -343,9 +335,10 @@ function Base.setindex!(
     return _setindex_scalar!(a, v, index)
 end
 
-function Base.setindex!(a::TracedRArray{T,N}, v, index::CartesianIndex{N}) where {T,N}
+function _setindex_scalar_cartesian!(
+    a::TracedRArray{T,N}, v, index::CartesianIndex{N}
+) where {T,N}
     GPUArraysCore.assertscalar("setindex!(::TracedRArray, v, ::CartesianIndex{N})")
-
     res = @opcall(
         reshape(
             @opcall(
@@ -360,6 +353,13 @@ function Base.setindex!(a::TracedRArray{T,N}, v, index::CartesianIndex{N}) where
     )
     set_mlir_data!(a, get_mlir_data(res))
     return a
+end
+
+function Base.setindex!(a::TracedRArray{T,N}, v, index::CartesianIndex{N}) where {T,N}
+    return _setindex_scalar_cartesian!(a, v, index)
+end
+function Base.setindex!(a::TracedRArray{T,1}, v, index::CartesianIndex{1}) where {T}
+    return _setindex_scalar_cartesian!(a, v, index)
 end
 
 function _setindex_linear!(a::TracedRArray{T,N}, v, indices::AbstractArray) where {T,N}
@@ -1384,25 +1384,29 @@ function scan_impl!(
     return output
 end
 
-function Base.searchsortedfirst(
-    a::AbstractRange{<:Union{Real,TracedRNumber}},
-    x::Union{Real,Reactant.TracedRNumber{<:Real}},
-    o::Base.DirectOrdering,
-)::TracedRNumber{keytype(a)}
-    x = TracedUtils.promote_to(TracedRNumber{Reactant.unwrapped_eltype(a)}, x)
+for (aType, xType) in (
+    (AbstractRange{<:Real}, TracedRNumber{<:Real}),
+    (AbstractRange{<:TracedRNumber}, Real),
+    (AbstractRange{<:TracedRNumber}, TracedRNumber{<:Real}),
+)
+    @eval function Base.searchsortedfirst(
+        a::$(aType), x::$(xType), o::Base.DirectOrdering
+    )::TracedRNumber{keytype(a)}
+        x = TracedUtils.promote_to(TracedRNumber{Reactant.unwrapped_eltype(a)}, x)
 
-    f, h, l = first(a), step(a), last(a)
-    n = round(Int, (x - f) / h + 1)
+        f, h, l = first(a), step(a), last(a)
+        n = round(Int, (x - f) / h + 1)
 
-    return ifelse(
-        !Base.Order.lt(o, f, x),
-        1,
-        ifelse(
-            (h == 0) | Base.Order.lt(o, l, x),
-            length(a) + 1,
-            ifelse(Base.Order.lt(o, @allowscalar(a[n]), x), n + 1, n),
-        ),
-    )
+        return ifelse(
+            !Base.Order.lt(o, f, x),
+            1,
+            ifelse(
+                (h == 0) | Base.Order.lt(o, l, x),
+                length(a) + 1,
+                ifelse(Base.Order.lt(o, @allowscalar(a[n]), x), n + 1, n),
+            ),
+        )
+    end
 end
 
 function overloaded_searchsortedfirst(v, x, lo::T, hi::T, o::Base.Ordering) where {T}

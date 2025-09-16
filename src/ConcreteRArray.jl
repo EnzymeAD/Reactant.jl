@@ -318,9 +318,7 @@ end
 
 # This doesn't follow the semantics of getindex with ranges. It is mostly meant to be used
 # inside Compiler.jl
-@inline function _fast_slice(
-    a::AbstractConcreteArray{T,N}, args::Vararg{UnitRange,N}
-) where {T,N}
+function _fast_slice(a::AbstractConcreteArray{T,N}, args::Vararg{UnitRange,N}) where {T,N}
     # Avoid slicing all-together
     args == ntuple(Base.Fix1(UnitRange, 1) ∘ Base.Fix1(size, a), N) && return a
     # For all other cases do a compile
@@ -328,7 +326,7 @@ end
     return fn(a, args...)
 end
 
-@inline _fast_slice(a::AbstractConcreteNumber) = a
+_fast_slice(a::AbstractConcreteNumber) = a
 
 function mysetindex!(a, v, args::Vararg{Any,N}) where {N}
     setindex!(a, v, args...)
@@ -369,7 +367,7 @@ function Base.setindex!(a::ConcreteIFRTArray, v, args::Vararg{Int,N}) where {N}
     return a
 end
 
-@inline function Base.similar(
+function Base.similar(
     ::Type{<:ConcretePJRTArray},
     ::Type{S},
     dims::Dims;
@@ -392,15 +390,15 @@ function Base.similar(
     @assert length(device_to_array_slices) == D
     sdata = ntuple(Val(D)) do i
         Base.@_inline_meta
-        Base.similar(a.data[i], S, Dims(length.(device_to_array_slices[i])))
+        similar(a.data[i], S, Dims(length.(device_to_array_slices[i])))
     end
     return ConcretePJRTArray{S,length(dims),D,Sh}(sdata, dims, a.sharding)
 end
 
 Base.similar(a::ConcretePJRTArray, dims::Dims) = similar(a, eltype(a), dims)
 
-@inline function Base.similar(AT::Type{<:ConcretePJRTArray{T}}, dims; kwargs...) where {T}
-    return Base.similar(AT, T, dims; kwargs...)
+function Base.similar(AT::Type{<:ConcretePJRTArray{T}}, dims::Dims; kwargs...) where {T}
+    return similar(AT, T, dims; kwargs...)
 end
 
 function Base.similar(a::ConcreteIFRTArray{T}, ::Type{S}=T, dims::Dims=size(a)) where {T,S}
@@ -409,7 +407,7 @@ function Base.similar(a::ConcreteIFRTArray{T}, ::Type{S}=T, dims::Dims=size(a)) 
     )
 end
 Base.similar(a::ConcreteIFRTArray, dims::Dims) = similar(a, eltype(a), dims)
-function Base.similar(::Type{ConcreteIFRTArray{T}}, dims) where {T}
+function Base.similar(::Type{ConcreteIFRTArray{T}}, dims::Dims) where {T}
     return ConcreteIFRTArray{T}(undef, dims)
 end
 
@@ -421,16 +419,16 @@ function Broadcast.BroadcastStyle(::Type{<:ConcreteIFRTArray})
     return Broadcast.ArrayStyle{ConcreteIFRTArray}()
 end
 
-@inline function Base.similar(
-    bc::Broadcast.Broadcasted{Broadcast.ArrayStyle{ConcretePJRTArray}}, ::Type{T}; kwargs...
+function Base.similar(
+    bc::Broadcast.Broadcasted{Broadcast.ArrayStyle{ConcretePJRTArray}}, ::Type{T}
 ) where {T}
-    return similar(ConcretePJRTArray, T, axes(bc); kwargs...)
+    return similar(ConcretePJRTArray, T, axes(bc))
 end
 
-@inline function Base.similar(
-    bc::Broadcast.Broadcasted{Broadcast.ArrayStyle{ConcreteIFRTArray}}, ::Type{T}; kwargs...
+function Base.similar(
+    bc::Broadcast.Broadcasted{Broadcast.ArrayStyle{ConcreteIFRTArray}}, ::Type{T}
 ) where {T}
-    return similar(ConcreteIFRTArray, T, axes(bc); kwargs...)
+    return similar(ConcreteIFRTArray, T, axes(bc))
 end
 
 # TODO replace this copy for `setindex!` maybe? how to copy data to already existing buffer? (i.e. `copyto!`)

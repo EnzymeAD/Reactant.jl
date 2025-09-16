@@ -232,6 +232,10 @@ for (jlop, hloop, hlocomp) in (
             return @opcall compare(lhs, rhs; comparison_direction=$(hlocomp))
         end
 
+        # ambiguity fixes
+        $(jlop)(@nospecialize(lhs::TracedRNumber), @nospecialize(::Missing)) = missing
+        $(jlop)(@nospecialize(::Missing), @nospecialize(rhs::TracedRNumber)) = missing
+
         function $(jlop)(@nospecialize(lhs::TracedRNumber{T}), @nospecialize(rhs)) where {T}
             return $(jlop)(lhs, Reactant.promote_to(lhs, rhs))
         end
@@ -492,7 +496,8 @@ for (minT, maxT) in Iterators.product((Number, TracedRNumber), (Number, TracedRN
     end
 end
 
-function Base.fill(x::TracedRNumber, dims::Union{NTuple{N,Integer},Tuple{}}) where {N}
+Base.fill(x::TracedRNumber, ::Tuple{}) = Reactant.broadcast_to_size(x, ())
+function Base.fill(x::TracedRNumber, dims::NTuple{N,<:Integer}) where {N}
     return Reactant.broadcast_to_size(x, dims)
 end
 
