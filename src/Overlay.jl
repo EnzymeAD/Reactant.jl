@@ -209,7 +209,7 @@ end
 end
 
 # Indexing overloads
-@reactant_overlay @noinline function Base.getindex(x, idxs...)
+@reactant_overlay @noinline function Base.getindex(x::Union{AbstractArray,Number}, idxs...)
     if use_overlayed_indexing(x, idxs...)
         return TracedIndexing.overloaded_getindex(x, idxs...)
     else

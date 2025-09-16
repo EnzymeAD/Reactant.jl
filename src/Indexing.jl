@@ -33,12 +33,30 @@ function overloaded_getindex(
 end
 
 ## Array Indexing
+standardize_indexing(a::TracedRArray, idxs) = a, idxs
+function standardize_indexing(a::AbstractArray{T,N}, idxs) where {T,N}
+    if ancestor(a) isa TracedRArray
+        return standardize_indexing_for_ancestor(a, idxs)
+    end
+    return Reactant.promote_to(TracedRArray{T,N}, a), idxs
+end
+
+function standardize_indexing_for_ancestor(a, index::NTuple{N,Any}) where {N}
+    return ancestor(a), TracedUtils.get_ancestor_indices(a, index...)
+end
+function standardize_indexing_for_ancestor(a, index::CartesianIndex)
+    return standardize_indexing_for_ancestor(a, (index.I...,))
+end
+function standardize_indexing_for_ancestor(a, linear_indices)
+    return ancestor(a), (TracedUtils.get_ancestor_indices(a, linear_indices),)
+end
+
 ### Scalar Indexing
 function overloaded_getindex(
     a::AbstractArray{T,N}, index::Vararg{Union{<:Integer,TracedRNumber{<:Integer}},N}
 ) where {T,N}
     assertscalar("getindex(::TracedRArray, ::Vararg{Int, N})")
-    a = materialize_traced_array(a)
+    a, index = standardize_indexing(a, index)
     res = @opcall(reshape(@opcall(dynamic_slice(a, [index...], ones(Int32, N))), Int[]))
     return TracedRNumber{unwrapped_eltype(T)}((), res.mlir_data)
 end
@@ -50,24 +68,28 @@ function overloaded_getindex(
 end
 
 function overloaded_getindex(a::AbstractArray{T,N}, index::CartesianIndex{N}) where {T,N}
-    return getindex_cartesian(materialize_traced_array(a), index)
+    a, index = standardize_indexing(a, index)
+    return getindex_cartesian(a, index)
 end
 function overloaded_getindex(a::AbstractVector{T}, index::CartesianIndex{1}) where {T}
-    return getindex_cartesian(materialize_traced_array(a), index)
+    a, index = standardize_indexing(a, index)
+    return getindex_cartesian(a, index)
 end
 
-overloaded_getindex(a::AbstractVector, ::Colon) = materialize_traced_array(vec(a))
-overloaded_getindex(a::AbstractArray, ::Colon) = materialize_traced_array(vec(a))
+overloaded_getindex(a::AbstractVector, ::Colon) = vec(materialize_traced_array(a))
+overloaded_getindex(a::AbstractArray, ::Colon) = vec(materialize_traced_array(a))
 
 function overloaded_getindex(a::AbstractArray{T,N}, indices::AbstractArray) where {T,N}
-    return getindex_linear(materialize_traced_array(a), indices)
+    a, indices = standardize_indexing(a, indices)
+    return getindex_linear(a, indices)
 end
 function overloaded_getindex(a::AbstractArray{T,1}, indices::AbstractArray) where {T}
-    return getindex_linear(materialize_traced_array(a), indices)
+    a, indices = standardize_indexing(a, indices)
+    return getindex_linear(a, indices)
 end
 
 function overloaded_getindex(a::AbstractArray{T,N}, indices::Vararg{Any,N}) where {T,N}
-    a = materialize_traced_array(a)
+    a, indices = standardize_indexing(a, indices)
     indices = Base.to_indices(a, indices)
 
     use_gather_getindex = false
@@ -142,39 +164,6 @@ function overloaded_getindex(a::AbstractArray{T,N}, indices::Vararg{Any,N}) wher
     end
     isempty(ddims) || return materialize_traced_array(dropdims(x; dims=Tuple(ddims)))
     return x
-end
-
-### Handle some special cases
-function overloaded_getindex(
-    a::WrappedArray{TracedRNumber{T}}, index::Union{<:Integer,TracedRNumber{<:Integer}}...
-) where {T}
-    return overloaded_getindex(
-        ancestor(a), TracedUtils.get_ancestor_indices(a, index...)...
-    )
-end
-
-function overloaded_getindex(
-    a::WrappedArray{TracedRNumber{T},1}, linear_indices::CartesianIndex{1}
-) where {T}
-    return overloaded_getindex(a, linear_indices.I...)
-end
-
-function overloaded_getindex(a::WrappedArray{TracedRNumber{T}}, linear_indices) where {T}
-    return overloaded_getindex(
-        ancestor(a), TracedUtils.get_ancestor_indices(a, linear_indices)
-    )
-end
-
-function overloaded_getindex(
-    a::WrappedArray{TracedRNumber{T}}, indices::Vararg{Any,N}
-) where {T,N}
-    return overloaded_getindex(
-        ancestor(a), TracedUtils.get_ancestor_indices(a, indices...)...
-    )
-end
-
-function overloaded_getindex(a::WrappedArray{TracedRNumber{T},1}, indices) where {T}
-    return overloaded_getindex(ancestor(a), TracedUtils.get_ancestor_indices(a, indices)...)
 end
 
 ## StepRangeLen Indexing
@@ -278,7 +267,9 @@ end
 
 overloaded_getindex(v::TracedUnitRange, ::Colon) = v
 
-function overloaded_getindex(v::TracedUnitRange{T}, i) where {T}
+function overloaded_getindex(
+    v::TracedUnitRange{T}, i::Union{Integer,Reactant.TracedRNumber{<:Integer}}
+) where {T}
     val = convert(T, v.start + (i - oneunit(i)))
     # TODO: we should have error messages at some point.
     # @boundscheck Base._in_unit_range(v, val, i) || throw_boundserror(v, i)

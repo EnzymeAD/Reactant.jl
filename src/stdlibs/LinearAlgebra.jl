@@ -4,6 +4,7 @@ using ..MLIR: MLIR
 using ..Reactant: Reactant, Ops
 using ..Reactant:
     TracedRArray, TracedRNumber, AnyTracedRArray, AnyTracedRMatrix, AnyTracedRVector
+using ..Reactant: call_with_reactant
 using ReactantCore: ReactantCore
 using ReactantCore: materialize_traced_array
 using Reactant_jll: Reactant_jll
@@ -11,7 +12,6 @@ using Reactant_jll: Reactant_jll
 using ..TracedUtils: TracedUtils, get_mlir_data, set_mlir_data!
 using ..Ops: @opcall
 
-using Adapt: WrappedArray
 using LinearAlgebra: LinearAlgebra, BLAS
 using LinearAlgebra: Adjoint, Transpose, Factorization, RowMaximum
 using LinearAlgebra: SymTridiagonal, Symmetric, Bidiagonal, Diagonal, Tridiagonal
@@ -237,8 +237,8 @@ function overloaded_mul!(
     α::Number=true,
     β::Number=false,
 )
-    A = Reactant.promote_to(TracedRArray, A)
-    B = Reactant.promote_to(TracedRArray, B)
+    A = call_with_reactant(Reactant.promote_to, TracedRArray, A)
+    B = call_with_reactant(Reactant.promote_to, TracedRArray, B)
 
     if size(C) != (size(A, 1), size(B, 2))
         throw(
@@ -457,19 +457,23 @@ end
 # TODO: The following currently drop several safety checks that are present in LinearAlgebra
 #       Once we have auto if tracing we can remove them.
 
-# Base.fill!
-function Base.fill!(
-    A::Union{
-        Diagonal{<:TracedRNumber},
-        Bidiagonal{<:TracedRNumber},
-        Tridiagonal{<:TracedRNumber},
-        SymTridiagonal{<:TracedRNumber},
-    },
-    x,
-)
-    xT = convert(eltype(A), x)
-    LinearAlgebra.fillstored!(A, xT)
-    return A
+for xType in (Any, TracedRNumber)
+    # Base.fill!
+    @eval function Base.fill!(
+        A::Union{
+            Diagonal{<:TracedRNumber},
+            Bidiagonal{<:TracedRNumber},
+            Tridiagonal{<:TracedRNumber},
+            SymTridiagonal{<:TracedRNumber},
+            LowerTriangular{<:TracedRNumber},
+            UpperTriangular{<:TracedRNumber},
+        },
+        x::$(xType),
+    )
+        xT = convert(eltype(A), x)
+        LinearAlgebra.fillstored!(A, xT)
+        return A
+    end
 end
 
 # Structured Broadcast
@@ -509,11 +513,26 @@ end
 
 LinearAlgebra.dot(x::AnyTracedRArray, y::AnyTracedRArray) = dot(vec(x), vec(y))
 
-function LinearAlgebra.dot(
-    x::AnyTracedRVector, A::WrappedArray{<:TracedRNumber}, y::AnyTracedRVector
+for pArray in (
+    LinearAlgebra.UpperHessenberg,
+    LinearAlgebra.UnitLowerTriangular,
+    LinearAlgebra.Hermitian,
+    LinearAlgebra.UpperTriangular,
+    LinearAlgebra.LowerTriangular,
+    LinearAlgebra.Diagonal,
+    LinearAlgebra.Tridiagonal,
+    LinearAlgebra.UnitUpperTriangular,
+    LinearAlgebra.Bidiagonal,
+    LinearAlgebra.Symmetric,
+    LinearAlgebra.SymTridiagonal,
 )
-    return dot(x, A * y)
+    @eval function LinearAlgebra.dot(
+        x::AnyTracedRVector, A::$(pArray){<:TracedRNumber}, y::AnyTracedRVector
+    )
+        return dot(x, A * y)
+    end
 end
+
 function LinearAlgebra.dot(x::AnyTracedRVector, A::AnyTracedRMatrix, y::AnyTracedRVector)
     return dot(x, A * y)
 end

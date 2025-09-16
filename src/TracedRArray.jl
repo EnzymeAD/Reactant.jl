@@ -58,7 +58,9 @@ function _setindex_scalar!(
                     Reactant.broadcast_to_size(
                         Reactant.promote_to(TracedRNumber{T}, v), ntuple(Returns(1), N)
                     ),
-                    collect(scalar_index_to_cartesian(index, size(a))),
+                    collect(
+                        Reactant.TracedIndexing.scalar_index_to_cartesian(index, size(a))
+                    ),
                 )
             ),
             collect(size(a)),
@@ -131,7 +133,7 @@ function _setindex_linear!(a::TracedRArray{T,N}, v, indices::AbstractArray) wher
     end
     res = @opcall scatter_setindex(
         a,
-        scalar_index_to_cartesian(vec(indices), size(a)),
+        Reactant.TracedIndexing.scalar_index_to_cartesian(vec(indices), size(a)),
         Reactant.promote_to(TracedRArray{T,1}, materialize_traced_array(vec(v))),
     )
     set_mlir_data!(a, get_mlir_data(res))
@@ -388,6 +390,10 @@ function Base.fill!(A::AnyTracedRArray{T,N}, x::TracedRNumber{T2}) where {T,N,T2
     return A
 end
 
+function Base.fill!(A::Array{T,N}, x::TracedRNumber{T2}) where {T,N,T2}
+    throw(MethodError(fill!, (A, x)))
+end
+
 struct AbstractReactantArrayStyle{N} <: AbstractArrayStyle{N} end
 
 AbstractReactantArrayStyle(::Val{N}) where {N} = AbstractReactantArrayStyle{N}()
@@ -419,9 +425,7 @@ end
 
 Base.eltype(::Broadcast.Extruded{T}) where {T} = eltype(T)
 
-function first_scalar(x)
-    Reactant.@allowscalar first(x)
-end
+first_scalar(x) = @allowscalar first(x)
 
 # we need to override the outer copy method to make sure we never fall back to scalar
 # iteration (see, e.g., CUDA.jl#145)
@@ -525,7 +529,7 @@ function _copyto!(dest::Array{<:TracedRNumber}, bc::Broadcasted)
 
     res = TracedUtils.elem_apply(bc.f, args...)
     for I in 1:length(dest)
-        dest[I] = Reactant.@allowscalar res[I]
+        dest[I] = @allowscalar res[I]
     end
     return dest
 end
@@ -874,7 +878,10 @@ function overloaded_partialsort_descending(
             dimension=1,
             comparator=(a, b, i1, i2) -> !lt(by(a), by(b)),
         )
-        return sorted_x[1:maximum(k)], sorted_idxs[1:maximum(k)]
+        return (
+            Reactant.TracedIndexing.overloaded_getindex(sorted_x, 1:maximum(k)),
+            Reactant.TracedIndexing.overloaded_getindex(sorted_idxs, 1:maximum(k)),
+        )
     end
 
     if Reactant.LOWER_PARTIALSORT_TO_APPROX_TOP_K[] && T <: Reactant.ReactantFloat
@@ -885,7 +892,10 @@ function overloaded_partialsort_descending(
             dimension=1,
             init_val=typemin(T),
         )
-        return result.values[1:maximum(k)], result.indices[1:maximum(k)]
+        return (
+            Reactant.TracedIndexing.overloaded_getindex(result.values, 1:maximum(k)),
+            Reactant.TracedIndexing.overloaded_getindex(result.indices, 1:maximum(k)),
+        )
     end
 
     (; values, indices) = @opcall top_k(materialize_traced_array(x), maximum(k))
@@ -902,7 +912,10 @@ function overloaded_partialsort_ascending(
             dimension=1,
             comparator=(a, b, i1, i2) -> !lt(by(a), by(b)),
         )
-        return sorted_x[1:maximum(k)], sorted_idxs[1:maximum(k)]
+        return (
+            Reactant.TracedIndexing.overloaded_getindex(sorted_x, 1:maximum(k)),
+            Reactant.TracedIndexing.overloaded_getindex(sorted_idxs, 1:maximum(k)),
+        )
     end
 
     if Reactant.LOWER_PARTIALSORT_TO_APPROX_TOP_K[] && T <: Reactant.ReactantFloat
@@ -913,7 +926,10 @@ function overloaded_partialsort_ascending(
             dimension=1,
             init_val=typemax(T),
         )
-        return result.values[1:maximum(k)], result.indices[1:maximum(k)]
+        return (
+            Reactant.TracedIndexing.overloaded_getindex(result.values, 1:maximum(k)),
+            Reactant.TracedIndexing.overloaded_getindex(result.indices, 1:maximum(k)),
+        )
     end
 
     (; values, indices) = @opcall top_k(
@@ -924,12 +940,12 @@ end
 
 # arg* functions
 function Base.argmin(f::F, x::AnyTracedRArray) where {F}
-    idx = scalar_index_to_cartesian(argmin(f.(x)), size(x))
+    idx = Reactant.TracedIndexing.scalar_index_to_cartesian(argmin(f.(x)), size(x))
     return @allowscalar x[idx...]
 end
 
 function Base.argmax(f::F, x::AnyTracedRArray) where {F}
-    idx = scalar_index_to_cartesian(argmax(f.(x)), size(x))
+    idx = Reactant.TracedIndexing.scalar_index_to_cartesian(argmax(f.(x)), size(x))
     return @allowscalar x[idx...]
 end
 
