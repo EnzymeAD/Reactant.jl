@@ -14,7 +14,7 @@ end
 
 @testset "Aqua" begin
     @testset "Ambiguities" begin
-        @test_broken Aqua.test_ambiguities(
+        Aqua.test_ambiguities(
             Reactant;
             exclude=[
                 Base.unsafe_convert,
