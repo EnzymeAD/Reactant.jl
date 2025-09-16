@@ -7,7 +7,7 @@ function infer_sig(sig)
     min_world = Ref{UInt}(typemin(UInt))
     max_world = Ref{UInt}(typemax(UInt))
 
-    lookup_result = Reactant.lookup_world(
+    lookup_result = lookup_world(
         sig, interp.world, Core.Compiler.method_table(interp), min_world, max_world
     )
     match = lookup_result::Core.MethodMatch
@@ -68,7 +68,7 @@ if Reactant_jll.is_available()
         @compile_workload begin
             @static if precompilation_supported()
                 x = ConcreteRNumber(2.0; client)
-                Reactant.compile(sin, (x,); client, optimize=:all)
+                compile(sin, (x,); client, optimize=:all)
                 if x isa ConcreteIFRTNumber
                     XLA.free_buffer(x.data.buffer)
                     x.data.buffer.buffer = C_NULL
@@ -80,7 +80,7 @@ if Reactant_jll.is_available()
                 end
 
                 y = ConcreteRArray([2.0]; client)
-                Reactant.compile(Base.sum, (y,); client, optimize=:all)
+                compile(Base.sum, (y,); client, optimize=:all)
                 if y isa ConcreteIFRTArray
                     XLA.free_buffer(y.data.buffer)
                     y.data.buffer.buffer = C_NULL

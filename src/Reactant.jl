@@ -130,7 +130,7 @@ function aos_to_soa(x::Array{TracedRNumber{T}}) where {T}
     isa_traced_soa(ancestor(x)) && return x
     for i in eachindex(x)
         if !isassigned(x, i)
-            x[i] = Reactant.promote_to(TracedRNumber{T}, 0)
+            x[i] = promote_to(TracedRNumber{T}, 0)
         end
     end
     return @opcall reshape(vcat(x...), size(x)...)

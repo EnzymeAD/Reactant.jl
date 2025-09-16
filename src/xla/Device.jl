@@ -20,12 +20,12 @@ Given the device, return the corresponding global device ordinal in the client.
 function device_ordinal end
 
 function Base.string(device::AbstractDevice)
-    client = XLA.client(device)
-    pname = XLA.platform_name(client)
+    client = client(device)
+    pname = platform_name(client)
     return "$(uppercase(pname)):$(device_ordinal(device)) $(device_kind(device))"
 end
 
 # Fallback method, preferably all device implementations overload this
-function XLA.is_addressable(device::AbstractDevice)
-    return device ∈ XLA.addressable_devices(XLA.client(device))
+function is_addressable(device::AbstractDevice)
+    return device ∈ addressable_devices(client(device))
 end

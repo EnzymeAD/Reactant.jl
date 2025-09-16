@@ -17,8 +17,6 @@ import Core.Compiler:
     CallMeta,
     Effects,
     NoCallInfo,
-    widenconst,
-    mapany,
     MethodResultPure
 
 Base.Experimental.@MethodTable(REACTANT_METHOD_TABLE)
@@ -60,7 +58,7 @@ function set_reactant_abi(
 
     # Improve inference by considering call_with_reactant as having the same results as
     # the original call
-    if f === Reactant.call_with_reactant
+    if f === call_with_reactant
         arginfo2 = ArgInfo(fargs isa Nothing ? nothing : fargs[2:end], argtypes[2:end])
         return abstract_call(interp, arginfo2::ArgInfo, si, sv, max_methods)
     end

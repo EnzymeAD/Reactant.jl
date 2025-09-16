@@ -77,9 +77,9 @@ end
     ::Type{Buffer},
     S::Type,
     dims::Dims;
-    client::Union{Nothing,XLA.PJRT.Client}=nothing,
+    client::Union{Nothing,Client}=nothing,
     idx::Union{Int,Nothing}=nothing,
-    device::Union{Nothing,XLA.PJRT.Device}=nothing,
+    device::Union{Nothing,Device}=nothing,
 )
     client = client === nothing ? XLA.default_backend() : client
 

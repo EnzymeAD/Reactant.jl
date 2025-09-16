@@ -19,7 +19,7 @@ end
 
 # copy
 function Base.copy(x::Union{AbstractConcreteArray,AbstractConcreteNumber})
-    fn = Reactant.compile(copy, (x,))
+    fn = compile(copy, (x,))
     return fn(x)
 end
 
@@ -122,11 +122,11 @@ function write_to_host_buffer!(data::Array, X::ConcretePJRTArray{T,N}) where {T,
             slice ∈ completed && continue
             push!(completed, slice)
             data_slice = data[slice...]
-            XLA.to_host(X.data[idx], data_slice, Reactant.Sharding.NoSharding())
+            XLA.to_host(X.data[idx], data_slice, Sharding.NoSharding())
             data[slice...] .= data_slice
         end
     else
-        XLA.to_host(XLA.synced_buffer(only(X.data)), data, Reactant.Sharding.NoSharding())
+        XLA.to_host(XLA.synced_buffer(only(X.data)), data, Sharding.NoSharding())
     end
     return nothing
 end
@@ -507,11 +507,7 @@ for aType in (:ConcretePJRTArray, :ConcreteIFRTArray)
 end
 
 function Base.copyto!(
-    dest::Vector{T},
-    doffs::Int64,
-    src::Reactant.ConcreteIFRTArray{T},
-    soffs::Int64,
-    n::Int64,
+    dest::Vector{T}, doffs::Int64, src::ConcreteIFRTArray{T}, soffs::Int64, n::Int64
 ) where {T}
     n == 0 && return dest
     n > 0 || Base._throw_argerror("Number of elements to copy must be non-negative.")
@@ -530,7 +526,7 @@ function Base.copyto!(
     wait(src_async)
 
     GC.@preserve dest begin
-        @ccall Reactant.MLIR.API.mlir_c.ifrt_array_copy_to_host_buffer(
+        @ccall MLIR.API.mlir_c.ifrt_array_copy_to_host_buffer(
             src_sync.buffer::Ptr{Cvoid},
             pointer(dest, doffs)::Ptr{T},
             ((soffs - 1) * sizeof(T))::Int64,
@@ -541,11 +537,7 @@ function Base.copyto!(
 end
 
 function Base.copyto!(
-    dest::Vector{T},
-    doffs::Int64,
-    src::Reactant.ConcretePJRTArray{T},
-    soffs::Int64,
-    n::Int64,
+    dest::Vector{T}, doffs::Int64, src::ConcretePJRTArray{T}, soffs::Int64, n::Int64
 ) where {T}
     n == 0 && return dest
     n > 0 || Base._throw_argerror("Number of elements to copy must be non-negative.")
@@ -559,7 +551,7 @@ function Base.copyto!(
     wait(src_async)
 
     GC.@preserve dest begin
-        @ccall Reactant.MLIR.API.mlir_c.CopyFromBuffer(
+        @ccall MLIR.API.mlir_c.CopyFromBuffer(
             client.client::Ptr{Cvoid},
             src_sync.buffer::Ptr{Cvoid},
             pointer(dest, doffs)::Ptr{T},
@@ -572,17 +564,13 @@ function Base.copyto!(
 end
 
 function Base.copyto!(
-    dest::Vector{T}, src::Union{Reactant.ConcretePJRTArray{T},Reactant.ConcreteIFRTArray{T}}
+    dest::Vector{T}, src::Union{ConcretePJRTArray{T},ConcreteIFRTArray{T}}
 ) where {T}
     return copyto!(dest, 1, src, 1, length(src))
 end
 
 function Base.copyto!(
-    dest::Reactant.ConcretePJRTArray{T},
-    doffs::Int64,
-    src::Vector{T},
-    soffs::Int64,
-    n::Int64,
+    dest::ConcretePJRTArray{T}, doffs::Int64, src::Vector{T}, soffs::Int64, n::Int64
 ) where {T}
     n == 0 && return dest
     n > 0 || Base._throw_argerror("Number of elements to copy must be non-negative.")
@@ -595,7 +583,7 @@ function Base.copyto!(
     wait(dest_async)
 
     GC.@preserve src begin
-        @ccall Reactant.MLIR.API.mlir_c.CopyToBuffer(
+        @ccall MLIR.API.mlir_c.CopyToBuffer(
             client.client::Ptr{Cvoid},
             dest_sync.buffer::Ptr{Cvoid},
             pointer(src, soffs)::Ptr{T},
@@ -607,7 +595,7 @@ function Base.copyto!(
     return dest
 end
 
-function Base.copyto!(dest::Reactant.ConcretePJRTArray{T}, src::Vector{T}) where {T}
+function Base.copyto!(dest::ConcretePJRTArray{T}, src::Vector{T}) where {T}
     return copyto!(dest, 1, src, 1, length(src))
 end
 
@@ -749,7 +737,7 @@ function Base.fill(
     sharding::Sharding.AbstractSharding=Sharding.NoSharding(),
 )
     output_shardings = Sharding.is_sharded(sharding) ? Dict(1 => sharding) : nothing
-    fn = Reactant.compile((); output_shardings) do
+    fn = compile((); output_shardings) do
         return @opcall fill(val, collect(Int64, dims))
     end
     return fn()

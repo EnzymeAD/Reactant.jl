@@ -489,7 +489,7 @@ Base.@nospecializeinfer function traced_type_inner(
 )
     T = eltype(A)
     if A isa UnionAll
-        if mode == ArrayToConcrete && T <: Reactant.ReactantPrimitive
+        if mode == ArrayToConcrete && T <: ReactantPrimitive
             runtime isa Val{:PJRT} && return ConcretePJRTArray{T}
             runtime isa Val{:IFRT} && return ConcreteIFRTArray{T}
             error("Unsupported runtime $runtime")
@@ -502,7 +502,7 @@ Base.@nospecializeinfer function traced_type_inner(
         end
     else
         N = ndims(A)
-        if mode == ArrayToConcrete && T <: Reactant.ReactantPrimitive
+        if mode == ArrayToConcrete && T <: ReactantPrimitive
             runtime isa Val{:PJRT} && return ConcretePJRTArray{
                 T,N,Sharding.ndevices(sharding),Sharding.shard_type(typeof(sharding), N)
             }
@@ -527,16 +527,16 @@ Base.@nospecializeinfer function traced_type_inner(
     end
 end
 
-Base.@nospecializeinfer function Reactant.traced_type_inner(
+Base.@nospecializeinfer function traced_type_inner(
     @nospecialize(OA::Type{SubArray{T,N,P,I,L}}),
     seen,
-    mode::Reactant.TraceMode,
+    mode::TraceMode,
     @nospecialize(track_numbers::Type),
     @nospecialize(sharding),
     @nospecialize(runtime)
 ) where {T,N,P,I,L}
-    P2 = Reactant.traced_type_inner(P, seen, mode, track_numbers, sharding, runtime)
-    I2 = Reactant.traced_type_inner(I, seen, mode, track_numbers, sharding, runtime)
+    P2 = traced_type_inner(P, seen, mode, track_numbers, sharding, runtime)
+    I2 = traced_type_inner(I, seen, mode, track_numbers, sharding, runtime)
     T2 = eltype(P2)
     return SubArray{T2,N,P2,I2,L}
 end
@@ -1451,9 +1451,7 @@ Base.@nospecializeinfer function make_tracer(
             error("Unsupported runtime $runtime")
         else
             if mode == TracedTrack || mode == NoStopTracedTrack
-                res = TracedRNumber{RT}(
-                    (path,), Reactant.broadcast_to_size(prev, ()).mlir_data
-                )
+                res = TracedRNumber{RT}((path,), broadcast_to_size(prev, ()).mlir_data)
                 if Base.ismutable(prev) && !haskey(seen, prev)
                     return seen[prev] = res
                 end
@@ -1461,9 +1459,7 @@ Base.@nospecializeinfer function make_tracer(
                 return res
             elseif mode == TracedSetPath
                 haskey(seen, prev) && return seen[prev]
-                res = TracedRNumber{RT}(
-                    (path,), Reactant.broadcast_to_size(prev, ()).mlir_data
-                )
+                res = TracedRNumber{RT}((path,), broadcast_to_size(prev, ()).mlir_data)
                 seen[prev] = res
                 return res
             elseif mode == TracedToConcrete
@@ -1984,16 +1980,16 @@ end
     )
 end
 
-function Reactant.traced_type_inner(
+function traced_type_inner(
     @nospecialize(RT::Type{<:UnitRange{<:ReactantPrimitive}}),
     seen,
-    mode::Reactant.TraceMode,
+    mode::TraceMode,
     track_numbers::Type,
     sharding,
     runtime,
 )
     (T,) = RT.parameters
-    newT = Reactant.traced_type_inner(T, seen, mode, track_numbers, sharding, runtime)
+    newT = traced_type_inner(T, seen, mode, track_numbers, sharding, runtime)
     if T == newT
         return RT
     else
@@ -2001,7 +1997,7 @@ function Reactant.traced_type_inner(
     end
 end
 
-function Reactant.make_tracer(
+function make_tracer(
     seen,
     @nospecialize(prev::UnitRange),
     @nospecialize(path),
@@ -2009,19 +2005,15 @@ function Reactant.make_tracer(
     @nospecialize(sharding = Sharding.NoSharding()),
     kwargs...,
 )
-    Reactant.Sharding.is_sharded(sharding) && error("Cannot specify sharding for UnitRange")
-    if mode == Reactant.TracedToTypes
+    Sharding.is_sharded(sharding) && error("Cannot specify sharding for UnitRange")
+    if mode == TracedToTypes
         push!(path, Core.Typeof(prev))
         make_tracer(seen, prev.start, path, mode; kwargs...)
         make_tracer(seen, prev.stop, path, mode; kwargs...)
         return nothing
     end
-    newstart = Reactant.make_tracer(
-        seen, prev.start, Reactant.append_path(path, :start), mode; kwargs...
-    )
-    newstop = Reactant.make_tracer(
-        seen, prev.stop, Reactant.append_path(path, :stop), mode; kwargs...
-    )
+    newstart = make_tracer(seen, prev.start, append_path(path, :start), mode; kwargs...)
+    newstop = make_tracer(seen, prev.stop, append_path(path, :stop), mode; kwargs...)
     if typeof(newstart) == typeof(prev.start) && typeof(newstop) == typeof(prev.stop)
         return prev
     else
@@ -2029,19 +2021,19 @@ function Reactant.make_tracer(
     end
 end
 
-function Reactant.traced_type_inner(
+function traced_type_inner(
     @nospecialize(RT::Type{<:StepRangeLen}),
     seen,
-    mode::Reactant.TraceMode,
+    mode::TraceMode,
     track_numbers::Type,
     sharding,
     runtime,
 )
     T, R, S, L = RT.parameters
-    newT = Reactant.traced_type_inner(T, seen, mode, track_numbers, sharding, runtime)
-    newR = Reactant.traced_type_inner(R, seen, mode, track_numbers, sharding, runtime)
-    newS = Reactant.traced_type_inner(S, seen, mode, track_numbers, sharding, runtime)
-    newL = Reactant.traced_type_inner(L, seen, mode, track_numbers, sharding, runtime)
+    newT = traced_type_inner(T, seen, mode, track_numbers, sharding, runtime)
+    newR = traced_type_inner(R, seen, mode, track_numbers, sharding, runtime)
+    newS = traced_type_inner(S, seen, mode, track_numbers, sharding, runtime)
+    newL = traced_type_inner(L, seen, mode, track_numbers, sharding, runtime)
     if T == newT && R == newR && S == newS && L == newL
         return RT
     else
@@ -2049,7 +2041,7 @@ function Reactant.traced_type_inner(
     end
 end
 
-function Reactant.make_tracer(
+function make_tracer(
     seen,
     @nospecialize(prev::StepRangeLen),
     @nospecialize(path),
@@ -2057,9 +2049,8 @@ function Reactant.make_tracer(
     @nospecialize(sharding = Sharding.NoSharding()),
     kwargs...,
 )
-    Reactant.Sharding.is_sharded(sharding) &&
-        error("Cannot specify sharding for StepRangeLen")
-    if mode == Reactant.TracedToTypes
+    Sharding.is_sharded(sharding) && error("Cannot specify sharding for StepRangeLen")
+    if mode == TracedToTypes
         push!(path, Core.Typeof(prev))
         make_tracer(seen, prev.ref, path, mode; sharding, kwargs...)
         make_tracer(seen, prev.step, path, mode; sharding, kwargs...)
@@ -2067,17 +2058,13 @@ function Reactant.make_tracer(
         make_tracer(seen, prev.offset, path, mode; sharding, kwargs...)
         return nothing
     end
-    newref = Reactant.make_tracer(
-        seen, prev.ref, Reactant.append_path(path, :ref), mode; sharding, kwargs...
+    newref = make_tracer(seen, prev.ref, append_path(path, :ref), mode; sharding, kwargs...)
+    newstep = make_tracer(
+        seen, prev.step, append_path(path, :step), mode; sharding, kwargs...
     )
-    newstep = Reactant.make_tracer(
-        seen, prev.step, Reactant.append_path(path, :step), mode; sharding, kwargs...
-    )
-    newlen = Reactant.make_tracer(
-        seen, prev.len, Reactant.append_path(path, :len), mode; sharding, kwargs...
-    )
-    newoffset = Reactant.make_tracer(
-        seen, prev.offset, Reactant.append_path(path, :offset), mode; sharding, kwargs...
+    newlen = make_tracer(seen, prev.len, append_path(path, :len), mode; sharding, kwargs...)
+    newoffset = make_tracer(
+        seen, prev.offset, append_path(path, :offset), mode; sharding, kwargs...
     )
     if typeof(newref) == typeof(prev.ref) &&
         typeof(newstep) == typeof(prev.step) &&
