@@ -188,6 +188,8 @@ include("TracedUtils.jl")
 
 include("TracedRNumber.jl")
 include("TracedRArray.jl")
+include("TracedRange.jl")
+include("Indexing.jl")
 
 include("ConcreteRArray.jl")
 
@@ -201,16 +203,31 @@ use_overlayed_version(x::Base.Iterators.Enumerate) = use_overlayed_version(x.itr
 use_overlayed_version(x::Vector) = looped_any(use_overlayed_version, x)
 use_overlayed_version(iter::Tuple) = looped_any(use_overlayed_version, iter)
 use_overlayed_version(iter::NamedTuple) = looped_any(use_overlayed_version, values(iter))
-use_overlayed_version(::TracedRArray) = true
-use_overlayed_version(::TracedRNumber) = true
 use_overlayed_version(::Number) = false
 use_overlayed_version(::MissingTracedValue) = true
-use_overlayed_version(::AbstractArray{<:TracedRNumber}) = true
 use_overlayed_version(rng::ReactantRNG) = use_overlayed_version(rng.seed)
+use_overlayed_version(::AbstractArray{<:TracedRNumber}) = true
+use_overlayed_version(::TracedRArray) = true
+use_overlayed_version(::TracedRNumber) = true
+use_overlayed_version(::TracedStepRangeLen) = true
+use_overlayed_version(::TracedUnitRange) = true
 function use_overlayed_version(x::AbstractArray)
     a = ancestor(x)
     a === x && return false
     return use_overlayed_version(a)
+end
+
+use_overlayed_indexing(x1, x2, xs...) = looped_any(use_overlayed_indexing, (x1, x2, xs...))
+use_overlayed_indexing(x) = false
+use_overlayed_indexing(::TracedRArray) = true
+use_overlayed_indexing(::TracedRNumber) = true
+use_overlayed_indexing(::AbstractArray{<:TracedRNumber}) = true
+use_overlayed_indexing(x::TracedStepRangeLen) = true
+use_overlayed_indexing(x::TracedUnitRange) = true
+function use_overlayed_indexing(x::AbstractArray)
+    a = ancestor(x)
+    a === x && return false
+    return use_overlayed_indexing(a)
 end
 
 ## We avoid calling into `any` to avoid triggering the `any` overlay

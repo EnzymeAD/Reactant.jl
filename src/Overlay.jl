@@ -171,7 +171,7 @@ end
 end
 
 @reactant_overlay @noinline function Base.map(f, x::AbstractArray, ys::AbstractArray...)
-    if use_overlayed_version(x) || any(use_overlayed_version, ys)
+    if use_overlayed_version(x) || looped_any(use_overlayed_version, ys)
         return TracedRArrayOverrides.overloaded_map(f, x, ys...)
     else
         return Base.inferencebarrier(Base.map)(CallWithReactant(f), x, ys...)
@@ -184,7 +184,7 @@ end
     if (
         use_overlayed_version(y) ||
         use_overlayed_version(x) ||
-        any(use_overlayed_version, xs)
+        looped_any(use_overlayed_version, xs)
     )
         return TracedRArrayOverrides.overloaded_map!(f, y, x, xs...)
     else
@@ -205,5 +205,34 @@ end
         return TracedRArrayOverrides.overloaded_mapreduce(f, |, x; dims)
     else
         return Base.inferencebarrier(Base._any)(CallWithReactant(f), x, dims)
+    end
+end
+
+# Indexing overloads
+@reactant_overlay @noinline function Base.getindex(x, idxs...)
+    if use_overlayed_indexing(x, idxs...)
+        return TracedIndexing.overloaded_getindex(x, idxs...)
+    else
+        return Base.inferencebarrier(Base.getindex)(x, idxs...)
+    end
+end
+
+# LinearAlgebra
+@reactant_overlay @noinline function LinearAlgebra.lu(
+    x::AbstractArray, pivot::LinearAlgebra.RowMaximum=LinearAlgebra.RowMaximum(); kwargs...
+)
+    if use_overlayed_version(x)
+        return TracedLinearAlgebra.overloaded_lu(x, pivot; kwargs...)
+    else
+        return Base.inferencebarrier(LinearAlgebra.lu)(x, pivot; kwargs...)
+    end
+end
+@reactant_overlay @noinline function LinearAlgebra.lu!(
+    x::AbstractArray, pivot::LinearAlgebra.RowMaximum=LinearAlgebra.RowMaximum(); kwargs...
+)
+    if use_overlayed_version(x)
+        return TracedLinearAlgebra.overloaded_lu(x, pivot; kwargs...)
+    else
+        return Base.inferencebarrier(LinearAlgebra.lu!)(x, pivot; kwargs...)
     end
 end

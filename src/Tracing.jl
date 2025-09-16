@@ -1998,7 +1998,7 @@ function traced_type_inner(
     if T == newT
         return RT
     else
-        return TracedRNumberOverrides.TracedUnitRange{newT}
+        return TracedUnitRange{newT}
     end
 end
 
@@ -2022,7 +2022,7 @@ function make_tracer(
     if typeof(newstart) == typeof(prev.start) && typeof(newstop) == typeof(prev.stop)
         return prev
     else
-        return TracedRNumberOverrides.TracedUnitRange(newstart, newstop)
+        return TracedUnitRange(newstart, newstop)
     end
 end
 
@@ -2042,7 +2042,7 @@ function traced_type_inner(
     if T == newT && R == newR && S == newS && L == newL
         return RT
     else
-        return TracedRNumberOverrides.TracedStepRangeLen{newT,newR,newS,newL}
+        return TracedStepRangeLen{newT,newR,newS,newL}
     end
 end
 
@@ -2077,6 +2077,6 @@ function make_tracer(
         typeof(newoffset) == typeof(prev.offset)
         return prev
     else
-        return TracedRNumberOverrides.TracedStepRangeLen(newref, newstep, newlen, newoffset)
+        return TracedStepRangeLen(newref, newstep, newlen, newoffset)
     end
 end

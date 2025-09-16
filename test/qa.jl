@@ -16,7 +16,16 @@ end
     @testset "Ambiguities" begin
         @test_broken Aqua.test_ambiguities(
             Reactant;
-            exclude=[Base.mapreducedim!, Base.:(==), Base.unsafe_convert, Base.replace],
+            exclude=[
+                Base.mapreducedim!,
+                Base.:(==),
+                Base.unsafe_convert,
+                Base.replace,
+                # These are not really ambiguous, Test is just weird about them
+                Base.rem,
+                Base.mod,
+                Base.mod1,
+            ],
         )
     end
     @testset "Undefined Exports" begin

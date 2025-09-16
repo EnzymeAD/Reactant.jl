@@ -11,11 +11,12 @@ using Reactant_jll: Reactant_jll
 using ..TracedUtils: TracedUtils, get_mlir_data, set_mlir_data!
 using ..Ops: @opcall
 
+using Adapt: WrappedArray
 using LinearAlgebra: LinearAlgebra, BLAS
 using LinearAlgebra: Adjoint, Transpose, Factorization, RowMaximum
 using LinearAlgebra: SymTridiagonal, Symmetric, Bidiagonal, Diagonal, Tridiagonal
 using LinearAlgebra: LowerTriangular, UnitLowerTriangular, UpperTriangular
-using LinearAlgebra: diag, diagm, dot, ldiv!, lu, lu!
+using LinearAlgebra: diag, diagm, dot, ldiv!
 using Libdl: Libdl
 
 function __init__()
@@ -508,6 +509,11 @@ end
 
 LinearAlgebra.dot(x::AnyTracedRArray, y::AnyTracedRArray) = dot(vec(x), vec(y))
 
+function LinearAlgebra.dot(
+    x::AnyTracedRVector, A::WrappedArray{<:TracedRNumber}, y::AnyTracedRVector
+)
+    return dot(x, A * y)
+end
 function LinearAlgebra.dot(x::AnyTracedRVector, A::AnyTracedRMatrix, y::AnyTracedRVector)
     return dot(x, A * y)
 end
@@ -600,24 +606,7 @@ function GeneralizedLU(factors::S, ipiv::P, perm::P, info::I) where {S,P,I}
     return GeneralizedLU{eltype(factors),S,P,I}(factors, ipiv, perm, info)
 end
 
-## allow > 2 dimensions as inputs
-function LinearAlgebra.lu(A::AnyTracedRArray{T,2}, ::RowMaximum; kwargs...) where {T}
-    return lu!(copy(A), RowMaximum(); kwargs...)
-end
-function LinearAlgebra.lu(
-    A::AnyTracedRArray{T,N}, ::RowMaximum=RowMaximum(); kwargs...
-) where {T,N}
-    return lu!(copy(A), RowMaximum(); kwargs...)
-end
-
-function LinearAlgebra.lu!(A::AnyTracedRArray{T,2}, ::RowMaximum; kwargs...) where {T}
-    return _lu_overload(A, RowMaximum(); kwargs...)
-end
-function LinearAlgebra.lu!(A::AnyTracedRArray{T,N}, ::RowMaximum; kwargs...) where {T,N}
-    return _lu_overload(A, RowMaximum(); kwargs...)
-end
-
-function _lu_overload(
+function overloaded_lu(
     A::AnyTracedRArray{T,N}, ::RowMaximum; check::Bool=false, allowsingular::Bool=false
 ) where {T,N}
     # TODO: don't ignore the check and allowsingular flags

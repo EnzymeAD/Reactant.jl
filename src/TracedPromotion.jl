@@ -23,7 +23,8 @@ function promote_to(
 end
 
 function promote_to(
-    ::Type{TracedRArray{T,1}}, rhs::Union{UnitRange,UnitRange{<:TracedRNumber}}
+    ::Type{TracedRArray{T,1}},
+    rhs::Union{UnitRange,UnitRange{<:TracedRNumber},<:TracedUnitRange},
 ) where {T}
     return @opcall add(
         @opcall(iota(eltype(rhs), [length(rhs)]; iota_dimension=1)),
@@ -34,7 +35,11 @@ end
 function promote_to(
     ::Type{TracedRArray{T,1}},
     rhs::Union{
-        StepRange,StepRangeLen,StepRange{<:TracedRNumber},StepRangeLen{<:TracedRNumber}
+        StepRange,
+        StepRangeLen,
+        StepRange{<:TracedRNumber},
+        StepRangeLen{<:TracedRNumber},
+        TracedStepRangeLen,
     },
 ) where {T}
     step_arr = broadcast_to_size(step(rhs), (length(rhs),))

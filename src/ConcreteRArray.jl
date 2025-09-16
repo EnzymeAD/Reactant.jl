@@ -487,12 +487,20 @@ function mycopyto!(dest, src)
 end
 
 for aType in (:ConcretePJRTArray, :ConcreteIFRTArray)
-    @eval function Base.copyto!(dest::$(aType), src::$(aType))
-        # We can't directly set the data field. it will alias the inner buffers without
-        # actually copying them.
-        fn = compile(mycopyto!, (dest, src))
-        fn(dest, src)
-        return dest
+    @eval begin
+        function Base.copyto!(
+            dest::$(aType){<:TracedRNumber}, src::$(aType){<:TracedRNumber}
+        )
+            throw(MethodError(copyto!, (dest, src)))
+        end
+
+        function Base.copyto!(dest::$(aType), src::$(aType))
+            # We can't directly set the data field. it will alias the inner buffers without
+            # actually copying them.
+            fn = compile(mycopyto!, (dest, src))
+            fn(dest, src)
+            return dest
+        end
     end
 end
 
@@ -641,6 +649,13 @@ for aType in (:ConcretePJRTArray, :ConcreteIFRTArray)
             dest::SubArray{<:Any,<:Any,<:$(aType)}, src::SubArray{<:Any,<:Any,<:Array}
         )
             return Base.copyto!(dest, convert(Array, copy(src)))
+        end
+
+        function Base.copyto!(
+            dest::SubArray{TracedRNumber{T1},<:Any,<:$(aType)},
+            src::SubArray{TracedRNumber{T2},<:Any,<:Array},
+        ) where {T1,T2}
+            throw(MethodError(copyto!, (dest, src)))
         end
     end
 end

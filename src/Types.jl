@@ -82,6 +82,42 @@ end
 @leaf TracedRArray
 Adapt.parent_type(::Type{TracedRArray{T,N}}) where {T,N} = TracedRArray{T,N}
 
+## TracedStepRangeLen
+struct TracedStepRangeLen{T,R,S,L} <: AbstractRange{T}
+    ref::R
+    step::S
+    len::L
+    offset::L
+end
+
+@leaf TracedStepRangeLen
+function Adapt.parent_type(::Type{TracedStepRangeLen{T,R,S,L}}) where {T,R,S,L}
+    return TracedStepRangeLen{T,R,S,L}
+end
+
+## TracedUnitRange
+struct TracedUnitRange{T} <: AbstractUnitRange{T}
+    start::T
+    stop::T
+    function TracedUnitRange{T}(start::T, stop::T) where {T}
+        return new(start, unitrange_last(start, stop))
+    end
+end
+
+function unitrange_last(start::Integer, stop::Integer)
+    return ifelse(stop >= start, stop, convert(typeof(stop), start - oneunit(start - stop)))
+end
+function unitrange_last(start, stop)
+    return ifelse(
+        stop >= start,
+        convert(typeof(stop), start + floor(stop - start)),
+        convert(typeof(stop), start - oneunit(start - stop)),
+    )
+end
+
+@leaf TracedUnitRange
+Adapt.parent_type(::Type{TracedUnitRange{T}}) where {T} = TracedUnitRange{T}
+
 const AnyTracedRArray{T,N} = AbstractArray{TracedRNumber{T},N}
 const AnyTracedRVector{T} = AnyTracedRArray{T,1}
 const AnyTracedRMatrix{T} = AnyTracedRArray{T,2}

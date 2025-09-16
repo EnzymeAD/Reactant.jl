@@ -2,7 +2,6 @@ module ReactantSpecialFunctionsExt
 
 using SpecialFunctions: SpecialFunctions
 using Reactant: Ops, Reactant, TracedRNumber, ReactantFloat, ReactantInt, ReactantFloatInt
-using Reactant.TracedRNumberOverrides: float
 using Reactant.Ops: @opcall
 
 for fn in [:digamma, :erf, :erfc, (:loggamma, :lgamma)]

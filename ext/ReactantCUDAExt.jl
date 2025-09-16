@@ -578,7 +578,7 @@ function Adapt.adapt_storage(::ReactantKernelAdaptor, xs::TracedRNumber{T}) wher
     return res
 end
 
-import Reactant.TracedRNumberOverrides.TracedStepRangeLen
+import Reactant.TracedStepRangeLen
 
 function Adapt.adapt_storage(::ReactantKernelAdaptor, r::TracedStepRangeLen)
     return TracedStepRangeLen(
