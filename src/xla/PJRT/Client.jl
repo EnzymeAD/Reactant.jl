@@ -110,12 +110,14 @@ const cpu_client_count = Ref(0)
 const cuda_client_count = Ref(0)
 const tpu_client_count = Ref(0)
 const metal_client_count = Ref(0)
+const sycl_client_count = Ref(0)
 
 for (backend, counter) in (
     (:CPUClient, :cpu_client_count),
     (:CUDAClient, :cuda_client_count),
     (:TPUClient, :tpu_client_count),
     (:MetalClient, :metal_client_count),
+    (:SYCLClient, :sycl_client_count),
 )
     main_fn = Symbol(:Make, backend)
     @eval function $(backend)(args...; checkcount::Bool=true, kwargs...)
@@ -205,6 +207,20 @@ function MakeMetalClient(;
                                                     distributed_runtime_client"
 
     return MakeClientUsingPluginAPI(metal_pjrt_plugin_path, "metal", "METAL")
+end
+
+function MakeSYCLClient(;
+    sycl_pjrt_plugin_path::String,
+    node_id::Integer=0,
+    num_nodes::Integer=1,
+    distributed_runtime_client::Union{Nothing,XLA.DistributedRuntimeClient}=nothing,
+)
+    @assert node_id == 0 "`PJRT.MakeSYCLClient` does not support node_id"
+    @assert num_nodes == 1 "`PJRT.MakeSYCLClient` does not support num_nodes > 1"
+    @assert distributed_runtime_client === nothing "`PJRT.MakeSYCLClient` does not support \
+                                                    distributed_runtime_client"
+
+    return MakeClientUsingPluginAPI(sycl_pjrt_plugin_path, "sycl", "SYCL")
 end
 
 function MakeClientUsingPluginAPI(

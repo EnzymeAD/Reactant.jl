@@ -5,6 +5,9 @@ if lowercase(get(ENV, "REACTANT_BACKEND_GROUP", "all")) == "gpu"
 end
 
 const REACTANT_TEST_GROUP = lowercase(get(ENV, "REACTANT_TEST_GROUP", "all"))
+const REACTANT_TEST_ONLY_PLUGIN = parse(
+    Bool, get(ENV, "REACTANT_TEST_ONLY_PLUGIN", "false")
+)
 
 @testset "Reactant.jl Tests" begin
     if REACTANT_TEST_GROUP == "all" || REACTANT_TEST_GROUP == "core"
@@ -12,31 +15,37 @@ const REACTANT_TEST_GROUP = lowercase(get(ENV, "REACTANT_TEST_GROUP", "all"))
             @safetestset "Metal Plugin" include("plugins/metal.jl")
         end
 
-        @safetestset "Layout" include("layout.jl")
-        @safetestset "Tracing" include("tracing.jl")
-        @safetestset "Basic" include("basic.jl")
-        @safetestset "Constructor" include("constructor.jl")
-        @safetestset "Autodiff" include("autodiff.jl")
-        @safetestset "Complex" include("complex.jl")
-        @safetestset "Broadcast" include("bcast.jl")
-        @safetestset "Struct" include("struct.jl")
-        @safetestset "Closure" include("closure.jl")
-        @safetestset "Compile" include("compile.jl")
-        @safetestset "IR" include("ir.jl")
-        @safetestset "Buffer Donation" include("buffer_donation.jl")
-        @safetestset "Wrapped Arrays" include("wrapped_arrays.jl")
-        @safetestset "Control Flow" include("control_flow.jl")
-        @safetestset "Sorting" include("sorting.jl")
-        @safetestset "Shortcuts to MLIR ops" include("ops.jl")
-        @safetestset "Indexing" include("indexing.jl")
-        if !Sys.isapple()
-            @safetestset "Custom Number Types" include("custom_number_types.jl")
+        if Sys.ARCH === :x86_64 && haskey(Reactant.XLA.global_backend_state.clients, "sycl")
+            @safetestset "Intel XPU Plugin" include("plugins/sycl.jl")
         end
-        @safetestset "Sharding" include("sharding.jl")
-        @safetestset "Comm Optimization" include("optimize_comm.jl")
-        @safetestset "Cluster Detection" include("cluster_detector.jl")
-        @safetestset "Config" include("config.jl")
-        @safetestset "Batching" include("batching.jl")
+
+        if !REACTANT_TEST_ONLY_PLUGIN
+            @safetestset "Layout" include("layout.jl")
+            @safetestset "Tracing" include("tracing.jl")
+            @safetestset "Basic" include("basic.jl")
+            @safetestset "Constructor" include("constructor.jl")
+            @safetestset "Autodiff" include("autodiff.jl")
+            @safetestset "Complex" include("complex.jl")
+            @safetestset "Broadcast" include("bcast.jl")
+            @safetestset "Struct" include("struct.jl")
+            @safetestset "Closure" include("closure.jl")
+            @safetestset "Compile" include("compile.jl")
+            @safetestset "IR" include("ir.jl")
+            @safetestset "Buffer Donation" include("buffer_donation.jl")
+            @safetestset "Wrapped Arrays" include("wrapped_arrays.jl")
+            @safetestset "Control Flow" include("control_flow.jl")
+            @safetestset "Sorting" include("sorting.jl")
+            @safetestset "Shortcuts to MLIR ops" include("ops.jl")
+            @safetestset "Indexing" include("indexing.jl")
+            if !Sys.isapple()
+                @safetestset "Custom Number Types" include("custom_number_types.jl")
+            end
+            @safetestset "Sharding" include("sharding.jl")
+            @safetestset "Comm Optimization" include("optimize_comm.jl")
+            @safetestset "Cluster Detection" include("cluster_detector.jl")
+            @safetestset "Config" include("config.jl")
+            @safetestset "Batching" include("batching.jl")
+        end
     end
 
     if REACTANT_TEST_GROUP == "all" || REACTANT_TEST_GROUP == "integration"
