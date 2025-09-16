@@ -274,10 +274,10 @@ function is_pure(func)
     for i in 1:length(attr)
         sa = Base.String(attr[i])
         if sa == "write"
-            return true
+            return false
         end
     end
-    return false
+    return true
 end
 
 function make_mlir_fn(
