@@ -197,6 +197,8 @@ for jlop in (
         $(jlop)(x::$(T), y::$(T)) = $(jlop)(to_number(x), to_number(y))
         $(jlop)(x::$(T), y::Number) = $(jlop)(to_number(x), y)
         $(jlop)(x::Number, y::$(T)) = $(jlop)(x, to_number(y))
+        $(jlop)(x::$(T), y::TracedRNumber) = throw(MethodError(jlop, (x, y)))
+        $(jlop)(x::TracedRNumber, y::$(T)) = throw(MethodError(jlop, (x, y)))
     end
 end
 

@@ -17,7 +17,12 @@ for T in (:F8E5M2, :F8E4M3FN, :F8E4M3B11FNUZ, :F8E5M2FNUZ, :F8E4M3FNUZ)
         Base.promote_rule(::Type{Float64}, ::Type{$(T)}) = Float64
 
         Base.promote_rule(::Type{$(T)}, ::Type{<:Integer}) = $(T)
+        Base.promote_rule(::Type{$(T)}, ::Type{BigInt}) = BigFloat
         Base.promote_rule(::Type{<:Integer}, ::Type{$(T)}) = $(T)
+        Base.promote_rule(::Type{BigInt}, ::Type{$(T)}) = BigFloat
+
+        Base.promote_rule(::Type{Bool}, ::Type{$(T)}) = $(T)
+        Base.promote_rule(::Type{$(T)}, ::Type{Bool}) = $(T)
 
         @static if isdefined(Core, :BFloat16)
             Base.promote_rule(::Type{$(T)}, ::Type{Core.BFloat16}) = Core.BFloat16
@@ -27,7 +32,18 @@ for T in (:F8E5M2, :F8E4M3FN, :F8E4M3B11FNUZ, :F8E5M2FNUZ, :F8E4M3FNUZ)
         # For type conversion we simply rely on XLA
         (::Type{inT})(x::$(T)) where {inT<:Number} = convert(inT, x)
         (::Type{$(T)})(x::inT) where {inT<:Number} = convert($(T), x)
+
         Base.Complex(x::$(T)) = complex(x, zero(x))
+        function Base.Bool(x::$(T))
+            return if x == 0
+                false
+            elseif x == 1
+                true
+            else
+                throw(InexactError(:Bool, Bool, x))
+            end
+        end
+        Base.BigInt(x::$(T)) = BigInt(Float64(x))
 
         function Base.convert(::Type{inT}, x::$(T)) where {inT<:Number}
             @assert MLIR.IR._has_context() "currently only supported inside compiled functions"

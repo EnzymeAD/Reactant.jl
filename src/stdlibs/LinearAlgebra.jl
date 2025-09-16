@@ -301,7 +301,7 @@ function LinearAlgebra.norm(x::TracedRArray{T,N}, p::Real=2) where {T,N}
 end
 
 function LinearAlgebra._diagm(shape, kv::Pair{<:Integer,<:AnyTracedRVector}...)
-    T = unwrapped_eltype(last(first(kv)))
+    T = Reactant.unwrapped_eltype(last(first(kv)))
     m, n = LinearAlgebra.diagm_size(shape, kv...)
 
     # For repeated indices we need to aggregate the values
