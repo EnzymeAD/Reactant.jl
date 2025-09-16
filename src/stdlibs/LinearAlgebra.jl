@@ -494,7 +494,8 @@ end
 
 #-------------
 
-function LinearAlgebra.dot(x::AnyTracedRVector, y::AnyTracedRVector)
+# LinearAlgebra overloads dot too many times for each of its types. Hence the overlay
+function overloaded_dot(x::AbstractVector, y::AbstractVector)
     if length(x) != length(y)
         throw(
             DimensionMismatch(
@@ -502,7 +503,6 @@ function LinearAlgebra.dot(x::AnyTracedRVector, y::AnyTracedRVector)
             ),
         )
     end
-
     res = @opcall dot_general(
         @opcall(conj(materialize_traced_array(x))),
         materialize_traced_array(y);
@@ -511,30 +511,12 @@ function LinearAlgebra.dot(x::AnyTracedRVector, y::AnyTracedRVector)
     return TracedRNumber{Reactant.unwrapped_eltype(res)}((), res.mlir_data)
 end
 
-LinearAlgebra.dot(x::AnyTracedRArray, y::AnyTracedRArray) = dot(vec(x), vec(y))
-
-for pArray in (
-    LinearAlgebra.UpperHessenberg,
-    LinearAlgebra.UnitLowerTriangular,
-    LinearAlgebra.Hermitian,
-    LinearAlgebra.UpperTriangular,
-    LinearAlgebra.LowerTriangular,
-    LinearAlgebra.Diagonal,
-    LinearAlgebra.Tridiagonal,
-    LinearAlgebra.UnitUpperTriangular,
-    LinearAlgebra.Bidiagonal,
-    LinearAlgebra.Symmetric,
-    LinearAlgebra.SymTridiagonal,
-)
-    @eval function LinearAlgebra.dot(
-        x::AnyTracedRVector, A::$(pArray){<:TracedRNumber}, y::AnyTracedRVector
-    )
-        return dot(x, A * y)
-    end
+function overloaded_dot(x::AbstractArray, y::AbstractArray)
+    return overloaded_dot(call_with_reactant(vec, x), call_with_reactant(vec, y))
 end
 
-function LinearAlgebra.dot(x::AnyTracedRVector, A::AnyTracedRMatrix, y::AnyTracedRVector)
-    return dot(x, A * y)
+function overloaded_dot(x::AbstractVector, A::AbstractMatrix, y::AbstractVector)
+    return overloaded_dot(x, call_with_reactant(*, A, y))
 end
 
 # ldiv & rdiv interfaces
@@ -565,6 +547,20 @@ function LinearAlgebra.generic_trimatdiv!(
     return C
 end
 
+function LinearAlgebra.generic_trimatdiv!(
+    C::AbstractVecOrMat{TracedRNumber{T}},
+    uploc,
+    isunitc,
+    tfun::Function,
+    A::Union{Adjoint,Transpose},
+    B::AbstractVecOrMat,
+) where {T}
+    # our passes will simplify Adjoint/Transpose before triangular_solve
+    return LinearAlgebra.generic_mattridiv!(
+        C, uploc, isunitc, tfun, materialize_traced_array(A), B
+    )
+end
+
 function LinearAlgebra.generic_mattridiv!(
     C::AbstractMatrix{TracedRNumber{T}},
     uploc,
@@ -586,6 +582,20 @@ function LinearAlgebra.generic_mattridiv!(
     )
     set_mlir_data!(C, get_mlir_data(res))
     return C
+end
+
+function LinearAlgebra.generic_mattridiv!(
+    C::AbstractMatrix{TracedRNumber{T}},
+    uploc,
+    isunitc,
+    tfun::Function,
+    A::AbstractMatrix,
+    B::Union{Adjoint,Transpose},
+) where {T}
+    # our passes will simplify Adjoint/Transpose before triangular_solve
+    return LinearAlgebra.generic_mattridiv!(
+        C, uploc, isunitc, tfun, A, materialize_traced_array(B)
+    )
 end
 
 LinearAlgebra.transpose!(B::AnyTracedRMatrix, A::AnyTracedRMatrix) = copy!(B, transpose(A))
@@ -701,14 +711,18 @@ function _lu_solve_core(factors::AbstractMatrix, B::AbstractMatrix, perm::Abstra
 end
 
 # Overload \ to support batched factorization
-for T in (
-        :GeneralizedFactorization,
-        :GeneralizedTransposeFactorization,
-        :GeneralizedAdjointFactorization,
-    ),
-    aType in (:AbstractVecOrMat, :AbstractArray)
+for FT in (
+    :GeneralizedFactorization,
+    :GeneralizedTransposeFactorization,
+    :GeneralizedAdjointFactorization,
+)
+    for aType in (:AbstractVecOrMat, :AbstractArray)
+        @eval Base.:(\)(F::$FT, B::$aType) = _overloaded_backslash(F, B)
+    end
 
-    @eval Base.:(\)(F::$T, B::$aType) = _overloaded_backslash(F, B)
+    @eval Base.:(\)(
+        F::$FT{T}, B::Union{Array{Complex{T},1},Array{Complex{T},2}}
+    ) where {T<:Union{Float32,Float64}} = _overloaded_backslash(F, B)
 end
 
 function _overloaded_backslash(F::GeneralizedFactorization, B::AbstractArray)

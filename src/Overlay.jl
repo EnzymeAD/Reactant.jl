@@ -208,15 +208,6 @@ end
     end
 end
 
-# Indexing overloads
-@reactant_overlay @noinline function Base.getindex(x::Union{AbstractArray,Number}, idxs...)
-    if use_overlayed_indexing(x, idxs...)
-        return TracedIndexing.overloaded_getindex(x, idxs...)
-    else
-        return Base.inferencebarrier(Base.getindex)(x, idxs...)
-    end
-end
-
 # LinearAlgebra
 @reactant_overlay @noinline function LinearAlgebra.lu(
     x::AbstractArray, pivot::LinearAlgebra.RowMaximum=LinearAlgebra.RowMaximum(); kwargs...
@@ -234,5 +225,22 @@ end
         return TracedLinearAlgebra.overloaded_lu(x, pivot; kwargs...)
     else
         return Base.inferencebarrier(LinearAlgebra.lu!)(x, pivot; kwargs...)
+    end
+end
+
+@reactant_overlay @noinline function LinearAlgebra.dot(x::AbstractArray, y::AbstractArray)
+    if use_overlayed_version(x) || use_overlayed_version(y)
+        return TracedLinearAlgebra.overloaded_dot(x, y)
+    else
+        return Base.inferencebarrier(LinearAlgebra.dot)(x, y)
+    end
+end
+@reactant_overlay @noinline function LinearAlgebra.dot(
+    x::AbstractVector, A::AbstractMatrix, y::AbstractVector
+)
+    if use_overlayed_version(x) || use_overlayed_version(A) || use_overlayed_version(y)
+        return TracedLinearAlgebra.overloaded_dot(x, A, y)
+    else
+        return Base.inferencebarrier(LinearAlgebra.dot)(x, A, y)
     end
 end

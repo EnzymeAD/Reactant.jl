@@ -878,10 +878,7 @@ function overloaded_partialsort_descending(
             dimension=1,
             comparator=(a, b, i1, i2) -> !lt(by(a), by(b)),
         )
-        return (
-            Reactant.TracedIndexing.overloaded_getindex(sorted_x, 1:maximum(k)),
-            Reactant.TracedIndexing.overloaded_getindex(sorted_idxs, 1:maximum(k)),
-        )
+        return (getindex(sorted_x, 1:maximum(k)), getindex(sorted_idxs, 1:maximum(k)))
     end
 
     if Reactant.LOWER_PARTIALSORT_TO_APPROX_TOP_K[] && T <: Reactant.ReactantFloat
@@ -893,8 +890,7 @@ function overloaded_partialsort_descending(
             init_val=typemin(T),
         )
         return (
-            Reactant.TracedIndexing.overloaded_getindex(result.values, 1:maximum(k)),
-            Reactant.TracedIndexing.overloaded_getindex(result.indices, 1:maximum(k)),
+            getindex(result.values, 1:maximum(k)), getindex(result.indices, 1:maximum(k))
         )
     end
 
@@ -912,10 +908,7 @@ function overloaded_partialsort_ascending(
             dimension=1,
             comparator=(a, b, i1, i2) -> !lt(by(a), by(b)),
         )
-        return (
-            Reactant.TracedIndexing.overloaded_getindex(sorted_x, 1:maximum(k)),
-            Reactant.TracedIndexing.overloaded_getindex(sorted_idxs, 1:maximum(k)),
-        )
+        return (getindex(sorted_x, 1:maximum(k)), getindex(sorted_idxs, 1:maximum(k)))
     end
 
     if Reactant.LOWER_PARTIALSORT_TO_APPROX_TOP_K[] && T <: Reactant.ReactantFloat
@@ -927,8 +920,7 @@ function overloaded_partialsort_ascending(
             init_val=typemax(T),
         )
         return (
-            Reactant.TracedIndexing.overloaded_getindex(result.values, 1:maximum(k)),
-            Reactant.TracedIndexing.overloaded_getindex(result.indices, 1:maximum(k)),
+            getindex(result.values, 1:maximum(k)), getindex(result.indices, 1:maximum(k))
         )
     end
 
