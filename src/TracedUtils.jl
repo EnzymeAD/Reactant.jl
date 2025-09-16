@@ -278,12 +278,7 @@ function is_pure(func)
     if attr isa Nothing
         return false
     end
-    for i in 1:length(attr)
-        sa = Base.String(attr[i])
-        if sa == "write"
-            return false
-        end
-    end
+    any(at -> String(at) == "write", attr) && return false
     return true
 end
 

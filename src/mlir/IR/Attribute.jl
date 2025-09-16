@@ -802,6 +802,14 @@ function Base.getindex(attr::Attribute, i)
     end
 end
 
+function Base.iterate(attr::Attribute, state=1)
+    if state > length(attr)
+        nothing
+    else
+        (attr[state], state + 1)
+    end
+end
+
 function Base.getindex(attr::Attribute)
     @assert isdenseelements(attr) "attribute $(attr) is not a dense elements attribute"
     @assert issplat(attr) "attribute $(attr) is not splatted (more than one different elements)"
