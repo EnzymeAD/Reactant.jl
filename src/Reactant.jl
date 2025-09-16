@@ -3,7 +3,7 @@ module Reactant
 using ReactantCore:
     ReactantCore, @trace, within_compile, MissingTracedValue, materialize_traced_array
 
-using LinearAlgebra: LinearAlgebra
+using LinearAlgebra: LinearAlgebra, RowMaximum
 using Random: Random, AbstractRNG
 using EnumX: @enumx
 using Functors: Functors, @leaf

@@ -635,6 +635,10 @@ function GeneralizedLU(factors::S, ipiv::P, perm::P, info::I) where {S,P,I}
     return GeneralizedLU{eltype(factors),S,P,I}(factors, ipiv, perm, info)
 end
 
+function overloaded_lu(x::AbstractArray, args...; kwargs...)
+    return overloaded_lu(Reactant.promote_to(TracedRArray, x), args...; kwargs...)
+end
+
 function overloaded_lu(
     A::AnyTracedRArray{T,N}, ::RowMaximum; check::Bool=false, allowsingular::Bool=false
 ) where {T,N}

@@ -209,8 +209,15 @@ end
 end
 
 # LinearAlgebra
+@reactant_overlay @noinline function LinearAlgebra.lu(x::AbstractArray; kwargs...)
+    if use_overlayed_version(x)
+        return TracedLinearAlgebra.overloaded_lu(x, RowMaximum(); kwargs...)
+    else
+        return Base.inferencebarrier(LinearAlgebra.lu)(x; kwargs...)
+    end
+end
 @reactant_overlay @noinline function LinearAlgebra.lu(
-    x::AbstractArray, pivot::LinearAlgebra.RowMaximum=LinearAlgebra.RowMaximum(); kwargs...
+    x::AbstractArray, pivot::RowMaximum; kwargs...
 )
     if use_overlayed_version(x)
         return TracedLinearAlgebra.overloaded_lu(x, pivot; kwargs...)
@@ -218,8 +225,15 @@ end
         return Base.inferencebarrier(LinearAlgebra.lu)(x, pivot; kwargs...)
     end
 end
+@reactant_overlay @noinline function LinearAlgebra.lu!(x::AbstractArray; kwargs...)
+    if use_overlayed_version(x)
+        return TracedLinearAlgebra.overloaded_lu(x, RowMaximum(); kwargs...)
+    else
+        return Base.inferencebarrier(LinearAlgebra.lu!)(x; kwargs...)
+    end
+end
 @reactant_overlay @noinline function LinearAlgebra.lu!(
-    x::AbstractArray, pivot::LinearAlgebra.RowMaximum=LinearAlgebra.RowMaximum(); kwargs...
+    x::AbstractArray, pivot::RowMaximum; kwargs...
 )
     if use_overlayed_version(x)
         return TracedLinearAlgebra.overloaded_lu(x, pivot; kwargs...)
