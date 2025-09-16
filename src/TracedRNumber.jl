@@ -100,6 +100,10 @@ function TracedRNumber{T}(x::Number) where {T}
     return Reactant.promote_to(TracedRNumber{unwrapped_eltype(T)}, x)
 end
 
+for T in Base.uniontypes(Reactant.ReactantFloat8)
+    @eval TracedRNumber{T}(x::$T) where {T} = Reactant.promote_to(TracedRNumber{T}, x)
+end
+
 for (aT, bT) in (
     (TracedRNumber{<:Real}, Real),
     (Real, TracedRNumber{<:Real}),

@@ -1,4 +1,4 @@
-using Reactant, ReactantCore, Test, Aqua, ExplicitImports, MethodAnalysis
+using Reactant, Test, Aqua, ExplicitImports, MethodAnalysis
 
 function get_all_dialects()
     mods = Module[]
@@ -35,10 +35,10 @@ end
         Aqua.test_piracies(
             Reactant;
             treat_as_own=(
-                ReactantCore.MissingTracedValue,
-                ReactantCore.promote_to_traced,
-                ReactantCore.traced_call,
-                ReactantCore.traced_while,
+                Reactant.ReactantCore.MissingTracedValue,
+                Reactant.ReactantCore.promote_to_traced,
+                Reactant.ReactantCore.traced_call,
+                Reactant.ReactantCore.traced_while,
             ),
         )
     end

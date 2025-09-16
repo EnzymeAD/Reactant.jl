@@ -32,6 +32,8 @@ for T in (:F8E5M2, :F8E4M3FN, :F8E4M3B11FNUZ, :F8E5M2FNUZ, :F8E4M3FNUZ)
         # For type conversion we simply rely on XLA
         (::Type{inT})(x::$(T)) where {inT<:Number} = convert(inT, x)
         (::Type{$(T)})(x::inT) where {inT<:Number} = convert($(T), x)
+        (::Type{$(T)})(x::Complex) = convert($(T), x)
+        (::Type{$(T)})(x::Rational) = convert($(T), x)
 
         Base.Complex(x::$(T)) = complex(x, zero(x))
         function Base.Bool(x::$(T))
@@ -44,6 +46,18 @@ for T in (:F8E5M2, :F8E4M3FN, :F8E4M3B11FNUZ, :F8E5M2FNUZ, :F8E4M3FNUZ)
             end
         end
         Base.BigInt(x::$(T)) = BigInt(Float64(x))
+        Base.Rational(x::$(T)) = Rational{Int8}(x)
+
+        function (::Type{$(T)})(x::Rational{S}) where {S}
+            P = promote_type($(T), S)
+            return convert(T, convert(P, x.num) / convert(P, x.den))::T
+        end
+
+        function (::Type{$(T)})(x::Complex)
+            return isreal(x) ? $(T)(real(x)) : throw(InexactError(nameof($(T)), $(T), x))
+        end
+
+        Base.convert(::Type{$(T)}, x::$(T)) = x
 
         function Base.convert(::Type{inT}, x::$(T)) where {inT<:Number}
             @assert MLIR.IR._has_context() "currently only supported inside compiled functions"
@@ -62,6 +76,10 @@ end
 primitive type TF32 <: AbstractFloat 32 end # currently only used to set precision
 
 const ReactantFloat8 = Union{F8E5M2,F8E4M3FN,F8E4M3B11FNUZ,F8E5M2FNUZ,F8E4M3FNUZ}
+
+for T1 in Base.uniontypes(ReactantFloat8), T2 in Base.uniontypes(ReactantFloat8)
+    @eval Base.convert(::Type{$T1}, x::$T2) = convert($(T1), x)
+end
 
 # TODO: Quantized types
 

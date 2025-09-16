@@ -87,6 +87,13 @@ function Base.convert(::Type{T}, x::AbstractConcreteNumber) where {T<:Number}
     return convert(T, to_number(x))
 end
 
+for T in Base.uniontypes(ReactantFloat8)
+    @eval function Base.convert(::Type{$T}, x::AbstractConcreteNumber)
+        $(T) == typeof(x) && return x
+        return convert($T, to_number(x))
+    end
+end
+
 Adapt.adapt_storage(::Type{T}, x::AbstractArray) where {T<:AbstractConcreteArray} = T(x)
 
 Base.size(x::AbstractConcreteArray) = x.shape
@@ -178,6 +185,14 @@ function Base.convert(
     return to_number(x)
 end
 
+for T in Base.uniontypes(ReactantFloat8)
+    @eval function Base.convert(
+        ::Type{$T}, x::Union{ConcretePJRTScalar{$T},ConcreteIFRTScalar{$T}}
+    )
+        return to_number(x)
+    end
+end
+
 for jlop in (:(Base.abs),), T in (AbstractConcreteNumber,)
     @eval $(jlop)(x::$(T)) = $(jlop)(to_number(x))
 end
@@ -210,17 +225,21 @@ for jlop in (:(Base.isnan), :(Base.isfinite)),
     @eval $(jlop)(x::$(T)) = $(jlop)(to_number(x))
 end
 
-for T in (AbstractConcreteNumber, AbstractConcreteArray{<:Any,0})
-    for (T1, T2) in ((T, Number), (Number, T), (T, T))
-        @eval begin
-            function Base.isapprox(x::$(T1), y::$(T2); kwargs...)
-                return Base.isapprox(to_number(x), to_number(y); kwargs...)
-            end
-            function Base.isapprox(
-                x::AbstractArray{<:$(T1)}, y::AbstractArray{<:$(T2)}; kwargs...
-            )
-                return Base.isapprox(to_number.(x), to_number.(y); kwargs...)
-            end
+for (T1, T2) in (
+    (AbstractConcreteNumber, AbstractConcreteNumber),
+    (AbstractConcreteNumber, Number),
+    (Number, AbstractConcreteNumber),
+    (AbstractConcreteArray{<:Any,0}, Number),
+    (Number, AbstractConcreteArray{<:Any,0}),
+)
+    @eval begin
+        function Base.isapprox(x::$(T1), y::$(T2); kwargs...)
+            return Base.isapprox(to_number(x), to_number(y); kwargs...)
+        end
+        function Base.isapprox(
+            x::AbstractArray{<:$(T1)}, y::AbstractArray{<:$(T2)}; kwargs...
+        )
+            return Base.isapprox(to_number.(x), to_number.(y); kwargs...)
         end
     end
 end
@@ -711,15 +730,22 @@ function mymapreducedim!(f, op, R, A)
     return nothing
 end
 
-function Base.mapreducedim!(
-    f,
-    op,
-    R::Union{AnyConcreteIFRTArray,AnyConcretePJRTArray},
-    A::Union{Base.AbstractBroadcasted,AbstractArray},
+# To avoid ambiguities
+for (fType, opType) in (
+    (typeof(identity), Union{typeof(*),typeof(Base.mul_prod)}),
+    (Any, Base.PermutedDimsArrays.CommutativeOps),
+    (Any, Any),
 )
-    fn = compile(mymapreducedim!, (f, op, R, A))
-    fn(f, op, R, A)
-    return R
+    @eval function Base.mapreducedim!(
+        f::$(fType),
+        op::$(opType),
+        R::Union{AnyConcreteIFRTArray,AnyConcretePJRTArray},
+        A::Union{Base.AbstractBroadcasted,AbstractArray},
+    )
+        fn = compile(mymapreducedim!, (f, op, R, A))
+        fn(f, op, R, A)
+        return R
+    end
 end
 
 function mymap!(f, R, A)
@@ -736,7 +762,7 @@ end
 # Directly initialize a Device Array
 function Base.fill(
     ::Type{<:Union{ConcreteIFRTArray,ConcretePJRTArray}},
-    val,
+    val::Number,
     dims::Vararg{Int};
     sharding::Sharding.AbstractSharding=Sharding.NoSharding(),
 )
