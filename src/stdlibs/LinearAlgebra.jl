@@ -1,17 +1,9 @@
 module TracedLinearAlgebra
 
+using ..MLIR: MLIR
+using ..Reactant: Reactant, Ops
 using ..Reactant:
-    Reactant,
-    TracedRArray,
-    TracedRNumber,
-    AnyTracedRArray,
-    AnyTracedRMatrix,
-    AnyTracedRVector,
-    AnyTracedRVecOrMat,
-    unwrapped_eltype,
-    Ops,
-    MLIR
-
+    TracedRArray, TracedRNumber, AnyTracedRArray, AnyTracedRMatrix, AnyTracedRVector
 using ReactantCore: ReactantCore
 using ReactantCore: materialize_traced_array
 using Reactant_jll: Reactant_jll
@@ -19,38 +11,22 @@ using Reactant_jll: Reactant_jll
 using ..TracedUtils: TracedUtils, get_mlir_data, set_mlir_data!
 using ..Ops: @opcall
 
-using LinearAlgebra:
-    LinearAlgebra,
-    Adjoint,
-    Bidiagonal,
-    Diagonal,
-    Factorization,
-    I,
-    LowerTriangular,
-    RowMaximum,
-    SymTridiagonal,
-    Symmetric,
-    Transpose,
-    Tridiagonal,
-    UnitLowerTriangular,
-    UpperTriangular,
-    diag,
-    diagm,
-    dot,
-    ldiv!,
-    lu,
-    lu!
+using LinearAlgebra: LinearAlgebra, BLAS
+using LinearAlgebra: Adjoint, Transpose, Factorization, RowMaximum
+using LinearAlgebra: SymTridiagonal, Symmetric, Bidiagonal, Diagonal, Tridiagonal
+using LinearAlgebra: LowerTriangular, UnitLowerTriangular, UpperTriangular
+using LinearAlgebra: diag, diagm, dot, ldiv!, lu, lu!
 using Libdl: Libdl
 
 function __init__()
     if Reactant_jll.is_available()
-        libblastrampoline_handle = Libdl.dlopen(LinearAlgebra.BLAS.libblas)
+        libblastrampoline_handle = Libdl.dlopen(BLAS.libblas)
 
         for (cname, enzymexla_name) in [
-            (LinearAlgebra.BLAS.@blasfunc(sgetrf_), :enzymexla_lapack_sgetrf_),
-            (LinearAlgebra.BLAS.@blasfunc(dgetrf_), :enzymexla_lapack_dgetrf_),
-            (LinearAlgebra.BLAS.@blasfunc(cgetrf_), :enzymexla_lapack_cgetrf_),
-            (LinearAlgebra.BLAS.@blasfunc(zgetrf_), :enzymexla_lapack_zgetrf_),
+            (BLAS.@blasfunc(sgetrf_), :enzymexla_lapack_sgetrf_),
+            (BLAS.@blasfunc(dgetrf_), :enzymexla_lapack_dgetrf_),
+            (BLAS.@blasfunc(cgetrf_), :enzymexla_lapack_cgetrf_),
+            (BLAS.@blasfunc(zgetrf_), :enzymexla_lapack_zgetrf_),
         ]
             sym = Libdl.dlsym(libblastrampoline_handle, cname)
             @ccall MLIR.API.mlir_c.EnzymeJaXMapSymbol(
@@ -95,7 +71,7 @@ for (AT, comp) in ((:LowerTriangular, "GE"), (:UpperTriangular, "LE"))
     uAT = Symbol(:Unit, AT)
     @eval begin
         function ReactantCore.materialize_traced_array(
-            x::$(AT){TracedRNumber{T},<:AnyTracedRMatrix}
+            x::LinearAlgebra.$(AT){TracedRNumber{T},<:AnyTracedRMatrix}
         ) where {T}
             m, n = size(x)
             px = materialize_traced_array(parent(x))
@@ -106,7 +82,7 @@ for (AT, comp) in ((:LowerTriangular, "GE"), (:UpperTriangular, "LE"))
         end
 
         function ReactantCore.materialize_traced_array(
-            x::$(uAT){TracedRNumber{T},<:AnyTracedRMatrix}
+            x::LinearAlgebra.$(uAT){TracedRNumber{T},<:AnyTracedRMatrix}
         ) where {T}
             m, n = size(x)
             px = materialize_traced_array(parent(x))
@@ -183,7 +159,7 @@ for (AT, dcomp, ocomp) in (
     (:UnitUpperTriangular, "LT", "GE"),
 )
     @eval function TracedUtils.set_mlir_data!(
-        x::$(AT){TracedRNumber{T},<:AnyTracedRMatrix}, data
+        x::LinearAlgebra.$(AT){TracedRNumber{T},<:AnyTracedRMatrix}, data
     ) where {T}
         tdata = TracedRArray{T}(data)
         z = zero(tdata)
@@ -274,7 +250,7 @@ function overloaded_mul!(
         throw(DimensionMismatch("A has size $(size(A)), B has size $(size(B))"))
     end
 
-    T = unwrapped_eltype(C)
+    T = Reactant.unwrapped_eltype(C)
     tmp = @opcall dot_general(
         T.(materialize_traced_array(A)),
         T.(materialize_traced_array(B));
@@ -397,7 +373,7 @@ end
 
 # Kronecker Product
 function LinearAlgebra.kron(
-    x::AnyTracedRVecOrMat{T1}, y::AnyTracedRVecOrMat{T2}
+    x::Reactant.AnyTracedRVecOrMat{T1}, y::Reactant.AnyTracedRVecOrMat{T2}
 ) where {T1,T2}
     x = materialize_traced_array(x)
     y = materialize_traced_array(y)
@@ -528,7 +504,7 @@ function LinearAlgebra.dot(x::AnyTracedRVector, y::AnyTracedRVector)
         materialize_traced_array(y);
         contracting_dimensions=([1], [1]),
     )
-    return TracedRNumber{unwrapped_eltype(res)}((), res.mlir_data)
+    return TracedRNumber{Reactant.unwrapped_eltype(res)}((), res.mlir_data)
 end
 
 LinearAlgebra.dot(x::AnyTracedRArray, y::AnyTracedRArray) = dot(vec(x), vec(y))

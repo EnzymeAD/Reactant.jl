@@ -13,9 +13,21 @@ using Reactant_jll: Reactant_jll
 using LLVMOpenMP_jll: LLVMOpenMP_jll
 
 using Adapt: Adapt, WrappedArray
-using GPUArraysCore: GPUArraysCore, @allowscalar, allowscalar # keep this import to allow users to do `Reactant.allowscalar(false)`
+using GPUArraysCore: GPUArraysCore, @allowscalar, allowscalar
 
-export @allowscalar # re-exported from GPUArraysCore
+using Enzyme:
+    Enzyme,
+    Active,
+    Annotation,
+    BatchDuplicated,
+    BatchDuplicatedNoNeed,
+    Const,
+    Duplicated,
+    DuplicatedNoNeed,
+    EnzymeRules,
+    Reverse
+
+export allowscalar, @allowscalar # re-exported from GPUArraysCore
 
 is_extension_loaded(::Val) = false
 
@@ -27,8 +39,6 @@ include("OrderedIdDict.jl")
 function precompiling()
     return (@ccall jl_generating_output()::Cint) == 1
 end
-
-using Enzyme
 
 struct ReactantABI <: Enzyme.EnzymeCore.ABI end
 

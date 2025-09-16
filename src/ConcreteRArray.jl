@@ -414,8 +414,12 @@ function Base.similar(::Type{ConcreteIFRTArray{T}}, dims) where {T}
 end
 
 # Broadcasting interface
-Base.BroadcastStyle(::Type{<:ConcretePJRTArray}) = Broadcast.ArrayStyle{ConcretePJRTArray}()
-Base.BroadcastStyle(::Type{<:ConcreteIFRTArray}) = Broadcast.ArrayStyle{ConcreteIFRTArray}()
+function Broadcast.BroadcastStyle(::Type{<:ConcretePJRTArray})
+    return Broadcast.ArrayStyle{ConcretePJRTArray}()
+end
+function Broadcast.BroadcastStyle(::Type{<:ConcreteIFRTArray})
+    return Broadcast.ArrayStyle{ConcreteIFRTArray}()
+end
 
 @inline function Base.similar(
     bc::Broadcast.Broadcasted{Broadcast.ArrayStyle{ConcretePJRTArray}}, ::Type{T}; kwargs...

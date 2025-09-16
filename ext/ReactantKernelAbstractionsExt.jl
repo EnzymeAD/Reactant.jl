@@ -1,14 +1,13 @@
 module ReactantKernelAbstractionsExt
 
-using Reactant
-
-import KernelAbstractions as KA
+using Reactant: Reactant
 
 using Adapt: Adapt
+using KernelAbstractions: KernelAbstractions
+
+const KA = KernelAbstractions
 
 ## back-end
-
-export ReactantBackend
 
 # ToDo: Include XLA client, device and sharding in ReactantBackend struct, to
 # support more complex applications? If so, need to adapt implementation of
@@ -110,8 +109,6 @@ function (obj::KA.Kernel{ReactantBackend})(args...; ndrange=nothing, workgroupsi
     return nothing
 end
 
-function ka_with_reactant end # defined in the CUDA extension
-
 Reactant.@reactant_overlay @noinline Base.@nospecializeinfer function (
     obj::KA.Kernel{ReactantBackend}
 )(
@@ -119,7 +116,7 @@ Reactant.@reactant_overlay @noinline Base.@nospecializeinfer function (
 )
     @nospecialize
     return Reactant.call_with_reactant(
-        ka_with_reactant, ndrange, workgroupsize, obj, args...
+        Reactant.ka_with_reactant, ndrange, workgroupsize, obj, args...
     )
 end
 

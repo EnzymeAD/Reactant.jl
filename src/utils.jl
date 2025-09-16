@@ -29,6 +29,9 @@ function maybe_argextype(@nospecialize(x), src)
     end
 end
 
+# Defined in KernelAbstractions Ext
+function ka_with_reactant end
+
 """
     Reactant.REDUB_ARGUMENTS_NAME
 

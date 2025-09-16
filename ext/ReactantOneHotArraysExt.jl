@@ -1,13 +1,12 @@
 module ReactantOneHotArraysExt
 
-using OneHotArrays
-using Reactant
-using Reactant: TracedRArray, TracedRNumber, Ops
+using OneHotArrays: OneHotArray
+using Reactant: Reactant, TracedRArray, TracedRNumber, Ops
 using ReactantCore: ReactantCore
 using Reactant.Ops: @opcall
 
 function Reactant.traced_type_inner(
-    @nospecialize(_::Type{OneHotArrays.OneHotArray{T,N,Np1,I}}),
+    @nospecialize(_::Type{OneHotArray{T,N,Np1,I}}),
     seen,
     @nospecialize(mode::Reactant.TraceMode),
     @nospecialize(track_numbers::Type),
@@ -20,10 +19,10 @@ function Reactant.traced_type_inner(
     else
         T
     end
-    return OneHotArrays.OneHotArray{T2,N,Np1,I2}
+    return OneHotArray{T2,N,Np1,I2}
 end
 
-function ReactantCore.materialize_traced_array(r::OneHotArrays.OneHotArray)
+function ReactantCore.materialize_traced_array(r::OneHotArray)
     indices = vec(r.indices)
     N = r.nlabels
     B = length(indices)
@@ -38,10 +37,10 @@ function ReactantCore.materialize_traced_array(r::OneHotArrays.OneHotArray)
     return reshape(z, size(r))
 end
 
-Reactant._parent(r::OneHotArrays.OneHotArray) = r.indices
+Reactant._parent(r::OneHotArray) = r.indices
 
 function Base.Array(
-    r::OneHotArrays.OneHotArray{T,N,Np1,<:Reactant.AbstractConcreteArray}
+    r::OneHotArray{T,N,Np1,<:Reactant.AbstractConcreteArray}
 ) where {T,N,Np1}
     return Array(reshape(Array(r.indices), 1, size(r.indices)...) .== 1:(r.nlabels))
 end

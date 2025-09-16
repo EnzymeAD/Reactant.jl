@@ -1,6 +1,6 @@
 module ReactantNNlibExt
 
-using NNlib
+using NNlib: NNlib, DenseConvDims
 using GPUArraysCore: @allowscalar
 using Reactant:
     Reactant, Ops, TracedRArray, AnyTracedRArray, MLIR, TracedRNumber, @reactant_overlay

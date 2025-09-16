@@ -1,23 +1,19 @@
 module ReactantCUDAExt
 
-using CUDA
 using Reactant: Reactant, TracedRArray, AnyConcretePJRTArray, MLIR, TracedRNumber
 using Reactant.Compiler: raising
-using ReactantCore: @trace
-using GPUCompiler: GPUCompiler
-using KernelAbstractions: KernelAbstractions
-import KernelAbstractions as KA
-using LLVM: LLVM
-using Libdl
-
 using Reactant.Ops: @opcall
 
-const ReactantKernelAbstractionsExt = Base.get_extension(
-    Reactant, :ReactantKernelAbstractionsExt
-)
-const ReactantBackend = ReactantKernelAbstractionsExt.ReactantBackend
+using Adapt: Adapt, adapt
+using CUDA: CUDA, CuDim, DenseCuArray, unsafe_cached_load
 
-using Adapt
+using GPUCompiler: GPUCompiler
+using KernelAbstractions: KernelAbstractions
+using LLVM: LLVM
+
+using PrecompileTools: @setup_workload, @compile_workload
+
+const KA = KernelAbstractions
 
 Reactant.is_extension_loaded(::Val{:CUDA}) = true
 
@@ -506,9 +502,7 @@ function threads_to_workgroupsize(threads, ndrange)
     end
 end
 
-function ReactantKernelAbstractionsExt.ka_with_reactant(
-    ndrange, workgroupsize, obj, args...
-)
+function Reactant.ka_with_reactant(ndrange, workgroupsize, obj, args...)
     backend = KA.backend(obj)
 
     ndrange, workgroupsize, iterspace, dynamic = KA.launch_config(
@@ -1481,7 +1475,7 @@ end
 # In Julia v1.11.3 precompiling this module caches bad code:
 # <https://github.com/EnzymeAD/Reactant.jl/issues/614>.
 @static if !Sys.isapple()
-    Reactant.PrecompileTools.@setup_workload begin
+    @setup_workload begin
         Reactant.initialize_dialect()
 
         if Reactant.XLA.REACTANT_XLA_RUNTIME == "PJRT"
@@ -1492,7 +1486,7 @@ end
             error("Unsupported runtime: $(Reactant.XLA.REACTANT_XLA_RUNTIME)")
         end
 
-        Reactant.PrecompileTools.@compile_workload begin
+        @compile_workload begin
             @static if Reactant.precompilation_supported() && VERSION != v"1.11.3"
                 function square_kernel!(x)
                     i = CUDA.threadIdx().x

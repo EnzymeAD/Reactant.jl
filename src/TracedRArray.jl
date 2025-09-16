@@ -1,8 +1,8 @@
 module TracedRArrayOverrides
 
 using Adapt: WrappedArray
-using Base.Broadcast
-using Base.Broadcast: BroadcastStyle, Broadcasted, AbstractArrayStyle, instantiate
+using Base: Broadcast
+using Base.Broadcast: Broadcasted, AbstractArrayStyle, instantiate
 
 using ..Reactant:
     Reactant,
@@ -630,7 +630,7 @@ struct AbstractReactantArrayStyle{N} <: AbstractArrayStyle{N} end
 AbstractReactantArrayStyle(::Val{N}) where {N} = AbstractReactantArrayStyle{N}()
 AbstractReactantArrayStyle{M}(::Val{N}) where {N,M} = AbstractReactantArrayStyle{N}()
 
-function BroadcastStyle(::Type{<:AnyTracedRArray{T,N}}) where {T,N}
+function Broadcast.BroadcastStyle(::Type{<:AnyTracedRArray{T,N}}) where {T,N}
     return AbstractReactantArrayStyle{N}()
 end
 

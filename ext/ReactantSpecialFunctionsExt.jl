@@ -1,5 +1,6 @@
 module ReactantSpecialFunctionsExt
-using SpecialFunctions
+
+using SpecialFunctions: SpecialFunctions
 using Reactant: Ops, Reactant, TracedRNumber, ReactantFloat, ReactantInt, ReactantFloatInt
 using Reactant.TracedRNumberOverrides: float
 using Reactant.Ops: @opcall

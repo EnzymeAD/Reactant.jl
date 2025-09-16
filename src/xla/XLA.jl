@@ -5,6 +5,7 @@ using Reactant_jll: Reactant_jll
 using LLVM: LLVM
 using Libdl: Libdl
 using EnumX: @enumx
+using Enzyme: Compiler
 using Preferences: load_preference
 
 const XLA_REACTANT_GPU_MEM_FRACTION = Ref{Float64}(0.75)
@@ -167,7 +168,7 @@ function __init__()
                 ptr = Libdl.dlsym(Reactant_jll.libReactantExtra_handle, name)
                 LLVM.define(
                     jd_main,
-                    Enzyme.Compiler.JIT.absolute_symbol_materialization(
+                    Compiler.JIT.absolute_symbol_materialization(
                         LLVM.mangle(lljit, name), ptr
                     ),
                 )
