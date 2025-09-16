@@ -87,13 +87,6 @@ function Base.convert(::Type{T}, x::AbstractConcreteNumber) where {T<:Number}
     return convert(T, to_number(x))
 end
 
-for T in Base.uniontypes(ReactantFloat8)
-    @eval function Base.convert(::Type{$T}, x::AbstractConcreteNumber)
-        $(T) == typeof(x) && return x
-        return convert($T, to_number(x))
-    end
-end
-
 Adapt.adapt_storage(::Type{T}, x::AbstractArray) where {T<:AbstractConcreteArray} = T(x)
 
 Base.size(x::AbstractConcreteArray) = x.shape
@@ -185,14 +178,6 @@ function Base.convert(
     return to_number(x)
 end
 
-for T in Base.uniontypes(ReactantFloat8)
-    @eval function Base.convert(
-        ::Type{$T}, x::Union{ConcretePJRTScalar{$T},ConcreteIFRTScalar{$T}}
-    )
-        return to_number(x)
-    end
-end
-
 for jlop in (:(Base.abs),), T in (AbstractConcreteNumber,)
     @eval $(jlop)(x::$(T)) = $(jlop)(to_number(x))
 end
@@ -212,12 +197,16 @@ for jlop in (
         $(jlop)(x::$(T), y::$(T)) = $(jlop)(to_number(x), to_number(y))
         $(jlop)(x::$(T), y::Number) = $(jlop)(to_number(x), y)
         $(jlop)(x::Number, y::$(T)) = $(jlop)(x, to_number(y))
+
         $(jlop)(x::$(T), y::TracedRNumber) = throw(MethodError(jlop, (x, y)))
         $(jlop)(x::TracedRNumber, y::$(T)) = throw(MethodError(jlop, (x, y)))
     end
 end
 
-Base.:^(x::AbstractConcreteNumber, y::Integer) = ^(to_number(x), y)
+for T in (Integer, Rational)
+    @eval Base.:^(x::AbstractConcreteNumber, y::$(T)) = ^(to_number(x), y)
+end
+Base.:^(::Irrational{:ℯ}, x::AbstractConcreteNumber) = exp(x)
 
 for jlop in (:(Base.isnan), :(Base.isfinite)),
     T in (AbstractConcreteNumber, AbstractConcreteArray{<:Any,0})
@@ -251,6 +240,8 @@ for (T1, T2) in (
     (AnyConcreteIFRTArray, AbstractArray),
     (AbstractArray, AnyConcreteIFRTArray),
     (AnyConcreteIFRTArray, AnyConcreteIFRTArray),
+    (AnyConcretePJRTArray, AnyConcreteIFRTArray),
+    (AnyConcreteIFRTArray, AnyConcretePJRTArray),
 )
     @eval begin
         function Base.isapprox(x::$(T1), y::$(T2); kwargs...)
@@ -691,6 +682,12 @@ function Base.zero(x::ConcreteIFRTArray{T,N}) where {T,N}
     )
 end
 
+function Base.fill!(
+    a::ConcretePJRTArray{TracedRNumber{T},N}, val::TracedRNumber{T2}
+) where {T,T2,N}
+    throw(MethodError(fill!, (a, val)))
+end
+
 function Base.fill!(a::ConcretePJRTArray{T,N}, val) where {T,N}
     isempty(a) && throw("Cannot setindex! to empty buffer")
 
@@ -719,10 +716,34 @@ function Base.fill!(a::ConcreteIFRTArray{T,N}, val) where {T,N}
     return a
 end
 
+function Base.fill!(
+    a::ConcreteIFRTArray{TracedRNumber{T},N}, val::TracedRNumber{T2}
+) where {T,T2,N}
+    throw(MethodError(fill!, (a, val)))
+end
+
 function Base.fill!(x::Union{AnyConcreteIFRTArray,AnyConcretePJRTArray}, val)
     fn = compile(fill!, (x, val))
     fn(x, val)
     return x
+end
+
+function Base.fill!(
+    x::Union{ConcreteIFRTArray{<:TracedRNumber},ConcretePJRTArray{<:TracedRNumber}}, val
+)
+    throw(MethodError(fill!, (x, val)))
+end
+function Base.fill!(
+    x::Union{ConcreteIFRTArray{<:TracedRNumber},ConcretePJRTArray{<:TracedRNumber}},
+    val::TracedRNumber,
+)
+    throw(MethodError(fill!, (x, val)))
+end
+function Base.fill!(
+    x::Union{AnyConcreteIFRTArray{<:TracedRNumber},AnyConcretePJRTArray{<:TracedRNumber}},
+    val,
+)
+    throw(MethodError(fill!, (x, val)))
 end
 
 function mymapreducedim!(f, op, R, A)
@@ -760,15 +781,18 @@ function Base.map!(f, R::Union{AnyConcreteIFRTArray,AnyConcretePJRTArray}, A::Ab
 end
 
 # Directly initialize a Device Array
-function Base.fill(
-    ::Type{<:Union{ConcreteIFRTArray,ConcretePJRTArray}},
-    val::Number,
-    dims::Vararg{Int};
-    sharding::Sharding.AbstractSharding=Sharding.NoSharding(),
-)
-    output_shardings = Sharding.is_sharded(sharding) ? Dict(1 => sharding) : nothing
-    fn = compile((); output_shardings) do
-        return @opcall fill(val, collect(Int64, dims))
+for T in (Number, Integer)
+    @eval function Base.fill(
+        ::Type{<:Union{ConcreteIFRTArray,ConcretePJRTArray}},
+        val::$(T),
+        dims::Union{Integer,AbstractUnitRange{<:Integer}}...;
+        sharding::Sharding.AbstractSharding=Sharding.NoSharding(),
+    )
+        output_shardings = Sharding.is_sharded(sharding) ? Dict(1 => sharding) : nothing
+        dims = collect(Int64, last.(dims))
+        fn = compile((); output_shardings) do
+            return @opcall fill(val, dims)
+        end
+        return fn()
     end
-    return fn()
 end

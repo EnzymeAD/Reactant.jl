@@ -534,12 +534,31 @@ for (jlop, hloop, hlocomp, merge) in
     end
 end
 
-__default_init(::Type{T}, ::typeof(Base.min)) where {T} = typemax(T)
-__default_init(::Type{T}, ::typeof(Base.FastMath.min_fast)) where {T} = typemax(T)
-__default_init(::Type{T}, ::typeof(Base.max)) where {T} = typemin(T)
-__default_init(::Type{T}, ::typeof(Base.FastMath.max_fast)) where {T} = typemin(T)
+function __default_init(
+    ::Type{T}, ::Union{typeof(Base.min),typeof(Base.FastMath.min_fast)}
+) where {T}
+    return typemax(T)
+end
+function __default_init(
+    ::Type{T}, ::Union{typeof(Base.max),typeof(Base.FastMath.max_fast)}
+) where {T}
+    return typemin(T)
+end
 function __default_init(::Type{T}, op::F) where {T,F}
     return Base.reduce_empty(Base.BottomRF(op), T)
+end
+
+function __default_init(
+    T::Type{<:Reactant.ReactantFloat8},
+    ::Union{typeof(Base.min),typeof(Base.FastMath.min_fast)},
+)
+    return T(typemax(Float16))
+end
+function __default_init(
+    T::Type{<:Reactant.ReactantFloat8},
+    ::Union{typeof(Base.max),typeof(Base.FastMath.max_fast)},
+)
+    return T(typemin(Float16))
 end
 function __default_init(T::Type{<:Reactant.ReactantFloat8}, op::F) where {F}
     return T(__default_init(Float16, op))
@@ -779,10 +798,33 @@ end
         Base.typed_hvcat, Tuple{Type{T},Tuple{Vararg{Int}},Vararg{Any}}, T, rows, as...
     )
 end
+@inline function Base.typed_hvcat(
+    ::Type{T}, rows::Tuple{Int}, as::TracedRArray...
+) where {T}
+    return invoke(
+        Base.typed_hvcat, Tuple{Type{T},Tuple{Vararg{Int}},Vararg{Any}}, T, rows, as...
+    )
+end
 
 function Base._typed_hvncat(
-    T::Type, dims::NTuple{N,Int}, row_first::Bool, as::TracedRArray...
-) where {N}
+    ::Type{T}, dims::NTuple{N,Int}, row_first::Bool, as::TracedRArray...
+) where {T,N}
+    return _typed_hvncat_internal(T, dims, row_first, as...)
+end
+function Base._typed_hvncat(
+    ::Type{T}, dims::Tuple{Int}, row_first::Bool, as::TracedRArray...
+) where {T}
+    return _typed_hvncat_internal(T, dims, row_first, as...)
+end
+function Base._typed_hvncat(
+    ::Type{T}, dims::Tuple{}, row_first::Bool, as::TracedRArray...
+) where {T}
+    return _typed_hvncat_internal(T, dims, row_first, as...)
+end
+
+function _typed_hvncat_internal(
+    ::Type{T}, dims::NTuple{N,Int}, row_first::Bool, as...
+) where {T,N}
     As = if row_first
         perm = [2, 1, 3:N...]
         dims = [dims[2], dims[1], dims[3:end]...]

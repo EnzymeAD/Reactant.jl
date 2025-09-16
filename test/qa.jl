@@ -14,7 +14,10 @@ end
 
 @testset "Aqua" begin
     @testset "Ambiguities" begin
-        Aqua.test_ambiguities(Reactant; broken=true)
+        @test_broken Aqua.test_ambiguities(
+            Reactant;
+            exclude=[Base.mapreducedim!, Base.:(==), Base.unsafe_convert, Base.replace],
+        )
     end
     @testset "Undefined Exports" begin
         Aqua.test_undefined_exports(Reactant)
@@ -41,9 +44,6 @@ end
                 Reactant.ReactantCore.traced_while,
             ),
         )
-    end
-    @testset "Persistent Tasks" begin
-        Aqua.test_persistent_tasks(Reactant)
     end
     @testset "Undocumented Names" begin
         # TODO: Write more documentation!

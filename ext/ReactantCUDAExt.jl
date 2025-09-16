@@ -60,9 +60,7 @@ function Base.getindex(RN::CuTracedRNumber{T,A}) where {T,A}
     return @inbounds unsafe_load(RN.ptr, 1, Val(align))
 end
 
-function Base.convert(::Type{T}, RN::CuTracedRNumber) where {T<:Number}
-    return Base.convert(T, Base.getindex(RN))
-end
+Base.convert(::Type{T}, RN::CuTracedRNumber) where {T<:Number} = convert(T, getindex(RN))
 
 for jlop in (
     :(Base.min),
@@ -85,17 +83,15 @@ for jlop in (
     end
 end
 
-@inline Base.ifelse(cond::Bool, a, b::CuTracedRNumber) = Base.ifelse(cond, a, b[])
-@inline Base.ifelse(cond::Bool, a::CuTracedRNumber, b) = Base.ifelse(cond, a[], b)
+@inline Base.ifelse(cond::Bool, a, b::CuTracedRNumber) = ifelse(cond, a, b[])
+@inline Base.ifelse(cond::Bool, a::CuTracedRNumber, b) = ifelse(cond, a[], b)
 @inline Base.ifelse(cond::Bool, a::CuTracedRNumber, b::CuTracedRNumber) =
-    Base.ifelse(cond, a[], b[])
-@inline Base.ifelse(cond::CuTracedRNumber, a, b) = Base.ifelse(cond[], a, b)
-@inline Base.ifelse(cond::CuTracedRNumber, a::CuTracedRNumber, b) =
-    Base.ifelse(cond[], a[], b)
-@inline Base.ifelse(cond::CuTracedRNumber, a, b::CuTracedRNumber) =
-    Base.ifelse(cond[], a, b[])
+    ifelse(cond, a[], b[])
+@inline Base.ifelse(cond::CuTracedRNumber, a, b) = ifelse(cond[], a, b)
+@inline Base.ifelse(cond::CuTracedRNumber, a::CuTracedRNumber, b) = ifelse(cond[], a[], b)
+@inline Base.ifelse(cond::CuTracedRNumber, a, b::CuTracedRNumber) = ifelse(cond[], a, b[])
 @inline Base.ifelse(cond::CuTracedRNumber, a::CuTracedRNumber, b::CuTracedRNumber) =
-    Base.ifelse(cond[], a[], b[])
+    ifelse(cond[], a[], b[])
 
 Base.@constprop :aggressive @inline Base.:^(
     a::CuTracedRNumber{T,A}, b::Integer
@@ -136,7 +132,7 @@ end
                 ),
                 Core.LLVMPtr{UInt8,1},
                 Tuple{Float64},
-                Base.convert(Float64, x),
+                convert(Float64, x),
             ),
         ),
     )
@@ -160,7 +156,7 @@ end
                 ),
                 Core.LLVMPtr{UInt8,1},
                 Tuple{Float32},
-                Base.convert(Float32, x),
+                convert(Float32, x),
             ),
         ),
     )
@@ -177,7 +173,7 @@ Base.@nospecializeinfer function Base.promote_rule(
     @nospecialize(a::Type{<:CuTracedRNumber{T}}),
     @nospecialize(b::Type{<:CuTracedRNumber{T2}})
 ) where {T,T2}
-    return Base.promote_rule(T, T2)
+    return promote_rule(T, T2)
 end
 Base.@nospecializeinfer function Base.promote_rule(
     ::Type{Any}, @nospecialize(b::Type{<:CuTracedRNumber})
@@ -195,7 +191,7 @@ Base.@nospecializeinfer function Base.promote_rule(
     if T == T2
         return T
     else
-        return Base.promote_rule(T, T2)
+        return promote_rule(T, T2)
     end
 end
 Base.@nospecializeinfer function Base.promote_rule(
@@ -204,7 +200,7 @@ Base.@nospecializeinfer function Base.promote_rule(
     if T == T2
         return T
     else
-        return Base.promote_rule(T, T2)
+        return promote_rule(T, T2)
     end
 end
 

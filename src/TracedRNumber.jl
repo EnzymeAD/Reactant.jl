@@ -90,6 +90,30 @@ function Base.promote_rule(
     return TracedRNumber{Base.promote_type(T, S)}
 end
 
+function Base.promote_rule(::Type{Nothing}, ::Type{TracedRNumber{S}}) where {S}
+    return Union{Nothing,TracedRNumber{S}}
+end
+
+function Base.promote_rule(::Type{TracedRNumber{T}}, ::Type{Nothing}) where {T}
+    return Union{Nothing,TracedRNumber{T}}
+end
+
+function Base.promote_rule(::Type{Missing}, ::Type{TracedRNumber{S}}) where {S}
+    return Union{Missing,TracedRNumber{S}}
+end
+
+function Base.promote_rule(::Type{TracedRNumber{T}}, ::Type{Missing}) where {T}
+    return Union{Missing,TracedRNumber{T}}
+end
+
+function Base.promote_rule(::Type{TwicePrecision{T}}, ::Type{TracedRNumber{S}}) where {T,S}
+    return TwicePrecision{Base.promote_type(T, TracedRNumber{S})}
+end
+
+function Base.promote_rule(::Type{TracedRNumber{T}}, ::Type{TwicePrecision{S}}) where {T,S}
+    return TwicePrecision{Base.promote_type(TracedRNumber{T}, S)}
+end
+
 # NOTE: This is inconsistent with the behavior of `convert` but we do it since it is a very
 #       common usecase
 TracedRNumber{T}(x::TracedRNumber{T}) where {T} = x
