@@ -1017,17 +1017,14 @@ end
     @test res[3] == 216
 end
 
-function unitrange_test(r, i)
-    return r[i]
-end
 @testset "Unitrange" begin
     x = 2:10
-    @test (@jit unitrange_test(x, 3)) == 4
-    @test (@jit unitrange_test(x, Reactant.ConcreteRNumber(4))) == 5
+    @test (@jit getindex(x, 3)) == 4
+    @test (@jit getindex(x, Reactant.ConcreteRNumber(4))) == 5
 
     x = Reactant.to_rarray(2:10; track_numbers=Number)
-    @test (@jit unitrange_test(x, 3)) == 4
-    @test (@jit unitrange_test(x, Reactant.ConcreteRNumber(4))) == 5
+    @test (@jit getindex(x, 3)) == 4
+    @test (@jit getindex(x, Reactant.ConcreteRNumber(4))) == 5
 end
 
 mulpi(x) = π * x

@@ -38,7 +38,7 @@ end
 standardize_indexing(a::TracedRArray, idxs) = a, idxs # TODO: remove this
 function standardize_indexing(a::AbstractArray{T,N}, idxs) where {T,N}
     if ancestor(a) isa TracedRArray
-        return standardize_indexing_for_ancestor(a, idxs)
+        return @show standardize_indexing_for_ancestor(a, idxs)
     end
     return Reactant.promote_to(TracedRArray{T,N}, a), idxs
 end

@@ -291,7 +291,7 @@ function __default_init(
     return Reactant.promote_to(TracedRNumber{T}, typemin(T))
 end
 function __default_init(::Type{T}, op::F) where {T,F}
-    return Reactant.promote_to(TracedRNumber{T}, Base.reduce_empty(Base.BottomRF(op), T))
+    return Reactant.promote_to(TracedRNumber, Base.reduce_empty(Base.BottomRF(op), T))
 end
 
 function __default_init(
@@ -339,9 +339,10 @@ function overloaded_mapreduce(
 
     op_in_T = unwrapped_eltype(Core.Compiler.return_type(f, Tuple{T}))
     reduce_init = __default_init(op_in_T, op)
-    if unwrapped_eltype(typeof(reduce_init)) != op_in_T
-        op_in_T = typeof(reduce_init)
-        A = typeof(reduce_init).(A)
+    riT = unwrapped_eltype(typeof(reduce_init))
+    if riT != op_in_T
+        op_in_T = riT
+        A = riT.(A)
     end
     reduce_init = Reactant.promote_to(TracedRNumber{op_in_T}, reduce_init)
 
@@ -1144,9 +1145,10 @@ function scan_impl!(
         op_in_T = Core.Compiler.return_type(op, Tuple{T,T})
         op_in_T === Union{} && (op_in_T = T)
         init = __default_init(T, op)
-        if typeof(init) != op_in_T
-            op_in_T = typeof(init)
-            input = typeof(init).(input)
+        riT = unwrapped_eltype(typeof(init))
+        if riT != op_in_T
+            op_in_T = riT
+            input = riT.(input)
         end
     else
         # TODO: fix this for TPUs
