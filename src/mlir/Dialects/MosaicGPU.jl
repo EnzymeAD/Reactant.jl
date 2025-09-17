@@ -124,6 +124,58 @@ function async_load_tmem(
 end
 
 """
+`async_prefetch`
+
+Schedules an async prefetch of the contents of the `source` MemRef in GMEM
+to the L2 cache, making subsequent loads of the same data from GMEM faster.
+
+The `indices` and `slice_lengths` inputs define what slice of the GMEM
+`source` is going to be prefetched. Both `indices` and `slice_lengths` must
+have a length equal to the rank of the `source`. The values in `indices` are
+the starting indices of each dimension and the values in `slice_lengths` are
+the lengths. Providing -1 in `slice_lengths` indicates that the slice length
+is 1.
+
+The `collective` attribute can be provided to partition the prefetch over
+multiple blocks in a cluster.
+
+The `predicate` allows scheduling the prefetch conditionally.
+"""
+function async_prefetch(
+    source::Value,
+    indices::Vector{Value},
+    predicate=nothing::Union{Nothing,Value};
+    slice_lengths,
+    collective,
+    location=Location(),
+)
+    op_ty_results = IR.Type[]
+    operands = Value[source, indices...]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[
+        namedattribute("slice_lengths", slice_lengths),
+        namedattribute("collective", collective),
+    ]
+    !isnothing(predicate) && push!(operands, predicate)
+    push!(
+        attributes,
+        operandsegmentsizes([1, length(indices), (predicate == nothing) ? 0 : 1]),
+    )
+
+    return create_operation(
+        "mosaic_gpu.async_prefetch",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+"""
 `async_store`
 
 Schedules an async store of the contents of the `source` MemRef in SMEM to

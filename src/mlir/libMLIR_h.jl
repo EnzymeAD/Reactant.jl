@@ -11111,6 +11111,7 @@ end
     MlirTpuImplicitDimNone = 0x0000000000000000
     MlirTpuImplicitDimMinor = 0x0000000000000001
     MlirTpuImplicitDimSecondMinor = 0x0000000000000002
+    MlirTpuImplicitDimMinorAndSecondMinor = 0x0000000000000003
 end
 
 @cenum MlirTpuDirection::UInt32 begin

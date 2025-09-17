@@ -1203,16 +1203,8 @@ end
 `cp_async_bulk_tensor_prefetch`
 
 Initiates an asynchronous prefetch operation on the tensor data from global
-memory to L2 cache.
-
-The Op has two modes:
-1) Tiled Mode: It\'s the default mode. The source multi-dimensional tensor
-layout is preserved at the destination.
-
-2) Im2col Mode: This mode is used when `im2colOffsets` operands are present.
-the elements in the Bounding Box of the source tensor are rearranged into
-columns at the destination. In this mode, the tensor has to be at least
-3-dimensional.
+memory to L2 cache. This Op supports all the load modes specified in
+`TMALoadMode`.
 
 The `l2CacheHint` operand is optional, and it is used to specify cache
 eviction policy that may be used during the memory access.
@@ -1224,6 +1216,7 @@ function cp_async_bulk_tensor_prefetch(
     coordinates::Vector{Value},
     im2colOffsets::Vector{Value},
     l2CacheHint=nothing::Union{Nothing,Value};
+    mode=nothing,
     location=Location(),
 )
     op_ty_results = IR.Type[]
@@ -1238,6 +1231,7 @@ function cp_async_bulk_tensor_prefetch(
             1, length(coordinates), length(im2colOffsets), (l2CacheHint == nothing) ? 0 : 1
         ]),
     )
+    !isnothing(mode) && push!(attributes, namedattribute("mode", mode))
 
     return create_operation(
         "nvvm.cp.async.bulk.tensor.prefetch",
@@ -2401,6 +2395,25 @@ function fence_sc_cluster(; location=Location())
     )
 end
 
+function read_ptx_sreg_globaltimer_lo(; res::IR.Type, location=Location())
+    op_ty_results = IR.Type[res,]
+    operands = Value[]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+
+    return create_operation(
+        "nvvm.read.ptx.sreg.globaltimer.lo",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
 function read_ptx_sreg_globaltimer(; res::IR.Type, location=Location())
     op_ty_results = IR.Type[res,]
     operands = Value[]
@@ -2577,20 +2590,23 @@ This op allows using PTX directly within the NVVM
 """
 function inline_ptx(
     readOnlyArgs::Vector{Value},
+    readWriteArgs::Vector{Value},
     predicate=nothing::Union{Nothing,Value};
     writeOnlyArgs::Vector{IR.Type},
     ptxCode,
     location=Location(),
 )
     op_ty_results = IR.Type[writeOnlyArgs...,]
-    operands = Value[readOnlyArgs...,]
+    operands = Value[readOnlyArgs..., readWriteArgs...]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[namedattribute("ptxCode", ptxCode),]
     !isnothing(predicate) && push!(operands, predicate)
     push!(
         attributes,
-        operandsegmentsizes([length(readOnlyArgs), (predicate == nothing) ? 0 : 1]),
+        operandsegmentsizes([
+            length(readOnlyArgs), length(readWriteArgs), (predicate == nothing) ? 0 : 1
+        ]),
     )
 
     return create_operation(
@@ -3200,6 +3216,38 @@ function mma_sync(
 
     return create_operation(
         "nvvm.mma.sync",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+"""
+`nanosleep`
+
+The op suspends the thread for a sleep duration approximately close to the 
+delay `\$duration`, specified in nanoseconds. 
+
+The sleep duration is approximated, but guaranteed to be in the 
+interval [0, 2*t]. The maximum sleep duration is 1 millisecond. 
+The implementation may reduce the sleep duration for individual threads 
+within a warp such that all sleeping threads in the warp wake up together.
+
+[For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#miscellaneous-instructions-nanosleep)
+"""
+function nanosleep(; duration, location=Location())
+    op_ty_results = IR.Type[]
+    operands = Value[]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[namedattribute("duration", duration),]
+
+    return create_operation(
+        "nvvm.nanosleep",
         location;
         operands,
         owned_regions,
