@@ -1,7 +1,7 @@
 module TracedIndexing
 
 using ..Reactant: Reactant, TracedRArray, TracedRNumber, TracedStepRangeLen, TracedUnitRange
-using ..Reactant: AnyTracedRArray, AnyTracedRVector, ancestor, unwrapped_eltype
+using ..Reactant: AnyTracedRArray, ancestor, unwrapped_eltype
 using ..Ops: @opcall
 using ..TracedUtils: TracedUtils
 
@@ -139,6 +139,20 @@ function Base.getindex(
     out = getindex(x.data, i)
     @assert !(out isa Missing)
     return out
+end
+
+function Base.getindex(x::Base.OneTo{TracedRNumber{T}}, i::Int) where {T}
+    return @allowscalar getindex(Reactant.promote_to(TracedRNumber{T}, x), i)
+end
+
+function Base.getindex(
+    x::Union{LinRange{TracedRNumber{T}},StepRangeLen{TracedRNumber{T}}}, i::Int
+) where {T}
+    return @allowscalar getindex(Reactant.promote_to(TracedRNumber{T}, x), i)
+end
+
+function Base.getindex(x::Base.UnitRange{TracedRNumber{T}}, i::Int) where {T}
+    return @allowscalar getindex(Reactant.promote_to(TracedRNumber{T}, x), i)
 end
 
 ## StepRangeLen Indexing
