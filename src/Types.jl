@@ -228,18 +228,20 @@ function ConcretePJRTArray(
     return ConcretePJRTArray{T,N,nsharded,typeof(shardinfo)}(sharded_data, shape, shardinfo)
 end
 
-function ConcretePJRTArray(
-    data::Memory{T};
-    client::Union{Nothing,XLA.PJRT.Client}=nothing,
-    idx::Union{Int,Nothing}=nothing,
-    device::Union{Nothing,XLA.PJRT.Device}=nothing,
-    sharding::Sharding.AbstractSharding=Sharding.NoSharding(),
-) where {T}
-    theclient, thedevice = _select_client_and_device(client, idx, device, sharding)
-    sharded_data, shardinfo = sharding(theclient, thedevice, data)
-    shape = size(data)
-    nsharded = length(sharded_data)
-    return ConcretePJRTArray{T,1,nsharded,typeof(shardinfo)}(sharded_data, shape, shardinfo)
+if isdefined(Base, :Memory)
+    function ConcretePJRTArray(
+        data::Memory{T};
+        client::Union{Nothing,XLA.PJRT.Client}=nothing,
+        idx::Union{Int,Nothing}=nothing,
+        device::Union{Nothing,XLA.PJRT.Device}=nothing,
+        sharding::Sharding.AbstractSharding=Sharding.NoSharding(),
+    ) where {T}
+        theclient, thedevice = _select_client_and_device(client, idx, device, sharding)
+        sharded_data, shardinfo = sharding(theclient, thedevice, data)
+        shape = size(data)
+        nsharded = length(sharded_data)
+        return ConcretePJRTArray{T,1,nsharded,typeof(shardinfo)}(sharded_data, shape, shardinfo)
+    end
 end
 
 Base.wait(x::Union{ConcretePJRTArray,ConcretePJRTNumber}) = foreach(wait, x.data)
@@ -370,17 +372,19 @@ function ConcreteIFRTArray(
     return ConcreteIFRTArray{T,N,typeof(shardinfo)}(sharded_data, shape, shardinfo, padding)
 end
 
-function ConcreteIFRTArray(
-    data::Memory{T};
-    client::Union{Nothing,XLA.IFRT.Client}=nothing,
-    idx::Union{Int,Nothing}=nothing,
-    device::Union{Nothing,XLA.IFRT.Device}=nothing,
-    sharding::Sharding.AbstractSharding=Sharding.NoSharding(),
-) where {T}
-    theclient, thedevice = _select_client_and_device(client, idx, device, sharding)
-    sharded_data, shardinfo, padding = sharding(theclient, nothing, data)
-    shape = size(data)
-    return ConcreteIFRTArray{T,1,typeof(shardinfo)}(sharded_data, shape, shardinfo)
+if isdefined(Base, :Memory)
+    function ConcreteIFRTArray(
+        data::Memory{T};
+        client::Union{Nothing,XLA.IFRT.Client}=nothing,
+        idx::Union{Int,Nothing}=nothing,
+        device::Union{Nothing,XLA.IFRT.Device}=nothing,
+        sharding::Sharding.AbstractSharding=Sharding.NoSharding(),
+    ) where {T}
+        theclient, thedevice = _select_client_and_device(client, idx, device, sharding)
+        sharded_data, shardinfo, padding = sharding(theclient, nothing, data)
+        shape = size(data)
+        return ConcreteIFRTArray{T,1,typeof(shardinfo)}(sharded_data, shape, shardinfo)
+    end
 end
 
 # Assemble data from multiple arrays. Needed in distributed setting where each process wont
