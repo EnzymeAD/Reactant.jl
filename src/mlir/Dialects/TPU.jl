@@ -688,6 +688,16 @@ function log(inputs::Vector{Value}; tag, formatted=nothing, location=Location())
     )
 end
 
+"""
+`mask_cast`
+
+Cast a mask register into a different packing.
+
+If casting to a type with smaller packing, then values being packed together
+must be identical. For example, for 8x128x4xi1 -> 8x128x2xi1,
+input[i, j, 0] == input[i, j, 1] and input[i, j, 2] == input[i, j, 3] must
+hold for all i, j. Otherwise, the result is undefined.
+"""
 function mask_cast(input::Value; result::IR.Type, location=Location())
     op_ty_results = IR.Type[result,]
     operands = Value[input,]
