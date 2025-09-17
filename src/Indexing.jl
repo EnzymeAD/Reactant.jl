@@ -27,6 +27,12 @@ function Base.getindex(
     # @boundscheck checkbounds(r, i)
     return Base.unsafe_getindex(r, i)
 end
+function Base.getindex(r::Base.UnitRange, i::I) where {I<:TracedRNumber{<:Integer}}
+    val = convert(I, r.start + (i - oneunit(i)))
+    # TODO: we should have error messages at some point.
+    # @boundscheck Base._in_unit_range(v, val, i) || throw_boundserror(v, i)
+    return val
+end
 
 ## Array Indexing
 standardize_indexing(a::TracedRArray, idxs) = a, idxs # TODO: remove this
