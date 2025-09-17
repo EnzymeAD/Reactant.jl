@@ -311,7 +311,7 @@ end
 
 @noinline function fill(
     element::T, shape::Vector{Int}; location=mlir_stacktrace("fill", @__FILE__, @__LINE__)
-) where {T <: AbstractIrrational}
+) where {T<:AbstractIrrational}
     return fill(float(element), shape; location)
 end
 
