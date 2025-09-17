@@ -1,8 +1,10 @@
 module ReactantSparseArraysExt
 
-using Reactant: Reactant, TracedRArray, TracedRNumber
-using SparseArrays: SparseArrays, ReadOnly
+using Reactant: Reactant, TracedRNumber
+using SparseArrays:
+    SparseArrays, ReadOnly, AbstractSparseArray, CHOLMOD, AbstractSparseMatrixCSC
 
+include("Errors.jl")
 include("ReadOnly.jl")
 
 end

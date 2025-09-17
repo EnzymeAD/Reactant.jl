@@ -19,15 +19,13 @@ function Base.getindex(a::TracedRArray{T,0}, ::CartesianIndex{0}) where {T}
     return TracedRNumber{T}((), a.mlir_data)
 end
 
-function Base.getindex(
-    r::Union{Base.StepRangeLen,Base.LinRange}, i::TracedRNumber{<:Integer}
-)
+function Base.getindex(r::Union{Base.StepRangeLen,Base.LinRange}, i::TracedRNumber{Int})
     @inline
     i isa TracedRNumber{Bool} && throw(ArgumentError("invalid index: $i of type Bool"))
     # @boundscheck checkbounds(r, i)
     return Base.unsafe_getindex(r, i)
 end
-function Base.getindex(r::Base.UnitRange, i::I) where {I<:TracedRNumber{<:Integer}}
+function Base.getindex(r::Base.UnitRange, i::I) where {I<:TracedRNumber{Int}}
     val = convert(I, r.start + (i - oneunit(i)))
     # TODO: we should have error messages at some point.
     # @boundscheck Base._in_unit_range(v, val, i) || throw_boundserror(v, i)
@@ -35,46 +33,28 @@ function Base.getindex(r::Base.UnitRange, i::I) where {I<:TracedRNumber{<:Intege
 end
 
 ## Array Indexing
-standardize_indexing(a::TracedRArray, idxs) = a, idxs # TODO: remove this
-function standardize_indexing(a::AbstractArray{T,N}, idxs) where {T,N}
-    if ancestor(a) isa TracedRArray
-        return @show standardize_indexing_for_ancestor(a, idxs)
-    end
-    return Reactant.promote_to(TracedRArray{T,N}, a), idxs
-end
-
-function standardize_indexing_for_ancestor(a, index::NTuple{N,Any}) where {N}
-    return ancestor(a), TracedUtils.get_ancestor_indices(a, index...)
-end
-function standardize_indexing_for_ancestor(a, index::CartesianIndex)
-    return standardize_indexing_for_ancestor(a, (index.I...,))
-end
-function standardize_indexing_for_ancestor(a, linear_indices)
-    return ancestor(a), (TracedUtils.get_ancestor_indices(a, linear_indices),)
-end
-
 ### Scalar Indexing
 function Base.getindex(
-    a::AnyTracedRArray{T,N}, index::Vararg{Union{<:Integer,TracedRNumber{<:Integer}},N}
+    a::TracedRArray{T,N}, index::Vararg{Union{Int,TracedRNumber{Int}},N}
 ) where {T,N}
     assertscalar("getindex(::TracedRArray, ::Vararg{Int, N})")
-    a, index = standardize_indexing(a, index)
     res = @opcall(reshape(@opcall(dynamic_slice(a, [index...], ones(Int32, N))), Int[]))
     return TracedRNumber{unwrapped_eltype(T)}((), res.mlir_data)
 end
 
 function Base.getindex(
-    a::AnyTracedRArray{T,N}, index::Union{<:Integer,TracedRNumber{<:Integer}}
+    a::TracedRArray{T,N}, index::Union{Int,TracedRNumber{Int}}
 ) where {T,N}
     return getindex(a, scalar_index_to_cartesian(index, size(a))...)
 end
 
-function Base.getindex(a::AnyTracedRArray{T,N}, index::CartesianIndex{N}) where {T,N}
-    a, index = standardize_indexing(a, index)
+function Base.getindex(a::TracedRArray{T,N}, index::CartesianIndex{N}) where {T,N}
     return getindex_cartesian(a, index)
 end
-function Base.getindex(a::AnyTracedRVector, index::CartesianIndex{1})
-    a, index = standardize_indexing(a, index)
+function Base.getindex(a::TracedRArray{T,1}, index::CartesianIndex{1}) where {T}
+    return getindex_cartesian(a, index)
+end
+function Base.getindex(a::TracedRArray, index::CartesianIndex{1})
     return getindex_cartesian(a, index)
 end
 
@@ -85,98 +65,84 @@ function Base.getindex(a::Array{<:TracedRNumber,N}, index::CartesianIndex{N}) wh
     return Base.unsafe_getindex(a, index)
 end
 
-Base.getindex(a::AnyTracedRVector, ::Colon) = vec(materialize_traced_array(a))
-Base.getindex(a::AnyTracedRArray, ::Colon) = vec(materialize_traced_array(a))
+Base.getindex(a::TracedRArray{<:Any,1}, ::Colon) = vec(materialize_traced_array(a))
+Base.getindex(a::TracedRArray, ::Colon) = vec(materialize_traced_array(a))
 
-function Base.getindex(a::AnyTracedRArray{T,N}, indices::AbstractArray) where {T,N}
-    a, indices = standardize_indexing(a, indices)
+function Base.getindex(a::TracedRArray{T,N}, indices::AbstractArray) where {T,N}
     return getindex_linear(a, indices)
 end
-function Base.getindex(a::AnyTracedRArray{T,1}, indices::AbstractArray) where {T}
-    a, indices = standardize_indexing(a, indices)
+function Base.getindex(a::TracedRArray{T,1}, indices::AbstractArray) where {T}
     return getindex_linear(a, indices)
+end
+
+function Base.getindex(a::TracedRArray{T,N}, indices::Vararg{Any,N}) where {T,N}
+    return getindex_general(a, indices...)
+end
+
+### Wrapped Array Types
+function Base.getindex(
+    a::AnyTracedRArray{T,N}, index::Vararg{Union{Int,TracedRNumber{Int}},N}
+) where {T,N}
+    return getindex(ancestor(a), TracedUtils.get_ancestor_indices(a, index...)...)
+end
+
+function Base.getindex(
+    a::AbstractRange{TracedRNumber{T}}, index::Union{Int,TracedRNumber{Int}}
+) where {T}
+    return getindex(Reactant.promote_to(TracedRArray{T,1}, a), index)
+end
+
+function Base.getindex(a::AnyTracedRArray{T,N}, linear_indices) where {T,N}
+    return getindex(ancestor(a), TracedUtils.get_ancestor_indices(a, linear_indices)...)
+end
+
+function Base.getindex(a::AnyTracedRArray{T,1}, indices) where {T}
+    return getindex(ancestor(a), TracedUtils.get_ancestor_indices(a, indices)...)
 end
 
 function Base.getindex(a::AnyTracedRArray{T,N}, indices::Vararg{Any,N}) where {T,N}
-    a, indices = standardize_indexing(a, indices)
-    indices = Base.to_indices(a, indices)
+    return getindex(ancestor(a), TracedUtils.get_ancestor_indices(a, indices...)...)
+end
 
-    use_gather_getindex = false
-    use_dynamic_slice = false
-    strides = Int64[]
-    for idxs in indices
-        if idxs isa Number
-            idxs isa TracedRNumber && (use_dynamic_slice = true)
-            push!(strides, 1)
-            continue
-        end
-        if idxs isa Reactant.TracedType
-            use_gather_getindex = true
-            break
-        end
-        stride = get_slice_stride(vec(idxs))
-        push!(strides, stride)
-        if stride ≤ 0 || (use_dynamic_slice && stride != 1)
-            use_gather_getindex = true
-            break
-        end
-    end
-
-    if use_gather_getindex
-        # TODO: This will create a dynamically sized tensor and we need to implement
-        #       `findall` for it.
-        if any(i -> unwrapped_eltype(i) <: Bool, indices)
-            error("Boolean indexing with TracedRArrays isn't fully supported yet.")
+### Specialize certain dispatches for better codegen
+for aType in (
+    Base.ReshapedArray{TracedRNumber{T}} where {T},
+    PermutedDimsArray{TracedRNumber{T}} where {T},
+)
+    @eval begin
+        function Base.getindex(a::$(aType), indices::Union{Int,TracedRNumber{Int}}...)
+            return getindex(materialize_traced_array(a), indices...)
         end
 
-        gather_dims = TracedUtils.indices_to_gather_dims(indices...)
-
-        return @opcall(
-            reshape(
-                @opcall(
-                    transpose(
-                        @opcall(
-                            reshape(
-                                @opcall(
-                                    gather(
-                                        a,
-                                        gather_dims.start_indices;
-                                        gather_dims.offset_dims,
-                                        gather_dims.collapsed_slice_dims,
-                                        operand_batching_dims=Int64[],
-                                        start_indices_batching_dims=Int64[],
-                                        gather_dims.start_index_map,
-                                        gather_dims.index_vector_dim,
-                                        gather_dims.slice_sizes,
-                                    )
-                                ),
-                                gather_dims.gather_reshape_shape,
-                            )
-                        ),
-                        gather_dims.permutation,
-                    )
-                ),
-                gather_dims.result_shape,
-            )
-        )
+        function Base.getindex(a::$(aType), indices...)
+            return getindex(materialize_traced_array(a), indices...)
+        end
     end
+end
 
-    if use_dynamic_slice
-        @assert all(isone, strides) "This should not happen, please report a bug"
-        x = @opcall dynamic_slice(a, [first.(indices)...], [length.(indices)...])
-    else
-        x = @opcall slice(a, [first.(indices)...], [last.(indices)...]; strides)
+for aType in
+    (Base.ReshapedArray{TracedRNumber{T},N,P,Tuple{}} where {T,N,P<:AbstractArray},)
+    @eval function Base.getindex(a::$(aType), indices::Int)
+        return getindex(materialize_traced_array(a), indices)
     end
+end
 
-    ddims = findall(indices) do idx
-        return idx isa Integer || idx isa TracedRNumber{<:Integer}
-    end
-    isempty(ddims) || return materialize_traced_array(dropdims(x; dims=Tuple(ddims)))
-    return x
+function Base.getindex(
+    x::Base.ReshapedArray{TracedRNumber{T}}, index::Base.ReshapedIndex
+) where {T}
+    return getindex(parent(x), index.parentindex)
+end
+
+function Base.getindex(
+    x::Base.Sort.WithoutMissingVector{TracedRNumber{T}}, i::Int
+) where {T}
+    out = getindex(x.data, i)
+    @assert !(out isa Missing)
+    return out
 end
 
 ## StepRangeLen Indexing
-function Base.getindex(r::TracedStepRangeLen{T}, s::OrdinalRange{S}) where {T,S<:Integer}
+function Base.getindex(r::TracedStepRangeLen{T}, s::OrdinalRange{S}) where {T,S}
     @inline
     @boundscheck checkbounds(r, s)
 
@@ -229,7 +195,7 @@ function overloaded_unsafe_getindex(
         Base.StepRangeLen{T,<:TwicePrecision,<:TwicePrecision},
         TracedStepRangeLen{T,<:TwicePrecision,<:TwicePrecision,<:TwicePrecision},
     },
-    i::TracedRNumber{<:Integer},
+    i::TracedRNumber{Int},
 ) where {T}
     # Very similar to _getindex_hiprec, but optimized to avoid a 2nd call to add12
     @inline
@@ -242,7 +208,7 @@ function overloaded_unsafe_getindex(
     return T2(x_hi + (x_lo + (shift_lo + r.ref.lo)))
 end
 
-function Base.getindex(r::TracedStepRangeLen, i::TracedRNumber{<:Integer})
+function Base.getindex(r::TracedStepRangeLen, i::TracedRNumber{Int})
     return Base.unsafe_getindex(r, i)
 end
 
@@ -250,7 +216,7 @@ end
 function Base.unsafe_getindex(r::TracedStepRangeLen, i::Integer)
     return overloaded_unsafe_getindex(r, i)
 end
-function Base.unsafe_getindex(r::TracedStepRangeLen, i::TracedRNumber{<:Integer})
+function Base.unsafe_getindex(r::TracedStepRangeLen, i::TracedRNumber{Int})
     return overloaded_unsafe_getindex(r, i)
 end
 
@@ -259,7 +225,7 @@ function Base.unsafe_getindex(
         Base.StepRangeLen{T,<:TwicePrecision,<:TwicePrecision},
         TracedStepRangeLen{T,<:TwicePrecision,<:TwicePrecision,<:TwicePrecision},
     },
-    i::TracedRNumber{<:Integer},
+    i::TracedRNumber{Int},
 ) where {T}
     return overloaded_unsafe_getindex(r, i)
 end
@@ -276,19 +242,12 @@ end
 
 Base.getindex(v::TracedUnitRange, ::Colon) = v
 
-function Base.getindex(
-    v::TracedUnitRange{T}, i::Reactant.TracedRNumber{<:Integer}
-) where {T}
-    val = convert(T, v.start + (i - oneunit(i)))
-    # TODO: we should have error messages at some point.
-    # @boundscheck Base._in_unit_range(v, val, i) || throw_boundserror(v, i)
-    return val
-end
-function Base.getindex(v::TracedUnitRange{T}, i::Integer) where {T}
-    val = convert(T, v.start + (i - oneunit(i)))
-    # TODO: we should have error messages at some point.
-    # @boundscheck Base._in_unit_range(v, val, i) || throw_boundserror(v, i)
-    return val
+for iType in (Int, TracedRNumber{Int}, Integer)
+    @eval function Base.getindex(v::TracedUnitRange{T}, i::$iType) where {T}
+        return convert(T, v.start + (i - oneunit(i)))
+        # TODO: we should have error messages at some point.
+        # @boundscheck Base._in_unit_range(v, val, i) || throw_boundserror(v, i)
+    end
 end
 
 # TODO: some of these dispatches can be optimized
@@ -401,6 +360,83 @@ function getindex_linear(a::TracedRArray{T,N}, indices::AbstractArray) where {T,
             collect(size(indices)),
         )
     )
+end
+
+function getindex_general(a::TracedRArray{T,N}, indices::Vararg{Any,N}) where {T,N}
+    indices = Base.to_indices(a, indices)
+
+    use_gather_getindex = false
+    use_dynamic_slice = false
+    strides = Int64[]
+    for idxs in indices
+        if idxs isa Number
+            idxs isa TracedRNumber && (use_dynamic_slice = true)
+            push!(strides, 1)
+            continue
+        end
+        if idxs isa Reactant.TracedType
+            use_gather_getindex = true
+            break
+        end
+        stride = get_slice_stride(vec(idxs))
+        push!(strides, stride)
+        if stride ≤ 0 || (use_dynamic_slice && stride != 1)
+            use_gather_getindex = true
+            break
+        end
+    end
+
+    if use_gather_getindex
+        # TODO: This will create a dynamically sized tensor and we need to implement
+        #       `findall` for it.
+        if any(i -> unwrapped_eltype(i) <: Bool, indices)
+            error("Boolean indexing with TracedRArrays isn't fully supported yet.")
+        end
+
+        gather_dims = TracedUtils.indices_to_gather_dims(indices...)
+
+        return @opcall(
+            reshape(
+                @opcall(
+                    transpose(
+                        @opcall(
+                            reshape(
+                                @opcall(
+                                    gather(
+                                        a,
+                                        gather_dims.start_indices;
+                                        gather_dims.offset_dims,
+                                        gather_dims.collapsed_slice_dims,
+                                        operand_batching_dims=Int64[],
+                                        start_indices_batching_dims=Int64[],
+                                        gather_dims.start_index_map,
+                                        gather_dims.index_vector_dim,
+                                        gather_dims.slice_sizes,
+                                    )
+                                ),
+                                gather_dims.gather_reshape_shape,
+                            )
+                        ),
+                        gather_dims.permutation,
+                    )
+                ),
+                gather_dims.result_shape,
+            )
+        )
+    end
+
+    if use_dynamic_slice
+        @assert all(isone, strides) "This should not happen, please report a bug"
+        x = @opcall dynamic_slice(a, [first.(indices)...], [length.(indices)...])
+    else
+        x = @opcall slice(a, [first.(indices)...], [last.(indices)...]; strides)
+    end
+
+    ddims = findall(indices) do idx
+        return idx isa Integer || idx isa TracedRNumber{Int}
+    end
+    isempty(ddims) || return materialize_traced_array(dropdims(x; dims=Tuple(ddims)))
+    return x
 end
 
 # TODO: move the setindex! here as well

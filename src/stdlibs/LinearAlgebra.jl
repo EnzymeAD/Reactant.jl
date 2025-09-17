@@ -745,4 +745,24 @@ function _overloaded_backslash(F::GeneralizedAdjointFactorization, B::AbstractAr
     )
 end
 
+# indexing into specific wrapepd array types
+# TODO: specialize these ones. We don't need to make the arrays dense (though our passes
+#       should be able to optimize them out)
+for AT in (
+    Bidiagonal{<:TracedRNumber},
+    LowerTriangular{<:TracedRNumber},
+    UpperTriangular{<:TracedRNumber},
+    LinearAlgebra.Hermitian{<:TracedRNumber},
+    SymTridiagonal{<:TracedRNumber},
+    Tridiagonal{<:TracedRNumber},
+    Symmetric{<:TracedRNumber},
+    LinearAlgebra.UnitUpperTriangular{<:TracedRNumber},
+    LinearAlgebra.UnitLowerTriangular{<:TracedRNumber},
+    LinearAlgebra.UpperHessenberg{<:TracedRNumber},
+)
+    @eval function Base.getindex(A::$AT, i::Int, j::Int)
+        return getindex(materialize_traced_array(A), i, j)
+    end
+end
+
 end

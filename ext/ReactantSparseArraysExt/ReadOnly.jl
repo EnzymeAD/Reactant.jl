@@ -47,3 +47,19 @@ function Base.getindex(
 ) where {T,N}
     return getindex(parent(x), idx...)
 end
+
+function Base.getindex(
+    x::SparseArrays.ReadOnly{Reactant.TracedRNumber{T},1,V},
+    idx::Union{Int64,Reactant.TracedRNumber{Int64}},
+) where {T,V<:AbstractArray{Reactant.TracedRNumber{T},1}}
+    return getindex(parent(x), idx)
+end
+
+function Base.getindex(
+    x::SparseArrays.ReadOnly{
+        Reactant.TracedRNumber{T},N,V
+    } where {V<:AbstractArray{Reactant.TracedRNumber{T},N}},
+    idx::Vararg{Union{Int64,Reactant.TracedRNumber{Int64}},N},
+) where {T,N}
+    return getindex(parent(x), idx...)
+end

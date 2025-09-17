@@ -488,18 +488,6 @@ function Base.copyto!(
     return copyto!(dest, materialize_traced_array(src))
 end
 
-function Base.copyto!(
-    dest::WrappedArray{TracedRNumber{T1},N}, src::AnyTracedRArray{T2,N}
-) where {T1,T2,N}
-    return copyto!(dest, materialize_traced_array(src))
-end
-
-function Base.copyto!(
-    dest::WrappedArray{TracedRNumber{T},N}, src::AnyTracedRArray{T,N}
-) where {T,N}
-    return copyto!(dest, materialize_traced_array(src))
-end
-
 function Base.copyto!(dest::AnyTracedRArray{T,N}, src::Array{T2,N}) where {T,T2,N}
     return copyto!(dest, Reactant.promote_to(TracedRArray{T2,N}, src))
 end
