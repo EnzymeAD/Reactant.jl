@@ -1,11 +1,12 @@
 module XLA
 
 using ..Reactant: Reactant, MLIR, Accelerators
-using Reactant_jll
-using Libdl
+using Reactant_jll: Reactant_jll
+using LLVM: LLVM
+using Libdl: Libdl
 using EnumX: @enumx
+using Enzyme: Compiler
 using Preferences: load_preference
-using Enzyme
 
 const XLA_REACTANT_GPU_MEM_FRACTION = Ref{Float64}(0.75)
 const XLA_REACTANT_GPU_PREALLOCATE = Ref{Bool}(true)
@@ -159,16 +160,16 @@ function __init__()
         @ccall MLIR.API.mlir_c.RegisterEnzymeXLAGPUHandler()::Cvoid
 
         @static if !Sys.isapple()
-            lljit = Enzyme.LLVM.JuliaOJIT()
-            jd_main = Enzyme.LLVM.JITDylib(lljit)
+            lljit = LLVM.JuliaOJIT()
+            jd_main = LLVM.JITDylib(lljit)
 
             for name in
                 ("XLAExecute", "XLAExecuteSharded", "ifrt_loaded_executable_execute")
                 ptr = Libdl.dlsym(Reactant_jll.libReactantExtra_handle, name)
-                Enzyme.LLVM.define(
+                LLVM.define(
                     jd_main,
-                    Enzyme.Compiler.JIT.absolute_symbol_materialization(
-                        Enzyme.LLVM.mangle(lljit, name), ptr
+                    Compiler.JIT.absolute_symbol_materialization(
+                        LLVM.mangle(lljit, name), ptr
                     ),
                 )
             end
@@ -196,8 +197,8 @@ for runtime in (:PJRT, :IFRT)
 
         # CPU
         if was_initialized && haskey(state.clients, "cpu")
-            XLA.free_client(state.clients["cpu"])
-            XLA.$(runtime).cpu_client_count[] -= 1
+            free_client(state.clients["cpu"])
+            $(runtime).cpu_client_count[] -= 1
         end
         cpu = $(runtime).CPUClient(; common_kwargs..., asynchronous=true)
         state.clients["cpu"] = cpu
@@ -210,8 +211,8 @@ for runtime in (:PJRT, :IFRT)
                     Accelerators.TPU.download_libtpu_if_needed()
                     try
                         if was_initialized && haskey(state.clients, "tpu")
-                            XLA.free_client(state.clients["tpu"])
-                            XLA.$(runtime).tpu_client_count[] -= 1
+                            free_client(state.clients["tpu"])
+                            $(runtime).tpu_client_count[] -= 1
                         end
                         tpu = $(runtime).TPUClient(;
                             tpu_path=Accelerators.TPU.get_libtpu_path(), common_kwargs...
@@ -224,8 +225,8 @@ for runtime in (:PJRT, :IFRT)
                 elseif Reactant_jll.host_platform.tags["gpu"] != "none"
                     try
                         if was_initialized && haskey(state.clients, "cuda")
-                            XLA.free_client(state.clients["cuda"])
-                            XLA.$(runtime).cuda_client_count[] -= 1
+                            free_client(state.clients["cuda"])
+                            $(runtime).cuda_client_count[] -= 1
                         end
                         gpu = $(runtime).CUDAClient(;
                             common_kwargs...,
@@ -241,8 +242,8 @@ for runtime in (:PJRT, :IFRT)
                 try
                     #=
                     if was_initialized && haskey(state.clients, "metal")
-                        XLA.free_client(state.clients["metal"])
-                        XLA.$(runtime).metal_client_count[] -= 1
+                        free_client(state.clients["metal"])
+                        $(runtime).metal_client_count[] -= 1
                     end
                     gpu = $(runtime).MetalClient(;
                         metal_pjrt_plugin_path=Accelerators.Metal.get_metal_pjrt_plugin_path(),

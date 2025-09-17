@@ -4,9 +4,10 @@ module TracedRandom
 # 1. https://github.com/JuliaGPU/CUDA.jl/blob/master/src/random.jl
 # 2. https://github.com/JuliaRandom/Random123.jl/blob/master/src/common.jl
 
-using ..Reactant:
-    Reactant, TracedRArray, TracedRNumber, ReactantRNG, AnyTracedRArray, TracedUtils, Ops
+using ..Reactant: Reactant, TracedUtils, Ops, TracedRArray, TracedRNumber, AnyTracedRArray
 using ..Reactant.Ops: @opcall
+import ..Reactant: ReactantRNG
+
 using Random: Random, AbstractRNG
 
 @noinline make_seed(rng::AbstractRNG=Random.RandomDevice()) =

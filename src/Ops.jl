@@ -99,7 +99,7 @@ function mlir_type(RT::Type{<:RNumber})::MLIR.IR.Type
     return MLIR.IR.TensorType(Int[], MLIR.IR.Type(unwrapped_eltype(RT)))
 end
 
-function mlir_type(::Type{<:MissingTracedValue})::MLIR.IR.Type
+function mlir_type(::Type{MissingTracedValue})::MLIR.IR.Type
     return MLIR.IR.TensorType(Int[], MLIR.IR.Type(Bool))
 end
 
@@ -307,6 +307,12 @@ end
         MLIR.Dialects.stablehlo.concatenate(concat_inputs; dimension=(dimension - 1)), 1
     )
     return TracedRArray{T,N}((), res, size(MLIR.IR.type(res)))
+end
+
+@noinline function fill(
+    element::T, shape::Vector{Int}; location=mlir_stacktrace("fill", @__FILE__, @__LINE__)
+) where {T<:AbstractIrrational}
+    return fill(float(element), shape; location)
 end
 
 @noinline function fill(
@@ -848,8 +854,8 @@ end
 end
 
 @noinline function clamp(
-    min::T, x::Union{TracedRArray{T,N},TracedRNumber{T}}, max::T; kwargs...
-) where {T,N}
+    min::T, x::Union{TracedRArray{T},TracedRNumber{T}}, max::T; kwargs...
+) where {T}
     return clamp(constant(min), x, constant(max); kwargs...)
 end
 

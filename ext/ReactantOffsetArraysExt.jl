@@ -1,8 +1,7 @@
 module ReactantOffsetArraysExt
 
-using OffsetArrays
-using OffsetArrays: OffsetArray, OffsetVector
-using Reactant: Reactant, MLIR, Ops, TracedRArray, AbstractConcreteArray
+using OffsetArrays: OffsetArrays, OffsetArray, OffsetVector
+using Reactant: Reactant, MLIR, Ops, TracedRArray, TracedRNumber, AbstractConcreteArray
 
 Base.@nospecializeinfer function Reactant.traced_type_inner(
     @nospecialize(OA::Type{<:OffsetArray}),
@@ -45,8 +44,7 @@ function Base.getindex(
 end
 
 function Base.getindex(
-    x::OffsetVector{Reactant.TracedRNumber{T},Reactant.TracedRArray{T,1}},
-    indices::Base.OneTo{Int},
+    x::OffsetVector{TracedRNumber{T},Reactant.TracedRArray{T,1}}, indices::Base.OneTo{Int}
 ) where {T}
     offset_indices = indices .- x.offsets[1]
     return getindex(parent(x), offset_indices)
@@ -54,13 +52,13 @@ end
 
 parentindex(r::OffsetArrays.IdOffsetRange, i) = i .- r.offset
 function Base.getindex(
-    a::OffsetArray{<:Reactant.TracedRNumber,N}, indices::Vararg{Union{Int,AbstractArray},N}
+    a::OffsetArray{<:TracedRNumber,N}, indices::Vararg{Union{Int,AbstractArray},N}
 ) where {N}
     J = map(parentindex, axes(a), indices)
     return parent(a)[J...]
 end
 
-function Base.getindex(a::OffsetVector{<:Reactant.TracedRNumber}, indices::Int)
+function Base.getindex(a::OffsetVector{<:TracedRNumber}, indices::Int)
     J = parentindex(Base.axes1(a), indices)
     return parent(a)[J]
 end

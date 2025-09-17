@@ -1010,24 +1010,21 @@ end
 
 @testset "Traced fractional index" begin
     times = Reactant.to_rarray(0:0.01:4.5; track_numbers=Number)
-    @test times isa Reactant.TracedRNumberOverrides.TracedStepRangeLen
+    @test times isa Reactant.TracedStepRangeLen
     res = @jit fractional_idx(times, ConcreteRNumber(2.143))
     @test res[1] ≈ 0.29999999999997334
     @test res[2] == 215
     @test res[3] == 216
 end
 
-function unitrange_test(r, i)
-    return r[i]
-end
 @testset "Unitrange" begin
     x = 2:10
-    @test (@jit unitrange_test(x, 3)) == 4
-    @test (@jit unitrange_test(x, Reactant.ConcreteRNumber(4))) == 5
+    @test (@jit getindex(x, 3)) == 4
+    @test (@jit getindex(x, Reactant.ConcreteRNumber(4))) == 5
 
     x = Reactant.to_rarray(2:10; track_numbers=Number)
-    @test (@jit unitrange_test(x, 3)) == 4
-    @test (@jit unitrange_test(x, Reactant.ConcreteRNumber(4))) == 5
+    @test (@jit getindex(x, 3)) == 4
+    @test (@jit getindex(x, Reactant.ConcreteRNumber(4))) == 5
 end
 
 mulpi(x) = π * x

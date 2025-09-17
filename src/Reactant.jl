@@ -3,15 +3,31 @@ module Reactant
 using ReactantCore:
     ReactantCore, @trace, within_compile, MissingTracedValue, materialize_traced_array
 
-using LinearAlgebra: LinearAlgebra
+using LinearAlgebra: LinearAlgebra, RowMaximum
 using Random: Random, AbstractRNG
 using EnumX: @enumx
 using Functors: Functors, @leaf
 
-using Adapt: Adapt, WrappedArray
-using GPUArraysCore: GPUArraysCore, @allowscalar, allowscalar # keep this import to allow users to do `Reactant.allowscalar(false)`
+using Libdl: Libdl
+using Reactant_jll: Reactant_jll
+using LLVMOpenMP_jll: LLVMOpenMP_jll
 
-export @allowscalar # re-exported from GPUArraysCore
+using Adapt: Adapt, WrappedArray
+using GPUArraysCore: GPUArraysCore, @allowscalar, allowscalar
+
+using Enzyme:
+    Enzyme,
+    Active,
+    Annotation,
+    BatchDuplicated,
+    BatchDuplicatedNoNeed,
+    Const,
+    Duplicated,
+    DuplicatedNoNeed,
+    EnzymeRules,
+    Reverse
+
+export allowscalar, @allowscalar # re-exported from GPUArraysCore
 
 is_extension_loaded(::Val) = false
 
@@ -23,8 +39,6 @@ include("OrderedIdDict.jl")
 function precompiling()
     return (@ccall jl_generating_output()::Cint) == 1
 end
-
-using Enzyme
 
 struct ReactantABI <: Enzyme.EnzymeCore.ABI end
 
@@ -63,8 +77,6 @@ _parent_type(::Type{Array{T,N}}) where {T,N} = Array{T,N}
 _parent_type(::Type{<:Slices{P}}) where {P} = P
 
 include("accelerators/Accelerators.jl")
-
-using .Accelerators.TPU: has_tpu
 
 include("CompileOptions.jl")
 
@@ -130,7 +142,7 @@ function aos_to_soa(x::Array{TracedRNumber{T}}) where {T}
     isa_traced_soa(ancestor(x)) && return x
     for i in eachindex(x)
         if !isassigned(x, i)
-            x[i] = Reactant.promote_to(TracedRNumber{T}, 0)
+            x[i] = promote_to(TracedRNumber{T}, 0)
         end
     end
     return @opcall reshape(vcat(x...), size(x)...)
@@ -176,6 +188,8 @@ include("TracedUtils.jl")
 
 include("TracedRNumber.jl")
 include("TracedRArray.jl")
+include("TracedRange.jl")
+include("Indexing.jl")
 
 include("ConcreteRArray.jl")
 
@@ -189,16 +203,31 @@ use_overlayed_version(x::Base.Iterators.Enumerate) = use_overlayed_version(x.itr
 use_overlayed_version(x::Vector) = looped_any(use_overlayed_version, x)
 use_overlayed_version(iter::Tuple) = looped_any(use_overlayed_version, iter)
 use_overlayed_version(iter::NamedTuple) = looped_any(use_overlayed_version, values(iter))
-use_overlayed_version(::TracedRArray) = true
-use_overlayed_version(::TracedRNumber) = true
 use_overlayed_version(::Number) = false
 use_overlayed_version(::MissingTracedValue) = true
-use_overlayed_version(::AbstractArray{<:TracedRNumber}) = true
 use_overlayed_version(rng::ReactantRNG) = use_overlayed_version(rng.seed)
+use_overlayed_version(::AbstractArray{<:TracedRNumber}) = true
+use_overlayed_version(::TracedRArray) = true
+use_overlayed_version(::TracedRNumber) = true
+use_overlayed_version(::TracedStepRangeLen) = true
+use_overlayed_version(::TracedUnitRange) = true
 function use_overlayed_version(x::AbstractArray)
     a = ancestor(x)
     a === x && return false
     return use_overlayed_version(a)
+end
+
+use_overlayed_indexing(x1, x2, xs...) = looped_any(use_overlayed_indexing, (x1, x2, xs...))
+use_overlayed_indexing(x) = false
+use_overlayed_indexing(::TracedRArray) = true
+use_overlayed_indexing(::TracedRNumber) = true
+use_overlayed_indexing(::AbstractArray{<:TracedRNumber}) = true
+use_overlayed_indexing(x::TracedStepRangeLen) = true
+use_overlayed_indexing(x::TracedUnitRange) = true
+function use_overlayed_indexing(x::AbstractArray)
+    a = ancestor(x)
+    a === x && return false
+    return use_overlayed_indexing(a)
 end
 
 ## We avoid calling into `any` to avoid triggering the `any` overlay
@@ -266,9 +295,6 @@ function deinitialize_dialect()
     return registry[] = nothing
 end
 
-using Libdl
-using Reactant_jll
-using LLVMOpenMP_jll
 function initialize_ptrs()
     for name in (
         "__kmpc_barrier",

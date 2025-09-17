@@ -75,7 +75,7 @@ Return an [`AllocatorStats`](@ref) instance with information about the device sp
 
     This method is currently not implemented for the CPU device.
 """
-function allocatorstats(device::AbstractDevice=XLA.default_device(XLA.default_backend()))
+function allocatorstats(device::AbstractDevice=default_device(default_backend()))
     stats = allocatorstats_internal(device)
     nullopt = typemin(Int64)
     return AllocatorStats(

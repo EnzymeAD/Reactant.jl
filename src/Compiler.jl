@@ -2,7 +2,7 @@ module Compiler
 
 using Reactant_jll
 using Libdl: dlsym
-using LinearAlgebra: BLAS
+using LinearAlgebra: BlasInt
 
 import ..Reactant:
     Reactant,
@@ -16,7 +16,6 @@ import ..Reactant:
     TracedRArray,
     TracedRNumber,
     RArray,
-    RNumber,
     OrderedIdDict,
     make_tracer,
     TracedToConcrete,
@@ -24,6 +23,7 @@ import ..Reactant:
     ancestor,
     TracedType
 import Reactant: OptimizeCommunicationOptions, ShardyPropagationOptions, CompileOptions
+using Reactant_jll: Reactant_jll
 
 import ..ReactantCore: correct_maybe_bcast_call
 
@@ -1685,7 +1685,7 @@ function compile_mlir!(
         "canonicalize"
     end
 
-    blas_int_width = sizeof(BLAS.BlasInt) * 8
+    blas_int_width = sizeof(BlasInt) * 8
     lower_enzymexla_linalg_pass = "lower-enzymexla-linalg{backend=$backend \
                                    blas_int_width=$blas_int_width}"
 
@@ -3661,7 +3661,7 @@ struct Thunk{FTy,tag,IsClosure,ArgTypes,ExecTy,DeviceTy,ClientTy,GD,DAM}
     donated_args_mask::DAM
 end
 
-function Base.show(io::IO, thunk::Thunk{FTy,tag}) where {FTy,tag}
+function Base.show(io::IO, thunk::Thunk{<:Any,tag}) where {tag}
     return print(io, "Reactant compiled function $(thunk.f) (with tag $(tag))")
 end
 
