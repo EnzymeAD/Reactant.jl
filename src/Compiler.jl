@@ -3217,7 +3217,7 @@ Generate Julia code to call the XLA executable.
 
 - `flatten_names`: A list of `Symbol`s representing the names of the flattened linear arguments.
 - `nresults`: The number of results to expect.
-- `is_pure`: Whether the function being compiled is pure (e.g. has a side effect, like MPI.Send)
+- `is_pure`: Whether the function being compiled is pure (i.e., has no side effects)
 """
 function codegen_xla_call(flatten_names, nresults, is_sharded::Bool, ndevices::Int, is_pure::Bool)
     flatten_buffer_refs = map(n -> :($n.buffer), flatten_names)
