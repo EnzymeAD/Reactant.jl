@@ -10,8 +10,6 @@ function Base.getindex(
     return error("Sparse arrays are not supported by reactant yet.")
 end
 
-function Base.getindex(
-    ::CHOLMOD.Sparse{TracedRNumber{T}}, ::Int64, ::Int64
-) where {T}
+function Base.getindex(::CHOLMOD.Sparse{TracedRNumber{T}}, ::Int64, ::Int64) where {T}
     return error("Sparse arrays are not supported by reactant yet.")
 end
