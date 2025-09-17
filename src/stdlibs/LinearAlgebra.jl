@@ -16,7 +16,7 @@ using LinearAlgebra: LinearAlgebra, BLAS
 using LinearAlgebra: Adjoint, Transpose, Factorization, RowMaximum
 using LinearAlgebra: SymTridiagonal, Symmetric, Bidiagonal, Diagonal, Tridiagonal
 using LinearAlgebra: LowerTriangular, UnitLowerTriangular, UpperTriangular
-using LinearAlgebra: diag, diagm, dot, ldiv!
+using LinearAlgebra: diag, diagm, ldiv!
 using Libdl: Libdl
 
 function __init__()
