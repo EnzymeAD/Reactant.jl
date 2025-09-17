@@ -1,6 +1,5 @@
 module TracedRArrayOverrides
 
-using Adapt: WrappedArray
 using Base: Broadcast
 using Base.Broadcast: Broadcasted, AbstractArrayStyle, instantiate
 
