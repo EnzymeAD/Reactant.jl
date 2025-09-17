@@ -5,6 +5,11 @@ using ..Ops: @opcall
 using ReactantCore: ReactantCore, @trace
 using Adapt: Adapt
 
+# This isn't technically necessary in this module, but this type used to be
+# defined in this module so we keep this alias here for compatibility.  TODO:
+# can be removed in future breaking version of Reactant.
+const TracedStepRangeLen = Reactant.TracedStepRangeLen
+
 import Base.TwicePrecision
 
 ReactantCore.is_traced(::TracedRNumber, seen) = true
