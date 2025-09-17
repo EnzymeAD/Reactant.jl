@@ -217,19 +217,6 @@ function use_overlayed_version(x::AbstractArray)
     return use_overlayed_version(a)
 end
 
-use_overlayed_indexing(x1, x2, xs...) = looped_any(use_overlayed_indexing, (x1, x2, xs...))
-use_overlayed_indexing(x) = false
-use_overlayed_indexing(::TracedRArray) = true
-use_overlayed_indexing(::TracedRNumber) = true
-use_overlayed_indexing(::AbstractArray{<:TracedRNumber}) = true
-use_overlayed_indexing(x::TracedStepRangeLen) = true
-use_overlayed_indexing(x::TracedUnitRange) = true
-function use_overlayed_indexing(x::AbstractArray)
-    a = ancestor(x)
-    a === x && return false
-    return use_overlayed_indexing(a)
-end
-
 ## We avoid calling into `any` to avoid triggering the `any` overlay
 function looped_any(f::F, itr) where {F}
     @inbounds for x in itr
