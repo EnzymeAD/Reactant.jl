@@ -1623,3 +1623,20 @@ mapped_sub(xs...) = stack(map(-, xs...))
         end
     end
 end
+
+@testset "AbstractRange Unwanted Promotions" begin
+    hlo1 = @code_hlo Reactant.promote_to(Reactant.TracedRArray, Base.OneTo(Int32(42)))
+    @test !contains(repr(hlo1), "42xi64")
+    @test contains(repr(hlo1), "42xi32")
+
+    hlo2 = @code_hlo Reactant.promote_to(Reactant.TracedRArray, Int32(34):(Int32(42)))
+    @test !contains(repr(hlo2), "9xi64")
+    @test contains(repr(hlo2), "9xi32")
+
+    hlo3 = @code_hlo Reactant.promote_to(
+        Reactant.TracedRArray, Int16(34):Int16(3):(Int16(42))
+    )
+    @test !contains(repr(hlo3), "3xi64")
+    @test !contains(repr(hlo3), "3xi32")
+    @test contains(repr(hlo3), "3xi16")
+end
