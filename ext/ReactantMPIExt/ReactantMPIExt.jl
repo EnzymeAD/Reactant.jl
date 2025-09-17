@@ -36,9 +36,9 @@ function Distributed.get_local_process_id(::Distributed.MPIEnvDetector)
 end
 
 function __init__()
-    # TODO improve this, temporary hack
-    # when  you fix it, remember to possibly make TracedType const again
-    Reactant.TracedType = Union{Reactant.TracedRArray,Reactant.TracedRNumber,Reactant.MissingTracedValue,TracedRequest}
+    # # TODO improve this, temporary hack
+    # # when  you fix it, remember to possibly make TracedType const again
+    # Reactant.TracedType = Union{Reactant.TracedRArray,Reactant.TracedRNumber,Reactant.MissingTracedValue,TracedRequest}
 
     # TODO maybe it's more efficient if we use `RTLD_NOW` instead of `RTLD_LAZY`?
     libmpi_handle = Libdl.dlopen(MPI.API.libmpi, RTLD_LAZY | RTLD_GLOBAL)
@@ -255,6 +255,7 @@ Reactant.TracedUtils.get_mlir_data(x::TracedRequest) = x.mlir_data
 #     return MLIR.IR.TensorType(collect(Int, ()), MLIR.IR.Type(Int64))
 # end
 #
+# TODO if want to use this, need to somehow add TracedRequest to TracedTypes, which is currently const
 # Base.@nospecializeinfer function Reactant.make_tracer(
 #     seen,
 #     @nospecialize(prev::TracedRequest),
