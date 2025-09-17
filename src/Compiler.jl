@@ -1135,8 +1135,7 @@ function optimization_passes(
                 "transpose_batch_norm_grad",
                 "transpose_if",
                 "transpose_fft",
-                # XXX: https://github.com/EnzymeAD/Enzyme-JAX/issues/1374
-                # "transpose_reshape",
+                "transpose_reshape",
             ],
         )
         if AGGRESSIVE_PROPAGATION[]
