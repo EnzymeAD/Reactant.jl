@@ -408,3 +408,36 @@ end
 
     @test parent_ra ≈ parent
 end
+
+function test_slice_copy!(x)
+    @view(x[1, :]) .= 0
+    return x
+end
+
+@testset "slice copy" begin
+    x = Reactant.to_rarray(rand(2, 10))
+    @jit test_slice_copy!(x)
+    @test all(Array(x)[1, :] .== 0)
+end
+
+@testset "reshaped view setindex!" begin
+    du = rand(Float32, 10)
+    u = rand(Float32, 10)
+    p = 16.0f0
+    t = 12.0f0
+
+    du_ra = Reactant.to_rarray(du; track_numbers=Number)
+    u_ra = Reactant.to_rarray(u; track_numbers=Number)
+    p_ra = Reactant.to_rarray(p; track_numbers=Number)
+    t_ra = Reactant.to_rarray(t; track_numbers=Number)
+
+    function odef(du, u, p, t)
+        u = reshape(u, 2, :)
+        du = reshape(du, 2, :)
+        @view(du[1, :]) .= @view(u[1, :]) .+ p .+ t
+        @view(du[2, :]) .= @view(u[2, :]) .* 2
+        return reshape(du, :)
+    end
+
+    @test @jit(odef(du_ra, u_ra, p_ra, t_ra)) ≈ odef(du, u, p, t)
+end

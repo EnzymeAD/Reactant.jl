@@ -1,6 +1,6 @@
 module ReactantPythonCallExt
 
-using PythonCall
+using PythonCall: PythonCall, Py, pyconvert, pydict, pyfunc, pyimport, pylist
 using Reactant: Reactant, TracedRArray
 using Reactant.Ops: @opcall
 

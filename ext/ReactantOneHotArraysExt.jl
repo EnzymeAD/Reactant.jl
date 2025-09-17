@@ -1,12 +1,12 @@
 module ReactantOneHotArraysExt
 
-using OneHotArrays
-using Reactant
-using Reactant: TracedRArray, TracedRNumber, TracedUtils, Ops
+using OneHotArrays: OneHotArray
+using Reactant: Reactant, TracedRArray, TracedRNumber, Ops
+using ReactantCore: ReactantCore
 using Reactant.Ops: @opcall
 
 function Reactant.traced_type_inner(
-    @nospecialize(_::Type{OneHotArrays.OneHotArray{T,N,Np1,I}}),
+    @nospecialize(_::Type{OneHotArray{T,N,Np1,I}}),
     seen,
     @nospecialize(mode::Reactant.TraceMode),
     @nospecialize(track_numbers::Type),
@@ -19,32 +19,28 @@ function Reactant.traced_type_inner(
     else
         T
     end
-    return OneHotArrays.OneHotArray{T2,N,Np1,I2}
+    return OneHotArray{T2,N,Np1,I2}
 end
 
-# OneHotArray is a <: AbstractArray{Bool, M} so our usual dispatches don't work
-function TracedUtils.broadcast_to_size(
-    r::OneHotArrays.OneHotArray{T,N,Np1,<:Reactant.TracedRArray}, rsize
-) where {T,N,Np1}
-    return TracedUtils.broadcast_to_size(TracedUtils.materialize_traced_array(r), rsize)
-end
-
-function TracedUtils.materialize_traced_array(r::OneHotArrays.OneHotArray)
+function ReactantCore.materialize_traced_array(r::OneHotArray)
     indices = vec(r.indices)
     N = r.nlabels
     B = length(indices)
 
-    linear_indices =
-        TracedUtils.promote_to(TracedRArray{Int64,ndims(r.indices)}, indices) .+
+    linear_indices = (
+        Reactant.promote_to(TracedRArray, indices) .+
         @opcall(iota(Int64, [B]; iota_dimension=1)) .* N
+    )
 
     z = @opcall(fill(false, (N, B)))
     z[linear_indices] = fill(true, length(linear_indices))
     return reshape(z, size(r))
 end
 
+Reactant._parent(r::OneHotArray) = r.indices
+
 function Base.Array(
-    r::OneHotArrays.OneHotArray{T,N,Np1,<:Reactant.AbstractConcreteArray}
+    r::OneHotArray{T,N,Np1,<:Reactant.AbstractConcreteArray}
 ) where {T,N,Np1}
     return Array(reshape(Array(r.indices), 1, size(r.indices)...) .== 1:(r.nlabels))
 end

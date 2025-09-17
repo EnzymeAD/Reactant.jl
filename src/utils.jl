@@ -1,3 +1,19 @@
+struct CallWithReactant{F} <: Function
+    f::F
+end
+
+function Base.reducedim_init(f::F, op::CallWithReactant, A::AbstractArray, region) where {F}
+    return Base.reducedim_init(f, op.f, A, region)
+end
+
+function (f::CallWithReactant{F})(args...; kwargs...) where {F}
+    if isempty(kwargs)
+        return call_with_reactant(f.f, args...)
+    else
+        return call_with_reactant(Core.kwcall, NamedTuple(kwargs), f.f, args...)
+    end
+end
+
 function apply(f::F, args...; kwargs...) where {F}
     return f(args...; kwargs...)
 end
@@ -12,6 +28,9 @@ function maybe_argextype(@nospecialize(x), src)
         nothing
     end
 end
+
+# Defined in KernelAbstractions Ext
+function ka_with_reactant end
 
 """
     Reactant.REDUB_ARGUMENTS_NAME
@@ -98,7 +117,7 @@ const __skip_rewrite_func_set = Set([
     typeof(Core.Compiler.typeinf_ext),
     # TODO: perhaps problematic calls in `traced_call`
     # should be moved to TracedUtils.jl:
-    typeof(Reactant.ReactantCore.traced_call),
+    typeof(ReactantCore.traced_call),
     typeof(ReactantCore.is_traced),
     # Perf optimization
     typeof(Base.typemax),
@@ -133,7 +152,7 @@ const __skip_rewrite_func_set = Set([
             typeof(Base.memoryref)
         end
     ),
-    typeof(Reactant.materialize_traced_array),
+    typeof(materialize_traced_array),
 ])
 
 """
@@ -223,9 +242,9 @@ function should_rewrite_call(@nospecialize(ft))
         if hasfield(typeof(ft), :name) && hasfield(typeof(ft.name), :module)
             mod = ft.name.module
             # Don't rewrite primitive ops, tracing utilities, or any MLIR-based functions
-            if has_ancestor(mod, Reactant.Ops) ||
-                has_ancestor(mod, Reactant.TracedUtils) ||
-                has_ancestor(mod, Reactant.MLIR)
+            if has_ancestor(mod, Ops) ||
+                has_ancestor(mod, TracedUtils) ||
+                has_ancestor(mod, MLIR)
                 return false
             end
             if string(mod) == "CUDA"
@@ -699,7 +718,7 @@ function call_with_reactant_generator(
 
     rewrite_argnumbers_by_one!(ir)
 
-    src = ccall(:jl_new_code_info_uninit, Ref{CC.CodeInfo}, ())
+    src = ccall(:jl_new_code_info_uninit, Ref{Core.CodeInfo}, ())
     src.slotnames = fill(:none, length(ir.argtypes) + 1)
     src.slotflags = fill(zero(UInt8), length(ir.argtypes))
     src.slottypes = copy(ir.argtypes)

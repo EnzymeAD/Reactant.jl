@@ -124,6 +124,58 @@ function async_load_tmem(
 end
 
 """
+`async_prefetch`
+
+Schedules an async prefetch of the contents of the `source` MemRef in GMEM
+to the L2 cache, making subsequent loads of the same data from GMEM faster.
+
+The `indices` and `slice_lengths` inputs define what slice of the GMEM
+`source` is going to be prefetched. Both `indices` and `slice_lengths` must
+have a length equal to the rank of the `source`. The values in `indices` are
+the starting indices of each dimension and the values in `slice_lengths` are
+the lengths. Providing -1 in `slice_lengths` indicates that the slice length
+is 1.
+
+The `collective` attribute can be provided to partition the prefetch over
+multiple blocks in a cluster.
+
+The `predicate` allows scheduling the prefetch conditionally.
+"""
+function async_prefetch(
+    source::Value,
+    indices::Vector{Value},
+    predicate=nothing::Union{Nothing,Value};
+    slice_lengths,
+    collective,
+    location=Location(),
+)
+    op_ty_results = IR.Type[]
+    operands = Value[source, indices...]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[
+        namedattribute("slice_lengths", slice_lengths),
+        namedattribute("collective", collective),
+    ]
+    !isnothing(predicate) && push!(operands, predicate)
+    push!(
+        attributes,
+        operandsegmentsizes([1, length(indices), (predicate == nothing) ? 0 : 1]),
+    )
+
+    return create_operation(
+        "mosaic_gpu.async_prefetch",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+"""
 `async_store`
 
 Schedules an async store of the contents of the `source` MemRef in SMEM to
@@ -491,11 +543,9 @@ must hold:
     unpacked_columns = allocated_columns * packing
 
 The number of allocated columns in TMEM can be any power of two in the
-range [32, 512]. If `exact` is `true`, then the calculated
-number of allocated columns must match that restriction. If `exact` is
-`false` and the calculated number of allocated columns is less than 32 or
-not a power of two, then it will be rounded up to the nearest power of two
-larger or equal to 32.
+range [32, 512]. If the calculated number of allocated columns is less than
+32 or not a power of two, then it will be rounded up to the nearest power of
+two larger or equal to 32.
 
 If `collective` is `true` 2 CTAs will perform the allocation collectively,
 otherwise, only one CTA will perform the allocation.
@@ -504,7 +554,6 @@ function tmem_alloc(
     smem_ptr::Value;
     result_0::IR.Type,
     collective=nothing,
-    exact=nothing,
     packing=nothing,
     location=Location(),
 )
@@ -514,7 +563,6 @@ function tmem_alloc(
     successors = Block[]
     attributes = NamedAttribute[]
     !isnothing(collective) && push!(attributes, namedattribute("collective", collective))
-    !isnothing(exact) && push!(attributes, namedattribute("exact", exact))
     !isnothing(packing) && push!(attributes, namedattribute("packing", packing))
 
     return create_operation(
@@ -545,6 +593,28 @@ function tmem_dealloc(tmem_ref::Value; location=Location())
         attributes,
         results=op_ty_results,
         result_inference=false,
+    )
+end
+
+function tmem_layout_cast(
+    ref::Value; result_0=nothing::Union{Nothing,IR.Type}, new_layout, location=Location()
+)
+    op_ty_results = IR.Type[]
+    operands = Value[ref,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[namedattribute("new_layout", new_layout),]
+    !isnothing(result_0) && push!(op_ty_results, result_0)
+
+    return create_operation(
+        "mosaic_gpu.tmem_layout_cast",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
     )
 end
 

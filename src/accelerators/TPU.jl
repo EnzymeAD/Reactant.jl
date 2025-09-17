@@ -3,8 +3,8 @@ module TPU
 using Reactant: Reactant
 using EnumX: @enumx
 using Scratch: @get_scratch!
-using HTTP
-using Downloads
+using HTTP: HTTP
+using Downloads: Downloads
 using unzip_jll: unzip
 
 const libtpu_dir = Ref{Union{Nothing,String}}(nothing)

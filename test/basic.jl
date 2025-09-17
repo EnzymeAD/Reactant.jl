@@ -579,9 +579,7 @@ end
 function f_row_major(x::AbstractArray{T}) where {T}
     y = [1 2; 3 4; 5 6]
     if x isa Reactant.TracedRArray
-        y = Reactant.TracedUtils.promote_to(
-            Reactant.TracedRArray{Reactant.unwrapped_eltype(T),2}, y
-        )
+        y = Reactant.promote_to(Reactant.TracedRArray{Reactant.unwrapped_eltype(T),2}, y)
     end
     return x .+ y
 end
@@ -893,7 +891,7 @@ end
 end
 
 @testset "don't expand ranges by default" begin
-    fn(x) = Reactant.TracedUtils.broadcast_to_size(x, (length(x),))
+    fn(x) = Reactant.broadcast_to_size(x, (length(x),))
 
     hlo = repr(@code_hlo(fn(1:10000)))
     @test contains(hlo, "stablehlo.iota")
@@ -928,7 +926,7 @@ end
 
     ra = Reactant.to_rarray(x)
     @jit dip!(ra)
-    ra[:a] ≈ (2.7 * 2) * ones(4)
+    @test ra[:a] ≈ (2.7 * 3.1) * ones(4)
 end
 
 @testset "@code_xla" begin
@@ -1012,24 +1010,21 @@ end
 
 @testset "Traced fractional index" begin
     times = Reactant.to_rarray(0:0.01:4.5; track_numbers=Number)
-    @test times isa Reactant.TracedRNumberOverrides.TracedStepRangeLen
+    @test times isa Reactant.TracedStepRangeLen
     res = @jit fractional_idx(times, ConcreteRNumber(2.143))
     @test res[1] ≈ 0.29999999999997334
     @test res[2] == 215
     @test res[3] == 216
 end
 
-function unitrange_test(r, i)
-    return r[i]
-end
 @testset "Unitrange" begin
     x = 2:10
-    @test (@jit unitrange_test(x, 3)) == 4
-    @test (@jit unitrange_test(x, Reactant.ConcreteRNumber(4))) == 5
+    @test (@jit getindex(x, 3)) == 4
+    @test (@jit getindex(x, Reactant.ConcreteRNumber(4))) == 5
 
     x = Reactant.to_rarray(2:10; track_numbers=Number)
-    @test (@jit unitrange_test(x, 3)) == 4
-    @test (@jit unitrange_test(x, Reactant.ConcreteRNumber(4))) == 5
+    @test (@jit getindex(x, 3)) == 4
+    @test (@jit getindex(x, Reactant.ConcreteRNumber(4))) == 5
 end
 
 mulpi(x) = π * x
@@ -1431,7 +1426,10 @@ end
 end
 
 zip_iterator(a, b) = mapreduce(splat(*), +, zip(a, b))
+zip_iterator2(a, b) = mapreduce(splat(.-), +, zip(a, b))
 enumerate_iterator(a) = mapreduce(splat(*), +, enumerate(a))
+enumerate_iterator2(a) = mapreduce(splat(.-), +, enumerate(a))
+mapreduce_vector(a) = mapreduce(-, +, a)
 
 function nested_mapreduce_zip(x, y)
     return mapreduce(+, zip(eachcol(x), eachcol(y)); init=0.0f0) do (x, y)
@@ -1447,42 +1445,63 @@ function nested_mapreduce_hcat(x, y)
     end
 end
 
+function f_generator(points, params)
+    return sum(params * point for point in points)
+end
+
 @testset "Base.Iterators" begin
     @testset "zip" begin
         N = 10
-        a = range(1.0, 5.0; length=N)
-        x = range(10.0, 15.0; length=N + 2)
+        a = collect(range(1.0, 5.0; length=N))
+        x = collect(range(10.0, 15.0; length=N + 2))
         x_ra = Reactant.to_rarray(x)
 
         @test @jit(zip_iterator(a, x_ra)) ≈ zip_iterator(a, x)
+
+        a = [rand(Float32, 2, 3) for _ in 1:10]
+        x = [rand(Float32, 2, 3) for _ in 1:10]
+        a_ra = Reactant.to_rarray(a)
+        x_ra = Reactant.to_rarray(x)
+
+        @test @jit(zip_iterator2(a_ra, x_ra)) ≈ zip_iterator2(a, x)
     end
 
     @testset "enumerate" begin
-        x = range(1.0, 5.0; length=10)
+        x = collect(range(1.0, 5.0; length=10))
         x_ra = Reactant.to_rarray(x)
 
         @test @jit(enumerate_iterator(x_ra)) ≈ enumerate_iterator(x)
+
+        x = [rand(Float32, 2, 3) for _ in 1:10]
+        x_ra = Reactant.to_rarray(x)
+
+        @test @jit(enumerate_iterator2(x_ra)) ≈ enumerate_iterator2(x)
     end
 
     @testset "nested mapreduce" begin
         x = rand(Float32, 4, 3)
         y = rand(Float32, 4, 3)
-
         x_ra = Reactant.to_rarray(x)
         y_ra = Reactant.to_rarray(y)
-
         @test @jit(nested_mapreduce_zip(x_ra, y_ra)) ≈ nested_mapreduce_zip(x, y)
     end
-
     @testset "nested mapreduce hcat" begin
         x = rand(Float32, 4, 3)
         y = rand(Float32, 4, 3)
-
         x_ra = Reactant.to_rarray(x)
         y_ra = Reactant.to_rarray(y)
 
         @test @jit(nested_mapreduce_hcat(x_ra, y_ra)) ≈ nested_mapreduce_hcat(x, y)
     end
+end
+
+@testset "Base.Generator" begin
+    points = eachcol(rand(Float32, 2, 6))
+    params = rand(Float32, 4, 2)
+    points_ra = Reactant.to_rarray(points)
+    params_ra = Reactant.to_rarray(params)
+
+    @test @jit(f_generator(points_ra, params_ra)) ≈ f_generator(points, params)
 end
 
 @testset "compilation cache" begin
@@ -1551,4 +1570,56 @@ map_test_1(i, xᵢ, yᵢ) = xᵢ + yᵢ + max(xᵢ, yᵢ)
     @jit map!(map_test_1, z_ra, 1:length(x), x_ra, y_ra)
     @test z ≈ z_ra
     @test z_ra ≈ gt
+end
+
+@testset "repeat specialize" begin
+    x_ra = Reactant.to_rarray(rand(Float32, 2, 3))
+
+    hlo = repr(@code_hlo(repeat(x_ra, 2, 3)))
+    @test !contains(hlo, "stablehlo.dynamic_update_slice")
+end
+
+@testset "call through inference barrier" begin
+    points = [rand(Float32, 2), rand(Float32, 2)]
+    params = rand(Float32, 4, 2)
+    points_ra = Reactant.to_rarray(points)
+    params_ra = Reactant.to_rarray(params)
+
+    f(params, points) = mapreduce(Base.Fix1(*, params), +, points)
+
+    @test @jit(f(params_ra, points_ra)) ≈ f(params, points)
+end
+
+@testset "clamp!" begin
+    x = rand(Float32, 32, 32)
+    x_ra = Reactant.to_rarray(x)
+    @test @jit(clamp!(x_ra, 0.5, Inf32)) ≈ clamp!(x, 0.5, Inf32)
+end
+
+mapped_sub(xs...) = stack(map(-, xs...))
+
+@testset "map of slices" begin
+    # We shouldn't be using `elem_apply` in this case and instead unroll the map
+    # our passes will fuse them backup if needed.
+    @testset "Vector of Slices" begin
+        x_full = rand(Float32, 10, 5, 3)
+        y_full = rand(Float32, 10, 5, 3)
+        x = [view(x_full, :, i, :) for i in 1:size(x_full, 2)]
+        y = [view(y_full, :, i, :) for i in 1:size(y_full, 2)]
+        x_ra = Reactant.to_rarray(x)
+        y_ra = Reactant.to_rarray(y)
+
+        @test @jit(mapped_sub(x_ra, y_ra)) ≈ mapped_sub(x, y) atol = 1e-5 rtol = 1e-5
+    end
+
+    @testset "Slices" begin
+        x_full = rand(Float32, 10, 5)
+
+        @testset "ColumnSlices" begin
+            x_sliced = eachcol(x_full)
+            x_ra = Reactant.to_rarray(x_sliced)
+
+            @test @jit(mapped_sub(x_ra)) ≈ mapped_sub(x_sliced) atol = 1e-5 rtol = 1e-5
+        end
+    end
 end

@@ -1597,7 +1597,7 @@ dimensions are present, grouped as follows:
 -   a variadic number of Workgroup memory attributions.
 -   a variadic number of Private memory attributions.
 
-The `kernelFunc` and `kernelModule` attributes are optional and specifies
+The `function` and `module` attributes are optional and specifies
 the kernel name and a module in which the kernel should be outlined.
 
 # Syntax
@@ -1608,6 +1608,8 @@ operation ::= `gpu.launch` (`async` (`[` ssa-id-list `]`)? )?
                          `blocks` `(` ssa-id-list `)` `in` ssa-reassignment
                          `threads` `(` ssa-id-list `)` `in` ssa-reassignment
                          (dynamic_shared_memory_size ssa-use)?
+                         (`module(` symbol-ref-id `)`)?
+                         (`function(` symbol-ref-id `)`)?
                          memory-attribution
                          region attr-dict?
 ssa-reassignment ::= `(` ssa-id `=` ssa-use (`,` ssa-id `=` ssa-use)* `)`
@@ -1665,6 +1667,14 @@ gpu.launch clusters(%cx, %cy, %cz) in (%sz_cx = %0, %sz_cy = %1, %sz_cz = %2)
   // sizes are immediately usable inside body region.
   \"some_op\"(%cx, %bx, %tx) : (index, index, index) -> ()
 }
+
+// Launch with module and function attributes.
+gpu.launch blocks(%bx, %by, %bz) in (%sz_bx = %0, %sz_by = %1, %sz_bz = %2)
+           threads(%tx, %ty, %tz) in (%sz_tx = %3, %sz_ty = %4, %sz_tz = %5)
+           module(@kernel_module) function(@kernel_func) {
+  \"some_op\"(%bx, %tx) : (index, index) -> ()
+  %42 = load %val1[%bx] : memref<?xf32, 1>
+}
 ```
 
 Rationale: using operation/block arguments gives analyses a clear way of
@@ -1686,8 +1696,8 @@ function launch(
     clusterSizeZ=nothing::Union{Nothing,Value},
     dynamicSharedMemorySize=nothing::Union{Nothing,Value},
     asyncToken=nothing::Union{Nothing,IR.Type},
-    kernelFunc=nothing,
-    kernelModule=nothing,
+    module_=nothing,
+    function_=nothing,
     body::Region,
     location=Location(),
 )
@@ -1732,9 +1742,8 @@ function launch(
         ]),
     )
     !isnothing(asyncToken) && push!(op_ty_results, asyncToken)
-    !isnothing(kernelFunc) && push!(attributes, namedattribute("kernelFunc", kernelFunc))
-    !isnothing(kernelModule) &&
-        push!(attributes, namedattribute("kernelModule", kernelModule))
+    !isnothing(module_) && push!(attributes, namedattribute("module", module_))
+    !isnothing(function_) && push!(attributes, namedattribute("function", function_))
 
     return create_operation(
         "gpu.launch",

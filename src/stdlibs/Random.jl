@@ -4,9 +4,10 @@ module TracedRandom
 # 1. https://github.com/JuliaGPU/CUDA.jl/blob/master/src/random.jl
 # 2. https://github.com/JuliaRandom/Random123.jl/blob/master/src/common.jl
 
-using ..Reactant:
-    Reactant, TracedRArray, TracedRNumber, ReactantRNG, AnyTracedRArray, TracedUtils, Ops
+using ..Reactant: Reactant, TracedUtils, Ops, TracedRArray, TracedRNumber, AnyTracedRArray
 using ..Reactant.Ops: @opcall
+import ..Reactant: ReactantRNG
+
 using Random: Random, AbstractRNG
 
 @noinline make_seed(rng::AbstractRNG=Random.RandomDevice()) =
@@ -31,7 +32,7 @@ Base.copy(rng::ReactantRNG) = ReactantRNG(copy(rng.seed), rng.algorithm)
 
 @noinline function ReactantRNG()
     if Reactant.within_compile()
-        return ReactantRNG(TracedUtils.promote_to(TracedRArray{UInt64,1}, make_seed()))
+        return ReactantRNG(Reactant.promote_to(TracedRArray, make_seed()))
     else
         return ReactantRNG(Reactant.to_rarray(make_seed()))
     end
@@ -111,7 +112,7 @@ for randfun in (:rand, :randn, :randexp)
         @noinline function $(overload_randfun)(
             rng::ReactantRNG{<:TracedRArray}, ::Type{T}=Float64
         ) where {T}
-            A = TracedUtils.promote_to(TracedRArray{T,0}, fill(T(0)))
+            A = Reactant.promote_to(TracedRArray, fill(T(0)))
             $(overload_randfun!)(rng, A)
             return TracedRNumber{T}((), A.mlir_data)
         end
@@ -126,8 +127,7 @@ for randfun in (:rand, :randn, :randexp, :rand!, :randn!, :randexp!)
     @eval begin
         @noinline function $(overload_randfun)(rng::AbstractRNG, args...)
             rng = ReactantRNG(
-                TracedUtils.promote_to(TracedRArray{UInt64,1}, make_seed(rng)),
-                rng_algorithm(rng),
+                Reactant.promote_to(TracedRArray, make_seed(rng)), rng_algorithm(rng)
             )
             return $(internal_overload_randfun)(rng, args...)
         end

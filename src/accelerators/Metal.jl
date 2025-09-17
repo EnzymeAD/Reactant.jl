@@ -2,7 +2,7 @@ module Metal
 
 using Reactant: Reactant
 using Scratch: @get_scratch!
-using Downloads
+using Downloads: Downloads
 
 const metal_pjrt_plugin_dir = Ref{Union{Nothing,String}}(nothing)
 

@@ -67,14 +67,14 @@ end
 """
 `addi`
 
-Performs N-bit addition on the operands. The operands are interpreted as 
-unsigned bitvectors. The result is represented by a bitvector containing the 
-mathematical value of the addition modulo 2^n, where `n` is the bitwidth. 
-Because `arith` integers use a two\'s complement representation, this operation 
+Performs N-bit addition on the operands. The operands are interpreted as
+unsigned bitvectors. The result is represented by a bitvector containing the
+mathematical value of the addition modulo 2^n, where `n` is the bitwidth.
+Because `arith` integers use a two\'s complement representation, this operation
 is applicable on both signed and unsigned integer operands.
 
 The `addi` operation takes two operands and returns one result, each of
-these is required to be the same type. This type may be an integer scalar type, 
+these is required to be the same type. This type may be an integer scalar type,
 a vector whose element type is integer, or a tensor of integers.
 
 This op supports `nuw`/`nsw` overflow flags which stands for
@@ -253,9 +253,9 @@ end
 
 Signed integer division. Rounds towards positive infinity, i.e. `7 / -2 = -3`.
 
-Divison by zero, or signed division overflow (minimum value divided by -1) 
-is undefined behavior. When applied to `vector` and `tensor` values, the 
-behavior is undefined if _any_ of its elements are divided by zero or has a 
+Divison by zero, or signed division overflow (minimum value divided by -1)
+is undefined behavior. When applied to `vector` and `tensor` values, the
+behavior is undefined if _any_ of its elements are divided by zero or has a
 signed division overflow.
 
 # Example
@@ -292,10 +292,10 @@ end
 
 Unsigned integer division. Rounds towards positive infinity. Treats the
 leading bit as the most significant, i.e. for `i16` given two\'s complement
-representation, `6 / -2 = 6 / (2^16 - 2) = 1`. 
+representation, `6 / -2 = 6 / (2^16 - 2) = 1`.
 
-Division by zero is undefined behavior. When applied to `vector` and 
-`tensor` values, the behavior is undefined if _any_ elements are divided by 
+Division by zero is undefined behavior. When applied to `vector` and
+`tensor` values, the behavior is undefined if _any_ elements are divided by
 zero.
 
 # Example
@@ -543,9 +543,9 @@ end
 Signed integer division. Rounds towards zero. Treats the leading bit as
 sign, i.e. `6 / -2 = -3`.
 
-Divison by zero, or signed division overflow (minimum value divided by -1) 
-is undefined behavior. When applied to `vector` and `tensor` values, the 
-behavior is undefined if _any_ of its elements are divided by zero or has a 
+Divison by zero, or signed division overflow (minimum value divided by -1)
+is undefined behavior. When applied to `vector` and `tensor` values, the
+behavior is undefined if _any_ of its elements are divided by zero or has a
 signed division overflow.
 
 # Example
@@ -590,8 +590,8 @@ Unsigned integer division. Rounds towards zero. Treats the leading bit as
 the most significant, i.e. for `i16` given two\'s complement representation,
 `6 / -2 = 6 / (2^16 - 2) = 0`.
 
-Division by zero is undefined behavior. When applied to `vector` and 
-`tensor` values, the behavior is undefined if _any_ elements are divided by 
+Division by zero is undefined behavior. When applied to `vector` and
+`tensor` values, the behavior is undefined if _any_ elements are divided by
 zero.
 
 # Example
@@ -790,9 +790,9 @@ end
 
 Signed integer division. Rounds towards negative infinity, i.e. `5 / -2 = -3`.
 
-Divison by zero, or signed division overflow (minimum value divided by -1) 
-is undefined behavior. When applied to `vector` and `tensor` values, the 
-behavior is undefined if _any_ of its elements are divided by zero or has a 
+Divison by zero, or signed division overflow (minimum value divided by -1)
+is undefined behavior. When applied to `vector` and `tensor` values, the
+behavior is undefined if _any_ of its elements are divided by zero or has a
 signed division overflow.
 
 # Example
@@ -1467,8 +1467,8 @@ end
 Signed integer division remainder. Treats the leading bit as sign, i.e. `6 %
 -2 = 0`.
 
-Division by zero is undefined behavior. When applied to `vector` and 
-`tensor` values, the behavior is undefined if _any_ elements are divided by 
+Division by zero is undefined behavior. When applied to `vector` and
+`tensor` values, the behavior is undefined if _any_ elements are divided by
 zero.
 
 # Example
@@ -1512,8 +1512,8 @@ end
 Unsigned integer division remainder. Treats the leading bit as the most
 significant, i.e. for `i16`, `6 % -2 = 6 % (2^16 - 2) = 6`.
 
-Division by zero is undefined behavior. When applied to `vector` and 
-`tensor` values, the behavior is undefined if _any_ elements are divided by 
+Division by zero is undefined behavior. When applied to `vector` and
+`tensor` values, the behavior is undefined if _any_ elements are divided by
 zero.
 
 # Example
@@ -1581,28 +1581,28 @@ end
 """
 `scaling_extf`
 
-This operation upcasts input floating-point values using provided scale 
-values. It expects both scales and the input operand to be of the same shape, 
-making the operation elementwise. Scales are usually calculated per block 
+This operation upcasts input floating-point values using provided scale
+values. It expects both scales and the input operand to be of the same shape,
+making the operation elementwise. Scales are usually calculated per block
 following the OCP MXFP spec as described in https://arxiv.org/abs/2310.10537.
 
-If scales are calculated per block where blockSize != 1, then scales may 
-require broadcasting to make this operation elementwise. For example, let\'s 
-say the input is of shape `<dim1 x dim2 x ... dimN>`. Given blockSize != 1 and 
-assuming quantization happens on the last axis, the input can be reshaped to 
-`<dim1 x dim2 x ... (dimN/blockSize) x blockSize>`. Scales will be calculated 
-per block on the last axis. Therefore, scales will be of shape 
-`<dim1 x dim2 x ... (dimN/blockSize) x 1>`. Scales could also be of some other 
-shape as long as it is broadcast compatible with the input, e.g., 
+If scales are calculated per block where blockSize != 1, then scales may
+require broadcasting to make this operation elementwise. For example, let\'s
+say the input is of shape `<dim1 x dim2 x ... dimN>`. Given blockSize != 1 and
+assuming quantization happens on the last axis, the input can be reshaped to
+`<dim1 x dim2 x ... (dimN/blockSize) x blockSize>`. Scales will be calculated
+per block on the last axis. Therefore, scales will be of shape
+`<dim1 x dim2 x ... (dimN/blockSize) x 1>`. Scales could also be of some other
+shape as long as it is broadcast compatible with the input, e.g.,
 `<1 x 1 x ... (dimN/blockSize) x 1>`.
 
-In this example, before calling into `arith.scaling_extf`, scales must be 
-broadcasted to `<dim1 x dim2 x dim3 ... (dimN/blockSize) x blockSize>`. Note 
-that there could be multiple quantization axes. Internally, 
+In this example, before calling into `arith.scaling_extf`, scales must be
+broadcasted to `<dim1 x dim2 x dim3 ... (dimN/blockSize) x blockSize>`. Note
+that there could be multiple quantization axes. Internally,
 `arith.scaling_extf` would perform the following:
- 
+
   ```
-  resultTy = get_type(result) 
+  resultTy = get_type(result)
   scaleTy  = get_type(scale)
   inputTy = get_type(input)
   scale.exponent = arith.truncf(scale) : scaleTy to f8E8M0
@@ -1610,7 +1610,7 @@ that there could be multiple quantization axes. Internally,
   input.extf = arith.extf(input) : inputTy to resultTy
   result = arith.mulf(scale.extf, input.extf)
   ```
-  It propagates NaN values. Therefore, if either scale or the input element 
+  It propagates NaN values. Therefore, if either scale or the input element
   contains NaN, then the output element value will also be a NaN.
 """
 function scaling_extf(
@@ -1638,28 +1638,28 @@ end
 """
 `scaling_truncf`
 
-This operation downcasts input using the provided scale values. It expects 
-both scales and the input operand to be of the same shape and, therefore, 
-makes the operation elementwise. Scales are usually calculated per block 
+This operation downcasts input using the provided scale values. It expects
+both scales and the input operand to be of the same shape and, therefore,
+makes the operation elementwise. Scales are usually calculated per block
 following the OCP MXFP spec as described in https://arxiv.org/abs/2310.10537.
 Users are required to normalize and clamp the scales as necessary before calling
 passing them to this operation.  OCP MXFP spec also does the flushing of denorms
-on the input operand, which should be handled during lowering by passing appropriate 
-fastMath flag to this operation. 
+on the input operand, which should be handled during lowering by passing appropriate
+fastMath flag to this operation.
 
-If scales are calculated per block where blockSize != 1, scales may require 
-broadcasting to make this operation elementwise. For example, let\'s say the 
-input is of shape `<dim1 x dim2 x ... dimN>`. Given blockSize != 1 and 
-assuming quantization happens on the last axis, the input can be reshaped to 
-`<dim1 x dim2 x ... (dimN/blockSize) x blockSize>`. Scales will be calculated 
-per block on the last axis. Therefore, scales will be of shape 
-`<dim1 x dim2 x ... (dimN/blockSize) x 1>`. Scales could also be of some other 
-shape as long as it is broadcast compatible with the input, e.g., 
+If scales are calculated per block where blockSize != 1, scales may require
+broadcasting to make this operation elementwise. For example, let\'s say the
+input is of shape `<dim1 x dim2 x ... dimN>`. Given blockSize != 1 and
+assuming quantization happens on the last axis, the input can be reshaped to
+`<dim1 x dim2 x ... (dimN/blockSize) x blockSize>`. Scales will be calculated
+per block on the last axis. Therefore, scales will be of shape
+`<dim1 x dim2 x ... (dimN/blockSize) x 1>`. Scales could also be of some other
+shape as long as it is broadcast compatible with the input, e.g.,
 `<1 x 1 x ... (dimN/blockSize) x 1>`.
 
-In this example, before calling into `arith.scaling_truncf`, scales must be 
-broadcasted to `<dim1 x dim2 x dim3 ... (dimN/blockSize) x blockSize>`. Note 
-that there could be multiple quantization axes. Internally, 
+In this example, before calling into `arith.scaling_truncf`, scales must be
+broadcasted to `<dim1 x dim2 x dim3 ... (dimN/blockSize) x blockSize>`. Note
+that there could be multiple quantization axes. Internally,
 `arith.scaling_truncf` would perform the following:
 
 ```
@@ -1704,9 +1704,9 @@ end
 """
 `shli`
 
-The `shli` operation shifts the integer value of the first operand to the left 
-by the integer value of the second operand. The second operand is interpreted as 
-unsigned. The low order bits are filled with zeros. If the value of the second 
+The `shli` operation shifts the integer value of the first operand to the left
+by the integer value of the second operand. The second operand is interpreted as
+unsigned. The low order bits are filled with zeros. If the value of the second
 operand is greater or equal than the bitwidth of the first operand, then the
 operation returns poison.
 
@@ -1721,7 +1721,7 @@ This op supports `nuw`/`nsw` overflow flags which stands for
 %1 = arith.constant 5 : i8  // %1 is 0b00000101
 %2 = arith.constant 3 : i8
 %3 = arith.shli %1, %2 : i8 // %3 is 0b00101000
-%4 = arith.shli %1, %2 overflow<nsw, nuw> : i8  
+%4 = arith.shli %1, %2 overflow<nsw, nuw> : i8
 ```
 """
 function shli(
@@ -1755,11 +1755,11 @@ end
 """
 `shrsi`
 
-The `shrsi` operation shifts an integer value of the first operand to the right 
-by the value of the second operand. The first operand is interpreted as signed, 
-and the second operand is interpreter as unsigned. The high order bits in the 
-output are filled with copies of the most-significant bit of the shifted value 
-(which means that the sign of the value is preserved). If the value of the second 
+The `shrsi` operation shifts an integer value of the first operand to the right
+by the value of the second operand. The first operand is interpreted as signed,
+and the second operand is interpreter as unsigned. The high order bits in the
+output are filled with copies of the most-significant bit of the shifted value
+(which means that the sign of the value is preserved). If the value of the second
 operand is greater or equal than bitwidth of the first operand, then the operation
 returns poison.
 
@@ -1798,9 +1798,9 @@ end
 """
 `shrui`
 
-The `shrui` operation shifts an integer value of the first operand to the right 
+The `shrui` operation shifts an integer value of the first operand to the right
 by the value of the second operand. The first operand is interpreted as unsigned,
-and the second operand is interpreted as unsigned. The high order bits are always 
+and the second operand is interpreted as unsigned. The high order bits are always
 filled with zeros. If the value of the second operand is greater or equal than the
 bitwidth of the first operand, then the operation returns poison.
 

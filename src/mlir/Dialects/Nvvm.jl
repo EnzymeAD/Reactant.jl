@@ -1203,16 +1203,8 @@ end
 `cp_async_bulk_tensor_prefetch`
 
 Initiates an asynchronous prefetch operation on the tensor data from global
-memory to L2 cache.
-
-The Op has two modes:
-1) Tiled Mode: It\'s the default mode. The source multi-dimensional tensor
-layout is preserved at the destination.
-
-2) Im2col Mode: This mode is used when `im2colOffsets` operands are present.
-the elements in the Bounding Box of the source tensor are rearranged into
-columns at the destination. In this mode, the tensor has to be at least
-3-dimensional.
+memory to L2 cache. This Op supports all the load modes specified in
+`TMALoadMode`.
 
 The `l2CacheHint` operand is optional, and it is used to specify cache
 eviction policy that may be used during the memory access.
@@ -1224,6 +1216,7 @@ function cp_async_bulk_tensor_prefetch(
     coordinates::Vector{Value},
     im2colOffsets::Vector{Value},
     l2CacheHint=nothing::Union{Nothing,Value};
+    mode=nothing,
     location=Location(),
 )
     op_ty_results = IR.Type[]
@@ -1238,6 +1231,7 @@ function cp_async_bulk_tensor_prefetch(
             1, length(coordinates), length(im2colOffsets), (l2CacheHint == nothing) ? 0 : 1
         ]),
     )
+    !isnothing(mode) && push!(attributes, namedattribute("mode", mode))
 
     return create_operation(
         "nvvm.cp.async.bulk.tensor.prefetch",
@@ -2401,6 +2395,25 @@ function fence_sc_cluster(; location=Location())
     )
 end
 
+function read_ptx_sreg_globaltimer_lo(; res::IR.Type, location=Location())
+    op_ty_results = IR.Type[res,]
+    operands = Value[]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+
+    return create_operation(
+        "nvvm.read.ptx.sreg.globaltimer.lo",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
 function read_ptx_sreg_globaltimer(; res::IR.Type, location=Location())
     op_ty_results = IR.Type[res,]
     operands = Value[]
@@ -2501,53 +2514,29 @@ function read_ptx_sreg_gridid(; res::IR.Type, range=nothing, location=Location()
 end
 
 """
-`griddepcontrol_launch_dependents`
+`griddepcontrol`
 
-Signals that specific dependents the runtime system designated to react to 
-this instruction can be scheduled as soon as all other CTAs in the grid 
-issue the same instruction or have completed.
-
-
-[For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/#parallel-synchronization-and-communication-instructions-griddepcontrol)
-"""
-function griddepcontrol_launch_dependents(; location=Location())
-    op_ty_results = IR.Type[]
-    operands = Value[]
-    owned_regions = Region[]
-    successors = Block[]
-    attributes = NamedAttribute[]
-
-    return create_operation(
-        "nvvm.griddepcontrol.launch.dependents",
-        location;
-        operands,
-        owned_regions,
-        successors,
-        attributes,
-        results=op_ty_results,
-        result_inference=false,
-    )
-end
-
-"""
-`griddepcontrol_wait`
-
-Causes the executing thread to wait until all prerequisite grids in flight 
+If the \$kind attribute is set to `wait`, it causes the 
+executing thread to wait until all prerequisite grids in flight 
 have completed and all the memory operations from the prerequisite grids 
 are performed and made visible to the current grid.
 
+When the \$kind is launch_dependents, it signals that specific dependents 
+the runtime system designated to react to this instruction can be scheduled 
+as soon as all other CTAs in the grid issue the same instruction or have 
+completed.
 
 [For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/#parallel-synchronization-and-communication-instructions-griddepcontrol)
 """
-function griddepcontrol_wait(; location=Location())
+function griddepcontrol(; kind, location=Location())
     op_ty_results = IR.Type[]
     operands = Value[]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[]
+    attributes = NamedAttribute[namedattribute("kind", kind),]
 
     return create_operation(
-        "nvvm.griddepcontrol.wait",
+        "nvvm.griddepcontrol",
         location;
         operands,
         owned_regions,
@@ -2601,20 +2590,23 @@ This op allows using PTX directly within the NVVM
 """
 function inline_ptx(
     readOnlyArgs::Vector{Value},
+    readWriteArgs::Vector{Value},
     predicate=nothing::Union{Nothing,Value};
     writeOnlyArgs::Vector{IR.Type},
     ptxCode,
     location=Location(),
 )
     op_ty_results = IR.Type[writeOnlyArgs...,]
-    operands = Value[readOnlyArgs...,]
+    operands = Value[readOnlyArgs..., readWriteArgs...]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[namedattribute("ptxCode", ptxCode),]
     !isnothing(predicate) && push!(operands, predicate)
     push!(
         attributes,
-        operandsegmentsizes([length(readOnlyArgs), (predicate == nothing) ? 0 : 1]),
+        operandsegmentsizes([
+            length(readOnlyArgs), length(readWriteArgs), (predicate == nothing) ? 0 : 1
+        ]),
     )
 
     return create_operation(
@@ -2744,13 +2736,18 @@ function read_ptx_sreg_lanemask_lt(; res::IR.Type, location=Location())
     )
 end
 
-function ldmatrix(ptr::Value; res::IR.Type, num, layout, location=Location())
+function ldmatrix(
+    ptr::Value; res::IR.Type, num, layout, shape, eltType, location=Location()
+)
     op_ty_results = IR.Type[res,]
     operands = Value[ptr,]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[
-        namedattribute("num", num), namedattribute("layout", layout)
+        namedattribute("num", num),
+        namedattribute("layout", layout),
+        namedattribute("shape", shape),
+        namedattribute("eltType", eltType),
     ]
 
     return create_operation(
@@ -3230,6 +3227,74 @@ function mma_sync(
 end
 
 """
+`nanosleep`
+
+The op suspends the thread for a sleep duration approximately close to the 
+delay `\$duration`, specified in nanoseconds. 
+
+The sleep duration is approximated, but guaranteed to be in the 
+interval [0, 2*t]. The maximum sleep duration is 1 millisecond. 
+The implementation may reduce the sleep duration for individual threads 
+within a warp such that all sleeping threads in the warp wake up together.
+
+[For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#miscellaneous-instructions-nanosleep)
+"""
+function nanosleep(; duration, location=Location())
+    op_ty_results = IR.Type[]
+    operands = Value[]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[namedattribute("duration", duration),]
+
+    return create_operation(
+        "nvvm.nanosleep",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+"""
+`pmevent`
+
+Triggers one or more of a fixed number of performance monitor events, with
+event index or mask specified by immediate operand.
+
+Without `mask` it triggers a single performance monitor event indexed by
+immediate operand a, in the range 0..15.
+
+With `mask` it triggers one or more of the performance monitor events. Each
+bit in the 16-bit immediate operand controls an event.
+
+[For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#miscellaneous-instructions-pmevent)
+"""
+function pmevent(; maskedEventId=nothing, eventId=nothing, location=Location())
+    op_ty_results = IR.Type[]
+    operands = Value[]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+    !isnothing(maskedEventId) &&
+        push!(attributes, namedattribute("maskedEventId", maskedEventId))
+    !isnothing(eventId) && push!(attributes, namedattribute("eventId", eventId))
+
+    return create_operation(
+        "nvvm.pmevent",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+"""
 `prefetch`
 
 Operand `addr` can be a global, local or generic address pointer. No 
@@ -3471,12 +3536,18 @@ location indicated by the address operand \$ptr in shared memory.
 
 [For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#warp-level-matrix-store-instruction-stmatrix)
 """
-function stmatrix(ptr::Value, sources::Vector{Value}; layout, location=Location())
+function stmatrix(
+    ptr::Value, sources::Vector{Value}; layout, shape, eltType, location=Location()
+)
     op_ty_results = IR.Type[]
     operands = Value[ptr, sources...]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("layout", layout),]
+    attributes = NamedAttribute[
+        namedattribute("layout", layout),
+        namedattribute("shape", shape),
+        namedattribute("eltType", eltType),
+    ]
 
     return create_operation(
         "nvvm.stmatrix",

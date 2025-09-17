@@ -157,13 +157,17 @@ function broadcast_in_sublanes(source::Value; output::IR.Type, lane, location=Lo
 end
 
 function concatenate(
-    sources::Vector{Value}; output::IR.Type, dimension, location=Location()
+    sources::Vector{Value};
+    output=nothing::Union{Nothing,IR.Type},
+    dimension,
+    location=Location(),
 )
-    op_ty_results = IR.Type[output,]
+    op_ty_results = IR.Type[]
     operands = Value[sources...,]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[namedattribute("dimension", dimension),]
+    !isnothing(output) && push!(op_ty_results, output)
 
     return create_operation(
         "tpu.concatenate",
@@ -172,8 +176,8 @@ function concatenate(
         owned_regions,
         successors,
         attributes,
-        results=op_ty_results,
-        result_inference=false,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
     )
 end
 
@@ -365,6 +369,7 @@ function enqueue_dma(
     device_id=nothing::Union{Nothing,Value},
     core_id=nothing::Union{Nothing,Value},
     priority=nothing,
+    strict_ordering=nothing,
     location=Location(),
 )
     op_ty_results = IR.Type[]
@@ -391,6 +396,8 @@ function enqueue_dma(
         ]),
     )
     !isnothing(priority) && push!(attributes, namedattribute("priority", priority))
+    !isnothing(strict_ordering) &&
+        push!(attributes, namedattribute("strict_ordering", strict_ordering))
 
     return create_operation(
         "tpu.enqueue_dma",
@@ -681,6 +688,16 @@ function log(inputs::Vector{Value}; tag, formatted=nothing, location=Location())
     )
 end
 
+"""
+`mask_cast`
+
+Cast a mask register into a different packing.
+
+If casting to a type with smaller packing, then values being packed together
+must be identical. For example, for 8x128x4xi1 -> 8x128x2xi1,
+input[i, j, 0] == input[i, j, 1] and input[i, j, 2] == input[i, j, 3] must
+hold for all i, j. Otherwise, the result is undefined.
+"""
 function mask_cast(input::Value; result::IR.Type, location=Location())
     op_ty_results = IR.Type[result,]
     operands = Value[input,]
@@ -1023,6 +1040,25 @@ function repeat(source::Value; output::IR.Type, dimension, times, location=Locat
     )
 end
 
+function reshape(source::Value; result::IR.Type, location=Location())
+    op_ty_results = IR.Type[result,]
+    operands = Value[source,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+
+    return create_operation(
+        "tpu.reshape",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
 function roll_vectors(input::Vector{Value}; output::IR.Type, location=Location())
     op_ty_results = IR.Type[output,]
     operands = Value[input...,]
@@ -1141,6 +1177,32 @@ function scan_count(
         attributes,
         results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
         result_inference=(length(op_ty_results) == 0 ? true : false),
+    )
+end
+
+function scan(
+    input::Value,
+    mask=nothing::Union{Nothing,Value};
+    output::IR.Type,
+    kind,
+    location=Location(),
+)
+    op_ty_results = IR.Type[output,]
+    operands = Value[input,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[namedattribute("kind", kind),]
+    !isnothing(mask) && push!(operands, mask)
+
+    return create_operation(
+        "tpu.scan",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
     )
 end
 
@@ -1651,6 +1713,7 @@ function wait_dma2(
     dst::Value,
     device_id=nothing::Union{Nothing,Value};
     core_id=nothing::Union{Nothing,Value},
+    strict_ordering=nothing,
     location=Location(),
 )
     op_ty_results = IR.Type[]
@@ -1672,6 +1735,8 @@ function wait_dma2(
             1
         end,
     ]))
+    !isnothing(strict_ordering) &&
+        push!(attributes, namedattribute("strict_ordering", strict_ordering))
 
     return create_operation(
         "tpu.wait_dma2",

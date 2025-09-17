@@ -1076,6 +1076,50 @@ function make_tensor_ptr(
     )
 end
 
+function map_elementwise(
+    srcs::Vector{Value};
+    result::Vector{IR.Type},
+    pack,
+    scalarOp::Region,
+    location=Location(),
+)
+    op_ty_results = IR.Type[result...,]
+    operands = Value[srcs...,]
+    owned_regions = Region[scalarOp,]
+    successors = Block[]
+    attributes = NamedAttribute[namedattribute("pack", pack),]
+
+    return create_operation(
+        "tt.map_elementwise",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+function map_elementwise_return(result::Vector{Value}; location=Location())
+    op_ty_results = IR.Type[]
+    operands = Value[result...,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+
+    return create_operation(
+        "tt.map_elementwise.return",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
 """
 `mulhiui`
 
