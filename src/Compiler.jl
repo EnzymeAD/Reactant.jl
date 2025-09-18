@@ -2363,7 +2363,7 @@ function compile_mlir!(
         result_shardings,
         mlir_fn_res.global_device_ids,
         donated_args_mask,
-        Reactant.TracedUtils.is_pure(func3)
+        Reactant.TracedUtils.is_pure(func3),
     )
 end
 
@@ -3219,7 +3219,9 @@ Generate Julia code to call the XLA executable.
 - `nresults`: The number of results to expect.
 - `is_pure`: Whether the function being compiled is pure (i.e., has no side effects)
 """
-function codegen_xla_call(flatten_names, nresults, is_sharded::Bool, ndevices::Int, is_pure::Bool)
+function codegen_xla_call(
+    flatten_names, nresults, is_sharded::Bool, ndevices::Int, is_pure::Bool
+)
     flatten_buffer_refs = map(n -> :($n.buffer), flatten_names)
 
     base_symbol_name = is_sharded ? Symbol(:result_buffer_m, ndevices, :_) : :result_buffer_
@@ -3573,7 +3575,11 @@ function compile(f, args; kwargs...)
     )
 
     concretized_res_names, xla_call_code = codegen_xla_call(
-        flatten_arg_names, length(linear_results), mlir_fn_res.is_sharded, ndevices, mlir_fn_res.is_pure
+        flatten_arg_names,
+        length(linear_results),
+        mlir_fn_res.is_sharded,
+        ndevices,
+        mlir_fn_res.is_pure,
     )
 
     shard_info_code, optional_shard_info_code, linear_result_shard_info = codegen_shard_info(

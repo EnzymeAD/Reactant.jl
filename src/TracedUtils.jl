@@ -420,7 +420,7 @@ function make_mlir_fn(
         missing,
         global_device_ids,
         nothing, # populated later in `compile_mlir!`
-        is_pure(func2)
+        is_pure(func2),
     )
 end
 
