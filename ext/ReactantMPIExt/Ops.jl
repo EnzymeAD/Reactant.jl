@@ -595,10 +595,11 @@ function wait(
 
     #! format: off
     #     int MPI_Wait(MPI_Request* request, MPI_Status* status)
+    # Size of status is implem dependent, we try to set it to the max
     IR.inject!(sym_name, """
         func.func @$sym_name(%errcode : !llvm.ptr, %req : !llvm.ptr) -> () {
             %c1_i32 = arith.constant 1 : i32
-            %status = llvm.alloca %c1_i32 x !llvm.array<4 x i32>  : (i32) -> !llvm.ptr
+            %status = llvm.alloca %c1_i32 x !llvm.array<6 x i32>  : (i32) -> !llvm.ptr
             %res = llvm.call @MPI_Wait(%req, %status) : (!llvm.ptr, !llvm.ptr) -> (i32)
             llvm.store %res, %errcode : i32, !llvm.ptr
             func.return
