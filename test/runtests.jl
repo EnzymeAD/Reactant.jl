@@ -39,6 +39,9 @@ const REACTANT_TEST_GROUP = lowercase(get(ENV, "REACTANT_TEST_GROUP", "all"))
         @safetestset "Config" include("config.jl")
         @safetestset "Batching" include("batching.jl")
         @safetestset "QA" include("qa.jl")
+        if isdefined(Base, :Memory)
+            @safetestset "Memory" include("memory.jl")
+        end
     end
 
     if REACTANT_TEST_GROUP == "all" || REACTANT_TEST_GROUP == "integration"
@@ -59,6 +62,7 @@ const REACTANT_TEST_GROUP = lowercase(get(ENV, "REACTANT_TEST_GROUP", "all"))
             nranks = 2
             run(`$(mpiexec()) -n $nranks $(Base.julia_cmd()) integration/mpi.jl`)
         end
+        @safetestset "FixedSizeArrays" include("integration/fixedsizearrays.jl")
     end
 
     if REACTANT_TEST_GROUP == "all" || REACTANT_TEST_GROUP == "neural_networks"

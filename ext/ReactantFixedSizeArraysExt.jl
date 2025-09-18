@@ -24,9 +24,10 @@ Base.@nospecializeinfer function Reactant.make_tracer(
     mode;
     kwargs...,
 ) where {T,N}
-    return Reactant.make_tracer(
+    shape = size(prev)
+    return reshape(Reactant.make_tracer(
         seen, parent(prev), (path..., 1), mode; kwargs..., track_numbers=Number
-    )
+    ), shape)
 end
 
 end
