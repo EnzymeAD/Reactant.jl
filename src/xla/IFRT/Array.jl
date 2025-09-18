@@ -38,6 +38,30 @@ function Array(
     return Array(buffer)
 end
 
+if isdefined(Base, :Memory)
+    function Array(
+        client::Client,
+        memory::Base.Memory{T},
+        device::Device=XLA.default_device(client),
+        memory_kind::AbstractString=string(convert(MemoryKind, XLA.default_memory(device))),
+    ) where {T<:Reactant.ReactantPrimitive}
+        sizear = collect(Int64, reverse(size(memory)))
+        buffer = GC.@preserve memory sizear begin
+            @ccall MLIR.API.mlir_c.ifrt_client_make_single_shard_array_from_host_buffer(
+                client.client::Ptr{Cvoid},
+                pointer(memory)::Ptr{T},
+                XLA.primitive_type(T)::UInt64,
+                1::Csize_t,
+                sizear::Ptr{Int64},
+                0::Cint, # kAlwaysCopy
+                device.device::Ptr{Cvoid},
+                string(memory_kind)::Cstring,
+            )::Ptr{Cvoid}
+        end
+        return Array(buffer)
+    end
+end
+
 function Array(
     client::Client, array::Base.Array{T,N}, sharding::Sharding
 ) where {T<:Reactant.ReactantPrimitive,N}
@@ -143,6 +167,45 @@ function Array(
     return Array(buffer)
 end
 
+if isdefined(Base, :Memory)
+    function Array(
+        client::Client, memory::Base.Memory{T}, sharding::Sharding
+    ) where {T<:Reactant.ReactantPrimitive}
+        all_devices = XLA.devices(sharding)
+        all_logical_device_ids = collect(Int64, 0:(length(all_devices) - 1))
+        hlo_sharding = convert(XLA.HloSharding, sharding)
+
+        slices, _ = XLA.sharding_to_concrete_array_indices(
+            hlo_sharding, size(memory), all_logical_device_ids
+        )
+
+        seen_slice = Dict{NTuple{N,UnitRange{Int64}},Int}()
+        host_buffers = Base.Array{T,1}[]
+        addressable_shard_indices = Vector{Int64}[]
+
+        cur_shard = 0
+        for (slice, device) in zip(slices, all_devices)
+            XLA.is_addressable(device) || continue
+
+            if haskey(seen_slice, slice)
+                idx = seen_slice[slice]
+                push!(addressable_shard_indices[idx], cur_shard)
+            else
+                host_buffer = let slice = memory[slice...]
+                    slice isa Number ? collect(slice) : slice
+                end
+                push!(host_buffers, host_buffer)
+                push!(addressable_shard_indices, Int64[cur_shard])
+                seen_slice[slice] = length(host_buffers)
+            end
+
+            cur_shard += 1
+        end
+
+        return Array(client, host_buffers, addressable_shard_indices, size(memory), sharding)
+    end
+end
+
 function Array(
     client::Client, array::Base.Array{T,N}, sharding
 ) where {T<:Reactant.ReactantPrimitive,N}
@@ -156,6 +219,23 @@ function Array(
     ifrt_sharding = Sharding([devices...], hlo_sharding)
 
     return Array(client, array, ifrt_sharding)
+end
+
+if isdefined(Base, :Memory)
+    function Array(
+        client::Client, memory::Base.Memory{T}, sharding
+    ) where {T<:Reactant.ReactantPrimitive}
+        @assert sharding isa Reactant.Sharding.AbstractSharding
+        if !(sharding isa Reactant.Sharding.HloSharding)
+            sharding = Reactant.Sharding.HloSharding(sharding, size(memory))
+        end
+
+        (; hlo_sharding, mesh) = sharding
+        devices = XLA.get_device.((client,), mesh.device_ids)
+        ifrt_sharding = Sharding([devices...], hlo_sharding)
+
+        return Array(client, memory, ifrt_sharding)
+    end
 end
 
 @inline function XLA.free_buffer(buffer::Array)
