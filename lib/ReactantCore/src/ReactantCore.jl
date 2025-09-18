@@ -180,7 +180,7 @@ macro trace(args...)
         (
             fnname_(call_args__) where {Typs__} = fnbody_
         ) | (
-            fnname_(call_args__) where {Typs__}
+            fnname_(call_args__) = fnbody_
         ) | (
             function fnname_(call_args__)
                 fnbody_
