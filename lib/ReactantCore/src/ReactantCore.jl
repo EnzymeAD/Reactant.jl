@@ -191,9 +191,70 @@ macro trace(args...)
         return (esc(trace_for(expr; track_numbers, checkpointing, mincut)))
     Meta.isexpr(expr, :while) &&
         return (esc(trace_while(expr; track_numbers, checkpointing, mincut)))
+    Meta.isexpr(expr, :function) && return esc(trace_funcdef(expr))
     return error(
         "Only `if-elseif-else` blocks, `for` and `while` loops are currently supported by `@trace`",
     )
+end
+
+function trace_funcdef(expr)
+    Meta.isexpr(expr, :function) || error("Expected function expr")
+    
+    # Extract function signature and body
+    sig = expr.args[1]
+    body = expr.args[2]
+    
+    # Check that we have a proper function signature
+    if !Meta.isexpr(sig, :call)
+        error("Expected function call signature, got $(sig.head)")
+    end
+    
+    # Check for keyword arguments (would appear as Expr(:parameters, ...) as first arg after fname)
+    if length(sig.args) > 1 && Meta.isexpr(sig.args[2], :parameters)
+        error("Functions with keyword arguments are not yet supported by @trace")
+    end
+    
+    fname = sig.args[1]
+    args = sig.args[2:end]
+    
+    # Extract argument names (handling type annotations)
+    arg_names = map(args) do arg
+        if arg isa Symbol
+            arg
+        elseif Meta.isexpr(arg, :(::))
+            # Type annotation: either x::T or ::T
+            if length(arg.args) == 1
+                error("Anonymous typed arguments are not supported")
+            else
+                arg.args[1]
+            end
+        else
+            error("Unsupported argument pattern: $arg")
+        end
+    end
+    
+    # Generate internal function name
+    internal_fname = gensym(Symbol(fname, :_internal))
+    
+    # Build the internal function definition
+    internal_sig = Expr(:call, internal_fname, args...)
+    internal_func = Expr(:function, internal_sig, body)
+    
+    # Build the wrapper function
+    wrapper_body = quote
+        if $(within_compile)()
+            return $(traced_call)($internal_fname, $(arg_names...))
+        else
+            return $internal_fname($(arg_names...))
+        end
+    end
+    wrapper_func = Expr(:function, sig, wrapper_body)
+    
+    # Return both function definitions
+    return quote
+        $internal_func
+        $wrapper_func
+    end
 end
 
 function trace_while(expr; track_numbers, mincut, checkpointing, first_arg=nothing)

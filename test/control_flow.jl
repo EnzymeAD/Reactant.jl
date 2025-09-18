@@ -820,6 +820,50 @@ end
     @test a_ra == a
 end
 
+@testset "trace function definitions" begin
+    # Basic traced function definition
+    @trace function traced_add(x, y)
+        return x .+ y
+    end
+    
+    @testset "basic traced function" begin
+        a = rand(2, 3)
+        b = rand(2, 3)
+        a_ra = Reactant.to_rarray(a)
+        b_ra = Reactant.to_rarray(b)
+        
+        # Should work the same as untraced when JIT compiled
+        @test @jit(traced_add(a_ra, b_ra)) ≈ traced_add(a, b)
+        ir = @code_hlo optimize=false traced_add(a_ra, b_ra)
+        func_names = [String(Reactant.MLIR.IR.attr(op, "sym_name")) for op in Reactant.MLIR.IR.OperationIterator(Reactant.MLIR.IR.body(ir))]
+        @test any(contains("traced_add"), func_names)
+
+        
+        # Should also work with regular arrays (outside compile context)
+        @test traced_add(a, b) ≈ a .+ b
+    end
+    
+    # Traced function with typed arguments
+    @trace function traced_multiply(x::AbstractArray, y::AbstractArray)
+        return x .* y
+    end
+    
+    @testset "traced function with type annotations" begin
+        a = rand(3, 3)
+        b = rand(3, 3)
+        a_ra = Reactant.to_rarray(a)
+        b_ra = Reactant.to_rarray(b)
+        
+        @test @jit(traced_multiply(a_ra, b_ra)) ≈ traced_multiply(a, b)
+        ir = @code_hlo optimize=false traced_multiply(a_ra, b_ra)
+        func_names = [String(Reactant.MLIR.IR.attr(op, "sym_name")) for op in Reactant.MLIR.IR.OperationIterator(Reactant.MLIR.IR.body(ir))]
+        @test any(contains("traced_multiply"), func_names)
+
+        @test traced_multiply(a, b) ≈ a .* b
+    end
+    end
+
+
 mutable struct TestClock{I}
     iteration::I
 end
