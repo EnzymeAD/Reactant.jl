@@ -202,7 +202,9 @@ if isdefined(Base, :Memory)
             cur_shard += 1
         end
 
-        return Array(client, host_buffers, addressable_shard_indices, size(memory), sharding)
+        return Array(
+            client, host_buffers, addressable_shard_indices, size(memory), sharding
+        )
     end
 end
 
