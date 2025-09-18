@@ -231,7 +231,8 @@ function get_argname(expr)
         var = gensym(:_)
         return var, Expr(:(::), var, expr.args[1])
     end
-    Meta.isexpr(expr, :kw) && return get_argname(expr.args[1]), expr
+    Meta.isexpr(expr, :kw) && return get_argname(expr.args[1])[1], expr
+    Meta.isexpr(expr, :(...)) && return expr, expr
     @assert expr isa Symbol
     if expr == :_
         var = gensym(:_)
@@ -259,7 +260,7 @@ function trace_function_definition(mod, expr)
 
     new_fn = MacroTools.splitdef(expr)
 
-    standardized_argnames = [get_argname(arg) for arg in new_fn[:args]]
+    standardized_argnames = get_argname.(new_fn[:args])
     argnames = first.(standardized_argnames)
     new_fn[:args] = last.(standardized_argnames)
 
@@ -267,10 +268,14 @@ function trace_function_definition(mod, expr)
         insert!(argnames, 1, orig_fname.args[1])
     end
 
-    traced_call_expr = if isempty(new_fn[:kwargs])
-        :($(traced_call)($(fname), $(argnames...)))
+    if isempty(new_fn[:kwargs])
+        traced_call_expr = :($(traced_call)($(fname), $(argnames...)))
+        untraced_call_expr = :($(fname)($(argnames...)))
     else
-        :($(traced_call)(Core.kwcall, (; $(new_fn[:kwargs]...)), $(fname), $(argnames...)))
+        kws = first.(get_argname.(new_fn[:kwargs]))
+        traced_call_expr =
+            :($(traced_call)(Core.kwcall, (; $(kws...)), $(fname), $(argnames...)))
+        untraced_call_expr = :(Core.kwcall((; $(kws...)), $(fname), $(argnames...)))
     end
 
     new_fn[:name] = orig_fname
@@ -278,7 +283,7 @@ function trace_function_definition(mod, expr)
         if $(within_compile)() && $(any)($(is_traced), ($(argnames...),))
             return $(traced_call_expr)
         else
-            return $(fname)($(argnames...); $(new_fn[:kwargs]...))
+            return $(untraced_call_expr)
         end
     )
 
