@@ -11,14 +11,14 @@ nranks = MPI.Comm_size(comm)
 
 
 # # --------------------------
-# # test MPI.jl Isend / Irecv!
 # # --------------------------
+# # test MPI.jl Isend / Irecv!
 # # Skip test if not enough processes
 # if nranks < 2
 #     @error "Need at least 2 MPI processes for Isend/Irecv test"
 # end
 
-# send_buf = [1, 2, 3, 4, 5]
+# # send_buf = [1, 2, 3, 4, 5]
 # send_buf = ones(5)
 # recv_buf = zeros(5)
 # tag = 42
@@ -29,16 +29,55 @@ nranks = MPI.Comm_size(comm)
 #     MPI.Wait(req_send)
 #     println("Rank 0: Sent")
 # elseif rank == 1
+    # source = 0
+    # req_recv = MPI.Irecv!(recv_buf, source, tag, comm)
+    # println("Rank 1: Waiting...")
+    # status = MPI.Wait(req_recv)
+    # println( "Rank 1: Received: $(recv_buf == send_buf)" )
+    # # @test MPI.Get_source(status) == 0
+    # # @test MPI.Get_tag(status) == 42
+# end
+
+# # Send / Irecv+wait
+# send_buf = ones(5)
+# recv_buf = zeros(5)
+# tag = 43
+# if rank == 0
+#     dest = 1
+#     MPI.Send(send_buf, dest, tag, comm)
+# elseif rank == 1
 #     source = 0
+
+#     # MPI.Recv!(recv_buf, source, tag, comm)
+
 #     req_recv = MPI.Irecv!(recv_buf, source, tag, comm)
-#     println("Rank 1: Waiting...")
 #     status = MPI.Wait(req_recv)
-#     println( "Rank 1: Received: $(recv_buf == send_buf)" )
-#     # @test MPI.Get_source(status) == 0
-#     # @test MPI.Get_tag(status) == 42
+
+#     println(recv_buf == send_buf)
+# end
+
+# # Isend+wait / Recv
+# send_buf = ones(5)
+# recv_buf = zeros(5)
+# tag = 43
+# if rank == 0
+#     dest = 1
+
+#     # MPI.Send(send_buf, dest, tag, comm)
+
+#     req_send = MPI.Isend(send_buf, dest, tag, comm)
+#     MPI.Wait(req_send)
+# elseif rank == 1
+#     source = 0
+
+#     MPI.Recv!(recv_buf, source, tag, comm)
+
+#     # req_recv = MPI.Irecv!(recv_buf, source, tag, comm)
+#     # status = MPI.Wait(req_recv)
+
+#     println(recv_buf == send_buf)
 # end
 # # --------------------------
-
 
 
 # send_buf = ConcreteRArray(ones(5))
@@ -81,34 +120,23 @@ nranks = MPI.Comm_size(comm)
 # # println("\nllvm:\n", @code_llvm bbb(recv_buf, src, tag, comm))
 
 
-# send_buf = ConcreteRArray(ones(5))
-# recv_buf = ConcreteRArray(zeros(5))
-# tag = 42
-# function aaa(send_buf, recv_buf, rank, tag, comm)
-#     if rank==0
-#         dest = 1
-#         req = MPI.Isend(send_buf, dest, tag, comm)
-#         # errcode = MPI.Wait(req)
-#         # return errcode
-#         return nothing
-#     elseif rank==1
-#         src = 1
-#         req = MPI.Irecv!(recv_buf, src, tag, comm)
-#         errcode = MPI.Wait(req)
-#         return errcode, recv_buf
-#     end
-# end
-# @jit aaa(send_buf, recv_buf, rank, tag, comm)
-# println("Rank $rank returned")
-
-# # rank==1 && sleep(10)
-# # println("\n$rank: code_hlo optimize=false:\n", @code_hlo optimize=false aaa(send_buf, recv_buf, rank, tag, comm))
-# # println("\n$rank: code_hlo:\n", @code_hlo aaa(send_buf, recv_buf, rank, tag, comm))
-# # println("\n$rank: code_xla:\n", @code_xla aaa(send_buf, recv_buf, rank, tag, comm))
-# # bbb = @compile aaa(send_buf, recv_buf, rank, tag, comm)
-# # println("\n$rank: lowered:\n", @code_lowered bbb(send_buf, recv_buf, rank, tag, comm))
-# # println("\n$rank: typed:\n", @code_typed bbb(send_buf, recv_buf, rank, tag, comm))
-# # println("\n$rank: llvm:\n", @code_llvm bbb(send_buf, recv_buf, rank, tag, comm))
-
+send_buf = ConcreteRArray(ones(5))
+recv_buf = ConcreteRArray(zeros(5))
+tag = 42
+function aaa(send_buf, recv_buf, rank, tag, comm)
+    if rank==0
+        dest = 1
+        req = MPI.Isend(send_buf, dest, tag, comm)
+        MPI.Wait(req)
+        return nothing
+    elseif rank==1
+        src = 0
+        req = MPI.Irecv!(recv_buf, src, tag, comm)
+        MPI.Wait(req)
+        return nothing
+    end
+end
+@jit aaa(send_buf, recv_buf, rank, tag, comm)
+println("Rank $rank returned, $(recv_buf==send_buf)")
 
 MPI.Finalize()

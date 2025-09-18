@@ -20,39 +20,26 @@ function aaa(comm, rank, send_buf, recv_buf, tag)
     if rank == 0
         dest = 1
         # ccall(:jl_breakpoint, Cvoid, (Any,), dest)
-        return MPI.Send(send_buf, dest, tag, comm) # kinda hacky, but have to return this otherwise julia optimizes this out
+        MPI.Send(send_buf, dest, tag, comm) # kinda hacky, but have to return this otherwise julia optimizes this out
+        return nothing
     elseif rank == 1
         src = 0
-        # return MPI.Recv!(recv_buf, src, tag, comm)
         MPI.Recv!(recv_buf, src, tag, comm)
-        return recv_buf
+        return nothing
     end
 end
 
-result = @jit aaa(comm, rank, send_buf, recv_buf, tag)
+@jit aaa(comm, rank, send_buf, recv_buf, tag)
+println("Rank $rank returned, $(recv_buf==send_buf)")
 
-if rank==0
-    println("Rank $rank: $result")
-elseif rank==1
-    println("Rank $rank: $(result[2])")
-    println( recv_buf == send_buf )
-end
-
-# # rank==1 && sleep(5)
-# # # println("\nRank $rank:\n", @code_hlo optimize=false aaa(comm, rank, send_buf, recv_buf, tag))
-# # println("\nRank $rank:\n", @code_xla aaa(comm, rank, send_buf, recv_buf, tag))
-
-# if rank==0
-#     println("\ncode_hlo optimize=false:\n", @code_hlo optimize=false aaa(comm, rank, send_buf, recv_buf, tag))
-#     println("\ncode_hlo:\n", @code_hlo aaa(comm, rank, send_buf, recv_buf, tag))
-#     println("\ncode_xla:\n", @code_xla aaa(comm, rank, send_buf, recv_buf, tag))
-
-#     bbb = @compile aaa(comm, rank, send_buf, recv_buf, tag)
-#     println("\nlowered:\n", @code_lowered bbb(comm, rank, send_buf, recv_buf, tag))
-#     println("\ntyped:\n", @code_typed bbb(comm, rank, send_buf, recv_buf, tag))
-#     println("\nllvm:\n", @code_llvm bbb(comm, rank, send_buf, recv_buf, tag))
-# end
-
+# rank==1 && sleep(10)
+# println("\n$rank: code_hlo optimize=false:\n", @code_hlo optimize=false aaa(comm, rank, send_buf, recv_buf, tag))
+# println("\n$rank: code_hlo:\n", @code_hlo aaa(comm, rank, send_buf, recv_buf, tag))
+# println("\n$rank: code_xla:\n", @code_xla aaa(comm, rank, send_buf, recv_buf, tag))
+# bbb = @compile aaa(comm, rank, send_buf, recv_buf, tag)
+# println("\n$rank: lowered:\n", @code_lowered bbb(comm, rank, send_buf, recv_buf, tag))
+# println("\n$rank: typed:\n", @code_typed bbb(comm, rank, send_buf, recv_buf, tag))
+# println("\n$rank: llvm:\n", @code_llvm bbb(comm, rank, send_buf, recv_buf, tag))
 
 
 # ----------------
