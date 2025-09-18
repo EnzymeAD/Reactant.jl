@@ -225,9 +225,19 @@ macro trace(args...)
 end
 
 function get_argname(expr)
-    Meta.isexpr(expr, :(::)) && return expr.args[1]
-    Meta.isexpr(expr, :kw) && return get_argname(expr.args[1])
-    return expr
+    if Meta.isexpr(expr, :(::))
+        length(expr.args) == 2 && return expr.args[1], expr
+        @assert length(expr.args) == 1
+        var = gensym(:_)
+        return var, Expr(:(::), var, expr.args[1])
+    end
+    Meta.isexpr(expr, :kw) && return get_argname(expr.args[1]), expr
+    @assert expr isa Symbol
+    if expr == :_
+        var = gensym(:_)
+        return var, var
+    end
+    return expr, expr
 end
 
 function trace_function_definition(mod, expr)
@@ -237,13 +247,22 @@ function trace_function_definition(mod, expr)
     isfunctor = Meta.isexpr(orig_fname, :(::))
     fname = gensym(Symbol(orig_fname, :internal))
     internal_fn[:name] = fname
+
     if isfunctor
+        if length(orig_fname.args) == 1
+            sym_name = gensym("functor")
+            orig_fname = Expr(:(::), sym_name, orig_fname.args[1])
+        end
+        @assert length(orig_fname.args) == 2
         insert!(internal_fn[:args], 1, :($orig_fname))
     end
 
     new_fn = MacroTools.splitdef(expr)
 
-    argnames = [get_argname(arg) for arg in new_fn[:args]]
+    standardized_argnames = [get_argname(arg) for arg in new_fn[:args]]
+    argnames = first.(standardized_argnames)
+    new_fn[:args] = last.(standardized_argnames)
+
     if isfunctor
         insert!(argnames, 1, orig_fname.args[1])
     end
@@ -254,6 +273,7 @@ function trace_function_definition(mod, expr)
         :($(traced_call)(Core.kwcall, (; $(new_fn[:kwargs]...)), $(fname), $(argnames...)))
     end
 
+    new_fn[:name] = orig_fname
     new_fn[:body] = :(
         if $(within_compile)() && $(any)($(is_traced), ($(argnames...),))
             return $(traced_call_expr)
