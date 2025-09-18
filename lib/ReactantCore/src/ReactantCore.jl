@@ -1,7 +1,7 @@
 module ReactantCore
 
 using ExpressionExplorer: ExpressionExplorer
-using MacroTools: MacroTools
+using MacroTools: MacroTools, @capture
 
 export @trace, within_compile, MissingTracedValue, promote_to_traced
 
@@ -174,26 +174,92 @@ macro trace(args...)
     track_numbers = track_numbers ? Number : Union{}
     expr = macroexpand(__module__, expr)
 
+    #! format: off
+    if @capture(
+        expr,
+        (
+            fnname_(call_args__) where {Typs__} = fnbody_
+        ) | (
+            fnname_(call_args__) where {Typs__}
+        ) | (
+            function fnname_(call_args__)
+                fnbody_
+            end
+        ) | (
+            function fnname_(call_args__) where {Typs__}
+                fnbody_
+            end
+        )
+    )
+        return esc(trace_function_definition(__module__, expr))
+    end
+    #! format: on
+
     if Meta.isexpr(expr, :(=))
         if Meta.isexpr(expr.args[2], :if)
             return esc(trace_if_with_returns(expr; track_numbers))
         end
     end
+
     Meta.isexpr(expr, :call) && return esc(trace_call(__module__, expr))
+
     if Meta.isexpr(expr, :(.), 2) && Meta.isexpr(expr.args[2], :tuple)
         fname = :($(Base.Broadcast.BroadcastFunction)($(expr.args[1])))
         args = only(expr.args[2:end]).args
         call = Expr(:call, fname, args...)
         return esc(trace_call(__module__, call))
     end
+
     Meta.isexpr(expr, :if) && return esc(trace_if(expr; track_numbers))
+
     Meta.isexpr(expr, :for) &&
         return (esc(trace_for(expr; track_numbers, checkpointing, mincut)))
+
     Meta.isexpr(expr, :while) &&
         return (esc(trace_while(expr; track_numbers, checkpointing, mincut)))
+
     return error(
-        "Only `if-elseif-else` blocks, `for` and `while` loops are currently supported by `@trace`",
+        "Only `if-elseif-else` blocks, function definitions, `function calls`, `for` and \
+        `while` loops are currently supported by `@trace`"
     )
+end
+
+function get_argname(expr)
+    Meta.isexpr(expr, :(::)) && return expr.args[1]
+    Meta.isexpr(expr, :kw) && return get_argname(expr.args[1])
+    return expr
+end
+
+function trace_function_definition(mod, expr)
+    internal_fn = MacroTools.splitdef(expr)
+    orig_fname = internal_fn[:name]
+    fname = gensym(Symbol(orig_fname, :internal))
+    internal_fn[:name] = fname
+
+    # @show internal_fn
+
+    new_fn = MacroTools.splitdef(expr)
+
+    argnames = [get_argname(arg) for arg in new_fn[:args]]
+
+    traced_call_expr = if isempty(new_fn[:kwargs])
+        :($(traced_call)($(fname), $(argnames...)))
+    else
+        :($(traced_call)(Core.kwcall, (; $(new_fn[:kwargs]...)), $(fname), $(argnames...)))
+    end
+
+    new_fn[:body] = :(
+        if $(within_compile)() && $(any)($(is_traced), ($(argnames...),))
+            return $(traced_call_expr)
+        else
+            return $(fname)($(argnames...); $(new_fn[:kwargs]...))
+        end
+    )
+
+    return quote
+        $(MacroTools.combinedef(new_fn))
+        $(MacroTools.combinedef(internal_fn))
+    end
 end
 
 function trace_while(expr; track_numbers, mincut, checkpointing, first_arg=nothing)
