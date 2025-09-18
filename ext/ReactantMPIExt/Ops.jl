@@ -559,36 +559,24 @@ function wait(
     # int MPI_Wait(MPI_Request* request, MPI_Status* status)
     #! format: off
     IR.inject!(sym_name, """
-        func.func @$sym_name(%errcode : !llvm.ptr, %req : !llvm.ptr) -> () {
+        func.func @$sym_name(%req : !llvm.ptr) -> () {
             %c1_i32 = arith.constant 1 : i32
             %status = llvm.alloca %c1_i32 x !llvm.array<6 x i32>  : (i32) -> !llvm.ptr
-            %res = llvm.call @MPI_Wait(%req, %status) : (!llvm.ptr, !llvm.ptr) -> (i32)
-            llvm.store %res, %errcode : i32, !llvm.ptr
+            llvm.call @MPI_Wait(%req, %status) : (!llvm.ptr, !llvm.ptr) -> (i32)
             func.return
         }
     """)
     #! format: on
 
-    errcode = Reactant.Ops.constant(fill(Cint(0)))
-
-    output_operand_aliases = IR.Attribute([
-        IR.Attribute(
-            MLIR.API.stablehloOutputOperandAliasGet(
-                MLIR.IR.context(), 0, C_NULL, 0, 0, C_NULL
-            ),
-        ),
-    ])
-
-    ret = enzymexla.jit_call(
-        IR.Value[errcode.mlir_data, req.mlir_data];
+    enzymexla.jit_call(
+        IR.Value[req.mlir_data];
         fn=sym_attr,
-        result_0=IR.Type[mlir_type(errcode)],
+        result_0=IR.Type[],
         location,
-        output_operand_aliases=output_operand_aliases,
+        output_operand_aliases=IR.Attribute(IR.Attribute[]),
     )
 
-    errcode.mlir_data = IR.result(ret)
-    return errcode
+    return nothing
 end
 
 function inject_mpi_op!(op)
