@@ -240,7 +240,9 @@ if isdefined(Base, :Memory)
         sharded_data, shardinfo = sharding(theclient, thedevice, data)
         shape = size(data)
         nsharded = length(sharded_data)
-        return ConcretePJRTArray{T,1,nsharded,typeof(shardinfo)}(sharded_data, shape, shardinfo)
+        return ConcretePJRTArray{T,1,nsharded,typeof(shardinfo)}(
+            sharded_data, shape, shardinfo
+        )
     end
 end
 
@@ -503,8 +505,11 @@ elseif XLA.REACTANT_XLA_RUNTIME == "IFRT"
     ConcreteIFRTArray
 end
 
-@inline ConcreteRArray{T}(::UndefInitializer, shape::Integer...; kwargs...) where {T} =
-    ConcreteRArray{T}(undef, Dims(shape); kwargs...)
+@inline ConcreteRArray{T}(::UndefInitializer, shape::Integer...; kwargs...) where {T} = ConcreteRArray{
+    T
+}(
+    undef, Dims(shape); kwargs...
+)
 
 """
     ConcreteRNumber(
