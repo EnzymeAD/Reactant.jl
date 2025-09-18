@@ -233,14 +233,20 @@ end
 function trace_function_definition(mod, expr)
     internal_fn = MacroTools.splitdef(expr)
     orig_fname = internal_fn[:name]
+
+    isfunctor = Meta.isexpr(orig_fname, :(::))
     fname = gensym(Symbol(orig_fname, :internal))
     internal_fn[:name] = fname
-
-    # @show internal_fn
+    if isfunctor
+        insert!(internal_fn[:args], 1, :($orig_fname))
+    end
 
     new_fn = MacroTools.splitdef(expr)
 
     argnames = [get_argname(arg) for arg in new_fn[:args]]
+    if isfunctor
+        insert!(argnames, 1, orig_fname.args[1])
+    end
 
     traced_call_expr = if isempty(new_fn[:kwargs])
         :($(traced_call)($(fname), $(argnames...)))
