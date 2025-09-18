@@ -261,6 +261,11 @@ f_checkpointing_diff(x, enable_checkpointing) =
 
 ### Complete Example: Neural Network Training
 
+!!! tip "Training Lux Neural Networks"
+    If you are using [Lux.jl](https://lux.csail.mit.edu/) for neural networks, prefer using the
+    [TrainState API](https://lux.csail.mit.edu/stable/manual/compiling_lux_models#compile_lux_model_trainstate)
+    that abstracts away a lot of these details.
+
 Here's a complete example of training a simple neural network:
 
 ```@example autodiff_tutorial
