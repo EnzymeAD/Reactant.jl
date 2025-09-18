@@ -24,7 +24,7 @@ end
     @test nranks == @jit MPI.Allreduce(x, MPI.SUM, MPI.COMM_WORLD)
 end
 
-@testset "Send, Recv!" begin
+@testset "Send / Recv!" begin
     comm = MPI.COMM_WORLD
     rank = MPI.Comm_rank(comm)
     nranks = MPI.Comm_size(comm)
@@ -81,12 +81,12 @@ end
         function sendrecv!(comm, rank, send_buf, recv_buf, tag)
             if rank == 0
                 dest = 1
-                err_code = MPI.Send(send_buf, dest, tag, comm) # kinda hacky, but unfort have to return something otherwise julia optimizes this out @code_lowered
-                return err_code
+                MPI.Send(send_buf, dest, tag, comm)
+                return nothing
             elseif rank == 1
                 src = 0
                 MPI.Recv!(recv_buf, src, tag, comm)
-                return recv_buf
+                return nothing
             end
         end
         @jit sendrecv!(comm, rank, send_buf, recv_buf, tag)
@@ -95,7 +95,7 @@ end
 
 end
 
-@testset "Isend, Irecv!, Wait" begin
+@testset "Isend / Irecv! / Wait" begin
     comm = MPI.COMM_WORLD
     rank = MPI.Comm_rank(comm)
     nranks = MPI.Comm_size(comm)
@@ -114,7 +114,7 @@ end
             src = 0
             req = MPI.Irecv!(recv_buf, src, tag, comm)
             MPI.Wait(req)
-            return recv_buf
+            return nothing
         end
     end
     @jit isendirecvwait(send_buf, recv_buf, rank, tag, comm)
