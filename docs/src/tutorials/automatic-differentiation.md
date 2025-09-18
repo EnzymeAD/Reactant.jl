@@ -226,6 +226,39 @@ println("Complex gradient: ", grad_complex[1])
 nothing # hide
 ```
 
+### Loops
+
+When performing computations in a loop using the [`@trace`](@ref) (see the [tutorial about Control Flow](@ref control-flow)), Enzyme has to save intermediary results during the primal computation to be used in the reverse pass.
+
+The [`@trace`](@ref) macro offers two parameters to limit the amount of memory that has to be saved. The first one in the `mincut` option which strictly reduces the amount of saved memory by saving only the minimal amount of memory needed for each iteration and recomputing variables if needed.
+
+Secondly, it is possible to enable the `checkpointing` option which will save intermediary loop carried values every $\sqrt{N}$ iterations and perform complete recomputation during the reverse pass. This is a way to trade compute time against memory.
+
+```@example autodiff_tutorial
+function f_checkpointing(x, enable_checkpointing)
+    y = copy(x)
+
+    # The intermediary values of y will need to be cached
+    # to be reused in the reverse pass. With checkpointing enabled,
+    # the cache will be of size `Int(sqrt(9)) * length(y)` instead of
+    # `9 * length(y)`.
+    @trace checkpointing=enable_checkpointing for i in 1:9
+        y .*= x
+    end
+
+    return y
+end
+
+f_checkpointing_diff(x, enable_checkpointing) =
+    Enzyme.gradient(Reverse, f_checkpointing, x, Const(enable_checkpointing))
+```
+
+!!! note
+    The currently implemented checkpointing scheme only supports a constant number
+    of iterations which has an integer square root. If $N$ is the number of iterations,
+    the values will be cached $\sqrt N$ times against $N$ times if checkpointing
+    is disabled.
+
 ### Complete Example: Neural Network Training
 
 Here's a complete example of training a simple neural network:
