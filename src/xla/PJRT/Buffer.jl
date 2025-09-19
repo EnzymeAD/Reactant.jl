@@ -28,7 +28,7 @@ end
 
 if isdefined(Base, :Memory)
     function Buffer(client::Client, memory::Memory{T}, device::Device) where {T}
-        return make_buffer_array(client, array, device)
+        return make_buffer_array(client, memory, device)
     end
 end
 
