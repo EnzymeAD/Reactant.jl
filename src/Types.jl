@@ -214,8 +214,8 @@ function ConcretePJRTArray{T,N}(
     return ConcretePJRTArray{T,N,D,typeof(sharding)}(data, shape, sharding)
 end
 
-function ConcretePJRTArray(
-    data::Array{T,N};
+function make_concrete_PJRT_array(
+    data::AbstractArray{T,N},
     client::Union{Nothing,XLA.PJRT.Client}=nothing,
     idx::Union{Int,Nothing}=nothing,
     device::Union{Nothing,XLA.PJRT.Device}=nothing,
@@ -228,6 +228,16 @@ function ConcretePJRTArray(
     return ConcretePJRTArray{T,N,nsharded,typeof(shardinfo)}(sharded_data, shape, shardinfo)
 end
 
+function ConcretePJRTArray(
+    data::Array{T,N};
+    client::Union{Nothing,XLA.PJRT.Client}=nothing,
+    idx::Union{Int,Nothing}=nothing,
+    device::Union{Nothing,XLA.PJRT.Device}=nothing,
+    sharding::Sharding.AbstractSharding=Sharding.NoSharding(),
+) where {T,N}
+    return make_concrete_PJRT_array(data, client, idx, device, sharding)
+end
+
 if isdefined(Base, :Memory)
     function ConcretePJRTArray(
         data::Memory{T};
@@ -236,13 +246,7 @@ if isdefined(Base, :Memory)
         device::Union{Nothing,XLA.PJRT.Device}=nothing,
         sharding::Sharding.AbstractSharding=Sharding.NoSharding(),
     ) where {T}
-        theclient, thedevice = _select_client_and_device(client, idx, device, sharding)
-        sharded_data, shardinfo = sharding(theclient, thedevice, data)
-        shape = size(data)
-        nsharded = length(sharded_data)
-        return ConcretePJRTArray{T,1,nsharded,typeof(shardinfo)}(
-            sharded_data, shape, shardinfo
-        )
+        return make_concrete_PJRT_array(data, client, idx, device, sharding)
     end
 end
 
@@ -360,8 +364,8 @@ function ConcreteIFRTArray{T,N}(
     return ConcreteIFRTArray{T,N,typeof(sharding)}(data, shape, sharding)
 end
 
-function ConcreteIFRTArray(
-    data::Array{T,N};
+function make_concrete_IFRT_array(
+    data::AbstractArray{T,N},
     client::Union{Nothing,XLA.IFRT.Client}=nothing,
     idx::Union{Int,Nothing}=nothing,
     device::Union{Nothing,XLA.IFRT.Device}=nothing,
@@ -374,6 +378,16 @@ function ConcreteIFRTArray(
     return ConcreteIFRTArray{T,N,typeof(shardinfo)}(sharded_data, shape, shardinfo, padding)
 end
 
+function ConcreteIFRTArray(
+    data::Array{T,N};
+    client::Union{Nothing,XLA.IFRT.Client}=nothing,
+    idx::Union{Int,Nothing}=nothing,
+    device::Union{Nothing,XLA.IFRT.Device}=nothing,
+    sharding::Sharding.AbstractSharding=Sharding.NoSharding(),
+) where {T,N}
+    return make_concrete_IFRT_array(data, client, idx, device, sharding)
+end
+
 if isdefined(Base, :Memory)
     function ConcreteIFRTArray(
         data::Memory{T};
@@ -382,10 +396,7 @@ if isdefined(Base, :Memory)
         device::Union{Nothing,XLA.IFRT.Device}=nothing,
         sharding::Sharding.AbstractSharding=Sharding.NoSharding(),
     ) where {T}
-        theclient, thedevice = _select_client_and_device(client, idx, device, sharding)
-        sharded_data, shardinfo, padding = sharding(theclient, nothing, data)
-        shape = size(data)
-        return ConcreteIFRTArray{T,1,typeof(shardinfo)}(sharded_data, shape, shardinfo)
+        return make_concrete_IFRT_array(data, client, idx, device, sharding)
     end
 end
 
