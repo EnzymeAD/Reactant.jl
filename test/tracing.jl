@@ -255,14 +255,16 @@ end
             struct Bar{T}
                 b::T
             end
-            struct Foo{T, B<:Bar{T}, AT<:AbstractArray{T}}
+            struct Foo{T,B<:Bar{T},AT<:AbstractArray{T}}
                 a::AT
                 b::B
             end
-            @test Reactant.apply_type_with_promotion(Foo, [Float64, Bar{Float64}, Reactant.TracedRArray{Float64, 1}]) == Foo{
+            @test Reactant.apply_type_with_promotion(
+                Foo, [Float64, Bar{Float64}, Reactant.TracedRArray{Float64,1}]
+            ) == Foo{
                 TracedRNumber{Float64},
                 Bar{TracedRNumber{Float64}},
-                Reactant.TracedRArray{Float64, 1},
+                Reactant.TracedRArray{Float64,1},
             }
         end
     end
