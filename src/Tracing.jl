@@ -882,8 +882,7 @@ When there's a constraint conflict, it tries to resolve it by promoting the conf
 """
 function apply_type_with_promotion(wrapper, params, relevant_typevars=typevar_dict(wrapper))
     unwrapped = Base.unwrap_unionall(wrapper) # remove all the typevars
-
-    new_params = copy(params)
+    params = [params...]
 
     changed = true
     iter = 0
@@ -921,7 +920,7 @@ function apply_type_with_promotion(wrapper, params, relevant_typevars=typevar_di
 
                     # Found a conflict! Figure out a new param type by promoting:
                     promoted = promote_type(value, params[param_i])
-                    new_params[param_i] = promoted
+                    params[param_i] = promoted
 
                     if value != promoted
                         # This happens when `value` lost the promotion battle.
@@ -929,13 +928,12 @@ function apply_type_with_promotion(wrapper, params, relevant_typevars=typevar_di
                         d = typevar_dict(rewrapped)
                         v = [param.parameters...]
                         v[d[typevar]] = promoted
-                        new_params[i] = params[i] = apply_type_with_promotion(rewrapped, v)
+                        params[i] = apply_type_with_promotion(rewrapped, v)
                     end
                     changed = true
                 end
             end
         end
-        params .= new_params
         iter += 1
     end
     return Core.apply_type(wrapper, params...)
