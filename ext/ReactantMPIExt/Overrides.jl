@@ -32,12 +32,7 @@ function MPI.Wait(req::TracedRequest)
 end
 
 # TODO use `make_tracer` to linearize arbitrary types? check out `MPI.Buffer`
-function MPI.Send(
-    buf::TracedRArray, 
-    dest::Integer, 
-    tag::Integer, 
-    comm::MPI.Comm
-)
+function MPI.Send(buf::TracedRArray, dest::Integer, tag::Integer, comm::MPI.Comm)
     tag = Reactant.Ops.constant(tag)
     dest = Reactant.Ops.constant(dest)
     return MPI.Send(buf, dest, tag, comm)
@@ -45,10 +40,7 @@ end
 
 # TODO use `make_tracer` to linearize arbitrary types? check out `MPI.Buffer`
 function MPI.Send(
-    buf::TracedRArray, 
-    dest::TracedRNumber, 
-    tag::TracedRNumber, 
-    comm::MPI.Comm
+    buf::TracedRArray, dest::TracedRNumber, tag::TracedRNumber, comm::MPI.Comm
 )
     @assert comm == MPI.COMM_WORLD "Only MPI.COMM_WORLD is supported currently"
     return Ops.send(buf, tag, dest)
@@ -56,11 +48,11 @@ end
 
 # TODO should we error if other `AbstractRequest` types are passed in?
 function MPI.Isend(
-    buf::TracedRArray, 
-    dest::Integer, 
-    tag::Integer, 
-    comm::MPI.Comm, 
-    request::TracedRequest=TracedRequest((), nothing)
+    buf::TracedRArray,
+    dest::Integer,
+    tag::Integer,
+    comm::MPI.Comm,
+    request::TracedRequest=TracedRequest((), nothing),
 )
     dest = Reactant.Ops.constant(dest)
     tag = Reactant.Ops.constant(tag)
@@ -72,10 +64,7 @@ end
 
 # TODO use `make_tracer` to linearize arbitrary types? check out `MPI.Buffer`
 function MPI.Isend(
-    buf::TracedRArray,
-    dest::TracedRNumber,
-    tag::TracedRNumber,
-    comm::MPI.Comm,
+    buf::TracedRArray, dest::TracedRNumber, tag::TracedRNumber, comm::MPI.Comm
 )
     @assert comm == MPI.COMM_WORLD "Only MPI.COMM_WORLD is supported currently"
 
@@ -103,12 +92,7 @@ end
 #     return Ops.isend(buf, tag, dest)
 # end
 
-function MPI.Recv!(
-    buf::TracedRArray,
-    source::Integer,
-    tag::Integer,
-    comm::MPI.Comm
-)
+function MPI.Recv!(buf::TracedRArray, source::Integer, tag::Integer, comm::MPI.Comm)
     tag = Reactant.Ops.constant(tag)
     source = Reactant.Ops.constant(source)
     return MPI.Recv!(buf, source, tag, comm)
@@ -133,10 +117,7 @@ end
 
 # TODO use `make_tracer` to delinearize arbitrary types? check out `MPI.Buffer`
 function MPI.Recv!(
-    buf::TracedRArray,
-    source::TracedRNumber,
-    tag::TracedRNumber,
-    comm::MPI.Comm
+    buf::TracedRArray, source::TracedRNumber, tag::TracedRNumber, comm::MPI.Comm
 )
     @assert comm == MPI.COMM_WORLD "Only MPI.COMM_WORLD is supported currently"
     return Ops.recv!(buf, tag, source)
@@ -147,7 +128,7 @@ function MPI.Irecv!(
     source::Integer,
     tag::Integer,
     comm::MPI.Comm,
-    request::TracedRequest=TracedRequest((), nothing)
+    request::TracedRequest=TracedRequest((), nothing),
 )
     source = Reactant.Ops.constant(source)
     tag = Reactant.Ops.constant(tag)
@@ -159,10 +140,7 @@ end
 
 # TODO use `make_tracer` to delinearize arbitrary types? check out `MPI.Buffer`
 function MPI.Irecv!(
-    buf::TracedRArray,
-    source::TracedRNumber,
-    tag::TracedRNumber,
-    comm::MPI.Comm
+    buf::TracedRArray, source::TracedRNumber, tag::TracedRNumber, comm::MPI.Comm
 )
     @assert comm == MPI.COMM_WORLD "Only MPI.COMM_WORLD is supported currently"
 

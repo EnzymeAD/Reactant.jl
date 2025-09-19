@@ -222,14 +222,11 @@ function __init__()
     end
 end
 
-
 mutable struct TracedRequest <: MPI.AbstractRequest
     paths::Tuple
     mlir_data::Union{Nothing,Reactant.MLIR.IR.Value}
 
-    function TracedRequest(
-        paths::Tuple, mlir_data::Union{Nothing,Reactant.MLIR.IR.Value}
-    )
+    function TracedRequest(paths::Tuple, mlir_data::Union{Nothing,Reactant.MLIR.IR.Value})
         if !isnothing(mlir_data)
             @assert size(Reactant.MLIR.IR.type(mlir_data)) == ()
         end
@@ -327,7 +324,6 @@ Reactant.TracedUtils.get_mlir_data(x::TracedRequest) = x.mlir_data
 #
 #     return result_cache[tocopy]
 # end
-
 
 include("Ops.jl")
 include("Overrides.jl")

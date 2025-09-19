@@ -338,9 +338,7 @@ function send(
     count = Reactant.Ops.constant(Int32(length(buf)))
 
     enzymexla.jit_call(
-        IR.Value[
-            buf.mlir_data, count.mlir_data, dest.mlir_data, tag.mlir_data
-        ];
+        IR.Value[buf.mlir_data, count.mlir_data, dest.mlir_data, tag.mlir_data];
         fn=sym_attr,
         result_0=IR.Type[],
         output_operand_aliases=IR.Attribute(IR.Attribute[]),
@@ -459,12 +457,7 @@ function recv!(
     ])
 
     ret = enzymexla.jit_call(
-        IR.Value[
-            recvbuf.mlir_data,
-            count.mlir_data,
-            src.mlir_data,
-            tag.mlir_data,
-        ];
+        IR.Value[recvbuf.mlir_data, count.mlir_data, src.mlir_data, tag.mlir_data];
         fn=sym_attr,
         result_0=[mlir_type(recvbuf)],
         output_operand_aliases,
@@ -550,7 +543,9 @@ function wait(
     sym_attr = IR.FlatSymbolRefAttribute(sym_name)
 
     # likely isend/irecv will have injected MPI_COMM_WORLD already
-    IR.tryinject!("MPI_COMM_WORLD", "llvm.mlir.global constant @MPI_COMM_WORLD() : !llvm.ptr")
+    IR.tryinject!(
+        "MPI_COMM_WORLD", "llvm.mlir.global constant @MPI_COMM_WORLD() : !llvm.ptr"
+    )
 
     IR.inject!("MPI_Wait", "llvm.func @MPI_Wait(!llvm.ptr, !llvm.ptr) -> i32")
 

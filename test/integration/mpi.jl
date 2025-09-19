@@ -90,9 +90,8 @@ end
             end
         end
         @jit sendrecv!(comm, rank, send_buf, recv_buf, tag)
-        rank==1 && @test recv_buf == send_buf
+        rank == 1 && @test recv_buf == send_buf
     end
-
 end
 
 @testset "Isend / Irecv! / Wait" begin
@@ -105,12 +104,12 @@ end
     recv_buf = ConcreteRArray(zeros(5))
     tag = 42
     function isendirecvwait(send_buf, recv_buf, rank, tag, comm)
-        if rank==0
+        if rank == 0
             dest = 1
             req = MPI.Isend(send_buf, dest, tag, comm)
             MPI.Wait(req)
             return nothing
-        elseif rank==1
+        elseif rank == 1
             src = 0
             req = MPI.Irecv!(recv_buf, src, tag, comm)
             MPI.Wait(req)
@@ -118,7 +117,7 @@ end
         end
     end
     @jit isendirecvwait(send_buf, recv_buf, rank, tag, comm)
-    rank==1 && @test recv_buf == send_buf
+    rank == 1 && @test recv_buf == send_buf
 end
 
 MPI.Finalize()
