@@ -820,6 +820,115 @@ end
     @test a_ra == a
 end
 
+@testset "trace function definitions" begin
+    # Basic traced function definition
+    @trace function traced_add(x, y)
+        return x .+ y
+    end
+
+    @testset "basic traced function" begin
+        a = rand(2, 3)
+        b = rand(2, 3)
+        a_ra = Reactant.to_rarray(a)
+        b_ra = Reactant.to_rarray(b)
+
+        # Should work the same as untraced when JIT compiled
+        @test @jit(traced_add(a_ra, b_ra)) ≈ traced_add(a, b)
+        ir = @code_hlo optimize = false traced_add(a_ra, b_ra)
+        func_names = [
+            String(Reactant.MLIR.IR.attr(op, "sym_name")) for
+            op in Reactant.MLIR.IR.OperationIterator(Reactant.MLIR.IR.body(ir))
+        ]
+        @test any(contains("traced_add"), func_names)
+
+        # Should also work with regular arrays (outside compile context)
+        @test traced_add(a, b) ≈ a .+ b
+    end
+
+    # Traced function with typed arguments
+    @trace function traced_multiply(x::AbstractArray, y::AbstractArray)
+        return x .* y
+    end
+
+    @testset "traced function with type annotations" begin
+        a = rand(3, 3)
+        b = rand(3, 3)
+        a_ra = Reactant.to_rarray(a)
+        b_ra = Reactant.to_rarray(b)
+
+        @test @jit(traced_multiply(a_ra, b_ra)) ≈ traced_multiply(a, b)
+        ir = @code_hlo optimize = false traced_multiply(a_ra, b_ra)
+        func_names = [
+            String(Reactant.MLIR.IR.attr(op, "sym_name")) for
+            op in Reactant.MLIR.IR.OperationIterator(Reactant.MLIR.IR.body(ir))
+        ]
+        @test any(contains("traced_multiply"), func_names)
+
+        @test traced_multiply(a, b) ≈ a .* b
+    end
+
+    @trace singleline(x) = x .+ 1
+
+    @testset "single line function" begin
+        a = rand(2, 3)
+        a_ra = Reactant.to_rarray(a)
+
+        @test @jit(singleline(a_ra)) ≈ singleline(a)
+        ir = @code_hlo optimize = false singleline(a_ra)
+        func_names = [
+            String(Reactant.MLIR.IR.attr(op, "sym_name")) for
+            op in Reactant.MLIR.IR.OperationIterator(Reactant.MLIR.IR.body(ir))
+        ]
+        @test any(contains("singleline"), func_names)
+
+        @test singleline(a) ≈ a .+ 1
+    end
+
+    struct FunctorTest1{X}
+        x::X
+    end
+
+    @trace function (f::FunctorTest1)(y)
+        return f.x .+ y
+    end
+
+    @testset "function with functor" begin
+        a = rand(2, 3)
+        a_ra = Reactant.to_rarray(a)
+
+        fn1 = FunctorTest1(2.0f0)
+
+        @test @jit(fn1(a_ra)) ≈ fn1(a)
+        ir = @code_hlo optimize = false fn1(a_ra)
+        func_names = [
+            String(Reactant.MLIR.IR.attr(op, "sym_name")) for
+            op in Reactant.MLIR.IR.OperationIterator(Reactant.MLIR.IR.body(ir))
+        ]
+        @test any(contains("FunctorTest1"), func_names)
+
+        @test fn1(a) ≈ a .+ 2.0f0
+    end
+
+    @trace function func_with_kwargs(x; y=1)
+        return x .+ y
+    end
+
+    @testset "function with kwargs" begin
+        a = rand(2, 3)
+        a_ra = Reactant.to_rarray(a)
+
+        @test @jit(func_with_kwargs(a_ra; y=2.0f0)) ≈ func_with_kwargs(a; y=2.0f0)
+        ir = @code_hlo optimize = false func_with_kwargs(a_ra; y=2.0f0)
+        func_names = [
+            String(Reactant.MLIR.IR.attr(op, "sym_name")) for
+            op in Reactant.MLIR.IR.OperationIterator(Reactant.MLIR.IR.body(ir))
+        ]
+        @test any(contains("kwcall"), func_names)
+
+        @test func_with_kwargs(a; y=2.0f0) ≈ a .+ 2.0f0
+    end
+end
+
 mutable struct TestClock{I}
     iteration::I
 end
