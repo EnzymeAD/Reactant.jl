@@ -502,8 +502,8 @@ MakeGPUClient(int node_id, int num_nodes, int64_t *allowed_devices,
     return client.release();
   }
 #else
-      *error = "ReactantExtra was not built with GPU support";
-      return nullptr;
+  *error = "ReactantExtra was not built with GPU support";
+  return nullptr;
 #endif
 }
 
