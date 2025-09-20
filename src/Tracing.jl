@@ -1516,11 +1516,11 @@ Base.@nospecializeinfer function make_tracer(
     )
 end
 
-Base.@nospecializeinfer function make_tracer(
+Base.@nospecializeinfer function make_tracer_array(
     seen,
-    @nospecialize(prev::Array),
+    @nospecialize(prev::AbstractArray),
     @nospecialize(path),
-    mode;
+    mode,
     @nospecialize(track_numbers::Type = Union{}),
     @nospecialize(sharding = Sharding.NoSharding()),
     @nospecialize(runtime = nothing),
@@ -1603,6 +1603,21 @@ Base.@nospecializeinfer function make_tracer(
         return prev
     end
     return newa
+end
+
+Base.@nospecializeinfer function make_tracer(
+    seen,
+    @nospecialize(prev::Array),
+    @nospecialize(path),
+    mode;
+    @nospecialize(track_numbers::Type = Union{}),
+    @nospecialize(sharding = Sharding.NoSharding()),
+    @nospecialize(runtime = nothing),
+    @nospecialize(device = nothing),
+    @nospecialize(client = nothing),
+    kwargs...,
+)
+    return make_tracer_array(seen, prev, path, mode, track_numbers, sharding, runtime, device, client, kwargs...)
 end
 
 Base.@nospecializeinfer function make_tracer(
@@ -1810,6 +1825,23 @@ Base.@nospecializeinfer function make_tracer(
     end
     res.contents = prev2
     return res
+end
+
+if isdefined(Base, :Memory)
+    Base.@nospecializeinfer function make_tracer(
+        seen,
+        @nospecialize(prev::Memory),
+        @nospecialize(path),
+        mode;
+        @nospecialize(track_numbers::Type = Union{}),
+        @nospecialize(sharding = Sharding.NoSharding()),
+        @nospecialize(runtime = nothing),
+        @nospecialize(device = nothing),
+        @nospecialize(client = nothing),
+        kwargs...,
+    )
+        return make_tracer_array(seen, prev, path, mode, track_numbers, sharding, runtime, device, client, kwargs...)
+    end
 end
 
 Base.@nospecializeinfer function make_tracer(
