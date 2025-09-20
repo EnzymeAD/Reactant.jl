@@ -903,13 +903,15 @@ function optimization_passes(
         "self_add_to_convolution_like($(Int(backend == "tpu")))",
         "self_mul_to_convolution_like($(Int(backend == "tpu")))",
         "subtract_multiply_const_to_add_mul_const",
+        "trivial_reduce_window_to_reduce_op",
+        "dot_general_add_distributive_simplify",
+        "dot_general_subtract_distributive_simplify",
     ]
 
     if !compile_options.disable_auto_batching_passes
         append!(
             transform_passes_list,
             [
-                "trivial_reduce_window_to_reduce_op",
                 "add_reduce_slice_fusion",
                 "mul_reduce_slice_fusion",
                 "min_reduce_slice_fusion",
@@ -1069,11 +1071,6 @@ function optimization_passes(
             "const_prop_through_barrier<16>",
             "concat_const_prop<1>($max_constant_threshold)",
             "dynamic_update_slice_const_prop($max_constant_threshold)",
-            "add_reduce_slice_fusion",
-            "mul_reduce_slice_fusion",
-            "min_reduce_slice_fusion",
-            "max_reduce_slice_fusion",
-            "trivial_reduce_window_to_reduce_op",
         ],
     )
 
