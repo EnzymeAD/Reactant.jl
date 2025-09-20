@@ -27,7 +27,7 @@ macro register_make_zero_inplace(sym)
         end
 
         @inline function $sym(prev::RArray{T,N}, seen::ST)::Nothing where {T,N,ST}
-            if Enzyme.Compiler.guaranteed_const_nongen(T, nothing)
+            if Enzyme.Compiler.guaranteed_const(T)
                 return nothing
             end
             if !isnothing(seen)
@@ -51,7 +51,7 @@ function Enzyme.make_zero(
     if haskey(seen, prev)
         return seen[prev]
     end
-    if Enzyme.Compiler.guaranteed_const_nongen(eltype(RT), nothing)
+    if Enzyme.Compiler.guaranteed_const(eltype(RT))
         return copy_if_inactive ? Base.deepcopy_internal(prev, seen) : prev
     end
     res = zero(prev)
