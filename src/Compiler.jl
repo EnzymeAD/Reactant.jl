@@ -903,13 +903,35 @@ function optimization_passes(
         "self_add_to_convolution_like($(Int(backend == "tpu")))",
         "self_mul_to_convolution_like($(Int(backend == "tpu")))",
         "subtract_multiply_const_to_add_mul_const",
-        "concat_insert_dim_dot_general",
-        "concat_insert_dim_gather",
-        "concat_insert_dim_iota",
-        "concat_insert_dim_reduce",
-        "concat_insert_dim_sort",
-        "concat_insert_dim_reduce_window",
     ]
+
+    if !compile_options.disable_auto_batching_passes
+        append!(
+            transform_passes_list,
+            [
+                "trivial_reduce_window_to_reduce_op",
+                "add_reduce_slice_fusion",
+                "mul_reduce_slice_fusion",
+                "min_reduce_slice_fusion",
+                "max_reduce_slice_fusion",
+                "concat_insert_dim_dot_general",
+                "concat_insert_dim_gather",
+                "concat_insert_dim_iota",
+                "concat_insert_dim_reduce",
+                "concat_insert_dim_sort",
+                "concat_insert_dim_reduce_window",
+                "dot_general_slice_to_batch",
+                "gather_slice_to_batch",
+                "iota_slice_to_batch",
+                "reduce_slice_to_batch",
+                "sort_slice_to_batch",
+                "transpose_slice_to_batch",
+                "broadcastindim_slice_to_batch",
+                "reducewindow_slice_to_batch",
+                "elementwise_slice_to_batch",
+            ],
+        )
+    end
 
     if !compile_options.disable_licm_optimization_passes
         append!(
