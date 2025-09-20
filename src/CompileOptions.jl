@@ -157,6 +157,8 @@ Fine-grained control over the compilation options for the Reactant compiler.
     `false` by default.
   - `disable_licm_optimization_passes`: Disables the Loop Invariant Code Motion (LICM)
     optimization passes. This is `false` by default.
+  - `disable_auto_batching_passes`: Disables the auto-batching optimization passes. This
+    is `false` by default.
 """
 struct CompileOptions
     optimization_passes::Union{Symbol,String}
@@ -185,6 +187,7 @@ struct CompileOptions
     disable_scatter_gather_optimization_passes::Bool
     disable_pad_optimization_passes::Bool
     disable_licm_optimization_passes::Bool
+    disable_auto_batching_passes::Bool
 end
 
 function CompileOptions(;
@@ -208,6 +211,7 @@ function CompileOptions(;
     disable_scatter_gather_optimization_passes::Bool=false,
     disable_pad_optimization_passes::Bool=false,
     disable_licm_optimization_passes::Bool=false,
+    disable_auto_batching_passes::Bool=false,
 )
     optimization_passes isa Bool &&
         (optimization_passes = ifelse(optimization_passes, :all, :none))
@@ -256,6 +260,7 @@ function CompileOptions(;
         disable_scatter_gather_optimization_passes,
         disable_pad_optimization_passes,
         disable_licm_optimization_passes,
+        disable_auto_batching_passes,
     )
 end
 
@@ -297,6 +302,7 @@ function __compile_options_with_reversed_propagation(compile_options::CompileOpt
         compile_options.disable_scatter_gather_optimization_passes,
         compile_options.disable_pad_optimization_passes,
         compile_options.disable_licm_optimization_passes,
+        compile_options.disable_auto_batching_passes,
     )
 end
 
