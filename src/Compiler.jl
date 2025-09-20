@@ -2,7 +2,7 @@ module Compiler
 
 using Reactant_jll
 using Libdl: dlsym
-using LinearAlgebra: BLAS
+using LinearAlgebra: BlasInt
 
 import ..Reactant:
     Reactant,
@@ -16,7 +16,6 @@ import ..Reactant:
     TracedRArray,
     TracedRNumber,
     RArray,
-    RNumber,
     OrderedIdDict,
     make_tracer,
     TracedToConcrete,
@@ -24,6 +23,7 @@ import ..Reactant:
     ancestor,
     TracedType
 import Reactant: OptimizeCommunicationOptions, ShardyPropagationOptions, CompileOptions
+using Reactant_jll: Reactant_jll
 
 import ..ReactantCore: correct_maybe_bcast_call
 
@@ -1047,6 +1047,11 @@ function optimization_passes(
             "const_prop_through_barrier<16>",
             "concat_const_prop<1>($max_constant_threshold)",
             "dynamic_update_slice_const_prop($max_constant_threshold)",
+            "add_reduce_slice_fusion",
+            "mul_reduce_slice_fusion",
+            "min_reduce_slice_fusion",
+            "max_reduce_slice_fusion",
+            "trivial_reduce_window_to_reduce_op",
         ],
     )
 
@@ -1686,7 +1691,7 @@ function compile_mlir!(
         "canonicalize"
     end
 
-    blas_int_width = sizeof(BLAS.BlasInt) * 8
+    blas_int_width = sizeof(BlasInt) * 8
     lower_enzymexla_linalg_pass = "lower-enzymexla-linalg{backend=$backend \
                                    blas_int_width=$blas_int_width}"
     lower_enzyme_probprog_pass = "lower-enzyme-probprog{backend=$backend}"
@@ -2339,6 +2344,8 @@ function compile_mlir!(
         end
     end
 
+    run_pass_pipeline!(mod, "mark-func-memory-effects", "mark-func-memory-effects")
+
     func_op = MLIR.API.mlirSymbolTableLookup(
         MLIR.IR.SymbolTable(MLIR.IR.Operation(mod)), fnname
     )
@@ -2390,6 +2397,11 @@ function compile_mlir!(
     MLIR.API.mlirRegionTakeBody(MLIR.IR.region(func3, 1), MLIR.IR.region(compiled_f, 1))
 
     push!(MLIR.IR.body(mod), func3)
+
+    mem = MLIR.IR.attr(compiled_f, "enzymexla.memory_effects")
+    if !(mem isa Nothing)
+        MLIR.IR.attr!(func3, "enzymexla.memory_effects", mem)
+    end
 
     MLIR.API.mlirOperationDestroy(compiled_f.operation)
     compiled_f.operation = MLIR.API.MlirOperation(C_NULL)
@@ -2474,6 +2486,7 @@ function compile_mlir!(
         result_shardings,
         mlir_fn_res.global_device_ids,
         donated_args_mask,
+        Reactant.TracedUtils.is_pure(func3),
     )
 end
 
@@ -3327,8 +3340,11 @@ Generate Julia code to call the XLA executable.
 
 - `flatten_names`: A list of `Symbol`s representing the names of the flattened linear arguments.
 - `nresults`: The number of results to expect.
+- `is_pure`: Whether the function being compiled is pure (i.e., has no side effects)
 """
-function codegen_xla_call(flatten_names, nresults, is_sharded::Bool, ndevices::Int)
+function codegen_xla_call(
+    flatten_names, nresults, is_sharded::Bool, ndevices::Int, is_pure::Bool
+)
     flatten_buffer_refs = map(n -> :($n.buffer), flatten_names)
 
     base_symbol_name = is_sharded ? Symbol(:result_buffer_m, ndevices, :_) : :result_buffer_
@@ -3337,7 +3353,7 @@ function codegen_xla_call(flatten_names, nresults, is_sharded::Bool, ndevices::I
         :($varname = linearized_results[$i])
     end
 
-    xla_call_code = if nresults == 0
+    xla_call_code = if nresults == 0 && is_pure
         :()
     else
         if is_sharded
@@ -3682,7 +3698,11 @@ function compile(f, args; kwargs...)
     )
 
     concretized_res_names, xla_call_code = codegen_xla_call(
-        flatten_arg_names, length(linear_results), mlir_fn_res.is_sharded, ndevices
+        flatten_arg_names,
+        length(linear_results),
+        mlir_fn_res.is_sharded,
+        ndevices,
+        mlir_fn_res.is_pure,
     )
 
     shard_info_code, optional_shard_info_code, linear_result_shard_info = codegen_shard_info(
@@ -3779,7 +3799,7 @@ struct Thunk{FTy,tag,IsClosure,ArgTypes,ExecTy,DeviceTy,ClientTy,GD,DAM}
     donated_args_mask::DAM
 end
 
-function Base.show(io::IO, thunk::Thunk{FTy,tag}) where {FTy,tag}
+function Base.show(io::IO, thunk::Thunk{<:Any,tag}) where {tag}
     return print(io, "Reactant compiled function $(thunk.f) (with tag $(tag))")
 end
 

@@ -19,7 +19,7 @@ end
 
 # copy
 function Base.copy(x::Union{AbstractConcreteArray,AbstractConcreteNumber})
-    fn = Reactant.compile(copy, (x,))
+    fn = compile(copy, (x,))
     return fn(x)
 end
 
@@ -86,6 +86,10 @@ function Base.convert(::Type{T}, x::AbstractConcreteNumber) where {T<:Number}
     T == typeof(x) && return x
     return convert(T, to_number(x))
 end
+function Base.convert(::Type{T}, x::AbstractConcreteNumber) where {T<:ReactantFloat8}
+    T == typeof(x) && return x
+    return convert(T, to_number(x))
+end
 
 Adapt.adapt_storage(::Type{T}, x::AbstractArray) where {T<:AbstractConcreteArray} = T(x)
 
@@ -122,11 +126,11 @@ function write_to_host_buffer!(data::Array, X::ConcretePJRTArray{T,N}) where {T,
             slice ∈ completed && continue
             push!(completed, slice)
             data_slice = data[slice...]
-            XLA.to_host(X.data[idx], data_slice, Reactant.Sharding.NoSharding())
+            XLA.to_host(X.data[idx], data_slice, Sharding.NoSharding())
             data[slice...] .= data_slice
         end
     else
-        XLA.to_host(XLA.synced_buffer(only(X.data)), data, Reactant.Sharding.NoSharding())
+        XLA.to_host(XLA.synced_buffer(only(X.data)), data, Sharding.NoSharding())
     end
     return nothing
 end
@@ -177,6 +181,11 @@ function Base.convert(
 ) where {T<:Number}
     return to_number(x)
 end
+function Base.convert(
+    ::Type{T}, x::Union{ConcretePJRTScalar{T},ConcreteIFRTScalar{T}}
+) where {T<:ReactantFloat8}
+    return to_number(x)
+end
 
 for jlop in (:(Base.abs),), T in (AbstractConcreteNumber,)
     @eval $(jlop)(x::$(T)) = $(jlop)(to_number(x))
@@ -197,10 +206,16 @@ for jlop in (
         $(jlop)(x::$(T), y::$(T)) = $(jlop)(to_number(x), to_number(y))
         $(jlop)(x::$(T), y::Number) = $(jlop)(to_number(x), y)
         $(jlop)(x::Number, y::$(T)) = $(jlop)(x, to_number(y))
+
+        $(jlop)(x::$(T), y::TracedRNumber) = throw(MethodError(jlop, (x, y)))
+        $(jlop)(x::TracedRNumber, y::$(T)) = throw(MethodError(jlop, (x, y)))
     end
 end
 
-Base.:^(x::AbstractConcreteNumber, y::Integer) = ^(to_number(x), y)
+for T in (Integer, Rational)
+    @eval Base.:^(x::AbstractConcreteNumber, y::$(T)) = ^(to_number(x), y)
+end
+Base.:^(::Irrational{:ℯ}, x::AbstractConcreteNumber) = exp(x)
 
 for jlop in (:(Base.isnan), :(Base.isfinite)),
     T in (AbstractConcreteNumber, AbstractConcreteArray{<:Any,0})
@@ -208,17 +223,21 @@ for jlop in (:(Base.isnan), :(Base.isfinite)),
     @eval $(jlop)(x::$(T)) = $(jlop)(to_number(x))
 end
 
-for T in (AbstractConcreteNumber, AbstractConcreteArray{<:Any,0})
-    for (T1, T2) in ((T, Number), (Number, T), (T, T))
-        @eval begin
-            function Base.isapprox(x::$(T1), y::$(T2); kwargs...)
-                return Base.isapprox(to_number(x), to_number(y); kwargs...)
-            end
-            function Base.isapprox(
-                x::AbstractArray{<:$(T1)}, y::AbstractArray{<:$(T2)}; kwargs...
-            )
-                return Base.isapprox(to_number.(x), to_number.(y); kwargs...)
-            end
+for (T1, T2) in (
+    (AbstractConcreteNumber, AbstractConcreteNumber),
+    (AbstractConcreteNumber, Number),
+    (Number, AbstractConcreteNumber),
+    (AbstractConcreteArray{<:Any,0}, Number),
+    (Number, AbstractConcreteArray{<:Any,0}),
+)
+    @eval begin
+        function Base.isapprox(x::$(T1), y::$(T2); kwargs...)
+            return Base.isapprox(to_number(x), to_number(y); kwargs...)
+        end
+        function Base.isapprox(
+            x::AbstractArray{<:$(T1)}, y::AbstractArray{<:$(T2)}; kwargs...
+        )
+            return Base.isapprox(to_number.(x), to_number.(y); kwargs...)
         end
     end
 end
@@ -230,6 +249,8 @@ for (T1, T2) in (
     (AnyConcreteIFRTArray, AbstractArray),
     (AbstractArray, AnyConcreteIFRTArray),
     (AnyConcreteIFRTArray, AnyConcreteIFRTArray),
+    (AnyConcretePJRTArray, AnyConcreteIFRTArray),
+    (AnyConcreteIFRTArray, AnyConcretePJRTArray),
 )
     @eval begin
         function Base.isapprox(x::$(T1), y::$(T2); kwargs...)
@@ -283,7 +304,9 @@ function Base.show(io::IO, X::Union{AnyConcretePJRTArray,AnyConcreteIFRTArray})
     return nothing
 end
 
-function Base.getindex(a::ConcretePJRTArray{T,N}, args::Vararg{Int,N}) where {T,N}
+function Base.getindex(
+    a::ConcretePJRTArray{T,N}, args::Vararg{Int,N}
+) where {T<:ReactantPrimitive,N}
     isempty(a) && throw("Cannot getindex from empty buffer")
 
     wait(a)
@@ -305,22 +328,22 @@ function Base.getindex(a::ConcretePJRTArray{T,N}, args::Vararg{Int,N}) where {T,
     return convert(Array, a)[args...]
 end
 
-function Base.getindex(a::ConcreteIFRTArray{T,N}, args::Vararg{Int,N}) where {T,N}
+function Base.getindex(
+    a::ConcreteIFRTArray{T,N}, args::Vararg{Int,N}
+) where {T<:ReactantPrimitive,N}
     GPUArraysCore.assertscalar("getindex(::ConcreteIFRTArray, ::Vararg{Int, N})")
     return convert(Array, a)[args...]
 end
 
 function Base.getindex(
     a::Union{ConcreteIFRTArray{T,N},ConcretePJRTArray{T,N}}, args::Vararg{Any,N}
-) where {T,N}
+) where {T<:ReactantPrimitive,N}
     return compile(getindex, (a, args...))(a, args...)
 end
 
 # This doesn't follow the semantics of getindex with ranges. It is mostly meant to be used
 # inside Compiler.jl
-@inline function _fast_slice(
-    a::AbstractConcreteArray{T,N}, args::Vararg{UnitRange,N}
-) where {T,N}
+function _fast_slice(a::AbstractConcreteArray{T,N}, args::Vararg{UnitRange,N}) where {T,N}
     # Avoid slicing all-together
     args == ntuple(Base.Fix1(UnitRange, 1) ∘ Base.Fix1(size, a), N) && return a
     # For all other cases do a compile
@@ -328,7 +351,7 @@ end
     return fn(a, args...)
 end
 
-@inline _fast_slice(a::AbstractConcreteNumber) = a
+_fast_slice(a::AbstractConcreteNumber) = a
 
 function mysetindex!(a, v, args::Vararg{Any,N}) where {N}
     setindex!(a, v, args...)
@@ -369,7 +392,7 @@ function Base.setindex!(a::ConcreteIFRTArray, v, args::Vararg{Int,N}) where {N}
     return a
 end
 
-@inline function Base.similar(
+function Base.similar(
     ::Type{<:ConcretePJRTArray},
     ::Type{S},
     dims::Dims;
@@ -392,15 +415,15 @@ function Base.similar(
     @assert length(device_to_array_slices) == D
     sdata = ntuple(Val(D)) do i
         Base.@_inline_meta
-        Base.similar(a.data[i], S, Dims(length.(device_to_array_slices[i])))
+        similar(a.data[i], S, Dims(length.(device_to_array_slices[i])))
     end
     return ConcretePJRTArray{S,length(dims),D,Sh}(sdata, dims, a.sharding)
 end
 
 Base.similar(a::ConcretePJRTArray, dims::Dims) = similar(a, eltype(a), dims)
 
-@inline function Base.similar(AT::Type{<:ConcretePJRTArray{T}}, dims; kwargs...) where {T}
-    return Base.similar(AT, T, dims; kwargs...)
+function Base.similar(AT::Type{<:ConcretePJRTArray{T}}, dims::Dims; kwargs...) where {T}
+    return similar(AT, T, dims; kwargs...)
 end
 
 function Base.similar(a::ConcreteIFRTArray{T}, ::Type{S}=T, dims::Dims=size(a)) where {T,S}
@@ -409,24 +432,28 @@ function Base.similar(a::ConcreteIFRTArray{T}, ::Type{S}=T, dims::Dims=size(a)) 
     )
 end
 Base.similar(a::ConcreteIFRTArray, dims::Dims) = similar(a, eltype(a), dims)
-function Base.similar(::Type{ConcreteIFRTArray{T}}, dims) where {T}
+function Base.similar(::Type{ConcreteIFRTArray{T}}, dims::Dims) where {T}
     return ConcreteIFRTArray{T}(undef, dims)
 end
 
 # Broadcasting interface
-Base.BroadcastStyle(::Type{<:ConcretePJRTArray}) = Broadcast.ArrayStyle{ConcretePJRTArray}()
-Base.BroadcastStyle(::Type{<:ConcreteIFRTArray}) = Broadcast.ArrayStyle{ConcreteIFRTArray}()
-
-@inline function Base.similar(
-    bc::Broadcast.Broadcasted{Broadcast.ArrayStyle{ConcretePJRTArray}}, ::Type{T}; kwargs...
-) where {T}
-    return similar(ConcretePJRTArray, T, axes(bc); kwargs...)
+function Broadcast.BroadcastStyle(::Type{<:ConcretePJRTArray})
+    return Broadcast.ArrayStyle{ConcretePJRTArray}()
+end
+function Broadcast.BroadcastStyle(::Type{<:ConcreteIFRTArray})
+    return Broadcast.ArrayStyle{ConcreteIFRTArray}()
 end
 
-@inline function Base.similar(
-    bc::Broadcast.Broadcasted{Broadcast.ArrayStyle{ConcreteIFRTArray}}, ::Type{T}; kwargs...
+function Base.similar(
+    bc::Broadcast.Broadcasted{Broadcast.ArrayStyle{ConcretePJRTArray}}, ::Type{T}
 ) where {T}
-    return similar(ConcreteIFRTArray, T, axes(bc); kwargs...)
+    return similar(ConcretePJRTArray, T, axes(bc))
+end
+
+function Base.similar(
+    bc::Broadcast.Broadcasted{Broadcast.ArrayStyle{ConcreteIFRTArray}}, ::Type{T}
+) where {T}
+    return similar(ConcreteIFRTArray, T, axes(bc))
 end
 
 # TODO replace this copy for `setindex!` maybe? how to copy data to already existing buffer? (i.e. `copyto!`)
@@ -473,12 +500,20 @@ function mycopyto!(dest, src)
 end
 
 for aType in (:ConcretePJRTArray, :ConcreteIFRTArray)
-    @eval function Base.copyto!(dest::$(aType), src::$(aType))
-        # We can't directly set the data field. it will alias the inner buffers without
-        # actually copying them.
-        fn = compile(mycopyto!, (dest, src))
-        fn(dest, src)
-        return dest
+    @eval begin
+        function Base.copyto!(
+            dest::$(aType){<:TracedRNumber}, src::$(aType){<:TracedRNumber}
+        )
+            throw(MethodError(copyto!, (dest, src)))
+        end
+
+        function Base.copyto!(dest::$(aType), src::$(aType))
+            # We can't directly set the data field. it will alias the inner buffers without
+            # actually copying them.
+            fn = compile(mycopyto!, (dest, src))
+            fn(dest, src)
+            return dest
+        end
     end
 end
 
@@ -507,11 +542,7 @@ for aType in (:ConcretePJRTArray, :ConcreteIFRTArray)
 end
 
 function Base.copyto!(
-    dest::Vector{T},
-    doffs::Int64,
-    src::Reactant.ConcreteIFRTArray{T},
-    soffs::Int64,
-    n::Int64,
+    dest::Vector{T}, doffs::Int64, src::ConcreteIFRTArray{T}, soffs::Int64, n::Int64
 ) where {T}
     n == 0 && return dest
     n > 0 || Base._throw_argerror("Number of elements to copy must be non-negative.")
@@ -530,7 +561,7 @@ function Base.copyto!(
     wait(src_async)
 
     GC.@preserve dest begin
-        @ccall Reactant.MLIR.API.mlir_c.ifrt_array_copy_to_host_buffer(
+        @ccall MLIR.API.mlir_c.ifrt_array_copy_to_host_buffer(
             src_sync.buffer::Ptr{Cvoid},
             pointer(dest, doffs)::Ptr{T},
             ((soffs - 1) * sizeof(T))::Int64,
@@ -541,11 +572,7 @@ function Base.copyto!(
 end
 
 function Base.copyto!(
-    dest::Vector{T},
-    doffs::Int64,
-    src::Reactant.ConcretePJRTArray{T},
-    soffs::Int64,
-    n::Int64,
+    dest::Vector{T}, doffs::Int64, src::ConcretePJRTArray{T}, soffs::Int64, n::Int64
 ) where {T}
     n == 0 && return dest
     n > 0 || Base._throw_argerror("Number of elements to copy must be non-negative.")
@@ -559,7 +586,7 @@ function Base.copyto!(
     wait(src_async)
 
     GC.@preserve dest begin
-        @ccall Reactant.MLIR.API.mlir_c.CopyFromBuffer(
+        @ccall MLIR.API.mlir_c.CopyFromBuffer(
             client.client::Ptr{Cvoid},
             src_sync.buffer::Ptr{Cvoid},
             pointer(dest, doffs)::Ptr{T},
@@ -572,17 +599,13 @@ function Base.copyto!(
 end
 
 function Base.copyto!(
-    dest::Vector{T}, src::Union{Reactant.ConcretePJRTArray{T},Reactant.ConcreteIFRTArray{T}}
+    dest::Vector{T}, src::Union{ConcretePJRTArray{T},ConcreteIFRTArray{T}}
 ) where {T}
     return copyto!(dest, 1, src, 1, length(src))
 end
 
 function Base.copyto!(
-    dest::Reactant.ConcretePJRTArray{T},
-    doffs::Int64,
-    src::Vector{T},
-    soffs::Int64,
-    n::Int64,
+    dest::ConcretePJRTArray{T}, doffs::Int64, src::Vector{T}, soffs::Int64, n::Int64
 ) where {T}
     n == 0 && return dest
     n > 0 || Base._throw_argerror("Number of elements to copy must be non-negative.")
@@ -595,7 +618,7 @@ function Base.copyto!(
     wait(dest_async)
 
     GC.@preserve src begin
-        @ccall Reactant.MLIR.API.mlir_c.CopyToBuffer(
+        @ccall MLIR.API.mlir_c.CopyToBuffer(
             client.client::Ptr{Cvoid},
             dest_sync.buffer::Ptr{Cvoid},
             pointer(src, soffs)::Ptr{T},
@@ -607,7 +630,7 @@ function Base.copyto!(
     return dest
 end
 
-function Base.copyto!(dest::Reactant.ConcretePJRTArray{T}, src::Vector{T}) where {T}
+function Base.copyto!(dest::ConcretePJRTArray{T}, src::Vector{T}) where {T}
     return copyto!(dest, 1, src, 1, length(src))
 end
 
@@ -639,6 +662,13 @@ for aType in (:ConcretePJRTArray, :ConcreteIFRTArray)
             dest::SubArray{<:Any,<:Any,<:$(aType)}, src::SubArray{<:Any,<:Any,<:Array}
         )
             return Base.copyto!(dest, convert(Array, copy(src)))
+        end
+
+        function Base.copyto!(
+            dest::SubArray{TracedRNumber{T1},<:Any,<:$(aType)},
+            src::SubArray{TracedRNumber{T2},<:Any,<:Array},
+        ) where {T1,T2}
+            throw(MethodError(copyto!, (dest, src)))
         end
     end
 end
@@ -680,6 +710,12 @@ function Base.zero(x::ConcreteIFRTArray{T,N}) where {T,N}
     )
 end
 
+function Base.fill!(
+    a::ConcretePJRTArray{TracedRNumber{T},N}, val::TracedRNumber{T2}
+) where {T,T2,N}
+    throw(MethodError(fill!, (a, val)))
+end
+
 function Base.fill!(a::ConcretePJRTArray{T,N}, val) where {T,N}
     isempty(a) && throw("Cannot setindex! to empty buffer")
 
@@ -708,10 +744,34 @@ function Base.fill!(a::ConcreteIFRTArray{T,N}, val) where {T,N}
     return a
 end
 
+function Base.fill!(
+    a::ConcreteIFRTArray{TracedRNumber{T},N}, val::TracedRNumber{T2}
+) where {T,T2,N}
+    throw(MethodError(fill!, (a, val)))
+end
+
 function Base.fill!(x::Union{AnyConcreteIFRTArray,AnyConcretePJRTArray}, val)
     fn = compile(fill!, (x, val))
     fn(x, val)
     return x
+end
+
+function Base.fill!(
+    x::Union{ConcreteIFRTArray{<:TracedRNumber},ConcretePJRTArray{<:TracedRNumber}}, val
+)
+    throw(MethodError(fill!, (x, val)))
+end
+function Base.fill!(
+    x::Union{ConcreteIFRTArray{<:TracedRNumber},ConcretePJRTArray{<:TracedRNumber}},
+    val::TracedRNumber,
+)
+    throw(MethodError(fill!, (x, val)))
+end
+function Base.fill!(
+    x::Union{AnyConcreteIFRTArray{<:TracedRNumber},AnyConcretePJRTArray{<:TracedRNumber}},
+    val,
+)
+    throw(MethodError(fill!, (x, val)))
 end
 
 function mymapreducedim!(f, op, R, A)
@@ -719,15 +779,22 @@ function mymapreducedim!(f, op, R, A)
     return nothing
 end
 
-function Base.mapreducedim!(
-    f,
-    op,
-    R::Union{AnyConcreteIFRTArray,AnyConcretePJRTArray},
-    A::Union{Base.AbstractBroadcasted,AbstractArray},
+# To avoid ambiguities
+for (fType, opType) in (
+    (typeof(identity), Union{typeof(*),typeof(Base.mul_prod)}),
+    (Any, Base.PermutedDimsArrays.CommutativeOps),
+    (Any, Any),
 )
-    fn = compile(mymapreducedim!, (f, op, R, A))
-    fn(f, op, R, A)
-    return R
+    @eval function Base.mapreducedim!(
+        f::$(fType),
+        op::$(opType),
+        R::Union{AnyConcreteIFRTArray,AnyConcretePJRTArray},
+        A::Union{Base.AbstractBroadcasted,AbstractArray},
+    )
+        fn = compile(mymapreducedim!, (f, op, R, A))
+        fn(f, op, R, A)
+        return R
+    end
 end
 
 function mymap!(f, R, A)
@@ -742,15 +809,18 @@ function Base.map!(f, R::Union{AnyConcreteIFRTArray,AnyConcretePJRTArray}, A::Ab
 end
 
 # Directly initialize a Device Array
-function Base.fill(
-    ::Type{<:Union{ConcreteIFRTArray,ConcretePJRTArray}},
-    val,
-    dims::Vararg{Int};
-    sharding::Sharding.AbstractSharding=Sharding.NoSharding(),
-)
-    output_shardings = Sharding.is_sharded(sharding) ? Dict(1 => sharding) : nothing
-    fn = Reactant.compile((); output_shardings) do
-        return @opcall fill(val, collect(Int64, dims))
+for T in (Number, Integer)
+    @eval function Base.fill(
+        ::Type{<:Union{ConcreteIFRTArray,ConcretePJRTArray}},
+        val::$(T),
+        dims::Union{Integer,AbstractUnitRange{<:Integer}}...;
+        sharding::Sharding.AbstractSharding=Sharding.NoSharding(),
+    )
+        output_shardings = Sharding.is_sharded(sharding) ? Dict(1 => sharding) : nothing
+        dims = collect(Int64, last.(dims))
+        fn = compile((); output_shardings) do
+            return @opcall fill(val, dims)
+        end
+        return fn()
     end
-    return fn()
 end

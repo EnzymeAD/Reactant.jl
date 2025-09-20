@@ -28,7 +28,7 @@ end
 
 @reactant_overlay @noinline function TracedRandom.default_rng()
     return ReactantRNG(
-        Reactant.promote_to(TracedRArray{UInt64,1}, TracedRandom.make_seed()), "DEFAULT"
+        promote_to(TracedRArray{UInt64,1}, TracedRandom.make_seed()), "DEFAULT"
     )
 end
 
@@ -171,7 +171,7 @@ end
 end
 
 @reactant_overlay @noinline function Base.map(f, x::AbstractArray, ys::AbstractArray...)
-    if use_overlayed_version(x) || any(use_overlayed_version, ys)
+    if use_overlayed_version(x) || looped_any(use_overlayed_version, ys)
         return TracedRArrayOverrides.overloaded_map(f, x, ys...)
     else
         return Base.inferencebarrier(Base.map)(CallWithReactant(f), x, ys...)
@@ -184,7 +184,7 @@ end
     if (
         use_overlayed_version(y) ||
         use_overlayed_version(x) ||
-        any(use_overlayed_version, xs)
+        looped_any(use_overlayed_version, xs)
     )
         return TracedRArrayOverrides.overloaded_map!(f, y, x, xs...)
     else
@@ -205,5 +205,56 @@ end
         return TracedRArrayOverrides.overloaded_mapreduce(f, |, x; dims)
     else
         return Base.inferencebarrier(Base._any)(CallWithReactant(f), x, dims)
+    end
+end
+
+# LinearAlgebra
+@reactant_overlay @noinline function LinearAlgebra.lu(x::AbstractArray; kwargs...)
+    if use_overlayed_version(x)
+        return TracedLinearAlgebra.overloaded_lu(x, RowMaximum(); kwargs...)
+    else
+        return Base.inferencebarrier(LinearAlgebra.lu)(x; kwargs...)
+    end
+end
+@reactant_overlay @noinline function LinearAlgebra.lu(
+    x::AbstractArray, pivot::RowMaximum; kwargs...
+)
+    if use_overlayed_version(x)
+        return TracedLinearAlgebra.overloaded_lu(x, pivot; kwargs...)
+    else
+        return Base.inferencebarrier(LinearAlgebra.lu)(x, pivot; kwargs...)
+    end
+end
+@reactant_overlay @noinline function LinearAlgebra.lu!(x::AbstractArray; kwargs...)
+    if use_overlayed_version(x)
+        return TracedLinearAlgebra.overloaded_lu(x, RowMaximum(); kwargs...)
+    else
+        return Base.inferencebarrier(LinearAlgebra.lu!)(x; kwargs...)
+    end
+end
+@reactant_overlay @noinline function LinearAlgebra.lu!(
+    x::AbstractArray, pivot::RowMaximum; kwargs...
+)
+    if use_overlayed_version(x)
+        return TracedLinearAlgebra.overloaded_lu(x, pivot; kwargs...)
+    else
+        return Base.inferencebarrier(LinearAlgebra.lu!)(x, pivot; kwargs...)
+    end
+end
+
+@reactant_overlay @noinline function LinearAlgebra.dot(x::AbstractArray, y::AbstractArray)
+    if use_overlayed_version(x) || use_overlayed_version(y)
+        return TracedLinearAlgebra.overloaded_dot(x, y)
+    else
+        return Base.inferencebarrier(LinearAlgebra.dot)(x, y)
+    end
+end
+@reactant_overlay @noinline function LinearAlgebra.dot(
+    x::AbstractVector, A::AbstractMatrix, y::AbstractVector
+)
+    if use_overlayed_version(x) || use_overlayed_version(A) || use_overlayed_version(y)
+        return TracedLinearAlgebra.overloaded_dot(x, A, y)
+    else
+        return Base.inferencebarrier(LinearAlgebra.dot)(x, A, y)
     end
 end

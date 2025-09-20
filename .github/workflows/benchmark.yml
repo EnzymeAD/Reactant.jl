@@ -1,0 +1,117 @@
+name: Benchmarks
+
+permissions:
+  contents: write # contents permission to update benchmark contents in gh-pages branch
+  statuses: read
+  deployments: write # deployments permission to deploy GitHub pages website
+  pull-requests: write
+
+on:
+  schedule:
+    - cron: '0 3 * * *' # Nightly at 3am UTC
+  workflow_dispatch:
+    # Manual trigger
+  pull_request:
+    types: [labeled, unlabeled, synchronize, opened, reopened]
+    paths:
+      - ".github/workflows/benchmark.yml"
+      - "ext/**"
+      - "lib/**"
+      - "src/**"
+      - "Project.toml"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  benchmark:
+    timeout-minutes: 90
+    if: ${{ (github.ref == 'refs/heads/main' && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')) || (github.event_name == 'pull_request' && contains(join(github.event.pull_request.labels.*.name, ','), 'run benchmarks')) }}
+    runs-on: ${{ matrix.os }}
+    container:
+      image: ${{ contains(matrix.os, 'linux') && 'ghcr.io/enzymead/reactant-docker-images@sha256:7004a6ebbdd77bd047900b2bffc542e8576864056dc27a9c94d30666d6f7ea01' || '' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - linux-x86-n2-32
+          - linux-x86-ct6e-180-4tpu
+          - linux-x86-a2-48-a100-4gpu
+    steps:
+      - uses: actions/checkout@v5
+      - uses: julia-actions/setup-julia@v2
+        with:
+          version: "1"
+      - uses: julia-actions/cache@v2
+      - name: "Instantiate benchmarks environment"
+        shell: julia --color=yes --project=benchmark {0}
+        run: |
+          using Pkg
+          Pkg.instantiate()
+      - name: "Run Benchmarks"
+        run: |
+          julia --color=yes --project=benchmark benchmark/runbenchmarks.jl
+      - name: Upload PProf Results
+        uses: actions/upload-artifact@v4
+        timeout-minutes: 10
+        with:
+          name: pprof-results-${{ matrix.os }}
+          path: "**/*pb.gz"
+          retention-days: 90
+          overwrite: false
+      - name: Upload Benchmark Results
+        uses: actions/upload-artifact@v4
+        timeout-minutes: 10
+        with:
+          name: benchmark-results-${{ matrix.os }}
+          path: "benchmark/results/*"
+          retention-days: 90
+          overwrite: false
+
+  benchmark-aggregate:
+    if: ${{ (github.ref == 'refs/heads/main' && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')) || (github.event_name == 'pull_request' && contains(join(github.event.pull_request.labels.*.name, ','), 'run benchmarks')) }}
+    needs: benchmark
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: julia-actions/setup-julia@v2
+        with:
+          version: "1"
+      - uses: julia-actions/cache@v2
+      - uses: actions/download-artifact@v5
+        with:
+          pattern: benchmark-results-*
+          path: benchmark/results
+          merge-multiple: true
+      - name: Combine benchmarks
+        id: locate
+        run: |
+          julia --color=yes -e '@info "Instantiating project"
+            using Pkg;
+            Pkg.add("JSON3");
+            @info "Combining Benchmarks"
+            include("benchmark/aggregate.jl")'
+
+           echo "path=$(find benchmark -type f -name combinedbenchmarks.json 2>/dev/null)" >> $GITHUB_OUTPUT
+      - name: Upload benchmark results as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-results
+          path: ${{ steps.locate.outputs.path }}
+          retention-days: 90
+          overwrite: false
+      - name: Upload Benchmark Results
+        uses: benchmark-action/github-action-benchmark@v1
+        with:
+          name: Reactant.jl Benchmarks
+          tool: "customSmallerIsBetter"
+          output-file-path: ${{ steps.locate.outputs.path }}
+          benchmark-data-dir-path: "benchmarks"
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          comment-always: true
+          summary-always: true
+          alert-threshold: "150%"
+          fail-on-alert: false
+          auto-push: ${{ github.event_name != 'pull_request' }}
+          max-items-in-chart: 50

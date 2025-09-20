@@ -1010,24 +1010,21 @@ end
 
 @testset "Traced fractional index" begin
     times = Reactant.to_rarray(0:0.01:4.5; track_numbers=Number)
-    @test times isa Reactant.TracedRNumberOverrides.TracedStepRangeLen
+    @test times isa Reactant.TracedStepRangeLen
     res = @jit fractional_idx(times, ConcreteRNumber(2.143))
     @test res[1] ≈ 0.29999999999997334
     @test res[2] == 215
     @test res[3] == 216
 end
 
-function unitrange_test(r, i)
-    return r[i]
-end
 @testset "Unitrange" begin
     x = 2:10
-    @test (@jit unitrange_test(x, 3)) == 4
-    @test (@jit unitrange_test(x, Reactant.ConcreteRNumber(4))) == 5
+    @test (@jit getindex(x, 3)) == 4
+    @test (@jit getindex(x, Reactant.ConcreteRNumber(4))) == 5
 
     x = Reactant.to_rarray(2:10; track_numbers=Number)
-    @test (@jit unitrange_test(x, 3)) == 4
-    @test (@jit unitrange_test(x, Reactant.ConcreteRNumber(4))) == 5
+    @test (@jit getindex(x, 3)) == 4
+    @test (@jit getindex(x, Reactant.ConcreteRNumber(4))) == 5
 end
 
 mulpi(x) = π * x
@@ -1625,4 +1622,21 @@ mapped_sub(xs...) = stack(map(-, xs...))
             @test @jit(mapped_sub(x_ra)) ≈ mapped_sub(x_sliced) atol = 1e-5 rtol = 1e-5
         end
     end
+end
+
+@testset "AbstractRange Unwanted Promotions" begin
+    hlo1 = @code_hlo Reactant.promote_to(Reactant.TracedRArray, Base.OneTo(Int32(42)))
+    @test !contains(repr(hlo1), "42xi64")
+    @test contains(repr(hlo1), "42xi32")
+
+    hlo2 = @code_hlo Reactant.promote_to(Reactant.TracedRArray, Int32(34):(Int32(42)))
+    @test !contains(repr(hlo2), "9xi64")
+    @test contains(repr(hlo2), "9xi32")
+
+    hlo3 = @code_hlo Reactant.promote_to(
+        Reactant.TracedRArray, Int16(34):Int16(3):(Int16(42))
+    )
+    @test !contains(repr(hlo3), "3xi64")
+    @test !contains(repr(hlo3), "3xi32")
+    @test contains(repr(hlo3), "3xi16")
 end

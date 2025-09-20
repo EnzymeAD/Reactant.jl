@@ -95,6 +95,9 @@ struct Mesh{D,ID<:AbstractVector{Int}}
         )
         return Mesh(reshape(collect(Int64, device_ids), shape), axis_names)
     end
+
+    # XXX (Deprecated): remove in v0.3
+    Mesh(::Tuple{}, ::Tuple{}, ::Tuple{}) = throw(MethodError(Mesh, ((), (), ())))
 end
 
 function sdy_mesh_to_reactant_mesh(mesh_attr::MLIR.IR.Attribute, global_device_ids)

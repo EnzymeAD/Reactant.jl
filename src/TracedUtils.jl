@@ -6,25 +6,18 @@ module TracedUtils
 using ..Reactant:
     Reactant,
     MLIR,
-    RNumber,
     TracedRArray,
     TracedRNumber,
     AnyTracedRArray,
     MissingTracedValue,
     OrderedIdDict,
-    ReactantPrimitive,
     Ops,
     promote_to, # keep this to avoid breaking external code
     broadcast_to_size # keep this to avoid breaking external code
 using ..Ops: @opcall
 using ReactantCore: ReactantCore
-using ReactantCore:
-    MissingTracedValue, is_traced, materialize_traced_array, promote_to_traced
+using ReactantCore: MissingTracedValue, is_traced, materialize_traced_array
 using Functors: Functors
-
-function ReactantCore.promote_to_traced(x)
-    return promote_to(Reactant.TracedRNumber{Reactant.unwrapped_eltype(typeof(x))}, x)
-end
 
 ReactantCore.materialize_traced_array(x::AbstractArray) = x
 
@@ -269,6 +262,17 @@ mutable struct CompiledMlirFnResult{F,TR,Re,Rt,LA,LR,PA,CR,M,MA,RS,GD,DA}
     result_shardings::RS
     global_device_ids::GD # only populated if is_sharded
     donated_args_mask::DA
+    is_pure::Bool
+end
+
+function is_pure(func)
+    attr = MLIR.IR.attr(func, "enzymexla.memory_effects")
+    # conservatively assume is not pure
+    if attr isa Nothing
+        return false
+    end
+    any(at -> String(at) == "write", attr) && return false
+    return true
 end
 
 function make_mlir_fn(
@@ -416,6 +420,7 @@ function make_mlir_fn(
         missing,
         global_device_ids,
         nothing, # populated later in `compile_mlir!`
+        is_pure(func2),
     )
 end
 
@@ -861,6 +866,12 @@ function finalize_mlir_fn(
             sym_visibility,
         )
     end
+
+    mem = MLIR.IR.attr(func, "enzymexla.memory_effects")
+    if !(mem isa Nothing)
+        MLIR.IR.attr!(func2, "enzymexla.memory_effects", mem)
+    end
+
     MLIR.API.mlirRegionTakeBody(MLIR.IR.region(func2, 1), MLIR.IR.region(func, 1))
 
     mesh_cache = Reactant.Compiler.sdycache()
@@ -1214,18 +1225,6 @@ _isone(::CartesianIndex) = false
 
 __contiguous_indices(::Base.LogicalIndex) = false
 __contiguous_indices(x) = all(_isone, diff(x))
-
-_get_slice_stride(::Base.LogicalIndex) = -1
-_get_slice_stride(x::CartesianIndex) = -1
-function _get_slice_stride(x)
-    length(x) == 1 && return 1
-    strides = diff(x)
-    isempty(strides) && return -1
-    allequal(strides) || return -1
-    val = first(strides)
-    val isa Number || return -1
-    return val
-end
 
 function create_index_mesh(idxs::AbstractVector...)
     lens = map(length, idxs)

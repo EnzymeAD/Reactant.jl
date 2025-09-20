@@ -1,9 +1,9 @@
 module Dialects
 
-import ..IR: Attribute, NamedAttribute, context
+import ..IR: Attribute, NamedAttribute
 import ..API
 
-using Reactant_jll
+using Reactant_jll: Reactant_jll
 
 namedattribute(name, val) = namedattribute(name, Attribute(val))
 namedattribute(name, val::Attribute) = NamedAttribute(name, val)

@@ -113,7 +113,7 @@ jobs:
         if: ${{ matrix.os != 'windows-latest' }}
         run: |
           echo "TMPDIR=${GITHUB_WORKSPACE}/tmp" >> ${GITHUB_ENV}
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Create TMPDIR
         if: ${{ matrix.os != 'windows-latest' }}
         run: |
@@ -123,7 +123,7 @@ jobs:
         with:
           version: ${{ matrix.version }}
       - uses: julia-actions/cache@v2
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         if: ${{ matrix.assertions }}
         with:
           repository: "JuliaLang/julia"
