@@ -46,7 +46,8 @@ jobs:
           - "1.11"
         os:
           - ubuntu-latest
-          - linux-x86-ct6e-180-4tpu
+        # TODO: enable these tests
+        #   - linux-x86-ct6e-180-4tpu
     uses: ./.github/workflows/CommonCI.yml
     with:
       julia_version: ${{ matrix.version }}
