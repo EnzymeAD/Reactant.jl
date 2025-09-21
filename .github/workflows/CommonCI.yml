@@ -166,6 +166,15 @@ jobs:
           contents: |
             [Reactant]
             xla_runtime = "PJRT"
+      - name: "Setup Runtime Preferences for ${{ inputs.project }} (PJRT)"
+        if: ${{ (inputs.runtime == 'pjrt' || inputs.runtime == 'both') && inputs.project != '.' }}
+        uses: "DamianReeves/write-file-action@master"
+        with:
+          path: ${{ inputs.project }}/LocalPreferences.toml
+          write-mode: "overwrite"
+          contents: |
+            [Reactant]
+            xla_runtime = "PJRT"
 
       - name: "Run Tests (PJRT)"
         if: ${{ (inputs.runtime == 'pjrt' || inputs.runtime == 'both') && inputs.project == '.' }}
@@ -192,6 +201,15 @@ jobs:
         uses: "DamianReeves/write-file-action@master"
         with:
           path: "LocalPreferences.toml"
+          write-mode: "overwrite"
+          contents: |
+            [Reactant]
+            xla_runtime = "IFRT"
+      - name: "Setup Runtime Preferences for ${{ inputs.project }} (IFRT)"
+        if: ${{ (inputs.runtime == 'ifrt' || inputs.runtime == 'both') && inputs.project != '.' }}
+        uses: "DamianReeves/write-file-action@master"
+        with:
+          path: ${{ inputs.project }}/LocalPreferences.toml
           write-mode: "overwrite"
           contents: |
             [Reactant]
