@@ -1,15 +1,11 @@
 steps:
   - group: ":test_tube: Tests"
     steps:
-      - label: ":julia: :linux: CUDA Julia v{{matrix.version}} -- {{matrix.group}} -- {{matrix.runtime}}"
+      - label: ":julia: :linux: CUDA Julia v{{matrix.version}} -- {{matrix.runtime}}"
         matrix:
           setup:
             version:
               - "1.10"
-            group:
-              - core
-              - neural_networks
-              - integration
             runtime:
               - "PJRT"
               - "IFRT"
@@ -41,7 +37,6 @@ steps:
           queue: "juliagpu"
           cuda: "*"
         env:
-          REACTANT_TEST_GROUP: "{{matrix.group}}"
           JULIA_DEBUG: "Reactant,Reactant_jll"
           CUDA_VISIBLE_DEVICES: 0
           REACTANT_BACKEND_GROUP: "GPU"

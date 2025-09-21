@@ -83,3 +83,50 @@ jobs:
       os: "ubuntu-24.04"
       runtime: ${{ matrix.runtime }}
       downgrade_testing: true
+
+  integration-cpu:
+    strategy:
+      fail-fast: false
+      matrix:
+        project:
+          - FancyArrayTypes
+          - FFT
+          - Python
+        version:
+          - "1.10"
+          - "1.11"
+    uses: ./.github/workflows/CommonCI.yml
+    with:
+      julia_version: ${{ matrix.version }}
+      os: "ubuntu-latest"
+      runtime: "both"
+      project: "test/integration/${{ matrix.project }}"
+
+  integration:
+    strategy:
+      fail-fast: false
+      matrix:
+        project:
+          - CUDA
+          - Flux
+          - Lux
+          - NNlib
+        version:
+          - "1.10"
+          - "1.11"
+        os:
+          - ubuntu-latest
+          - linux-x86-ct6e-180-4tpu
+        include:
+          - project: CUDA
+            os: linux-x86-a2-48-a100-4gpu
+            version: "1.10"
+          - project: CUDA
+            os: linux-x86-a2-48-a100-4gpu
+            version: "1.11"
+    uses: ./.github/workflows/CommonCI.yml
+    with:
+      julia_version: ${{ matrix.version }}
+      os: ${{ matrix.os }}
+      runtime: "both"
+      project: "test/integration/${{ matrix.project }}"
