@@ -67,7 +67,7 @@ jobs:
       runtime: ${{ matrix.runtime }}
       test_group: ${{ matrix.test_group }}
 
-  # This has been broken for a while, originating from Enzyme.jl
+  # This has been broken for a while, originating from CUDA.jl
   # test-assertions:
   #   strategy:
   #     fail-fast: false
