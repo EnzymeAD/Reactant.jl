@@ -792,3 +792,15 @@ end
     hlo = repr(@code_hlo(NNlib.gather(x_ra, idxs_ra)))
     @test !contains(hlo, "i64>")
 end
+
+function btranspose_badjoint(x)
+    x1 = NNlib.batched_transpose(x)
+    x2 = NNlib.batched_adjoint(x)
+    return x1 .+ x2
+end
+
+@testset "batched transpose/adjoint" begin
+    x = rand(4, 2, 3)
+    x_ra = Reactant.to_rarray(x)
+    @test @jit(btranspose_badjoint(x_ra)) ≈ btranspose_badjoint(x)
+end

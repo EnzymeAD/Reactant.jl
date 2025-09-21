@@ -1,4 +1,4 @@
-using Reactant, Test, Statistics, NNlib, LinearAlgebra
+using Reactant, Test, Statistics, LinearAlgebra
 
 function view_getindex_1(x)
     x = view(x, 2:3, 1:2, :)
@@ -75,18 +75,6 @@ end
 
     @test m1 ≈ m2
     @test v1 ≈ v2
-end
-
-function btranspose_badjoint(x)
-    x1 = NNlib.batched_transpose(x)
-    x2 = NNlib.batched_adjoint(x)
-    return x1 .+ x2
-end
-
-@testset "batched transpose/adjoint" begin
-    x = rand(4, 2, 3)
-    x_ra = Reactant.to_rarray(x)
-    @test @jit(btranspose_badjoint(x_ra)) ≈ btranspose_badjoint(x)
 end
 
 function bypass_permutedims(x)
