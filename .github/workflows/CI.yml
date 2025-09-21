@@ -48,10 +48,6 @@ jobs:
           - macOS-latest
           - windows-latest
           - linux-x86-ct6e-180-4tpu
-        test_group:
-          - core
-          - neural_networks
-          - integration
         runtime:
           - "pjrt"
           - "ifrt"
@@ -65,7 +61,6 @@ jobs:
       julia_version: ${{ matrix.version }}
       os: ${{ matrix.os }}
       runtime: ${{ matrix.runtime }}
-      test_group: ${{ matrix.test_group }}
 
   # This has been broken for a while, originating from CUDA.jl
   # test-assertions:
@@ -74,26 +69,17 @@ jobs:
   #     matrix:
   #       version:
   #         - "1.10"
-  #       test_group:
-  #         - core
-  #         - neural_networks
-  #         - integration
   #   uses: ./.github/workflows/CommonCI.yml
   #   with:
   #     julia_version: ${{ matrix.version }}
   #     os: "ubuntu-24.04"
   #     runtime: "both"
   #     assertions: true
-  #     test_group: ${{ matrix.test_group }}
 
   downgrade:
     strategy:
       fail-fast: false
       matrix:
-        test_group:
-          - core
-          - neural_networks
-          - integration
         runtime:
           - "pjrt"
           - "ifrt"
@@ -102,5 +88,4 @@ jobs:
       julia_version: "1.10"
       os: "ubuntu-24.04"
       runtime: ${{ matrix.runtime }}
-      test_group: ${{ matrix.test_group }}
       downgrade_testing: true
