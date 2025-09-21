@@ -1,8 +1,5 @@
-using Test
-using Reactant
-using Enzyme, NNlib
-using Reactant.MLIR
-using Statistics
+using Test, Reactant, Enzyme, Statistics
+using Reactant: MLIR
 
 @noinline function no(@nospecialize(x))
     x = @ccall $(Base.@cfunction(identity, Any, (Any,)))(x::Any)::Any
