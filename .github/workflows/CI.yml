@@ -67,24 +67,24 @@ jobs:
       runtime: ${{ matrix.runtime }}
       test_group: ${{ matrix.test_group }}
 
-  test-assertions:
-    strategy:
-      fail-fast: false
-      matrix:
-        version:
-          - "1.10"
-          - "1.11"
-        test_group:
-          - core
-          - neural_networks
-          - integration
-    uses: ./.github/workflows/CommonCI.yml
-    with:
-      julia_version: ${{ matrix.version }}
-      os: "ubuntu-24.04"
-      runtime: "both"
-      assertions: true
-      test_group: ${{ matrix.test_group }}
+  # This has been broken for a while, originating from Enzyme.jl
+  # test-assertions:
+  #   strategy:
+  #     fail-fast: false
+  #     matrix:
+  #       version:
+  #         - "1.10"
+  #       test_group:
+  #         - core
+  #         - neural_networks
+  #         - integration
+  #   uses: ./.github/workflows/CommonCI.yml
+  #   with:
+  #     julia_version: ${{ matrix.version }}
+  #     os: "ubuntu-24.04"
+  #     runtime: "both"
+  #     assertions: true
+  #     test_group: ${{ matrix.test_group }}
 
   downgrade:
     strategy:
