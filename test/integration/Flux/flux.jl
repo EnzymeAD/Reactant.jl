@@ -4,12 +4,7 @@ using Reactant, Flux, Test
     noisy = rand(Float32, 2, 1000)
     truth = [xor(col[1] > 0.5, col[2] > 0.5) for col in eachcol(noisy)]
 
-    model = Chain(
-        Dense(2 => 3, tanh),
-        BatchNorm(3),
-        Dense(3 => 2),
-        softmax,
-    )
+    model = Chain(Dense(2 => 3, tanh), BatchNorm(3), Dense(3 => 2), softmax)
 
     origout = model(noisy)
 
