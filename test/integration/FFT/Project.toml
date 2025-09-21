@@ -1,0 +1,10 @@
+[deps]
+FFTW = "7a1cc6ca-52ef-59f5-83cd-3a7055c09341"
+Reactant = "3c362404-f566-11ee-1572-e11a4b42c853"
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+
+[sources]
+Reactant = {path = "../../.."}
+
+[extras]
+Reactant_jll = "0192cb87-2b54-54ad-80e0-3be72ad8a3c0"

@@ -1,0 +1,13 @@
+[deps]
+FillArrays = "1a297f60-69ca-5386-bcde-b61e274b549b"
+OffsetArrays = "6fe1bfb0-de20-5000-8ca7-80f57d26f881"
+OneHotArrays = "0b1bfda6-eb8a-41d2-88d8-f5af5cad476f"
+Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
+Reactant = "3c362404-f566-11ee-1572-e11a4b42c853"
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+
+[sources]
+Reactant = {path = "../../.."}
+
+[extras]
+Reactant_jll = "0192cb87-2b54-54ad-80e0-3be72ad8a3c0"

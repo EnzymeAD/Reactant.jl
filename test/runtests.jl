@@ -1,66 +1,66 @@
 using Reactant, SafeTestsets, Test
 
-if lowercase(get(ENV, "REACTANT_BACKEND_GROUP", "all")) == "gpu"
+const REACTANT_BACKEND_GROUP = lowercase(get(ENV, "REACTANT_BACKEND_GROUP", "all"))
+
+if REACTANT_BACKEND_GROUP == "gpu"
     Reactant.set_default_backend("gpu")
+elseif REACTANT_BACKEND_GROUP == "tpu"
+    Reactant.set_default_backend("tpu")
+elseif REACTANT_BACKEND_GROUP == "cpu"
+    Reactant.set_default_backend("cpu")
 end
 
-const REACTANT_TEST_GROUP = lowercase(get(ENV, "REACTANT_TEST_GROUP", "all"))
-
 @testset "Reactant.jl Tests" begin
-    if REACTANT_TEST_GROUP == "all" || REACTANT_TEST_GROUP == "core"
+    @testset "Core" begin
+        @safetestset "Layout" include("core/layout.jl")
+        @safetestset "Tracing" include("core/tracing.jl")
+        @safetestset "Basic" include("core/basic.jl")
+        @safetestset "Constructor" include("core/constructor.jl")
+        @safetestset "Autodiff" include("core/autodiff.jl")
+        @safetestset "Complex" include("core/complex.jl")
+        @safetestset "Broadcast" include("core/bcast.jl")
+        @safetestset "Struct" include("core/struct.jl")
+        @safetestset "Closure" include("core/closure.jl")
+        @safetestset "Compile" include("core/compile.jl")
+        @safetestset "IR" include("core/ir.jl")
+        @safetestset "Buffer Donation" include("core/buffer_donation.jl")
+        @safetestset "Wrapped Arrays" include("core/wrapped_arrays.jl")
+        @safetestset "Control Flow" include("core/control_flow.jl")
+        @safetestset "Sorting" include("core/sorting.jl")
+        @safetestset "Shortcuts to MLIR ops" include("core/ops.jl")
+        @safetestset "Indexing" include("core/indexing.jl")
+        @safetestset "Config" include("core/config.jl")
+        @safetestset "Batching" include("core/batching.jl")
+
+        if !Sys.isapple()
+            @safetestset "Custom Number Types" include("core/custom_number_types.jl")
+        end
+    end
+
+    @testset "Distributed" begin
+        @safetestset "Sharding" include("distributed/sharding.jl")
+        @safetestset "Comm Optimization" include("distributed/optimize_comm.jl")
+        @safetestset "Cluster Detection" include("distributed/cluster_detector.jl")
+    end
+
+    @testset "Plugins" begin
         if Sys.isapple() && haskey(Reactant.XLA.global_backend_state.clients, "metal")
             @safetestset "Metal Plugin" include("plugins/metal.jl")
         end
-
-        @safetestset "Layout" include("layout.jl")
-        @safetestset "Tracing" include("tracing.jl")
-        @safetestset "Basic" include("basic.jl")
-        @safetestset "Constructor" include("constructor.jl")
-        @safetestset "Autodiff" include("autodiff.jl")
-        @safetestset "Complex" include("complex.jl")
-        @safetestset "Broadcast" include("bcast.jl")
-        @safetestset "Struct" include("struct.jl")
-        @safetestset "Closure" include("closure.jl")
-        @safetestset "Compile" include("compile.jl")
-        @safetestset "IR" include("ir.jl")
-        @safetestset "Buffer Donation" include("buffer_donation.jl")
-        @safetestset "Wrapped Arrays" include("wrapped_arrays.jl")
-        @safetestset "Control Flow" include("control_flow.jl")
-        @safetestset "Sorting" include("sorting.jl")
-        @safetestset "Shortcuts to MLIR ops" include("ops.jl")
-        @safetestset "Indexing" include("indexing.jl")
-        if !Sys.isapple()
-            @safetestset "Custom Number Types" include("custom_number_types.jl")
-        end
-        @safetestset "Sharding" include("sharding.jl")
-        @safetestset "Comm Optimization" include("optimize_comm.jl")
-        @safetestset "Cluster Detection" include("cluster_detector.jl")
-        @safetestset "Config" include("config.jl")
-        @safetestset "Batching" include("batching.jl")
-        @safetestset "QA" include("qa.jl")
     end
 
-    if REACTANT_TEST_GROUP == "all" || REACTANT_TEST_GROUP == "integration"
-        @safetestset "CUDA" include("integration/cuda.jl")
-        @safetestset "KernelAbstractions" include("integration/kernelabstractions.jl")
-        @safetestset "Linear Algebra" include("integration/linear_algebra.jl")
-        @safetestset "OffsetArrays" include("integration/offsetarrays.jl")
-        @safetestset "OneHotArrays" include("integration/onehotarrays.jl")
-        @safetestset "AbstractFFTs" include("integration/fft.jl")
-        @safetestset "SpecialFunctions" include("integration/special_functions.jl")
-        @safetestset "Random" include("integration/random.jl")
-        @safetestset "Python" include("integration/python.jl")
-        @safetestset "Optimisers" include("integration/optimisers.jl")
-        @safetestset "FillArrays" include("integration/fillarrays.jl")
-        @safetestset "Zygote" include("integration/zygote.jl")
+    @testset "Standard Libraries" begin
+        @safetestset "Linear Algebra" include("stdlibs/linear_algebra.jl")
+        @safetestset "Random" include("stdlibs/random.jl")
     end
 
-    if REACTANT_TEST_GROUP == "all" || REACTANT_TEST_GROUP == "neural_networks"
-        @safetestset "NNlib Primitives" include("nn/nnlib.jl")
-        @safetestset "Flux.jl Integration" include("nn/flux.jl")
-        if Sys.islinux()
-            @safetestset "LuxLib Primitives" include("nn/luxlib.jl")
-            @safetestset "Lux Integration" include("nn/lux.jl")
-        end
+    @testset "Common Integrations" begin
+        # most integrations are tested in the integration tests except deps that are
+        # very common
+        @safetestset "SpecialFunctions" include("common_integration/special_functions.jl")
+    end
+
+    @testset "Quality Assurance" begin
+        @safetestset "QA" include("core/qa.jl")
     end
 end

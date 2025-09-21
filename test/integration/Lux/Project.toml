@@ -1,0 +1,17 @@
+[deps]
+Enzyme = "7da242da-08ed-463a-9acd-ee780be4f1d9"
+Functors = "d9f16b24-f501-4c13-a1f2-28368ffc5196"
+Lux = "b2108857-7c20-44ae-9111-449ecde12c47"
+LuxLib = "82251201-b29d-42c6-8e01-566dec8acb11"
+NNlib = "872c559c-99b0-510c-b3b7-b6c96a88d5cd"
+OneHotArrays = "0b1bfda6-eb8a-41d2-88d8-f5af5cad476f"
+Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
+Reactant = "3c362404-f566-11ee-1572-e11a4b42c853"
+Statistics = "10745b16-79ce-11e8-11f9-7d13ad32a3b2"
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+
+[sources]
+Reactant = {path = "../../.."}
+
+[extras]
+Reactant_jll = "0192cb87-2b54-54ad-80e0-3be72ad8a3c0"
