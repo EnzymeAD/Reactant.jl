@@ -117,6 +117,9 @@ jobs:
         os:
           - ubuntu-latest
           - linux-x86-ct6e-180-4tpu
+        exclude:
+          - os: linux-x86-ct6e-180-4tpu
+            version: "1.10"
         include:
           - project: CUDA
             os: linux-x86-a2-48-a100-4gpu
