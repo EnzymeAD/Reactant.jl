@@ -1,7 +1,5 @@
-using Reactant
+using Reactant, Test
 using Reactant: Ops
-
-using Test
 
 fn(x, y) = sin.(x) .+ cos.(y.x[1:2, :])
 

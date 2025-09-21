@@ -1,5 +1,4 @@
-using NNlib, Reactant, Enzyme
-using Statistics
+using NNlib, Reactant, Enzyme, Test, Statistics
 
 @testset "Activation Functions" begin
     sumabs2(f, x) = sum(abs2, f.(x))
