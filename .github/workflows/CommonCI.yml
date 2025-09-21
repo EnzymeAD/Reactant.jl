@@ -35,6 +35,11 @@ on:
         required: false
         default: false
         type: boolean
+      project:
+        description: "Project"
+        required: false
+        default: "."
+        type: string
 
 jobs:
   test:
@@ -132,8 +137,21 @@ jobs:
           end
           Pkg.develop(dev_pks)
         shell: julia --color=yes --code-coverage=user --depwarn=yes --project=. {0}
-        # Only in Julia v1.10 we need to install `ReactantCore` manually.
         if: ${{ inputs.julia_version == '1.10' || inputs.julia_version == 'lts' }}
+
+      - name: Install Project
+        if: ${{ inputs.project != '.' }}
+        run: |
+          import Pkg
+          PKg.activate(get(ENV, "JULIA_PROJECT", nothing))
+          if VERSION < v"1.11-"
+              Pkg.develop([PackageSpec(; path="."), PackageSpec(; path="lib/ReactantCore")])
+          end
+          Pkg.instantiate()
+        shell: julia --color=yes --code-coverage=user --depwarn=yes {0}
+        env:
+          JULIA_PKG_SERVER_REGISTRY_PREFERENCE: eager
+          JULIA_PROJECT: ${{ inputs.project }}
 
       # Run the tests (pjrt or ifrt or both)
       - name: "Setup Runtime Preferences (PJRT)"
@@ -145,8 +163,9 @@ jobs:
           contents: |
             [Reactant]
             xla_runtime = "PJRT"
+
       - name: "Run Tests (PJRT)"
-        if: ${{ inputs.runtime == 'pjrt' || inputs.runtime == 'both' }}
+        if: ${{ (inputs.runtime == 'pjrt' || inputs.runtime == 'both') && inputs.project == '.' }}
         timeout-minutes: 120
         run: |
           import Pkg
@@ -159,6 +178,11 @@ jobs:
         env:
           ALLOW_RERESOLVE: ${{ !inputs.downgrade_testing }}
           REACTANT_TEST_GROUP: ${{ inputs.test_group }}
+      - name: "Run Integration Tests (PJRT)"
+        if: ${{ (inputs.runtime == 'pjrt' || inputs.runtime == 'both') && inputs.project != '.' }}
+        timeout-minutes: 30
+        run: julia --color=yes --project=test/integration/${{ inputs.project }} --threads=auto --check-bounds=yes -O1 test/integration/${{ inputs.project }}/runtests.jl
+        shell: bash
 
       - name: "Setup Runtime Preferences (IFRT)"
         if: ${{ inputs.runtime == 'ifrt' || inputs.runtime == 'both' }}
@@ -169,8 +193,9 @@ jobs:
           contents: |
             [Reactant]
             xla_runtime = "IFRT"
+
       - name: "Run Tests (IFRT)"
-        if: ${{ inputs.runtime == 'ifrt' || inputs.runtime == 'both' }}
+        if: ${{ (inputs.runtime == 'ifrt' || inputs.runtime == 'both') && inputs.project == '.' }}
         timeout-minutes: 120
         run: |
           import Pkg
@@ -183,6 +208,11 @@ jobs:
         env:
           ALLOW_RERESOLVE: ${{ !inputs.downgrade_testing }}
           REACTANT_TEST_GROUP: ${{ inputs.test_group }}
+      - name: "Run Integration Tests (IFRT)"
+        if: ${{ (inputs.runtime == 'ifrt' || inputs.runtime == 'both') && inputs.project != '.' }}
+        timeout-minutes: 30
+        run: julia --color=yes --project=test/integration/${{ inputs.project }} --threads=auto --check-bounds=yes -O1 test/integration/${{ inputs.project }}/runtests.jl
+        shell: bash
 
       - name: "Upload MLIR modules"
         uses: actions/upload-artifact@v4
