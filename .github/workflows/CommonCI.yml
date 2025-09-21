@@ -143,7 +143,7 @@ jobs:
         if: ${{ inputs.project != '.' }}
         run: |
           import Pkg
-          PKg.activate(get(ENV, "JULIA_PROJECT", nothing))
+          Pkg.activate(get(ENV, "JULIA_PROJECT", nothing))
           if VERSION < v"1.11-"
               Pkg.develop([PackageSpec(; path="."), PackageSpec(; path="lib/ReactantCore")])
           end
