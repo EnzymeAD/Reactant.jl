@@ -8,4 +8,8 @@ using Test
     @testset "Lux Integration" begin
         include("lux.jl")
     end
+
+    @testset "Optimisers Integration" begin
+        include("optimisers.jl")
+    end
 end
