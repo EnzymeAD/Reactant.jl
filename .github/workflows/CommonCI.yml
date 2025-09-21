@@ -69,6 +69,8 @@ jobs:
           version: ${{ inputs.julia_version }}
       - uses: julia-actions/cache@v2
         id: julia-cache
+        with:
+          cache-name: julia-cache;workflow=${{ inputs.julia_version }}-${{ inputs.os }}-${{ inputs.runtime }}-assertions=${{ inputs.assertions }}-${{ github.event_name }}-${{ inputs.test_group }}-${{ inputs.downgrade_testing }}-${{ inputs.localjll }}
 
       - uses: julia-actions/julia-downgrade-compat@v2
         if: ${{ inputs.downgrade_testing }}
