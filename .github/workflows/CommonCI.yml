@@ -145,7 +145,10 @@ jobs:
           import Pkg
           Pkg.activate(get(ENV, "JULIA_PROJECT", nothing))
           if VERSION < v"1.11-"
-              Pkg.develop([PackageSpec(; path="."), PackageSpec(; path="lib/ReactantCore")])
+              Pkg.develop([
+                Pkg.PackageSpec(; path="."),
+                Pkg.PackageSpec(; path="lib/ReactantCore")
+              ])
           end
           Pkg.instantiate()
         shell: julia --color=yes --code-coverage=user --depwarn=yes {0}
