@@ -2,7 +2,7 @@ abstract type RNumber{T<:ReactantPrimitive} <: Number end
 
 abstract type AbstractConcreteNumber{T} <: RNumber{T} end
 
-abstract type RArray{T,N} <: AbstractArray{T,N} end
+abstract type RArray{T,N} <: DenseArray{T,N} end
 
 abstract type AbstractConcreteArray{T,N} <: RArray{T,N} end
 
