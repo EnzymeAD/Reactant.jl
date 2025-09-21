@@ -149,12 +149,17 @@ jobs:
             xla_runtime = "PJRT"
       - name: "Run Tests (PJRT)"
         timeout-minutes: 60
-        if: ${{ inputs.runtime == 'pjrt' || inputs.runtime == 'both' }}
-        uses: julia-actions/julia-runtest@v1
+        run: |
+          import Pkg
+          Pkg.Registry.update()
+          Pkg.test(;
+            coverage="user",
+            allow_reresolve=parse(Bool, get(ENV, "ALLOW_RERESOLVE", "true"))
+          )
+        shell: julia --color=yes --code-coverage=user --depwarn=yes --project=. {0}
         env:
           ALLOW_RERESOLVE: ${{ !inputs.downgrade_testing }}
           JULIA_PKG_SERVER_REGISTRY_PREFERENCE: eager
-          ENABLE_PJRT_COMPATIBILITY: 1
           REACTANT_TEST_GROUP: ${{ inputs.test_group }}
           XLA_FLAGS: "--xla_force_host_platform_device_count=12"
           JULIA_DEBUG: "Reactant,Reactant_jll"
@@ -170,12 +175,17 @@ jobs:
             xla_runtime = "IFRT"
       - name: "Run Tests (IFRT)"
         timeout-minutes: 60
-        if: ${{ inputs.runtime == 'ifrt' || inputs.runtime == 'both' }}
-        uses: julia-actions/julia-runtest@v1
+        run: |
+          import Pkg
+          Pkg.Registry.update()
+          Pkg.test(;
+            coverage="user",
+            allow_reresolve=parse(Bool, get(ENV, "ALLOW_RERESOLVE", "true"))
+          )
+        shell: julia --color=yes --code-coverage=user --depwarn=yes --project=. {0}
         env:
           ALLOW_RERESOLVE: ${{ !inputs.downgrade_testing }}
           JULIA_PKG_SERVER_REGISTRY_PREFERENCE: eager
-          ENABLE_PJRT_COMPATIBILITY: 1
           REACTANT_TEST_GROUP: ${{ inputs.test_group }}
           XLA_FLAGS: "--xla_force_host_platform_device_count=12"
           JULIA_DEBUG: "Reactant,Reactant_jll"
