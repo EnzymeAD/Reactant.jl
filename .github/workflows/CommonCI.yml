@@ -190,7 +190,7 @@ jobs:
         env:
           ALLOW_RERESOLVE: ${{ !inputs.downgrade_testing }}
           REACTANT_TEST_GROUP: ${{ inputs.test_group }}
-      - name: "Run Integration Tests (PJRT)"
+      - name: "Run ${{ inputs.project }} Integration Tests (PJRT)"
         if: ${{ (inputs.runtime == 'pjrt' || inputs.runtime == 'both') && inputs.project != '.' }}
         timeout-minutes: 30
         run: julia --color=yes --project=${{ inputs.project }} --threads=auto --check-bounds=yes -O1 ${{ inputs.project }}/runtests.jl
@@ -229,7 +229,7 @@ jobs:
         env:
           ALLOW_RERESOLVE: ${{ !inputs.downgrade_testing }}
           REACTANT_TEST_GROUP: ${{ inputs.test_group }}
-      - name: "Run Integration Tests (IFRT)"
+      - name: "Run ${{ inputs.project }} Integration Tests (IFRT)"
         if: ${{ (inputs.runtime == 'ifrt' || inputs.runtime == 'both') && inputs.project != '.' }}
         timeout-minutes: 30
         run: julia --color=yes --project=${{ inputs.project }} --threads=auto --check-bounds=yes -O1 ${{ inputs.project }}/runtests.jl
