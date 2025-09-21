@@ -1,4 +1,5 @@
 [deps]
+Enzyme = "7da242da-08ed-463a-9acd-ee780be4f1d9"
 Flux = "587475ba-b771-5e3f-ad9e-33799f191a9c"
 Reactant = "3c362404-f566-11ee-1572-e11a4b42c853"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"

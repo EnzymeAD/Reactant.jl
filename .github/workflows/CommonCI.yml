@@ -75,7 +75,7 @@ jobs:
       - uses: julia-actions/cache@v2
         id: julia-cache
         with:
-          cache-name: julia-cache;workflow=${{ inputs.julia_version }}-${{ inputs.os }}-${{ inputs.runtime }}-assertions=${{ inputs.assertions }}-${{ github.event_name }}-${{ inputs.test_group }}-${{ inputs.downgrade_testing }}-${{ inputs.localjll }}
+          cache-name: julia-cache;workflow=${{ inputs.julia_version }}-${{ inputs.os }}-${{ inputs.runtime }}-assertions=${{ inputs.assertions }}-${{ github.event_name }}-${{ inputs.test_group }}-${{ inputs.downgrade_testing }}-${{ inputs.localjll }}-${{ inputs.project }}
 
       - uses: julia-actions/julia-downgrade-compat@v2
         if: ${{ inputs.downgrade_testing }}
@@ -184,7 +184,7 @@ jobs:
       - name: "Run Integration Tests (PJRT)"
         if: ${{ (inputs.runtime == 'pjrt' || inputs.runtime == 'both') && inputs.project != '.' }}
         timeout-minutes: 30
-        run: julia --color=yes --project=test/integration/${{ inputs.project }} --threads=auto --check-bounds=yes -O1 test/integration/${{ inputs.project }}/runtests.jl
+        run: julia --color=yes --project=${{ inputs.project }} --threads=auto --check-bounds=yes -O1 ${{ inputs.project }}/runtests.jl
         shell: bash
 
       - name: "Setup Runtime Preferences (IFRT)"
@@ -214,7 +214,7 @@ jobs:
       - name: "Run Integration Tests (IFRT)"
         if: ${{ (inputs.runtime == 'ifrt' || inputs.runtime == 'both') && inputs.project != '.' }}
         timeout-minutes: 30
-        run: julia --color=yes --project=test/integration/${{ inputs.project }} --threads=auto --check-bounds=yes -O1 test/integration/${{ inputs.project }}/runtests.jl
+        run: julia --color=yes --project=${{ inputs.project }} --threads=auto --check-bounds=yes -O1 ${{ inputs.project }}/runtests.jl
         shell: bash
 
       - name: "Upload MLIR modules"
