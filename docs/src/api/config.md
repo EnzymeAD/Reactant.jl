@@ -33,6 +33,11 @@ Reactant.PrecisionConfig
 Reactant.DotGeneralAlgorithm
 ```
 
+### Zygote Overlay
+
+- `OVERLAY_ZYGOTE_CALLS`: Whether to overlay `Zygote.gradient` calls with `Enzyme.autodiff`
+  calls.
+
 ## Environment Variables
 
 The following environment variables can be used to configure Reactant.
