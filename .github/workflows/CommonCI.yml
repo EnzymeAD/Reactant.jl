@@ -51,20 +51,18 @@ jobs:
         run: sudo rm -rf /opt/*
         if: ${{ startsWith(inputs.os, 'ubuntu-') && inputs.localjll }}
 
-      # XXX: I don't know why this isn't creating a dir
-      # - name: Set TMPDIR
-      #   # We have to use `${GITHUB_WORKSPACE}` instead of `github.workspace` because GitHub
-      #   # is terrible and the two don't match inside containers:
-      #   # https://github.com/actions/runner/issues/2058
-      #   if: ${{ inputs.os != 'windows-latest' }}
-      #   run: |
-      #     echo "TMPDIR=${GITHUB_WORKSPACE}/tmp" >> ${GITHUB_ENV}
-      # - name: Make TMPDIR
-      #   if: ${{ inputs.os != 'windows-latest' }}
-      #   run: |
-      #     mkdir -p ${{ env.TMPDIR }}
-
       - uses: actions/checkout@v5
+
+      - name: Set TMPDIR and create directory
+        # We have to use `${GITHUB_WORKSPACE}` instead of `github.workspace` because GitHub
+        # is terrible and the two don't match inside containers:
+        # https://github.com/actions/runner/issues/2058
+        if: ${{ !startsWith(inputs.os, 'windows-') }}
+        run: |
+          export TMPDIR="${GITHUB_WORKSPACE}/tmp"
+          mkdir -p "$TMPDIR"
+          echo "TMPDIR=$TMPDIR" >> $GITHUB_ENV
+
       - uses: julia-actions/setup-julia@v2
         if: ${{ ! inputs.assertions }}
         with:
@@ -148,6 +146,7 @@ jobs:
             [Reactant]
             xla_runtime = "PJRT"
       - name: "Run Tests (PJRT)"
+        if: ${{ inputs.runtime == 'pjrt' || inputs.runtime == 'both' }}
         timeout-minutes: 60
         run: |
           import Pkg
@@ -174,6 +173,7 @@ jobs:
             [Reactant]
             xla_runtime = "IFRT"
       - name: "Run Tests (IFRT)"
+        if: ${{ inputs.runtime == 'ifrt' || inputs.runtime == 'both' }}
         timeout-minutes: 60
         run: |
           import Pkg
