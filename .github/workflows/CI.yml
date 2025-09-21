@@ -62,19 +62,13 @@ jobs:
       os: ${{ matrix.os }}
       runtime: ${{ matrix.runtime }}
 
-  # This has been broken for a while, originating from CUDA.jl
-  # test-assertions:
-  #   strategy:
-  #     fail-fast: false
-  #     matrix:
-  #       version:
-  #         - "1.10"
-  #   uses: ./.github/workflows/CommonCI.yml
-  #   with:
-  #     julia_version: ${{ matrix.version }}
-  #     os: "ubuntu-24.04"
-  #     runtime: "both"
-  #     assertions: true
+  test-assertions:
+    uses: ./.github/workflows/CommonCI.yml
+    with:
+      julia_version: "1.10"
+      os: "ubuntu-24.04"
+      runtime: "both"
+      assertions: true
 
   downgrade:
     strategy:

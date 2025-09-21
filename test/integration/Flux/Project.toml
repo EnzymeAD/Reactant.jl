@@ -6,6 +6,3 @@ Zygote = "e88e6eb3-aa80-5325-afca-941959d7151f"
 
 [sources]
 Reactant = {path = "../../.."}
-
-[extras]
-Reactant_jll = "0192cb87-2b54-54ad-80e0-3be72ad8a3c0"
