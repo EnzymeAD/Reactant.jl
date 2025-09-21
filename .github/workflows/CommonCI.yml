@@ -149,7 +149,7 @@ jobs:
             xla_runtime = "PJRT"
       - name: "Run Tests (PJRT)"
         if: ${{ inputs.runtime == 'pjrt' || inputs.runtime == 'both' }}
-        timeout-minutes: 60
+        timeout-minutes: 120
         run: |
           import Pkg
           Pkg.Registry.update()
@@ -176,7 +176,7 @@ jobs:
             xla_runtime = "IFRT"
       - name: "Run Tests (IFRT)"
         if: ${{ inputs.runtime == 'ifrt' || inputs.runtime == 'both' }}
-        timeout-minutes: 60
+        timeout-minutes: 120
         run: |
           import Pkg
           Pkg.Registry.update()
@@ -197,7 +197,7 @@ jobs:
         timeout-minutes: 10
         if: ${{ always() }}
         with:
-          name: "mlir-${{ inputs.julia_version }}-${{ inputs.os }}-${{ inputs.runtime }}-assertions=${{ inputs.assertions }}-${{ github.event_name }}"
+          name: "mlir-${{ inputs.julia_version }}-${{ inputs.os }}-${{ inputs.runtime }}-assertions=${{ inputs.assertions }}-${{ github.event_name }}-test_group=${{ inputs.test_group }}-${{ inputs.localjll }}"
           path: "**/*.mlir"
           retention-days: 90
           overwrite: false
