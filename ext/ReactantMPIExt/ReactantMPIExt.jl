@@ -36,10 +36,6 @@ function Distributed.get_local_process_id(::Distributed.MPIEnvDetector)
 end
 
 function __init__()
-    # # TODO improve this, temporary hack
-    # # when  you fix it, remember to possibly make TracedType const again
-    # Reactant.TracedType = Union{Reactant.TracedRArray,Reactant.TracedRNumber,Reactant.MissingTracedValue,TracedRequest}
-
     libmpi_handle = MPI.API.libmpi_handle
 
     # register MPI routines
@@ -237,21 +233,20 @@ function Base.show(io::IOty, X::TracedRequest) where {IOty<:Union{IO,IOContext}}
     return print(io, "TracedRequest(", X.paths, ")")
 end
 
-Reactant.TracedUtils.get_mlir_data(x::TracedRequest) = x.mlir_data
+# # NOTE: Commenting out the below on the assumption that a Request will never cross the compile boundary
+# #       If we ever want to return a request, the below could serve as a starting point
+# Reactant.TracedUtils.get_mlir_data(x::TracedRequest) = x.mlir_data
 # Reactant.TracedUtils.set_mlir_data!(x::TracedRequest, data) = (x.mlir_data = data; return x)
 
-# # May need these later, but for now we assume that no request needs to pass the compile boundary
 # Reactant.TracedUtils.get_paths(x::TracedRequest) = x.paths
 # Reactant.TracedUtils.set_paths!(x::TracedRequest, paths) = (x.paths = paths; return x)
 #
-# # TODO not sure how to implement this for TracedRequest
-# # probably just want to hardcode the types and dims?
 # function Reactant.Ops.mlir_type(x::TracedRequest)::MLIR.IR.Type
 #     # return MLIR.IR.TensorType(collect(Int, size(x)), MLIR.IR.Type(unwrapped_eltype(x)))
 #     return MLIR.IR.TensorType(collect(Int, ()), MLIR.IR.Type(Int64))
 # end
 #
-# TODO if want to use this, need to somehow add TracedRequest to TracedTypes, which is currently const
+# TODO for this to work properly in finalize_mlir_fn(), need to add TracedRequest to TracedTypes, currently const
 # Base.@nospecializeinfer function Reactant.make_tracer(
 #     seen,
 #     @nospecialize(prev::TracedRequest),
