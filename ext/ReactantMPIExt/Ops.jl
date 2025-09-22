@@ -274,30 +274,6 @@ function inject_mpi_datatype!(datatype)
     end
 end
 
-function convert_julia_type_to_mpi_datatype(T::Type)
-    if T === Bool
-        MPI.C_BOOL
-    elseif T === Int8
-        MPI.INT8_T
-    elseif T === Int16
-        MPI.INT16_T
-    elseif T === Int32
-        MPI.INT32_T
-    elseif T === Int64
-        MPI.INT64_T
-    elseif T === Float32
-        MPI.FLOAT
-    elseif T === Float64
-        MPI.DOUBLE
-    elseif T === ComplexF32
-        MPI.C_FLOAT_COMPLEX
-    elseif T === ComplexF64
-        MPI.C_DOUBLE_COMPLEX
-    else
-        throw(ArgumentError("Unknown conversion from $T to a MPI_Datatype"))
-    end
-end
-
 function send(
     buf::TracedRArray,
     tag::TracedRNumber,
@@ -305,7 +281,7 @@ function send(
     location=mlir_stacktrace("mpi.send", @__FILE__, @__LINE__),
 )
     T = Reactant.unwrapped_eltype(buf)
-    mpi_datatype = convert_julia_type_to_mpi_datatype(T)
+    mpi_datatype = MPI.Datatype(T)
     mpi_datatype_name = inject_mpi_datatype!(mpi_datatype)
 
     sym_name = "enzymexla_wrapper_MPI_Send_$(mpi_datatype_name)"
@@ -356,7 +332,7 @@ function isend(
     location=mlir_stacktrace("mpi.isend", @__FILE__, @__LINE__),
 )
     T = Reactant.unwrapped_eltype(buf)
-    mpi_datatype = convert_julia_type_to_mpi_datatype(T)
+    mpi_datatype = MPI.Datatype(T)
     mpi_datatype_name = inject_mpi_datatype!(mpi_datatype)
 
     sym_name = "enzymexla_wrapper_MPI_Isend_$(mpi_datatype_name)"
@@ -416,7 +392,7 @@ function recv!(
     location=mlir_stacktrace("mpi.recv", @__FILE__, @__LINE__),
 )
     T = Reactant.unwrapped_eltype(recvbuf)
-    mpi_datatype = convert_julia_type_to_mpi_datatype(T)
+    mpi_datatype = MPI.Datatype(T)
     mpi_datatype_name = inject_mpi_datatype!(mpi_datatype)
 
     sym_name = "enzymexla_wrapper_MPI_Recv_$(mpi_datatype_name)"
@@ -477,7 +453,7 @@ function irecv!(
     location=mlir_stacktrace("mpi.irecv", @__FILE__, @__LINE__),
 )
     T = Reactant.unwrapped_eltype(buf)
-    mpi_datatype = convert_julia_type_to_mpi_datatype(T)
+    mpi_datatype = MPI.Datatype(T)
     mpi_datatype_name = inject_mpi_datatype!(mpi_datatype)
 
     sym_name = "enzymexla_wrapper_MPI_Irecv_$(mpi_datatype_name)"
@@ -626,7 +602,7 @@ function allreduce!(
 
     op_name = inject_mpi_op!(op)
     T = Reactant.unwrapped_eltype(sendbuf)
-    mpi_datatype = convert_julia_type_to_mpi_datatype(T)
+    mpi_datatype = MPI.Datatype(T)
     mpi_datatype_name = inject_mpi_datatype!(mpi_datatype)
 
     IR.inject!("MPI_COMM_WORLD", "llvm.mlir.global constant @MPI_COMM_WORLD() : !llvm.ptr")
