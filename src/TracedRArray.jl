@@ -23,6 +23,33 @@ Base.strides(x::TracedRArray) = Base.size_to_strides(1, size(x)...)
 
 Base.IndexStyle(::Type{<:TracedRArray}) = Base.IndexLinear()
 
+Base.elsize(::Type{TracedRArray{T,N}}) where {T,N} = sizeof(T)
+
+const ArrayTypesAlias = (
+    :(TracedRArray),
+    :(SubArray{<:TracedRNumber,<:Any,<:TracedRArray}),
+    :(Base.ReshapedArray{<:TracedRNumber,<:Any,<:TracedRArray}),
+    :(SubArray{<:TracedRNumber,<:Any,<:Base.ReshapedArray{<:TracedRNumber,<:Any,<:TracedRArray}}),
+    :(Base.ReshapedArray{<:TracedRNumber,<:Any,<:SubArray{<:TracedRNumber,<:Any,<:TracedRArray}}),
+)
+for ArrayType1 in ArrayTypesAlias
+    for ArrayType2 in ArrayTypesAlias
+        @eval Base.mightalias(::$ArrayType1, ::$ArrayType2) = false
+    end
+end
+
+# Base.mightalias(::TracedRArray, ::TracedRArray) = false
+# Base.mightalias(
+#     ::SubArray{<:TracedRNumber,<:Any,<:TracedRArray},
+#     ::SubArray{<:TracedRNumber,<:Any,<:TracedRArray},
+# ) = false
+# Base.mightalias(
+#     ::SubArray{<:TracedRNumber,<:Any,<:TracedRArray}, ::TracedRArray
+# ) = false
+# Base.mightalias(
+#     ::TracedRArray, ::SubArray{<:TracedRNumber,<:Any,<:TracedRArray}
+# ) = false
+
 # This is required otherwise we will copy a tracedrarray each time
 # we use it
 Base.convert(T::Type{<:TracedRArray}, x::AbstractArray) = Reactant.promote_to(T, x)

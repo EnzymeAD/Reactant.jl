@@ -52,6 +52,11 @@ mutable struct TracedRNumber{T} <: RNumber{T}
     end
 end
 
+Base.elsize(::Type{TracedRNumber{T}}) where {T} = sizeof(T)
+Base.elsize(::Type{RNumber{T}}) where {T} = sizeof(T)
+Base.elsize(::Type{<:AbstractConcreteNumber{T}}) where {T} = sizeof(T)
+Base.elsize(::Type{<:AbstractConcreteArray{T}}) where {T} = sizeof(T)
+
 function repath(x::TracedRNumber{T}, paths) where {T}
     return TracedRNumber{T}(paths, x.mlir_data)
 end
