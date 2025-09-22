@@ -1,11 +1,11 @@
-using Test
+using Test, SafeTestsets
 
 @testset "CUDA Integration" begin
-    @testset "CUDA" begin
+    @safetestset "CUDA" begin
         include("cuda.jl")
     end
 
-    @testset "KernelAbstractions" begin
+    @safetestset "KernelAbstractions" begin
         include("kernelabstractions.jl")
     end
 end
