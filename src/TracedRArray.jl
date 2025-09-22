@@ -265,8 +265,15 @@ function Base.show(io::IOty, X::TracedRArray{T,N}) where {T,N,IOty<:Union{IO,IOC
     return print(io, "TracedRArray{", T, ",", N, "N}(", X.paths, ", size=", size(X), ")")
 end
 
-function Base.permutedims(A::AnyTracedRArray{T,N}, perm) where {T,N}
-    return @opcall transpose(materialize_traced_array(A), Int64[perm...])
+for ArrayType in (
+    :(AnyTracedRArray{T,N}),
+    :(TracedRArray{T,N}),
+    :(SubArray{<:TracedRNumber{T},N,<:TracedRArray}),
+    :(Base.ReshapedArray{<:TracedRNumber{T},N,<:TracedRArray})
+    )
+    @eval function Base.permutedims(A::$ArrayType, perm) where {T,N}
+        return @opcall transpose(materialize_traced_array(A), Int64[perm...])
+    end
 end
 
 for (jlop, hloop, hlocomp, merge) in
