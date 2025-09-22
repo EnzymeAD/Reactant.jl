@@ -287,8 +287,6 @@ function send(
     sym_name = "enzymexla_wrapper_MPI_Send_$(mpi_datatype_name)"
     sym_attr = IR.FlatSymbolRefAttribute(sym_name)
 
-    # TODO emit constant for size and datatype, and pass as args
-
     IR.inject!("MPI_COMM_WORLD", "llvm.mlir.global constant @MPI_COMM_WORLD() : !llvm.ptr")
     IR.inject!(
         "MPI_Send",

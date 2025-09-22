@@ -71,34 +71,13 @@ function MPI.Isend(
     return Ops.isend(buf, tag, dest)
 end
 
-# TODO possible to use this signature? As is, ambiguous with the ones defined by MPI.jl
-# # TODO use `make_tracer` to linearize arbitrary types? check out `MPI.Buffer`
-# function MPI.Isend(
-#     buf::TracedRArray,
-#     dest::Union{T,TracedRNumber{T}},
-#     tag::Union{T,TracedRNumber{T}},
-#     comm::MPI.Comm,
-# ) where {T<:Integer}
-#     @assert comm == MPI.COMM_WORLD "Only MPI.COMM_WORLD is supported currently"
-
-#     tag = if !(tag isa TracedRNumber)
-#         Reactant.Ops.constant(tag)
-#     end
-
-#     dest = if !(dest isa TracedRNumber)
-#         Reactant.Ops.constant(dest)
-#     end
-
-#     return Ops.isend(buf, tag, dest)
-# end
-
 function MPI.Recv!(buf::TracedRArray, source::Integer, tag::Integer, comm::MPI.Comm)
     tag = Reactant.Ops.constant(tag)
     source = Reactant.Ops.constant(source)
     return MPI.Recv!(buf, source, tag, comm)
 end
 
-# TODO Do we need these? Comment out at least until everything is working
+# TODO Do we need these?
 # function MPI.Recv!(
 #     buf::TracedRArray,
 #     source::Integer,
