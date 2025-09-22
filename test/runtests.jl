@@ -56,6 +56,7 @@ const REACTANT_TEST_GROUP = lowercase(get(ENV, "REACTANT_TEST_GROUP", "all"))
         @safetestset "Optimisers" include("integration/optimisers.jl")
         @safetestset "FillArrays" include("integration/fillarrays.jl")
         @safetestset "FixedSizeArrays" include("integration/fixedsizearrays.jl")
+        @safetestset "Zygote" include("integration/zygote.jl")
     end
 
     if REACTANT_TEST_GROUP == "all" || REACTANT_TEST_GROUP == "neural_networks"
