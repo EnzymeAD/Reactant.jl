@@ -40,8 +40,7 @@ function __init__()
     # # when  you fix it, remember to possibly make TracedType const again
     # Reactant.TracedType = Union{Reactant.TracedRArray,Reactant.TracedRNumber,Reactant.MissingTracedValue,TracedRequest}
 
-    # TODO maybe it's more efficient if we use `RTLD_NOW` instead of `RTLD_LAZY`?
-    libmpi_handle = Libdl.dlopen(MPI.API.libmpi, RTLD_LAZY | RTLD_GLOBAL)
+    libmpi_handle = MPI.API.libmpi_handle
 
     # register MPI routines
     for name in [
