@@ -1,7 +1,7 @@
 using Test, MPI, Reactant
 
-# # MPI only works on cpu currently --- is this the right way/place to enforce that?
-# Reactant.set_default_backend("cpu")
+client = Reactant.XLA.default_backend()
+Reactant.set_default_backend("cpu")
 
 MPI.Init()
 
@@ -121,3 +121,5 @@ end
 end
 
 MPI.Finalize()
+
+Reactant.set_default_backend(client)
