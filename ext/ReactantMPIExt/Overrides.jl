@@ -1,15 +1,15 @@
 using Reactant: @reactant_overlay, TracedRArray, TracedRNumber
 
-@reactant_overlay @noinline function MPI.Init(; kwargs...)
-    if !isempty(kwargs)
-        @warn "Ignoring MPI.Init kwargs when tracing over MPI..." kwargs...
-    end
-    return Ops.init()
-end
+# @reactant_overlay @noinline function MPI.Init(; kwargs...)
+#     if !isempty(kwargs)
+#         @warn "Ignoring MPI.Init kwargs when tracing over MPI..." kwargs...
+#     end
+#     return Ops.init()
+# end
 
-@reactant_overlay @noinline function MPI.Finalize(; kwargs...)
-    return Ops.finalize()
-end
+# @reactant_overlay @noinline function MPI.Finalize(; kwargs...)
+#     return Ops.finalize()
+# end
 
 @reactant_overlay @noinline function MPI.Comm_rank(comm::MPI.Comm)
     @assert comm == MPI.COMM_WORLD "Only MPI.COMM_WORLD is supported currently"
