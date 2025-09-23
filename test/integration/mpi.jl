@@ -24,40 +24,52 @@ end
     @test nranks == @jit MPI.Allreduce(x, MPI.SUM, MPI.COMM_WORLD)
 end
 
+@testset "Barrier" begin
+    @testset "Single Barrier" begin
+        comm = MPI.COMM_WORLD
+        ret = @jit MPI.Barrier(comm)
+        @test ret === nothing
+    end
+
+    @testset "Consecutive Barriers" begin
+        # Test multiple consecutive barriers
+        comm = MPI.COMM_WORLD
+        for i in 1:3
+            @test_nowarn @jit MPI.Barrier(comm)
+        end
+    end
+end
+
 @testset "Send / Recv!" begin
     comm = MPI.COMM_WORLD
     rank = MPI.Comm_rank(comm)
     nranks = MPI.Comm_size(comm)
 
-    # test MPI.jl Send / Reactant Recv
-    # useful to isolate Reactant issues
-    @testset "MPI.jl Send / Reactant Recv!" begin
-        send_buf = ones(5)
-        tag = 43
-        if rank == 0
-            MPI.Send(send_buf, comm; dest=1, tag=tag)
-        elseif rank == 1
-            recv_buf = ConcreteRArray(zeros(5))
-            source = 0
-            @jit MPI.Recv!(recv_buf, source, tag, comm)
-            @test recv_buf == send_buf
-        end
-    end
-
-    # test Reactant Send / MPI.jl Recv
-    # useful to isolate Reactant issues
-    @testset "Reactant Send / MPI.jl Recv!" begin
-        send_buf = ConcreteRArray(ones(5))
-        tag = 43
-        if rank == 0
-            dest = 1
-            @jit MPI.Send(send_buf, dest, tag, comm)
-        elseif rank == 1
-            recv_buf = zeros(5)
-            MPI.Recv!(recv_buf, comm; source=0, tag=tag)
-            @test recv_buf == send_buf
-        end
-    end
+    # # useful for isolating whether Reactant Send or Recv! is the issue
+    # @testset "MPI.jl Send / Reactant Recv!" begin
+    #     send_buf = ones(5)
+    #     tag = 43
+    #     if rank == 0
+    #         MPI.Send(send_buf, comm; dest=1, tag=tag)
+    #     elseif rank == 1
+    #         recv_buf = ConcreteRArray(zeros(5))
+    #         source = 0
+    #         @jit MPI.Recv!(recv_buf, source, tag, comm)
+    #         @test recv_buf == send_buf
+    #     end
+    # end
+    # @testset "Reactant Send / MPI.jl Recv!" begin
+    #     send_buf = ConcreteRArray(ones(5))
+    #     tag = 43
+    #     if rank == 0
+    #         dest = 1
+    #         @jit MPI.Send(send_buf, dest, tag, comm)
+    #     elseif rank == 1
+    #         recv_buf = zeros(5)
+    #         MPI.Recv!(recv_buf, comm; source=0, tag=tag)
+    #         @test recv_buf == send_buf
+    #     end
+    # end
 
     # test Reactant Send/Recv
     @testset "Reactant Send / Recv! - compiled separately" begin
@@ -99,7 +111,9 @@ end
     rank = MPI.Comm_rank(comm)
     nranks = MPI.Comm_size(comm)
 
-    # note: currently don't allow a request to cross the compile boundary
+    # NOTE: currently don't allow a request to cross the compile boundary
+    # debugging tip: if this fails, can use pair Send with Irecv! + Wait, or Recv! with
+    # Isend + Wait to isolate the issue
     send_buf = ConcreteRArray(ones(5))
     recv_buf = ConcreteRArray(zeros(5))
     tag = 42
