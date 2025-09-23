@@ -92,6 +92,31 @@ function assume_multiple(
     )
 end
 
+"""
+`barrier`
+
+Performs barrier synchronization across all SC vector subcores at the
+specified barrier id.
+"""
+function barrier(barrier_id::Value; location=Location())
+    op_ty_results = IR.Type[]
+    operands = Value[barrier_id,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+
+    return create_operation(
+        "tpu.barrier",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
 function bitcast(input::Value; output::IR.Type, location=Location())
     op_ty_results = IR.Type[output,]
     operands = Value[input,]

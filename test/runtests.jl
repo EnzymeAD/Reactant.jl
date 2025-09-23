@@ -52,6 +52,7 @@ const REACTANT_TEST_GROUP = lowercase(get(ENV, "REACTANT_TEST_GROUP", "all"))
         @safetestset "Python" include("integration/python.jl")
         @safetestset "Optimisers" include("integration/optimisers.jl")
         @safetestset "FillArrays" include("integration/fillarrays.jl")
+        @safetestset "Zygote" include("integration/zygote.jl")
         @safetestset "MPI" begin
             using MPI
             nranks = 2

@@ -49,7 +49,7 @@ function promote_to(
 end
 
 function promote_to(::Type{TracedRArray{T,1}}, rhs::Base.OneTo) where {T}
-    return promote_to(TracedRArray{T,1}, 1:last(rhs))
+    return promote_to(TracedRArray{T,1}, first(rhs):last(rhs))
 end
 
 function promote_to(::Type{TracedRArray{T,N}}, rhs::AbstractArray{<:Any,N}) where {T,N}
