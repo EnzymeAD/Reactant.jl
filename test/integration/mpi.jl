@@ -32,7 +32,6 @@ end
     end
 
     @testset "Consecutive Barriers" begin
-        # Test multiple consecutive barriers
         comm = MPI.COMM_WORLD
         for i in 1:3
             @test_nowarn @jit MPI.Barrier(comm)
