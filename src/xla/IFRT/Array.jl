@@ -17,10 +17,7 @@ function Array(
 end
 
 function make_array_singleshard(
-    client::Client,
-    array::AbstractArray{T,N},
-    device::Device,
-    memory_kind::AbstractString,
+    client::Client, array::AbstractArray{T,N}, device::Device, memory_kind::AbstractString
 ) where {T<:Reactant.ReactantPrimitive,N}
     sizear = collect(Int64, reverse(size(array)))
     buffer = GC.@preserve array sizear begin
@@ -98,7 +95,7 @@ end
 function Array(
     client::Client, array::Base.Array{T,N}, sharding::Sharding
 ) where {T<:Reactant.ReactantPrimitive,N}
-    make_array_sharding(client, array, sharding)
+    return make_array_sharding(client, array, sharding)
 end
 
 function Array(
@@ -173,7 +170,7 @@ if isdefined(Base, :Memory)
     function Array(
         client::Client, memory::Base.Memory{T}, sharding::Sharding
     ) where {T<:Reactant.ReactantPrimitive}
-        make_array_sharding(client, memory, sharding)
+        return make_array_sharding(client, memory, sharding)
     end
 end
 

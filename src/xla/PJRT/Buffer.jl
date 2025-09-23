@@ -7,7 +7,8 @@ mutable struct Buffer <: XLA.AbstractBuffer
 end
 
 function make_buffer_array(
-    client::Client, array::AbstractArray{T,N}, device::Device) where {T,N}    
+    client::Client, array::AbstractArray{T,N}, device::Device
+) where {T,N}
     sizear = collect(Int64, reverse(size(array)))
     buffer = GC.@preserve array sizear begin
         @ccall MLIR.API.mlir_c.ArrayFromHostBuffer(
