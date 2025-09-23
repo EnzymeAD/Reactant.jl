@@ -1617,7 +1617,9 @@ Base.@nospecializeinfer function make_tracer(
     @nospecialize(client = nothing),
     kwargs...,
 )
-    return make_tracer_array(seen, prev, path, mode, track_numbers, sharding, runtime, device, client, kwargs...)
+    return make_tracer_array(
+        seen, prev, path, mode, track_numbers, sharding, runtime, device, client, kwargs...
+    )
 end
 
 Base.@nospecializeinfer function make_tracer(
@@ -1840,7 +1842,18 @@ if isdefined(Base, :Memory)
         @nospecialize(client = nothing),
         kwargs...,
     )
-        return make_tracer_array(seen, prev, path, mode, track_numbers, sharding, runtime, device, client, kwargs...)
+        return make_tracer_array(
+            seen,
+            prev,
+            path,
+            mode,
+            track_numbers,
+            sharding,
+            runtime,
+            device,
+            client,
+            kwargs...,
+        )
     end
 end
 
