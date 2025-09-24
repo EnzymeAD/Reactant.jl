@@ -1,6 +1,6 @@
 module ReactantFillArraysExt
 
-using Reactant: Reactant, TracedUtils, TracedRNumber, Ops, Sharding, unwrapped_eltype
+using Reactant: Reactant, TracedRNumber, Sharding, unwrapped_eltype
 using ReactantCore: ReactantCore
 using FillArrays: FillArrays, AbstractFill, Fill, Ones, Zeros, OneElement
 using GPUArraysCore: @allowscalar
