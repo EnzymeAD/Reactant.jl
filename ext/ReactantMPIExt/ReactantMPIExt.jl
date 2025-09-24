@@ -208,6 +208,7 @@ function __init__()
         # :MPI_ERR_PROC_FAILED_PENDING,
         # :MPI_ERR_REVOKED,
     ]
+        !hasproperty(MPI.API, name) && continue
         value = getproperty(MPI.API, name)
         if value isa Base.RefValue
             value = value[]
