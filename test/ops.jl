@@ -790,12 +790,12 @@ end
 end
 
 @testset "acos" begin
-    x = Reactant.to_rarray([-1.0, 0.0, 1.0])
+    x = Reactant.to_rarray(Float32[-1.0, 0.0, 1.0])
     @test acos.(Array(x)) ≈ @jit Ops.acos(x)
 end
 
 @testset "acosh" begin
-    x = Reactant.to_rarray([1.0, 10.0])
+    x = Reactant.to_rarray(Float32[1.0, 10.0])
     @test acosh.(Array(x)) ≈ @jit Ops.acosh(x)
 end
 
