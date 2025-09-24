@@ -197,7 +197,7 @@ function __init__()
         # :MPI_T_ERR_PVAR_NO_STARTSTOP,
         # :MPI_T_ERR_PVAR_NO_WRITE,
         # :MPI_T_ERR_PVAR_NO_ATOMIC,
-        # :MPI_ERR_RMA_RANGE, # not defined for windows mpi
+        :MPI_ERR_RMA_RANGE,
         :MPI_ERR_RMA_ATTACH,
         :MPI_ERR_RMA_FLAVOR,
         :MPI_ERR_RMA_SHARED,
