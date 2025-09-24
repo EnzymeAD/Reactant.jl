@@ -195,10 +195,16 @@ end
     oA = collect(Float64, 1:1:64)
     A = Reactant.to_rarray(oA)
     B = ConcreteRNumber(3.1)
-    @test begin
+
+    @testset "raise = default" begin
         @jit searchsorted!(A, B)
-        all(Array(A) .≈ 311)
-    end broken = contains(string(Reactant.devices()[1]), "TPU")
+        @test all(Array(A) .≈ 311)
+    end
+
+    @testset "raise = true" begin
+        @jit raise = true searchsorted!(A, B)
+        @test all(Array(A) .≈ 311)
+    end
 end
 
 function convert_mul_kernel!(Gu, w::FT) where {FT}

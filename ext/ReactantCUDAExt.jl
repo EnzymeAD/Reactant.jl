@@ -159,8 +159,8 @@ This API can only be used on devices with compute capability 3.5 or higher.
 !!! warning
     Experimental API. Subject to change without deprecation.
 """
-struct Const{T,N,A,S} <: DenseArray{T,N}
-    a::CuTracedArray{T,N,A,S}
+struct Const{T,N,AS,Size} <: DenseArray{T,N}
+    a::CuTracedArray{T,N,AS,Size}
 end
 Base.Experimental.Const(A::CuTracedArray) = Const(A)
 
