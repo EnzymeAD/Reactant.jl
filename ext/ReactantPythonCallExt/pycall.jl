@@ -7,7 +7,17 @@ function Reactant.convert_to_jax_dtype_struct(x::Union{TracedRArray,TracedRNumbe
     )
 end
 
-function pycall_with_jax_tracing(f::Py, args...)
+function overlayed_pycall(f::Py, args...)
+    @assert JAX_TRACING_SUPPORTED[] || TRITON_COMPILE_SUPPORTED[]
+    # TODO: check for Autotuner and Heutistics as well
+    if TRITON_COMPILE_SUPPORTED[] && pyisinstance(f, tritonptr[].JITFunction)
+        return overlayed_pycall_with_triton(f, args...)
+    else
+        return overlayed_pycall_with_jax_tracing(f, args...)
+    end
+end
+
+function overlayed_pycall_with_jax_tracing(f::Py, args...)
     JAX_TRACING_SUPPORTED[] || throw("jax could not be loaded.")
 
     seen_args = Reactant.OrderedIdDict()
@@ -34,4 +44,8 @@ function pycall_with_jax_tracing(f::Py, args...)
     # arrays.
     res = @opcall hlo_call(pyconvert(String, lowered.as_text()), linear_args...)
     return length(res) == 0 ? nothing : (length(res) == 1 ? res[1] : res)
+end
+
+function overlayed_pycall_with_triton(f::Py, args...)
+    error("TODO: implement triton")
 end
