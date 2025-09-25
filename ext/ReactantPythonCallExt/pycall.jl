@@ -108,8 +108,18 @@ function overlayed_pycall_with_triton(
 
     ccinfo = triton.compile(src; target=target, options=options.__dict__)
 
-    println(pyconvert(String, ccinfo.asm["source"]))
-    println(pyconvert(String, ccinfo.asm["ttir"]))
+    @show ccinfo.metadata
+    @show ccinfo.asm.keys()
+    # shared = ccinfo.metadata["shared"]
+    kernel_name = pyconvert(String, ccinfo.metadata.name)
+    # cluster_dims = ccinfo.metadata["cluster_dims"]
+
+    # println(pyconvert(String, ccinfo.asm["source"]))
+    # println(pyconvert(String, ccinfo.asm["ttir"]))
+
+    res = @opcall triton_call(
+        pyconvert(String, ccinfo.asm["ttir"]), args...; func_name=kernel_name
+    )
 
     return error("TODO: implement triton")
 end
