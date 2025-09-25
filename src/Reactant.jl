@@ -236,6 +236,35 @@ include("stdlibs/Base.jl")
 # Other Integrations
 include("Enzyme.jl")
 
+"""
+    rowmajor_strides(x::AbstractArray)
+
+Returns the strides of the array `x` assuming that the array is stored in row-major order.
+"""
+rowmajor_strides(x::AbstractArray) = rowmajor_strides(size(x))
+function rowmajor_strides(sz::NTuple{N,Int}) where {N}
+    strides = ntuple(_ -> 1, N)
+    for i in (N - 1):-1:1
+        strides = Base.setindex(strides, strides[i + 1] * sz[i + 1], i)
+    end
+    return strides
+end
+
+"""
+    rowmajor_stride(x::AbstractArray, i::Integer)
+
+Returns the stride of the array `x` at dimension `i` assuming that the array is stored in
+row-major order.
+"""
+rowmajor_stride(x::AbstractArray, i::Integer) = rowmajor_stride(size(x), i)
+function rowmajor_stride(sz::NTuple{N,Int}, i::Integer) where {N}
+    s = 1
+    for j in (i + 1):N
+        s *= sz[j]
+    end
+    return s
+end
+
 export StackedBatchDuplicated, StackedBatchDuplicatedNoNeed
 
 const TracedType = Union{TracedRArray,TracedRNumber,MissingTracedValue}
