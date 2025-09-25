@@ -37,7 +37,7 @@ fn(x, y) = sin.(x) .+ cos.(y.x[1:2, :])
 
         result = @jit pyfn(tup_ra, y_ra, num_ra, partial_eval)
         @test result ≈ gt atol = 1e-5
-        @test result isa ConcreteRArray{Float32, 2}
+        @test result isa ConcreteRArray{Float32,2}
     end
 
     @testset "SavedModel Export" begin
