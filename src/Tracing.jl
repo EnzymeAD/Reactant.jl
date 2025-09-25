@@ -6,7 +6,11 @@
     TracedSetPath = 5
     TracedToTypes = 6
     NoStopTracedTrack = 7
+    TracedToJAX = 8
 end
+
+function convert_to_jax_dtype_struct end
+function jax_dtype_struct_type end
 
 struct VisitedObject
     id::Int
@@ -386,6 +390,8 @@ Base.@nospecializeinfer function traced_type_inner(
             }
         end
         error("Unsupported runtime $runtime")
+    elseif mode == TracedToJAX
+        return jax_dtype_struct_type(T)
     elseif mode == TracedTrack || mode == NoStopTracedTrack || mode == TracedSetPath
         return T
     else
@@ -432,6 +438,8 @@ Base.@nospecializeinfer function traced_type_inner(
             }
         end
         error("Unsupported runtime $runtime")
+    elseif mode == TracedToJAX
+        return jax_dtype_struct_type(T)
     elseif mode == TracedTrack || mode == NoStopTracedTrack || mode == TracedSetPath
         return T
     else
@@ -1312,6 +1320,17 @@ Base.@nospecializeinfer function make_tracer(
         error("Unsupported runtime $runtime")
     end
 
+    if mode == TracedToJAX
+        haskey(seen, prev) && return seen[prev]
+        if !Sharding.is_sharded(sharding)
+            res = convert_to_jax_dtype_struct(prev)
+        else
+            error("TODO: implement sharding")
+        end
+        seen[prev] = res
+        return res
+    end
+
     throw("Cannot Unknown trace mode $mode")
 end
 
@@ -1388,6 +1407,17 @@ Base.@nospecializeinfer function make_tracer(
             return res
         end
         error("Unsupported runtime $runtime")
+    end
+
+    if mode == TracedToJAX
+        haskey(seen, prev) && return seen[prev]
+        if !Sharding.is_sharded(sharding)
+            res = convert_to_jax_dtype_struct(prev)
+        else
+            error("TODO: implement sharding")
+        end
+        seen[prev] = res
+        return res
     end
 
     throw("Cannot Unknown trace mode $mode")
