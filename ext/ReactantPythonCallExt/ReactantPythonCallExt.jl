@@ -1,6 +1,6 @@
 module ReactantPythonCallExt
 
-using PythonCall: PythonCall, Py, pyconvert, pydict, pyfunc, pyimport, pylist
+using PythonCall: PythonCall, Py, pyconvert, pydict, pyfunc, pyimport, pylist, pyisinstance
 using Reactant: Reactant, TracedRArray, TracedRNumber, @reactant_overlay
 using Reactant.Ops: @opcall
 
@@ -8,6 +8,10 @@ const jaxptr = Ref{Py}()
 const jnpptr = Ref{Py}()
 
 const JAX_TRACING_SUPPORTED = Ref{Bool}(false)
+
+const tritonptr = Ref{Py}()
+
+const TRITON_COMPILE_SUPPORTED = Ref{Bool}(false)
 
 const tfptr = Ref{Py}()
 const tf2xlaptr = Ref{Py}()
@@ -41,6 +45,14 @@ function __init__()
     catch err
         @warn "Failed to import jax. Tracing jax functions invoked with pycall won't \
                be supported." exception = (err, catch_backtrace())
+    end
+
+    try
+        tritonptr[] = pyimport("triton")
+        TRITON_COMPILE_SUPPORTED[] = true
+    catch err
+        @warn "Failed to import triton. Compiling jax functions with triton won't be \
+               supported." exception = (err, catch_backtrace())
     end
 
     try
