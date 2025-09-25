@@ -859,35 +859,98 @@ end
     return clamp(constant(min), x, constant(max); kwargs...)
 end
 
-# function convolution(
-#     lhs::TracedRArray{T,N},
-#     rhs::TracedRArray{T,N};
-#     dimension_numbers,
-#     feature_group_count,
-#     batch_group_count,
-#     window_strides=nothing,
-#     padding=nothing,
-#     lhs_dilation=nothing,
-#     rhs_dilation=nothing,
-#     location=mlir_stacktrace(
-#         "convolution", @__FILE__, @__LINE__
-#     ),
-# ) where {T,N}
-#     res = MLIR.IR.result(
-#         stablehlo.convolution(
-#             lhs.mlir_data,
-#             rhs.mlir_data;
-#             result=mlir_type(TracedRArray{T,N}, ...), # TODO size of result
-#             window_strides, #*MLIR.IR.DenseArrayAttribute(window_strides)*#,
-#             padding, #*MLIR.IR.DenseArrayAttribute(padding)*#,
-#             lhs_dilation, #*MLIR.IR.DenseArrayAttribute(lhs_dilation)*#,
-#             rhs_dilation, #*MLIR.IR.DenseArrayAttribute(rhs_dilation)*#,
-#             feature_group_count=feature_group_count,
-#             location,
-#         ),
-#     )
-#     return TracedRArray{T,N}((), res, size(lhs))
-# end
+mutable struct ConvolutionParams
+    windowStrides::MLIR.API.MlirAttribute
+    padding::MLIR.API.MlirAttribute
+    lhsDilation::MLIR.API.MlirAttribute
+    rhsDilation::MLIR.API.MlirAttribute
+    windowReversal::MLIR.API.MlirAttribute
+    dimensionNumber::MLIR.API.MlirAttribute
+    featureGroupCount::Int64
+    batchGroupCount::Int64
+end
+
+function inferConvolutionOp(
+    loc::MLIR.IR.Location,
+    lhsType::MLIR.IR.Type,
+    rhsType::MLIR.IR.Type,
+    windowStrides::MLIR.IR.Attribute,
+    padding::MLIR.IR.Attribute,
+    lhsDilation::MLIR.IR.Attribute,
+    rhsDilation::MLIR.IR.Attribute,
+    windowReversal::MLIR.IR.Attribute,
+    dimensionNumber::MLIR.IR.Attribute,
+    featureGroupCount::Int,
+    batchGroupCount::Int,
+)
+    cp = ConvolutionParams(
+        windowStrides,
+        padding,
+        lhsDilation,
+        rhsDilation,
+        windowReversal,
+        dimensionNumber,
+        featureGroupCount,
+        batchGroupCount,
+    )
+    @ccall MLIR.API.mlir_c.inferConvolutionOp(
+        loc::MLIR.API.MlirLocation, lhsType::MLIR.API.MlirType, rhsType::MLIR.API.MlirType, cp::Ref{ConvolutionParams}
+    )::MLIR.API.MlirType
+end
+
+function convolution(
+    input::TracedRArray{T,N},
+    kernel::TracedRArray{T,N},
+    dimension_numbers;
+    feature_group_count=1,
+    batch_group_count=1,
+    window_strides::AbstractArray{Int}=Int[],
+    padding::AbstractArray{Int}=Int[],
+    lhs_dilation::AbstractArray{Int}=Int[],
+    rhs_dilation::AbstractArray{Int}=Int[],
+    window_reversal::AbstractArray{Bool}=Bool[],
+    location=mlir_stacktrace("convolution", @__FILE__, @__LINE__),
+) where {T,N}
+    padding =
+        isempty(padding) ? MLIR.IR.Attribute() : MLIR.IR.DenseElementsAttribute(padding)
+    window_strides = MLIR.IR.DenseArrayAttribute(window_strides)
+    lhs_dilation = MLIR.IR.DenseArrayAttribute(lhs_dilation)
+    rhs_dilation = MLIR.IR.DenseArrayAttribute(rhs_dilation)
+    window_reversal = MLIR.IR.DenseArrayAttribute(window_reversal)
+    output_type = inferConvolutionOp(
+        location,
+        mlir_type(input),
+        mlir_type(kernel),
+        window_strides,
+        padding,
+        lhs_dilation,
+        rhs_dilation,
+        window_reversal,
+        dimension_numbers,
+        feature_group_count,
+        batch_group_count,
+    )
+    @assert output_type.ptr != Ptr{Nothing}() "cannot infer result type"
+    output_type = MLIR.IR.Type(output_type)
+
+    res = MLIR.IR.result(
+        MLIR.Dialects.stablehlo.convolution(
+            input.mlir_data,
+            kernel.mlir_data;
+            result_0=output_type,
+            window_strides,
+            padding,
+            lhs_dilation,
+            rhs_dilation,
+            window_reversal,
+            dimension_numbers,
+            feature_group_count,
+            batch_group_count,
+            location,
+        ),
+    )
+    return TracedRArray{T,N}((), res, size(output_type))
+end
 
 Base.@nospecializeinfer @noinline function dot_general(
     @nospecialize(lhs::TracedRArray{T1}),
