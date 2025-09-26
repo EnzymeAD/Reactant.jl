@@ -585,4 +585,4 @@ function overload_autodiff(
     end
 end
 
-const ignore_derivatives = Enzyme.ignore_derivatives
+const ignore_derivatives = EnzymeCore.ignore_derivatives
