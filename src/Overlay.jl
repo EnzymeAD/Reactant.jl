@@ -43,7 +43,6 @@ leaves.
     return res
 end
 
-
 # Random.jl overlays
 @reactant_overlay @noinline function Random.default_rng()
     return call_with_reactant(TracedRandom.default_rng)
