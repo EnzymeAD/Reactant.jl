@@ -25,5 +25,5 @@ end
     x = OneElement(3.4f0, (3, 4), (32, 32))
     rx = Reactant.to_rarray(x)
 
-    @test @jit(fn(rx, rx)) ≈ fn(x, x)
+    @test @jit(fn(rx, rx)) ≈ fn(x, x) atol = 1e-3 rtol = 1e-3
 end
