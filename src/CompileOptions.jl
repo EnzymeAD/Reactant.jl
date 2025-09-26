@@ -229,6 +229,8 @@ function CompileOptions(;
             :canonicalize,
             :just_batch,
             :none,
+            :probprog,
+            :probprog_no_lowering,
         ]
     end
 
