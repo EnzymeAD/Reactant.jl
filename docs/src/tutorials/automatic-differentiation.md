@@ -190,12 +190,12 @@ nothing # hide
 
 ### Ignoring Derivatives
 
-Use [`Reactant.ignore_derivatives`](@ref) to exclude parts of computation from gradient:
+Use [`Enzyme.ignore_derivatives`](@ref) to exclude parts of computation from gradient:
 
 ```@example autodiff_tutorial
 function func_with_ignore(x)
     # This part won't contribute to gradient
-    ignored_sum = Reactant.ignore_derivatives(sum(x))
+    ignored_sum = Enzyme.ignore_derivatives(sum(x))
     # This part will contribute
     return sum(x .^ 2) + ignored_sum
 end

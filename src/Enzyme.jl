@@ -586,14 +586,14 @@ function overload_autodiff(
 end
 
 """
-    ignore_derivatives(args...)
+    Enzyme.ignore_derivatives(args...)
 
 Prevents the flow of gradients (and higher-order derivatives) by creating a new value that
 is detached from the original value. This is an identity operation on the primal. This can
 be applied on a nested structure of arrays and we will apply the operation on each of the
 leaves.
 """
-function ignore_derivatives(args...)
+@reactant_overlay function Enzyme.ignore_derivatives(args...)
     res = map(ignore_derivatives_internal, args)
     length(args) == 1 && return only(res)
     return res

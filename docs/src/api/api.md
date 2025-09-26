@@ -78,7 +78,7 @@ Reactant.addressable_devices
 ## Differentiation Specific API
 
 ```@docs
-Reactant.ignore_derivatives
+Enzyme.ignore_derivatives
 ```
 
 ## Persistent Compilation Cache
