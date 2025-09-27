@@ -1801,7 +1801,7 @@ function _extract_function(
         error("hlo_call: could not find function $func_name in the provided module")
     end
 
-    return name_to_call
+    return fn, name_to_call
 end
 
 function triton_call(
@@ -1815,7 +1815,7 @@ function triton_call(
     location=mlir_stacktrace("triton_call", @__FILE__, @__LINE__),
     # TODO: other kwargs
 )
-    name_to_call = _extract_function(mlir_code; func_name, func_op_kind="tt.func")
+    _, name_to_call = _extract_function(mlir_code; func_name, func_op_kind="tt.func")
 
     enzymexla.triton_call(
         grid_x.mlir_data,
@@ -1861,7 +1861,7 @@ julia> Reactant.@jit(
     func_name="main",
     location=mlir_stacktrace("hlo_call", @__FILE__, @__LINE__),
 )
-    name_to_call = _extract_function(code; func_name, func_op_kind="func.func")
+    fn, name_to_call = _extract_function(code; func_name, func_op_kind="func.func")
 
     ftype_attr = MLIR.IR.attr(fn, "function_type")
     ftype = MLIR.IR.Type(ftype_attr)
