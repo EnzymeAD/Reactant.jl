@@ -792,6 +792,53 @@ function stream2token(source::Value; result::IR.Type, location=Location())
     )
 end
 
+function triton_call(
+    gridx::Value,
+    gridy::Value,
+    gridz::Value,
+    shmem::Value,
+    inputs::Vector{Value};
+    result_0::Vector{IR.Type},
+    fn,
+    backend_config=nothing,
+    operand_layouts=nothing,
+    result_layouts=nothing,
+    arg_attrs=nothing,
+    res_attrs=nothing,
+    output_operand_aliases=nothing,
+    xla_side_effect_free=nothing,
+    location=Location(),
+)
+    op_ty_results = IR.Type[result_0...,]
+    operands = Value[gridx, gridy, gridz, shmem, inputs...]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[namedattribute("fn", fn),]
+    !isnothing(backend_config) &&
+        push!(attributes, namedattribute("backend_config", backend_config))
+    !isnothing(operand_layouts) &&
+        push!(attributes, namedattribute("operand_layouts", operand_layouts))
+    !isnothing(result_layouts) &&
+        push!(attributes, namedattribute("result_layouts", result_layouts))
+    !isnothing(arg_attrs) && push!(attributes, namedattribute("arg_attrs", arg_attrs))
+    !isnothing(res_attrs) && push!(attributes, namedattribute("res_attrs", res_attrs))
+    !isnothing(output_operand_aliases) &&
+        push!(attributes, namedattribute("output_operand_aliases", output_operand_aliases))
+    !isnothing(xla_side_effect_free) &&
+        push!(attributes, namedattribute("xla_side_effect_free", xla_side_effect_free))
+
+    return create_operation(
+        "enzymexla.triton_call",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
 function wrap(
     operand::Value;
     result=nothing::Union{Nothing,IR.Type},
