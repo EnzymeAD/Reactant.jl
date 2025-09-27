@@ -1763,14 +1763,27 @@ function triton_call(
     mlir_code::String,
     args::Union{TracedRArray,TracedRNumber,Number}...;
     func_name::String="main",
+    grid_x::TracedRNumber{<:Integer},
+    grid_y::TracedRNumber{<:Integer},
+    grid_z::TracedRNumber{<:Integer},
+    shmem::TracedRNumber{<:Integer},
     location=mlir_stacktrace("triton_call", @__FILE__, @__LINE__),
+    # TODO: other kwargs
 )
     name_to_call = _extract_function(mlir_code; func_name, func_op_kind="tt.func")
 
-    @show name_to_call
-    display(MLIR.IR.mmodule())
+    enzymexla.triton_call(
+        grid_x.mlir_data,
+        grid_y.mlir_data,
+        grid_z.mlir_data,
+        shmem.mlir_data,
+        [Reactant.TracedUtils.get_mlir_data(a) for a in args];
+        fn=MLIR.IR.FlatSymbolRefAttribute(name_to_call),
+        result_0=MLIR.IR.Type[],
+        location,
+    )
 
-    error("TODO: implement triton_call")
+    return nothing
 end
 
 """
