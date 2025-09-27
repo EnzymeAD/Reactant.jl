@@ -190,7 +190,7 @@ nothing # hide
 
 ### Ignoring Derivatives
 
-Use [`Enzyme.ignore_derivatives`](@ref) to exclude parts of computation from gradient:
+Use [`EnzymeCore.ignore_derivatives`](@ref) to exclude parts of computation from gradient:
 
 ```@example autodiff_tutorial
 function func_with_ignore(x)

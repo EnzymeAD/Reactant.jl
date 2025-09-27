@@ -21,24 +21,15 @@ end
     return overload_autodiff(rmode, f, rt, args...)
 end
 
-function ignore_derivatives_internal(arg)
-    return Functors.fmap(arg) do argᵢ
-        argᵢ isa AnyTracedRArray && (argᵢ = materialize_traced_array(argᵢ))
-        argᵢ isa TracedType && return @opcall ignore_derivatives(argᵢ)
-        return argᵢ
+@reactant_overlay function EnzymeCore.ignore_derivatives(args...)
+    res = map(args) do arg
+        return Functors.fmap(arg) do argᵢ
+            argᵢ isa AnyTracedRArray &&
+                (argᵢ = call_with_reactant(materialize_traced_array, argᵢ))
+            argᵢ isa TracedType && return @opcall ignore_derivatives(argᵢ)
+            return argᵢ
+        end
     end
-end
-
-"""
-    ignore_derivatives(args...)
-
-Prevents the flow of gradients (and higher-order derivatives) by creating a new value that
-is detached from the original value. This is an identity operation on the primal. This can
-be applied on a nested structure of arrays and we will apply the operation on each of the
-leaves.
-"""
-@reactant_overlay function Enzyme.ignore_derivatives(args...)
-    res = map(ignore_derivatives_internal, args)
     length(args) == 1 && return only(res)
     return res
 end
