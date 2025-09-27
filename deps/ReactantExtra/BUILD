@@ -1427,7 +1427,6 @@ gentbl_cc_library(
     deps = [
         "@enzyme//:EnzymeDialectTdFiles",
         "@enzyme_ad//src/enzyme_ad/jax:EnzymeXLADialectTdFiles",
-        "@llvm-project//mlir:CopyOpInterfaceTdFiles",
         "@llvm-project//mlir:GPUOpsTdFiles",
         "@stablehlo//:stablehlo_ops_td_files",
     ],
