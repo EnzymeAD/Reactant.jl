@@ -997,6 +997,24 @@ function mlirModuleFromOperation(op)
 end
 
 """
+    mlirModuleEqual(lhs, rhs)
+
+Checks if two modules are equal.
+"""
+function mlirModuleEqual(lhs, rhs)
+    @ccall mlir_c.mlirModuleEqual(lhs::MlirModule, rhs::MlirModule)::Bool
+end
+
+"""
+    mlirModuleHashValue(mod)
+
+Compute a hash for the given module.
+"""
+function mlirModuleHashValue(mod)
+    @ccall mlir_c.mlirModuleHashValue(mod::MlirModule)::Csize_t
+end
+
+"""
     MlirOperationState
 
 An auxiliary class for constructing operations.
@@ -1299,6 +1317,15 @@ Checks whether two operation handles point to the same operation. This does not 
 """
 function mlirOperationEqual(op, other)
     @ccall mlir_c.mlirOperationEqual(op::MlirOperation, other::MlirOperation)::Bool
+end
+
+"""
+    mlirOperationHashValue(op)
+
+Compute a hash for the given operation.
+"""
+function mlirOperationHashValue(op)
+    @ccall mlir_c.mlirOperationHashValue(op::MlirOperation)::Csize_t
 end
 
 """
@@ -9568,6 +9595,14 @@ end
 
 function mlirFrozenRewritePatternSetDestroy(op)
     @ccall mlir_c.mlirFrozenRewritePatternSetDestroy(op::MlirFrozenRewritePatternSet)::Cvoid
+end
+
+function mlirApplyPatternsAndFoldGreedilyWithOp(op, patterns, arg3)
+    @ccall mlir_c.mlirApplyPatternsAndFoldGreedilyWithOp(
+        op::MlirOperation,
+        patterns::MlirFrozenRewritePatternSet,
+        arg3::MlirGreedyRewriteDriverConfig,
+    )::MlirLogicalResult
 end
 
 function mlirApplyPatternsAndFoldGreedily(op, patterns, arg3)

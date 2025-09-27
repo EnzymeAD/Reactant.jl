@@ -13,6 +13,15 @@ import ...IR:
 import ..Dialects: namedattribute, operandsegmentsizes
 import ...API
 
+"""
+`barrier0`
+
+The `nvvm.barrier0` operation is a convenience operation that performs barrier 
+synchronization and communication within a CTA (Cooperative Thread Array) using 
+barrier ID 0. It is functionally equivalent to `nvvm.barrier` or `nvvm.barrier id=0`. 
+
+[For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#parallel-synchronization-and-communication-instructions-bar)
+"""
 function barrier0(; location=Location())
     op_ty_results = IR.Type[]
     operands = Value[]
@@ -65,6 +74,35 @@ function barrier_arrive(
     )
 end
 
+"""
+`barrier`
+
+The `nvvm.barrier` operation performs barrier synchronization and communication 
+within a CTA (Cooperative Thread Array). It causes executing threads to wait for 
+all non-exited threads participating in the barrier to arrive.
+
+The operation takes two optional operands:
+
+- `barrierId`: Specifies a logical barrier resource with value 0 through 15. 
+  Each CTA instance has sixteen barriers numbered 0..15. Defaults to 0 if not specified.
+- `numberOfThreads`: Specifies the number of threads participating in the barrier. 
+  When specified, the value must be a multiple of the warp size. If not specified, 
+  all threads in the CTA participate in the barrier.
+
+The barrier operation guarantees that when the barrier completes, prior memory 
+accesses requested by participating threads are performed relative to all threads 
+participating in the barrier. It also ensures that no new memory access is 
+requested by participating threads before the barrier completes.
+
+When a barrier completes, the waiting threads are restarted without delay, and 
+the barrier is reinitialized so that it can be immediately reused.
+
+This operation generates an aligned barrier, indicating that all threads in the CTA 
+will execute the same barrier instruction. Behavior is undefined if all threads in the 
+CTA do not reach this instruction.
+
+[For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#parallel-synchronization-and-communication-instructions-bar)
+"""
 function barrier(
     barrierId=nothing::Union{Nothing,Value};
     numberOfThreads=nothing::Union{Nothing,Value},
@@ -1294,11 +1332,25 @@ function cp_async_bulk_tensor_reduce(
     )
 end
 
+"""
+`cp_async_bulk_tensor_global_shared_cta`
+
+Initiates an asynchronous copy of the tensor data from shared::cta
+memory to global memory. This Op supports all the store modes specified in
+`TMAStoreMode`.
+
+The `l2CacheHint` operand is optional, and it is used to specify cache
+eviction policy that may be used during the memory access.
+
+[For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/#data-movement-and-conversion-instructions-cp-async-bulk-tensor)
+"""
 function cp_async_bulk_tensor_global_shared_cta(
     tmaDescriptor::Value,
     srcMem::Value,
     coordinates::Vector{Value},
-    predicate=nothing::Union{Nothing,Value};
+    l2CacheHint=nothing::Union{Nothing,Value};
+    predicate=nothing::Union{Nothing,Value},
+    mode=nothing,
     location=Location(),
 )
     op_ty_results = IR.Type[]
@@ -1306,11 +1358,24 @@ function cp_async_bulk_tensor_global_shared_cta(
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
+    !isnothing(l2CacheHint) && push!(operands, l2CacheHint)
     !isnothing(predicate) && push!(operands, predicate)
     push!(
         attributes,
-        operandsegmentsizes([1, 1, length(coordinates), (predicate == nothing) ? 0 : 1]),
+        operandsegmentsizes([
+            1,
+            1,
+            length(coordinates),
+            if (l2CacheHint == nothing)
+                0
+            elseif 1(predicate == nothing)
+                0
+            else
+                1
+            end,
+        ]),
     )
+    !isnothing(mode) && push!(attributes, namedattribute("mode", mode))
 
     return create_operation(
         "nvvm.cp.async.bulk.tensor.global.shared.cta",
@@ -1381,9 +1446,9 @@ end
 """
 `cp_async_mbarrier_arrive`
 
-The `cp.async.mbarrier.arrive` Op makes the mbarrier object track
+The `cp.async.mbarrier.arrive` Op makes the *mbarrier object* track
 all prior cp.async operations initiated by the executing thread.
-The `addr` operand specifies the address of the mbarrier object
+The `addr` operand specifies the address of the *mbarrier object*
 in generic address space. The `noinc` attr impacts how the
 mbarrier\'s state is updated.
 
@@ -1412,9 +1477,9 @@ end
 """
 `cp_async_mbarrier_arrive_shared`
 
-The `cp.async.mbarrier.arrive.shared` Op makes the mbarrier object
+The `cp.async.mbarrier.arrive.shared` Op makes the *mbarrier object*
 track all prior cp.async operations initiated by the executing thread.
-The `addr` operand specifies the address of the mbarrier object in
+The `addr` operand specifies the address of the *mbarrier object* in
 shared memory. The `noinc` attr impacts how the mbarrier\'s state
 is updated. 
 
@@ -2762,6 +2827,33 @@ function ldmatrix(
     )
 end
 
+"""
+`mbarrier_arrive_expect_tx`
+
+The `nvvm.mbarrier.arrive.expect_tx` operation performs an expect-tx operation 
+followed by an arrive-on operation on the *mbarrier object*. Uses the default 
+`.release.cta` semantics. This release pattern establishes memory ordering for 
+operations occurring in program order before this arrive instruction by making 
+operations from the current thread visible to subsequent operations in other 
+threads within the CTA. When other threads perform corresponding acquire operations 
+(like \'mbarrier.test.wait\'), they synchronize with this release pattern.
+
+This operation first performs an expect-tx operation with the specified transaction 
+count, then performs an arrive-on operation with an implicit count of 1. The 
+expect-tx operation increases the tx-count of the *mbarrier object* by the specified 
+expectCount value, setting the current phase to expect and tracks the completion 
+of additional asynchronous transactions.
+
+The operation takes the following operands:
+- `addr`: A pointer to the memory location of the *mbarrier object*. Uses generic 
+  addressing, but the address must still be in the shared memory space.
+- `txcount`: An unsigned integer specifying the expected transaction count 
+  for the expect-tx operation. This represents the number of asynchronous transactions 
+  expected to complete before the barrier phase completes.
+- `predicate`: Optional predicate for conditional execution.
+
+[For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#parallel-synchronization-and-communication-instructions-mbarrier-arrive)
+"""
 function mbarrier_arrive_expect_tx(
     addr::Value,
     txcount::Value,
@@ -2787,6 +2879,14 @@ function mbarrier_arrive_expect_tx(
     )
 end
 
+"""
+`mbarrier_arrive_expect_tx_shared`
+
+This Op is the same as `nvvm.mbarrier.arrive.expect_tx` except that the *mbarrier object*
+should be accessed using a shared-memory pointer instead of a generic-memory pointer.
+
+[For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#parallel-synchronization-and-communication-instructions-mbarrier-arrive)
+"""
 function mbarrier_arrive_expect_tx_shared(
     addr::Value,
     txcount::Value,
@@ -2812,6 +2912,31 @@ function mbarrier_arrive_expect_tx_shared(
     )
 end
 
+"""
+`mbarrier_arrive_nocomplete`
+
+The `nvvm.mbarrier.arrive.nocomplete` operation performs an arrive-on operation 
+on the *mbarrier object* with the guarantee that it will not cause the barrier to 
+complete its current phase. Uses the default `.release.cta` semantics. This release 
+pattern establishes memory ordering for operations occurring in program order before 
+this arrive instruction by making operations from the current thread visible to 
+subsequent operations in other threads within the CTA. When other threads perform 
+corresponding acquire operations (like \'mbarrier.test.wait\'), they synchronize with 
+this release pattern.
+
+This operation causes the executing thread to signal its arrival at the barrier 
+with a specified count, but ensures that the barrier phase will not complete as 
+a result of this operation. The operation returns an opaque value that 
+captures the phase of the *mbarrier object* prior to the arrive-on operation.
+
+The operation takes the following operands:
+- `addr`: A pointer to the memory location of the *mbarrier object*. Uses generic 
+  addressing, but the address must still be in the shared memory space.
+- `count`: Integer specifying the count argument to the arrive-on operation. 
+  Must be in the valid range as specified in the *mbarrier object* contents.
+
+[For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#parallel-synchronization-and-communication-instructions-mbarrier-arrive)
+"""
 function mbarrier_arrive_nocomplete(
     addr::Value, count::Value; res::IR.Type, location=Location()
 )
@@ -2833,6 +2958,14 @@ function mbarrier_arrive_nocomplete(
     )
 end
 
+"""
+`mbarrier_arrive_nocomplete_shared`
+
+This Op is the same as `nvvm.mbarrier.arrive.nocomplete` except that the *mbarrier object*
+should be accessed using a shared-memory pointer instead of a generic-memory pointer.
+
+[For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#parallel-synchronization-and-communication-instructions-mbarrier-arrive)
+"""
 function mbarrier_arrive_nocomplete_shared(
     addr::Value, count::Value; res::IR.Type, location=Location()
 )
@@ -2854,6 +2987,28 @@ function mbarrier_arrive_nocomplete_shared(
     )
 end
 
+"""
+`mbarrier_arrive`
+
+The `nvvm.mbarrier.arrive` operation performs an arrive-on operation on the 
+*mbarrier object* at the specified address. Uses the default `.release.cta` semantics. 
+This release pattern establishes memory ordering for operations occurring in program 
+order before this arrive instruction by making operations from the current thread 
+visible to subsequent operations in other threads within the CTA. When other threads 
+perform corresponding acquire operations (like \'mbarrier.test.wait\'), they synchronize 
+with this release pattern.
+
+This operation causes the executing thread to signal its arrival at the barrier.
+The operation returns an opaque value that captures the phase of the 
+*mbarrier object* prior to the arrive-on operation. The contents of this state 
+value are implementation-specific.
+
+The operation takes the following operand:
+- `addr`: A pointer to the memory location of the *mbarrier object*. Uses generic 
+  addressing, but the address must still be in the shared memory space.
+
+[For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#parallel-synchronization-and-communication-instructions-mbarrier-arrive)
+"""
 function mbarrier_arrive(addr::Value; res::IR.Type, location=Location())
     op_ty_results = IR.Type[res,]
     operands = Value[addr,]
@@ -2873,6 +3028,14 @@ function mbarrier_arrive(addr::Value; res::IR.Type, location=Location())
     )
 end
 
+"""
+`mbarrier_arrive_shared`
+
+This Op is the same as `nvvm.mbarrier.arrive` except that the *mbarrier object*
+should be accessed using a shared-memory pointer instead of a generic-memory pointer.
+
+[For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#parallel-synchronization-and-communication-instructions-mbarrier-arrive)
+"""
 function mbarrier_arrive_shared(addr::Value; res::IR.Type, location=Location())
     op_ty_results = IR.Type[res,]
     operands = Value[addr,]
@@ -2892,6 +3055,27 @@ function mbarrier_arrive_shared(addr::Value; res::IR.Type, location=Location())
     )
 end
 
+"""
+`mbarrier_init`
+
+The `nvvm.mbarrier.init` operation initializes an *mbarrier object* at the specified 
+memory location. 
+
+This operation initializes the *mbarrier object* with the following state:
+- Current phase: 0
+- Expected arrival count: `count`
+- Pending arrival count: `count`  
+- Transaction count (tx-count): 0
+
+The operation takes the following operands:
+- `addr`: A pointer to the memory location of the *mbarrier object*. Uses generic 
+  addressing, but the address must still be in the shared memory space.
+- `count`: Integer specifying the number of threads that will participate in barrier
+  synchronization. Must be in the range [1, 2²⁰ - 1].
+- `predicate`: Optional predicate for conditional execution.
+
+[For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#parallel-synchronization-and-communication-instructions-mbarrier-init)
+"""
 function mbarrier_init(
     addr::Value, count::Value, predicate=nothing::Union{Nothing,Value}; location=Location()
 )
@@ -2914,6 +3098,14 @@ function mbarrier_init(
     )
 end
 
+"""
+`mbarrier_init_shared`
+
+This Op is the same as `nvvm.mbarrier.init` except that the *mbarrier object*
+should be accessed using a shared-memory pointer instead of a generic-memory pointer.
+
+[For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#parallel-synchronization-and-communication-instructions-mbarrier-init)
+"""
 function mbarrier_init_shared(
     addr::Value, count::Value, predicate=nothing::Union{Nothing,Value}; location=Location()
 )
@@ -2936,6 +3128,22 @@ function mbarrier_init_shared(
     )
 end
 
+"""
+`mbarrier_inval`
+
+The `nvvm.mbarrier.inval` operation invalidates an *mbarrier object* at the 
+specified memory location. 
+
+This operation marks the *mbarrier object* as invalid, making it safe to repurpose 
+the memory location for other uses or to reinitialize it as a new *mbarrier object*.
+It is undefined behavior if the *mbarrier object* is already invalid.
+
+The operation takes the following operand:
+- `addr`: A pointer to the memory location of the *mbarrier object*. Uses generic 
+  addressing, but the address must still be in the shared memory space.
+
+[For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#parallel-synchronization-and-communication-instructions-mbarrier-inval)
+"""
 function mbarrier_inval(addr::Value; location=Location())
     op_ty_results = IR.Type[]
     operands = Value[addr,]
@@ -2955,6 +3163,14 @@ function mbarrier_inval(addr::Value; location=Location())
     )
 end
 
+"""
+`mbarrier_inval_shared`
+
+This Op is the same as `nvvm.mbarrier.inval` except that the *mbarrier object*
+should be accessed using a shared-memory pointer instead of a generic-memory pointer.
+
+[For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#parallel-synchronization-and-communication-instructions-mbarrier-inval)
+"""
 function mbarrier_inval_shared(addr::Value; location=Location())
     op_ty_results = IR.Type[]
     operands = Value[addr,]
@@ -2974,6 +3190,53 @@ function mbarrier_inval_shared(addr::Value; location=Location())
     )
 end
 
+"""
+`mbarrier_test_wait`
+
+The `nvvm.mbarrier.test.wait` operation performs a non-blocking test for the 
+completion of a specific phase of an *mbarrier object*. It uses the default
+`.acquire.cta` semantics. This acquire pattern establishes memory ordering for 
+operations occurring in program order after this wait instruction by making 
+operations from other threads in the CTA visible to subsequent operations in the current 
+thread. When this wait completes, it synchronizes with the corresponding release 
+pattern from the `mbarrier.arrive` operation, establishing memory ordering within 
+the CTA.
+
+This operation tests whether the mbarrier phase specified by the state operand 
+has completed. It is a non-blocking instruction that immediately returns the 
+completion status without suspending the executing thread.
+
+The operation takes the following operands:
+- `addr`: A pointer to the memory location of the *mbarrier object*. Uses generic 
+  addressing, but the address must still be in the shared memory space.
+- `state`: An opaque value returned by a previous `mbarrier.arrive` 
+  operation on the same *mbarrier object* during the current or immediately 
+  preceding phase.
+
+The operation returns a boolean value indicating whether the specified phase 
+has completed:
+- `true`: The immediately preceding phase has completed
+- `false`: The phase is still incomplete (current phase)
+
+**Memory ordering guarantees**: When this wait returns true, the following 
+ordering guarantees hold:
+
+1. All memory accesses (except async operations) requested prior to
+   `mbarrier.arrive` having release semantics by participating CTA threads
+   are visible to the executing thread.
+2. All `cp.async` operations requested prior to `cp.async.mbarrier.arrive`
+   by participating CTA threads are visible to the executing thread.
+3. All `cp.async.bulk` operations using the same *mbarrier object* requested
+   prior to `mbarrier.arrive` having release semantics by participating CTA
+   threads are visible to the executing thread.
+4. Memory accesses requested after this wait are not visible to memory
+   accesses performed prior to `mbarrier.arrive` by other participating
+   threads.
+5. No ordering guarantee exists for memory accesses by the same thread
+   between `mbarrier.arrive` and this wait.
+
+[For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/#parallel-synchronization-and-communication-instructions-mbarrier-test-wait-try-wait)
+"""
 function mbarrier_test_wait(addr::Value, state::Value; res::IR.Type, location=Location())
     op_ty_results = IR.Type[res,]
     operands = Value[addr, state]
@@ -2993,6 +3256,14 @@ function mbarrier_test_wait(addr::Value, state::Value; res::IR.Type, location=Lo
     )
 end
 
+"""
+`mbarrier_test_wait_shared`
+
+This Op is the same as `nvvm.mbarrier.test.wait` except that the *mbarrier object*
+should be accessed using a shared-memory pointer instead of a generic-memory pointer.
+
+[For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/#parallel-synchronization-and-communication-instructions-mbarrier-test-wait-try-wait)
+"""
 function mbarrier_test_wait_shared(
     addr::Value, state::Value; res::IR.Type, location=Location()
 )
@@ -3014,6 +3285,58 @@ function mbarrier_test_wait_shared(
     )
 end
 
+"""
+`mbarrier_try_wait_parity`
+
+The `nvvm.mbarrier.try_wait.parity` operation performs a potentially-blocking 
+test for the completion of a specific phase of an *mbarrier object* using phase 
+parity. It uses the default `.acquire.cta` semantics. This acquire pattern 
+establishes memory ordering for operations occurring in program order after this 
+wait instruction by making operations from other threads in the CTA visible to subsequent 
+operations in the current thread. When this wait completes, it synchronizes with 
+the corresponding release pattern from the `mbarrier.arrive` operation, establishing 
+memory ordering within the CTA.
+
+This operation waits for the completion of the mbarrier phase indicated by the 
+phase parity. While it uses the underlying PTX `mbarrier.try_wait.parity` 
+instruction, this MLIR operation generates a loop that enforces the test to 
+complete before continuing execution, ensuring the barrier phase is actually 
+completed rather than potentially timing out.
+
+The operation takes the following operands:
+- `addr`: A pointer to the memory location of the *mbarrier object*. Uses generic 
+  addressing, but the address must still be in the shared memory space.
+- `phase`: An integer specifying the phase parity (0 or 1). Even phases 
+  have parity 0, odd phases have parity 1.
+- `ticks`: An unsigned integer specifying the suspend time hint in 
+  nanoseconds. This may be used instead of the system-dependent time limit.
+
+**Memory ordering guarantees**: When this wait returns true, the following 
+ordering guarantees hold:
+
+1. All memory accesses (except async operations) requested prior to
+   `mbarrier.arrive` having release semantics by participating CTA threads
+   are visible to the executing thread.
+2. All `cp.async` operations requested prior to `cp.async.mbarrier.arrive`
+   by participating CTA threads are visible to the executing thread.
+3. All `cp.async.bulk` operations using the same *mbarrier object* requested
+   prior to `mbarrier.arrive` having release semantics by participating CTA
+   threads are visible to the executing thread.
+4. Memory accesses requested after this wait are not visible to memory
+   accesses performed prior to `mbarrier.arrive` by other participating
+   threads.
+5. No ordering guarantee exists for memory accesses by the same thread
+   between `mbarrier.arrive` and this wait.
+
+**Implementation behavior**:
+This operation generates a PTX loop that repeatedly calls the underlying 
+`mbarrier.try_wait.parity` instruction until the barrier phase completes. 
+Unlike the raw PTX instruction which may return without completion after a 
+timeout, this MLIR operation guarantees completion by continuing to loop until 
+the specified phase is reached.
+
+[For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/#parallel-synchronization-and-communication-instructions-mbarrier-test-wait-try-wait)
+"""
 function mbarrier_try_wait_parity(
     addr::Value, phase::Value, ticks::Value; location=Location()
 )
@@ -3035,6 +3358,14 @@ function mbarrier_try_wait_parity(
     )
 end
 
+"""
+`mbarrier_try_wait_parity_shared`
+
+This Op is the same as `nvvm.mbarrier.try_wait.parity` except that the *mbarrier object*
+should be accessed using a shared-memory pointer instead of a generic-memory pointer.
+
+[For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/#parallel-synchronization-and-communication-instructions-mbarrier-test-wait-try-wait)
+"""
 function mbarrier_try_wait_parity_shared(
     addr::Value, phase::Value, ticks::Value; location=Location()
 )
@@ -3297,11 +3628,20 @@ end
 """
 `prefetch`
 
-Operand `addr` can be a global, local or generic address pointer. No 
-operation is performed if `addr` maps to a `shared` memory location.
+Prefetches the cache line containing the address given by `addr`. The 
+operand may be a global, local, or generic pointer. When `tensormap` is 
+specified, the operand may instead be a constant or generic pointer. If the 
+address maps to shared memory, the operation has no effect.
 
-The `cacheLevel` attribute specifies the cache level to which the cache line
-containing the specified address is brought.
+At most one of `cacheLevel` or `tensormap` may be present. The `cacheLevel` 
+attribute selects the target cache level. When combined with `uniform`, the 
+prefetch is performed to the uniform cache, in which case `addr` must be a 
+generic pointer.
+
+When `tensormap` is used, the line containing `addr` is brought from the 
+constant or parameter state space for later use by `cp.async.bulk.tensor`. 
+If `in_param_space` is specified, the generic pointer is interpreted as 
+referring to the parameter state space.
 
 `uniform` can be specified after the `cacheLevel` to indicate that the 
 prefetch is performed to the specified uniform cache level. If `uniform` is 
@@ -3314,41 +3654,31 @@ priority when `cacheLevel` is L2.
 [For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/#data-movement-and-conversion-instructions-prefetch-prefetchu)
 """
 function prefetch(
-    addr::Value; cacheLevel, uniform=nothing, evictPriority=nothing, location=Location()
+    addr::Value,
+    predicate=nothing::Union{Nothing,Value};
+    cacheLevel=nothing,
+    evictPriority=nothing,
+    tensormap=nothing,
+    uniform=nothing,
+    in_param_space=nothing,
+    location=Location(),
 )
     op_ty_results = IR.Type[]
     operands = Value[addr,]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("cacheLevel", cacheLevel),]
-    !isnothing(uniform) && push!(attributes, namedattribute("uniform", uniform))
+    attributes = NamedAttribute[]
+    !isnothing(predicate) && push!(operands, predicate)
+    !isnothing(cacheLevel) && push!(attributes, namedattribute("cacheLevel", cacheLevel))
     !isnothing(evictPriority) &&
         push!(attributes, namedattribute("evictPriority", evictPriority))
+    !isnothing(tensormap) && push!(attributes, namedattribute("tensormap", tensormap))
+    !isnothing(uniform) && push!(attributes, namedattribute("uniform", uniform))
+    !isnothing(in_param_space) &&
+        push!(attributes, namedattribute("in_param_space", in_param_space))
 
     return create_operation(
         "nvvm.prefetch",
-        location;
-        operands,
-        owned_regions,
-        successors,
-        attributes,
-        results=op_ty_results,
-        result_inference=false,
-    )
-end
-
-function prefetch_tensormap(
-    tmaDescriptor::Value, predicate=nothing::Union{Nothing,Value}; location=Location()
-)
-    op_ty_results = IR.Type[]
-    operands = Value[tmaDescriptor,]
-    owned_regions = Region[]
-    successors = Block[]
-    attributes = NamedAttribute[]
-    !isnothing(predicate) && push!(operands, predicate)
-
-    return create_operation(
-        "nvvm.prefetch.tensormap",
         location;
         operands,
         owned_regions,
@@ -3447,7 +3777,7 @@ end
 
 The `shfl.sync` Op implements data shuffle within threads of a warp.
 The `thread_mask` denotes the threads participating in the Op where
-the bit position corresponds to a particular thread’s laneid.
+the bit position corresponds to a particular thread\'s laneid.
 The `offset` specifies a source lane or source lane offset
 (depending on `kind`). The `val` is the input value to be copied from
 the source. The `mask_and_clamp` contains two packed values specifying
@@ -3561,6 +3891,33 @@ function stmatrix(
     )
 end
 
+"""
+`bar_warp_sync`
+
+The `nvvm.bar.warp.sync` operation performs barrier synchronization for threads 
+within a warp. 
+
+This operation causes the executing thread to wait until all threads corresponding 
+to the `mask` operand have executed a `bar.warp.sync` with the same mask value 
+before resuming execution.
+
+The `mask` operand specifies the threads participating in the barrier, where each 
+bit position corresponds to the thread\'s lane ID within the warp. Only threads with 
+their corresponding bit set in the mask participate in the barrier synchronization.
+
+**Important constraints**:
+- The behavior is undefined if the executing thread is not included in the mask 
+  (i.e., the bit corresponding to the thread\'s lane ID is not set)
+- For compute capability sm_6x or below, all threads in the mask must execute 
+  the same `bar.warp.sync` instruction in convergence
+
+This operation also guarantees memory ordering among participating threads. 
+Threads within the warp that wish to communicate via memory can store to memory, 
+execute `bar.warp.sync`, and then safely read values stored by other threads 
+in the warp.
+
+[For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#parallel-synchronization-and-communication-instructions-bar-warp-sync)
+"""
 function bar_warp_sync(mask::Value; location=Location())
     op_ty_results = IR.Type[]
     operands = Value[mask,]
@@ -3612,10 +3969,10 @@ end
 """
 `tcgen05_commit`
 
-The `tcgen05.commit` makes the mbarrier object, specified by
+The `tcgen05.commit` makes the *mbarrier object*, specified by
 the operand `addr`, track the completion of all the prior
 async-tcgen05 operations initiated by the executing thread.
-The multicast variants allow signaling on the mbarrier objects
+The multicast variants allow signaling on the *mbarrier objects*
 of multiple CTAs within the cluster. Operand `multicastMask`,
 when present, specifies the destination CTAs in the cluster such
 that each bit position in the 16-bit `multicastMask` operand
@@ -4146,7 +4503,7 @@ The vote operation kinds are:
 - `ballot`: In the ballot form, the destination result is a 32 bit integer.
   In this form, the predicate from each thread in membermask are copied into
   the corresponding bit position of the result, where the bit position
-  corresponds to the thread’s lane id.
+  corresponds to the thread\'s lane id.
 
 [For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/#parallel-synchronization-and-communication-instructions-vote-sync)
 """
