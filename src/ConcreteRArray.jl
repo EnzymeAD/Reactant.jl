@@ -200,7 +200,7 @@ for jlop in (
         :(Base.:^),
         :(Base.:(==)),
     ),
-    T in (AbstractConcreteNumber, AbstractConcreteArray{<:Any,0})
+    T in (AbstractConcreteNumber, AbstractConcreteArray{<:Number,0})
 
     @eval begin
         $(jlop)(x::$(T), y::$(T)) = $(jlop)(to_number(x), to_number(y))
