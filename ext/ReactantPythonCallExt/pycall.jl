@@ -106,20 +106,19 @@ function overlayed_pycall_with_triton(
         ),
     )
 
+    # Currently we are doing a double compilation here. can we do better?
+    # we are compiling here + lowering again inside enzymejax
     ccinfo = triton.compile(src; target=target, options=options.__dict__)
 
-    @show ccinfo.metadata
-    @show ccinfo.asm.keys()
-    # shared = ccinfo.metadata["shared"]
-    kernel_name = pyconvert(String, ccinfo.metadata.name)
-    # cluster_dims = ccinfo.metadata["cluster_dims"]
-
-    # println(pyconvert(String, ccinfo.asm["source"]))
-    # println(pyconvert(String, ccinfo.asm["ttir"]))
-
-    res = @opcall triton_call(
-        pyconvert(String, ccinfo.asm["ttir"]), args...; func_name=kernel_name
+    @opcall triton_call(
+        pyconvert(String, ccinfo.asm["ttir"]),
+        filter(x -> x isa Reactant.TracedType, args)...;
+        func_name=pyconvert(String, ccinfo.metadata.name),
+        grid_x=@opcall(constant(grid[1])),
+        grid_y=@opcall(constant(grid[2])),
+        grid_z=@opcall(constant(grid[3])),
+        shmem=@opcall(constant(pyconvert(Int, ccinfo.metadata.shared))),
     )
 
-    return error("TODO: implement triton")
+    return nothing
 end
