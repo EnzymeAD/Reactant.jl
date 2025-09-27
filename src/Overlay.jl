@@ -21,6 +21,19 @@ end
     return overload_autodiff(rmode, f, rt, args...)
 end
 
+@reactant_overlay function EnzymeCore.ignore_derivatives(args...)
+    res = map(args) do arg
+        return Functors.fmap(arg) do argᵢ
+            argᵢ isa AnyTracedRArray &&
+                (argᵢ = call_with_reactant(materialize_traced_array, argᵢ))
+            argᵢ isa TracedType && return @opcall ignore_derivatives(argᵢ)
+            return argᵢ
+        end
+    end
+    length(args) == 1 && return only(res)
+    return res
+end
+
 # Random.jl overlays
 @reactant_overlay @noinline function Random.default_rng()
     return call_with_reactant(TracedRandom.default_rng)
