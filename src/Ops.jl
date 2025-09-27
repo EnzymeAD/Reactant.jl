@@ -1698,8 +1698,92 @@ end
 end
 
 # Generate a unique name given a module hash and a function name.
-function _hlo_call_name(orig_name, module_suffix)
-    return orig_name * "_hlo_call_" * module_suffix
+_new_function_name(orig_name, module_suffix) = orig_name * "_call_" * module_suffix
+
+function _extract_function(
+    code::String; func_name::String="main", func_op_kind::String="func.func"
+)
+    module_suffix = string(hash(code); base=16)
+    name_to_call = _new_function_name(func_name, module_suffix)
+
+    current_module = MLIR.IR.mmodule()
+    top_level_block = MLIR.IR.body(current_module)
+
+    symbol_attr_name = String(MLIR.API.mlirSymbolTableGetSymbolAttributeName())
+    fn = MLIR.IR.lookup(
+        MLIR.IR.SymbolTable(MLIR.IR.Operation(current_module)), name_to_call
+    )
+
+    if isnothing(fn)
+        new_mod = parse(MLIR.IR.Module, code)
+        new_mod_op = MLIR.IR.Operation(new_mod)
+        body = MLIR.IR.body(new_mod)
+
+        operations = collect(MLIR.IR.OperationIterator(body))
+        for op in operations
+            if MLIR.IR.name(op) == func_op_kind
+                fn_name = String(MLIR.IR.attr(op, symbol_attr_name))
+                if fn_name == func_name
+                    fn = op
+                end
+
+                res = MLIR.IR.LogicalResult(
+                    MLIR.API.mlirSymbolTableReplaceAllSymbolUses(
+                        fn_name, name_to_call, new_mod_op
+                    ),
+                )
+                @assert res == MLIR.IR.success() "hlo_call: failed to rename $fn_name"
+
+                # Set function private
+                MLIR.IR.attr!(
+                    op,
+                    MLIR.API.mlirSymbolTableGetVisibilityAttributeName(),
+                    MLIR.IR.Attribute("private"),
+                )
+
+                # Change function name
+                MLIR.IR.attr!(op, symbol_attr_name, MLIR.IR.Attribute(name_to_call))
+            end
+        end
+
+        for op in operations
+            MLIR.IR.rmfromparent!(op)
+            push!(top_level_block, op)
+        end
+    end
+
+    if isnothing(fn)
+        error("hlo_call: could not find function $func_name in the provided module")
+    end
+
+    return fn, name_to_call
+end
+
+function triton_call(
+    mlir_code::String,
+    args::Union{TracedRArray,TracedRNumber,Number}...;
+    func_name::String="main",
+    grid_x::TracedRNumber{<:Integer},
+    grid_y::TracedRNumber{<:Integer},
+    grid_z::TracedRNumber{<:Integer},
+    shmem::TracedRNumber{<:Integer},
+    location=mlir_stacktrace("triton_call", @__FILE__, @__LINE__),
+    # TODO: other kwargs
+)
+    _, name_to_call = _extract_function(mlir_code; func_name, func_op_kind="tt.func")
+
+    enzymexla.triton_call(
+        grid_x.mlir_data,
+        grid_y.mlir_data,
+        grid_z.mlir_data,
+        shmem.mlir_data,
+        [Reactant.TracedUtils.get_mlir_data(a) for a in args];
+        fn=MLIR.IR.FlatSymbolRefAttribute(name_to_call),
+        result_0=MLIR.IR.Type[],
+        location,
+    )
+
+    return nothing
 end
 
 """
@@ -1728,69 +1812,16 @@ julia> Reactant.@jit(
 """
 @noinline function hlo_call(
     code,
-    args...;
+    args::Union{TracedRArray,TracedRNumber}...;
     func_name="main",
     location=mlir_stacktrace("hlo_call", @__FILE__, @__LINE__),
 )
-    module_suffix = string(hash(code); base=16)
-    name_to_call = _hlo_call_name(func_name, module_suffix)
-
-    current_module = MLIR.IR.mmodule()
-    top_level_block = MLIR.IR.body(current_module)
-
-    symbol_attr_name = String(MLIR.API.mlirSymbolTableGetSymbolAttributeName())
-
-    fn = MLIR.IR.lookup(
-        MLIR.IR.SymbolTable(MLIR.IR.Operation(current_module)), name_to_call
-    )
-    if isnothing(fn)
-        new_mod = parse(MLIR.IR.Module, code)
-        new_mod_op = MLIR.IR.Operation(new_mod)
-        body = MLIR.IR.body(new_mod)
-
-        operations = collect(MLIR.IR.OperationIterator(body))
-        for op in operations
-            if MLIR.IR.name(op) == "func.func"
-                fn_name = String(MLIR.IR.attr(op, symbol_attr_name))
-                if fn_name == func_name
-                    fn = op
-                end
-
-                new_name = _hlo_call_name(fn_name, module_suffix)
-                res = MLIR.IR.LogicalResult(
-                    MLIR.API.mlirSymbolTableReplaceAllSymbolUses(
-                        fn_name, new_name, new_mod_op
-                    ),
-                )
-                @assert res == MLIR.IR.success() "hlo_call: failed to rename $fn_name"
-
-                # Set function private
-                MLIR.IR.attr!(
-                    op,
-                    MLIR.API.mlirSymbolTableGetVisibilityAttributeName(),
-                    MLIR.IR.Attribute("private"),
-                )
-
-                # Change function name
-                MLIR.IR.attr!(op, symbol_attr_name, MLIR.IR.Attribute(new_name))
-            end
-        end
-
-        for op in operations
-            MLIR.IR.rmfromparent!(op)
-            push!(top_level_block, op)
-        end
-    end
-
-    if isnothing(fn)
-        error("hlo_call: could not find function $func_name in the provided module")
-    end
+    fn, name_to_call = _extract_function(code; func_name, func_op_kind="func.func")
 
     ftype_attr = MLIR.IR.attr(fn, "function_type")
     ftype = MLIR.IR.Type(ftype_attr)
 
-    @assert all(Base.Fix2(isa, Union{TracedRArray,TracedRNumber}), args) "hlo_call: all inputs to hlo_call should be reactant arrays or numbers"
-    @assert MLIR.IR.ninputs(ftype) == length(args) "hlo_call: invalid number of arguments for function $func_name"
+    @assert MLIR.IR.ninputs(ftype) == length(args) "hlo_call: invalid number of arguments for function $func_name. Expected $(MLIR.IR.ninputs(ftype)), got $(length(args))"
 
     for (i, arg) in enumerate(args)
         expected_type = MLIR.IR.input(ftype, i)
