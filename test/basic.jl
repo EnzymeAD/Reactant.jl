@@ -1552,6 +1552,18 @@ end
     end
 end
 
+@testset "log10" begin
+    x = collect(Float64, 1:10)
+    x_ra = Reactant.to_rarray(x)
+    @test Array(@jit(log10.(x_ra))) ≈ log10.(x)
+end
+
+@testset "log2" begin
+    x = collect(Float64, 1:10)
+    x_ra = Reactant.to_rarray(x)
+    @test Array(@jit(log2.(x_ra))) ≈ log2.(x)
+end
+
 map_test_1(i, xᵢ, yᵢ) = xᵢ + yᵢ + max(xᵢ, yᵢ)
 
 @testset "multi-argument map" begin
