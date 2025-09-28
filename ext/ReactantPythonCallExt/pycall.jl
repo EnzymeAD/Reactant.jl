@@ -60,6 +60,7 @@ signature_string(::TracedRNumber{T}) where {T} = "$(MLIR_TYPE_STRING[T])", nothi
 signature_string(x::T) where {T<:Number} = string(x), x
 signature_string(x) = error("Unsupported argument type: $(typeof(x))")
 
+# TODO: better name for hints?
 function overlayed_pycall_with_triton(
     kernel::Py, args...; grid, num_warps::Integer=1, num_stages::Integer=3, hints=nothing
 )
@@ -95,8 +96,11 @@ function overlayed_pycall_with_triton(
         fn=kernel, constexprs=constants, signature=sigmap, attrs=attrs
     )
 
-    # TODO: check that we are using CUDA. Get compute_capability from the target
-    target = triton.backends.compiler.GPUTarget("cuda", 80, 32)
+    target = triton.backends.compiler.GPUTarget(
+        "cuda",
+        parse(Int, Reactant.Compiler.cubinChip[][4:end]),
+        Reactant.Compiler.cuWarpSize[],
+    )
     backend = triton.compiler.make_backend(target)
     options = backend.parse_options(
         pydict(
@@ -111,7 +115,7 @@ function overlayed_pycall_with_triton(
     ccinfo = triton.compile(src; target=target, options=options.__dict__)
 
     @opcall triton_call(
-        pyconvert(String, ccinfo.asm["ttir"]),
+        pyconvert(String, ccinfo.asm["source"]),
         filter(x -> x isa Reactant.TracedType, args)...;
         func_name=pyconvert(String, ccinfo.metadata.name),
         grid_x=@opcall(constant(grid[1])),
