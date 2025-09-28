@@ -1319,42 +1319,42 @@ function triton_optimization_passes()
             "convert-nvvm-to-llvm",
             # common passes
             "canonicalize",
-            # # ttir passes
-            # "triton-combine",
-            # "triton-reorder-broadcast",
-            # "triton-rewrite-tensor-pointer",
-            # "triton-rewrite-tensor-descriptor-to-pointer",
-            # "triton-loop-unroll",
-            # "triton-licm",
-            # "triton-loop-aware-cse",
-            # # TODO: should num-warps and num-ctas be set for each kernel?
-            # "convert-triton-to-tritongpu{target=cuda:$(cubinChip[][4:end]) num-warps=1 threads-per-warp=$(cuWarpSize[]) num-ctas=1}",
-            # # ttgir passes
-            # "tritongpu-coalesce",
-            # "tritongpu-optimize-thread-locality",
-            # "tritongpu-hoist-tmem-alloc",
-            # "tritongpu-assign-latencies",
-            # "tritongpu-pipeline",
-            # "tritongpu-schedule-loops",
-            # "tritongpu-automatic-warp-specialization",
-            # "tritongpu-prefetch",
-            # "tritongpu-accelerate-matmul",
-            # "tritongpu-reorder-instructions",
-            # "tritongpu-F32DotTC",
-            # "tritongpu-optimize-dot-operands",
-            # "tritongpu-remove-layout-conversions",
-            # "tritongpu-reduce-data-duplication",
-            # "tritongpu-hoist-tmem-alloc",
-            # "tritongpu-fuse-nested-loops",
-            # "tritongpu-rewrite-partition-dependencies",
-            # "tritongpu-partition-loops",
-            # "tritongpu-combine-tensor-select-and-if",
-            # # ttgir to llvm passes
-            # "tritongpu-allocate-warp-groups",
-            # "allocate-shared-memory",
-            # "tritongpu-global-scratch-memory-allocation",
-            # "tritongpu-optimize-accumulator-init",
-            # "tritongpu-coalesce-async-copy",
+            # ttir passes
+            "triton-combine",
+            "triton-reorder-broadcast",
+            "triton-rewrite-tensor-pointer",
+            "triton-rewrite-tensor-descriptor-to-pointer",
+            "triton-loop-unroll",
+            "triton-licm",
+            "triton-loop-aware-cse",
+            # TODO: should num-warps and num-ctas be set for each kernel?
+            "convert-triton-to-tritongpu{target=cuda:$(cubinChip[][4:end]) num-warps=1 threads-per-warp=$(cuWarpSize[]) num-ctas=1}",
+            # ttgir passes
+            "tritongpu-coalesce",
+            "tritongpu-optimize-thread-locality",
+            "tritongpu-hoist-tmem-alloc",
+            "tritongpu-assign-latencies",
+            "tritongpu-pipeline",
+            "tritongpu-schedule-loops",
+            "tritongpu-automatic-warp-specialization",
+            "tritongpu-prefetch",
+            "tritongpu-accelerate-matmul",
+            "tritongpu-reorder-instructions",
+            "tritongpu-F32DotTC",
+            "tritongpu-optimize-dot-operands",
+            "tritongpu-remove-layout-conversions",
+            "tritongpu-reduce-data-duplication",
+            "tritongpu-hoist-tmem-alloc",
+            "tritongpu-fuse-nested-loops",
+            "tritongpu-rewrite-partition-dependencies",
+            "tritongpu-partition-loops",
+            "tritongpu-combine-tensor-select-and-if",
+            # ttgir to llvm passes
+            "tritongpu-allocate-warp-groups",
+            "allocate-shared-memory",
+            "tritongpu-global-scratch-memory-allocation",
+            "tritongpu-optimize-accumulator-init",
+            "tritongpu-coalesce-async-copy",
         ],
         ",",
     )
@@ -2318,8 +2318,7 @@ function compile_mlir!(
         end
     end
 
-    # XXX: re-enable this pass
-    # run_pass_pipeline!(mod, "mark-func-memory-effects", "mark-func-memory-effects")
+    run_pass_pipeline!(mod, "mark-func-memory-effects", "mark-func-memory-effects")
 
     func_op = MLIR.API.mlirSymbolTableLookup(
         MLIR.IR.SymbolTable(MLIR.IR.Operation(mod)), fnname

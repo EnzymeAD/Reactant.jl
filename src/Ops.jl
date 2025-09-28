@@ -1750,22 +1750,32 @@ function _extract_function(
     func_name::String="main",
     func_op_kind::String="func.func",
     nested_module::Bool=false,
+    location::MLIR.IR.Location=MLIR.IR.Location(),
 )
     module_suffix = string(hash(code); base=16)
-    name_to_call = _new_function_name(func_name, module_suffix)
-
-    current_module = MLIR.IR.mmodule()
-    if nested_module
-        new_module = MLIR.IR.Module()
-        push!(MLIR.IR.body(current_module), MLIR.IR.Operation(new_module, true))
-        current_module = new_module
-    end
-    top_level_block = MLIR.IR.body(current_module)
-
+    name_to_call = func_name * "_call_" * module_suffix
+    mod_name = func_name * "_module_" * module_suffix
     symbol_attr_name = String(MLIR.API.mlirSymbolTableGetSymbolAttributeName())
-    fn = MLIR.IR.lookup(
-        MLIR.IR.SymbolTable(MLIR.IR.Operation(current_module)), name_to_call
-    )
+
+    if nested_module
+        region = MLIR.IR.Region()
+        push!(region, MLIR.IR.Block())
+        moduleop = MLIR.Dialects.builtin.module_(;
+            location, bodyRegion=region, sym_name=mod_name
+        )
+        MLIR.IR.rmfromparent!(moduleop)
+        push!(MLIR.IR.body(MLIR.IR.mmodule()), moduleop) # insert into parent module
+
+        top_level_block = MLIR.IR.Block(
+            MLIR.API.mlirModuleGetBody(MLIR.API.mlirModuleFromOperation(moduleop)), false
+        )
+        fn = nothing
+    else
+        current_module = MLIR.IR.mmodule()
+        moduleop = MLIR.IR.Operation(current_module)
+        top_level_block = MLIR.IR.body(current_module)
+        fn = MLIR.IR.lookup(MLIR.IR.SymbolTable(moduleop), name_to_call)
+    end
 
     if isnothing(fn)
         new_mod = parse(MLIR.IR.Module, code)
@@ -1773,31 +1783,27 @@ function _extract_function(
         body = MLIR.IR.body(new_mod)
 
         operations = collect(MLIR.IR.OperationIterator(body))
-        for op in operations
-            if MLIR.IR.name(op) == func_op_kind
-                fn_name = String(MLIR.IR.attr(op, symbol_attr_name))
-                if fn_name == func_name
-                    fn = op
-                end
+        idx = Base.findfirst(op -> MLIR.IR.name(op) == func_op_kind, operations)
+        @assert idx !== nothing
+        op = operations[idx]
 
-                res = MLIR.IR.LogicalResult(
-                    MLIR.API.mlirSymbolTableReplaceAllSymbolUses(
-                        fn_name, name_to_call, new_mod_op
-                    ),
-                )
-                @assert res == MLIR.IR.success() "hlo_call: failed to rename $fn_name"
+        fn_name = String(MLIR.IR.attr(op, symbol_attr_name))
+        fn_name == func_name && (fn = op)
 
-                # Set function private
-                MLIR.IR.attr!(
-                    op,
-                    MLIR.API.mlirSymbolTableGetVisibilityAttributeName(),
-                    MLIR.IR.Attribute("private"),
-                )
+        res = MLIR.IR.LogicalResult(
+            MLIR.API.mlirSymbolTableReplaceAllSymbolUses(fn_name, name_to_call, new_mod_op)
+        )
+        @assert res == MLIR.IR.success() "hlo_call: failed to rename $fn_name"
 
-                # Change function name
-                MLIR.IR.attr!(op, symbol_attr_name, MLIR.IR.Attribute(name_to_call))
-            end
-        end
+        # Set function private
+        MLIR.IR.attr!(
+            op,
+            MLIR.API.mlirSymbolTableGetVisibilityAttributeName(),
+            MLIR.IR.Attribute("private"),
+        )
+
+        # Change function name
+        MLIR.IR.attr!(op, symbol_attr_name, MLIR.IR.Attribute(name_to_call))
 
         for op in operations
             MLIR.IR.rmfromparent!(op)
@@ -1809,7 +1815,7 @@ function _extract_function(
         error("hlo_call: could not find function $func_name in the provided module")
     end
 
-    return fn, name_to_call
+    return fn, name_to_call, mod_name
 end
 
 function triton_call(
@@ -1823,8 +1829,8 @@ function triton_call(
     location=mlir_stacktrace("triton_call", @__FILE__, @__LINE__),
     # TODO: other kwargs
 )
-    _, name_to_call = _extract_function(
-        mlir_code; func_name, func_op_kind="tt.func", nested_module=true
+    _, name_to_call, mod_name = _extract_function(
+        mlir_code; func_name, func_op_kind="tt.func", nested_module=true, location
     )
 
     enzymexla.triton_call(
@@ -1833,7 +1839,9 @@ function triton_call(
         grid_z.mlir_data,
         shmem.mlir_data,
         [Reactant.TracedUtils.get_mlir_data(a) for a in args];
-        fn=MLIR.IR.FlatSymbolRefAttribute(name_to_call),
+        fn=MLIR.IR.SymbolRefAttribute(
+            mod_name, MLIR.IR.Attribute[MLIR.IR.FlatSymbolRefAttribute(name_to_call)]
+        ),
         result_0=MLIR.IR.Type[],
         location,
     )
@@ -1871,7 +1879,9 @@ julia> Reactant.@jit(
     func_name="main",
     location=mlir_stacktrace("hlo_call", @__FILE__, @__LINE__),
 )
-    fn, name_to_call = _extract_function(code; func_name, func_op_kind="func.func")
+    fn, name_to_call, _ = _extract_function(
+        code; func_name, func_op_kind="func.func", location
+    )
 
     ftype_attr = MLIR.IR.attr(fn, "function_type")
     ftype = MLIR.IR.Type(ftype_attr)
