@@ -1291,7 +1291,64 @@ function optimization_passes(
         push!(passes, "remove-duplicate-func-def")
     end
     push!(passes, func_passes)
+    if backend == "cuda"
+        push!(passes, triton_optimization_passes())
+    end
     return join(passes, ',')
+end
+
+# https://github.com/triton-lang/triton/blob/8ee584014e9570ba608809c42dc2060fdd214a98/python/src/passes.cc
+function triton_optimization_passes()
+    # TODO: check that all triton passes are included here
+    return join(
+        [
+            # convert passes
+            "convert-scf-to-cf",
+            "convert-cf-to-llvm",
+            "convert-index-to-llvm",
+            "convert-arith-to-llvm",
+            "convert-nvvm-to-llvm",
+            # common passes
+            "canonicalize",
+            # # ttir passes
+            # "triton-combine",
+            # "triton-reorder-broadcast",
+            # "triton-rewrite-tensor-pointer",
+            # "triton-rewrite-tensor-descriptor-to-pointer",
+            # "triton-loop-unroll",
+            # "triton-licm",
+            # "triton-loop-aware-cse",
+            # # TODO: should num-warps and num-ctas be set for each kernel?
+            # "convert-triton-to-tritongpu{target=cuda:$(cubinChip[][4:end]) num-warps=1 threads-per-warp=$(cuWarpSize[]) num-ctas=1}",
+            # # ttgir passes
+            # "tritongpu-coalesce",
+            # "tritongpu-optimize-thread-locality",
+            # "tritongpu-hoist-tmem-alloc",
+            # "tritongpu-assign-latencies",
+            # "tritongpu-pipeline",
+            # "tritongpu-schedule-loops",
+            # "tritongpu-automatic-warp-specialization",
+            # "tritongpu-prefetch",
+            # "tritongpu-accelerate-matmul",
+            # "tritongpu-reorder-instructions",
+            # "tritongpu-F32DotTC",
+            # "tritongpu-optimize-dot-operands",
+            # "tritongpu-remove-layout-conversions",
+            # "tritongpu-reduce-data-duplication",
+            # "tritongpu-hoist-tmem-alloc",
+            # "tritongpu-fuse-nested-loops",
+            # "tritongpu-rewrite-partition-dependencies",
+            # "tritongpu-partition-loops",
+            # "tritongpu-combine-tensor-select-and-if",
+            # # ttgir to llvm passes
+            # "tritongpu-allocate-warp-groups",
+            # "allocate-shared-memory",
+            # "tritongpu-global-scratch-memory-allocation",
+            # "tritongpu-optimize-accumulator-init",
+            # "tritongpu-coalesce-async-copy",
+        ],
+        ",",
+    )
 end
 
 # TODO we want to be able to run the more advanced passes via transform dialect as an enzyme intermediate
@@ -1425,6 +1482,7 @@ const cubinChip = Ref{String}("sm_60")
 const cubinFormat = Ref{String}("bin")
 const cuindexBitWidth = Ref{Int}(32)
 const cuOptLevel = Ref{Int}(2)
+const cuWarpSize = Ref{Int}(32)
 # Wgatever the relevant highest version from our LLVM is within NVPTX.td
 # Or more specifically looking at clang/lib/Driver/ToolChains/Cuda.cpp:684
 #  We see relevant ptx version is CUDA 12.6 -> 85
@@ -2245,7 +2303,8 @@ function compile_mlir!(
         end
     end
 
-    run_pass_pipeline!(mod, "mark-func-memory-effects", "mark-func-memory-effects")
+    # XXX: re-enable this pass
+    # run_pass_pipeline!(mod, "mark-func-memory-effects", "mark-func-memory-effects")
 
     func_op = MLIR.API.mlirSymbolTableLookup(
         MLIR.IR.SymbolTable(MLIR.IR.Operation(mod)), fnname

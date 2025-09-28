@@ -1701,12 +1701,20 @@ end
 _new_function_name(orig_name, module_suffix) = orig_name * "_call_" * module_suffix
 
 function _extract_function(
-    code::String; func_name::String="main", func_op_kind::String="func.func"
+    code::String;
+    func_name::String="main",
+    func_op_kind::String="func.func",
+    nested_module::Bool=false,
 )
     module_suffix = string(hash(code); base=16)
     name_to_call = _new_function_name(func_name, module_suffix)
 
     current_module = MLIR.IR.mmodule()
+    if nested_module
+        new_module = MLIR.IR.Module()
+        push!(MLIR.IR.body(current_module), MLIR.IR.Operation(new_module, true))
+        current_module = new_module
+    end
     top_level_block = MLIR.IR.body(current_module)
 
     symbol_attr_name = String(MLIR.API.mlirSymbolTableGetSymbolAttributeName())
@@ -1770,7 +1778,9 @@ function triton_call(
     location=mlir_stacktrace("triton_call", @__FILE__, @__LINE__),
     # TODO: other kwargs
 )
-    _, name_to_call = _extract_function(mlir_code; func_name, func_op_kind="tt.func")
+    _, name_to_call = _extract_function(
+        mlir_code; func_name, func_op_kind="tt.func", nested_module=true
+    )
 
     enzymexla.triton_call(
         grid_x.mlir_data,
