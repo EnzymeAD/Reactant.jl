@@ -901,3 +901,5 @@ end
 nmantissa(::Type{Float16}) = 10
 nmantissa(::Type{Float32}) = 23
 nmantissa(::Type{Float64}) = 52
+
+_unwrap_val(::Val{T}) where {T} = T
