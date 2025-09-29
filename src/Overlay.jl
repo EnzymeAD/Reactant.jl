@@ -24,8 +24,9 @@ end
 @reactant_overlay function EnzymeCore.ignore_derivatives(args...)
     res = map(args) do arg
         return Functors.fmap(arg) do argᵢ
-            argᵢ isa AnyTracedRArray &&
-                (argᵢ = call_with_reactant(materialize_traced_array, argᵢ))
+            if argᵢ isa AnyTracedRArray && !(argᵢ isa TracedType)
+                argᵢ = call_with_reactant(materialize_traced_array, argᵢ)
+            end
             argᵢ isa TracedType && return @opcall ignore_derivatives(argᵢ)
             return argᵢ
         end
