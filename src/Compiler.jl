@@ -702,6 +702,7 @@ function optimization_passes(
     lower_comms::Bool=true,
     max_constant_threshold::Int=1024,
     backend::String="gpu",
+    enable_triton_passes::Bool=false,
 )
     transform_passes_list = [
         "patterns=compare_op_canon<16>",
@@ -1303,7 +1304,7 @@ function optimization_passes(
         push!(passes, "remove-duplicate-func-def")
     end
     push!(passes, func_passes)
-    if backend == "cuda"
+    if enable_triton_passes && backend == "cuda"
         push!(passes, triton_optimization_passes())
     end
     return join(passes, ',')
@@ -1378,12 +1379,11 @@ function triton_optimization_passes()
             "allocate-shared-memory",
             "triton-tensor-memory-allocation",
             "tritongpu-global-scratch-memory-allocation",
-            # TODO: register the commented out passes
-            # "convert-triton-gpu-to-llvm",
+            "convert-triton-gpu-to-llvm",
             "canonicalize",
             "cse",
-            # "convert-nv-gpu-to-llvm",
-            # "convert-warp-specialize-to-llvm",
+            "convert-nv-gpu-to-llvm",
+            "convert-warp-specialize-to-llvm",
             "reconcile-unrealized-casts",
             "canonicalize",
             "cse",
@@ -1784,10 +1784,28 @@ function compile_mlir!(
     end
 
     opt_passes = optimization_passes(
-        compile_options; sroa=true, recognize_comms, lower_comms, backend
+        compile_options;
+        sroa=true,
+        recognize_comms,
+        lower_comms,
+        backend,
+        enable_triton_passes=false,
     )
     opt_passes2 = optimization_passes(
-        compile_options; sroa=false, recognize_comms, lower_comms, backend
+        compile_options;
+        sroa=false,
+        recognize_comms,
+        lower_comms,
+        backend,
+        enable_triton_passes=false,
+    )
+    opt_passes3 = optimization_passes(
+        compile_options;
+        sroa=false,
+        recognize_comms,
+        lower_comms,
+        backend,
+        enable_triton_passes=true,
     )
 
     raise_passes = if raise isa String
@@ -1802,7 +1820,7 @@ function compile_mlir!(
             opt_passes2
 
         if DUS_TO_CONCAT[]
-            opt_passes3 = optimization_passes(
+            opt_passes_dus_to_concat = optimization_passes(
                 compile_options;
                 sroa=false,
                 dus_to_concat=true,
@@ -1810,7 +1828,7 @@ function compile_mlir!(
                 lower_comms,
                 backend,
             )
-            result = result * "," * opt_passes3
+            result = result * "," * opt_passes_dus_to_concat
         end
         result
     else
@@ -1841,12 +1859,12 @@ function compile_mlir!(
                         "enzyme-batch",
                         opt_passes2,
                         enzyme_pass,
-                        opt_passes2,
+                        opt_passes3,
                         "canonicalize",
                         "remove-unnecessary-enzyme-ops",
                         "enzyme-simplify-math",
                         legalize_chlo_to_stablehlo...,
-                        opt_passes2,
+                        opt_passes3,
                         lower_enzymexla_linalg_pass,
                         jit,
                     ]
@@ -1857,12 +1875,12 @@ function compile_mlir!(
                         "enzyme-batch",
                         opt_passes2,
                         enzyme_pass,
-                        opt_passes2,
+                        opt_passes3,
                         "canonicalize",
                         "remove-unnecessary-enzyme-ops",
                         "enzyme-simplify-math",
                         legalize_chlo_to_stablehlo...,
-                        opt_passes2,
+                        opt_passes3,
                         kern,
                         raise_passes,
                         lower_enzymexla_linalg_pass,
@@ -1886,12 +1904,12 @@ function compile_mlir!(
                         "enzyme-batch",
                         opt_passes2,
                         enzyme_pass,
-                        opt_passes2,
+                        opt_passes3,
                         "canonicalize",
                         "remove-unnecessary-enzyme-ops",
                         "enzyme-simplify-math",
                         legalize_chlo_to_stablehlo...,
-                        opt_passes2,
+                        opt_passes3,
                     ]
                 end,
                 ',',
@@ -1911,12 +1929,12 @@ function compile_mlir!(
                         "enzyme-batch",
                         opt_passes2,
                         enzyme_pass,
-                        opt_passes2,
+                        opt_passes3,
                         "canonicalize",
                         "remove-unnecessary-enzyme-ops",
                         "enzyme-simplify-math",
                         legalize_chlo_to_stablehlo...,
-                        opt_passes2,
+                        opt_passes3,
                     ]
                 else
                     [
@@ -1925,12 +1943,12 @@ function compile_mlir!(
                         "enzyme-batch",
                         opt_passes2,
                         enzyme_pass,
-                        opt_passes2,
+                        opt_passes3,
                         "canonicalize",
                         "remove-unnecessary-enzyme-ops",
                         "enzyme-simplify-math",
                         legalize_chlo_to_stablehlo...,
-                        opt_passes2,
+                        opt_passes3,
                         kern,
                         raise_passes,
                     ]
@@ -1952,12 +1970,12 @@ function compile_mlir!(
                         "enzyme-batch",
                         opt_passes2,
                         enzyme_pass,
-                        opt_passes2,
+                        opt_passes3,
                         "canonicalize",
                         "remove-unnecessary-enzyme-ops",
                         "enzyme-simplify-math",
                         legalize_chlo_to_stablehlo...,
-                        opt_passes2,
+                        opt_passes3,
                         kern,
                     ]
                 end,
@@ -1975,12 +1993,12 @@ function compile_mlir!(
                     "enzyme-batch",
                     opt_passes2,
                     enzyme_pass,
-                    opt_passes2,
+                    opt_passes3,
                     "canonicalize",
                     "remove-unnecessary-enzyme-ops",
                     "enzyme-simplify-math",
                     legalize_chlo_to_stablehlo...,
-                    opt_passes2,
+                    opt_passes3,
                 ],
                 ',',
             ),
@@ -2017,7 +2035,7 @@ function compile_mlir!(
                         "remove-unnecessary-enzyme-ops",
                         "enzyme-simplify-math",
                         legalize_chlo_to_stablehlo...,
-                        opt_passes2,
+                        opt_passes3,
                         lower_enzymexla_linalg_pass,
                         jit,
                     ]
@@ -2030,7 +2048,7 @@ function compile_mlir!(
                         "remove-unnecessary-enzyme-ops",
                         "enzyme-simplify-math",
                         legalize_chlo_to_stablehlo...,
-                        opt_passes2,
+                        opt_passes3,
                         kern,
                         raise_passes,
                         lower_enzymexla_linalg_pass,
@@ -2241,7 +2259,7 @@ function compile_mlir!(
                 run_pass_pipeline!(
                     mod,
                     join(
-                        [opt_passes, "canonicalize", "cse", "canonicalize", opt_passes2],
+                        [opt_passes, "canonicalize", "cse", "canonicalize", opt_passes3],
                         ",",
                     ),
                     "mid_pad_opts",
