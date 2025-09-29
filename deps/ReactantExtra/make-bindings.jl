@@ -42,6 +42,7 @@ for file in [
     "MPI.jl",
     "MemRef.jl",
     "SparseTensor.jl",
+    "TritonExt.jl"
 ]
     build_file(joinpath(src_dir, "mlir", "Dialects", file))
 end
