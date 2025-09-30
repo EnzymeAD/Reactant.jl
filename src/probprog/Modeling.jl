@@ -1,5 +1,5 @@
 using ..Reactant:
-    MLIR, TracedUtils, AbstractRNG, AbstractConcreteArray, TracedRArray, ConcreteRNumber
+    MLIR, TracedUtils, AbstractRNG, TracedRArray, ConcreteRNumber
 using ..Compiler: @jit, @compile
 
 function process_mlir_function(f::Function, args::Tuple, op_name::String)
