@@ -12,8 +12,7 @@ function process_mlir_function(f::Function, args::Tuple, op_name::String)
         (all_args[1], (res isa Tuple ? res : (res,))...)
     end
 
-    mlir_fn_res = invokelatest(
-        TracedUtils.make_mlir_fn,
+    mlir_fn_res = TracedUtils.make_mlir_fn(
         wrapper_fn,
         args,
         (),
