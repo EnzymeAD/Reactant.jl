@@ -1851,11 +1851,28 @@ function triton_call(
     block_y::TracedRNumber{<:Integer},
     block_z::TracedRNumber{<:Integer},
     location=mlir_stacktrace("triton_call", @__FILE__, @__LINE__),
-    # TODO: other kwargs
 )
     _, symref = _extract_function(mlir_code; func_name, func_op_kind="tt.func", location)
 
-    triton_ext.call(
+    result_types = MLIR.IR.Type[]
+    output_operand_aliases = MLIR.IR.Attribute[]
+    output_to_arg = Int[]
+    for (i, arg) in enumerate(args)
+        if arg isa TracedRArray
+            push!(result_types, mlir_type(typeof(arg), size(arg)))
+            push!(
+                output_operand_aliases,
+                MLIR.IR.Attribute(
+                    MLIR.API.stablehloOutputOperandAliasGet(
+                        MLIR.IR.context(), 0, C_NULL, Int64(i - 1), 0, C_NULL
+                    ),
+                ),
+            )
+            push!(output_to_arg, i)
+        end
+    end
+
+    results = triton_ext.call(
         grid_x.mlir_data,
         grid_y.mlir_data,
         grid_z.mlir_data,
@@ -1864,11 +1881,23 @@ function triton_call(
         block_z.mlir_data,
         [Reactant.TracedUtils.get_mlir_data(a) for a in args];
         fn=symref,
-        result_0=MLIR.IR.Type[],
+        result_0=result_types,
         location,
+        output_operand_aliases,
     )
 
-    return nothing
+    array_results = ()
+    for i in 1:MLIR.IR.nresults(results)
+        arg = args[output_to_arg[i]]
+        array_results = (
+            array_results...,
+            Reactant.TracedRArray{unwrapped_eltype(arg),ndims(arg)}(
+                (), MLIR.IR.result(results, i), size(arg)
+            ),
+        )
+    end
+    length(array_results) == 1 && return array_results[1]
+    return array_results
 end
 
 """

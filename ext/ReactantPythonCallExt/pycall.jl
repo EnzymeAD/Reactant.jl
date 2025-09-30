@@ -120,7 +120,7 @@ function overlayed_pycall_with_triton(
     # we are compiling here + lowering again inside enzymejax
     ccinfo = triton.compile(src; target=target, options=options.__dict__)
 
-    @opcall triton_call(
+    return @opcall triton_call(
         pyconvert(String, ccinfo.asm["source"]),
         filter(x -> x isa Reactant.TracedType, args)...;
         func_name=pyconvert(String, ccinfo.metadata.name),
@@ -131,6 +131,4 @@ function overlayed_pycall_with_triton(
         block_y=@opcall(constant(blocks[2])),
         block_z=@opcall(constant(blocks[3])),
     )
-
-    return nothing
 end
