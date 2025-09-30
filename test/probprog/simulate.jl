@@ -38,14 +38,6 @@ end
         )
         @test contains(repr(before), "enzyme.simulate")
 
-        unlowered = @code_hlo optimize = :probprog_no_lowering ProbProg.simulate_internal(
-            rng, model, μ, σ, shape
-        )
-        @test !contains(repr(unlowered), "enzyme.simulate")
-        @test contains(repr(unlowered), "enzyme.addSampleToTrace")
-        @test contains(repr(unlowered), "enzyme.addWeightToTrace")
-        @test contains(repr(unlowered), "enzyme.addRetvalToTrace")
-
         after = @code_hlo optimize = :probprog ProbProg.simulate_internal(
             rng, model, μ, σ, shape
         )

@@ -230,7 +230,6 @@ function CompileOptions(;
             :just_batch,
             :none,
             :probprog,
-            :probprog_no_lowering,
         ]
     end
 

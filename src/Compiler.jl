@@ -1880,61 +1880,6 @@ function compile_mlir!(
             ),
             "no_enzyme",
         )
-    elseif compile_options.optimization_passes === :probprog_no_lowering
-        run_pass_pipeline!(
-            mod,
-            join(
-                if compile_options.raise_first
-                    [
-                        "mark-func-memory-effects",
-                        opt_passes,
-                        kern,
-                        raise_passes,
-                        "enzyme-batch",
-                        opt_passes2,
-                        enzyme_pass,
-                        probprog_pass,
-                        opt_passes2,
-                        "canonicalize",
-                        "remove-unnecessary-enzyme-ops",
-                        "enzyme-simplify-math",
-                        (
-                            if compile_options.legalize_chlo_to_stablehlo
-                                ["func.func(chlo-legalize-to-stablehlo)"]
-                            else
-                                []
-                            end
-                        )...,
-                        opt_passes2,
-                    ]
-                else
-                    [
-                        "mark-func-memory-effects",
-                        opt_passes,
-                        "enzyme-batch",
-                        opt_passes2,
-                        enzyme_pass,
-                        probprog_pass,
-                        opt_passes2,
-                        "canonicalize",
-                        "remove-unnecessary-enzyme-ops",
-                        "enzyme-simplify-math",
-                        (
-                            if compile_options.legalize_chlo_to_stablehlo
-                                ["func.func(chlo-legalize-to-stablehlo)"]
-                            else
-                                []
-                            end
-                        )...,
-                        opt_passes2,
-                        kern,
-                        raise_passes,
-                    ]
-                end,
-                ",",
-            ),
-            "probprog_no_lowering",
-        )
     elseif compile_options.optimization_passes === :probprog
         run_pass_pipeline!(
             mod,
