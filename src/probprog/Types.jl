@@ -70,7 +70,6 @@ Base.get(c::Constraint, k::Address, default) = get(c.dict, k, default)
 extract_addresses(constraint::Constraint) = Set(keys(constraint))
 
 const Selection = Set{Symbol}
-const CompiledFnCache = Dict{Tuple{Type,Set{Address}},Any}
 
 const _probprog_ref_lock = ReentrantLock()
 const _probprog_refs = IdDict()
@@ -87,8 +86,3 @@ end
 
 get_choices(trace::ProbProgTrace) = trace.choices
 select(syms::Symbol...) = Set(syms)
-
-function with_compiled_cache(f)
-    cache = CompiledFnCache()
-    return f(cache)
-end
