@@ -286,15 +286,15 @@ function simple_grad_without_ignore(x::AbstractArray{T}) where {T}
 end
 
 function simple_grad_with_ignore(x::AbstractArray{T}) where {T}
-    return Reactant.ignore_derivatives(sum(x; dims=1), x .- 1, (x, x .+ 2)), sum(abs2, x)
+    return Enzyme.ignore_derivatives(sum(x; dims=1), x .- 1, (x, x .+ 2)), sum(abs2, x)
 end
 
 function zero_grad(x)
-    return Reactant.ignore_derivatives(sum(x))
+    return Enzyme.ignore_derivatives(sum(x))
 end
 
 function zero_grad2(x)
-    return Reactant.ignore_derivatives(sum(x), x)
+    return Enzyme.ignore_derivatives(sum(x), x)
 end
 
 @testset "ignore_derivatives" begin

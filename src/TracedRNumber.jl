@@ -538,6 +538,10 @@ function Base.sincospi(x::TracedRNumber{T}) where {T}
     return @opcall(sine(T(π) * x)), @opcall(cosine(T(π) * x))
 end
 
+@noinline Base.Math.log10(x::TracedRNumber) = Base.Math._log(x, Val(10), :log10)
+@noinline Base.Math.log2(x::TracedRNumber) = Base.Math._log(x, Val(2), :log2)
+Base.Math._log(x::TracedRNumber, base, ::Symbol) = log(x) / log(Reactant._unwrap_val(base))
+
 Base.isreal(::TracedRNumber) = false
 Base.isreal(::TracedRNumber{<:Real}) = true
 

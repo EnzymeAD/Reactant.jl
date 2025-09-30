@@ -26,6 +26,7 @@ using Enzyme:
     DuplicatedNoNeed,
     EnzymeRules,
     Reverse
+using EnzymeCore: EnzymeCore
 
 export allowscalar, @allowscalar # re-exported from GPUArraysCore
 
@@ -40,7 +41,7 @@ function precompiling()
     return (@ccall jl_generating_output()::Cint) == 1
 end
 
-struct ReactantABI <: Enzyme.EnzymeCore.ABI end
+struct ReactantABI <: EnzymeCore.ABI end
 
 include("PrimitiveTypes.jl")
 

@@ -175,6 +175,40 @@ function autodiff(
     )
 end
 
+function autodiff_region(
+    inputs::Vector{Value};
+    outputs::Vector{IR.Type},
+    activity,
+    ret_activity,
+    width=nothing,
+    strong_zero=nothing,
+    fn=nothing,
+    body::Region,
+    location=Location(),
+)
+    op_ty_results = IR.Type[outputs...,]
+    operands = Value[inputs...,]
+    owned_regions = Region[body,]
+    successors = Block[]
+    attributes = NamedAttribute[
+        namedattribute("activity", activity), namedattribute("ret_activity", ret_activity)
+    ]
+    !isnothing(width) && push!(attributes, namedattribute("width", width))
+    !isnothing(strong_zero) && push!(attributes, namedattribute("strong_zero", strong_zero))
+    !isnothing(fn) && push!(attributes, namedattribute("fn", fn))
+
+    return create_operation(
+        "enzyme.autodiff_region",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
 function batch(
     inputs::Vector{Value}; outputs::Vector{IR.Type}, fn, batch_shape, location=Location()
 )
@@ -638,6 +672,25 @@ function untracedCall(
 
     return create_operation(
         "enzyme.untracedCall",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+function yield(operands::Vector{Value}; location=Location())
+    op_ty_results = IR.Type[]
+    operands = Value[operands...,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+
+    return create_operation(
+        "enzyme.yield",
         location;
         operands,
         owned_regions,
