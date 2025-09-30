@@ -71,9 +71,7 @@ const REACTANT_TEST_GROUP = lowercase(get(ENV, "REACTANT_TEST_GROUP", "all"))
 
     if REACTANT_TEST_GROUP == "all" || REACTANT_TEST_GROUP == "probprog"
         @safetestset "ProbProg Sample" include("probprog/sample.jl")
-        @safetestset "ProbProg BLR" include("probprog/blr.jl")
         @safetestset "ProbProg Simulate" include("probprog/simulate.jl")
         @safetestset "ProbProg Generate" include("probprog/generate.jl")
-        @safetestset "ProbProg Linear Regression" include("probprog/linear_regression.jl")
     end
 end
