@@ -81,30 +81,14 @@ function sample(
     symbol::Symbol=gensym("sample"),
     logpdf::Union{Nothing,Function}=nothing,
 ) where {Nargs}
-    res = sample_internal(rng, f, args...; symbol, logpdf)
-
-    res = res[2:end]
-
-    return length(res) == 1 ? res[1] : res
-end
-
-function sample_internal(
-    rng::AbstractRNG,
-    f::Function,
-    args::Vararg{Any,Nargs};
-    symbol::Symbol=gensym("sample"),
-    logpdf::Union{Nothing,Function}=nothing,
-) where {Nargs}
-    args = (rng, args...)
-    mlir_fn_res, argprefix, resprefix, resargprefix = process_mlir_function(
-        f, args, "sample"
-    )
+    args_with_rng = (rng, args...)
+    mlir_fn_res, argprefix, resprefix, _ = process_mlir_function(f, args_with_rng, "sample")
 
     (; result, linear_args, linear_results) = mlir_fn_res
     fnwrap = mlir_fn_res.fnwrapped
     func2 = mlir_fn_res.f
 
-    inputs = process_mlir_inputs(linear_args, f, args, fnwrap, argprefix)
+    inputs = process_mlir_inputs(linear_args, f, args_with_rng, fnwrap, argprefix)
     out_tys = [MLIR.IR.type(TracedUtils.get_mlir_data(res)) for res in linear_results]
 
     sym = TracedUtils.get_attribute_by_name(func2, "sym_name")
@@ -115,23 +99,15 @@ function sample_internal(
         MLIR.IR.context()::MLIR.API.MlirContext, symbol_addr::UInt64
     )::MLIR.IR.Attribute
 
-    # Construct MLIR attribute if Julia logpdf function is provided.
+    # Construct logpdf attribute if `logpdf` function is provided.
     logpdf_attr = nothing
-    if logpdf !== nothing
-        # Just to get static information about the sample. TODO: kwargs?
-        example_sample = f(args...)
+    if logpdf isa Function
+        samples = f(args_with_rng...)
 
-        # Remove AbstractRNG from `f`'s argument list if present, assuming that
-        # logpdf parameters follows `(sample, args...)` convention.
-        logpdf_args = nothing
-        if !isempty(args) && args[1] isa AbstractRNG
-            logpdf_args = (example_sample, Base.tail(args)...)  # TODO: kwargs?
-        else
-            logpdf_args = (example_sample, args...)
-        end
+        # Assume that logpdf parameters follow `(sample, args...)` convention.
+        logpdf_args = (samples, args...)
 
-        logpdf_mlir = invokelatest(
-            TracedUtils.make_mlir_fn,
+        logpdf_mlir = TracedUtils.make_mlir_fn(
             logpdf,
             logpdf_args,
             (),
@@ -155,31 +131,21 @@ function sample_internal(
     )
 
     process_mlir_outputs(
-        sample_op, linear_results, result, f, args, fnwrap, resprefix, argprefix
+        sample_op, linear_results, result, f, args_with_rng, fnwrap, resprefix, argprefix
     )
 
     return result
 end
 
-function call(rng::AbstractRNG, f::Function, args::Vararg{Any,Nargs}) where {Nargs}
-    res = @jit optimize = :probprog call_internal(rng, f, args...)
-
-    res = map(res[2:end]) do r
-        r isa AbstractConcreteArray ? Array(r) : r
-    end
-
-    return length(res) == 1 ? res[1] : res
-end
-
-function call_internal(rng::AbstractRNG, f::Function, args::Vararg{Any,Nargs}) where {Nargs}
-    args = (rng, args...)
-    mlir_fn_res, argprefix, resprefix, resargprefix = process_mlir_function(f, args, "call")
+function untraced_call(rng::AbstractRNG, f::Function, args::Vararg{Any,Nargs}) where {Nargs}
+    args_with_rng = (rng, args...)
+    mlir_fn_res, argprefix, resprefix, _ = process_mlir_function(f, args_with_rng, "call")
 
     (; result, linear_args, in_tys, linear_results) = mlir_fn_res
     fnwrap = mlir_fn_res.fnwrapped
     func2 = mlir_fn_res.f
 
-    inputs = process_mlir_inputs(linear_args, f, args, fnwrap, argprefix)
+    inputs = process_mlir_inputs(linear_args, f, args_with_rng, fnwrap, argprefix)
     out_tys = [MLIR.IR.type(TracedUtils.get_mlir_data(res)) for res in linear_results]
 
     fname = TracedUtils.get_attribute_by_name(func2, "sym_name")
@@ -188,16 +154,17 @@ function call_internal(rng::AbstractRNG, f::Function, args::Vararg{Any,Nargs}) w
     call_op = MLIR.Dialects.enzyme.untracedCall(inputs; outputs=out_tys, fn=fn_attr)
 
     process_mlir_outputs(
-        call_op, linear_results, result, f, args, fnwrap, resprefix, argprefix
+        call_op, linear_results, result, f, args_with_rng, fnwrap, resprefix, argprefix
     )
 
     return result
 end
 
-function simulate(rng::AbstractRNG, f::Function, args::Vararg{Any,Nargs}) where {Nargs}
+# Gen-like helper function.
+function simulate_(rng::AbstractRNG, f::Function, args::Vararg{Any,Nargs}) where {Nargs}
     trace = nothing
 
-    compiled_fn = @compile optimize = :probprog simulate_internal(rng, f, args...)
+    compiled_fn = @compile optimize = :probprog simulate(rng, f, args...)
 
     seed_buffer = only(rng.seed.data).buffer
     GC.@preserve seed_buffer begin
@@ -217,13 +184,9 @@ function simulate(rng::AbstractRNG, f::Function, args::Vararg{Any,Nargs}) where 
     return trace, trace.weight
 end
 
-function simulate_internal(
-    rng::AbstractRNG, f::Function, args::Vararg{Any,Nargs}
-) where {Nargs}
+function simulate(rng::AbstractRNG, f::Function, args::Vararg{Any,Nargs}) where {Nargs}
     args = (rng, args...)
-    mlir_fn_res, argprefix, resprefix, resargprefix = process_mlir_function(
-        f, args, "simulate"
-    )
+    mlir_fn_res, argprefix, resprefix, _ = process_mlir_function(f, args, "simulate")
 
     (; result, linear_args, in_tys, linear_results) = mlir_fn_res
     fnwrap = mlir_fn_res.fnwrapped
@@ -262,7 +225,8 @@ function simulate_internal(
     return trace, weight, result
 end
 
-function generate(
+# Gen-like helper function.
+function generate_(
     rng::AbstractRNG,
     f::Function,
     args::Vararg{Any,Nargs};
@@ -275,7 +239,7 @@ function generate(
     constrained_addresses = extract_addresses(constraint)
 
     function wrapper_fn(rng, constraint_ptr, args...)
-        return generate_internal(rng, f, args...; constraint_ptr, constrained_addresses)
+        return generate(rng, f, args...; constraint_ptr, constrained_addresses)
     end
 
     compiled_fn = @compile optimize = :probprog wrapper_fn(rng, constraint_ptr, args...)
@@ -298,7 +262,7 @@ function generate(
     return trace, trace.weight
 end
 
-function generate_internal(
+function generate(
     rng::AbstractRNG,
     f::Function,
     args::Vararg{Any,Nargs};
@@ -306,9 +270,7 @@ function generate_internal(
     constrained_addresses::Set{Address},
 ) where {Nargs}
     args = (rng, args...)
-    mlir_fn_res, argprefix, resprefix, resargprefix = process_mlir_function(
-        f, args, "generate"
-    )
+    mlir_fn_res, argprefix, resprefix, _ = process_mlir_function(f, args, "generate")
 
     (; result, linear_args, in_tys, linear_results) = mlir_fn_res
     fnwrap = mlir_fn_res.fnwrapped

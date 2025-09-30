@@ -8,20 +8,20 @@ function normal_logpdf(x, μ, σ, _)
 end
 
 function product_two_normals(rng, μ, σ, shape)
-    a = ProbProg.sample(rng, normal, μ, σ, shape; symbol=:a, logpdf=normal_logpdf)
-    b = ProbProg.sample(rng, normal, μ, σ, shape; symbol=:b, logpdf=normal_logpdf)
+    _, a = ProbProg.sample(rng, normal, μ, σ, shape; symbol=:a, logpdf=normal_logpdf)
+    _, b = ProbProg.sample(rng, normal, μ, σ, shape; symbol=:b, logpdf=normal_logpdf)
     return a .* b
 end
 
 function model(rng, μ, σ, shape)
-    s = ProbProg.sample(rng, normal, μ, σ, shape; symbol=:s, logpdf=normal_logpdf)
-    t = ProbProg.sample(rng, normal, s, σ, shape; symbol=:t, logpdf=normal_logpdf)
+    _, s = ProbProg.sample(rng, normal, μ, σ, shape; symbol=:s, logpdf=normal_logpdf)
+    _, t = ProbProg.sample(rng, normal, s, σ, shape; symbol=:t, logpdf=normal_logpdf)
     return t
 end
 
 function model2(rng, μ, σ, shape)
-    s = ProbProg.sample(rng, product_two_normals, μ, σ, shape; symbol=:s)
-    t = ProbProg.sample(rng, product_two_normals, s, σ, shape; symbol=:t)
+    _, s = ProbProg.sample(rng, product_two_normals, μ, σ, shape; symbol=:s)
+    _, t = ProbProg.sample(rng, product_two_normals, s, σ, shape; symbol=:t)
     return t
 end
 
@@ -33,12 +33,12 @@ end
         μ = Reactant.ConcreteRNumber(0.0)
         σ = Reactant.ConcreteRNumber(1.0)
 
-        before = @code_hlo optimize = false ProbProg.simulate_internal(
+        before = @code_hlo optimize = false ProbProg.simulate(
             rng, model, μ, σ, shape
         )
         @test contains(repr(before), "enzyme.simulate")
 
-        after = @code_hlo optimize = :probprog ProbProg.simulate_internal(
+        after = @code_hlo optimize = :probprog ProbProg.simulate(
             rng, model, μ, σ, shape
         )
         @test !contains(repr(after), "enzyme.simulate")
@@ -54,7 +54,7 @@ end
         μ = Reactant.ConcreteRNumber(0.0)
         σ = Reactant.ConcreteRNumber(1.0)
 
-        trace, weight = ProbProg.simulate(rng, model, μ, σ, shape)
+        trace, weight = ProbProg.simulate_(rng, model, μ, σ, shape)
 
         @test size(trace.retval[1]) == shape
         @test haskey(trace.choices, :s)
@@ -68,7 +68,8 @@ end
         op(_, x, y) = x * y'
         logpdf(res, _, _) = sum(res)
         function fake_model(rng, x, y)
-            return ProbProg.sample(rng, op, x, y; symbol=:matmul, logpdf=logpdf)
+            _, res = ProbProg.sample(rng, op, x, y; symbol=:matmul, logpdf=logpdf)
+            return res
         end
 
         x = reshape(collect(Float64, 1:12), (4, 3))
@@ -78,7 +79,7 @@ end
         seed = Reactant.to_rarray(UInt64[1, 4])
         rng = ReactantRNG(seed)
 
-        trace, weight = ProbProg.simulate(rng, fake_model, x_ra, y_ra)
+        trace, weight = ProbProg.simulate_(rng, fake_model, x_ra, y_ra)
 
         @test Array(trace.retval[1]) == op(rng, x, y)
         @test haskey(trace.choices, :matmul)
@@ -93,7 +94,7 @@ end
         μ = Reactant.ConcreteRNumber(0.0)
         σ = Reactant.ConcreteRNumber(1.0)
 
-        trace, weight = ProbProg.simulate(rng, model2, μ, σ, shape)
+        trace, weight = ProbProg.simulate_(rng, model2, μ, σ, shape)
 
         @test size(trace.retval[1]) == shape
 

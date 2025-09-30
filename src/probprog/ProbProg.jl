@@ -18,9 +18,16 @@ include("FFI.jl")
 include("Modeling.jl")
 include("Display.jl")
 
-export ProbProgTrace, Constraint, Selection, CompiledFnCache, Address
-export get_choices, select, choicemap, with_compiled_cache
+# Types.
+export ProbProgTrace, Constraint, Selection, Address
 
-export sample, call, simulate, generate
+# Utility functions.
+export get_choices, select, choicemap
+
+# Core MLIR ops.
+export sample, untraced_call, simulate, generate
+
+# Gen-like helper functions.
+export simulate_, generate_
 
 end

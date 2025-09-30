@@ -8,21 +8,21 @@ function normal_logpdf(x, μ, σ, _)
 end
 
 function model(rng, μ, σ, shape)
-    s = ProbProg.sample(rng, normal, μ, σ, shape; symbol=:s, logpdf=normal_logpdf)
-    t = ProbProg.sample(rng, normal, s, σ, shape; symbol=:t, logpdf=normal_logpdf)
+    _, s = ProbProg.sample(rng, normal, μ, σ, shape; symbol=:s, logpdf=normal_logpdf)
+    _, t = ProbProg.sample(rng, normal, s, σ, shape; symbol=:t, logpdf=normal_logpdf)
     return t
 end
 
 function two_normals(rng, μ, σ, shape)
-    x = ProbProg.sample(rng, normal, μ, σ, shape; symbol=:x, logpdf=normal_logpdf)
-    y = ProbProg.sample(rng, normal, x, σ, shape; symbol=:y, logpdf=normal_logpdf)
+    _, x = ProbProg.sample(rng, normal, μ, σ, shape; symbol=:x, logpdf=normal_logpdf)
+    _, y = ProbProg.sample(rng, normal, x, σ, shape; symbol=:y, logpdf=normal_logpdf)
     return y
 end
 
 function nested_model(rng, μ, σ, shape)
-    s = ProbProg.sample(rng, normal, μ, σ, shape; symbol=:s, logpdf=normal_logpdf)
-    t = ProbProg.sample(rng, two_normals, s, σ, shape; symbol=:t)
-    u = ProbProg.sample(rng, two_normals, t, σ, shape; symbol=:u)
+    _, s = ProbProg.sample(rng, normal, μ, σ, shape; symbol=:s, logpdf=normal_logpdf)
+    _, t = ProbProg.sample(rng, two_normals, s, σ, shape; symbol=:t)
+    _, u = ProbProg.sample(rng, two_normals, t, σ, shape; symbol=:u)
     return u
 end
 
@@ -33,7 +33,7 @@ end
         rng = ReactantRNG(seed)
         μ = Reactant.ConcreteRNumber(0.0)
         σ = Reactant.ConcreteRNumber(1.0)
-        trace, weight = ProbProg.generate(rng, model, μ, σ, shape)
+        trace, weight = ProbProg.generate_(rng, model, μ, σ, shape)
         @test mean(trace.retval[1]) ≈ 0.0 atol = 0.05 rtol = 0.05
     end
 
@@ -46,7 +46,7 @@ end
 
         constraint = ProbProg.Constraint(:s => (fill(0.1, shape),))
 
-        trace, weight = ProbProg.generate(rng, model, μ, σ, shape; constraint)
+        trace, weight = ProbProg.generate_(rng, model, μ, σ, shape; constraint)
 
         @test trace.choices[:s][1] == constraint[ProbProg.Address(:s)][1]
 
@@ -71,7 +71,7 @@ end
             :u => :y => (fill(0.3, shape),),
         )
 
-        trace, weight = ProbProg.generate(rng, nested_model, μ, σ, shape; constraint)
+        trace, weight = ProbProg.generate_(rng, nested_model, μ, σ, shape; constraint)
 
         @test trace.choices[:s][1] == fill(0.1, shape)
         @test trace.subtraces[:t].choices[:x][1] == fill(0.2, shape)
@@ -111,7 +111,7 @@ end
             reinterpret(UInt64, pointer_from_objref(constraint1))
         )
 
-        wrapper_fn(rng, constraint_ptr, μ, σ) = ProbProg.generate_internal(
+        wrapper_fn(rng, constraint_ptr, μ, σ) = ProbProg.generate(
             rng, model, μ, σ, shape; constraint_ptr, constrained_addresses
         )
 
