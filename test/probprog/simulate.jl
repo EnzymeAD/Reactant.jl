@@ -33,14 +33,10 @@ end
         μ = Reactant.ConcreteRNumber(0.0)
         σ = Reactant.ConcreteRNumber(1.0)
 
-        before = @code_hlo optimize = false ProbProg.simulate(
-            rng, model, μ, σ, shape
-        )
+        before = @code_hlo optimize = false ProbProg.simulate(rng, model, μ, σ, shape)
         @test contains(repr(before), "enzyme.simulate")
 
-        after = @code_hlo optimize = :probprog ProbProg.simulate(
-            rng, model, μ, σ, shape
-        )
+        after = @code_hlo optimize = :probprog ProbProg.simulate(rng, model, μ, σ, shape)
         @test !contains(repr(after), "enzyme.simulate")
         @test !contains(repr(after), "enzyme.addSampleToTrace")
         @test !contains(repr(after), "enzyme.addWeightToTrace")
