@@ -373,6 +373,21 @@ enzymeActivityAttrGet(MlirContext ctx, int32_t val) {
                                               (mlir::enzyme::Activity)val));
 }
 
+extern "C" MLIR_CAPI_EXPORTED MlirType enzymeTraceTypeGet(MlirContext ctx) {
+  return wrap(mlir::enzyme::TraceType::get(unwrap(ctx)));
+}
+
+extern "C" MLIR_CAPI_EXPORTED MlirType
+enzymeConstraintTypeGet(MlirContext ctx) {
+  return wrap(mlir::enzyme::ConstraintType::get(unwrap(ctx)));
+}
+
+extern "C" MLIR_CAPI_EXPORTED MlirAttribute
+enzymeSymbolAttrGet(MlirContext ctx, uint64_t symbol) {
+  mlir::Attribute attr = mlir::enzyme::SymbolAttr::get(unwrap(ctx), symbol);
+  return wrap(attr);
+}
+
 // Create profiler session and start profiling
 REACTANT_ABI tsl::ProfilerSession *
 CreateProfilerSession(uint32_t device_tracer_level,
