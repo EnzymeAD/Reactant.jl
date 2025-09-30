@@ -1847,7 +1847,9 @@ function triton_call(
     grid_x::TracedRNumber{<:Integer},
     grid_y::TracedRNumber{<:Integer},
     grid_z::TracedRNumber{<:Integer},
-    shmem::TracedRNumber{<:Integer},
+    block_x::TracedRNumber{<:Integer},
+    block_y::TracedRNumber{<:Integer},
+    block_z::TracedRNumber{<:Integer},
     location=mlir_stacktrace("triton_call", @__FILE__, @__LINE__),
     # TODO: other kwargs
 )
@@ -1857,7 +1859,9 @@ function triton_call(
         grid_x.mlir_data,
         grid_y.mlir_data,
         grid_z.mlir_data,
-        shmem.mlir_data,
+        block_x.mlir_data,
+        block_y.mlir_data,
+        block_z.mlir_data,
         [Reactant.TracedUtils.get_mlir_data(a) for a in args];
         fn=symref,
         result_0=MLIR.IR.Type[],

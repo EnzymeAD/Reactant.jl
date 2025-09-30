@@ -47,9 +47,8 @@ function overlayed_pycall_with_jax_tracing(f::Py, args...)
     return length(res) == 0 ? nothing : (length(res) == 1 ? res[1] : res)
 end
 
-# TODO: support using metaparams here
-normalize_grid(grid::Integer) = normalize_grid((grid,))
-function normalize_grid(grid::Dims{N}) where {N}
+normalize_grid_and_blocks(grid::Integer) = normalize_grid_and_blocks((grid,))
+function normalize_grid_and_blocks(grid::Dims{N}) where {N}
     @assert N <= 3
     @assert all(grid .> 0)
     return (grid..., ntuple(_ -> 1, 3 - N)...)
@@ -62,11 +61,18 @@ signature_string(x) = error("Unsupported argument type: $(typeof(x))")
 
 # TODO: better name for hints?
 function overlayed_pycall_with_triton(
-    kernel::Py, args...; grid, num_warps::Integer=1, num_stages::Integer=3, hints=nothing
+    kernel::Py,
+    args...;
+    grid,
+    blocks,
+    num_warps::Integer=1,
+    num_stages::Integer=3,
+    hints=nothing,
 )
     triton = tritonptr[]
 
-    grid = normalize_grid(grid)
+    grid = normalize_grid_and_blocks(grid)
+    blocks = normalize_grid_and_blocks(blocks)
 
     mapped = map(signature_string, args)
     signature = first.(mapped)
@@ -121,7 +127,9 @@ function overlayed_pycall_with_triton(
         grid_x=@opcall(constant(grid[1])),
         grid_y=@opcall(constant(grid[2])),
         grid_z=@opcall(constant(grid[3])),
-        shmem=@opcall(constant(pyconvert(Int, ccinfo.metadata.shared))),
+        block_x=@opcall(constant(blocks[1])),
+        block_y=@opcall(constant(blocks[2])),
+        block_z=@opcall(constant(blocks[3])),
     )
 
     return nothing

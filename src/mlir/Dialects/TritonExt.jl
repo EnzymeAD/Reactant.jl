@@ -17,7 +17,9 @@ function call(
     gridx::Value,
     gridy::Value,
     gridz::Value,
-    shmem::Value,
+    blockx::Value,
+    blocky::Value,
+    blockz::Value,
     inputs::Vector{Value};
     result_0::Vector{IR.Type},
     fn,
@@ -31,7 +33,7 @@ function call(
     location=Location(),
 )
     op_ty_results = IR.Type[result_0...,]
-    operands = Value[gridx, gridy, gridz, shmem, inputs...]
+    operands = Value[gridx, gridy, gridz, blockx, blocky, blockz, inputs...]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[namedattribute("fn", fn),]
