@@ -11,7 +11,9 @@ function sample(
     logpdf::Union{Nothing,Function}=nothing,
 ) where {Nargs}
     args_with_rng = (rng, args...)
-    mlir_fn_res, argprefix, resprefix, _ = process_probprog_function(f, args_with_rng, "sample")
+    mlir_fn_res, argprefix, resprefix, _ = process_probprog_function(
+        f, args_with_rng, "sample"
+    )
 
     (; result, linear_args, linear_results) = mlir_fn_res
     fnwrap = mlir_fn_res.fnwrapped
@@ -68,7 +70,9 @@ end
 
 function untraced_call(rng::AbstractRNG, f::Function, args::Vararg{Any,Nargs}) where {Nargs}
     args_with_rng = (rng, args...)
-    mlir_fn_res, argprefix, resprefix, _ = process_probprog_function(f, args_with_rng, "call")
+    mlir_fn_res, argprefix, resprefix, _ = process_probprog_function(
+        f, args_with_rng, "call"
+    )
 
     (; result, linear_args, in_tys, linear_results) = mlir_fn_res
     fnwrap = mlir_fn_res.fnwrapped
