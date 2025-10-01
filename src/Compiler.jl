@@ -906,6 +906,8 @@ function optimization_passes(
         "trivial_reduce_window_to_reduce_op",
         "dot_general_add_distributive_simplify",
         "dot_general_subtract_distributive_simplify",
+        "dus_to_dynamic_pad",
+        "dynamic_pad_to_pad",
     ]
 
     if !compile_options.disable_auto_batching_passes
@@ -968,6 +970,7 @@ function optimization_passes(
                 "gather_elementwise",
                 ## const prop patterns
                 "gather_const_prop",
+                "clamp_const_prop",
             ],
         )
     end
