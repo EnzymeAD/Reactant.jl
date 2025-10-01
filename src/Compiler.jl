@@ -924,7 +924,8 @@ function optimization_passes(
                 "concat_insert_dim_reduce",
                 "concat_insert_dim_sort",
                 "concat_insert_dim_reduce_window",
-                "concat_insert_dim_elementwise",
+                # XXX: busted `map of slices` tests, needs upstream fix
+                # "concat_insert_dim_elementwise",
                 "dot_general_slice_to_batch",
                 "gather_slice_to_batch",
                 "iota_slice_to_batch",
