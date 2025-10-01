@@ -924,6 +924,7 @@ function optimization_passes(
                 "concat_insert_dim_reduce",
                 "concat_insert_dim_sort",
                 "concat_insert_dim_reduce_window",
+                "concat_insert_dim_elementwise",
                 "dot_general_slice_to_batch",
                 "gather_slice_to_batch",
                 "iota_slice_to_batch",
@@ -970,7 +971,6 @@ function optimization_passes(
                 "gather_elementwise",
                 ## const prop patterns
                 "gather_const_prop",
-                "clamp_const_prop",
             ],
         )
     end
@@ -1074,6 +1074,7 @@ function optimization_passes(
             "const_prop_through_barrier<16>",
             "concat_const_prop<1>($max_constant_threshold)",
             "dynamic_update_slice_const_prop($max_constant_threshold)",
+            "clamp_const_prop",
         ],
     )
 
