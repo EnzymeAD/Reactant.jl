@@ -1,76 +1,7 @@
 using ..Reactant: MLIR, TracedUtils, AbstractRNG, TracedRArray, ConcreteRNumber
 using ..Compiler: @jit, @compile
 
-function process_mlir_function(f::Function, args::Tuple, op_name::String)
-    argprefix = gensym(op_name * "arg")
-    resprefix = gensym(op_name * "result")
-    resargprefix = gensym(op_name * "resarg")
-
-    wrapper_fn = (all_args...) -> begin
-        res = f(all_args...)
-        (all_args[1], (res isa Tuple ? res : (res,))...)
-    end
-
-    mlir_fn_res = TracedUtils.make_mlir_fn(
-        wrapper_fn,
-        args,
-        (),
-        string(f),
-        false;
-        do_transpose=false,
-        args_in_result=:result,
-        argprefix,
-        resprefix,
-        resargprefix,
-    )
-
-    return mlir_fn_res, argprefix, resprefix, resargprefix
-end
-
-function process_mlir_inputs(linear_args, f, args, fnwrap, argprefix)
-    inputs = MLIR.IR.Value[]
-    for a in linear_args
-        idx, path = TracedUtils.get_argidx(a, argprefix)
-        if idx == 2 && fnwrap
-            TracedUtils.push_val!(inputs, f, path[3:end])
-        else
-            if fnwrap && idx > 1
-                idx -= 1
-            end
-            TracedUtils.push_val!(inputs, args[idx], path[3:end])
-        end
-    end
-    return inputs
-end
-
-function process_mlir_outputs(
-    op, linear_results, result, f, args, fnwrap, resprefix, argprefix, start_idx=0
-)
-    for (i, res) in enumerate(linear_results)
-        resv = MLIR.IR.result(op, i + start_idx)
-
-        if TracedUtils.has_idx(res, resprefix)
-            path = TracedUtils.get_idx(res, resprefix)
-            TracedUtils.set!(result, path[2:end], resv)
-        end
-
-        if TracedUtils.has_idx(res, argprefix)
-            idx, path = TracedUtils.get_argidx(res, argprefix)
-            if fnwrap && idx == 2
-                TracedUtils.set!(f, path[3:end], resv)
-            else
-                if fnwrap && idx > 2
-                    idx -= 1
-                end
-                TracedUtils.set!(args[idx], path[3:end], resv)
-            end
-        end
-
-        if !TracedUtils.has_idx(res, resprefix) && !TracedUtils.has_idx(res, argprefix)
-            TracedUtils.set!(res, (), resv)
-        end
-    end
-end
+include("Utils.jl")
 
 function sample(
     rng::AbstractRNG,
@@ -80,13 +11,13 @@ function sample(
     logpdf::Union{Nothing,Function}=nothing,
 ) where {Nargs}
     args_with_rng = (rng, args...)
-    mlir_fn_res, argprefix, resprefix, _ = process_mlir_function(f, args_with_rng, "sample")
+    mlir_fn_res, argprefix, resprefix, _ = process_probprog_function(f, args_with_rng, "sample")
 
     (; result, linear_args, linear_results) = mlir_fn_res
     fnwrap = mlir_fn_res.fnwrapped
     func2 = mlir_fn_res.f
 
-    inputs = process_mlir_inputs(linear_args, f, args_with_rng, fnwrap, argprefix)
+    inputs = process_probprog_inputs(linear_args, f, args_with_rng, fnwrap, argprefix)
     out_tys = [MLIR.IR.type(TracedUtils.get_mlir_data(res)) for res in linear_results]
 
     sym = TracedUtils.get_attribute_by_name(func2, "sym_name")
@@ -128,7 +59,7 @@ function sample(
         name=Base.String(symbol),
     )
 
-    process_mlir_outputs(
+    process_probprog_outputs(
         sample_op, linear_results, result, f, args_with_rng, fnwrap, resprefix, argprefix
     )
 
@@ -137,13 +68,13 @@ end
 
 function untraced_call(rng::AbstractRNG, f::Function, args::Vararg{Any,Nargs}) where {Nargs}
     args_with_rng = (rng, args...)
-    mlir_fn_res, argprefix, resprefix, _ = process_mlir_function(f, args_with_rng, "call")
+    mlir_fn_res, argprefix, resprefix, _ = process_probprog_function(f, args_with_rng, "call")
 
     (; result, linear_args, in_tys, linear_results) = mlir_fn_res
     fnwrap = mlir_fn_res.fnwrapped
     func2 = mlir_fn_res.f
 
-    inputs = process_mlir_inputs(linear_args, f, args_with_rng, fnwrap, argprefix)
+    inputs = process_probprog_inputs(linear_args, f, args_with_rng, fnwrap, argprefix)
     out_tys = [MLIR.IR.type(TracedUtils.get_mlir_data(res)) for res in linear_results]
 
     fname = TracedUtils.get_attribute_by_name(func2, "sym_name")
@@ -151,7 +82,7 @@ function untraced_call(rng::AbstractRNG, f::Function, args::Vararg{Any,Nargs}) w
 
     call_op = MLIR.Dialects.enzyme.untracedCall(inputs; outputs=out_tys, fn=fn_attr)
 
-    process_mlir_outputs(
+    process_probprog_outputs(
         call_op, linear_results, result, f, args_with_rng, fnwrap, resprefix, argprefix
     )
 
@@ -184,13 +115,13 @@ end
 
 function simulate(rng::AbstractRNG, f::Function, args::Vararg{Any,Nargs}) where {Nargs}
     args = (rng, args...)
-    mlir_fn_res, argprefix, resprefix, _ = process_mlir_function(f, args, "simulate")
+    mlir_fn_res, argprefix, resprefix, _ = process_probprog_function(f, args, "simulate")
 
     (; result, linear_args, in_tys, linear_results) = mlir_fn_res
     fnwrap = mlir_fn_res.fnwrapped
     func2 = mlir_fn_res.f
 
-    inputs = process_mlir_inputs(linear_args, f, args, fnwrap, argprefix)
+    inputs = process_probprog_inputs(linear_args, f, args, fnwrap, argprefix)
     out_tys = [MLIR.IR.type(TracedUtils.get_mlir_data(res)) for res in linear_results]
 
     fname = TracedUtils.get_attribute_by_name(func2, "sym_name")
@@ -205,7 +136,7 @@ function simulate(rng::AbstractRNG, f::Function, args::Vararg{Any,Nargs}) where 
         inputs; trace=trace_ty, weight=weight_ty, outputs=out_tys, fn=fn_attr
     )
 
-    process_mlir_outputs(
+    process_probprog_outputs(
         simulate_op, linear_results, result, f, args, fnwrap, resprefix, argprefix, 2
     )
 
@@ -268,13 +199,13 @@ function generate(
     constrained_addresses::Set{Address},
 ) where {Nargs}
     args = (rng, args...)
-    mlir_fn_res, argprefix, resprefix, _ = process_mlir_function(f, args, "generate")
+    mlir_fn_res, argprefix, resprefix, _ = process_probprog_function(f, args, "generate")
 
     (; result, linear_args, in_tys, linear_results) = mlir_fn_res
     fnwrap = mlir_fn_res.fnwrapped
     func2 = mlir_fn_res.f
 
-    inputs = process_mlir_inputs(linear_args, f, args, fnwrap, argprefix)
+    inputs = process_probprog_inputs(linear_args, f, args, fnwrap, argprefix)
     out_tys = [MLIR.IR.type(TracedUtils.get_mlir_data(res)) for res in linear_results]
 
     fname = TracedUtils.get_attribute_by_name(func2, "sym_name")
@@ -321,7 +252,7 @@ function generate(
         constrained_addresses=MLIR.IR.Attribute(constrained_addresses_attr),
     )
 
-    process_mlir_outputs(
+    process_probprog_outputs(
         generate_op, linear_results, result, f, args, fnwrap, resprefix, argprefix, 2
     )
 
