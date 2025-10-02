@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1759290593989,
+  "lastUpdate": 1759376873441,
   "repoUrl": "https://github.com/EnzymeAD/Reactant.jl",
   "entries": {
     "Reactant.jl Benchmarks": [
@@ -11335,6 +11335,878 @@ window.BENCHMARK_DATA = {
           {
             "name": "DeepONet ([64, 1024], [1, 128])/backward/TPU/DisablePadAfterEnzyme",
             "value": 0.00032017000000000005,
+            "unit": "s"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Acake",
+            "username": "sbrantq",
+            "email": "scharfrichterq@gmail.com"
+          },
+          "committer": {
+            "name": "GitHub",
+            "username": "web-flow",
+            "email": "noreply@github.com"
+          },
+          "id": "1ec34529bc42b3521aabb3baba15bd8ba9f1ecdb",
+          "message": "ProbProg: JLL changes for trace/symbol/constraint types (#1719)",
+          "timestamp": "2025-09-30T19:47:52Z",
+          "url": "https://github.com/EnzymeAD/Reactant.jl/commit/1ec34529bc42b3521aabb3baba15bd8ba9f1ecdb"
+        },
+        "date": 1759376858760,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "DeepONet ([64, 1024], [1, 128])/forward/CPU/Default",
+            "value": 0.0017131870000000001,
+            "unit": "s"
+          },
+          {
+            "name": "DeepONet ([64, 1024], [1, 128])/forward/CPU/DisableScatterGatherPad",
+            "value": 0.001807407,
+            "unit": "s"
+          },
+          {
+            "name": "DeepONet ([64, 1024], [1, 128])/backward/CPU/DisablePadAfterEnzyme",
+            "value": 0.004180098,
+            "unit": "s"
+          },
+          {
+            "name": "DeepONet ([64, 1024], [1, 128])/backward/CPU/DefaultAfterEnzyme",
+            "value": 0.004245553,
+            "unit": "s"
+          },
+          {
+            "name": "DeepONet ([64, 1024], [1, 128])/backward/CPU/DisableScatterGatherPadBeforeEnzyme",
+            "value": 0.004239583,
+            "unit": "s"
+          },
+          {
+            "name": "DeepONet ([64, 1024], [1, 128])/backward/CPU/DisableScatterGatherPadAll",
+            "value": 0.004235513000000001,
+            "unit": "s"
+          },
+          {
+            "name": "DeepONet ([64, 1024], [1, 128])/backward/CPU/DisablePadBeforeEnzyme",
+            "value": 0.004232373,
+            "unit": "s"
+          },
+          {
+            "name": "DeepONet ([64, 1024], [1, 128])/backward/CPU/DisablePadAll",
+            "value": 0.004202548,
+            "unit": "s"
+          },
+          {
+            "name": "DeepONet ([64, 1024], [1, 128])/forward/CPU/DisableScatterGather",
+            "value": 0.001704168,
+            "unit": "s"
+          },
+          {
+            "name": "DeepONet ([64, 1024], [1, 128])/backward/CPU/DefaultAll",
+            "value": 0.004430215,
+            "unit": "s"
+          },
+          {
+            "name": "DeepONet ([64, 1024], [1, 128])/backward/CPU/DisableTransposeReshapeAfterEnzyme",
+            "value": 0.004378906,
+            "unit": "s"
+          },
+          {
+            "name": "DeepONet ([64, 1024], [1, 128])/forward/CPU/XLA",
+            "value": 0.002024391,
+            "unit": "s"
+          },
+          {
+            "name": "DeepONet ([64, 1024], [1, 128])/backward/CPU/XLA",
+            "value": 0.004181487,
+            "unit": "s"
+          },
+          {
+            "name": "DeepONet ([64, 1024], [1, 128])/backward/CPU/DisableScatterGatherAfterEnzyme",
+            "value": 0.004210826,
+            "unit": "s"
+          },
+          {
+            "name": "DeepONet ([64, 1024], [1, 128])/backward/CPU/DefaultBeforeEnzyme",
+            "value": 0.004220423,
+            "unit": "s"
+          },
+          {
+            "name": "DeepONet ([64, 1024], [1, 128])/backward/CPU/DisableTransposeReshapeBeforeEnzyme",
+            "value": 0.0042431100000000005,
+            "unit": "s"
+          },
+          {
+            "name": "DeepONet ([64, 1024], [1, 128])/backward/CPU/DisableScatterGatherPadAfterEnzyme",
+            "value": 0.0041399850000000005,
+            "unit": "s"
+          },
+          {
+            "name": "DeepONet ([64, 1024], [1, 128])/forward/CPU/DisablePad",
+            "value": 0.0017712670000000002,
+            "unit": "s"
+          },
+          {
+            "name": "DeepONet ([64, 1024], [1, 128])/backward/CPU/DisableTransposeReshapeAll",
+            "value": 0.004184814,
+            "unit": "s"
+          },
+          {
+            "name": "DeepONet ([64, 1024], [1, 128])/backward/CPU/DisableScatterGatherAll",
+            "value": 0.004242593,
+            "unit": "s"
+          },
+          {
+            "name": "DeepONet ([64, 1024], [1, 128])/forward/CPU/DisableTransposeReshape",
+            "value": 0.0015953550000000001,
+            "unit": "s"
+          },
+          {
+            "name": "DeepONet ([64, 1024], [1, 128])/backward/CPU/DisableScatterGatherBeforeEnzyme",
+            "value": 0.004257847,
+            "unit": "s"
+          },
+          {
+            "name": "VGG11 bn=true [224, 224, 3, 4]/forward/CUDA/DisablePad",
+            "value": 0.002058826,
+            "unit": "s"
+          },
+          {
+            "name": "DeepONet ([64, 1024], [1, 128])/backward/CUDA/DisableScatterGatherAll",
+            "value": 0.000716268,
+            "unit": "s"
+          },
+          {
+            "name": "DeepONet ([64, 1024], [1, 128])/backward/CUDA/XLA",
+            "value": 0.000830662,
+            "unit": "s"
+          },
+          {
+            "name": "VGG11 bn=true [224, 224, 3, 4]/backward/CUDA/DisableTransposeReshapeAll",
+            "value": 0.007133824,
+            "unit": "s"
+          },
+          {
+            "name": "DeepONet ([64, 1024], [1, 128])/backward/CUDA/DefaultBeforeEnzyme",
+            "value": 0.000714581,
+            "unit": "s"
+          },
+          {
+            "name": "FNO [64, 64, 1, 4]/backward/CUDA/DefaultAll",
+            "value": 0.002948771,
+            "unit": "s"
+          },
+          {
+            "name": "VGG11 bn=true [224, 224, 3, 4]/forward/CUDA/DisableScatterGatherPad",
+            "value": 0.002106592,
+            "unit": "s"
+          },
+          {
+            "name": "VGG11 bn=true [224, 224, 3, 4]/backward/CUDA/DisableTransposeReshapeBeforeEnzyme",
+            "value": 0.007239898000000001,
+            "unit": "s"
+          },
+          {
+            "name": "FNO [64, 64, 1, 4]/backward/CUDA/DefaultBeforeEnzyme",
+            "value": 0.0029875220000000003,
+            "unit": "s"
+          },
+          {
+            "name": "DeepONet ([64, 1024], [1, 128])/forward/CUDA/XLA",
+            "value": 0.000362622,
+            "unit": "s"
+          },
+          {
+            "name": "FNO [64, 64, 1, 4]/backward/CUDA/DisablePadBeforeEnzyme",
+            "value": 0.002959812,
+            "unit": "s"
+          },
+          {
+            "name": "FNO [64, 64, 1, 4]/backward/CUDA/DisableScatterGatherPadAll",
+            "value": 0.0029467990000000004,
+            "unit": "s"
+          },
+          {
+            "name": "FNO [64, 64, 1, 4]/forward/CUDA/DisablePad",
+            "value": 0.0011024140000000001,
+            "unit": "s"
+          },
+          {
+            "name": "VGG11 bn=true [224, 224, 3, 4]/backward/CUDA/DisablePadBeforeEnzyme",
+            "value": 0.007207023000000001,
+            "unit": "s"
+          },
+          {
+            "name": "VGG11 bn=true [224, 224, 3, 4]/backward/CUDA/DisableScatterGatherPadBeforeEnzyme",
+            "value": 0.007205593000000001,
+            "unit": "s"
+          },
+          {
+            "name": "VGG11 bn=true [224, 224, 3, 4]/backward/CUDA/DisableScatterGatherAfterEnzyme",
+            "value": 0.007132221,
+            "unit": "s"
+          },
+          {
+            "name": "FNO [64, 64, 1, 4]/forward/CUDA/DisableScatterGatherPad",
+            "value": 0.0010852350000000001,
+            "unit": "s"
+          },
+          {
+            "name": "DeepONet ([64, 1024], [1, 128])/backward/CUDA/DisablePadAll",
+            "value": 0.000698741,
+            "unit": "s"
+          },
+          {
+            "name": "DeepONet ([64, 1024], [1, 128])/forward/CUDA/DisableTransposeReshape",
+            "value": 0.000374491,
+            "unit": "s"
+          },
+          {
+            "name": "ViT tiny [256, 256, 3, 4]/forward/CUDA/DisableScatterGatherPad",
+            "value": 0.003215573,
+            "unit": "s"
+          },
+          {
+            "name": "ViT tiny [256, 256, 3, 4]/forward/CUDA/DisableScatterGather",
+            "value": 0.003167842,
+            "unit": "s"
+          },
+          {
+            "name": "DeepONet ([64, 1024], [1, 128])/backward/CUDA/DefaultAfterEnzyme",
+            "value": 0.000709255,
+            "unit": "s"
+          },
+          {
+            "name": "ViT tiny [256, 256, 3, 4]/backward/CUDA/XLA",
+            "value": 0.012372316000000001,
+            "unit": "s"
+          },
+          {
+            "name": "FNO [64, 64, 1, 4]/backward/CUDA/DisableScatterGatherAfterEnzyme",
+            "value": 0.002928033,
+            "unit": "s"
+          },
+          {
+            "name": "VGG11 bn=true [224, 224, 3, 4]/backward/CUDA/DefaultAfterEnzyme",
+            "value": 0.007132251,
+            "unit": "s"
+          },
+          {
+            "name": "DeepONet ([64, 1024], [1, 128])/forward/CUDA/DisableScatterGather",
+            "value": 0.00038123400000000004,
+            "unit": "s"
+          },
+          {
+            "name": "FNO [64, 64, 1, 4]/forward/CUDA/DisableTransposeReshape",
+            "value": 0.001129046,
+            "unit": "s"
+          },
+          {
+            "name": "FNO [64, 64, 1, 4]/backward/CUDA/DisablePadAll",
+            "value": 0.0029238830000000004,
+            "unit": "s"
+          },
+          {
+            "name": "ViT tiny [256, 256, 3, 4]/forward/CUDA/XLA",
+            "value": 0.003395686,
+            "unit": "s"
+          },
+          {
+            "name": "VGG11 bn=true [224, 224, 3, 4]/backward/CUDA/DisableScatterGatherBeforeEnzyme",
+            "value": 0.007287428,
+            "unit": "s"
+          },
+          {
+            "name": "FNO [64, 64, 1, 4]/backward/CUDA/DisableTransposeReshapeAll",
+            "value": 0.003076465,
+            "unit": "s"
+          },
+          {
+            "name": "ViT tiny [256, 256, 3, 4]/forward/CUDA/DisableTransposeReshape",
+            "value": 0.003168082,
+            "unit": "s"
+          },
+          {
+            "name": "VGG11 bn=true [224, 224, 3, 4]/backward/CUDA/DisablePadAll",
+            "value": 0.007094129,
+            "unit": "s"
+          },
+          {
+            "name": "VGG11 bn=true [224, 224, 3, 4]/backward/CUDA/DisableScatterGatherPadAfterEnzyme",
+            "value": 0.007121433000000001,
+            "unit": "s"
+          },
+          {
+            "name": "DeepONet ([64, 1024], [1, 128])/forward/CUDA/DisablePad",
+            "value": 0.00033909,
+            "unit": "s"
+          },
+          {
+            "name": "FNO [64, 64, 1, 4]/backward/CUDA/DisableTransposeReshapeBeforeEnzyme",
+            "value": 0.003144637,
+            "unit": "s"
+          },
+          {
+            "name": "DeepONet ([64, 1024], [1, 128])/backward/CUDA/DisableScatterGatherAfterEnzyme",
+            "value": 0.000708746,
+            "unit": "s"
+          },
+          {
+            "name": "DeepONet ([64, 1024], [1, 128])/backward/CUDA/DisableTransposeReshapeAfterEnzyme",
+            "value": 0.000703251,
+            "unit": "s"
+          },
+          {
+            "name": "VGG11 bn=true [224, 224, 3, 4]/backward/CUDA/DisableScatterGatherPadAll",
+            "value": 0.007110756,
+            "unit": "s"
+          },
+          {
+            "name": "DeepONet ([64, 1024], [1, 128])/backward/CUDA/DisableTransposeReshapeBeforeEnzyme",
+            "value": 0.0007054800000000001,
+            "unit": "s"
+          },
+          {
+            "name": "VGG11 bn=true [224, 224, 3, 4]/backward/CUDA/DefaultAll",
+            "value": 0.007129852000000001,
+            "unit": "s"
+          },
+          {
+            "name": "FNO [64, 64, 1, 4]/backward/CUDA/XLA",
+            "value": 0.0031473720000000003,
+            "unit": "s"
+          },
+          {
+            "name": "VGG11 bn=true [224, 224, 3, 4]/backward/CUDA/XLA",
+            "value": 0.007302449000000001,
+            "unit": "s"
+          },
+          {
+            "name": "VGG11 bn=true [224, 224, 3, 4]/forward/CUDA/DisableTransposeReshape",
+            "value": 0.002062983,
+            "unit": "s"
+          },
+          {
+            "name": "FNO [64, 64, 1, 4]/backward/CUDA/DisableTransposeReshapeAfterEnzyme",
+            "value": 0.003050206,
+            "unit": "s"
+          },
+          {
+            "name": "DeepONet ([64, 1024], [1, 128])/backward/CUDA/DefaultAll",
+            "value": 0.000676575,
+            "unit": "s"
+          },
+          {
+            "name": "FNO [64, 64, 1, 4]/backward/CUDA/DisablePadAfterEnzyme",
+            "value": 0.002916655,
+            "unit": "s"
+          },
+          {
+            "name": "VGG11 bn=true [224, 224, 3, 4]/backward/CUDA/DisableScatterGatherAll",
+            "value": 0.007098696000000001,
+            "unit": "s"
+          },
+          {
+            "name": "DeepONet ([64, 1024], [1, 128])/backward/CUDA/DisableScatterGatherPadAfterEnzyme",
+            "value": 0.000681686,
+            "unit": "s"
+          },
+          {
+            "name": "FNO [64, 64, 1, 4]/forward/CUDA/XLA",
+            "value": 0.0011824860000000002,
+            "unit": "s"
+          },
+          {
+            "name": "ViT tiny [256, 256, 3, 4]/forward/CUDA/DisablePad",
+            "value": 0.002555387,
+            "unit": "s"
+          },
+          {
+            "name": "VGG11 bn=true [224, 224, 3, 4]/forward/CUDA/XLA",
+            "value": 0.0021115070000000003,
+            "unit": "s"
+          },
+          {
+            "name": "VGG11 bn=true [224, 224, 3, 4]/backward/CUDA/DisablePadAfterEnzyme",
+            "value": 0.007111504,
+            "unit": "s"
+          },
+          {
+            "name": "FNO [64, 64, 1, 4]/backward/CUDA/DisableScatterGatherBeforeEnzyme",
+            "value": 0.0029671420000000003,
+            "unit": "s"
+          },
+          {
+            "name": "ViT tiny [256, 256, 3, 4]/forward/CUDA/Default",
+            "value": 0.002604,
+            "unit": "s"
+          },
+          {
+            "name": "DeepONet ([64, 1024], [1, 128])/backward/CUDA/DisableScatterGatherBeforeEnzyme",
+            "value": 0.000692001,
+            "unit": "s"
+          },
+          {
+            "name": "FNO [64, 64, 1, 4]/forward/CUDA/DisableScatterGather",
+            "value": 0.0010927950000000001,
+            "unit": "s"
+          },
+          {
+            "name": "VGG11 bn=true [224, 224, 3, 4]/backward/CUDA/DisableTransposeReshapeAfterEnzyme",
+            "value": 0.007111489,
+            "unit": "s"
+          },
+          {
+            "name": "DeepONet ([64, 1024], [1, 128])/backward/CUDA/DisablePadAfterEnzyme",
+            "value": 0.000678656,
+            "unit": "s"
+          },
+          {
+            "name": "DeepONet ([64, 1024], [1, 128])/backward/CUDA/DisableScatterGatherPadAll",
+            "value": 0.00066922,
+            "unit": "s"
+          },
+          {
+            "name": "FNO [64, 64, 1, 4]/backward/CUDA/DisableScatterGatherAll",
+            "value": 0.002927985,
+            "unit": "s"
+          },
+          {
+            "name": "FNO [64, 64, 1, 4]/backward/CUDA/DefaultAfterEnzyme",
+            "value": 0.0029269440000000003,
+            "unit": "s"
+          },
+          {
+            "name": "DeepONet ([64, 1024], [1, 128])/backward/CUDA/DisableTransposeReshapeAll",
+            "value": 0.000674599,
+            "unit": "s"
+          },
+          {
+            "name": "VGG11 bn=true [224, 224, 3, 4]/forward/CUDA/Default",
+            "value": 0.00206387,
+            "unit": "s"
+          },
+          {
+            "name": "FNO [64, 64, 1, 4]/forward/CUDA/Default",
+            "value": 0.001085826,
+            "unit": "s"
+          },
+          {
+            "name": "DeepONet ([64, 1024], [1, 128])/forward/CUDA/DisableScatterGatherPad",
+            "value": 0.000336116,
+            "unit": "s"
+          },
+          {
+            "name": "VGG11 bn=true [224, 224, 3, 4]/forward/CUDA/DisableScatterGather",
+            "value": 0.002087659,
+            "unit": "s"
+          },
+          {
+            "name": "ViT tiny [256, 256, 3, 4]/backward/CUDA/DefaultAll",
+            "value": 0.010701932,
+            "unit": "s"
+          },
+          {
+            "name": "DeepONet ([64, 1024], [1, 128])/backward/CUDA/DisablePadBeforeEnzyme",
+            "value": 0.0007224870000000001,
+            "unit": "s"
+          },
+          {
+            "name": "DeepONet ([64, 1024], [1, 128])/forward/CUDA/Default",
+            "value": 0.000337992,
+            "unit": "s"
+          },
+          {
+            "name": "FNO [64, 64, 1, 4]/backward/CUDA/DisableScatterGatherPadAfterEnzyme",
+            "value": 0.002931795,
+            "unit": "s"
+          },
+          {
+            "name": "FNO [64, 64, 1, 4]/backward/CUDA/DisableScatterGatherPadBeforeEnzyme",
+            "value": 0.0029806900000000002,
+            "unit": "s"
+          },
+          {
+            "name": "VGG11 bn=true [224, 224, 3, 4]/backward/CUDA/DefaultBeforeEnzyme",
+            "value": 0.007221611,
+            "unit": "s"
+          },
+          {
+            "name": "DeepONet ([64, 1024], [1, 128])/backward/CUDA/DisableScatterGatherPadBeforeEnzyme",
+            "value": 0.000709276,
+            "unit": "s"
+          },
+          {
+            "name": "VGG11 bn=true [224, 224, 3, 4]/backward/TPU/DisableScatterGatherPadAfterEnzyme",
+            "value": 0.0047447900000000005,
+            "unit": "s"
+          },
+          {
+            "name": "VGG11 bn=true [224, 224, 3, 4]/forward/TPU/DisablePad",
+            "value": 0.00131741,
+            "unit": "s"
+          },
+          {
+            "name": "FNO [64, 64, 1, 4]/backward/TPU/DisableScatterGatherPadAll",
+            "value": 0.0029983690000000003,
+            "unit": "s"
+          },
+          {
+            "name": "ViT tiny [256, 256, 3, 4]/backward/TPU/XLA",
+            "value": 0.0027787600000000003,
+            "unit": "s"
+          },
+          {
+            "name": "DeepONet ([64, 1024], [1, 128])/backward/TPU/DisablePadBeforeEnzyme",
+            "value": 0.00033611000000000003,
+            "unit": "s"
+          },
+          {
+            "name": "DeepONet ([64, 1024], [1, 128])/backward/TPU/DisableTransposeReshapeAfterEnzyme",
+            "value": 0.00033954000000000005,
+            "unit": "s"
+          },
+          {
+            "name": "FNO [64, 64, 1, 4]/backward/TPU/DisableScatterGatherAfterEnzyme",
+            "value": 0.0028762500000000003,
+            "unit": "s"
+          },
+          {
+            "name": "FNO [64, 64, 1, 4]/backward/TPU/DefaultAll",
+            "value": 0.00300657,
+            "unit": "s"
+          },
+          {
+            "name": "VGG11 bn=true [224, 224, 3, 4]/backward/TPU/DisableScatterGatherPadAll",
+            "value": 0.00473755,
+            "unit": "s"
+          },
+          {
+            "name": "DeepONet ([64, 1024], [1, 128])/backward/TPU/DisableScatterGatherPadBeforeEnzyme",
+            "value": 0.00033685000000000003,
+            "unit": "s"
+          },
+          {
+            "name": "DeepONet ([64, 1024], [1, 128])/forward/TPU/Default",
+            "value": 0.00014896,
+            "unit": "s"
+          },
+          {
+            "name": "VGG11 bn=true [224, 224, 3, 4]/backward/TPU/DisablePadBeforeEnzyme",
+            "value": 0.0047415800000000004,
+            "unit": "s"
+          },
+          {
+            "name": "VGG11 bn=true [224, 224, 3, 4]/forward/TPU/DisableScatterGatherPad",
+            "value": 0.00130251,
+            "unit": "s"
+          },
+          {
+            "name": "FNO [64, 64, 1, 4]/backward/TPU/DisableTransposeReshapeAfterEnzyme",
+            "value": 0.00301531,
+            "unit": "s"
+          },
+          {
+            "name": "DeepONet ([64, 1024], [1, 128])/backward/TPU/DisableScatterGatherBeforeEnzyme",
+            "value": 0.00034404000000000005,
+            "unit": "s"
+          },
+          {
+            "name": "DeepONet ([64, 1024], [1, 128])/backward/TPU/DisableScatterGatherAfterEnzyme",
+            "value": 0.00033621000000000004,
+            "unit": "s"
+          },
+          {
+            "name": "ViT tiny [256, 256, 3, 4]/forward/TPU/DisableScatterGatherPad",
+            "value": 0.00062219,
+            "unit": "s"
+          },
+          {
+            "name": "FNO [64, 64, 1, 4]/backward/TPU/DisableTransposeReshapeAll",
+            "value": 0.0029878,
+            "unit": "s"
+          },
+          {
+            "name": "FNO [64, 64, 1, 4]/backward/TPU/DisableTransposeReshapeBeforeEnzyme",
+            "value": 0.0029913500000000003,
+            "unit": "s"
+          },
+          {
+            "name": "VGG11 bn=true [224, 224, 3, 4]/backward/TPU/DefaultAfterEnzyme",
+            "value": 0.004760960000000001,
+            "unit": "s"
+          },
+          {
+            "name": "FNO [64, 64, 1, 4]/forward/TPU/DisableScatterGather",
+            "value": 0.00110888,
+            "unit": "s"
+          },
+          {
+            "name": "FNO [64, 64, 1, 4]/backward/TPU/DisablePadBeforeEnzyme",
+            "value": 0.0029945,
+            "unit": "s"
+          },
+          {
+            "name": "ViT tiny [256, 256, 3, 4]/forward/TPU/XLA",
+            "value": 0.00099368,
+            "unit": "s"
+          },
+          {
+            "name": "ViT tiny [256, 256, 3, 4]/backward/TPU/DefaultAll",
+            "value": 0.002466359,
+            "unit": "s"
+          },
+          {
+            "name": "VGG11 bn=true [224, 224, 3, 4]/forward/TPU/Default",
+            "value": 0.00131069,
+            "unit": "s"
+          },
+          {
+            "name": "DeepONet ([64, 1024], [1, 128])/forward/TPU/DisableScatterGatherPad",
+            "value": 0.00016342,
+            "unit": "s"
+          },
+          {
+            "name": "DeepONet ([64, 1024], [1, 128])/backward/TPU/DefaultAll",
+            "value": 0.00032923,
+            "unit": "s"
+          },
+          {
+            "name": "VGG11 bn=true [224, 224, 3, 4]/backward/TPU/DefaultAll",
+            "value": 0.0047428900000000005,
+            "unit": "s"
+          },
+          {
+            "name": "DeepONet ([64, 1024], [1, 128])/forward/TPU/DisableScatterGather",
+            "value": 0.00017323000000000002,
+            "unit": "s"
+          },
+          {
+            "name": "VGG11 bn=true [224, 224, 3, 4]/forward/TPU/DisableTransposeReshape",
+            "value": 0.00130753,
+            "unit": "s"
+          },
+          {
+            "name": "FNO [64, 64, 1, 4]/backward/TPU/DisableScatterGatherPadBeforeEnzyme",
+            "value": 0.0029837400000000004,
+            "unit": "s"
+          },
+          {
+            "name": "ViT tiny [256, 256, 3, 4]/forward/TPU/DisablePad",
+            "value": 0.00063185,
+            "unit": "s"
+          },
+          {
+            "name": "DeepONet ([64, 1024], [1, 128])/backward/TPU/DefaultBeforeEnzyme",
+            "value": 0.00033263000000000005,
+            "unit": "s"
+          },
+          {
+            "name": "DeepONet ([64, 1024], [1, 128])/forward/TPU/DisablePad",
+            "value": 0.00017355000000000002,
+            "unit": "s"
+          },
+          {
+            "name": "DeepONet ([64, 1024], [1, 128])/backward/TPU/XLA",
+            "value": 0.00034156000000000003,
+            "unit": "s"
+          },
+          {
+            "name": "VGG11 bn=true [224, 224, 3, 4]/backward/TPU/DisableTransposeReshapeAll",
+            "value": 0.00476264,
+            "unit": "s"
+          },
+          {
+            "name": "FNO [64, 64, 1, 4]/backward/TPU/DisableScatterGatherAll",
+            "value": 0.0030034700000000003,
+            "unit": "s"
+          },
+          {
+            "name": "DeepONet ([64, 1024], [1, 128])/backward/TPU/DisableScatterGatherPadAll",
+            "value": 0.00033926000000000003,
+            "unit": "s"
+          },
+          {
+            "name": "VGG11 bn=true [224, 224, 3, 4]/backward/TPU/DisableTransposeReshapeBeforeEnzyme",
+            "value": 0.00476487,
+            "unit": "s"
+          },
+          {
+            "name": "VGG11 bn=true [224, 224, 3, 4]/backward/TPU/DisableTransposeReshapeAfterEnzyme",
+            "value": 0.0047553000000000005,
+            "unit": "s"
+          },
+          {
+            "name": "VGG11 bn=true [224, 224, 3, 4]/backward/TPU/DisableScatterGatherAll",
+            "value": 0.00472868,
+            "unit": "s"
+          },
+          {
+            "name": "FNO [64, 64, 1, 4]/backward/TPU/DisablePadAfterEnzyme",
+            "value": 0.002871419,
+            "unit": "s"
+          },
+          {
+            "name": "VGG11 bn=true [224, 224, 3, 4]/backward/TPU/DisableScatterGatherBeforeEnzyme",
+            "value": 0.00473707,
+            "unit": "s"
+          },
+          {
+            "name": "VGG11 bn=true [224, 224, 3, 4]/backward/TPU/DisableScatterGatherAfterEnzyme",
+            "value": 0.00474049,
+            "unit": "s"
+          },
+          {
+            "name": "VGG11 bn=true [224, 224, 3, 4]/forward/TPU/XLA",
+            "value": 0.00123864,
+            "unit": "s"
+          },
+          {
+            "name": "ViT tiny [256, 256, 3, 4]/forward/TPU/DisableTransposeReshape",
+            "value": 0.00062912,
+            "unit": "s"
+          },
+          {
+            "name": "ViT tiny [256, 256, 3, 4]/forward/TPU/Default",
+            "value": 0.0006259000000000001,
+            "unit": "s"
+          },
+          {
+            "name": "FNO [64, 64, 1, 4]/backward/TPU/DefaultBeforeEnzyme",
+            "value": 0.002984949,
+            "unit": "s"
+          },
+          {
+            "name": "FNO [64, 64, 1, 4]/forward/TPU/Default",
+            "value": 0.00112099,
+            "unit": "s"
+          },
+          {
+            "name": "VGG11 bn=true [224, 224, 3, 4]/backward/TPU/XLA",
+            "value": 0.004648149,
+            "unit": "s"
+          },
+          {
+            "name": "FNO [64, 64, 1, 4]/forward/TPU/XLA",
+            "value": 0.0013865400000000001,
+            "unit": "s"
+          },
+          {
+            "name": "DeepONet ([64, 1024], [1, 128])/forward/TPU/DisableTransposeReshape",
+            "value": 0.00017107,
+            "unit": "s"
+          },
+          {
+            "name": "FNO [64, 64, 1, 4]/backward/TPU/DisablePadAll",
+            "value": 0.003001899,
+            "unit": "s"
+          },
+          {
+            "name": "DeepONet ([64, 1024], [1, 128])/forward/TPU/XLA",
+            "value": 0.00024752000000000004,
+            "unit": "s"
+          },
+          {
+            "name": "FNO [64, 64, 1, 4]/forward/TPU/DisableScatterGatherPad",
+            "value": 0.00110958,
+            "unit": "s"
+          },
+          {
+            "name": "VGG11 bn=true [224, 224, 3, 4]/backward/TPU/DisablePadAfterEnzyme",
+            "value": 0.00476372,
+            "unit": "s"
+          },
+          {
+            "name": "DeepONet ([64, 1024], [1, 128])/backward/TPU/DefaultAfterEnzyme",
+            "value": 0.00034843,
+            "unit": "s"
+          },
+          {
+            "name": "VGG11 bn=true [224, 224, 3, 4]/backward/TPU/DisablePadAll",
+            "value": 0.00473667,
+            "unit": "s"
+          },
+          {
+            "name": "VGG11 bn=true [224, 224, 3, 4]/backward/TPU/DefaultBeforeEnzyme",
+            "value": 0.00476006,
+            "unit": "s"
+          },
+          {
+            "name": "VGG11 bn=true [224, 224, 3, 4]/forward/TPU/DisableScatterGather",
+            "value": 0.0013067900000000002,
+            "unit": "s"
+          },
+          {
+            "name": "ViT tiny [256, 256, 3, 4]/forward/TPU/DisableScatterGather",
+            "value": 0.00062169,
+            "unit": "s"
+          },
+          {
+            "name": "FNO [64, 64, 1, 4]/backward/TPU/DisableScatterGatherBeforeEnzyme",
+            "value": 0.0030005500000000003,
+            "unit": "s"
+          },
+          {
+            "name": "DeepONet ([64, 1024], [1, 128])/backward/TPU/DisableTransposeReshapeBeforeEnzyme",
+            "value": 0.00034106,
+            "unit": "s"
+          },
+          {
+            "name": "DeepONet ([64, 1024], [1, 128])/backward/TPU/DisableScatterGatherPadAfterEnzyme",
+            "value": 0.00034276,
+            "unit": "s"
+          },
+          {
+            "name": "DeepONet ([64, 1024], [1, 128])/backward/TPU/DisablePadAll",
+            "value": 0.00034153000000000005,
+            "unit": "s"
+          },
+          {
+            "name": "DeepONet ([64, 1024], [1, 128])/backward/TPU/DisableScatterGatherAll",
+            "value": 0.00033508,
+            "unit": "s"
+          },
+          {
+            "name": "FNO [64, 64, 1, 4]/forward/TPU/DisableTransposeReshape",
+            "value": 0.0011423100000000001,
+            "unit": "s"
+          },
+          {
+            "name": "FNO [64, 64, 1, 4]/backward/TPU/DefaultAfterEnzyme",
+            "value": 0.00284991,
+            "unit": "s"
+          },
+          {
+            "name": "FNO [64, 64, 1, 4]/backward/TPU/DisableScatterGatherPadAfterEnzyme",
+            "value": 0.00287387,
+            "unit": "s"
+          },
+          {
+            "name": "VGG11 bn=true [224, 224, 3, 4]/backward/TPU/DisableScatterGatherPadBeforeEnzyme",
+            "value": 0.00475232,
+            "unit": "s"
+          },
+          {
+            "name": "FNO [64, 64, 1, 4]/forward/TPU/DisablePad",
+            "value": 0.0011079800000000002,
+            "unit": "s"
+          },
+          {
+            "name": "FNO [64, 64, 1, 4]/backward/TPU/XLA",
+            "value": 0.0032040790000000003,
+            "unit": "s"
+          },
+          {
+            "name": "DeepONet ([64, 1024], [1, 128])/backward/TPU/DisableTransposeReshapeAll",
+            "value": 0.00034578,
+            "unit": "s"
+          },
+          {
+            "name": "DeepONet ([64, 1024], [1, 128])/backward/TPU/DisablePadAfterEnzyme",
+            "value": 0.00033646,
             "unit": "s"
           }
         ]
