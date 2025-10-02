@@ -62,7 +62,7 @@ function process_probprog_inputs(linear_args, f, args_with_rng, fnwrap, argprefi
 end
 
 """
-    process_probprog_outputs(op, linear_results, result, f, args_with_rng, fnwrap, resprefix, argprefix, start_idx=0)
+    process_probprog_outputs(op, linear_results, result, f, args_with_rng, fnwrap, resprefix, argprefix, start_idx=0, rng_only=false)
 
 This function handles the probprog argument convention where:
 - **Index 1**: RNG state
@@ -78,11 +78,27 @@ When setting results, the function checks:
   Use `start_idx=0`: `linear_results[i]` corresponds to `op.result[i]`
 - `simulate` and `generate` return trace, weight, then outputs:
   Use `start_idx=2`: `linear_results[i]` corresponds to `op.result[i+2]`
+- `mh` and `regenerate` return trace, accepted/weight, rng_state (no model outputs):
+  Use `start_idx=2, rng_only=true`: only process first result (rng_state)
+
+`rng_only`: When true, only process the first result (RNG state), skipping model outputs
 """
 function process_probprog_outputs(
-    op, linear_results, result, f, args_with_rng, fnwrap, resprefix, argprefix, start_idx=0
+    op,
+    linear_results,
+    result,
+    f,
+    args_with_rng,
+    fnwrap,
+    resprefix,
+    argprefix,
+    start_idx=0,
+    rng_only=false,
 )
-    for (i, res) in enumerate(linear_results)
+    num_to_process = rng_only ? 1 : length(linear_results)
+
+    for i in 1:num_to_process
+        res = linear_results[i]
         resv = MLIR.IR.result(op, i + start_idx)
 
         if TracedUtils.has_idx(res, resprefix)

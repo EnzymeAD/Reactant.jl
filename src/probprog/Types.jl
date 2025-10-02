@@ -69,7 +69,7 @@ Base.get(c::Constraint, k::Address, default) = get(c.dict, k, default)
 
 extract_addresses(constraint::Constraint) = Set(keys(constraint))
 
-const Selection = Set{Symbol}
+const Selection = Set{Address}
 
 const _probprog_ref_lock = ReentrantLock()
 const _probprog_refs = IdDict()
@@ -85,4 +85,4 @@ function _keepalive!(tr::Any)
 end
 
 get_choices(trace::ProbProgTrace) = trace.choices
-select(syms::Symbol...) = Set(syms)
+select(addrs::Address...) = Set{Address}([addrs...])
