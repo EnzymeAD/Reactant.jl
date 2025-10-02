@@ -166,6 +166,51 @@ function gpu_error(; result::IR.Type, region::Region, location=Location())
     )
 end
 
+function gpu_kernel_address(; result::IR.Type, fn, location=Location())
+    op_ty_results = IR.Type[result,]
+    operands = Value[]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[namedattribute("fn", fn),]
+
+    return create_operation(
+        "enzymexla.gpu_kernel_address",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+function gpu_occupancy(
+    blockSize::Value,
+    dynamicSMemSize::Value,
+    flags::Value;
+    result::IR.Type,
+    fn,
+    location=Location(),
+)
+    op_ty_results = IR.Type[result,]
+    operands = Value[blockSize, dynamicSMemSize, flags]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[namedattribute("fn", fn),]
+
+    return create_operation(
+        "enzymexla.gpu_occupancy",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
 function gpu_thread(
     threadIndexX::Value,
     threadIndexY::Value,
