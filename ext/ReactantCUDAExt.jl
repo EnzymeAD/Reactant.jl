@@ -1285,7 +1285,7 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
         blk_operands...,
         mlir_args;
         result_0=restys,
-        fn=MLIR.IR.FlatSymbolRefAttribute(sym_name),
+        fn=MLIR.IR.SymbolRefAttribute(sym_name, MLIR.IR.Attribute[]),
         output_operand_aliases=MLIR.IR.Attribute(output_operand_aliases),
         xla_side_effect_free=MLIR.IR.UnitAttribute(),
     )
