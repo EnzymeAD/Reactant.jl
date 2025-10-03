@@ -1,3 +1,5 @@
+using Reactant,Test
+
 @testset "ranges" begin
     i = Reactant.to_rarray(5,track_numbers=true)
     @test Array{Int64}(@jit(1:i)) == collect(1:5)
