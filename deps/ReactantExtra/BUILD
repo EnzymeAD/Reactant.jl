@@ -1,4 +1,4 @@
-load("@llvm-project//mlir:tblgen.bzl", "gentbl_cc_library", "td_library")
+load("@llvm-project//mlir:tblgen.bzl", "gentbl_cc_library")
 load("@local_config_rocm//rocm:build_defs.bzl", "if_rocm")
 load("@local_config_cuda//cuda:build_defs.bzl", "if_cuda")
 load("@xla//tools/toolchains/cross_compile/cc:cc_toolchain_config.bzl", "cc_toolchain_config")
@@ -979,6 +979,9 @@ cc_library(
             "-Wl,-exported_symbol,_ReactantFuncSetArgAttr",
             "-Wl,-exported_symbol,_ReactantHermeticCudaGetVersion",
             "-Wl,-exported_symbol,_ReactantCudaDriverGetVersion",
+            "-Wl,-exported_symbol,_ReactantCudaDeviceGetComputeCapalilityMajor",
+            "-Wl,-exported_symbol,_ReactantCudaDeviceGetComputeCapalilityMinor",
+            "-Wl,-exported_symbol,_ReactantCudaDeviceGetWarpSizeInThreads",
             "-Wl,-exported_symbol,_ReactantLLVMParseCommandLineOptions",
             "-Wl,-exported_symbol,_PjRtDeviceGetLocalDeviceId",
             "-Wl,-exported_symbol,_PjRtDeviceGetGlobalDeviceId",
@@ -1429,6 +1432,24 @@ gentbl_cc_library(
         "@enzyme_ad//src/enzyme_ad/jax:EnzymeXLADialectTdFiles",
         "@llvm-project//mlir:GPUOpsTdFiles",
         "@stablehlo//:stablehlo_ops_td_files",
+    ],
+)
+
+gentbl_cc_library(
+    name = "TritonExtJLIncGen",
+    tbl_outs = [
+        (
+            [
+                "--generator=jl-op-defs",
+                "--disable-module-wrap=0",
+            ],
+            "TritonExt.jl",
+        ),
+    ],
+    tblgen = "//:mlir-jl-tblgen",
+    td_file = "@enzyme_ad//src/enzyme_ad/jax:Dialect/TritonExt/Ops.td",
+    deps = [
+        "@enzyme_ad//src/enzyme_ad/jax:TritonExtDialectTdFiles",
     ],
 )
 
