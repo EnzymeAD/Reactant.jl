@@ -502,8 +502,8 @@ MakeGPUClient(int node_id, int num_nodes, int64_t *allowed_devices,
     return client.release();
   }
 #else
-      *error = "ReactantExtra was not built with GPU support";
-      return nullptr;
+  *error = "ReactantExtra was not built with GPU support";
+  return nullptr;
 #endif
 }
 
@@ -764,8 +764,8 @@ REACTANT_ABI int32_t ReactantCudaDeviceGetWarpSizeInThreads() {
   CUdevice cuDevice;
   ReactantHandleCuResult(cuDeviceGet(&cuDevice, 0));
   int warpSize;
-  ReactantHandleCuResult(cuDeviceGetAttribute(
-      &warpSize, CU_DEVICE_ATTRIBUTE_WARP_SIZE, cuDevice));
+  ReactantHandleCuResult(
+      cuDeviceGetAttribute(&warpSize, CU_DEVICE_ATTRIBUTE_WARP_SIZE, cuDevice));
   return warpSize;
 }
 
