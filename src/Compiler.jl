@@ -1844,12 +1844,14 @@ function compile_mlir!(
                     [
                         "mark-func-memory-effects",
                         opt_passes,
+                        opt_passes_with_triton,
+                        "lower-triton",
                         kern,
                         raise_passes,
                         "enzyme-batch",
                         opt_passes2,
                         enzyme_pass,
-                        opt_passes_with_triton,
+                        opt_passes2,
                         "canonicalize",
                         "remove-unnecessary-enzyme-ops",
                         "enzyme-simplify-math",
@@ -1871,6 +1873,7 @@ function compile_mlir!(
                         "enzyme-simplify-math",
                         legalize_chlo_to_stablehlo...,
                         opt_passes2,
+                        "lower-triton",
                         kern,
                         raise_passes,
                         lower_enzymexla_linalg_pass,
@@ -1880,6 +1883,31 @@ function compile_mlir!(
                 ",",
             ),
             "all",
+        )
+    elseif compile_options.optimization_passes === :no_triton
+        run_pass_pipeline!(
+            mod,
+            join(
+                if compile_options.raise_first
+                    ["mark-func-memory-effects", opt_passes]
+                else
+                    [
+                        "mark-func-memory-effects",
+                        opt_passes,
+                        "enzyme-batch",
+                        opt_passes2,
+                        enzyme_pass,
+                        opt_passes2,
+                        "canonicalize",
+                        "remove-unnecessary-enzyme-ops",
+                        "enzyme-simplify-math",
+                        legalize_chlo_to_stablehlo...,
+                        opt_passes2,
+                    ]
+                end,
+                ',',
+            ),
+            "before_kernel",
         )
     elseif compile_options.optimization_passes === :before_kernel
         run_pass_pipeline!(
@@ -1913,13 +1941,14 @@ function compile_mlir!(
                 if compile_options.raise_first
                     [
                         "mark-func-memory-effects",
-                        opt_passes,
+                        opt_passes_with_triton,
+                        "lower-triton",
                         kern,
                         raise_passes,
                         "enzyme-batch",
                         opt_passes2,
                         enzyme_pass,
-                        opt_passes_with_triton,
+                        opt_passes2,
                         "canonicalize",
                         "remove-unnecessary-enzyme-ops",
                         "enzyme-simplify-math",
@@ -1939,6 +1968,7 @@ function compile_mlir!(
                         "enzyme-simplify-math",
                         legalize_chlo_to_stablehlo...,
                         opt_passes2,
+                        "lower-triton",
                         kern,
                         raise_passes,
                     ]
@@ -1966,6 +1996,7 @@ function compile_mlir!(
                         "enzyme-simplify-math",
                         legalize_chlo_to_stablehlo...,
                         opt_passes2,
+                        "lower-triton",
                         kern,
                     ]
                 end,
@@ -2039,6 +2070,7 @@ function compile_mlir!(
                         "enzyme-simplify-math",
                         legalize_chlo_to_stablehlo...,
                         opt_passes_with_triton,
+                        "lower-triton",
                         kern,
                         raise_passes,
                         lower_enzymexla_linalg_pass,
@@ -2056,7 +2088,8 @@ function compile_mlir!(
                 if compile_options.raise_first
                     [
                         "mark-func-memory-effects",
-                        opt_passes,
+                        opt_passes_with_triton,
+                        "lower-triton",
                         kern,
                         raise_passes,
                         "enzyme-batch",
@@ -2071,9 +2104,10 @@ function compile_mlir!(
                         "mark-func-memory-effects",
                         opt_passes,
                         "enzyme-batch",
-                        opt_passes2,
+                        opt_passes_with_triton,
                         enzyme_pass,
                         "canonicalize,remove-unnecessary-enzyme-ops,enzyme-simplify-math",
+                        "lower-triton",
                         kern,
                         raise_passes,
                         lower_enzymexla_linalg_pass,

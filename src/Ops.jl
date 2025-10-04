@@ -1864,7 +1864,7 @@ function triton_call(
                 output_operand_aliases,
                 MLIR.IR.Attribute(
                     MLIR.API.stablehloOutputOperandAliasGet(
-                        MLIR.IR.context(), 0, C_NULL, Int64(i - 1), 0, C_NULL
+                        MLIR.IR.context(), 1, Int64[i - 1], Int64(i - 1), 0, C_NULL
                     ),
                 ),
             )
