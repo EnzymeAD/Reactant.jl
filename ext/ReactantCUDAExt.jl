@@ -1460,14 +1460,6 @@ function Reactant.make_tracer(
     return newa
 end
 
-function __init__()
-    if CUDA.functional() && !Reactant.precompiling()
-        cap = CUDA.capability(CUDA.device())
-        Reactant.Compiler.cubinChip[] = "sm_$(cap.major)$(cap.minor)"
-    end
-    return nothing
-end
-
 # In Julia v1.11.3 precompiling this module caches bad code:
 # <https://github.com/EnzymeAD/Reactant.jl/issues/614>.
 @static if !Sys.isapple()
