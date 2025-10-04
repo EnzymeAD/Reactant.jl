@@ -1429,6 +1429,8 @@ const cubinChip = Ref{String}("sm_60")
 const cubinFormat = Ref{String}("bin")
 const cuindexBitWidth = Ref{Int}(32)
 const cuOptLevel = Ref{Int}(2)
+const cuWarpSize = Ref{Int}(32)
+
 # Wgatever the relevant highest version from our LLVM is within NVPTX.td
 # Or more specifically looking at clang/lib/Driver/ToolChains/Cuda.cpp:684
 #  We see relevant ptx version is CUDA 12.6 -> 85
