@@ -177,13 +177,13 @@ function Base._reshape(parent::TracedUnitRange, dims::Dims)
     return Base.__reshape((parent, IndexStyle(parent)), dims)
 end
 
-function (C::Base.Colon)(start::TracedRNumber{T},stop::TracedRNumber{T}) where T
-    TracedUnitRange(start,stop)
+function (C::Base.Colon)(start::TracedRNumber{T}, stop::TracedRNumber{T}) where {T}
+    return TracedUnitRange(start, stop)
 end
-function (C::Base.Colon)(start::TracedRNumber{T},stop::T) where T
-    C(start,TracedRNumber{T}(stop))
+function (C::Base.Colon)(start::TracedRNumber{T}, stop::T) where {T}
+    return C(start, TracedRNumber{T}(stop))
 end
-function (C::Base.Colon)(start::T,stop::TracedRNumber{T}) where T
-    C(TracedRNumber{T}(start),stop)
+function (C::Base.Colon)(start::T, stop::TracedRNumber{T}) where {T}
+    return C(TracedRNumber{T}(start), stop)
 end
 end
