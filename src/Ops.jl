@@ -1889,12 +1889,11 @@ function triton_call(
     array_results = ()
     for i in 1:MLIR.IR.nresults(results)
         arg = args[output_to_arg[i]]
-        array_results = (
-            array_results...,
-            Reactant.TracedRArray{unwrapped_eltype(arg),ndims(arg)}(
-                (), MLIR.IR.result(results, i), size(arg)
-            ),
+        res = Reactant.TracedRArray{unwrapped_eltype(arg),ndims(arg)}(
+            (), MLIR.IR.result(results, i), size(arg)
         )
+        copyto!(arg, res)
+        array_results = (array_results..., res)
     end
     length(array_results) == 1 && return array_results[1]
     return array_results
