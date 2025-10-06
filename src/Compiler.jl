@@ -1109,7 +1109,8 @@ function optimization_passes(
                 "reshape_dus",
                 "dot_reshape_pad<1>",
                 "pad_dot_general<1>(0)",
-                "pad_dot_general<1>(1)",
+                # XXX: see https://github.com/EnzymeAD/Enzyme-JAX/issues/1445
+                # "pad_dot_general<1>(1)",
                 "reshape_pad",
                 "reshape_wrap",
                 "reshape_rotate",
@@ -3521,6 +3522,9 @@ function compile_xla(
         else
             module_string = ""
         end
+
+        # Drop some of our attributes
+        run_pass_pipeline!(mod, "drop-unsupported-attributes", "drop_enzymexla_attributes")
 
         if before_xla_optimizations
             exec = nothing
