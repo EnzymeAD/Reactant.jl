@@ -906,6 +906,8 @@ function optimization_passes(
         "trivial_reduce_window_to_reduce_op",
         "dot_general_add_distributive_simplify",
         "dot_general_subtract_distributive_simplify",
+        "dus_to_dynamic_pad",
+        "dynamic_pad_to_pad",
     ]
 
     if !compile_options.disable_auto_batching_passes
@@ -922,6 +924,7 @@ function optimization_passes(
                 "concat_insert_dim_reduce",
                 "concat_insert_dim_sort",
                 "concat_insert_dim_reduce_window",
+                "concat_insert_dim_elementwise",
                 "dot_general_slice_to_batch",
                 "gather_slice_to_batch",
                 "iota_slice_to_batch",
@@ -1071,6 +1074,7 @@ function optimization_passes(
             "const_prop_through_barrier<16>",
             "concat_const_prop<1>($max_constant_threshold)",
             "dynamic_update_slice_const_prop($max_constant_threshold)",
+            "clamp_const_prop",
         ],
     )
 
@@ -1105,7 +1109,8 @@ function optimization_passes(
                 "reshape_dus",
                 "dot_reshape_pad<1>",
                 "pad_dot_general<1>(0)",
-                "pad_dot_general<1>(1)",
+                # XXX: see https://github.com/EnzymeAD/Enzyme-JAX/issues/1445
+                # "pad_dot_general<1>(1)",
                 "reshape_pad",
                 "reshape_wrap",
                 "reshape_rotate",
@@ -1425,6 +1430,8 @@ const cubinChip = Ref{String}("sm_60")
 const cubinFormat = Ref{String}("bin")
 const cuindexBitWidth = Ref{Int}(32)
 const cuOptLevel = Ref{Int}(2)
+const cuWarpSize = Ref{Int}(32)
+
 # Wgatever the relevant highest version from our LLVM is within NVPTX.td
 # Or more specifically looking at clang/lib/Driver/ToolChains/Cuda.cpp:684
 #  We see relevant ptx version is CUDA 12.6 -> 85
@@ -3515,6 +3522,9 @@ function compile_xla(
         else
             module_string = ""
         end
+
+        # Drop some of our attributes
+        run_pass_pipeline!(mod, "drop-unsupported-attributes", "drop_enzymexla_attributes")
 
         if before_xla_optimizations
             exec = nothing
