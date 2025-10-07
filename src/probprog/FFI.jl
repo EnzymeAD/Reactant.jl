@@ -266,6 +266,129 @@ function getSubconstraint(
     return nothing
 end
 
+function getSampleFromTrace(
+    trace_ptr_ptr::Ptr{Ptr{Any}},
+    symbol_ptr_ptr::Ptr{Ptr{Any}},
+    sample_ptr_array::Ptr{Ptr{Any}},
+    num_samples_ptr::Ptr{UInt64},
+    ndims_array::Ptr{UInt64},
+    shape_ptr_array::Ptr{Ptr{UInt64}},
+    width_array::Ptr{UInt64},
+)
+    trace = unsafe_pointer_to_objref(unsafe_load(trace_ptr_ptr))::ProbProgTrace
+    symbol = unsafe_pointer_to_objref(unsafe_load(symbol_ptr_ptr))::Symbol
+    num_samples = unsafe_load(num_samples_ptr)
+    ndims_array = unsafe_wrap(Array, ndims_array, num_samples)
+    width_array = unsafe_wrap(Array, width_array, num_samples)
+    shape_ptr_array = unsafe_wrap(Array, shape_ptr_array, num_samples)
+    sample_ptr_array = unsafe_wrap(Array, sample_ptr_array, num_samples)
+
+    tostore = get(trace.choices, symbol, nothing)
+
+    if tostore === nothing
+        @ccall printf(
+            "No sample found in trace for symbol: %s\n"::Cstring, string(symbol)::Cstring
+        )::Cvoid
+        return nothing
+    end
+
+    for i in 1:num_samples
+        ndims = ndims_array[i]
+        width = width_array[i]
+        shape_ptr = shape_ptr_array[i]
+        sample_ptr = sample_ptr_array[i]
+
+        julia_type = if width == 32
+            Float32
+        elseif width == 64
+            Float64
+        elseif width == 1
+            Bool
+        else
+            nothing
+        end
+
+        if julia_type === nothing
+            @ccall printf(
+                "Unsupported datatype width: %zd\n"::Cstring, width::Csize_t
+            )::Cvoid
+            return nothing
+        end
+
+        if julia_type != eltype(tostore[i])
+            @ccall printf(
+                "Type mismatch in trace sample: %s != %s\n"::Cstring,
+                string(julia_type)::Cstring,
+                string(eltype(tostore[i]))::Cstring,
+            )::Cvoid
+            return nothing
+        end
+
+        if ndims == 0
+            unsafe_store!(Ptr{julia_type}(sample_ptr), tostore[i])
+        else
+            shape = unsafe_wrap(Array, shape_ptr, ndims)
+            dest = unsafe_wrap(Array, Ptr{julia_type}(sample_ptr), Tuple(shape))
+
+            if size(dest) != size(tostore[i])
+                if length(size(dest)) != length(size(tostore[i]))
+                    @ccall printf(
+                        "Shape size mismatch in trace sample: %zd != %zd\n"::Cstring,
+                        length(size(dest))::Csize_t,
+                        length(size(tostore[i]))::Csize_t,
+                    )::Cvoid
+                    return nothing
+                end
+                for j in 1:length(size(dest))
+                    d = size(dest)[j]
+                    t = size(tostore[i])[j]
+                    if d != t
+                        @ccall printf(
+                            "Shape mismatch in `%zd`th dimension of trace sample: %zd != %zd\n"::Cstring,
+                            j::Csize_t,
+                            size(dest)[j]::Csize_t,
+                            size(tostore[i])[j]::Csize_t,
+                        )::Cvoid
+                        return nothing
+                    end
+                end
+            end
+
+            dest .= tostore[i]
+        end
+    end
+
+    return nothing
+end
+
+function getSubtrace(
+    trace_ptr_ptr::Ptr{Ptr{Any}},
+    symbol_ptr_ptr::Ptr{Ptr{Any}},
+    subtrace_ptr_ptr::Ptr{Ptr{Any}},
+)
+    trace = unsafe_pointer_to_objref(unsafe_load(trace_ptr_ptr))::ProbProgTrace
+    symbol = unsafe_pointer_to_objref(unsafe_load(symbol_ptr_ptr))::Symbol
+
+    subtrace = get(trace.subtraces, symbol, nothing)
+
+    if subtrace === nothing
+        @ccall printf(
+            "No subtrace found for symbol: %s\n"::Cstring, string(symbol)::Cstring
+        )::Cvoid
+        return nothing
+    end
+
+    _keepalive!(subtrace)
+    unsafe_store!(subtrace_ptr_ptr, pointer_from_objref(subtrace))
+    return nothing
+end
+
+function getWeightFromTrace(trace_ptr_ptr::Ptr{Ptr{Any}}, weight_ptr::Ptr{Any})
+    trace = unsafe_pointer_to_objref(unsafe_load(trace_ptr_ptr))::ProbProgTrace
+    unsafe_store!(Ptr{Float64}(weight_ptr), trace.weight)
+    return nothing
+end
+
 function __init__()
     init_trace_ptr = @cfunction(initTrace, Cvoid, (Ptr{Ptr{Any}},))
     @ccall MLIR.API.mlir_c.EnzymeJaXMapSymbol(
@@ -340,6 +463,36 @@ function __init__()
     )
     @ccall MLIR.API.mlir_c.EnzymeJaXMapSymbol(
         :enzyme_probprog_get_subconstraint::Cstring, get_subconstraint_ptr::Ptr{Cvoid}
+    )::Cvoid
+
+    get_sample_from_trace_ptr = @cfunction(
+        getSampleFromTrace,
+        Cvoid,
+        (
+            Ptr{Ptr{Any}},
+            Ptr{Ptr{Any}},
+            Ptr{Ptr{Any}},
+            Ptr{UInt64},
+            Ptr{UInt64},
+            Ptr{Ptr{UInt64}},
+            Ptr{UInt64},
+        )
+    )
+    @ccall MLIR.API.mlir_c.EnzymeJaXMapSymbol(
+        :enzyme_probprog_get_sample_from_trace::Cstring,
+        get_sample_from_trace_ptr::Ptr{Cvoid},
+    )::Cvoid
+
+    get_subtrace_ptr = @cfunction(
+        getSubtrace, Cvoid, (Ptr{Ptr{Any}}, Ptr{Ptr{Any}}, Ptr{Ptr{Any}})
+    )
+    @ccall MLIR.API.mlir_c.EnzymeJaXMapSymbol(
+        :enzyme_probprog_get_subtrace::Cstring, get_subtrace_ptr::Ptr{Cvoid}
+    )::Cvoid
+
+    get_weight_from_trace_ptr = @cfunction(getWeightFromTrace, Cvoid, (Ptr{Ptr{Any}}, Ptr{Any}))
+    @ccall MLIR.API.mlir_c.EnzymeJaXMapSymbol(
+        :enzyme_probprog_get_weight_from_trace::Cstring, get_weight_from_trace_ptr::Ptr{Cvoid}
     )::Cvoid
 
     return nothing
