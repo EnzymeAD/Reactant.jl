@@ -1,4 +1,4 @@
-import Pkg
+using Pkg: Pkg
 Pkg.activate(@__DIR__)
 Pkg.instantiate()
 
