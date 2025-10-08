@@ -238,9 +238,8 @@ function NNlib.unfold!(
     K = NNlib.kernel_size(cdims)
     C_out = prod(K) * C_in
 
-    I_flat = Matrix{yT}(LinearAlgebra.I, C_out, C_out)
-    weight = Reactant.promote_to(
-        TracedRArray{yT,length(K) + 2}, reshape(I_flat', (K..., C_in, C_out))
+    weight = reshape(
+        Reactant.promote_to(TracedRArray{yT,2}, LinearAlgebra.I(C_out)), (K..., C_in, C_out)
     )
 
     spatial_out = NNlib.output_size(cdims)
