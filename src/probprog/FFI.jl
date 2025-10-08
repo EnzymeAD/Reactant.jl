@@ -490,9 +490,12 @@ function __init__()
         :enzyme_probprog_get_subtrace::Cstring, get_subtrace_ptr::Ptr{Cvoid}
     )::Cvoid
 
-    get_weight_from_trace_ptr = @cfunction(getWeightFromTrace, Cvoid, (Ptr{Ptr{Any}}, Ptr{Any}))
+    get_weight_from_trace_ptr = @cfunction(
+        getWeightFromTrace, Cvoid, (Ptr{Ptr{Any}}, Ptr{Any})
+    )
     @ccall MLIR.API.mlir_c.EnzymeJaXMapSymbol(
-        :enzyme_probprog_get_weight_from_trace::Cstring, get_weight_from_trace_ptr::Ptr{Cvoid}
+        :enzyme_probprog_get_weight_from_trace::Cstring,
+        get_weight_from_trace_ptr::Ptr{Cvoid},
     )::Cvoid
 
     return nothing
