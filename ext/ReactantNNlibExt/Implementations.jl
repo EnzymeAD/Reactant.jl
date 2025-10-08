@@ -230,6 +230,20 @@ end
 
 # Fold / Unfold
 function NNlib.unfold!(
+    y::AnyTracedRArray{yT,3}, x::AbstractArray{xT,5}, cdims::DenseConvDims
+) where {yT,xT}
+    unfold_impl!(y, x, cdims)
+    return y
+end
+
+function NNlib.unfold!(
+    y::AnyTracedRArray{yT,3}, x::AbstractArray{xT,N}, cdims::DenseConvDims
+) where {yT,xT,N}
+    unfold_impl!(y, x, cdims)
+    return y
+end
+
+function unfold_impl!(
     y::AnyTracedRArray{yT,3}, x::AbstractArray{xT,N}, cdims::DenseConvDims
 ) where {yT,xT,N}
     @assert Reactant.unwrapped_eltype(yT) <: AbstractFloat "XLA doesn't support non-float \
@@ -256,6 +270,20 @@ function NNlib.unfold!(
 end
 
 function NNlib.fold!(
+    x::AnyTracedRArray{T,5}, y::AnyTracedRArray{T2,3}, cdims::DenseConvDims;
+) where {T,T2}
+    fold_impl!(x, y, cdims)
+    return x
+end
+
+function NNlib.fold!(
+    x::AnyTracedRArray{T,N}, y::AnyTracedRArray{T2,3}, cdims::DenseConvDims;
+) where {T,T2,N}
+    fold_impl!(x, y, cdims)
+    return x
+end
+
+function fold_impl!(
     x::AnyTracedRArray{T,N}, y::AnyTracedRArray{T2,3}, cdims::DenseConvDims;
 ) where {T,T2,N}
     @assert Reactant.unwrapped_eltype(T) <: AbstractFloat "XLA doesn't support non-float \
