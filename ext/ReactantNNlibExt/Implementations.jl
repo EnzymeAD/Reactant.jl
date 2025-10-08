@@ -225,6 +225,34 @@ function overloaded_∇conv_data!(
     return dx
 end
 
+# Fold / Unfold
+function NNlib.unfold!(
+    y::AnyTracedRArray{yT,3}, x::AbstractArray{xT,N}, cdims::DenseConvDims
+) where {yT,xT,N}
+    @assert Reactant.unwrapped_eltype(yT) <: AbstractFloat "XLA doesn't support non-float \
+                                                            unfold (got $(yT))."
+
+    x = yT.(materialize_traced_array(x))
+
+    C_in = NNlib.channels_in(cdims)
+    K = NNlib.kernel_size(cdims)
+    C_out = prod(K) * C_in
+
+    I_flat = Matrix{yT}(LinearAlgebra.I, C_out, C_out)
+    weight = Reactant.promote_to(
+        TracedRArray{yT,length(K) + 2}, reshape(I_flat', (K..., C_in, C_out))
+    )
+
+    spatial_out = NNlib.output_size(cdims)
+    conv_out_size = (spatial_out..., C_out, size(x, N))
+    y_temp = similar(y, conv_out_size)
+    overloaded_conv!(y_temp, x, weight, cdims)
+    result = reshape(y_temp, prod(spatial_out), C_out, size(x, N))
+
+    set_mlir_data!(y, materialize_traced_array(result).mlir_data)
+    return y
+end
+
 # Pooling
 function overloaded_maxpool!(
     y::AnyTracedRArray{T,N}, x::AnyTracedRArray{T2,N}, pdims::NNlib.PoolDims;
