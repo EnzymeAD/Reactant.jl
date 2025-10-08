@@ -29,6 +29,7 @@ const REACTANT_TEST_GROUP = lowercase(get(ENV, "REACTANT_TEST_GROUP", "all"))
         @safetestset "Sorting" include("sorting.jl")
         @safetestset "Shortcuts to MLIR ops" include("ops.jl")
         @safetestset "Indexing" include("indexing.jl")
+        @safetestset "Ranges" include("ranges.jl")
         if !Sys.isapple()
             @safetestset "Custom Number Types" include("custom_number_types.jl")
         end

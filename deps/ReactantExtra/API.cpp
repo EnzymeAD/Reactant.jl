@@ -502,8 +502,8 @@ MakeGPUClient(int node_id, int num_nodes, int64_t *allowed_devices,
     return client.release();
   }
 #else
-      *error = "ReactantExtra was not built with GPU support";
-      return nullptr;
+  *error = "ReactantExtra was not built with GPU support";
+  return nullptr;
 #endif
 }
 
@@ -731,16 +731,56 @@ std::vector<int64_t> row_major(int64_t dim) {
 static void noop() {}
 
 #ifdef REACTANT_CUDA
+
 #include "third_party/gpus/cuda/include/cuda.h"
+
 REACTANT_ABI int32_t ReactantCudaDriverGetVersion() {
   int32_t data;
   ReactantHandleCuResult(cuDriverGetVersion(&data));
   return data;
 }
+
 REACTANT_ABI int32_t ReactantHermeticCudaGetVersion() { return CUDA_VERSION; }
+
+REACTANT_ABI int32_t ReactantCudaDeviceGetComputeCapalilityMajor() {
+  CUdevice cuDevice;
+  ReactantHandleCuResult(cuDeviceGet(&cuDevice, 0));
+  int major;
+  ReactantHandleCuResult(cuDeviceGetAttribute(
+      &major, CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MAJOR, cuDevice));
+  return major;
+}
+
+REACTANT_ABI int32_t ReactantCudaDeviceGetComputeCapalilityMinor() {
+  CUdevice cuDevice;
+  ReactantHandleCuResult(cuDeviceGet(&cuDevice, 0));
+  int minor;
+  ReactantHandleCuResult(cuDeviceGetAttribute(
+      &minor, CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MINOR, cuDevice));
+  return minor;
+}
+
+REACTANT_ABI int32_t ReactantCudaDeviceGetWarpSizeInThreads() {
+  CUdevice cuDevice;
+  ReactantHandleCuResult(cuDeviceGet(&cuDevice, 0));
+  int warpSize;
+  ReactantHandleCuResult(
+      cuDeviceGetAttribute(&warpSize, CU_DEVICE_ATTRIBUTE_WARP_SIZE, cuDevice));
+  return warpSize;
+}
+
 #else
+
 REACTANT_ABI int32_t ReactantCudaDriverGetVersion() { return 0; }
+
 REACTANT_ABI int32_t ReactantHermeticCudaGetVersion() { return 0; }
+
+REACTANT_ABI int32_t ReactantCudaDeviceGetComputeCapalilityMajor() { return 0; }
+
+REACTANT_ABI int32_t ReactantCudaDeviceGetComputeCapalilityMinor() { return 0; }
+
+REACTANT_ABI int32_t ReactantCudaDeviceGetWarpSizeInThreads() { return 0; }
+
 #endif
 
 REACTANT_ABI void *UnsafeBufferPointer(PjRtBuffer *buffer) {

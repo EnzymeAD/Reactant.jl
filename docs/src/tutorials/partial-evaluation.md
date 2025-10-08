@@ -57,7 +57,7 @@ The StableHLO IR code generated here is:
 # output
 
 module @reactant_add attributes {mhlo.num_partitions = 1 : i64, mhlo.num_replicas = 1 : i64} {
-  func.func @main(%arg0: tensor<i64>, %arg1: tensor<i64>) -> tensor<i64> attributes {enzymexla.memory_effects = []} {
+  func.func @main(%arg0: tensor<i64> {enzymexla.memory_effects = []}, %arg1: tensor<i64> {enzymexla.memory_effects = []}) -> tensor<i64> attributes {enzymexla.memory_effects = []} {
     %0 = stablehlo.add %arg0, %arg1 : tensor<i64>
     return %0 : tensor<i64>
   }
@@ -101,7 +101,7 @@ variable input `%arg0`:
 # output
 
 module @reactant_add attributes {mhlo.num_partitions = 1 : i64, mhlo.num_replicas = 1 : i64} {
-  func.func @main(%arg0: tensor<i64>) -> tensor<i64> attributes {enzymexla.memory_effects = []} {
+  func.func @main(%arg0: tensor<i64> {enzymexla.memory_effects = []}) -> tensor<i64> attributes {enzymexla.memory_effects = []} {
     %c = stablehlo.constant dense<4> : tensor<i64>
     %0 = stablehlo.add %arg0, %c : tensor<i64>
     return %0 : tensor<i64>
