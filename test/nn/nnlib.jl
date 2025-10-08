@@ -793,3 +793,5 @@ end
     hlo = repr(@code_hlo(NNlib.gather(x_ra, idxs_ra)))
     @test !contains(hlo, "i64>")
 end
+
+@testset "unfold/fold" begin end
