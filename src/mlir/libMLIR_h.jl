@@ -11479,4 +11479,32 @@ function mlirGetDialectHandle__mosaic_gpu__()
     @ccall mlir_c.mlirGetDialectHandle__mosaic_gpu__()::MlirDialectHandle
 end
 
+function enzymexlaLapackLayoutAttrGet(ctx, col_major)
+    @ccall mlir_c.enzymexlaLapackLayoutAttrGet(
+        ctx::MlirContext, col_major::UInt8
+    )::MlirAttribute
+end
+
+function enzymexlaLapackTransposeAttrGet(ctx, mode)
+    @ccall mlir_c.enzymexlaLapackTransposeAttrGet(
+        ctx::MlirContext, mode::Int32
+    )::MlirAttribute
+end
+
+function enzymexlaLapackSideAttrGet(ctx, left_side)
+    @ccall mlir_c.enzymexlaLapackSideAttrGet(
+        ctx::MlirContext, left_side::UInt8
+    )::MlirAttribute
+end
+
+function enzymexlaQRAlgorithmAttrGet(ctx, mode)
+    @ccall mlir_c.enzymexlaQRAlgorithmAttrGet(ctx::MlirContext, mode::Int32)::MlirAttribute
+end
+
+function enzymexlaGeluApproximationAttrGet(ctx, mode)
+    @ccall mlir_c.enzymexlaGeluApproximationAttrGet(
+        ctx::MlirContext, mode::Int32
+    )::MlirAttribute
+end
+
 const MLIR_CAPI_DWARF_ADDRESS_SPACE_NULL = -1
