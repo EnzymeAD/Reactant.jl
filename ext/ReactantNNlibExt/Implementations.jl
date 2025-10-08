@@ -135,7 +135,7 @@ function overloaded_∇conv_filter!(
 
     if !NNlib.flipkernel(cdims)
         set_mlir_data!(
-            dw, get_mlir_data(@opcall(reverse(dw; dimensions=output_spatial_dims)))
+            dw, get_mlir_data(@opcall(reverse(dw; dimensions=collect(Int64, 1:(N - 2)))))
         )
     end
 

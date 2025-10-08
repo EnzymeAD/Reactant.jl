@@ -1,5 +1,5 @@
 [deps]
-python = "<= 3.13"
+python = "<=3.13,>=3.9,<4"
 
 [pip.deps]
 jax = ">= 0.6"

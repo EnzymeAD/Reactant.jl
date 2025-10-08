@@ -818,8 +818,8 @@ end
         y_ra = @jit NNlib.unfold(x_ra, cdims)
         z_ra = @jit NNlib.fold(y_ra, size(x_ra), cdims)
 
-        @test y ≈ y_ra atol=1e-5 rtol=1e-5
-        @test z ≈ z_ra atol=1e-5 rtol=1e-5
+        @test y ≈ y_ra atol = 1e-5 rtol = 1e-5
+        @test z ≈ z_ra atol = 1e-5 rtol = 1e-5
 
         # introduce stride
         cdims = DenseConvDims(x, w; padding=1, stride=2)
@@ -829,7 +829,7 @@ end
         y_ra = @jit NNlib.unfold(x_ra, cdims)
         z_ra = @jit NNlib.fold(y_ra, size(x_ra), cdims)
 
-        @test y ≈ y_ra atol=1e-5 rtol=1e-5
-        @test z ≈ z_ra atol=1e-5 rtol=1e-5
+        @test y ≈ y_ra atol = 1e-5 rtol = 1e-5
+        @test z ≈ z_ra atol = 1e-5 rtol = 1e-5
     end
 end
