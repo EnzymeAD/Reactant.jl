@@ -110,6 +110,7 @@ function overloaded_∇conv_filter!(
             end for i in 1:num_spatial_dims
         ),
     )
+    padding = reshape(padding, 2, :)
 
     result = @opcall convolution(
         collect(Int64, size(dw)),
@@ -160,6 +161,7 @@ function overloaded_∇conv_data!(
     stride = NNlib.stride(cdims)
     dilation = NNlib.dilation(cdims)
     feature_group_count = NNlib.groupcount(cdims)
+    kernel_spatial_dims = collect(Int64, 1:(N - 2))
 
     # jax does
     # (cout, cin, h, w) -> (group, cout ÷ group, cin , h, w) -> (cout ÷ group, group, cin, h, w) -> (cout, cin * group, h, w)
@@ -193,9 +195,10 @@ function overloaded_∇conv_data!(
                 pad_after = lhs_shape[i] + rhs_shape[i] - 1 - out_shape[i] - pad_before
 
                 [pad_before, pad_after]
-            end for i in input_spatial_dims
+            end for i in 1:(N - 2)
         ),
     )
+    padding = reshape(padding, 2, :)
 
     if NNlib.flipkernel(cdims)
         w = @opcall reverse(w; dimensions=kernel_spatial_dims)
@@ -210,7 +213,7 @@ function overloaded_∇conv_data!(
         input_spatial_dims=collect(Int64, 1:(N - 2)),
         kernel_input_dim=N,
         kernel_output_dim=N - 1,
-        kernel_spatial_dims=collect(Int64, 1:(N - 2)),
+        kernel_spatial_dims,
         output_batch_dim=N,
         output_feature_dim=N - 1,
         output_spatial_dims=collect(Int64, 1:(N - 2)),
@@ -250,6 +253,28 @@ function NNlib.unfold!(
 
     set_mlir_data!(y, materialize_traced_array(result).mlir_data)
     return y
+end
+
+function NNlib.fold!(
+    x::AnyTracedRArray{T,N}, y::AnyTracedRArray{T2,3}, cdims::DenseConvDims;
+) where {T,T2,N}
+    @assert Reactant.unwrapped_eltype(T) <: AbstractFloat "XLA doesn't support non-float \
+                                                            fold (got $(T))."
+    y = T.(materialize_traced_array(y))
+
+    C_in = NNlib.channels_in(cdims)
+    K = NNlib.kernel_size(cdims)
+    C_out = prod(K) * C_in
+
+    weight = reshape(
+        Reactant.promote_to(TracedRArray{T,2}, LinearAlgebra.I(C_out)), (K..., C_in, C_out)
+    )
+
+    spatial_out = NNlib.output_size(cdims)
+
+    dy = materialize_traced_array(reshape(y, (spatial_out..., C_out, size(y, 3))))
+    overloaded_∇conv_data!(x, dy, weight, cdims)
+    return x
 end
 
 # Pooling
