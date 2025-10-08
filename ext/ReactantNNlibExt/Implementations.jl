@@ -45,74 +45,33 @@ function overloaded_conv!(
 ) where {T,T2,T3,N}
     # StableHLO expects matching element types
     x = T.(materialize_traced_array(x))
-    W = T.(materialize_traced_array(W))
+    weight = T.(materialize_traced_array(W))
 
-    padding = NNlib.padding(cdims)
-    stride = NNlib.stride(cdims)
-    dilation = NNlib.dilation(cdims)
-    flipkernel = NNlib.flipkernel(cdims)
-    feature_group_count = NNlib.groupcount(cdims)
-
-    input_rank = ndims(x)
-
-    num_spatial_dims = input_rank - 2
-
-    input_spatial_dims = 1:num_spatial_dims
-    input_feature_dim = N - 1
-    input_batch_dim = N
-
-    kernel_spatial_dims = input_spatial_dims
-    kernel_input_dim = N - 1
-    kernel_output_dim = N
-
-    output_batch_dim = input_batch_dim
-    output_feature_dim = input_feature_dim
-    output_spatial_dims = input_spatial_dims
-
-    #! format: off
-    dimension_numbers = MLIR.API.stablehloConvDimensionNumbersGet(
-        MLIR.IR.context(),
-        Int64(input_batch_dim - 1),
-        Int64(input_feature_dim - 1),
-        length(input_spatial_dims), Int64[i - 1 for i in input_spatial_dims],
-        Int64(kernel_input_dim - 1),
-        Int64(kernel_output_dim - 1),
-        length(kernel_spatial_dims), Int64[i - 1 for i in kernel_spatial_dims],
-        Int64(output_batch_dim - 1),
-        Int64(output_feature_dim - 1),
-        length(output_spatial_dims), Int64[i - 1 for i in output_spatial_dims],
-    )
-    #! format: on
-
-    padding = Reactant.MLIR.IR.DenseElementsAttribute(
-        reshape(collect(padding), (2, num_spatial_dims))'
-    )
-    result_type = Reactant.MLIR.IR.TensorType(
-        collect(Int, size(y)), Reactant.MLIR.IR.Type(T)
-    )
-
-    weight = W
-    if !flipkernel
-        weight = @opcall reverse(weight; dimensions=kernel_spatial_dims)
+    if !NNlib.flipkernel(cdims)
+        weight = @opcall reverse(weight; dimensions=collect(Int64, 1:(N - 2)))
     end
 
-    conv = Reactant.MLIR.Dialects.stablehlo.convolution(
-        get_mlir_data(x),
-        get_mlir_data(weight);
-        result_0=result_type,
-        window_strides=collect(stride),
-        padding,
-        dimension_numbers,
-        lhs_dilation=1,
-        rhs_dilation=collect(dilation),
-        feature_group_count,
+    result = @opcall convolution(
+        collect(Int64, size(y)),
+        x,
+        weight;
+        window_strides=collect(Int64, NNlib.stride(cdims)),
+        input_batch_dim=N,
+        input_feature_dim=N - 1,
+        input_spatial_dims=collect(Int64, 1:(N - 2)),
+        kernel_input_dim=N - 1,
+        kernel_output_dim=N,
+        kernel_spatial_dims=collect(Int64, 1:(N - 2)),
+        output_batch_dim=N,
+        output_feature_dim=N - 1,
+        output_spatial_dims=collect(Int64, 1:(N - 2)),
+        padding=reshape(collect(Int64, NNlib.padding(cdims)), 2, :),
+        rhs_dilation=collect(Int64, NNlib.dilation(cdims)),
+        feature_group_count=NNlib.groupcount(cdims),
         batch_group_count=1,
-        precision_config=MLIR.IR.Attribute([
-            MLIR.IR.Attribute(Reactant.CONVOLUTION_PRECISION[]),
-            MLIR.IR.Attribute(Reactant.CONVOLUTION_PRECISION[]),
-        ]),
     )
-    set_mlir_data!(y, Reactant.MLIR.IR.result(conv))
+
+    set_mlir_data!(y, result.mlir_data)
     return y
 end
 
@@ -134,84 +93,44 @@ function overloaded_∇conv_filter!(
     dy = T.(materialize_traced_array(dy))
 
     num_spatial_dims = N - 2
-    input_batch_dim = N - 1
-    input_feature_dim = N
-
-    kernel_input_dim = N
-    kernel_output_dim = N - 1
-
-    output_batch_dim = N - 1
-    output_feature_dim = N
-
-    output_spatial_dims = kernel_spatial_dims = input_spatial_dims = 1:num_spatial_dims
 
     padding = reshape(collect(NNlib.padding(cdims)), (2, num_spatial_dims))
-    stride = NNlib.stride(cdims)
-    dilation = NNlib.dilation(cdims)
-    feature_group_count = NNlib.groupcount(cdims)
 
-    padding =
-        let lhs_shape = first(size(x), num_spatial_dims),
-            rhs_shape = dilate_shape.(first(size(dw), num_spatial_dims), dilation),
-            out_shape = dilate_shape.(first(size(dy), num_spatial_dims), stride),
+    lhs_shape = size(x)[1:num_spatial_dims]
+    rhs_shape = dilate_shape.(size(dw)[1:num_spatial_dims], NNlib.dilation(cdims))
+    out_shape = dilate_shape.(size(dy)[1:num_spatial_dims], NNlib.stride(cdims))
 
-            padding = reduce(
-                hcat,
-                (
-                    let pad_before = padding[1, i],
-                        pad_after = (
-                            out_shape[i] - lhs_shape[i] + rhs_shape[i] - pad_before - 1
-                        )
+    padding = reduce(
+        hcat,
+        (
+            let pad_before = padding[1, i],
+                pad_after = (out_shape[i] - lhs_shape[i] + rhs_shape[i] - pad_before - 1)
 
-                        [pad_before, pad_after]
-                    end for i in 1:num_spatial_dims
-                ),
-            )
-
-            Reactant.MLIR.IR.DenseElementsAttribute(padding')
-        end
-
-    batch_group_count = 1
-    if feature_group_count > 1
-        batch_group_count = feature_group_count
-        feature_group_count = 1
-    end
-
-    dimension_numbers = MLIR.API.stablehloConvDimensionNumbersGet(
-        MLIR.IR.context(),
-        Int64(input_batch_dim - 1),
-        Int64(input_feature_dim - 1),
-        length(input_spatial_dims),
-        Int64[i - 1 for i in input_spatial_dims],
-        Int64(kernel_input_dim - 1),
-        Int64(kernel_output_dim - 1),
-        length(kernel_spatial_dims),
-        Int64[i - 1 for i in kernel_spatial_dims],
-        Int64(output_batch_dim - 1),
-        Int64(output_feature_dim - 1),
-        length(output_spatial_dims),
-        Int64[i - 1 for i in output_spatial_dims],
+                [pad_before, pad_after]
+            end for i in 1:num_spatial_dims
+        ),
     )
 
-    result_type = Reactant.MLIR.IR.TensorType(
-        collect(Int, size(dw)), Reactant.MLIR.IR.Type(T)
-    )
-    conv = MLIR.Dialects.stablehlo.convolution(
-        get_mlir_data(x),
-        get_mlir_data(dy);
-        result_0=result_type,
-        window_strides=collect(dilation),
+    result = @opcall convolution(
+        collect(Int64, size(dw)),
+        x,
+        dy;
+        window_strides=collect(Int64, NNlib.dilation(cdims)),
+        input_batch_dim=N - 1,
+        input_feature_dim=N,
+        input_spatial_dims=collect(Int64, 1:(N - 2)),
+        kernel_input_dim=N,
+        kernel_output_dim=N - 1,
+        kernel_spatial_dims=collect(Int64, 1:(N - 2)),
+        output_batch_dim=N - 1,
+        output_feature_dim=N,
+        output_spatial_dims=collect(Int64, 1:(N - 2)),
         padding,
-        dimension_numbers,
-        rhs_dilation=collect(stride),
-        feature_group_count,
-        batch_group_count,
-        precision_config=MLIR.IR.Attribute([
-            MLIR.IR.Attribute(Reactant.CONVOLUTION_PRECISION[]),
-            MLIR.IR.Attribute(Reactant.CONVOLUTION_PRECISION[]),
-        ]),
+        rhs_dilation=collect(Int64, NNlib.stride(cdims)),
+        feature_group_count=1,
+        batch_group_count=NNlib.groupcount(cdims),
     )
-    set_mlir_data!(dw, MLIR.IR.result(conv))
+    set_mlir_data!(dw, result.mlir_data)
 
     if !NNlib.flipkernel(cdims)
         set_mlir_data!(
@@ -237,19 +156,7 @@ function overloaded_∇conv_data!(
     dy = T.(materialize_traced_array(dy))
     w = T.(materialize_traced_array(w))
 
-    num_spatial_dims = N - 2
-    input_batch_dim = N
-    input_feature_dim = N - 1
-
-    kernel_input_dim = N
-    kernel_output_dim = N - 1
-
-    output_batch_dim = N
-    output_feature_dim = N - 1
-
-    output_spatial_dims = kernel_spatial_dims = input_spatial_dims = 1:num_spatial_dims
-
-    padding = reshape(collect(NNlib.padding(cdims)), (2, num_spatial_dims))
+    padding = reshape(collect(NNlib.padding(cdims)), 2, :)
     stride = NNlib.stride(cdims)
     dilation = NNlib.dilation(cdims)
     feature_group_count = NNlib.groupcount(cdims)
@@ -275,67 +182,45 @@ function overloaded_∇conv_data!(
         )
     end
 
-    padding =
-        let lhs_shape = first(size(dx), num_spatial_dims),
-            rhs_shape = dilate_shape.(first(size(w), num_spatial_dims), dilation),
-            out_shape = dilate_shape.(first(size(dy), num_spatial_dims), stride),
+    lhs_shape = size(dx)[1:(N - 2)]
+    rhs_shape = dilate_shape.(size(w)[1:(N - 2)], dilation)
+    out_shape = dilate_shape.(size(dy)[1:(N - 2)], stride)
 
-            padding = reduce(
-                hcat,
-                (
-                    let pad_before = rhs_shape[i] - padding[2i - 1] - 1,
-                        pad_after =
-                            lhs_shape[i] + rhs_shape[i] - 1 - out_shape[i] - pad_before
+    padding = reduce(
+        hcat,
+        (
+            let pad_before = rhs_shape[i] - padding[2i - 1] - 1,
+                pad_after = lhs_shape[i] + rhs_shape[i] - 1 - out_shape[i] - pad_before
 
-                        [pad_before, pad_after]
-                    end for i in input_spatial_dims
-                ),
-            )
-
-            Reactant.MLIR.IR.DenseElementsAttribute(padding')
-        end
-
-    dimension_numbers = MLIR.API.stablehloConvDimensionNumbersGet(
-        MLIR.IR.context(),
-        Int64(input_batch_dim - 1),
-        Int64(input_feature_dim - 1),
-        length(input_spatial_dims),
-        Int64[i - 1 for i in input_spatial_dims],
-        Int64(kernel_input_dim - 1),
-        Int64(kernel_output_dim - 1),
-        length(kernel_spatial_dims),
-        Int64[i - 1 for i in kernel_spatial_dims],
-        Int64(output_batch_dim - 1),
-        Int64(output_feature_dim - 1),
-        length(output_spatial_dims),
-        Int64[i - 1 for i in output_spatial_dims],
-    )
-
-    result_type = Reactant.MLIR.IR.TensorType(
-        collect(Int, size(dx)), Reactant.MLIR.IR.Type(T)
+                [pad_before, pad_after]
+            end for i in input_spatial_dims
+        ),
     )
 
     if NNlib.flipkernel(cdims)
         w = @opcall reverse(w; dimensions=kernel_spatial_dims)
     end
 
-    conv = MLIR.Dialects.stablehlo.convolution(
-        get_mlir_data(dy),
-        get_mlir_data(w);
-        result_0=result_type,
-        window_strides=1,
+    result = @opcall convolution(
+        collect(Int64, size(dx)),
+        dy,
+        w;
+        input_batch_dim=N,
+        input_feature_dim=N - 1,
+        input_spatial_dims=collect(Int64, 1:(N - 2)),
+        kernel_input_dim=N,
+        kernel_output_dim=N - 1,
+        kernel_spatial_dims=collect(Int64, 1:(N - 2)),
+        output_batch_dim=N,
+        output_feature_dim=N - 1,
+        output_spatial_dims=collect(Int64, 1:(N - 2)),
         padding,
-        lhs_dilation=collect(stride),
-        rhs_dilation=collect(dilation),
-        dimension_numbers,
+        lhs_dilation=collect(NNlib.stride(cdims)),
+        rhs_dilation=collect(NNlib.dilation(cdims)),
         feature_group_count,
         batch_group_count=1,
-        precision_config=MLIR.IR.Attribute([
-            MLIR.IR.Attribute(Reactant.CONVOLUTION_PRECISION[]),
-            MLIR.IR.Attribute(Reactant.CONVOLUTION_PRECISION[]),
-        ]),
     )
-    set_mlir_data!(dx, MLIR.IR.result(conv))
+    set_mlir_data!(dx, result.mlir_data)
 
     return dx
 end

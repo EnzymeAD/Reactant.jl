@@ -859,35 +859,80 @@ end
     return clamp(constant(min), x, constant(max); kwargs...)
 end
 
-# function convolution(
-#     lhs::TracedRArray{T,N},
-#     rhs::TracedRArray{T,N};
-#     dimension_numbers,
-#     feature_group_count,
-#     batch_group_count,
-#     window_strides=nothing,
-#     padding=nothing,
-#     lhs_dilation=nothing,
-#     rhs_dilation=nothing,
-#     location=mlir_stacktrace(
-#         "convolution", @__FILE__, @__LINE__
-#     ),
-# ) where {T,N}
-#     res = MLIR.IR.result(
-#         stablehlo.convolution(
-#             lhs.mlir_data,
-#             rhs.mlir_data;
-#             result=mlir_type(TracedRArray{T,N}, ...), # TODO size of result
-#             window_strides, #*MLIR.IR.DenseArrayAttribute(window_strides)*#,
-#             padding, #*MLIR.IR.DenseArrayAttribute(padding)*#,
-#             lhs_dilation, #*MLIR.IR.DenseArrayAttribute(lhs_dilation)*#,
-#             rhs_dilation, #*MLIR.IR.DenseArrayAttribute(rhs_dilation)*#,
-#             feature_group_count=feature_group_count,
-#             location,
-#         ),
-#     )
-#     return TracedRArray{T,N}((), res, size(lhs))
-# end
+@noinline function convolution(
+    result_size::Vector{Int64},
+    lhs::TracedRArray{T,N},
+    rhs::TracedRArray{T,N};
+    input_batch_dim::Int64,
+    input_feature_dim::Int64,
+    input_spatial_dims::Vector{Int64},
+    kernel_input_dim::Int64,
+    kernel_output_dim::Int64,
+    kernel_spatial_dims::Vector{Int64},
+    output_batch_dim::Int64,
+    output_feature_dim::Int64,
+    output_spatial_dims::Vector{Int64},
+    padding::Matrix{Int64},
+    feature_group_count::Int64,
+    batch_group_count::Int64,
+    window_strides::Union{Vector{Int64},Nothing}=nothing,
+    lhs_dilation::Union{Vector{Int64},Nothing}=nothing,
+    rhs_dilation::Union{Vector{Int64},Nothing}=nothing,
+    precision_config=Reactant.CONVOLUTION_PRECISION[],
+    location=mlir_stacktrace("convolution", @__FILE__, @__LINE__),
+) where {T,N}
+    num_spatial_dims = N - 2
+    @assert length(input_spatial_dims) == num_spatial_dims
+    @assert length(kernel_spatial_dims) == num_spatial_dims
+    @assert length(output_spatial_dims) == num_spatial_dims
+    @assert size(padding, 1) == 2
+    @assert size(padding, 2) == num_spatial_dims
+
+    dimension_numbers = MLIR.API.stablehloConvDimensionNumbersGet(
+        MLIR.IR.context(),
+        Int64(input_batch_dim - 1),
+        Int64(input_feature_dim - 1),
+        length(input_spatial_dims),
+        Int64[i - 1 for i in input_spatial_dims],
+        Int64(kernel_input_dim - 1),
+        Int64(kernel_output_dim - 1),
+        length(kernel_spatial_dims),
+        Int64[i - 1 for i in kernel_spatial_dims],
+        Int64(output_batch_dim - 1),
+        Int64(output_feature_dim - 1),
+        length(output_spatial_dims),
+        Int64[i - 1 for i in output_spatial_dims],
+    )
+
+    if precision_config !== nothing
+        if precision_config isa Reactant.PrecisionConfig.T
+            precision_config = (precision_config, precision_config)
+        end
+
+        @assert precision_config isa Union{Tuple,Vector}
+        @assert length(precision_config) == 2
+        @assert all(Base.Fix2(isa, Reactant.PrecisionConfig.T), precision_config)
+    end
+
+    conv = MLIR.Dialects.stablehlo.convolution(
+        lhs.mlir_data,
+        rhs.mlir_data;
+        result_0=MLIR.IR.TensorType(result_size, MLIR.IR.Type(T)),
+        window_strides,
+        padding=MLIR.IR.DenseElementsAttribute(padding'),
+        dimension_numbers,
+        lhs_dilation,
+        rhs_dilation,
+        feature_group_count,
+        batch_group_count,
+        precision_config=MLIR.IR.Attribute([
+            MLIR.IR.Attribute(precision_config[1]), MLIR.IR.Attribute(precision_config[2])
+        ]),
+        location,
+    )
+
+    return TracedRArray{T,N}((), MLIR.IR.result(conv), result_size)
+end
 
 Base.@nospecializeinfer @noinline function dot_general(
     @nospecialize(lhs::TracedRArray{T1}),
@@ -925,13 +970,13 @@ Base.@nospecializeinfer @noinline function dot_general(
 
     # C11
     if !isnothing(precision_config)
-        if precision_config isa Reactant.DotGeneralPrecision.T
+        if precision_config isa Reactant.PrecisionConfig.T
             precision_config = (precision_config, precision_config)
         end
 
         @assert precision_config isa Union{Tuple,Vector}
         @assert length(precision_config) == 2
-        @assert all(Base.Fix2(isa, Reactant.DotGeneralPrecision.T), precision_config)
+        @assert all(Base.Fix2(isa, Reactant.PrecisionConfig.T), precision_config)
     end
 
     resT = promote_type(T1, T2)
