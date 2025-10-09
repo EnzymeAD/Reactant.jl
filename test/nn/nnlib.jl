@@ -1,5 +1,4 @@
-using NNlib, Reactant, Enzyme
-using Statistics
+using NNlib, Reactant, Enzyme, Random, Statistics
 
 @testset "Activation Functions" begin
     sumabs2(f, x) = sum(abs2, f.(x))
@@ -792,4 +791,45 @@ end
     @test @jit(NNlib.gather(x_ra, idxs_ra)) ≈ NNlib.gather(x, idxs)
     hlo = repr(@code_hlo(NNlib.gather(x_ra, idxs_ra)))
     @test !contains(hlo, "i64>")
+end
+
+@testset "unfold/fold" begin
+    rng = Random.default_rng()
+
+    @testset "unfold wrapper" begin
+        x = Reactant.to_rarray(rand(rng, 16, 16, 3, 10))
+        w = Reactant.to_rarray(rand(rng, 5, 5, 3, 2))
+        @test size(@jit(NNlib.unfold(x, size(w)))) == (144, 75, 10)
+        @test size(@jit(NNlib.unfold(x, size(w); pad=2))) == (256, 75, 10)
+        @test size(@jit(NNlib.unfold(x, size(w); stride=2))) == (36, 75, 10)
+        @test size(@jit(NNlib.unfold(x, size(w); dilation=2))) == (64, 75, 10)
+    end
+
+    @testset "spatial_rank=$spatial_rank" for spatial_rank in (1, 2, 3)
+        x = rand(rng, repeat([8], spatial_rank)..., 3, 2)
+        x_ra = Reactant.to_rarray(x)
+        w = rand(rng, repeat([3], spatial_rank)..., 3, 3)
+        w_ra = Reactant.to_rarray(w)
+
+        cdims = DenseConvDims(x, w; padding=1)
+        y = NNlib.unfold(x, cdims)
+        z = NNlib.fold(y, size(x), cdims)
+
+        y_ra = @jit NNlib.unfold(x_ra, cdims)
+        z_ra = @jit NNlib.fold(y_ra, size(x_ra), cdims)
+
+        @test y ≈ y_ra atol = 1e-5 rtol = 1e-5
+        @test z ≈ z_ra atol = 1e-5 rtol = 1e-5
+
+        # introduce stride
+        cdims = DenseConvDims(x, w; padding=1, stride=2)
+        y = NNlib.unfold(x, cdims)
+        z = NNlib.fold(y, size(x), cdims)
+
+        y_ra = @jit NNlib.unfold(x_ra, cdims)
+        z_ra = @jit NNlib.fold(y_ra, size(x_ra), cdims)
+
+        @test y ≈ y_ra atol = 1e-5 rtol = 1e-5
+        @test z ≈ z_ra atol = 1e-5 rtol = 1e-5
+    end
 end
