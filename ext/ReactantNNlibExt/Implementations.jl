@@ -176,11 +176,13 @@ function overloaded_∇conv_data!(
             feature_group_count,
         )
         w = permutedims(w, (kernel_spatial_dims..., N - 1, N + 1, N))
-        w = reshape(
-            w,
-            (size(w, i) for i in kernel_spatial_dims)...,
-            size(w, N - 1) * feature_group_count,
-            size(w, N + 1),
+        w = materialize_traced_array(
+            reshape(
+                w,
+                (size(w, i) for i in kernel_spatial_dims)...,
+                size(w, N - 1) * feature_group_count,
+                size(w, N + 1),
+            ),
         )
     end
 
