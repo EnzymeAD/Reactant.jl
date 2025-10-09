@@ -908,6 +908,8 @@ function optimization_passes(
         "dot_general_subtract_distributive_simplify",
         "dus_to_dynamic_pad",
         "dynamic_pad_to_pad",
+        "remove_no_ops_from_while_loop",
+        "while_is_copy_simplify",
     ]
 
     if !compile_options.disable_auto_batching_passes
