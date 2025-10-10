@@ -7,4 +7,6 @@ using SparseArrays:
 include("Errors.jl")
 include("ReadOnly.jl")
 
+Reactant.use_overlayed_version(::AbstractSparseArray) = false
+
 end
