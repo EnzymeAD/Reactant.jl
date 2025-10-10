@@ -199,16 +199,13 @@ end
 
 function push_acts!(ad_inputs, x::Union{Const,Active}, path, reverse)
     TracedUtils.push_val!(ad_inputs, x.val, path)
-    ad_inputs[end] = TracedUtils.transpose_val(ad_inputs[end])
     return nothing
 end
 
 function push_acts!(ad_inputs, x::Union{Duplicated,DuplicatedNoNeed}, path, reverse)
     TracedUtils.push_val!(ad_inputs, x.val, path)
-    ad_inputs[end] = TracedUtils.transpose_val(ad_inputs[end])
     if !reverse
         TracedUtils.push_val!(ad_inputs, x.dval, path)
-        ad_inputs[end] = TracedUtils.transpose_val(ad_inputs[end])
     end
 end
 
@@ -216,12 +213,8 @@ function push_acts!(
     ad_inputs, x::Union{BatchDuplicated,BatchDuplicatedNoNeed}, path, reverse
 )
     TracedUtils.push_val!(ad_inputs, x.val, path)
-    ad_inputs[end] = TracedUtils.transpose_val(ad_inputs[end])
     if !reverse
-        TracedUtils.push_val!(
-            ad_inputs, call_with_reactant(Core.kwcall, (; dims=1), stack, x.dval), path
-        )
-        ad_inputs[end] = TracedUtils.transpose_val(ad_inputs[end]; keep_first_intact=true)
+        TracedUtils.push_val!(ad_inputs, call_with_reactant(stack, x.dval), path)
     end
 end
 
@@ -328,12 +321,9 @@ function overload_autodiff(
                 if width == 1
                     cst = @opcall fill(one(unwrapped_eltype(a)), size(a))
                 else
-                    cst = @opcall fill(one(unwrapped_eltype(a)), (width, size(a)...))
+                    cst = @opcall fill(one(unwrapped_eltype(a)), (size(a)..., width))
                 end
-                push!(
-                    ad_inputs,
-                    TracedUtils.transpose_val(cst.mlir_data; keep_first_intact=width > 1),
-                )
+                push!(ad_inputs, cst.mlir_data)
             end
         else
             if TracedUtils.has_idx(a, argprefix)
@@ -348,14 +338,9 @@ function overload_autodiff(
                         TracedUtils.push_val!(ad_inputs, arg.dval, path[3:end])
                     else
                         TracedUtils.push_val!(
-                            ad_inputs,
-                            call_with_reactant(Core.kwcall, (; dims=1), stack, arg.dval),
-                            path[3:end],
+                            ad_inputs, call_with_reactant(stack, arg.dval), path[3:end]
                         )
                     end
-                    ad_inputs[end] = TracedUtils.transpose_val(
-                        ad_inputs[end]; keep_first_intact=width > 1
-                    )
                 end
             else
                 act = act_from_type(Enzyme.Const, reverse, true)
@@ -377,7 +362,7 @@ function overload_autodiff(
     fname = TracedUtils.get_attribute_by_name(func2, "sym_name")
     fname = MLIR.IR.FlatSymbolRefAttribute(Base.String(fname))
     res = (reverse ? MLIR.Dialects.enzyme.autodiff : MLIR.Dialects.enzyme.fwddiff)(
-        ad_inputs;
+        [TracedUtils.transpose_val(v) for v in ad_inputs];
         outputs=outtys,
         fn=fname,
         width,
