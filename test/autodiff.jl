@@ -219,10 +219,12 @@ fn(x) = sum(abs2, x)
 vector_forward_ad(x) = Enzyme.autodiff(Forward, fn, BatchDuplicated(x, Enzyme.onehot(x)))
 
 @testset "Vector Mode AD" begin
-    x = Reactant.to_rarray(reshape(collect(Float32, 1:4), 2, 2))
-    res = @jit vector_forward_ad(x)
-    res_enz = vector_forward_ad(Array(x))
+    x = reshape(collect(Float32, 1:6), 3, 2)
+    x_ra = Reactant.to_rarray(x)
+    res = @jit vector_forward_ad(x_ra)
+    res_enz = vector_forward_ad(x)
 
+    @test x_ra ≈ x # See https://github.com/EnzymeAD/Reactant.jl/issues/1733
     @test res[1][1] ≈ res_enz[1][1]
     @test res[1][2] ≈ res_enz[1][2]
     @test res[1][3] ≈ res_enz[1][3]

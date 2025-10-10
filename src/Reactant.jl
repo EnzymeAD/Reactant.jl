@@ -15,10 +15,11 @@ using LLVMOpenMP_jll: LLVMOpenMP_jll
 using Adapt: Adapt, WrappedArray
 using GPUArraysCore: GPUArraysCore, @allowscalar, allowscalar
 
-using Enzyme:
-    Enzyme,
-    Active,
+using Enzyme: Enzyme
+using EnzymeCore:
+    EnzymeCore,
     Annotation,
+    Active,
     BatchDuplicated,
     BatchDuplicatedNoNeed,
     Const,
@@ -26,7 +27,6 @@ using Enzyme:
     DuplicatedNoNeed,
     EnzymeRules,
     Reverse
-using EnzymeCore: EnzymeCore
 
 export allowscalar, @allowscalar # re-exported from GPUArraysCore
 
