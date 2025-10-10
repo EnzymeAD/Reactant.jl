@@ -25,31 +25,6 @@ Base.IndexStyle(::Type{<:TracedRArray}) = Base.IndexLinear()
 
 Base.elsize(::Type{TracedRArray{T,N}}) where {T,N} = sizeof(T)
 
-const ArrayTypesAlias = (
-    :(TracedRArray),
-    :(SubArray{<:TracedRNumber,<:Any,<:TracedRArray}),
-    :(Base.ReshapedArray{<:TracedRNumber,<:Any,<:TracedRArray}),
-    :(SubArray{<:TracedRNumber,<:Any,<:Base.ReshapedArray{<:TracedRNumber,<:Any,<:TracedRArray}}),
-    :(Base.ReshapedArray{<:TracedRNumber,<:Any,<:SubArray{<:TracedRNumber,<:Any,<:TracedRArray}}),
-)
-for ArrayType1 in ArrayTypesAlias
-    for ArrayType2 in ArrayTypesAlias
-        @eval Base.mightalias(::$ArrayType1, ::$ArrayType2) = false
-    end
-end
-
-# Base.mightalias(::TracedRArray, ::TracedRArray) = false
-# Base.mightalias(
-#     ::SubArray{<:TracedRNumber,<:Any,<:TracedRArray},
-#     ::SubArray{<:TracedRNumber,<:Any,<:TracedRArray},
-# ) = false
-# Base.mightalias(
-#     ::SubArray{<:TracedRNumber,<:Any,<:TracedRArray}, ::TracedRArray
-# ) = false
-# Base.mightalias(
-#     ::TracedRArray, ::SubArray{<:TracedRNumber,<:Any,<:TracedRArray}
-# ) = false
-
 # This is required otherwise we will copy a tracedrarray each time
 # we use it
 Base.convert(T::Type{<:TracedRArray}, x::AbstractArray) = Reactant.promote_to(T, x)
@@ -290,17 +265,6 @@ end
 
 function Base.show(io::IOty, X::TracedRArray{T,N}) where {T,N,IOty<:Union{IO,IOContext}}
     return print(io, "TracedRArray{", T, ",", N, "N}(", X.paths, ", size=", size(X), ")")
-end
-
-for ArrayType in (
-    :(AnyTracedRArray{T,N}),
-    :(TracedRArray{T,N}),
-    :(SubArray{<:TracedRNumber{T},N,<:TracedRArray}),
-    :(Base.ReshapedArray{<:TracedRNumber{T},N,<:TracedRArray})
-    )
-    @eval function Base.permutedims(A::$ArrayType, perm) where {T,N}
-        return @opcall transpose(materialize_traced_array(A), Int64[perm...])
-    end
 end
 
 for (jlop, hloop, hlocomp, merge) in
@@ -1380,6 +1344,17 @@ function unrolled_map(f::F, itr) where {F}
     end
 
     return result
+end
+
+# permutedims for TracedRArrays and wrappers
+function Base.permutedims(A::AnyTracedRArray{T,N}, perm) where {T,N}
+    return @opcall transpose(materialize_traced_array(A), Int64[perm...])
+end
+
+function Base.permutedims!(dest::TracedRArray, src::AnyTracedRArray, perm)
+    result = @opcall transpose(materialize_traced_array(src), Int64[perm...])
+    TracedUtils.set_mlir_data!(dest, result.mlir_data)
+    return dest
 end
 
 end
