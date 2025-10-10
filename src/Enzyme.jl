@@ -5,6 +5,56 @@ const enzyme_dupnoneed = 3
 const enzyme_outnoneed = 4
 const enzyme_constnoneed = 5
 
+struct StackedBatchDuplicated{T,N,M,V<:AbstractArray{T,N},W<:AbstractArray{T,M}} <:
+       Annotation{V}
+    val::V
+    dval::W
+
+    function StackedBatchDuplicated(
+        val::V, dval::W
+    ) where {T,N,M,V<:AbstractArray{T,N},W<:AbstractArray{T,M}}
+        @assert N == M - 1
+        @assert size(val) == size(dval)[1:(end - 1)]
+        return new{T,N,M,V,W}(val, dval)
+    end
+end
+
+@inline function Enzyme.same_or_one_rec(current, arg::StackedBatchDuplicated, args...)
+    return Enzyme.same_or_one_rec(
+        Enzyme.same_or_one_helper(current, size(arg.dval, ndims(arg.dval))), args...
+    )
+end
+
+@inline function Enzyme.same_or_one_rec(current, ::Type{<:StackedBatchDuplicated}, args...)
+    throw(AssertionError("BatchDuplicatedNoNeed not yet supported"))
+end
+
+struct StackedBatchDuplicatedNoNeed{T,N,M,V<:AbstractArray{T,N},W<:AbstractArray{T,M}} <:
+       Annotation{V}
+    val::V
+    dval::W
+
+    function StackedBatchDuplicatedNoNeed(
+        val::V, dval::W
+    ) where {T,N,M,V<:AbstractArray{T,N},W<:AbstractArray{T,M}}
+        @assert N == M - 1
+        @assert size(val) == size(dval)[1:(end - 1)]
+        return new{T,N,M,V,W}(val, dval)
+    end
+end
+
+@inline function Enzyme.same_or_one_rec(current, arg::StackedBatchDuplicatedNoNeed, args...)
+    return Enzyme.same_or_one_rec(
+        Enzyme.same_or_one_helper(current, size(arg.dval, ndims(arg.dval))), args...
+    )
+end
+
+@inline function Enzyme.same_or_one_rec(
+    current, ::Type{<:StackedBatchDuplicatedNoNeed}, args...
+)
+    throw(AssertionError("BatchDuplicatedNoNeed not yet supported"))
+end
+
 @inline function Enzyme.make_zero(x::RNumber)
     return zero(Core.Typeof(x))
 end
@@ -150,52 +200,40 @@ function Enzyme.EnzymeRules.reverse(
     end
 end
 
-@inline act_from_type(x, reverse, needs_primal=true) =
-    throw(AssertionError("Unhandled activity $(typeof(x))"))
-@inline act_from_type(::Enzyme.Const, reverse, needs_primal=true) =
-    act_from_type(Enzyme.Const, reverse, needs_primal)
-@inline act_from_type(::Enzyme.Duplicated, reverse, needs_primal=true) =
-    act_from_type(Enzyme.Duplicated, reverse, needs_primal)
-@inline act_from_type(::Enzyme.DuplicatedNoNeed, reverse, needs_primal=true) =
-    reverse ? enzyme_out : enzyme_dupnoneed
-@inline act_from_type(::Enzyme.BatchDuplicated, reverse, needs_primal=true) =
-    act_from_type(Enzyme.Duplicated, reverse, needs_primal)
-@inline act_from_type(::Enzyme.BatchDuplicatedNoNeed, reverse, needs_primal=true) =
-    reverse ? enzyme_out : enzyme_dupnoneed
-@inline act_from_type(::Enzyme.Active, reverse, needs_primal=true) =
-    act_from_type(Enzyme.Active, reverse, needs_primal)
-@inline act_from_type(::Type{<:Enzyme.Const}, reverse, needs_primal) =
-    if needs_primal
-        enzyme_const
-    else
-        enzyme_constnoneed
-    end
-@inline act_from_type(::Type{<:Enzyme.Duplicated}, reverse, needs_primal) =
+@inline function act_from_type(::A, reverse, needs_primal=true) where {A<:Annotation}
+    return act_from_type(A, reverse, needs_primal)
+end
+
+@inline function act_from_type(::Type{<:Enzyme.Active}, reverse, needs_primal)
+    return needs_primal ? enzyme_out : enzyme_outnoneed
+end
+@inline function act_from_type(::Type{<:Enzyme.Const}, reverse, needs_primal)
+    return needs_primal ? enzyme_const : enzyme_constnoneed
+end
+
+@inline function act_from_type(::Type{<:Enzyme.Duplicated}, reverse, needs_primal)
     if reverse
-        if needs_primal
-            enzyme_out
-        else
-            enzyme_outnoneed
-        end
+        return needs_primal ? enzyme_out : enzyme_outnoneed
     else
-        if needs_primal
-            enzyme_dup
-        else
-            enzyme_dupnoneed
-        end
+        return needs_primal ? enzyme_dup : enzyme_dupnoneed
     end
+end
+@inline function act_from_type(
+    ::Type{<:Union{Enzyme.BatchDuplicated,StackedBatchDuplicated}}, reverse, needs_primal
+)
+    return act_from_type(Enzyme.Duplicated, reverse, needs_primal)
+end
 
-@inline act_from_type(::Type{<:Enzyme.BatchDuplicated}, reverse, needs_primal) =
-    act_from_type(Enzyme.Duplicated, reverse, needs_primal)
-@inline act_from_type(::Type{<:Enzyme.BatchDuplicatedNoNeed}, reverse, needs_primal) =
-    act_from_type(Enzyme.DuplicatedNoNeed, Reverse, needs_primal)
-
-@inline act_from_type(::Type{<:Enzyme.Active}, reverse, needs_primal) =
-    if needs_primal
-        enzyme_out
-    else
-        enzyme_outnoneed
-    end
+@inline function act_from_type(::Type{<:Enzyme.DuplicatedNoNeed}, reverse, needs_primal)
+    return reverse ? enzyme_out : enzyme_dupnoneed
+end
+@inline function act_from_type(
+    ::Type{<:Union{Enzyme.BatchDuplicatedNoNeed,StackedBatchDuplicatedNoNeed}},
+    reverse,
+    needs_primal,
+)
+    return act_from_type(Enzyme.DuplicatedNoNeed, reverse, needs_primal)
+end
 
 function push_acts!(ad_inputs, x::Union{Const,Active}, path, reverse)
     TracedUtils.push_val!(ad_inputs, x.val, path)
@@ -215,6 +253,15 @@ function push_acts!(
     TracedUtils.push_val!(ad_inputs, x.val, path)
     if !reverse
         TracedUtils.push_val!(ad_inputs, call_with_reactant(stack, x.dval), path)
+    end
+end
+
+function push_acts!(
+    ad_inputs, x::Union{StackedBatchDuplicated,StackedBatchDuplicatedNoNeed}, path, reverse
+)
+    TracedUtils.push_val!(ad_inputs, x.val, path)
+    if !reverse
+        TracedUtils.push_val!(ad_inputs, x.dval, path)
     end
 end
 

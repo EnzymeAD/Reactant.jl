@@ -217,6 +217,9 @@ end
 
 fn(x) = sum(abs2, x)
 vector_forward_ad(x) = Enzyme.autodiff(Forward, fn, BatchDuplicated(x, Enzyme.onehot(x)))
+function vector_forward_ad2(x, dx)
+    return Enzyme.autodiff(Forward, fn, StackedBatchDuplicated(x, dx))
+end
 
 @testset "Vector Mode AD" begin
     x = reshape(collect(Float32, 1:6), 3, 2)
@@ -229,6 +232,20 @@ vector_forward_ad(x) = Enzyme.autodiff(Forward, fn, BatchDuplicated(x, Enzyme.on
     @test res[1][2] ≈ res_enz[1][2]
     @test res[1][3] ≈ res_enz[1][3]
     @test res[1][4] ≈ res_enz[1][4]
+    @test res[1][5] ≈ res_enz[1][5]
+    @test res[1][6] ≈ res_enz[1][6]
+
+    oh = Enzyme.onehot(x)
+    oh_stacked = stack(oh)
+    oh_ra = Reactant.to_rarray(oh_stacked)
+    res2 = @jit vector_forward_ad2(x_ra, oh_ra)
+
+    @test res2[1][1] ≈ res_enz[1][1]
+    @test res2[1][2] ≈ res_enz[1][2]
+    @test res2[1][3] ≈ res_enz[1][3]
+    @test res2[1][4] ≈ res_enz[1][4]
+    @test res2[1][5] ≈ res_enz[1][5]
+    @test res2[1][6] ≈ res_enz[1][6]
 end
 
 function fn2!(y, x)
