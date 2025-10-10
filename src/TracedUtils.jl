@@ -204,6 +204,7 @@ end
 Base.@nospecializeinfer function batch_ty(
     width::Int, @nospecialize(mlirty::MLIR.IR.Type)
 )::MLIR.IR.Type
+    width == 1 && return mlirty
     return MLIR.IR.TensorType(Int[width, size(mlirty)...], eltype(mlirty))
 end
 

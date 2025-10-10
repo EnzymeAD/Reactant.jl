@@ -229,6 +229,41 @@ vector_forward_ad(x) = Enzyme.autodiff(Forward, fn, BatchDuplicated(x, Enzyme.on
     @test res[1][4] ≈ res_enz[1][4]
 end
 
+using Reactant, Enzyme
+
+function fn2!(y, x)
+    @allowscalar y[1] = x[1] #  + x[2]
+    @allowscalar y[2] = x[1] #  + x[2]
+    return nothing
+end
+
+x = Reactant.to_rarray([2.0, 3.0])
+y = Reactant.to_rarray([0.0, 0.0])
+
+dx1 = Reactant.to_rarray([0.0, 0.0])
+dx2 = Reactant.to_rarray([0.0, 0.0])
+dx3 = Reactant.to_rarray([0.0, 0.0])
+dx4 = Reactant.to_rarray([0.0, 0.0])
+
+dy1 = Reactant.to_rarray([1.0, 0.0])
+dy2 = Reactant.to_rarray([0.0, 1.0])
+dy3 = Reactant.to_rarray([1.0, 2.0])
+dy4 = Reactant.to_rarray([2.0, 1.0])
+
+@code_hlo optimize = "enzyme-hlo-opt,inline,enzyme-batch,inline,enzyme-hlo-opt" autodiff(
+    Reverse,
+    fn2!,
+    BatchDuplicated(y, (dy1, dy2, dy3, dy4)),
+    BatchDuplicated(x, (dx1, dx2, dx3, dx4)),
+)
+
+@code_hlo autodiff(
+    Reverse,
+    fn2!,
+    BatchDuplicated(y, (dy1, dy2, dy3, dy4)),
+    BatchDuplicated(x, (dx1, dx2, dx3, dx4)),
+)
+
 @testset "make_zero!" begin
     x = Reactant.to_rarray([3.1])
     @jit Enzyme.make_zero!(x)
