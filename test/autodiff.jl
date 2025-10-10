@@ -229,6 +229,56 @@ vector_forward_ad(x) = Enzyme.autodiff(Forward, fn, BatchDuplicated(x, Enzyme.on
     @test res[1][4] ≈ res_enz[1][4]
 end
 
+function fn2!(y, x)
+    copyto!(y, x .^ 2)
+    return nothing
+end
+
+@testset "Vector Mode AD (Reverse)" begin
+    x = [2.0, 3.0]
+    x_ra = Reactant.to_rarray(x)
+    y = [0.0, 0.0]
+    y_ra = Reactant.to_rarray(y)
+
+    dx1 = zeros(2)
+    dx2 = zeros(2)
+    dx3 = zeros(2)
+    dx4 = zeros(2)
+    dx1_ra = Reactant.to_rarray(dx1)
+    dx2_ra = Reactant.to_rarray(dx2)
+    dx3_ra = Reactant.to_rarray(dx3)
+    dx4_ra = Reactant.to_rarray(dx4)
+
+    dy1 = zeros(2)
+    dy2 = zeros(2)
+    dy3 = zeros(2)
+    dy4 = zeros(2)
+    dy1_ra = Reactant.to_rarray(dy1)
+    dy2_ra = Reactant.to_rarray(dy2)
+    dy3_ra = Reactant.to_rarray(dy3)
+    dy4_ra = Reactant.to_rarray(dy4)
+
+    autodiff(
+        ReverseWithPrimal,
+        fn2!,
+        BatchDuplicated(y, (dy1, dy2, dy3, dy4)),
+        BatchDuplicated(x, (dx1, dx2, dx3, dx4)),
+    )
+
+    @jit autodiff(
+        Reverse,
+        fn2!,
+        BatchDuplicated(y_ra, (dy1_ra, dy2_ra, dy3_ra, dy4_ra)),
+        BatchDuplicated(x_ra, (dx1_ra, dx2_ra, dx3_ra, dx4_ra)),
+    )
+
+    @test y ≈ y_ra
+    @test dy1 ≈ dy1_ra
+    @test dy2 ≈ dy2_ra
+    @test dy3 ≈ dy3_ra
+    @test dy4 ≈ dy4_ra
+end
+
 @testset "make_zero!" begin
     x = Reactant.to_rarray([3.1])
     @jit Enzyme.make_zero!(x)
