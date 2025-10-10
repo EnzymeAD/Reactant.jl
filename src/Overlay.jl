@@ -114,8 +114,8 @@ end
 ## `mul!` goes through too many layers of abstractions and we aren't able to overload
 ## without specializing on every possible combination of types
 for (cT, aT, bT) in (
-    (:AbstractVector, :AbstractMatrix, :AbstractVector),
-    (:AbstractMatrix, :AbstractMatrix, :AbstractVecOrMat),
+    (:AbstractVector, :DenseMatrix, :AbstractVector),
+    (:AbstractMatrix, :DenseMatrix, :AbstractVecOrMat),
 )
     @eval begin
         @reactant_overlay @noinline function LinearAlgebra.mul!(
