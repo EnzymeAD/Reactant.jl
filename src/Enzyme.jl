@@ -334,7 +334,6 @@ function overload_autodiff(
                     ad_inputs,
                     TracedUtils.transpose_val(cst.mlir_data; keep_first_intact=width > 1),
                 )
-                @show ad_inputs[end]
             end
         else
             if TracedUtils.has_idx(a, argprefix)
@@ -357,7 +356,6 @@ function overload_autodiff(
                     ad_inputs[end] = TracedUtils.transpose_val(
                         ad_inputs[end]; keep_first_intact=width > 1
                     )
-                    @show ad_inputs[end]
                 end
             else
                 act = act_from_type(Enzyme.Const, reverse, true)

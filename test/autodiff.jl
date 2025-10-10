@@ -366,3 +366,31 @@ end
     @test result2 isa Tuple{<:ConcreteRNumber{Float32},<:ConcreteRArray{Float32,2}}
     @test ∂x2[1] ≈ zeros(Float32, 4, 4)
 end
+
+cubic(x) = x .^ 3
+
+function vjp_cubic(x, lambdas)
+    vjps = similar(lambdas)
+    for i in 1:size(lambdas, 2)
+        lambda = lambdas[:, i]
+        eval_jac_T_v(x) = sum(cubic(x) .* lambda)
+        vjps[:, i] .= Enzyme.gradient(Reverse, Const(eval_jac_T_v), x)[1]
+    end
+    return vjps
+end
+
+function jvp_vjp_cubic(v, x, lambdas)
+    vjp_cubic_inline(x) = vjp_cubic(x, lambdas)
+    return Enzyme.autodiff(Forward, Const(vjp_cubic_inline), Duplicated(x, v))[1]
+end
+
+@testset "Nested Forward over Reverse AD" begin
+    x = ones(3)
+    x_r = Reactant.to_rarray(x)
+    v = ones(3)
+    v_r = Reactant.to_rarray(x)
+    lambdas = ones(3, 2)
+    lambdas_r = Reactant.to_rarray(lambdas)
+
+    @test jvp_vjp_cubic(v, x, lambdas) ≈ @jit(jvp_vjp_cubic(v_r, x_r, lambdas_r))
+end
