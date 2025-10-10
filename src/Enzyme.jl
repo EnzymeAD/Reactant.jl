@@ -197,39 +197,25 @@ end
         enzyme_outnoneed
     end
 
-function push_acts!(ad_inputs, x::Const, path, reverse)
+function push_acts!(ad_inputs, x::Union{Const,Active}, path, reverse)
     return TracedUtils.push_val!(ad_inputs, x.val, path)
 end
 
-function push_acts!(ad_inputs, x::Active, path, reverse)
-    return TracedUtils.push_val!(ad_inputs, x.val, path)
-end
-
-function push_acts!(ad_inputs, x::Duplicated, path, reverse)
+function push_acts!(ad_inputs, x::Union{Duplicated,DuplicatedNoNeed}, path, reverse)
     TracedUtils.push_val!(ad_inputs, x.val, path)
     if !reverse
         TracedUtils.push_val!(ad_inputs, x.dval, path)
     end
 end
 
-function push_acts!(ad_inputs, x::DuplicatedNoNeed, path, reverse)
+function push_acts!(
+    ad_inputs, x::Union{BatchDuplicated,BatchDuplicatedNoNeed}, path, reverse
+)
     TracedUtils.push_val!(ad_inputs, x.val, path)
     if !reverse
-        TracedUtils.push_val!(ad_inputs, x.dval, path)
-    end
-end
-
-function push_acts!(ad_inputs, x::BatchDuplicated, path, reverse)
-    TracedUtils.push_val!(ad_inputs, x.val, path)
-    if !reverse
-        TracedUtils.push_val!(ad_inputs, stack(x.dval; dims=1), path)
-    end
-end
-
-function push_acts!(ad_inputs, x::BatchDuplicatedNoNeed, path, reverse)
-    TracedUtils.push_val!(ad_inputs, x.val, path)
-    if !reverse
-        TracedUtils.push_val!(ad_inputs, stack(tval; dims=1), path)
+        TracedUtils.push_val!(
+            ad_inputs, call_with_reactant(Core.kwcall, (; dims=1), stack, x.dval), path
+        )
     end
 end
 
@@ -244,7 +230,7 @@ function set_act!(inp, path, reverse, tostore; emptypath=false, width=1)
         x = traced_getfield(x, p)
     end
 
-    if !reverse || width == 1
+    if width == 1
         TracedUtils.set_mlir_data!(x, tostore)
     else
         tostore_traced = TracedRArray(tostore)
@@ -333,7 +319,7 @@ function overload_autodiff(
             act = act_from_type(A, reverse, Enzyme.needs_primal(CMode))
             push!(ret_activity, act)
             if act == enzyme_out || act == enzyme_outnoneed
-                if width == 1 || CMode <: Enzyme.ForwardMode
+                if width == 1
                     cst = @opcall fill(one(unwrapped_eltype(a)), size(a))
                 else
                     cst = @opcall fill(one(unwrapped_eltype(a)), (width, size(a)...))
@@ -344,15 +330,18 @@ function overload_autodiff(
             if TracedUtils.has_idx(a, argprefix)
                 idx, path = TracedUtils.get_argidx(a, argprefix)
                 arg = idx == 1 && fnwrap ? f : args[idx - fnwrap]
+
                 act = act_from_type(arg, reverse, true)
                 push!(ret_activity, act)
 
                 if act == enzyme_out || act == enzyme_outnoneed
-                    if width == 1 || CMode <: Enzyme.ForwardMode
+                    if width == 1
                         TracedUtils.push_val!(ad_inputs, arg.dval, path[3:end])
                     else
                         TracedUtils.push_val!(
-                            ad_inputs, stack(arg.dval; dims=1), path[3:end]
+                            ad_inputs,
+                            call_with_reactant(Core.kwcall, (; dims=1), stack, arg.dval),
+                            path[3:end]
                         )
                     end
                 end
@@ -415,15 +404,11 @@ function overload_autodiff(
                     TracedUtils.set!(dresult, path[2:end], tval)
                 else
                     ttval = TracedRArray(tval)
-                    for i in 1:width
+                    for (i, sl) in enumerate(eachslice(ttval; dims=1))
                         TracedUtils.set!(
                             dresult[i],
                             path[2:end],
-                            TracedUtils.get_mlir_data(
-                                @allowscalar(
-                                    ttval[i, ntuple(Returns(Colon()), ndims(a))...]
-                                )
-                            ),
+                            @allowscalar(TracedUtils.get_mlir_data(sl))
                         )
                     end
                 end
