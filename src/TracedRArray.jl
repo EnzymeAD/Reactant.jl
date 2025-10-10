@@ -277,6 +277,17 @@ for (jlop, hloop, hlocomp, merge) in
     end
 end
 
+# Override _parentsmatch to avoid pointer comparisons during tracing
+# Direct TracedRArray comparisons - they don't alias unless they're the same object
+Base._parentsmatch(A::TracedRArray, B::TracedRArray) = A === B
+# ReshapedArray comparisons - check if they share the same parent (more specific than StridedArray)
+function Base._parentsmatch(
+    A::Base.ReshapedArray{<:TracedRNumber,<:Any,<:Union{TracedRArray,SubArray{<:TracedRNumber,<:Any,<:TracedRArray}}},
+    B::Base.ReshapedArray{<:TracedRNumber,<:Any,<:Union{TracedRArray,SubArray{<:TracedRNumber,<:Any,<:TracedRArray}}}
+)
+    return Base._parentsmatch(parent(A), parent(B))
+end
+
 function __default_init(
     ::Type{T}, ::Union{typeof(Base.min),typeof(Base.FastMath.min_fast)}
 ) where {T}
