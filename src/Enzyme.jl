@@ -410,23 +410,20 @@ function overload_autodiff(
             end
             if CMode <: Enzyme.ForwardMode && !(A <: Enzyme.Const)
                 path = TracedUtils.get_idx(a, resprefix)
+                tval = TracedUtils.transpose_val(MLIR.IR.result(res, residx))
                 if width == 1
-                    tval = TracedUtils.transpose_val(MLIR.IR.result(res, residx))
                     TracedUtils.set!(dresult, path[2:end], tval)
                 else
-                    tval = TracedUtils.transpose_val(MLIR.IR.result(res, residx))
+                    ttval = TracedRArray(tval)
                     for i in 1:width
-                        sz = size(a)
-                        starts = Int64[i]
-                        limits = Int64[i]
-                        for v in sz
-                            push!(starts, 0)
-                            push!(limits, v)
-                        end
-                        sval = @opcall slice(TracedRArray(tval), starts, limits)
-                        sval = @opcall reshape(sval, collect(Int64, sz))
                         TracedUtils.set!(
-                            dresult[i], path[2:end], TracedUtils.get_mlir_data(sval)
+                            dresult[i],
+                            path[2:end],
+                            TracedUtils.get_mlir_data(
+                                @allowscalar(
+                                    ttval[i, ntuple(Returns(Colon()), ndims(a))...]
+                                )
+                            ),
                         )
                     end
                 end
@@ -434,24 +431,11 @@ function overload_autodiff(
             end
         elseif TracedUtils.has_idx(a, argprefix)
             idx, path = TracedUtils.get_argidx(a, argprefix)
-            if idx == 1 && fnwrap
-                TracedUtils.set!(
-                    f.val,
-                    path[3:end],
-                    TracedUtils.transpose_val(MLIR.IR.result(res, residx)),
-                )
-                residx += 1
-            else
-                if fnwrap
-                    idx -= 1
-                end
-                TracedUtils.set!(
-                    args[idx].val,
-                    path[3:end],
-                    TracedUtils.transpose_val(MLIR.IR.result(res, residx)),
-                )
-                residx += 1
-            end
+            arg = idx == 1 && fnwrap ? f : args[idx - fnwrap]
+            TracedUtils.set!(
+                arg.val, path[3:end], TracedUtils.transpose_val(MLIR.IR.result(res, residx))
+            )
+            residx += 1
         else
             TracedUtils.set!(a, (), TracedUtils.transpose_val(MLIR.IR.result(res, residx)))
             residx += 1
@@ -461,49 +445,22 @@ function overload_autodiff(
     restup = Any[(a isa Active) ? copy(a) : nothing for a in args]
     for a in linear_args
         idx, path = TracedUtils.get_argidx(a, argprefix)
-        if idx == 1 && fnwrap
-            if act_from_type(f, reverse) != enzyme_out
-                continue
-            end
-            if f isa Enzyme.Active
-                @assert false
-                residx += 1
-                continue
-            end
-            set_act!(
-                f,
-                path[3:end],
-                reverse,
-                TracedUtils.transpose_val(MLIR.IR.result(res, residx));
-                width,
-            )
-        else
-            if fnwrap
-                idx -= 1
-            end
-            if act_from_type(args[idx], reverse) != enzyme_out
-                continue
-            end
-            if args[idx] isa Enzyme.Active
-                set_act!(
-                    args[idx],
-                    path[3:end],
-                    false,
-                    TracedUtils.transpose_val(MLIR.IR.result(res, residx));
-                    width,
-                    emptypath=true,
-                ) #=reverse=#
-                residx += 1
-                continue
-            end
-            set_act!(
-                args[idx],
-                path[3:end],
-                reverse,
-                TracedUtils.transpose_val(MLIR.IR.result(res, residx));
-                width,
-            )
+
+        arg = idx == 1 && fnwrap ? f : args[idx - fnwrap]
+        act_from_type(arg, reverse) != enzyme_out && continue
+
+        if idx == 1 && fnwrap && arg isa Enzyme.Active
+            @assert false
         end
+
+        set_act!(
+            arg,
+            path[3:end],
+            reverse,
+            TracedUtils.transpose_val(MLIR.IR.result(res, residx));
+            width,
+            emptypath=arg isa Enzyme.Active,
+        )
         residx += 1
     end
 
@@ -519,15 +476,15 @@ function overload_autodiff(
     else
         if Enzyme.needs_primal(CMode)
             if CMode <: Enzyme.ForwardMode && !(A <: Enzyme.Const)
-                (dresult, result)
+                return (dresult, result)
             else
-                (result,)
+                return (result,)
             end
         else
             if CMode <: Enzyme.ForwardMode && !(A <: Enzyme.Const)
-                (dresult,)
+                return (dresult,)
             else
-                ()
+                return ()
             end
         end
     end
