@@ -61,7 +61,9 @@ end
 
 function Enzyme.onehot(x::TracedRArray{T,N}) where {T,N}
     onehot_matrix = promote_to(TracedRArray{T,2}, LinearAlgebra.I(length(x)))
-    return Tuple(reshape(y, size(x)) for y in eachcol(onehot_matrix))
+    return Tuple(
+        materialize_traced_array(reshape(y, size(x))) for y in eachcol(onehot_matrix)
+    )
 end
 
 function Enzyme.EnzymeRules.inactive_noinl(::typeof(XLA.buffer_on_cpu), args...)
