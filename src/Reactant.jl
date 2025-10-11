@@ -18,6 +18,7 @@ using GPUArraysCore: GPUArraysCore, @allowscalar, allowscalar
 using Enzyme: Enzyme
 using EnzymeCore:
     EnzymeCore,
+    Mode,
     Annotation,
     Active,
     BatchDuplicated,
@@ -26,7 +27,8 @@ using EnzymeCore:
     Duplicated,
     DuplicatedNoNeed,
     EnzymeRules,
-    Reverse
+    ReverseMode,
+    ForwardMode
 
 export allowscalar, @allowscalar # re-exported from GPUArraysCore
 
