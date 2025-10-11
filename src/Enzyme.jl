@@ -116,32 +116,28 @@ function Enzyme.onehot(x::TracedRArray{T,N}) where {T,N}
     )
 end
 
-function Enzyme.EnzymeRules.inactive_noinl(::typeof(XLA.buffer_on_cpu), args...)
+function EnzymeRules.inactive_noinl(::typeof(XLA.buffer_on_cpu), args...)
     return nothing
 end
 
-function Enzyme.EnzymeRules.inactive_noinl(::typeof(XLA.addressable_devices), args...)
+function EnzymeRules.inactive_noinl(::typeof(XLA.addressable_devices), args...)
     return nothing
 end
 
-function Enzyme.EnzymeRules.noalias(
-    ::typeof(Base.similar), a::ConcretePJRTArray, ::Type, args...
-)
+function EnzymeRules.noalias(::typeof(Base.similar), a::ConcretePJRTArray, ::Type, args...)
     return nothing
 end
 
-function Enzyme.EnzymeRules.noalias(
-    ::typeof(Base.similar), a::ConcreteIFRTArray, ::Type, args...
-)
+function EnzymeRules.noalias(::typeof(Base.similar), a::ConcreteIFRTArray, ::Type, args...)
     return nothing
 end
 
-function Enzyme.EnzymeRules.augmented_primal(
+function EnzymeRules.augmented_primal(
     config,
     ofn::Const{typeof(Base.similar)},
     ::Type{RT},
-    uval::Enzyme.Annotation{<:ConcretePJRTArray},
-    T::Enzyme.Const{<:Type},
+    uval::Annotation{<:ConcretePJRTArray},
+    T::Const{<:Type},
     args...,
 ) where {RT}
     primargs = ntuple(Val(length(args))) do i
@@ -149,7 +145,7 @@ function Enzyme.EnzymeRules.augmented_primal(
         args[i].val
     end
 
-    primal = if EnzymeRules.needs_primal(config)
+    primal = if EnzymeCore.needs_primal(config)
         ofn.val(uval.val, T.val, primargs...)
     else
         nothing
@@ -185,14 +181,14 @@ function Enzyme.EnzymeRules.augmented_primal(
     )
 end
 
-function Enzyme.EnzymeRules.reverse(
+function EnzymeRules.reverse(
     config,
     ofn::Const{typeof(Base.similar)},
     ::Type{RT},
     tape,
-    uval::Enzyme.Annotation{<:ConcretePJRTArray},
-    T::Enzyme.Const{<:Type},
-    args::Vararg{Enzyme.Annotation,N},
+    uval::Annotation{<:ConcretePJRTArray},
+    T::Const{<:Type},
+    args::Vararg{Annotation,N},
 ) where {RT,N}
     ntuple(Val(N + 2)) do i
         Base.@_inline_meta
@@ -204,14 +200,14 @@ end
     return act_from_type(A, reverse, needs_primal)
 end
 
-@inline function act_from_type(::Type{<:Enzyme.Active}, reverse, needs_primal)
+@inline function act_from_type(::Type{<:Active}, reverse, needs_primal)
     return needs_primal ? enzyme_out : enzyme_outnoneed
 end
-@inline function act_from_type(::Type{<:Enzyme.Const}, reverse, needs_primal)
+@inline function act_from_type(::Type{<:Const}, reverse, needs_primal)
     return needs_primal ? enzyme_const : enzyme_constnoneed
 end
 
-@inline function act_from_type(::Type{<:Enzyme.Duplicated}, reverse, needs_primal)
+@inline function act_from_type(::Type{<:Duplicated}, reverse, needs_primal)
     if reverse
         return needs_primal ? enzyme_out : enzyme_outnoneed
     else
@@ -219,20 +215,20 @@ end
     end
 end
 @inline function act_from_type(
-    ::Type{<:Union{Enzyme.BatchDuplicated,StackedBatchDuplicated}}, reverse, needs_primal
+    ::Type{<:Union{BatchDuplicated,StackedBatchDuplicated}}, reverse, needs_primal
 )
-    return act_from_type(Enzyme.Duplicated, reverse, needs_primal)
+    return act_from_type(Duplicated, reverse, needs_primal)
 end
 
-@inline function act_from_type(::Type{<:Enzyme.DuplicatedNoNeed}, reverse, needs_primal)
+@inline function act_from_type(::Type{<:DuplicatedNoNeed}, reverse, needs_primal)
     return reverse ? enzyme_out : enzyme_dupnoneed
 end
 @inline function act_from_type(
-    ::Type{<:Union{Enzyme.BatchDuplicatedNoNeed,StackedBatchDuplicatedNoNeed}},
+    ::Type{<:Union{BatchDuplicatedNoNeed,StackedBatchDuplicatedNoNeed}},
     reverse,
     needs_primal,
 )
-    return act_from_type(Enzyme.DuplicatedNoNeed, reverse, needs_primal)
+    return act_from_type(DuplicatedNoNeed, reverse, needs_primal)
 end
 
 function push_acts!(ad_inputs, x::Union{Const,Active}, path, reverse)
@@ -266,7 +262,7 @@ function push_acts!(
 end
 
 function set_act!(inp, path, reverse, tostore; emptypath=false, width=1)
-    x = if inp isa Enzyme.Active
+    x = if inp isa Active
         inp.val
     else
         inp.dval
@@ -298,9 +294,9 @@ function act_attr(val)
 end
 
 function overload_autodiff(
-    ::CMode, f::FA, ::Type{A}, args::Vararg{Enzyme.Annotation,Nargs}
-) where {CMode<:Enzyme.Mode,FA<:Enzyme.Annotation,A<:Enzyme.Annotation,Nargs}
-    reverse = CMode <: Enzyme.ReverseMode
+    ::CMode, f::FA, ::Type{A}, args::Vararg{Annotation,Nargs}
+) where {CMode<:Mode,FA<:Annotation,A<:Annotation,Nargs}
+    reverse = CMode <: ReverseMode
 
     width = Enzyme.same_or_one(1, args...)
     if width == 0
@@ -343,14 +339,14 @@ function overload_autodiff(
 
     for a in linear_results
         if TracedUtils.has_idx(a, resprefix)
-            if Enzyme.needs_primal(CMode)
+            if EnzymeCore.needs_primal(CMode)
                 push!(
                     outtys,
                     TracedUtils.transpose_ty(MLIR.IR.type(TracedUtils.get_mlir_data(a))),
                 )
             end
 
-            if CMode <: Enzyme.ForwardMode && !(A <: Enzyme.Const)
+            if CMode <: ForwardMode && !(A <: Const)
                 push!(
                     outtys,
                     TracedUtils.batch_ty(
@@ -362,7 +358,7 @@ function overload_autodiff(
                 )
             end
 
-            act = act_from_type(A, reverse, Enzyme.needs_primal(CMode))
+            act = act_from_type(A, reverse, EnzymeCore.needs_primal(CMode))
             push!(ret_activity, act)
             if act == enzyme_out || act == enzyme_outnoneed
                 if width == 1
@@ -390,7 +386,7 @@ function overload_autodiff(
                     end
                 end
             else
-                act = act_from_type(Enzyme.Const, reverse, true)
+                act = act_from_type(Const, reverse, true)
                 push!(ret_activity, act)
             end
 
@@ -413,14 +409,14 @@ function overload_autodiff(
         outputs=outtys,
         fn=fname,
         width,
-        strong_zero=Enzyme.strong_zero(CMode),
+        strong_zero=EnzymeCore.strong_zero(CMode),
         activity=MLIR.IR.Attribute([act_attr(a) for a in activity]),
         ret_activity=MLIR.IR.Attribute([act_attr(a) for a in ret_activity]),
     )
 
     residx = 1
 
-    dresult = if CMode <: Enzyme.ForwardMode && !(A <: Enzyme.Const)
+    dresult = if CMode <: ForwardMode && !(A <: Const)
         if width == 1
             deepcopy(result)
         else
@@ -435,13 +431,13 @@ function overload_autodiff(
 
     for a in linear_results
         if TracedUtils.has_idx(a, resprefix)
-            if Enzyme.needs_primal(CMode)
+            if needs_primal(CMode)
                 path = TracedUtils.get_idx(a, resprefix)
                 tval = TracedUtils.transpose_val(MLIR.IR.result(res, residx))
                 TracedUtils.set!(result, path[2:end], tval)
                 residx += 1
             end
-            if CMode <: Enzyme.ForwardMode && !(A <: Enzyme.Const)
+            if CMode <: ForwardMode && !(A <: Const)
                 path = TracedUtils.get_idx(a, resprefix)
                 tval = TracedUtils.transpose_val(MLIR.IR.result(res, residx))
                 if width == 1
@@ -478,7 +474,7 @@ function overload_autodiff(
         arg = idx == 1 && fnwrap ? f : args[idx - fnwrap]
         act_from_type(arg, reverse) != enzyme_out && continue
 
-        if idx == 1 && fnwrap && arg isa Enzyme.Active
+        if idx == 1 && fnwrap && arg isa Active
             @assert false
         end
 
@@ -488,7 +484,7 @@ function overload_autodiff(
             reverse,
             TracedUtils.transpose_val(MLIR.IR.result(res, residx));
             width,
-            emptypath=arg isa Enzyme.Active,
+            emptypath=arg isa Active,
         )
         residx += 1
     end
@@ -496,21 +492,21 @@ function overload_autodiff(
     func2.operation = MLIR.API.MlirOperation(C_NULL)
 
     if reverse
-        resv = if Enzyme.needs_primal(CMode)
+        resv = if EnzymeCore.needs_primal(CMode)
             result
         else
             nothing
         end
         return ((restup...,), resv)
     else
-        if Enzyme.needs_primal(CMode)
-            if CMode <: Enzyme.ForwardMode && !(A <: Enzyme.Const)
+        if EnzymeCore.needs_primal(CMode)
+            if CMode <: ForwardMode && !(A <: Const)
                 return (dresult, result)
             else
                 return (result,)
             end
         else
-            if CMode <: Enzyme.ForwardMode && !(A <: Enzyme.Const)
+            if CMode <: ForwardMode && !(A <: Const)
                 return (dresult,)
             else
                 return ()
