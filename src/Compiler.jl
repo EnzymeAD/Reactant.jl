@@ -910,6 +910,7 @@ function optimization_passes(
         "dynamic_pad_to_pad",
         "remove_no_ops_from_while_loop",
         "while_is_copy_simplify",
+        "split_variadic_scatter_op",
     ]
 
     if !compile_options.disable_auto_batching_passes
@@ -1077,6 +1078,7 @@ function optimization_passes(
             "concat_const_prop<1>($max_constant_threshold)",
             "dynamic_update_slice_const_prop($max_constant_threshold)",
             "clamp_const_prop",
+            "scatter_const_fold($max_constant_threshold)",
         ],
     )
 

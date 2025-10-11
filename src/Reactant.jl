@@ -15,18 +15,20 @@ using LLVMOpenMP_jll: LLVMOpenMP_jll
 using Adapt: Adapt, WrappedArray
 using GPUArraysCore: GPUArraysCore, @allowscalar, allowscalar
 
-using Enzyme:
-    Enzyme,
-    Active,
+using Enzyme: Enzyme
+using EnzymeCore:
+    EnzymeCore,
+    Mode,
     Annotation,
+    Active,
     BatchDuplicated,
     BatchDuplicatedNoNeed,
     Const,
     Duplicated,
     DuplicatedNoNeed,
     EnzymeRules,
-    Reverse
-using EnzymeCore: EnzymeCore
+    ReverseMode,
+    ForwardMode
 
 export allowscalar, @allowscalar # re-exported from GPUArraysCore
 
@@ -233,6 +235,8 @@ include("stdlibs/Base.jl")
 
 # Other Integrations
 include("Enzyme.jl")
+
+export StackedBatchDuplicated, StackedBatchDuplicatedNoNeed
 
 const TracedType = Union{TracedRArray,TracedRNumber,MissingTracedValue}
 
