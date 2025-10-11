@@ -23,6 +23,8 @@ Base.strides(x::TracedRArray) = Base.size_to_strides(1, size(x)...)
 
 Base.IndexStyle(::Type{<:TracedRArray}) = Base.IndexLinear()
 
+Base.elsize(::Type{TracedRArray{T,N}}) where {T,N} = sizeof(T)
+
 # This is required otherwise we will copy a tracedrarray each time
 # we use it
 Base.convert(T::Type{<:TracedRArray}, x::AbstractArray) = Reactant.promote_to(T, x)
@@ -265,10 +267,6 @@ function Base.show(io::IOty, X::TracedRArray{T,N}) where {T,N,IOty<:Union{IO,IOC
     return print(io, "TracedRArray{", T, ",", N, "N}(", X.paths, ", size=", size(X), ")")
 end
 
-function Base.permutedims(A::AnyTracedRArray{T,N}, perm) where {T,N}
-    return @opcall transpose(materialize_traced_array(A), Int64[perm...])
-end
-
 for (jlop, hloop, hlocomp, merge) in
     ((:(Base.:(==)), :compare, "EQ", :all), (:(Base.:(!=)), :compare, "NE", :any))
     @eval function $jlop(
@@ -277,6 +275,17 @@ for (jlop, hloop, hlocomp, merge) in
         elems = $(jlop).(lhs, rhs)
         return N == 0 ? elems : $(merge)(elems)
     end
+end
+
+# Override _parentsmatch to avoid pointer comparisons during tracing
+# Direct TracedRArray comparisons - they don't alias unless they're the same object
+Base._parentsmatch(A::TracedRArray, B::TracedRArray) = A === B
+# ReshapedArray comparisons - check if they share the same parent (more specific than StridedArray)
+function Base._parentsmatch(
+    A::Base.ReshapedArray{<:TracedRNumber,<:Any,<:Union{TracedRArray,SubArray{<:TracedRNumber,<:Any,<:TracedRArray}}},
+    B::Base.ReshapedArray{<:TracedRNumber,<:Any,<:Union{TracedRArray,SubArray{<:TracedRNumber,<:Any,<:TracedRArray}}}
+)
+    return Base._parentsmatch(parent(A), parent(B))
 end
 
 function __default_init(
@@ -1346,6 +1355,17 @@ function unrolled_map(f::F, itr) where {F}
     end
 
     return result
+end
+
+# permutedims for TracedRArrays and wrappers
+function Base.permutedims(A::AnyTracedRArray{T,N}, perm) where {T,N}
+    return @opcall transpose(materialize_traced_array(A), Int64[perm...])
+end
+
+function Base.permutedims!(dest::TracedRArray, src::AnyTracedRArray, perm)
+    result = @opcall transpose(materialize_traced_array(src), Int64[perm...])
+    TracedUtils.set_mlir_data!(dest, result.mlir_data)
+    return dest
 end
 
 end

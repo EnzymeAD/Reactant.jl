@@ -2,7 +2,7 @@ abstract type RNumber{T<:ReactantPrimitive} <: Number end
 
 abstract type AbstractConcreteNumber{T} <: RNumber{T} end
 
-abstract type RArray{T,N} <: AbstractArray{T,N} end
+abstract type RArray{T,N} <: DenseArray{T,N} end
 
 abstract type AbstractConcreteArray{T,N} <: RArray{T,N} end
 
@@ -51,6 +51,11 @@ mutable struct TracedRNumber{T} <: RNumber{T}
         return new{T}(paths, mlir_data)
     end
 end
+
+Base.elsize(::Type{TracedRNumber{T}}) where {T} = sizeof(T)
+Base.elsize(::Type{RNumber{T}}) where {T} = sizeof(T)
+Base.elsize(::Type{<:AbstractConcreteNumber{T}}) where {T} = sizeof(T)
+Base.elsize(::Type{<:AbstractConcreteArray{T}}) where {T} = sizeof(T)
 
 function repath(x::TracedRNumber{T}, paths) where {T}
     return TracedRNumber{T}(paths, x.mlir_data)
