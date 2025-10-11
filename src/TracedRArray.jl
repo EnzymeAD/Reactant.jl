@@ -282,8 +282,16 @@ end
 Base._parentsmatch(A::TracedRArray, B::TracedRArray) = A === B
 # ReshapedArray comparisons - check if they share the same parent (more specific than StridedArray)
 function Base._parentsmatch(
-    A::Base.ReshapedArray{<:TracedRNumber,<:Any,<:Union{TracedRArray,SubArray{<:TracedRNumber,<:Any,<:TracedRArray}}},
-    B::Base.ReshapedArray{<:TracedRNumber,<:Any,<:Union{TracedRArray,SubArray{<:TracedRNumber,<:Any,<:TracedRArray}}}
+    A::Base.ReshapedArray{
+        <:TracedRNumber,
+        <:Any,
+        <:Union{TracedRArray,SubArray{<:TracedRNumber,<:Any,<:TracedRArray}},
+    },
+    B::Base.ReshapedArray{
+        <:TracedRNumber,
+        <:Any,
+        <:Union{TracedRArray,SubArray{<:TracedRNumber,<:Any,<:TracedRArray}},
+    },
 )
     return Base._parentsmatch(parent(A), parent(B))
 end
