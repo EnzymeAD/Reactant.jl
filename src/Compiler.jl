@@ -974,6 +974,7 @@ function optimization_passes(
                 "gather_elementwise",
                 ## const prop patterns
                 "gather_const_prop",
+                "scatter_const_fold($max_constant_threshold)",
             ],
         )
     end
@@ -1078,7 +1079,6 @@ function optimization_passes(
             "concat_const_prop<1>($max_constant_threshold)",
             "dynamic_update_slice_const_prop($max_constant_threshold)",
             "clamp_const_prop",
-            "scatter_const_fold($max_constant_threshold)",
         ],
     )
 

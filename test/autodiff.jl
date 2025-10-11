@@ -409,5 +409,5 @@ end
     lambdas = ones(3, 2)
     lambdas_r = Reactant.to_rarray(lambdas)
 
-    @test jvp_vjp_cubic(v, x, lambdas) ≈ @jit(jvp_vjp_cubic(v_r, x_r, lambdas_r))
+    @test @jit(jvp_vjp_cubic(v_r, x_r, lambdas_r)) ≈ fill(6, (3, 2))
 end
