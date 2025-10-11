@@ -34,6 +34,10 @@ Base.complex(x::TracedRArray{<:Real}) = complex.(x)
 Base.complex(x::TracedRArray{<:Complex}) = x
 
 TracedRArray{T,N}(x::AbstractArray) where {T,N} = convert(TracedRArray{T,N}, x)
+function TracedRArray{T,N}(::UndefInitializer, shape::Vararg{Int,N}) where {T,N}
+    cst = @opcall fill(zero(T), shape)
+    return TracedRArray{T,N}((), cst.mlir_data, shape)
+end
 
 function maybe_assert_scalar_setindexing(
     ::TracedRArray{T,N}, ::Vararg{Union{Int,TracedRNumber{Int}},N}

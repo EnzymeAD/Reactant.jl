@@ -521,11 +521,8 @@ elseif XLA.REACTANT_XLA_RUNTIME == "IFRT"
     ConcreteIFRTArray
 end
 
-@inline ConcreteRArray{T}(::UndefInitializer, shape::Integer...; kwargs...) where {T} = ConcreteRArray{
-    T
-}(
-    undef, Dims(shape); kwargs...
-)
+@inline ConcreteRArray{T}(::UndefInitializer, shape::Integer...; kwargs...) where {T} =
+    ConcreteRArray{T}(undef, Dims(shape); kwargs...)
 
 """
     ConcreteRNumber(

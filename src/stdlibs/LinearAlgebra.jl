@@ -205,33 +205,29 @@ Reactant.aos_to_soa(x::Tridiagonal{TracedRNumber{T}}) where {T} = x
 
 # Core functions
 function overloaded_mul!(
-    @nospecialize(C::TracedRArray{T,1}),
+    @nospecialize(C::AbstractVector),
     @nospecialize(A::AbstractMatrix),
     @nospecialize(B::AbstractVector),
     α::Number=true,
     β::Number=false,
-) where {T}
-    # TODO: The reshape operations are not getting optimized, we should directly call
-    #       dot_general
-    rC = @opcall reshape(C, length(C), 1)
-    overloaded_mul!(rC, A, reshape(B, :, 1), α, β)
-    C.mlir_data = get_mlir_data(vec(rC))
+)
+    overloaded_mul!(reshape(C, length(C), 1), A, reshape(B, :, 1), α, β)
     return C
 end
 
 function overloaded_mul!(
-    @nospecialize(C::TracedRArray{T,2}),
+    @nospecialize(C::AbstractMatrix),
     @nospecialize(A::AbstractMatrix),
     @nospecialize(B::AbstractVector),
     α::Number=true,
     β::Number=false,
-) where {T}
+)
     overloaded_mul!(C, A, reshape(B, :, 1), α, β)
     return C
 end
 
 function overloaded_mul!(
-    @nospecialize(C::TracedRArray{T,2} where {T}),
+    @nospecialize(C::AbstractMatrix),
     @nospecialize(A::AbstractMatrix),
     @nospecialize(B::AbstractMatrix),
     α::Number=true,
