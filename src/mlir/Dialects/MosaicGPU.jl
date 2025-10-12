@@ -499,19 +499,12 @@ function tcgen05_mma(
     attributes = NamedAttribute[]
     !isnothing(a_scale) && push!(operands, a_scale)
     !isnothing(b_scale) && push!(operands, b_scale)
-    push!(attributes, operandsegmentsizes([
-        1,
-        1,
-        1,
-        1,
-        if (a_scale == nothing)
-            0
-        elseif 1(b_scale == nothing)
-            0
-        else
-            1
-        end,
-    ]))
+    push!(
+        attributes,
+        operandsegmentsizes([
+            1, 1, 1, 1, (a_scale == nothing) ? 0 : 1, (b_scale == nothing) ? 0 : 1
+        ]),
+    )
     !isnothing(collective) && push!(attributes, namedattribute("collective", collective))
 
     return create_operation(

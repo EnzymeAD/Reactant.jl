@@ -409,15 +409,11 @@ function enqueue_dma(
         attributes,
         operandsegmentsizes([
             1,
-            (source_semaphore == nothing) ? 0 : 11,
+            (source_semaphore == nothing) ? 0 : 1,
             1,
-            if (device_id == nothing)
-                0
-            elseif 1(core_id == nothing)
-                0
-            else
-                1
-            end,
+            1,
+            (device_id == nothing) ? 0 : 1,
+            (core_id == nothing) ? 0 : 1,
         ]),
     )
     !isnothing(priority) && push!(attributes, namedattribute("priority", priority))
@@ -1268,17 +1264,12 @@ function sem_signal(
     attributes = NamedAttribute[]
     !isnothing(device_id) && push!(operands, device_id)
     !isnothing(core_id) && push!(operands, core_id)
-    push!(attributes, operandsegmentsizes([
-        1,
-        1,
-        if (device_id == nothing)
-            0
-        elseif 1(core_id == nothing)
-            0
-        else
-            1
-        end,
-    ]))
+    push!(
+        attributes,
+        operandsegmentsizes([
+            1, 1, (device_id == nothing) ? 0 : 1, (core_id == nothing) ? 0 : 1
+        ]),
+    )
     !isnothing(core_type) && push!(attributes, namedattribute("core_type", core_type))
 
     return create_operation(
@@ -1748,18 +1739,12 @@ function wait_dma2(
     attributes = NamedAttribute[]
     !isnothing(device_id) && push!(operands, device_id)
     !isnothing(core_id) && push!(operands, core_id)
-    push!(attributes, operandsegmentsizes([
-        1,
-        1,
-        1,
-        if (device_id == nothing)
-            0
-        elseif 1(core_id == nothing)
-            0
-        else
-            1
-        end,
-    ]))
+    push!(
+        attributes,
+        operandsegmentsizes([
+            1, 1, 1, (device_id == nothing) ? 0 : 1, (core_id == nothing) ? 0 : 1
+        ]),
+    )
     !isnothing(strict_ordering) &&
         push!(attributes, namedattribute("strict_ordering", strict_ordering))
 

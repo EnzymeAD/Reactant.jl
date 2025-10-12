@@ -115,15 +115,12 @@ function barrier(
     attributes = NamedAttribute[]
     !isnothing(barrierId) && push!(operands, barrierId)
     !isnothing(numberOfThreads) && push!(operands, numberOfThreads)
-    push!(attributes, operandsegmentsizes([
-        if (barrierId == nothing)
-            0
-        elseif 1(numberOfThreads == nothing)
-            0
-        else
-            1
-        end,
-    ]))
+    push!(
+        attributes,
+        operandsegmentsizes([
+            (barrierId == nothing) ? 0 : 1, (numberOfThreads == nothing) ? 0 : 1
+        ]),
+    )
 
     return create_operation(
         "nvvm.barrier",
@@ -988,19 +985,12 @@ function cp_async_bulk_shared_cluster_global(
     attributes = NamedAttribute[]
     !isnothing(multicastMask) && push!(operands, multicastMask)
     !isnothing(l2CacheHint) && push!(operands, l2CacheHint)
-    push!(attributes, operandsegmentsizes([
-        1,
-        1,
-        1,
-        1,
-        if (multicastMask == nothing)
-            0
-        elseif 1(l2CacheHint == nothing)
-            0
-        else
-            1
-        end,
-    ]))
+    push!(
+        attributes,
+        operandsegmentsizes([
+            1, 1, 1, 1, (multicastMask == nothing) ? 0 : 1, (l2CacheHint == nothing) ? 0 : 1
+        ]),
+    )
 
     return create_operation(
         "nvvm.cp.async.bulk.shared.cluster.global",
@@ -1106,18 +1096,12 @@ function cp_async_bulk_global_shared_cta(
     attributes = NamedAttribute[]
     !isnothing(l2CacheHint) && push!(operands, l2CacheHint)
     !isnothing(byteMask) && push!(operands, byteMask)
-    push!(attributes, operandsegmentsizes([
-        1,
-        1,
-        1,
-        if (l2CacheHint == nothing)
-            0
-        elseif 1(byteMask == nothing)
-            0
-        else
-            1
-        end,
-    ]))
+    push!(
+        attributes,
+        operandsegmentsizes([
+            1, 1, 1, (l2CacheHint == nothing) ? 0 : 1, (byteMask == nothing) ? 0 : 1
+        ]),
+    )
 
     return create_operation(
         "nvvm.cp.async.bulk.global.shared.cta",
@@ -1213,15 +1197,9 @@ function cp_async_bulk_tensor_shared_cluster_global(
             length(coordinates),
             1,
             length(im2colOffsets),
-            if (multicastMask == nothing)
-                0
-            elseif 1(l2CacheHint == nothing)
-                0
-            elseif 1(predicate == nothing)
-                0
-            else
-                1
-            end,
+            (multicastMask == nothing) ? 0 : 1,
+            (l2CacheHint == nothing) ? 0 : 1,
+            (predicate == nothing) ? 0 : 1,
         ]),
     )
 
@@ -1366,13 +1344,8 @@ function cp_async_bulk_tensor_global_shared_cta(
             1,
             1,
             length(coordinates),
-            if (l2CacheHint == nothing)
-                0
-            elseif 1(predicate == nothing)
-                0
-            else
-                1
-            end,
+            (l2CacheHint == nothing) ? 0 : 1,
+            (predicate == nothing) ? 0 : 1,
         ]),
     )
     !isnothing(mode) && push!(attributes, namedattribute("mode", mode))

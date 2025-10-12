@@ -1537,17 +1537,11 @@ function launch_func(
             1,
             1,
             1,
-            if (clusterSizeX == nothing)
-                0
-            elseif 1(clusterSizeY == nothing)
-                0
-            elseif 1(clusterSizeZ == nothing)
-                0
-            elseif 1(dynamicSharedMemorySize == nothing)
-                0
-            else
-                1length(kernelOperands)
-            end,
+            (clusterSizeX == nothing) ? 0 : 1,
+            (clusterSizeY == nothing) ? 0 : 1,
+            (clusterSizeZ == nothing) ? 0 : 1,
+            (dynamicSharedMemorySize == nothing) ? 0 : 1,
+            length(kernelOperands),
             (asyncObject == nothing) ? 0 : 1,
         ]),
     )
@@ -1728,17 +1722,10 @@ function launch(
             1,
             1,
             1,
-            if (clusterSizeX == nothing)
-                0
-            elseif 1(clusterSizeY == nothing)
-                0
-            elseif 1(clusterSizeZ == nothing)
-                0
-            elseif 1(dynamicSharedMemorySize == nothing)
-                0
-            else
-                1
-            end,
+            (clusterSizeX == nothing) ? 0 : 1,
+            (clusterSizeY == nothing) ? 0 : 1,
+            (clusterSizeZ == nothing) ? 0 : 1,
+            (dynamicSharedMemorySize == nothing) ? 0 : 1,
         ]),
     )
     !isnothing(asyncToken) && push!(op_ty_results, asyncToken)
