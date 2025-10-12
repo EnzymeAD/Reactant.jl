@@ -444,7 +444,7 @@ function overload_autodiff(
                     TracedUtils.set!(dresult, path[2:end], tval)
                 else
                     ttval = TracedRArray(tval)
-                    for (i, sl) in enumerate(eachslice(ttval; dims=1))
+                    for (i, sl) in enumerate(eachslice(ttval; dims=ndims(ttval)))
                         TracedUtils.set!(
                             dresult[i],
                             path[2:end],
