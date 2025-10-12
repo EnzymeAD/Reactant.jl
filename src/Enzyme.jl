@@ -274,6 +274,8 @@ function set_act!(inp, path, reverse, tostore; emptypath=false, width=1)
 
     if width == 1
         TracedUtils.set_mlir_data!(x, tostore)
+    elseif x isa AbstractArray
+        TracedUtils.set_mlir_data!(x, tostore)
     else
         tostore_traced = TracedRArray(tostore)
         @assert length(x) == size(tostore_traced, ndims(tostore_traced))
@@ -378,6 +380,8 @@ function overload_autodiff(
 
                 if act == enzyme_out || act == enzyme_outnoneed
                     if width == 1
+                        TracedUtils.push_val!(ad_inputs, arg.dval, path[3:end])
+                    elseif arg.dval isa AbstractArray
                         TracedUtils.push_val!(ad_inputs, arg.dval, path[3:end])
                     else
                         TracedUtils.push_val!(
