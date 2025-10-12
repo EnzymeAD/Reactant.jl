@@ -435,7 +435,7 @@ function overload_autodiff(
 
     for a in linear_results
         if TracedUtils.has_idx(a, resprefix)
-            if needs_primal(CMode)
+            if EnzymeCore.needs_primal(CMode)
                 path = TracedUtils.get_idx(a, resprefix)
                 tval = TracedUtils.transpose_val(MLIR.IR.result(res, residx))
                 TracedUtils.set!(result, path[2:end], tval)
