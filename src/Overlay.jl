@@ -114,17 +114,18 @@ end
 ## `mul!` goes through too many layers of abstractions and we aren't able to overload
 ## without specializing on every possible combination of types
 for (cT, aT, bT) in (
-    (:AbstractVector, :DenseMatrix, :AbstractVector),
-    (:AbstractMatrix, :DenseMatrix, :AbstractVecOrMat),
+    (:AbstractVector, :AbstractMatrix, :AbstractVector),
+    (:AbstractMatrix, :AbstractMatrix, :AbstractVecOrMat),
 )
     @eval begin
         @reactant_overlay @noinline function LinearAlgebra.mul!(
             C::$cT, A::$aT, B::$bT, α::Number, β::Number
         )
-            A, B = aos_to_soa(A), aos_to_soa(B)
+            A2, B2 = aos_to_soa(A), aos_to_soa(B)
             C2 = aos_to_soa(C)
-            if use_overlayed_version((C2, A, B))
-                TracedLinearAlgebra.overloaded_mul!(C2, A, B, α, β)
+            # A2 can also be a SparseMatrix, which should be handled by its own methods
+            if use_overlayed_version(A2) && use_overlayed_version((C2, A2, B2))
+                TracedLinearAlgebra.overloaded_mul!(C2, A2, B2, α, β)
                 if C2 !== C
                     C .= C2
                 end
