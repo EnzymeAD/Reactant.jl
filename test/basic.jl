@@ -1652,3 +1652,16 @@ end
     @test !contains(repr(hlo3), "3xi32")
     @test contains(repr(hlo3), "3xi16")
 end
+
+init_zeros(x) = zeros(eltype(x), 2, 3, 4)
+init_ones(x) = ones(eltype(x), 2, 3, 4)
+init_fill(x) = fill(eltype(x)(5), 2, 3, 4)
+
+@testset "zeros/ones/fill" begin
+    x = rand(Float32, 2)
+    x_ra = Reactant.to_rarray(rand(Float32, 2))
+
+    @test @jit(init_zeros(x_ra)) ≈ init_zeros(x)
+    @test @jit(init_ones(x_ra)) ≈ init_ones(x)
+    @test @jit(init_fill(x_ra)) ≈ init_fill(x)
+end

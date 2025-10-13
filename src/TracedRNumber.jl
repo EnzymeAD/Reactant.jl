@@ -698,4 +698,14 @@ function Base.copysign(x::S, y::TracedRNumber{T}) where {S<:Number,T}
     return copysign(Reactant.promote_to(TracedRNumber{S}, x), y)
 end
 
+function Base.zeros(::Type{TracedRNumber{T}}, dims::Dims{N}) where {T,N}
+    return @opcall fill(zero(T), dims)
+end
+function Base.ones(::Type{TracedRNumber{T}}, dims::Dims{N}) where {T,N}
+    return @opcall fill(one(T), dims)
+end
+function Base.fill(v::TracedRNumber{T}, dims::Dims{N}) where {T,N}
+    return @opcall fill(v, dims)
+end
+
 end # module TracedRNumberOverrides
