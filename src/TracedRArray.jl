@@ -326,6 +326,12 @@ function __default_init(T::Type{<:Reactant.ReactantFloat8}, op::F) where {F}
     return Reactant.promote_to(TracedRNumber{T}, __default_init(Float16, op))
 end
 
+struct TracedCall{F} <: Function
+    f::F
+end
+
+(fn::TracedCall)(args...) = @opcall call(fn.f, args...)
+
 function overloaded_mapreduce(
     @nospecialize(f), @nospecialize(op), @nospecialize(A); dims=:, init=Base._InitialValue()
 )
@@ -334,7 +340,7 @@ function overloaded_mapreduce(
     # unroll the mapreduce.
     if typeof(res) == typeof(A)
         @assert dims == Colon() "dims not supported for mapreduce currently."
-        return foldl(op, res; init)
+        return foldl(TracedCall(op), res; init)
     end
     return overloaded_mapreduce(identity, op, res; dims=:, init)
 end
@@ -1323,6 +1329,9 @@ end
 
 struct BroadcastIterator{F}
     f::F
+
+    BroadcastIterator{F}(f::F) where {F} = new{F}(f)
+    BroadcastIterator(f::F) where {F} = new{F}(f)
 end
 
 (fn::BroadcastIterator)(args...) = fn.f((args...,))
@@ -1343,14 +1352,13 @@ end
 
 unwrapped_broadcast(f::F, xs) where {F} = unrolled_map(f, xs)
 
-# TODO: once traced_call supports internal mutations, we can use traced_call here
 # TODO: we should overload this for Slices and use mapslices instead
 function unrolled_map(f::F, itr) where {F}
     y = Reactant.call_with_reactant(iterate, itr)
     y === nothing && return []
 
     first, state = y
-    res_first = Reactant.call_with_reactant(f, first)
+    res_first = @opcall call(f, first)
     result = [res_first]
 
     while true
@@ -1358,7 +1366,7 @@ function unrolled_map(f::F, itr) where {F}
         y === nothing && break
 
         val, state = y
-        res = Reactant.call_with_reactant(f, val)
+        res = @opcall call(f, val)
         push!(result, res)
     end
 

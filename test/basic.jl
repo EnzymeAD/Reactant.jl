@@ -1493,6 +1493,15 @@ end
 
         @test @jit(nested_mapreduce_hcat(x_ra, y_ra)) ≈ nested_mapreduce_hcat(x, y)
     end
+
+    @testset "mapreduce vector" begin
+        x = [rand(Float32, 2, 3) for _ in 1:10]
+        x_ra = Reactant.to_rarray(x)
+
+        @test @jit(mapreduce_vector(x_ra)) ≈ mapreduce_vector(x)
+        hlo = repr(@code_hlo optimize = false mapreduce_vector(x_ra))
+        @test contains(hlo, "call")
+    end
 end
 
 @testset "Base.Generator" begin
