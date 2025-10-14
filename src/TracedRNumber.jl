@@ -701,11 +701,22 @@ end
 function Base.zeros(::Type{TracedRNumber{T}}, dims::Dims{N}) where {T,N}
     return @opcall fill(zero(T), dims)
 end
+function Base.zeros(::Type{TracedRNumber{T}}, ::Tuple{}) where {T}
+    return @opcall fill(zero(T), ())
+end
+
 function Base.ones(::Type{TracedRNumber{T}}, dims::Dims{N}) where {T,N}
     return @opcall fill(one(T), dims)
 end
+function Base.ones(::Type{TracedRNumber{T}}, ::Tuple{}) where {T}
+    return @opcall fill(one(T), ())
+end
+
 function Base.fill(v::TracedRNumber{T}, dims::Dims{N}) where {T,N}
     return @opcall fill(v, dims)
+end
+function Base.fill(v::TracedRNumber{T}, ::Tuple{}) where {T}
+    return @opcall fill(v, ())
 end
 
 end # module TracedRNumberOverrides

@@ -1654,14 +1654,20 @@ end
 end
 
 init_zeros(x) = zeros(eltype(x), 2, 3, 4)
+init_zeros_0d(x) = zeros(eltype(x))
 init_ones(x) = ones(eltype(x), 2, 3, 4)
+init_ones_0d(x) = ones(eltype(x))
 init_fill(x) = fill(eltype(x)(5), 2, 3, 4)
+init_fill_0d(x) = fill(eltype(x)(5))
 
 @testset "zeros/ones/fill" begin
     x = rand(Float32, 2)
     x_ra = Reactant.to_rarray(rand(Float32, 2))
 
     @test @jit(init_zeros(x_ra)) ≈ init_zeros(x)
+    @test @jit(init_zeros_0d(x_ra)) ≈ init_zeros_0d(x)
     @test @jit(init_ones(x_ra)) ≈ init_ones(x)
+    @test @jit(init_ones_0d(x_ra)) ≈ init_ones_0d(x)
     @test @jit(init_fill(x_ra)) ≈ init_fill(x)
+    @test @jit(init_fill_0d(x_ra)) ≈ init_fill_0d(x)
 end
