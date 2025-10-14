@@ -837,6 +837,40 @@ function stream2token(source::Value; result::IR.Type, location=Location())
     )
 end
 
+"""
+`lapack_symm`
+
+C := alpha*A*B + beta*C, or C := alpha*B*A + beta*C, where alpha and beta are scalars,  A is a symmetric matrix\"
+"""
+function lapack_symm(
+    A::Value,
+    B::Value,
+    C::Value,
+    alpha::Value,
+    beta::Value;
+    output::IR.Type,
+    side,
+    uplo,
+    location=Location(),
+)
+    op_ty_results = IR.Type[output,]
+    operands = Value[A, B, C, alpha, beta]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[namedattribute("side", side), namedattribute("uplo", uplo)]
+
+    return create_operation(
+        "enzymexla.lapack.symm",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
 function wrap(
     operand::Value;
     result=nothing::Union{Nothing,IR.Type},

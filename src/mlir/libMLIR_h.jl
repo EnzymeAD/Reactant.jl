@@ -11497,6 +11497,10 @@ function enzymexlaLapackSideAttrGet(ctx, left_side)
     )::MlirAttribute
 end
 
+function enzymexlaLapackUploAttrGet(ctx, up)
+    @ccall mlir_c.enzymexlaLapackUploAttrGet(ctx::MlirContext, up::UInt8)::MlirAttribute
+end
+
 function enzymexlaQRAlgorithmAttrGet(ctx, mode)
     @ccall mlir_c.enzymexlaQRAlgorithmAttrGet(ctx::MlirContext, mode::Int32)::MlirAttribute
 end
