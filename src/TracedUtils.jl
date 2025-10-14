@@ -204,6 +204,7 @@ end
 Base.@nospecializeinfer function batch_ty(
     width::Int, @nospecialize(mlirty::MLIR.IR.Type)
 )::MLIR.IR.Type
+    width == 1 && return mlirty
     return MLIR.IR.TensorType(Int[width, size(mlirty)...], eltype(mlirty))
 end
 
@@ -214,15 +215,11 @@ Base.@nospecializeinfer function transpose_ty(
 end
 
 Base.@nospecializeinfer function transpose_val(
-    @nospecialize(val::MLIR.IR.Value); keep_first_intact::Bool=false
+    @nospecialize(val::MLIR.IR.Value)
 )::MLIR.IR.Value
     val_size = size(MLIR.IR.type(val))
     val_size == () && return val
-    if keep_first_intact
-        attr = MLIR.IR.DenseArrayAttribute(Int64[0, reverse(1:(length(val_size) - 1))...])
-    else
-        attr = MLIR.IR.DenseArrayAttribute(Int64[reverse(0:(length(val_size) - 1))...])
-    end
+    attr = MLIR.IR.DenseArrayAttribute(Int64[reverse(0:(length(val_size) - 1))...])
     return MLIR.IR.result(MLIR.Dialects.stablehlo.transpose(val; permutation=attr), 1)
 end
 

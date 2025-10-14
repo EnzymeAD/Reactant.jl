@@ -217,16 +217,85 @@ end
 
 fn(x) = sum(abs2, x)
 vector_forward_ad(x) = Enzyme.autodiff(Forward, fn, BatchDuplicated(x, Enzyme.onehot(x)))
+function vector_forward_ad2(x, dx)
+    return Enzyme.autodiff(Forward, fn, StackedBatchDuplicated(x, dx))
+end
 
 @testset "Vector Mode AD" begin
-    x = Reactant.to_rarray(reshape(collect(Float32, 1:4), 2, 2))
-    res = @jit vector_forward_ad(x)
-    res_enz = vector_forward_ad(Array(x))
+    x = reshape(collect(Float32, 1:6), 3, 2)
+    x_ra = Reactant.to_rarray(x)
+    res = @jit vector_forward_ad(x_ra)
+    res_enz = vector_forward_ad(x)
 
+    @test x_ra ≈ x # See https://github.com/EnzymeAD/Reactant.jl/issues/1733
     @test res[1][1] ≈ res_enz[1][1]
     @test res[1][2] ≈ res_enz[1][2]
     @test res[1][3] ≈ res_enz[1][3]
     @test res[1][4] ≈ res_enz[1][4]
+    @test res[1][5] ≈ res_enz[1][5]
+    @test res[1][6] ≈ res_enz[1][6]
+
+    oh = Enzyme.onehot(x)
+    oh_stacked = stack(oh)
+    oh_ra = Reactant.to_rarray(oh_stacked)
+    res2 = @jit vector_forward_ad2(x_ra, oh_ra)
+
+    @test res2[1][1] ≈ res_enz[1][1]
+    @test res2[1][2] ≈ res_enz[1][2]
+    @test res2[1][3] ≈ res_enz[1][3]
+    @test res2[1][4] ≈ res_enz[1][4]
+    @test res2[1][5] ≈ res_enz[1][5]
+    @test res2[1][6] ≈ res_enz[1][6]
+end
+
+function fn2!(y, x)
+    copyto!(y, x .^ 2)
+    return nothing
+end
+
+@testset "Vector Mode AD (Reverse)" begin
+    x = [2.0, 3.0]
+    x_ra = Reactant.to_rarray(x)
+    y = [0.0, 0.0]
+    y_ra = Reactant.to_rarray(y)
+
+    dx1 = zeros(2)
+    dx2 = zeros(2)
+    dx3 = zeros(2)
+    dx4 = zeros(2)
+    dx1_ra = Reactant.to_rarray(dx1)
+    dx2_ra = Reactant.to_rarray(dx2)
+    dx3_ra = Reactant.to_rarray(dx3)
+    dx4_ra = Reactant.to_rarray(dx4)
+
+    dy1 = zeros(2)
+    dy2 = zeros(2)
+    dy3 = zeros(2)
+    dy4 = zeros(2)
+    dy1_ra = Reactant.to_rarray(dy1)
+    dy2_ra = Reactant.to_rarray(dy2)
+    dy3_ra = Reactant.to_rarray(dy3)
+    dy4_ra = Reactant.to_rarray(dy4)
+
+    autodiff(
+        ReverseWithPrimal,
+        fn2!,
+        BatchDuplicated(y, (dy1, dy2, dy3, dy4)),
+        BatchDuplicated(x, (dx1, dx2, dx3, dx4)),
+    )
+
+    @jit autodiff(
+        Reverse,
+        fn2!,
+        BatchDuplicated(y_ra, (dy1_ra, dy2_ra, dy3_ra, dy4_ra)),
+        BatchDuplicated(x_ra, (dx1_ra, dx2_ra, dx3_ra, dx4_ra)),
+    )
+
+    @test y ≈ y_ra
+    @test dy1 ≈ dy1_ra
+    @test dy2 ≈ dy2_ra
+    @test dy3 ≈ dy3_ra
+    @test dy4 ≈ dy4_ra
 end
 
 @testset "make_zero!" begin
@@ -313,4 +382,32 @@ end
     ∂x2, result2 = @jit Enzyme.gradient(ReverseWithPrimal, zero_grad2, x)
     @test result2 isa Tuple{<:ConcreteRNumber{Float32},<:ConcreteRArray{Float32,2}}
     @test ∂x2[1] ≈ zeros(Float32, 4, 4)
+end
+
+cubic(x) = x .^ 3
+
+function vjp_cubic(x, lambdas)
+    vjps = similar(lambdas)
+    for i in 1:size(lambdas, 2)
+        lambda = lambdas[:, i]
+        eval_jac_T_v(x) = sum(cubic(x) .* lambda)
+        vjps[:, i] .= Enzyme.gradient(Reverse, Const(eval_jac_T_v), x)[1]
+    end
+    return vjps
+end
+
+function jvp_vjp_cubic(v, x, lambdas)
+    vjp_cubic_inline(x) = vjp_cubic(x, lambdas)
+    return Enzyme.autodiff(Forward, Const(vjp_cubic_inline), Duplicated(x, v))[1]
+end
+
+@testset "Nested Forward over Reverse AD" begin
+    x = ones(3)
+    x_r = Reactant.to_rarray(x)
+    v = ones(3)
+    v_r = Reactant.to_rarray(x)
+    lambdas = ones(3, 2)
+    lambdas_r = Reactant.to_rarray(lambdas)
+
+    @test @jit(jvp_vjp_cubic(v_r, x_r, lambdas_r)) ≈ fill(6, (3, 2))
 end
