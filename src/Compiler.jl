@@ -1302,7 +1302,7 @@ end
 # TODO we want to be able to run the more advanced passes via transform dialect as an enzyme intermediate
 # However, this errs as we cannot attach the transform with to the funcop itself [as we run a functionpass].
 const enzyme_pass::String = "enzyme{postpasses=\"arith-raise{stablehlo=true},canonicalize,cse,canonicalize,remove-unnecessary-enzyme-ops,enzyme-simplify-math,canonicalize,cse,canonicalize\"}"
-const probprog_pass::String = "probprog{postpasses=\"arith-raise{stablehlo=true},canonicalize,cse,canonicalize\"}"
+const probprog_pass::String = "probprog{postpasses=\"arith-raise{stablehlo=true}\"}"
 
 function run_pass_pipeline!(mod, pass_pipeline, key=""; enable_verifier=true)
     pm = MLIR.IR.PassManager()
@@ -1720,7 +1720,6 @@ function compile_mlir!(
     blas_int_width = sizeof(BlasInt) * 8
     lower_enzymexla_linalg_pass = "lower-enzymexla-linalg{backend=$backend \
                                    blas_int_width=$blas_int_width}"
-    lower_enzyme_probprog_pass = "lower-enzyme-probprog{backend=$backend}"
 
     legalize_chlo_to_stablehlo =
         if legalize_stablehlo_to_mhlo || compile_options.legalize_chlo_to_stablehlo
@@ -1899,8 +1898,10 @@ function compile_mlir!(
                         raise_passes,
                         "enzyme-batch",
                         opt_passes2,
-                        enzyme_pass,
                         probprog_pass,
+                        "lower-probprog-to-stablehlo{backend=$backend}",
+                        "outline-enzyme-regions",
+                        enzyme_pass,
                         opt_passes2,
                         "canonicalize",
                         "remove-unnecessary-enzyme-ops",
@@ -1914,7 +1915,7 @@ function compile_mlir!(
                         )...,
                         opt_passes2,
                         lower_enzymexla_linalg_pass,
-                        lower_enzyme_probprog_pass,
+                        "lower-probprog-trace-ops{backend=$backend}",
                         jit,
                     ]
                 else
@@ -1923,8 +1924,10 @@ function compile_mlir!(
                         opt_passes,
                         "enzyme-batch",
                         opt_passes2,
-                        enzyme_pass,
                         probprog_pass,
+                        "lower-probprog-to-stablehlo{backend=$backend}",
+                        "outline-enzyme-regions",
+                        enzyme_pass,
                         opt_passes2,
                         "canonicalize",
                         "remove-unnecessary-enzyme-ops",
@@ -1940,7 +1943,7 @@ function compile_mlir!(
                         kern,
                         raise_passes,
                         lower_enzymexla_linalg_pass,
-                        lower_enzyme_probprog_pass,
+                        "lower-probprog-trace-ops{backend=$backend}",
                         jit,
                     ]
                 end,
