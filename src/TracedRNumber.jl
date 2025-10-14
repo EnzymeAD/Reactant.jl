@@ -566,11 +566,6 @@ for (minT, maxT) in Iterators.product((Number, TracedRNumber), (Number, TracedRN
     end
 end
 
-Base.fill(x::TracedRNumber, ::Tuple{}) = Reactant.broadcast_to_size(x, ())
-function Base.fill(x::TracedRNumber, dims::NTuple{N,<:Integer}) where {N}
-    return Reactant.broadcast_to_size(x, dims)
-end
-
 function Base.float(x::TracedRNumber{T}) where {T}
     return Reactant.promote_to(TracedRNumber{float(T)}, x)
 end
