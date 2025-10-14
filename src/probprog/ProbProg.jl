@@ -9,6 +9,7 @@ include("FFI.jl")
 include("Modeling.jl")
 include("Display.jl")
 include("MH.jl")
+include("HMC.jl")
 
 # Types.
 export ProbProgTrace, Constraint, Selection, Address
@@ -17,7 +18,7 @@ export ProbProgTrace, Constraint, Selection, Address
 export get_choices, select
 
 # Core MLIR ops.
-export sample, untraced_call, simulate, generate, mh
+export sample, untraced_call, simulate, generate, mh, hmc
 
 # Gen-like helper functions.
 export simulate_, generate_
