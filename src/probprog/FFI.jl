@@ -17,7 +17,14 @@ function addSampleToTrace(
     shape_ptr_array::Ptr{Ptr{UInt64}},
     width_array::Ptr{UInt64},
 )
-    trace = unsafe_pointer_to_objref(unsafe_load(trace_ptr_ptr))::ProbProgTrace
+    trace = nothing
+    try
+        trace = unsafe_pointer_to_objref(unsafe_load(trace_ptr_ptr))::ProbProgTrace
+    catch
+        @ccall printf("Trace dereference failure\n"::Cstring)::Cvoid
+        return nothing
+    end
+
     symbol = unsafe_pointer_to_objref(unsafe_load(symbol_ptr_ptr))::Symbol
     num_outputs = unsafe_load(num_outputs_ptr)
     ndims_array = unsafe_wrap(Array, ndims_array, num_outputs)
@@ -67,7 +74,14 @@ function addSubtrace(
     symbol_ptr_ptr::Ptr{Ptr{Any}},
     subtrace_ptr_ptr::Ptr{Ptr{Any}},
 )
-    trace = unsafe_pointer_to_objref(unsafe_load(trace_ptr_ptr))::ProbProgTrace
+    trace = nothing
+    try
+        trace = unsafe_pointer_to_objref(unsafe_load(trace_ptr_ptr))::ProbProgTrace
+    catch
+        @ccall printf("Trace dereference failure\n"::Cstring)::Cvoid
+        return nothing
+    end
+
     symbol = unsafe_pointer_to_objref(unsafe_load(symbol_ptr_ptr))::Symbol
     subtrace = unsafe_pointer_to_objref(unsafe_load(subtrace_ptr_ptr))::ProbProgTrace
 
@@ -77,7 +91,14 @@ function addSubtrace(
 end
 
 function addWeightToTrace(trace_ptr_ptr::Ptr{Ptr{Any}}, weight_ptr::Ptr{Any})
-    trace = unsafe_pointer_to_objref(unsafe_load(trace_ptr_ptr))::ProbProgTrace
+    trace = nothing
+    try
+        trace = unsafe_pointer_to_objref(unsafe_load(trace_ptr_ptr))::ProbProgTrace
+    catch
+        @ccall printf("Trace dereference failure\n"::Cstring)::Cvoid
+        return nothing
+    end
+
     trace.weight = unsafe_load(Ptr{Float64}(weight_ptr))
     return nothing
 end
@@ -90,7 +111,13 @@ function addRetvalToTrace(
     shape_ptr_array::Ptr{Ptr{UInt64}},
     width_array::Ptr{UInt64},
 )
-    trace = unsafe_pointer_to_objref(unsafe_load(trace_ptr_ptr))::ProbProgTrace
+    trace = nothing
+    try
+        trace = unsafe_pointer_to_objref(unsafe_load(trace_ptr_ptr))::ProbProgTrace
+    catch
+        @ccall printf("Trace dereference failure\n"::Cstring)::Cvoid
+        return nothing
+    end
 
     num_results = unsafe_load(num_results_ptr)
 
@@ -275,7 +302,14 @@ function getSampleFromTrace(
     shape_ptr_array::Ptr{Ptr{UInt64}},
     width_array::Ptr{UInt64},
 )
-    trace = unsafe_pointer_to_objref(unsafe_load(trace_ptr_ptr))::ProbProgTrace
+    trace = nothing
+    try
+        trace = unsafe_pointer_to_objref(unsafe_load(trace_ptr_ptr))::ProbProgTrace
+    catch
+        @ccall printf("Trace dereference failure\n"::Cstring)::Cvoid
+        return nothing
+    end
+
     symbol = unsafe_pointer_to_objref(unsafe_load(symbol_ptr_ptr))::Symbol
     num_samples = unsafe_load(num_samples_ptr)
     ndims_array = unsafe_wrap(Array, ndims_array, num_samples)
@@ -366,7 +400,14 @@ function getSubtrace(
     symbol_ptr_ptr::Ptr{Ptr{Any}},
     subtrace_ptr_ptr::Ptr{Ptr{Any}},
 )
-    trace = unsafe_pointer_to_objref(unsafe_load(trace_ptr_ptr))::ProbProgTrace
+    trace = nothing
+    try
+        trace = unsafe_pointer_to_objref(unsafe_load(trace_ptr_ptr))::ProbProgTrace
+    catch
+        @ccall printf("Trace dereference failure\n"::Cstring)::Cvoid
+        return nothing
+    end
+
     symbol = unsafe_pointer_to_objref(unsafe_load(symbol_ptr_ptr))::Symbol
 
     subtrace = get(trace.subtraces, symbol, nothing)
@@ -384,7 +425,17 @@ function getSubtrace(
 end
 
 function getWeightFromTrace(trace_ptr_ptr::Ptr{Ptr{Any}}, weight_ptr::Ptr{Any})
-    trace = unsafe_pointer_to_objref(unsafe_load(trace_ptr_ptr))::ProbProgTrace
+    trace = nothing
+    try
+        trace = unsafe_pointer_to_objref(unsafe_load(trace_ptr_ptr))::ProbProgTrace
+    catch
+        @ccall printf("Trace dereference failure\n"::Cstring)::Cvoid
+        return nothing
+    end
+    println("Within getWeightFromTrace, trace: $(trace)")
+
+    println("Within getWeightFromTrace, weight: $(trace.weight)")
+
     unsafe_store!(Ptr{Float64}(weight_ptr), trace.weight)
     return nothing
 end
