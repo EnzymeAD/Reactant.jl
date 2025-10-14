@@ -440,6 +440,142 @@ function getWeightFromTrace(trace_ptr_ptr::Ptr{Ptr{Any}}, weight_ptr::Ptr{Any})
     return nothing
 end
 
+function getFlattenedSamplesFromTrace(
+    trace_ptr_ptr::Ptr{Ptr{Any}},
+    num_addresses_ptr::Ptr{UInt64},
+    total_symbols_ptr::Ptr{UInt64},
+    address_lengths_ptr::Ptr{UInt64},
+    flattened_symbols_ptr::Ptr{UInt64},
+    position_ptr::Ptr{Any},
+)
+    trace = nothing
+    try
+        trace = unsafe_pointer_to_objref(unsafe_load(trace_ptr_ptr))::ProbProgTrace
+    catch
+        @ccall printf("No trace found\n"::Cstring)::Cvoid
+        return nothing
+    end
+
+    num_addresses = unsafe_load(num_addresses_ptr)
+    total_symbols = unsafe_load(total_symbols_ptr)
+
+    address_lengths = unsafe_wrap(Array, address_lengths_ptr, num_addresses)
+    flattened_symbols = unsafe_wrap(Array, flattened_symbols_ptr, total_symbols)
+
+    addresses = Vector{Vector{Symbol}}()
+    symbol_idx = 1
+    for i in 1:num_addresses
+        addr_len = address_lengths[i]
+        address = Symbol[]
+        for j in 1:addr_len
+            symbol_ptr_value = flattened_symbols[symbol_idx]
+            symbol = unsafe_pointer_to_objref(Ptr{Any}(symbol_ptr_value))::Symbol
+            push!(address, symbol)
+            symbol_idx += 1
+        end
+        push!(addresses, address)
+    end
+
+    flattened_values = Float64[]
+
+    for address in addresses
+        current_trace = trace
+
+        for (idx, symbol) in enumerate(address)
+            if idx < length(address)
+                if !haskey(current_trace.subtraces, symbol)
+                    @ccall printf(
+                        "No subtrace found for symbol in address path: %s\n"::Cstring,
+                        string(symbol)::Cstring,
+                    )::Cvoid
+                    return nothing
+                end
+                current_trace = current_trace.subtraces[symbol]
+            else
+                if !haskey(current_trace.choices, symbol)
+                    @ccall printf(
+                        "No sample found for symbol: %s\n"::Cstring, string(symbol)::Cstring
+                    )::Cvoid
+                    return nothing
+                end
+
+                sample_tuple = current_trace.choices[symbol]
+
+                for sample_val in sample_tuple
+                    if isa(sample_val, AbstractArray)
+                        for val in sample_val
+                            push!(flattened_values, Float64(val))
+                        end
+                    else
+                        push!(flattened_values, Float64(sample_val))
+                    end
+                end
+            end
+        end
+    end
+
+    position_array = unsafe_wrap(
+        Array, Ptr{Float64}(position_ptr), length(flattened_values)
+    )
+    copyto!(position_array, flattened_values)
+
+    return nothing
+end
+
+function dump(
+    value_ptr::Ptr{Any},
+    label_ptr::Ptr{UInt8},
+    ndims_ptr::Ptr{UInt64},
+    shape_ptr::Ptr{UInt64},
+    width_ptr::Ptr{UInt64},
+)
+    label = unsafe_string(label_ptr)
+    ndims = unsafe_load(ndims_ptr)
+    width = unsafe_load(width_ptr)
+
+    julia_type = if width == 32
+        Float32
+    elseif width == 64
+        Float64
+    elseif width == 1
+        Bool
+    else
+        @ccall printf(
+            "DUMP ERROR: Unsupported datatype width: %lld\n"::Cstring, width::Int64
+        )::Cvoid
+        return nothing
+    end
+
+    println("═══ DUMP: $label ═══")
+
+    if ndims == 0
+        value = unsafe_load(Ptr{julia_type}(value_ptr))
+        println("  Scalar ($julia_type): $value")
+    else
+        shape = unsafe_wrap(Array, shape_ptr, ndims)
+        value_array = unsafe_wrap(Array, Ptr{julia_type}(value_ptr), Tuple(shape))
+
+        println("  Shape: $(Tuple(shape))")
+        println("  Type: Array{$julia_type}")
+        println("  Values:")
+
+        total_elements = prod(shape)
+        if total_elements <= 20
+            println("    ", value_array)
+        else
+            println("    [$(total_elements) elements]")
+            println("    min: $(minimum(value_array))")
+            println("    max: $(maximum(value_array))")
+            println("    mean: $(sum(value_array) / total_elements)")
+            println("    First 10: $(value_array[1:min(10, total_elements)])")
+        end
+    end
+
+    println("═══════════════════════════════════")
+
+    return nothing
+end
+
 function __init__()
     init_trace_ptr = @cfunction(initTrace, Cvoid, (Ptr{Ptr{Any}},))
     @ccall MLIR.API.mlir_c.EnzymeJaXMapSymbol(
@@ -547,6 +683,23 @@ function __init__()
     @ccall MLIR.API.mlir_c.EnzymeJaXMapSymbol(
         :enzyme_probprog_get_weight_from_trace::Cstring,
         get_weight_from_trace_ptr::Ptr{Cvoid},
+    )::Cvoid
+
+    get_flattened_samples_from_trace_ptr = @cfunction(
+        getFlattenedSamplesFromTrace,
+        Cvoid,
+        (Ptr{Ptr{Any}}, Ptr{UInt64}, Ptr{UInt64}, Ptr{UInt64}, Ptr{UInt64}, Ptr{Any})
+    )
+    @ccall MLIR.API.mlir_c.EnzymeJaXMapSymbol(
+        :enzyme_probprog_get_flattened_samples_from_trace::Cstring,
+        get_flattened_samples_from_trace_ptr::Ptr{Cvoid},
+    )::Cvoid
+
+    dump_ptr = @cfunction(
+        dump, Cvoid, (Ptr{Any}, Ptr{UInt8}, Ptr{UInt64}, Ptr{UInt64}, Ptr{UInt64})
+    )
+    @ccall MLIR.API.mlir_c.EnzymeJaXMapSymbol(
+        :enzyme_probprog_dump::Cstring, dump_ptr::Ptr{Cvoid}
     )::Cvoid
 
     return nothing
