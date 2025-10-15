@@ -432,9 +432,6 @@ function getWeightFromTrace(trace_ptr_ptr::Ptr{Ptr{Any}}, weight_ptr::Ptr{Any})
         @ccall printf("Trace dereference failure\n"::Cstring)::Cvoid
         return nothing
     end
-    println("Within getWeightFromTrace, trace: $(trace)")
-
-    println("Within getWeightFromTrace, weight: $(trace.weight)")
 
     unsafe_store!(Ptr{Float64}(weight_ptr), trace.weight)
     return nothing
