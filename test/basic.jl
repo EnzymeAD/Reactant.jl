@@ -1677,5 +1677,5 @@ end
     x_ra2 = Reactant.to_rarray(rand(Float64, 2))
 
     fn = @compile sum(x_ra1)
-    @test_throws Reactant.MisMatchedThunkTypeError fn(x_ra2)
+    @test_throws Reactant.Compiler.MisMatchedThunkTypeError fn(x_ra2)
 end
