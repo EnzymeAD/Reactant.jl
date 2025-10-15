@@ -887,7 +887,6 @@ function optimization_passes(
         "reshape_deletions_broadcast_in_dim_simplify",
         "reshape_insertions_broadcast_in_dim_simplify",
         "dot_general_reshape",
-        "diagonal_tensor_dot_general_rewrite",
         "widen_wrap",
         "widen_extend",
         "elementwise_pad",
@@ -966,6 +965,7 @@ function optimization_passes(
                 "scatter_multiply_simplify",
                 "unary_elementwise_scatter_simplify",
                 "scatter_indices_are_unique",
+                "diagonal_tensor_dot_general_rewrite",
                 ## const prop patterns
                 "scatter_update_computation_const_prop",
                 # gather patterns
