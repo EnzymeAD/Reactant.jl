@@ -329,7 +329,7 @@ function __init__()
             )
         end
     end
-
+    init_jit()
     return nothing
 end
 
