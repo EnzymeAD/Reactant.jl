@@ -127,7 +127,7 @@ You can verify a TPU was found correctly with the following commands:
 ```julia-repl
 julia> import Reactant
 
-julia> Reactant.has_tpu()
+julia> Reactant.Accelerators.TPU.has_tpu()
 true
 ```
 
