@@ -330,7 +330,7 @@ function __init__()
         end
     end
 
-    @static if VERSION > v"1.11"
+    @static if VERSION ≥ v"1.12-"
         if ccall(:jl_generating_output, Cint, ()) == 1
             @warn """
             Reactant.jl currently doesn't support versions of Julia 1.12 or newer. We are
