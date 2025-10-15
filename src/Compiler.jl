@@ -187,6 +187,17 @@ function traced_setfield_buffer!(
         end
         cache_dict[val] = cval
     end
+
+    if obj isa Reactant.ReactantRNG
+        field_sym = field isa Int ? fieldname(typeof(obj), field) : field
+        if field_sym === :seed
+            if !haskey(cache_dict, val)
+                cache_dict[val] = cval
+            end
+            return obj
+        end
+    end
+
     return traced_setfield!(obj, field, cval, path)
 end
 
@@ -211,6 +222,17 @@ function traced_setfield_buffer!(
         end
         cache_dict[val] = cval
     end
+
+    if obj isa Reactant.ReactantRNG
+        field_sym = field isa Int ? fieldname(typeof(obj), field) : field
+        if field_sym === :seed
+            if !haskey(cache_dict, val)
+                cache_dict[val] = cval
+            end
+            return obj
+        end
+    end
+
     return traced_setfield!(obj, field, cval, path)
 end
 
