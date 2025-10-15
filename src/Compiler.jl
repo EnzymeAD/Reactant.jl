@@ -3725,6 +3725,9 @@ function get_compiled_argtypes(
     return ArgTypes
 end
 
+get_tag(::Thunk{<:Any,tag}) where {tag} = tag
+get_tag(::Type{<:Thunk{<:Any,tag}}) where {tag} = tag
+
 function Base.show(io::IO, thunk::Thunk{<:Any,tag}) where {tag}
     return print(io, "Reactant compiled function $(thunk.f) (with tag $(tag))")
 end
@@ -3768,7 +3771,7 @@ end
     if get_compiled_argtypes(thunk) != FoundTypes
         return :(throw($(MisMatchedThunkTypeError{thunk,FoundTypes}())))
     end
-    body = __thunk_fwd_body_cache[tag]
+    body = __thunk_fwd_body_cache[get_tag(thunk)]
     if IsClosure
         return quote
             args = (thunk.f, args...)
