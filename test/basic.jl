@@ -1671,3 +1671,11 @@ init_fill_0d(x) = fill(eltype(x)(5))
     @test @jit(init_fill(x_ra)) ≈ init_fill(x)
     @test @jit(init_fill_0d(x_ra)) ≈ init_fill_0d(x)
 end
+
+@testset "Mismatched Thunk Error" begin
+    x_ra1 = Reactant.to_rarray(rand(Float32, 2))
+    x_ra2 = Reactant.to_rarray(rand(Float64, 2))
+
+    fn = @compile sum(x_ra1)
+    @test_throws Reactant.Compiler.MisMatchedThunkTypeError fn(x_ra2)
+end

@@ -3714,6 +3714,18 @@ struct Thunk{FTy,tag,IsClosure,ArgTypes,ExecTy,DeviceTy,ClientTy,GD,DAM}
     donated_args_mask::DAM
 end
 
+for fn in (:get_tag, :get_isclosure, :get_compiled_argtypes)
+    @eval $fn(thunk::Thunk) = $fn(typeof(thunk))
+end
+
+function get_compiled_argtypes(::Type{<:Thunk{<:Any,<:Any,<:Any,ArgTypes}}) where {ArgTypes}
+    return ArgTypes
+end
+
+get_tag(::Type{<:Thunk{<:Any,tag}}) where {tag} = tag
+
+get_isclosure(::Type{<:Thunk{<:Any,<:Any,IsClosure}}) where {IsClosure} = IsClosure
+
 function Base.show(io::IO, thunk::Thunk{<:Any,tag}) where {tag}
     return print(io, "Reactant compiled function $(thunk.f) (with tag $(tag))")
 end
@@ -3752,24 +3764,13 @@ function Base.showerror(
     )
 end
 
-@generated function (
-    thunk::Thunk{FTy,tag,IsClosure,ArgTypes,ExecTy,DeviceTy,ClientTy,GD,DAM}
-)(
-    args...
-) where {FTy,tag,IsClosure,ArgTypes,ExecTy,DeviceTy,ClientTy,GD,DAM}
+@generated function (thunk::Thunk)(args...)
     FoundTypes = Tuple{args...}
-    if ArgTypes != FoundTypes
-        return quote
-            throw(
-                $(MisMatchedThunkTypeError{
-                    Thunk{FTy,tag,IsClosure,ArgTypes,ExecTy,DeviceTy,ClientTy,GD,DAM},
-                    FoundTypes,
-                }()),
-            )
-        end
+    if get_compiled_argtypes(thunk) != FoundTypes
+        return :(throw($(MisMatchedThunkTypeError{thunk,FoundTypes}())))
     end
-    body = __thunk_fwd_body_cache[tag]
-    if IsClosure
+    body = __thunk_fwd_body_cache[get_tag(thunk)]
+    if get_isclosure(thunk)
         return quote
             args = (thunk.f, args...)
             $body
