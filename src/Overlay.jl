@@ -103,7 +103,7 @@ for randfun in (:rand, :randn, :randexp)
             return TracedRandom.$(overload_randfun!)(rng, A)
         end
         @reactant_overlay @noinline function Random.$(randfun!)(A::AnyTracedRArray)
-            return TracedRandom.$(overload_randfun!)(TracedRandom.default_rng(), A)
+            return TracedRandom.$(overload_randfun!)(call_with_reactant(TracedRandom.default_rng), A)
         end
     end
 end
