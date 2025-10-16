@@ -40,7 +40,7 @@ end
 @noinline ReactantRNG(seed::AbstractVector) = ReactantRNG(seed, "DEFAULT")
 
 @noinline function default_rng()
-    ReactantRNG()
+    return ReactantRNG()
 end
 
 @noinline rng_algorithm(rng::ReactantRNG) = rng.algorithm
