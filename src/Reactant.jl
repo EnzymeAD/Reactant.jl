@@ -91,7 +91,7 @@ include("xla/XLA.jl")
 include("Configuration.jl")
 include("Sharding.jl")
 include("Devices.jl")
-include("Interpreter.jl")
+include("JIT.jl")
 include("Profiler.jl")
 include("Types.jl")
 include("Distributed.jl")
@@ -342,7 +342,7 @@ function __init__()
             """ maxlog = 1
         end
     end
-
+    init_jit()
     return nothing
 end
 

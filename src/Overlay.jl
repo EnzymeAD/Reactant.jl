@@ -62,7 +62,7 @@ for randfun in (:rand, :randn, :randexp)
             end
             @warn "Reactant doesn't support sampling of $(T) with the current \
                    interpreter. Falling back to native interpreter." maxlog = 1
-            return Base.inferencebarrier(Random.$(randfun))(rng, T, dims)
+            return call_with_native(Random.$(randfun), rng, T, dims)
         end
 
         @reactant_overlay @noinline function Random.$(randfun)(
@@ -81,7 +81,7 @@ for randfun in (:rand, :randn, :randexp)
             end
             @warn "Reactant doesn't support sampling of $(T) with the current \
                    interpreter. Falling back to native interpreter." maxlog = 1
-            return Base.inferencebarrier(Random.$(randfun))(rng, T, dim1, dims...)
+            return call_with_native(Random.$(randfun), rng, T, dim1, dims...)
         end
 
         # scalars
@@ -93,7 +93,7 @@ for randfun in (:rand, :randn, :randexp)
             end
             @warn "Reactant doesn't support sampling of $(T) with the current \
                    interpreter. Falling back to native interpreter." maxlog = 1
-            return Base.inferencebarrier(Random.$(randfun))(rng, T)
+            return call_with_native(Random.$(randfun), rng, T)
         end
 
         # inplace
@@ -130,7 +130,7 @@ for (cT, aT, bT) in (
                 # Inference barrier is required when calling function recursively within
                 # overload. This is required since otherwise type inference will think this
                 # is a recursive edge rather than a call to the base method
-                Base.inferencebarrier(LinearAlgebra.mul!)(C, A, B, α, β)
+                call_with_native(LinearAlgebra.mul!, C, A, B, α, β)
             end
             return C
         end
@@ -155,7 +155,7 @@ end
             # Inference barrier is required when calling function recursively within
             # overload. This is required since otherwise type inference will think this is
             # a recursive edge rather than a call to the base method
-            return Base.inferencebarrier(Base._stack)(dims, iter2)
+            return call_with_native(Base._stack, dims, iter2)
         end
     end
 end
@@ -165,7 +165,7 @@ end
     if use_overlayed_version(A)
         error("Reactant doesn't have a `Base._unique_dims` with the current interpreter.")
     else
-        Base.inferencebarrier(Base._unique_dims)(A, dims)
+        call_with_native(Base._unique_dims, A, dims)
     end
 end
 
@@ -178,8 +178,8 @@ end
     if use_overlayed_version(A)
         return TracedRArrayOverrides.overloaded_mapreduce(f, op, A; kwargs...)
     else
-        return Base.inferencebarrier(Base.mapreduce)(
-            CallWithReactant(f), CallWithReactant(op), A; kwargs...
+        return call_with_native(
+            Base.mapreduce, CallWithReactant(f), CallWithReactant(op), A; kwargs...
         )
     end
 end
@@ -188,7 +188,7 @@ end
     if use_overlayed_version(x) || looped_any(use_overlayed_version, ys)
         return TracedRArrayOverrides.overloaded_map(f, x, ys...)
     else
-        return Base.inferencebarrier(Base.map)(CallWithReactant(f), x, ys...)
+        return call_with_native(Base.map, CallWithReactant(f), x, ys...)
     end
 end
 
@@ -202,7 +202,7 @@ end
     )
         return TracedRArrayOverrides.overloaded_map!(f, y, x, xs...)
     else
-        return Base.inferencebarrier(Base.map!)(CallWithReactant(f), y, x, xs...)
+        return call_with_native(Base.map!, CallWithReactant(f), y, x, xs...)
     end
 end
 
@@ -210,7 +210,7 @@ end
     if use_overlayed_version(x)
         return TracedRArrayOverrides.overloaded_mapreduce(f, &, x; dims)
     else
-        return Base.inferencebarrier(Base._all)(CallWithReactant(f), x, dims)
+        return call_with_native(Base._all, CallWithReactant(f), x, dims)
     end
 end
 
@@ -218,7 +218,7 @@ end
     if use_overlayed_version(x)
         return TracedRArrayOverrides.overloaded_mapreduce(f, |, x; dims)
     else
-        return Base.inferencebarrier(Base._any)(CallWithReactant(f), x, dims)
+        return call_with_native(Base._any, CallWithReactant(f), x, dims)
     end
 end
 
@@ -227,7 +227,7 @@ end
     if use_overlayed_version(x)
         return TracedLinearAlgebra.overloaded_lu(x, RowMaximum(); kwargs...)
     else
-        return Base.inferencebarrier(LinearAlgebra.lu)(x; kwargs...)
+        return call_with_native(LinearAlgebra.lu, x; kwargs...)
     end
 end
 @reactant_overlay @noinline function LinearAlgebra.lu(
@@ -236,14 +236,14 @@ end
     if use_overlayed_version(x)
         return TracedLinearAlgebra.overloaded_lu(x, pivot; kwargs...)
     else
-        return Base.inferencebarrier(LinearAlgebra.lu)(x, pivot; kwargs...)
+        return call_with_native(LinearAlgebra.lu, x, pivot; kwargs...)
     end
 end
 @reactant_overlay @noinline function LinearAlgebra.lu!(x::AbstractArray; kwargs...)
     if use_overlayed_version(x)
         return TracedLinearAlgebra.overloaded_lu(x, RowMaximum(); kwargs...)
     else
-        return Base.inferencebarrier(LinearAlgebra.lu!)(x; kwargs...)
+        return call_with_native(LinearAlgebra.lu!, x; kwargs...)
     end
 end
 @reactant_overlay @noinline function LinearAlgebra.lu!(
@@ -252,7 +252,7 @@ end
     if use_overlayed_version(x)
         return TracedLinearAlgebra.overloaded_lu(x, pivot; kwargs...)
     else
-        return Base.inferencebarrier(LinearAlgebra.lu!)(x, pivot; kwargs...)
+        return call_with_native(LinearAlgebra.lu!, x, pivot; kwargs...)
     end
 end
 
@@ -260,7 +260,7 @@ end
     if use_overlayed_version(x) || use_overlayed_version(y)
         return TracedLinearAlgebra.overloaded_dot(x, y)
     else
-        return Base.inferencebarrier(LinearAlgebra.dot)(x, y)
+        return call_with_native(LinearAlgebra.dot, x, y)
     end
 end
 @reactant_overlay @noinline function LinearAlgebra.dot(
@@ -269,6 +269,6 @@ end
     if use_overlayed_version(x) || use_overlayed_version(A) || use_overlayed_version(y)
         return TracedLinearAlgebra.overloaded_dot(x, A, y)
     else
-        return Base.inferencebarrier(LinearAlgebra.dot)(x, A, y)
+        return call_with_native(LinearAlgebra.dot, x, A, y)
     end
 end
