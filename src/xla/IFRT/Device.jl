@@ -31,7 +31,7 @@ function XLA.get_local_device_id(::Device)
     return error("Not implemented for ifrt devices")
 end
 
-function XLA.get_local_hardware_id(::Device)
+function XLA.get_local_hardware_id(device::Device)
     GC.@preserve device begin
         return @ccall MLIR.API.mlir_c.ifrt_DeviceGetLocalHardwareId(
             device.device::Ptr{Cvoid}
