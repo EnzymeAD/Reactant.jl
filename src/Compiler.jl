@@ -1914,7 +1914,7 @@ function compile_mlir!(
                 end,
                 ',',
             ),
-            "before_kernel",
+            "no_triton",
         )
     elseif compile_options.optimization_passes === :before_kernel
         run_pass_pipeline!(
