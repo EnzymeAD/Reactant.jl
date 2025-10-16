@@ -39,7 +39,9 @@ Base.copy(rng::ReactantRNG) = ReactantRNG(copy(rng.seed), rng.algorithm)
 end
 @noinline ReactantRNG(seed::AbstractVector) = ReactantRNG(seed, "DEFAULT")
 
-@noinline default_rng() = ReactantRNG()
+@noinline function default_rng()
+    ReactantRNG()
+end
 
 @noinline rng_algorithm(rng::ReactantRNG) = rng.algorithm
 @noinline rng_algorithm(::AbstractRNG) = "DEFAULT"
