@@ -730,9 +730,29 @@ std::vector<int64_t> row_major(int64_t dim) {
 }
 static void noop() {}
 
+struct DeviceProperties {
+  size_t totalGlobalMem;
+  size_t sharedMemPerBlock;
+  int regsPerBlock;
+  int warpSize;
+  int maxThreadsPerBlock;
+  int maxThreadsDim[3];
+  int maxGridSize[3];
+  int clockRate;
+  size_t totalConstMem;
+  int major;
+  int minor;
+  int multiProcessorCount;
+  int canMapHostMemory;
+  int computeMode;
+  int l2CacheSize;
+  int maxThreadsPerMultiProcessor;
+};
+
 #ifdef REACTANT_CUDA
 
 #include "third_party/gpus/cuda/include/cuda.h"
+#include "third_party/gpus/cuda/include/cuda_runtime.h"
 
 REACTANT_ABI int32_t ReactantCudaDriverGetVersion() {
   int32_t data;
@@ -769,6 +789,33 @@ REACTANT_ABI int32_t ReactantCudaDeviceGetWarpSizeInThreads() {
   return warpSize;
 }
 
+REACTANT_ABI void ReactantCudaDeviceGetProperties(DeviceProperties *jlprops,
+                                                  int32_t device_id) {
+  cudaDeviceProp props;
+  ReactantHandleCuResult(cudaGetDeviceProperties(&props, device_id));
+
+  jlprops->totalGlobalMem = props.totalGlobalMem;
+  jlprops->sharedMemPerBlock = props.sharedMemPerBlock;
+  jlprops->regsPerBlock = props.regsPerBlock;
+  jlprops->warpSize = props.warpSize;
+  jlprops->maxThreadsPerBlock = props.maxThreadsPerBlock;
+  jlprops->maxThreadsDim[0] = props.maxThreadsDim[0];
+  jlprops->maxThreadsDim[1] = props.maxThreadsDim[1];
+  jlprops->maxThreadsDim[2] = props.maxThreadsDim[2];
+  jlprops->maxGridSize[0] = props.maxGridSize[0];
+  jlprops->maxGridSize[1] = props.maxGridSize[1];
+  jlprops->maxGridSize[2] = props.maxGridSize[2];
+  jlprops->clockRate = props.clockRate;
+  jlprops->totalConstMem = props.totalConstMem;
+  jlprops->major = props.major;
+  jlprops->minor = props.minor;
+  jlprops->multiProcessorCount = props.multiProcessorCount;
+  jlprops->canMapHostMemory = props.canMapHostMemory;
+  jlprops->computeMode = props.computeMode;
+  jlprops->l2CacheSize = props.l2CacheSize;
+  jlprops->maxThreadsPerMultiProcessor = props.maxThreadsPerMultiProcessor;
+}
+
 #else
 
 REACTANT_ABI int32_t ReactantCudaDriverGetVersion() { return 0; }
@@ -780,6 +827,9 @@ REACTANT_ABI int32_t ReactantCudaDeviceGetComputeCapalilityMajor() { return 0; }
 REACTANT_ABI int32_t ReactantCudaDeviceGetComputeCapalilityMinor() { return 0; }
 
 REACTANT_ABI int32_t ReactantCudaDeviceGetWarpSizeInThreads() { return 0; }
+
+REACTANT_ABI void ReactantCudaDeviceGetProperties(DeviceProperties *jlprops,
+                                                  int32_t device_id) {}
 
 #endif
 
@@ -1953,6 +2003,15 @@ REACTANT_ABI ifrt::Client *ifrt_DeviceToClient(ifrt::Device *device) {
 
 REACTANT_ABI bool ifrt_DeviceIsAddressable(ifrt::Device *device) {
   return device->IsAddressable();
+}
+
+REACTANT_ABI int64_t ifrt_DeviceGetLocalHardwareId(ifrt::Device *device) {
+  if (!llvm::isa<ifrt::PjRtDevice>(device)) {
+    ReactantThrowError(
+        "ifrt_device_get_allocator_stats: only supported for ifrt-pjrt.");
+  }
+  auto ifrt_pjrt_device = llvm::dyn_cast<ifrt::PjRtDevice>(device);
+  return ifrt_pjrt_device->pjrt_device()->local_hardware_id().value();
 }
 
 static xla::ifrt::RCReferenceWrapper<ifrt::DeviceList>
