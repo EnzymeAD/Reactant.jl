@@ -13,7 +13,7 @@ struct JLAllocatorStats
     peak_pool_bytes::Int64
 end
 
-_format_bytes(x) = Base.format_bytes(x)
+_format_bytes(x) = x < 0 ? nothing : Base.format_bytes(x)
 _format_bytes(x::Nothing) = x
 
 """

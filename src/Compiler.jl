@@ -1395,7 +1395,8 @@ function __get_compile_options_and_kwargs(;
 end
 
 function compile_mlir(f, args; client=nothing, kwargs...)
-    backend = XLA.platform_name(client !== nothing ? client : XLA.default_backend())
+    client = client !== nothing ? client : XLA.default_backend()
+    backend = XLA.platform_name(client)
 
     if backend == "CUDA"
         backend = "GPU"
@@ -1414,6 +1415,7 @@ function compile_mlir(f, args; client=nothing, kwargs...)
             compile_options;
             backend,
             runtime=XLA.runtime(client),
+            client,
             kwargs...,
         )
 
@@ -1430,11 +1432,9 @@ end
 
 const PartitionKA = Ref{Bool}(true)
 
-const cubinChip = Ref{String}("sm_60")
-const cubinFormat = Ref{String}("bin")
 const cuindexBitWidth = Ref{Int}(32)
+const cubinFormat = Ref{String}("bin")
 const cuOptLevel = Ref{Int}(2)
-const cuWarpSize = Ref{Int}(32)
 
 # Wgatever the relevant highest version from our LLVM is within NVPTX.td
 # Or more specifically looking at clang/lib/Driver/ToolChains/Cuda.cpp:684
@@ -1580,8 +1580,11 @@ function compile_mlir!(
     backend="gpu",
     runtime::Union{Val{:PJRT},Val{:IFRT}},
     legalize_stablehlo_to_mhlo::Bool=false,
+    client=nothing,
     kwargs...,
 )
+    client = client !== nothing ? client : XLA.default_backend()
+
     # Explicitly don't use block! to avoid creating a closure, which creates
     # both compile-time and relocatability issues
 
@@ -1655,25 +1658,27 @@ function compile_mlir!(
         else
             jit = "lower-jit{openmp=$(OpenMP[]) backend=cpu},symbol-dce"
         end
-    elseif DEBUG_KERNEL[]
-        curesulthandler = dlsym(
-            Reactant_jll.libReactantExtra_handle, "ReactantHandleCuResult"
-        )
-        @assert curesulthandler !== nothing
-        curesulthandler = Base.reinterpret(UInt, curesulthandler)
-        kern = if is_raising
-            "lower-kernel{backend=cpu},symbol-dce,canonicalize"
-        else
-            "lower-kernel,canonicalize"
-        end
-        jit = "lower-jit{debug=true cuResultHandlerPtr=$curesulthandler cuOptLevel=$(cuOptLevel[]) cubinFormat=$(cubinFormat[]) indexBitWidth=$(cuindexBitWidth[])  cubinChip=$(cubinChip[]) cubinFeatures=$(cubinFeatures()) run_init=true toolkitPath=$toolkit},symbol-dce"
     else
         kern = if is_raising
             "lower-kernel{backend=cpu},symbol-dce,canonicalize"
         else
             "lower-kernel,canonicalize"
         end
-        jit = "lower-jit{cuOptLevel=$(cuOptLevel[]) indexBitWidth=$(cuindexBitWidth[]) cubinFormat=$(cubinFormat[]) cubinChip=$(cubinChip[]) cubinFeatures=$(cubinFeatures()) run_init=true toolkitPath=$toolkit},symbol-dce"
+
+        device_properties = XLA.device_properties(XLA.default_device(client))
+        cubinChip = "sm_$(device_properties.major)$(device_properties.minor)"
+
+        if DEBUG_KERNEL[]
+            curesulthandler = dlsym(
+                Reactant_jll.libReactantExtra_handle, "ReactantHandleCuResult"
+            )
+            @assert curesulthandler !== nothing
+            curesulthandler = Base.reinterpret(UInt, curesulthandler)
+            extra_lowerjit_options = "debug=true cuResultHandlerPtr=$curesulthandler "
+        else
+            extra_lowerjit_options = ""
+        end
+        jit = "lower-jit{$(extra_lowerjit_options)cuOptLevel=$(cuOptLevel[]) cubinFormat=$(cubinFormat[]) indexBitWidth=$(cuindexBitWidth[])  cubinChip=$(cubinChip) cubinFeatures=$(cubinFeatures()) run_init=true toolkitPath=$toolkit},symbol-dce"
     end
 
     recognize_comms = true
@@ -3477,7 +3482,8 @@ function compile_xla(
     context_gc_vector[ctx] = Vector{Union{TracedRArray,TracedRNumber}}(undef, 0)
     @ccall MLIR.API.mlir_c.RegisterDialects(ctx::MLIR.API.MlirContext)::Cvoid
 
-    backend = XLA.platform_name(client !== nothing ? client : XLA.default_backend())
+    client = client !== nothing ? client : XLA.default_backend()
+    backend = XLA.platform_name(client)
 
     if backend == "CUDA"
         backend = "GPU"
@@ -3498,6 +3504,7 @@ function compile_xla(
             compile_options;
             backend,
             runtime=XLA.runtime(client),
+            client,
             kwargs...,
         )
 
