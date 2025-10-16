@@ -2008,7 +2008,7 @@ REACTANT_ABI bool ifrt_DeviceIsAddressable(ifrt::Device *device) {
 REACTANT_ABI int64_t ifrt_DeviceGetLocalHardwareId(ifrt::Device *device) {
   if (!llvm::isa<ifrt::PjRtDevice>(device)) {
     ReactantThrowError(
-        "ifrt_device_get_allocator_stats: only supported for ifrt-pjrt.");
+        "ifrt_DeviceGetLocalHardwareId: only supported for ifrt-pjrt.");
   }
   auto ifrt_pjrt_device = llvm::dyn_cast<ifrt::PjRtDevice>(device);
   return ifrt_pjrt_device->pjrt_device()->local_hardware_id().value();
