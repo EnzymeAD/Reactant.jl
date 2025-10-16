@@ -47,8 +47,14 @@ function overlayed_pycall_with_jax_tracing(f::Py, args...)
     return length(res) == 0 ? nothing : (length(res) == 1 ? res[1] : res)
 end
 
-normalize_grid_and_blocks(grid::Integer) = normalize_grid_and_blocks((grid,))
-function normalize_grid_and_blocks(grid::Dims{N}) where {N}
+function normalize_grid_and_blocks(grid_fn, metadata)
+    return normalize_grid_and_blocks(grid_fn(metadata), metadata)
+end
+
+function normalize_grid_and_blocks(grid::Integer, metadata)
+    return normalize_grid_and_blocks((grid,), metadata)
+end
+function normalize_grid_and_blocks(grid::Dims{N}, metadata) where {N}
     @assert N <= 3
     @assert all(grid .> 0)
     return (grid..., ntuple(_ -> 1, 3 - N)...)
@@ -70,9 +76,6 @@ function overlayed_pycall_with_triton(
     hints=nothing,
 )
     triton = tritonptr[]
-
-    grid = normalize_grid_and_blocks(grid)
-    blocks = normalize_grid_and_blocks(blocks)
 
     mapped = map(signature_string, args)
     signature = first.(mapped)
@@ -119,6 +122,9 @@ function overlayed_pycall_with_triton(
     # Currently we are doing a double compilation here. can we do better?
     # we are compiling here + lowering again inside enzymejax
     ccinfo = triton.compile(src; target=target, options=options.__dict__)
+
+    grid = normalize_grid_and_blocks(grid, ccinfo.metadata)
+    blocks = normalize_grid_and_blocks(blocks, ccinfo.metadata)
 
     return @opcall triton_call(
         pyconvert(String, ccinfo.asm["source"]),
