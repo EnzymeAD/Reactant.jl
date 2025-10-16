@@ -47,14 +47,16 @@ function overlayed_pycall_with_jax_tracing(f::Py, args...)
     return length(res) == 0 ? nothing : (length(res) == 1 ? res[1] : res)
 end
 
-function normalize_grid_and_blocks(grid_fn, metadata)
-    return normalize_grid_and_blocks(grid_fn(metadata), metadata)
+function normalize_grid_and_blocks(grid_fn, metadata, device_properties)
+    return normalize_grid_and_blocks(
+        grid_fn(metadata, device_properties), metadata, device_properties
+    )
 end
 
-function normalize_grid_and_blocks(grid::Integer, metadata)
-    return normalize_grid_and_blocks((grid,), metadata)
+function normalize_grid_and_blocks(grid::Integer, metadata, device_properties)
+    return normalize_grid_and_blocks((grid,), metadata, device_properties)
 end
-function normalize_grid_and_blocks(grid::Dims{N}, metadata) where {N}
+function normalize_grid_and_blocks(grid::Dims{N}, metadata, device_properties) where {N}
     @assert N <= 3
     @assert all(grid .> 0)
     return (grid..., ntuple(_ -> 1, 3 - N)...)
@@ -71,8 +73,9 @@ function overlayed_pycall_with_triton(
     args...;
     grid,
     blocks,
-    num_warps::Integer=1,
+    num_warps::Integer=4,
     num_stages::Integer=3,
+    num_ctas::Integer=1,
     hints=nothing,
 )
     triton = tritonptr[]
@@ -105,16 +108,23 @@ function overlayed_pycall_with_triton(
         fn=kernel, constexprs=constants, signature=sigmap, attrs=attrs
     )
 
+    # TODO: pass the device/client here from `compile`
+    client = Reactant.XLA.default_backend()
+    @assert Reactant.XLA.platform_name(client) == "cuda"
+    device = Reactant.XLA.default_device(client)
+    device_properties = Reactant.XLA.device_properties(device)
+
     target = triton.backends.compiler.GPUTarget(
-        "cuda",
-        parse(Int, Reactant.Compiler.cubinChip[][4:end]),
-        Reactant.Compiler.cuWarpSize[],
+        Reactant.XLA.platform_name(client),
+        parse(Int, "$(device_properties.major)$(device_properties.minor)"),
+        device_properties.warp_size,
     )
     backend = triton.compiler.make_backend(target)
     options = backend.parse_options(
         pydict(
             "num_warps" => num_warps,
             "num_stages" => num_stages,
+            "num_ctas" => num_ctas,
             "extern_libs" => pytuple((pytuple(("libdevice", Reactant_jll.libdevice)),)),
         ),
     )
@@ -123,8 +133,8 @@ function overlayed_pycall_with_triton(
     # we are compiling here + lowering again inside enzymejax
     ccinfo = triton.compile(src; target=target, options=options.__dict__)
 
-    grid = normalize_grid_and_blocks(grid, ccinfo.metadata)
-    blocks = normalize_grid_and_blocks(blocks, ccinfo.metadata)
+    grid = normalize_grid_and_blocks(grid, ccinfo.metadata, device_properties)
+    blocks = normalize_grid_and_blocks(blocks, ccinfo.metadata, device_properties)
 
     return @opcall triton_call(
         pyconvert(String, ccinfo.asm["source"]),
@@ -136,5 +146,8 @@ function overlayed_pycall_with_triton(
         block_x=@opcall(constant(blocks[1])),
         block_y=@opcall(constant(blocks[2])),
         block_z=@opcall(constant(blocks[3])),
+        # The following are written to module attributes and restored later on
+        num_ctas,
+        num_warps,
     )
 end

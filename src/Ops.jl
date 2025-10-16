@@ -1837,7 +1837,7 @@ function _extract_function(
         error("hlo_call: could not find function $func_name in the provided module")
     end
 
-    return fn, symref
+    return fn, symref, moduleop
 end
 
 function triton_call(
@@ -1850,9 +1850,16 @@ function triton_call(
     block_x::TracedRNumber{<:Integer},
     block_y::TracedRNumber{<:Integer},
     block_z::TracedRNumber{<:Integer},
+    num_ctas::Integer=1,
+    num_warps::Integer=4,
     location=mlir_stacktrace("triton_call", @__FILE__, @__LINE__),
 )
-    _, symref = _extract_function(mlir_code; func_name, func_op_kind="tt.func", location)
+    _, symref, modop = _extract_function(
+        mlir_code; func_name, func_op_kind="tt.func", location
+    )
+
+    MLIR.IR.attr!(modop, "ttg.num-wraps", MLIR.IR.Attribute(Int32(num_warps)))
+    MLIR.IR.attr!(modop, "ttg.num-ctas", MLIR.IR.Attribute(Int32(num_ctas)))
 
     result_types = MLIR.IR.Type[]
     output_operand_aliases = MLIR.IR.Attribute[]
@@ -1929,7 +1936,7 @@ julia> Reactant.@jit(
     func_name="main",
     location=mlir_stacktrace("hlo_call", @__FILE__, @__LINE__),
 )
-    fn, symref = _extract_function(code; func_name, func_op_kind="func.func", location)
+    fn, symref, _ = _extract_function(code; func_name, func_op_kind="func.func", location)
 
     ftype_attr = MLIR.IR.attr(fn, "function_type")
     ftype = MLIR.IR.Type(ftype_attr)

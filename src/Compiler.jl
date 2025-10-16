@@ -703,6 +703,7 @@ function optimization_passes(
     max_constant_threshold::Int=1024,
     backend::String="gpu",
     enable_triton_passes::Bool=false,
+    device_properties::Union{Nothing,XLA.DeviceProperties}=nothing,
 )
     transform_passes_list = [
         "patterns=compare_op_canon<16>",
@@ -1305,14 +1306,20 @@ function optimization_passes(
     end
     push!(passes, func_passes)
     if enable_triton_passes && backend == "cuda"
-        push!(passes, triton_optimization_passes())
+        push!(passes, triton_optimization_passes(device_properties))
     end
     return join(passes, ',')
 end
 
 # https://github.com/triton-lang/triton/blob/8ee584014e9570ba608809c42dc2060fdd214a98/python/src/passes.cc
 # To get the latest passes run triton with MLIR_ENABLE_DUMP=1 and then extract the passes
-function triton_optimization_passes()
+function triton_optimization_passes(device_properties)
+    @assert device_properties !== nothing "Device properties must be provided to run \
+                                           triton passes. This might happen if you are \
+                                           compiling a triton kernel for non-cuda backend."
+    major_version = device_properties.major
+    minor_version = device_properties.minor
+
     all_passes = join(
         [
             "canonicalize",
@@ -1323,7 +1330,9 @@ function triton_optimization_passes()
             "cse",
             "symbol-dce",
             "triton-loop-unroll",
-            "convert-triton-to-tritongpu{target=cuda:$(cubinChip[][4:end]) num-warps=1 threads-per-warp=$(cuWarpSize[]) num-ctas=1}",
+            "preserve-triton-warps-ctas{save=true restore=false}",
+            "convert-triton-to-tritongpu{target=cuda:$(major_version)$(minor_version)}",
+            "preserve-triton-warps-ctas{save=false restore=true}",
             "tritongpu-coalesce",
             "tritongpu-F32DotTC",
             "triton-nvidia-gpu-plan-cta",
@@ -1743,6 +1752,9 @@ function compile_mlir!(
 
     toolkit = XLA.CUDA_DATA_DIR[]
 
+    default_device = XLA.default_device(client)
+    device_properties = XLA.device_properties(default_device)
+
     if backend == "cpu" || backend == "tpu"
         kern = "lower-kernel{backend=cpu},canonicalize"
         if backend == "tpu"
@@ -1757,9 +1769,7 @@ function compile_mlir!(
             "lower-kernel,canonicalize"
         end
 
-        device_properties = XLA.device_properties(XLA.default_device(client))
         cubinChip = "sm_$(device_properties.major)$(device_properties.minor)"
-
         if DEBUG_KERNEL[]
             curesulthandler = dlsym(
                 Reactant_jll.libReactantExtra_handle, "ReactantHandleCuResult"
@@ -1790,6 +1800,7 @@ function compile_mlir!(
         lower_comms,
         backend,
         enable_triton_passes=false,
+        device_properties,
     )
     opt_passes2 = optimization_passes(
         compile_options;
@@ -1798,6 +1809,7 @@ function compile_mlir!(
         lower_comms,
         backend,
         enable_triton_passes=false,
+        device_properties,
     )
     opt_passes_with_triton = optimization_passes(
         compile_options;
@@ -1806,6 +1818,7 @@ function compile_mlir!(
         lower_comms,
         backend,
         enable_triton_passes=true,
+        device_properties,
     )
 
     raise_passes = if raise isa String
@@ -1827,6 +1840,7 @@ function compile_mlir!(
                 recognize_comms,
                 lower_comms,
                 backend,
+                device_properties,
             )
             result = result * "," * opt_passes_dus_to_concat
         end
@@ -2151,6 +2165,7 @@ function compile_mlir!(
                 recognize_comms,
                 lower_comms,
                 backend,
+                device_properties,
             ),
             "post_op_transpose_reshape",
         )
