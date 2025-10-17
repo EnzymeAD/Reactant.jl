@@ -9,6 +9,7 @@ function hmc(
     mass=nothing,
     step_size=nothing,
     num_steps=nothing,
+    initial_momentum=nothing,
 ) where {Nargs}
     args = (rng, args...)
     mlir_fn_res, argprefix, resprefix, _ = process_probprog_function(f, args, "hmc")
@@ -90,12 +91,18 @@ function hmc(
         num_steps_val = TracedUtils.get_mlir_data(num_steps)
     end
 
+    initial_momentum_val = nothing
+    if !isnothing(initial_momentum)
+        initial_momentum_val = TracedUtils.get_mlir_data(initial_momentum)
+    end
+
     hmc_op = MLIR.Dialects.enzyme.mcmc(
         inputs,
         trace_val,
         mass_val;
         step_size=step_size_val,
         num_steps=num_steps_val,
+        initial_momentum=initial_momentum_val,
         new_trace=trace_ty,
         accepted=accepted_ty,
         output_rng_state=out_tys[1], # by convention
