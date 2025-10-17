@@ -47,16 +47,25 @@ function overlayed_pycall_with_jax_tracing(f::Py, args...)
     return length(res) == 0 ? nothing : (length(res) == 1 ? res[1] : res)
 end
 
-function normalize_grid_and_blocks(grid_fn, metadata, device_properties)
-    return normalize_grid_and_blocks(
-        grid_fn(metadata, device_properties), metadata, device_properties
-    )
+struct TritonMetadata{CK,MD,DP}
+    compiled_kernel::CK
+    metadata::MD
+    device_properties::DP
+    num_warps::Int
+    num_stages::Int
+    num_ctas::Int
+    num_regs::Int
+    num_spills::Int
+    max_num_threads::Int
 end
 
-function normalize_grid_and_blocks(grid::Integer, metadata, device_properties)
-    return normalize_grid_and_blocks((grid,), metadata, device_properties)
+function normalize_grid_and_blocks(grid_fn, metadata)
+    return normalize_grid_and_blocks(grid_fn(metadata), metadata)
 end
-function normalize_grid_and_blocks(grid::Dims{N}, metadata, device_properties) where {N}
+function normalize_grid_and_blocks(grid::Integer, metadata)
+    return normalize_grid_and_blocks((grid,), metadata)
+end
+function normalize_grid_and_blocks(grid::Dims{N}, metadata) where {N}
     @assert N <= 3
     @assert all(grid .> 0)
     return (grid..., ntuple(_ -> 1, 3 - N)...)
@@ -131,15 +140,40 @@ function overlayed_pycall_with_triton(
 
     # Currently we are doing a double compilation here. can we do better?
     # we are compiling here + lowering again inside enzymejax
-    ccinfo = triton.compile(src; target=target, options=options.__dict__)
+    compiled_kernel = triton.compile(src; target=target, options=options.__dict__)
 
-    grid = normalize_grid_and_blocks(grid, ccinfo.metadata, device_properties)
-    blocks = normalize_grid_and_blocks(blocks, ccinfo.metadata, device_properties)
+    cubin = pyconvert(Vector{UInt8}, compiled_kernel.asm["cubin"])
+    fname = pyconvert(String, compiled_kernel.metadata.name)
+    n_regs, n_spills, n_max_threads = Ref{Int32}(), Ref{Int32}(), Ref{Int32}()
+    GC.@preserve cubin fname n_regs n_spills n_max_threads begin
+        @ccall Reactant.MLIR.API.mlir_c.ReactantCudaGetRegsSpillsMaxThreadsFromBinary(
+            cubin::Ptr{Cvoid},
+            fname::Cstring,
+            n_regs::Ptr{Int32},
+            n_spills::Ptr{Int32},
+            n_max_threads::Ptr{Int32},
+        )::Cvoid
+    end
+
+    metadata = TritonMetadata(
+        compiled_kernel,
+        compiled_kernel.metadata,
+        device_properties,
+        num_warps,
+        num_stages,
+        num_ctas,
+        Int(n_regs[]),
+        Int(n_spills[]),
+        Int(n_max_threads[]),
+    )
+
+    grid = normalize_grid_and_blocks(grid, metadata)
+    blocks = normalize_grid_and_blocks(blocks, metadata)
 
     return @opcall triton_call(
-        pyconvert(String, ccinfo.asm["source"]),
+        pyconvert(String, compiled_kernel.asm["source"]),
         filter(x -> x isa Reactant.TracedType, args)...;
-        func_name=pyconvert(String, ccinfo.metadata.name),
+        func_name=fname,
         grid_x=@opcall(constant(grid[1])),
         grid_y=@opcall(constant(grid[2])),
         grid_z=@opcall(constant(grid[3])),
