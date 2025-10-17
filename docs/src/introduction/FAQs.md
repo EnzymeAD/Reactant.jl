@@ -85,7 +85,7 @@ After using Julia's built-in `GC.gc()`:
 ## Benchmark results feel suspiciously fast
 
 If you see benchmark results that are suspiciously fast, it's likely because the benchmark
-was executed with compiled functions where `sync=false` was used. In this case, the compield 
+was executed with compiled functions where `sync=false` was used (the default). In this case, the compiled 
 function will be executed asynchronously, and the benchmark results will be the time it takes
 for the function to schedule the computation on the device. Compile functions with `sync=true` to get the actual runtime. You can also use the `Reactant.synchronize` on the result of the computation to block until the computation is complete.
 
