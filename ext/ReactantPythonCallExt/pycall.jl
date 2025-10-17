@@ -59,13 +59,9 @@ struct TritonMetadata{CK,MD,DP}
     max_num_threads::Int
 end
 
-function normalize_grid_and_blocks(grid_fn, metadata)
-    return normalize_grid_and_blocks(grid_fn(metadata), metadata)
-end
-function normalize_grid_and_blocks(grid::Integer, metadata)
-    return normalize_grid_and_blocks((grid,), metadata)
-end
-function normalize_grid_and_blocks(grid::Dims{N}, metadata) where {N}
+normalize_grid(grid_fn, metadata) = normalize_grid(grid_fn(metadata), metadata)
+normalize_grid(grid::Integer, metadata) = normalize_grid((grid,), metadata)
+function normalize_grid(grid::Dims{N}, metadata) where {N}
     @assert N <= 3
     @assert all(grid .> 0)
     return (grid..., ntuple(_ -> 1, 3 - N)...)
@@ -81,7 +77,6 @@ function overlayed_pycall_with_triton(
     kernel::Py,
     args...;
     grid,
-    blocks,
     num_warps::Integer=4,
     num_stages::Integer=3,
     num_ctas::Integer=1,
@@ -118,6 +113,7 @@ function overlayed_pycall_with_triton(
     )
 
     # TODO: pass the device/client here from `compile`
+    # TODO: cluster dims
     client = Reactant.XLA.default_backend()
     @assert Reactant.XLA.platform_name(client) == "cuda"
     device = Reactant.XLA.default_device(client)
@@ -167,8 +163,7 @@ function overlayed_pycall_with_triton(
         Int(n_max_threads[]),
     )
 
-    grid = normalize_grid_and_blocks(grid, metadata)
-    blocks = normalize_grid_and_blocks(blocks, metadata)
+    grid = normalize_grid(grid, metadata)
 
     return @opcall triton_call(
         pyconvert(String, compiled_kernel.asm["source"]),
@@ -177,10 +172,9 @@ function overlayed_pycall_with_triton(
         grid_x=@opcall(constant(grid[1])),
         grid_y=@opcall(constant(grid[2])),
         grid_z=@opcall(constant(grid[3])),
-        block_x=@opcall(constant(blocks[1])),
-        block_y=@opcall(constant(blocks[2])),
-        block_z=@opcall(constant(blocks[3])),
-        # The following are written to module attributes and restored later on
+        block_x=@opcall(constant(num_warps * device_properties.warp_size)),
+        block_y=@opcall(constant(1)),
+        block_z=@opcall(constant(1)),
         num_ctas,
         num_warps,
     )

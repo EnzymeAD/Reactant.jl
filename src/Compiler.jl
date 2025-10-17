@@ -1952,6 +1952,7 @@ function compile_mlir!(
                         "enzyme-simplify-math",
                         legalize_chlo_to_stablehlo...,
                         opt_passes2,
+                        "lower-triton",
                     ]
                 end,
                 ',',

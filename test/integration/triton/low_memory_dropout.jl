@@ -10,15 +10,7 @@ function seeded_dropout(x::AbstractVector{T}, p::Number, seed) where {T}
     output = similar(x)
     mask = similar(x, Bool)
     low_memory_dropout_kernel(
-        x,
-        output,
-        mask,
-        length(x),
-        p,
-        seed,
-        1024;
-        grid=(cld(length(x), 1024),),
-        blocks=(1024,),
+        x, output, mask, length(x), p, seed, 1024; grid=(cld(length(x), 1024),)
     )
     return output, mask
 end
