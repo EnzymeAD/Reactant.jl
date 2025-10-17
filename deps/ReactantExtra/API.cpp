@@ -388,6 +388,18 @@ enzymeSymbolAttrGet(MlirContext ctx, uint64_t symbol) {
   return wrap(attr);
 }
 
+extern "C" MLIR_CAPI_EXPORTED MlirAttribute
+enzymeRngDistributionAttrGet(MlirContext ctx, int32_t val) {
+  return wrap(mlir::enzyme::RngDistributionAttr::get(
+      unwrap(ctx), (mlir::enzyme::RngDistribution)val));
+}
+
+extern "C" MLIR_CAPI_EXPORTED MlirAttribute
+enzymeMCMCAlgorithmAttrGet(MlirContext ctx, int32_t val) {
+  return wrap(mlir::enzyme::MCMCAlgorithmAttr::get(
+      unwrap(ctx), (mlir::enzyme::MCMCAlgorithm)val));
+}
+
 // Create profiler session and start profiling
 REACTANT_ABI tsl::ProfilerSession *
 CreateProfilerSession(uint32_t device_tracer_level,
