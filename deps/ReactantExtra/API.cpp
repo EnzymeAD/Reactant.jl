@@ -738,13 +738,11 @@ struct DeviceProperties {
   int maxThreadsPerBlock;
   int maxThreadsDim[3];
   int maxGridSize[3];
-  int clockRate;
   size_t totalConstMem;
   int major;
   int minor;
   int multiProcessorCount;
   int canMapHostMemory;
-  int computeMode;
   int l2CacheSize;
   int maxThreadsPerMultiProcessor;
 };
@@ -805,13 +803,11 @@ REACTANT_ABI void ReactantCudaDeviceGetProperties(DeviceProperties *jlprops,
   jlprops->maxGridSize[0] = props.maxGridSize[0];
   jlprops->maxGridSize[1] = props.maxGridSize[1];
   jlprops->maxGridSize[2] = props.maxGridSize[2];
-  jlprops->clockRate = props.clockRate;
   jlprops->totalConstMem = props.totalConstMem;
   jlprops->major = props.major;
   jlprops->minor = props.minor;
   jlprops->multiProcessorCount = props.multiProcessorCount;
   jlprops->canMapHostMemory = props.canMapHostMemory;
-  jlprops->computeMode = props.computeMode;
   jlprops->l2CacheSize = props.l2CacheSize;
   jlprops->maxThreadsPerMultiProcessor = props.maxThreadsPerMultiProcessor;
 }
