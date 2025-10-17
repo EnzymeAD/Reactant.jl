@@ -4,7 +4,8 @@ using Reactant: ProbProg, ReactantRNG
 normal(rng, μ, σ, shape) = μ .+ σ .* randn(rng, shape)
 
 function normal_logpdf(x, μ, σ, _)
-    return -sum(log.(σ)) - length(x) / 2 * log(2π) - sum((x .- μ) .^ 2 ./ (2 .* (σ .^ 2)))
+    return -length(x) * log(σ) - length(x) / 2 * log(2π) -
+           sum((x .- μ) .^ 2 ./ (2 .* (σ .^ 2)))
 end
 
 function model(rng, μ, σ, shape)
