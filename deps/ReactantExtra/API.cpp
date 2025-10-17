@@ -1626,8 +1626,9 @@ REACTANT_ABI HeldIfrtArray *ifrt_client_assemble_array_from_single_shards(
 REACTANT_ABI HeldIfrtArray *
 ifrt_pjrt_array_create(ifrt::PjRtClient *client,
                        HeldValue<std::shared_ptr<xla::PjRtBuffer>> *buffer) {
-  return reactant::capture(tsl::RCReference<ifrt::Array>(
-      MyValueOrThrow(xla::ifrt::PjRtArray::Create(client, buffer->obj()))));
+  return reactant::capture(
+      tsl::RCReference<ifrt::Array>(MyValueOrThrow(xla::ifrt::PjRtArray::Create(
+          client, buffer->obj(), /*has_custom_layout*/ false))));
 }
 
 // we might me interested in the `Compiler::Compile` method variant that accepts
@@ -2373,7 +2374,7 @@ REACTANT_ABI bool hlo_sharding_check_eq(xla::HloSharding *hloSharding,
 
 #pragma endregion
 
-typedef ifrt::Future<> IfRtFutureType;
+typedef tsl::Future<> IfRtFutureType;
 
 REACTANT_ABI void ifrt_free_future(IfRtFutureType *Future) { delete Future; }
 
@@ -2600,7 +2601,7 @@ REACTANT_ABI void ifrt_loaded_executable_execute(
   // there is only 1 status and is valid because we set `options.fill_status =
   // true`
   *futures = true;
-  *status = new FutureType(result.status);
+  *status = new IfRtFutureType(result.status);
 
   for (int i = 0; i < num_results; i++) {
     op_results[i] = reactant::capture(result.outputs[i]);
