@@ -9,7 +9,7 @@
     ```julia
     using Preferences, UUIDs
 
-    Preferences.set_preference!(
+    Preferences.set_preferences!(
         UUID("3c362404-f566-11ee-1572-e11a4b42c853"),
         "xla_runtime" => "IFRT"
     )

@@ -149,6 +149,21 @@ end
 
 Base.Array(x::Union{AnyConcretePJRTArray,AnyConcreteIFRTArray}) = convert(Array, x)
 
+"""
+    synchronize(x::Union{ConcretePJRTArray,ConcretePJRTNumber})
+    synchronize(x::Union{ConcreteIFRTArray,ConcreteIFRTNumber})
+
+Blocks until the computation is complete. Returns `nothing`.
+Does nothing if the input is not supported by Reactant.
+For tuples, synchronizes each element of the tuple.
+
+!!! note
+    This function is internal and is not part of the public API. 
+    Prefer `@compile` with `sync=true` to compile functions that block until the computation is complete instead of calling this function.
+"""
+synchronize(any) = nothing
+synchronize(tuple::Tuple) = foreach(synchronize, tuple)
+
 function synchronize(x::Union{ConcretePJRTArray,ConcretePJRTNumber})
     foreach(wait, x.data)
     return nothing
