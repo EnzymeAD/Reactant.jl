@@ -156,6 +156,12 @@ end
     return Base.setproperty!(obj, field, (val[idx],))
 end
 
+function traced_setfield_buffer!(
+    runtime::Val, cache_dict, concrete_res, obj::Nothing, field, path
+)
+    return nothing
+end
+
 function traced_setfield_buffer!(runtime::Val, cache_dict, concrete_res, obj, field, path)
     return traced_setfield_buffer!(
         runtime, cache_dict, traced_getfield(obj, field), concrete_res, obj, field, path
