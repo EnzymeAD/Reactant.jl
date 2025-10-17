@@ -82,7 +82,7 @@ After using Julia's built-in `GC.gc()`:
 [ Info: gc... 10
 ```
 
-## Benchmark results feel suspisiosly fast
+## Benchmark results feel suspiciously fast
 
 If you see benchmark results that are suspiciously fast, it's likely because the benchmark
 was executed with compiled functions where `sync=false` was used. In this case, the compield 
