@@ -1327,9 +1327,7 @@ function triton_optimization_passes(device_properties)
             "cse",
             "symbol-dce",
             "triton-loop-unroll",
-            "preserve-triton-warps-ctas{save=true restore=false}",
-            "convert-triton-to-tritongpu{target=cuda:$(major_version)$(minor_version)}",
-            "preserve-triton-warps-ctas{save=false restore=true}",
+            "convert-triton-to-triton-gpu-preserving-module-attributes{target=cuda:$(major_version)$(minor_version)}",
             "tritongpu-coalesce",
             "tritongpu-F32DotTC",
             "triton-nvidia-gpu-plan-cta",
@@ -1929,6 +1927,31 @@ function compile_mlir!(
                 ',',
             ),
             "no_triton",
+        )
+    elseif compile_options.optimization_passes === :before_triton_lowering
+        run_pass_pipeline!(
+            mod,
+            join(
+                if compile_options.raise_first
+                    ["mark-func-memory-effects", opt_passes]
+                else
+                    [
+                        "mark-func-memory-effects",
+                        opt_passes,
+                        "enzyme-batch",
+                        opt_passes2,
+                        enzyme_pass,
+                        opt_passes_with_triton,
+                        "canonicalize",
+                        "remove-unnecessary-enzyme-ops",
+                        "enzyme-simplify-math",
+                        legalize_chlo_to_stablehlo...,
+                        opt_passes2,
+                    ]
+                end,
+                ',',
+            ),
+            "before_triton_lowering",
         )
     elseif compile_options.optimization_passes === :before_kernel
         run_pass_pipeline!(

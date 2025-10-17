@@ -53,19 +53,19 @@ end
 
 @testset "fused_layer_norm" begin
     if RunningOnCUDA
-        x_ra = Reactant.to_rarray(rand(Float32, 256, 2056))
-        weight_ra = Reactant.to_rarray(rand(Float32, 256))
-        bias_ra = Reactant.to_rarray(rand(Float32, 256))
+        x_ra = Reactant.to_rarray(rand(Float32, 257, 2056))
+        weight_ra = Reactant.to_rarray(rand(Float32, 257))
+        bias_ra = Reactant.to_rarray(rand(Float32, 257))
 
         y_ra1, mean_ra1, rstd_ra1 = @jit layer_norm_triton(x_ra, weight_ra, bias_ra, false)
         y_ra2, mean_ra2, rstd_ra2 = @jit layer_norm_naive(x_ra, weight_ra, bias_ra)
         y_ra3, mean_ra3, rstd_ra3 = @jit layer_norm_triton(x_ra, weight_ra, bias_ra, true)
 
-        @test_broken y_ra1 ≈ y_ra2
-        @test_broken y_ra2 ≈ y_ra3
-        @test_broken mean_ra1 ≈ mean_ra2
+        @test y_ra1 ≈ y_ra2
+        @test y_ra2 ≈ y_ra3
+        @test mean_ra1 ≈ mean_ra2
         @test mean_ra2 ≈ mean_ra3
-        @test_broken rstd_ra1 ≈ rstd_ra2
+        @test rstd_ra1 ≈ rstd_ra2
         @test rstd_ra2 ≈ rstd_ra3
     end
 end

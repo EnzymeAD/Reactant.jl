@@ -59,9 +59,9 @@ struct TritonMetadata{CK,MD,DP}
     max_num_threads::Int
 end
 
-normalize_grid(grid_fn, metadata) = normalize_grid(grid_fn(metadata), metadata)
-normalize_grid(grid::Integer, metadata) = normalize_grid((grid,), metadata)
-function normalize_grid(grid::Dims{N}, metadata) where {N}
+canonicalize_grid(grid_fn, metadata) = canonicalize_grid(grid_fn(metadata), metadata)
+canonicalize_grid(grid::Integer, metadata) = canonicalize_grid((grid,), metadata)
+function canonicalize_grid(grid::Dims{N}, metadata) where {N}
     @assert N <= 3
     @assert all(grid .> 0)
     return (grid..., ntuple(_ -> 1, 3 - N)...)
@@ -82,6 +82,7 @@ function overlayed_pycall_with_triton(
     num_ctas::Integer=1,
     hints=nothing,
 )
+    @assert num_ctas == 1 "TODO: num_ctas > 1 not supported"
     triton = tritonptr[]
 
     mapped = map(signature_string, args)
@@ -163,7 +164,7 @@ function overlayed_pycall_with_triton(
         Int(n_max_threads[]),
     )
 
-    grid = normalize_grid(grid, metadata)
+    grid = canonicalize_grid(grid, metadata)
 
     return @opcall triton_call(
         pyconvert(String, compiled_kernel.asm["source"]),
@@ -177,5 +178,7 @@ function overlayed_pycall_with_triton(
         block_z=@opcall(constant(1)),
         num_ctas,
         num_warps,
+        threads_per_warp=device_properties.warp_size,
+        enable_source_remat=false,
     )
 end
