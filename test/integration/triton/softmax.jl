@@ -19,6 +19,8 @@ function softmax_triton(x::AbstractMatrix{T}) where {T}
     out = similar(x_transposed)
     n_rows, n_cols = size(x_transposed)
 
+    BLOCK_SIZE = nextpow(2, n_cols)
+
     function grid_fn(metadata)
         occupancy = (
             metadata.device_properties.regs_per_block ÷
@@ -43,7 +45,7 @@ function softmax_triton(x::AbstractMatrix{T}) where {T}
         n_rows,
         n_cols,
         BLOCK_SIZE,
-        num_stages;
+        num_stages=3;
         grid=grid_fn,
     )
 
