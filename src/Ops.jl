@@ -1852,14 +1852,22 @@ function triton_call(
     block_z::TracedRNumber{<:Integer},
     num_ctas::Integer=1,
     num_warps::Integer=4,
+    threads_per_warp::Integer=32,
+    enable_source_remat::Bool=false,
     location=mlir_stacktrace("triton_call", @__FILE__, @__LINE__),
 )
     _, symref, modop = _extract_function(
         mlir_code; func_name, func_op_kind="tt.func", location
     )
 
-    MLIR.IR.attr!(modop, "ttg.num-wraps", MLIR.IR.Attribute(Int32(num_warps)))
-    MLIR.IR.attr!(modop, "ttg.num-ctas", MLIR.IR.Attribute(Int32(num_ctas)))
+    MLIR.IR.attr!(modop, "enzymexla.ttg.num-warps", MLIR.IR.Attribute(Int32(num_warps)))
+    MLIR.IR.attr!(modop, "enzymexla.ttg.num-ctas", MLIR.IR.Attribute(Int32(num_ctas)))
+    MLIR.IR.attr!(
+        modop, "enzymexla.ttg.threads-per-warp", MLIR.IR.Attribute(Int32(threads_per_warp))
+    )
+    if enable_source_remat
+        MLIR.IR.attr!(modop, "enzymexla.ttg.enable-source-remat", MLIR.IR.UnitAttribute())
+    end
 
     result_types = MLIR.IR.Type[]
     output_operand_aliases = MLIR.IR.Attribute[]
