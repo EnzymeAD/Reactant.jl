@@ -32,6 +32,8 @@ function get_padding(x)
     return ntuple(Returns(0), ndims(x))
 end
 
+const DEBUG_ENSURE_ALWAYS_SHARDED = Ref(false)
+
 # Traced Types
 
 ## MissingTracedValue -- defined in ReactantCore
@@ -138,6 +140,9 @@ mutable struct ConcretePJRTNumber{T,D,S<:Sharding.ShardInfo} <: AbstractConcrete
     function ConcretePJRTNumber{T,D,S}(
         data::NTuple{D,XLA.PJRT.AsyncBuffer}, sharding::S
     ) where {T,D,S}
+        if DEBUG_ENSURE_ALWAYS_SHARDED[]
+            @assert Sharding.is_sharded(sharding)
+        end
         return new{T,D,S}(data, sharding, false)
     end
 end
@@ -191,6 +196,9 @@ mutable struct ConcretePJRTArray{T,N,D,S<:Sharding.ShardInfo} <: AbstractConcret
     function ConcretePJRTArray{T,N,D,S}(
         data::NTuple{D,XLA.PJRT.AsyncBuffer}, shape::NTuple{N,Int}, sharding::S
     ) where {T,N,D,S}
+        if DEBUG_ENSURE_ALWAYS_SHARDED[]
+            @assert Sharding.is_sharded(sharding)
+        end
         return new{T,N,D,S}(data, shape, sharding, false)
     end
 end
@@ -274,6 +282,9 @@ mutable struct ConcreteIFRTNumber{T,S<:Sharding.ShardInfo} <: AbstractConcreteNu
     donated::Bool
 
     function ConcreteIFRTNumber{T,S}(data::XLA.IFRT.AsyncArray, sharding::S) where {T,S}
+        if DEBUG_ENSURE_ALWAYS_SHARDED[]
+            @assert Sharding.is_sharded(sharding)
+        end
         return new{T,S}(data, sharding, false)
     end
 end
@@ -324,6 +335,9 @@ mutable struct ConcreteIFRTArray{
         sharding::S,
         padding::Union{Nothing,NTuple{N,Int}}=nothing,
     ) where {T,N,S}
+        if DEBUG_ENSURE_ALWAYS_SHARDED[]
+            @assert Sharding.is_sharded(sharding)
+        end
         return new{T,N,S,typeof(padding)}(data, shape, sharding, false, padding)
     end
 end
