@@ -45,7 +45,6 @@ function softmax_triton(x::AbstractMatrix{T}) where {T}
         BLOCK_SIZE,
         num_stages;
         grid=grid_fn,
-        blocks=(BLOCK_SIZE,),
     )
 
     return permutedims(out, (2, 1))

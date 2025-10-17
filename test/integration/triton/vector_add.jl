@@ -8,7 +8,7 @@ const RunningOnCUDA = contains(string(Reactant.devices()[1]), "CUDA")
 
 function vector_add_triton(x::AbstractVector{T}, y::AbstractVector{T}) where {T}
     out = similar(x)
-    add_kernel(x, y, out, length(x), 1024; grid=(cld(length(x), 1024),), blocks=(1024,))
+    add_kernel(x, y, out, length(x), 1024; grid=(cld(length(x), 1024),))
     return out
 end
 
