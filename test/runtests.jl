@@ -66,9 +66,9 @@ const REACTANT_TEST_GROUP = lowercase(get(ENV, "REACTANT_TEST_GROUP", "all"))
             @safetestset "low_memory_dropout" include(
                 "integration/triton/low_memory_dropout.jl"
             )
-            # @safetestset "layer norm" include("integration/triton/layer_norm.jl")
+            @safetestset "layer norm" include("integration/triton/layer_norm.jl")
             # @safetestset "attention" include("integration/triton/attention.jl")
-            # @safetestset "libdevice" include("integration/triton/libdevice.jl")
+            @safetestset "libdevice" include("integration/triton/libdevice.jl")
             # @safetestset "grouped gemm" include("integration/triton/grouped_gemm.jl")
             # @safetestset "persistant matmul" include(
             #     "integration/triton/persistant_matmul.jl"
