@@ -29,32 +29,32 @@ build --repo_env=RULES_PYTHON_ENABLE_PYSTAR=0
 
 build -c opt
 
-build:cuda --repo_env TF_NEED_CUDA=1
-build:cuda --repo_env TF_NVCC_CLANG=1
-build:cuda --repo_env TF_NCCL_USE_STUB=1
-build:cuda --repo_env=HERMETIC_CUDA_VERSION="12.8.1"
-build:cuda --repo_env=HERMETIC_CUDNN_VERSION="9.8.0"
-build:cuda --repo_env=HERMETIC_NVSHMEM_VERSION="3.2.5"
+common:cuda --repo_env TF_NEED_CUDA=1
+common:cuda --repo_env TF_NVCC_CLANG=1
+common:cuda --repo_env TF_NCCL_USE_STUB=1
+common:cuda --repo_env=HERMETIC_CUDA_VERSION="12.8.1"
+common:cuda --repo_env=HERMETIC_CUDNN_VERSION="9.8.0"
+common:cuda --repo_env=HERMETIC_NVSHMEM_VERSION="3.2.5"
 # "sm" means we emit only cubin, which is forward compatible within a GPU generation.
 # "compute" means we emit both cubin and PTX, which is larger but also forward compatible to future GPU generations.
-build:cuda --repo_env HERMETIC_CUDA_COMPUTE_CAPABILITIES="sm_60,sm_70,sm_80,compute_90"
-build:cuda --crosstool_top="@local_config_cuda//crosstool:toolchain"
-build:cuda --@local_config_cuda//:enable_cuda
+common:cuda --repo_env HERMETIC_CUDA_COMPUTE_CAPABILITIES="sm_60,sm_70,sm_80,compute_90"
+common:cuda --crosstool_top="@local_config_cuda//crosstool:toolchain"
+common:cuda --@local_config_cuda//:enable_cuda
 # Default hermetic CUDA and CUDNN versions.
-build:cuda --@local_config_cuda//cuda:include_cuda_libs=true
-build:cuda --@local_config_cuda//:cuda_compiler=nvcc
-# build:cuda --@local_config_nvshmem//:override_include_nvshmem_libs=true
-# build:cuda --@local_config_nvshmem//cuda:include_nvshmem_libs=true
+common:cuda --@local_config_cuda//cuda:include_cuda_libs=true
+common:cuda --@local_config_cuda//:cuda_compiler=nvcc
+# common:cuda --@local_config_nvshmem//:override_include_nvshmem_libs=true
+# common:cuda --@local_config_nvshmem//cuda:include_nvshmem_libs=true
 
 
-build:rocm --crosstool_top=@local_config_rocm//crosstool:toolchain
-build:rocm --define=using_rocm=true --define=using_rocm_hipcc=true
-build:rocm --repo_env TF_NEED_ROCM=1
-build:rocm --action_env TF_ROCM_AMDGPU_TARGETS="gfx900,gfx906,gfx908,gfx90a,gfx940,gfx941,gfx942,gfx1030,gfx1100,gfx1200,gfx1201"
+common:rocm --crosstool_top=@local_config_rocm//crosstool:toolchain
+common:rocm --define=using_rocm=true --define=using_rocm_hipcc=true
+common:rocm --repo_env TF_NEED_ROCM=1
+common:rocm --action_env TF_ROCM_AMDGPU_TARGETS="gfx900,gfx906,gfx908,gfx90a,gfx940,gfx941,gfx942,gfx1030,gfx1100,gfx1200,gfx1201"
 
 # Build with hipcc for ROCm and clang for the host.
-build:rocm --action_env=TF_ROCM_CLANG="1"
-build:rocm --action_env=CLANG_COMPILER_PATH="/usr/lib/llvm-18/bin/clang"
-build:rocm --copt=-Wno-gnu-offsetof-extensions
-build:rocm --copt=-Qunused-arguments
-build:rocm --action_env=TF_HIPCC_CLANG="1"
+common:rocm --action_env=TF_ROCM_CLANG="1"
+common:rocm --action_env=CLANG_COMPILER_PATH="/usr/lib/llvm-18/bin/clang"
+common:rocm --copt=-Wno-gnu-offsetof-extensions
+common:rocm --copt=-Qunused-arguments
+common:rocm --action_env=TF_HIPCC_CLANG="1"

@@ -706,7 +706,7 @@ end
     @test for_no_track_numbers_ra(x_ra, n_ra) == for_no_track_numbers(x, n)
 
     ir = sprint(show, @code_hlo optimize = "enzyme-batch" for_no_track_numbers(x_ra, n_ra))
-    @test contains(ir, "enzymexla.disable_min_cut")
+    @test contains(ir, "enzyme.disable_mincut")
     @test contains(ir, "enzymexla.enable_checkpointing")
 end
 

@@ -2149,7 +2149,7 @@ end
     )
 
     if !mincut
-        MLIR.IR.attr!(while_op, "enzymexla.disable_min_cut", MLIR.IR.UnitAttribute())
+        MLIR.IR.attr!(while_op, "enzyme.disable_mincut", MLIR.IR.UnitAttribute())
     end
 
     if checkpointing

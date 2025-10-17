@@ -1,11 +1,9 @@
 load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
 
 NSYNC_COMMIT = "82b118aa7ace3132e517e2c467f8732978cf4023"
-
 NSYNC_SHA256 = ""
 
-ENZYMEXLA_COMMIT = "996b3e5ccbe5024d69d9a365e5f4db79f41dbc6c"
-
+ENZYMEXLA_COMMIT = "6137ac98e710adf6f4e953bf441db4e25b2db40f"
 ENZYMEXLA_SHA256 = ""
 
 http_archive(
@@ -36,7 +34,11 @@ LLVM_TARGETS = [
     "AArch64",
     "X86",
     "ARM",
-]
+] 
+#+ [
+#    "PowerPC",
+#    "SystemZ"
+#]
 
 # Uncomment these lines to use a custom LLVM commit
 # LLVM_COMMIT = "b39c5cb6977f35ad727d86b2dd6232099734ffd3"
@@ -73,19 +75,9 @@ LLVM_TARGETS = [
 #     ],
 # )
 
-http_archive(
-    name = "rules_ml_toolchain",
-    patch_cmds = [
-        """
-	sed -i.bak0 "/D_FORTIFY_SOURCE/d" cc/features/BUILD third_party/gpus/crosstool/cc_toolchain_config.bzl.tpl
-""",
-    ],
-    sha256 = "e7e44c4e349a1c1f31398bd2257c51432e73ea0e7e24cce67090b68b0b50007e",
-    strip_prefix = "rules_ml_toolchain-55dcd0a52c7e0f9eec9927a32512229c09ac3b3e",
-    urls = [
-        "https://github.com/google-ml-infra/rules_ml_toolchain/archive/55dcd0a52c7e0f9eec9927a32512229c09ac3b3e.tar.gz",
-    ],
-)
+load("@enzyme_ad//third_party/ml_toolchain:workspace.bzl", ml_toolchain_workspace = "repo")
+
+ml_toolchain_workspace()
 
 load("@enzyme_ad//third_party/jax:workspace.bzl", jax_workspace = "repo")
 
