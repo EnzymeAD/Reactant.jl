@@ -156,6 +156,17 @@ Base.@nospecializeinfer function traced_tuple_type_inner(
 end
 
 Base.@nospecializeinfer function traced_type_inner(
+    @nospecialize(T::Type{<:Tuple}),
+    seen,
+    mode::TraceMode,
+    @nospecialize(track_numbers::Type),
+    @nospecialize(sharding),
+    @nospecialize(runtime)
+)
+    return traced_tuple_type_inner(T, seen, mode, track_numbers, sharding, runtime)
+end
+
+Base.@nospecializeinfer function traced_type_inner(
     @nospecialize(T::Core.TypeofVararg),
     seen,
     @nospecialize(mode::TraceMode),
@@ -1885,6 +1896,10 @@ end
 Base.@nospecializeinfer function make_tracer(
     seen, @nospecialize(prev::ReactantRNG), @nospecialize(path), mode; kwargs...
 )
+    if mode == TracedToTypes
+        push!(path, Core.Typeof(prev))
+        return make_tracer(seen, prev.seed, path, mode; kwargs...)
+    end
     return ReactantRNG(
         make_tracer(seen, prev.seed, (path..., :seed), mode; kwargs...), prev.algorithm
     )

@@ -93,8 +93,6 @@ end
 end
 
 @testset "RNN Integration" begin
-    using Reactant, Lux, Enzyme, Random
-
     model = Recurrence(RNNCell(4 => 4); ordering=BatchLastIndex())
     ps, st = Reactant.to_rarray(Lux.setup(Random.default_rng(), model))
 
