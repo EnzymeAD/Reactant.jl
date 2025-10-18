@@ -617,7 +617,7 @@ end
     f::LLVMFunc{F,tt}; shmem::Union{Integer,Base.Callable}=0, max_threads::Integer=0
 ) where {F,tt}
     return CUDA.launch_configuration(
-        Base.inferencebarrier(CUDA.cufunction)(f.f, Tuple{tt.parameters[2:end]...}).fun;
+        call_with_native(CUDA.cufunction, f.f, Tuple{tt.parameters[2:end]...}).fun;
         shmem,
         max_threads,
     )
@@ -1465,7 +1465,7 @@ end
 @static if !Sys.isapple()
     @setup_workload begin
         Reactant.initialize_dialect()
-
+        init_jit()
         if Reactant.XLA.REACTANT_XLA_RUNTIME == "PJRT"
             client = Reactant.XLA.PJRT.CPUClient(; checkcount=false)
         elseif Reactant.XLA.REACTANT_XLA_RUNTIME == "IFRT"
@@ -1504,7 +1504,6 @@ end
         Reactant.XLA.free_client(client)
         client.client = C_NULL
         Reactant.deinitialize_dialect()
-        Reactant.clear_oc_cache()
     end
 end
 
