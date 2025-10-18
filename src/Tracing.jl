@@ -156,6 +156,17 @@ Base.@nospecializeinfer function traced_tuple_type_inner(
 end
 
 Base.@nospecializeinfer function traced_type_inner(
+    @nospecialize(T::Type{<:Tuple}),
+    seen,
+    mode::TraceMode,
+    @nospecialize(track_numbers::Type),
+    @nospecialize(sharding),
+    @nospecialize(runtime)
+)
+    return traced_tuple_type_inner(T, seen, mode, track_numbers, sharding, runtime)
+end
+
+Base.@nospecializeinfer function traced_type_inner(
     @nospecialize(T::Core.TypeofVararg),
     seen,
     @nospecialize(mode::TraceMode),
@@ -608,6 +619,33 @@ Base.@nospecializeinfer function traced_type_inner(
     return Core.LLVMPtr{
         traced_type_inner(PT.parameters[1], seen, mode, track_numbers, sharding, runtime),A
     }
+end
+
+Base.@nospecializeinfer function traced_type_inner(
+    @nospecialize(PT::Type{ReactantRNG{S}}),
+    seen,
+    @nospecialize(mode::TraceMode),
+    @nospecialize(track_numbers::Type),
+    @nospecialize(sharding),
+    @nospecialize(runtime)
+) where {S}
+    return ReactantRNG{traced_type_inner(S, seen, mode, track_numbers, sharding, runtime)}
+end
+
+Base.@nospecializeinfer function traced_type_inner(
+    @nospecialize(PT::Type{<:Random.AbstractRNG}),
+    seen,
+    @nospecialize(mode::TraceMode),
+    @nospecialize(track_numbers::Type),
+    @nospecialize(sharding),
+    @nospecialize(runtime)
+)
+    if mode == ArrayToConcrete
+        return ReactantRNG{
+            traced_type_inner(Array{UInt64,1}, seen, mode, track_numbers, sharding, runtime)
+        }
+    end
+    return PT
 end
 
 Base.@nospecializeinfer function traced_type_inner(
@@ -1852,6 +1890,33 @@ Base.@nospecializeinfer function make_tracer(
     @nospecialize(runtime = nothing),
     kwargs...,
 )
+    return prev
+end
+
+Base.@nospecializeinfer function make_tracer(
+    seen, @nospecialize(prev::ReactantRNG), @nospecialize(path), mode; kwargs...
+)
+    if mode == TracedToTypes
+        push!(path, Core.Typeof(prev))
+        return make_tracer(seen, prev.seed, path, mode; kwargs...)
+    end
+    return ReactantRNG(
+        make_tracer(seen, prev.seed, (path..., :seed), mode; kwargs...), prev.algorithm
+    )
+end
+
+Base.@nospecializeinfer function make_tracer(
+    seen, @nospecialize(prev::Random.AbstractRNG), @nospecialize(path), mode; kwargs...
+)
+    if mode == ArrayToConcrete
+        TracedRandom.should_warn_if_not_natively_supported(prev)
+        return ReactantRNG(
+            make_tracer(
+                seen, TracedRandom.make_seed(prev), (path..., :seed), mode; kwargs...
+            ),
+            TracedRandom.rng_algorithm(prev),
+        )
+    end
     return prev
 end
 
