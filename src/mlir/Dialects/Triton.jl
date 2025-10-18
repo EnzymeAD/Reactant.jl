@@ -1011,6 +1011,7 @@ function make_tensor_descriptor(
     shape::Vector{Value},
     strides::Vector{Value};
     result::IR.Type,
+    padding=nothing,
     location=Location(),
 )
     op_ty_results = IR.Type[result,]
@@ -1018,6 +1019,7 @@ function make_tensor_descriptor(
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
+    !isnothing(padding) && push!(attributes, namedattribute("padding", padding))
 
     return create_operation(
         "tt.make_tensor_descriptor",
