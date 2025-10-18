@@ -984,6 +984,7 @@ cc_library(
             "-Wl,-exported_symbol,_ReactantCudaDeviceGetComputeCapalilityMinor",
             "-Wl,-exported_symbol,_ReactantCudaDeviceGetWarpSizeInThreads",
             "-Wl,-exported_symbol,_ReactantCudaDeviceGetProperties",
+            "-Wl,-exported_symbol,_ReactantCudaGetRegsSpillsMaxThreadsFromBinary",
             "-Wl,-exported_symbol,_PjRtDeviceGetLocalDeviceId",
             "-Wl,-exported_symbol,_PjRtDeviceGetGlobalDeviceId",
             "-Wl,-exported_symbol,_PjRtDeviceGetLocalHardwareId",
@@ -1433,6 +1434,24 @@ gentbl_cc_library(
         "@enzyme_ad//src/enzyme_ad/jax:EnzymeXLADialectTdFiles",
         "@llvm-project//mlir:GPUOpsTdFiles",
         "@stablehlo//:stablehlo_ops_td_files",
+    ],
+)
+
+gentbl_cc_library(
+    name = "TritonExtJLIncGen",
+    tbl_outs = [
+        (
+            [
+                "--generator=jl-op-defs",
+                "--disable-module-wrap=0",
+            ],
+            "TritonExt.jl",
+        ),
+    ],
+    tblgen = "//:mlir-jl-tblgen",
+    td_file = "@enzyme_ad//src/enzyme_ad/jax:Dialect/TritonExt/Ops.td",
+    deps = [
+        "@enzyme_ad//src/enzyme_ad/jax:TritonExtDialectTdFiles",
     ],
 )
 
