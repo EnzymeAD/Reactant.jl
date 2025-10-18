@@ -1347,6 +1347,15 @@ function mlirOperationGetLocation(op)
 end
 
 """
+    mlirOperationSetLocation(op, loc)
+
+Sets the location of the operation.
+"""
+function mlirOperationSetLocation(op, loc)
+    @ccall mlir_c.mlirOperationSetLocation(op::MlirOperation, loc::MlirLocation)::Cvoid
+end
+
+"""
     mlirOperationGetTypeID(op)
 
 Gets the type id of the operation. Returns null if the operation does not have a registered operation description.
@@ -7178,12 +7187,20 @@ end
 end
 
 """
-    mlirLLVMDICompileUnitAttrGet(ctx, id, sourceLanguage, file, producer, isOptimized, emissionKind, nameTableKind)
+    mlirLLVMDICompileUnitAttrGet(ctx, id, sourceLanguage, file, producer, isOptimized, emissionKind, nameTableKind, splitDebugFilename)
 
 Creates a LLVM DICompileUnit attribute.
 """
 function mlirLLVMDICompileUnitAttrGet(
-    ctx, id, sourceLanguage, file, producer, isOptimized, emissionKind, nameTableKind
+    ctx,
+    id,
+    sourceLanguage,
+    file,
+    producer,
+    isOptimized,
+    emissionKind,
+    nameTableKind,
+    splitDebugFilename,
 )
     @ccall mlir_c.mlirLLVMDICompileUnitAttrGet(
         ctx::MlirContext,
@@ -7194,6 +7211,7 @@ function mlirLLVMDICompileUnitAttrGet(
         isOptimized::Bool,
         emissionKind::MlirLLVMDIEmissionKind,
         nameTableKind::MlirLLVMDINameTableKind,
+        splitDebugFilename::MlirAttribute,
     )::MlirAttribute
 end
 
@@ -8983,6 +9001,27 @@ function mlirPassManagerEnableTiming(passManager)
 end
 
 """
+    MlirPassDisplayMode
+
+Enumerated type of pass display modes. Mainly used in [`mlirPassManagerEnableStatistics`](@ref).
+"""
+@cenum MlirPassDisplayMode::UInt32 begin
+    MLIR_PASS_DISPLAY_MODE_LIST = 0x0000000000000000
+    MLIR_PASS_DISPLAY_MODE_PIPELINE = 0x0000000000000001
+end
+
+"""
+    mlirPassManagerEnableStatistics(passManager, displayMode)
+
+Enable pass statistics.
+"""
+function mlirPassManagerEnableStatistics(passManager, displayMode)
+    @ccall mlir_c.mlirPassManagerEnableStatistics(
+        passManager::MlirPassManager, displayMode::MlirPassDisplayMode
+    )::Cvoid
+end
+
+"""
     mlirPassManagerGetNestedUnder(passManager, operationName)
 
 Nest an OpPassManager under the top-level PassManager, the nested passmanager will only run on operations matching the provided name. The returned OpPassManager will be destroyed when the parent is destroyed. To further nest more OpPassManager under the newly returned one, see `mlirOpPassManagerNest` below.
@@ -9167,6 +9206,14 @@ struct MlirRewritePatternSet
     ptr::Ptr{Cvoid}
 end
 
+struct MlirPatternRewriter
+    ptr::Ptr{Cvoid}
+end
+
+struct MlirRewritePattern
+    ptr::Ptr{Cvoid}
+end
+
 """
     mlirRewriterBaseGetContext(rewriter)
 
@@ -9256,6 +9303,17 @@ Returns the current block of the rewriter.
 """
 function mlirRewriterBaseGetBlock(rewriter)
     @ccall mlir_c.mlirRewriterBaseGetBlock(rewriter::MlirRewriterBase)::MlirBlock
+end
+
+"""
+    mlirRewriterBaseGetOperationAfterInsertion(rewriter)
+
+Returns the operation right after the current insertion point of the rewriter. A null [`MlirOperation`](@ref) will be returned
+"""
+function mlirRewriterBaseGetOperationAfterInsertion(rewriter)
+    @ccall mlir_c.mlirRewriterBaseGetOperationAfterInsertion(
+        rewriter::MlirRewriterBase
+    )::MlirOperation
 end
 
 """
@@ -9583,18 +9641,25 @@ function mlirIRRewriterDestroy(rewriter)
 end
 
 """
-    mlirFreezeRewritePattern(op)
+    mlirFreezeRewritePattern(set)
 
-FrozenRewritePatternSet API
+Freeze the given [`MlirRewritePatternSet`](@ref) to a [`MlirFrozenRewritePatternSet`](@ref). Note that the ownership of the input set is transferred into the frozen set after this call.
 """
-function mlirFreezeRewritePattern(op)
+function mlirFreezeRewritePattern(set)
     @ccall mlir_c.mlirFreezeRewritePattern(
-        op::MlirRewritePatternSet
+        set::MlirRewritePatternSet
     )::MlirFrozenRewritePatternSet
 end
 
-function mlirFrozenRewritePatternSetDestroy(op)
-    @ccall mlir_c.mlirFrozenRewritePatternSetDestroy(op::MlirFrozenRewritePatternSet)::Cvoid
+"""
+    mlirFrozenRewritePatternSetDestroy(set)
+
+Destroy the given [`MlirFrozenRewritePatternSet`](@ref).
+"""
+function mlirFrozenRewritePatternSetDestroy(set)
+    @ccall mlir_c.mlirFrozenRewritePatternSetDestroy(
+        set::MlirFrozenRewritePatternSet
+    )::Cvoid
 end
 
 function mlirApplyPatternsAndFoldGreedilyWithOp(op, patterns, arg3)
@@ -9611,6 +9676,80 @@ function mlirApplyPatternsAndFoldGreedily(op, patterns, arg3)
         patterns::MlirFrozenRewritePatternSet,
         arg3::MlirGreedyRewriteDriverConfig,
     )::MlirLogicalResult
+end
+
+"""
+    mlirPatternRewriterAsBase(rewriter)
+
+Cast the PatternRewriter to a RewriterBase
+"""
+function mlirPatternRewriterAsBase(rewriter)
+    @ccall mlir_c.mlirPatternRewriterAsBase(rewriter::MlirPatternRewriter)::MlirRewriterBase
+end
+
+"""
+    MlirRewritePatternCallbacks
+
+Callbacks to construct a rewrite pattern.
+
+| Field           | Note                                                                                                                                                                                  |
+| :-------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| construct       | Optional constructor for the user data. Set to nullptr to disable it.                                                                                                                 |
+| destruct        | Optional destructor for the user data. Set to nullptr to disable it.                                                                                                                  |
+| matchAndRewrite | The callback function to match against code rooted at the specified operation, and perform the rewrite if the match is successful, corresponding to RewritePattern::matchAndRewrite.  |
+"""
+struct MlirRewritePatternCallbacks
+    construct::Ptr{Cvoid}
+    destruct::Ptr{Cvoid}
+    matchAndRewrite::Ptr{Cvoid}
+end
+
+"""
+    mlirOpRewritePattenCreate(rootName, benefit, context, callbacks, userData, nGeneratedNames, generatedNames)
+
+Create a rewrite pattern that matches the operation with the given rootName, corresponding to mlir::OpRewritePattern.
+"""
+function mlirOpRewritePattenCreate(
+    rootName, benefit, context, callbacks, userData, nGeneratedNames, generatedNames
+)
+    @ccall mlir_c.mlirOpRewritePattenCreate(
+        rootName::MlirStringRef,
+        benefit::Cuint,
+        context::MlirContext,
+        callbacks::MlirRewritePatternCallbacks,
+        userData::Ptr{Cvoid},
+        nGeneratedNames::Csize_t,
+        generatedNames::Ptr{MlirStringRef},
+    )::MlirRewritePattern
+end
+
+"""
+    mlirRewritePatternSetCreate(context)
+
+Create an empty [`MlirRewritePatternSet`](@ref).
+"""
+function mlirRewritePatternSetCreate(context)
+    @ccall mlir_c.mlirRewritePatternSetCreate(context::MlirContext)::MlirRewritePatternSet
+end
+
+"""
+    mlirRewritePatternSetDestroy(set)
+
+Destruct the given [`MlirRewritePatternSet`](@ref).
+"""
+function mlirRewritePatternSetDestroy(set)
+    @ccall mlir_c.mlirRewritePatternSetDestroy(set::MlirRewritePatternSet)::Cvoid
+end
+
+"""
+    mlirRewritePatternSetAdd(set, pattern)
+
+Add the given [`MlirRewritePattern`](@ref) into a [`MlirRewritePatternSet`](@ref). Note that the ownership of the pattern is transferred to the set after this call.
+"""
+function mlirRewritePatternSetAdd(set, pattern)
+    @ccall mlir_c.mlirRewritePatternSetAdd(
+        set::MlirRewritePatternSet, pattern::MlirRewritePattern
+    )::Cvoid
 end
 
 """
@@ -11203,6 +11342,7 @@ struct MlirTpuApplyVectorLayoutContext
     target_shape::MlirTpuI64TargetTuple
     mxu_shape::MlirTpuMxuShape
     max_sublanes_in_scratch::Int64
+    shape_invariant_numerics::Bool
 end
 
 function mlirTpuVectorLayoutCreate(bitwidth, offsets, tiling, implicit_dim)

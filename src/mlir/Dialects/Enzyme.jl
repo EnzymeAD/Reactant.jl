@@ -505,6 +505,25 @@ function initTrace(; trace::IR.Type, location=Location())
     )
 end
 
+function load(cache::Value, indices::Vector{Value}; result::IR.Type, location=Location())
+    op_ty_results = IR.Type[result,]
+    operands = Value[cache, indices...]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+
+    return create_operation(
+        "enzyme.load",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
 function placeholder(; output::IR.Type, location=Location())
     op_ty_results = IR.Type[output,]
     operands = Value[]
@@ -644,6 +663,25 @@ function simulate(
 
     return create_operation(
         "enzyme.simulate",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+function store(value::Value, cache::Value, indices::Vector{Value}; location=Location())
+    op_ty_results = IR.Type[]
+    operands = Value[value, cache, indices...]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+
+    return create_operation(
+        "enzyme.store",
         location;
         operands,
         owned_regions,

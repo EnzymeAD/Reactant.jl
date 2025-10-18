@@ -1361,6 +1361,48 @@ function shuffled_store(
     )
 end
 
+function stochastic_convert_elementwise(
+    input::Value, random::Value; output::IR.Type, dst_type, location=Location()
+)
+    op_ty_results = IR.Type[output,]
+    operands = Value[input, random]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[namedattribute("dst_type", dst_type),]
+
+    return create_operation(
+        "tpu.stochastic_convert_elementwise",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+function stochastic_convert(
+    input::Value, random::Value; output::IR.Type, location=Location()
+)
+    op_ty_results = IR.Type[output,]
+    operands = Value[input, random]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+
+    return create_operation(
+        "tpu.stochastic_convert",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
 function store(
     valueToStore::Value,
     base::Value,
@@ -1564,7 +1606,12 @@ function truncf(in::Value; out::IR.Type, rounding_mode, location=Location())
 end
 
 function unpack_subelements(
-    source::Value; output::IR.Type, index, pack_format, location=Location()
+    source::Value;
+    output::IR.Type,
+    index,
+    pack_format,
+    sign_extended=nothing,
+    location=Location(),
 )
     op_ty_results = IR.Type[output,]
     operands = Value[source,]
@@ -1573,6 +1620,8 @@ function unpack_subelements(
     attributes = NamedAttribute[
         namedattribute("index", index), namedattribute("pack_format", pack_format)
     ]
+    !isnothing(sign_extended) &&
+        push!(attributes, namedattribute("sign_extended", sign_extended))
 
     return create_operation(
         "tpu.unpack_subelements",
