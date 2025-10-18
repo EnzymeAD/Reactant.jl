@@ -201,3 +201,18 @@ end
         ConcreteRArray{Float64,2}
     @test @jit(rand_on_device()) isa ConcreteRArray{Float32,3}
 end
+
+@testset "Tracing of Random" begin
+    struct RandomContainer{RNG}
+        rng::RNG
+    end
+
+    rng_st = RandomContainer(MersenneTwister(0))
+    rng_st_ra = Reactant.to_rarray(rng_st)
+    @test rng_st_ra.rng isa Reactant.ReactantRNG
+
+    fn(st) = rand(st.rng, 10000)
+
+    hlo = @code_hlo fn(rng_st_ra)
+    @test contains(repr(hlo), "stablehlo.rng_bit_generator")
+end
