@@ -13,6 +13,7 @@ Reactant.REDUB_ARGUMENTS_NAME
 Reactant.Compiler.codegen_unflatten!
 Reactant.Compiler.codegen_flatten!
 Reactant.Compiler.codegen_xla_call
+Reactant.synchronize
 ```
 
 ## Other Docstrings

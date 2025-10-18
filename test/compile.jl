@@ -243,3 +243,30 @@ end
     hlo = @code_hlo legalize_chlo_to_stablehlo = true fn_test(x_ra)
     @test occursin("mhlo.topk", repr(hlo))
 end
+
+function fn_test_for_synchronize(x)
+    return x .+ 1
+end
+
+@testset "synchronize" begin 
+    @test isnothing(Reactant.synchronize(1))
+    @test isnothing(Reactant.synchronize([1, 2, 3]))
+
+    x = rand(Float32, 10)
+
+    @test isnothing(Reactant.synchronize(x))
+    
+    xr = Reactant.to_rarray(x)
+    fsyncfalse = @compile sync=false fn_test_for_synchronize(xr)
+    fsynctrue = @compile sync=true fn_test_for_synchronize(xr)
+
+    ysyncfalse = fsyncfalse(xr)
+    @test isnothing(Reactant.synchronize(ysyncfalse))
+
+    ysynctrue = fsynctrue(xr)
+    @test isnothing(Reactant.synchronize(ysynctrue))
+
+    @test ysyncfalse == ysynctrue
+    
+    @test Reactant.synchronize((ysyncfalse, ysynctrue)) == nothing
+end

@@ -9,7 +9,7 @@
     ```julia
     using Preferences, UUIDs
 
-    Preferences.set_preference!(
+    Preferences.set_preferences!(
         UUID("3c362404-f566-11ee-1572-e11a4b42c853"),
         "xla_runtime" => "IFRT"
     )
@@ -119,6 +119,20 @@ mesh, that are then referenced when specifying how the data is sharded.
    named `:y`.
 
 Given the mesh, we will specify how the data is sharded across the devices.
+
+## Gradients 
+
+It is also possible to compute gradients of functions that are sharded. Here we show an example using the `Enzyme.jl` package.
+
+```@example sharding_tutorial
+using Enzyme
+
+function compute_gradient(x_sharded_both)
+    return Enzyme.gradient(Enzyme.ReverseWithPrimal, Enzyme.Const(big_sin), x_sharded_both)
+end
+
+@jit compute_gradient(x_sharded_both)
+```
 
 <!--
 TODO describe how arrays are the "global data arrays, even though data is itself only stored

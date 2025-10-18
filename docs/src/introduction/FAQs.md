@@ -81,3 +81,77 @@ After using Julia's built-in `GC.gc()`:
 [ Info: gc... 9
 [ Info: gc... 10
 ```
+
+## Benchmark results feel suspiciously fast
+
+If you see benchmark results that are suspiciously fast, it's likely because the benchmark
+was executed with compiled functions where `sync=false` was used (the default). In this case, the compiled 
+function will be executed asynchronously, and the benchmark results will be the time it takes
+for the function to schedule the computation on the device. Compile functions with `sync=true` to get the actual runtime. You can also use the `Reactant.synchronize` on the result of the computation to block until the computation is complete.
+
+### Example
+
+```julia
+using Reactant, BenchmarkTools
+
+function myfunc(x, y)
+    return x .+ y
+end
+
+x = Reactant.to_rarray(rand(Float32, 1000))
+y = Reactant.to_rarray(rand(Float32, 1000))
+```
+
+```julia
+@benchmark f($x, $y) setup=(f = @compile sync=false myfunc($x, $y))
+```
+
+```
+BenchmarkTools.Trial: 199 samples with 9 evaluations per sample.
+ Range (min … max):  2.926 μs … 14.333 μs  ┊ GC (min … max): 0.00% … 0.00%
+ Time  (median):     3.607 μs              ┊ GC (median):    0.00%
+ Time  (mean ± σ):   4.210 μs ±  1.968 μs  ┊ GC (mean ± σ):  0.00% ± 0.00%
+
+   █▅▄▂                                                       
+  ▇█████▇█▅▅▃▃▂▃▄▂▂▁▁▂▁▁▂▁▁▁▁▁▂▁▁▁▁▂▁▁▁▃▁▁▁▁▁▂▁▁▁▁▁▁▁▂▃▁▂▁▁▃ ▂
+  2.93 μs        Histogram: frequency by time        12.5 μs <
+
+ Memory estimate: 400 bytes, allocs estimate: 14.
+```
+
+```julia
+@benchmark f($x, $y) setup=(f = @compile sync=true myfunc($x, $y))
+```
+
+```
+BenchmarkTools.Trial: 221 samples with 8 evaluations per sample.
+ Range (min … max):   8.974 μs … 42.443 μs  ┊ GC (min … max): 0.00% … 0.00%
+ Time  (median):     11.688 μs              ┊ GC (median):    0.00%
+ Time  (mean ± σ):   12.264 μs ±  3.070 μs  ┊ GC (mean ± σ):  0.00% ± 0.00%
+
+    █▃ ▅▇██▃▄ ▄█▃▄▂▅ ▇ ▂    ▂                                  
+  ▇▆████████████████▇███▇▃▆▆██▅▅▅▆▆▅▇▁▆▁▁▃▁▃▁▆▁▁▃▁▁▁▁▃▁▁▁▅▁▁▅ ▅
+  8.97 μs         Histogram: frequency by time        20.2 μs <
+
+ Memory estimate: 400 bytes, allocs estimate: 14.
+```
+
+```julia
+@benchmark begin 
+    result = f($x, $y); 
+    Reactant.synchronize(result) 
+end setup=(f = @compile sync=false myfunc(x, y))
+```
+
+```
+BenchmarkTools.Trial: 233 samples with 8 evaluations per sample.
+ Range (min … max):   8.911 μs … 19.609 μs  ┊ GC (min … max): 0.00% … 0.00%
+ Time  (median):     12.479 μs              ┊ GC (median):    0.00%
+ Time  (mean ± σ):   12.758 μs ±  2.219 μs  ┊ GC (mean ± σ):  0.00% ± 0.00%
+
+       ▁▄▄▄▃▂▁   ▃  ▄█▂ ▆▄▂ ▃    ▁  ▃   ▁                      
+  ▄▃▄▆▆████████▆██▆▇███▆███▇█▄▄▆██▇▇█▇▆▄██▇▁▆▄▃▃▁▁▁▁▃▁▁▁▁▄▁▁▃ ▄
+  8.91 μs         Histogram: frequency by time        19.3 μs <
+
+ Memory estimate: 400 bytes, allocs estimate: 14.
+```
