@@ -215,4 +215,18 @@ end
 
     hlo = @code_hlo fn(rng_st_ra)
     @test contains(repr(hlo), "stablehlo.rng_bit_generator")
+
+    @testset "natively supported RNGs" begin
+        rng = Threefry2x()
+        rng_ra = Reactant.to_rarray(rng)
+        @test rng_ra isa Reactant.ReactantRNG
+        @test rng_ra.seed ≈ UInt64[rng.key1, rng.key2]
+        @test rng_ra.algorithm == "THREE_FRY"
+
+        rng = Philox2x()
+        rng_ra = Reactant.to_rarray(rng)
+        @test rng_ra isa Reactant.ReactantRNG
+        @test rng_ra.seed ≈ UInt64[rng.ctr1, rng.ctr2, rng.key]
+        @test rng_ra.algorithm == "PHILOX"
+    end
 end

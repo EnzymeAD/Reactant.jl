@@ -1909,6 +1909,7 @@ Base.@nospecializeinfer function make_tracer(
     seen, @nospecialize(prev::Random.AbstractRNG), @nospecialize(path), mode; kwargs...
 )
     if mode == ArrayToConcrete
+        TracedRandom.should_warn_if_not_natively_supported(prev)
         return ReactantRNG(
             make_tracer(
                 seen, TracedRandom.make_seed(prev), (path..., :seed), mode; kwargs...
