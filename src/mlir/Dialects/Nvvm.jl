@@ -694,6 +694,86 @@ function read_ptx_sreg_clusterid_z(; res::IR.Type, range=nothing, location=Locat
 end
 
 """
+`clusterlaunchcontrol_query_cancel`
+
+`clusterlaunchcontrol.query.cancel` queries the response of a 
+`clusterlaunchcontrol.try.cancel` operation specified by operand 
+`try_cancel_response`.
+
+Operand `query_type` specifies the type of query to perform and can be one 
+of the following:
+- `is_canceled` : Returns true if the try cancel request succeeded, 
+and false otherwise.
+- `get_first_cta_id_{x/y/z}` : Returns the x, y, or z coordinate of the 
+first CTA in the canceled cluster. Behaviour is defined only if the try 
+cancel request succeeded. 
+
+[For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/#parallel-synchronization-and-communication-instructions-clusterlaunchcontrol-query-cancel)
+"""
+function clusterlaunchcontrol_query_cancel(
+    try_cancel_response::Value; res::IR.Type, query_type, location=Location()
+)
+    op_ty_results = IR.Type[res,]
+    operands = Value[try_cancel_response,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[namedattribute("query_type", query_type),]
+
+    return create_operation(
+        "nvvm.clusterlaunchcontrol.query.cancel",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+"""
+`clusterlaunchcontrol_try_cancel`
+
+`clusterlaunchcontrol.try.cancel` requests atomically canceling the launch 
+of a cluster that has not started running yet. It asynchronously writes an 
+opaque response to shared memory indicating whether the operation succeeded 
+or failed.
+
+Operand `smemAddress` specifies the naturally aligned address of the 
+16-byte wide shared memory location where the request\'s response is written.
+
+Operand `mbarrier` specifies the mbarrier object used to track the 
+completion of the asynchronous operation.
+
+If `multicast` is specified, the response is asynchronously written to the 
+corresponding local shared memory location (specifed by `addr`) of each CTA 
+in the requesting cluster.
+
+[For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/#parallel-synchronization-and-communication-instructions-clusterlaunchcontrol-try-cancel)
+"""
+function clusterlaunchcontrol_try_cancel(
+    smemAddress::Value, mbarrier::Value; multicast=nothing, location=Location()
+)
+    op_ty_results = IR.Type[]
+    operands = Value[smemAddress, mbarrier]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+    !isnothing(multicast) && push!(attributes, namedattribute("multicast", multicast))
+
+    return create_operation(
+        "nvvm.clusterlaunchcontrol.try.cancel",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+"""
 `cluster_wait`
 
 The `cluster.wait` causes the executing thread to wait for all non-exited threads
@@ -741,13 +821,13 @@ respectively.
 [For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-cvt)
 """
 function convert_bf16x2_to_f8x2(
-    a::Value; dst::IR.Type, type, rnd=nothing, sat=nothing, location=Location()
+    a::Value; dst::IR.Type, rnd=nothing, sat=nothing, dstTy, location=Location()
 )
     op_ty_results = IR.Type[dst,]
     operands = Value[a,]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("type", type),]
+    attributes = NamedAttribute[namedattribute("dstTy", dstTy),]
     !isnothing(rnd) && push!(attributes, namedattribute("rnd", rnd))
     !isnothing(sat) && push!(attributes, namedattribute("sat", sat))
 
@@ -782,13 +862,13 @@ the cvt instruction.
 [For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-cvt)
 """
 function convert_f16x2_to_f8x2(
-    a::Value; dst::IR.Type, type, relu=nothing, location=Location()
+    a::Value; dst::IR.Type, relu=nothing, dstTy, location=Location()
 )
     op_ty_results = IR.Type[dst,]
     operands = Value[a,]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("type", type),]
+    attributes = NamedAttribute[namedattribute("dstTy", dstTy),]
     !isnothing(relu) && push!(attributes, namedattribute("relu", relu))
 
     return create_operation(
@@ -821,13 +901,13 @@ the cvt instruction.
 [For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-cvt)
 """
 function convert_f32x2_to_f6x2(
-    a::Value, b::Value; dst::IR.Type, type, relu=nothing, location=Location()
+    a::Value, b::Value; dst::IR.Type, relu=nothing, dstTy, location=Location()
 )
     op_ty_results = IR.Type[dst,]
     operands = Value[a, b]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("type", type),]
+    attributes = NamedAttribute[namedattribute("dstTy", dstTy),]
     !isnothing(relu) && push!(attributes, namedattribute("relu", relu))
 
     return create_operation(
@@ -863,17 +943,17 @@ function convert_f32x2_to_f8x2(
     a::Value,
     b::Value;
     dst::IR.Type,
-    type,
     rnd=nothing,
     sat=nothing,
     relu=nothing,
+    dstTy,
     location=Location(),
 )
     op_ty_results = IR.Type[dst,]
     operands = Value[a, b]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("type", type),]
+    attributes = NamedAttribute[namedattribute("dstTy", dstTy),]
     !isnothing(rnd) && push!(attributes, namedattribute("rnd", rnd))
     !isnothing(sat) && push!(attributes, namedattribute("sat", sat))
     !isnothing(relu) && push!(attributes, namedattribute("relu", relu))
@@ -1148,16 +1228,8 @@ end
 `cp_async_bulk_tensor_shared_cluster_global`
 
 Initiates an asynchronous copy operation on the tensor data from global 
-memory to shared memory. 
-
-The Op operates has two load modes:
-1) Tiled Mode: It\'s the default mode. The source multi-dimensional tensor 
-layout is preserved at the destination. 
-
-2) Im2col Mode: This mode is used when `im2colOffsets` operands are present.
-the elements in the Bounding Box of the source tensor are rearranged into
-columns at the destination. In this mode, the tensor has to be at least 
-3-dimensional. 
+memory to shared::cluster (or) shared::cta memory. This Op supports all
+the load modes specified in `TMALoadMode`.
 
 The `multicastMask` operand is optional. When it is present, the Op copies
 data from global memory to shared memory of multiple CTAs in the cluster.
@@ -1167,6 +1239,10 @@ the `nvvm.read.ptx.sreg.ctaid` of the destination CTA.
 
 The `l2CacheHint` operand is optional, and it is used to specify cache 
 eviction policy that may be used during the memory access.
+
+When the `isCTAOnly` attribute is set to true, the destination is
+shared::cta only. Hence, `multicastMask` and `CTAGroup` are not applicable
+when `isCTAOnly` is true.
 
 [For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-cp-async-bulk-tensor)
 """
@@ -1179,6 +1255,9 @@ function cp_async_bulk_tensor_shared_cluster_global(
     multicastMask=nothing::Union{Nothing,Value};
     l2CacheHint=nothing::Union{Nothing,Value},
     predicate=nothing::Union{Nothing,Value},
+    mode=nothing,
+    isCTAOnly=nothing,
+    group=nothing,
     location=Location(),
 )
     op_ty_results = IR.Type[]
@@ -1202,6 +1281,9 @@ function cp_async_bulk_tensor_shared_cluster_global(
             (predicate == nothing) ? 0 : 1,
         ]),
     )
+    !isnothing(mode) && push!(attributes, namedattribute("mode", mode))
+    !isnothing(isCTAOnly) && push!(attributes, namedattribute("isCTAOnly", isCTAOnly))
+    !isnothing(group) && push!(attributes, namedattribute("group", group))
 
     return create_operation(
         "nvvm.cp.async.bulk.tensor.shared.cluster.global",

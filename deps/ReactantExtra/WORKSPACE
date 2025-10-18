@@ -1,6 +1,7 @@
 load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
 
 NSYNC_COMMIT = "82b118aa7ace3132e517e2c467f8732978cf4023"
+
 NSYNC_SHA256 = ""
 
 ENZYMEXLA_COMMIT = "a7c38bce984c3adedafb8e03282c0e39640ab6f9"
@@ -34,7 +35,7 @@ LLVM_TARGETS = [
     "AArch64",
     "X86",
     "ARM",
-] 
+]
 #+ [
 #    "PowerPC",
 #    "SystemZ"
