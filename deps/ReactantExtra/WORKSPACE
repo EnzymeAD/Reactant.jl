@@ -3,7 +3,7 @@ load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
 NSYNC_COMMIT = "82b118aa7ace3132e517e2c467f8732978cf4023"
 NSYNC_SHA256 = ""
 
-ENZYMEXLA_COMMIT = "c0aa547f37916ef5caf3ea0d7760201233a9f15a"
+ENZYMEXLA_COMMIT = "0991a582e476ff80ffad283a742121d31648b688"
 ENZYMEXLA_SHA256 = ""
 
 http_archive(
