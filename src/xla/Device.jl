@@ -40,13 +40,11 @@ struct DeviceProperties
     max_threads_per_block::Cint
     max_threads_dim::NTuple{3,Cint}
     max_grid_size::NTuple{3,Cint}
-    clock_rate::Cint
     total_const_mem::Csize_t
     major::Cint
     minor::Cint
     multi_processor_count::Cint
     can_map_host_memory::Cint
-    compute_mode::Cint
     l2_cache_size::Cint
     max_threads_per_multiprocessor::Cint
 end
@@ -94,12 +92,10 @@ function Base.show(io::IO, ::MIME"text/plain", props::DeviceProperties)
         Max Threads Per Block: $(props.max_threads_per_block)
         Max Threads Dim: $(props.max_threads_dim)
         Max Grid Size: $(props.max_grid_size)
-        Clock Rate: $(props.clock_rate)
         Total Const Mem: $(_format_bytes(props.total_const_mem))
         Version: $(VersionNumber(props.major, props.minor))
         Multi Processor Count: $(props.multi_processor_count)
         Can Map Host Memory: $(props.can_map_host_memory)
-        Compute Mode: $(props.compute_mode)
         L2 Cache Size: $(props.l2_cache_size)
         Max Threads Per Multiprocessor: $(props.max_threads_per_multiprocessor)
         """,
