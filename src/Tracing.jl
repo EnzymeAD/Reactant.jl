@@ -629,20 +629,12 @@ Base.@nospecializeinfer function traced_type_inner(
     @nospecialize(sharding),
     @nospecialize(runtime)
 )
-    mode == ConcreteToTraced && throw("$(typeof(prev)) is not a concrete type")
-    if mode in (
-        TracedTrack,
-        TracedToConcrete,
-        TracedSetPath,
-        TracedToTypes,
-        NoStopTracedTrack,
-        TracedToJAX,
-    )
-        throw("$(typeof(prev)) is not a traced type")
+    if mode == ArrayToConcrete
+        return ReactantRNG{
+            traced_type_inner(Array{UInt64,1}, seen, mode, track_numbers, sharding, runtime)
+        }
     end
-    return ReactantRNG{
-        traced_type_inner(Array{UInt64,1}, seen, mode, track_numbers, sharding, runtime)
-    }
+    return PT
 end
 
 Base.@nospecializeinfer function traced_type_inner(
@@ -1901,21 +1893,13 @@ end
 Base.@nospecializeinfer function make_tracer(
     seen, @nospecialize(prev::Random.AbstractRNG), @nospecialize(path), mode; kwargs...
 )
-    mode == ConcreteToTraced && throw("$(typeof(prev)) is not a concrete type")
-    if mode in (
-        TracedTrack,
-        TracedToConcrete,
-        TracedSetPath,
-        TracedToTypes,
-        NoStopTracedTrack,
-        TracedToJAX,
-    )
-        throw("$(typeof(prev)) is not a traced type")
+    if mode == ArrayToConcrete
+        return ReactantRNG(
+            make_tracer(seen, TracedRandom.make_seed(prev), (path..., :seed), mode; kwargs...),
+            TracedRandom.rng_algorithm(prev),
+        )
     end
-    return ReactantRNG(
-        make_tracer(seen, TracedRandom.make_seed(prev), (path..., :seed), mode; kwargs...),
-        TracedRandom.rng_algorithm(prev),
-    )
+    return prev
 end
 
 @inline function to_rarray(
