@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, minimum-scale=1.0, initial-scale=1, user-scalable=yes"
+    />
+    <style>
+      html {
+        font-family: "Comic Sans", BlinkMacSystemFont, -apple-system, "Segoe UI", Roboto,
+          Oxygen, Ubuntu, Cantarell, "Fira Sans", "Droid Sans", "Helvetica Neue",
+          Helvetica, Arial, sans-serif;
+        -webkit-font-smoothing: antialiased;
+        background-color: #fff;
+        font-size: 16px;
+      }
+      body {
+        color: #4a4a4a;
+        margin: 8px;
+        font-size: 1em;
+        font-weight: 400;
+      }
+      header {
+        margin-bottom: 8px;
+        display: flex;
+        flex-direction: column;
+      }
+      main {
+        width: 100%;
+        display: flex;
+        flex-direction: column;
+      }
+      a {
+        color: #3273dc;
+        cursor: pointer;
+        text-decoration: none;
+      }
+      a:hover {
+        color: #000;
+      }
+      button {
+        color: #fff;
+        background-color: #3298dc;
+        border-color: transparent;
+        cursor: pointer;
+        text-align: center;
+      }
+      button:hover {
+        background-color: #2793da;
+        flex: none;
+      }
+      .spacer {
+        flex: auto;
+      }
+      .small {
+        font-size: 0.75rem;
+      }
+      footer {
+        margin-top: 16px;
+        display: flex;
+        align-items: center;
+      }
+      .header-label {
+        margin-right: 4px;
+      }
+      .benchmark-set {
+        margin: 8px 0;
+        width: 100%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-wrap: wrap;
+      }
+      .chartCard {
+        width: 40vw;
+        height: 40vh;
+        padding-left: 12px;
+        padding-right: 12px;
+        padding-top: 0px;
+        margin-right: 8px;
+        margin-left: 8px;
+        margin-top: 0px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-direction: column;
+      }
+      .option-container {
+        display: flex;
+      }
+      .option-label {
+        margin-right: 8px;
+      }
+      .option {
+        margin-right: 4px;
+      }
+      .disabled {
+        color: #ccc;
+        cursor: default;
+        pointer-events: none;
+      }
+    </style>
+    <title>Benchmarks</title>
+  </head>
+
+  <body>
+    <header id="header">
+      <div class="header-item">
+        <strong class="header-label">Last Update:</strong>
+        <span id="last-update"></span>
+      </div>
+      <div class="header-item">
+        <strong class="header-label">Repository:</strong>
+        <a id="repository-link" rel="noopener"></a>
+      </div>
+      <!-- Only time plots shown -->
+    </header>
+    <main id="main"></main>
+    <footer>
+      <button id="dl-button">Download data as JSON</button>
+      <div class="spacer"></div>
+      <div class="small">
+        Powered by
+        <a
+          rel="noopener"
+          href="https://github.com/marketplace/actions/continuous-benchmark"
+          >github-action-benchmark</a
+        >
+      </div>
+    </footer>
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@2.9.2/dist/Chart.min.js"></script>
+    <script src="data.js"></script>
+    <script id="main-script">
+      "use strict";
+      (function () {
+        // Get option from query string
+        const pageOption = "time";
+
+        // Color palette for cycling
+        const colorPalette = [
+          "#00add8", "#a270ba", "#dea584", "#f1e05a", "#5D6D7E", "#EC7063", "#F4D03F", "#52BE80",
+          "#FF5733", "#33FF57", "#3357FF", "#FF33A1", "#A133FF", "#33FFF6", "#FFC133", "#FF3333"
+        ];
+
+        function init() {
+          function collectBenchesPerTestCase(entries) {
+            const map = new Map();
+            for (const entry of entries) {
+              const { commit, date, tool, benches } = entry;
+              for (const bench of benches) {
+                const result = { commit, date, tool, bench };
+                const splitted_name = bench.name.split("/");
+                const benchmarkName = splitted_name[0];
+                const variant = splitted_name[1];
+                const device = splitted_name[2];
+                const passes = splitted_name[3];
+
+                if (map.get(benchmarkName) === undefined) {
+                  map.set(benchmarkName, new Map());
+                }
+
+                const mapBenchmarkName = map.get(benchmarkName);
+                if (mapBenchmarkName.get(variant) === undefined) {
+                  mapBenchmarkName.set(variant, new Map());
+                }
+
+                const mapSimMethod = mapBenchmarkName.get(variant);
+                if (mapSimMethod.get(device) === undefined) {
+                  mapSimMethod.set(device, new Map());
+                }
+
+                const mapDevice = mapSimMethod.get(device);
+                if (mapDevice.get(passes) === undefined) {
+                  mapDevice.set(passes, [result]);
+                } else {
+                  mapDevice.get(passes).push(result);
+                }
+              }
+            }
+            return map;
+          }
+
+          const data = window.BENCHMARK_DATA;
+
+          // Render header
+          document.getElementById("last-update").textContent = new Date(
+            data.lastUpdate
+          ).toString();
+          const repoLink = document.getElementById("repository-link");
+          repoLink.href = data.repoUrl;
+          repoLink.textContent = data.repoUrl;
+
+          // Only time option, so no links to render
+
+          // Render footer
+          document.getElementById("dl-button").onclick = () => {
+            const dataUrl = "data:," + JSON.stringify(data, null, 2);
+            const a = document.createElement("a");
+            a.href = dataUrl;
+            a.download = "benchmark_data.json";
+            a.click();
+          };
+
+          // Prepare data points for charts
+          return Object.keys(data.entries).map((name) => ({
+            name,
+            dataSet: collectBenchesPerTestCase(data.entries[name]),
+          }));
+        }
+
+        function renderAllChars(dataSets) {
+          function renderGraph(parent, name, graphData) {
+            const canvas = document.createElement("canvas");
+            parent.appendChild(canvas);
+
+              const datasets = [];
+              // Compute min value for y-axis
+              let minY = Infinity;
+              const data = {
+                labels: graphData
+                  .entries()
+                  .next()
+                  .value[1].map((d) => d.commit.id.slice(0, 7)),
+                datasets,
+              };
+
+            const passesIndices = new Map();
+            const passesNames = [...graphData.keys()].sort();
+            let datasetIndex = 0;
+
+            for (const passesName of passesNames) {
+              const passesData = graphData.get(passesName);
+              const color = colorPalette[datasetIndex % colorPalette.length];
+              const lineData = {
+                label: passesName,
+                data: passesData.map((d) => {
+                  // Only time plot
+                  const val = d.bench.value;
+                  if (val < minY) minY = val;
+                  return val;
+                }),
+                borderColor: color,
+                fill: false,
+              };
+              datasets.push(lineData);
+              passesIndices.set(datasetIndex, passesName);
+              datasetIndex++;
+            }
+
+            const yAxisLabel = "Time (s)";
+            const options = {
+              scales: {
+                xAxes: [
+                  {
+                    scaleLabel: {
+                      display: true,
+                      labelString: "commit",
+                    },
+                  },
+                ],
+                yAxes: [
+                  {
+                    scaleLabel: {
+                      display: true,
+                      labelString: yAxisLabel + " (log scale)",
+                    },
+                    ticks: {
+                      min: minY * 0.9,
+                      callback: function(value, index, values) {
+                        // Show up to 3 decimal places in scientific notation
+                        if (value === 0) return '0';
+                        return value.toExponential(3);
+                      },
+                    },
+                    type: "logarithmic",
+                  },
+                ],
+              },
+              tooltips: {
+                callbacks: {
+                  afterTitle: function(items) {
+                    const item = items[0];
+                    const datasetIndex = item.datasetIndex;
+                    const dataIndex = item.index;
+                    const commit = graphData.get(
+                      passesIndices.get(datasetIndex)
+                    )[dataIndex].commit;
+                    return (
+                      "\n" +
+                      commit.message +
+                      "\n\n" +
+                      commit.timestamp +
+                      " committed by @" +
+                      commit.author.username +
+                      "\n"
+                    );
+                  },
+                  label: function(item) {
+                    const datasetIndex = item.datasetIndex;
+                    const passesName = passesIndices.get(datasetIndex);
+                    let label = passesName + ": " + item.value;
+                    label += " s";
+                    return label;
+                  },
+                  afterLabel: function(item) {
+                    const datasetIndex = item.datasetIndex;
+                    const dataIndex = item.index;
+                    const { extra } = graphData.get(
+                      passesIndices.get(datasetIndex)
+                    )[dataIndex].bench;
+                    return extra ? "\n" + extra : "";
+                  },
+                },
+              },
+              onClick: function(_mouseEvent, activeElems) {
+                if (activeElems.length === 0) {
+                  console.log("got here");
+                  return;
+                }
+
+                const datasetIndex = activeElems[0]._datasetIndex;
+                const dataIndex = activeElems[0]._index;
+                const url = graphData.get(passesIndices.get(datasetIndex))[
+                  dataIndex
+                ].commit.url;
+                window.open(url, "_blank");
+              },
+            };
+
+            new Chart(canvas, {
+              type: "line",
+              data,
+              options,
+            });
+          }
+
+          function renderRow(benchmarkName, variant, rowData, parent) {
+            const mainDiv = document.createElement("div");
+            parent.appendChild(mainDiv);
+
+            const devices = [...rowData.keys()].sort();
+            for (const device of devices) {
+              const graphTitle =
+                benchmarkName + " + " + variant + " + " + device;
+
+              const titleElem = document.createElement("h6");
+              titleElem.textContent = graphTitle.toUpperCase();
+              titleElem.style.textAlign = "center";
+              titleElem.style.marginBottom = "0.25em";
+              titleElem.style.marginTop = "0.25em";
+              mainDiv.appendChild(titleElem);
+
+              const graphsElem = document.createElement("div");
+              graphsElem.className = "chartCard";
+              mainDiv.appendChild(graphsElem);
+
+              renderGraph(graphsElem, graphTitle, rowData.get(device));
+            }
+          }
+
+          const main = document.getElementById("main");
+          const div1 = document.createElement("div");
+          div1.className = "benchmark-set";
+          main.appendChild(div1);
+          const dataSet = dataSets[0].dataSet;
+          const benchmarkNames = [...dataSet.keys()].sort();
+          const simMethods = [...dataSet.get(benchmarkNames[0]).keys()].sort();
+
+          for (const benchmarkName of benchmarkNames) {
+            for (const variant of simMethods) {
+              renderRow(
+                benchmarkName,
+                variant,
+                dataSet.get(benchmarkName).get(variant),
+                div1
+              );
+            }
+          }
+        }
+
+        renderAllChars(init()); // Start
+      })();
+    </script>
+  </body>
+</html>
