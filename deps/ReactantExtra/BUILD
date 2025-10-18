@@ -12,9 +12,16 @@ package(
 )
 
 cc_toolchain_suite(
-    name = "ygg_cross_compile_toolchain_suite",
+    name = "ygg_host_toolchain_suite",
     toolchains = {
         "k8": ":ygg_host_toolchain",
+    },
+)
+
+cc_toolchain_suite(
+    name = "ygg_cross_compile_toolchain_suite",
+    toolchains = {
+        "k8": ":ygg_x86_toolchain",
         "x64_windows": ":ygg_win_x86_toolchain",
         "darwin": ":ygg_darwin_x86_toolchain",
         "darwin_arm64": ":ygg_darwin_arm64_toolchain",
@@ -128,7 +135,7 @@ cc_toolchain_config(
         "objdump": "/opt/bin/x86_64-linux-musl-cxx11/x86_64-linux-musl-objdump",
         "strip": "/opt/bin/x86_64-linux-musl-cxx11/x86_64-linux-musl-strip",
     },
-    toolchain_identifier = "ygg_x86_toolchain",
+    toolchain_identifier = "ygg_host",
     unfiltered_compile_flags = [
         "-no-canonical-prefixes",
         "-Wno-builtin-macro-redefined",
@@ -193,7 +200,7 @@ cc_toolchain_config(
     compiler = "clang",
     coverage_compile_flags = ["--coverage"],
     coverage_link_flags = ["--coverage"],
-    cpu = "x86",
+    cpu = "k8",
     cxx_builtin_include_directories = [
         "/opt/BB_TARGET/lib/gcc/BB_TARGET/GCC_VERSION/include",
         "/opt/BB_TARGET/lib/gcc/BB_TARGET/GCC_VERSION/include-fixed",
