@@ -1893,7 +1893,9 @@ end
 Base.@nospecializeinfer function make_tracer(
     seen, @nospecialize(prev::ReactantRNG), @nospecialize(path), mode; kwargs...
 )
-    return ReactantRNG(make_tracer(seen, prev.seed, path, mode; kwargs...), prev.algorithm)
+    return ReactantRNG(
+        make_tracer(seen, prev.seed, (path..., :seed), mode; kwargs...), prev.algorithm
+    )
 end
 
 Base.@nospecializeinfer function make_tracer(
@@ -1911,7 +1913,7 @@ Base.@nospecializeinfer function make_tracer(
         throw("$(typeof(prev)) is not a traced type")
     end
     return ReactantRNG(
-        make_tracer(seen, TracedRandom.make_seed(prev), path, mode; kwargs...),
+        make_tracer(seen, TracedRandom.make_seed(prev), (path..., :seed), mode; kwargs...),
         TracedRandom.rng_algorithm(prev),
     )
 end
