@@ -248,17 +248,17 @@ function fn_test_for_synchronize(x)
     return x .+ 1
 end
 
-@testset "synchronize" begin 
+@testset "synchronize" begin
     @test isnothing(Reactant.synchronize(1))
     @test isnothing(Reactant.synchronize([1, 2, 3]))
 
     x = rand(Float32, 10)
 
     @test isnothing(Reactant.synchronize(x))
-    
+
     xr = Reactant.to_rarray(x)
-    fsyncfalse = @compile sync=false fn_test_for_synchronize(xr)
-    fsynctrue = @compile sync=true fn_test_for_synchronize(xr)
+    fsyncfalse = @compile sync = false fn_test_for_synchronize(xr)
+    fsynctrue = @compile sync = true fn_test_for_synchronize(xr)
 
     ysyncfalse = fsyncfalse(xr)
     @test isnothing(Reactant.synchronize(ysyncfalse))
@@ -267,6 +267,6 @@ end
     @test isnothing(Reactant.synchronize(ysynctrue))
 
     @test ysyncfalse == ysynctrue
-    
+
     @test Reactant.synchronize((ysyncfalse, ysynctrue)) == nothing
 end
