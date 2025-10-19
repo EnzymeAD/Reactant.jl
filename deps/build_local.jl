@@ -36,7 +36,7 @@ function get_cuda_version()
     end
 
     if cuname == ""
-    	return nothing
+        return nothing
     end
 
     handle = Libdl.dlopen(cuname)
@@ -123,16 +123,20 @@ if build_backend == "auto" || build_backend == "cuda"
     cuda_ver = get_cuda_version()
     @show cuda_ver
     if cuda_ver === nothing
-	if build_backend == "cuda"
-		throw(AssertionError("Could not detect cuda version, but requested cuda with auto version build"))
-	end
-	build_backend = "cpu"
+        if build_backend == "cuda"
+            throw(
+                AssertionError(
+                    "Could not detect cuda version, but requested cuda with auto version build",
+                ),
+            )
+        end
+        build_backend = "cpu"
     else
-	if Int(get_cuda_version().major) == 13
-	   build_backend = "cuda13"
-	else
-	   build_backend = "cuda12"
-	end
+        if Int(get_cuda_version().major) == 13
+            build_backend = "cuda13"
+        else
+            build_backend = "cuda12"
+        end
     end
 end
 
