@@ -79,7 +79,7 @@ LLVM_TARGETS = [
 
 load("@enzyme_ad//third_party/ml_toolchain:workspace.bzl", ml_toolchain_workspace = "repo")
 
-ml_toolchain_workspace("6bc326eeb70f8b3d28a06ec719e0c40fd909b07a")
+ml_toolchain_workspace([], "6bc326eeb70f8b3d28a06ec719e0c40fd909b07a")
 
 load("@enzyme_ad//third_party/jax:workspace.bzl", jax_workspace = "repo")
 
