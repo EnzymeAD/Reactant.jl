@@ -156,12 +156,6 @@ end
     return Base.setproperty!(obj, field, (val[idx],))
 end
 
-function traced_setfield_buffer!(
-    runtime::Val, cache_dict, concrete_res, obj::Nothing, field, path
-)
-    return nothing
-end
-
 function traced_setfield_buffer!(runtime::Val, cache_dict, concrete_res, obj, field, path)
     return traced_setfield_buffer!(
         runtime, cache_dict, traced_getfield(obj, field), concrete_res, obj, field, path
@@ -193,17 +187,6 @@ function traced_setfield_buffer!(
         end
         cache_dict[val] = cval
     end
-
-    if obj isa Reactant.ReactantRNG
-        field_sym = field isa Int ? fieldname(typeof(obj), field) : field
-        if field_sym === :seed
-            if !haskey(cache_dict, val)
-                cache_dict[val] = cval
-            end
-            return obj
-        end
-    end
-
     return traced_setfield!(obj, field, cval, path)
 end
 
@@ -228,17 +211,6 @@ function traced_setfield_buffer!(
         end
         cache_dict[val] = cval
     end
-
-    if obj isa Reactant.ReactantRNG
-        field_sym = field isa Int ? fieldname(typeof(obj), field) : field
-        if field_sym === :seed
-            if !haskey(cache_dict, val)
-                cache_dict[val] = cval
-            end
-            return obj
-        end
-    end
-
     return traced_setfield!(obj, field, cval, path)
 end
 
