@@ -934,6 +934,34 @@ end
     return TracedRArray{T,N}((), MLIR.IR.result(conv), result_size)
 end
 
+@noinline function lapack_symm(
+    A::TracedRArray{T},
+    B::TracedRArray{T},
+    C::TracedRArray{T},
+    alpha::TracedRNumber{T},
+    beta::TracedRNumber{T};
+    side::Symbol,
+    uplo::Symbol,
+    location=mlir_stacktrace("lapack_symm", @__FILE__, @__LINE__),
+) where {T}
+    ctx = MLIR.IR.context()
+    ressize = size(C)
+    res = MLIR.IR.result(
+        enzymexla.lapack_symm(
+            A.mlir_data,
+            B.mlir_data,
+            C.mlir_data,
+            alpha.mlir_data,
+            beta.mlir_data;
+            output=mlir_type(TracedRArray{eltype(C),length(ressize)}, ressize),
+            side=enzymexlaLapackSideAttrGet(ctx, side == :L ? 1 : 0),
+            uplo=enzymexlaLapackUploAttrGet(ctx, uplo == :U ? 1 : 0),
+            location,
+        ),
+    )
+    return res
+end
+
 Base.@nospecializeinfer @noinline function dot_general(
     @nospecialize(lhs::TracedRArray{T1}),
     @nospecialize(rhs::TracedRArray{T2});
