@@ -5,7 +5,7 @@ steps:
         matrix:
           setup:
             version:
-              - "1.10"
+              - "1.12"
             group:
               - core
               - neural_networks
