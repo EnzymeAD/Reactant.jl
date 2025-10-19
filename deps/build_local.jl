@@ -61,7 +61,7 @@ s = ArgParseSettings()
         default = something(Sys.which("gcc"), "/usr/bin/gcc")
         arg_type = String
     "--cc"
-        default = something(Sys.which("cc"), Sys.which("gcc"), Sys.which("clang"), "/usr/bin/cc")
+        default = something(Sys.which("clang"), Sys.which("cc"), Sys.which("gcc"), "/usr/bin/cc")
         arg_type = String
     "--hermetic_python_version"
         help = "Hermetic Python version."
