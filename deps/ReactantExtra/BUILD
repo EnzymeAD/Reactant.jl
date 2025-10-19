@@ -345,7 +345,9 @@ cc_toolchain_config(
     ],
     dbg_compile_flags = ["-g"],
     host_system_name = "linux",
-    link_flags = [],
+    link_flags = [
+        "-stdlib=libstdc++",
+    ],
     link_libs = [
         "-lstdc++",
         "-lm",
