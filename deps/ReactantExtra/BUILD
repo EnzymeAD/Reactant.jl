@@ -928,6 +928,7 @@ cc_library(
         "//conditions:default": [],
         "@bazel_tools//src/conditions:darwin": [
             "-Wl,-exported_symbol,_stablehlo*",
+            "-Wl,-exported_symbol,_enzymexla*",
             "-Wl,-exported_symbol,_mlir*",
             "-Wl,-exported_symbol,_sdy*",
             "-Wl,-exported_symbol,_EnzymeJaXMapSymbol",
