@@ -28,8 +28,26 @@ function model(rng, xs)
     return vcat(ys_a, ys_b)
 end
 
-function hmc_program(rng, t, model, xs, step_size, num_steps, mass, initial_momentum)
-    trace_ptr, accepted, _ = ProbProg.hmc(
+function hmc_program(
+    rng,
+    model,
+    xs,
+    step_size,
+    num_steps,
+    mass,
+    initial_momentum,
+    constraint_ptr,
+    constrained_addresses,
+)
+    t, _, _ = ProbProg.generate(
+        rng,
+        model,
+        xs;
+        constraint_ptr=constraint_ptr,
+        constrained_addresses=constrained_addresses,
+    )
+
+    t, accepted, _ = ProbProg.hmc(
         rng,
         t,
         model,
@@ -41,7 +59,7 @@ function hmc_program(rng, t, model, xs, step_size, num_steps, mass, initial_mome
         initial_momentum=initial_momentum,
     )
 
-    return trace_ptr, accepted
+    return t, accepted
 end
 
 @testset "hmc" begin
@@ -54,7 +72,8 @@ end
     obs = ProbProg.Constraint(
         :param_a => ([0.0],), :param_b => ([0.0],), :ys_a => (ys_a,), :ys_b => (ys_b,)
     )
-    init_trace, _ = ProbProg.generate_(rng, model, xs; constraint=obs)
+    constrained_addresses = ProbProg.extract_addresses(obs)
+    constraint_ptr = ConcreteRNumber(reinterpret(UInt64, pointer_from_objref(obs)))
 
     step_size = ConcreteRNumber(0.01)
     num_steps_compile = ConcreteRNumber(10)
@@ -63,7 +82,15 @@ end
     initial_momentum = ConcreteRArray([0.0, 0.0])
 
     code = @code_hlo optimize = :probprog hmc_program(
-        rng, init_trace, model, xs, step_size, num_steps_compile, mass, initial_momentum
+        rng,
+        model,
+        xs,
+        step_size,
+        num_steps_compile,
+        mass,
+        initial_momentum,
+        constraint_ptr,
+        constrained_addresses,
     )
     @test contains(repr(code), "enzyme_probprog_get_flattened_samples_from_trace")
     @test contains(repr(code), "enzyme_probprog_get_weight_from_trace")
@@ -72,17 +99,32 @@ end
 
     compile_time_s = @elapsed begin
         compiled_fn = @compile optimize = :probprog hmc_program(
-            rng, init_trace, model, xs, step_size, num_steps_compile, mass, initial_momentum
+            rng,
+            model,
+            xs,
+            step_size,
+            num_steps_compile,
+            mass,
+            initial_momentum,
+            constraint_ptr,
+            constrained_addresses,
         )
     end
     println("HMC compile time: $(round(compile_time_s * 1000, digits=2)) ms")
 
-    trace = init_trace
     seed_buffer = only(rng.seed.data).buffer
-    GC.@preserve seed_buffer init_trace begin
+    GC.@preserve seed_buffer obs begin
         run_time_s = @elapsed begin
             trace_ptr, _ = compiled_fn(
-                rng, trace, model, xs, step_size, num_steps_run, mass, initial_momentum
+                rng,
+                model,
+                xs,
+                step_size,
+                num_steps_run,
+                mass,
+                initial_momentum,
+                constraint_ptr,
+                constrained_addresses,
             )
             trace = ProbProg.from_trace_tensor(trace_ptr)
         end
