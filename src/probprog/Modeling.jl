@@ -101,18 +101,9 @@ function simulate_(rng::AbstractRNG, f::Function, args::Vararg{Any,Nargs}) where
 
     seed_buffer = only(rng.seed.data).buffer
     GC.@preserve seed_buffer begin
-        trace, _, _ = compiled_fn(rng, f, args...)
-
-        while !isready(trace)
-            yield()
-        end
+        t, _, _ = compiled_fn(rng, f, args...)
+        trace = from_trace_tensor(t)
     end
-
-    trace = unsafe_pointer_to_objref(Ptr{Any}(Array(trace)[1]))
-
-    trace.rng = rng
-    trace.fn = f
-    trace.args = args
 
     return trace, trace.weight
 end
@@ -179,18 +170,9 @@ function generate_(
 
     seed_buffer = only(rng.seed.data).buffer
     GC.@preserve seed_buffer constraint begin
-        trace, _, _ = compiled_fn(rng, constraint_ptr, args...)
-
-        while !isready(trace)
-            yield()
-        end
+        t, _, _ = compiled_fn(rng, constraint_ptr, args...)
+        trace = from_trace_tensor(t)
     end
-
-    trace = unsafe_pointer_to_objref(Ptr{Any}(Array(trace)[1]))
-
-    trace.rng = rng
-    trace.fn = f
-    trace.args = args
 
     return trace, trace.weight
 end

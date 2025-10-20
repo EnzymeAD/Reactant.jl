@@ -5,20 +5,9 @@ mutable struct ProbProgTrace
     retval::Any
     weight::Any
     subtraces::Dict{Symbol,Any}
-    rng::Union{Nothing,AbstractRNG}
-    fn::Union{Nothing,Function}
-    args::Union{Nothing,Tuple}
 
     function ProbProgTrace()
-        return new(
-            Dict{Symbol,Any}(),
-            nothing,
-            nothing,
-            Dict{Symbol,Any}(),
-            nothing,
-            nothing,
-            nothing,
-        )
+        return new(Dict{Symbol,Any}(), nothing, nothing, Dict{Symbol,Any}())
     end
 end
 
