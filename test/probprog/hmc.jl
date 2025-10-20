@@ -70,17 +70,23 @@ end
     @test !contains(repr(code), "enzyme.mh")
     @test !contains(repr(code), "enzyme.mcmc")
 
-    compiled_fn = @compile optimize = :probprog hmc_program(
-        rng, init_trace, model, xs, step_size, num_steps_compile, mass, initial_momentum
-    )
+    compile_time_s = @elapsed begin
+        compiled_fn = @compile optimize = :probprog hmc_program(
+            rng, init_trace, model, xs, step_size, num_steps_compile, mass, initial_momentum
+        )
+    end
+    println("HMC compile time: $(round(compile_time_s * 1000, digits=2)) ms")
 
     trace = init_trace
     seed_buffer = only(rng.seed.data).buffer
     GC.@preserve seed_buffer init_trace begin
-        trace_ptr, _ = compiled_fn(
-            rng, trace, model, xs, step_size, num_steps_run, mass, initial_momentum
-        )
-        trace = ProbProg.from_trace_tensor(trace_ptr)
+        run_time_s = @elapsed begin
+            trace_ptr, _ = compiled_fn(
+                rng, trace, model, xs, step_size, num_steps_run, mass, initial_momentum
+            )
+            trace = ProbProg.from_trace_tensor(trace_ptr)
+        end
+        println("HMC run time: $(round(run_time_s * 1000, digits=2)) ms")
     end
 
     # NumPyro results
