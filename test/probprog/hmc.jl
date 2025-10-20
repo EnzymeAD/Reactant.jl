@@ -77,16 +77,10 @@ end
     trace = init_trace
     seed_buffer = only(rng.seed.data).buffer
     GC.@preserve seed_buffer init_trace begin
-        GC.enable(false)
-        try
-            trace_ptr, _ = compiled_fn(
-                rng, trace, model, xs, step_size, num_steps_run, mass, initial_momentum
-            )
-            trace = ProbProg.from_trace_tensor(trace_ptr)
-        finally
-            GC.enable(true)
-            GC.gc()
-        end
+        trace_ptr, _ = compiled_fn(
+            rng, trace, model, xs, step_size, num_steps_run, mass, initial_momentum
+        )
+        trace = ProbProg.from_trace_tensor(trace_ptr)
     end
 
     # NumPyro results
