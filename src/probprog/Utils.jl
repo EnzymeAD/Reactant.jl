@@ -1,4 +1,5 @@
-using ..Reactant: MLIR, TracedUtils
+using ..Reactant: MLIR, TracedUtils, Ops, TracedRArray
+import ..Reactant: promote_to
 
 """
     process_probprog_function(f, args_with_rng, op_name)
@@ -122,4 +123,15 @@ function process_probprog_outputs(
             TracedUtils.set!(res, (), resv)
         end
     end
+end
+
+to_trace_tensor(t::ProbProgTrace) = promote_to(TracedRArray{UInt64,0}, t)
+
+function from_trace_tensor(trace_ptr)
+    return unsafe_pointer_to_objref(Ptr{Any}(Array(trace_ptr)[1]))::ProbProgTrace
+end
+
+function promote_to(::Type{TracedRArray{UInt64,0}}, t::ProbProgTrace)
+    ptr = reinterpret(UInt64, pointer_from_objref(t))
+    return Ops.fill(ptr, Int64[])
 end

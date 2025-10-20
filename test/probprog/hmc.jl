@@ -29,12 +29,9 @@ function model(rng, xs)
 end
 
 function hmc_program(rng, t, model, xs, step_size, num_steps, mass, initial_momentum)
-    trace_ptr_val = reinterpret(UInt64, pointer_from_objref(t))
-    trace_ptr = Reactant.Ops.fill(trace_ptr_val, Int64[])
-
     trace_ptr, accepted, _ = ProbProg.hmc(
         rng,
-        trace_ptr,
+        t,
         model,
         xs;
         selection=ProbProg.select(ProbProg.Address(:param_a), ProbProg.Address(:param_b)),
@@ -85,10 +82,7 @@ end
             trace_ptr, _ = compiled_fn(
                 rng, trace, model, xs, step_size, num_steps_run, mass, initial_momentum
             )
-            while !isready(trace_ptr)
-                yield()
-            end
-            trace = unsafe_pointer_to_objref(Ptr{Any}(Array(trace_ptr)[1]))
+            trace = ProbProg.from_trace_tensor(trace_ptr)
         finally
             GC.enable(true)
             GC.gc()
