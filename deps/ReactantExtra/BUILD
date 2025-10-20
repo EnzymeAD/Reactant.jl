@@ -1078,6 +1078,7 @@ cc_library(
         "@llvm-project//llvm:X86CodeGen",
         "@enzyme_ad//src/enzyme_ad/jax:TransformOps",
         "@enzyme_ad//src/enzyme_ad/jax:XLADerivatives",
+        "@enzyme_ad//src/enzyme_ad/jax:CInterface",
         # "@enzyme_ad//src/enzyme_ad/jax:gpu",
         "@xla//xla/ffi/api:ffi",
         "@xla//xla/ffi:ffi_api",
