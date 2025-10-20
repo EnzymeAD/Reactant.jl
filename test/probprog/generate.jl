@@ -122,12 +122,8 @@ end
         seed_buffer = only(rng.seed.data).buffer
         GC.@preserve seed_buffer constraint1 begin
             trace1, _ = compiled_fn(rng, constraint_ptr1, μ, σ)
-
-            while !isready(trace1)
-                yield()
-            end
+            trace1 = ProbProg.from_trace_tensor(trace1)
         end
-        trace1 = unsafe_pointer_to_objref(Ptr{Any}(Array(trace1)[1]))
 
         constraint2 = ProbProg.Constraint(:s => (fill(0.2, shape),))
         constraint_ptr2 = Reactant.ConcreteRNumber(
@@ -138,12 +134,8 @@ end
         seed_buffer = only(rng.seed.data).buffer
         GC.@preserve seed_buffer constraint2 begin
             trace2, _ = compiled_fn(rng, constraint_ptr2, μ, σ)
-
-            while !isready(trace2)
-                yield()
-            end
+            trace2 = ProbProg.from_trace_tensor(trace2)
         end
-        trace2 = unsafe_pointer_to_objref(Ptr{Any}(Array(trace2)[1]))
 
         @test trace1.choices[:s][1] != trace2.choices[:s][1]
     end
