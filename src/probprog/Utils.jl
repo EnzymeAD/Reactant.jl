@@ -127,11 +127,28 @@ end
 
 to_trace_tensor(t::ProbProgTrace) = promote_to(TracedRArray{UInt64,0}, t)
 
-function from_trace_tensor(trace_ptr)
-    return unsafe_pointer_to_objref(Ptr{Any}(Array(trace_ptr)[1]))::ProbProgTrace
+function from_trace_tensor(trace_tensor)
+    while !isready(trace_tensor)
+        yield()
+    end
+    return unsafe_pointer_to_objref(Ptr{Any}(Array(trace_tensor)[1]))::ProbProgTrace
 end
 
 function promote_to(::Type{TracedRArray{UInt64,0}}, t::ProbProgTrace)
     ptr = reinterpret(UInt64, pointer_from_objref(t))
+    return Ops.fill(ptr, Int64[])
+end
+
+to_constraint_tensor(c::Constraint) = promote_to(TracedRArray{UInt64,0}, c)
+
+function from_constraint_tensor(constraint_tensor)
+    while !isready(constraint_tensor)
+        yield()
+    end
+    return unsafe_pointer_to_objref(Ptr{Any}(Array(constraint_tensor)[1]))::Constraint
+end
+
+function promote_to(::Type{TracedRArray{UInt64,0}}, c::Constraint)
+    ptr = reinterpret(UInt64, pointer_from_objref(c))
     return Ops.fill(ptr, Int64[])
 end
