@@ -3410,10 +3410,18 @@ end
     approximation::String;
     location=mlir_stacktrace("gelu", @__FILE__, @__LINE__),
 ) where {T,N}
-    @assert approximation in ("NONE", "TANH", "SIGMOID")
+    approx = if approximation == "NONE"
+        MLIR.API.enzymexlaGeluApproximationAttrGet(MLIR.IR.context(), Int32(0))
+    elseif approximation == "TANH"
+        MLIR.API.enzymexlaGeluApproximationAttrGet(MLIR.IR.context(), Int32(1))
+    elseif approximation == "SIGMOID"
+        MLIR.API.enzymexlaGeluApproximationAttrGet(MLIR.IR.context(), Int32(2))
+    else
+        error("Invalid gelu approximation: $approximation")
+    end
 
     res = MLIR.IR.result(
-        enzymexla.ml_gelu(x.mlir_data; gelu_approximation=approximation, location), 1
+        enzymexla.ml_gelu(x.mlir_data; gelu_approximation=approx, location), 1
     )
 
     if x isa TracedRArray
