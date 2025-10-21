@@ -234,15 +234,6 @@ for runtime in (:PJRT, :IFRT)
                         )
                         state.clients["cuda"] = gpu
                         state.default_client = gpu
-
-                        # set values for cuda. This is being done here since we need cuda
-                        # to be initialized before we can use it. initializing the devices
-                        # implicitly initializes cuda.
-                        cc_major = @ccall MLIR.API.mlir_c.ReactantCudaDeviceGetComputeCapalilityMajor()::Int32
-                        cc_minor = @ccall MLIR.API.mlir_c.ReactantCudaDeviceGetComputeCapalilityMinor()::Int32
-                        Reactant.Compiler.cubinChip[] = "sm_$(cc_major)$(cc_minor)"
-
-                        Reactant.Compiler.cuWarpSize[] = @ccall MLIR.API.mlir_c.ReactantCudaDeviceGetWarpSizeInThreads()::Int32
                     catch e
                         println(stdout, e)
                     end

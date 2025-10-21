@@ -33,6 +33,14 @@ function XLA.get_local_device_id(device::Device)
     end
 end
 
+function XLA.get_local_hardware_id(device::Device)
+    GC.@preserve device begin
+        return @ccall MLIR.API.mlir_c.PjRtDeviceGetLocalHardwareId(
+            device.device::Ptr{Cvoid}
+        )::Cint
+    end
+end
+
 function XLA.is_addressable(device::Device)
     GC.@preserve device begin
         return @ccall MLIR.API.mlir_c.pjrt_device_is_addressable(
