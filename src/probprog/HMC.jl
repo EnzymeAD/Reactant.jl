@@ -28,8 +28,8 @@ function hmc(
         MLIR.IR.context()::MLIR.API.MlirContext
     )::MLIR.IR.Type
 
-    if original_trace isa TracedRArray{UInt64,0}
-        trace_val = MLIR.IR.result(
+    trace_val = if original_trace isa TracedRArray{UInt64,0}
+        MLIR.IR.result(
             MLIR.Dialects.builtin.unrealized_conversion_cast(
                 [original_trace.mlir_data]; outputs=[trace_ty]
             ),
@@ -38,7 +38,7 @@ function hmc(
     else
         # First iteration: promote a ProbProgTrace to tensor<ui64>
         promoted = to_trace_tensor(original_trace)
-        trace_val = MLIR.IR.result(
+        MLIR.IR.result(
             MLIR.Dialects.builtin.unrealized_conversion_cast(
                 [TracedUtils.get_mlir_data(promoted)]; outputs=[trace_ty]
             ),

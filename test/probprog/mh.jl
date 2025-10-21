@@ -31,10 +31,16 @@ function model(rng, xs)
     return ys
 end
 
-function mh_program(rng, t, model, xs, num_iters)
-    trace_ptr_val = reinterpret(UInt64, pointer_from_objref(t))
-    trace_ptr = Reactant.Ops.fill(trace_ptr_val, Int64[])
+function mh_program(rng, model, xs, num_iters, constraint_ptr, constrained_addresses)
+    init_trace, _, _ = ProbProg.generate(
+        rng,
+        model,
+        xs;
+        constraint_ptr=constraint_ptr,
+        constrained_addresses=constrained_addresses,
+    )
 
+    trace_ptr = init_trace
     @trace for _ in 1:num_iters
         trace_ptr, _ = ProbProg.mh(
             rng, trace_ptr, model, xs; selection=ProbProg.select(ProbProg.Address(:slope))
@@ -74,27 +80,28 @@ end
         ys = [8.23, 5.87, 3.99, 2.59, 0.23, -0.66, -3.53, -6.91, -7.24, -9.90]
         obs = ProbProg.Constraint(:ys => (ys,))
         num_iters = ConcreteRNumber(10000)
-        init_trace, _ = ProbProg.generate_(rng, model, xs; constraint=obs)
+        constrained_addresses = ProbProg.extract_addresses(obs)
+        constraint_ptr = ConcreteRNumber(reinterpret(UInt64, pointer_from_objref(obs)))
 
-        code = @code_hlo optimize = :probprog mh_program(rng, init_trace, model, xs, 10000)
+        code = @code_hlo optimize = :probprog mh_program(
+            rng, model, xs, 10000, constraint_ptr, constrained_addresses
+        )
         @test contains(repr(code), "enzyme_probprog_get_sample_from_trace")
         @test contains(repr(code), "enzyme_probprog_get_weight_from_trace")
         @test !contains(repr(code), "enzyme.mh")
 
         compiled_fn = @compile optimize = :probprog mh_program(
-            rng, init_trace, model, xs, num_iters
+            rng, model, xs, num_iters, constraint_ptr, constrained_addresses
         )
 
         trace = nothing
         seed_buffer = only(rng.seed.data).buffer
         num_iters = ConcreteRNumber(1000)
-        GC.@preserve seed_buffer init_trace begin
-            trace_ptr = compiled_fn(rng, init_trace, model, xs, num_iters)
-            while !isready(trace_ptr)
-                yield()
-            end
-
-            trace = unsafe_pointer_to_objref(Ptr{Any}(Array(trace_ptr)[1]))
+        GC.@preserve seed_buffer obs begin
+            trace_ptr = compiled_fn(
+                rng, model, xs, num_iters, constraint_ptr, constrained_addresses
+            )
+            trace = ProbProg.from_trace_tensor(trace_ptr)
         end
 
         slope = only(trace.choices[:slope])[1]

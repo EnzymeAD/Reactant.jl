@@ -34,15 +34,10 @@ function mh(
         )
     else
         # First iteration: create constant from pointer
-        trace_ptr = reinterpret(UInt64, pointer_from_objref(original_trace))
-        tt = MLIR.IR.TensorType(Int64[], MLIR.IR.Type(UInt64))
-        splatattr = MLIR.API.mlirDenseElementsAttrUInt64SplatGet(tt, trace_ptr)
-        cst_op = MLIR.Dialects.stablehlo.constant(; output=tt, value=splatattr)
-        trace_ptr_val = MLIR.IR.result(cst_op)
-
+        promoted = to_trace_tensor(original_trace)
         trace_val = MLIR.IR.result(
             MLIR.Dialects.builtin.unrealized_conversion_cast(
-                [trace_ptr_val]; outputs=[trace_ty]
+                [TracedUtils.get_mlir_data(promoted)]; outputs=[trace_ty]
             ),
             1,
         )
