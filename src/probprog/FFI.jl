@@ -1,10 +1,16 @@
-using ..Reactant: MLIR
+using ..Reactant: MLIR, Profiler
 
 function initTrace(trace_ptr_ptr::Ptr{Ptr{Any}})
+    activity_id = @ccall MLIR.API.mlir_c.ProfilerActivityStart(
+        "ProbProg.initTrace"::Cstring, Profiler.TRACE_ME_LEVEL_CRITICAL::Cint
+    )::Int64
+
     tr = ProbProgTrace()
     _keepalive!(tr)
 
     unsafe_store!(trace_ptr_ptr, pointer_from_objref(tr))
+
+    @ccall MLIR.API.mlir_c.ProfilerActivityEnd(activity_id::Int64)::Cvoid
     return nothing
 end
 
@@ -17,11 +23,16 @@ function addSampleToTrace(
     shape_ptr_array::Ptr{Ptr{UInt64}},
     width_array::Ptr{UInt64},
 )
+    activity_id = @ccall MLIR.API.mlir_c.ProfilerActivityStart(
+        "ProbProg.addSampleToTrace"::Cstring, Profiler.TRACE_ME_LEVEL_CRITICAL::Cint
+    )::Int64
+
     trace = nothing
     try
         trace = unsafe_pointer_to_objref(unsafe_load(trace_ptr_ptr))::ProbProgTrace
     catch
         @ccall printf("Trace dereference failure\n"::Cstring)::Cvoid
+        @ccall MLIR.API.mlir_c.ProfilerActivityEnd(activity_id::Int64)::Cvoid
         return nothing
     end
 
@@ -66,6 +77,7 @@ function addSampleToTrace(
 
     trace.choices[symbol] = tuple(vals...)
 
+    @ccall MLIR.API.mlir_c.ProfilerActivityEnd(activity_id::Int64)::Cvoid
     return nothing
 end
 
@@ -74,11 +86,16 @@ function addSubtrace(
     symbol_ptr_ptr::Ptr{Ptr{Any}},
     subtrace_ptr_ptr::Ptr{Ptr{Any}},
 )
+    activity_id = @ccall MLIR.API.mlir_c.ProfilerActivityStart(
+        "ProbProg.addSubtrace"::Cstring, Profiler.TRACE_ME_LEVEL_CRITICAL::Cint
+    )::Int64
+
     trace = nothing
     try
         trace = unsafe_pointer_to_objref(unsafe_load(trace_ptr_ptr))::ProbProgTrace
     catch
         @ccall printf("Trace dereference failure\n"::Cstring)::Cvoid
+        @ccall MLIR.API.mlir_c.ProfilerActivityEnd(activity_id::Int64)::Cvoid
         return nothing
     end
 
@@ -87,19 +104,27 @@ function addSubtrace(
 
     trace.subtraces[symbol] = subtrace
 
+    @ccall MLIR.API.mlir_c.ProfilerActivityEnd(activity_id::Int64)::Cvoid
     return nothing
 end
 
 function addWeightToTrace(trace_ptr_ptr::Ptr{Ptr{Any}}, weight_ptr::Ptr{Any})
+    activity_id = @ccall MLIR.API.mlir_c.ProfilerActivityStart(
+        "ProbProg.addWeightToTrace"::Cstring, Profiler.TRACE_ME_LEVEL_CRITICAL::Cint
+    )::Int64
+
     trace = nothing
     try
         trace = unsafe_pointer_to_objref(unsafe_load(trace_ptr_ptr))::ProbProgTrace
     catch
         @ccall printf("Trace dereference failure\n"::Cstring)::Cvoid
+        @ccall MLIR.API.mlir_c.ProfilerActivityEnd(activity_id::Int64)::Cvoid
         return nothing
     end
 
     trace.weight = unsafe_load(Ptr{Float64}(weight_ptr))
+
+    @ccall MLIR.API.mlir_c.ProfilerActivityEnd(activity_id::Int64)::Cvoid
     return nothing
 end
 
@@ -111,17 +136,23 @@ function addRetvalToTrace(
     shape_ptr_array::Ptr{Ptr{UInt64}},
     width_array::Ptr{UInt64},
 )
+    activity_id = @ccall MLIR.API.mlir_c.ProfilerActivityStart(
+        "ProbProg.addRetvalToTrace"::Cstring, Profiler.TRACE_ME_LEVEL_CRITICAL::Cint
+    )::Int64
+
     trace = nothing
     try
         trace = unsafe_pointer_to_objref(unsafe_load(trace_ptr_ptr))::ProbProgTrace
     catch
         @ccall printf("Trace dereference failure\n"::Cstring)::Cvoid
+        @ccall MLIR.API.mlir_c.ProfilerActivityEnd(activity_id::Int64)::Cvoid
         return nothing
     end
 
     num_results = unsafe_load(num_results_ptr)
 
     if num_results == 0
+        @ccall MLIR.API.mlir_c.ProfilerActivityEnd(activity_id::Int64)::Cvoid
         return nothing
     end
 
@@ -151,6 +182,7 @@ function addRetvalToTrace(
             @ccall printf(
                 "Unsupported datatype width: %lld\n"::Cstring, width::Int64
             )::Cvoid
+            @ccall MLIR.API.mlir_c.ProfilerActivityEnd(activity_id::Int64)::Cvoid
             return nothing
         end
 
@@ -164,6 +196,7 @@ function addRetvalToTrace(
 
     trace.retval = tuple(vals...)
 
+    @ccall MLIR.API.mlir_c.ProfilerActivityEnd(activity_id::Int64)::Cvoid
     return nothing
 end
 
@@ -176,6 +209,10 @@ function getSampleFromConstraint(
     shape_ptr_array::Ptr{Ptr{UInt64}},
     width_array::Ptr{UInt64},
 )
+    activity_id = @ccall MLIR.API.mlir_c.ProfilerActivityStart(
+        "ProbProg.getSampleFromConstraint"::Cstring, Profiler.TRACE_ME_LEVEL_CRITICAL::Cint
+    )::Int64
+
     constraint = unsafe_pointer_to_objref(unsafe_load(constraint_ptr_ptr))::Constraint
     symbol = unsafe_pointer_to_objref(unsafe_load(symbol_ptr_ptr))::Symbol
     num_samples = unsafe_load(num_samples_ptr)
@@ -190,6 +227,7 @@ function getSampleFromConstraint(
         @ccall printf(
             "No constraint found for symbol: %s\n"::Cstring, string(symbol)::Cstring
         )::Cvoid
+        @ccall MLIR.API.mlir_c.ProfilerActivityEnd(activity_id::Int64)::Cvoid
         return nothing
     end
 
@@ -213,6 +251,7 @@ function getSampleFromConstraint(
             @ccall printf(
                 "Unsupported datatype width: %zd\n"::Cstring, width::Csize_t
             )::Cvoid
+            @ccall MLIR.API.mlir_c.ProfilerActivityEnd(activity_id::Int64)::Cvoid
             return nothing
         end
 
@@ -222,6 +261,7 @@ function getSampleFromConstraint(
                 string(julia_type)::Cstring,
                 string(eltype(tostore[i]))::Cstring,
             )::Cvoid
+            @ccall MLIR.API.mlir_c.ProfilerActivityEnd(activity_id::Int64)::Cvoid
             return nothing
         end
 
@@ -231,34 +271,24 @@ function getSampleFromConstraint(
             shape = unsafe_wrap(Array, shape_ptr, ndims)
             dest = unsafe_wrap(Array, Ptr{julia_type}(sample_ptr), Tuple(shape))
 
-            if size(dest) != size(tostore[i])
-                if length(size(dest)) != length(size(tostore[i]))
-                    @ccall printf(
-                        "Shape size mismatch in constrained sample: %zd != %zd\n"::Cstring,
-                        length(size(dest))::Csize_t,
-                        length(size(tostore[i]))::Csize_t,
-                    )::Cvoid
-                    return nothing
-                end
-                for i in 1:length(size(dest))
-                    d = size(dest)[i]
-                    t = size(tostore[i])[i]
-                    if d != t
-                        @ccall printf(
-                            "Shape mismatch in `%zd`th dimension of constrained sample: %zd != %zd\n"::Cstring,
-                            i::Csize_t,
-                            size(dest)[i]::Csize_t,
-                            size(tostore[i])[i]::Csize_t,
-                        )::Cvoid
-                        return nothing
-                    end
-                end
+            dest_size = size(dest)
+            src_size = size(tostore[i])
+
+            if dest_size != src_size
+                @ccall printf(
+                    "Shape mismatch in constrained sample: expected %zd dims, got %zd\n"::Cstring,
+                    length(dest_size)::Csize_t,
+                    length(src_size)::Csize_t,
+                )::Cvoid
+                @ccall MLIR.API.mlir_c.ProfilerActivityEnd(activity_id::Int64)::Cvoid
+                return nothing
             end
 
-            dest .= tostore[i]
+            copyto!(dest, tostore[i])
         end
     end
 
+    @ccall MLIR.API.mlir_c.ProfilerActivityEnd(activity_id::Int64)::Cvoid
     return nothing
 end
 
@@ -267,6 +297,10 @@ function getSubconstraint(
     symbol_ptr_ptr::Ptr{Ptr{Any}},
     subconstraint_ptr_ptr::Ptr{Ptr{Any}},
 )
+    activity_id = @ccall MLIR.API.mlir_c.ProfilerActivityStart(
+        "ProbProg.getSubconstraint"::Cstring, Profiler.TRACE_ME_LEVEL_CRITICAL::Cint
+    )::Int64
+
     constraint = unsafe_pointer_to_objref(unsafe_load(constraint_ptr_ptr))::Constraint
     symbol = unsafe_pointer_to_objref(unsafe_load(symbol_ptr_ptr))::Symbol
 
@@ -285,11 +319,14 @@ function getSubconstraint(
         @ccall printf(
             "No subconstraint found for symbol: %s\n"::Cstring, string(symbol)::Cstring
         )::Cvoid
+        @ccall MLIR.API.mlir_c.ProfilerActivityEnd(activity_id::Int64)::Cvoid
         return nothing
     end
 
     _keepalive!(subconstraint)
     unsafe_store!(subconstraint_ptr_ptr, pointer_from_objref(subconstraint))
+
+    @ccall MLIR.API.mlir_c.ProfilerActivityEnd(activity_id::Int64)::Cvoid
     return nothing
 end
 
@@ -302,11 +339,16 @@ function getSampleFromTrace(
     shape_ptr_array::Ptr{Ptr{UInt64}},
     width_array::Ptr{UInt64},
 )
+    activity_id = @ccall MLIR.API.mlir_c.ProfilerActivityStart(
+        "ProbProg.getSampleFromTrace"::Cstring, Profiler.TRACE_ME_LEVEL_CRITICAL::Cint
+    )::Int64
+
     trace = nothing
     try
         trace = unsafe_pointer_to_objref(unsafe_load(trace_ptr_ptr))::ProbProgTrace
     catch
         @ccall printf("Trace dereference failure\n"::Cstring)::Cvoid
+        @ccall MLIR.API.mlir_c.ProfilerActivityEnd(activity_id::Int64)::Cvoid
         return nothing
     end
 
@@ -323,6 +365,7 @@ function getSampleFromTrace(
         @ccall printf(
             "No sample found in trace for symbol: %s\n"::Cstring, string(symbol)::Cstring
         )::Cvoid
+        @ccall MLIR.API.mlir_c.ProfilerActivityEnd(activity_id::Int64)::Cvoid
         return nothing
     end
 
@@ -346,6 +389,7 @@ function getSampleFromTrace(
             @ccall printf(
                 "Unsupported datatype width: %zd\n"::Cstring, width::Csize_t
             )::Cvoid
+            @ccall MLIR.API.mlir_c.ProfilerActivityEnd(activity_id::Int64)::Cvoid
             return nothing
         end
 
@@ -355,6 +399,7 @@ function getSampleFromTrace(
                 string(julia_type)::Cstring,
                 string(eltype(tostore[i]))::Cstring,
             )::Cvoid
+            @ccall MLIR.API.mlir_c.ProfilerActivityEnd(activity_id::Int64)::Cvoid
             return nothing
         end
 
@@ -364,34 +409,24 @@ function getSampleFromTrace(
             shape = unsafe_wrap(Array, shape_ptr, ndims)
             dest = unsafe_wrap(Array, Ptr{julia_type}(sample_ptr), Tuple(shape))
 
-            if size(dest) != size(tostore[i])
-                if length(size(dest)) != length(size(tostore[i]))
-                    @ccall printf(
-                        "Shape size mismatch in trace sample: %zd != %zd\n"::Cstring,
-                        length(size(dest))::Csize_t,
-                        length(size(tostore[i]))::Csize_t,
-                    )::Cvoid
-                    return nothing
-                end
-                for j in 1:length(size(dest))
-                    d = size(dest)[j]
-                    t = size(tostore[i])[j]
-                    if d != t
-                        @ccall printf(
-                            "Shape mismatch in `%zd`th dimension of trace sample: %zd != %zd\n"::Cstring,
-                            j::Csize_t,
-                            size(dest)[j]::Csize_t,
-                            size(tostore[i])[j]::Csize_t,
-                        )::Cvoid
-                        return nothing
-                    end
-                end
+            dest_size = size(dest)
+            src_size = size(tostore[i])
+
+            if dest_size != src_size
+                @ccall printf(
+                    "Shape mismatch in trace sample: expected %zd dims, got %zd\n"::Cstring,
+                    length(dest_size)::Csize_t,
+                    length(src_size)::Csize_t,
+                )::Cvoid
+                @ccall MLIR.API.mlir_c.ProfilerActivityEnd(activity_id::Int64)::Cvoid
+                return nothing
             end
 
-            dest .= tostore[i]
+            copyto!(dest, tostore[i])
         end
     end
 
+    @ccall MLIR.API.mlir_c.ProfilerActivityEnd(activity_id::Int64)::Cvoid
     return nothing
 end
 
@@ -400,11 +435,16 @@ function getSubtrace(
     symbol_ptr_ptr::Ptr{Ptr{Any}},
     subtrace_ptr_ptr::Ptr{Ptr{Any}},
 )
+    activity_id = @ccall MLIR.API.mlir_c.ProfilerActivityStart(
+        "ProbProg.getSubtrace"::Cstring, Profiler.TRACE_ME_LEVEL_CRITICAL::Cint
+    )::Int64
+
     trace = nothing
     try
         trace = unsafe_pointer_to_objref(unsafe_load(trace_ptr_ptr))::ProbProgTrace
     catch
         @ccall printf("Trace dereference failure\n"::Cstring)::Cvoid
+        @ccall MLIR.API.mlir_c.ProfilerActivityEnd(activity_id::Int64)::Cvoid
         return nothing
     end
 
@@ -416,24 +456,34 @@ function getSubtrace(
         @ccall printf(
             "No subtrace found for symbol: %s\n"::Cstring, string(symbol)::Cstring
         )::Cvoid
+        @ccall MLIR.API.mlir_c.ProfilerActivityEnd(activity_id::Int64)::Cvoid
         return nothing
     end
 
     _keepalive!(subtrace)
     unsafe_store!(subtrace_ptr_ptr, pointer_from_objref(subtrace))
+
+    @ccall MLIR.API.mlir_c.ProfilerActivityEnd(activity_id::Int64)::Cvoid
     return nothing
 end
 
 function getWeightFromTrace(trace_ptr_ptr::Ptr{Ptr{Any}}, weight_ptr::Ptr{Any})
+    activity_id = @ccall MLIR.API.mlir_c.ProfilerActivityStart(
+        "ProbProg.getWeightFromTrace"::Cstring, Profiler.TRACE_ME_LEVEL_CRITICAL::Cint
+    )::Int64
+
     trace = nothing
     try
         trace = unsafe_pointer_to_objref(unsafe_load(trace_ptr_ptr))::ProbProgTrace
     catch
         @ccall printf("Trace dereference failure\n"::Cstring)::Cvoid
+        @ccall MLIR.API.mlir_c.ProfilerActivityEnd(activity_id::Int64)::Cvoid
         return nothing
     end
 
     unsafe_store!(Ptr{Float64}(weight_ptr), trace.weight)
+
+    @ccall MLIR.API.mlir_c.ProfilerActivityEnd(activity_id::Int64)::Cvoid
     return nothing
 end
 
@@ -445,11 +495,17 @@ function getFlattenedSamplesFromTrace(
     flattened_symbols_ptr::Ptr{UInt64},
     position_ptr::Ptr{Any},
 )
+    activity_id = @ccall MLIR.API.mlir_c.ProfilerActivityStart(
+        "ProbProg.getFlattenedSamplesFromTrace"::Cstring,
+        Profiler.TRACE_ME_LEVEL_CRITICAL::Cint,
+    )::Int64
+
     trace = nothing
     try
         trace = unsafe_pointer_to_objref(unsafe_load(trace_ptr_ptr))::ProbProgTrace
     catch
         @ccall printf("No trace found\n"::Cstring)::Cvoid
+        @ccall MLIR.API.mlir_c.ProfilerActivityEnd(activity_id::Int64)::Cvoid
         return nothing
     end
 
@@ -485,6 +541,7 @@ function getFlattenedSamplesFromTrace(
                         "No subtrace found for symbol in address path: %s\n"::Cstring,
                         string(symbol)::Cstring,
                     )::Cvoid
+                    @ccall MLIR.API.mlir_c.ProfilerActivityEnd(activity_id::Int64)::Cvoid
                     return nothing
                 end
                 current_trace = current_trace.subtraces[symbol]
@@ -493,6 +550,7 @@ function getFlattenedSamplesFromTrace(
                     @ccall printf(
                         "No sample found for symbol: %s\n"::Cstring, string(symbol)::Cstring
                     )::Cvoid
+                    @ccall MLIR.API.mlir_c.ProfilerActivityEnd(activity_id::Int64)::Cvoid
                     return nothing
                 end
 
@@ -516,6 +574,7 @@ function getFlattenedSamplesFromTrace(
     )
     copyto!(position_array, flattened_values)
 
+    @ccall MLIR.API.mlir_c.ProfilerActivityEnd(activity_id::Int64)::Cvoid
     return nothing
 end
 
@@ -526,6 +585,10 @@ function dump(
     shape_ptr::Ptr{UInt64},
     width_ptr::Ptr{UInt64},
 )
+    activity_id = @ccall MLIR.API.mlir_c.ProfilerActivityStart(
+        "ProbProg.dump"::Cstring, Profiler.TRACE_ME_LEVEL_CRITICAL::Cint
+    )::Int64
+
     label = unsafe_string(label_ptr)
     ndims = unsafe_load(ndims_ptr)
     width = unsafe_load(width_ptr)
@@ -540,6 +603,7 @@ function dump(
         @ccall printf(
             "DUMP ERROR: Unsupported datatype width: %lld\n"::Cstring, width::Int64
         )::Cvoid
+        @ccall MLIR.API.mlir_c.ProfilerActivityEnd(activity_id::Int64)::Cvoid
         return nothing
     end
 
@@ -570,6 +634,7 @@ function dump(
 
     println("═══════════════════════════════════")
 
+    @ccall MLIR.API.mlir_c.ProfilerActivityEnd(activity_id::Int64)::Cvoid
     return nothing
 end
 
