@@ -115,36 +115,50 @@ source_dir = joinpath(@__DIR__, "ReactantExtra")
 # --@local_config_cuda//:cuda_compiler=nvcc
 # --crosstool_top="@local_config_cuda//crosstool:toolchain"
 
-build_kind = parsed_args["debug"] ? "dbg" : "opt"
+abstract type AbstractBackend end
+struct CPUBackend <: AbstractBackend end
+struct CUDABackend <: AbstractBackend
+    version::VersionNumber
+    CUDABackend(ver::VersionNumber) = new(VersionNumber(ver.major))
+end
 
-build_backend = parsed_args["backend"]
+function parse_build_backend(str::String)::AbstractBackend
+    if str == "cpu"
+        return CPUBackend()
+    elseif str == "cuda12"
+        return CUDABackend(v"12")
+    elseif str == "cuda13"
+        return CUDABackend(v"13")
+    end
 
-if build_backend == "auto" || build_backend == "cuda"
-    cuda_ver = get_cuda_version()
-    @show cuda_ver
-    if cuda_ver === nothing
-        if build_backend == "cuda"
-            throw(
-                AssertionError(
-                    "Could not detect cuda version, but requested cuda with auto version build",
-                ),
-            )
-        end
-        build_backend = "cpu"
-    else
-        if Int(get_cuda_version().major) == 13
-            build_backend = "cuda13"
+    if str in ("auto", "cuda")
+        cuda_ver = get_cuda_version()
+        if isnothing(cuda_ver)
+            if str == "cuda"
+                throw(
+                    AssertionError(
+                        "Could not detect cuda version, but requested cuda with auto version build",
+                    ),
+                )
+            end
+            return CPUBackend()
         else
-            build_backend = "cuda12"
+            return CUDABackend(get_cuda_version())
         end
+    else
+        error("Unknown backend '$(str)'")
     end
 end
 
-arg = if build_backend == "cuda12"
+build_kind = parsed_args["debug"] ? "dbg" : "opt"
+
+build_backend = parse_build_backend(parsed_args["backend"])
+
+arg = if build_backend == CUDABackend(v"12")
     "--config=cuda12"
-elseif build_backend == "cuda13"
+elseif build_backend == CUDABackend(v"13")
     "--config=cuda13"
-elseif build_backend == "cpu"
+elseif build_backend == CPUBackend()
     ""
 else
     throw(AssertionError("Unknown backend `$build_backend`"))
@@ -231,6 +245,7 @@ push!(build_cmd_list, "--copt=-Wno-private-header")
 push!(build_cmd_list, "--color=$(parsed_args["color"])")
 push!(build_cmd_list, ":libReactantExtra.so")
 
+@info "About to run Bazel" build_cmd_list
 run(Cmd(Cmd(build_cmd_list); dir=source_dir))
 
 # Discover built libraries
@@ -241,7 +256,7 @@ end
 lib_path = joinpath(source_dir, "bazel-bin", only(built_libs))
 isfile(lib_path) || error("Could not find library $lib_path in build directory")
 
-if build_backend == "cuda"
+if build_backend isa CUDABackend
     for path in (
         joinpath("bin", "ptxas"),
         joinpath("bin", "fatbinary"),
@@ -249,17 +264,27 @@ if build_backend == "cuda"
     )
         full_path = joinpath(source_dir, "bazel-bin", "cuda", path)
         if !Base.Filesystem.ispath(full_path)
-            Base.Filesystem.mkpath(dirname(full_path))
-            Base.Filesystem.symlink(
-                joinpath(
-                    source_dir,
-                    "bazel-bin",
-                    "libReactantExtra.so.runfiles",
-                    "cuda_nvcc",
-                    path,
-                ),
-                full_path,
+            source = joinpath(
+                source_dir,
+                "bazel-bin",
+                "libReactantExtra.so.runfiles",
+                # libdevice's directory was moved in CUDA 13, before was in same
+                # dir as ptxas and fatbinary
+                if contains(basename(path), "libdevice") && build_backend.version >= v"13"
+                    "cuda_nvvm"
+                else
+                    "cuda_nvcc"
+                end,
+                path,
             )
+            if !Base.Filesystem.ispath(source)
+                error(
+                    "File $(source) does not exist, are you sure it is where you expect it to be?",
+                )
+            end
+            Base.Filesystem.mkpath(dirname(full_path))
+            @info "Symlinking $(full_path) -> $(source)"
+            Base.Filesystem.symlink(source, full_path)
         end
     end
 end
