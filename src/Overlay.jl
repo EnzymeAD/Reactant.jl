@@ -133,7 +133,7 @@ for (cT, aT, bT) in (
                 # Inference barrier is required when calling function recursively within
                 # overload. This is required since otherwise type inference will think this
                 # is a recursive edge rather than a call to the base method
-                Base.inferencebarrier(LinearAlgebra.mul!)(C, A, B, α, β)
+                Base.inferencebarrier(LinearAlgebra.mul!)(C2, A2, B2, α, β)
             end
             return C
         end

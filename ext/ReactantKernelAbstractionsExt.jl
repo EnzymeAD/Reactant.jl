@@ -1,6 +1,7 @@
 module ReactantKernelAbstractionsExt
 
 using Reactant: Reactant
+using ReactantCore: ReactantCore
 
 using Adapt: Adapt
 using KernelAbstractions: KernelAbstractions
@@ -101,6 +102,14 @@ function tokw(ndrange, workgroupsize, obj, args...)
 end
 
 function (obj::KA.Kernel{ReactantBackend})(args...; ndrange=nothing, workgroupsize=nothing)
+    # If we're already inside a compilation/tracing context, or if any arguments are traced,
+    # we should trace through this kernel call instead of trying to compile it again.
+    if Reactant.within_compile() || any(ReactantCore.is_traced, args)
+        return Reactant.call_with_reactant(
+            Reactant.ka_with_reactant, ndrange, workgroupsize, obj, args...
+        )
+    end
+    
     if Reactant.precompiling()
         Reactant.@code_hlo optimize = false tokw(ndrange, workgroupsize, obj, args...)
     else
