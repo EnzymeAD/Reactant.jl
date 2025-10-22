@@ -432,3 +432,34 @@ end
             1e-2
     end
 end
+
+@testset "Symmetric Multiplication" begin
+    @testset "F32" begin
+        A = Symmetric(rand(Float32,(10,10)))
+        B = rand(Float32,(10,10))
+        C = rand(Float32,(10,10))
+        A_ra = Reactant.to_rarray(A)
+        B_ra = Reactant.to_rarray(B)
+        C_ra = Reactant.to_rarray(C)
+
+        alpha = rand(Float32)
+        beta = rand(Float32)
+
+        @test @code_hlo optimize=false A_ra * B_ra * alpha
+
+    end
+    @testset "F64" begin
+        A = Symmetric(rand(Float64,(10,10)))
+        B = rand(Float64,(10,10))
+        C = rand(Float64,(10,10))
+        A_ra = Reactant.to_rarray(A)
+        B_ra = Reactant.to_rarray(B)
+        C_ra = Reactant.to_rarray(C)
+
+        alpha = rand(Float64)
+        beta = rand(Float64)
+
+        @test @code_hlo optimize=false A_ra * B_ra * alpha
+
+    end
+end
