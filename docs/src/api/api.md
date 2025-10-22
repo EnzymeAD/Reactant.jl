@@ -34,6 +34,7 @@ ConcreteRNumber
 @code_hlo
 @code_mhlo
 @code_xla
+@mlir_visualize
 ```
 
 ## Compile Options
