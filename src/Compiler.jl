@@ -910,6 +910,7 @@ function optimization_passes(
         "remove_no_ops_from_while_loop",
         "while_is_copy_simplify",
         "split_variadic_scatter_op",
+        "dynamic_slice_simplify",
     ]
 
     if !compile_options.disable_auto_batching_passes
