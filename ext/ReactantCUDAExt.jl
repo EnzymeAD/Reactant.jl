@@ -1282,8 +1282,8 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
 
     @assert length(restys) == length(aliases)
     call = MLIR.Dialects.enzymexla.kernel_call(
-        blk_operands...,
-        mlir_args;
+        blk_operands...;
+        inputs=mlir_args,
         result_0=restys,
         fn=MLIR.IR.FlatSymbolRefAttribute(sym_name),
         output_operand_aliases=MLIR.IR.Attribute(output_operand_aliases),
