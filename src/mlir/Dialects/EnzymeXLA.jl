@@ -460,7 +460,10 @@ function kernel_call(
     blocky::Value,
     blockz::Value,
     shmem::Value,
-    inputs::Vector{Value};
+    clusterx=nothing::Union{Nothing,Value};
+    clustery=nothing::Union{Nothing,Value},
+    clusterz=nothing::Union{Nothing,Value},
+    inputs::Vector{Value},
     result_0::Vector{IR.Type},
     fn,
     backend_config=nothing,
@@ -477,6 +480,25 @@ function kernel_call(
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[namedattribute("fn", fn),]
+    !isnothing(clusterx) && push!(operands, clusterx)
+    !isnothing(clustery) && push!(operands, clustery)
+    !isnothing(clusterz) && push!(operands, clusterz)
+    push!(
+        attributes,
+        operandsegmentsizes([
+            1,
+            1,
+            1,
+            1,
+            1,
+            1,
+            1,
+            (clusterx == nothing) ? 0 : 1,
+            (clustery == nothing) ? 0 : 1,
+            (clusterz == nothing) ? 0 : 1,
+            length(inputs),
+        ]),
+    )
     !isnothing(backend_config) &&
         push!(attributes, namedattribute("backend_config", backend_config))
     !isnothing(operand_layouts) &&

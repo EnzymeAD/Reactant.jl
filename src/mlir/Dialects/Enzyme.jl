@@ -259,6 +259,54 @@ function broadcast(input::Value; output::IR.Type, shape, location=Location())
     )
 end
 
+"""
+`concat`
+
+Concat list of input arguments into a generic value
+"""
+function concat(inputs::Vector{Value}; output::IR.Type, location=Location())
+    op_ty_results = IR.Type[output,]
+    operands = Value[inputs...,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+
+    return create_operation(
+        "enzyme.concat",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+"""
+`extract`
+
+Extract value from batched operand at index
+"""
+function extract(input::Value, index::Value; output::IR.Type, location=Location())
+    op_ty_results = IR.Type[output,]
+    operands = Value[input, index]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+
+    return create_operation(
+        "enzyme.extract",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
 function fwddiff(
     inputs::Vector{Value};
     outputs::Vector{IR.Type},
