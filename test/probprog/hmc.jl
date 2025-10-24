@@ -75,9 +75,9 @@ end
     constrained_addresses = ProbProg.extract_addresses(obs)
     constraint_ptr = ConcreteRNumber(reinterpret(UInt64, pointer_from_objref(obs)))
 
-    step_size = ConcreteRNumber(0.01)
-    num_steps_compile = ConcreteRNumber(10)
-    num_steps_run = ConcreteRNumber(20)
+    step_size = ConcreteRNumber(0.001)
+    num_steps_compile = ConcreteRNumber(1000)
+    num_steps_run = ConcreteRNumber(40000000)
     mass = nothing
     initial_momentum = ConcreteRArray([0.0, 0.0])
 
@@ -113,6 +113,7 @@ end
     println("HMC compile time: $(round(compile_time_s * 1000, digits=2)) ms")
 
     seed_buffer = only(rng.seed.data).buffer
+    trace = nothing
     GC.@preserve seed_buffer obs begin
         run_time_s = @elapsed begin
             trace_ptr, _ = compiled_fn(
@@ -132,6 +133,6 @@ end
     end
 
     # NumPyro results
-    @test only(trace.choices[:param_a])[1] ≈ 0.7630458236301266 rtol = 1e-6
-    @test only(trace.choices[:param_b])[1] ≈ -1.1296070526289126 rtol = 1e-6
+    @test only(trace.choices[:param_a])[1] ≈ 0.01327671 rtol = 1e-6
+    @test only(trace.choices[:param_b])[1] ≈ -0.01965474 rtol = 1e-6
 end
