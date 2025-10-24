@@ -109,7 +109,9 @@ function (obj::KA.Kernel{ReactantBackend})(args...; ndrange=nothing, workgroupsi
     return nothing
 end
 
-Reactant.@reactant_overlay Base.@nospecializeinfer @noinline function (obj::KA.Kernel{ReactantBackend})(
+Reactant.@reactant_overlay Base.@nospecializeinfer @noinline function (
+    obj::KA.Kernel{ReactantBackend}
+)(
     @nospecialize args...; ndrange=nothing, workgroupsize=nothing
 )
     return Reactant.call_with_reactant(
