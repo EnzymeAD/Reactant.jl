@@ -610,7 +610,7 @@ end
 #      using a custom interpreter in type unstable code.
 # `redub_arguments` is `(typeof(original_function), map(typeof, original_args_tuple)...)`
 function call_with_reactant_generator(
-    world::UInt, source::LineNumberNode, self, @nospecialize(redub_arguments)
+    world::UInt, source::Union{LineNumberNode, Core.Method}, self, @nospecialize(redub_arguments)
 )
     @nospecialize
     args = redub_arguments
