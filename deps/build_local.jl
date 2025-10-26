@@ -211,6 +211,8 @@ push!(build_cmd_list, "--jobs=$(parsed_args["jobs"])")
 push!(build_cmd_list, "--experimental_ui_max_stdouterr_bytes=-1")
 push!(build_cmd_list, "--sandbox_debug")
 
+push!(build_cmd_list, "--linkopt=-fuse-ld=lld")
+
 for opt in parsed_args["copt"]
     push!(build_cmd_list, "--copt=$(opt)")
 end

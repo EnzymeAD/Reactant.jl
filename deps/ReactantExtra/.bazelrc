@@ -43,10 +43,6 @@ common:cuda --@local_config_cuda//:cuda_compiler=nvcc
 # common:cuda --@local_config_nvshmem//:override_include_nvshmem_libs=true
 # common:cuda --@local_config_nvshmem//cuda:include_nvshmem_libs=true
 
-common:cuda --copt -mcmodel=large
-common:cuda --linkopt -mcmodel=large
-
-
 common:cuda12 --config=cuda
 common:cuda12 --repo_env=HERMETIC_CUDA_VERSION="12.9.1"
 common:cuda12 --repo_env=HERMETIC_CUDNN_VERSION="9.8.0"
