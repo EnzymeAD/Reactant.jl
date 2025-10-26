@@ -1326,6 +1326,7 @@ end
 # TODO we want to be able to run the more advanced passes via transform dialect as an enzyme intermediate
 # However, this errs as we cannot attach the transform with to the funcop itself [as we run a functionpass].
 const enzyme_pass::String = "enzyme{postpasses=\"arith-raise{stablehlo=true},canonicalize,cse,canonicalize,remove-unnecessary-enzyme-ops,enzyme-simplify-math,canonicalize,cse,canonicalize,arith-raise{stablehlo=true}\"}"
+const probprog_pass::String = "probprog{postpasses=\"arith-raise{stablehlo=true}\"}"
 
 function run_pass_pipeline!(mod, pass_pipeline, key=""; enable_verifier=true)
     pm = MLIR.IR.PassManager()
@@ -1922,6 +1923,71 @@ function compile_mlir!(
                 ',',
             ),
             "no_enzyme",
+        )
+    elseif compile_options.optimization_passes === :probprog
+        run_pass_pipeline!(
+            mod,
+            join(
+                if compile_options.raise_first
+                    [
+                        "mark-func-memory-effects",
+                        opt_passes,
+                        kern,
+                        raise_passes,
+                        "enzyme-batch",
+                        opt_passes2,
+                        probprog_pass,
+                        "lower-probprog-to-stablehlo{backend=$backend}",
+                        "outline-enzyme-regions",
+                        enzyme_pass,
+                        opt_passes2,
+                        "canonicalize",
+                        "remove-unnecessary-enzyme-ops",
+                        "enzyme-simplify-math",
+                        (
+                            if compile_options.legalize_chlo_to_stablehlo
+                                ["func.func(chlo-legalize-to-stablehlo)"]
+                            else
+                                []
+                            end
+                        )...,
+                        opt_passes2,
+                        lower_enzymexla_linalg_pass,
+                        "lower-probprog-trace-ops{backend=$backend}",
+                        jit,
+                    ]
+                else
+                    [
+                        "mark-func-memory-effects",
+                        opt_passes,
+                        "enzyme-batch",
+                        opt_passes2,
+                        probprog_pass,
+                        "lower-probprog-to-stablehlo{backend=$backend}",
+                        "outline-enzyme-regions",
+                        enzyme_pass,
+                        opt_passes2,
+                        "canonicalize",
+                        "remove-unnecessary-enzyme-ops",
+                        "enzyme-simplify-math",
+                        (
+                            if compile_options.legalize_chlo_to_stablehlo
+                                ["func.func(chlo-legalize-to-stablehlo)"]
+                            else
+                                []
+                            end
+                        )...,
+                        opt_passes2,
+                        kern,
+                        raise_passes,
+                        lower_enzymexla_linalg_pass,
+                        "lower-probprog-trace-ops{backend=$backend}",
+                        jit,
+                    ]
+                end,
+                ",",
+            ),
+            "probprog",
         )
     elseif compile_options.optimization_passes === :only_enzyme
         run_pass_pipeline!(
