@@ -4,7 +4,7 @@ NSYNC_COMMIT = "82b118aa7ace3132e517e2c467f8732978cf4023"
 
 NSYNC_SHA256 = ""
 
-ENZYMEXLA_COMMIT = "fcf54c56ea4b2b8a78b88c7ca88f1ad385916621"
+ENZYMEXLA_COMMIT = "e745f88da54d550ab6dec08cff986488fa37d66b"
 
 ENZYMEXLA_SHA256 = ""
 
@@ -79,7 +79,7 @@ LLVM_TARGETS = [
 
 load("@enzyme_ad//third_party/ml_toolchain:workspace.bzl", ml_toolchain_workspace = "repo")
 
-ml_toolchain_workspace([], "6bc326eeb70f8b3d28a06ec719e0c40fd909b07a")
+ml_toolchain_workspace([])
 
 load("@enzyme_ad//third_party/jax:workspace.bzl", jax_workspace = "repo")
 
