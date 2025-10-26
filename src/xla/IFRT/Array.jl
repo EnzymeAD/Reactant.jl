@@ -16,11 +16,8 @@ function Array(
     return Array(client, fill(array), device, memory_kind)
 end
 
-function Array(
-    client::Client,
-    array::Base.Array{T,N},
-    device::Device=XLA.default_device(client),
-    memory_kind::AbstractString=string(convert(MemoryKind, XLA.default_memory(device))),
+function make_array_singleshard(
+    client::Client, array::AbstractArray{T,N}, device::Device, memory_kind::AbstractString
 ) where {T<:Reactant.ReactantPrimitive,N}
     sizear = collect(Int64, reverse(size(array)))
     buffer = GC.@preserve array sizear begin
@@ -39,7 +36,27 @@ function Array(
 end
 
 function Array(
-    client::Client, array::Base.Array{T,N}, sharding::Sharding
+    client::Client,
+    array::Base.Array{T,N},
+    device::Device=XLA.default_device(client),
+    memory_kind::AbstractString=string(convert(MemoryKind, XLA.default_memory(device))),
+) where {T<:Reactant.ReactantPrimitive,N}
+    return make_array_singleshard(client, array, device, memory_kind)
+end
+
+if isdefined(Base, :Memory)
+    function Array(
+        client::Client,
+        memory::Base.Memory{T},
+        device::Device=XLA.default_device(client),
+        memory_kind::AbstractString=string(convert(MemoryKind, XLA.default_memory(device))),
+    ) where {T<:Reactant.ReactantPrimitive}
+        return make_array_singleshard(client, memory, device, memory_kind)
+    end
+end
+
+function make_array_sharding(
+    client::Client, array::AbstractArray{T,N}, sharding::Sharding
 ) where {T<:Reactant.ReactantPrimitive,N}
     all_devices = XLA.devices(sharding)
     all_logical_device_ids = collect(Int64, 0:(length(all_devices) - 1))
@@ -76,13 +93,19 @@ function Array(
 end
 
 function Array(
+    client::Client, array::Base.Array{T,N}, sharding::Sharding
+) where {T<:Reactant.ReactantPrimitive,N}
+    return make_array_sharding(client, array, sharding)
+end
+
+function Array(
     client::Client,
     host_buffers::Vector{Base.Array{T,N}},
     addressable_shard_indices::Vector{Vector{Int64}},
     array_shape,
     sharding::Sharding,
 ) where {T<:Reactant.ReactantPrimitive,N}
-    # Construct using the slower path, the faster path is only implemented for IFRT-Proxy
+    # make using the slower path, the faster path is only implemented for IFRT-Proxy
     # and seems to cause issues with IFRT-PJRT
     all_addressable_devices = filter(XLA.is_addressable, XLA.devices(sharding))
 
@@ -143,8 +166,16 @@ function Array(
     return Array(buffer)
 end
 
-function Array(
-    client::Client, array::Base.Array{T,N}, sharding
+if isdefined(Base, :Memory)
+    function Array(
+        client::Client, memory::Base.Memory{T}, sharding::Sharding
+    ) where {T<:Reactant.ReactantPrimitive}
+        return make_array_sharding(client, memory, sharding)
+    end
+end
+
+function make_array_ifrt_sharding(
+    client::Client, array::Base.AbstractArray{T,N}, sharding
 ) where {T<:Reactant.ReactantPrimitive,N}
     @assert sharding isa Reactant.Sharding.AbstractSharding
     if !(sharding isa Reactant.Sharding.HloSharding)
@@ -156,6 +187,20 @@ function Array(
     ifrt_sharding = Sharding([devices...], hlo_sharding)
 
     return Array(client, array, ifrt_sharding)
+end
+
+function Array(
+    client::Client, array::Base.Array{T,N}, sharding
+) where {T<:Reactant.ReactantPrimitive,N}
+    return make_array_ifrt_sharding(client, array, sharding)
+end
+
+if isdefined(Base, :Memory)
+    function Array(
+        client::Client, memory::Base.Memory{T}, sharding
+    ) where {T<:Reactant.ReactantPrimitive}
+        return make_array_ifrt_sharding(client, memory, sharding)
+    end
 end
 
 @inline function XLA.free_buffer(buffer::Array)

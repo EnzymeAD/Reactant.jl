@@ -6,7 +6,9 @@ mutable struct Buffer <: XLA.AbstractBuffer
     end
 end
 
-function Buffer(client::Client, array::Array{T,N}, device::Device) where {T,N}
+function make_buffer_array(
+    client::Client, array::AbstractArray{T,N}, device::Device
+) where {T,N}
     sizear = collect(Int64, reverse(size(array)))
     buffer = GC.@preserve array sizear begin
         @ccall MLIR.API.mlir_c.ArrayFromHostBuffer(
@@ -19,6 +21,16 @@ function Buffer(client::Client, array::Array{T,N}, device::Device) where {T,N}
         )::Ptr{Cvoid}
     end
     return Buffer(buffer)
+end
+
+function Buffer(client::Client, array::Array{T,N}, device::Device) where {T,N}
+    return make_buffer_array(client, array, device)
+end
+
+if isdefined(Base, :Memory)
+    function Buffer(client::Client, memory::Memory{T}, device::Device) where {T}
+        return make_buffer_array(client, memory, device)
+    end
 end
 
 function Base.similar(a::Buffer)
