@@ -29,6 +29,8 @@ build --repo_env=RULES_PYTHON_ENABLE_PYSTAR=0
 
 build -c opt
 
+common:macos --define ynn_enable_arm64_sme=false
+
 common:cuda --repo_env TF_NEED_CUDA=1
 common:cuda --repo_env TF_NVCC_CLANG=1
 common:cuda --repo_env TF_NCCL_USE_STUB=1
