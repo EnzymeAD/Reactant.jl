@@ -79,7 +79,7 @@ jobs:
         with:
           version: "1"
       - uses: julia-actions/cache@v2
-      - uses: actions/download-artifact@v5
+      - uses: actions/download-artifact@v6
         with:
           pattern: benchmark-results-*
           path: benchmark/results
