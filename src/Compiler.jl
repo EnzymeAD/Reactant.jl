@@ -910,6 +910,7 @@ function optimization_passes(
         "remove_no_ops_from_while_loop",
         "while_is_copy_simplify",
         "split_variadic_scatter_op",
+        "dynamic_slice_simplify",
     ]
 
     if !compile_options.disable_auto_batching_passes
@@ -1124,9 +1125,11 @@ function optimization_passes(
         if AGGRESSIVE_PROPAGATION[]
             push!(transform_passes_list, "reshape_slice(0)")
             push!(transform_passes_list, "reshape_elementwise(0)")
+            push!(transform_passes_list, "reshape_dynamic_slice(0)")
         else
             push!(transform_passes_list, "reshape_slice(1)")
             push!(transform_passes_list, "reshape_elementwise(1)")
+            push!(transform_passes_list, "reshape_dynamic_slice(1)")
         end
     elseif compile_options.reshape_propagate === :down
         append!(
