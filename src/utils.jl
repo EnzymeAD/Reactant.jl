@@ -523,7 +523,8 @@ function make_oc_ref(
         return oc_captures[]
     else
         ores = @static if VERSION < v"1.11"
-            ccall(:jl_new_opaque_closure_from_code_info,
+            ccall(
+                :jl_new_opaque_closure_from_code_info,
                 Any,
                 (Any, Any, Any, Any, Any, Cint, Any, Cint, Cint, Any, Cint),
                 sig,
@@ -539,7 +540,8 @@ function make_oc_ref(
                 true,
             )::Core.OpaqueClosure
         else
-            ccall(:jl_new_opaque_closure_from_code_info,
+            ccall(
+                :jl_new_opaque_closure_from_code_info,
                 Any,
                 (Any, Any, Any, Any, Any, Cint, Any, Cint, Cint, Any, Cint, Cint),
                 sig,            # jl_tupletype_t *argt

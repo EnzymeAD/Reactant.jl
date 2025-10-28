@@ -44,7 +44,9 @@ function set_reactant_abi(
             elseif VERSION < v"1.12.0-"
                 return CallMeta(Union{}, Union{}, Effects(), NoCallInfo())
             else
-                return Core.Compiler.Future{Core.Compiler.CallMeta}(CallMeta(Union{}, Union{}, Effects(), NoCallInfo()))
+                return Core.Compiler.Future{Core.Compiler.CallMeta}(
+                    CallMeta(Union{}, Union{}, Effects(), NoCallInfo())
+                )
             end
         end
         @static if VERSION < v"1.11.0-"
@@ -56,9 +58,14 @@ function set_reactant_abi(
                 Core.Const(true), Union{}, Core.Compiler.EFFECTS_TOTAL, MethodResultPure()
             )
         else
-            return Core.Compiler.Future{Core.Compiler.CallMeta}(CallMeta(
-                Core.Const(true), Union{}, Core.Compiler.EFFECTS_TOTAL, MethodResultPure()
-            ))
+            return Core.Compiler.Future{Core.Compiler.CallMeta}(
+                CallMeta(
+                    Core.Const(true),
+                    Union{},
+                    Core.Compiler.EFFECTS_TOTAL,
+                    MethodResultPure(),
+                ),
+            )
         end
     end
 

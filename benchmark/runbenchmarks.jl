@@ -44,7 +44,7 @@ for (i, (k, v)) in enumerate(results)
 end
 
 open(joinpath(filepath, filename), "w") do io
-    JSON3.pretty(io, JSON3.write(standardized_results))
+    return JSON3.pretty(io, JSON3.write(standardized_results))
 end
 
 @info "Saved results to $(joinpath(filepath, filename))"

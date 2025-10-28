@@ -110,25 +110,25 @@ function (obj::KA.Kernel{ReactantBackend})(args...; ndrange=nothing, workgroupsi
 end
 
 @static if VERSION < v"1.12-"
-Reactant.@reactant_overlay Base.@nospecializeinfer @noinline function (
-    obj::KA.Kernel{ReactantBackend}
-)(
-    @nospecialize args...; ndrange=nothing, workgroupsize=nothing
-)
-    return Reactant.call_with_reactant(
-        Reactant.ka_with_reactant, ndrange, workgroupsize, obj, args...
+    Reactant.@reactant_overlay Base.@nospecializeinfer @noinline function (
+        obj::KA.Kernel{ReactantBackend}
+    )(
+        @nospecialize args...; ndrange=nothing, workgroupsize=nothing
     )
-end
+        return Reactant.call_with_reactant(
+            Reactant.ka_with_reactant, ndrange, workgroupsize, obj, args...
+        )
+    end
 else
-Reactant.@reactant_overlay function (obj::KA.Kernel{ReactantBackend})(
-    args...; ndrange=nothing, workgroupsize=nothing
-)
-    Base.@_noinline_meta
-    Base.@_nospecializeinfer_meta
-    return Reactant.call_with_reactant(
-        Reactant.ka_with_reactant, ndrange, workgroupsize, obj, args...
+    Reactant.@reactant_overlay function (obj::KA.Kernel{ReactantBackend})(
+        args...; ndrange=nothing, workgroupsize=nothing
     )
-end
+        Base.@_noinline_meta
+        Base.@_nospecializeinfer_meta
+        return Reactant.call_with_reactant(
+            Reactant.ka_with_reactant, ndrange, workgroupsize, obj, args...
+        )
+    end
 end
 
 end
