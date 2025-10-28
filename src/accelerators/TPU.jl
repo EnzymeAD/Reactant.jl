@@ -10,6 +10,9 @@ using unzip_jll: unzip
 const libtpu_dir = Ref{Union{Nothing,String}}(nothing)
 const RUNNING_IN_CLOUD_TPU_VM = Ref(false)
 
+const LIBTPU_VERSION = "0.0.28.dev20251027"
+const LIBTPU_SO = "libtpu-$(replace(string(LIBTPU_VERSION), '.' => '_')).so"
+
 function __init__()
     @static if !Sys.isapple()
         if !Reactant.precompiling() && has_tpu()
@@ -32,18 +35,18 @@ end
 
 get_libtpu_dir() = libtpu_dir[]
 
-get_libtpu_path() = joinpath(get_libtpu_dir(), "libtpu.so")
+get_libtpu_path() = joinpath(get_libtpu_dir(), LIBTPU_SO)
 
 function download_libtpu_if_needed(path=nothing)
     path === nothing && (path = get_libtpu_dir())
     @assert path !== nothing "libtpu_dir is not set!"
 
-    libtpu_path = joinpath(path, "libtpu.so")
+    libtpu_path = joinpath(path, LIBTPU_SO)
     if !isfile(libtpu_path)
         zip_file_path = joinpath(path, "tpu.zip")
         tmp_dir = joinpath(path, "tmp")
         Downloads.download(
-            "https://storage.googleapis.com/libtpu-nightly-releases/wheels/libtpu-nightly/libtpu_nightly-0.1.dev20250811+nightly-py3-none-manylinux_2_31_x86_64.whl",
+            "https://storage.googleapis.com/libtpu-nightly-releases/wheels/libtpu/libtpu-0.0.28.dev20251027+nightly-cp314-cp314t-manylinux_2_31_x86_64.whl",
             zip_file_path,
         )
         run(`$(unzip()) -qq $(zip_file_path) -d $(tmp_dir)`)
