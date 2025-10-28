@@ -166,6 +166,8 @@ function overlayed_pycall_with_triton(
 
     grid = canonicalize_grid(grid, metadata)
 
+    # TODO: actual cluster_x/y/z
+
     return @opcall triton_call(
         pyconvert(String, compiled_kernel.asm["source"]),
         filter(x -> x isa Reactant.TracedType, args)...;
@@ -176,6 +178,9 @@ function overlayed_pycall_with_triton(
         block_x=@opcall(constant(num_warps * device_properties.warp_size)),
         block_y=@opcall(constant(1)),
         block_z=@opcall(constant(1)),
+        cluster_x=@opcall(constant(1)),
+        cluster_y=@opcall(constant(1)),
+        cluster_z=@opcall(constant(1)),
         num_ctas,
         num_warps,
         threads_per_warp=device_properties.warp_size,
