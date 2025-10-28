@@ -1109,6 +1109,19 @@ function Base.accumulate_pairwise!(op, A::AnyTracedRVector, B::AnyTracedRVector)
     return accumulate!(op, A, B; dims=1)
 end
 
+if isdefined(Base, :_accumulate_promote_op)
+    function Base._accumulate_promote_op(op, A::AnyTracedRArray{T}; init=nothing) where {T}
+        if init !== nothing
+            init isa TracedRNumber && (init = zero(unwrapped_eltype(init)))
+        end
+        return TracedRNumber{
+            unwrapped_eltype(
+                Base._accumulate_promote_op(op, Array{T,ndims(A)}(undef, size(A)); init)
+            ),
+        }
+    end
+end
+
 function Base._accumulate!(
     op, output::AnyTracedRArray, input::AnyTracedRVector, ::Nothing, ::Nothing
 )
