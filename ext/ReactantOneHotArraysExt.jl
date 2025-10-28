@@ -48,17 +48,28 @@ function Base.Array(
     return Array(reshape(Array(r.indices), 1, size(r.indices)...) .== 1:(r.nlabels))
 end
 
+function OneHotArrays.onehotbatch(data::AnyTracedRArray{<:Any,N}, labels) where {N}
+    # TODO: add checkbounds once we support that with TracedRNumber
+    labels_expanded = @opcall broadcast_in_dim(
+        Reactant.promote_to(
+            TracedRArray{Reactant.unwrapped_eltype(labels),1},
+            ReactantCore.materialize_traced_array(vec(labels))
+        ),
+        Int64[1],
+        [length(labels), size(data)...],
+    )
+    data = ReactantCore.materialize_traced_array(reshape(data, 1, size(data)...))
+    return mapslices(findfirst, data .== labels_expanded; dims=Tuple(2:(N + 1)))
+end
+
 function OneHotArrays.onehotbatch(
-    data::AnyTracedRArray{<:Integer,N}, labels::AbstractVector{<:Integer}
+    data::AnyTracedRArray{<:Integer,N}, labels::AbstractUnitRange{<:Integer}
 ) where {N}
     # TODO: add checkbounds once we support that with TracedRNumber
-    indices =
-        UInt32.(
-            map(
-                Base.Fix2(+, 1 - first(labels)), ReactantCore.materialize_traced_array(data)
-            )
-        )
-    return indices
+    indices = map(
+        TracedRNumber{UInt32} ∘ Base.Fix2(+, 1 - first(labels)),
+        ReactantCore.materialize_traced_array(data),
+    )
     return OneHotArray{TracedRNumber{UInt32},N,N + 1,typeof(indices)}(
         indices, length(labels)
     )
@@ -79,6 +90,7 @@ function OneHotArrays.onecold(y::AnyTracedRArray{T,1}, labels=1:length(y)) where
     )
     return @allowscalar labels_arr[imax]
 end
+
 function OneHotArrays.onecold(y::AnyTracedRArray{T}, labels=1:size(y, 1)) where {T}
     nl = length(labels)
     ny = size(y, 1)

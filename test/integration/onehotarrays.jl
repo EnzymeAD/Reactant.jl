@@ -32,14 +32,25 @@ end
     end
 end
 
-using Reactant, Test, OneHotArrays, Random
-
 @testset "onehotbatch/onecold" begin
     x = Int32[10, 20, 30, 10, 10]
     x_ra = Reactant.to_rarray(x)
-    labels = Int32.(10:10:40)
+    labels = Int32(10):Int32(10):Int32(40)
+    res_ra = @jit onehotbatch(x_ra, labels)
+    res = onehotbatch(x, labels)
+    @test Array(res_ra) ≈ res
 
-    res_ra = @jit onehotbatch(x_ra, labels) # XXX: broken??
+    x = rand(10:10:40, 2, 3, 5)
+    x_ra = Reactant.to_rarray(x)
+    labels = reshape([10, 20, 30, 40], 2, 2)
+    res = onehotbatch(x, labels)
+    res_ra = @jit onehotbatch(x_ra, labels)
+    @test Array(res_ra) ≈ res
+
+    x = Int32[1, 2, 3, 1, 1]
+    x_ra = Reactant.to_rarray(x)
+    labels = Int32(1):Int32(4)
+    res_ra = @jit onehotbatch(x_ra, labels)
     res = onehotbatch(x, labels)
     @test Array(res_ra) ≈ res
 
