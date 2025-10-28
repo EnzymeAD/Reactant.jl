@@ -296,12 +296,12 @@ if isdefined(LinearAlgebra, :_tril)
 end
 
 function LinearAlgebra.triu!(X::AnyTracedRArray{T,2}, k::Integer) where {T}
-    set_mlir_data!(X, overloaded_triu(materialize_traced_array(X), k))
+    set_mlir_data!(X, get_mlir_data(overloaded_triu(materialize_traced_array(X), k)))
     return X
 end
 
 function LinearAlgebra.tril!(X::AnyTracedRArray{T,2}, k::Integer) where {T}
-    set_mlir_data!(X, overloaded_tril(materialize_traced_array(X), k))
+    set_mlir_data!(X, get_mlir_data(overloaded_tril(materialize_traced_array(X), k)))
     return X
 end
 
