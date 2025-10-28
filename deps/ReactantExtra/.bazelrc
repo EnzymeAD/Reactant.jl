@@ -45,7 +45,7 @@ common:cuda --@local_config_cuda//:cuda_compiler=nvcc
 
 common:cuda12 --config=cuda
 common:cuda12 --repo_env=HERMETIC_CUDA_VERSION="12.9.1"
-common:cuda12 --repo_env=HERMETIC_CUDNN_VERSION="9.8.0"
+common:cuda12 --repo_env=HERMETIC_CUDNN_VERSION="9.13.0"
 common:cuda12 --repo_env=HERMETIC_NVSHMEM_VERSION="3.3.9"
 # "sm" means we emit only cubin, which is forward compatible within a GPU generation.
 # "compute" means we emit both cubin and PTX, which is larger but also forward compatible to future GPU generations.
