@@ -53,7 +53,7 @@ function OneHotArrays.onehotbatch(data::AnyTracedRArray{<:Any,N}, labels) where 
     labels_expanded = @opcall broadcast_in_dim(
         Reactant.promote_to(
             TracedRArray{Reactant.unwrapped_eltype(labels),1},
-            ReactantCore.materialize_traced_array(vec(labels))
+            ReactantCore.materialize_traced_array(vec(labels)),
         ),
         Int64[1],
         [length(labels), size(data)...],
