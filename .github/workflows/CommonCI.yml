@@ -212,3 +212,4 @@ env:
   JULIA_PKG_SERVER_REGISTRY_PREFERENCE: eager
   XLA_FLAGS: "--xla_force_host_platform_device_count=12"
   JULIA_DEBUG: "Reactant,Reactant_jll"
+  REACTANT_FORCE_DOWNLOAD_LIBTPU: "true"
