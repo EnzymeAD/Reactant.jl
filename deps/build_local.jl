@@ -252,7 +252,7 @@ run(Cmd(Cmd(build_cmd_list); dir=source_dir))
 
 # Discover built libraries
 built_libs = filter(readdir(joinpath(source_dir, "bazel-bin"))) do file
-    endswith(file, "Extra.so") && startswith(file, "lib")
+    return endswith(file, "Extra.so") && startswith(file, "lib")
 end
 
 lib_path = joinpath(source_dir, "bazel-bin", only(built_libs))

@@ -105,7 +105,11 @@ function XLA.compile(
 end
 
 function execute_ir(N, M, n_outs, with_device::Bool, nmesh_ids::Int64)
-    ptr = sizeof(Int) == sizeof(Int64) ? "i64" : "i32"
+    ptr = @static if VERSION < v"1.12"
+        sizeof(Int) == sizeof(Int64) ? "i64" : "i32"
+    else
+        "ptr"
+    end
     cint = sizeof(Cint) == sizeof(Int64) ? "i64" : "i32"
     args = N > 0 ? ", [$N x $ptr] %inps, [$M x i8] %donated" : ""
     if with_device

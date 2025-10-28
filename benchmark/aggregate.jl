@@ -15,5 +15,5 @@ for backend in BACKENDS
 end
 
 open(joinpath(dirname(@__FILE__), "results", "combinedbenchmarks.json"), "w") do io
-    JSON3.pretty(io, JSON3.write(all_results))
+    return JSON3.pretty(io, JSON3.write(all_results))
 end
