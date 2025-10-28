@@ -9,6 +9,7 @@ using unzip_jll: unzip
 
 const libtpu_dir = Ref{Union{Nothing,String}}(nothing)
 const RUNNING_IN_CLOUD_TPU_VM = Ref(false)
+const FORCE_DOWNLOAD_LIBTPU = Ref(false)
 
 function __init__()
     @static if !Sys.isapple()
@@ -16,6 +17,12 @@ function __init__()
             setup_libtpu!()
             cloud_tpu_init!()
         end
+
+        # TODO: we should have a way to checking that the downloaded libtpu doesn't match
+        # the expected version.
+        FORCE_DOWNLOAD_LIBTPU[] = parse(
+            Bool, get(ENV, "REACTANT_FORCE_DOWNLOAD_LIBTPU", "false")
+        )
     end
 end
 
@@ -39,6 +46,11 @@ function download_libtpu_if_needed(path=nothing)
     @assert path !== nothing "libtpu_dir is not set!"
 
     libtpu_path = joinpath(path, "libtpu.so")
+
+    if FORCE_DOWNLOAD_LIBTPU[] && isfile(libtpu_path)
+        rm(libtpu_path; force=true)
+    end
+
     if !isfile(libtpu_path)
         zip_file_path = joinpath(path, "tpu.zip")
         tmp_dir = joinpath(path, "tmp")
