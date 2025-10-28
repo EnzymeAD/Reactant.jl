@@ -273,26 +273,56 @@ function overloaded_mul!(
     return C
 end
 
-function LinearAlgebra.triu!(@nospecialize(X::TracedRArray{T,2}), k::Integer) where {T}
+if isdefined(LinearAlgebra, :_triu)
+    function LinearAlgebra._triu(A::AnyTracedRArray{T,2}, ::Val{true}, k::Integer) where {T}
+        return overloaded_triu(materialize_traced_array(A), k)
+    end
+    function LinearAlgebra._triu(
+        A::AnyTracedRArray{T,2}, ::Val{false}, k::Integer
+    ) where {T}
+        return overloaded_triu(materialize_traced_array(A), k)
+    end
+end
+
+if isdefined(LinearAlgebra, :_tril)
+    function LinearAlgebra._tril(A::AnyTracedRArray{T,2}, ::Val{true}, k::Integer) where {T}
+        return overloaded_tril(materialize_traced_array(A), k)
+    end
+    function LinearAlgebra._tril(
+        A::AnyTracedRArray{T,2}, ::Val{false}, k::Integer
+    ) where {T}
+        return overloaded_tril(materialize_traced_array(A), k)
+    end
+end
+
+function LinearAlgebra.triu!(X::AnyTracedRArray{T,2}, k::Integer) where {T}
+    set_mlir_data!(X, overloaded_triu(materialize_traced_array(X), k))
+    return X
+end
+
+function LinearAlgebra.tril!(X::AnyTracedRArray{T,2}, k::Integer) where {T}
+    set_mlir_data!(X, overloaded_tril(materialize_traced_array(X), k))
+    return X
+end
+
+function overloaded_triu(X::TracedRArray{T,2}, k::Integer) where {T}
     iota_1 = @opcall iota(Int64, [size(X)...]; iota_dimension=1)
     iota_2 = @opcall subtract(
         @opcall(iota(Int64, [size(X)...]; iota_dimension=2)),
         Reactant.broadcast_to_size(k, size(X)),
     )
     idxs = @opcall compare(iota_1, iota_2; comparison_direction="LE")
-    X.mlir_data = @opcall(select(idxs, X, zero(X))).mlir_data
-    return X
+    return @opcall select(idxs, X, zero(X))
 end
 
-function LinearAlgebra.tril!(@nospecialize(X::TracedRArray{T,2}), k::Integer) where {T}
+function overloaded_tril(X::TracedRArray{T,2}, k::Integer) where {T}
     iota_1 = @opcall iota(Int64, [size(X)...]; iota_dimension=1)
     iota_2 = @opcall subtract(
         @opcall(iota(Int64, [size(X)...]; iota_dimension=2)),
         Reactant.broadcast_to_size(k, size(X)),
     )
     idxs = @opcall compare(iota_1, iota_2; comparison_direction="GE")
-    X.mlir_data = @opcall(select(idxs, X, zero(X))).mlir_data
-    return X
+    return @opcall select(idxs, X, zero(X))
 end
 
 # LinearAlgebra defines norm with some conditionals which cannot be traced directly
