@@ -31,6 +31,7 @@ const __skip_rewrite_func_set = Set([
     typeof(task_local_storage),
     typeof(getproperty),
     typeof(invokelatest),
+    typeof(objectid)
 ])
 const __skip_rewrite_func_set_lock = ReentrantLock()
 
