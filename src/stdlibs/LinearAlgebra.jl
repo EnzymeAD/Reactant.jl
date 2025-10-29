@@ -273,6 +273,68 @@ function overloaded_mul!(
     return C
 end
 
+function overloaded_mul!(
+    @nospecialize(C::TracedRArray{T,2} where {T}),
+    @nospecialize(A::Symmetric),
+    @nospecialize(B::AbstractMatrix),
+    α::Number=true,
+    β::Number=true,
+)
+    # Promote to traced arrays
+    A = call_with_reactant(Reactant.promote_to, TracedRArray, parent(A))
+    B = call_with_reactant(Reactant.promote_to, TracedRArray, B)
+
+    # Dimension checks
+    if size(C) != (size(A, 1), size(B, 2))
+        throw(DimensionMismatch("C=$(size(C)), A=$(size(A)), B=$(size(B))"))
+    end
+
+    T = Reactant.unwrapped_eltype(C)
+    tmp = @opcall lapack_symm(
+        T.(materialize_traced_array(A)),
+        T.(materialize_traced_array(B)),
+        T.(materialize_traced_array(C)),
+        Reactant.promote_to(TracedRNumber{T}, α),
+        Reactant.promote_to(TracedRNumber{T}, β),
+        side=:L,
+        uplo=:U,
+    )
+
+    set_mlir_data!(C, get_mlir_data(tmp)) # TODO remove later, handling in place ops are weird
+    return C
+end
+
+function overloaded_mul!(
+    @nospecialize(C::TracedRArray{T,2} where {T}),
+    @nospecialize(A::AbstractMatrix),
+    @nospecialize(B::Symmetric),
+    α::Number=true,
+    β::Number=true,
+)
+    # Promote to traced arrays
+    A = call_with_reactant(Reactant.promote_to, TracedRArray, A)
+    B = call_with_reactant(Reactant.promote_to, TracedRArray, parent(B))
+
+    # Dimension checks
+    if size(C) != (size(A, 1), size(B, 2))
+        throw(DimensionMismatch("C=$(size(C)), A=$(size(A)), B=$(size(B))"))
+    end
+
+    T = Reactant.unwrapped_eltype(C)
+    tmp = @opcall lapack_symm(
+        T.(materialize_traced_array(A)),
+        T.(materialize_traced_array(B)),
+        T.(materialize_traced_array(C)),
+        Reactant.promote_to(TracedRNumber{T}, α),
+        Reactant.promote_to(TracedRNumber{T}, β),
+        side=:R,
+        uplo=:U,
+    )
+
+    set_mlir_data!(C, get_mlir_data(tmp)) # TODO remove later, handling in place ops are weird
+    return C
+end
+
 function LinearAlgebra.triu!(@nospecialize(X::TracedRArray{T,2}), k::Integer) where {T}
     iota_1 = @opcall iota(Int64, [size(X)...]; iota_dimension=1)
     iota_2 = @opcall subtract(
