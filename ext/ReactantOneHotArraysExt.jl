@@ -59,7 +59,10 @@ function OneHotArrays.onehotbatch(data::AnyTracedRArray{<:Any,N}, labels) where 
         [length(labels), size(data)...],
     )
     data = ReactantCore.materialize_traced_array(reshape(data, 1, size(data)...))
-    return mapslices(findfirst, data .== labels_expanded; dims=Tuple(2:(N + 1)))
+    indices = UInt32.(@opcall(findfirst(data .== labels_expanded; dimension=1)))
+    return OneHotArray{TracedRNumber{UInt32},N,N + 1,typeof(indices)}(
+        indices, length(labels)
+    )
 end
 
 function OneHotArrays.onehotbatch(
