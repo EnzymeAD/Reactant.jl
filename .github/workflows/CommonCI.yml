@@ -185,7 +185,7 @@ jobs:
           REACTANT_TEST_GROUP: ${{ inputs.test_group }}
 
       - name: "Upload MLIR modules"
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         timeout-minutes: 10
         if: always()
         with:
