@@ -1465,7 +1465,7 @@ end
 @static if !Sys.isapple()
     @setup_workload begin
         Reactant.initialize_dialect()
-        init_jit()
+        Reactant.init_jit()
         if Reactant.XLA.REACTANT_XLA_RUNTIME == "PJRT"
             client = Reactant.XLA.PJRT.CPUClient(; checkcount=false)
         elseif Reactant.XLA.REACTANT_XLA_RUNTIME == "IFRT"
