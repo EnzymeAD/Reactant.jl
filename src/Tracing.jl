@@ -71,7 +71,7 @@ Base.@nospecializeinfer function traced_type_inner(
         end
     elseif (mode == NoStopTracedTrack || mode == TracedTrack || mode == TracedSetPath) &&
         T <: track_numbers
-        return TracedRNumber{T,Missing}
+        return TracedRNumber{T}
     end
     return T
 end
@@ -264,7 +264,7 @@ Base.@nospecializeinfer function traced_type_inner(
     end
 
     if mode == ConcreteToTraced
-        return TracedRNumber{T,Missing}
+        return TracedRNumber{T}
     elseif mode == TracedToConcrete
         return T0
     elseif mode == ArrayToConcrete
@@ -286,7 +286,7 @@ Base.@nospecializeinfer function traced_type_inner(
     T = T0 isa UnionAll ? T0.body.parameters[1] : T0.parameters[1]
 
     if mode == ConcreteToTraced
-        return TracedRNumber{T,Missing}
+        return TracedRNumber{T}
     elseif mode == TracedToConcrete
         return T0
     elseif mode == ArrayToConcrete
@@ -316,7 +316,7 @@ Base.@nospecializeinfer function traced_type_inner(
     end
 
     if mode == ConcreteToTraced
-        return TracedRArray{elT,N,Missing}
+        return TracedRArray{elT,N}
     elseif mode == TracedToConcrete
         return T
     elseif mode == ArrayToConcrete
@@ -346,7 +346,7 @@ Base.@nospecializeinfer function traced_type_inner(
     end
 
     if mode == ConcreteToTraced
-        return TracedRArray{elT,N,Missing}
+        return TracedRArray{elT,N}
     elseif mode == TracedToConcrete
         return T
     elseif mode == ArrayToConcrete
