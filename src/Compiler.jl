@@ -3,6 +3,7 @@ module Compiler
 using Reactant_jll
 using Libdl: dlsym
 using LinearAlgebra: BlasInt
+using Functors: Functors
 
 import ..Reactant:
     Reactant,
@@ -257,6 +258,8 @@ function create_result(
             push!(elems, ev)
         end
 
+        @show T
+
         result = Expr(:new, T, elems...)
 
         push!(
@@ -272,7 +275,7 @@ function create_result(
 end
 
 function create_result(
-    tocopy::ConcretePJRTNumber{T,D,S},
+    tocopy::ConcretePJRTNumber{T,D},
     path,
     result_stores,
     path_to_shard_info,
@@ -283,7 +286,7 @@ function create_result(
     result_cache,
     var_idx,
     resultgen_code,
-) where {T,D,S}
+) where {T,D}
     if !haskey(result_cache, tocopy)
         sym = Symbol("result", var_idx[])
         var_idx[] += 1
@@ -314,7 +317,7 @@ function create_result(
 end
 
 function create_result(
-    tocopy::ConcreteIFRTNumber{T,S},
+    tocopy::ConcreteIFRTNumber{T},
     path,
     result_stores,
     path_to_shard_info,
@@ -325,7 +328,7 @@ function create_result(
     result_cache,
     var_idx,
     resultgen_code,
-) where {T,S}
+) where {T}
     if !haskey(result_cache, tocopy)
         sym = Symbol("result", var_idx[])
         var_idx[] += 1
@@ -356,7 +359,7 @@ function create_result(
 end
 
 function create_result(
-    tocopy::ConcretePJRTArray{T,N,D,S},
+    tocopy::ConcretePJRTArray{T,N,D},
     path,
     result_stores,
     path_to_shard_info,
@@ -367,7 +370,7 @@ function create_result(
     result_cache,
     var_idx,
     resultgen_code,
-) where {T,N,D,S}
+) where {T,N,D}
     if !haskey(result_cache, tocopy)
         sym = Symbol("result", var_idx[])
         var_idx[] += 1
@@ -399,7 +402,7 @@ function create_result(
 end
 
 function create_result(
-    tocopy::ConcreteIFRTArray{T,N,S},
+    tocopy::ConcreteIFRTArray{T,N},
     path,
     result_stores,
     path_to_shard_info,
@@ -410,7 +413,7 @@ function create_result(
     result_cache,
     var_idx,
     resultgen_code,
-) where {T,N,S}
+) where {T,N}
     if !haskey(result_cache, tocopy)
         sym = Symbol("result", var_idx[])
         var_idx[] += 1
@@ -593,6 +596,8 @@ function create_result(
     )
     elems = Union{Symbol,Expr}[]
     for (i, (k, v)) in enumerate(pairs(tocopy))
+        @show i
+        @show v
         push!(elems, create_result(v, append_path(path, i), args...))
     end
     return :(NamedTuple{$K}(($(elems...),)))
@@ -1647,12 +1652,6 @@ function compile_mlir!(
         raise isa Bool && (raise = true)
     end
 
-    concrete_seen = OrderedIdDict()
-
-    concrete_result = make_tracer(
-        concrete_seen, traced_result, ("result",), TracedToConcrete; runtime
-    )
-
     toolkit = XLA.CUDA_DATA_DIR[]
 
     if backend == "cpu" || backend == "tpu"
@@ -2175,6 +2174,7 @@ function compile_mlir!(
     # shardy passes
     use_shardy_partitioner = false
     result_shardings = missing
+    final_traced_result = traced_result
     if is_sharded
         module_op = copy(MLIR.IR.Operation(mod))
         mod_copied = MLIR.IR.Module(module_op)
@@ -2206,6 +2206,10 @@ function compile_mlir!(
             end
         else
             result_shardings = [Sharding.Replicated() for _ in 1:length(linear_results)]
+        end
+
+        for (tr, sharding) in zip(linear_results, result_shardings)
+            tr.sharding = sharding
         end
 
         if compile_options.shardy_passes === :none
@@ -2383,6 +2387,10 @@ function compile_mlir!(
             )
         end
     end
+
+    concrete_result = make_tracer(
+        OrderedIdDict(), final_traced_result, ("result",), TracedToConcrete; runtime
+    )
 
     return Reactant.TracedUtils.CompiledMlirFnResult(
         fnwrapped,
@@ -3151,7 +3159,6 @@ function codegen_unflatten!(
                 p in Reactant.TracedUtils.get_paths(arg) if length(p) > 0 && p[1] == :args
             ))
 
-            res = :result
             path = path[2:end]
 
             if in(path, keys(result_stores))
@@ -3246,10 +3253,15 @@ function codegen_unflatten!(
     end
 
     # generate return object which stores the concrete results in some arbitrary way
-    return Expr[
-        unresharded_code..., resultgen_code..., :(result = $result_code), unflatten_code...
-    ],
-    used_shardinfo
+    return (
+        Expr[
+            unresharded_code...,
+            resultgen_code...,
+            :(result = $result_code),
+            unflatten_code...,
+        ],
+        used_shardinfo,
+    )
 end
 
 """

@@ -23,8 +23,8 @@ function Base.copy(x::Union{AbstractConcreteArray,AbstractConcreteNumber})
     return fn(x)
 end
 
-function Base.copy(X::ConcreteIFRTArray{T,D,S,P}) where {T,D,S,P}
-    return ConcreteIFRTArray{T,D,S}(Base.copy(X.data), X.shape, X.sharding, X.padding)
+function Base.copy(X::ConcreteIFRTArray{T,D,P}) where {T,D,P}
+    return ConcreteIFRTArray{T,D}(Base.copy(X.data), X.shape, X.sharding, X.padding)
 end
 
 function Base.copy(X::ConcretePJRTArray)
@@ -422,8 +422,8 @@ function Base.similar(
 end
 
 function Base.similar(
-    a::ConcretePJRTArray{T,N,D,Sh}, ::Type{S}=T, dims::Dims=size(a)
-) where {S,T,Sh,N,D}
+    a::ConcretePJRTArray{T,N,D}, ::Type{S}=T, dims::Dims=size(a)
+) where {S,T,N,D}
     device_to_array_slices, sharding = Sharding.sharding_to_array_slices(
         a.sharding, dims; return_updated_sharding=Val(true), client=XLA.client(a)
     )
@@ -432,7 +432,7 @@ function Base.similar(
         Base.@_inline_meta
         similar(a.data[i], S, Dims(length.(device_to_array_slices[i])))
     end
-    return ConcretePJRTArray{S,length(dims),D,Sh}(sdata, dims, a.sharding)
+    return ConcretePJRTArray{S,length(dims),D}(sdata, dims, a.sharding)
 end
 
 Base.similar(a::ConcretePJRTArray, dims::Dims) = similar(a, eltype(a), dims)
