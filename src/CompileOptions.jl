@@ -229,6 +229,8 @@ function CompileOptions(;
             :canonicalize,
             :just_batch,
             :none,
+            :no_triton,
+            :before_triton_lowering,
         ]
     end
 
