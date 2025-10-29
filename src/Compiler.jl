@@ -258,8 +258,6 @@ function create_result(
             push!(elems, ev)
         end
 
-        @show T
-
         result = Expr(:new, T, elems...)
 
         push!(
@@ -596,8 +594,6 @@ function create_result(
     )
     elems = Union{Symbol,Expr}[]
     for (i, (k, v)) in enumerate(pairs(tocopy))
-        @show i
-        @show v
         push!(elems, create_result(v, append_path(path, i), args...))
     end
     return :(NamedTuple{$K}(($(elems...),)))
@@ -2174,7 +2170,6 @@ function compile_mlir!(
     # shardy passes
     use_shardy_partitioner = false
     result_shardings = missing
-    final_traced_result = traced_result
     if is_sharded
         module_op = copy(MLIR.IR.Operation(mod))
         mod_copied = MLIR.IR.Module(module_op)
@@ -2206,10 +2201,6 @@ function compile_mlir!(
             end
         else
             result_shardings = [Sharding.Replicated() for _ in 1:length(linear_results)]
-        end
-
-        for (tr, sharding) in zip(linear_results, result_shardings)
-            tr.sharding = sharding
         end
 
         if compile_options.shardy_passes === :none
@@ -2389,7 +2380,7 @@ function compile_mlir!(
     end
 
     concrete_result = make_tracer(
-        OrderedIdDict(), final_traced_result, ("result",), TracedToConcrete; runtime
+        OrderedIdDict(), traced_result, ("result",), TracedToConcrete; runtime
     )
 
     return Reactant.TracedUtils.CompiledMlirFnResult(
