@@ -17,7 +17,6 @@ using ..Reactant:
 using ..Ops: @opcall
 using ReactantCore: ReactantCore
 using ReactantCore: MissingTracedValue, is_traced, materialize_traced_array
-using Functors: Functors
 
 ReactantCore.materialize_traced_array(x::AbstractArray) = x
 
