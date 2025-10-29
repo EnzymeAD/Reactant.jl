@@ -2302,6 +2302,13 @@ function compile_mlir!(
         ]
     end
 
+    result_shardings_after_masking = eltype(result_shardings)[]
+    for (i, present) in enumerate(results_mask)
+        if present
+            push!(result_shardings_after_masking, result_shardings[i])
+        end
+    end
+
     func3 = MLIR.Dialects.func.func_(;
         sym_name="main",
         function_type=MLIR.IR.FunctionType(in_tys, out_tys2),
@@ -2403,7 +2410,7 @@ function compile_mlir!(
         mlir_fn_res.unique_meshes,
         mlir_fn_res.mutated_args,
         use_shardy_partitioner,
-        result_shardings,
+        result_shardings_after_masking,
         mlir_fn_res.global_device_ids,
         donated_args_mask,
         Reactant.TracedUtils.is_pure(func3),

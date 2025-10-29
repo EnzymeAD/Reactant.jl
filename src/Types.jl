@@ -142,6 +142,8 @@ mutable struct ConcretePJRTNumber{T,D} <: AbstractConcreteNumber{T}
     end
 end
 
+ConcretePJRTNumber{T,1}(x::Number) where {T} = ConcretePJRTNumber{T}(x)
+
 function ConcretePJRTNumber{T}(data::Tuple{XLA.PJRT.AsyncBuffer}) where {T}
     return ConcretePJRTNumber{T,1}(data, Sharding.NoShardInfo())
 end
@@ -512,7 +514,7 @@ function ConcretePJRTArray{T}(
     sharded_data, shardinfo = sharding(theclient, thedevice, T, shape)
     N = length(shape)
     nsharded = length(sharded_data)
-    return ConcretePJRTArray{T,N,nsharded,typeof(shardinfo)}(sharded_data, shape, shardinfo)
+    return ConcretePJRTArray{T,N,nsharded}(sharded_data, shape, shardinfo)
 end
 
 function ConcreteIFRTArray{T}(
@@ -529,7 +531,7 @@ function ConcreteIFRTArray{T}(
     dummy_array = Array{T}(undef, shape)
     # ToDo: How to use specified device (non-sharded case)?
     sharded_data, shardinfo, padding = sharding(theclient, nothing, dummy_array)
-    return ConcreteIFRTArray{T,N,typeof(shardinfo)}(sharded_data, shape, shardinfo, padding)
+    return ConcreteIFRTArray{T,N}(sharded_data, shape, shardinfo, padding)
 end
 
 function _select_client_and_device(
