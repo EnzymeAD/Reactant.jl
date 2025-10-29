@@ -472,3 +472,37 @@ end
         contains(repr(hlo), "num_partitions=8")
     end skip = RunningOnTPU
 end
+
+struct MyModel{D}
+    decoder::D
+end
+
+(m::MyModel)(x) = m.decoder * x
+
+@testset "Sharding with Enzyme.gradient" begin
+    if length(addressable_devices) ≥ 8
+        mesh = Sharding.Mesh(reshape(0:7, 2, 4), (:x, :y))
+        sharding = Sharding.NamedSharding(mesh, (:x, :y))
+
+        decoder = randn(Float32, 32, 128)
+        r = randn(Float32, 128, 16)
+
+        m_ra_sharded = MyModel(Reactant.to_rarray(decoder; sharding))
+        r_ra_sharded = Reactant.to_rarray(r; sharding)
+
+        m_ra = MyModel(Reactant.to_rarray(decoder))
+        r_ra = Reactant.to_rarray(r)
+
+        loss_fn(m, r) = sum(abs2, m(r))
+
+        gr_sharded = @jit Enzyme.gradient(
+            Reverse, Const(loss_fn), m_ra_sharded, r_ra_sharded
+        )
+        gr = @jit Enzyme.gradient(Reverse, Const(loss_fn), m_ra, r_ra)
+
+        @test Array(gr_sharded[1].decoder) ≈ Array(gr[1].decoder)
+        @test Array(gr_sharded[2]) ≈ Array(gr[2])
+    else
+        @warn "Not enough addressable devices to run sharding tests"
+    end
+end
