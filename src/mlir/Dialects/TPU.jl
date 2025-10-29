@@ -70,6 +70,21 @@ function assume_layout(input::Value; result::IR.Type, location=Location())
     )
 end
 
+"""
+`assume_multiple`
+
+This operation is a hint to the compiler that the input `value` is guaranteed
+to be a multiple of `multiple`. This can be used to satisfy divisibility checks
+in some compiler passes.
+
+The result is the same as the input `value`.
+
+# Example
+
+```mlir
+%val = tpu.assume_multiple %arg0, 16 : index
+```
+"""
 function assume_multiple(
     value::Value; result=nothing::Union{Nothing,IR.Type}, multiple, location=Location()
 )

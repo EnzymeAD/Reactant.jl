@@ -1949,7 +1949,6 @@ function func(;
     reciprocal_estimates=nothing,
     prefer_vector_width=nothing,
     target_features=nothing,
-    unsafe_fp_math=nothing,
     no_infs_fp_math=nothing,
     no_nans_fp_math=nothing,
     no_signed_zeros_fp_math=nothing,
@@ -1960,6 +1959,7 @@ function func(;
     instrument_function_exit=nothing,
     no_inline=nothing,
     always_inline=nothing,
+    inline_hint=nothing,
     no_unwind=nothing,
     will_return=nothing,
     optimize_none=nothing,
@@ -2026,8 +2026,6 @@ function func(;
         push!(attributes, namedattribute("prefer_vector_width", prefer_vector_width))
     !isnothing(target_features) &&
         push!(attributes, namedattribute("target_features", target_features))
-    !isnothing(unsafe_fp_math) &&
-        push!(attributes, namedattribute("unsafe_fp_math", unsafe_fp_math))
     !isnothing(no_infs_fp_math) &&
         push!(attributes, namedattribute("no_infs_fp_math", no_infs_fp_math))
     !isnothing(no_nans_fp_math) &&
@@ -2050,6 +2048,7 @@ function func(;
     !isnothing(no_inline) && push!(attributes, namedattribute("no_inline", no_inline))
     !isnothing(always_inline) &&
         push!(attributes, namedattribute("always_inline", always_inline))
+    !isnothing(inline_hint) && push!(attributes, namedattribute("inline_hint", inline_hint))
     !isnothing(no_unwind) && push!(attributes, namedattribute("no_unwind", no_unwind))
     !isnothing(will_return) && push!(attributes, namedattribute("will_return", will_return))
     !isnothing(optimize_none) &&

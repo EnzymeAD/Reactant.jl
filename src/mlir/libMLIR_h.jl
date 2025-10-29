@@ -9705,14 +9705,14 @@ struct MlirRewritePatternCallbacks
 end
 
 """
-    mlirOpRewritePattenCreate(rootName, benefit, context, callbacks, userData, nGeneratedNames, generatedNames)
+    mlirOpRewritePatternCreate(rootName, benefit, context, callbacks, userData, nGeneratedNames, generatedNames)
 
 Create a rewrite pattern that matches the operation with the given rootName, corresponding to mlir::OpRewritePattern.
 """
-function mlirOpRewritePattenCreate(
+function mlirOpRewritePatternCreate(
     rootName, benefit, context, callbacks, userData, nGeneratedNames, generatedNames
 )
-    @ccall mlir_c.mlirOpRewritePattenCreate(
+    @ccall mlir_c.mlirOpRewritePatternCreate(
         rootName::MlirStringRef,
         benefit::Cuint,
         context::MlirContext,
@@ -10005,6 +10005,10 @@ function mlirTranslateModuleToLLVMIR(_module, context)
     @ccall mlir_c.mlirTranslateModuleToLLVMIR(
         _module::MlirOperation, context::LLVMContextRef
     )::LLVMModuleRef
+end
+
+function mlirTranslateModuleToLLVMIRToString(_module)
+    @ccall mlir_c.mlirTranslateModuleToLLVMIRToString(_module::MlirOperation)::Cstring
 end
 
 struct MlirTypeFromLLVMIRTranslator
