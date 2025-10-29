@@ -72,6 +72,27 @@ function barrier(indices::Vector{Value}; location=Location())
     )
 end
 
+function cacheload(
+    memref::Value, indices::Vector{Value}; result::IR.Type, location=Location()
+)
+    op_ty_results = IR.Type[result,]
+    operands = Value[memref, indices...]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+
+    return create_operation(
+        "enzymexla.cacheload",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
 function comm_region(; result_0::Vector{IR.Type}, body::Region, location=Location())
     op_ty_results = IR.Type[result_0...,]
     operands = Value[]
@@ -240,8 +261,8 @@ end
 `gpu_wrapper`
 
 The optional arguments to this operation are suggestions about what block
-dimensions this gpu kernel should have - usually taken from kernel launch
-params
+dimensions this gpu kernel should have - usually taken f rom kernel
+  launch params
 """
 function gpu_wrapper(
     blockDims::Vector{Value}; result::IR.Type, region::Region, location=Location()
@@ -327,10 +348,12 @@ end
 
 This operation computes the QR factorization of a matrix using Householder 
 reflections. Mathematically, it decomposes A into the product of an 
-orthogonal matrix Q and an upper triangular matrix R, such that A = QR.
+orthogonal matri x Q and an upper triangular matrix R,
+  such that A = QR.
 
-This operation is modeled after LAPACK\'s *GEQRF routines, which returns the 
-result in the QR packed format.
+                This operation is modeled after
+                    LAPACK\'s *GEQRF routines, which returns the  result in
+                        the QR packed format.
 """
 function lapack_geqrf(
     input::Value; output::IR.Type, tau::IR.Type, info::IR.Type, location=Location()
@@ -859,6 +882,25 @@ function stream2token(source::Value; result::IR.Type, location=Location())
     )
 end
 
+function subindex(source::Value, index::Value; result::IR.Type, location=Location())
+    op_ty_results = IR.Type[result,]
+    operands = Value[source, index]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+
+    return create_operation(
+        "enzymexla.subindex",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
 """
 `lapack_symm`
 
@@ -883,6 +925,25 @@ function lapack_symm(
 
     return create_operation(
         "enzymexla.lapack.symm",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+function typeAlign(; result::IR.Type, source, location=Location())
+    op_ty_results = IR.Type[result,]
+    operands = Value[]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[namedattribute("source", source),]
+
+    return create_operation(
+        "enzymexla.typeAlign",
         location;
         operands,
         owned_regions,

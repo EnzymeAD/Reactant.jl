@@ -844,6 +844,134 @@ function convert_bf16x2_to_f8x2(
 end
 
 """
+`convert_f4x2_to_f16x2`
+
+This Op converts the given f4 inputs in a packed i8 to f16.
+
+The result `dst` is represented as a vector of f16 elements.
+The `relu` attribute, when set, lowers to the \'.relu\' variant of 
+the cvt instruction.\"
+
+[For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-cvt)
+"""
+function convert_f4x2_to_f16x2(
+    src::Value; dst::IR.Type, relu=nothing, srcType, location=Location()
+)
+    op_ty_results = IR.Type[dst,]
+    operands = Value[src,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[namedattribute("srcType", srcType),]
+    !isnothing(relu) && push!(attributes, namedattribute("relu", relu))
+
+    return create_operation(
+        "nvvm.convert.f4x2.to.f16x2",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+"""
+`convert_f6x2_to_f16x2`
+
+This Op converts the given f6 inputs in a i8x2 vector to f16.
+
+The result `dst` is represented as a vector of f16 elements.
+The `relu` attribute, when set, lowers to the \'.relu\' variant of 
+the cvt instruction.\"
+
+[For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-cvt)
+"""
+function convert_f6x2_to_f16x2(
+    src::Value; dst::IR.Type, relu=nothing, srcType, location=Location()
+)
+    op_ty_results = IR.Type[dst,]
+    operands = Value[src,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[namedattribute("srcType", srcType),]
+    !isnothing(relu) && push!(attributes, namedattribute("relu", relu))
+
+    return create_operation(
+        "nvvm.convert.f6x2.to.f16x2",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+"""
+`convert_f8x2_to_bf16x2`
+
+This Op converts the given f8 inputs in a i8x2 vector to bf16.
+
+The result `dst` is represented as a vector of bf16 elements.
+
+
+[For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-cvt)
+"""
+function convert_f8x2_to_bf16x2(src::Value; dst::IR.Type, srcType, location=Location())
+    op_ty_results = IR.Type[dst,]
+    operands = Value[src,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[namedattribute("srcType", srcType),]
+
+    return create_operation(
+        "nvvm.convert.f8x2.to.bf16x2",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+"""
+`convert_f8x2_to_f16x2`
+
+This Op converts the given f8 inputs in a i8x2 vector to f16.
+
+The result `dst` is represented as a vector of f16 elements.
+The `relu` attribute, when set, lowers to the \'.relu\' variant of 
+the cvt instruction.\"
+
+[For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-cvt)
+"""
+function convert_f8x2_to_f16x2(
+    src::Value; dst::IR.Type, relu=nothing, srcType, location=Location()
+)
+    op_ty_results = IR.Type[dst,]
+    operands = Value[src,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[namedattribute("srcType", srcType),]
+    !isnothing(relu) && push!(attributes, namedattribute("relu", relu))
+
+    return create_operation(
+        "nvvm.convert.f8x2.to.f16x2",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+"""
 `convert_f16x2_to_f8x2`
 
 This Op converts the given f16 inputs in an f16x2 vector to the specified 
@@ -873,6 +1001,41 @@ function convert_f16x2_to_f8x2(
 
     return create_operation(
         "nvvm.convert.f16x2.to.f8x2",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+"""
+`convert_f32x2_to_f4x2`
+
+This Op converts each of the given float inputs to the specified fp4 type.
+The result `dst` is returned as an i8 type where the converted values are 
+packed such that the value converted from `a` is stored in the upper 4 bits 
+of `dst` and the value converted from `b` is stored in the lower 4 bits of 
+`dst`.
+The `relu` attribute, when set, lowers to the \'.relu\' variant of
+the cvt instruction.
+
+[For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-cvt)
+"""
+function convert_f32x2_to_f4x2(
+    a::Value, b::Value; dst::IR.Type, relu=nothing, dstTy, location=Location()
+)
+    op_ty_results = IR.Type[dst,]
+    operands = Value[a, b]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[namedattribute("dstTy", dstTy),]
+    !isnothing(relu) && push!(attributes, namedattribute("relu", relu))
+
+    return create_operation(
+        "nvvm.convert.f32x2.to.f4x2",
         location;
         operands,
         owned_regions,
