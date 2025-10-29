@@ -163,6 +163,17 @@ function ConcretePJRTNumber{T}(data::T2; kwargs...) where {T<:Number,T2<:Number}
                                                             sharded"
     return ConcretePJRTNumber{T,length(carray.data)}(carray.data, carray.sharding)
 end
+function ConcretePJRTNumber{T}(
+    data::ConcretePJRTNumber{T2}; kwargs...
+) where {T<:Number,T2<:Number}
+    return ConcretePJRTNumber{T}(
+        convert(T, data);
+        client=XLA.client(data),
+        device=XLA.device(data),
+        data.sharding,
+        kwargs...,
+    )
+end
 function ConcretePJRTNumber(data::T; kwargs...) where {T<:Number}
     return ConcretePJRTNumber{T}(data; kwargs...)
 end
@@ -285,6 +296,17 @@ end
 function ConcreteIFRTNumber{T}(data::T2; kwargs...) where {T<:Number,T2<:Number}
     carray = ConcreteIFRTArray(fill(convert(T, data)); kwargs...)
     return ConcreteIFRTNumber{T}(carray.data, carray.sharding)
+end
+function ConcreteIFRTNumber{T}(
+    data::ConcreteIFRTNumber{T2}; kwargs...
+) where {T<:Number,T2<:Number}
+    return ConcreteIFRTNumber{T}(
+        convert(T, data);
+        client=XLA.client(data),
+        device=XLA.device(data),
+        data.sharding,
+        kwargs...,
+    )
 end
 function ConcreteIFRTNumber(data::T; kwargs...) where {T<:Number}
     return ConcreteIFRTNumber{T}(data; kwargs...)
