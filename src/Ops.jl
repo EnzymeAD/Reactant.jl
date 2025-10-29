@@ -946,6 +946,8 @@ end
 ) where {T}
     ctx = MLIR.IR.context()
     ressize = size(C)
+    resT = mlir_type(TracedRArray{unwrapped_eltype(C),length(ressize)}, ressize)
+
     res = MLIR.IR.result(
         enzymexla.lapack_symm(
             A.mlir_data,
@@ -953,13 +955,13 @@ end
             C.mlir_data,
             alpha.mlir_data,
             beta.mlir_data;
-            output=mlir_type(TracedRArray{eltype(C),length(ressize)}, ressize),
-            side=enzymexlaLapackSideAttrGet(ctx, side == :L ? 1 : 0),
-            uplo=enzymexlaLapackUploAttrGet(ctx, uplo == :U ? 1 : 0),
+            output=resT,
+            side=MLIR.API.enzymexlaLapackSideAttrGet(ctx, side == :L ? 1 : 0),
+            uplo=MLIR.API.enzymexlaLapackUploAttrGet(ctx, uplo == :U ? 1 : 0),
             location,
         ),
     )
-    return res
+    return TracedRArray{resT,length(ressize)}((), res, ressize)
 end
 
 Base.@nospecializeinfer @noinline function dot_general(
