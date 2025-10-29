@@ -961,7 +961,7 @@ end
             location,
         ),
     )
-    return TracedRArray{resT,length(ressize)}((), res, ressize)
+    return TracedRArray{T,length(ressize)}((), res, ressize)
 end
 
 Base.@nospecializeinfer @noinline function dot_general(
