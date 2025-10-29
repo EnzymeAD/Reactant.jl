@@ -937,6 +937,7 @@ function optimization_passes(
                 "broadcastindim_slice_to_batch",
                 "reducewindow_slice_to_batch",
                 "elementwise_slice_to_batch",
+                "greedy_while_loop_batch_fission",
             ],
         )
     end
