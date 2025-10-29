@@ -13,9 +13,6 @@ const RUNNING_IN_CLOUD_TPU_VM = Ref(false)
 const LIBTPU_VERSION = "0.0.28.dev20251027"
 const LIBTPU_SO = "libtpu-$(replace(string(LIBTPU_VERSION), '.' => '_')).so"
 
-const LIBTPU_VERSION = "0.0.28.dev20251027"
-const LIBTPU_SO = "libtpu-$(replace(string(LIBTPU_VERSION), '.' => '_')).so"
-
 function __init__()
     @static if !Sys.isapple()
         if !Reactant.precompiling() && has_tpu()
