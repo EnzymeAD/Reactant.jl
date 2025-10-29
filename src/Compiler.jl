@@ -2302,11 +2302,15 @@ function compile_mlir!(
         ]
     end
 
-    result_shardings_after_masking = eltype(result_shardings)[]
-    for (i, present) in enumerate(results_mask)
-        if present
-            push!(result_shardings_after_masking, result_shardings[i])
+    if result_shardings !== missing
+        result_shardings_after_masking = eltype(result_shardings)[]
+        for (i, present) in enumerate(results_mask)
+            if present
+                push!(result_shardings_after_masking, result_shardings[i])
+            end
         end
+    else
+        result_shardings_after_masking = missing
     end
 
     func3 = MLIR.Dialects.func.func_(;
