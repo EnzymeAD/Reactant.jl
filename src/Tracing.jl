@@ -1901,7 +1901,7 @@ Base.@nospecializeinfer function make_tracer(
         return make_tracer(seen, prev.seed, path, mode; kwargs...)
     end
     return ReactantRNG(
-        make_tracer(seen, prev.seed, (path..., :seed), mode; kwargs...), prev.algorithm
+        make_tracer(seen, prev.seed, (path..., 1), mode; kwargs...), prev.algorithm
     )
 end
 
@@ -1911,9 +1911,7 @@ Base.@nospecializeinfer function make_tracer(
     if mode == ArrayToConcrete
         TracedRandom.should_warn_if_not_natively_supported(prev)
         return ReactantRNG(
-            make_tracer(
-                seen, TracedRandom.make_seed(prev), (path..., :seed), mode; kwargs...
-            ),
+            make_tracer(seen, TracedRandom.make_seed(prev), (path..., 1), mode; kwargs...),
             TracedRandom.rng_algorithm(prev),
         )
     end

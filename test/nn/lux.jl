@@ -102,3 +102,13 @@ end
     res, ∂ps = @jit gradient_loss_function(model, x, ps, st)
     @test res isa Reactant.ConcreteRNumber
 end
+
+@testset "RNG stored in state" begin
+    model = Dropout(0.5f0)
+    ps, st = Reactant.to_rarray(Lux.setup(Random.default_rng(), model))
+
+    x = Reactant.to_rarray(randn(Float32, 10, 10))
+
+    res, st_new = @jit model(x, ps, st)
+    @test st_new.rng isa Reactant.ReactantRNG
+end
