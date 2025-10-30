@@ -24,8 +24,7 @@ function finite_difference_gradient(f, x::AbstractArray{T}; epsilon=sqrt(eps(T))
     f_evaluated = mapslices(f, f_input; dims=ntuple(identity, ndims(x)))
     return ReactantCore.materialize_traced_array(
         reshape(
-            (f_evaluated[1:length(x)] - f_evaluated[(length(x) + 1):end]) ./
-            (2 * epsilon),
+            (f_evaluated[1:length(x)] - f_evaluated[(length(x) + 1):end]) ./ (2 * epsilon),
             size(x),
         ),
     )
