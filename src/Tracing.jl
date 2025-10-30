@@ -455,7 +455,7 @@ Base.@nospecializeinfer function traced_type_inner(
 ) where {T}
     if mode == ConcreteToTraced
         return AbstractArray{
-                             traced_type_inner(eltype(A), seen, mode, track_numbers, sharding, runtime)
+            traced_type_inner(eltype(A), seen, mode, track_numbers, sharding, runtime)
         }
     else
         return A
@@ -472,7 +472,8 @@ Base.@nospecializeinfer function traced_type_inner(
 ) where {T,N}
     if mode == ConcreteToTraced
         return AbstractArray{
-             traced_type_inner(eltype(A), seen, mode, track_numbers, sharding, runtime),ndims(A)
+            traced_type_inner(eltype(A), seen, mode, track_numbers, sharding, runtime),
+            ndims(A),
         }
     else
         return A
