@@ -26,6 +26,12 @@ function model2(rng, μ, σ, shape)
     return t
 end
 
+function model3(rng, μ, σ, shape)
+    _, s = ProbProg.sample(rng, product_two_normals, μ, σ, shape; symbol=:s)
+    _, t = ProbProg.sample(rng, product_two_normals, μ, σ, shape; symbol=:t)
+    return s, t
+end
+
 @testset "Simulate" begin
     @testset "hlo" begin
         shape = (3, 3, 3)
@@ -104,6 +110,39 @@ end
         @test haskey(trace.subtraces[:s].choices, :b)
         @test haskey(trace.subtraces[:t].choices, :a)
         @test haskey(trace.subtraces[:t].choices, :b)
+        @test trace.subtraces[:s].choices[:a][1] !== trace.subtraces[:t].choices[:a][1]
+        @test trace.subtraces[:s].choices[:b][1] !== trace.subtraces[:t].choices[:b][1]
+
+        @test size(trace.choices[:s][1]) == shape
+        @test size(trace.choices[:t][1]) == shape
+
+        @test trace.weight isa Float64
+
+        @test trace.weight ≈ trace.subtraces[:s].weight + trace.subtraces[:t].weight
+    end
+
+    @testset "submodel_subtraces" begin
+        shape = (3, 3, 3)
+        seed = Reactant.to_rarray(UInt64[1, 4])
+        rng = ReactantRNG(seed)
+        μ = Reactant.ConcreteRNumber(0.0)
+        σ = Reactant.ConcreteRNumber(1.0)
+
+        trace, weight = ProbProg.simulate_(rng, model3, μ, σ, shape)
+
+        @test size(trace.retval[1]) == shape
+
+        @test length(trace.choices) == 2
+        @test haskey(trace.choices, :s)
+        @test haskey(trace.choices, :t)
+
+        @test length(trace.subtraces) == 2
+        @test haskey(trace.subtraces[:s].choices, :a)
+        @test haskey(trace.subtraces[:s].choices, :b)
+        @test haskey(trace.subtraces[:t].choices, :a)
+        @test haskey(trace.subtraces[:t].choices, :b)
+        @test trace.subtraces[:s].choices[:a][1] !== trace.subtraces[:t].choices[:a][1]
+        @test trace.subtraces[:s].choices[:b][1] !== trace.subtraces[:t].choices[:b][1]
 
         @test size(trace.choices[:s][1]) == shape
         @test size(trace.choices[:t][1]) == shape
