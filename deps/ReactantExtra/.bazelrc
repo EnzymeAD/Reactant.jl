@@ -35,7 +35,11 @@ common:cuda --repo_env TF_NEED_CUDA=1
 common:cuda --repo_env TF_NVCC_CLANG=1
 common:cuda --repo_env TF_NCCL_USE_STUB=1
 common:cuda_static --@rules_ml_toolchain//common:link_cuda_static_libs=true
-common:cuda_static --@rules_ml_toolchain//common:link_nvrtc_static_libs=true
+
+# Broken upstream =/
+# common:cuda_static --@rules_ml_toolchain//common:link_nvrtc_static_libs=true
+# common:cuda_static --@rules_ml_toolchain//common:link_cudnn_static_libs=true
+
 common:cuda --@local_config_cuda//:enable_cuda
 common:cuda --crosstool_top="@local_config_cuda//crosstool:toolchain"
 # Default hermetic CUDA and CUDNN versions.
