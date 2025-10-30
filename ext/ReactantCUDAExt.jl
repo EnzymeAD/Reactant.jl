@@ -1379,16 +1379,9 @@ Base.@nospecializeinfer function Reactant.traced_type_inner(
     N = ndims(A)
     if mode == Reactant.ArrayToConcrete && T <: Reactant.ReactantPrimitive
         if runtime isa Val{:PJRT}
-            return Reactant.ConcretePJRTArray{
-                T,
-                N,
-                Reactant.Sharding.ndevices(sharding),
-                Reactant.Sharding.shard_type(typeof(sharding), N),
-            }
+            return Reactant.ConcretePJRTArray{T,N,Reactant.Sharding.ndevices(sharding)}
         elseif runtime isa Val{:IFRT}
-            return Reactant.ConcreteIFRTArray{
-                T,N,Reactant.Sharding.shard_type(typeof(sharding), N)
-            }
+            return Reactant.ConcreteIFRTArray{T,N}
         end
         error("Unsupported runtime $runtime")
     else
