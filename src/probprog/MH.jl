@@ -8,17 +8,10 @@ function mh(
     selection::Selection,
 ) where {Nargs}
     args = (rng, args...)
-    mlir_fn_res, argprefix, resprefix, _ = process_probprog_function(f, args, "mh")
-
-    (; result, linear_args, in_tys, linear_results) = mlir_fn_res
-    fnwrap = mlir_fn_res.fnwrapped
-    func2 = mlir_fn_res.f
-
-    inputs = process_probprog_inputs(linear_args, f, args, fnwrap, argprefix)
-    out_tys = [MLIR.IR.type(TracedUtils.get_mlir_data(res)) for res in linear_results]
-
-    fname = TracedUtils.get_attribute_by_name(func2, "sym_name")
-    fn_attr = MLIR.IR.FlatSymbolRefAttribute(Base.String(fname))
+    (; f_name, mlir_caller_args, mlir_result_types, traced_result, linear_results, fnwrapped, argprefix, resprefix) = process_probprog_function(
+        f, args, "mh"
+    )
+    fn_attr = MLIR.IR.FlatSymbolRefAttribute(f_name)
 
     trace_ty = @ccall MLIR.API.mlir_c.enzymeTraceTypeGet(
         MLIR.IR.context()::MLIR.API.MlirContext
@@ -64,18 +57,27 @@ function mh(
     accepted_ty = MLIR.IR.TensorType(Int64[], MLIR.IR.Type(Bool))
 
     mh_op = MLIR.Dialects.enzyme.mh(
-        inputs,
+        mlir_caller_args,
         trace_val;
         new_trace=trace_ty,
         accepted=accepted_ty,
-        output_rng_state=out_tys[1], # by convention
+        output_rng_state=mlir_result_types[1], # by convention
         fn=fn_attr,
         selection=MLIR.IR.Attribute(selection_attr),
     )
 
     # Return (new_trace, accepted, output_rng_state)
-    process_probprog_outputs(
-        mh_op, linear_results, result, f, args, fnwrap, resprefix, argprefix, 2, true
+    traced_result = process_probprog_outputs(
+        mh_op,
+        linear_results,
+        traced_result,
+        f,
+        args,
+        fnwrapped,
+        resprefix,
+        argprefix,
+        2,
+        true,
     )
 
     new_trace_val = MLIR.IR.result(mh_op, 1)
@@ -89,7 +91,7 @@ function mh(
     new_trace = TracedRArray{UInt64,0}((), new_trace_ptr, ())
     accepted = TracedRArray{Bool,0}((), MLIR.IR.result(mh_op, 2), ())
 
-    return new_trace, accepted, result
+    return new_trace, accepted, traced_result
 end
 
 const metropolis_hastings = mh
