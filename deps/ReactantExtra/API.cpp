@@ -1037,7 +1037,7 @@ REACTANT_ABI MlirModule ConvertLLVMStrToMLIR(const char *lmod,
   return wrap(res);
 }
 
-typedef PjRtFuture<> FutureType;
+typedef xla::Future<> FutureType;
 REACTANT_ABI void FreeFuture(FutureType *Future) { delete Future; }
 
 REACTANT_ABI uint8_t FutureIsReady(FutureType *Future) {
@@ -1236,7 +1236,7 @@ REACTANT_ABI void XLAExecuteSharded(xla::PjRtLoadedExecutable *exec,
   options.untuple_result = true;
 
   // Optional future to hold asynchronous execution results.
-  std::optional<PjRtFuture<>> returned_future;
+  std::optional<xla::Future<>> returned_future;
 
   auto results = MyValueOrThrow(exec->ExecuteSharded(argument_handles, device,
                                                      options, returned_future,
