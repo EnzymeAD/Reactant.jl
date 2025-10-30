@@ -1,4 +1,4 @@
-using Reactant
+using Reactant, Test
 using Reactant:
     traced_type,
     TracedRArray,
@@ -8,7 +8,6 @@ using Reactant:
     NoFieldMatchError,
     TracedTypeError,
     ReactantPrimitive
-using Test
 
 struct Wrapper{A,B}
     a::A
@@ -259,9 +258,11 @@ end
             1.0; track_numbers=Number
         ) isa ConcreteRNumber
         @test @inferred Reactant.to_rarray(1.0) isa Float64
-        @test @inferred Reactant.to_rarray(rand(3)) isa ConcreteRArray
+        @test @inferred Reactant.to_rarray(
+            Reactant.TestUtils.construct_test_array(Float64, 3)
+        ) isa ConcreteRArray
 
-        x_ra = Reactant.to_rarray(rand(3))
+        x_ra = Reactant.to_rarray(Reactant.TestUtils.construct_test_array(Float64, 3))
         @test @inferred Reactant.to_rarray(x_ra) isa ConcreteRArray
 
         x_ra = Reactant.to_rarray(1.0; track_numbers=Number)
