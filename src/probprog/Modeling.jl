@@ -11,86 +11,76 @@ function sample(
     logpdf::Union{Nothing,Function}=nothing,
 ) where {Nargs}
     args_with_rng = (rng, args...)
-    mlir_fn_res, argprefix, resprefix, _ = process_probprog_function(
+    (; f_name, mlir_caller_args, mlir_result_types, traced_result, linear_results, fnwrapped, argprefix, resprefix) = process_probprog_function(
         f, args_with_rng, "sample"
     )
 
-    (; result, linear_args, linear_results) = mlir_fn_res
-    fnwrap = mlir_fn_res.fnwrapped
-    func2 = mlir_fn_res.f
-
-    inputs = process_probprog_inputs(linear_args, f, args_with_rng, fnwrap, argprefix)
-    out_tys = [MLIR.IR.type(TracedUtils.get_mlir_data(res)) for res in linear_results]
-
-    sym = TracedUtils.get_attribute_by_name(func2, "sym_name")
-    fn_attr = MLIR.IR.FlatSymbolRefAttribute(Base.String(sym))
-
+    fn_attr = MLIR.IR.FlatSymbolRefAttribute(f_name)
     symbol_addr = reinterpret(UInt64, pointer_from_objref(symbol))
     symbol_attr = @ccall MLIR.API.mlir_c.enzymeSymbolAttrGet(
         MLIR.IR.context()::MLIR.API.MlirContext, symbol_addr::UInt64
     )::MLIR.IR.Attribute
 
-    # Construct logpdf attribute if `logpdf` function is provided.
     logpdf_attr = nothing
     if logpdf isa Function
         samples = f(args_with_rng...)
 
-        # Assume that logpdf parameters follow `(sample, args...)` convention.
+        # Logpdf calling convention: `(sample, args...)` (no rng state)
         logpdf_args = (samples, args...)
 
-        logpdf_mlir = TracedUtils.make_mlir_fn(
-            logpdf,
-            logpdf_args,
-            (),
-            string(logpdf),
-            false;
-            do_transpose=false,
-            args_in_result=:result,
+        logpdf_attr = MLIR.IR.FlatSymbolRefAttribute(
+            process_probprog_function(logpdf, logpdf_args, "logpdf", false).f_name
         )
-
-        logpdf_sym = TracedUtils.get_attribute_by_name(logpdf_mlir.f, "sym_name")
-        logpdf_attr = MLIR.IR.FlatSymbolRefAttribute(Base.String(logpdf_sym))
     end
 
     sample_op = MLIR.Dialects.enzyme.sample(
-        inputs;
-        outputs=out_tys,
+        mlir_caller_args;
+        outputs=mlir_result_types,
         fn=fn_attr,
         logpdf=logpdf_attr,
         symbol=symbol_attr,
         name=Base.String(symbol),
     )
 
-    process_probprog_outputs(
-        sample_op, linear_results, result, f, args_with_rng, fnwrap, resprefix, argprefix
+    traced_result = process_probprog_outputs(
+        sample_op,
+        linear_results,
+        traced_result,
+        f,
+        args_with_rng,
+        fnwrapped,
+        resprefix,
+        argprefix,
     )
 
-    return result
+    return traced_result
 end
 
 function untraced_call(rng::AbstractRNG, f::Function, args::Vararg{Any,Nargs}) where {Nargs}
     args_with_rng = (rng, args...)
-    mlir_fn_res, argprefix, resprefix, _ = process_probprog_function(
-        f, args_with_rng, "call"
+
+    (; f_name, mlir_caller_args, mlir_result_types, traced_result, linear_results, fnwrapped, argprefix, resprefix) = process_probprog_function(
+        f, args_with_rng, "untraced_call"
     )
 
-    (; result, linear_args, in_tys, linear_results) = mlir_fn_res
-    fnwrap = mlir_fn_res.fnwrapped
-    func2 = mlir_fn_res.f
+    fn_attr = MLIR.IR.FlatSymbolRefAttribute(f_name)
 
-    inputs = process_probprog_inputs(linear_args, f, args_with_rng, fnwrap, argprefix)
-    out_tys = [MLIR.IR.type(TracedUtils.get_mlir_data(res)) for res in linear_results]
-
-    fname = TracedUtils.get_attribute_by_name(func2, "sym_name")
-    fn_attr = MLIR.IR.FlatSymbolRefAttribute(Base.String(fname))
-
-    call_op = MLIR.Dialects.enzyme.untracedCall(inputs; outputs=out_tys, fn=fn_attr)
-
-    process_probprog_outputs(
-        call_op, linear_results, result, f, args_with_rng, fnwrap, resprefix, argprefix
+    call_op = MLIR.Dialects.enzyme.untracedCall(
+        mlir_caller_args; outputs=mlir_result_types, fn=fn_attr
     )
 
-    return result
+    traced_result = process_probprog_outputs(
+        call_op,
+        linear_results,
+        traced_result,
+        f,
+        args_with_rng,
+        fnwrapped,
+        resprefix,
+        argprefix,
+    )
+
+    return traced_result
 end
 
 # Gen-like helper function.
@@ -110,17 +100,10 @@ end
 
 function simulate(rng::AbstractRNG, f::Function, args::Vararg{Any,Nargs}) where {Nargs}
     args = (rng, args...)
-    mlir_fn_res, argprefix, resprefix, _ = process_probprog_function(f, args, "simulate")
-
-    (; result, linear_args, in_tys, linear_results) = mlir_fn_res
-    fnwrap = mlir_fn_res.fnwrapped
-    func2 = mlir_fn_res.f
-
-    inputs = process_probprog_inputs(linear_args, f, args, fnwrap, argprefix)
-    out_tys = [MLIR.IR.type(TracedUtils.get_mlir_data(res)) for res in linear_results]
-
-    fname = TracedUtils.get_attribute_by_name(func2, "sym_name")
-    fn_attr = MLIR.IR.FlatSymbolRefAttribute(Base.String(fname))
+    (; f_name, mlir_caller_args, mlir_result_types, traced_result, linear_results, fnwrapped, argprefix, resprefix) = process_probprog_function(
+        f, args, "simulate"
+    )
+    fn_attr = MLIR.IR.FlatSymbolRefAttribute(f_name)
 
     trace_ty = @ccall MLIR.API.mlir_c.enzymeTraceTypeGet(
         MLIR.IR.context()::MLIR.API.MlirContext
@@ -128,11 +111,23 @@ function simulate(rng::AbstractRNG, f::Function, args::Vararg{Any,Nargs}) where 
     weight_ty = MLIR.IR.TensorType(Int64[], MLIR.IR.Type(Float64))
 
     simulate_op = MLIR.Dialects.enzyme.simulate(
-        inputs; trace=trace_ty, weight=weight_ty, outputs=out_tys, fn=fn_attr
+        mlir_caller_args;
+        trace=trace_ty,
+        weight=weight_ty,
+        outputs=mlir_result_types,
+        fn=fn_attr,
     )
 
-    process_probprog_outputs(
-        simulate_op, linear_results, result, f, args, fnwrap, resprefix, argprefix, 2
+    traced_result = process_probprog_outputs(
+        simulate_op,
+        linear_results,
+        traced_result,
+        f,
+        args,
+        fnwrapped,
+        resprefix,
+        argprefix,
+        2,
     )
 
     trace = MLIR.IR.result(
@@ -146,7 +141,7 @@ function simulate(rng::AbstractRNG, f::Function, args::Vararg{Any,Nargs}) where 
     trace = TracedRArray{UInt64,0}((), trace, ())
     weight = TracedRArray{Float64,0}((), MLIR.IR.result(simulate_op, 2), ())
 
-    return trace, weight, result
+    return trace, weight, traced_result
 end
 
 # Gen-like helper function.
@@ -185,17 +180,12 @@ function generate(
     constrained_addresses::Set{Address},
 ) where {Nargs}
     args = (rng, args...)
-    mlir_fn_res, argprefix, resprefix, _ = process_probprog_function(f, args, "generate")
 
-    (; result, linear_args, in_tys, linear_results) = mlir_fn_res
-    fnwrap = mlir_fn_res.fnwrapped
-    func2 = mlir_fn_res.f
+    (; f_name, mlir_caller_args, mlir_result_types, traced_result, linear_results, fnwrapped, argprefix, resprefix) = process_probprog_function(
+        f, args, "generate"
+    )
 
-    inputs = process_probprog_inputs(linear_args, f, args, fnwrap, argprefix)
-    out_tys = [MLIR.IR.type(TracedUtils.get_mlir_data(res)) for res in linear_results]
-
-    fname = TracedUtils.get_attribute_by_name(func2, "sym_name")
-    fn_attr = MLIR.IR.FlatSymbolRefAttribute(Base.String(fname))
+    fn_attr = MLIR.IR.FlatSymbolRefAttribute(f_name)
 
     constraint_ty = @ccall MLIR.API.mlir_c.enzymeConstraintTypeGet(
         MLIR.IR.context()::MLIR.API.MlirContext
@@ -229,17 +219,25 @@ function generate(
     weight_ty = MLIR.IR.TensorType(Int64[], MLIR.IR.Type(Float64))
 
     generate_op = MLIR.Dialects.enzyme.generate(
-        inputs,
+        mlir_caller_args,
         constraint_val;
         trace=trace_ty,
         weight=weight_ty,
-        outputs=out_tys,
+        outputs=mlir_result_types,
         fn=fn_attr,
         constrained_addresses=MLIR.IR.Attribute(constrained_addresses_attr),
     )
 
-    process_probprog_outputs(
-        generate_op, linear_results, result, f, args, fnwrap, resprefix, argprefix, 2
+    traced_result = process_probprog_outputs(
+        generate_op,
+        linear_results,
+        traced_result,
+        f,
+        args,
+        fnwrapped,
+        resprefix,
+        argprefix,
+        2,
     )
 
     trace = MLIR.IR.result(
@@ -253,5 +251,5 @@ function generate(
     trace = TracedRArray{UInt64,0}((), trace, ())
     weight = TracedRArray{Float64,0}((), MLIR.IR.result(generate_op, 2), ())
 
-    return trace, weight, result
+    return trace, weight, traced_result
 end
