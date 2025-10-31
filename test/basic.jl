@@ -754,13 +754,48 @@ end
         @test @jit(fn.(x_ra)) isa ConcreteRArray{Float32,2}
     end
 
+    x2 = inv.(x)
+    x2_ra = Reactant.to_rarray(x2)
+
+    @testset for fn in (acscd, asecd)
+        @test @jit(fn.(x2_ra)) ≈ fn.(x2)
+        @test @jit(fn.(x2_ra)) isa ConcreteRArray{Float32,2}
+    end
+
+    xrad = deg2rad.(x)
+    xrad_ra = Reactant.to_rarray(xrad)
+
+    @testset for fn in (
+        sind, cosd, tand, cscd, secd, cotd, asind, acosd, atand, acotd
+    )
+        @test @jit(fn.(xrad_ra)) ≈ fn.(xrad)
+        @test @jit(fn.(xrad_ra)) isa ConcreteRArray{Float32,2}
+    end
+
     x = 0.235f0
     x_ra = Reactant.to_rarray(x; track_numbers=Number)
 
-    @testset for fn in (sinpi, cospi, tanpi, sin, cos, tan)
+    @testset for fn in (sinpi, cospi, tanpi, sin, cos, tan, asind, acosd, atand, acotd)
         @test @jit(fn.(x_ra)) ≈ fn.(x)
         @test @jit(fn.(x_ra)) isa ConcreteRNumber{Float32}
     end
+
+    x2 = inv(x)
+    x2_ra = Reactant.to_rarray(x2; track_numbers=Number)
+
+    @testset for fn in (acscd, asecd)
+        @test @jit(fn.(x2_ra)) ≈ fn.(x2)
+        @test @jit(fn.(x2_ra)) isa ConcreteRNumber{Float32}
+    end
+
+    xrad = deg2rad(x)
+    xrad_ra = Reactant.to_rarray(xrad; track_numbers=Number)
+
+    @testset for fn in (sind, cosd, tand, cscd, secd, cotd)
+        @test @jit(fn.(xrad_ra)) ≈ fn.(xrad)
+        @test @jit(fn.(xrad_ra)) isa ConcreteRNumber{Float32}
+    end
+
     @testset for fn in (sincospi, sincos)
         res = @jit fn(x_ra)
         @test res[1] ≈ fn(x)[1]
