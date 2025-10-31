@@ -1,4 +1,4 @@
-using LuxLib, Reactant, Enzyme, NNlib
+using LuxLib, Reactant, Enzyme, NNlib, Test
 
 @testset "Fused Dense" begin
     sumabs2fuseddense(act, weight, x, bias) =
@@ -22,9 +22,9 @@ using LuxLib, Reactant, Enzyme, NNlib
     end
 
     @testset for act in (identity, relu, sigmoid, tanh, gelu), has_bias in (true, false)
-        weight = randn(Float32, 9, 10)
-        x = randn(Float32, 10, 12)
-        bias = has_bias ? randn(Float32, 9) : nothing
+        weight = Reactant.TestUtils.construct_test_array(Float32, 9, 10)
+        x = Reactant.TestUtils.construct_test_array(Float32, 10, 12)
+        bias = has_bias ? Reactant.TestUtils.construct_test_array(Float32, 9) : nothing
 
         weight_ra = Reactant.to_rarray(weight)
         x_ra = Reactant.to_rarray(x)
@@ -93,8 +93,8 @@ end
     end
 
     @testset for act in (identity, relu, sigmoid, tanh, gelu)
-        x = randn(Float32, 10, 10)
-        b = randn(Float32, 10)
+        x = Reactant.TestUtils.construct_test_array(Float32, 10, 10)
+        b = Reactant.TestUtils.construct_test_array(Float32, 10)
 
         x_ra = Reactant.to_rarray(x)
         b_ra = Reactant.to_rarray(b)
@@ -164,7 +164,7 @@ end
         return dx
     end
 
-    x_act = randn(Float32, 10, 10)
+    x_act = Reactant.TestUtils.construct_test_array(Float32, 10, 10)
     x_act_ca = Reactant.to_rarray(x_act)
 
     @testset "Activation: $act" for act in (
@@ -215,9 +215,9 @@ end
 
 @testset "Fused Conv" begin
     @testset for groups in (1, 2), has_bias in (true, false), act in (identity, relu, tanh)
-        weight = randn(Float32, 4, 4, 8 ÷ groups, 4)
-        x = randn(Float32, 16, 16, 8, 2)
-        bias = has_bias ? randn(Float32, 4) : nothing
+        weight = Reactant.TestUtils.construct_test_array(Float32, 4, 4, 8 ÷ groups, 4)
+        x = Reactant.TestUtils.construct_test_array(Float32, 16, 16, 8, 2)
+        bias = has_bias ? Reactant.TestUtils.construct_test_array(Float32, 4) : nothing
 
         weight_reactant = Reactant.to_rarray(weight)
         x_reactant = Reactant.to_rarray(x)
