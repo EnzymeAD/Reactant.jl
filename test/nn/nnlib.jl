@@ -3,32 +3,22 @@ using NNlib, Reactant, Enzyme, Statistics, Test
 @testset "Activation Functions" begin
     sumabs2(f, x) = sum(abs2, f.(x))
 
-    function ∇sumabs2(f, x)
-        dx = Enzyme.make_zero(x)
-        Enzyme.autodiff(Reverse, sumabs2, Active, Const(f), Duplicated(x, dx))
-        return dx
-    end
-
     x_act = Reactant.TestUtils.construct_test_array(Float32, 10, 10)
     x_act_ca = Reactant.to_rarray(x_act)
 
     @testset "Activation: $act" for act in (
         identity, relu, sigmoid, tanh, tanh_fast, sigmoid_fast, gelu, abs2, relu6
     )
-        f_compile = Reactant.compile(sumabs2, (act, x_act_ca))
-
         y_simple = sumabs2(act, x_act)
-        y_compile = f_compile(act, x_act_ca)
+        y_compile = @jit sumabs2(act, x_act_ca)
 
-        ∂x_enz = Enzyme.make_zero(x_act)
-        Enzyme.autodiff(Reverse, sumabs2, Active, Const(act), Duplicated(x_act, ∂x_enz))
-
-        ∇sumabs2_compiled = Reactant.compile(∇sumabs2, (act, x_act_ca))
-
-        ∂x_compile = ∇sumabs2_compiled(act, x_act_ca)
+        ∂x_compile = @jit(Enzyme.gradient(Reverse, sumabs2, Const(act), x_act_ca))[2]
+        ∂x_compile_fd = @jit Reactant.TestUtils.finite_difference_gradient(
+            Base.Fix1(sumabs2, act), x_act_ca
+        )
 
         @test y_simple ≈ y_compile
-        @test ∂x_enz ≈ ∂x_compile
+        @test ∂x_compile ≈ ∂x_compile_fd
     end
 end
 
@@ -179,18 +169,13 @@ end
     @test @jit(NNlib.pad_zeros(x_ra, (1, 1, 1, 1))) ≈ NNlib.pad_zeros(x, (1, 1, 1, 1))
 
     sumabs2(f, x) = sum(abs2, f(x))
-
-    function ∇sumabs2(f, x)
-        dx = Enzyme.make_zero(x)
-        Enzyme.autodiff(Reverse, sumabs2, Active, Const(f), Duplicated(x, dx))
-        return dx
-    end
+    ∇sumabs2(f, x) = Enzyme.gradient(Reverse, sumabs2, Const(f), x)[2]
 
     pad_fn = Base.Fix2(NNlib.pad_constant, (1, 1, 1, 1))
-    @test @jit(∇sumabs2(pad_fn, x_ra)) ≈ ∇sumabs2(pad_fn, x)
+    @test @jit(∇sumabs2(pad_fn, x_ra)) ≈ 2 .* x
 
     pad_fn2 = Base.Fix2(NNlib.pad_constant, (1, 0, 1, 3))
-    @test @jit(∇sumabs2(pad_fn2, x_ra)) ≈ ∇sumabs2(pad_fn2, x)
+    @test @jit(∇sumabs2(pad_fn2, x_ra)) ≈ 2 .* x
 
     x = Reactant.TestUtils.construct_test_array(ComplexF32, 4, 4)
     x_ra = Reactant.to_rarray(x)
@@ -649,33 +634,17 @@ end
         idx = [4, 2, 1, 5, 3]
         idx_ca = Reactant.to_rarray(idx)
 
-        function test_scatter(dsts, srcs, idxs)
-            return sum(NNlib.scatter!(+, dsts, srcs, idxs))
-        end
+        test_scatter(dsts, srcs, idxs) = sum(NNlib.scatter!(+, dsts, srcs, idxs))
 
-        function test_gradient(objective_function, dsts, srcs, idxs)
-            derivs, val = Enzyme.gradient(
-                Enzyme.set_abi(Enzyme.ReverseWithPrimal, Reactant.ReactantABI),
-                Const(objective_function),
-                dsts,
-                srcs,
-                idxs,
-            )
-            return derivs, val
-        end
-
-        test_gradient_compiled = @compile test_gradient(
-            test_scatter, dst_ca, src_ca, idx_ca
+        grads_ca, loss_ca = @jit Enzyme.gradient(
+            Enzyme.ReverseWithPrimal, Const(test_scatter), dst_ca, src_ca, idx_ca
         )
+        loss = test_scatter(dst, src, idx)
 
-        grads_enz, loss_enz = Enzyme.gradient(
-            Enzyme.ReverseWithPrimal, Const(test_scatter), dst, src, idx
-        )
-        grads_ca, loss_ca = test_gradient_compiled(test_scatter, dst_ca, src_ca, idx_ca)
-
-        @test grads_enz[1] ≈ Array(grads_ca[1])
-        @test grads_enz[2] ≈ Array(grads_ca[2])
-        @test loss_enz ≈ loss_ca
+        @test grads_ca[1] ≈ ones(Float32, size(dst)...)
+        @test grads_ca[2] ≈ ones(Float32, size(src)...)
+        @test grads_ca[3] === nothing
+        @test loss ≈ loss_ca
     end
 end
 

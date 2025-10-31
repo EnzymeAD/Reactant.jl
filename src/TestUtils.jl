@@ -20,7 +20,9 @@ function construct_test_array(::Type{T}, dims::Int...) where {T}
     return reshape(collect(T, 1:prod(dims)), dims...)
 end
 
-function finite_difference_gradient(f, x::AbstractArray{T}; epsilon=sqrt(eps(T))) where {T}
+function finite_difference_gradient(
+    f, x::AbstractArray{T}; epsilon=eps(T)^(3 / 4)
+) where {T}
     onehot_matrix = Reactant.promote_to(
         TracedRArray{Reactant.unwrapped_eltype(T),2}, LinearAlgebra.I(length(x))
     )
