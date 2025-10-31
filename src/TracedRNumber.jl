@@ -505,6 +505,27 @@ for (jlop, hloop) in (
     @eval $(jlop)(@nospecialize(lhs::TracedRNumber)) = @opcall $(hloop)(lhs)
 end
 
+# Degree-based trigonometric wrappers for TracedRNumber
+# These convert to radians internally so Reactant can lower to
+# StableHLO-supported radian trigonometric operations.
+
+Base.sind(x::TracedRNumber) = sin(deg2rad(x))
+Base.cosd(x::TracedRNumber) = cos(deg2rad(x))
+Base.tand(x::TracedRNumber) = tan(deg2rad(x))
+Base.cscd(x::TracedRNumber) = 1 / sind(x)
+Base.secd(x::TracedRNumber) = 1 / cosd(x)
+Base.cotd(x::TracedRNumber) = 1 / tand(x)
+
+Base.asind(x::TracedRNumber) = rad2deg(asin(x))
+Base.acosd(x::TracedRNumber) = rad2deg(acos(x))
+Base.atand(x::TracedRNumber) = rad2deg(atan(x))
+
+Base.atand(y::TracedRNumber, x::TracedRNumber) = rad2deg(atan(y, x))
+
+Base.acscd(x::TracedRNumber) = rad2deg(asin(1 / x))
+Base.asecd(x::TracedRNumber) = rad2deg(acos(1 / x))
+Base.acotd(x::TracedRNumber) = rad2deg(atan(1 / x))
+
 for (jlop, hloop) in (
     (:(Base.sin), :sine),
     (:(Base.cos), :cosine),
