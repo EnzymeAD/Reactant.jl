@@ -1,7 +1,7 @@
-using Reactant, Test, Random, StableRNGs
+using Reactant, Test
 
 @testset "sort & sortperm" begin
-    x = randn(10)
+    x = Reactant.TestUtils.construct_test_array(Float64, 10)
     x_ra = Reactant.to_rarray(x)
 
     srt_rev(x) = sort(x; rev=true)
@@ -20,18 +20,18 @@ using Reactant, Test, Random, StableRNGs
     @test @jit(srtperm_lt(x_ra)) ≈ srtperm_lt(x)
     @test @jit(srtperm_by(x_ra)) ≈ srtperm_by(x)
 
-    x = rand(10)
+    x = Reactant.TestUtils.construct_test_array(Float64, 10)
     x_ra = Reactant.to_rarray(x)
     @jit sort!(x_ra)
     @test x_ra ≈ sort(x)
 
-    x = rand(10)
+    x = Reactant.TestUtils.construct_test_array(Float64, 10)
     x_ra = Reactant.to_rarray(x)
     ix = similar(x_ra, Int)
     @jit sortperm!(ix, x_ra)
     @test ix ≈ sortperm(x)
 
-    x = rand(10, 4, 3)
+    x = Reactant.TestUtils.construct_test_array(Float64, 10, 4, 3)
     x_ra = Reactant.to_rarray(x)
 
     srt(x, d) = sort(x; dims=d)
@@ -56,7 +56,7 @@ using Reactant, Test, Random, StableRNGs
 end
 
 @testset "partialsort & partialsortperm" begin
-    x = randn(10)
+    x = Reactant.TestUtils.construct_test_array(Float64, 10)
     x_ra = Reactant.to_rarray(x)
 
     @test @jit(partialsort(x_ra, 1:5)) ≈ partialsort(x, 1:5)
@@ -72,25 +72,25 @@ end
     @test @jit(partialsortperm(x_ra, 4)) ≈ partialsortperm(x, 4)
     @test @jit(partialsortperm(x_ra, 4; rev=true)) ≈ partialsortperm(x, 4; rev=true)
 
-    x = randn(10)
+    x = Reactant.TestUtils.construct_test_array(Float64, 10)
     x_ra = Reactant.to_rarray(x)
     @jit partialsort!(x_ra, 1:5)
     partialsort!(x, 1:5)
     @test Array(x_ra)[1:5] ≈ x[1:5]
 
-    x = randn(10)
+    x = Reactant.TestUtils.construct_test_array(Float64, 10)
     x_ra = Reactant.to_rarray(x)
     @jit partialsort!(x_ra, 3:5; rev=true)
     partialsort!(x, 3:5; rev=true)
     @test Array(x_ra)[3:5] ≈ x[3:5]
 
-    x = randn(10)
+    x = Reactant.TestUtils.construct_test_array(Float64, 10)
     x_ra = Reactant.to_rarray(x)
     @jit partialsort!(x_ra, 3)
     partialsort!(x, 3)
     @test @allowscalar(x_ra[3]) ≈ x[3]
 
-    x = randn(10)
+    x = Reactant.TestUtils.construct_test_array(Float64, 10)
     x_ra = Reactant.to_rarray(x)
 
     ix = similar(x, Int)
@@ -107,7 +107,7 @@ end
 end
 
 @testset "argmin / argmax" begin
-    x = rand(2, 3)
+    x = Reactant.TestUtils.construct_test_array(Float64, 2, 3)
     x_ra = Reactant.to_rarray(x)
 
     linargmin(x) = LinearIndices(x)[argmin(x)]
@@ -116,7 +116,7 @@ end
     @test linargmin(x) == @jit(argmin(x_ra))
     @test linargmax(x) == @jit(argmax(x_ra))
 
-    x = rand(2, 3, 4)
+    x = Reactant.TestUtils.construct_test_array(Float64, 2, 3, 4)
     x_ra = Reactant.to_rarray(x)
 
     linargmin(x, d) = LinearIndices(x)[argmin(x; dims=d)]
@@ -131,7 +131,7 @@ end
     @test linargmin(x, 3) == @jit(argmindims(x_ra, 3))
     @test linargmax(x, 3) == @jit(argmaxdims(x_ra, 3))
 
-    x = randn(2, 3, 4)
+    x = Reactant.TestUtils.construct_test_array(Float64, 2, 3, 4)
     x_ra = Reactant.to_rarray(x)
 
     @test argmin(abs2, x) ≈ @jit(argmin(abs2, x_ra))
@@ -144,10 +144,10 @@ function dual_approx(x, y)
 end
 
 @testset "findmin / findmax" begin
-    xvec = randn(10)
+    xvec = Reactant.TestUtils.construct_test_array(Float64, 10)
     xvec_ra = Reactant.to_rarray(xvec)
 
-    x = randn(2, 3)
+    x = Reactant.TestUtils.construct_test_array(Float64, 2, 3)
     x_ra = Reactant.to_rarray(x)
 
     function fwithlinindices(g, f, x; kwargs...)
@@ -203,8 +203,7 @@ end
 end
 
 @testset "approx top k lowering" begin
-    x = collect(Float32, 1:1000)
-    x = x[randperm!(StableRNG(0), collect(1:1000))]
+    x = vec(permutedims(reshape(collect(Float32, 1:1000), 2, 5, 10, 10), (4, 2, 3, 1)))
     x_ra = Reactant.to_rarray(x)
 
     hlo = Reactant.with_config(; lower_partialsort_to_approx_top_k=true) do

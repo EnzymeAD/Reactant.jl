@@ -351,6 +351,9 @@ function set_default_backend(backend::Union{String,XLA.AbstractClient})
     return nothing
 end
 
+# Not part of the public API. Exclusively for testing purposes.
+include("TestUtils.jl")
+
 include("Precompile.jl")
 
 end # module

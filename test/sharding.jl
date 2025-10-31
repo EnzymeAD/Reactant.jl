@@ -277,7 +277,7 @@ end
 
         @testset "Handle Sub-Axis Info" begin
             @test Reactant.to_rarray(
-                randn(Float32, 142, 142);
+                Reactant.TestUtils.construct_test_array(Float32, 142, 142);
                 sharding=Sharding.NamedSharding(
                     Sharding.Mesh(reshape(0:11, 3, 4), (:x, :y)), (:x, :y)
                 ),
@@ -317,10 +317,11 @@ end
         )
 
         x_ra = Reactant.to_rarray(
-            randn(Float32, 4, 5); sharding=Sharding.NamedSharding(mesh, ((:x, :y), :z))
+            Reactant.TestUtils.construct_test_array(Float32, 4, 5);
+            sharding=Sharding.NamedSharding(mesh, ((:x, :y), :z)),
         )
 
-        y_ra_arr = randn(Float32, 5, 4)
+        y_ra_arr = Reactant.TestUtils.construct_test_array(Float32, 5, 4)
         y_ra = Reactant.to_rarray(y_ra_arr; sharding=Sharding.NoSharding())
         y_ra_2 = Reactant.to_rarray(y_ra_arr; sharding=Sharding.NoSharding())
 
@@ -354,7 +355,7 @@ end
 @testset "Bad Codegen for Resharded Inputs: #1027" begin
     if length(addressable_devices) ≥ 12 && Reactant.XLA.runtime() isa Val{:IFRT}
         x_ra = Reactant.to_rarray(
-            randn(Float32, 32, 32);
+            Reactant.TestUtils.construct_test_array(Float32, 32, 32);
             sharding=Sharding.NamedSharding(
                 Sharding.Mesh(reshape(0:11, 3, 4), (:x, :y)), (:x, :y)
             ),
@@ -448,7 +449,8 @@ end
         mesh = Sharding.Mesh(reshape(0:7, 2, 4), (:x, :y))
 
         x_ra = Reactant.to_rarray(
-            randn(Float32, 4, 4); sharding=Sharding.NamedSharding(mesh, (:x, :y))
+            Reactant.TestUtils.construct_test_array(Float32, 4, 4);
+            sharding=Sharding.NamedSharding(mesh, (:x, :y)),
         )
 
         shardy_options = Reactant.ShardyPropagationOptions(;
@@ -466,7 +468,8 @@ end
 
     @test begin
         x_ra = Reactant.to_rarray(
-            rand(Float32, 32, 32); sharding=Sharding.NamedSharding(mesh, (:x, :y))
+            Reactant.TestUtils.construct_test_array(Float32, 32, 32);
+            sharding=Sharding.NamedSharding(mesh, (:x, :y)),
         )
         hlo = @code_xla sum(x_ra)
         contains(repr(hlo), "num_partitions=8")
@@ -484,8 +487,8 @@ end
         mesh = Sharding.Mesh(reshape(0:7, 2, 4), (:x, :y))
         sharding = Sharding.NamedSharding(mesh, (:x, :y))
 
-        decoder = randn(Float32, 32, 128)
-        r = randn(Float32, 128, 16)
+        decoder = Reactant.TestUtils.construct_test_array(Float32, 32, 128)
+        r = Reactant.TestUtils.construct_test_array(Float32, 128, 16)
 
         m_ra_sharded = MyModel(Reactant.to_rarray(decoder; sharding))
         r_ra_sharded = Reactant.to_rarray(r; sharding)
