@@ -207,9 +207,7 @@ function Base.getproperty(t::Union{ProbProgTrace,Constraint}, s::Symbol)
     end
 end
 
-function donate_argument!(
-    ::Any, ::Union{ProbProgTrace,Constraint}, ::Int, ::Any, ::Any
-)
+function donate_argument!(::Any, ::Union{ProbProgTrace,Constraint}, ::Int, ::Any, ::Any)
     return nothing
 end
 
