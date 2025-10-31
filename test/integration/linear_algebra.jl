@@ -374,13 +374,13 @@ end
         @testset for T in (Float32, Float64, ComplexF32, ComplexF64)
             (T == ComplexF64 || T == Float64) && RunningOnTPU && continue
 
-            A = Reactant.TestUtils.construct_test_array(T, 4, 4)
+            A = rand(T, 4, 4)
             A_ra = Reactant.to_rarray(A)
 
-            b = Reactant.TestUtils.construct_test_array(T, 4)
+            b = rand(T, 4)
             b_ra = Reactant.to_rarray(b)
 
-            B = Reactant.TestUtils.construct_test_array(T, 4, 3)
+            B = rand(T, 4, 3)
             B_ra = Reactant.to_rarray(B)
 
             @test @jit(solve_with_lu(A_ra, b_ra)) ≈ solve_with_lu(A, b) atol = 1e-4 rtol =
@@ -394,13 +394,13 @@ end
         @testset for T in (Float32, Float64, ComplexF32, ComplexF64)
             (T == ComplexF64 || T == Float64) && RunningOnTPU && continue
 
-            A = Reactant.TestUtils.construct_test_array(T, 4, 4, 3, 2)
+            A = rand(T, 4, 4, 3, 2)
             A_ra = Reactant.to_rarray(A)
 
-            b = Reactant.TestUtils.construct_test_array(T, 4, 3, 2)
+            b = rand(T, 4, 3, 2)
             b_ra = Reactant.to_rarray(b)
 
-            B = Reactant.TestUtils.construct_test_array(T, 4, 5, 3, 2)
+            B = rand(T, 4, 5, 3, 2)
             B_ra = Reactant.to_rarray(B)
 
             @test @jit(solve_with_lu(A_ra, b_ra)) ≈ solve_with_lu_batched(A, b) atol = 1e-4 rtol =
@@ -423,8 +423,8 @@ end
     end
 
     @testset "Input Permutation" begin
-        A = Reactant.TestUtils.construct_test_array(Float32, 10, 10, 32)
-        B = Reactant.TestUtils.construct_test_array(Float32, 10, 32)
+        A = rand(Float32, 10, 10, 32)
+        B = rand(Float32, 10, 32)
         A_ra = Reactant.to_rarray(A)
         B_ra = Reactant.to_rarray(B)
 

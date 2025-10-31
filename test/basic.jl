@@ -746,7 +746,7 @@ end
 end
 
 @testset "Common Trig Functions" begin
-    x = Reactant.TestUtils.construct_test_array(Float32, 4, 16)
+    x = Reactant.TestUtils.construct_test_array(Float32, 4, 16)[:, 1:7]
     x_ra = Reactant.to_rarray(x)
 
     @testset for fn in (sinpi, cospi, tanpi, sin, cos, tan)

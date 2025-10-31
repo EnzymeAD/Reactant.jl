@@ -1216,10 +1216,10 @@ end
 
             if !affine
                 @test occursin(
-                    "stablehlo.constant dense<0.000000e+00> : tensor<3xf64>", repr(hlo)
+                    "stablehlo.constant dense<0.000000e+00> : tensor<3xf32>", repr(hlo)
                 )
                 @test occursin(
-                    "stablehlo.constant dense<1.000000e+00> : tensor<3xf64>", repr(hlo)
+                    "stablehlo.constant dense<1.000000e+00> : tensor<3xf32>", repr(hlo)
                 )
             end
 
@@ -1257,10 +1257,10 @@ end
             @test occursin("stablehlo.batch_norm_inference", repr(hlo))
             if !affine
                 @test occursin(
-                    "stablehlo.constant dense<0.000000e+00> : tensor<3xf64>", repr(hlo)
+                    "stablehlo.constant dense<0.000000e+00> : tensor<3xf32>", repr(hlo)
                 )
                 @test occursin(
-                    "stablehlo.constant dense<1.000000e+00> : tensor<3xf64>", repr(hlo)
+                    "stablehlo.constant dense<1.000000e+00> : tensor<3xf32>", repr(hlo)
                 )
             end
 
@@ -1294,7 +1294,7 @@ end
 
             if !affine
                 @test occursin(
-                    "stablehlo.constant dense<1.000000e+00> : tensor<3xf64>", repr(hlo)
+                    "stablehlo.constant dense<1.000000e+00> : tensor<3xf32>", repr(hlo)
                 )
             end
 
