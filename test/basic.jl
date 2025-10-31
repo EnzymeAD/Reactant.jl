@@ -765,9 +765,7 @@ end
     xrad = deg2rad.(x)
     xrad_ra = Reactant.to_rarray(xrad)
 
-    @testset for fn in (
-        sind, cosd, tand, cscd, secd, cotd, asind, acosd, atand, acotd
-    )
+    @testset for fn in (sind, cosd, tand, cscd, secd, cotd, asind, acosd, atand, acotd)
         @test @jit(fn.(xrad_ra)) ≈ fn.(xrad)
         @test @jit(fn.(xrad_ra)) isa ConcreteRArray{Float32,2}
     end
