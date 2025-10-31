@@ -409,7 +409,7 @@ on `%idx_0`.
 If all `N` basis elements are provided, the linearize_index operation is said to
 \"have an outer bound\".
 
-As a convenience, and for symmetry with `getPaddedBasis()`, ifg the first
+As a convenience, and for symmetry with `getPaddedBasis()`, if the first
 element of a set of `OpFoldResult`s passed to the builders of this operation is
 `nullptr`, that element is ignored.
 
@@ -869,7 +869,7 @@ into a slice within a [MemRef](Builtin.md/#memreftype) of the same base
 elemental type, supplied as its second operand.
 The index for each memref dimension is an affine expression of loop
 induction variables and symbols. These indices determine the start position
-of the write within the memref. The shape of th input vector determines the
+of the write within the memref. The shape of the input vector determines the
 shape of the slice written to the memref. This slice is contiguous along the
 respective dimensions of the shape. Strided vector stores will be supported
 in the future.
