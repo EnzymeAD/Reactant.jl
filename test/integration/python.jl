@@ -24,8 +24,11 @@ fn(x, y) = sin.(x) .+ cos.(y.x[1:2, :])
             name="sum_and_sin_cos_jax",
         )
 
-        tup = (rand(Float32, 3, 4), rand(Float32, 3, 4))
-        y = rand(Float32, 2, 2)
+        tup = (
+            Reactant.TestUtils.construct_test_array(Float32, 3, 4),
+            Reactant.TestUtils.construct_test_array(Float32, 3, 4),
+        )
+        y = Reactant.TestUtils.construct_test_array(Float32, 2, 2)
         num = 4.0
         partial_eval = 0.5
 
@@ -44,8 +47,10 @@ fn(x, y) = sin.(x) .+ cos.(y.x[1:2, :])
         tf = pyimport("tensorflow")
         np = pyimport("numpy")
 
-        x = Reactant.to_rarray(rand(Float32, 2, 10))
-        y = (; x=Reactant.to_rarray(rand(Float32, 4, 10)))
+        x = Reactant.to_rarray(Reactant.TestUtils.construct_test_array(Float32, 2, 10))
+        y = (;
+            x=Reactant.to_rarray(Reactant.TestUtils.construct_test_array(Float32, 4, 10))
+        )
 
         compiled_fn = @compile serializable = true fn(x, y)
 

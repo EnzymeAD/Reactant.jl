@@ -1,12 +1,12 @@
 using FFTW, Reactant, Test
 
 @testset "fft" begin
-    x = rand(ComplexF32, 2, 2, 3, 4)
+    x = Reactant.TestUtils.construct_test_array(ComplexF32, 2, 2, 3, 4)
     x_ra = Reactant.to_rarray(x)
 
     @test_throws AssertionError @jit(fft(x_ra)) # TODO: support this
 
-    x = rand(ComplexF32, 2, 3, 4)
+    x = Reactant.TestUtils.construct_test_array(ComplexF32, 2, 3, 4)
     x_ra = Reactant.to_rarray(x)
 
     @test @jit(fft(x_ra)) ≈ fft(x)
@@ -26,7 +26,7 @@ using FFTW, Reactant, Test
     @test @jit(ifftshift(shifted_fft)) ≈ Array(y_ra)
 
     @testset "fft real input" begin
-        x = rand(Float32, 2, 3, 4)
+        x = Reactant.TestUtils.construct_test_array(Float32, 2, 3, 4)
         x_ra = Reactant.to_rarray(x)
 
         @test @jit(fft(x_ra)) ≈ fft(x)
@@ -36,12 +36,12 @@ using FFTW, Reactant, Test
 end
 
 @testset "rfft" begin
-    x = rand(Float32, 2, 2, 3, 4)
+    x = Reactant.TestUtils.construct_test_array(Float32, 2, 2, 3, 4)
     x_ra = Reactant.to_rarray(x)
 
     @test_throws AssertionError @jit(rfft(x_ra)) # TODO: support this
 
-    x = rand(Float32, 2, 3, 4)
+    x = Reactant.TestUtils.construct_test_array(Float32, 2, 3, 4)
     x_ra = Reactant.to_rarray(x)
 
     @test @jit(rfft(x_ra)) ≈ rfft(x)

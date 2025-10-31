@@ -1,9 +1,9 @@
-using Reactant, Flux
+using Reactant, Flux, Test
 
 @testset "Flux.jl Integration" begin
     # Generate some data for the XOR problem: vectors of length 2, as columns of a matrix:
-    noisy = rand(Float32, 2, 1000)                                        # 2×1000 Matrix{Float32}
-    truth = [xor(col[1] > 0.5, col[2] > 0.5) for col in eachcol(noisy)]   # 1000-element Vector{Bool}
+    noisy = Reactant.TestUtils.construct_test_array(Float32, 2, 1000)
+    truth = Reactant.TestUtils.construct_test_array(Int, 1000) .> 500
 
     # Define our model, a multi-layer perceptron with one hidden layer of size 3:
     model = Chain(

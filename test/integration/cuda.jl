@@ -1,6 +1,4 @@
-using Reactant
-using Test
-using CUDA
+using Reactant, Test, CUDA
 
 const ReactantCUDAExt = Base.get_extension(Reactant, :ReactantCUDAExt)
 
