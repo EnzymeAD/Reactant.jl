@@ -3498,11 +3498,9 @@ end
     else
         found_group_id = only(group_ids)
         if group_id !== nothing && found_group_id != group_id
-            error(
-                "Provided group_id $(group_id) does not match the existing group_id \
-                 $(found_group_id) for the inputs. All inputs must belong to the same \
-                 sharding group."
-            )
+            error("Provided group_id $(group_id) does not match the existing group_id \
+                   $(found_group_id) for the inputs. All inputs must belong to the same \
+                   sharding group.")
         end
         group_id = found_group_id
     end
