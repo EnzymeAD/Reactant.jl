@@ -92,7 +92,7 @@ function simulate_(rng::AbstractRNG, f::Function, args::Vararg{Any,Nargs}) where
     seed_buffer = only(rng.seed.data).buffer
     GC.@preserve seed_buffer begin
         t, _, _ = compiled_fn(rng, f, args...)
-        trace = from_trace_tensor(t)
+        trace = ProbProgTrace(t)
     end
 
     return trace, trace.weight
@@ -146,27 +146,20 @@ end
 
 # Gen-like helper function.
 function generate_(
-    rng::AbstractRNG,
-    f::Function,
-    args::Vararg{Any,Nargs};
-    constraint::Constraint=Constraint(),
+    rng::AbstractRNG, constraint::Constraint, f::Function, args::Vararg{Any,Nargs}
 ) where {Nargs}
     trace = nothing
 
-    constraint_ptr = ConcreteRNumber(reinterpret(UInt64, pointer_from_objref(constraint)))
-
     constrained_addresses = extract_addresses(constraint)
 
-    function wrapper_fn(rng, constraint_ptr, args...)
-        return generate(rng, f, args...; constraint_ptr, constrained_addresses)
-    end
-
-    compiled_fn = @compile optimize = :probprog wrapper_fn(rng, constraint_ptr, args...)
+    compiled_fn = @compile optimize = :probprog generate(
+        rng, constraint, f, args...; constrained_addresses
+    )
 
     seed_buffer = only(rng.seed.data).buffer
     GC.@preserve seed_buffer constraint begin
-        t, _, _ = compiled_fn(rng, constraint_ptr, args...)
-        trace = from_trace_tensor(t)
+        t, _, _ = compiled_fn(rng, constraint, f, args...)
+        trace = ProbProgTrace(t)
     end
 
     return trace, trace.weight
@@ -174,9 +167,9 @@ end
 
 function generate(
     rng::AbstractRNG,
+    constraint,
     f::Function,
     args::Vararg{Any,Nargs};
-    constraint_ptr::TracedRNumber,
     constrained_addresses::Set{Address},
 ) where {Nargs}
     args = (rng, args...)
@@ -193,7 +186,7 @@ function generate(
 
     constraint_val = MLIR.IR.result(
         MLIR.Dialects.builtin.unrealized_conversion_cast(
-            [TracedUtils.get_mlir_data(constraint_ptr)]; outputs=[constraint_ty]
+            [TracedUtils.get_mlir_data(constraint)]; outputs=[constraint_ty]
         ),
         1,
     )
