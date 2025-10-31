@@ -2,7 +2,7 @@ using ..Reactant: ConcreteRNumber, TracedRArray
 
 function hmc(
     rng::AbstractRNG,
-    original_trace::Union{ProbProgTrace,TracedRArray{UInt64,0}},
+    original_trace,
     f::Function,
     args::Vararg{Any,Nargs};
     selection::Selection,
@@ -21,23 +21,12 @@ function hmc(
         MLIR.IR.context()::MLIR.API.MlirContext
     )::MLIR.IR.Type
 
-    trace_val = if original_trace isa TracedRArray{UInt64,0}
-        MLIR.IR.result(
-            MLIR.Dialects.builtin.unrealized_conversion_cast(
-                [original_trace.mlir_data]; outputs=[trace_ty]
-            ),
-            1,
-        )
-    else
-        # First iteration: promote a ProbProgTrace to tensor<ui64>
-        promoted = to_trace_tensor(original_trace)
-        MLIR.IR.result(
-            MLIR.Dialects.builtin.unrealized_conversion_cast(
-                [TracedUtils.get_mlir_data(promoted)]; outputs=[trace_ty]
-            ),
-            1,
-        )
-    end
+    trace_val = MLIR.IR.result(
+        MLIR.Dialects.builtin.unrealized_conversion_cast(
+            [TracedUtils.get_mlir_data(original_trace)]; outputs=[trace_ty]
+        ),
+        1,
+    )
 
     selection_attr = MLIR.IR.Attribute[]
     for address in selection
