@@ -1595,6 +1595,12 @@ end
     return (; output_state, output)
 end
 
+@noinline function rng_bit_generator(
+    ::Type{TracedRNumber{T}}, seed::TracedRArray{UInt64,1}, shape; kwargs...
+) where {T}
+    return rng_bit_generator(T, seed, shape; kwargs...)
+end
+
 """
     randn(
         ::Type{T},
@@ -1649,6 +1655,12 @@ end
     return (; output_state=imag_result.output_state, output)
 end
 
+@noinline function randn(
+    ::Type{TracedRNumber{T}}, seed::TracedRArray{UInt64,1}, shape; kwargs...
+) where {T}
+    return randn(T, seed, shape; kwargs...)
+end
+
 """
     randexp(
         ::Type{T},
@@ -1684,6 +1696,12 @@ distribution with rate 1. Returns a NamedTuple with the following fields:
     seed = res.output_state
     rand_exp = negate(log_plus_one(negate(rand_uniform)))
     return (; output_state=seed, output=rand_exp)
+end
+
+@noinline function randexp(
+    ::Type{TracedRNumber{T}}, seed::TracedRArray{UInt64,1}, shape; kwargs...
+) where {T}
+    return randexp(T, seed, shape; kwargs...)
 end
 
 # functional ops
