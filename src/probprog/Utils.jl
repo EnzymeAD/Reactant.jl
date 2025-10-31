@@ -3,14 +3,20 @@ using ..Reactant:
     TracedUtils,
     Ops,
     TracedRArray,
+    TracedRNumber,
     Compiler,
     OrderedIdDict,
-    make_tracer,
     TracedToTypes,
-    TracedTrack,
     TracedType,
-    TracedSetPath
-import ..Reactant: promote_to
+    TracedTrack,
+    TracedSetPath,
+    ConcreteToTraced,
+    AbstractConcreteArray,
+    XLA,
+    Sharding,
+    to_number
+import ..Reactant: promote_to, make_tracer
+import ..Compiler: donate_argument!
 
 """
     process_probprog_function(f, args, op_name)
@@ -171,30 +177,59 @@ function process_probprog_outputs(
     return traced_result
 end
 
-to_trace_tensor(t::ProbProgTrace) = promote_to(TracedRArray{UInt64,0}, t)
+function promote_to(::Type{TracedRArray{UInt64,0}}, t::Union{ProbProgTrace,Constraint})
+    return Ops.fill(reinterpret(UInt64, pointer_from_objref(t)), Int64[])
+end
 
-function from_trace_tensor(trace_tensor)
-    while !isready(trace_tensor)
+function Base.convert(
+    ::Type{T}, x::AbstractConcreteArray
+) where {T<:Union{ProbProgTrace,Constraint}}
+    while !isready(x)
         yield()
     end
-    return unsafe_pointer_to_objref(Ptr{Any}(Array(trace_tensor)[1]))::ProbProgTrace
+    return unsafe_pointer_to_objref(Ptr{Any}(collect(x)[1]))::T
 end
 
-function promote_to(::Type{TracedRArray{UInt64,0}}, t::ProbProgTrace)
-    ptr = reinterpret(UInt64, pointer_from_objref(t))
-    return Ops.fill(ptr, Int64[])
-end
-
-to_constraint_tensor(c::Constraint) = promote_to(TracedRArray{UInt64,0}, c)
-
-function from_constraint_tensor(constraint_tensor)
-    while !isready(constraint_tensor)
+function Base.convert(
+    ::Type{T}, x::AbstractConcreteNumber
+) where {T<:Union{ProbProgTrace,Constraint}}
+    while !isready(x)
         yield()
     end
-    return unsafe_pointer_to_objref(Ptr{Any}(Array(constraint_tensor)[1]))::Constraint
+    return unsafe_pointer_to_objref(Ptr{Any}(to_number(x)))::T
 end
 
-function promote_to(::Type{TracedRArray{UInt64,0}}, c::Constraint)
-    ptr = reinterpret(UInt64, pointer_from_objref(c))
-    return Ops.fill(ptr, Int64[])
+function Base.getproperty(t::Union{ProbProgTrace,Constraint}, s::Symbol)
+    if s === :data
+        return ConcreteRNumber(reinterpret(UInt64, pointer_from_objref(t))).data
+    else
+        return getfield(t, s)
+    end
+end
+
+function donate_argument!(
+    ::Any, ::Union{ProbProgTrace,Constraint}, ::Int, ::Any, ::Any
+)
+    return nothing
+end
+
+Base.@nospecializeinfer function make_tracer(
+    seen,
+    @nospecialize(prev::Union{ProbProgTrace,Constraint}),
+    @nospecialize(path),
+    mode;
+    @nospecialize(sharding = Sharding.NoSharding()),
+    kwargs...,
+)
+    if mode == ConcreteToTraced
+        haskey(seen, prev) && return seen[prev]::TracedRNumber{UInt64}
+        result = TracedRNumber{UInt64}((path,), nothing)
+        seen[prev] = result
+        return result
+    elseif mode == TracedToTypes
+        push!(path, typeof(prev))
+        return nothing
+    else
+        error("Unsupported mode for $(typeof(prev)): $mode")
+    end
 end

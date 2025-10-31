@@ -1,4 +1,5 @@
 using Base: ReentrantLock
+using ..Reactant: AbstractConcreteNumber, AbstractConcreteArray
 
 mutable struct ProbProgTrace
     choices::Dict{Symbol,Any}
@@ -8,6 +9,9 @@ mutable struct ProbProgTrace
 
     function ProbProgTrace()
         return new(Dict{Symbol,Any}(), nothing, nothing, Dict{Symbol,Any}())
+    end
+    function ProbProgTrace(x::Union{AbstractConcreteNumber,AbstractConcreteArray})
+        return convert(ProbProgTrace, x)
     end
 end
 
@@ -42,6 +46,9 @@ mutable struct Constraint <: AbstractDict{Address,Any}
 
     Constraint() = new(Dict{Address,Any}())
     Constraint(d::Dict{Address,Any}) = new(d)
+    function Constraint(x::Union{AbstractConcreteNumber,AbstractConcreteArray})
+        return convert(Constraint, x)
+    end
 end
 
 Base.getindex(c::Constraint, k::Address) = c.dict[k]
