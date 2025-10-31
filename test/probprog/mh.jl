@@ -31,30 +31,22 @@ function model(rng, xs)
     return ys
 end
 
-function mh_program(rng, model, xs, num_iters, constraint_ptr, constrained_addresses)
+function mh_program(rng, model, xs, num_iters, constraint, constrained_addresses)
     init_trace, _, _ = ProbProg.generate(
-        rng,
-        model,
-        xs;
-        constraint_ptr=constraint_ptr,
-        constrained_addresses=constrained_addresses,
+        rng, constraint, model, xs; constrained_addresses=constrained_addresses
     )
 
-    trace_ptr = init_trace
+    trace = init_trace
     @trace for _ in 1:num_iters
-        trace_ptr, _ = ProbProg.mh(
-            rng, trace_ptr, model, xs; selection=ProbProg.select(ProbProg.Address(:slope))
+        trace, _ = ProbProg.mh(
+            rng, trace, model, xs; selection=ProbProg.select(ProbProg.Address(:slope))
         )
-        trace_ptr, _ = ProbProg.mh(
-            rng,
-            trace_ptr,
-            model,
-            xs;
-            selection=ProbProg.select(ProbProg.Address(:intercept)),
+        trace, _ = ProbProg.mh(
+            rng, trace, model, xs; selection=ProbProg.select(ProbProg.Address(:intercept))
         )
     end
 
-    return trace_ptr
+    return trace
 end
 
 @testset "linear_regression" begin
@@ -81,27 +73,24 @@ end
         obs = ProbProg.Constraint(:ys => (ys,))
         num_iters = ConcreteRNumber(10000)
         constrained_addresses = ProbProg.extract_addresses(obs)
-        constraint_ptr = ConcreteRNumber(reinterpret(UInt64, pointer_from_objref(obs)))
 
         code = @code_hlo optimize = :probprog mh_program(
-            rng, model, xs, 10000, constraint_ptr, constrained_addresses
+            rng, model, xs, num_iters, obs, constrained_addresses
         )
         @test contains(repr(code), "enzyme_probprog_get_sample_from_trace")
         @test contains(repr(code), "enzyme_probprog_get_weight_from_trace")
         @test !contains(repr(code), "enzyme.mh")
 
         compiled_fn = @compile optimize = :probprog mh_program(
-            rng, model, xs, num_iters, constraint_ptr, constrained_addresses
+            rng, model, xs, num_iters, obs, constrained_addresses
         )
 
         trace = nothing
         seed_buffer = only(rng.seed.data).buffer
         num_iters = ConcreteRNumber(1000)
         GC.@preserve seed_buffer obs begin
-            trace_ptr = compiled_fn(
-                rng, model, xs, num_iters, constraint_ptr, constrained_addresses
-            )
-            trace = ProbProg.from_trace_tensor(trace_ptr)
+            trace = compiled_fn(rng, model, xs, num_iters, obs, constrained_addresses)
+            trace = ProbProg.ProbProgTrace(trace)
         end
 
         slope = only(trace.choices[:slope])[1]

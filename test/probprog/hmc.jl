@@ -36,16 +36,10 @@ function hmc_program(
     num_steps,
     mass,
     initial_momentum,
-    constraint_ptr,
+    constraint,
     constrained_addresses,
 )
-    t, _, _ = ProbProg.generate(
-        rng,
-        model,
-        xs;
-        constraint_ptr=constraint_ptr,
-        constrained_addresses=constrained_addresses,
-    )
+    t, _, _ = ProbProg.generate(rng, constraint, model, xs; constrained_addresses)
 
     t, accepted, _ = ProbProg.hmc(
         rng,
@@ -73,7 +67,6 @@ end
         :param_a => ([0.0],), :param_b => ([0.0],), :ys_a => (ys_a,), :ys_b => (ys_b,)
     )
     constrained_addresses = ProbProg.extract_addresses(obs)
-    constraint_ptr = ConcreteRNumber(reinterpret(UInt64, pointer_from_objref(obs)))
 
     step_size = ConcreteRNumber(0.001)
     num_steps_compile = ConcreteRNumber(1000)
@@ -89,7 +82,7 @@ end
         num_steps_compile,
         mass,
         initial_momentum,
-        constraint_ptr,
+        obs,
         constrained_addresses,
     )
     @test contains(repr(code), "enzyme_probprog_get_flattened_samples_from_trace")
@@ -106,7 +99,7 @@ end
             num_steps_compile,
             mass,
             initial_momentum,
-            constraint_ptr,
+            obs,
             constrained_addresses,
         )
     end
@@ -116,7 +109,7 @@ end
     trace = nothing
     GC.@preserve seed_buffer obs begin
         run_time_s = @elapsed begin
-            trace_ptr, _ = compiled_fn(
+            trace, _ = compiled_fn(
                 rng,
                 model,
                 xs,
@@ -124,10 +117,10 @@ end
                 num_steps_run,
                 mass,
                 initial_momentum,
-                constraint_ptr,
+                obs,
                 constrained_addresses,
             )
-            trace = ProbProg.from_trace_tensor(trace_ptr)
+            trace = ProbProg.ProbProgTrace(trace)
         end
         println("HMC run time: $(round(run_time_s * 1000, digits=2)) ms")
     end

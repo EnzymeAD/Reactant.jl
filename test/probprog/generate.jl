@@ -34,7 +34,7 @@ end
         rng = ReactantRNG(seed)
         μ = Reactant.ConcreteRNumber(0.0)
         σ = Reactant.ConcreteRNumber(1.0)
-        trace, weight = ProbProg.generate_(rng, model, μ, σ, shape)
+        trace, weight = ProbProg.generate_(rng, ProbProg.Constraint(), model, μ, σ, shape)
         @test mean(trace.retval[1]) ≈ 0.0 atol = 0.05 rtol = 0.05
     end
 
@@ -47,7 +47,7 @@ end
 
         constraint = ProbProg.Constraint(:s => (fill(0.1, shape),))
 
-        trace, weight = ProbProg.generate_(rng, model, μ, σ, shape; constraint)
+        trace, weight = ProbProg.generate_(rng, constraint, model, μ, σ, shape)
 
         @test trace.choices[:s][1] == constraint[ProbProg.Address(:s)][1]
 
@@ -72,7 +72,7 @@ end
             :u => :y => (fill(0.3, shape),),
         )
 
-        trace, weight = ProbProg.generate_(rng, nested_model, μ, σ, shape; constraint)
+        trace, weight = ProbProg.generate_(rng, constraint, nested_model, μ, σ, shape)
 
         @test trace.choices[:s][1] == fill(0.1, shape)
         @test trace.subtraces[:t].choices[:x][1] == fill(0.2, shape)
@@ -108,33 +108,24 @@ end
 
         constrained_addresses = ProbProg.extract_addresses(constraint1)
 
-        constraint_ptr1 = Reactant.ConcreteRNumber(
-            reinterpret(UInt64, pointer_from_objref(constraint1))
+        compiled_fn = @compile optimize = :probprog ProbProg.generate(
+            rng, constraint1, model, μ, σ, shape; constrained_addresses
         )
-
-        wrapper_fn(rng, constraint_ptr, μ, σ) = ProbProg.generate(
-            rng, model, μ, σ, shape; constraint_ptr, constrained_addresses
-        )
-
-        compiled_fn = @compile optimize = :probprog wrapper_fn(rng, constraint_ptr1, μ, σ)
 
         trace1 = nothing
         seed_buffer = only(rng.seed.data).buffer
         GC.@preserve seed_buffer constraint1 begin
-            trace1, _ = compiled_fn(rng, constraint_ptr1, μ, σ)
-            trace1 = ProbProg.from_trace_tensor(trace1)
+            trace1, _ = compiled_fn(rng, constraint1, model, μ, σ, shape)
+            trace1 = ProbProg.ProbProgTrace(trace1)
         end
 
         constraint2 = ProbProg.Constraint(:s => (fill(0.2, shape),))
-        constraint_ptr2 = Reactant.ConcreteRNumber(
-            reinterpret(UInt64, pointer_from_objref(constraint2))
-        )
 
         trace2 = nothing
         seed_buffer = only(rng.seed.data).buffer
         GC.@preserve seed_buffer constraint2 begin
-            trace2, _ = compiled_fn(rng, constraint_ptr2, μ, σ)
-            trace2 = ProbProg.from_trace_tensor(trace2)
+            trace2, _ = compiled_fn(rng, constraint2, model, μ, σ, shape)
+            trace2 = ProbProg.ProbProgTrace(trace2)
         end
 
         @test trace1.choices[:s][1] != trace2.choices[:s][1]
