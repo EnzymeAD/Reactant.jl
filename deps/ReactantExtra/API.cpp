@@ -373,28 +373,28 @@ enzymeActivityAttrGet(MlirContext ctx, int32_t val) {
                                               (mlir::enzyme::Activity)val));
 }
 
-extern "C" MLIR_CAPI_EXPORTED MlirType enzymeTraceTypeGet(MlirContext ctx) {
+REACTANT_ABI MLIR_CAPI_EXPORTED MlirType enzymeTraceTypeGet(MlirContext ctx) {
   return wrap(mlir::enzyme::TraceType::get(unwrap(ctx)));
 }
 
-extern "C" MLIR_CAPI_EXPORTED MlirType
+REACTANT_ABI MLIR_CAPI_EXPORTED MlirType
 enzymeConstraintTypeGet(MlirContext ctx) {
   return wrap(mlir::enzyme::ConstraintType::get(unwrap(ctx)));
 }
 
-extern "C" MLIR_CAPI_EXPORTED MlirAttribute
+REACTANT_ABI MLIR_CAPI_EXPORTED MlirAttribute
 enzymeSymbolAttrGet(MlirContext ctx, uint64_t symbol) {
   mlir::Attribute attr = mlir::enzyme::SymbolAttr::get(unwrap(ctx), symbol);
   return wrap(attr);
 }
 
-extern "C" MLIR_CAPI_EXPORTED MlirAttribute
+REACTANT_ABI MLIR_CAPI_EXPORTED MlirAttribute
 enzymeRngDistributionAttrGet(MlirContext ctx, int32_t val) {
   return wrap(mlir::enzyme::RngDistributionAttr::get(
       unwrap(ctx), (mlir::enzyme::RngDistribution)val));
 }
 
-extern "C" MLIR_CAPI_EXPORTED MlirAttribute
+REACTANT_ABI MLIR_CAPI_EXPORTED MlirAttribute
 enzymeMCMCAlgorithmAttrGet(MlirContext ctx, int32_t val) {
   return wrap(mlir::enzyme::MCMCAlgorithmAttr::get(
       unwrap(ctx), (mlir::enzyme::MCMCAlgorithm)val));
