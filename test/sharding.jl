@@ -509,3 +509,29 @@ end
         @warn "Not enough addressable devices to run sharding tests"
     end
 end
+
+@testset "Sharding Group" begin
+    if length(Reactant.devices()) ≥ 4 && Reactant.XLA.runtime() isa Val{:IFRT}
+        mesh = Sharding.Mesh(reshape(0:3, 2, 2), (:x, :y))
+        sharding = Sharding.NamedSharding(mesh, (:x, :y))
+
+        function shard_groups(x)
+            y = (x' * x)[1:4, :]
+            Reactant.Ops.sharding_group(x, y)
+            z = y .+ x
+            Reactant.Ops.sharding_group(z, y)
+            return z
+        end
+
+        x = Reactant.to_rarray(
+            Reactant.TestUtils.construct_test_array(Float32, 4, 128); sharding
+        )
+
+        hlo = repr(@code_hlo shard_groups(x))
+
+        @test count("sharding_group", hlo) == 3
+        @test count("group_id=0", hlo) == 3
+    else
+        @warn "Not enough addressable devices to run sharding tests"
+    end
+end
