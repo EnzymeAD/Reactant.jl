@@ -63,6 +63,13 @@ end
 
 @leaf TracedRNumber
 
+## CuTracedRNumber
+struct CuTracedRNumber{T,A} <: RNumber{T}
+    ptr::Core.LLVMPtr{T,A}
+end
+
+@leaf CuTracedRNumber
+
 ## TracedRArray
 mutable struct TracedRArray{T,N} <: RArray{TracedRNumber{T},N}
     paths::Tuple
@@ -86,6 +93,16 @@ end
 
 @leaf TracedRArray
 Adapt.parent_type(::Type{TracedRArray{T,N}}) where {T,N} = TracedRArray{T,N}
+
+## CuTracedArray
+struct CuTracedArray{T,N,A,Size} <: DenseArray{T,N}
+    ptr::Core.LLVMPtr{T,A}
+end
+
+@leaf CuTracedArray
+function Adapt.parent_type(::Type{CuTracedArray{T,N,A,Size}}) where {T,N,A,Size}
+    return CuTracedArray{T,N,A,Size}
+end
 
 ## TracedStepRangeLen
 struct TracedStepRangeLen{T,R,S,L} <: AbstractRange{T}
