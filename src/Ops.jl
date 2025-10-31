@@ -1,6 +1,6 @@
 # This module reflects the HLO ops defined in the openxla/stablehlo repo (plus some extras).
 # If you want to add some check or test, the StableHLO spec should be taken as the source of truth, not the Julia or Reactant semantics.
-# Julia and Reactant semantics should be considered on the higher abstractions that use these 
+# Julia and Reactant semantics should be considered on the higher abstractions that use these
 module Ops
 using ..MLIR: MLIR
 using ..MLIR.Dialects: stablehlo, chlo, enzyme, enzymexla
@@ -3472,6 +3472,49 @@ end
         ),
         size(input),
     )
+end
+
+@noinline function sharding_group(
+    inputs::Union{TracedRArray,TracedRNumber}...;
+    group_id::Union{Integer,Nothing}=nothing,
+    location=mlir_stacktrace("sharding_group", @__FILE__, @__LINE__),
+)
+    @assert length(inputs) > 1 "At least two inputs are required to form a sharding group, \
+                                got $(length(inputs))"
+
+    counter, cache = Reactant.Compiler.sdygroupidcache()
+
+    group_ids = unique([cache[input] for input in inputs if haskey(cache, input)])
+    if length(group_ids) > 1
+        error("All inputs must belong to the same sharding group. Found multiple group \
+               ids: $(group_ids)")
+    end
+
+    if length(group_ids) == 0
+        if group_id === nothing
+            group_id = @atomic counter.group_id
+            @atomic counter.group_id += 1
+        end
+    else
+        found_group_id = only(group_ids)
+        if group_id !== nothing && found_group_id != group_id
+            error(
+                "Provided group_id $(group_id) does not match the existing group_id \
+                 $(found_group_id) for the inputs. All inputs must belong to the same \
+                 sharding group."
+            )
+        end
+        group_id = found_group_id
+    end
+
+    for input in inputs
+        if !haskey(cache, input)
+            cache[input] = group_id
+            MLIR.Dialects.sdy.sharding_group(input.mlir_data; group_id=group_id, location)
+        end
+    end
+
+    return nothing
 end
 
 end # module Ops
