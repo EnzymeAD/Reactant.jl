@@ -1482,13 +1482,15 @@ end
         ::Type{T},
         seed::TracedRArray{UInt64,1},
         shape;
+        minval::Union{T,Nothing}=nothing,
+        maxval::Union{T,Nothing}=nothing,
         algorithm::String="DEFAULT",
         location=mlir_stacktrace("rand", @__FILE__, @__LINE__),
     )
 
 Generate a random array of type `T` with the given shape and seed from a uniform random
-distribution between 0 and 1 (for floating point types). Returns a NamedTuple with the
-following fields:
+distribution between `[minval, maxval)` (for floating point types). Returns a NamedTuple
+with the following fields:
 
 - `output_state`: The state of the random number generator after the operation.
 - `output`: The generated array.
@@ -1498,6 +1500,10 @@ following fields:
 - `T`: The type of the generated array.
 - `seed`: The seed for the random number generator.
 - `shape`: The shape of the generated array.
+- `minval`: The minimum value of the generated random numbers. (Only for floating point
+  types). Defaults to `0`.
+- `maxval`: The maximum value of the generated random numbers. (Only for floating point
+  types). Defaults to `1`.
 - `algorithm`: The algorithm to use for generating the random numbers. Defaults to
   "DEFAULT". Other options include "PHILOX" and "THREE_FRY".
 """
@@ -1505,10 +1511,14 @@ following fields:
     ::Type{T},
     seed::TracedRArray{UInt64,1},
     shape;
+    minval::Union{T,Nothing}=nothing,
+    maxval::Union{T,Nothing}=nothing,
     algorithm::String="DEFAULT",
     location=mlir_stacktrace("rng_bit_generator", @__FILE__, @__LINE__),
 ) where {T<:Integer}
     @assert algorithm in ("DEFAULT", "PHILOX", "THREE_FRY")
+    @assert minval === nothing "minval is not supported for integer rng_bit_generator"
+    @assert maxval === nothing "maxval is not supported for integer rng_bit_generator"
     if algorithm == "PHILOX"
         @assert length(seed) ∈ (2, 3)
     elseif algorithm == "THREE_FRY"
@@ -1527,30 +1537,59 @@ following fields:
     )
 end
 
+function _get_uint_from_bitwidth(width::Int)
+    @assert width ∈ (8, 16, 32, 64) "Unsupported bitwidth: $width"
+    return width == 8 ? UInt8 : (width == 16 ? UInt16 : (width == 32 ? UInt32 : UInt64))
+end
+
 # https://github.com/jax-ml/jax/blob/474dcd409d6fa4c048014851922460f9d4fc199e/jax/_src/random.py#L444-L464
 @noinline function rng_bit_generator(
     ::Type{T},
     seed::TracedRArray{UInt64,1},
     shape;
+    minval::T=T(0),
+    maxval::T=T(1),
     algorithm::String="DEFAULT",
     location=mlir_stacktrace("rng_bit_generator", @__FILE__, @__LINE__),
 ) where {T<:AbstractFloat}
     nbits = sizeof(T) * 8
-    @assert nbits ∈ (8, 16, 32, 64) "Unsupported type: $(T)"
-    uT = nbits == 8 ? UInt8 : (nbits == 16 ? UInt16 : (nbits == 32 ? UInt32 : UInt64))
-    (; output_state, output) = rng_bit_generator(uT, seed, shape; algorithm, location)
+    nmantissa = Reactant.nmantissa(T)
+    rng_bits = nbits
+    nmantissa < 8 && (rng_bits = 8)
+    uint_gen_dtype = _get_uint_from_bitwidth(rng_bits)
+    (; output_state, output) = rng_bit_generator(
+        uint_gen_dtype, seed, shape; algorithm, location
+    )
+    uint_dtype = _get_uint_from_bitwidth(nbits)
+    bits = output
+    if rng_bits != nbits
+        bits = convert(TracedRArray{uint_dtype,length(shape)}, bits)
+    end
+
     float_bits = or(
         shift_right_logical(
-            output,
-            fill(uT(nbits - Reactant.nmantissa(T)), size(output); location);
-            location,
+            bits, fill(uint_dtype(rng_bits - nmantissa), size(bits); location); location
         ),
-        fill(reinterpret(uT, T(1)), size(output); location);
+        fill(reinterpret(uint_dtype, T(1)), size(bits); location);
         location,
     )
-    output = subtract(
+    floats = subtract(
         bitcast_convert(TracedRArray{T,length(shape)}, float_bits; location),
         fill(T(1), size(output); location);
+        location,
+    )
+
+    maxval = prevfloat(maxval) # make maxval exclusive
+    minval_ = fill(minval, size(floats); location)
+    maxval_ = fill(maxval, size(floats); location)
+    output = clamp(
+        minval_,
+        add(
+            multiply(floats, subtract(maxval_, minval_; location); location),
+            minval_;
+            location,
+        ),
+        maxval_;
         location,
     )
     return (; output_state, output)
@@ -1585,18 +1624,29 @@ fields:
     seed::TracedRArray{UInt64,1},
     shape;
     algorithm::String="DEFAULT",
-    location=mlir_stacktrace("rand", @__FILE__, @__LINE__),
-) where {T}
-    res = rng_bit_generator(T, seed, shape; algorithm, location)
+    location=mlir_stacktrace("randn", @__FILE__, @__LINE__),
+) where {T<:AbstractFloat}
+    res = rng_bit_generator(
+        T, seed, shape; algorithm, location, minval=nextfloat(T(-1)), maxval=T(1)
+    )
     rand_uniform = res.output
     seed = res.output_state
-    scaled_uniform = subtract(
-        multiply(rand_uniform, fill(T(2), size(rand_uniform))),
-        fill(T(1), size(rand_uniform)),
-    )
-    probit = erf_inv(scaled_uniform)
+    probit = erf_inv(rand_uniform)
     rand_normal = multiply(probit, fill(Base.sqrt(T(2)), size(rand_uniform)))
     return (; output_state=seed, output=rand_normal)
+end
+
+@noinline function randn(
+    ::Type{Complex{T}},
+    seed::TracedRArray{UInt64,1},
+    shape;
+    algorithm::String="DEFAULT",
+    location=mlir_stacktrace("randn", @__FILE__, @__LINE__),
+) where {T<:AbstractFloat}
+    real_result = randn(T, seed, shape; algorithm, location)
+    imag_result = randn(T, real_result.output_state, shape; algorithm, location)
+    output = complex.(real_result.output, imag_result.output)
+    return (; output_state=imag_result.output_state, output)
 end
 
 """
@@ -1628,7 +1678,7 @@ distribution with rate 1. Returns a NamedTuple with the following fields:
     shape;
     algorithm::String="DEFAULT",
     location=mlir_stacktrace("rand", @__FILE__, @__LINE__),
-) where {T}
+) where {T<:AbstractFloat}
     res = rng_bit_generator(T, seed, shape; algorithm, location)
     rand_uniform = res.output
     seed = res.output_state
