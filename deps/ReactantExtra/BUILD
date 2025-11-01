@@ -899,12 +899,20 @@ platform(
 )
 
 cc_library(
+    name = "dlpack",
+    srcs = ["dlpack.cc"],
+    hdrs = ["dlpack.h"],
+    linkstatic = True,
+    deps = [
+        "@dlpack",
+        "@llvm-project//mlir:Support",
+    ],
+)
+
+cc_library(
     name = "ReactantExtraLib",
-    srcs = glob(
-        [
-            "*.cpp",
-        ],
-    ) + [
+    srcs = [
+        "API.cpp",
         "@enzyme_ad//src/enzyme_ad/jax:gpu.cc",
         "@enzyme_ad//src/enzyme_ad/jax:cpu.cc",
         # "@xla//xla/service/gpu:backend_configs.pb.cc",
@@ -912,9 +920,7 @@ cc_library(
         # "@xla//xla:autotune_results.pb.cc",
         # "@xla//xla/service:buffer_assignment.pb.cc",
     ],
-    hdrs = glob([
-        "*.h",
-    ]) + [
+    hdrs = [
         "@enzyme_ad//src/enzyme_ad/jax:RegistryUtils.h",
     ],
     copts = [
@@ -1225,7 +1231,10 @@ cc_binary(
     name = "libReactantExtra.so",
     linkshared = 1,  ## important
     linkstatic = 1,  ## important
-    deps = [":ReactantExtraLib"],
+    deps = [
+        ":ReactantExtraLib",
+        ":dlpack",
+    ],
 )
 
 cc_binary(
