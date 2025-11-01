@@ -15,6 +15,7 @@ using ..Reactant:
     promote_to, # keep this to avoid breaking external code
     broadcast_to_size # keep this to avoid breaking external code
 using ..Ops: @opcall
+using GPUArraysCore: @allowscalar
 using ReactantCore: ReactantCore
 using ReactantCore: MissingTracedValue, is_traced, materialize_traced_array
 
@@ -1086,6 +1087,25 @@ function set!(x, path, tostore; emptypath=false)
     return emptypath && set_paths!(x, ())
 end
 
+function __elem_apply_loop_condition(idx_ref, fn_ref::F, res_ref, args_ref, L_ref) where {F}
+    return idx_ref[] < L_ref[]
+end
+
+function __elem_apply_loop_body(idx_ref, fn_ref::F, res_ref, args_ref, L_ref) where {F}
+    args = args_ref[]
+    fn = fn_ref[]
+    res = res_ref[]
+    idx = idx_ref[] + 1
+    L = L_ref[]
+
+    scalar_args = [@allowscalar(args[i][idx]) for i in 1:length(args)]
+    @allowscalar res[idx] = fn(scalar_args...)
+
+    idx_ref[] = idx
+    res_ref[] = res
+    return nothing
+end
+
 function elem_apply(f, args::Vararg{Any,Nargs}) where {Nargs}
     if all(iszero ∘ ndims, args)
         scalar_args = map(args) do arg
@@ -1093,6 +1113,29 @@ function elem_apply(f, args::Vararg{Any,Nargs}) where {Nargs}
         end
         return Reactant.call_with_reactant(f, scalar_args...)
     end
+
+    # TODO: do this conditionally
+    # All args should be st we can scalarize them
+    # If `f` has any traced value then we can't scalarize
+
+    @assert allequal(size.(args)) "All args must have the same size"
+    sz = size(first(args))
+    L = prod(sz)
+    result = similar(first(args), Float32, sz...) # TODO: eltype????
+
+    ind_var = Ref(0)
+    f_ref = Ref(f)
+    result_ref = Ref(result)
+    args_ref = Ref(args)
+    limit_ref = Ref(L)
+
+    ReactantCore.traced_while(
+        __elem_apply_loop_condition,
+        __elem_apply_loop_body,
+        (ind_var, f_ref, result_ref, args_ref, limit_ref),
+    )
+
+    return result
 
     argprefix::Symbol = gensym("broadcastarg")
     resprefix::Symbol = gensym("broadcastresult")
