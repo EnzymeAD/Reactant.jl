@@ -1580,7 +1580,8 @@ function compile_mlir!(
     args,
     compile_options::CompileOptions,
     callcache=default_callcache(),
-    sdycache=default_sdycache();
+    sdycache=default_sdycache(),
+    sdygroupidcache=default_sdygroupidcache();
     fn_kwargs=(),
     backend="gpu",
     runtime::Union{Val{:PJRT},Val{:IFRT}},
@@ -1597,6 +1598,7 @@ function compile_mlir!(
     MLIR.IR.activate!(MLIR.IR.body(mod))
     activate_callcache!(callcache)
     activate_sdycache!(sdycache)
+    activate_sdygroupidcache!(sdygroupidcache)
 
     # Save in the TLS whether we are raising.  We identify that condition by
     # checking whether the user set an explicit list of passes, or chose
@@ -1623,6 +1625,7 @@ function compile_mlir!(
     finally
         deactivate_raising!(is_raising)
         deactivate_sdycache!(sdycache)
+        deactivate_sdygroupidcache!(sdygroupidcache)
         deactivate_callcache!(callcache)
         MLIR.IR.deactivate!(MLIR.IR.body(mod))
         MLIR.IR.deactivate!(mod)
@@ -3832,7 +3835,7 @@ function register_thunk(
     )
 end
 
-for cache_type in (:callcache, :sdycache)
+for cache_type in (:callcache, :sdycache, :sdygroupidcache)
     activate_fn = Symbol(:activate_, cache_type, :!)
     deactivate_fn = Symbol(:deactivate_, cache_type, :!)
     has_fn = Symbol(:_has_, cache_type)
@@ -3877,6 +3880,14 @@ function default_sdycache()
             mesh::Sharding.Mesh,
         }
     }()
+end
+
+mutable struct SdyGroupIDCounter{T}
+    @atomic group_id::T
+end
+
+function default_sdygroupidcache()
+    return SdyGroupIDCounter{Int}(0), Base.IdDict{Union{TracedRArray,TracedRNumber},Int}()
 end
 
 function default_callcache()

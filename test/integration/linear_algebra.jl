@@ -48,9 +48,9 @@ function mul_with_view3(A, x)
 end
 
 @testset "Matrix Multiplication" begin
-    A = rand(4, 4)
-    x = rand(4, 2)
-    b = rand(4)
+    A = Reactant.TestUtils.construct_test_array(Float64, 4, 4)
+    x = Reactant.TestUtils.construct_test_array(Float64, 4, 2)
+    b = Reactant.TestUtils.construct_test_array(Float64, 4)
 
     A_ra = Reactant.to_rarray(A)
     x_ra = Reactant.to_rarray(x)
@@ -63,14 +63,14 @@ end
 
     @test @jit(mul_with_view1(A_ra, x_ra)) ≈ mul_with_view1(A, x)
 
-    x2 = rand(4)
+    x2 = Reactant.TestUtils.construct_test_array(Float64, 4)
     x2_ra = Reactant.to_rarray(x2)
 
     @test @jit(mul_with_view2(A_ra, x2_ra)) ≈ mul_with_view2(A, x2)
     @test @jit(mul_with_view3(A_ra, x2_ra)) ≈ mul_with_view3(A, x2)
 
     # Mixed Precision
-    x = rand(Float32, 4, 2)
+    x = Reactant.TestUtils.construct_test_array(Float32, 4, 2)
     x_ra = Reactant.to_rarray(x)
 
     @test @jit(muladd2(A_ra, x_ra, b_ra)) ≈ muladd2(A, x, b)
@@ -84,7 +84,7 @@ end
 end
 
 @testset "triu & tril" begin
-    A = rand(4, 6)
+    A = Reactant.TestUtils.construct_test_array(Float64, 4, 6)
     A_ra = Reactant.to_rarray(A)
 
     @test @jit(triu(A_ra)) ≈ triu(A)
@@ -120,14 +120,14 @@ end
 end
 
 @testset "diag / diagm" begin
-    x = rand(2, 4)
+    x = Reactant.TestUtils.construct_test_array(Float64, 2, 4)
     x_ra = Reactant.to_rarray(x)
 
     @testset for k in (-size(x, 1) + 1):(size(x, 1) - 1)
         @test @jit(diag(x_ra, k)) ≈ diag(x, k)
     end
 
-    x = rand(4)
+    x = Reactant.TestUtils.construct_test_array(Float64, 4)
     x_ra = Reactant.to_rarray(x)
 
     @test @jit(diagm(x_ra)) ≈ diagm(x)
@@ -136,9 +136,9 @@ end
     @test @jit(diagm(6, 6, x_ra)) ≈ diagm(6, 6, x)
     @test_throws DimensionMismatch @jit(diagm(3, 3, x_ra))
 
-    x1 = rand(3)
-    x2 = rand(3)
-    x3 = rand(2)
+    x1 = Reactant.TestUtils.construct_test_array(Float64, 3)
+    x2 = Reactant.TestUtils.construct_test_array(Float64, 3)
+    x3 = Reactant.TestUtils.construct_test_array(Float64, 2)
     x_ra1 = Reactant.to_rarray(x1)
     x_ra2 = Reactant.to_rarray(x2)
     x_ra3 = Reactant.to_rarray(x3)
@@ -159,7 +159,7 @@ mul_upper_triangular(x) = UpperTriangular(x) * x
 mul_symmetric(x) = Symmetric(x) * x
 
 @testset "Wrapper Types Matrix Multiplication" begin
-    x = rand(4, 4)
+    x = Reactant.TestUtils.construct_test_array(Float64, 4, 4)
     x_ra = Reactant.to_rarray(x)
 
     @testset "$(wrapper_type)" for (wrapper_type, fn) in [
@@ -180,8 +180,8 @@ end
         @testset for (x_sz, y_sz) in [
             ((3, 4), (2, 5)), ((3, 4), (2,)), ((3,), (2, 5)), ((3,), (5,)), ((10,), ())
         ]
-            x = x_sz == () ? rand(T) : rand(T, x_sz)
-            y = y_sz == () ? rand(T) : rand(T, y_sz)
+            x = x_sz == () ? one(T) : Reactant.TestUtils.construct_test_array(T, x_sz...)
+            y = y_sz == () ? one(T) : Reactant.TestUtils.construct_test_array(T, y_sz...)
             x_ra = Reactant.to_rarray(x; track_numbers=Number)
             y_ra = Reactant.to_rarray(y; track_numbers=Number)
             @test @jit(kron(x_ra, y_ra)) ≈ kron(x, y)
@@ -191,26 +191,26 @@ end
 
 @testset "axpy!" begin
     α = 3
-    x = rand(Int64, 4)
+    x = Reactant.TestUtils.construct_test_array(Int64, 4)
     x_ra = Reactant.to_rarray(x)
-    y = rand(Int64, 4)
+    y = Reactant.TestUtils.construct_test_array(Int64, 4)
     y_ra = Reactant.to_rarray(y)
 
     @jit axpy!(α, x_ra, y_ra)
     @test y_ra ≈ axpy!(α, x, y)
 
     α = 2
-    x = rand(4)
+    x = Reactant.TestUtils.construct_test_array(Float64, 4)
     x_ra = Reactant.to_rarray(x)
-    y = rand(4)
+    y = Reactant.TestUtils.construct_test_array(Float64, 4)
     y_ra = Reactant.to_rarray(y)
 
     @jit axpy!(α, x_ra, y_ra)
     @test y_ra ≈ axpy!(α, x, y)
 
     α = 4.12
-    X = rand(3, 5)
-    Y = rand(3, 5)
+    X = Reactant.TestUtils.construct_test_array(Float64, 3, 5)
+    Y = Reactant.TestUtils.construct_test_array(Float64, 3, 5)
     X_ra = Reactant.to_rarray(X)
     Y_ra = Reactant.to_rarray(Y)
 
@@ -218,9 +218,9 @@ end
     @test Y_ra ≈ axpy!(α, X, Y)
 
     α = 3.2 + 1im
-    x = rand(Complex{Float32}, 4)
+    x = Reactant.TestUtils.construct_test_array(Complex{Float32}, 4)
     x_ra = Reactant.to_rarray(x)
-    y = rand(Complex{Float32}, 4)
+    y = Reactant.TestUtils.construct_test_array(Complex{Float32}, 4)
     y_ra = Reactant.to_rarray(y)
 
     @jit axpy!(α, x_ra, y_ra)
@@ -230,9 +230,9 @@ end
 @testset "axpby!" begin
     α = 3
     β = 2
-    x = rand(Int64, 4)
+    x = Reactant.TestUtils.construct_test_array(Int64, 4)
     x_ra = Reactant.to_rarray(x)
-    y = rand(Int64, 4)
+    y = Reactant.TestUtils.construct_test_array(Int64, 4)
     y_ra = Reactant.to_rarray(y)
 
     @jit axpby!(α, x_ra, β, y_ra)
@@ -240,17 +240,17 @@ end
 
     α = 2
     β = 3
-    x = rand(4)
+    x = Reactant.TestUtils.construct_test_array(Float64, 4)
     x_ra = Reactant.to_rarray(x)
-    y = rand(4)
+    y = Reactant.TestUtils.construct_test_array(Float64, 4)
     y_ra = Reactant.to_rarray(y)
 
     @jit axpby!(α, x_ra, β, y_ra)
     @test y_ra ≈ axpby!(α, x, β, y)
 
     α = 4.12
-    X = rand(3, 5)
-    Y = rand(3, 5)
+    X = Reactant.TestUtils.construct_test_array(Float64, 3, 5)
+    Y = Reactant.TestUtils.construct_test_array(Float64, 3, 5)
     X_ra = Reactant.to_rarray(X)
     Y_ra = Reactant.to_rarray(Y)
 
@@ -259,9 +259,9 @@ end
 
     α = 3.2 + 1im
     β = 2.1 - 4.2im
-    x = rand(Complex{Float32}, 4)
+    x = Reactant.TestUtils.construct_test_array(Complex{Float32}, 4)
     x_ra = Reactant.to_rarray(x)
-    y = rand(Complex{Float32}, 4)
+    y = Reactant.TestUtils.construct_test_array(Complex{Float32}, 4)
     y_ra = Reactant.to_rarray(y)
 
     @jit axpby!(α, x_ra, β, y_ra)
@@ -284,23 +284,23 @@ end
     end
 
     @testset "2-arg complex" begin
-        x = rand(Complex{Float32}, 4)
-        y = rand(Complex{Float32}, 4)
+        x = Reactant.TestUtils.construct_test_array(Complex{Float32}, 4)
+        y = Reactant.TestUtils.construct_test_array(Complex{Float32}, 4)
         x_ra = Reactant.to_rarray(x)
         y_ra = Reactant.to_rarray(y)
 
         @test @jit(dot(x_ra, y_ra)) ≈ dot(x, y)
 
-        x = rand(Complex{Float32}, 2, 2)
+        x = Reactant.TestUtils.construct_test_array(Complex{Float32}, 2, 2)
         x_ra = Reactant.to_rarray(x)
 
         @test @jit(dot(x_ra, x_ra)) ≈ dot(x, x)
     end
 
     @testset "3-arg" begin
-        x = rand(Float32, 2, 2)
-        y = rand(Float32, 4, 5)
-        z = rand(Float32, 5)
+        x = Reactant.TestUtils.construct_test_array(Float32, 2, 2)
+        y = Reactant.TestUtils.construct_test_array(Float32, 4, 5)
+        z = Reactant.TestUtils.construct_test_array(Float32, 5)
         x_ra = Reactant.to_rarray(x)
         y_ra = Reactant.to_rarray(y)
         z_ra = Reactant.to_rarray(z)
@@ -321,9 +321,9 @@ end
     @testset for T in (Float32, Float64, ComplexF32, ComplexF64)
         T == ComplexF64 && RunningOnTPU && continue
 
-        A = rand(T, 6, 6)
-        B = rand(T, 6, 6)
-        b = rand(T, 6)
+        A = Reactant.TestUtils.construct_test_array(T, 6, 6)
+        B = Reactant.TestUtils.construct_test_array(T, 6, 6)
+        b = Reactant.TestUtils.construct_test_array(T, 6)
         b_ra = Reactant.to_rarray(b)
         B_ra = Reactant.to_rarray(B)
 
@@ -411,7 +411,7 @@ end
     end
 
     @testset "transpose! and adjoint!" begin
-        A = rand(Complex{Float32}, 7, 13)
+        A = Reactant.TestUtils.construct_test_array(Complex{Float32}, 7, 13)
         B = similar(A')::Matrix
         A_ra = Reactant.to_rarray(A)
 

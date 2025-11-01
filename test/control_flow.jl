@@ -13,12 +13,12 @@ function condition1(x)
 end
 
 @testset "condition1" begin
-    x = rand(2, 10)
+    x = Reactant.TestUtils.construct_test_array(Float64, 2, 10)
     x_ra = Reactant.to_rarray(x)
 
     @test @jit(condition1(x_ra)) ≈ condition1(x)
 
-    x = -rand(2, 10)
+    x = -Reactant.TestUtils.construct_test_array(Float64, 2, 10)
     x_ra = Reactant.to_rarray(x)
 
     @test @jit(condition1(x_ra)) ≈ condition1(x)
@@ -36,12 +36,12 @@ function condition1_missing_var(x)
 end
 
 @testset "condition1_missing_var" begin
-    x = rand(2, 10)
+    x = Reactant.TestUtils.construct_test_array(Float64, 2, 10)
     x_ra = Reactant.to_rarray(x)
 
     @test @jit(condition1_missing_var(x_ra)) ≈ condition1_missing_var(x)
 
-    x = -rand(2, 10)
+    x = -Reactant.TestUtils.construct_test_array(Float64, 2, 10)
     x_ra = Reactant.to_rarray(x)
 
     @test @jit(condition1_missing_var(x_ra)) ≈ condition1_missing_var(x)
@@ -83,22 +83,22 @@ function condition2_if_else_if(x, y)
 end
 
 @testset "condition2: multiple conditions" begin
-    x = rand(2, 10)
-    y = rand(2, 10)
+    x = Reactant.TestUtils.construct_test_array(Float64, 2, 10)
+    y = Reactant.TestUtils.construct_test_array(Float64, 2, 10)
     x_ra = Reactant.to_rarray(x)
     y_ra = Reactant.to_rarray(y)
 
     @test @jit(condition2_nested_if(x_ra, y_ra)) ≈ condition2_nested_if(x, y)
     @test @jit(condition2_if_else_if(x_ra, y_ra)) ≈ condition2_if_else_if(x, y)
 
-    y = -rand(2, 10)
+    y = -Reactant.TestUtils.construct_test_array(Float64, 2, 10)
     y_ra = Reactant.to_rarray(y)
 
     @test @jit(condition2_nested_if(x_ra, y_ra)) ≈ condition2_nested_if(x, y)
     @test @jit(condition2_if_else_if(x_ra, y_ra)) ≈ condition2_if_else_if(x, y)
 
-    x = -rand(2, 10)
-    y = -rand(2, 10)
+    x = -Reactant.TestUtils.construct_test_array(Float64, 2, 10)
+    y = -Reactant.TestUtils.construct_test_array(Float64, 2, 10)
     x_ra = Reactant.to_rarray(x)
     y_ra = Reactant.to_rarray(y)
 
@@ -118,28 +118,28 @@ function condition3_mixed_conditions(x, y)
 end
 
 @testset "condition3: mixed conditions" begin
-    x = rand(2, 10)
-    y = rand(2, 10)
+    x = Reactant.TestUtils.construct_test_array(Float64, 2, 10)
+    y = Reactant.TestUtils.construct_test_array(Float64, 2, 10)
     x_ra = Reactant.to_rarray(x)
     y_ra = Reactant.to_rarray(y)
 
     @test @jit(condition3_mixed_conditions(x_ra, y_ra)) ≈ condition3_mixed_conditions(x, y)
 
-    x = -rand(2, 10)
-    y = -rand(2, 10)
+    x = -Reactant.TestUtils.construct_test_array(Float64, 2, 10)
+    y = -Reactant.TestUtils.construct_test_array(Float64, 2, 10)
     x_ra = Reactant.to_rarray(x)
     y_ra = Reactant.to_rarray(y)
 
     @test @jit(condition3_mixed_conditions(x_ra, y_ra)) ≈ condition3_mixed_conditions(x, y)
 
-    x = rand(2, 10)
-    y = -rand(2, 10)
+    x = Reactant.TestUtils.construct_test_array(Float64, 2, 10)
+    y = -Reactant.TestUtils.construct_test_array(Float64, 2, 10)
     x_ra = Reactant.to_rarray(x)
     y_ra = Reactant.to_rarray(y)
     @test @jit(condition3_mixed_conditions(x_ra, y_ra)) ≈ condition3_mixed_conditions(x, y)
 
-    y = rand(2, 10)
-    z = -rand(2, 10)
+    y = Reactant.TestUtils.construct_test_array(Float64, 2, 10)
+    z = -Reactant.TestUtils.construct_test_array(Float64, 2, 10)
     y_ra = Reactant.to_rarray(y)
     z_ra = Reactant.to_rarray(z)
     @test @jit(condition3_mixed_conditions(x_ra, y_ra)) ≈ condition3_mixed_conditions(x, y)
@@ -159,28 +159,28 @@ function condition4_mixed_conditions(x, y)
 end
 
 @testset "condition4: mixed conditions" begin
-    x = rand(2, 10)
-    y = rand(2, 10)
+    x = Reactant.TestUtils.construct_test_array(Float64, 2, 10)
+    y = Reactant.TestUtils.construct_test_array(Float64, 2, 10)
     x_ra = Reactant.to_rarray(x)
     y_ra = Reactant.to_rarray(y)
 
     @test @jit(condition4_mixed_conditions(x_ra, y_ra)) ≈ condition4_mixed_conditions(x, y)
 
-    x = -rand(2, 10)
-    y = -rand(2, 10)
+    x = -Reactant.TestUtils.construct_test_array(Float64, 2, 10)
+    y = -Reactant.TestUtils.construct_test_array(Float64, 2, 10)
     x_ra = Reactant.to_rarray(x)
     y_ra = Reactant.to_rarray(y)
 
     @test @jit(condition4_mixed_conditions(x_ra, y_ra)) ≈ condition4_mixed_conditions(x, y)
 
-    x = rand(2, 10)
-    y = -rand(2, 10)
+    x = Reactant.TestUtils.construct_test_array(Float64, 2, 10)
+    y = -Reactant.TestUtils.construct_test_array(Float64, 2, 10)
     x_ra = Reactant.to_rarray(x)
     y_ra = Reactant.to_rarray(y)
     @test @jit(condition4_mixed_conditions(x_ra, y_ra)) ≈ condition4_mixed_conditions(x, y)
 
-    y = rand(2, 10)
-    z = -rand(2, 10)
+    y = Reactant.TestUtils.construct_test_array(Float64, 2, 10)
+    z = -Reactant.TestUtils.construct_test_array(Float64, 2, 10)
     y_ra = Reactant.to_rarray(y)
     z_ra = Reactant.to_rarray(z)
     @test @jit(condition4_mixed_conditions(x_ra, y_ra)) ≈ condition4_mixed_conditions(x, y)
@@ -200,8 +200,8 @@ function condition5_multiple_returns(x, y)
 end
 
 @testset "condition5: multiple returns" begin
-    x = rand(2, 10)
-    y = rand(2, 10)
+    x = Reactant.TestUtils.construct_test_array(Float64, 2, 10)
+    y = Reactant.TestUtils.construct_test_array(Float64, 2, 10)
     x_ra = Reactant.to_rarray(x)
     y_ra = Reactant.to_rarray(y)
 
@@ -280,7 +280,7 @@ function condition8_return_if(x)
 end
 
 @testset "condition8: return if" begin
-    x = rand(2, 10)
+    x = Reactant.TestUtils.construct_test_array(Float64, 2, 10)
     x_ra = Reactant.to_rarray(x)
 
     res_ra = @jit(condition8_return_if(x_ra))
@@ -288,7 +288,7 @@ end
     @test res_ra[1] ≈ res[1]
     @test res_ra[2] ≈ res[2]
 
-    x = -rand(2, 10)
+    x = -Reactant.TestUtils.construct_test_array(Float64, 2, 10)
     x_ra = Reactant.to_rarray(x)
 
     res_ra = @jit(condition8_return_if(x_ra))
@@ -316,14 +316,14 @@ function condition9_if_ends_with_nothing(x)
 end
 
 @testset "condition9: if ends with nothing" begin
-    x = rand(2, 10)
+    x = Reactant.TestUtils.construct_test_array(Float64, 2, 10)
     x_ra = Reactant.to_rarray(x)
 
     res_ra = @jit(condition9_if_ends_with_nothing(x_ra))
     res = condition9_if_ends_with_nothing(x)
     @test res_ra ≈ res
 
-    x = -rand(2, 10)
+    x = -Reactant.TestUtils.construct_test_array(Float64, 2, 10)
     x_ra = Reactant.to_rarray(x)
 
     res_ra = @jit(condition9_if_ends_with_nothing(x_ra))
@@ -343,7 +343,7 @@ function condition9_if_ends_with_pathological_nothing(x)
 end
 
 @testset "condition9: if ends with pathological nothing" begin
-    x = rand(2, 10)
+    x = Reactant.TestUtils.construct_test_array(Float64, 2, 10)
     x_ra = Reactant.to_rarray(x)
 
     res_ra = @jit(condition9_if_ends_with_pathological_nothing(x_ra))
@@ -362,7 +362,7 @@ function condition10_condition_with_setindex(x)
 end
 
 @testset "condition10: condition with setindex!" begin
-    x = rand(2, 10)
+    x = Reactant.TestUtils.construct_test_array(Float64, 2, 10)
     x_ra = Reactant.to_rarray(x)
 
     res_ra = @jit(condition10_condition_with_setindex(x_ra))
@@ -371,7 +371,7 @@ end
     @test @allowscalar(x_ra[1, 1]) == -1.0
     @test @allowscalar(x_ra[2, 1]) == -1.0
 
-    x = -rand(2, 10)
+    x = -Reactant.TestUtils.construct_test_array(Float64, 2, 10)
     x[2, 1] = 0.0
     x_ra = Reactant.to_rarray(x)
 
@@ -403,18 +403,18 @@ function condition11_nested_ifff(x, y, z)
 end
 
 @testset "condition11: nested if 3 levels deep" begin
-    x = rand(2, 10)
-    y = rand(2, 10)
-    z = rand(2, 10)
+    x = Reactant.TestUtils.construct_test_array(Float64, 2, 10)
+    y = Reactant.TestUtils.construct_test_array(Float64, 2, 10)
+    z = Reactant.TestUtils.construct_test_array(Float64, 2, 10)
     x_ra = Reactant.to_rarray(x)
     y_ra = Reactant.to_rarray(y)
     z_ra = Reactant.to_rarray(z)
 
     @test @jit(condition11_nested_ifff(x_ra, y_ra, z_ra)) ≈ condition11_nested_ifff(x, y, z)
 
-    x = -rand(2, 10)
-    y = -rand(2, 10)
-    z = -rand(2, 10)
+    x = -Reactant.TestUtils.construct_test_array(Float64, 2, 10)
+    y = -Reactant.TestUtils.construct_test_array(Float64, 2, 10)
+    z = -Reactant.TestUtils.construct_test_array(Float64, 2, 10)
     x_ra = Reactant.to_rarray(x)
     y_ra = Reactant.to_rarray(y)
     z_ra = Reactant.to_rarray(z)
@@ -435,9 +435,9 @@ function condition12_compile_test(x, y, z)
 end
 
 @testset "condition12: compile test" begin
-    x = rand(2, 10)
-    y = rand(2, 10)
-    z = rand(2, 10)
+    x = Reactant.TestUtils.construct_test_array(Float64, 2, 10)
+    y = Reactant.TestUtils.construct_test_array(Float64, 2, 10)
+    z = Reactant.TestUtils.construct_test_array(Float64, 2, 10)
     x_ra = Reactant.to_rarray(x)
     y_ra = Reactant.to_rarray(y)
     z_ra = Reactant.to_rarray(z)
@@ -445,9 +445,9 @@ end
     @test @jit(condition12_compile_test(x_ra, y_ra, z_ra)) ≈
         condition12_compile_test(x, y, z)
 
-    x = -rand(2, 10)
-    y = -rand(2, 10)
-    z = -rand(2, 10)
+    x = -Reactant.TestUtils.construct_test_array(Float64, 2, 10)
+    y = -Reactant.TestUtils.construct_test_array(Float64, 2, 10)
+    z = -Reactant.TestUtils.construct_test_array(Float64, 2, 10)
     x_ra = Reactant.to_rarray(x)
     y_ra = Reactant.to_rarray(y)
     z_ra = Reactant.to_rarray(z)
@@ -467,7 +467,7 @@ function condition_with_structure(x)
 end
 
 @testset "condition with structure" begin
-    x = rand(2, 10)
+    x = Reactant.TestUtils.construct_test_array(Float64, 2, 10)
     x_ra = Reactant.to_rarray(x)
 
     res_ra = @jit condition_with_structure(x_ra)
@@ -476,7 +476,7 @@ end
     @test res_ra.b[1] ≈ res.b[1]
     @test res_ra.b[2] ≈ res.b[2]
 
-    x = -rand(2, 10)
+    x = -Reactant.TestUtils.construct_test_array(Float64, 2, 10)
     x_ra = Reactant.to_rarray(x)
 
     res_ra = @jit condition_with_structure(x_ra)
@@ -494,7 +494,7 @@ function for_with_step(x)
 end
 
 @testset "for: for with step" begin
-    x = rand(1:100, 22)
+    x = collect(1:22)
     x_ra = Reactant.to_rarray(x)
 
     @test @jit(for_with_step(x_ra)) == for_with_step(x)
@@ -508,7 +508,7 @@ function nnorm(x, n)
 end
 
 @testset "for: induction" begin
-    x = randn(Float32, 10)
+    x = Reactant.TestUtils.construct_test_array(Float32, 10)
     x_ra = Reactant.to_rarray(x)
 
     n = 10
@@ -537,7 +537,7 @@ end
 
     μ = ones(Float32, Nμ) ./ Nμ
     ν = ones(Float32, Nν) ./ Nν
-    C = randn(Float32, Nμ, Nν)
+    C = Reactant.TestUtils.construct_test_array(Float32, Nμ, Nν)
 
     μ_ra = Reactant.to_rarray(μ)
     ν_ra = Reactant.to_rarray(ν)
@@ -576,7 +576,7 @@ function cumsum!(x)
 end
 
 @testset "for: mutation within loop" begin
-    x = rand(1:100, 10)
+    x = collect(1:10)
     x_ra = Reactant.to_rarray(x)
 
     @test @jit(cumsum!(x_ra)) == cumsum!(x)
@@ -591,7 +591,7 @@ function for_ref_outer(x)
 end
 
 @testset "for: outer reference" begin
-    x = randn(Float64, 10)
+    x = Reactant.TestUtils.construct_test_array(Float64, 10)
     x_ra = Reactant.to_rarray(x)
 
     @test @jit(for_ref_outer(x_ra)) ≈ for_ref_outer(x)
@@ -606,7 +606,7 @@ function for_inner_scope(x)
 end
 
 @testset "for: inner scope" begin
-    x = randn(Float64, 10)
+    x = Reactant.TestUtils.construct_test_array(Float64, 10)
     x_ra = Reactant.to_rarray(x)
 
     @test @jit(for_inner_scope(x_ra)) ≈ for_inner_scope(x)
@@ -622,7 +622,7 @@ function for_with_named_tuple(x)
 end
 
 @testset "for: named tuple" begin
-    x = randn(Float64, 10)
+    x = Reactant.TestUtils.construct_test_array(Float64, 10)
     x_ra = Reactant.to_rarray(x)
 
     @test @jit(for_with_named_tuple(x_ra)) ≈ for_with_named_tuple(x)
@@ -718,8 +718,8 @@ function call1(a, b)
 end
 
 @testset "call: basic" begin
-    a = rand(2, 3)
-    b = rand(2, 3)
+    a = Reactant.TestUtils.construct_test_array(Float64, 2, 3)
+    b = Reactant.TestUtils.construct_test_array(Float64, 2, 3)
     a_ra = Reactant.to_rarray(a)
     b_ra = Reactant.to_rarray(b)
 
@@ -731,7 +731,7 @@ end
     @test length(ops) == 2 # call1, _call1
 
     # With different operand sizes, different functions need to be generated:
-    c = rand(4, 5)
+    c = Reactant.TestUtils.construct_test_array(Float64, 4, 5)
     c_ra = Reactant.to_rarray(c)
 
     @test @jit(call1(a_ra, c_ra)) ≈ call1(a, c)
@@ -767,7 +767,7 @@ function call3(y)
 end
 
 @testset "call: caching for Julia operands" begin
-    y = rand(3)
+    y = Reactant.TestUtils.construct_test_array(Float64, 3)
     y_ra = Reactant.to_rarray(y)
 
     ir = @code_hlo optimize = false call3(y_ra)
@@ -790,8 +790,8 @@ function call4(foo, foo2, bar)
 end
 
 @testset "call: Caching struct arguments" begin
-    a = rand(10)
-    b = rand(10)
+    a = Reactant.TestUtils.construct_test_array(Float64, 10)
+    b = Reactant.TestUtils.construct_test_array(Float64, 10)
     foo = Foo(Reactant.to_rarray(a))
     foo2 = Foo(Reactant.to_rarray(b))
     bar = Foo(Bar(Reactant.to_rarray(b))) # typeof(foo) == typeof(bar), but these don't match!
@@ -827,8 +827,8 @@ end
     end
 
     @testset "basic traced function" begin
-        a = rand(2, 3)
-        b = rand(2, 3)
+        a = Reactant.TestUtils.construct_test_array(Float64, 2, 3)
+        b = Reactant.TestUtils.construct_test_array(Float64, 2, 3)
         a_ra = Reactant.to_rarray(a)
         b_ra = Reactant.to_rarray(b)
 
@@ -851,8 +851,8 @@ end
     end
 
     @testset "traced function with type annotations" begin
-        a = rand(3, 3)
-        b = rand(3, 3)
+        a = Reactant.TestUtils.construct_test_array(Float64, 3, 3)
+        b = Reactant.TestUtils.construct_test_array(Float64, 3, 3)
         a_ra = Reactant.to_rarray(a)
         b_ra = Reactant.to_rarray(b)
 
@@ -870,7 +870,7 @@ end
     @trace singleline(x) = x .+ 1
 
     @testset "single line function" begin
-        a = rand(2, 3)
+        a = Reactant.TestUtils.construct_test_array(Float64, 2, 3)
         a_ra = Reactant.to_rarray(a)
 
         @test @jit(singleline(a_ra)) ≈ singleline(a)
@@ -893,7 +893,7 @@ end
     end
 
     @testset "function with functor" begin
-        a = rand(2, 3)
+        a = Reactant.TestUtils.construct_test_array(Float64, 2, 3)
         a_ra = Reactant.to_rarray(a)
 
         fn1 = FunctorTest1(2.0f0)
@@ -914,7 +914,7 @@ end
     end
 
     @testset "function with kwargs" begin
-        a = rand(2, 3)
+        a = Reactant.TestUtils.construct_test_array(Float64, 2, 3)
         a_ra = Reactant.to_rarray(a)
 
         @test @jit(func_with_kwargs(a_ra; y=2.0f0)) ≈ func_with_kwargs(a; y=2.0f0)
@@ -1013,7 +1013,7 @@ function loop_batched(x)
 end
 
 @testset "setindex: batched" begin
-    x = rand(1024, 128)
+    x = Reactant.TestUtils.construct_test_array(Float64, 1024, 128)
     x_ra = Reactant.to_rarray(x)
 
     @test @jit(loop_batched(x_ra)) ≈ loop_batched(x)

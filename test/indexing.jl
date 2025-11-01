@@ -7,7 +7,7 @@ function update_on_copy(x)
 end
 
 @testset "view / setindex" begin
-    x = rand(2, 4, 3)
+    x = Reactant.TestUtils.construct_test_array(Float64, 2, 4, 3)
     y = copy(x)
     x_concrete = Reactant.to_rarray(x)
     y_concrete = Reactant.to_rarray(y)
@@ -32,7 +32,7 @@ end
 end
 
 @testset "setindex: unitrange index" begin
-    x = rand(4, 4)
+    x = Reactant.TestUtils.construct_test_array(Float64, 4, 4)
     y = zeros(3, 2)
     x_ra = Reactant.to_rarray(x)
     y_ra = Reactant.to_rarray(y)
@@ -78,7 +78,7 @@ function masking!(x)
 end
 
 @testset "setindex! with views" begin
-    x = rand(4, 4) .+ 2.0
+    x = Reactant.TestUtils.construct_test_array(Float64, 4, 4) .+ 2.0
     x_ra = Reactant.to_rarray(x)
 
     y = masking(x)
@@ -107,7 +107,7 @@ function non_contiguous_setindex!(x)
 end
 
 @testset "non-contiguous setindex!" begin
-    x = rand(6, 6)
+    x = Reactant.TestUtils.construct_test_array(Float64, 6, 6)
     x_ra = Reactant.to_rarray(x)
 
     y = @jit(non_contiguous_setindex!(x_ra))
@@ -122,7 +122,7 @@ end
 end
 
 @testset "dynamic indexing" begin
-    x = randn(5, 3)
+    x = Reactant.TestUtils.construct_test_array(Float64, 5, 3)
     x_ra = Reactant.to_rarray(x)
 
     idx = [1, 2, 3]
@@ -148,7 +148,7 @@ end
 end
 
 @testset "non-contiguous indexing" begin
-    x = rand(4, 4, 3)
+    x = Reactant.TestUtils.construct_test_array(Float64, 4, 4, 3)
     x_ra = Reactant.to_rarray(x)
 
     non_contiguous_indexing1(x) = x[[1, 3, 2], :, :]
@@ -157,7 +157,7 @@ end
     @test @jit(non_contiguous_indexing1(x_ra)) ≈ non_contiguous_indexing1(x)
     @test @jit(non_contiguous_indexing2(x_ra)) ≈ non_contiguous_indexing2(x)
 
-    x = rand(4, 2)
+    x = Reactant.TestUtils.construct_test_array(Float64, 4, 2)
     x_ra = Reactant.to_rarray(x)
 
     non_contiguous_indexing3(x) = x[[1, 3, 2], :]
@@ -166,7 +166,7 @@ end
     @test @jit(non_contiguous_indexing3(x_ra)) ≈ non_contiguous_indexing3(x)
     @test @jit(non_contiguous_indexing4(x_ra)) ≈ non_contiguous_indexing4(x)
 
-    x = rand(4, 4, 3)
+    x = Reactant.TestUtils.construct_test_array(Float64, 4, 4, 3)
     x_ra = Reactant.to_rarray(x)
 
     non_contiguous_indexing1!(x) = x[[1, 3, 2], :, :] .= 2
@@ -176,14 +176,14 @@ end
     non_contiguous_indexing1!(x)
     @test x_ra ≈ x
 
-    x = rand(4, 4, 3)
+    x = Reactant.TestUtils.construct_test_array(Float64, 4, 4, 3)
     x_ra = Reactant.to_rarray(x)
 
     @jit(non_contiguous_indexing2!(x_ra))
     non_contiguous_indexing2!(x)
     @test x_ra ≈ x
 
-    x = rand(4, 2)
+    x = Reactant.TestUtils.construct_test_array(Float64, 4, 2)
     x_ra = Reactant.to_rarray(x)
 
     non_contiguous_indexing3!(x) = x[[1, 3, 2], :] .= 2
@@ -193,7 +193,7 @@ end
     non_contiguous_indexing3!(x)
     @test x_ra ≈ x
 
-    x = rand(4, 2)
+    x = Reactant.TestUtils.construct_test_array(Float64, 4, 2)
     x_ra = Reactant.to_rarray(x)
 
     @jit(non_contiguous_indexing4!(x_ra))
@@ -202,7 +202,7 @@ end
 end
 
 @testset "indexing with traced arrays" begin
-    x = rand(4, 4, 3)
+    x = Reactant.TestUtils.construct_test_array(Float64, 4, 4, 3)
     idx1 = [1, 3, 2]
     idx3 = [1, 2, 1, 3]
 
@@ -222,7 +222,7 @@ end
 end
 
 @testset "linear indexing" begin
-    x = rand(4, 4, 3)
+    x = Reactant.TestUtils.construct_test_array(Float64, 4, 4, 3)
     x_ra = Reactant.to_rarray(x)
 
     getindex_linear_scalar(x, idx) = @allowscalar x[idx]
@@ -234,7 +234,7 @@ end
         ) ≈ getindex_linear_scalar(x, i)
     end
 
-    idx = rand(1:length(x), 8)
+    idx = [1, 6, 12, 18, 24, 30, 36, 42]
     idx_ra = Reactant.to_rarray(idx)
 
     getindex_linear_vector(x, idx) = x[idx]
@@ -244,8 +244,9 @@ end
 end
 
 @testset "Boolean Indexing" begin
-    x_ra = Reactant.to_rarray(rand(Float32, 4, 16))
-    idxs_ra = Reactant.to_rarray(rand(Bool, 16))
+    x_ra = Reactant.to_rarray(Reactant.TestUtils.construct_test_array(Float32, 4, 16))
+    idxs = [iszero(mod(i, 3)) for i in 1:16]
+    idxs_ra = Reactant.to_rarray(idxs)
 
     fn(x, idxs) = x[:, idxs]
 
@@ -256,7 +257,7 @@ end
 end
 
 @testset "inconsistent indexing" begin
-    x_ra = Reactant.to_rarray(rand(3, 4, 3))
+    x_ra = Reactant.to_rarray(Reactant.TestUtils.construct_test_array(Float64, 3, 4, 3))
     idx_ra = Reactant.to_rarray(1; track_numbers=Number)
 
     fn1(x) = x[:, :, 1]
@@ -269,10 +270,12 @@ end
 end
 
 @testset "High-Dimensional Array Indexing" begin
-    x_ra = Reactant.to_rarray(rand(5, 4, 3))
-    idx1_ra = Reactant.to_rarray(rand(1:5, 2, 2, 3))
-    idx2_ra = Reactant.to_rarray(rand(1:4, 2, 2, 3))
-    idx3 = rand(1:3, 2, 2, 3)
+    x_ra = Reactant.to_rarray(Reactant.TestUtils.construct_test_array(Float64, 5, 4, 3))
+    idx1 = reshape(mod1.(collect(1:12), 5), 2, 2, 3)
+    idx2 = reshape(mod1.(collect(1:12), 4), 2, 2, 3)
+    idx3 = reshape(mod1.(collect(1:12), 3), 2, 2, 3)
+    idx1_ra = Reactant.to_rarray(idx1)
+    idx2_ra = Reactant.to_rarray(idx2)
 
     fn(x, idx1, idx2, idx3) = x[idx1, idx2, idx3]
 
@@ -291,10 +294,10 @@ end
 @testset "issue #617" begin
     N, M = 4, 6
 
-    f = rand(ComplexF32, N, N)
-    p = rand(ComplexF32, N * N)
+    f = Reactant.TestUtils.construct_test_array(ComplexF32, N, N)
+    p = Reactant.TestUtils.construct_test_array(ComplexF32, N * N)
     I = 1:(N^2)
-    out = rand(ComplexF32, M, M)
+    out = Reactant.TestUtils.construct_test_array(ComplexF32, M, M)
 
     fr = Reactant.to_rarray(f)
     pr = Reactant.to_rarray(p)
@@ -334,7 +337,7 @@ end
 
 @testset "write_with_broadcast" begin
     x_ra = Reactant.to_rarray(zeros(3, 4, 3))
-    y_ra = Reactant.to_rarray(rand(3, 4))
+    y_ra = Reactant.to_rarray(Reactant.TestUtils.construct_test_array(Float64, 3, 4))
 
     res = @jit write_with_broadcast1!(x_ra, y_ra)
 
@@ -349,7 +352,7 @@ end
     @test res[1, :, :] ≈ reshape(y, 4, 3)
 
     x_ra = Reactant.to_rarray(zeros(3, 4, 3))
-    y_ra = Reactant.to_rarray(rand(3, 4))
+    y_ra = Reactant.to_rarray(Reactant.TestUtils.construct_test_array(Float64, 3, 4))
 
     res = @jit write_with_broadcast2!(x_ra, y_ra)
 
@@ -376,7 +379,7 @@ end
 end
 
 @testset "ConcreteRArray view fill!" begin
-    x = Reactant.to_rarray(rand(2, 3))
+    x = Reactant.to_rarray(Reactant.TestUtils.construct_test_array(Float64, 2, 3))
     x_view = view(x, 1:2, 1:2)
 
     fill!(x_view, 0.0)
@@ -385,7 +388,7 @@ end
 
 @testset "ConcreteRArray mapreducedim!" begin
     dest = ones(3, 1)
-    x = rand(3, 3)
+    x = Reactant.TestUtils.construct_test_array(Float64, 3, 3)
     dest_ra = Reactant.to_rarray(dest)
     x_ra = Reactant.to_rarray(x)
 
@@ -397,7 +400,7 @@ end
 
 @testset "ConcreteRArray destination view mapreducedim" begin
     parent = ones(3, 1)
-    x = rand(2, 3)
+    x = Reactant.TestUtils.construct_test_array(Float64, 2, 3)
     parent_ra = Reactant.to_rarray(parent)
     x_ra = Reactant.to_rarray(x)
 
@@ -415,14 +418,14 @@ function test_slice_copy!(x)
 end
 
 @testset "slice copy" begin
-    x = Reactant.to_rarray(rand(2, 10))
+    x = Reactant.to_rarray(Reactant.TestUtils.construct_test_array(Float64, 2, 10))
     @jit test_slice_copy!(x)
     @test all(Array(x)[1, :] .== 0)
 end
 
 @testset "reshaped view setindex!" begin
-    du = rand(Float32, 10)
-    u = rand(Float32, 10)
+    du = Reactant.TestUtils.construct_test_array(Float32, 10)
+    u = Reactant.TestUtils.construct_test_array(Float32, 10)
     p = 16.0f0
     t = 12.0f0
 

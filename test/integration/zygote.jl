@@ -4,7 +4,7 @@ sumabs2(x) = sum(abs2, x)
 
 @testset "Zygote" begin
     @testset "Zygote.gradient" begin
-        x = Reactant.to_rarray(rand(Float32, 32, 10))
+        x = Reactant.to_rarray(Reactant.TestUtils.construct_test_array(Float32, 32, 10))
 
         zyg_grad = @jit Zygote.gradient(sumabs2, x)
         enz_grad = @jit Enzyme.gradient(Reverse, Const(sumabs2), x)

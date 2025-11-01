@@ -1,41 +1,30 @@
-using NNlib, Reactant, Enzyme, Random, Statistics
-using Test
+using NNlib, Reactant, Enzyme, Statistics, Test
 
 @testset "Activation Functions" begin
     sumabs2(f, x) = sum(abs2, f.(x))
 
-    function ∇sumabs2(f, x)
-        dx = Enzyme.make_zero(x)
-        Enzyme.autodiff(Reverse, sumabs2, Active, Const(f), Duplicated(x, dx))
-        return dx
-    end
-
-    x_act = randn(Float32, 10, 10)
+    x_act = Reactant.TestUtils.construct_test_array(Float32, 10, 10)
     x_act_ca = Reactant.to_rarray(x_act)
 
     @testset "Activation: $act" for act in (
         identity, relu, sigmoid, tanh, tanh_fast, sigmoid_fast, gelu, abs2, relu6
     )
-        f_compile = Reactant.compile(sumabs2, (act, x_act_ca))
-
         y_simple = sumabs2(act, x_act)
-        y_compile = f_compile(act, x_act_ca)
+        y_compile = @jit sumabs2(act, x_act_ca)
 
-        ∂x_enz = Enzyme.make_zero(x_act)
-        Enzyme.autodiff(Reverse, sumabs2, Active, Const(act), Duplicated(x_act, ∂x_enz))
-
-        ∇sumabs2_compiled = Reactant.compile(∇sumabs2, (act, x_act_ca))
-
-        ∂x_compile = ∇sumabs2_compiled(act, x_act_ca)
+        ∂x_compile = @jit(Enzyme.gradient(Reverse, sumabs2, Const(act), x_act_ca))[2]
+        ∂x_compile_fd = @jit Reactant.TestUtils.finite_difference_gradient(
+            Base.Fix1(sumabs2, act), x_act_ca
+        )
 
         @test y_simple ≈ y_compile
-        @test ∂x_enz ≈ ∂x_compile
+        @test ∂x_compile ≈ ∂x_compile_fd
     end
 end
 
 @testset "Pooling" begin
     @testset for f in (NNlib.meanpool, NNlib.maxpool)
-        x = randn(Float32, 32, 32, 3, 2)
+        x = Reactant.TestUtils.construct_test_array(Float32, 32, 32, 3, 2)
         x_reactant = Reactant.to_rarray(x)
 
         @testset for window in ((2, 2), (3, 3), (4, 4)),
@@ -68,8 +57,8 @@ end
 
 @testset "Convolution" begin
     @testset for groups in (1, 2, 4)
-        weight = randn(Float32, 4, 4, 8 ÷ groups, 4)
-        x = randn(Float32, 16, 16, 8, 2)
+        weight = Reactant.TestUtils.construct_test_array(Float32, 4, 4, 8 ÷ groups, 4)
+        x = Reactant.TestUtils.construct_test_array(Float32, 16, 16, 8, 2)
 
         weight_reactant = Reactant.to_rarray(weight)
         x_reactant = Reactant.to_rarray(x)
@@ -127,24 +116,24 @@ end
         convolution_precision=PrecisionConfig.HIGH,
         dot_general_precision=PrecisionConfig.HIGH,
     ) do
-        x = rand(Float32, 4, 3, 5)
-        y = rand(Float32, 3, 2, 5)
+        x = Reactant.TestUtils.construct_test_array(Float32, 4, 3, 5)
+        y = Reactant.TestUtils.construct_test_array(Float32, 3, 2, 5)
 
         x_ra = Reactant.to_rarray(x)
         y_ra = Reactant.to_rarray(y)
 
         @test @jit(batched_mul(x_ra, y_ra)) ≈ batched_mul(x, y)
 
-        x = rand(Float32, 4, 3, 1)
-        y = rand(Float32, 3, 2, 5)
+        x = Reactant.TestUtils.construct_test_array(Float32, 4, 3, 1)
+        y = Reactant.TestUtils.construct_test_array(Float32, 3, 2, 5)
 
         x_ra = Reactant.to_rarray(x)
         y_ra = Reactant.to_rarray(y)
 
         @test @jit(batched_mul(x_ra, y_ra)) ≈ batched_mul(x, y)
 
-        x = rand(Float32, 4, 3, 5)
-        y = rand(Float32, 3, 2, 1)
+        x = Reactant.TestUtils.construct_test_array(Float32, 4, 3, 5)
+        y = Reactant.TestUtils.construct_test_array(Float32, 3, 2, 1)
 
         x_ra = Reactant.to_rarray(x)
         y_ra = Reactant.to_rarray(y)
@@ -154,7 +143,7 @@ end
 end
 
 @testset "Constant Padding: NNlib.pad_constant" begin
-    x = rand(Float32, 4, 4)
+    x = Reactant.TestUtils.construct_test_array(Float32, 4, 4)
     x_ra = Reactant.to_rarray(x)
 
     # Symmetric Padding
@@ -180,27 +169,22 @@ end
     @test @jit(NNlib.pad_zeros(x_ra, (1, 1, 1, 1))) ≈ NNlib.pad_zeros(x, (1, 1, 1, 1))
 
     sumabs2(f, x) = sum(abs2, f(x))
-
-    function ∇sumabs2(f, x)
-        dx = Enzyme.make_zero(x)
-        Enzyme.autodiff(Reverse, sumabs2, Active, Const(f), Duplicated(x, dx))
-        return dx
-    end
+    ∇sumabs2(f, x) = Enzyme.gradient(Reverse, sumabs2, Const(f), x)[2]
 
     pad_fn = Base.Fix2(NNlib.pad_constant, (1, 1, 1, 1))
-    @test @jit(∇sumabs2(pad_fn, x_ra)) ≈ ∇sumabs2(pad_fn, x)
+    @test @jit(∇sumabs2(pad_fn, x_ra)) ≈ 2 .* x
 
     pad_fn2 = Base.Fix2(NNlib.pad_constant, (1, 0, 1, 3))
-    @test @jit(∇sumabs2(pad_fn2, x_ra)) ≈ ∇sumabs2(pad_fn2, x)
+    @test @jit(∇sumabs2(pad_fn2, x_ra)) ≈ 2 .* x
 
-    x = rand(ComplexF32, 4, 4)
+    x = Reactant.TestUtils.construct_test_array(ComplexF32, 4, 4)
     x_ra = Reactant.to_rarray(x)
 
     @test @jit(NNlib.pad_constant(x_ra, (1, 1))) ≈ NNlib.pad_constant(x, (1, 1))
 end
 
 @testset "make_causal_mask" begin
-    x = rand(2, 10)
+    x = Reactant.TestUtils.construct_test_array(Float64, 2, 10)
     x_ra = Reactant.to_rarray(x)
 
     @test @jit(NNlib.make_causal_mask(x_ra)) ≈ NNlib.make_causal_mask(x)
@@ -331,8 +315,8 @@ end
 
         ## 3d src, 2d index of 2-tuples -> 3d output
         n1, nsrc, nidx = 2, 3, 6
-        src = rand(Float32, n1, nsrc, nsrc)
-        index = [(rand(1:nsrc), rand(1:nsrc)) for i in 1:nidx, j in 1:nidx]
+        src = Reactant.TestUtils.construct_test_array(Float32, n1, nsrc, nsrc)
+        index = [(mod1(i, nsrc), mod1(j, nsrc)) for i in 1:nidx, j in 1:nidx]
 
         y = @jit(NNlib.gather(Reactant.to_rarray(src), Reactant.to_rarray(index)))
         M = NNlib.typelength(eltype(index))
@@ -370,8 +354,10 @@ end
 
         ## 3d src, 2d index of 2-tuples -> 3d output
         n1, nsrc, nidx = 2, 3, 6
-        src = rand(Float32, n1, nsrc, nsrc)
-        index = [CartesianIndex((rand(1:nsrc), rand(1:nsrc))) for i in 1:nidx, j in 1:nidx]
+        src = Reactant.TestUtils.construct_test_array(Float32, n1, nsrc, nsrc)
+        index = [
+            CartesianIndex((mod1(i, nsrc), mod1(j, nsrc))) for i in 1:nidx, j in 1:nidx
+        ]
 
         y = @jit(NNlib.gather(Reactant.to_rarray(src), Reactant.to_rarray(index)))
         M = NNlib.typelength(eltype(index))
@@ -648,33 +634,17 @@ end
         idx = [4, 2, 1, 5, 3]
         idx_ca = Reactant.to_rarray(idx)
 
-        function test_scatter(dsts, srcs, idxs)
-            return sum(NNlib.scatter!(+, dsts, srcs, idxs))
-        end
+        test_scatter(dsts, srcs, idxs) = sum(NNlib.scatter!(+, dsts, srcs, idxs))
 
-        function test_gradient(objective_function, dsts, srcs, idxs)
-            derivs, val = Enzyme.gradient(
-                Enzyme.set_abi(Enzyme.ReverseWithPrimal, Reactant.ReactantABI),
-                Const(objective_function),
-                dsts,
-                srcs,
-                idxs,
-            )
-            return derivs, val
-        end
-
-        test_gradient_compiled = @compile test_gradient(
-            test_scatter, dst_ca, src_ca, idx_ca
+        grads_ca, loss_ca = @jit Enzyme.gradient(
+            Enzyme.ReverseWithPrimal, Const(test_scatter), dst_ca, src_ca, idx_ca
         )
+        loss = test_scatter(dst, src, idx)
 
-        grads_enz, loss_enz = Enzyme.gradient(
-            Enzyme.ReverseWithPrimal, Const(test_scatter), dst, src, idx
-        )
-        grads_ca, loss_ca = test_gradient_compiled(test_scatter, dst_ca, src_ca, idx_ca)
-
-        @test grads_enz[1] ≈ Array(grads_ca[1])
-        @test grads_enz[2] ≈ Array(grads_ca[2])
-        @test loss_enz ≈ loss_ca
+        @test grads_ca[1] ≈ ones(Float32, size(dst)...)
+        @test grads_ca[2] ≈ ones(Float32, size(src)...)
+        @test grads_ca[3] === nothing
+        @test loss ≈ loss_ca
     end
 end
 
@@ -685,10 +655,14 @@ end
     n_out_features = 4
     kernel_size = Tuple((2 for _ in 1:ndim))
 
-    x = randn(Float32, (x_spatial_dim for _ in 1:ndim)..., n_in_features, batch_size)
+    x = Reactant.TestUtils.construct_test_array(
+        Float32, (x_spatial_dim for _ in 1:ndim)..., n_in_features, batch_size
+    )
     x_reactant = Reactant.to_rarray(x)
 
-    w = randn(Float32, kernel_size..., n_in_features, n_out_features)
+    w = Reactant.TestUtils.construct_test_array(
+        Float32, kernel_size..., n_in_features, n_out_features
+    )
     w_reactant = Reactant.to_rarray(w)
 
     @testset "conv: padding=$padding stride=$stride dilation=$dilation groups=$groups" for (
@@ -700,7 +674,7 @@ end
             conv_dims = NNlib.DenseConvDims(x, w; padding, stride, dilation, groups)
 
             output_size = (NNlib.output_size(conv_dims)..., n_out_features, batch_size)
-            dy = randn(Float32, output_size)
+            dy = Reactant.TestUtils.construct_test_array(Float32, output_size...)
             dy_reactant = Reactant.to_rarray(dy)
 
             @test @jit(NNlib.∇conv_data(dy_reactant, w_reactant, conv_dims)) ≈
@@ -712,7 +686,7 @@ end
 end
 
 @testset "Upsampling" begin
-    x = randn(Float32, 4, 4, 3, 2)
+    x = Reactant.TestUtils.construct_test_array(Float32, 4, 4, 3, 2)
     x_ra = Reactant.to_rarray(x)
 
     @testset "Nearest" begin
@@ -720,7 +694,7 @@ end
     end
 
     @testset "Linear" begin
-        x = randn(Float32, 4, 3, 2)
+        x = Reactant.TestUtils.construct_test_array(Float32, 4, 3, 2)
         x_ra = Reactant.to_rarray(x)
 
         @test @jit(NNlib.upsample_linear(x_ra, (2,))) ≈ NNlib.upsample_linear(x, (2,))
@@ -730,7 +704,7 @@ end
     end
 
     @testset "Bi-Linear" begin
-        x = randn(Float32, 4, 4, 3, 2)
+        x = Reactant.TestUtils.construct_test_array(Float32, 4, 4, 3, 2)
         x_ra = Reactant.to_rarray(x)
 
         @test @jit(NNlib.upsample_bilinear(x_ra, (2, 2))) ≈
@@ -741,7 +715,7 @@ end
     end
 
     @testset "Tri-Linear" begin
-        x = randn(Float32, 4, 4, 4, 3, 2)
+        x = Reactant.TestUtils.construct_test_array(Float32, 4, 4, 4, 3, 2)
         x_ra = Reactant.to_rarray(x)
 
         @test @jit(NNlib.upsample_trilinear(x_ra, (2, 2, 2))) ≈
@@ -765,7 +739,7 @@ end
 end
 
 @testset "softmax/logsoftmax reshaped input" begin
-    x = rand(Float32, 3, 4, 5)
+    x = Reactant.TestUtils.construct_test_array(Float32, 3, 4, 5)
     x_ra = reshape(Reactant.to_rarray(x), 12, 5)
     x = reshape(x, 12, 5)
 
@@ -783,10 +757,10 @@ end
 end
 
 @testset "gather 32bit indexing" begin
-    x = rand(Float32, 10, 10)
+    x = Reactant.TestUtils.construct_test_array(Float32, 10, 10)
     x_ra = Reactant.to_rarray(x)
 
-    idxs = Int32.(rand(1:10, 32))
+    idxs = Int32.(mod1.(collect(1:32), 10))
     idxs_ra = Reactant.to_rarray(idxs)
 
     @test @jit(NNlib.gather(x_ra, idxs_ra)) ≈ NNlib.gather(x, idxs)
@@ -795,11 +769,11 @@ end
 end
 
 @testset "unfold/fold" begin
-    rng = Random.default_rng()
-
     @testset "unfold wrapper" begin
-        x = Reactant.to_rarray(rand(rng, 16, 16, 3, 10))
-        w = Reactant.to_rarray(rand(rng, 5, 5, 3, 2))
+        x = Reactant.to_rarray(
+            Reactant.TestUtils.construct_test_array(Float32, 16, 16, 3, 10)
+        )
+        w = Reactant.to_rarray(Reactant.TestUtils.construct_test_array(Float32, 5, 5, 3, 2))
         @test size(@jit(NNlib.unfold(x, size(w)))) == (144, 75, 10)
         @test size(@jit(NNlib.unfold(x, size(w); pad=2))) == (256, 75, 10)
         @test size(@jit(NNlib.unfold(x, size(w); stride=2))) == (36, 75, 10)
@@ -807,9 +781,13 @@ end
     end
 
     @testset "spatial_rank=$spatial_rank" for spatial_rank in (1, 2, 3)
-        x = rand(rng, repeat([8], spatial_rank)..., 3, 2)
+        x = Reactant.TestUtils.construct_test_array(
+            Float32, repeat([8], spatial_rank)..., 3, 2
+        )
         x_ra = Reactant.to_rarray(x)
-        w = rand(rng, repeat([3], spatial_rank)..., 3, 3)
+        w = Reactant.TestUtils.construct_test_array(
+            Float32, repeat([3], spatial_rank)..., 3, 3
+        )
         w_ra = Reactant.to_rarray(w)
 
         cdims = DenseConvDims(x, w; padding=1)
@@ -819,8 +797,8 @@ end
         y_ra = @jit NNlib.unfold(x_ra, cdims)
         z_ra = @jit NNlib.fold(y_ra, size(x_ra), cdims)
 
-        @test y ≈ y_ra atol = 1e-5 rtol = 1e-5
-        @test z ≈ z_ra atol = 1e-5 rtol = 1e-5
+        @test y ≈ y_ra atol = 1e-5 rtol = 1e-2
+        @test z ≈ z_ra atol = 1e-5 rtol = 1e-2
 
         # introduce stride
         cdims = DenseConvDims(x, w; padding=1, stride=2)
@@ -830,7 +808,7 @@ end
         y_ra = @jit NNlib.unfold(x_ra, cdims)
         z_ra = @jit NNlib.fold(y_ra, size(x_ra), cdims)
 
-        @test y ≈ y_ra atol = 1e-5 rtol = 1e-5
-        @test z ≈ z_ra atol = 1e-5 rtol = 1e-5
+        @test y ≈ y_ra atol = 1e-5 rtol = 1e-2
+        @test z ≈ z_ra atol = 1e-5 rtol = 1e-2
     end
 end

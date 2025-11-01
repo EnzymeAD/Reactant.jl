@@ -41,8 +41,8 @@ end
 
 @testset "Lux.jl Integration" begin
     # Generate some data for the XOR problem: vectors of length 2, as columns of a matrix:
-    noisy = rand(Float32, 2, 1000)                                        # 2×1000 Matrix{Float32}
-    truth = [xor(col[1] > 0.5, col[2] > 0.5) for col in eachcol(noisy)]   # 1000-element Vector{Bool}
+    noisy = Reactant.TestUtils.construct_test_array(Float32, 2, 1000)
+    truth = Reactant.TestUtils.construct_test_array(Int, 1000) .> 500
 
     # Define our model, a multi-layer perceptron with one hidden layer of size 3:
     model = Lux.Chain(
@@ -67,36 +67,21 @@ end
 
     @test comp ≈ origout atol = 1e-3 rtol = 1e-2
 
-    target = onehotbatch(truth, [true, false])                   # 2×1000 OneHotMatrix
+    target = onehotbatch(truth, [true, false])
+    ctarget = Reactant.to_rarray(target)
 
-    ctarget = Reactant.to_rarray(Array{Float32}(target))
-    # ctarget = Reactant.to_rarray(target)
-
-    res, dps = gradient_loss_function(model, noisy, target, ps, st)
-
-    dot_general_precision = if contains(string(Reactant.devices()[1]), "CUDA")
-        PrecisionConfig.HIGHEST
-    else
-        PrecisionConfig.DEFAULT
-    end
-
-    compiled_gradient = Reactant.with_config(; dot_general_precision) do
-        @compile gradient_loss_function(cmodel, cnoisy, ctarget, cps, cst2)
-    end
-
-    res_reactant, dps_reactant = compiled_gradient(cmodel, cnoisy, ctarget, cps, cst2)
-
-    @test res ≈ res_reactant atol = 1e-3 rtol = 1e-2
-    for (dps1, dps2) in zip(fleaves(dps), fleaves(dps_reactant))
-        @test dps1 ≈ dps2 atol = 1e-3 rtol = 1e-2
-    end
+    # Gradient correctness tests are run in luxlib.jl and nnlib.jl
+    res_reactant, dps_reactant = @jit gradient_loss_function(
+        cmodel, cnoisy, ctarget, cps, cst2
+    )
+    @test res_reactant isa Reactant.ConcreteRNumber
 end
 
 @testset "RNN Integration" begin
     model = Recurrence(RNNCell(4 => 4); ordering=BatchLastIndex())
     ps, st = Reactant.to_rarray(Lux.setup(Random.default_rng(), model))
 
-    x = Reactant.to_rarray(rand(Float32, 4, 16, 12))
+    x = Reactant.to_rarray(Reactant.TestUtils.construct_test_array(Float32, 4, 16, 12))
 
     # This test requires running optimizations between the enzyme autodiff passes
     res, ∂ps = @jit gradient_loss_function(model, x, ps, st)
@@ -107,7 +92,7 @@ end
     model = Dropout(0.5f0)
     ps, st = Reactant.to_rarray(Lux.setup(Random.default_rng(), model))
 
-    x = Reactant.to_rarray(randn(Float32, 10, 10))
+    x = Reactant.to_rarray(Reactant.TestUtils.construct_test_array(Float32, 10, 10))
 
     res, st_new = @jit model(x, ps, st)
     @test st_new.rng isa Reactant.ReactantRNG
