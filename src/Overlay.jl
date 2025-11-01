@@ -187,7 +187,11 @@ end
 end
 
 @reactant_overlay @noinline function Base.map(f, x::AbstractArray, ys::AbstractArray...)
-    if use_overlayed_version(x) || looped_any(use_overlayed_version, ys)
+    if (
+        use_overlayed_version(x) ||
+        use_overlayed_version(f) ||
+        looped_any(use_overlayed_version, ys)
+    )
         return TracedRArrayOverrides.overloaded_map(f, x, ys...)
     else
         return Base.inferencebarrier(Base.map)(CallWithReactant(f), x, ys...)
@@ -200,6 +204,7 @@ end
     if (
         use_overlayed_version(y) ||
         use_overlayed_version(x) ||
+        use_overlayed_version(f) ||
         looped_any(use_overlayed_version, xs)
     )
         return TracedRArrayOverrides.overloaded_map!(f, y, x, xs...)
@@ -209,7 +214,7 @@ end
 end
 
 @reactant_overlay @noinline function Base._all(f, x::AbstractArray, dims)
-    if use_overlayed_version(x)
+    if use_overlayed_version(x) || use_overlayed_version(f)
         return TracedRArrayOverrides.overloaded_mapreduce(f, &, x; dims)
     else
         return Base.inferencebarrier(Base._all)(CallWithReactant(f), x, dims)
@@ -217,7 +222,7 @@ end
 end
 
 @reactant_overlay @noinline function Base._any(f, x::AbstractArray, dims)
-    if use_overlayed_version(x)
+    if use_overlayed_version(x) || use_overlayed_version(f)
         return TracedRArrayOverrides.overloaded_mapreduce(f, |, x; dims)
     else
         return Base.inferencebarrier(Base._any)(CallWithReactant(f), x, dims)

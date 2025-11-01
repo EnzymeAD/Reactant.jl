@@ -15,6 +15,7 @@ using ..Reactant:
     promote_to, # keep this to avoid breaking external code
     broadcast_to_size # keep this to avoid breaking external code
 using ..Ops: @opcall
+using GPUArraysCore: @allowscalar
 using ReactantCore: ReactantCore
 using ReactantCore: MissingTracedValue, is_traced, materialize_traced_array
 
@@ -1086,12 +1087,62 @@ function set!(x, path, tostore; emptypath=false)
     return emptypath && set_paths!(x, ())
 end
 
+function __elem_apply_loop_condition(idx_ref, fn_ref::F, res_ref, args_ref, L_ref) where {F}
+    return idx_ref[] < L_ref[]
+end
+
+function __elem_apply_loop_body(idx_ref, fn_ref::F, res_ref, args_ref, L_ref) where {F}
+    args = args_ref[]
+    fn = fn_ref[]
+    res = res_ref[]
+    idx = idx_ref[] + 1
+
+    scalar_args = [@allowscalar(arg[idx]) for arg in args]
+    @allowscalar res[idx] = fn(scalar_args...)
+
+    idx_ref[] = idx
+    res_ref[] = res
+    return nothing
+end
+
+function elem_apply_via_while_loop(f, args::Vararg{Any,Nargs}) where {Nargs}
+    @assert allequal(size.(args)) "All args must have the same size"
+    L = length(first(args))
+    # flattening the tensors makes the auto-batching pass work nicer
+    flat_args = [ReactantCore.materialize_traced_array(vec(arg)) for arg in args]
+
+    # This wont be a mutating function so we can safely execute it once
+    res_tmp = @allowscalar(f([@allowscalar(arg[1]) for arg in flat_args]...))
+    result = similar(first(flat_args), Reactant.unwrapped_eltype(res_tmp), L)
+
+    ind_var = Ref(0)
+    f_ref = Ref(f)
+    result_ref = Ref(result)
+    args_ref = Ref(flat_args)
+    limit_ref = Ref(L)
+
+    ReactantCore.traced_while(
+        __elem_apply_loop_condition,
+        __elem_apply_loop_body,
+        (ind_var, f_ref, result_ref, args_ref, limit_ref),
+    )
+
+    return ReactantCore.materialize_traced_array(reshape(result, size(first(args))))
+end
+
 function elem_apply(f, args::Vararg{Any,Nargs}) where {Nargs}
     if all(iszero ∘ ndims, args)
         scalar_args = map(args) do arg
             return promote_to(TracedRNumber{Reactant.unwrapped_eltype(arg)}, arg)
         end
         return Reactant.call_with_reactant(f, scalar_args...)
+    end
+
+    # we can expand the scope of this later to support cases where the output
+    # doesn't align with `Ops.batch`. For now we just handle cases that would
+    # obviously fail with scalarizing the inputs.
+    if Reactant.use_overlayed_version(f)
+        return elem_apply_via_while_loop(f, args...)
     end
 
     argprefix::Symbol = gensym("broadcastarg")
