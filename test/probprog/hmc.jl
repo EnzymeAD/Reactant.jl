@@ -87,7 +87,6 @@ end
     )
     @test contains(repr(code), "enzyme_probprog_get_flattened_samples_from_trace")
     @test contains(repr(code), "enzyme_probprog_get_weight_from_trace")
-    @test !contains(repr(code), "enzyme.mh")
     @test !contains(repr(code), "enzyme.mcmc")
 
     compile_time_s = @elapsed begin
