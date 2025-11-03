@@ -1738,7 +1738,7 @@ function compile_mlir!(
             ()
         end
 
-    legal_to_run_shardy_passes = compile_options.optimization_passes !== :before_raise
+    legal_to_run_shardy_passes = compile_options.optimization_passes === :all
 
     if compile_options.optimization_passes === :all
         run_pass_pipeline!(
