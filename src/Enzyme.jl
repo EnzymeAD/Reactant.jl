@@ -299,7 +299,8 @@ function overload_autodiff(
     mode::CMode, f::FA, args::Vararg{Annotation,Nargs}
 ) where {CMode<:Mode,FA<:Annotation,Nargs}
     # need to guess the correct activity here. Execute the function, we will DCE it
-    res = call_with_reactant(f.val, [x.val for x in args]...)
+    # XXX: DONT MERGE
+    res = call_with_reactant(deepcopy(f.val), [deepcopy(x.val) for x in args]...)
     return overload_autodiff(
         mode, f, Enzyme.guess_activity(Core.Typeof(res), mode), args...
     )
