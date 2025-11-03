@@ -10,6 +10,18 @@ end
 
 # Enzyme.jl overlays
 @reactant_overlay @noinline function Enzyme.autodiff_deferred(
+    rmode::Enzyme.Mode, f::FA, args::Vararg{Annotation,Nargs}
+) where {FA<:Annotation,Nargs}
+    return overload_autodiff(rmode, f, args...)
+end
+
+@reactant_overlay @noinline function Enzyme.autodiff(
+    rmode::Enzyme.Mode, f::FA, args::Vararg{Annotation,Nargs}
+) where {FA<:Annotation,Nargs}
+    return overload_autodiff(rmode, f, args...)
+end
+
+@reactant_overlay @noinline function Enzyme.autodiff_deferred(
     rmode::Enzyme.Mode, f::FA, rt::Type{A}, args::Vararg{Annotation,Nargs}
 ) where {FA<:Annotation,A<:Annotation,Nargs}
     return overload_autodiff(rmode, f, rt, args...)

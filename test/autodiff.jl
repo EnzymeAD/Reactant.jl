@@ -2,6 +2,8 @@ using Enzyme, Reactant, Test, Random
 
 square(x) = x * 2
 
+sum_without_activity(x) = sum(abs2, x; dims=(2, 3))
+
 fwd(Mode, RT, x, y) = Enzyme.autodiff(Mode, square, RT, Duplicated(x, y))
 
 @testset "Activity" begin
@@ -37,6 +39,16 @@ fwd(Mode, RT, x, y) = Enzyme.autodiff(Mode, square, RT, Duplicated(x, y))
 
     @test Enzyme.guess_activity(Reactant.TracedRNumber{Float32}, Enzyme.Reverse) <:
         Enzyme.Duplicated
+end
+
+@testset "Correct Activity Guess" begin
+    x = Reactant.to_rarray(Reactant.TestUtils.construct_test_array(Float32, 3, 4, 5, 6))
+    bx = Reactant.to_rarray(Reactant.TestUtils.construct_test_array(Float32, 3, 4, 5, 6))
+
+    res = only(@jit(Enzyme.autodiff(Forward, sum_without_activity, Duplicated(x, bx))))
+    @test res isa Reactant.ConcreteRArray{Float32,4}
+    @test size(res) == (3, 1, 1, 6)
+    @test 2 .* sum_without_activity(bx) ≈ res
 end
 
 @testset "Basic Forward Mode" begin

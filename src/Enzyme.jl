@@ -296,6 +296,16 @@ function act_attr(val)
 end
 
 function overload_autodiff(
+    mode::CMode, f::FA, args::Vararg{Annotation,Nargs}
+) where {CMode<:Mode,FA<:Annotation,Nargs}
+    # need to guess the correct activity here. Execute the function, we will DCE it
+    res = call_with_reactant(f.val, [x.val for x in args]...)
+    return overload_autodiff(
+        mode, f, Enzyme.guess_activity(Core.Typeof(res), mode), args...
+    )
+end
+
+function overload_autodiff(
     ::CMode, f::FA, ::Type{A}, args::Vararg{Annotation,Nargs}
 ) where {CMode<:Mode,FA<:Annotation,A<:Annotation,Nargs}
     reverse = CMode <: ReverseMode
