@@ -1543,7 +1543,7 @@ end
 function get_optimize_comms_passes(options::OptimizeCommunicationOptions)
     options_str = String(options)
     res = [
-        "enzyme-hlo-generate-td{patterns=lower_rotate;concat_to_onedim_dus;concat_to_onedim_dusslice;concatreshape_to_onedim_dus}",
+        "enzyme-hlo-generate-td{patterns=lower_rotate;concat_to_onedim_dus;concat_to_onedim_dusslice;concatreshape_to_onedim_dus;recognize_wrap;recognize_extend}",
         "transform-interpreter",
         "enzyme-hlo-remove-transform",
         "enzyme-hlo-generate-td{patterns=reshape_to_broadcast}",
