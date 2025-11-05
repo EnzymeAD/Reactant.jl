@@ -132,7 +132,7 @@ function apply_transformation!(ir::Core.Compiler.IRCode, if_::IfStructure)
         add_phi_value!(true_phi_ssa, phi, true_bbs,header_bb)
         add_phi_value!(false_phi_ssa, phi, false_bbs,header_bb)
     end
-    Debugger.@bp
+    #Debugger.@bp
     #map the old argument with the new ones
     new_args_dict = Dict()
     @warn "r1" ir true_bbs new_args_dict true_phi_ssa

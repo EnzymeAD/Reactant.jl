@@ -255,7 +255,7 @@ function extract_multiple_block_ir(
 
     @lk new_returns args
     @error "" args argtypes
-    Debugger.@bp
+    #Debugger.@bp
     retu = if length(new_returns) > 1
         tuple = Core.Compiler.NewInstruction(
             Expr(:call, Core.GlobalRef(Core, :tuple), new_returns...),
