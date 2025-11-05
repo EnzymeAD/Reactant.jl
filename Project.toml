@@ -115,6 +115,7 @@ Statistics = "1.10"
 YaoBlocks = "0.13, 0.14"
 Zygote = "0.7"
 julia = "1.10"
+p7zip_jll = "17"
 
 [extras]
 Adapt = "79e6a3ab-5dfb-504d-930d-738a2a938a0e"
