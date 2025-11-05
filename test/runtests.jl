@@ -39,6 +39,10 @@ const REACTANT_TEST_GROUP = lowercase(get(ENV, "REACTANT_TEST_GROUP", "all"))
         @safetestset "Config" include("config.jl")
         @safetestset "Batching" include("batching.jl")
         @safetestset "QA" include("qa.jl")
+        @static (VERSION < v"1.12" &&VERSION > v"1.11") && begin 
+            @safetestset "Automatic Control Flow" include("auto_cf/basic.jl")
+            
+    end
     end
 
     if REACTANT_TEST_GROUP == "all" || REACTANT_TEST_GROUP == "integration"

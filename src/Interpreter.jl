@@ -86,11 +86,13 @@ function set_reactant_abi(
     )
 end
 
+
+current_interpreter = Ref{Enzyme.Compiler.Interpreter.EnzymeInterpreter{typeof(Reactant.set_reactant_abi)}}()
 @static if Enzyme.GPUCompiler.HAS_INTEGRATED_CACHE
     struct ReactantCacheToken end
 
     function ReactantInterpreter(; world::UInt=Base.get_world_counter())
-        return Enzyme.Compiler.Interpreter.EnzymeInterpreter(
+        current_interpreter[] = Enzyme.Compiler.Interpreter.EnzymeInterpreter(
             ReactantCacheToken(),
             REACTANT_METHOD_TABLE,
             world,
@@ -108,7 +110,7 @@ else
     function ReactantInterpreter(;
         world::UInt=Base.get_world_counter(), code_cache=REACTANT_CACHE
     )
-        return Enzyme.Compiler.Interpreter.EnzymeInterpreter(
+        current_interpreter[] = Enzyme.Compiler.Interpreter.EnzymeInterpreter(
             REACTANT_CACHE,
             REACTANT_METHOD_TABLE,
             world,
