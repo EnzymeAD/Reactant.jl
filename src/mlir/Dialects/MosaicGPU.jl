@@ -451,6 +451,32 @@ function slice_smem(offset::Value; result_0::IR.Type, location=Location())
 end
 
 """
+`slice_tmem`
+
+The principal use case for this op is to do a single TMEM allocation and
+slice it into multiple smaller TMEM references. `source` is the large TMEM
+allocation and `offset` is the number of columns to start slicing from.
+"""
+function slice_tmem(source::Value; result_0::IR.Type, offset, location=Location())
+    op_ty_results = IR.Type[result_0,]
+    operands = Value[source,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[namedattribute("offset", offset),]
+
+    return create_operation(
+        "mosaic_gpu.slice_tmem",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+"""
 `tcgen05_mma`
 
 Schedules `tcgen05.mma` instructions that perform the following matrix
