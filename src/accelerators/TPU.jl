@@ -5,7 +5,7 @@ using EnumX: @enumx
 using Scratch: @get_scratch!
 using HTTP: HTTP
 using Downloads: Downloads
-using unzip_jll: unzip
+using p7zip_jll: p7zip
 
 const libtpu_dir = Ref{Union{Nothing,String}}(nothing)
 const RUNNING_IN_CLOUD_TPU_VM = Ref(false)
@@ -49,7 +49,7 @@ function download_libtpu_if_needed(path=nothing)
             "https://storage.googleapis.com/libtpu-nightly-releases/wheels/libtpu/libtpu-0.0.28.dev20251027+nightly-cp314-cp314t-manylinux_2_31_x86_64.whl",
             zip_file_path,
         )
-        run(`$(unzip()) -qq $(zip_file_path) -d $(tmp_dir)`)
+        run(pipeline(`$(p7zip()) x -tzip -o$(tmp_dir) -- $(zip_file_path)`, devnull))
         mv(joinpath(tmp_dir, "libtpu", "libtpu.so"), libtpu_path)
         rm(tmp_dir; recursive=true)
         rm(zip_file_path; recursive=true)

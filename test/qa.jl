@@ -91,7 +91,7 @@ end
                 Reactant.Accelerators.TPU.TPUVersion,
                 Reactant.PrecisionConfig,
             ),
-            ignore=(:unzip, :ShardyPropagationOptions),
+            ignore=(:ShardyPropagationOptions),
         ) === nothing
     end
     @testset "Qualified Accesses" begin
