@@ -325,20 +325,22 @@ end
 """
 `initialize_barrier`
 
-Initializes a memref of barriers each meant to synchronize exactly
+Initializes `num_barriers` barriers each meant to synchronize exactly
 `arrival_count` threads.
 
-The base pointer of the result memref corresponds to `base_pointer`, which
-must be a pointer to a shared memory location.
+`base_pointer` must be a pointer to a shared memory location.
 """
 function initialize_barrier(
-    base_pointer::Value; barriers_ref::IR.Type, arrival_count, location=Location()
+    base_pointer::Value; arrival_count, num_barriers, location=Location()
 )
-    op_ty_results = IR.Type[barriers_ref,]
+    op_ty_results = IR.Type[]
     operands = Value[base_pointer,]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("arrival_count", arrival_count),]
+    attributes = NamedAttribute[
+        namedattribute("arrival_count", arrival_count),
+        namedattribute("num_barriers", num_barriers),
+    ]
 
     return create_operation(
         "mosaic_gpu.initialize_barrier",
