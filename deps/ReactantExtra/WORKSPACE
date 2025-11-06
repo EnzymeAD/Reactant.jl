@@ -4,7 +4,7 @@ NSYNC_COMMIT = "82b118aa7ace3132e517e2c467f8732978cf4023"
 
 NSYNC_SHA256 = ""
 
-ENZYMEXLA_COMMIT = "f937a462ceaf28a0008c7aa9a03c6fc4c3a6c7c9"
+ENZYMEXLA_COMMIT = "22ecd03862d2973078a41bbf6009a3bd8d7bc18b"
 
 ENZYMEXLA_SHA256 = ""
 
@@ -20,6 +20,7 @@ http_archive(
     patch_cmds = [
         """
 sed -i.bak0 "s/\\\\\\\\\\\\\\\\\\/\\\\\\\\\\\\\\\\\\/:patches/@enzyme_ad\\\\\\\\\\\\\\\\\\/\\\\\\\\\\\\\\\\\\/:patches/g" workspace.bzl
+sed -i.bak0 "s,//:patches,@enzyme_ad//:patches,g" third_party/*/workspace.bzl
 """,
     ],
     sha256 = ENZYMEXLA_SHA256,
