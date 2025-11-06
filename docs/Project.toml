@@ -3,7 +3,6 @@ Documenter = "e30172f5-a6a5-5a46-863b-614d45cd2de4"
 DocumenterVitepress = "4710194d-e776-4893-9690-8d956a29c365"
 Enzyme = "7da242da-08ed-463a-9acd-ee780be4f1d9"
 EnzymeCore = "f151be2c-9106-41f4-ab19-57ee4f262869"
-OpenSSL_jll = "458c3c95-2e84-50aa-8efc-19380b2a3a95"
 Reactant = "3c362404-f566-11ee-1572-e11a4b42c853"
 ReactantCore = "a3311ec8-5e00-46d5-b541-4f83e724a433"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
@@ -15,4 +14,3 @@ ReactantCore = {path = "../lib/ReactantCore"}
 [compat]
 Documenter = "1.4.1"
 DocumenterVitepress = "0.2"
-OpenSSL_jll = "=3.0.16"
