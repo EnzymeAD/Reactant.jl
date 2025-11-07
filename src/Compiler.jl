@@ -905,10 +905,9 @@ function optimization_passes(
         "self_mul_to_convolution_like($(Int(backend == "tpu")))",
         "subtract_multiply_const_to_add_mul_const",
         "trivial_reduce_window_to_reduce_op",
+        "case_to_if",
         "dot_general_add_distributive_simplify",
         "dot_general_subtract_distributive_simplify",
-        "dus_to_dynamic_pad",
-        "dynamic_pad_to_pad",
         "remove_no_ops_from_while_loop",
         "while_is_copy_simplify",
         "split_variadic_scatter_op",
@@ -960,6 +959,7 @@ function optimization_passes(
                 "dot_general_licm(0)",
                 "reduce_licm(0)",
                 "reduce_window_licm(0)",
+                "reverse_licm(0)",
             ],
         )
     end
@@ -1029,6 +1029,8 @@ function optimization_passes(
                 "rotate_pad",
                 "concat_multipad",
                 "speculate_if_pad_to_select",
+                "dus_to_dynamic_pad",
+                "dynamic_pad_to_pad",
             ],
         )
 
