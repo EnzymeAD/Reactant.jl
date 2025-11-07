@@ -824,6 +824,26 @@ REACTANT_ABI void ReactantCudaDeviceGetProperties(DeviceProperties *jlprops,
   jlprops->maxThreadsPerMultiProcessor = props.maxThreadsPerMultiProcessor;
 }
 
+REACTANT_ABI void ReactantCudaGetRegsSpillsMaxThreadsFromBinary(
+    const char *binary, const char *fnname, int32_t *regs, int32_t *spills,
+    int32_t *maxThreads) {
+  CUfunction fun;
+  CUmodule mod;
+
+  ReactantHandleCuResult(cuModuleLoadData(&mod, binary));
+  ReactantHandleCuResult(cuModuleGetFunction(&fun, mod, fnname));
+
+  ReactantHandleCuResult(
+      cuFuncGetAttribute(regs, CU_FUNC_ATTRIBUTE_NUM_REGS, fun));
+  ReactantHandleCuResult(
+      cuFuncGetAttribute(spills, CU_FUNC_ATTRIBUTE_LOCAL_SIZE_BYTES, fun));
+  *spills /= 4;
+  ReactantHandleCuResult(cuFuncGetAttribute(
+      maxThreads, CU_FUNC_ATTRIBUTE_MAX_THREADS_PER_BLOCK, fun));
+
+  return;
+}
+
 #else
 
 REACTANT_ABI int32_t ReactantCudaDriverGetVersion() { return 0; }
@@ -838,6 +858,10 @@ REACTANT_ABI int32_t ReactantCudaDeviceGetWarpSizeInThreads() { return 0; }
 
 REACTANT_ABI void ReactantCudaDeviceGetProperties(DeviceProperties *jlprops,
                                                   int32_t device_id) {}
+
+REACTANT_ABI void ReactantCudaGetRegsSpillsMaxThreadsFromBinary(
+    const char *binary, const char *fnname, int32_t *regs, int32_t *spills,
+    int32_t *maxThreads) {}
 
 #endif
 
