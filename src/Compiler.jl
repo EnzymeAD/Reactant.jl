@@ -693,6 +693,7 @@ const AGGRESSIVE_SUM_TO_CONV = Ref(false)
 const AGGRESSIVE_PROPAGATION = Ref(false)
 const DUS_SLICE_SIMPLIFY = Ref(true)
 const CONCATS_TO_DUS = Ref(false)
+const WHILE_UNROLL_THRESHOLD = Ref(5)
 
 # Optimization passes via transform dialect
 function optimization_passes(
@@ -912,6 +913,7 @@ function optimization_passes(
         "while_is_copy_simplify",
         "split_variadic_scatter_op",
         "dynamic_slice_simplify",
+        "enzyme_hlo_unroll($(WHILE_UNROLL_THRESHOLD[]))",
     ]
 
     if !compile_options.disable_auto_batching_passes
@@ -955,6 +957,9 @@ function optimization_passes(
                 "transpose_licm(0)",
                 "broadcastindim_licm(0)",
                 "reshape_licm(0)",
+                "dot_general_licm(0)",
+                "reduce_licm(0)",
+                "reduce_window_licm(0)",
             ],
         )
     end

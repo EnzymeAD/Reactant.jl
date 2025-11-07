@@ -80,8 +80,8 @@ function naive_batched_matmul(x, y)
 end
 
 @testset "Naive Batched Matmul => Single Dot General" begin
-    x = Reactant.to_rarray(Reactant.TestUtils.construct_test_array(Float32, 3, 256, 5))
-    y = Reactant.to_rarray(Reactant.TestUtils.construct_test_array(Float32, 256, 7, 5))
+    x = Reactant.to_rarray(Reactant.TestUtils.construct_test_array(Float32, 3, 256, 8))
+    y = Reactant.to_rarray(Reactant.TestUtils.construct_test_array(Float32, 256, 7, 8))
 
     run_auto_batching_tests(naive_batched_matmul, x, y)
 end
