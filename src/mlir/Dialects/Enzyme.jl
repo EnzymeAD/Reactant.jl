@@ -520,8 +520,8 @@ function getFlattenedSamplesFromTrace(
     )
 end
 
-function get(gradient::Value; result_0::IR.Type, location=Location())
-    op_ty_results = IR.Type[result_0,]
+function get(gradient::Value; result::IR.Type, location=Location())
+    op_ty_results = IR.Type[result,]
     operands = Value[gradient,]
     owned_regions = Region[]
     successors = Block[]
