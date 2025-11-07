@@ -693,7 +693,7 @@ const AGGRESSIVE_SUM_TO_CONV = Ref(false)
 const AGGRESSIVE_PROPAGATION = Ref(false)
 const DUS_SLICE_SIMPLIFY = Ref(true)
 const CONCATS_TO_DUS = Ref(false)
-const WHILE_UNROLL_THRESHOLD = Ref(5)
+const WHILE_UNROLL_THRESHOLD = Ref(4)
 
 # Optimization passes via transform dialect
 function optimization_passes(
