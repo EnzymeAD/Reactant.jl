@@ -6,7 +6,7 @@ function hmc(
     f::Function,
     args::Vararg{Any,Nargs};
     selection::Selection,
-    mass=nothing,
+    inverse_mass_matrix=nothing,
     step_size=nothing,
     num_steps=nothing,
     initial_momentum=nothing,
@@ -53,9 +53,9 @@ function hmc(
         0::Int32,  # 0 = HMC
     )::MLIR.IR.Attribute
 
-    mass_val = nothing
-    if !isnothing(mass)
-        mass_val = TracedUtils.get_mlir_data(mass)
+    inverse_mass_matrix_val = nothing
+    if !isnothing(inverse_mass_matrix)
+        inverse_mass_matrix_val = TracedUtils.get_mlir_data(inverse_mass_matrix)
     end
 
     step_size_val = nothing
@@ -76,7 +76,7 @@ function hmc(
     hmc_op = MLIR.Dialects.enzyme.mcmc(
         mlir_caller_args,
         trace_val,
-        mass_val;
+        inverse_mass_matrix_val;
         step_size=step_size_val,
         num_steps=num_steps_val,
         initial_momentum=initial_momentum_val,

@@ -1,6 +1,6 @@
 using Reactant, Test, Random
 using Statistics
-using Reactant: ProbProg, ReactantRNG
+using Reactant: ProbProg, ReactantRNG, Profiler
 
 normal(rng, μ, σ, shape) = μ .+ σ .* randn(rng, shape)
 
@@ -34,7 +34,7 @@ function hmc_program(
     xs,
     step_size,
     num_steps,
-    mass,
+    inverse_mass_matrix,
     initial_momentum,
     constraint,
     constrained_addresses,
@@ -47,10 +47,10 @@ function hmc_program(
         model,
         xs;
         selection=ProbProg.select(ProbProg.Address(:param_a), ProbProg.Address(:param_b)),
-        mass=mass,
-        step_size=step_size,
-        num_steps=num_steps,
-        initial_momentum=initial_momentum,
+        inverse_mass_matrix,
+        step_size,
+        num_steps,
+        initial_momentum,
     )
 
     return t, accepted
@@ -71,7 +71,7 @@ end
     step_size = ConcreteRNumber(0.001)
     num_steps_compile = ConcreteRNumber(1000)
     num_steps_run = ConcreteRNumber(40000000)
-    mass = nothing
+    inverse_mass_matrix = ConcreteRArray([1.0 0.0; 0.0 1.0])
     initial_momentum = ConcreteRArray([0.0, 0.0])
 
     code = @code_hlo optimize = :probprog hmc_program(
@@ -80,7 +80,7 @@ end
         xs,
         step_size,
         num_steps_compile,
-        mass,
+        inverse_mass_matrix,
         initial_momentum,
         obs,
         constrained_addresses,
@@ -96,7 +96,7 @@ end
             xs,
             step_size,
             num_steps_compile,
-            mass,
+            inverse_mass_matrix,
             initial_momentum,
             obs,
             constrained_addresses,
@@ -106,19 +106,37 @@ end
 
     seed_buffer = only(rng.seed.data).buffer
     trace = nothing
+    enable_profiling = false
+
     GC.@preserve seed_buffer obs begin
         run_time_s = @elapsed begin
-            trace, _ = compiled_fn(
-                rng,
-                model,
-                xs,
-                step_size,
-                num_steps_run,
-                mass,
-                initial_momentum,
-                obs,
-                constrained_addresses,
-            )
+            if enable_profiling
+                Profiler.with_profiler("./traces"; create_perfetto_link=true) do
+                    trace, _ = compiled_fn(
+                        rng,
+                        model,
+                        xs,
+                        step_size,
+                        num_steps_run,
+                        inverse_mass_matrix,
+                        initial_momentum,
+                        obs,
+                        constrained_addresses,
+                    )
+                end
+            else
+                trace, _ = compiled_fn(
+                    rng,
+                    model,
+                    xs,
+                    step_size,
+                    num_steps_run,
+                    inverse_mass_matrix,
+                    initial_momentum,
+                    obs,
+                    constrained_addresses,
+                )
+            end
             trace = ProbProg.ProbProgTrace(trace)
         end
         println("HMC run time: $(round(run_time_s * 1000, digits=2)) ms")
