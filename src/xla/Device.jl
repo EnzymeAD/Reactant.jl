@@ -101,3 +101,38 @@ function Base.show(io::IO, ::MIME"text/plain", props::DeviceProperties)
         """,
     )
 end
+
+# only for streaming executors like CUDA / ROCM
+mutable struct StreamExecutorDeviceDescription
+    ptr::Ptr{Cvoid}
+
+    function StreamExecutorDeviceDescription(ptr::Ptr{Cvoid})
+        @assert ptr != C_NULL
+        return new(ptr)
+    end
+end
+
+function StreamExecutorDeviceDescription(device::AbstractDevice)
+    panme = platform_name(client(device))
+    local_hardware_id = get_local_hardware_id(device)
+
+    if panme == "cuda"
+        return StreamExecutorDeviceDescription(
+            @ccall MLIR.API.mlir_c.CudaGetStreamExecutorDeviceDescription(
+                local_hardware_id::Int32
+            )::Ptr{Cvoid}
+        )
+    else
+        error("Unsupported platform: $(panme)")
+    end
+end
+
+function Base.show(io::IO, ::MIME"text/plain", props::StreamExecutorDeviceDescription)
+    GC.@preserve props begin
+        str = @ccall MLIR.API.mlir_c.deviceDescriptionToString(
+            props.ptr::Ptr{Cvoid}
+        )::Cstring
+    end
+    print(io, unsafe_string_and_free(str))
+    return nothing
+end
