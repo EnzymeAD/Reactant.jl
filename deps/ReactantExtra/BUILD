@@ -1449,6 +1449,24 @@ gentbl_cc_library(
 )
 
 gentbl_cc_library(
+    name = "TritonExtJLIncGen",
+    tbl_outs = [
+        (
+            [
+                "--generator=jl-op-defs",
+                "--disable-module-wrap=0",
+            ],
+            "TritonExt.jl",
+        ),
+    ],
+    tblgen = "//:mlir-jl-tblgen",
+    td_file = "@enzyme_ad//src/enzyme_ad/jax:Dialect/TritonExt/Ops.td",
+    deps = [
+        "@enzyme_ad//src/enzyme_ad/jax:TritonExtDialectTdFiles",
+    ],
+)
+
+gentbl_cc_library(
     name = "TPUJLIncGen",
     tbl_outs = [
         (

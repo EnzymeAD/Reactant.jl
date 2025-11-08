@@ -361,12 +361,12 @@ end
 
 Extract value from batched operand at index
 """
-function extract(input::Value, index::Value; output::IR.Type, location=Location())
+function extract(input::Value; output::IR.Type, index, location=Location())
     op_ty_results = IR.Type[output,]
-    operands = Value[input, index]
+    operands = Value[input,]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[]
+    attributes = NamedAttribute[namedattribute("index", index),]
 
     return create_operation(
         "enzyme.extract",
