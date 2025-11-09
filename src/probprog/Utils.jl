@@ -12,7 +12,6 @@ using ..Reactant:
     TracedSetPath,
     ConcreteToTraced,
     AbstractConcreteArray,
-    XLA,
     Sharding,
     to_number
 import ..Reactant: promote_to, make_tracer
@@ -21,15 +20,8 @@ import ..Compiler: donate_argument!
 """
     process_probprog_function(f, args, op_name)
 
-Note: by convention `args` must have the RNG state as the first argument.
-
-This function handles the probprog argument convention where:
-- **Index 1**: RNG state
-- **Index 2**: Function `f` (when wrapped)
-- **Index 3+**: Remaining arguments
-
-This wrapper ensures the RNG state is threaded through as the first result,
-followed by the actual function results.
+By convention `args` must have the RNG state as the first argument.
+Ensures the RNG state is threaded through as the first result, followed by the actual function results.
 """
 function process_probprog_function(f, args, op_name, with_rng=true)
     seen = OrderedIdDict()
@@ -114,22 +106,14 @@ end
 
 This function handles the probprog argument convention where:
 - **Index 1**: RNG state
-- **Index 2**: Function `f` (when `fnwrap` is true)
+- **Index 2**: Function `f` (when `fnwrapped` is true)
 - **Index 3+**: Other arguments
 
-When setting results, the function checks:
-1. If result path matches `resprefix`, store in `result`
-2. If result path matches `argprefix`, store in `args` (adjust indices for wrapped function)
-
-`offset` varies depending on the ProbProg operation:
-- `sample` and `untraced_call` return only function outputs:
-  Use `offset=0`: `linear_results[i]` corresponds to `op.result[i]`
+`offset` and `rng_only` vary depending on the ProbProg operation, e.g.:
 - `simulate` and `generate` return trace, weight, then outputs:
   Use `offset=2`: `linear_results[i]` corresponds to `op.result[i+2]`
-- `mh` and `regenerate` return trace, accepted/weight, rng_state (no model outputs):
+- `mh` and `regenerate` return trace, accepted/weight, new rng_state:
   Use `offset=2, rng_only=true`: only process first result (rng_state)
-
-`rng_only`: When true, only process the first result (RNG state), skipping model outputs
 """
 function process_probprog_outputs(
     op,
