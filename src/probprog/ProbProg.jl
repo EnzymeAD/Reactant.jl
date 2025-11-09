@@ -16,8 +16,6 @@ export ProbProgTrace, Constraint, Selection, Address
 
 # Utility functions.
 export get_choices, select
-export to_trace_tensor, from_trace_tensor
-export to_constraint_tensor, from_constraint_tensor
 
 # Core MLIR ops.
 export sample, untraced_call, simulate, generate, mh, hmc

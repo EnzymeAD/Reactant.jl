@@ -1,5 +1,5 @@
-using ..Reactant: MLIR, TracedUtils, AbstractRNG, TracedRArray, ConcreteRNumber
-using ..Compiler: @jit, @compile
+using ..Reactant: MLIR, TracedUtils, AbstractRNG, TracedRArray
+using ..Compiler: @compile
 
 include("Utils.jl")
 
