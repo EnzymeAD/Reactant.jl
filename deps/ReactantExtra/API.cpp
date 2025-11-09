@@ -914,8 +914,9 @@ CudaGetStreamExecutorDeviceDescription(int32_t device_id) {
 
   // Memory bandwidth (bytes/sec) ≈ 2 * memClock(Hz) * busWidth(bytes)
   // props.memoryClockRate is in kHz; bus width is in bits.
-  const double mem_clock_hz =
-      static_cast<double>(props.memoryClockRate) * 1000.0;
+  const double mem_clock_hz = static_cast<double>(GetCudaIntegerAttribute(
+                                  cudaDevAttrMemoryClockRate, device_id)) *
+                              1000.0;
   const double bus_bytes = static_cast<double>(props.memoryBusWidth) / 8.0;
   const double bandwidth_Bps = 2.0 * mem_clock_hz * bus_bytes; // DDR assumption
   device_description->set_memory_bandwidth(
@@ -925,8 +926,10 @@ CudaGetStreamExecutorDeviceDescription(int32_t device_id) {
       GetCudaIntegerAttribute(cudaDevAttrL2CacheSize, device_id));
 
   // SM clock (GHz). props.clockRate is kHz.
-  device_description->set_clock_rate_ghz(static_cast<double>(props.clockRate) /
-                                         1.0e6);
+  device_description->set_clock_rate_ghz(
+      static_cast<double>(
+          GetCudaIntegerAttribute(cudaDevAttrClockRate, device_id)) /
+      1.0e6);
   device_description->set_device_memory_size(props.totalGlobalMem);
 
   // Registers
@@ -3480,7 +3483,7 @@ REACTANT_ABI void EstimateRunTimeForInstruction(
 
 #else
 
-REACTANT_ABI void *CreateGPUPerformanceModelWrapper(
+REACTANT_ABI void *CreateGPUPerformanceModel(
     MlirContext ctx, stream_executor::DeviceDescription *device_description) {
   return nullptr;
 }
