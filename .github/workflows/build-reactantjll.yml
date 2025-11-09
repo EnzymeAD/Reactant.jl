@@ -1,7 +1,7 @@
 name: "Build Reactant_jll"
 
 on:
-  pull_request_target:
+  pull_request:
     branches:
       - main
     paths:
@@ -42,5 +42,5 @@ jobs:
     needs: enzyme-jax-commit
     with:
       reactantbuilder_ref: "main"
-      reactant_commit: ${{ github.sha }}
+      reactant_commit: ${{ github.event.pull_request.head.sha }}
       enzyme_jax_commit: ${{ needs.enzyme-jax-commit.outputs.enzyme_jax_commit }}
