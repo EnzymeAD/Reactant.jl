@@ -1,4 +1,4 @@
-using ..Reactant: ConcreteRNumber, TracedRArray
+using ..Reactant: TracedRArray
 
 function hmc(
     rng::AbstractRNG,
