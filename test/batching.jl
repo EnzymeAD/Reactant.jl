@@ -85,3 +85,18 @@ end
 
     run_auto_batching_tests(naive_batched_matmul, x, y)
 end
+
+function batch_with_closure(x, y)
+    _fn(x) = x .+ y
+    return mapslices(_fn, x; dims=2)
+end
+
+@testset "Batching with closure" begin
+    x = Reactant.TestUtils.construct_test_array(Float32, 3, 256, 8)
+    y = Reactant.TestUtils.construct_test_array(Float32, 256)
+
+    x_ra = Reactant.to_rarray(x)
+    y_ra = Reactant.to_rarray(y)
+
+    @test @jit(batch_with_closure(x_ra, y_ra)) ≈ batch_with_closure(x, y)
+end
