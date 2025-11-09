@@ -198,11 +198,7 @@ function extract_multiple_block_ir(
     for (i, b) in enumerate(to_extract)
         block_map[b] = i
     end
-
     cfg = new_cfg(ir, to_extract, block_map)
-
-    #f = first(ir.cfg.blocks[first(to_extract)].stmts)
-    #l = last(ir.cfg.blocks[last(to_extract)].stmts)
 
     #PhiNode uses the global IR, either shift it or add it to the new IR argument
     for (i, rb) in enumerate(new_returns)
@@ -255,7 +251,6 @@ function extract_multiple_block_ir(
 
     @lk new_returns args
     @error "" args argtypes
-    #Debugger.@bp
     retu = if length(new_returns) > 1
         tuple = Core.Compiler.NewInstruction(
             Expr(:call, Core.GlobalRef(Core, :tuple), new_returns...),

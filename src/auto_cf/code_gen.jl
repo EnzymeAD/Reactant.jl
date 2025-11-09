@@ -73,7 +73,7 @@ TODO: remove masked_traced
         equal || break
         equal = a <: b
     end
-    @assert equal "$(typeof.(args)) \n $(ir.argtypes[2:end])"
+    @assert equal "\n $(typeof.(args)) \n $(ir.argtypes[2:end])"
     @warn ir
     f = Core.OpaqueClosure(ir)
     result = f(args...)
@@ -126,11 +126,11 @@ function apply_transformation!(ir::Core.Compiler.IRCode, if_::IfStructure)
         push!(phi_index, index)
         phi = ir.stmts.stmt[index]
         phi_type::Type = ir.stmts.type[index]
-        if_returned_type::Union{Type, Nothing} = returning_type(phi_type) #TODO: deal with promotion here
+        if_returned_type::Union{Type,Nothing} = returning_type(phi_type) #TODO: deal with promotion here
         if_returned_type isa Nothing && error("transformation failed")
         push!(if_returned_types, if_returned_type)
-        add_phi_value!(true_phi_ssa, phi, true_bbs,header_bb)
-        add_phi_value!(false_phi_ssa, phi, false_bbs,header_bb)
+        add_phi_value!(true_phi_ssa, phi, true_bbs, header_bb)
+        add_phi_value!(false_phi_ssa, phi, false_bbs, header_bb)
     end
     #Debugger.@bp
     #map the old argument with the new ones
@@ -150,7 +150,7 @@ function apply_transformation!(ir::Core.Compiler.IRCode, if_::IfStructure)
     r1 = finish(r1, new_args_v)
     r2 = finish(r2, new_args_v)
 
-    @warn "r1/r2" r1 r2 
+    @warn "r1/r2" r1 r2
 
     #remove MethodInstance name (needed for OpaqueClosure)
     new_args_v = new_args_v[2:end]
@@ -405,12 +405,11 @@ end
 function apply_transformation!(ir::CC.IRCode, f::ForStructure)
     f.state == Maybe && return nothing
     body_phi_ssa = list_phi_nodes_values(ir, Int32(min(f.body_bbs...)), Int32(f.header_bb))
+    internal_accu_ssa = list_phi_nodes_values(
+        ir, Int32(min(f.body_bbs...)), Int32(f.latch_bb)
+    )
     terminal_phi_ssa = list_phi_nodes_values(ir, Int32(f.terminal_bb), Int32(f.header_bb))
-    #check terminal block Phi nodes and find the incumulators by doing the substraction between terminal body and first body block phi nodes
-    accumulars_mask = Vector()
-    for ssa in terminal_phi_ssa
-        push!(accumulars_mask, ssa in body_phi_ssa)
-    end
+    #check terminal block Phi nodes and find the different kinds of accumulars
 
     new_args_dict = Dict()
     #TODO: rewrite this: to use terminal_phi_ssa directly
@@ -422,6 +421,7 @@ function apply_transformation!(ir::CC.IRCode, f::ForStructure)
     remove_iterator(ir, max(f.body_bbs...))
 
     last_bb = max(f.body_bbs...)
+
     results = []
     for index in ir.cfg.blocks[f.terminal_bb].stmts
         stmt = ir.stmts.stmt[index]
@@ -430,6 +430,17 @@ function apply_transformation!(ir::CC.IRCode, f::ForStructure)
             bb == last_bb || continue
             push!(results, stmt.values[e_index])
         end
+    end
+
+    n_accu = length(terminal_phi_ssa)
+    n_accu_internal = 0
+    #find all internal accumulars
+    for (i, ssa) in enumerate(body_phi_ssa)
+        i == 1 && continue #first is the incrementer
+        ssa in terminal_phi_ssa && continue
+        n_accu_internal += 1
+        push!(results, internal_accu_ssa[i])
+        push!(terminal_phi_ssa, ssa)
     end
     body_bbs = f.body_bbs
     @warn ir body_bbs new_args_dict results traced_ssa_for_bodies traced_ssa_for_bodies_types
@@ -463,7 +474,7 @@ function apply_transformation!(ir::CC.IRCode, f::ForStructure)
     @lk value new_args_v terminal_phi_ssa t
     while_output_type = (typeof_ir(ir, ssa) for ssa in terminal_phi_ssa)
     #first element in new_args_v/ value is the iterator first step: only the iterator definition is needed
-    sign = (t, Hidden, Int, Vector{Bool}, while_output_type..., new_args_v[2:end]...)
+    sign = (t, Hidden, Int, Tuple{Int,Int}, while_output_type..., new_args_v[2:end]...)
     @lk sign
     mi = method_instance(
         jit_loop_controlflow, CC.widenconst.(sign), current_interpreter[].world
@@ -476,11 +487,10 @@ function apply_transformation!(ir::CC.IRCode, f::ForStructure)
         iterator_def,
         Hidden(loop_body),
         iterator_index,
-        accumulars_mask,
+        (n_accu, n_accu_internal),
         terminal_phi_ssa...,
         value...,
     )
-    @warn expr
     phi_index = []
     #In the last block of for, collect all phi_values
     for index in ir.cfg.blocks[f.terminal_bb].stmts
@@ -517,7 +527,7 @@ get_mlir_pointer_or_nothing(_) = nothing
 
 #iterator for_body iterator_type n_init traced_ssa_for_bodies args
 @noinline function jit_loop_controlflow(
-    iterator, for_body::Hidden, iterator_index::Int, accu_mask::Vector{Bool}, args_full...
+    iterator, for_body::Hidden, iterator_index::Int, (n_accu, n_internal_accu)::Tuple{Int,Int}, args_full...
 )
     #only support UnitRange atm
     (start, stop, iterator_begin, iter_step) =
@@ -538,11 +548,10 @@ get_mlir_pointer_or_nothing(_) = nothing
     else
         Reactant.TracedRNumber{typeof(start)}((), nothing)
     end
-    n_accu = length(accu_mask)
-    @lk n_accu args_full accu_mask iterator_index
-    accus = args_full[1:n_accu]
+    accus = args_full[1:n_accu + n_internal_accu]
+
     julia_use_iter = iterator_index != 0
-    args = args_full[(n_accu + 1):end]
+    args = args_full[(n_accu + n_internal_accu + 1):end]
     @lk args accus
     tmp_while_op = Reactant.MLIR.Dialects.stablehlo.while_(
         Reactant.MLIR.IR.Value[];
@@ -672,7 +681,7 @@ get_mlir_pointer_or_nothing(_) = nothing
     Reactant.MLIR.API.mlirOperationDestroy(tmp_while_op.operation)
 
     results = []
-    for (i, accu) in enumerate(accus)
+    for (i, accu) in enumerate(accus[1:n_accu])
         r_i = deepcopy(accu) #TODO: is this needed?
         Reactant.TracedUtils.set_mlir_data!(
             r_i, Reactant.MLIR.IR.result(while_op, i + init_mlir_result_offset)
