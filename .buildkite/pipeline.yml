@@ -90,5 +90,5 @@ steps:
   #     REACTANT_TEST_GROUP: "{{matrix.group}}"
   #     JULIA_DEBUG: "Reactant,Reactant_jll"
   #     CUDA_VISIBLE_DEVICES: 0
-    if: build.message !~ /\[skip tests\]/
-    timeout_in_minutes: 120
+    # if: build.message !~ /\[skip tests\]/
+    # timeout_in_minutes: 120
