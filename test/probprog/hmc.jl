@@ -47,10 +47,10 @@ function hmc_program(
         model,
         xs;
         selection=ProbProg.select(ProbProg.Address(:param_a), ProbProg.Address(:param_b)),
-        mass=mass,
-        step_size=step_size,
-        num_steps=num_steps,
-        initial_momentum=initial_momentum,
+        mass,
+        step_size,
+        num_steps,
+        initial_momentum,
     )
 
     return t, accepted
