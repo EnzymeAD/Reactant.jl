@@ -19,6 +19,7 @@ When you encounter OOM (Out of Memory) errors, you can try to clear the cache by
 Julia's builtin `GC.gc()` between memory-intensive operations.
 
 !!! note
+
     This will only free memory which is not currently live. If the result of compiled
     function was stored in a vector, it will still be alive and `GC.gc()` won't free it.
 
@@ -85,7 +86,7 @@ After using Julia's built-in `GC.gc()`:
 ## Benchmark results feel suspiciously fast
 
 If you see benchmark results that are suspiciously fast, it's likely because the benchmark
-was executed with compiled functions where `sync=false` was used (the default). In this case, the compiled 
+was executed with compiled functions where `sync=false` was used (the default). In this case, the compiled
 function will be executed asynchronously, and the benchmark results will be the time it takes
 for the function to schedule the computation on the device. Compile functions with `sync=true` to get the actual runtime. You can also use the `Reactant.synchronize` on the result of the computation to block until the computation is complete.
 
@@ -106,13 +107,13 @@ y = Reactant.to_rarray(rand(Float32, 1000))
 @benchmark f($x, $y) setup=(f = @compile sync=false myfunc($x, $y))
 ```
 
-```
+```julia
 BenchmarkTools.Trial: 199 samples with 9 evaluations per sample.
  Range (min … max):  2.926 μs … 14.333 μs  ┊ GC (min … max): 0.00% … 0.00%
  Time  (median):     3.607 μs              ┊ GC (median):    0.00%
  Time  (mean ± σ):   4.210 μs ±  1.968 μs  ┊ GC (mean ± σ):  0.00% ± 0.00%
 
-   █▅▄▂                                                       
+   █▅▄▂
   ▇█████▇█▅▅▃▃▂▃▄▂▂▁▁▂▁▁▂▁▁▁▁▁▂▁▁▁▁▂▁▁▁▃▁▁▁▁▁▂▁▁▁▁▁▁▁▂▃▁▂▁▁▃ ▂
   2.93 μs        Histogram: frequency by time        12.5 μs <
 
@@ -123,13 +124,13 @@ BenchmarkTools.Trial: 199 samples with 9 evaluations per sample.
 @benchmark f($x, $y) setup=(f = @compile sync=true myfunc($x, $y))
 ```
 
-```
+```julia
 BenchmarkTools.Trial: 221 samples with 8 evaluations per sample.
  Range (min … max):   8.974 μs … 42.443 μs  ┊ GC (min … max): 0.00% … 0.00%
  Time  (median):     11.688 μs              ┊ GC (median):    0.00%
  Time  (mean ± σ):   12.264 μs ±  3.070 μs  ┊ GC (mean ± σ):  0.00% ± 0.00%
 
-    █▃ ▅▇██▃▄ ▄█▃▄▂▅ ▇ ▂    ▂                                  
+    █▃ ▅▇██▃▄ ▄█▃▄▂▅ ▇ ▂    ▂
   ▇▆████████████████▇███▇▃▆▆██▅▅▅▆▆▅▇▁▆▁▁▃▁▃▁▆▁▁▃▁▁▁▁▃▁▁▁▅▁▁▅ ▅
   8.97 μs         Histogram: frequency by time        20.2 μs <
 
@@ -137,21 +138,31 @@ BenchmarkTools.Trial: 221 samples with 8 evaluations per sample.
 ```
 
 ```julia
-@benchmark begin 
-    result = f($x, $y); 
-    Reactant.synchronize(result) 
+@benchmark begin
+    result = f($x, $y);
+    Reactant.synchronize(result)
 end setup=(f = @compile sync=false myfunc(x, y))
 ```
 
-```
+```julia
 BenchmarkTools.Trial: 233 samples with 8 evaluations per sample.
  Range (min … max):   8.911 μs … 19.609 μs  ┊ GC (min … max): 0.00% … 0.00%
  Time  (median):     12.479 μs              ┊ GC (median):    0.00%
  Time  (mean ± σ):   12.758 μs ±  2.219 μs  ┊ GC (mean ± σ):  0.00% ± 0.00%
 
-       ▁▄▄▄▃▂▁   ▃  ▄█▂ ▆▄▂ ▃    ▁  ▃   ▁                      
+       ▁▄▄▄▃▂▁   ▃  ▄█▂ ▆▄▂ ▃    ▁  ▃   ▁
   ▄▃▄▆▆████████▆██▆▇███▆███▇█▄▄▆██▇▇█▇▆▄██▇▁▆▄▃▃▁▁▁▁▃▁▁▁▁▄▁▁▃ ▄
   8.91 μs         Histogram: frequency by time        19.3 μs <
 
  Memory estimate: 400 bytes, allocs estimate: 14.
 ```
+
+## XLA verbosity flags
+
+XLA has special logging flags that can be used to get more information about the compilation
+process. These flags are:
+
+1. `TF_CPP_MAX_VLOG_LEVEL`: This set the max verbosity level for XLA, i.e. all logging
+   for `VLOG(level)` where `level <= TF_CPP_MAX_VLOG_LEVEL` will be printed.
+2. `TF_CPP_MIN_VLOG_LEVEL`: This set the min verbosity level for XLA, i.e. all logging
+   for `VLOG(level)` where `level >= TF_CPP_MIN_VLOG_LEVEL` will be printed.
