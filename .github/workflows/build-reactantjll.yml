@@ -1,0 +1,27 @@
+name: "Build Reactant_jll"
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/build-reactantjll.yml"
+      - "deps/ReactantExtra/API.cpp"
+      - "deps/ReactantExtra/BUILD"
+      - "deps/ReactantExtra/WORKSPACE"
+      - "deps/ReactantExtra/workspace.bzl"
+
+concurrency:
+  # Skip intermediate builds: always.
+  # Cancel intermediate builds: only if it is a pull request build.
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ startsWith(github.ref, 'refs/pull/') }}
+
+jobs:
+  build-jll:
+    name: Build Reactant_jll
+    if: github.event.pull_request.draft == false
+    uses: EnzymeAD/ReactantBuilder/.github/workflows/build-reactant-reusable.yml@main
+    with:
+      reactantbuilder_ref: "main"
+      reactant_commit: ${{ github.sha }}
