@@ -17,12 +17,6 @@ using ..Reactant:
 import ..Reactant: promote_to, make_tracer
 import ..Compiler: donate_argument!
 
-"""
-    process_probprog_function(f, args, op_name)
-
-By convention `args` must have the RNG state as the first argument.
-Ensures the RNG state is threaded through as the first result, followed by the actual function results.
-"""
 function process_probprog_function(f, args, op_name, with_rng=true)
     seen = OrderedIdDict()
     cache_key = []
@@ -101,20 +95,6 @@ function process_probprog_function(f, args, op_name, with_rng=true)
     )
 end
 
-"""
-    process_probprog_outputs(op, linear_results, traced_result, f, args, fnwrapped, resprefix, argprefix, offset=0, rng_only=false)
-
-This function handles the probprog argument convention where:
-- **Index 1**: RNG state
-- **Index 2**: Function `f` (when `fnwrapped` is true)
-- **Index 3+**: Other arguments
-
-`offset` and `rng_only` vary depending on the ProbProg operation, e.g.:
-- `simulate` and `generate` return trace, weight, then outputs:
-  Use `offset=2`: `linear_results[i]` corresponds to `op.result[i+2]`
-- `mh` and `regenerate` return trace, accepted/weight, new rng_state:
-  Use `offset=2, rng_only=true`: only process first result (rng_state)
-"""
 function process_probprog_outputs(
     op,
     linear_results,
