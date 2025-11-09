@@ -82,6 +82,11 @@
 #include "xla/pjrt/pjrt_executable.h"
 #include "xla/pjrt/plugin/xla_cpu/xla_cpu_pjrt_client.h"
 
+#include "xla/hlo/ir/hlo_computation.h"
+#include "xla/hlo/ir/hlo_instruction.h"
+#include "xla/hlo/ir/hlo_instructions.h"
+#include "xla/hlo/ir/hlo_module.h"
+#include "xla/hlo/parser/hlo_parser.h"
 #include "xla/hlo/translate/hlo_to_mhlo/hlo_utils.h"
 #include "xla/hlo/translate/stablehlo.h"
 
@@ -154,6 +159,13 @@
 // Cost Analysis
 #include "xla/hlo/ir/hlo_module.h"
 #include "xla/service/hlo_cost_analysis.h"
+
+#if defined(REACTANT_CUDA) || defined(REACTANT_ROCM)
+#include "xla/service/gpu/model/gpu_hlo_cost_analysis.h"
+#include "xla/service/gpu/model/gpu_performance_model.h"
+#include "xla/service/gpu/model/gpu_performance_model_base.h"
+#include "xla/stream_executor/device_description.h"
+#endif
 
 #include "jaxlib/mosaic/dialect/tpu/tpu_dialect.h"
 
@@ -763,6 +775,7 @@ struct DeviceProperties {
 
 #include "third_party/gpus/cuda/include/cuda.h"
 #include "third_party/gpus/cuda/include/cuda_runtime.h"
+#include "xla/stream_executor/cuda/cuda_compute_capability.h"
 
 REACTANT_ABI int32_t ReactantCudaDriverGetVersion() {
   int32_t data;
@@ -844,6 +857,94 @@ REACTANT_ABI void ReactantCudaGetRegsSpillsMaxThreadsFromBinary(
   return;
 }
 
+inline stream_executor::SemanticVersion
+GetStreamExecutorVersion(int32_t version) {
+  return stream_executor::SemanticVersion(version / 1000, (version % 1000) / 10,
+                                          version % 10);
+}
+
+inline int32_t GetCudaIntegerAttribute(cudaDeviceAttr attribute,
+                                       int32_t device_id) {
+  int32_t value;
+  ReactantHandleCuResult(cudaDeviceGetAttribute(&value, attribute, device_id));
+  return value;
+}
+
+static int32_t CUDACoresPerSM(int32_t major, int32_t minor) {
+  switch (major) {
+  case 2:
+    return 32;
+  case 3:
+    return 192;
+  case 7:
+    return 64;
+  case 8:
+    return minor == 0 ? 64 : 128;
+  default:
+    return 128;
+  }
+}
+
+REACTANT_ABI stream_executor::DeviceDescription *
+CudaGetStreamExecutorDeviceDescription(int32_t device_id) {
+  stream_executor::DeviceDescription *device_description =
+      new stream_executor::DeviceDescription();
+
+  cudaDeviceProp props;
+  cudaGetDeviceProperties(&props, device_id);
+
+  device_description->set_gpu_compute_capability(
+      stream_executor::CudaComputeCapability(props.major, props.minor));
+
+  device_description->set_threads_per_block_limit(props.maxThreadsPerBlock);
+  device_description->set_threads_per_warp(props.warpSize);
+  device_description->set_shared_memory_per_block(props.sharedMemPerBlock);
+  device_description->set_shared_memory_per_block_optin(GetCudaIntegerAttribute(
+      cudaDevAttrMaxSharedMemoryPerBlockOptin, device_id));
+  device_description->set_shared_memory_per_core(GetCudaIntegerAttribute(
+      cudaDevAttrMaxSharedMemoryPerMultiprocessor, device_id));
+  device_description->set_threads_per_core_limit(GetCudaIntegerAttribute(
+      cudaDevAttrMaxThreadsPerMultiProcessor, device_id));
+  device_description->set_core_count(props.multiProcessorCount);
+  device_description->set_fpus_per_core(
+      CUDACoresPerSM(props.major, props.minor));
+  device_description->set_block_dim_limit_x(props.maxGridSize[0]);
+  device_description->set_block_dim_limit_y(props.maxGridSize[1]);
+  device_description->set_block_dim_limit_z(props.maxGridSize[2]);
+
+  // Memory bandwidth (bytes/sec) ≈ 2 * memClock(Hz) * busWidth(bytes)
+  // props.memoryClockRate is in kHz; bus width is in bits.
+  const double mem_clock_hz =
+      static_cast<double>(props.memoryClockRate) * 1000.0;
+  const double bus_bytes = static_cast<double>(props.memoryBusWidth) / 8.0;
+  const double bandwidth_Bps = 2.0 * mem_clock_hz * bus_bytes; // DDR assumption
+  device_description->set_memory_bandwidth(
+      static_cast<uint64_t>(bandwidth_Bps));
+
+  device_description->set_l2_cache_size(
+      GetCudaIntegerAttribute(cudaDevAttrL2CacheSize, device_id));
+
+  // SM clock (GHz). props.clockRate is kHz.
+  device_description->set_clock_rate_ghz(static_cast<double>(props.clockRate) /
+                                         1.0e6);
+  device_description->set_device_memory_size(props.totalGlobalMem);
+
+  // Registers
+  device_description->set_registers_per_core_limit(GetCudaIntegerAttribute(
+      cudaDevAttrMaxRegistersPerMultiprocessor, device_id));
+  device_description->set_registers_per_block_limit(
+      GetCudaIntegerAttribute(cudaDevAttrMaxRegistersPerBlock, device_id));
+
+  // CUDA versions
+  int drv = 0, rtm = 0;
+  cudaRuntimeGetVersion(&rtm);
+  device_description->set_runtime_version(GetStreamExecutorVersion(rtm));
+  cudaDriverGetVersion(&drv);
+  device_description->set_driver_version(GetStreamExecutorVersion(drv));
+
+  return device_description;
+}
+
 #else
 
 REACTANT_ABI int32_t ReactantCudaDriverGetVersion() { return 0; }
@@ -863,7 +964,17 @@ REACTANT_ABI void ReactantCudaGetRegsSpillsMaxThreadsFromBinary(
     const char *binary, const char *fnname, int32_t *regs, int32_t *spills,
     int32_t *maxThreads) {}
 
+REACTANT_ABI stream_executor::DeviceDescription *
+CudaGetStreamExecutorDeviceDescription(int32_t device_id) {
+  return nullptr;
+}
+
 #endif
+
+REACTANT_ABI const char *
+deviceDescriptionToString(stream_executor::DeviceDescription *device) {
+  return cstr_from_string(device->ToString());
+}
 
 REACTANT_ABI void *UnsafeBufferPointer(PjRtBuffer *buffer) {
   auto unsafe = MyValueOrThrow(buffer->client()->UnsafeBufferPointer(buffer));
@@ -1725,8 +1836,27 @@ PjRtLoadedExecutableGetHloModules(xla::PjRtLoadedExecutable *exec,
   }
 }
 
-REACTANT_ABI const char *HloModuleToString(HeldHloModule *hlo_module) {
-  return cstr_from_string(hlo_module->obj()->ToString());
+HloPrintOptions getHloPrintOptions(int32_t print_options) {
+  switch (print_options) {
+  case 0:
+    return HloPrintOptions::Default();
+  case 1:
+    return HloPrintOptions::ShortParsable();
+  case 2:
+    return HloPrintOptions::Canonical();
+  case 3:
+    return HloPrintOptions::Fingerprint();
+  case 4:
+    return HloPrintOptions::ModuleFingerprint();
+  default:
+    ReactantThrowError("Invalid print_options");
+  }
+}
+
+REACTANT_ABI const char *HloModuleToString(HeldHloModule *hlo_module,
+                                           int32_t print_options) {
+  return cstr_from_string(
+      hlo_module->obj()->ToString(getHloPrintOptions(print_options)));
 }
 
 REACTANT_ABI void FreeHloModule(HeldHloModule *hlo_module) {
@@ -3163,3 +3293,210 @@ REACTANT_ABI HeldHloModule *convertMlirModuleToHloModule(MlirModule mod) {
       std::move(MyValueOrThrow(xla::ConvertStablehloToHlo(cmod_op)));
   return reactant::capture(hlo_module);
 }
+
+REACTANT_ABI HeldHloModule *
+parseAndReturnUnverifiedHloModule(const char *cstr) {
+  absl::string_view str(cstr);
+  auto hlo_module_status = xla::ParseAndReturnUnverifiedModule(str);
+  if (!hlo_module_status.ok()) {
+    ReactantThrowError(hlo_module_status.status().ToString().c_str());
+  }
+  std::shared_ptr<xla::HloModule> hlo_module =
+      std::move(hlo_module_status.value());
+  return reactant::capture(hlo_module);
+}
+
+REACTANT_ABI xla::HloComputation *
+hloModuleGetEntryComputation(HeldHloModule *hlo_module) {
+  return hlo_module->obj()->entry_computation();
+}
+
+REACTANT_ABI void freeHloComputation(HloComputation *hlo_computation) {
+  delete hlo_computation;
+}
+
+REACTANT_ABI const char *hloComputationToString(HloComputation *hlo_computation,
+                                                int32_t print_options) {
+  return cstr_from_string(
+      hlo_computation->ToString(getHloPrintOptions(print_options)));
+}
+
+REACTANT_ABI int64_t
+hloComputationInstructionCount(HloComputation *hlo_computation) {
+  return hlo_computation->instruction_count();
+}
+
+REACTANT_ABI void
+hloComputationGetInstructionsPostOrder(HloComputation *hlo_computation,
+                                       int64_t num_instructions,
+                                       HloInstruction **hlo_instructions) {
+  std::vector<HloInstruction *> instructions =
+      hlo_computation->MakeInstructionPostOrder();
+  assert(instructions.size() == num_instructions);
+  for (int i = 0; i < num_instructions; i++) {
+    hlo_instructions[i] = instructions[i];
+  }
+}
+
+REACTANT_ABI void freeHloInstruction(HloInstruction *hlo_instruction) {
+  delete hlo_instruction;
+}
+
+REACTANT_ABI const char *hloInstructionToString(HloInstruction *hlo_instruction,
+                                                int32_t print_options) {
+  return cstr_from_string(
+      hlo_instruction->ToString(getHloPrintOptions(print_options)));
+}
+
+REACTANT_ABI uint8_t hloInstructionHasToApply(HloInstruction *hlo_instruction) {
+  return hlo_instruction->has_to_apply();
+}
+
+REACTANT_ABI HloComputation *
+hloInstructionGetToApply(HloInstruction *hlo_instruction) {
+  return hlo_instruction->to_apply();
+}
+
+REACTANT_ABI uint8_t hloInstructionGetOpcode(HloInstruction *hlo_instruction) {
+  return static_cast<uint8_t>(hlo_instruction->opcode());
+}
+
+REACTANT_ABI const char *hloOpcodeToString(uint8_t opcode) {
+  return cstr_from_string(xla::HloOpcodeString(static_cast<HloOpcode>(opcode)));
+}
+
+REACTANT_ABI uint8_t hloInstructionIsFusion(HloInstruction *hlo_instruction) {
+  if (dynamic_cast<HloFusionInstruction *>(hlo_instruction)) {
+    return 1;
+  }
+  return 0;
+}
+
+REACTANT_ABI uint8_t
+hloInstructionGetFusionKind(HloInstruction *hlo_instruction) {
+  if (auto hlo_instruction_fusion =
+          dynamic_cast<HloFusionInstruction *>(hlo_instruction)) {
+    return static_cast<uint8_t>(hlo_instruction_fusion->fusion_kind());
+  }
+  ReactantThrowError("hloInstructionGetFusionKind: not a fusion instruction");
+}
+
+REACTANT_ABI const char *hloFusionKindToString(uint8_t kind) {
+  return cstr_from_string(
+      xla::ToString(static_cast<HloInstruction::FusionKind>(kind)));
+}
+
+REACTANT_ABI HloComputation *
+hloInstructionFusedInstructionsComputation(HloInstruction *hlo_instruction) {
+  if (auto hlo_instruction_fusion =
+          dynamic_cast<HloFusionInstruction *>(hlo_instruction)) {
+    return hlo_instruction_fusion->fused_instructions_computation();
+  }
+  ReactantThrowError("hloInstructionFusedInstructionsComputation: not a fusion "
+                     "instruction");
+}
+
+struct JLEstimateRunTimeData {
+  int64_t flops;
+  int64_t bytes_read;
+  int64_t bytes_written;
+  int64_t read_time_ns;
+  int64_t write_time_ns;
+  int64_t compute_time_ns;
+  int64_t execution_time_ns;
+};
+
+#if defined(REACTANT_CUDA) || defined(REACTANT_ROCM)
+namespace details {
+
+// Cost analysis for individual instructions.
+class GPUPerformanceModel {
+public:
+  GPUPerformanceModel(mlir::MLIRContext *mlir_context,
+                      stream_executor::DeviceDescription *device_description)
+      : mlir_context_(std::move(mlir_context)),
+        symbolic_expr_context_(mlir_context_),
+        device_description_(*device_description),
+        hlo_cost_analysis_options_{.count_multiple_input_accesses = true},
+        fusion_analysis_cache_(device_description_),
+        gpu_hlo_cost_analysis_(hlo_cost_analysis_options_, device_description_),
+        gpu_performance_model_(device_description_, fusion_analysis_cache_,
+                               gpu_performance_model_cache_,
+                               &symbolic_expr_context_) {}
+
+  void RunAnalysisOnHloModule(std::shared_ptr<xla::HloModule> hlo_module) {
+    hlo_module->entry_computation()->Accept(&gpu_hlo_cost_analysis_);
+    ran_analysis_ = true;
+  }
+
+  xla::gpu::EstimateRunTimeData
+  EstimateRunTimeForInstruction(HloInstruction *hlo_instruction) {
+    if (!ran_analysis_) {
+      ReactantThrowError("Must call RunAnalysisOnHloModule before calling "
+                         "EstimateRunTimeForInstruction");
+    }
+    return gpu_performance_model_.EstimateRunTimeForInstruction(
+        hlo_instruction, &gpu_hlo_cost_analysis_);
+  }
+
+private:
+  mlir::MLIRContext *mlir_context_;
+  xla::SymbolicExprContext symbolic_expr_context_;
+  xla::gpu::GpuHloCostAnalysis::Options hlo_cost_analysis_options_;
+  stream_executor::DeviceDescription device_description_;
+  xla::gpu::HloFusionAnalysisCache fusion_analysis_cache_;
+  xla::gpu::GpuHloCostAnalysis gpu_hlo_cost_analysis_;
+  xla::gpu::GpuPerformanceModelCache gpu_performance_model_cache_;
+  xla::gpu::GpuPerformanceModel gpu_performance_model_;
+  bool ran_analysis_ = false;
+};
+
+} // namespace details
+
+REACTANT_ABI details::GPUPerformanceModel *CreateGPUPerformanceModel(
+    MlirContext ctx, stream_executor::DeviceDescription *device_description) {
+  return new details::GPUPerformanceModel(unwrap(ctx), device_description);
+}
+
+REACTANT_ABI void
+RunAnalysisOnHloModule(details::GPUPerformanceModel *gpu_performance_model,
+                       HeldHloModule *hlo_module) {
+  gpu_performance_model->RunAnalysisOnHloModule(hlo_module->obj());
+}
+
+REACTANT_ABI void EstimateRunTimeForInstruction(
+    details::GPUPerformanceModel *gpu_performance_model,
+    HloInstruction *hlo_instruction, JLEstimateRunTimeData *jldata) {
+  auto data =
+      gpu_performance_model->EstimateRunTimeForInstruction(hlo_instruction);
+  jldata->flops = data.flops;
+  jldata->bytes_read = data.bytes_read;
+  jldata->bytes_written = data.bytes_written;
+  jldata->read_time_ns = absl::ToInt64Nanoseconds(data.read_time);
+  jldata->write_time_ns = absl::ToInt64Nanoseconds(data.write_time);
+  jldata->compute_time_ns = absl::ToInt64Nanoseconds(data.compute_time);
+  jldata->execution_time_ns = absl::ToInt64Nanoseconds(data.exec_time);
+}
+
+#else
+
+REACTANT_ABI void *CreateGPUPerformanceModelWrapper(
+    MlirContext ctx, stream_executor::DeviceDescription *device_description) {
+  return nullptr;
+}
+
+REACTANT_ABI void RunAnalysisOnHloModule(void *gpu_performance_model,
+                                         HloModule *hlo_module) {
+  ReactantThrowError("RunAnalysisOnHloModule is only supported if Reactant "
+                     "was compiled with CUDA or ROCM support.");
+}
+
+REACTANT_ABI void EstimateRunTimeForInstruction(void *gpu_performance_model,
+                                                HloInstruction *hlo_instruction,
+                                                JLEstimateRunTimeData *jldata) {
+  ReactantThrowError(
+      "EstimateRunTimeForInstruction is only supported if Reactant "
+      "was compiled with CUDA or ROCM support.");
+}
+
+#endif
