@@ -100,3 +100,27 @@ end
 
     @test @jit(batch_with_closure(x_ra, y_ra)) ≈ batch_with_closure(x, y)
 end
+
+function map_with_scalar_indexing(i, x, y)
+    c = max(x[i], y[i])
+    return x[i] + y[i] + c
+end
+
+function mctr(f, range, x, y)
+    f2(i) = f(i, x, y)
+    return map(f2, range)
+end
+
+@testset "map with scalar indexing" begin
+    input1 = Reactant.to_rarray(Reactant.TestUtils.construct_test_array(Float32, 10))
+    input2 = Reactant.to_rarray(Reactant.TestUtils.construct_test_array(Float32, 10))
+
+    hlo = @code_hlo optimize = false mctr(map_with_scalar_indexing, 1:8, input1, input2)
+    @test contains(repr(hlo), "stablehlo.while")
+    hlo = @code_hlo optimize = true mctr(map_with_scalar_indexing, 1:8, input1, input2)
+    @test !contains(repr(hlo), "stablehlo.while")
+
+    res_ra = @jit mctr(map_with_scalar_indexing, 1:8, input1, input2)
+    res = mctr(map_with_scalar_indexing, 1:8, Array(input1), Array(input2))
+    @test res_ra ≈ res
+end
