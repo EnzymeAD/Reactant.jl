@@ -21,12 +21,13 @@ function construct_test_array(::Type{T}, dims::Int...) where {T}
 end
 
 function finite_difference_gradient(
-    f, x::AbstractArray{T}; epsilon=eps(T)^(3 / 4)
+    f, x::AbstractArray{T}; epsilon=eps(T)^(T(3 / 4))
 ) where {T}
     onehot_matrix = Reactant.promote_to(
-        TracedRArray{Reactant.unwrapped_eltype(T),2}, LinearAlgebra.I(length(x))
+        TracedRArray{Reactant.unwrapped_eltype(T),2},
+        LinearAlgebra.Diagonal(fill(epsilon, length(x))),
     )
-    perturbation = reshape(onehot_matrix .* epsilon, size(x)..., length(x))
+    perturbation = reshape(onehot_matrix, size(x)..., length(x))
     f_input = cat(x .+ perturbation, x .- perturbation; dims=ndims(x) + 1)
 
     f_evaluated = mapslices(f, f_input; dims=ntuple(identity, ndims(x)))

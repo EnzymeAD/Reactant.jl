@@ -366,3 +366,9 @@ end
 
     @test @jit(jvp_vjp_cubic(v_r, x_r, lambdas_r)) ≈ fill(6, (3, 2))
 end
+
+@testset "Finite Difference Gradient" begin
+    x = Reactant.to_rarray(Reactant.TestUtils.construct_test_array(Float16, 2, 2))
+    res = @jit Reactant.TestUtils.finite_difference_gradient(sum, x)
+    @test res isa Reactant.ConcreteRArray{Float16,2}
+end
