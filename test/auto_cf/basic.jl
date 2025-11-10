@@ -78,6 +78,17 @@ function simple_branch_for(A)
     return p, x
 end
 
+function internal_accu(a)
+    p = 0
+    q = 0
+    for i in 0:a
+        p += 1 + i
+        q += p * 2
+    end
+    q
+end
+
+
 function promote_loop_non_upgraded_slot(A, x)
     p = 1
     for i in axes(A, 2)
@@ -101,6 +112,7 @@ end
     @test @jit(simple_promote_loop_mutable_repeated(tA)) == simple_promote_loop_mutable_repeated(A)
     @test @jit(simple_promote_loop_mutable_repeated_twin(tA)) == simple_promote_loop_mutable_repeated_twin(A)
     @test @jit(simple_branch_for(tA)) == simple_branch_for(A)
+    @test @jit(internal_accu(a)) == internal_accu(a)
     @test @jit(promote_loop_non_upgraded_slot(tA, a)) == promote_loop_non_upgraded_slot(A,n)
 end
 

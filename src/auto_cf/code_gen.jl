@@ -436,7 +436,7 @@ function apply_transformation!(ir::CC.IRCode, f::ForStructure)
     n_accu_internal = 0
     #find all internal accumulars
     for (i, ssa) in enumerate(body_phi_ssa)
-        i == 1 && continue #first is the incrementer
+        i == 1 && continue #first is the incrementer (can be nothing or a phi)
         ssa in terminal_phi_ssa && continue
         n_accu_internal += 1
         push!(results, internal_accu_ssa[i])
