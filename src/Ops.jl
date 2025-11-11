@@ -3,7 +3,7 @@
 # Julia and Reactant semantics should be considered on the higher abstractions that use these
 module Ops
 using ..MLIR: MLIR
-using ..MLIR.Dialects: stablehlo, chlo, enzyme, enzymexla
+using ..MLIR.Dialects: stablehlo, chlo, enzyme, enzymexla, enzymexla_tt_ext
 using ..Reactant:
     Reactant,
     TracedRArray,
@@ -1811,8 +1811,181 @@ end
 end
 
 # Generate a unique name given a module hash and a function name.
-function _hlo_call_name(orig_name, module_suffix)
-    return orig_name * "_hlo_call_" * module_suffix
+_new_function_name(orig_name, module_suffix) = orig_name * "_call_" * module_suffix
+
+function _extract_function(
+    code::String;
+    func_name::String="main",
+    func_op_kind::String="func.func",
+    location::MLIR.IR.Location=MLIR.IR.Location(),
+)
+    module_suffix = string(hash(code); base=16)
+    name_to_call = func_name * "_call_" * module_suffix
+    mod_name = func_name * "_module_" * module_suffix
+    symbol_attr_name = String(MLIR.API.mlirSymbolTableGetSymbolAttributeName())
+
+    use_ttext_module = split(func_op_kind, ".")[1] == "tt"
+
+    if use_ttext_module
+        tt_mod_name = func_name * "_tt_module_" * module_suffix
+        tt_region = MLIR.IR.Region()
+        tt_block = MLIR.IR.Block()
+        push!(tt_region, tt_block)
+        triton_mod_op = enzymexla_tt_ext.module_(;
+            location, bodyRegion=tt_region, sym_name=tt_mod_name
+        )
+        MLIR.IR.rmfromparent!(triton_mod_op)
+        push!(MLIR.IR.body(MLIR.IR.mmodule()), triton_mod_op) # insert into parent module
+
+        region = MLIR.IR.Region()
+        push!(region, MLIR.IR.Block())
+        moduleop = MLIR.Dialects.builtin.module_(;
+            location, bodyRegion=region, sym_name=mod_name
+        )
+        MLIR.IR.rmfromparent!(moduleop)
+        push!(tt_block, moduleop) # insert into triton module
+
+        top_level_block = MLIR.IR.Block(
+            MLIR.API.mlirModuleGetBody(MLIR.API.mlirModuleFromOperation(moduleop)), false
+        )
+        fn = nothing
+
+        symref = MLIR.IR.SymbolRefAttribute(
+            tt_mod_name,
+            MLIR.IR.Attribute[
+                MLIR.IR.FlatSymbolRefAttribute(mod_name),
+                MLIR.IR.FlatSymbolRefAttribute(name_to_call),
+            ],
+        )
+    else
+        current_module = MLIR.IR.mmodule()
+        moduleop = MLIR.IR.Operation(current_module)
+        top_level_block = MLIR.IR.body(current_module)
+        fn = MLIR.IR.lookup(MLIR.IR.SymbolTable(moduleop), name_to_call)
+        symref = MLIR.IR.FlatSymbolRefAttribute(name_to_call)
+    end
+
+    if isnothing(fn)
+        new_mod = parse(MLIR.IR.Module, code)
+        new_mod_op = MLIR.IR.Operation(new_mod)
+        body = MLIR.IR.body(new_mod)
+
+        operations = collect(MLIR.IR.OperationIterator(body))
+        idx = Base.findfirst(op -> MLIR.IR.name(op) == func_op_kind, operations)
+        @assert idx !== nothing
+        op = operations[idx]
+
+        fn_name = String(MLIR.IR.attr(op, symbol_attr_name))
+        fn_name == func_name && (fn = op)
+
+        res = MLIR.IR.LogicalResult(
+            MLIR.API.mlirSymbolTableReplaceAllSymbolUses(fn_name, name_to_call, new_mod_op)
+        )
+        @assert res == MLIR.IR.success() "hlo_call: failed to rename $fn_name"
+
+        if !use_ttext_module
+            # Set function private
+            MLIR.IR.attr!(
+                op,
+                MLIR.API.mlirSymbolTableGetVisibilityAttributeName(),
+                MLIR.IR.Attribute("private"),
+            )
+        end
+
+        # Change function name
+        MLIR.IR.attr!(op, symbol_attr_name, MLIR.IR.Attribute(name_to_call))
+
+        for op in operations
+            MLIR.IR.rmfromparent!(op)
+            push!(top_level_block, op)
+        end
+    end
+
+    if isnothing(fn)
+        error("hlo_call: could not find function $func_name in the provided module")
+    end
+
+    return fn, symref, moduleop
+end
+
+function triton_call(
+    mlir_code::String,
+    args::Union{TracedRArray,TracedRNumber,Number}...;
+    func_name::String="main",
+    grid_x::TracedRNumber{<:Integer},
+    grid_y::TracedRNumber{<:Integer},
+    grid_z::TracedRNumber{<:Integer},
+    block_x::TracedRNumber{<:Integer},
+    block_y::TracedRNumber{<:Integer},
+    block_z::TracedRNumber{<:Integer},
+    cluster_x::TracedRNumber{<:Integer},
+    cluster_y::TracedRNumber{<:Integer},
+    cluster_z::TracedRNumber{<:Integer},
+    num_ctas::Integer=1,
+    num_warps::Integer=4,
+    threads_per_warp::Integer=32,
+    enable_source_remat::Bool=false,
+    location=mlir_stacktrace("triton_call", @__FILE__, @__LINE__),
+)
+    _, symref, modop = _extract_function(
+        mlir_code; func_name, func_op_kind="tt.func", location
+    )
+
+    MLIR.IR.attr!(modop, "enzymexla.ttg.num-warps", MLIR.IR.Attribute(Int32(num_warps)))
+    MLIR.IR.attr!(modop, "enzymexla.ttg.num-ctas", MLIR.IR.Attribute(Int32(num_ctas)))
+    MLIR.IR.attr!(
+        modop, "enzymexla.ttg.threads-per-warp", MLIR.IR.Attribute(Int32(threads_per_warp))
+    )
+    if enable_source_remat
+        MLIR.IR.attr!(modop, "enzymexla.ttg.enable-source-remat", MLIR.IR.UnitAttribute())
+    end
+
+    result_types = MLIR.IR.Type[]
+    output_operand_aliases = MLIR.IR.Attribute[]
+    output_to_arg = Int[]
+    for (i, arg) in enumerate(args)
+        if arg isa TracedRArray
+            push!(result_types, mlir_type(typeof(arg), size(arg)))
+            push!(
+                output_operand_aliases,
+                MLIR.IR.Attribute(
+                    MLIR.API.stablehloOutputOperandAliasGet(
+                        MLIR.IR.context(), 1, Int64[i - 1], Int64(i - 1), 0, C_NULL
+                    ),
+                ),
+            )
+            push!(output_to_arg, i)
+        end
+    end
+
+    results = enzymexla_tt_ext.call(
+        grid_x.mlir_data,
+        grid_y.mlir_data,
+        grid_z.mlir_data,
+        block_x.mlir_data,
+        block_y.mlir_data,
+        block_z.mlir_data,
+        cluster_x.mlir_data,
+        cluster_y.mlir_data,
+        cluster_z.mlir_data,
+        [Reactant.TracedUtils.get_mlir_data(a) for a in args];
+        fn=symref,
+        result_0=result_types,
+        location,
+        output_operand_aliases,
+    )
+
+    array_results = ()
+    for i in 1:MLIR.IR.nresults(results)
+        arg = args[output_to_arg[i]]
+        res = Reactant.TracedRArray{unwrapped_eltype(arg),ndims(arg)}(
+            (), MLIR.IR.result(results, i), size(arg)
+        )
+        copyto!(arg, res)
+        array_results = (array_results..., res)
+    end
+    length(array_results) == 1 && return array_results[1]
+    return array_results
 end
 
 """
@@ -1841,69 +2014,16 @@ julia> Reactant.@jit(
 """
 @noinline function hlo_call(
     code,
-    args...;
+    args::Union{TracedRArray,TracedRNumber}...;
     func_name="main",
     location=mlir_stacktrace("hlo_call", @__FILE__, @__LINE__),
 )
-    module_suffix = string(hash(code); base=16)
-    name_to_call = _hlo_call_name(func_name, module_suffix)
-
-    current_module = MLIR.IR.mmodule()
-    top_level_block = MLIR.IR.body(current_module)
-
-    symbol_attr_name = String(MLIR.API.mlirSymbolTableGetSymbolAttributeName())
-
-    fn = MLIR.IR.lookup(
-        MLIR.IR.SymbolTable(MLIR.IR.Operation(current_module)), name_to_call
-    )
-    if isnothing(fn)
-        new_mod = parse(MLIR.IR.Module, code)
-        new_mod_op = MLIR.IR.Operation(new_mod)
-        body = MLIR.IR.body(new_mod)
-
-        operations = collect(MLIR.IR.OperationIterator(body))
-        for op in operations
-            if MLIR.IR.name(op) == "func.func"
-                fn_name = String(MLIR.IR.attr(op, symbol_attr_name))
-                if fn_name == func_name
-                    fn = op
-                end
-
-                new_name = _hlo_call_name(fn_name, module_suffix)
-                res = MLIR.IR.LogicalResult(
-                    MLIR.API.mlirSymbolTableReplaceAllSymbolUses(
-                        fn_name, new_name, new_mod_op
-                    ),
-                )
-                @assert res == MLIR.IR.success() "hlo_call: failed to rename $fn_name"
-
-                # Set function private
-                MLIR.IR.attr!(
-                    op,
-                    MLIR.API.mlirSymbolTableGetVisibilityAttributeName(),
-                    MLIR.IR.Attribute("private"),
-                )
-
-                # Change function name
-                MLIR.IR.attr!(op, symbol_attr_name, MLIR.IR.Attribute(new_name))
-            end
-        end
-
-        for op in operations
-            MLIR.IR.rmfromparent!(op)
-            push!(top_level_block, op)
-        end
-    end
-
-    if isnothing(fn)
-        error("hlo_call: could not find function $func_name in the provided module")
-    end
+    fn, symref, _ = _extract_function(code; func_name, func_op_kind="func.func", location)
 
     ftype_attr = MLIR.IR.attr(fn, "function_type")
     ftype = MLIR.IR.Type(ftype_attr)
 
-    @assert all(Base.Fix2(isa, Union{TracedRArray,TracedRNumber}), args) "hlo_call: all inputs to hlo_call should be reactant arrays or numbers"
-    @assert MLIR.IR.ninputs(ftype) == length(args) "hlo_call: invalid number of arguments for function $func_name"
+    @assert MLIR.IR.ninputs(ftype) == length(args) "hlo_call: invalid number of arguments for function $func_name. Expected $(MLIR.IR.ninputs(ftype)), got $(length(args))"
 
     for (i, arg) in enumerate(args)
         expected_type = MLIR.IR.input(ftype, i)
@@ -1915,7 +2035,7 @@ julia> Reactant.@jit(
     call = MLIR.Dialects.func.call(
         operands;
         result_0=[MLIR.IR.result(ftype, i) for i in 1:MLIR.IR.nresults(ftype)],
-        callee=MLIR.IR.FlatSymbolRefAttribute(name_to_call),
+        callee=symref,
         location,
     )
 
