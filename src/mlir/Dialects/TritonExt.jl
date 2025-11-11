@@ -17,9 +17,6 @@ function call(
     gridx::Value,
     gridy::Value,
     gridz::Value,
-    blockx::Value,
-    blocky::Value,
-    blockz::Value,
     clusterx::Value,
     clustery::Value,
     clusterz::Value,
@@ -36,9 +33,7 @@ function call(
     location=Location(),
 )
     op_ty_results = IR.Type[result_0...,]
-    operands = Value[
-        gridx, gridy, gridz, blockx, blocky, blockz, clusterx, clustery, clusterz, inputs...
-    ]
+    operands = Value[gridx, gridy, gridz, clusterx, clustery, clusterz, inputs...]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[namedattribute("fn", fn),]
