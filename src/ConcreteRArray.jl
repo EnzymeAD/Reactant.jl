@@ -93,7 +93,24 @@ end
 
 Adapt.adapt_storage(::Type{T}, x::AbstractArray) where {T<:AbstractConcreteArray} = T(x)
 
-Base.size(x::AbstractConcreteArray) = x.shape
+function Base.size(x::AbstractConcreteArray)
+    # TODO: inside compile make it dynamic??
+    # return map(Base.Fix1(_size_static_or_dynamic, x), 1:ndims(x))
+    return x.shape
+end
+
+function _buffer_size(x::AbstractConcreteArray, dim::Integer)
+    sz = x.shape[dim]
+    return sz < 0 ? _size_dynamic(x, dim) : sz
+end
+
+function _size_dynamic(x::ConcretePJRTArray, dim::Integer)
+    @assert !Sharding.is_sharded(x.sharding) "TODO: support the sharded case. Use IFRT for \
+                                              now."
+    return size(x.data[1])[ndims(x) - dim + 1]
+end
+
+_size_dynamic(x::ConcreteIFRTArray, dim::Integer) = size(x.data)[ndims(x) - dim + 1]
 
 function Base.isempty(x::Union{AbstractConcreteArray,AbstractConcreteNumber})
     data = x.data
@@ -284,6 +301,12 @@ function Base.show(io::IO, X::Union{ConcretePJRTScalar,ConcreteIFRTScalar})
     show(io, to_number(X))
     print(io, ")")
     return nothing
+end
+
+function Base.summary(io::IO, X::Union{AnyConcretePJRTArray,AnyConcreteIFRTArray})
+    shape = X.shape
+    shape_string = join(map(x -> x < 0 ? "?" : string(x), shape), "×")
+    print(io, "$(shape_string) $(typeof(X))")
 end
 
 function Base.print_array(io::IO, X::Union{AnyConcretePJRTArray,AnyConcreteIFRTArray})

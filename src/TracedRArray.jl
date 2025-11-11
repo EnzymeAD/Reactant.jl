@@ -247,7 +247,24 @@ end
 
 Base.Tuple(x::TracedRArray) = ntuple(Base.Fix1(getindex, x), length(x))
 
-Base.size(x::TracedRArray) = x.shape
+struct DynamicDimensionSize{SZ} <: Integer
+    size::SZ
+end
+
+# collect(Int, ....)
+function Base.convert(::Type{Int64}, x::DynamicDimensionSize)
+    return Reactant.MLIR.IR.get_dynamic_size()
+end
+Base.Int64(x::DynamicDimensionSize) = convert(Int64, x)
+
+Base.size(x::TracedRArray) = ntuple(i -> size(x, i), ndims(x))
+function Base.size(x::TracedRArray, dim::Integer)
+    @assert 1 <= dim <= ndims(x) "dimension out of range"
+    if x.shape[dim] < 0 # assume dynamic size
+        return DynamicDimensionSize(@opcall get_dimension_size(x, dim))
+    end
+    return x.shape[dim]
+end
 
 Base.collect(x::TracedRArray) = copy(x) # XXX: Is this correct?
 
@@ -1109,7 +1126,7 @@ function Base.accumulate_pairwise!(op, A::AnyTracedRVector, B::AnyTracedRVector)
     return accumulate!(op, A, B; dims=1)
 end
 
-if isdefined(Base, :_accumulate_promote_op)
+@static if isdefined(Base, :_accumulate_promote_op)
     function Base._accumulate_promote_op(op, A::AnyTracedRArray{T}; init=nothing) where {T}
         if init !== nothing
             init isa TracedRNumber && (init = zero(unwrapped_eltype(init)))

@@ -480,7 +480,7 @@ function prepare_mlir_fn_args(
         if toscalar
             in_tys[i] = MLIR.IR.TensorType(Int[], elT)
         else
-            sz = collect(Int, size(arg))
+            sz = collect(Int, size(inv_map[arg]))
             if !optimize_then_pad
                 carg = inv_map[arg]
                 Reactant.has_padding(carg) && (sz .+= Reactant.get_padding(carg))
