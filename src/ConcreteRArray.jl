@@ -306,7 +306,7 @@ end
 function Base.summary(io::IO, X::Union{AnyConcretePJRTArray,AnyConcreteIFRTArray})
     shape = X.shape
     shape_string = join(map(x -> x < 0 ? "?" : string(x), shape), "×")
-    print(io, "$(shape_string) $(typeof(X))")
+    return print(io, "$(shape_string) $(typeof(X))")
 end
 
 function Base.print_array(io::IO, X::Union{AnyConcretePJRTArray,AnyConcreteIFRTArray})
