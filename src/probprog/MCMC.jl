@@ -1,11 +1,12 @@
 using ..Reactant: TracedRArray
 
-function hmc(
+function mcmc(
     rng::AbstractRNG,
     original_trace,
     f::Function,
     args::Vararg{Any,Nargs};
     selection::Selection,
+    algorithm::Symbol=:HMC,
     inverse_mass_matrix=nothing,
     step_size=nothing,
     num_steps=nothing,
@@ -48,9 +49,19 @@ function hmc(
     )::MLIR.IR.Type
     accepted_ty = MLIR.IR.TensorType(Int64[], MLIR.IR.Type(Bool))
 
+    # Map algorithm symbol to integer enum value
+    # From EnzymeOps.td: HMC = 0, NUTS = 1
+    alg_value = if algorithm == :HMC
+        Int32(0)
+    elseif algorithm == :NUTS
+        Int32(1)
+    else
+        error("Unknown MCMC algorithm: $algorithm. Supported algorithms are :HMC and :NUTS")
+    end
+
     alg_attr = @ccall MLIR.API.mlir_c.enzymeMCMCAlgorithmAttrGet(
         MLIR.IR.context()::MLIR.API.MlirContext,
-        0::Int32,  # 0 = HMC
+        alg_value::Int32,
     )::MLIR.IR.Attribute
 
     inverse_mass_matrix_val = nothing
