@@ -41,12 +41,13 @@ function hmc_program(
 )
     t, _, _ = ProbProg.generate(rng, constraint, model, xs; constrained_addresses)
 
-    t, accepted, _ = ProbProg.hmc(
+    t, accepted, _ = ProbProg.mcmc(
         rng,
         t,
         model,
         xs;
         selection=ProbProg.select(ProbProg.Address(:param_a), ProbProg.Address(:param_b)),
+        algorithm=:HMC,
         inverse_mass_matrix,
         step_size,
         num_steps,
