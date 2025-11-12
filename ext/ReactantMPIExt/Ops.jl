@@ -18,43 +18,52 @@ using MPI: MPI
 #     return mpi.finalize(; location)
 # end
 
-function comm_rank(; location=mlir_stacktrace("mpi.comm_rank", @__FILE__, @__LINE__))
-    sym_name = "enzymexla_wrapper_MPI_Comm_rank"
-    sym_attr = IR.FlatSymbolRefAttribute(sym_name)
+#function comm_rank(; location=mlir_stacktrace("mpi.comm_rank", @__FILE__, @__LINE__))
+#    sym_name = "enzymexla_wrapper_MPI_Comm_rank"
+#    sym_attr = IR.FlatSymbolRefAttribute(sym_name)
 
-    IR.inject!("MPI_COMM_WORLD", "llvm.mlir.global constant @MPI_COMM_WORLD() : !llvm.ptr")
-    IR.inject!("MPI_Comm_rank", "llvm.func @MPI_Comm_rank(!llvm.ptr, !llvm.ptr) -> i32")
+#    IR.inject!("MPI_COMM_WORLD", "llvm.mlir.global constant @MPI_COMM_WORLD() : !llvm.ptr")
+#    IR.inject!("MPI_Comm_rank", "llvm.func @MPI_Comm_rank(!llvm.ptr, !llvm.ptr) -> i32")
 
-    #! format: off
-    IR.inject!(sym_name, """
-        func.func @$sym_name(%rank_ptr : !llvm.ptr) -> () {
-            %comm = llvm.mlir.addressof @MPI_COMM_WORLD : !llvm.ptr
-            %errcode = llvm.call @MPI_Comm_rank(%comm, %rank_ptr) : (!llvm.ptr, !llvm.ptr) -> (i32)
-            func.return
-        }
-    """)
-    #! format: on
+#    #! format: off
+#    IR.inject!(sym_name, """
+#        func.func @$sym_name(%rank_ptr : !llvm.ptr) -> () {
+#            %comm = llvm.mlir.addressof @MPI_COMM_WORLD : !llvm.ptr
+#            %errcode = llvm.call @MPI_Comm_rank(%comm, %rank_ptr) : (!llvm.ptr, !llvm.ptr) -> (i32)
+#            func.return
+#        }
+#    """)
+#    #! format: on
 
-    rank_placeholder = Reactant.Ops.constant(fill(Cint(-1)))
-    output_operand_aliases = IR.Attribute([
-        IR.Attribute(
-            MLIR.API.stablehloOutputOperandAliasGet(
-                MLIR.IR.context(), 0, C_NULL, 0, 0, C_NULL
-            ),
-        ),
-    ])
+#    rank_placeholder = Reactant.Ops.constant(fill(Cint(-1)))
+#    output_operand_aliases = IR.Attribute([
+#        IR.Attribute(
+#            MLIR.API.stablehloOutputOperandAliasGet(
+#                MLIR.IR.context(), 0, C_NULL, 0, 0, C_NULL
+#            ),
+#        ),
+#    ])
 
-    res = IR.result(
-        enzymexla.jit_call(
-            IR.Value[rank_placeholder.mlir_data];
-            fn=sym_attr,
-            result_0=[IR.TensorType(Int[], IR.Type(Cint))],
-            location,
-            output_operand_aliases,
-        ),
-    )
-    return TracedRNumber{Cint}((), res)
+#    res = IR.result(
+#        enzymexla.jit_call(
+#            IR.Value[rank_placeholder.mlir_data];
+#            fn=sym_attr,
+#            result_0=[IR.TensorType(Int[], IR.Type(Cint))],
+#            location,
+#            output_operand_aliases,
+#        ),
+#    )
+#    return TracedRNumber{Cint}((), res)
+#end
+
+@noinline function comm_rank(; location=mlir_stacktrace("mpi.comm_rank", @__FILE__, @__LINE__))
+    comm = Reactant.Ops.constant(fill(Cint(-1)))            # ???
+    retval = mlir_type(TracedRArray{T,N})                   # ???
+    rank = mlir_type(Reactant.Ops.constant(fill(Cint(-1)))) # ???
+    res = MLIR.IR.result(enzymexla.comm_rank(comm.mlir_data; retval, rank, location))
+    return TracedRArray{Cint}((), res)
 end
+
 
 function comm_size(; location=mlir_stacktrace("mpi.comm_size", @__FILE__, @__LINE__))
     sym_name = "enzymexla_wrapper_MPI_Comm_size"
