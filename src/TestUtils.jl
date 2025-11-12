@@ -20,8 +20,21 @@ function construct_test_array(::Type{T}, dims::Int...) where {T}
     return reshape(collect(T, 1:prod(dims)), dims...)
 end
 
+# https://github.com/JuliaDiff/FiniteDiff.jl/blob/3a8c3d8d87e59de78e2831787a3f54b12b7c2075/src/epsilons.jl#L133
+function default_epslion(::Val{fdtype}, ::Type{T}) where {fdtype,T}
+    if fdtype == :forward
+        return sqrt(eps(real(T)))
+    elseif fdtype == :central
+        return cbrt(eps(real(T)))
+    elseif fdtype == :hcentral
+        return eps(T)^(T(1 / 4))
+    else
+        return one(real(T))
+    end
+end
+
 function finite_difference_gradient(
-    f, x::AbstractArray{T}; epsilon=eps(T)^(T(3 / 4))
+    f, x::AbstractArray{T}; epsilon=default_epslion(Val(:central), T)
 ) where {T}
     onehot_matrix = Reactant.promote_to(
         TracedRArray{Reactant.unwrapped_eltype(T),2},

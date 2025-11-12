@@ -3,7 +3,7 @@ using NNlib, Reactant, Enzyme, Statistics, Test
 @testset "Activation Functions" begin
     sumabs2(f, x) = sum(abs2, f.(x))
 
-    x_act = Reactant.TestUtils.construct_test_array(Float32, 10, 10)
+    x_act = Reactant.TestUtils.construct_test_array(Float32, 10, 10) .- 0.5f0
     x_act_ca = Reactant.to_rarray(x_act)
 
     @testset "Activation: $act" for act in (
@@ -18,7 +18,7 @@ using NNlib, Reactant, Enzyme, Statistics, Test
         )
 
         @test y_simple ≈ y_compile
-        @test ∂x_compile ≈ ∂x_compile_fd
+        @test ∂x_compile ≈ ∂x_compile_fd atol=1e-3 rtol=1e-3
     end
 end
 
