@@ -135,6 +135,13 @@ function operand(operation::Operation, i=1)
 end
 
 """
+    operands(op)
+
+Return an array of all operands of the operation.
+"""
+operands(op) = Value[operand(op, i) for i in 1:noperands(op)]
+
+"""
     operand!(op, i, value)
 
 Sets the `i`-th operand of the operation.
@@ -228,11 +235,35 @@ function Base.show(io::IO, operation::Operation)
 
     flags = API.mlirOpPrintingFlagsCreate()
 
-    API.mlirOpPrintingFlagsEnableDebugInfo(flags, get(io, :debug, false), true)
+    API.mlirOpPrintingFlagsEnableDebugInfo(flags, get(io, :debug, false), false)
     API.mlirOperationPrintWithFlags(operation, flags, c_print_callback, ref)
     API.mlirOpPrintingFlagsDestroy(flags)
 
     return write(io, rstrip(String(take!(buffer))))
+end
+
+"""
+    parse(::Type{Operation}, code; context=context())
+
+Parses an operation from the string and transfers ownership to the caller.
+"""
+function Base.parse(
+    ::Core.Type{Operation},
+    code;
+    verify::Bool=false,
+    context::Context=context(),
+    block=Block(),
+    location::Location=Location(),
+)
+    return Operation(
+        @ccall API.mlir_c.mlirOperationParse(
+            context::API.MlirContext,
+            block::API.MlirBlock,
+            code::API.MlirStringRef,
+            location::API.MlirLocation,
+            verify::Bool,
+        )::API.MlirOperation
+    )
 end
 
 """
@@ -274,7 +305,7 @@ This will return true if the dialect is loaded and the operation is registered w
 is_registered(opname; context::Context=context()) =
     API.mlirContextIsRegisteredOperation(context, opname)
 
-function create_operation(
+function create_operation_common(
     name,
     loc;
     results=nothing,
@@ -320,10 +351,35 @@ function create_operation(
         if mlirIsNull(op)
             error("Create Operation '$name' failed")
         end
-        res = Operation(op, true)
-        if _has_block()
-            push!(block(), res)
-        end
-        return res
+        return Operation(op, true)
+    end
+end
+
+function create_operation(args...; kwargs...)
+    res = create_operation_common(args...; kwargs...)
+    if _has_block()
+        push!(block(), res)
+    end
+    return res
+end
+
+function create_operation_at_front(args...; kwargs...)
+    res = create_operation_common(args...; kwargs...)
+    Base.pushfirst!(block(), res)
+    return res
+end
+
+function FunctionType(op::Operation)
+    is_function_op = @ccall API.mlir_c.mlirIsFunctionOpInterface(
+        op::API.MlirOperation
+    )::Bool
+    if is_function_op
+        return Type(
+            @ccall API.mlir_c.mlirGetFunctionTypeFromOperation(
+                op::API.MlirOperation
+            )::API.MlirType
+        )
+    else
+        throw("operation is not a function operation")
     end
 end

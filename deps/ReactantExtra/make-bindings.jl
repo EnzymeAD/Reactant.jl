@@ -1,8 +1,16 @@
+const bazel_cmd = if !isnothing(Sys.which("bazelisk"))
+    "bazelisk"
+elseif !isnothing(Sys.which("bazel"))
+    "bazel"
+else
+    error("Could not find `bazel` or `bazelisk` in PATH!")
+end
+
 function build_file(output_path)
     file = basename(output_path)
     run(
         Cmd(
-            `bazel build --action_env=JULIA=$(Base.julia_cmd().exec[1]) --action_env=JULIA_DEPOT_PATH=$(Base.DEPOT_PATH) --repo_env HERMETIC_PYTHON_VERSION="3.10" --check_visibility=false --verbose_failures //:$file`;
+            `$(bazel_cmd) build --action_env=JULIA=$(Base.julia_cmd().exec[1]) --action_env=JULIA_DEPOT_PATH=$(Base.DEPOT_PATH) --repo_env HERMETIC_PYTHON_VERSION="3.10" --check_visibility=false --verbose_failures //:$file`;
             dir=@__DIR__,
         ),
     )
@@ -19,9 +27,22 @@ for file in [
     "Affine.jl",
     "Func.jl",
     "Enzyme.jl",
+    "EnzymeXLA.jl",
     "StableHLO.jl",
     "CHLO.jl",
     "VHLO.jl",
+    "Llvm.jl",
+    "Nvvm.jl",
+    "Gpu.jl",
+    "Affine.jl",
+    "TPU.jl",
+    "MosaicGPU.jl",
+    "Triton.jl",
+    "Shardy.jl",
+    "MPI.jl",
+    "MemRef.jl",
+    "SparseTensor.jl",
+    "TritonExt.jl",
 ]
     build_file(joinpath(src_dir, "mlir", "Dialects", file))
 end

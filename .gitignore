@@ -251,6 +251,8 @@ docs/site/
 # committed for packages, but should be committed for applications that require a static
 # environment.
 Manifest.toml
+Manifest-v*.toml
+.CondaPkg
 
 .vscode/*
 .vscode/settings.json

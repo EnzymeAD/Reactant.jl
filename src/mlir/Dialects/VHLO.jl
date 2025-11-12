@@ -519,6 +519,25 @@ function cbrt_v1(operand::Value; result::IR.Type, location=Location())
     )
 end
 
+function cbrt_v2(operand::Value; result::IR.Type, result_accuracy, location=Location())
+    op_ty_results = IR.Type[result,]
+    operands = Value[operand,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[namedattribute("result_accuracy", result_accuracy),]
+
+    return create_operation(
+        "vhlo.cbrt_v2",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
 function ceil_v1(operand::Value; result::IR.Type, location=Location())
     op_ty_results = IR.Type[result,]
     operands = Value[operand,]
@@ -852,6 +871,25 @@ function cosine_v1(operand::Value; result::IR.Type, location=Location())
 
     return create_operation(
         "vhlo.cosine_v1",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+function cosine_v2(operand::Value; result::IR.Type, result_accuracy, location=Location())
+    op_ty_results = IR.Type[result,]
+    operands = Value[operand,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[namedattribute("result_accuracy", result_accuracy),]
+
+    return create_operation(
+        "vhlo.cosine_v2",
         location;
         operands,
         owned_regions,
@@ -1452,6 +1490,27 @@ function exponential_v1(operand::Value; result::IR.Type, location=Location())
     )
 end
 
+function exponential_v2(
+    operand::Value; result::IR.Type, result_accuracy, location=Location()
+)
+    op_ty_results = IR.Type[result,]
+    operands = Value[operand,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[namedattribute("result_accuracy", result_accuracy),]
+
+    return create_operation(
+        "vhlo.exponential_v2",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
 function exponential_minus_one_v1(operand::Value; result::IR.Type, location=Location())
     op_ty_results = IR.Type[result,]
     operands = Value[operand,]
@@ -1461,6 +1520,27 @@ function exponential_minus_one_v1(operand::Value; result::IR.Type, location=Loca
 
     return create_operation(
         "vhlo.exponential_minus_one_v1",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+function exponential_minus_one_v2(
+    operand::Value; result::IR.Type, result_accuracy, location=Location()
+)
+    op_ty_results = IR.Type[result,]
+    operands = Value[operand,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[namedattribute("result_accuracy", result_accuracy),]
+
+    return create_operation(
+        "vhlo.exponential_minus_one_v2",
         location;
         operands,
         owned_regions,
@@ -1786,6 +1866,27 @@ function log_plus_one_v1(operand::Value; result::IR.Type, location=Location())
     )
 end
 
+function log_plus_one_v2(
+    operand::Value; result::IR.Type, result_accuracy, location=Location()
+)
+    op_ty_results = IR.Type[result,]
+    operands = Value[operand,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[namedattribute("result_accuracy", result_accuracy),]
+
+    return create_operation(
+        "vhlo.log_plus_one_v2",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
 function log_v1(operand::Value; result::IR.Type, location=Location())
     op_ty_results = IR.Type[result,]
     operands = Value[operand,]
@@ -1805,6 +1906,25 @@ function log_v1(operand::Value; result::IR.Type, location=Location())
     )
 end
 
+function log_v2(operand::Value; result::IR.Type, result_accuracy, location=Location())
+    op_ty_results = IR.Type[result,]
+    operands = Value[operand,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[namedattribute("result_accuracy", result_accuracy),]
+
+    return create_operation(
+        "vhlo.log_v2",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
 function logistic_v1(operand::Value; result::IR.Type, location=Location())
     op_ty_results = IR.Type[result,]
     operands = Value[operand,]
@@ -1814,6 +1934,25 @@ function logistic_v1(operand::Value; result::IR.Type, location=Location())
 
     return create_operation(
         "vhlo.logistic_v1",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+function logistic_v2(operand::Value; result::IR.Type, result_accuracy, location=Location())
+    op_ty_results = IR.Type[result,]
+    operands = Value[operand,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[namedattribute("result_accuracy", result_accuracy),]
+
+    return create_operation(
+        "vhlo.logistic_v2",
         location;
         operands,
         owned_regions,
@@ -2172,6 +2311,38 @@ function recv_v1(
     )
 end
 
+function recv_v2(
+    token::Value;
+    results::Vector{IR.Type},
+    channel_id,
+    channel_type,
+    is_host_transfer,
+    source_target_pairs,
+    location=Location(),
+)
+    op_ty_results = IR.Type[results...,]
+    operands = Value[token,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[
+        namedattribute("channel_id", channel_id),
+        namedattribute("channel_type", channel_type),
+        namedattribute("is_host_transfer", is_host_transfer),
+        namedattribute("source_target_pairs", source_target_pairs),
+    ]
+
+    return create_operation(
+        "vhlo.recv_v2",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
 function reduce_v1(
     inputs::Vector{Value},
     init_values::Vector{Value};
@@ -2489,6 +2660,25 @@ function rsqrt_v1(operand::Value; result::IR.Type, location=Location())
     )
 end
 
+function rsqrt_v2(operand::Value; result::IR.Type, result_accuracy, location=Location())
+    op_ty_results = IR.Type[result,]
+    operands = Value[operand,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[namedattribute("result_accuracy", result_accuracy),]
+
+    return create_operation(
+        "vhlo.rsqrt_v2",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
 function scatter_v1(
     inputs::Vector{Value},
     scatter_indices::Value,
@@ -2657,6 +2847,39 @@ function send_v1(
     )
 end
 
+function send_v2(
+    inputs::Vector{Value},
+    token::Value;
+    result::IR.Type,
+    channel_id,
+    channel_type,
+    is_host_transfer,
+    source_target_pairs,
+    location=Location(),
+)
+    op_ty_results = IR.Type[result,]
+    operands = Value[inputs..., token]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[
+        namedattribute("channel_id", channel_id),
+        namedattribute("channel_type", channel_type),
+        namedattribute("is_host_transfer", is_host_transfer),
+        namedattribute("source_target_pairs", source_target_pairs),
+    ]
+
+    return create_operation(
+        "vhlo.send_v2",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
 function set_dimension_size_v1(
     operand::Value, size::Value; result::IR.Type, dimension, location=Location()
 )
@@ -2777,6 +3000,25 @@ function sine_v1(operand::Value; result::IR.Type, location=Location())
     )
 end
 
+function sine_v2(operand::Value; result::IR.Type, result_accuracy, location=Location())
+    op_ty_results = IR.Type[result,]
+    operands = Value[operand,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[namedattribute("result_accuracy", result_accuracy),]
+
+    return create_operation(
+        "vhlo.sine_v2",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
 function slice_v1(
     operand::Value;
     result::IR.Type,
@@ -2854,6 +3096,25 @@ function sqrt_v1(operand::Value; result::IR.Type, location=Location())
     )
 end
 
+function sqrt_v2(operand::Value; result::IR.Type, result_accuracy, location=Location())
+    op_ty_results = IR.Type[result,]
+    operands = Value[operand,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[namedattribute("result_accuracy", result_accuracy),]
+
+    return create_operation(
+        "vhlo.sqrt_v2",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
 function subtract_v1(lhs::Value, rhs::Value; result::IR.Type, location=Location())
     op_ty_results = IR.Type[result,]
     operands = Value[lhs, rhs]
@@ -2892,6 +3153,25 @@ function tan_v1(operand::Value; result::IR.Type, location=Location())
     )
 end
 
+function tan_v2(operand::Value; result::IR.Type, result_accuracy, location=Location())
+    op_ty_results = IR.Type[result,]
+    operands = Value[operand,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[namedattribute("result_accuracy", result_accuracy),]
+
+    return create_operation(
+        "vhlo.tan_v2",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
 function tanh_v1(operand::Value; result::IR.Type, location=Location())
     op_ty_results = IR.Type[result,]
     operands = Value[operand,]
@@ -2901,6 +3181,25 @@ function tanh_v1(operand::Value; result::IR.Type, location=Location())
 
     return create_operation(
         "vhlo.tanh_v1",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+function tanh_v2(operand::Value; result::IR.Type, result_accuracy, location=Location())
+    op_ty_results = IR.Type[result,]
+    operands = Value[operand,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[namedattribute("result_accuracy", result_accuracy),]
+
+    return create_operation(
+        "vhlo.tanh_v2",
         location;
         operands,
         owned_regions,

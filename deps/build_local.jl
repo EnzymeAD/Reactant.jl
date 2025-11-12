@@ -1,29 +1,103 @@
 # Invoke with
-# `julia --project=deps deps/build_local.jl [dbg/opt] [auto/cpu/cuda]`
+# `julia --project=deps deps/build_local.jl [--debug] [--backend=auto/cpu/cuda]`
 
 # the pre-built ReactantExtra_jll might not be loadable on this platform
 Reactant_jll = Base.UUID("0192cb87-2b54-54ad-80e0-3be72ad8a3c0")
 
-using Pkg, Scratch, Preferences, Libdl
+using ArgParse
 
-# 1. Get a scratch directory
-scratch_dir = get_scratch!(Reactant_jll, "build")
-isdir(scratch_dir) && rm(scratch_dir; recursive=true)
+using Libdl
+
+# adapted from `cudaRuntimeGetVersion` in CUDA_Runtime_jll
+function cuDriverGetVersion(library_handle)
+    function_handle = Libdl.dlsym(library_handle, "cuDriverGetVersion"; throw_error=false)
+    if function_handle === nothing
+        @debug "CUDA Driver library seems invalid (does not contain 'cuDriverGetVersion')"
+        return nothing
+    end
+    version_ref = Ref{Cint}()
+    status = ccall(function_handle, Cint, (Ptr{Cint},), version_ref)
+    if status != 0
+        @debug "Call to 'cuDriverGetVersion' failed with status $(status)"
+        return nothing
+    end
+    major, ver = divrem(version_ref[], 1000)
+    minor, patch = divrem(ver, 10)
+    version = VersionNumber(major, minor, patch)
+    @debug "Detected CUDA Driver version $(version)"
+    return version
+end
+
+function get_cuda_version()
+    cuname = if Sys.iswindows()
+        Libdl.find_library("nvcuda")
+    else
+        Libdl.find_library(["libcuda.so.1", "libcuda.so"])
+    end
+
+    if cuname == ""
+        return nothing
+    end
+
+    handle = Libdl.dlopen(cuname)
+    current_cuda_version = cuDriverGetVersion(handle)
+    path = Libdl.dlpath(handle)
+    Libdl.dlclose(handle)
+    return current_cuda_version
+end
+
+s = ArgParseSettings()
+#! format: off
+@add_arg_table! s begin
+    "--debug"
+        help = "Build with debug mode (-c dbg)."
+        action = :store_true
+    "--backend"
+        help = "Build with the specified backend (auto, cpu, cuda)."
+        default = "auto"
+        arg_type = String
+    "--gcc_host_compiler_path"
+        help = "Path to the gcc host compiler."
+        default = something(Sys.which("gcc"), "/usr/bin/gcc")
+        arg_type = String
+    "--cc"
+        default = something(Sys.which("clang"), Sys.which("cc"), Sys.which("gcc"), "/usr/bin/cc")
+        arg_type = String
+    "--hermetic_python_version"
+        help = "Hermetic Python version."
+        default = "3.12"
+        arg_type = String
+    "--jobs"
+        help = "Number of parallel jobs."
+        default = Sys.CPU_THREADS
+        arg_type = Int
+    "--copt"
+        help = "Options to be passed to the C compiler.  Can be used multiple times."
+        action = :append_arg
+        arg_type = String
+    "--cxxopt"
+        help = "Options to be passed to the C++ compiler.  Can be used multiple times."
+        action = :append_arg
+        arg_type = String
+    "--extraopt"
+        help = "Extra options to be passed to Bazel.  Can be used multiple times."
+        action = :append_arg
+        arg_type = String
+    "--color"
+        help = "Set to `yes` to enable color output, or `no` to disable it. Defaults to same color setting as the Julia process."
+        default = something(Base.have_color, false) ? "yes" : "no"
+        arg_type = String
+end
+#! format: on
+parsed_args = parse_args(ARGS, s)
+
+println("Parsed args:")
+for (k, v) in parsed_args
+    println("  $k = $v")
+end
+println()
 
 source_dir = joinpath(@__DIR__, "ReactantExtra")
-
-# 2. Ensure that an appropriate LLVM_full_jll is installed
-Pkg.activate(; temp=true)
-
-# Build!
-@info "Building" source_dir scratch_dir
-run(`mkdir -p $(scratch_dir)`)
-run(
-    Cmd(
-        `$(Base.julia_cmd().exec[1]) --project=. -e "using Pkg; Pkg.instantiate()"`;
-        dir=source_dir,
-    ),
-)
 
 #--repo_env TF_NEED_ROCM=1
 #--define=using_rocm=true --define=using_rocm_hipcc=true
@@ -41,87 +115,188 @@ run(
 # --@local_config_cuda//:cuda_compiler=nvcc
 # --crosstool_top="@local_config_cuda//crosstool:toolchain"
 
-build_kind = if length(ARGS) ≥ 1
-    kind = ARGS[1]
-    if kind ∉ ("dbg", "opt")
-        error("Invalid build kind $(kind). Valid options are 'dbg' and 'opt'")
-    end
-    kind
-else
-    "dbg"
+abstract type AbstractBackend end
+struct CPUBackend <: AbstractBackend end
+struct CUDABackend <: AbstractBackend
+    version::VersionNumber
+    CUDABackend(ver::VersionNumber) = new(VersionNumber(ver.major))
 end
 
-@info "Building JLL with -c $(build_kind)"
-
-build_backend = if length(ARGS) ≥ 2
-    backend = ARGS[2]
-    if backend ∉ ("auto", "cpu", "cuda")
-        error("Invalid build backend $(backend). Valid options are 'auto', 'cpu', and 'cuda'")
+function parse_build_backend(str::String)::AbstractBackend
+    if str == "cpu"
+        return CPUBackend()
+    elseif str == "cuda12"
+        return CUDABackend(v"12")
+    elseif str == "cuda13"
+        return CUDABackend(v"13")
     end
-    backend
-else
-    "auto"
+
+    if str in ("auto", "cuda")
+        cuda_ver = get_cuda_version()
+        if isnothing(cuda_ver)
+            if str == "cuda"
+                throw(
+                    AssertionError(
+                        "Could not detect cuda version, but requested cuda with auto version build",
+                    ),
+                )
+            end
+            return CPUBackend()
+        else
+            return CUDABackend(get_cuda_version())
+        end
+    else
+        error("Unknown backend '$(str)'")
+    end
 end
 
-if build_backend == "auto"
-    build_backend = try
-        run(Cmd(`nvidia-smi`))
-        "cuda"
-    catch
-        "cpu"
-    end
-end
+build_kind = parsed_args["debug"] ? "dbg" : "opt"
 
-arg = if build_backend == "cuda"
-    "--config=cuda"
-elseif build_backend == "cpu"
+build_backend = parse_build_backend(parsed_args["backend"])
+
+arg = if build_backend == CUDABackend(v"12")
+    "--config=cuda12"
+elseif build_backend == CUDABackend(v"13")
+    "--config=cuda13"
+elseif build_backend == CPUBackend()
     ""
-end
-
-@info "Building JLL with backend $(build_backend)"
-
-if isempty(arg)
-    run(
-        Cmd(
-            `bazel build -c $(build_kind) --action_env=JULIA=$(Base.julia_cmd().exec[1])
-            --repo_env HERMETIC_PYTHON_VERSION="3.10"
-            --check_visibility=false --verbose_failures :libReactantExtra.so`;
-            dir=source_dir,
-        ),
-    )
 else
-    run(
-        Cmd(
-            `bazel build $(arg) -c $(build_kind) --action_env=JULIA=$(Base.julia_cmd().exec[1])
-            --repo_env HERMETIC_PYTHON_VERSION="3.10"
-            --check_visibility=false --verbose_failures :libReactantExtra.so`;
-            dir=source_dir,
-        ),
-    )
+    throw(AssertionError("Unknown backend `$build_backend`"))
 end
-# env=Dict("HOME"=>ENV["HOME"], "PATH"=>joinpath(source_dir, "..")*":"*ENV["PATH"])))
 
-run(Cmd(`rm -f libReactantExtra.dylib`; dir=joinpath(source_dir, "bazel-bin")))
-run(
-    Cmd(
-        `ln -s libReactantExtra.so libReactantExtra.dylib`;
-        dir=joinpath(source_dir, "bazel-bin"),
-    ),
-)
+bazel_cmd = if !isnothing(Sys.which("bazelisk"))
+    "bazelisk"
+elseif !isnothing(Sys.which("bazel"))
+    "bazel"
+else
+    error("Could not find `bazel` or `bazelisk` in PATH!")
+end
+
+@info "Building JLL with $(bazel_cmd)"
+
+gcc_host_compiler_path = parsed_args["gcc_host_compiler_path"]
+cc = parsed_args["cc"]
+hermetic_python_version = parsed_args["hermetic_python_version"]
+
+# Try to guess if `cc` is GCC and get its version number.
+cc_is_gcc, gcc_version = let
+    io = IOBuffer()
+    run(pipeline(ignorestatus(`$(cc) --version`); stdout=io))
+    version_string = String(take!(io))
+    # Detecing GCC is hard, the name "gcc" may not appear anywhere in the
+    # version string, but on the second line there should be FSF.
+    m = match(
+        r"\([^)]+\) (\d+\.\d+\.\d+).*\n.*Free Software Foundation, Inc\.",
+        version_string,
+    )
+    if !isnothing(m)
+        true, VersionNumber(m[1])
+    else
+        false, v"0"
+    end
+end
+
+build_cmd_list = [bazel_cmd, "build"]
+!isempty(arg) && push!(build_cmd_list, arg)
+append!(build_cmd_list, ["-c", "$(build_kind)"])
+push!(build_cmd_list, "--action_env=JULIA=$(Base.julia_cmd().exec[1])")
+push!(build_cmd_list, "--repo_env=HERMETIC_PYTHON_VERSION=$(hermetic_python_version)")
+if !isempty(gcc_host_compiler_path)
+    push!(build_cmd_list, "--repo_env=GCC_HOST_COMPILER_PATH=$(gcc_host_compiler_path)")
+end
+push!(build_cmd_list, "--repo_env=CC=$(cc)")
+push!(build_cmd_list, "--check_visibility=false")
+push!(build_cmd_list, "--verbose_failures")
+push!(build_cmd_list, "--jobs=$(parsed_args["jobs"])")
+push!(build_cmd_list, "--experimental_ui_max_stdouterr_bytes=-1")
+push!(build_cmd_list, "--sandbox_debug")
+
+push!(build_cmd_list, "--linkopt=-fuse-ld=lld")
+
+for opt in parsed_args["copt"]
+    push!(build_cmd_list, "--copt=$(opt)")
+end
+for opt in parsed_args["cxxopt"]
+    push!(build_cmd_list, "--cxxopt=$(opt)")
+end
+for opt in parsed_args["extraopt"]
+    push!(build_cmd_list, opt)
+end
+# Some versions of GCC can't deal with some components of XLA, disable them if necessary.
+if cc_is_gcc
+    arch = Base.BinaryPlatforms.arch(Base.BinaryPlatforms.HostPlatform())
+    if arch == "x86_64"
+        if gcc_version < v"13"
+            push!(build_cmd_list, "--define=xnn_enable_avxvnniint8=false")
+        end
+        if gcc_version < v"12"
+            push!(build_cmd_list, "--define=xnn_enable_avx512fp16=false")
+        end
+        if gcc_version < v"11"
+            # TODO: this is not sufficient to complete a build with GCC 10.
+            push!(build_cmd_list, "--define=xnn_enable_avxvnni=false")
+        end
+    end
+else
+    # Assume the compiler is clang if not GCC. `using_clang` is an option
+    # introduced by Enzyme-JAX.
+    push!(build_cmd_list, "--define=using_clang=true")
+    push!(build_cmd_list, "--copt=-Wno-unused-command-line-argument")
+end
+push!(build_cmd_list, "--copt=-Wno-private-header")
+push!(build_cmd_list, "--color=$(parsed_args["color"])")
+push!(build_cmd_list, ":libReactantExtra.so")
+
+@info "About to run Bazel" build_cmd_list
+run(Cmd(Cmd(build_cmd_list); dir=source_dir))
 
 # Discover built libraries
 built_libs = filter(readdir(joinpath(source_dir, "bazel-bin"))) do file
-    endswith(file, "Extra.$(Libdl.dlext)") && startswith(file, "lib")
+    return endswith(file, "Extra.so") && startswith(file, "lib")
 end
 
 lib_path = joinpath(source_dir, "bazel-bin", only(built_libs))
 isfile(lib_path) || error("Could not find library $lib_path in build directory")
 
-# Tell ReactReactantExtra_jllant_jll to load our library instead of the default artifact one
+if build_backend isa CUDABackend
+    for path in (
+        joinpath("bin", "ptxas"),
+        joinpath("bin", "fatbinary"),
+        joinpath("nvvm", "libdevice", "libdevice.10.bc"),
+    )
+        full_path = joinpath(source_dir, "bazel-bin", "cuda", path)
+        if !Base.Filesystem.ispath(full_path)
+            source = joinpath(
+                source_dir,
+                "bazel-bin",
+                "libReactantExtra.so.runfiles",
+                # libdevice's directory was moved in CUDA 13, before was in same
+                # dir as ptxas and fatbinary
+                if contains(basename(path), "libdevice") && build_backend.version >= v"13"
+                    "cuda_nvvm"
+                else
+                    "cuda_nvcc"
+                end,
+                path,
+            )
+            if !Base.Filesystem.ispath(source)
+                error(
+                    "File $(source) does not exist, are you sure it is where you expect it to be?",
+                )
+            end
+            Base.Filesystem.mkpath(dirname(full_path))
+            @info "Symlinking $(full_path) -> $(source)"
+            Base.Filesystem.symlink(source, full_path)
+        end
+    end
+end
+
+# Tell ReactantExtra_jll to load our library instead of the default artifact one
+using Preferences
+
 set_preferences!(
     joinpath(dirname(@__DIR__), "LocalPreferences.toml"),
     "Reactant_jll",
-    "libReactantExtra_path" => lib_path,
-    "libReactantDialects_path" => joinpath(source_dir, "bazel-bin");
+    "libReactantExtra_path" => lib_path;
     force=true,
 )

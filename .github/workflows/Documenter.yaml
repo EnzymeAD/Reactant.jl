@@ -1,0 +1,53 @@
+name: Documentation
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/Documenter.yaml"
+      - "docs/**"
+      - "lib/**"
+      - "src/**"
+  push:
+    branches:
+      - main
+    tags: "*"
+    paths:
+      - ".github/workflows/Documenter.yaml"
+      - "docs/**"
+      - "lib/**"
+      - "src/**"
+
+concurrency:
+  # Same group concurrency as the `PreviewCleanup.yml` workflow, because they both
+  # git-push to the same branch, so we want to avoid clashes.  NOTE: this is
+  # different from the concurrency group below, which is to cancel successive
+  # jobs from within the PR.
+  group: docs-pushing
+
+jobs:
+  docs:
+    name: Documentation
+    runs-on: ubuntu-latest
+    concurrency:
+      # Skip intermediate builds: always.
+      # Cancel intermediate builds: only if it is a pull request build.
+      group: ${{ github.workflow }}-${{ github.ref }}
+      cancel-in-progress: ${{ startsWith(github.ref, 'refs/pull/') }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: julia-actions/setup-julia@v2
+        with:
+          version: "1.11"
+      - uses: julia-actions/cache@v2
+      - name: Instantiate docs environment
+        shell: julia --color=yes --project=docs {0}
+        run: |
+          using Pkg
+          Pkg.develop(PackageSpec(path=pwd()))
+          Pkg.instantiate()
+      - name: Build documentation
+        run: julia --color=yes --project=docs docs/make.jl
+        env:
+          XLA_FLAGS: --xla_force_host_platform_device_count=8
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          DOCUMENTER_KEY: ${{ secrets.DOCUMENTER_KEY }}

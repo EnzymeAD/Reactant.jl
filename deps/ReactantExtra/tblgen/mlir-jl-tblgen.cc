@@ -26,30 +26,33 @@
 
 using namespace llvm;
 
-using generator_function = bool(const llvm::RecordKeeper& recordKeeper,
-                                llvm::raw_ostream& os);
+using generator_function = bool(const llvm::RecordKeeper &recordKeeper,
+                                llvm::raw_ostream &os);
 
 struct GeneratorInfo {
-  const char* name;
-  generator_function* generator;
+  const char *name;
+  generator_function *generator;
 };
 
 extern generator_function emitOpTableDefs;
 extern generator_function emitTestTableDefs;
 
-static std::array<GeneratorInfo, 1> generators {{
-  {"jl-op-defs", emitOpTableDefs},
+static std::array<GeneratorInfo, 1> generators{{
+    {"jl-op-defs", emitOpTableDefs},
 }};
 
-generator_function* generator;
+generator_function *generator;
 bool disableModuleWrap;
 
 int main(int argc, char **argv) {
   llvm::InitLLVM y(argc, argv);
-  llvm::cl::opt<std::string> generatorOpt("generator", llvm::cl::desc("Generator to run"), cl::Required);
-  llvm::cl::opt<bool> disableModuleWrapOpt("disable-module-wrap", llvm::cl::desc("Disable module wrap"), cl::init(false));
+  llvm::cl::opt<std::string> generatorOpt(
+      "generator", llvm::cl::desc("Generator to run"), cl::Required);
+  llvm::cl::opt<bool> disableModuleWrapOpt(
+      "disable-module-wrap", llvm::cl::desc("Disable module wrap"),
+      cl::init(false));
   cl::ParseCommandLineOptions(argc, argv);
-  for (const auto& spec : generators) {
+  for (const auto &spec : generators) {
     if (generatorOpt == spec.name) {
       generator = spec.generator;
       break;
@@ -61,7 +64,8 @@ int main(int argc, char **argv) {
   }
   disableModuleWrap = disableModuleWrapOpt;
 
-  return TableGenMain(argv[0], [](raw_ostream& os, const RecordKeeper &records) {
-    return generator(records, os);
-  });
+  return TableGenMain(argv[0],
+                      [](raw_ostream &os, const RecordKeeper &records) {
+                        return generator(records, os);
+                      });
 }

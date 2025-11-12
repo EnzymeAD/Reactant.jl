@@ -96,7 +96,7 @@ isdict(attr::Attribute) = API.mlirAttributeIsADictionary(attr)
 Creates a dictionary attribute containing the given list of elements in the provided context.
 """
 function Attribute(attrs::Dict; context::Context=context())
-    attrs = map(splat(NamedAttribute), attrs)
+    attrs = [NamedAttribute(k, Attribute(v); context) for (k, v) in attrs]
     return Attribute(API.mlirDictionaryAttrGet(context, length(attrs), attrs))
 end
 
@@ -487,7 +487,7 @@ function Base.fill(value::Float64, shaped_type::Type)
     return API.mlirDenseElementsAttrDoubleSplatGet(shaped_type, value)
 end
 
-function Base.fill(::Core.Type{Attribute}, value, shape)
+function Base.fill(::Core.Type{Attribute}, value, shape::Vector{Int})
     shaped_type = TensorType(shape, Type(typeof(value)))
     return Base.fill(value, shaped_type)
 end
@@ -502,7 +502,7 @@ to_row_major(x::AbstractArray{T,0}) where {T} = x
 Creates a dense elements attribute with the given shaped type from elements of a specific type. Expects the element type of the shaped type to match the data element type.
 """
 function DenseElementsAttribute(values::AbstractArray{Bool})
-    shaped_type = TensorType(size(values), Type(Bool))
+    shaped_type = TensorType(collect(Int, size(values)), Type(Bool))
     return Attribute(
         API.mlirDenseElementsAttrBoolGet(
             shaped_type, length(values), AbstractArray{Cint}(to_row_major(values))
@@ -511,21 +511,21 @@ function DenseElementsAttribute(values::AbstractArray{Bool})
 end
 
 function DenseElementsAttribute(values::AbstractArray{UInt8})
-    shaped_type = TensorType(size(values), Type(UInt8))
+    shaped_type = TensorType(collect(Int, size(values)), Type(UInt8))
     return Attribute(
         API.mlirDenseElementsAttrUInt8Get(shaped_type, length(values), to_row_major(values))
     )
 end
 
 function DenseElementsAttribute(values::AbstractArray{Int8})
-    shaped_type = TensorType(size(values), Type(Int8))
+    shaped_type = TensorType(collect(Int, size(values)), Type(Int8))
     return Attribute(
         API.mlirDenseElementsAttrInt8Get(shaped_type, length(values), to_row_major(values))
     )
 end
 
 function DenseElementsAttribute(values::AbstractArray{UInt16})
-    shaped_type = TensorType(size(values), Type(UInt16))
+    shaped_type = TensorType(collect(Int, size(values)), Type(UInt16))
     return Attribute(
         API.mlirDenseElementsAttrUInt16Get(
             shaped_type, length(values), to_row_major(values)
@@ -534,14 +534,14 @@ function DenseElementsAttribute(values::AbstractArray{UInt16})
 end
 
 function DenseElementsAttribute(values::AbstractArray{Int16})
-    shaped_type = TensorType(size(values), Type(Int16))
+    shaped_type = TensorType(collect(Int, size(values)), Type(Int16))
     return Attribute(
         API.mlirDenseElementsAttrInt16Get(shaped_type, length(values), to_row_major(values))
     )
 end
 
 function DenseElementsAttribute(values::AbstractArray{UInt32})
-    shaped_type = TensorType(size(values), Type(UInt32))
+    shaped_type = TensorType(collect(Int, size(values)), Type(UInt32))
     return Attribute(
         API.mlirDenseElementsAttrUInt32Get(
             shaped_type, length(values), to_row_major(values)
@@ -550,14 +550,14 @@ function DenseElementsAttribute(values::AbstractArray{UInt32})
 end
 
 function DenseElementsAttribute(values::AbstractArray{Int32})
-    shaped_type = TensorType(size(values), Type(Int32))
+    shaped_type = TensorType(collect(Int, size(values)), Type(Int32))
     return Attribute(
         API.mlirDenseElementsAttrInt32Get(shaped_type, length(values), to_row_major(values))
     )
 end
 
 function DenseElementsAttribute(values::AbstractArray{UInt64})
-    shaped_type = TensorType(size(values), Type(UInt64))
+    shaped_type = TensorType(collect(Int, size(values)), Type(UInt64))
     return Attribute(
         API.mlirDenseElementsAttrUInt64Get(
             shaped_type, length(values), to_row_major(values)
@@ -566,21 +566,21 @@ function DenseElementsAttribute(values::AbstractArray{UInt64})
 end
 
 function DenseElementsAttribute(values::AbstractArray{Int64})
-    shaped_type = TensorType(size(values), Type(Int64))
+    shaped_type = TensorType(collect(Int, size(values)), Type(Int64))
     return Attribute(
         API.mlirDenseElementsAttrInt64Get(shaped_type, length(values), to_row_major(values))
     )
 end
 
 function DenseElementsAttribute(values::AbstractArray{Float32})
-    shaped_type = TensorType(size(values), Type(Float32))
+    shaped_type = TensorType(collect(Int, size(values)), Type(Float32))
     return Attribute(
         API.mlirDenseElementsAttrFloatGet(shaped_type, length(values), to_row_major(values))
     )
 end
 
 function DenseElementsAttribute(values::AbstractArray{Float64})
-    shaped_type = TensorType(size(values), Type(Float64))
+    shaped_type = TensorType(collect(Int, size(values)), Type(Float64))
     return Attribute(
         API.mlirDenseElementsAttrDoubleGet(
             shaped_type, length(values), to_row_major(values)
@@ -588,10 +588,19 @@ function DenseElementsAttribute(values::AbstractArray{Float64})
     )
 end
 
-# TODO mlirDenseElementsAttrBFloat16Get
+if isdefined(Core, :BFloat16)
+    function DenseElementsAttribute(values::AbstractArray{Core.BFloat16})
+        shaped_type = TensorType(collect(Int, size(values)), Type(Core.BFloat16))
+        return Attribute(
+            API.mlirDenseElementsAttrBFloat16Get(
+                shaped_type, length(values), to_row_major(values)
+            ),
+        )
+    end
+end
 
 function DenseElementsAttribute(values::AbstractArray{Float16})
-    shaped_type = TensorType(size(values), Type(Float16))
+    shaped_type = TensorType(collect(Int, size(values)), Type(Float16))
     return Attribute(
         API.mlirDenseElementsAttrFloat16Get(
             shaped_type, length(values), to_row_major(values)
@@ -599,8 +608,8 @@ function DenseElementsAttribute(values::AbstractArray{Float16})
     )
 end
 
-function DenseElementsAttribute(values::AbstractArray{<:Complex})
-    shaped_type = TensorType(size(values), Type(eltype(values)))
+function DenseElementsAttribute(values::AbstractArray)
+    shaped_type = TensorType(collect(Int, size(values)), Type(eltype(values)))
     return Attribute(
         API.mlirDenseElementsAttrRawBufferGet(
             shaped_type, length(values) * Base.elsize(values), to_row_major(values)
@@ -615,7 +624,7 @@ Creates a dense elements attribute with the given shaped type from string elemen
 """
 function DenseElementsAttribute(values::AbstractArray{String})
     # TODO may fail because `Type(String)` is not defined
-    shaped_type = TensorType(size(values), Type(String))
+    shaped_type = TensorType(collect(Int, size(values)), Type(String))
     return Attribute(
         API.mlirDenseElementsAttrStringGet(
             shaped_type, length(values), to_row_major(values)
@@ -628,7 +637,7 @@ end
 
 Creates a dense elements attribute that has the same data as the given dense elements attribute and a different shaped type. The new type must have the same total number of elements.
 """
-function Base.reshape(attr::Attribute, shape)
+function Base.reshape(attr::Attribute, shape::Vector{Int})
     @assert isdenseelements(attr) "attribute $(attr) is not a dense elements attribute"
     @assert length(attr) == prod(shape) "new shape $(shape) has a different number of elements than the original attribute"
     element_type = eltype(type(attr))
@@ -697,6 +706,9 @@ function DenseArrayAttribute end
 )
 @llvmversioned min = v"16" DenseArrayAttribute(
     values::AbstractArray{Int8}; context::Context=context()
+) = Attribute(API.mlirDenseI8ArrayGet(context, length(values), to_row_major(values)))
+@llvmversioned min = v"16" DenseArrayAttribute(
+    values::AbstractArray{UInt8}; context::Context=context()
 ) = Attribute(API.mlirDenseI8ArrayGet(context, length(values), to_row_major(values)))
 @llvmversioned min = v"16" DenseArrayAttribute(
     values::AbstractArray{Int16}; context::Context=context()
@@ -787,6 +799,14 @@ function Base.getindex(attr::Attribute, i)
         elseif isdensearray(attr, Float64)
             API.mlirDenseF64ArrayGetElement(attr, i)
         end
+    end
+end
+
+function Base.iterate(attr::Attribute, state=1)
+    if state > length(attr)
+        nothing
+    else
+        (attr[state], state + 1)
     end
 end
 

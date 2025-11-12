@@ -14,27 +14,81 @@ Reactant.@jit
 ## ReactantCore API
 
 ```@docs
+within_compile
+```
+
+```@docs
 @trace
+```
+
+## Reactant data types
+
+```@docs
+ConcreteRArray
+ConcreteRNumber
 ```
 
 ## Inspect Generated HLO
 
 ```@docs
 @code_hlo
+@code_mhlo
+@code_xla
 ```
 
-```@raw html
-<br>
-```
-
-# Internal Functionality
-
-!!! danger "Private"
-
-    These functions are not part of the public API and are subject to change at any time.
+## Compile Options
 
 ```@docs
-Reactant.Compiler.codegen_unflatten!
-Reactant.Compiler.codegen_flatten!
-Reactant.Compiler.codegen_xla_call
+CompileOptions
+Reactant.DefaultXLACompileOptions
+```
+
+### Sharding Specific Options
+
+```@docs
+OptimizeCommunicationOptions
+ShardyPropagationOptions
+```
+
+## Tracing customization
+
+```@docs
+Reactant.@skip_rewrite_func
+Reactant.@skip_rewrite_type
+```
+
+## Profile XLA
+
+Reactant can hook into XLA's profiler to generate compilation and execution traces.
+See the [profiling tutorial](@ref profiling) for more details.
+
+```@docs
+Reactant.Profiler.with_profiler
+Reactant.Profiler.annotate
+Reactant.Profiler.@annotate
+```
+
+## Devices
+
+```@docs
+Reactant.devices
+Reactant.addressable_devices
+```
+
+## Differentiation Specific API
+
+```@docs
+EnzymeCore.ignore_derivatives
+```
+
+## Persistent Compilation Cache
+
+```@docs
+clear_compilation_cache!
+```
+
+## Internal utils
+
+```@docs
+ReactantCore.materialize_traced_array
 ```

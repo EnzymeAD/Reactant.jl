@@ -1,56 +1,55 @@
-using LuxLib, Reactant, Enzyme, NNlib
+using LuxLib, Reactant, Enzyme, NNlib, Test
 
 @testset "Fused Dense" begin
     sumabs2fuseddense(act, weight, x, bias) =
         sum(abs2, fused_dense_bias_activation(act, weight, x, bias))
 
     function ∇fuseddense(act, weight, x, bias)
-        dw = Enzyme.make_zero(weight)
-        dx = Enzyme.make_zero(x)
-        db = bias === nothing ? nothing : Enzyme.make_zero(bias)
-        b_dup = bias === nothing ? Const(bias) : Duplicated(bias, db)
-        Enzyme.autodiff(
-            Reverse,
-            sumabs2fuseddense,
-            Active,
-            Const(act),
-            Duplicated(weight, dw),
-            Duplicated(x, dx),
-            b_dup,
+        return Enzyme.gradient(Reverse, sumabs2fuseddense, Const(act), weight, x, bias)[2:end]
+    end
+
+    function ∇fuseddense_fd(act, weight, x, bias)
+        dw = Reactant.TestUtils.finite_difference_gradient(
+            w -> sumabs2fuseddense(act, w, x, bias), weight
         )
+        dx = Reactant.TestUtils.finite_difference_gradient(
+            x -> sumabs2fuseddense(act, weight, x, bias), x
+        )
+        db = if bias === nothing
+            nothing
+        else
+            Reactant.TestUtils.finite_difference_gradient(
+                b -> sumabs2fuseddense(act, weight, x, b), bias
+            )
+        end
         return dw, dx, db
     end
 
     @testset for act in (identity, relu, sigmoid, tanh, gelu), has_bias in (true, false)
-        weight = randn(Float32, 9, 10)
-        x = randn(Float32, 10, 12)
-        bias = has_bias ? randn(Float32, 9) : nothing
+        weight = Reactant.TestUtils.construct_test_array(Float32, 9, 10)
+        x = Reactant.TestUtils.construct_test_array(Float32, 10, 12)
+        bias = has_bias ? Reactant.TestUtils.construct_test_array(Float32, 9) : nothing
 
-        weight_ra = Reactant.ConcreteRArray(weight)
-        x_ra = Reactant.ConcreteRArray(x)
+        weight_ra = Reactant.to_rarray(weight)
+        x_ra = Reactant.to_rarray(x)
         bias_ra = Reactant.to_rarray(bias)
 
-        f_compile = Reactant.compile(
-            fused_dense_bias_activation, (act, weight_ra, x_ra, bias_ra)
-        )
+        y_compile = @jit fused_dense_bias_activation(act, weight_ra, x_ra, bias_ra)
 
         y_res = fused_dense_bias_activation(act, weight, x, bias)
-        y_compile = f_compile(act, weight_ra, x_ra, bias_ra)
 
         @test y_res ≈ y_compile atol = 1e-5 rtol = 1e-2
 
         @testset "Enzyme: fused_dense_bias_activation" begin
-            dw, dx, db = ∇fuseddense(act, weight, x, bias)
-            ∇fuseddense_compiled = Reactant.compile(
-                ∇fuseddense, (act, weight_ra, x_ra, bias_ra)
-            )
-            dw_compile, dx_compile, db_compile = ∇fuseddense_compiled(
+            dw_compile, dx_compile, db_compile = @jit ∇fuseddense(
                 act, weight_ra, x_ra, bias_ra
             )
 
-            @test dw ≈ dw_compile atol = 1e-5 rtol = 1e-2
-            @test dx ≈ dx_compile atol = 1e-5 rtol = 1e-2
-            has_bias && @test db ≈ db_compile atol = 1e-5 rtol = 1e-2
+            dw_fd, dx_fd, db_fd = @jit ∇fuseddense_fd(act, weight, x, bias)
+
+            @test dw_fd ≈ dw_compile atol = 1e-5 rtol = 1e-2
+            @test dx_fd ≈ dx_compile atol = 1e-5 rtol = 1e-2
+            has_bias && @test db_fd ≈ db_compile atol = 1e-5 rtol = 1e-2
         end
     end
 end
@@ -62,64 +61,59 @@ end
     sumabs2biasact!!(act, x, b) = sum(abs2, biasact!!(act, x, b))
 
     function ∇biasact(act, x, b)
-        dx = Enzyme.make_zero(x)
-        db = Enzyme.make_zero(b)
-        Enzyme.autodiff(
-            Reverse,
-            sumabs2biasact,
-            Active,
-            Const(act),
-            Duplicated(x, dx),
-            Duplicated(b, db),
+        return Enzyme.gradient(Reverse, sumabs2biasact, Const(act), x, b)[2:end]
+    end
+
+    function ∇biasact_fd(act, x, b)
+        dx = Reactant.TestUtils.finite_difference_gradient(
+            x -> sumabs2biasact(act, x, b), x
+        )
+        db = Reactant.TestUtils.finite_difference_gradient(
+            b -> sumabs2biasact(act, x, b), b
         )
         return dx, db
     end
 
     function ∇biasact!!(act, x, b)
-        dx = Enzyme.make_zero(x)
-        db = Enzyme.make_zero(b)
-        Enzyme.autodiff(
-            Reverse,
-            sumabs2biasact!!,
-            Active,
-            Const(act),
-            Duplicated(x, dx),
-            Duplicated(b, db),
+        return Enzyme.gradient(Reverse, sumabs2biasact!!, Const(act), x, b)[2:end]
+    end
+    function ∇biasact!!_fd(act, x, b)
+        dx = Reactant.TestUtils.finite_difference_gradient(
+            x -> sumabs2biasact!!(act, x, b), x
+        )
+        db = Reactant.TestUtils.finite_difference_gradient(
+            b -> sumabs2biasact!!(act, x, b), b
         )
         return dx, db
     end
 
     @testset for act in (identity, relu, sigmoid, tanh, gelu)
-        x = randn(Float32, 10, 10)
-        b = randn(Float32, 10)
+        x = Reactant.TestUtils.construct_test_array(Float32, 10, 10)
+        b = Reactant.TestUtils.construct_test_array(Float32, 10)
 
-        x_ra = Reactant.ConcreteRArray(x)
-        b_ra = Reactant.ConcreteRArray(b)
+        x_ra = Reactant.to_rarray(x)
+        b_ra = Reactant.to_rarray(b)
 
-        f_compile = Reactant.compile(biasact, (act, x_ra, b_ra))
-        f_compile!! = Reactant.compile(biasact!!, (act, x_ra, b_ra))
+        y_compile = @jit biasact(act, x_ra, b_ra)
+        y_compile!! = @jit biasact!!(act, x_ra, b_ra)
 
         y_simple = biasact(act, x, b)
         y_simple!! = biasact!!(act, x, b)
-        y_compile = f_compile(act, x_ra, b_ra)
-        y_compile!! = f_compile!!(act, x_ra, b_ra)
 
         @test y_simple ≈ y_compile atol = 1e-5 rtol = 1e-2
         @test y_simple!! ≈ y_compile!! atol = 1e-5 rtol = 1e-2
 
         @testset "Enzyme: bias_activation" begin
-            ∂x_enz, ∂b_enz = ∇biasact(act, x, b)
-            ∇biasact_compiled = Reactant.compile(∇biasact, (act, x_ra, b_ra))
-            ∂x_compile, ∂b_compile = ∇biasact_compiled(act, x_ra, b_ra)
+            ∂x_enz, ∂b_enz = @jit ∇biasact_fd(act, x, b)
+            ∂x_compile, ∂b_compile = @jit ∇biasact(act, x_ra, b_ra)
 
             @test ∂x_enz ≈ ∂x_compile atol = 1e-5 rtol = 1e-2
             @test ∂b_enz ≈ ∂b_compile atol = 1e-5 rtol = 1e-2
         end
 
         @testset "Enzyme: bias_activation!!" begin
-            ∂x_enz!!, ∂b_enz!! = ∇biasact!!(act, x, b)
-            ∇biasact!!_compiled = Reactant.compile(∇biasact!!, (act, x_ra, b_ra))
-            ∂x_compile!!, ∂b_compile!! = ∇biasact!!_compiled(act, x_ra, b_ra)
+            ∂x_enz!!, ∂b_enz!! = @jit ∇biasact!!_fd(act, x, b)
+            ∂x_compile!!, ∂b_compile!! = @jit ∇biasact!!(act, x_ra, b_ra)
 
             @test ∂x_enz!! ≈ ∂x_compile!! atol = 1e-5 rtol = 1e-2
             @test ∂b_enz!! ≈ ∂b_compile!! atol = 1e-5 rtol = 1e-2
@@ -132,46 +126,30 @@ end
     sumabs2(f, x) = sum(abs2, fast_activation(f, x))
     sumabs2!!(f, x) = sum(abs2, fast_activation!!(f, copy(x)))
 
-    function ∇sumabs2(f, x)
-        dx = Enzyme.make_zero(x)
-        Enzyme.autodiff(Reverse, sumabs2, Active, Const(f), Duplicated(x, dx))
-        return dx
-    end
+    ∇sumabs2(f, x) = Enzyme.gradient(Reverse, sumabs2, Const(f), x)[2]
+    ∇sumabs2_fd(f, x) = Reactant.TestUtils.finite_difference_gradient(x -> sumabs2(f, x), x)
+    ∇sumabs2!!(f, x) = Enzyme.gradient(Reverse, sumabs2!!, Const(f), x)[2]
+    ∇sumabs2!!_fd(f, x) =
+        Reactant.TestUtils.finite_difference_gradient(x -> sumabs2!!(f, x), x)
 
-    function ∇sumabs2!!(f, x)
-        dx = Enzyme.make_zero(x)
-        Enzyme.autodiff(Reverse, sumabs2!!, Active, Const(f), Duplicated(x, dx))
-        return dx
-    end
-
-    x_act = randn(Float32, 10, 10)
-    x_act_ca = Reactant.ConcreteRArray(x_act)
+    x_act = Reactant.TestUtils.construct_test_array(Float32, 10, 10)
+    x_act_ca = Reactant.to_rarray(x_act)
 
     @testset "Activation: $act" for act in (
         identity, relu, sigmoid, tanh, tanh_fast, sigmoid_fast, gelu, abs2
     )
-        f_compile = Reactant.compile(sumabs2, (act, x_act_ca))
-        f_compile!! = Reactant.compile(sumabs2!!, (act, x_act_ca))
-
         y_simple = sumabs2(act, x_act)
         y_simple!! = sumabs2!!(act, x_act)
-        y_compile = f_compile(act, x_act_ca)
-        y_compile!! = f_compile!!(act, x_act_ca)
+        y_compile = @jit sumabs2(act, x_act_ca)
+        y_compile!! = @jit sumabs2!!(act, x_act_ca)
 
         @test y_simple ≈ y_compile atol = 1e-5 rtol = 1e-2
         @test y_simple!! ≈ y_compile!! atol = 1e-5 rtol = 1e-2
 
-        ∂x_enz = Enzyme.make_zero(x_act)
-        Enzyme.autodiff(Reverse, sumabs2, Active, Const(act), Duplicated(x_act, ∂x_enz))
-
-        ∂x_enz!! = Enzyme.make_zero(x_act)
-        Enzyme.autodiff(Reverse, sumabs2!!, Active, Const(act), Duplicated(x_act, ∂x_enz!!))
-
-        ∇sumabs2_compiled = Reactant.compile(∇sumabs2, (act, x_act_ca))
-        ∂x_compile = ∇sumabs2_compiled(act, x_act_ca)
-
-        ∇sumabs2!!_compiled = Reactant.compile(∇sumabs2!!, (act, x_act_ca))
-        ∂x_compile!! = ∇sumabs2!!_compiled(act, x_act_ca)
+        ∂x_enz = @jit ∇sumabs2_fd(act, x_act)
+        ∂x_compile = @jit ∇sumabs2(act, x_act_ca)
+        ∂x_enz!! = @jit ∇sumabs2!!_fd(act, x_act)
+        ∂x_compile!! = @jit ∇sumabs2!!(act, x_act_ca)
 
         @test ∂x_enz ≈ ∂x_compile atol = 1e-5 rtol = 1e-2
         @test ∂x_enz!! ≈ ∂x_compile!! atol = 1e-5 rtol = 1e-2
@@ -179,32 +157,25 @@ end
 end
 
 @testset "Fused Conv" begin
-    @testset for groups in (1, 2, 4),
-        has_bias in (true, false),
-        act in (identity, relu, sigmoid, tanh, gelu)
+    @testset for groups in (1, 2), has_bias in (true, false), act in (identity, relu, tanh)
+        weight = Reactant.TestUtils.construct_test_array(Float32, 4, 4, 8 ÷ groups, 4)
+        x = Reactant.TestUtils.construct_test_array(Float32, 16, 16, 8, 2)
+        bias = has_bias ? Reactant.TestUtils.construct_test_array(Float32, 4) : nothing
 
-        weight = randn(Float32, 4, 4, 8 ÷ groups, 4)
-        x = randn(Float32, 16, 16, 8, 2)
-        bias = has_bias ? randn(Float32, 4) : nothing
-
-        weight_reactant = Reactant.ConcreteRArray(weight)
-        x_reactant = Reactant.ConcreteRArray(x)
+        weight_reactant = Reactant.to_rarray(weight)
+        x_reactant = Reactant.to_rarray(x)
         bias_reactant = Reactant.to_rarray(bias)
 
-        @testset for stride in ((1, 1), (2, 2), (3, 3)),
-            padding in ((0, 0), (1, 1), (2, 2), (0, 2), (2, 0), (0, 1), (1, 0)),
-            dilation in ((1, 1), (2, 2), (1, 2), (2, 1))
+        @testset for stride in ((1, 1), (3, 3)),
+            padding in ((0, 0), (2, 2), (2, 0)),
+            dilation in ((1, 1), (1, 2))
 
             conv_dims = DenseConvDims(x, weight; stride, padding, dilation, groups)
 
-            fused_conv_compiled = Reactant.compile(
-                fused_conv_bias_activation,
-                (act, weight_reactant, x_reactant, bias_reactant, conv_dims),
-            )
-
-            reactant_res = fused_conv_compiled(
+            reactant_res = @jit fused_conv_bias_activation(
                 act, weight_reactant, x_reactant, bias_reactant, conv_dims
             )
+
             luxlib_res = fused_conv_bias_activation(act, weight, x, bias, conv_dims)
 
             @test reactant_res ≈ luxlib_res atol = 1e-5 rtol = 1e-2

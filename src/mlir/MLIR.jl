@@ -1,11 +1,17 @@
 module MLIR
 
-module API
-    using CEnum
-    using Preferences
-    using Reactant_jll
+using ..Reactant
 
-    const mlir_c = Reactant_jll.libReactantExtra
+module API
+    using CEnum: @cenum
+    using Preferences: Preferences
+    using Reactant_jll: Reactant_jll
+
+    const mlir_c = if Reactant_jll.is_available()
+        Reactant_jll.libReactantExtra
+    else
+        missing
+    end
 
     # MLIR C API
     let

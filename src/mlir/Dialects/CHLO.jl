@@ -78,14 +78,16 @@ end
 
 Returns `AsinAcosKernel(operand)` element-wise.
 
+```
 If
   w = _asin_acos_kernel(z)
   w\' = _asin_acos_kernel(I * z)
-then
+Then
   asin(z) = complex(atan2(z.real, w.real), sign(z.imag) * w.imag)
   acos(z) = complex(atan2(w.real, z.real), -sign(z.imag) * w.imag)
   asinh(z) = complex(sign(z.real) * w\'.imag, atan2(z.imag, w\'.real))
   acosh(z) = complex(w.imag, sign(z.imag) * atan2(w.real, z.real))
+```
 
 This op is used as an intermediate value in decompositions and
 should never be constructed directly by frameworks or consumed by
@@ -1398,6 +1400,59 @@ function polygamma(
 end
 
 """
+`ragged_dot`
+
+
+This operation takes three tensor args---lhs, rhs, and group_sizes---and
+a \"ragged_dot_dimension_numbers\" attribute. Like dot_general, the lhs and
+rhs are allowed arbitrary batch and contracting dimensions. Additionally,
+the lhs is required to have one ragged dimension, and the rhs may have at
+most one group dimension. The op has three modes, depending on the kind of
+the lhs ragged dimension.
+
+In mode 1, the shape-signature is `[b,m,k], [g,b,k,n], [b,g] -> [b,m,n]`.
+Here the ragged dimension is an lhs non-contracting dimension (`m`). The
+dimensions `b` and `k` represent batch and contracting dimensions
+respectively. The rhs is required to have a group dimension (`g`).
+
+In mode 2, the shape-signature is `[b,m,k], [b,k,n], [b,g] -> [g,b,m,n]`.
+Here the ragged dimension is an lhs/rhs contracting dimension (`k`).
+
+In mode 3, the shape-signature is `[b,m,k], [b,k,n], [g] -> [b,m,n]`. Here
+the ragged dimension is an lhs/rhs batch dimension (`b`).
+"""
+function ragged_dot(
+    lhs::Value,
+    rhs::Value,
+    group_sizes::Value;
+    result::IR.Type,
+    ragged_dot_dimension_numbers,
+    precision_config=nothing,
+    location=Location(),
+)
+    op_ty_results = IR.Type[result,]
+    operands = Value[lhs, rhs, group_sizes]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[namedattribute(
+        "ragged_dot_dimension_numbers", ragged_dot_dimension_numbers
+    ),]
+    !isnothing(precision_config) &&
+        push!(attributes, namedattribute("precision_config", precision_config))
+
+    return create_operation(
+        "chlo.ragged_dot",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+"""
 `sinh`
 
 Returns `Sinh(operand)` element-wise.
@@ -1417,6 +1472,36 @@ function sinh(operand::Value; result=nothing::Union{Nothing,IR.Type}, location=L
 
     return create_operation(
         "chlo.sinh",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
+    )
+end
+
+"""
+`square`
+
+Returns `Square(operand)` element-wise.
+
+\$\$
+\\square(x) = complex((x.real - x.imag) * (x.real + x.imag), x.real * x.imag * 2) if x is a complex number
+           = x * x                                                               otherwise
+\$\$
+"""
+function square(operand::Value; result=nothing::Union{Nothing,IR.Type}, location=Location())
+    op_ty_results = IR.Type[]
+    operands = Value[operand,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+    !isnothing(result) && push!(op_ty_results, result)
+
+    return create_operation(
+        "chlo.square",
         location;
         operands,
         owned_regions,
@@ -1459,14 +1544,16 @@ end
 """
 `top_k`
 
-If the input is a vector (rank-1), finds the `k` largest entries in the vector
-and outputs their values and indices as vectors.  Thus `values[j]` is the
-`j`-th largest entry in `input`, and its index is `indices[j]`.
+If the input is a vector (rank-1), finds the `k` largest entries in the
+vector and outputs their values and indices as vectors.  Thus `values[j]` is
+the `j`-th largest entry in `input`, and its index is `indices[j]`.
 
 For matrices (resp. higher rank input), computes the top `k` entries in each
 row (resp. vector along the last dimension).  Thus,
 
-    values.shape = indices.shape = input.shape[:-1] + [k]
+```
+values.shape = indices.shape = input.shape[:-1] + [k]
+```
 
 If two elements are equal, the lower-index element appears first.
 """

@@ -18,21 +18,25 @@ import ...API
 
 The `affine.apply` operation applies an [affine mapping](#affine-maps)
 to a list of SSA values, yielding a single SSA value. The number of
-dimension and symbol arguments to `affine.apply` must be equal to the
+dimension and symbol operands to `affine.apply` must be equal to the
 respective number of dimensional and symbolic inputs to the affine mapping;
 the affine mapping has to be one-dimensional, and so the `affine.apply`
 operation always returns one value. The input operands and result must all
 have ‘index’ type.
 
+An operand that is a valid dimension as per the [rules on valid affine
+dimensions and symbols](#restrictions-on-dimensions-and-symbols)
+cannot be used as a symbolic operand.
+
 # Example
 
 ```mlir
-#map10 = affine_map<(d0, d1) -> (d0 floordiv 8 + d1 floordiv 128)>
+#map = affine_map<(d0, d1) -> (d0 floordiv 8 + d1 floordiv 128)>
 ...
-%1 = affine.apply #map10 (%s, %t)
+%1 = affine.apply #map (%s, %t)
 
 // Inline example.
-%2 = affine.apply affine_map<(i)[s0] -> (i+s0)> (%42)[%n]
+%2 = affine.apply affine_map<(i)[s0] -> (i + s0)> (%42)[%n]
 ```
 """
 function apply(
@@ -82,19 +86,50 @@ In the above example, `%indices:3` conceptually holds the following:
 %indices_1 = affine.apply #map1()[%linear_index]
 %indices_2 = affine.apply #map2()[%linear_index]
 ```
+
+In other words, `%0:3 = affine.delinearize_index %x into (B, C)` produces
+`%0 = {%x / (B * C), (%x mod (B * C)) / C, %x mod C}`.
+
+The basis may either contain `N` or `N-1` elements, where `N` is the number of results.
+If there are N basis elements, the first one will not be used during computations,
+but may be used during analysis and canonicalization to eliminate terms from
+the `affine.delinearize_index` or to enable conclusions about the total size of
+`%linear_index`.
+
+If the basis is fully provided, the delinearize_index operation is said to \"have
+an outer bound\". The builders assume that an `affine.delinearize_index` has
+an outer bound by default, as this is how the operation was initially defined.
+
+That is, the example above could also have been written
+```mlir
+%0:3 = affine.delinearize_index %linear_index into (244, 244) : index, index
+```
+
+Note that, for symmetry with `getPaddedBasis()`, if `hasOuterBound` is `true`
+when one of the `OpFoldResult` builders is called but the first element of the
+basis is `nullptr`, that first element is ignored and the builder proceeds as if
+there was no outer bound.
+
+Due to the constraints of affine maps, all the basis elements must
+be strictly positive. A dynamic basis element being 0 or negative causes
+undefined behavior.
+
+As with other affine operations, lowerings of delinearize_index may assume
+that the underlying computations do not overflow the index type in a signed sense
+- that is, the product of all basis elements is positive as an `index` as well.
 """
 function delinearize_index(
     linear_index::Value,
-    basis::Vector{Value};
-    multi_index=nothing::Union{Nothing,Vector{IR.Type}},
+    dynamic_basis::Vector{Value};
+    multi_index::Vector{IR.Type},
+    static_basis,
     location=Location(),
 )
-    op_ty_results = IR.Type[]
-    operands = Value[linear_index, basis...]
+    op_ty_results = IR.Type[multi_index...,]
+    operands = Value[linear_index, dynamic_basis...]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[]
-    !isnothing(multi_index) && push!(op_ty_results, multi_index...)
+    attributes = NamedAttribute[namedattribute("static_basis", static_basis),]
 
     return create_operation(
         "affine.delinearize_index",
@@ -103,8 +138,8 @@ function delinearize_index(
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=op_ty_results,
+        result_inference=false,
     )
 end
 
@@ -327,6 +362,7 @@ func.func @pad_edges(%I : memref<10x10xf32>) -> (memref<12x12xf32) {
 function if_(
     operand_0::Vector{Value};
     results::Vector{IR.Type},
+    condition,
     thenRegion::Region,
     elseRegion::Region,
     location=Location(),
@@ -335,7 +371,7 @@ function if_(
     operands = Value[operand_0...,]
     owned_regions = Region[thenRegion, elseRegion]
     successors = Block[]
-    attributes = NamedAttribute[]
+    attributes = NamedAttribute[namedattribute("condition", condition),]
 
     return create_operation(
         "affine.if",
@@ -346,6 +382,86 @@ function if_(
         attributes,
         results=op_ty_results,
         result_inference=false,
+    )
+end
+
+"""
+`linearize_index`
+
+The `affine.linearize_index` operation takes a sequence of index values and a
+basis of the same length and linearizes the indices using that basis.
+
+That is, for indices `%idx_0` to `%idx_{N-1}` and basis elements `b_0`
+(or `b_1`) up to `b_{N-1}` it computes
+
+```
+sum(i = 0 to N-1) %idx_i * product(j = i + 1 to N-1) B_j
+```
+
+In other words, `%0 = affine.linearize_index [%z, %y, %x] by (Z, Y, X)`
+gives `%0 = %x + %y * X + %z * X * Y`, or `%0 = %x + X * (%y + Y * (%z))`.
+
+The basis may either have `N` or `N-1` elements, where `N` is the number of
+inputs to linearize_index. If `N` inputs are provided, the first one is not used
+in computation, but may be used during analysis or canonicalization as a bound
+on `%idx_0`.
+
+If all `N` basis elements are provided, the linearize_index operation is said to
+\"have an outer bound\".
+
+As a convenience, and for symmetry with `getPaddedBasis()`, if the first
+element of a set of `OpFoldResult`s passed to the builders of this operation is
+`nullptr`, that element is ignored.
+
+If the `disjoint` property is present, this is an optimization hint that,
+for all `i`, `0 <= %idx_i < B_i` - that is, no index affects any other index,
+except that `%idx_0` may be negative to make the index as a whole negative.
+In addition, `disjoint` is an assertion that all bases elements are non-negative.
+
+Note that the outputs of `affine.delinearize_index` are, by definition, `disjoint`.
+
+As with other affine ops, undefined behavior occurs if the linearization
+computation overflows in the signed sense.
+
+# Example
+
+```mlir
+%linear_index = affine.linearize_index [%index_0, %index_1, %index_2] by (2, 3, 5) : index
+// Same effect
+%linear_index = affine.linearize_index [%index_0, %index_1, %index_2] by (3, 5) : index
+```
+
+In the above example, `%linear_index` conceptually holds the following:
+
+```mlir
+#map = affine_map<()[s0, s1, s2] -> (s0 * 15 + s1 * 5 + s2)>
+%linear_index = affine.apply #map()[%index_0, %index_1, %index_2]
+```
+"""
+function linearize_index(
+    multi_index::Vector{Value},
+    dynamic_basis::Vector{Value};
+    linear_index=nothing::Union{Nothing,IR.Type},
+    static_basis,
+    location=Location(),
+)
+    op_ty_results = IR.Type[]
+    operands = Value[multi_index..., dynamic_basis...]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[namedattribute("static_basis", static_basis),]
+    push!(attributes, operandsegmentsizes([length(multi_index), length(dynamic_basis)]))
+    !isnothing(linear_index) && push!(op_ty_results, linear_index)
+
+    return create_operation(
+        "affine.linearize_index",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
     )
 end
 
@@ -753,7 +869,7 @@ into a slice within a [MemRef](Builtin.md/#memreftype) of the same base
 elemental type, supplied as its second operand.
 The index for each memref dimension is an affine expression of loop
 induction variables and symbols. These indices determine the start position
-of the write within the memref. The shape of th input vector determines the
+of the write within the memref. The shape of the input vector determines the
 shape of the slice written to the memref. This slice is contiguous along the
 respective dimensions of the shape. Strided vector stores will be supported
 in the future.

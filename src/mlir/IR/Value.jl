@@ -8,8 +8,8 @@ struct Value
 end
 
 Base.convert(::Core.Type{API.MlirValue}, value::Value) = value.value
-Base.size(value::Value) = Base.size(Type(value))
-Base.ndims(value::Value) = Base.ndims(Type(value))
+Base.size(value::Value) = Base.size(type(value))
+Base.ndims(value::Value) = Base.ndims(type(value))
 
 """
     ==(value1, value2)

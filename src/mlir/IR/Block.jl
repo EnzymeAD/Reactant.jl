@@ -38,14 +38,14 @@ Base.unsafe_convert(::Core.Type{API.MlirBlock}, block::Block) = block.block
 
 Returns the closest surrounding operation that contains this block.
 """
-parent_op(block::Block) = Operation(API.mlirBlockGetParentOperation(block))
+parent_op(block::Block) = Operation(API.mlirBlockGetParentOperation(block), false)
 
 """
     parent_region(block)
 
 Returns the region that contains this block.
 """
-parent_region(block::Block) = Region(API.mlirBlockGetParentRegion(block))
+parent_region(block::Block) = Region(API.mlirBlockGetParentRegion(block), false)
 
 Base.parent(block::Block) = parent_region(block)
 
@@ -84,6 +84,19 @@ Appends an argument of the specified type to the block. Returns the newly added 
 """
 push_argument!(block::Block, type; location::Location=Location()) =
     Value(API.mlirBlockAddArgument(block, type, location))
+
+"""
+    erase_argument!(block, i)
+
+Erase argument `i` of the block. Returns the block.
+"""
+function erase_argument!(block, i)
+    if i ∉ 1:nargs(block)
+        throw(BoundsError(block, i))
+    end
+    API.mlirBlockEraseArgument(block, i - 1)
+    return block
+end
 
 """
     first_op(block)

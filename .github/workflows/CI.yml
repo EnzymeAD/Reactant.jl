@@ -1,11 +1,26 @@
 name: CI
+
 on:
   pull_request:
+    paths:
+      - ".github/workflows/CI.yml"
+      - "ext/**"
+      - "lib/**"
+      - "src/**"
+      - "test/**"
+      - "Project.toml"
   push:
     branches:
       - main
       - release-*
-    tags: '*'
+    tags: ["*"]
+    paths:
+      - ".github/workflows/CI.yml"
+      - "ext/**"
+      - "lib/**"
+      - "src/**"
+      - "test/**"
+      - "Project.toml"
 
 concurrency:
   # Skip intermediate builds: always.
@@ -15,141 +30,77 @@ concurrency:
 
 jobs:
   test:
-    name: Julia ${{ matrix.version }} - ${{ matrix.test_group }} - ${{ matrix.os }} - ${{ matrix.arch }} - ${{ matrix.libReactant }} libReactant - assertions=${{ matrix.assertions }} - ${{ github.event_name }}
-    runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
         version:
-          - '1.10'
-          - '1.11'
-          - 'nightly'
+          - "1.10"
+          - "1.11"
+          # - 'nightly'
         os:
-          - ubuntu-20.04
+          - ubuntu-24.04
+          # `ubuntu-22.04-arm` is considered more stable than `ubuntu-24.04-arm`:
+          # <https://github.com/orgs/community/discussions/148648#discussioncomment-12099554>.
+          - ubuntu-22.04-arm
+          # Disable `macOS-13` until
+          # <https://github.com/EnzymeAD/Reactant.jl/issues/867> is resolved.
+          # - macOS-13
           - macOS-latest
+          - windows-latest
+          - linux-x86-ct6e-180-4tpu
         test_group:
           - core
           - neural_networks
           - integration
-        arch:
-          - x64
-        assertions:
-          - false
-        libReactant: [packaged]
-        include:
-          - os: ubuntu-20.04
-            arch: x64
-            libReactant: packaged
-            version: '1.10'
-            assertions: true
-            test_group: core
-          - os: ubuntu-20.04
-            arch: x64
-            libReactant: packaged
-            version: '1.10'
-            assertions: true
-            test_group: neural_networks
-          - os: ubuntu-20.04
-            arch: x86
-            libReactant: packaged
-            version: '1.10'
-            test_group: core
-          - os: ubuntu-20.04
-            arch: x86
-            libReactant: packaged
-            version: '1.10'
-            test_group: neural_networks
-          - os: ubuntu-20.04
-            arch: x86
-            libReactant: packaged
-            version: '1.10'
-            test_group: integration
-    steps:
-      - uses: actions/checkout@v4
-      - uses: julia-actions/setup-julia@v2
-        if: ${{ ! matrix.assertions }}
-        with:
-          version: ${{ matrix.version }}
-          arch: ${{ matrix.arch }}
-      - uses: julia-actions/cache@v2
-      - uses: actions/checkout@v4
-        if: ${{ matrix.assertions }}
-        with:
-          repository: 'JuliaLang/julia'
-          ref: release-${{ matrix.version }}
-          path: 'julia'
-      - name: Compile Julia
-        if: ${{ matrix.assertions }}
-        run: |
-          sed -i.bak 's/exit 2/exit 0/g' julia/deps/tools/jlchecksum
-          make -C julia -j $(nproc) FORCE_ASSERTIONS=1 LLVM_ASSERTIONS=1 JULIA_PRECOMPILE=0
-          echo $PWD/julia/usr/bin >> $GITHUB_PATH
-      - name: Build libReactant
-        if: ${{ matrix.libReactant == 'local' && matrix.os != 'macOS-latest'}}
-        id: build_libreactant
-        run: |
-          python -m pip install numpy
-          julia --color=yes --project=deps -e 'using Pkg; Pkg.instantiate()'
-          julia --color=yes --project=deps deps/build_local.jl
-          cp LocalPreferences.toml test/
-      - name: Build libReactant MacOS
-        if: ${{ matrix.libReactant == 'local' && matrix.os == 'macOS-latest'}}
-        id: build_libreactant_mac
-        run: |
-          python -m pip install numpy
-          julia --color=yes --project=deps -e 'using Pkg; Pkg.instantiate()'
-          SDKROOT=`xcrun --show-sdk-path` julia --color=yes --project=deps deps/build_local.jl
-          cp LocalPreferences.toml test/
-      - name: "Install Dependencies and Run Tests"
-        run: |
-          import Pkg
-          Pkg.Registry.update()
-          # Install packages present in subdirectories
-          dev_pks = Pkg.PackageSpec[]
-          for path in ("lib/ReactantCore",)
-              push!(dev_pks, Pkg.PackageSpec(; path))
-          end
-          Pkg.develop(dev_pks)
-          Pkg.instantiate()
-          Pkg.test(; coverage="user")
-        shell: julia --color=yes --code-coverage=user --depwarn=yes --project=. {0}
-        id: run_tests
-        env:
-          JULIA_PKG_SERVER_REGISTRY_PREFERENCE: eager
-          REACTANT_TEST_GROUP: ${{ matrix.test_group }}
-      - uses: julia-actions/julia-processcoverage@v1
-        if: steps.run_tests.outcome == 'success'
-      - uses: codecov/codecov-action@v5
-        if: steps.run_tests.outcome == 'success'
-        with:
-          files: lcov.info
-  docs:
-    name: Documentation
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: julia-actions/setup-julia@v2
-        with:
-          version: '1'
-      - uses: julia-actions/cache@v2
-      - run: |
-          julia --color=yes --project=docs -e '
-            using Pkg
-            Pkg.develop([
-              PackageSpec(path=pwd()),
-              PackageSpec("Reactant_jll"),
-              PackageSpec(path="lib/ReactantCore")
-            ])
-            Pkg.instantiate()'
-        env:
-          JULIA_PKG_SERVER_REGISTRY_PREFERENCE: eager
-      - run: |
-          julia --color=yes --project=docs -e '
-            using Documenter: DocMeta, doctest
-            using Reactant
-            DocMeta.setdocmeta!(Reactant, :DocTestSetup, :(using Reactant); recursive=true)
-            doctest(Reactant)'
-      - run: julia --color=yes --project=docs docs/make.jl
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          DOCUMENTER_KEY: ${{ secrets.DOCUMENTER_KEY }}
+        runtime:
+          - "pjrt"
+          - "ifrt"
+        exclude:
+          - os: linux-x86-ct6e-180-4tpu
+            version: "1.10"
+          - os: linux-x86-ct6e-180-4tpu
+            runtime: "pjrt"
+    uses: ./.github/workflows/CommonCI.yml
+    with:
+      julia_version: ${{ matrix.version }}
+      os: ${{ matrix.os }}
+      runtime: ${{ matrix.runtime }}
+      test_group: ${{ matrix.test_group }}
+
+  # This has been broken for a while, originating from CUDA.jl
+  # test-assertions:
+  #   strategy:
+  #     fail-fast: false
+  #     matrix:
+  #       version:
+  #         - "1.10"
+  #       test_group:
+  #         - core
+  #         - neural_networks
+  #         - integration
+  #   uses: ./.github/workflows/CommonCI.yml
+  #   with:
+  #     julia_version: ${{ matrix.version }}
+  #     os: "ubuntu-24.04"
+  #     runtime: "both"
+  #     assertions: true
+  #     test_group: ${{ matrix.test_group }}
+
+  downgrade:
+    strategy:
+      fail-fast: false
+      matrix:
+        test_group:
+          - core
+          - neural_networks
+          - integration
+        runtime:
+          - "pjrt"
+          - "ifrt"
+    uses: ./.github/workflows/CommonCI.yml
+    with:
+      julia_version: "1.10"
+      os: "ubuntu-24.04"
+      runtime: ${{ matrix.runtime }}
+      test_group: ${{ matrix.test_group }}
+      downgrade_testing: true

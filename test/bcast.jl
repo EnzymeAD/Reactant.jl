@@ -1,8 +1,5 @@
-using Test
-using Reactant
-using Enzyme, NNlib
+using Test, Reactant, Enzyme, NNlib, Statistics
 using Reactant.MLIR
-using Statistics
 
 @noinline function no(@nospecialize(x))
     x = @ccall $(Base.@cfunction(identity, Any, (Any,)))(x::Any)::Any
@@ -13,19 +10,13 @@ mutable struct Data
     v::Reactant.TracedRArray{Float64,1}
 end
 @noinline function tmp(a, b, d)
-    @show d
-    @show typeof(d)
     c = d.v
-    @show typeof(c)
 
     return reshape(a, (4,)) ./ sqrt.(b .+ a)
 end
 
 function test()
-    ctx = MLIR.IR.Context(Reactant.registry[], false)
-    @ccall MLIR.API.mlir_c.RegisterDialects(ctx::MLIR.API.MlirContext)::Cvoid
-
-    MLIR.IR.context!(ctx) do
+    MLIR.IR.with_context() do ctx
         mod = MLIR.IR.Module(MLIR.IR.Location())
         modbody = MLIR.IR.body(mod)
 
@@ -52,17 +43,17 @@ function test()
             end
         end
 
-        return println(string(mod))
+        return string(mod)
     end
 end
-test()
+@test test() == "module {\n}"
 
-@testset "ConcreteRArray broadcasting" begin
+@testset "ConcretePJRTArray broadcasting" begin
     x = ones(10, 10)
     y = ones(10, 10)
 
-    x_ca = Reactant.ConcreteRArray(x)
-    y_ca = Reactant.ConcreteRArray(y)
+    x_ca = Reactant.to_rarray(x)
+    y_ca = Reactant.to_rarray(y)
 
     @testset "Broadcasting" begin
         @test x .+ y ≈ @jit x_ca .+ y_ca
@@ -78,7 +69,7 @@ function scalar_bcast(x)
 end
 
 @testset "Scalar broadcasting" begin
-    x = rand(2, 3)
+    x = Reactant.TestUtils.construct_test_array(Float32, 2, 3)
     x_ra = Reactant.to_rarray(x)
     @test @jit(scalar_bcast(x_ra)) ≈ scalar_bcast(x)
 end
@@ -90,7 +81,7 @@ function custom_ln(x)
 end
 
 @testset "Custom layernorm" begin
-    x = rand(Float32, 3, 3, 4, 2)
+    x = Reactant.TestUtils.construct_test_array(Float32, 3, 3, 4, 2)
     x_ra = Reactant.to_rarray(x)
     @test @jit(custom_ln(x_ra)) ≈ custom_ln(x)
 end
@@ -98,7 +89,7 @@ end
 pow(x, n) = x .^ n
 
 @testset "Pow" begin
-    x = rand(2, 3)
+    x = Reactant.TestUtils.construct_test_array(Float32, 2, 3)
     x_ra = Reactant.to_rarray(x)
     @test @jit(pow(x_ra, 2)) ≈ pow(x, 2)
 end
@@ -115,7 +106,7 @@ function custombcast(x)
 end
 
 @testset "Broadcasting closures / functors" begin
-    x = rand(2, 3)
+    x = Reactant.TestUtils.construct_test_array(Float32, 2, 3)
     x_ra = Reactant.to_rarray(x)
     @test @jit(custombcast(x_ra)) ≈ custombcast(x)
 end

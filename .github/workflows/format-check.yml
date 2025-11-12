@@ -1,10 +1,17 @@
 name: Format Suggestions
+
 on:
   push:
     branches:
       - main
     tags: '*'
+    paths:
+      - '.github/workflows/format-check.yml'
+      - '**/*.jl'
   pull_request:
+    paths:
+      - '.github/workflows/format-check.yml'
+      - '**/*.jl'
 
 concurrency:
   # Skip intermediate builds: always.
@@ -13,7 +20,9 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  code-style:
+  code-style-julia:
     runs-on: ubuntu-latest
     steps:
-      - uses: julia-actions/julia-format@v3
+      - uses: julia-actions/julia-format@v4
+        with:
+          version: '1'

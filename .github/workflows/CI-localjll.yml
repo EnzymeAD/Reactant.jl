@@ -1,0 +1,43 @@
+name: CI with local libReactant
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/CI-localjll.yml'
+      - 'deps/**'
+  push:
+    branches:
+      - main
+      - release-*
+    tags: ['*']
+    paths:
+      - '.github/workflows/CI-localjll.yml'
+      - 'deps/**'
+
+concurrency:
+  # Skip intermediate builds: always.
+  # Cancel intermediate builds: only if it is a pull request build.
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ startsWith(github.ref, 'refs/pull/') }}
+
+jobs:
+  test-localjll:
+    strategy:
+      fail-fast: false
+      matrix:
+        version:
+          - "1.10"
+          - "1.11"
+        os:
+          - linux-x86-n2-32
+          - macOS-latest
+        exclude:
+          - os: macOS-latest
+            version: "1.10"
+    uses: ./.github/workflows/CommonCI.yml
+    with:
+      julia_version: ${{ matrix.version }}
+      os: ${{ matrix.os }}
+      runtime: "both"
+      assertions: false
+      localjll: true
