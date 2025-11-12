@@ -899,12 +899,27 @@ platform(
 )
 
 cc_library(
+    name = "hlo_featurizer",
+    srcs = [
+        "hlo_featurizer/encoder.cc",
+    ],
+    hdrs = [
+        "hlo_featurizer/encoder.h",
+        "hlo_featurizer/featurizer.h",
+        "hlo_featurizer/hlo_opcode.h",
+    ],
+    linkstatic = True,
+    deps = [
+        "@com_google_absl//absl/strings",
+        "@xla//xla/hlo/ir:hlo",
+    ],
+    alwayslink = True,
+)
+
+cc_library(
     name = "ReactantExtraLib",
-    srcs = glob(
-        [
-            "*.cpp",
-        ],
-    ) + [
+    srcs = [
+        "API.cpp",
         "@enzyme_ad//src/enzyme_ad/jax:gpu.cc",
         "@enzyme_ad//src/enzyme_ad/jax:cpu.cc",
         # "@xla//xla/service/gpu:backend_configs.pb.cc",
@@ -912,9 +927,7 @@ cc_library(
         # "@xla//xla:autotune_results.pb.cc",
         # "@xla//xla/service:buffer_assignment.pb.cc",
     ],
-    hdrs = glob([
-        "*.h",
-    ]) + [
+    hdrs = [
         "@enzyme_ad//src/enzyme_ad/jax:RegistryUtils.h",
     ],
     copts = [
