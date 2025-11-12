@@ -210,5 +210,5 @@ jobs:
 
 env:
   JULIA_PKG_SERVER_REGISTRY_PREFERENCE: eager
-  XLA_FLAGS: "--xla_force_host_platform_device_count=12"
+  XLA_FLAGS: "--xla_force_host_platform_device_count=12 --xla_enable_enzyme_comms_opt=true"
   JULIA_DEBUG: "Reactant,Reactant_jll"
