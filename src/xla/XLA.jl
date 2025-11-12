@@ -226,6 +226,36 @@ for runtime in (:PJRT, :IFRT)
                     catch e
                         println(stdout, e)
                     end
+                elseif Accelerators.TT.has_tt()
+                    try
+                        if was_initialized && haskey(state.clients, "tt")
+                            XLA.free_client(state.clients["tt"])
+                            XLA.$(runtime).tt_client_count[] -= 1
+                        end
+                        # The env var `TT_METAL_RUNTIME_ROOT` must be set before creating the client.
+                        if isnothing(get(ENV, "TT_METAL_RUNTIME_ROOT", nothing))
+                            tt_metal_path_in_wheel = joinpath(
+                                dirname(Accelerators.TT.get_tt_pjrt_plugin_path()),
+                                "tt-metal",
+                            )
+                            if ispath(tt_metal_path_in_wheel)
+                                ENV["TT_METAL_RUNTIME_ROOT"] = tt_metal_path_in_wheel
+                            else
+                                error(
+                                    "`TT_METAL_RUNTIME_ROOT` environment variable not set and we could not automatically determine it",
+                                )
+                            end
+                        end
+
+                        tt = $(runtime).TTClient(;
+                            tt_pjrt_plugin_path=Accelerators.TT.get_tt_pjrt_plugin_path(),
+                            common_kwargs...,
+                        )
+                        state.clients["tt"] = tt
+                        state.default_client = tt
+                    catch e
+                        println(stdout, e)
+                    end
                 elseif Reactant_jll.host_platform.tags["gpu"] != "none"
                     try
                         if was_initialized && haskey(state.clients, "cuda")
