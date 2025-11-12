@@ -247,21 +247,11 @@ end
 
 Base.Tuple(x::TracedRArray) = ntuple(Base.Fix1(getindex, x), length(x))
 
-struct DynamicDimensionSize{SZ} <: Integer
-    size::SZ
-end
-
-# collect(Int, ....)
-function Base.convert(::Type{Int64}, x::DynamicDimensionSize)
-    return Reactant.MLIR.IR.get_dynamic_size()
-end
-Base.Int64(x::DynamicDimensionSize) = convert(Int64, x)
-
 Base.size(x::TracedRArray) = ntuple(i -> size(x, i), ndims(x))
 function Base.size(x::TracedRArray, dim::Integer)
     @assert 1 <= dim <= ndims(x) "dimension out of range"
     if x.shape[dim] < 0 # assume dynamic size
-        return DynamicDimensionSize(@opcall get_dimension_size(x, dim))
+        return @opcall get_dimension_size(x, dim)
     end
     return x.shape[dim]
 end
@@ -1218,7 +1208,7 @@ function scan_impl!(
             window_dilations=ones(Int64, N),
             padding_low=padding_low,
             padding_high=zeros(Int64, N),
-            output_shape=collect(Int64, size(output)),
+            output_shape=TracedUtils.collect_dynamic_size(output),
         )
     )[1]
     copyto!(output, reduction_result)

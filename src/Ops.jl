@@ -85,14 +85,18 @@ macro opcall(expr)
 end
 
 function mlir_type(x::Union{RNumber,RArray})::MLIR.IR.Type
-    return MLIR.IR.TensorType(collect(Int, size(x)), MLIR.IR.Type(unwrapped_eltype(x)))
+    return MLIR.IR.TensorType(
+        Reactant.TracedUtils.collect_dynamic_size(x), MLIR.IR.Type(unwrapped_eltype(x))
+    )
 end
 
 mlir_type(::MissingTracedValue) = MLIR.IR.TensorType((), MLIR.IR.Type(Bool))
 
 function mlir_type(RT::Type{<:RArray{T,N}}, shape) where {T,N}
     @assert length(shape) == N
-    return MLIR.IR.TensorType(collect(Int, shape), MLIR.IR.Type(unwrapped_eltype(RT)))
+    return MLIR.IR.TensorType(
+        Reactant.TracedUtils.collect_dynamic_size(shape), MLIR.IR.Type(unwrapped_eltype(RT))
+    )
 end
 
 function mlir_type(RT::Type{<:RNumber})::MLIR.IR.Type
@@ -589,7 +593,7 @@ end
     location=mlir_stacktrace("transpose", @__FILE__, @__LINE__),
 ) where {T,N}
     @assert length(permutation) == ndims(x)
-    rsize = permute!(collect(Int64, size(x)), permutation)
+    rsize = permute!(Reactant.TracedUtils.collect_dynamic_size(x), permutation)
     permutation = permutation .- 1
     result = mlir_type(TracedRArray{T,N}, rsize)
     permutation = MLIR.IR.DenseArrayAttribute(permutation)
@@ -774,7 +778,7 @@ end
     elseif type == "RFFT"
         @assert T <: Real
         Tout = Complex{T}
-        rsize = let rsize = collect(Int64, size(x))
+        rsize = let rsize = Reactant.TracedUtils.collect_dynamic_size(x)
             rsize[end] = rsize[end] == 0 ? 0 : rsize[end] ÷ 2 + 1
             Tuple(rsize)
         end
@@ -783,7 +787,7 @@ end
             x = complex(x, fill(T(0), size(x); location); location)
         end
         Tout = Base.real(T)
-        rsize = let rsize = collect(Int64, size(x))
+        rsize = let rsize = Reactant.TracedUtils.collect_dynamic_size(x)
             rsize[(end - Base.length(length) + 1):end] = length
             Tuple(rsize)
         end
@@ -1314,6 +1318,7 @@ end
         String(MLIR.IR.attr(func, String(MLIR.API.mlirSymbolTableGetSymbolAttributeName())))
     )
 
+    # TODO: we might need dynamic_iota
     iota_arg = iota(Int32, collect(Int64, size(x)); iota_dimension=dimension, location)
     init_arg = constant(Int32(-1); location)
     init_val = constant(init_val; location)
@@ -1329,7 +1334,7 @@ end
     )
     fallback && (backend_config["is_fallback"] = MLIR.IR.Attribute(true))
 
-    result_shape = collect(Int64, size(x))
+    result_shape = Reactant.TracedUtils.collect_dynamic_size(x)
     result_shape[dimension] = k
 
     out = stablehlo.custom_call(
@@ -1405,7 +1410,9 @@ end
 ) where {N}
     return reduce(
         TracedRArray[
-            x, iota(Int64, collect(Int64, size(x)); iota_dimension=dimension, location)
+            # TODO: dynamic_iota
+            x,
+            iota(Int64, collect(Int64, size(x)); iota_dimension=dimension, location),
         ],
         TracedRNumber[
             Reactant.promote_to(TracedRNumber, false),
@@ -1428,7 +1435,9 @@ end
 ) where {T,N}
     values, indices = reduce(
         TracedRArray[
-            x, iota(Int64, collect(Int64, size(x)); iota_dimension=dimension, location)
+            # TODO: dynamic_iota
+            x,
+            iota(Int64, collect(Int64, size(x)); iota_dimension=dimension, location),
         ],
         TracedRNumber[
             Reactant.promote_to(TracedRNumber{T}, typemin(T)),
@@ -1441,7 +1450,7 @@ end
         end;
         location,
     )
-    new_shape = collect(Int64, size(x))
+    new_shape = Reactant.TracedUtils.collect_dynamic_size(x)
     new_shape[dimension] = 1
     return (reshape(values, new_shape; location), reshape(indices, new_shape; location))
 end
@@ -3007,7 +3016,9 @@ end
 ) where {F}
     @assert allequal(size.(xs)) "All input arrays must have the same size."
 
-    reduced_shape = Tuple(deleteat!(collect(Int64, size(xs[1])), dimensions))
+    reduced_shape = Tuple(
+        deleteat!(Reactant.TracedUtils.collect_dynamic_size(xs[1]), dimensions)
+    )
 
     op = stablehlo.reduce(
         [x.mlir_data for x in xs],
@@ -3112,7 +3123,10 @@ end
     if ndims(res) != length(permutation)
         res = reshape(
             res,
-            vcat(collect(Int64, size(res)), ones(Int64, length(permutation) - ndims(res))),
+            vcat(
+                Reactant.TracedUtils.collect_dynamic_size(res),
+                ones(Int64, length(permutation) - ndims(res)),
+            ),
         )
     end
     return transpose(res, invperm(permutation); location)
@@ -3158,7 +3172,7 @@ end
             bcasted_arg = broadcast_in_dim(
                 v,
                 collect(Int64, (length(batch_shape) + 1):(ndims(v) + length(batch_shape))),
-                vcat(batch_shape, collect(Int64, size(v)));
+                vcat(batch_shape, Reactant.TracedUtils.collect_dynamic_size(v));
                 location,
             )
             push!(final_inputs, bcasted_arg)
@@ -3173,7 +3187,7 @@ end
         push!(
             output_types,
             MLIR.IR.TensorType(
-                vcat(batch_shape, collect(Int64, size(result))),
+                vcat(batch_shape, Reactant.TracedUtils.collect_dynamic_size(result)),
                 MLIR.IR.Type(unwrapped_eltype(result)),
             ),
         )
@@ -3285,7 +3299,7 @@ Compute the row maximum pivoted LU factorization of `x` and return the factors `
 ) where {T,pT}
     @assert ndims(x) >= 2
 
-    output_shape = collect(Int64, size(x))
+    output_shape = Reactant.TracedUtils.collect_dynamic_size(x)
     batch_shape = output_shape[1:(end - 2)]
     pivots_shape = vcat(batch_shape, min(size(x, ndims(x) - 1), size(x, ndims(x))))
     permutation_shape = vcat(batch_shape, size(x, ndims(x) - 1))
@@ -3531,7 +3545,7 @@ end
                                               $(size(input, dimension)) (got $(lhs))"
     @assert 0 ≤ rhs ≤ size(input, dimension) "rhs must be between 0 and \
                                               $(size(input, dimension)) (got $(rhs))"
-    sz = collect(Int64, size(input))
+    sz = Reactant.TracedUtils.collect_dynamic_size(input)
     sz[dimension] = sz[dimension] + lhs + rhs
     return TracedRArray{T,N}(
         (),

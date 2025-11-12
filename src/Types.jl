@@ -72,7 +72,7 @@ mutable struct TracedRArray{T,N} <: RArray{TracedRNumber{T},N}
     function TracedRArray{T,N}(
         paths::Tuple, mlir_data::Union{Nothing,MLIR.IR.Value}, shape
     ) where {T,N}
-        shape = Tuple(collect(Int, shape))
+        shape = Tuple(TracedUtils.collect_dynamic_size(shape))
         if !isnothing(mlir_data)
             @assert size(MLIR.IR.type(mlir_data)) == shape "Expected: $(shape), got: $(size(MLIR.IR.type(mlir_data)))"
         end
