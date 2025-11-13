@@ -100,10 +100,8 @@ if length(addressable_devices) ≥ 8
 
         hlo = repr(@code_xla shardy_passes = :to_mhlo_shardings dus2(rx, ry))
         @test !contains(hlo, "all-to-all")
-        @test !contains(hlo, "all-gather") broken =
-            Reactant.XLA.REACTANT_XLA_RUNTIME == "PJRT"
-        @test contains(hlo, "collective-permute") broken =
-            Reactant.XLA.REACTANT_XLA_RUNTIME == "PJRT"
+        @test !contains(hlo, "all-gather")
+        @test contains(hlo, "collective-permute")
 
         dus2(x, y)
         @jit shardy_passes = :to_mhlo_shardings dus2(rx, ry)
