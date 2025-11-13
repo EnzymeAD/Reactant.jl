@@ -322,6 +322,25 @@ function custom_primitive(
     )
 end
 
+function debug_print(value::Value; format, location=Location())
+    op_ty_results = IR.Type[]
+    operands = Value[value,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[namedattribute("format", format),]
+
+    return create_operation(
+        "mosaic_gpu.debug_print",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
 """
 `initialize_barrier`
 
@@ -659,6 +678,74 @@ function tmem_relinquish_alloc_permit(; collective=nothing, location=Location())
 
     return create_operation(
         "mosaic_gpu.tmem_relinquish_alloc_permit",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+"""
+`vector_load`
+
+Similar to `vector.load` (vector dialect) but supports loading from
+non-contiguous memory.
+
+If `optimized` is true, raises an error if we cannot generate an optimised
+transfer. If unset, fall back to a non-optimized transfer if unable to
+generate an optimized transfer.
+"""
+function vector_load(
+    source::Value;
+    result_0=nothing::Union{Nothing,IR.Type},
+    optimized=nothing,
+    location=Location(),
+)
+    op_ty_results = IR.Type[]
+    operands = Value[source,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+    !isnothing(result_0) && push!(op_ty_results, result_0)
+    !isnothing(optimized) && push!(attributes, namedattribute("optimized", optimized))
+
+    return create_operation(
+        "mosaic_gpu.vector_load",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
+    )
+end
+
+"""
+`vector_store`
+
+Similar to `vector.store` (vector dialect) but supports storing to
+non-contiguous memory.
+
+If `optimized` is true, raises an error if we cannot generate an optimised
+transfer. If unset, fall back to a non-optimized transfer if unable to
+generate an optimized transfer.
+"""
+function vector_store(
+    valueToStore::Value, destination::Value; optimized=nothing, location=Location()
+)
+    op_ty_results = IR.Type[]
+    operands = Value[valueToStore, destination]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+    !isnothing(optimized) && push!(attributes, namedattribute("optimized", optimized))
+
+    return create_operation(
+        "mosaic_gpu.vector_store",
         location;
         operands,
         owned_regions,
