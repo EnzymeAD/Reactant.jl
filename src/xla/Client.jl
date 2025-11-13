@@ -13,10 +13,13 @@ function get_device end
 function get_addressable_device end
 function platform_name end
 
+"""
+    DEFAULT_DEVICE :: Ref{Int}
+
+0-based index of default device to use, by default 0 (first available device).
+"""
+const DEFAULT_DEVICE = Ref{Int}(0)
+
 function default_device(client::AbstractClient)
-    return addressable_devices(client)[something(
-        # `REACTANT_DEFAULT_DEVICE` is interpreted as 0-based.
-        tryparse(Int, get(ENV, "REACTANT_DEFAULT_DEVICE", "0")) + 1,
-        1,
-    )]
+    return addressable_devices(client)[DEFAULT_DEVICE[] + 1]
 end
