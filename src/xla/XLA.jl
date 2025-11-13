@@ -227,24 +227,29 @@ for runtime in (:PJRT, :IFRT)
                         println(stdout, e)
                     end
                 elseif Accelerators.TT.has_tt()
+                    @debug "TT accelerator detected, setting it up"
                     try
                         if was_initialized && haskey(state.clients, "tt")
                             XLA.free_client(state.clients["tt"])
                             XLA.$(runtime).tt_client_count[] -= 1
                         end
                         # The env var `TT_METAL_RUNTIME_ROOT` must be set before creating the client.
-                        if isnothing(get(ENV, "TT_METAL_RUNTIME_ROOT", nothing))
+                        tt_metal_runtime_root = get(ENV, "TT_METAL_RUNTIME_ROOT", nothing)
+                        if isnothing(tt_metal_runtime_root)
                             tt_metal_path_in_wheel = joinpath(
                                 dirname(Accelerators.TT.get_tt_pjrt_plugin_path()),
                                 "tt-metal",
                             )
                             if ispath(tt_metal_path_in_wheel)
+                                @debug "Setting environment variable 'TT_METAL_RUNTIME_ROOT' to '$(tt_metal_path_in_wheel)'"
                                 ENV["TT_METAL_RUNTIME_ROOT"] = tt_metal_path_in_wheel
                             else
                                 error(
                                     "`TT_METAL_RUNTIME_ROOT` environment variable not set and we could not automatically determine it",
                                 )
                             end
+                        else
+                            @debug "Environment variable 'TT_METAL_RUNTIME_ROOT' already set to to '$(tt_metal_runtime_root)'"
                         end
 
                         tt = $(runtime).TTClient(;

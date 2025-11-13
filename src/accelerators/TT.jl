@@ -2,61 +2,64 @@ module TT
 
 using Reactant: Reactant
 using Scratch: @get_scratch!
-using Downloads
+using Downloads: Downloads
+using p7zip_jll: p7zip
 
 const tt_pjrt_plugin_dir = Ref{Union{Nothing,String}}(nothing)
+const tt_pjrt_plugin_name = Ref{String}("pjrt_plugin_tt.so")
 
 function __init__()
     @static if Sys.islinux()
-        Reactant.precompiling() || setup_tt_pjrt_plugin!()
+        if !Reactant.precompiling() && has_tt()
+            setup_tt_pjrt_plugin!()
+        end
     end
 end
 
 has_tt() = true
 
 function setup_tt_pjrt_plugin!()
-    path_from_env = get(ENV, "TT_LIBRARY_PATH", nothing)
-    if path_from_env !== nothing && ispath(path_from_env)
-        tt_pjrt_plugin_dir[] = path_from_env
+    plugin_dir_from_env = get(ENV, "TT_PJRT_PLUGIN_DIR", nothing)
+    if plugin_dir_from_env !== nothing && ispath(plugin_dir_from_env)
+        tt_pjrt_plugin_dir[] = plugin_dir_from_env
     else
-        tt_pjrt_plugin_dir[] = @get_scratch!("pjrt_tt_plugin")
+        tt_pjrt_plugin_dir[] = @get_scratch!("pjrt_plugin_tt")
     end
-    # download_tt_pjrt_plugin_if_needed(tt_pjrt_plugin_dir[])
+    download_tt_pjrt_plugin_if_needed(tt_pjrt_plugin_dir[])
     return nothing
 end
 
 get_tt_pjrt_plugin_dir() = tt_pjrt_plugin_dir[]
 
 function get_tt_pjrt_plugin_path()
-    return joinpath(get_tt_pjrt_plugin_dir(), "pjrt_plugin_tt.so")
+    return joinpath(get_tt_pjrt_plugin_dir(), tt_pjrt_plugin_name[])
 end
 
-# function download_tt_pjrt_plugin_if_needed(path=nothing)
-#     path === nothing && (path = get_tt_pjrt_plugin_dir())
-#     @assert path !== nothing "tt_pjrt_plugin_dir is not set!"
+function download_tt_pjrt_plugin_if_needed(dir=nothing)
+    dir === nothing && (dir = get_tt_pjrt_plugin_dir())
+    @assert dir !== nothing "tt_pjrt_plugin_dir is not set!"
 
-#     tt_pjrt_plugin_path = joinpath(path, "pjrt_plugin_tt_14.dylib")
-#     if !isfile(tt_pjrt_plugin_path)
-#         zip_file_path = joinpath(path, "pjrt-plugin-tt.zip")
-#         tmp_dir = joinpath(path, "tmp")
-#         Downloads.download(
-#             if Sys.ARCH === :aarch64
-#                 "https://files.pythonhosted.org/packages/09/dc/6d8fbfc29d902251cf333414cf7dcfaf4b252a9920c881354584ed36270d/jax_tt-0.1.1-py3-none-macosx_13_0_arm64.whl"
-#             elseif Sys.ARCH === :x86_64
-#                 "https://files.pythonhosted.org/packages/87/ec/9bb7f7f0ffd06c3fb89813126b2f698636ac7a4263ed7bdd1ff7d7c94f8f/jax_tt-0.1.1-py3-none-macosx_10_14_x86_64.whl"
-#             else
-#                 error("Unsupported architecture: $(Sys.ARCH)")
-#             end,
-#             zip_file_path,
-#         )
-#         run(`unzip -qq $(zip_file_path) -d $(tmp_dir)`)
-#         mv(
-#             joinpath(tmp_dir, "jax_plugins", "tt_plugin", "pjrt_plugin_tt_14.dylib"),
-#             tt_pjrt_plugin_path,
-#         )
-#         rm(tmp_dir; recursive=true)
-#         rm(zip_file_path; recursive=true)
-#     end
-# end
+    tt_pjrt_plugin_path = joinpath(dir, tt_pjrt_plugin_name[])
+    if isfile(tt_pjrt_plugin_path)
+        @debug "TT PJRT plugin already found in '$(tt_pjrt_plugin_path)', nothing to do"
+    else
+        @debug "Will install the TT PJRT plugin to '$(tt_pjrt_plugin_path)'"
+        mktempdir() do tmp_dir
+            zip_file_path = joinpath(tmp_dir, "pjrt-plugin-tt.zip")
+            wheel_url = if Sys.ARCH === :x86_64
+                "https://pypi.eng.aws.tenstorrent.com/pjrt-plugin-tt/pjrt_plugin_tt-0.6.0.dev20251113-cp311-cp311-linux_x86_64.whl"
+            else
+                error("Unsupported architecture: $(Sys.ARCH)")
+            end
+            @debug "Downloading TT PJRT plugin from '$(wheel_url)'"
+            Downloads.download(wheel_url, zip_file_path)
+            run(pipeline(`$(p7zip()) x -tzip -o$(tmp_dir) -- $(zip_file_path)`, devnull))
+            data_dir = only(filter!(endswith(".data"), readdir(tmp_dir; join=true)))
+            # We need to move the entire `pjrt_plugin_tt` directory to the destination.
+            mv(joinpath(data_dir, "purelib", "pjrt_plugin_tt"), dir; force=true)
+        end
+        @assert isfile(tt_pjrt_plugin_path)
+    end
+end
 
 end # module TT
