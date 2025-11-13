@@ -230,8 +230,8 @@ for runtime in (:PJRT, :IFRT)
                     @debug "TT accelerator detected, setting it up"
                     try
                         if was_initialized && haskey(state.clients, "tt")
-                            XLA.free_client(state.clients["tt"])
-                            XLA.$(runtime).tt_client_count[] -= 1
+                            free_client(state.clients["tt"])
+                            $(runtime).tt_client_count[] -= 1
                         end
                         # The env var `TT_METAL_RUNTIME_ROOT` must be set before creating the client.
                         tt_metal_runtime_root = get(ENV, "TT_METAL_RUNTIME_ROOT", nothing)
