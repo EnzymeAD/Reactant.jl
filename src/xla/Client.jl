@@ -13,4 +13,8 @@ function get_device end
 function get_addressable_device end
 function platform_name end
 
-default_device(client::AbstractClient) = first(addressable_devices(client))
+function default_device(client::AbstractClient)
+    return addressable_devices(client)[something(
+        tryparse(Int, get(ENV, "REACTANT_DEFAULT_DEVICE", "1")), 1
+    )]
+end
