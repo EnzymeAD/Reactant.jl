@@ -15,6 +15,8 @@ function platform_name end
 
 function default_device(client::AbstractClient)
     return addressable_devices(client)[something(
-        tryparse(Int, get(ENV, "REACTANT_DEFAULT_DEVICE", "1")), 1
+        # `REACTANT_DEFAULT_DEVICE` is interpreted as 0-based.
+        tryparse(Int, get(ENV, "REACTANT_DEFAULT_DEVICE", "0")) + 1,
+        1,
     )]
 end
