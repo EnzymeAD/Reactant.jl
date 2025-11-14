@@ -340,7 +340,7 @@ macro profile(ex)
     quote
         # TODO: optionally compile the code first and profile
 
-        Reactant.Profiler.with_profiler($(esc(profile_dir))) do
+        $(with_profiler)($(esc(profile_dir))) do
             $(esc(ex))
         end
 
