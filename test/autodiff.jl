@@ -372,3 +372,27 @@ end
     res = @jit Reactant.TestUtils.finite_difference_gradient(sum, x)
     @test res isa Reactant.ConcreteRArray{Float16,2}
 end
+
+using Reactant
+
+function fdiff_multiple_args(f, nt, x)
+    return sum(abs2, f(nt.y .+ x .- nt.x))
+end
+
+struct WrapperFunc{T}
+    x::T
+end
+
+(f::WrapperFunc)(x) = x .^ 3 .+ f.x
+
+nt = (; x=rand(3, 4), y=rand(3, 4))
+fn = WrapperFunc(rand(3, 4))
+x = rand(3, 4)
+
+nt_ra = Reactant.to_rarray(nt)
+fn_ra = Reactant.to_rarray(fn)
+x_ra = Reactant.to_rarray(x)
+
+@code_hlo Reactant.TestUtils.finite_difference_gradient(
+    fdiff_multiple_args, fn_ra, nt_ra, x_ra
+)

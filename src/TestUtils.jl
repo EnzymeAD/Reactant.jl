@@ -1,6 +1,7 @@
 module TestUtils
 
-using ..Reactant: Reactant, TracedRArray
+using ..Reactant: Reactant, TracedRArray, TracedRNumber, TracedUtils
+using Reactant.Ops: @opcall
 using ReactantCore: ReactantCore
 using LinearAlgebra: LinearAlgebra
 
@@ -33,23 +34,121 @@ function default_epslion(::Val{fdtype}, ::Type{T}) where {fdtype,T}
     end
 end
 
-function finite_difference_gradient(
-    f, x::AbstractArray{T}; epsilon=default_epslion(Val(:central), T)
-) where {T}
+function generate_purturbed_array(x::AbstractArray{T}, epsilon) where {T}
     onehot_matrix = Reactant.promote_to(
         TracedRArray{Reactant.unwrapped_eltype(T),2},
         LinearAlgebra.Diagonal(fill(epsilon, length(x))),
     )
-    perturbation = reshape(onehot_matrix, size(x)..., length(x))
-    f_input = cat(x .+ perturbation, x .- perturbation; dims=ndims(x) + 1)
-
-    f_evaluated = mapslices(f, f_input; dims=ntuple(identity, ndims(x)))
-    return ReactantCore.materialize_traced_array(
-        reshape(
-            (f_evaluated[1:length(x)] - f_evaluated[(length(x) + 1):end]) ./ (2 * epsilon),
-            size(x),
-        ),
+    perturbation = permutedims(
+        reshape(onehot_matrix, size(x)..., length(x)), (ndims(x) + 1, 1:(ndims(x))...)
     )
+    return cat(
+        reshape(x, 1, size(x)...) .+ perturbation,
+        reshape(x, 1, size(x)...) .- perturbation;
+        dims=1,
+    )
+end
+
+function finite_difference_gradient(f::F, args...) where {F}
+    argprefix = gensym("finitediffarg")
+    resprefix = gensym("finitediffresult")
+    resargprefix = gensym("finitediffresarg")
+
+    # TODO: can we detect and prevent using functions that mutate their arguments?
+    mlir_fn_res = TracedUtils.make_mlir_fn(
+        f,
+        args,
+        (),
+        "finite_difference_gradient_fn",
+        false;
+        args_in_result=:none,
+        argprefix,
+        resprefix,
+        resargprefix,
+    )
+
+    seenargs = Reactant.OrderedIdDict()
+    Reactant.make_tracer(seenargs, f, (argprefix,), Reactant.TracedSetPath)
+    for (i, arg) in enumerate(args)
+        Reactant.make_tracer(seenargs, arg, (argprefix, i), Reactant.TracedSetPath)
+    end
+
+    linear_args = Reactant.TracedType[]
+    for (k, v) in seenargs
+        v isa Reactant.TracedType || continue
+        push!(linear_args, v)
+    end
+
+    if (
+        length(mlir_fn_res.linear_results) != 1 ||
+        !(mlir_fn_res.linear_results[1] isa TracedRNumber)
+    )
+        error(
+            "`finite_difference_gradient` only supports functions with a single scalar output",
+        )
+    end
+
+    gradient_results = TracedRArray[]
+    for i in 1:length(linear_args)
+        arg = linear_args[i]
+        if arg isa TracedRArray && TracedUtils.has_idx(arg, argprefix)
+            path = TracedUtils.get_idx(arg, argprefix)
+            if mlir_fn_res.fnwrapped && length(path) > 1 && path[2] == 1
+                continue
+            end
+
+            # We need the gradient wrt this argument
+            # we will naively insert the args here, cse will take care of the rest
+            new_arguments = TracedRArray[]
+            epsilon = default_epslion(Val(:central), Reactant.unwrapped_eltype(arg))
+            pertubed_arg = generate_purturbed_array(arg, epsilon)
+            bsize = size(pertubed_arg, 1)
+            for j in 1:length(linear_args)
+                if i == j
+                    new_arg = pertubed_arg
+                elseif linear_args[j] isa TracedRNumber
+                    new_arg = @opcall broadcast_in_dim(
+                        linear_args[j], Int64[], Int64[bsize]
+                    )
+                else
+                    new_arg = @opcall broadcast_in_dim(
+                        linear_args[j],
+                        collect(Int64, 2:(ndims(linear_args[j]) + 1)),
+                        Int64[bsize, size(linear_args[j])...],
+                    )
+                end
+                new_arg = @opcall transpose(new_arg, Int64[1, ((ndims(new_arg)):-1:2)...];)
+                push!(new_arguments, new_arg)
+            end
+
+            batched_res = @opcall batch(
+                new_arguments,
+                [
+                    Reactant.MLIR.IR.TensorType(
+                        Int64[bsize],
+                        Reactant.MLIR.IR.Type(
+                            Reactant.unwrapped_eltype(mlir_fn_res.linear_results[1])
+                        ),
+                    ),
+                ],
+                Int64[bsize];
+                fn=mlir_fn_res.f,
+            )
+            batched_res = only(batched_res)
+            push!(
+                gradient_results,
+                ReactantCore.materialize_traced_array(
+                    reshape(
+                        (batched_res[1:(bsize ÷ 2)] - batched_res[((bsize ÷ 2) + 1):end]) ./
+                        (2 * epsilon),
+                        size(arg),
+                    ),
+                ),
+            )
+        end
+    end
+
+    return Tuple(gradient_results)
 end
 
 end

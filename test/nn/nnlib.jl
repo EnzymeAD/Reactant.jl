@@ -18,7 +18,7 @@ using NNlib, Reactant, Enzyme, Statistics, Test
         )
 
         @test y_simple ≈ y_compile
-        @test ∂x_compile ≈ ∂x_compile_fd atol=1e-3 rtol=1e-3
+        @test ∂x_compile ≈ ∂x_compile_fd atol = 1e-3 rtol = 1e-3
     end
 end
 
