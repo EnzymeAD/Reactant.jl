@@ -2,6 +2,8 @@ module Profiler
 
 import ..Reactant
 using Sockets: Sockets
+using PrettyTables: PrettyTables
+using JSON3: JSON3
 
 """
     with_profiler(f, trace_output_dir::String; trace_device=true, trace_host=true, create_perfetto_link=false)
@@ -192,6 +194,162 @@ mutable struct ProfileServer
         exec = @ccall Reactant.MLIR.API.mlir_c.ProfilerServerStart(port::Int32)::Ptr{Cvoid}
         @assert exec != C_NULL
         return finalizer(free_profiler, new(exec))
+    end
+end
+
+function wrap_string(s; width=20)
+    s_str = string(s)
+    return join([s_str[i:min(i + width - 1, end)] for i in 1:width:length(s_str)], "\n")
+end
+
+struct KernelStatsProfileResults
+    data
+end
+
+function KernelStatsProfileResults(data::JSON3.Object)
+    cols = data["cols"]
+    rows = data["rows"]
+    keys = Tuple(Symbol.(get.(cols, "id")))
+    table = Vector{NamedTuple}(undef, length(rows))
+
+    for (i, row) in enumerate(rows)
+        vals = get.(row["c"], "v")
+        table[i] = NamedTuple{keys}(vals)
+    end
+
+    return KernelStatsProfileResults(table)
+end
+
+function Base.show(io::IO, r::KernelStatsProfileResults)
+    tbl = r.data
+
+    println(io, "╔════════════════╗")
+    println(io, "║  Kernel Stats  ║")
+    println(io, "╚════════════════╝")
+
+    isempty(tbl) && return nothing
+
+    fields = fieldnames(typeof(tbl[1]))
+    wrapped = split.(wrap_string.(fields; width=10), "\n")
+    nrows = maximum(length.(wrapped))
+    column_labels = [[get(wrapped[j], i, "") for j in 1:length(wrapped)] for i in 1:nrows]
+
+    PrettyTables.pretty_table(
+        io,
+        tbl;
+        line_breaks=true,
+        maximum_data_column_widths=10,
+        auto_wrap=true,
+        column_labels,
+    )
+    return nothing
+end
+
+struct FrameworkStatsProfileResults
+    data
+end
+
+function FrameworkStatsProfileResults(data::JSON3.Array{JSON3.Object})
+    results = Vector{Vector{NamedTuple}}()
+
+    for table in data
+        local_result = Vector{NamedTuple}()
+
+        # Extract column information
+        cols = table["cols"]
+        col_ids = [Symbol(col["id"]) for col in cols]
+
+        # Extract rows
+        rows = table["rows"]
+
+        # Parse each row into a NamedTuple
+        for row in rows
+            values = [cell["v"] for cell in row["c"]]
+            nt = NamedTuple{Tuple(col_ids)}(Tuple(values))
+            push!(local_result, nt)
+        end
+
+        push!(results, local_result)
+    end
+
+    return FrameworkStatsProfileResults(results)
+end
+
+function Base.show(io::IO, r::FrameworkStatsProfileResults)
+    println(io, "╔══════════════════════════════╗")
+    println(io, "║  FrameworkOpStatsResults     ║")
+    println(io, "╚══════════════════════════════╝")
+
+    isempty(r.data) && return nothing
+
+    for tbl in r.data
+        fields = fieldnames(typeof(tbl[1]))
+        wrapped = split.(wrap_string.(fields; width=10), "\n")
+        nrows = maximum(length.(wrapped))
+        column_labels = [
+            [get(wrapped[j], i, "") for j in 1:length(wrapped)] for i in 1:nrows
+        ]
+
+        PrettyTables.pretty_table(
+            io,
+            tbl;
+            line_breaks=true,
+            auto_wrap=true,
+            maximum_data_column_widths=10,
+            column_labels,
+        )
+    end
+
+    return nothing
+end
+
+struct ReactantProfileResults
+    kernel_stats::KernelStatsProfileResults
+    framework_stats::FrameworkStatsProfileResults
+end
+
+function Base.show(io::IO, r::ReactantProfileResults)
+    println(io, "╔═══════════════════════════════════════════════════════╗")
+    println(io, "║ Reactant Profile Results                              ║")
+    println(io, "╚═══════════════════════════════════════════════════════╝")
+    show(io, r.kernel_stats)
+    println(io)
+    show(io, r.framework_stats)
+    return nothing
+end
+
+function parse_xprof_profile_data(data)
+    extmod = Base.get_extension(Reactant, :ReactantPythonCallExt)
+    if extmod === nothing
+        error("Currently we require `PythonCall` to be loaded to parse xprof data.")
+    end
+    kernel_stats = KernelStatsProfileResults(
+        JSON3.read(extmod.xspace_to_tools_data(data, "kernel_stats"))
+    )
+    framework_stats = FrameworkStatsProfileResults(
+        JSON3.read(extmod.xspace_to_tools_data(data, "framework_op_stats"))
+    )
+    return ReactantProfileResults(kernel_stats, framework_stats)
+    return nothing
+end
+
+macro profile(ex)
+    profile_dir = joinpath(tempdir(), "reactant_profile")
+    mkpath(profile_dir)
+
+    quote
+        # TODO: optionally compile the code first and profile
+
+        Reactant.Profiler.with_profiler($(esc(profile_dir))) do
+            $(esc(ex))
+        end
+
+        trace_output_dir = joinpath($(esc(profile_dir)), "plugins", "profile")
+        date = maximum(readdir(trace_output_dir))
+        traces_path = joinpath(trace_output_dir, date)
+
+        filename = first(f for f in readdir(traces_path) if endswith(f, ".xplane.pb"))
+        data = $(parse_xprof_profile_data)(joinpath(traces_path, filename))
     end
 end
 
