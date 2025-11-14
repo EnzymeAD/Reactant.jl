@@ -461,6 +461,13 @@ Base.@nospecializeinfer function TensorType(
 end
 
 """
+    get_dynamic_size()
+
+Returns the value indicating a dynamic size in a shaped type.
+"""
+get_dynamic_size() = API.mlirShapedTypeGetDynamicSize()
+
+"""
     TensorType(elementType)
 
 Creates an unranked tensor type with the given element type in the same context as the element type. The type is owned by the context.

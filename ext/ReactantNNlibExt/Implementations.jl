@@ -52,7 +52,7 @@ function overloaded_conv!(
     end
 
     result = @opcall convolution(
-        collect(Int64, size(y)),
+        TracedUtils.collect_dynamic_size(y),
         x,
         weight;
         window_strides=collect(Int64, NNlib.stride(cdims)),
@@ -113,7 +113,7 @@ function overloaded_∇conv_filter!(
     padding = reshape(padding, 2, :)
 
     result = @opcall convolution(
-        collect(Int64, size(dw)),
+        TracedUtils.collect_dynamic_size(dw),
         x,
         dy;
         window_strides=collect(Int64, NNlib.dilation(cdims)),
@@ -207,7 +207,7 @@ function overloaded_∇conv_data!(
     end
 
     result = @opcall convolution(
-        collect(Int64, size(dx)),
+        TracedUtils.collect_dynamic_size(dx),
         dy,
         w;
         input_batch_dim=N,
