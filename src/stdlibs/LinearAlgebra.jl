@@ -5,8 +5,7 @@ using ..Reactant: Reactant, Ops
 using ..Reactant:
     TracedRArray, TracedRNumber, AnyTracedRArray, AnyTracedRMatrix, AnyTracedRVector
 using ..Reactant: call_with_reactant
-using ReactantCore: ReactantCore
-using ReactantCore: materialize_traced_array
+using ReactantCore: ReactantCore, materialize_traced_array
 using Reactant_jll: Reactant_jll
 
 using ..TracedUtils: TracedUtils, get_mlir_data, set_mlir_data!
@@ -657,6 +656,8 @@ struct GeneralizedLU{T,S<:AbstractArray,P<:AbstractArray,I<:Union{AbstractArray,
     info::I
 end
 
+Base.size(lu::GeneralizedLU) = size(lu.factors)
+
 Base.ndims(lu::GeneralizedLU) = ndims(lu.factors)
 
 function GeneralizedLU(factors::S, ipiv::P, perm::P, info::I) where {S,P,I}
@@ -729,6 +730,26 @@ function LinearAlgebra.ldiv!(
     return B
 end
 
+function LinearAlgebra.det(lu::GeneralizedLU{T,<:AbstractMatrix}) where {T}
+    n = LinearAlgebra.checksquare(lu)
+    # TODO: check for non-singular matrices
+
+    P = prod(LinearAlgebra.diag(lu.factors))
+    return ifelse(isodd(sum(lu.ipiv[1:n] .!= (1:n))), -one(T), one(T)) * P
+end
+
+function LinearAlgebra.logabsdet(lu::GeneralizedLU{T,<:AbstractMatrix}) where {T}
+    n = LinearAlgebra.checksquare(lu)
+    Treal = real(T)
+    # TODO: check for non-singular matrices
+
+    d = LinearAlgebra.diag(lu.factors)
+    absdet = sum(log ∘ abs, d)
+    P = prod(sign, d)
+    s = ifelse(isodd(sum(lu.ipiv[1:n] .!= (1:n))), -one(Treal), one(Treal)) * P
+    return absdet, s
+end
+
 for f_wrapper in (LinearAlgebra.TransposeFactorization, LinearAlgebra.AdjointFactorization),
     aType in (:AbstractVecOrMat, :AbstractArray)
 
@@ -793,6 +814,20 @@ for AT in (
     @eval function Base.getindex(A::$AT, i::Int, j::Int)
         return getindex(materialize_traced_array(A), i, j)
     end
+end
+
+LinearAlgebra._istriu(A::AnyTracedRMatrix, k) = all(iszero, overloaded_tril(A, k - 1))
+LinearAlgebra._istril(A::AnyTracedRMatrix, k) = all(iszero, overloaded_triu(A, k + 1))
+
+# Only needed because we lack automatic if tracing
+function LinearAlgebra.det(A::AnyTracedRMatrix)
+    # FIXME: using @trace here produces the cryptic UndefVarError
+    return LinearAlgebra.det(LinearAlgebra.lu(A; check=false))
+end
+
+function LinearAlgebra.logabsdet(A::AnyTracedRMatrix)
+    # FIXME: using @trace here produces the cryptic UndefVarError
+    return LinearAlgebra.logabsdet(LinearAlgebra.lu(A; check=false))
 end
 
 end
