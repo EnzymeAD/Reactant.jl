@@ -903,6 +903,8 @@ function optimization_passes(
         "split_variadic_scatter_op",
         "dynamic_slice_simplify",
         "enzyme_hlo_unroll($(WHILE_UNROLL_THRESHOLD[]))",
+        "dot_general_only_diagonal_access",
+        "transpose_symmetric_simplify",
     ]
 
     if !compile_options.disable_auto_batching_passes
