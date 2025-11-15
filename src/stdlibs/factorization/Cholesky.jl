@@ -8,8 +8,12 @@ end
 Base.size(c::GeneralizedCholesky) = size(c.factors)
 Base.ndims(c::GeneralizedCholesky) = ndims(c.factors)
 
+function overloaded_cholesky(A::AbstractArray, ::NoPivot; check::Bool=false)
+    return overloaded_cholesky(Reactant.promote_to(TracedRArray, A), NoPivot(); check)
+end
+
 function overloaded_cholesky(
-    A::AbstractArray{T,N}, ::NoPivot; check::Bool=false
+    A::AnyTracedRArray{T,N}, ::NoPivot; check::Bool=false
 ) where {T,N}
     # TODO: dont ignore check
     # move the batching dims to the front

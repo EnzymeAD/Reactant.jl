@@ -26,12 +26,24 @@ Base.copy(x::TracedRNumber{T}) where {T} = TracedRNumber{T}((), x.mlir_data)
 function Base.eps(::Type{TracedRNumber{T}}) where {T}
     return Reactant.promote_to(TracedRNumber{T}, eps(T))
 end
+Base.eps(x::TracedRNumber{T}) where {T} = eps(typeof(x))
 
 function Base.typemin(::Type{TracedRNumber{T}}) where {T}
     return Reactant.promote_to(TracedRNumber{T}, typemin(T))
 end
+Base.typemin(x::TracedRNumber{T}) where {T} = typemin(typeof(x))
+
 function Base.typemax(::Type{TracedRNumber{T}}) where {T}
     return Reactant.promote_to(TracedRNumber{T}, typemax(T))
+end
+Base.typemax(x::TracedRNumber{T}) where {T} = typemax(typeof(x))
+
+function Base.nextfloat(x::TracedRNumber{T}) where {T<:AbstractFloat}
+    return @opcall next_after(x, typemax(x))
+end
+
+function Base.prevfloat(x::TracedRNumber{T}) where {T<:AbstractFloat}
+    return @opcall next_after(x, typemin(x))
 end
 
 function Base.rtoldefault(T::Type{<:TracedRNumber})

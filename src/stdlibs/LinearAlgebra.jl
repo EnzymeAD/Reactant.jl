@@ -5,8 +5,7 @@ using ..Reactant: Reactant, Ops
 using ..Reactant:
     TracedRArray, TracedRNumber, AnyTracedRArray, AnyTracedRMatrix, AnyTracedRVector
 using ..Reactant: call_with_reactant
-using ReactantCore: ReactantCore
-using ReactantCore: materialize_traced_array
+using ReactantCore: ReactantCore, materialize_traced_array, @trace
 using Reactant_jll: Reactant_jll
 
 using ..TracedUtils: TracedUtils, get_mlir_data, set_mlir_data!
@@ -16,7 +15,7 @@ using LinearAlgebra: LinearAlgebra, BLAS
 using LinearAlgebra: Adjoint, Transpose, Factorization, RowMaximum, NoPivot
 using LinearAlgebra: SymTridiagonal, Symmetric, Bidiagonal, Diagonal, Tridiagonal
 using LinearAlgebra: LowerTriangular, UnitLowerTriangular, UpperTriangular
-using LinearAlgebra: diag, diagm, ldiv!
+using LinearAlgebra: diag, diagm, ldiv!, inv, rmul!
 using Libdl: Libdl
 using GPUArraysCore: @allowscalar
 
@@ -679,6 +678,46 @@ end
 function LinearAlgebra.ishermitian(A::AnyTracedRMatrix)
     axes(A, 1) == axes(A, 2) || return false
     return all(A .== adjoint(A))
+end
+
+function LinearAlgebra.isbanded(A::AnyTracedRMatrix, kl::Integer, ku::Integer)
+    return LinearAlgebra.istriu(A, kl) && LinearAlgebra.istril(A, ku)
+end
+
+@static if isdefined(LinearAlgebra, :__normalize!)
+    function LinearAlgebra.__normalize!(a::AnyTracedRArray, nrm)
+        # The largest positive floating point number whose inverse is less than infinity
+        δ = inv(prevfloat(typemax(nrm)))
+        @trace if nrm ≥ δ # Safe to multiply with inverse
+            invnrm = inv(nrm)
+            rmul!(a, invnrm)
+        else # scale elements to avoid overflow
+            εδ = eps(one(nrm)) / δ
+            rmul!(a, εδ)
+            rmul!(a, inv(nrm * εδ))
+        end
+        return a
+    end
+end
+
+function LinearAlgebra.rmul!(A::AnyTracedRArray, b::Number)
+    @. A *= b
+    return A
+end
+
+function LinearAlgebra.lmul!(b::Number, A::AnyTracedRArray)
+    @. A = b * A
+    return A
+end
+
+function LinearAlgebra.rdiv!(A::AnyTracedRArray, b::Number)
+    @. A /= b
+    return A
+end
+
+function LinearAlgebra.ldiv!(b::Number, A::AnyTracedRArray)
+    @. A = b \ A
+    return A
 end
 
 end
