@@ -13,7 +13,7 @@ using ..TracedUtils: TracedUtils, get_mlir_data, set_mlir_data!
 using ..Ops: @opcall
 
 using LinearAlgebra: LinearAlgebra, BLAS
-using LinearAlgebra: Adjoint, Transpose, Factorization, RowMaximum
+using LinearAlgebra: Adjoint, Transpose, Factorization, RowMaximum, NoPivot
 using LinearAlgebra: SymTridiagonal, Symmetric, Bidiagonal, Diagonal, Tridiagonal
 using LinearAlgebra: LowerTriangular, UnitLowerTriangular, UpperTriangular
 using LinearAlgebra: diag, diagm, ldiv!
@@ -39,6 +39,8 @@ function __init__()
 
     return nothing
 end
+
+include("factorization/Factorization.jl")
 
 # Various Wrapper Arrays defined in LinearAlgebra
 function ReactantCore.materialize_traced_array(
@@ -667,6 +669,16 @@ function LinearAlgebra.cross(x::AnyTracedRVector, y::AnyTracedRVector)
     @allowscalar a1, a2, a3 = x_
     @allowscalar b1, b2, b3 = y_
     return Reactant.aos_to_soa([a2 * b3 - a3 * b2, a3 * b1 - a1 * b3, a1 * b2 - a2 * b1])
+end
+
+function LinearAlgebra.issymmetric(A::AnyTracedRMatrix)
+    axes(A, 1) == axes(A, 2) || return false
+    return all(A .== transpose(A))
+end
+
+function LinearAlgebra.ishermitian(A::AnyTracedRMatrix)
+    axes(A, 1) == axes(A, 2) || return false
+    return all(A .== adjoint(A))
 end
 
 end
