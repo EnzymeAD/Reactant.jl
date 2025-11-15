@@ -8,13 +8,34 @@ using LuxLib, Reactant, Enzyme, NNlib, Test
         return Enzyme.gradient(Reverse, sumabs2fuseddense, Const(act), weight, x, bias)[2:end]
     end
 
-    function ∇fuseddense_fd(act, weight, x, bias)
-        return Reactant.TestUtils.finite_difference_gradient(
-            (w, x, b) -> sumabs2fuseddense(act, w, x, b), weight, x, bias
-        )
+    function ∇fuseddense(actgradfn, act, weight, x, bias)
+        z = weight * x
+        if bias !== nothing
+            z .+= bias
+        end
+        Ω = act.(z)
+
+        δ = 2 .* actgradfn.(Ω, z) .* Ω
+
+        ∂weight = δ * x'
+        if bias !== nothing
+            ∂bias = vec(sum(δ; dims=2))
+        else
+            ∂bias = nothing
+        end
+        ∂x = weight' * δ
+        return ∂weight, ∂x, ∂bias
     end
 
-    @testset for act in (identity, relu, sigmoid, tanh, gelu), has_bias in (true, false)
+    @testset "Activation: $act | bias=$has_bias" for (act, gradfn) in (
+            (identity, (Ω, x) -> one(Ω)),
+            (relu, (Ω, x) -> (Ω > 0)),
+            (sigmoid, (Ω, x) -> conj((1 - Ω) * Ω)),
+            (tanh, (Ω, x) -> conj(1 - Ω^2)),
+            (gelu, (Ω, x) -> NNlib.deriv_gelu_tanh(x)),
+        ),
+        has_bias in (true, false)
+
         weight = Reactant.TestUtils.construct_test_array(Float32, 9, 10)
         x = Reactant.TestUtils.construct_test_array(Float32, 10, 12)
         bias = has_bias ? Reactant.TestUtils.construct_test_array(Float32, 9) : nothing
@@ -24,9 +45,7 @@ using LuxLib, Reactant, Enzyme, NNlib, Test
         bias_ra = Reactant.to_rarray(bias)
 
         y_compile = @jit fused_dense_bias_activation(act, weight_ra, x_ra, bias_ra)
-
         y_res = fused_dense_bias_activation(act, weight, x, bias)
-
         @test y_res ≈ y_compile atol = 1e-5 rtol = 1e-2
 
         @testset "Enzyme: fused_dense_bias_activation" begin
@@ -34,11 +53,11 @@ using LuxLib, Reactant, Enzyme, NNlib, Test
                 act, weight_ra, x_ra, bias_ra
             )
 
-            dw_fd, dx_fd, db_fd = @jit ∇fuseddense_fd(act, weight_ra, x_ra, bias_ra)
+            dw_gt, dx_gt, db_gt = @jit ∇fuseddense(gradfn, act, weight_ra, x_ra, bias_ra)
 
-            @test dw_fd ≈ dw_compile atol = 1e-5 rtol = 1e-2
-            @test dx_fd ≈ dx_compile atol = 1e-5 rtol = 1e-2
-            has_bias && @test db_fd ≈ db_compile atol = 1e-5 rtol = 1e-2
+            @test dw_gt ≈ dw_compile atol = 1e-5 rtol = 1e-2
+            @test dx_gt ≈ dx_compile atol = 1e-5 rtol = 1e-2
+            has_bias && @test db_gt ≈ db_compile atol = 1e-5 rtol = 1e-2
         end
     end
 end
@@ -53,22 +72,25 @@ end
         return Enzyme.gradient(Reverse, sumabs2biasact, Const(act), x, b)[2:end]
     end
 
-    function ∇biasact_fd(act, x, b)
-        return Reactant.TestUtils.finite_difference_gradient(
-            (x, b) -> sumabs2biasact(act, x, b), x, b
-        )
-    end
-
     function ∇biasact!!(act, x, b)
         return Enzyme.gradient(Reverse, sumabs2biasact!!, Const(act), x, b)[2:end]
     end
-    function ∇biasact!!_fd(act, x, b)
-        return Reactant.TestUtils.finite_difference_gradient(
-            (x, b) -> sumabs2biasact!!(act, x, b), x, b
-        )
+
+    function ∇biasact(gradfn, act, x, b)
+        xb = x .+ b
+        Ω = act.(xb)
+        ∂x = 2 .* gradfn.(Ω, xb) .* Ω
+        ∂b = vec(sum(∂x; dims=2))
+        return ∂x, ∂b
     end
 
-    @testset for act in (identity, relu, sigmoid, tanh, gelu)
+    @testset "Activation: $act" for (act, gradfn) in (
+            (identity, (Ω, x) -> one(Ω)),
+            (relu, (Ω, x) -> (Ω > 0)),
+            (sigmoid, (Ω, x) -> conj((1 - Ω) * Ω)),
+            (tanh, (Ω, x) -> conj(1 - Ω^2)),
+            (gelu, (Ω, x) -> NNlib.deriv_gelu_tanh(x)),
+        )
         x = Reactant.TestUtils.construct_test_array(Float32, 10, 10)
         b = Reactant.TestUtils.construct_test_array(Float32, 10)
 
@@ -84,20 +106,20 @@ end
         @test y_simple ≈ y_compile atol = 1e-5 rtol = 1e-2
         @test y_simple!! ≈ y_compile!! atol = 1e-5 rtol = 1e-2
 
-        @testset "Enzyme: bias_activation" begin
-            ∂x_enz, ∂b_enz = @jit ∇biasact_fd(act, x_ra, b_ra)
-            ∂x_compile, ∂b_compile = @jit ∇biasact(act, x_ra, b_ra)
+        ∂x_gt, ∂b_gt = @jit ∇biasact(gradfn, act, x_ra, b_ra)
 
-            @test ∂x_enz ≈ ∂x_compile atol = 1e-5 rtol = 1e-2
-            @test ∂b_enz ≈ ∂b_compile atol = 1e-5 rtol = 1e-2
+        @testset "Enzyme: bias_activation" begin
+            ∂x_enz, ∂b_enz = @jit ∇biasact(act, x_ra, b_ra)
+
+            @test ∂x_enz ≈ ∂x_gt atol = 1e-5 rtol = 1e-2
+            @test ∂b_enz ≈ ∂b_gt atol = 1e-5 rtol = 1e-2
         end
 
         @testset "Enzyme: bias_activation!!" begin
-            ∂x_enz!!, ∂b_enz!! = @jit ∇biasact!!_fd(act, x_ra, b_ra)
-            ∂x_compile!!, ∂b_compile!! = @jit ∇biasact!!(act, x_ra, b_ra)
+            ∂x_enz!!, ∂b_enz!! = @jit ∇biasact!!(act, x_ra, b_ra)
 
-            @test ∂x_enz!! ≈ ∂x_compile!! atol = 1e-5 rtol = 1e-2
-            @test ∂b_enz!! ≈ ∂b_compile!! atol = 1e-5 rtol = 1e-2
+            @test ∂x_enz!! ≈ ∂x_gt atol = 1e-5 rtol = 1e-2
+            @test ∂b_enz!! ≈ ∂b_gt atol = 1e-5 rtol = 1e-2
         end
     end
 end
@@ -108,16 +130,26 @@ end
     sumabs2!!(f, x) = sum(abs2, fast_activation!!(f, copy(x)))
 
     ∇sumabs2(f, x) = Enzyme.gradient(Reverse, sumabs2, Const(f), x)[2]
-    ∇sumabs2_fd(f, x) = Reactant.TestUtils.finite_difference_gradient(x -> sumabs2(f, x), x)
     ∇sumabs2!!(f, x) = Enzyme.gradient(Reverse, sumabs2!!, Const(f), x)[2]
-    ∇sumabs2!!_fd(f, x) =
-        Reactant.TestUtils.finite_difference_gradient(x -> sumabs2!!(f, x), x)
+
+    function ∇sumabs2(gradfn, f, x)
+        Ω = f.(x)
+        return 2 .* gradfn.(Ω, x) .* Ω
+    end
 
     x_act = Reactant.TestUtils.construct_test_array(Float32, 10, 10)
     x_act_ca = Reactant.to_rarray(x_act)
 
-    @testset "Activation: $act" for act in (
-        identity, relu, sigmoid, tanh, tanh_fast, sigmoid_fast, gelu, abs2
+    @testset "Activation: $act" for (act, gradfn) in (
+        (identity, (Ω, x) -> one(Ω)),
+        (relu, (Ω, x) -> (Ω > 0)),
+        (sigmoid, (Ω, x) -> conj((1 - Ω) * Ω)),
+        (tanh, (Ω, x) -> conj(1 - Ω^2)),
+        (tanh_fast, (Ω, x) -> conj(1 - Ω^2)),
+        (sigmoid_fast, (Ω, x) -> conj((1 - Ω) * Ω)),
+        (gelu, (Ω, x) -> NNlib.deriv_gelu_tanh(x)),
+        (abs2, (Ω, x) -> (2 * x)),
+        (relu6, (Ω, x) -> (Ω > 0) & (Ω < 6)),
     )
         y_simple = sumabs2(act, x_act)
         y_simple!! = sumabs2!!(act, x_act)
@@ -127,13 +159,12 @@ end
         @test y_simple ≈ y_compile atol = 1e-5 rtol = 1e-2
         @test y_simple!! ≈ y_compile!! atol = 1e-5 rtol = 1e-2
 
-        ∂x_enz = @jit ∇sumabs2_fd(act, x_act_ca)
-        ∂x_compile = @jit ∇sumabs2(act, x_act_ca)
-        ∂x_enz!! = @jit ∇sumabs2!!_fd(act, x_act_ca)
-        ∂x_compile!! = @jit ∇sumabs2!!(act, x_act_ca)
+        ∂x_enz = @jit ∇sumabs2(act, x_act_ca)
+        ∂x_enz!! = @jit ∇sumabs2!!(act, x_act_ca)
+        ∂x_gt = @jit ∇sumabs2(gradfn, act, x_act_ca)
 
-        @test ∂x_enz ≈ ∂x_compile atol = 1e-5 rtol = 1e-2
-        @test ∂x_enz!! ≈ ∂x_compile!! atol = 1e-5 rtol = 1e-2
+        @test ∂x_enz ≈ ∂x_gt atol = 1e-5 rtol = 1e-2
+        @test ∂x_enz!! ≈ ∂x_gt atol = 1e-5 rtol = 1e-2
     end
 end
 
