@@ -3312,6 +3312,39 @@ Compute the row maximum pivoted LU factorization of `x` and return the factors `
     return (res, ipiv, perm, info)
 end
 
+@noinline function svd(
+    x::TracedRArray{T,N};
+    full::Bool=false,
+    location=mlir_stacktrace("svd", @__FILE__, @__LINE__),
+) where {T,N}
+    @assert N >= 2
+
+    batch_sizes = size(x)[1:(end - 2)]
+    m, n = size(x)[(end - 1):end]
+    r = min(m, n)
+
+    U_size = (batch_sizes..., m, full ? m : r)
+    S_size = (batch_sizes..., r)
+    Vt_size = (batch_sizes..., full ? n : r, n)
+    info_size = batch_sizes
+
+    svd_op = enzymexla.linalg_svd(
+        x.mlir_data;
+        U=mlir_type(TracedRArray{T,N}, U_size),
+        S=mlir_type(TracedRArray{T,N - 1}, S_size),
+        Vt=mlir_type(TracedRArray{T,N}, Vt_size),
+        info=mlir_type(TracedRArray{Int32,N - 2}, info_size),
+        full=full,
+        location,
+    )
+
+    U = TracedRArray{T,N}((), MLIR.IR.result(svd_op, 1), U_size)
+    S = TracedRArray{T,N - 1}((), MLIR.IR.result(svd_op, 2), S_size)
+    Vt = TracedRArray{T,N}((), MLIR.IR.result(svd_op, 3), Vt_size)
+
+    return U, S, Vt
+end
+
 @noinline function reduce_window(
     f::F,
     inputs::Vector{TracedRArray{T,N}},
