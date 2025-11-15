@@ -69,10 +69,12 @@ function vector_svd(A::AbstractVector{T}, full::Bool, normA) where {T}
         U = materialize_traced_array(reshape(normalize(A), length(A), 1))
         return U, fill(normA, 1), ones(T, 1, 1)
     end
-    return @opcall svd(
-        materialize_traced_array(reshape(normalize(A), length(A), 1)); full
-    )
+    return @opcall svd(materialize_traced_array(reshape(normalize(A), length(A), 1)); full)
 end
 
 # TODO: compute svdvals without computing the full svd. In principle we should
 #       simple dce the U and Vt inside the compiler itself and simply compute Σ
+LinearAlgebra.svdvals(x::AnyTracedRArray{T,N}) where {T,N} = overloaded_svd(x).S
+LinearAlgebra.svdvals!(x::AnyTracedRArray{T,N}) where {T,N} = overloaded_svd(x).S
+LinearAlgebra.svdvals(x::AnyTracedRVector{T}) where {T} = overloaded_svd(x).S
+LinearAlgebra.svdvals!(x::AnyTracedRVector{T}) where {T} = overloaded_svd(x).S
