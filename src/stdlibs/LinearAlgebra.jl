@@ -5,7 +5,7 @@ using ..Reactant: Reactant, Ops
 using ..Reactant:
     TracedRArray, TracedRNumber, AnyTracedRArray, AnyTracedRMatrix, AnyTracedRVector
 using ..Reactant: call_with_reactant
-using ReactantCore: ReactantCore, materialize_traced_array, @trace
+using ReactantCore: ReactantCore, materialize_traced_array
 using Reactant_jll: Reactant_jll
 
 using ..TracedUtils: TracedUtils, get_mlir_data, set_mlir_data!
@@ -738,12 +738,13 @@ function LinearAlgebra.det(lu::GeneralizedLU{T,<:AbstractMatrix}) where {T}
     return ifelse(isodd(sum(lu.ipiv[1:n] .!= (1:n))), -one(T), one(T)) * P
 end
 
-function LinearAlgebra.logabsdet(F::GeneralizedLU{T,<:AbstractMatrix}) where {T}
-    n = LinearAlgebra.checksquare(F)
+function LinearAlgebra.logabsdet(lu::GeneralizedLU{T,<:AbstractMatrix}) where {T}
+    n = LinearAlgebra.checksquare(lu)
     Treal = real(T)
     # TODO: check for non-singular matrices
 
-    absdet = sum(log ∘ abs, LinearAlgebra.diag(lu.factors))
+    d = LinearAlgebra.diag(lu.factors)
+    absdet = sum(log ∘ abs, d)
     P = prod(sign, d)
     s = ifelse(isodd(sum(lu.ipiv[1:n] .!= (1:n))), -one(Treal), one(Treal)) * P
     return absdet, s
@@ -820,26 +821,13 @@ LinearAlgebra._istril(A::AnyTracedRMatrix, k) = all(iszero, overloaded_triu(A, k
 
 # Only needed because we lack automatic if tracing
 function LinearAlgebra.det(A::AnyTracedRMatrix)
-    T = Reactant.unwrapped_eltype(A)
-    S = promote_type(T, typeof((one(T) * zero(T) + zero(T)) / one(T)))
-    istriangular = LinearAlgebra.istriu(A) | LinearAlgebra.istril(A)
-    # return LinearAlgebra.det(LinearAlgebra.lu(A; check=false))
-    return ReactantCore.traced_if(
-        istriangular,
-        # x -> convert(TracedRNumber{S}, LinearAlgebra.det(LinearAlgebra.UpperTriangular(x))),
-        x -> LinearAlgebra.det(LinearAlgebra.lu(x; check=false)),
-        x -> LinearAlgebra.det(LinearAlgebra.lu(x; check=false)),
-        (A,),
-    )
+    # FIXME: using @trace here produces the cryptic UndefVarError
+    return LinearAlgebra.det(LinearAlgebra.lu(A; check=false))
 end
 
 function LinearAlgebra.logabsdet(A::AnyTracedRMatrix)
-    @trace if LinearAlgebra.istriu(A) || LinearAlgebra.istril(A)
-        r = LinearAlgebra.logabsdet(LinearAlgebra.UpperTriangular(A))
-    else
-        r = LinearAlgebra.logabsdet(LinearAlgebra.lu(A; check=false))
-    end
-    return r
+    # FIXME: using @trace here produces the cryptic UndefVarError
+    return LinearAlgebra.logabsdet(LinearAlgebra.lu(A; check=false))
 end
 
 end
