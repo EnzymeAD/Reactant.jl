@@ -366,3 +366,44 @@ end
 
     @test @jit(jvp_vjp_cubic(v_r, x_r, lambdas_r)) ≈ fill(6, (3, 2))
 end
+
+@testset "Finite Difference Gradient" begin
+    x = Reactant.to_rarray(Reactant.TestUtils.construct_test_array(Float16, 2, 2))
+    res = @jit Reactant.TestUtils.finite_difference_gradient(sum, x)
+    @test res isa Reactant.ConcreteRArray{Float16,2}
+end
+
+function fdiff_multiple_args(f, nt, x)
+    return sum(abs2, f(nt.y .+ x .- nt.x))
+end
+
+struct WrapperFunc{T}
+    x::T
+end
+
+(f::WrapperFunc)(x) = x .^ 3 .+ f.x
+
+@testset "Finite Difference Gradient (non vector inputs)" begin
+    nt = (;
+        x=Reactant.TestUtils.construct_test_array(Float64, 3, 4),
+        y=Reactant.TestUtils.construct_test_array(Float64, 3, 4),
+    )
+    fn = WrapperFunc(Reactant.TestUtils.construct_test_array(Float64, 3, 4))
+    x = Reactant.TestUtils.construct_test_array(Float64, 3, 4)
+
+    nt_ra = Reactant.to_rarray(nt)
+    fn_ra = Reactant.to_rarray(fn)
+    x_ra = Reactant.to_rarray(x)
+
+    results_fd = @jit Reactant.TestUtils.finite_difference_gradient(
+        fdiff_multiple_args, fn_ra, nt_ra, x_ra
+    )
+    @test results_fd isa typeof((fn_ra, nt_ra, x_ra))
+
+    results_enz = @jit Enzyme.gradient(Reverse, fdiff_multiple_args, fn_ra, nt_ra, x_ra)
+
+    @test results_fd[1].x ≈ results_enz[1].x
+    @test results_fd[2].x ≈ results_enz[2].x
+    @test results_fd[2].y ≈ results_enz[2].y
+    @test results_fd[3] ≈ results_enz[3]
+end

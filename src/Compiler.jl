@@ -702,9 +702,10 @@ function optimization_passes(
     dus_to_concat::Bool=false,
     recognize_comms::Bool=true,
     lower_comms::Bool=true,
-    max_constant_threshold::Int=1024,
     backend::String="gpu",
 )
+    (; max_constant_threshold) = compile_options
+
     transform_passes_list = [
         "patterns=compare_op_canon<16>",
         "transpose_transpose<16>",

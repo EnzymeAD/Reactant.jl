@@ -491,6 +491,7 @@ for (jlop, hloop) in (
     (:(Base.log), :log),
     (:(Base.log1p), :log_plus_one),
     (:(Base.sqrt), :sqrt),
+    (:(Base.cbrt), :cbrt),
     (:(Base.acos), :acos),
     (:(Base.acosh), :acosh),
     (:(Base.asin), :asin),
