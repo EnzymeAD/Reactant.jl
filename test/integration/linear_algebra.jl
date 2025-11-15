@@ -432,3 +432,21 @@ end
             1e-2
     end
 end
+
+@testset "istriu" begin
+    x = Reactant.TestUtils.construct_test_array(Float32, 8, 8)
+    x_triu = triu(x, 4)
+    x_triu_ra = Reactant.to_rarray(x_triu)
+    @test Bool(@jit(LinearAlgebra.istriu(x_triu_ra, 4)))
+    @test Bool(@jit(LinearAlgebra.istriu(x_triu_ra, 3)))
+    @test !Bool(@jit(LinearAlgebra.istriu(x_triu_ra, 5)))
+end
+
+@testset "istril" begin
+    x = Reactant.TestUtils.construct_test_array(Float32, 8, 8)
+    x_tril = tril(x, -4)
+    x_tril_ra = Reactant.to_rarray(x_tril)
+    @test Bool(@jit(LinearAlgebra.istril(x_tril_ra, -4)))
+    @test Bool(@jit(LinearAlgebra.istril(x_tril_ra, -3)))
+    @test !Bool(@jit(LinearAlgebra.istril(x_tril_ra, -5)))
+end
