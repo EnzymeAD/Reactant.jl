@@ -92,10 +92,8 @@ function finite_difference_gradient(
         length(mlir_fn_res.linear_results) != 1 ||
         !(mlir_fn_res.linear_results[1] isa TracedRNumber)
     )
-        error(
-            "`finite_difference_gradient` only supports functions with a single scalar \
-             output. Received : $(mlir_fn_res.linear_results)",
-        )
+        error("`finite_difference_gradient` only supports functions with a single scalar \
+               output. Received : $(mlir_fn_res.linear_results)")
     end
 
     gradient_results = TracedRArray[]
