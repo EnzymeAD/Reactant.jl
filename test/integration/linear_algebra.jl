@@ -452,7 +452,7 @@ end
 end
 
 @testset "det" begin
-    x = Reactant.TestUtils.construct_test_array(Float64, 8, 8)
+    x = Reactant.TestUtils.construct_test_array(Float32, 8, 8)
     x_ra = Reactant.to_rarray(x)
 
     res_ra = @jit LinearAlgebra.logabsdet(x_ra)
