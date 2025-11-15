@@ -34,22 +34,31 @@ function default_epslion(::Val{fdtype}, ::Type{T}) where {fdtype,T}
     end
 end
 
-function generate_purturbed_array(x::AbstractArray{T}, epsilon) where {T}
+function get_perturbation(x::AbstractArray{T}, epsilon) where {T}
     onehot_matrix = Reactant.promote_to(
         TracedRArray{Reactant.unwrapped_eltype(T),2},
-        LinearAlgebra.Diagonal(fill(epsilon, length(x))),
+        LinearAlgebra.Diagonal(fill(epsilon, length(x)));
     )
-    perturbation = permutedims(
+    return permutedims(
         reshape(onehot_matrix, size(x)..., length(x)), (ndims(x) + 1, 1:(ndims(x))...)
-    )
-    return cat(
-        reshape(x, 1, size(x)...) .+ perturbation,
-        reshape(x, 1, size(x)...) .- perturbation;
-        dims=1,
     )
 end
 
-function finite_difference_gradient(f::F, args...) where {F}
+function generate_perturbed_array(::Val{:central}, x::AbstractArray{T}, epsilon) where {T}
+    perturbation = get_perturbation(x, epsilon)
+    x_ = reshape(x, 1, size(x)...)
+    return cat(x_ .+ perturbation, x_ .- perturbation; dims=1)
+end
+
+function generate_perturbed_array(::Val{:forward}, x::AbstractArray{T}, epsilon) where {T}
+    perturbation = get_perturbation(x, epsilon)
+    x_ = reshape(x, 1, size(x)...)
+    return cat(x_ .+ perturbation, x_; dims=1)
+end
+
+function finite_difference_gradient(
+    f::F, args...; method::Union{Val{:central},Val{:forward}}=Val(:central)
+) where {F}
     argprefix = gensym("finitediffarg")
     resprefix = gensym("finitediffresult")
     resargprefix = gensym("finitediffresarg")
@@ -89,6 +98,7 @@ function finite_difference_gradient(f::F, args...) where {F}
     end
 
     gradient_results = TracedRArray[]
+    gradient_result_map_path = []
     for i in 1:length(linear_args)
         arg = linear_args[i]
         if arg isa TracedRArray && TracedUtils.has_idx(arg, argprefix)
@@ -100,8 +110,10 @@ function finite_difference_gradient(f::F, args...) where {F}
             # We need the gradient wrt this argument
             # we will naively insert the args here, cse will take care of the rest
             new_arguments = TracedRArray[]
-            epsilon = default_epslion(Val(:central), Reactant.unwrapped_eltype(arg))
-            pertubed_arg = generate_purturbed_array(arg, epsilon)
+
+            epsilon = default_epslion(method, Reactant.unwrapped_eltype(arg))
+            pertubed_arg = generate_perturbed_array(method, arg, epsilon)
+
             bsize = size(pertubed_arg, 1)
             for j in 1:length(linear_args)
                 if i == j
@@ -135,20 +147,28 @@ function finite_difference_gradient(f::F, args...) where {F}
                 fn=mlir_fn_res.f,
             )
             batched_res = only(batched_res)
+
+            if method isa Val{:central}
+                diff = batched_res[1:(bsize ÷ 2)] - batched_res[((bsize ÷ 2) + 1):end]
+                grad_res = diff ./ (2 * epsilon)
+            elseif method isa Val{:forward}
+                diff = batched_res[1:(end - 1)] .- batched_res[end:end]
+                grad_res = diff ./ epsilon
+            end
+
+            push!(gradient_result_map_path, TracedUtils.get_idx(arg, argprefix))
             push!(
                 gradient_results,
-                ReactantCore.materialize_traced_array(
-                    reshape(
-                        (batched_res[1:(bsize ÷ 2)] - batched_res[((bsize ÷ 2) + 1):end]) ./
-                        (2 * epsilon),
-                        size(arg),
-                    ),
-                ),
+                ReactantCore.materialize_traced_array(reshape(grad_res, size(arg))),
             )
         end
     end
 
-    return Tuple(gradient_results)
+    results = deepcopy(args)
+    for (path, grad_res) in zip(gradient_result_map_path, gradient_results)
+        TracedUtils.set!(results, path[2:end], grad_res.mlir_data)
+    end
+    return results
 end
 
 end

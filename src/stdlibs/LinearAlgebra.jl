@@ -273,7 +273,7 @@ function overloaded_mul!(
     return C
 end
 
-if isdefined(LinearAlgebra, :_triu)
+@static if isdefined(LinearAlgebra, :_triu)
     function LinearAlgebra._triu(A::AnyTracedRArray{T,2}, ::Val{true}, k::Integer) where {T}
         return overloaded_triu(materialize_traced_array(A), k)
     end
@@ -284,7 +284,7 @@ if isdefined(LinearAlgebra, :_triu)
     end
 end
 
-if isdefined(LinearAlgebra, :_tril)
+@static if isdefined(LinearAlgebra, :_tril)
     function LinearAlgebra._tril(A::AnyTracedRArray{T,2}, ::Val{true}, k::Integer) where {T}
         return overloaded_tril(materialize_traced_array(A), k)
     end

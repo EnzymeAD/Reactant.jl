@@ -33,6 +33,15 @@ Base.convert(T::Type{<:TracedRArray}, x::AbstractArray) = Reactant.promote_to(T,
 Base.complex(x::TracedRArray{<:Real}) = complex.(x)
 Base.complex(x::TracedRArray{<:Complex}) = x
 
+function Base.deepcopy_internal(x::TracedRArray, stackdict::IdDict)
+    if haskey(stackdict, x)
+        return stackdict[x]::typeof(x)
+    end
+    y = copy(x)
+    stackdict[x] = y
+    return y
+end
+
 TracedRArray{T,N}(x::AbstractArray) where {T,N} = convert(TracedRArray{T,N}, x)
 
 function maybe_assert_scalar_setindexing(
@@ -1109,7 +1118,7 @@ function Base.accumulate_pairwise!(op, A::AnyTracedRVector, B::AnyTracedRVector)
     return accumulate!(op, A, B; dims=1)
 end
 
-if isdefined(Base, :_accumulate_promote_op)
+@static if isdefined(Base, :_accumulate_promote_op)
     function Base._accumulate_promote_op(op, A::AnyTracedRArray{T}; init=nothing) where {T}
         if init !== nothing
             init isa TracedRNumber && (init = zero(unwrapped_eltype(init)))
