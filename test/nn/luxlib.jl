@@ -9,20 +9,9 @@ using LuxLib, Reactant, Enzyme, NNlib, Test
     end
 
     function ∇fuseddense_fd(act, weight, x, bias)
-        dw = Reactant.TestUtils.finite_difference_gradient(
-            w -> sumabs2fuseddense(act, w, x, bias), weight
+        return Reactant.TestUtils.finite_difference_gradient(
+            (w, x, b) -> sumabs2fuseddense(act, w, x, b), weight, x, bias
         )
-        dx = Reactant.TestUtils.finite_difference_gradient(
-            x -> sumabs2fuseddense(act, weight, x, bias), x
-        )
-        db = if bias === nothing
-            nothing
-        else
-            Reactant.TestUtils.finite_difference_gradient(
-                b -> sumabs2fuseddense(act, weight, x, b), bias
-            )
-        end
-        return dw, dx, db
     end
 
     @testset for act in (identity, relu, sigmoid, tanh, gelu), has_bias in (true, false)
@@ -45,7 +34,7 @@ using LuxLib, Reactant, Enzyme, NNlib, Test
                 act, weight_ra, x_ra, bias_ra
             )
 
-            dw_fd, dx_fd, db_fd = @jit ∇fuseddense_fd(act, weight, x, bias)
+            dw_fd, dx_fd, db_fd = @jit ∇fuseddense_fd(act, weight_ra, x_ra, bias_ra)
 
             @test dw_fd ≈ dw_compile atol = 1e-5 rtol = 1e-2
             @test dx_fd ≈ dx_compile atol = 1e-5 rtol = 1e-2
@@ -65,26 +54,18 @@ end
     end
 
     function ∇biasact_fd(act, x, b)
-        dx = Reactant.TestUtils.finite_difference_gradient(
-            x -> sumabs2biasact(act, x, b), x
+        return Reactant.TestUtils.finite_difference_gradient(
+            (x, b) -> sumabs2biasact(act, x, b), x, b
         )
-        db = Reactant.TestUtils.finite_difference_gradient(
-            b -> sumabs2biasact(act, x, b), b
-        )
-        return dx, db
     end
 
     function ∇biasact!!(act, x, b)
         return Enzyme.gradient(Reverse, sumabs2biasact!!, Const(act), x, b)[2:end]
     end
     function ∇biasact!!_fd(act, x, b)
-        dx = Reactant.TestUtils.finite_difference_gradient(
-            x -> sumabs2biasact!!(act, x, b), x
+        return Reactant.TestUtils.finite_difference_gradient(
+            (x, b) -> sumabs2biasact!!(act, x, b), x, b
         )
-        db = Reactant.TestUtils.finite_difference_gradient(
-            b -> sumabs2biasact!!(act, x, b), b
-        )
-        return dx, db
     end
 
     @testset for act in (identity, relu, sigmoid, tanh, gelu)
@@ -104,7 +85,7 @@ end
         @test y_simple!! ≈ y_compile!! atol = 1e-5 rtol = 1e-2
 
         @testset "Enzyme: bias_activation" begin
-            ∂x_enz, ∂b_enz = @jit ∇biasact_fd(act, x, b)
+            ∂x_enz, ∂b_enz = @jit ∇biasact_fd(act, x_ra, b_ra)
             ∂x_compile, ∂b_compile = @jit ∇biasact(act, x_ra, b_ra)
 
             @test ∂x_enz ≈ ∂x_compile atol = 1e-5 rtol = 1e-2
@@ -112,7 +93,7 @@ end
         end
 
         @testset "Enzyme: bias_activation!!" begin
-            ∂x_enz!!, ∂b_enz!! = @jit ∇biasact!!_fd(act, x, b)
+            ∂x_enz!!, ∂b_enz!! = @jit ∇biasact!!_fd(act, x_ra, b_ra)
             ∂x_compile!!, ∂b_compile!! = @jit ∇biasact!!(act, x_ra, b_ra)
 
             @test ∂x_enz!! ≈ ∂x_compile!! atol = 1e-5 rtol = 1e-2
@@ -146,9 +127,9 @@ end
         @test y_simple ≈ y_compile atol = 1e-5 rtol = 1e-2
         @test y_simple!! ≈ y_compile!! atol = 1e-5 rtol = 1e-2
 
-        ∂x_enz = @jit ∇sumabs2_fd(act, x_act)
+        ∂x_enz = @jit ∇sumabs2_fd(act, x_act_ca)
         ∂x_compile = @jit ∇sumabs2(act, x_act_ca)
-        ∂x_enz!! = @jit ∇sumabs2!!_fd(act, x_act)
+        ∂x_enz!! = @jit ∇sumabs2!!_fd(act, x_act_ca)
         ∂x_compile!! = @jit ∇sumabs2!!(act, x_act_ca)
 
         @test ∂x_enz ≈ ∂x_compile atol = 1e-5 rtol = 1e-2
