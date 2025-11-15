@@ -15,7 +15,7 @@ using LinearAlgebra: LinearAlgebra, BLAS
 using LinearAlgebra: Adjoint, Transpose, Factorization, RowMaximum, NoPivot
 using LinearAlgebra: SymTridiagonal, Symmetric, Bidiagonal, Diagonal, Tridiagonal
 using LinearAlgebra: LowerTriangular, UnitLowerTriangular, UpperTriangular
-using LinearAlgebra: diag, diagm, ldiv!, inv, rmul!
+using LinearAlgebra: diag, diagm, ldiv!, rmul!, normalize, norm
 using Libdl: Libdl
 using GPUArraysCore: @allowscalar
 
@@ -330,7 +330,7 @@ end
 # LinearAlgebra defines norm with some conditionals which cannot be traced directly
 function LinearAlgebra.norm(x::TracedRArray{T,N}, p::Real=2) where {T,N}
     isinf(p) && return maximum(abs, x)
-    return mapreduce(Base.Fix2(^, p), +, x)^(1 / p)
+    return mapreduce(Base.Fix2(^, p), +, x)^(T(1 / p))
 end
 
 function LinearAlgebra._diagm(shape, kv::Pair{<:Integer,<:AnyTracedRVector}...)
