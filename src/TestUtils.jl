@@ -167,6 +167,7 @@ function finite_difference_gradient(
     for (path, grad_res) in zip(gradient_result_map_path, gradient_results)
         TracedUtils.set!(results, path[2:end], grad_res.mlir_data)
     end
+    length(args) == 1 && return results[1]
     return results
 end
 
