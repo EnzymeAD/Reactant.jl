@@ -573,7 +573,8 @@ Base.isinteger(x::TracedRNumber{<:AbstractFloat}) = x - trunc(x) == zero(x)
 Base.isodd(x::TracedRNumber) = isodd(real(x))
 function Base.isodd(x::TracedRNumber{<:Real})
     return (
-        isinteger(x) & !iszero(
+        isinteger(x) &
+        !iszero(
             rem(
                 Reactant.promote_to(TracedRNumber{Int}, x),
                 Reactant.promote_to(TracedRNumber{Int}, 2),
