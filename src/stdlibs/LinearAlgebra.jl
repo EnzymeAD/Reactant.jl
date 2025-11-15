@@ -18,6 +18,7 @@ using LinearAlgebra: SymTridiagonal, Symmetric, Bidiagonal, Diagonal, Tridiagona
 using LinearAlgebra: LowerTriangular, UnitLowerTriangular, UpperTriangular
 using LinearAlgebra: diag, diagm, ldiv!
 using Libdl: Libdl
+using GPUArraysCore: @allowscalar
 
 function __init__()
     if Reactant_jll.is_available()
@@ -793,6 +794,22 @@ for AT in (
     @eval function Base.getindex(A::$AT, i::Int, j::Int)
         return getindex(materialize_traced_array(A), i, j)
     end
+end
+
+function LinearAlgebra.cross(x::AnyTracedRVector, y::AbstractVector)
+    return LinearAlgebra.cross(x, Reactant.promote_to(TracedRArray{eltype(y),1}, y))
+end
+
+function LinearAlgebra.cross(x::AbstractVector, y::AnyTracedRVector)
+    return LinearAlgebra.cross(Reactant.promote_to(TracedRArray{eltype(x),1}, x), y)
+end
+
+function LinearAlgebra.cross(x::AnyTracedRVector, y::AnyTracedRVector)
+    x_ = materialize_traced_array(x)
+    y_ = materialize_traced_array(y)
+    @allowscalar a1, a2, a3 = x_
+    @allowscalar b1, b2, b3 = y_
+    return Reactant.aos_to_soa([a2 * b3 - a3 * b2, a3 * b1 - a1 * b3, a1 * b2 - a2 * b1])
 end
 
 end
