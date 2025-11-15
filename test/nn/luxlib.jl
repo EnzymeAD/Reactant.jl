@@ -85,12 +85,12 @@ end
     end
 
     @testset "Activation: $act" for (act, gradfn) in (
-            (identity, (Ω, x) -> one(Ω)),
-            (relu, (Ω, x) -> (Ω > 0)),
-            (sigmoid, (Ω, x) -> conj((1 - Ω) * Ω)),
-            (tanh, (Ω, x) -> conj(1 - Ω^2)),
-            (gelu, (Ω, x) -> NNlib.deriv_gelu_tanh(x)),
-        )
+        (identity, (Ω, x) -> one(Ω)),
+        (relu, (Ω, x) -> (Ω > 0)),
+        (sigmoid, (Ω, x) -> conj((1 - Ω) * Ω)),
+        (tanh, (Ω, x) -> conj(1 - Ω^2)),
+        (gelu, (Ω, x) -> NNlib.deriv_gelu_tanh(x)),
+    )
         x = Reactant.TestUtils.construct_test_array(Float32, 10, 10)
         b = Reactant.TestUtils.construct_test_array(Float32, 10)
 
