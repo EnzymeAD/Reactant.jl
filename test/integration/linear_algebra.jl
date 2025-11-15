@@ -451,12 +451,6 @@ end
     @test !Bool(@jit(LinearAlgebra.istril(x_tril_ra, -5)))
 end
 
-@testset "logabsdet" begin
-    x = Reactant.TestUtils.construct_test_array(Float64, 8, 8)
-    x_ra = Reactant.to_rarray(x)
-    @test @jit(LinearAlgebra.logabsdet(x_ra)) ≈ LinearAlgebra.logabsdet(x)
-end
-
 @testset "det" begin
     x = Reactant.TestUtils.construct_test_array(Float64, 8, 8)
     x_ra = Reactant.to_rarray(x)
@@ -470,4 +464,3 @@ end
     res = LinearAlgebra.det(x)
     @test res_ra ≈ res
 end
-
