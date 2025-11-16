@@ -29,6 +29,10 @@ function __init__()
             (BLAS.@blasfunc(dgetrf_), :enzymexla_lapack_dgetrf_),
             (BLAS.@blasfunc(cgetrf_), :enzymexla_lapack_cgetrf_),
             (BLAS.@blasfunc(zgetrf_), :enzymexla_lapack_zgetrf_),
+            (BLAS.@blasfunc(sgesvd_), :enzymexla_lapack_sgesvd_),
+            (BLAS.@blasfunc(dgesvd_), :enzymexla_lapack_dgesvd_),
+            (BLAS.@blasfunc(cgesvd_), :enzymexla_lapack_cgesvd_),
+            (BLAS.@blasfunc(zgesvd_), :enzymexla_lapack_zgesvd_),
         ]
             sym = Libdl.dlsym(libblastrampoline_handle, cname)
             @ccall MLIR.API.mlir_c.EnzymeJaXMapSymbol(
