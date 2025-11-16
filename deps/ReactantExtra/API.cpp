@@ -167,7 +167,8 @@
 #include "xla/stream_executor/device_description.h"
 #endif
 
-#include "jaxlib/mosaic/dialect/tpu/tpu_dialect.h"
+// Broken upstream x/ref https://github.com/jax-ml/jax/issues/33344
+// #include "jaxlib/mosaic/dialect/tpu/tpu_dialect.h"
 
 #include "llvm/Support/ExtensibleRTTI.h"
 #include <llvm/Support/FileSystem.h>
