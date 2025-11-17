@@ -117,6 +117,19 @@ end
     @test res[1] ≈ ones(2, 2)
 end
 
+f_sincos(x) = map(sin, x) + map(cos, reverse(x))
+f_sincos_jac(x) = [cos(x[i]) * (i == j ? 1 : 0) - sin(x[end-i+1]) * (i == (length(x) - j + 1) ? 1 : 0) for i in 1:length(x), j in 1:length(x)]
+
+@testset "Forward Jacobian" begin
+    jac(x) = only(Enzyme.jacobian(Enzyme.Forward, f_sincos, x))
+    x_r = Reactant.to_rarray(rand(10))
+
+    j_gt = f_sincos_jac(x_r)
+    j_reactant = Reactant.@jit jac(x_r)
+
+    @test j_reactant ≈ j_gt
+end
+
 mutable struct StateReturn
     st::Any
 end
