@@ -25,14 +25,26 @@ function __init__()
         libblastrampoline_handle = Libdl.dlopen(BLAS.libblas)
 
         for (cname, enzymexla_name) in [
+            # LU
             (BLAS.@blasfunc(sgetrf_), :enzymexla_lapack_sgetrf_),
             (BLAS.@blasfunc(dgetrf_), :enzymexla_lapack_dgetrf_),
             (BLAS.@blasfunc(cgetrf_), :enzymexla_lapack_cgetrf_),
             (BLAS.@blasfunc(zgetrf_), :enzymexla_lapack_zgetrf_),
+            # SVD QR Iteration
             (BLAS.@blasfunc(sgesvd_), :enzymexla_lapack_sgesvd_),
             (BLAS.@blasfunc(dgesvd_), :enzymexla_lapack_dgesvd_),
             (BLAS.@blasfunc(cgesvd_), :enzymexla_lapack_cgesvd_),
             (BLAS.@blasfunc(zgesvd_), :enzymexla_lapack_zgesvd_),
+            # SVD Divide and Conquer
+            (BLAS.@blasfunc(sgesdd_), :enzymexla_lapack_sgesdd_),
+            (BLAS.@blasfunc(dgesdd_), :enzymexla_lapack_dgesdd_),
+            (BLAS.@blasfunc(cgesdd_), :enzymexla_lapack_cgesdd_),
+            (BLAS.@blasfunc(zgesdd_), :enzymexla_lapack_zgesdd_),
+            # SVD Jacobi
+            (BLAS.@blasfunc(sgesvj_), :enzymexla_lapack_sgesvj_),
+            (BLAS.@blasfunc(dgesvj_), :enzymexla_lapack_dgesvj_),
+            (BLAS.@blasfunc(cgesvj_), :enzymexla_lapack_cgesvj_),
+            (BLAS.@blasfunc(zgesvj_), :enzymexla_lapack_zgesvj_),
         ]
             sym = Libdl.dlsym(libblastrampoline_handle, cname)
             @ccall MLIR.API.mlir_c.EnzymeJaXMapSymbol(
