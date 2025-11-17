@@ -469,3 +469,17 @@ end
         @test res_ra ≈ res
     end
 end
+
+@testset "inv" begin
+    x_lowtri = Float32[1 0; 2 2]
+    x_reg = Float32[1 -1; 2 2]
+    x_uptri = Float32[1 2; 0 2]
+
+    for x in (x_lowtri, x_reg, x_uptri)
+        x_ra = Reactant.to_rarray(x)
+
+        res_ra = @jit inv(x_ra)
+        res = inv(x)
+        @test res_ra ≈ res
+    end
+end
