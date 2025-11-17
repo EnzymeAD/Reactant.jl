@@ -230,36 +230,42 @@ end
 end
 
 # LinearAlgebra
-@reactant_overlay @noinline function LinearAlgebra.lu(x::AbstractArray; kwargs...)
-    if use_overlayed_version(x)
-        return TracedLinearAlgebra.overloaded_lu(x, RowMaximum(); kwargs...)
-    else
-        return Base.inferencebarrier(LinearAlgebra.lu)(x; kwargs...)
-    end
-end
-@reactant_overlay @noinline function LinearAlgebra.lu(
-    x::AbstractArray, pivot::RowMaximum; kwargs...
+## Various factorizations
+## TODO: specialize for `cholesky!` --> cholcopy
+factorization_copy(f::F, x, pivot) where {F} = x
+factorization_copy(f::F, x) where {F} = x
+
+for (jlop, rop, default_pivot) in (
+    (:lu, :overloaded_lu, RowMaximum),
+    (:lu!, :overloaded_lu, RowMaximum),
+    (:cholesky, :overloaded_cholesky, NoPivot),
+    (:cholesky!, :overloaded_cholesky, NoPivot),
 )
-    if use_overlayed_version(x)
-        return TracedLinearAlgebra.overloaded_lu(x, pivot; kwargs...)
-    else
-        return Base.inferencebarrier(LinearAlgebra.lu)(x, pivot; kwargs...)
-    end
-end
-@reactant_overlay @noinline function LinearAlgebra.lu!(x::AbstractArray; kwargs...)
-    if use_overlayed_version(x)
-        return TracedLinearAlgebra.overloaded_lu(x, RowMaximum(); kwargs...)
-    else
-        return Base.inferencebarrier(LinearAlgebra.lu!)(x; kwargs...)
-    end
-end
-@reactant_overlay @noinline function LinearAlgebra.lu!(
-    x::AbstractArray, pivot::RowMaximum; kwargs...
-)
-    if use_overlayed_version(x)
-        return TracedLinearAlgebra.overloaded_lu(x, pivot; kwargs...)
-    else
-        return Base.inferencebarrier(LinearAlgebra.lu!)(x, pivot; kwargs...)
+    @eval begin
+        @reactant_overlay @noinline function LinearAlgebra.$(jlop)(
+            x::AbstractArray; kwargs...
+        )
+            if use_overlayed_version(x)
+                pivot = $(default_pivot)()
+                return TracedLinearAlgebra.$(rop)(
+                    factorization_copy(LinearAlgebra.$(jlop), x, pivot), pivot; kwargs...
+                )
+            else
+                return Base.inferencebarrier(LinearAlgebra.$(jlop))(x; kwargs...)
+            end
+        end
+
+        @reactant_overlay @noinline function LinearAlgebra.$(jlop)(
+            x::AbstractArray, pivot::$(default_pivot); kwargs...
+        )
+            if use_overlayed_version(x)
+                return TracedLinearAlgebra.$(rop)(
+                    factorization_copy(LinearAlgebra.$(jlop), x, pivot), pivot; kwargs...
+                )
+            else
+                return Base.inferencebarrier(LinearAlgebra.$(jlop))(x, pivot; kwargs...)
+            end
+        end
     end
 end
 
