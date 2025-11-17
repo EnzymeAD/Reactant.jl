@@ -29,6 +29,10 @@ Base.elsize(::Type{TracedRArray{T,N}}) where {T,N} = sizeof(T)
 # we use it
 Base.convert(T::Type{<:TracedRArray}, x::AbstractArray) = Reactant.promote_to(T, x)
 
+# Base.first is very common usecase for getting first element to get the type
+# inside LinearAlgebra.jl
+Base.first(x::TracedRArray{T,N}) where {T,N} = @allowscalar(x[1])
+
 # Base.complex
 Base.complex(x::TracedRArray{<:Real}) = complex.(x)
 Base.complex(x::TracedRArray{<:Complex}) = x

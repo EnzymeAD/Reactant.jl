@@ -488,3 +488,14 @@ end
     x_ra = Reactant.to_rarray(rand(Float32, 4, 4))
     @test @jit(norm(x_ra)) isa ConcreteRNumber{Float32}
 end
+
+@testset "cross" begin
+    x = Float32[0; 1; 0]
+    x_ra = Reactant.to_rarray(x)
+    y = Float32[0; 0; 1]
+    y_ra = Reactant.to_rarray(y)
+
+    @test @jit(LinearAlgebra.cross(x_ra, y_ra)) ≈ LinearAlgebra.cross(x, y)
+    @test @jit(LinearAlgebra.cross(x_ra, y)) ≈ LinearAlgebra.cross(x, y)
+    @test @jit(LinearAlgebra.cross(x, y_ra)) ≈ LinearAlgebra.cross(x, y)
+end
