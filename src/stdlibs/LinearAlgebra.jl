@@ -912,4 +912,18 @@ function LinearAlgebra.cross(x::AnyTracedRVector, y::AnyTracedRVector)
     return Reactant.aos_to_soa([a2 * b3 - a3 * b2, a3 * b1 - a1 * b3, a1 * b2 - a2 * b1])
 end
 
+function LinearAlgebra.issymmetric(A::AnyTracedRMatrix)
+    axes(A, 1) == axes(A, 2) || return false
+    return all(A .== transpose(A))
+end
+
+function LinearAlgebra.ishermitian(A::AnyTracedRMatrix)
+    axes(A, 1) == axes(A, 2) || return false
+    return all(A .== adjoint(A))
+end
+
+function LinearAlgebra.isbanded(A::AnyTracedRMatrix, kl::Integer, ku::Integer)
+    return istriu(A, kl) & istril(A, ku)
+end
+
 end
