@@ -343,19 +343,9 @@ function make_mlir_fn(
         process_linear_args!(linear_args, fnbody, do_transpose, optimize_then_pad, inv_map)
 
         if isempty(kwargs)
-            if within_autodiff
-                Reactant.call_with_reactant_within_autodiff(f, traced_args...)
-            else
-                Reactant.call_with_reactant(f, traced_args...)
-            end
+            Reactant.call_with_reactant(f, traced_args...)
         else
-            if within_autodiff
-                Reactant.call_with_reactant_within_autodiff(
-                    Core.kwcall, kwargs, f, traced_args...
-                )
-            else
-                Reactant.call_with_reactant(Core.kwcall, kwargs, f, traced_args...)
-            end
+            Reactant.call_with_reactant(Core.kwcall, kwargs, f, traced_args...)
         end
     finally
         MLIR.IR.deactivate!(fnbody)
