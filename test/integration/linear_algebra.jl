@@ -533,3 +533,14 @@ end
     @test @jit(LinearAlgebra.cross(x_ra, y)) ≈ LinearAlgebra.cross(x, y)
     @test @jit(LinearAlgebra.cross(x, y_ra)) ≈ LinearAlgebra.cross(x, y)
 end
+
+@testset "normalize/normalize!" begin
+    x = Reactant.TestUtils.construct_test_array(Float32, 4, 4)
+    x_ra = Reactant.to_rarray(x)
+
+    @test @jit(LinearAlgebra.normalize(x_ra)) ≈ LinearAlgebra.normalize(x)
+
+    LinearAlgebra.normalize!(x)
+    @jit LinearAlgebra.normalize!(x_ra)
+    @test x_ra ≈ x
+end
