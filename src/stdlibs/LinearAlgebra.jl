@@ -16,7 +16,7 @@ using LinearAlgebra: Adjoint, Transpose, Factorization, RowMaximum
 using LinearAlgebra: SymTridiagonal, Symmetric, Bidiagonal, Diagonal, Tridiagonal
 using LinearAlgebra: LowerTriangular, UnitLowerTriangular, UpperTriangular
 using LinearAlgebra:
-    diag, diagm, ldiv!, det, logabsdet, lu, istriu, istril, triu!, tril!, inv, inv!
+    diag, diagm, ldiv!, det, logabsdet, lu, istriu, istril, triu!, tril!, inv!, rmul!
 using Libdl: Libdl
 using GPUArraysCore: @allowscalar
 
@@ -924,6 +924,42 @@ end
 
 function LinearAlgebra.isbanded(A::AnyTracedRMatrix, kl::Integer, ku::Integer)
     return istriu(A, kl) & istril(A, ku)
+end
+
+@static if isdefined(LinearAlgebra, :__normalize!)
+    function LinearAlgebra.__normalize!(a::AnyTracedRArray, nrm)
+        # The largest positive floating point number whose inverse is less than infinity
+        δ = inv(prevfloat(typemax(nrm)))
+        @trace if nrm ≥ δ # Safe to multiply with inverse
+            invnrm = inv(nrm)
+            rmul!(a, invnrm)
+        else # scale elements to avoid overflow
+            εδ = eps(one(nrm)) / δ
+            rmul!(a, εδ)
+            rmul!(a, inv(nrm * εδ))
+        end
+        return a
+    end
+end
+
+function LinearAlgebra.rmul!(A::AnyTracedRArray, b::Number)
+    @. A *= b
+    return A
+end
+
+function LinearAlgebra.lmul!(b::Number, A::AnyTracedRArray)
+    @. A = b * A
+    return A
+end
+
+function LinearAlgebra.rdiv!(A::AnyTracedRArray, b::Number)
+    @. A /= b
+    return A
+end
+
+function LinearAlgebra.ldiv!(b::Number, A::AnyTracedRArray)
+    @. A = b \ A
+    return A
 end
 
 end
