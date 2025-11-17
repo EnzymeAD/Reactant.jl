@@ -902,11 +902,11 @@ function subindex(source::Value, index::Value; result::IR.Type, location=Locatio
 end
 
 """
-`lapack_symm`
+`blas_symm`
 
 C := alpha*A*B + beta*C, or C := alpha*B*A + beta*C, where alpha and beta are scalars,  A is a symmetric matrix\"
 """
-function lapack_symm(
+function blas_symm(
     A::Value,
     B::Value,
     C::Value,
@@ -924,7 +924,7 @@ function lapack_symm(
     attributes = NamedAttribute[namedattribute("side", side), namedattribute("uplo", uplo)]
 
     return create_operation(
-        "enzymexla.lapack.symm",
+        "enzymexla.blas.symm",
         location;
         operands,
         owned_regions,
