@@ -5,6 +5,11 @@ struct GeneralizedCholesky{T,S<:AbstractArray,I<:Union{AbstractArray,Number}} <:
     info::I
 end
 
+function GeneralizedCholesky(factors::S, uplo::Char, info::I) where {S,I}
+    @assert ndims(info) == ndims(factors) - 2
+    return GeneralizedCholesky{eltype(factors),S,I}(factors, uplo, info)
+end
+
 Base.size(c::GeneralizedCholesky) = size(c.factors)
 Base.ndims(c::GeneralizedCholesky) = ndims(c.factors)
 
@@ -32,6 +37,60 @@ function overloaded_cholesky(
             dims=(1, 2),
         ),
     )
+    if N == 2
+        info = TracedRNumber{Bool}((), info.mlir_data)
+    end
 
-    return GeneralizedCholesky{T,typeof(factors),typeof(info)}(factors, 'U', info)
+    return GeneralizedCholesky(factors, 'U', info)
+end
+
+function LinearAlgebra.ldiv!(
+    F::GeneralizedCholesky{T,<:AbstractArray{T,N}}, B::AbstractArray{T,M}
+) where {T,N,M}
+    @assert N == M + 1
+    ldiv!(F, reshape(B, size(B, 1), 1, size(B)[2:end]...))
+    return B
+end
+
+function LinearAlgebra.ldiv!(
+    F::GeneralizedCholesky{T,<:AbstractArray{T,2}}, B::AbstractArray{T,2}
+) where {T}
+    B .= _cholesky_solve_core(F.factors, B, F.uplo)
+    return B
+end
+
+function LinearAlgebra.ldiv!(
+    F::GeneralizedCholesky{T,<:AbstractArray{T,N}}, B::AbstractArray{T,N}
+) where {T,N}
+    batch_shape = size(F.factors)[3:end]
+    @assert batch_shape == size(B)[3:end]
+
+    base_fn = F.uplo == 'U' ? _cholesky_solve_core_upper : _cholesky_solve_core_lower
+
+    permutation = vcat(collect(Int64, 3:N), 1, 2)
+
+    factors = @opcall transpose(materialize_traced_array(F.factors), permutation)
+    B_permuted = @opcall transpose(materialize_traced_array(B), permutation)
+
+    res = @opcall transpose(
+        only(@opcall(batch(base_fn, [factors, B_permuted], collect(Int64, batch_shape)))),
+        invperm(permutation),
+    )
+    B .= res
+    return B
+end
+
+function _cholesky_solve_core(factors::AbstractMatrix, B::AbstractMatrix, uplo::Char)
+    if uplo == 'U'
+        return _cholesky_solve_core_upper(factors, B)
+    else
+        return _cholesky_solve_core_lower(factors, B)
+    end
+end
+
+function _cholesky_solve_core_lower(factors::AbstractMatrix, B::AbstractMatrix)
+    return adjoint(LowerTriangular(factors)) \ (LowerTriangular(factors) \ B)
+end
+function _cholesky_solve_core_upper(factors::AbstractMatrix, B::AbstractMatrix)
+    return UpperTriangular(factors) \ (adjoint(UpperTriangular(factors)) \ B)
 end
