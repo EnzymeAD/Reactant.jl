@@ -15,7 +15,8 @@ using LinearAlgebra: LinearAlgebra, BLAS
 using LinearAlgebra: Adjoint, Transpose, Factorization, RowMaximum
 using LinearAlgebra: SymTridiagonal, Symmetric, Bidiagonal, Diagonal, Tridiagonal
 using LinearAlgebra: LowerTriangular, UnitLowerTriangular, UpperTriangular
-using LinearAlgebra: diag, diagm, ldiv!, det, logabsdet, lu, istriu, istril
+using LinearAlgebra:
+    diag, diagm, ldiv!, det, logabsdet, lu, istriu, istril, triu!, tril!, inv, inv!
 using Libdl: Libdl
 
 function __init__()
@@ -657,8 +658,11 @@ struct GeneralizedLU{T,S<:AbstractArray,P<:AbstractArray,I<:Union{AbstractArray,
 end
 
 Base.size(lu::GeneralizedLU) = size(lu.factors)
-
+Base.size(lu::GeneralizedLU, i) = size(lu.factors, i)
 Base.ndims(lu::GeneralizedLU) = ndims(lu.factors)
+function Base.copy(lu::GeneralizedLU)
+    return GeneralizedLU(copy(lu.factors), copy(lu.ipiv), copy(lu.perm), copy(lu.info))
+end
 
 function GeneralizedLU(factors::S, ipiv::P, perm::P, info::I) where {S,P,I}
     @assert ndims(ipiv) == ndims(perm) == ndims(factors) - 1
@@ -760,6 +764,18 @@ for f_wrapper in (LinearAlgebra.TransposeFactorization, LinearAlgebra.AdjointFac
     end
 end
 
+# currently we lower inverse to lu decomposition + triangular solve. we should
+# instead emit getri and lower that to a fallback if the backend doesn't support
+# it.
+function LinearAlgebra.inv!(lu::GeneralizedLU)
+    @assert ndims(lu) == 2 "Only implemented for 2D tensors"
+    rhs = Reactant.promote_to(
+        TracedRArray{Reactant.unwrapped_eltype(eltype(lu)),2}, LinearAlgebra.I(size(lu, 1))
+    )
+    ldiv!(lu, rhs)
+    return rhs
+end
+
 function _lu_solve_core(factors::AbstractMatrix, B::AbstractMatrix, perm::AbstractVector)
     permuted_B = B[Int64.(perm), :]
     return UpperTriangular(factors) \ (UnitLowerTriangular(factors) \ permuted_B)
@@ -845,6 +861,38 @@ function LinearAlgebra.logabsdet(
     sgn = prod(sign, d)
     abs_det = sum(log ∘ abs, d)
     return abs_det, sgn
+end
+
+function Base.inv(A::TracedRArray{T,2}) where {T} # don't overload Any* here
+    LinearAlgebra.checksquare(A)
+    @trace if istriu(A)
+        Ai = triu!(parent(inv(UpperTriangular(A))))
+    elseif istril(A)
+        Ai = tril!(parent(inv(LowerTriangular(A))))
+    else
+        Ai = inv!(lu(A; check=false))
+    end
+    return Ai
+end
+
+for (wT, lower, ud) in (
+    (:UpperTriangular, false, false),
+    (:LowerTriangular, true, false),
+    (:UnitUpperTriangular, false, true),
+    (:UnitLowerTriangular, true, true),
+)
+    @eval function Base.inv(A::LinearAlgebra.$(wT){T,<:AnyTracedRMatrix}) where {T}
+        S = typeof(inv(oneunit(Reactant.unwrapped_eltype(T))))
+        rhs = Reactant.promote_to(TracedRArray{S,2}, LinearAlgebra.I(size(A, 1)))
+        return @opcall triangular_solve(
+            parent(A),
+            rhs;
+            left_side=false,
+            lower=$(lower),
+            transpose_a='N',
+            unit_diagonal=$(ud),
+        )
+    end
 end
 
 end
