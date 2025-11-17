@@ -35,7 +35,7 @@ end
         Chain(Dense(256 => 128, relu), Dense(128 => 84, relu), Dense(84 => 10)),
     )
     ps, st = Lux.setup(Random.default_rng(), model)
-    x = rand(Float32, 28, 28, 1, 4)
+    x = Reactant.TestUtils.construct_test_array(Float32, 28, 28, 1, 4)
 
     st_test = Lux.testmode(st)
 

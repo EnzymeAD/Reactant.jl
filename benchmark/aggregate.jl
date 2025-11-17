@@ -1,36 +1,19 @@
-using BenchmarkTools
+using JSON3
 
-const BACKENDS = ["CPU", "CUDA"]
+const BACKENDS = ["CPU", "CUDA", "TPU"]
 
-const CPU_Results = joinpath(dirname(@__FILE__), "results", "CPUbenchmarks.json")
-@assert(ispath(CPU_Results))
-
-const RESULTS = BenchmarkTools.load(CPU_Results)[1]
-@assert RESULTS isa BenchmarkTools.BenchmarkGroup
-
-for backend in BACKENDS[2:end]
-    @info "Aggregating results for $(backend)"
+all_results = []
+for backend in BACKENDS
     filename = string(backend, "benchmarks.json")
     filepath = joinpath(dirname(@__FILE__), "results", filename)
-    if !ispath(filepath)
-        @warn "No file found at path: $(filepath)"
+    if ispath(filepath)
+        results = JSON3.read(read(filepath, String))
+        append!(all_results, results)
     else
-        backend_results = BenchmarkTools.load(filepath)[1]
-        if backend_results isa BenchmarkTools.BenchmarkGroup
-            # <benchmark name>/<forward or reverse>/<backend>/<reactant or package>
-            for benchmark in keys(RESULTS)
-                for pass in keys(RESULTS[benchmark])
-                    for pkg in keys(backend_results[benchmark][pass][backend])
-                        RESULTS[benchmark][pass][backend][pkg] = backend_results[benchmark][pass][backend][pkg]
-                    end
-                end
-            end
-        else
-            @warn "Unexpected file format for file at path: $(filepath)"
-        end
+        @warn "No file found at path: $(filepath)"
     end
 end
 
-BenchmarkTools.save(
-    joinpath(dirname(@__FILE__), "results", "combinedbenchmarks.json"), RESULTS
-)
+open(joinpath(dirname(@__FILE__), "results", "combinedbenchmarks.json"), "w") do io
+    return JSON3.pretty(io, JSON3.write(all_results))
+end

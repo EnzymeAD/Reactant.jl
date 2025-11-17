@@ -2,7 +2,8 @@ module Compiler
 
 using Reactant_jll
 using Libdl: dlsym
-using LinearAlgebra: BLAS
+using LinearAlgebra: BlasInt
+using Functors: Functors
 
 import ..Reactant:
     Reactant,
@@ -16,7 +17,6 @@ import ..Reactant:
     TracedRArray,
     TracedRNumber,
     RArray,
-    RNumber,
     OrderedIdDict,
     make_tracer,
     TracedToConcrete,
@@ -24,6 +24,7 @@ import ..Reactant:
     ancestor,
     TracedType
 import Reactant: OptimizeCommunicationOptions, ShardyPropagationOptions, CompileOptions
+using Reactant_jll: Reactant_jll
 
 import ..ReactantCore: correct_maybe_bcast_call
 
@@ -272,7 +273,7 @@ function create_result(
 end
 
 function create_result(
-    tocopy::ConcretePJRTNumber{T,D,S},
+    tocopy::ConcretePJRTNumber{T,D},
     path,
     result_stores,
     path_to_shard_info,
@@ -283,7 +284,7 @@ function create_result(
     result_cache,
     var_idx,
     resultgen_code,
-) where {T,D,S}
+) where {T,D}
     if !haskey(result_cache, tocopy)
         sym = Symbol("result", var_idx[])
         var_idx[] += 1
@@ -314,7 +315,7 @@ function create_result(
 end
 
 function create_result(
-    tocopy::ConcreteIFRTNumber{T,S},
+    tocopy::ConcreteIFRTNumber{T},
     path,
     result_stores,
     path_to_shard_info,
@@ -325,7 +326,7 @@ function create_result(
     result_cache,
     var_idx,
     resultgen_code,
-) where {T,S}
+) where {T}
     if !haskey(result_cache, tocopy)
         sym = Symbol("result", var_idx[])
         var_idx[] += 1
@@ -356,7 +357,7 @@ function create_result(
 end
 
 function create_result(
-    tocopy::ConcretePJRTArray{T,N,D,S},
+    tocopy::ConcretePJRTArray{T,N,D},
     path,
     result_stores,
     path_to_shard_info,
@@ -367,7 +368,7 @@ function create_result(
     result_cache,
     var_idx,
     resultgen_code,
-) where {T,N,D,S}
+) where {T,N,D}
     if !haskey(result_cache, tocopy)
         sym = Symbol("result", var_idx[])
         var_idx[] += 1
@@ -399,7 +400,7 @@ function create_result(
 end
 
 function create_result(
-    tocopy::ConcreteIFRTArray{T,N,S},
+    tocopy::ConcreteIFRTArray{T,N},
     path,
     result_stores,
     path_to_shard_info,
@@ -410,7 +411,7 @@ function create_result(
     result_cache,
     var_idx,
     resultgen_code,
-) where {T,N,S}
+) where {T,N}
     if !haskey(result_cache, tocopy)
         sym = Symbol("result", var_idx[])
         var_idx[] += 1
@@ -692,6 +693,7 @@ const AGGRESSIVE_SUM_TO_CONV = Ref(false)
 const AGGRESSIVE_PROPAGATION = Ref(false)
 const DUS_SLICE_SIMPLIFY = Ref(true)
 const CONCATS_TO_DUS = Ref(false)
+const WHILE_UNROLL_THRESHOLD = Ref(4)
 
 # Optimization passes via transform dialect
 function optimization_passes(
@@ -700,9 +702,10 @@ function optimization_passes(
     dus_to_concat::Bool=false,
     recognize_comms::Bool=true,
     lower_comms::Bool=true,
-    max_constant_threshold::Int=1024,
     backend::String="gpu",
 )
+    (; max_constant_threshold) = compile_options
+
     transform_passes_list = [
         "patterns=compare_op_canon<16>",
         "transpose_transpose<16>",
@@ -757,6 +760,9 @@ function optimization_passes(
         "noop_slice<16>",
         "noop_reverse<16>",
         "slice_slice<16>",
+        "dynamic_slice_slice<16>",
+        "slice_dynamic_slice<16>",
+        "dynamic_slice_dynamic_slice<16>",
         "shift_right_logical_simplify<16>",
         "slice_simplify<16>",
         "convert_simplify<16>",
@@ -814,20 +820,7 @@ function optimization_passes(
         "dus_dus",
         "dus_dus_concat",
         "abs_positive_simplify",
-        "transpose_unary_transpose_abs",
-        "transpose_unary_transpose_neg",
-        "transpose_unary_transpose_sqrt",
-        "transpose_unary_transpose_rsqrt",
-        "transpose_unary_transpose_ceil",
-        "transpose_unary_transpose_convert",
-        "transpose_unary_transpose_cosine",
-        "transpose_unary_transpose_exp",
-        "transpose_unary_transpose_expm1",
-        "transpose_unary_transpose_log",
-        "transpose_unary_transpose_log1p",
-        "transpose_unary_transpose_sign",
-        "transpose_unary_transpose_sine",
-        "transpose_unary_transpose_tanh",
+        "transpose_elementwise_transpose",
         "select_comp_iota_const_simplify<1>",
         "sign_abs_simplify<1>",
         "broadcastindim_is_reshape",
@@ -887,7 +880,6 @@ function optimization_passes(
         "reshape_deletions_broadcast_in_dim_simplify",
         "reshape_insertions_broadcast_in_dim_simplify",
         "dot_general_reshape",
-        "diagonal_tensor_dot_general_rewrite",
         "widen_wrap",
         "widen_extend",
         "elementwise_pad",
@@ -903,13 +895,47 @@ function optimization_passes(
         "self_add_to_convolution_like($(Int(backend == "tpu")))",
         "self_mul_to_convolution_like($(Int(backend == "tpu")))",
         "subtract_multiply_const_to_add_mul_const",
-        "concat_insert_dim_dot_general",
-        "concat_insert_dim_gather",
-        "concat_insert_dim_iota",
-        "concat_insert_dim_reduce",
-        "concat_insert_dim_sort",
-        "concat_insert_dim_reduce_window",
+        "trivial_reduce_window_to_reduce_op",
+        "case_to_if",
+        "dot_general_add_distributive_simplify",
+        "dot_general_subtract_distributive_simplify",
+        "remove_no_ops_from_while_loop",
+        "while_is_copy_simplify",
+        "split_variadic_scatter_op",
+        "dynamic_slice_simplify",
+        "enzyme_hlo_unroll($(WHILE_UNROLL_THRESHOLD[]))",
+        "dot_general_only_diagonal_access",
+        "transpose_symmetric_simplify",
     ]
+
+    if !compile_options.disable_auto_batching_passes
+        append!(
+            transform_passes_list,
+            [
+                "add_reduce_slice_fusion",
+                "mul_reduce_slice_fusion",
+                "min_reduce_slice_fusion",
+                "max_reduce_slice_fusion",
+                "concat_insert_dim_dot_general",
+                "concat_insert_dim_gather",
+                "concat_insert_dim_iota",
+                "concat_insert_dim_reduce",
+                "concat_insert_dim_sort",
+                "concat_insert_dim_reduce_window",
+                "concat_insert_dim_elementwise",
+                "dot_general_slice_to_batch",
+                "gather_slice_to_batch",
+                "iota_slice_to_batch",
+                "reduce_slice_to_batch",
+                "sort_slice_to_batch",
+                "transpose_slice_to_batch",
+                "broadcastindim_slice_to_batch",
+                "reducewindow_slice_to_batch",
+                "elementwise_slice_to_batch",
+                "greedy_while_loop_batch_fission",
+            ],
+        )
+    end
 
     if !compile_options.disable_licm_optimization_passes
         append!(
@@ -923,6 +949,10 @@ function optimization_passes(
                 "transpose_licm(0)",
                 "broadcastindim_licm(0)",
                 "reshape_licm(0)",
+                "dot_general_licm(0)",
+                "reduce_licm(0)",
+                "reduce_window_licm(0)",
+                "reverse_licm(0)",
             ],
         )
     end
@@ -936,6 +966,7 @@ function optimization_passes(
                 "scatter_multiply_simplify",
                 "unary_elementwise_scatter_simplify",
                 "scatter_indices_are_unique",
+                "diagonal_tensor_dot_general_rewrite",
                 ## const prop patterns
                 "scatter_update_computation_const_prop",
                 # gather patterns
@@ -944,6 +975,7 @@ function optimization_passes(
                 "gather_elementwise",
                 ## const prop patterns
                 "gather_const_prop",
+                "scatter_const_fold($max_constant_threshold)",
             ],
         )
     end
@@ -990,6 +1022,8 @@ function optimization_passes(
                 "rotate_pad",
                 "concat_multipad",
                 "speculate_if_pad_to_select",
+                "dus_to_dynamic_pad",
+                "dynamic_pad_to_pad",
             ],
         )
 
@@ -1047,6 +1081,7 @@ function optimization_passes(
             "const_prop_through_barrier<16>",
             "concat_const_prop<1>($max_constant_threshold)",
             "dynamic_update_slice_const_prop($max_constant_threshold)",
+            "clamp_const_prop",
         ],
     )
 
@@ -1081,7 +1116,8 @@ function optimization_passes(
                 "reshape_dus",
                 "dot_reshape_pad<1>",
                 "pad_dot_general<1>(0)",
-                "pad_dot_general<1>(1)",
+                # XXX: see https://github.com/EnzymeAD/Enzyme-JAX/issues/1445
+                # "pad_dot_general<1>(1)",
                 "reshape_pad",
                 "reshape_wrap",
                 "reshape_rotate",
@@ -1091,9 +1127,11 @@ function optimization_passes(
         if AGGRESSIVE_PROPAGATION[]
             push!(transform_passes_list, "reshape_slice(0)")
             push!(transform_passes_list, "reshape_elementwise(0)")
+            push!(transform_passes_list, "reshape_dynamic_slice(0)")
         else
             push!(transform_passes_list, "reshape_slice(1)")
             push!(transform_passes_list, "reshape_elementwise(1)")
+            push!(transform_passes_list, "reshape_dynamic_slice(1)")
         end
     elseif compile_options.reshape_propagate === :down
         append!(
@@ -1102,6 +1140,9 @@ function optimization_passes(
                 "concat_appending_reshape",
                 "slice_reshape",
                 "slice_reshape_slice<1>",
+                "dynamic_slice_reshape_slice<1>",
+                "slice_reshape_dynamic_slice<1>",
+                "dynamic_slice_reshape_dynamic_slice<1>",
                 "slice_reshape_concat<1>",
                 "slice_reshape_elementwise<1>",
                 "slice_reshape_dot_general<1>",
@@ -1148,17 +1189,7 @@ function optimization_passes(
             transform_passes_list,
             [
                 "reorder_elementwise_and_shape_op<16>",
-                "binary_op_transpose_simplify_add",
-                "binary_op_transpose_simplify_sub",
-                "binary_op_transpose_simplify_mul",
-                "binary_op_transpose_simplify_div",
-                "binary_op_transpose_simplify_min",
-                "binary_op_transpose_simplify_max",
-                "binary_op_transpose_simplify_pow",
-                "binary_op_transpose_simplify_rem",
-                "binary_op_transpose_simplify_or",
-                "binary_op_transpose_simplify_and",
-                "binary_op_transpose_simplify_xor",
+                "elementwise_all_transpose_operands_simplify",
                 "slice_transpose",
                 "einsum_transpose<1>",
                 "slice_reshape_transpose<1>",
@@ -1272,7 +1303,7 @@ end
 
 # TODO we want to be able to run the more advanced passes via transform dialect as an enzyme intermediate
 # However, this errs as we cannot attach the transform with to the funcop itself [as we run a functionpass].
-const enzyme_pass::String = "enzyme{postpasses=\"arith-raise{stablehlo=true},canonicalize,cse,canonicalize,remove-unnecessary-enzyme-ops,enzyme-simplify-math,canonicalize,cse,canonicalize\"}"
+const enzyme_pass::String = "enzyme{postpasses=\"arith-raise{stablehlo=true},canonicalize,cse,canonicalize,remove-unnecessary-enzyme-ops,enzyme-simplify-math,canonicalize,cse,canonicalize,arith-raise{stablehlo=true}\"}"
 
 function run_pass_pipeline!(mod, pass_pipeline, key=""; enable_verifier=true)
     pm = MLIR.IR.PassManager()
@@ -1362,7 +1393,8 @@ function __get_compile_options_and_kwargs(;
 end
 
 function compile_mlir(f, args; client=nothing, kwargs...)
-    backend = XLA.platform_name(client !== nothing ? client : XLA.default_backend())
+    client = client !== nothing ? client : XLA.default_backend()
+    backend = XLA.platform_name(client)
 
     if backend == "CUDA"
         backend = "GPU"
@@ -1381,6 +1413,7 @@ function compile_mlir(f, args; client=nothing, kwargs...)
             compile_options;
             backend,
             runtime=XLA.runtime(client),
+            client,
             kwargs...,
         )
 
@@ -1397,10 +1430,10 @@ end
 
 const PartitionKA = Ref{Bool}(true)
 
-const cubinChip = Ref{String}("sm_60")
-const cubinFormat = Ref{String}("bin")
 const cuindexBitWidth = Ref{Int}(32)
+const cubinFormat = Ref{String}("bin")
 const cuOptLevel = Ref{Int}(2)
+
 # Wgatever the relevant highest version from our LLVM is within NVPTX.td
 # Or more specifically looking at clang/lib/Driver/ToolChains/Cuda.cpp:684
 #  We see relevant ptx version is CUDA 12.6 -> 85
@@ -1540,13 +1573,17 @@ function compile_mlir!(
     args,
     compile_options::CompileOptions,
     callcache=default_callcache(),
-    sdycache=default_sdycache();
+    sdycache=default_sdycache(),
+    sdygroupidcache=default_sdygroupidcache();
     fn_kwargs=(),
     backend="gpu",
     runtime::Union{Val{:PJRT},Val{:IFRT}},
     legalize_stablehlo_to_mhlo::Bool=false,
+    client=nothing,
     kwargs...,
 )
+    client = client !== nothing ? client : XLA.default_backend()
+
     # Explicitly don't use block! to avoid creating a closure, which creates
     # both compile-time and relocatability issues
 
@@ -1554,6 +1591,7 @@ function compile_mlir!(
     MLIR.IR.activate!(MLIR.IR.body(mod))
     activate_callcache!(callcache)
     activate_sdycache!(sdycache)
+    activate_sdygroupidcache!(sdygroupidcache)
 
     # Save in the TLS whether we are raising.  We identify that condition by
     # checking whether the user set an explicit list of passes, or chose
@@ -1580,6 +1618,7 @@ function compile_mlir!(
     finally
         deactivate_raising!(is_raising)
         deactivate_sdycache!(sdycache)
+        deactivate_sdygroupidcache!(sdygroupidcache)
         deactivate_callcache!(callcache)
         MLIR.IR.deactivate!(MLIR.IR.body(mod))
         MLIR.IR.deactivate!(mod)
@@ -1605,12 +1644,6 @@ function compile_mlir!(
         raise isa Bool && (raise = true)
     end
 
-    concrete_seen = OrderedIdDict()
-
-    concrete_result = make_tracer(
-        concrete_seen, traced_result, ("result",), TracedToConcrete; runtime
-    )
-
     toolkit = XLA.CUDA_DATA_DIR[]
 
     if backend == "cpu" || backend == "tpu"
@@ -1620,25 +1653,27 @@ function compile_mlir!(
         else
             jit = "lower-jit{openmp=$(OpenMP[]) backend=cpu},symbol-dce"
         end
-    elseif DEBUG_KERNEL[]
-        curesulthandler = dlsym(
-            Reactant_jll.libReactantExtra_handle, "ReactantHandleCuResult"
-        )
-        @assert curesulthandler !== nothing
-        curesulthandler = Base.reinterpret(UInt, curesulthandler)
-        kern = if is_raising
-            "lower-kernel{backend=cpu},symbol-dce,canonicalize"
-        else
-            "lower-kernel,canonicalize"
-        end
-        jit = "lower-jit{debug=true cuResultHandlerPtr=$curesulthandler cuOptLevel=$(cuOptLevel[]) cubinFormat=$(cubinFormat[]) indexBitWidth=$(cuindexBitWidth[])  cubinChip=$(cubinChip[]) cubinFeatures=$(cubinFeatures()) run_init=true toolkitPath=$toolkit},symbol-dce"
     else
         kern = if is_raising
             "lower-kernel{backend=cpu},symbol-dce,canonicalize"
         else
             "lower-kernel,canonicalize"
         end
-        jit = "lower-jit{cuOptLevel=$(cuOptLevel[]) indexBitWidth=$(cuindexBitWidth[]) cubinFormat=$(cubinFormat[]) cubinChip=$(cubinChip[]) cubinFeatures=$(cubinFeatures()) run_init=true toolkitPath=$toolkit},symbol-dce"
+
+        device_properties = XLA.device_properties(XLA.default_device(client))
+        cubinChip = "sm_$(device_properties.major)$(device_properties.minor)"
+
+        if DEBUG_KERNEL[]
+            curesulthandler = dlsym(
+                Reactant_jll.libReactantExtra_handle, "ReactantHandleCuResult"
+            )
+            @assert curesulthandler !== nothing
+            curesulthandler = Base.reinterpret(UInt, curesulthandler)
+            extra_lowerjit_options = "debug=true cuResultHandlerPtr=$curesulthandler "
+        else
+            extra_lowerjit_options = ""
+        end
+        jit = "lower-jit{$(extra_lowerjit_options)cuOptLevel=$(cuOptLevel[]) cubinFormat=$(cubinFormat[]) indexBitWidth=$(cuindexBitWidth[])  cubinChip=$(cubinChip) cubinFeatures=$(cubinFeatures()) run_init=true toolkitPath=$toolkit},symbol-dce"
     end
 
     recognize_comms = true
@@ -1685,7 +1720,7 @@ function compile_mlir!(
         "canonicalize"
     end
 
-    blas_int_width = sizeof(BLAS.BlasInt) * 8
+    blas_int_width = sizeof(BlasInt) * 8
     lower_enzymexla_linalg_pass = "lower-enzymexla-linalg{backend=$backend \
                                    blas_int_width=$blas_int_width}"
 
@@ -1695,6 +1730,8 @@ function compile_mlir!(
         else
             ()
         end
+
+    legal_to_run_shardy_passes = compile_options.optimization_passes === :all
 
     if compile_options.optimization_passes === :all
         run_pass_pipeline!(
@@ -2131,7 +2168,7 @@ function compile_mlir!(
     # shardy passes
     use_shardy_partitioner = false
     result_shardings = missing
-    if is_sharded
+    if is_sharded && legal_to_run_shardy_passes
         module_op = copy(MLIR.IR.Operation(mod))
         mod_copied = MLIR.IR.Module(module_op)
 
@@ -2221,6 +2258,8 @@ function compile_mlir!(
         end
     end
 
+    run_pass_pipeline!(mod, "mark-func-memory-effects", "mark-func-memory-effects")
+
     func_op = MLIR.API.mlirSymbolTableLookup(
         MLIR.IR.SymbolTable(MLIR.IR.Operation(mod)), fnname
     )
@@ -2261,6 +2300,17 @@ function compile_mlir!(
         ]
     end
 
+    if result_shardings !== missing
+        result_shardings_after_masking = eltype(result_shardings)[]
+        for (i, present) in enumerate(results_mask)
+            if present
+                push!(result_shardings_after_masking, result_shardings[i])
+            end
+        end
+    else
+        result_shardings_after_masking = missing
+    end
+
     func3 = MLIR.Dialects.func.func_(;
         sym_name="main",
         function_type=MLIR.IR.FunctionType(in_tys, out_tys2),
@@ -2272,6 +2322,11 @@ function compile_mlir!(
     MLIR.API.mlirRegionTakeBody(MLIR.IR.region(func3, 1), MLIR.IR.region(compiled_f, 1))
 
     push!(MLIR.IR.body(mod), func3)
+
+    mem = MLIR.IR.attr(compiled_f, "enzymexla.memory_effects")
+    if !(mem isa Nothing)
+        MLIR.IR.attr!(func3, "enzymexla.memory_effects", mem)
+    end
 
     MLIR.API.mlirOperationDestroy(compiled_f.operation)
     compiled_f.operation = MLIR.API.MlirOperation(C_NULL)
@@ -2333,6 +2388,10 @@ function compile_mlir!(
         end
     end
 
+    concrete_result = make_tracer(
+        OrderedIdDict(), traced_result, ("result",), TracedToConcrete; runtime
+    )
+
     return Reactant.TracedUtils.CompiledMlirFnResult(
         fnwrapped,
         func3,
@@ -2353,9 +2412,10 @@ function compile_mlir!(
         mlir_fn_res.unique_meshes,
         mlir_fn_res.mutated_args,
         use_shardy_partitioner,
-        result_shardings,
+        result_shardings_after_masking,
         mlir_fn_res.global_device_ids,
         donated_args_mask,
+        Reactant.TracedUtils.is_pure(func3),
     )
 end
 
@@ -3099,7 +3159,6 @@ function codegen_unflatten!(
                 p in Reactant.TracedUtils.get_paths(arg) if length(p) > 0 && p[1] == :args
             ))
 
-            res = :result
             path = path[2:end]
 
             if in(path, keys(result_stores))
@@ -3194,10 +3253,15 @@ function codegen_unflatten!(
     end
 
     # generate return object which stores the concrete results in some arbitrary way
-    return Expr[
-        unresharded_code..., resultgen_code..., :(result = $result_code), unflatten_code...
-    ],
-    used_shardinfo
+    return (
+        Expr[
+            unresharded_code...,
+            resultgen_code...,
+            :(result = $result_code),
+            unflatten_code...,
+        ],
+        used_shardinfo,
+    )
 end
 
 """
@@ -3209,8 +3273,11 @@ Generate Julia code to call the XLA executable.
 
 - `flatten_names`: A list of `Symbol`s representing the names of the flattened linear arguments.
 - `nresults`: The number of results to expect.
+- `is_pure`: Whether the function being compiled is pure (i.e., has no side effects)
 """
-function codegen_xla_call(flatten_names, nresults, is_sharded::Bool, ndevices::Int)
+function codegen_xla_call(
+    flatten_names, nresults, is_sharded::Bool, ndevices::Int, is_pure::Bool
+)
     flatten_buffer_refs = map(n -> :($n.buffer), flatten_names)
 
     base_symbol_name = is_sharded ? Symbol(:result_buffer_m, ndevices, :_) : :result_buffer_
@@ -3219,7 +3286,7 @@ function codegen_xla_call(flatten_names, nresults, is_sharded::Bool, ndevices::I
         :($varname = linearized_results[$i])
     end
 
-    xla_call_code = if nresults == 0
+    xla_call_code = if nresults == 0 && is_pure
         :()
     else
         if is_sharded
@@ -3431,7 +3498,8 @@ function compile_xla(
     context_gc_vector[ctx] = Vector{Union{TracedRArray,TracedRNumber}}(undef, 0)
     @ccall MLIR.API.mlir_c.RegisterDialects(ctx::MLIR.API.MlirContext)::Cvoid
 
-    backend = XLA.platform_name(client !== nothing ? client : XLA.default_backend())
+    client = client !== nothing ? client : XLA.default_backend()
+    backend = XLA.platform_name(client)
 
     if backend == "CUDA"
         backend = "GPU"
@@ -3452,6 +3520,7 @@ function compile_xla(
             compile_options;
             backend,
             runtime=XLA.runtime(client),
+            client,
             kwargs...,
         )
 
@@ -3480,6 +3549,9 @@ function compile_xla(
         else
             module_string = ""
         end
+
+        # Drop some of our attributes
+        run_pass_pipeline!(mod, "drop-unsupported-attributes", "drop_enzymexla_attributes")
 
         if before_xla_optimizations
             exec = nothing
@@ -3564,7 +3636,11 @@ function compile(f, args; kwargs...)
     )
 
     concretized_res_names, xla_call_code = codegen_xla_call(
-        flatten_arg_names, length(linear_results), mlir_fn_res.is_sharded, ndevices
+        flatten_arg_names,
+        length(linear_results),
+        mlir_fn_res.is_sharded,
+        ndevices,
+        mlir_fn_res.is_pure,
     )
 
     shard_info_code, optional_shard_info_code, linear_result_shard_info = codegen_shard_info(
@@ -3661,7 +3737,19 @@ struct Thunk{FTy,tag,IsClosure,ArgTypes,ExecTy,DeviceTy,ClientTy,GD,DAM}
     donated_args_mask::DAM
 end
 
-function Base.show(io::IO, thunk::Thunk{FTy,tag}) where {FTy,tag}
+for fn in (:get_tag, :get_isclosure, :get_compiled_argtypes)
+    @eval $fn(thunk::Thunk) = $fn(typeof(thunk))
+end
+
+function get_compiled_argtypes(::Type{<:Thunk{<:Any,<:Any,<:Any,ArgTypes}}) where {ArgTypes}
+    return ArgTypes
+end
+
+get_tag(::Type{<:Thunk{<:Any,tag}}) where {tag} = tag
+
+get_isclosure(::Type{<:Thunk{<:Any,<:Any,IsClosure}}) where {IsClosure} = IsClosure
+
+function Base.show(io::IO, thunk::Thunk{<:Any,tag}) where {tag}
     return print(io, "Reactant compiled function $(thunk.f) (with tag $(tag))")
 end
 
@@ -3699,24 +3787,13 @@ function Base.showerror(
     )
 end
 
-@generated function (
-    thunk::Thunk{FTy,tag,IsClosure,ArgTypes,ExecTy,DeviceTy,ClientTy,GD,DAM}
-)(
-    args...
-) where {FTy,tag,IsClosure,ArgTypes,ExecTy,DeviceTy,ClientTy,GD,DAM}
+@generated function (thunk::Thunk)(args...)
     FoundTypes = Tuple{args...}
-    if ArgTypes != FoundTypes
-        return quote
-            throw(
-                $(MisMatchedThunkTypeError{
-                    Thunk{FTy,tag,IsClosure,ArgTypes,ExecTy,DeviceTy,ClientTy,GD,DAM},
-                    FoundTypes,
-                }()),
-            )
-        end
+    if get_compiled_argtypes(thunk) != FoundTypes
+        return :(throw($(MisMatchedThunkTypeError{thunk,FoundTypes}())))
     end
-    body = __thunk_fwd_body_cache[tag]
-    if IsClosure
+    body = __thunk_fwd_body_cache[get_tag(thunk)]
+    if get_isclosure(thunk)
         return quote
             args = (thunk.f, args...)
             $body
@@ -3753,7 +3830,7 @@ function register_thunk(
     )
 end
 
-for cache_type in (:callcache, :sdycache)
+for cache_type in (:callcache, :sdycache, :sdygroupidcache)
     activate_fn = Symbol(:activate_, cache_type, :!)
     deactivate_fn = Symbol(:deactivate_, cache_type, :!)
     has_fn = Symbol(:_has_, cache_type)
@@ -3798,6 +3875,14 @@ function default_sdycache()
             mesh::Sharding.Mesh,
         }
     }()
+end
+
+mutable struct SdyGroupIDCounter{T}
+    @atomic group_id::T
+end
+
+function default_sdygroupidcache()
+    return SdyGroupIDCounter{Int}(0), Base.IdDict{Union{TracedRArray,TracedRNumber},Int}()
 end
 
 function default_callcache()

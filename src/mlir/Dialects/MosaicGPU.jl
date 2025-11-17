@@ -32,6 +32,25 @@ function arrive_expect_tx(barrier::Value; expect_tx, location=Location())
     )
 end
 
+function arrive(barrier::Value; orders_tensor_core, location=Location())
+    op_ty_results = IR.Type[]
+    operands = Value[barrier,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[namedattribute("orders_tensor_core", orders_tensor_core),]
+
+    return create_operation(
+        "mosaic_gpu.arrive",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
 """
 `async_load`
 
@@ -120,6 +139,58 @@ function async_load_tmem(
         attributes,
         results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
         result_inference=(length(op_ty_results) == 0 ? true : false),
+    )
+end
+
+"""
+`async_prefetch`
+
+Schedules an async prefetch of the contents of the `source` MemRef in GMEM
+to the L2 cache, making subsequent loads of the same data from GMEM faster.
+
+The `indices` and `slice_lengths` inputs define what slice of the GMEM
+`source` is going to be prefetched. Both `indices` and `slice_lengths` must
+have a length equal to the rank of the `source`. The values in `indices` are
+the starting indices of each dimension and the values in `slice_lengths` are
+the lengths. Providing -1 in `slice_lengths` indicates that the slice length
+is 1.
+
+The `collective` attribute can be provided to partition the prefetch over
+multiple blocks in a cluster.
+
+The `predicate` allows scheduling the prefetch conditionally.
+"""
+function async_prefetch(
+    source::Value,
+    indices::Vector{Value},
+    predicate=nothing::Union{Nothing,Value};
+    slice_lengths,
+    collective,
+    location=Location(),
+)
+    op_ty_results = IR.Type[]
+    operands = Value[source, indices...]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[
+        namedattribute("slice_lengths", slice_lengths),
+        namedattribute("collective", collective),
+    ]
+    !isnothing(predicate) && push!(operands, predicate)
+    push!(
+        attributes,
+        operandsegmentsizes([1, length(indices), (predicate == nothing) ? 0 : 1]),
+    )
+
+    return create_operation(
+        "mosaic_gpu.async_prefetch",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
     )
 end
 
@@ -229,6 +300,31 @@ function broadcast_in_dim(
 end
 
 """
+`broadcasted_iota`
+
+Creates an array that has the specified shape and holds values starting at
+zero and incrementing by one along the specified dimension.
+"""
+function broadcasted_iota(; result_0::IR.Type, dimension, location=Location())
+    op_ty_results = IR.Type[result_0,]
+    operands = Value[]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[namedattribute("dimension", dimension),]
+
+    return create_operation(
+        "mosaic_gpu.broadcasted_iota",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+"""
 `custom_primitive`
 
 Allows defining a custom Mosaic GPU primitive.
@@ -270,23 +366,44 @@ function custom_primitive(
     )
 end
 
+function debug_print(value::Value; format, location=Location())
+    op_ty_results = IR.Type[]
+    operands = Value[value,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[namedattribute("format", format),]
+
+    return create_operation(
+        "mosaic_gpu.debug_print",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
 """
 `initialize_barrier`
 
-Initializes a memref of barriers each meant to synchronize exactly
+Initializes `num_barriers` barriers each meant to synchronize exactly
 `arrival_count` threads.
 
-The base pointer of the result memref corresponds to `base_pointer`, which
-must be a pointer to a shared memory location.
+`base_pointer` must be a pointer to a shared memory location.
 """
 function initialize_barrier(
-    base_pointer::Value; barriers_ref::IR.Type, arrival_count, location=Location()
+    base_pointer::Value; arrival_count, num_barriers, location=Location()
 )
-    op_ty_results = IR.Type[barriers_ref,]
+    op_ty_results = IR.Type[]
     operands = Value[base_pointer,]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("arrival_count", arrival_count),]
+    attributes = NamedAttribute[
+        namedattribute("arrival_count", arrival_count),
+        namedattribute("num_barriers", num_barriers),
+    ]
 
     return create_operation(
         "mosaic_gpu.initialize_barrier",
@@ -350,6 +467,25 @@ function optimization_barrier(
     )
 end
 
+function print_layout(value::Value; format, location=Location())
+    op_ty_results = IR.Type[]
+    operands = Value[value,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[namedattribute("format", format),]
+
+    return create_operation(
+        "mosaic_gpu.print_layout",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
 """
 `return_`
 
@@ -388,6 +524,32 @@ function slice_smem(offset::Value; result_0::IR.Type, location=Location())
 
     return create_operation(
         "mosaic_gpu.slice_smem",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+"""
+`slice_tmem`
+
+The principal use case for this op is to do a single TMEM allocation and
+slice it into multiple smaller TMEM references. `source` is the large TMEM
+allocation and `offset` is the number of columns to start slicing from.
+"""
+function slice_tmem(source::Value; result_0::IR.Type, offset, location=Location())
+    op_ty_results = IR.Type[result_0,]
+    operands = Value[source,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[namedattribute("offset", offset),]
+
+    return create_operation(
+        "mosaic_gpu.slice_tmem",
         location;
         operands,
         owned_regions,
@@ -447,19 +609,12 @@ function tcgen05_mma(
     attributes = NamedAttribute[]
     !isnothing(a_scale) && push!(operands, a_scale)
     !isnothing(b_scale) && push!(operands, b_scale)
-    push!(attributes, operandsegmentsizes([
-        1,
-        1,
-        1,
-        1,
-        if (a_scale == nothing)
-            0
-        elseif 1(b_scale == nothing)
-            0
-        else
-            1
-        end,
-    ]))
+    push!(
+        attributes,
+        operandsegmentsizes([
+            1, 1, 1, 1, (a_scale == nothing) ? 0 : 1, (b_scale == nothing) ? 0 : 1
+        ]),
+    )
     !isnothing(collective) && push!(attributes, namedattribute("collective", collective))
 
     return create_operation(
@@ -586,6 +741,74 @@ function tmem_relinquish_alloc_permit(; collective=nothing, location=Location())
 
     return create_operation(
         "mosaic_gpu.tmem_relinquish_alloc_permit",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+"""
+`vector_load`
+
+Similar to `vector.load` (vector dialect) but supports loading from
+non-contiguous memory.
+
+If `optimized` is true, raises an error if we cannot generate an optimised
+transfer. If unset, fall back to a non-optimized transfer if unable to
+generate an optimized transfer.
+"""
+function vector_load(
+    source::Value;
+    result_0=nothing::Union{Nothing,IR.Type},
+    optimized=nothing,
+    location=Location(),
+)
+    op_ty_results = IR.Type[]
+    operands = Value[source,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+    !isnothing(result_0) && push!(op_ty_results, result_0)
+    !isnothing(optimized) && push!(attributes, namedattribute("optimized", optimized))
+
+    return create_operation(
+        "mosaic_gpu.vector_load",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
+    )
+end
+
+"""
+`vector_store`
+
+Similar to `vector.store` (vector dialect) but supports storing to
+non-contiguous memory.
+
+If `optimized` is true, raises an error if we cannot generate an optimised
+transfer. If unset, fall back to a non-optimized transfer if unable to
+generate an optimized transfer.
+"""
+function vector_store(
+    valueToStore::Value, destination::Value; optimized=nothing, location=Location()
+)
+    op_ty_results = IR.Type[]
+    operands = Value[valueToStore, destination]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+    !isnothing(optimized) && push!(attributes, namedattribute("optimized", optimized))
+
+    return create_operation(
+        "mosaic_gpu.vector_store",
         location;
         operands,
         owned_regions,

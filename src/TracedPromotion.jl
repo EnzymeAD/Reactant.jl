@@ -23,7 +23,8 @@ function promote_to(
 end
 
 function promote_to(
-    ::Type{TracedRArray{T,1}}, rhs::Union{UnitRange,UnitRange{<:TracedRNumber}}
+    ::Type{TracedRArray{T,1}},
+    rhs::Union{UnitRange,UnitRange{<:TracedRNumber},<:TracedUnitRange},
 ) where {T}
     return @opcall add(
         @opcall(iota(eltype(rhs), [length(rhs)]; iota_dimension=1)),
@@ -34,7 +35,11 @@ end
 function promote_to(
     ::Type{TracedRArray{T,1}},
     rhs::Union{
-        StepRange,StepRangeLen,StepRange{<:TracedRNumber},StepRangeLen{<:TracedRNumber}
+        StepRange,
+        StepRangeLen,
+        StepRange{<:TracedRNumber},
+        StepRangeLen{<:TracedRNumber},
+        TracedStepRangeLen,
     },
 ) where {T}
     step_arr = broadcast_to_size(step(rhs), (length(rhs),))
@@ -44,7 +49,11 @@ function promote_to(
 end
 
 function promote_to(::Type{TracedRArray{T,1}}, rhs::Base.OneTo) where {T}
-    return promote_to(TracedRArray{T,1}, 1:last(rhs))
+    return promote_to(TracedRArray{T,1}, first(rhs):last(rhs))
+end
+
+function promote_to(::Type{TracedRArray{T,N}}, rhs::LinearAlgebra.Diagonal) where {T,N}
+    return LinearAlgebra.diagm(promote_to(TracedRArray{T,1}, rhs.diag))
 end
 
 function promote_to(::Type{TracedRArray{T,N}}, rhs::AbstractArray{<:Any,N}) where {T,N}
@@ -74,7 +83,14 @@ function promote_to(::Type{TracedRNumber{T}}, rhs::TracedRArray{T2,0}) where {T,
 end
 
 function promote_to(::Type{TracedRNumber{T}}, rhs::Number) where {T}
-    return promote_to(TracedRNumber{T}, @opcall(fill(T(rhs))))
+    res = @opcall(fill(rhs))
+    return @opcall convert(
+        TracedRNumber{T}, TracedRNumber{unwrapped_eltype(res)}((), res.mlir_data)
+    )
+end
+
+function ReactantCore.promote_to_traced(x)
+    return promote_to(TracedRNumber{unwrapped_eltype(typeof(x))}, x)
 end
 
 ## Promote to a Traced Type and broadcast to a given size

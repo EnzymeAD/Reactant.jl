@@ -13,6 +13,15 @@ import ...IR:
 import ..Dialects: namedattribute, operandsegmentsizes
 import ...API
 
+"""
+`barrier0`
+
+The `nvvm.barrier0` operation is a convenience operation that performs barrier 
+synchronization and communication within a CTA (Cooperative Thread Array) using 
+barrier ID 0. It is functionally equivalent to `nvvm.barrier` or `nvvm.barrier id=0`. 
+
+[For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#parallel-synchronization-and-communication-instructions-bar)
+"""
 function barrier0(; location=Location())
     op_ty_results = IR.Type[]
     operands = Value[]
@@ -65,6 +74,35 @@ function barrier_arrive(
     )
 end
 
+"""
+`barrier`
+
+The `nvvm.barrier` operation performs barrier synchronization and communication 
+within a CTA (Cooperative Thread Array). It causes executing threads to wait for 
+all non-exited threads participating in the barrier to arrive.
+
+The operation takes two optional operands:
+
+- `barrierId`: Specifies a logical barrier resource with value 0 through 15. 
+  Each CTA instance has sixteen barriers numbered 0..15. Defaults to 0 if not specified.
+- `numberOfThreads`: Specifies the number of threads participating in the barrier. 
+  When specified, the value must be a multiple of the warp size. If not specified, 
+  all threads in the CTA participate in the barrier.
+
+The barrier operation guarantees that when the barrier completes, prior memory 
+accesses requested by participating threads are performed relative to all threads 
+participating in the barrier. It also ensures that no new memory access is 
+requested by participating threads before the barrier completes.
+
+When a barrier completes, the waiting threads are restarted without delay, and 
+the barrier is reinitialized so that it can be immediately reused.
+
+This operation generates an aligned barrier, indicating that all threads in the CTA 
+will execute the same barrier instruction. Behavior is undefined if all threads in the 
+CTA do not reach this instruction.
+
+[For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#parallel-synchronization-and-communication-instructions-bar)
+"""
 function barrier(
     barrierId=nothing::Union{Nothing,Value};
     numberOfThreads=nothing::Union{Nothing,Value},
@@ -77,15 +115,12 @@ function barrier(
     attributes = NamedAttribute[]
     !isnothing(barrierId) && push!(operands, barrierId)
     !isnothing(numberOfThreads) && push!(operands, numberOfThreads)
-    push!(attributes, operandsegmentsizes([
-        if (barrierId == nothing)
-            0
-        elseif 1(numberOfThreads == nothing)
-            0
-        else
-            1
-        end,
-    ]))
+    push!(
+        attributes,
+        operandsegmentsizes([
+            (barrierId == nothing) ? 0 : 1, (numberOfThreads == nothing) ? 0 : 1
+        ]),
+    )
 
     return create_operation(
         "nvvm.barrier",
@@ -659,6 +694,86 @@ function read_ptx_sreg_clusterid_z(; res::IR.Type, range=nothing, location=Locat
 end
 
 """
+`clusterlaunchcontrol_query_cancel`
+
+`clusterlaunchcontrol.query.cancel` queries the response of a 
+`clusterlaunchcontrol.try.cancel` operation specified by operand 
+`try_cancel_response`.
+
+Operand `query_type` specifies the type of query to perform and can be one 
+of the following:
+- `is_canceled` : Returns true if the try cancel request succeeded, 
+and false otherwise.
+- `get_first_cta_id_{x/y/z}` : Returns the x, y, or z coordinate of the 
+first CTA in the canceled cluster. Behaviour is defined only if the try 
+cancel request succeeded. 
+
+[For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/#parallel-synchronization-and-communication-instructions-clusterlaunchcontrol-query-cancel)
+"""
+function clusterlaunchcontrol_query_cancel(
+    try_cancel_response::Value; res::IR.Type, query_type, location=Location()
+)
+    op_ty_results = IR.Type[res,]
+    operands = Value[try_cancel_response,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[namedattribute("query_type", query_type),]
+
+    return create_operation(
+        "nvvm.clusterlaunchcontrol.query.cancel",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+"""
+`clusterlaunchcontrol_try_cancel`
+
+`clusterlaunchcontrol.try.cancel` requests atomically canceling the launch 
+of a cluster that has not started running yet. It asynchronously writes an 
+opaque response to shared memory indicating whether the operation succeeded 
+or failed.
+
+Operand `smemAddress` specifies the naturally aligned address of the 
+16-byte wide shared memory location where the request\'s response is written.
+
+Operand `mbarrier` specifies the mbarrier object used to track the 
+completion of the asynchronous operation.
+
+If `multicast` is specified, the response is asynchronously written to the 
+corresponding local shared memory location (specifed by `addr`) of each CTA 
+in the requesting cluster.
+
+[For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/#parallel-synchronization-and-communication-instructions-clusterlaunchcontrol-try-cancel)
+"""
+function clusterlaunchcontrol_try_cancel(
+    smemAddress::Value, mbarrier::Value; multicast=nothing, location=Location()
+)
+    op_ty_results = IR.Type[]
+    operands = Value[smemAddress, mbarrier]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+    !isnothing(multicast) && push!(attributes, namedattribute("multicast", multicast))
+
+    return create_operation(
+        "nvvm.clusterlaunchcontrol.try.cancel",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+"""
 `cluster_wait`
 
 The `cluster.wait` causes the executing thread to wait for all non-exited threads
@@ -706,18 +821,146 @@ respectively.
 [For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-cvt)
 """
 function convert_bf16x2_to_f8x2(
-    a::Value; dst::IR.Type, type, rnd=nothing, sat=nothing, location=Location()
+    a::Value; dst::IR.Type, rnd=nothing, sat=nothing, dstTy, location=Location()
 )
     op_ty_results = IR.Type[dst,]
     operands = Value[a,]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("type", type),]
+    attributes = NamedAttribute[namedattribute("dstTy", dstTy),]
     !isnothing(rnd) && push!(attributes, namedattribute("rnd", rnd))
     !isnothing(sat) && push!(attributes, namedattribute("sat", sat))
 
     return create_operation(
         "nvvm.convert.bf16x2.to.f8x2",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+"""
+`convert_f4x2_to_f16x2`
+
+This Op converts the given f4 inputs in a packed i8 to f16.
+
+The result `dst` is represented as a vector of f16 elements.
+The `relu` attribute, when set, lowers to the \'.relu\' variant of 
+the cvt instruction.\"
+
+[For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-cvt)
+"""
+function convert_f4x2_to_f16x2(
+    src::Value; dst::IR.Type, relu=nothing, srcType, location=Location()
+)
+    op_ty_results = IR.Type[dst,]
+    operands = Value[src,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[namedattribute("srcType", srcType),]
+    !isnothing(relu) && push!(attributes, namedattribute("relu", relu))
+
+    return create_operation(
+        "nvvm.convert.f4x2.to.f16x2",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+"""
+`convert_f6x2_to_f16x2`
+
+This Op converts the given f6 inputs in a i8x2 vector to f16.
+
+The result `dst` is represented as a vector of f16 elements.
+The `relu` attribute, when set, lowers to the \'.relu\' variant of 
+the cvt instruction.\"
+
+[For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-cvt)
+"""
+function convert_f6x2_to_f16x2(
+    src::Value; dst::IR.Type, relu=nothing, srcType, location=Location()
+)
+    op_ty_results = IR.Type[dst,]
+    operands = Value[src,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[namedattribute("srcType", srcType),]
+    !isnothing(relu) && push!(attributes, namedattribute("relu", relu))
+
+    return create_operation(
+        "nvvm.convert.f6x2.to.f16x2",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+"""
+`convert_f8x2_to_bf16x2`
+
+This Op converts the given f8 inputs in a i8x2 vector to bf16.
+
+The result `dst` is represented as a vector of bf16 elements.
+
+
+[For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-cvt)
+"""
+function convert_f8x2_to_bf16x2(src::Value; dst::IR.Type, srcType, location=Location())
+    op_ty_results = IR.Type[dst,]
+    operands = Value[src,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[namedattribute("srcType", srcType),]
+
+    return create_operation(
+        "nvvm.convert.f8x2.to.bf16x2",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+"""
+`convert_f8x2_to_f16x2`
+
+This Op converts the given f8 inputs in a i8x2 vector to f16.
+
+The result `dst` is represented as a vector of f16 elements.
+The `relu` attribute, when set, lowers to the \'.relu\' variant of 
+the cvt instruction.\"
+
+[For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-cvt)
+"""
+function convert_f8x2_to_f16x2(
+    src::Value; dst::IR.Type, relu=nothing, srcType, location=Location()
+)
+    op_ty_results = IR.Type[dst,]
+    operands = Value[src,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[namedattribute("srcType", srcType),]
+    !isnothing(relu) && push!(attributes, namedattribute("relu", relu))
+
+    return create_operation(
+        "nvvm.convert.f8x2.to.f16x2",
         location;
         operands,
         owned_regions,
@@ -747,17 +990,94 @@ the cvt instruction.
 [For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-cvt)
 """
 function convert_f16x2_to_f8x2(
-    a::Value; dst::IR.Type, type, relu=nothing, location=Location()
+    a::Value; dst::IR.Type, relu=nothing, dstTy, location=Location()
 )
     op_ty_results = IR.Type[dst,]
     operands = Value[a,]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("type", type),]
+    attributes = NamedAttribute[namedattribute("dstTy", dstTy),]
     !isnothing(relu) && push!(attributes, namedattribute("relu", relu))
 
     return create_operation(
         "nvvm.convert.f16x2.to.f8x2",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+"""
+`convert_f32x2_to_bf16x2`
+
+Converts two F32 values to packed bf16x2 format using stochastic 
+rounding (.rs) mode with randomness provided by the `rbits` parameter. The 
+`relu` attribute clamps negative results to 0. The `sat` attribute determines 
+saturation behavior. The `src_hi` and `src_lo` parameters correspond to operands 
+`a` and `b` in the PTX ISA, respectively.
+
+[For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-cvt)
+"""
+function convert_f32x2_to_bf16x2(
+    src_hi::Value,
+    src_lo::Value,
+    rbits::Value;
+    dst::IR.Type,
+    rnd=nothing,
+    sat=nothing,
+    relu=nothing,
+    location=Location(),
+)
+    op_ty_results = IR.Type[dst,]
+    operands = Value[src_hi, src_lo, rbits]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+    !isnothing(rnd) && push!(attributes, namedattribute("rnd", rnd))
+    !isnothing(sat) && push!(attributes, namedattribute("sat", sat))
+    !isnothing(relu) && push!(attributes, namedattribute("relu", relu))
+
+    return create_operation(
+        "nvvm.convert.f32x2.to.bf16x2",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+"""
+`convert_f32x2_to_f4x2`
+
+This Op converts each of the given float inputs to the specified fp4 type.
+The result `dst` is returned as an i8 type where the converted values are 
+packed such that the value converted from `a` is stored in the upper 4 bits 
+of `dst` and the value converted from `b` is stored in the lower 4 bits of 
+`dst`.
+The `relu` attribute, when set, lowers to the \'.relu\' variant of
+the cvt instruction.
+
+[For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-cvt)
+"""
+function convert_f32x2_to_f4x2(
+    a::Value, b::Value; dst::IR.Type, relu=nothing, dstTy, location=Location()
+)
+    op_ty_results = IR.Type[dst,]
+    operands = Value[a, b]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[namedattribute("dstTy", dstTy),]
+    !isnothing(relu) && push!(attributes, namedattribute("relu", relu))
+
+    return create_operation(
+        "nvvm.convert.f32x2.to.f4x2",
         location;
         operands,
         owned_regions,
@@ -786,13 +1106,13 @@ the cvt instruction.
 [For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-cvt)
 """
 function convert_f32x2_to_f6x2(
-    a::Value, b::Value; dst::IR.Type, type, relu=nothing, location=Location()
+    a::Value, b::Value; dst::IR.Type, relu=nothing, dstTy, location=Location()
 )
     op_ty_results = IR.Type[dst,]
     operands = Value[a, b]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("type", type),]
+    attributes = NamedAttribute[namedattribute("dstTy", dstTy),]
     !isnothing(relu) && push!(attributes, namedattribute("relu", relu))
 
     return create_operation(
@@ -828,23 +1148,167 @@ function convert_f32x2_to_f8x2(
     a::Value,
     b::Value;
     dst::IR.Type,
-    type,
     rnd=nothing,
     sat=nothing,
     relu=nothing,
+    dstTy,
     location=Location(),
 )
     op_ty_results = IR.Type[dst,]
     operands = Value[a, b]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("type", type),]
+    attributes = NamedAttribute[namedattribute("dstTy", dstTy),]
     !isnothing(rnd) && push!(attributes, namedattribute("rnd", rnd))
     !isnothing(sat) && push!(attributes, namedattribute("sat", sat))
     !isnothing(relu) && push!(attributes, namedattribute("relu", relu))
 
     return create_operation(
         "nvvm.convert.f32x2.to.f8x2",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+"""
+`convert_f32x2_to_f16x2`
+
+Converts two F32 values to packed f16x2 format using stochastic 
+rounding (.rs) mode with randomness provided by the `rbits` parameter. The 
+`relu` attribute clamps negative results to 0. The `sat` attribute determines 
+saturation behavior. The `src_hi` and `src_lo` parameters correspond to operands 
+`a` and `b` in the PTX ISA, respectively.
+
+[For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-cvt)
+"""
+function convert_f32x2_to_f16x2(
+    src_hi::Value,
+    src_lo::Value,
+    rbits::Value;
+    dst::IR.Type,
+    rnd=nothing,
+    sat=nothing,
+    relu=nothing,
+    location=Location(),
+)
+    op_ty_results = IR.Type[dst,]
+    operands = Value[src_hi, src_lo, rbits]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+    !isnothing(rnd) && push!(attributes, namedattribute("rnd", rnd))
+    !isnothing(sat) && push!(attributes, namedattribute("sat", sat))
+    !isnothing(relu) && push!(attributes, namedattribute("relu", relu))
+
+    return create_operation(
+        "nvvm.convert.f32x2.to.f16x2",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+"""
+`convert_f32x4_to_f4x4`
+
+Converts a vector<4xf32> to packed f4x4 format using 
+stochastic rounding (.rs) mode with SATFINITE saturation. Randomness is 
+provided by the `rbits` parameter. The `dstTy` attribute specifies the 
+target floating-point format. The `relu` attribute clamps negative results to 0.
+
+Note: These operations always use RS rounding mode and SATFINITE saturation mode.
+
+[For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-cvt)
+"""
+function convert_f32x4_to_f4x4(
+    src::Value, rbits::Value; dst::IR.Type, relu=nothing, dstTy, location=Location()
+)
+    op_ty_results = IR.Type[dst,]
+    operands = Value[src, rbits]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[namedattribute("dstTy", dstTy),]
+    !isnothing(relu) && push!(attributes, namedattribute("relu", relu))
+
+    return create_operation(
+        "nvvm.convert.f32x4.to.f4x4",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+"""
+`convert_f32x4_to_f6x4`
+
+Converts a vector<4xf32> to packed f6x4 format using 
+stochastic rounding (.rs) mode with SATFINITE saturation. Randomness is 
+provided by the `rbits` parameter. The `dstTy` attribute specifies the 
+target floating-point format. The `relu` attribute clamps negative results to 0.
+
+Note: These operations always use RS rounding mode and SATFINITE saturation mode.
+
+[For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-cvt)
+"""
+function convert_f32x4_to_f6x4(
+    src::Value, rbits::Value; dst::IR.Type, relu=nothing, dstTy, location=Location()
+)
+    op_ty_results = IR.Type[dst,]
+    operands = Value[src, rbits]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[namedattribute("dstTy", dstTy),]
+    !isnothing(relu) && push!(attributes, namedattribute("relu", relu))
+
+    return create_operation(
+        "nvvm.convert.f32x4.to.f6x4",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+"""
+`convert_f32x4_to_f8x4`
+
+Converts a vector<4xf32> to packed f8x4 format using 
+stochastic rounding (.rs) mode with SATFINITE saturation. Randomness is 
+provided by the `rbits` parameter. The `dstTy` attribute specifies the 
+target floating-point format. The `relu` attribute clamps negative results to 0.
+
+Note: These operations always use RS rounding mode and SATFINITE saturation mode.
+
+[For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-cvt)
+"""
+function convert_f32x4_to_f8x4(
+    src::Value, rbits::Value; dst::IR.Type, relu=nothing, dstTy, location=Location()
+)
+    op_ty_results = IR.Type[dst,]
+    operands = Value[src, rbits]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[namedattribute("dstTy", dstTy),]
+    !isnothing(relu) && push!(attributes, namedattribute("relu", relu))
+
+    return create_operation(
+        "nvvm.convert.f32x4.to.f8x4",
         location;
         operands,
         owned_regions,
@@ -950,19 +1414,12 @@ function cp_async_bulk_shared_cluster_global(
     attributes = NamedAttribute[]
     !isnothing(multicastMask) && push!(operands, multicastMask)
     !isnothing(l2CacheHint) && push!(operands, l2CacheHint)
-    push!(attributes, operandsegmentsizes([
-        1,
-        1,
-        1,
-        1,
-        if (multicastMask == nothing)
-            0
-        elseif 1(l2CacheHint == nothing)
-            0
-        else
-            1
-        end,
-    ]))
+    push!(
+        attributes,
+        operandsegmentsizes([
+            1, 1, 1, 1, (multicastMask == nothing) ? 0 : 1, (l2CacheHint == nothing) ? 0 : 1
+        ]),
+    )
 
     return create_operation(
         "nvvm.cp.async.bulk.shared.cluster.global",
@@ -1068,18 +1525,12 @@ function cp_async_bulk_global_shared_cta(
     attributes = NamedAttribute[]
     !isnothing(l2CacheHint) && push!(operands, l2CacheHint)
     !isnothing(byteMask) && push!(operands, byteMask)
-    push!(attributes, operandsegmentsizes([
-        1,
-        1,
-        1,
-        if (l2CacheHint == nothing)
-            0
-        elseif 1(byteMask == nothing)
-            0
-        else
-            1
-        end,
-    ]))
+    push!(
+        attributes,
+        operandsegmentsizes([
+            1, 1, 1, (l2CacheHint == nothing) ? 0 : 1, (byteMask == nothing) ? 0 : 1
+        ]),
+    )
 
     return create_operation(
         "nvvm.cp.async.bulk.global.shared.cta",
@@ -1126,16 +1577,8 @@ end
 `cp_async_bulk_tensor_shared_cluster_global`
 
 Initiates an asynchronous copy operation on the tensor data from global 
-memory to shared memory. 
-
-The Op operates has two load modes:
-1) Tiled Mode: It\'s the default mode. The source multi-dimensional tensor 
-layout is preserved at the destination. 
-
-2) Im2col Mode: This mode is used when `im2colOffsets` operands are present.
-the elements in the Bounding Box of the source tensor are rearranged into
-columns at the destination. In this mode, the tensor has to be at least 
-3-dimensional. 
+memory to shared::cluster (or) shared::cta memory. This Op supports all
+the load modes specified in `TMALoadMode`.
 
 The `multicastMask` operand is optional. When it is present, the Op copies
 data from global memory to shared memory of multiple CTAs in the cluster.
@@ -1145,6 +1588,10 @@ the `nvvm.read.ptx.sreg.ctaid` of the destination CTA.
 
 The `l2CacheHint` operand is optional, and it is used to specify cache 
 eviction policy that may be used during the memory access.
+
+When the `isCTAOnly` attribute is set to true, the destination is
+shared::cta only. Hence, `multicastMask` and `CTAGroup` are not applicable
+when `isCTAOnly` is true.
 
 [For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-cp-async-bulk-tensor)
 """
@@ -1157,6 +1604,9 @@ function cp_async_bulk_tensor_shared_cluster_global(
     multicastMask=nothing::Union{Nothing,Value};
     l2CacheHint=nothing::Union{Nothing,Value},
     predicate=nothing::Union{Nothing,Value},
+    mode=nothing,
+    isCTAOnly=nothing,
+    group=nothing,
     location=Location(),
 )
     op_ty_results = IR.Type[]
@@ -1175,17 +1625,14 @@ function cp_async_bulk_tensor_shared_cluster_global(
             length(coordinates),
             1,
             length(im2colOffsets),
-            if (multicastMask == nothing)
-                0
-            elseif 1(l2CacheHint == nothing)
-                0
-            elseif 1(predicate == nothing)
-                0
-            else
-                1
-            end,
+            (multicastMask == nothing) ? 0 : 1,
+            (l2CacheHint == nothing) ? 0 : 1,
+            (predicate == nothing) ? 0 : 1,
         ]),
     )
+    !isnothing(mode) && push!(attributes, namedattribute("mode", mode))
+    !isnothing(isCTAOnly) && push!(attributes, namedattribute("isCTAOnly", isCTAOnly))
+    !isnothing(group) && push!(attributes, namedattribute("group", group))
 
     return create_operation(
         "nvvm.cp.async.bulk.tensor.shared.cluster.global",
@@ -1203,16 +1650,8 @@ end
 `cp_async_bulk_tensor_prefetch`
 
 Initiates an asynchronous prefetch operation on the tensor data from global
-memory to L2 cache.
-
-The Op has two modes:
-1) Tiled Mode: It\'s the default mode. The source multi-dimensional tensor
-layout is preserved at the destination.
-
-2) Im2col Mode: This mode is used when `im2colOffsets` operands are present.
-the elements in the Bounding Box of the source tensor are rearranged into
-columns at the destination. In this mode, the tensor has to be at least
-3-dimensional.
+memory to L2 cache. This Op supports all the load modes specified in
+`TMALoadMode`.
 
 The `l2CacheHint` operand is optional, and it is used to specify cache
 eviction policy that may be used during the memory access.
@@ -1224,6 +1663,7 @@ function cp_async_bulk_tensor_prefetch(
     coordinates::Vector{Value},
     im2colOffsets::Vector{Value},
     l2CacheHint=nothing::Union{Nothing,Value};
+    mode=nothing,
     location=Location(),
 )
     op_ty_results = IR.Type[]
@@ -1238,6 +1678,7 @@ function cp_async_bulk_tensor_prefetch(
             1, length(coordinates), length(im2colOffsets), (l2CacheHint == nothing) ? 0 : 1
         ]),
     )
+    !isnothing(mode) && push!(attributes, namedattribute("mode", mode))
 
     return create_operation(
         "nvvm.cp.async.bulk.tensor.prefetch",
@@ -1300,11 +1741,25 @@ function cp_async_bulk_tensor_reduce(
     )
 end
 
+"""
+`cp_async_bulk_tensor_global_shared_cta`
+
+Initiates an asynchronous copy of the tensor data from shared::cta
+memory to global memory. This Op supports all the store modes specified in
+`TMAStoreMode`.
+
+The `l2CacheHint` operand is optional, and it is used to specify cache
+eviction policy that may be used during the memory access.
+
+[For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/#data-movement-and-conversion-instructions-cp-async-bulk-tensor)
+"""
 function cp_async_bulk_tensor_global_shared_cta(
     tmaDescriptor::Value,
     srcMem::Value,
     coordinates::Vector{Value},
-    predicate=nothing::Union{Nothing,Value};
+    l2CacheHint=nothing::Union{Nothing,Value};
+    predicate=nothing::Union{Nothing,Value},
+    mode=nothing,
     location=Location(),
 )
     op_ty_results = IR.Type[]
@@ -1312,11 +1767,19 @@ function cp_async_bulk_tensor_global_shared_cta(
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
+    !isnothing(l2CacheHint) && push!(operands, l2CacheHint)
     !isnothing(predicate) && push!(operands, predicate)
     push!(
         attributes,
-        operandsegmentsizes([1, 1, length(coordinates), (predicate == nothing) ? 0 : 1]),
+        operandsegmentsizes([
+            1,
+            1,
+            length(coordinates),
+            (l2CacheHint == nothing) ? 0 : 1,
+            (predicate == nothing) ? 0 : 1,
+        ]),
     )
+    !isnothing(mode) && push!(attributes, namedattribute("mode", mode))
 
     return create_operation(
         "nvvm.cp.async.bulk.tensor.global.shared.cta",
@@ -1387,11 +1850,13 @@ end
 """
 `cp_async_mbarrier_arrive`
 
-The `cp.async.mbarrier.arrive` Op makes the mbarrier object track
+The `cp.async.mbarrier.arrive` Op makes the *mbarrier object* track
 all prior cp.async operations initiated by the executing thread.
-The `addr` operand specifies the address of the mbarrier object
-in generic address space. The `noinc` attr impacts how the
-mbarrier\'s state is updated.
+The `addr` operand specifies the address of the *mbarrier object*
+in generic or shared::cta address space. When it is generic, the
+underlying memory should fall within the shared::cta space;
+otherwise the behavior is undefined. The `noinc` attr impacts
+how the mbarrier\'s state is updated.
 
 [For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#parallel-synchronization-and-communication-instructions-cp-async-mbarrier-arrive)
 """
@@ -1405,37 +1870,6 @@ function cp_async_mbarrier_arrive(addr::Value; noinc=nothing, location=Location(
 
     return create_operation(
         "nvvm.cp.async.mbarrier.arrive",
-        location;
-        operands,
-        owned_regions,
-        successors,
-        attributes,
-        results=op_ty_results,
-        result_inference=false,
-    )
-end
-
-"""
-`cp_async_mbarrier_arrive_shared`
-
-The `cp.async.mbarrier.arrive.shared` Op makes the mbarrier object
-track all prior cp.async operations initiated by the executing thread.
-The `addr` operand specifies the address of the mbarrier object in
-shared memory. The `noinc` attr impacts how the mbarrier\'s state
-is updated. 
-
-[For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#parallel-synchronization-and-communication-instructions-cp-async-mbarrier-arrive)
-"""
-function cp_async_mbarrier_arrive_shared(addr::Value; noinc=nothing, location=Location())
-    op_ty_results = IR.Type[]
-    operands = Value[addr,]
-    owned_regions = Region[]
-    successors = Block[]
-    attributes = NamedAttribute[]
-    !isnothing(noinc) && push!(attributes, namedattribute("noinc", noinc))
-
-    return create_operation(
-        "nvvm.cp.async.mbarrier.arrive.shared",
         location;
         operands,
         owned_regions,
@@ -2401,6 +2835,25 @@ function fence_sc_cluster(; location=Location())
     )
 end
 
+function read_ptx_sreg_globaltimer_lo(; res::IR.Type, location=Location())
+    op_ty_results = IR.Type[res,]
+    operands = Value[]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+
+    return create_operation(
+        "nvvm.read.ptx.sreg.globaltimer.lo",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
 function read_ptx_sreg_globaltimer(; res::IR.Type, location=Location())
     op_ty_results = IR.Type[res,]
     operands = Value[]
@@ -2577,20 +3030,23 @@ This op allows using PTX directly within the NVVM
 """
 function inline_ptx(
     readOnlyArgs::Vector{Value},
+    readWriteArgs::Vector{Value},
     predicate=nothing::Union{Nothing,Value};
     writeOnlyArgs::Vector{IR.Type},
     ptxCode,
     location=Location(),
 )
     op_ty_results = IR.Type[writeOnlyArgs...,]
-    operands = Value[readOnlyArgs...,]
+    operands = Value[readOnlyArgs..., readWriteArgs...]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[namedattribute("ptxCode", ptxCode),]
     !isnothing(predicate) && push!(operands, predicate)
     push!(
         attributes,
-        operandsegmentsizes([length(readOnlyArgs), (predicate == nothing) ? 0 : 1]),
+        operandsegmentsizes([
+            length(readOnlyArgs), length(readWriteArgs), (predicate == nothing) ? 0 : 1
+        ]),
     )
 
     return create_operation(
@@ -2746,6 +3202,33 @@ function ldmatrix(
     )
 end
 
+"""
+`mbarrier_arrive_expect_tx`
+
+The `nvvm.mbarrier.arrive.expect_tx` operation performs an expect-tx operation 
+followed by an arrive-on operation on the *mbarrier object*. Uses the default 
+`.release.cta` semantics. This release pattern establishes memory ordering for 
+operations occurring in program order before this arrive instruction by making 
+operations from the current thread visible to subsequent operations in other 
+threads within the CTA. When other threads perform corresponding acquire operations 
+(like \'mbarrier.test.wait\'), they synchronize with this release pattern.
+
+This operation first performs an expect-tx operation with the specified transaction 
+count, then performs an arrive-on operation with an implicit count of 1. The 
+expect-tx operation increases the tx-count of the *mbarrier object* by the specified 
+expectCount value, setting the current phase to expect and tracks the completion 
+of additional asynchronous transactions.
+
+The operation takes the following operands:
+- `addr`: A pointer to the memory location of the *mbarrier object*. Uses generic 
+  addressing, but the address must still be in the shared memory space.
+- `txcount`: An unsigned integer specifying the expected transaction count 
+  for the expect-tx operation. This represents the number of asynchronous transactions 
+  expected to complete before the barrier phase completes.
+- `predicate`: Optional predicate for conditional execution.
+
+[For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#parallel-synchronization-and-communication-instructions-mbarrier-arrive)
+"""
 function mbarrier_arrive_expect_tx(
     addr::Value,
     txcount::Value,
@@ -2771,6 +3254,14 @@ function mbarrier_arrive_expect_tx(
     )
 end
 
+"""
+`mbarrier_arrive_expect_tx_shared`
+
+This Op is the same as `nvvm.mbarrier.arrive.expect_tx` except that the *mbarrier object*
+should be accessed using a shared-memory pointer instead of a generic-memory pointer.
+
+[For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#parallel-synchronization-and-communication-instructions-mbarrier-arrive)
+"""
 function mbarrier_arrive_expect_tx_shared(
     addr::Value,
     txcount::Value,
@@ -2796,6 +3287,33 @@ function mbarrier_arrive_expect_tx_shared(
     )
 end
 
+"""
+`mbarrier_arrive_nocomplete`
+
+The `nvvm.mbarrier.arrive.nocomplete` operation performs an arrive-on operation 
+on the *mbarrier object* with the guarantee that it will not cause the barrier to 
+complete its current phase. Uses the default `.release.cta` semantics. This release 
+pattern establishes memory ordering for operations occurring in program order before 
+this arrive instruction by making operations from the current thread visible to 
+subsequent operations in other threads within the CTA. When other threads perform 
+corresponding acquire operations (like \'mbarrier.test.wait\'), they synchronize with 
+this release pattern.
+
+This operation causes the executing thread to signal its arrival at the barrier 
+with a specified count, but ensures that the barrier phase will not complete as 
+a result of this operation. The operation returns an opaque value that 
+captures the phase of the *mbarrier object* prior to the arrive-on operation.
+
+The operation takes the following operands:
+- `addr`: A pointer to the memory location of the *mbarrier object*. The `addr`
+  must be a pointer to generic or shared::cta memory. When it is generic, the
+  underlying address must be within the shared::cta memory space; otherwise
+  the behavior is undefined.
+- `count`: Integer specifying the count argument to the arrive-on operation. 
+  Must be in the valid range as specified in the *mbarrier object* contents.
+
+[For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#parallel-synchronization-and-communication-instructions-mbarrier-arrive)
+"""
 function mbarrier_arrive_nocomplete(
     addr::Value, count::Value; res::IR.Type, location=Location()
 )
@@ -2817,27 +3335,30 @@ function mbarrier_arrive_nocomplete(
     )
 end
 
-function mbarrier_arrive_nocomplete_shared(
-    addr::Value, count::Value; res::IR.Type, location=Location()
-)
-    op_ty_results = IR.Type[res,]
-    operands = Value[addr, count]
-    owned_regions = Region[]
-    successors = Block[]
-    attributes = NamedAttribute[]
+"""
+`mbarrier_arrive`
 
-    return create_operation(
-        "nvvm.mbarrier.arrive.nocomplete.shared",
-        location;
-        operands,
-        owned_regions,
-        successors,
-        attributes,
-        results=op_ty_results,
-        result_inference=false,
-    )
-end
+The `nvvm.mbarrier.arrive` operation performs an arrive-on operation on the 
+*mbarrier object* at the specified address. Uses the default `.release.cta` semantics. 
+This release pattern establishes memory ordering for operations occurring in program 
+order before this arrive instruction by making operations from the current thread 
+visible to subsequent operations in other threads within the CTA. When other threads 
+perform corresponding acquire operations (like \'mbarrier.test.wait\'), they synchronize 
+with this release pattern.
 
+This operation causes the executing thread to signal its arrival at the barrier.
+The operation returns an opaque value that captures the phase of the 
+*mbarrier object* prior to the arrive-on operation. The contents of this state 
+value are implementation-specific.
+
+The operation takes the following operand:
+- `addr`: A pointer to the memory location of the *mbarrier object*. The `addr`
+  must be a pointer to generic or shared::cta memory. When it is generic, the
+  underlying address must be within the shared::cta memory space; otherwise
+  the behavior is undefined.
+
+[For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#parallel-synchronization-and-communication-instructions-mbarrier-arrive)
+"""
 function mbarrier_arrive(addr::Value; res::IR.Type, location=Location())
     op_ty_results = IR.Type[res,]
     operands = Value[addr,]
@@ -2857,25 +3378,29 @@ function mbarrier_arrive(addr::Value; res::IR.Type, location=Location())
     )
 end
 
-function mbarrier_arrive_shared(addr::Value; res::IR.Type, location=Location())
-    op_ty_results = IR.Type[res,]
-    operands = Value[addr,]
-    owned_regions = Region[]
-    successors = Block[]
-    attributes = NamedAttribute[]
+"""
+`mbarrier_init`
 
-    return create_operation(
-        "nvvm.mbarrier.arrive.shared",
-        location;
-        operands,
-        owned_regions,
-        successors,
-        attributes,
-        results=op_ty_results,
-        result_inference=false,
-    )
-end
+The `nvvm.mbarrier.init` operation initializes an *mbarrier object* at the specified 
+memory location. 
 
+This operation initializes the *mbarrier object* with the following state:
+- Current phase: 0
+- Expected arrival count: `count`
+- Pending arrival count: `count`  
+- Transaction count (tx-count): 0
+
+The operation takes the following operands:
+- `addr`: A pointer to the memory location of the *mbarrier object*. The `addr`
+  must be a pointer to generic or shared::cta memory. When it is generic, the
+  underlying address must be within the shared::cta memory space; otherwise
+  the behavior is undefined.
+- `count`: Integer specifying the number of threads that will participate in barrier
+  synchronization. Must be in the range [1, 2²⁰ - 1].
+- `predicate`: Optional predicate for conditional execution.
+
+[For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#parallel-synchronization-and-communication-instructions-mbarrier-init)
+"""
 function mbarrier_init(
     addr::Value, count::Value, predicate=nothing::Union{Nothing,Value}; location=Location()
 )
@@ -2898,28 +3423,24 @@ function mbarrier_init(
     )
 end
 
-function mbarrier_init_shared(
-    addr::Value, count::Value, predicate=nothing::Union{Nothing,Value}; location=Location()
-)
-    op_ty_results = IR.Type[]
-    operands = Value[addr, count]
-    owned_regions = Region[]
-    successors = Block[]
-    attributes = NamedAttribute[]
-    !isnothing(predicate) && push!(operands, predicate)
+"""
+`mbarrier_inval`
 
-    return create_operation(
-        "nvvm.mbarrier.init.shared",
-        location;
-        operands,
-        owned_regions,
-        successors,
-        attributes,
-        results=op_ty_results,
-        result_inference=false,
-    )
-end
+The `nvvm.mbarrier.inval` operation invalidates an *mbarrier object* at the 
+specified memory location. 
 
+This operation marks the *mbarrier object* as invalid, making it safe to repurpose 
+the memory location for other uses or to reinitialize it as a new *mbarrier object*.
+It is undefined behavior if the *mbarrier object* is already invalid.
+
+The operation takes the following operand:
+- `addr`: A pointer to the memory location of the *mbarrier object*. The `addr`
+  must be a pointer to generic or shared::cta memory. When it is generic, the
+  underlying address must be within the shared::cta memory space; otherwise
+  the behavior is undefined.
+
+[For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#parallel-synchronization-and-communication-instructions-mbarrier-inval)
+"""
 function mbarrier_inval(addr::Value; location=Location())
     op_ty_results = IR.Type[]
     operands = Value[addr,]
@@ -2939,25 +3460,53 @@ function mbarrier_inval(addr::Value; location=Location())
     )
 end
 
-function mbarrier_inval_shared(addr::Value; location=Location())
-    op_ty_results = IR.Type[]
-    operands = Value[addr,]
-    owned_regions = Region[]
-    successors = Block[]
-    attributes = NamedAttribute[]
+"""
+`mbarrier_test_wait`
 
-    return create_operation(
-        "nvvm.mbarrier.inval.shared",
-        location;
-        operands,
-        owned_regions,
-        successors,
-        attributes,
-        results=op_ty_results,
-        result_inference=false,
-    )
-end
+The `nvvm.mbarrier.test.wait` operation performs a non-blocking test for the 
+completion of a specific phase of an *mbarrier object*. It uses the default
+`.acquire.cta` semantics. This acquire pattern establishes memory ordering for 
+operations occurring in program order after this wait instruction by making 
+operations from other threads in the CTA visible to subsequent operations in the current 
+thread. When this wait completes, it synchronizes with the corresponding release 
+pattern from the `mbarrier.arrive` operation, establishing memory ordering within 
+the CTA.
 
+This operation tests whether the mbarrier phase specified by the state operand 
+has completed. It is a non-blocking instruction that immediately returns the 
+completion status without suspending the executing thread.
+
+The operation takes the following operands:
+- `addr`: A pointer to the memory location of the *mbarrier object*. Uses generic 
+  addressing, but the address must still be in the shared memory space.
+- `state`: An opaque value returned by a previous `mbarrier.arrive` 
+  operation on the same *mbarrier object* during the current or immediately 
+  preceding phase.
+
+The operation returns a boolean value indicating whether the specified phase 
+has completed:
+- `true`: The immediately preceding phase has completed
+- `false`: The phase is still incomplete (current phase)
+
+**Memory ordering guarantees**: When this wait returns true, the following 
+ordering guarantees hold:
+
+1. All memory accesses (except async operations) requested prior to
+   `mbarrier.arrive` having release semantics by participating CTA threads
+   are visible to the executing thread.
+2. All `cp.async` operations requested prior to `cp.async.mbarrier.arrive`
+   by participating CTA threads are visible to the executing thread.
+3. All `cp.async.bulk` operations using the same *mbarrier object* requested
+   prior to `mbarrier.arrive` having release semantics by participating CTA
+   threads are visible to the executing thread.
+4. Memory accesses requested after this wait are not visible to memory
+   accesses performed prior to `mbarrier.arrive` by other participating
+   threads.
+5. No ordering guarantee exists for memory accesses by the same thread
+   between `mbarrier.arrive` and this wait.
+
+[For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/#parallel-synchronization-and-communication-instructions-mbarrier-test-wait-try-wait)
+"""
 function mbarrier_test_wait(addr::Value, state::Value; res::IR.Type, location=Location())
     op_ty_results = IR.Type[res,]
     operands = Value[addr, state]
@@ -2977,27 +3526,58 @@ function mbarrier_test_wait(addr::Value, state::Value; res::IR.Type, location=Lo
     )
 end
 
-function mbarrier_test_wait_shared(
-    addr::Value, state::Value; res::IR.Type, location=Location()
-)
-    op_ty_results = IR.Type[res,]
-    operands = Value[addr, state]
-    owned_regions = Region[]
-    successors = Block[]
-    attributes = NamedAttribute[]
+"""
+`mbarrier_try_wait_parity`
 
-    return create_operation(
-        "nvvm.mbarrier.test.wait.shared",
-        location;
-        operands,
-        owned_regions,
-        successors,
-        attributes,
-        results=op_ty_results,
-        result_inference=false,
-    )
-end
+The `nvvm.mbarrier.try_wait.parity` operation performs a potentially-blocking 
+test for the completion of a specific phase of an *mbarrier object* using phase 
+parity. It uses the default `.acquire.cta` semantics. This acquire pattern 
+establishes memory ordering for operations occurring in program order after this 
+wait instruction by making operations from other threads in the CTA visible to subsequent 
+operations in the current thread. When this wait completes, it synchronizes with 
+the corresponding release pattern from the `mbarrier.arrive` operation, establishing 
+memory ordering within the CTA.
 
+This operation waits for the completion of the mbarrier phase indicated by the 
+phase parity. While it uses the underlying PTX `mbarrier.try_wait.parity` 
+instruction, this MLIR operation generates a loop that enforces the test to 
+complete before continuing execution, ensuring the barrier phase is actually 
+completed rather than potentially timing out.
+
+The operation takes the following operands:
+- `addr`: A pointer to the memory location of the *mbarrier object*. Uses generic 
+  addressing, but the address must still be in the shared memory space.
+- `phase`: An integer specifying the phase parity (0 or 1). Even phases 
+  have parity 0, odd phases have parity 1.
+- `ticks`: An unsigned integer specifying the suspend time hint in 
+  nanoseconds. This may be used instead of the system-dependent time limit.
+
+**Memory ordering guarantees**: When this wait returns true, the following 
+ordering guarantees hold:
+
+1. All memory accesses (except async operations) requested prior to
+   `mbarrier.arrive` having release semantics by participating CTA threads
+   are visible to the executing thread.
+2. All `cp.async` operations requested prior to `cp.async.mbarrier.arrive`
+   by participating CTA threads are visible to the executing thread.
+3. All `cp.async.bulk` operations using the same *mbarrier object* requested
+   prior to `mbarrier.arrive` having release semantics by participating CTA
+   threads are visible to the executing thread.
+4. Memory accesses requested after this wait are not visible to memory
+   accesses performed prior to `mbarrier.arrive` by other participating
+   threads.
+5. No ordering guarantee exists for memory accesses by the same thread
+   between `mbarrier.arrive` and this wait.
+
+**Implementation behavior**:
+This operation generates a PTX loop that repeatedly calls the underlying 
+`mbarrier.try_wait.parity` instruction until the barrier phase completes. 
+Unlike the raw PTX instruction which may return without completion after a 
+timeout, this MLIR operation guarantees completion by continuing to loop until 
+the specified phase is reached.
+
+[For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/#parallel-synchronization-and-communication-instructions-mbarrier-test-wait-try-wait)
+"""
 function mbarrier_try_wait_parity(
     addr::Value, phase::Value, ticks::Value; location=Location()
 )
@@ -3019,6 +3599,14 @@ function mbarrier_try_wait_parity(
     )
 end
 
+"""
+`mbarrier_try_wait_parity_shared`
+
+This Op is the same as `nvvm.mbarrier.try_wait.parity` except that the *mbarrier object*
+should be accessed using a shared-memory pointer instead of a generic-memory pointer.
+
+[For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/#parallel-synchronization-and-communication-instructions-mbarrier-test-wait-try-wait)
+"""
 function mbarrier_try_wait_parity_shared(
     addr::Value, phase::Value, ticks::Value; location=Location()
 )
@@ -3085,6 +3673,34 @@ function match_sync(thread_mask::Value, val::Value; res::IR.Type, kind, location
 
     return create_operation(
         "nvvm.match.sync",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+"""
+`memory_barrier`
+
+`membar` operation guarantees that prior memory accesses requested by this
+thread are performed at the specified `scope`, before later memory
+operations requested by this thread following the membar instruction.
+
+[For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/#parallel-synchronization-and-communication-instructions-membar)
+"""
+function memory_barrier(; scope, location=Location())
+    op_ty_results = IR.Type[]
+    operands = Value[]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[namedattribute("scope", scope),]
+
+    return create_operation(
+        "nvvm.memory.barrier",
         location;
         operands,
         owned_regions,
@@ -3211,6 +3827,38 @@ function mma_sync(
 end
 
 """
+`nanosleep`
+
+The op suspends the thread for a sleep duration approximately close to the 
+delay `\$duration`, specified in nanoseconds. 
+
+The sleep duration is approximated, but guaranteed to be in the 
+interval [0, 2*t]. The maximum sleep duration is 1 millisecond. 
+The implementation may reduce the sleep duration for individual threads 
+within a warp such that all sleeping threads in the warp wake up together.
+
+[For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#miscellaneous-instructions-nanosleep)
+"""
+function nanosleep(; duration, location=Location())
+    op_ty_results = IR.Type[]
+    operands = Value[]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[namedattribute("duration", duration),]
+
+    return create_operation(
+        "nvvm.nanosleep",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+"""
 `pmevent`
 
 Triggers one or more of a fixed number of performance monitor events, with
@@ -3249,11 +3897,20 @@ end
 """
 `prefetch`
 
-Operand `addr` can be a global, local or generic address pointer. No 
-operation is performed if `addr` maps to a `shared` memory location.
+Prefetches the cache line containing the address given by `addr`. The 
+operand may be a global, local, or generic pointer. When `tensormap` is 
+specified, the operand may instead be a constant or generic pointer. If the 
+address maps to shared memory, the operation has no effect.
 
-The `cacheLevel` attribute specifies the cache level to which the cache line
-containing the specified address is brought.
+At most one of `cacheLevel` or `tensormap` may be present. The `cacheLevel` 
+attribute selects the target cache level. When combined with `uniform`, the 
+prefetch is performed to the uniform cache, in which case `addr` must be a 
+generic pointer.
+
+When `tensormap` is used, the line containing `addr` is brought from the 
+constant or parameter state space for later use by `cp.async.bulk.tensor`. 
+If `in_param_space` is specified, the generic pointer is interpreted as 
+referring to the parameter state space.
 
 `uniform` can be specified after the `cacheLevel` to indicate that the 
 prefetch is performed to the specified uniform cache level. If `uniform` is 
@@ -3266,41 +3923,31 @@ priority when `cacheLevel` is L2.
 [For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/#data-movement-and-conversion-instructions-prefetch-prefetchu)
 """
 function prefetch(
-    addr::Value; cacheLevel, uniform=nothing, evictPriority=nothing, location=Location()
+    addr::Value,
+    predicate=nothing::Union{Nothing,Value};
+    cacheLevel=nothing,
+    evictPriority=nothing,
+    tensormap=nothing,
+    uniform=nothing,
+    in_param_space=nothing,
+    location=Location(),
 )
     op_ty_results = IR.Type[]
     operands = Value[addr,]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("cacheLevel", cacheLevel),]
-    !isnothing(uniform) && push!(attributes, namedattribute("uniform", uniform))
+    attributes = NamedAttribute[]
+    !isnothing(predicate) && push!(operands, predicate)
+    !isnothing(cacheLevel) && push!(attributes, namedattribute("cacheLevel", cacheLevel))
     !isnothing(evictPriority) &&
         push!(attributes, namedattribute("evictPriority", evictPriority))
+    !isnothing(tensormap) && push!(attributes, namedattribute("tensormap", tensormap))
+    !isnothing(uniform) && push!(attributes, namedattribute("uniform", uniform))
+    !isnothing(in_param_space) &&
+        push!(attributes, namedattribute("in_param_space", in_param_space))
 
     return create_operation(
         "nvvm.prefetch",
-        location;
-        operands,
-        owned_regions,
-        successors,
-        attributes,
-        results=op_ty_results,
-        result_inference=false,
-    )
-end
-
-function prefetch_tensormap(
-    tmaDescriptor::Value, predicate=nothing::Union{Nothing,Value}; location=Location()
-)
-    op_ty_results = IR.Type[]
-    operands = Value[tmaDescriptor,]
-    owned_regions = Region[]
-    successors = Block[]
-    attributes = NamedAttribute[]
-    !isnothing(predicate) && push!(operands, predicate)
-
-    return create_operation(
-        "nvvm.prefetch.tensormap",
         location;
         operands,
         owned_regions,
@@ -3399,12 +4046,17 @@ end
 
 The `shfl.sync` Op implements data shuffle within threads of a warp.
 The `thread_mask` denotes the threads participating in the Op where
-the bit position corresponds to a particular thread’s laneid.
+the bit position corresponds to a particular thread\'s laneid.
 The `offset` specifies a source lane or source lane offset
 (depending on `kind`). The `val` is the input value to be copied from
 the source. The `mask_and_clamp` contains two packed values specifying
 a mask for logically splitting warps into sub-segments and an upper bound
 for clamping the source lane index.
+
+The `return_value_and_is_valid` unit attribute can be specified to indicate 
+that the return value is a two-element struct, where the first element is 
+the result value and the second element is a predicate indicating if the 
+computed source lane index is valid.
 
 [For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/#data-movement-and-conversion-instructions-shfl-sync)
 """
@@ -3513,6 +4165,33 @@ function stmatrix(
     )
 end
 
+"""
+`bar_warp_sync`
+
+The `nvvm.bar.warp.sync` operation performs barrier synchronization for threads 
+within a warp. 
+
+This operation causes the executing thread to wait until all threads corresponding 
+to the `mask` operand have executed a `bar.warp.sync` with the same mask value 
+before resuming execution.
+
+The `mask` operand specifies the threads participating in the barrier, where each 
+bit position corresponds to the thread\'s lane ID within the warp. Only threads with 
+their corresponding bit set in the mask participate in the barrier synchronization.
+
+**Important constraints**:
+- The behavior is undefined if the executing thread is not included in the mask 
+  (i.e., the bit corresponding to the thread\'s lane ID is not set)
+- For compute capability sm_6x or below, all threads in the mask must execute 
+  the same `bar.warp.sync` instruction in convergence
+
+This operation also guarantees memory ordering among participating threads. 
+Threads within the warp that wish to communicate via memory can store to memory, 
+execute `bar.warp.sync`, and then safely read values stored by other threads 
+in the warp.
+
+[For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#parallel-synchronization-and-communication-instructions-bar-warp-sync)
+"""
 function bar_warp_sync(mask::Value; location=Location())
     op_ty_results = IR.Type[]
     operands = Value[mask,]
@@ -3564,10 +4243,10 @@ end
 """
 `tcgen05_commit`
 
-The `tcgen05.commit` makes the mbarrier object, specified by
+The `tcgen05.commit` makes the *mbarrier object*, specified by
 the operand `addr`, track the completion of all the prior
 async-tcgen05 operations initiated by the executing thread.
-The multicast variants allow signaling on the mbarrier objects
+The multicast variants allow signaling on the *mbarrier objects*
 of multiple CTAs within the cluster. Operand `multicastMask`,
 when present, specifies the destination CTAs in the cluster such
 that each bit position in the 16-bit `multicastMask` operand
@@ -4098,7 +4777,7 @@ The vote operation kinds are:
 - `ballot`: In the ballot form, the destination result is a 32 bit integer.
   In this form, the predicate from each thread in membermask are copied into
   the corresponding bit position of the result, where the bit position
-  corresponds to the thread’s lane id.
+  corresponds to the thread\'s lane id.
 
 [For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/#parallel-synchronization-and-communication-instructions-vote-sync)
 """

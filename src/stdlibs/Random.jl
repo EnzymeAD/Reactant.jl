@@ -4,13 +4,22 @@ module TracedRandom
 # 1. https://github.com/JuliaGPU/CUDA.jl/blob/master/src/random.jl
 # 2. https://github.com/JuliaRandom/Random123.jl/blob/master/src/common.jl
 
-using ..Reactant:
-    Reactant, TracedRArray, TracedRNumber, ReactantRNG, AnyTracedRArray, TracedUtils, Ops
+using ..Reactant: Reactant, TracedUtils, Ops, TracedRArray, TracedRNumber, AnyTracedRArray
 using ..Reactant.Ops: @opcall
+import ..Reactant: ReactantRNG
+
 using Random: Random, AbstractRNG
 
-@noinline make_seed(rng::AbstractRNG=Random.RandomDevice()) =
-    Random.rand!(rng, Vector{UInt64}(undef, 2))
+@noinline function should_warn_if_not_natively_supported(rng::AbstractRNG)
+    @warn "The RNG $(typeof(rng)) is not natively supported by Reactant. We will convert \
+           this to `ReactantRNG` which will have different seed and distribution \
+           characteristics." maxlog = 1
+    return nothing
+end
+
+@noinline function make_seed(rng::AbstractRNG=Random.RandomDevice())
+    return Random.rand!(rng, Vector{UInt64}(undef, 2))
+end
 
 @noinline function Random.seed!(rng::ReactantRNG, seed::Number)
     if seed isa TracedRNumber
@@ -38,7 +47,9 @@ Base.copy(rng::ReactantRNG) = ReactantRNG(copy(rng.seed), rng.algorithm)
 end
 @noinline ReactantRNG(seed::AbstractVector) = ReactantRNG(seed, "DEFAULT")
 
-@noinline default_rng() = ReactantRNG()
+@noinline function default_rng()
+    return ReactantRNG()
+end
 
 @noinline rng_algorithm(rng::ReactantRNG) = rng.algorithm
 @noinline rng_algorithm(::AbstractRNG) = "DEFAULT"

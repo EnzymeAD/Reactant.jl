@@ -1,6 +1,6 @@
 # This module reflects the HLO ops defined in the openxla/stablehlo repo (plus some extras).
 # If you want to add some check or test, the StableHLO spec should be taken as the source of truth, not the Julia or Reactant semantics.
-# Julia and Reactant semantics should be considered on the higher abstractions that use these 
+# Julia and Reactant semantics should be considered on the higher abstractions that use these
 module Ops
 using ..MLIR: MLIR
 using ..MLIR.Dialects: stablehlo, chlo, enzyme, enzymexla
@@ -99,7 +99,7 @@ function mlir_type(RT::Type{<:RNumber})::MLIR.IR.Type
     return MLIR.IR.TensorType(Int[], MLIR.IR.Type(unwrapped_eltype(RT)))
 end
 
-function mlir_type(::Type{<:MissingTracedValue})::MLIR.IR.Type
+function mlir_type(::Type{MissingTracedValue})::MLIR.IR.Type
     return MLIR.IR.TensorType(Int[], MLIR.IR.Type(Bool))
 end
 
@@ -307,6 +307,12 @@ end
         MLIR.Dialects.stablehlo.concatenate(concat_inputs; dimension=(dimension - 1)), 1
     )
     return TracedRArray{T,N}((), res, size(MLIR.IR.type(res)))
+end
+
+@noinline function fill(
+    element::T, shape::Vector{Int}; location=mlir_stacktrace("fill", @__FILE__, @__LINE__)
+) where {T<:AbstractIrrational}
+    return fill(float(element), shape; location)
 end
 
 @noinline function fill(
@@ -848,40 +854,85 @@ end
 end
 
 @noinline function clamp(
-    min::T, x::Union{TracedRArray{T,N},TracedRNumber{T}}, max::T; kwargs...
-) where {T,N}
+    min::T, x::Union{TracedRArray{T},TracedRNumber{T}}, max::T; kwargs...
+) where {T}
     return clamp(constant(min), x, constant(max); kwargs...)
 end
 
-# function convolution(
-#     lhs::TracedRArray{T,N},
-#     rhs::TracedRArray{T,N};
-#     dimension_numbers,
-#     feature_group_count,
-#     batch_group_count,
-#     window_strides=nothing,
-#     padding=nothing,
-#     lhs_dilation=nothing,
-#     rhs_dilation=nothing,
-#     location=mlir_stacktrace(
-#         "convolution", @__FILE__, @__LINE__
-#     ),
-# ) where {T,N}
-#     res = MLIR.IR.result(
-#         stablehlo.convolution(
-#             lhs.mlir_data,
-#             rhs.mlir_data;
-#             result=mlir_type(TracedRArray{T,N}, ...), # TODO size of result
-#             window_strides, #*MLIR.IR.DenseArrayAttribute(window_strides)*#,
-#             padding, #*MLIR.IR.DenseArrayAttribute(padding)*#,
-#             lhs_dilation, #*MLIR.IR.DenseArrayAttribute(lhs_dilation)*#,
-#             rhs_dilation, #*MLIR.IR.DenseArrayAttribute(rhs_dilation)*#,
-#             feature_group_count=feature_group_count,
-#             location,
-#         ),
-#     )
-#     return TracedRArray{T,N}((), res, size(lhs))
-# end
+@noinline function convolution(
+    result_size::Vector{Int64},
+    lhs::TracedRArray{T,N},
+    rhs::TracedRArray{T,N};
+    input_batch_dim::Int64,
+    input_feature_dim::Int64,
+    input_spatial_dims::Vector{Int64},
+    kernel_input_dim::Int64,
+    kernel_output_dim::Int64,
+    kernel_spatial_dims::Vector{Int64},
+    output_batch_dim::Int64,
+    output_feature_dim::Int64,
+    output_spatial_dims::Vector{Int64},
+    padding::Matrix{Int64},
+    feature_group_count::Int64,
+    batch_group_count::Int64,
+    window_strides::Union{Vector{Int64},Nothing}=nothing,
+    lhs_dilation::Union{Vector{Int64},Nothing}=nothing,
+    rhs_dilation::Union{Vector{Int64},Nothing}=nothing,
+    precision_config=Reactant.CONVOLUTION_PRECISION[],
+    location=mlir_stacktrace("convolution", @__FILE__, @__LINE__),
+) where {T,N}
+    num_spatial_dims = N - 2
+    @assert length(input_spatial_dims) == num_spatial_dims
+    @assert length(kernel_spatial_dims) == num_spatial_dims
+    @assert length(output_spatial_dims) == num_spatial_dims
+    @assert size(padding, 1) == 2
+    @assert size(padding, 2) == num_spatial_dims
+
+    dimension_numbers = MLIR.API.stablehloConvDimensionNumbersGet(
+        MLIR.IR.context(),
+        Int64(input_batch_dim - 1),
+        Int64(input_feature_dim - 1),
+        length(input_spatial_dims),
+        Int64[i - 1 for i in input_spatial_dims],
+        Int64(kernel_input_dim - 1),
+        Int64(kernel_output_dim - 1),
+        length(kernel_spatial_dims),
+        Int64[i - 1 for i in kernel_spatial_dims],
+        Int64(output_batch_dim - 1),
+        Int64(output_feature_dim - 1),
+        length(output_spatial_dims),
+        Int64[i - 1 for i in output_spatial_dims],
+    )
+
+    if precision_config !== nothing
+        if precision_config isa Reactant.PrecisionConfig.T
+            precision_config = (precision_config, precision_config)
+        end
+
+        @assert precision_config isa Union{Tuple,Vector}
+        @assert length(precision_config) == 2
+        @assert all(Base.Fix2(isa, Reactant.PrecisionConfig.T), precision_config)
+    end
+
+    conv = MLIR.Dialects.stablehlo.convolution(
+        lhs.mlir_data,
+        rhs.mlir_data;
+        result_0=MLIR.IR.TensorType(result_size, MLIR.IR.Type(T)),
+        window_strides,
+        padding=MLIR.IR.DenseElementsAttribute(padding'),
+        dimension_numbers,
+        lhs_dilation,
+        rhs_dilation,
+        feature_group_count,
+        batch_group_count,
+        precision_config=MLIR.IR.Attribute([
+            MLIR.IR.Attribute(precision_config[1]), MLIR.IR.Attribute(precision_config[2])
+        ]),
+        location,
+    )
+
+    return TracedRArray{T,N}((), MLIR.IR.result(conv), result_size)
+end
 
 Base.@nospecializeinfer @noinline function dot_general(
     @nospecialize(lhs::TracedRArray{T1}),
@@ -919,13 +970,13 @@ Base.@nospecializeinfer @noinline function dot_general(
 
     # C11
     if !isnothing(precision_config)
-        if precision_config isa Reactant.DotGeneralPrecision.T
+        if precision_config isa Reactant.PrecisionConfig.T
             precision_config = (precision_config, precision_config)
         end
 
         @assert precision_config isa Union{Tuple,Vector}
         @assert length(precision_config) == 2
-        @assert all(Base.Fix2(isa, Reactant.DotGeneralPrecision.T), precision_config)
+        @assert all(Base.Fix2(isa, Reactant.PrecisionConfig.T), precision_config)
     end
 
     resT = promote_type(T1, T2)
@@ -1431,13 +1482,15 @@ end
         ::Type{T},
         seed::TracedRArray{UInt64,1},
         shape;
+        minval::Union{T,Nothing}=nothing,
+        maxval::Union{T,Nothing}=nothing,
         algorithm::String="DEFAULT",
         location=mlir_stacktrace("rand", @__FILE__, @__LINE__),
     )
 
 Generate a random array of type `T` with the given shape and seed from a uniform random
-distribution between 0 and 1 (for floating point types). Returns a NamedTuple with the
-following fields:
+distribution between `[minval, maxval)` (for floating point types). Returns a NamedTuple
+with the following fields:
 
 - `output_state`: The state of the random number generator after the operation.
 - `output`: The generated array.
@@ -1447,6 +1500,10 @@ following fields:
 - `T`: The type of the generated array.
 - `seed`: The seed for the random number generator.
 - `shape`: The shape of the generated array.
+- `minval`: The minimum value of the generated random numbers. (Only for floating point
+  types). Defaults to `0`.
+- `maxval`: The maximum value of the generated random numbers. (Only for floating point
+  types). Defaults to `1`.
 - `algorithm`: The algorithm to use for generating the random numbers. Defaults to
   "DEFAULT". Other options include "PHILOX" and "THREE_FRY".
 """
@@ -1454,10 +1511,14 @@ following fields:
     ::Type{T},
     seed::TracedRArray{UInt64,1},
     shape;
+    minval::Union{T,Nothing}=nothing,
+    maxval::Union{T,Nothing}=nothing,
     algorithm::String="DEFAULT",
     location=mlir_stacktrace("rng_bit_generator", @__FILE__, @__LINE__),
 ) where {T<:Integer}
     @assert algorithm in ("DEFAULT", "PHILOX", "THREE_FRY")
+    @assert minval === nothing "minval is not supported for integer rng_bit_generator"
+    @assert maxval === nothing "maxval is not supported for integer rng_bit_generator"
     if algorithm == "PHILOX"
         @assert length(seed) ∈ (2, 3)
     elseif algorithm == "THREE_FRY"
@@ -1476,33 +1537,68 @@ following fields:
     )
 end
 
+function _get_uint_from_bitwidth(width::Int)
+    @assert width ∈ (8, 16, 32, 64) "Unsupported bitwidth: $width"
+    return width == 8 ? UInt8 : (width == 16 ? UInt16 : (width == 32 ? UInt32 : UInt64))
+end
+
 # https://github.com/jax-ml/jax/blob/474dcd409d6fa4c048014851922460f9d4fc199e/jax/_src/random.py#L444-L464
 @noinline function rng_bit_generator(
     ::Type{T},
     seed::TracedRArray{UInt64,1},
     shape;
+    minval::T=T(0),
+    maxval::T=T(1),
     algorithm::String="DEFAULT",
     location=mlir_stacktrace("rng_bit_generator", @__FILE__, @__LINE__),
 ) where {T<:AbstractFloat}
     nbits = sizeof(T) * 8
-    @assert nbits ∈ (8, 16, 32, 64) "Unsupported type: $(T)"
-    uT = nbits == 8 ? UInt8 : (nbits == 16 ? UInt16 : (nbits == 32 ? UInt32 : UInt64))
-    (; output_state, output) = rng_bit_generator(uT, seed, shape; algorithm, location)
+    nmantissa = Reactant.nmantissa(T)
+    rng_bits = nbits
+    nmantissa < 8 && (rng_bits = 8)
+    uint_gen_dtype = _get_uint_from_bitwidth(rng_bits)
+    (; output_state, output) = rng_bit_generator(
+        uint_gen_dtype, seed, shape; algorithm, location
+    )
+    uint_dtype = _get_uint_from_bitwidth(nbits)
+    bits = output
+    if rng_bits != nbits
+        bits = convert(TracedRArray{uint_dtype,length(shape)}, bits)
+    end
+
     float_bits = or(
         shift_right_logical(
-            output,
-            fill(uT(nbits - Reactant.nmantissa(T)), size(output); location);
-            location,
+            bits, fill(uint_dtype(rng_bits - nmantissa), size(bits); location); location
         ),
-        fill(reinterpret(uT, T(1)), size(output); location);
+        fill(reinterpret(uint_dtype, T(1)), size(bits); location);
         location,
     )
-    output = subtract(
+    floats = subtract(
         bitcast_convert(TracedRArray{T,length(shape)}, float_bits; location),
         fill(T(1), size(output); location);
         location,
     )
+
+    maxval = prevfloat(maxval) # make maxval exclusive
+    minval_ = fill(minval, size(floats); location)
+    maxval_ = fill(maxval, size(floats); location)
+    output = clamp(
+        minval_,
+        add(
+            multiply(floats, subtract(maxval_, minval_; location); location),
+            minval_;
+            location,
+        ),
+        maxval_;
+        location,
+    )
     return (; output_state, output)
+end
+
+@noinline function rng_bit_generator(
+    ::Type{TracedRNumber{T}}, seed::TracedRArray{UInt64,1}, shape; kwargs...
+) where {T}
+    return rng_bit_generator(T, seed, shape; kwargs...)
 end
 
 """
@@ -1534,18 +1630,35 @@ fields:
     seed::TracedRArray{UInt64,1},
     shape;
     algorithm::String="DEFAULT",
-    location=mlir_stacktrace("rand", @__FILE__, @__LINE__),
-) where {T}
-    res = rng_bit_generator(T, seed, shape; algorithm, location)
+    location=mlir_stacktrace("randn", @__FILE__, @__LINE__),
+) where {T<:AbstractFloat}
+    res = rng_bit_generator(
+        T, seed, shape; algorithm, location, minval=nextfloat(T(-1)), maxval=T(1)
+    )
     rand_uniform = res.output
     seed = res.output_state
-    scaled_uniform = subtract(
-        multiply(rand_uniform, fill(T(2), size(rand_uniform))),
-        fill(T(1), size(rand_uniform)),
-    )
-    probit = erf_inv(scaled_uniform)
+    probit = erf_inv(rand_uniform)
     rand_normal = multiply(probit, fill(Base.sqrt(T(2)), size(rand_uniform)))
     return (; output_state=seed, output=rand_normal)
+end
+
+@noinline function randn(
+    ::Type{Complex{T}},
+    seed::TracedRArray{UInt64,1},
+    shape;
+    algorithm::String="DEFAULT",
+    location=mlir_stacktrace("randn", @__FILE__, @__LINE__),
+) where {T<:AbstractFloat}
+    real_result = randn(T, seed, shape; algorithm, location)
+    imag_result = randn(T, real_result.output_state, shape; algorithm, location)
+    output = complex.(real_result.output, imag_result.output)
+    return (; output_state=imag_result.output_state, output)
+end
+
+@noinline function randn(
+    ::Type{TracedRNumber{T}}, seed::TracedRArray{UInt64,1}, shape; kwargs...
+) where {T}
+    return randn(T, seed, shape; kwargs...)
 end
 
 """
@@ -1577,12 +1690,18 @@ distribution with rate 1. Returns a NamedTuple with the following fields:
     shape;
     algorithm::String="DEFAULT",
     location=mlir_stacktrace("rand", @__FILE__, @__LINE__),
-) where {T}
+) where {T<:AbstractFloat}
     res = rng_bit_generator(T, seed, shape; algorithm, location)
     rand_uniform = res.output
     seed = res.output_state
     rand_exp = negate(log_plus_one(negate(rand_uniform)))
     return (; output_state=seed, output=rand_exp)
+end
+
+@noinline function randexp(
+    ::Type{TracedRNumber{T}}, seed::TracedRArray{UInt64,1}, shape; kwargs...
+) where {T}
+    return randexp(T, seed, shape; kwargs...)
 end
 
 # functional ops
@@ -2098,7 +2217,7 @@ end
     )
 
     if !mincut
-        MLIR.IR.attr!(while_op, "enzymexla.disable_min_cut", MLIR.IR.UnitAttribute())
+        MLIR.IR.attr!(while_op, "enzyme.disable_mincut", MLIR.IR.UnitAttribute())
     end
 
     if checkpointing
@@ -3011,6 +3130,7 @@ end
             [size(input, i) for i in (length(batch_shape) + 1):ndims(input)]...,
         ) for input in inputs
     ]
+    argprefix = gensym("batcharg")
     mlir_fn_res = Reactant.TracedUtils.make_mlir_fn(
         f,
         (sample_inputs...,),
@@ -3019,10 +3139,34 @@ end
         false;
         args_in_result=:none,
         do_transpose=false,
+        argprefix,
     )
 
     func = mlir_fn_res.f
     @assert MLIR.IR.nregions(func) == 1
+
+    if mlir_fn_res.fnwrapped
+        # In the long-term we should be able to do per-argument batching.
+        # Rn we simply broadcast_in_dim the arguments to the correct shape.
+        final_inputs = TracedRArray[]
+        seenargs = Reactant.OrderedIdDict()
+        Reactant.make_tracer(
+            seenargs, f, (argprefix, 1), Reactant.TracedSetPath; toscalar=false
+        )
+        for (k, v) in seenargs
+            v isa Reactant.TracedType || continue
+            bcasted_arg = broadcast_in_dim(
+                v,
+                collect(Int64, (length(batch_shape) + 1):(ndims(v) + length(batch_shape))),
+                vcat(batch_shape, collect(Int64, size(v)));
+                location,
+            )
+            push!(final_inputs, bcasted_arg)
+        end
+        append!(final_inputs, inputs)
+    else
+        final_inputs = inputs
+    end
 
     output_types = MLIR.IR.Type[]
     for result in mlir_fn_res.linear_results
@@ -3035,7 +3179,7 @@ end
         )
     end
 
-    return batch(inputs, output_types, batch_shape; fn=func, location)
+    return batch(final_inputs, output_types, batch_shape; fn=func, location)
 end
 
 @noinline function batch(
@@ -3421,6 +3565,47 @@ end
         ),
         size(input),
     )
+end
+
+@noinline function sharding_group(
+    inputs::Union{TracedRArray,TracedRNumber}...;
+    group_id::Union{Integer,Nothing}=nothing,
+    location=mlir_stacktrace("sharding_group", @__FILE__, @__LINE__),
+)
+    @assert length(inputs) > 1 "At least two inputs are required to form a sharding group, \
+                                got $(length(inputs))"
+
+    counter, cache = Reactant.Compiler.sdygroupidcache()
+
+    group_ids = unique([cache[input] for input in inputs if haskey(cache, input)])
+    if length(group_ids) > 1
+        error("All inputs must belong to the same sharding group. Found multiple group \
+               ids: $(group_ids)")
+    end
+
+    if length(group_ids) == 0
+        if group_id === nothing
+            group_id = @atomic counter.group_id
+            @atomic counter.group_id += 1
+        end
+    else
+        found_group_id = only(group_ids)
+        if group_id !== nothing && found_group_id != group_id
+            error("Provided group_id $(group_id) does not match the existing group_id \
+                   $(found_group_id) for the inputs. All inputs must belong to the same \
+                   sharding group.")
+        end
+        group_id = found_group_id
+    end
+
+    for input in inputs
+        if !haskey(cache, input)
+            cache[input] = group_id
+            MLIR.Dialects.sdy.sharding_group(input.mlir_data; group_id=group_id, location)
+        end
+    end
+
+    return nothing
 end
 
 end # module Ops

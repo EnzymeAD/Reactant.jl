@@ -1,23 +1,19 @@
 module ReactantCUDAExt
 
-using CUDA
 using Reactant: Reactant, TracedRArray, AnyConcretePJRTArray, MLIR, TracedRNumber
 using Reactant.Compiler: raising
-using ReactantCore: @trace
-using GPUCompiler: GPUCompiler
-using KernelAbstractions: KernelAbstractions
-import KernelAbstractions as KA
-using LLVM: LLVM
-using Libdl
-
 using Reactant.Ops: @opcall
 
-const ReactantKernelAbstractionsExt = Base.get_extension(
-    Reactant, :ReactantKernelAbstractionsExt
-)
-const ReactantBackend = ReactantKernelAbstractionsExt.ReactantBackend
+using Adapt: Adapt, adapt
+using CUDA: CUDA, CuDim, DenseCuArray, unsafe_cached_load
 
-using Adapt
+using GPUCompiler: GPUCompiler
+using KernelAbstractions: KernelAbstractions
+using LLVM: LLVM
+
+using PrecompileTools: @setup_workload, @compile_workload
+
+const KA = KernelAbstractions
 
 Reactant.is_extension_loaded(::Val{:CUDA}) = true
 
@@ -64,9 +60,7 @@ function Base.getindex(RN::CuTracedRNumber{T,A}) where {T,A}
     return @inbounds unsafe_load(RN.ptr, 1, Val(align))
 end
 
-function Base.convert(::Type{T}, RN::CuTracedRNumber) where {T<:Number}
-    return Base.convert(T, Base.getindex(RN))
-end
+Base.convert(::Type{T}, RN::CuTracedRNumber) where {T<:Number} = convert(T, getindex(RN))
 
 for jlop in (
     :(Base.min),
@@ -89,17 +83,15 @@ for jlop in (
     end
 end
 
-@inline Base.ifelse(cond::Bool, a, b::CuTracedRNumber) = Base.ifelse(cond, a, b[])
-@inline Base.ifelse(cond::Bool, a::CuTracedRNumber, b) = Base.ifelse(cond, a[], b)
+@inline Base.ifelse(cond::Bool, a, b::CuTracedRNumber) = ifelse(cond, a, b[])
+@inline Base.ifelse(cond::Bool, a::CuTracedRNumber, b) = ifelse(cond, a[], b)
 @inline Base.ifelse(cond::Bool, a::CuTracedRNumber, b::CuTracedRNumber) =
-    Base.ifelse(cond, a[], b[])
-@inline Base.ifelse(cond::CuTracedRNumber, a, b) = Base.ifelse(cond[], a, b)
-@inline Base.ifelse(cond::CuTracedRNumber, a::CuTracedRNumber, b) =
-    Base.ifelse(cond[], a[], b)
-@inline Base.ifelse(cond::CuTracedRNumber, a, b::CuTracedRNumber) =
-    Base.ifelse(cond[], a, b[])
+    ifelse(cond, a[], b[])
+@inline Base.ifelse(cond::CuTracedRNumber, a, b) = ifelse(cond[], a, b)
+@inline Base.ifelse(cond::CuTracedRNumber, a::CuTracedRNumber, b) = ifelse(cond[], a[], b)
+@inline Base.ifelse(cond::CuTracedRNumber, a, b::CuTracedRNumber) = ifelse(cond[], a, b[])
 @inline Base.ifelse(cond::CuTracedRNumber, a::CuTracedRNumber, b::CuTracedRNumber) =
-    Base.ifelse(cond[], a[], b[])
+    ifelse(cond[], a[], b[])
 
 Base.@constprop :aggressive @inline Base.:^(
     a::CuTracedRNumber{T,A}, b::Integer
@@ -140,7 +132,7 @@ end
                 ),
                 Core.LLVMPtr{UInt8,1},
                 Tuple{Float64},
-                Base.convert(Float64, x),
+                convert(Float64, x),
             ),
         ),
     )
@@ -164,7 +156,7 @@ end
                 ),
                 Core.LLVMPtr{UInt8,1},
                 Tuple{Float32},
-                Base.convert(Float32, x),
+                convert(Float32, x),
             ),
         ),
     )
@@ -181,7 +173,7 @@ Base.@nospecializeinfer function Base.promote_rule(
     @nospecialize(a::Type{<:CuTracedRNumber{T}}),
     @nospecialize(b::Type{<:CuTracedRNumber{T2}})
 ) where {T,T2}
-    return Base.promote_rule(T, T2)
+    return promote_rule(T, T2)
 end
 Base.@nospecializeinfer function Base.promote_rule(
     ::Type{Any}, @nospecialize(b::Type{<:CuTracedRNumber})
@@ -199,7 +191,7 @@ Base.@nospecializeinfer function Base.promote_rule(
     if T == T2
         return T
     else
-        return Base.promote_rule(T, T2)
+        return promote_rule(T, T2)
     end
 end
 Base.@nospecializeinfer function Base.promote_rule(
@@ -208,7 +200,7 @@ Base.@nospecializeinfer function Base.promote_rule(
     if T == T2
         return T
     else
-        return Base.promote_rule(T, T2)
+        return promote_rule(T, T2)
     end
 end
 
@@ -506,9 +498,7 @@ function threads_to_workgroupsize(threads, ndrange)
     end
 end
 
-function ReactantKernelAbstractionsExt.ka_with_reactant(
-    ndrange, workgroupsize, obj, args...
-)
+function Reactant.ka_with_reactant(ndrange, workgroupsize, obj, args...)
     backend = KA.backend(obj)
 
     ndrange, workgroupsize, iterspace, dynamic = KA.launch_config(
@@ -588,7 +578,7 @@ function Adapt.adapt_storage(::ReactantKernelAdaptor, xs::TracedRNumber{T}) wher
     return res
 end
 
-import Reactant.TracedRNumberOverrides.TracedStepRangeLen
+import Reactant.TracedStepRangeLen
 
 function Adapt.adapt_storage(::ReactantKernelAdaptor, r::TracedStepRangeLen)
     return TracedStepRangeLen(
@@ -1292,8 +1282,8 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
 
     @assert length(restys) == length(aliases)
     call = MLIR.Dialects.enzymexla.kernel_call(
-        blk_operands...,
-        mlir_args;
+        blk_operands...;
+        inputs=mlir_args,
         result_0=restys,
         fn=MLIR.IR.FlatSymbolRefAttribute(sym_name),
         output_operand_aliases=MLIR.IR.Attribute(output_operand_aliases),
@@ -1389,16 +1379,9 @@ Base.@nospecializeinfer function Reactant.traced_type_inner(
     N = ndims(A)
     if mode == Reactant.ArrayToConcrete && T <: Reactant.ReactantPrimitive
         if runtime isa Val{:PJRT}
-            return Reactant.ConcretePJRTArray{
-                T,
-                N,
-                Reactant.Sharding.ndevices(sharding),
-                Reactant.Sharding.shard_type(typeof(sharding), N),
-            }
+            return Reactant.ConcretePJRTArray{T,N,Reactant.Sharding.ndevices(sharding)}
         elseif runtime isa Val{:IFRT}
-            return Reactant.ConcreteIFRTArray{
-                T,N,Reactant.Sharding.shard_type(typeof(sharding), N)
-            }
+            return Reactant.ConcreteIFRTArray{T,N}
         end
         error("Unsupported runtime $runtime")
     else
@@ -1470,18 +1453,10 @@ function Reactant.make_tracer(
     return newa
 end
 
-function __init__()
-    if CUDA.functional() && !Reactant.precompiling()
-        cap = CUDA.capability(CUDA.device())
-        Reactant.Compiler.cubinChip[] = "sm_$(cap.major)$(cap.minor)"
-    end
-    return nothing
-end
-
 # In Julia v1.11.3 precompiling this module caches bad code:
 # <https://github.com/EnzymeAD/Reactant.jl/issues/614>.
 @static if !Sys.isapple()
-    Reactant.PrecompileTools.@setup_workload begin
+    @setup_workload begin
         Reactant.initialize_dialect()
 
         if Reactant.XLA.REACTANT_XLA_RUNTIME == "PJRT"
@@ -1492,7 +1467,7 @@ end
             error("Unsupported runtime: $(Reactant.XLA.REACTANT_XLA_RUNTIME)")
         end
 
-        Reactant.PrecompileTools.@compile_workload begin
+        @compile_workload begin
             @static if Reactant.precompilation_supported() && VERSION != v"1.11.3"
                 function square_kernel!(x)
                     i = CUDA.threadIdx().x

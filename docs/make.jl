@@ -1,4 +1,4 @@
-using Reactant, ReactantCore
+using Reactant, ReactantCore, EnzymeCore
 using Documenter, DocumenterVitepress
 
 DocMeta.setdocmeta!(Reactant, :DocTestSetup, :(using Reactant); recursive=true)
@@ -7,6 +7,7 @@ makedocs(;
     modules=[
         Reactant,
         ReactantCore,
+        EnzymeCore,
         Reactant.XLA,
         Reactant.MLIR,
         Reactant.MLIR.API,

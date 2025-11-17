@@ -1459,6 +1459,22 @@ Examples:
 // Alignment is optional
 llvm.mlir.global private constant @y(dense<1.0> : tensor<8xf32>) { alignment = 32 : i64 } : !llvm.array<8 x f32>
 ```
+
+The `target_specific_attrs` attribute provides a mechanism to preserve
+target-specific LLVM IR attributes that are not explicitly modeled in the
+LLVM dialect.
+
+The attribute is an array containing either string attributes or
+two-element array attributes of strings. The value of a standalone string
+attribute is interpreted as the name of an LLVM IR attribute on the global.
+A two-element array is interpreted as a key-value pair.
+
+# Example
+
+```mlir
+llvm.mlir.global external @example() {
+  target_specific_attrs = [\"value-less-attr\", [\"int-attr\", \"4\"], [\"string-attr\", \"string\"]]} : f64
+```
 """
 function mlir_global(;
     global_type,
@@ -1476,6 +1492,7 @@ function mlir_global(;
     comdat=nothing,
     dbg_exprs=nothing,
     visibility_=nothing,
+    target_specific_attrs=nothing,
     initializer::Region,
     location=Location(),
 )
@@ -1503,6 +1520,8 @@ function mlir_global(;
     !isnothing(comdat) && push!(attributes, namedattribute("comdat", comdat))
     !isnothing(dbg_exprs) && push!(attributes, namedattribute("dbg_exprs", dbg_exprs))
     !isnothing(visibility_) && push!(attributes, namedattribute("visibility_", visibility_))
+    !isnothing(target_specific_attrs) &&
+        push!(attributes, namedattribute("target_specific_attrs", target_specific_attrs))
 
     return create_operation(
         "llvm.mlir.global",
@@ -1930,10 +1949,8 @@ function func(;
     reciprocal_estimates=nothing,
     prefer_vector_width=nothing,
     target_features=nothing,
-    unsafe_fp_math=nothing,
     no_infs_fp_math=nothing,
     no_nans_fp_math=nothing,
-    approx_func_fp_math=nothing,
     no_signed_zeros_fp_math=nothing,
     denormal_fp_math=nothing,
     denormal_fp_math_f32=nothing,
@@ -1942,6 +1959,7 @@ function func(;
     instrument_function_exit=nothing,
     no_inline=nothing,
     always_inline=nothing,
+    inline_hint=nothing,
     no_unwind=nothing,
     will_return=nothing,
     optimize_none=nothing,
@@ -2008,14 +2026,10 @@ function func(;
         push!(attributes, namedattribute("prefer_vector_width", prefer_vector_width))
     !isnothing(target_features) &&
         push!(attributes, namedattribute("target_features", target_features))
-    !isnothing(unsafe_fp_math) &&
-        push!(attributes, namedattribute("unsafe_fp_math", unsafe_fp_math))
     !isnothing(no_infs_fp_math) &&
         push!(attributes, namedattribute("no_infs_fp_math", no_infs_fp_math))
     !isnothing(no_nans_fp_math) &&
         push!(attributes, namedattribute("no_nans_fp_math", no_nans_fp_math))
-    !isnothing(approx_func_fp_math) &&
-        push!(attributes, namedattribute("approx_func_fp_math", approx_func_fp_math))
     !isnothing(no_signed_zeros_fp_math) && push!(
         attributes, namedattribute("no_signed_zeros_fp_math", no_signed_zeros_fp_math)
     )
@@ -2034,6 +2048,7 @@ function func(;
     !isnothing(no_inline) && push!(attributes, namedattribute("no_inline", no_inline))
     !isnothing(always_inline) &&
         push!(attributes, namedattribute("always_inline", always_inline))
+    !isnothing(inline_hint) && push!(attributes, namedattribute("inline_hint", inline_hint))
     !isnothing(no_unwind) && push!(attributes, namedattribute("no_unwind", no_unwind))
     !isnothing(will_return) && push!(attributes, namedattribute("will_return", will_return))
     !isnothing(optimize_none) &&

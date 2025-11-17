@@ -5,7 +5,7 @@ Implements serialization of Reactant compiled functions. Currently supported for
 """
 module Serialization
 
-using ..Reactant: Reactant, Compiler, MLIR
+using ..Reactant: Reactant, Compiler
 
 serialization_supported(::Val) = false
 

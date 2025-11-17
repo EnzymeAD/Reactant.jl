@@ -1,12 +1,11 @@
-using Reactant
-using Test
+using Reactant, Test
 
 Base.sum(x::NamedTuple{(:a,),Tuple{T}}) where {T<:Reactant.TracedRArray} = (; a=sum(x.a))
 
 @testset "compile" begin
     @testset "create_result" begin
         @testset "NamedTuple" begin
-            x = (; a=rand(4, 3))
+            x = (; a=Reactant.TestUtils.construct_test_array(Float64, 4, 3))
             x2 = Reactant.to_rarray(x)
 
             res = @jit sum(x2)
@@ -53,7 +52,7 @@ Base.sum(x::NamedTuple{(:a,),Tuple{T}}) where {T<:Reactant.TracedRArray} = (; a=
     @testset "no variable name collisions in compile macros (#237)" begin
         f(x) = x
         g(x) = f(x)
-        x = rand(2, 2)
+        x = Reactant.TestUtils.construct_test_array(Float64, 2, 2)
         y = Reactant.to_rarray(x)
         @test (@jit g(y); true)
     end
@@ -75,7 +74,7 @@ end
 
 @testset "Module export" begin
     f(x) = sin.(cos.(x))
-    x_ra = Reactant.to_rarray(rand(3))
+    x_ra = Reactant.to_rarray(Reactant.TestUtils.construct_test_array(Float64, 3))
 
     hlo_code = @code_hlo f(x_ra)
     @test !startswith(string(hlo_code), "Module")
@@ -90,7 +89,7 @@ end
 end
 
 @testset "Vararg compilation: Issue #293" begin
-    x = rand(2, 2)
+    x = Reactant.TestUtils.construct_test_array(Float64, 2, 2)
     x_ra = Reactant.to_rarray(x)
 
     @test @allowscalar(x_ra[1]) ≈ x[1]
@@ -98,8 +97,8 @@ end
 end
 
 @testset "no_nan passes" begin
-    x_ra = Reactant.to_rarray(rand(Float32, 4, 16))
-    y_ra = Reactant.to_rarray(rand(Float32, 4, 16))
+    x_ra = Reactant.to_rarray(Reactant.TestUtils.construct_test_array(Float32, 4, 16))
+    y_ra = Reactant.to_rarray(Reactant.TestUtils.construct_test_array(Float32, 4, 16))
 
     fn(x) = x .- x
 
@@ -138,7 +137,7 @@ function sinusoidal_embedding(
 end
 
 @testset "sinusoidal_embedding" begin
-    x_ra = Reactant.to_rarray(rand(Float32, 1, 1, 1, 4))
+    x_ra = Reactant.to_rarray(Reactant.TestUtils.construct_test_array(Float32, 1, 1, 1, 4))
     hlo = @code_hlo sinusoidal_embedding(x_ra, 0.1, 10.0, 4)
 end
 
@@ -239,7 +238,34 @@ function fn_test(x)
 end
 
 @testset "chlo legalize" begin
-    x_ra = Reactant.to_rarray(rand(Float32, 128))
+    x_ra = Reactant.to_rarray(Reactant.TestUtils.construct_test_array(Float32, 128))
     hlo = @code_hlo legalize_chlo_to_stablehlo = true fn_test(x_ra)
     @test occursin("mhlo.topk", repr(hlo))
+end
+
+function fn_test_for_synchronize(x)
+    return x .+ 1
+end
+
+@testset "synchronize" begin
+    @test isnothing(Reactant.synchronize(1))
+    @test isnothing(Reactant.synchronize([1, 2, 3]))
+
+    x = Reactant.TestUtils.construct_test_array(Float32, 10)
+
+    @test isnothing(Reactant.synchronize(x))
+
+    xr = Reactant.to_rarray(x)
+    fsyncfalse = @compile sync = false fn_test_for_synchronize(xr)
+    fsynctrue = @compile sync = true fn_test_for_synchronize(xr)
+
+    ysyncfalse = fsyncfalse(xr)
+    @test isnothing(Reactant.synchronize(ysyncfalse))
+
+    ysynctrue = fsynctrue(xr)
+    @test isnothing(Reactant.synchronize(ysynctrue))
+
+    @test ysyncfalse == ysynctrue
+
+    @test Reactant.synchronize((ysyncfalse, ysynctrue)) == nothing
 end

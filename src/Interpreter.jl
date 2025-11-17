@@ -17,8 +17,6 @@ import Core.Compiler:
     CallMeta,
     Effects,
     NoCallInfo,
-    widenconst,
-    mapany,
     MethodResultPure
 
 Base.Experimental.@MethodTable(REACTANT_METHOD_TABLE)
@@ -43,24 +41,37 @@ function set_reactant_abi(
         if length(argtypes) != 1
             @static if VERSION < v"1.11.0-"
                 return CallMeta(Union{}, Effects(), NoCallInfo())
-            else
+            elseif VERSION < v"1.12.0-"
                 return CallMeta(Union{}, Union{}, Effects(), NoCallInfo())
+            else
+                return Core.Compiler.Future{Core.Compiler.CallMeta}(
+                    CallMeta(Union{}, Union{}, Effects(), NoCallInfo())
+                )
             end
         end
         @static if VERSION < v"1.11.0-"
             return CallMeta(
                 Core.Const(true), Core.Compiler.EFFECTS_TOTAL, MethodResultPure()
             )
-        else
+        elseif VERSION < v"1.12.0-"
             return CallMeta(
                 Core.Const(true), Union{}, Core.Compiler.EFFECTS_TOTAL, MethodResultPure()
+            )
+        else
+            return Core.Compiler.Future{Core.Compiler.CallMeta}(
+                CallMeta(
+                    Core.Const(true),
+                    Union{},
+                    Core.Compiler.EFFECTS_TOTAL,
+                    MethodResultPure(),
+                ),
             )
         end
     end
 
     # Improve inference by considering call_with_reactant as having the same results as
     # the original call
-    if f === Reactant.call_with_reactant
+    if f === call_with_reactant
         arginfo2 = ArgInfo(fargs isa Nothing ? nothing : fargs[2:end], argtypes[2:end])
         return abstract_call(interp, arginfo2::ArgInfo, si, sv, max_methods)
     elseif !(interp.within_autodiff_rewrite) && f === overload_autodiff

@@ -622,18 +622,12 @@ function dot_scaled(
     ]
     !isnothing(a_scale) && push!(operands, a_scale)
     !isnothing(b_scale) && push!(operands, b_scale)
-    push!(attributes, operandsegmentsizes([
-        1,
-        1,
-        1,
-        if (a_scale == nothing)
-            0
-        elseif 1(b_scale == nothing)
-            0
-        else
-            1
-        end,
-    ]))
+    push!(
+        attributes,
+        operandsegmentsizes([
+            1, 1, 1, (a_scale == nothing) ? 0 : 1, (b_scale == nothing) ? 0 : 1
+        ]),
+    )
     !isnothing(lhs_k_pack) && push!(attributes, namedattribute("lhs_k_pack", lhs_k_pack))
     !isnothing(rhs_k_pack) && push!(attributes, namedattribute("rhs_k_pack", rhs_k_pack))
 
@@ -956,16 +950,10 @@ function load(
     attributes = NamedAttribute[]
     !isnothing(mask) && push!(operands, mask)
     !isnothing(other) && push!(operands, other)
-    push!(attributes, operandsegmentsizes([
-        1,
-        if (mask == nothing)
-            0
-        elseif 1(other == nothing)
-            0
-        else
-            1
-        end,
-    ]))
+    push!(
+        attributes,
+        operandsegmentsizes([1, (mask == nothing) ? 0 : 1, (other == nothing) ? 0 : 1]),
+    )
     !isnothing(result) && push!(op_ty_results, result)
     !isnothing(boundaryCheck) &&
         push!(attributes, namedattribute("boundaryCheck", boundaryCheck))
@@ -1023,6 +1011,7 @@ function make_tensor_descriptor(
     shape::Vector{Value},
     strides::Vector{Value};
     result::IR.Type,
+    padding=nothing,
     location=Location(),
 )
     op_ty_results = IR.Type[result,]
@@ -1030,6 +1019,7 @@ function make_tensor_descriptor(
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
+    !isnothing(padding) && push!(attributes, namedattribute("padding", padding))
 
     return create_operation(
         "tt.make_tensor_descriptor",

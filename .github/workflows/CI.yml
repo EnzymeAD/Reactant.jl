@@ -13,7 +13,7 @@ on:
     branches:
       - main
       - release-*
-    tags: "*"
+    tags: ["*"]
     paths:
       - ".github/workflows/CI.yml"
       - "ext/**"
@@ -30,11 +30,6 @@ concurrency:
 
 jobs:
   test:
-    timeout-minutes: 90
-    name: Julia ${{ matrix.version }} - ${{ matrix.test_group }} - ${{ matrix.os }} - ${{ matrix.runtime }} - assertions=${{ matrix.assertions }} - ${{ github.event_name }}
-    runs-on: ${{ matrix.os }}
-    container:
-      image: ${{ contains(matrix.os, 'linux') && 'ghcr.io/enzymead/reactant-docker-images:main' || '' }}
     strategy:
       fail-fast: false
       matrix:
@@ -52,137 +47,60 @@ jobs:
           # - macOS-13
           - macOS-latest
           - windows-latest
+          - linux-x86-ct6e-180-4tpu
         test_group:
           - core
           - neural_networks
           - integration
         runtime:
-          - "PJRT"
-          - "IFRT"
-        assertions:
-          - false
-        include:
+          - "pjrt"
+          - "ifrt"
+        exclude:
           - os: linux-x86-ct6e-180-4tpu
-            version: "1.11"
-            assertions: false
-            test_group: core
-            runtime: "IFRT"
+            version: "1.10"
           - os: linux-x86-ct6e-180-4tpu
-            version: "1.11"
-            assertions: false
-            test_group: integration
-            runtime: "IFRT"
-          - os: linux-x86-ct6e-180-4tpu
-            version: "1.11"
-            assertions: false
-            test_group: neural_networks
-            runtime: "IFRT"
-          - os: ubuntu-24.04
-            version: "1.10"
-            assertions: true
-            test_group: core
-            runtime: "PJRT"
-          - os: ubuntu-24.04
-            version: "1.10"
-            assertions: true
-            test_group: neural_networks
-            runtime: "PJRT"
-          - os: ubuntu-24.04
-            version: "1.10"
-            assertions: true
-            test_group: integration
-            runtime: "PJRT"
-          - os: ubuntu-24.04
-            libReactant: packaged
-            version: '1.10'
-            test_group: core
-          - os: ubuntu-24.04
-            libReactant: packaged
-            version: '1.10'
-            test_group: neural_networks
-          - os: ubuntu-24.04
-            libReactant: packaged
-            version: '1.10'
-            test_group: integration
-    steps:
-      - name: Set TMPDIR
-        # We have to use `${GITHUB_WORKSPACE}` instead of `github.workspace` because GitHub
-        # is terrible and the two don't match inside containers:
-        # https://github.com/actions/runner/issues/2058
-        
-        if: ${{ matrix.os != 'windows-latest' }}
-        run: |
-          echo "TMPDIR=${GITHUB_WORKSPACE}/tmp" >> ${GITHUB_ENV}
-      - uses: actions/checkout@v4
-      - name: Create TMPDIR
-        if: ${{ matrix.os != 'windows-latest' }}
-        run: |
-          mkdir -p ${{ env.TMPDIR }}
-      - uses: julia-actions/setup-julia@v2
-        if: ${{ ! matrix.assertions }}
-        with:
-          version: ${{ matrix.version }}
-      - uses: julia-actions/cache@v2
-      - uses: actions/checkout@v4
-        if: ${{ matrix.assertions }}
-        with:
-          repository: "JuliaLang/julia"
-          ref: release-${{ matrix.version }}
-          path: "julia"
-      - name: Compile Julia
-        if: ${{ matrix.assertions }}
-        run: |
-          sed -i.bak 's/exit 2/exit 0/g' julia/deps/tools/jlchecksum
-          make -C julia -j $(nproc) FORCE_ASSERTIONS=1 LLVM_ASSERTIONS=1 JULIA_PRECOMPILE=0
-          echo $PWD/julia/usr/bin >> $GITHUB_PATH
-      - name: "Setup Runtime Preferences"
-        uses: "DamianReeves/write-file-action@master"
-        with:
-          path: "LocalPreferences.toml"
-          write-mode: "overwrite"
-          contents: |
-            [Reactant]
-            xla_runtime = "${{ matrix.runtime }}"
-      - name: "Install Dependencies"
-        run: |
-          import Pkg
-          Pkg.Registry.update()
-          # Install packages present in subdirectories
-          dev_pks = Pkg.PackageSpec[]
-          for path in ("lib/ReactantCore",)
-              push!(dev_pks, Pkg.PackageSpec(; path))
-          end
-          Pkg.develop(dev_pks)
-        shell: julia --color=yes --code-coverage=user --depwarn=yes --project=. {0}
-        # Only in Julia v1.10 we need to install `ReactantCore` manually.
-        if: ${{ matrix.version == '1.10' }}
-        env:
-          JULIA_PKG_SERVER_REGISTRY_PREFERENCE: eager
-      - name: "Run Tests"
-        timeout-minutes: 60
-        run: |
-          import Pkg
-          Pkg.Registry.update()
-          Pkg.test(; coverage="user")
-        shell: julia --color=yes --code-coverage=user --depwarn=yes --project=. {0}
-        id: run_tests
-        env:
-          JULIA_PKG_SERVER_REGISTRY_PREFERENCE: eager
-          ENABLE_PJRT_COMPATIBILITY: 1
-          REACTANT_TEST_GROUP: ${{ matrix.test_group }}
-          XLA_FLAGS: "--xla_force_host_platform_device_count=12"
-          JULIA_DEBUG: "Reactant,Reactant_jll"
-      - name: Upload MLIR modules
-        uses: actions/upload-artifact@v4
-        timeout-minutes: 10
-        if: ${{ always() }}
-        with:
-          name: "mlir-${{ matrix.version }}-${{ matrix.test_group }}-${{ matrix.os }}-${{ matrix.runtime }}-assertions=${{ matrix.assertions }}-${{ github.event_name }}"
-          path: "**/*.mlir"
-          retention-days: 90
-          overwrite: false
-      - uses: julia-actions/julia-processcoverage@v1
-      - uses: codecov/codecov-action@v5
-        with:
-          files: lcov.info
-          token: ${{ secrets.CODECOV_TOKEN }}
+            runtime: "pjrt"
+    uses: ./.github/workflows/CommonCI.yml
+    with:
+      julia_version: ${{ matrix.version }}
+      os: ${{ matrix.os }}
+      runtime: ${{ matrix.runtime }}
+      test_group: ${{ matrix.test_group }}
+
+  # This has been broken for a while, originating from CUDA.jl
+  # test-assertions:
+  #   strategy:
+  #     fail-fast: false
+  #     matrix:
+  #       version:
+  #         - "1.10"
+  #       test_group:
+  #         - core
+  #         - neural_networks
+  #         - integration
+  #   uses: ./.github/workflows/CommonCI.yml
+  #   with:
+  #     julia_version: ${{ matrix.version }}
+  #     os: "ubuntu-24.04"
+  #     runtime: "both"
+  #     assertions: true
+  #     test_group: ${{ matrix.test_group }}
+
+  downgrade:
+    strategy:
+      fail-fast: false
+      matrix:
+        test_group:
+          - core
+          - neural_networks
+          - integration
+        runtime:
+          - "pjrt"
+          - "ifrt"
+    uses: ./.github/workflows/CommonCI.yml
+    with:
+      julia_version: "1.10"
+      os: "ubuntu-24.04"
+      runtime: ${{ matrix.runtime }}
+      test_group: ${{ matrix.test_group }}
+      downgrade_testing: true

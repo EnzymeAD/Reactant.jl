@@ -2,7 +2,8 @@ module Metal
 
 using Reactant: Reactant
 using Scratch: @get_scratch!
-using Downloads
+using Downloads: Downloads
+using p7zip_jll: p7zip
 
 const metal_pjrt_plugin_dir = Ref{Union{Nothing,String}}(nothing)
 
@@ -47,7 +48,7 @@ function download_metal_pjrt_plugin_if_needed(path=nothing)
             end,
             zip_file_path,
         )
-        run(`unzip -qq $(zip_file_path) -d $(tmp_dir)`)
+        run(pipeline(`$(p7zip()) x -tzip -o$(tmp_dir) -- $(zip_file_path)`, devnull))
         mv(
             joinpath(tmp_dir, "jax_plugins", "metal_plugin", "pjrt_plugin_metal_14.dylib"),
             metal_pjrt_plugin_path,

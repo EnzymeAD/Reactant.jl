@@ -41,7 +41,9 @@ Base.:(==)(a::TypeID, b::TypeID) = API.mlirTypeIDEqual(a, b)
     function Base.cconvert(::Core.Type{API.MlirTypeIDAllocator}, allocator::TypeIDAllocator)
         return allocator
     end
-    function Base.unsafe_convert(::Core.Type{API.MlirTypeIDAllocator}, allocator)
+    function Base.unsafe_convert(
+        ::Core.Type{API.MlirTypeIDAllocator}, allocator::TypeIDAllocator
+    )
         return allocator.allocator
     end
 

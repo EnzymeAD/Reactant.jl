@@ -5,49 +5,26 @@ square(x) = x * 2
 fwd(Mode, RT, x, y) = Enzyme.autodiff(Mode, square, RT, Duplicated(x, y))
 
 @testset "Activity" begin
-    @test Enzyme.guess_activity(
-        Reactant.ConcretePJRTArray{
-            Float32,2,1,Reactant.Sharding.ShardInfo{Reactant.Sharding.NoSharding,Nothing}
-        },
-        Enzyme.Reverse,
-    ) <: Enzyme.Duplicated
+    @test Enzyme.guess_activity(Reactant.ConcretePJRTArray{Float32,2,1}, Enzyme.Reverse) <:
+        Enzyme.Duplicated
 
     @test Enzyme.guess_activity(Reactant.ConcretePJRTArray{Float32}, Enzyme.Reverse) <:
         Enzyme.Duplicated
 
-    @test Enzyme.guess_activity(
-        Reactant.ConcreteIFRTArray{
-            Float32,2,Reactant.Sharding.ShardInfo{Reactant.Sharding.NoSharding,Nothing}
-        },
-        Enzyme.Reverse,
-    ) <: Enzyme.Duplicated
+    @test Enzyme.guess_activity(Reactant.ConcreteIFRTArray{Float32,2}, Enzyme.Reverse) <:
+        Enzyme.Duplicated
 
-    @test Enzyme.guess_activity(
-        Reactant.ConcretePJRTNumber{
-            Float32,1,Reactant.Sharding.ShardInfo{Reactant.Sharding.NoSharding,Nothing}
-        },
-        Enzyme.Reverse,
-    ) <: Enzyme.Duplicated
+    @test Enzyme.guess_activity(Reactant.ConcretePJRTNumber{Float32,1}, Enzyme.Reverse) <:
+        Enzyme.Duplicated
 
     @test Enzyme.guess_activity(Reactant.ConcretePJRTNumber{Float32}, Enzyme.Reverse) <:
         Enzyme.Duplicated
 
-    @test Enzyme.guess_activity(
-        Reactant.ConcretePJRTNumber{
-            Float32,1,Reactant.Sharding.ShardInfo{Reactant.Sharding.NoSharding,Nothing}
-        },
-        Enzyme.Reverse,
-    ) <: Enzyme.Duplicated
+    @test Enzyme.guess_activity(Reactant.ConcretePJRTNumber{Float32,1}, Enzyme.Reverse) <:
+        Enzyme.Duplicated
 
     @test Enzyme.guess_activity(Reactant.ConcretePJRTNumber{Float32}, Enzyme.Reverse) <:
         Enzyme.Duplicated
-
-    @test Enzyme.guess_activity(
-        Reactant.ConcreteIFRTNumber{
-            Float32,Reactant.Sharding.ShardInfo{Reactant.Sharding.NoSharding,Nothing}
-        },
-        Enzyme.Reverse,
-    ) <: Enzyme.Duplicated
 
     @test Enzyme.guess_activity(Reactant.ConcreteIFRTNumber{Float32}, Enzyme.Reverse) <:
         Enzyme.Duplicated
@@ -63,10 +40,6 @@ fwd(Mode, RT, x, y) = Enzyme.autodiff(Mode, square, RT, Duplicated(x, y))
 end
 
 @testset "Basic Forward Mode" begin
-    ores1 = fwd(Forward, Duplicated, ones(3, 2), 3.1 * ones(3, 2))
-    @test typeof(ores1) == NamedTuple{(Symbol("1"),),Tuple{Array{Float64,2}}}
-    @test ores1[1] ≈ 6.2 * ones(3, 2)
-
     res1 = @jit(
         fwd(
             Forward,
@@ -77,11 +50,7 @@ end
     )
 
     @test res1 isa Tuple{<:ConcreteRArray{Float64,2}}
-    @test res1[1] ≈ ores1[1]
-
-    ores1 = fwd(ForwardWithPrimal, Duplicated, ones(3, 2), 3.1 * ones(3, 2))
-    @test typeof(ores1) ==
-        NamedTuple{(Symbol("1"), Symbol("2")),Tuple{Array{Float64,2},Array{Float64,2}}}
+    @test res1[1] ≈ fill(6.2, 3, 2)
 
     res1 = @jit(
         fwd(
@@ -93,11 +62,8 @@ end
     )
 
     @test res1 isa Tuple{<:ConcreteRArray{Float64,2},<:ConcreteRArray{Float64,2}}
-    @test res1[1] ≈ ores1[1]
-    @test res1[2] ≈ ores1[2]
-
-    ores1 = fwd(Forward, Const, ones(3, 2), 3.1 * ones(3, 2))
-    @test typeof(ores1) == Tuple{}
+    @test res1[1] ≈ fill(6.2, 3, 2)
+    @test res1[2] ≈ fill(2.0, 3, 2)
 
     res1 = @jit(
         fwd(
@@ -110,9 +76,6 @@ end
 
     @test typeof(res1) == Tuple{}
 
-    ores1 = fwd(ForwardWithPrimal, Const, ones(3, 2), 3.1 * ones(3, 2))
-    @test typeof(ores1) == NamedTuple{(Symbol("1"),),Tuple{Array{Float64,2}}}
-
     res1 = @jit(
         fwd(
             set_abi(ForwardWithPrimal, Reactant.ReactantABI),
@@ -123,7 +86,7 @@ end
     )
 
     @test res1 isa Tuple{<:ConcreteRArray{Float64,2}}
-    @test res1[1] ≈ ores1[1]
+    @test res1[1] ≈ fill(2.0, 3, 2)
 end
 
 function error_not_within_autodiff()
@@ -178,7 +141,7 @@ function cached_return(x, stret::StateReturn1)
 end
 
 @testset "Cached Return: Issue #416" begin
-    x = rand(10)
+    x = Reactant.TestUtils.construct_test_array(Float64, 10)
     x_ra = Reactant.to_rarray(x)
 
     stret = StateReturn(nothing)
@@ -225,23 +188,84 @@ end
 end
 
 @testset "onehot" begin
-    x = Reactant.to_rarray(rand(3, 4))
+    x = Reactant.to_rarray(ones(3, 4))
     hlo = @code_hlo optimize = false Enzyme.onehot(x)
     @test !contains("stablehlo.constant", repr(hlo))
 end
 
 fn(x) = sum(abs2, x)
 vector_forward_ad(x) = Enzyme.autodiff(Forward, fn, BatchDuplicated(x, Enzyme.onehot(x)))
+function vector_forward_ad2(x, dx)
+    return Enzyme.autodiff(Forward, fn, StackedBatchDuplicated(x, dx))
+end
 
 @testset "Vector Mode AD" begin
-    x = Reactant.to_rarray(reshape(collect(Float32, 1:4), 2, 2))
-    res = @jit vector_forward_ad(x)
-    res_enz = vector_forward_ad(Array(x))
+    x = reshape(collect(Float32, 1:6), 3, 2)
+    x_ra = Reactant.to_rarray(x)
+    res = @jit vector_forward_ad(x_ra)
 
-    @test res[1][1] ≈ res_enz[1][1]
-    @test res[1][2] ≈ res_enz[1][2]
-    @test res[1][3] ≈ res_enz[1][3]
-    @test res[1][4] ≈ res_enz[1][4]
+    @test x_ra ≈ x # See https://github.com/EnzymeAD/Reactant.jl/issues/1733
+    @test res[1][1] ≈ 2
+    @test res[1][2] ≈ 4
+    @test res[1][3] ≈ 6
+    @test res[1][4] ≈ 8
+    @test res[1][5] ≈ 10
+    @test res[1][6] ≈ 12
+
+    oh = Enzyme.onehot(x)
+    oh_stacked = stack(oh)
+    oh_ra = Reactant.to_rarray(oh_stacked)
+    res2 = @jit vector_forward_ad2(x_ra, oh_ra)
+
+    @test res2[1][1] ≈ 2
+    @test res2[1][2] ≈ 4
+    @test res2[1][3] ≈ 6
+    @test res2[1][4] ≈ 8
+    @test res2[1][5] ≈ 10
+    @test res2[1][6] ≈ 12
+end
+
+function fn2!(y, x)
+    copyto!(y, x .^ 2)
+    return nothing
+end
+
+@testset "Vector Mode AD (Reverse)" begin
+    x = [2.0, 3.0]
+    x_ra = Reactant.to_rarray(x)
+    y = [0.0, 0.0]
+    y_ra = Reactant.to_rarray(y)
+
+    dx1 = zeros(2)
+    dx2 = zeros(2)
+    dx3 = zeros(2)
+    dx4 = zeros(2)
+    dx1_ra = Reactant.to_rarray(dx1)
+    dx2_ra = Reactant.to_rarray(dx2)
+    dx3_ra = Reactant.to_rarray(dx3)
+    dx4_ra = Reactant.to_rarray(dx4)
+
+    dy1 = ones(2) .* 1
+    dy2 = ones(2) .* 2
+    dy3 = ones(2) .* 3
+    dy4 = ones(2) .* 4
+    dy1_ra = Reactant.to_rarray(dy1)
+    dy2_ra = Reactant.to_rarray(dy2)
+    dy3_ra = Reactant.to_rarray(dy3)
+    dy4_ra = Reactant.to_rarray(dy4)
+
+    @jit autodiff(
+        Reverse,
+        fn2!,
+        BatchDuplicated(y_ra, (dy1_ra, dy2_ra, dy3_ra, dy4_ra)),
+        BatchDuplicated(x_ra, (dx1_ra, dx2_ra, dx3_ra, dx4_ra)),
+    )
+
+    @test y_ra ≈ x .^ 2
+    @test dx1_ra ≈ 2 .* x .* dy1
+    @test dx2_ra ≈ 2 .* x .* dy2
+    @test dx3_ra ≈ 2 .* x .* dy3
+    @test dx4_ra ≈ 2 .* x .* dy4
 end
 
 @testset "make_zero!" begin
@@ -269,7 +293,7 @@ function gradient_fn(x, st)
 end
 
 @testset "seed" begin
-    x = Reactant.to_rarray(rand(2, 2))
+    x = Reactant.to_rarray(Reactant.TestUtils.construct_test_array(Float64, 2, 2))
     st = (; rng=Reactant.ReactantRNG())
 
     @test begin
@@ -301,19 +325,19 @@ function simple_grad_without_ignore(x::AbstractArray{T}) where {T}
 end
 
 function simple_grad_with_ignore(x::AbstractArray{T}) where {T}
-    return Reactant.ignore_derivatives(sum(x; dims=1), x .- 1, (x, x .+ 2)), sum(abs2, x)
+    return Enzyme.ignore_derivatives(sum(x; dims=1), x .- 1, (x, x .+ 2)), sum(abs2, x)
 end
 
 function zero_grad(x)
-    return Reactant.ignore_derivatives(sum(x))
+    return Enzyme.ignore_derivatives(sum(x))
 end
 
 function zero_grad2(x)
-    return Reactant.ignore_derivatives(sum(x), x)
+    return Enzyme.ignore_derivatives(sum(x), x)
 end
 
 @testset "ignore_derivatives" begin
-    x = Reactant.to_rarray(rand(Float32, 4, 4))
+    x = Reactant.to_rarray(Reactant.TestUtils.construct_test_array(Float32, 4, 4))
 
     res1 = @jit Enzyme.gradient(Reverse, simple_grad_without_ignore, x)
     @test res1[1] ≈ (2 .* Array(x) .+ 4)
@@ -328,4 +352,73 @@ end
     ∂x2, result2 = @jit Enzyme.gradient(ReverseWithPrimal, zero_grad2, x)
     @test result2 isa Tuple{<:ConcreteRNumber{Float32},<:ConcreteRArray{Float32,2}}
     @test ∂x2[1] ≈ zeros(Float32, 4, 4)
+end
+
+cubic(x) = x .^ 3
+
+function vjp_cubic(x, lambdas)
+    vjps = similar(lambdas)
+    for i in 1:size(lambdas, 2)
+        lambda = lambdas[:, i]
+        eval_jac_T_v(x) = sum(cubic(x) .* lambda)
+        vjps[:, i] .= Enzyme.gradient(Reverse, Const(eval_jac_T_v), x)[1]
+    end
+    return vjps
+end
+
+function jvp_vjp_cubic(v, x, lambdas)
+    vjp_cubic_inline(x) = vjp_cubic(x, lambdas)
+    return Enzyme.autodiff(Forward, Const(vjp_cubic_inline), Duplicated(x, v))[1]
+end
+
+@testset "Nested Forward over Reverse AD" begin
+    x = ones(3)
+    x_r = Reactant.to_rarray(x)
+    v = ones(3)
+    v_r = Reactant.to_rarray(x)
+    lambdas = ones(3, 2)
+    lambdas_r = Reactant.to_rarray(lambdas)
+
+    @test @jit(jvp_vjp_cubic(v_r, x_r, lambdas_r)) ≈ fill(6, (3, 2))
+end
+
+@testset "Finite Difference Gradient" begin
+    x = Reactant.to_rarray(Reactant.TestUtils.construct_test_array(Float16, 2, 2))
+    res = @jit Reactant.TestUtils.finite_difference_gradient(sum, x)
+    @test res isa Reactant.ConcreteRArray{Float16,2}
+end
+
+function fdiff_multiple_args(f, nt, x)
+    return sum(abs2, f(nt.y .+ x .- nt.x))
+end
+
+struct WrapperFunc{T}
+    x::T
+end
+
+(f::WrapperFunc)(x) = x .^ 3 .+ f.x
+
+@testset "Finite Difference Gradient (non vector inputs)" begin
+    nt = (;
+        x=Reactant.TestUtils.construct_test_array(Float64, 3, 4),
+        y=Reactant.TestUtils.construct_test_array(Float64, 3, 4),
+    )
+    fn = WrapperFunc(Reactant.TestUtils.construct_test_array(Float64, 3, 4))
+    x = Reactant.TestUtils.construct_test_array(Float64, 3, 4)
+
+    nt_ra = Reactant.to_rarray(nt)
+    fn_ra = Reactant.to_rarray(fn)
+    x_ra = Reactant.to_rarray(x)
+
+    results_fd = @jit Reactant.TestUtils.finite_difference_gradient(
+        fdiff_multiple_args, fn_ra, nt_ra, x_ra
+    )
+    @test results_fd isa typeof((fn_ra, nt_ra, x_ra))
+
+    results_enz = @jit Enzyme.gradient(Reverse, fdiff_multiple_args, fn_ra, nt_ra, x_ra)
+
+    @test results_fd[1].x ≈ results_enz[1].x
+    @test results_fd[2].x ≈ results_enz[2].x
+    @test results_fd[2].y ≈ results_enz[2].y
+    @test results_fd[3] ≈ results_enz[3]
 end
