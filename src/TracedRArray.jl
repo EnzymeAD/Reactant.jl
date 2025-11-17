@@ -730,11 +730,20 @@ end
 
 # stack
 function overloaded_stack(dims::Union{Integer,Colon}, xs)
-    @assert allequal([ndims(x) for x in xs]) "All arrays must have the same number of \
-                                              dimensions..."
-    dims = dims isa Colon ? ndims(first(xs)) + 1 : dims
+    dims = dims isa Colon ? nothing : dims
     res = []
-    for x in xs
+    prev_dims = nothing
+    for x in unwrapped_broadcast(identity, xs)
+        cur_dims = ndims(x)
+        if prev_dims === nothing
+            prev_dims = cur_dims
+        else
+            @assert prev_dims == cur_dims "All arrays must have the same number of \
+                                           dimensions..."
+        end
+
+        dims === nothing && (dims = cur_dims + 1)
+
         new_shape = ntuple(
             i -> i == dims ? 1 : (i < dims ? size(x, i) : size(x, i - 1)), ndims(x) + 1
         )

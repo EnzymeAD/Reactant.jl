@@ -351,23 +351,30 @@ end
     end
 end
 
-solve_with_lu(A, b) = lu(A) \ b
-function solve_with_lu_batched(A::AbstractArray{T,N}, B::AbstractArray{T,N}) where {T,N}
+solve_with_fact(f::F, A, b) where {F} = f(A) \ b
+function solve_with_fact_batched(
+    f::F, A::AbstractArray{T,N}, B::AbstractArray{T,N}
+) where {F,T,N}
     A2 = reshape(A, size(A, 1), size(A, 2), prod(size(A)[3:end]))
     B2 = reshape(B, size(B, 1), size(B, 2), prod(size(B)[3:end]))
     @assert size(A2, 3) == size(B2, 3)
     return reshape(
-        stack(lu(view(A2, :, :, i)) \ view(B2, :, :, i) for i in axes(A2, 3)),
+        stack(f(view(A2, :, :, i)) \ view(B2, :, :, i) for i in axes(A2, 3)),
         size(A2, 1),
         size(B2, 2),
         size(A)[3:end]...,
     )
 end
-function solve_with_lu_batched(A::AbstractArray{T,N}, b::AbstractArray{T,M}) where {T,N,M}
+function solve_with_fact_batched(
+    f::F, A::AbstractArray{T,N}, b::AbstractArray{T,M}
+) where {F,T,N,M}
     @assert N == M + 1
     B = reshape(b, size(b, 1), 1, size(b)[2:end]...)
-    return dropdims(solve_with_lu_batched(A, B); dims=2)
+    return dropdims(solve_with_fact_batched(f, A, B); dims=2)
 end
+
+solve_with_lu(A, b) = solve_with_fact(lu, A, b)
+solve_with_lu_batched(A, b) = solve_with_fact_batched(lu, A, b)
 
 @testset "LU Factorization" begin
     @testset "Un-batched" begin
@@ -430,6 +437,53 @@ end
 
         @test @jit(solve_with_lu(A_ra, B_ra)) ≈ solve_with_lu_batched(A, B) atol = 1e-4 rtol =
             1e-2
+    end
+end
+
+solve_with_cholesky(A, b) = solve_with_fact(cholesky, A, b)
+solve_with_cholesky_batched(A, b) = solve_with_fact_batched(cholesky, A, b)
+
+@testset "Cholesky Factorization" begin
+    @testset "Un-batched" begin
+        @testset for T in (Float32, Float64, ComplexF32, ComplexF64)
+            (T == ComplexF64 || T == Float64) && RunningOnTPU && continue
+
+            A = rand(T, 4, 4)
+            A = A * A'
+            A_ra = Reactant.to_rarray(A)
+
+            b = rand(T, 4)
+            b_ra = Reactant.to_rarray(b)
+
+            B = rand(T, 4, 3)
+            B_ra = Reactant.to_rarray(B)
+
+            @test @jit(solve_with_cholesky(A_ra, b_ra)) ≈ solve_with_cholesky(A, b) atol =
+                1e-4 rtol = 1e-2
+            @test @jit(solve_with_cholesky(A_ra, B_ra)) ≈ solve_with_cholesky(A, B) atol =
+                1e-4 rtol = 1e-2
+        end
+    end
+
+    @testset "Batched" begin
+        @testset for T in (Float32, Float64, ComplexF32, ComplexF64)
+            (T == ComplexF64 || T == Float64) && RunningOnTPU && continue
+
+            A = rand(T, 4, 4, 6)
+            A = reshape(stack((r * r' for r in eachslice(A; dims=3))), 4, 4, 3, 2)
+            A_ra = Reactant.to_rarray(A)
+
+            b = rand(T, 4, 3, 2)
+            b_ra = Reactant.to_rarray(b)
+
+            B = rand(T, 4, 5, 3, 2)
+            B_ra = Reactant.to_rarray(B)
+
+            @test @jit(solve_with_cholesky(A_ra, b_ra)) ≈ solve_with_cholesky_batched(A, b) atol =
+                1e-4 rtol = 1e-2
+            @test @jit(solve_with_cholesky(A_ra, B_ra)) ≈ solve_with_cholesky_batched(A, B) atol =
+                1e-4 rtol = 1e-2
+        end
     end
 end
 

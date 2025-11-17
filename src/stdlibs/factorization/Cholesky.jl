@@ -32,7 +32,7 @@ function overloaded_cholesky(
     info = materialize_traced_array(
         dropdims(
             Reactant.CallWithReactant(mapreduce)(
-                isfinite, &, UpperTriangular(factors); dims=1:2
+                isfinite, &, mapslices(LinearAlgebra.triu, factors; dims=(1, 2)); dims=1:2
             );
             dims=(1, 2),
         ),
