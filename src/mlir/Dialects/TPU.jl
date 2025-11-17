@@ -476,12 +476,15 @@ function enqueue_indirect_dma(
     )
 end
 
-function erase_memref_layout(operand::Value; result::IR.Type, location=Location())
-    op_ty_results = IR.Type[result,]
+function erase_memref_layout(
+    operand::Value; result=nothing::Union{Nothing,IR.Type}, location=Location()
+)
+    op_ty_results = IR.Type[]
     operands = Value[operand,]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
+    !isnothing(result) && push!(op_ty_results, result)
 
     return create_operation(
         "tpu.erase_memref_layout",
@@ -490,8 +493,8 @@ function erase_memref_layout(operand::Value; result::IR.Type, location=Location(
         owned_regions,
         successors,
         attributes,
-        results=op_ty_results,
-        result_inference=false,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
     )
 end
 

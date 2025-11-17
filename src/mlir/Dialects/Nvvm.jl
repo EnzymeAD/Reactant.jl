@@ -1853,8 +1853,10 @@ end
 The `cp.async.mbarrier.arrive` Op makes the *mbarrier object* track
 all prior cp.async operations initiated by the executing thread.
 The `addr` operand specifies the address of the *mbarrier object*
-in generic address space. The `noinc` attr impacts how the
-mbarrier\'s state is updated.
+in generic or shared::cta address space. When it is generic, the
+underlying memory should fall within the shared::cta space;
+otherwise the behavior is undefined. The `noinc` attr impacts
+how the mbarrier\'s state is updated.
 
 [For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#parallel-synchronization-and-communication-instructions-cp-async-mbarrier-arrive)
 """
@@ -1868,37 +1870,6 @@ function cp_async_mbarrier_arrive(addr::Value; noinc=nothing, location=Location(
 
     return create_operation(
         "nvvm.cp.async.mbarrier.arrive",
-        location;
-        operands,
-        owned_regions,
-        successors,
-        attributes,
-        results=op_ty_results,
-        result_inference=false,
-    )
-end
-
-"""
-`cp_async_mbarrier_arrive_shared`
-
-The `cp.async.mbarrier.arrive.shared` Op makes the *mbarrier object*
-track all prior cp.async operations initiated by the executing thread.
-The `addr` operand specifies the address of the *mbarrier object* in
-shared memory. The `noinc` attr impacts how the mbarrier\'s state
-is updated. 
-
-[For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#parallel-synchronization-and-communication-instructions-cp-async-mbarrier-arrive)
-"""
-function cp_async_mbarrier_arrive_shared(addr::Value; noinc=nothing, location=Location())
-    op_ty_results = IR.Type[]
-    operands = Value[addr,]
-    owned_regions = Region[]
-    successors = Block[]
-    attributes = NamedAttribute[]
-    !isnothing(noinc) && push!(attributes, namedattribute("noinc", noinc))
-
-    return create_operation(
-        "nvvm.cp.async.mbarrier.arrive.shared",
         location;
         operands,
         owned_regions,
@@ -3334,8 +3305,10 @@ a result of this operation. The operation returns an opaque value that
 captures the phase of the *mbarrier object* prior to the arrive-on operation.
 
 The operation takes the following operands:
-- `addr`: A pointer to the memory location of the *mbarrier object*. Uses generic 
-  addressing, but the address must still be in the shared memory space.
+- `addr`: A pointer to the memory location of the *mbarrier object*. The `addr`
+  must be a pointer to generic or shared::cta memory. When it is generic, the
+  underlying address must be within the shared::cta memory space; otherwise
+  the behavior is undefined.
 - `count`: Integer specifying the count argument to the arrive-on operation. 
   Must be in the valid range as specified in the *mbarrier object* contents.
 
@@ -3363,35 +3336,6 @@ function mbarrier_arrive_nocomplete(
 end
 
 """
-`mbarrier_arrive_nocomplete_shared`
-
-This Op is the same as `nvvm.mbarrier.arrive.nocomplete` except that the *mbarrier object*
-should be accessed using a shared-memory pointer instead of a generic-memory pointer.
-
-[For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#parallel-synchronization-and-communication-instructions-mbarrier-arrive)
-"""
-function mbarrier_arrive_nocomplete_shared(
-    addr::Value, count::Value; res::IR.Type, location=Location()
-)
-    op_ty_results = IR.Type[res,]
-    operands = Value[addr, count]
-    owned_regions = Region[]
-    successors = Block[]
-    attributes = NamedAttribute[]
-
-    return create_operation(
-        "nvvm.mbarrier.arrive.nocomplete.shared",
-        location;
-        operands,
-        owned_regions,
-        successors,
-        attributes,
-        results=op_ty_results,
-        result_inference=false,
-    )
-end
-
-"""
 `mbarrier_arrive`
 
 The `nvvm.mbarrier.arrive` operation performs an arrive-on operation on the 
@@ -3408,8 +3352,10 @@ The operation returns an opaque value that captures the phase of the
 value are implementation-specific.
 
 The operation takes the following operand:
-- `addr`: A pointer to the memory location of the *mbarrier object*. Uses generic 
-  addressing, but the address must still be in the shared memory space.
+- `addr`: A pointer to the memory location of the *mbarrier object*. The `addr`
+  must be a pointer to generic or shared::cta memory. When it is generic, the
+  underlying address must be within the shared::cta memory space; otherwise
+  the behavior is undefined.
 
 [For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#parallel-synchronization-and-communication-instructions-mbarrier-arrive)
 """
@@ -3422,33 +3368,6 @@ function mbarrier_arrive(addr::Value; res::IR.Type, location=Location())
 
     return create_operation(
         "nvvm.mbarrier.arrive",
-        location;
-        operands,
-        owned_regions,
-        successors,
-        attributes,
-        results=op_ty_results,
-        result_inference=false,
-    )
-end
-
-"""
-`mbarrier_arrive_shared`
-
-This Op is the same as `nvvm.mbarrier.arrive` except that the *mbarrier object*
-should be accessed using a shared-memory pointer instead of a generic-memory pointer.
-
-[For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#parallel-synchronization-and-communication-instructions-mbarrier-arrive)
-"""
-function mbarrier_arrive_shared(addr::Value; res::IR.Type, location=Location())
-    op_ty_results = IR.Type[res,]
-    operands = Value[addr,]
-    owned_regions = Region[]
-    successors = Block[]
-    attributes = NamedAttribute[]
-
-    return create_operation(
-        "nvvm.mbarrier.arrive.shared",
         location;
         operands,
         owned_regions,
@@ -3608,35 +3527,6 @@ function mbarrier_test_wait(addr::Value, state::Value; res::IR.Type, location=Lo
 end
 
 """
-`mbarrier_test_wait_shared`
-
-This Op is the same as `nvvm.mbarrier.test.wait` except that the *mbarrier object*
-should be accessed using a shared-memory pointer instead of a generic-memory pointer.
-
-[For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/#parallel-synchronization-and-communication-instructions-mbarrier-test-wait-try-wait)
-"""
-function mbarrier_test_wait_shared(
-    addr::Value, state::Value; res::IR.Type, location=Location()
-)
-    op_ty_results = IR.Type[res,]
-    operands = Value[addr, state]
-    owned_regions = Region[]
-    successors = Block[]
-    attributes = NamedAttribute[]
-
-    return create_operation(
-        "nvvm.mbarrier.test.wait.shared",
-        location;
-        operands,
-        owned_regions,
-        successors,
-        attributes,
-        results=op_ty_results,
-        result_inference=false,
-    )
-end
-
-"""
 `mbarrier_try_wait_parity`
 
 The `nvvm.mbarrier.try_wait.parity` operation performs a potentially-blocking 
@@ -3783,6 +3673,34 @@ function match_sync(thread_mask::Value, val::Value; res::IR.Type, kind, location
 
     return create_operation(
         "nvvm.match.sync",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+"""
+`memory_barrier`
+
+`membar` operation guarantees that prior memory accesses requested by this
+thread are performed at the specified `scope`, before later memory
+operations requested by this thread following the membar instruction.
+
+[For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/#parallel-synchronization-and-communication-instructions-membar)
+"""
+function memory_barrier(; scope, location=Location())
+    op_ty_results = IR.Type[]
+    operands = Value[]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[namedattribute("scope", scope),]
+
+    return create_operation(
+        "nvvm.memory.barrier",
         location;
         operands,
         owned_regions,

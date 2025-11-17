@@ -32,6 +32,25 @@ function arrive_expect_tx(barrier::Value; expect_tx, location=Location())
     )
 end
 
+function arrive(barrier::Value; orders_tensor_core, location=Location())
+    op_ty_results = IR.Type[]
+    operands = Value[barrier,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[namedattribute("orders_tensor_core", orders_tensor_core),]
+
+    return create_operation(
+        "mosaic_gpu.arrive",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
 """
 `async_load`
 
@@ -281,6 +300,31 @@ function broadcast_in_dim(
 end
 
 """
+`broadcasted_iota`
+
+Creates an array that has the specified shape and holds values starting at
+zero and incrementing by one along the specified dimension.
+"""
+function broadcasted_iota(; result_0::IR.Type, dimension, location=Location())
+    op_ty_results = IR.Type[result_0,]
+    operands = Value[]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[namedattribute("dimension", dimension),]
+
+    return create_operation(
+        "mosaic_gpu.broadcasted_iota",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+"""
 `custom_primitive`
 
 Allows defining a custom Mosaic GPU primitive.
@@ -420,6 +464,25 @@ function optimization_barrier(
         attributes,
         results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
         result_inference=(length(op_ty_results) == 0 ? true : false),
+    )
+end
+
+function print_layout(value::Value; format, location=Location())
+    op_ty_results = IR.Type[]
+    operands = Value[value,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[namedattribute("format", format),]
+
+    return create_operation(
+        "mosaic_gpu.print_layout",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
     )
 end
 

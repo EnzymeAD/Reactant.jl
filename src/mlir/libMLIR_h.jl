@@ -11623,6 +11623,12 @@ function mlirGetDialectHandle__mosaic_gpu__()
     @ccall mlir_c.mlirGetDialectHandle__mosaic_gpu__()::MlirDialectHandle
 end
 
+function mlirDialectRegistryInsertMosaicGpuInlinerExtensions(registry)
+    @ccall mlir_c.mlirDialectRegistryInsertMosaicGpuInlinerExtensions(
+        registry::MlirDialectRegistry
+    )::Cvoid
+end
+
 function enzymexlaLapackLayoutAttrGet(ctx, col_major)
     @ccall mlir_c.enzymexlaLapackLayoutAttrGet(
         ctx::MlirContext, col_major::UInt8
