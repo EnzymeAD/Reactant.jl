@@ -295,228 +295,240 @@ function act_attr(val)
     return MLIR.IR.Attribute(val)
 end
 
+const WITHIN_AUTODIFF = Ref(false)
+
+function overload_within_autodiff()
+    return WITHIN_AUTODIFF[]
+end
+
 function overload_autodiff(
     ::CMode, f::FA, ::Type{A}, args::Vararg{Annotation,Nargs}
 ) where {CMode<:Mode,FA<:Annotation,A<:Annotation,Nargs}
-    reverse = CMode <: ReverseMode
+    WITHIN_AUTODIFF[] = true
+    try
+        reverse = CMode <: ReverseMode
 
-    width = Enzyme.same_or_one(1, args...)
-    if width == 0
-        throw(ErrorException("Cannot differentiate with a batch size of 0"))
-    end
-
-    primf = f.val
-    primargs = ((v.val for v in args)...,)
-
-    argprefix::Symbol = gensym("autodiffarg")
-    resprefix::Symbol = gensym("autodiffresult")
-    resargprefix::Symbol = gensym("autodiffresarg")
-
-    mlir_fn_res = TracedUtils.make_mlir_fn(
-        primf,
-        primargs,
-        (),
-        string(f) * "_autodiff",
-        false;
-        argprefix,
-        resprefix,
-        resargprefix,
-        within_autodiff=true,
-    )
-    (; result, linear_args, in_tys, linear_results) = mlir_fn_res
-    fnwrap = mlir_fn_res.fnwrapped
-    func2 = mlir_fn_res.f
-
-    activity = Int32[]
-    ad_inputs = MLIR.IR.Value[]
-
-    for a in linear_args
-        idx, path = TracedUtils.get_argidx(a, argprefix)
-        arg = idx == 1 && fnwrap ? f : args[idx - fnwrap]
-        push!(activity, act_from_type(arg, reverse))
-        push_acts!(ad_inputs, arg, path[3:end], reverse)
-    end
-
-    outtys = MLIR.IR.Type[]
-    ret_activity = Int32[]
-
-    for a in linear_results
-        if TracedUtils.has_idx(a, resprefix)
-            if EnzymeCore.needs_primal(CMode)
-                push!(
-                    outtys,
-                    TracedUtils.transpose_ty(MLIR.IR.type(TracedUtils.get_mlir_data(a))),
-                )
-            end
-
-            if CMode <: ForwardMode && !(A <: Const)
-                push!(
-                    outtys,
-                    TracedUtils.batch_ty(
-                        width,
-                        TracedUtils.transpose_ty(
-                            MLIR.IR.type(TracedUtils.get_mlir_data(a))
-                        ),
-                    ),
-                )
-            end
-
-            act = act_from_type(A, reverse, EnzymeCore.needs_primal(CMode))
-            push!(ret_activity, act)
-            if act == enzyme_out || act == enzyme_outnoneed
-                if width == 1
-                    cst = @opcall fill(one(unwrapped_eltype(a)), size(a))
-                else
-                    cst = @opcall fill(one(unwrapped_eltype(a)), (size(a)..., width))
-                end
-                push!(ad_inputs, cst.mlir_data)
-            end
-        else
-            if TracedUtils.has_idx(a, argprefix)
-                idx, path = TracedUtils.get_argidx(a, argprefix)
-                arg = idx == 1 && fnwrap ? f : args[idx - fnwrap]
-
-                act = act_from_type(arg, reverse, true)
-                push!(ret_activity, act)
-
-                if act == enzyme_out || act == enzyme_outnoneed
-                    if width == 1
-                        TracedUtils.push_val!(ad_inputs, arg.dval, path[3:end])
-                    elseif arg.dval isa AbstractArray
-                        TracedUtils.push_val!(ad_inputs, arg.dval, path[3:end])
-                    else
-                        TracedUtils.push_val!(
-                            ad_inputs, call_with_reactant(stack, arg.dval), path[3:end]
-                        )
-                    end
-                end
-            else
-                act = act_from_type(Const, reverse, true)
-                push!(ret_activity, act)
-            end
-
-            push!(
-                outtys, TracedUtils.transpose_ty(MLIR.IR.type(TracedUtils.get_mlir_data(a)))
-            )
+        width = Enzyme.same_or_one(1, args...)
+        if width == 0
+            throw(ErrorException("Cannot differentiate with a batch size of 0"))
         end
-    end
 
-    for (i, act) in enumerate(activity)
-        if act == enzyme_out || act == enzyme_dup || act == enzyme_dupnoneed
-            push!(outtys, TracedUtils.batch_ty(width, in_tys[i]))
-        end
-    end
+        primf = f.val
+        primargs = ((v.val for v in args)...,)
 
-    fname = TracedUtils.get_attribute_by_name(func2, "sym_name")
-    fname = MLIR.IR.FlatSymbolRefAttribute(Base.String(fname))
-    res = (reverse ? MLIR.Dialects.enzyme.autodiff : MLIR.Dialects.enzyme.fwddiff)(
-        [TracedUtils.transpose_val(v) for v in ad_inputs];
-        outputs=outtys,
-        fn=fname,
-        width,
-        strong_zero=EnzymeCore.strong_zero(CMode),
-        activity=MLIR.IR.Attribute([act_attr(a) for a in activity]),
-        ret_activity=MLIR.IR.Attribute([act_attr(a) for a in ret_activity]),
-    )
+        argprefix::Symbol = gensym("autodiffarg")
+        resprefix::Symbol = gensym("autodiffresult")
+        resargprefix::Symbol = gensym("autodiffresarg")
 
-    residx = 1
+        mlir_fn_res = TracedUtils.make_mlir_fn(
+            primf,
+            primargs,
+            (),
+            string(f) * "_autodiff",
+            false;
+            argprefix,
+            resprefix,
+            resargprefix,
+            within_autodiff=true,
+        )
+        (; result, linear_args, in_tys, linear_results) = mlir_fn_res
+        fnwrap = mlir_fn_res.fnwrapped
+        func2 = mlir_fn_res.f
 
-    dresult = if CMode <: ForwardMode && !(A <: Const)
-        if width == 1
-            deepcopy(result)
-        else
-            ntuple(Val(width)) do i
-                Base.@_inline_meta
-                deepcopy(result)
-            end
-        end
-    else
-        nothing
-    end
+        activity = Int32[]
+        ad_inputs = MLIR.IR.Value[]
 
-    for a in linear_results
-        if TracedUtils.has_idx(a, resprefix)
-            if EnzymeCore.needs_primal(CMode)
-                path = TracedUtils.get_idx(a, resprefix)
-                tval = TracedUtils.transpose_val(MLIR.IR.result(res, residx))
-                TracedUtils.set!(result, path[2:end], tval)
-                residx += 1
-            end
-            if CMode <: ForwardMode && !(A <: Const)
-                path = TracedUtils.get_idx(a, resprefix)
-                tval = TracedUtils.transpose_val(MLIR.IR.result(res, residx))
-                if width == 1
-                    TracedUtils.set!(dresult, path[2:end], tval)
-                else
-                    ttval = TracedRArray(tval)
-                    for (i, sl) in enumerate(eachslice(ttval; dims=ndims(ttval)))
-                        TracedUtils.set!(
-                            dresult[i],
-                            path[2:end],
-                            @allowscalar(TracedUtils.get_mlir_data(sl))
-                        )
-                    end
-                end
-                residx += 1
-            end
-        elseif TracedUtils.has_idx(a, argprefix)
+        for a in linear_args
             idx, path = TracedUtils.get_argidx(a, argprefix)
             arg = idx == 1 && fnwrap ? f : args[idx - fnwrap]
-            TracedUtils.set!(
-                arg.val, path[3:end], TracedUtils.transpose_val(MLIR.IR.result(res, residx))
-            )
-            residx += 1
-        else
-            TracedUtils.set!(a, (), TracedUtils.transpose_val(MLIR.IR.result(res, residx)))
-            residx += 1
-        end
-    end
-
-    restup = Any[(a isa Active) ? copy(a) : nothing for a in args]
-    for a in linear_args
-        idx, path = TracedUtils.get_argidx(a, argprefix)
-
-        arg = idx == 1 && fnwrap ? f : args[idx - fnwrap]
-        act_from_type(arg, reverse) != enzyme_out && continue
-
-        if idx == 1 && fnwrap && arg isa Active
-            @assert false
+            push!(activity, act_from_type(arg, reverse))
+            push_acts!(ad_inputs, arg, path[3:end], reverse)
         end
 
-        set_act!(
-            arg,
-            path[3:end],
-            reverse,
-            TracedUtils.transpose_val(MLIR.IR.result(res, residx));
+        outtys = MLIR.IR.Type[]
+        ret_activity = Int32[]
+
+        for a in linear_results
+            if TracedUtils.has_idx(a, resprefix)
+                if EnzymeCore.needs_primal(CMode)
+                    push!(
+                        outtys,
+                        TracedUtils.transpose_ty(MLIR.IR.type(TracedUtils.get_mlir_data(a))),
+                    )
+                end
+
+                if CMode <: ForwardMode && !(A <: Const)
+                    push!(
+                        outtys,
+                        TracedUtils.batch_ty(
+                            width,
+                            TracedUtils.transpose_ty(
+                                MLIR.IR.type(TracedUtils.get_mlir_data(a))
+                            ),
+                        ),
+                    )
+                end
+
+                act = act_from_type(A, reverse, EnzymeCore.needs_primal(CMode))
+                push!(ret_activity, act)
+                if act == enzyme_out || act == enzyme_outnoneed
+                    if width == 1
+                        cst = @opcall fill(one(unwrapped_eltype(a)), size(a))
+                    else
+                        cst = @opcall fill(one(unwrapped_eltype(a)), (size(a)..., width))
+                    end
+                    push!(ad_inputs, cst.mlir_data)
+                end
+            else
+                if TracedUtils.has_idx(a, argprefix)
+                    idx, path = TracedUtils.get_argidx(a, argprefix)
+                    arg = idx == 1 && fnwrap ? f : args[idx - fnwrap]
+
+                    act = act_from_type(arg, reverse, true)
+                    push!(ret_activity, act)
+
+                    if act == enzyme_out || act == enzyme_outnoneed
+                        if width == 1
+                            TracedUtils.push_val!(ad_inputs, arg.dval, path[3:end])
+                        elseif arg.dval isa AbstractArray
+                            TracedUtils.push_val!(ad_inputs, arg.dval, path[3:end])
+                        else
+                            TracedUtils.push_val!(
+                                ad_inputs, call_with_reactant(stack, arg.dval), path[3:end]
+                            )
+                        end
+                    end
+                else
+                    act = act_from_type(Const, reverse, true)
+                    push!(ret_activity, act)
+                end
+
+                push!(
+                    outtys, TracedUtils.transpose_ty(MLIR.IR.type(TracedUtils.get_mlir_data(a)))
+                )
+            end
+        end
+
+        for (i, act) in enumerate(activity)
+            if act == enzyme_out || act == enzyme_dup || act == enzyme_dupnoneed
+                push!(outtys, TracedUtils.batch_ty(width, in_tys[i]))
+            end
+        end
+
+        fname = TracedUtils.get_attribute_by_name(func2, "sym_name")
+        fname = MLIR.IR.FlatSymbolRefAttribute(Base.String(fname))
+        res = (reverse ? MLIR.Dialects.enzyme.autodiff : MLIR.Dialects.enzyme.fwddiff)(
+            [TracedUtils.transpose_val(v) for v in ad_inputs];
+            outputs=outtys,
+            fn=fname,
             width,
-            emptypath=arg isa Active,
+            strong_zero=EnzymeCore.strong_zero(CMode),
+            activity=MLIR.IR.Attribute([act_attr(a) for a in activity]),
+            ret_activity=MLIR.IR.Attribute([act_attr(a) for a in ret_activity]),
         )
-        residx += 1
-    end
 
-    func2.operation = MLIR.API.MlirOperation(C_NULL)
+        residx = 1
 
-    if reverse
-        resv = if EnzymeCore.needs_primal(CMode)
-            result
+        dresult = if CMode <: ForwardMode && !(A <: Const)
+            if width == 1
+                deepcopy(result)
+            else
+                ntuple(Val(width)) do i
+                    Base.@_inline_meta
+                    deepcopy(result)
+                end
+            end
         else
             nothing
         end
-        return ((restup...,), resv)
-    else
-        if EnzymeCore.needs_primal(CMode)
-            if CMode <: ForwardMode && !(A <: Const)
-                return (dresult, result)
+
+        for a in linear_results
+            if TracedUtils.has_idx(a, resprefix)
+                if EnzymeCore.needs_primal(CMode)
+                    path = TracedUtils.get_idx(a, resprefix)
+                    tval = TracedUtils.transpose_val(MLIR.IR.result(res, residx))
+                    TracedUtils.set!(result, path[2:end], tval)
+                    residx += 1
+                end
+                if CMode <: ForwardMode && !(A <: Const)
+                    path = TracedUtils.get_idx(a, resprefix)
+                    tval = TracedUtils.transpose_val(MLIR.IR.result(res, residx))
+                    if width == 1
+                        TracedUtils.set!(dresult, path[2:end], tval)
+                    else
+                        ttval = TracedRArray(tval)
+                        for (i, sl) in enumerate(eachslice(ttval; dims=ndims(ttval)))
+                            TracedUtils.set!(
+                                dresult[i],
+                                path[2:end],
+                                @allowscalar(TracedUtils.get_mlir_data(sl))
+                            )
+                        end
+                    end
+                    residx += 1
+                end
+            elseif TracedUtils.has_idx(a, argprefix)
+                idx, path = TracedUtils.get_argidx(a, argprefix)
+                arg = idx == 1 && fnwrap ? f : args[idx - fnwrap]
+                TracedUtils.set!(
+                    arg.val, path[3:end], TracedUtils.transpose_val(MLIR.IR.result(res, residx))
+                )
+                residx += 1
             else
-                return (result,)
-            end
-        else
-            if CMode <: ForwardMode && !(A <: Const)
-                return (dresult,)
-            else
-                return ()
+                TracedUtils.set!(a, (), TracedUtils.transpose_val(MLIR.IR.result(res, residx)))
+                residx += 1
             end
         end
+
+        restup = Any[(a isa Active) ? copy(a) : nothing for a in args]
+        for a in linear_args
+            idx, path = TracedUtils.get_argidx(a, argprefix)
+
+            arg = idx == 1 && fnwrap ? f : args[idx - fnwrap]
+            act_from_type(arg, reverse) != enzyme_out && continue
+
+            if idx == 1 && fnwrap && arg isa Active
+                @assert false
+            end
+
+            set_act!(
+                arg,
+                path[3:end],
+                reverse,
+                TracedUtils.transpose_val(MLIR.IR.result(res, residx));
+                width,
+                emptypath=arg isa Active,
+            )
+            residx += 1
+        end
+
+        func2.operation = MLIR.API.MlirOperation(C_NULL)
+
+        if reverse
+            resv = if EnzymeCore.needs_primal(CMode)
+                result
+            else
+                nothing
+            end
+            return ((restup...,), resv)
+        else
+            if EnzymeCore.needs_primal(CMode)
+                if CMode <: ForwardMode && !(A <: Const)
+                    return (dresult, result)
+                else
+                    return (result,)
+                end
+            else
+                if CMode <: ForwardMode && !(A <: Const)
+                    return (dresult,)
+                else
+                    return ()
+                end
+            end
+        end
+
+    finally
+        WITHIN_AUTODIFF[] = false
     end
 end
 

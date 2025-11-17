@@ -74,18 +74,6 @@ function set_reactant_abi(
     if f === call_with_reactant
         arginfo2 = ArgInfo(fargs isa Nothing ? nothing : fargs[2:end], argtypes[2:end])
         return abstract_call(interp, arginfo2::ArgInfo, si, sv, max_methods)
-    elseif !(interp.within_autodiff_rewrite) && f === overload_autodiff
-        interp′ = Enzyme.Compiler.Interpreter.EnzymeInterpreter(
-            interp; within_autodiff_rewrite=true
-        )
-        return Base.@invoke abstract_call_known(
-            interp′::Enzyme.Compiler.Interpreter.EnzymeInterpreter,
-            f,
-            arginfo,
-            si,
-            sv,
-            max_methods,
-        )
     end
 
     return Base.@invoke abstract_call_known(
