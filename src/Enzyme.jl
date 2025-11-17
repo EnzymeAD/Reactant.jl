@@ -96,7 +96,7 @@ end
 @register_make_zero_inplace(Enzyme.remake_zero!)
 
 function Enzyme.make_zero(
-    ::Type{RT}, seen::IdDict, prev::RT, ::Val{copy_if_inactive}=Val(false)
+    ::Type{RT}, seen::IdDict, prev::RT, (::Val{copy_if_inactive})=Val(false)
 )::RT where {copy_if_inactive,RT<:Union{RArray,RNumber}}
     if haskey(seen, prev)
         return seen[prev]
@@ -142,7 +142,7 @@ function EnzymeRules.augmented_primal(
 ) where {RT}
     primargs = ntuple(Val(length(args))) do i
         Base.@_inline_meta
-        args[i].val
+        return args[i].val
     end
 
     primal = if EnzymeCore.needs_primal(config)
@@ -162,7 +162,7 @@ function EnzymeRules.augmented_primal(
         else
             ntuple(Val(EnzymeRules.width(config))) do i
                 Base.@_inline_meta
-                ConcretePJRTArray(
+                return ConcretePJRTArray(
                     zeros(T.val, primargs...);
                     client=XLA.client(uval.val),
                     device=XLA.device(uval.val),
@@ -192,7 +192,7 @@ function EnzymeRules.reverse(
 ) where {RT,N}
     ntuple(Val(N + 2)) do i
         Base.@_inline_meta
-        nothing
+        return nothing
     end
 end
 
@@ -294,7 +294,6 @@ function act_attr(val)
     )::MLIR.API.MlirAttribute
     return MLIR.IR.Attribute(val)
 end
-
 
 function overload_autodiff(
     ::CMode, f::FA, ::Type{A}, args::Vararg{Annotation,Nargs}
@@ -428,7 +427,7 @@ function overload_autodiff(
         else
             ntuple(Val(width)) do i
                 Base.@_inline_meta
-                deepcopy(result)
+                return deepcopy(result)
             end
         end
     else
