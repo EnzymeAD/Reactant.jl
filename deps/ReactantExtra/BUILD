@@ -1175,7 +1175,7 @@ cc_library(
         "@com_google_absl//absl/log:globals",
         "@llvm-project//mlir:CAPIIRObjects",
         "@llvm-project//mlir:CAPILLVMObjects",
-        
+
         # Broken upstream x/ref https://github.com/jax-ml/jax/issues/33344
         # "@jax//jaxlib/mosaic:tpu_dialect_capi_objects",
         "@jax//jaxlib/triton:triton_dialect_capi_objects",
