@@ -452,15 +452,20 @@ end
 end
 
 @testset "det" begin
-    x = Reactant.TestUtils.construct_test_array(Float32, 8, 8)
-    x_ra = Reactant.to_rarray(x)
+    x_lowtri = Float32[1 0; 2 2]
+    x_reg = Float32[1 -1; 2 2]
+    x_uptri = Float32[1 2; 0 2]
 
-    res_ra = @jit LinearAlgebra.logabsdet(x_ra)
-    res = LinearAlgebra.logabsdet(x)
-    @test res_ra[1] ≈ res[1]
-    @test res_ra[2] ≈ res[2]
+    for x in (x_lowtri, x_reg, x_uptri)
+        x_ra = Reactant.to_rarray(x)
 
-    res_ra = @jit LinearAlgebra.det(x_ra)
-    res = LinearAlgebra.det(x)
-    @test res_ra ≈ res
+        res_ra = @jit LinearAlgebra.logabsdet(x_ra)
+        res = LinearAlgebra.logabsdet(x)
+        @test res_ra[1] ≈ res[1]
+        @test res_ra[2] ≈ res[2]
+
+        res_ra = @jit LinearAlgebra.det(x_ra)
+        res = LinearAlgebra.det(x)
+        @test res_ra ≈ res
+    end
 end

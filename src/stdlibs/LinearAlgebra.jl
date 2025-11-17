@@ -5,7 +5,7 @@ using ..Reactant: Reactant, Ops
 using ..Reactant:
     TracedRArray, TracedRNumber, AnyTracedRArray, AnyTracedRMatrix, AnyTracedRVector
 using ..Reactant: call_with_reactant
-using ReactantCore: ReactantCore, materialize_traced_array
+using ReactantCore: ReactantCore, materialize_traced_array, @trace
 using Reactant_jll: Reactant_jll
 
 using ..TracedUtils: TracedUtils, get_mlir_data, set_mlir_data!
@@ -15,7 +15,7 @@ using LinearAlgebra: LinearAlgebra, BLAS
 using LinearAlgebra: Adjoint, Transpose, Factorization, RowMaximum
 using LinearAlgebra: SymTridiagonal, Symmetric, Bidiagonal, Diagonal, Tridiagonal
 using LinearAlgebra: LowerTriangular, UnitLowerTriangular, UpperTriangular
-using LinearAlgebra: diag, diagm, ldiv!
+using LinearAlgebra: diag, diagm, ldiv!, det, logabsdet, lu, istriu, istril
 using Libdl: Libdl
 
 function __init__()
@@ -821,13 +821,30 @@ LinearAlgebra._istril(A::AnyTracedRMatrix, k) = all(iszero, overloaded_triu(A, k
 
 # Only needed because we lack automatic if tracing
 function LinearAlgebra.det(A::AnyTracedRMatrix)
-    # FIXME: using @trace here produces the cryptic UndefVarError
-    return LinearAlgebra.det(LinearAlgebra.lu(A; check=false))
+    @trace if istriu(A) || istril(A)
+        _det = det(UpperTriangular(A))
+    else
+        _det = det(lu(A; check=false))
+    end
+    return _det
 end
 
 function LinearAlgebra.logabsdet(A::AnyTracedRMatrix)
-    # FIXME: using @trace here produces the cryptic UndefVarError
-    return LinearAlgebra.logabsdet(LinearAlgebra.lu(A; check=false))
+    @trace if istriu(A) || istril(A)
+        _logabsdet = logabsdet(UpperTriangular(A))
+    else
+        _logabsdet = logabsdet(lu(A; check=false))
+    end
+    return _logabsdet
+end
+
+function LinearAlgebra.logabsdet(
+    A::Union{UpperTriangular{T,<:AnyTracedRMatrix},LowerTriangular{T,<:AnyTracedRMatrix}}
+) where {T}
+    d = LinearAlgebra.diag(A)
+    sgn = prod(sign, d)
+    abs_det = sum(log ∘ abs, d)
+    return abs_det, sgn
 end
 
 end
