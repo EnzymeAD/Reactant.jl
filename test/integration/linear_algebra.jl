@@ -433,22 +433,56 @@ end
     end
 end
 
-@testset "istriu" begin
-    x = Reactant.TestUtils.construct_test_array(Float32, 8, 8)
-    x_triu = triu(x, 4)
-    x_triu_ra = Reactant.to_rarray(x_triu)
-    @test Bool(@jit(LinearAlgebra.istriu(x_triu_ra, 4)))
-    @test Bool(@jit(LinearAlgebra.istriu(x_triu_ra, 3)))
-    @test !Bool(@jit(LinearAlgebra.istriu(x_triu_ra, 5)))
-end
+@testset "structure check" begin
+    @testset "istriu" begin
+        x = Reactant.TestUtils.construct_test_array(Float32, 8, 8)
+        x_triu = triu(x, 4)
+        x_triu_ra = Reactant.to_rarray(x_triu)
+        @test Bool(@jit(LinearAlgebra.istriu(x_triu_ra, 4)))
+        @test Bool(@jit(LinearAlgebra.istriu(x_triu_ra, 3)))
+        @test !Bool(@jit(LinearAlgebra.istriu(x_triu_ra, 5)))
+    end
 
-@testset "istril" begin
-    x = Reactant.TestUtils.construct_test_array(Float32, 8, 8)
-    x_tril = tril(x, -4)
-    x_tril_ra = Reactant.to_rarray(x_tril)
-    @test Bool(@jit(LinearAlgebra.istril(x_tril_ra, -4)))
-    @test Bool(@jit(LinearAlgebra.istril(x_tril_ra, -3)))
-    @test !Bool(@jit(LinearAlgebra.istril(x_tril_ra, -5)))
+    @testset "istril" begin
+        x = Reactant.TestUtils.construct_test_array(Float32, 8, 8)
+        x_tril = tril(x, -4)
+        x_tril_ra = Reactant.to_rarray(x_tril)
+        @test Bool(@jit(LinearAlgebra.istril(x_tril_ra, -4)))
+        @test Bool(@jit(LinearAlgebra.istril(x_tril_ra, -3)))
+        @test !Bool(@jit(LinearAlgebra.istril(x_tril_ra, -5)))
+    end
+
+    @testset "banded" begin
+        x = Reactant.TestUtils.construct_test_array(Float32, 8, 8)
+        x = tril(triu(x, -3), 4)
+        x_ra = Reactant.to_rarray(x)
+
+        @test Bool(@jit(LinearAlgebra.isbanded(x_ra, -3, 4)))
+        @test Bool(@jit(LinearAlgebra.isbanded(x_ra, -3, 5)))
+        @test Bool(@jit(LinearAlgebra.isbanded(x_ra, -4, 4)))
+        @test !Bool(@jit(LinearAlgebra.isbanded(x_ra, -2, 4)))
+        @test !Bool(@jit(LinearAlgebra.isbanded(x_ra, -3, 3)))
+    end
+
+    @testset "issymmetric/ishermitian" begin
+        x = Reactant.TestUtils.construct_test_array(Float32, 8, 8)
+        x2 = x .+ x'
+        x_ra = Reactant.to_rarray(x)
+        x2_ra = Reactant.to_rarray(x2)
+        @test Bool(@jit(LinearAlgebra.issymmetric(x2_ra)))
+        @test Bool(@jit(LinearAlgebra.ishermitian(x2_ra)))
+        @test !Bool(@jit(LinearAlgebra.issymmetric(x_ra)))
+        @test !Bool(@jit(LinearAlgebra.ishermitian(x_ra)))
+
+        x = Reactant.TestUtils.construct_test_array(ComplexF32, 8, 8)
+        x2 = x .+ x'
+        x_ra = Reactant.to_rarray(x)
+        x2_ra = Reactant.to_rarray(x2)
+        @test !Bool(@jit(LinearAlgebra.issymmetric(x2_ra)))
+        @test Bool(@jit(LinearAlgebra.ishermitian(x2_ra)))
+        @test !Bool(@jit(LinearAlgebra.issymmetric(x_ra)))
+        @test !Bool(@jit(LinearAlgebra.ishermitian(x_ra)))
+    end
 end
 
 @testset "det" begin
