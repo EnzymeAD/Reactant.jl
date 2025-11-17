@@ -483,3 +483,8 @@ end
         @test res_ra ≈ res
     end
 end
+
+@testset "norm accidental promotion" begin
+    x_ra = Reactant.to_rarray(rand(Float32, 4, 4))
+    @test @jit(norm(x_ra)) isa ConcreteRNumber{Float32}
+end
