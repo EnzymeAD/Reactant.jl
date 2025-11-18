@@ -11655,6 +11655,10 @@ function enzymexlaQRAlgorithmAttrGet(ctx, mode)
     @ccall mlir_c.enzymexlaQRAlgorithmAttrGet(ctx::MlirContext, mode::Int32)::MlirAttribute
 end
 
+function enzymexlaSVDAlgorithmAttrGet(ctx, mode)
+    @ccall mlir_c.enzymexlaSVDAlgorithmAttrGet(ctx::MlirContext, mode::Int32)::MlirAttribute
+end
+
 function enzymexlaGeluApproximationAttrGet(ctx, mode)
     @ccall mlir_c.enzymexlaGeluApproximationAttrGet(
         ctx::MlirContext, mode::Int32
