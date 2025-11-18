@@ -443,12 +443,36 @@ end
 solve_with_cholesky(A, b) = solve_with_fact(cholesky, A, b)
 solve_with_cholesky_batched(A, b) = solve_with_fact_batched(cholesky, A, b)
 
+function random_matrix_with_cond(
+    ::Type{T}, rows::Int, cols::Int, cond_number::Float64
+) where {T}
+    # Generate random orthogonal matrices U and V
+    U = (
+        LinearAlgebra.qr(randn(rows, rows)).Q *
+        Diagonal(sign.(diag(LinearAlgebra.qr(randn(rows, rows)).R)))
+    )
+    V = (
+        LinearAlgebra.qr(randn(cols, cols)).Q *
+        Diagonal(sign.(diag(LinearAlgebra.qr(randn(cols, cols)).R)))
+    )
+
+    min_dim = min(rows, cols)
+    singular_values = exp.(range(log(1.0), log(1.0 / cond_number); length=min_dim))
+
+    S = zeros(Float64, rows, cols)
+    @inbounds for i in 1:min_dim
+        S[i, i] = singular_values[i]
+    end
+
+    return T.(U * S * V')
+end
+
 @testset "Cholesky Factorization" begin
     @testset "Un-batched" begin
         @testset for T in (Float32, Float64, ComplexF32, ComplexF64)
             (T == ComplexF64 || T == Float64) && RunningOnTPU && continue
 
-            A = rand(T, 4, 4)
+            A = random_matrix_with_cond(T, 4, 4, 1.001) # avoid ill conditioned
             A = A * A'
             A_ra = Reactant.to_rarray(A)
 
@@ -469,7 +493,9 @@ solve_with_cholesky_batched(A, b) = solve_with_fact_batched(cholesky, A, b)
         @testset for T in (Float32, Float64, ComplexF32, ComplexF64)
             (T == ComplexF64 || T == Float64) && RunningOnTPU && continue
 
-            A = rand(T, 4, 4, 6)
+            A = stack(
+                random_matrix_with_cond(T, 4, 4, 1.001) for _ in 1:6
+            )
             A = reshape(stack((r * r' for r in eachslice(A; dims=3))), 4, 4, 3, 2)
             A_ra = Reactant.to_rarray(A)
 
