@@ -493,9 +493,7 @@ end
         @testset for T in (Float32, Float64, ComplexF32, ComplexF64)
             (T == ComplexF64 || T == Float64) && RunningOnTPU && continue
 
-            A = stack(
-                random_matrix_with_cond(T, 4, 4, 1.001) for _ in 1:6
-            )
+            A = stack(random_matrix_with_cond(T, 4, 4, 1.001) for _ in 1:6)
             A = reshape(stack((r * r' for r in eachslice(A; dims=3))), 4, 4, 3, 2)
             A_ra = Reactant.to_rarray(A)
 
