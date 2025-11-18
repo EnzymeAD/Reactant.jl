@@ -736,12 +736,12 @@ end
 
 function LinearAlgebra.issymmetric(A::AnyTracedRMatrix)
     axes(A, 1) == axes(A, 2) || return false
-    return Reactant.call_with_reactant(all, A .== transpose(A))
+    return all(A .== transpose(A))
 end
 
 function LinearAlgebra.ishermitian(A::AnyTracedRMatrix)
     axes(A, 1) == axes(A, 2) || return false
-    return Reactant.call_with_reactant(all, A .== adjoint(A))
+    return all(A .== adjoint(A))
 end
 
 function LinearAlgebra.isbanded(A::AnyTracedRMatrix, kl::Integer, ku::Integer)
