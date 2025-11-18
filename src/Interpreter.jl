@@ -95,11 +95,11 @@ end
             REACTANT_METHOD_TABLE,
             world,
             false,
-            #=forward_rules=#false,
-            #=reverse_rules=#false,
-            #=inactive_rules=#false,
-            #=broadcast_rewrite=#false,
-            #=within_autodiff_rewrite=#set_reactant_abi,
+            false,            #=forward_rules=#
+            false,            #=reverse_rules=#
+            false,            #=inactive_rules=#
+            false,            #=broadcast_rewrite=#
+            set_reactant_abi,            #=within_autodiff_rewrite=#
         )
     end
 else
@@ -113,11 +113,11 @@ else
             REACTANT_METHOD_TABLE,
             world,
             false,
-            #=forward_rules=#false,
-            #=reverse_rules=#false,
-            #=inactive_rules=#false,
-            #=broadcast_rewrite=#false,
-            #=within_autodiff_rewrite=#set_reactant_abi,
+            false,            #=forward_rules=#
+            false,            #=reverse_rules=#
+            false,            #=inactive_rules=#
+            false,            #=broadcast_rewrite=#
+            set_reactant_abi,            #=within_autodiff_rewrite=#
         )
     end
 end
