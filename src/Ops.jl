@@ -3316,6 +3316,7 @@ end
     x::TracedRArray{T,N},
     ::Type{iT}=Int32;
     full::Bool=false,
+    algorithm::String="DEFAULT",
     location=mlir_stacktrace("svd", @__FILE__, @__LINE__),
 ) where {T,iT,N}
     @assert N >= 2
@@ -3329,6 +3330,18 @@ end
     Vt_size = (batch_sizes..., full ? n : r, n)
     info_size = batch_sizes
 
+    if algorithm == "DEFAULT"
+        algint = 0
+    elseif algorithm == "QRIteration"
+        algint = 1
+    elseif algorithm == "DivideAndConquer"
+        algint = 2
+    elseif algorithm == "Jacobi"
+        algint = 3
+    else
+        error("Unsupported SVD algorithm: $algorithm")
+    end
+
     svd_op = enzymexla.linalg_svd(
         x.mlir_data;
         U=mlir_type(TracedRArray{T,N}, U_size),
@@ -3336,6 +3349,7 @@ end
         Vt=mlir_type(TracedRArray{T,N}, Vt_size),
         info=mlir_type(TracedRArray{iT,N - 2}, info_size),
         full=full,
+        algorithm=MLIR.API.enzymexlaSVDAlgorithmAttrGet(MLIR.IR.context(), algint),
         location,
     )
 
