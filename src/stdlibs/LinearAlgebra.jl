@@ -748,6 +748,16 @@ function LinearAlgebra.isbanded(A::AnyTracedRMatrix, kl::Integer, ku::Integer)
     return istriu(A, kl) & istril(A, ku)
 end
 
+function LinearAlgebra.normalize(a::AnyTracedRArray{T}, p::Real=2) where {T}
+    nrm = LinearAlgebra.norm(a, p)
+    if !isempty(a)
+        aa = LinearAlgebra.copymutable_oftype(a, typeof(zero(T) / nrm))
+        return LinearAlgebra.__normalize!(aa, nrm)
+    else
+        return typeof(zero(T) / nrm)[]
+    end
+end
+
 @static if isdefined(LinearAlgebra, :__normalize!)
     function LinearAlgebra.__normalize!(a::AnyTracedRArray, nrm)
         # The largest positive floating point number whose inverse is less than infinity
