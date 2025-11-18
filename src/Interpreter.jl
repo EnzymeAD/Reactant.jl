@@ -90,17 +90,17 @@ end
     struct ReactantCacheToken end
 
     function ReactantInterpreter(;
-        world::UInt=Base.get_world_counter(), within_autodiff=false
+        world::UInt=Base.get_world_counter()
     )
         return Enzyme.Compiler.Interpreter.EnzymeInterpreter(
             ReactantCacheToken(),
             REACTANT_METHOD_TABLE,
             world,
-            false,            #=forward_rules=#
-            false,            #=reverse_rules=#
-            false,            #=inactive_rules=#
-            false,            #=broadcast_rewrite=#
-            within_autodiff,  #=within_autodiff_rewrite=#
+            false,  #=forward_rules=#
+            false,  #=reverse_rules=#
+            false,  #=inactive_rules=#
+            false,  #=broadcast_rewrite=#
+            false,  #=within_autodiff_rewrite=#
             set_reactant_abi,
         )
     end
@@ -110,17 +110,16 @@ else
     function ReactantInterpreter(;
         world::UInt=Base.get_world_counter(),
         code_cache=REACTANT_CACHE,
-        within_autodiff=false,
     )
         return Enzyme.Compiler.Interpreter.EnzymeInterpreter(
             REACTANT_CACHE,
             REACTANT_METHOD_TABLE,
             world,
-            false,            #=forward_rules=#
-            false,            #=reverse_rules=#
-            false,            #=inactive_rules=#
-            false,            #=broadcast_rewrite=#
-            within_autodiff,  #=within_autodiff_rewrite=#
+            false,  #=forward_rules=#
+            false,  #=reverse_rules=#
+            false,  #=inactive_rules=#
+            false,  #=broadcast_rewrite=#
+            false,  #=within_autodiff_rewrite=#
             set_reactant_abi,
         )
     end

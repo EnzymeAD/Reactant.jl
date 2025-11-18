@@ -19,7 +19,6 @@ function apply(f::F, args...; kwargs...) where {F}
 end
 
 function call_with_reactant end
-function call_with_reactant_within_autodiff end
 
 function maybe_argextype(@nospecialize(x), src)
     return try

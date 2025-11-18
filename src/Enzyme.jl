@@ -321,7 +321,6 @@ function overload_autodiff(
         argprefix,
         resprefix,
         resargprefix,
-        within_autodiff=true,
     )
     (; result, linear_args, in_tys, linear_results) = mlir_fn_res
     fnwrap = mlir_fn_res.fnwrapped
