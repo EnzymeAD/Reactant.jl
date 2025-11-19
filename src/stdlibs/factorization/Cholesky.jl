@@ -1,17 +1,17 @@
-struct GeneralizedCholesky{T,S<:AbstractArray,I<:Union{AbstractArray,Number}} <:
-       GeneralizedFactorization{T}
+struct BatchedCholesky{T,S<:AbstractArray,I<:Union{AbstractArray,Number}} <:
+       BatchedFactorization{T}
     factors::S
     uplo::Char
     info::I
 end
 
-function GeneralizedCholesky(factors::S, uplo::Char, info::I) where {S,I}
+function BatchedCholesky(factors::S, uplo::Char, info::I) where {S,I}
     @assert ndims(info) == ndims(factors) - 2
-    return GeneralizedCholesky{eltype(factors),S,I}(factors, uplo, info)
+    return BatchedCholesky{eltype(factors),S,I}(factors, uplo, info)
 end
 
-Base.size(c::GeneralizedCholesky) = size(c.factors)
-Base.ndims(c::GeneralizedCholesky) = ndims(c.factors)
+Base.size(c::BatchedCholesky) = size(c.factors)
+Base.ndims(c::BatchedCholesky) = ndims(c.factors)
 
 function overloaded_cholesky(A::AbstractArray, ::NoPivot; check::Bool=false)
     return overloaded_cholesky(Reactant.promote_to(TracedRArray, A), NoPivot(); check)
@@ -41,11 +41,11 @@ function overloaded_cholesky(
         info = TracedRNumber{Bool}((), info.mlir_data)
     end
 
-    return GeneralizedCholesky(factors, 'U', info)
+    return BatchedCholesky(factors, 'U', info)
 end
 
 function LinearAlgebra.ldiv!(
-    F::GeneralizedCholesky{T,<:AbstractArray{T,N}}, B::AbstractArray{T,M}
+    F::BatchedCholesky{T,<:AbstractArray{T,N}}, B::AbstractArray{T,M}
 ) where {T,N,M}
     @assert N == M + 1
     ldiv!(F, reshape(B, size(B, 1), 1, size(B)[2:end]...))
@@ -53,14 +53,14 @@ function LinearAlgebra.ldiv!(
 end
 
 function LinearAlgebra.ldiv!(
-    F::GeneralizedCholesky{T,<:AbstractArray{T,2}}, B::AbstractArray{T,2}
+    F::BatchedCholesky{T,<:AbstractArray{T,2}}, B::AbstractArray{T,2}
 ) where {T}
     B .= _cholesky_solve_core(F.factors, B, F.uplo)
     return B
 end
 
 function LinearAlgebra.ldiv!(
-    F::GeneralizedCholesky{T,<:AbstractArray{T,N}}, B::AbstractArray{T,N}
+    F::BatchedCholesky{T,<:AbstractArray{T,N}}, B::AbstractArray{T,N}
 ) where {T,N}
     batch_shape = size(F.factors)[3:end]
     @assert batch_shape == size(B)[3:end]

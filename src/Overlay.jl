@@ -269,6 +269,22 @@ for (jlop, rop, default_pivot) in (
     end
 end
 
+for (jlop, rop) in ((:svd, :overloaded_svd),)
+    @eval begin
+        @reactant_overlay @noinline function LinearAlgebra.$(jlop)(
+            x::AbstractArray; kwargs...
+        )
+            if use_overlayed_version(x)
+                return TracedLinearAlgebra.$(rop)(
+                    factorization_copy(LinearAlgebra.$(jlop), x); kwargs...
+                )
+            else
+                return Base.inferencebarrier(LinearAlgebra.$(jlop))(x; kwargs...)
+            end
+        end
+    end
+end
+
 @reactant_overlay @noinline function LinearAlgebra.dot(x::AbstractArray, y::AbstractArray)
     if use_overlayed_version(x) || use_overlayed_version(y)
         return TracedLinearAlgebra.overloaded_dot(x, y)

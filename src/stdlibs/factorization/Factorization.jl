@@ -1,25 +1,25 @@
-# Supports batched factorization
-abstract type GeneralizedFactorization{T} <: Factorization{T} end
+abstract type BatchedFactorization{T} <: Factorization{T} end
 
-function LinearAlgebra.TransposeFactorization(f::GeneralizedFactorization)
+function LinearAlgebra.TransposeFactorization(f::BatchedFactorization)
     return LinearAlgebra.TransposeFactorization{eltype(f),typeof(f)}(f)
 end
 
-function LinearAlgebra.AdjointFactorization(f::GeneralizedFactorization)
+function LinearAlgebra.AdjointFactorization(f::BatchedFactorization)
     return LinearAlgebra.AdjointFactorization{eltype(f),typeof(f)}(f)
 end
 
 const GeneralizedTransposeFactorization{T} =
-    LinearAlgebra.TransposeFactorization{T,<:GeneralizedFactorization{T}} where {T}
+    LinearAlgebra.TransposeFactorization{T,<:BatchedFactorization{T}} where {T}
 const GeneralizedAdjointFactorization{T} =
-    LinearAlgebra.AdjointFactorization{T,<:GeneralizedFactorization{T}} where {T}
+    LinearAlgebra.AdjointFactorization{T,<:BatchedFactorization{T}} where {T}
 
 include("Cholesky.jl")
 include("LU.jl")
+include("SVD.jl")
 
 # Overload \ to support batched factorization
 for FT in (
-    :GeneralizedFactorization,
+    :BatchedFactorization,
     :GeneralizedTransposeFactorization,
     :GeneralizedAdjointFactorization,
 )
@@ -32,7 +32,7 @@ for FT in (
     ) where {T<:Union{Float32,Float64}} = _overloaded_backslash(F, B)
 end
 
-function _overloaded_backslash(F::GeneralizedFactorization, B::AbstractArray)
+function _overloaded_backslash(F::BatchedFactorization, B::AbstractArray)
     return ldiv!(
         F, LinearAlgebra.copy_similar(B, typeof(oneunit(eltype(F)) \ oneunit(eltype(B))))
     )
