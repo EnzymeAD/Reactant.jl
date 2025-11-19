@@ -523,7 +523,43 @@ function get_svd_algorithms(backend::String)
     return algorithms
 end
 
-@testset "svd factorization" begin end
+least_squares_with_svd(A, b, full, alg) = svd(A; full, alg) \ b
+
+@testset "svd factorization" begin
+    algs = get_svd_algorithms(string(Reactant.devices()[1]))
+
+    A = Reactant.TestUtils.construct_test_array(Float32, 4, 8)
+    tmp = rand(Float32, 8, 5)
+    B = A * tmp
+    b = B[:, 1]
+
+    A_ra = Reactant.to_rarray(A)
+    B_ra = Reactant.to_rarray(B)
+    b_ra = Reactant.to_rarray(b)
+
+    # test least squares error
+    @testset "least squares error: $(alg) | full=$(full)" for alg in algs,
+        full in (true, false)
+        # FIXME: svd is mutating the input buffers
+
+        sol1 = @jit least_squares_with_svd(A_ra, b_ra, full, alg)
+        err1 = maximum(abs, A * Array(sol1) .- b)
+        @show err1
+
+        sol2 = @jit least_squares_with_svd(A_ra, B_ra, full, alg)
+        err2 = maximum(abs, A * Array(sol2) .- B)
+        @show err2
+    end
+
+    @testset "[batched] least squares error: $(alg) | full=$(full)" for alg in algs,
+        full in (true, false)
+
+
+        # TODO
+    end
+
+    # TODO: when A is a vector
+end
 
 @testset "svdvals" begin
     algs = get_svd_algorithms(string(Reactant.devices()[1]))
@@ -532,7 +568,7 @@ end
         A = Reactant.TestUtils.construct_test_array(Float32, 4, 4)
         _svdvals = svdvals(A)
         A_ra = Reactant.to_rarray(A)
-        _svdvals_ra = @jit svdvals(A_ra; algorithm=alg)
+        _svdvals_ra = @jit svdvals(A_ra; alg=alg)
         @test _svdvals_ra ≈ _svdvals
     end
 
@@ -540,7 +576,7 @@ end
         A = Reactant.TestUtils.construct_test_array(Float32, 4, 4, 3, 2)
         _svdvals = reshape(mapslices(svdvals, A; dims=(1, 2)), 4, 3, 2)
         A_ra = Reactant.to_rarray(A)
-        _svdvals_ra = @jit svdvals(A_ra; algorithm=alg)
+        _svdvals_ra = @jit svdvals(A_ra; alg=alg)
         @test _svdvals_ra ≈ _svdvals
     end
 end

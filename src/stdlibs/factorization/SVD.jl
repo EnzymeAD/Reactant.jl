@@ -1,4 +1,4 @@
-struct BatchedSVD{T,Tr,M<:AbstractArray,C<:AbstractArray} <: Factorization{T}
+struct BatchedSVD{T,Tr,M<:AbstractArray,C<:AbstractArray} <: BatchedFactorization{T}
     U::M
     S::C
     Vt::M
@@ -8,6 +8,11 @@ struct BatchedSVD{T,Tr,M<:AbstractArray,C<:AbstractArray} <: Factorization{T}
         return new{T,Tr,M,C}(U, S, Vt)
     end
 end
+
+function Base.size(svd::BatchedSVD)
+    return (size(svd.U, 1), size(svd.Vt, 2), size(svd.U)[3:end]...)
+end
+Base.size(svd::BatchedSVD, i::Integer) = i == 2 ? size(svd.Vt, 2) : size(svd.U, i)
 
 function BatchedSVD(U::M, S::C, Vt::M) where {M,C}
     @assert ndims(S) == ndims(U) - 1
@@ -34,13 +39,13 @@ function overloaded_svd(A::AbstractArray; kwargs...)
 end
 
 function overloaded_svd(
-    A::AnyTracedRArray{T,N}; full::Bool=false, algorithm=LinearAlgebra.default_svd_alg(A)
+    A::AnyTracedRArray{T,N}; full::Bool=false, alg=LinearAlgebra.default_svd_alg(A)
 ) where {T,N}
     # Batching here is in the last dimensions. `Ops.svd` expects the last dimensions
     permdims = vcat(collect(Int64, 3:N), 1, 2)
     A = @opcall transpose(materialize_traced_array(A), permdims)
 
-    U, S, Vt = @opcall svd(A; full, algorithm=_jlalg_to_enzymexla_alg(algorithm))
+    U, S, Vt = @opcall svd(A; full, algorithm=_jlalg_to_enzymexla_alg(alg))
 
     # Permute back to the original dimensions
     S_perm = vcat(N - 1, collect(Int64, 1:(N - 2)))
@@ -63,13 +68,13 @@ struct __ZeroNormVectorSVDDispatch{A} <: Function
 end
 
 function overloaded_svd(
-    A::AnyTracedRVector; full::Bool=false, algorithm=LinearAlgebra.default_svd_alg(A)
+    A::AnyTracedRVector; full::Bool=false, alg=LinearAlgebra.default_svd_alg(A)
 )
     normA = Reactant.call_with_reactant(LinearAlgebra.norm, A)
     U, S, Vt = ReactantCore.traced_if(
         iszero(normA),
-        __ZeroNormVectorSVDDispatch(full, algorithm),
-        __InnerVectorSVDDispatch(full, algorithm),
+        __ZeroNormVectorSVDDispatch(full, alg),
+        __InnerVectorSVDDispatch(full, alg),
         (A, normA),
     )
     return BatchedSVD(U, S, Vt)
@@ -88,7 +93,7 @@ function (fn::__InnerVectorSVDDispatch)(A::AbstractVector{T}, normA) where {T}
         U = materialize_traced_array(reshape(normalizedA, length(A), 1))
         return U, fill(normA, 1), ones(T, 1, 1)
     end
-    (; U, S, Vt) = overloaded_svd(reshape(A, :, 1); full=true, algorithm=fn.algorithm)
+    (; U, S, Vt) = overloaded_svd(reshape(A, :, 1); full=true, alg=fn.algorithm)
     return U, S, Vt
 end
 
@@ -103,4 +108,61 @@ function LinearAlgebra.svdvals(x::AnyTracedRVector{T}; kwargs...) where {T}
 end
 function LinearAlgebra.svdvals!(x::AnyTracedRVector{T}; kwargs...) where {T}
     return overloaded_svd(x; kwargs..., full=false).S
+end
+
+# Ideally we want to slice based on near zero singular values, but this will
+# produce dynamically sized slices. Instead we zero out slices and proceed
+function _svd_solve_core(
+    U::AbstractMatrix, S::AbstractVector{Tr}, Vt::AbstractMatrix, B::AbstractMatrix
+) where {Tr}
+    mask = S .> eps(real(Tr)) * @allowscalar(S[1])
+    m, n = size(U, 1), size(Vt, 2)
+    rhs = S .\ (U' * LinearAlgebra._cut_B(B, 1:m))
+    rhs = ifelse.(mask, rhs, zero(eltype(rhs)))
+    return (Vt[1:length(S), :])' * rhs
+end
+
+function LinearAlgebra.ldiv!(
+    svd::BatchedSVD{T,Tr,<:AbstractArray{T,N}}, B::AbstractArray{T,M}
+) where {T,Tr,N,M}
+    @assert N == M + 1
+    ldiv!(svd, reshape(B, size(B, 1), 1, size(B)[2:end]...))
+    return B
+end
+
+function LinearAlgebra.ldiv!(
+    svd::BatchedSVD{T,Tr,<:AbstractArray{T,2}}, B::AbstractArray{T,2}
+) where {T,Tr}
+    n = size(svd, 2)
+    sol = _svd_solve_core(svd.U, svd.S, svd.Vt, B)
+    B[1:n, :] .= sol
+    return B
+end
+
+function LinearAlgebra.ldiv!(
+    svd::BatchedSVD{T,Tr,<:AbstractArray{T,N}}, B::AbstractArray{T,N}
+) where {T,Tr,N}
+    batch_shape = size(svd.U)[3:end]
+    @assert batch_shape == size(B)[3:end]
+
+    n = size(svd, 2)
+    permutation = vcat(collect(Int64, 3:N), 1, 2)
+    S_perm = vcat(collect(Int64, 2:(N - 1)), 1)
+
+    U = @opcall transpose(materialize_traced_array(svd.U), permutation)
+    S = @opcall transpose(materialize_traced_array(svd.S), S_perm)
+    Vt = @opcall transpose(materialize_traced_array(svd.Vt), permutation)
+
+    B_permuted = @opcall transpose(materialize_traced_array(B), permutation)
+
+    res = @opcall transpose(
+        only(
+            @opcall(
+                batch(_svd_solve_core, [U, S, Vt, B_permuted], collect(Int64, batch_shape))
+            ),
+        ),
+        invperm(permutation),
+    )
+    B[1:n, :, ntuple(Returns(Colon()), length(batch_shape))...] .= res
+    return B
 end

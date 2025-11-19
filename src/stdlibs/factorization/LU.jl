@@ -7,7 +7,7 @@ struct BatchedLU{T,S<:AbstractArray,P<:AbstractArray,I<:Union{AbstractArray,Numb
 end
 
 Base.size(lu::BatchedLU) = size(lu.factors)
-Base.size(lu::BatchedLU, i) = size(lu.factors, i)
+Base.size(lu::BatchedLU, i::Integer) = size(lu.factors, i)
 Base.ndims(lu::BatchedLU) = ndims(lu.factors)
 function Base.copy(lu::BatchedLU)
     return BatchedLU(copy(lu.factors), copy(lu.ipiv), copy(lu.perm), copy(lu.info))

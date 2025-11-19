@@ -11,6 +11,7 @@ function BatchedCholesky(factors::S, uplo::Char, info::I) where {S,I}
 end
 
 Base.size(c::BatchedCholesky) = size(c.factors)
+Base.size(c::BatchedCholesky, i::Integer) = size(c.factors, i)
 Base.ndims(c::BatchedCholesky) = ndims(c.factors)
 
 function overloaded_cholesky(A::AbstractArray, ::NoPivot; check::Bool=false)
