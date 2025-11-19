@@ -511,6 +511,40 @@ end
     end
 end
 
+function get_svd_algorithms(backend::String)
+    algorithms = ["DEFAULT"]
+    if occursin("cpu", backend)
+        append!(algorithms, ["QRIteration", "DivideAndConquer"])
+    elseif occursin("cuda", backend)
+        append!(algorithms, ["QRIteration", "Jacobi"])
+    elseif occursin("tpu", backend)
+        append!(algorithms, ["Jacobi"])
+    end
+    return algorithms
+end
+
+@testset "svd factorization" begin end
+
+@testset "svdvals" begin
+    algs = get_svd_algorithms(string(Reactant.devices()[1]))
+
+    @testset "Un-batched: $(alg)" for alg in algs
+        A = Reactant.TestUtils.construct_test_array(Float32, 4, 4)
+        _svdvals = svdvals(A)
+        A_ra = Reactant.to_rarray(A)
+        _svdvals_ra = @jit svdvals(A_ra; algorithm=alg)
+        @test _svdvals_ra ≈ _svdvals
+    end
+
+    @testset "Batched: $(alg)" for alg in algs
+        A = Reactant.TestUtils.construct_test_array(Float32, 4, 4, 3, 2)
+        _svdvals = reshape(mapslices(svdvals, A; dims=(1, 2)), 4, 3, 2)
+        A_ra = Reactant.to_rarray(A)
+        _svdvals_ra = @jit svdvals(A_ra; algorithm=alg)
+        @test _svdvals_ra ≈ _svdvals
+    end
+end
+
 @testset "structure check" begin
     @testset "istriu" begin
         x = Reactant.TestUtils.construct_test_array(Float32, 8, 8)

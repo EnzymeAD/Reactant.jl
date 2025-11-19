@@ -36,7 +36,21 @@ end
 function overloaded_svd(
     A::AnyTracedRArray{T,N}; full::Bool=false, algorithm=LinearAlgebra.default_svd_alg(A)
 ) where {T,N}
-    U, S, Vt = @opcall svd(A; full, algorithm=_jlalg_to_enzymexla_alg(algorithm))
+    # Batching here is in the last dimensions. `Ops.svd` expects the last dimensions
+    permdims = vcat(collect(Int64, 3:N), 1, 2)
+    A = @opcall transpose(materialize_traced_array(A), permdims)
+
+    U, S, Vt = @opcall svd(
+        A; full, algorithm=_jlalg_to_enzymexla_alg(algorithm)
+    )
+
+    # Permute back to the original dimensions
+    S_perm = vcat(N - 1, collect(Int64, 1:(N - 2)))
+
+    U = @opcall transpose(U, invperm(permdims))
+    S = @opcall transpose(S, S_perm)
+    Vt = @opcall transpose(Vt, invperm(permdims))
+
     return BatchedSVD(U, S, Vt)
 end
 
@@ -80,7 +94,6 @@ function (fn::__InnerVectorSVDDispatch)(A::AbstractVector{T}, normA) where {T}
     return U, S, Vt
 end
 
-# TODO: not yet performant. See https://github.com/EnzymeAD/Enzyme-JAX/issues/1623
 function LinearAlgebra.svdvals(x::AnyTracedRArray{T,N}; kwargs...) where {T,N}
     return overloaded_svd(x; kwargs..., full=false).S
 end
