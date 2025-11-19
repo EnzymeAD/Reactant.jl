@@ -40,9 +40,7 @@ function overloaded_svd(
     permdims = vcat(collect(Int64, 3:N), 1, 2)
     A = @opcall transpose(materialize_traced_array(A), permdims)
 
-    U, S, Vt = @opcall svd(
-        A; full, algorithm=_jlalg_to_enzymexla_alg(algorithm)
-    )
+    U, S, Vt = @opcall svd(A; full, algorithm=_jlalg_to_enzymexla_alg(algorithm))
 
     # Permute back to the original dimensions
     S_perm = vcat(N - 1, collect(Int64, 1:(N - 2)))
