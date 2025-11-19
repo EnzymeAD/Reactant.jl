@@ -3325,9 +3325,10 @@ end
     m, n = size(x)[(end - 1):end]
     r = min(m, n)
 
-    U_size = (batch_sizes..., m, full ? m : r)
+    # note that sizes are transposed here
+    U_size = (batch_sizes..., full ? m : r, m)
     S_size = (batch_sizes..., r)
-    Vt_size = (batch_sizes..., full ? n : r, n)
+    Vt_size = (batch_sizes..., n, full ? n : r)
     info_size = batch_sizes
 
     if algorithm == "DEFAULT"
