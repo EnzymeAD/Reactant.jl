@@ -496,12 +496,11 @@ function overload_autodiff(
     func2.operation = MLIR.API.MlirOperation(C_NULL)
 
     if reverse
-        resv = if EnzymeCore.needs_primal(CMode)
-            result
+        if EnzymeCore.needs_primal(CMode)
+            return ((restup...,), result)
         else
-            nothing
+            return ((restup...,),)
         end
-        return ((restup...,), resv)
     else
         if EnzymeCore.needs_primal(CMode)
             if CMode <: ForwardMode && !(A <: Const)
