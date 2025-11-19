@@ -1722,6 +1722,8 @@ function compile_mlir!(
 
     blas_int_width = sizeof(BlasInt) * 8
     lower_enzymexla_linalg_pass = "lower-enzymexla-linalg{backend=$backend \
+                                   blas_int_width=$blas_int_width},\
+                                   lower-enzymexla-lapack{backend=$backend \
                                    blas_int_width=$blas_int_width}"
 
     legalize_chlo_to_stablehlo =
