@@ -511,12 +511,20 @@ end
     end
 end
 
-function get_svd_algorithms(backend::String)
+using LinearAlgebra, Reactant
+Reactant.set_default_backend("cpu")
+
+function get_svd_algorithms(backend::String, size=nothing)
+    backend = lowercase(backend)
     algorithms = ["DEFAULT"]
     if occursin("cpu", backend)
         append!(algorithms, ["QRIteration", "DivideAndConquer"])
     elseif occursin("cuda", backend)
-        append!(algorithms, ["QRIteration", "Jacobi"])
+        if size === nothing || size[1] ≥ size[2]
+            append!(algorithms, ["QRIteration", "Jacobi"])
+        else
+            append!(algorithms, ["Jacobi"])
+        end
     elseif occursin("tpu", backend)
         append!(algorithms, ["Jacobi"])
     end
@@ -525,10 +533,19 @@ end
 
 least_squares_with_svd(A, b, full, alg) = svd(A; full, alg) \ b
 
-@testset "svd factorization" begin
-    algs = get_svd_algorithms(string(Reactant.devices()[1]))
+function compute_ls_solution_error(A, sol, b, bsize)
+    b = reshape(b, size(b, 1), bsize, :)
+    A = reshape(A, size(A, 1), size(A, 2), :)
+    sol = reshape(sol, size(sol, 1), bsize, :)
+    mul = stack((A[:, :, i] * sol[:, :, i] for i in axes(A, 3)); dims=3)
+    return maximum(abs, mul .- b)
+end
 
+@testset "svd factorization" begin
     A = Reactant.TestUtils.construct_test_array(Float32, 4, 8)
+
+    algs = get_svd_algorithms(string(Reactant.devices()[1]), size(A))
+
     tmp = rand(Float32, 8, 5)
     B = A * tmp
     b = B[:, 1]
@@ -540,25 +557,39 @@ least_squares_with_svd(A, b, full, alg) = svd(A; full, alg) \ b
     # test least squares error
     @testset "least squares error: $(alg) | full=$(full)" for alg in algs,
         full in (true, false)
-        # FIXME: svd is mutating the input buffers
 
         sol1 = @jit least_squares_with_svd(A_ra, b_ra, full, alg)
         err1 = maximum(abs, A * Array(sol1) .- b)
-        @show err1
+        @test err1 < 1e-3
 
         sol2 = @jit least_squares_with_svd(A_ra, B_ra, full, alg)
         err2 = maximum(abs, A * Array(sol2) .- B)
-        @show err2
+        @test err2 < 1e-3
     end
+
+    A = Reactant.TestUtils.construct_test_array(Float32, 4, 8, 3, 2)
+    A_ra = Reactant.to_rarray(A)
+
+    tmp = rand(Float32, 8, 5, 3, 2)
+    B = similar(A, Float32, 4, 5, 3, 2)
+    for i in 1:3, j in 1:2
+        B[:, :, i, j] = A[:, :, i, j] * tmp[:, :, i, j]
+    end
+    B_ra = Reactant.to_rarray(B)
+    b = B[:, 1, :, :]
+    b_ra = Reactant.to_rarray(b)
 
     @testset "[batched] least squares error: $(alg) | full=$(full)" for alg in algs,
         full in (true, false)
 
+        sol1 = @jit least_squares_with_svd(A_ra, b_ra, full, alg)
+        err1 = compute_ls_solution_error(A, Array(sol1), b, 1)
+        @test err1 < 1e-3
 
-        # TODO
+        sol2 = @jit least_squares_with_svd(A_ra, B_ra, full, alg)
+        err2 = compute_ls_solution_error(A, Array(sol2), B, 5)
+        @test err2 < 1e-3
     end
-
-    # TODO: when A is a vector
 end
 
 @testset "svdvals" begin
