@@ -160,6 +160,9 @@
 #include "xla/hlo/ir/hlo_module.h"
 #include "xla/service/hlo_cost_analysis.h"
 
+#include "xla/tools/hlo_opt/compiled_opt_lib.h"
+#include "xla/tools/xla_compile_lib.h"
+
 #if defined(REACTANT_CUDA) || defined(REACTANT_ROCM)
 #include "xla/service/gpu/model/gpu_hlo_cost_analysis.h"
 #include "xla/service/gpu/model/gpu_performance_model.h"
@@ -3505,3 +3508,24 @@ REACTANT_ABI void EstimateRunTimeForInstruction(void *gpu_performance_model,
 }
 
 #endif
+
+REACTANT_ABI const char *CompileMLIRtoLLVMIRWithXLA(HeldHloModule *hlo_module,
+                                                    const char *backend,
+                                                    const char *stage) {
+  std::unique_ptr<xla::HloModule> module =
+      std::move(hlo_module->obj())->Clone();
+
+  auto optProvider =
+      xla::OptProvider::GetProviderForPlatform(std::string(backend));
+  if (!optProvider.ok()) {
+    ReactantThrowError(optProvider.status().ToString().c_str());
+  }
+
+  auto result =
+      optProvider.value()->GenerateStage(std::move(module), std::string(stage));
+  if (!result.ok()) {
+    ReactantThrowError(result.status().ToString().c_str());
+  }
+
+  return cstr_from_string(result.value().value());
+}
