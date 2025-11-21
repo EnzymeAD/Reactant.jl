@@ -1012,6 +1012,48 @@ function convert_f16x2_to_f8x2(
 end
 
 """
+`convert_f32x2_to_bf16x2`
+
+Converts two F32 values to packed bf16x2 format using stochastic 
+rounding (.rs) mode with randomness provided by the `rbits` parameter. The 
+`relu` attribute clamps negative results to 0. The `sat` attribute determines 
+saturation behavior. The `src_hi` and `src_lo` parameters correspond to operands 
+`a` and `b` in the PTX ISA, respectively.
+
+[For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-cvt)
+"""
+function convert_f32x2_to_bf16x2(
+    src_hi::Value,
+    src_lo::Value,
+    rbits::Value;
+    dst::IR.Type,
+    rnd=nothing,
+    sat=nothing,
+    relu=nothing,
+    location=Location(),
+)
+    op_ty_results = IR.Type[dst,]
+    operands = Value[src_hi, src_lo, rbits]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+    !isnothing(rnd) && push!(attributes, namedattribute("rnd", rnd))
+    !isnothing(sat) && push!(attributes, namedattribute("sat", sat))
+    !isnothing(relu) && push!(attributes, namedattribute("relu", relu))
+
+    return create_operation(
+        "nvvm.convert.f32x2.to.bf16x2",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+"""
 `convert_f32x2_to_f4x2`
 
 This Op converts each of the given float inputs to the specified fp4 type.
@@ -1123,6 +1165,150 @@ function convert_f32x2_to_f8x2(
 
     return create_operation(
         "nvvm.convert.f32x2.to.f8x2",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+"""
+`convert_f32x2_to_f16x2`
+
+Converts two F32 values to packed f16x2 format using stochastic 
+rounding (.rs) mode with randomness provided by the `rbits` parameter. The 
+`relu` attribute clamps negative results to 0. The `sat` attribute determines 
+saturation behavior. The `src_hi` and `src_lo` parameters correspond to operands 
+`a` and `b` in the PTX ISA, respectively.
+
+[For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-cvt)
+"""
+function convert_f32x2_to_f16x2(
+    src_hi::Value,
+    src_lo::Value,
+    rbits::Value;
+    dst::IR.Type,
+    rnd=nothing,
+    sat=nothing,
+    relu=nothing,
+    location=Location(),
+)
+    op_ty_results = IR.Type[dst,]
+    operands = Value[src_hi, src_lo, rbits]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+    !isnothing(rnd) && push!(attributes, namedattribute("rnd", rnd))
+    !isnothing(sat) && push!(attributes, namedattribute("sat", sat))
+    !isnothing(relu) && push!(attributes, namedattribute("relu", relu))
+
+    return create_operation(
+        "nvvm.convert.f32x2.to.f16x2",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+"""
+`convert_f32x4_to_f4x4`
+
+Converts a vector<4xf32> to packed f4x4 format using 
+stochastic rounding (.rs) mode with SATFINITE saturation. Randomness is 
+provided by the `rbits` parameter. The `dstTy` attribute specifies the 
+target floating-point format. The `relu` attribute clamps negative results to 0.
+
+Note: These operations always use RS rounding mode and SATFINITE saturation mode.
+
+[For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-cvt)
+"""
+function convert_f32x4_to_f4x4(
+    src::Value, rbits::Value; dst::IR.Type, relu=nothing, dstTy, location=Location()
+)
+    op_ty_results = IR.Type[dst,]
+    operands = Value[src, rbits]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[namedattribute("dstTy", dstTy),]
+    !isnothing(relu) && push!(attributes, namedattribute("relu", relu))
+
+    return create_operation(
+        "nvvm.convert.f32x4.to.f4x4",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+"""
+`convert_f32x4_to_f6x4`
+
+Converts a vector<4xf32> to packed f6x4 format using 
+stochastic rounding (.rs) mode with SATFINITE saturation. Randomness is 
+provided by the `rbits` parameter. The `dstTy` attribute specifies the 
+target floating-point format. The `relu` attribute clamps negative results to 0.
+
+Note: These operations always use RS rounding mode and SATFINITE saturation mode.
+
+[For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-cvt)
+"""
+function convert_f32x4_to_f6x4(
+    src::Value, rbits::Value; dst::IR.Type, relu=nothing, dstTy, location=Location()
+)
+    op_ty_results = IR.Type[dst,]
+    operands = Value[src, rbits]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[namedattribute("dstTy", dstTy),]
+    !isnothing(relu) && push!(attributes, namedattribute("relu", relu))
+
+    return create_operation(
+        "nvvm.convert.f32x4.to.f6x4",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+"""
+`convert_f32x4_to_f8x4`
+
+Converts a vector<4xf32> to packed f8x4 format using 
+stochastic rounding (.rs) mode with SATFINITE saturation. Randomness is 
+provided by the `rbits` parameter. The `dstTy` attribute specifies the 
+target floating-point format. The `relu` attribute clamps negative results to 0.
+
+Note: These operations always use RS rounding mode and SATFINITE saturation mode.
+
+[For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-cvt)
+"""
+function convert_f32x4_to_f8x4(
+    src::Value, rbits::Value; dst::IR.Type, relu=nothing, dstTy, location=Location()
+)
+    op_ty_results = IR.Type[dst,]
+    operands = Value[src, rbits]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[namedattribute("dstTy", dstTy),]
+    !isnothing(relu) && push!(attributes, namedattribute("relu", relu))
+
+    return create_operation(
+        "nvvm.convert.f32x4.to.f8x4",
         location;
         operands,
         owned_regions,
@@ -1667,8 +1853,10 @@ end
 The `cp.async.mbarrier.arrive` Op makes the *mbarrier object* track
 all prior cp.async operations initiated by the executing thread.
 The `addr` operand specifies the address of the *mbarrier object*
-in generic address space. The `noinc` attr impacts how the
-mbarrier\'s state is updated.
+in generic or shared::cta address space. When it is generic, the
+underlying memory should fall within the shared::cta space;
+otherwise the behavior is undefined. The `noinc` attr impacts
+how the mbarrier\'s state is updated.
 
 [For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#parallel-synchronization-and-communication-instructions-cp-async-mbarrier-arrive)
 """
@@ -1682,37 +1870,6 @@ function cp_async_mbarrier_arrive(addr::Value; noinc=nothing, location=Location(
 
     return create_operation(
         "nvvm.cp.async.mbarrier.arrive",
-        location;
-        operands,
-        owned_regions,
-        successors,
-        attributes,
-        results=op_ty_results,
-        result_inference=false,
-    )
-end
-
-"""
-`cp_async_mbarrier_arrive_shared`
-
-The `cp.async.mbarrier.arrive.shared` Op makes the *mbarrier object*
-track all prior cp.async operations initiated by the executing thread.
-The `addr` operand specifies the address of the *mbarrier object* in
-shared memory. The `noinc` attr impacts how the mbarrier\'s state
-is updated. 
-
-[For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#parallel-synchronization-and-communication-instructions-cp-async-mbarrier-arrive)
-"""
-function cp_async_mbarrier_arrive_shared(addr::Value; noinc=nothing, location=Location())
-    op_ty_results = IR.Type[]
-    operands = Value[addr,]
-    owned_regions = Region[]
-    successors = Block[]
-    attributes = NamedAttribute[]
-    !isnothing(noinc) && push!(attributes, namedattribute("noinc", noinc))
-
-    return create_operation(
-        "nvvm.cp.async.mbarrier.arrive.shared",
         location;
         operands,
         owned_regions,
@@ -3148,8 +3305,10 @@ a result of this operation. The operation returns an opaque value that
 captures the phase of the *mbarrier object* prior to the arrive-on operation.
 
 The operation takes the following operands:
-- `addr`: A pointer to the memory location of the *mbarrier object*. Uses generic 
-  addressing, but the address must still be in the shared memory space.
+- `addr`: A pointer to the memory location of the *mbarrier object*. The `addr`
+  must be a pointer to generic or shared::cta memory. When it is generic, the
+  underlying address must be within the shared::cta memory space; otherwise
+  the behavior is undefined.
 - `count`: Integer specifying the count argument to the arrive-on operation. 
   Must be in the valid range as specified in the *mbarrier object* contents.
 
@@ -3177,35 +3336,6 @@ function mbarrier_arrive_nocomplete(
 end
 
 """
-`mbarrier_arrive_nocomplete_shared`
-
-This Op is the same as `nvvm.mbarrier.arrive.nocomplete` except that the *mbarrier object*
-should be accessed using a shared-memory pointer instead of a generic-memory pointer.
-
-[For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#parallel-synchronization-and-communication-instructions-mbarrier-arrive)
-"""
-function mbarrier_arrive_nocomplete_shared(
-    addr::Value, count::Value; res::IR.Type, location=Location()
-)
-    op_ty_results = IR.Type[res,]
-    operands = Value[addr, count]
-    owned_regions = Region[]
-    successors = Block[]
-    attributes = NamedAttribute[]
-
-    return create_operation(
-        "nvvm.mbarrier.arrive.nocomplete.shared",
-        location;
-        operands,
-        owned_regions,
-        successors,
-        attributes,
-        results=op_ty_results,
-        result_inference=false,
-    )
-end
-
-"""
 `mbarrier_arrive`
 
 The `nvvm.mbarrier.arrive` operation performs an arrive-on operation on the 
@@ -3222,8 +3352,10 @@ The operation returns an opaque value that captures the phase of the
 value are implementation-specific.
 
 The operation takes the following operand:
-- `addr`: A pointer to the memory location of the *mbarrier object*. Uses generic 
-  addressing, but the address must still be in the shared memory space.
+- `addr`: A pointer to the memory location of the *mbarrier object*. The `addr`
+  must be a pointer to generic or shared::cta memory. When it is generic, the
+  underlying address must be within the shared::cta memory space; otherwise
+  the behavior is undefined.
 
 [For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#parallel-synchronization-and-communication-instructions-mbarrier-arrive)
 """
@@ -3247,33 +3379,6 @@ function mbarrier_arrive(addr::Value; res::IR.Type, location=Location())
 end
 
 """
-`mbarrier_arrive_shared`
-
-This Op is the same as `nvvm.mbarrier.arrive` except that the *mbarrier object*
-should be accessed using a shared-memory pointer instead of a generic-memory pointer.
-
-[For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#parallel-synchronization-and-communication-instructions-mbarrier-arrive)
-"""
-function mbarrier_arrive_shared(addr::Value; res::IR.Type, location=Location())
-    op_ty_results = IR.Type[res,]
-    operands = Value[addr,]
-    owned_regions = Region[]
-    successors = Block[]
-    attributes = NamedAttribute[]
-
-    return create_operation(
-        "nvvm.mbarrier.arrive.shared",
-        location;
-        operands,
-        owned_regions,
-        successors,
-        attributes,
-        results=op_ty_results,
-        result_inference=false,
-    )
-end
-
-"""
 `mbarrier_init`
 
 The `nvvm.mbarrier.init` operation initializes an *mbarrier object* at the specified 
@@ -3286,8 +3391,10 @@ This operation initializes the *mbarrier object* with the following state:
 - Transaction count (tx-count): 0
 
 The operation takes the following operands:
-- `addr`: A pointer to the memory location of the *mbarrier object*. Uses generic 
-  addressing, but the address must still be in the shared memory space.
+- `addr`: A pointer to the memory location of the *mbarrier object*. The `addr`
+  must be a pointer to generic or shared::cta memory. When it is generic, the
+  underlying address must be within the shared::cta memory space; otherwise
+  the behavior is undefined.
 - `count`: Integer specifying the number of threads that will participate in barrier
   synchronization. Must be in the range [1, 2²⁰ - 1].
 - `predicate`: Optional predicate for conditional execution.
@@ -3317,36 +3424,6 @@ function mbarrier_init(
 end
 
 """
-`mbarrier_init_shared`
-
-This Op is the same as `nvvm.mbarrier.init` except that the *mbarrier object*
-should be accessed using a shared-memory pointer instead of a generic-memory pointer.
-
-[For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#parallel-synchronization-and-communication-instructions-mbarrier-init)
-"""
-function mbarrier_init_shared(
-    addr::Value, count::Value, predicate=nothing::Union{Nothing,Value}; location=Location()
-)
-    op_ty_results = IR.Type[]
-    operands = Value[addr, count]
-    owned_regions = Region[]
-    successors = Block[]
-    attributes = NamedAttribute[]
-    !isnothing(predicate) && push!(operands, predicate)
-
-    return create_operation(
-        "nvvm.mbarrier.init.shared",
-        location;
-        operands,
-        owned_regions,
-        successors,
-        attributes,
-        results=op_ty_results,
-        result_inference=false,
-    )
-end
-
-"""
 `mbarrier_inval`
 
 The `nvvm.mbarrier.inval` operation invalidates an *mbarrier object* at the 
@@ -3357,8 +3434,10 @@ the memory location for other uses or to reinitialize it as a new *mbarrier obje
 It is undefined behavior if the *mbarrier object* is already invalid.
 
 The operation takes the following operand:
-- `addr`: A pointer to the memory location of the *mbarrier object*. Uses generic 
-  addressing, but the address must still be in the shared memory space.
+- `addr`: A pointer to the memory location of the *mbarrier object*. The `addr`
+  must be a pointer to generic or shared::cta memory. When it is generic, the
+  underlying address must be within the shared::cta memory space; otherwise
+  the behavior is undefined.
 
 [For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#parallel-synchronization-and-communication-instructions-mbarrier-inval)
 """
@@ -3371,33 +3450,6 @@ function mbarrier_inval(addr::Value; location=Location())
 
     return create_operation(
         "nvvm.mbarrier.inval",
-        location;
-        operands,
-        owned_regions,
-        successors,
-        attributes,
-        results=op_ty_results,
-        result_inference=false,
-    )
-end
-
-"""
-`mbarrier_inval_shared`
-
-This Op is the same as `nvvm.mbarrier.inval` except that the *mbarrier object*
-should be accessed using a shared-memory pointer instead of a generic-memory pointer.
-
-[For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#parallel-synchronization-and-communication-instructions-mbarrier-inval)
-"""
-function mbarrier_inval_shared(addr::Value; location=Location())
-    op_ty_results = IR.Type[]
-    operands = Value[addr,]
-    owned_regions = Region[]
-    successors = Block[]
-    attributes = NamedAttribute[]
-
-    return create_operation(
-        "nvvm.mbarrier.inval.shared",
         location;
         operands,
         owned_regions,
@@ -3464,35 +3516,6 @@ function mbarrier_test_wait(addr::Value, state::Value; res::IR.Type, location=Lo
 
     return create_operation(
         "nvvm.mbarrier.test.wait",
-        location;
-        operands,
-        owned_regions,
-        successors,
-        attributes,
-        results=op_ty_results,
-        result_inference=false,
-    )
-end
-
-"""
-`mbarrier_test_wait_shared`
-
-This Op is the same as `nvvm.mbarrier.test.wait` except that the *mbarrier object*
-should be accessed using a shared-memory pointer instead of a generic-memory pointer.
-
-[For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/#parallel-synchronization-and-communication-instructions-mbarrier-test-wait-try-wait)
-"""
-function mbarrier_test_wait_shared(
-    addr::Value, state::Value; res::IR.Type, location=Location()
-)
-    op_ty_results = IR.Type[res,]
-    operands = Value[addr, state]
-    owned_regions = Region[]
-    successors = Block[]
-    attributes = NamedAttribute[]
-
-    return create_operation(
-        "nvvm.mbarrier.test.wait.shared",
         location;
         operands,
         owned_regions,
@@ -3650,6 +3673,34 @@ function match_sync(thread_mask::Value, val::Value; res::IR.Type, kind, location
 
     return create_operation(
         "nvvm.match.sync",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+"""
+`memory_barrier`
+
+`membar` operation guarantees that prior memory accesses requested by this
+thread are performed at the specified `scope`, before later memory
+operations requested by this thread following the membar instruction.
+
+[For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/#parallel-synchronization-and-communication-instructions-membar)
+"""
+function memory_barrier(; scope, location=Location())
+    op_ty_results = IR.Type[]
+    operands = Value[]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[namedattribute("scope", scope),]
+
+    return create_operation(
+        "nvvm.memory.barrier",
         location;
         operands,
         owned_regions,
@@ -4001,6 +4052,11 @@ The `offset` specifies a source lane or source lane offset
 the source. The `mask_and_clamp` contains two packed values specifying
 a mask for logically splitting warps into sub-segments and an upper bound
 for clamping the source lane index.
+
+The `return_value_and_is_valid` unit attribute can be specified to indicate 
+that the return value is a two-element struct, where the first element is 
+the result value and the second element is a predicate indicating if the 
+computed source lane index is valid.
 
 [For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/#data-movement-and-conversion-instructions-shfl-sync)
 """

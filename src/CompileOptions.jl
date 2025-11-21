@@ -12,10 +12,11 @@ communication.
     wrap_comm::Int = 0
     extend_comm::Int = 0
     dus_to_pad_manual_comp_comm::Int = 0 # 2
-    dus_to_pad_comm::Int = 1
+    dus_to_pad_comm::Int = 0
     concat_two_operands_comm::Int = 0
     concat_to_pad_comm::Int = 1
-    extend_to_pad_comm::Int = 1
+    extend_to_pad_comm::Int = 0
+    extend_to_pad_comm2::Int = 1
     wrap_to_pad_comm::Int = 1
 end
 

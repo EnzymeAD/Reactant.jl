@@ -33,6 +33,15 @@ Base.convert(T::Type{<:TracedRArray}, x::AbstractArray) = Reactant.promote_to(T,
 Base.complex(x::TracedRArray{<:Real}) = complex.(x)
 Base.complex(x::TracedRArray{<:Complex}) = x
 
+function Base.deepcopy_internal(x::TracedRArray, stackdict::IdDict)
+    if haskey(stackdict, x)
+        return stackdict[x]::typeof(x)
+    end
+    y = copy(x)
+    stackdict[x] = y
+    return y
+end
+
 TracedRArray{T,N}(x::AbstractArray) where {T,N} = convert(TracedRArray{T,N}, x)
 
 function maybe_assert_scalar_setindexing(
@@ -721,11 +730,20 @@ end
 
 # stack
 function overloaded_stack(dims::Union{Integer,Colon}, xs)
-    @assert allequal([ndims(x) for x in xs]) "All arrays must have the same number of \
-                                              dimensions..."
-    dims = dims isa Colon ? ndims(first(xs)) + 1 : dims
+    dims = dims isa Colon ? nothing : dims
     res = []
-    for x in xs
+    prev_dims = nothing
+    for x in unwrapped_broadcast(identity, xs)
+        cur_dims = ndims(x)
+        if prev_dims === nothing
+            prev_dims = cur_dims
+        else
+            @assert prev_dims == cur_dims "All arrays must have the same number of \
+                                           dimensions..."
+        end
+
+        dims === nothing && (dims = cur_dims + 1)
+
         new_shape = ntuple(
             i -> i == dims ? 1 : (i < dims ? size(x, i) : size(x, i - 1)), ndims(x) + 1
         )
@@ -1109,7 +1127,7 @@ function Base.accumulate_pairwise!(op, A::AnyTracedRVector, B::AnyTracedRVector)
     return accumulate!(op, A, B; dims=1)
 end
 
-if isdefined(Base, :_accumulate_promote_op)
+@static if isdefined(Base, :_accumulate_promote_op)
     function Base._accumulate_promote_op(op, A::AnyTracedRArray{T}; init=nothing) where {T}
         if init !== nothing
             init isa TracedRNumber && (init = zero(unwrapped_eltype(init)))

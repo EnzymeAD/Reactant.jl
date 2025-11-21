@@ -167,7 +167,8 @@
 #include "xla/stream_executor/device_description.h"
 #endif
 
-#include "jaxlib/mosaic/dialect/tpu/tpu_dialect.h"
+// Broken upstream x/ref https://github.com/jax-ml/jax/issues/33344
+// #include "jaxlib/mosaic/dialect/tpu/tpu_dialect.h"
 
 #include "llvm/Support/ExtensibleRTTI.h"
 #include <llvm/Support/FileSystem.h>
@@ -1208,6 +1209,7 @@ GenerateCompileOptions(int64_t device_id, const int64_t *mesh_ids,
   auto debug_options = options.executable_build_options.mutable_debug_options();
 
   debug_options->set_xla_gpu_cuda_data_dir(xla_gpu_cuda_data_dir);
+  debug_options->set_xla_enable_enzyme_comms_opt(true);
 
   if (kernel_cache_enabled) {
     debug_options->set_xla_gpu_kernel_cache_file(kernel_cache_path);

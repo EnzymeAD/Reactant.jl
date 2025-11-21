@@ -702,9 +702,10 @@ function optimization_passes(
     dus_to_concat::Bool=false,
     recognize_comms::Bool=true,
     lower_comms::Bool=true,
-    max_constant_threshold::Int=1024,
     backend::String="gpu",
 )
+    (; max_constant_threshold) = compile_options
+
     transform_passes_list = [
         "patterns=compare_op_canon<16>",
         "transpose_transpose<16>",
@@ -759,6 +760,9 @@ function optimization_passes(
         "noop_slice<16>",
         "noop_reverse<16>",
         "slice_slice<16>",
+        "dynamic_slice_slice<16>",
+        "slice_dynamic_slice<16>",
+        "dynamic_slice_dynamic_slice<16>",
         "shift_right_logical_simplify<16>",
         "slice_simplify<16>",
         "convert_simplify<16>",
@@ -816,20 +820,7 @@ function optimization_passes(
         "dus_dus",
         "dus_dus_concat",
         "abs_positive_simplify",
-        "transpose_unary_transpose_abs",
-        "transpose_unary_transpose_neg",
-        "transpose_unary_transpose_sqrt",
-        "transpose_unary_transpose_rsqrt",
-        "transpose_unary_transpose_ceil",
-        "transpose_unary_transpose_convert",
-        "transpose_unary_transpose_cosine",
-        "transpose_unary_transpose_exp",
-        "transpose_unary_transpose_expm1",
-        "transpose_unary_transpose_log",
-        "transpose_unary_transpose_log1p",
-        "transpose_unary_transpose_sign",
-        "transpose_unary_transpose_sine",
-        "transpose_unary_transpose_tanh",
+        "transpose_elementwise_transpose",
         "select_comp_iota_const_simplify<1>",
         "sign_abs_simplify<1>",
         "broadcastindim_is_reshape",
@@ -913,6 +904,8 @@ function optimization_passes(
         "split_variadic_scatter_op",
         "dynamic_slice_simplify",
         "enzyme_hlo_unroll($(WHILE_UNROLL_THRESHOLD[]))",
+        "dot_general_only_diagonal_access",
+        "transpose_symmetric_simplify",
     ]
 
     if !compile_options.disable_auto_batching_passes
@@ -1147,6 +1140,9 @@ function optimization_passes(
                 "concat_appending_reshape",
                 "slice_reshape",
                 "slice_reshape_slice<1>",
+                "dynamic_slice_reshape_slice<1>",
+                "slice_reshape_dynamic_slice<1>",
+                "dynamic_slice_reshape_dynamic_slice<1>",
                 "slice_reshape_concat<1>",
                 "slice_reshape_elementwise<1>",
                 "slice_reshape_dot_general<1>",
@@ -1193,17 +1189,7 @@ function optimization_passes(
             transform_passes_list,
             [
                 "reorder_elementwise_and_shape_op<16>",
-                "binary_op_transpose_simplify_add",
-                "binary_op_transpose_simplify_sub",
-                "binary_op_transpose_simplify_mul",
-                "binary_op_transpose_simplify_div",
-                "binary_op_transpose_simplify_min",
-                "binary_op_transpose_simplify_max",
-                "binary_op_transpose_simplify_pow",
-                "binary_op_transpose_simplify_rem",
-                "binary_op_transpose_simplify_or",
-                "binary_op_transpose_simplify_and",
-                "binary_op_transpose_simplify_xor",
+                "elementwise_all_transpose_operands_simplify",
                 "slice_transpose",
                 "einsum_transpose<1>",
                 "slice_reshape_transpose<1>",
@@ -1737,6 +1723,8 @@ function compile_mlir!(
 
     blas_int_width = sizeof(BlasInt) * 8
     lower_enzymexla_linalg_pass = "lower-enzymexla-linalg{backend=$backend \
+                                   blas_int_width=$blas_int_width},\
+                                   lower-enzymexla-lapack{backend=$backend \
                                    blas_int_width=$blas_int_width}"
 
     legalize_chlo_to_stablehlo =

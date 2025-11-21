@@ -11623,6 +11623,12 @@ function mlirGetDialectHandle__mosaic_gpu__()
     @ccall mlir_c.mlirGetDialectHandle__mosaic_gpu__()::MlirDialectHandle
 end
 
+function mlirDialectRegistryInsertMosaicGpuInlinerExtensions(registry)
+    @ccall mlir_c.mlirDialectRegistryInsertMosaicGpuInlinerExtensions(
+        registry::MlirDialectRegistry
+    )::Cvoid
+end
+
 function enzymexlaLapackLayoutAttrGet(ctx, col_major)
     @ccall mlir_c.enzymexlaLapackLayoutAttrGet(
         ctx::MlirContext, col_major::UInt8
@@ -11649,8 +11655,18 @@ function enzymexlaQRAlgorithmAttrGet(ctx, mode)
     @ccall mlir_c.enzymexlaQRAlgorithmAttrGet(ctx::MlirContext, mode::Int32)::MlirAttribute
 end
 
+function enzymexlaSVDAlgorithmAttrGet(ctx, mode)
+    @ccall mlir_c.enzymexlaSVDAlgorithmAttrGet(ctx::MlirContext, mode::Int32)::MlirAttribute
+end
+
 function enzymexlaGeluApproximationAttrGet(ctx, mode)
     @ccall mlir_c.enzymexlaGeluApproximationAttrGet(
+        ctx::MlirContext, mode::Int32
+    )::MlirAttribute
+end
+
+function enzymexlaGuaranteedAnalysisResultAttrGet(ctx, mode)
+    @ccall mlir_c.enzymexlaGuaranteedAnalysisResultAttrGet(
         ctx::MlirContext, mode::Int32
     )::MlirAttribute
 end

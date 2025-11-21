@@ -3,22 +3,33 @@ using NNlib, Reactant, Enzyme, Statistics, Test
 @testset "Activation Functions" begin
     sumabs2(f, x) = sum(abs2, f.(x))
 
-    x_act = Reactant.TestUtils.construct_test_array(Float32, 10, 10)
+    function ∇sumabs2(gradfn, f, x)
+        Ω = f.(x)
+        return 2 .* gradfn.(Ω, x) .* Ω
+    end
+
+    x_act = Reactant.TestUtils.construct_test_array(Float32, 10, 10) .- 0.5f0
     x_act_ca = Reactant.to_rarray(x_act)
 
-    @testset "Activation: $act" for act in (
-        identity, relu, sigmoid, tanh, tanh_fast, sigmoid_fast, gelu, abs2, relu6
+    @testset "Activation: $act" for (act, gradfn) in (
+        (identity, (Ω, x) -> one(Ω)),
+        (relu, (Ω, x) -> (Ω > 0)),
+        (sigmoid, (Ω, x) -> conj((1 - Ω) * Ω)),
+        (tanh, (Ω, x) -> conj(1 - Ω^2)),
+        (tanh_fast, (Ω, x) -> conj(1 - Ω^2)),
+        (sigmoid_fast, (Ω, x) -> conj((1 - Ω) * Ω)),
+        (gelu, (Ω, x) -> NNlib.deriv_gelu_tanh(x)),
+        (abs2, (Ω, x) -> (2 * x)),
+        (relu6, (Ω, x) -> (Ω > 0) & (Ω < 6)),
     )
         y_simple = sumabs2(act, x_act)
         y_compile = @jit sumabs2(act, x_act_ca)
 
         ∂x_compile = @jit(Enzyme.gradient(Reverse, sumabs2, Const(act), x_act_ca))[2]
-        ∂x_compile_fd = @jit Reactant.TestUtils.finite_difference_gradient(
-            Base.Fix1(sumabs2, act), x_act_ca
-        )
+        ∂x_compile_gt = @jit ∇sumabs2(gradfn, act, x_act_ca)
 
         @test y_simple ≈ y_compile
-        @test ∂x_compile ≈ ∂x_compile_fd
+        @test ∂x_compile ≈ ∂x_compile_gt atol = 1e-3 rtol = 1e-3
     end
 end
 

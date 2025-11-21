@@ -32,6 +32,25 @@ function arrive_expect_tx(barrier::Value; expect_tx, location=Location())
     )
 end
 
+function arrive(barrier::Value; orders_tensor_core, location=Location())
+    op_ty_results = IR.Type[]
+    operands = Value[barrier,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[namedattribute("orders_tensor_core", orders_tensor_core),]
+
+    return create_operation(
+        "mosaic_gpu.arrive",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
 """
 `async_load`
 
@@ -281,6 +300,31 @@ function broadcast_in_dim(
 end
 
 """
+`broadcasted_iota`
+
+Creates an array that has the specified shape and holds values starting at
+zero and incrementing by one along the specified dimension.
+"""
+function broadcasted_iota(; result_0::IR.Type, dimension, location=Location())
+    op_ty_results = IR.Type[result_0,]
+    operands = Value[]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[namedattribute("dimension", dimension),]
+
+    return create_operation(
+        "mosaic_gpu.broadcasted_iota",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+"""
 `custom_primitive`
 
 Allows defining a custom Mosaic GPU primitive.
@@ -312,6 +356,25 @@ function custom_primitive(
 
     return create_operation(
         "mosaic_gpu.custom_primitive",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+function debug_print(value::Value; format, location=Location())
+    op_ty_results = IR.Type[]
+    operands = Value[value,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[namedattribute("format", format),]
+
+    return create_operation(
+        "mosaic_gpu.debug_print",
         location;
         operands,
         owned_regions,
@@ -401,6 +464,25 @@ function optimization_barrier(
         attributes,
         results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
         result_inference=(length(op_ty_results) == 0 ? true : false),
+    )
+end
+
+function print_layout(value::Value; format, location=Location())
+    op_ty_results = IR.Type[]
+    operands = Value[value,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[namedattribute("format", format),]
+
+    return create_operation(
+        "mosaic_gpu.print_layout",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
     )
 end
 
@@ -659,6 +741,74 @@ function tmem_relinquish_alloc_permit(; collective=nothing, location=Location())
 
     return create_operation(
         "mosaic_gpu.tmem_relinquish_alloc_permit",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+"""
+`vector_load`
+
+Similar to `vector.load` (vector dialect) but supports loading from
+non-contiguous memory.
+
+If `optimized` is true, raises an error if we cannot generate an optimised
+transfer. If unset, fall back to a non-optimized transfer if unable to
+generate an optimized transfer.
+"""
+function vector_load(
+    source::Value;
+    result_0=nothing::Union{Nothing,IR.Type},
+    optimized=nothing,
+    location=Location(),
+)
+    op_ty_results = IR.Type[]
+    operands = Value[source,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+    !isnothing(result_0) && push!(op_ty_results, result_0)
+    !isnothing(optimized) && push!(attributes, namedattribute("optimized", optimized))
+
+    return create_operation(
+        "mosaic_gpu.vector_load",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
+    )
+end
+
+"""
+`vector_store`
+
+Similar to `vector.store` (vector dialect) but supports storing to
+non-contiguous memory.
+
+If `optimized` is true, raises an error if we cannot generate an optimised
+transfer. If unset, fall back to a non-optimized transfer if unable to
+generate an optimized transfer.
+"""
+function vector_store(
+    valueToStore::Value, destination::Value; optimized=nothing, location=Location()
+)
+    op_ty_results = IR.Type[]
+    operands = Value[valueToStore, destination]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+    !isnothing(optimized) && push!(attributes, namedattribute("optimized", optimized))
+
+    return create_operation(
+        "mosaic_gpu.vector_store",
         location;
         operands,
         owned_regions,

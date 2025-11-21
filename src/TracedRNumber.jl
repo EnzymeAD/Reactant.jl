@@ -26,12 +26,24 @@ Base.copy(x::TracedRNumber{T}) where {T} = TracedRNumber{T}((), x.mlir_data)
 function Base.eps(::Type{TracedRNumber{T}}) where {T}
     return Reactant.promote_to(TracedRNumber{T}, eps(T))
 end
+Base.eps(x::TracedRNumber{T}) where {T} = eps(typeof(x))
 
 function Base.typemin(::Type{TracedRNumber{T}}) where {T}
     return Reactant.promote_to(TracedRNumber{T}, typemin(T))
 end
+Base.typemin(x::TracedRNumber{T}) where {T} = typemin(typeof(x))
+
 function Base.typemax(::Type{TracedRNumber{T}}) where {T}
     return Reactant.promote_to(TracedRNumber{T}, typemax(T))
+end
+Base.typemax(x::TracedRNumber{T}) where {T} = typemax(typeof(x))
+
+function Base.nextfloat(x::TracedRNumber{T}) where {T<:AbstractFloat}
+    return @opcall next_after(x, typemax(x))
+end
+
+function Base.prevfloat(x::TracedRNumber{T}) where {T<:AbstractFloat}
+    return @opcall next_after(x, typemin(x))
 end
 
 function Base.rtoldefault(T::Type{<:TracedRNumber})
@@ -491,6 +503,7 @@ for (jlop, hloop) in (
     (:(Base.log), :log),
     (:(Base.log1p), :log_plus_one),
     (:(Base.sqrt), :sqrt),
+    (:(Base.cbrt), :cbrt),
     (:(Base.acos), :acos),
     (:(Base.acosh), :acosh),
     (:(Base.asin), :asin),
@@ -566,13 +579,31 @@ Base.Math._log(x::TracedRNumber, base, ::Symbol) = log(x) / log(Reactant._unwrap
 Base.isreal(::TracedRNumber) = false
 Base.isreal(::TracedRNumber{<:Real}) = true
 
+Base.isinteger(x::TracedRNumber{<:Integer}) = true
+Base.isinteger(x::TracedRNumber{<:AbstractFloat}) = x - trunc(x) == zero(x)
+
+Base.isodd(x::TracedRNumber) = isodd(real(x))
+function Base.isodd(x::TracedRNumber{<:Real})
+    return (
+        isinteger(x) &
+        !iszero(
+            rem(
+                Reactant.promote_to(TracedRNumber{Int}, x),
+                Reactant.promote_to(TracedRNumber{Int}, 2),
+            ),
+        )
+    )
+end
+
 Base.iseven(x::TracedRNumber) = iseven(real(x))
 function Base.iseven(x::TracedRNumber{<:Real})
-    return iszero(
-        rem(
-            Reactant.promote_to(TracedRNumber{Int}, x),
-            Reactant.promote_to(TracedRNumber{Int}, 2),
-        ),
+    return (
+        isinteger(x) & iszero(
+            rem(
+                Reactant.promote_to(TracedRNumber{Int}, x),
+                Reactant.promote_to(TracedRNumber{Int}, 2),
+            ),
+        )
     )
 end
 

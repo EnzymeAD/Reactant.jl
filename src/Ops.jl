@@ -3312,6 +3312,60 @@ Compute the row maximum pivoted LU factorization of `x` and return the factors `
     return (res, ipiv, perm, info)
 end
 
+@noinline function svd(
+    x::TracedRArray{T,N},
+    ::Type{iT}=Int32;
+    full::Bool=false,
+    algorithm::String="DEFAULT",
+    location=mlir_stacktrace("svd", @__FILE__, @__LINE__),
+) where {T,iT,N}
+    @assert N >= 2
+
+    batch_sizes = size(x)[1:(end - 2)]
+    m, n = size(x)[(end - 1):end]
+    r = min(m, n)
+
+    U_size = (batch_sizes..., m, full ? m : r)
+    S_size = (batch_sizes..., r)
+    Vt_size = (batch_sizes..., full ? n : r, n)
+    info_size = batch_sizes
+
+    if algorithm == "DEFAULT"
+        algint = 0
+    elseif algorithm == "QRIteration"
+        algint = 1
+    elseif algorithm == "DivideAndConquer"
+        algint = 2
+    elseif algorithm == "Jacobi"
+        algint = 3
+    else
+        error("Unsupported SVD algorithm: $algorithm")
+    end
+
+    svd_op = enzymexla.linalg_svd(
+        x.mlir_data;
+        U=mlir_type(TracedRArray{T,N}, U_size),
+        S=mlir_type(TracedRArray{Base.real(T),N - 1}, S_size),
+        Vt=mlir_type(TracedRArray{T,N}, Vt_size),
+        info=mlir_type(TracedRArray{iT,N - 2}, info_size),
+        full=full,
+        algorithm=MLIR.API.enzymexlaSVDAlgorithmAttrGet(MLIR.IR.context(), algint),
+        location,
+    )
+
+    U = TracedRArray{T,N}((), MLIR.IR.result(svd_op, 1), U_size)
+    S = TracedRArray{Base.real(T),N - 1}((), MLIR.IR.result(svd_op, 2), S_size)
+    Vt = TracedRArray{T,N}((), MLIR.IR.result(svd_op, 3), Vt_size)
+
+    if N == 2
+        info = TracedRNumber{iT}((), MLIR.IR.result(svd_op, 4))
+    else
+        info = TracedRArray{iT,N - 2}((), MLIR.IR.result(svd_op, 4), info_size)
+    end
+
+    return U, S, Vt, info
+end
+
 @noinline function reduce_window(
     f::F,
     inputs::Vector{TracedRArray{T,N}},
