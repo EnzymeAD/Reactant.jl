@@ -1402,26 +1402,27 @@ function unwrapped_broadcast(f::F, x::Slices, original_dims) where {F}
         updated_dims = ()
         if original_dims isa Colon
             updated_dims = mapslices_dims
+            re = x -> dropdims(x; dims=mapslices_dims)
         else
             for d in original_dims
                 idx = findfirst(isequal(d), x.slicemap)
                 @assert idx !== nothing "Expected dimension $d in $(x.slicemap)"
                 updated_dims = (updated_dims..., idx)
             end
+            re = x -> eachslice(x; dims=mapslices_dims, drop=true)
         end
 
-        return (
-            mapslices(f, px; dims=mapslices_dims),
-            updated_dims,
-            x -> eachslice(x; dims=mapslices_dims, drop=true),
-        )
+        return mapslices(f, px; dims=mapslices_dims), updated_dims, re
     else
         mapslices_dims = Tuple(filter(i -> !(x.slicemap[i] isa Colon), 1:ndims(px)))
-        return (
-            mapslices(f, px; dims=mapslices_dims),
-            original_dims,
-            x -> eachslice(x; dims=mapslices_dims, drop=false),
-        )
+        if original_dims isa Colon
+            updated_dims = mapslices_dims
+            re = x -> dropdims(x; dims=mapslices_dims)
+        else
+            updated_dims = Tuple(d for d in original_dims if d in mapslices_dims)
+            re = x -> eachslice(x; dims=mapslices_dims, drop=false)
+        end
+        return mapslices(f, px; dims=mapslices_dims), updated_dims, re
     end
 end
 
