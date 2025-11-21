@@ -4,7 +4,7 @@ function promote_loop(a)
     for j in 1:2
         a += 5
     end
-    a
+    return a
 end
 
 function promote_loop_twin(a)
@@ -15,14 +15,14 @@ function promote_loop_twin(a)
     for j in 1:2
         a += 5
     end
-    a
+    return a
 end
 
 function promote_loop_slot_write(a)
     for j in 1:2
         a += 5 + j
     end
-    a
+    return a
 end
 
 function double_promote_loop_slot_write(a)
@@ -31,21 +31,21 @@ function double_promote_loop_slot_write(a)
             a += i + j
         end
     end
-    a
+    return a
 end
 
 function simple_promote_loop_mutable(A)
     for i in 1:10
         A[i, 1] = A[1, i]
     end
-    A
+    return A
 end
 
 function simple_promote_loop_mutable_repeated(A)
     for j in 1:10
         A[2, 1] = A[1, 2]
     end
-    A
+    return A
 end
 
 function simple_promote_loop_mutable_repeated_twin(A)
@@ -55,7 +55,7 @@ function simple_promote_loop_mutable_repeated_twin(A)
     for j in 1:10
         A[2, 1] = A[1, 2]
     end
-    A
+    return A
 end
 
 function simple_promote_loop_mutable_twin(A)
@@ -65,7 +65,7 @@ function simple_promote_loop_mutable_twin(A)
     for j in 1:10
         A[2, 1] = A[1, 2]
     end
-    A
+    return A
 end
 
 function simple_branch_for(A)
@@ -85,9 +85,8 @@ function internal_accu(a)
         p += 1 + i
         q += p * 2
     end
-    q
+    return q
 end
-
 
 function promote_loop_non_upgraded_slot(A, x)
     p = 1
@@ -96,7 +95,6 @@ function promote_loop_non_upgraded_slot(A, x)
     end
     return p
 end
-
 
 @testset "basic promotion" begin
     n = 64
@@ -109,14 +107,15 @@ end
     A = collect(reshape(1:100, 10, 10))
     tA = Reactant.to_rarray(A)
     @test @jit(simple_promote_loop_mutable(tA)) == simple_promote_loop_mutable(A)
-    @test @jit(simple_promote_loop_mutable_repeated(tA)) == simple_promote_loop_mutable_repeated(A)
-    @test @jit(simple_promote_loop_mutable_repeated_twin(tA)) == simple_promote_loop_mutable_repeated_twin(A)
+    @test @jit(simple_promote_loop_mutable_repeated(tA)) ==
+        simple_promote_loop_mutable_repeated(A)
+    @test @jit(simple_promote_loop_mutable_repeated_twin(tA)) ==
+        simple_promote_loop_mutable_repeated_twin(A)
     @test @jit(simple_branch_for(tA)) == simple_branch_for(A)
     @test @jit(internal_accu(a)) == internal_accu(a)
-    @test @jit(promote_loop_non_upgraded_slot(tA, a)) == promote_loop_non_upgraded_slot(A,n)
+    @test @jit(promote_loop_non_upgraded_slot(tA, a)) ==
+        promote_loop_non_upgraded_slot(A, n)
 end
-
-
 
 function simple_traced_iterator(A)
     a = A[1, 1]
@@ -155,14 +154,13 @@ end
     @test @jit(simple_reverse_iterator(a)) == simple_reverse_iterator(n)
 end
 
-
 function basic_if(c)
     r = c ? 1 : 0
-    r
+    return r
 end
 
 function normalized_if(c)
-    c ? 1 : 0
+    return c ? 1 : 0
 end
 
 function slot_if(c)
@@ -172,7 +170,7 @@ function slot_if(c)
     else
         a -= 1
     end
-    a
+    return a
 end
 
 function partial_if(c)
@@ -184,7 +182,7 @@ function partial_if(c)
         a3 = 3
         a4 = 4
     end
-    a1 + a2 + a3 + a4
+    return a1 + a2 + a3 + a4
 end
 
 function asymetric_slot_if(c)
@@ -192,7 +190,7 @@ function asymetric_slot_if(c)
     if c
         a += 1
     end
-    a
+    return a
 end
 
 function asymetric_slot__argument_if(c, b)
@@ -203,14 +201,14 @@ function asymetric_slot__argument_if(c, b)
     else
         a -= 1
     end
-    a + b
+    return a + b
 end
 
 function mutable_if(c, A)
     if c
         A[1] += 1
     end
-    A
+    return A
 end
 
 function mutable_both_if(c, A)
@@ -219,7 +217,7 @@ function mutable_both_if(c, A)
     else
         A[2] -= 1
     end
-    A
+    return A
 end
 
 function multiple_layer(x)
@@ -241,8 +239,43 @@ end
     @test @jit(slot_if(a)) == slot_if(v)
     @test @jit(partial_if(a)) == partial_if(v)
     @test @jit(asymetric_slot_if(a)) == asymetric_slot_if(v)
-    @test @jit(asymetric_slot__argument_if(a,n)) == asymetric_slot__argument_if(v,n)
+    @test @jit(asymetric_slot__argument_if(a, n)) == asymetric_slot__argument_if(v, n)
     @test @jit(mutable_if(a, tA)) == mutable_if(v, A)
     @test @jit(mutable_both_if(a, tA)) == mutable_both_if(v, A)
     @test @jit(multiple_layer(a)) == multiple_layer(v)
+end
+
+function simple_while(k, i)
+    while k - i > 0
+        k -= i
+    end
+    return k
+end
+
+function double_while(a)
+    while a > 50
+        while a > 0
+            a -= 1
+        end
+    end
+    return a
+end
+
+function internal_accu_while(a)
+    b = 0
+    while a > 0
+        b += 1
+        a -= b + 1
+    end
+    return a
+end
+
+@testset "basic while" begin
+    v = true
+    a = Reactant.ConcreteRNumber(v)
+    n = Reactant.ConcreteRNumber(16)
+    i = 12
+    @test @jit(simple_while(n, i)) == simple_while(n,i)
+    @test @jit(double_while(n)) == double_while(n)
+    @test @jit(internal_accu_while(n)) == internal_accu_while(n)
 end

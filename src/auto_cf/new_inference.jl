@@ -393,11 +393,21 @@ end
 is_traced(::Type{Tuple{}}) = false
 is_traced(t) = false
 
+function is_for_last_body_block(node, bb)::Bool
+    isnothing(node) && return false
+    node isa Reactant.LoopStructure || return false
+    node.kind == For || return false
+    max(node.body_bbs...) == bb
+end
+
 #TODO: add support to while loop / general loop
 function is_a_traced_loop(an, src::CC.CodeInfo, cfg::CC.CFG, bb_header)
     bb_body_first = min(cfg.blocks[bb_header].succs...)
     can_be_for = max(cfg.blocks[bb_body_first].preds...) > bb_body_first
-    can_be_while = max(cfg.blocks[bb_header].preds...) > bb_header
+    begin
+        an.tree.node
+    end
+    can_be_while = !is_for_last_body_block(an.tree.node, bb_header) && max(cfg.blocks[bb_header].preds...) > bb_header
     #detect cycle in the cfg
     if can_be_for || can_be_while
         bb_end = max(cfg.blocks[bb_header].succs...)
@@ -613,8 +623,6 @@ function rewrite_loop_stack!(an::Analysis, frame, states, currstate)
         ct = ct.parent[]
         node isa LoopStructure || continue
         node.state == Maybe || continue
-        @error src
-        #TODO: while loop
         if node.kind == For
             new_iterator_type = get_new_iterator_type(src, cfg, node.header_bb)
             slot = rewrite_iterator(src, cfg, node.header_bb, new_iterator_type)

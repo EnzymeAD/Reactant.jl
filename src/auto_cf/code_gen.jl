@@ -560,14 +560,15 @@ function apply_transformation_while!(ir::CC.IRCode, f::LoopStructure)
         phi = only(indexes)
         change_stmt!(ir, phi, expr, returning_type(type_traced_ssa[1]))
     else
-        before_while_header_pos = Core.SSAValue(terminator_index(ir, f.header_bb) - 1)
-        CC.insert_node!(
-            ir, before_while_header_pos, Core.Compiler.NewInstruction(expr, Any), true
+        before_while_header_pos = terminator_index(ir, f.header_bb-1)
+        ssa_while = CC.insert_node!(
+            ir, Core.SSAValue(before_while_header_pos), Core.Compiler.NewInstruction(expr, Any), true
         )
         for (i, index) in enumerate(indexes)
-            ir.stmts.stmt[index] = Expr(
-                :call, Core.GlobalRef(Base, :getindex), while_ssa, i
+            expr = Expr(
+                :call, Core.GlobalRef(Base, :getindex), ssa_while, i
             )
+            change_stmt!(ir,index, expr, type_traced_ssa[i])
         end
     end
 end
