@@ -1,28 +1,25 @@
-# Supports batched factorization
-abstract type GeneralizedFactorization{T} <: Factorization{T} end
+abstract type BatchedFactorization{T} <: Factorization{T} end
 
-function LinearAlgebra.TransposeFactorization(f::GeneralizedFactorization)
+function LinearAlgebra.TransposeFactorization(f::BatchedFactorization)
     return LinearAlgebra.TransposeFactorization{eltype(f),typeof(f)}(f)
 end
 
-function LinearAlgebra.AdjointFactorization(f::GeneralizedFactorization)
+function LinearAlgebra.AdjointFactorization(f::BatchedFactorization)
     return LinearAlgebra.AdjointFactorization{eltype(f),typeof(f)}(f)
 end
 
-const GeneralizedTransposeFactorization{T} =
-    LinearAlgebra.TransposeFactorization{T,<:GeneralizedFactorization{T}} where {T}
-const GeneralizedAdjointFactorization{T} =
-    LinearAlgebra.AdjointFactorization{T,<:GeneralizedFactorization{T}} where {T}
+const BatchedTransposeFactorization{T} =
+    LinearAlgebra.TransposeFactorization{T,<:BatchedFactorization{T}} where {T}
+const BatchedAdjointFactorization{T} =
+    LinearAlgebra.AdjointFactorization{T,<:BatchedFactorization{T}} where {T}
 
 include("Cholesky.jl")
 include("LU.jl")
+include("SVD.jl")
 
 # Overload \ to support batched factorization
-for FT in (
-    :GeneralizedFactorization,
-    :GeneralizedTransposeFactorization,
-    :GeneralizedAdjointFactorization,
-)
+for FT in
+    (:BatchedFactorization, :BatchedTransposeFactorization, :BatchedAdjointFactorization)
     for aType in (:AbstractVecOrMat, :AbstractArray)
         @eval Base.:(\)(F::$FT, B::$aType) = _overloaded_backslash(F, B)
     end
@@ -32,18 +29,36 @@ for FT in (
     ) where {T<:Union{Float32,Float64}} = _overloaded_backslash(F, B)
 end
 
-function _overloaded_backslash(F::GeneralizedFactorization, B::AbstractArray)
-    return ldiv!(
-        F, LinearAlgebra.copy_similar(B, typeof(oneunit(eltype(F)) \ oneunit(eltype(B))))
-    )
+function __get_B(F::Factorization, B::AbstractArray)
+    m, n = size(F, 1), size(F, 2)
+    if m != size(B, 1)
+        throw(DimensionMismatch("arguments must have the same number of rows"))
+    end
+
+    TFB = typeof(oneunit(eltype(F)) \ oneunit(eltype(B)))
+
+    BB = similar(B, TFB, max(size(B, 1), n), size(B)[2:end]...)
+    if n > size(B, 1)
+        BB[1:m, ntuple(Returns(Colon()), ndims(B) - 1)...] = B
+    else
+        copyto!(BB, B)
+    end
+
+    return BB
 end
 
-function _overloaded_backslash(F::GeneralizedTransposeFactorization, B::AbstractArray)
+function _overloaded_backslash(F::BatchedFactorization, B::AbstractArray)
+    BB = __get_B(F, B)
+    ldiv!(F, BB)
+    return BB[1:size(F, 2), ntuple(Returns(Colon()), ndims(B) - 1)...]
+end
+
+function _overloaded_backslash(F::BatchedTransposeFactorization, B::AbstractArray)
     return conj!(adjoint(F.parent) \ conj.(B))
 end
 
-function _overloaded_backslash(F::GeneralizedAdjointFactorization, B::AbstractArray)
-    return ldiv!(
-        F, LinearAlgebra.copy_similar(B, typeof(oneunit(eltype(F)) \ oneunit(eltype(B))))
-    )
+function _overloaded_backslash(F::BatchedAdjointFactorization, B::AbstractArray)
+    BB = __get_B(F, B)
+    ldiv!(F, BB)
+    return BB[1:size(F)[2], ntuple(Returns(Colon()), ndims(B) - 1)...]
 end

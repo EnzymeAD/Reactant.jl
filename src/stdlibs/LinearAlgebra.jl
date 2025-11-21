@@ -4,7 +4,7 @@ using ..MLIR: MLIR
 using ..Reactant: Reactant, Ops
 using ..Reactant:
     TracedRArray, TracedRNumber, AnyTracedRArray, AnyTracedRMatrix, AnyTracedRVector
-using ..Reactant: call_with_reactant
+using ..Reactant: call_with_reactant, unwrapped_eltype, promote_to
 using ReactantCore: ReactantCore, materialize_traced_array, @trace
 using Reactant_jll: Reactant_jll
 
@@ -15,8 +15,9 @@ using LinearAlgebra: LinearAlgebra, BLAS
 using LinearAlgebra: Adjoint, Transpose, Factorization, RowMaximum, NoPivot
 using LinearAlgebra: SymTridiagonal, Symmetric, Bidiagonal, Diagonal, Tridiagonal
 using LinearAlgebra: LowerTriangular, UnitLowerTriangular, UpperTriangular
-using LinearAlgebra:
-    diag, diagm, ldiv!, det, logabsdet, lu, istriu, istril, triu!, tril!, inv!, rmul!
+using LinearAlgebra: I, diag, diagm, ldiv!, det, logabsdet, istriu, istril, triu!, tril!
+using LinearAlgebra: inv!, rmul!, normalize
+using LinearAlgebra: svd, lu
 using Libdl: Libdl
 using GPUArraysCore: @allowscalar
 

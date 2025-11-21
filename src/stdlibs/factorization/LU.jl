@@ -1,22 +1,22 @@
-struct GeneralizedLU{T,S<:AbstractArray,P<:AbstractArray,I<:Union{AbstractArray,Number}} <:
-       GeneralizedFactorization{T}
+struct BatchedLU{T,S<:AbstractArray,P<:AbstractArray,I<:Union{AbstractArray,Number}} <:
+       BatchedFactorization{T}
     factors::S
     ipiv::P
     perm::P
     info::I
 end
 
-Base.size(lu::GeneralizedLU) = size(lu.factors)
-Base.size(lu::GeneralizedLU, i) = size(lu.factors, i)
-Base.ndims(lu::GeneralizedLU) = ndims(lu.factors)
-function Base.copy(lu::GeneralizedLU)
-    return GeneralizedLU(copy(lu.factors), copy(lu.ipiv), copy(lu.perm), copy(lu.info))
+Base.size(lu::BatchedLU) = size(lu.factors)
+Base.size(lu::BatchedLU, i::Integer) = size(lu.factors, i)
+Base.ndims(lu::BatchedLU) = ndims(lu.factors)
+function Base.copy(lu::BatchedLU)
+    return BatchedLU(copy(lu.factors), copy(lu.ipiv), copy(lu.perm), copy(lu.info))
 end
 
-function GeneralizedLU(factors::S, ipiv::P, perm::P, info::I) where {S,P,I}
+function BatchedLU(factors::S, ipiv::P, perm::P, info::I) where {S,P,I}
     @assert ndims(ipiv) == ndims(perm) == ndims(factors) - 1
     @assert ndims(info) == ndims(factors) - 2
-    return GeneralizedLU{eltype(factors),S,P,I}(factors, ipiv, perm, info)
+    return BatchedLU{eltype(factors),S,P,I}(factors, ipiv, perm, info)
 end
 
 function overloaded_lu(x::AbstractArray, args...; kwargs...)
@@ -37,11 +37,11 @@ function overloaded_lu(
     factors = @opcall transpose(factors, invperm(permdims))
     ipiv = @opcall transpose(ipiv, perm_perm)
     perm = @opcall transpose(perm, perm_perm)
-    return GeneralizedLU(factors, ipiv, perm, info)
+    return BatchedLU(factors, ipiv, perm, info)
 end
 
 function LinearAlgebra.ldiv!(
-    lu::GeneralizedLU{T,<:AbstractArray{T,N},P,I}, B::AbstractArray{T,M}
+    lu::BatchedLU{T,<:AbstractArray{T,N},P,I}, B::AbstractArray{T,M}
 ) where {T,P,I,N,M}
     @assert N == M + 1
     ldiv!(lu, reshape(B, size(B, 1), 1, size(B)[2:end]...))
@@ -49,14 +49,14 @@ function LinearAlgebra.ldiv!(
 end
 
 function LinearAlgebra.ldiv!(
-    lu::GeneralizedLU{T,<:AbstractArray{T,2},P,I}, B::AbstractArray{T,2}
+    lu::BatchedLU{T,<:AbstractArray{T,2},P,I}, B::AbstractArray{T,2}
 ) where {T,P,I}
     B .= _lu_solve_core(lu.factors, B, lu.perm)
     return B
 end
 
 function LinearAlgebra.ldiv!(
-    lu::GeneralizedLU{T,<:AbstractArray{T,N},P,I}, B::AbstractArray{T,N}
+    lu::BatchedLU{T,<:AbstractArray{T,N},P,I}, B::AbstractArray{T,N}
 ) where {T,P,I,N}
     batch_shape = size(lu.factors)[3:end]
     @assert batch_shape == size(B)[3:end]
@@ -83,7 +83,7 @@ function LinearAlgebra.ldiv!(
     return B
 end
 
-function LinearAlgebra.det(lu::GeneralizedLU{T,<:AbstractMatrix}) where {T}
+function LinearAlgebra.det(lu::BatchedLU{T,<:AbstractMatrix}) where {T}
     n = LinearAlgebra.checksquare(lu)
     # TODO: check for non-singular matrices
 
@@ -91,7 +91,7 @@ function LinearAlgebra.det(lu::GeneralizedLU{T,<:AbstractMatrix}) where {T}
     return ifelse(isodd(sum(lu.ipiv[1:n] .!= (1:n))), -one(T), one(T)) * P
 end
 
-function LinearAlgebra.logabsdet(lu::GeneralizedLU{T,<:AbstractMatrix}) where {T}
+function LinearAlgebra.logabsdet(lu::BatchedLU{T,<:AbstractMatrix}) where {T}
     n = LinearAlgebra.checksquare(lu)
     Treal = real(T)
     # TODO: check for non-singular matrices
@@ -106,7 +106,7 @@ end
 for f_wrapper in (LinearAlgebra.TransposeFactorization, LinearAlgebra.AdjointFactorization),
     aType in (:AbstractVecOrMat, :AbstractArray)
 
-    @eval function LinearAlgebra.ldiv!(lu::$(f_wrapper){<:Any,<:GeneralizedLU}, B::$aType)
+    @eval function LinearAlgebra.ldiv!(lu::$(f_wrapper){<:Any,<:BatchedLU}, B::$aType)
         # TODO: implement this
         error("`$(f_wrapper)` is not supported yet for LU.")
         return nothing
@@ -116,7 +116,7 @@ end
 # currently we lower inverse to lu decomposition + triangular solve. we should
 # instead emit getri and lower that to a fallback if the backend doesn't support
 # it.
-function LinearAlgebra.inv!(lu::GeneralizedLU)
+function LinearAlgebra.inv!(lu::BatchedLU)
     @assert ndims(lu) == 2 "Only implemented for 2D tensors"
     rhs = Reactant.promote_to(
         TracedRArray{Reactant.unwrapped_eltype(eltype(lu)),2}, LinearAlgebra.I(size(lu, 1))
