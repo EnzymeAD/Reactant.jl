@@ -3137,7 +3137,7 @@ end
         (),
         "unbatched_" * string(f),
         false;
-        args_in_result=:none,
+        args_in_result=:result,
         do_transpose=false,
         argprefix,
     )
