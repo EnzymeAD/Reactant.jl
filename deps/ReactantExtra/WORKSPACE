@@ -232,11 +232,6 @@ load(
     "CUDNN_REDISTRIBUTIONS",
 )
 load(
-    "@cuda_redist_json//:distributions.bzl",
-    "CUDA_REDISTRIBUTIONS",
-    "CUDNN_REDISTRIBUTIONS",
-)
-load(
     "@rules_ml_toolchain//third_party/gpus/cuda/hermetic:cuda_redist_init_repositories.bzl",
     "cuda_redist_init_repositories",
     "cudnn_redist_init_repository",
