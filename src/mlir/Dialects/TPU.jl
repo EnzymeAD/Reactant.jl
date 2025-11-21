@@ -70,6 +70,21 @@ function assume_layout(input::Value; result::IR.Type, location=Location())
     )
 end
 
+"""
+`assume_multiple`
+
+This operation is a hint to the compiler that the input `value` is guaranteed
+to be a multiple of `multiple`. This can be used to satisfy divisibility checks
+in some compiler passes.
+
+The result is the same as the input `value`.
+
+# Example
+
+```mlir
+%val = tpu.assume_multiple %arg0, 16 : index
+```
+"""
 function assume_multiple(
     value::Value; result=nothing::Union{Nothing,IR.Type}, multiple, location=Location()
 )
@@ -89,6 +104,31 @@ function assume_multiple(
         attributes,
         results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
         result_inference=(length(op_ty_results) == 0 ? true : false),
+    )
+end
+
+"""
+`barrier`
+
+Performs barrier synchronization across all SC vector subcores at the
+specified barrier id.
+"""
+function barrier(barrier_id::Value; location=Location())
+    op_ty_results = IR.Type[]
+    operands = Value[barrier_id,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+
+    return create_operation(
+        "tpu.barrier",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
     )
 end
 
@@ -384,15 +424,11 @@ function enqueue_dma(
         attributes,
         operandsegmentsizes([
             1,
-            (source_semaphore == nothing) ? 0 : 11,
+            (source_semaphore == nothing) ? 0 : 1,
             1,
-            if (device_id == nothing)
-                0
-            elseif 1(core_id == nothing)
-                0
-            else
-                1
-            end,
+            1,
+            (device_id == nothing) ? 0 : 1,
+            (core_id == nothing) ? 0 : 1,
         ]),
     )
     !isnothing(priority) && push!(attributes, namedattribute("priority", priority))
@@ -440,12 +476,15 @@ function enqueue_indirect_dma(
     )
 end
 
-function erase_memref_layout(operand::Value; result::IR.Type, location=Location())
-    op_ty_results = IR.Type[result,]
+function erase_memref_layout(
+    operand::Value; result=nothing::Union{Nothing,IR.Type}, location=Location()
+)
+    op_ty_results = IR.Type[]
     operands = Value[operand,]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
+    !isnothing(result) && push!(op_ty_results, result)
 
     return create_operation(
         "tpu.erase_memref_layout",
@@ -454,8 +493,8 @@ function erase_memref_layout(operand::Value; result::IR.Type, location=Location(
         owned_regions,
         successors,
         attributes,
-        results=op_ty_results,
-        result_inference=false,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
     )
 end
 
@@ -874,6 +913,38 @@ function prng_set_seed_32(seeds::Vector{Value}; location=Location())
     )
 end
 
+"""
+`pack_elementwise`
+
+Packs multiple `sources` elementwise into a single vector of a narrower `target_type`.
+
+The number of `sources` must equal the packing factor, which is the ratio of
+the element bitwidth of the `sources` to the element bitwidth of the
+`target_type`. Elements from the `sources` are interleaved and packed into
+each word of the `output`, ordered from lowest to highest bits,
+corresponding to their order in the `sources`.
+"""
+function pack_elementwise(
+    sources::Vector{Value}; output::IR.Type, target_type, location=Location()
+)
+    op_ty_results = IR.Type[output,]
+    operands = Value[sources...,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[namedattribute("target_type", target_type),]
+
+    return create_operation(
+        "tpu.pack_elementwise",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
 function pack_vmsk(low::Value, high::Value; output::IR.Type, location=Location())
     op_ty_results = IR.Type[output,]
     operands = Value[low, high]
@@ -1243,17 +1314,12 @@ function sem_signal(
     attributes = NamedAttribute[]
     !isnothing(device_id) && push!(operands, device_id)
     !isnothing(core_id) && push!(operands, core_id)
-    push!(attributes, operandsegmentsizes([
-        1,
-        1,
-        if (device_id == nothing)
-            0
-        elseif 1(core_id == nothing)
-            0
-        else
-            1
-        end,
-    ]))
+    push!(
+        attributes,
+        operandsegmentsizes([
+            1, 1, (device_id == nothing) ? 0 : 1, (core_id == nothing) ? 0 : 1
+        ]),
+    )
     !isnothing(core_type) && push!(attributes, namedattribute("core_type", core_type))
 
     return create_operation(
@@ -1335,6 +1401,48 @@ function shuffled_store(
 
     return create_operation(
         "tpu.shuffled_store",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+function stochastic_convert_elementwise(
+    input::Value, random::Value; output::IR.Type, dst_type, location=Location()
+)
+    op_ty_results = IR.Type[output,]
+    operands = Value[input, random]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[namedattribute("dst_type", dst_type),]
+
+    return create_operation(
+        "tpu.stochastic_convert_elementwise",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+function stochastic_convert(
+    input::Value, random::Value; output::IR.Type, location=Location()
+)
+    op_ty_results = IR.Type[output,]
+    operands = Value[input, random]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+
+    return create_operation(
+        "tpu.stochastic_convert",
         location;
         operands,
         owned_regions,
@@ -1547,8 +1655,46 @@ function truncf(in::Value; out::IR.Type, rounding_mode, location=Location())
     )
 end
 
+"""
+`unpack_elementwise`
+
+Unpacks a single vector from `source`, which contains multiple `source_type`
+vectors packed elementwise.
+
+The `index` selects which packed value to extract from each word of `source`.
+An `index` of 0 corresponds to the lowest bits. The extracted values are
+cast to the output element type.
+"""
+function unpack_elementwise(
+    source::Value; output::IR.Type, source_type, index, location=Location()
+)
+    op_ty_results = IR.Type[output,]
+    operands = Value[source,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[
+        namedattribute("source_type", source_type), namedattribute("index", index)
+    ]
+
+    return create_operation(
+        "tpu.unpack_elementwise",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
 function unpack_subelements(
-    source::Value; output::IR.Type, index, pack_format, location=Location()
+    source::Value;
+    output::IR.Type,
+    index,
+    pack_format,
+    sign_extended=nothing,
+    location=Location(),
 )
     op_ty_results = IR.Type[output,]
     operands = Value[source,]
@@ -1557,6 +1703,8 @@ function unpack_subelements(
     attributes = NamedAttribute[
         namedattribute("index", index), namedattribute("pack_format", pack_format)
     ]
+    !isnothing(sign_extended) &&
+        push!(attributes, namedattribute("sign_extended", sign_extended))
 
     return create_operation(
         "tpu.unpack_subelements",
@@ -1723,18 +1871,12 @@ function wait_dma2(
     attributes = NamedAttribute[]
     !isnothing(device_id) && push!(operands, device_id)
     !isnothing(core_id) && push!(operands, core_id)
-    push!(attributes, operandsegmentsizes([
-        1,
-        1,
-        1,
-        if (device_id == nothing)
-            0
-        elseif 1(core_id == nothing)
-            0
-        else
-            1
-        end,
-    ]))
+    push!(
+        attributes,
+        operandsegmentsizes([
+            1, 1, 1, (device_id == nothing) ? 0 : 1, (core_id == nothing) ? 0 : 1
+        ]),
+    )
     !isnothing(strict_ordering) &&
         push!(attributes, namedattribute("strict_ordering", strict_ordering))
 

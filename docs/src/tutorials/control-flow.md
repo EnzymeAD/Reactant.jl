@@ -124,7 +124,7 @@ a function from traced arguments, leading to a traced condition.
 
 In addition to conditional evaluations, [`@trace`](@ref) also supports capturing
 loops. This is possible in the form of both for and while loops.
-This enables one to write algorithm that would not be possible otherwise such as
+This enables one to write algorithms that would not be possible otherwise such as
 performing computations until convergence or running a computation for an certain
 number of iterations which is only known during runtime.
 
@@ -188,6 +188,6 @@ This implementation runs the algorithm until convergence (the transport plan has
 
 !!! warning "Current limitations"
 
-    This is currently not allowed to include mutations as part of the while loop condition.
+    It is currently not allowed to include mutations as part of the while loop condition.
 
     The for loop tracing does not support any arbitrary iterable. It supports integer ranges.

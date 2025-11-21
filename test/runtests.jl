@@ -29,6 +29,7 @@ const REACTANT_TEST_GROUP = lowercase(get(ENV, "REACTANT_TEST_GROUP", "all"))
         @safetestset "Sorting" include("sorting.jl")
         @safetestset "Shortcuts to MLIR ops" include("ops.jl")
         @safetestset "Indexing" include("indexing.jl")
+        @safetestset "Ranges" include("ranges.jl")
         if !Sys.isapple()
             @safetestset "Custom Number Types" include("custom_number_types.jl")
         end
@@ -52,14 +53,22 @@ const REACTANT_TEST_GROUP = lowercase(get(ENV, "REACTANT_TEST_GROUP", "all"))
         @safetestset "Python" include("integration/python.jl")
         @safetestset "Optimisers" include("integration/optimisers.jl")
         @safetestset "FillArrays" include("integration/fillarrays.jl")
+        @safetestset "MPI" begin
+            using MPI
+            nranks = 2
+            run(`$(mpiexec()) -n $nranks $(Base.julia_cmd()) integration/mpi.jl`)
+        end
+
+        # Zygote is not supported on 1.12 https://github.com/FluxML/Zygote.jl/issues/1580
+        if VERSION < v"1.12-"
+            @safetestset "Zygote" include("integration/zygote.jl")
+        end
     end
 
     if REACTANT_TEST_GROUP == "all" || REACTANT_TEST_GROUP == "neural_networks"
         @safetestset "NNlib Primitives" include("nn/nnlib.jl")
         @safetestset "Flux.jl Integration" include("nn/flux.jl")
-        if Sys.islinux()
-            @safetestset "LuxLib Primitives" include("nn/luxlib.jl")
-            @safetestset "Lux Integration" include("nn/lux.jl")
-        end
+        @safetestset "LuxLib Primitives" include("nn/luxlib.jl")
+        @safetestset "Lux Integration" include("nn/lux.jl")
     end
 end

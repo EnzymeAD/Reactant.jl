@@ -52,6 +52,10 @@ function promote_to(::Type{TracedRArray{T,1}}, rhs::Base.OneTo) where {T}
     return promote_to(TracedRArray{T,1}, first(rhs):last(rhs))
 end
 
+function promote_to(::Type{TracedRArray{T,N}}, rhs::LinearAlgebra.Diagonal) where {T,N}
+    return LinearAlgebra.diagm(promote_to(TracedRArray{T,1}, rhs.diag))
+end
+
 function promote_to(::Type{TracedRArray{T,N}}, rhs::AbstractArray{<:Any,N}) where {T,N}
     if ancestor(rhs) isa AnyTracedRArray
         return promote_to(TracedRArray{T,N}, materialize_traced_array(rhs))

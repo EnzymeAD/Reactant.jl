@@ -36,7 +36,7 @@ addxy(x, y)
 
 # output
 
-ConcretePJRTNumber{Int64, 1, Reactant.Sharding.ShardInfo{Reactant.Sharding.NoSharding, Nothing}}(7)
+ConcretePJRTNumber{Int64, 1}(7)
 ```
 
 returns a result that depends on both arguments `x` and `y`:
@@ -46,7 +46,7 @@ addxy(ConcreteRNumber(7), ConcreteRNumber(8))
 
 # output
 
-ConcretePJRTNumber{Int64, 1, Reactant.Sharding.ShardInfo{Reactant.Sharding.NoSharding, Nothing}}(15)
+ConcretePJRTNumber{Int64, 1}(15)
 ```
 
 The StableHLO IR code generated here is:
@@ -57,7 +57,7 @@ The StableHLO IR code generated here is:
 # output
 
 module @reactant_add attributes {mhlo.num_partitions = 1 : i64, mhlo.num_replicas = 1 : i64} {
-  func.func @main(%arg0: tensor<i64>, %arg1: tensor<i64>) -> tensor<i64> attributes {enzymexla.memory_effects = []} {
+  func.func @main(%arg0: tensor<i64> {enzymexla.memory_effects = []}, %arg1: tensor<i64> {enzymexla.memory_effects = []}) -> tensor<i64> attributes {enzymexla.memory_effects = []} {
     %0 = stablehlo.add %arg0, %arg1 : tensor<i64>
     return %0 : tensor<i64>
   }
@@ -76,7 +76,7 @@ addx4(x, 4)
 
 # output
 
-ConcretePJRTNumber{Int64, 1, Reactant.Sharding.ShardInfo{Reactant.Sharding.NoSharding, Nothing}}(7)
+ConcretePJRTNumber{Int64, 1}(7)
 ```
 
 will only change based on `x`, not on the non-Reactant argument `y`, we get
@@ -87,7 +87,7 @@ addx4(ConcreteRNumber(7), 8)
 
 # output
 
-ConcretePJRTNumber{Int64, 1, Reactant.Sharding.ShardInfo{Reactant.Sharding.NoSharding, Nothing}}(11)
+ConcretePJRTNumber{Int64, 1}(11)
 ```
 
 The StableHLO code shows that the second argument has been replaced by a
@@ -101,7 +101,7 @@ variable input `%arg0`:
 # output
 
 module @reactant_add attributes {mhlo.num_partitions = 1 : i64, mhlo.num_replicas = 1 : i64} {
-  func.func @main(%arg0: tensor<i64>) -> tensor<i64> attributes {enzymexla.memory_effects = []} {
+  func.func @main(%arg0: tensor<i64> {enzymexla.memory_effects = []}) -> tensor<i64> attributes {enzymexla.memory_effects = []} {
     %c = stablehlo.constant dense<4> : tensor<i64>
     %0 = stablehlo.add %arg0, %c : tensor<i64>
     return %0 : tensor<i64>

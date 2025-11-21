@@ -32,8 +32,12 @@ include("Future.jl")
 include("Buffer.jl")
 include("Stats.jl")
 include("Utils.jl")
-include("HloModule.jl")
 include("Memory.jl")
+
+include("IR/Module.jl")
+include("IR/Instruction.jl")
+include("IR/Computation.jl")
+include("IR/PerformanceModel.jl")
 
 include("PJRT/PJRT.jl")
 

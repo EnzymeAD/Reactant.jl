@@ -1601,17 +1601,30 @@ broadcasted to `<dim1 x dim2 x dim3 ... (dimN/blockSize) x blockSize>`. Note
 that there could be multiple quantization axes. Internally,
 `arith.scaling_extf` would perform the following:
 
-  ```
-  resultTy = get_type(result)
-  scaleTy  = get_type(scale)
-  inputTy = get_type(input)
-  scale.exponent = arith.truncf(scale) : scaleTy to f8E8M0
-  scale.extf = arith.extf(scale.exponent) : f8E8M0 to resultTy
-  input.extf = arith.extf(input) : inputTy to resultTy
-  result = arith.mulf(scale.extf, input.extf)
-  ```
-  It propagates NaN values. Therefore, if either scale or the input element
-  contains NaN, then the output element value will also be a NaN.
+```mlir
+// Cast scale to result type.
+%0 = arith.truncf %1 : f32 to f8E8M0FNU
+%1 = arith.extf %0 : f8E8M0FNU to f16
+
+// Cast input to result type.
+%2 = arith.extf %3 : f4E2M1FN to f16
+
+// Perform scaling
+%3 = arith.mulf %2, %1 : f16
+```
+It propagates NaN values. Therefore, if either scale or the input element
+contains NaN, then the output element value will also be a NaN.
+
+# Example
+
+```mlir
+// Upcast from f4E2M1FN to f32.
+%a = arith.scaling_extf %b, %c : f4E2M1FN, f8E8M0FNU to f32
+
+// Element-wise upcast with broadcast (blockSize = 32).
+%f = vector.broadcast %g : vector<1xf8E8M0FNU> to vector<32xf8E8M0FNU>
+%h = arith.scaling_extf %i, %f : vector<32xf4E2M1FN>, vector<32xf8E8M0FNU> to vector<32xbf16>
+```
 """
 function scaling_extf(
     in::Value, scale::Value; out::IR.Type, fastmath=nothing, location=Location()
@@ -1662,14 +1675,27 @@ broadcasted to `<dim1 x dim2 x dim3 ... (dimN/blockSize) x blockSize>`. Note
 that there could be multiple quantization axes. Internally,
 `arith.scaling_truncf` would perform the following:
 
+```mlir
+// Cast scale to input type.
+%0 = arith.truncf %1 : f32 to f8E8M0FNU
+%1 = arith.extf %0 : f8E8M0FNU to f16
+
+// Perform scaling.
+%3 = arith.divf %2, %1 : f16
+
+// Cast to result type.
+%4 = arith.truncf %3 : f16 to f4E2M1FN
 ```
-scaleTy = get_type(scale)
-inputTy = get_type(input)
-resultTy = get_type(result)
-scale.exponent = arith.truncf(scale) : scaleTy to f8E8M0
-scale.extf = arith.extf(scale.exponent) : f8E8M0 to inputTy
-result = arith.divf(input, scale.extf)
-result.cast = arith.truncf(result, resultTy)
+
+# Example
+
+```mlir
+// Downcast from f32 to f4E2M1FN.
+%a = arith.scaling_truncf %b, %c : f32, f8E8M0FNU to f4E2M1FN
+
+// Element-wise downcast with broadcast (blockSize = 32).
+%f = vector.broadcast %g : vector<1xf8E8M0FNU> to vector<32xf8E8M0FNU>
+%h = arith.scaling_truncf %i, %f : vector<32xbf16>, vector<32xf8E8M0FNU> to vector<32xf4E2M1FN>
 ```
 """
 function scaling_truncf(

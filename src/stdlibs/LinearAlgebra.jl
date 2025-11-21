@@ -4,30 +4,48 @@ using ..MLIR: MLIR
 using ..Reactant: Reactant, Ops
 using ..Reactant:
     TracedRArray, TracedRNumber, AnyTracedRArray, AnyTracedRMatrix, AnyTracedRVector
-using ..Reactant: call_with_reactant
-using ReactantCore: ReactantCore
-using ReactantCore: materialize_traced_array
+using ..Reactant: call_with_reactant, unwrapped_eltype, promote_to
+using ReactantCore: ReactantCore, materialize_traced_array, @trace
 using Reactant_jll: Reactant_jll
 
 using ..TracedUtils: TracedUtils, get_mlir_data, set_mlir_data!
 using ..Ops: @opcall
 
 using LinearAlgebra: LinearAlgebra, BLAS
-using LinearAlgebra: Adjoint, Transpose, Factorization, RowMaximum
+using LinearAlgebra: Adjoint, Transpose, Factorization, RowMaximum, NoPivot
 using LinearAlgebra: SymTridiagonal, Symmetric, Bidiagonal, Diagonal, Tridiagonal
 using LinearAlgebra: LowerTriangular, UnitLowerTriangular, UpperTriangular
-using LinearAlgebra: diag, diagm, ldiv!
+using LinearAlgebra: I, diag, diagm, ldiv!, det, logabsdet, istriu, istril, triu!, tril!
+using LinearAlgebra: inv!, rmul!, normalize
+using LinearAlgebra: svd, lu
 using Libdl: Libdl
+using GPUArraysCore: @allowscalar
 
 function __init__()
     if Reactant_jll.is_available()
         libblastrampoline_handle = Libdl.dlopen(BLAS.libblas)
 
         for (cname, enzymexla_name) in [
+            # LU
             (BLAS.@blasfunc(sgetrf_), :enzymexla_lapack_sgetrf_),
             (BLAS.@blasfunc(dgetrf_), :enzymexla_lapack_dgetrf_),
             (BLAS.@blasfunc(cgetrf_), :enzymexla_lapack_cgetrf_),
             (BLAS.@blasfunc(zgetrf_), :enzymexla_lapack_zgetrf_),
+            # SVD QR Iteration
+            (BLAS.@blasfunc(sgesvd_), :enzymexla_lapack_sgesvd_),
+            (BLAS.@blasfunc(dgesvd_), :enzymexla_lapack_dgesvd_),
+            (BLAS.@blasfunc(cgesvd_), :enzymexla_lapack_cgesvd_),
+            (BLAS.@blasfunc(zgesvd_), :enzymexla_lapack_zgesvd_),
+            # SVD Divide and Conquer
+            (BLAS.@blasfunc(sgesdd_), :enzymexla_lapack_sgesdd_),
+            (BLAS.@blasfunc(dgesdd_), :enzymexla_lapack_dgesdd_),
+            (BLAS.@blasfunc(cgesdd_), :enzymexla_lapack_cgesdd_),
+            (BLAS.@blasfunc(zgesdd_), :enzymexla_lapack_zgesdd_),
+            # SVD Jacobi
+            (BLAS.@blasfunc(sgesvj_), :enzymexla_lapack_sgesvj_),
+            (BLAS.@blasfunc(dgesvj_), :enzymexla_lapack_dgesvj_),
+            (BLAS.@blasfunc(cgesvj_), :enzymexla_lapack_cgesvj_),
+            (BLAS.@blasfunc(zgesvj_), :enzymexla_lapack_zgesvj_),
         ]
             sym = Libdl.dlsym(libblastrampoline_handle, cname)
             @ccall MLIR.API.mlir_c.EnzymeJaXMapSymbol(
@@ -38,6 +56,8 @@ function __init__()
 
     return nothing
 end
+
+include("factorization/Factorization.jl")
 
 # Various Wrapper Arrays defined in LinearAlgebra
 function ReactantCore.materialize_traced_array(
@@ -273,32 +293,62 @@ function overloaded_mul!(
     return C
 end
 
-function LinearAlgebra.triu!(@nospecialize(X::TracedRArray{T,2}), k::Integer) where {T}
+@static if isdefined(LinearAlgebra, :_triu)
+    function LinearAlgebra._triu(A::AnyTracedRArray{T,2}, ::Val{true}, k::Integer) where {T}
+        return overloaded_triu(materialize_traced_array(A), k)
+    end
+    function LinearAlgebra._triu(
+        A::AnyTracedRArray{T,2}, ::Val{false}, k::Integer
+    ) where {T}
+        return overloaded_triu(materialize_traced_array(A), k)
+    end
+end
+
+@static if isdefined(LinearAlgebra, :_tril)
+    function LinearAlgebra._tril(A::AnyTracedRArray{T,2}, ::Val{true}, k::Integer) where {T}
+        return overloaded_tril(materialize_traced_array(A), k)
+    end
+    function LinearAlgebra._tril(
+        A::AnyTracedRArray{T,2}, ::Val{false}, k::Integer
+    ) where {T}
+        return overloaded_tril(materialize_traced_array(A), k)
+    end
+end
+
+function LinearAlgebra.triu!(X::AnyTracedRArray{T,2}, k::Integer) where {T}
+    set_mlir_data!(X, get_mlir_data(overloaded_triu(materialize_traced_array(X), k)))
+    return X
+end
+
+function LinearAlgebra.tril!(X::AnyTracedRArray{T,2}, k::Integer) where {T}
+    set_mlir_data!(X, get_mlir_data(overloaded_tril(materialize_traced_array(X), k)))
+    return X
+end
+
+function overloaded_triu(X::TracedRArray{T,2}, k::Integer) where {T}
     iota_1 = @opcall iota(Int64, [size(X)...]; iota_dimension=1)
     iota_2 = @opcall subtract(
         @opcall(iota(Int64, [size(X)...]; iota_dimension=2)),
         Reactant.broadcast_to_size(k, size(X)),
     )
     idxs = @opcall compare(iota_1, iota_2; comparison_direction="LE")
-    X.mlir_data = @opcall(select(idxs, X, zero(X))).mlir_data
-    return X
+    return @opcall select(idxs, X, zero(X))
 end
 
-function LinearAlgebra.tril!(@nospecialize(X::TracedRArray{T,2}), k::Integer) where {T}
+function overloaded_tril(X::TracedRArray{T,2}, k::Integer) where {T}
     iota_1 = @opcall iota(Int64, [size(X)...]; iota_dimension=1)
     iota_2 = @opcall subtract(
         @opcall(iota(Int64, [size(X)...]; iota_dimension=2)),
         Reactant.broadcast_to_size(k, size(X)),
     )
     idxs = @opcall compare(iota_1, iota_2; comparison_direction="GE")
-    X.mlir_data = @opcall(select(idxs, X, zero(X))).mlir_data
-    return X
+    return @opcall select(idxs, X, zero(X))
 end
 
 # LinearAlgebra defines norm with some conditionals which cannot be traced directly
 function LinearAlgebra.norm(x::TracedRArray{T,N}, p::Real=2) where {T,N}
     isinf(p) && return maximum(abs, x)
-    return mapreduce(Base.Fix2(^, p), +, x)^(1 / p)
+    return mapreduce(Base.Fix2(^, p), +, x)^(T(1 / p))
 end
 
 function LinearAlgebra._diagm(shape, kv::Pair{<:Integer,<:AnyTracedRVector}...)
@@ -602,149 +652,6 @@ LinearAlgebra.transpose!(B::AnyTracedRMatrix, A::AnyTracedRMatrix) = copy!(B, tr
 
 LinearAlgebra.adjoint!(B::AnyTracedRMatrix, A::AnyTracedRMatrix) = copy!(B, adjoint(A))
 
-# Supports batched factorization
-abstract type GeneralizedFactorization{T} <: Factorization{T} end
-
-function LinearAlgebra.TransposeFactorization(f::GeneralizedFactorization)
-    return LinearAlgebra.TransposeFactorization{eltype(f),typeof(f)}(f)
-end
-
-function LinearAlgebra.AdjointFactorization(f::GeneralizedFactorization)
-    return LinearAlgebra.AdjointFactorization{eltype(f),typeof(f)}(f)
-end
-
-const GeneralizedTransposeFactorization{T} =
-    LinearAlgebra.TransposeFactorization{T,<:GeneralizedFactorization{T}} where {T}
-const GeneralizedAdjointFactorization{T} =
-    LinearAlgebra.AdjointFactorization{T,<:GeneralizedFactorization{T}} where {T}
-
-# LU Factorization
-struct GeneralizedLU{T,S<:AbstractArray,P<:AbstractArray,I<:Union{AbstractArray,Number}} <:
-       GeneralizedFactorization{T}
-    factors::S
-    ipiv::P
-    perm::P
-    info::I
-end
-
-Base.ndims(lu::GeneralizedLU) = ndims(lu.factors)
-
-function GeneralizedLU(factors::S, ipiv::P, perm::P, info::I) where {S,P,I}
-    @assert ndims(ipiv) == ndims(perm) == ndims(factors) - 1
-    @assert ndims(info) == ndims(factors) - 2
-    return GeneralizedLU{eltype(factors),S,P,I}(factors, ipiv, perm, info)
-end
-
-function overloaded_lu(x::AbstractArray, args...; kwargs...)
-    return overloaded_lu(Reactant.promote_to(TracedRArray, x), args...; kwargs...)
-end
-
-function overloaded_lu(
-    A::AnyTracedRArray{T,N}, ::RowMaximum; check::Bool=false, allowsingular::Bool=false
-) where {T,N}
-    # TODO: don't ignore the check and allowsingular flags
-    # Batching here is in the last dimensions. `Ops.lu` expects the last dimensions
-    permdims = vcat(collect(Int64, 3:N), 1, 2)
-    A = @opcall transpose(materialize_traced_array(A), permdims)
-    factors, ipiv, perm, info = @opcall lu(A)
-
-    # Permute back to the original dimensions
-    perm_perm = vcat(N - 1, collect(Int64, 1:(N - 2)))
-    factors = @opcall transpose(factors, invperm(permdims))
-    ipiv = @opcall transpose(ipiv, perm_perm)
-    perm = @opcall transpose(perm, perm_perm)
-    return GeneralizedLU(factors, ipiv, perm, info)
-end
-
-function LinearAlgebra.ldiv!(
-    lu::GeneralizedLU{T,<:AbstractArray{T,N},P,I}, B::AbstractArray{T,M}
-) where {T,P,I,N,M}
-    @assert N == M + 1
-    ldiv!(lu, reshape(B, size(B, 1), 1, size(B)[2:end]...))
-    return B
-end
-
-function LinearAlgebra.ldiv!(
-    lu::GeneralizedLU{T,<:AbstractArray{T,2},P,I}, B::AbstractArray{T,2}
-) where {T,P,I}
-    B .= _lu_solve_core(lu.factors, B, lu.perm)
-    return B
-end
-
-function LinearAlgebra.ldiv!(
-    lu::GeneralizedLU{T,<:AbstractArray{T,N},P,I}, B::AbstractArray{T,N}
-) where {T,P,I,N}
-    batch_shape = size(lu.factors)[3:end]
-    @assert batch_shape == size(B)[3:end]
-
-    permutation = vcat(collect(Int64, 3:N), 1, 2)
-
-    factors = @opcall transpose(materialize_traced_array(lu.factors), permutation)
-    B_permuted = @opcall transpose(materialize_traced_array(B), permutation)
-    perm = @opcall transpose(
-        materialize_traced_array(lu.perm), vcat(collect(Int64, 2:(N - 1)), 1)
-    )
-
-    res = @opcall transpose(
-        only(
-            @opcall(
-                batch(
-                    _lu_solve_core, [factors, B_permuted, perm], collect(Int64, batch_shape)
-                )
-            ),
-        ),
-        invperm(permutation),
-    )
-    B .= res
-    return B
-end
-
-for f_wrapper in (LinearAlgebra.TransposeFactorization, LinearAlgebra.AdjointFactorization),
-    aType in (:AbstractVecOrMat, :AbstractArray)
-
-    @eval function LinearAlgebra.ldiv!(lu::$(f_wrapper){<:Any,<:GeneralizedLU}, B::$aType)
-        # TODO: implement this
-        error("`$(f_wrapper)` is not supported yet for LU.")
-        return nothing
-    end
-end
-
-function _lu_solve_core(factors::AbstractMatrix, B::AbstractMatrix, perm::AbstractVector)
-    permuted_B = B[Int64.(perm), :]
-    return UpperTriangular(factors) \ (UnitLowerTriangular(factors) \ permuted_B)
-end
-
-# Overload \ to support batched factorization
-for FT in (
-    :GeneralizedFactorization,
-    :GeneralizedTransposeFactorization,
-    :GeneralizedAdjointFactorization,
-)
-    for aType in (:AbstractVecOrMat, :AbstractArray)
-        @eval Base.:(\)(F::$FT, B::$aType) = _overloaded_backslash(F, B)
-    end
-
-    @eval Base.:(\)(
-        F::$FT{T}, B::Union{Array{Complex{T},1},Array{Complex{T},2}}
-    ) where {T<:Union{Float32,Float64}} = _overloaded_backslash(F, B)
-end
-
-function _overloaded_backslash(F::GeneralizedFactorization, B::AbstractArray)
-    return ldiv!(
-        F, LinearAlgebra.copy_similar(B, typeof(oneunit(eltype(F)) \ oneunit(eltype(B))))
-    )
-end
-
-function _overloaded_backslash(F::GeneralizedTransposeFactorization, B::AbstractArray)
-    return conj!(adjoint(F.parent) \ conj.(B))
-end
-
-function _overloaded_backslash(F::GeneralizedAdjointFactorization, B::AbstractArray)
-    return ldiv!(
-        F, LinearAlgebra.copy_similar(B, typeof(oneunit(eltype(F)) \ oneunit(eltype(B))))
-    )
-end
-
 # indexing into specific wrapepd array types
 # TODO: specialize these ones. We don't need to make the arrays dense (though our passes
 #       should be able to optimize them out)
@@ -763,6 +670,145 @@ for AT in (
     @eval function Base.getindex(A::$AT, i::Int, j::Int)
         return getindex(materialize_traced_array(A), i, j)
     end
+end
+
+LinearAlgebra._istriu(A::AnyTracedRMatrix, k) = all(iszero, overloaded_tril(A, k - 1))
+LinearAlgebra._istril(A::AnyTracedRMatrix, k) = all(iszero, overloaded_triu(A, k + 1))
+
+# Only needed because we lack automatic if tracing
+function LinearAlgebra.det(A::AnyTracedRMatrix)
+    @trace if istriu(A) || istril(A)
+        _det = det(UpperTriangular(A))
+    else
+        _det = det(lu(A; check=false))
+    end
+    return _det
+end
+
+function LinearAlgebra.logabsdet(A::AnyTracedRMatrix)
+    @trace if istriu(A) || istril(A)
+        _logabsdet = logabsdet(UpperTriangular(A))
+    else
+        _logabsdet = logabsdet(lu(A; check=false))
+    end
+    return _logabsdet
+end
+
+function LinearAlgebra.logabsdet(
+    A::Union{UpperTriangular{T,<:AnyTracedRMatrix},LowerTriangular{T,<:AnyTracedRMatrix}}
+) where {T}
+    d = LinearAlgebra.diag(A)
+    sgn = prod(sign, d)
+    abs_det = sum(log ∘ abs, d)
+    return abs_det, sgn
+end
+
+function Base.inv(A::TracedRArray{T,2}) where {T} # don't overload Any* here
+    LinearAlgebra.checksquare(A)
+    @trace if istriu(A)
+        Ai = triu!(parent(inv(UpperTriangular(A))))
+    elseif istril(A)
+        Ai = tril!(parent(inv(LowerTriangular(A))))
+    else
+        Ai = inv!(lu(A; check=false))
+    end
+    return Ai
+end
+
+for (wT, lower, ud) in (
+    (:UpperTriangular, false, false),
+    (:LowerTriangular, true, false),
+    (:UnitUpperTriangular, false, true),
+    (:UnitLowerTriangular, true, true),
+)
+    @eval function Base.inv(A::LinearAlgebra.$(wT){T,<:AnyTracedRMatrix}) where {T}
+        S = typeof(inv(oneunit(Reactant.unwrapped_eltype(T))))
+        rhs = Reactant.promote_to(TracedRArray{S,2}, LinearAlgebra.I(size(A, 1)))
+        return @opcall triangular_solve(
+            parent(A),
+            rhs;
+            left_side=false,
+            lower=$(lower),
+            transpose_a='N',
+            unit_diagonal=$(ud),
+        )
+    end
+end
+
+function LinearAlgebra.cross(x::AnyTracedRVector, y::AbstractVector)
+    return LinearAlgebra.cross(x, Reactant.promote_to(TracedRArray{eltype(y),1}, y))
+end
+
+function LinearAlgebra.cross(x::AbstractVector, y::AnyTracedRVector)
+    return LinearAlgebra.cross(Reactant.promote_to(TracedRArray{eltype(x),1}, x), y)
+end
+
+function LinearAlgebra.cross(x::AnyTracedRVector, y::AnyTracedRVector)
+    x_ = materialize_traced_array(x)
+    y_ = materialize_traced_array(y)
+    @allowscalar a1, a2, a3 = x_
+    @allowscalar b1, b2, b3 = y_
+    return Reactant.aos_to_soa([a2 * b3 - a3 * b2, a3 * b1 - a1 * b3, a1 * b2 - a2 * b1])
+end
+
+function LinearAlgebra.issymmetric(A::AnyTracedRMatrix)
+    axes(A, 1) == axes(A, 2) || return false
+    return all(A .== transpose(A))
+end
+
+function LinearAlgebra.ishermitian(A::AnyTracedRMatrix)
+    axes(A, 1) == axes(A, 2) || return false
+    return all(A .== adjoint(A))
+end
+
+function LinearAlgebra.isbanded(A::AnyTracedRMatrix, kl::Integer, ku::Integer)
+    return istriu(A, kl) & istril(A, ku)
+end
+
+function LinearAlgebra.normalize(a::AnyTracedRArray{T}, p::Real=2) where {T}
+    nrm = LinearAlgebra.norm(a, p)
+    if !isempty(a)
+        aa = LinearAlgebra.copymutable_oftype(a, typeof(zero(T) / nrm))
+        return LinearAlgebra.__normalize!(aa, nrm)
+    else
+        return typeof(zero(T) / nrm)[]
+    end
+end
+
+@static if isdefined(LinearAlgebra, :__normalize!)
+    function LinearAlgebra.__normalize!(a::AnyTracedRArray, nrm)
+        # The largest positive floating point number whose inverse is less than infinity
+        δ = inv(prevfloat(typemax(nrm)))
+        @trace if nrm ≥ δ # Safe to multiply with inverse
+            invnrm = inv(nrm)
+            rmul!(a, invnrm)
+        else # scale elements to avoid overflow
+            εδ = eps(one(nrm)) / δ
+            rmul!(a, εδ)
+            rmul!(a, inv(nrm * εδ))
+        end
+        return a
+    end
+end
+
+function LinearAlgebra.rmul!(A::AnyTracedRArray, b::Number)
+    @. A *= b
+    return A
+end
+
+function LinearAlgebra.lmul!(b::Number, A::AnyTracedRArray)
+    @. A = b * A
+    return A
+end
+
+function LinearAlgebra.rdiv!(A::AnyTracedRArray, b::Number)
+    @. A /= b
+    return A
+end
+
+function LinearAlgebra.ldiv!(b::Number, A::AnyTracedRArray)
+    @. A = b \ A
+    return A
 end
 
 end

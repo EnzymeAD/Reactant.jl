@@ -21,9 +21,11 @@ fn(x, y) = (2 .* x .- 3) * y'
     end
 end
 
+fn2(x, y) = ((2 .* x .- 3) * y')[:, 3]
+
 @testset "OneElement" begin
     x = OneElement(3.4f0, (3, 4), (32, 32))
     rx = Reactant.to_rarray(x)
 
-    @test @jit(fn(rx, rx)) ≈ fn(x, x)
+    @test @jit(fn2(rx, rx)) ≈ fn2(x, x)
 end

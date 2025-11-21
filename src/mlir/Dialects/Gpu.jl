@@ -995,7 +995,7 @@ end
 This operation provides a memref pointer to the start of dynamic shared
 memory, often referred to as workgroup memory. It\'s important to note that
 this dynamic shared memory needs to be allocated at kernel launch. One can
-conveniently utilize `the dynamic_shared_memory_size` parameter of
+conveniently utilize the `dynamic_shared_memory_size` parameter of
 `gpu.launch` for this purpose.
 
 Examples:
@@ -1537,17 +1537,11 @@ function launch_func(
             1,
             1,
             1,
-            if (clusterSizeX == nothing)
-                0
-            elseif 1(clusterSizeY == nothing)
-                0
-            elseif 1(clusterSizeZ == nothing)
-                0
-            elseif 1(dynamicSharedMemorySize == nothing)
-                0
-            else
-                1length(kernelOperands)
-            end,
+            (clusterSizeX == nothing) ? 0 : 1,
+            (clusterSizeY == nothing) ? 0 : 1,
+            (clusterSizeZ == nothing) ? 0 : 1,
+            (dynamicSharedMemorySize == nothing) ? 0 : 1,
+            length(kernelOperands),
             (asyncObject == nothing) ? 0 : 1,
         ]),
     )
@@ -1728,17 +1722,10 @@ function launch(
             1,
             1,
             1,
-            if (clusterSizeX == nothing)
-                0
-            elseif 1(clusterSizeY == nothing)
-                0
-            elseif 1(clusterSizeZ == nothing)
-                0
-            elseif 1(dynamicSharedMemorySize == nothing)
-                0
-            else
-                1
-            end,
+            (clusterSizeX == nothing) ? 0 : 1,
+            (clusterSizeY == nothing) ? 0 : 1,
+            (clusterSizeZ == nothing) ? 0 : 1,
+            (dynamicSharedMemorySize == nothing) ? 0 : 1,
         ]),
     )
     !isnothing(asyncToken) && push!(op_ty_results, asyncToken)
@@ -2726,6 +2713,48 @@ function spmat_get_size(
         attributes,
         results=op_ty_results,
         result_inference=false,
+    )
+end
+
+"""
+`subgroup_broadcast`
+
+Broadcasts a value from one lane to all active lanes in a subgroup. The
+result is guaranteed to be uniform across the active lanes in subgroup.
+
+The possible broadcast types are:
+
+* `first_active_lane` - broadcasts the value from the first active lane
+in the subgroup.
+* `specific_lane` - broadcasts from the specified lane. The lane index
+must be uniform and within the subgroup size. The result is poison if the
+lane index is invalid, non subgroup-uniform, or if the source lane is not
+active.
+"""
+function subgroup_broadcast(
+    src::Value,
+    lane=nothing::Union{Nothing,Value};
+    result=nothing::Union{Nothing,IR.Type},
+    broadcast_type,
+    location=Location(),
+)
+    op_ty_results = IR.Type[]
+    operands = Value[src,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[namedattribute("broadcast_type", broadcast_type),]
+    !isnothing(lane) && push!(operands, lane)
+    !isnothing(result) && push!(op_ty_results, result)
+
+    return create_operation(
+        "gpu.subgroup_broadcast",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
     )
 end
 

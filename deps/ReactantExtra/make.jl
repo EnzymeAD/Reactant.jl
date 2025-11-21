@@ -1,3 +1,7 @@
+using Pkg: Pkg
+Pkg.activate(@__DIR__)
+Pkg.instantiate()
+
 import BinaryBuilderBase:
     PkgSpec, Prefix, temp_prefix, setup_dependencies, cleanup_dependencies, destdir
 using Clang.Generators
@@ -19,11 +23,12 @@ let options = deepcopy(options)
     genarg = first(eachsplit(ARGS[3], " "))
 
     gen_include_dir = joinpath(splitpath(genarg)[1:(end - 4)]...)
-    hlo_include_dir = joinpath(splitpath(ARGS[end - 5])[1:(end - 1)]...)
-    sdy_include_dir = joinpath(splitpath(ARGS[end - 4])[1:(end - 1)]...)
-    triton_include_dir = joinpath(splitpath(ARGS[end - 3])[1:(end - 1)]...)
-    mosaic_tpu_include_dir = joinpath(splitpath(ARGS[end - 2])[1:(end - 1)]...)
-    mosaic_gpu_include_dir = joinpath(splitpath(ARGS[end - 1])[1:(end - 1)]...)
+    hlo_include_dir = joinpath(splitpath(ARGS[end - 6])[1:(end - 1)]...)
+    sdy_include_dir = joinpath(splitpath(ARGS[end - 5])[1:(end - 1)]...)
+    triton_include_dir = joinpath(splitpath(ARGS[end - 4])[1:(end - 1)]...)
+    mosaic_tpu_include_dir = joinpath(splitpath(ARGS[end - 3])[1:(end - 1)]...)
+    mosaic_gpu_include_dir = joinpath(splitpath(ARGS[end - 2])[1:(end - 1)]...)
+    enzymexla_include_dir = joinpath(splitpath(ARGS[end - 1])[1:(end - 1)]...)
 
     append!(
         args,
@@ -44,6 +49,8 @@ let options = deepcopy(options)
             mosaic_tpu_include_dir,
             "-I",
             mosaic_gpu_include_dir,
+            "-I",
+            enzymexla_include_dir,
             "-x",
             "c++",
         ],
@@ -56,6 +63,7 @@ let options = deepcopy(options)
         detect_headers(triton_include_dir, args, Dict())...,
         detect_headers(mosaic_tpu_include_dir, args, Dict())...,
         detect_headers(mosaic_gpu_include_dir, args, Dict())...,
+        detect_headers(enzymexla_include_dir, args, Dict())...,
     ]
 
     ctx = create_context(headers, args, options)

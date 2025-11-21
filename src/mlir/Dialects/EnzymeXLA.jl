@@ -72,6 +72,27 @@ function barrier(indices::Vector{Value}; location=Location())
     )
 end
 
+function cacheload(
+    memref::Value, indices::Vector{Value}; result::IR.Type, location=Location()
+)
+    op_ty_results = IR.Type[result,]
+    operands = Value[memref, indices...]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+
+    return create_operation(
+        "enzymexla.cacheload",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
 function comm_region(; result_0::Vector{IR.Type}, body::Region, location=Location())
     op_ty_results = IR.Type[result_0...,]
     operands = Value[]
@@ -166,6 +187,51 @@ function gpu_error(; result::IR.Type, region::Region, location=Location())
     )
 end
 
+function gpu_kernel_address(; result::IR.Type, fn, location=Location())
+    op_ty_results = IR.Type[result,]
+    operands = Value[]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[namedattribute("fn", fn),]
+
+    return create_operation(
+        "enzymexla.gpu_kernel_address",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+function gpu_occupancy(
+    blockSize::Value,
+    dynamicSMemSize::Value,
+    flags::Value;
+    result::IR.Type,
+    fn,
+    location=Location(),
+)
+    op_ty_results = IR.Type[result,]
+    operands = Value[blockSize, dynamicSMemSize, flags]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[namedattribute("fn", fn),]
+
+    return create_operation(
+        "enzymexla.gpu_occupancy",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
 function gpu_thread(
     threadIndexX::Value,
     threadIndexY::Value,
@@ -195,8 +261,8 @@ end
 `gpu_wrapper`
 
 The optional arguments to this operation are suggestions about what block
-dimensions this gpu kernel should have - usually taken from kernel launch
-params
+dimensions this gpu kernel should have - usually taken f rom kernel
+  launch params
 """
 function gpu_wrapper(
     blockDims::Vector{Value}; result::IR.Type, region::Region, location=Location()
@@ -280,11 +346,12 @@ end
 """
 `lapack_geqrf`
 
-This operation computes the QR factorization of a matrix using Householder 
-reflections. Mathematically, it decomposes A into the product of an 
-orthogonal matrix Q and an upper triangular matrix R, such that A = QR.
+This operation computes the QR factorization of a matrix using Householder
+reflections. Mathematically, it decomposes A into the product of an
+orthogonal matri x Q and an upper triangular matrix R,
+such that A = QR.
 
-This operation is modeled after LAPACK\'s *GEQRF routines, which returns the 
+This operation is modeled after LAPACK\'s *GEQRF routines, which returns the
 result in the QR packed format.
 """
 function lapack_geqrf(
@@ -311,11 +378,11 @@ end
 """
 `lapack_geqrt`
 
-This operation computes the QR factorization of a matrix using Householder 
-reflections. Mathematically, it decomposes A into the product of an 
+This operation computes the QR factorization of a matrix using Householder
+reflections. Mathematically, it decomposes A into the product of an
 orthogonal matrix Q and an upper triangular matrix R, such that A = QR.
 
-This operation is modeled after LAPACK\'s *GEQRT routines, which returns the 
+This operation is modeled after LAPACK\'s *GEQRT routines, which returns the
 result in the QR CompactWY format.
 """
 function lapack_geqrt(
@@ -345,6 +412,96 @@ function lapack_geqrt(
     )
 end
 
+function lapack_gesdd(
+    input::Value;
+    U::IR.Type,
+    S::IR.Type,
+    Vt::IR.Type,
+    info::IR.Type,
+    full=nothing,
+    compute_uv=nothing,
+    location=Location(),
+)
+    op_ty_results = IR.Type[U, S, Vt, info]
+    operands = Value[input,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+    !isnothing(full) && push!(attributes, namedattribute("full", full))
+    !isnothing(compute_uv) && push!(attributes, namedattribute("compute_uv", compute_uv))
+
+    return create_operation(
+        "enzymexla.lapack.gesdd",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+function lapack_gesvd(
+    input::Value;
+    U::IR.Type,
+    S::IR.Type,
+    Vt::IR.Type,
+    info::IR.Type,
+    full=nothing,
+    compute_uv=nothing,
+    location=Location(),
+)
+    op_ty_results = IR.Type[U, S, Vt, info]
+    operands = Value[input,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+    !isnothing(full) && push!(attributes, namedattribute("full", full))
+    !isnothing(compute_uv) && push!(attributes, namedattribute("compute_uv", compute_uv))
+
+    return create_operation(
+        "enzymexla.lapack.gesvd",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+function lapack_gesvj(
+    input::Value;
+    U::IR.Type,
+    S::IR.Type,
+    Vt::IR.Type,
+    info::IR.Type,
+    full=nothing,
+    compute_uv=nothing,
+    location=Location(),
+)
+    op_ty_results = IR.Type[U, S, Vt, info]
+    operands = Value[input,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+    !isnothing(full) && push!(attributes, namedattribute("full", full))
+    !isnothing(compute_uv) && push!(attributes, namedattribute("compute_uv", compute_uv))
+
+    return create_operation(
+        "enzymexla.lapack.gesvj",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
 function get_stream(; result::IR.Type, location=Location())
     op_ty_results = IR.Type[result,]
     operands = Value[]
@@ -354,6 +511,51 @@ function get_stream(; result::IR.Type, location=Location())
 
     return create_operation(
         "enzymexla.get_stream",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+function lapack_getrf(
+    input::Value;
+    output::IR.Type,
+    pivots::IR.Type,
+    permutation::IR.Type,
+    info::IR.Type,
+    location=Location(),
+)
+    op_ty_results = IR.Type[output, pivots, permutation, info]
+    operands = Value[input,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+
+    return create_operation(
+        "enzymexla.lapack.getrf",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+function lapack_getri(input::Value, ipiv::Value; output::IR.Type, location=Location())
+    op_ty_results = IR.Type[output,]
+    operands = Value[input, ipiv]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+
+    return create_operation(
+        "enzymexla.lapack.getri",
         location;
         operands,
         owned_regions,
@@ -415,7 +617,10 @@ function kernel_call(
     blocky::Value,
     blockz::Value,
     shmem::Value,
-    inputs::Vector{Value};
+    clusterx=nothing::Union{Nothing,Value};
+    clustery=nothing::Union{Nothing,Value},
+    clusterz=nothing::Union{Nothing,Value},
+    inputs::Vector{Value},
     result_0::Vector{IR.Type},
     fn,
     backend_config=nothing,
@@ -432,6 +637,25 @@ function kernel_call(
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[namedattribute("fn", fn),]
+    !isnothing(clusterx) && push!(operands, clusterx)
+    !isnothing(clustery) && push!(operands, clustery)
+    !isnothing(clusterz) && push!(operands, clusterz)
+    push!(
+        attributes,
+        operandsegmentsizes([
+            1,
+            1,
+            1,
+            1,
+            1,
+            1,
+            1,
+            (clusterx == nothing) ? 0 : 1,
+            (clustery == nothing) ? 0 : 1,
+            (clusterz == nothing) ? 0 : 1,
+            length(inputs),
+        ]),
+    )
     !isnothing(backend_config) &&
         push!(attributes, namedattribute("backend_config", backend_config))
     !isnothing(operand_layouts) &&
@@ -664,15 +888,15 @@ end
 """
 `linalg_qr`
 
-This operation computes the QR factorization of a matrix using Householder 
-reflections. Mathematically, it decomposes A into the product of an 
-orthogonal (unitary if complex) matrix Q and an upper triangular matrix R, 
+This operation computes the QR factorization of a matrix using Householder
+reflections. Mathematically, it decomposes A into the product of an
+orthogonal (unitary if complex) matrix Q and an upper triangular matrix R,
 such that A = QR.
 
 If A has size m x n and m > n, Q is an m x n isometric matrix. If m < n, R
 will be a m x n trapezoidal matrix.
 
-This operation is modeled after the mathematical formulation of the QR 
+This operation is modeled after the mathematical formulation of the QR
 factorization, and not after LAPACK\'s compact formats.
 """
 function linalg_qr(
@@ -752,6 +976,7 @@ function linalg_svd(
     Vt::IR.Type,
     info::IR.Type,
     full=nothing,
+    algorithm=nothing,
     location=Location(),
 )
     op_ty_results = IR.Type[U, S, Vt, info]
@@ -760,6 +985,7 @@ function linalg_svd(
     successors = Block[]
     attributes = NamedAttribute[]
     !isnothing(full) && push!(attributes, namedattribute("full", full))
+    !isnothing(algorithm) && push!(attributes, namedattribute("algorithm", algorithm))
 
     return create_operation(
         "enzymexla.linalg.svd",
@@ -782,6 +1008,78 @@ function stream2token(source::Value; result::IR.Type, location=Location())
 
     return create_operation(
         "enzymexla.stream2token",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+function subindex(source::Value, index::Value; result::IR.Type, location=Location())
+    op_ty_results = IR.Type[result,]
+    operands = Value[source, index]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+
+    return create_operation(
+        "enzymexla.subindex",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+"""
+`blas_symm`
+
+C := alpha*A*B + beta*C, or C := alpha*B*A + beta*C, where alpha and beta are scalars,  A is a symmetric matrix\"
+"""
+function blas_symm(
+    A::Value,
+    B::Value,
+    C::Value,
+    alpha::Value,
+    beta::Value;
+    output::IR.Type,
+    side,
+    uplo,
+    location=Location(),
+)
+    op_ty_results = IR.Type[output,]
+    operands = Value[A, B, C, alpha, beta]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[namedattribute("side", side), namedattribute("uplo", uplo)]
+
+    return create_operation(
+        "enzymexla.blas.symm",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+function typeAlign(; result::IR.Type, source, location=Location())
+    op_ty_results = IR.Type[result,]
+    operands = Value[]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[namedattribute("source", source),]
+
+    return create_operation(
+        "enzymexla.typeAlign",
         location;
         operands,
         owned_regions,

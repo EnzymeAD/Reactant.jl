@@ -686,7 +686,7 @@ end
     basic_sort(x, dimension) = only(Ops.sort(x; comparator=(a, b) -> a < b, dimension))
     @testset for i in 1:3
         t_size = tuple(fill(10, (i,))...)
-        x = randn(t_size)
+        x = Reactant.TestUtils.construct_test_array(Float32, t_size...)
         xa = Reactant.to_rarray(x)
 
         @testset for j in 1:i
@@ -790,13 +790,13 @@ end
 end
 
 @testset "acos" begin
-    x = Reactant.to_rarray([-1.0, 0.0, 1.0])
-    @test acos.(Array(x)) ≈ @jit Ops.acos(x)
+    x = Reactant.to_rarray(Float32[-1.0, 0.0, 1.0])
+    @test acos.(Array(x)) ≈ @jit(Ops.acos(x))
 end
 
 @testset "acosh" begin
-    x = Reactant.to_rarray([1.0, 10.0])
-    @test acosh.(Array(x)) ≈ @jit Ops.acosh(x)
+    x = Reactant.to_rarray(Float32[1.0, 10.0])
+    @test acosh.(Array(x)) ≈ @jit(Ops.acosh(x))
 end
 
 @testset "asin" begin
@@ -986,8 +986,8 @@ function f_repeat(x, y)
 end
 
 @testset "hlo_call: repeat" begin
-    x = Reactant.to_rarray(randn(Float32, 3))
-    y = Reactant.to_rarray(randn(Float32, 3))
+    x = Reactant.to_rarray(Reactant.TestUtils.construct_test_array(Float32, 3))
+    y = Reactant.to_rarray(Reactant.TestUtils.construct_test_array(Float32, 3))
     mod = Reactant.@code_hlo optimize = false f_repeat(x, y)
     hlo_ir = repr(mod)
 
@@ -1063,7 +1063,7 @@ end
     end
 
     # Floating point operation is not associative
-    A = rand(Int64, 3, 4, 5)
+    A = Reactant.TestUtils.construct_test_array(Int64, 3, 4, 5)
     A_ra = Reactant.to_rarray(A)
     init = 1
     init_ra = @jit Reactant.Ops.constant(init)
@@ -1114,8 +1114,8 @@ end
 
 @testset "Large constant" begin
     N = 5
-    constant = randn(N)
-    v = randn(N)
+    constant = Reactant.TestUtils.construct_test_array(Float64, N)
+    v = Reactant.TestUtils.construct_test_array(Float64, N)
     vr = Reactant.to_rarray(v)
     # Function which would use the `constant` object
     f!(v) = v .+= constant
@@ -1170,7 +1170,7 @@ end
 
 @testset "lu factorization" begin
     @testset "unbatched" begin
-        x_ra = Reactant.to_rarray(randn(Float32, 6, 6))
+        x_ra = Reactant.to_rarray(Reactant.TestUtils.construct_test_array(Float32, 6, 6))
         lu_ra, ipiv, perm, info = @jit Ops.lu(x_ra)
 
         @test @jit(recon_from_lu(lu_ra)) ≈ @jit(getindex(x_ra, perm, :)) atol = 1e-5 rtol =
@@ -1178,7 +1178,9 @@ end
     end
 
     @testset "batched" begin
-        x_ra = Reactant.to_rarray(randn(Float32, 4, 3, 6, 6))
+        x_ra = Reactant.to_rarray(
+            Reactant.TestUtils.construct_test_array(Float32, 4, 3, 6, 6)
+        )
         lu_ra, ipiv, perm, info = @jit Ops.lu(x_ra)
         @test size(lu_ra) == (4, 3, 6, 6)
         @test size(ipiv) == (4, 3, 6)
@@ -1193,10 +1195,16 @@ end
 @testset "batch norm" begin
     @testset "training" begin
         @testset for affine in [false, true]
-            x = Reactant.to_rarray(randn(2, 3, 4, 5))
+            x = Reactant.to_rarray(
+                Reactant.TestUtils.construct_test_array(Float32, 2, 3, 4, 5)
+            )
             if affine
-                scale = Reactant.to_rarray(randn(3))
-                offset = Reactant.to_rarray(randn(3))
+                scale = Reactant.to_rarray(
+                    Reactant.TestUtils.construct_test_array(Float32, 3)
+                )
+                offset = Reactant.to_rarray(
+                    Reactant.TestUtils.construct_test_array(Float32, 3)
+                )
             else
                 scale, offset = nothing, nothing
             end
@@ -1208,10 +1216,10 @@ end
 
             if !affine
                 @test occursin(
-                    "stablehlo.constant dense<0.000000e+00> : tensor<3xf64>", repr(hlo)
+                    "stablehlo.constant dense<0.000000e+00> : tensor<3xf32>", repr(hlo)
                 )
                 @test occursin(
-                    "stablehlo.constant dense<1.000000e+00> : tensor<3xf64>", repr(hlo)
+                    "stablehlo.constant dense<1.000000e+00> : tensor<3xf32>", repr(hlo)
                 )
             end
 
@@ -1226,16 +1234,22 @@ end
 
     @testset "inference" begin
         @testset for affine in [false, true]
-            x = Reactant.to_rarray(randn(2, 3, 4, 5))
+            x = Reactant.to_rarray(
+                Reactant.TestUtils.construct_test_array(Float32, 2, 3, 4, 5)
+            )
             if affine
-                scale = Reactant.to_rarray(randn(3))
-                offset = Reactant.to_rarray(randn(3))
+                scale = Reactant.to_rarray(
+                    Reactant.TestUtils.construct_test_array(Float32, 3)
+                )
+                offset = Reactant.to_rarray(
+                    Reactant.TestUtils.construct_test_array(Float32, 3)
+                )
             else
                 scale, offset = nothing, nothing
             end
 
-            rm = Reactant.to_rarray(randn(3))
-            rv = Reactant.to_rarray(rand(3))
+            rm = Reactant.to_rarray(Reactant.TestUtils.construct_test_array(Float32, 3))
+            rv = Reactant.to_rarray(Reactant.TestUtils.construct_test_array(Float32, 3))
 
             hlo = @code_hlo Ops.batch_norm_inference(
                 x, scale, offset, rm, rv; epsilon=1e-5, feature_index=2
@@ -1243,10 +1257,10 @@ end
             @test occursin("stablehlo.batch_norm_inference", repr(hlo))
             if !affine
                 @test occursin(
-                    "stablehlo.constant dense<0.000000e+00> : tensor<3xf64>", repr(hlo)
+                    "stablehlo.constant dense<0.000000e+00> : tensor<3xf32>", repr(hlo)
                 )
                 @test occursin(
-                    "stablehlo.constant dense<1.000000e+00> : tensor<3xf64>", repr(hlo)
+                    "stablehlo.constant dense<1.000000e+00> : tensor<3xf32>", repr(hlo)
                 )
             end
 
@@ -1259,11 +1273,19 @@ end
 
     @testset "batch_norm_grad" begin
         @testset for affine in [false, true]
-            x = Reactant.to_rarray(randn(2, 3, 4, 5))
-            scale = affine ? Reactant.to_rarray(randn(3)) : nothing
-            rm = Reactant.to_rarray(randn(3))
-            rv = Reactant.to_rarray(rand(3))
-            gx = Reactant.to_rarray(randn(2, 3, 4, 5))
+            x = Reactant.to_rarray(
+                Reactant.TestUtils.construct_test_array(Float32, 2, 3, 4, 5)
+            )
+            scale = if affine
+                Reactant.to_rarray(Reactant.TestUtils.construct_test_array(Float32, 3))
+            else
+                nothing
+            end
+            rm = Reactant.to_rarray(Reactant.TestUtils.construct_test_array(Float32, 3))
+            rv = Reactant.to_rarray(Reactant.TestUtils.construct_test_array(Float32, 3))
+            gx = Reactant.to_rarray(
+                Reactant.TestUtils.construct_test_array(Float32, 2, 3, 4, 5)
+            )
 
             hlo = @code_hlo Ops.batch_norm_grad(
                 x, scale, rm, rv, gx; epsilon=1e-5, feature_index=2
@@ -1272,7 +1294,7 @@ end
 
             if !affine
                 @test occursin(
-                    "stablehlo.constant dense<1.000000e+00> : tensor<3xf64>", repr(hlo)
+                    "stablehlo.constant dense<1.000000e+00> : tensor<3xf32>", repr(hlo)
                 )
             end
 

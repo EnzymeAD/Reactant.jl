@@ -39,10 +39,10 @@ jobs:
           - linux-x86-ct6e-180-4tpu
           - linux-x86-a2-48-a100-4gpu
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: julia-actions/setup-julia@v2
         with:
-          version: "1"
+          version: "1.11"
       - uses: julia-actions/cache@v2
       - name: "Instantiate benchmarks environment"
         shell: julia --color=yes --project=benchmark {0}
@@ -53,7 +53,7 @@ jobs:
         run: |
           julia --color=yes --project=benchmark benchmark/runbenchmarks.jl
       - name: Upload PProf Results
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         timeout-minutes: 10
         with:
           name: pprof-results-${{ matrix.os }}
@@ -61,7 +61,7 @@ jobs:
           retention-days: 90
           overwrite: false
       - name: Upload Benchmark Results
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         timeout-minutes: 10
         with:
           name: benchmark-results-${{ matrix.os }}
@@ -79,7 +79,7 @@ jobs:
         with:
           version: "1"
       - uses: julia-actions/cache@v2
-      - uses: actions/download-artifact@v5
+      - uses: actions/download-artifact@v6
         with:
           pattern: benchmark-results-*
           path: benchmark/results
@@ -95,7 +95,7 @@ jobs:
 
            echo "path=$(find benchmark -type f -name combinedbenchmarks.json 2>/dev/null)" >> $GITHUB_OUTPUT
       - name: Upload benchmark results as artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: benchmark-results
           path: ${{ steps.locate.outputs.path }}

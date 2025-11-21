@@ -1,4 +1,4 @@
-using CUDA, KernelAbstractions, Reactant
+using CUDA, KernelAbstractions, Reactant, Test
 
 # Simple kernel for matrix multiplication
 @kernel function matmul_kernel!(output, a)

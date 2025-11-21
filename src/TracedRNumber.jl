@@ -26,12 +26,24 @@ Base.copy(x::TracedRNumber{T}) where {T} = TracedRNumber{T}((), x.mlir_data)
 function Base.eps(::Type{TracedRNumber{T}}) where {T}
     return Reactant.promote_to(TracedRNumber{T}, eps(T))
 end
+Base.eps(x::TracedRNumber{T}) where {T} = eps(typeof(x))
 
 function Base.typemin(::Type{TracedRNumber{T}}) where {T}
     return Reactant.promote_to(TracedRNumber{T}, typemin(T))
 end
+Base.typemin(x::TracedRNumber{T}) where {T} = typemin(typeof(x))
+
 function Base.typemax(::Type{TracedRNumber{T}}) where {T}
     return Reactant.promote_to(TracedRNumber{T}, typemax(T))
+end
+Base.typemax(x::TracedRNumber{T}) where {T} = typemax(typeof(x))
+
+function Base.nextfloat(x::TracedRNumber{T}) where {T<:AbstractFloat}
+    return @opcall next_after(x, typemax(x))
+end
+
+function Base.prevfloat(x::TracedRNumber{T}) where {T<:AbstractFloat}
+    return @opcall next_after(x, typemin(x))
 end
 
 function Base.rtoldefault(T::Type{<:TracedRNumber})
@@ -491,6 +503,7 @@ for (jlop, hloop) in (
     (:(Base.log), :log),
     (:(Base.log1p), :log_plus_one),
     (:(Base.sqrt), :sqrt),
+    (:(Base.cbrt), :cbrt),
     (:(Base.acos), :acos),
     (:(Base.acosh), :acosh),
     (:(Base.asin), :asin),
@@ -504,6 +517,27 @@ for (jlop, hloop) in (
 )
     @eval $(jlop)(@nospecialize(lhs::TracedRNumber)) = @opcall $(hloop)(lhs)
 end
+
+# Degree-based trigonometric wrappers for TracedRNumber
+# These convert to radians internally so Reactant can lower to
+# StableHLO-supported radian trigonometric operations.
+
+Base.sind(x::TracedRNumber) = sin(deg2rad(x))
+Base.cosd(x::TracedRNumber) = cos(deg2rad(x))
+Base.tand(x::TracedRNumber) = tan(deg2rad(x))
+Base.cscd(x::TracedRNumber) = 1 / sind(x)
+Base.secd(x::TracedRNumber) = 1 / cosd(x)
+Base.cotd(x::TracedRNumber) = 1 / tand(x)
+
+Base.asind(x::TracedRNumber) = rad2deg(asin(x))
+Base.acosd(x::TracedRNumber) = rad2deg(acos(x))
+Base.atand(x::TracedRNumber) = rad2deg(atan(x))
+
+Base.atand(y::TracedRNumber, x::TracedRNumber) = rad2deg(atan(y, x))
+
+Base.acscd(x::TracedRNumber) = rad2deg(asin(1 / x))
+Base.asecd(x::TracedRNumber) = rad2deg(acos(1 / x))
+Base.acotd(x::TracedRNumber) = rad2deg(atan(1 / x))
 
 for (jlop, hloop) in (
     (:(Base.sin), :sine),
@@ -538,16 +572,38 @@ function Base.sincospi(x::TracedRNumber{T}) where {T}
     return @opcall(sine(T(π) * x)), @opcall(cosine(T(π) * x))
 end
 
+@noinline Base.Math.log10(x::TracedRNumber) = Base.Math._log(x, Val(10), :log10)
+@noinline Base.Math.log2(x::TracedRNumber) = Base.Math._log(x, Val(2), :log2)
+Base.Math._log(x::TracedRNumber, base, ::Symbol) = log(x) / log(Reactant._unwrap_val(base))
+
 Base.isreal(::TracedRNumber) = false
 Base.isreal(::TracedRNumber{<:Real}) = true
 
+Base.isinteger(x::TracedRNumber{<:Integer}) = true
+Base.isinteger(x::TracedRNumber{<:AbstractFloat}) = x - trunc(x) == zero(x)
+
+Base.isodd(x::TracedRNumber) = isodd(real(x))
+function Base.isodd(x::TracedRNumber{<:Real})
+    return (
+        isinteger(x) &
+        !iszero(
+            rem(
+                Reactant.promote_to(TracedRNumber{Int}, x),
+                Reactant.promote_to(TracedRNumber{Int}, 2),
+            ),
+        )
+    )
+end
+
 Base.iseven(x::TracedRNumber) = iseven(real(x))
 function Base.iseven(x::TracedRNumber{<:Real})
-    return iszero(
-        rem(
-            Reactant.promote_to(TracedRNumber{Int}, x),
-            Reactant.promote_to(TracedRNumber{Int}, 2),
-        ),
+    return (
+        isinteger(x) & iszero(
+            rem(
+                Reactant.promote_to(TracedRNumber{Int}, x),
+                Reactant.promote_to(TracedRNumber{Int}, 2),
+            ),
+        )
     )
 end
 
@@ -560,11 +616,6 @@ for (minT, maxT) in Iterators.product((Number, TracedRNumber), (Number, TracedRN
             Reactant.promote_to(TracedRNumber{T}, max),
         )
     end
-end
-
-Base.fill(x::TracedRNumber, ::Tuple{}) = Reactant.broadcast_to_size(x, ())
-function Base.fill(x::TracedRNumber, dims::NTuple{N,<:Integer}) where {N}
-    return Reactant.broadcast_to_size(x, dims)
 end
 
 function Base.float(x::TracedRNumber{T}) where {T}
@@ -692,6 +743,27 @@ function Base.copysign(x::TracedRNumber{T}, y::S) where {T,S<:Number}
 end
 function Base.copysign(x::S, y::TracedRNumber{T}) where {S<:Number,T}
     return copysign(Reactant.promote_to(TracedRNumber{S}, x), y)
+end
+
+function Base.zeros(::Type{TracedRNumber{T}}, dims::Dims{N}) where {T,N}
+    return @opcall fill(zero(T), dims)
+end
+function Base.zeros(::Type{TracedRNumber{T}}, ::Tuple{}) where {T}
+    return @opcall fill(zero(T), ())
+end
+
+function Base.ones(::Type{TracedRNumber{T}}, dims::Dims{N}) where {T,N}
+    return @opcall fill(one(T), dims)
+end
+function Base.ones(::Type{TracedRNumber{T}}, ::Tuple{}) where {T}
+    return @opcall fill(one(T), ())
+end
+
+function Base.fill(v::TracedRNumber{T}, dims::Dims{N}) where {T,N}
+    return @opcall fill(v, dims)
+end
+function Base.fill(v::TracedRNumber{T}, ::Tuple{}) where {T}
+    return @opcall fill(v, ())
 end
 
 end # module TracedRNumberOverrides

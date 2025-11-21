@@ -23,8 +23,8 @@ function Base.copy(x::Union{AbstractConcreteArray,AbstractConcreteNumber})
     return fn(x)
 end
 
-function Base.copy(X::ConcreteIFRTArray{T,D,S,P}) where {T,D,S,P}
-    return ConcreteIFRTArray{T,D,S}(Base.copy(X.data), X.shape, X.sharding, X.padding)
+function Base.copy(X::ConcreteIFRTArray{T,D,P}) where {T,D,P}
+    return ConcreteIFRTArray{T,D}(Base.copy(X.data), X.shape, X.sharding, X.padding)
 end
 
 function Base.copy(X::ConcretePJRTArray)
@@ -149,6 +149,21 @@ end
 
 Base.Array(x::Union{AnyConcretePJRTArray,AnyConcreteIFRTArray}) = convert(Array, x)
 
+"""
+    synchronize(x::Union{ConcretePJRTArray,ConcretePJRTNumber})
+    synchronize(x::Union{ConcreteIFRTArray,ConcreteIFRTNumber})
+
+Blocks until the computation is complete. Returns `nothing`.
+Does nothing if the input is not supported by Reactant.
+For tuples, synchronizes each element of the tuple.
+
+!!! note
+    This function is internal and is not part of the public API. 
+    Prefer `@compile` with `sync=true` to compile functions that block until the computation is complete instead of calling this function.
+"""
+synchronize(any) = nothing
+synchronize(tuple::Tuple) = foreach(synchronize, tuple)
+
 function synchronize(x::Union{ConcretePJRTArray,ConcretePJRTNumber})
     foreach(wait, x.data)
     return nothing
@@ -200,7 +215,7 @@ for jlop in (
         :(Base.:^),
         :(Base.:(==)),
     ),
-    T in (AbstractConcreteNumber, AbstractConcreteArray{<:Any,0})
+    T in (AbstractConcreteNumber, AbstractConcreteArray{<:Number,0})
 
     @eval begin
         $(jlop)(x::$(T), y::$(T)) = $(jlop)(to_number(x), to_number(y))
@@ -407,8 +422,8 @@ function Base.similar(
 end
 
 function Base.similar(
-    a::ConcretePJRTArray{T,N,D,Sh}, ::Type{S}=T, dims::Dims=size(a)
-) where {S,T,Sh,N,D}
+    a::ConcretePJRTArray{T,N,D}, ::Type{S}=T, dims::Dims=size(a)
+) where {S,T,N,D}
     device_to_array_slices, sharding = Sharding.sharding_to_array_slices(
         a.sharding, dims; return_updated_sharding=Val(true), client=XLA.client(a)
     )
@@ -417,7 +432,7 @@ function Base.similar(
         Base.@_inline_meta
         similar(a.data[i], S, Dims(length.(device_to_array_slices[i])))
     end
-    return ConcretePJRTArray{S,length(dims),D,Sh}(sdata, dims, a.sharding)
+    return ConcretePJRTArray{S,length(dims),D}(sdata, dims, a.sharding)
 end
 
 Base.similar(a::ConcretePJRTArray, dims::Dims) = similar(a, eltype(a), dims)

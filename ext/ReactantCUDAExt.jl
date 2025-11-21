@@ -1282,8 +1282,8 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
 
     @assert length(restys) == length(aliases)
     call = MLIR.Dialects.enzymexla.kernel_call(
-        blk_operands...,
-        mlir_args;
+        blk_operands...;
+        inputs=mlir_args,
         result_0=restys,
         fn=MLIR.IR.FlatSymbolRefAttribute(sym_name),
         output_operand_aliases=MLIR.IR.Attribute(output_operand_aliases),
@@ -1379,16 +1379,9 @@ Base.@nospecializeinfer function Reactant.traced_type_inner(
     N = ndims(A)
     if mode == Reactant.ArrayToConcrete && T <: Reactant.ReactantPrimitive
         if runtime isa Val{:PJRT}
-            return Reactant.ConcretePJRTArray{
-                T,
-                N,
-                Reactant.Sharding.ndevices(sharding),
-                Reactant.Sharding.shard_type(typeof(sharding), N),
-            }
+            return Reactant.ConcretePJRTArray{T,N,Reactant.Sharding.ndevices(sharding)}
         elseif runtime isa Val{:IFRT}
-            return Reactant.ConcreteIFRTArray{
-                T,N,Reactant.Sharding.shard_type(typeof(sharding), N)
-            }
+            return Reactant.ConcreteIFRTArray{T,N}
         end
         error("Unsupported runtime $runtime")
     else
@@ -1458,14 +1451,6 @@ function Reactant.make_tracer(
         return prev
     end
     return newa
-end
-
-function __init__()
-    if CUDA.functional() && !Reactant.precompiling()
-        cap = CUDA.capability(CUDA.device())
-        Reactant.Compiler.cubinChip[] = "sm_$(cap.major)$(cap.minor)"
-    end
-    return nothing
 end
 
 # In Julia v1.11.3 precompiling this module caches bad code:

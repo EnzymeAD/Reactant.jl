@@ -3,7 +3,7 @@ module Reactant
 using ReactantCore:
     ReactantCore, @trace, within_compile, MissingTracedValue, materialize_traced_array
 
-using LinearAlgebra: LinearAlgebra, RowMaximum
+using LinearAlgebra: LinearAlgebra, RowMaximum, NoPivot
 using Random: Random, AbstractRNG
 using EnumX: @enumx
 using Functors: Functors, @leaf
@@ -15,17 +15,20 @@ using LLVMOpenMP_jll: LLVMOpenMP_jll
 using Adapt: Adapt, WrappedArray
 using GPUArraysCore: GPUArraysCore, @allowscalar, allowscalar
 
-using Enzyme:
-    Enzyme,
-    Active,
+using Enzyme: Enzyme
+using EnzymeCore:
+    EnzymeCore,
+    Mode,
     Annotation,
+    Active,
     BatchDuplicated,
     BatchDuplicatedNoNeed,
     Const,
     Duplicated,
     DuplicatedNoNeed,
     EnzymeRules,
-    Reverse
+    ReverseMode,
+    ForwardMode
 
 export allowscalar, @allowscalar # re-exported from GPUArraysCore
 
@@ -40,7 +43,7 @@ function precompiling()
     return (@ccall jl_generating_output()::Cint) == 1
 end
 
-struct ReactantABI <: Enzyme.EnzymeCore.ABI end
+struct ReactantABI <: EnzymeCore.ABI end
 
 include("PrimitiveTypes.jl")
 
@@ -233,6 +236,8 @@ include("stdlibs/Base.jl")
 # Other Integrations
 include("Enzyme.jl")
 
+export StackedBatchDuplicated, StackedBatchDuplicatedNoNeed
+
 const TracedType = Union{TracedRArray,TracedRNumber,MissingTracedValue}
 
 include("ControlFlow.jl")
@@ -325,6 +330,19 @@ function __init__()
         end
     end
 
+    @static if VERSION ≥ v"1.12-"
+        if ccall(:jl_generating_output, Cint, ()) == 1
+            @warn """
+            Reactant.jl currently doesn't support versions of Julia 1.12 or newer. We are
+            actively working on adding support for newer versions of Julia. For the time
+            being we recommend using 1.11 or LTS.
+
+            For latest updates, check the status of support for Julia 1.12+ at
+            https://github.com/EnzymeAD/Reactant.jl/issues/1736.
+            """ maxlog = 1
+        end
+    end
+
     return nothing
 end
 
@@ -332,6 +350,9 @@ function set_default_backend(backend::Union{String,XLA.AbstractClient})
     XLA.set_default_backend(backend)
     return nothing
 end
+
+# Not part of the public API. Exclusively for testing purposes.
+include("TestUtils.jl")
 
 include("Precompile.jl")
 

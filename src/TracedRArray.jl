@@ -23,6 +23,8 @@ Base.strides(x::TracedRArray) = Base.size_to_strides(1, size(x)...)
 
 Base.IndexStyle(::Type{<:TracedRArray}) = Base.IndexLinear()
 
+Base.elsize(::Type{TracedRArray{T,N}}) where {T,N} = sizeof(T)
+
 # This is required otherwise we will copy a tracedrarray each time
 # we use it
 Base.convert(T::Type{<:TracedRArray}, x::AbstractArray) = Reactant.promote_to(T, x)
@@ -30,6 +32,15 @@ Base.convert(T::Type{<:TracedRArray}, x::AbstractArray) = Reactant.promote_to(T,
 # Base.complex
 Base.complex(x::TracedRArray{<:Real}) = complex.(x)
 Base.complex(x::TracedRArray{<:Complex}) = x
+
+function Base.deepcopy_internal(x::TracedRArray, stackdict::IdDict)
+    if haskey(stackdict, x)
+        return stackdict[x]::typeof(x)
+    end
+    y = copy(x)
+    stackdict[x] = y
+    return y
+end
 
 TracedRArray{T,N}(x::AbstractArray) where {T,N} = convert(TracedRArray{T,N}, x)
 
@@ -265,10 +276,6 @@ function Base.show(io::IOty, X::TracedRArray{T,N}) where {T,N,IOty<:Union{IO,IOC
     return print(io, "TracedRArray{", T, ",", N, "N}(", X.paths, ", size=", size(X), ")")
 end
 
-function Base.permutedims(A::AnyTracedRArray{T,N}, perm) where {T,N}
-    return @opcall transpose(materialize_traced_array(A), Int64[perm...])
-end
-
 for (jlop, hloop, hlocomp, merge) in
     ((:(Base.:(==)), :compare, "EQ", :all), (:(Base.:(!=)), :compare, "NE", :any))
     @eval function $jlop(
@@ -277,6 +284,25 @@ for (jlop, hloop, hlocomp, merge) in
         elems = $(jlop).(lhs, rhs)
         return N == 0 ? elems : $(merge)(elems)
     end
+end
+
+# Override _parentsmatch to avoid pointer comparisons during tracing
+# Direct TracedRArray comparisons - they don't alias unless they're the same object
+Base._parentsmatch(A::TracedRArray, B::TracedRArray) = A === B
+# ReshapedArray comparisons - check if they share the same parent (more specific than StridedArray)
+function Base._parentsmatch(
+    A::Base.ReshapedArray{
+        <:TracedRNumber,
+        <:Any,
+        <:Union{TracedRArray,SubArray{<:TracedRNumber,<:Any,<:TracedRArray}},
+    },
+    B::Base.ReshapedArray{
+        <:TracedRNumber,
+        <:Any,
+        <:Union{TracedRArray,SubArray{<:TracedRNumber,<:Any,<:TracedRArray}},
+    },
+)
+    return Base._parentsmatch(parent(A), parent(B))
 end
 
 function __default_init(
@@ -704,11 +730,20 @@ end
 
 # stack
 function overloaded_stack(dims::Union{Integer,Colon}, xs)
-    @assert allequal([ndims(x) for x in xs]) "All arrays must have the same number of \
-                                              dimensions..."
-    dims = dims isa Colon ? ndims(first(xs)) + 1 : dims
+    dims = dims isa Colon ? nothing : dims
     res = []
-    for x in xs
+    prev_dims = nothing
+    for x in unwrapped_broadcast(identity, xs)
+        cur_dims = ndims(x)
+        if prev_dims === nothing
+            prev_dims = cur_dims
+        else
+            @assert prev_dims == cur_dims "All arrays must have the same number of \
+                                           dimensions..."
+        end
+
+        dims === nothing && (dims = cur_dims + 1)
+
         new_shape = ntuple(
             i -> i == dims ? 1 : (i < dims ? size(x, i) : size(x, i - 1)), ndims(x) + 1
         )
@@ -1092,6 +1127,19 @@ function Base.accumulate_pairwise!(op, A::AnyTracedRVector, B::AnyTracedRVector)
     return accumulate!(op, A, B; dims=1)
 end
 
+@static if isdefined(Base, :_accumulate_promote_op)
+    function Base._accumulate_promote_op(op, A::AnyTracedRArray{T}; init=nothing) where {T}
+        if init !== nothing
+            init isa TracedRNumber && (init = zero(unwrapped_eltype(init)))
+        end
+        return TracedRNumber{
+            unwrapped_eltype(
+                Base._accumulate_promote_op(op, Array{T,ndims(A)}(undef, size(A)); init)
+            ),
+        }
+    end
+end
+
 function Base._accumulate!(
     op, output::AnyTracedRArray, input::AnyTracedRVector, ::Nothing, ::Nothing
 )
@@ -1346,6 +1394,17 @@ function unrolled_map(f::F, itr) where {F}
     end
 
     return result
+end
+
+# permutedims for TracedRArrays and wrappers
+function Base.permutedims(A::AnyTracedRArray{T,N}, perm) where {T,N}
+    return @opcall transpose(materialize_traced_array(A), Int64[perm...])
+end
+
+function Base.permutedims!(dest::TracedRArray, src::AnyTracedRArray, perm)
+    result = @opcall transpose(materialize_traced_array(src), Int64[perm...])
+    TracedUtils.set_mlir_data!(dest, result.mlir_data)
+    return dest
 end
 
 end

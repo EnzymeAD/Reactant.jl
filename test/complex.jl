@@ -44,7 +44,7 @@ const ARRAY_LIST = (
 end
 
 @testset "abs: $T" for T in (Float32, ComplexF32)
-    x = randn(T, 10)
+    x = Reactant.TestUtils.construct_test_array(T, 10)
     x_concrete = Reactant.to_rarray(x)
     @test @jit(abs.(x_concrete)) ≈ abs.(x)
 end
@@ -61,18 +61,18 @@ end
 end
 
 @testset "complex reduction" begin
-    x = randn(ComplexF32, 10, 10)
+    x = Reactant.TestUtils.construct_test_array(ComplexF32, 10, 10)
     x_ra = Reactant.to_rarray(x)
     @test @jit(sum(abs2, x_ra)) ≈ sum(abs2, x)
 end
 
 @testset "create complex numbers" begin
-    x = randn(ComplexF32)
+    x = ComplexF32(1.0 - 2.0im)
     x_ra = Reactant.to_rarray(x; track_numbers=true)
     @test @jit(Complex(x_ra)) == x_ra
 
-    x = randn(Float32)
-    y = randn(Float64)
+    x = 1.5f0
+    y = -2.25
     x_ra = Reactant.to_rarray(x; track_numbers=true)
     y_ra = Reactant.to_rarray(y; track_numbers=true)
     @test @jit(Complex(x_ra, y_ra)) == Complex(x, y) skip = RunningOnTPU

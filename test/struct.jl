@@ -1,6 +1,4 @@
-using Reactant
-using Test
-using Adapt
+using Reactant, Test, Adapt
 
 # from bsc-quantic/Tenet.jl
 struct MockTensor{T,N,A<:AbstractArray{T,N}} <: AbstractArray{T,N}
@@ -77,7 +75,7 @@ end
 @testset "Struct" begin
     @testset "MockTensor" begin
         @testset "immutable" begin
-            x = MockTensor(rand(4, 4), [:i, :j])
+            x = MockTensor(Reactant.TestUtils.construct_test_array(Float64, 4, 4), [:i, :j])
             x2 = MockTensor(Reactant.to_rarray(parent(x)), x.inds)
 
             y = @jit(bcast_cos(x2))
@@ -89,7 +87,9 @@ end
         end
 
         @testset "mutable" begin
-            x = MutableMockTensor(rand(4, 4), [:i, :j])
+            x = MutableMockTensor(
+                Reactant.TestUtils.construct_test_array(Float64, 4, 4), [:i, :j]
+            )
             x2 = MutableMockTensor(Reactant.to_rarray(parent(x)), x.inds)
 
             y = @jit(bcast_cos(x2))
@@ -102,7 +102,7 @@ end
     end
 
     @testset "MockLinkedList" begin
-        x = [rand(2, 2) for _ in 1:2]
+        x = [Reactant.TestUtils.construct_test_array(Float64, 2, 2) for _ in 1:2]
         x2 = list(x...)
         x3 = Reactant.to_rarray(x2)
 
