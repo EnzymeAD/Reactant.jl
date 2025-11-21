@@ -1191,6 +1191,39 @@ Base.@nospecializeinfer function make_tracer_unknown(
                     xi2 = Core.Typeof(xi2)((newpath,), xi2.mlir_data)
                     seen[xi2] = xi2
                     changed = true
+                elseif !ismutabletype(FT) && !ismutabletype(Core.Typeof(xi2)) && fieldcount(FT) == fieldcount(Core.Typeof(xi2))
+                    # Attempt to reconcile struct mismatch (e.g. Foo{Float64} -> Foo{TracedRNumber})
+                    # arising from parent type constraints overriding local inference.
+                    local flds_sub = Vector{Any}(undef, fieldcount(FT))
+                    local success = true
+                    for j in 1:fieldcount(FT)
+                        val_j = getfield(xi2, j)
+                        ft_j = fieldtype(FT, j)
+                        if val_j isa ft_j
+                            flds_sub[j] = val_j
+                        elseif is_traced_number(ft_j) && val_j isa unwrapped_eltype(ft_j)
+                            val_wrapped = ft_j(val_j)
+                            # Correct the path for the wrapped scalar
+                            sub_path = append_path(newpath, j)
+                            val_wrapped = Core.Typeof(val_wrapped)((sub_path,), val_wrapped.mlir_data)
+                            seen[val_wrapped] = val_wrapped
+                            flds_sub[j] = val_wrapped
+                        else
+                            success = false
+                            break
+                        end
+                    end
+                    
+                    if success
+                        xi2 = ccall(:jl_new_structv, Any, (Any, Ptr{Any}, UInt32), FT, flds_sub, fieldcount(FT))
+                        changed = true
+                    else
+                        throw(
+                            AssertionError(
+                                "Could not recursively make tracer of object of type $RT into $TT at field $i (named $(fieldname(TT, i))), need object of type $(fieldtype(TT, i)) found object of type $(Core.Typeof(xi2)) ",
+                            ),
+                        )
+                    end
                 else
                     throw(
                         AssertionError(
