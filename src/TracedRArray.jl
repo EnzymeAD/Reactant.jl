@@ -1367,19 +1367,25 @@ end
 function unwrapped_broadcast(f::F, x::Base.Iterators.Zip, original_dims) where {F}
     min_length = Base.inferencebarrier(minimum)(length, x.is)
     itrs = [length(itr) > min_length ? itr[1:min_length] : itr for itr in x.is]
-    any(Base.Fix2(isa, AnyTracedRArray), itrs) || return unrolled_map(f, x)
-    return broadcast(BroadcastIterator(f), itrs...), original_dims, identity
+    result = if any(Base.Fix2(isa, AnyTracedRArray), itrs)
+        broadcast(BroadcastIterator(f), itrs...)
+    else
+        unrolled_map(f, x)
+    end
+    return result, original_dims, identity
 end
 
 function unwrapped_broadcast(f::F, x::Base.Iterators.Enumerate, original_dims) where {F}
-    x.itr isa AnyTracedRArray || return unrolled_map(f, x)
-    return (
+    result = if x.itr isa AnyTracedRArray
         broadcast(
-            BroadcastIterator(f), Reactant.promote_to(TracedRArray, 1:length(x.itr)), x.itr
-        ),
-        original_dims,
-        identity,
-    )
+            BroadcastIterator(f),
+            Reactant.promote_to(TracedRArray, 1:length(x.itr)),
+            x.itr,
+        )
+    else
+        unrolled_map(f, x)
+    end
+    return result, original_dims, identity
 end
 
 function unwrapped_broadcast(f::F, x::Slices, original_dims) where {F}
