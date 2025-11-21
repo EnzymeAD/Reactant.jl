@@ -1059,7 +1059,7 @@ cc_library(
             "-Wl,-exported_symbol,_CreateGPUPerformanceModel",
             "-Wl,-exported_symbol,_RunAnalysisOnHloModule",
             "-Wl,-exported_symbol,_EstimateRunTimeForInstruction",
-            "-Wl,-exported_symbol,_CompileMLIRtoLLVMIRWithXLA",
+            "-Wl,-exported_symbol,_ConvertMLIRModuleToLLVMIR",
         ],
     }),
     linkstatic = True,
@@ -1195,10 +1195,12 @@ cc_library(
         "@xla//xla/tsl/platform:errors",
         "@xla//xla/service:hlo_proto_cc_impl",
         "@com_google_absl//absl/status:statusor",
-        "@xla//xla/tools:xla_compile_lib",
-        "@xla//xla/tools/hlo_opt:compiled_opt_lib",
-        "@xla//xla/tools/hlo_opt:cpu_opt",
-        "@xla//xla/hlo/tools/hlo_opt:opt_lib",
+        "@xla//xla/client:client_library",
+        "@xla//xla/hlo/translate/mhlo_to_hlo:type_to_shape",
+        "@xla//xla/hlo/translate/mhlo_to_hlo:mlir_hlo_to_hlo",
+        "@xla//xla/service:local_service_utils",
+        "@xla//xla/service",
+        "@xla//xla/service/cpu:backend_config_proto_cc",
     ] + if_cuda([
         "@xla//xla/stream_executor/cuda:cuda_compute_capability_proto_cc_impl",
         "@xla//xla/service:gpu_plugin",
@@ -1216,7 +1218,6 @@ cc_library(
         "@xla//xla/stream_executor:cuda_platform",
         "@xla//xla/stream_executor:kernel",
         "@xla//xla/stream_executor/cuda:all_runtime",
-        "@xla//xla/tools/hlo_opt:gpu_opt",
     ]) + if_rocm([
         "@xla//xla/service:gpu_plugin",
         "@xla//xla/pjrt/c:pjrt_c_api_gpu",
@@ -1225,7 +1226,6 @@ cc_library(
         "@xla//xla/stream_executor:rocm_platform",
         "@xla//xla/service/gpu:amdgpu_compiler",
         "@xla//xla/backends/profiler/gpu:device_tracer",
-        "@xla//xla/tools/hlo_opt:gpu_opt",
     ]) + select({
         # gloo tcp transport only builds on linux
         "@xla//xla/tsl:macos": [
@@ -1247,7 +1247,6 @@ cc_library(
         ],
     }),
     alwayslink = True,
-    testonly = True,
 )
 
 # cc_shared_library(
@@ -1256,7 +1255,6 @@ cc_binary(
     linkshared = 1,  ## important
     linkstatic = 1,  ## important
     deps = [":ReactantExtraLib"],
-    testonly = True,
 )
 
 cc_binary(

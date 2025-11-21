@@ -160,8 +160,14 @@
 #include "xla/hlo/ir/hlo_module.h"
 #include "xla/service/hlo_cost_analysis.h"
 
-#include "xla/tools/hlo_opt/compiled_opt_lib.h"
-#include "xla/tools/xla_compile_lib.h"
+#include "xla/client/client_library.h"
+#include "xla/hlo/translate/mhlo_to_hlo/mlir_hlo_to_hlo.h"
+#include "xla/hlo/translate/mhlo_to_hlo/type_to_shape.h"
+#include "xla/service/compiler.h"
+#include "xla/service/cpu/backend_config.pb.h"
+#include "xla/service/cpu/cpu_executable.h"
+#include "xla/service/local_service_utils.h"
+#include "xla/service/service.h"
 
 #if defined(REACTANT_CUDA) || defined(REACTANT_ROCM)
 #include "xla/service/gpu/model/gpu_hlo_cost_analysis.h"
@@ -1213,6 +1219,9 @@ GenerateCompileOptions(int64_t device_id, const int64_t *mesh_ids,
 
   debug_options->set_xla_gpu_cuda_data_dir(xla_gpu_cuda_data_dir);
   debug_options->set_xla_enable_enzyme_comms_opt(true);
+
+  // TODO: make this an option
+  debug_options->set_xla_embed_ir_in_executable(true);
 
   if (kernel_cache_enabled) {
     debug_options->set_xla_gpu_kernel_cache_file(kernel_cache_path);
@@ -3509,23 +3518,99 @@ REACTANT_ABI void EstimateRunTimeForInstruction(void *gpu_performance_model,
 
 #endif
 
-REACTANT_ABI const char *CompileMLIRtoLLVMIRWithXLA(HeldHloModule *hlo_module,
-                                                    const char *backend,
-                                                    const char *stage) {
-  std::unique_ptr<xla::HloModule> module =
-      std::move(hlo_module->obj())->Clone();
+REACTANT_ABI const char *ConvertMLIRModuleToLLVMIR(MlirModule mod) {
+  auto cmod_op = cast<ModuleOp>(*unwrap(mod));
 
-  auto optProvider =
-      xla::OptProvider::GetProviderForPlatform(std::string(backend));
-  if (!optProvider.ok()) {
-    ReactantThrowError(optProvider.status().ToString().c_str());
+  xla::HloProto hlo_proto;
+  mlir::MlirToHloConversionOptions options;
+  options.use_tuple_args = false;
+  options.return_tuple = false;
+  auto status = mlir::ConvertMlirHloToHlo(cmod_op, &hlo_proto, options);
+  if (!status.ok()) {
+    ReactantThrowError(status.ToString().c_str());
   }
 
-  auto result =
-      optProvider.value()->GenerateStage(std::move(module), std::string(stage));
-  if (!result.ok()) {
-    ReactantThrowError(result.status().ToString().c_str());
+  for (auto &computation :
+       *hlo_proto.mutable_hlo_module()->mutable_computations()) {
+    if (computation.id() != hlo_proto.hlo_module().entry_computation_id())
+      continue;
+    // Assume root is the last instruction.
+    xla::HloInstructionProto &instruction =
+        *computation.mutable_instructions()->rbegin();
+    xla::cpu::BackendConfig backend_config;
+    backend_config.ParseFromString(instruction.backend_config());
+    backend_config.Clear();
+    instruction.set_backend_config(backend_config.SerializeAsString());
+    break;
   }
 
-  return cstr_from_string(result.value().value());
+  xla::XlaComputation xla_computation(hlo_proto.hlo_module());
+
+  // Extract and convert the shapes fro MHLO.
+  std::vector<xla::Shape> shapes;
+  mlir::SymbolTable symbol_table(cmod_op);
+  auto entry_point = symbol_table.lookup<mlir::FunctionOpInterface>("main");
+  shapes.reserve(entry_point.getNumArguments());
+  for (mlir::Type type : entry_point.getArgumentTypes()) {
+    shapes.push_back(xla::TypeToShape(type));
+  }
+  std::vector<const xla::Shape *> shape_pointers;
+  shape_pointers.reserve(shapes.size());
+  for (xla::Shape &shape : shapes) {
+    shape_pointers.push_back(&shape);
+  }
+
+  absl::StatusOr<xla::LocalClient *> local_client_or_error =
+      xla::ClientLibrary::GetOrCreateLocalClient();
+  if (!local_client_or_error.ok()) {
+    llvm::errs() << "failed to get local client\n";
+    ReactantThrowError(local_client_or_error.status().ToString().c_str());
+  }
+  xla::LocalClient *local_client = local_client_or_error.value();
+
+  xla::ExecutableBuildOptions build_options;
+  build_options.mutable_debug_options()->set_xla_embed_ir_in_executable(true);
+
+  if (build_options.device_ordinal() == -1) {
+    build_options.set_device_ordinal(local_client->default_device_ordinal());
+  }
+
+  absl::StatusOr<std::unique_ptr<xla::HloModuleConfig>> module_config_or_error =
+      xla::GetHloModuleConfig(
+          xla_computation, shape_pointers, build_options,
+          // TODO: how to get the service options?
+          // /*(service) options=*/&local_client->local_service()->options_,
+          nullptr, local_client->mutable_backend());
+  if (!module_config_or_error.ok()) {
+    llvm::errs() << "failed to get hlo module config\n";
+    ReactantThrowError(module_config_or_error.status().ToString().c_str());
+  }
+
+  auto executor = local_client->mutable_backend()->stream_executor(
+      build_options.device_ordinal());
+  if (!executor.ok()) {
+    llvm::errs() << "failed to get stream executor\n";
+    ReactantThrowError(executor.status().ToString().c_str());
+  }
+
+  xla::Compiler::CompileOptions opts = {
+      build_options.device_allocator(), build_options.compile_thread_pool(),
+      build_options.layout_canonicalization_callback()};
+  auto executable = local_client->local_service()->BuildExecutable(
+      xla_computation.proto(), std::move(module_config_or_error.value()),
+      local_client->mutable_backend(), executor.value(), opts,
+      build_options.run_backend_only());
+  if (!executable.ok()) {
+    llvm::errs() << "failed to build executable\n";
+    ReactantThrowError(executable.status().ToString().c_str());
+  }
+
+  auto local_executable = std::make_unique<xla::LocalExecutable>(
+      std::move(executable.value()),
+      local_client->local_service()->mutable_backend(), build_options);
+
+  auto *cpu_executable =
+      static_cast<xla::cpu::CpuExecutable *>(local_executable->executable());
+
+  return cstr_from_string(cpu_executable->ir_module_string());
 }
