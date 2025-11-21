@@ -419,6 +419,7 @@ function lapack_gesdd(
     Vt::IR.Type,
     info::IR.Type,
     full=nothing,
+    compute_uv=nothing,
     location=Location(),
 )
     op_ty_results = IR.Type[U, S, Vt, info]
@@ -427,6 +428,7 @@ function lapack_gesdd(
     successors = Block[]
     attributes = NamedAttribute[]
     !isnothing(full) && push!(attributes, namedattribute("full", full))
+    !isnothing(compute_uv) && push!(attributes, namedattribute("compute_uv", compute_uv))
 
     return create_operation(
         "enzymexla.lapack.gesdd",
@@ -447,6 +449,7 @@ function lapack_gesvd(
     Vt::IR.Type,
     info::IR.Type,
     full=nothing,
+    compute_uv=nothing,
     location=Location(),
 )
     op_ty_results = IR.Type[U, S, Vt, info]
@@ -455,6 +458,7 @@ function lapack_gesvd(
     successors = Block[]
     attributes = NamedAttribute[]
     !isnothing(full) && push!(attributes, namedattribute("full", full))
+    !isnothing(compute_uv) && push!(attributes, namedattribute("compute_uv", compute_uv))
 
     return create_operation(
         "enzymexla.lapack.gesvd",
@@ -475,6 +479,7 @@ function lapack_gesvj(
     Vt::IR.Type,
     info::IR.Type,
     full=nothing,
+    compute_uv=nothing,
     location=Location(),
 )
     op_ty_results = IR.Type[U, S, Vt, info]
@@ -483,6 +488,7 @@ function lapack_gesvj(
     successors = Block[]
     attributes = NamedAttribute[]
     !isnothing(full) && push!(attributes, namedattribute("full", full))
+    !isnothing(compute_uv) && push!(attributes, namedattribute("compute_uv", compute_uv))
 
     return create_operation(
         "enzymexla.lapack.gesvj",

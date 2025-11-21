@@ -11665,4 +11665,10 @@ function enzymexlaGeluApproximationAttrGet(ctx, mode)
     )::MlirAttribute
 end
 
+function enzymexlaGuaranteedAnalysisResultAttrGet(ctx, mode)
+    @ccall mlir_c.enzymexlaGuaranteedAnalysisResultAttrGet(
+        ctx::MlirContext, mode::Int32
+    )::MlirAttribute
+end
+
 const MLIR_CAPI_DWARF_ADDRESS_SPACE_NULL = -1
