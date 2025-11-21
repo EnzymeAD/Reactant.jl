@@ -916,7 +916,7 @@ function apply_type_with_promotion(wrapper, params, relevant_typevars=typevar_di
                 # here we first check if the typevar is actually relevant:
                 if haskey(relevant_typevars, typevar)
                     param_i = relevant_typevars[typevar]
-                    value <: params[param_i] && continue
+                    (!(value isa Type) || value <: params[param_i]) && continue
 
                     # Found a conflict! Figure out a new param type by promoting:
                     promoted = promote_type(value, params[param_i])
