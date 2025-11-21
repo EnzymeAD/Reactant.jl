@@ -342,14 +342,15 @@ end
 function overloaded_mapreduce(
     @nospecialize(f), @nospecialize(op), @nospecialize(A); dims=:, init=Base._InitialValue()
 )
-    res = unwrapped_broadcast(f, A)
+    res, updated_dims, re = unwrapped_broadcast(f, A, dims)
     # This means we are unable to use the optimized dispatches. For now we will
     # unroll the mapreduce.
     if typeof(res) == typeof(A)
-        @assert dims == Colon() "dims not supported for mapreduce currently."
+        @assert dims isa Colon "dims not supported for mapreduce currently."
         return foldl(op, res; init)
     end
-    return overloaded_mapreduce(identity, op, res; dims=:, init)
+
+    return re(overloaded_mapreduce(identity, op, res; dims=updated_dims, init))
 end
 
 function overloaded_mapreduce(
@@ -365,6 +366,7 @@ function overloaded_mapreduce(
     dims isa Int && (dims = Int64[dims])
     dims isa Colon && (dims = collect(Int64, 1:N))
     dims isa Vector{Int64} || (dims = collect(Int64, dims))
+    dims = sort(dims)
 
     op_in_T = unwrapped_eltype(Core.Compiler.return_type(f, Tuple{T}))
     reduce_init = __default_init(op_in_T, op)
@@ -737,7 +739,7 @@ function overloaded_stack(dims::Union{Integer,Colon}, xs)
     dims = dims isa Colon ? nothing : dims
     res = []
     prev_dims = nothing
-    for x in unwrapped_broadcast(identity, xs)
+    for x in first(unwrapped_broadcast(identity, xs, Colon()))
         cur_dims = ndims(x)
         if prev_dims === nothing
             prev_dims = cur_dims
@@ -1362,24 +1364,66 @@ end
 
 (fn::BroadcastIterator)(args...) = fn.f((args...,))
 
-function unwrapped_broadcast(f::F, x::Base.Iterators.Zip) where {F}
+function unwrapped_broadcast(f::F, x::Base.Iterators.Zip, original_dims) where {F}
     min_length = Base.inferencebarrier(minimum)(length, x.is)
     itrs = [length(itr) > min_length ? itr[1:min_length] : itr for itr in x.is]
     any(Base.Fix2(isa, AnyTracedRArray), itrs) || return unrolled_map(f, x)
-    return broadcast(BroadcastIterator(f), itrs...)
+    return broadcast(BroadcastIterator(f), itrs...), original_dims, identity
 end
 
-function unwrapped_broadcast(f::F, x::Base.Iterators.Enumerate) where {F}
+function unwrapped_broadcast(f::F, x::Base.Iterators.Enumerate, original_dims) where {F}
     x.itr isa AnyTracedRArray || return unrolled_map(f, x)
-    return broadcast(
-        BroadcastIterator(f), Reactant.promote_to(TracedRArray, 1:length(x.itr)), x.itr
+    return (
+        broadcast(
+            BroadcastIterator(f), Reactant.promote_to(TracedRArray, 1:length(x.itr)), x.itr
+        ),
+        original_dims,
+        identity,
     )
 end
 
-unwrapped_broadcast(f::F, xs) where {F} = unrolled_map(f, xs)
+function unwrapped_broadcast(f::F, x::Slices, original_dims) where {F}
+    px = parent(x)
+    if ndims(x) != ndims(px) # drop=true
+        ordering, mapslices_dims = (), ()
+        for (i, s) in enumerate(x.slicemap)
+            s isa Colon && continue
+            ordering = (ordering..., s)
+            mapslices_dims = (mapslices_dims..., i)
+        end
+        mapslices_dims = Tuple(mapslices_dims[order] for order in ordering)
+
+        updated_dims = ()
+        if original_dims isa Colon
+            updated_dims = mapslices_dims
+        else
+            for d in original_dims
+                idx = findfirst(isequal(d), x.slicemap)
+                @assert idx !== nothing "Expected dimension $d in $(x.slicemap)"
+                updated_dims = (updated_dims..., idx)
+            end
+        end
+
+        return (
+            mapslices(f, px; dims=mapslices_dims),
+            updated_dims,
+            x -> eachslice(x; dims=mapslices_dims, drop=true),
+        )
+    else
+        mapslices_dims = Tuple(filter(i -> !(x.slicemap[i] isa Colon), 1:ndims(px)))
+        return (
+            mapslices(f, px; dims=mapslices_dims),
+            original_dims,
+            x -> eachslice(x; dims=mapslices_dims, drop=false),
+        )
+    end
+end
+
+function unwrapped_broadcast(f::F, xs, original_dims) where {F}
+    return reshape(unrolled_map(f, xs), size(xs)), original_dims, identity
+end
 
 # TODO: once traced_call supports internal mutations, we can use traced_call here
-# TODO: we should overload this for Slices and use mapslices instead
 function unrolled_map(f::F, itr) where {F}
     y = Reactant.call_with_reactant(iterate, itr)
     y === nothing && return []
