@@ -1420,7 +1420,9 @@ function unwrapped_broadcast(f::F, x::Slices, original_dims) where {F}
 end
 
 function unwrapped_broadcast(f::F, xs, original_dims) where {F}
-    return reshape(unrolled_map(f, xs), size(xs)), original_dims, identity
+    mapped_xs = unrolled_map(f, xs)
+    applicable(size, xs) && (mapped_xs = reshape(mapped_xs, size(xs)))
+    return mapped_xs, original_dims, identity
 end
 
 # TODO: once traced_call supports internal mutations, we can use traced_call here
