@@ -124,7 +124,7 @@ f_sincos_jac(x) = [cos(x[i]) * (i == j ? 1 : 0) - sin(x[end-i+1]) * (i == (lengt
     jac(x) = only(Enzyme.jacobian(Enzyme.Forward, f_sincos, x))
     x_r = Reactant.to_rarray(rand(10))
 
-    j_gt = f_sincos_jac(x_r)
+    j_gt = Reactant.@allowscalar f_sincos_jac(x_r)
     j_reactant = Reactant.@jit jac(x_r)
 
     @test j_reactant ≈ j_gt
