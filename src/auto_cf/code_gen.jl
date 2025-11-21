@@ -61,7 +61,6 @@ end
     juliair_to_mlir(ir::Core.Compiler.IRCode, args...) -> Vector
 
 Execute the `ir` and add a MLIR `return` operation to the traced `ir` return variables. Return all `ir` return variable
-TODO: remove masked_traced
 `args` must follow types restriction in `ir.argtypes`, otherwise completely break Julia 
 """
 @noinline function juliair_to_mlir(ir::Core.Compiler.IRCode, args...)::Tuple
@@ -84,7 +83,7 @@ end
 
 @skip_rewrite_func juliair_to_mlir
 
-function remove_phi_node_for_body!(ir::CC.IRCode, f::ForStructure)
+function remove_phi_node_for_body!(ir::CC.IRCode, f::LoopStructure)
     first_bb = min(f.body_bbs...)
     traced_ssa = []
     type_traced_ssa = Type[]
@@ -101,7 +100,6 @@ function remove_phi_node_for_body!(ir::CC.IRCode, f::ForStructure)
     return traced_ssa, type_traced_ssa
 end
 
-using Debugger
 """
     apply_transformation!(ir::Core.Compiler.IRCode, if_::IfStructure)
     Apply static Julia IR change to `ir` in order to tracing the if defined in `if_`.
@@ -401,9 +399,180 @@ function list_phi_nodes_values(ir::CC.IRCode, in_bb::Int32, phi_bb::Int32)
 end
 
 @skip_rewrite_func jit_if_controlflow
-
-function apply_transformation!(ir::CC.IRCode, f::ForStructure)
+function apply_transformation!(ir::CC.IRCode, f::LoopStructure)
     f.state == Maybe && return nothing
+    if f.kind == While
+        apply_transformation_while!(ir, f)
+    else
+        apply_transformation_loop!(ir, f)
+    end
+end
+
+function remove_phi_node_while_body!(ir::CC.IRCode, f::LoopStructure)
+    before_while_ssa = []
+    body_while_ssa = []
+    type_traced_ssa = Type[]
+    indexes = []
+    for index in ir.cfg.blocks[f.header_bb].stmts
+        stmt = ir.stmts.stmt[index]
+        isnothing(stmt) && continue #phi node can be simplified during IR compact
+        stmt isa Core.PhiNode || break
+        ir.stmts.stmt[index] = stmt.values[1]
+        type = ir.stmts.type[index]
+        is_traced(type) || continue
+        push!(before_while_ssa, stmt.values[1])
+        push!(body_while_ssa, stmt.values[2])
+        push!(type_traced_ssa, type)
+        push!(indexes, index)
+    end
+    return indexes, before_while_ssa, body_while_ssa, type_traced_ssa
+end
+
+@noinline function jit_while_controlflow(
+    n_accu::Int, loop_cond::Hidden, loop_body::Hidden, args_...
+)
+    args_full = deepcopy(args_)
+    #args_full composition: body_accumulator cond_accumulator environment
+    @lk loop_cond loop_body n_accu args_full
+
+
+    accus = args_full[1:n_accu]
+
+    tmp_while_op = Reactant.MLIR.Dialects.stablehlo.while_(
+        Reactant.MLIR.IR.Value[Reactant.TracedUtils.get_mlir_data.(accus)...];
+        cond=Reactant.MLIR.IR.Region(),
+        body=Reactant.MLIR.IR.Region(),
+        result_0=Reactant.MLIR.IR.Type[Reactant.Ops.mlir_type.(accus)...],
+    )
+
+    mlir_loop_args = Reactant.MLIR.IR.Type[Reactant.Ops.mlir_type.(accus)...]
+    cond = Reactant.MLIR.IR.Block(
+        mlir_loop_args, [Reactant.MLIR.IR.Location() for _ in mlir_loop_args]
+    )
+    push!(Reactant.MLIR.IR.region(tmp_while_op, 1), cond)
+
+    accus_copy = deepcopy(accus)
+    for i in 1:n_accu
+        Reactant.TracedUtils.set_mlir_data!(args_full[i], Reactant.MLIR.IR.argument(cond, i))
+    end
+
+    Reactant.MLIR.IR.activate!(cond)
+    Reactant.Ops.activate_constant_context!(cond)
+
+    cond_r = juliair_to_mlir(loop_cond.value, accus_copy..., args_full...)
+    Reactant.Ops.return_(cond_r...)
+
+    Reactant.MLIR.IR.deactivate!(cond)
+    Reactant.Ops.deactivate_constant_context!(cond)
+
+    body = Reactant.MLIR.IR.Block(
+        mlir_loop_args, [Reactant.MLIR.IR.Location() for _ in mlir_loop_args]
+    )
+    push!(Reactant.MLIR.IR.region(tmp_while_op, 2), body)
+
+
+    for i in 1:n_accu
+        Reactant.TracedUtils.set_mlir_data!(accus_copy[i], Reactant.MLIR.IR.argument(body, i))
+    end
+
+    Reactant.MLIR.IR.activate!(body)
+    Reactant.Ops.activate_constant_context!(body)
+
+    body_r = juliair_to_mlir(loop_body.value,accus_copy..., args_full...)
+    Reactant.Ops.return_(body_r...)
+
+    Reactant.MLIR.IR.deactivate!(body)
+    Reactant.Ops.deactivate_constant_context!(body)
+
+    results = []
+    for (i, accu) in enumerate(accus[1:n_accu])
+        r_i = deepcopy(accu)
+        Reactant.TracedUtils.set_mlir_data!(r_i, Reactant.MLIR.IR.result(tmp_while_op, i))
+        push!(results, r_i)
+    end
+    @lk tmp_while_op
+    return length(results) == 1 ? only(results) : Tuple(results)
+    #return error("test")
+end
+
+function apply_transformation_while!(ir::CC.IRCode, f::LoopStructure)
+    (indexes, before_while_ssa, body_while_ssa, type_traced_ssa) = remove_phi_node_while_body!(
+        ir, f
+    )
+    @lk indexes before_while_ssa body_while_ssa type_traced_ssa
+
+    new_args_dict = Dict()
+    #Add accumulers defined in the header directly in the extraction dictionnary to simplify loop body order
+    for (i, index) in enumerate(indexes)
+        new_args_dict[Core.SSAValue(index)] = (Core.Argument(i + 1), type_traced_ssa[i])
+    end
+
+    goto_if_not_pos = terminator_index(ir, f.header_bb)
+    cond_pos = goto_if_not_pos - 2
+    change_stmt!(ir, goto_if_not_pos - 1, nothing, Nothing)
+    loop_cond_wip = extract_multiple_block_ir(
+        ir, Set(f.header_bb), new_args_dict, [Core.SSAValue(cond_pos)]
+    )
+    loop_body_wip = extract_multiple_block_ir(ir, f.body_bbs, new_args_dict, body_while_ssa)
+
+    (value, new_args_v) = vec_args(ir, new_args_dict)
+
+    loop_cond = finish(loop_cond_wip, new_args_v)
+    loop_body = finish(loop_body_wip, new_args_v)
+
+    n_accu = length(indexes)
+    value = value[(1 + n_accu):end]
+    new_args_v = new_args_v[(1 + n_accu):end]
+
+    @lk new_args_dict value new_args_v ir
+
+    clear_block_ir!(ir, f.body_bbs)
+    clear_block_ir!(ir, Set(f.header_bb))
+    change_stmt!(ir, terminator_index(ir, f.header_bb), Core.GotoNode(f.terminal_bb), Any)
+    change_stmt!(
+        ir, terminator_index(ir, max(f.body_bbs...)), Core.GotoNode(f.terminal_bb), Any
+    )
+
+    sign = (Int, Hidden, Hidden, new_args_v[2:end]...)
+    @lk sign
+    mi = method_instance(
+        jit_while_controlflow, CC.widenconst.(sign), current_interpreter[].world
+    )
+    isnothing(mi) && error("invalid Method Instance")
+    expr = Expr(
+        :invoke,
+        mi,
+        GlobalRef(@__MODULE__, :jit_while_controlflow),
+        n_accu,
+        Hidden(loop_cond),
+        Hidden(loop_body),
+        value...,
+    )
+
+    if length(indexes) == 0
+        CC.insert_node!(
+            ir,
+            CC.SSAValue(start_index(ir, f.terminal_bb)),
+            Core.Compiler.NewInstruction(expr, Any),
+            false,
+        )
+    elseif length(indexes) == 1
+        phi = only(indexes)
+        change_stmt!(ir, phi, expr, returning_type(type_traced_ssa[1]))
+    else
+        before_while_header_pos = Core.SSAValue(terminator_index(ir, f.header_bb) - 1)
+        CC.insert_node!(
+            ir, before_while_header_pos, Core.Compiler.NewInstruction(expr, Any), true
+        )
+        for (i, index) in enumerate(indexes)
+            ir.stmts.stmt[index] = Expr(
+                :call, Core.GlobalRef(Base, :getindex), while_ssa, i
+            )
+        end
+    end
+end
+
+function apply_transformation_loop!(ir::CC.IRCode, f::LoopStructure)
     body_phi_ssa = list_phi_nodes_values(ir, Int32(min(f.body_bbs...)), Int32(f.header_bb))
     internal_accu_ssa = list_phi_nodes_values(
         ir, Int32(min(f.body_bbs...)), Int32(f.latch_bb)
@@ -527,7 +696,11 @@ get_mlir_pointer_or_nothing(_) = nothing
 
 #iterator for_body iterator_type n_init traced_ssa_for_bodies args
 @noinline function jit_loop_controlflow(
-    iterator, for_body::Hidden, iterator_index::Int, (n_accu, n_internal_accu)::Tuple{Int,Int}, args_full...
+    iterator,
+    for_body::Hidden,
+    iterator_index::Int,
+    (n_accu, n_internal_accu)::Tuple{Int,Int},
+    args_full...,
 )
     #only support UnitRange atm
     (start, stop, iterator_begin, iter_step) =
@@ -548,7 +721,7 @@ get_mlir_pointer_or_nothing(_) = nothing
     else
         Reactant.TracedRNumber{typeof(start)}((), nothing)
     end
-    accus = args_full[1:n_accu + n_internal_accu]
+    accus = args_full[1:(n_accu + n_internal_accu)]
 
     julia_use_iter = iterator_index != 0
     args = args_full[(n_accu + n_internal_accu + 1):end]
@@ -755,7 +928,7 @@ function analysis_reassign_block_id!(tree::Tree, ir::CC.IRCode, src::CC.CodeInfo
         return reassign_tree!(is.owned_false_bbs)
     end
 
-    function reassign_tree!(fs::ForStructure)
+    function reassign_tree!(fs::LoopStructure)
         fs.header_bb = new_block_map[fs.header_bb]
         fs.latch_bb = new_block_map[fs.latch_bb]
         fs.terminal_bb = new_block_map[fs.terminal_bb]
@@ -808,5 +981,6 @@ function run_passes_ipo_safe_auto_cf(
         end
     end
     CC.@label __done__  # used by @pass
+    @error "end" ir
     return ir
 end

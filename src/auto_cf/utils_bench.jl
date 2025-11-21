@@ -46,7 +46,7 @@ function analysis_reassign_block_id!(an::Analysis, ir::CC.IRCode, src::CC.CodeIn
         reassign_tree!(is.owned_false_bbs)
     end
 
-    function reassign_tree!(fs::ForStructure)
+    function reassign_tree!(fs::LoopStructure)
         fs.header_bb = new_block_map[fs.header_bb]
         fs.latch_bb = new_block_map[fs.latch_bb]
         fs.terminal_bb = new_block_map[fs.terminal_bb]

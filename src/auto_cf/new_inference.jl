@@ -39,7 +39,11 @@ end
 #an = Analysis(Tree(nothing, [], Ref{Tree}()), nothing, nothing, nothing, nothing)
 
 function update_tree!(an::Analysis, bb::Int)
-    for c in an.tree.children
+    tree = an.tree
+    if tree.node isa LoopStructure && tree.node.kind == While
+        tree.node.header_bb == bb && return true
+    end
+    for c in tree.children
         c.node.header_bb == bb || continue
         an.pending_tree = c
         return true
@@ -84,12 +88,12 @@ function is_terminal_bb(tree::Tree, bb)
 end
 
 Base.in(bb::Int, is::IfStructure) = bb in is.true_bbs || bb in is.false_bbs
-Base.in(bb::Int, is::ForStructure) = bb in is.body_bbs
+Base.in(bb::Int, is::LoopStructure) = bb in is.body_bbs
 
 function in_header(bb::Int, is::IfStructure)
     return bb in is.true_bbs || bb in is.false_bbs || bb == is.header_bb
 end
-function in_header(bb::Int, is::ForStructure)
+function in_header(bb::Int, is::LoopStructure)
     return bb in is.body_bbs || bb == is.header_bb || bb == is.latch_bb
 end
 
@@ -101,13 +105,32 @@ function in_stack(tree::Tree, bb::Int)
     return false
 end
 
+function protect_goto_if_not!(frame, an, bb, cond) #TODO: remove cond
+    goto_if_not_index = terminator_index(frame.cfg, bb)
+    ssa = add_instruction!(
+        frame,
+        goto_if_not_index - 1,
+        Expr(:call, GlobalRef(@__MODULE__, :traced_protection), cond),
+    )
+    invalidate_slot_definition_analysis!(an)
+    (; dest::Int) = frame.src.code[goto_if_not_index + 1]::Core.GotoIfNot #shifted because of the insertion
+    return modify_instruction!(frame, goto_if_not_index + 1, Core.GotoIfNot(ssa, dest))
+end
+
 #TODO: don't recompute TCF each time
 function add_cf!(an, frame, currbb, currpc, condt)
     update_tree!(an, frame.currbb) && return false
-
+    Debugger.@bp
     tl = is_a_traced_loop(an, frame.src, frame.cfg, frame.currbb)
     if tl !== nothing
         add_tree!(an, tl)
+        if tl.kind == While
+            Debugger.@bp
+            terminator_pos = terminator_index(frame.cfg, tl.header_bb)
+            (; cond) = frame.src.code[terminator_pos]::Core.GotoIfNot
+            protect_goto_if_not!(frame, an, tl.header_bb, cond)
+            return true
+        end
         return false
     end
 
@@ -116,16 +139,7 @@ function add_cf!(an, frame, currbb, currpc, condt)
         add_tree!(an, tl)
         !tl.legalize[] || return false
         #legalize if by inserting a call
-        goto_if_not_index = terminator_index(frame.cfg, frame.currbb)
-        cond = tl.ssa_cond
-        ssa = add_instruction!(
-            frame,
-            goto_if_not_index - 1,
-            Expr(:call, GlobalRef(@__MODULE__, :traced_protection), cond),
-        )
-        invalidate_slot_definition_analysis!(an)
-        (; dest::Int) = frame.src.code[goto_if_not_index + 1]::Core.GotoIfNot #shifted because of the insertion
-        modify_instruction!(frame, goto_if_not_index + 1, Core.GotoIfNot(ssa, dest))
+        protect_goto_if_not!(frame, an, frame.currbb, tl.ssa_cond)
         tl.legalize[] = true
         return true
     end
@@ -156,17 +170,7 @@ function if_type_passing!(an, frame)
     last_cf isa IfStructure || return false
     last_cf.header_bb == frame.currbb || return false
     !last_cf.legalize[] || return false
-    cond = last_cf.ssa_cond
-    goto_if_not_index = terminator_index(frame.cfg, frame.currbb)
-    ssa = add_instruction!(
-        frame,
-        goto_if_not_index - 1,
-        Expr(:call, GlobalRef(@__MODULE__, :traced_protection), cond),
-    )
-    invalidate_slot_definition_analysis!(an)
-
-    (; dest::Int) = frame.src.code[goto_if_not_index + 1]::Core.GotoIfNot #shifted because of the insertion
-    modify_instruction!(frame, goto_if_not_index + 1, Core.GotoIfNot(ssa, dest))
+    protect_goto_if_not!(frame, an, frame.currbb, last_cf.ssa_cond)
     last_cf.legalize[] = true
     #update frame
     return true
@@ -175,7 +179,7 @@ end
 function can_upgrade_loop(an, rt)
     in_tcf(an) || return false
     last_cf = an.tree.node
-    last_cf isa ForStructure || return false
+    last_cf isa LoopStructure || return false
     last_cf.state == Maybe || return false
     is_traced(rt) || return false
     return true
@@ -286,8 +290,9 @@ end
         end
 
         #no need to change frame furthermore
-    elseif last_cf isa ForStructure
+    elseif last_cf isa LoopStructure
         (last_cf.state == Traced || last_cf.state == Upgraded) || return (NoUpgrade,)
+        Debugger.@bp
         if (!rt_traced && is_traced(slot_type))
             return if apply_slot_upgrade!(frame, frame.currpc, rt)
                 (UpgradeLocally,)
@@ -300,7 +305,14 @@ end
         slot_definition_bb = CC.block_for_inst(frame.cfg, slot_definition_pos)
         #local slot doesn't need to be upgrade TODO: suspicious
         slot_definition_bb in last_cf.body_bbs && return (NoUpgrade,)
-        if slot_definition_bb == last_cf.header_bb || in_stack(an.tree, slot_definition_bb)
+        for_stack_cond =
+            (last_cf.kind == For) && (
+                slot_definition_bb == last_cf.header_bb ||
+                in_stack(an.tree, slot_definition_bb)
+            )
+        while_stack_cond =
+            (last_cf.kind == While) && (slot_definition_bb + 1 == last_cf.header_bb) #While loops to header block: slot upgrade must be done before this block
+        if for_stack_cond || while_stack_cond
             #stack upgrade
             #the slot has been upgraded: find read of the slot inside the current traced stack: if any, we must restart the inference from there
             return if apply_slot_upgrade!(frame, slot_definition_pos, rt)
@@ -384,20 +396,41 @@ is_traced(t) = false
 #TODO: add support to while loop / general loop
 function is_a_traced_loop(an, src::CC.CodeInfo, cfg::CC.CFG, bb_header)
     bb_body_first = min(cfg.blocks[bb_header].succs...)
-    preds::Vector{Int} = cfg.blocks[bb_body_first].preds
-    (max(preds...) < bb_body_first) && return nothing #No loop
-    bb_latch = max(preds...)
-    bb_end = max(cfg.blocks[bb_header].succs...)
-    bb_body_last = only(cfg.blocks[bb_latch].preds)
-    #TODO: proper accu and block
-    return ForStructure(
-        (),
-        bb_header,
-        bb_latch,
-        bb_end,
-        Set(bb_body_first:bb_body_last),
-        is_traced_loop_iterator(src, cfg, bb_header) ? Traced : Maybe,
-    )
+    can_be_for = max(cfg.blocks[bb_body_first].preds...) > bb_body_first
+    can_be_while = max(cfg.blocks[bb_header].preds...) > bb_header
+    #detect cycle in the cfg
+    if can_be_for || can_be_while
+        bb_end = max(cfg.blocks[bb_header].succs...)
+        latch = max(cfg.blocks[bb_body_first].preds...)
+        @error bb_header latch
+        bb_body_last = cfg.blocks[latch].preds
+        #the latch is present only in for loop: detect if the final body block can go between the latch and the end block
+        if length(bb_body_last) == 1 && bb_end == max(cfg.blocks[bb_body_last[1]].succs...)
+            can_be_for && return LoopStructure(
+                For,
+                (),
+                bb_header,
+                latch,
+                bb_end,
+                Set(bb_body_first:bb_body_last[1]),
+                is_traced_loop_iterator(src, cfg, bb_header) ? Traced : Maybe,
+            )
+        else
+            bb_body_max = max(cfg.blocks[bb_header].preds...)
+            terminator_pos = terminator_index(cfg, bb_header)
+            cond_index = src.code[terminator_pos].cond.id
+            can_be_while && return LoopStructure(
+                While,
+                (),
+                bb_header,
+                0,
+                bb_end,
+                Set(bb_body_first:bb_body_max),
+                is_traced(src.ssavaluetypes[cond_index]) ? Traced : Maybe,
+            )
+        end
+    end
+    return nothing
 end
 
 function bb_owned_branch(domtree, bb::Int)::Set{Int}
@@ -534,13 +567,40 @@ function reset_slot!(states)
     end
 end
 
-function reset_slot!(states, fs::ForStructure, slot::Core.SlotNumber)
+function reset_slot!(states, fs::LoopStructure, slot::Core.SlotNumber)
     reset_slot!(states[fs.header_bb], slot)
     for bb in fs.body_bbs
         reset_slot!(states[bb], slot)
     end
     reset_slot!(states[fs.latch_bb], slot)
     return reset_slot!(states[fs.terminal_bb], slot)
+end
+
+#upgrade a while loop cond by upgrading each slot used in the cond expression
+function while_cond_upgrade!(frame, an, cfg, bb)
+    src = frame.src
+    terminator_pos = terminator_index(cfg, bb)
+    (; cond) = src.code[terminator_pos]::Core.GotoIfNot
+    to_upgrade_slots = Dict{Int,Core.SlotNumber}()
+    to_visit = Any[cond]
+    current_pos = terminator_pos
+    while !isempty(to_visit)
+        e = pop!(to_visit)
+        if e isa Expr
+            push!(to_visit, e.args[2:end]...)
+        elseif e isa Core.SlotNumber
+            to_upgrade_slots[current_pos] = e  #TODO: pos before header must be handled
+        elseif e isa Core.SSAValue
+            current_pos = e.id
+            push!(to_visit, src.code[current_pos])
+        end
+    end
+
+    for e in sort(to_upgrade_slots)
+        pos = e.first
+        frame.src.code[pos] = Expr(:call, GlobalRef(@__MODULE__, :upgrade), e.second)
+    end
+    return protect_goto_if_not!(frame, an, bb, cond)
 end
 
 #TODO: stack -> branch
@@ -551,13 +611,19 @@ function rewrite_loop_stack!(an::Analysis, frame, states, currstate)
     while !isnothing(ct.node)
         node = ct.node
         ct = ct.parent[]
-        node isa ForStructure || continue
+        node isa LoopStructure || continue
         node.state == Maybe || continue
-        #TODO: while loop 
-        new_iterator_type = get_new_iterator_type(src, cfg, node.header_bb)
-        slot = rewrite_iterator(src, cfg, node.header_bb, new_iterator_type)
-        last_for_bb = last(sort(collect(node.body_bbs)))
-        slot = rewrite_iterator(frame.src, frame.cfg, last_for_bb, new_iterator_type)
+        @error src
+        #TODO: while loop
+        if node.kind == For
+            new_iterator_type = get_new_iterator_type(src, cfg, node.header_bb)
+            slot = rewrite_iterator(src, cfg, node.header_bb, new_iterator_type)
+            last_for_bb = last(sort(collect(node.body_bbs)))
+            slot = rewrite_iterator(frame.src, frame.cfg, last_for_bb, new_iterator_type)
+        else
+            while_cond_upgrade!(frame, an, cfg, node.header_bb)
+            Debugger.@bp
+        end
         top_loop_tcf = ct
         node.state = Upgraded
     end
@@ -611,7 +677,7 @@ function CC.typeinf_local(interp::Reactant.ReactantInterp, frame::CC.InferenceSt
     mod = frame.mod
     if @static (VERSION < v"1.12" && VERSION > v"1.11") &&
         has_ancestor(mod, Main) &&
-        is_traced(frame.linfo.specTypes) &&
+        #is_traced(frame.linfo.specTypes) &&
         !has_ancestor(mod, Core) &&
         !has_ancestor(mod, Base) &&
         !has_ancestor(mod, Reactant)
@@ -696,7 +762,7 @@ function typeinf_local_traced(
                     condx = stmt.cond
                     condxslot = CC.ssa_def_slot(condx, frame)
                     condt = CC.abstract_eval_value(interp, condx, currstate, frame)
-
+                    @error condx condxslot condt
                     if add_cf!(an, frame, currbb, currpc, condt)
                         @goto reset_inference
                     end
@@ -881,7 +947,6 @@ function typeinf_local_traced(
 
             #upgrade maybe for loop here: eagerly restart type inference if we detect an traced type
             #NOTE: must be placed before CC.Bottom check: in a traced context, an iterator with invalid arguments still should be upgraded
-            #@info stmt an.tree
             upgrade_result = check_and_upgrade_slot!(an, frame, stmt, rt, currstate)
             slot_state = first(upgrade_result)
             if slot_state === UpgradeDefinition #Slot Upgrade ...

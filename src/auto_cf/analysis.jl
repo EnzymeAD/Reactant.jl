@@ -1,8 +1,11 @@
-@enum UpgradeSlot NoUpgrade UpgradeLocally UpgradeDefinition UpgradeDefinitionGlobal EqualizeBranches
+@enum UpgradeSlot NoUpgrade UpgradeLocally UpgradeDefinition UpgradeDefinitionGlobal
 
 @enum State Traced Upgraded Maybe NotTraced
 
-mutable struct ForStructure
+@enum LoopKind For While
+
+mutable struct LoopStructure
+    kind::LoopKind
     accus::Tuple
     header_bb::Int
     latch_bb::Int
@@ -29,7 +32,7 @@ mutable struct SlotAnalysis
 end
 
 
-CFStructure = Union{IfStructure,ForStructure}
+CFStructure = Union{IfStructure,LoopStructure}
 mutable struct Tree
     node::Union{Nothing,Base.uniontypes(CFStructure)...}
     children::Vector{Tree}

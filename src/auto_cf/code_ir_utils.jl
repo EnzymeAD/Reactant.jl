@@ -15,7 +15,6 @@ end
     change_stmt!(ir::Core.Compiler.IRCode, ssa::Int, stmt, return_type::Type) -> Core.Compiler.Instruction
 
 Change the `ir` at position `ssa` by the statement `stmt` with a `return_type`
-TODO: when stmt is the terminator: Goto -> nothing : must update cfg
 """
 function change_stmt!(ir::Core.Compiler.IRCode, ssa::Int, stmt, return_type::Type)
     return Core.Compiler.inst_from_newinst!(
