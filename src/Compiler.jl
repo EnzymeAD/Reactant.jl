@@ -1725,6 +1725,7 @@ function compile_mlir!(
                                    blas_int_width=$blas_int_width},\
                                    lower-enzymexla-lapack{backend=$backend \
                                    blas_int_width=$blas_int_width}"
+    lower_enzymexla_ml_pass = "lower-enzymexla-ml"
 
     legalize_chlo_to_stablehlo =
         if legalize_stablehlo_to_mhlo || compile_options.legalize_chlo_to_stablehlo
@@ -1755,6 +1756,7 @@ function compile_mlir!(
                         legalize_chlo_to_stablehlo...,
                         opt_passes2,
                         lower_enzymexla_linalg_pass,
+                        lower_enzymexla_ml_pass,
                         jit,
                     ]
                 else
@@ -1773,6 +1775,7 @@ function compile_mlir!(
                         kern,
                         raise_passes,
                         lower_enzymexla_linalg_pass,
+                        lower_enzymexla_ml_pass,
                         jit,
                     ]
                 end,
@@ -1926,6 +1929,7 @@ function compile_mlir!(
                         legalize_chlo_to_stablehlo...,
                         opt_passes2,
                         lower_enzymexla_linalg_pass,
+                        lower_enzymexla_ml_pass,
                         jit,
                     ]
                 else
@@ -1941,6 +1945,7 @@ function compile_mlir!(
                         kern,
                         raise_passes,
                         lower_enzymexla_linalg_pass,
+                        lower_enzymexla_ml_pass,
                         jit,
                     ]
                 end,
@@ -1963,6 +1968,7 @@ function compile_mlir!(
                         enzyme_pass,
                         "canonicalize,remove-unnecessary-enzyme-ops,enzyme-simplify-math",
                         lower_enzymexla_linalg_pass,
+                        lower_enzymexla_ml_pass,
                         jit,
                     ]
                 else
@@ -1976,6 +1982,7 @@ function compile_mlir!(
                         kern,
                         raise_passes,
                         lower_enzymexla_linalg_pass,
+                        lower_enzymexla_ml_pass,
                         jit,
                     ]
                 end,
