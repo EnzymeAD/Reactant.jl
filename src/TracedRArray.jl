@@ -1364,6 +1364,22 @@ end
 
 (fn::BroadcastIterator)(args...) = fn.f((args...,))
 
+abstract type AbstractUnwrappedBroadcastRestoreFunction end
+
+struct __Identity <: AbstractUnwrappedBroadcastRestoreFunction end
+(::__Identity)(x) = x
+
+struct __EachSlice{D} <: AbstractUnwrappedBroadcastRestoreFunction
+    dims::D
+    drop::Bool
+end
+(s::__EachSlice{D})(x) where {D} = eachslice(x; dims=s.dims, drop=s.drop)
+
+struct __DropDims{D} <: AbstractUnwrappedBroadcastRestoreFunction
+    dims::D
+end
+(s::__DropDims{D})(x) where {D} = dropdims(x; dims=s.dims)
+
 function unwrapped_broadcast(f::F, x::Base.Iterators.Zip, original_dims) where {F}
     min_length = Base.inferencebarrier(minimum)(length, x.is)
     itrs = [length(itr) > min_length ? itr[1:min_length] : itr for itr in x.is]
@@ -1372,7 +1388,7 @@ function unwrapped_broadcast(f::F, x::Base.Iterators.Zip, original_dims) where {
     else
         unrolled_map(f, x)
     end
-    return result, original_dims, identity
+    return result, original_dims, __Identity()
 end
 
 function unwrapped_broadcast(f::F, x::Base.Iterators.Enumerate, original_dims) where {F}
@@ -1385,7 +1401,7 @@ function unwrapped_broadcast(f::F, x::Base.Iterators.Enumerate, original_dims) w
     else
         unrolled_map(f, x)
     end
-    return result, original_dims, identity
+    return result, original_dims, __Identity()
 end
 
 function unwrapped_broadcast(f::F, x::Slices, original_dims) where {F}
@@ -1402,14 +1418,14 @@ function unwrapped_broadcast(f::F, x::Slices, original_dims) where {F}
         updated_dims = ()
         if original_dims isa Colon
             updated_dims = mapslices_dims
-            re = x -> dropdims(x; dims=mapslices_dims)
+            re = __DropDims(mapslices_dims)
         else
             for d in original_dims
                 idx = findfirst(isequal(d), x.slicemap)
                 @assert idx !== nothing "Expected dimension $d in $(x.slicemap)"
                 updated_dims = (updated_dims..., idx)
             end
-            re = x -> eachslice(x; dims=mapslices_dims, drop=true)
+            re = __EachSlice(mapslices_dims, true)
         end
 
         return mapslices(f, px; dims=mapslices_dims), updated_dims, re
@@ -1417,10 +1433,10 @@ function unwrapped_broadcast(f::F, x::Slices, original_dims) where {F}
         mapslices_dims = Tuple(filter(i -> !(x.slicemap[i] isa Colon), 1:ndims(px)))
         if original_dims isa Colon
             updated_dims = mapslices_dims
-            re = x -> dropdims(x; dims=mapslices_dims)
+            re = __DropDims(mapslices_dims)
         else
             updated_dims = Tuple(d for d in original_dims if d in mapslices_dims)
-            re = x -> eachslice(x; dims=mapslices_dims, drop=false)
+            re = __EachSlice(mapslices_dims, false)
         end
         return mapslices(f, px; dims=mapslices_dims), updated_dims, re
     end
@@ -1429,7 +1445,7 @@ end
 function unwrapped_broadcast(f::F, xs, original_dims) where {F}
     mapped_xs = unrolled_map(f, xs)
     applicable(size, xs) && (mapped_xs = reshape(mapped_xs, size(xs)))
-    return mapped_xs, original_dims, identity
+    return mapped_xs, original_dims, __Identity()
 end
 
 # TODO: once traced_call supports internal mutations, we can use traced_call here
