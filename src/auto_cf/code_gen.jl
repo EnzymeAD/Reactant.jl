@@ -1,7 +1,3 @@
-#TODO: remove this
-returning_type(X) = X
-get_traced_type(X) = X
-
 struct TUnitRange{T}
     min::Union{T,Reactant.TracedRNumber{T}}
     max::Union{T,Reactant.TracedRNumber{T}}
@@ -124,13 +120,12 @@ function apply_transformation!(ir::Core.Compiler.IRCode, if_::IfStructure)
         push!(phi_index, index)
         phi = ir.stmts.stmt[index]
         phi_type::Type = ir.stmts.type[index]
-        if_returned_type::Union{Type,Nothing} = returning_type(phi_type) #TODO: deal with promotion here
+        if_returned_type::Union{Type,Nothing} = phi_type #TODO: deal with promotion here
         if_returned_type isa Nothing && error("transformation failed")
         push!(if_returned_types, if_returned_type)
         add_phi_value!(true_phi_ssa, phi, true_bbs, header_bb)
         add_phi_value!(false_phi_ssa, phi, false_bbs, header_bb)
     end
-    #Debugger.@bp
     #map the old argument with the new ones
     new_args_dict = Dict()
     @warn "r1" ir true_bbs new_args_dict true_phi_ssa
@@ -157,7 +152,6 @@ function apply_transformation!(ir::Core.Compiler.IRCode, if_::IfStructure)
     owned_bbs = union(owned_true_bbs, owned_false_bbs)
     #Mutate IR
     #replace GotoIfNot -> GotoNode
-    #TODO: can cond be defined before goto?
     ssa_goto = terminator_index(ir, header_bb)
     change_stmt!(
         ir, terminator_index(ir, max(owned_bbs...)), Core.GotoNode(terminal_bb), Any
@@ -199,14 +193,13 @@ function apply_transformation!(ir::Core.Compiler.IRCode, if_::IfStructure)
             ir,
             first(phi_index),
             expr,
-            get_traced_type(returning_type(ir.stmts.type[first(phi_index)])),
-        )
+            ir.stmts.type[first(phi_index)])
         @goto out
     end
 
     if_ssa = if n_result == 1
         ni = Core.Compiler.NewInstruction(
-            expr, get_traced_type(returning_type(only(if_returned_types)))
+            expr, only(if_returned_types)
         )
         if_ssa = Core.Compiler.insert_node!(ir, ssa_goto, ni, false)
     else
@@ -560,7 +553,7 @@ function apply_transformation_while!(ir::CC.IRCode, f::LoopStructure)
         )
     elseif length(indexes) == 1
         phi = only(indexes)
-        change_stmt!(ir, phi, expr, returning_type(type_traced_ssa[1]))
+        change_stmt!(ir, phi, expr, type_traced_ssa[1])
     else
         before_while_header_pos = terminator_index(ir, f.header_bb - 1)
         ssa_while = CC.insert_node!(
@@ -587,7 +580,6 @@ function apply_transformation_loop!(ir::CC.IRCode, f::LoopStructure)
     #check terminal block Phi nodes and find the different kinds of accumulars
 
     new_args_dict = Dict()
-    #TODO: rewrite this: to use terminal_phi_ssa directly
     (traced_ssa_for_bodies, traced_ssa_for_bodies_types) = remove_phi_node_for_body!(ir, f)
 
     ir_back = CC.copy(ir)
@@ -622,7 +614,7 @@ function apply_transformation_loop!(ir::CC.IRCode, f::LoopStructure)
     body_bbs = f.body_bbs
     @warn ir body_bbs new_args_dict results traced_ssa_for_bodies traced_ssa_for_bodies_types
     @lk ir body_bbs new_args_dict results traced_ssa_for_bodies traced_ssa_for_bodies_types
-    #TODO: replace result with terminal_phi_ssa
+
     loop_body = extract_multiple_block_ir(ir, f.body_bbs, new_args_dict, results).ir
     #value doesn't contain the function name unlike new_args_v
     (value, new_args_v) = vec_args(ir, new_args_dict)
@@ -683,7 +675,7 @@ function apply_transformation_loop!(ir::CC.IRCode, f::LoopStructure)
         )
     elseif length(phi_index) == 1
         phi = only(phi_index)
-        change_stmt!(ir, phi, expr, returning_type(ir.stmts.type[phi]))
+        change_stmt!(ir, phi, expr, ir.stmts.type[phi])
     else
         while_ssa = Core.SSAValue(terminator_index(ir, f.header_bb) - 1)
         change_stmt!(ir, while_ssa.id, expr, Tuple{while_output_type...})
@@ -951,6 +943,62 @@ function analysis_reassign_block_id!(tree::Tree, ir::CC.IRCode, src::CC.CodeInfo
     reassign_tree!(tree)
     return true
 end
+
+
+
+"""
+    analysis_reassign_block_id!(an::Analysis, ir::CC.IRCode, src::CC.CodeInfo)
+
+slot2reg can change type infered CodeInfo CFG by removing non-reachable block.
+Updates all relevant CF structures in the analysis to reflect new block mapping.
+Returns true if blocks were reassigned, false otherwise.
+"""
+function analysis_reassign_block_id!(an::Analysis, ir::CC.IRCode, src::CC.CodeInfo)
+    cfg = CC.compute_basic_blocks(src.code)
+    length(ir.cfg.blocks) == length(cfg.blocks) && return false
+    @info "rewrite analysis blocks"
+    new_block_map = []
+    i = 0
+    for block in cfg.blocks
+        unreacheable_block = all(x->src.ssavaluetypes[x] === Union{}, block.stmts)
+        i = unreacheable_block ? i : i + 1
+        push!(new_block_map, i)
+    end
+    @info new_block_map
+    function reassign_tree!(s::Set{Int})
+        n = [new_block_map[i] for i in s]
+        empty!(s)
+        push!(s, n...)
+    end
+
+    function reassign_tree!(is::IfStructure)
+        is.header_bb = new_block_map[is.header_bb]
+        is.terminal_bb = new_block_map[is.terminal_bb]
+        reassign_tree!(is.true_bbs)
+        reassign_tree!(is.false_bbs)
+        reassign_tree!(is.owned_true_bbs)
+        reassign_tree!(is.owned_false_bbs)
+    end
+
+    function reassign_tree!(fs::LoopStructure)
+        fs.header_bb = new_block_map[fs.header_bb]
+        fs.latch_bb = new_block_map[fs.latch_bb]
+        fs.terminal_bb = new_block_map[fs.terminal_bb]
+        reassign_tree!(fs.body_bbs)
+    end
+
+    function reassign_tree!(t::Tree)
+        isnothing(t.node) || reassign_tree!(t.node)
+        for c in t.children
+            reassign_tree!(c)
+        end
+    end
+    reassign_tree!(an.tree)
+    @error an.tree
+    return true
+end
+
+
 
 function run_passes_ipo_safe_auto_cf(
     ci::CC.CodeInfo,

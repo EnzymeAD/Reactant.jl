@@ -36,8 +36,6 @@ function get_slot(vec, stmt, frame, pos)
     end
 end
 
-#an = Analysis(Tree(nothing, [], Ref{Tree}()), nothing, nothing, nothing, nothing)
-
 function update_tree!(an::Analysis, bb::Int)
     tree = an.tree
     if tree.node isa LoopStructure && tree.node.kind == While
@@ -244,18 +242,6 @@ function get_root(tree)
     return tree
 end
 
-#TODO: remove
-function get_first_slot_read_stack(frame, tree, slot::Core.SlotNumber, stop::Int)
-    node = current_top_struct(tree)
-    start_stmt = frame.cfg.blocks[node.header_bb].stmts.start
-    for stmt_index in start_stmt:stop
-        s = frame.src.code[stmt_index]
-        s isa Core.SlotNumber || continue
-        s.id == slot.id && return CC.block_for_inst(frame.cfg.index, stmt_index)
-    end
-    return nothing
-end
-
 @inline function check_and_upgrade_slot!(an, frame, stmt, rt, currstate)
     in_tcf(an) || return (NoUpgrade,)
     stmt isa Expr || return (NoUpgrade,)
@@ -400,7 +386,6 @@ function is_for_last_body_block(node, bb)::Bool
     max(node.body_bbs...) == bb
 end
 
-#TODO: add support to while loop / general loop
 function is_a_traced_loop(an, src::CC.CodeInfo, cfg::CC.CFG, bb_header)
     bb_body_first = min(cfg.blocks[bb_header].succs...)
     can_be_for = max(cfg.blocks[bb_body_first].preds...) > bb_body_first

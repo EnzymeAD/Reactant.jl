@@ -164,7 +164,6 @@ function offset_stmt!(dict::Dict, stmt, offset::Dict, ir::Core.Compiler.IRCode, 
 end
 
 
-using Debugger
 """
     extract_multiple_block_ir(ir, to_extract_set::Set, args::Dict, new_returns::Vector)::WipExtracting
     Extract from `ir` a list of blocks `to_extract_set`, creating an new independant IR containing only these blocks.
