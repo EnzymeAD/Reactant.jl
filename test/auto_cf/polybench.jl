@@ -748,7 +748,7 @@ end
     tf = Reactant.to_rarray(f)
 
     @jit(kernel_correlation(tA))
-    @jit(kernel_correlation(tA))
+    @jit(kernel_covariance(tA))
 
     @test @jit(kernel_gemm(5, 2, tA, tA)) == kernel_gemm(5, 2, A, A)
     @test @jit(kernel_gemmver(2.0, 0.01, tf, tf, tf, tf, tA, tf, tf, tf)) ≈

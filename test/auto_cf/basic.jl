@@ -112,7 +112,7 @@ end
     @test @jit(simple_promote_loop_mutable_repeated_twin(tA)) ==
         simple_promote_loop_mutable_repeated_twin(A)
     @test @jit(simple_branch_for(tA)) == simple_branch_for(A)
-    @test @jit(internal_accu(a)) == internal_accu(a)
+    @test @jit(internal_accu(a)) == internal_accu(n)
     @test @jit(promote_loop_non_upgraded_slot(tA, a)) ==
         promote_loop_non_upgraded_slot(A, n)
 end
@@ -270,12 +270,19 @@ function internal_accu_while(a)
     return a
 end
 
+function multi_cond(k, i)
+    while k - i > 0 & k > 8
+        k -= i
+    end
+    return k
+end
+
 @testset "basic while" begin
-    v = true
-    a = Reactant.ConcreteRNumber(v)
+    a = Reactant.ConcreteRNumber(true)
     n = Reactant.ConcreteRNumber(16)
     i = 12
     @test @jit(simple_while(n, i)) == simple_while(n,i)
     @test @jit(double_while(n)) == double_while(n)
     @test @jit(internal_accu_while(n)) == internal_accu_while(n)
+    @test @jit(multi_cond(n, i)) == multi_cond(n,i)
 end

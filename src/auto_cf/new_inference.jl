@@ -692,6 +692,7 @@ function CC.typeinf_local(interp::Reactant.ReactantInterp, frame::CC.InferenceSt
         @info "auto control flow tracing enabled: $(frame.linfo)"
         normalize_exit!(frame)
         an = Analysis(Tree(nothing, [], Ref{Tree}()), nothing, nothing, nothing, nothing)
+        @error frame.src
         typeinf_local_traced(interp, frame, an)
         @error frame.src
         isempty(an.tree) ||

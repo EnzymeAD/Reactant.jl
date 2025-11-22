@@ -435,7 +435,6 @@ end
     #args_full composition: body_accumulator cond_accumulator environment
     @lk loop_cond loop_body n_accu args_full
 
-
     accus = args_full[1:n_accu]
 
     tmp_while_op = Reactant.MLIR.Dialects.stablehlo.while_(
@@ -453,7 +452,9 @@ end
 
     accus_copy = deepcopy(accus)
     for i in 1:n_accu
-        Reactant.TracedUtils.set_mlir_data!(args_full[i], Reactant.MLIR.IR.argument(cond, i))
+        Reactant.TracedUtils.set_mlir_data!(
+            args_full[i], Reactant.MLIR.IR.argument(cond, i)
+        )
     end
 
     Reactant.MLIR.IR.activate!(cond)
@@ -470,15 +471,16 @@ end
     )
     push!(Reactant.MLIR.IR.region(tmp_while_op, 2), body)
 
-
     for i in 1:n_accu
-        Reactant.TracedUtils.set_mlir_data!(accus_copy[i], Reactant.MLIR.IR.argument(body, i))
+        Reactant.TracedUtils.set_mlir_data!(
+            accus_copy[i], Reactant.MLIR.IR.argument(body, i)
+        )
     end
 
     Reactant.MLIR.IR.activate!(body)
     Reactant.Ops.activate_constant_context!(body)
 
-    body_r = juliair_to_mlir(loop_body.value,accus_copy..., args_full...)
+    body_r = juliair_to_mlir(loop_body.value, accus_copy..., args_full...)
     Reactant.Ops.return_(body_r...)
 
     Reactant.MLIR.IR.deactivate!(body)
@@ -560,21 +562,24 @@ function apply_transformation_while!(ir::CC.IRCode, f::LoopStructure)
         phi = only(indexes)
         change_stmt!(ir, phi, expr, returning_type(type_traced_ssa[1]))
     else
-        before_while_header_pos = terminator_index(ir, f.header_bb-1)
+        before_while_header_pos = terminator_index(ir, f.header_bb - 1)
         ssa_while = CC.insert_node!(
-            ir, Core.SSAValue(before_while_header_pos), Core.Compiler.NewInstruction(expr, Any), true
+            ir,
+            Core.SSAValue(before_while_header_pos),
+            Core.Compiler.NewInstruction(expr, Any),
+            true,
         )
         for (i, index) in enumerate(indexes)
-            expr = Expr(
-                :call, Core.GlobalRef(Base, :getindex), ssa_while, i
-            )
-            change_stmt!(ir,index, expr, type_traced_ssa[i])
+            expr = Expr(:call, Core.GlobalRef(Base, :getindex), ssa_while, i)
+            change_stmt!(ir, index, expr, type_traced_ssa[i])
         end
     end
 end
 
 function apply_transformation_loop!(ir::CC.IRCode, f::LoopStructure)
+    @error "list phi nodes values" ir Int32(min(f.body_bbs...)) Int32(f.header_bb)
     body_phi_ssa = list_phi_nodes_values(ir, Int32(min(f.body_bbs...)), Int32(f.header_bb))
+    @error "body phi ssa" body_phi_ssa
     internal_accu_ssa = list_phi_nodes_values(
         ir, Int32(min(f.body_bbs...)), Int32(f.latch_bb)
     )
@@ -587,8 +592,6 @@ function apply_transformation_loop!(ir::CC.IRCode, f::LoopStructure)
 
     ir_back = CC.copy(ir)
     @lk ir_back
-    #iteration to reenter loop
-    remove_iterator(ir, max(f.body_bbs...))
 
     last_bb = max(f.body_bbs...)
 
@@ -606,12 +609,16 @@ function apply_transformation_loop!(ir::CC.IRCode, f::LoopStructure)
     n_accu_internal = 0
     #find all internal accumulars
     for (i, ssa) in enumerate(body_phi_ssa)
-        i == 1 && continue #first is the incrementer (can be nothing or a phi)
+        (CC.argextype(ssa, ir) <: (Union{Tuple{T,Nothing},Nothing} where T)) && continue
         ssa in terminal_phi_ssa && continue
         n_accu_internal += 1
         push!(results, internal_accu_ssa[i])
         push!(terminal_phi_ssa, ssa)
     end
+
+    #iteration to reenter loop
+    remove_iterator(ir, max(f.body_bbs...))
+
     body_bbs = f.body_bbs
     @warn ir body_bbs new_args_dict results traced_ssa_for_bodies traced_ssa_for_bodies_types
     @lk ir body_bbs new_args_dict results traced_ssa_for_bodies traced_ssa_for_bodies_types
@@ -641,7 +648,6 @@ function apply_transformation_loop!(ir::CC.IRCode, f::LoopStructure)
         ir.stmts.type[iterator_def.id]
     end
 
-    @lk value new_args_v terminal_phi_ssa t
     while_output_type = (typeof_ir(ir, ssa) for ssa in terminal_phi_ssa)
     #first element in new_args_v/ value is the iterator first step: only the iterator definition is needed
     sign = (t, Hidden, Int, Tuple{Int,Int}, while_output_type..., new_args_v[2:end]...)
