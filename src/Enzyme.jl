@@ -70,7 +70,7 @@ end
 end
 
 @inline function Enzyme.tupstack(
-    data::Tuple{Vararg{<:RArray}},
+    data::Tuple{<:RArray, Vararg{<:RArray}},
     outshape::Tuple{Vararg{Int}},
     inshape::Tuple{Vararg{Int}},
 )
