@@ -72,10 +72,10 @@ end
 end
 
 @inline function Enzyme.tupstack(
-    data::Tuple{Vararg{<:RArray{T}}},
+    data::Tuple{Vararg{<:RArray}},
     outshape::Tuple{Vararg{Int}},
     inshape::Tuple{Vararg{Int}},
-) where {T}
+)
     res = similar(first(data), outshape..., inshape...)
     c = CartesianIndices(outshape)
     tail_dims = map(Returns(:), inshape)
