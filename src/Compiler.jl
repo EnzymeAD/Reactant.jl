@@ -809,6 +809,7 @@ function optimization_passes(
         "associative_binary_op_reordering<1>",
         "transpose_broadcast_in_dim_to_broadcast_in_dim<16>",
         "replace_neg_add_with_subtract",
+        "replace_subtract_neg_with_add",
         "binop_const_simplify",
         "not_select_simplify",
         "common_compare_expression_rewrite",
@@ -906,6 +907,8 @@ function optimization_passes(
         "enzyme_hlo_unroll($(WHILE_UNROLL_THRESHOLD[]))",
         "dot_general_only_diagonal_access",
         "transpose_symmetric_simplify",
+        "divide_negated_operands_simplify",
+        "multiply_negated_operands_simplify",
     ]
 
     if !compile_options.disable_auto_batching_passes
@@ -923,6 +926,7 @@ function optimization_passes(
                 "concat_insert_dim_sort",
                 "concat_insert_dim_reduce_window",
                 "concat_insert_dim_elementwise",
+                "concat_insert_dim_convolution",
                 "dot_general_slice_to_batch",
                 "gather_slice_to_batch",
                 "iota_slice_to_batch",
@@ -932,6 +936,7 @@ function optimization_passes(
                 "broadcastindim_slice_to_batch",
                 "reducewindow_slice_to_batch",
                 "elementwise_slice_to_batch",
+                "convolution_slice_to_batch",
                 "greedy_while_loop_batch_fission",
             ],
         )
@@ -953,6 +958,7 @@ function optimization_passes(
                 "reduce_licm(0)",
                 "reduce_window_licm(0)",
                 "reverse_licm(0)",
+                "convolution_licm(0)",
             ],
         )
     end
