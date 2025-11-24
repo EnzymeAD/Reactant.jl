@@ -91,8 +91,9 @@ function kernel_gemm(alpha, beta, A, B)
     return C
 end
 
-function kernel_gemmver(alpha, beta, u1, u2, v1, v2, A, x, y, z)
+function kernel_gemmver(alpha, beta, u1, u2, v1, v2, A, x_p, y, z)
     w = zeros(eltype(A), axes(A, 1))
+    x = copy(x_p)
     for i in axes(A, 1)
         for j in axes(A, 2)
             A[i, j] = A[i, j] + u1[i] * v1[j] + u2[i] * v2[j]
@@ -725,67 +726,214 @@ function kernel_nussinov(seq, T)
     return T
 end
 
-end
-
-function kernel_deriche2(I)
-    Y1 = zero(I)
-        ym1  = 0.0
-        ym2 = 0.0
-        i = 1
-        for j in axes(I, 2)
-            Y1[i, j] = I[i, j] +  ym1 + ym2
-            ym2 = ym1 + 1.0
-            ym1 = Y1[i, j]
-        end
-    return Y1
-end
-
-@testset "Polybench" begin
+@testset "kernel_correlation" begin
     A = collect(reshape(1:1.0:256, 16, 16))
-    c = collect(reshape(1:16, 1, 16))
     tA = Reactant.to_rarray(A)
+    @jit(kernel_correlation(tA)) #TODO: fix type inference behavior 
+end
+
+@testset "kernel_covariance" begin
+    A = collect(reshape(1:1.0:256, 16, 16))
+    tA = Reactant.to_rarray(A)
+    @jit(kernel_covariance(tA)) #TODO: fix type inference behavior 
+end
+
+@testset "kernel_gemm" begin
+    tA = Reactant.to_rarray(collect(reshape(1:1.0:256, 16, 16)))
+    tB = Reactant.to_rarray(collect(reshape(1:2.0:512, 16, 16)))
+    @test @jit(kernel_gemm(5, 2, tA, tB)) == kernel_gemm(5, 2, tA, tB)
+end
+
+@testset "kernel_gemmver" begin
     f = collect(reshape(0:0.065:1, 1, 16))
     tf = Reactant.to_rarray(f)
-
-    @jit(kernel_correlation(tA))
-    @jit(kernel_covariance(tA))
-
-    @test @jit(kernel_gemm(5, 2, tA, tA)) == kernel_gemm(5, 2, A, A)
+    A = collect(reshape(1:1.0:256, 16, 16))
+    tA = Reactant.to_rarray(A)
     @test @jit(kernel_gemmver(2.0, 0.01, tf, tf, tf, tf, tA, tf, tf, tf)) ≈
         kernel_gemmver(2.0, 0.01, f, f, f, f, A, f, f, f)
+end
+
+@testset "kernel_gesummv" begin
+    f = collect(reshape(0:0.065:1, 1, 16))
+    tf = Reactant.to_rarray(f)
+    A = collect(reshape(1:1.0:256, 16, 16))
+    tA = Reactant.to_rarray(A)
     @test @jit(kernel_gesummv(2.0, 0.01, tA, tA, tf)) ≈ kernel_gesummv(2.0, 0.01, A, A, f)
+end
+
+@testset "kernel_symm" begin
+    A = collect(reshape(1:1.0:256, 16, 16))
+    tA = Reactant.to_rarray(A)
     @test @jit(kernel_symm(2.0, 0.01, tA, tA)) ≈ kernel_symm(2.0, 0.01, A, A)
+end
+
+@testset "kernel_syr2k" begin
+    A = collect(reshape(1:1.0:256, 16, 16))
+    tA = Reactant.to_rarray(A)
     @test @jit(kernel_syr2k(2.0, 0.01, tA, tA)) ≈ kernel_syr2k(2.0, 0.01, A, A)
+end
+
+@testset "kernel_syrk" begin
+    A = collect(reshape(1:1.0:256, 16, 16))
+    tA = Reactant.to_rarray(A)
     @test @jit(kernel_syrk(2.0, 0.01, tA)) ≈ kernel_syrk(2.0, 0.01, A)
+end
+
+@testset "kernel_trmm" begin
+    A = collect(reshape(1:1.0:256, 16, 16))
+    tA = Reactant.to_rarray(A)
     @test @jit(kernel_trmm(2.0, tA, tA)) ≈ kernel_trmm(2.0, A, A)
+end
+
+@testset "kernel_2mm" begin
+    A = collect(reshape(1:1.0:256, 16, 16))
+    tA = Reactant.to_rarray(A)
     @test @jit(kernel_2mm(2.0, 0.01, tA, tA, tA, tA)) ≈ kernel_2mm(2.0, 0.01, A, A, A, A)
+end
+
+@testset "kernel_3mm" begin
+    A = collect(reshape(1:1.0:256, 16, 16))
+    tA = Reactant.to_rarray(A)
     @test @jit(kernel_3mm(tA, tA, tA, tA)) ≈ kernel_3mm(A, A, A, A)
+end
+
+@testset "kernel_atax" begin
+    f = collect(reshape(0:0.065:1, 1, 16))
+    tf = Reactant.to_rarray(f)
+    A = collect(reshape(1:1.0:256, 16, 16))
+    tA = Reactant.to_rarray(A)
     @test @jit(kernel_atax(tA, tf)) ≈ kernel_atax(A, f)
+end
+
+@testset "kernel_bicg" begin
+    f = collect(reshape(0:0.065:1, 1, 16))
+    tf = Reactant.to_rarray(f)
+    A = collect(reshape(1:1.0:256, 16, 16))
+    tA = Reactant.to_rarray(A)
     @test all((@jit(kernel_bicg(tA, tf, tf)) .≈ kernel_bicg(A, f, f)))
+end
+
+@testset "kernel_doitgen" begin
     AA = ones(16, 16, 16)
     tAA = Reactant.to_rarray(AA)
+    A = collect(reshape(1:1.0:256, 16, 16))
+    tA = Reactant.to_rarray(A)
     @test @jit((kernel_doitgen(tAA, tA))) ≈ kernel_doitgen(AA, A)
+end
+
+@testset "kernel_mvt" begin
+    f = collect(reshape(0:0.065:1, 1, 16))
+    tf = Reactant.to_rarray(f)
+    A = collect(reshape(1:1.0:256, 16, 16))
+    tA = Reactant.to_rarray(A)
     @test all((@jit(kernel_mvt(tf, tf, tf, tf, tA)) .≈ kernel_mvt(f, f, f, f, A)))
+end
+
+@testset "kernel_cholesky" begin
+    A = collect(reshape(1:1.0:256, 16, 16))
+    tA = Reactant.to_rarray(A)
     @test @jit(kernel_cholesky(tA)) ≈ kernel_cholesky(A)
+end
+
+@testset "kernel_durbin" begin
+    f = collect(reshape(0:0.065:1, 1, 16))
+    tf = Reactant.to_rarray(f)
     @test @jit(kernel_durbin(tf, tf)) ≈ kernel_durbin(f, f)
+end
+
+@testset "kernel_gramschidt" begin
+    A = collect(reshape(1:1.0:256, 16, 16))
+    tA = Reactant.to_rarray(A)
     @test @jit(kernel_gramschidt(tA, tA, tA)) ≈ kernel_gramschidt(A, A, A)
+end
+
+@testset "kernel_lu" begin
+    A = collect(reshape(1:1.0:256, 16, 16))
+    tA = Reactant.to_rarray(A)
     @test @jit(kernel_lu(tA)) ≈ kernel_lu(A)
+end
+
+@testset "kernel_ludcmp" begin
+    f = collect(reshape(0:0.065:1, 1, 16))
+    tf = Reactant.to_rarray(f)
+    A = collect(reshape(1:1.0:256, 16, 16))
+    tA = Reactant.to_rarray(A)
     @test @jit(kernel_ludcmp(tA, tA, tf, tf)) ≈ kernel_ludcmp(A, A, f, f)
+end
+
+@testset "kernel_trisolv" begin
+    f = collect(reshape(0:0.065:1, 1, 16))
+    tf = Reactant.to_rarray(f)
+    A = collect(reshape(1:1.0:256, 16, 16))
+    tA = Reactant.to_rarray(A)
     @test @jit(kernel_trisolv(tA, tf, tf)) ≈ kernel_trisolv(A, f, f)
-    tA1 = Reactant.to_rarray(A)
-    tA2 = Reactant.to_rarray(A)
-    tA3 = Reactant.to_rarray(A)
-    tA4 = Reactant.to_rarray(A)
+end
+
+@testset "kernel_adi" begin
+    A1 = collect(reshape(1:1.0:256, 16, 16))
+    A2 = collect(reshape(1:1.0:256, 16, 16))
+    A3 = collect(reshape(1:1.0:256, 16, 16))
+    A4 = collect(reshape(1:1.0:256, 16, 16))
+    tA1 = Reactant.to_rarray(A1)
+    tA2 = Reactant.to_rarray(A2)
+    tA3 = Reactant.to_rarray(A3)
+    tA4 = Reactant.to_rarray(A4)
     @test all(
         @jit(kernel_adi(5, tA1, tA2, tA3, tA4)) .≈
-        kernel_adi(5, copy(A), copy(A), copy(A), copy(A)),
+        kernel_adi(5, copy(A1), copy(A2), copy(A3), copy(A4)),
     )
+end
+
+@testset "kernel_fdtd_2d" begin
+    f = collect(reshape(0:0.065:1, 1, 16))
+    tf = Reactant.to_rarray(f)
+    A = collect(reshape(1:1.0:256, 16, 16))
+    tA = Reactant.to_rarray(A)
     @test @jit(kernel_fdtd_2d(tA, tA, tA, tf)) ≈ kernel_fdtd_2d(A, A, A, f)
+end
+
+@testset "kernel_heat_3d" begin
+    AA = ones(16, 16, 16)
+    tAA = Reactant.to_rarray(AA)
     @test all(@jit(kernel_heat_3d(5, tAA, tAA)) .≈ kernel_heat_3d(5, AA, AA))
+end
+
+@testset "kernel_jacobi_1d" begin
+    f = collect(reshape(0:0.065:1, 1, 16))
+    tf = Reactant.to_rarray(f)
     @test all(@jit(kernel_jacobi_1d(5, tf, tf)) .≈ kernel_jacobi_1d(5, f, f))
+end
+
+@testset "kernel_jacobi_2d" begin
+    A = collect(reshape(1:1.0:256, 16, 16))
+    tA = Reactant.to_rarray(A)
     @test all(@jit(kernel_jacobi_2d(5, tA, tA)) .≈ kernel_jacobi_2d(5, A, A))
+end
+
+@testset "kernel_seidel_2d" begin
+    A = collect(reshape(1:1.0:256, 16, 16))
+    tA = Reactant.to_rarray(A)
     @test all(@jit(kernel_seidel_2d(5, tA)) .≈ kernel_seidel_2d(5, A))
+end
+
+@testset "kernel_deriche" begin
+    A = collect(reshape(1:1.0:256, 16, 16))
+    tA = Reactant.to_rarray(A)
     @test all(@jit(kernel_deriche(0.1, tA)) .≈ kernel_deriche(0.1, A)) #TODO: FAIL
+end
+
+@testset "kernel_floyd_warshall" begin
+    A = collect(reshape(1:1.0:256, 16, 16))
+    tA = Reactant.to_rarray(A)
     @test @jit(kernel_floyd_warshall(tA)) == kernel_floyd_warshall(A)
+end
+
+@testset "kernel_nussinov" begin
+    f = collect(reshape(0:0.065:1, 1, 16))
+    tf = Reactant.to_rarray(f)
+    A = collect(reshape(1:1.0:256, 16, 16))
+    tA = Reactant.to_rarray(A)
     @test @jit(kernel_nussinov(tf, tA)) ≈ kernel_nussinov(f, A)
+end
+
 end
