@@ -421,6 +421,11 @@ function remove_phi_node_while_body!(ir::CC.IRCode, f::LoopStructure)
     return indexes, before_while_ssa, body_while_ssa, type_traced_ssa
 end
 
+"""
+    jit_while_controlflow(n_accu::Int, loop_cond::Hidden, loop_body::Hidden, args_...) -> Tuple
+
+Trace the while loop controlflow.
+"""
 @noinline function jit_while_controlflow(
     n_accu::Int, loop_cond::Hidden, loop_body::Hidden, args_...
 )
@@ -490,6 +495,11 @@ end
     #return error("test")
 end
 
+"""
+    apply_transformation_while!(ir::CC.IRCode, f::LoopStructure)
+
+Modify the `IRCode` to enable the tracing of `LoopStructure` while.
+"""
 function apply_transformation_while!(ir::CC.IRCode, f::LoopStructure)
     (indexes, before_while_ssa, body_while_ssa, type_traced_ssa) = remove_phi_node_while_body!(
         ir, f
@@ -569,6 +579,11 @@ function apply_transformation_while!(ir::CC.IRCode, f::LoopStructure)
     end
 end
 
+"""
+    apply_transformation_loop!(ir::CC.IRCode, f::LoopStructure)
+
+Modify the `IRCode` to enable the tracing of`LoopStructure` for.
+"""
 function apply_transformation_loop!(ir::CC.IRCode, f::LoopStructure)
     @error "list phi nodes values" ir Int32(min(f.body_bbs...)) Int32(f.header_bb)
     body_phi_ssa = list_phi_nodes_values(ir, Int32(min(f.body_bbs...)), Int32(f.header_bb))
@@ -687,13 +702,19 @@ function apply_transformation_loop!(ir::CC.IRCode, f::LoopStructure)
     end
 end
 
+
 function get_mlir_pointer_or_nothing(x::Union{Reactant.TracedRNumber,Reactant.TracedRArray})
     return Reactant.TracedUtils.get_mlir_data(x).value
 end
 
+
 get_mlir_pointer_or_nothing(_) = nothing
 
-#iterator for_body iterator_type n_init traced_ssa_for_bodies args
+"""
+    jit_while_controlflow(n_accu::Int, loop_cond::Hidden, loop_body::Hidden, args_...) -> Tuple
+
+Trace the for loop controlflow.
+"""
 @noinline function jit_loop_controlflow(
     iterator,
     for_body::Hidden,
@@ -883,8 +904,8 @@ function post_order(tree::Tree)
 end
 
 """
-    control_flow_transform!(an::Analysis, ir::Core.Compiler.IRCode) -> Core.Compiler.IRCode
-    apply changes to traced control flow, `ir` argument is not valid anymore
+    control_flow_transform!(tree::Tree, ir::CC.IRCode)::CC.IRCode
+    Applies changes to traced control flow following context defined in `tree`. The `ir` argument is not valid anymore.
 """
 function control_flow_transform!(tree::Tree, ir::CC.IRCode)::CC.IRCode
     for node in post_order(tree)[1:(end - 1)]
@@ -894,11 +915,11 @@ function control_flow_transform!(tree::Tree, ir::CC.IRCode)::CC.IRCode
     return CC.compact!(ir, true)
 end
 
-#=
+"""
     analysis_reassign_block_id!(an::Analysis, ir::Core.IRCode, src::Core.CodeInfo)
     slot2reg can change type infered CodeInfo CFG by removing non-reachable block,
     ControlFlow analysis use blocks information and must be shifted.
-=#
+"""
 function analysis_reassign_block_id!(tree::Tree, ir::CC.IRCode, src::CC.CodeInfo)
     isempty(tree) && return false
     cfg = CC.compute_basic_blocks(src.code)
@@ -944,62 +965,17 @@ function analysis_reassign_block_id!(tree::Tree, ir::CC.IRCode, src::CC.CodeInfo
     return true
 end
 
-
-
 """
-    analysis_reassign_block_id!(an::Analysis, ir::CC.IRCode, src::CC.CodeInfo)
+    run_passes_ipo_safe_auto_cf(
+        ci::CC.CodeInfo,
+        sv::CC.OptimizationState,
+        caller::CC.InferenceResult,
+        tree::Tree,
+        optimize_until=nothing,
+    )
 
-slot2reg can change type infered CodeInfo CFG by removing non-reachable block.
-Updates all relevant CF structures in the analysis to reflect new block mapping.
-Returns true if blocks were reassigned, false otherwise.
+Runs the optimizer on the IR, including tracing control flow transformation.
 """
-function analysis_reassign_block_id!(an::Analysis, ir::CC.IRCode, src::CC.CodeInfo)
-    cfg = CC.compute_basic_blocks(src.code)
-    length(ir.cfg.blocks) == length(cfg.blocks) && return false
-    @info "rewrite analysis blocks"
-    new_block_map = []
-    i = 0
-    for block in cfg.blocks
-        unreacheable_block = all(x->src.ssavaluetypes[x] === Union{}, block.stmts)
-        i = unreacheable_block ? i : i + 1
-        push!(new_block_map, i)
-    end
-    @info new_block_map
-    function reassign_tree!(s::Set{Int})
-        n = [new_block_map[i] for i in s]
-        empty!(s)
-        push!(s, n...)
-    end
-
-    function reassign_tree!(is::IfStructure)
-        is.header_bb = new_block_map[is.header_bb]
-        is.terminal_bb = new_block_map[is.terminal_bb]
-        reassign_tree!(is.true_bbs)
-        reassign_tree!(is.false_bbs)
-        reassign_tree!(is.owned_true_bbs)
-        reassign_tree!(is.owned_false_bbs)
-    end
-
-    function reassign_tree!(fs::LoopStructure)
-        fs.header_bb = new_block_map[fs.header_bb]
-        fs.latch_bb = new_block_map[fs.latch_bb]
-        fs.terminal_bb = new_block_map[fs.terminal_bb]
-        reassign_tree!(fs.body_bbs)
-    end
-
-    function reassign_tree!(t::Tree)
-        isnothing(t.node) || reassign_tree!(t.node)
-        for c in t.children
-            reassign_tree!(c)
-        end
-    end
-    reassign_tree!(an.tree)
-    @error an.tree
-    return true
-end
-
-
-
 function run_passes_ipo_safe_auto_cf(
     ci::CC.CodeInfo,
     sv::CC.OptimizationState,
