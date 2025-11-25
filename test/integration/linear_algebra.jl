@@ -723,3 +723,24 @@ end
     @jit LinearAlgebra.normalize!(x_ra)
     @test x_ra ≈ x
 end
+
+raise_to_syrk(x, y) = 3 .* (x * transpose(x)) .+ 5 .* y
+raise_to_syrk2(x, y) = 3 .* (transpose(x) * x) .+ 5 .* y
+
+@testset "syrk optimizations" begin
+    @testset for elty in (Float32, Float64, ComplexF32, ComplexF64)
+        x = Reactant.TestUtils.construct_test_array(elty, 4, 5)
+        y1 = Reactant.TestUtils.construct_test_array(elty, 4, 4)
+        y2 = Reactant.TestUtils.construct_test_array(elty, 5, 5)
+        x_ra = Reactant.to_rarray(x)
+
+        @testset for (fn, y) in ((raise_to_syrk, y1), (raise_to_syrk2, y2))
+            y_ra = Reactant.to_rarray(y)
+
+            hlo = @code_hlo optimize=:before_jit fn(x_ra, y_ra)
+            @test occursin("enzymexla.blas.syrk", repr(hlo))
+
+            @test @jit(fn(x_ra, y_ra)) ≈ fn(x, y)
+        end
+    end
+end
