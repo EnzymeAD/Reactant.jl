@@ -124,17 +124,11 @@ function ReactantCore.materialize_traced_array(
     m, n = size(x)
     row_idxs = @opcall iota(Int, [m, n]; iota_dimension=1)
     col_idxs = @opcall iota(Int, [m, n]; iota_dimension=2)
-    if x.uplo == 'L'
-        indicator = @opcall compare(row_idxs, col_idxs; comparison_direction="GT")
-        x_lt = @opcall select(indicator, parent(x), zero(parent(x)))
-        x_ltd = materialize_traced_array(LowerTriangular(parent(x)))
-        return @opcall add(x_lt, @opcall(transpose(x_ltd, [2, 1])))
-    else
-        indicator = @opcall compare(row_idxs, col_idxs; comparison_direction="LT")
-        x_ut = @opcall select(indicator, parent(x), zero(parent(x)))
-        x_utd = materialize_traced_array(UpperTriangular(parent(x)))
-        return @opcall add(@opcall(transpose(x_utd, [2, 1])), x_ut)
-    end
+    indicator = @opcall compare(
+        row_idxs, col_idxs; comparison_direction=x.uplo == 'L' ? "GT" : "LT"
+    )
+    x_transposed = @opcall transpose(parent(x), [2, 1])
+    return @opcall select(indicator, parent(x), x_transposed)
 end
 
 function TracedUtils.set_mlir_data!(
