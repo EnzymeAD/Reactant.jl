@@ -913,6 +913,7 @@ function optimization_passes(
         "transpose_syrk_to_syrk",
         "fuse_mul_into_syrk",
         "fuse_add_into_syrk",
+        "factor_scalars_in_dot_general",
     ]
 
     if !is_sharded
