@@ -704,6 +704,7 @@ function optimization_passes(
     lower_comms::Bool=true,
     backend::String="gpu",
     is_sharded::Bool=false,
+    raise_shlo_to_blas_lapack::Bool=true,
 )
     (; max_constant_threshold) = compile_options
 
@@ -918,7 +919,9 @@ function optimization_passes(
 
     if !is_sharded
         # these passes don't have optimized sharding implementations
-        append!(transform_passes_list, ["dot_general_to_syrk"])
+        if raise_shlo_to_blas_lapack
+            append!(transform_passes_list, ["dot_general_to_syrk"])
+        end
     end
 
     if !compile_options.disable_auto_batching_passes
@@ -2026,6 +2029,7 @@ function compile_mlir!(
                 lower_comms,
                 backend,
                 is_sharded,
+                raise_shlo_to_blas_lapack=false,
             ),
             "post_op_transpose_reshape",
         )
@@ -2168,7 +2172,15 @@ function compile_mlir!(
                 run_pass_pipeline!(
                     mod,
                     join(
-                        [opt_passes, "canonicalize", "cse", "canonicalize", opt_passes2],
+                        [
+                            opt_passes,
+                            "canonicalize",
+                            "cse",
+                            "canonicalize",
+                            opt_passes2,
+                            lower_enzymexla_linalg_pass,
+                            jit,
+                        ],
                         ",",
                     ),
                     "mid_pad_opts",
