@@ -703,6 +703,7 @@ function optimization_passes(
     recognize_comms::Bool=true,
     lower_comms::Bool=true,
     backend::String="gpu",
+    is_sharded::Bool=false,
 )
     (; max_constant_threshold) = compile_options
 
@@ -909,7 +910,15 @@ function optimization_passes(
         "transpose_symmetric_simplify",
         "divide_negated_operands_simplify",
         "multiply_negated_operands_simplify",
+        "transpose_syrk_to_syrk",
+        "fuse_mul_into_syrk",
+        "fuse_add_into_syrk",
     ]
+
+    if !is_sharded
+        # these passes don't have optimized sharding implementations
+        append!(transform_passes_list, ["dot_general_to_syrk"])
+    end
 
     if !compile_options.disable_auto_batching_passes
         append!(
@@ -1693,10 +1702,10 @@ function compile_mlir!(
     end
 
     opt_passes = optimization_passes(
-        compile_options; sroa=true, recognize_comms, lower_comms, backend
+        compile_options; sroa=true, recognize_comms, lower_comms, backend, is_sharded
     )
     opt_passes2 = optimization_passes(
-        compile_options; sroa=false, recognize_comms, lower_comms, backend
+        compile_options; sroa=false, recognize_comms, lower_comms, backend, is_sharded
     )
 
     raise_passes = if raise isa String
@@ -1718,6 +1727,7 @@ function compile_mlir!(
                 recognize_comms,
                 lower_comms,
                 backend,
+                is_sharded,
             )
             result = result * "," * opt_passes3
         end
@@ -1728,6 +1738,8 @@ function compile_mlir!(
 
     blas_int_width = sizeof(BlasInt) * 8
     lower_enzymexla_linalg_pass = "lower-enzymexla-linalg{backend=$backend \
+                                   blas_int_width=$blas_int_width},\
+                                   lower-enzymexla-blas{backend=$backend \
                                    blas_int_width=$blas_int_width},\
                                    lower-enzymexla-lapack{backend=$backend \
                                    blas_int_width=$blas_int_width}"
@@ -2012,6 +2024,7 @@ function compile_mlir!(
                 recognize_comms,
                 lower_comms,
                 backend,
+                is_sharded,
             ),
             "post_op_transpose_reshape",
         )
