@@ -737,7 +737,7 @@ raise_to_syrk2(x, y) = 3 .* (transpose(x) * x) .+ 5 .* y
         @testset for (fn, y) in ((raise_to_syrk, y1), (raise_to_syrk2, y2))
             y_ra = Reactant.to_rarray(y)
 
-            hlo = @code_hlo optimize=:before_jit fn(x_ra, y_ra)
+            hlo = @code_hlo optimize = :before_jit fn(x_ra, y_ra)
             @test occursin("enzymexla.blas.syrk", repr(hlo))
 
             @test @jit(fn(x_ra, y_ra)) ≈ fn(x, y)
