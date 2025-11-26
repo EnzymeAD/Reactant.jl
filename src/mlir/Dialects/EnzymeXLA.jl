@@ -1074,7 +1074,11 @@ end
 """
 `blas_syrk`
 
-C := alpha*A*A^T + beta*C, or C := alpha*A^T*A + beta*C, where alpha and beta are scalars. C must be a n x n symmetric matrix.\"
+C := alpha*A*A^T + beta*C, or C := alpha*A^T*A + beta*C, where alpha and beta are
+scalars. C must be a n x n symmetric matrix.
+
+If `fill` is present, then both the upper and lower triangles of the matrix are filled.
+Otherwise the values in the non-uplo part of the matrix are undefined.
 """
 function blas_syrk(
     A::Value,
@@ -1084,6 +1088,7 @@ function blas_syrk(
     output::IR.Type,
     uplo,
     transpose=nothing,
+    fill=nothing,
     location=Location(),
 )
     op_ty_results = IR.Type[output,]
@@ -1092,6 +1097,7 @@ function blas_syrk(
     successors = Block[]
     attributes = NamedAttribute[namedattribute("uplo", uplo),]
     !isnothing(transpose) && push!(attributes, namedattribute("transpose", transpose))
+    !isnothing(fill) && push!(attributes, namedattribute("fill", fill))
 
     return create_operation(
         "enzymexla.blas.syrk",
