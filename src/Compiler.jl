@@ -703,8 +703,6 @@ function optimization_passes(
     recognize_comms::Bool=true,
     lower_comms::Bool=true,
     backend::String="gpu",
-    enable_triton_passes::Bool=false,
-    device_properties::Union{Nothing,XLA.DeviceProperties}=nothing,
 )
     (; max_constant_threshold) = compile_options
 
@@ -1306,113 +1304,7 @@ function optimization_passes(
         push!(passes, "remove-duplicate-func-def")
     end
     push!(passes, func_passes)
-    if enable_triton_passes && backend == "cuda"
-        push!(passes, triton_optimization_passes(device_properties))
-    end
     return join(passes, ',')
-end
-
-# https://github.com/triton-lang/triton/blob/8ee584014e9570ba608809c42dc2060fdd214a98/python/src/passes.cc
-# To get the latest passes run triton with MLIR_ENABLE_DUMP=1 and then extract the passes
-function triton_optimization_passes(device_properties)
-    @assert device_properties !== nothing "Device properties must be provided to run \
-                                           triton passes. This might happen if you are \
-                                           compiling a triton kernel for non-cuda backend."
-    major_version = device_properties.major
-    minor_version = device_properties.minor
-
-    passes_group_1 = join(
-        [
-            "canonicalize",
-            "triton-rewrite-tensor-pointer",
-            "canonicalize",
-            "triton-combine",
-            "triton-reorder-broadcast",
-            "cse",
-            "symbol-dce",
-            "triton-loop-unroll",
-            "convert-triton-to-triton-gpu-preserving-module-attributes{target=cuda:$(major_version)$(minor_version)}",
-            "tritongpu-coalesce",
-            "tritongpu-F32DotTC",
-            "triton-nvidia-gpu-plan-cta",
-            "tritongpu-remove-layout-conversions",
-            "tritongpu-optimize-thread-locality",
-            "tritongpu-accelerate-matmul",
-            "tritongpu-remove-layout-conversions",
-            "tritongpu-optimize-dot-operands",
-            "canonicalize",
-            "triton-nvidia-optimize-descriptor-encoding",
-            "triton-loop-aware-cse",
-            "tritongpu-fuse-nested-loops",
-            "canonicalize",
-            "triton-licm",
-            "tritongpu-optimize-accumulator-init",
-            "tritongpu-hoist-tmem-alloc",
-            "tritongpu-promote-lhs-to-tmem",
-            "tritongpu-assign-latencies",
-            "tritongpu-schedule-loops",
-            "tritongpu-automatic-warp-specialization",
-            "tritongpu-partition-scheduling",
-            "tritongpu-load-mma-specialization",
-            "tritongpu-rewrite-partition-dependencies",
-            "sccp",
-            "cse",
-            "tritongpu-partition-loops",
-            "tritongpu-optimize-partition-warps",
-            "tritongpu-schedule-loops",
-            "tritongpu-pipeline",
-            "tritongpu-combine-tensor-select-and-if",
-            "triton-nvidia-gpu-remove-tmem-tokens",
-            "canonicalize",
-            "triton-loop-aware-cse",
-            "tritongpu-prefetch",
-            "tritongpu-optimize-dot-operands",
-            "canonicalize",
-            "tritongpu-coalesce-async-copy",
-            "triton-nvidia-optimize-tmem-layouts",
-            "tritongpu-remove-layout-conversions",
-            "triton-nvidia-interleave-tmem",
-            "tritongpu-reduce-data-duplication",
-            "tritongpu-reorder-instructions",
-            "triton-loop-aware-cse",
-            "symbol-dce",
-            "triton-nvidia-tma-lowering",
-            "triton-nvidia-gpu-fence-insertion",
-            "sccp",
-            "canonicalize",
-            "triton-nvidia-mma-lowering",
-            "tritongpu-combine-tensor-select-and-if",
-            "tritongpu-allocate-warp-groups",
-            "convert-scf-to-cf",
-            "allocate-shared-memory",
-            "triton-tensor-memory-allocation",
-            "tritongpu-global-scratch-memory-allocation",
-            "convert-triton-gpu-to-llvm",
-        ],
-        ",",
-    )
-    passes_group_2 = join(
-        [
-            "canonicalize",
-            "cse",
-            "convert-nv-gpu-to-llvm",
-            "convert-warp-specialize-to-llvm",
-            "reconcile-unrealized-casts",
-            "canonicalize",
-            "cse",
-            "symbol-dce",
-            "enable-line-info",
-        ],
-        ",",
-    )
-    return join(
-        [
-            "enzymexla_tt_ext.module(builtin.module($(passes_group_1)))",
-            "triton-augment-function-with-extra-arguments",
-            "enzymexla_tt_ext.module(builtin.module($(passes_group_2)))",
-        ],
-        ",",
-    )
 end
 
 # TODO we want to be able to run the more advanced passes via transform dialect as an enzyme intermediate
@@ -1760,9 +1652,6 @@ function compile_mlir!(
 
     toolkit = XLA.CUDA_DATA_DIR[]
 
-    default_device = XLA.default_device(client)
-    device_properties = XLA.device_properties(default_device)
-
     if backend == "cpu" || backend == "tpu"
         kern = "lower-kernel{backend=cpu},canonicalize"
         if backend == "tpu"
@@ -1777,7 +1666,9 @@ function compile_mlir!(
             "lower-kernel,canonicalize"
         end
 
+        device_properties = XLA.device_properties(XLA.default_device(client))
         cubinChip = "sm_$(device_properties.major)$(device_properties.minor)"
+
         if DEBUG_KERNEL[]
             curesulthandler = dlsym(
                 Reactant_jll.libReactantExtra_handle, "ReactantHandleCuResult"
@@ -1802,31 +1693,10 @@ function compile_mlir!(
     end
 
     opt_passes = optimization_passes(
-        compile_options;
-        sroa=true,
-        recognize_comms,
-        lower_comms,
-        backend,
-        enable_triton_passes=false,
-        device_properties,
+        compile_options; sroa=true, recognize_comms, lower_comms, backend
     )
     opt_passes2 = optimization_passes(
-        compile_options;
-        sroa=false,
-        recognize_comms,
-        lower_comms,
-        backend,
-        enable_triton_passes=false,
-        device_properties,
-    )
-    opt_passes_with_triton = optimization_passes(
-        compile_options;
-        sroa=false,
-        recognize_comms,
-        lower_comms,
-        backend,
-        enable_triton_passes=true,
-        device_properties,
+        compile_options; sroa=false, recognize_comms, lower_comms, backend
     )
 
     raise_passes = if raise isa String
@@ -1841,16 +1711,15 @@ function compile_mlir!(
             opt_passes2
 
         if DUS_TO_CONCAT[]
-            opt_passes_dus_to_concat = optimization_passes(
+            opt_passes3 = optimization_passes(
                 compile_options;
                 sroa=false,
                 dus_to_concat=true,
                 recognize_comms,
                 lower_comms,
                 backend,
-                device_properties,
             )
-            result = result * "," * opt_passes_dus_to_concat
+            result = result * "," * opt_passes3
         end
         result
     else
@@ -1862,6 +1731,8 @@ function compile_mlir!(
                                    blas_int_width=$blas_int_width},\
                                    lower-enzymexla-lapack{backend=$backend \
                                    blas_int_width=$blas_int_width}"
+
+    lower_triton_passes = "lower-triton{backend=$backend compute_capability=$(device_properties.major).$(device_properties.minor)}"
 
     legalize_chlo_to_stablehlo =
         if legalize_stablehlo_to_mhlo || compile_options.legalize_chlo_to_stablehlo
@@ -1880,8 +1751,7 @@ function compile_mlir!(
                     [
                         "mark-func-memory-effects",
                         opt_passes,
-                        opt_passes_with_triton,
-                        "lower-triton",
+                        lower_triton_passes,
                         kern,
                         raise_passes,
                         "enzyme-batch",
@@ -1894,7 +1764,6 @@ function compile_mlir!(
                         legalize_chlo_to_stablehlo...,
                         opt_passes2,
                         lower_enzymexla_linalg_pass,
-                        "lower-triton-extension-ops",
                         jit,
                     ]
                 else
@@ -1904,17 +1773,15 @@ function compile_mlir!(
                         "enzyme-batch",
                         opt_passes2,
                         enzyme_pass,
-                        opt_passes_with_triton,
                         "canonicalize",
                         "remove-unnecessary-enzyme-ops",
                         "enzyme-simplify-math",
                         legalize_chlo_to_stablehlo...,
                         opt_passes2,
-                        "lower-triton",
+                        lower_triton_passes,
                         kern,
                         raise_passes,
                         lower_enzymexla_linalg_pass,
-                        "lower-triton-extension-ops",
                         jit,
                     ]
                 end,
@@ -1960,7 +1827,6 @@ function compile_mlir!(
                         "enzyme-batch",
                         opt_passes2,
                         enzyme_pass,
-                        opt_passes_with_triton,
                         "canonicalize",
                         "remove-unnecessary-enzyme-ops",
                         "enzyme-simplify-math",
@@ -1985,13 +1851,12 @@ function compile_mlir!(
                         "enzyme-batch",
                         opt_passes2,
                         enzyme_pass,
-                        opt_passes_with_triton,
                         "canonicalize",
                         "remove-unnecessary-enzyme-ops",
                         "enzyme-simplify-math",
                         legalize_chlo_to_stablehlo...,
                         opt_passes2,
-                        "lower-triton",
+                        lower_triton_passes,
                     ]
                 end,
                 ',',
@@ -2005,8 +1870,8 @@ function compile_mlir!(
                 if compile_options.raise_first
                     [
                         "mark-func-memory-effects",
-                        opt_passes_with_triton,
-                        "lower-triton",
+                        opt_passes,
+                        lower_triton_passes,
                         kern,
                         raise_passes,
                         "enzyme-batch",
@@ -2026,13 +1891,13 @@ function compile_mlir!(
                         "enzyme-batch",
                         opt_passes2,
                         enzyme_pass,
-                        opt_passes_with_triton,
+                        opt_passes2,
                         "canonicalize",
                         "remove-unnecessary-enzyme-ops",
                         "enzyme-simplify-math",
                         legalize_chlo_to_stablehlo...,
                         opt_passes2,
-                        "lower-triton",
+                        lower_triton_passes,
                         kern,
                         raise_passes,
                     ]
@@ -2054,13 +1919,13 @@ function compile_mlir!(
                         "enzyme-batch",
                         opt_passes2,
                         enzyme_pass,
-                        opt_passes_with_triton,
+                        opt_passes2,
                         "canonicalize",
                         "remove-unnecessary-enzyme-ops",
                         "enzyme-simplify-math",
                         legalize_chlo_to_stablehlo...,
                         opt_passes2,
-                        "lower-triton",
+                        lower_triton_passes,
                         kern,
                     ]
                 end,
@@ -2078,7 +1943,7 @@ function compile_mlir!(
                     "enzyme-batch",
                     opt_passes2,
                     enzyme_pass,
-                    opt_passes_with_triton,
+                    opt_passes2,
                     "canonicalize",
                     "remove-unnecessary-enzyme-ops",
                     "enzyme-simplify-math",
@@ -2120,9 +1985,8 @@ function compile_mlir!(
                         "remove-unnecessary-enzyme-ops",
                         "enzyme-simplify-math",
                         legalize_chlo_to_stablehlo...,
-                        opt_passes_with_triton,
+                        opt_passes2,
                         lower_enzymexla_linalg_pass,
-                        "lower-triton-extension-ops",
                         jit,
                     ]
                 else
@@ -2134,12 +1998,11 @@ function compile_mlir!(
                         "remove-unnecessary-enzyme-ops",
                         "enzyme-simplify-math",
                         legalize_chlo_to_stablehlo...,
-                        opt_passes_with_triton,
-                        "lower-triton",
+                        opt_passes2,
+                        lower_triton_passes,
                         kern,
                         raise_passes,
                         lower_enzymexla_linalg_pass,
-                        "lower-triton-extension-ops",
                         jit,
                     ]
                 end,
@@ -2154,8 +2017,8 @@ function compile_mlir!(
                 if compile_options.raise_first
                     [
                         "mark-func-memory-effects",
-                        opt_passes_with_triton,
-                        "lower-triton",
+                        opt_passes,
+                        lower_triton_passes,
                         kern,
                         raise_passes,
                         "enzyme-batch",
@@ -2163,7 +2026,6 @@ function compile_mlir!(
                         enzyme_pass,
                         "canonicalize,remove-unnecessary-enzyme-ops,enzyme-simplify-math",
                         lower_enzymexla_linalg_pass,
-                        "lower-triton-extension-ops",
                         jit,
                     ]
                 else
@@ -2171,14 +2033,13 @@ function compile_mlir!(
                         "mark-func-memory-effects",
                         opt_passes,
                         "enzyme-batch",
-                        opt_passes_with_triton,
+                        opt_passes2,
                         enzyme_pass,
                         "canonicalize,remove-unnecessary-enzyme-ops,enzyme-simplify-math",
-                        "lower-triton",
+                        lower_triton_passes,
                         kern,
                         raise_passes,
                         lower_enzymexla_linalg_pass,
-                        "lower-triton-extension-ops",
                         jit,
                     ]
                 end,
@@ -2209,7 +2070,6 @@ function compile_mlir!(
                 recognize_comms,
                 lower_comms,
                 backend,
-                device_properties,
             ),
             "post_op_transpose_reshape",
         )
