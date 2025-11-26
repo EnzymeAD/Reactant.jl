@@ -52,7 +52,8 @@ body(module_) = Block(API.mlirModuleGetBody(module_), false)
 
 Views the module as a generic operation.
 """
-Operation(module_::Module) = Operation(API.mlirModuleGetOperation(module_), false)
+Operation(module_::Module, owned::Bool=false) =
+    Operation(API.mlirModuleGetOperation(module_), owned)
 
 function Base.show(io::IO, module_::Module)
     return show(io, Operation(module_))
