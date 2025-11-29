@@ -625,7 +625,7 @@ end
 function collect_tvars_in_type!(dependencies, @nospecialize(t))
     if t isa TypeVar
         push!(dependencies, t)
-        return
+        return nothing
     end
     if t isa DataType
         for p in t.parameters
@@ -732,16 +732,18 @@ Base.@nospecializeinfer function traced_type_inner(
         return T
     end
 
-    @debug "traced_type_inner: Processing type with field changes" T=T subTys=subTys
+    @debug "traced_type_inner: Processing type with field changes" T = T subTys = subTys
 
     wrapped_cpjrt_array = T <: AbstractArray && ancestor(T) <: ConcretePJRTArray
     wrapped_cifrt_array = T <: AbstractArray && ancestor(T) <: ConcreteIFRTArray
     wrapped_tracedarray = T <: AbstractArray && ancestor(T) <: TracedRArray
 
-    @debug "wrapped flags" wrapped_cpjrt_array=wrapped_cpjrt_array wrapped_cifrt_array=wrapped_cifrt_array wrapped_tracedarray=wrapped_tracedarray
+    @debug "wrapped flags" wrapped_cpjrt_array = wrapped_cpjrt_array wrapped_cifrt_array =
+        wrapped_cifrt_array wrapped_tracedarray = wrapped_tracedarray
 
     subParms = []
-    @debug "Tracing type parameters" num_params=length(T.parameters) T_parameters=T.parameters
+    @debug "Tracing type parameters" num_params = length(T.parameters) T_parameters =
+        T.parameters
     for (i, SST) in enumerate(T.parameters)
         if wrapped_cpjrt_array && i == 1 && SST isa Type && SST <: ReactantPrimitive
             TrT = traced_type_inner(
@@ -773,19 +775,24 @@ Base.@nospecializeinfer function traced_type_inner(
         end
     end
 
-    @debug "Built subParms" subParms=subParms
+    @debug "Built subParms" subParms = subParms
 
     if !isempty(subParms)
-        @debug "Calling apply_type_with_promotion" wrapper=T.name.wrapper subParms=subParms num_params=length(T.parameters)
+        @debug "Calling apply_type_with_promotion" wrapper = T.name.wrapper subParms =
+            subParms num_params = length(T.parameters)
         TT2, changed_params = apply_type_with_promotion(T.name.wrapper, subParms)
-        @debug "apply_type_with_promotion succeeded" TT2=TT2 result_fieldcount=fieldcount(TT2) changed_params=changed_params
+        @debug "apply_type_with_promotion succeeded" TT2 = TT2 result_fieldcount = fieldcount(
+            TT2
+        ) changed_params = changed_params
     else
         @debug "subParms is empty, using T as-is"
         TT2, changed_params = T, nothing
     end
     seen3 = copy(seen)
     seen3[T] = TT2
-    @debug "Validating reconstructed type" T=T TT2=TT2 fieldcount_match=(fieldcount(T) == fieldcount(TT2))
+    @debug "Validating reconstructed type" T = T TT2 = TT2 fieldcount_match = (
+        fieldcount(T) == fieldcount(TT2)
+    )
 
     generic_T = Base.unwrap_unionall(T.name.wrapper)
     param_map = typevar_dict(T.name.wrapper)
@@ -813,9 +820,11 @@ Base.@nospecializeinfer function traced_type_inner(
             subT = fieldtype(T, f)
             subT2 = fieldtype(TT2, f)
             subTT = traced_type_inner(subT, seen3, mode, track_numbers, sharding, runtime)
-            @debug "Field validation" f=f subT=subT subT2=subT2 subTT=subTT match=(subT2==subTT)
+            @debug "Field validation" f = f subT = subT subT2 = subT2 subTT = subTT match = (
+                subT2 == subTT
+            )
             if subT2 != subTT
-                @debug "Field mismatch detected" f=f expected=subTT got=subT2
+                @debug "Field mismatch detected" f = f expected = subTT got = subT2
                 legal = false
                 break
             end
@@ -828,7 +837,9 @@ Base.@nospecializeinfer function traced_type_inner(
             return TT2
         end
     else
-        @debug "Field count mismatch" fieldcount_T=fieldcount(T) fieldcount_TT2=fieldcount(TT2)
+        @debug "Field count mismatch" fieldcount_T = fieldcount(T) fieldcount_TT2 = fieldcount(
+            TT2
+        )
     end
 
     throw(NoFieldMatchError(T, TT2, subTys))
@@ -1255,7 +1266,9 @@ Base.@nospecializeinfer function make_tracer_unknown(
                     xi2 = Core.Typeof(xi2)((newpath,), xi2.mlir_data)
                     seen[xi2] = xi2
                     changed = true
-                elseif !ismutabletype(FT) && !ismutabletype(Core.Typeof(xi2)) && fieldcount(FT) == fieldcount(Core.Typeof(xi2))
+                elseif !ismutabletype(FT) &&
+                    !ismutabletype(Core.Typeof(xi2)) &&
+                    fieldcount(FT) == fieldcount(Core.Typeof(xi2))
                     # Attempt to reconcile struct mismatch (e.g. Foo{Float64} -> Foo{TracedRNumber})
                     # arising from parent type constraints overriding local inference.
                     local flds_sub = Vector{Any}(undef, fieldcount(FT))
@@ -1269,7 +1282,9 @@ Base.@nospecializeinfer function make_tracer_unknown(
                             val_wrapped = ft_j(val_j)
                             # Correct the path for the wrapped scalar
                             sub_path = append_path(newpath, j)
-                            val_wrapped = Core.Typeof(val_wrapped)((sub_path,), val_wrapped.mlir_data)
+                            val_wrapped = Core.Typeof(val_wrapped)(
+                                (sub_path,), val_wrapped.mlir_data
+                            )
                             seen[val_wrapped] = val_wrapped
                             flds_sub[j] = val_wrapped
                         else
@@ -1279,7 +1294,14 @@ Base.@nospecializeinfer function make_tracer_unknown(
                     end
 
                     if success
-                        xi2 = ccall(:jl_new_structv, Any, (Any, Ptr{Any}, UInt32), FT, flds_sub, fieldcount(FT))
+                        xi2 = ccall(
+                            :jl_new_structv,
+                            Any,
+                            (Any, Ptr{Any}, UInt32),
+                            FT,
+                            flds_sub,
+                            fieldcount(FT),
+                        )
                         changed = true
                     else
                         throw(
