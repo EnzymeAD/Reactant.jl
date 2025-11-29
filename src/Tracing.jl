@@ -622,6 +622,28 @@ Base.@nospecializeinfer function traced_type_inner(
     return PT
 end
 
+function collect_tvars_in_type!(dependencies, @nospecialize(t))
+    if t isa TypeVar
+        push!(dependencies, t)
+        return
+    end
+    if t isa DataType
+        for p in t.parameters
+            collect_tvars_in_type!(dependencies, p)
+        end
+    elseif t isa Union
+        collect_tvars_in_type!(dependencies, t.a)
+        collect_tvars_in_type!(dependencies, t.b)
+    elseif t isa UnionAll
+        collect_tvars_in_type!(dependencies, t.var.lb)
+        collect_tvars_in_type!(dependencies, t.var.ub)
+        collect_tvars_in_type!(dependencies, t.body)
+    elseif t isa Core.TypeofVararg
+        collect_tvars_in_type!(dependencies, t.T)
+        collect_tvars_in_type!(dependencies, t.N)
+    end
+end
+
 Base.@nospecializeinfer function traced_type_inner(
     @nospecialize(T::Type),
     seen,
@@ -710,11 +732,16 @@ Base.@nospecializeinfer function traced_type_inner(
         return T
     end
 
+    @debug "traced_type_inner: Processing type with field changes" T=T subTys=subTys
+
     wrapped_cpjrt_array = T <: AbstractArray && ancestor(T) <: ConcretePJRTArray
     wrapped_cifrt_array = T <: AbstractArray && ancestor(T) <: ConcreteIFRTArray
     wrapped_tracedarray = T <: AbstractArray && ancestor(T) <: TracedRArray
 
+    @debug "wrapped flags" wrapped_cpjrt_array=wrapped_cpjrt_array wrapped_cifrt_array=wrapped_cifrt_array wrapped_tracedarray=wrapped_tracedarray
+
     subParms = []
+    @debug "Tracing type parameters" num_params=length(T.parameters) T_parameters=T.parameters
     for (i, SST) in enumerate(T.parameters)
         if wrapped_cpjrt_array && i == 1 && SST isa Type && SST <: ReactantPrimitive
             TrT = traced_type_inner(
@@ -746,38 +773,67 @@ Base.@nospecializeinfer function traced_type_inner(
         end
     end
 
+    @debug "Built subParms" subParms=subParms
+
     if !isempty(subParms)
-        TT2 = apply_type_with_promotion(T.name.wrapper, subParms)
+        @debug "Calling apply_type_with_promotion" wrapper=T.name.wrapper subParms=subParms num_params=length(T.parameters)
+        try
+            TT2, changed_params = apply_type_with_promotion(T.name.wrapper, subParms)
+            @debug "apply_type_with_promotion succeeded" TT2=TT2 result_fieldcount=fieldcount(TT2) changed_params=changed_params
+        catch e
+            @error "apply_type_with_promotion failed" exception=e T=T subParms=subParms
+            rethrow()
+        end
     else
-        TT2 = T
+        @debug "subParms is empty, using T as-is"
+        TT2, changed_params = T, nothing
     end
     seen3 = copy(seen)
     seen3[T] = TT2
+    @debug "Validating reconstructed type" T=T TT2=TT2 fieldcount_match=(fieldcount(T) == fieldcount(TT2))
+
+    generic_T = Base.unwrap_unionall(T.name.wrapper)
+    param_map = typevar_dict(T.name.wrapper)
+
     if fieldcount(T) == fieldcount(TT2)
         legal = true
+
+        skipfield = false
         for f in 1:fieldcount(T)
-            if isa(Base.unwrap_unionall(T.name.wrapper).types[f], TypeVar)
-                # The field is constrained by a TypeVar directly,
-                # so we don't need to check.
-                # (The check below would fail if the typevar was promoted as
-                # we don't get the same result when calling traced_type_inner
-                # on the field type directly.)
-                continue
+            def_ft = fieldtype(generic_T, f)
+            field_tvars = Base.IdSet{TypeVar}()
+            collect_tvars_in_type!(field_tvars, def_ft)
+            # field_tvars now contains all typevars the field type directly depends on.
+            @debug "Collected field tvars" field_tvars
+            for tvar in field_tvars
+                idx = get(param_map, tvar, nothing)
+                isnothing(idx) && continue
+                if changed_params[idx]
+                    skipfield = true
+                    break
+                end
             end
+            skipfield && continue
+
             subT = fieldtype(T, f)
             subT2 = fieldtype(TT2, f)
             subTT = traced_type_inner(subT, seen3, mode, track_numbers, sharding, runtime)
+            @debug "Field validation" f=f subT=subT subT2=subT2 subTT=subTT match=(subT2==subTT)
             if subT2 != subTT
+                @debug "Field mismatch detected" f=f expected=subTT got=subT2
                 legal = false
                 break
             end
         end
         if legal
+            @debug "All field checks passed, returning TT2"
             for (k, v) in seen3
                 seen[k] = v
             end
             return TT2
         end
+    else
+        @debug "Field count mismatch" fieldcount_T=fieldcount(T) fieldcount_TT2=fieldcount(TT2)
     end
 
     throw(NoFieldMatchError(T, TT2, subTys))
@@ -790,27 +846,27 @@ const traced_type_cache = Dict{Tuple{TraceMode,Type,Any},Dict{Type,Type}}()
 #     T = T.parameters[1]
 #     mode = mode.parameters[1]::TraceMode
 #     track_numbers = track_numbers.parameters[1]
-# 
-# 
+#
+#
 #     min_world = Ref{UInt}(typemin(UInt))
 #     max_world = Ref{UInt}(typemax(UInt))
-# 
+#
 #     sig = Tuple{typeof(traced_type_inner), Type{T}, Dict{Type, Type}, TraceMode, Type{track_numbers}}
-# 
+#
 #     lookup_result = lookup_world(
 #         sig, world, nothing, min_world, max_world
 #     )
 #     if lookup_result === nothing
 #         stub = Core.GeneratedFunctionStub(identity, Core.svec(:traced_type, :T, :mode, :track_numbers), Core.svec())
-#         return stub(world, source, method_error) 
+#         return stub(world, source, method_error)
 #     end
 #     match = lookup_result::Core.MethodMatch
-# 
+#
 #     mi = ccall(:jl_specializations_get_linfo, Ref{Core.MethodInstance},
 #                (Any, Any, Any), match.method, match.spec_types, match.sparams)::Core.MethodInstance
-#     
+#
 #     ci = Core.Compiler.retrieve_code_info(mi, world)::Core.Compiler.CodeInfo
-# 
+#
 #     cache = nothing
 #     cache_key = (mode, track_numbers)
 #     if haskey(traced_type_cache, cache_key)
@@ -819,8 +875,8 @@ const traced_type_cache = Dict{Tuple{TraceMode,Type,Any},Dict{Type,Type}}()
 #         cache = Dict{Type, Type}()
 #         traced_type_cache[cache_key] = cache
 #     end
-# 
-# 
+#
+#
 #     # prepare a new code info
 #     new_ci = copy(ci)
 #     empty!(new_ci.code)
@@ -838,21 +894,21 @@ const traced_type_cache = Dict{Tuple{TraceMode,Type,Any},Dict{Type,Type}}()
 #     gensig = Tuple{typeof(traced_type_inner), Type, Dict{Type, Type}, TraceMode, Type{track_numbers}}
 #     push!(edges, ccall(:jl_method_table_for, Any, (Any,), gensig))
 #     push!(edges, gensig)
-# 
+#
 #     new_ci.edges = edges
-#     
+#
 #     # XXX: setting this edge does not give us proper method invalidation, see
 #     #      JuliaLang/julia#34962 which demonstrates we also need to "call" the kernel.
 #     #      invoking `code_llvm` also does the necessary codegen, as does calling the
 #     #      underlying C methods -- which GPUCompiler does, so everything Just Works.
-# 
+#
 #     # prepare the slots
 #     new_ci.slotnames = Symbol[Symbol("#self#"), :T, :mode, :track_numbers]
 #     new_ci.slotflags = UInt8[0x00 for i = 1:4]
-# 
+#
 #     # return the codegen world age
 #     res1 = call_with_reactant(traced_type_inner, T, cache, mode, track_numbers)
-# 
+#
 #     res0 = Base.invoke_in_world(world, traced_type_inner, T, cache, mode, track_numbers)
 #     res = Base.invokelatest(traced_type_inner, T, cache, mode, track_numbers)
 #     push!(new_ci.code, Core.Compiler.ReturnNode(res))
@@ -862,15 +918,15 @@ const traced_type_cache = Dict{Tuple{TraceMode,Type,Any},Dict{Type,Type}}()
 #       push!(new_ci.codelocs, 1)   # see note below
 #     end
 #     new_ci.ssavaluetypes += 1
-# 
+#
 #     # NOTE: we keep the first entry of the original linetable, and use it for location info
 #     #       on the call to check_cache. we can't not have a codeloc (using 0 causes
 #     #       corruption of the back trace), and reusing the target function's info
 #     #       has as advantage that we see the name of the kernel in the backtraces.
-# 
+#
 #     return new_ci
 # end
-# 
+#
 # @eval Base.@assume_effects :removable :foldable :nothrow @inline function traced_type_old(T::Type, mode::Val, track_numbers::Type)
 #     $(Expr(:meta, :generated_only))
 #     $(Expr(:meta, :generated, traced_type_generator))
@@ -882,6 +938,7 @@ When there's a constraint conflict, it tries to resolve it by promoting the conf
 """
 function apply_type_with_promotion(wrapper, params, relevant_typevars=typevar_dict(wrapper))
     unwrapped = Base.unwrap_unionall(wrapper) # remove all the typevars
+    original_params = copy(params)
     params = [params...]
 
     changed = true
@@ -928,7 +985,7 @@ function apply_type_with_promotion(wrapper, params, relevant_typevars=typevar_di
                         d = typevar_dict(rewrapped)
                         v = [param.parameters...]
                         v[d[typevar]] = promoted
-                        params[i] = apply_type_with_promotion(rewrapped, v)
+                        params[i], _changed_params = apply_type_with_promotion(rewrapped, v)
                     end
                     changed = true
                 end
@@ -936,7 +993,8 @@ function apply_type_with_promotion(wrapper, params, relevant_typevars=typevar_di
         end
         iter += 1
     end
-    return Core.apply_type(wrapper, params...)
+    changed_params = original_params .!= params
+    return Core.apply_type(wrapper, params...), changed_params
 end
 
 function typevar_dict(t)
@@ -1224,7 +1282,7 @@ Base.@nospecializeinfer function make_tracer_unknown(
                             break
                         end
                     end
-                    
+
                     if success
                         xi2 = ccall(:jl_new_structv, Any, (Any, Ptr{Any}, UInt32), FT, flds_sub, fieldcount(FT))
                         changed = true
