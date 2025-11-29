@@ -777,13 +777,8 @@ Base.@nospecializeinfer function traced_type_inner(
 
     if !isempty(subParms)
         @debug "Calling apply_type_with_promotion" wrapper=T.name.wrapper subParms=subParms num_params=length(T.parameters)
-        try
-            TT2, changed_params = apply_type_with_promotion(T.name.wrapper, subParms)
-            @debug "apply_type_with_promotion succeeded" TT2=TT2 result_fieldcount=fieldcount(TT2) changed_params=changed_params
-        catch e
-            @error "apply_type_with_promotion failed" exception=e T=T subParms=subParms
-            rethrow()
-        end
+        TT2, changed_params = apply_type_with_promotion(T.name.wrapper, subParms)
+        @debug "apply_type_with_promotion succeeded" TT2=TT2 result_fieldcount=fieldcount(TT2) changed_params=changed_params
     else
         @debug "subParms is empty, using T as-is"
         TT2, changed_params = T, nothing
