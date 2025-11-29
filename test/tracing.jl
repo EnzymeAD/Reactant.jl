@@ -261,11 +261,11 @@ end
             end
             @test Reactant.apply_type_with_promotion(
                 Foo, [Float64, Bar{Float64}, Reactant.TracedRArray{Float64,1}]
-            ) == Foo{
+            ) == (Foo{
                 TracedRNumber{Float64},
                 Bar{TracedRNumber{Float64}},
                 Reactant.TracedRArray{Float64,1},
-            }
+            }, [true, true, false])
         end
     end
 
