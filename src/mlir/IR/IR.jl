@@ -136,11 +136,11 @@ function verifyall(operation::Operation; debug=false)
 end
 verifyall(module_::Module; debug=false) = verifyall(Operation(module_); debug)
 
-function tryinject!(sym_name, code; verify=false, mod=IR.mmodule(), location=Location())
+function tryinject!(sym_name, code; verify=false, mod=mmodule(), location=Location())
     fn = lookup(SymbolTable(Operation(mod)), sym_name)
 
     if fn === nothing
-        ctx = IR.context()
+        ctx = context()
         block = body(mod)
         return @ccall API.mlir_c.mlirOperationInject(
             ctx::API.MlirContext,
@@ -159,7 +159,7 @@ function inject!(sym_name, code; kwargs...)
     @assert success "Failed injecting MLIR to top-level block"
 end
 
-function tryinjectop!(sym_name, code; mod=IR.mmodule(), location=Location())
+function tryinjectop!(sym_name, code; mod=mmodule(), location=Location())
     fn = lookup(SymbolTable(Operation(mod)), sym_name)
 
     if isnothing(fn)

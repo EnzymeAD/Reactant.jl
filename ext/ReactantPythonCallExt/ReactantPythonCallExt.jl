@@ -1,7 +1,8 @@
 module ReactantPythonCallExt
 
-using PythonCall
-using Reactant: Reactant, TracedRArray
+using PythonCall: PythonCall, Py, pyconvert, pydict, pyfunc, pyimport, pylist
+using Reactant: Reactant, TracedRArray, TracedRNumber, @reactant_overlay
+using Reactant.Ops: @opcall
 
 const jaxptr = Ref{Py}()
 const jnpptr = Ref{Py}()
@@ -56,6 +57,7 @@ function __init__()
     return nothing
 end
 
+include("overlays.jl")
 include("pycall.jl")
 include("saved_model.jl")
 

@@ -99,5 +99,9 @@ Finally, you may have to add the flag `--extraopt "--sandbox_writable_path=/path
 
 ## `LocalPreferences.toml` file
 
-At the end of a successfult build, the `build_local.jl` script will create a `LocalPreferences.toml` file (see [`Preferences.jl` documentation](https://juliapackaging.github.io/Preferences.jl/stable/) for more information) in the top-level of the Reactant repository, pointing `libReactantExtra` to the new local build.
-If you instantiate this environment Reactant will automatically use the new local build, but if you want to use the local build in a different environment you will have to copy the `LocalPreferences.toml` file (or its content, if you already have a `LocalPreferences.toml` file) to the directory of that environment.
+At the end of a successful build, the `build_local.jl` script will create a `LocalPreferences.toml` file (see [`Preferences.jl` documentation](https://juliapackaging.github.io/Preferences.jl/stable/) for more information) in the top-level of the Reactant repository, pointing `libReactantExtra` to the new local build. 
+If you instantiate this environment, Reactant will automatically use the new local build.
+
+If you want to use the local build in a different environment:
+1. copy the `LocalPreferences.toml` file (or its content, if you already have a `LocalPreferences.toml` file) to the directory of that environment, and
+2. ensure that `Reactant_jll` is a direct dependency of that environment (i.e., add `Reactant_jll` to your `Project.toml` directly).

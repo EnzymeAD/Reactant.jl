@@ -1,14 +1,13 @@
 module ReactantKernelAbstractionsExt
 
-using Reactant
-
-import KernelAbstractions as KA
+using Reactant: Reactant
 
 using Adapt: Adapt
+using KernelAbstractions: KernelAbstractions
+
+const KA = KernelAbstractions
 
 ## back-end
-
-export ReactantBackend
 
 # ToDo: Include XLA client, device and sharding in ReactantBackend struct, to
 # support more complex applications? If so, need to adapt implementation of
@@ -26,7 +25,7 @@ function Base.getproperty(x::ReactantBackend, sym::Symbol)
 end
 
 function KA.allocate(::ReactantBackend, ::Type{T}, dims::Tuple) where {T}
-    return ConcreteRArray(undef, T, dims)
+    return Reactant.ConcreteRArray{T}(undef, dims)
 end
 
 function KA.zeros(b::ReactantBackend, ::Type{T}, dims::Tuple) where {T}
@@ -103,24 +102,33 @@ end
 
 function (obj::KA.Kernel{ReactantBackend})(args...; ndrange=nothing, workgroupsize=nothing)
     if Reactant.precompiling()
-        @code_hlo optimize = false tokw(ndrange, workgroupsize, obj, args...)
+        Reactant.@code_hlo optimize = false tokw(ndrange, workgroupsize, obj, args...)
     else
-        @jit tokw(ndrange, workgroupsize, obj, args...)
+        Reactant.@jit tokw(ndrange, workgroupsize, obj, args...)
     end
     return nothing
 end
 
-function ka_with_reactant end # defined in the CUDA extension
-
-Reactant.@reactant_overlay @noinline Base.@nospecializeinfer function (
-    obj::KA.Kernel{ReactantBackend}
-)(
-    args...; ndrange=nothing, workgroupsize=nothing
-)
-    @nospecialize
-    return Reactant.call_with_reactant(
-        ka_with_reactant, ndrange, workgroupsize, obj, args...
+@static if VERSION < v"1.12-"
+    Reactant.@reactant_overlay Base.@nospecializeinfer @noinline function (
+        obj::KA.Kernel{ReactantBackend}
+    )(
+        @nospecialize args...; ndrange=nothing, workgroupsize=nothing
     )
+        return Reactant.call_with_reactant(
+            Reactant.ka_with_reactant, ndrange, workgroupsize, obj, args...
+        )
+    end
+else
+    Reactant.@reactant_overlay function (obj::KA.Kernel{ReactantBackend})(
+        args...; ndrange=nothing, workgroupsize=nothing
+    )
+        Base.@_noinline_meta
+        Base.@_nospecializeinfer_meta
+        return Reactant.call_with_reactant(
+            Reactant.ka_with_reactant, ndrange, workgroupsize, obj, args...
+        )
+    end
 end
 
 end

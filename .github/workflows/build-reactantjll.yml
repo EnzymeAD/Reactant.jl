@@ -1,0 +1,46 @@
+name: "Build Reactant_jll"
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/build-reactantjll.yml"
+      - "deps/ReactantExtra/API.cpp"
+      - "deps/ReactantExtra/BUILD"
+      - "deps/ReactantExtra/WORKSPACE"
+      - "deps/ReactantExtra/workspace.bzl"
+
+concurrency:
+  # Skip intermediate builds: always.
+  # Cancel intermediate builds: only if it is a pull request build.
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ startsWith(github.ref, 'refs/pull/') }}
+
+jobs:
+  enzyme-jax-commit:
+    name: Extract ENZYMEXLA_COMMIT from WORKSPACE
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Extract ENZYMEXLA_COMMIT from WORKSPACE
+        id: extract_enzyme_jax_commit
+        run: |
+          ENZYMEXLA_COMMIT=$(grep -oP 'ENZYMEXLA_COMMIT = "\K[^"]+' deps/ReactantExtra/WORKSPACE)
+          echo "enzyme_jax_commit=$ENZYMEXLA_COMMIT" >> $GITHUB_OUTPUT
+    outputs:
+      enzyme_jax_commit: ${{ steps.extract_enzyme_jax_commit.outputs.enzyme_jax_commit }}
+
+  build-jll:
+    name: Build Reactant_jll
+    if: github.event.pull_request.draft == false
+    uses: EnzymeAD/ReactantBuilder/.github/workflows/build-reactant-reusable.yml@main
+    needs: enzyme-jax-commit
+    with:
+      reactantbuilder_ref: "main"
+      reactant_commit: ${{ github.event.pull_request.head.sha }}
+      enzyme_jax_commit: ${{ needs.enzyme-jax-commit.outputs.enzyme_jax_commit }}

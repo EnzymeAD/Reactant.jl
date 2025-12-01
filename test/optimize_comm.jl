@@ -9,7 +9,7 @@ function rotate(x)
     return nothing
 end
 function pad(x)
-    return Reactant.Ops.pad(x, eltype(x)(0); low=[5, 0], high=[15, 0], interior=[0, 0])
+    return Reactant.@opcall pad(x, eltype(x)(0); low=[5, 0], high=[15, 0], interior=[0, 0])
 end
 
 function dus(x, y)
@@ -75,7 +75,6 @@ if length(addressable_devices) ≥ 8
         ry = Reactant.to_rarray(y; sharding)
 
         hlo = repr(@code_xla shardy_passes = :to_mhlo_shardings dus(rx, ry))
-        println(hlo)
         @test !contains(hlo, "all-to-all")
         @test !contains(hlo, "all-gather")
         @test contains(hlo, "collective-permute")
@@ -101,10 +100,8 @@ if length(addressable_devices) ≥ 8
 
         hlo = repr(@code_xla shardy_passes = :to_mhlo_shardings dus2(rx, ry))
         @test !contains(hlo, "all-to-all")
-        @test !contains(hlo, "all-gather") broken =
-            Reactant.XLA.REACTANT_XLA_RUNTIME == "PJRT"
-        @test contains(hlo, "collective-permute") broken =
-            Reactant.XLA.REACTANT_XLA_RUNTIME == "PJRT"
+        @test !contains(hlo, "all-gather")
+        @test contains(hlo, "collective-permute")
 
         dus2(x, y)
         @jit shardy_passes = :to_mhlo_shardings dus2(rx, ry)

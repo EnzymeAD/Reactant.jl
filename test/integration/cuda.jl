@@ -1,7 +1,4 @@
-
-using Reactant
-using Test
-using CUDA
+using Reactant, Test, CUDA
 
 const ReactantCUDAExt = Base.get_extension(Reactant, :ReactantCUDAExt)
 
@@ -123,8 +120,6 @@ end
     @test all(Array(a) .== 9)
 end
 
-using Reactant, CUDA
-
 function cmul!(a, b)
     b[1] *= a[1]
     return nothing
@@ -200,8 +195,10 @@ end
     oA = collect(Float64, 1:1:64)
     A = Reactant.to_rarray(oA)
     B = ConcreteRNumber(3.1)
-    @jit searchsorted!(A, B)
-    @test all(Array(A) .≈ 311)
+    @test begin
+        @jit searchsorted!(A, B)
+        all(Array(A) .≈ 311)
+    end broken = contains(string(Reactant.devices()[1]), "TPU")
 end
 
 function convert_mul_kernel!(Gu, w::FT) where {FT}

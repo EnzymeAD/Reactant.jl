@@ -1,7 +1,7 @@
 module ReactantCore
 
 using ExpressionExplorer: ExpressionExplorer
-using MacroTools: MacroTools
+using MacroTools: MacroTools, @capture
 
 export @trace, within_compile, MissingTracedValue, promote_to_traced
 
@@ -175,26 +175,123 @@ macro trace(args...)
     track_numbers = track_numbers ? Number : Union{}
     expr = macroexpand(__module__, expr)
 
+    #! format: off
+    if @capture(
+        expr,
+        (
+            fnname_(call_args__) where {Typs__} = fnbody_
+        ) | (
+            fnname_(call_args__) = fnbody_
+        ) | (
+            function fnname_(call_args__)
+                fnbody_
+            end
+        ) | (
+            function fnname_(call_args__) where {Typs__}
+                fnbody_
+            end
+        )
+    )
+        return esc(trace_function_definition(__module__, expr))
+    end
+    #! format: on
+
     if Meta.isexpr(expr, :(=))
         if Meta.isexpr(expr.args[2], :if)
             return esc(trace_if_with_returns(expr; track_numbers))
         end
     end
+
     Meta.isexpr(expr, :call) && return esc(trace_call(__module__, expr))
+
     if Meta.isexpr(expr, :(.), 2) && Meta.isexpr(expr.args[2], :tuple)
         fname = :($(Base.Broadcast.BroadcastFunction)($(expr.args[1])))
         args = only(expr.args[2:end]).args
         call = Expr(:call, fname, args...)
         return esc(trace_call(__module__, call))
     end
+
     Meta.isexpr(expr, :if) && return esc(trace_if(expr; track_numbers))
+
     Meta.isexpr(expr, :for) &&
         return (esc(trace_for(expr; track_numbers, checkpointing, mincut)))
+
     Meta.isexpr(expr, :while) &&
         return (esc(trace_while(expr; track_numbers, checkpointing, mincut)))
+
     return error(
-        "Only `if-elseif-else` blocks, `for` and `while` loops are currently supported by `@trace`",
+        "Only `if-elseif-else` blocks, function definitions, `function calls`, `for` and \
+        `while` loops are currently supported by `@trace`"
     )
+end
+
+function get_argname(expr)
+    if Meta.isexpr(expr, :(::))
+        length(expr.args) == 2 && return expr.args[1], expr
+        @assert length(expr.args) == 1
+        var = gensym(:_)
+        return var, Expr(:(::), var, expr.args[1])
+    end
+    Meta.isexpr(expr, :kw) && return get_argname(expr.args[1])[1], expr
+    Meta.isexpr(expr, :(...)) && return expr, expr
+    @assert expr isa Symbol
+    if expr == :_
+        var = gensym(:_)
+        return var, var
+    end
+    return expr, expr
+end
+
+function trace_function_definition(mod, expr)
+    internal_fn = MacroTools.splitdef(expr)
+    orig_fname = internal_fn[:name]
+
+    isfunctor = Meta.isexpr(orig_fname, :(::))
+    fname = gensym(Symbol(orig_fname, :internal))
+    internal_fn[:name] = fname
+
+    if isfunctor
+        if length(orig_fname.args) == 1
+            sym_name = gensym("functor")
+            orig_fname = Expr(:(::), sym_name, orig_fname.args[1])
+        end
+        @assert length(orig_fname.args) == 2
+        insert!(internal_fn[:args], 1, :($orig_fname))
+    end
+
+    new_fn = MacroTools.splitdef(expr)
+
+    standardized_argnames = get_argname.(new_fn[:args])
+    argnames = first.(standardized_argnames)
+    new_fn[:args] = last.(standardized_argnames)
+
+    if isfunctor
+        insert!(argnames, 1, orig_fname.args[1])
+    end
+
+    if isempty(new_fn[:kwargs])
+        traced_call_expr = :($(traced_call)($(fname), $(argnames...)))
+        untraced_call_expr = :($(fname)($(argnames...)))
+    else
+        kws = first.(get_argname.(new_fn[:kwargs]))
+        traced_call_expr =
+            :($(traced_call)(Core.kwcall, (; $(kws...)), $(fname), $(argnames...)))
+        untraced_call_expr = :(Core.kwcall((; $(kws...)), $(fname), $(argnames...)))
+    end
+
+    new_fn[:name] = orig_fname
+    new_fn[:body] = :(
+        if $(within_compile)() && $(any)($(is_traced), ($(argnames...),))
+            return $(traced_call_expr)
+        else
+            return $(untraced_call_expr)
+        end
+    )
+
+    return quote
+        $(MacroTools.combinedef(new_fn))
+        $(MacroTools.combinedef(internal_fn))
+    end
 end
 
 function trace_while(expr; track_numbers, mincut, checkpointing, first_arg=nothing)

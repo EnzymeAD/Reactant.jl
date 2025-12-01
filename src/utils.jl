@@ -1,3 +1,18 @@
+struct CallWithReactant{F} <: Function
+    f::F
+end
+
+function Base.reducedim_init(f::F, op::CallWithReactant, A::AbstractArray, region) where {F}
+    return Base.reducedim_init(f, op.f, A, region)
+end
+
+function (f::CallWithReactant{F})(args...; kwargs...) where {F}
+    if isempty(kwargs)
+        return call_with_reactant(f.f, args...)
+    else
+        return call_with_reactant(Core.kwcall, NamedTuple(kwargs), f.f, args...)
+    end
+end
 
 function apply(f::F, args...; kwargs...) where {F}
     return f(args...; kwargs...)
@@ -13,6 +28,9 @@ function maybe_argextype(@nospecialize(x), src)
         nothing
     end
 end
+
+# Defined in KernelAbstractions Ext
+function ka_with_reactant end
 
 """
     Reactant.REDUB_ARGUMENTS_NAME
@@ -99,7 +117,7 @@ const __skip_rewrite_func_set = Set([
     typeof(Core.Compiler.typeinf_ext),
     # TODO: perhaps problematic calls in `traced_call`
     # should be moved to TracedUtils.jl:
-    typeof(Reactant.ReactantCore.traced_call),
+    typeof(ReactantCore.traced_call),
     typeof(ReactantCore.is_traced),
     # Perf optimization
     typeof(Base.typemax),
@@ -134,7 +152,7 @@ const __skip_rewrite_func_set = Set([
             typeof(Base.memoryref)
         end
     ),
-    typeof(Reactant.materialize_traced_array),
+    typeof(materialize_traced_array),
 ])
 
 """
@@ -224,9 +242,9 @@ function should_rewrite_call(@nospecialize(ft))
         if hasfield(typeof(ft), :name) && hasfield(typeof(ft.name), :module)
             mod = ft.name.module
             # Don't rewrite primitive ops, tracing utilities, or any MLIR-based functions
-            if has_ancestor(mod, Reactant.Ops) ||
-                has_ancestor(mod, Reactant.TracedUtils) ||
-                has_ancestor(mod, Reactant.MLIR)
+            if has_ancestor(mod, Ops) ||
+                has_ancestor(mod, TracedUtils) ||
+                has_ancestor(mod, MLIR)
                 return false
             end
             if string(mod) == "CUDA"
@@ -351,7 +369,11 @@ function rewrite_inst(inst, ir, interp, RT, guaranteed_error)
         end
     end
     if Meta.isexpr(inst, :invoke)
-        omi = inst.args[1]::Core.MethodInstance
+        omi = if inst.args[1] isa Core.MethodInstance
+            inst.args[1]
+        else
+            (inst.args[1]::Core.CodeInstance).def
+        end
         sig = omi.specTypes
         ft = sig.parameters[1]
         argsig = sig.parameters[2:end]
@@ -500,22 +522,42 @@ function make_oc_ref(
     if Base.isassigned(oc_captures)
         return oc_captures[]
     else
-        ores = ccall(
-            :jl_new_opaque_closure_from_code_info,
-            Any,
-            (Any, Any, Any, Any, Any, Cint, Any, Cint, Cint, Any, Cint),
-            sig,
-            rt,
-            rt,
-            @__MODULE__,
-            src,
-            0,
-            nothing,
-            nargs,
-            isva,
-            f,
-            true,
-        )::Core.OpaqueClosure
+        ores = @static if VERSION < v"1.11"
+            ccall(
+                :jl_new_opaque_closure_from_code_info,
+                Any,
+                (Any, Any, Any, Any, Any, Cint, Any, Cint, Cint, Any, Cint),
+                sig,
+                rt,
+                rt,
+                @__MODULE__,
+                src,
+                0,
+                nothing,
+                nargs,
+                isva,
+                f,
+                true,
+            )::Core.OpaqueClosure
+        else
+            ccall(
+                :jl_new_opaque_closure_from_code_info,
+                Any,
+                (Any, Any, Any, Any, Any, Cint, Any, Cint, Cint, Any, Cint, Cint),
+                sig,            # jl_tupletype_t *argt
+                rt,             # jl_value_t *rt_lb
+                rt,             # jl_value_t *rt_ub
+                @__MODULE__,    # jl_module_t *mod
+                src,            # jl_code_info_t *ci
+                0,              # int lineno
+                nothing,        # jl_value_t *file
+                nargs,          # int nargs
+                isva,           # int isva
+                f,              # jl_value_t *env
+                true,           # int do_compile
+                true,           # int isinferred
+            )::Core.OpaqueClosure
+        end
         oc_captures[] = ores
         return ores
     end
@@ -887,7 +929,10 @@ end
 #      using a custom interpreter in type unstable code.
 # `redub_arguments` is `(typeof(original_function), map(typeof, original_args_tuple)...)`
 function call_with_reactant_generator(
-    world::UInt, source::LineNumberNode, self, @nospecialize(redub_arguments)
+    world::UInt,
+    source::Union{LineNumberNode,Core.Method},
+    self,
+    @nospecialize(redub_arguments)
 )
     @nospecialize
     args = redub_arguments
@@ -1024,11 +1069,13 @@ function call_with_reactant_generator(
 
     rewrite_argnumbers_by_one!(ir)
 
-    src = ccall(:jl_new_code_info_uninit, Ref{CC.CodeInfo}, ())
+    src = ccall(:jl_new_code_info_uninit, Ref{Core.CodeInfo}, ())
     src.slotnames = fill(:none, length(ir.argtypes) + 1)
     src.slotflags = fill(zero(UInt8), length(ir.argtypes))
     src.slottypes = copy(ir.argtypes)
-    src.rettype = rt
+    @static if VERSION < v"1.12.0-"
+        src.rettype = rt
+    end
     src = CC.ir_to_codeinf!(src, ir)
 
     if DEBUG_INTERP[]
@@ -1050,6 +1097,12 @@ function call_with_reactant_generator(
     # and the REDUB_ARGUMENTS_NAME tuple of input arguments
     code_info.slotnames = Any[:call_with_reactant, REDUB_ARGUMENTS_NAME]
     code_info.slotflags = UInt8[0x00, 0x00]
+
+    if VERSION >= v"1.12-"
+        code_info.nargs = length(code_info.slotnames)
+        code_info.isva = true
+    end
+
     n_prepended_slots = 2
     overdub_args_slot = Core.SlotNumber(n_prepended_slots)
 
@@ -1057,10 +1110,18 @@ function call_with_reactant_generator(
     # into these overdubbed equivalents instead of updating `code_info` in-place. Then, at
     # the end of the pass, we'll reset `code_info` fields accordingly.
     overdubbed_code = Any[]
-    overdubbed_codelocs = Int32[]
+
+    overdubbed_codelocs = @static if isdefined(Core, :DebugInfo)
+        nothing
+    else
+        Int32[]
+    end
+
     function push_inst!(inst)
         push!(overdubbed_code, inst)
-        push!(overdubbed_codelocs, code_info.codelocs[1])
+        @static if !isdefined(Core, :DebugInfo)
+            push!(overdubbed_codelocs, code_info.codelocs[1])
+        end
         return Core.SSAValue(length(overdubbed_code))
     end
     # Rewire the arguments from our tuple input of fn and args, to the corresponding calling convention
@@ -1082,6 +1143,11 @@ function call_with_reactant_generator(
     iter_args = n_actual_args
     if method.isva
         iter_args = min(n_actual_args, n_method_args - 1)
+    end
+
+    if VERSION >= v"1.12-"
+        src.nargs = length(src.slottypes)
+        src.isva = false
     end
 
     for i in 1:iter_args
@@ -1394,7 +1460,13 @@ function call_with_reactant_generator(
     end
 
     code_info.code = overdubbed_code
-    code_info.codelocs = overdubbed_codelocs
+
+    @static if isdefined(Core, :DebugInfo)
+        code_info.debuginfo = Core.DebugInfo(:none) # Core.DebugInfoStream(overdubbed_codelocs), length(overdubbed_codelocs))
+    else
+        code_info.codelocs = overdubbed_codelocs
+    end
+
     code_info.ssavaluetypes = length(overdubbed_code)
     code_info.ssaflags = [0x00 for _ in 1:length(overdubbed_code)] # XXX we need to copy flags that are set for the original code
 
@@ -1416,3 +1488,5 @@ end
 nmantissa(::Type{Float16}) = 10
 nmantissa(::Type{Float32}) = 23
 nmantissa(::Type{Float64}) = 52
+
+_unwrap_val(::Val{T}) where {T} = T

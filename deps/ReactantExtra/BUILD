@@ -1,4 +1,4 @@
-load("@llvm-project//mlir:tblgen.bzl", "gentbl_cc_library", "td_library")
+load("@llvm-project//mlir:tblgen.bzl", "gentbl_cc_library")
 load("@local_config_rocm//rocm:build_defs.bzl", "if_rocm")
 load("@local_config_cuda//cuda:build_defs.bzl", "if_cuda")
 load("@xla//tools/toolchains/cross_compile/cc:cc_toolchain_config.bzl", "cc_toolchain_config")
@@ -12,9 +12,16 @@ package(
 )
 
 cc_toolchain_suite(
-    name = "ygg_cross_compile_toolchain_suite",
+    name = "ygg_host_toolchain_suite",
     toolchains = {
         "k8": ":ygg_host_toolchain",
+    },
+)
+
+cc_toolchain_suite(
+    name = "ygg_cross_compile_toolchain_suite",
+    toolchains = {
+        "k8": ":ygg_x86_toolchain",
         "x64_windows": ":ygg_win_x86_toolchain",
         "darwin": ":ygg_darwin_x86_toolchain",
         "darwin_arm64": ":ygg_darwin_arm64_toolchain",
@@ -128,7 +135,7 @@ cc_toolchain_config(
         "objdump": "/opt/bin/x86_64-linux-musl-cxx11/x86_64-linux-musl-objdump",
         "strip": "/opt/bin/x86_64-linux-musl-cxx11/x86_64-linux-musl-strip",
     },
-    toolchain_identifier = "ygg_x86_toolchain",
+    toolchain_identifier = "ygg_host",
     unfiltered_compile_flags = [
         "-no-canonical-prefixes",
         "-Wno-builtin-macro-redefined",
@@ -190,10 +197,10 @@ cc_toolchain_config(
         "-isystem /opt/BB_TARGET/BB_TARGET/include/c++/GCC_VERSION/parallel",
         "-stdlib=libstdc++",
     ],
-    compiler = "compiler",
+    compiler = "clang",
     coverage_compile_flags = ["--coverage"],
     coverage_link_flags = ["--coverage"],
-    cpu = "x86",
+    cpu = "k8",
     cxx_builtin_include_directories = [
         "/opt/BB_TARGET/lib/gcc/BB_TARGET/GCC_VERSION/include",
         "/opt/BB_TARGET/lib/gcc/BB_TARGET/GCC_VERSION/include-fixed",
@@ -234,13 +241,13 @@ cc_toolchain_config(
         "as": "/opt/bin/BB_FULL_TARGET/as",
         "c++": "/opt/bin/BB_FULL_TARGET/c++",
         "c++filt": "/opt/bin/BB_FULL_TARGET/c++filt",
-        "cc": "/opt/bin/BB_FULL_TARGET/cc",
+        "cc": "/opt/bin/BB_FULL_TARGET/clang",
         "clang": "/opt/bin/BB_FULL_TARGET/clang",
         "clang++": "/opt/bin/BB_FULL_TARGET/clang++",
         "cpp": "/opt/bin/BB_FULL_TARGET/cpp",
         "f77": "/opt/bin/BB_FULL_TARGET/f77",
-        "g++": "/opt/bin/BB_FULL_TARGET/g++",
-        "gcc": "/opt/bin/BB_FULL_TARGET/gcc",
+        "g++": "/opt/bin/BB_FULL_TARGET/clang++",
+        "gcc": "/opt/bin/BB_FULL_TARGET/clang",
         "gfortran": "/opt/bin/BB_FULL_TARGET/gfortran",
         "ld": "/opt/bin/BB_FULL_TARGET/ld",
         "ld.lld": "/opt/bin/BB_FULL_TARGET/ld.lld",
@@ -318,7 +325,7 @@ cc_toolchain_config(
         "-isystem /opt/BB_TARGET/BB_TARGET/include/c++/GCC_VERSION/backward",
         "-isystem /opt/BB_TARGET/BB_TARGET/include/c++/GCC_VERSION/parallel",
     ],
-    compiler = "compiler",
+    compiler = "clang",
     coverage_compile_flags = ["--coverage"],
     coverage_link_flags = ["--coverage"],
     cpu = "aarch64",
@@ -338,7 +345,9 @@ cc_toolchain_config(
     ],
     dbg_compile_flags = ["-g"],
     host_system_name = "linux",
-    link_flags = [],
+    link_flags = [
+        "-stdlib=libstdc++",
+    ],
     link_libs = [
         "-lstdc++",
         "-lm",
@@ -361,13 +370,13 @@ cc_toolchain_config(
         "as": "/opt/bin/BB_FULL_TARGET/as",
         "c++": "/opt/bin/BB_FULL_TARGET/c++",
         "c++filt": "/opt/bin/BB_FULL_TARGET/c++filt",
-        "cc": "/opt/bin/BB_FULL_TARGET/cc",
+        "cc": "/opt/bin/BB_FULL_TARGET/clang",
         "clang": "/opt/bin/BB_FULL_TARGET/clang",
         "clang++": "/opt/bin/BB_FULL_TARGET/clang++",
         "cpp": "/opt/bin/BB_FULL_TARGET/cpp",
         "f77": "/opt/bin/BB_FULL_TARGET/f77",
-        "g++": "/opt/bin/BB_FULL_TARGET/g++",
-        "gcc": "/opt/bin/BB_FULL_TARGET/gcc",
+        "g++": "/opt/bin/BB_FULL_TARGET/clang++",
+        "gcc": "/opt/bin/BB_FULL_TARGET/clang",
         "gfortran": "/opt/bin/BB_FULL_TARGET/gfortran",
         "ld": "/opt/bin/BB_FULL_TARGET/ld",
         "ld.lld": "/opt/bin/BB_FULL_TARGET/ld.lld",
@@ -914,11 +923,12 @@ cc_library(
         "-Werror=return-type",
         "-Werror=unused-result",
         "-Wno-error=stringop-truncation",
-    ] + if_cuda(["-DREACTANT_CUDA=1"]),
+    ] + if_cuda(["-DREACTANT_CUDA=1"]) + if_rocm(["-DREACTANT_ROCM=1"]),
     linkopts = select({
         "//conditions:default": [],
         "@bazel_tools//src/conditions:darwin": [
             "-Wl,-exported_symbol,_stablehlo*",
+            "-Wl,-exported_symbol,_enzymexla*",
             "-Wl,-exported_symbol,_mlir*",
             "-Wl,-exported_symbol,_sdy*",
             "-Wl,-exported_symbol,_EnzymeJaXMapSymbol",
@@ -980,6 +990,11 @@ cc_library(
             "-Wl,-exported_symbol,_ReactantHermeticCudaGetVersion",
             "-Wl,-exported_symbol,_ReactantCudaDriverGetVersion",
             "-Wl,-exported_symbol,_ReactantLLVMParseCommandLineOptions",
+            "-Wl,-exported_symbol,_ReactantCudaDeviceGetComputeCapalilityMajor",
+            "-Wl,-exported_symbol,_ReactantCudaDeviceGetComputeCapalilityMinor",
+            "-Wl,-exported_symbol,_ReactantCudaDeviceGetWarpSizeInThreads",
+            "-Wl,-exported_symbol,_ReactantCudaDeviceGetProperties",
+            "-Wl,-exported_symbol,_ReactantCudaGetRegsSpillsMaxThreadsFromBinary",
             "-Wl,-exported_symbol,_PjRtDeviceGetLocalDeviceId",
             "-Wl,-exported_symbol,_PjRtDeviceGetGlobalDeviceId",
             "-Wl,-exported_symbol,_PjRtDeviceGetLocalHardwareId",
@@ -1026,6 +1041,24 @@ cc_library(
             "-Wl,-exported_symbol,_mlirGetFunctionTypeFromOperation",
             "-Wl,-exported_symbol,_mlirIsFunctionOpInterface",
             "-Wl,-exported_symbol,_convertMlirModuleToHloModule",
+            "-Wl,-exported_symbol,_parseAndReturnUnverifiedHloModule",
+            "-Wl,-exported_symbol,_hloModuleGetEntryComputation",
+            "-Wl,-exported_symbol,_freeHloComputation",
+            "-Wl,-exported_symbol,_hloComputationToString",
+            "-Wl,-exported_symbol,_hloComputationGetInstructionsPostOrder",
+            "-Wl,-exported_symbol,_freeHloInstruction",
+            "-Wl,-exported_symbol,_hloInstructionToString",
+            "-Wl,-exported_symbol,_hloInstructionGetOpcode",
+            "-Wl,-exported_symbol,_hloInstructionIsFusion",
+            "-Wl,-exported_symbol,_hloInstructionGetFusionKind",
+            "-Wl,-exported_symbol,_hloOpcodeToString",
+            "-Wl,-exported_symbol,_hloFusionKindToString",
+            "-Wl,-exported_symbol,_hloInstructionFusedInstructionsComputation",
+            "-Wl,-exported_symbol,_deviceDescriptionToString",
+            "-Wl,-exported_symbol,_CudaGetStreamExecutorDeviceDescription",
+            "-Wl,-exported_symbol,_CreateGPUPerformanceModel",
+            "-Wl,-exported_symbol,_RunAnalysisOnHloModule",
+            "-Wl,-exported_symbol,_EstimateRunTimeForInstruction",
         ],
     }),
     linkstatic = True,
@@ -1065,6 +1098,7 @@ cc_library(
         "@llvm-project//llvm:X86CodeGen",
         "@enzyme_ad//src/enzyme_ad/jax:TransformOps",
         "@enzyme_ad//src/enzyme_ad/jax:XLADerivatives",
+        "@enzyme_ad//src/enzyme_ad/jax:CInterface",
         # "@enzyme_ad//src/enzyme_ad/jax:gpu",
         "@xla//xla/ffi/api:ffi",
         "@xla//xla/ffi:ffi_api",
@@ -1089,12 +1123,12 @@ cc_library(
         "@xla//xla/stream_executor/tpu:tpu_executor",
         "@xla//xla/stream_executor/tpu:tpu_transfer_manager",
         "@xla//xla/service/cpu:cpu_transfer_manager",
-        "@xla//xla/pjrt/gpu:se_gpu_pjrt_client",
         "@xla//xla/tsl/protobuf:protos_all_cc_impl",
         "@xla//xla/tsl/framework:allocator_registry_impl",
         "@xla//xla/pjrt:status_casters",
         "@xla//xla/python/ifrt",
         "@xla//xla/python/pjrt_ifrt",
+        "@xla//xla/hlo/parser:hlo_parser",
         "@xla//xla/hlo/translate:stablehlo",
         "@xla//xla/python/ifrt_proxy/server:grpc_server",
         "@xla//xla/python/ifrt_proxy/client:grpc_client",
@@ -1141,13 +1175,11 @@ cc_library(
         "@com_google_absl//absl/log:globals",
         "@llvm-project//mlir:CAPIIRObjects",
         "@llvm-project//mlir:CAPILLVMObjects",
-        "@jax//jaxlib/mosaic:tpu_dialect_capi_objects",
+
+        # Broken upstream x/ref https://github.com/jax-ml/jax/issues/33344
+        # "@jax//jaxlib/mosaic:tpu_dialect_capi_objects",
         "@jax//jaxlib/triton:triton_dialect_capi_objects",
-        "@xla//xla/stream_executor/cuda:cuda_compute_capability_proto_cc_impl",
-        "@xla//xla/service:gpu_plugin",
-        "@xla//xla/pjrt/c:pjrt_c_api_gpu",
         "@xla//xla/pjrt/plugin/xla_cpu:xla_cpu_pjrt_client",
-        "@xla//xla/pjrt/plugin/xla_gpu:xla_gpu_pjrt_client",
         "@stablehlo//:linalg_passes",
         "@stablehlo//:tosa_passes",
         "@stablehlo//:stablehlo_passes",
@@ -1163,6 +1195,11 @@ cc_library(
         "@xla//xla/service:hlo_proto_cc_impl",
         "@com_google_absl//absl/status:statusor",
     ] + if_cuda([
+        "@xla//xla/stream_executor/cuda:cuda_compute_capability_proto_cc_impl",
+        "@xla//xla/service:gpu_plugin",
+        "@xla//xla/pjrt/c:pjrt_c_api_gpu",
+        "@xla//xla/pjrt/gpu:se_gpu_pjrt_client",
+        "@xla//xla/pjrt/plugin/xla_gpu:xla_gpu_pjrt_client",
         "@jax//jaxlib/cuda:cuda_gpu_kernels",
         "@xla//xla/backends/profiler:profiler_backends",
         "@xla//xla/backends/profiler/gpu:device_tracer",
@@ -1175,6 +1212,10 @@ cc_library(
         "@xla//xla/stream_executor:kernel",
         "@xla//xla/stream_executor/cuda:all_runtime",
     ]) + if_rocm([
+        "@xla//xla/service:gpu_plugin",
+        "@xla//xla/pjrt/c:pjrt_c_api_gpu",
+        "@xla//xla/pjrt/gpu:se_gpu_pjrt_client",
+        "@xla//xla/pjrt/plugin/xla_gpu:xla_gpu_pjrt_client",
         "@xla//xla/stream_executor:rocm_platform",
         "@xla//xla/service/gpu:amdgpu_compiler",
         "@xla//xla/backends/profiler/gpu:device_tracer",
@@ -1423,9 +1464,26 @@ gentbl_cc_library(
     deps = [
         "@enzyme//:EnzymeDialectTdFiles",
         "@enzyme_ad//src/enzyme_ad/jax:EnzymeXLADialectTdFiles",
-        "@llvm-project//mlir:CopyOpInterfaceTdFiles",
         "@llvm-project//mlir:GPUOpsTdFiles",
         "@stablehlo//:stablehlo_ops_td_files",
+    ],
+)
+
+gentbl_cc_library(
+    name = "TritonExtJLIncGen",
+    tbl_outs = [
+        (
+            [
+                "--generator=jl-op-defs",
+                "--disable-module-wrap=0",
+            ],
+            "TritonExt.jl",
+        ),
+    ],
+    tblgen = "//:mlir-jl-tblgen",
+    td_file = "@enzyme_ad//src/enzyme_ad/jax:Dialect/TritonExt/Ops.td",
+    deps = [
+        "@enzyme_ad//src/enzyme_ad/jax:TritonExtDialectTdFiles",
     ],
 )
 
@@ -1600,6 +1658,7 @@ genrule(
         "@jax//jaxlib/mosaic:dialect/tpu/integrations/c/tpu_passes.capi.h.inc",
         "@jax//jaxlib/mosaic/dialect/gpu:integrations/c/attributes.h",
         "@jax//jaxlib/mosaic/dialect/gpu:integrations/c/gpu_dialect.h",
+        "@enzyme_ad//src/enzyme_ad/jax:Integrations/c/EnzymeXLA.h",
         "//:Project.toml",
         "//:Manifest.toml",
         "//:wrap.toml",
@@ -1607,7 +1666,7 @@ genrule(
         "//:make.jl",
     ],
     outs = ["libMLIR_h.jl"],
-    cmd = "$$JULIA \"--color=yes\" \"--project=$(location //:Project.toml)\" \"$(location //:make.jl)\" \"$(location @llvm-project//mlir:include/mlir-c/Bindings/Python/Interop.h)\" \"$(location @llvm-project//llvm:include/llvm-c/Support.h)\" \"$(locations @llvm-project//mlir:ConversionPassIncGen_filegroup)\" \"$(location @stablehlo//:stablehlo/integrations/c/StablehloAttributes.h)\" \"$(location @shardy//shardy/integrations/c:attributes.h)\" \"$(location @jax//jaxlib/triton:triton_dialect_capi.h)\" \"$(location @jax//jaxlib/mosaic:dialect/tpu/integrations/c/tpu_dialect.h)\" \"$(location @jax//jaxlib/mosaic/dialect/gpu:integrations/c/gpu_dialect.h)\" \"$@\"",
+    cmd = "$$JULIA \"--color=yes\" \"--project=$(location //:Project.toml)\" \"$(location //:make.jl)\" \"$(location @llvm-project//mlir:include/mlir-c/Bindings/Python/Interop.h)\" \"$(location @llvm-project//llvm:include/llvm-c/Support.h)\" \"$(locations @llvm-project//mlir:ConversionPassIncGen_filegroup)\" \"$(location @stablehlo//:stablehlo/integrations/c/StablehloAttributes.h)\" \"$(location @shardy//shardy/integrations/c:attributes.h)\" \"$(location @jax//jaxlib/triton:triton_dialect_capi.h)\" \"$(location @jax//jaxlib/mosaic:dialect/tpu/integrations/c/tpu_dialect.h)\" \"$(location @jax//jaxlib/mosaic/dialect/gpu:integrations/c/gpu_dialect.h)\" \"$(location @enzyme_ad//src/enzyme_ad/jax:Integrations/c/EnzymeXLA.h)\" \"$@\"",
     tags = [
         "jlrule",
     ],

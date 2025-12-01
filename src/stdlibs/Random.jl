@@ -4,12 +4,22 @@ module TracedRandom
 # 1. https://github.com/JuliaGPU/CUDA.jl/blob/master/src/random.jl
 # 2. https://github.com/JuliaRandom/Random123.jl/blob/master/src/common.jl
 
-using ..Reactant:
-    Reactant, TracedRArray, TracedRNumber, ReactantRNG, AnyTracedRArray, TracedUtils, Ops
+using ..Reactant: Reactant, TracedUtils, Ops, TracedRArray, TracedRNumber, AnyTracedRArray
+using ..Reactant.Ops: @opcall
+import ..Reactant: ReactantRNG
+
 using Random: Random, AbstractRNG
 
-@noinline make_seed(rng::AbstractRNG=Random.RandomDevice()) =
-    Random.rand!(rng, Vector{UInt64}(undef, 2))
+@noinline function should_warn_if_not_natively_supported(rng::AbstractRNG)
+    @warn "The RNG $(typeof(rng)) is not natively supported by Reactant. We will convert \
+           this to `ReactantRNG` which will have different seed and distribution \
+           characteristics." maxlog = 1
+    return nothing
+end
+
+@noinline function make_seed(rng::AbstractRNG=Random.RandomDevice())
+    return Random.rand!(rng, Vector{UInt64}(undef, 2))
+end
 
 @noinline function Random.seed!(rng::ReactantRNG, seed::Number)
     if seed isa TracedRNumber
@@ -30,14 +40,16 @@ Base.copy(rng::ReactantRNG) = ReactantRNG(copy(rng.seed), rng.algorithm)
 
 @noinline function ReactantRNG()
     if Reactant.within_compile()
-        return ReactantRNG(TracedUtils.promote_to(TracedRArray{UInt64,1}, make_seed()))
+        return ReactantRNG(Reactant.promote_to(TracedRArray, make_seed()))
     else
         return ReactantRNG(Reactant.to_rarray(make_seed()))
     end
 end
 @noinline ReactantRNG(seed::AbstractVector) = ReactantRNG(seed, "DEFAULT")
 
-@noinline default_rng() = ReactantRNG()
+@noinline function default_rng()
+    return ReactantRNG()
+end
 
 @noinline rng_algorithm(rng::ReactantRNG) = rng.algorithm
 @noinline rng_algorithm(::AbstractRNG) = "DEFAULT"
@@ -46,7 +58,7 @@ end
     rng::ReactantRNG{<:TracedRArray}, A::AnyTracedRArray{T,N}
 ) where {T,N}
     length(A) == 0 && return A
-    res = Ops.rng_bit_generator(T, rng.seed, [size(A)...]; rng.algorithm)
+    res = @opcall rng_bit_generator(T, rng.seed, [size(A)...]; rng.algorithm)
     copyto!(rng.seed, res.output_state)
     TracedUtils.set_mlir_data!(A, res.output.mlir_data)
     return A
@@ -56,7 +68,7 @@ end
     rng::ReactantRNG{<:TracedRArray}, A::AnyTracedRArray{T,N}
 ) where {T,N}
     length(A) == 0 && return A
-    res = Ops.randn(T, rng.seed, [size(A)...]; rng.algorithm)
+    res = @opcall randn(T, rng.seed, [size(A)...]; rng.algorithm)
     copyto!(rng.seed, res.output_state)
     TracedUtils.set_mlir_data!(A, res.output.mlir_data)
     return A
@@ -66,7 +78,7 @@ end
     rng::ReactantRNG{<:TracedRArray}, A::AnyTracedRArray{T,N}
 ) where {T,N}
     length(A) == 0 && return A
-    res = Ops.randexp(T, rng.seed, [size(A)...]; rng.algorithm)
+    res = @opcall randexp(T, rng.seed, [size(A)...]; rng.algorithm)
     copyto!(rng.seed, res.output_state)
     TracedUtils.set_mlir_data!(A, res.output.mlir_data)
     return A
@@ -110,7 +122,7 @@ for randfun in (:rand, :randn, :randexp)
         @noinline function $(overload_randfun)(
             rng::ReactantRNG{<:TracedRArray}, ::Type{T}=Float64
         ) where {T}
-            A = TracedUtils.promote_to(TracedRArray{T,0}, fill(T(0)))
+            A = Reactant.promote_to(TracedRArray, fill(T(0)))
             $(overload_randfun!)(rng, A)
             return TracedRNumber{T}((), A.mlir_data)
         end
@@ -125,8 +137,7 @@ for randfun in (:rand, :randn, :randexp, :rand!, :randn!, :randexp!)
     @eval begin
         @noinline function $(overload_randfun)(rng::AbstractRNG, args...)
             rng = ReactantRNG(
-                TracedUtils.promote_to(TracedRArray{UInt64,1}, make_seed(rng)),
-                rng_algorithm(rng),
+                Reactant.promote_to(TracedRArray, make_seed(rng)), rng_algorithm(rng)
             )
             return $(internal_overload_randfun)(rng, args...)
         end

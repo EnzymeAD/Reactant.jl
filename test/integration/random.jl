@@ -189,7 +189,7 @@ end
 rand_sample(rng, x) = rand(rng, eltype(x), size(x))
 
 function rand_on_device()
-    x = Reactant.Ops.fill(0.0f0, (3, 4, 5))
+    x = Reactant.@opcall fill(0.0f0, (3, 4, 5))
     rand!(x)
     return x
 end
@@ -200,4 +200,33 @@ end
     @test @jit(rand_sample(Reactant.ReactantRNG(), Reactant.to_rarray(rand(3, 4)))) isa
         ConcreteRArray{Float64,2}
     @test @jit(rand_on_device()) isa ConcreteRArray{Float32,3}
+end
+
+@testset "Tracing of Random" begin
+    struct RandomContainer{RNG}
+        rng::RNG
+    end
+
+    rng_st = RandomContainer(MersenneTwister(0))
+    rng_st_ra = Reactant.to_rarray(rng_st)
+    @test rng_st_ra.rng isa Reactant.ReactantRNG
+
+    fn(st) = rand(st.rng, 10000)
+
+    hlo = @code_hlo fn(rng_st_ra)
+    @test contains(repr(hlo), "stablehlo.rng_bit_generator")
+
+    @testset "natively supported RNGs" begin
+        rng = Threefry2x()
+        rng_ra = Reactant.to_rarray(rng)
+        @test rng_ra isa Reactant.ReactantRNG
+        @test rng_ra.seed ≈ UInt64[rng.key1, rng.key2]
+        @test rng_ra.algorithm == "THREE_FRY"
+
+        rng = Philox2x()
+        rng_ra = Reactant.to_rarray(rng)
+        @test rng_ra isa Reactant.ReactantRNG
+        @test rng_ra.seed ≈ UInt64[rng.ctr1, rng.ctr2, rng.key]
+        @test rng_ra.algorithm == "PHILOX"
+    end
 end

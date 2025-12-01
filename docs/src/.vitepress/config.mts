@@ -83,13 +83,24 @@ export default defineConfig({
       {
         text: "Tutorials",
         items: [
-          {text: "Overview", link: "/tutorials/"},
-          {text: "Profiling", link: "/tutorials/profiling"},
-          {text: "Distributed", link: "/tutorials/multihost"},
-          {text: "Local build", link: "/tutorials/local-build"},
-          {text: "Control Flow", link: "/tutorials/control-flow"},
-          {text: "Sharding", link: "/tutorials/sharding"},
-          {text: "Persistent Compilation Cache", link: "/tutorials/persistent_compile_cache"},
+          { text: "Overview", link: "/tutorials/" },
+          {
+            text: "Partial Evaluation",
+            link: "/tutorials/partial-evaluation",
+          },
+          { text: "Control Flow", link: "/tutorials/control-flow" },
+          {
+            text: "Automatic Differentiation",
+            link: "/tutorials/automatic-differentiation",
+          },
+          { text: "Sharding", link: "/tutorials/sharding" },
+          { text: "Profiling", link: "/tutorials/profiling" },
+          { text: "Multi-Host Environments", link: "/tutorials/multihost" },
+          { text: "Local build", link: "/tutorials/local-build" },
+          {
+            text: "Persistent Compilation Cache",
+            link: "/tutorials/persistent_compile_cache",
+          },
         ],
       },
       {
@@ -120,6 +131,7 @@ export default defineConfig({
               { text: "SparseTensor", link: "/api/dialects/sparsetensor" },
               { text: "StableHLO", link: "/api/dialects/stablehlo" },
               { text: "Triton", link: "/api/dialects/triton" },
+              { text: "TritonExt", link: "/api/dialects/tritonext" },
               { text: "TPU", link: "/api/dialects/tpu" },
               { text: "VHLO", link: "/api/dialects/vhlo" },
             ],
@@ -156,12 +168,23 @@ export default defineConfig({
         collapsed: false,
         items: [
           { text: "Overview", link: "/tutorials/" },
-          { text: "Profiling", link: "/tutorials/profiling" },
-          { text: "Distributed", link: "/tutorials/multihost" },
-          { text: "Local build", link: "/tutorials/local-build" },
+          {
+            text: "Partial Evaluation",
+            link: "/tutorials/partial-evaluation",
+          },
           { text: "Control Flow", link: "/tutorials/control-flow" },
+          {
+            text: "Automatic Differentiation",
+            link: "/tutorials/automatic-differentiation",
+          },
           { text: "Sharding", link: "/tutorials/sharding" },
-          { text: "Persistent Compilation Cache", link: "/tutorials/persistent_compile_cache" },
+          { text: "Profiling", link: "/tutorials/profiling" },
+          { text: "Multi-Host Environments", link: "/tutorials/multihost" },
+          { text: "Local build", link: "/tutorials/local-build" },
+          {
+            text: "Persistent Compilation Cache",
+            link: "/tutorials/persistent_compile_cache",
+          },
         ],
       }
     ],
@@ -199,6 +222,7 @@ export default defineConfig({
               { text: "SparseTensor", link: "/api/dialects/sparsetensor" },
               { text: "StableHLO", link: "/api/dialects/stablehlo" },
               { text: "Triton", link: "/api/dialects/triton" },
+              { text: "TritonExt", link: "/api/dialects/tritonext" },
               { text: "TPU", link: "/api/dialects/tpu" },
               { text: "VHLO", link: "/api/dialects/vhlo" },
             ],

@@ -995,7 +995,7 @@ end
 This operation provides a memref pointer to the start of dynamic shared
 memory, often referred to as workgroup memory. It\'s important to note that
 this dynamic shared memory needs to be allocated at kernel launch. One can
-conveniently utilize `the dynamic_shared_memory_size` parameter of
+conveniently utilize the `dynamic_shared_memory_size` parameter of
 `gpu.launch` for this purpose.
 
 Examples:
@@ -1537,17 +1537,11 @@ function launch_func(
             1,
             1,
             1,
-            if (clusterSizeX == nothing)
-                0
-            elseif 1(clusterSizeY == nothing)
-                0
-            elseif 1(clusterSizeZ == nothing)
-                0
-            elseif 1(dynamicSharedMemorySize == nothing)
-                0
-            else
-                1length(kernelOperands)
-            end,
+            (clusterSizeX == nothing) ? 0 : 1,
+            (clusterSizeY == nothing) ? 0 : 1,
+            (clusterSizeZ == nothing) ? 0 : 1,
+            (dynamicSharedMemorySize == nothing) ? 0 : 1,
+            length(kernelOperands),
             (asyncObject == nothing) ? 0 : 1,
         ]),
     )
@@ -1597,7 +1591,7 @@ dimensions are present, grouped as follows:
 -   a variadic number of Workgroup memory attributions.
 -   a variadic number of Private memory attributions.
 
-The `kernelFunc` and `kernelModule` attributes are optional and specifies
+The `function` and `module` attributes are optional and specifies
 the kernel name and a module in which the kernel should be outlined.
 
 # Syntax
@@ -1608,6 +1602,8 @@ operation ::= `gpu.launch` (`async` (`[` ssa-id-list `]`)? )?
                          `blocks` `(` ssa-id-list `)` `in` ssa-reassignment
                          `threads` `(` ssa-id-list `)` `in` ssa-reassignment
                          (dynamic_shared_memory_size ssa-use)?
+                         (`module(` symbol-ref-id `)`)?
+                         (`function(` symbol-ref-id `)`)?
                          memory-attribution
                          region attr-dict?
 ssa-reassignment ::= `(` ssa-id `=` ssa-use (`,` ssa-id `=` ssa-use)* `)`
@@ -1665,6 +1661,14 @@ gpu.launch clusters(%cx, %cy, %cz) in (%sz_cx = %0, %sz_cy = %1, %sz_cz = %2)
   // sizes are immediately usable inside body region.
   \"some_op\"(%cx, %bx, %tx) : (index, index, index) -> ()
 }
+
+// Launch with module and function attributes.
+gpu.launch blocks(%bx, %by, %bz) in (%sz_bx = %0, %sz_by = %1, %sz_bz = %2)
+           threads(%tx, %ty, %tz) in (%sz_tx = %3, %sz_ty = %4, %sz_tz = %5)
+           module(@kernel_module) function(@kernel_func) {
+  \"some_op\"(%bx, %tx) : (index, index) -> ()
+  %42 = load %val1[%bx] : memref<?xf32, 1>
+}
 ```
 
 Rationale: using operation/block arguments gives analyses a clear way of
@@ -1686,8 +1690,8 @@ function launch(
     clusterSizeZ=nothing::Union{Nothing,Value},
     dynamicSharedMemorySize=nothing::Union{Nothing,Value},
     asyncToken=nothing::Union{Nothing,IR.Type},
-    kernelFunc=nothing,
-    kernelModule=nothing,
+    module_=nothing,
+    function_=nothing,
     body::Region,
     location=Location(),
 )
@@ -1718,23 +1722,15 @@ function launch(
             1,
             1,
             1,
-            if (clusterSizeX == nothing)
-                0
-            elseif 1(clusterSizeY == nothing)
-                0
-            elseif 1(clusterSizeZ == nothing)
-                0
-            elseif 1(dynamicSharedMemorySize == nothing)
-                0
-            else
-                1
-            end,
+            (clusterSizeX == nothing) ? 0 : 1,
+            (clusterSizeY == nothing) ? 0 : 1,
+            (clusterSizeZ == nothing) ? 0 : 1,
+            (dynamicSharedMemorySize == nothing) ? 0 : 1,
         ]),
     )
     !isnothing(asyncToken) && push!(op_ty_results, asyncToken)
-    !isnothing(kernelFunc) && push!(attributes, namedattribute("kernelFunc", kernelFunc))
-    !isnothing(kernelModule) &&
-        push!(attributes, namedattribute("kernelModule", kernelModule))
+    !isnothing(module_) && push!(attributes, namedattribute("module", module_))
+    !isnothing(function_) && push!(attributes, namedattribute("function", function_))
 
     return create_operation(
         "gpu.launch",
@@ -2717,6 +2713,48 @@ function spmat_get_size(
         attributes,
         results=op_ty_results,
         result_inference=false,
+    )
+end
+
+"""
+`subgroup_broadcast`
+
+Broadcasts a value from one lane to all active lanes in a subgroup. The
+result is guaranteed to be uniform across the active lanes in subgroup.
+
+The possible broadcast types are:
+
+* `first_active_lane` - broadcasts the value from the first active lane
+in the subgroup.
+* `specific_lane` - broadcasts from the specified lane. The lane index
+must be uniform and within the subgroup size. The result is poison if the
+lane index is invalid, non subgroup-uniform, or if the source lane is not
+active.
+"""
+function subgroup_broadcast(
+    src::Value,
+    lane=nothing::Union{Nothing,Value};
+    result=nothing::Union{Nothing,IR.Type},
+    broadcast_type,
+    location=Location(),
+)
+    op_ty_results = IR.Type[]
+    operands = Value[src,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[namedattribute("broadcast_type", broadcast_type),]
+    !isnothing(lane) && push!(operands, lane)
+    !isnothing(result) && push!(op_ty_results, result)
+
+    return create_operation(
+        "gpu.subgroup_broadcast",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
     )
 end
 

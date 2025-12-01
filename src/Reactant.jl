@@ -3,15 +3,34 @@ module Reactant
 using ReactantCore:
     ReactantCore, @trace, within_compile, MissingTracedValue, materialize_traced_array
 
-using LinearAlgebra: LinearAlgebra
+using LinearAlgebra: LinearAlgebra, RowMaximum, NoPivot
 using Random: Random, AbstractRNG
 using EnumX: @enumx
 using Functors: Functors, @leaf
 
-using Adapt: Adapt, WrappedArray
-using GPUArraysCore: GPUArraysCore, @allowscalar, allowscalar # keep this import to allow users to do `Reactant.allowscalar(false)`
+using Libdl: Libdl
+using Reactant_jll: Reactant_jll
+using LLVMOpenMP_jll: LLVMOpenMP_jll
 
-export @allowscalar # re-exported from GPUArraysCore
+using Adapt: Adapt, WrappedArray
+using GPUArraysCore: GPUArraysCore, @allowscalar, allowscalar
+
+using Enzyme: Enzyme
+using EnzymeCore:
+    EnzymeCore,
+    Mode,
+    Annotation,
+    Active,
+    BatchDuplicated,
+    BatchDuplicatedNoNeed,
+    Const,
+    Duplicated,
+    DuplicatedNoNeed,
+    EnzymeRules,
+    ReverseMode,
+    ForwardMode
+
+export allowscalar, @allowscalar # re-exported from GPUArraysCore
 
 is_extension_loaded(::Val) = false
 
@@ -24,14 +43,12 @@ function precompiling()
     return (@ccall jl_generating_output()::Cint) == 1
 end
 
-using Enzyme
-
-struct ReactantABI <: Enzyme.EnzymeCore.ABI end
+struct ReactantABI <: EnzymeCore.ABI end
 
 include("PrimitiveTypes.jl")
 
 function ancestor(x::AbstractArray)
-    p_x = parent(x)
+    p_x = applicable(_parent, x) ? _parent(x) : parent(x)
     p_x === x && return x
     return ancestor(p_x)
 end
@@ -55,10 +72,14 @@ end
 # A lot of packages don't define `Adapt.parent_type`. We use `_parent_type` as a way to
 # define the parent type of an array without type-piracy.
 function _parent_type end
+function _parent end
+
+_parent_type(::Type{Array}) = Array
+_parent_type(::Type{Array{T}}) where {T} = Array{T}
+_parent_type(::Type{Array{T,N}}) where {T,N} = Array{T,N}
+_parent_type(::Type{<:Slices{P}}) where {P} = P
 
 include("accelerators/Accelerators.jl")
-
-using .Accelerators.TPU: has_tpu
 
 include("CompileOptions.jl")
 
@@ -81,19 +102,6 @@ export Sharding
 
 include("utils.jl")
 
-function TracedRArray{T}(data::MLIR.IR.Value) where {T}
-    data_type = MLIR.IR.type(data)
-    if T == eltype(MLIR.IR.julia_type(data_type))
-        return TracedRArray{T,ndims(data_type)}((), data, size(data_type))
-    end
-    tdata = TracedRArray(data)
-    return Ops.convert(TracedRArray{T,ndims(data_type)}, tdata)
-end
-
-function TracedRArray(data::MLIR.IR.Value)
-    return TracedRArray{eltype(MLIR.IR.julia_type(MLIR.IR.type(data)))}(data)
-end
-
 isa_traced_soa(_) = false
 isa_traced_soa(::TracedRArray) = true
 isa_traced_soa(::AbstractRange{<:TracedRNumber}) = true
@@ -109,6 +117,23 @@ unwrapped_eltype(::TracedRNumber{T}) where {T} = T
 unwrapped_eltype(::Type{<:AbstractArray{T,N}}) where {T,N} = unwrapped_eltype(T)
 unwrapped_eltype(::AbstractArray{T,N}) where {T,N} = unwrapped_eltype(T)
 
+include("Ops.jl")
+
+using .Ops: @opcall
+
+function TracedRArray{T}(data::MLIR.IR.Value) where {T}
+    data_type = MLIR.IR.type(data)
+    if T == eltype(MLIR.IR.julia_type(data_type))
+        return TracedRArray{T,ndims(data_type)}((), data, size(data_type))
+    end
+    tdata = TracedRArray(data)
+    return @opcall convert(TracedRArray{T,ndims(data_type)}, tdata)
+end
+
+function TracedRArray(data::MLIR.IR.Value)
+    return TracedRArray{eltype(MLIR.IR.julia_type(MLIR.IR.type(data)))}(data)
+end
+
 promote_traced_type(a::Type, b::Type) = Base.promote_type(a, b)
 
 aos_to_soa(x::AbstractArray) = x
@@ -120,10 +145,10 @@ function aos_to_soa(x::Array{TracedRNumber{T}}) where {T}
     isa_traced_soa(ancestor(x)) && return x
     for i in eachindex(x)
         if !isassigned(x, i)
-            x[i] = TracedUtils.promote_to(TracedRNumber{T}, 0)
+            x[i] = promote_to(TracedRNumber{T}, 0)
         end
     end
-    return Ops.reshape(vcat(x...), size(x)...)
+    return @opcall reshape(vcat(x...), size(x)...)
 end
 
 function aos_to_soa(x::AbstractArray{<:ConcretePJRTNumber{T}}) where {T}
@@ -161,29 +186,46 @@ function aos_to_soa(x::AbstractArray{<:ConcreteIFRTNumber{T}}) where {T}
     return x_c
 end
 
-include("Ops.jl")
+include("TracedPromotion.jl")
 include("TracedUtils.jl")
 
 include("TracedRNumber.jl")
 include("TracedRArray.jl")
+include("TracedRange.jl")
+include("Indexing.jl")
 
 include("ConcreteRArray.jl")
 
 use_overlayed_version(x) = false
-use_overlayed_version(x::Base.Iterators.Zip) = any(use_overlayed_version, x.is)
+function use_overlayed_version(x::F) where {F<:Function}
+    return use_overlayed_version(getfield.(Ref(x), fieldnames(F)))
+end
+use_overlayed_version(x::Base.Generator) = use_overlayed_version((x.f, x.iter))
+use_overlayed_version(x::Base.Iterators.Zip) = use_overlayed_version(x.is)
 use_overlayed_version(x::Base.Iterators.Enumerate) = use_overlayed_version(x.itr)
-use_overlayed_version(iter::Tuple) = any(use_overlayed_version, iter)
-use_overlayed_version(iter::NamedTuple) = any(use_overlayed_version, values(iter))
-use_overlayed_version(::TracedRArray) = true
-use_overlayed_version(::TracedRNumber) = true
+use_overlayed_version(x::Vector) = looped_any(use_overlayed_version, x)
+use_overlayed_version(iter::Tuple) = looped_any(use_overlayed_version, iter)
+use_overlayed_version(iter::NamedTuple) = looped_any(use_overlayed_version, values(iter))
 use_overlayed_version(::Number) = false
 use_overlayed_version(::MissingTracedValue) = true
-use_overlayed_version(::AbstractArray{<:TracedRNumber}) = true
 use_overlayed_version(rng::ReactantRNG) = use_overlayed_version(rng.seed)
+use_overlayed_version(::AbstractArray{<:TracedRNumber}) = true
+use_overlayed_version(::TracedRArray) = true
+use_overlayed_version(::TracedRNumber) = true
+use_overlayed_version(::TracedStepRangeLen) = true
+use_overlayed_version(::TracedUnitRange) = true
 function use_overlayed_version(x::AbstractArray)
     a = ancestor(x)
     a === x && return false
     return use_overlayed_version(a)
+end
+
+## We avoid calling into `any` to avoid triggering the `any` overlay
+function looped_any(f::F, itr) where {F}
+    @inbounds for x in itr
+        f(x) && return true
+    end
+    return false
 end
 
 # StdLib Overloads
@@ -193,6 +235,8 @@ include("stdlibs/Base.jl")
 
 # Other Integrations
 include("Enzyme.jl")
+
+export StackedBatchDuplicated, StackedBatchDuplicatedNoNeed
 
 const TracedType = Union{TracedRArray,TracedRNumber,MissingTracedValue}
 
@@ -243,9 +287,6 @@ function deinitialize_dialect()
     return registry[] = nothing
 end
 
-using Libdl
-using Reactant_jll
-using LLVMOpenMP_jll
 function initialize_ptrs()
     for name in (
         "__kmpc_barrier",
@@ -289,6 +330,19 @@ function __init__()
         end
     end
 
+    @static if VERSION ≥ v"1.12-"
+        if ccall(:jl_generating_output, Cint, ()) == 1
+            @warn """
+            Reactant.jl currently doesn't support versions of Julia 1.12 or newer. We are
+            actively working on adding support for newer versions of Julia. For the time
+            being we recommend using 1.11 or LTS.
+
+            For latest updates, check the status of support for Julia 1.12+ at
+            https://github.com/EnzymeAD/Reactant.jl/issues/1736.
+            """ maxlog = 1
+        end
+    end
+
     return nothing
 end
 
@@ -296,6 +350,9 @@ function set_default_backend(backend::Union{String,XLA.AbstractClient})
     XLA.set_default_backend(backend)
     return nothing
 end
+
+# Not part of the public API. Exclusively for testing purposes.
+include("TestUtils.jl")
 
 include("Precompile.jl")
 

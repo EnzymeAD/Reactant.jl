@@ -1,11 +1,12 @@
 module XLA
 
 using ..Reactant: Reactant, MLIR, Accelerators
-using Reactant_jll
-using Libdl
+using Reactant_jll: Reactant_jll
+using LLVM: LLVM
+using Libdl: Libdl
 using EnumX: @enumx
+using Enzyme: Compiler
 using Preferences: load_preference
-using Enzyme
 
 const XLA_REACTANT_GPU_MEM_FRACTION = Ref{Float64}(0.75)
 const XLA_REACTANT_GPU_PREALLOCATE = Ref{Bool}(true)
@@ -31,8 +32,12 @@ include("Future.jl")
 include("Buffer.jl")
 include("Stats.jl")
 include("Utils.jl")
-include("HloModule.jl")
 include("Memory.jl")
+
+include("IR/Module.jl")
+include("IR/Instruction.jl")
+include("IR/Computation.jl")
+include("IR/PerformanceModel.jl")
 
 include("PJRT/PJRT.jl")
 
@@ -131,7 +136,8 @@ function __init__()
             XLA_REACTANT_GPU_MEM_FRACTION[] = parse(
                 Float64, ENV["XLA_REACTANT_GPU_MEM_FRACTION"]
             )
-            @debug "XLA_REACTANT_GPU_MEM_FRACTION: " XLA_REACTANT_GPU_MEM_FRACTION[]
+            @debug "XLA_REACTANT_GPU_MEM_FRACTION: " XLA_REACTANT_GPU_MEM_FRACTION[] maxlog =
+                1
             if XLA_REACTANT_GPU_MEM_FRACTION[] > 1 || XLA_REACTANT_GPU_MEM_FRACTION[] < 0
                 error("XLA_REACTANT_GPU_MEM_FRACTION must be between 0 and 1")
             end
@@ -141,31 +147,33 @@ function __init__()
             XLA_REACTANT_GPU_PREALLOCATE[] = parse(
                 Bool, ENV["XLA_REACTANT_GPU_PREALLOCATE"]
             )
-            @debug "XLA_REACTANT_GPU_PREALLOCATE: " XLA_REACTANT_GPU_PREALLOCATE[]
+            @debug "XLA_REACTANT_GPU_PREALLOCATE: " XLA_REACTANT_GPU_PREALLOCATE[] maxlog =
+                1
         end
 
         if haskey(ENV, "REACTANT_VISIBLE_GPU_DEVICES")
             global_state.local_gpu_device_ids =
                 parse.(Int, split(ENV["REACTANT_VISIBLE_GPU_DEVICES"], ","))
-            @debug "REACTANT_VISIBLE_GPU_DEVICES: " global_state.local_gpu_device_ids
+            @debug "REACTANT_VISIBLE_GPU_DEVICES: " global_state.local_gpu_device_ids maxlog =
+                1
         end
 
-        @debug "REACTANT_XLA_RUNTIME: " REACTANT_XLA_RUNTIME
+        @debug "REACTANT_XLA_RUNTIME: " REACTANT_XLA_RUNTIME maxlog = 1
 
         @ccall MLIR.API.mlir_c.RegisterEnzymeXLACPUHandler()::Cvoid
         @ccall MLIR.API.mlir_c.RegisterEnzymeXLAGPUHandler()::Cvoid
 
         @static if !Sys.isapple()
-            lljit = Enzyme.LLVM.JuliaOJIT()
-            jd_main = Enzyme.LLVM.JITDylib(lljit)
+            lljit = LLVM.JuliaOJIT()
+            jd_main = LLVM.JITDylib(lljit)
 
             for name in
                 ("XLAExecute", "XLAExecuteSharded", "ifrt_loaded_executable_execute")
                 ptr = Libdl.dlsym(Reactant_jll.libReactantExtra_handle, name)
-                Enzyme.LLVM.define(
+                LLVM.define(
                     jd_main,
-                    Enzyme.Compiler.JIT.absolute_symbol_materialization(
-                        Enzyme.LLVM.mangle(lljit, name), ptr
+                    Compiler.JIT.absolute_symbol_materialization(
+                        LLVM.mangle(lljit, name), ptr
                     ),
                 )
             end
@@ -193,8 +201,8 @@ for runtime in (:PJRT, :IFRT)
 
         # CPU
         if was_initialized && haskey(state.clients, "cpu")
-            XLA.free_client(state.clients["cpu"])
-            XLA.$(runtime).cpu_client_count[] -= 1
+            free_client(state.clients["cpu"])
+            $(runtime).cpu_client_count[] -= 1
         end
         cpu = $(runtime).CPUClient(; common_kwargs..., asynchronous=true)
         state.clients["cpu"] = cpu
@@ -207,8 +215,8 @@ for runtime in (:PJRT, :IFRT)
                     Accelerators.TPU.download_libtpu_if_needed()
                     try
                         if was_initialized && haskey(state.clients, "tpu")
-                            XLA.free_client(state.clients["tpu"])
-                            XLA.$(runtime).tpu_client_count[] -= 1
+                            free_client(state.clients["tpu"])
+                            $(runtime).tpu_client_count[] -= 1
                         end
                         tpu = $(runtime).TPUClient(;
                             tpu_path=Accelerators.TPU.get_libtpu_path(), common_kwargs...
@@ -218,11 +226,11 @@ for runtime in (:PJRT, :IFRT)
                     catch e
                         println(stdout, e)
                     end
-                else
+                elseif Reactant_jll.host_platform.tags["gpu"] != "none"
                     try
                         if was_initialized && haskey(state.clients, "cuda")
-                            XLA.free_client(state.clients["cuda"])
-                            XLA.$(runtime).cuda_client_count[] -= 1
+                            free_client(state.clients["cuda"])
+                            $(runtime).cuda_client_count[] -= 1
                         end
                         gpu = $(runtime).CUDAClient(;
                             common_kwargs...,
@@ -238,8 +246,8 @@ for runtime in (:PJRT, :IFRT)
                 try
                     #=
                     if was_initialized && haskey(state.clients, "metal")
-                        XLA.free_client(state.clients["metal"])
-                        XLA.$(runtime).metal_client_count[] -= 1
+                        free_client(state.clients["metal"])
+                        $(runtime).metal_client_count[] -= 1
                     end
                     gpu = $(runtime).MetalClient(;
                         metal_pjrt_plugin_path=Accelerators.Metal.get_metal_pjrt_plugin_path(),
