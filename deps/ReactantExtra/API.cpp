@@ -1020,6 +1020,7 @@ REACTANT_ABI void CopyToBuffer(PjRtClient *client, PjRtBuffer *buffer,
   auto pid = client->platform_id();
   if (pid == xla::TpuId()) {
     auto dims = buffer->on_device_shape().dimensions();
+    // TODO: note this assume that we want to copy the entire buffer size.
     auto buf2 = ArrayFromHostBuffer(client, data, buffer->element_type(), dims.size(), dims.data(), buffer->device());
     *bufferP = buf2;
     PjRtBufferFree((PjRtBuffer *)buffer);
@@ -1063,6 +1064,14 @@ REACTANT_ABI void CopyToBuffer(PjRtClient *client, PjRtBuffer *buffer,
 
 REACTANT_ABI void CopyFromBuffer(PjRtClient *client, PjRtBuffer *buffer,
                                  void *data, size_t offset, size_t size, PjRtBuffer **bufferP) {
+
+  auto pid = client->platform_id();
+  if (pid == xla::TpuId()) {
+    // TODO: note this assume that we want to copy the entire buffer size.
+    BufferToHost(buffer, data);
+    return;
+  }
+
   auto future = buffer->CopyRawToHost(data, offset, size);
   future.Await();
 #if 0
