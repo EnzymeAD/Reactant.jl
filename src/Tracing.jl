@@ -732,18 +732,11 @@ Base.@nospecializeinfer function traced_type_inner(
         return T
     end
 
-    @debug "traced_type_inner: Processing type with field changes" T = T subTys = subTys
-
     wrapped_cpjrt_array = T <: AbstractArray && ancestor(T) <: ConcretePJRTArray
     wrapped_cifrt_array = T <: AbstractArray && ancestor(T) <: ConcreteIFRTArray
     wrapped_tracedarray = T <: AbstractArray && ancestor(T) <: TracedRArray
 
-    @debug "wrapped flags" wrapped_cpjrt_array = wrapped_cpjrt_array wrapped_cifrt_array =
-        wrapped_cifrt_array wrapped_tracedarray = wrapped_tracedarray
-
     subParms = []
-    @debug "Tracing type parameters" num_params = length(T.parameters) T_parameters =
-        T.parameters
     for (i, SST) in enumerate(T.parameters)
         if wrapped_cpjrt_array && i == 1 && SST isa Type && SST <: ReactantPrimitive
             TrT = traced_type_inner(
@@ -775,24 +768,13 @@ Base.@nospecializeinfer function traced_type_inner(
         end
     end
 
-    @debug "Built subParms" subParms = subParms
-
     if !isempty(subParms)
-        @debug "Calling apply_type_with_promotion" wrapper = T.name.wrapper subParms =
-            subParms num_params = length(T.parameters)
         TT2, changed_params = apply_type_with_promotion(T.name.wrapper, subParms)
-        @debug "apply_type_with_promotion succeeded" TT2 = TT2 result_fieldcount = fieldcount(
-            TT2
-        ) changed_params = changed_params
     else
-        @debug "subParms is empty, using T as-is"
         TT2, changed_params = T, nothing
     end
     seen3 = copy(seen)
     seen3[T] = TT2
-    @debug "Validating reconstructed type" T = T TT2 = TT2 fieldcount_match = (
-        fieldcount(T) == fieldcount(TT2)
-    )
 
     generic_T = Base.unwrap_unionall(T.name.wrapper)
     param_map = typevar_dict(T.name.wrapper)
@@ -806,7 +788,6 @@ Base.@nospecializeinfer function traced_type_inner(
             field_tvars = Base.IdSet{TypeVar}()
             collect_tvars_in_type!(field_tvars, def_ft)
             # field_tvars now contains all typevars the field type directly depends on.
-            @debug "Collected field tvars" field_tvars
             for tvar in field_tvars
                 idx = get(param_map, tvar, nothing)
                 isnothing(idx) && continue
@@ -820,26 +801,17 @@ Base.@nospecializeinfer function traced_type_inner(
             subT = fieldtype(T, f)
             subT2 = fieldtype(TT2, f)
             subTT = traced_type_inner(subT, seen3, mode, track_numbers, sharding, runtime)
-            @debug "Field validation" f = f subT = subT subT2 = subT2 subTT = subTT match = (
-                subT2 == subTT
-            )
             if subT2 != subTT
-                @debug "Field mismatch detected" f = f expected = subTT got = subT2
                 legal = false
                 break
             end
         end
         if legal
-            @debug "All field checks passed, returning TT2"
             for (k, v) in seen3
                 seen[k] = v
             end
             return TT2
         end
-    else
-        @debug "Field count mismatch" fieldcount_T = fieldcount(T) fieldcount_TT2 = fieldcount(
-            TT2
-        )
     end
 
     throw(NoFieldMatchError(T, TT2, subTys))
