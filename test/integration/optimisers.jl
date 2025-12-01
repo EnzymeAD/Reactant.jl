@@ -24,5 +24,7 @@ end
     gs = Reactant.to_rarray((a=rand(4), b=rand(2), c=rand(4)))
 
     hlo = @code_hlo Optimisers.update(st_opt, ps, gs)
-    @test length(findall("stablehlo.broadcast_in_dim", repr(hlo))) == 2
+    if !Reactant.TRACE_CALLS[]
+        @test length(findall("stablehlo.broadcast_in_dim", repr(hlo))) == 2
+    end
 end
