@@ -985,6 +985,27 @@ REACTANT_ABI void *UnsafeBufferPointer(PjRtBuffer *buffer) {
   return (void *)unsafe;
 }
 
+REACTANT_ABI PjRtBuffer *ArrayFromHostBuffer(PjRtClient *client, void *data,
+                                             uint64_t ptype, size_t dim,
+                                             const int64_t *cshape,
+                                             PjRtDevice *device) {
+  auto primtype = (xla::PrimitiveType)ptype;
+  absl::Span<const int64_t> shape(cshape, dim);
+  PjRtClient::HostBufferSemantics semantics =
+      PjRtClient::HostBufferSemantics::kImmutableOnlyDuringCall;
+  // xla::Layout layout(col_major(dim));
+  // auto buffer = xla::MyValueOrThrow(client->BufferFromHostBuffer(data,
+  // primtype, shape, /*byte_strides*/{},  semantics, /*ondone*/{}, device,
+  // &layout));
+  const xla::Layout *layout = nullptr;
+  auto buffer = MyValueOrThrow(client->BufferFromHostBuffer(
+      data, primtype, shape, /*byte_strides*/ {}, semantics, /*ondone*/ {},
+      *device->default_memory_space(), layout));
+  auto bres = buffer.release();
+  return bres;
+}
+
+
 REACTANT_ABI void CopyToBuffer(PjRtClient *client, PjRtBuffer *buffer,
                                void *data, size_t offset, size_t size, PjRtBuffer **bufferP) {
   if (buffer->IsOnCpu()) {
@@ -998,7 +1019,7 @@ REACTANT_ABI void CopyToBuffer(PjRtClient *client, PjRtBuffer *buffer,
   
   auto pid = client->platform_id();
   if (pid == xla::TpuId()) {
-    auto dims = argB->on_device_shape().dimensions();
+    auto dims = buffer->on_device_shape().dimensions();
     auto buf2 = ArrayFromHostBuffer(client, data, buffer->element_type(), dims.size(), dims.data(), buffer->device());
     *bufferP = buf2;
     PjRtBufferFree((PjRtBuffer *)buffer);
@@ -1087,26 +1108,6 @@ REACTANT_ABI PjRtBuffer *UninitPJRTBuffer(PjRtClient *client,
   auto xbuffer =
       MyValueOrThrow(client->CreateUninitializedBuffer(xlashape, memory_space));
   return xbuffer.release();
-}
-
-REACTANT_ABI PjRtBuffer *ArrayFromHostBuffer(PjRtClient *client, void *data,
-                                             uint64_t ptype, size_t dim,
-                                             int64_t *cshape,
-                                             PjRtDevice *device) {
-  auto primtype = (xla::PrimitiveType)ptype;
-  absl::Span<const int64_t> shape(cshape, dim);
-  PjRtClient::HostBufferSemantics semantics =
-      PjRtClient::HostBufferSemantics::kImmutableOnlyDuringCall;
-  // xla::Layout layout(col_major(dim));
-  // auto buffer = xla::MyValueOrThrow(client->BufferFromHostBuffer(data,
-  // primtype, shape, /*byte_strides*/{},  semantics, /*ondone*/{}, device,
-  // &layout));
-  const xla::Layout *layout = nullptr;
-  auto buffer = MyValueOrThrow(client->BufferFromHostBuffer(
-      data, primtype, shape, /*byte_strides*/ {}, semantics, /*ondone*/ {},
-      *device->default_memory_space(), layout));
-  auto bres = buffer.release();
-  return bres;
 }
 
 REACTANT_ABI uint8_t BufferOnCPU(PjRtBuffer *buffer) {
