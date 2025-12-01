@@ -1062,6 +1062,20 @@ REACTANT_ABI void CopyToBuffer(PjRtClient *client, PjRtBuffer *buffer,
 #endif
 }
 
+REACTANT_ABI void BufferToHost(PjRtBuffer *buffer, void *data) {
+  Shape shape(MyValueOrThrow(buffer->HostShape()));
+  /// Grumpily the cpu copy code does not respect layout and does a raw copy
+  /// For now, we assume a non-julia row major ordering
+  /// If in the future it supports col_major we can swap to that.
+  *shape.mutable_layout() = xla::Layout(row_major(shape.dimensions_size()));
+  MutableBorrowingLiteral literal((const char *)data, shape);
+  auto status = buffer->ToLiteralSync(&literal);
+  if (!status.ok()) {
+    printf("error copying to host: %s\n", status.ToString().c_str());
+  }
+}
+
+
 REACTANT_ABI void CopyFromBuffer(PjRtClient *client, PjRtBuffer *buffer,
                                  void *data, size_t offset, size_t size, PjRtBuffer **bufferP) {
 
@@ -1128,19 +1142,6 @@ REACTANT_ABI PjRtBuffer *CopyBufferToDevice(PjRtBuffer *buffer,
   auto res = MyValueOrThrow(
       buffer->CopyToMemorySpace(*dst_device->default_memory_space()));
   return res.release();
-}
-
-REACTANT_ABI void BufferToHost(PjRtBuffer *buffer, void *data) {
-  Shape shape(MyValueOrThrow(buffer->HostShape()));
-  /// Grumpily the cpu copy code does not respect layout and does a raw copy
-  /// For now, we assume a non-julia row major ordering
-  /// If in the future it supports col_major we can swap to that.
-  *shape.mutable_layout() = xla::Layout(row_major(shape.dimensions_size()));
-  MutableBorrowingLiteral literal((const char *)data, shape);
-  auto status = buffer->ToLiteralSync(&literal);
-  if (!status.ok()) {
-    printf("error copying to host: %s\n", status.ToString().c_str());
-  }
 }
 
 REACTANT_ABI void FreeClient(PjRtClient *client) { delete client; }
