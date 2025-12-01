@@ -986,7 +986,7 @@ REACTANT_ABI void *UnsafeBufferPointer(PjRtBuffer *buffer) {
 }
 
 REACTANT_ABI void CopyToBuffer(PjRtClient *client, PjRtBuffer *buffer,
-                               void *data, size_t offset, size_t size) {
+                               void *data, size_t offset, size_t size, PjRtBuffer **bufferP) {
   if (buffer->IsOnCpu()) {
     auto unsafe =
         (char *)MyValueOrThrow(buffer->client()->UnsafeBufferPointer(buffer));
@@ -995,6 +995,16 @@ REACTANT_ABI void CopyToBuffer(PjRtClient *client, PjRtBuffer *buffer,
     // data, size);
     return;
   }
+  
+  auto pid = client->platform_id();
+  if (pid == xla::TpuId()) {
+    auto dims = argB->on_device_shape().dimensions();
+    auto buf2 = ArrayFromHostBuffer(client, data, buffer->element_type(), dims.size(), dims.data(), buffer->device());
+    *bufferP = buf2;
+    PjRtBufferFree((PjRtBuffer *)buffer);
+    return;
+  }
+
   auto raw_buffer =
       MyValueOrThrow(PjRtRawBuffer::CreateRawAliasOfBuffer(buffer));
   auto future = raw_buffer->CopyRawHostToDevice(data, offset, size);
@@ -1005,7 +1015,6 @@ REACTANT_ABI void CopyToBuffer(PjRtClient *client, PjRtBuffer *buffer,
     return;
   }
 
-  auto pid = client->platform_id();
   if (pid == xla::CudaId()) {
     auto stream_client = (xla::PjRtStreamExecutorClient*)lrt->client;
 
@@ -1032,7 +1041,7 @@ REACTANT_ABI void CopyToBuffer(PjRtClient *client, PjRtBuffer *buffer,
 }
 
 REACTANT_ABI void CopyFromBuffer(PjRtClient *client, PjRtBuffer *buffer,
-                                 void *data, size_t offset, size_t size) {
+                                 void *data, size_t offset, size_t size, PjRtBuffer **bufferP) {
   auto future = buffer->CopyRawToHost(data, offset, size);
   future.Await();
 #if 0
@@ -3147,14 +3156,14 @@ REACTANT_ABI void reactantXLAMemcpy(LinkableRuntime **__restrict__ lrtP,
     break;
   case 1: // cudaMemcpyHostToDevice
   {
-    auto &&[dstB, dstO, _] = bufferAndOffset(lrt, dst);
-    CopyToBuffer(lrt->client, dstB, src, dstO, size);
+    auto &&[dstB, dstO, start] = bufferAndOffset(lrt, dst);
+    CopyToBuffer(lrt->client, dstB, src, dstO, size, start);
     break;
   }
   case 2: // cudaMemcpyDeviceToHost
   {
-    auto &&[srcB, srcO, _] = bufferAndOffset(lrt, src);
-    CopyFromBuffer(lrt->client, srcB, dst, srcO, size);
+    auto &&[srcB, srcO, start] = bufferAndOffset(lrt, src);
+    CopyFromBuffer(lrt->client, srcB, dst, srcO, size, start);
     break;
   }
   case 3: // cudaMemcpyDeviceToDevice
