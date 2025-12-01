@@ -913,6 +913,22 @@ const traced_type_cache = Dict{Tuple{TraceMode,Type,Any},Dict{Type,Type}}()
 """
 This function tries to apply the param types to the wrapper type.
 When there's a constraint conflict, it tries to resolve it by promoting the conflicting types. The new param type is then propagated in any param type that depends on it.
+Apart from the applied type, it also returns a boolean array indicating which of the param types were changed.
+
+For example:
+```jl
+using Reactant
+struct Foo{T, A<:AbstractArray{T}}
+    a::A
+end
+Reactant.apply_type_with_promotion(Foo, (Int, TracedRArray{Int, 1}))
+```
+returns
+```jl
+(Foo{Reactant.TracedRNumber{Int64}, Reactant.TracedRArray{Int64, 1}}, Bool[1, 0])
+```
+
+The first type parameter has been promoted to satisfy to be in agreement with the second parameter.
 """
 function apply_type_with_promotion(wrapper, params, relevant_typevars=typevar_dict(wrapper))
     unwrapped = Base.unwrap_unionall(wrapper) # remove all the typevars
