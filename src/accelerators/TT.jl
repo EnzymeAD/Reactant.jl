@@ -16,7 +16,23 @@ function __init__()
     end
 end
 
-has_tt() = true
+force_tt_init() = haskey(ENV, "REACTANT_FORCE_TT_INIT")
+
+function has_tt()
+    if force_tt_init()
+        return true
+    end
+
+    # To find whether we have Tenstorrent devices, we can either
+    #
+    # * look for devices in `/dev/tenstorrent`, or
+    # * look for devices in `/sys/bus/pci/devices` with `vendor` equal to `0x1e52`, something like
+    #       any(readchomp(joinpath(dir, "vendor")) == "0x1e52" for dir in readdir("/sys/bus/pci/devices"; join=true))
+    #
+    # The former is simpler for our current purposes, so we can go that way.
+    dev_tt = "/dev/tenstorrent"
+    return isdir(dev_tt) && length(readdir(dev_tt)) > 0
+end
 
 function setup_tt_pjrt_plugin!()
     plugin_dir_from_env = get(ENV, "TT_PJRT_PLUGIN_DIR", nothing)
