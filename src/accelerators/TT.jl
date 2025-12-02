@@ -61,11 +61,12 @@ function download_tt_pjrt_plugin_if_needed(dir=nothing)
     else
         @debug "Will install the TT PJRT plugin to '$(tt_pjrt_plugin_path)'"
         mktempdir() do tmp_dir
+            # Index at https://pypi.eng.aws.tenstorrent.com/pjrt-plugin-tt/
             zip_file_path = joinpath(tmp_dir, "pjrt-plugin-tt.zip")
             wheel_url = if Sys.ARCH === :x86_64
                 "https://pypi.eng.aws.tenstorrent.com/pjrt-plugin-tt/pjrt_plugin_tt-0.6.0.dev20251113-cp311-cp311-linux_x86_64.whl"
             else
-                error("Unsupported architecture: $(Sys.ARCH)")
+                error("Unsupported architecture for TT PJRT plugin: $(Sys.ARCH)")
             end
             @debug "Downloading TT PJRT plugin from '$(wheel_url)'"
             Downloads.download(wheel_url, zip_file_path)
