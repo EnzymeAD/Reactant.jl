@@ -21,15 +21,19 @@ function matmul!(output, a)
     return KernelAbstractions.synchronize(backend)
 end
 
-@testset "KernelAbstractions Matmul" begin
-    A = Reactant.to_rarray(ones(100, 100))
-    out = Reactant.to_rarray(ones(100, 100))
-    platform_name = Reactant.XLA.platform_name(Reactant.XLA.default_backend())
-    raise = platform_name ∉ ("cpu", "cuda")
-    @jit raise = raise matmul!(out, A)
-    out_c = Array(out)
-    A_c = Array(A)
-    @test out_c ≈ A_c * A_c'
+# TODO: raising fails on TPU CI.
+#       https://github.com/EnzymeAD/Reactant.jl/pull/1923#discussion_r2580461294
+if !Reactant.Accelerators.TPU.has_tpu()
+    @testset "KernelAbstractions Matmul" begin
+        A = Reactant.to_rarray(ones(100, 100))
+        out = Reactant.to_rarray(ones(100, 100))
+        platform_name = Reactant.XLA.platform_name(Reactant.XLA.default_backend())
+        raise = platform_name ∉ ("cpu", "cuda")
+        @jit raise = raise matmul!(out, A)
+        out_c = Array(out)
+        A_c = Array(A)
+        @test out_c ≈ A_c * A_c'
+    end
 end
 
 # simple square kernel
