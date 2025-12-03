@@ -16,10 +16,10 @@ function platform_name end
 """
     DEFAULT_DEVICE :: Ref{Int}
 
-0-based index of default device to use, by default 0 (first available device).
+1-based index of default device to use, by default 1 (first available device).
 """
-const DEFAULT_DEVICE = Ref{Int}(0)
+const DEFAULT_DEVICE = Ref{Int}(1)
 
 function default_device(client::AbstractClient)
-    return addressable_devices(client)[DEFAULT_DEVICE[] + 1]
+    return addressable_devices(client)[DEFAULT_DEVICE[]]
 end
