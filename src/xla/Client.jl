@@ -16,7 +16,8 @@ function platform_name end
 """
     DEFAULT_DEVICE :: Ref{Int}
 
-0-based index of default device to use, by default 0 (first available device).
+0-based index of default device to use.
+By default, the value of the environment variable `REACTANT_DEFAULT_DEVICE` is used when set to a non-negative integer, otherwise it is set to 0 (first available device).
 """
 const DEFAULT_DEVICE = Ref{Int}(0)
 
