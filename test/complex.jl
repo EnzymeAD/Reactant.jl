@@ -68,10 +68,10 @@ end
     mul_re_im(x) = x * Complex(true, true)
     mul_nothing(x) = x * Complex(false, false)
 
-    @test (@jit mul_im(y)) == Complex(0.0, 42.0)
-    @test (@jit mul_re(y)) == Complex(42.0, 0.0)
-    @test (@jit mul_re_im(y)) == Complex(42.0, 42.0)
-    @test (@jit mul_nothing(y)) == Complex(0.0, 0.0)
+    @test (@jit mul_im(x)) == Complex(0.0, 42.0)
+    @test (@jit mul_re(x)) == Complex(42.0, 0.0)
+    @test (@jit mul_re_im(x)) == Complex(42.0, 42.0)
+    @test (@jit mul_nothing(x)) == Complex(0.0, 0.0)
 end
 
 @testset "complex reduction" begin
