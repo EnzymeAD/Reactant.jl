@@ -57,10 +57,10 @@ using MPI: MPI
 #end
 
 @noinline function comm_rank(; location=mlir_stacktrace("mpi.comm_rank", @__FILE__, @__LINE__))
-    comm = Reactant.Ops.constant(fill(Cint(-1)))            # ???
-    retval = mlir_type(Reactant.Ops.constant(fill(Cint(-1)))) # ??? retval = mlir_type(TracedRArray{T,N})   # ???
+    # comm = Reactant.Ops.constant(fill(Cint(666)))            # ???
+    # retval = mlir_type(Reactant.Ops.constant(fill(Cint(-1)))) # ??? retval = mlir_type(TracedRArray{T,N})   # ???
     rank = mlir_type(Reactant.Ops.constant(fill(Cint(-1)))) # ???
-    res = MLIR.IR.result(enzymexla.comm_rank(comm.mlir_data; retval, rank, location))
+    res = MLIR.IR.result(enzymexla.comm_rank(; rank, location))
     return TracedRNumber{Cint}((), res)
 end
 
