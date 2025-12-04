@@ -3071,7 +3071,7 @@ struct LinkableRuntime {
       executables;
 
   // Set of allocated pointers to size
-  std::set<void *> allocations;
+  std::set<void *, std::greater<void*>> allocations;
 
   LinkableRuntime(const std::string &backend) : registry() {
     InitializeRegistry(wrap(&registry));
@@ -3219,7 +3219,7 @@ REACTANT_ABI void reactantXLAExec(LinkableRuntime **__restrict__ lrtP,
   for (int64_t i = 0; i < argcnt; i++) {
     auto &&[argB, argO, argP] = bufferAndOffset(lrt, args[i]);
     if (argO != 0) {
-      llvm::errs() << "only zero-offset execution supported\n";
+      llvm::errs() << "only zero-offset execution supported, argument " << i << " had byte offset of " << argO << "\n";
       exit(1);
     }
     baseArrays[i] = argB;
