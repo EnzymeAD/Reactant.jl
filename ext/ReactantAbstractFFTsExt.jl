@@ -40,6 +40,25 @@ for op in (:rfft, :fft, :ifft)
             invperm(perm),
         )
     end
+
+    # Out-of-place plan
+    plan_name = Symbol("Reactant", uppercase(string(op)), "Plan")
+    plan_f = Symbol("plan_", op)
+    @eval struct $(plan_name){T} <: AbstractFFTs.Plan{T} end
+    @eval AbstractFFTs.$(plan_f)(::Reactant.TracedRArray{T}) where {T} = $(plan_name){T}()
+    @eval Base.:*(::$(plan_name){T}, x::Reactant.TracedRArray{T}) where {T} =
+        AbstractFFTs.$(op)(x)
+
+    # In-place plan
+    if op !== :rfft
+        plan_name! = Symbol("Reactant", uppercase(string(op)), "InPlacePlan")
+        plan_f! = Symbol("plan_", op, "!")
+        @eval struct $(plan_name!){T} <: AbstractFFTs.Plan{T} end
+        @eval AbstractFFTs.$(plan_f!)(::Reactant.TracedRArray{T}) where {T} =
+            $(plan_name){T}()
+        @eval Base.:*(::$(plan_name!){T}, x::Reactant.TracedRArray{T}) where {T} =
+            x .= AbstractFFTs.$(op)(x)
+    end
 end
 
 for op in (:irfft,)
