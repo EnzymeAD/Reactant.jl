@@ -81,4 +81,8 @@ using Reactant
 Reactant.set_default_backend("tpu")
 ```
 
+```julia [Tenstorrent (Experimental)]
+using Reactant
+Reactant.set_default_backend("tt")
+```
 :::

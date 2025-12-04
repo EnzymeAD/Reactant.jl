@@ -519,7 +519,7 @@ function Reactant.ka_with_reactant(ndrange, workgroupsize, obj, args...)
 
     # figure out the optimal workgroupsize automatically
     if KA.workgroupsize(obj) <: KA.DynamicSize && workgroupsize === nothing
-        if !Reactant.Compiler.PartitionKA[] || raising()
+        if !Reactant.Compiler.PartitionKA[] || raising() || !CUDA.functional()
             threads = prod(ndrange)
         else
             config = CUDA.launch_configuration(kernel.fun; max_threads=prod(ndrange))

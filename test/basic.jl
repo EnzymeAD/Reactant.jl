@@ -770,6 +770,14 @@ end
         @test @jit(fn.(xrad_ra)) isa ConcreteRArray{Float32,2}
     end
 
+    yrad = Reactant.TestUtils.construct_test_array(Float32, 4, 16)[:, 3:9]
+    yrad_ra = Reactant.to_rarray(yrad)
+
+    @testset for fn in (atan, atand)
+        @test @jit(fn.(yrad_ra, xrad_ra)) ≈ fn.(yrad, xrad)
+        @test @jit(fn.(yrad_ra, xrad_ra)) isa ConcreteRArray{Float32,2}
+    end
+
     x = 0.235f0
     x_ra = Reactant.to_rarray(x; track_numbers=Number)
 

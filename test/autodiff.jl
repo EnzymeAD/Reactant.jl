@@ -422,3 +422,12 @@ end
     @test results_fd[2].y ≈ results_enz[2].y
     @test results_fd[3] ≈ results_enz[3]
 end
+
+@testset "Correct return tuple" begin
+    # issue 1875
+    x = ones(2)
+    xr = Reactant.to_rarray(x)
+    res = autodiff(Reverse, sum, Duplicated(x, zero(x)))
+    res_reactant = @jit autodiff(Reverse, sum, Duplicated(xr, zero(xr)))
+    @test length(res) == length(res_reactant)
+end

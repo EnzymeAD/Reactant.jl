@@ -26,12 +26,24 @@ Base.copy(x::TracedRNumber{T}) where {T} = TracedRNumber{T}((), x.mlir_data)
 function Base.eps(::Type{TracedRNumber{T}}) where {T}
     return Reactant.promote_to(TracedRNumber{T}, eps(T))
 end
+Base.eps(x::TracedRNumber{T}) where {T} = eps(typeof(x))
 
 function Base.typemin(::Type{TracedRNumber{T}}) where {T}
     return Reactant.promote_to(TracedRNumber{T}, typemin(T))
 end
+Base.typemin(x::TracedRNumber{T}) where {T} = typemin(typeof(x))
+
 function Base.typemax(::Type{TracedRNumber{T}}) where {T}
     return Reactant.promote_to(TracedRNumber{T}, typemax(T))
+end
+Base.typemax(x::TracedRNumber{T}) where {T} = typemax(typeof(x))
+
+function Base.nextfloat(x::TracedRNumber{T}) where {T<:AbstractFloat}
+    return @opcall next_after(x, typemax(x))
+end
+
+function Base.prevfloat(x::TracedRNumber{T}) where {T<:AbstractFloat}
+    return @opcall next_after(x, typemin(x))
 end
 
 function Base.rtoldefault(T::Type{<:TracedRNumber})
@@ -229,6 +241,15 @@ for (jlop, hloop) in (
         return @opcall $(hloop)(lhs, rhs)
     end
 end
+
+function Base.:*(x::TracedRNumber{T}, z::Complex{Bool}) where {T<:Real}
+    # this is to support multiplication by im (Complex{Bool}(false, true))
+    z_re, z_im = real(z), imag(z)
+    res_re = z_re ? x : zero(x)
+    res_im = z_im ? x : zero(x)
+    return Complex(res_re, res_im)
+end
+Base.:*(z::Complex{Bool}, x::TracedRNumber{T}) where {T<:Real} = x * z
 
 # Based on https://github.com/JuliaLang/julia/blob/39255d47db7657950ff1c82137ecec5a70bae622/base/float.jl#L608-L617
 function Base.mod(
@@ -521,6 +542,7 @@ Base.asind(x::TracedRNumber) = rad2deg(asin(x))
 Base.acosd(x::TracedRNumber) = rad2deg(acos(x))
 Base.atand(x::TracedRNumber) = rad2deg(atan(x))
 
+Base.atan(y::TracedRNumber, x::TracedRNumber) = @opcall atan2(y, x)
 Base.atand(y::TracedRNumber, x::TracedRNumber) = rad2deg(atan(y, x))
 
 Base.acscd(x::TracedRNumber) = rad2deg(asin(1 / x))

@@ -51,7 +51,7 @@ jobs:
         run: sudo rm -rf /opt/*
         if: ${{ startsWith(inputs.os, 'ubuntu-') && inputs.localjll }}
 
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
 
       - name: Set TMPDIR and create directory
         # We have to use `${GITHUB_WORKSPACE}` instead of `github.workspace` because GitHub
@@ -107,7 +107,7 @@ jobs:
           cp LocalPreferences.toml test/
 
       # Compile Julia if assertions are enabled
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
         if: ${{ inputs.assertions }}
         with:
           repository: "JuliaLang/julia"
