@@ -533,6 +533,7 @@ Base.asind(x::TracedRNumber) = rad2deg(asin(x))
 Base.acosd(x::TracedRNumber) = rad2deg(acos(x))
 Base.atand(x::TracedRNumber) = rad2deg(atan(x))
 
+Base.atan(y::TracedRNumber, x::TracedRNumber) = @opcall atan2(y, x)
 Base.atand(y::TracedRNumber, x::TracedRNumber) = rad2deg(atan(y, x))
 
 Base.acscd(x::TracedRNumber) = rad2deg(asin(1 / x))
