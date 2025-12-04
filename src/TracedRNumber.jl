@@ -242,6 +242,15 @@ for (jlop, hloop) in (
     end
 end
 
+function Base.:*(x::TracedRNumber{T}, z::Complex{Bool}) where {T<:Real}
+    # this is to support multiplication by im (Complex{Bool}(false, true))
+    z_re, z_im = real(z), imag(z)
+    res_re = z_re ? x : zero(x)
+    res_im = z_im ? x : zero(x)
+    return Complex(res_re, res_im)
+end
+Base.:*(z::Complex{Bool}, x::TracedRNumber{T}) where {T<:Real} = x * z
+
 # Based on https://github.com/JuliaLang/julia/blob/39255d47db7657950ff1c82137ecec5a70bae622/base/float.jl#L608-L617
 function Base.mod(
     @nospecialize(x::Reactant.TracedRNumber{T}), @nospecialize(y::Reactant.TracedRNumber{T})
