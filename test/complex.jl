@@ -60,6 +60,20 @@ end
     @test isapprox(f(y), ComplexF32(2.0 - 1.0im))
 end
 
+@testset "multiplication by im" begin
+    x = ConcreteRNumber(42.0)
+
+    mul_im(x) = x * im
+    mul_re(x) = x * Complex(true, false)
+    mul_re_im(x) = x * Complex(true, true)
+    mul_nothing(x) = x * Complex(false, false)
+
+    @test (@jit mul_im(y)) == Complex(0.0, 42.0)
+    @test (@jit mul_re(y)) == Complex(42.0, 0.0)
+    @test (@jit mul_re_im(y)) == Complex(42.0, 42.0)
+    @test (@jit mul_nothing(y)) == Complex(0.0, 0.0)
+end
+
 @testset "complex reduction" begin
     x = Reactant.TestUtils.construct_test_array(ComplexF32, 10, 10)
     x_ra = Reactant.to_rarray(x)
