@@ -16,7 +16,7 @@ jobs:
         with:
           version: '1.10'
       - uses: julia-actions/cache@v2
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
         with:
           ref: main
       - name: Install JuliaFormatter.jl

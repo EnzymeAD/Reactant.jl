@@ -703,6 +703,8 @@ function optimization_passes(
     recognize_comms::Bool=true,
     lower_comms::Bool=true,
     backend::String="gpu",
+    is_sharded::Bool=false,
+    raise_shlo_to_blas_lapack::Bool=true,
 )
     (; max_constant_threshold) = compile_options
 
@@ -809,6 +811,7 @@ function optimization_passes(
         "associative_binary_op_reordering<1>",
         "transpose_broadcast_in_dim_to_broadcast_in_dim<16>",
         "replace_neg_add_with_subtract",
+        "replace_subtract_neg_with_add",
         "binop_const_simplify",
         "not_select_simplify",
         "common_compare_expression_rewrite",
@@ -906,7 +909,20 @@ function optimization_passes(
         "enzyme_hlo_unroll($(WHILE_UNROLL_THRESHOLD[]))",
         "dot_general_only_diagonal_access",
         "transpose_symmetric_simplify",
+        "divide_negated_operands_simplify",
+        "multiply_negated_operands_simplify",
+        "transpose_syrk_to_syrk",
+        "fuse_mul_into_syrk",
+        "fuse_add_into_syrk",
+        "factor_scalars_in_dot_general",
     ]
+
+    if !is_sharded
+        # these passes don't have optimized sharding implementations
+        if raise_shlo_to_blas_lapack
+            append!(transform_passes_list, ["dot_general_to_syrk"])
+        end
+    end
 
     if !compile_options.disable_auto_batching_passes
         append!(
@@ -923,6 +939,7 @@ function optimization_passes(
                 "concat_insert_dim_sort",
                 "concat_insert_dim_reduce_window",
                 "concat_insert_dim_elementwise",
+                "concat_insert_dim_convolution",
                 "dot_general_slice_to_batch",
                 "gather_slice_to_batch",
                 "iota_slice_to_batch",
@@ -932,6 +949,7 @@ function optimization_passes(
                 "broadcastindim_slice_to_batch",
                 "reducewindow_slice_to_batch",
                 "elementwise_slice_to_batch",
+                "convolution_slice_to_batch",
                 "greedy_while_loop_batch_fission",
             ],
         )
@@ -953,6 +971,7 @@ function optimization_passes(
                 "reduce_licm(0)",
                 "reduce_window_licm(0)",
                 "reverse_licm(0)",
+                "convolution_licm(0)",
             ],
         )
     end
@@ -1687,10 +1706,10 @@ function compile_mlir!(
     end
 
     opt_passes = optimization_passes(
-        compile_options; sroa=true, recognize_comms, lower_comms, backend
+        compile_options; sroa=true, recognize_comms, lower_comms, backend, is_sharded
     )
     opt_passes2 = optimization_passes(
-        compile_options; sroa=false, recognize_comms, lower_comms, backend
+        compile_options; sroa=false, recognize_comms, lower_comms, backend, is_sharded
     )
 
     raise_passes = if raise isa String
@@ -1712,6 +1731,7 @@ function compile_mlir!(
                 recognize_comms,
                 lower_comms,
                 backend,
+                is_sharded,
             )
             result = result * "," * opt_passes3
         end
@@ -1722,6 +1742,8 @@ function compile_mlir!(
 
     blas_int_width = sizeof(BlasInt) * 8
     lower_enzymexla_linalg_pass = "lower-enzymexla-linalg{backend=$backend \
+                                   blas_int_width=$blas_int_width},\
+                                   lower-enzymexla-blas{backend=$backend \
                                    blas_int_width=$blas_int_width},\
                                    lower-enzymexla-lapack{backend=$backend \
                                    blas_int_width=$blas_int_width}"
@@ -2006,6 +2028,8 @@ function compile_mlir!(
                 recognize_comms,
                 lower_comms,
                 backend,
+                is_sharded,
+                raise_shlo_to_blas_lapack=false,
             ),
             "post_op_transpose_reshape",
         )
@@ -2148,7 +2172,15 @@ function compile_mlir!(
                 run_pass_pipeline!(
                     mod,
                     join(
-                        [opt_passes, "canonicalize", "cse", "canonicalize", opt_passes2],
+                        [
+                            opt_passes,
+                            "canonicalize",
+                            "cse",
+                            "canonicalize",
+                            opt_passes2,
+                            lower_enzymexla_linalg_pass,
+                            jit,
+                        ],
                         ",",
                     ),
                     "mid_pad_opts",

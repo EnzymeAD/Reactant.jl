@@ -46,6 +46,21 @@ function __init__()
             (BLAS.@blasfunc(dgesvj_), :enzymexla_lapack_dgesvj_),
             (BLAS.@blasfunc(cgesvj_), :enzymexla_lapack_cgesvj_),
             (BLAS.@blasfunc(zgesvj_), :enzymexla_lapack_zgesvj_),
+            # syrk
+            (BLAS.@blasfunc(ssyrk_), :enzymexla_blas_ssyrk_),
+            (BLAS.@blasfunc(dsyrk_), :enzymexla_blas_dsyrk_),
+            (BLAS.@blasfunc(csyrk_), :enzymexla_blas_csyrk_),
+            (BLAS.@blasfunc(zsyrk_), :enzymexla_blas_zsyrk_),
+            # trmm
+            (BLAS.@blasfunc(strmm_), :enzymexla_blas_strmm_),
+            (BLAS.@blasfunc(dtrmm_), :enzymexla_blas_dtrmm_),
+            (BLAS.@blasfunc(ctrmm_), :enzymexla_blas_ctrmm_),
+            (BLAS.@blasfunc(ztrmm_), :enzymexla_blas_ztrmm_),
+            # symm
+            (BLAS.@blasfunc(ssymm_), :enzymexla_blas_ssymm_),
+            (BLAS.@blasfunc(dsymm_), :enzymexla_blas_dsymm_),
+            (BLAS.@blasfunc(csymm_), :enzymexla_blas_csymm_),
+            (BLAS.@blasfunc(zsymm_), :enzymexla_blas_zsymm_),
         ]
             sym = Libdl.dlsym(libblastrampoline_handle, cname)
             @ccall MLIR.API.mlir_c.EnzymeJaXMapSymbol(
@@ -124,17 +139,11 @@ function ReactantCore.materialize_traced_array(
     m, n = size(x)
     row_idxs = @opcall iota(Int, [m, n]; iota_dimension=1)
     col_idxs = @opcall iota(Int, [m, n]; iota_dimension=2)
-    if x.uplo == 'L'
-        indicator = @opcall compare(row_idxs, col_idxs; comparison_direction="GT")
-        x_lt = @opcall select(indicator, parent(x), zero(parent(x)))
-        x_ltd = materialize_traced_array(LowerTriangular(parent(x)))
-        return @opcall add(x_lt, @opcall(transpose(x_ltd, [2, 1])))
-    else
-        indicator = @opcall compare(row_idxs, col_idxs; comparison_direction="LT")
-        x_ut = @opcall select(indicator, parent(x), zero(parent(x)))
-        x_utd = materialize_traced_array(UpperTriangular(parent(x)))
-        return @opcall add(@opcall(transpose(x_utd, [2, 1])), x_ut)
-    end
+    indicator = @opcall compare(
+        row_idxs, col_idxs; comparison_direction=x.uplo == 'L' ? "GT" : "LT"
+    )
+    x_transposed = @opcall transpose(parent(x), [2, 1])
+    return @opcall select(indicator, parent(x), x_transposed)
 end
 
 function TracedUtils.set_mlir_data!(
