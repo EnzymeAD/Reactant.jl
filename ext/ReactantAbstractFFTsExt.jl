@@ -55,7 +55,7 @@ for op in (:rfft, :fft, :ifft)
         plan_f! = Symbol("plan_", op, "!")
         @eval struct $(plan_name!){T} <: AbstractFFTs.Plan{T} end
         @eval AbstractFFTs.$(plan_f!)(::Reactant.TracedRArray{T}) where {T} =
-            $(plan_name){T}()
+            $(plan_name!){T}()
         @eval Base.:*(::$(plan_name!){T}, x::Reactant.TracedRArray{T}) where {T} =
             x .= AbstractFFTs.$(op)(x)
     end
