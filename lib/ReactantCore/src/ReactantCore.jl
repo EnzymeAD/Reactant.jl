@@ -9,6 +9,7 @@ export @trace, within_compile, MissingTracedValue, promote_to_traced
 function is_traced((@nospecialize x::T), seen=Base.IdSet()) where {T}
     if !isprimitivetype(x)
         for fn in fieldnames(T)
+            isdefined(x, fn) || continue
             f = getfield(x, fn)
             if !(f in seen)
                 push!(seen, f)
@@ -344,7 +345,10 @@ function trace_while(expr; track_numbers, mincut, checkpointing, first_arg=nothi
             $body_fn_sym = $(arg_syms) -> begin
                 $(to_locals...)
                 $body
+                temp = Reactant.TRACE_CALLS[]
+                Reactant.TRACE_CALLS[] = false
                 $(from_locals...)
+                Reactant.TRACE_CALLS[] = temp
                 nothing
             end
 
@@ -353,7 +357,6 @@ function trace_while(expr; track_numbers, mincut, checkpointing, first_arg=nothi
             else
                 ($(QuoteNode.(args_names.args)...),)
             end
-
             $(ReactantCore).traced_while(
                 $(cond_fn_sym),
                 $(body_fn_sym),
