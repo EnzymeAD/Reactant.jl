@@ -1405,7 +1405,6 @@ REACTANT_ABI void XLAExecuteSharded(xla::PjRtLoadedExecutable *exec,
       options.non_donatable_input_indices.insert(static_cast<int>(i));
     }
   }
-  options.untuple_result = true;
 
   // Optional future to hold asynchronous execution results.
   std::optional<xla::Future<>> returned_future;
@@ -1484,7 +1483,6 @@ REACTANT_ABI void XLAExecute(xla::PjRtLoadedExecutable *exec, int op_args_len,
     if (!is_arg_donatable[i])
       options.non_donatable_input_indices.insert((int)i);
   }
-  options.untuple_result = true;
 
   std::optional<std::vector<FutureType>> returned_futures =
       std::vector<FutureType>();
