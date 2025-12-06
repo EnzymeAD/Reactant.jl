@@ -66,3 +66,45 @@ end
         @test @jit(rfft(x_ra, (1, 2, 3))) ≈ rfft(x, (1, 2, 3))
     end
 end
+
+@testset "Planned FFTs" begin
+    @testset "Out-of-place [$(fft), size $(size)]" for size in ((16,), (16, 16)),
+        (plan, fft) in (
+            (FFTW.plan_fft, FFTW.fft),
+            (FFTW.plan_ifft, FFTW.ifft),
+            (FFTW.plan_rfft, FFTW.rfft),
+        )
+
+        x = randn(fft === FFTW.rfft ? Float32 : ComplexF32, size)
+        x_r = Reactant.to_rarray(x)
+        # We make a copy of the original array to make sure the operation does
+        # not modify the input.
+        copied_x_r = copy(x_r)
+
+        planned_fft(x) = plan(x) * x
+        compiled_planned_fft = @compile planned_fft(x_r)
+        # Make sure the result is correct
+        @test compiled_planned_fft(x_r) ≈ fft(x)
+        # Make sure the operation is not in-place
+        @test x_r == copied_x_r
+    end
+
+    @testset "In-place [$(fft!), size $(size)]" for size in ((16,), (16, 16)),
+        (plan!, fft!) in ((FFTW.plan_fft!, FFTW.fft!), (FFTW.plan_ifft!, FFTW.ifft!))
+
+        x = randn(ComplexF32, size)
+        x_r = Reactant.to_rarray(x)
+        # We make a copy of the original array to make sure the operation
+        # modifies the input.
+        copied_x_r = copy(x_r)
+
+        planned_fft!(x) = plan!(x) * x
+        compiled_planned_fft! = @compile planned_fft!(x_r)
+        planned_y_r = compiled_planned_fft!(x_r)
+        # Make sure the result is correct
+        @test planned_y_r ≈ fft!(x)
+        # Make sure the operation is in-place
+        @test planned_y_r ≈ x_r
+        @test x_r ≉ copied_x_r
+    end
+end
