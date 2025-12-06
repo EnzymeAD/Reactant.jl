@@ -27,3 +27,23 @@ or [TensorFlow Hub](https://tensorflow.org/hub). Refer to the
 ```@docs
 Reactant.Serialization.export_as_tf_saved_model
 ```
+
+## Exporting to JAX via EnzymeAD
+
+!!! note "No Dependencies Required"
+
+    Unlike TensorFlow SavedModel export, exporting to JAX via EnzymeAD does not require any
+    Python dependencies at build time. It generates standalone files that can be used with
+    EnzymeAD/JAX in Python.
+
+This export functionality generates:
+1. A `.mlir` file containing the StableHLO representation of your Julia function
+2. Example input `.npy` files with properly transposed arrays (column-major → row-major)
+3. A Python script that wraps the function for use with `enzyme_ad.jax.hlo_call`
+
+The generated Python script can be immediately used with JAX and EnzymeAD without any
+additional Julia dependencies.
+
+```@docs
+Reactant.Serialization.export_to_enzymeax
+```
