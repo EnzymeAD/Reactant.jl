@@ -57,7 +57,7 @@ for op in (:rfft, :fft, :ifft)
         @eval AbstractFFTs.$(plan_f!)(::Reactant.TracedRArray{T}) where {T} =
             $(plan_name!){T}()
         @eval Base.:*(::$(plan_name!){T}, x::Reactant.TracedRArray{T}) where {T} =
-            x .= AbstractFFTs.$(op)(x)
+            copyto!(x, AbstractFFTs.$(op)(x))
     end
 end
 
