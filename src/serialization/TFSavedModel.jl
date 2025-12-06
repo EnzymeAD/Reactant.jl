@@ -1,27 +1,9 @@
 module TFSavedModel
 
-using ..Serialization: serialization_supported
+using ..Serialization: serialization_supported, NUMPY_SIMPLE_TYPES
 using ..Reactant: Compiler, MLIR
 
 # https://github.com/openxla/stablehlo/blob/955fa7e6e3b0a6411edc8ff6fcce1e644440acbd/stablehlo/integrations/python/stablehlo/savedmodel/stablehlo_to_tf_saved_model.py
-
-const NUMPY_SIMPLE_TYPES = Dict(
-    Bool => :bool,
-    Int8 => :int8,
-    Int16 => :int16,
-    Int32 => :int32,
-    Int64 => :int64,
-    UInt8 => :uint8,
-    UInt16 => :uint16,
-    UInt32 => :uint32,
-    UInt64 => :uint64,
-    Float16 => :float16,
-    Float32 => :float32,
-    Float64 => :float64,
-    ComplexF16 => :complex16,
-    ComplexF32 => :complex32,
-    ComplexF64 => :complex64,
-)
 
 struct VariableSignature
     shape::Vector{Int}
