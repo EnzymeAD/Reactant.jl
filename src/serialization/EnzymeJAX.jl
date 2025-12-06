@@ -85,21 +85,25 @@ function export_to_enzymeax(
     mlir_path = joinpath(output_dir, "$(function_name)_$(fnid).mlir")
     write(mlir_path, hlo_code)
 
-    invmap = IdDict()
-    for (k, v) in mlir_fn_res.seen_args
-        invmap[v] = k
-    end
-
     # Process and save inputs based on the linearized arguments
+    # seen_args is an OrderedIdDict where keys are concrete args and values are traced args
+    # linear_args contains only the arguments that need to be passed to the function
+    # We iterate over seen_args which preserves the order, and only save those in linear_args
     input_paths = String[]
     input_info = []
-    for (i, linear_arg) in enumerate(mlir_fn_res.linear_args)
-        carg = invmap[linear_arg]
-        # Save the input (transposed for row-major Python/NumPy)
-        input_path = joinpath(output_dir, "$(function_name)_$(fnid)_input_$(i).npy")
-        _save_transposed_array(input_path, _to_array(carg))
-        push!(input_paths, input_path)
-        push!(input_info, (shape=size(carg), dtype=eltype(carg)))
+    input_idx = 1
+    for (concrete_arg, traced_arg) in mlir_fn_res.seen_args
+        # Only process arguments that are in linear_args (skip computed values)
+        if traced_arg in mlir_fn_res.linear_args
+            # Save the input (transposed for row-major Python/NumPy)
+            input_path = joinpath(
+                output_dir, "$(function_name)_$(fnid)_input_$(input_idx).npy"
+            )
+            _save_transposed_array(input_path, _to_array(concrete_arg))
+            push!(input_paths, input_path)
+            push!(input_info, (shape=size(concrete_arg), dtype=eltype(concrete_arg)))
+            input_idx += 1
+        end
     end
 
     # Generate Python script
