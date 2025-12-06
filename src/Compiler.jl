@@ -3576,6 +3576,9 @@ function compile_xla(
             mod, f; mlir_fn_res.num_partitions, mlir_fn_res.num_replicas
         )
 
+        # Drop some of our attributes
+        run_pass_pipeline!(mod, "drop-unsupported-attributes", "drop_enzymexla_attributes")
+
         # compile MLIR module to XLA executable
         global_device_ids = collect(Int64, mlir_fn_res.global_device_ids)
         mlir_fn_res.is_sharded && (device = nothing)
