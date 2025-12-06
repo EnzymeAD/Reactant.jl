@@ -3438,14 +3438,13 @@ public:
   GPUPerformanceModel(mlir::MLIRContext *mlir_context,
                       stream_executor::DeviceDescription *device_description)
       : mlir_context_(std::move(mlir_context)),
-        symbolic_expr_context_(mlir_context_),
         device_description_(*device_description),
         hlo_cost_analysis_options_{.count_multiple_input_accesses = true},
         fusion_analysis_cache_(device_description_),
         gpu_hlo_cost_analysis_(hlo_cost_analysis_options_, device_description_),
         gpu_performance_model_(device_description_, fusion_analysis_cache_,
                                gpu_performance_model_cache_,
-                               &symbolic_expr_context_) {}
+                               mlir_context_) {}
 
   void RunAnalysisOnHloModule(std::shared_ptr<xla::HloModule> hlo_module) {
     hlo_module->entry_computation()->Accept(&gpu_hlo_cost_analysis_);
@@ -3464,7 +3463,6 @@ public:
 
 private:
   mlir::MLIRContext *mlir_context_;
-  xla::SymbolicExprContext symbolic_expr_context_;
   xla::gpu::GpuHloCostAnalysis::Options hlo_cost_analysis_options_;
   stream_executor::DeviceDescription device_description_;
   xla::gpu::HloFusionAnalysisCache fusion_analysis_cache_;
