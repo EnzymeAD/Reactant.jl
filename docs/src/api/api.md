@@ -91,4 +91,6 @@ clear_compilation_cache!
 
 ```@docs
 ReactantCore.materialize_traced_array
+
+Reactant.apply_type_with_promotion
 ```
