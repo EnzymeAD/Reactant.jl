@@ -2,6 +2,7 @@
 Implements serialization of Reactant compiled functions. Currently supported formats are:
 
 - [Tensorflow SavedModel](https://www.tensorflow.org/guide/saved_model)
+- [EnzymeJAX](https://github.com/EnzymeAD/Enzyme-JAX) export for JAX integration
 """
 module Serialization
 
@@ -10,6 +11,7 @@ using ..Reactant: Reactant, Compiler
 serialization_supported(::Val) = false
 
 include("TFSavedModel.jl")
+include("EnzymeJAX.jl")
 
 """
     export_as_tf_saved_model(
@@ -105,6 +107,22 @@ function export_as_tf_saved_model(
     return TFSavedModel.export_as_saved_model(
         thunk, saved_model_path, target_version, _input_locations, state_dict
     )
+end
+
+"""
+    export_to_enzymeax(
+        f,
+        args...;
+        output_dir::String=".",
+        function_name::String="exported_function",
+    )
+
+Export a Julia function to EnzymeJAX format for use in Python/JAX.
+
+See [`EnzymeJAX.export_to_enzymeax`](@ref) for details.
+"""
+function export_to_enzymeax(f, args...; kwargs...)
+    return EnzymeJAX.export_to_enzymeax(f, args...; kwargs...)
 end
 
 end
