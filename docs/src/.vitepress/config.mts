@@ -101,6 +101,7 @@ export default defineConfig({
             text: "Persistent Compilation Cache",
             link: "/tutorials/persistent_compile_cache",
           },
+          { text: "Raising", link: "/tutorials/raising" }
         ],
       },
       {
@@ -185,6 +186,7 @@ export default defineConfig({
             text: "Persistent Compilation Cache",
             link: "/tutorials/persistent_compile_cache",
           },
+          { text: "Raising", link: "/tutorials/raising" }
         ],
       }
     ],
