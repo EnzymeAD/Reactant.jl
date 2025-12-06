@@ -74,7 +74,7 @@ Then in Python:
 from exported.my_function import run_my_function
 import jax
 
-result = jax.jit(run_my_function)(*inputs)
+result = run_my_function(*inputs)
 ```
 """
 function export_to_enzymejax(
@@ -220,6 +220,7 @@ function _generate_python_script(
         inputs = [$(join(load_inputs, ", "))]
         return tuple(inputs)
 
+    @jax.jit
     def run_$(function_name)($(arg_list)):
         \"\"\"
         Call the exported Julia function via EnzymeJAX.
@@ -248,7 +249,7 @@ function _generate_python_script(
 
         # Run the function (with JIT compilation)
         print(\"Running $(function_name) with JIT compilation...\")
-        result = jax.jit(run_$(function_name))(*inputs)
+        result = run_$(function_name)(*inputs)
         print(\"Result:\", result)
     """
 
