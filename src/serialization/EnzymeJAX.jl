@@ -74,7 +74,8 @@ function export_to_enzymejax(
 
     # Generate the StableHLO/MLIR code using compile_mlir
     # This returns compilation result with traced argument information
-    mod, mlir_fn_res = Compiler.compile_mlir(f, args)
+    argprefix = gensym("exportarg")
+    mod, mlir_fn_res = Compiler.compile_mlir(f, args; argprefix)
     hlo_code = string(mod)
 
     # Save MLIR code
@@ -93,17 +94,22 @@ function export_to_enzymejax(
     input_info = []
     input_idx = 1
     for (concrete_arg, traced_arg) in mlir_fn_res.seen_args
+        path = Reactant.TracedUtils.get_idx(traced_arg, argprefix)[2:end]
+
         # Only process arguments that are in linear_args (skip computed values)
-        if traced_arg in mlir_fn_res.linear_args
-            # Save the input (transposed for row-major Python/NumPy)
-            input_path = joinpath(
-                output_dir, "$(function_name)_$(fnid)_input_$(input_idx).npy"
-            )
-            _save_transposed_array(input_path, _to_array(concrete_arg))
-            push!(input_paths, input_path)
-            push!(input_info, (shape=size(concrete_arg), dtype=eltype(concrete_arg)))
-            input_idx += 1
-        end
+        # Save the input (transposed for row-major Python/NumPy)
+        input_path = joinpath(output_dir, "$(function_name)_$(fnid)_input_$(input_idx).npy")
+        _save_transposed_array(input_path, _to_array(concrete_arg))
+        push!(input_paths, input_path)
+        push!(
+            input_info,
+            (
+                shape=size(concrete_arg),
+                dtype=eltype(concrete_arg),
+                path="arg." * join(string.(path), "."),
+            ),
+        )
+        input_idx += 1
     end
 
     # Generate Python script
@@ -197,7 +203,7 @@ function _generate_python_script(
     # Generate docstring for arguments
     arg_docs = join(
         [
-            "        $(arg_names[i]): Array of shape $(reverse(info.shape)) and dtype $(Serialization.NUMPY_SIMPLE_TYPES[info.dtype])"
+            "        $(arg_names[i]): Array of shape $(reverse(info.shape)) and dtype $(Serialization.NUMPY_SIMPLE_TYPES[info.dtype]). Path: $(info.path)"
             for (i, info) in enumerate(input_info)
         ],
         "\n",
