@@ -127,20 +127,6 @@ function export_as_tf_saved_model(
     )
 end
 
-"""
-    export_to_enzymejax(
-        f,
-        args...;
-        output_dir::String=".",
-        function_name::String="exported_function",
-    )
-
-Export a Julia function to EnzymeJAX format for use in Python/JAX.
-
-See [`EnzymeJAX.export_to_enzymejax`](@ref) for details.
-"""
-function export_to_enzymejax(f, args...; kwargs...)
-    return EnzymeJAX.export_to_enzymejax(f, args...; kwargs...)
-end
+const export_to_enzymejax = EnzymeJAX.export_to_enzymejax
 
 end

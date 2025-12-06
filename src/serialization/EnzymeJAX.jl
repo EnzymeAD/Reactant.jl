@@ -33,6 +33,8 @@ This function:
   - `output_dir::Union{String,Nothing}`: Directory where output files will be saved. If
     `nothing`, uses a temporary directory and prints the path.
   - `function_name::String`: Base name for generated files
+  - `preserve_sharding::Bool`: Whether to preserve sharding information in the exported
+    function. Defaults to `true`.
 
 ## Returns
 
@@ -55,8 +57,11 @@ function my_function(x::AbstractArray, y::NamedTuple, z::Number)
 end
 
 # Create some example inputs
-x = Reactant.to_rarray(Float32[1, 2, 3])
-y = (; x=Reactant.to_rarray(Float32[4, 5, 6]), y=Reactant.to_rarray(Float32[7, 8, 9]))
+x = Reactant.to_rarray(reshape(collect(Float32, 1:6), 2, 3))
+y = (;
+    x=Reactant.to_rarray(reshape(collect(Float32, 7:12), 2, 3)),
+    y=Reactant.to_rarray(reshape(collect(Float32, 13:18), 2, 3))
+)
 z = Reactant.to_rarray(10.0f0; track_numbers=true)
 
 # Export to EnzymeJAX
@@ -73,7 +78,11 @@ result = jax.jit(run_my_function)(*inputs)
 ```
 """
 function export_to_enzymejax(
-    f, args...; output_dir::Union{String,Nothing}=nothing, function_name::String=string(f)
+    f,
+    args...;
+    output_dir::Union{String,Nothing}=nothing,
+    function_name::String=string(f),
+    preserve_sharding::Bool=true,
 )
     if output_dir === nothing
         output_dir = mktempdir(; cleanup=false)
@@ -173,6 +182,15 @@ function _generate_python_script(
         "\n",
     )
 
+    arg_size_checks = [
+        "assert $(arg_names[i]).shape == $(reverse(info.shape)), f\"Expected shape of $(arg_names[i]) to be $(reverse(info.shape)). Got {$(arg_names[i]).shape} (path: $(info.path))\""
+        for (i, info) in enumerate(input_info)
+    ]
+    arg_dtype_checks = [
+        "assert $(arg_names[i]).dtype == np.dtype('$(Serialization.NUMPY_SIMPLE_TYPES[info.dtype])'), f\"Expected dtype of $(arg_names[i]) to be $(Serialization.NUMPY_SIMPLE_TYPES[info.dtype]). Got {$(arg_names[i]).dtype} (path: $(info.path))\""
+        for (i, info) in enumerate(input_info)
+    ]
+
     load_inputs = ["npz_data['$(info.key)']" for info in input_info]
 
     # Build the complete Python script
@@ -217,6 +235,8 @@ function _generate_python_script(
             arrays from Julia, make sure to transpose them first using:
             \`permutedims(arr, reverse(1:ndims(arr)))\`
         \"\"\"
+        $(join(arg_dtype_checks, "\n    "))
+        $(join(arg_size_checks, "\n    "))
         return hlo_call(
             $(arg_list),
             source=_hlo_code,
