@@ -41,20 +41,16 @@ A tuple `(mlir_path, python_path, input_paths)` containing paths to:
 using Reactant
 
 # Define a simple function
-function my_function(x, y)
-    return x .+ y
+function my_function(x, y::NamedTuple)
+    return x .+ y.x .- y.y
 end
 
 # Create some example inputs
 x = Reactant.to_rarray(Float32[1, 2, 3])
-y = Reactant.to_rarray(Float32[4, 5, 6])
+y = (; x=Reactant.to_rarray(Float32[4, 5, 6]), y=Reactant.to_rarray(Float32[7, 8, 9]))
 
 # Export to EnzymeJAX
-mlir_path, python_path, input_paths = Reactant.Serialization.export_to_enzymeax(
-    my_function, x, y;
-    output_dir="/tmp/exported",
-    function_name="my_function"
-)
+python_file_path = Reactant.Serialization.export_to_enzymeax(my_function, x, y)
 ```
 
 Then in Python:
@@ -67,83 +63,63 @@ result = jax.jit(run_my_function)(*inputs)
 ```
 """
 function export_to_enzymeax(
-    f, args...; output_dir::String=".", function_name::String="exported_function"
+    f, args...; output_dir::Union{String,Nothing}=nothing, function_name::String=string(f)
 )
-    # Create output directory if it doesn't exist
-    mkpath(output_dir)
+    if output_dir === nothing
+        output_dir = mktempdir(; cleanup=false)
+        @info "Output directory is $(output_dir)"
+    else
+        mkpath(output_dir)
+    end
 
-    # Generate the StableHLO/MLIR code using compile_mlir directly
-    mod, mlir_fn_res = Compiler.compile_mlir(f, args; shardy_passes=:none)
+    # Generate the StableHLO/MLIR code using compile_mlir
+    # This returns compilation result with traced argument information
+    mod, mlir_fn_res = Compiler.compile_mlir(f, args)
     hlo_code = string(mod)
 
     # Save MLIR code
-    mlir_path = joinpath(output_dir, "$(function_name).mlir")
+    fnid = 0
+    while isfile(joinpath(output_dir, "$(function_name)_$(fnid).mlir"))
+        fnid += 1
+    end
+    mlir_path = joinpath(output_dir, "$(function_name)_$(fnid).mlir")
     write(mlir_path, hlo_code)
 
-    # Process and save inputs
+    invmap = IdDict()
+    for (k, v) in mlir_fn_res.seen_args
+        invmap[v] = k
+    end
+
+    # Process and save inputs based on the linearized arguments
     input_paths = String[]
     input_info = []
-
-    for (i, arg) in enumerate(args)
-        # Convert to array if needed
-        arr = _to_array(arg)
-
+    for (i, linear_arg) in enumerate(mlir_fn_res.linear_args)
+        carg = invmap[linear_arg]
         # Save the input (transposed for row-major Python/NumPy)
-        input_path = joinpath(output_dir, "$(function_name)_input_$(i).npy")
-        _save_transposed_array(input_path, arr)
+        input_path = joinpath(output_dir, "$(function_name)_$(fnid)_input_$(i).npy")
+        _save_transposed_array(input_path, _to_array(carg))
         push!(input_paths, input_path)
-
-        # Store shape and dtype info (in Julia's column-major ordering)
-        push!(input_info, (shape=size(arr), dtype=eltype(arr)))
+        push!(input_info, (shape=size(carg), dtype=eltype(carg)))
     end
 
     # Generate Python script
     python_path = joinpath(output_dir, "$(function_name).py")
     _generate_python_script(python_path, function_name, mlir_path, input_paths, input_info)
-
-    return (mlir_path, python_path, input_paths)
+    return python_path
 end
 
-"""
-Convert Reactant types to regular Julia arrays for saving.
-"""
-function _to_array(x::Reactant.ConcreteRArray)
-    return Array(x)
-end
+_to_array(x::Reactant.ConcreteRArray) = Array(x)
+_to_array(x::Reactant.ConcreteRNumber) = Number(x)
 
-function _to_array(x::Reactant.ConcreteRNumber)
-    return [x.data]
-end
-
-function _to_array(x::AbstractArray)
-    return Array(x)
-end
-
-function _to_array(x::Number)
-    return [x]
-end
-
-function _to_array(x::Tuple)
-    return error("Tuple arguments are not yet supported. Please flatten your arguments.")
-end
-
-function _to_array(x::NamedTuple)
-    return error(
-        "NamedTuple arguments are not yet supported. Please flatten your arguments."
-    )
-end
-
-"""
-Save an array to a .npy file, transposing to account for row-major vs column-major ordering.
-"""
+# Save an array to a .npy file, transposing to account for row-major vs
+# column-major ordering.
 function _save_transposed_array(path::String, arr::AbstractArray)
     # For multi-dimensional arrays, we need to reverse the dimensions for Python/NumPy
-    # Julia: column-major (fastest changing index first)
-    # Python: row-major (fastest changing index last)
     transposed = permutedims(arr, reverse(1:ndims(arr)))
 
     # Use a simple .npy writer
-    # NPY format v1.0: magic (6 bytes) + version (2 bytes) + header_len (2 bytes) + header + data
+    # NPY format v1.0: magic (6 bytes) + version (2 bytes) + header_len (2 bytes) +
+    #                  header + data
     open(path, "w") do io
         # Magic number for .npy format
         write(io, UInt8[0x93, 0x4E, 0x55, 0x4D, 0x50, 0x59])
@@ -173,68 +149,22 @@ function _save_transposed_array(path::String, arr::AbstractArray)
     return nothing
 end
 
-"""
-Get NumPy dtype string for a Julia type.
-"""
-function _numpy_dtype_string(::Type{Bool})
-    return "|b1"
-end
+# TODO: use a proper package for this
+_numpy_dtype_string(::Type{Bool}) = "|b1"
+_numpy_dtype_string(::Type{Int8}) = "|i1"
+_numpy_dtype_string(::Type{UInt8}) = "|u1"
+_numpy_dtype_string(::Type{Int16}) = "<i2"
+_numpy_dtype_string(::Type{UInt16}) = "<u2"
+_numpy_dtype_string(::Type{Int32}) = "<i4"
+_numpy_dtype_string(::Type{UInt32}) = "<u4"
+_numpy_dtype_string(::Type{Int64}) = "<i8"
+_numpy_dtype_string(::Type{UInt64}) = "<u8"
+_numpy_dtype_string(::Type{Float16}) = "<f2"
+_numpy_dtype_string(::Type{Float32}) = "<f4"
+_numpy_dtype_string(::Type{Float64}) = "<f8"
+_numpy_dtype_string(::Type{ComplexF32}) = "<c8"
+_numpy_dtype_string(::Type{ComplexF64}) = "<c16"
 
-function _numpy_dtype_string(::Type{Int8})
-    return "|i1"
-end
-
-function _numpy_dtype_string(::Type{UInt8})
-    return "|u1"
-end
-
-function _numpy_dtype_string(::Type{Int16})
-    return "<i2"
-end
-
-function _numpy_dtype_string(::Type{UInt16})
-    return "<u2"
-end
-
-function _numpy_dtype_string(::Type{Int32})
-    return "<i4"
-end
-
-function _numpy_dtype_string(::Type{UInt32})
-    return "<u4"
-end
-
-function _numpy_dtype_string(::Type{Int64})
-    return "<i8"
-end
-
-function _numpy_dtype_string(::Type{UInt64})
-    return "<u8"
-end
-
-function _numpy_dtype_string(::Type{Float16})
-    return "<f2"
-end
-
-function _numpy_dtype_string(::Type{Float32})
-    return "<f4"
-end
-
-function _numpy_dtype_string(::Type{Float64})
-    return "<f8"
-end
-
-function _numpy_dtype_string(::Type{ComplexF32})
-    return "<c8"
-end
-
-function _numpy_dtype_string(::Type{ComplexF64})
-    return "<c16"
-end
-
-"""
-Generate a Python script that uses EnzymeJAX to call the exported function.
-"""
 function _generate_python_script(
     python_path::String,
     function_name::String,
