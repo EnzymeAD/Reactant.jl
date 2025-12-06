@@ -94,12 +94,12 @@ end
             ReactantCacheToken(),
             REACTANT_METHOD_TABLE,
             world,
-            false,
             false,            #=forward_rules=#
             false,            #=reverse_rules=#
             false,            #=inactive_rules=#
             false,            #=broadcast_rewrite=#
-            set_reactant_abi,            #=within_autodiff_rewrite=#
+            false,            #=within_autodiff_rewrite=#
+            set_reactant_abi, #=handler=#
         )
     end
 else
@@ -112,12 +112,12 @@ else
             REACTANT_CACHE,
             REACTANT_METHOD_TABLE,
             world,
-            false,
             false,            #=forward_rules=#
             false,            #=reverse_rules=#
             false,            #=inactive_rules=#
             false,            #=broadcast_rewrite=#
-            set_reactant_abi,            #=within_autodiff_rewrite=#
+            false,            #=within_autodiff_rewrite=#
+            set_reactant_abi, #=handler=#
         )
     end
 end
