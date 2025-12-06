@@ -38,6 +38,7 @@ const REACTANT_TEST_GROUP = lowercase(get(ENV, "REACTANT_TEST_GROUP", "all"))
         @safetestset "Cluster Detection" include("cluster_detector.jl")
         @safetestset "Config" include("config.jl")
         @safetestset "Batching" include("batching.jl")
+        @safetestset "Export to EnzymeJAX" include("export_enzymeax.jl")
         @safetestset "QA" include("qa.jl")
     end
 
