@@ -15,7 +15,7 @@ using Test
         y = Reactant.to_rarray(Float32[7 8; 9 10; 11 12])  # 3x2 matrix
         
         # Export to EnzymeJAX
-        mlir_path, python_path, input_paths = Reactant.Serialization.export_to_enzymeax(
+        mlir_path, python_path, input_paths = Reactant.Serialization.export_to_enzymejax(
             matrix_multiply, x, y;
             output_dir=tmpdir,
             function_name="matrix_multiply"
@@ -56,7 +56,7 @@ end
         y = Reactant.to_rarray(rand(Float32, 28, 28, 1, 4))
         
         # Export to EnzymeJAX
-        mlir_path, python_path, input_paths = Reactant.Serialization.export_to_enzymeax(
+        mlir_path, python_path, input_paths = Reactant.Serialization.export_to_enzymejax(
             add_3d, x, y;
             output_dir=tmpdir,
             function_name="add_3d"
@@ -86,7 +86,7 @@ end
         
         x = Reactant.to_rarray(Float32[1.0, 2.0, 3.0, 4.0])
         
-        mlir_path, python_path, input_paths = Reactant.Serialization.export_to_enzymeax(
+        mlir_path, python_path, input_paths = Reactant.Serialization.export_to_enzymejax(
             simple_fn, x;
             output_dir=tmpdir,
             function_name="test_fn"

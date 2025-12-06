@@ -16,7 +16,7 @@ using Test
         y = Reactant.to_rarray(Float32[4, 5, 6])
         
         # Export to EnzymeJAX
-        mlir_path, python_path, input_paths = Reactant.Serialization.export_to_enzymeax(
+        mlir_path, python_path, input_paths = Reactant.Serialization.export_to_enzymejax(
             simple_add, x, y;
             output_dir=tmpdir,
             function_name="simple_add"
@@ -46,7 +46,7 @@ using Test
             @test filesize(input_path) > 0
         end
         
-        println("✓ All export_to_enzymeax tests passed!")
+        println("✓ All export_to_enzymejax tests passed!")
         println("  - MLIR file created: $(mlir_path)")
         println("  - Python file created: $(python_path)")
         println("  - Input files created: $(length(input_paths))")

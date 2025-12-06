@@ -45,5 +45,5 @@ The generated Python script can be immediately used with JAX and EnzymeAD withou
 additional Julia dependencies.
 
 ```@docs
-Reactant.Serialization.export_to_enzymeax
+Reactant.Serialization.export_to_enzymejax
 ```
