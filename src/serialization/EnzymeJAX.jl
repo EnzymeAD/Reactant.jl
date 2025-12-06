@@ -95,7 +95,12 @@ function export_to_enzymejax(
     # This returns compilation result with traced argument information
     argprefix = gensym("exportarg")
     mod, mlir_fn_res = Compiler.compile_mlir(
-        f, args; argprefix, drop_unsupported_attributes=true
+        f,
+        args;
+        argprefix,
+        drop_unsupported_attributes=true,
+        # to support older jax versions which don't support shardy
+        shardy_passes=:to_mhlo_shardings,
     )
     hlo_code = string(mod)
 
@@ -120,6 +125,13 @@ function export_to_enzymejax(
         # Store input data for the single NPZ file
         arr_key = "arr_$input_idx"
         input_data[arr_key] = _to_array(concrete_arg)
+
+        # Extract sharding information if available and if preserve_sharding is true
+        sharding_info = nothing
+        if preserve_sharding && _has_sharding_info(concrete_arg)
+            sharding_info = _extract_sharding_info(concrete_arg)
+        end
+
         push!(
             input_info,
             (
@@ -127,6 +139,7 @@ function export_to_enzymejax(
                 dtype=Reactant.unwrapped_eltype(concrete_arg),
                 path="arg." * join(string.(path), "."),
                 key=arr_key,
+                sharding=sharding_info,
             ),
         )
         input_idx += 1
@@ -138,12 +151,39 @@ function export_to_enzymejax(
 
     # Generate Python script
     python_path = joinpath(output_dir, "$(function_name).py")
-    _generate_python_script(python_path, function_name, mlir_path, input_path, input_info)
+    _generate_python_script(
+        python_path, function_name, mlir_path, input_path, input_info; preserve_sharding
+    )
     return python_path
 end
 
 _to_array(x::Reactant.ConcreteRArray) = Array(x)
 _to_array(x::Reactant.ConcreteRNumber{T}) where {T} = T(x)
+
+_has_sharding_info(x::Reactant.ConcreteRArray) = Reactant.Sharding.is_sharded(x.sharding)
+_has_sharding_info(x) = false
+
+function _extract_sharding_info(x::Reactant.ConcreteRArray)
+    sharding = x.sharding
+    if sharding isa Reactant.Sharding.ShardInfo
+        inner_sharding = sharding.sharding
+        if inner_sharding isa Reactant.Sharding.NamedSharding
+            # TODO: we need to export is_closed, priority, and subaxes at some point
+            return (;
+                type="NamedSharding",
+                mesh=inner_sharding.mesh,
+                partition_spec=inner_sharding.partition_spec,
+            )
+        elseif inner_sharding isa Reactant.Sharding.Replicated
+            return (; type="Replicated", mesh=inner_sharding.mesh)
+        elseif inner_sharding isa Reactant.Sharding.NoSharding
+            return (; type="NoSharding")
+        else
+            error("Unsupported sharding type: $(typeof(inner_sharding))")
+        end
+    end
+    return (; type="NoSharding")
+end
 
 function save_inputs_npz(
     output_path::String, inputs::Dict{String,<:Union{AbstractArray,Number}}
@@ -162,7 +202,8 @@ function _generate_python_script(
     function_name::String,
     mlir_path::String,
     input_path::String,
-    input_info::Vector,
+    input_info::Vector;
+    preserve_sharding::Bool=true,
 )
     # Get relative paths for the Python script
     output_dir = dirname(python_path)
@@ -191,6 +232,74 @@ function _generate_python_script(
         for (i, info) in enumerate(input_info)
     ]
 
+    # Generate sharding annotations if available
+    has_any_sharding =
+        preserve_sharding && any(info.sharding !== nothing for info in input_info)
+
+    device_put_calls = String[]
+    if has_any_sharding
+        inserted_meshes = IdDict()
+        counter = 0
+        for (i, info) in enumerate(input_info)
+            if info.sharding !== nothing
+                if haskey(inserted_meshes, info.sharding.mesh)
+                    pymesh = inserted_meshes[info.sharding.mesh]
+                else
+                    pymesh = "mesh$counter"
+                    counter += 1
+                    inserted_meshes[info.sharding.mesh] = pymesh
+                    axis_sizes = join(string.(reverse(info.sharding.mesh.axis_sizes)), ", ")
+                    mesh_axes = join(
+                        reverse(["'$(string(x))'" for x in info.sharding.mesh.axis_names]),
+                        ", ",
+                    )
+
+                    push!(
+                        device_put_calls,
+                        "$(pymesh) = jax.make_mesh(($(axis_sizes)), ($(mesh_axes)))",
+                    )
+                end
+
+                push!(
+                    device_put_calls,
+                    "# Set up sharding for $(arg_names[i]): $(info.sharding.type)",
+                )
+
+                # Create device_put call with NamedSharding
+                if info.sharding.type == "NoSharding"
+                    device_put_calls_str = "$(arg_names[i]) = jnp.asarray($(arg_names[i]))"
+                elseif info.sharding.type == "NamedSharding"
+                    pstrings = [
+                        if length(p) == 1
+                            p[1] isa Nothing ? "None" : "'$(string(p[1]))'"
+                        else
+                            join(string.(reverse(p)), ", ")
+                        end for p in info.sharding.partition_spec
+                    ]
+                    partition_spec = join(reverse(pstrings), ", ")
+                    device_put_calls_str = "$(arg_names[i]) = jax.device_put($(arg_names[i]), jax.sharding.NamedSharding($(pymesh), P($(partition_spec))))"
+                else
+                    error("Unsupported sharding type: $(info.sharding.type)")
+                end
+                push!(device_put_calls, device_put_calls_str)
+            end
+        end
+    end
+
+    if has_any_sharding
+        inputs_to_jax_arrays = """# Apply sharding to inputs using device_put and NamedSharding
+            $(join(device_put_calls, "\n    "))
+        """
+    else
+        convert_str_list = join(
+            ["    $(argname) = jnp.asarray($(argname))" for argname in arg_names], "\n"
+        )
+        inputs_to_jax_arrays = """
+        # Convert inputs to jax arrays
+        $(convert_str_list)
+        """
+    end
+
     load_inputs = ["npz_data['$(info.key)']" for info in input_info]
 
     # Build the complete Python script
@@ -203,6 +312,7 @@ function _generate_python_script(
 
     from enzyme_ad.jax import hlo_call
     import jax
+    from jax.sharding import PartitionSpec as P
     import jax.numpy as jnp
     import numpy as np
     import os
@@ -245,11 +355,11 @@ function _generate_python_script(
 
     if __name__ == \"__main__\":
         # Load the example inputs
-        inputs = load_inputs()
-
-        # Run the function (with JIT compilation)
-        print(\"Running $(function_name) with JIT compilation...\")
-        result = run_$(function_name)(*inputs)
+        ($(arg_list),) = load_inputs()
+        $(inputs_to_jax_arrays)
+        # Run the function
+        print(\"Running $(function_name)...\")
+        result = run_$(function_name)($(arg_list))
         print(\"Result:\", result)
     """
 
