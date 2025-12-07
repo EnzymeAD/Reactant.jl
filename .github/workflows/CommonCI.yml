@@ -52,6 +52,9 @@ jobs:
         if: ${{ startsWith(inputs.os, 'ubuntu-') && inputs.localjll }}
 
       - uses: actions/checkout@v6
+        with:
+          repository: LuxDL/Lux.jl
+          ref: ap/dump_performance_numbers
 
       - name: Set TMPDIR and create directory
         # We have to use `${GITHUB_WORKSPACE}` instead of `github.workspace` because GitHub
@@ -74,15 +77,21 @@ jobs:
           mkdir -p "$XDG_RUNTIME_DIR/upterm"
           chmod -R 700 "$XDG_RUNTIME_DIR"
 
-      - name: Install tmux
+      - name: Run and dump xprof
         run: |
-          apt-get update && apt-get -y install tmux
-      - name: Setup upterm session
-        uses: owenthereal/action-upterm@v1
-        with:
-          limit-access-to-actor: true
-          limit-access-to-users: avik-pal
-          wait-timeout-minutes: 30
+          julia --threads=auto examples/Qwen3/generate_dumps.jl
+          zip -r traces.zip examples/Qwen3/traces
+
+      # - name: Install tmux
+      #   run: |
+      #     apt-get update && apt-get -y install tmux
+
+      # - name: Setup upterm session
+      #   uses: owenthereal/action-upterm@v1
+      #   with:
+      #     limit-access-to-actor: true
+      #     limit-access-to-users: avik-pal
+      #     wait-timeout-minutes: 30
 
       - name: "Upload MLIR modules"
         uses: actions/upload-artifact@v5
