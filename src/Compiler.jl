@@ -1494,6 +1494,102 @@ function release_guard_from_gc_for_module(mod::MLIR.IR.Module)
     return nothing
 end
 
+"""
+    create_pass_failure_zip(mod, f, args, pass_pipeline_key, error_msg)
+
+Create a zip file containing the unoptimized IR and a Julia script for reproducing the issue.
+This is automatically called when a pass pipeline fails during compilation.
+
+Returns the path to the created zip file.
+"""
+function create_pass_failure_zip(
+    mod::MLIR.IR.Module, f, args, pass_pipeline_key::String, error_msg::String
+)
+    try
+        # Import p7zip_jll
+        import p7zip_jll: p7zip
+
+        # Create a temporary directory for the files
+        temp_dir = mktempdir(; prefix="reactant_failure_", cleanup=false)
+        
+        # Save the unoptimized IR
+        mlir_path = joinpath(temp_dir, "unoptimized_ir.mlir")
+        open(mlir_path, "w") do io
+            println(io, "// Pass pipeline that failed: ", pass_pipeline_key)
+            println(io, "// Error message: ", error_msg)
+            println(io)
+            show(IOContext(io, :debug => true), mod)
+        end
+        
+        # Try to export inputs and create a Julia script using Serialization
+        function_name = string(f)
+        script_path = nothing
+        try
+            # Check if NPZ is available for serialization
+            if Reactant.Serialization.serialization_supported(Val(:NPZ))
+                script_path = Reactant.Serialization.export_to_reactant_script(
+                    f, args...; output_dir=temp_dir, function_name=function_name
+                )
+            end
+        catch e
+            @debug "Could not create Julia script for reproduction" exception = e
+        end
+        
+        # Create README with instructions
+        readme_path = joinpath(temp_dir, "README.md")
+        open(readme_path, "w") do io
+            println(io, "# Reactant Compilation Failure Report")
+            println(io)
+            println(io, "This archive contains information about a failed Reactant compilation.")
+            println(io)
+            println(io, "## Contents")
+            println(io)
+            println(io, "- `unoptimized_ir.mlir`: The MLIR module before optimization passes")
+            println(io, "- `README.md`: This file")
+            if script_path !== nothing
+                println(io, "- `$(function_name).jl`: Julia script for reproduction")
+                println(io, "- `$(function_name)*.mlir`: Exported HLO code")
+                println(io, "- `$(function_name)*_inputs.npz`: Input data")
+            end
+            println(io)
+            println(io, "## Error Information")
+            println(io)
+            println(io, "**Pass Pipeline Key**: `$(pass_pipeline_key)`")
+            println(io)
+            println(io, "**Error Message**:")
+            println(io, "```")
+            println(io, error_msg)
+            println(io, "```")
+            println(io)
+            println(io, "## How to Report")
+            println(io)
+            println(io, "1. Upload this zip file to a file sharing service")
+            println(io, "2. Open an issue at https://github.com/EnzymeAD/Reactant.jl/issues")
+            println(io, "3. Include the link to the uploaded zip file in your issue")
+            println(io, "4. Describe what you were trying to do when the error occurred")
+            println(io)
+            println(io, "## Debugging")
+            println(io)
+            println(io, "You can inspect the `unoptimized_ir.mlir` file to see the IR before it failed.")
+            if script_path !== nothing
+                println(io, "You can also try running the `$(function_name).jl` script to reproduce the issue.")
+            end
+        end
+        
+        # Create the zip file
+        zip_path = temp_dir * ".zip"
+        run(pipeline(`$(p7zip()) a -tzip $(zip_path) $(temp_dir)/*`, devnull))
+        
+        # Clean up the temp directory (but keep the zip)
+        rm(temp_dir; recursive=true, force=true)
+        
+        return zip_path
+    catch e
+        @error "Failed to create debug zip file" exception = e
+        return nothing
+    end
+end
+
 # helper for debug purposes: String -> Text
 function run_pass_pipeline_on_source(source, pass_pipeline; enable_verifier=true)
     return MLIR.IR.with_context() do _
@@ -1570,16 +1666,41 @@ function compile_mlir(f, args; client=nothing, drop_unsupported_attributes=false
         mod = MLIR.IR.Module(MLIR.IR.Location())
 
         compile_options, kwargs_inner = __get_compile_options_and_kwargs(; kwargs...)
-        mlir_fn_res = compile_mlir!(
-            mod,
-            f,
-            args,
-            compile_options;
-            backend,
-            runtime=XLA.runtime(client),
-            client,
-            kwargs_inner...,
-        )
+        
+        # Wrap compile_mlir! to catch pass pipeline failures
+        mlir_fn_res = try
+            compile_mlir!(
+                mod,
+                f,
+                args,
+                compile_options;
+                backend,
+                runtime=XLA.runtime(client),
+                client,
+                kwargs_inner...,
+            )
+        catch e
+            # Check if this is a pass pipeline failure
+            if e isa String && contains(e, "failed to run pass manager")
+                # Create a debug zip file with the unoptimized IR
+                zip_path = create_pass_failure_zip(mod, f, args, "compilation", string(e))
+                if zip_path !== nothing
+                    error(
+                        "Compilation failed during pass pipeline execution. " *
+                        "A debug zip file has been created at: $(zip_path)\n" *
+                        "Please upload this file when reporting the issue at: " *
+                        "https://github.com/EnzymeAD/Reactant.jl/issues\n" *
+                        "Original error: $(e)"
+                    )
+                else
+                    # If we couldn't create the zip, just rethrow the original error
+                    rethrow()
+                end
+            else
+                # Not a pass pipeline failure, rethrow
+                rethrow()
+            end
+        end
 
         # Attach a name, and partitioning attributes to the module
         __add_mhlo_attributes_and_name!(
