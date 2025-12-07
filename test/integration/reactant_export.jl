@@ -115,7 +115,9 @@ using Reactant, Test, NPZ
         )
 
         output_dir = dirname(julia_file_path)
-        npz_path = first(filter(f -> endswith(f, ".npz"), readdir(output_dir; join=true)))
+        npz_files = filter(f -> endswith(f, ".npz"), readdir(output_dir; join=true))
+        @test !isempty(npz_files)
+        npz_path = first(npz_files)
         
         # Load the NPZ file and verify the data
         npz_data = npzread(npz_path)

@@ -1578,7 +1578,8 @@ function create_pass_failure_zip(
         
         # Create the zip file
         zip_path = temp_dir * ".zip"
-        # Use explicit file enumeration to avoid shell expansion issues
+        # Note: temp_files are passed as command arguments (not via shell expansion)
+        # which prevents shell injection even if paths contain special characters
         temp_files = readdir(temp_dir; join=true)
         run(pipeline(`$(p7zip()) a -tzip $(zip_path) $(temp_files...)`, devnull))
         
