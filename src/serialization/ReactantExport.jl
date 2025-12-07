@@ -13,7 +13,7 @@ using ..Reactant: Reactant, Compiler, Serialization
 Export a Julia function to a standalone Reactant script.
 
 This function:
-1. Compiles the function to StableHLO via `Reactant.@code_hlo`
+1. Compiles the function to StableHLO via Reactant's compile_mlir
 2. Saves the MLIR/StableHLO code to a `.mlir` file
 3. Saves all input arrays to a single compressed `.npz` file (transposed to account for
    row-major vs column-major)
@@ -40,7 +40,7 @@ The path to the generated Julia script as a `String`.
 
 ## Files Generated
 
-  - `{function_name}.mlir`: The StableHLO/MLIR module
+  - `{function_name}_{id}.mlir`: The StableHLO/MLIR module (where `{id}` is a numeric counter)
   - `{function_name}_{id}_inputs.npz`: Compressed NPZ file containing all input arrays
   - `{function_name}.jl`: Julia script that loads and executes the exported function
 
@@ -170,13 +170,24 @@ function _generate_julia_script(
     # Generate docstring for arguments
     arg_docs = join(
         [
-            "        $(arg_names[i]): Array of shape $(reverse(info.shape)) and dtype $(Serialization.NUMPY_SIMPLE_TYPES[info.dtype]). Path: $(info.path)"
+            if length(info.shape) == 0
+                "        $(arg_names[i]): Scalar of dtype $(Serialization.NUMPY_SIMPLE_TYPES[info.dtype]). Path: $(info.path)"
+            else
+                "        $(arg_names[i]): Array of shape $(reverse(info.shape)) and dtype $(Serialization.NUMPY_SIMPLE_TYPES[info.dtype]). Path: $(info.path)"
+            end
             for (i, info) in enumerate(input_info)
         ],
         "\n",
     )
 
     load_inputs = ["npz_data[\"$(info.key)\"]" for info in input_info]
+
+    # Build a cleaner representation of the load_inputs code
+    load_input_lines = String[]
+    for load in load_inputs
+        push!(load_input_lines, "let arr = $load; arr isa Number ? arr : permutedims(arr, reverse(1:ndims(arr))) end")
+    end
+    load_inputs_code = join(load_input_lines, ",\n            ")
 
     # Build the complete Julia script
     script = """
@@ -200,7 +211,7 @@ function _generate_julia_script(
         npz_data = npzread(joinpath(SCRIPT_DIR, "$(input_rel)"))
         # Transpose back from Python/NumPy (row-major) to Julia (column-major)
         inputs = [
-            $(join(["let arr = " * load * "; arr isa Number ? arr : permutedims(arr, reverse(1:ndims(arr))) end" for load in load_inputs], ",\n            "))
+            $(load_inputs_code)
         ]
         return tuple(inputs...)
     end

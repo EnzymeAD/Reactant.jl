@@ -1578,7 +1578,9 @@ function create_pass_failure_zip(
         
         # Create the zip file
         zip_path = temp_dir * ".zip"
-        run(pipeline(`$(p7zip()) a -tzip $(zip_path) $(temp_dir)/*`, devnull))
+        # Use explicit file enumeration to avoid shell expansion issues
+        temp_files = readdir(temp_dir; join=true)
+        run(pipeline(`$(p7zip()) a -tzip $(zip_path) $(temp_files...)`, devnull))
         
         # Clean up the temp directory (but keep the zip)
         rm(temp_dir; recursive=true, force=true)
@@ -1681,16 +1683,17 @@ function compile_mlir(f, args; client=nothing, drop_unsupported_attributes=false
             )
         catch e
             # Check if this is a pass pipeline failure
-            if e isa String && contains(e, "failed to run pass manager")
+            error_msg = string(e)
+            if contains(error_msg, "failed to run pass manager")
                 # Create a debug zip file with the unoptimized IR
-                zip_path = create_pass_failure_zip(mod, f, args, "compilation", string(e))
+                zip_path = create_pass_failure_zip(mod, f, args, "compilation", error_msg)
                 if zip_path !== nothing
                     error(
                         "Compilation failed during pass pipeline execution. " *
                         "A debug zip file has been created at: $(zip_path)\n" *
                         "Please upload this file when reporting the issue at: " *
                         "https://github.com/EnzymeAD/Reactant.jl/issues\n" *
-                        "Original error: $(e)"
+                        "Original error: $(error_msg)"
                     )
                 else
                     # If we couldn't create the zip, just rethrow the original error
