@@ -4,6 +4,7 @@ using Reactant_jll
 using Libdl: dlsym
 using LinearAlgebra: BlasInt
 using Functors: Functors
+import p7zip_jll: p7zip
 
 import ..Reactant:
     Reactant,
@@ -1506,9 +1507,6 @@ function create_pass_failure_zip(
     mod::MLIR.IR.Module, f, args, pass_pipeline_key::String, error_msg::String
 )
     try
-        # Import p7zip_jll
-        import p7zip_jll: p7zip
-
         # Create a temporary directory for the files
         temp_dir = mktempdir(; prefix="reactant_failure_", cleanup=false)
         
