@@ -1411,7 +1411,7 @@ function __get_compile_options_and_kwargs(;
     )
 end
 
-function compile_mlir(f, args; client=nothing, kwargs...)
+function compile_mlir(f, args; client=nothing, drop_unsupported_attributes=false, kwargs...)
     client = client !== nothing ? client : XLA.default_backend()
     backend = XLA.platform_name(client)
 
@@ -1440,6 +1440,11 @@ function compile_mlir(f, args; client=nothing, kwargs...)
         __add_mhlo_attributes_and_name!(
             mod, f; mlir_fn_res.num_partitions, mlir_fn_res.num_replicas
         )
+
+        if drop_unsupported_attributes
+            # Drop some of our attributes
+            run_pass_pipeline!(mod, "drop-unsupported-attributes", "drop_enzymexla_attributes")
+        end
 
         return mod, mlir_fn_res
     end
@@ -3571,6 +3576,9 @@ function compile_xla(
             mod, f; mlir_fn_res.num_partitions, mlir_fn_res.num_replicas
         )
 
+        # Drop some of our attributes
+        run_pass_pipeline!(mod, "drop-unsupported-attributes", "drop_enzymexla_attributes")
+
         # compile MLIR module to XLA executable
         global_device_ids = collect(Int64, mlir_fn_res.global_device_ids)
         mlir_fn_res.is_sharded && (device = nothing)
@@ -3583,9 +3591,6 @@ function compile_xla(
         else
             module_string = ""
         end
-
-        # Drop some of our attributes
-        run_pass_pipeline!(mod, "drop-unsupported-attributes", "drop_enzymexla_attributes")
 
         if before_xla_optimizations
             exec = nothing

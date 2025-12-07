@@ -3,6 +3,7 @@ module ReactantPythonCallExt
 using PythonCall: PythonCall, Py, pyconvert, pydict, pyfunc, pyimport, pylist
 using Reactant: Reactant, TracedRArray, TracedRNumber, @reactant_overlay
 using Reactant.Ops: @opcall
+using Reactant.Serialization: NUMPY_SIMPLE_TYPES
 
 const jaxptr = Ref{Py}()
 const jnpptr = Ref{Py}()
@@ -14,24 +15,6 @@ const tf2xlaptr = Ref{Py}()
 const npptr = Ref{Py}()
 
 const SAVED_MODEL_EXPORT_SUPPORTED = Ref{Bool}(false)
-
-const NUMPY_SIMPLE_TYPES = Dict(
-    Bool => :bool,
-    Int8 => :int8,
-    Int16 => :int16,
-    Int32 => :int32,
-    Int64 => :int64,
-    UInt8 => :uint8,
-    UInt16 => :uint16,
-    UInt32 => :uint32,
-    UInt64 => :uint64,
-    Float16 => :float16,
-    Float32 => :float32,
-    Float64 => :float64,
-    ComplexF16 => :complex16,
-    ComplexF32 => :complex32,
-    ComplexF64 => :complex64,
-)
 
 function __init__()
     try

@@ -27,3 +27,22 @@ or [TensorFlow Hub](https://tensorflow.org/hub). Refer to the
 ```@docs
 Reactant.Serialization.export_as_tf_saved_model
 ```
+
+## Exporting to JAX via EnzymeAD
+
+!!! note "Load NPZ"
+
+    This export functionality requires the `NPZ` package to be loaded.
+
+This export functionality generates:
+
+1. A `.mlir` file containing the StableHLO representation of your Julia function
+2. Input `.npz` files containing the input arrays for the function
+3. A Python script that wraps the function for use with `enzyme_ad.jax.hlo_call`
+
+The generated Python script can be immediately used with JAX and EnzymeAD without any
+additional Julia dependencies.
+
+```@docs
+Reactant.Serialization.EnzymeJAX.export_to_enzymejax
+```
