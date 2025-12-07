@@ -1,6 +1,7 @@
 module ReactantExport
 
 using ..Reactant: Reactant, Compiler, Serialization
+using Serialization: serialize, deserialize
 
 """
     export_to_reactant_script(
@@ -15,13 +16,12 @@ Export a Julia function to a standalone Reactant script.
 This function:
 1. Compiles the function to StableHLO via Reactant's compile_mlir
 2. Saves the MLIR/StableHLO code to a `.mlir` file
-3. Saves all input arrays to a single compressed `.npz` file (transposed to account for
-   row-major vs column-major)
+3. Saves all input arrays to a serialized `.jls` file using Julia's Serialization
 4. Generates a Julia script that only depends on Reactant for loading and executing
 
 ## Requirements
 
-- **NPZ.jl**: Must be loaded with `using NPZ` for compression support
+No external dependencies required - uses Julia's standard library Serialization
 
 ## Arguments
 
@@ -41,13 +41,13 @@ The path to the generated Julia script as a `String`.
 ## Files Generated
 
   - `{function_name}_{id}.mlir`: The StableHLO/MLIR module (where `{id}` is a numeric counter)
-  - `{function_name}_{id}_inputs.npz`: Compressed NPZ file containing all input arrays
+  - `{function_name}_{id}_inputs.jls`: Serialized file containing all input arrays
   - `{function_name}.jl`: Julia script that loads and executes the exported function
 
 ## Example
 
 ```julia
-using Reactant, NPZ
+using Reactant
 
 # Define a simple function
 function my_function(x::AbstractArray, y::AbstractArray)
@@ -124,9 +124,9 @@ function export_to_reactant_script(
         input_idx += 1
     end
 
-    # Save all inputs to a single NPZ file
-    input_path = joinpath(output_dir, "$(function_name)_$(fnid)_inputs.npz")
-    save_inputs_npz(input_path, input_data)
+    # Save all inputs to a serialized file
+    input_path = joinpath(output_dir, "$(function_name)_$(fnid)_inputs.jls")
+    save_inputs_jls(input_path, input_data)
 
     # Generate Julia script
     julia_path = joinpath(output_dir, "$(function_name).jl")
@@ -137,19 +137,12 @@ end
 _to_array(x::Reactant.ConcreteRArray) = Array(x)
 _to_array(x::Reactant.ConcreteRNumber{T}) where {T} = T(x)
 
-function save_inputs_npz(
-    output_path::String, inputs::Dict{String,<:Union{AbstractArray,Number}}
-)
-    if !Serialization.serialization_supported(Val(:NPZ))
-        error(
-            "`NPZ.jl` is required for saving compressed arrays. Please load it with \
-               `using NPZ` and try again.",
-        )
+function save_inputs_jls(output_path::String, inputs::Dict{String,<:Union{AbstractArray,Number}})
+    open(output_path, "w") do io
+        serialize(io, inputs)
     end
-    return save_inputs_npz_impl(output_path, inputs)
+    return output_path
 end
-
-function save_inputs_npz_impl end
 
 function _generate_julia_script(
     julia_path::String,
@@ -171,21 +164,21 @@ function _generate_julia_script(
     arg_docs = join(
         [
             if length(info.shape) == 0
-                "        $(arg_names[i]): Scalar of dtype $(Serialization.NUMPY_SIMPLE_TYPES[info.dtype]). Path: $(info.path)"
+                "        $(arg_names[i]): Scalar of type $(info.dtype). Path: $(info.path)"
             else
-                "        $(arg_names[i]): Array of shape $(reverse(info.shape)) and dtype $(Serialization.NUMPY_SIMPLE_TYPES[info.dtype]). Path: $(info.path)"
+                "        $(arg_names[i]): Array of shape $(info.shape) and type $(info.dtype). Path: $(info.path)"
             end
             for (i, info) in enumerate(input_info)
         ],
         "\n",
     )
 
-    load_inputs = ["npz_data[\"$(info.key)\"]" for info in input_info]
+    load_inputs = ["inputs_data[\"$(info.key)\"]" for info in input_info]
 
-    # Build a cleaner representation of the load_inputs code
+    # Build a cleaner representation of the load_inputs code - no transpose needed for Julia Serialization
     load_input_lines = String[]
     for load in load_inputs
-        push!(load_input_lines, "let arr = $load; arr isa Number ? arr : permutedims(arr, reverse(1:ndims(arr))) end")
+        push!(load_input_lines, load)
     end
     load_inputs_code = join(load_input_lines, ",\n            ")
 
@@ -198,7 +191,7 @@ function _generate_julia_script(
     \"\"\"
 
     using Reactant
-    using NPZ
+    using Serialization
 
     # Get the directory of this script
     const SCRIPT_DIR = @__DIR__
@@ -208,8 +201,9 @@ function _generate_julia_script(
 
     function load_inputs()
         \"\"\"Load the example inputs that were exported from Julia.\"\"\"
-        npz_data = npzread(joinpath(SCRIPT_DIR, "$(input_rel)"))
-        # Transpose back from Python/NumPy (row-major) to Julia (column-major)
+        inputs_data = open(joinpath(SCRIPT_DIR, "$(input_rel)"), "r") do io
+            deserialize(io)
+        end
         inputs = [
             $(load_inputs_code)
         ]
