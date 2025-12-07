@@ -8,13 +8,13 @@ const REACTANT_TEST_GROUP = lowercase(get(ENV, "REACTANT_TEST_GROUP", "all"))
 
 using CondaPkg
 
-const ENZYMEAD_INSTALLED = Ref(false)
+const ENZYMEJAX_INSTALLED = Ref(false)
 # Install specific packages. Pkg.test doesn't pick up CondaPkg.toml in test folder
 if REACTANT_TEST_GROUP == "all" || REACTANT_TEST_GROUP == "integration"
     CondaPkg.add_pip("jax"; version="==0.5")
     try
         CondaPkg.add_pip("enzyme_ad"; version=">=0.0.9")
-        ENZYMEAD_INSTALLED[] = true
+        ENZYMEJAX_INSTALLED[] = true
     catch
     end
 end
