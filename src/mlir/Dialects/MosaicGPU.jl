@@ -215,6 +215,10 @@ does not.
 
 The `predicate` allows scheduling the transfer conditionally. The async copy
 is always scheduled by at most a single lane in the warpgroup.
+
+The `reduction_op` attribute can be provided to perform a reduction when
+storing to GMEM. For example, using `add` will add the SMEM values to
+existing values in GMEM.
 """
 function async_store(
     source::Value,
@@ -223,6 +227,7 @@ function async_store(
     predicate=nothing::Union{Nothing,Value};
     slice_lengths,
     commit_group=nothing,
+    reduction_op=nothing,
     location=Location(),
 )
     op_ty_results = IR.Type[]
@@ -237,6 +242,8 @@ function async_store(
     )
     !isnothing(commit_group) &&
         push!(attributes, namedattribute("commit_group", commit_group))
+    !isnothing(reduction_op) &&
+        push!(attributes, namedattribute("reduction_op", reduction_op))
 
     return create_operation(
         "mosaic_gpu.async_store",
@@ -639,7 +646,7 @@ The `smem_ptr` is a pointer in SMEM where a pointer to the allocated
 TMEM will be stored. The op returns a memref to the allocated TMEM. The
 result must have a shape with dimensions [rows, logical_columns]. If
 `packing` is 1, then the number of logical (unpacked) columns is equal to
-the number of allocated columns in TMEM. Otherwise, these equations
+the number of allocated columns in TMEM. Otherwise, these constraints
 must hold:
 
     packing = 32 / bitwidth(element type of result)
