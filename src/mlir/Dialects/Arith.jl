@@ -548,11 +548,17 @@ is undefined behavior. When applied to `vector` and `tensor` values, the
 behavior is undefined if _any_ of its elements are divided by zero or has a
 signed division overflow.
 
+If the `exact` attribute is present, the result value is poison if `lhs` is
+not a multiple of `rhs`.
+
 # Example
 
 ```mlir
 // Scalar signed integer division.
 %a = arith.divsi %b, %c : i64
+
+// Scalar signed integer division where %b is known to be a multiple of %c.
+%a = arith.divsi %b, %c exact : i64
 
 // SIMD vector element-wise division.
 %f = arith.divsi %g, %h : vector<4xi32>
@@ -562,7 +568,11 @@ signed division overflow.
 ```
 """
 function divsi(
-    lhs::Value, rhs::Value; result=nothing::Union{Nothing,IR.Type}, location=Location()
+    lhs::Value,
+    rhs::Value;
+    result=nothing::Union{Nothing,IR.Type},
+    isExact=nothing,
+    location=Location(),
 )
     op_ty_results = IR.Type[]
     operands = Value[lhs, rhs]
@@ -570,6 +580,7 @@ function divsi(
     successors = Block[]
     attributes = NamedAttribute[]
     !isnothing(result) && push!(op_ty_results, result)
+    !isnothing(isExact) && push!(attributes, namedattribute("isExact", isExact))
 
     return create_operation(
         "arith.divsi",
@@ -594,11 +605,17 @@ Division by zero is undefined behavior. When applied to `vector` and
 `tensor` values, the behavior is undefined if _any_ elements are divided by
 zero.
 
+If the `exact` attribute is present, the result value is poison if `lhs` is
+not a multiple of `rhs`.
+
 # Example
 
 ```mlir
 // Scalar unsigned integer division.
 %a = arith.divui %b, %c : i64
+
+// Scalar unsigned integer division where %b is known to be a multiple of %c.
+%a = arith.divui %b, %c exact : i64
 
 // SIMD vector element-wise division.
 %f = arith.divui %g, %h : vector<4xi32>
@@ -608,7 +625,11 @@ zero.
 ```
 """
 function divui(
-    lhs::Value, rhs::Value; result=nothing::Union{Nothing,IR.Type}, location=Location()
+    lhs::Value,
+    rhs::Value;
+    result=nothing::Union{Nothing,IR.Type},
+    isExact=nothing,
+    location=Location(),
 )
     op_ty_results = IR.Type[]
     operands = Value[lhs, rhs]
@@ -616,6 +637,7 @@ function divui(
     successors = Block[]
     attributes = NamedAttribute[]
     !isnothing(result) && push!(op_ty_results, result)
+    !isnothing(isExact) && push!(attributes, namedattribute("isExact", isExact))
 
     return create_operation(
         "arith.divui",
@@ -1789,18 +1811,25 @@ output are filled with copies of the most-significant bit of the shifted value
 operand is greater or equal than bitwidth of the first operand, then the operation
 returns poison.
 
+If the `exact` attribute is present, the result value of shrsi is a poison
+value if any of the bits shifted out are non-zero.
+
 # Example
 
 ```mlir
-%1 = arith.constant 160 : i8               // %1 is 0b10100000
+%1 = arith.constant 160 : i8         // %1 is 0b10100000
 %2 = arith.constant 3 : i8
-%3 = arith.shrsi %1, %2 : (i8, i8) -> i8   // %3 is 0b11110100
-%4 = arith.constant 96 : i8                   // %4 is 0b01100000
-%5 = arith.shrsi %4, %2 : (i8, i8) -> i8   // %5 is 0b00001100
+%3 = arith.shrsi %1, %2 exact : i8   // %3 is 0b11110100
+%4 = arith.constant 98 : i8          // %4 is 0b01100010
+%5 = arith.shrsi %4, %2 : i8         // %5 is 0b00001100
 ```
 """
 function shrsi(
-    lhs::Value, rhs::Value; result=nothing::Union{Nothing,IR.Type}, location=Location()
+    lhs::Value,
+    rhs::Value;
+    result=nothing::Union{Nothing,IR.Type},
+    isExact=nothing,
+    location=Location(),
 )
     op_ty_results = IR.Type[]
     operands = Value[lhs, rhs]
@@ -1808,6 +1837,7 @@ function shrsi(
     successors = Block[]
     attributes = NamedAttribute[]
     !isnothing(result) && push!(op_ty_results, result)
+    !isnothing(isExact) && push!(attributes, namedattribute("isExact", isExact))
 
     return create_operation(
         "arith.shrsi",
@@ -1830,16 +1860,25 @@ and the second operand is interpreted as unsigned. The high order bits are alway
 filled with zeros. If the value of the second operand is greater or equal than the
 bitwidth of the first operand, then the operation returns poison.
 
+If the `exact` attribute is present, the result value of shrui is a poison
+value if any of the bits shifted out are non-zero.
+
 # Example
 
 ```mlir
-%1 = arith.constant 160 : i8               // %1 is 0b10100000
+%1 = arith.constant 160 : i8        // %1 is 0b10100000
 %2 = arith.constant 3 : i8
-%3 = arith.shrui %1, %2 : (i8, i8) -> i8   // %3 is 0b00010100
+%3 = arith.constant 6 : i8
+%4 = arith.shrui %1, %2 exact : i8  // %4 is 0b00010100
+%5 = arith.shrui %1, %3 : i8        // %3 is 0b00000010
 ```
 """
 function shrui(
-    lhs::Value, rhs::Value; result=nothing::Union{Nothing,IR.Type}, location=Location()
+    lhs::Value,
+    rhs::Value;
+    result=nothing::Union{Nothing,IR.Type},
+    isExact=nothing,
+    location=Location(),
 )
     op_ty_results = IR.Type[]
     operands = Value[lhs, rhs]
@@ -1847,6 +1886,7 @@ function shrui(
     successors = Block[]
     attributes = NamedAttribute[]
     !isnothing(result) && push!(op_ty_results, result)
+    !isnothing(isExact) && push!(attributes, namedattribute("isExact", isExact))
 
     return create_operation(
         "arith.shrui",
