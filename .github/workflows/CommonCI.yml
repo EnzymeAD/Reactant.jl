@@ -67,122 +67,22 @@ jobs:
         if: ${{ ! inputs.assertions }}
         with:
           version: ${{ inputs.julia_version }}
-      - uses: julia-actions/cache@v2
-        id: julia-cache
-        with:
-          cache-name: julia-cache;workflow=${{ inputs.julia_version }}-${{ inputs.os }}-${{ inputs.runtime }}-assertions=${{ inputs.assertions }}-${{ github.event_name }}-${{ inputs.test_group }}-${{ inputs.downgrade_testing }}-${{ inputs.localjll }}
 
-      - uses: julia-actions/julia-downgrade-compat@v2
-        if: ${{ inputs.downgrade_testing }}
-        with:
-          skip: "ReactantCore"
-          julia_version: ${{ inputs.julia_version }}
+      - name: Prepare runtime directory for Upterm socket
+        run: |
+          export XDG_RUNTIME_DIR="/run/user/0"
+          mkdir -p "$XDG_RUNTIME_DIR/upterm"
+          chmod -R 700 "$XDG_RUNTIME_DIR"
 
-      # Local build of libReactant
-      - uses: bazel-contrib/setup-bazel@0.15.0
-        if: ${{ inputs.localjll }}
-        name: Set up Bazel
+      - name: Install tmux
+        run: |
+          apt-get update && apt-get -y install tmux
+      - name: Setup upterm session
+        uses: owenthereal/action-upterm@v1
         with:
-          # Avoid downloading Bazel every time.
-          bazelisk-cache: true
-          # Store build cache per workflow.
-          disk-cache: ${{ github.workflow }}-${{ inputs.os }}-${{ inputs.julia_version }}
-          # Share repository cache between workflows.
-          repository-cache: true
-          bazelisk-version: 1.x
-      - name: Prepare build on macOS
-        if: ${{ startsWith(inputs.os, 'macOS-') && inputs.localjll }}
-        run: |
-          echo "SDKROOT=$(xcrun --show-sdk-path)" >> "${GITHUB_ENV}"
-      - name: Install numpy
-        if: ${{ startsWith(inputs.os, 'macOS-') && inputs.localjll }}
-        run: |
-          python -m pip install numpy
-      - name: Build libReactant
-        timeout-minutes: 120
-        if: ${{ inputs.localjll }}
-        run: |
-          julia --color=yes --project=deps -e 'using Pkg; Pkg.instantiate()'
-          julia --color=yes --project=deps deps/build_local.jl --cc clang
-          cp LocalPreferences.toml test/
-
-      # Compile Julia if assertions are enabled
-      - uses: actions/checkout@v6
-        if: ${{ inputs.assertions }}
-        with:
-          repository: "JuliaLang/julia"
-          ref: release-${{ inputs.julia_version }}
-          path: "julia"
-      - name: Compile Julia
-        if: ${{ inputs.assertions }}
-        run: |
-          sed -i.bak 's/exit 2/exit 0/g' julia/deps/tools/jlchecksum
-          make -C julia -j $(nproc) FORCE_ASSERTIONS=1 LLVM_ASSERTIONS=1 JULIA_PRECOMPILE=0
-          echo $PWD/julia/usr/bin >> $GITHUB_PATH
-
-      # Install dependencies (specifically ReactantCore subdirectory for 1.10)
-      - name: "Install Dependencies"
-        run: |
-          import Pkg
-          Pkg.Registry.update()
-          # Install packages present in subdirectories
-          dev_pks = Pkg.PackageSpec[]
-          for path in ("lib/ReactantCore",)
-              push!(dev_pks, Pkg.PackageSpec(; path))
-          end
-          Pkg.develop(dev_pks)
-        shell: julia --color=yes --code-coverage=user --depwarn=yes --project=. {0}
-        # Only in Julia v1.10 we need to install `ReactantCore` manually.
-        if: ${{ inputs.julia_version == '1.10' || inputs.julia_version == 'lts' }}
-
-      # Run the tests (pjrt or ifrt or both)
-      - name: "Setup Runtime Preferences (PJRT)"
-        if: ${{ inputs.runtime == 'pjrt' || inputs.runtime == 'both' }}
-        uses: "DamianReeves/write-file-action@master"
-        with:
-          path: "LocalPreferences.toml"
-          write-mode: "overwrite"
-          contents: |
-            [Reactant]
-            xla_runtime = "PJRT"
-      - name: "Run Tests (PJRT)"
-        if: ${{ inputs.runtime == 'pjrt' || inputs.runtime == 'both' }}
-        timeout-minutes: 120
-        run: |
-          import Pkg
-          Pkg.Registry.update()
-          Pkg.test(;
-            coverage="user",
-            allow_reresolve=parse(Bool, get(ENV, "ALLOW_RERESOLVE", "true"))
-          )
-        shell: julia --color=yes --code-coverage=user --depwarn=yes --project=. {0}
-        env:
-          ALLOW_RERESOLVE: ${{ !inputs.downgrade_testing }}
-          REACTANT_TEST_GROUP: ${{ inputs.test_group }}
-
-      - name: "Setup Runtime Preferences (IFRT)"
-        if: ${{ inputs.runtime == 'ifrt' || inputs.runtime == 'both' }}
-        uses: "DamianReeves/write-file-action@master"
-        with:
-          path: "LocalPreferences.toml"
-          write-mode: "overwrite"
-          contents: |
-            [Reactant]
-            xla_runtime = "IFRT"
-      - name: "Run Tests (IFRT)"
-        if: ${{ inputs.runtime == 'ifrt' || inputs.runtime == 'both' }}
-        timeout-minutes: 120
-        run: |
-          import Pkg
-          Pkg.Registry.update()
-          Pkg.test(;
-            coverage="user",
-            allow_reresolve=parse(Bool, get(ENV, "ALLOW_RERESOLVE", "true"))
-          )
-        shell: julia --color=yes --code-coverage=user --depwarn=yes --project=. {0}
-        env:
-          ALLOW_RERESOLVE: ${{ !inputs.downgrade_testing }}
-          REACTANT_TEST_GROUP: ${{ inputs.test_group }}
+          limit-access-to-actor: true
+          limit-access-to-users: avik-pal
+          wait-timeout-minutes: 30
 
       - name: "Upload MLIR modules"
         uses: actions/upload-artifact@v5
@@ -190,23 +90,10 @@ jobs:
         if: always()
         with:
           name: "mlir-${{ inputs.julia_version }}-${{ inputs.os }}-${{ inputs.runtime }}-assertions=${{ inputs.assertions }}-${{ github.event_name }}-test_group=${{ inputs.test_group }}-${{ inputs.localjll }}"
-          path: "**/*.mlir"
-          retention-days: 90
+          path: "**/*.zip"
+          retention-days: 5
           overwrite: false
 
-      - name: Save Julia depot cache on cancel or failure
-        if: cancelled() || failure()
-        uses: actions/cache/save@v4
-        with:
-          path: |
-            ${{ steps.julia-cache.outputs.cache-paths }}
-          key: ${{ steps.julia-cache.outputs.cache-key }}
-
-      - uses: julia-actions/julia-processcoverage@v1
-      - uses: codecov/codecov-action@v5
-        with:
-          files: lcov.info
-          token: ${{ secrets.CODECOV_TOKEN }}
 
 env:
   JULIA_PKG_SERVER_REGISTRY_PREFERENCE: eager

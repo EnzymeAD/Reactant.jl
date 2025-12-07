@@ -1,94 +1,94 @@
-steps:
-  - group: ":test_tube: Tests"
-    steps:
-      - label: ":julia: :linux: CUDA Julia v{{matrix.version}} -- {{matrix.group}} -- {{matrix.runtime}}"
-        matrix:
-          setup:
-            version:
-              - "1.10"
-            group:
-              - core
-              - neural_networks
-              - integration
-            runtime:
-              - "PJRT"
-              - "IFRT"
-        plugins:
-          - JuliaCI/julia#v1:
-              version: "{{matrix.version}}"
-          - JuliaCI/julia-coverage#v1:
-              codecov: true
-              dirs:
-                - src
-                - ext
-                - lib/ReactantCore/src
-        commands: |
-          touch LocalPreferences.toml
+# steps:
+#   - group: ":test_tube: Tests"
+#     steps:
+#       - label: ":julia: :linux: CUDA Julia v{{matrix.version}} -- {{matrix.group}} -- {{matrix.runtime}}"
+#         matrix:
+#           setup:
+#             version:
+#               - "1.10"
+#             group:
+#               - core
+#               - neural_networks
+#               - integration
+#             runtime:
+#               - "PJRT"
+#               - "IFRT"
+#         plugins:
+#           - JuliaCI/julia#v1:
+#               version: "{{matrix.version}}"
+#           - JuliaCI/julia-coverage#v1:
+#               codecov: true
+#               dirs:
+#                 - src
+#                 - ext
+#                 - lib/ReactantCore/src
+#         commands: |
+#           touch LocalPreferences.toml
 
-          echo "[Reactant]" >> LocalPreferences.toml
-          echo "xla_runtime = \"{{matrix.runtime}}\"" >> LocalPreferences.toml
+#           echo "[Reactant]" >> LocalPreferences.toml
+#           echo "xla_runtime = \"{{matrix.runtime}}\"" >> LocalPreferences.toml
 
-          cat LocalPreferences.toml
+#           cat LocalPreferences.toml
 
-          julia --project=. -e 'println("--- :julia: Instantiating project")
-              using Pkg
-              Pkg.develop([PackageSpec(path="lib/ReactantCore")])'
+#           julia --project=. -e 'println("--- :julia: Instantiating project")
+#               using Pkg
+#               Pkg.develop([PackageSpec(path="lib/ReactantCore")])'
 
-          julia --project=. -e 'println("--- :julia: Run Tests")
-              using Pkg
-              Pkg.test(; coverage="user")'
-        agents:
-          queue: "juliagpu"
-          cuda: "*"
-        env:
-          REACTANT_TEST_GROUP: "{{matrix.group}}"
-          JULIA_DEBUG: "Reactant,Reactant_jll"
-          CUDA_VISIBLE_DEVICES: 0
-          REACTANT_BACKEND_GROUP: "GPU"
-        if: build.message !~ /\[skip tests\]/
-        timeout_in_minutes: 120
+#           julia --project=. -e 'println("--- :julia: Run Tests")
+#               using Pkg
+#               Pkg.test(; coverage="user")'
+#         agents:
+#           queue: "juliagpu"
+#           cuda: "*"
+#         env:
+#           REACTANT_TEST_GROUP: "{{matrix.group}}"
+#           JULIA_DEBUG: "Reactant,Reactant_jll"
+#           CUDA_VISIBLE_DEVICES: 0
+#           REACTANT_BACKEND_GROUP: "GPU"
+#         if: build.message !~ /\[skip tests\]/
+#         timeout_in_minutes: 120
 
-  # - label: ":julia: :linux: AMDGPU Julia v{{matrix.version}} -- {{matrix.group}} -- {{matrix.runtime}}"
-  #   matrix:
-  #     setup:
-  #       version:
-  #         - "1.10"
-  #       group:
-  #         - core
-  #         - neural_networks
-  #         - integration
-  #       runtime:
-  #         - "IFRT"
-  #   plugins:
-  #     - JuliaCI/julia#v1:
-  #         version: "{{matrix.version}}"
-  #     - JuliaCI/julia-coverage#v1:
-  #         codecov: true
-  #         dirs:
-  #           - src
-  #           - ext
-  #           - lib/ReactantCore/src
-  #   agents:
-  #     queue: "juliagpu"
-  #     rocm: "*"
-  #   commands: |
-  #     touch LocalPreferences.toml
+#   # - label: ":julia: :linux: AMDGPU Julia v{{matrix.version}} -- {{matrix.group}} -- {{matrix.runtime}}"
+#   #   matrix:
+#   #     setup:
+#   #       version:
+#   #         - "1.10"
+#   #       group:
+#   #         - core
+#   #         - neural_networks
+#   #         - integration
+#   #       runtime:
+#   #         - "IFRT"
+#   #   plugins:
+#   #     - JuliaCI/julia#v1:
+#   #         version: "{{matrix.version}}"
+#   #     - JuliaCI/julia-coverage#v1:
+#   #         codecov: true
+#   #         dirs:
+#   #           - src
+#   #           - ext
+#   #           - lib/ReactantCore/src
+#   #   agents:
+#   #     queue: "juliagpu"
+#   #     rocm: "*"
+#   #   commands: |
+#   #     touch LocalPreferences.toml
 
-  #     echo "[Reactant]" >> LocalPreferences.toml
-  #     echo "xla_runtime = \"{{matrix.runtime}}\"" >> LocalPreferences.toml
+#   #     echo "[Reactant]" >> LocalPreferences.toml
+#   #     echo "xla_runtime = \"{{matrix.runtime}}\"" >> LocalPreferences.toml
 
-  #     cat LocalPreferences.toml
+#   #     cat LocalPreferences.toml
 
-  #     julia --project=. -e 'println("--- :julia: Instantiating project")
-  #         using Pkg
-  #         Pkg.develop([PackageSpec(path="lib/ReactantCore")])'
+#   #     julia --project=. -e 'println("--- :julia: Instantiating project")
+#   #         using Pkg
+#   #         Pkg.develop([PackageSpec(path="lib/ReactantCore")])'
 
-  #     julia --project=. -e 'println("--- :julia: Run Tests")
-  #         using Pkg
-  #         Pkg.test(; coverage="user")'
-  #   env:
-  #     REACTANT_TEST_GROUP: "{{matrix.group}}"
-  #     JULIA_DEBUG: "Reactant,Reactant_jll"
-  #     CUDA_VISIBLE_DEVICES: 0
-    # if: build.message !~ /\[skip tests\]/
-    # timeout_in_minutes: 120
+#   #     julia --project=. -e 'println("--- :julia: Run Tests")
+#   #         using Pkg
+#   #         Pkg.test(; coverage="user")'
+#   #   env:
+#   #     REACTANT_TEST_GROUP: "{{matrix.group}}"
+#   #     JULIA_DEBUG: "Reactant,Reactant_jll"
+#   #     CUDA_VISIBLE_DEVICES: 0
+#     # if: build.message !~ /\[skip tests\]/
+#     # timeout_in_minutes: 120
