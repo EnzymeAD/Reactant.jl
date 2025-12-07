@@ -28,7 +28,7 @@ end
 
         # Export the function
         python_file_path = Reactant.Serialization.export_to_enzymejax(
-            f_simple, x; output_dir=mktempdir(; cleanup=false)
+            f_simple, x; output_dir=mktempdir(; cleanup=true)
         )
 
         @test isfile(python_file_path)
@@ -65,7 +65,7 @@ end
 
         # Export the function
         python_file_path = Reactant.Serialization.export_to_enzymejax(
-            f_matmul, x, y; output_dir=mktempdir(; cleanup=false), function_name="matmul"
+            f_matmul, x, y; output_dir=mktempdir(; cleanup=true), function_name="matmul"
         )
 
         @test isfile(python_file_path)
@@ -104,7 +104,7 @@ end
             x,
             y,
             z;
-            output_dir=mktempdir(; cleanup=false),
+            output_dir=mktempdir(; cleanup=true),
             function_name="complex_fn",
         )
 
@@ -153,7 +153,7 @@ end
                 f_sharded,
                 x,
                 y;
-                output_dir=mktempdir(; cleanup=false),
+                output_dir=mktempdir(; cleanup=true),
                 function_name="f_sharded_with_preserve",
                 preserve_sharding=true,
             )
@@ -193,7 +193,7 @@ end
                 f_sharded_no_preserve,
                 x,
                 y;
-                output_dir=mktempdir(; cleanup=false),
+                output_dir=mktempdir(; cleanup=true),
                 function_name="f_sharded_no_preserve",
                 preserve_sharding=false,
             )
