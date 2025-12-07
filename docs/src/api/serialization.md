@@ -46,3 +46,22 @@ additional Julia dependencies.
 ```@docs
 Reactant.Serialization.EnzymeJAX.export_to_enzymejax
 ```
+
+## Exporting to Standalone Reactant Script
+
+!!! note "Load NPZ"
+
+    This export functionality requires the `NPZ` package to be loaded.
+
+This export functionality generates:
+
+1. A `.mlir` file containing the StableHLO representation of your Julia function
+2. Input `.npz` files containing the input arrays for the function
+3. A Julia script that can load and execute the function using only Reactant
+
+The generated Julia script serves as a minimal reproducer that can be shared when reporting
+issues or debugging. It only depends on Reactant and NPZ.
+
+```@docs
+Reactant.Serialization.ReactantExport.export_to_reactant_script
+```
