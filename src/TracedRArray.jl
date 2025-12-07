@@ -629,6 +629,8 @@ function maybe_expand_dims(x::AbstractArray{T,N}, dims) where {T,N}
 end
 
 function Base._cat_t(dims, ::Type{T}, X::TracedRArray...) where {T}
+    temp = Reactant.TRACE_CALLS[]
+    Reactant.TRACE_CALLS[] = false
     dims = dispatch_val(dims)
     @assert dims isa Integer "Support for non-integer dimensions is not implemented yet."
 
@@ -642,7 +644,7 @@ function Base._cat_t(dims, ::Type{T}, X::TracedRArray...) where {T}
     # convert to the target eltype
     X = map(Base.Fix1(Reactant.promote_to, TracedRArray{RT,length(shape)}), X)
 
-    return TracedRArray{RT,length(shape)}(
+    result = TracedRArray{RT,length(shape)}(
         (),
         MLIR.IR.result(
             # TODO maybe we should do some conversion?
@@ -655,6 +657,8 @@ function Base._cat_t(dims, ::Type{T}, X::TracedRArray...) where {T}
         ),
         shape,
     )
+    Reactant.TRACE_CALLS[] = temp
+    return result
 end
 
 for (minT, maxT) in Iterators.product((Number, TracedRNumber), (Number, TracedRNumber))
