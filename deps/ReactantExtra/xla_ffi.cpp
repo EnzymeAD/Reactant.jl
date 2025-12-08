@@ -1,7 +1,5 @@
 #include "absl/strings/str_format.h"
 
-#include "jaxlib/ffi_helpers.h"
-#include "jaxlib/gpu/blas_handle_pool.h"
 #include "xla/ffi/api/c_api.h"
 #include "xla/ffi/api/ffi.h"
 #include "xla/ffi/ffi_api.h"
@@ -10,13 +8,15 @@
 
 #define REACTANT_ABI extern "C" MLIR_CAPI_EXPORTED
 
-using namespace jax;
 using namespace xla;
 
 namespace reactant {
 namespace cuda {
 
 #if defined(REACTANT_CUDA)
+
+#include "jaxlib/ffi_helpers.h"
+#include "jaxlib/gpu/blas_handle_pool.h"
 
 #include "third_party/gpus/cuda/include/cuComplex.h"
 #include "third_party/gpus/cuda/include/cublas_v2.h"
@@ -25,6 +25,8 @@ namespace cuda {
 #include "third_party/gpus/cuda/include/cufft.h"
 #include "third_party/gpus/cuda/include/cusolverDn.h"
 #include "third_party/gpus/cuda/include/cusolver_common.h"
+
+using namespace jax;
 
 #define SOLVER_BLAS_DISPATCH_IMPL(impl, ...)                                   \
   switch (dataType) {                                                          \
@@ -41,26 +43,32 @@ namespace cuda {
   }
 
 template <typename T>
-T GetHostScalar(CUstream stream, bool use_attribute, double value_real,
-                double value_imag, ffi::AnyBuffer buffer) {
-  T host_value;
+ffi::Error GetHostScalar(CUstream stream, bool use_attribute, double value_real,
+                         double value_imag, ffi::AnyBuffer buffer,
+                         T *host_value) {
   if (use_attribute) {
     if constexpr (std::is_same<T, float>::value) {
-      host_value = static_cast<float>(value_real);
+      *host_value = static_cast<float>(value_real);
     } else if constexpr (std::is_same<T, double>::value) {
-      host_value = value_real;
+      *host_value = value_real;
     } else if constexpr (std::is_same<T, cuComplex>::value) {
-      host_value = cuComplex{static_cast<float>(value_real),
-                             static_cast<float>(value_imag)};
+      *host_value = cuComplex{static_cast<float>(value_real),
+                              static_cast<float>(value_imag)};
     } else if constexpr (std::is_same<T, cuDoubleComplex>::value) {
-      host_value = cuDoubleComplex{value_real, value_imag};
+      *host_value = cuDoubleComplex{value_real, value_imag};
     }
   } else {
+    // Ensure buffer has exactly 1 element
+    if (buffer.element_count() != 1) {
+      return ffi::Error::InvalidArgument(
+          absl::StrFormat("Expected scalar buffer with 1 element, got %d",
+                          buffer.element_count()));
+    }
     // memcpy to host
-    cudaMemcpyAsync(&host_value, buffer.untyped_data(), sizeof(T),
+    cudaMemcpyAsync(host_value, buffer.untyped_data(), sizeof(T),
                     cudaMemcpyDeviceToHost, stream);
   }
-  return host_value;
+  return ffi::Error::Success();
 }
 
 inline ffi::Error CublasStatusToError(cublasStatus_t status,
@@ -185,10 +193,11 @@ ffi::Error SyrkImpl(CUstream stream, bool transpose, bool uplo,
                     double beta_real, double beta_imag, ffi::AnyBuffer a,
                     ffi::AnyBuffer c_in, ffi::AnyBuffer alpha_,
                     ffi::AnyBuffer beta_, ffi::Result<ffi::AnyBuffer> c_out) {
-  T host_alpha = GetHostScalar<T>(stream, use_alpha_attribute, alpha_real,
-                                  alpha_imag, alpha_);
-  T host_beta =
-      GetHostScalar<T>(stream, use_beta_attribute, beta_real, beta_imag, beta_);
+  T host_alpha, host_beta;
+  FFI_RETURN_IF_ERROR(GetHostScalar<T>(stream, use_alpha_attribute, alpha_real,
+                                       alpha_imag, alpha_, &host_alpha));
+  FFI_RETURN_IF_ERROR(GetHostScalar<T>(stream, use_beta_attribute, beta_real,
+                                       beta_imag, beta_, &host_beta));
   return SyrkImpl<T>(stream, transpose, uplo, a, c_in, &host_alpha, &host_beta,
                      c_out);
 }
