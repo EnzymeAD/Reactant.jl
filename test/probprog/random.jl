@@ -148,6 +148,132 @@ function multinormal_sample(
     return final_rng, sample
 end
 
+@testset "Pointwise comparison of enzyme.random vs jax.random.uniform (rbg keys)" begin
+    @testset "Seed [0, 42], Uniform[0, 1)" begin
+        seed = ConcreteRArray(UInt64[0, 42])
+        a = ConcreteRNumber(0.0)
+        b = ConcreteRNumber(1.0)
+        _, samples = @jit optimize = :probprog uniform_batch(seed, a, b, Val(4))
+
+        # From `jax.random.uniform`
+        expected = [
+            8.4909300718788883e-01,
+            3.0369218405915133e-01,
+            2.4453662713853408e-02,
+            2.0794768990657464e-01,
+        ]
+        @test Array(samples) ≈ expected rtol = 1e-6
+    end
+
+    @testset "Seed [42, 0], Uniform[0, 1)" begin
+        seed = ConcreteRArray(UInt64[42, 0])
+        a = ConcreteRNumber(0.0)
+        b = ConcreteRNumber(1.0)
+        _, samples = @jit optimize = :probprog uniform_batch(seed, a, b, Val(4))
+
+        expected = [
+            4.1849332372313075e-01,
+            9.5969642844487657e-01,
+            9.8035520433948231e-01,
+            5.4171566704126906e-01,
+        ]
+        @test Array(samples) ≈ expected rtol = 1e-6
+    end
+
+    @testset "Seed [123, 456], Uniform[0, 1)" begin
+        seed = ConcreteRArray(UInt64[123, 456])
+        a = ConcreteRNumber(0.0)
+        b = ConcreteRNumber(1.0)
+        _, samples = @jit optimize = :probprog uniform_batch(seed, a, b, Val(4))
+
+        expected = [
+            2.6847234683911436e-01,
+            1.2922761390693727e-01,
+            1.1689176826956760e-01,
+            7.7846987060968886e-01,
+        ]
+        @test Array(samples) ≈ expected rtol = 1e-6
+    end
+
+    @testset "Seed [0, 42], Uniform[-5, 5)" begin
+        seed = ConcreteRArray(UInt64[0, 42])
+        a = ConcreteRNumber(-5.0)
+        b = ConcreteRNumber(5.0)
+        _, samples = @jit optimize = :probprog uniform_batch(seed, a, b, Val(4))
+
+        expected = [
+            3.4909300718788883e+00,
+            -1.9630781594084867e+00,
+            -4.7554633728614659e+00,
+            -2.9205231009342536e+00,
+        ]
+        @test Array(samples) ≈ expected rtol = 1e-6
+    end
+end
+
+@testset "Pointwise comparison of enzyme.random vs jax.random.normal (rbg keys)" begin
+    @testset "Seed [0, 42], Normal(0, 1)" begin
+        seed = ConcreteRArray(UInt64[0, 42])
+        μ = ConcreteRNumber(0.0)
+        σ = ConcreteRNumber(1.0)
+        _, samples = @jit optimize = :probprog normal_batch(seed, μ, σ, Val(4))
+
+        # From `jax.random.normal`
+        expected = [
+            1.0325511783331600e+00,
+            -5.1381066876953718e-01,
+            -1.9693986956197995e+00,
+            -8.1356293307292016e-01,
+        ]
+        @test Array(samples) ≈ expected rtol = 1e-6
+    end
+
+    @testset "Seed [42, 0], Normal(0, 1)" begin
+        seed = ConcreteRArray(UInt64[42, 0])
+        μ = ConcreteRNumber(0.0)
+        σ = ConcreteRNumber(1.0)
+        _, samples = @jit optimize = :probprog normal_batch(seed, μ, σ, Val(4))
+
+        expected = [
+            -2.0574942680158675e-01,
+            1.7471740990286067e+00,
+            2.0611409893427024e+00,
+            1.0475695633826559e-01,
+        ]
+        @test Array(samples) ≈ expected rtol = 1e-6
+    end
+
+    @testset "Seed [123, 456], Normal(0, 1)" begin
+        seed = ConcreteRArray(UInt64[123, 456])
+        μ = ConcreteRNumber(0.0)
+        σ = ConcreteRNumber(1.0)
+        _, samples = @jit optimize = :probprog normal_batch(seed, μ, σ, Val(4))
+
+        expected = [
+            -6.1743977488187884e-01,
+            -1.1300498307955880e+00,
+            -1.1906690400729674e+00,
+            7.6703575263105905e-01,
+        ]
+        @test Array(samples) ≈ expected rtol = 1e-6
+    end
+
+    @testset "Seed [0, 42], Normal(5, 2)" begin
+        seed = ConcreteRArray(UInt64[0, 42])
+        μ = ConcreteRNumber(5.0)
+        σ = ConcreteRNumber(2.0)
+        _, samples = @jit optimize = :probprog normal_batch(seed, μ, σ, Val(4))
+
+        expected = [
+            7.0651023566663200e+00,
+            3.9723786624609256e+00,
+            1.0612026087604010e+00,
+            3.3728741338541597e+00,
+        ]
+        @test Array(samples) ≈ expected rtol = 1e-6
+    end
+end
+
 # https://en.wikipedia.org/wiki/Standard_error#Exact_value
 se_mean(σ, n) = σ / sqrt(n)
 # https://en.wikipedia.org/wiki/Variance#Distribution_of_the_sample_variance
@@ -156,8 +282,7 @@ se_std(σ, n) = σ / sqrt(2 * (n - 1))
 se_cov(σᵢ, σⱼ, ρ, n) = sqrt((σᵢ^2 * σⱼ^2 + (ρ * σᵢ * σⱼ)^2) / (n - 1))  # ρ = correlation
 
 const N_SIGMA = 5
-
-@testset "enzyme.random op - UNIFORM distribution" begin
+@testset "Statistical properties of enzyme.random op - UNIFORM distribution" begin
     batch_size = 10000
     n_batches = 10
     n_samples = batch_size * n_batches
@@ -247,7 +372,7 @@ const N_SIGMA = 5
     end
 end
 
-@testset "enzyme.random op - NORMAL distribution" begin
+@testset "Statistical properties of enzyme.random op - NORMAL distribution" begin
     batch_size = 10000
     n_batches = 10
     n_samples = batch_size * n_batches
@@ -319,7 +444,7 @@ end
     end
 end
 
-@testset "enzyme.random op - MULTINORMAL distribution" begin
+@testset "Statistical properties of enzyme.random op - MULTINORMAL distribution" begin
     n_samples = 2000
 
     @testset "2D Standard Multivariate Normal" begin
