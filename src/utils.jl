@@ -242,9 +242,9 @@ function should_rewrite_call(@nospecialize(ft))
         if hasfield(typeof(ft), :name) && hasfield(typeof(ft.name), :module)
             mod = ft.name.module
             # Don't rewrite primitive ops, tracing utilities, or any MLIR-based functions
-            if has_ancestor(mod, Ops) ||
-                has_ancestor(mod, TracedUtils) ||
-                has_ancestor(mod, MLIR)
+            if has_ancestor(mod, Reactant.Ops) ||
+                has_ancestor(mod, Reactant.TracedUtils) ||
+                has_ancestor(mod, Reactant.MLIR)
                 return false
             end
             if string(mod) == "CUDA"
