@@ -6,6 +6,11 @@
 
 #include "mlir/CAPI/IR.h"
 
+#if defined(REACTANT_CUDA)
+#include "jaxlib/ffi_helpers.h"
+#include "jaxlib/gpu/blas_handle_pool.h"
+#endif
+
 #define REACTANT_ABI extern "C" MLIR_CAPI_EXPORTED
 
 using namespace xla;
@@ -14,9 +19,6 @@ namespace reactant {
 namespace cuda {
 
 #if defined(REACTANT_CUDA)
-
-#include "jaxlib/ffi_helpers.h"
-#include "jaxlib/gpu/blas_handle_pool.h"
 
 #include "third_party/gpus/cuda/include/cuComplex.h"
 #include "third_party/gpus/cuda/include/cublas_v2.h"
