@@ -87,7 +87,7 @@ function export_to_enzymejax(
     output_dir::Union{String,Nothing}=nothing,
     function_name::String=string(f),
     preserve_sharding::Bool=true,
-    compile_options=Reactant.Compiler.__get_compile_options_and_kwargs(),
+    compile_options=Reactant.Compiler.CompileOptions(),
 )
     function_name = replace(function_name, "!" => "_")
 
