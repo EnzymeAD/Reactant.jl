@@ -7,7 +7,9 @@ using ..Reactant: Reactant, Compiler, Serialization
         f,
         args...;
         output_dir::Union{String,Nothing}=nothing,
-        function_name::String=string(f)
+        function_name::String=string(f),
+        preserve_sharding::Bool=true,
+        compile_options=Reactant.Compiler.CompileOptions(),
     )
 
 Export a Julia function to EnzymeJAX format for use in Python/JAX.
@@ -35,6 +37,8 @@ This function:
   - `function_name::String`: Base name for generated files
   - `preserve_sharding::Bool`: Whether to preserve sharding information in the exported
     function. Defaults to `true`.
+  - `compile_options`: Compilation options passed to `Reactant.Compiler.compile_mlir`. See
+    [`Reactant.Compiler.CompileOptions`](@ref) for more details.
 
 ## Returns
 
@@ -83,6 +87,7 @@ function export_to_enzymejax(
     output_dir::Union{String,Nothing}=nothing,
     function_name::String=string(f),
     preserve_sharding::Bool=true,
+    compile_options=Reactant.Compiler.__get_compile_options_and_kwargs(),
 )
     if output_dir === nothing
         output_dir = mktempdir(; cleanup=false)
@@ -99,6 +104,7 @@ function export_to_enzymejax(
         args;
         argprefix,
         drop_unsupported_attributes=true,
+        compile_options,
         # to support older jax versions which don't support shardy
         shardy_passes=:to_mhlo_shardings,
     )
