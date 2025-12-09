@@ -89,6 +89,8 @@ function export_to_enzymejax(
     preserve_sharding::Bool=true,
     compile_options=Reactant.Compiler.__get_compile_options_and_kwargs(),
 )
+    function_name = replace(function_name, "!" => "_")
+
     if output_dir === nothing
         output_dir = mktempdir(; cleanup=false)
         @info "Output directory is $(output_dir)"
