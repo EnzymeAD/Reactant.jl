@@ -50,6 +50,15 @@ end
         @test Array(k3) == [0xa20e4081f71f4ea9, 0x2f36b83d4e83f1ba]
         @test Array(k4) == [0xe4e8dfbe9312778b, 0x982ff5502e6ccb51]
     end
+
+    @testset "N=3, Complex Seed" begin
+        seed = ConcreteRArray(UInt64[0x96eb2785b435a7fa, 0x12d488db5338d363])
+        k1, k2, k3 = @jit optimize = :probprog random_split(seed, Val(3))
+
+        @test Array(k1) == [0x5d72ef94c64bb847, 0x12efbc9bfdd8d39a]
+        @test Array(k2) == [0x2e413c499508b247, 0xf5a39577425f372c]
+        @test Array(k3) == [0xab99221e8f5b3649, 0xffbe16929f90ee63]
+    end
 end
 
 # Similarly, `enzyme.random` op is not intended to be emitted directly in Reactant-land.
