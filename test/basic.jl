@@ -408,12 +408,21 @@ sum_xxᵀ(x) = sum(x .* x')
     end
 end
 
+function similar_from_type(x)
+    sim_x = similar(typeof(x), (4, 5))
+    return sim_x
+end
+
 @testset "similar" begin
     x = zeros(2, 3)
     y = Reactant.to_rarray(x)
     f = @compile similar(y)
     @test size(f(y)) == size(x)
     @test eltype(f(y)) == eltype(x)
+
+    f_from_type = @compile similar_from_type(y)
+    @test size(f_from_type(y)) == (4, 5)
+    @test eltype(f_from_type(y)) == eltype(x)
 end
 
 @testset "Scalars" begin
