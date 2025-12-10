@@ -1005,9 +1005,9 @@ REACTANT_ABI PjRtBuffer *ArrayFromHostBuffer(PjRtClient *client, void *data,
   return bres;
 }
 
-
 REACTANT_ABI void CopyToBuffer(PjRtClient *client, PjRtBuffer *buffer,
-                               void *data, size_t offset, size_t size, PjRtBuffer **bufferP) {
+                               void *data, size_t offset, size_t size,
+                               PjRtBuffer **bufferP) {
   if (buffer->IsOnCpu()) {
     auto unsafe =
         (char *)MyValueOrThrow(buffer->client()->UnsafeBufferPointer(buffer));
@@ -1016,12 +1016,13 @@ REACTANT_ABI void CopyToBuffer(PjRtClient *client, PjRtBuffer *buffer,
     // data, size);
     return;
   }
-  
+
   auto pid = client->platform_id();
   if (pid == xla::TpuId()) {
     auto dims = buffer->on_device_shape().dimensions();
     // TODO: note this assume that we want to copy the entire buffer size.
-    auto buf2 = ArrayFromHostBuffer(client, data, buffer->element_type(), dims.size(), dims.data(), buffer->device());
+    auto buf2 = ArrayFromHostBuffer(client, data, buffer->element_type(),
+                                    dims.size(), dims.data(), buffer->device());
     *bufferP = buf2;
     PjRtBufferFree((PjRtBuffer *)buffer);
     return;
@@ -1075,9 +1076,9 @@ REACTANT_ABI void BufferToHost(PjRtBuffer *buffer, void *data) {
   }
 }
 
-
 REACTANT_ABI void CopyFromBuffer(PjRtClient *client, PjRtBuffer *buffer,
-                                 void *data, size_t offset, size_t size, PjRtBuffer **bufferP) {
+                                 void *data, size_t offset, size_t size,
+                                 PjRtBuffer **bufferP) {
 
   auto pid = client->platform_id();
   if (pid == xla::TpuId()) {
@@ -3069,7 +3070,7 @@ struct LinkableRuntime {
       executables;
 
   // Set of allocated pointers to size
-  std::set<void *, std::greater<void*>> allocations;
+  std::set<void *, std::greater<void *>> allocations;
 
   LinkableRuntime(const std::string &backend) : registry() {
     InitializeRegistry(wrap(&registry));
@@ -3217,7 +3218,8 @@ REACTANT_ABI void reactantXLAExec(LinkableRuntime **__restrict__ lrtP,
   for (int64_t i = 0; i < argcnt; i++) {
     auto &&[argB, argO, argP] = bufferAndOffset(lrt, args[i]);
     if (argO != 0) {
-      llvm::errs() << "only zero-offset execution supported, argument " << i << " had byte offset of " << argO << "\n";
+      llvm::errs() << "only zero-offset execution supported, argument " << i
+                   << " had byte offset of " << argO << "\n";
       exit(1);
     }
     baseArrays[i] = argB;
@@ -3443,8 +3445,7 @@ public:
         fusion_analysis_cache_(device_description_),
         gpu_hlo_cost_analysis_(hlo_cost_analysis_options_, device_description_),
         gpu_performance_model_(device_description_, fusion_analysis_cache_,
-                               gpu_performance_model_cache_,
-                               mlir_context_) {}
+                               gpu_performance_model_cache_, mlir_context_) {}
 
   void RunAnalysisOnHloModule(std::shared_ptr<xla::HloModule> hlo_module) {
     hlo_module->entry_computation()->Accept(&gpu_hlo_cost_analysis_);

@@ -31,7 +31,10 @@ jobs:
         os:
           - linux-x86-n2-32
           - macOS-latest
+          - linux-x86-a2-48-a100-4gpu
         exclude:
+          - os: linux-x86-a2-48-a100-4gpu
+            version: "1.10"
           - os: macOS-latest
             version: "1.10"
     uses: ./.github/workflows/CommonCI.yml
