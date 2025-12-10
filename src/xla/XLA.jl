@@ -162,6 +162,7 @@ function __init__()
 
         @ccall MLIR.API.mlir_c.RegisterEnzymeXLACPUHandler()::Cvoid
         @ccall MLIR.API.mlir_c.RegisterEnzymeXLAGPUHandler()::Cvoid
+        @ccall MLIR.API.mlir_c.registerReactantXLAFFI()::Cvoid
 
         @static if !Sys.isapple()
             lljit = LLVM.JuliaOJIT()
