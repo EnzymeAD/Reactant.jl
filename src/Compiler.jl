@@ -2594,6 +2594,20 @@ end
 
 Compile the function `f` with arguments `args` and return the compiled function.
 
+## Note
+
+Note that `@compile foo(bar(x))` is equivalent to
+```julia
+y = bar(x)  # first compute the output of `bar(x)`, say `y`
+@compile foo(y) # then compile `foo` for `y`
+```
+That is, like `@jit`, `@compile` only applies to the outermost function call; it does *not* compile the composed function `foo(bar(x))` jointly.
+Hence, if you want to compile the composed function `foo(bar(x))` jointly, you need to introduce an intermediate function, i.e.,
+```julia
+baz(x) = foo(bar(x))
+@compile baz(x)
+```
+
 ## Options
 
 $(SYNC_DOCS)
@@ -2617,7 +2631,7 @@ end
 Run @compile f(args..) then immediately execute it. Most users should use [`@compile`](@ref)
 instead to cache the compiled function and execute it later.
 
-# Note
+## Note
 
 Note that `@jit foo(bar(x))` is equivalent to
 ```julia
