@@ -64,9 +64,11 @@ function Base.getindex(a::OffsetVector{<:TracedRNumber}, indices::Int)
 end
 
 function Reactant.TracedUtils.get_ancestor_and_indices_inner(
-    x::OffsetArray{<:TracedRNumber, N}, indices::Vararg{Any,N}
+    x::OffsetArray{<:TracedRNumber,N}, indices::Vararg{Any,N}
 ) where {N}
-    return Reactant.TracedUtils.get_ancestor_and_indices(parent(x), map(parentindex, axes(x), indices)...)
+    return Reactant.TracedUtils.get_ancestor_and_indices(
+        parent(x), map(parentindex, axes(x), indices)...
+    )
 end
 
 end
