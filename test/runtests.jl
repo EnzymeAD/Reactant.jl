@@ -6,6 +6,19 @@ end
 
 const REACTANT_TEST_GROUP = lowercase(get(ENV, "REACTANT_TEST_GROUP", "all"))
 
+using CondaPkg
+
+const ENZYMEJAX_INSTALLED = Ref(false)
+# Install specific packages. Pkg.test doesn't pick up CondaPkg.toml in test folder
+if REACTANT_TEST_GROUP == "all" || REACTANT_TEST_GROUP == "integration"
+    CondaPkg.add_pip("jax"; version="==0.5")
+    try
+        CondaPkg.add_pip("enzyme_ad"; version=">=0.0.9")
+        ENZYMEJAX_INSTALLED[] = true
+    catch
+    end
+end
+
 @testset "Reactant.jl Tests" begin
     if REACTANT_TEST_GROUP == "all" || REACTANT_TEST_GROUP == "core"
         if Sys.isapple() && haskey(Reactant.XLA.global_backend_state.clients, "metal")
@@ -53,6 +66,9 @@ const REACTANT_TEST_GROUP = lowercase(get(ENV, "REACTANT_TEST_GROUP", "all"))
         @safetestset "Python" include("integration/python.jl")
         @safetestset "Optimisers" include("integration/optimisers.jl")
         @safetestset "FillArrays" include("integration/fillarrays.jl")
+        if ENZYMEJAX_INSTALLED[] && !Sys.isapple()
+            @safetestset "EnzymeJAX Export" include("integration/enzymejax.jl")
+        end
         @safetestset "MPI" begin
             using MPI
             nranks = 2

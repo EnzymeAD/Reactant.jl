@@ -100,15 +100,15 @@ function set_mlir_data!(x::Base.ReshapedArray{TracedRNumber{T}}, data) where {T}
     return x
 end
 
-function get_ancestor_indices(
+function get_ancestor_and_indices(
     x::Base.ReshapedArray{TracedRNumber{T},N}, indices::Vector{CartesianIndex{N}}
 ) where {T,N}
     linear_indices = LinearIndices(size(x))[indices]
     parent_linear_indices = LinearIndices(size(parent(x)))[linear_indices]
-    return (parent_linear_indices,)
+    return (parent(x), (parent_linear_indices,))
 end
 
-function get_ancestor_indices(
+function get_ancestor_and_indices(
     x::Base.ReshapedArray{TracedRNumber{T},N}, indices...
 ) where {T,N}
     @assert length(indices) == N "Expected $N indices, got $(length(indices))"
@@ -134,13 +134,13 @@ function get_ancestor_indices(
             )
         )
         parent_linear_indices = @opcall reshape(parent_linear_indices, result_size)
-        return (parent_linear_indices,)
+        return (parent(x), (parent_linear_indices,))
     else
         # Have this as a separate code-path since we can generate non-dynamic indexing
         cartesian_indices = CartesianIndex.(Iterators.product(indices...))
         linear_indices = LinearIndices(size(x))[cartesian_indices]
         parent_linear_indices = LinearIndices(size(parent(x)))[linear_indices]
-        return (parent_linear_indices,)
+        return (parent(x), (parent_linear_indices,))
     end
 end
 
@@ -152,53 +152,55 @@ function set_mlir_data!(
 end
 
 function set_mlir_data!(x::AnyTracedRArray{T}, data) where {T}
-    ancestor_indices = get_ancestor_indices(x, axes(x)...)
+    ancestor, ancestor_indices = get_ancestor_and_indices(x, axes(x)...)
     setindex!(Reactant.ancestor(x), TracedRArray{T}(data), ancestor_indices...)
     return x
 end
 
-get_ancestor_indices(::TracedRArray, indices) = indices
-get_ancestor_indices(::TracedRArray, indices, args...) = (indices, args...)
+get_ancestor_and_indices(a::TracedRArray, indices) = (a, indices)
+get_ancestor_and_indices(a::TracedRArray, indices, args...) = (a, (indices, args...))
 
-get_ancestor_indices(::Array{<:TracedRNumber}, indices...) = indices
-get_ancestor_indices(::Array{<:TracedRNumber}, indices, args...) = (indices, args...)
-
-function get_ancestor_indices(x::AnyTracedRArray, indices...)
-    return get_ancestor_indices_inner(x, indices...) # redirect to avoid ambiguity
-end
-function get_ancestor_indices(x::AnyTracedRArray, indices, args...)
-    return get_ancestor_indices_inner(x, indices, args...) # redirect to avoid ambiguity
+get_ancestor_and_indices(a::Array{<:TracedRNumber}, indices...) = (a, indices)
+function get_ancestor_and_indices(a::Array{<:TracedRNumber}, indices, args...)
+    return (a, (indices, args...))
 end
 
-function get_ancestor_indices_inner(
+function get_ancestor_and_indices(x::AnyTracedRArray, indices...)
+    return get_ancestor_and_indices_inner(x, indices...) # redirect to avoid ambiguity
+end
+function get_ancestor_and_indices(x::AnyTracedRArray, indices, args...)
+    return get_ancestor_and_indices_inner(x, indices, args...) # redirect to avoid ambiguity
+end
+
+function get_ancestor_and_indices_inner(
     x::AnyTracedRArray{T,N}, indices::Vararg{Any,N}
 ) where {T,N}
-    return get_ancestor_indices(parent(x), Base.reindex(parentindices(x), indices)...)
+    return get_ancestor_and_indices(parent(x), Base.reindex(parentindices(x), indices)...)
 end
-function get_ancestor_indices_inner(x::AnyTracedRArray{T,1}, indices) where {T}
-    return get_ancestor_indices(parent(x), Base.reindex(parentindices(x), indices))
+function get_ancestor_and_indices_inner(x::AnyTracedRArray{T,1}, indices) where {T}
+    return get_ancestor_and_indices(parent(x), Base.reindex(parentindices(x), indices))
 end
 
-function get_ancestor_indices_inner(
+function get_ancestor_and_indices_inner(
     x::AnyTracedRArray{T,N}, linear_indices::AbstractArray
 ) where {T,N}
-    idxs = _get_ancestor_indices_linear(x, linear_indices)
-    return idxs isa Tuple ? idxs : (idxs,)
+    a, idxs = _get_ancestor_and_indices_linear(x, linear_indices)
+    return a, (idxs isa Tuple ? idxs : (idxs,))
 end
-function get_ancestor_indices_inner(
+function get_ancestor_and_indices_inner(
     x::AnyTracedRArray{T,1}, linear_indices::AbstractArray
 ) where {T}
-    idxs = _get_ancestor_indices_linear(x, linear_indices)
-    return idxs isa Tuple ? idxs : (idxs,)
+    a, idxs = _get_ancestor_and_indices_linear(x, linear_indices)
+    return a, (idxs isa Tuple ? idxs : (idxs,))
 end
 
-function _get_ancestor_indices_linear(x::AnyTracedRArray, indices::AbstractArray)
+function _get_ancestor_and_indices_linear(x::AnyTracedRArray, indices::AbstractArray)
     indices = CartesianIndices(x)[indices]
     pidxs = parentindices(x)
     parent_indices = map(indices) do idx
         CartesianIndex(Base.reindex(pidxs, (idx.I...,)))
     end
-    return get_ancestor_indices(parent(x), parent_indices)
+    return get_ancestor_and_indices(parent(x), parent_indices)
 end
 
 Base.@nospecializeinfer function batch_ty(
