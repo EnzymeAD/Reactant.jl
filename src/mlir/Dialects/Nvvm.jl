@@ -2840,6 +2840,39 @@ function fence_proxy_release(;
     )
 end
 
+"""
+`fence_proxy_sync_restrict`
+
+The `nvvm.fence.proxy.sync_restrict` Op used to establish
+ordering between a prior memory access performed between proxies. Currently,
+the ordering is only supported between async and generic proxies. `sync_restrict`
+restricts `acquire` memory semantics to `shared_cluster` and `release` memory
+semantics to `shared_cta` with cluster scope.
+[For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#parallel-synchronization-and-communication-instructions-membar)
+"""
+function fence_proxy_sync_restrict(;
+    order, fromProxy=nothing, toProxy=nothing, location=Location()
+)
+    op_ty_results = IR.Type[]
+    operands = Value[]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[namedattribute("order", order),]
+    !isnothing(fromProxy) && push!(attributes, namedattribute("fromProxy", fromProxy))
+    !isnothing(toProxy) && push!(attributes, namedattribute("toProxy", toProxy))
+
+    return create_operation(
+        "nvvm.fence.proxy.sync_restrict",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
 function fence_sc_cluster(; location=Location())
     op_ty_results = IR.Type[]
     operands = Value[]
@@ -2849,6 +2882,34 @@ function fence_sc_cluster(; location=Location())
 
     return create_operation(
         "nvvm.fence.sc.cluster",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+"""
+`fence_sync_restrict`
+
+The `nvvm.fence.sync_restrict` Op restricts the class of memory
+operations for which the fence instruction provides the memory ordering guarantees.
+`sync_restrict` restricts `acquire` memory semantics to `shared_cluster` and
+`release` memory semantics to `shared_cta` with cluster scope.
+[For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#parallel-synchronization-and-communication-instructions-membar)
+"""
+function fence_sync_restrict(; order, location=Location())
+    op_ty_results = IR.Type[]
+    operands = Value[]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[namedattribute("order", order),]
+
+    return create_operation(
+        "nvvm.fence.sync_restrict",
         location;
         operands,
         owned_regions,
@@ -3227,6 +3288,44 @@ function ldmatrix(
 end
 
 """
+`mbarrier_arrive_drop_expect_tx`
+
+The `nvvm.mbarrier.arrive_drop.expect_tx` operation is similar to the
+`nvvm.mbarrier.arrive.expect_tx` operation except that it performs an
+`arrive_drop` operation instead of only an `arrive` operation.
+
+[For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#parallel-synchronization-and-communication-instructions-mbarrier-arrive-drop)
+"""
+function mbarrier_arrive_drop_expect_tx(
+    addr::Value,
+    txcount::Value;
+    res=nothing::Union{Nothing,IR.Type},
+    scope=nothing,
+    relaxed=nothing,
+    location=Location(),
+)
+    op_ty_results = IR.Type[]
+    operands = Value[addr, txcount]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+    !isnothing(res) && push!(op_ty_results, res)
+    !isnothing(scope) && push!(attributes, namedattribute("scope", scope))
+    !isnothing(relaxed) && push!(attributes, namedattribute("relaxed", relaxed))
+
+    return create_operation(
+        "nvvm.mbarrier.arrive_drop.expect_tx",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+"""
 `mbarrier_arrive_drop_nocomplete`
 
 The `nvvm.mbarrier.arrive_drop.nocomplete` operation decrements the expected
@@ -3310,11 +3409,11 @@ operations from the current thread visible to subsequent operations in other
 threads within the CTA. When other threads perform corresponding acquire operations 
 (like \'mbarrier.test.wait\'), they synchronize with this release pattern.
 
-This operation first performs an expect-tx operation with the specified transaction 
-count, then performs an arrive-on operation with an implicit count of 1. The 
-expect-tx operation increases the tx-count of the *mbarrier object* by the specified 
-expectCount value, setting the current phase to expect and tracks the completion 
-of additional asynchronous transactions.
+This operation first performs an expect-tx operation with the specified transaction
+count, then performs an arrive-on operation with an implicit count of 1. The
+expect-tx operation increases the expect-count of the *mbarrier object* by the
+specified value (i.e. `txcount`), setting the current phase to expect and track
+the completion of additional asynchronous transactions.
 
 The operation takes the following operands:
 - `addr`: A pointer to the memory location of the *mbarrier object*. Uses generic 
@@ -3322,14 +3421,22 @@ The operation takes the following operands:
 - `txcount`: An unsigned integer specifying the expected transaction count 
   for the expect-tx operation. This represents the number of asynchronous transactions 
   expected to complete before the barrier phase completes.
-- `predicate`: Optional predicate for conditional execution.
+- `scope`: This specifies the set of threads that directly observe the memory
+  synchronizing effect of the `mbarrier.test.wait` operation.
+- `relaxed`: When set to true, the `arrive` operation has relaxed memory semantics
+  and does not provide any ordering or visibility guarantees.
+- `predicate`: Optional predicate for conditional execution used only when lowering to
+  inline-ptx.
 
-[For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#parallel-synchronization-and-communication-instructions-mbarrier-arrive)
+[For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#parallel-synchronization-and-communication-instructions-mbarrier-arrive-drop)
 """
 function mbarrier_arrive_expect_tx(
     addr::Value,
     txcount::Value,
     predicate=nothing::Union{Nothing,Value};
+    res=nothing::Union{Nothing,IR.Type},
+    scope=nothing,
+    relaxed=nothing,
     location=Location(),
 )
     op_ty_results = IR.Type[]
@@ -3338,6 +3445,9 @@ function mbarrier_arrive_expect_tx(
     successors = Block[]
     attributes = NamedAttribute[]
     !isnothing(predicate) && push!(operands, predicate)
+    !isnothing(res) && push!(op_ty_results, res)
+    !isnothing(scope) && push!(attributes, namedattribute("scope", scope))
+    !isnothing(relaxed) && push!(attributes, namedattribute("relaxed", relaxed))
 
     return create_operation(
         "nvvm.mbarrier.arrive.expect_tx",
@@ -3614,25 +3724,32 @@ end
 """
 `mbarrier_test_wait`
 
-The `nvvm.mbarrier.test.wait` operation performs a non-blocking test for the 
+The `nvvm.mbarrier.test.wait` operation performs a non-blocking test for the
 completion of a specific phase of an *mbarrier object*. It uses the default
-`.acquire.cta` semantics. This acquire pattern establishes memory ordering for 
-operations occurring in program order after this wait instruction by making 
-operations from other threads in the CTA visible to subsequent operations in the current 
-thread. When this wait completes, it synchronizes with the corresponding release 
-pattern from the `mbarrier.arrive` operation, establishing memory ordering within 
+`.acquire.cta` semantics. This acquire pattern establishes memory ordering for
+operations occurring in program order after this wait instruction by making
+operations from other threads in the CTA visible to subsequent operations in the current
+thread. When this wait completes, it synchronizes with the corresponding release
+pattern from the `mbarrier.arrive` operation, establishing memory ordering within
 the CTA.
 
-This operation tests whether the mbarrier phase specified by the state operand 
-has completed. It is a non-blocking instruction that immediately returns the 
+This operation tests whether the mbarrier phase specified by the state operand
+has completed. It is a non-blocking instruction that immediately returns the
 completion status without suspending the executing thread.
 
 The operation takes the following operands:
-- `addr`: A pointer to the memory location of the *mbarrier object*. Uses generic 
+- `addr`: A pointer to the memory location of the *mbarrier object*. Uses generic
   addressing, but the address must still be in the shared memory space.
-- `state`: An opaque value returned by a previous `mbarrier.arrive` 
-  operation on the same *mbarrier object* during the current or immediately 
-  preceding phase.
+- `stateOrPhase`: This argument represents a `state` when it is a 64-bit value
+  and represents a `phase` when it is a 32-bit value. The `state` is an opaque
+  value returned by a previous `mbarrier.arrive` operation on the same
+  *mbarrier object* during the current or immediately preceding phase.
+  The `phase` is an integer specifying the phase parity (0 or 1).
+  Even phases have parity 0, odd phases have parity 1.
+- `scope`: This specifies the set of threads that directly observe the memory
+  synchronizing effect of the `mbarrier.test.wait` operation.
+- `relaxed`: When set to true, the `arrive` operation has relaxed memory semantics
+  and does not provide any ordering or visibility guarantees.
 
 The operation returns a boolean value indicating whether the specified phase 
 has completed:
@@ -3658,15 +3775,70 @@ ordering guarantees hold:
 
 [For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/#parallel-synchronization-and-communication-instructions-mbarrier-test-wait-try-wait)
 """
-function mbarrier_test_wait(addr::Value, state::Value; res::IR.Type, location=Location())
+function mbarrier_test_wait(
+    addr::Value,
+    stateOrPhase::Value;
+    res::IR.Type,
+    scope=nothing,
+    relaxed=nothing,
+    location=Location(),
+)
     op_ty_results = IR.Type[res,]
-    operands = Value[addr, state]
+    operands = Value[addr, stateOrPhase]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
+    !isnothing(scope) && push!(attributes, namedattribute("scope", scope))
+    !isnothing(relaxed) && push!(attributes, namedattribute("relaxed", relaxed))
 
     return create_operation(
         "nvvm.mbarrier.test.wait",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+"""
+`mbarrier_try_wait`
+
+The `nvvm.mbarrier.try_wait` operation checks whether the specified
+*mbarrier object* at `addr` has completed the given phase. Note that
+unlike the `nvvm.mbarrier.test.wait` operation, the try_wait operation
+is a potentially-blocking one. If the phase is not yet complete, the
+calling thread may be suspended. A suspended thread resumes execution
+once the phase completes or when a system-defined timeout occurs.
+Optionally, the `ticks` operand can be used to provide a custom timeout
+(in nanoseconds), overriding the system-defined one. The semantics of
+this operation and its operands are otherwise similar to those of the
+`nvvm.mbarrier.test.wait` Op.
+
+[For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/#parallel-synchronization-and-communication-instructions-mbarrier-test-wait-try-wait)
+"""
+function mbarrier_try_wait(
+    addr::Value,
+    stateOrPhase::Value,
+    ticks=nothing::Union{Nothing,Value};
+    res::IR.Type,
+    scope=nothing,
+    relaxed=nothing,
+    location=Location(),
+)
+    op_ty_results = IR.Type[res,]
+    operands = Value[addr, stateOrPhase]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+    !isnothing(ticks) && push!(operands, ticks)
+    !isnothing(scope) && push!(attributes, namedattribute("scope", scope))
+    !isnothing(relaxed) && push!(attributes, namedattribute("relaxed", relaxed))
+
+    return create_operation(
+        "nvvm.mbarrier.try_wait",
         location;
         operands,
         owned_regions,
