@@ -2617,6 +2617,20 @@ end
 Run @compile f(args..) then immediately execute it. Most users should use [`@compile`](@ref)
 instead to cache the compiled function and execute it later.
 
+# Note
+
+Note that `@jit foo(bar(x))` is equivalent to
+```julia
+y = bar(x)  # first compute the output of `bar(x)`, say `y`
+@jit foo(y) # then compile `foo` for `y` and execute it
+```
+That is, like `@compile`, `@jit` only applies to the outermost function call; it does *not* compile the composed function `foo(bar(x))` jointly.
+Hence, if you want to compile the composed function `foo(bar(x))` jointly, you need to introduce an intermediate function, i.e.,
+```julia
+baz(x) = foo(bar(x))
+@jit baz(x)
+```
+
 ## Options
 
 $(SYNC_DOCS)
