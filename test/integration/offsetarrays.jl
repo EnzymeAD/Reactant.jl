@@ -23,8 +23,7 @@ end
     vU = OffsetArray(U, -7:120, -7:120, 1:1)
     rU = Reactant.to_rarray(vU)
 
-    @jit fill!(@view(U[1:112, 1:112, 1]), 1.0)
-
+    @jit fill!(@view(rU[1:112, 1:112, 1]), 1.0)
     fill!(@view(vU[1:112, 1:112, 1]), 1.0)
 
     @test parent(rU) ≈ parent(vU)
