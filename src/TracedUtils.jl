@@ -161,7 +161,9 @@ get_ancestor_and_indices(a::TracedRArray, indices) = (a, indices)
 get_ancestor_and_indices(a::TracedRArray, indices, args...) = (a, (indices, args...))
 
 get_ancestor_and_indices(a::Array{<:TracedRNumber}, indices...) = (a, indices)
-get_ancestor_and_indices(a::Array{<:TracedRNumber}, indices, args...) = (a, (indices, args...))
+function get_ancestor_and_indices(a::Array{<:TracedRNumber}, indices, args...)
+    return (a, (indices, args...))
+end
 
 function get_ancestor_and_indices(x::AnyTracedRArray, indices...)
     return get_ancestor_and_indices_inner(x, indices...) # redirect to avoid ambiguity
