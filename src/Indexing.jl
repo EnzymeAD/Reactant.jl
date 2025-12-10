@@ -104,7 +104,7 @@ function Base.getindex(a::AnyTracedRArray{T,1}, indices) where {T}
 end
 
 function Base.getindex(a::AnyTracedRArray{T,N}, indices::Vararg{Any,N}) where {T,N}
-    ancestor, idxs = TracedUtils.get_ancestor_and_indices(a, indices)
+    ancestor, idxs = TracedUtils.get_ancestor_and_indices(a, indices...)
     return getindex(ancestor, idxs...)
 end
 
