@@ -19,7 +19,7 @@ end
 end
 
 @testset "OffsetArray View" begin
-    U  = zeros(Float64, 128, 128, 1)
+    U = zeros(Float64, 128, 128, 1)
     vU = OffsetArray(U, -7:120, -7:120, 1:1)
     rU = Reactant.to_rarray(vU)
 
