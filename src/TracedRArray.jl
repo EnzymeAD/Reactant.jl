@@ -283,7 +283,7 @@ first_scalar(x) = @allowscalar first(x)
 
 # we need to override the outer copy method to make sure we never fall back to scalar
 # iteration (see, e.g., CUDA.jl#145)
-function Base.copy(bc::Broadcasted{<:AbstractReactantArrayStyle})
+function _copy(bc)
     fn = if bc.f isa Type && bc.f <: Reactant.ReactantPrimitive
         TracedUtils.TypeCast{bc.f}()
     else
@@ -299,6 +299,10 @@ function Base.copy(bc::Broadcasted{<:AbstractReactantArrayStyle})
     end
     sim = similar(bc, ElType)
     return copyto!(sim, bc)
+end
+
+@noinline function Base.copy(bc::Broadcasted{<:AbstractReactantArrayStyle})
+    return _copy(bc)
 end
 
 function Base.materialize!(
