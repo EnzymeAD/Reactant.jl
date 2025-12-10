@@ -4,7 +4,7 @@ import Reactant
 import StructArrays
 
 import StructArrays: StructArrayStyle, StructArray, StructVector, index_type
-import Reactant: TraceMode, TracedToTypes, traced_type_inner, append_path, make_tracer, traced_type
+import Reactant: TraceMode, TracedToTypes, traced_type_inner, append_path, make_tracer, traced_type, ReactantPrimitive
 import Reactant.TracedRArrayOverrides: AbstractReactantArrayStyle, _copy
 import Base.Broadcast: Broadcasted
 
@@ -15,7 +15,7 @@ function Base.copy(bc::Broadcasted{StructArrays.StructArrayStyle{S, N}}) where {
 end
 
 Base.@nospecializeinfer function Reactant.traced_type_inner(
-    @nospecialize(prev::Type{<:StructVector{NT}}),
+    @nospecialize(prev::Type{<:StructArray{NT}}),
     seen,
     @nospecialize(mode::TraceMode),
     @nospecialize(track_numbers::Type),
@@ -31,22 +31,30 @@ Base.@nospecializeinfer function Reactant.traced_type_inner(
         sharding,
         runtime,
     )
-    T_traced = traced_type_inner(
-        T,
-        seen,
-        mode,
+
+    names = T.parameters[1]
+    valuetypes = T.parameters[2].parameters
+    traced_value_types = map(valuetypes) do VT
         # The elements in the NamedTuple are backed by vectors,
         # these vectors are converted to RArrays so we need to track numbers:
-        Number #= track_numbers =#,
-        sharding,
-        runtime,
-    )
+        track_numbers = VT <: ReactantPrimitive ? ReactantPrimitive : track_numbers
+        traced_type_inner(
+            VT,
+            seen,
+            mode,
+            track_numbers,
+            sharding,
+            runtime,
+        )
+    end
+    T_traced = NamedTuple{names, Tuple{traced_value_types...}}
+
     return StructVector{T_traced, C_traced, index_type(fieldtypes(C_traced))}
 end
 
 function Reactant.make_tracer(
-    seen, @nospecialize(prev::StructVector{NT}), @nospecialize(path), mode; track_numbers=false, sharding=Reactant.Sharding.Sharding.NoSharding(), runtime=nothing, kwargs...
-) where {NT <: NamedTuple}
+    seen, @nospecialize(prev::StructArray{NT, N}), @nospecialize(path), mode; track_numbers=false, sharding=Reactant.Sharding.Sharding.NoSharding(), runtime=nothing, kwargs...
+) where {NT <: NamedTuple, N}
     track_numbers isa Bool && (track_numbers = track_numbers ? Number : Union{})
     components = getfield(prev, :components)
     if mode == TracedToTypes
@@ -64,7 +72,7 @@ function Reactant.make_tracer(
         sharding,
         runtime,
     )
-    return StructVector{first(T_traced.parameters)}(traced_components)
+    return StructArray{first(T_traced.parameters)}(traced_components)
 end
 
 @inline function Reactant.traced_getfield(@nospecialize(obj::StructArray), field)
