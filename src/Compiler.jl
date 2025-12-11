@@ -916,7 +916,8 @@ function optimization_passes(
         "fuse_add_into_syrk",
         "factor_scalars_in_dot_general",
         "reduce_mul_to_dot_general",
-        "dot_general_broadcast_in_dim",
+        # XXX: This pass is currently broken
+        # "dot_general_broadcast_in_dim",
         "dot_general_broadcast_in_dim_sort_dims",
     ]
 
