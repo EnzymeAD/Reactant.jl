@@ -915,10 +915,10 @@ function optimization_passes(
         "fuse_mul_into_syrk",
         "fuse_add_into_syrk",
         "factor_scalars_in_dot_general",
-        "reduce_mul_to_dot_general",
-        # XXX: This pass is currently broken
+        # XXX: These passes are currently broken
+        # "reduce_mul_to_dot_general",
         # "dot_general_broadcast_in_dim",
-        "dot_general_broadcast_in_dim_sort_dims",
+        # "dot_general_broadcast_in_dim_sort_dims",
     ]
 
     if !is_sharded
