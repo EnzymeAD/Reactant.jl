@@ -1742,3 +1742,43 @@ end
     fn = @compile sum(x_ra1)
     @test_throws Reactant.Compiler.MisMatchedThunkTypeError fn(x_ra2)
 end
+
+@testset "Slices" begin
+    @testset "drop=true" begin
+        x = eachslice(
+            Reactant.TestUtils.construct_test_array(Float32, 2, 3, 4, 5); dims=(3, 1)
+        )
+        x_ra = Reactant.to_rarray(x)
+
+        @test @jit(sum(x_ra)) ≈ sum(x)
+
+        @testset for dims in (1, 2, (1, 2), (2, 1))
+            res_ra = @jit sum(x_ra; dims)
+            res = sum(x; dims)
+            @test size(res_ra) == size(res)
+            for (gt, comp) in zip(res_ra, res)
+                @test gt ≈ comp
+            end
+        end
+    end
+
+    @testset "drop=false" begin
+        x = eachslice(
+            Reactant.TestUtils.construct_test_array(Float32, 2, 3, 4, 5);
+            dims=(3, 1),
+            drop=false,
+        )
+        x_ra = Reactant.to_rarray(x)
+
+        @test @jit(sum(x_ra)) ≈ sum(x)
+
+        @testset for dims in (1, 2, 3, 4, (1, 2), (1, 2, 4), (3, 4, 1), (2, 1))
+            res_ra = @jit sum(x_ra; dims)
+            res = sum(x; dims)
+            @test size(res_ra) == size(res)
+            for (gt, comp) in zip(res_ra, res)
+                @test gt ≈ comp
+            end
+        end
+    end
+end
