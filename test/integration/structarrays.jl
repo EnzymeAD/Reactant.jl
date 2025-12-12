@@ -39,3 +39,29 @@ using StructArrays, Reactant, Test
         Int64,
     }
 end
+
+@noinline function elwise(e::NamedTuple)
+    return (; c=e.b, d=sin(e.a))
+end
+
+function broadcast_elwise(x)
+    return elwise.(x)
+end
+
+@testset "structarray broadcasting" begin
+    x = StructVector(; a=rand(10), b=rand(Float32, 10))
+
+    x_ra = Reactant.to_rarray(x)
+
+    result = @jit broadcast_elwise(x_ra)
+
+    @test typeof(result) == StructVector{
+        @NamedTuple{c::ConcretePJRTNumber{Float32,1}, d::ConcretePJRTNumber{Float64,1}},
+        @NamedTuple{c::ConcretePJRTArray{Float32,1,1}, d::ConcretePJRTArray{Float64,1,1}},
+        CartesianIndex{1},
+    }
+    for (component_ra, component) in
+        zip(components(result), components(broadcast_elwise(x)))
+        @test component_ra ≈ component
+    end
+end
