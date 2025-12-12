@@ -1121,7 +1121,7 @@ function __elem_apply_loop_body(idx_ref, fn_ref::F, res_ref, args_ref, L_ref) wh
     res = res_ref[]
     idx = idx_ref[] + 1
 
-    scalar_args = [@allowscalar(arg[idx]) for arg in args]
+    scalar_args = [@allowscalar((@inbounds arg[idx])) for arg in args]
     @allowscalar res[idx] = fn(scalar_args...)
 
     idx_ref[] = idx
