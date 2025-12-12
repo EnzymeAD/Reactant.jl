@@ -26,6 +26,48 @@ This transformation enables several features:
     encounters an error while being raised, please open an issue on
     [the Reactant.jl repository](https://github.com/EnzymeAD/Reactant.jl/issues/new?labels=raising).
 
+### Example
+
+```@example raising_kernelabstractions_to_stablehlo
+using Reactant
+using KernelAbstractions
+using CUDA # needs to be loaded for raising even if CUDA is not functional on your system
+```
+
+!!! tip
+
+    We could have also directly implemented the kernel using CUDA.jl instead of KernelAbstractions.jl.
+
+We will implement a simple kernel to compute the square of a vector.
+
+```@example raising_kernelabstractions_to_stablehlo
+@kernel function square_kernel!(y, @Const(x))
+    i = @index(Global)
+    @inbounds y[i] = x[i] * x[i]
+end
+
+function square(x)
+    y = similar(x)
+    backend = KernelAbstractions.get_backend(x)
+    kernel! = square_kernel!(backend)
+    kernel!(y, x; ndrange=length(x))
+    return y
+end
+```
+
+```@example raising_kernelabstractions_to_stablehlo
+x = Reactant.to_rarray(collect(1:1:64) ./ 64)
+nothing # hide
+```
+
+Let's see what the HLO IR looks like for this function. Note that raising is automatically
+enabled for backends like TPU, where the original kernel was not designed to run on. To
+enable raising on other backends, pass the `raise=true` option.
+
+```@example raising_kernelabstractions_to_stablehlo
+@code_hlo raise=true square(x)
+```
+
 ## Raising Scalar Loops to Tensor IR
 
 We will implement a simple N body simulation code in Reactant. Instead of using
