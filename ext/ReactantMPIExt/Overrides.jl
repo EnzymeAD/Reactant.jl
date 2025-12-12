@@ -33,8 +33,8 @@ end
 
 # TODO use `make_tracer` to linearize arbitrary types? check out `MPI.Buffer`
 function MPI.Send(buf::TracedRArray, dest::Integer, tag::Integer, comm::MPI.Comm)
-    tag = Reactant.Ops.constant(tag)
-    dest = Reactant.Ops.constant(dest)
+    tag = Reactant.Ops.constant(Int32(tag))
+    dest = Reactant.Ops.constant(Int32(dest))
     return MPI.Send(buf, dest, tag, comm)
 end
 
@@ -43,7 +43,7 @@ function MPI.Send(
     buf::TracedRArray, dest::TracedRNumber, tag::TracedRNumber, comm::MPI.Comm
 )
     @assert comm == MPI.COMM_WORLD "Only MPI.COMM_WORLD is supported currently"
-    return Ops.send(buf, tag, dest)
+    return Ops.send(buf, dest, tag)
 end
 
 # TODO should we error if other `AbstractRequest` types are passed in?
