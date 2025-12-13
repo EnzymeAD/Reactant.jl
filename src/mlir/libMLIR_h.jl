@@ -6637,6 +6637,18 @@ function mlirLoadIRDLDialects(_module)
     @ccall mlir_c.mlirLoadIRDLDialects(_module::MlirModule)::MlirLogicalResult
 end
 
+function mlirIRDLVariadicityAttrGet(ctx, value)
+    @ccall mlir_c.mlirIRDLVariadicityAttrGet(
+        ctx::MlirContext, value::MlirStringRef
+    )::MlirAttribute
+end
+
+function mlirIRDLVariadicityArrayAttrGet(ctx, nValues, values)
+    @ccall mlir_c.mlirIRDLVariadicityArrayAttrGet(
+        ctx::MlirContext, nValues::Cptrdiff_t, values::Ptr{MlirAttribute}
+    )::MlirAttribute
+end
+
 function mlirGetDialectHandle__index__()
     @ccall mlir_c.mlirGetDialectHandle__index__()::MlirDialectHandle
 end
@@ -8686,17 +8698,20 @@ struct MlirExecutionEngine
 end
 
 """
-    mlirExecutionEngineCreate(op, optLevel, numPaths, sharedLibPaths, enableObjectDump)
+    mlirExecutionEngineCreate(op, optLevel, numPaths, sharedLibPaths, enableObjectDump, enablePIC)
 
-Creates an ExecutionEngine for the provided ModuleOp. The ModuleOp is expected to be "translatable" to LLVM IR (only contains operations in dialects that implement the `LLVMTranslationDialectInterface`). The module ownership stays with the client and can be destroyed as soon as the call returns. `optLevel` is the optimization level to be used for transformation and code generation. LLVM passes at `optLevel` are run before code generation. The number and array of paths corresponding to shared libraries that will be loaded are specified via `numPaths` and `sharedLibPaths` respectively. TODO: figure out other options.
+Creates an ExecutionEngine for the provided ModuleOp. The ModuleOp is expected to be "translatable" to LLVM IR (only contains operations in dialects that implement the `LLVMTranslationDialectInterface`). The module ownership stays with the client and can be destroyed as soon as the call returns. `optLevel` is the optimization level to be used for transformation and code generation. LLVM passes at `optLevel` are run before code generation. The number and array of paths corresponding to shared libraries that will be loaded are specified via `numPaths` and `sharedLibPaths` respectively. The `enablePIC` arguments controls the relocation model, when true the generated code is emitted as "position independent", making it possible to save it and reload it as a shared object in another process. TODO: figure out other options.
 """
-function mlirExecutionEngineCreate(op, optLevel, numPaths, sharedLibPaths, enableObjectDump)
+function mlirExecutionEngineCreate(
+    op, optLevel, numPaths, sharedLibPaths, enableObjectDump, enablePIC
+)
     @ccall mlir_c.mlirExecutionEngineCreate(
         op::MlirModule,
         optLevel::Cint,
         numPaths::Cint,
         sharedLibPaths::Ptr{MlirStringRef},
         enableObjectDump::Bool,
+        enablePIC::Bool,
     )::MlirExecutionEngine
 end
 
