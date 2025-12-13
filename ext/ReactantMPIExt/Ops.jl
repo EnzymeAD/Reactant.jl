@@ -343,7 +343,8 @@ end
     tag::TracedRNumber;
     location=mlir_stacktrace("mpi.send", @__FILE__, @__LINE__),
 )
-    enzymexla.send(buf.mlir_data, dest.mlir_data, tag.mlir_data; location)
+    count = Reactant.Ops.constant(Int32(length(buf)))
+    enzymexla.send(buf.mlir_data, count.mlir_data, dest.mlir_data, tag.mlir_data; location)
     return nothing
 end
 
