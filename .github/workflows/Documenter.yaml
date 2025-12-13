@@ -51,3 +51,4 @@ jobs:
           XLA_FLAGS: --xla_force_host_platform_device_count=8
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           DOCUMENTER_KEY: ${{ secrets.DOCUMENTER_KEY }}
+          JULIA_DEBUG: "Reactant_jll,Reactant,Documenter"
