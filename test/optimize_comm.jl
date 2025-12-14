@@ -22,6 +22,10 @@ function dus2(x, y)
     return nothing
 end
 
+function wrap(x)
+    return Reactant.Ops.@opcall wrap(x, 7, 7; dimension=1)
+end
+
 if length(addressable_devices) ≥ 8
     @testset "Rotate" begin
         N = min((length(Reactant.devices()) ÷ 2) * 2, 8)
@@ -107,5 +111,17 @@ if length(addressable_devices) ≥ 8
         @jit shardy_passes = :to_mhlo_shardings dus2(rx, ry)
         @test all(x .== convert(Array, rx))
         @test all(y .== convert(Array, ry))
+    end
+
+    @testset "Wrap" begin
+        mesh = Sharding.Mesh(Reactant.devices(), (:x,))
+        sharding = Sharding.NamedSharding(mesh, (:x,))
+
+        x = Reactant.to_rarray(rand(8192); sharding)
+        hlo = repr(@code_xla wrap(x))
+
+        @test !contains(hlo, "all-to-all")
+        @test !contains(hlo, "all-gather")
+        @test contains(hlo, "collective-permute")
     end
 end
