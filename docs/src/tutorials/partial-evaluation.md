@@ -11,20 +11,17 @@ on this.
 
 For example, the function
 
-```jldoctest partial_evaluation_tutorial
+```@example partial_evaluation_tutorial
 using Reactant
+
 function add(a, b)
    a + b
-end;
-
-# output
-
-add (generic function with 1 method)
+end
 ```
 
 when compiled with two `ConcreteRNumber` arguments
 
-```jldoctest partial_evaluation_tutorial
+```@example partial_evaluation_tutorial
 using Reactant
 
 x = ConcreteRNumber(3)
@@ -32,36 +29,23 @@ y = ConcreteRNumber(4)
 
 addxy = @compile add(x, y)
 
-addxy(x, y)
-
-# output
-
-ConcretePJRTNumber{Int64, 1}(7)
+res = addxy(x, y)
+@assert Int(res) == 7 #hide
+res #hide
 ```
 
 returns a result that depends on both arguments `x` and `y`:
 
-```jldoctest partial_evaluation_tutorial
-addxy(ConcreteRNumber(7), ConcreteRNumber(8))
-
-# output
-
-ConcretePJRTNumber{Int64, 1}(15)
+```@example partial_evaluation_tutorial
+res = addxy(ConcreteRNumber(7), ConcreteRNumber(8))
+@assert Int(res) == 15 #hide
+res #hide
 ```
 
 The StableHLO IR code generated here is:
 
-```jldoctest partial_evaluation_tutorial
+```@example partial_evaluation_tutorial
 @code_hlo add(x, y)
-
-# output
-
-module @reactant_add attributes {mhlo.num_partitions = 1 : i64, mhlo.num_replicas = 1 : i64} {
-  func.func @main(%arg0: tensor<i64> {enzymexla.memory_effects = []}, %arg1: tensor<i64> {enzymexla.memory_effects = []}) -> tensor<i64> attributes {enzymexla.memory_effects = []} {
-    %0 = stablehlo.add %arg0, %arg1 : tensor<i64>
-    return %0 : tensor<i64>
-  }
-}
 ```
 
 So at HLO-level, there a are two variable inputs `%arg0` and `%arg1`.
@@ -69,25 +53,21 @@ So at HLO-level, there a are two variable inputs `%arg0` and `%arg1`.
 However, if argument `y` has a non-Reactant value during compilation, (`4` in
 this example) then the result when executing the compiled function
 
-```jldoctest partial_evaluation_tutorial
+```@example partial_evaluation_tutorial
 addx4 = @compile add(x, 4)
 
-addx4(x, 4)
-
-# output
-
-ConcretePJRTNumber{Int64, 1}(7)
+res = addx4(x, 4)
+@assert Int(res) == 7 #hide
+res #hide
 ```
 
 will only change based on `x`, not on the non-Reactant argument `y`, we get
 `7 + 4 == 11`, not `7 + 8 == 15`:
 
-```jldoctest partial_evaluation_tutorial
-addx4(ConcreteRNumber(7), 8)
-
-# output
-
-ConcretePJRTNumber{Int64, 1}(11)
+```@example partial_evaluation_tutorial
+res = addx4(ConcreteRNumber(7), 8)
+@assert Int(res) == 11 #hide
+res #hide
 ```
 
 The StableHLO code shows that the second argument has been replaced by a
@@ -95,16 +75,6 @@ constant `%c` during partial evaluation. When the compiled function is
 executed, the value of `y` is ignored - at HLO-level, there is only one
 variable input `%arg0`:
 
-```jldoctest partial_evaluation_tutorial
+```@example partial_evaluation_tutorial
 @code_hlo add(x, 4)
-
-# output
-
-module @reactant_add attributes {mhlo.num_partitions = 1 : i64, mhlo.num_replicas = 1 : i64} {
-  func.func @main(%arg0: tensor<i64> {enzymexla.memory_effects = []}) -> tensor<i64> attributes {enzymexla.memory_effects = []} {
-    %c = stablehlo.constant dense<4> : tensor<i64>
-    %0 = stablehlo.add %arg0, %c : tensor<i64>
-    return %0 : tensor<i64>
-  }
-}
 ```

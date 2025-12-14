@@ -7,11 +7,11 @@ using p7zip_jll: p7zip
 
 const metal_pjrt_plugin_dir = Ref{Union{Nothing,String}}(nothing)
 
-function __init__()
-    @static if Sys.isapple()
-        Reactant.precompiling() || setup_metal_pjrt_plugin!()
-    end
-end
+# function __init__()
+#     @static if Sys.isapple()
+#         Reactant.precompiling() || setup_metal_pjrt_plugin!()
+#     end
+# end
 
 function setup_metal_pjrt_plugin!()
     path_from_env = get(ENV, "METAL_LIBRARY_PATH", nothing)
