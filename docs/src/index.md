@@ -76,6 +76,11 @@ using Reactant
 Reactant.set_default_backend("gpu")
 ```
 
+```julia [AMD GPUs]
+using Reactant
+Reactant.set_default_backend("gpu")
+```
+
 ```julia [Cloud TPUs]
 using Reactant
 Reactant.set_default_backend("tpu")
