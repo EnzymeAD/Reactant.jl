@@ -918,6 +918,8 @@ function optimization_passes(
         "reduce_mul_to_dot_general",
         "dot_general_broadcast_in_dim",
         "dot_general_broadcast_in_dim_sort_dims",
+        "dus_dynamic_slice_simplify",
+        "while_dus_ds_simplify",
     ]
 
     if !is_sharded
