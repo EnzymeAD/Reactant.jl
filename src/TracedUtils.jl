@@ -285,6 +285,7 @@ function make_mlir_fn(
     args_in_result::Symbol=:all,
     construct_function_without_args::Bool=false,
     do_transpose=true,
+    within_autodiff=false,
     input_shardings=nothing,  # This is not meant to be used by the user.
     output_shardings=nothing, # This is not meant to be used by the user.
     runtime=nothing,
