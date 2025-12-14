@@ -23,7 +23,7 @@ function dus2(x, y)
 end
 
 function wrap(x)
-    return Reactant.Ops.@opcall wrap(x, 7, 7; dimension=1)
+    return Reactant.Ops.@opcall wrap(x, 2, 2; dimension=1)
 end
 
 if length(addressable_devices) ≥ 8
