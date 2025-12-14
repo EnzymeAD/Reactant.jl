@@ -1138,6 +1138,15 @@ end
     @test fr!(vr) ≈ f!(v)
 end
 
+fn_test_wrap(x) = Reactant.Ops.wrap(x, 2, 1; dimension=3)
+
+@testset "Ops.wrap" begin
+    x = Reactant.to_rarray(rand(2, 3, 4, 5))
+    out = @jit fn_test_wrap(x)
+
+    @test size(out) == (2, 3, 7, 5)
+end
+
 @testset "Ops.fill" begin
     @testset "Fill with TracedScalar" begin
         fn(x) = Ops.fill(x, [2, 3])
