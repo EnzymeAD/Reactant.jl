@@ -49,7 +49,11 @@ function run_auto_batching_tests(f::F, args...) where {F}
             )
             @test occursin("stablehlo.while", hlo)
 
-            hlo = repr(@code_hlo f(args...))
+            hlo = repr(
+                @code_hlo compile_options = CompileOptions(;
+                    disable_auto_batching_passes=false
+                ) f(args...)
+            )
             @test !occursin("stablehlo.while", hlo)
         end
     end
@@ -115,9 +119,13 @@ end
     input1 = Reactant.to_rarray(Reactant.TestUtils.construct_test_array(Float32, 10))
     input2 = Reactant.to_rarray(Reactant.TestUtils.construct_test_array(Float32, 10))
 
-    hlo = @code_hlo optimize = false mctr(map_with_scalar_indexing, 1:8, input1, input2)
+    hlo = @code_hlo compile_options = CompileOptions(; disable_auto_batching_passes=true) mctr(
+        map_with_scalar_indexing, 1:8, input1, input2
+    )
     @test contains(repr(hlo), "stablehlo.while")
-    hlo = @code_hlo optimize = true mctr(map_with_scalar_indexing, 1:8, input1, input2)
+    hlo = @code_hlo compile_options = CompileOptions(; disable_auto_batching_passes=false) mctr(
+        map_with_scalar_indexing, 1:8, input1, input2
+    )
     @test !contains(repr(hlo), "stablehlo.while")
 
     res_ra = @jit mctr(map_with_scalar_indexing, 1:8, input1, input2)
