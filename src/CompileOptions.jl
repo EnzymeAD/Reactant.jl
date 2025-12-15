@@ -212,7 +212,7 @@ function CompileOptions(;
     disable_scatter_gather_optimization_passes::Bool=false,
     disable_pad_optimization_passes::Bool=false,
     disable_licm_optimization_passes::Bool=false,
-    disable_auto_batching_passes::Bool=true,
+    disable_auto_batching_passes::Bool=false,
 )
     optimization_passes isa Bool &&
         (optimization_passes = ifelse(optimization_passes, :all, :none))
