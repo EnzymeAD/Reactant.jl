@@ -99,7 +99,7 @@ end
             false,            #=inactive_rules=#
             false,            #=broadcast_rewrite=#
             false,            #=within_autodiff_rewrite=#
-            set_reactant_abi,
+            set_reactant_abi, #=handler=#
         )
     end
 else
@@ -117,7 +117,7 @@ else
             false,            #=inactive_rules=#
             false,            #=broadcast_rewrite=#
             false,            #=within_autodiff_rewrite=#
-            set_reactant_abi,
+            set_reactant_abi, #=handler=#
         )
     end
 end

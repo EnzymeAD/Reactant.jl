@@ -695,6 +695,54 @@ function return_(results::Vector{Value}; location=Location())
 end
 
 """
+`sharded_to_unreduced`
+
+The `axes` should be used to shard the operand. This operation makes them
+unreduced in the result. We have the following relationship:
+
+all-gather(x, axes) = all-reduce(sharded-to-unreduced(x, axes), axes), where
+all-gather, sharded-to-unreduced, all-reduce are applied on the same axes.
+
+# Example
+```mlir
+%1 = stablehlo.tanh(%0) {sdy.sharding = #sdy.sharding_per_value<[<@mesh, [{\"a\", \"b\", \"c\"}, {}, {\"d\"}\\], unreduced = [\"e\"]>]>} : tensor<8x8x8xf32>
+%2 = sdy.sharded_to_unreduced [{\"b\", \"c\"}, {}, {\"d\"}\\] %1 out_sharding=<@mesh, [{\"a\"}, {}, {}\\], unreduced = [\"b\", \"c\", \"d\", \"e\"]> : tensor<8x8x8xf32>
+```
+
+**Constraints:**
+- Must satisfy the constraints listed in `Sdy_CollectiveOpInterface`.
+- Elements in `axes` must satisfy the constraints listed in `AxisRefListAttr`.
+- Applying `axes` to the operand sharding gets `out_sharding`.
+"""
+function sharded_to_unreduced(
+    tensor::Value;
+    result=nothing::Union{Nothing,IR.Type},
+    axes,
+    out_sharding,
+    location=Location(),
+)
+    op_ty_results = IR.Type[]
+    operands = Value[tensor,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[
+        namedattribute("axes", axes), namedattribute("out_sharding", out_sharding)
+    ]
+    !isnothing(result) && push!(op_ty_results, result)
+
+    return create_operation(
+        "sdy.sharded_to_unreduced",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
+    )
+end
+
+"""
 `sharding_constraint`
 
 Attaches a sharding to an intermediate tensor (e.g. the result of a matmul)

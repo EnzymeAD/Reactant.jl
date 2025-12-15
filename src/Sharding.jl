@@ -949,7 +949,7 @@ function HloSharding(sharding::NamedSharding, client::XLA.IFRT.Client, _, x)
     data = XLA.IFRT.AsyncArray(client, x, ifrt_sharding)
 
     # XXX: Can we auto-pad this case too? Will think about it later, for now use
-    #      NamedSharidng
+    #      NamedSharding
     return data, ShardInfo(hlo_sharding, device_to_array_slices), nothing
 end
 
@@ -997,7 +997,7 @@ function (sharding::HloSharding)(
     data = XLA.IFRT.AsyncArray(client, x, ifrt_sharding)
 
     # XXX: Can we auto-pad this case too? Will think about it later, for now use
-    #      NamedSharidng
+    #      NamedSharding
     return data, ShardInfo(sharding, device_to_array_slices), nothing
 end
 

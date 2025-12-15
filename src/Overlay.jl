@@ -9,16 +9,34 @@
 end
 
 # Enzyme.jl overlays
+const WITHIN_AUTODIFF = Ref(false)
+
+@reactant_overlay @noinline function Enzyme.within_autodiff()
+    return WITHIN_AUTODIFF[]
+end
+
 @reactant_overlay @noinline function Enzyme.autodiff_deferred(
     rmode::Enzyme.Mode, f::FA, rt::Type{A}, args::Vararg{Annotation,Nargs}
 ) where {FA<:Annotation,A<:Annotation,Nargs}
-    return overload_autodiff(rmode, f, rt, args...)
+    original_within_autodiff = WITHIN_AUTODIFF[]
+    try
+        WITHIN_AUTODIFF[] = true
+        return overload_autodiff(rmode, f, rt, args...)
+    finally
+        WITHIN_AUTODIFF[] = original_within_autodiff
+    end
 end
 
 @reactant_overlay @noinline function Enzyme.autodiff(
     rmode::Enzyme.Mode, f::FA, rt::Type{A}, args::Vararg{Annotation,Nargs}
 ) where {FA<:Annotation,A<:Annotation,Nargs}
-    return overload_autodiff(rmode, f, rt, args...)
+    original_within_autodiff = WITHIN_AUTODIFF[]
+    try
+        WITHIN_AUTODIFF[] = true
+        return overload_autodiff(rmode, f, rt, args...)
+    finally
+        WITHIN_AUTODIFF[] = original_within_autodiff
+    end
 end
 
 @reactant_overlay function EnzymeCore.ignore_derivatives(args...)

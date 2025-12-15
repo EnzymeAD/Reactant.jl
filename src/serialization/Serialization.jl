@@ -2,6 +2,7 @@
 Implements serialization of Reactant compiled functions. Currently supported formats are:
 
 - [Tensorflow SavedModel](https://www.tensorflow.org/guide/saved_model)
+- [EnzymeJAX](https://github.com/EnzymeAD/Enzyme-JAX) export for JAX integration
 """
 module Serialization
 
@@ -9,7 +10,26 @@ using ..Reactant: Reactant, Compiler
 
 serialization_supported(::Val) = false
 
+const NUMPY_SIMPLE_TYPES = Dict(
+    Bool => :bool,
+    Int8 => :int8,
+    Int16 => :int16,
+    Int32 => :int32,
+    Int64 => :int64,
+    UInt8 => :uint8,
+    UInt16 => :uint16,
+    UInt32 => :uint32,
+    UInt64 => :uint64,
+    Float16 => :float16,
+    Float32 => :float32,
+    Float64 => :float64,
+    ComplexF16 => :complex16,
+    ComplexF32 => :complex32,
+    ComplexF64 => :complex64,
+)
+
 include("TFSavedModel.jl")
+include("EnzymeJAX.jl")
 
 """
     export_as_tf_saved_model(
@@ -106,5 +126,7 @@ function export_as_tf_saved_model(
         thunk, saved_model_path, target_version, _input_locations, state_dict
     )
 end
+
+const export_to_enzymejax = EnzymeJAX.export_to_enzymejax
 
 end

@@ -622,6 +622,28 @@ Base.@nospecializeinfer function traced_type_inner(
     return PT
 end
 
+function collect_tvars_in_type!(dependencies, @nospecialize(t))
+    if t isa TypeVar
+        push!(dependencies, t)
+        return nothing
+    end
+    if t isa DataType
+        for p in t.parameters
+            collect_tvars_in_type!(dependencies, p)
+        end
+    elseif t isa Union
+        collect_tvars_in_type!(dependencies, t.a)
+        collect_tvars_in_type!(dependencies, t.b)
+    elseif t isa UnionAll
+        collect_tvars_in_type!(dependencies, t.var.lb)
+        collect_tvars_in_type!(dependencies, t.var.ub)
+        collect_tvars_in_type!(dependencies, t.body)
+    elseif t isa Core.TypeofVararg
+        collect_tvars_in_type!(dependencies, t.T)
+        collect_tvars_in_type!(dependencies, t.N)
+    end
+end
+
 Base.@nospecializeinfer function traced_type_inner(
     @nospecialize(T::Type),
     seen,
@@ -747,15 +769,35 @@ Base.@nospecializeinfer function traced_type_inner(
     end
 
     if !isempty(subParms)
-        TT2 = Core.apply_type(T.name.wrapper, subParms...)
+        TT2, changed_params = apply_type_with_promotion(T.name.wrapper, subParms)
     else
-        TT2 = T
+        TT2, changed_params = T, nothing
     end
     seen3 = copy(seen)
     seen3[T] = TT2
+
+    generic_T = Base.unwrap_unionall(T.name.wrapper)
+    param_map = typevar_dict(T.name.wrapper)
+
     if fieldcount(T) == fieldcount(TT2)
         legal = true
+
+        skipfield = false
         for f in 1:fieldcount(T)
+            def_ft = fieldtype(generic_T, f)
+            field_tvars = Base.IdSet{TypeVar}()
+            collect_tvars_in_type!(field_tvars, def_ft)
+            # field_tvars now contains all typevars the field type directly depends on.
+            for tvar in field_tvars
+                idx = get(param_map, tvar, nothing)
+                isnothing(idx) && continue
+                if changed_params[idx]
+                    skipfield = true
+                    break
+                end
+            end
+            skipfield && continue
+
             subT = fieldtype(T, f)
             subT2 = fieldtype(TT2, f)
             subTT = traced_type_inner(subT, seen3, mode, track_numbers, sharding, runtime)
@@ -782,27 +824,27 @@ const traced_type_cache = Dict{Tuple{TraceMode,Type,Any},Dict{Type,Type}}()
 #     T = T.parameters[1]
 #     mode = mode.parameters[1]::TraceMode
 #     track_numbers = track_numbers.parameters[1]
-# 
-# 
+#
+#
 #     min_world = Ref{UInt}(typemin(UInt))
 #     max_world = Ref{UInt}(typemax(UInt))
-# 
+#
 #     sig = Tuple{typeof(traced_type_inner), Type{T}, Dict{Type, Type}, TraceMode, Type{track_numbers}}
-# 
+#
 #     lookup_result = lookup_world(
 #         sig, world, nothing, min_world, max_world
 #     )
 #     if lookup_result === nothing
 #         stub = Core.GeneratedFunctionStub(identity, Core.svec(:traced_type, :T, :mode, :track_numbers), Core.svec())
-#         return stub(world, source, method_error) 
+#         return stub(world, source, method_error)
 #     end
 #     match = lookup_result::Core.MethodMatch
-# 
+#
 #     mi = ccall(:jl_specializations_get_linfo, Ref{Core.MethodInstance},
 #                (Any, Any, Any), match.method, match.spec_types, match.sparams)::Core.MethodInstance
-#     
+#
 #     ci = Core.Compiler.retrieve_code_info(mi, world)::Core.Compiler.CodeInfo
-# 
+#
 #     cache = nothing
 #     cache_key = (mode, track_numbers)
 #     if haskey(traced_type_cache, cache_key)
@@ -811,8 +853,8 @@ const traced_type_cache = Dict{Tuple{TraceMode,Type,Any},Dict{Type,Type}}()
 #         cache = Dict{Type, Type}()
 #         traced_type_cache[cache_key] = cache
 #     end
-# 
-# 
+#
+#
 #     # prepare a new code info
 #     new_ci = copy(ci)
 #     empty!(new_ci.code)
@@ -830,21 +872,21 @@ const traced_type_cache = Dict{Tuple{TraceMode,Type,Any},Dict{Type,Type}}()
 #     gensig = Tuple{typeof(traced_type_inner), Type, Dict{Type, Type}, TraceMode, Type{track_numbers}}
 #     push!(edges, ccall(:jl_method_table_for, Any, (Any,), gensig))
 #     push!(edges, gensig)
-# 
+#
 #     new_ci.edges = edges
-#     
+#
 #     # XXX: setting this edge does not give us proper method invalidation, see
 #     #      JuliaLang/julia#34962 which demonstrates we also need to "call" the kernel.
 #     #      invoking `code_llvm` also does the necessary codegen, as does calling the
 #     #      underlying C methods -- which GPUCompiler does, so everything Just Works.
-# 
+#
 #     # prepare the slots
 #     new_ci.slotnames = Symbol[Symbol("#self#"), :T, :mode, :track_numbers]
 #     new_ci.slotflags = UInt8[0x00 for i = 1:4]
-# 
+#
 #     # return the codegen world age
 #     res1 = call_with_reactant(traced_type_inner, T, cache, mode, track_numbers)
-# 
+#
 #     res0 = Base.invoke_in_world(world, traced_type_inner, T, cache, mode, track_numbers)
 #     res = Base.invokelatest(traced_type_inner, T, cache, mode, track_numbers)
 #     push!(new_ci.code, Core.Compiler.ReturnNode(res))
@@ -854,19 +896,108 @@ const traced_type_cache = Dict{Tuple{TraceMode,Type,Any},Dict{Type,Type}}()
 #       push!(new_ci.codelocs, 1)   # see note below
 #     end
 #     new_ci.ssavaluetypes += 1
-# 
+#
 #     # NOTE: we keep the first entry of the original linetable, and use it for location info
 #     #       on the call to check_cache. we can't not have a codeloc (using 0 causes
 #     #       corruption of the back trace), and reusing the target function's info
 #     #       has as advantage that we see the name of the kernel in the backtraces.
-# 
+#
 #     return new_ci
 # end
-# 
+#
 # @eval Base.@assume_effects :removable :foldable :nothrow @inline function traced_type_old(T::Type, mode::Val, track_numbers::Type)
 #     $(Expr(:meta, :generated_only))
 #     $(Expr(:meta, :generated, traced_type_generator))
 # end
+
+"""
+This function tries to apply the param types to the wrapper type.
+When there's a constraint conflict, it tries to resolve it by promoting the conflicting types. The new param type is then propagated in any param type that depends on it.
+Apart from the applied type, it also returns a boolean array indicating which of the param types were changed.
+
+For example:
+```jl
+using Reactant
+struct Foo{T, A<:AbstractArray{T}}
+    a::A
+end
+Reactant.apply_type_with_promotion(Foo, (Int, TracedRArray{Int, 1}))
+```
+returns
+```jl
+(Foo{Reactant.TracedRNumber{Int64}, Reactant.TracedRArray{Int64, 1}}, Bool[1, 0])
+```
+
+The first type parameter has been promoted to satisfy to be in agreement with the second parameter.
+"""
+function apply_type_with_promotion(wrapper, params, relevant_typevars=typevar_dict(wrapper))
+    unwrapped = Base.unwrap_unionall(wrapper) # remove all the typevars
+    original_params = copy(params)
+    params = [params...]
+
+    changed = true
+    iter = 0
+    while changed && iter < 100
+        changed = false
+        for (i, param) in enumerate(params)
+            # Add back the typevars to only one of the parameters:
+            rewrapped = Base.rewrap_unionall(unwrapped.parameters[i], wrapper)
+
+            sz = @ccall jl_subtype_env_size(rewrapped::Any)::Cint
+            arr = Array{Any}(undef, sz)
+
+            # Verify that the currently selected parameter subtypes the param in the wrapper type.
+            # In the process, `arr` is filled with with the required types for each parameter used by the current parameter:
+            is_subtype =
+                (@ccall jl_subtype_env(
+                    params[i]::Any, rewrapped::Any, arr::Ptr{Any}, sz::Cint
+                )::Cint) == 1
+            !is_subtype && error(
+                "Failed to find a valid type for typevar $i ($(params[i]) <: $(rewrapped) == false)",
+            )
+
+            # Check whether the required types are supertypes of all the parameter types we currently have:
+            current_unionall = rewrapped
+            for value in arr
+                # Peel open the unionall to figure out which typevar each `value` corresponds to:
+                typevar = current_unionall.var
+                current_unionall = current_unionall.body
+
+                # `param` might have other typevars that don't occur in `wrapper`,
+                # here we first check if the typevar is actually relevant:
+                if haskey(relevant_typevars, typevar)
+                    param_i = relevant_typevars[typevar]
+                    (!(value isa Type) || value <: params[param_i]) && continue
+
+                    # Found a conflict! Figure out a new param type by promoting:
+                    promoted = promote_type(value, params[param_i])
+                    params[param_i] = promoted
+
+                    if value != promoted
+                        # This happens when `value` lost the promotion battle.
+                        # At this point, we need to update the problematic parameter in`value`.
+                        d = typevar_dict(rewrapped)
+                        v = [param.parameters...]
+                        v[d[typevar]] = promoted
+                        params[i], _changed_params = apply_type_with_promotion(rewrapped, v)
+                    end
+                    changed = true
+                end
+            end
+        end
+        iter += 1
+    end
+    changed_params = original_params .!= params
+    return Core.apply_type(wrapper, params...), changed_params
+end
+
+function typevar_dict(t)
+    d = Dict()
+    for (i, name) in enumerate(Base.unwrap_unionall(t).parameters)
+        d[name] = i
+    end
+    return d
+end
 
 Base.@assume_effects :total @inline function traced_type(
     T::Type, ::Val{mode}, track_numbers::Type, sharding, runtime
@@ -1123,6 +1254,50 @@ Base.@nospecializeinfer function make_tracer_unknown(
                     xi2 = Core.Typeof(xi2)((newpath,), xi2.mlir_data)
                     seen[xi2] = xi2
                     changed = true
+                elseif !ismutabletype(FT) &&
+                    !ismutabletype(Core.Typeof(xi2)) &&
+                    fieldcount(FT) == fieldcount(Core.Typeof(xi2))
+                    # Attempt to reconcile struct mismatch (e.g. Foo{Float64} -> Foo{TracedRNumber})
+                    # arising from parent type constraints overriding local inference.
+                    local flds_sub = Vector{Any}(undef, fieldcount(FT))
+                    local success = true
+                    for j in 1:fieldcount(FT)
+                        val_j = getfield(xi2, j)
+                        ft_j = fieldtype(FT, j)
+                        if val_j isa ft_j
+                            flds_sub[j] = val_j
+                        elseif is_traced_number(ft_j) && val_j isa unwrapped_eltype(ft_j)
+                            val_wrapped = ft_j(val_j)
+                            # Correct the path for the wrapped scalar
+                            sub_path = append_path(newpath, j)
+                            val_wrapped = Core.Typeof(val_wrapped)(
+                                (sub_path,), val_wrapped.mlir_data
+                            )
+                            seen[val_wrapped] = val_wrapped
+                            flds_sub[j] = val_wrapped
+                        else
+                            success = false
+                            break
+                        end
+                    end
+
+                    if success
+                        xi2 = ccall(
+                            :jl_new_structv,
+                            Any,
+                            (Any, Ptr{Any}, UInt32),
+                            FT,
+                            flds_sub,
+                            fieldcount(FT),
+                        )
+                        changed = true
+                    else
+                        throw(
+                            AssertionError(
+                                "Could not recursively make tracer of object of type $RT into $TT at field $i (named $(fieldname(TT, i))), need object of type $(fieldtype(TT, i)) found object of type $(Core.Typeof(xi2)) ",
+                            ),
+                        )
+                    end
                 else
                     throw(
                         AssertionError(

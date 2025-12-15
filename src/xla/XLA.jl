@@ -162,6 +162,7 @@ function __init__()
 
         @ccall MLIR.API.mlir_c.RegisterEnzymeXLACPUHandler()::Cvoid
         @ccall MLIR.API.mlir_c.RegisterEnzymeXLAGPUHandler()::Cvoid
+        @ccall MLIR.API.mlir_c.registerReactantXLAFFI()::Cvoid
 
         @static if !Sys.isapple()
             lljit = LLVM.JuliaOJIT()
@@ -223,6 +224,41 @@ for runtime in (:PJRT, :IFRT)
                         )
                         state.clients["tpu"] = tpu
                         state.default_client = tpu
+                    catch e
+                        println(stdout, e)
+                    end
+                elseif Accelerators.TT.has_tt()
+                    @debug "TT accelerator detected, setting it up"
+                    try
+                        if was_initialized && haskey(state.clients, "tt")
+                            free_client(state.clients["tt"])
+                            $(runtime).tt_client_count[] -= 1
+                        end
+                        # The env var `TT_METAL_RUNTIME_ROOT` must be set before creating the client.
+                        tt_metal_runtime_root = get(ENV, "TT_METAL_RUNTIME_ROOT", nothing)
+                        if isnothing(tt_metal_runtime_root)
+                            tt_metal_path_in_wheel = joinpath(
+                                dirname(Accelerators.TT.get_tt_pjrt_plugin_path()),
+                                "tt-metal",
+                            )
+                            if ispath(tt_metal_path_in_wheel)
+                                @debug "Setting environment variable 'TT_METAL_RUNTIME_ROOT' to '$(tt_metal_path_in_wheel)'"
+                                ENV["TT_METAL_RUNTIME_ROOT"] = tt_metal_path_in_wheel
+                            else
+                                error(
+                                    "`TT_METAL_RUNTIME_ROOT` environment variable not set and we could not automatically determine it",
+                                )
+                            end
+                        else
+                            @debug "Environment variable 'TT_METAL_RUNTIME_ROOT' already set to to '$(tt_metal_runtime_root)'"
+                        end
+
+                        tt = $(runtime).TTClient(;
+                            tt_pjrt_plugin_path=Accelerators.TT.get_tt_pjrt_plugin_path(),
+                            common_kwargs...,
+                        )
+                        state.clients["tt"] = tt
+                        state.default_client = tt
                     catch e
                         println(stdout, e)
                     end

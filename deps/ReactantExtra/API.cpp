@@ -985,8 +985,29 @@ REACTANT_ABI void *UnsafeBufferPointer(PjRtBuffer *buffer) {
   return (void *)unsafe;
 }
 
+REACTANT_ABI PjRtBuffer *ArrayFromHostBuffer(PjRtClient *client, void *data,
+                                             uint64_t ptype, size_t dim,
+                                             const int64_t *cshape,
+                                             PjRtDevice *device) {
+  auto primtype = (xla::PrimitiveType)ptype;
+  absl::Span<const int64_t> shape(cshape, dim);
+  PjRtClient::HostBufferSemantics semantics =
+      PjRtClient::HostBufferSemantics::kImmutableOnlyDuringCall;
+  // xla::Layout layout(col_major(dim));
+  // auto buffer = xla::MyValueOrThrow(client->BufferFromHostBuffer(data,
+  // primtype, shape, /*byte_strides*/{},  semantics, /*ondone*/{}, device,
+  // &layout));
+  const xla::Layout *layout = nullptr;
+  auto buffer = MyValueOrThrow(client->BufferFromHostBuffer(
+      data, primtype, shape, /*byte_strides*/ {}, semantics, /*ondone*/ {},
+      *device->default_memory_space(), layout));
+  auto bres = buffer.release();
+  return bres;
+}
+
 REACTANT_ABI void CopyToBuffer(PjRtClient *client, PjRtBuffer *buffer,
-                               void *data, size_t offset, size_t size) {
+                               void *data, size_t offset, size_t size,
+                               PjRtBuffer **bufferP) {
   if (buffer->IsOnCpu()) {
     auto unsafe =
         (char *)MyValueOrThrow(buffer->client()->UnsafeBufferPointer(buffer));
@@ -995,6 +1016,18 @@ REACTANT_ABI void CopyToBuffer(PjRtClient *client, PjRtBuffer *buffer,
     // data, size);
     return;
   }
+
+  auto pid = client->platform_id();
+  if (pid == xla::TpuId()) {
+    auto dims = buffer->on_device_shape().dimensions();
+    // TODO: note this assume that we want to copy the entire buffer size.
+    auto buf2 = ArrayFromHostBuffer(client, data, buffer->element_type(),
+                                    dims.size(), dims.data(), buffer->device());
+    *bufferP = buf2;
+    PjRtBufferFree((PjRtBuffer *)buffer);
+    return;
+  }
+
   auto raw_buffer =
       MyValueOrThrow(PjRtRawBuffer::CreateRawAliasOfBuffer(buffer));
   auto future = raw_buffer->CopyRawHostToDevice(data, offset, size);
@@ -1005,7 +1038,6 @@ REACTANT_ABI void CopyToBuffer(PjRtClient *client, PjRtBuffer *buffer,
     return;
   }
 
-  auto pid = client->platform_id();
   if (pid == xla::CudaId()) {
     auto stream_client = (xla::PjRtStreamExecutorClient*)lrt->client;
 
@@ -1031,8 +1063,30 @@ REACTANT_ABI void CopyToBuffer(PjRtClient *client, PjRtBuffer *buffer,
 #endif
 }
 
+REACTANT_ABI void BufferToHost(PjRtBuffer *buffer, void *data) {
+  Shape shape(MyValueOrThrow(buffer->HostShape()));
+  /// Grumpily the cpu copy code does not respect layout and does a raw copy
+  /// For now, we assume a non-julia row major ordering
+  /// If in the future it supports col_major we can swap to that.
+  *shape.mutable_layout() = xla::Layout(row_major(shape.dimensions_size()));
+  MutableBorrowingLiteral literal((const char *)data, shape);
+  auto status = buffer->ToLiteralSync(&literal);
+  if (!status.ok()) {
+    printf("error copying to host: %s\n", status.ToString().c_str());
+  }
+}
+
 REACTANT_ABI void CopyFromBuffer(PjRtClient *client, PjRtBuffer *buffer,
-                                 void *data, size_t offset, size_t size) {
+                                 void *data, size_t offset, size_t size,
+                                 PjRtBuffer **bufferP) {
+
+  auto pid = client->platform_id();
+  if (pid == xla::TpuId()) {
+    // TODO: note this assume that we want to copy the entire buffer size.
+    BufferToHost(buffer, data);
+    return;
+  }
+
   auto future = buffer->CopyRawToHost(data, offset, size);
   future.Await();
 #if 0
@@ -1080,26 +1134,6 @@ REACTANT_ABI PjRtBuffer *UninitPJRTBuffer(PjRtClient *client,
   return xbuffer.release();
 }
 
-REACTANT_ABI PjRtBuffer *ArrayFromHostBuffer(PjRtClient *client, void *data,
-                                             uint64_t ptype, size_t dim,
-                                             int64_t *cshape,
-                                             PjRtDevice *device) {
-  auto primtype = (xla::PrimitiveType)ptype;
-  absl::Span<const int64_t> shape(cshape, dim);
-  PjRtClient::HostBufferSemantics semantics =
-      PjRtClient::HostBufferSemantics::kImmutableOnlyDuringCall;
-  // xla::Layout layout(col_major(dim));
-  // auto buffer = xla::MyValueOrThrow(client->BufferFromHostBuffer(data,
-  // primtype, shape, /*byte_strides*/{},  semantics, /*ondone*/{}, device,
-  // &layout));
-  const xla::Layout *layout = nullptr;
-  auto buffer = MyValueOrThrow(client->BufferFromHostBuffer(
-      data, primtype, shape, /*byte_strides*/ {}, semantics, /*ondone*/ {},
-      *device->default_memory_space(), layout));
-  auto bres = buffer.release();
-  return bres;
-}
-
 REACTANT_ABI uint8_t BufferOnCPU(PjRtBuffer *buffer) {
   return buffer->IsOnCpu();
 }
@@ -1109,19 +1143,6 @@ REACTANT_ABI PjRtBuffer *CopyBufferToDevice(PjRtBuffer *buffer,
   auto res = MyValueOrThrow(
       buffer->CopyToMemorySpace(*dst_device->default_memory_space()));
   return res.release();
-}
-
-REACTANT_ABI void BufferToHost(PjRtBuffer *buffer, void *data) {
-  Shape shape(MyValueOrThrow(buffer->HostShape()));
-  /// Grumpily the cpu copy code does not respect layout and does a raw copy
-  /// For now, we assume a non-julia row major ordering
-  /// If in the future it supports col_major we can swap to that.
-  *shape.mutable_layout() = xla::Layout(row_major(shape.dimensions_size()));
-  MutableBorrowingLiteral literal((const char *)data, shape);
-  auto status = buffer->ToLiteralSync(&literal);
-  if (!status.ok()) {
-    printf("error copying to host: %s\n", status.ToString().c_str());
-  }
 }
 
 REACTANT_ABI void FreeClient(PjRtClient *client) { delete client; }
@@ -1385,7 +1406,6 @@ REACTANT_ABI void XLAExecuteSharded(xla::PjRtLoadedExecutable *exec,
       options.non_donatable_input_indices.insert(static_cast<int>(i));
     }
   }
-  options.untuple_result = true;
 
   // Optional future to hold asynchronous execution results.
   std::optional<xla::Future<>> returned_future;
@@ -1464,7 +1484,6 @@ REACTANT_ABI void XLAExecute(xla::PjRtLoadedExecutable *exec, int op_args_len,
     if (!is_arg_donatable[i])
       options.non_donatable_input_indices.insert((int)i);
   }
-  options.untuple_result = true;
 
   std::optional<std::vector<FutureType>> returned_futures =
       std::vector<FutureType>();
@@ -3051,7 +3070,7 @@ struct LinkableRuntime {
       executables;
 
   // Set of allocated pointers to size
-  std::set<void *> allocations;
+  std::set<void *, std::greater<void *>> allocations;
 
   LinkableRuntime(const std::string &backend) : registry() {
     InitializeRegistry(wrap(&registry));
@@ -3147,14 +3166,14 @@ REACTANT_ABI void reactantXLAMemcpy(LinkableRuntime **__restrict__ lrtP,
     break;
   case 1: // cudaMemcpyHostToDevice
   {
-    auto &&[dstB, dstO, _] = bufferAndOffset(lrt, dst);
-    CopyToBuffer(lrt->client, dstB, src, dstO, size);
+    auto &&[dstB, dstO, start] = bufferAndOffset(lrt, dst);
+    CopyToBuffer(lrt->client, dstB, src, dstO, size, start);
     break;
   }
   case 2: // cudaMemcpyDeviceToHost
   {
-    auto &&[srcB, srcO, _] = bufferAndOffset(lrt, src);
-    CopyFromBuffer(lrt->client, srcB, dst, srcO, size);
+    auto &&[srcB, srcO, start] = bufferAndOffset(lrt, src);
+    CopyFromBuffer(lrt->client, srcB, dst, srcO, size, start);
     break;
   }
   case 3: // cudaMemcpyDeviceToDevice
@@ -3199,7 +3218,8 @@ REACTANT_ABI void reactantXLAExec(LinkableRuntime **__restrict__ lrtP,
   for (int64_t i = 0; i < argcnt; i++) {
     auto &&[argB, argO, argP] = bufferAndOffset(lrt, args[i]);
     if (argO != 0) {
-      llvm::errs() << "only zero-offset execution supported\n";
+      llvm::errs() << "only zero-offset execution supported, argument " << i
+                   << " had byte offset of " << argO << "\n";
       exit(1);
     }
     baseArrays[i] = argB;
@@ -3420,14 +3440,12 @@ public:
   GPUPerformanceModel(mlir::MLIRContext *mlir_context,
                       stream_executor::DeviceDescription *device_description)
       : mlir_context_(std::move(mlir_context)),
-        symbolic_expr_context_(mlir_context_),
         device_description_(*device_description),
         hlo_cost_analysis_options_{.count_multiple_input_accesses = true},
         fusion_analysis_cache_(device_description_),
         gpu_hlo_cost_analysis_(hlo_cost_analysis_options_, device_description_),
         gpu_performance_model_(device_description_, fusion_analysis_cache_,
-                               gpu_performance_model_cache_,
-                               &symbolic_expr_context_) {}
+                               gpu_performance_model_cache_, mlir_context_) {}
 
   void RunAnalysisOnHloModule(std::shared_ptr<xla::HloModule> hlo_module) {
     hlo_module->entry_computation()->Accept(&gpu_hlo_cost_analysis_);
@@ -3446,7 +3464,6 @@ public:
 
 private:
   mlir::MLIRContext *mlir_context_;
-  xla::SymbolicExprContext symbolic_expr_context_;
   xla::gpu::GpuHloCostAnalysis::Options hlo_cost_analysis_options_;
   stream_executor::DeviceDescription device_description_;
   xla::gpu::HloFusionAnalysisCache fusion_analysis_cache_;

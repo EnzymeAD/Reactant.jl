@@ -266,6 +266,10 @@ function Base.similar(::TracedRArray, ::Type{T}, dims::Dims{N}) where {T,N}
     return @opcall fill(zero(unwrapped_eltype(T)), dims)
 end
 
+function Base.similar(::Type{<:TracedRArray{T}}, dims::Dims{N}) where {T,N}
+    return @opcall fill(zero(T), dims)
+end
+
 function Base.show(io::IOty, X::AnyTracedRArray) where {IOty<:Union{IO,IOContext}}
     print(io, Core.Typeof(X), "(")
     parent(X) !== X && Base.show(io, parent(X))

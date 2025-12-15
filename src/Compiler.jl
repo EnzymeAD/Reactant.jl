@@ -703,6 +703,8 @@ function optimization_passes(
     recognize_comms::Bool=true,
     lower_comms::Bool=true,
     backend::String="gpu",
+    is_sharded::Bool=false,
+    raise_shlo_to_blas_lapack::Bool=true,
 )
     (; max_constant_threshold) = compile_options
 
@@ -909,7 +911,23 @@ function optimization_passes(
         "transpose_symmetric_simplify",
         "divide_negated_operands_simplify",
         "multiply_negated_operands_simplify",
+        "transpose_syrk_to_syrk",
+        "fuse_mul_into_syrk",
+        "fuse_add_into_syrk",
+        "factor_scalars_in_dot_general",
+        "reduce_mul_to_dot_general",
+        "dot_general_broadcast_in_dim",
+        "dot_general_broadcast_in_dim_sort_dims",
+        "dus_dynamic_slice_simplify",
+        "while_dus_ds_simplify",
     ]
+
+    if !is_sharded
+        # these passes don't have optimized sharding implementations
+        if raise_shlo_to_blas_lapack
+            append!(transform_passes_list, ["dot_general_to_syrk"])
+        end
+    end
 
     if !compile_options.disable_auto_batching_passes
         append!(
@@ -1398,7 +1416,7 @@ function __get_compile_options_and_kwargs(;
     )
 end
 
-function compile_mlir(f, args; client=nothing, kwargs...)
+function compile_mlir(f, args; client=nothing, drop_unsupported_attributes=false, kwargs...)
     client = client !== nothing ? client : XLA.default_backend()
     backend = XLA.platform_name(client)
 
@@ -1427,6 +1445,11 @@ function compile_mlir(f, args; client=nothing, kwargs...)
         __add_mhlo_attributes_and_name!(
             mod, f; mlir_fn_res.num_partitions, mlir_fn_res.num_replicas
         )
+
+        if drop_unsupported_attributes
+            # Drop some of our attributes
+            run_pass_pipeline!(mod, "drop-unsupported-attributes", "drop_enzymexla_attributes")
+        end
 
         return mod, mlir_fn_res
     end
@@ -1693,10 +1716,10 @@ function compile_mlir!(
     end
 
     opt_passes = optimization_passes(
-        compile_options; sroa=true, recognize_comms, lower_comms, backend
+        compile_options; sroa=true, recognize_comms, lower_comms, backend, is_sharded
     )
     opt_passes2 = optimization_passes(
-        compile_options; sroa=false, recognize_comms, lower_comms, backend
+        compile_options; sroa=false, recognize_comms, lower_comms, backend, is_sharded
     )
 
     raise_passes = if raise isa String
@@ -1718,6 +1741,7 @@ function compile_mlir!(
                 recognize_comms,
                 lower_comms,
                 backend,
+                is_sharded,
             )
             result = result * "," * opt_passes3
         end
@@ -1728,6 +1752,8 @@ function compile_mlir!(
 
     blas_int_width = sizeof(BlasInt) * 8
     lower_enzymexla_linalg_pass = "lower-enzymexla-linalg{backend=$backend \
+                                   blas_int_width=$blas_int_width},\
+                                   lower-enzymexla-blas{backend=$backend \
                                    blas_int_width=$blas_int_width},\
                                    lower-enzymexla-lapack{backend=$backend \
                                    blas_int_width=$blas_int_width}"
@@ -2012,6 +2038,8 @@ function compile_mlir!(
                 recognize_comms,
                 lower_comms,
                 backend,
+                is_sharded,
+                raise_shlo_to_blas_lapack=false,
             ),
             "post_op_transpose_reshape",
         )
@@ -2154,7 +2182,15 @@ function compile_mlir!(
                 run_pass_pipeline!(
                     mod,
                     join(
-                        [opt_passes, "canonicalize", "cse", "canonicalize", opt_passes2],
+                        [
+                            opt_passes,
+                            "canonicalize",
+                            "cse",
+                            "canonicalize",
+                            opt_passes2,
+                            lower_enzymexla_linalg_pass,
+                            jit,
+                        ],
                         ",",
                     ),
                     "mid_pad_opts",
@@ -2563,6 +2599,20 @@ end
 
 Compile the function `f` with arguments `args` and return the compiled function.
 
+## Note
+
+Note that `@compile foo(bar(x))` is equivalent to
+```julia
+y = bar(x)  # first compute the output of `bar(x)`, say `y`
+@compile foo(y) # then compile `foo` for `y`
+```
+That is, like `@jit`, `@compile` only applies to the outermost function call; it does *not* compile the composed function `foo(bar(x))` jointly.
+Hence, if you want to compile the composed function `foo(bar(x))` jointly, you need to introduce an intermediate function, i.e.,
+```julia
+baz(x) = foo(bar(x))
+@compile baz(x)
+```
+
 ## Options
 
 $(SYNC_DOCS)
@@ -2585,6 +2635,20 @@ end
 
 Run @compile f(args..) then immediately execute it. Most users should use [`@compile`](@ref)
 instead to cache the compiled function and execute it later.
+
+## Note
+
+Note that `@jit foo(bar(x))` is equivalent to
+```julia
+y = bar(x)  # first compute the output of `bar(x)`, say `y`
+@jit foo(y) # then compile `foo` for `y` and execute it
+```
+That is, like `@compile`, `@jit` only applies to the outermost function call; it does *not* compile the composed function `foo(bar(x))` jointly.
+Hence, if you want to compile the composed function `foo(bar(x))` jointly, you need to introduce an intermediate function, i.e.,
+```julia
+baz(x) = foo(bar(x))
+@jit baz(x)
+```
 
 ## Options
 
@@ -3545,6 +3609,9 @@ function compile_xla(
             mod, f; mlir_fn_res.num_partitions, mlir_fn_res.num_replicas
         )
 
+        # Drop some of our attributes
+        run_pass_pipeline!(mod, "drop-unsupported-attributes", "drop_enzymexla_attributes")
+
         # compile MLIR module to XLA executable
         global_device_ids = collect(Int64, mlir_fn_res.global_device_ids)
         mlir_fn_res.is_sharded && (device = nothing)
@@ -3557,9 +3624,6 @@ function compile_xla(
         else
             module_string = ""
         end
-
-        # Drop some of our attributes
-        run_pass_pipeline!(mod, "drop-unsupported-attributes", "drop_enzymexla_attributes")
 
         if before_xla_optimizations
             exec = nothing

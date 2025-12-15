@@ -173,9 +173,13 @@ end
 """
 `broadcast_in_sublanes`
 
-For each sublane `i`, broadcasts the value in lane `lane + i` along the entire
-sublane. If `lane + i` is not in [0, lane_count), then the value in sublane `i`
-is not defined (can be anything).
+For each sublane `i`, broadcasts the value in lane `lane + i` along the
+entire sublane. For packed type, imagine the data is compressed unpacked
+along sublane dimension, and the sublane count is multiplied by the packing
+factor.
+For example, for i16 with sublane count 8, `i` above is in [0, 8 * 2).
+If `lane + i` is not in [0, lane_count), then the value in sublane `i` is
+not defined (can be anything).
 """
 function broadcast_in_sublanes(source::Value; output::IR.Type, lane, location=Location())
     op_ty_results = IR.Type[output,]
@@ -1401,6 +1405,44 @@ function shuffled_store(
 
     return create_operation(
         "tpu.shuffled_store",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+"""
+`sort`
+
+tpu.sort performs a stable sort of key/value pairs in ascending or
+descending order based on keys. Masked-out keys and values are placed at the
+end of the output vectors. An output mask indicates which outputs
+correspond to the valid inputs.
+"""
+function sort(
+    keys::Value,
+    values::Value,
+    mask=nothing::Union{Nothing,Value};
+    output_mask::IR.Type,
+    sorted_keys::IR.Type,
+    sorted_values::IR.Type,
+    descending=nothing,
+    location=Location(),
+)
+    op_ty_results = IR.Type[output_mask, sorted_keys, sorted_values]
+    operands = Value[keys, values]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+    !isnothing(mask) && push!(operands, mask)
+    !isnothing(descending) && push!(attributes, namedattribute("descending", descending))
+
+    return create_operation(
+        "tpu.sort",
         location;
         operands,
         owned_regions,

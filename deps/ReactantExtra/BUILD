@@ -1059,6 +1059,7 @@ cc_library(
             "-Wl,-exported_symbol,_CreateGPUPerformanceModel",
             "-Wl,-exported_symbol,_RunAnalysisOnHloModule",
             "-Wl,-exported_symbol,_EstimateRunTimeForInstruction",
+            "-Wl,-exported_symbol,_registerReactantXLAFFI",
         ],
     }),
     linkstatic = True,

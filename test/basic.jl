@@ -408,12 +408,21 @@ sum_xxᵀ(x) = sum(x .* x')
     end
 end
 
+function similar_from_type(x)
+    sim_x = similar(typeof(x), (4, 5))
+    return sim_x
+end
+
 @testset "similar" begin
     x = zeros(2, 3)
     y = Reactant.to_rarray(x)
     f = @compile similar(y)
     @test size(f(y)) == size(x)
     @test eltype(f(y)) == eltype(x)
+
+    f_from_type = @compile similar_from_type(y)
+    @test size(f_from_type(y)) == (4, 5)
+    @test eltype(f_from_type(y)) == eltype(x)
 end
 
 @testset "Scalars" begin
@@ -768,6 +777,14 @@ end
     @testset for fn in (sind, cosd, tand, cscd, secd, cotd, asind, acosd, atand, acotd)
         @test @jit(fn.(xrad_ra)) ≈ fn.(xrad)
         @test @jit(fn.(xrad_ra)) isa ConcreteRArray{Float32,2}
+    end
+
+    yrad = Reactant.TestUtils.construct_test_array(Float32, 4, 16)[:, 3:9]
+    yrad_ra = Reactant.to_rarray(yrad)
+
+    @testset for fn in (atan, atand)
+        @test @jit(fn.(yrad_ra, xrad_ra)) ≈ fn.(yrad, xrad)
+        @test @jit(fn.(yrad_ra, xrad_ra)) isa ConcreteRArray{Float32,2}
     end
 
     x = 0.235f0

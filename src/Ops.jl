@@ -3564,12 +3564,16 @@ end
                                               $(size(input, dimension)) (got $(lhs))"
     @assert 0 ≤ rhs ≤ size(input, dimension) "rhs must be between 0 and \
                                               $(size(input, dimension)) (got $(rhs))"
+
+    sz = collect(Int64, size(input))
+    sz[dimension] = sz[dimension] + lhs + rhs
+
     return TracedRArray{T,N}(
         (),
         MLIR.IR.result(
             enzymexla.wrap(input.mlir_data; lhs, rhs, dimension=dimension - 1, location), 1
         ),
-        size(input),
+        sz,
     )
 end
 

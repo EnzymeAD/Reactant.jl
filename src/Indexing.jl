@@ -83,7 +83,8 @@ end
 function Base.getindex(
     a::AnyTracedRArray{T,N}, index::Vararg{Union{Int,TracedRNumber{Int}},N}
 ) where {T,N}
-    return getindex(ancestor(a), TracedUtils.get_ancestor_indices(a, index...)...)
+    ancestor, idxs = TracedUtils.get_ancestor_and_indices(a, index...)
+    return getindex(ancestor, idxs...)
 end
 
 function Base.getindex(
@@ -93,15 +94,18 @@ function Base.getindex(
 end
 
 function Base.getindex(a::AnyTracedRArray{T,N}, linear_indices) where {T,N}
-    return getindex(ancestor(a), TracedUtils.get_ancestor_indices(a, linear_indices)...)
+    ancestor, idxs = TracedUtils.get_ancestor_and_indices(a, linear_indices)
+    return getindex(ancestor, idxs...)
 end
 
 function Base.getindex(a::AnyTracedRArray{T,1}, indices) where {T}
-    return getindex(ancestor(a), TracedUtils.get_ancestor_indices(a, indices)...)
+    ancestor, idxs = TracedUtils.get_ancestor_and_indices(a, indices)
+    return getindex(ancestor, idxs...)
 end
 
 function Base.getindex(a::AnyTracedRArray{T,N}, indices::Vararg{Any,N}) where {T,N}
-    return getindex(ancestor(a), TracedUtils.get_ancestor_indices(a, indices...)...)
+    ancestor, idxs = TracedUtils.get_ancestor_and_indices(a, indices...)
+    return getindex(ancestor, idxs...)
 end
 
 ### Specialize certain dispatches for better codegen

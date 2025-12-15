@@ -2208,6 +2208,15 @@ function mlirBlockArgumentSetType(value, type)
 end
 
 """
+    mlirBlockArgumentSetLocation(value, loc)
+
+Sets the location of the block argument to the given location.
+"""
+function mlirBlockArgumentSetLocation(value, loc)
+    @ccall mlir_c.mlirBlockArgumentSetLocation(value::MlirValue, loc::MlirLocation)::Cvoid
+end
+
+"""
     mlirOpResultGetOwner(value)
 
 Returns an operation that produced this value as its result. Asserts if the value is not an op result.
@@ -6628,6 +6637,18 @@ function mlirLoadIRDLDialects(_module)
     @ccall mlir_c.mlirLoadIRDLDialects(_module::MlirModule)::MlirLogicalResult
 end
 
+function mlirIRDLVariadicityAttrGet(ctx, value)
+    @ccall mlir_c.mlirIRDLVariadicityAttrGet(
+        ctx::MlirContext, value::MlirStringRef
+    )::MlirAttribute
+end
+
+function mlirIRDLVariadicityArrayAttrGet(ctx, nValues, values)
+    @ccall mlir_c.mlirIRDLVariadicityArrayAttrGet(
+        ctx::MlirContext, nValues::Cptrdiff_t, values::Ptr{MlirAttribute}
+    )::MlirAttribute
+end
+
 function mlirGetDialectHandle__index__()
     @ccall mlir_c.mlirGetDialectHandle__index__()::MlirDialectHandle
 end
@@ -6643,6 +6664,10 @@ Creates an llvm.ptr type.
 """
 function mlirLLVMPointerTypeGet(ctx, addressSpace)
     @ccall mlir_c.mlirLLVMPointerTypeGet(ctx::MlirContext, addressSpace::Cuint)::MlirType
+end
+
+function mlirLLVMPointerTypeGetTypeID()
+    @ccall mlir_c.mlirLLVMPointerTypeGetTypeID()::MlirTypeID
 end
 
 """
@@ -6738,6 +6763,10 @@ Returns `true` if the type is an LLVM dialect struct type.
 """
 function mlirTypeIsALLVMStructType(type)
     @ccall mlir_c.mlirTypeIsALLVMStructType(type::MlirType)::Bool
+end
+
+function mlirLLVMStructTypeGetTypeID()
+    @ccall mlir_c.mlirLLVMStructTypeGetTypeID()::MlirTypeID
 end
 
 """
@@ -7486,6 +7515,12 @@ end
 function mlirLinalgInferContractionDimensions(op)
     @ccall mlir_c.mlirLinalgInferContractionDimensions(
         op::MlirOperation
+    )::MlirLinalgContractionDimensions
+end
+
+function mlirLinalgInferContractionDimensionsFromMaps(indexingMaps, numMaps)
+    @ccall mlir_c.mlirLinalgInferContractionDimensionsFromMaps(
+        indexingMaps::Ptr{MlirAffineMap}, numMaps::Csize_t
     )::MlirLinalgContractionDimensions
 end
 
@@ -8663,17 +8698,20 @@ struct MlirExecutionEngine
 end
 
 """
-    mlirExecutionEngineCreate(op, optLevel, numPaths, sharedLibPaths, enableObjectDump)
+    mlirExecutionEngineCreate(op, optLevel, numPaths, sharedLibPaths, enableObjectDump, enablePIC)
 
-Creates an ExecutionEngine for the provided ModuleOp. The ModuleOp is expected to be "translatable" to LLVM IR (only contains operations in dialects that implement the `LLVMTranslationDialectInterface`). The module ownership stays with the client and can be destroyed as soon as the call returns. `optLevel` is the optimization level to be used for transformation and code generation. LLVM passes at `optLevel` are run before code generation. The number and array of paths corresponding to shared libraries that will be loaded are specified via `numPaths` and `sharedLibPaths` respectively. TODO: figure out other options.
+Creates an ExecutionEngine for the provided ModuleOp. The ModuleOp is expected to be "translatable" to LLVM IR (only contains operations in dialects that implement the `LLVMTranslationDialectInterface`). The module ownership stays with the client and can be destroyed as soon as the call returns. `optLevel` is the optimization level to be used for transformation and code generation. LLVM passes at `optLevel` are run before code generation. The number and array of paths corresponding to shared libraries that will be loaded are specified via `numPaths` and `sharedLibPaths` respectively. The `enablePIC` arguments controls the relocation model, when true the generated code is emitted as "position independent", making it possible to save it and reload it as a shared object in another process. TODO: figure out other options.
 """
-function mlirExecutionEngineCreate(op, optLevel, numPaths, sharedLibPaths, enableObjectDump)
+function mlirExecutionEngineCreate(
+    op, optLevel, numPaths, sharedLibPaths, enableObjectDump, enablePIC
+)
     @ccall mlir_c.mlirExecutionEngineCreate(
         op::MlirModule,
         optLevel::Cint,
         numPaths::Cint,
         sharedLibPaths::Ptr{MlirStringRef},
         enableObjectDump::Bool,
+        enablePIC::Bool,
     )::MlirExecutionEngine
 end
 
@@ -11266,301 +11304,26 @@ function mlirGetDialectHandle__tpu__()
     @ccall mlir_c.mlirGetDialectHandle__tpu__()::MlirDialectHandle
 end
 
-function mlirTPUAttributeIsATiledLayoutAttr(attr)
-    @ccall mlir_c.mlirTPUAttributeIsATiledLayoutAttr(attr::MlirAttribute)::Bool
-end
-
-"""
-    mlirTPUTiledLayoutAttrGetTiles(attr)
-
-Encodes the tiles as an ArrayAttr of DenseI64ArrayAttrs.
-"""
-function mlirTPUTiledLayoutAttrGetTiles(attr)
-    @ccall mlir_c.mlirTPUTiledLayoutAttrGetTiles(attr::MlirAttribute)::MlirAttribute
-end
-
 function mlirTPUAnalyzePotentialCommunication(op, has_communication, has_custom_barrier)
     @ccall mlir_c.mlirTPUAnalyzePotentialCommunication(
         op::MlirOperation, has_communication::Ptr{Bool}, has_custom_barrier::Ptr{Bool}
     )::Cvoid
 end
 
-@cenum MlirTpuImplicitDim::UInt32 begin
-    MlirTpuImplicitDimNone = 0x0000000000000000
-    MlirTpuImplicitDimMinor = 0x0000000000000001
-    MlirTpuImplicitDimSecondMinor = 0x0000000000000002
-    MlirTpuImplicitDimMinorAndSecondMinor = 0x0000000000000003
-end
-
-@cenum MlirTpuDirection::UInt32 begin
-    MlirTpuDirectionSublanes = 0x0000000000000000
-    MlirTpuDirectionLanes = 0x0000000000000001
-    MlirTpuDirectionSubelements = 0x0000000000000002
-end
-
-struct MlirTpuVectorLayout
-    ptr::Ptr{Cvoid}
-end
-
-struct MlirTpuVregDataBounds
-    ptr::Ptr{Cvoid}
-end
-
-struct MlirTpuI64ArrayRef
-    ptr::Ptr{Int64}
-    size::Csize_t
-end
-
-struct MlirTpuValueArray
-    shape::MlirTpuI64ArrayRef
-    vals::Ptr{MlirValue}
-end
-
-struct MlirTpuLayoutOffsets
-    sublane::Int64
-    lane::Int64
-end
-
-struct MlirTpuI64TargetTuple
-    sublane::Int64
-    lane::Int64
-end
-
-struct MlirTpuMxuShape
-    contracting_size::Int64
-    non_contracting_size::Int64
-end
-
-struct MlirTpuBoolTargetTuple
-    sublane::Bool
-    lane::Bool
-end
-
-struct MlirTpuInsertionPoint
-    block::MlirBlock
-    ref_operation::MlirOperation
-end
-
-struct MlirTpuApplyVectorLayoutContext
-    hardware_generation::Cint
-    target_shape::MlirTpuI64TargetTuple
-    mxu_shape::MlirTpuMxuShape
-    max_sublanes_in_scratch::Int64
-    shape_invariant_numerics::Bool
-end
-
-function mlirTpuVectorLayoutCreate(bitwidth, offsets, tiling, implicit_dim)
-    @ccall mlir_c.mlirTpuVectorLayoutCreate(
-        bitwidth::Cint,
-        offsets::MlirTpuLayoutOffsets,
-        tiling::MlirTpuI64TargetTuple,
-        implicit_dim::MlirTpuImplicitDim,
-    )::MlirTpuVectorLayout
-end
-
-function mlirTpuVectorLayoutDestroy(arg1)
-    @ccall mlir_c.mlirTpuVectorLayoutDestroy(arg1::MlirTpuVectorLayout)::Cvoid
-end
-
-function mlirTpuVectorLayoutGetBitwidth(layout)
-    @ccall mlir_c.mlirTpuVectorLayoutGetBitwidth(layout::MlirTpuVectorLayout)::Cint
-end
-
-function mlirTpuVectorLayoutGetOffsets(layout)
-    @ccall mlir_c.mlirTpuVectorLayoutGetOffsets(
-        layout::MlirTpuVectorLayout
-    )::MlirTpuLayoutOffsets
-end
-
-function mlirTpuVectorLayoutGetTiling(layout)
-    @ccall mlir_c.mlirTpuVectorLayoutGetTiling(
-        layout::MlirTpuVectorLayout
-    )::MlirTpuI64TargetTuple
-end
-
-function mlirTpuVectorLayoutGetImplicitDim(layout)
-    @ccall mlir_c.mlirTpuVectorLayoutGetImplicitDim(
-        layout::MlirTpuVectorLayout
-    )::MlirTpuImplicitDim
-end
-
-function mlirTpuVectorLayoutGetPacking(layout)
-    @ccall mlir_c.mlirTpuVectorLayoutGetPacking(layout::MlirTpuVectorLayout)::Cint
-end
-
-function mlirTpuVectorLayoutGetLayoutRank(layout)
-    @ccall mlir_c.mlirTpuVectorLayoutGetLayoutRank(layout::MlirTpuVectorLayout)::Cint
-end
-
-function mlirTpuVectorLayoutEquals(lhs, rhs)
-    @ccall mlir_c.mlirTpuVectorLayoutEquals(
-        lhs::MlirTpuVectorLayout, rhs::MlirTpuVectorLayout
-    )::Bool
-end
-
-function mlirTpuVectorLayoutTilesPerVreg(layout, target_shape)
-    @ccall mlir_c.mlirTpuVectorLayoutTilesPerVreg(
-        layout::MlirTpuVectorLayout, target_shape::MlirTpuI64TargetTuple
-    )::Int64
-end
-
-function mlirTpuVectorLayoutSublanesPerTile(layout, target_shape)
-    @ccall mlir_c.mlirTpuVectorLayoutSublanesPerTile(
-        layout::MlirTpuVectorLayout, target_shape::MlirTpuI64TargetTuple
-    )::Int64
-end
-
-function mlirTpuVectorLayoutVregSlice(layout, target_shape)
-    @ccall mlir_c.mlirTpuVectorLayoutVregSlice(
-        layout::MlirTpuVectorLayout, target_shape::MlirTpuI64TargetTuple
-    )::MlirTpuI64TargetTuple
-end
-
-function mlirTpuVectorLayoutImplicitShape(layout, shape)
-    @ccall mlir_c.mlirTpuVectorLayoutImplicitShape(
-        layout::MlirTpuVectorLayout, shape::MlirTpuI64ArrayRef
-    )::MlirTpuI64ArrayRef
-end
-
-function mlirTpuVectorLayoutTileArrayShape(layout, shape, target_shape)
-    @ccall mlir_c.mlirTpuVectorLayoutTileArrayShape(
-        layout::MlirTpuVectorLayout,
-        shape::MlirTpuI64ArrayRef,
-        target_shape::MlirTpuI64TargetTuple,
-    )::MlirTpuI64ArrayRef
-end
-
-function mlirTpuVectorLayoutTileDataBounds(
-    layout, ctx, full_shape, idxs, size, target_shape, allow_replicated
-)
-    @ccall mlir_c.mlirTpuVectorLayoutTileDataBounds(
-        layout::MlirTpuVectorLayout,
-        ctx::MlirContext,
-        full_shape::Ptr{Int64},
-        idxs::Ptr{Int64},
-        size::Csize_t,
-        target_shape::MlirTpuI64TargetTuple,
-        allow_replicated::MlirTpuBoolTargetTuple,
-    )::MlirTpuVregDataBounds
-end
-
-function mlirTpuVectorLayoutHasNaturalTopology(layout, target_shape)
-    @ccall mlir_c.mlirTpuVectorLayoutHasNaturalTopology(
-        layout::MlirTpuVectorLayout, target_shape::MlirTpuI64TargetTuple
-    )::Bool
-end
-
-function mlirTpuVectorLayoutHasNativeTiling(layout, target_shape)
-    @ccall mlir_c.mlirTpuVectorLayoutHasNativeTiling(
-        layout::MlirTpuVectorLayout, target_shape::MlirTpuI64TargetTuple
-    )::Bool
-end
-
-function mlirTpuVectorLayoutGeneralizes(layout, other, shape, target_shape)
-    @ccall mlir_c.mlirTpuVectorLayoutGeneralizes(
-        layout::MlirTpuVectorLayout,
-        other::MlirTpuVectorLayout,
-        shape::MlirTpuI64ArrayRef,
-        target_shape::MlirTpuI64TargetTuple,
-    )::Bool
-end
-
-function mlirTpuVectorLayoutEquivalentTo(layout, other, shape, target_shape)
-    @ccall mlir_c.mlirTpuVectorLayoutEquivalentTo(
-        layout::MlirTpuVectorLayout,
-        other::MlirTpuVectorLayout,
-        shape::MlirTpuI64ArrayRef,
-        target_shape::MlirTpuI64TargetTuple,
-    )::Bool
-end
-
-function mlirTpuVectorLayoutPrint(layout, callback, user_data)
-    @ccall mlir_c.mlirTpuVectorLayoutPrint(
-        layout::MlirTpuVectorLayout, callback::MlirStringCallback, user_data::Ptr{Cvoid}
-    )::Cvoid
-end
-
-function mlirTpuVectorLayoutIsValid(layout, target_shape)
-    @ccall mlir_c.mlirTpuVectorLayoutIsValid(
-        layout::MlirTpuVectorLayout, target_shape::MlirTpuI64TargetTuple
-    )::Bool
-end
-
-function mlirTpuVregDataBoundsDestroy(data_bounds)
-    @ccall mlir_c.mlirTpuVregDataBoundsDestroy(data_bounds::MlirTpuVregDataBounds)::Cvoid
-end
-
-function mlirTpuVregDataBoundsMaskVariesAlong(data_bounds, direction, target_shape)
-    @ccall mlir_c.mlirTpuVregDataBoundsMaskVariesAlong(
-        data_bounds::MlirTpuVregDataBounds,
-        direction::MlirTpuDirection,
-        target_shape::MlirTpuI64TargetTuple,
-    )::Bool
-end
-
-function mlirTpuVregDataBoundsIsComplete(data_bounds, target_shape)
-    @ccall mlir_c.mlirTpuVregDataBoundsIsComplete(
-        data_bounds::MlirTpuVregDataBounds, target_shape::MlirTpuI64TargetTuple
-    )::Bool
-end
-
-function mlirTpuVregDataBoundsGetVectorMask(
-    data_bounds, insertion_point, location, generation, target_shape
-)
-    @ccall mlir_c.mlirTpuVregDataBoundsGetVectorMask(
-        data_bounds::MlirTpuVregDataBounds,
-        insertion_point::MlirTpuInsertionPoint,
-        location::MlirLocation,
-        generation::Cint,
-        target_shape::MlirTpuI64TargetTuple,
-    )::MlirValue
-end
-
-function mlirTpuVregDataBoundsGetSublaneMask(data_bounds, ctx, target_shape)
-    @ccall mlir_c.mlirTpuVregDataBoundsGetSublaneMask(
-        data_bounds::MlirTpuVregDataBounds,
-        ctx::MlirContext,
-        target_shape::MlirTpuI64TargetTuple,
-    )::MlirAttribute
-end
-
-function mlirTpuAssemble(insertion_point, vector_type, layout, vals, target_shape)
-    @ccall mlir_c.mlirTpuAssemble(
-        insertion_point::MlirTpuInsertionPoint,
-        vector_type::MlirType,
-        layout::MlirTpuVectorLayout,
-        vals::MlirTpuValueArray,
-        target_shape::MlirTpuI64TargetTuple,
-    )::MlirOperation
-end
-
-function mlirTpuDisassemble(insertion_point, layout, val, target_shape)
-    @ccall mlir_c.mlirTpuDisassemble(
-        insertion_point::MlirTpuInsertionPoint,
-        layout::MlirTpuVectorLayout,
-        val::MlirValue,
-        target_shape::MlirTpuI64TargetTuple,
-    )::MlirTpuValueArray
-end
-
-function mlirTpuApplyLayoutOp(ctx, op)
-    @ccall mlir_c.mlirTpuApplyLayoutOp(
-        ctx::MlirTpuApplyVectorLayoutContext, op::MlirOperation
-    )::MlirLogicalResult
-end
-
-function mlirTpuRelayout(insertion_point, val, src, dst, ctx)
-    @ccall mlir_c.mlirTpuRelayout(
-        insertion_point::MlirTpuInsertionPoint,
-        val::MlirValue,
-        src::MlirTpuVectorLayout,
-        dst::MlirTpuVectorLayout,
-        ctx::MlirTpuApplyVectorLayoutContext,
-    )::MlirValue
-end
-
 function mlirTpuRegisterMosaicSerdePass()
     @ccall mlir_c.mlirTpuRegisterMosaicSerdePass()::Cvoid
+end
+
+function mlirTpuFloat8EXMYTypeGetUnderlyingType(exmy_type)
+    @ccall mlir_c.mlirTpuFloat8EXMYTypeGetUnderlyingType(exmy_type::MlirType)::MlirType
+end
+
+function mlirTpuIsAFloat8EXMYType(type)
+    @ccall mlir_c.mlirTpuIsAFloat8EXMYType(type::MlirType)::Bool
+end
+
+function mlirTpuFloat8EXMYTypeGet(ctx, exmy_type)
+    @ccall mlir_c.mlirTpuFloat8EXMYTypeGet(ctx::MlirContext, exmy_type::MlirType)::MlirType
 end
 
 function mlirMosaicGpuIsATileTransformAttr(attr)
