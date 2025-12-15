@@ -114,7 +114,7 @@ if length(addressable_devices) ≥ 8
     end
 
     @testset "Wrap" begin
-        mesh = Sharding.Mesh(Reactant.devices(), (:x,))
+        mesh = Sharding.Mesh(Reactant.devices()[1:8], (:x,))
         sharding = Sharding.NamedSharding(mesh, (:x,))
 
         x = Reactant.to_rarray(rand(8192); sharding)
