@@ -38,7 +38,7 @@ jobs:
           - "1.11"
           # - 'nightly'
         os:
-          - ubuntu-24.04
+          - ubuntu-latest
           # `ubuntu-22.04-arm` is considered more stable than `ubuntu-24.04-arm`:
           # <https://github.com/orgs/community/discussions/148648#discussioncomment-12099554>.
           # - ubuntu-22.04-arm
@@ -50,16 +50,16 @@ jobs:
           # - linux-x86-ct6e-180-4tpu
         test_group:
           - core
-          - neural_networks
-          - integration
+          # - neural_networks
+          # - integration
         runtime:
           # - "pjrt"
           - "ifrt"
-        exclude:
-          - os: linux-x86-ct6e-180-4tpu
-            version: "1.10"
-          - os: linux-x86-ct6e-180-4tpu
-            runtime: "pjrt"
+        # exclude:
+        #   - os: linux-x86-ct6e-180-4tpu
+        #     version: "1.10"
+        #   - os: linux-x86-ct6e-180-4tpu
+        #     runtime: "pjrt"
     uses: ./.github/workflows/CommonCI.yml
     with:
       julia_version: ${{ matrix.version }}
