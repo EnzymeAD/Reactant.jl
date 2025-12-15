@@ -114,11 +114,11 @@ if length(addressable_devices) ≥ 8
     end
 
     @testset "Wrap" begin
-        mesh = Sharding.Mesh(Reactant.devices()[1:8], (:x,))
+        mesh = Sharding.Mesh(Reactant.devices(), (:x,))
         sharding = Sharding.NamedSharding(mesh, (:x,))
 
-        x = Reactant.to_rarray(rand(8192); sharding)
-        hlo = repr(@code_xla wrap(x))
+        x = Reactant.to_rarray(rand(192 * length(addressable_devices)); sharding)
+        @assert x isa ConcreteIFRTArray
 
         @test !contains(hlo, "all-to-all")
         @test !contains(hlo, "all-gather")
