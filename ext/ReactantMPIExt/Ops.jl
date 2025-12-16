@@ -476,7 +476,12 @@ end
    location=mlir_stacktrace("mpi.recv", @__FILE__, @__LINE__),
 )
     count = Reactant.Ops.constant(Int32(length(recvbuf)))
-    ret = enzymexla.recv(count.mlir_data, src.mlir_data, tag.mlir_data; buf=mlir_type(recvbuf), location)
+    ret = enzymexla.recv(recvbuf.mlir_data, 
+                         count.mlir_data, 
+                         src.mlir_data, 
+                         tag.mlir_data; 
+                         outbuf=mlir_type(recvbuf), 
+                         location)
     recvbuf.mlir_data = IR.result(ret)
     return recvbuf
 end
