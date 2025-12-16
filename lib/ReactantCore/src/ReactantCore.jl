@@ -147,6 +147,7 @@ macro trace(args...)
     track_numbers = true
     checkpointing = false
     mincut = false
+    tessera = false
 
     expr = first(args)
     while length(args) > 1
@@ -165,6 +166,9 @@ macro trace(args...)
                 mincut = val
             end
             args = args[2:end]
+        elseif args[1] === :tessera
+          tessera = true
+          args = args[2:end]
         else
             break
         end
@@ -191,9 +195,10 @@ macro trace(args...)
             end
         )
     )
-        return esc(trace_function_definition(__module__, expr))
+        return esc(trace_function_definition(__module__, expr; tessera))
     end
     #! format: on
+    @assert !tessera "tessera annotation is only allowed in front of function definitions"
 
     if Meta.isexpr(expr, :(=))
         if Meta.isexpr(expr.args[2], :if)
@@ -241,9 +246,11 @@ function get_argname(expr)
     return expr, expr
 end
 
-function trace_function_definition(mod, expr)
+function trace_function_definition(mod, expr; tessera=false)
     internal_fn = MacroTools.splitdef(expr)
     orig_fname = internal_fn[:name]
+    
+    tessera_name = tessera ? orig_fname : nothing
 
     isfunctor = Meta.isexpr(orig_fname, :(::))
     fname = gensym(Symbol(orig_fname, :internal))
@@ -269,12 +276,12 @@ function trace_function_definition(mod, expr)
     end
 
     if isempty(new_fn[:kwargs])
-        traced_call_expr = :($(traced_call)($(fname), $(argnames...)))
+        traced_call_expr = :($(traced_call)($(fname), $(argnames...); tessera_name=$(String(tessera_name))))
         untraced_call_expr = :($(fname)($(argnames...)))
     else
         kws = first.(get_argname.(new_fn[:kwargs]))
         traced_call_expr =
-            :($(traced_call)(Core.kwcall, (; $(kws...)), $(fname), $(argnames...)))
+            :($(traced_call)(Core.kwcall, (; $(kws...)), $(fname), $(argnames...); tessera_name=$(String(tessera_name))))
         untraced_call_expr = :(Core.kwcall((; $(kws...)), $(fname), $(argnames...)))
     end
 
@@ -290,6 +297,9 @@ function trace_function_definition(mod, expr)
     return quote
         $(MacroTools.combinedef(new_fn))
         $(MacroTools.combinedef(internal_fn))
+
+        # return the user-facing function:
+        $(new_fn[:name])
     end
 end
 
