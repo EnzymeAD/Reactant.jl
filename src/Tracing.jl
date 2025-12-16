@@ -984,7 +984,7 @@ function apply_type_with_promotion(wrapper, params, relevant_typevars=typevar_di
                         # This happens when `value` lost the promotion battle.
                         # At this point, we need to update the problematic parameter in`value`.
                         d = typevar_dict(rewrapped)
-                        v = [param.parameters...]
+                        v = Any[param.parameters...]
                         v[d[typevar]] = resolved
                         params[i], _changed_params = apply_type_with_promotion(rewrapped, v)
                     end
