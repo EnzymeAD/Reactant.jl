@@ -250,7 +250,7 @@ function trace_function_definition(mod, expr; tessera=false)
     internal_fn = MacroTools.splitdef(expr)
     orig_fname = internal_fn[:name]
 
-    tessera_name = tessera ? orig_fname : nothing
+    tessera_name = tessera ? String(orig_fname) : nothing
 
     isfunctor = Meta.isexpr(orig_fname, :(::))
     fname = gensym(Symbol(orig_fname, :internal))
@@ -276,9 +276,8 @@ function trace_function_definition(mod, expr; tessera=false)
     end
 
     if isempty(new_fn[:kwargs])
-        traced_call_expr = :($(traced_call)(
-            $(fname), $(argnames...); tessera_name=$(String(tessera_name))
-        ))
+        traced_call_expr =
+            :($(traced_call)($(fname), $(argnames...); tessera_name=$(tessera_name)))
         untraced_call_expr = :($(fname)($(argnames...)))
     else
         kws = first.(get_argname.(new_fn[:kwargs]))
@@ -287,7 +286,7 @@ function trace_function_definition(mod, expr; tessera=false)
             (; $(kws...)),
             $(fname),
             $(argnames...);
-            tessera_name=$(String(tessera_name)),
+            tessera_name=$(tessera_name),
         ))
         untraced_call_expr = :(Core.kwcall((; $(kws...)), $(fname), $(argnames...)))
     end
@@ -304,9 +303,6 @@ function trace_function_definition(mod, expr; tessera=false)
     return quote
         $(MacroTools.combinedef(new_fn))
         $(MacroTools.combinedef(internal_fn))
-
-        # return the user-facing function:
-        $(new_fn[:name])
     end
 end
 
