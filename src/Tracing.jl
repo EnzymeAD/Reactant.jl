@@ -910,9 +910,16 @@ const traced_type_cache = Dict{Tuple{TraceMode,Type,Any},Dict{Type,Type}}()
 #     $(Expr(:meta, :generated, traced_type_generator))
 # end
 
+resolve_conflict(t1::Type{<:ConcreteRNumber{T}}, t2::Type{T}) where {T} = T
+resolve_conflict(t1::Type{T}, t2::Type{<:ConcreteRNumber{T}}) where {T} = T
+resolve_conflict(t1, t2) = promote_type(t1, t2)
+
 """
 This function tries to apply the param types to the wrapper type.
-When there's a constraint conflict, it tries to resolve it by promoting the conflicting types. The new param type is then propagated in any param type that depends on it.
+When there's a constraint conflict, it tries to resolve it:
+* ConcreteRNumber{T} vs T: resolves to T
+* other cases: resolve by `promote_type`
+The new param type is then propagated in any param type that depends on it.
 Apart from the applied type, it also returns a boolean array indicating which of the param types were changed.
 
 For example:
@@ -970,15 +977,15 @@ function apply_type_with_promotion(wrapper, params, relevant_typevars=typevar_di
                     (!(value isa Type) || value <: params[param_i]) && continue
 
                     # Found a conflict! Figure out a new param type by promoting:
-                    promoted = promote_type(value, params[param_i])
-                    params[param_i] = promoted
+                    resolved = resolve_conflict(value, params[param_i])
+                    params[param_i] = resolved
 
-                    if value != promoted
+                    if value != resolved
                         # This happens when `value` lost the promotion battle.
                         # At this point, we need to update the problematic parameter in`value`.
                         d = typevar_dict(rewrapped)
                         v = [param.parameters...]
-                        v[d[typevar]] = promoted
+                        v[d[typevar]] = resolved
                         params[i], _changed_params = apply_type_with_promotion(rewrapped, v)
                     end
                     changed = true
