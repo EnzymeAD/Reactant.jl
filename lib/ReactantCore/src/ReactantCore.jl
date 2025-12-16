@@ -167,8 +167,8 @@ macro trace(args...)
             end
             args = args[2:end]
         elseif args[1] === :tessera
-          tessera = true
-          args = args[2:end]
+            tessera = true
+            args = args[2:end]
         else
             break
         end
@@ -249,7 +249,7 @@ end
 function trace_function_definition(mod, expr; tessera=false)
     internal_fn = MacroTools.splitdef(expr)
     orig_fname = internal_fn[:name]
-    
+
     tessera_name = tessera ? orig_fname : nothing
 
     isfunctor = Meta.isexpr(orig_fname, :(::))
@@ -276,12 +276,19 @@ function trace_function_definition(mod, expr; tessera=false)
     end
 
     if isempty(new_fn[:kwargs])
-        traced_call_expr = :($(traced_call)($(fname), $(argnames...); tessera_name=$(String(tessera_name))))
+        traced_call_expr = :($(traced_call)(
+            $(fname), $(argnames...); tessera_name=$(String(tessera_name))
+        ))
         untraced_call_expr = :($(fname)($(argnames...)))
     else
         kws = first.(get_argname.(new_fn[:kwargs]))
-        traced_call_expr =
-            :($(traced_call)(Core.kwcall, (; $(kws...)), $(fname), $(argnames...); tessera_name=$(String(tessera_name))))
+        traced_call_expr = :($(traced_call)(
+            Core.kwcall,
+            (; $(kws...)),
+            $(fname),
+            $(argnames...);
+            tessera_name=$(String(tessera_name)),
+        ))
         untraced_call_expr = :(Core.kwcall((; $(kws...)), $(fname), $(argnames...)))
     end
 

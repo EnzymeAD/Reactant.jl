@@ -2651,7 +2651,9 @@ end
     return corrected_traced_results
 end
 
-@noinline function call(f, args...; location=mlir_stacktrace("call", @__FILE__, @__LINE__), tessera_name=nothing)
+@noinline function call(
+    f, args...; location=mlir_stacktrace("call", @__FILE__, @__LINE__), tessera_name=nothing
+)
     seen = Reactant.OrderedIdDict()
     cache_key = Any[tessera_name]
     Reactant.make_tracer(seen, (f, args...), cache_key, Reactant.TracedToTypes)
@@ -2694,7 +2696,7 @@ end
             resargprefix,
         )
         if !isnothing(tessera_name)
-          MLIR.IR.attr!(temp.f, "tessera_name", MLIR.IR.Attribute(tessera_name))
+            MLIR.IR.attr!(temp.f, "tessera_name", MLIR.IR.Attribute(tessera_name))
         end
     end
 
