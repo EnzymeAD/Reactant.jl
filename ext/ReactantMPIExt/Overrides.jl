@@ -99,7 +99,7 @@ function MPI.Recv!(
     buf::TracedRArray, source::TracedRNumber, tag::TracedRNumber, comm::MPI.Comm
 )
     @assert comm == MPI.COMM_WORLD "Only MPI.COMM_WORLD is supported currently"
-    return Ops.recv!(buf, tag, source)
+    return Ops.recv!(buf, source, tag)
 end
 
 function MPI.Irecv!(

@@ -410,9 +410,9 @@ function isend(
 end
 
 #function recv!(
-#    recvbuf::TracedRArray,
-#    tag::TracedRNumber,
-#    src::TracedRNumber;
+#   recvbuf::TracedRArray,
+#   src::TracedRNumber,
+#   tag::TracedRNumber;
 #    location=mlir_stacktrace("mpi.recv", @__FILE__, @__LINE__),
 #)
 #    T = Reactant.unwrapped_eltype(recvbuf)
@@ -471,8 +471,8 @@ end
 
 @noinline function recv!(
    recvbuf::TracedRArray,
-   tag::TracedRNumber,
-   src::TracedRNumber;
+   src::TracedRNumber,
+   tag::TracedRNumber;
    location=mlir_stacktrace("mpi.recv", @__FILE__, @__LINE__),
 )
     count = Reactant.Ops.constant(Int32(length(recvbuf)))
