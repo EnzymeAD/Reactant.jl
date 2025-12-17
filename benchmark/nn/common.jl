@@ -1,3 +1,10 @@
+using Lux: Lux, reactant_device
+using Printf: @sprintf
+using Reactant: Reactant, @compile
+using Enzyme: Enzyme
+using Chairmarks: @b
+using Random: Random
+
 function sumabs2first(model, x, ps, st)
     y, _ = Lux.apply(model, x, ps, st)
     return sum(abs2, y)
@@ -242,4 +249,23 @@ function run_benchmark!(
     @info print_stmt
 
     return nothing
+end
+
+function get_backend()
+    # To run benchmarks on a specific backend
+    BENCHMARK_GROUP = get(ENV, "BENCHMARK_GROUP", nothing)
+
+    if BENCHMARK_GROUP == "CUDA"
+        Reactant.set_default_backend("gpu")
+        @info "Running CUDA benchmarks" maxlog = 1
+    elseif BENCHMARK_GROUP == "TPU"
+        Reactant.set_default_backend("tpu")
+    elseif BENCHMARK_GROUP == "CPU"
+        Reactant.set_default_backend("cpu")
+        @info "Running CPU benchmarks" maxlog = 1
+    else
+        BENCHMARK_GROUP = String(split(string(first(Reactant.devices())), ":")[1])
+        @info "Running $(BENCHMARK_GROUP) benchmarks" maxlog = 1
+    end
+    return BENCHMARK_GROUP
 end
