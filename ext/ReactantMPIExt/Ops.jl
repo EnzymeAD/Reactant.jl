@@ -109,28 +109,33 @@ end
     return TracedRNumber{Cint}((), res)
 end
 
-function barrier(; location=mlir_stacktrace("mpi.barrier", @__FILE__, @__LINE__))
-    sym_name = "enzymexla_wrapper_MPI_Barrier"
-    sym_attr = IR.FlatSymbolRefAttribute(sym_name)
+#function barrier(; location=mlir_stacktrace("mpi.barrier", @__FILE__, @__LINE__))
+#    sym_name = "enzymexla_wrapper_MPI_Barrier"
+#    sym_attr = IR.FlatSymbolRefAttribute(sym_name)
 
-    IR.inject!("MPI_COMM_WORLD", "llvm.mlir.global constant @MPI_COMM_WORLD() : !llvm.ptr")
-    IR.inject!("MPI_Barrier", "llvm.func @MPI_Barrier(!llvm.ptr) -> i32")
+#    IR.inject!("MPI_COMM_WORLD", "llvm.mlir.global constant @MPI_COMM_WORLD() : !llvm.ptr")
+#    IR.inject!("MPI_Barrier", "llvm.func @MPI_Barrier(!llvm.ptr) -> i32")
 
-    #! format: off
-    IR.inject!(sym_name, """
-        func.func @$sym_name() -> () {
-            %comm = llvm.mlir.addressof @MPI_COMM_WORLD : !llvm.ptr
-            %status = llvm.call @MPI_Barrier(%comm) : (!llvm.ptr) -> (i32)
-            func.return
-        }
-    """)
-    #! format: on
+#    #! format: off
+#    IR.inject!(sym_name, """
+#        func.func @$sym_name() -> () {
+#            %comm = llvm.mlir.addressof @MPI_COMM_WORLD : !llvm.ptr
+#            %status = llvm.call @MPI_Barrier(%comm) : (!llvm.ptr) -> (i32)
+#            func.return
+#        }
+#    """)
+#    #! format: on
 
-    output_operand_aliases = IR.Attribute(IR.Attribute[])
-    enzymexla.jit_call(
-        IR.Value[]; fn=sym_attr, result_0=IR.Type[], output_operand_aliases, location
-    )
+#    output_operand_aliases = IR.Attribute(IR.Attribute[])
+#    enzymexla.jit_call(
+#        IR.Value[]; fn=sym_attr, result_0=IR.Type[], output_operand_aliases, location
+#    )
 
+#    return nothing
+#end
+
+@noinline function barrier(; location=mlir_stacktrace("mpi.barrier", @__FILE__, @__LINE__))
+    enzymexla.mpi_barrier(; location)
     return nothing
 end
 
