@@ -269,6 +269,15 @@ end
                 },
                 [true, true, false],
             )
+
+            @test Reactant.apply_type_with_promotion(
+                Foo,
+                [
+                    ConcreteRNumber{Float64},
+                    Bar{ConcreteRNumber{Float64}},
+                    ConcreteRArray{Float64,1},
+                ],
+            ) == (Foo{Float64,Bar{Float64},ConcreteRArray{Float64,1}}, [true, true, false])
         end
     end
 
