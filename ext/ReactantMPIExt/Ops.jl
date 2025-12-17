@@ -348,60 +348,83 @@ end
     return nothing
 end
 
-# TODO need c-function for creating MLIR `mpi.request` type?
-function isend(
+## TODO need c-function for creating MLIR `mpi.request` type?
+#function isend(
+#    buf::TracedRArray,
+#    tag::TracedRNumber,
+#    dest::TracedRNumber;
+#    location=mlir_stacktrace("mpi.isend", @__FILE__, @__LINE__),
+#)
+#    T = Reactant.unwrapped_eltype(buf)
+#    mpi_datatype = MPI.Datatype(T)
+#    mpi_datatype_name = inject_mpi_datatype!(mpi_datatype)
+
+#    sym_name = "enzymexla_wrapper_MPI_Isend_$(mpi_datatype_name)"
+#    sym_attr = IR.FlatSymbolRefAttribute(sym_name)
+
+#    IR.inject!("MPI_COMM_WORLD", "llvm.mlir.global constant @MPI_COMM_WORLD() : !llvm.ptr")
+#    IR.inject!(
+#        "MPI_Isend",
+#        "llvm.func @MPI_Isend(!llvm.ptr, i32, !llvm.ptr, i32, i32, !llvm.ptr, !llvm.ptr) -> i32",
+#    )
+
+#    # int MPI_Isend(const void* buf, int count, MPI_Datatype datatype, 
+#    #               int dest, int tag, MPI_Comm comm, MPI_Request* request)
+#    #! format: off
+#    IR.inject!(sym_name, """
+#        func.func @$sym_name(%buf : !llvm.ptr, %count_ptr : !llvm.ptr, %dest_ptr : !llvm.ptr, %tag_ptr : !llvm.ptr, %req_ptr : !llvm.ptr) -> () {
+#            %comm = llvm.mlir.addressof @MPI_COMM_WORLD : !llvm.ptr
+#            %datatype = llvm.mlir.addressof @$(mpi_datatype_name) : !llvm.ptr
+#            %count = llvm.load %count_ptr : !llvm.ptr -> i32
+#            %dest = llvm.load %dest_ptr : !llvm.ptr -> i32
+#            %tag = llvm.load %tag_ptr : !llvm.ptr -> i32
+#            %res = llvm.call @MPI_Isend(%buf, %count, %datatype, %dest, %tag, %comm, %req_ptr) : (!llvm.ptr, i32, !llvm.ptr, i32, i32, !llvm.ptr, !llvm.ptr) -> (i32)
+#            func.return
+#        }
+#    """)
+#    #! format: on
+
+#    count = Reactant.Ops.constant(Int32(length(buf)))
+#    request = Reactant.Ops.constant(Int64(-1))
+
+#    output_operand_aliases = IR.Attribute([
+#        IR.Attribute(
+#            MLIR.API.stablehloOutputOperandAliasGet(
+#                MLIR.IR.context(), 0, C_NULL, 4, 0, C_NULL
+#            ),
+#        ),
+#    ])
+
+#    ret = enzymexla.jit_call(
+#        IR.Value[
+#            buf.mlir_data, count.mlir_data, dest.mlir_data, tag.mlir_data, request.mlir_data
+#        ];
+#        fn=sym_attr,
+#        result_0=IR.Type[mlir_type(request)],
+#        output_operand_aliases=output_operand_aliases,
+#        location,
+#    )
+
+#    request.mlir_data = IR.result(ret)
+#    return request # we return a TracedRNumber, converted to TracedRequest in Overrides.jl
+#end
+
+@noinline function isend(
     buf::TracedRArray,
     tag::TracedRNumber,
     dest::TracedRNumber;
     location=mlir_stacktrace("mpi.isend", @__FILE__, @__LINE__),
 )
-    T = Reactant.unwrapped_eltype(buf)
-    mpi_datatype = MPI.Datatype(T)
-    mpi_datatype_name = inject_mpi_datatype!(mpi_datatype)
-
-    sym_name = "enzymexla_wrapper_MPI_Isend_$(mpi_datatype_name)"
-    sym_attr = IR.FlatSymbolRefAttribute(sym_name)
-
-    IR.inject!("MPI_COMM_WORLD", "llvm.mlir.global constant @MPI_COMM_WORLD() : !llvm.ptr")
-    IR.inject!(
-        "MPI_Isend",
-        "llvm.func @MPI_Isend(!llvm.ptr, i32, !llvm.ptr, i32, i32, !llvm.ptr, !llvm.ptr) -> i32",
-    )
-
-    # int MPI_Isend(const void* buf, int count, MPI_Datatype datatype, 
-    #               int dest, int tag, MPI_Comm comm, MPI_Request* request)
-    #! format: off
-    IR.inject!(sym_name, """
-        func.func @$sym_name(%buf : !llvm.ptr, %count_ptr : !llvm.ptr, %dest_ptr : !llvm.ptr, %tag_ptr : !llvm.ptr, %req_ptr : !llvm.ptr) -> () {
-            %comm = llvm.mlir.addressof @MPI_COMM_WORLD : !llvm.ptr
-            %datatype = llvm.mlir.addressof @$(mpi_datatype_name) : !llvm.ptr
-            %count = llvm.load %count_ptr : !llvm.ptr -> i32
-            %dest = llvm.load %dest_ptr : !llvm.ptr -> i32
-            %tag = llvm.load %tag_ptr : !llvm.ptr -> i32
-            %res = llvm.call @MPI_Isend(%buf, %count, %datatype, %dest, %tag, %comm, %req_ptr) : (!llvm.ptr, i32, !llvm.ptr, i32, i32, !llvm.ptr, !llvm.ptr) -> (i32)
-            func.return
-        }
-    """)
-    #! format: on
-
     count = Reactant.Ops.constant(Int32(length(buf)))
     request = Reactant.Ops.constant(Int64(-1))
 
-    output_operand_aliases = IR.Attribute([
-        IR.Attribute(
-            MLIR.API.stablehloOutputOperandAliasGet(
-                MLIR.IR.context(), 0, C_NULL, 4, 0, C_NULL
-            ),
-        ),
-    ])
-
-    ret = enzymexla.jit_call(
-        IR.Value[
-            buf.mlir_data, count.mlir_data, dest.mlir_data, tag.mlir_data, request.mlir_data
-        ];
-        fn=sym_attr,
-        result_0=IR.Type[mlir_type(request)],
-        output_operand_aliases=output_operand_aliases,
+    ret = enzymexla.isend(
+        buf.mlir_data,
+        count.mlir_data,
+        dest.mlir_data,
+        tag.mlir_data,
+        request.mlir_data;
+        outrequest=mlir_type(request),
         location,
     )
 
