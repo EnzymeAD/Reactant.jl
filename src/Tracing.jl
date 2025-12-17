@@ -1303,6 +1303,34 @@ function make_tracer(
     )
 end
 
+function make_tracer(
+    seen,
+    @nospecialize(prev::Base.RefValue),
+    @nospecialize(path),
+    mode;
+    @nospecialize(toscalar=false),
+    kwargs...,
+)
+    if toscalar && mode == TracedSetPath
+        return make_tracer(
+            seen,
+            prev[],
+            path,
+            mode;
+            toscalar=false,
+        )
+    end
+    @assert !toscalar
+    return make_tracer_unknown(
+            seen,
+            prev,
+            path,
+            mode;
+            toscalar,
+            kwargs...,
+        )
+end
+
 Base.@nospecializeinfer function make_tracer(
     seen,
     @nospecialize(prev::ConcretePJRTArray{T,N}),
