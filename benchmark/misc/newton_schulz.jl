@@ -33,9 +33,12 @@ end
 
 function run_newton_schulz_benchmark!(results, backend)
     compile_modes = [
-        ("Default", Reactant.CompileOptions(; sync=true)),
         (
-            "DisableStructuredTensors",
+            "StructuredTensors",
+            Reactant.CompileOptions(; sync=true, disable_structured_tensors_passes=false)
+        ),
+        (
+            "Default",
             Reactant.CompileOptions(; sync=true, disable_structured_tensors_passes=true),
         ),
     ]

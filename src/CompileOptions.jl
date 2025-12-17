@@ -169,7 +169,7 @@ Fine-grained control over the compilation options for the Reactant compiler.
   - `disable_loop_raising_passes`: Disables raising passes for `stablehlo.while`.
     (Default: `false`).
   - `disable_structured_tensors_passes`: Disables structured tensors detection and
-    propagation passes. (Default `false`).
+    propagation passes. (Default `true`).
 """
 struct CompileOptions
     optimization_passes::Union{Symbol,String}
@@ -230,7 +230,7 @@ function CompileOptions(;
     disable_slice_to_batch_passes::Bool=true, # expensive + introduces all-to-all in GB25
     disable_concat_to_batch_passes::Bool=false,
     disable_loop_raising_passes::Bool=false,
-    disable_structured_tensors_passes::Bool=false,
+    disable_structured_tensors_passes::Bool=true, # missing optimization passes currently
 )
     optimization_passes isa Bool &&
         (optimization_passes = ifelse(optimization_passes, :all, :none))
