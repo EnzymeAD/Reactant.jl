@@ -926,26 +926,16 @@ function optimization_passes(
     if !is_sharded
         # these passes don't have optimized sharding implementations
         if raise_shlo_to_blas_lapack
-            append!(transform_passes_list, ["dot_general_to_syrk"])
+            if !compile_options.disable_structured_tensors_passes
+                append!(transform_passes_list, ["dot_general_to_syrk"])
+            end
         end
     end
 
-    if !compile_options.disable_auto_batching_passes
+    if !compile_options.disable_slice_to_batch_passes
         append!(
             transform_passes_list,
             [
-                "add_reduce_slice_fusion",
-                "mul_reduce_slice_fusion",
-                "min_reduce_slice_fusion",
-                "max_reduce_slice_fusion",
-                "concat_insert_dim_dot_general",
-                "concat_insert_dim_gather",
-                "concat_insert_dim_iota",
-                "concat_insert_dim_reduce",
-                "concat_insert_dim_sort",
-                "concat_insert_dim_reduce_window",
-                "concat_insert_dim_elementwise",
-                "concat_insert_dim_convolution",
                 "dot_general_slice_to_batch",
                 "gather_slice_to_batch",
                 "iota_slice_to_batch",
@@ -956,9 +946,43 @@ function optimization_passes(
                 "reducewindow_slice_to_batch",
                 "elementwise_slice_to_batch",
                 "convolution_slice_to_batch",
-                "greedy_while_loop_batch_fission",
             ],
         )
+    end
+
+    if !compile_options.disable_reduce_slice_fusion_passes
+        append!(
+            transform_passes_list,
+            [
+                "add_reduce_slice_fusion",
+                "mul_reduce_slice_fusion",
+                "min_reduce_slice_fusion",
+                "max_reduce_slice_fusion",
+                "and_reduce_slice_fusion",
+                "xor_reduce_slice_fusion",
+                "or_reduce_slice_fusion",
+            ],
+        )
+    end
+
+    if !compile_options.disable_concat_to_batch_passes
+        append!(
+            transform_passes_list,
+            [
+                "concat_insert_dim_dot_general",
+                "concat_insert_dim_gather",
+                "concat_insert_dim_iota",
+                "concat_insert_dim_reduce",
+                "concat_insert_dim_sort",
+                "concat_insert_dim_reduce_window",
+                "concat_insert_dim_elementwise",
+                "concat_insert_dim_convolution",
+            ],
+        )
+    end
+
+    if !compile_options.disable_loop_raising_passes
+        append!(transform_passes_list, ["greedy_while_loop_batch_fission"])
     end
 
     if !compile_options.disable_licm_optimization_passes

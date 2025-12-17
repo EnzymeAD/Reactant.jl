@@ -123,7 +123,7 @@ raising).
 
 ```@example raising_stablehlo
 @code_hlo compile_options = CompileOptions(;
-    disable_auto_batching_passes=true
+    disable_loop_raising_passes=true
 ) compute_attractive_force(positions_ra, masses_ra, 2.0f0)
 ```
 
@@ -133,7 +133,7 @@ tensor IR.
 
 ```@example raising_stablehlo
 hlo = @code_hlo compile_options=CompileOptions(;
-    disable_auto_batching_passes=false
+    disable_loop_raising_passes=false
 ) compute_attractive_force(positions_ra, masses_ra, 2.0f0)
 @assert !contains(repr(hlo), "stablehlo.while") #hide
 hlo
@@ -145,7 +145,7 @@ the values are identical.
 ```@example raising_stablehlo
 y_jl = compute_attractive_force(positions, masses, 2.0f0)
 y_ra = @jit compile_options=CompileOptions(;
-    disable_auto_batching_passes=false
+    disable_loop_raising_passes=false
 ) compute_attractive_force(positions_ra, masses_ra, 2.0f0)
 maximum(abs, Array(y_ra) .- y_jl)
 ```
@@ -154,7 +154,7 @@ Let's time the execution of the two versions.
 
 ```@example raising_stablehlo
 fn1 = @compile sync=true compile_options=CompileOptions(;
-    disable_auto_batching_passes=true
+    disable_loop_raising_passes=true
 ) compute_attractive_force(positions_ra, masses_ra, 2.0f0)
 fn2 = @compile sync=true compute_attractive_force(positions_ra, masses_ra, 2.0f0)
 ```
