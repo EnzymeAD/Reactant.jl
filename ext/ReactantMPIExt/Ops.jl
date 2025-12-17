@@ -695,62 +695,80 @@ function inject_mpi_op!(op)
     end
 end
 
-function allreduce!(
-    op, sendbuf, recvbuf; location=mlir_stacktrace("mpi.wait", @__FILE__, @__LINE__)
+#function allreduce!(
+#    op, sendbuf, recvbuf; location=mlir_stacktrace("mpi.wait", @__FILE__, @__LINE__)
+#)
+#    # @assert Reactant.unwrapped_eltype(sendbuf) == Reactant.unwrapped_eltype(recvbuf)
+#    # @assert length(sendbuf) == length(recvbuf)
+
+#    op_name = inject_mpi_op!(op)
+#    T = Reactant.unwrapped_eltype(sendbuf)
+#    mpi_datatype = MPI.Datatype(T)
+#    mpi_datatype_name = inject_mpi_datatype!(mpi_datatype)
+
+#    IR.inject!("MPI_COMM_WORLD", "llvm.mlir.global constant @MPI_COMM_WORLD() : !llvm.ptr")
+#    IR.inject!(
+#        "MPI_Allreduce",
+#        "llvm.func @MPI_Allreduce(!llvm.ptr, !llvm.ptr, i32, !llvm.ptr, !llvm.ptr, !llvm.ptr) -> i32",
+#    )
+
+#    sym_name = "enzymexla_wrapper_MPI_Allreduce_$(op_name)_$(mpi_datatype_name)"
+#    sym_attr = IR.FlatSymbolRefAttribute(sym_name)
+
+#    # TODO is okay to use `i32`? how can we use word-size value or map C's `int` to MLIR? can we use `index`?
+#    #! format: off
+#    IR.inject!(sym_name, """
+#        func.func @$sym_name(%sendbuf : !llvm.ptr, %recvbuf : !llvm.ptr, %count_ptr : !llvm.ptr) -> () {
+#            %comm = llvm.mlir.addressof @MPI_COMM_WORLD : !llvm.ptr
+#            %op = llvm.mlir.addressof @$op_name : !llvm.ptr
+#            %datatype = llvm.mlir.addressof @$mpi_datatype_name : !llvm.ptr
+#            %count = llvm.load %count_ptr : !llvm.ptr -> i32
+#            %errcode = llvm.call @MPI_Allreduce(%sendbuf, %recvbuf, %count, %datatype, %op, %comm) : (!llvm.ptr, !llvm.ptr, i32, !llvm.ptr, !llvm.ptr, !llvm.ptr) -> (i32)
+#            func.return
+#        }
+#    """)
+#    #! format: on
+
+#    count = Reactant.Ops.constant(fill(length(sendbuf)))
+
+#    output_operand_aliases = IR.Attribute([
+#        IR.Attribute(
+#            MLIR.API.stablehloOutputOperandAliasGet(
+#                MLIR.IR.context(), 0, C_NULL, 1, 0, C_NULL
+#            ),
+#        ),
+#    ])
+
+#    res = IR.result(
+#        enzymexla.jit_call(
+#            IR.Value[sendbuf.mlir_data, recvbuf.mlir_data, count.mlir_data];
+#            fn=sym_attr,
+#            result_0=IR.Type[Reactant.Ops.mlir_type(typeof(recvbuf), size(recvbuf))],
+#            location,
+#            output_operand_aliases,
+#        ),
+#    )
+
+#    recvbuf.mlir_data = res
+
+#    return recvbuf
+#end
+
+@noinline function allreduce!(
+    op,
+    sendbuf::TracedRArray,
+    recvbuf::TracedRArray;
+    location=mlir_stacktrace("mpi.wait", @__FILE__, @__LINE__)
 )
-    @assert Reactant.unwrapped_eltype(sendbuf) == Reactant.unwrapped_eltype(recvbuf)
-    @assert length(sendbuf) == length(recvbuf)
-
-    op_name = inject_mpi_op!(op)
-    T = Reactant.unwrapped_eltype(sendbuf)
-    mpi_datatype = MPI.Datatype(T)
-    mpi_datatype_name = inject_mpi_datatype!(mpi_datatype)
-
-    IR.inject!("MPI_COMM_WORLD", "llvm.mlir.global constant @MPI_COMM_WORLD() : !llvm.ptr")
-    IR.inject!(
-        "MPI_Allreduce",
-        "llvm.func @MPI_Allreduce(!llvm.ptr, !llvm.ptr, i32, !llvm.ptr, !llvm.ptr, !llvm.ptr) -> i32",
+    count = Reactant.Ops.constant(Int32(length(sendbuf)))
+    ret = enzymexla.allreduce(
+        sendbuf.mlir_data,
+        recvbuf.mlir_data,
+        count.mlir_data;
+        outbuf=mlir_type(recvbuf),
+        location
     )
-
-    sym_name = "enzymexla_wrapper_MPI_Allreduce_$(op_name)_$(mpi_datatype_name)"
-    sym_attr = IR.FlatSymbolRefAttribute(sym_name)
-
-    # TODO is okay to use `i32`? how can we use word-size value or map C's `int` to MLIR? can we use `index`?
-    #! format: off
-    IR.inject!(sym_name, """
-        func.func @$sym_name(%sendbuf : !llvm.ptr, %recvbuf : !llvm.ptr, %count_ptr : !llvm.ptr) -> () {
-            %comm = llvm.mlir.addressof @MPI_COMM_WORLD : !llvm.ptr
-            %op = llvm.mlir.addressof @$op_name : !llvm.ptr
-            %datatype = llvm.mlir.addressof @$mpi_datatype_name : !llvm.ptr
-            %count = llvm.load %count_ptr : !llvm.ptr -> i32
-            %errcode = llvm.call @MPI_Allreduce(%sendbuf, %recvbuf, %count, %datatype, %op, %comm) : (!llvm.ptr, !llvm.ptr, i32, !llvm.ptr, !llvm.ptr, !llvm.ptr) -> (i32)
-            func.return
-        }
-    """)
-    #! format: on
-
-    count = Reactant.Ops.constant(fill(length(sendbuf)))
-
-    output_operand_aliases = IR.Attribute([
-        IR.Attribute(
-            MLIR.API.stablehloOutputOperandAliasGet(
-                MLIR.IR.context(), 0, C_NULL, 1, 0, C_NULL
-            ),
-        ),
-    ])
-
-    res = IR.result(
-        enzymexla.jit_call(
-            IR.Value[sendbuf.mlir_data, recvbuf.mlir_data, count.mlir_data];
-            fn=sym_attr,
-            result_0=IR.Type[Reactant.Ops.mlir_type(typeof(recvbuf), size(recvbuf))],
-            location,
-            output_operand_aliases,
-        ),
-    )
-
-    recvbuf.mlir_data = res
-
+    recvbuf.mlir_data = IR.result(ret)
     return recvbuf
 end
 
