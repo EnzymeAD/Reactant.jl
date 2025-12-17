@@ -128,5 +128,8 @@ end
 
 function MPI.Allreduce!(sendbuf::TracedRArray, recvbuf::TracedRArray, op, comm::MPI.Comm)
     @assert comm == MPI.COMM_WORLD "Only MPI.COMM_WORLD is supported currently"
+    @assert Reactant.unwrapped_eltype(sendbuf) == Reactant.unwrapped_eltype(recvbuf)
+    @assert length(sendbuf) == length(recvbuf)
+
     return Ops.allreduce!(op, sendbuf, recvbuf)
 end
