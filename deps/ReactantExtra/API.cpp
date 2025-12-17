@@ -3522,3 +3522,76 @@ REACTANT_ABI void EstimateRunTimeForInstruction(void *gpu_performance_model,
 }
 
 #endif
+
+#pragma region DLPack
+
+#include "xla/pjrt/pjrt_common.h"
+#include "xla/backends/cpu/alignment.h"
+
+REACTANT_ABI size_t CpuMinAlignment() {return xla::cpu::MinAlign();}
+REACTANT_ABI xla::PjRtBuffer *
+DataPointerToViewBuffer(void *data, xla::PjRtDevice *device, uint64_t dtype,
+                        uint64_t *shape, uint64_t *minor_to_major,
+                        uint64_t ndims, std::intptr_t stream_opt) {
+  std::optional<std::intptr_t> stream;
+
+  if (stream_opt != 0)
+    stream = stream_opt; // has value
+  else
+    stream = std::nullopt;
+  auto memory_space = *device->default_memory_space();
+
+  auto cshape = (const int64_t *)shape;
+  auto cminor_to_major = (const int64_t *)minor_to_major;
+  absl::Span<const int64_t> span_cshape(cshape, ndims);
+  absl::Span<const int64_t> span_minor_to_major(cminor_to_major, ndims);
+
+  xla::Shape xla_shape = xla::ShapeUtil::MakeShapeWithDenseLayout(
+      (xla::PrimitiveType)dtype, span_cshape, span_minor_to_major);
+
+  std::function<void()> on_delete_callback;
+  on_delete_callback = []() {
+  };
+  
+
+  auto result = MyValueOrThrow(device->client()->CreateViewOfDeviceBuffer(
+      data, xla_shape, memory_space, on_delete_callback, stream));
+  return (result).release();
+}
+
+REACTANT_ABI xla::PjRtBuffer *MutableZeroCopyBufferFromHostBuffer(xla::PjRtClient *client, void *data,
+  uint64_t ptype, size_t dim,
+  int64_t *cshape,
+  xla::PjRtDevice *device) {
+auto primtype = (xla::PrimitiveType)ptype;
+absl::Span<const int64_t> shape(cshape, dim);
+xla::PjRtClient::HostBufferSemantics semantics =
+xla::PjRtClient::HostBufferSemantics::kMutableZeroCopy;
+const xla::Layout *layout = nullptr;
+auto buffer = MyValueOrThrow(client->BufferFromHostBuffer(
+data, primtype, shape, /*byte_strides*/ {}, semantics, /*ondone*/ {},
+*device->default_memory_space(), layout));
+auto bres = buffer.release();
+return bres;
+}
+REACTANT_ABI std::intptr_t
+GetBufferComputeStream(xla::PjRtBuffer *pjrt_buffer) {
+  // absl::bit_cast<std::intptr_t>(
+  //   se_stream->platform_specific_handle().stream)
+  return absl::bit_cast<std::intptr_t>(
+      MyValueOrThrow(tensorflow::down_cast<xla::PjRtStreamExecutorDevice *>(
+                         pjrt_buffer->device())
+                         ->GetLocalDeviceState())
+          ->compute_stream()
+          ->platform_specific_handle()
+          .stream);
+}
+
+REACTANT_ABI void WaitUntilBufferReadyOnStream(xla::PjRtBuffer *pjrt_buffer,
+                                               std::intptr_t stream) {
+  static_cast<xla::CommonPjRtBuffer *>(pjrt_buffer)
+      ->GetBufferWithHold(xla::CommonPjRtBuffer::ScopedHold::kUsage)
+      .buffer()
+      ->WaitUntilBufferReadyOnStream(stream);
+}
+#pragma endregion
