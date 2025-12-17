@@ -17,6 +17,19 @@ include("nn/neural_operators.jl")
 
 end
 
+# Miscellaneous Benchmarks
+module Misc
+
+using Reactant, LinearAlgebra
+using Chairmarks: @b
+using Printf: @sprintf
+using Random: Random
+
+include("misc/common.jl")
+include("misc/newton_schulz.jl")
+
+end
+
 function run_benchmarks(backend::String)
     results = Dict()
 
@@ -28,6 +41,9 @@ function run_benchmarks(backend::String)
     ## neural operator benchmarks
     NN.run_deeponet_benchmark!(results, backend)
     NN.run_fno_benchmark!(results, backend)
+
+    # misc benchmarks
+    Misc.run_newton_schulz_benchmark!(results, backend)
 
     return results
 end
