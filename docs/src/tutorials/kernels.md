@@ -1,12 +1,20 @@
-# Kernels
+# [GPU Kernels](@id gpu-kernels)
 
-Suppose your codebase contains custom GPU kernels, typically those defined with [KernelAbstractions.jl](https://github.com/JuliaGPU/KernelAbstractions.jl).
+```@meta
+ShareDefaultModule = true
+```
+
+Suppose your code base contains custom GPU kernels, such as those defined with [KernelAbstractions.jl](https://github.com/JuliaGPU/KernelAbstractions.jl) or directly with a backend like [CUDA.jl](https://github.com/JuliaGPU/CUDA.jl).
 
 ## Example
 
-```@example kernels
+```@example
 using KernelAbstractions
+```
 
+Here we define a very simple squaring kernel:
+
+```@example
 @kernel function square_kernel!(y, @Const(x))
     i = @index(Global)
     @inbounds y[i] = x[i] * x[i]
@@ -21,66 +29,78 @@ function square(x)
 end
 ```
 
-```jldoctest kernels
+Let's test it to make sure it works:
+
+```@example
 x = float.(1:5)
 y = square(x)
-
-# output
-
-5-element Vector{Float64}:
-  1.0
-  4.0
-  9.0
- 16.0
- 25.0
+@assert y == x .^ 2  # hide
 ```
 
 ## Kernel compilation
 
-To compile such kernels with Reactant, you need to pass the option `raise=true` to the `@compile` or `@jit` macro.
-Furthermore, the [CUDA.jl](https://github.com/JuliaGPU/CUDA.jl) package needs to be loaded (even on non-NVIDIA hardware).
+To compile this kernel with Reactant, the [CUDA.jl](https://github.com/JuliaGPU/CUDA.jl) package needs to be loaded (even on non-NVIDIA hardware).
 
-```jldoctest kernels
+```@example
 import CUDA
 using Reactant
-
-xr = ConcreteRArray(x)
-yr = @jit raise=true square(xr)
-
-# output
-
-5-element ConcretePJRTArray{Float64,1}:
-  1.0
-  4.0
-  9.0
- 16.0
- 25.0
 ```
 
-## GPU Kernel raising
+The rest of the compilation works as usual:
 
-Kernel raising refer to Reactant's ability to transform a program written in a GPU kernel style. That is, kernel functions which are evaluated in a grid of blocks and threads where operations are done at the scalar level. The transformation raises the program to a tensor style function (in the StableHLO dialect) where operations are broadcasted.
+```@example
+xr = ConcreteRArray(x)
+square_compiled = @compile square(xr)
+```
 
-This transformation enables several features:
+```@example
+yr = square_compiled(xr)
+@assert yr == xr .^ 2  # hide
+```
 
- - Running the raised compute kernel on hardware where the original kernel was not designed to run on (_i.e._ running a CUDA kernel on a TPU).
- - Enabling further optimizations, since the raised kernel is now indiscernible from the rest of the program, it can be optimized with it. For example, two sequential kernel launches operating on the result of each others can be fused if they are both raised. Resulting in a single kernel launch, in the final optimized StableHLO program.
- - Lastly, automatic-differentiation in Reactant is currently not supported for GPU kernels. Raising kernels enables Enzyme to differentiate the raised kernel. For this to function, one must use the `raise_first` compilation option to make sure the kernel are raised before Enzyme performs automatic-differentiation on the program.
+## Kernel raising
+
+Kernel raising refer to Reactant's ability to transform a program written in a GPU kernel style (that is, kernel functions which are evaluated in a grid of blocks and threads, where operations are done at the scalar level).
+The transformation raises the program to a tensor-style function (in the StableHLO dialect) where operations are broadcasted.
+
+Raising is achieved by passing the keyword `raise = true` during compilation:
+
+```@example
+square_compiled_raised = @compile raise=true square(xr)
+```
+
+```@example
+yr2 = square_compiled_raised(xr)
+@assert yr2 == xr .^ 2  # hide
+```
+
+This transformation unlocks several features:
+
+- Running the raised compute kernel on hardware where the original kernel was not designed to run on (_i.e._ running a CUDA kernel on a TPU).
+- Enabling further optimizations: since the raised kernel is now indiscernible from the rest of the program, it can be optimized with it. For example, two sequential kernel launches operating on the result of each other can be fused if they are both raised. This results in a single kernel launch for the final optimized StableHLO program.
+- Supporting automatic differentiation, which Reactant currently cannot handle for GPU kernels. Raising kernels enables Enzyme to differentiate the raised kernel (more on this below).
 
 !!! note
-    Not all classes of kernels are currently raisable to StableHLO. If your kernel encounters an error while being raised, please open an issue on [the Reactant.jl repository](https://github.com/EnzymeAD/Reactant.jl/issues/new?labels=raising).
+    Not all classes of kernels are currently raisable to StableHLO. If your kernel encounters an error while being raised, please open an issue on [the Reactant repository](https://github.com/EnzymeAD/Reactant.jl/issues/new?labels=raising).
 
-## Differentiated kernel
+## Kernel differentiation
 
-In addition, if you want to compute derivatives of your kernel with [Enzyme.jl](https://github.com/EnzymeAD/Enzyme.jl), the option `raise_first=true` also becomes necessary.
+If you want to compute derivatives of your kernel, combining Reactant with [Enzyme.jl](https://github.com/EnzymeAD/Enzyme.jl) is the best choice.
 
-```jldoctest kernels
+```@example
 import Enzyme
+```
 
+You must use the `raise_first = true` compilation option to make sure the kernel is raised before Enzyme performs automatic differentiation on the program.
+
+```@example
 sumsquare(x) = sum(square(x))
-gr = @jit raise=true raise_first=true Enzyme.gradient(Enzyme.Reverse, sumsquare, xr)
+gradient_compiled = @compile raise=true raise_first=true Enzyme.gradient(Enzyme.Reverse, sumsquare, xr)
+```
 
-# output
+Note that the mode and function argument are partially evaluated at compilation time, but we still need to provide them again at execution time:
 
-(ConcretePJRTArray{Float64, 1, 1}([2.0, 4.0, 6.0, 8.0, 10.0]),)
+```@example
+gr = gradient_compiled(Enzyme.Reverse, sumsquare, xr)[1]
+@assert gr == 2xr  # hide
 ```
