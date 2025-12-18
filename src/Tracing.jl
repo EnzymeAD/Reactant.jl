@@ -1315,7 +1315,7 @@ function make_tracer(
         return make_tracer(
             seen,
             prev[],
-            path,
+            append_path(path, :x),
             mode;
             toscalar=false,
         )
