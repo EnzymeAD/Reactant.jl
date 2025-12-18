@@ -57,11 +57,10 @@ using MPI: MPI
 #end
 
 @noinline function comm_rank(; location=mlir_stacktrace("mpi.comm_rank", @__FILE__, @__LINE__))
-    # comm = Reactant.Ops.constant(fill(Cint(666)))            # ???
-    # retval = mlir_type(Reactant.Ops.constant(fill(Cint(-1)))) # ??? retval = mlir_type(TracedRArray{T,N})   # ???
-    rank = mlir_type(Reactant.Ops.constant(fill(Cint(-1)))) # ???
-    res = MLIR.IR.result(enzymexla.comm_rank(; rank, location))
-    return TracedRNumber{Cint}((), res)
+    rank = Reactant.Ops.constant(fill(Int32(-1)))
+    ret = enzymexla.comm_rank(; rank=mlir_type(rank), location)
+    rank.mlir_data = IR.result(ret)
+    return rank
 end
 
 
@@ -104,9 +103,10 @@ end
 #end
 
 @noinline function comm_size(; location=mlir_stacktrace("mpi.comm_size", @__FILE__, @__LINE__))
-    size = mlir_type(Reactant.Ops.constant(fill(Cint(-1))))
-    res = MLIR.IR.result(enzymexla.comm_size(; size, location))
-    return TracedRNumber{Cint}((), res)
+    size = Reactant.Ops.constant(Int32(-1))
+    ret = enzymexla.comm_size(; size=mlir_type(size), location)
+    size.mlir_data = IR.result(ret)
+    return size
 end
 
 #function barrier(; location=mlir_stacktrace("mpi.barrier", @__FILE__, @__LINE__))
