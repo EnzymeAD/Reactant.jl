@@ -147,7 +147,7 @@ Base.@nospecializeinfer function transmute_type_inner(
     @nospecialize(runtime)
 )
     C isa UnionAll || return Complex{
-        transmute_type_inner(C.parameters[1], seen, mode, track_numbers, sharding, runtime)
+        transmute_type_inner(C.parameters[1], seen, mode, track_numbers, sharding, runtime),
     }
     return C
 end
@@ -234,7 +234,9 @@ Base.@nospecializeinfer function transmute_type_inner(
     @nospecialize(sharding),
     @nospecialize(runtime)
 )
-    return Vararg{transmute_type_inner(T.T, seen, mode, track_numbers, sharding, runtime),T.N}
+    return Vararg{
+        transmute_type_inner(T.T, seen, mode, track_numbers, sharding, runtime),T.N
+    }
 end
 
 Base.@nospecializeinfer function transmute_type_inner(
@@ -261,7 +263,9 @@ Base.@nospecializeinfer function transmute_type_inner(
 )
     N = T.parameters[1]
     V = T.parameters[2]
-    return NamedTuple{N,transmute_type_inner(V, seen, mode, track_numbers, sharding, runtime)}
+    return NamedTuple{
+        N,transmute_type_inner(V, seen, mode, track_numbers, sharding, runtime)
+    }
 end
 
 Base.@nospecializeinfer @inline dict_key(::Type{<:AbstractDict}) = nothing
@@ -653,7 +657,10 @@ Base.@nospecializeinfer function transmute_type_inner(
     @nospecialize(runtime)
 ) where {T,A}
     return Core.LLVMPtr{
-        transmute_type_inner(PT.parameters[1], seen, mode, track_numbers, sharding, runtime),A
+        transmute_type_inner(
+            PT.parameters[1], seen, mode, track_numbers, sharding, runtime
+        ),
+        A,
     }
 end
 
@@ -665,7 +672,9 @@ Base.@nospecializeinfer function transmute_type_inner(
     @nospecialize(sharding),
     @nospecialize(runtime)
 ) where {S}
-    return ReactantRNG{transmute_type_inner(S, seen, mode, track_numbers, sharding, runtime)}
+    return ReactantRNG{
+        transmute_type_inner(S, seen, mode, track_numbers, sharding, runtime)
+    }
 end
 
 Base.@nospecializeinfer function transmute_type_inner(
@@ -678,7 +687,9 @@ Base.@nospecializeinfer function transmute_type_inner(
 )
     if mode == ArrayToConcrete
         return ReactantRNG{
-            transmute_type_inner(Array{UInt64,1}, seen, mode, track_numbers, sharding, runtime)
+            transmute_type_inner(
+                Array{UInt64,1}, seen, mode, track_numbers, sharding, runtime
+            ),
         }
     end
     return PT
@@ -822,7 +833,9 @@ Base.@nospecializeinfer function transmute_type_inner(
             push!(subParms, TrT)
         else
             if SST isa Type
-                TrT = transmute_type_inner(SST, seen, mode, track_numbers, sharding, runtime)
+                TrT = transmute_type_inner(
+                    SST, seen, mode, track_numbers, sharding, runtime
+                )
                 push!(subParms, TrT)
             else
                 push!(subParms, SST)
@@ -862,7 +875,9 @@ Base.@nospecializeinfer function transmute_type_inner(
 
             subT = fieldtype(T, f)
             subT2 = fieldtype(TT2, f)
-            subTT = transmute_type_inner(subT, seen3, mode, track_numbers, sharding, runtime)
+            subTT = transmute_type_inner(
+                subT, seen3, mode, track_numbers, sharding, runtime
+            )
             if subT2 != subTT
                 legal = false
                 break
