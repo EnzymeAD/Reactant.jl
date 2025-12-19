@@ -6,7 +6,7 @@ using Reactant: Reactant, MLIR, Ops, TracedRArray, TracedRNumber, AbstractConcre
 Base.@nospecializeinfer function Reactant.transmute_type_inner(
     @nospecialize(OA::Type{<:OffsetArray}),
     seen,
-    mode::Reactant.TraceMode,
+    mode::Reactant.TransmutationMode,
     @nospecialize(track_numbers::Type),
     @nospecialize(sharding),
     @nospecialize(runtime)

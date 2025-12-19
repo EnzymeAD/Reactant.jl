@@ -22,7 +22,7 @@ end
 Base.@nospecializeinfer function Reactant.transmute_type_inner(
     @nospecialize(OA::Type{MyGrid{FT,AT}}),
     seen,
-    mode::Reactant.TraceMode,
+    mode::Reactant.TransmutationMode,
     @nospecialize(track_numbers::Type),
     @nospecialize(sharding),
     @nospecialize(runtime)
@@ -64,7 +64,7 @@ end
 Base.@nospecializeinfer function Reactant.transmute_type_inner(
     @nospecialize(OA::Type{MyGrid2{FT,AT}}),
     seen,
-    mode::Reactant.TraceMode,
+    mode::Reactant.TransmutationMode,
     @nospecialize(track_numbers::Type),
     @nospecialize(sharding),
     @nospecialize(runtime)

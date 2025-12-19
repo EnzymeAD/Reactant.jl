@@ -16,7 +16,7 @@ __compatible_eltype(::Type{T}, ::Type{TracedRNumber{U}}) where {T,U} = TracedRNu
 function Reactant.transmute_type_inner(
     @nospecialize(_::Type{OneHotArray{T,N,Np1,I}}),
     seen,
-    @nospecialize(mode::Reactant.TraceMode),
+    @nospecialize(mode::Reactant.TransmutationMode),
     @nospecialize(track_numbers::Type),
     @nospecialize(sharding),
     @nospecialize(runtime)

@@ -23,7 +23,7 @@ end
 Base.@nospecializeinfer function Reactant.transmute_type_inner(
     @nospecialize(A::Type{<:MockTensor}),
     seen,
-    mode::Reactant.TraceMode,
+    mode::Reactant.TransmutationMode,
     @nospecialize(track_numbers::Type),
     @nospecialize(sharding),
     @nospecialize(runtime)

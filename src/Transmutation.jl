@@ -106,7 +106,7 @@ for T in (
     @eval Base.@nospecializeinfer function transmute_type_inner(
         @nospecialize(T::Type{<:$T}),
         seen,
-        @nospecialize(mode::TraceMode),
+        @nospecialize(mode::TransmutationMode),
         @nospecialize(track_numbers::Type),
         @nospecialize(sharding),
         @nospecialize(runtime)
@@ -118,7 +118,7 @@ end
 Base.@nospecializeinfer function transmute_type_inner(
     @nospecialize(T::Type{<:ReactantPrimitive}),
     seen,
-    @nospecialize(mode::TraceMode),
+    @nospecialize(mode::TransmutationMode),
     @nospecialize(track_numbers::Type),
     @nospecialize(sharding),
     @nospecialize(runtime)
@@ -141,7 +141,7 @@ end
 Base.@nospecializeinfer function transmute_type_inner(
     @nospecialize(C::Type{<:Complex}),
     seen,
-    @nospecialize(mode::TraceMode),
+    @nospecialize(mode::TransmutationMode),
     @nospecialize(track_numbers::Type),
     @nospecialize(sharding),
     @nospecialize(runtime)
@@ -155,7 +155,7 @@ end
 Base.@nospecializeinfer function transmute_type_inner(
     @nospecialize(T::Type{<:Function}),
     seen,
-    mode::TraceMode,
+    mode::TransmutationMode,
     @nospecialize(track_numbers::Type),
     @nospecialize(sharding),
     @nospecialize(runtime)
@@ -188,7 +188,7 @@ end
 Base.@nospecializeinfer function traced_tuple_type_inner(
     @nospecialize(T::Type{<:Tuple}),
     seen,
-    @nospecialize(mode::TraceMode),
+    @nospecialize(mode::TransmutationMode),
     @nospecialize(track_numbers::Type),
     @nospecialize(sharding),
     @nospecialize(runtime)
@@ -218,7 +218,7 @@ end
 Base.@nospecializeinfer function transmute_type_inner(
     @nospecialize(T::Type{<:Tuple}),
     seen,
-    mode::TraceMode,
+    mode::TransmutationMode,
     @nospecialize(track_numbers::Type),
     @nospecialize(sharding),
     @nospecialize(runtime)
@@ -229,7 +229,7 @@ end
 Base.@nospecializeinfer function transmute_type_inner(
     @nospecialize(T::Core.TypeofVararg),
     seen,
-    @nospecialize(mode::TraceMode),
+    @nospecialize(mode::TransmutationMode),
     @nospecialize(track_numbers::Type),
     @nospecialize(sharding),
     @nospecialize(runtime)
@@ -240,7 +240,7 @@ end
 Base.@nospecializeinfer function transmute_type_inner(
     @nospecialize(T::TypeVar),
     seen,
-    @nospecialize(mode::TraceMode),
+    @nospecialize(mode::TransmutationMode),
     @nospecialize(track_numbers::Type),
     @nospecialize(sharding),
     @nospecialize(runtime)
@@ -254,7 +254,7 @@ end
 Base.@nospecializeinfer function transmute_type_inner(
     @nospecialize(T::Type{<:NamedTuple}),
     seen,
-    @nospecialize(mode::TraceMode),
+    @nospecialize(mode::TransmutationMode),
     @nospecialize(track_numbers::Type),
     @nospecialize(sharding),
     @nospecialize(runtime)
@@ -284,7 +284,7 @@ end
 Base.@nospecializeinfer function transmute_type_inner(
     @nospecialize(T::Type{<:AbstractDict}),
     seen,
-    @nospecialize(mode::TraceMode),
+    @nospecialize(mode::TransmutationMode),
     @nospecialize(track_numbers::Type),
     @nospecialize(sharding),
     @nospecialize(runtime)
@@ -314,7 +314,7 @@ end
 Base.@nospecializeinfer function transmute_type_inner(
     @nospecialize(T0::Type{<:ConcretePJRTNumber}),
     seen,
-    @nospecialize(mode::TraceMode),
+    @nospecialize(mode::TransmutationMode),
     @nospecialize(track_numbers::Type),
     @nospecialize(sharding),
     @nospecialize(runtime)
@@ -340,7 +340,7 @@ end
 Base.@nospecializeinfer function transmute_type_inner(
     @nospecialize(T0::Type{<:ConcreteIFRTNumber}),
     seen,
-    @nospecialize(mode::TraceMode),
+    @nospecialize(mode::TransmutationMode),
     @nospecialize(track_numbers::Type),
     @nospecialize(sharding),
     @nospecialize(runtime)
@@ -362,7 +362,7 @@ end
 Base.@nospecializeinfer function transmute_type_inner(
     @nospecialize(T::Type{<:ConcretePJRTArray}),
     seen,
-    @nospecialize(mode::TraceMode),
+    @nospecialize(mode::TransmutationMode),
     @nospecialize(track_numbers::Type),
     @nospecialize(sharding),
     @nospecialize(runtime)
@@ -392,7 +392,7 @@ end
 Base.@nospecializeinfer function transmute_type_inner(
     @nospecialize(T::Type{<:ConcreteIFRTArray}),
     seen,
-    @nospecialize(mode::TraceMode),
+    @nospecialize(mode::TransmutationMode),
     @nospecialize(track_numbers::Type),
     @nospecialize(sharding),
     @nospecialize(runtime)
@@ -422,7 +422,7 @@ end
 Base.@nospecializeinfer function transmute_type_inner(
     @nospecialize(T::Type{MissingTracedValue}),
     seen,
-    mode::TraceMode,
+    mode::TransmutationMode,
     @nospecialize(track_numbers::Type),
     @nospecialize(sharding),
     @nospecialize(runtime)
@@ -433,7 +433,7 @@ end
 Base.@nospecializeinfer function transmute_type_inner(
     @nospecialize(T::Type{<:TracedRArray}),
     seen,
-    mode::TraceMode,
+    mode::TransmutationMode,
     @nospecialize(track_numbers::Type),
     @nospecialize(sharding),
     @nospecialize(runtime)
@@ -465,7 +465,7 @@ end
 Base.@nospecializeinfer function transmute_type_inner(
     @nospecialize(T::Type{<:TracedRNumber}),
     seen,
-    mode::TraceMode,
+    mode::TransmutationMode,
     @nospecialize(track_numbers::Type),
     @nospecialize(sharding),
     @nospecialize(runtime)
@@ -499,7 +499,7 @@ end
 Base.@nospecializeinfer function transmute_type_inner(
     @nospecialize(A::Type{AbstractArray}),
     seen,
-    @nospecialize(mode::TraceMode),
+    @nospecialize(mode::TransmutationMode),
     @nospecialize(track_numbers::Type),
     @nospecialize(sharding),
     @nospecialize(runtime)
@@ -510,7 +510,7 @@ end
 Base.@nospecializeinfer function transmute_type_inner(
     A::Type{AbstractArray{T}},
     seen,
-    mode::TraceMode,
+    mode::TransmutationMode,
     @nospecialize(track_numbers::Type),
     @nospecialize(sharding),
     @nospecialize(runtime)
@@ -527,7 +527,7 @@ end
 Base.@nospecializeinfer function transmute_type_inner(
     A::Type{AbstractArray{T,N}},
     seen,
-    mode::TraceMode,
+    mode::TransmutationMode,
     @nospecialize(track_numbers::Type),
     @nospecialize(sharding),
     @nospecialize(runtime)
@@ -545,7 +545,7 @@ end
 Base.@nospecializeinfer function transmute_type_inner(
     @nospecialize(A::Type{<:Array}),
     seen,
-    mode::TraceMode,
+    mode::TransmutationMode,
     @nospecialize(track_numbers::Type),
     @nospecialize(sharding),
     @nospecialize(runtime)
@@ -590,7 +590,7 @@ end
 Base.@nospecializeinfer function transmute_type_inner(
     @nospecialize(OA::Type{SubArray{T,N,P,I,L}}),
     seen,
-    mode::TraceMode,
+    mode::TransmutationMode,
     @nospecialize(track_numbers::Type),
     @nospecialize(sharding),
     @nospecialize(runtime)
@@ -605,7 +605,7 @@ for P in (Ptr, Core.LLVMPtr, Base.RefValue)
     @eval Base.@nospecializeinfer function transmute_type_inner(
         @nospecialize(PT::Type{$P}),
         seen,
-        @nospecialize(mode::TraceMode),
+        @nospecialize(mode::TransmutationMode),
         @nospecialize(track_numbers::Type),
         @nospecialize(sharding),
         @nospecialize(runtime)
@@ -617,7 +617,7 @@ for P in (Ptr, Base.RefValue)
     @eval Base.@nospecializeinfer function transmute_type_inner(
         @nospecialize(PT::Type{$P{T}}),
         seen,
-        @nospecialize(mode::TraceMode),
+        @nospecialize(mode::TransmutationMode),
         @nospecialize(track_numbers::Type),
         @nospecialize(sharding),
         @nospecialize(runtime)
@@ -633,7 +633,7 @@ end
 Base.@nospecializeinfer function transmute_type_inner(
     @nospecialize(PT::Type{Core.LLVMPtr{T}}),
     seen,
-    @nospecialize(mode::TraceMode),
+    @nospecialize(mode::TransmutationMode),
     @nospecialize(track_numbers::Type),
     @nospecialize(sharding),
     @nospecialize(runtime)
@@ -647,7 +647,7 @@ end
 Base.@nospecializeinfer function transmute_type_inner(
     @nospecialize(PT::Type{Core.LLVMPtr{T,A}}),
     seen,
-    @nospecialize(mode::TraceMode),
+    @nospecialize(mode::TransmutationMode),
     @nospecialize(track_numbers::Type),
     @nospecialize(sharding),
     @nospecialize(runtime)
@@ -660,7 +660,7 @@ end
 Base.@nospecializeinfer function transmute_type_inner(
     @nospecialize(PT::Type{ReactantRNG{S}}),
     seen,
-    @nospecialize(mode::TraceMode),
+    @nospecialize(mode::TransmutationMode),
     @nospecialize(track_numbers::Type),
     @nospecialize(sharding),
     @nospecialize(runtime)
@@ -671,7 +671,7 @@ end
 Base.@nospecializeinfer function transmute_type_inner(
     @nospecialize(PT::Type{<:Random.AbstractRNG}),
     seen,
-    @nospecialize(mode::TraceMode),
+    @nospecialize(mode::TransmutationMode),
     @nospecialize(track_numbers::Type),
     @nospecialize(sharding),
     @nospecialize(runtime)
@@ -709,7 +709,7 @@ end
 Base.@nospecializeinfer function transmute_type_inner(
     @nospecialize(T::Type),
     seen,
-    mode::TraceMode,
+    mode::TransmutationMode,
     @nospecialize(track_numbers::Type),
     @nospecialize(sharding),
     @nospecialize(runtime)
@@ -882,14 +882,14 @@ end
 # function transmute_type_generator(world::UInt, source, self, @nospecialize(T::Type), @nospecialize(mode::Type{<:Val}), @nospecialize(track_numbers::Type))
 #     @nospecialize
 #     T = T.parameters[1]
-#     mode = mode.parameters[1]::TraceMode
+#     mode = mode.parameters[1]::TransmutationMode
 #     track_numbers = track_numbers.parameters[1]
 #
 #
 #     min_world = Ref{UInt}(typemin(UInt))
 #     max_world = Ref{UInt}(typemax(UInt))
 #
-#     sig = Tuple{typeof(transmute_type_inner), Type{T}, Dict{Type, Type}, TraceMode, Type{track_numbers}}
+#     sig = Tuple{typeof(transmute_type_inner), Type{T}, Dict{Type, Type}, TransmutationMode, Type{track_numbers}}
 #
 #     lookup_result = lookup_world(
 #         sig, world, nothing, min_world, max_world
@@ -929,7 +929,7 @@ end
 #     new_ci.min_world = min_world[]
 #     new_ci.max_world = max_world[]
 #     edges = Any[mi]
-#     gensig = Tuple{typeof(transmute_type_inner), Type, Dict{Type, Type}, TraceMode, Type{track_numbers}}
+#     gensig = Tuple{typeof(transmute_type_inner), Type, Dict{Type, Type}, TransmutationMode, Type{track_numbers}}
 #     push!(edges, ccall(:jl_method_table_for, Any, (Any,), gensig))
 #     push!(edges, gensig)
 #
@@ -2255,7 +2255,7 @@ end
 function transmute_type_inner(
     @nospecialize(RT::Type{<:UnitRange{<:ReactantPrimitive}}),
     seen,
-    mode::TraceMode,
+    mode::TransmutationMode,
     track_numbers::Type,
     sharding,
     runtime,
@@ -2298,7 +2298,7 @@ end
 function transmute_type_inner(
     @nospecialize(RT::Type{<:StepRangeLen}),
     seen,
-    mode::TraceMode,
+    mode::TransmutationMode,
     track_numbers::Type,
     sharding,
     runtime,

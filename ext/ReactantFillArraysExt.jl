@@ -13,7 +13,7 @@ for AT in (Fill, Ones, Zeros)
     @eval Base.@nospecializeinfer function Reactant.transmute_type_inner(
         @nospecialize(FA::Type{$(AT){T,N,Axes}}),
         seen,
-        mode::Reactant.TraceMode,
+        mode::Reactant.TransmutationMode,
         @nospecialize(track_numbers::Type),
         @nospecialize(sharding),
         @nospecialize(runtime)
@@ -67,7 +67,7 @@ end
 Base.@nospecializeinfer function Reactant.transmute_type_inner(
     @nospecialize(FA::Type{OneElement{T,N,I,A}}),
     seen,
-    mode::Reactant.TraceMode,
+    mode::Reactant.TransmutationMode,
     @nospecialize(track_numbers::Type),
     @nospecialize(sharding),
     @nospecialize(runtime)

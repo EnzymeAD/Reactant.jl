@@ -1348,7 +1348,7 @@ end
 Base.@nospecializeinfer function Reactant.transmute_type_inner(
     @nospecialize(A::Type{<:CuTracedArray}),
     seen,
-    @nospecialize(mode::Reactant.TraceMode),
+    @nospecialize(mode::Reactant.TransmutationMode),
     @nospecialize(track_numbers::Type),
     @nospecialize(sharding),
     @nospecialize(runtime)
@@ -1359,7 +1359,7 @@ end
 Base.@nospecializeinfer function Reactant.transmute_type_inner(
     @nospecialize(A::Type{<:CuTracedRNumber}),
     seen,
-    @nospecialize(mode::Reactant.TraceMode),
+    @nospecialize(mode::Reactant.TransmutationMode),
     @nospecialize(track_numbers::Type),
     @nospecialize(sharding),
     @nospecialize(runtime)
@@ -1370,7 +1370,7 @@ end
 Base.@nospecializeinfer function Reactant.transmute_type_inner(
     @nospecialize(A::Type{<:CUDA.CuArray}),
     seen,
-    mode::Reactant.TraceMode,
+    mode::Reactant.TransmutationMode,
     @nospecialize(track_numbers::Type),
     @nospecialize(sharding),
     @nospecialize(runtime)
