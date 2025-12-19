@@ -152,7 +152,7 @@ end
         x::T
     end
 
-    function Reactant.Compiler.make_tracer(
+    function Reactant.Compiler.transmute(
         seen, prev::MockTestCustomPath, path, mode; kwargs...
     )
         custom_path = Reactant.append_path(path, (; custom_id=1))

@@ -1,4 +1,4 @@
-@enum TraceMode begin
+@enum TransmutationMode begin
     ConcreteToTraced = 1
     TracedTrack = 2
     TracedToConcrete = 3
@@ -8,6 +8,68 @@
     NoStopTracedTrack = 7
     TracedToJAX = 8
 end
+
+const TraceMode = TransmutationMode
+
+const transmute_type_cache = Dict{Tuple{TransmutationMode,Type,Any},Dict{Type,Type}}()
+
+"""
+    transmute_type(T::Type, ::Val{mode}, track_numbers::Type, sharding, runtime)
+
+Return the adapted typed used for tracing.
+
+!!! warning
+    This is the new name for the `traced_type` function, which is deprecated and will be removed on v0.3 release.
+    If you extend it with new methods, transition to this new function instead on the next breaking release.
+"""
+Base.@assume_effects :total @inline function transmute_type(
+    T::Type, ::Val{mode}, track_numbers::Type, sharding, runtime
+) where {mode}
+    if mode == TracedSetPath || mode == TracedTrack || mode == TracedToTypes
+        return T
+    end
+
+    cache = nothing
+    cache_key = (mode, track_numbers, sharding)
+    if haskey(transmute_type_cache, cache_key)
+        cache = transmute_type_cache[cache_key]
+    else
+        cache = Dict{Type,Type}()
+        transmute_type_cache[cache_key] = cache
+    end
+    return transmute_type_inner(T, cache, mode, track_numbers, sharding, runtime)
+end
+
+promote_transmute_type(a::Type, b::Type) = Base.promote_type(a, b)
+
+"""
+    transmute(seen, prev, path, mode; track_numbers=Union{}, sharding=Sharding.NoSharding(), runtime=nothing, kwargs...)
+
+Adapt the object to be suitable for tracing, returning a new object if needed.
+
+!!! warning
+    This is the new name for the `make_tracer` function, which is deprecated and will be removed on v0.3 release.
+    If you extend it with new methods, transition to this new function instead on the next breaking release.
+"""
+function transmute(
+    seen,
+    @nospecialize(prev),
+    @nospecialize(path),
+    mode;
+    @nospecialize(track_numbers::Type = Union{}),
+    @nospecialize(sharding = Sharding.NoSharding()),
+    @nospecialize(runtime = nothing),
+    kwargs...,
+)
+    return transmute_unknown(
+        seen, prev, path, mode; track_numbers, sharding, runtime, kwargs...
+    )
+end
+
+# kept for backward compatibility
+const traced_type = transmute_type
+const promote_traced_type = promote_transmute_type
+const make_tracer = transmute
 
 function convert_to_jax_dtype_struct end
 function jax_dtype_struct_type end
@@ -19,9 +81,9 @@ end
 is_traced_number(x::Type) = false
 Base.@nospecializeinfer is_traced_number(@nospecialize(T::Type{<:TracedRNumber})) = true
 
-function traced_type_inner end
+function transmute_type_inner end
 
-Base.@nospecializeinfer function traced_type_inner(
+Base.@nospecializeinfer function transmute_type_inner(
     @nospecialize(T::Type{Union{}}), @nospecialize(args...)
 )
     return T
@@ -41,7 +103,7 @@ for T in (
     VersionNumber,
     Sharding.Mesh,
 )
-    @eval Base.@nospecializeinfer function traced_type_inner(
+    @eval Base.@nospecializeinfer function transmute_type_inner(
         @nospecialize(T::Type{<:$T}),
         seen,
         @nospecialize(mode::TraceMode),
@@ -53,7 +115,7 @@ for T in (
     end
 end
 
-Base.@nospecializeinfer function traced_type_inner(
+Base.@nospecializeinfer function transmute_type_inner(
     @nospecialize(T::Type{<:ReactantPrimitive}),
     seen,
     @nospecialize(mode::TraceMode),
@@ -76,7 +138,7 @@ Base.@nospecializeinfer function traced_type_inner(
     return T
 end
 
-Base.@nospecializeinfer function traced_type_inner(
+Base.@nospecializeinfer function transmute_type_inner(
     @nospecialize(C::Type{<:Complex}),
     seen,
     @nospecialize(mode::TraceMode),
@@ -85,12 +147,12 @@ Base.@nospecializeinfer function traced_type_inner(
     @nospecialize(runtime)
 )
     C isa UnionAll || return Complex{
-        traced_type_inner(C.parameters[1], seen, mode, track_numbers, sharding, runtime)
+        transmute_type_inner(C.parameters[1], seen, mode, track_numbers, sharding, runtime)
     }
     return C
 end
 
-Base.@nospecializeinfer function traced_type_inner(
+Base.@nospecializeinfer function transmute_type_inner(
     @nospecialize(T::Type{<:Function}),
     seen,
     mode::TraceMode,
@@ -108,7 +170,7 @@ Base.@nospecializeinfer function traced_type_inner(
     changed = false
     traced_fieldtypes = Type[]
     for i in 1:N
-        next = traced_type_inner(
+        next = transmute_type_inner(
             fieldtype(T, i), seen, mode, track_numbers, getproperty(sharding, i), runtime
         )
         changed |= next != fieldtype(T, i)
@@ -138,14 +200,14 @@ Base.@nospecializeinfer function traced_tuple_type_inner(
         if T.var.lb === Union{} && T.var.ub === Any
             return UnionAll(
                 T.var,
-                traced_type_inner(T.body, seen, mode, track_numbers, sharding, runtime),
+                transmute_type_inner(T.body, seen, mode, track_numbers, sharding, runtime),
             )
         end
         throw(AssertionError("Type $T is not concrete type or concrete tuple"))
     end
     TT = Union{Type,Core.TypeofVararg}[]
     for i in 1:length(T.parameters)
-        st = traced_type_inner(
+        st = transmute_type_inner(
             T.parameters[i], seen, mode, track_numbers, sharding, runtime
         )
         push!(TT, st)
@@ -153,7 +215,7 @@ Base.@nospecializeinfer function traced_tuple_type_inner(
     return Tuple{TT...}
 end
 
-Base.@nospecializeinfer function traced_type_inner(
+Base.@nospecializeinfer function transmute_type_inner(
     @nospecialize(T::Type{<:Tuple}),
     seen,
     mode::TraceMode,
@@ -164,7 +226,7 @@ Base.@nospecializeinfer function traced_type_inner(
     return traced_tuple_type_inner(T, seen, mode, track_numbers, sharding, runtime)
 end
 
-Base.@nospecializeinfer function traced_type_inner(
+Base.@nospecializeinfer function transmute_type_inner(
     @nospecialize(T::Core.TypeofVararg),
     seen,
     @nospecialize(mode::TraceMode),
@@ -172,10 +234,10 @@ Base.@nospecializeinfer function traced_type_inner(
     @nospecialize(sharding),
     @nospecialize(runtime)
 )
-    return Vararg{traced_type_inner(T.T, seen, mode, track_numbers, sharding, runtime),T.N}
+    return Vararg{transmute_type_inner(T.T, seen, mode, track_numbers, sharding, runtime),T.N}
 end
 
-Base.@nospecializeinfer function traced_type_inner(
+Base.@nospecializeinfer function transmute_type_inner(
     @nospecialize(T::TypeVar),
     seen,
     @nospecialize(mode::TraceMode),
@@ -189,7 +251,7 @@ Base.@nospecializeinfer function traced_type_inner(
     throw(AssertionError("Unsupported Typevar $T lb=$(T.lb) ub=$(T.ub)"))
 end
 
-Base.@nospecializeinfer function traced_type_inner(
+Base.@nospecializeinfer function transmute_type_inner(
     @nospecialize(T::Type{<:NamedTuple}),
     seen,
     @nospecialize(mode::TraceMode),
@@ -199,7 +261,7 @@ Base.@nospecializeinfer function traced_type_inner(
 )
     N = T.parameters[1]
     V = T.parameters[2]
-    return NamedTuple{N,traced_type_inner(V, seen, mode, track_numbers, sharding, runtime)}
+    return NamedTuple{N,transmute_type_inner(V, seen, mode, track_numbers, sharding, runtime)}
 end
 
 Base.@nospecializeinfer @inline dict_key(::Type{<:AbstractDict}) = nothing
@@ -219,7 +281,7 @@ Base.@nospecializeinfer @inline function dict_value(
     end
 end
 
-Base.@nospecializeinfer function traced_type_inner(
+Base.@nospecializeinfer function transmute_type_inner(
     @nospecialize(T::Type{<:AbstractDict}),
     seen,
     @nospecialize(mode::TraceMode),
@@ -232,7 +294,7 @@ Base.@nospecializeinfer function traced_type_inner(
         return T
     else
         K = dict_key(T)
-        V2 = traced_type_inner(V, seen, mode, track_numbers, sharding, runtime)
+        V2 = transmute_type_inner(V, seen, mode, track_numbers, sharding, runtime)
         if V == V2
             return T
         end
@@ -249,7 +311,7 @@ Base.@nospecializeinfer function traced_type_inner(
     end
 end
 
-Base.@nospecializeinfer function traced_type_inner(
+Base.@nospecializeinfer function transmute_type_inner(
     @nospecialize(T0::Type{<:ConcretePJRTNumber}),
     seen,
     @nospecialize(mode::TraceMode),
@@ -275,7 +337,7 @@ Base.@nospecializeinfer function traced_type_inner(
     end
 end
 
-Base.@nospecializeinfer function traced_type_inner(
+Base.@nospecializeinfer function transmute_type_inner(
     @nospecialize(T0::Type{<:ConcreteIFRTNumber}),
     seen,
     @nospecialize(mode::TraceMode),
@@ -297,7 +359,7 @@ Base.@nospecializeinfer function traced_type_inner(
     end
 end
 
-Base.@nospecializeinfer function traced_type_inner(
+Base.@nospecializeinfer function transmute_type_inner(
     @nospecialize(T::Type{<:ConcretePJRTArray}),
     seen,
     @nospecialize(mode::TraceMode),
@@ -327,7 +389,7 @@ Base.@nospecializeinfer function traced_type_inner(
     end
 end
 
-Base.@nospecializeinfer function traced_type_inner(
+Base.@nospecializeinfer function transmute_type_inner(
     @nospecialize(T::Type{<:ConcreteIFRTArray}),
     seen,
     @nospecialize(mode::TraceMode),
@@ -357,7 +419,7 @@ Base.@nospecializeinfer function traced_type_inner(
     end
 end
 
-Base.@nospecializeinfer function traced_type_inner(
+Base.@nospecializeinfer function transmute_type_inner(
     @nospecialize(T::Type{MissingTracedValue}),
     seen,
     mode::TraceMode,
@@ -368,7 +430,7 @@ Base.@nospecializeinfer function traced_type_inner(
     return error("This should not happen")
 end
 
-Base.@nospecializeinfer function traced_type_inner(
+Base.@nospecializeinfer function transmute_type_inner(
     @nospecialize(T::Type{<:TracedRArray}),
     seen,
     mode::TraceMode,
@@ -400,7 +462,7 @@ Base.@nospecializeinfer function traced_type_inner(
     end
 end
 
-Base.@nospecializeinfer function traced_type_inner(
+Base.@nospecializeinfer function transmute_type_inner(
     @nospecialize(T::Type{<:TracedRNumber}),
     seen,
     mode::TraceMode,
@@ -434,7 +496,7 @@ Base.@nospecializeinfer function traced_type_inner(
     end
 end
 
-Base.@nospecializeinfer function traced_type_inner(
+Base.@nospecializeinfer function transmute_type_inner(
     @nospecialize(A::Type{AbstractArray}),
     seen,
     @nospecialize(mode::TraceMode),
@@ -445,7 +507,7 @@ Base.@nospecializeinfer function traced_type_inner(
     return A
 end
 
-Base.@nospecializeinfer function traced_type_inner(
+Base.@nospecializeinfer function transmute_type_inner(
     A::Type{AbstractArray{T}},
     seen,
     mode::TraceMode,
@@ -455,14 +517,14 @@ Base.@nospecializeinfer function traced_type_inner(
 ) where {T}
     if mode == ConcreteToTraced
         return AbstractArray{
-            traced_type_inner(eltype(A), seen, mode, track_numbers, sharding, runtime)
+            transmute_type_inner(eltype(A), seen, mode, track_numbers, sharding, runtime)
         }
     else
         return A
     end
 end
 
-Base.@nospecializeinfer function traced_type_inner(
+Base.@nospecializeinfer function transmute_type_inner(
     A::Type{AbstractArray{T,N}},
     seen,
     mode::TraceMode,
@@ -472,7 +534,7 @@ Base.@nospecializeinfer function traced_type_inner(
 ) where {T,N}
     if mode == ConcreteToTraced
         return AbstractArray{
-            traced_type_inner(eltype(A), seen, mode, track_numbers, sharding, runtime),
+            transmute_type_inner(eltype(A), seen, mode, track_numbers, sharding, runtime),
             ndims(A),
         }
     else
@@ -480,7 +542,7 @@ Base.@nospecializeinfer function traced_type_inner(
     end
 end
 
-Base.@nospecializeinfer function traced_type_inner(
+Base.@nospecializeinfer function transmute_type_inner(
     @nospecialize(A::Type{<:Array}),
     seen,
     mode::TraceMode,
@@ -496,7 +558,7 @@ Base.@nospecializeinfer function traced_type_inner(
             error("Unsupported runtime $runtime")
         else
             return Array{
-                traced_type_inner(
+                transmute_type_inner(
                     T, seen, mode, track_numbers, getproperty(sharding, 1), runtime
                 ),
             }
@@ -516,7 +578,7 @@ Base.@nospecializeinfer function traced_type_inner(
             error("Unsupported runtime $runtime")
         else
             return Array{
-                traced_type_inner(
+                transmute_type_inner(
                     T, seen, mode, track_numbers, getproperty(sharding, 1), runtime
                 ),
                 N,
@@ -525,7 +587,7 @@ Base.@nospecializeinfer function traced_type_inner(
     end
 end
 
-Base.@nospecializeinfer function traced_type_inner(
+Base.@nospecializeinfer function transmute_type_inner(
     @nospecialize(OA::Type{SubArray{T,N,P,I,L}}),
     seen,
     mode::TraceMode,
@@ -533,14 +595,14 @@ Base.@nospecializeinfer function traced_type_inner(
     @nospecialize(sharding),
     @nospecialize(runtime)
 ) where {T,N,P,I,L}
-    P2 = traced_type_inner(P, seen, mode, track_numbers, sharding, runtime)
-    I2 = traced_type_inner(I, seen, mode, track_numbers, sharding, runtime)
+    P2 = transmute_type_inner(P, seen, mode, track_numbers, sharding, runtime)
+    I2 = transmute_type_inner(I, seen, mode, track_numbers, sharding, runtime)
     T2 = eltype(P2)
     return SubArray{T2,N,P2,I2,L}
 end
 
 for P in (Ptr, Core.LLVMPtr, Base.RefValue)
-    @eval Base.@nospecializeinfer function traced_type_inner(
+    @eval Base.@nospecializeinfer function transmute_type_inner(
         @nospecialize(PT::Type{$P}),
         seen,
         @nospecialize(mode::TraceMode),
@@ -552,7 +614,7 @@ for P in (Ptr, Core.LLVMPtr, Base.RefValue)
     end
 end
 for P in (Ptr, Base.RefValue)
-    @eval Base.@nospecializeinfer function traced_type_inner(
+    @eval Base.@nospecializeinfer function transmute_type_inner(
         @nospecialize(PT::Type{$P{T}}),
         seen,
         @nospecialize(mode::TraceMode),
@@ -561,14 +623,14 @@ for P in (Ptr, Base.RefValue)
         @nospecialize(runtime)
     ) where {T}
         return $P{
-            traced_type_inner(
+            transmute_type_inner(
                 PT.parameters[1], seen, mode, track_numbers, sharding, runtime
             ),
         }
     end
 end
 
-Base.@nospecializeinfer function traced_type_inner(
+Base.@nospecializeinfer function transmute_type_inner(
     @nospecialize(PT::Type{Core.LLVMPtr{T}}),
     seen,
     @nospecialize(mode::TraceMode),
@@ -577,12 +639,12 @@ Base.@nospecializeinfer function traced_type_inner(
     @nospecialize(runtime)
 ) where {T}
     return Core.LLVMPtr{
-        traced_type_inner(
+        transmute_type_inner(
             PT.body.parameters[1], seen, mode, track_numbers, sharding, runtime
         ),
     }
 end
-Base.@nospecializeinfer function traced_type_inner(
+Base.@nospecializeinfer function transmute_type_inner(
     @nospecialize(PT::Type{Core.LLVMPtr{T,A}}),
     seen,
     @nospecialize(mode::TraceMode),
@@ -591,11 +653,11 @@ Base.@nospecializeinfer function traced_type_inner(
     @nospecialize(runtime)
 ) where {T,A}
     return Core.LLVMPtr{
-        traced_type_inner(PT.parameters[1], seen, mode, track_numbers, sharding, runtime),A
+        transmute_type_inner(PT.parameters[1], seen, mode, track_numbers, sharding, runtime),A
     }
 end
 
-Base.@nospecializeinfer function traced_type_inner(
+Base.@nospecializeinfer function transmute_type_inner(
     @nospecialize(PT::Type{ReactantRNG{S}}),
     seen,
     @nospecialize(mode::TraceMode),
@@ -603,10 +665,10 @@ Base.@nospecializeinfer function traced_type_inner(
     @nospecialize(sharding),
     @nospecialize(runtime)
 ) where {S}
-    return ReactantRNG{traced_type_inner(S, seen, mode, track_numbers, sharding, runtime)}
+    return ReactantRNG{transmute_type_inner(S, seen, mode, track_numbers, sharding, runtime)}
 end
 
-Base.@nospecializeinfer function traced_type_inner(
+Base.@nospecializeinfer function transmute_type_inner(
     @nospecialize(PT::Type{<:Random.AbstractRNG}),
     seen,
     @nospecialize(mode::TraceMode),
@@ -616,7 +678,7 @@ Base.@nospecializeinfer function traced_type_inner(
 )
     if mode == ArrayToConcrete
         return ReactantRNG{
-            traced_type_inner(Array{UInt64,1}, seen, mode, track_numbers, sharding, runtime)
+            transmute_type_inner(Array{UInt64,1}, seen, mode, track_numbers, sharding, runtime)
         }
     end
     return PT
@@ -644,7 +706,7 @@ function collect_tvars_in_type!(dependencies, @nospecialize(t))
     end
 end
 
-Base.@nospecializeinfer function traced_type_inner(
+Base.@nospecializeinfer function transmute_type_inner(
     @nospecialize(T::Type),
     seen,
     mode::TraceMode,
@@ -677,7 +739,7 @@ Base.@nospecializeinfer function traced_type_inner(
         if T.var.lb === Union{} && T.var.ub === Any || T <: Type
             return UnionAll(
                 T.var,
-                traced_type_inner(T.body, seen, mode, track_numbers, sharding, runtime),
+                transmute_type_inner(T.body, seen, mode, track_numbers, sharding, runtime),
             )
         end
         aT = Base.argument_datatype(T)
@@ -692,8 +754,8 @@ Base.@nospecializeinfer function traced_type_inner(
 
     if T isa Union
         return Union{
-            traced_type_inner(T.a, seen, mode, track_numbers, sharding, runtime),
-            traced_type_inner(T.b, seen, mode, track_numbers, sharding, runtime),
+            transmute_type_inner(T.a, seen, mode, track_numbers, sharding, runtime),
+            transmute_type_inner(T.b, seen, mode, track_numbers, sharding, runtime),
         }
     end
 
@@ -720,7 +782,7 @@ Base.@nospecializeinfer function traced_type_inner(
     subTys = Union{Type,TypeVar}[]
     for f in 1:fieldcount(T)
         subT = fieldtype(T, f)
-        subTT = traced_type_inner(subT, seen2, mode, track_numbers, sharding, runtime)
+        subTT = transmute_type_inner(subT, seen2, mode, track_numbers, sharding, runtime)
         changed |= subT != subTT
         push!(subTys, subTT)
     end
@@ -739,7 +801,7 @@ Base.@nospecializeinfer function traced_type_inner(
     subParms = []
     for (i, SST) in enumerate(T.parameters)
         if wrapped_cpjrt_array && i == 1 && SST isa Type && SST <: ReactantPrimitive
-            TrT = traced_type_inner(
+            TrT = transmute_type_inner(
                 ConcretePJRTNumber{SST,Sharding.ndevices(sharding)},
                 seen,
                 mode,
@@ -749,18 +811,18 @@ Base.@nospecializeinfer function traced_type_inner(
             )
             push!(subParms, TrT)
         elseif wrapped_cifrt_array && i == 1 && SST isa Type && SST <: ReactantPrimitive
-            TrT = traced_type_inner(
+            TrT = transmute_type_inner(
                 ConcreteIFRTNumber{SST}, seen, mode, track_numbers, sharding, runtime
             )
             push!(subParms, TrT)
         elseif wrapped_tracedarray && i == 1 && SST isa Type && SST <: TracedRNumber
-            TrT = traced_type_inner(
+            TrT = transmute_type_inner(
                 unwrapped_eltype(SST), seen, mode, track_numbers, sharding, runtime
             )
             push!(subParms, TrT)
         else
             if SST isa Type
-                TrT = traced_type_inner(SST, seen, mode, track_numbers, sharding, runtime)
+                TrT = transmute_type_inner(SST, seen, mode, track_numbers, sharding, runtime)
                 push!(subParms, TrT)
             else
                 push!(subParms, SST)
@@ -800,7 +862,7 @@ Base.@nospecializeinfer function traced_type_inner(
 
             subT = fieldtype(T, f)
             subT2 = fieldtype(TT2, f)
-            subTT = traced_type_inner(subT, seen3, mode, track_numbers, sharding, runtime)
+            subTT = transmute_type_inner(subT, seen3, mode, track_numbers, sharding, runtime)
             if subT2 != subTT
                 legal = false
                 break
@@ -817,9 +879,7 @@ Base.@nospecializeinfer function traced_type_inner(
     throw(NoFieldMatchError(T, TT2, subTys))
 end
 
-const traced_type_cache = Dict{Tuple{TraceMode,Type,Any},Dict{Type,Type}}()
-
-# function traced_type_generator(world::UInt, source, self, @nospecialize(T::Type), @nospecialize(mode::Type{<:Val}), @nospecialize(track_numbers::Type))
+# function transmute_type_generator(world::UInt, source, self, @nospecialize(T::Type), @nospecialize(mode::Type{<:Val}), @nospecialize(track_numbers::Type))
 #     @nospecialize
 #     T = T.parameters[1]
 #     mode = mode.parameters[1]::TraceMode
@@ -829,13 +889,13 @@ const traced_type_cache = Dict{Tuple{TraceMode,Type,Any},Dict{Type,Type}}()
 #     min_world = Ref{UInt}(typemin(UInt))
 #     max_world = Ref{UInt}(typemax(UInt))
 #
-#     sig = Tuple{typeof(traced_type_inner), Type{T}, Dict{Type, Type}, TraceMode, Type{track_numbers}}
+#     sig = Tuple{typeof(transmute_type_inner), Type{T}, Dict{Type, Type}, TraceMode, Type{track_numbers}}
 #
 #     lookup_result = lookup_world(
 #         sig, world, nothing, min_world, max_world
 #     )
 #     if lookup_result === nothing
-#         stub = Core.GeneratedFunctionStub(identity, Core.svec(:traced_type, :T, :mode, :track_numbers), Core.svec())
+#         stub = Core.GeneratedFunctionStub(identity, Core.svec(:transmute_type, :T, :mode, :track_numbers), Core.svec())
 #         return stub(world, source, method_error)
 #     end
 #     match = lookup_result::Core.MethodMatch
@@ -847,11 +907,11 @@ const traced_type_cache = Dict{Tuple{TraceMode,Type,Any},Dict{Type,Type}}()
 #
 #     cache = nothing
 #     cache_key = (mode, track_numbers)
-#     if haskey(traced_type_cache, cache_key)
-#         cache = traced_type_cache[cache_key]
+#     if haskey(transmute_type_cache, cache_key)
+#         cache = transmute_type_cache[cache_key]
 #     else
 #         cache = Dict{Type, Type}()
-#         traced_type_cache[cache_key] = cache
+#         transmute_type_cache[cache_key] = cache
 #     end
 #
 #
@@ -869,7 +929,7 @@ const traced_type_cache = Dict{Tuple{TraceMode,Type,Any},Dict{Type,Type}}()
 #     new_ci.min_world = min_world[]
 #     new_ci.max_world = max_world[]
 #     edges = Any[mi]
-#     gensig = Tuple{typeof(traced_type_inner), Type, Dict{Type, Type}, TraceMode, Type{track_numbers}}
+#     gensig = Tuple{typeof(transmute_type_inner), Type, Dict{Type, Type}, TraceMode, Type{track_numbers}}
 #     push!(edges, ccall(:jl_method_table_for, Any, (Any,), gensig))
 #     push!(edges, gensig)
 #
@@ -885,10 +945,10 @@ const traced_type_cache = Dict{Tuple{TraceMode,Type,Any},Dict{Type,Type}}()
 #     new_ci.slotflags = UInt8[0x00 for i = 1:4]
 #
 #     # return the codegen world age
-#     res1 = call_with_reactant(traced_type_inner, T, cache, mode, track_numbers)
+#     res1 = call_with_reactant(transmute_type_inner, T, cache, mode, track_numbers)
 #
-#     res0 = Base.invoke_in_world(world, traced_type_inner, T, cache, mode, track_numbers)
-#     res = Base.invokelatest(traced_type_inner, T, cache, mode, track_numbers)
+#     res0 = Base.invoke_in_world(world, transmute_type_inner, T, cache, mode, track_numbers)
+#     res = Base.invokelatest(transmute_type_inner, T, cache, mode, track_numbers)
 #     push!(new_ci.code, Core.Compiler.ReturnNode(res))
 #     push!(new_ci.ssaflags, 0x00)   # Julia's native compilation pipeline (and its verifier) expects `ssaflags` to be the same length as `code`
 #     @static if isdefined(Core, :DebugInfo)
@@ -905,9 +965,9 @@ const traced_type_cache = Dict{Tuple{TraceMode,Type,Any},Dict{Type,Type}}()
 #     return new_ci
 # end
 #
-# @eval Base.@assume_effects :removable :foldable :nothrow @inline function traced_type_old(T::Type, mode::Val, track_numbers::Type)
+# @eval Base.@assume_effects :removable :foldable :nothrow @inline function transmute_type_old(T::Type, mode::Val, track_numbers::Type)
 #     $(Expr(:meta, :generated_only))
-#     $(Expr(:meta, :generated, traced_type_generator))
+#     $(Expr(:meta, :generated, transmute_type_generator))
 # end
 
 resolve_conflict(t1::Type{<:ConcreteRNumber{T}}, t2::Type{T}) where {T} = T
@@ -1006,46 +1066,6 @@ function typevar_dict(t)
     return d
 end
 
-"""
-    transmute_type(args...; kwargs...)
-
-Return the adapted typed used for tracing.
-
-!!! warning
-    This is the new name for the `traced_type` function, which is deprecated and will be removed on v0.3 release.
-    If you extend it with new methods, transition to this new function instead on the next breaking release.
-"""
-transmute_type(args...; kwargs...) = traced_type(args...; kwargs...)
-
-"""
-    transmute(args...; kwargs...)
-
-Adapt the object to be suitable for tracing, returning a new object if needed.
-
-!!! warning
-    This is the new name for the `make_tracer` function, which is deprecated and will be removed on v0.3 release.
-    If you extend it with new methods, transition to this new function instead on the next breaking release.
-"""
-transmute(args...; kwargs...) = make_tracer(args...; kwargs...)
-
-Base.@assume_effects :total @inline function traced_type(
-    T::Type, ::Val{mode}, track_numbers::Type, sharding, runtime
-) where {mode}
-    if mode == TracedSetPath || mode == TracedTrack || mode == TracedToTypes
-        return T
-    end
-
-    cache = nothing
-    cache_key = (mode, track_numbers, sharding)
-    if haskey(traced_type_cache, cache_key)
-        cache = traced_type_cache[cache_key]
-    else
-        cache = Dict{Type,Type}()
-        traced_type_cache[cache_key] = cache
-    end
-    return traced_type_inner(T, cache, mode, track_numbers, sharding, runtime)
-end
-
 abstract type TracedTypeException <: Exception end
 
 struct TracedTypeError <: TracedTypeException
@@ -1087,7 +1107,7 @@ function Base.showerror(io::IO, err::NoFieldMatchError)
     end
 end
 
-function make_tracer(
+function transmute(
     seen,
     @nospecialize(prev::Union{Base.ExceptionStack,Core.MethodInstance}),
     @nospecialize(path),
@@ -1098,7 +1118,7 @@ function make_tracer(
 end
 append_path(@nospecialize(path), i) = (path..., i)
 
-Base.@nospecializeinfer function make_tracer_via_immutable_constructor(
+Base.@nospecializeinfer function transmute_via_immutable_constructor(
     seen,
     @nospecialize(prev),
     @nospecialize(path),
@@ -1182,7 +1202,7 @@ Base.@nospecializeinfer function make_tracer_via_immutable_constructor(
     return y
 end
 
-Base.@nospecializeinfer function make_tracer_unknown(
+Base.@nospecializeinfer function transmute_unknown(
     seen,
     @nospecialize(prev),
     @nospecialize(path),
@@ -1353,22 +1373,7 @@ Base.@nospecializeinfer function make_tracer_unknown(
     return y
 end
 
-function make_tracer(
-    seen,
-    @nospecialize(prev),
-    @nospecialize(path),
-    mode;
-    @nospecialize(track_numbers::Type = Union{}),
-    @nospecialize(sharding = Sharding.NoSharding()),
-    @nospecialize(runtime = nothing),
-    kwargs...,
-)
-    return make_tracer_unknown(
-        seen, prev, path, mode; track_numbers, sharding, runtime, kwargs...
-    )
-end
-
-Base.@nospecializeinfer function make_tracer(
+Base.@nospecializeinfer function transmute(
     seen,
     @nospecialize(prev::ConcretePJRTArray{T,N}),
     @nospecialize(path),
@@ -1389,7 +1394,7 @@ Base.@nospecializeinfer function make_tracer(
     return res
 end
 
-Base.@nospecializeinfer function make_tracer(
+Base.@nospecializeinfer function transmute(
     seen,
     @nospecialize(prev::ConcreteIFRTArray{T,N}),
     @nospecialize(path),
@@ -1410,7 +1415,7 @@ Base.@nospecializeinfer function make_tracer(
     return res
 end
 
-Base.@nospecializeinfer function make_tracer(
+Base.@nospecializeinfer function transmute(
     seen,
     prev::ConcretePJRTNumber{T},
     @nospecialize(path),
@@ -1431,7 +1436,7 @@ Base.@nospecializeinfer function make_tracer(
     return res
 end
 
-Base.@nospecializeinfer function make_tracer(
+Base.@nospecializeinfer function transmute(
     seen,
     @nospecialize(prev::ConcreteIFRTNumber{T}),
     @nospecialize(path),
@@ -1452,7 +1457,7 @@ Base.@nospecializeinfer function make_tracer(
     return res
 end
 
-Base.@nospecializeinfer function make_tracer(
+Base.@nospecializeinfer function transmute(
     seen,
     @nospecialize(prev::TracedRArray{T,N}),
     @nospecialize(path),
@@ -1541,7 +1546,7 @@ Base.@nospecializeinfer function make_tracer(
     throw("Cannot Unknown trace mode $mode")
 end
 
-Base.@nospecializeinfer function make_tracer(
+Base.@nospecializeinfer function transmute(
     seen,
     @nospecialize(prev::TracedRNumber{T}),
     @nospecialize(path),
@@ -1630,7 +1635,7 @@ Base.@nospecializeinfer function make_tracer(
     throw("Cannot Unknown trace mode $mode")
 end
 
-Base.@nospecializeinfer function make_tracer(
+Base.@nospecializeinfer function transmute(
     seen, @nospecialize(prev::MissingTracedValue), @nospecialize(path), mode; kwargs...
 )
     if mode == ConcreteToTraced
@@ -1667,7 +1672,7 @@ Base.@nospecializeinfer function make_tracer(
     throw("Cannot Unknown trace mode $mode")
 end
 
-Base.@nospecializeinfer function make_tracer(
+Base.@nospecializeinfer function transmute(
     seen,
     @nospecialize(prev::Number),
     @nospecialize(path),
@@ -1712,7 +1717,7 @@ Base.@nospecializeinfer function make_tracer(
     return prev
 end
 
-Base.@nospecializeinfer function make_tracer(
+Base.@nospecializeinfer function transmute(
     seen, @nospecialize(prev::Type), @nospecialize(path), mode; kwargs...
 )
     if mode == TracedToTypes
@@ -1722,7 +1727,7 @@ Base.@nospecializeinfer function make_tracer(
     return prev
 end
 
-Base.@nospecializeinfer function make_tracer(
+Base.@nospecializeinfer function transmute(
     seen, @nospecialize(prev::Symbol), @nospecialize(path), mode; kwargs...
 )
     if mode == TracedToTypes
@@ -1732,7 +1737,7 @@ Base.@nospecializeinfer function make_tracer(
     return prev
 end
 
-Base.@nospecializeinfer function make_tracer(
+Base.@nospecializeinfer function transmute(
     seen,
     @nospecialize(prev::Complex),
     @nospecialize(path),
@@ -1753,7 +1758,7 @@ Base.@nospecializeinfer function make_tracer(
     )
 end
 
-Base.@nospecializeinfer function make_tracer(
+Base.@nospecializeinfer function transmute(
     seen,
     @nospecialize(prev::Array),
     @nospecialize(path),
@@ -1842,7 +1847,7 @@ Base.@nospecializeinfer function make_tracer(
     return newa
 end
 
-Base.@nospecializeinfer function make_tracer(
+Base.@nospecializeinfer function transmute(
     seen,
     @nospecialize(prev::Dict{Key,Value}),
     @nospecialize(path),
@@ -1933,7 +1938,7 @@ Base.@nospecializeinfer function make_tracer(
     return newa
 end
 
-Base.@nospecializeinfer function make_tracer(
+Base.@nospecializeinfer function transmute(
     seen,
     @nospecialize(prev::Tuple),
     @nospecialize(path),
@@ -1965,7 +1970,7 @@ Base.@nospecializeinfer function make_tracer(
     )
 end
 
-Base.@nospecializeinfer function make_tracer(
+Base.@nospecializeinfer function transmute(
     seen,
     @nospecialize(prev::NamedTuple),
     @nospecialize(path),
@@ -2006,7 +2011,7 @@ end
 
 struct UndefinedBox end
 
-Base.@nospecializeinfer function make_tracer(
+Base.@nospecializeinfer function transmute(
     seen,
     @nospecialize(prev::Core.Box),
     @nospecialize(path),
@@ -2049,7 +2054,7 @@ Base.@nospecializeinfer function make_tracer(
     return res
 end
 
-Base.@nospecializeinfer function make_tracer(
+Base.@nospecializeinfer function transmute(
     seen,
     @nospecialize(prev::Sharding.Mesh),
     @nospecialize(path),
@@ -2062,25 +2067,25 @@ Base.@nospecializeinfer function make_tracer(
     return prev
 end
 
-Base.@nospecializeinfer function make_tracer(
+Base.@nospecializeinfer function transmute(
     seen, @nospecialize(prev::ReactantRNG), @nospecialize(path), mode; kwargs...
 )
     if mode == TracedToTypes
         push!(path, Core.Typeof(prev))
-        return make_tracer(seen, prev.seed, path, mode; kwargs...)
+        return transmute(seen, prev.seed, path, mode; kwargs...)
     end
     return ReactantRNG(
-        make_tracer(seen, prev.seed, (path..., 1), mode; kwargs...), prev.algorithm
+        transmute(seen, prev.seed, (path..., 1), mode; kwargs...), prev.algorithm
     )
 end
 
-Base.@nospecializeinfer function make_tracer(
+Base.@nospecializeinfer function transmute(
     seen, @nospecialize(prev::Random.AbstractRNG), @nospecialize(path), mode; kwargs...
 )
     if mode == ArrayToConcrete
         TracedRandom.should_warn_if_not_natively_supported(prev)
         return ReactantRNG(
-            make_tracer(seen, TracedRandom.make_seed(prev), (path..., 1), mode; kwargs...),
+            transmute(seen, TracedRandom.make_seed(prev), (path..., 1), mode; kwargs...),
             TracedRandom.rng_algorithm(prev),
         )
     end
@@ -2121,7 +2126,7 @@ end
     )
 end
 
-# fast paths avoiding make_tracer
+# fast paths avoiding transmute
 function to_rarray_internal(
     @nospecialize(::TracedRArray),
     @nospecialize(track_numbers::Type),
@@ -2247,7 +2252,7 @@ end
     )
 end
 
-function traced_type_inner(
+function transmute_type_inner(
     @nospecialize(RT::Type{<:UnitRange{<:ReactantPrimitive}}),
     seen,
     mode::TraceMode,
@@ -2256,7 +2261,7 @@ function traced_type_inner(
     runtime,
 )
     (T,) = RT.parameters
-    newT = traced_type_inner(T, seen, mode, track_numbers, sharding, runtime)
+    newT = transmute_type_inner(T, seen, mode, track_numbers, sharding, runtime)
     if T == newT
         return RT
     else
@@ -2264,7 +2269,7 @@ function traced_type_inner(
     end
 end
 
-function make_tracer(
+function transmute(
     seen,
     @nospecialize(prev::UnitRange),
     @nospecialize(path),
@@ -2290,7 +2295,7 @@ function make_tracer(
     end
 end
 
-function traced_type_inner(
+function transmute_type_inner(
     @nospecialize(RT::Type{<:StepRangeLen}),
     seen,
     mode::TraceMode,
@@ -2299,10 +2304,10 @@ function traced_type_inner(
     runtime,
 )
     T, R, S, L = RT.parameters
-    newT = traced_type_inner(T, seen, mode, track_numbers, sharding, runtime)
-    newR = traced_type_inner(R, seen, mode, track_numbers, sharding, runtime)
-    newS = traced_type_inner(S, seen, mode, track_numbers, sharding, runtime)
-    newL = traced_type_inner(L, seen, mode, track_numbers, sharding, runtime)
+    newT = transmute_type_inner(T, seen, mode, track_numbers, sharding, runtime)
+    newR = transmute_type_inner(R, seen, mode, track_numbers, sharding, runtime)
+    newS = transmute_type_inner(S, seen, mode, track_numbers, sharding, runtime)
+    newL = transmute_type_inner(L, seen, mode, track_numbers, sharding, runtime)
     if T == newT && R == newR && S == newS && L == newL
         return RT
     else
@@ -2310,7 +2315,7 @@ function traced_type_inner(
     end
 end
 
-function make_tracer(
+function transmute(
     seen,
     @nospecialize(prev::StepRangeLen),
     @nospecialize(path),

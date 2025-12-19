@@ -3,7 +3,7 @@ module ReactantOffsetArraysExt
 using OffsetArrays: OffsetArrays, OffsetArray, OffsetVector
 using Reactant: Reactant, MLIR, Ops, TracedRArray, TracedRNumber, AbstractConcreteArray
 
-Base.@nospecializeinfer function Reactant.traced_type_inner(
+Base.@nospecializeinfer function Reactant.transmute_type_inner(
     @nospecialize(OA::Type{<:OffsetArray}),
     seen,
     mode::Reactant.TraceMode,
@@ -13,7 +13,7 @@ Base.@nospecializeinfer function Reactant.traced_type_inner(
 )
     N = ndims(OA)
     T = OffsetArrays.parenttype(OA)
-    T2 = Reactant.traced_type_inner(T, seen, mode, track_numbers, sharding, runtime)
+    T2 = Reactant.transmute_type_inner(T, seen, mode, track_numbers, sharding, runtime)
     return OffsetArray{eltype(T2),N,T2}
 end
 

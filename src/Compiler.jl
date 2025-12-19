@@ -18,7 +18,7 @@ import ..Reactant:
     TracedRNumber,
     RArray,
     OrderedIdDict,
-    make_tracer,
+    transmute,
     TracedToConcrete,
     append_path,
     ancestor,

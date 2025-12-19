@@ -77,9 +77,9 @@ function finite_difference_gradient(
     )
 
     seenargs = Reactant.OrderedIdDict()
-    Reactant.make_tracer(seenargs, f, (argprefix,), Reactant.TracedSetPath)
+    Reactant.transmute(seenargs, f, (argprefix,), Reactant.TracedSetPath)
     for (i, arg) in enumerate(args)
-        Reactant.make_tracer(seenargs, arg, (argprefix, i), Reactant.TracedSetPath)
+        Reactant.transmute(seenargs, arg, (argprefix, i), Reactant.TracedSetPath)
     end
 
     linear_args = Reactant.TracedType[]

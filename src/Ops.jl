@@ -3150,7 +3150,7 @@ end
         # Rn we simply broadcast_in_dim the arguments to the correct shape.
         final_inputs = TracedRArray[]
         seenargs = Reactant.OrderedIdDict()
-        Reactant.make_tracer(
+        Reactant.transmute(
             seenargs, f, (argprefix, 1), Reactant.TracedSetPath; toscalar=false
         )
         for (k, v) in seenargs

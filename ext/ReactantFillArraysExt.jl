@@ -10,7 +10,7 @@ Reactant._parent_type(T::Type{<:AbstractFill}) = T
 Reactant._parent_type(T::Type{<:OneElement}) = T
 
 for AT in (Fill, Ones, Zeros)
-    @eval Base.@nospecializeinfer function Reactant.traced_type_inner(
+    @eval Base.@nospecializeinfer function Reactant.transmute_type_inner(
         @nospecialize(FA::Type{$(AT){T,N,Axes}}),
         seen,
         mode::Reactant.TraceMode,
@@ -20,23 +20,23 @@ for AT in (Fill, Ones, Zeros)
     ) where {T,N,Axes}
         # T will be a number so we need to trace it
         return $(AT){
-            Reactant.traced_type_inner(T, seen, mode, Number, sharding, runtime),N,Axes
+            Reactant.transmute_type_inner(T, seen, mode, Number, sharding, runtime),N,Axes
         }
     end
 end
 
-Base.@nospecializeinfer function Reactant.make_tracer(
+Base.@nospecializeinfer function Reactant.transmute(
     seen, @nospecialize(prev::Fill{T,N,Axes}), @nospecialize(path), mode; kwargs...
 ) where {T,N,Axes}
     return Fill(
-        Reactant.make_tracer(
+        Reactant.transmute(
             seen, prev.value, (path..., 1), mode; kwargs..., track_numbers=Number
         ),
         prev.axes,
     )
 end
 
-Base.@nospecializeinfer function Reactant.make_tracer(
+Base.@nospecializeinfer function Reactant.transmute(
     seen,
     @nospecialize(prev::Ones{T,N,Axes}),
     @nospecialize(path),
@@ -46,11 +46,11 @@ Base.@nospecializeinfer function Reactant.make_tracer(
     kwargs...,
 ) where {T,N,Axes}
     return Ones(
-        Reactant.traced_type_inner(T, seen, mode, Number, sharding, runtime), prev.axes
+        Reactant.transmute_type_inner(T, seen, mode, Number, sharding, runtime), prev.axes
     )
 end
 
-Base.@nospecializeinfer function Reactant.make_tracer(
+Base.@nospecializeinfer function Reactant.transmute(
     seen,
     @nospecialize(prev::Zeros{T,N,Axes}),
     @nospecialize(path),
@@ -60,11 +60,11 @@ Base.@nospecializeinfer function Reactant.make_tracer(
     kwargs...,
 ) where {T,N,Axes}
     return Zeros(
-        Reactant.traced_type_inner(T, seen, mode, Number, sharding, runtime), prev.axes
+        Reactant.transmute_type_inner(T, seen, mode, Number, sharding, runtime), prev.axes
     )
 end
 
-Base.@nospecializeinfer function Reactant.traced_type_inner(
+Base.@nospecializeinfer function Reactant.transmute_type_inner(
     @nospecialize(FA::Type{OneElement{T,N,I,A}}),
     seen,
     mode::Reactant.TraceMode,
@@ -74,15 +74,15 @@ Base.@nospecializeinfer function Reactant.traced_type_inner(
 ) where {T,N,I,A}
     # T will be a number so we need to trace it
     return OneElement{
-        Reactant.traced_type_inner(T, seen, mode, Number, sharding, runtime),N,I,A
+        Reactant.transmute_type_inner(T, seen, mode, Number, sharding, runtime),N,I,A
     }
 end
 
-Base.@nospecializeinfer function Reactant.make_tracer(
+Base.@nospecializeinfer function Reactant.transmute(
     seen, @nospecialize(prev::OneElement{T,N,I,A}), @nospecialize(path), mode; kwargs...
 ) where {T,N,I,A}
     return OneElement(
-        Reactant.make_tracer(
+        Reactant.transmute(
             seen, prev.val, (path..., 1), mode; kwargs..., track_numbers=Number
         ),
         prev.ind,

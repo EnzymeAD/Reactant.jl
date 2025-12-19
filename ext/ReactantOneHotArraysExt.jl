@@ -13,7 +13,7 @@ end
 __compatible_eltype(::Type{TracedRNumber{T}}, ::Type{U}) where {T,U} = T
 __compatible_eltype(::Type{T}, ::Type{TracedRNumber{U}}) where {T,U} = TracedRNumber{T}
 
-function Reactant.traced_type_inner(
+function Reactant.transmute_type_inner(
     @nospecialize(_::Type{OneHotArray{T,N,Np1,I}}),
     seen,
     @nospecialize(mode::Reactant.TraceMode),
@@ -21,7 +21,7 @@ function Reactant.traced_type_inner(
     @nospecialize(sharding),
     @nospecialize(runtime)
 ) where {T,N,Np1,I}
-    I2 = Reactant.traced_type_inner(I, seen, mode, track_numbers, sharding, runtime)
+    I2 = Reactant.transmute_type_inner(I, seen, mode, track_numbers, sharding, runtime)
     return OneHotArray{__compatible_eltype(T, eltype(I2)),N,Np1,I2}
 end
 

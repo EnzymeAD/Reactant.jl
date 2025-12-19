@@ -30,7 +30,7 @@ end
 end
 
 @testset "Tracing" begin
-    @testset "trace_type" begin
+    @testset "transmute_type" begin
         @testset "mode = ConcreteToTraced" begin
             @testset "$origty" for (origty, targetty, targettynum) in [
                 (Any, Any, Any),
