@@ -66,11 +66,6 @@ function transmute(
     )
 end
 
-# kept for backward compatibility
-const traced_type = transmute_type
-const promote_traced_type = promote_transmute_type
-const make_tracer = transmute
-
 function convert_to_jax_dtype_struct end
 function jax_dtype_struct_type end
 
@@ -82,6 +77,12 @@ is_traced_number(x::Type) = false
 Base.@nospecializeinfer is_traced_number(@nospecialize(T::Type{<:TracedRNumber})) = true
 
 function transmute_type_inner end
+
+# kept for backward compatibility
+const traced_type = transmute_type
+const traced_type_inner = transmute_type_inner
+const promote_traced_type = promote_transmute_type
+const make_tracer = transmute
 
 Base.@nospecializeinfer function transmute_type_inner(
     @nospecialize(T::Type{Union{}}), @nospecialize(args...)
