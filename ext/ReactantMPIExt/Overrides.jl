@@ -68,7 +68,7 @@ function MPI.Isend(
 )
     @assert comm == MPI.COMM_WORLD "Only MPI.COMM_WORLD is supported currently"
 
-    return Ops.isend(buf, tag, dest)
+    return Ops.isend(buf, dest, tag)
 end
 
 function MPI.Recv!(buf::TracedRArray, source::Integer, tag::Integer, comm::MPI.Comm)
@@ -76,23 +76,6 @@ function MPI.Recv!(buf::TracedRArray, source::Integer, tag::Integer, comm::MPI.C
     source = Reactant.Ops.constant(Int32(source))
     return MPI.Recv!(buf, source, tag, comm)
 end
-
-# TODO Do we need these?
-# function MPI.Recv!(
-#     buf::TracedRArray,
-#     source::Integer,
-#     tag::Integer,
-#     comm::MPI.Comm,
-#     ::Type{MPI.API.MPI_Status},
-# )
-#     return MPI.Recv!(buf, source, tag, comm)
-# end
-
-# function MPI.Recv!(
-#     buf::TracedRArray, source::Integer, tag::Integer, comm::MPI.Comm, ::Nothing
-# )
-#     return MPI.Recv!(buf, source, tag, comm)
-# end
 
 # TODO use `make_tracer` to delinearize arbitrary types? check out `MPI.Buffer`
 function MPI.Recv!(
@@ -123,7 +106,7 @@ function MPI.Irecv!(
 )
     @assert comm == MPI.COMM_WORLD "Only MPI.COMM_WORLD is supported currently"
 
-    return Ops.irecv!(buf, tag, source)
+    return Ops.irecv!(buf, source, tag)
 end
 
 function MPI.Allreduce!(sendbuf::TracedRArray, recvbuf::TracedRArray, op, comm::MPI.Comm)
