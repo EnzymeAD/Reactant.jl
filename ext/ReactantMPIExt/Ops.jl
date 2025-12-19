@@ -50,8 +50,8 @@ end
 
 @noinline function isend(
     buf::TracedRArray,
-    tag::TracedRNumber,
-    dest::TracedRNumber;
+    dest::TracedRNumber,
+    tag::TracedRNumber;
     location=mlir_stacktrace("mpi.isend", @__FILE__, @__LINE__),
 )
     count = Reactant.Ops.constant(Int32(length(buf)))
@@ -72,26 +72,26 @@ end
 end
 
 @noinline function recv!(
-   recvbuf::TracedRArray,
+   buf::TracedRArray,
    src::TracedRNumber,
    tag::TracedRNumber;
    location=mlir_stacktrace("mpi.recv", @__FILE__, @__LINE__),
 )
-    count = Reactant.Ops.constant(Int32(length(recvbuf)))
-    ret = enzymexla.recv(recvbuf.mlir_data, 
+    count = Reactant.Ops.constant(Int32(length(buf)))
+    ret = enzymexla.recv(buf.mlir_data, 
                          count.mlir_data, 
                          src.mlir_data, 
                          tag.mlir_data; 
-                         outbuf=mlir_type(recvbuf), 
+                         outbuf=mlir_type(buf), 
                          location)
-    recvbuf.mlir_data = IR.result(ret)
-    return recvbuf
+    buf.mlir_data = IR.result(ret)
+    return buf
 end
 
 @noinline function irecv!(
     buf::TracedRArray,
-    tag::TracedRNumber,
-    src::TracedRNumber;
+    src::TracedRNumber,
+    tag::TracedRNumber;
     location=mlir_stacktrace("mpi.irecv", @__FILE__, @__LINE__),
 )
     count = Reactant.Ops.constant(Int32(length(buf)))
