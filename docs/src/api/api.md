@@ -50,7 +50,7 @@ OptimizeCommunicationOptions
 ShardyPropagationOptions
 ```
 
-## Tracing
+## Transmutation
 
 ```@docs
 Reactant.transmute

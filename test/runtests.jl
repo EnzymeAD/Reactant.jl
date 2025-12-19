@@ -26,7 +26,7 @@ end
         end
 
         @safetestset "Layout" include("layout.jl")
-        @safetestset "Tracing" include("tracing.jl")
+        @safetestset "Transmutation" include("transmutation.jl")
         @safetestset "Basic" include("basic.jl")
         @safetestset "Constructor" include("constructor.jl")
         @safetestset "Autodiff" include("autodiff.jl")

@@ -239,7 +239,7 @@ export StackedBatchDuplicated, StackedBatchDuplicatedNoNeed
 const TracedType = Union{TracedRArray,TracedRNumber,MissingTracedValue}
 
 include("ControlFlow.jl")
-include("Tracing.jl")
+include("Transmutation.jl")
 
 include("Compiler.jl")
 

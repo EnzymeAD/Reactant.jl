@@ -5,7 +5,7 @@ using ReactantCore: ReactantCore
 using FillArrays: FillArrays, AbstractFill, Fill, Ones, Zeros, OneElement
 using GPUArraysCore: @allowscalar
 
-# Tracing
+# Transmutation
 Reactant._parent_type(T::Type{<:AbstractFill}) = T
 Reactant._parent_type(T::Type{<:OneElement}) = T
 
