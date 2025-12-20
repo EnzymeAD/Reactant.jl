@@ -109,8 +109,8 @@ end
         outbuf=mlir_type(buf), 
         datatype=mpi_datatype_name,
         location)
-    buf.mlir_data = IR.result(ret)
 
+    buf.mlir_data = IR.result(ret)
     return buf
 end
 
@@ -174,6 +174,7 @@ end
         op=mpi_op_name,
         location
     )
+
     recvbuf.mlir_data = IR.result(ret)
     return recvbuf
 end
