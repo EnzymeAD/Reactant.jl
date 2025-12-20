@@ -43,8 +43,21 @@ end
     tag::TracedRNumber;
     location=mlir_stacktrace("mpi.send", @__FILE__, @__LINE__),
 )
+    T = Reactant.unwrapped_eltype(buf)
+    mpi_datatype = MPI.Datatype(T)
+    mpi_datatype_name = get_mpi_datatype_name(mpi_datatype)
+
     count = Reactant.Ops.constant(Int32(length(buf)))
-    enzymexla.send(buf.mlir_data, count.mlir_data, dest.mlir_data, tag.mlir_data; location)
+
+    enzymexla.send(
+        buf.mlir_data,
+        count.mlir_data,
+        dest.mlir_data,
+        tag.mlir_data;
+        datatype=mpi_datatype_name,
+        location
+    )
+
     return nothing
 end
 
@@ -54,6 +67,10 @@ end
     tag::TracedRNumber;
     location=mlir_stacktrace("mpi.isend", @__FILE__, @__LINE__),
 )
+    T = Reactant.unwrapped_eltype(buf)
+    mpi_datatype = MPI.Datatype(T)
+    mpi_datatype_name = get_mpi_datatype_name(mpi_datatype)
+
     count = Reactant.Ops.constant(Int32(length(buf)))
     request = Reactant.Ops.constant(Int64(-1))
 
@@ -64,6 +81,7 @@ end
         tag.mlir_data,
         request.mlir_data;
         outrequest=mlir_type(request),
+        datatype=mpi_datatype_name,
         location,
     )
 
@@ -77,14 +95,22 @@ end
    tag::TracedRNumber;
    location=mlir_stacktrace("mpi.recv", @__FILE__, @__LINE__),
 )
+    T = Reactant.unwrapped_eltype(buf)
+    mpi_datatype = MPI.Datatype(T)
+    mpi_datatype_name = get_mpi_datatype_name(mpi_datatype)
+
     count = Reactant.Ops.constant(Int32(length(buf)))
-    ret = enzymexla.recv(buf.mlir_data, 
-                         count.mlir_data, 
-                         src.mlir_data, 
-                         tag.mlir_data; 
-                         outbuf=mlir_type(buf), 
-                         location)
+
+    ret = enzymexla.recv(
+        buf.mlir_data, 
+        count.mlir_data, 
+        src.mlir_data, 
+        tag.mlir_data; 
+        outbuf=mlir_type(buf), 
+        datatype=mpi_datatype_name,
+        location)
     buf.mlir_data = IR.result(ret)
+
     return buf
 end
 
@@ -94,6 +120,10 @@ end
     tag::TracedRNumber;
     location=mlir_stacktrace("mpi.irecv", @__FILE__, @__LINE__),
 )
+    T = Reactant.unwrapped_eltype(buf)
+    mpi_datatype = MPI.Datatype(T)
+    mpi_datatype_name = get_mpi_datatype_name(mpi_datatype)
+
     count = Reactant.Ops.constant(Int32(length(buf)))
     request = Reactant.Ops.constant(Int64(-1))
 
@@ -105,6 +135,7 @@ end
         request.mlir_data;
         outbuf=mlir_type(buf),
         outrequest=mlir_type(request),
+        datatype=mpi_datatype_name,
         location,
     )
 
@@ -126,19 +157,28 @@ end
     recvbuf::TracedRArray;
     location=mlir_stacktrace("mpi.wait", @__FILE__, @__LINE__)
 )
+    mpi_op_name = get_mpi_op_name(op)
+
+    T = Reactant.unwrapped_eltype(sendbuf)
+    mpi_datatype = MPI.Datatype(T)
+    mpi_datatype_name = get_mpi_datatype_name(mpi_datatype)
+
     count = Reactant.Ops.constant(Int32(length(sendbuf)))
+
     ret = enzymexla.allreduce(
         sendbuf.mlir_data,
         recvbuf.mlir_data,
         count.mlir_data;
         outbuf=mlir_type(recvbuf),
+        datatype=mpi_datatype_name,
+        op=mpi_op_name,
         location
     )
     recvbuf.mlir_data = IR.result(ret)
     return recvbuf
 end
 
-function inject_mpi_op!(op)
+function get_mpi_op_name(op)
     if op == MPI.OP_NULL
         return "MPI_OP_NULL"
     elseif op == MPI.MAX
@@ -170,7 +210,7 @@ function inject_mpi_op!(op)
     end
 end
 
-function inject_mpi_datatype!(datatype)
+function get_mpi_datatype_name(datatype)
     if datatype == MPI.DATATYPE_NULL
         return "MPI_DATATYPE_NULL"
     elseif datatype == MPI.BYTE
