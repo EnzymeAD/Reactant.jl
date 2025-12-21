@@ -2697,6 +2697,51 @@ macro jit(args...)
     #! format: on
 end
 
+"""
+    @mlir_visualize [optimize = ...] [no_nan = <true/false>] f(args...)
+
+Runs `@code_hlo` and visualizes the MLIR module using `model-explorer`. This expects the
+`model-explorer` executable to be in your `PATH`. Installation instructions can be found
+[here](https://github.com/google-ai-edge/model-explorer).
+"""
+macro mlir_visualize(args...)
+    default_options = Dict{Symbol,Any}(
+        :optimize => true,
+        :no_nan => false,
+        :client => nothing,
+        :raise => false,
+        :raise_first => false,
+        :shardy_passes => :(:to_mhlo_shardings),
+        :assert_nonallocating => false,
+        :donated_args => :(:auto),
+        :transpose_propagate => :(:up),
+        :reshape_propagate => :(:up),
+        :optimize_then_pad => true,
+        :optimize_communications => true,
+        :cudnn_hlo_optimize => false,
+    )
+    compile_expr, (; compiled) = compile_call_expr(
+        __module__, compile_mlir, default_options, args...
+    )
+    #! format: off
+    return esc(
+        :(
+            if Sys.which("model-explorer") === nothing
+                error("model-explorer is not in your PATH. Please install it from \
+                       https://github.com/google-ai-edge/model-explorer")
+            end;
+            $(compile_expr);
+            mlir_mod = $(first)($(compiled));
+            tmpfile = tempname() * ".mlir";
+            open(tmpfile, "w") do io
+                print(io, mlir_mod)
+            end;
+            run(`model-explorer $(tmpfile)`)
+        )
+    )
+    #! format: on
+end
+
 function compile_call_expr(mod, compiler, options::Dict, args...)
     while length(args) > 1
         option, args = args[1], args[2:end]
