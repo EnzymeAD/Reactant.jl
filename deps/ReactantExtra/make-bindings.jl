@@ -35,7 +35,7 @@ for file in [
     "Nvvm.jl",
     "Gpu.jl",
     "Affine.jl",
-    "TPU.jl",
+    # "TPU.jl", # XXX: currently broken
     "MosaicGPU.jl",
     "Triton.jl",
     "Shardy.jl",
