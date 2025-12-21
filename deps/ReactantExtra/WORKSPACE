@@ -4,7 +4,7 @@ NSYNC_COMMIT = "82b118aa7ace3132e517e2c467f8732978cf4023"
 
 NSYNC_SHA256 = ""
 
-ENZYMEXLA_COMMIT = "66133dbf44eaada5e8f6f18d888c1d0ec4f51667"
+ENZYMEXLA_COMMIT = "3501b2ed9caac9f37790cc44fe4151595f0afacd"
 
 ENZYMEXLA_SHA256 = ""
 
@@ -226,11 +226,6 @@ load(
 
 cuda_json_init_repository()
 
-load(
-    "@cuda_redist_json//:distributions.bzl",
-    "CUDA_REDISTRIBUTIONS",
-    "CUDNN_REDISTRIBUTIONS",
-)
 load(
     "@cuda_redist_json//:distributions.bzl",
     "CUDA_REDISTRIBUTIONS",

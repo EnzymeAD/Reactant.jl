@@ -829,7 +829,7 @@ function optimization_passes(
         "broadcastindim_is_reshape",
         "slice_reduce_window<1>",
         "while_deadresult",
-        "while_dus",
+        # "while_dus",
         "while_op_induction_replacement",
         "dus_concat",
         "slice_dus_to_concat",
@@ -991,7 +991,11 @@ function optimization_passes(
     if !compile_options.disable_loop_raising_passes
         append!(
             transform_passes_list,
-            ["greedy_while_loop_batch_fission", "while_elementwise_reduction_to_reduce"],
+            [
+                "greedy_while_loop_batch_fission",
+                "while_elementwise_reduction_to_reduce",
+                "remove_loop_carried_dependencies_from_while_load_operations",
+            ],
         )
     end
 
