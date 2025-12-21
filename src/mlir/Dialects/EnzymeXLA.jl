@@ -34,6 +34,25 @@ function scope(
     )
 end
 
+function store_var(variables::Vector{Value}; type, location=Location())
+    op_ty_results = IR.Type[]
+    operands = Value[variables...,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[namedattribute("type", type),]
+
+    return create_operation(
+        "enzymexla.store_var",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
 function alternatives(; regions::Vector{Region}, location=Location())
     op_ty_results = IR.Type[]
     operands = Value[]

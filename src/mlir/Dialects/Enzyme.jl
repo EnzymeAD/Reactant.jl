@@ -141,6 +141,33 @@ function addWeightToTrace(
     )
 end
 
+function affine_atomic_rmw(
+    value::Value,
+    memref::Value,
+    indices::Vector{Value};
+    result::IR.Type,
+    kind,
+    map,
+    location=Location(),
+)
+    op_ty_results = IR.Type[result,]
+    operands = Value[value, memref, indices...]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[namedattribute("kind", kind), namedattribute("map", map)]
+
+    return create_operation(
+        "enzyme.affine_atomic_rmw",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
 function autodiff(
     inputs::Vector{Value};
     outputs::Vector{IR.Type},
