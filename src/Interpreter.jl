@@ -28,7 +28,7 @@ function var"@reactant_overlay"(__source__::LineNumberNode, __module__::Module, 
 end
 
 @inline function set_reactant_abi(
-    interp::EnzymeInterpreter{typeof(set_reactant_abi)},
+    interp::Enzyme.Compiler.Interpreter.EnzymeInterpreter{typeof(set_reactant_abi)},
     @nospecialize(f),
     arginfo::ArgInfo,
     si::StmtInfo,
@@ -75,6 +75,16 @@ end
         return abstract_call(interp, arginfo2::ArgInfo, si, sv, max_methods)
     end
 
+    if !should_rewrite_call(typeof(f))
+    return Base.@invoke abstract_call_known(
+        Core.Compiler.NativeInterpreter(interp.world),
+        f::Any,
+        arginfo::ArgInfo,
+        si::StmtInfo,
+        sv::AbsIntState,
+        max_methods::Int,
+    )
+    else
     return Base.@invoke abstract_call_known(
         interp::AbstractInterpreter,
         f::Any,
@@ -83,6 +93,7 @@ end
         sv::AbsIntState,
         max_methods::Int,
     )
+    end
 end
 
 @static if Enzyme.GPUCompiler.HAS_INTEGRATED_CACHE
