@@ -76,14 +76,14 @@ end
     end
 
     if !should_rewrite_call(typeof(f))
-    return Base.@invoke abstract_call_known(
-        Core.Compiler.NativeInterpreter(interp.world),
-        f::Any,
-        arginfo::ArgInfo,
-        si::StmtInfo,
-        sv::AbsIntState,
-        max_methods::Int,
-    )
+        return Base.@invoke abstract_call_known(
+            Core.Compiler.NativeInterpreter(interp.world),
+            f::Any,
+            arginfo::ArgInfo,
+            si::StmtInfo,
+            sv::AbsIntState,
+            max_methods::Int,
+        )
     else
     return Base.@invoke abstract_call_known(
         interp::AbstractInterpreter,
