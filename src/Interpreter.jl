@@ -37,6 +37,8 @@ function set_reactant_abi(
 )
     (; fargs, argtypes) = arginfo
 
+    ccall(:jl_, Cvoid, (Any,), (f, argtypes))
+    
     if f === ReactantCore.within_compile
         if length(argtypes) != 1
             @static if VERSION < v"1.11.0-"
