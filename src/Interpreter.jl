@@ -27,16 +27,14 @@ function var"@reactant_overlay"(__source__::LineNumberNode, __module__::Module, 
     )
 end
 
-function set_reactant_abi(
-    interp,
+@inline function set_reactant_abi(
+    interp::EnzymeInterpreter{typeof(set_reactant_abi)},
     @nospecialize(f),
     arginfo::ArgInfo,
     si::StmtInfo,
     sv::AbsIntState,
-    max_methods::Int=get_max_methods(interp, f, sv),
+    max_methods::Int
 )
-    (; fargs, argtypes) = arginfo
-
     if f === ReactantCore.within_compile
         if length(argtypes) != 1
             @static if VERSION < v"1.11.0-"
@@ -72,6 +70,7 @@ function set_reactant_abi(
     # Improve inference by considering call_with_reactant as having the same results as
     # the original call
     if f === call_with_reactant
+    	(; fargs, argtypes) = arginfo
         arginfo2 = ArgInfo(fargs isa Nothing ? nothing : fargs[2:end], argtypes[2:end])
         return abstract_call(interp, arginfo2::ArgInfo, si, sv, max_methods)
     end
