@@ -13,7 +13,6 @@ import Core.Compiler:
     ArgInfo,
     StmtInfo,
     AbsIntState,
-    get_max_methods,
     CallMeta,
     Effects,
     NoCallInfo,
