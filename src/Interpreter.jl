@@ -77,7 +77,6 @@ end
     if !should_rewrite_call(typeof(f))
         ninterp = Core.Compiler.NativeInterpreter(interp.world)
         # Note: mildly sus, but gabe said this was fine?
-        
         @static if VERSION >= v"1.12"
             sv.interp = ninterp
             # sv2 = Compiler.OptimizationState(sv.result.linfo, ninterp)
@@ -91,11 +90,9 @@ end
             sv::AbsIntState,
             max_methods::Int,
         )
-        
         @static if VERSION >= v"1.12"
             sv.interp = interp
         end
-        
         return result
     else
         return Base.@invoke abstract_call_known(
