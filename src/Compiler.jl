@@ -921,6 +921,11 @@ function optimization_passes(
         "dus_dynamic_slice_simplify",
         "while_dus_ds_simplify",
         "reshape_slice_reshape",
+        "dot_general_remove_batch_dimensions",
+        "delete_dims_reduce",
+        "reduce_delete_dims",
+        "dot_general_insert_dim_contraction_simplification",
+        "fuse_reshape_collapse_or_expand_dims_into_reduce",
     ]
 
     if !is_sharded
@@ -982,7 +987,10 @@ function optimization_passes(
     end
 
     if !compile_options.disable_loop_raising_passes
-        append!(transform_passes_list, ["greedy_while_loop_batch_fission"])
+        append!(
+            transform_passes_list,
+            ["greedy_while_loop_batch_fission", "while_elementwise_reduction_to_reduce"],
+        )
     end
 
     if !compile_options.disable_licm_optimization_passes
@@ -1002,6 +1010,7 @@ function optimization_passes(
                 "reduce_window_licm(0)",
                 "reverse_licm(0)",
                 "convolution_licm(0)",
+                "dynamic_slice_licm(0)",
             ],
         )
     end
@@ -1199,6 +1208,11 @@ function optimization_passes(
                 "elementwise_reshape_like",
             ],
         )
+        if AGGRESSIVE_PROPAGATION[]
+            push!(transform_passes_list, "reshape_elementwise_only_fusible(0)")
+        else
+            push!(transform_passes_list, "reshape_elementwise_only_fusible(1)")
+        end
     end
 
     if compile_options.transpose_propagate === :up
@@ -1240,6 +1254,7 @@ function optimization_passes(
                 "reorder_elementwise_and_shape_op<16>",
                 "elementwise_all_transpose_operands_simplify",
                 "slice_transpose",
+                "dynamic_slice_transpose",
                 "einsum_transpose<1>",
                 "slice_reshape_transpose<1>",
                 "reduce_transpose_simplify",
