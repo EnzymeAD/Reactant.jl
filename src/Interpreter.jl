@@ -75,14 +75,25 @@ end
     end
 
     if !should_rewrite_call(typeof(f))
-        return Base.@invoke abstract_call_known(
-            Core.Compiler.NativeInterpreter(interp.world),
+        ninterp = Core.Compiler.NativeInterpreter(interp.world)
+        # Note: mildly sus, but gabe said this was fine?
+        @static if VERSION >= v"1.12"
+            sv.interp = ninterp
+            # sv2 = Compiler.OptimizationState(sv.result.linfo, ninterp)
+        end
+
+        result = Base.@invoke abstract_call_known(
+            ninterp::Core.Compiler.NativeInterpreter,
             f::Any,
             arginfo::ArgInfo,
             si::StmtInfo,
             sv::AbsIntState,
             max_methods::Int,
         )
+        @static if VERSION >= v"1.12"
+            sv.interp = interp
+        end
+        return result
     else
         return Base.@invoke abstract_call_known(
             interp::AbstractInterpreter,
