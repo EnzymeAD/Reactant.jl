@@ -118,7 +118,7 @@ if length(addressable_devices) ≥ 8
         sharding = Sharding.NamedSharding(mesh, (:x,))
 
         x = Reactant.to_rarray(rand(192 * length(addressable_devices)); sharding)
-        @assert x isa ConcreteIFRTArray
+        hlo = repr(@code_xla shardy_passes = :to_mhlo_shardings wrap(x))
 
         @test !contains(hlo, "all-to-all")
         @test !contains(hlo, "all-gather")
