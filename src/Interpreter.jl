@@ -76,8 +76,10 @@ end
 
     if !should_rewrite_call(typeof(f))
         ninterp = Core.Compiler.NativeInterpreter(interp.world)
-        sv = Compiler.OptimizationState(sv.result.linfo, ninterp)
-        return Base.@invoke abstract_call_known(
+        # Note: mildly sus, but gabe said this was fine?
+        sv.interp = ninterp
+        # sv2 = Compiler.OptimizationState(sv.result.linfo, ninterp)
+        result = Base.@invoke abstract_call_known(
             ninterp::Compiler.NativeInterpreter,
             f::Any,
             arginfo::ArgInfo,
@@ -85,6 +87,8 @@ end
             sv::AbsIntState,
             max_methods::Int,
         )
+        sv.interp = interp
+        return result
     else
         return Base.@invoke abstract_call_known(
             interp::AbstractInterpreter,
