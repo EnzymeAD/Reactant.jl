@@ -80,7 +80,7 @@ end
         sv.interp = ninterp
         # sv2 = Compiler.OptimizationState(sv.result.linfo, ninterp)
         result = Base.@invoke abstract_call_known(
-            ninterp::Compiler.NativeInterpreter,
+            ninterp::Core.Compiler.NativeInterpreter,
             f::Any,
             arginfo::ArgInfo,
             si::StmtInfo,
