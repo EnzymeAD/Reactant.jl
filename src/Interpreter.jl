@@ -75,8 +75,10 @@ end
     end
 
     if !should_rewrite_call(typeof(f))
+        ninterp = Core.Compiler.NativeInterpreter(interp.world)
+        sv = Compiler.OptimizationState(sv.result.linfo, ninterp)
         return Base.@invoke abstract_call_known(
-            Core.Compiler.NativeInterpreter(interp.world),
+            ninterp::Compiler.NativeInterpreter,
             f::Any,
             arginfo::ArgInfo,
             si::StmtInfo,
