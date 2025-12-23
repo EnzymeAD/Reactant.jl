@@ -8,7 +8,7 @@ communication.
 @kwdef struct OptimizeCommunicationOptions
     periodic_concat::Int = 0
     rotate_comm::Int = 0
-    rotate_to_pad_comm::Int = 1
+    rotate_to_pad_comm::Int = 0
     wrap_comm::Int = 0
     extend_comm::Int = 0
     dus_to_pad_manual_comp_comm::Int = 0 # 2
@@ -18,6 +18,7 @@ communication.
     extend_to_pad_comm::Int = 0
     extend_to_pad_comm2::Int = 1
     wrap_to_pad_comm::Int = 1
+    rotate_spmd::Int = 1
 end
 
 function Base.String(options::OptimizeCommunicationOptions)
