@@ -78,10 +78,10 @@ end
         ninterp = Core.Compiler.NativeInterpreter(interp.world)
         # Note: mildly sus, but gabe said this was fine?
         @static if VERSION >= v"1.12"
-	    if hasproperty(sv, :interp)
-	        sv.interp = ninterp
+            if hasproperty(sv, :interp)
+                sv.interp = ninterp
                 # sv2 = Compiler.OptimizationState(sv.result.linfo, ninterp)
-	    end
+            end
         end
 
         result = Base.@invoke abstract_call_known(
@@ -93,9 +93,9 @@ end
             max_methods::Int,
         )
         @static if VERSION >= v"1.12"
-	    if hasproperty(sv, :interp)
+            if hasproperty(sv, :interp)
                 sv.interp = interp
-	    end
+            end
         end
         return result
     else
