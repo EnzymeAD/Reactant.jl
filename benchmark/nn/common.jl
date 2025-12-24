@@ -216,14 +216,14 @@ function run_benchmark!(
     if fwd_or_bwd == "forward"
         x, ps, st = general_lux_setup(model, x_dims)
         time = profile_with_xprof(
-            Lux.apply, model, x, ps, Lux.testmode(st); nrepeat=10, compile_options
+            Lux.apply, model, x, ps, Lux.testmode(st); nrepeat=10, warmup=3, compile_options
         )
         results[full_benchmark_name] = time
         GC.gc(true)
     elseif fwd_or_bwd == "backward"
         x, ps, st = general_lux_setup(model, x_dims)
         time = profile_with_xprof(
-            simple_gradient, model, x, ps, st; nrepeat=10, compile_options
+            simple_gradient, model, x, ps, st; nrepeat=10, warmup=3, compile_options
         )
         results[full_benchmark_name] = time
         GC.gc(true)

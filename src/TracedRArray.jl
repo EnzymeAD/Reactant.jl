@@ -1444,7 +1444,7 @@ end
 
 function unwrapped_broadcast(f::F, xs, original_dims) where {F}
     mapped_xs = unrolled_map(f, xs)
-    applicable(size, xs) && (mapped_xs = reshape(mapped_xs, size(xs)))
+    hasmethod(size, typeof(xs)) && (mapped_xs = reshape(mapped_xs, size(xs)))
     return mapped_xs, original_dims, __Identity()
 end
 
