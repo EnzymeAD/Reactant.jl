@@ -1,23 +1,15 @@
 using Lux: Lux, reactant_device
 using Printf: @sprintf
 using Reactant: Reactant, @compile
-using Enzyme: Enzyme
+using Enzyme: Enzyme, Const
 using Chairmarks: @b
 using Random: Random
 
-function sumabs2first(model, x, ps, st)
-    y, _ = Lux.apply(model, x, ps, st)
-    return sum(abs2, y)
-end
+sumabs2first(model, x, ps, st) = sum(abs2, first(Lux.apply(model, x, ps, st)))
 
 function simple_gradient(model, x, ps, st)
     return Enzyme.gradient(
-        Enzyme.Reverse,
-        sumabs2first,
-        Enzyme.Const(model),
-        Enzyme.Const(x),
-        ps,
-        Enzyme.Const(st),
+        Enzyme.Reverse, sumabs2first, Const(model), Const(x), ps, Const(st)
     )
 end
 

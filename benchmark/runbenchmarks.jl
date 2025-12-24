@@ -2,8 +2,6 @@ using InteractiveUtils: versioninfo
 using Reactant: Reactant
 using JSON3: JSON3
 
-using PProf, Profile
-
 @info sprint(io -> versioninfo(io; verbose=true))
 
 # To run benchmarks on a specific backend
@@ -27,10 +25,7 @@ end
 # Main benchmark files
 include("setup.jl")
 
-Profile.init(; n=10^7)
-Profile.clear()
-results = @profile run_benchmarks(BENCHMARK_GROUP)
-pprof()
+results = run_benchmarks(BENCHMARK_GROUP)
 
 filepath = joinpath(dirname(@__FILE__), "results")
 mkpath(filepath)
