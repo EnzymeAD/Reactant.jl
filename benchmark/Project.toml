@@ -6,11 +6,14 @@ JSON3 = "0f8b85d8-7281-11e9-16c2-39a750bddbf1"
 LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
 Lux = "b2108857-7c20-44ae-9111-449ecde12c47"
 NeuralOperators = "ea5c82af-86e5-48da-8ee1-382d6ad7af4b"
+PrecompileTools = "aea7be01-6a6a-4083-8856-8a6e6704d82a"
 Printf = "de0858da-6303-5e67-8744-51eddeeeb8d7"
 Reactant = "3c362404-f566-11ee-1572-e11a4b42c853"
+XProfUtils = "2504a78c-b2aa-47de-9ed8-a71e5918f272"
 
 [sources]
 Reactant = {path = ".."}
+XProfUtils = {path = "XProfUtils"}
 
 [compat]
 Boltz = "1.7"
@@ -20,6 +23,7 @@ JSON3 = "1"
 LinearAlgebra = "1.10"
 Lux = "1.21"
 NeuralOperators = "0.6.2"
+PrecompileTools = "1.2"
 Printf = "1.10"
 Reactant = "0.2.161"
 julia = "1.10"

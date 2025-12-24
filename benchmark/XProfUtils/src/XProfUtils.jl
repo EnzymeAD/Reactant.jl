@@ -7,8 +7,6 @@ using Reactant: Reactant, @compile
 using Setfield: @set!
 using Sockets: Sockets
 
-const jax = Ref{Union{Py,Nothing}}(nothing)
-const xprof = Ref{Union{Py,Nothing}}(nothing)
 const xprof_pywrap_profiler_plugin = Ref{Union{Py,Nothing}}(nothing)
 const xprof_convert_raw_to_tool_data = Ref{Union{Py,Nothing}}(nothing)
 
@@ -21,8 +19,6 @@ function get_free_port()
 end
 
 function __init__()
-    jax[] = pyimport("jax")
-    xprof[] = pyimport("xprof")
     xprof_pywrap_profiler_plugin[] = pyimport("xprof.convert._pywrap_profiler_plugin")
     xprof_convert_raw_to_tool_data[] = pyimport("xprof.convert.raw_to_tool_data")
 

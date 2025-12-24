@@ -104,6 +104,10 @@ function profiler_activity_start(name::String, level::Cint)
     )::Int64
 end
 
+function profiler_activity_start(name::String, level::Cint, ::Nothing)
+    return profiler_activity_start(name, level)
+end
+
 function profiler_activity_start(name::String, level::Cint, metadata::Dict{String,<:Any})
     return profiler_activity_start(traceme_encode(name, metadata), level)
 end
