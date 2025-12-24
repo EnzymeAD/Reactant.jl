@@ -41,7 +41,7 @@ function run_newton_schulz_benchmark!(results, backend)
     ]
 
     # Using a set of sizes to show scaling
-    for N in [256, 512, 1024, 2048, 4096, 8192]
+    for N in [256, 512, 1024, 2048, 4096]
         # Initialize Random Data on CPU
         rng = Random.default_rng()
         X = randn(rng, Float32, N, N)
@@ -72,7 +72,7 @@ function run_newton_schulz_benchmark!(results, backend)
             full_benchmark_name = string(benchmark_name, "/", backend, "/", tag)
 
             time = profile_with_xprof(
-                newton_schulz_muon, x_ra; nrepeat=100, compile_options=options
+                newton_schulz_muon, x_ra; nrepeat=25, compile_options=options
             )
             results[full_benchmark_name] = time
 

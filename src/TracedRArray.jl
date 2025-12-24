@@ -1442,10 +1442,18 @@ function unwrapped_broadcast(f::F, x::Slices, original_dims) where {F}
     end
 end
 
+function _maybe_reshape(x, x2::Base.Generator)
+    if hasmethod(size, Tuple{eltype(x2)})
+        return applicable(size, x2) ? reshape(x, size(x2)) : x
+    end
+    return x
+end
+function _maybe_reshape(x, x2)
+    return applicable(size, x2) ? reshape(x, size(x2)) : x
+end
+
 function unwrapped_broadcast(f::F, xs, original_dims) where {F}
-    mapped_xs = unrolled_map(f, xs)
-    hasmethod(size, typeof(xs)) && (mapped_xs = reshape(mapped_xs, size(xs)))
-    return mapped_xs, original_dims, __Identity()
+    return _maybe_reshape(unrolled_map(f, xs), xs), original_dims, __Identity()
 end
 
 # TODO: once traced_call supports internal mutations, we can use traced_call here
