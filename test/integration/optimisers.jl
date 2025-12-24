@@ -12,3 +12,17 @@ is_empty_buffer(x::ConcretePJRTNumber) = any(x === C_NULL for x in x.data)
     @test !is_empty_buffer(opt_state[2].rule.eta)
     @test !is_empty_buffer(opt_state[3].rule.eta)
 end
+
+@testset "Correct Aliasing" begin
+    ps = Reactant.to_rarray((a=ones(4), b=ones(2), c=ones(4)))
+    opt = Reactant.to_rarray(Descent(0.001f0); track_numbers=true)
+
+    st_opt = @jit Optimisers.setup(opt, ps)
+
+    @test st_opt.a.rule.eta.data === st_opt.b.rule.eta.data
+
+    gs = Reactant.to_rarray((a=ones(4), b=ones(2), c=ones(4)))
+
+    hlo = @code_hlo Optimisers.update(st_opt, ps, gs)
+    @test length(findall("stablehlo.broadcast_in_dim", repr(hlo))) == 2
+end

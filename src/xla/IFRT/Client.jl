@@ -112,13 +112,17 @@ end
 
 # Different Backends
 const cpu_client_count = Ref(0)
-const gpu_client_count = Ref(0)
+const cuda_client_count = Ref(0)
 const tpu_client_count = Ref(0)
+const metal_client_count = Ref(0)
+const tt_client_count = Ref(0)
 
 for (backend, counter) in (
     (:CPUClient, :cpu_client_count),
-    (:GPUClient, :gpu_client_count),
+    (:CUDAClient, :cuda_client_count),
     (:TPUClient, :tpu_client_count),
+    (:MetalClient, :metal_client_count),
+    (:TTClient, :tt_client_count),
 )
     main_fn = Symbol(:MakeIFRTPJRT, backend)
     @eval function $(backend)(args...; checkcount::Bool=true, kwargs...)
@@ -159,7 +163,7 @@ function MakeIFRTPJRTCPUClient(;
     return client, refstr
 end
 
-function MakeIFRTPJRTGPUClient(;
+function MakeIFRTPJRTCUDAClient(;
     node_id::Integer=0,
     num_nodes::Integer=1,
     platform::String="gpu",
@@ -177,8 +181,8 @@ function MakeIFRTPJRTGPUClient(;
         client = @ccall MLIR.API.mlir_c.ifrt_make_pjrt_gpu_client(
             node_id::Cint,
             num_nodes::Cint,
-            allowed_devices::Ptr{Cvoid},
-            num_allowed_devices::Cint,
+            allowed_devices::Ptr{Int64},
+            num_allowed_devices::Int64,
             XLA.XLA_REACTANT_GPU_MEM_FRACTION[]::Cdouble,
             XLA.XLA_REACTANT_GPU_PREALLOCATE[]::Bool,
             platform::Cstring,
@@ -196,19 +200,62 @@ function MakeIFRTPJRTTPUClient(;
     num_nodes::Integer=1,
     distributed_runtime_client::Union{Nothing,XLA.DistributedRuntimeClient}=nothing,
 )
-    refstr = Ref{Cstring}()
+    return MakeIFRTPJRTClientViaPluginAPI(
+        tpu_path, "tpu", "TPU"; node_id, num_nodes, distributed_runtime_client
+    )
+end
+
+function MakeIFRTPJRTMetalClient(;
+    metal_pjrt_plugin_path::String,
+    node_id::Integer=0,
+    num_nodes::Integer=1,
+    distributed_runtime_client::Union{Nothing,XLA.DistributedRuntimeClient}=nothing,
+)
+    return MakeIFRTPJRTClientViaPluginAPI(
+        metal_pjrt_plugin_path,
+        "metal",
+        "METAL";
+        node_id,
+        num_nodes,
+        distributed_runtime_client,
+    )
+end
+
+function MakeIFRTPJRTTTClient(;
+    tt_pjrt_plugin_path::String,
+    node_id::Integer=0,
+    num_nodes::Integer=1,
+    distributed_runtime_client::Union{Nothing,XLA.DistributedRuntimeClient}=nothing,
+)
+    return MakeIFRTPJRTClientViaPluginAPI(
+        tt_pjrt_plugin_path, "tt", "TT"; node_id, num_nodes, distributed_runtime_client
+    )
+end
+
+function MakeIFRTPJRTClientViaPluginAPI(
+    library_path::String,
+    device_type::String,
+    client_name::String=uppercase(device_type);
+    node_id::Integer=0,
+    num_nodes::Integer=1,
+    distributed_runtime_client::Union{Nothing,XLA.DistributedRuntimeClient}=nothing,
+)
+    pjrt_client = XLA.PJRT.MakeClientUsingPluginAPI(library_path, device_type, client_name)
+
     distributed_runtime_client =
         distributed_runtime_client === nothing ? C_NULL : distributed_runtime_client.client
 
-    GC.@preserve refstr distributed_runtime_client begin
-        client = @ccall MLIR.API.mlir_c.ifrt_make_pjrt_tpu_client(
-            tpu_path::Cstring,
-            refstr::Ptr{Cstring},
+    errstr = Ref{Cstring}()
+    GC.@preserve pjrt_client errstr distributed_runtime_client device_type begin
+        client = @ccall MLIR.API.mlir_c.ifrt_pjrt_make_client_with_default_kv_store(
+            pjrt_client::Ptr{Cvoid},
             node_id::Cint,
             num_nodes::Cint,
             distributed_runtime_client::Ptr{Cvoid},
+            errstr::Ptr{Cstring},
+            device_type::Cstring,
         )::Ptr{Cvoid}
     end
 
-    return client, refstr
+    return client, errstr
 end

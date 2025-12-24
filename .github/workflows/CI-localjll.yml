@@ -9,7 +9,7 @@ on:
     branches:
       - main
       - release-*
-    tags: '*'
+    tags: ['*']
     paths:
       - '.github/workflows/CI-localjll.yml'
       - 'deps/**'
@@ -21,126 +21,26 @@ concurrency:
   cancel-in-progress: ${{ startsWith(github.ref, 'refs/pull/') }}
 
 jobs:
-  test:
-    name: Julia ${{ matrix.version }} - ${{ matrix.os }} - local libReactant - ${{ github.event_name }}
-    runs-on: ${{ matrix.os }}
+  test-localjll:
     strategy:
       fail-fast: false
       matrix:
         version:
-          - '1.10'
-          - '1.11'
+          - "1.10"
+          - "1.11"
         os:
-          - ubuntu-24.04
+          - linux-x86-n2-32
           - macOS-latest
+          - linux-x86-a2-48-a100-4gpu
         exclude:
+          - os: linux-x86-a2-48-a100-4gpu
+            version: "1.10"
           - os: macOS-latest
-            version: '1.10'
-    env:
-      TMPDIR: ${{ github.workspace }}/tmp
-    steps:
-      - uses: actions/checkout@v4
-      - name: Create TMPDIR
-        run: |
-          mkdir -p ${{ env.TMPDIR }}
-      - uses: julia-actions/setup-julia@v2
-        with:
-          version: ${{ matrix.version }}
-      - uses: julia-actions/cache@v2
-      - uses: bazel-contrib/setup-bazel@0.14.0
-        name: Set up Bazel
-        with:
-          # Avoid downloading Bazel every time.
-          bazelisk-cache: true
-          # Store build cache per workflow.
-          disk-cache: ${{ github.workflow }}-${{ matrix.os }}-${{ matrix.version }}
-          # Share repository cache between workflows.
-          repository-cache: true
-          bazelisk-version: 1.x
-      - name: Prepare build on macOS
-        if: ${{ startsWith(matrix.os, 'macOS-') }}
-        run: |
-          echo "SDKROOT=$(xcrun --show-sdk-path)" >> "${GITHUB_ENV}"
-      - name: Build libReactant
-        run: |
-          python -m pip install numpy
-          julia --color=yes --project=deps -e 'using Pkg; Pkg.instantiate()'
-          julia --color=yes --project=deps deps/build_local.jl
-          cp LocalPreferences.toml test/
-      - name: "Setup Runtime Preferences"
-        run: |
-          import Pkg
-          Pkg.Registry.update()
-          Pkg.instantiate()
-          using Preferences
-          Preferences.set_preferences!("Reactant", "xla_runtime" => "PJRT"; force=true)
-        shell: julia --color=yes --code-coverage=user --depwarn=yes --project=. {0}
-        env:
-          JULIA_PKG_PRECOMPILE_AUTO: 0
-      - name: "Install Dependencies"
-        run: |
-          import Pkg
-          Pkg.Registry.update()
-          # Install packages present in subdirectories
-          dev_pks = Pkg.PackageSpec[]
-          for path in ("lib/ReactantCore",)
-              push!(dev_pks, Pkg.PackageSpec(; path))
-          end
-          Pkg.develop(dev_pks)
-        shell: julia --color=yes --code-coverage=user --depwarn=yes --project=. {0}
-        # Only in Julia v1.10 we need to install `ReactantCore` manually.
-        if: ${{ matrix.version == '1.10' }}
-        env:
-          JULIA_PKG_SERVER_REGISTRY_PREFERENCE: eager
-      - name: "Run Tests: PJRT"
-        run: |
-          import Pkg
-          Pkg.Registry.update()
-          Pkg.test(; coverage="user")
-        shell: julia --color=yes --code-coverage=user --depwarn=yes --project=. {0}
-        env:
-          JULIA_PKG_SERVER_REGISTRY_PREFERENCE: eager
-          XLA_FLAGS: "--xla_force_host_platform_device_count=12"
-          JULIA_DEBUG: "Reactant,Reactant_jll"
-      - name: Upload MLIR modules (PJRT)
-        uses: actions/upload-artifact@v4
-        timeout-minutes: 10
-        if: ${{ always() }}
-        with:
-          name: "mlir-localjll-PJRT-${{ matrix.version }}-${{ matrix.os }}-${{ github.event_name }}"
-          path: "**/*.mlir"
-          retention-days: 90
-          overwrite: false
-      - name: "Setup Runtime Preferences"
-        run: |
-          import Pkg
-          Pkg.Registry.update()
-          Pkg.instantiate()
-          using Preferences
-          Preferences.set_preferences!("Reactant", "xla_runtime" => "IFRT"; force=true)
-        shell: julia --color=yes --code-coverage=user --depwarn=yes --project=. {0}
-        env:
-          JULIA_PKG_PRECOMPILE_AUTO: 0
-      - name: "Run Tests: IFRT"
-        run: |
-          import Pkg
-          Pkg.Registry.update()
-          Pkg.test(; coverage="user")
-        shell: julia --color=yes --code-coverage=user --depwarn=yes --project=. {0}
-        env:
-          JULIA_PKG_SERVER_REGISTRY_PREFERENCE: eager
-          XLA_FLAGS: "--xla_force_host_platform_device_count=12"
-          JULIA_DEBUG: "Reactant,Reactant_jll"
-      - name: Upload MLIR modules (IFRT)
-        uses: actions/upload-artifact@v4
-        timeout-minutes: 10
-        if: ${{ always() }}
-        with:
-          name: "mlir-localjll-IFRT-${{ matrix.version }}-${{ matrix.os }}-${{ github.event_name }}"
-          path: "**/*.mlir"
-          retention-days: 90
-          overwrite: false
-      - uses: julia-actions/julia-processcoverage@v1
-      - uses: codecov/codecov-action@v5
-        with:
-          files: lcov.info
+            version: "1.10"
+    uses: ./.github/workflows/CommonCI.yml
+    with:
+      julia_version: ${{ matrix.version }}
+      os: ${{ matrix.os }}
+      runtime: "both"
+      assertions: false
+      localjll: true

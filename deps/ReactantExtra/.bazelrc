@@ -1,36 +1,80 @@
 build --announce_rc
 
-query --experimental_repo_remote_exec
-build --experimental_repo_remote_exec
-build --cxxopt=-std=c++17 --host_cxxopt=-std=c++17
-build --cxxopt=-w --host_cxxopt=-w
-build --define=grpc_no_ares=true
-build --define=tsl_link_protobuf=true
-build --define open_source_build=true
+# TODO: Migrate for https://github.com/bazelbuild/bazel/issues/7260
+# common --incompatible_enable_cc_toolchain_resolution
+common --noincompatible_enable_cc_toolchain_resolution
 
-build --define framework_shared_object=true
-build --define tsl_protobuf_header_only=true
-build --define=use_fast_cpp_protos=true
-build --define=allow_oversize_protos=true
+common --@rules_ml_toolchain//common:enable_hermetic_cc=False
+common --repo_env USE_HERMETIC_CC_TOOLCHAIN=0
+common --experimental_repo_remote_exec
+common --cxxopt=-std=c++17 --host_cxxopt=-std=c++17
+common --cxxopt=-w --host_cxxopt=-w
+common --define=grpc_no_ares=true
+common --noenable_bzlmod
+
+build --copt=-DMLIR_CAPI_BUILDING_LIBRARY=1
+build --copt=-DMLIR_CAPI_ENABLE_WINDOWS_DLL_DECLSPEC=1
+
+build --repo_env=USE_PYWRAP_RULES=True
+build --copt=-DGRPC_BAZEL_BUILD
+build --host_copt=-DGRPC_BAZEL_BUILD
+build --action_env=GRPC_BAZEL_RUNTIME=1
+build --repo_env=PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=upb
+build --action_env=PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=upb
+build --repo_env=RULES_PYTHON_ENABLE_PYSTAR=0
+# Do not do this. This is how gRPC builds itself by default, but we don't want
+# that as it would link protobuf into its own set of dynamic libraries, which
+# would conflict with our protobuf linkage.
+#build --define=use_fast_cpp_protos=true
 
 build -c opt
 
-build:cuda --repo_env TF_NEED_CUDA=1
-build:cuda --repo_env TF_NVCC_CLANG=1
-build:cuda --repo_env TF_NCCL_USE_STUB=1
-build:cuda --repo_env=HERMETIC_CUDA_VERSION="12.6.2"
-build:cuda --repo_env=HERMETIC_CUDNN_VERSION="9.4.0"
+common:macos --define ynn_enable_arm64_sme=false
+
+common:cuda --repo_env TF_NEED_CUDA=1
+common:cuda --repo_env TF_NVCC_CLANG=1
+common:cuda --repo_env TF_NCCL_USE_STUB=1
+common:cuda_static --@rules_ml_toolchain//common:link_cuda_static_libs=true
+
+# Broken upstream =/
+# common:cuda_static --@rules_ml_toolchain//common:link_nvrtc_static_libs=true
+# common:cuda_static --@rules_ml_toolchain//common:link_cudnn_static_libs=true
+
+common:cuda --@local_config_cuda//:enable_cuda
+common:cuda --crosstool_top="@local_config_cuda//crosstool:toolchain"
+# Default hermetic CUDA and CUDNN versions.
+common:cuda --@local_config_cuda//cuda:include_cuda_libs=true
+common:cuda --@local_config_cuda//:cuda_compiler=nvcc
+# common:cuda --@local_config_nvshmem//:override_include_nvshmem_libs=true
+# common:cuda --@local_config_nvshmem//cuda:include_nvshmem_libs=true
+
+common:cuda12 --config=cuda
+common:cuda12 --config=cuda_static
+common:cuda12 --repo_env=HERMETIC_CUDA_VERSION="12.9.1"
+common:cuda12 --repo_env=HERMETIC_CUDNN_VERSION="9.14.0"
+common:cuda12 --repo_env=HERMETIC_NVSHMEM_VERSION="3.3.9"
 # "sm" means we emit only cubin, which is forward compatible within a GPU generation.
 # "compute" means we emit both cubin and PTX, which is larger but also forward compatible to future GPU generations.
-build:cuda --repo_env HERMETIC_CUDA_COMPUTE_CAPABILITIES="sm_50,sm_60,sm_70,sm_80,compute_90"
-build:cuda --crosstool_top="@local_config_cuda//crosstool:toolchain"
-build:cuda --@local_config_cuda//:enable_cuda
-# Default hermetic CUDA and CUDNN versions.
-build:cuda --@local_config_cuda//cuda:include_cuda_libs=true
-build:cuda --@local_config_cuda//:cuda_compiler=nvcc
+common:cuda12 --repo_env HERMETIC_CUDA_COMPUTE_CAPABILITIES="sm_50,sm_60,sm_70,sm_80,sm_90,sm_100,compute_120"
 
-build:rocm --repo_env TF_NEED_ROCM=1
-build:rocm --define=using_rocm=true
-build:rocm --define=using_rocm_hipcc=true
-build:rocm --action_env TF_ROCM_AMDGPU_TARGETS="gfx900,gfx906,gfx908,gfx90a,gfx1030"
 
+common:cuda13 --config=cuda
+common:cuda13 --repo_env=HERMETIC_CUDA_VERSION="13.0.2"
+common:cuda13 --repo_env=HERMETIC_CUDNN_VERSION="9.14.0"
+common:cuda13 --repo_env=HERMETIC_NVSHMEM_VERSION="3.3.20"
+# "sm" means we emit only cubin, which is forward compatible within a GPU generation.
+# "compute" means we emit both cubin and PTX, which is larger but also forward compatible to future GPU generations.
+common:cuda13 --repo_env HERMETIC_CUDA_COMPUTE_CAPABILITIES="sm_75,sm_80,sm_90,sm_100,compute_120"
+
+
+common:rocm --crosstool_top=@local_config_rocm//crosstool:toolchain
+common:rocm --define=using_rocm=true --define=using_rocm_hipcc=true
+common:rocm --repo_env TF_NEED_ROCM=1
+common:rocm --action_env TF_ROCM_AMDGPU_TARGETS="gfx900,gfx906,gfx908,gfx90a,gfx940,gfx941,gfx942,gfx1030,gfx1100,gfx1200,gfx1201"
+
+# Build with hipcc for ROCm and clang for the host.
+common:rocm --action_env=TF_ROCM_CLANG="1"
+common:rocm --action_env=CLANG_COMPILER_PATH="/usr/lib/llvm-18/bin/clang"
+common:rocm --copt=-Wno-gnu-offsetof-extensions
+common:rocm --copt=-Qunused-arguments
+common:rocm --action_env=TF_HIPCC_CLANG="1"

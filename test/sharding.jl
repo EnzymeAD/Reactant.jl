@@ -1,6 +1,7 @@
-using Reactant, Test
+using Reactant, Test, Enzyme
 
 const addressable_devices = Reactant.addressable_devices()
+const RunningOnTPU = contains(string(Reactant.devices()[1]), "TPU")
 
 function fn_test1(x)
     y = x .+ x
@@ -202,14 +203,14 @@ end
 
         function fn_with_constraint(x)
             y = x .+ x
-            return Reactant.Ops.sharding_constraint(y, constraint)
+            return Reactant.@opcall sharding_constraint(y, constraint)
         end
 
         hlo = @code_hlo shardy_passes = :none fn_with_constraint(x_ra)
         @test contains(repr(hlo), "sharding_constraint")
         hlo = @code_hlo shardy_passes = :to_mhlo_shardings fn_with_constraint(x_ra)
         @test !contains(repr(hlo), "sharding_constraint")
-        @test length(collect(eachmatch(r"mhlo.sharding", repr(hlo)))) == 6
+        @test length(collect(eachmatch(r"mhlo.sharding", repr(hlo)))) == 5
 
         z = Reactant.to_rarray(x; sharding=constraint)
         res = @jit fn_with_constraint(x_ra)
@@ -234,7 +235,7 @@ end
             x_ra_no_sharding
         )
         @test !contains(repr(hlo), "sharding_constraint")
-        @test length(collect(eachmatch(r"mhlo.sharding", repr(hlo)))) == 6
+        @test length(collect(eachmatch(r"mhlo.sharding", repr(hlo)))) == 5
 
         res = @jit fn_with_constraint(x_ra_no_sharding)
         @test x .+ x ≈ Array(res)
@@ -276,7 +277,7 @@ end
 
         @testset "Handle Sub-Axis Info" begin
             @test Reactant.to_rarray(
-                randn(Float32, 142, 142);
+                Reactant.TestUtils.construct_test_array(Float32, 142, 142);
                 sharding=Sharding.NamedSharding(
                     Sharding.Mesh(reshape(0:11, 3, 4), (:x, :y)), (:x, :y)
                 ),
@@ -316,10 +317,11 @@ end
         )
 
         x_ra = Reactant.to_rarray(
-            randn(Float32, 4, 5); sharding=Sharding.NamedSharding(mesh, ((:x, :y), :z))
+            Reactant.TestUtils.construct_test_array(Float32, 4, 5);
+            sharding=Sharding.NamedSharding(mesh, ((:x, :y), :z)),
         )
 
-        y_ra_arr = randn(Float32, 5, 4)
+        y_ra_arr = Reactant.TestUtils.construct_test_array(Float32, 5, 4)
         y_ra = Reactant.to_rarray(y_ra_arr; sharding=Sharding.NoSharding())
         y_ra_2 = Reactant.to_rarray(y_ra_arr; sharding=Sharding.NoSharding())
 
@@ -353,7 +355,7 @@ end
 @testset "Bad Codegen for Resharded Inputs: #1027" begin
     if length(addressable_devices) ≥ 12 && Reactant.XLA.runtime() isa Val{:IFRT}
         x_ra = Reactant.to_rarray(
-            randn(Float32, 32, 32);
+            Reactant.TestUtils.construct_test_array(Float32, 32, 32);
             sharding=Sharding.NamedSharding(
                 Sharding.Mesh(reshape(0:11, 3, 4), (:x, :y)), (:x, :y)
             ),
@@ -447,14 +449,88 @@ end
         mesh = Sharding.Mesh(reshape(0:7, 2, 4), (:x, :y))
 
         x_ra = Reactant.to_rarray(
-            randn(Float32, 4, 4); sharding=Sharding.NamedSharding(mesh, (:x, :y))
+            Reactant.TestUtils.construct_test_array(Float32, 4, 4);
+            sharding=Sharding.NamedSharding(mesh, (:x, :y)),
         )
 
-        shardy_options = Sharding.ShardyPropagationOptions(;
+        shardy_options = Reactant.ShardyPropagationOptions(;
             enable_insert_explicit_collectives=true, conservative_propagation=true
         )
 
         @test (@jit shardy_passes = shardy_options fn_test2(x_ra)) ≈ fn_test2(x_ra)
+    else
+        @warn "Not enough addressable devices to run sharding tests"
+    end
+end
+
+@testset "Compile-Only with More Devices" begin
+    mesh = Sharding.Mesh(zeros(Int64, 2, 4), (:x, :y))
+
+    @test begin
+        x_ra = Reactant.to_rarray(
+            Reactant.TestUtils.construct_test_array(Float32, 32, 32);
+            sharding=Sharding.NamedSharding(mesh, (:x, :y)),
+        )
+        hlo = @code_xla sum(x_ra)
+        contains(repr(hlo), "num_partitions=8")
+    end skip = RunningOnTPU
+end
+
+struct MyModel{D}
+    decoder::D
+end
+
+(m::MyModel)(x) = m.decoder * x
+
+@testset "Sharding with Enzyme.gradient" begin
+    if length(addressable_devices) ≥ 8 && Reactant.XLA.runtime() isa Val{:IFRT}
+        mesh = Sharding.Mesh(reshape(0:7, 2, 4), (:x, :y))
+        sharding = Sharding.NamedSharding(mesh, (:x, :y))
+
+        decoder = Reactant.TestUtils.construct_test_array(Float32, 32, 128)
+        r = Reactant.TestUtils.construct_test_array(Float32, 128, 16)
+
+        m_ra_sharded = MyModel(Reactant.to_rarray(decoder; sharding))
+        r_ra_sharded = Reactant.to_rarray(r; sharding)
+
+        m_ra = MyModel(Reactant.to_rarray(decoder))
+        r_ra = Reactant.to_rarray(r)
+
+        loss_fn(m, r) = sum(abs2, m(r))
+
+        gr_sharded = @jit Enzyme.gradient(
+            Reverse, Const(loss_fn), m_ra_sharded, r_ra_sharded
+        )
+        gr = @jit Enzyme.gradient(Reverse, Const(loss_fn), m_ra, r_ra)
+
+        @test Array(gr_sharded[1].decoder) ≈ Array(gr[1].decoder)
+        @test Array(gr_sharded[2]) ≈ Array(gr[2])
+    else
+        @warn "Not enough addressable devices to run sharding tests"
+    end
+end
+
+@testset "Sharding Group" begin
+    if length(Reactant.devices()) ≥ 4 && Reactant.XLA.runtime() isa Val{:IFRT}
+        mesh = Sharding.Mesh(reshape(0:3, 2, 2), (:x, :y))
+        sharding = Sharding.NamedSharding(mesh, (:x, :y))
+
+        function shard_groups(x)
+            y = (x' * x)[1:4, :]
+            Reactant.Ops.sharding_group(x, y)
+            z = y .+ x
+            Reactant.Ops.sharding_group(z, y)
+            return z
+        end
+
+        x = Reactant.to_rarray(
+            Reactant.TestUtils.construct_test_array(Float32, 4, 128); sharding
+        )
+
+        hlo = repr(@code_hlo shard_groups(x))
+
+        @test count("sharding_group", hlo) == 3
+        @test count("group_id=0", hlo) == 3
     else
         @warn "Not enough addressable devices to run sharding tests"
     end

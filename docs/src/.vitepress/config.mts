@@ -18,7 +18,7 @@ export default defineConfig({
   outDir: 'REPLACE_ME_DOCUMENTER_VITEPRESS', // This is required for MarkdownVitepress to work correctly...
   ignoreDeadLinks: true, // tested in Documenter.jl directly
   lastUpdated: true,
-  
+
   head: [
     ['link', { rel: "icon", href: `${baseTemp.base}favicon.ico` }],
     ['script', {src: `/versions.js` }],
@@ -31,18 +31,18 @@ export default defineConfig({
       }
     },
     optimizeDeps: {
-      exclude: [ 
+      exclude: [
         '@nolebase/vitepress-plugin-enhanced-readabilities/client',
         'vitepress',
         '@nolebase/ui',
-      ], 
-    }, 
-    ssr: { 
-      noExternal: [ 
+      ],
+    },
+    ssr: {
+      noExternal: [
         // If there are other packages that need to be processed by Vite, you can add them here.
         '@nolebase/vitepress-plugin-enhanced-readabilities',
         '@nolebase/ui',
-      ], 
+      ],
     },
   },
   markdown: {
@@ -76,16 +76,32 @@ export default defineConfig({
         items: [
           { text: "Introduction", link: "/introduction" },
           { text: "Configuration", link: "/introduction/configuration" },
+          { text: "FAQs", link: "/introduction/FAQs" },
         ],
       },
       { text: "Benchmarks", link: "https://enzymead.github.io/Reactant.jl/benchmarks/" },
       {
         text: "Tutorials",
         items: [
-          {text: "Overview", link: "/tutorials/"},
-          {text: "Profiling", link: "/tutorials/profiling"},
-          {text: "Distributed", link: "/tutorials/multihost"},
-          {text: "Local build", link: "/tutorials/local-build"},
+          { text: "Overview", link: "/tutorials/" },
+          {
+            text: "Partial Evaluation",
+            link: "/tutorials/partial-evaluation",
+          },
+          { text: "Control Flow", link: "/tutorials/control-flow" },
+          {
+            text: "Automatic Differentiation",
+            link: "/tutorials/automatic-differentiation",
+          },
+          { text: "Sharding", link: "/tutorials/sharding" },
+          { text: "Profiling", link: "/tutorials/profiling" },
+          { text: "Multi-Host Environments", link: "/tutorials/multihost" },
+          { text: "Local build", link: "/tutorials/local-build" },
+          {
+            text: "Persistent Compilation Cache",
+            link: "/tutorials/persistent_compile_cache",
+          },
+          { text: "Raising", link: "/tutorials/raising" }
         ],
       },
       {
@@ -93,7 +109,9 @@ export default defineConfig({
         items: [
           { text: "Core Reactant API", link: "/api/api" },
           { text: "Sharding", link: "/api/sharding" },
+          { text: "Serialization", link: "/api/serialization" },
           { text: "Ops", link: "/api/ops" },
+          { text: "Configuration", link: "/api/config" },
           {
             text: "MLIR Dialects",
             items: [
@@ -108,10 +126,13 @@ export default defineConfig({
               { text: "LLVM", link: "/api/dialects/llvm" },
               { text: "MPI", link: "/api/dialects/mpi" },
               { text: "MemRef", link: "/api/dialects/memref" },
+              { text: "Mosaic GPU", link: "/api/dialects/mosaicgpu" },
               { text: "NVVM", link: "/api/dialects/nvvm" },
               { text: "Shardy", link: "/api/dialects/shardy" },
+              { text: "SparseTensor", link: "/api/dialects/sparsetensor" },
               { text: "StableHLO", link: "/api/dialects/stablehlo" },
               { text: "Triton", link: "/api/dialects/triton" },
+              { text: "TritonExt", link: "/api/dialects/tritonext" },
               { text: "TPU", link: "/api/dialects/tpu" },
               { text: "VHLO", link: "/api/dialects/vhlo" },
             ],
@@ -138,6 +159,7 @@ export default defineConfig({
         items: [
           { text: "Introduction", link: "/introduction" },
           { text: "Configuration", link: "/introduction/configuration" },
+          { text: "FAQs", link: "/introduction/FAQs" },
         ],
       }
     ],
@@ -147,9 +169,24 @@ export default defineConfig({
         collapsed: false,
         items: [
           { text: "Overview", link: "/tutorials/" },
+          {
+            text: "Partial Evaluation",
+            link: "/tutorials/partial-evaluation",
+          },
+          { text: "Control Flow", link: "/tutorials/control-flow" },
+          {
+            text: "Automatic Differentiation",
+            link: "/tutorials/automatic-differentiation",
+          },
+          { text: "Sharding", link: "/tutorials/sharding" },
           { text: "Profiling", link: "/tutorials/profiling" },
-          { text: "Distributed", link: "/tutorials/multihost" },
+          { text: "Multi-Host Environments", link: "/tutorials/multihost" },
           { text: "Local build", link: "/tutorials/local-build" },
+          {
+            text: "Persistent Compilation Cache",
+            link: "/tutorials/persistent_compile_cache",
+          },
+          { text: "Raising", link: "/tutorials/raising" }
         ],
       }
     ],
@@ -163,7 +200,9 @@ export default defineConfig({
             link: "/api/api",
           },
           { text: "Sharding", link: "/api/sharding" },
+          { text: "Serialization", link: "/api/serialization" },
           { text: "Ops", link: "/api/ops" },
+          { text: "Configuration", link: "/api/config" },
           {
             text: "MLIR Dialects",
             collapsed: false,
@@ -179,10 +218,13 @@ export default defineConfig({
               { text: "LLVM", link: "/api/dialects/llvm" },
               { text: "MPI", link: "/api/dialects/mpi" },
               { text: "MemRef", link: "/api/dialects/memref" },
+              { text: "Mosaic GPU", link: "/api/dialects/mosaicgpu" },
               { text: "NVVM", link: "/api/dialects/nvvm" },
               { text: "Shardy", link: "/api/dialects/shardy" },
+              { text: "SparseTensor", link: "/api/dialects/sparsetensor" },
               { text: "StableHLO", link: "/api/dialects/stablehlo" },
               { text: "Triton", link: "/api/dialects/triton" },
+              { text: "TritonExt", link: "/api/dialects/tritonext" },
               { text: "TPU", link: "/api/dialects/tpu" },
               { text: "VHLO", link: "/api/dialects/vhlo" },
             ],

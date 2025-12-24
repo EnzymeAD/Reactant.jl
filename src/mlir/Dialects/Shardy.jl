@@ -79,8 +79,15 @@ affect the order of the corresponding replica groups.
 
 **Constraints:**
 - Must satisfy the constraints listed in `Sdy_CollectiveOpInterface`.
-- `reduction_axes` must satisfy the constraints listed in `AxisRefListAttr`;
-- `reduction_axes` must not overlap with the operand sharding axes;
+- `reduction_axes` must satisfy the constraints listed in `AxisRefListAttr`.
+- `reduction_axes` must be sorted w.r.t. the mesh.
+- The operand sharding and `out_sharding` must have equivalent dimension
+  shardings.
+- `reduction_axes` must not overlap with the operand dimension sharding and
+  replicated axes (it can overlap with unreduced axes).
+- `reduction_axes` must not overlap with the unreduced axes of
+  `out_sharding`. In other words, `out_sharding` must be be replicated along
+  `reduction_axes` (implicitly or explicitly).
 """
 function all_reduce(
     tensor::Value;
@@ -135,9 +142,9 @@ inferred sharding.
 ```
 
 **Constraints:**
+- Must satisfy the constraints listed in `Sdy_CollectiveOpInterface`.
 - Elements in `slicing_axes` must satisfy the constraints listed in
   `AxisRefListAttr`.
-- Must satisfy the constraints listed in `Sdy_CollectiveOpInterface`.
 - Applying `slicing_axes` to the operand sharding gets `out_sharding`.
 """
 function all_slice(
@@ -172,9 +179,10 @@ end
 """
 `all_to_all`
 
-Slices chunks of a tensor along dimension `tgt_dim` and axes specified in
-`axes`, scatteres those chunks along the axes, and concatenates them along
-dimension `src_dim`.
+For each (axes, src_dim, tgt_dim) tuple in the parameter list, this
+operation slices chunks of a tensor along dimension `tgt_dim` and axes
+specified in `axes`, scatteres those chunks along the axes, and concatenates
+them along dimension `src_dim`.
 
 This operation is essentially a combination of an all-gather along `src_dim`
 and `axes`, followed by an all-slice along `tgt_dim` and `axes`, i.e., a
@@ -191,24 +199,26 @@ this inferred sharding.
 
 # Example
 ```mlir
-%1 = stablehlo.tanh(%0) {sdy.sharding = #sdy.sharding_per_value<[<@mesh, [{\"a\", \"b\", \"c\"}, {}\\]>]>} : tensor<8x8xf32>
-%2 = sdy.all_to_all {\"b\", \"c\"} 0->1 %1 out_sharding=<@mesh, [{\"a\"}, {\"b\", \"c\"}\\]> : tensor<8x8xf32>
+%1 = stablehlo.tanh(%0) {sdy.sharding = #sdy.sharding_per_value<[<@mesh, [{\"a\", \"b\"}, {\"c\"}, {}, {}\\]>]>} : tensor<8x8x4x4x32>
+%2 = sdy.all_to_all [{\"b\"}: 0->2, {\"c\"}: 1->3] %1 out_sharding=<@mesh, [{\"a\"}, {}, {\"b\"}, {\"c\"}\\]> : tensor<8x8x4x4x32>
 ```
 
 **Constraints:**
 - Must satisfy the constraints listed in `Sdy_CollectiveOpInterface`.
-- `axes` must satisfy the constraints listed in `AxisRefListAttr`.
-- `src_dim` and `tgt_dim` must be valid dimensions (positive and less than
-  rank of tensor), and different from each other.
+- The parameter list must not be empty.
+- For each parameter in `params`:
+  - Elements in `axes` must satisfy the constraints of `AxisRefAttr`.
+  - `src_dim` and `tgt_dim` must be valid dimensions (non-negative and less
+  than rank of tensor).
+  - Any `src_dim` or `tgt_dim` must be unique across all parameters.
+  - `src_dim` must be sorted in ascending order across all parameters.
 - Moving `axes` from `src_dim` to `tgt_dim` in the operand sharding gets
   `out_sharding`.
 """
 function all_to_all(
     tensor::Value;
     result=nothing::Union{Nothing,IR.Type},
-    src_dim,
-    tgt_dim,
-    axes,
+    params,
     out_sharding,
     location=Location(),
 )
@@ -217,10 +227,7 @@ function all_to_all(
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[
-        namedattribute("src_dim", src_dim),
-        namedattribute("tgt_dim", tgt_dim),
-        namedattribute("axes", axes),
-        namedattribute("out_sharding", out_sharding),
+        namedattribute("params", params), namedattribute("out_sharding", out_sharding)
     ]
     !isnothing(result) && push!(op_ty_results, result)
 
@@ -421,12 +428,15 @@ communication.
 The body is local wrt the manual_axes. Propagation will occur through
 the body on any free axes - those not in the manual_axes list.
 
+Note that any unranked tensors are expected to have a sharding with rank 0,
+i.e. fully replicated.
+
 **Constraints:**
 - Elements in `in_shardings` and `out_shardings` must satisfy the constraints listed in `TensorShardingAttr`.
 - The number of global and local tensor inputs/outputs of the op region must match.
 - The manual axes must come before any free axes in each dim sharding.
+- The manual axes cannot introduce padding. Namely, the dimension size must be divisible by the corresponding manual axes size.
 - The global and local shapes of the op regions arguments/results must match.
-- No manual axes are split.
 """
 function manual_computation(
     tensors::Vector{Value};
@@ -582,6 +592,50 @@ function propagation_barrier(
 end
 
 """
+`reduce_scatter`
+
+Reduces chunks of a tensor along axes specified in `reduce_scatter_axes`,
+and then scatters the result along the same axes. This operation is
+essentially a combination of an `sdy.all_reduce` followed by an
+`sdy.all_slice` along the same `reduce_scatter_axes`.
+
+**Constraints:**
+- Must satisfy the constraints listed in `Sdy_CollectiveOpInterface`.
+- Elements in `reduce_scatter_axes` must satisfy the constraints listed in
+  `AxisRefListAttr`.
+- Applying `reduce_scatter_axes` to the operand sharding gets
+  `out_sharding`.
+"""
+function reduce_scatter(
+    tensor::Value;
+    result=nothing::Union{Nothing,IR.Type},
+    reduce_scatter_axes,
+    out_sharding,
+    location=Location(),
+)
+    op_ty_results = IR.Type[]
+    operands = Value[tensor,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[
+        namedattribute("reduce_scatter_axes", reduce_scatter_axes),
+        namedattribute("out_sharding", out_sharding),
+    ]
+    !isnothing(result) && push!(op_ty_results, result)
+
+    return create_operation(
+        "sdy.reduce_scatter",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
+    )
+end
+
+"""
 `reshard`
 
 Reshards the input tensor with the specified sharding, which is different
@@ -637,6 +691,54 @@ function return_(results::Vector{Value}; location=Location())
         attributes,
         results=op_ty_results,
         result_inference=false,
+    )
+end
+
+"""
+`sharded_to_unreduced`
+
+The `axes` should be used to shard the operand. This operation makes them
+unreduced in the result. We have the following relationship:
+
+all-gather(x, axes) = all-reduce(sharded-to-unreduced(x, axes), axes), where
+all-gather, sharded-to-unreduced, all-reduce are applied on the same axes.
+
+# Example
+```mlir
+%1 = stablehlo.tanh(%0) {sdy.sharding = #sdy.sharding_per_value<[<@mesh, [{\"a\", \"b\", \"c\"}, {}, {\"d\"}\\], unreduced = [\"e\"]>]>} : tensor<8x8x8xf32>
+%2 = sdy.sharded_to_unreduced [{\"b\", \"c\"}, {}, {\"d\"}\\] %1 out_sharding=<@mesh, [{\"a\"}, {}, {}\\], unreduced = [\"b\", \"c\", \"d\", \"e\"]> : tensor<8x8x8xf32>
+```
+
+**Constraints:**
+- Must satisfy the constraints listed in `Sdy_CollectiveOpInterface`.
+- Elements in `axes` must satisfy the constraints listed in `AxisRefListAttr`.
+- Applying `axes` to the operand sharding gets `out_sharding`.
+"""
+function sharded_to_unreduced(
+    tensor::Value;
+    result=nothing::Union{Nothing,IR.Type},
+    axes,
+    out_sharding,
+    location=Location(),
+)
+    op_ty_results = IR.Type[]
+    operands = Value[tensor,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[
+        namedattribute("axes", axes), namedattribute("out_sharding", out_sharding)
+    ]
+    !isnothing(result) && push!(op_ty_results, result)
+
+    return create_operation(
+        "sdy.sharded_to_unreduced",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
     )
 end
 

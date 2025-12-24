@@ -17,3 +17,14 @@ end
     tval = @jit scalar_index(rOA)
     @test tval ≈ oval
 end
+
+@testset "OffsetArray View" begin
+    U = zeros(Float64, 128, 128, 1)
+    vU = OffsetArray(U, -7:120, -7:120, 1:1)
+    rU = Reactant.to_rarray(vU)
+
+    @jit fill!(@view(rU[1:112, 1:112, 1]), 1.0)
+    fill!(@view(vU[1:112, 1:112, 1]), 1.0)
+
+    @test parent(rU) ≈ parent(vU)
+end

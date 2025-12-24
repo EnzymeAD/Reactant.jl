@@ -1,4 +1,4 @@
-name: Format 'main'
+name: Format Julia code on 'main'
 
 on:
   schedule:
@@ -16,7 +16,7 @@ jobs:
         with:
           version: '1.10'
       - uses: julia-actions/cache@v2
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           ref: main
       - name: Install JuliaFormatter.jl
@@ -34,9 +34,9 @@ jobs:
         uses: peter-evans/create-pull-request@v7
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-          commit-message: Format code
-          title: 'Format code of branch "main"'
-          branch: format-main
+          commit-message: Format Julia code
+          title: 'Format Julia code of branch "main"'
+          branch: format-main-julia
           delete-branch: true
           labels: format
           author: enzyme-ci-bot[bot] <78882869+enzyme-ci-bot[bot]@users.noreply.github.com>

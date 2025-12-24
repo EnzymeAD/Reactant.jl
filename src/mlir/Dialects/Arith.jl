@@ -67,17 +67,17 @@ end
 """
 `addi`
 
-Performs N-bit addition on the operands. The operands are interpreted as 
-unsigned bitvectors. The result is represented by a bitvector containing the 
-mathematical value of the addition modulo 2^n, where `n` is the bitwidth. 
-Because `arith` integers use a two\'s complement representation, this operation 
+Performs N-bit addition on the operands. The operands are interpreted as
+unsigned bitvectors. The result is represented by a bitvector containing the
+mathematical value of the addition modulo 2^n, where `n` is the bitwidth.
+Because `arith` integers use a two\'s complement representation, this operation
 is applicable on both signed and unsigned integer operands.
 
 The `addi` operation takes two operands and returns one result, each of
-these is required to be the same type. This type may be an integer scalar type, 
+these is required to be the same type. This type may be an integer scalar type,
 a vector whose element type is integer, or a tensor of integers.
 
-This op supports `nuw`/`nsw` overflow flags which stands stand for
+This op supports `nuw`/`nsw` overflow flags which stands for
 \"No Unsigned Wrap\" and \"No Signed Wrap\", respectively. If the `nuw` and/or
 `nsw` flags are present, and an unsigned/signed overflow occurs
 (respectively), the result is poison.
@@ -219,7 +219,7 @@ value of equal bit width. When operating on vectors, casts elementwise.
 
 Note that this implements a logical bitcast independent of target
 endianness. This allows constant folding without target information and is
-consistent with the bitcast constant folders in LLVM (see
+consitent with the bitcast constant folders in LLVM (see
 https://github.com/llvm/llvm-project/blob/18c19414eb/llvm/lib/IR/ConstantFold.cpp#L168)
 For targets where the source and target type have the same endianness (which
 is the standard), this cast will also change no bits at runtime, but it may
@@ -253,9 +253,9 @@ end
 
 Signed integer division. Rounds towards positive infinity, i.e. `7 / -2 = -3`.
 
-Division by zero, or signed division overflow (minimum value divided by -1) 
-is undefined behavior. When applied to `vector` and `tensor` values, the 
-behavior is undefined if _any_ of its elements are divided by zero or has a 
+Divison by zero, or signed division overflow (minimum value divided by -1)
+is undefined behavior. When applied to `vector` and `tensor` values, the
+behavior is undefined if _any_ of its elements are divided by zero or has a
 signed division overflow.
 
 # Example
@@ -292,10 +292,10 @@ end
 
 Unsigned integer division. Rounds towards positive infinity. Treats the
 leading bit as the most significant, i.e. for `i16` given two\'s complement
-representation, `6 / -2 = 6 / (2^16 - 2) = 1`. 
+representation, `6 / -2 = 6 / (2^16 - 2) = 1`.
 
-Division by zero is undefined behavior. When applied to `vector` and 
-`tensor` values, the behavior is undefined if _any_ elements are divided by 
+Division by zero is undefined behavior. When applied to `vector` and
+`tensor` values, the behavior is undefined if _any_ elements are divided by
 zero.
 
 # Example
@@ -419,16 +419,16 @@ main reason being that comparison operations have diverging sets of
 attributes: integers require sign specification while floats require various
 floating point-related particularities, e.g., `-ffast-math` behavior,
 IEEE754 compliance, etc
-([rationale](https://mlir.llvm.org/docs/Rationale/Rationale/#splitting-floating-point-vs-integer-operations)).
+([rationale](../Rationale/Rationale.md#splitting-floating-point-vs-integer-operations)).
 The type of comparison is specified as attribute to avoid introducing ten
 similar operations, taking into account that they are often implemented
 using the same operation downstream
-([rationale](https://mlir.llvm.org/docs/Rationale/Rationale/#specifying-comparison-kind-as-attribute)). The
+([rationale](../Rationale/Rationale.md#specifying-comparison-kind-as-attribute)). The
 separation between signed and unsigned order comparisons is necessary
 because of integers being signless. The comparison operation must know how
 to interpret values with the foremost bit being set: negatives in two\'s
 complement or large positives
-([rationale](https://mlir.llvm.org/docs/Rationale/Rationale/#specifying-sign-in-integer-comparison-operations)).
+([rationale](../Rationale/Rationale.md#specifying-sign-in-integer-comparison-operations)).
 
 # Example
 
@@ -543,16 +543,22 @@ end
 Signed integer division. Rounds towards zero. Treats the leading bit as
 sign, i.e. `6 / -2 = -3`.
 
-Divison by zero, or signed division overflow (minimum value divided by -1) 
-is undefined behavior. When applied to `vector` and `tensor` values, the 
-behavior is undefined if _any_ of its elements are divided by zero or has a 
+Divison by zero, or signed division overflow (minimum value divided by -1)
+is undefined behavior. When applied to `vector` and `tensor` values, the
+behavior is undefined if _any_ of its elements are divided by zero or has a
 signed division overflow.
+
+If the `exact` attribute is present, the result value is poison if `lhs` is
+not a multiple of `rhs`.
 
 # Example
 
 ```mlir
 // Scalar signed integer division.
 %a = arith.divsi %b, %c : i64
+
+// Scalar signed integer division where %b is known to be a multiple of %c.
+%a = arith.divsi %b, %c exact : i64
 
 // SIMD vector element-wise division.
 %f = arith.divsi %g, %h : vector<4xi32>
@@ -562,7 +568,11 @@ signed division overflow.
 ```
 """
 function divsi(
-    lhs::Value, rhs::Value; result=nothing::Union{Nothing,IR.Type}, location=Location()
+    lhs::Value,
+    rhs::Value;
+    result=nothing::Union{Nothing,IR.Type},
+    isExact=nothing,
+    location=Location(),
 )
     op_ty_results = IR.Type[]
     operands = Value[lhs, rhs]
@@ -570,6 +580,7 @@ function divsi(
     successors = Block[]
     attributes = NamedAttribute[]
     !isnothing(result) && push!(op_ty_results, result)
+    !isnothing(isExact) && push!(attributes, namedattribute("isExact", isExact))
 
     return create_operation(
         "arith.divsi",
@@ -590,15 +601,21 @@ Unsigned integer division. Rounds towards zero. Treats the leading bit as
 the most significant, i.e. for `i16` given two\'s complement representation,
 `6 / -2 = 6 / (2^16 - 2) = 0`.
 
-Division by zero is undefined behavior. When applied to `vector` and 
-`tensor` values, the behavior is undefined if _any_ elements are divided by 
+Division by zero is undefined behavior. When applied to `vector` and
+`tensor` values, the behavior is undefined if _any_ elements are divided by
 zero.
+
+If the `exact` attribute is present, the result value is poison if `lhs` is
+not a multiple of `rhs`.
 
 # Example
 
 ```mlir
 // Scalar unsigned integer division.
 %a = arith.divui %b, %c : i64
+
+// Scalar unsigned integer division where %b is known to be a multiple of %c.
+%a = arith.divui %b, %c exact : i64
 
 // SIMD vector element-wise division.
 %f = arith.divui %g, %h : vector<4xi32>
@@ -608,7 +625,11 @@ zero.
 ```
 """
 function divui(
-    lhs::Value, rhs::Value; result=nothing::Union{Nothing,IR.Type}, location=Location()
+    lhs::Value,
+    rhs::Value;
+    result=nothing::Union{Nothing,IR.Type},
+    isExact=nothing,
+    location=Location(),
 )
     op_ty_results = IR.Type[]
     operands = Value[lhs, rhs]
@@ -616,6 +637,7 @@ function divui(
     successors = Block[]
     attributes = NamedAttribute[]
     !isnothing(result) && push!(op_ty_results, result)
+    !isnothing(isExact) && push!(attributes, namedattribute("isExact", isExact))
 
     return create_operation(
         "arith.divui",
@@ -790,9 +812,9 @@ end
 
 Signed integer division. Rounds towards negative infinity, i.e. `5 / -2 = -3`.
 
-Divison by zero, or signed division overflow (minimum value divided by -1) 
-is undefined behavior. When applied to `vector` and `tensor` values, the 
-behavior is undefined if _any_ of its elements are divided by zero or has a 
+Divison by zero, or signed division overflow (minimum value divided by -1)
+is undefined behavior. When applied to `vector` and `tensor` values, the
+behavior is undefined if _any_ of its elements are divided by zero or has a
 signed division overflow.
 
 # Example
@@ -1193,7 +1215,7 @@ The `muli` operation takes two operands and returns one result, each of
 these is required to be the same type. This type may be an integer scalar type,
 a vector whose element type is integer, or a tensor of integers.
 
-This op supports `nuw`/`nsw` overflow flags which stands stand for
+This op supports `nuw`/`nsw` overflow flags which stands for
 \"No Unsigned Wrap\" and \"No Signed Wrap\", respectively. If the `nuw` and/or
 `nsw` flags are present, and an unsigned/signed overflow occurs
 (respectively), the result is poison.
@@ -1467,8 +1489,8 @@ end
 Signed integer division remainder. Treats the leading bit as sign, i.e. `6 %
 -2 = 0`.
 
-Division by zero is undefined behavior. When applied to `vector` and 
-`tensor` values, the behavior is undefined if _any_ elements are divided by 
+Division by zero is undefined behavior. When applied to `vector` and
+`tensor` values, the behavior is undefined if _any_ elements are divided by
 zero.
 
 # Example
@@ -1512,8 +1534,8 @@ end
 Unsigned integer division remainder. Treats the leading bit as the most
 significant, i.e. for `i16`, `6 % -2 = 6 % (2^16 - 2) = 6`.
 
-Division by zero is undefined behavior. When applied to `vector` and 
-`tensor` values, the behavior is undefined if _any_ elements are divided by 
+Division by zero is undefined behavior. When applied to `vector` and
+`tensor` values, the behavior is undefined if _any_ elements are divided by
 zero.
 
 # Example
@@ -1579,15 +1601,164 @@ function sitofp(in::Value; out::IR.Type, location=Location())
 end
 
 """
+`scaling_extf`
+
+This operation upcasts input floating-point values using provided scale
+values. It expects both scales and the input operand to be of the same shape,
+making the operation elementwise. Scales are usually calculated per block
+following the OCP MXFP spec as described in https://arxiv.org/abs/2310.10537.
+
+If scales are calculated per block where blockSize != 1, then scales may
+require broadcasting to make this operation elementwise. For example, let\'s
+say the input is of shape `<dim1 x dim2 x ... dimN>`. Given blockSize != 1 and
+assuming quantization happens on the last axis, the input can be reshaped to
+`<dim1 x dim2 x ... (dimN/blockSize) x blockSize>`. Scales will be calculated
+per block on the last axis. Therefore, scales will be of shape
+`<dim1 x dim2 x ... (dimN/blockSize) x 1>`. Scales could also be of some other
+shape as long as it is broadcast compatible with the input, e.g.,
+`<1 x 1 x ... (dimN/blockSize) x 1>`.
+
+In this example, before calling into `arith.scaling_extf`, scales must be
+broadcasted to `<dim1 x dim2 x dim3 ... (dimN/blockSize) x blockSize>`. Note
+that there could be multiple quantization axes. Internally,
+`arith.scaling_extf` would perform the following:
+
+```mlir
+// Cast scale to result type.
+%0 = arith.truncf %1 : f32 to f8E8M0FNU
+%1 = arith.extf %0 : f8E8M0FNU to f16
+
+// Cast input to result type.
+%2 = arith.extf %3 : f4E2M1FN to f16
+
+// Perform scaling
+%3 = arith.mulf %2, %1 : f16
+```
+It propagates NaN values. Therefore, if either scale or the input element
+contains NaN, then the output element value will also be a NaN.
+
+# Example
+
+```mlir
+// Upcast from f4E2M1FN to f32.
+%a = arith.scaling_extf %b, %c : f4E2M1FN, f8E8M0FNU to f32
+
+// Element-wise upcast with broadcast (blockSize = 32).
+%f = vector.broadcast %g : vector<1xf8E8M0FNU> to vector<32xf8E8M0FNU>
+%h = arith.scaling_extf %i, %f : vector<32xf4E2M1FN>, vector<32xf8E8M0FNU> to vector<32xbf16>
+```
+"""
+function scaling_extf(
+    in::Value, scale::Value; out::IR.Type, fastmath=nothing, location=Location()
+)
+    op_ty_results = IR.Type[out,]
+    operands = Value[in, scale]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+    !isnothing(fastmath) && push!(attributes, namedattribute("fastmath", fastmath))
+
+    return create_operation(
+        "arith.scaling_extf",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+"""
+`scaling_truncf`
+
+This operation downcasts input using the provided scale values. It expects
+both scales and the input operand to be of the same shape and, therefore,
+makes the operation elementwise. Scales are usually calculated per block
+following the OCP MXFP spec as described in https://arxiv.org/abs/2310.10537.
+Users are required to normalize and clamp the scales as necessary before calling
+passing them to this operation.  OCP MXFP spec also does the flushing of denorms
+on the input operand, which should be handled during lowering by passing appropriate
+fastMath flag to this operation.
+
+If scales are calculated per block where blockSize != 1, scales may require
+broadcasting to make this operation elementwise. For example, let\'s say the
+input is of shape `<dim1 x dim2 x ... dimN>`. Given blockSize != 1 and
+assuming quantization happens on the last axis, the input can be reshaped to
+`<dim1 x dim2 x ... (dimN/blockSize) x blockSize>`. Scales will be calculated
+per block on the last axis. Therefore, scales will be of shape
+`<dim1 x dim2 x ... (dimN/blockSize) x 1>`. Scales could also be of some other
+shape as long as it is broadcast compatible with the input, e.g.,
+`<1 x 1 x ... (dimN/blockSize) x 1>`.
+
+In this example, before calling into `arith.scaling_truncf`, scales must be
+broadcasted to `<dim1 x dim2 x dim3 ... (dimN/blockSize) x blockSize>`. Note
+that there could be multiple quantization axes. Internally,
+`arith.scaling_truncf` would perform the following:
+
+```mlir
+// Cast scale to input type.
+%0 = arith.truncf %1 : f32 to f8E8M0FNU
+%1 = arith.extf %0 : f8E8M0FNU to f16
+
+// Perform scaling.
+%3 = arith.divf %2, %1 : f16
+
+// Cast to result type.
+%4 = arith.truncf %3 : f16 to f4E2M1FN
+```
+
+# Example
+
+```mlir
+// Downcast from f32 to f4E2M1FN.
+%a = arith.scaling_truncf %b, %c : f32, f8E8M0FNU to f4E2M1FN
+
+// Element-wise downcast with broadcast (blockSize = 32).
+%f = vector.broadcast %g : vector<1xf8E8M0FNU> to vector<32xf8E8M0FNU>
+%h = arith.scaling_truncf %i, %f : vector<32xbf16>, vector<32xf8E8M0FNU> to vector<32xf4E2M1FN>
+```
+"""
+function scaling_truncf(
+    in::Value,
+    scale::Value;
+    out::IR.Type,
+    roundingmode=nothing,
+    fastmath=nothing,
+    location=Location(),
+)
+    op_ty_results = IR.Type[out,]
+    operands = Value[in, scale]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+    !isnothing(roundingmode) &&
+        push!(attributes, namedattribute("roundingmode", roundingmode))
+    !isnothing(fastmath) && push!(attributes, namedattribute("fastmath", fastmath))
+
+    return create_operation(
+        "arith.scaling_truncf",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+"""
 `shli`
 
-The `shli` operation shifts the integer value of the first operand to the left 
-by the integer value of the second operand. The second operand is interpreted as 
-unsigned. The low order bits are filled with zeros. If the value of the second 
+The `shli` operation shifts the integer value of the first operand to the left
+by the integer value of the second operand. The second operand is interpreted as
+unsigned. The low order bits are filled with zeros. If the value of the second
 operand is greater or equal than the bitwidth of the first operand, then the
 operation returns poison.
 
-This op supports `nuw`/`nsw` overflow flags which stands stand for
+This op supports `nuw`/`nsw` overflow flags which stands for
 \"No Unsigned Wrap\" and \"No Signed Wrap\", respectively. If the `nuw` and/or
 `nsw` flags are present, and an unsigned/signed overflow occurs
 (respectively), the result is poison.
@@ -1598,7 +1769,7 @@ This op supports `nuw`/`nsw` overflow flags which stands stand for
 %1 = arith.constant 5 : i8  // %1 is 0b00000101
 %2 = arith.constant 3 : i8
 %3 = arith.shli %1, %2 : i8 // %3 is 0b00101000
-%4 = arith.shli %1, %2 overflow<nsw, nuw> : i8  
+%4 = arith.shli %1, %2 overflow<nsw, nuw> : i8
 ```
 """
 function shli(
@@ -1632,26 +1803,33 @@ end
 """
 `shrsi`
 
-The `shrsi` operation shifts an integer value of the first operand to the right 
-by the value of the second operand. The first operand is interpreted as signed, 
-and the second operand is interpreter as unsigned. The high order bits in the 
-output are filled with copies of the most-significant bit of the shifted value 
-(which means that the sign of the value is preserved). If the value of the second 
+The `shrsi` operation shifts an integer value of the first operand to the right
+by the value of the second operand. The first operand is interpreted as signed,
+and the second operand is interpreter as unsigned. The high order bits in the
+output are filled with copies of the most-significant bit of the shifted value
+(which means that the sign of the value is preserved). If the value of the second
 operand is greater or equal than bitwidth of the first operand, then the operation
 returns poison.
+
+If the `exact` attribute is present, the result value of shrsi is a poison
+value if any of the bits shifted out are non-zero.
 
 # Example
 
 ```mlir
-%1 = arith.constant 160 : i8               // %1 is 0b10100000
+%1 = arith.constant 160 : i8         // %1 is 0b10100000
 %2 = arith.constant 3 : i8
-%3 = arith.shrsi %1, %2 : (i8, i8) -> i8   // %3 is 0b11110100
-%4 = arith.constant 96 : i8                   // %4 is 0b01100000
-%5 = arith.shrsi %4, %2 : (i8, i8) -> i8   // %5 is 0b00001100
+%3 = arith.shrsi %1, %2 exact : i8   // %3 is 0b11110100
+%4 = arith.constant 98 : i8          // %4 is 0b01100010
+%5 = arith.shrsi %4, %2 : i8         // %5 is 0b00001100
 ```
 """
 function shrsi(
-    lhs::Value, rhs::Value; result=nothing::Union{Nothing,IR.Type}, location=Location()
+    lhs::Value,
+    rhs::Value;
+    result=nothing::Union{Nothing,IR.Type},
+    isExact=nothing,
+    location=Location(),
 )
     op_ty_results = IR.Type[]
     operands = Value[lhs, rhs]
@@ -1659,6 +1837,7 @@ function shrsi(
     successors = Block[]
     attributes = NamedAttribute[]
     !isnothing(result) && push!(op_ty_results, result)
+    !isnothing(isExact) && push!(attributes, namedattribute("isExact", isExact))
 
     return create_operation(
         "arith.shrsi",
@@ -1675,22 +1854,31 @@ end
 """
 `shrui`
 
-The `shrui` operation shifts an integer value of the first operand to the right 
+The `shrui` operation shifts an integer value of the first operand to the right
 by the value of the second operand. The first operand is interpreted as unsigned,
-and the second operand is interpreted as unsigned. The high order bits are always 
+and the second operand is interpreted as unsigned. The high order bits are always
 filled with zeros. If the value of the second operand is greater or equal than the
 bitwidth of the first operand, then the operation returns poison.
+
+If the `exact` attribute is present, the result value of shrui is a poison
+value if any of the bits shifted out are non-zero.
 
 # Example
 
 ```mlir
-%1 = arith.constant 160 : i8               // %1 is 0b10100000
+%1 = arith.constant 160 : i8        // %1 is 0b10100000
 %2 = arith.constant 3 : i8
-%3 = arith.shrui %1, %2 : (i8, i8) -> i8   // %3 is 0b00010100
+%3 = arith.constant 6 : i8
+%4 = arith.shrui %1, %2 exact : i8  // %4 is 0b00010100
+%5 = arith.shrui %1, %3 : i8        // %3 is 0b00000010
 ```
 """
 function shrui(
-    lhs::Value, rhs::Value; result=nothing::Union{Nothing,IR.Type}, location=Location()
+    lhs::Value,
+    rhs::Value;
+    result=nothing::Union{Nothing,IR.Type},
+    isExact=nothing,
+    location=Location(),
 )
     op_ty_results = IR.Type[]
     operands = Value[lhs, rhs]
@@ -1698,6 +1886,7 @@ function shrui(
     successors = Block[]
     attributes = NamedAttribute[]
     !isnothing(result) && push!(op_ty_results, result)
+    !isnothing(isExact) && push!(attributes, namedattribute("isExact", isExact))
 
     return create_operation(
         "arith.shrui",
@@ -1775,7 +1964,7 @@ The `subi` operation takes two operands and returns one result, each of
 these is required to be the same type. This type may be an integer scalar type,
 a vector whose element type is integer, or a tensor of integers.
 
-This op supports `nuw`/`nsw` overflow flags which stands stand for
+This op supports `nuw`/`nsw` overflow flags which stands for
 \"No Unsigned Wrap\" and \"No Signed Wrap\", respectively. If the `nuw` and/or
 `nsw` flags are present, and an unsigned/signed overflow occurs
 (respectively), the result is poison.
@@ -1865,22 +2054,35 @@ width M and an integer destination type of width N. The destination
 bit-width must be smaller than the input bit-width (N < M).
 The top-most (N - M) bits of the input are discarded.
 
+This op supports `nuw`/`nsw` overflow flags which stands for \"No Unsigned
+Wrap\" and \"No Signed Wrap\", respectively. If the nuw keyword is present,
+and any of the truncated bits are non-zero, the result is a poison value.
+If the nsw keyword is present, and any of the truncated bits are not the
+same as the top bit of the truncation result, the result is a poison value.
+
 # Example
 
 ```mlir
+  // Scalar truncation.
   %1 = arith.constant 21 : i5     // %1 is 0b10101
   %2 = arith.trunci %1 : i5 to i4 // %2 is 0b0101
   %3 = arith.trunci %1 : i5 to i3 // %3 is 0b101
 
-  %5 = arith.trunci %0 : vector<2 x i32> to vector<2 x i16>
+  // Vector truncation.
+  %4 = arith.trunci %0 : vector<2 x i32> to vector<2 x i16>
+
+  // Scalar truncation with overflow flags.
+  %5 = arith.trunci %a overflow<nsw, nuw> : i32 to i16
 ```
 """
-function trunci(in::Value; out::IR.Type, location=Location())
+function trunci(in::Value; out::IR.Type, overflowFlags=nothing, location=Location())
     op_ty_results = IR.Type[out,]
     operands = Value[in,]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
+    !isnothing(overflowFlags) &&
+        push!(attributes, namedattribute("overflowFlags", overflowFlags))
 
     return create_operation(
         "arith.trunci",

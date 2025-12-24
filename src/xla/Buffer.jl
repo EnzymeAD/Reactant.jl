@@ -1,5 +1,6 @@
 abstract type AbstractBuffer end
 
+function free_buffer end
 function synced_buffer end
 function buffer_on_cpu end
 function to_host end
@@ -32,7 +33,7 @@ for op in (:(Base.ndims), :(Base.size), :(Base.eltype), :device, :client, :shard
     @eval $op(buffer::AbstractAsyncBuffer) = $op(buffer.buffer)
 end
 
-function XLA.synced_buffer(buffer::AbstractAsyncBuffer)
+function synced_buffer(buffer::AbstractAsyncBuffer)
     wait(buffer)
     return buffer.buffer
 end
@@ -50,10 +51,10 @@ function Base.isready(buffer::AbstractAsyncBuffer)
     return Base.isready(buffer.future)
 end
 
-XLA.buffer_on_cpu(buffer::AbstractAsyncBuffer) = XLA.buffer_on_cpu(buffer.buffer)
+buffer_on_cpu(buffer::AbstractAsyncBuffer) = buffer_on_cpu(buffer.buffer)
 
-function XLA.to_host(buffer::AbstractAsyncBuffer, data, sharding)
+function to_host(buffer::AbstractAsyncBuffer, data, sharding)
     wait(buffer)
-    XLA.to_host(buffer.buffer, data, sharding)
+    to_host(buffer.buffer, data, sharding)
     return nothing
 end

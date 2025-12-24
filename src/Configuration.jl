@@ -1,7 +1,7 @@
 using ScopedValues: ScopedValues, ScopedValue
 
 export with_config
-export DotGeneralAlgorithmPreset, DotGeneralPrecision, DotGeneralAlgorithm
+export DotGeneralAlgorithmPreset, PrecisionConfig, DotGeneralAlgorithm
 
 """
     with_config(f; kwargs...)
@@ -9,7 +9,17 @@ export DotGeneralAlgorithmPreset, DotGeneralPrecision, DotGeneralAlgorithm
 Run the function `f` within a dynamic scope such that all uses of the config within this
 scope will use the provided values.
 
+# Extended Help
+
 ## Configuration Options
+
+### Lowering
+
+  - `lower_partialsort_to_approx_top_k`: Whether to lower `partialsort` and
+    `partialsortperm` to `Ops.approx_top_k`. Note that XLA only supports lowering
+    `ApproxTopK` for TPUs unless `fallback_approx_top_k_lowering` is set to `true`.
+  - `fallback_approx_top_k_lowering`: Whether to lower `Ops.approx_top_k` to
+    `stablehlo.top_k` if the XLA backend doesn't support `ApproxTopK`. Defaults to `true`.
 
 ### DotGeneral
 
@@ -17,21 +27,56 @@ scope will use the provided values.
     [`DotGeneralAlgorithm`](@ref) or [`DotGeneralAlgorithmPreset`](@ref). Defaults to
     `DotGeneralAlgorithmPreset.DEFAULT`.
   - `dot_general_precision`: Precision for `stablehlo.dot_general`. Can be `nothing`,
-    or [`DotGeneralPrecision`](@ref). Defaults to `DotGeneralPrecision.DEFAULT`.
+    or [`PrecisionConfig`](@ref). Defaults to `PrecisionConfig.DEFAULT`.
+  - `convolution_precision`: Precision for `stablehlo.convolution`. Can be `nothing`,
+    or [`PrecisionConfig`](@ref). Defaults to `PrecisionConfig.DEFAULT`.
+
+### Zygote Overlay
+
+  - `overlay_zygote_calls`: Whether to overlay `Zygote.gradient` calls with
+    `Enzyme.autodiff` calls. Defaults to `true`.
 """
-function with_config(f; dot_general_algorithm=missing, dot_general_precision=missing)
+function with_config(
+    f;
+    dot_general_algorithm=missing,
+    dot_general_precision=missing,
+    convolution_precision=missing,
+    lower_partialsort_to_approx_top_k=missing,
+    fallback_approx_top_k_lowering=missing,
+    overlay_zygote_calls=missing,
+)
     config_vars = ()
     dot_general_algorithm !== missing &&
         (config_vars = (config_vars..., DOT_GENERAL_ALGORITHM => dot_general_algorithm))
     dot_general_precision !== missing &&
         (config_vars = (config_vars..., DOT_GENERAL_PRECISION => dot_general_precision))
+    convolution_precision !== missing &&
+        (config_vars = (config_vars..., CONVOLUTION_PRECISION => convolution_precision))
+    lower_partialsort_to_approx_top_k !== missing && (
+        config_vars = (
+            config_vars...,
+            LOWER_PARTIALSORT_TO_APPROX_TOP_K => lower_partialsort_to_approx_top_k,
+        )
+    )
+    fallback_approx_top_k_lowering !== missing && (
+        config_vars = (
+            config_vars...,
+            FALLBACK_APPROX_TOP_K_LOWERING => fallback_approx_top_k_lowering,
+        )
+    )
+    overlay_zygote_calls !== missing &&
+        (config_vars = (config_vars..., OVERLAY_ZYGOTE_CALLS => overlay_zygote_calls))
 
     return ScopedValues.with(f, config_vars...)
 end
 
+# Lower to ApproxTopK
+const LOWER_PARTIALSORT_TO_APPROX_TOP_K = ScopedValue(false)
+const FALLBACK_APPROX_TOP_K_LOWERING = ScopedValue(true)
+
 # DotGeneral Attributes Configuration
 """
-    DotGeneralPrecision
+    PrecisionConfig
 
 Controls the `precision_config` for `stablehlo.dot_general`. Valid values are:
 
@@ -41,26 +86,34 @@ Controls the `precision_config` for `stablehlo.dot_general`. Valid values are:
 
 The following functions are available:
 
-  `MLIR.IR.Attribute(precision::DotGeneralPrecision.T)`
+  `MLIR.IR.Attribute(precision::PrecisionConfig.T)`
 """
-@enumx DotGeneralPrecision begin
+@enumx PrecisionConfig begin
     DEFAULT
     HIGH
     HIGHEST
 end
 
+Base.@deprecate_binding DotGeneralPrecision PrecisionConfig
+
 const DOT_GENERAL_PRECISION = ScopedValue{
-    Union{DotGeneralPrecision.T,Nothing,Tuple{DotGeneralPrecision.T,DotGeneralPrecision.T}}
+    Union{PrecisionConfig.T,Nothing,Tuple{PrecisionConfig.T,PrecisionConfig.T}}
 }(
-    DotGeneralPrecision.DEFAULT
+    PrecisionConfig.DEFAULT
 )
 
-function MLIR.IR.Attribute(precision::DotGeneralPrecision.T)
-    precision_str = if precision == DotGeneralPrecision.DEFAULT
+const CONVOLUTION_PRECISION = ScopedValue{
+    Union{PrecisionConfig.T,Nothing,Tuple{PrecisionConfig.T,PrecisionConfig.T}}
+}(
+    PrecisionConfig.DEFAULT
+)
+
+function MLIR.IR.Attribute(precision::PrecisionConfig.T)
+    precision_str = if precision == PrecisionConfig.DEFAULT
         "DEFAULT"
-    elseif precision == DotGeneralPrecision.HIGH
+    elseif precision == PrecisionConfig.HIGH
         "HIGH"
-    elseif precision == DotGeneralPrecision.HIGHEST
+    elseif precision == PrecisionConfig.HIGHEST
         "HIGHEST"
     end
     return MLIR.IR.Attribute(
@@ -334,3 +387,6 @@ function DotGeneralAlgorithm(
 
     return nothing
 end
+
+# Overlay Zygote.jl
+const OVERLAY_ZYGOTE_CALLS = ScopedValue(true)

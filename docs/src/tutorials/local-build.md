@@ -8,9 +8,9 @@ In the `deps/` subdirectory of the Reactant repository there is a script to do l
 * A reasonably recent C/C++ compiler, ideally GCC 12+.
   Older compilers may not work.
 * Bazel. If you don't have it already, you can download a build for your platform from [the latest `bazelbuild/bazelisk` release](https://github.com/bazelbuild/bazelisk/releases/latest) and put the `bazel` executable in `PATH`
-* not necessary in general, but for debug builds with CUDA support, you'll need a fast linker, like `lld` or `mold`
+* not necessary in general, but for debug builds with CUDA support, you'll need a fast linker, like `lld` or `mold`.
   Binutils `ld` won't work, don't even try using it.
-  You can obtain `mold` for your platform from the [latest `rui314/mold` release](https://github.com/rui314/mold/releases/latest) and put the `mold` executable in `PATH`
+  You can obtain `mold` for your platform from the [latest `rui314/mold` release](https://github.com/rui314/mold/releases/latest) and put the executable in `PATH` with name `ld.mold`.
 
 ## Building
 
@@ -84,10 +84,24 @@ To do that using this `build_local.jl` script pass the options `--extraopt '--st
 
 ### Using ccache
 
-If you want to use `ccache` as your compiler, you may have to add the flag `--extraopt "--sandbox_writable_path=/path/to/ccache/directory"` to let `ccache` write to its own directory.
+To speed up recompilation you can use [ccache](https://ccache.dev/).
+You can use ccache on top of Bazel's own caching system, which is very inflexible: Bazel invalidates cache whenever you change any variable, leading to poor cache hit rate when recompiling code with different options, even if they don't actually affect compilation output.
+Since [Bazel interacts badly with ccache](https://github.com/ccache/ccache/discussions/1279) when the latter [masquerades itself as the compiler via symlinks](https://ccache.dev/manual/4.11.3.html#_run_modes), the most reliable way to use ccache with Bazel is to create a small shell wrapper like
 
+```bash
+#!/bin/bash
+/path/to/ccache /path/to/your/compiler "${@}"
+```
+
+replacing `/path/to/ccache` with the path where ccache was installed, and `/path/to/your/compiler` with the path of your compiler.
+Then inform Bazel to use this script as the compiler (with the `build_local.jl` script add the flag `--cc /path/to/ccache/wrapper`, where `/path/to/ccache/wrapper` is the path where you saved the shell wrapper).
+Finally, you may have to add the flag `--extraopt "--sandbox_writable_path=/path/to/ccache/directory"`, otherwise Bazel will not let `ccache` write the cache output to its own directory.
 
 ## `LocalPreferences.toml` file
 
-At the end of a successfult build, the `build_local.jl` script will create a `LocalPreferences.toml` file (see [`Preferences.jl` documentation](https://juliapackaging.github.io/Preferences.jl/stable/) for more information) in the top-level of the Reactant repository, pointing `libReactantExtra` to the new local build.
-If you instantiate this environment Reactant will automatically use the new local build, but if you want to use the local build in a different environment you will have to copy the `LocalPreferences.toml` file (or its content, if you already have a `LocalPreferences.toml` file) to the directory of that environment.
+At the end of a successful build, the `build_local.jl` script will create a `LocalPreferences.toml` file (see [`Preferences.jl` documentation](https://juliapackaging.github.io/Preferences.jl/stable/) for more information) in the top-level of the Reactant repository, pointing `libReactantExtra` to the new local build. 
+If you instantiate this environment, Reactant will automatically use the new local build.
+
+If you want to use the local build in a different environment:
+1. copy the `LocalPreferences.toml` file (or its content, if you already have a `LocalPreferences.toml` file) to the directory of that environment, and
+2. ensure that `Reactant_jll` is a direct dependency of that environment (i.e., add `Reactant_jll` to your `Project.toml` directly).

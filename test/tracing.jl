@@ -1,4 +1,4 @@
-using Reactant
+using Reactant, Test
 using Reactant:
     traced_type,
     TracedRArray,
@@ -8,7 +8,6 @@ using Reactant:
     NoFieldMatchError,
     TracedTypeError,
     ReactantPrimitive
-using Test
 
 struct Wrapper{A,B}
     a::A
@@ -24,6 +23,10 @@ struct RMSProp{Teta,Trho,Teps,C<:Bool}
     rho::Trho
     epsilon::Teps
     centred::C
+end
+
+@testset "Traced Type" begin
+    @test !(Vector{Union{}} <: Reactant.AnyTracedRArray)
 end
 
 @testset "Tracing" begin
@@ -248,6 +251,34 @@ end
                 Reactant.XLA.runtime(),
             )
         end
+        @testset "apply_type_with_promotion" begin
+            struct Bar{T}
+                b::T
+            end
+            struct Foo{T,B<:Bar{T},AT<:AbstractArray{T}}
+                a::AT
+                b::B
+            end
+            @test Reactant.apply_type_with_promotion(
+                Foo, [Float64, Bar{Float64}, Reactant.TracedRArray{Float64,1}]
+            ) == (
+                Foo{
+                    TracedRNumber{Float64},
+                    Bar{TracedRNumber{Float64}},
+                    Reactant.TracedRArray{Float64,1},
+                },
+                [true, true, false],
+            )
+
+            @test Reactant.apply_type_with_promotion(
+                Foo,
+                [
+                    ConcreteRNumber{Float64},
+                    Bar{ConcreteRNumber{Float64}},
+                    ConcreteRArray{Float64,1},
+                ],
+            ) == (Foo{Float64,Bar{Float64},ConcreteRArray{Float64,1}}, [true, true, false])
+        end
     end
 
     @testset "specialized dispatches" begin
@@ -255,9 +286,11 @@ end
             1.0; track_numbers=Number
         ) isa ConcreteRNumber
         @test @inferred Reactant.to_rarray(1.0) isa Float64
-        @test @inferred Reactant.to_rarray(rand(3)) isa ConcreteRArray
+        @test @inferred Reactant.to_rarray(
+            Reactant.TestUtils.construct_test_array(Float64, 3)
+        ) isa ConcreteRArray
 
-        x_ra = Reactant.to_rarray(rand(3))
+        x_ra = Reactant.to_rarray(Reactant.TestUtils.construct_test_array(Float64, 3))
         @test @inferred Reactant.to_rarray(x_ra) isa ConcreteRArray
 
         x_ra = Reactant.to_rarray(1.0; track_numbers=Number)
@@ -281,5 +314,26 @@ end
         @test opt_traced.rho isa ConcreteRNumber{Float64}
         @test opt_traced.epsilon isa ConcreteRNumber{Float64}
         @test opt_traced.centred isa Bool
+    end
+
+    @testset "@skip_rewrite_func" begin
+        a = ConcreteRArray([1.0 2.0; 3.0 4.0])
+
+        # TODO we should test it with a type-unstable method
+        add_skip_rewrite(x) = x + x
+        Reactant.@skip_rewrite_func add_skip_rewrite
+
+        # wrapper because `@skip_rewrite_*` doesn't work with top-functions
+        f(x) = add_skip_rewrite(x)
+
+        # warmup
+        @code_hlo optimize = false f(a)
+
+        t = @timed @code_hlo optimize = false f(a)
+
+        # `@timed` only measures compile time from v1.11.0 onward
+        @static if VERSION >= v"1.11.0"
+            @test iszero(t.compile_time)
+        end
     end
 end

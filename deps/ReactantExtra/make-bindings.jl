@@ -35,11 +35,14 @@ for file in [
     "Nvvm.jl",
     "Gpu.jl",
     "Affine.jl",
-    "TPU.jl",
+    # "TPU.jl", # XXX: currently broken
+    "MosaicGPU.jl",
     "Triton.jl",
     "Shardy.jl",
     "MPI.jl",
     "MemRef.jl",
+    "SparseTensor.jl",
+    "TritonExt.jl",
 ]
     build_file(joinpath(src_dir, "mlir", "Dialects", file))
 end

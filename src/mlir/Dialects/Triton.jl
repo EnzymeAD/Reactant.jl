@@ -128,31 +128,6 @@ function func(;
 end
 
 """
-`reinterpret_tensor_descriptor`
-
-This Op exists to help the transition from untyped raw TMA objects to typed Tensor descriptor objects.
-Ideally, we can remove this once the APIs are fully fleshed out.
-"""
-function reinterpret_tensor_descriptor(rawDesc::Value; result::IR.Type, location=Location())
-    op_ty_results = IR.Type[result,]
-    operands = Value[rawDesc,]
-    owned_regions = Region[]
-    successors = Block[]
-    attributes = NamedAttribute[]
-
-    return create_operation(
-        "tt.reinterpret_tensor_descriptor",
-        location;
-        operands,
-        owned_regions,
-        successors,
-        attributes,
-        results=op_ty_results,
-        result_inference=false,
-    )
-end
-
-"""
 `return_`
 
 The `tt.return` operation represents a return operation within a function.
@@ -424,15 +399,12 @@ end
 """
 `descriptor_gather`
 
-The `tt.desciptor_gather` op will be lowered to NVIDIA TMA
-load operations on targets that support it.
+The `tt.descriptor_gather` op will be lowered to NVIDIA TMA
+gather operations on targets that support it.
 
 `desc_ptr` is a pointer to the TMA descriptor allocated in global memory.
 The descriptor block must have 1 row and the indices must be a 1D tensor.
 Accordingly, the result is a 2D tensor multiple rows.
-
-This is an escape hatch and is only there for testing/experimenting. This
-op will be removed in the future.
 """
 function descriptor_gather(
     desc::Value, x_offsets::Value, y_offset::Value; result::IR.Type, location=Location()
@@ -461,9 +433,6 @@ end
 This operation will be lowered to Nvidia TMA load operation on targets supporting it.
 `desc` is a tensor descriptor object.
 The destination tensor type and shape must match the descriptor otherwise the result is undefined.
-
-This is an escape hatch and is only there for testing/experimenting.
-This op will be removed in the future.
 """
 function descriptor_load(
     desc::Value,
@@ -493,6 +462,44 @@ function descriptor_load(
     )
 end
 
+"""
+`descriptor_reduce`
+
+This operation will be lowered to Nvidia TMA store operation on targets supporting it.
+`desc` is a tensor descriptor object.
+The shape and types of `src` must match the descriptor otherwise the result is undefined.
+"""
+function descriptor_reduce(
+    desc::Value, src::Value, indices::Vector{Value}; kind, location=Location()
+)
+    op_ty_results = IR.Type[]
+    operands = Value[desc, src, indices...]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[namedattribute("kind", kind),]
+
+    return create_operation(
+        "tt.descriptor_reduce",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+"""
+`descriptor_scatter`
+
+The `tt.descriptor_scatter` op will be lowered to NVIDIA TMA
+scatter operations on targets that support it.
+
+`desc_ptr` is a pointer to the TMA descriptor allocated in global memory.
+The descriptor block must have 1 row and the indices must be a 1D tensor.
+Accordingly, the result is a 2D tensor multiple rows.
+"""
 function descriptor_scatter(
     desc::Value, x_offsets::Value, y_offset::Value, src::Value; location=Location()
 )
@@ -520,9 +527,6 @@ end
 This operation will be lowered to Nvidia TMA store operation on targets supporting it.
 `desc` is a tensor descriptor object.
 The shape and types of `src` must match the descriptor otherwise the result is undefined.
-
-This is an escape hatch and is only there for testing/experimenting.
-This op will be removed in the future.
 """
 function descriptor_store(
     desc::Value, src::Value, indices::Vector{Value}; location=Location()
@@ -549,9 +553,11 @@ end
 `dot`
 
 \$d = matrix_multiply(\$a, \$b) + \$c. \$inputPrecision describes how to exercise the TC
-when the inputs are f32. It can be one of: tf32, tf32x3, ieee.
+when the inputs are f32. It can be one of: tf32, tf32x3, ieee, bf16x3, bf16x6.
 tf32: use TC with tf32 ops.
 tf32x3: implement the 3xTF32 trick. For more info see the pass in F32DotTC.cpp
+bf16x3: implement the 3xBF16 trick. For more info see the pass in F32DotTC.cpp
+bf16x6: implement the 6xBF16 trick. For more info see the pass in F32DotTC.cpp
 ieee: don\'t use TC, implement dot in software.
 If the GPU does not have Tensor cores or the inputs are not f32, this flag is ignored.
 """
@@ -603,6 +609,8 @@ function dot_scaled(
     a_elem_type,
     b_elem_type,
     fastMath,
+    lhs_k_pack=nothing,
+    rhs_k_pack=nothing,
     location=Location(),
 )
     op_ty_results = IR.Type[d,]
@@ -616,18 +624,14 @@ function dot_scaled(
     ]
     !isnothing(a_scale) && push!(operands, a_scale)
     !isnothing(b_scale) && push!(operands, b_scale)
-    push!(attributes, operandsegmentsizes([
-        1,
-        1,
-        1,
-        if (a_scale == nothing)
-            0
-        elseif 1(b_scale == nothing)
-            0
-        else
-            1
-        end,
-    ]))
+    push!(
+        attributes,
+        operandsegmentsizes([
+            1, 1, 1, (a_scale == nothing) ? 0 : 1, (b_scale == nothing) ? 0 : 1
+        ]),
+    )
+    !isnothing(lhs_k_pack) && push!(attributes, namedattribute("lhs_k_pack", lhs_k_pack))
+    !isnothing(rhs_k_pack) && push!(attributes, namedattribute("rhs_k_pack", rhs_k_pack))
 
     return create_operation(
         "tt.dot_scaled",
@@ -700,79 +704,6 @@ function expand_dims(
         attributes,
         results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
         result_inference=(length(op_ty_results) == 0 ? true : false),
-    )
-end
-
-function experimental_tensormap_create(
-    desc_ptr::Value,
-    global_address::Value,
-    box_dim::Vector{Value},
-    global_dim::Vector{Value},
-    global_stride::Vector{Value},
-    element_stride::Vector{Value};
-    elem_type,
-    interleave_layout,
-    swizzle_mode,
-    fill_mode,
-    location=Location(),
-)
-    op_ty_results = IR.Type[]
-    operands = Value[
-        desc_ptr,
-        global_address,
-        box_dim...,
-        global_dim...,
-        global_stride...,
-        element_stride...,
-    ]
-    owned_regions = Region[]
-    successors = Block[]
-    attributes = NamedAttribute[
-        namedattribute("elem_type", elem_type),
-        namedattribute("interleave_layout", interleave_layout),
-        namedattribute("swizzle_mode", swizzle_mode),
-        namedattribute("fill_mode", fill_mode),
-    ]
-    push!(
-        attributes,
-        operandsegmentsizes([
-            1,
-            1,
-            length(box_dim),
-            length(global_dim),
-            length(global_stride),
-            length(element_stride),
-        ]),
-    )
-
-    return create_operation(
-        "tt.experimental_tensormap_create",
-        location;
-        operands,
-        owned_regions,
-        successors,
-        attributes,
-        results=op_ty_results,
-        result_inference=false,
-    )
-end
-
-function experimental_tensormap_fenceproxy_acquire(desc_ptr::Value; location=Location())
-    op_ty_results = IR.Type[]
-    operands = Value[desc_ptr,]
-    owned_regions = Region[]
-    successors = Block[]
-    attributes = NamedAttribute[]
-
-    return create_operation(
-        "tt.experimental_tensormap_fenceproxy_acquire",
-        location;
-        operands,
-        owned_regions,
-        successors,
-        attributes,
-        results=op_ty_results,
-        result_inference=false,
     )
 end
 
@@ -933,12 +864,15 @@ Return the histogram of the input tensor. The number of bins is equal to
 the dimension of the output tensor. Each bins has a width of 1 and bins
 start at 0.
 """
-function histogram(src::Value; result::IR.Type, location=Location())
+function histogram(
+    src::Value, mask=nothing::Union{Nothing,Value}; result::IR.Type, location=Location()
+)
     op_ty_results = IR.Type[result,]
     operands = Value[src,]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
+    !isnothing(mask) && push!(operands, mask)
 
     return create_operation(
         "tt.histogram",
@@ -1018,16 +952,10 @@ function load(
     attributes = NamedAttribute[]
     !isnothing(mask) && push!(operands, mask)
     !isnothing(other) && push!(operands, other)
-    push!(attributes, operandsegmentsizes([
-        1,
-        if (mask == nothing)
-            0
-        elseif 1(other == nothing)
-            0
-        else
-            1
-        end,
-    ]))
+    push!(
+        attributes,
+        operandsegmentsizes([1, (mask == nothing) ? 0 : 1, (other == nothing) ? 0 : 1]),
+    )
     !isnothing(result) && push!(op_ty_results, result)
     !isnothing(boundaryCheck) &&
         push!(attributes, namedattribute("boundaryCheck", boundaryCheck))
@@ -1085,6 +1013,7 @@ function make_tensor_descriptor(
     shape::Vector{Value},
     strides::Vector{Value};
     result::IR.Type,
+    padding=nothing,
     location=Location(),
 )
     op_ty_results = IR.Type[result,]
@@ -1092,6 +1021,7 @@ function make_tensor_descriptor(
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
+    !isnothing(padding) && push!(attributes, namedattribute("padding", padding))
 
     return create_operation(
         "tt.make_tensor_descriptor",
@@ -1128,6 +1058,50 @@ function make_tensor_ptr(
 
     return create_operation(
         "tt.make_tensor_ptr",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+function map_elementwise(
+    srcs::Vector{Value};
+    result::Vector{IR.Type},
+    pack,
+    scalarOp::Region,
+    location=Location(),
+)
+    op_ty_results = IR.Type[result...,]
+    operands = Value[srcs...,]
+    owned_regions = Region[scalarOp,]
+    successors = Block[]
+    attributes = NamedAttribute[namedattribute("pack", pack),]
+
+    return create_operation(
+        "tt.map_elementwise",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+function map_elementwise_return(result::Vector{Value}; location=Location())
+    op_ty_results = IR.Type[]
+    operands = Value[result...,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+
+    return create_operation(
+        "tt.map_elementwise.return",
         location;
         operands,
         owned_regions,
@@ -1523,6 +1497,26 @@ function trans(
 
     return create_operation(
         "tt.trans",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
+    )
+end
+
+function unsplat(src::Value; result=nothing::Union{Nothing,IR.Type}, location=Location())
+    op_ty_results = IR.Type[]
+    operands = Value[src,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+    !isnothing(result) && push!(op_ty_results, result)
+
+    return create_operation(
+        "tt.unsplat",
         location;
         operands,
         owned_regions,

@@ -107,13 +107,17 @@ end
 
 # Different Backends
 const cpu_client_count = Ref(0)
-const gpu_client_count = Ref(0)
+const cuda_client_count = Ref(0)
 const tpu_client_count = Ref(0)
+const metal_client_count = Ref(0)
+const tt_client_count = Ref(0)
 
 for (backend, counter) in (
     (:CPUClient, :cpu_client_count),
-    (:GPUClient, :gpu_client_count),
+    (:CUDAClient, :cuda_client_count),
     (:TPUClient, :tpu_client_count),
+    (:MetalClient, :metal_client_count),
+    (:TTClient, :tt_client_count),
 )
     main_fn = Symbol(:Make, backend)
     @eval function $(backend)(args...; checkcount::Bool=true, kwargs...)
@@ -145,7 +149,7 @@ function MakeCPUClient(;
     )::Ptr{Cvoid}
 end
 
-function MakeGPUClient(;
+function MakeCUDAClient(;
     node_id::Integer=0,
     num_nodes::Integer=1,
     platform::String="gpu",
@@ -163,8 +167,8 @@ function MakeGPUClient(;
         client = @ccall MLIR.API.mlir_c.MakeGPUClient(
             node_id::Cint,
             num_nodes::Cint,
-            allowed_devices::Ptr{Cvoid},
-            num_allowed_devices::Cint,
+            allowed_devices::Ptr{Int64},
+            num_allowed_devices::Int64,
             XLA.XLA_REACTANT_GPU_MEM_FRACTION[]::Cdouble,
             XLA.XLA_REACTANT_GPU_PREALLOCATE[]::Bool,
             platform::Cstring,
@@ -188,13 +192,53 @@ function MakeTPUClient(;
     @assert distributed_runtime_client === nothing "`PJRT.MakeTPUClient` does not support \
                                                     distributed_runtime_client"
 
-    refstr = Ref{Cstring}()
-    GC.@preserve refstr begin
-        client = @ccall MLIR.API.mlir_c.MakeTPUClient(
-            tpu_path::Cstring, refstr::Ptr{Cstring}
+    return MakeClientUsingPluginAPI(tpu_path, "tpu", "TPU")
+end
+
+function MakeMetalClient(;
+    metal_pjrt_plugin_path::String,
+    node_id::Integer=0,
+    num_nodes::Integer=1,
+    distributed_runtime_client::Union{Nothing,XLA.DistributedRuntimeClient}=nothing,
+)
+    @assert node_id == 0 "`PJRT.MakeMetalClient` does not support node_id"
+    @assert num_nodes == 1 "`PJRT.MakeMetalClient` does not support num_nodes > 1"
+    @assert distributed_runtime_client === nothing "`PJRT.MakeMetalClient` does not support \
+                                                    distributed_runtime_client"
+
+    return MakeClientUsingPluginAPI(metal_pjrt_plugin_path, "metal", "METAL")
+end
+
+function MakeTTClient(;
+    tt_pjrt_plugin_path::String,
+    node_id::Integer=0,
+    num_nodes::Integer=1,
+    distributed_runtime_client::Union{Nothing,XLA.DistributedRuntimeClient}=nothing,
+)
+    @assert node_id == 0 "`PJRT.MakeTTClient` does not support node_id"
+    @assert num_nodes == 1 "`PJRT.MakeTTClient` does not support num_nodes > 1"
+    @assert distributed_runtime_client === nothing "`PJRT.MakeTTClient` does not support \
+                                                    distributed_runtime_client"
+
+    return MakeClientUsingPluginAPI(tt_pjrt_plugin_path, "tt", "TT")
+end
+
+function MakeClientUsingPluginAPI(
+    library_path::String, device_type::String, client_name::String=uppercase(device_type)
+)
+    @assert isfile(library_path) "$(library_path) does not exist for $(device_type) PJRT \
+                                  plugin."
+
+    errstr = Ref{Cstring}()
+    GC.@preserve errstr library_path device_type client_name begin
+        client = @ccall MLIR.API.mlir_c.MakeClientUsingPluginAPI(
+            device_type::Cstring,
+            library_path::Cstring,
+            client_name::Cstring,
+            errstr::Ptr{Cstring},
         )::Ptr{Cvoid}
     end
 
-    client == C_NULL && throw(AssertionError(unsafe_string(refstr[])))
+    client == C_NULL && throw(AssertionError(unsafe_string(errstr[])))
     return client
 end

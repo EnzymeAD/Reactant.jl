@@ -21,12 +21,40 @@ within_compile
 @trace
 ```
 
+## Reactant data types
+
+```@docs
+ConcreteRArray
+ConcreteRNumber
+```
+
 ## Inspect Generated HLO
 
 ```@docs
 @code_hlo
 @code_mhlo
 @code_xla
+```
+
+## Compile Options
+
+```@docs
+CompileOptions
+Reactant.DefaultXLACompileOptions
+```
+
+### Sharding Specific Options
+
+```@docs
+OptimizeCommunicationOptions
+ShardyPropagationOptions
+```
+
+## Tracing customization
+
+```@docs
+Reactant.@skip_rewrite_func
+Reactant.@skip_rewrite_type
 ```
 
 ## Profile XLA
@@ -47,22 +75,22 @@ Reactant.devices
 Reactant.addressable_devices
 ```
 
+## Differentiation Specific API
+
+```@docs
+EnzymeCore.ignore_derivatives
+```
+
+## Persistent Compilation Cache
+
+```@docs
+clear_compilation_cache!
+```
+
 ## Internal utils
 
 ```@docs
 ReactantCore.materialize_traced_array
-```
 
-## Configuration
-
-```@docs
-Reactant.with_config
-```
-
-### DotGeneral
-
-```@docs
-Reactant.DotGeneralAlgorithmPreset
-Reactant.DotGeneralPrecision
-Reactant.DotGeneralAlgorithm
+Reactant.apply_type_with_promotion
 ```

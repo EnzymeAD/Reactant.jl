@@ -1,4 +1,4 @@
-using CUDA, KernelAbstractions, Reactant
+using CUDA, KernelAbstractions, Reactant, Test
 
 # Simple kernel for matrix multiplication
 @kernel function matmul_kernel!(output, a)
@@ -21,22 +21,18 @@ function matmul!(output, a)
     return KernelAbstractions.synchronize(backend)
 end
 
-# https://github.com/EnzymeAD/Reactant.jl/issues/614
-const skip_non_cuda_tests = true
-
-@static if !Sys.isapple()
+# TODO: raising fails on TPU CI.
+#       https://github.com/EnzymeAD/Reactant.jl/pull/1923#discussion_r2580461294
+if !Reactant.Accelerators.TPU.has_tpu()
     @testset "KernelAbstractions Matmul" begin
         A = Reactant.to_rarray(ones(100, 100))
         out = Reactant.to_rarray(ones(100, 100))
-        if CUDA.functional()
-            @test all(Array(@jit(matmul!(out, A))) .≈ 100) broken = true
-        else
-            @static if skip_non_cuda_tests
-                @test false broken = true
-            else
-                @code_hlo optimize = :before_kernel matmul!(out, A)
-            end
-        end
+        platform_name = Reactant.XLA.platform_name(Reactant.XLA.default_backend())
+        raise = platform_name ∉ ("cpu", "cuda")
+        @jit raise = raise matmul!(out, A)
+        out_c = Array(out)
+        A_c = Array(A)
+        @test out_c ≈ A_c * A_c'
     end
 end
 
@@ -54,17 +50,26 @@ function square(x)
     return y
 end
 
-@static if !Sys.isapple()
-    @testset "KernelAbstractions Square" begin
-        x = Reactant.to_rarray(collect(1:1:64) ./ 64)
-        if CUDA.functional()
-            @test all(Array(@jit(square(x))) .≈ Array(x) .* Array(x))
-        else
-            @static if skip_non_cuda_tests
-                @test false broken = true
-            else
-                @code_hlo optimize = :before_kernel square(x)
-            end
-        end
+@testset "KernelAbstractions Square" begin
+    x = Reactant.to_rarray(collect(1:1:64) ./ 64)
+
+    platform_name = Reactant.XLA.platform_name(Reactant.XLA.default_backend())
+    raise = platform_name ∉ ("cpu", "cuda")
+
+    b = get_backend(x)
+    @test b isa Base.get_extension(Reactant, :ReactantKernelAbstractionsExt).ReactantBackend
+    let y = allocate(b, Float32, (100, 10))
+        @test y isa ConcreteRArray{Float32,2}
+        @test size(y) == (100, 10)
     end
+    let y = KernelAbstractions.zeros(b, Float32, (100, 10))
+        @test y isa ConcreteRArray{Float32,2}
+        @test Array(y) == zeros(Float32, 100, 10)
+    end
+    let y = KernelAbstractions.ones(b, Float32, (100, 10))
+        @test y isa ConcreteRArray{Float32,2}
+        @test Array(y) == ones(Float32, 100, 10)
+    end
+
+    @test all(Array(@jit(raise = raise, square(x))) .≈ Array(x) .* Array(x))
 end

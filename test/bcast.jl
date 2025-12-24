@@ -1,8 +1,5 @@
-using Test
-using Reactant
-using Enzyme, NNlib
+using Test, Reactant, Enzyme, NNlib, Statistics
 using Reactant.MLIR
-using Statistics
 
 @noinline function no(@nospecialize(x))
     x = @ccall $(Base.@cfunction(identity, Any, (Any,)))(x::Any)::Any
@@ -72,7 +69,7 @@ function scalar_bcast(x)
 end
 
 @testset "Scalar broadcasting" begin
-    x = rand(2, 3)
+    x = Reactant.TestUtils.construct_test_array(Float32, 2, 3)
     x_ra = Reactant.to_rarray(x)
     @test @jit(scalar_bcast(x_ra)) ≈ scalar_bcast(x)
 end
@@ -84,7 +81,7 @@ function custom_ln(x)
 end
 
 @testset "Custom layernorm" begin
-    x = rand(Float32, 3, 3, 4, 2)
+    x = Reactant.TestUtils.construct_test_array(Float32, 3, 3, 4, 2)
     x_ra = Reactant.to_rarray(x)
     @test @jit(custom_ln(x_ra)) ≈ custom_ln(x)
 end
@@ -92,7 +89,7 @@ end
 pow(x, n) = x .^ n
 
 @testset "Pow" begin
-    x = rand(2, 3)
+    x = Reactant.TestUtils.construct_test_array(Float32, 2, 3)
     x_ra = Reactant.to_rarray(x)
     @test @jit(pow(x_ra, 2)) ≈ pow(x, 2)
 end
@@ -109,7 +106,7 @@ function custombcast(x)
 end
 
 @testset "Broadcasting closures / functors" begin
-    x = rand(2, 3)
+    x = Reactant.TestUtils.construct_test_array(Float32, 2, 3)
     x_ra = Reactant.to_rarray(x)
     @test @jit(custombcast(x_ra)) ≈ custombcast(x)
 end

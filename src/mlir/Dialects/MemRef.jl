@@ -16,19 +16,26 @@ import ...API
 """
 `assume_alignment`
 
-The `assume_alignment` operation takes a memref and an integer of alignment
-value, and internally annotates the buffer with the given alignment. If
-the buffer isn\'t aligned to the given alignment, the behavior is undefined.
+The `assume_alignment` operation takes a memref and an integer alignment
+value. It returns a new SSA value of the same memref type, but associated
+with the assumption that the underlying buffer is aligned to the given
+alignment.
 
-This operation doesn\'t affect the semantics of a correct program. It\'s for
-optimization only, and the optimization is best-effort.
+If the buffer isn\'t aligned to the given alignment, its result is poison.
+This operation doesn\'t affect the semantics of a program where the
+alignment assumption holds true. It is intended for optimization purposes,
+allowing the compiler to generate more efficient code based on the
+alignment assumption. The optimization is best-effort.
 """
-function assume_alignment(memref::Value; alignment, location=Location())
+function assume_alignment(
+    memref::Value; result=nothing::Union{Nothing,IR.Type}, alignment, location=Location()
+)
     op_ty_results = IR.Type[]
     operands = Value[memref,]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[namedattribute("alignment", alignment),]
+    !isnothing(result) && push!(op_ty_results, result)
 
     return create_operation(
         "memref.assume_alignment",
@@ -37,8 +44,8 @@ function assume_alignment(memref::Value; alignment, location=Location())
         owned_regions,
         successors,
         attributes,
-        results=op_ty_results,
-        result_inference=false,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
     )
 end
 
@@ -145,6 +152,50 @@ function copy(source::Value, target::Value; location=Location())
 end
 
 """
+`distinct_objects`
+
+The `distinct_objects` operation takes a list of memrefs and returns the same
+memrefs, with the additional assumption that accesses to them will never
+alias with each other. This means that loads and stores to different
+memrefs in the list can be safely reordered.
+
+If the memrefs do alias, the load/store behavior is undefined. This
+operation doesn\'t affect the semantics of a valid program. It is
+intended for optimization purposes, allowing the compiler to generate more
+efficient code based on the non-aliasing assumption. The optimization is
+best-effort.
+
+# Example
+
+```mlir
+%1, %2 = memref.distinct_objects %a, %b : memref<?xf32>, memref<?xf32>
+```
+"""
+function distinct_objects(
+    operands::Vector{Value};
+    results=nothing::Union{Nothing,Vector{IR.Type}},
+    location=Location(),
+)
+    op_ty_results = IR.Type[]
+    operands = Value[operands...,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+    !isnothing(results) && push!(op_ty_results, results...)
+
+    return create_operation(
+        "memref.distinct_objects",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
+    )
+end
+
+"""
 `generic_atomic_rmw`
 
 The `memref.generic_atomic_rmw` operation provides a way to perform a
@@ -199,7 +250,12 @@ end
 The `load` op reads an element from a memref at the specified indices.
 
 The number of indices must match the rank of the memref. The indices must
-be in-bounds: `0 <= idx < dim_size`
+be in-bounds: `0 <= idx < dim_size`.
+
+Lowerings of `memref.load` may emit attributes, e.g. `inbouds` + `nuw`
+when converting to LLVM\'s `llvm.getelementptr`, that would cause undefined
+behavior if indices are out of bounds or if computing the offset in the
+memref would cause signed overflow of the `index` type.
 
 The single result of `memref.load` is a value with the same type as the
 element type of the memref.
@@ -208,6 +264,11 @@ A set `nontemporal` attribute indicates that this load is not expected to
 be reused in the cache. For details, refer to the
 [LLVM load instruction](https://llvm.org/docs/LangRef.html#load-instruction).
 
+An optional `alignment` attribute allows to specify the byte alignment of the
+load operation. It must be a positive power of 2. The operation must access
+memory at an address aligned to this boundary. Violations may lead to
+architecture-specific faults or performance penalties.
+A value of 0 indicates no specific alignment requirement.
 # Example
 
 ```mlir
@@ -219,6 +280,7 @@ function load(
     indices::Vector{Value};
     result=nothing::Union{Nothing,IR.Type},
     nontemporal=nothing,
+    alignment=nothing,
     location=Location(),
 )
     op_ty_results = IR.Type[]
@@ -228,6 +290,7 @@ function load(
     attributes = NamedAttribute[]
     !isnothing(result) && push!(op_ty_results, result)
     !isnothing(nontemporal) && push!(attributes, namedattribute("nontemporal", nontemporal))
+    !isnothing(alignment) && push!(attributes, namedattribute("alignment", alignment))
 
     return create_operation(
         "memref.load",
@@ -315,7 +378,7 @@ end
 The `alloca` operation allocates memory on the stack, to be automatically
 released when control transfers back from the region of its closest
 surrounding operation with an
-[`AutomaticAllocationScope`](https://mlir.llvm.org/docs/Traits/#automaticallocationscope) trait.
+[`AutomaticAllocationScope`](../Traits/#automaticallocationscope) trait.
 The amount of memory allocated is specified by its memref and additional
 operands. For example:
 
@@ -398,9 +461,10 @@ region. To return a value, one should use `memref.alloca_scope.return`
 operation:
 
 ```mlir
-%result = memref.alloca_scope {
+%result = memref.alloca_scope -> f32 {
+  %value = arith.constant 1.0 : f32
   ...
-  memref.alloca_scope.return %value
+  memref.alloca_scope.return %value : f32
 }
 ```
 
@@ -435,7 +499,7 @@ the return operation may be omitted. Otherwise, it has to be present
 to indicate which values are going to be returned. For example:
 
 ```mlir
-memref.alloca_scope.return %value
+memref.alloca_scope.return %value : f32
 ```
 """
 function alloca_scope_return(results::Vector{Value}; location=Location())
@@ -500,11 +564,11 @@ address space.
 # Example
 
 ```mlir
-Cast to concrete shape.
-    %4 = memref.cast %1 : memref<*xf32> to memref<4x?xf32>
+// Cast to concrete shape.
+%4 = memref.cast %1 : memref<*xf32> to memref<4x?xf32>
 
-Erase rank information.
-    %5 = memref.cast %1 : memref<4x?xf32> to memref<*xf32>
+// Erase rank information.
+%5 = memref.cast %1 : memref<4x?xf32> to memref<*xf32>
 ```
 """
 function cast(source::Value; dest::IR.Type, location=Location())
@@ -599,8 +663,8 @@ alloc\'d memref (e.g. memrefs returned by `view` operations).
 # Example
 
 ```mlir
-%0 = memref.alloc() : memref<8x64xf32, affine_map<(d0, d1) -> (d0, d1), 1>>
-memref.dealloc %0 : memref<8x64xf32,  affine_map<(d0, d1) -> (d0, d1), 1>>
+%0 = memref.alloc() : memref<8x64xf32, affine_map<(d0, d1) -> (d0, d1)>, 1>
+memref.dealloc %0 : memref<8x64xf32,  affine_map<(d0, d1) -> (d0, d1)>, 1>
 ```
 """
 function dealloc(memref::Value; location=Location())
@@ -703,13 +767,13 @@ For example, a DmaStartOp operation that transfers 256 elements of a memref
 space 1 at indices [%k, %l], would be specified as follows:
 
 ```mlir
-%num_elements = arith.constant 256
+%num_elements = arith.constant 256 : index
 %idx = arith.constant 0 : index
-%tag = memref.alloc() : memref<1 x i32, affine_map<(d0) -> (d0)>, 4>
-dma_start %src[%i, %j], %dst[%k, %l], %num_elements, %tag[%idx] :
-  memref<40 x 128 x f32>, affine_map<(d0) -> (d0)>, 0>,
-  memref<2 x 1024 x f32>, affine_map<(d0) -> (d0)>, 1>,
-  memref<1 x i32>, affine_map<(d0) -> (d0)>, 2>
+%tag = memref.alloc() : memref<1 x i32, affine_map<(d0) -> (d0)>, 2>
+memref.dma_start %src[%i, %j], %dst[%k, %l], %num_elements, %tag[%idx] :
+  memref<40 x 128 x f32, affine_map<(d0, d1) -> (d0, d1)>, 0>,
+  memref<2 x 1024 x f32, affine_map<(d0, d1) -> (d0, d1)>, 1>,
+  memref<1 x i32, affine_map<(d0) -> (d0)>, 2>
 ```
 
 If %stride and %num_elt_per_stride are specified, the DMA is expected to
@@ -717,8 +781,8 @@ transfer %num_elt_per_stride elements every %stride elements apart from
 memory space 0 until %num_elements are transferred.
 
 ```mlir
-dma_start %src[%i, %j], %dst[%k, %l], %num_elements, %tag[%idx], %stride,
-          %num_elt_per_stride :
+memref.dma_start %src[%i, %j], %dst[%k, %l], %num_elements, %tag[%idx], %stride,
+                 %num_elt_per_stride :
 ```
 
 * TODO: add additional operands to allow source and destination striding, and
@@ -755,10 +819,10 @@ number of elements associated with the DMA operation.
 # Example
 
 ```mlir
- dma_start %src[%i, %j], %dst[%k, %l], %num_elements, %tag[%index] :
-   memref<2048 x f32>, affine_map<(d0) -> (d0)>, 0>,
-   memref<256 x f32>, affine_map<(d0) -> (d0)>, 1>
-   memref<1 x i32>, affine_map<(d0) -> (d0)>, 2>
+ memref.dma_start %src[%i, %j], %dst[%k, %l], %num_elements, %tag[%index] :
+   memref<2048 x f32, affine_map<(d0) -> (d0)>, 0>,
+   memref<256 x f32, affine_map<(d0) -> (d0)>, 1>,
+   memref<1 x i32, affine_map<(d0) -> (d0)>, 2>
  ...
  ...
  dma_wait %tag[%index], %num_elements : memref<1 x i32, affine_map<(d0) -> (d0)>, 2>
@@ -935,8 +999,8 @@ This makes lowering more progressive and brings the following benefits:
 
 ```mlir
   %base, %offset, %sizes:2, %strides:2 =
-    memref.extract_strided_metadata %memref :
-      memref<10x?xf32>, index, index, index, index, index
+    memref.extract_strided_metadata %memref : memref<10x?xf32>
+      -> memref<f32>, index, index, index, index, index
 
   // After folding, the type of %m2 can be memref<10x?xf32> and further
   // folded to %memref.
@@ -944,7 +1008,7 @@ This makes lowering more progressive and brings the following benefits:
       offset: [%offset],
       sizes: [%sizes#0, %sizes#1],
       strides: [%strides#0, %strides#1]
-    : memref<f32> to memref<?x?xf32, offset: ?, strides: [?, ?]>
+    : memref<f32> to memref<?x?xf32, strided<[?, ?], offset:?>>
 ```
 """
 function extract_strided_metadata(
@@ -1033,10 +1097,10 @@ given global variable will always return the same memref descriptor).
 
 ```mlir
 // Private variable with an initial value.
-memref.global \"private\" @x : memref<2xf32> = dense<0.0,2.0>
+memref.global \"private\" @x : memref<2xf32> = dense<[0.0, 2.0]>
 
 // Private variable with an initial value and an alignment (power of 2).
-memref.global \"private\" @x : memref<2xf32> = dense<0.0,2.0> {alignment = 64}
+memref.global \"private\" @x : memref<2xf32> = dense<[0.0, 2.0]> {alignment = 64}
 
 // Declaration of an external variable.
 memref.global \"private\" @y : memref<4xi32>
@@ -1045,7 +1109,7 @@ memref.global \"private\" @y : memref<4xi32>
 memref.global @z : memref<3xf16> = uninitialized
 
 // Externally visible constant variable.
-memref.global constant @c : memref<2xi32> = dense<1, 4>
+memref.global constant @c : memref<2xi32> = dense<[1, 4]>
 ```
 """
 function global_(;
@@ -1095,6 +1159,10 @@ by the cast.
 The input and result must have the same shape, element type, rank, and layout.
 
 If the source and target address spaces are the same, this operation is a noop.
+
+Finally, if the target memory-space is the generic/default memory-space,
+then it is assumed this cast can be bubbled down safely. See the docs of
+`MemorySpaceCastOpInterface` interface for more details.
 
 # Example
 
@@ -1238,7 +1306,7 @@ memref.
 ```
 
 If the result memref has a dynamic shape, a result dimension operand is
-needed to specify its dynamic dimension. In the example below, the ssa value
+needed to spefify its dynamic dimension. In the example below, the ssa value
 \'%d\' specifies the unknown dimension of the result memref.
 
 ```mlir
@@ -1261,8 +1329,8 @@ behavior.
 
 ```mlir
 %new = memref.realloc %old : memref<64xf32> to memref<124xf32>
-%4 = memref.load %new[%index]   // ok
-%5 = memref.load %old[%index]   // undefined behavior
+%4 = memref.load %new[%index] : memref<124xf32> // ok
+%5 = memref.load %old[%index] : memref<64xf32>  // undefined behavior
 ```
 """
 function realloc(
@@ -1297,7 +1365,79 @@ end
 
 Modify offset, sizes and strides of an unranked/ranked memref.
 
-# Example
+Example 1:
+
+Consecutive `reinterpret_cast` operations on memref\'s with static
+dimensions.
+
+We distinguish between *underlying memory* — the sequence of elements as
+they appear in the contiguous memory of the memref — and the
+*strided memref*, which refers to the underlying memory interpreted
+according to specified offsets, sizes, and strides.
+
+```mlir
+%result1 = memref.reinterpret_cast %arg0 to
+  offset: [9],
+  sizes: [4, 4],
+  strides: [16, 2]
+: memref<8x8xf32, strided<[8, 1], offset: 0>> to
+  memref<4x4xf32, strided<[16, 2], offset: 9>>
+
+%result2 = memref.reinterpret_cast %result1 to
+  offset: [0],
+  sizes: [2, 2],
+  strides: [4, 2]
+: memref<4x4xf32, strided<[16, 2], offset: 9>> to
+  memref<2x2xf32, strided<[4, 2], offset: 0>>
+```
+
+The underlying memory of `%arg0` consists of a linear sequence of integers
+from 1 to 64. Its memref has the following 8x8 elements:
+
+```mlir
+[[1,  2,  3,  4,  5,  6,  7,  8],
+[9,  10, 11, 12, 13, 14, 15, 16],
+[17, 18, 19, 20, 21, 22, 23, 24],
+[25, 26, 27, 28, 29, 30, 31, 32],
+[33, 34, 35, 36, 37, 38, 39, 40],
+[41, 42, 43, 44, 45, 46, 47, 48],
+[49, 50, 51, 52, 53, 54, 55, 56],
+[57, 58, 59, 60, 61, 62, 63, 64]]
+```
+
+Following the first `reinterpret_cast`, the strided memref elements
+of `%result1` are:
+
+```mlir
+[[10, 12, 14, 16],
+[26, 28, 30, 32],
+[42, 44, 46, 48],
+[58, 60, 62, 64]]
+```
+
+Note: The offset and strides are relative to the underlying memory of
+`%arg0`.
+
+The second `reinterpret_cast` results in the following strided memref
+for `%result2`:
+
+```mlir
+[[1, 3],
+[5, 7]]
+```
+
+Notice that it does not matter if you use %result1 or %arg0 as a source
+for the second `reinterpret_cast` operation. Only the underlying memory
+pointers will be reused.
+
+The offset and stride are relative to the base underlying memory of the
+memref, starting at 1, not at 10 as seen in the output of `%result1`.
+This behavior contrasts with the `subview` operator, where values are
+relative to the strided memref (refer to `subview` examples).
+Consequently, the second `reinterpret_cast` behaves as if `%arg0` were
+passed directly as its argument.
+
+Example 2:
 ```mlir
 memref.reinterpret_cast %ranked to
   offset: [0],
@@ -1319,7 +1459,8 @@ In other words:
 %dst = memref.reinterpret_cast %src to
   offset: [%offset],
   sizes: [%sizes],
-  strides: [%strides]
+  strides: [%strides] :
+  memref<*xf32> to memref<?x?xf32, strided<[?, ?], offset: ?>>
 ```
 means that `%dst`\'s descriptor will be:
 ```mlir
@@ -1382,12 +1523,12 @@ Result type is ranked.
 ```mlir
 // Reshape statically-shaped memref.
 %dst = memref.reshape %src(%shape)
-         : (memref<4x1xf32>, memref<1xi32>) to memref<4xf32>
+         : (memref<4x1xf32>, memref<1xi32>) -> memref<4xf32>
 %dst0 = memref.reshape %src(%shape0)
-         : (memref<4x1xf32>, memref<2xi32>) to memref<2x2xf32>
+         : (memref<4x1xf32>, memref<2xi32>) -> memref<2x2xf32>
 // Flatten unranked memref.
 %dst = memref.reshape %src(%shape)
-         : (memref<*xf32>, memref<1xi32>) to memref<?xf32>
+         : (memref<*xf32>, memref<1xi32>) -> memref<?xf32>
 ```
 
 b. Source type is ranked or unranked. Shape argument has dynamic size.
@@ -1396,10 +1537,10 @@ Result type is unranked.
 ```mlir
 // Reshape dynamically-shaped 1D memref.
 %dst = memref.reshape %src(%shape)
-         : (memref<?xf32>, memref<?xi32>) to memref<*xf32>
+         : (memref<?xf32>, memref<?xi32>) -> memref<*xf32>
 // Reshape unranked memref.
 %dst = memref.reshape %src(%shape)
-         : (memref<*xf32>, memref<?xi32>) to memref<*xf32>
+         : (memref<*xf32>, memref<?xi32>) -> memref<*xf32>
 ```
 """
 function reshape(source::Value, shape::Value; result::IR.Type, location=Location())
@@ -1427,12 +1568,22 @@ end
 The `store` op stores an element into a memref at the specified indices.
 
 The number of indices must match the rank of the memref. The indices must
-be in-bounds: `0 <= idx < dim_size`
+be in-bounds: `0 <= idx < dim_size`.
+
+Lowerings of `memref.store` may emit attributes, e.g. `inbouds` + `nuw`
+when converting to LLVM\'s `llvm.getelementptr`, that would cause undefined
+behavior if indices are out of bounds or if computing the offset in the
+memref would cause signed overflow of the `index` type.
 
 A set `nontemporal` attribute indicates that this store is not expected to
 be reused in the cache. For details, refer to the
 [LLVM store instruction](https://llvm.org/docs/LangRef.html#store-instruction).
 
+An optional `alignment` attribute allows to specify the byte alignment of the
+store operation. It must be a positive power of 2. The operation must access
+memory at an address aligned to this boundary. Violations may lead to
+architecture-specific faults or performance penalties.
+A value of 0 indicates no specific alignment requirement.
 # Example
 
 ```mlir
@@ -1444,6 +1595,7 @@ function store(
     memref::Value,
     indices::Vector{Value};
     nontemporal=nothing,
+    alignment=nothing,
     location=Location(),
 )
     op_ty_results = IR.Type[]
@@ -1452,6 +1604,7 @@ function store(
     successors = Block[]
     attributes = NamedAttribute[]
     !isnothing(nontemporal) && push!(attributes, namedattribute("nontemporal", nontemporal))
+    !isnothing(alignment) && push!(attributes, namedattribute("alignment", alignment))
 
     return create_operation(
         "memref.store",
@@ -1602,6 +1755,64 @@ performing an out-of-bounds subview at runtime is undefined behavior.
 
 Example 1:
 
+Consecutive `subview` operations on memref\'s with static dimensions.
+
+We distinguish between *underlying memory* — the sequence of elements as
+they appear in the contiguous memory of the memref — and the
+*strided memref*, which refers to the underlying memory interpreted
+according to specified offsets, sizes, and strides.
+
+```mlir
+%result1 = memref.subview %arg0[1, 1][4, 4][2, 2]
+: memref<8x8xf32, strided<[8, 1], offset: 0>> to
+  memref<4x4xf32, strided<[16, 2], offset: 9>>
+
+%result2 = memref.subview %result1[1, 1][2, 2][2, 2]
+: memref<4x4xf32, strided<[16, 2], offset: 9>> to
+  memref<2x2xf32, strided<[32, 4], offset: 27>>
+```
+
+The underlying memory of `%arg0` consists of a linear sequence of integers
+from 1 to 64. Its memref has the following 8x8 elements:
+
+```mlir
+[[1,  2,  3,  4,  5,  6,  7,  8],
+[9,  10, 11, 12, 13, 14, 15, 16],
+[17, 18, 19, 20, 21, 22, 23, 24],
+[25, 26, 27, 28, 29, 30, 31, 32],
+[33, 34, 35, 36, 37, 38, 39, 40],
+[41, 42, 43, 44, 45, 46, 47, 48],
+[49, 50, 51, 52, 53, 54, 55, 56],
+[57, 58, 59, 60, 61, 62, 63, 64]]
+```
+
+Following the first `subview`, the strided memref elements of `%result1`
+are:
+
+```mlir
+[[10, 12, 14, 16],
+[26, 28, 30, 32],
+[42, 44, 46, 48],
+[58, 60, 62, 64]]
+```
+
+Note: The offset and strides are relative to the strided memref of `%arg0`
+(compare to the corresponding `reinterpret_cast` example).
+
+The second `subview` results in the following strided memref for
+`%result2`:
+
+```mlir
+[[28, 32],
+[60, 64]]
+```
+
+Unlike the `reinterpret_cast`, the values are relative to the strided
+memref of the input (`%result1` in this case) and not its
+underlying memory.
+
+Example 2:
+
 ```mlir
 // Subview of static memref with strided layout at static offsets, sizes
 // and strides.
@@ -1610,7 +1821,7 @@ Example 1:
       memref<8x2xf32, strided<[21, 18], offset: 137>>
 ```
 
-Example 2:
+Example 3:
 
 ```mlir
 // Subview of static memref with identity layout at dynamic offsets, sizes
@@ -1619,7 +1830,7 @@ Example 2:
     : memref<64x4xf32> to memref<?x?xf32, strided<[?, ?], offset: ?>>
 ```
 
-Example 3:
+Example 4:
 
 ```mlir
 // Subview of dynamic memref with strided layout at dynamic offsets and
@@ -1629,7 +1840,7 @@ Example 3:
       memref<4x4xf32, strided<[?, ?], offset: ?>>
 ```
 
-Example 4:
+Example 5:
 
 ```mlir
 // Rank-reducing subviews.
@@ -1639,7 +1850,7 @@ Example 4:
     : memref<8x16x4xf32> to memref<6x3xf32, strided<[4, 1], offset: 210>>
 ```
 
-Example 5:
+Example 6:
 
 ```mlir
 // Identity subview. The subview is the full source memref.

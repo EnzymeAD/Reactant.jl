@@ -378,6 +378,88 @@ function bitcast(arg::Value; res::IR.Type, location=Location())
     )
 end
 
+"""
+`blockaddress`
+
+Creates an SSA value containing a pointer to a basic block. The block
+address information (function and block) is given by the `BlockAddressAttr`
+attribute. This operation assumes an existing `llvm.blocktag` operation
+identifying an existing MLIR block within a function. Example:
+
+```mlir
+llvm.mlir.global private @g() : !llvm.ptr {
+  %0 = llvm.blockaddress <function = @fn, tag = <id = 0>> : !llvm.ptr
+  llvm.return %0 : !llvm.ptr
+}
+
+llvm.func @fn() {
+  llvm.br ^bb1
+^bb1:  // pred: ^bb0
+  llvm.blocktag <id = 0>
+  llvm.return
+}
+```
+"""
+function blockaddress(; res::IR.Type, block_addr, location=Location())
+    op_ty_results = IR.Type[res,]
+    operands = Value[]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[namedattribute("block_addr", block_addr),]
+
+    return create_operation(
+        "llvm.blockaddress",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+"""
+`blocktag`
+
+This operation uses a `tag` to uniquely identify an MLIR block in a
+function. The same tag is used by `llvm.blockaddress` in order to compute
+the target address.
+
+A given function should have at most one `llvm.blocktag` operation with a
+given `tag`. This operation cannot be used as a terminator.
+
+# Example
+
+```mlir
+llvm.func @f() -> !llvm.ptr {
+  %addr = llvm.blockaddress <function = @f, tag = <id = 1>> : !llvm.ptr
+  llvm.br ^bb1
+^bb1:
+  llvm.blocktag <id = 1>
+  llvm.return %addr : !llvm.ptr
+}
+```
+"""
+function blocktag(; tag, location=Location())
+    op_ty_results = IR.Type[]
+    operands = Value[]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[namedattribute("tag", tag),]
+
+    return create_operation(
+        "llvm.blocktag",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
 function br(
     destOperands::Vector{Value}; loop_annotation=nothing, dest::Block, location=Location()
 )
@@ -466,6 +548,11 @@ optional indirect callee type and the MLIR function type, which differs from
 the LLVM function type that uses an explicit void type to model functions
 that do not return a value.
 
+If this operatin has the `no_inline` attribute, then this specific function call
+will never be inlined. The opposite behavior will occur if the call has `always_inline`
+attribute. The `inline_hint` attribute indicates that it is desirable to inline
+this function call.
+
 Examples:
 
 ```mlir
@@ -493,7 +580,6 @@ function call(
     var_callee_type=nothing,
     callee=nothing,
     fastmathFlags=nothing,
-    branch_weights=nothing,
     CConv=nothing,
     TailCallKind=nothing,
     memory_effects=nothing,
@@ -506,6 +592,7 @@ function call(
     res_attrs=nothing,
     no_inline=nothing,
     always_inline=nothing,
+    inline_hint=nothing,
     access_groups=nothing,
     alias_scopes=nothing,
     noalias_scopes=nothing,
@@ -527,8 +614,6 @@ function call(
     !isnothing(callee) && push!(attributes, namedattribute("callee", callee))
     !isnothing(fastmathFlags) &&
         push!(attributes, namedattribute("fastmathFlags", fastmathFlags))
-    !isnothing(branch_weights) &&
-        push!(attributes, namedattribute("branch_weights", branch_weights))
     !isnothing(CConv) && push!(attributes, namedattribute("CConv", CConv))
     !isnothing(TailCallKind) &&
         push!(attributes, namedattribute("TailCallKind", TailCallKind))
@@ -544,6 +629,7 @@ function call(
     !isnothing(no_inline) && push!(attributes, namedattribute("no_inline", no_inline))
     !isnothing(always_inline) &&
         push!(attributes, namedattribute("always_inline", always_inline))
+    !isnothing(inline_hint) && push!(attributes, namedattribute("inline_hint", inline_hint))
     !isnothing(access_groups) &&
         push!(attributes, namedattribute("access_groups", access_groups))
     !isnothing(alias_scopes) &&
@@ -672,9 +758,9 @@ end
 Unlike LLVM IR, MLIR does not have first-class constant values. Therefore,
 all constants must be created as SSA values before being used in other
 operations. `llvm.mlir.constant` creates such values for scalars, vectors,
-strings, and structs. It has a mandatory `value` attribute whose type
-depends on the type of the constant value. The type of the constant value
-must correspond to the attribute type converted to LLVM IR type.
+strings, structs, and array of structs. It has a mandatory `value` attribute
+whose type depends on the type of the constant value. The type of the constant
+value must correspond to the attribute type converted to LLVM IR type.
 
 When creating constant scalars, the `value` attribute must be either an
 integer attribute or a floating point attribute. The type of the attribute
@@ -695,6 +781,11 @@ an LLVM struct type. The number of fields in the struct must match the
 number of elements in the attribute, and the type of each LLVM struct field
 must correspond to the type of the corresponding attribute element converted
 to LLVM IR.
+
+When creating an array of structs, the `value` attribute must be an array
+attribute, itself containing zero, or undef, or array attributes for each
+potential nested array type, and the elements of the leaf array attributes
+for must match the struct element types or be zero or undef attributes.
 
 Examples:
 
@@ -1133,8 +1224,12 @@ Like in LLVM IR, it is possible to use both constants as well as SSA values
 as indices. In the case of indexing within a structure, it is required to
 either use constant indices directly, or supply a constant SSA value.
 
-An optional \'inbounds\' attribute specifies the low-level pointer arithmetic
+The no-wrap flags can be used to specify the low-level pointer arithmetic
 overflow behavior that LLVM uses after lowering the operation to LLVM IR.
+Valid options include \'inbounds\' (pointer arithmetic must be within object
+bounds), \'nusw\' (no unsigned signed wrap), and \'nuw\' (no unsigned wrap).
+Note that \'inbounds\' implies \'nusw\' which is ensured by the enum
+definition. The flags can be set individually or in combination.
 
 Examples:
 
@@ -1156,7 +1251,6 @@ function getelementptr(
     res::IR.Type,
     rawConstantIndices,
     elem_type,
-    inbounds=nothing,
     location=Location(),
 )
     op_ty_results = IR.Type[res,]
@@ -1167,7 +1261,6 @@ function getelementptr(
         namedattribute("rawConstantIndices", rawConstantIndices),
         namedattribute("elem_type", elem_type),
     ]
-    !isnothing(inbounds) && push!(attributes, namedattribute("inbounds", inbounds))
 
     return create_operation(
         "llvm.getelementptr",
@@ -1366,6 +1459,22 @@ Examples:
 // Alignment is optional
 llvm.mlir.global private constant @y(dense<1.0> : tensor<8xf32>) { alignment = 32 : i64 } : !llvm.array<8 x f32>
 ```
+
+The `target_specific_attrs` attribute provides a mechanism to preserve
+target-specific LLVM IR attributes that are not explicitly modeled in the
+LLVM dialect.
+
+The attribute is an array containing either string attributes or
+two-element array attributes of strings. The value of a standalone string
+attribute is interpreted as the name of an LLVM IR attribute on the global.
+A two-element array is interpreted as a key-value pair.
+
+# Example
+
+```mlir
+llvm.mlir.global external @example() {
+  target_specific_attrs = [\"value-less-attr\", [\"int-attr\", \"4\"], [\"string-attr\", \"string\"]]} : f64
+```
 """
 function mlir_global(;
     global_type,
@@ -1383,6 +1492,7 @@ function mlir_global(;
     comdat=nothing,
     dbg_exprs=nothing,
     visibility_=nothing,
+    target_specific_attrs=nothing,
     initializer::Region,
     location=Location(),
 )
@@ -1410,6 +1520,8 @@ function mlir_global(;
     !isnothing(comdat) && push!(attributes, namedattribute("comdat", comdat))
     !isnothing(dbg_exprs) && push!(attributes, namedattribute("dbg_exprs", dbg_exprs))
     !isnothing(visibility_) && push!(attributes, namedattribute("visibility_", visibility_))
+    !isnothing(target_specific_attrs) &&
+        push!(attributes, namedattribute("target_specific_attrs", target_specific_attrs))
 
     return create_operation(
         "llvm.mlir.global",
@@ -1450,6 +1562,141 @@ function icmp(
 end
 
 """
+`mlir_ifunc`
+
+`llvm.mlir.ifunc` is a top level operation that defines a global ifunc.
+It defines a new symbol and takes a symbol refering to a resolver function.
+IFuncs can be called as regular functions. The function type is the same
+as the IFuncType. The symbol is resolved at runtime by calling a resolver
+function.
+
+Examples:
+
+```mlir
+// IFuncs resolve a symbol at runtime using a resovler function.
+llvm.mlir.ifunc external @foo: !llvm.func<f32 (i64)>, !llvm.ptr @resolver
+
+llvm.func @foo_1(i64) -> f32
+llvm.func @foo_2(i64) -> f32
+
+llvm.func @resolve_foo() -> !llvm.ptr attributes {
+  %0 = llvm.mlir.addressof @foo_2 : !llvm.ptr
+  %1 = llvm.mlir.addressof @foo_1 : !llvm.ptr
+
+  // ... Logic selecting from foo_{1, 2}
+
+  // Return function pointer to the selected function
+  llvm.return %7 : !llvm.ptr
+}
+
+llvm.func @use_foo() {
+  // IFuncs are called as regular functions
+  %res = llvm.call @foo(%value) : i64 -> f32
+}
+```
+"""
+function mlir_ifunc(;
+    sym_name,
+    i_func_type,
+    resolver,
+    resolver_type,
+    linkage,
+    dso_local=nothing,
+    address_space=nothing,
+    unnamed_addr=nothing,
+    visibility_=nothing,
+    location=Location(),
+)
+    op_ty_results = IR.Type[]
+    operands = Value[]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[
+        namedattribute("sym_name", sym_name),
+        namedattribute("i_func_type", i_func_type),
+        namedattribute("resolver", resolver),
+        namedattribute("resolver_type", resolver_type),
+        namedattribute("linkage", linkage),
+    ]
+    !isnothing(dso_local) && push!(attributes, namedattribute("dso_local", dso_local))
+    !isnothing(address_space) &&
+        push!(attributes, namedattribute("address_space", address_space))
+    !isnothing(unnamed_addr) &&
+        push!(attributes, namedattribute("unnamed_addr", unnamed_addr))
+    !isnothing(visibility_) && push!(attributes, namedattribute("visibility_", visibility_))
+
+    return create_operation(
+        "llvm.mlir.ifunc",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+"""
+`indirectbr`
+
+Transfer control flow to address in `\$addr`. A list of possible target
+blocks in `\$successors` can be provided and maybe used as a hint in LLVM:
+
+```mlir
+...
+llvm.func @g(...
+  %dest = llvm.blockaddress <function = @g, tag = <id = 0>> : !llvm.ptr
+  llvm.indirectbr %dest : !llvm.ptr, [
+    ^head
+  ]
+^head:
+  llvm.blocktag <id = 0>
+  llvm.return %arg0 : i32
+  ...
+```
+
+It also supports a list of operands that can be passed to a target block:
+
+```mlir
+  llvm.indirectbr %dest : !llvm.ptr, [
+    ^head(%arg0 : i32),
+    ^tail(%arg1, %arg0 : i32, i32)
+  ]
+^head(%r0 : i32):
+  llvm.return %r0 : i32
+^tail(%r1 : i32, %r2 : i32):
+  ...
+```
+"""
+function indirectbr(
+    addr::Value,
+    succOperands::Vector{Value};
+    indbr_operand_segments,
+    successors::Vector{Block},
+    location=Location(),
+)
+    op_ty_results = IR.Type[]
+    operands = Value[addr, succOperands...]
+    owned_regions = Region[]
+    successors = Block[successors...,]
+    attributes = NamedAttribute[namedattribute(
+        "indbr_operand_segments", indbr_operand_segments
+    ),]
+
+    return create_operation(
+        "llvm.indirectbr",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+"""
 `inline_asm`
 
 The InlineAsmOp mirrors the underlying LLVM semantics with a notable
@@ -1458,6 +1705,9 @@ any symbol or any global variable: only the operands of the op may be read,
 written, or referenced.
 Attempting to define or reference any symbol or any global behavior is
 considered undefined behavior at this time.
+If `tail_call_kind` is used, the operation behaves like the specified
+tail call kind. The `musttail` kind it\'s not available for this operation,
+since it isn\'t supported by LLVM\'s inline asm.
 """
 function inline_asm(
     operands::Vector{Value};
@@ -1466,6 +1716,7 @@ function inline_asm(
     constraints,
     has_side_effects=nothing,
     is_align_stack=nothing,
+    tail_call_kind=nothing,
     asm_dialect=nothing,
     operand_attrs=nothing,
     location=Location(),
@@ -1482,6 +1733,8 @@ function inline_asm(
         push!(attributes, namedattribute("has_side_effects", has_side_effects))
     !isnothing(is_align_stack) &&
         push!(attributes, namedattribute("is_align_stack", is_align_stack))
+    !isnothing(tail_call_kind) &&
+        push!(attributes, namedattribute("tail_call_kind", tail_call_kind))
     !isnothing(asm_dialect) && push!(attributes, namedattribute("asm_dialect", asm_dialect))
     !isnothing(operand_attrs) &&
         push!(attributes, namedattribute("operand_attrs", operand_attrs))
@@ -1693,17 +1946,20 @@ function func(;
     frame_pointer=nothing,
     target_cpu=nothing,
     tune_cpu=nothing,
+    reciprocal_estimates=nothing,
+    prefer_vector_width=nothing,
     target_features=nothing,
-    unsafe_fp_math=nothing,
     no_infs_fp_math=nothing,
     no_nans_fp_math=nothing,
-    approx_func_fp_math=nothing,
     no_signed_zeros_fp_math=nothing,
     denormal_fp_math=nothing,
     denormal_fp_math_f32=nothing,
     fp_contract=nothing,
+    instrument_function_entry=nothing,
+    instrument_function_exit=nothing,
     no_inline=nothing,
     always_inline=nothing,
+    inline_hint=nothing,
     no_unwind=nothing,
     will_return=nothing,
     optimize_none=nothing,
@@ -1711,6 +1967,7 @@ function func(;
     work_group_size_hint=nothing,
     reqd_work_group_size=nothing,
     intel_reqd_sub_group_size=nothing,
+    uwtable_kind=nothing,
     body::Region,
     location=Location(),
 )
@@ -1763,16 +2020,16 @@ function func(;
         push!(attributes, namedattribute("frame_pointer", frame_pointer))
     !isnothing(target_cpu) && push!(attributes, namedattribute("target_cpu", target_cpu))
     !isnothing(tune_cpu) && push!(attributes, namedattribute("tune_cpu", tune_cpu))
+    !isnothing(reciprocal_estimates) &&
+        push!(attributes, namedattribute("reciprocal_estimates", reciprocal_estimates))
+    !isnothing(prefer_vector_width) &&
+        push!(attributes, namedattribute("prefer_vector_width", prefer_vector_width))
     !isnothing(target_features) &&
         push!(attributes, namedattribute("target_features", target_features))
-    !isnothing(unsafe_fp_math) &&
-        push!(attributes, namedattribute("unsafe_fp_math", unsafe_fp_math))
     !isnothing(no_infs_fp_math) &&
         push!(attributes, namedattribute("no_infs_fp_math", no_infs_fp_math))
     !isnothing(no_nans_fp_math) &&
         push!(attributes, namedattribute("no_nans_fp_math", no_nans_fp_math))
-    !isnothing(approx_func_fp_math) &&
-        push!(attributes, namedattribute("approx_func_fp_math", approx_func_fp_math))
     !isnothing(no_signed_zeros_fp_math) && push!(
         attributes, namedattribute("no_signed_zeros_fp_math", no_signed_zeros_fp_math)
     )
@@ -1781,9 +2038,17 @@ function func(;
     !isnothing(denormal_fp_math_f32) &&
         push!(attributes, namedattribute("denormal_fp_math_f32", denormal_fp_math_f32))
     !isnothing(fp_contract) && push!(attributes, namedattribute("fp_contract", fp_contract))
+    !isnothing(instrument_function_entry) && push!(
+        attributes,
+        namedattribute("instrument_function_entry", instrument_function_entry),
+    )
+    !isnothing(instrument_function_exit) && push!(
+        attributes, namedattribute("instrument_function_exit", instrument_function_exit)
+    )
     !isnothing(no_inline) && push!(attributes, namedattribute("no_inline", no_inline))
     !isnothing(always_inline) &&
         push!(attributes, namedattribute("always_inline", always_inline))
+    !isnothing(inline_hint) && push!(attributes, namedattribute("inline_hint", inline_hint))
     !isnothing(no_unwind) && push!(attributes, namedattribute("no_unwind", no_unwind))
     !isnothing(will_return) && push!(attributes, namedattribute("will_return", will_return))
     !isnothing(optimize_none) &&
@@ -1798,6 +2063,8 @@ function func(;
         attributes,
         namedattribute("intel_reqd_sub_group_size", intel_reqd_sub_group_size),
     )
+    !isnothing(uwtable_kind) &&
+        push!(attributes, namedattribute("uwtable_kind", uwtable_kind))
 
     return create_operation(
         "llvm.func",

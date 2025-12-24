@@ -1,4 +1,7 @@
-exports_files(["mlir-jl-tblgen.cc", "jl-generators.cc"])
+exports_files([
+    "mlir-jl-tblgen.cc",
+    "jl-generators.cc",
+])
 
 licenses(["notice"])
 

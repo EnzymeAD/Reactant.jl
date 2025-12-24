@@ -3,7 +3,7 @@ mutable struct AsyncArray <: XLA.AbstractAsyncBuffer
     future::Union{Future,Nothing}
 end
 
-const AsyncEmptyArray = AsyncArray(Array(C_NULL), nothing)
+const AsyncEmptyArray = AsyncArray(Array(C_NULL, false), nothing)
 
 AsyncArray(args...; kwargs...) = AsyncArray(Array(args...; kwargs...), nothing)
 
@@ -25,3 +25,8 @@ function XLA.to_host(array::AsyncArray, data, reactant_sharding)
 end
 
 XLA.sharding(x::AsyncArray) = XLA.sharding(x.buffer)
+
+function Base.copy(b::AsyncArray)
+    Base.wait(b)
+    return AsyncArray(Base.copy(b.buffer), nothing)
+end

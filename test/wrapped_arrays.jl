@@ -17,7 +17,7 @@ function view_getindex_3(x)
 end
 
 @testset "view getindex" begin
-    x = rand(4, 4, 3)
+    x = Reactant.TestUtils.construct_test_array(Float64, 4, 4, 3)
     x_ra = Reactant.to_rarray(x)
 
     @test @allowscalar(@jit(view_getindex_1(x_ra))) ≈ view_getindex_1(x)
@@ -31,7 +31,7 @@ function reshape_wrapper(x)
 end
 
 @testset "reshape wrapper" begin
-    x = rand(4, 4, 3)
+    x = Reactant.TestUtils.construct_test_array(Float64, 4, 4, 3)
     x_ra = Reactant.to_rarray(x)
     @test @jit(reshape_wrapper(x_ra)) ≈ reshape_wrapper(x)
 end
@@ -42,7 +42,7 @@ function permutedims_wrapper(x)
 end
 
 @testset "permutedims wrapper" begin
-    x = rand(4, 4, 3)
+    x = Reactant.TestUtils.construct_test_array(Float64, 4, 4, 3)
     x_ra = Reactant.to_rarray(x)
     @test @jit(permutedims_wrapper(x_ra)) ≈ permutedims_wrapper(x)
 end
@@ -53,7 +53,7 @@ function bcast_wrapper(f::F, x) where {F}
 end
 
 @testset "Broadcasting on wrapped arrays" begin
-    x = rand(4, 3)
+    x = Reactant.TestUtils.construct_test_array(Float64, 4, 3)
     x_ra = Reactant.to_rarray(x)
 
     for op in (-, tanh, sin)
@@ -67,7 +67,7 @@ function mean_var(x)
 end
 
 @testset "mean/var" begin
-    x = rand(4, 3)
+    x = Reactant.TestUtils.construct_test_array(Float64, 4, 3)
     x_ra = Reactant.to_rarray(x)
 
     m1, v1 = mean_var(x)
@@ -84,7 +84,7 @@ function btranspose_badjoint(x)
 end
 
 @testset "batched transpose/adjoint" begin
-    x = rand(4, 2, 3)
+    x = Reactant.TestUtils.construct_test_array(Float64, 4, 2, 3)
     x_ra = Reactant.to_rarray(x)
     @test @jit(btranspose_badjoint(x_ra)) ≈ btranspose_badjoint(x)
 end
@@ -97,12 +97,12 @@ end
 add_perm_dims(x) = x .+ PermutedDimsArray(x, (2, 1))
 
 @testset "PermutedDimsArray" begin
-    x = rand(4, 4, 3)
+    x = Reactant.TestUtils.construct_test_array(Float64, 4, 4, 3)
     x_ra = Reactant.to_rarray(x)
     y_ra = @jit(bypass_permutedims(x_ra))
     @test @allowscalar(Array(y_ra)) ≈ bypass_permutedims(x)
 
-    x = rand(4, 4)
+    x = Reactant.TestUtils.construct_test_array(Float64, 4, 4)
     x_ra = Reactant.to_rarray(x)
 
     @test @jit(add_perm_dims(x_ra)) ≈ add_perm_dims(x)
@@ -148,19 +148,19 @@ end
         ("Transpose", write_to_transposed_array!),
         ("Adjoint", write_to_adjoint_array!),
     ]
-        x = Reactant.to_rarray(rand(3, 2))
+        x = Reactant.to_rarray(Reactant.TestUtils.construct_test_array(Float64, 3, 2))
         y = @jit fn(x)
         @test all(isone, Array(y))
     end
 
     @testset "PermutedDimsArray" begin
-        x = rand(4, 4)
+        x = Reactant.TestUtils.construct_test_array(Float64, 4, 4)
         x_ra = Reactant.to_rarray(x)
         @test @jit(write_to_permuted_dims_array!(x_ra)) ≈ write_to_permuted_dims_array!(x)
     end
 
     @testset "Diagonal" begin
-        x = rand(4, 4)
+        x = Reactant.TestUtils.construct_test_array(Float64, 4, 4)
         x_ra = Reactant.to_rarray(x)
         y_ra = copy(x_ra)
 
@@ -197,7 +197,7 @@ end
         ("UpperTriangular", upper_triangular_write),
         ("Tridiagonal", tridiagonal_write),
     ]
-        x = rand(4, 4)
+        x = Reactant.TestUtils.construct_test_array(Float64, 4, 4)
         x_ra = Reactant.to_rarray(x)
         @test @jit(fn(x_ra)) ≈ fn(x)
     end
@@ -219,8 +219,8 @@ function broadcast_reshaped_array(x, idx1)
 end
 
 @testset "Broadcast reshaped array" begin
-    x_ra = Reactant.to_rarray(rand(5, 4, 2))
-    idx1_ra = Reactant.to_rarray(rand(1:20, 4))
+    x_ra = Reactant.to_rarray(Reactant.TestUtils.construct_test_array(Float64, 5, 4, 2))
+    idx1_ra = Reactant.to_rarray([3, 7, 15, 19])
     idx2_ra = Reactant.to_rarray([2, 1])
 
     @test broadcast_reshaped_array(Array(x_ra), Array(idx1_ra), Array(idx2_ra)) ≈
@@ -240,8 +240,8 @@ end
 
 @testset "reshaped subarray indexing" begin
     fn(x) = view(x, 1:2) .+ 1
-    x_ra = Reactant.to_rarray(rand(3, 4, 3))
-    @test @jit(fn(x_ra)) == fn(Array(x_ra))
+    x_ra = Reactant.to_rarray(Reactant.TestUtils.construct_test_array(Float64, 3, 4, 3))
+    @test @jit(fn(x_ra)) ≈ fn(Array(x_ra))
 end
 
 function reshape_getindex(x)
@@ -281,7 +281,7 @@ function view_diagonal(x)
 end
 
 @testset "2 levels of wrapping" begin
-    x = reshape(collect(Float32, 1:8), 2, 4)
+    x = Reactant.TestUtils.construct_test_array(Float32, 2, 4)
     x_ra = Reactant.to_rarray(x)
 
     @test @jit(view_adjoint(x_ra)) ≈ view_adjoint(x)

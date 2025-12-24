@@ -130,7 +130,7 @@ end
 """
 `barrier`
 
-The \"barrier\" op synchronizes all work items of a workgroup. It is used
+The `barrier` op synchronizes all work items of a workgroup. It is used
 to coordinate communication between the work items of the workgroup.
 
 ```mlir
@@ -322,7 +322,7 @@ Returns the block id within the cluster along the x, y, or z `dimension`.
 ```
 
 If `upper_bound` is set, then executing (a lowering of) this operation in an
-environment where the number of thread blocks per cluster  along `dimension`
+environment where the number of thread blocks per cluster along `dimension`
 is greater than `upper_bound` causes undefined behavior.
 
 There is an implicit upper bound of `kMaxClusterDim` (currently 8).
@@ -995,7 +995,7 @@ end
 This operation provides a memref pointer to the start of dynamic shared
 memory, often referred to as workgroup memory. It\'s important to note that
 this dynamic shared memory needs to be allocated at kernel launch. One can
-conveniently utilize `the dynamic_shared_memory_size` parameter of
+conveniently utilize the `dynamic_shared_memory_size` parameter of
 `gpu.launch` for this purpose.
 
 Examples:
@@ -1537,17 +1537,11 @@ function launch_func(
             1,
             1,
             1,
-            if (clusterSizeX == nothing)
-                0
-            elseif 1(clusterSizeY == nothing)
-                0
-            elseif 1(clusterSizeZ == nothing)
-                0
-            elseif 1(dynamicSharedMemorySize == nothing)
-                0
-            else
-                1length(kernelOperands)
-            end,
+            (clusterSizeX == nothing) ? 0 : 1,
+            (clusterSizeY == nothing) ? 0 : 1,
+            (clusterSizeZ == nothing) ? 0 : 1,
+            (dynamicSharedMemorySize == nothing) ? 0 : 1,
+            length(kernelOperands),
             (asyncObject == nothing) ? 0 : 1,
         ]),
     )
@@ -1597,8 +1591,8 @@ dimensions are present, grouped as follows:
 -   a variadic number of Workgroup memory attributions.
 -   a variadic number of Private memory attributions.
 
-The `kernelFunc` and `kernelModule` attributes are optional and specifies
-the kernel name and a module in which the kernel should be outlined. 
+The `function` and `module` attributes are optional and specifies
+the kernel name and a module in which the kernel should be outlined.
 
 # Syntax
 
@@ -1608,6 +1602,8 @@ operation ::= `gpu.launch` (`async` (`[` ssa-id-list `]`)? )?
                          `blocks` `(` ssa-id-list `)` `in` ssa-reassignment
                          `threads` `(` ssa-id-list `)` `in` ssa-reassignment
                          (dynamic_shared_memory_size ssa-use)?
+                         (`module(` symbol-ref-id `)`)?
+                         (`function(` symbol-ref-id `)`)?
                          memory-attribution
                          region attr-dict?
 ssa-reassignment ::= `(` ssa-id `=` ssa-use (`,` ssa-id `=` ssa-use)* `)`
@@ -1665,6 +1661,14 @@ gpu.launch clusters(%cx, %cy, %cz) in (%sz_cx = %0, %sz_cy = %1, %sz_cz = %2)
   // sizes are immediately usable inside body region.
   \"some_op\"(%cx, %bx, %tx) : (index, index, index) -> ()
 }
+
+// Launch with module and function attributes.
+gpu.launch blocks(%bx, %by, %bz) in (%sz_bx = %0, %sz_by = %1, %sz_bz = %2)
+           threads(%tx, %ty, %tz) in (%sz_tx = %3, %sz_ty = %4, %sz_tz = %5)
+           module(@kernel_module) function(@kernel_func) {
+  \"some_op\"(%bx, %tx) : (index, index) -> ()
+  %42 = load %val1[%bx] : memref<?xf32, 1>
+}
 ```
 
 Rationale: using operation/block arguments gives analyses a clear way of
@@ -1686,8 +1690,8 @@ function launch(
     clusterSizeZ=nothing::Union{Nothing,Value},
     dynamicSharedMemorySize=nothing::Union{Nothing,Value},
     asyncToken=nothing::Union{Nothing,IR.Type},
-    kernelFunc=nothing,
-    kernelModule=nothing,
+    module_=nothing,
+    function_=nothing,
     body::Region,
     location=Location(),
 )
@@ -1718,23 +1722,15 @@ function launch(
             1,
             1,
             1,
-            if (clusterSizeX == nothing)
-                0
-            elseif 1(clusterSizeY == nothing)
-                0
-            elseif 1(clusterSizeZ == nothing)
-                0
-            elseif 1(dynamicSharedMemorySize == nothing)
-                0
-            else
-                1
-            end,
+            (clusterSizeX == nothing) ? 0 : 1,
+            (clusterSizeY == nothing) ? 0 : 1,
+            (clusterSizeZ == nothing) ? 0 : 1,
+            (dynamicSharedMemorySize == nothing) ? 0 : 1,
         ]),
     )
     !isnothing(asyncToken) && push!(op_ty_results, asyncToken)
-    !isnothing(kernelFunc) && push!(attributes, namedattribute("kernelFunc", kernelFunc))
-    !isnothing(kernelModule) &&
-        push!(attributes, namedattribute("kernelModule", kernelModule))
+    !isnothing(module_) && push!(attributes, namedattribute("module", module_))
+    !isnothing(function_) && push!(attributes, namedattribute("function", function_))
 
     return create_operation(
         "gpu.launch",
@@ -1905,7 +1901,7 @@ end
 """
 `return_`
 
-A terminator operation for regions that appear in the body of  `gpu.func`
+A terminator operation for regions that appear in the body of `gpu.func`
 functions. The operands to the `gpu.return` are the result values returned
 by an invocation of the `gpu.func`.
 """
@@ -1925,6 +1921,66 @@ function return_(operands::Vector{Value}; location=Location())
         attributes,
         results=op_ty_results,
         result_inference=false,
+    )
+end
+
+"""
+`rotate`
+
+The \"rotate\" op moves values across lanes in a subgroup (a.k.a., local
+invocations) within the same subgroup. The `width` attribute specifies the
+number of lanes that participate in the rotation, and must be uniform across
+all participating lanes. Further, the first `width` lanes of the subgroup
+must be active.
+
+`width` must be a power of two, and `offset` must be in the range
+`[0, width)`.
+
+Return the `rotateResult` of the invocation whose id within the group is
+calculated as follows:
+
+```mlir
+Invocation ID = ((LaneId + offset) & (width - 1)) + (LaneId & ~(width - 1))
+```
+
+Returns the `rotateResult` and `true` if the current lane id is smaller than
+`width`, and poison value and `false` otherwise.
+
+example:
+
+```mlir
+%1, %2 = gpu.rotate %0, 1, 16 : f32
+```
+
+For lane `k`, returns the value from lane `(k + cst1) % width`.
+"""
+function rotate(
+    value::Value;
+    rotateResult=nothing::Union{Nothing,IR.Type},
+    valid=nothing::Union{Nothing,IR.Type},
+    offset,
+    width,
+    location=Location(),
+)
+    op_ty_results = IR.Type[]
+    operands = Value[value,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[
+        namedattribute("offset", offset), namedattribute("width", width)
+    ]
+    !isnothing(rotateResult) && push!(op_ty_results, rotateResult)
+    !isnothing(valid) && push!(op_ty_results, valid)
+
+    return create_operation(
+        "gpu.rotate",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
     )
 end
 
@@ -2113,8 +2169,8 @@ end
 """
 `shuffle`
 
-The \"shuffle\" op moves values to a across lanes (a.k.a., invocations,
-work items) within the same subgroup. The `width` argument specifies the
+The \"shuffle\" op moves values across lanes in a subgroup (a.k.a., local
+invocation) within the same subgroup. The `width` argument specifies the
 number of lanes that participate in the shuffle, and must be uniform
 across all lanes. Further, the first `width` lanes of the subgroup must
 be active.
@@ -2141,7 +2197,8 @@ trades value with exactly one other lane.
 %3, %4 = gpu.shuffle down %0, %cst1, %width : f32
 ```
 
-For lane `k`, returns the value from lane `(k + 1) % width`.
+For lane `k`, returns the value from lane `(k + cst1)`. If `(k + cst1)` is
+bigger than or equal to `width`, the value is poison and `valid` is `false`.
 
 `up` example:
 
@@ -2150,7 +2207,8 @@ For lane `k`, returns the value from lane `(k + 1) % width`.
 %5, %6 = gpu.shuffle up %0, %cst1, %width : f32
 ```
 
-For lane `k`, returns the value from lane `(k - 1) % width`.
+For lane `k`, returns the value from lane `(k - cst1)`. If `(k - cst1)` is
+smaller than `0`, the value is poison and `valid` is `false`.
 
 `idx` example:
 
@@ -2659,6 +2717,48 @@ function spmat_get_size(
 end
 
 """
+`subgroup_broadcast`
+
+Broadcasts a value from one lane to all active lanes in a subgroup. The
+result is guaranteed to be uniform across the active lanes in subgroup.
+
+The possible broadcast types are:
+
+* `first_active_lane` - broadcasts the value from the first active lane
+in the subgroup.
+* `specific_lane` - broadcasts from the specified lane. The lane index
+must be uniform and within the subgroup size. The result is poison if the
+lane index is invalid, non subgroup-uniform, or if the source lane is not
+active.
+"""
+function subgroup_broadcast(
+    src::Value,
+    lane=nothing::Union{Nothing,Value};
+    result=nothing::Union{Nothing,IR.Type},
+    broadcast_type,
+    location=Location(),
+)
+    op_ty_results = IR.Type[]
+    operands = Value[src,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[namedattribute("broadcast_type", broadcast_type),]
+    !isnothing(lane) && push!(operands, lane)
+    !isnothing(result) && push!(op_ty_results, result)
+
+    return create_operation(
+        "gpu.subgroup_broadcast",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
+    )
+end
+
+"""
 `subgroup_id`
 
 Returns the subgroup id, i.e., the index of the current subgroup within the
@@ -2831,6 +2931,108 @@ function subgroup_mma_elementwise(
 
     return create_operation(
         "gpu.subgroup_mma_elementwise",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+"""
+`subgroup_mma_extract_thread_local`
+
+The `gpu.subgroup_mma_extract_thread_local` operation extracts a value from `!gpu.mma_matrix`
+that is stored at subgroup level.
+
+This operation takes `!gpu.mma_matrix` as its first operand. It is the source
+matrix across a subgroup. The op returns a scalar value stored in the invocation
+in the subgroup.
+
+Since `matrix` is packed into the the threads within a subgroup, `indices` are
+the indices into the values stored by each thread. That is, an index of 0 (or [0, 0])
+does not necessarily refer to the first element of the matrix, but the first element
+that a particular thread holds.
+
+The mapping of matrix elements to threads is not defined by this operation and may
+not be defined by some lowerings (such as the lowering to SPIR-V). However, if the
+size of the subgroup is S, then `subgroup_mma_extract_thread_local` at each index in
+`[0, (M * N) / S)` will have the entire matrix extracted across the subgroup.
+
+# Example
+
+```mlir
+%c0 = arith.constant 0 : index
+%val = gpu.subgroup_mma_extract_thread_local %m[%c0] : !gpu.mma_matrix<16x16xf32, \"AOp\"> -> f32
+```
+"""
+function subgroup_mma_extract_thread_local(
+    matrix::Value,
+    indices::Vector{Value};
+    res=nothing::Union{Nothing,IR.Type},
+    location=Location(),
+)
+    op_ty_results = IR.Type[]
+    operands = Value[matrix, indices...]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+    !isnothing(res) && push!(op_ty_results, res)
+
+    return create_operation(
+        "gpu.subgroup_mma_extract_thread_local",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
+    )
+end
+
+"""
+`subgroup_mma_insert_thread_local`
+
+The `gpu.subgroup_mma_insert_thread_local` operation inserts a value to `!gpu.mma_matrix`
+that is stored at subgroup level.
+
+This operation takes scalar value as its first operand and `!gpu.mma_matrix`
+as its second operand. The op inserts the scalar value to the matrix.
+
+Since `matrix` is packed into the the threads within a subgroup, `indices` are
+the indices into the values stored by each thread. That is, an index of 0 (or [0, 0])
+does not necessarily refer to the first element of the matrix, but the first element
+that a particular thread holds.
+
+The mapping of matrix elements to threads is not defined by this operation and may
+not be defined by some lowerings (such as the lowering to SPIR-V). However, if the
+size of the subgroup is S, then `subgroup_mma_insert_thread_local` at each index in
+`[0, (M * N) / S)` will have the entire matrix inserted across the subgroup.
+
+The op returns `!gpu.mma_matrix` with the updated value.
+
+# Example
+
+```mlir
+%c0 = arith.constant 0 : index
+%s0 = gpu.subgroup_mma_insert_thread_local %val, %m[%c0] : f16, !gpu.mma_matrix<16x16xf16, \"COp\">
+        -> !gpu.mma_matrix<16x16xf16, \"COp\">
+```
+"""
+function subgroup_mma_insert_thread_local(
+    value::Value, matrix::Value, indices::Vector{Value}; res::IR.Type, location=Location()
+)
+    op_ty_results = IR.Type[res,]
+    operands = Value[value, matrix, indices...]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+
+    return create_operation(
+        "gpu.subgroup_mma_insert_thread_local",
         location;
         operands,
         owned_regions,
@@ -3310,7 +3512,7 @@ end
 """
 `yield`
 
-gpu.yield` is a special terminator operation for blocks inside regions
+`gpu.yield` is a special terminator operation for blocks inside regions
 in gpu ops. It returns values to the immediately enclosing gpu op.
 
 # Example

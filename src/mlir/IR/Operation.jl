@@ -243,6 +243,30 @@ function Base.show(io::IO, operation::Operation)
 end
 
 """
+    parse(::Type{Operation}, code; context=context())
+
+Parses an operation from the string and transfers ownership to the caller.
+"""
+function Base.parse(
+    ::Core.Type{Operation},
+    code;
+    verify::Bool=false,
+    context::Context=context(),
+    block=Block(),
+    location::Location=Location(),
+)
+    return Operation(
+        @ccall API.mlir_c.mlirOperationParse(
+            context::API.MlirContext,
+            block::API.MlirBlock,
+            code::API.MlirStringRef,
+            location::API.MlirLocation,
+            verify::Bool,
+        )::API.MlirOperation
+    )
+end
+
+"""
     verify(op)
 
 Verify the operation and return true if it passes, false if it fails.
@@ -343,4 +367,19 @@ function create_operation_at_front(args...; kwargs...)
     res = create_operation_common(args...; kwargs...)
     Base.pushfirst!(block(), res)
     return res
+end
+
+function FunctionType(op::Operation)
+    is_function_op = @ccall API.mlir_c.mlirIsFunctionOpInterface(
+        op::API.MlirOperation
+    )::Bool
+    if is_function_op
+        return Type(
+            @ccall API.mlir_c.mlirGetFunctionTypeFromOperation(
+                op::API.MlirOperation
+            )::API.MlirType
+        )
+    else
+        throw("operation is not a function operation")
+    end
 end
