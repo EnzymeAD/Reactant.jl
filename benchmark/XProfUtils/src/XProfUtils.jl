@@ -132,7 +132,7 @@ function extract_mean_step_time_from_overview_page(xplane_file::String, nrepeat:
     end
 
     length(step_times_ms) == 0 && return nothing
-    return sum(step_times_ms) / length(step_times_ms)
+    return (sum(step_times_ms) / 1e3) / length(step_times_ms) 
 end
 
 function extract_mean_step_time_from_hlo_op_profile(xplane_file::String, nrepeat::Int)
@@ -144,7 +144,7 @@ function extract_mean_step_time_from_hlo_op_profile(xplane_file::String, nrepeat
 
     jl_data = pyconvert(Vector{UInt8}, pydata)
     picosec = JSON3.read(jl_data)["byProgram"]["metrics"]["normalizedTimePs"]
-    return (picosec / 1e9) / nrepeat
+    return (picosec / 1e12) / nrepeat
 end
 
 export extract_mean_step_time, profile_with_xprof
