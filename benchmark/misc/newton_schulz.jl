@@ -35,12 +35,9 @@ function run_newton_schulz_benchmark!(results, backend)
     compile_modes = [
         (
             "StructuredTensors",
-            Reactant.CompileOptions(; sync=true, disable_structured_tensors_passes=false),
+            Reactant.CompileOptions(; disable_structured_tensors_passes=false),
         ),
-        (
-            "Default",
-            Reactant.CompileOptions(; sync=true, disable_structured_tensors_passes=true),
-        ),
+        ("Default", Reactant.CompileOptions(; disable_structured_tensors_passes=true)),
     ]
 
     # Using a set of sizes to show scaling
@@ -74,18 +71,12 @@ function run_newton_schulz_benchmark!(results, backend)
             benchmark_name = "NewtonSchulz [$(N) x $(N)]"
             full_benchmark_name = string(benchmark_name, "/", backend, "/", tag)
 
-            # Compile the function specialized on the input type
-            compiled_ns = @compile compile_options = options newton_schulz_muon(x_ra)
+            time = profile_with_xprof(
+                newton_schulz_muon, x_ra; nrepeat=100, compile_options=options
+            )
+            results[full_benchmark_name] = time
 
-            # Warmup
-            out = compiled_ns(x_ra)
-
-            # Benchmark
-            bench = @b compiled_ns($x_ra) seconds = 5 evals = 1 samples = 100
-
-            results[full_benchmark_name] = bench.time
-
-            print_stmt = @sprintf "%100s     :     %.5gs" full_benchmark_name bench.time
+            print_stmt = @sprintf "%100s     :     %.5gs" full_benchmark_name time
             @info print_stmt
             GC.gc(true)
         end

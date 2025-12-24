@@ -1,6 +1,7 @@
 using Reactant: Reactant, @compile
 using Chairmarks: @b
 using Printf: @sprintf
+using XProfUtils: profile_with_xprof
 
 function get_backend()
     # To run benchmarks on a specific backend
