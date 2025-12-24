@@ -840,6 +840,5 @@ for T in (Number, Integer)
     end
 end
 
-Base.isinf(x::ConcreteRNumber{T}) where T = Base.isinf(convert(T, x))
-Base.round(x::ConcreteRNumber{T}) where T = Base.round(convert(T, x))
-
+Base.isinf(x::ConcreteRNumber{T}) where {T} = Base.isinf(convert(T, x))
+Base.round(x::ConcreteRNumber{T}) where {T} = Base.round(convert(T, x))
