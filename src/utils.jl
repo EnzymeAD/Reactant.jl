@@ -342,6 +342,7 @@ function rewrite_inst(inst, ir, interp, RT, guaranteed_error)
         # Even if type unstable we do not want (or need) to replace intrinsic
         # calls or builtins with our version.
         ft = Core.Compiler.widenconst(maybe_argextype(inst.args[1], ir))
+        ft == Core.OpaqueClosure && return false, inst, RT 
         if ft == typeof(Core.kwcall)
             ft = Core.Compiler.widenconst(maybe_argextype(inst.args[3], ir))
         end
@@ -570,6 +571,15 @@ function safe_print(name, x)
     return ccall(:jl_, Cvoid, (Any,), name * " " * string(x))
 end
 
+
+ReactantInterp = Enzyme.Compiler.Interpreter.EnzymeInterpreter{
+    typeof(Reactant.set_reactant_abi)
+}
+include("auto_cf/analysis.jl")
+include("auto_cf/AutoCF.jl")
+
+
+
 const DEBUG_INTERP = Ref(false)
 
 # Rewrite type unstable calls to recurse into call_with_reactant to ensure
@@ -681,7 +691,8 @@ function call_with_reactant_generator(
     end
 
     interp = ReactantInterpreter(; world)
-
+    current_interpreter[] = interp
+    
     min_world = Ref{UInt}(typemin(UInt))
     max_world = Ref{UInt}(typemax(UInt))
 
@@ -719,7 +730,21 @@ function call_with_reactant_generator(
         ir = CC.run_passes(frame.src, CC.OptimizationState(frame, interp), result, nothing)
         rt = CC.widenconst(CC.ignorelimited(result.result))
     else
-        ir, rt = CC.typeinf_ircode(interp, mi, nothing)
+        result = CC.InferenceResult(mi, CC.typeinf_lattice(interp))
+        @warn mi
+        frame = CC.InferenceState(result, :no, interp)
+        @assert !isnothing(frame)
+        CC.typeinf(interp, frame)
+        opt = CC.OptimizationState(frame, interp)
+        tree = get(get_meta(interp).traced_tree_map, mi_key(opt.linfo), nothing)
+        @warn opt.linfo tree
+        CC.@timeit "optimizer" ir = if isnothing(tree) || isempty(tree)
+            CC.run_passes_ipo_safe(opt.src, opt, result)
+        else
+            run_passes_ipo_safe_auto_cf(opt.src, opt, result, tree)
+        end
+        CC.ipo_dataflow_analysis!(interp, ir, result)
+        rt = CC.widenconst(CC.ignorelimited(result.result))
     end
 
     if guaranteed_error
@@ -957,3 +982,4 @@ nmantissa(::Type{Float32}) = 23
 nmantissa(::Type{Float64}) = 52
 
 _unwrap_val(::Val{T}) where {T} = T
+
