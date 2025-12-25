@@ -3536,6 +3536,130 @@ end
         grad_operand, has_affine ? grad_scale : nothing, has_affine ? grad_offset : nothing
     )
 end
+# Bessel Functions - Unary Operations (single argument z)
+
+for op in [:special_jinc]
+    @eval begin
+        @noinline function $op(
+            x::TracedRArray{T,N};
+            location=mlir_stacktrace($(string(op)), @__FILE__, @__LINE__),
+        ) where {T,N}
+            res = MLIR.IR.result(
+                enzymexla.$op(
+                    x.mlir_data; res=mlir_type(TracedRArray{T,N}, size(x)), location
+                ),
+                1,
+            )
+            return TracedRArray{T,N}((), res, size(x))
+        end
+
+        @noinline function $op(
+            x::TracedRNumber{T};
+            location=mlir_stacktrace($(string(op)), @__FILE__, @__LINE__),
+        ) where {T}
+            res = MLIR.IR.result(
+                enzymexla.$op(x.mlir_data; res=mlir_type(TracedRArray{T,0}, ()), location),
+                1,
+            )
+            return TracedRNumber{T}((), res)
+        end
+    end
+end
+
+# Bessel Functions - Binary Operations (nu, z arguments)
+# nu can have a different type than z; result type matches z
+
+for op in [
+    :special_besselj,
+    :special_besseljx,
+    :special_bessely,
+    :special_besselyx,
+    :special_besseli,
+    :special_besselix,
+    :special_besselk,
+    :special_besselkx,
+    :special_hankelh1x,
+    :special_hankelh2x,
+    :special_sphericalbesselj,
+    :special_sphericalbessely,
+]
+    @eval begin
+        @noinline function $op(
+            nu::TracedRArray{T1,N},
+            z::TracedRArray{T2,N};
+            location=mlir_stacktrace($(string(op)), @__FILE__, @__LINE__),
+        ) where {T1,T2,N}
+            res = MLIR.IR.result(
+                enzymexla.$op(
+                    nu.mlir_data,
+                    z.mlir_data;
+                    res=mlir_type(TracedRArray{T2,N}, size(z)),
+                    location,
+                ),
+                1,
+            )
+            return TracedRArray{T2,N}((), res, size(z))
+        end
+
+        @noinline function $op(
+            nu::TracedRNumber{T1},
+            z::TracedRNumber{T2};
+            location=mlir_stacktrace($(string(op)), @__FILE__, @__LINE__),
+        ) where {T1,T2}
+            res = MLIR.IR.result(
+                enzymexla.$op(
+                    nu.mlir_data,
+                    z.mlir_data;
+                    res=mlir_type(TracedRArray{T2,0}, ()),
+                    location,
+                ),
+                1,
+            )
+            return TracedRNumber{T2}((), res)
+        end
+    end
+end
+
+# Bessel Function of the Third Kind (Hankel) - Ternary Operation (nu, k, z arguments)
+# nu and k can have different types than z; result type matches z
+
+@noinline function special_besselh(
+    nu::TracedRArray{T1,N},
+    k::TracedRArray{T2,N},
+    z::TracedRArray{T3,N};
+    location=mlir_stacktrace("special_besselh", @__FILE__, @__LINE__),
+) where {T1,T2,T3,N}
+    res = MLIR.IR.result(
+        enzymexla.special_besselh(
+            nu.mlir_data,
+            k.mlir_data,
+            z.mlir_data;
+            res=mlir_type(TracedRArray{T3,N}, size(z)),
+            location,
+        ),
+        1,
+    )
+    return TracedRArray{T3,N}((), res, size(z))
+end
+
+@noinline function special_besselh(
+    nu::TracedRNumber{T1},
+    k::TracedRNumber{T2},
+    z::TracedRNumber{T3};
+    location=mlir_stacktrace("special_besselh", @__FILE__, @__LINE__),
+) where {T1,T2,T3}
+    res = MLIR.IR.result(
+        enzymexla.special_besselh(
+            nu.mlir_data,
+            k.mlir_data,
+            z.mlir_data;
+            res=mlir_type(TracedRArray{T3,0}, ()),
+            location,
+        ),
+        1,
+    )
+    return TracedRNumber{T3}((), res)
+end
 
 @noinline function ignore_derivatives(
     input::Union{TracedRArray,TracedRNumber};
