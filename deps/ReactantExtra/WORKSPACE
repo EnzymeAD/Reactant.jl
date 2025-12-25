@@ -15,6 +15,17 @@ http_archive(
     urls = ["https://github.com/wsmoses/nsync/archive/{commit}.tar.gz".format(commit = NSYNC_COMMIT)],
 )
 
+XPROF_COMMIT = "xprof-v2.21.1"
+
+XPROF_SHA256 = ""
+
+http_archive(
+    name = "org_xprof",
+    sha256 = XPROF_SHA256,
+    strip_prefix = "xprof-" + XPROF_COMMIT,
+    urls = ["https://github.com/openxla/xprof/archive/refs/tags/{commit}.tar.gz".format(commit = XPROF_COMMIT)],
+)
+
 http_archive(
     name = "enzyme_ad",
     patch_cmds = [
@@ -226,11 +237,6 @@ load(
 
 cuda_json_init_repository()
 
-load(
-    "@cuda_redist_json//:distributions.bzl",
-    "CUDA_REDISTRIBUTIONS",
-    "CUDNN_REDISTRIBUTIONS",
-)
 load(
     "@cuda_redist_json//:distributions.bzl",
     "CUDA_REDISTRIBUTIONS",
