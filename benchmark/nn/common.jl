@@ -3,7 +3,6 @@ using Printf: @sprintf
 using Reactant: Reactant, @compile
 using Enzyme: Enzyme, Const
 using Random: Random
-using XProfUtils: profile_with_xprof
 
 sumabs2first(model, x, ps, st) = sum(abs2, first(Lux.apply(model, x, ps, st)))
 
@@ -216,16 +215,18 @@ function run_benchmark!(
 
     if fwd_or_bwd == "forward"
         x, ps, st = general_lux_setup(model, x_dims)
-        time = profile_with_xprof(
+        time = Reactant.Profiler.profile_with_xprof(
             Lux.apply, model, x, ps, Lux.testmode(st); nrepeat=10, warmup=3, compile_options
         )
+        time = time.profiling_result.runtime_ns / 1e9
         results[full_benchmark_name] = time
         GC.gc(true)
     elseif fwd_or_bwd == "backward"
         x, ps, st = general_lux_setup(model, x_dims)
-        time = profile_with_xprof(
+        time = Reactant.Profiler.profile_with_xprof(
             simple_gradient, model, x, ps, st; nrepeat=10, warmup=3, compile_options
         )
+        time = time.profiling_result.runtime_ns / 1e9
         results[full_benchmark_name] = time
         GC.gc(true)
     else

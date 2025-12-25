@@ -10,6 +10,5 @@ updates:
     directories:
       - "/"
       - "/lib/ReactantCore"
-      - "/benchmark/XProfUtils"
     schedule:
       interval: "weekly"

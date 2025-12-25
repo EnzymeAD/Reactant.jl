@@ -1,5 +1,0 @@
-[deps]
-python = "<=3.12,>=3.9,<4"
-
-[pip.deps]
-xprof = ">= 2.20"
