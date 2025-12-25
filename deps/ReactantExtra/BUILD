@@ -1060,6 +1060,11 @@ cc_library(
             "-Wl,-exported_symbol,_RunAnalysisOnHloModule",
             "-Wl,-exported_symbol,_EstimateRunTimeForInstruction",
             "-Wl,-exported_symbol,_registerReactantXLAFFI",
+            "-Wl,-exported_symbol,_GetBufferComputeStream",
+            "-Wl,-exported_symbol,_WaitUntilBufferReadyOnStream",
+            "-Wl,-exported_symbol,_MutableZeroCopyBufferFromHostBuffer",
+            "-Wl,-exported_symbol,_CpuMinAlignment",
+            "-Wl,-exported_symbol,_DataPointerToViewBuffer"
         ],
     }),
     linkstatic = True,
