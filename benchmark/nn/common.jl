@@ -1,16 +1,15 @@
-function sumabs2first(model, x, ps, st)
-    y, _ = Lux.apply(model, x, ps, st)
-    return sum(abs2, y)
-end
+using Lux: Lux, reactant_device
+using Printf: @sprintf
+using Reactant: Reactant, @compile
+using Enzyme: Enzyme, Const
+using Random: Random
+using XProfUtils: profile_with_xprof
+
+sumabs2first(model, x, ps, st) = sum(abs2, first(Lux.apply(model, x, ps, st)))
 
 function simple_gradient(model, x, ps, st)
     return Enzyme.gradient(
-        Enzyme.Reverse,
-        sumabs2first,
-        Enzyme.Const(model),
-        Enzyme.Const(x),
-        ps,
-        Enzyme.Const(st),
+        Enzyme.Reverse, sumabs2first, Const(model), Const(x), ps, Const(st)
     )
 end
 
@@ -42,15 +41,15 @@ function run_lux_benchmark!(
     disable_bwd_transpose_bench=true,
     bwd_enzyme_pass_options=(:all, :before_enzyme, :after_enzyme),
 )
-    common_opts = (; sync=true, no_nan=true, all_finite=true)
+    common_opts = (; no_nan=true, all_finite=true)
 
     fwd_options = [
-        ("XLA", Reactant.DefaultXLACompileOptions(; sync=true)),
+        ("XLA", Reactant.DefaultXLACompileOptions()),
         ("Default", Reactant.CompileOptions(; common_opts...)),
     ]
 
     bwd_options = [
-        ("XLA", Reactant.DefaultXLACompileOptions(; sync=true)),
+        ("XLA", Reactant.DefaultXLACompileOptions()),
         [
             (
                 "Default" * join(uppercasefirst.(split(string(pass), "_")), ""),
@@ -216,30 +215,43 @@ function run_benchmark!(
 
     if fwd_or_bwd == "forward"
         x, ps, st = general_lux_setup(model, x_dims)
-        st_test = Lux.testmode(st)
-        compiled_fwd = @compile compile_options = compile_options Lux.apply(
-            model, x, ps, st_test
+        time = profile_with_xprof(
+            Lux.apply, model, x, ps, Lux.testmode(st); nrepeat=10, warmup=3, compile_options
         )
-
-        bench = @b compiled_fwd(model, x, ps, st_test) seconds = 5 evals = 1 samples = 10
-        results[full_benchmark_name] = bench.time
+        results[full_benchmark_name] = time
         GC.gc(true)
     elseif fwd_or_bwd == "backward"
         x, ps, st = general_lux_setup(model, x_dims)
-        st_test = Lux.testmode(st)
-        compiled_bwd = @compile compile_options = compile_options simple_gradient(
-            model, x, ps, st
+        time = profile_with_xprof(
+            simple_gradient, model, x, ps, st; nrepeat=10, warmup=3, compile_options
         )
-
-        bench = @b compiled_bwd(model, x, ps, st) seconds = 5 evals = 1 samples = 10
-        results[full_benchmark_name] = bench.time
+        results[full_benchmark_name] = time
         GC.gc(true)
     else
         @error "Unknown fwd_or_bwd: $(fwd_or_bwd)"
     end
 
-    print_stmt = @sprintf "%100s     :     %.5gs" full_benchmark_name bench.time
+    print_stmt = @sprintf "%100s     :     %.5gs" full_benchmark_name time
     @info print_stmt
 
     return nothing
+end
+
+function get_backend()
+    # To run benchmarks on a specific backend
+    BENCHMARK_GROUP = get(ENV, "BENCHMARK_GROUP", nothing)
+
+    if BENCHMARK_GROUP == "CUDA"
+        Reactant.set_default_backend("gpu")
+        @info "Running CUDA benchmarks" maxlog = 1
+    elseif BENCHMARK_GROUP == "TPU"
+        Reactant.set_default_backend("tpu")
+    elseif BENCHMARK_GROUP == "CPU"
+        Reactant.set_default_backend("cpu")
+        @info "Running CPU benchmarks" maxlog = 1
+    else
+        BENCHMARK_GROUP = String(split(string(first(Reactant.devices())), ":")[1])
+        @info "Running $(BENCHMARK_GROUP) benchmarks" maxlog = 1
+    end
+    return BENCHMARK_GROUP
 end

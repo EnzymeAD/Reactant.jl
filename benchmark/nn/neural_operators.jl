@@ -1,3 +1,10 @@
+using NeuralOperators: DeepONet, FourierNeuralOperator
+using Lux: gelu
+
+if !isdefined(@__MODULE__, :run_lux_benchmark!)
+    include("common.jl")
+end
+
 function run_deeponet_benchmark!(results, backend)
     model = DeepONet(;
         branch=(64, ntuple(Returns(256), 4)..., 16),
@@ -14,10 +21,16 @@ function run_deeponet_benchmark!(results, backend)
 end
 
 function run_fno_benchmark!(results, backend)
-    lowercase(backend) == "cpu" && return nothing
     model = FourierNeuralOperator((16, 16), 3, 8, 64)
 
     run_lux_benchmark!(results, "FNO [64, 64, 1, 4]", backend, model, (64, 64, 1, 4))
 
     return nothing
+end
+
+if abspath(PROGRAM_FILE) == @__FILE__
+    backend = get_backend()
+    results = Dict()
+    run_deeponet_benchmark!(results, backend)
+    run_fno_benchmark!(results, backend)
 end

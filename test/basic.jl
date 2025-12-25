@@ -1782,3 +1782,28 @@ end
         end
     end
 end
+
+function meshgrid(args::AbstractVector...)
+    return let N = length(args)
+        stack(enumerate(args)) do (i, arg)
+            new_shape = ones(Int, N)
+            new_shape[i] = length(arg)
+            repeat_sizes = collect(Int, map(length, args))
+            repeat_sizes[i] = 1
+            return repeat(reshape(arg, new_shape...), repeat_sizes...)
+        end
+    end
+end
+
+function meshgrid(x::Number, y::Number)
+    return meshgrid(range(eltype(x)(0), x; length=10), range(eltype(y)(0), y; length=10))
+end
+
+@testset "meshgrid" begin
+    x = 10.0f0
+    y = 20.0f0
+    x_ra = ConcreteRNumber(x)
+    y_ra = ConcreteRNumber(y)
+
+    @test @jit(meshgrid(x_ra, y_ra)) ≈ meshgrid(x, y)
+end

@@ -66,6 +66,8 @@ See the [profiling tutorial](@ref profiling) for more details.
 Reactant.Profiler.with_profiler
 Reactant.Profiler.annotate
 Reactant.Profiler.@annotate
+Reactant.Profiler.profiler_activity_start
+Reactant.Profiler.profiler_activity_end
 ```
 
 ## Devices

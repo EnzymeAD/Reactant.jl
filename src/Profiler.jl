@@ -67,19 +67,91 @@ const TRACE_ME_LEVEL_CRITICAL = Cint(1)
 const TRACE_ME_LEVEL_INFO = Cint(2)
 const TRACE_ME_LEVEL_VERBOSE = Cint(3)
 
-"""
-    annotate(f, name, [level=TRACE_ME_LEVEL_CRITICAL])
+function traceme_encode(name::String, metadata::Dict{String,<:Any})
+    isempty(metadata) && return name
+    encoded = IOBuffer()
+    print(encoded, name, '#')
+    first = true
+    for (k, v) in metadata
+        first || print(encoded, ',')
+        print(encoded, k, '=', string(v))
+        first = false
+    end
+    print(encoded, '#')
+    return String(take!(encoded))
+end
 
-Generate an annotation in the current trace.
 """
-function annotate(f, name, level=TRACE_ME_LEVEL_CRITICAL)
-    id = @ccall Reactant.MLIR.API.mlir_c.ProfilerActivityStart(
+    profiler_activity_start(name::String, level::Cint[, metadata::Dict{String, <:Any}])
+    profiler_activity_start(name::String, level::Cint[, metadata::Pair{String, <:Any}...])
+
+Start a profiler activity with metadata (key-value pairs). The metadata will be encoded
+into the trace event and can be viewed in profiling tools like Perfetto.
+
+Returns an activity ID that should be passed to `profiler_activity_end` when the activity ends.
+
+# Example
+```julia
+id = profiler_activity_start("my_operation", TRACE_ME_LEVEL_INFO,
+                             "key1" => "value1", "key2" => 42)
+# ... do work ...
+profiler_activity_end(id)
+```
+"""
+function profiler_activity_start(name::String, level::Cint)
+    return @ccall Reactant.MLIR.API.mlir_c.ProfilerActivityStart(
         name::Cstring, level::Cint
     )::Int64
+end
+
+function profiler_activity_start(name::String, level::Cint, ::Nothing)
+    return profiler_activity_start(name, level)
+end
+
+function profiler_activity_start(name::String, level::Cint, metadata::Dict{String,<:Any})
+    return profiler_activity_start(traceme_encode(name, metadata), level)
+end
+
+function profiler_activity_start(name::String, level::Cint, metadata::Pair{String,<:Any}...)
+    return profiler_activity_start(name, level, Dict(metadata...))
+end
+
+"""
+    profiler_activity_end(id::Int64)
+
+End a profiler activity. See [`profiler_activity_start`](@ref) for more information.
+"""
+function profiler_activity_end(id::Int64)
+    return @ccall Reactant.MLIR.API.mlir_c.ProfilerActivityEnd(id::Int64)::Cvoid
+end
+
+"""
+    annotate(f, name, [level=TRACE_ME_LEVEL_CRITICAL]; [metadata])
+
+Generate an annotation in the current trace. Optionally include metadata as key-value pairs.
+
+# Example
+```julia
+annotate("my_operation") do
+    # ... do work ...
+end
+
+annotate("my_operation"; metadata=Dict("key1" => "value1", "key2" => 42)) do
+    # ... do work ...
+end
+```
+"""
+function annotate(
+    f,
+    name,
+    level=TRACE_ME_LEVEL_CRITICAL;
+    metadata::Union{Dict{String,Any},Nothing}=nothing,
+)
+    id = profiler_activity_start(name, level, metadata)
     try
         f()
     finally
-        @ccall Reactant.MLIR.API.mlir_c.ProfilerActivityEnd(id::Int64)::Cvoid
+        profiler_activity_end(id)
     end
 end
 
