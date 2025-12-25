@@ -42,7 +42,7 @@ function run_newton_schulz_benchmark!(results, backend)
 
     # Using a set of sizes to show scaling
     for N in [256, 512, 1024, 2048, 4096]
-        benchmark_name = "NewtonSchulz/[$(N) x $(N)] primal/"
+        benchmark_name = "NewtonSchulz/[$(N) x $(N)] primal"
 
         # Initialize Random Data on CPU
         rng = Random.default_rng()
