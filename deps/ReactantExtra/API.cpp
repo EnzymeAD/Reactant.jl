@@ -174,8 +174,13 @@
 #include <llvm/Support/FileSystem.h>
 #include <llvm/Support/raw_ostream.h>
 
+#include "plugin/xprof/worker/stub_factory.h"
+#include "xprof/convert/tool_options.h"
+#include "xprof/pywrap/profiler_plugin_impl.h"
+
 using namespace mlir;
 using namespace xla;
+using ::tensorflow::profiler::ToolOptions;
 
 namespace mlir {
 namespace enzyme {
@@ -3522,3 +3527,105 @@ REACTANT_ABI void EstimateRunTimeForInstruction(void *gpu_performance_model,
 }
 
 #endif
+
+REACTANT_ABI void
+InitializeXProfStubs(const char *cstr_worker_service_address) {
+  std::string worker_service_address = std::string(cstr_worker_service_address);
+  xprof::profiler::InitializeStubs(worker_service_address);
+}
+
+REACTANT_ABI void StartGrpcServer(int port) {
+  xprof::pywrap::StartGrpcServer(port);
+}
+
+// Creates a ToolOptions map from Julia arrays.
+// Takes 6 arrays: 3 pairs of (keys, values) for bool, int, and char* options.
+// Each array pair has a corresponding count parameter.
+ToolOptions ToolOptionsFromJuliaArrays(
+    const char **bool_keys, const bool *bool_values, int64_t bool_count,
+    const char **int_keys, const int *int_values, int64_t int_count,
+    const char **str_keys, const char **str_values, int64_t str_count) {
+  ToolOptions map;
+
+  // Add bool options
+  for (int64_t i = 0; i < bool_count; ++i) {
+    if (bool_keys[i] != nullptr) {
+      map.emplace(std::string(bool_keys[i]),
+                  std::variant<bool, int, std::string>(bool_values[i]));
+    }
+  }
+
+  // Add int options
+  for (int64_t i = 0; i < int_count; ++i) {
+    if (int_keys[i] != nullptr) {
+      map.emplace(std::string(int_keys[i]),
+                  std::variant<bool, int, std::string>(int_values[i]));
+    }
+  }
+
+  // Add string options
+  for (int64_t i = 0; i < str_count; ++i) {
+    if (str_keys[i] != nullptr && str_values[i] != nullptr) {
+      map.emplace(
+          std::string(str_keys[i]),
+          std::variant<bool, int, std::string>(std::string(str_values[i])));
+    }
+  }
+
+  return map;
+}
+
+// C API wrapper for xprof::pywrap::XSpaceToToolsData
+// Returns:
+//   - result_data: pointer to the result data (caller must free with free())
+//   - result_size: size of the result data
+//   - is_binary: whether the result is binary data
+//   - error: error message if failed (caller must free with free())
+// Returns 0 on success, non-zero on failure
+REACTANT_ABI int XSpaceToToolsData(
+    const char **xspace_paths, int64_t num_paths, const char *tool_name,
+    const char **bool_keys, const bool *bool_values, int64_t bool_count,
+    const char **int_keys, const int *int_values, int64_t int_count,
+    const char **str_keys, const char **str_values, int64_t str_count,
+    char **result_data, int64_t *result_size, bool *is_binary, char **error) {
+  *error = nullptr;
+  *result_data = nullptr;
+  *result_size = 0;
+  *is_binary = false;
+
+  // Convert xspace paths to vector
+  std::vector<std::string> xspace_paths_vec;
+  xspace_paths_vec.reserve(num_paths);
+  for (int64_t i = 0; i < num_paths; ++i) {
+    if (xspace_paths[i] != nullptr) {
+      xspace_paths_vec.push_back(std::string(xspace_paths[i]));
+    }
+  }
+
+  // Build tool options
+  ToolOptions tool_options = ToolOptionsFromJuliaArrays(
+      bool_keys, bool_values, bool_count, int_keys, int_values, int_count,
+      str_keys, str_values, str_count);
+
+  // Call XSpaceToToolsData
+  absl::StatusOr<std::pair<std::string, bool>> result =
+      xprof::pywrap::XSpaceToToolsData(xspace_paths_vec, std::string(tool_name),
+                                       tool_options);
+
+  if (!result.ok()) {
+    auto str = result.status().message();
+    char *err = (char *)malloc(str.size() + 1);
+    memcpy(err, str.data(), str.size() + 1);
+    *error = err;
+    return 1;
+  }
+
+  // Copy result data
+  const std::string &data = result->first;
+  *result_size = static_cast<int64_t>(data.size());
+  *result_data = (char *)malloc(data.size());
+  memcpy(*result_data, data.data(), data.size());
+  *is_binary = result->second;
+
+  return 0;
+}
