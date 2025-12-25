@@ -209,7 +209,8 @@ function run_benchmark!(
     model,
     x_dims,
 )
-    full_benchmark_name = string(benchmark_name, "/", fwd_or_bwd, "/", backend, "/", tag)
+    prim_or_rev = fwd_or_bwd == "forward" ? "primal" : "reverse"
+    full_benchmark_name = string(benchmark_name, "/", prim_or_rev, "/", backend, "/", tag)
     @assert !haskey(results, full_benchmark_name) "Benchmark already exists: \
                                                    $(full_benchmark_name)"
 

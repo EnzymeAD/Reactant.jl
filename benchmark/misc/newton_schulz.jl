@@ -42,6 +42,8 @@ function run_newton_schulz_benchmark!(results, backend)
 
     # Using a set of sizes to show scaling
     for N in [256, 512, 1024, 2048, 4096]
+        benchmark_name = "NewtonSchulz/[$(N) x $(N)] primal/"
+
         # Initialize Random Data on CPU
         rng = Random.default_rng()
         X = randn(rng, Float32, N, N)
@@ -51,7 +53,6 @@ function run_newton_schulz_benchmark!(results, backend)
         x_ra = Reactant.to_rarray(X)
 
         if backend == "CPU"
-            benchmark_name = "NewtonSchulz [$(N) x $(N)]"
             full_benchmark_name = string(benchmark_name, "/CPU/Julia")
 
             # Warmup
@@ -68,7 +69,6 @@ function run_newton_schulz_benchmark!(results, backend)
         end
 
         for (tag, options) in compile_modes
-            benchmark_name = "NewtonSchulz [$(N) x $(N)]"
             full_benchmark_name = string(benchmark_name, "/", backend, "/", tag)
 
             time = profile_with_xprof(
