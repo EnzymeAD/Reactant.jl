@@ -1351,7 +1351,7 @@ function circshift_internal!(
             src1 = selectdim(src, i, (-amt + 1):size(src, i))
             src2 = selectdim(src, i, 1:(-amt))
         end
-        src = cat(src1, src2; dims=i)
+        src = cat(materialize_traced_array(src1), materialize_traced_array(src2); dims=i)
     end
 
     copyto!(dest, src)
