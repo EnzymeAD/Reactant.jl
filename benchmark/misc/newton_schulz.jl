@@ -71,9 +71,10 @@ function run_newton_schulz_benchmark!(results, backend)
         for (tag, options) in compile_modes
             full_benchmark_name = string(benchmark_name, "/", backend, "/", tag)
 
-            time = profile_with_xprof(
+            time = Reactant.Profiler.profile_with_xprof(
                 newton_schulz_muon, x_ra; nrepeat=25, compile_options=options
             )
+            time = time.profiling_result.runtime_ns / 1e9
             results[full_benchmark_name] = time
 
             print_stmt = @sprintf "%100s     :     %.5gs" full_benchmark_name time

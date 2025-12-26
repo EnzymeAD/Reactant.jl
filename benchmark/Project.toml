@@ -9,11 +9,9 @@ NeuralOperators = "ea5c82af-86e5-48da-8ee1-382d6ad7af4b"
 PrecompileTools = "aea7be01-6a6a-4083-8856-8a6e6704d82a"
 Printf = "de0858da-6303-5e67-8744-51eddeeeb8d7"
 Reactant = "3c362404-f566-11ee-1572-e11a4b42c853"
-XProfUtils = "2504a78c-b2aa-47de-9ed8-a71e5918f272"
 
 [sources]
 Reactant = {path = ".."}
-XProfUtils = {path = "XProfUtils"}
 
 [compat]
 Boltz = "1.7"

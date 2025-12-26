@@ -3838,6 +3838,7 @@ function compile(f, args; kwargs...)
         client,
         mlir_fn_res.global_device_ids,
         mlir_fn_res.donated_args_mask,
+        compile_options.sync,
     )
 end
 
@@ -3849,6 +3850,7 @@ struct Thunk{FTy,tag,IsClosure,ArgTypes,ExecTy,DeviceTy,ClientTy,GD,DAM}
     client::ClientTy
     global_device_ids::GD
     donated_args_mask::DAM
+    compiled_with_sync::Bool
 end
 
 for fn in (:get_tag, :get_isclosure, :get_compiled_argtypes)
@@ -3928,6 +3930,7 @@ function register_thunk(
     client,
     global_device_ids,
     donated_args_mask,
+    compiled_with_sync::Bool,
 )
     return Thunk{
         Core.Typeof(f),
@@ -3940,7 +3943,14 @@ function register_thunk(
         Core.Typeof(global_device_ids),
         Core.Typeof(donated_args_mask),
     }(
-        f, exec, device, module_string, client, global_device_ids, donated_args_mask
+        f,
+        exec,
+        device,
+        module_string,
+        client,
+        global_device_ids,
+        donated_args_mask,
+        compiled_with_sync,
     )
 end
 

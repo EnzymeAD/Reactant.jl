@@ -333,6 +333,39 @@ function __compile_options_with_reversed_propagation(compile_options::CompileOpt
     )
 end
 
+function __compile_options_with_updated_sync(compile_options::CompileOptions, sync::Bool)
+    if compile_options.sync == sync
+        return compile_options
+    end
+    return CompileOptions(
+        compile_options.optimization_passes,
+        compile_options.no_nan,
+        compile_options.all_finite,
+        compile_options.inline,
+        compile_options.transpose_propagate,
+        compile_options.reshape_propagate,
+        compile_options.max_constant_threshold,
+        compile_options.raise,
+        compile_options.raise_first,
+        compile_options.legalize_chlo_to_stablehlo,
+        compile_options.cudnn_hlo_optimize,
+        compile_options.shardy_passes,
+        compile_options.optimize_then_pad,
+        compile_options.optimize_communications,
+        compile_options.assert_nonallocating,
+        compile_options.donated_args,
+        sync,
+        compile_options.disable_scatter_gather_optimization_passes,
+        compile_options.disable_pad_optimization_passes,
+        compile_options.disable_licm_optimization_passes,
+        compile_options.disable_reduce_slice_fusion_passes,
+        compile_options.disable_slice_to_batch_passes,
+        compile_options.disable_concat_to_batch_passes,
+        compile_options.disable_loop_raising_passes,
+        compile_options.disable_structured_tensors_passes,
+    )
+end
+
 """
     DefaultXLACompileOptions(;
         donated_args=:auto, sync=false, optimize_then_pad=true, assert_nonallocating=false
