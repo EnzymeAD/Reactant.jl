@@ -62,7 +62,7 @@ Reactant.jl is a Julia package that compiles Julia functions into MLIR (Multi-Le
 ### Test Structure
 - **Framework**: Uses `SafeTestsets` and Julia's built-in `Test`
 - **Test Groups**: Tests are organized into three groups:
-  - `core`: Basic functionality, tracing, compilation, autodiff
+  - `core`: Basic functionality, tracing, transmutation, compilation, autodiff
   - `neural_networks`: NNlib, Flux, LuxLib, Lux integration
   - `integration`: CUDA, KernelAbstractions, FFT, MPI, etc.
 - **Backend Testing**: Tests can run with different backends (CPU/GPU)
@@ -186,7 +186,7 @@ buildifier -r deps/ReactantExtra/
 
 ### Adding a New Operation
 1. Implement the Julia function in appropriate file in `src/`
-2. Add tracing support if needed in `src/Tracing.jl`
+2. Add transmutation support if needed in `src/Transmutation.jl`
 3. Add tests in `test/ops.jl` or appropriate test file
 4. Add documentation if it's a public API
 5. Format code with JuliaFormatter

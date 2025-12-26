@@ -248,7 +248,7 @@ end
 # end
 #
 # TODO for this to work properly in finalize_mlir_fn(), need to add TracedRequest to TracedTypes, currently const
-# Base.@nospecializeinfer function Reactant.make_tracer(
+# Base.@nospecializeinfer function Reactant.transmute(
 #     seen,
 #     @nospecialize(prev::TracedRequest),
 #     @nospecialize(path),

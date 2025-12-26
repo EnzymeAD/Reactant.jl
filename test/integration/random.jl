@@ -202,7 +202,7 @@ end
     @test @jit(rand_on_device()) isa ConcreteRArray{Float32,3}
 end
 
-@testset "Tracing of Random" begin
+@testset "Transmutation of Random" begin
     struct RandomContainer{RNG}
         rng::RNG
     end

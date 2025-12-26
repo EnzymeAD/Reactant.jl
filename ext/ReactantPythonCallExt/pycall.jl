@@ -15,7 +15,7 @@ function pycall_with_jax_tracing(f::Py, args...)
     static_argnums = ()
     prev_len = 0
     for (i, arg) in enumerate(args)
-        jax_inputs[i] = Reactant.make_tracer(seen_args, arg, (), Reactant.TracedToJAX)
+        jax_inputs[i] = Reactant.transmute(seen_args, arg, (), Reactant.TracedToJAX)
         if length(seen_args) == prev_len
             static_argnums = (static_argnums..., i - 1)
         end

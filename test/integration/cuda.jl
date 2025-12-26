@@ -5,7 +5,7 @@ const ReactantCUDAExt = Base.get_extension(Reactant, :ReactantCUDAExt)
 @testset "Promote CuTraced" begin
     TFT = ReactantCUDAExt.CuTracedRNumber{Float64,1}
     FT = Float64
-    @test Reactant.promote_traced_type(TFT, FT) == TFT
+    @test Reactant.promote_transmute_type(TFT, FT) == TFT
     @test Base.promote_type(TFT, FT) == FT
 end
 
