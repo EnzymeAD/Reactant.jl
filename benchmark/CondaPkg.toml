@@ -1,8 +1,0 @@
-[deps]
-python = "<=3.12,>=3.9,<4"
-
-[pip.deps]
-jax = ">= 0.5"
-tensorflow = ">= 2.17"
-numpy = ">= 1, >= 2"
-xprof = ">= 2.20"

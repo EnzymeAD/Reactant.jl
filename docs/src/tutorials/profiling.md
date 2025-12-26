@@ -1,6 +1,37 @@
 # [Profiling](@id profiling)
 
-## Capturing traces
+## Quick profiling in your terminal
+
+!!! note
+
+    This is only meant to be used for quick profiling or programmatically accessing the
+    profiling results. For more detailed and GUI friendly profiling proceed to the next
+    section.
+
+Simply replace the use of `Base.@time` or `Base.@timed` with `Reactant.Profiler.@time` or
+`Reactant.Profiler.@timed`. We will automatically compile the function if it is not already
+a Reactant compiled function (with `sync=true`).
+
+```@example profiling
+using Reactant
+
+x = Reactant.to_rarray(randn(Float32, 100, 2))
+W = Reactant.to_rarray(randn(Float32, 10, 100))
+b = Reactant.to_rarray(randn(Float32, 10))
+
+linear(x, W, b) = (W * x) .+ b
+
+Reactant.@time linear(x, W, b)
+```
+
+```@example profiling
+Reactant.@timed nrepeat=100 linear(x, W, b)
+```
+
+Note that the information returned depends on the backend. Specifically CUDA and TPU
+backends provide more detailed information regarding memory usage and allocation.
+
+## [Capturing traces](@id capturing_traces)
 
 When running Reactant, it is possible to capture traces using the [XLA profiler](https://jax.readthedocs.io/en/latest/profiling.html).
 These traces can provide information about where the XLA specific parts of program spend time during compilation or execution. Note that tracing and compilation happen on the CPU even though the final execution is aimed to run on another device such as GPU or TPU. Therefore, including tracing and compilation in a trace will create annotations on the CPU.
