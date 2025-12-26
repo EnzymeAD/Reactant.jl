@@ -21,6 +21,8 @@ communication.
     wrap_to_pad_comm::Int = 0
     rotate_spmd::Int = 1
     wrap_to_rotate::Int = 1
+    # This is set higher to override the existing concat pattern
+    concat_to_rotatepad::Int = 3
 end
 
 function Base.String(options::OptimizeCommunicationOptions)
