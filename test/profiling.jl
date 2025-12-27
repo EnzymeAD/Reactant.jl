@@ -19,7 +19,9 @@ linear(x, W, b) = (W * x) .+ b
 
         fn = @compile sync = true linear(x, W, b)
         file =
-            Reactant.Profiler.profile_and_get_xplane_file(fn, x, W, b; nrepeat=10).xplane_file
+            Reactant.Profiler.profile_and_get_xplane_file(
+                fn, x, W, b; nrepeat=10
+            ).xplane_file
         @test isfile(file)
 
         kernel_stats = Reactant.Profiler.get_kernel_stats(file)
