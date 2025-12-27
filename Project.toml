@@ -130,4 +130,4 @@ NNlib = "872c559c-99b0-510c-b3b7-b6c96a88d5cd"
 PythonCall = "6099a3de-0909-46bc-b1f4-468b9a2dfc0d"
 
 [workspace]
-projects = ["docs", "test", "benchmark"]
+projects = ["docs",  "benchmark"]
