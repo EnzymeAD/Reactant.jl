@@ -991,7 +991,11 @@ function optimization_passes(
     if !compile_options.disable_loop_raising_passes
         append!(
             transform_passes_list,
-            ["greedy_while_loop_batch_fission", "while_elementwise_reduction_to_reduce"],
+            [
+                "greedy_while_loop_batch_fission",
+                "while_elementwise_reduction_to_reduce",
+                "remove_loop_carried_dependencies_from_while_load_operations",
+            ],
         )
     end
 
