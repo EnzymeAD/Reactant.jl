@@ -22,6 +22,7 @@ b = Reactant.to_rarray(randn(Float32, 10))
 linear(x, W, b) = (W * x) .+ b
 
 Reactant.@time linear(x, W, b)
+nothing # hide
 ```
 
 ```@example profiling
@@ -29,7 +30,94 @@ Reactant.@timed nrepeat=100 linear(x, W, b)
 ```
 
 Note that the information returned depends on the backend. Specifically CUDA and TPU
-backends provide more detailed information regarding memory usage and allocation.
+backends provide more detailed information regarding memory usage and allocation (something
+like the following will be displayed on GPUs):
+
+```julia
+AggregateProfilingResult(
+    runtime = 0.00001235s, 
+    compile_time = 0.20724930s,  # time spent compiling by Reactant
+    GPU_0_bfc = MemoryProfileSummary(
+        peak_bytes_usage_lifetime = 32.015 MiB,  # peak memory usage over the entire program (lifetime of memory allocator)
+        peak_stats = MemoryAggregationStats(
+            stack_reserved_bytes = 0 bytes,  # memory usage by stack reservation
+            heap_allocated_bytes = 30.750 KiB,  # memory usage by heap allocation
+            free_memory_bytes = 4.228 GiB,  # free memory available for allocation or reservation
+            fragmentation = 0.0,  # fragmentation of memory within [0, 1]
+            peak_bytes_in_use = 30.750 KiB # The peak memory usage over the entire program
+        )
+        peak_stats_time = 0.02420451s, 
+        memory_capacity = 4.228 GiB # memory capacity of the allocator
+    )
+    flops = FlopsSummary(
+        Flops = 5.180502680725853e-7,  # [flops / (peak flops * program time)], capped at 1.0
+        UncappedFlops = 5.180502680725853e-7, 
+        RawFlops = 4060.0,  # Total FLOPs performed
+        BF16Flops = 4060.0,  # Total FLOPs Normalized to the bf16 (default) devices peak bandwidth
+    )
+)
+```
+
+Additionally for GPUs and TPUs, we can use the [`Reactant.@profile`](@ref) macro to profile
+the function and get information regarding each of the kernels executed.
+
+```@example profiling
+Reactant.@profile linear(x, W, b)
+nothing # hide
+```
+
+On GPUs this would look something like the following:
+
+```julia
+╔================================================================================╗
+║ KERNEL STATISTICS                                                              ║
+╚================================================================================╝
+
+┌───────────────────┬─────────────┬────────────────┬──────────────┬──────────────┬──────────────┬──────────────┬───────────┬──────────┬────────────┬─────────────┐
+│       Kernel Name │ Occurrences │ Total Duration │ Avg Duration │ Min Duration │ Max Duration │ Static Shmem │ Block Dim │ Grid Dim │ TensorCore │ Occupancy % │
+├───────────────────┼─────────────┼────────────────┼──────────────┼──────────────┼──────────────┼──────────────┼───────────┼──────────┼────────────┼─────────────┤
+│ gemm_fusion_dot_1 │           1 │    0.00000266s │  0.00000266s │  0.00000266s │  0.00000266s │    8.000 KiB │    64,1,1 │    1,1,1 │          ✗ │       50.0% │
+│   loop_add_fusion │           1 │    0.00000157s │  0.00000157s │  0.00000157s │  0.00000157s │      0 bytes │    20,1,1 │    1,1,1 │          ✗ │       31.2% │
+└───────────────────┴─────────────┴────────────────┴──────────────┴──────────────┴──────────────┴──────────────┴───────────┴──────────┴────────────┴─────────────┘
+
+╔================================================================================╗
+║ FRAMEWORK OP STATISTICS                                                        ║
+╚================================================================================╝
+
+┌───────────────────┬─────────┬─────────────┬─────────────┬─────────────────┬───────────────┬──────────┬───────────┬──────────────┬──────────┐
+│         Operation │    Type │ Host/Device │ Occurrences │ Total Self-Time │ Avg Self-Time │ Device % │ Memory BW │    FLOP Rate │ Bound By │
+├───────────────────┼─────────┼─────────────┼─────────────┼─────────────────┼───────────────┼──────────┼───────────┼──────────────┼──────────┤
+│ gemm_fusion_dot.1 │ Unknown │      Device │           1 │     0.00000266s │   0.00000266s │   62.88% │ 1.71 GB/s │ 1.51 GFLOP/s │      HBM │
+│             +/add │     add │      Device │           1 │     0.00000157s │   0.00000157s │   37.12% │ 0.12 GB/s │ 0.04 GFLOP/s │      HBM │
+└───────────────────┴─────────┴─────────────┴─────────────┴─────────────────┴───────────────┴──────────┴───────────┴──────────────┴──────────┘
+
+╔================================================================================╗
+║ SUMMARY                                                                        ║
+╚================================================================================╝
+
+AggregateProfilingResult(
+    runtime = 0.00002246s, 
+    compile_time = 0.16447328s,  # time spent compiling by Reactant
+    GPU_0_bfc = MemoryProfileSummary(
+        peak_bytes_usage_lifetime = 32.015 MiB,  # peak memory usage over the entire program (lifetime of memory allocator)
+        peak_stats = MemoryAggregationStats(
+            stack_reserved_bytes = 0 bytes,  # memory usage by stack reservation
+            heap_allocated_bytes = 31.250 KiB,  # memory usage by heap allocation
+            free_memory_bytes = 4.228 GiB,  # free memory available for allocation or reservation
+            fragmentation = 0.0,  # fragmentation of memory within [0, 1]
+            peak_bytes_in_use = 31.250 KiB # The peak memory usage over the entire program
+        )
+        peak_stats_time = 0.00812043s, 
+        memory_capacity = 4.228 GiB # memory capacity of the allocator
+    )
+    flops = FlopsSummary(
+        Flops = 3.747296689092735e-6,  # [flops / (peak flops * program time)], capped at 1.0
+        UncappedFlops = 3.747296689092735e-6, 
+        RawFlops = 4060.0,  # Total FLOPs performed
+        BF16Flops = 4060.0,  # Total FLOPs Normalized to the bf16 (default) devices peak bandwidth
+    )
+)
+```
 
 ## [Capturing traces](@id capturing_traces)
 
