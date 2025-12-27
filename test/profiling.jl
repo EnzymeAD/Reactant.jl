@@ -30,7 +30,7 @@ linear(x, W, b) = (W * x) .+ b
     end
 
     # Run the profiling/timing tools and print
-    Reactant.@timed nrepeat=32 linear(x, W, b)
-    Reactant.@time nrepeat=32 linear(x, W, b)
-    Reactant.@profile nrepeat=32 linear(x, W, b)
+    Reactant.@timed nrepeat = 32 linear(x, W, b)
+    Reactant.@time nrepeat = 32 linear(x, W, b)
+    Reactant.@profile nrepeat = 32 linear(x, W, b)
 end
