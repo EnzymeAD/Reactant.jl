@@ -22,6 +22,7 @@ b = Reactant.to_rarray(randn(Float32, 10))
 linear(x, W, b) = (W * x) .+ b
 
 Reactant.@time linear(x, W, b)
+nothing # hide
 ```
 
 ```@example profiling
@@ -30,6 +31,14 @@ Reactant.@timed nrepeat=100 linear(x, W, b)
 
 Note that the information returned depends on the backend. Specifically CUDA and TPU
 backends provide more detailed information regarding memory usage and allocation.
+
+Additionally for GPUs and TPUs, we can use the [`Reactant.@profile`](@ref) macro to profile
+the function and get information regarding each of the kernels executed.
+
+```@example profiling
+Reactant.@profile linear(x, W, b)
+nothing # hide
+```
 
 ## [Capturing traces](@id capturing_traces)
 

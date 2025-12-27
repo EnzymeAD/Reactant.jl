@@ -41,7 +41,7 @@ Zygote = "e88e6eb3-aa80-5325-afca-941959d7151f"
 [compat]
 Adapt = "4.1"
 ArrayInterface = "7.17.1"
-CUDA = "5.5"
+CUDA = "5.9"
 DLFP8Types = "0.1"
 Distributions = "0.25"
 Enzyme = "0.13.28"
