@@ -958,6 +958,8 @@ function get_kernel_stats(xplane_file::String)
     return reports
 end
 
+_clip_str(x, N::Int=50) = length(x) > N ? x[1:N] * "..." : x
+
 function print_kernel_report(reports::Vector{KernelReport}; io::IO=stdout)
     isempty(reports) && return nothing
 
@@ -974,7 +976,7 @@ function print_kernel_report(reports::Vector{KernelReport}; io::IO=stdout)
 
     # Build column definitions: (header, extractor, is_duration)
     columns = Tuple{String,Function,Bool}[]
-    push!(columns, ("Kernel Name", r -> r.name, false))
+    push!(columns, ("Kernel Name", r -> _clip_str(r.name), false))
     push!(columns, ("Occurrences", r -> string(r.occurrences), false))
     push!(columns, ("Total Duration", r -> _timestr(r.total_duration_ns) * "s", true))
     push!(
@@ -1134,7 +1136,7 @@ function print_framework_op_stats(reports::Vector{FrameworkOpStats}; io::IO=stdo
 
     # Build column definitions: (header, extractor, is_duration)
     columns = Tuple{String,Function,Bool}[]
-    push!(columns, ("Operation", r -> r.op_name, false))
+    push!(columns, ("Operation", r -> _clip_str(r.op_name), false))
     push!(columns, ("Type", r -> r.op_type, false))
     push!(columns, ("Host/Device", r -> r.host_or_device, false))
     push!(columns, ("Occurrences", r -> string(r.occurrences), false))
