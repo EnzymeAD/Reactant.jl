@@ -200,16 +200,17 @@ function run_bicg_benchmark!(results, backend)
 end
 
 function kernel_doitgen(A::AbstractArray{T,3}, x::AbstractArray{T,2}) where {T}
-    sum = similar(A, T, size(A, 2))
-    @trace for r in axes(A, 1)
-        @trace for q in axes(A, 2)
-            @trace for p in axes(A, 2)
-                sum[p] = zero(eltype(A))
-                @trace for s in axes(A, 2)
+    R, Q, P = size(A)
+    sum = similar(A, T, P)
+    @trace for r in 1:R
+        @trace for q in 1:Q
+            @trace for p in 1:P
+                sum[p] = 0
+                @trace for s in 1:P
                     sum[p] += A[r, q, s] * x[s, p]
                 end
             end
-            @trace for p in axes(A, 2)
+            @trace for p in 1:P
                 A[r, q, p] = sum[p]
             end
         end
@@ -219,33 +220,18 @@ end
 
 function kernel_doitgen_vectorized(A::AbstractArray{T,3}, x::AbstractArray{T,2}) where {T}
     R, Q, S = size(A)
-    P, S_x = size(x)
-
-    @assert S == S_x "Dimension mismatch: A has S=$S but x has S=$S_x"
-    @assert P == S "Dimension mismatch: P=$P must equal S=$S for computation to make sense"
-
-    A_reshaped = reshape(A, R * Q, S)
-    @show size(A_reshaped)
-    @show size(x')
-    @show size(A_reshaped * x')
-    Aout = reshape(A_reshaped * x', R, Q, P)
-
-    # Store result back in A (in-place)
-    A[:, :, 1:P] .= Aout
-
-    return A
+    return reshape(reshape(A, R * Q, S) * x, R, Q, S)
 end
 
 function run_doitgen_benchmark!(results, backend)
-    R, Q, S = 256, 1024, 2048
-    P = S
+    R, Q, P = 256, 1024, 512
 
-    A = rand(Float32, R, Q, S)
-    x = rand(Float32, P, S)
+    A = rand(Float32, R, Q, P)
+    x = rand(Float32, P, P)
 
     run_benchmark!(
         results,
-        "doitgen [$(R), $(Q), $(S)]",
+        "doitgen [$(R), $(Q), $(P)]",
         backend,
         kernel_doitgen,
         (A, x),
@@ -303,8 +289,7 @@ function run_linalg_kernel_benchmarks!(results, backend)
     run_3mm_benchmark!(results, backend)
     run_atax_benchmark!(results, backend)
     run_bicg_benchmark!(results, backend)
-    # FIXME: See https://github.com/EnzymeAD/Enzyme-JAX/issues/1868
-    # run_doitgen_benchmark!(results, backend)
+    run_doitgen_benchmark!(results, backend)
     run_mvt_benchmark!(results, backend)
     return nothing
 end

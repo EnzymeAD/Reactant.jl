@@ -28,7 +28,7 @@ function recursive_check(x::AbstractArray, y::AbstractArray; kwargs...)
         x_arr = Array(x)
         y_arr = Array(y)
         diff = abs.(x_arr .- y_arr)
-        @show findall(diff .> 1e-2)
+        # @show findall(diff .> 1e-2)
         @show maximum(diff)
     end
     return res
