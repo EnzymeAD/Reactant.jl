@@ -584,6 +584,7 @@ function dump(
     ndims_ptr::Ptr{UInt64},
     shape_ptr::Ptr{UInt64},
     width_ptr::Ptr{UInt64},
+    type_kind_ptr::Ptr{UInt64},
 )
     activity_id = @ccall MLIR.API.mlir_c.ProfilerActivityStart(
         "ProbProg.dump"::Cstring, Profiler.TRACE_ME_LEVEL_CRITICAL::Cint
@@ -592,17 +593,60 @@ function dump(
     label = unsafe_string(label_ptr)
     ndims = unsafe_load(ndims_ptr)
     width = unsafe_load(width_ptr)
+    type_kind = unsafe_load(type_kind_ptr)
 
-    julia_type = if width == 32
-        Float32
-    elseif width == 64
-        Float64
-    elseif width == 1
-        Bool
+    julia_type = if type_kind == 0
+        if width == 32
+            Float32
+        elseif width == 64
+            Float64
+        else
+            @ccall printf(
+                "DUMP ERROR: Unsupported float width: %lld\n"::Cstring, width::Int64
+            )::Cvoid
+            @ccall MLIR.API.mlir_c.ProfilerActivityEnd(activity_id::Int64)::Cvoid
+            return nothing
+        end
+    elseif type_kind == 1
+        if width == 1
+            Bool
+        elseif width == 8
+            Int8
+        elseif width == 16
+            Int16
+        elseif width == 32
+            Int32
+        elseif width == 64
+            Int64
+        else
+            @ccall printf(
+                "DUMP ERROR: Unsupported signed int width: %lld\n"::Cstring,
+                width::Int64,
+            )::Cvoid
+            @ccall MLIR.API.mlir_c.ProfilerActivityEnd(activity_id::Int64)::Cvoid
+            return nothing
+        end
+    elseif type_kind == 2
+        if width == 1
+            Bool
+        elseif width == 8
+            UInt8
+        elseif width == 16
+            UInt16
+        elseif width == 32
+            UInt32
+        elseif width == 64
+            UInt64
+        else
+            @ccall printf(
+                "DUMP ERROR: Unsupported unsigned int width: %lld\n"::Cstring,
+                width::Int64,
+            )::Cvoid
+            @ccall MLIR.API.mlir_c.ProfilerActivityEnd(activity_id::Int64)::Cvoid
+            return nothing
+        end
     else
-        @ccall printf(
-            "DUMP ERROR: Unsupported datatype width: %lld\n"::Cstring, width::Int64
-        )::Cvoid
+        @ccall printf("DUMP ERROR: Unknown type kind: %lld\n"::Cstring, type_kind::Int64)::Cvoid
         @ccall MLIR.API.mlir_c.ProfilerActivityEnd(activity_id::Int64)::Cvoid
         return nothing
     end
@@ -758,7 +802,9 @@ function __init__()
     )::Cvoid
 
     dump_ptr = @cfunction(
-        dump, Cvoid, (Ptr{Any}, Ptr{UInt8}, Ptr{UInt64}, Ptr{UInt64}, Ptr{UInt64})
+        dump,
+        Cvoid,
+        (Ptr{Any}, Ptr{UInt8}, Ptr{UInt64}, Ptr{UInt64}, Ptr{UInt64}, Ptr{UInt64})
     )
     @ccall MLIR.API.mlir_c.EnzymeJaXMapSymbol(
         :enzyme_probprog_dump::Cstring, dump_ptr::Ptr{Cvoid}
