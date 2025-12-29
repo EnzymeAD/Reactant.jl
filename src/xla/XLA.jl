@@ -158,6 +158,13 @@ function __init__()
                 1
         end
 
+        if haskey(ENV, "REACTANT_DEFAULT_DEVICE")
+            DEFAULT_DEVICE[] = max(
+                0, something(tryparse(Int, ENV["REACTANT_DEFAULT_DEVICE"]), 0)
+            )
+            @debug "REACTANT_DEFAULT_DEVICE: " DEFAULT_DEVICE[] maxlog = 1
+        end
+
         @debug "REACTANT_XLA_RUNTIME: " REACTANT_XLA_RUNTIME maxlog = 1
 
         @ccall MLIR.API.mlir_c.RegisterEnzymeXLACPUHandler()::Cvoid
