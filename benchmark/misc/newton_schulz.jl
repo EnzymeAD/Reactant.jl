@@ -1,9 +1,7 @@
 using Reactant, LinearAlgebra
 using Random: Random
 
-if !isdefined(@__MODULE__, :get_backend)
-    include("common.jl")
-end
+include("common.jl")
 
 # Generic implementation of Newton-Schulz Orthogonalization Iteration
 function newton_schulz_muon(G; steps=12, eps=1e-7)
@@ -41,7 +39,7 @@ function run_newton_schulz_benchmark!(results, backend)
     ]
 
     # Using a set of sizes to show scaling
-    for N in [256, 512, 1024, 2048, 4096]
+    for N in [256, 1024, 4096]
         benchmark_name = "NewtonSchulz/[$(N) x $(N)] primal"
 
         # Initialize Random Data on CPU
