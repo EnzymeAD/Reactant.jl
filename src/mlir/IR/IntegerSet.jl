@@ -62,7 +62,7 @@ Base.:(==)(a::IntegerSet, b::IntegerSet) = API.mlirIntegerSetEqual(a, b)
 
 Gets the context in which the given integer set lives.
 """
-context(set::IntegerSet) = Context(API.mlirIntegerSetGetContext(set.set))
+context(set::IntegerSet) = Context(API.mlirIntegerSetGetContext(set.set); owned=false)
 
 """
     isempty(set)

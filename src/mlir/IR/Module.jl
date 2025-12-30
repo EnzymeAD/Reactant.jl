@@ -38,7 +38,7 @@ end
 
 Gets the context that a module was created with.
 """
-context(module_::Module) = Context(API.mlirModuleGetContext(module_))
+context(module_::Module) = Context(API.mlirModuleGetContext(module_); owned=false)
 
 """
     body(module)
