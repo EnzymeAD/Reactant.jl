@@ -44,7 +44,7 @@ function export_as_saved_model(
                PythonCall hasn't been installed and loaded.")
     end
 
-    mlir_mod = MLIR.IR.with_context() do ctx
+    mlir_mod = MLIR.IR.with_context() do
         parse(MLIR.IR.Module, thunk.module_string)
     end
 

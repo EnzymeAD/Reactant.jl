@@ -21,7 +21,7 @@ Base.:(==)(a::AffineExpr, b::AffineExpr) = API.mlirAffineExprEqual(a, b)
 
 Gets the context that owns the affine expression.
 """
-context(expr::AffineExpr) = Context(API.mlirAffineExprGetContext(expr))
+context(expr::AffineExpr) = Context(API.mlirAffineExprGetContext(expr); owned=false)
 
 """
     is_symbolic_or_constant(affineExpr)

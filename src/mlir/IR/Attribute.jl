@@ -31,7 +31,7 @@ Base.:(==)(a::Attribute, b::Attribute) = API.mlirAttributeEqual(a, b)
 
 Gets the context that an attribute was created with.
 """
-context(attr::Attribute) = Context(API.mlirAttributeGetContext(attr))
+context(attr::Attribute) = Context(API.mlirAttributeGetContext(attr); owned=false)
 
 """
     type(attribute)

@@ -30,7 +30,7 @@ end
 
 Base.convert(::Core.Type{API.MlirLocation}, location::Location) = location.location
 Base.:(==)(a::Location, b::Location) = API.mlirLocationEqual(a, b)
-context(location::Location) = Context(API.mlirLocationGetContext(location))
+context(location::Location) = Context(API.mlirLocationGetContext(location); owned=false)
 
 function Base.show(io::IO, location::Location)
     c_print_callback = @cfunction(print_callback, Cvoid, (API.MlirStringRef, Any))

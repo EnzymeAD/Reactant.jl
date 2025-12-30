@@ -16,7 +16,7 @@ end
 end
 
 function test()
-    MLIR.IR.with_context() do ctx
+    MLIR.IR.with_context() do
         mod = MLIR.IR.Module(MLIR.IR.Location())
         modbody = MLIR.IR.body(mod)
 

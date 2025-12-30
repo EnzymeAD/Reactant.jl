@@ -36,7 +36,7 @@ compose(expr::AffineExpr, map::AffineMap) = AffineExpr(API.mlirAffineExprCompose
 
 Gets the context that the given affine map was created with.
 """
-context(map::AffineMap) = API.mlirAffineMapGetContext(map)
+context(map::AffineMap) = Context(API.mlirAffineMapGetContext(map); owned=false)
 
 """
     AffineMap(ndims, nsymbols; context=context())
@@ -259,7 +259,7 @@ The rhs can only contains dimensions and symbols present on the left hand side o
 ```julia
 julia> using Reactant.MLIR: IR
 
-julia> IR.context!(IR.Context()) do
+julia> IR.with_context(IR.Context()) do
            IR.@affinemap (d1, d2)[s0] -> (d1 + s0, d2 % 10)
        end
 MLIR.IR.AffineMap(#= (d0, d1)[s0] -> (d0 + s0, d1 mod 10) =#)

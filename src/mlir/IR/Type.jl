@@ -29,7 +29,7 @@ Base.:(==)(a::Type, b::Type) = API.mlirTypeEqual(a, b)
 
 Gets the context that a type was created with.
 """
-context(type::Type) = Context(API.mlirTypeGetContext(type))
+context(type::Type) = Context(API.mlirTypeGetContext(type); owned=false)
 
 """
     typeid(type)
