@@ -3626,7 +3626,6 @@ function compile_xla(
     end
 
     results = MLIR.IR.with_context(ctx) do
-        # try
         # compile function to MLIR module
         mod = MLIR.IR.Module(MLIR.IR.Location())
 
