@@ -96,7 +96,7 @@ function with_context(f; allow_use_existing=false)
         @ccall API.mlir_c.RegisterDialects(ctx::API.MlirContext)::Cvoid
     end
 
-    with_context(f, ctx)
+    result = with_context(f, ctx)
 
     delete_context && Base.delete!(Reactant.Compiler.context_gc_vector, ctx)
 
