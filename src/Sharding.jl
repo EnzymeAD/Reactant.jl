@@ -586,14 +586,16 @@ function sharding_to_array_slices(
             undef, 0
         )
         @ccall MLIR.API.mlir_c.RegisterDialects(ctx::MLIR.API.MlirContext)::Cvoid
-        
+
         MLIR.IR.with_context(ctx) do
             sdycache = Reactant.Compiler.default_sdycache()
             Reactant.Compiler.activate_sdycache!(sdycache)
 
             try
                 data_mlir_type = [
-                    MLIR.IR.TensorType(collect(Int64, reverse(size_x)), MLIR.IR.Type(Float32))
+                    MLIR.IR.TensorType(
+                        collect(Int64, reverse(size_x)), MLIR.IR.Type(Float32)
+                    ),
                 ]
                 mod = MLIR.IR.Module(MLIR.IR.Location(; context=ctx))
 
@@ -619,7 +621,9 @@ function sharding_to_array_slices(
                     sharding, ctx, sym_name, mesh_attr, size_x; dialect=:sdy
                 )
 
-                MLIR.API.mlirFuncSetArgAttr(func, 0, "sdy.sharding", input_tensor_sharding_attr)
+                MLIR.API.mlirFuncSetArgAttr(
+                    func, 0, "sdy.sharding", input_tensor_sharding_attr
+                )
 
                 Reactant.Compiler.run_pass_pipeline!(
                     mod, join(["sdy-propagation-pipeline", "sdy-close-shardings"], ",")
