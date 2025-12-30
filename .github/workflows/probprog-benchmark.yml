@@ -1,0 +1,174 @@
+name: ProbProg Benchmark
+
+permissions:
+  contents: write
+  statuses: read
+  deployments: write
+  pull-requests: write
+
+on:
+  schedule:
+    - cron: '0 4 * * 0'
+  workflow_dispatch:
+  pull_request:
+    types: [labeled, synchronize, opened, reopened]
+    paths:
+      - ".github/workflows/probprog-benchmark.yml"
+      - "src/probprog/**"
+      - "test/probprog/**"
+      - "benchmark/probprog/**"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  JAX_ENABLE_X64: "1"
+
+jobs:
+  benchmark-numpyro:
+    name: NumPyro Benchmark - ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    if: ${{ (github.ref == 'refs/heads/main' && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')) || (github.event_name == 'pull_request' && contains(join(github.event.pull_request.labels.*.name, ','), 'run probprog benchmarks')) }}
+
+    container:
+      image: ${{ contains(matrix.os, 'linux') && 'ghcr.io/enzymead/reactant-docker-images@sha256:7004a6ebbdd77bd047900b2bffc542e8576864056dc27a9c94d30666d6f7ea01' || '' }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - linux-x86-n2-32
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install NumPyro and dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install jax[cpu] numpyro numpy
+
+      - name: Run NumPyro benchmarks
+        run: |
+          mkdir -p benchmark/probprog/results
+          python benchmark/probprog/numpyro_benchmark.py \
+            --output benchmark/probprog/results/numpyro_results.json
+
+      - name: Upload NumPyro results
+        uses: actions/upload-artifact@v5
+        with:
+          name: numpyro-results-${{ matrix.os }}
+          path: benchmark/probprog/results/numpyro_results.json
+          retention-days: 90
+
+  benchmark-reactant:
+    name: Reactant Benchmark - ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    if: ${{ (github.ref == 'refs/heads/main' && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')) || (github.event_name == 'pull_request' && contains(join(github.event.pull_request.labels.*.name, ','), 'run probprog benchmarks')) }}
+
+    container:
+      image: ${{ contains(matrix.os, 'linux') && 'ghcr.io/enzymead/reactant-docker-images@sha256:7004a6ebbdd77bd047900b2bffc542e8576864056dc27a9c94d30666d6f7ea01' || '' }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - linux-x86-n2-32
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: julia-actions/setup-julia@v2
+        with:
+          version: "1.11"
+
+      - uses: julia-actions/cache@v2
+
+      - name: Instantiate ProbProg benchmarks
+        shell: julia --color=yes --project=benchmark/probprog {0}
+        run: |
+          using Pkg
+          Pkg.instantiate()
+          Pkg.build()
+
+      - name: Run Reactant benchmarks
+        run: |
+          mkdir -p benchmark/probprog/results
+          julia --color=yes --project=benchmark/probprog benchmark/probprog/reactant_benchmark.jl \
+            --output benchmark/probprog/results/reactant_results.json
+
+      - name: Upload Reactant results
+        uses: actions/upload-artifact@v5
+        with:
+          name: reactant-results-${{ matrix.os }}
+          path: benchmark/probprog/results/reactant_results.json
+          retention-days: 90
+
+  compare-and-validate:
+    name: Compare Results
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    needs: [benchmark-numpyro, benchmark-reactant]
+    if: ${{ !cancelled() }}
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install numpy
+
+      - name: Download NumPyro results
+        uses: actions/download-artifact@v6
+        with:
+          pattern: numpyro-results-*
+          path: benchmark/probprog/results/numpyro
+          merge-multiple: true
+
+      - name: Download Reactant results
+        uses: actions/download-artifact@v6
+        with:
+          pattern: reactant-results-*
+          path: benchmark/probprog/results/reactant
+          merge-multiple: true
+
+      - name: Compare and validate results
+        run: |
+          python benchmark/probprog/compare_results.py \
+            --numpyro-results benchmark/probprog/results/numpyro/numpyro_results.json \
+            --reactant-results benchmark/probprog/results/reactant/reactant_results.json \
+            --output benchmark/probprog/results/comparison.json \
+            --benchmark-output benchmark/probprog/results/benchmark.json
+
+      - name: Upload comparison results
+        uses: actions/upload-artifact@v5
+        with:
+          name: probprog-comparison
+          path: benchmark/probprog/results/comparison.json
+          retention-days: 90
+
+      - name: Upload Benchmark Results
+        uses: benchmark-action/github-action-benchmark@v1
+        with:
+          name: Reactant.jl ProbProg Benchmarks
+          tool: "customSmallerIsBetter"
+          output-file-path: benchmark/probprog/results/benchmark.json
+          benchmark-data-dir-path: "benchmarks/probprog"
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          comment-always: ${{ github.event.pull_request.head.repo.full_name == github.repository }}
+          summary-always: ${{ github.event.pull_request.head.repo.full_name == github.repository }}
+          alert-threshold: "150%"
+          fail-on-alert: false
+          auto-push: ${{ github.event_name != 'pull_request' }}
+          max-items-in-chart: 50
