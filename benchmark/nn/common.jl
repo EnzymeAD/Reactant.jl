@@ -57,7 +57,7 @@ function run_lux_benchmark!(
         ]...,
     ]
 
-    if disable_transpose_bench
+    if !disable_transpose_bench
         push!(
             fwd_options,
             (
@@ -69,7 +69,7 @@ function run_lux_benchmark!(
         )
     end
 
-    if disable_bwd_transpose_bench
+    if !disable_bwd_transpose_bench
         append!(
             bwd_options,
             [
@@ -87,7 +87,7 @@ function run_lux_benchmark!(
         )
     end
 
-    if disable_scatter_gather_bench
+    if !disable_scatter_gather_bench
         push!(
             fwd_options,
             (
@@ -99,7 +99,7 @@ function run_lux_benchmark!(
         )
     end
 
-    if disable_bwd_scatter_gather_bench
+    if !disable_bwd_scatter_gather_bench
         append!(
             bwd_options,
             [
@@ -116,7 +116,7 @@ function run_lux_benchmark!(
         )
     end
 
-    if disable_pad_bench
+    if !disable_pad_bench
         push!(
             fwd_options,
             (
@@ -128,7 +128,7 @@ function run_lux_benchmark!(
         )
     end
 
-    if disable_bwd_pad_bench
+    if !disable_bwd_pad_bench
         append!(
             bwd_options,
             [
@@ -144,7 +144,7 @@ function run_lux_benchmark!(
         )
     end
 
-    if disable_scatter_gather_bench && disable_pad_bench
+    if !disable_scatter_gather_bench && !disable_pad_bench
         push!(
             fwd_options,
             (
@@ -158,7 +158,7 @@ function run_lux_benchmark!(
         )
     end
 
-    if disable_bwd_scatter_gather_bench && disable_bwd_pad_bench
+    if !disable_bwd_scatter_gather_bench && !disable_bwd_pad_bench
         append!(
             bwd_options,
             [

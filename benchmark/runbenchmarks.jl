@@ -1,6 +1,7 @@
 using InteractiveUtils: versioninfo
 using Reactant: Reactant
 using JSON3: JSON3
+using PrettyTables: pretty_table
 
 @info sprint(io -> versioninfo(io; verbose=true))
 
@@ -26,6 +27,23 @@ end
 include("setup.jl")
 
 results = run_benchmarks(BENCHMARK_GROUP)
+
+table = Matrix{Any}(undef, length(results), 5)
+for (i, (k, v)) in enumerate(sort(results))
+    i1, i2, i3, i4 = rsplit(k, "/"; limit=4)
+    table[i, 1] = i1
+    table[i, 2] = i2
+    table[i, 3] = i3
+    table[i, 4] = i4
+    table[i, 5] = v
+end
+
+pretty_table(
+    table;
+    alignment=[:l, :l, :l, :l, :c],
+    column_labels=["Benchmark", "Mode", "Backend", "Passes", "Time (s)"],
+    display_size=(-1, -1),
+)
 
 filepath = joinpath(dirname(@__FILE__), "results")
 mkpath(filepath)

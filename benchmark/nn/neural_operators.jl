@@ -1,9 +1,7 @@
 using NeuralOperators: DeepONet, FourierNeuralOperator
 using Lux: gelu
 
-if !isdefined(@__MODULE__, :run_lux_benchmark!)
-    include("common.jl")
-end
+include("common.jl")
 
 function run_deeponet_benchmark!(results, backend)
     model = DeepONet(;
