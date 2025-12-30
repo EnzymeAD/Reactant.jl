@@ -1,7 +1,7 @@
 using Reactant: MLIR
 
 @testset "inject" begin
-    mod = MLIR.IR.with_context() do ctx
+    mod = MLIR.IR.with_context() do
         mod = MLIR.IR.Module()
 
         MLIR.IR.mmodule!(mod) do

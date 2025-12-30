@@ -1458,7 +1458,7 @@ const context_gc_vector = Dict{MLIR.IR.Context,Vector{Union{TracedRArray,TracedR
 
 # helper for debug purposes: String -> Text
 function run_pass_pipeline_on_source(source, pass_pipeline; enable_verifier=true)
-    return MLIR.IR.with_context() do ctx
+    return MLIR.IR.with_context() do
         mod = parse(MLIR.IR.Module, source)
         run_pass_pipeline!(mod, pass_pipeline; enable_verifier)
         MLIR.IR.verifyall(MLIR.IR.Operation(mod); debug=true)
@@ -1522,7 +1522,7 @@ function compile_mlir(f, args; client=nothing, drop_unsupported_attributes=false
         backend = "cpu"
     end
 
-    results = MLIR.IR.with_context() do ctx
+    results = MLIR.IR.with_context() do
         mod = MLIR.IR.Module(MLIR.IR.Location())
 
         compile_options, kwargs = __get_compile_options_and_kwargs(; kwargs...)
@@ -3681,8 +3681,8 @@ function compile_xla(
         backend = "cpu"
     end
 
-    MLIR.IR.activate!(ctx)
-    results = try
+    results = MLIR.IR.with_context(ctx) do
+        # try
         # compile function to MLIR module
         mod = MLIR.IR.Module(MLIR.IR.Location())
 
@@ -3748,8 +3748,6 @@ function compile_xla(
         end
 
         return mod, exec, hlo_modules, mlir_fn_res, device, client, module_string
-    finally
-        MLIR.IR.deactivate!(ctx)
     end
 
     Base.delete!(context_gc_vector, ctx)

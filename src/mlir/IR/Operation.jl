@@ -30,7 +30,7 @@ Base.copy(operation::Operation) = Operation(API.mlirOperationClone(operation))
 
 Gets the context this operation is associated with.
 """
-context(operation::Operation) = Context(API.mlirOperationGetContext(operation))
+context(operation::Operation) = Context(API.mlirOperationGetContext(operation); owned=false)
 
 """
     location(op)
