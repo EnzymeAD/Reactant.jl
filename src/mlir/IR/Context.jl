@@ -33,14 +33,18 @@ Context() = Context(API.mlirContextCreate(); owned=true)
 
 Creates an MLIR context with or without multithreading support.
 """
-Context(threading::Bool) = Context(API.mlirContextCreateWithThreading(threading); owned=true)
+function Context(threading::Bool)
+    return Context(API.mlirContextCreateWithThreading(threading); owned=true)
+end
 
 """
     Context(registry::DialectRegistry, threading::Bool)
 
 Creates an MLIR context with the given dialect registry and with or without multithreading support.
 """
-Context(registry, threading) = Context(API.mlirContextCreateWithRegistry(registry, threading); owned=true)
+function Context(registry, threading)
+    return Context(API.mlirContextCreateWithRegistry(registry, threading); owned=true)
+end
 
 Base.convert(::Core.Type{API.MlirContext}, c::Context) = c.context
 

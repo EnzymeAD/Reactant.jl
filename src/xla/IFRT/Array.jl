@@ -310,7 +310,7 @@ function replicate_array_to_all_devices(array::Array, sharding, mesh, size_arr)
         undef, 0
     )
     @ccall MLIR.API.mlir_c.RegisterDialects(ctx::MLIR.API.MlirContext)::Cvoid
-    
+
     MLIR.IR.with_context(ctx) do
         sdycache = Reactant.Compiler.default_sdycache()
         Reactant.Compiler.activate_sdycache!(sdycache)
@@ -349,12 +349,19 @@ function replicate_array_to_all_devices(array::Array, sharding, mesh, size_arr)
             push!(MLIR.IR.body(mod), func)
 
             MLIR.API.mlirFuncSetArgAttr(func, 0, "sdy.sharding", input_tensor_sharding_attr)
-            MLIR.API.mlirFuncSetResultAttr(func, 0, "sdy.sharding", output_tensor_sharding_attr)
+            MLIR.API.mlirFuncSetResultAttr(
+                func, 0, "sdy.sharding", output_tensor_sharding_attr
+            )
 
             Reactant.Compiler.run_pass_pipeline!(
                 mod,
                 join(
-                    ["sdy-propagation-pipeline", "sdy-close-shardings", "canonicalize", "cse"],
+                    [
+                        "sdy-propagation-pipeline",
+                        "sdy-close-shardings",
+                        "canonicalize",
+                        "cse",
+                    ],
                     ",",
                 ),
             )
