@@ -908,12 +908,8 @@ function optimization_passes(
         "dynamic_slice_simplify",
         "enzyme_hlo_unroll($(WHILE_UNROLL_THRESHOLD[]))",
         "dot_general_only_diagonal_access",
-        "transpose_symmetric_simplify",
         "divide_negated_operands_simplify",
         "multiply_negated_operands_simplify",
-        "transpose_syrk_to_syrk",
-        "fuse_mul_into_syrk",
-        "fuse_add_into_syrk",
         "factor_scalars_in_dot_general",
         "reduce_mul_to_dot_general",
         "dot_general_broadcast_in_dim",
@@ -928,14 +924,16 @@ function optimization_passes(
         "reduce_delete_dims",
         "dot_general_insert_dim_contraction_simplification",
         "fuse_reshape_collapse_or_expand_dims_into_reduce",
+        "transpose_syrk_to_syrk",
+        "fuse_mul_into_syrk",
+        "fuse_add_into_syrk",
+        "syrk_simplify_output_uplo",
+        "transpose_symmetric_simplify",
     ]
 
-    if !is_sharded
-        # these passes don't have optimized sharding implementations
-        if raise_shlo_to_blas_lapack
-            if !compile_options.disable_structured_tensors_passes
-                append!(transform_passes_list, ["dot_general_to_syrk"])
-            end
+    if !compile_options.disable_structured_tensors_passes
+        if !is_sharded && raise_shlo_to_blas_lapack
+            append!(transform_passes_list, ["dot_general_to_syrk"])
         end
     end
 
