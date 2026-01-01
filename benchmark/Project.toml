@@ -7,8 +7,10 @@ LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
 Lux = "b2108857-7c20-44ae-9111-449ecde12c47"
 NeuralOperators = "ea5c82af-86e5-48da-8ee1-382d6ad7af4b"
 PrecompileTools = "aea7be01-6a6a-4083-8856-8a6e6704d82a"
+PrettyTables = "08abe8d2-0d0c-5749-adfa-8a2ac140af0d"
 Printf = "de0858da-6303-5e67-8744-51eddeeeb8d7"
 Reactant = "3c362404-f566-11ee-1572-e11a4b42c853"
+Reactant_jll = "0192cb87-2b54-54ad-80e0-3be72ad8a3c0"
 
 [sources]
 Reactant = {path = ".."}
@@ -24,4 +26,4 @@ NeuralOperators = "0.6.2"
 PrecompileTools = "1.2"
 Printf = "1.10"
 Reactant = "0.2.161"
-julia = "1.10"
+julia = "1.11"

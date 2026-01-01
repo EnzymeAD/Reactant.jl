@@ -1,8 +1,6 @@
 using Boltz: Vision
 
-if !isdefined(@__MODULE__, :run_lux_benchmark!)
-    include("common.jl")
-end
+include("common.jl")
 
 function run_vit_benchmark!(results, backend)
     lowercase(backend) == "cpu" && return nothing

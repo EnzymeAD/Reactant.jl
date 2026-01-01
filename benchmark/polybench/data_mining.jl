@@ -30,7 +30,7 @@ function correlation(D::AbstractMatrix{T}) where {T}
     @trace for i in 1:n
         @trace for j in 1:m
             D[i, j] -= mean[j]
-            D[i, j] /= sqrt(n) * stddev[j]
+            D[i, j] /= T(sqrt(n)) * stddev[j]
         end
     end
 
@@ -53,8 +53,9 @@ function correlation_vectorized(D::AbstractMatrix{T}) where {T}
     μ = sum(D; dims=1) ./ n
     X = D .- μ
     # compute variance via dot product (X'X diagonal)
-    σ = sqrt.(sum(X .^ 2; dims=1) ./ (n - 1))   # 1 × cols
-    Xn = X ./ σ
+    σ = sqrt.(sum(X .^ 2; dims=1))   # 1 × cols
+    σ = ifelse.(σ .<= T(0.1), T(1.0), σ)
+    Xn = X ./ (σ ./ sqrt(T(n - 1)))
     return (Xn' * Xn) ./ (n - 1)
 end
 
