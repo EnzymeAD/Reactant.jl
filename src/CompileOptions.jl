@@ -169,8 +169,10 @@ Fine-grained control over the compilation options for the Reactant compiler.
     (Default: `false`).
   - `disable_loop_raising_passes`: Disables raising passes for `stablehlo.while`.
     (Default: `false`).
-  - `disable_structured_tensors_passes`: Disables structured tensors detection and
-    propagation passes. (Default `true`).
+  - `disable_structured_tensors_detection_passes`: Disables structured tensors detection
+    passes. (Default `true`).
+  - `disable_structured_tensors_passes`: Disables structured tensors optimization passes.
+    (Default `false`).
 """
 struct CompileOptions
     optimization_passes::Union{Symbol,String}
@@ -203,6 +205,7 @@ struct CompileOptions
     disable_slice_to_batch_passes::Bool
     disable_concat_to_batch_passes::Bool
     disable_loop_raising_passes::Bool
+    disable_structured_tensors_detection_passes::Bool
     disable_structured_tensors_passes::Bool
 end
 
@@ -231,7 +234,8 @@ function CompileOptions(;
     disable_slice_to_batch_passes::Bool=true, # expensive + introduces all-to-all in GB25
     disable_concat_to_batch_passes::Bool=false,
     disable_loop_raising_passes::Bool=false,
-    disable_structured_tensors_passes::Bool=true, # missing optimization passes currently
+    disable_structured_tensors_detection_passes::Bool=true,  # missing optimization passes currently
+    disable_structured_tensors_passes::Bool=false,
 )
     optimization_passes isa Bool &&
         (optimization_passes = ifelse(optimization_passes, :all, :none))
@@ -284,6 +288,7 @@ function CompileOptions(;
         disable_slice_to_batch_passes,
         disable_concat_to_batch_passes,
         disable_loop_raising_passes,
+        disable_structured_tensors_detection_passes,
         disable_structured_tensors_passes,
     )
 end
@@ -330,6 +335,7 @@ function __compile_options_with_reversed_propagation(compile_options::CompileOpt
         compile_options.disable_slice_to_batch_passes,
         compile_options.disable_concat_to_batch_passes,
         compile_options.disable_loop_raising_passes,
+        compile_options.disable_structured_tensors_detection_passes,
         compile_options.disable_structured_tensors_passes,
     )
 end
@@ -363,6 +369,7 @@ function __compile_options_with_updated_sync(compile_options::CompileOptions, sy
         compile_options.disable_slice_to_batch_passes,
         compile_options.disable_concat_to_batch_passes,
         compile_options.disable_loop_raising_passes,
+        compile_options.disable_structured_tensors_detection_passes,
         compile_options.disable_structured_tensors_passes,
     )
 end

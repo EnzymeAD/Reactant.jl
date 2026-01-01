@@ -33,9 +33,16 @@ function run_newton_schulz_benchmark!(results, backend)
     compile_modes = [
         (
             "StructuredTensors",
-            Reactant.CompileOptions(; disable_structured_tensors_passes=false),
+            CompileOptions(; disable_structured_tensors_detection_passes=false),
         ),
-        ("Default", Reactant.CompileOptions(; disable_structured_tensors_passes=true)),
+        (
+            "StructuredTensors (Only Detection)",
+            CompileOptions(;
+                disable_structured_tensors_detection_passes=false,
+                disable_structured_tensors_passes=true,
+            ),
+        ),
+        ("Default", CompileOptions(; disable_structured_tensors_detection_passes=true)),
     ]
 
     # Using a set of sizes to show scaling

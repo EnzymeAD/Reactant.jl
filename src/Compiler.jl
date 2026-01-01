@@ -907,13 +907,8 @@ function optimization_passes(
         "split_variadic_scatter_op",
         "dynamic_slice_simplify",
         "enzyme_hlo_unroll($(WHILE_UNROLL_THRESHOLD[]))",
-        "dot_general_only_diagonal_access",
-        "transpose_symmetric_simplify",
         "divide_negated_operands_simplify",
         "multiply_negated_operands_simplify",
-        "transpose_syrk_to_syrk",
-        "fuse_mul_into_syrk",
-        "fuse_add_into_syrk",
         "factor_scalars_in_dot_general",
         "reduce_mul_to_dot_general",
         "dot_general_broadcast_in_dim",
@@ -933,10 +928,53 @@ function optimization_passes(
     if !is_sharded
         # these passes don't have optimized sharding implementations
         if raise_shlo_to_blas_lapack
-            if !compile_options.disable_structured_tensors_passes
+            if !compile_options.disable_structured_tensors_detection_passes
                 append!(transform_passes_list, ["dot_general_to_syrk"])
             end
         end
+    end
+
+    if !compile_options.disable_structured_tensors_passes
+        append!(
+            transform_passes_list,
+            [
+                "transpose_syrk_to_syrk",
+                "fuse_mul_into_syrk",
+                "fuse_add_into_syrk",
+                "dot_general_only_diagonal_access",
+                "transpose_symmetric_simplify",
+                "syrk_simplify_output_uplo",
+            ],
+        )
+    end
+
+    if !compile_options.disable_scatter_gather_optimization_passes
+        append!(
+            transform_passes_list,
+            [
+                # scatter patterns
+                "scatter_to_dynamic_update_slice<1>",
+                "scatter_multiply_simplify",
+                "unary_elementwise_scatter_simplify",
+                "scatter_indices_are_unique",
+                ## const prop patterns
+                "scatter_update_computation_const_prop",
+                # gather patterns
+                "dynamic_gather_op_is_not_dynamic<16>",
+                "gather_op_canon<16>",
+                "gather_elementwise",
+                ## const prop patterns
+                "gather_const_prop",
+                "scatter_const_fold($max_constant_threshold)",
+            ],
+        )
+    end
+
+    if (
+        !compile_options.disable_scatter_gather_optimization_passes &&
+        !compile_options.disable_structured_tensors_passes
+    )
+        append!(transform_passes_list, ["diagonal_tensor_dot_general_rewrite"])
     end
 
     if !compile_options.disable_slice_to_batch_passes
@@ -1017,29 +1055,6 @@ function optimization_passes(
                 "reverse_licm(0)",
                 "convolution_licm(0)",
                 "dynamic_slice_licm(0)",
-            ],
-        )
-    end
-
-    if !compile_options.disable_scatter_gather_optimization_passes
-        append!(
-            transform_passes_list,
-            [
-                # scatter patterns
-                "scatter_to_dynamic_update_slice<1>",
-                "scatter_multiply_simplify",
-                "unary_elementwise_scatter_simplify",
-                "scatter_indices_are_unique",
-                "diagonal_tensor_dot_general_rewrite",
-                ## const prop patterns
-                "scatter_update_computation_const_prop",
-                # gather patterns
-                "dynamic_gather_op_is_not_dynamic<16>",
-                "gather_op_canon<16>",
-                "gather_elementwise",
-                ## const prop patterns
-                "gather_const_prop",
-                "scatter_const_fold($max_constant_threshold)",
             ],
         )
     end
