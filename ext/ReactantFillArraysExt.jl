@@ -15,12 +15,12 @@ for AT in (Fill, Ones, Zeros)
         seen,
         mode::Reactant.TraceMode,
         @nospecialize(track_numbers::Type),
-        @nospecialize(sharding),
+        @nospecialize(ndevices_val::Val),
         @nospecialize(runtime)
     ) where {T,N,Axes}
         # T will be a number so we need to trace it
         return $(AT){
-            Reactant.traced_type_inner(T, seen, mode, Number, sharding, runtime),N,Axes
+            Reactant.traced_type_inner(T, seen, mode, Number, ndevices_val, runtime),N,Axes
         }
     end
 end
@@ -45,8 +45,9 @@ Base.@nospecializeinfer function Reactant.make_tracer(
     @nospecialize(runtime = nothing),
     kwargs...,
 ) where {T,N,Axes}
+    ndevices_val = Val(Sharding.ndevices(sharding))
     return Ones(
-        Reactant.traced_type_inner(T, seen, mode, Number, sharding, runtime), prev.axes
+        Reactant.traced_type_inner(T, seen, mode, Number, ndevices_val, runtime), prev.axes
     )
 end
 
@@ -59,8 +60,9 @@ Base.@nospecializeinfer function Reactant.make_tracer(
     @nospecialize(runtime = nothing),
     kwargs...,
 ) where {T,N,Axes}
+    ndevices_val = Val(Sharding.ndevices(sharding))
     return Zeros(
-        Reactant.traced_type_inner(T, seen, mode, Number, sharding, runtime), prev.axes
+        Reactant.traced_type_inner(T, seen, mode, Number, ndevices_val, runtime), prev.axes
     )
 end
 
@@ -69,12 +71,12 @@ Base.@nospecializeinfer function Reactant.traced_type_inner(
     seen,
     mode::Reactant.TraceMode,
     @nospecialize(track_numbers::Type),
-    @nospecialize(sharding),
+    @nospecialize(ndevices_val::Val),
     @nospecialize(runtime)
 ) where {T,N,I,A}
     # T will be a number so we need to trace it
     return OneElement{
-        Reactant.traced_type_inner(T, seen, mode, Number, sharding, runtime),N,I,A
+        Reactant.traced_type_inner(T, seen, mode, Number, ndevices_val, runtime),N,I,A
     }
 end
 

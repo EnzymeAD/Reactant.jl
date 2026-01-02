@@ -18,10 +18,10 @@ function Reactant.traced_type_inner(
     seen,
     @nospecialize(mode::Reactant.TraceMode),
     @nospecialize(track_numbers::Type),
-    @nospecialize(sharding),
+    @nospecialize(ndevices_val::Val),
     @nospecialize(runtime)
 ) where {T,N,Np1,I}
-    I2 = Reactant.traced_type_inner(I, seen, mode, track_numbers, sharding, runtime)
+    I2 = Reactant.traced_type_inner(I, seen, mode, track_numbers, ndevices_val, runtime)
     return OneHotArray{__compatible_eltype(T, eltype(I2)),N,Np1,I2}
 end
 
