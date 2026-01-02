@@ -325,13 +325,12 @@ function ConcreteIFRTNumber(data::ConcreteIFRTNumber; kwargs...)
 end
 
 ## ConcreteIFRTArray
-mutable struct ConcreteIFRTArray{T,N,P<:Union{Nothing,NTuple{N,Int}}} <:
-               AbstractConcreteArray{T,N}
+mutable struct ConcreteIFRTArray{T,N} <: AbstractConcreteArray{T,N}
     data::XLA.IFRT.AsyncArray
     shape::NTuple{N,Int}
     sharding::Sharding.ShardInfo
     donated::Bool
-    padding::P
+    padding::NTuple{N,Int}
 
     function ConcreteIFRTArray{T,N}(
         data::XLA.IFRT.AsyncArray,
@@ -339,12 +338,14 @@ mutable struct ConcreteIFRTArray{T,N,P<:Union{Nothing,NTuple{N,Int}}} <:
         sharding::Sharding.ShardInfo,
         padding::Union{Nothing,NTuple{N,Int}}=nothing,
     ) where {T,N}
-        return new{T,N,typeof(padding)}(data, shape, sharding, false, padding)
+        if padding === nothing
+            padding = ntuple(Returns(0), N)
+        end
+        return new{T,N}(data, shape, sharding, false, padding)
     end
 end
 
-has_padding(::ConcreteIFRTArray{T,N,Nothing}) where {T,N} = false
-has_padding(x::ConcreteIFRTArray{T,N,P}) where {T,N,P} = !all(iszero, x.padding)
+has_padding(x::ConcreteIFRTArray) = !all(iszero, x.padding)
 
 @leaf ConcreteIFRTArray
 
@@ -428,11 +429,11 @@ function XLA.device(x::Union{ConcreteIFRTArray,ConcreteIFRTNumber})
 end
 
 const ConcreteIFRTScalar{T} = Union{ConcreteIFRTArray{T,0},ConcreteIFRTNumber{T}}
-const WrappedConcreteIFRTArray{T,N,S} = WrappedArray{
-    T,N,ConcreteIFRTArray,ConcreteIFRTArray{T,N,S}
+const WrappedConcreteIFRTArray{T,N} = WrappedArray{
+    T,N,ConcreteIFRTArray,ConcreteIFRTArray{T,N}
 }
-const AnyConcreteIFRTArray{T,N,S} = Union{
-    ConcreteIFRTArray{T,N,S},WrappedConcreteIFRTArray{T,N,S}
+const AnyConcreteIFRTArray{T,N} = Union{
+    ConcreteIFRTArray{T,N},WrappedConcreteIFRTArray{T,N}
 }
 
 function ConcreteIFRTArray(x::AnyConcreteIFRTArray; kwargs...)

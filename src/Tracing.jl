@@ -331,11 +331,7 @@ Base.@nospecializeinfer function traced_type_inner(
         if runtime isa Val{:PJRT}
             return ConcretePJRTArray{T.parameters[1],T.parameters[2]}
         elseif runtime isa Val{:IFRT}
-            return ConcreteIFRTArray{
-                T.parameters[1],
-                T.parameters[2],
-                Nothing, # TODO: check if we can ensure no padding??
-            }
+            return ConcreteIFRTArray{T.parameters[1],T.parameters[2]}
         end
         error("Unsupported runtime $runtime")
     elseif mode == TracedToJAX
