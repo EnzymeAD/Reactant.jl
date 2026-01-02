@@ -90,39 +90,6 @@ Base.@nospecializeinfer function traced_type_inner(
     return C
 end
 
-Base.@nospecializeinfer function traced_type_inner(
-    @nospecialize(T::Type{<:Function}),
-    seen,
-    mode::TraceMode,
-    @nospecialize(track_numbers::Type),
-    @nospecialize(sharding),
-    @nospecialize(runtime)
-)
-    # functions are directly returned
-    if T === Function || sizeof(T) == 0
-        return T
-    end
-
-    # in closures, enclosured variables need to be traced
-    N = fieldcount(T)
-    changed = false
-    traced_fieldtypes = Type[]
-    for i in 1:N
-        next = traced_type_inner(
-            fieldtype(T, i), seen, mode, track_numbers, getproperty(sharding, i), runtime
-        )
-        changed |= next != fieldtype(T, i)
-        push!(traced_fieldtypes, next)
-    end
-
-    if !changed
-        return T
-    end
-
-    # closure are struct types with the types of enclosured vars as type parameters
-    return Core.apply_type(T.name.wrapper, traced_fieldtypes...)
-end
-
 Base.@nospecializeinfer function traced_tuple_type_inner(
     @nospecialize(T::Type{<:Tuple}),
     seen,
@@ -1301,14 +1268,14 @@ Base.@nospecializeinfer function make_tracer_unknown(
                     else
                         throw(
                             AssertionError(
-                                "Could not recursively make tracer of object of type $RT into $TT at field $i (named $(fieldname(TT, i))), need object of type $(fieldtype(TT, i)) found object of type $(Core.Typeof(xi2)) ",
+                                "Could not recursively make tracer of object of type $RT into $TT at field $i (named $(fieldname(TT, i))), need object of type $FT found object of type $(Core.Typeof(xi2)) ",
                             ),
                         )
                     end
                 else
                     throw(
                         AssertionError(
-                            "Could not recursively make tracer of object of type $RT into $TT at field $i (named $(fieldname(TT, i))), need object of type $(fieldtype(TT, i)) found object of type $(Core.Typeof(xi2)) ",
+                            "Could not recursively make tracer of object of type $RT into $TT at field $i (named $(fieldname(TT, i))), need object of type $FT found object of type $(Core.Typeof(xi2)) ",
                         ),
                     )
                 end
