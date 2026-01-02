@@ -1362,9 +1362,7 @@ Base.@nospecializeinfer function Reactant.traced_type_inner(
         TT = Reactant.traced_type_inner(T, seen, mode, track_numbers, ndevices_val, runtime)
         TT === T && return A
         return Array{
-            Reactant.traced_type_inner(
-                T, seen, mode, track_numbers, ndevices_val, runtime
-            ),
+            Reactant.traced_type_inner(T, seen, mode, track_numbers, ndevices_val, runtime),
             N,
         }
     end
