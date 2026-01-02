@@ -45,9 +45,7 @@ Base.@nospecializeinfer function Reactant.make_tracer(
     @nospecialize(runtime = nothing),
     kwargs...,
 ) where {T,N,Axes}
-    return Ones(
-        Reactant.traced_type(T, Val(mode), Number, sharding, runtime), prev.axes
-    )
+    return Ones(Reactant.traced_type(T, Val(mode), Number, sharding, runtime), prev.axes)
 end
 
 Base.@nospecializeinfer function Reactant.make_tracer(
@@ -59,9 +57,7 @@ Base.@nospecializeinfer function Reactant.make_tracer(
     @nospecialize(runtime = nothing),
     kwargs...,
 ) where {T,N,Axes}
-    return Zeros(
-        Reactant.traced_type(T, Val(mode), Number, sharding, runtime), prev.axes
-    )
+    return Zeros(Reactant.traced_type(T, Val(mode), Number, sharding, runtime), prev.axes)
 end
 
 Base.@nospecializeinfer function Reactant.traced_type_inner(
