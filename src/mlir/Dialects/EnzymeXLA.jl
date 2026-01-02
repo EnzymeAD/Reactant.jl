@@ -1413,11 +1413,19 @@ end
 """
 `blas_syrk`
 
-C := alpha*A*A^T + beta*C, or C := alpha*A^T*A + beta*C, where alpha and beta are
-scalars. C must be a n x n symmetric matrix.
+C_out := alpha*A*A^T + beta*C, or C_out := alpha*A^T*A + beta*C, where alpha and beta
+are scalars. C must be a n x n symmetric matrix.
 
-If `fill` is present, then both the upper and lower triangles of the matrix are filled.
-Otherwise the values in the non-uplo part of the matrix are undefined.
+`output_uplo` determines which part of `C_out` is populated. Accessing the values in
+the non-`output_uplo` part of the matrix is undefined behavior.
+
+LAPACK/BLAS routines typically require a single `uplo` attribute and it is implicitly
+assumed that the output `uplo` corresponds to the input `uplo`. This means the burden
+lies on the user to manually copy data if they need to access the other half of the
+matrix. By specifying the `output_uplo` we can perform transformations that analyze the
+entire dataflow, and avoid computing/copying half of the tensor all together. Generally,
+it is recommended to set this attribute to `enzymexla::LapackUplo::F`, and our passes
+will automatically refine this to minimize data copies.
 """
 function blas_syrk(
     A::Value,
@@ -1426,17 +1434,18 @@ function blas_syrk(
     beta::Value;
     output::IR.Type,
     uplo,
+    output_uplo,
     transpose=nothing,
-    fill=nothing,
     location=Location(),
 )
     op_ty_results = IR.Type[output,]
     operands = Value[A, C, alpha, beta]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("uplo", uplo),]
+    attributes = NamedAttribute[
+        namedattribute("uplo", uplo), namedattribute("output_uplo", output_uplo)
+    ]
     !isnothing(transpose) && push!(attributes, namedattribute("transpose", transpose))
-    !isnothing(fill) && push!(attributes, namedattribute("fill", fill))
 
     return create_operation(
         "enzymexla.blas.syrk",
