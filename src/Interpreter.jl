@@ -13,7 +13,6 @@ import Core.Compiler:
     ArgInfo,
     StmtInfo,
     AbsIntState,
-    get_max_methods,
     CallMeta,
     Effects,
     NoCallInfo,
@@ -27,16 +26,15 @@ function var"@reactant_overlay"(__source__::LineNumberNode, __module__::Module, 
     )
 end
 
-function set_reactant_abi(
-    interp,
+@inline function set_reactant_abi(
+    interp::Enzyme.Compiler.Interpreter.EnzymeInterpreter{typeof(set_reactant_abi)},
     @nospecialize(f),
     arginfo::ArgInfo,
     si::StmtInfo,
     sv::AbsIntState,
-    max_methods::Int=get_max_methods(interp, f, sv),
+    max_methods::Int,
 )
     (; fargs, argtypes) = arginfo
-
     if f === ReactantCore.within_compile
         if length(argtypes) != 1
             @static if VERSION < v"1.11.0-"
@@ -76,14 +74,40 @@ function set_reactant_abi(
         return abstract_call(interp, arginfo2::ArgInfo, si, sv, max_methods)
     end
 
-    return Base.@invoke abstract_call_known(
-        interp::AbstractInterpreter,
-        f::Any,
-        arginfo::ArgInfo,
-        si::StmtInfo,
-        sv::AbsIntState,
-        max_methods::Int,
-    )
+    if !should_rewrite_call(typeof(f))
+        ninterp = Core.Compiler.NativeInterpreter(interp.world)
+        # Note: mildly sus, but gabe said this was fine?
+        @static if VERSION >= v"1.12"
+            if hasproperty(sv, :interp)
+                sv.interp = ninterp
+                # sv2 = Compiler.OptimizationState(sv.result.linfo, ninterp)
+            end
+        end
+
+        result = Base.@invoke abstract_call_known(
+            ninterp::Core.Compiler.NativeInterpreter,
+            f::Any,
+            arginfo::ArgInfo,
+            si::StmtInfo,
+            sv::AbsIntState,
+            max_methods::Int,
+        )
+        @static if VERSION >= v"1.12"
+            if hasproperty(sv, :interp)
+                sv.interp = interp
+            end
+        end
+        return result
+    else
+        return Base.@invoke abstract_call_known(
+            interp::AbstractInterpreter,
+            f::Any,
+            arginfo::ArgInfo,
+            si::StmtInfo,
+            sv::AbsIntState,
+            max_methods::Int,
+        )
+    end
 end
 
 @static if Enzyme.GPUCompiler.HAS_INTEGRATED_CACHE

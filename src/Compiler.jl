@@ -894,9 +894,9 @@ function optimization_passes(
         # "compare_mul",
         "compare_convert",
         "add_selects",
-        "self_subtract_to_convolution_like($(Int(backend == "tpu")))",
-        "self_add_to_convolution_like($(Int(backend == "tpu")))",
-        "self_mul_to_convolution_like($(Int(backend == "tpu")))",
+        "self_subtract_to_convolution_like(0)",
+        "self_add_to_convolution_like(0)",
+        "self_mul_to_convolution_like(0)",
         "subtract_multiply_const_to_add_mul_const",
         "trivial_reduce_window_to_reduce_op",
         "case_to_if",
@@ -919,8 +919,15 @@ function optimization_passes(
         "dot_general_broadcast_in_dim",
         "dot_general_broadcast_in_dim_sort_dims",
         "dus_dynamic_slice_simplify",
+        "while_dus_dus_simplify",
         "while_dus_ds_simplify",
         "reshape_slice_reshape",
+        "dynamic_slice_elementwise",
+        "dot_general_remove_batch_dimensions",
+        "delete_dims_reduce",
+        "reduce_delete_dims",
+        "dot_general_insert_dim_contraction_simplification",
+        "fuse_reshape_collapse_or_expand_dims_into_reduce",
     ]
 
     if !is_sharded
@@ -982,7 +989,14 @@ function optimization_passes(
     end
 
     if !compile_options.disable_loop_raising_passes
-        append!(transform_passes_list, ["greedy_while_loop_batch_fission"])
+        append!(
+            transform_passes_list,
+            [
+                "greedy_while_loop_batch_fission",
+                "while_elementwise_reduction_to_reduce",
+                "remove_loop_carried_dependencies_from_while_load_operations",
+            ],
+        )
     end
 
     if !compile_options.disable_licm_optimization_passes
@@ -1002,6 +1016,7 @@ function optimization_passes(
                 "reduce_window_licm(0)",
                 "reverse_licm(0)",
                 "convolution_licm(0)",
+                "dynamic_slice_licm(0)",
             ],
         )
     end
@@ -1199,6 +1214,11 @@ function optimization_passes(
                 "elementwise_reshape_like",
             ],
         )
+        if AGGRESSIVE_PROPAGATION[]
+            push!(transform_passes_list, "reshape_elementwise_only_fusible(0)")
+        else
+            push!(transform_passes_list, "reshape_elementwise_only_fusible(1)")
+        end
     end
 
     if compile_options.transpose_propagate === :up
@@ -1240,6 +1260,7 @@ function optimization_passes(
                 "reorder_elementwise_and_shape_op<16>",
                 "elementwise_all_transpose_operands_simplify",
                 "slice_transpose",
+                "dynamic_slice_transpose",
                 "einsum_transpose<1>",
                 "slice_reshape_transpose<1>",
                 "reduce_transpose_simplify",
@@ -1590,7 +1611,7 @@ end
 function get_optimize_comms_passes(options::OptimizeCommunicationOptions)
     options_str = String(options)
     res = [
-        "enzyme-hlo-generate-td{patterns=lower_rotate;concat_to_onedim_dus;concat_to_onedim_dusslice;concatreshape_to_onedim_dus}",
+        "enzyme-hlo-generate-td{patterns=concat_to_onedim_dus;concat_to_onedim_dusslice;concatreshape_to_onedim_dus}",
         "transform-interpreter",
         "enzyme-hlo-remove-transform",
         "enzyme-hlo-generate-td{patterns=reshape_to_broadcast}",
@@ -3821,6 +3842,7 @@ function compile(f, args; kwargs...)
         client,
         mlir_fn_res.global_device_ids,
         mlir_fn_res.donated_args_mask,
+        compile_options.sync,
     )
 end
 
@@ -3832,6 +3854,7 @@ struct Thunk{FTy,tag,IsClosure,ArgTypes,ExecTy,DeviceTy,ClientTy,GD,DAM}
     client::ClientTy
     global_device_ids::GD
     donated_args_mask::DAM
+    compiled_with_sync::Bool
 end
 
 for fn in (:get_tag, :get_isclosure, :get_compiled_argtypes)
@@ -3911,6 +3934,7 @@ function register_thunk(
     client,
     global_device_ids,
     donated_args_mask,
+    compiled_with_sync::Bool,
 )
     return Thunk{
         Core.Typeof(f),
@@ -3923,7 +3947,14 @@ function register_thunk(
         Core.Typeof(global_device_ids),
         Core.Typeof(donated_args_mask),
     }(
-        f, exec, device, module_string, client, global_device_ids, donated_args_mask
+        f,
+        exec,
+        device,
+        module_string,
+        client,
+        global_device_ids,
+        donated_args_mask,
+        compiled_with_sync,
     )
 end
 

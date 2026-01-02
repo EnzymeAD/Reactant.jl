@@ -1,6 +1,6 @@
 load("@llvm-project//mlir:tblgen.bzl", "gentbl_cc_library")
-load("@local_config_rocm//rocm:build_defs.bzl", "if_rocm")
 load("@local_config_cuda//cuda:build_defs.bzl", "if_cuda")
+load("@local_config_rocm//rocm:build_defs.bzl", "if_rocm")
 load("@xla//tools/toolchains/cross_compile/cc:cc_toolchain_config.bzl", "cc_toolchain_config")
 
 # load("//toolchain:yggdrasil.bzl", "ygg_cc_toolchain")
@@ -1060,6 +1060,9 @@ cc_library(
             "-Wl,-exported_symbol,_RunAnalysisOnHloModule",
             "-Wl,-exported_symbol,_EstimateRunTimeForInstruction",
             "-Wl,-exported_symbol,_registerReactantXLAFFI",
+            "-Wl,-exported_symbol,_InitializeXProfStubs",
+            "-Wl,-exported_symbol,_StartGrpcServer",
+            "-Wl,-exported_symbol,_XSpaceToToolsData",
         ],
     }),
     linkstatic = True,
@@ -1163,6 +1166,9 @@ cc_library(
         "@xla//xla/backends/profiler/cpu:metadata_utils",
         "@xla//xla/backends/profiler/tpu:tpu_tracer",
         "@xla//xla/python:profiler_utils",
+        "@org_xprof//xprof/pywrap:profiler_plugin_impl",
+        "@org_xprof//plugin/xprof/worker:stub_factory",
+        "@org_xprof//xprof/convert:tool_options",
         "@tsl//tsl/platform:env_impl",
         "@xla//xla/stream_executor:stream_executor_impl",
         "@xla//xla/mlir/utils:type_util",

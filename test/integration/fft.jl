@@ -108,3 +108,19 @@ end
         @test x_r ≉ copied_x_r
     end
 end
+
+@testset "spectral convolution" begin
+    function spectral_conv(x, weight; dims=(1, 2))
+        ω = fft(x, dims)
+        ω_inverse = ifftshift(fftshift(ω, dims) .* weight, dims)
+        return sum(abs2, ifft(ω_inverse, dims))
+    end
+
+    x = Reactant.TestUtils.construct_test_array(Float32, 8, 8, 4, 1)
+    weight = ones(Float32, 1, 1) .* 4
+
+    x_r = Reactant.to_rarray(x)
+    weight_r = Reactant.to_rarray(weight)
+
+    @test spectral_conv(x, weight) ≈ @jit(spectral_conv(x_r, weight_r))
+end

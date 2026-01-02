@@ -96,6 +96,8 @@ include("Profiler.jl")
 include("Types.jl")
 include("Distributed.jl")
 
+using .Profiler: @time, @timed, @profile
+
 const with_profiler = Profiler.with_profiler
 
 export Sharding

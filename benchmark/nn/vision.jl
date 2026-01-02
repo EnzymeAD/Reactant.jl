@@ -1,3 +1,7 @@
+using Boltz: Vision
+
+include("common.jl")
+
 function run_vit_benchmark!(results, backend)
     lowercase(backend) == "cpu" && return nothing
     for mode in (:tiny,), bsize in (4,)
@@ -27,4 +31,11 @@ function run_vgg_benchmark!(results, backend)
             (224, 224, 3, bsize),
         )
     end
+end
+
+if abspath(PROGRAM_FILE) == @__FILE__
+    backend = get_backend()
+    results = Dict()
+    run_vit_benchmark!(results, backend)
+    run_vgg_benchmark!(results, backend)
 end
