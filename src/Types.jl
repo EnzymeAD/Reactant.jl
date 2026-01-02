@@ -130,38 +130,44 @@ const AnyTracedRVecOrMat{T} = Union{AnyTracedRVector{T},AnyTracedRMatrix{T}}
 
 # Concrete Types
 ## ConcretePJRTNumber
-mutable struct ConcretePJRTNumber{T,D} <: AbstractConcreteNumber{T}
-    data::NTuple{D,XLA.PJRT.AsyncBuffer}
+mutable struct ConcretePJRTNumber{T} <: AbstractConcreteNumber{T}
+    data::Vector{XLA.PJRT.AsyncBuffer}
     sharding::Sharding.ShardInfo
     donated::Bool
 
-    function ConcretePJRTNumber{T,D}(
-        data::NTuple{D,XLA.PJRT.AsyncBuffer}, sharding::Sharding.ShardInfo
-    ) where {T,D}
-        return new{T,D}(data, sharding, false)
+    function ConcretePJRTNumber{T}(
+        data::Vector{XLA.PJRT.AsyncBuffer}, sharding::Sharding.ShardInfo
+    ) where {T}
+        return new{T}(data, sharding, false)
     end
 end
 
-ConcretePJRTNumber{T,1}(x::Number) where {T} = ConcretePJRTNumber{T}(x)
-
-function ConcretePJRTNumber{T}(data::Tuple{XLA.PJRT.AsyncBuffer}) where {T}
-    return ConcretePJRTNumber{T,1}(data, Sharding.NoShardInfo())
+function ConcretePJRTNumber{T}(data::Vector{XLA.PJRT.AsyncBuffer}) where {T}
+    return ConcretePJRTNumber{T}(data, Sharding.NoShardInfo())
 end
 
-function ConcretePJRTNumber{T}(data::NTuple{D,XLA.PJRT.AsyncBuffer}, sharding) where {T,D}
-    return ConcretePJRTNumber{T,D}(data, sharding)
-end
+# XXX (Deprecated): remove in v0.3
+@deprecate ConcretePJRTNumber{T}(data::Tuple{XLA.PJRT.AsyncBuffer}) where {T} ConcretePJRTNumber{
+    T
+}(
+    collect(data), Sharding.NoShardInfo()
+)
+@deprecate ConcretePJRTNumber{T}(data::NTuple{D,XLA.PJRT.AsyncBuffer}, sharding) where {T,D} ConcretePJRTNumber{
+    T
+}(
+    collect(data), sharding
+)
 
 @leaf ConcretePJRTNumber
 
 function ConcretePJRTNumber{T}(data::T2; kwargs...) where {T<:Number,T2<:Number}
     carray = ConcretePJRTArray(fill(convert(T, data)); kwargs...)
     if !Sharding.is_sharded(carray.sharding)
-        return ConcretePJRTNumber{T,1}((carray.data[1],), carray.sharding)
+        return ConcretePJRTNumber{T}([carray.data[1]], carray.sharding)
     end
     @assert all(isnothing, carray.sharding.partition_spec) "ConcretePJRTNumber cannot be \
                                                             sharded"
-    return ConcretePJRTNumber{T,length(carray.data)}(carray.data, carray.sharding)
+    return ConcretePJRTNumber{T}(carray.data, carray.sharding)
 end
 function ConcretePJRTNumber{T}(
     data::ConcretePJRTNumber{T2}; kwargs...
@@ -189,41 +195,38 @@ function ConcretePJRTNumber(data::ConcretePJRTNumber; kwargs...)
 end
 
 ## ConcretePJRTArray
-mutable struct ConcretePJRTArray{T,N,D} <: AbstractConcreteArray{T,N}
-    data::NTuple{D,XLA.PJRT.AsyncBuffer}
+mutable struct ConcretePJRTArray{T,N} <: AbstractConcreteArray{T,N}
+    data::Vector{XLA.PJRT.AsyncBuffer}
     shape::NTuple{N,Int}
     sharding::Sharding.ShardInfo
     donated::Bool
 
-    function ConcretePJRTArray{T,N,D}(
-        data::NTuple{D,XLA.PJRT.AsyncBuffer},
+    function ConcretePJRTArray{T,N}(
+        data::Vector{XLA.PJRT.AsyncBuffer},
         shape::NTuple{N,Int},
         sharding::Sharding.ShardInfo,
-    ) where {T,N,D}
-        return new{T,N,D}(data, shape, sharding, false)
+    ) where {T,N}
+        return new{T,N}(data, shape, sharding, false)
     end
 end
 
 @leaf ConcretePJRTArray
 Adapt.parent_type(::Type{<:ConcretePJRTArray{T,N}}) where {T,N} = ConcretePJRTArray{T,N}
-function Adapt.parent_type(::Type{ConcretePJRTArray{T,N,D}}) where {T,N,D}
-    return ConcretePJRTArray{T,N,D}
-end
 
 # XXX (Deprecated): remove in v0.3
-Base.@deprecate ConcretePJRTArray(data::Number; kwargs...) ConcretePJRTNumber(
-    data; kwargs...
-)
+@deprecate ConcretePJRTArray(data::Number; kwargs...) ConcretePJRTNumber(data; kwargs...)
+@deprecate ConcretePJRTArray{T,N}(
+    data::Tuple{XLA.PJRT.AsyncBuffer}, shape::NTuple{N,Int}
+) where {T,N} ConcretePJRTArray{T,N}(collect(data), shape, Sharding.NoShardInfo())
+
+@deprecate ConcretePJRTArray{T,N}(
+    data::NTuple{D,XLA.PJRT.AsyncBuffer}, shape::NTuple{N,Int}, sharding
+) where {T,N,D} ConcretePJRTArray{T,N}(collect(data), shape, sharding)
 
 function ConcretePJRTArray{T,N}(
-    data::Tuple{XLA.PJRT.AsyncBuffer}, shape::NTuple{N,Int}
+    data::Vector{XLA.PJRT.AsyncBuffer}, shape::NTuple{N,Int}
 ) where {T,N}
-    return ConcretePJRTArray{T,N,1}(data, shape, Sharding.NoShardInfo())
-end
-function ConcretePJRTArray{T,N}(
-    data::NTuple{D,XLA.PJRT.AsyncBuffer}, shape::NTuple{N,Int}, sharding
-) where {T,N,D}
-    return ConcretePJRTArray{T,N,D}(data, shape, sharding)
+    return ConcretePJRTArray{T,N}(data, shape, Sharding.NoShardInfo())
 end
 
 function ConcretePJRTArray(
@@ -236,8 +239,7 @@ function ConcretePJRTArray(
     theclient, thedevice = _select_client_and_device(client, idx, device, sharding)
     sharded_data, shardinfo = sharding(theclient, thedevice, data)
     shape = size(data)
-    nsharded = length(sharded_data)
-    return ConcretePJRTArray{T,N,nsharded}(sharded_data, shape, shardinfo)
+    return ConcretePJRTArray{T,N}(collect(sharded_data), shape, shardinfo)
 end
 
 Base.wait(x::Union{ConcretePJRTArray,ConcretePJRTNumber}) = foreach(wait, x.data)
@@ -248,11 +250,11 @@ function XLA.device(x::Union{ConcretePJRTArray,ConcretePJRTNumber})
 end
 
 const ConcretePJRTScalar{T} = Union{ConcretePJRTArray{T,0},ConcretePJRTNumber{T}}
-const WrappedConcretePJRTArray{T,N,D} = WrappedArray{
-    T,N,ConcretePJRTArray,ConcretePJRTArray{T,N,D}
+const WrappedConcretePJRTArray{T,N} = WrappedArray{
+    T,N,ConcretePJRTArray,ConcretePJRTArray{T,N}
 }
-const AnyConcretePJRTArray{T,N,D} = Union{
-    ConcretePJRTArray{T,N,D},WrappedConcretePJRTArray{T,N,D}
+const AnyConcretePJRTArray{T,N} = Union{
+    ConcretePJRTArray{T,N},WrappedConcretePJRTArray{T,N}
 }
 
 function ConcretePJRTArray(x::AnyConcretePJRTArray; kwargs...)
@@ -323,13 +325,12 @@ function ConcreteIFRTNumber(data::ConcreteIFRTNumber; kwargs...)
 end
 
 ## ConcreteIFRTArray
-mutable struct ConcreteIFRTArray{T,N,P<:Union{Nothing,NTuple{N,Int}}} <:
-               AbstractConcreteArray{T,N}
+mutable struct ConcreteIFRTArray{T,N} <: AbstractConcreteArray{T,N}
     data::XLA.IFRT.AsyncArray
     shape::NTuple{N,Int}
     sharding::Sharding.ShardInfo
     donated::Bool
-    padding::P
+    padding::NTuple{N,Int}
 
     function ConcreteIFRTArray{T,N}(
         data::XLA.IFRT.AsyncArray,
@@ -337,12 +338,14 @@ mutable struct ConcreteIFRTArray{T,N,P<:Union{Nothing,NTuple{N,Int}}} <:
         sharding::Sharding.ShardInfo,
         padding::Union{Nothing,NTuple{N,Int}}=nothing,
     ) where {T,N}
-        return new{T,N,typeof(padding)}(data, shape, sharding, false, padding)
+        if padding === nothing
+            padding = ntuple(Returns(0), N)
+        end
+        return new{T,N}(data, shape, sharding, false, padding)
     end
 end
 
-has_padding(::ConcreteIFRTArray{T,N,Nothing}) where {T,N} = false
-has_padding(x::ConcreteIFRTArray{T,N,P}) where {T,N,P} = !all(iszero, x.padding)
+has_padding(x::ConcreteIFRTArray) = !all(iszero, x.padding)
 
 @leaf ConcreteIFRTArray
 
@@ -426,11 +429,11 @@ function XLA.device(x::Union{ConcreteIFRTArray,ConcreteIFRTNumber})
 end
 
 const ConcreteIFRTScalar{T} = Union{ConcreteIFRTArray{T,0},ConcreteIFRTNumber{T}}
-const WrappedConcreteIFRTArray{T,N,S} = WrappedArray{
-    T,N,ConcreteIFRTArray,ConcreteIFRTArray{T,N,S}
+const WrappedConcreteIFRTArray{T,N} = WrappedArray{
+    T,N,ConcreteIFRTArray,ConcreteIFRTArray{T,N}
 }
-const AnyConcreteIFRTArray{T,N,S} = Union{
-    ConcreteIFRTArray{T,N,S},WrappedConcreteIFRTArray{T,N,S}
+const AnyConcreteIFRTArray{T,N} = Union{
+    ConcreteIFRTArray{T,N},WrappedConcreteIFRTArray{T,N}
 }
 
 function ConcreteIFRTArray(x::AnyConcreteIFRTArray; kwargs...)
@@ -535,8 +538,7 @@ function ConcretePJRTArray{T}(
     theclient, thedevice = _select_client_and_device(client, idx, device, sharding)
     sharded_data, shardinfo = sharding(theclient, thedevice, T, shape)
     N = length(shape)
-    nsharded = length(sharded_data)
-    return ConcretePJRTArray{T,N,nsharded}(sharded_data, shape, shardinfo)
+    return ConcretePJRTArray{T,N}(collect(sharded_data), shape, shardinfo)
 end
 
 function ConcreteIFRTArray{T}(

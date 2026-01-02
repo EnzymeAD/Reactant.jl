@@ -219,20 +219,12 @@ end
                 (Wrapper, Wrapper, Wrapper),
             ]
                 tracedty = traced_type(
-                    origty,
-                    Val(ConcreteToTraced),
-                    Union{},
-                    Sharding.NoSharding(),
-                    Reactant.XLA.runtime(),
+                    origty, Val(ConcreteToTraced), Union{}, Reactant.XLA.runtime()
                 )
                 @test tracedty == targetty
 
                 tracedty2 = traced_type(
-                    origty,
-                    Val(ConcreteToTraced),
-                    ReactantPrimitive,
-                    Sharding.NoSharding(),
-                    Reactant.XLA.runtime(),
+                    origty, Val(ConcreteToTraced), ReactantPrimitive, Reactant.XLA.runtime()
                 )
                 @test tracedty2 == targetty
             end
@@ -244,11 +236,7 @@ end
                 TracedRArray{Float64,3},
             ]
                 @test_throws Union{ErrorException,String} traced_type(
-                    type,
-                    Val(ConcreteToTraced),
-                    Union{},
-                    Sharding.NoSharding(),
-                    Reactant.XLA.runtime(),
+                    type, Val(ConcreteToTraced), Union{}, Reactant.XLA.runtime()
                 )
             end
         end
@@ -258,11 +246,7 @@ end
                 y::Union{Nothing,Node}
             end
             @test_throws NoFieldMatchError traced_type(
-                Node,
-                Val(ArrayToConcrete),
-                Union{},
-                Sharding.NoSharding(),
-                Reactant.XLA.runtime(),
+                Node, Val(ArrayToConcrete), Union{}, Reactant.XLA.runtime()
             )
         end
         @testset "apply_type_with_promotion" begin

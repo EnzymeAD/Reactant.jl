@@ -143,7 +143,12 @@ end
         end
     end
 
-    if field !== :data || typeof(val) == typeof(getfield(obj, field))
+    if (
+        field !== :data || (
+            typeof(val) == typeof(getfield(obj, field)) &&
+            length(val) == length(getfield(obj, field))
+        )
+    )
         return Base.setproperty!(obj, field, val)
     end
 
@@ -154,7 +159,7 @@ end
     devices = Reactant.XLA.device.(val)
     device = Reactant.XLA.device(only(getfield(obj, :data)))
     idx = findfirst(isequal(device), devices)
-    return Base.setproperty!(obj, field, (val[idx],))
+    return Base.setproperty!(obj, field, [val[idx]])
 end
 
 function traced_setfield_buffer!(runtime::Val, cache_dict, concrete_res, obj, field, path)
@@ -273,7 +278,7 @@ function create_result(
 end
 
 function create_result(
-    tocopy::ConcretePJRTNumber{T,D},
+    tocopy::ConcretePJRTNumber{T},
     path,
     result_stores,
     path_to_shard_info,
@@ -284,7 +289,7 @@ function create_result(
     result_cache,
     var_idx,
     resultgen_code,
-) where {T,D}
+) where {T}
     if !haskey(result_cache, tocopy)
         sym = Symbol("result", var_idx[])
         var_idx[] += 1
@@ -298,9 +303,9 @@ function create_result(
             end
             sharding = pop!(path_to_shard_info, path)
             push!(used_shardinfo, sharding)
-            result = :(ConcretePJRTNumber{$T}(($(restore)...,), $sharding))
+            result = :(ConcretePJRTNumber{$T}(collect($(restore)), $sharding))
         else
-            result = :(ConcretePJRTNumber{$T}($restore))
+            result = :(ConcretePJRTNumber{$T}(collect($(restore))))
         end
         push!(
             resultgen_code,
@@ -357,7 +362,7 @@ function create_result(
 end
 
 function create_result(
-    tocopy::ConcretePJRTArray{T,N,D},
+    tocopy::ConcretePJRTArray{T,N},
     path,
     result_stores,
     path_to_shard_info,
@@ -368,7 +373,7 @@ function create_result(
     result_cache,
     var_idx,
     resultgen_code,
-) where {T,N,D}
+) where {T,N}
     if !haskey(result_cache, tocopy)
         sym = Symbol("result", var_idx[])
         var_idx[] += 1
@@ -383,9 +388,9 @@ function create_result(
             sharding = pop!(path_to_shard_info, path)
             push!(used_shardinfo, sharding)
             result =
-                :(ConcretePJRTArray{$T,$N}(($(restore)...,), $(tocopy.shape), $sharding))
+                :(ConcretePJRTArray{$T,$N}(collect($(restore)), $(tocopy.shape), $sharding))
         else
-            result = :(ConcretePJRTArray{$T,$N}($restore, $(tocopy.shape)))
+            result = :(ConcretePJRTArray{$T,$N}(collect($(restore)), $(tocopy.shape)))
         end
         push!(
             resultgen_code,
@@ -3629,7 +3634,7 @@ function __resolve_device_and_client(client, seen_args, linear_args, is_sharded)
         devices_list = []
         for (k, v) in seen_args
             !(v isa TracedRArray || v isa TracedRNumber) && continue
-            buffer = k.data isa Tuple ? only(k.data) : k.data
+            buffer = k.data isa Vector ? only(k.data) : k.data
             push!(devices_list, XLA.device(buffer))
         end
         if !isempty(devices_list)

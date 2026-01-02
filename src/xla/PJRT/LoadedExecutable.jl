@@ -182,9 +182,9 @@ end
     for i in 1:n_outs
         push!(
             results,
-            :((
-                AsyncBuffer(Buffer(outputs[$i]), future ? Future(future_res[$i]) : nothing),
-            )),
+            :([
+                AsyncBuffer(Buffer(outputs[$i]), future ? Future(future_res[$i]) : nothing)
+            ]),
         )
     end
 
@@ -318,12 +318,11 @@ end
     future && (future_res = future_res[])
 
     return ntuple(Val(n_outs)) do j
-        ntuple(Val(K)) do i
-            Base.@_inline_meta
-            idx = (i - 1) * n_outs + j
-            return AsyncBuffer(
-                Buffer(outputs[idx]), future ? Future(future_res[idx]) : nothing
-            )
-        end
+        [
+            AsyncBuffer(
+                Buffer(outputs[(i - 1) * n_outs + j]),
+                future ? Future(future_res[(i - 1) * n_outs + j]) : nothing,
+            ) for i in 1:K
+        ]
     end
 end
