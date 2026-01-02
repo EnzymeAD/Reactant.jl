@@ -2,6 +2,7 @@ using InteractiveUtils: versioninfo
 using PrettyTables: pretty_table
 using Reactant: Reactant
 using JSON3: JSON3
+using PrettyTables: pretty_table
 
 @info sprint(io -> versioninfo(io; verbose=true))
 
