@@ -31,7 +31,7 @@ end
 
 mul(a, b) = a .* b
 
-struct MyFix{N, FT, XT} <: Base.Function
+struct MyFix{N,FT,XT} <: Base.Function
     f::FT
     x::XT
 end
@@ -145,9 +145,9 @@ end
 
                 # Function types
                 (
-                    MyFix{2, typeof(mul), ConcreteRArray{Float64, 1}},
-                    MyFix{2, typeof(mul), TracedRArray{Float64, 1}},
-                    MyFix{2, typeof(mul), TracedRArray{Float64, 1}},
+                    MyFix{2,typeof(mul),ConcreteRArray{Float64,1}},
+                    MyFix{2,typeof(mul),TracedRArray{Float64,1}},
+                    MyFix{2,typeof(mul),TracedRArray{Float64,1}},
                 ),
 
                 # Val types
