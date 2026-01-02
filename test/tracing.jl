@@ -148,7 +148,7 @@ end
                     MyFix{2, typeof(mul), ConcreteRArray{Float64, 1}},
                     MyFix{2, typeof(mul), TracedRArray{Float64, 1}},
                     MyFix{2, typeof(mul), TracedRArray{Float64, 1}},
-                )
+                ),
 
                 # Val types
                 (Val{0}, Val{0}, Val{0}),
