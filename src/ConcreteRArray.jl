@@ -23,7 +23,7 @@ function Base.copy(x::Union{AbstractConcreteArray,AbstractConcreteNumber})
     return fn(x)
 end
 
-function Base.copy(X::ConcreteIFRTArray{T,D,P}) where {T,D,P}
+function Base.copy(X::ConcreteIFRTArray{T,D}) where {T,D}
     return ConcreteIFRTArray{T,D}(Base.copy(X.data), X.shape, X.sharding, X.padding)
 end
 
