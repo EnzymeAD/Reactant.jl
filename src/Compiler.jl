@@ -18,7 +18,7 @@ import ..Reactant:
     TracedRNumber,
     RArray,
     OrderedIdDict,
-    make_tracer,
+    transmute,
     TracedToConcrete,
     append_path,
     ancestor,
@@ -2478,7 +2478,7 @@ function compile_mlir!(
         end
     end
 
-    concrete_result = make_tracer(
+    concrete_result = transmute(
         OrderedIdDict(), traced_result, ("result",), TracedToConcrete; runtime
     )
 

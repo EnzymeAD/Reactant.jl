@@ -136,8 +136,6 @@ function TracedRArray(data::MLIR.IR.Value)
     return TracedRArray{eltype(MLIR.IR.julia_type(MLIR.IR.type(data)))}(data)
 end
 
-promote_traced_type(a::Type, b::Type) = Base.promote_type(a, b)
-
 aos_to_soa(x::AbstractArray) = x
 
 aos_to_soa(x::TracedRArray) = x
@@ -243,7 +241,7 @@ export StackedBatchDuplicated, StackedBatchDuplicatedNoNeed
 const TracedType = Union{TracedRArray,TracedRNumber,MissingTracedValue}
 
 include("ControlFlow.jl")
-include("Tracing.jl")
+include("Transmutation.jl")
 
 include("Compiler.jl")
 

@@ -19,27 +19,27 @@ function Base.show(io::IOty, X::MyGrid) where {IOty<:Union{IO,IOContext}}
     return print(io, ")")
 end
 
-Base.@nospecializeinfer function Reactant.traced_type_inner(
+Base.@nospecializeinfer function Reactant.transmute_type_inner(
     @nospecialize(OA::Type{MyGrid{FT,AT}}),
     seen,
-    mode::Reactant.TraceMode,
+    mode::Reactant.TransmutationMode,
     @nospecialize(track_numbers::Type),
     @nospecialize(sharding),
     @nospecialize(runtime)
 ) where {FT,AT}
-    FT2 = Reactant.traced_type_inner(FT, seen, mode, track_numbers, sharding, runtime)
-    AT2 = Reactant.traced_type_inner(AT, seen, mode, track_numbers, sharding, runtime)
+    FT2 = Reactant.transmute_type_inner(FT, seen, mode, track_numbers, sharding, runtime)
+    AT2 = Reactant.transmute_type_inner(AT, seen, mode, track_numbers, sharding, runtime)
 
     for NF in (AT2,)
-        FT2 = Reactant.promote_traced_type(FT2, eltype(NF))
+        FT2 = Reactant.promote_transmute_type(FT2, eltype(NF))
     end
 
     res = MyGrid{FT2,AT2}
     return res
 end
 
-@inline Reactant.make_tracer(seen, @nospecialize(prev::MyGrid), args...; kwargs...) =
-    Reactant.make_tracer_via_immutable_constructor(seen, prev, args...; kwargs...)
+@inline Reactant.transmute(seen, @nospecialize(prev::MyGrid), args...; kwargs...) =
+    Reactant.transmute_via_immutable_constructor(seen, prev, args...; kwargs...)
 
 struct MyGrid2{FT,AT} <: AbstractVector{FT}
     data::AT
@@ -61,27 +61,27 @@ function Base.show(io::IOty, X::MyGrid2) where {IOty<:Union{IO,IOContext}}
     return print(io, ")")
 end
 
-Base.@nospecializeinfer function Reactant.traced_type_inner(
+Base.@nospecializeinfer function Reactant.transmute_type_inner(
     @nospecialize(OA::Type{MyGrid2{FT,AT}}),
     seen,
-    mode::Reactant.TraceMode,
+    mode::Reactant.TransmutationMode,
     @nospecialize(track_numbers::Type),
     @nospecialize(sharding),
     @nospecialize(runtime)
 ) where {FT,AT}
-    FT2 = Reactant.traced_type_inner(FT, seen, mode, track_numbers, sharding, runtime)
-    AT2 = Reactant.traced_type_inner(AT, seen, mode, track_numbers, sharding, runtime)
+    FT2 = Reactant.transmute_type_inner(FT, seen, mode, track_numbers, sharding, runtime)
+    AT2 = Reactant.transmute_type_inner(AT, seen, mode, track_numbers, sharding, runtime)
 
     for NF in (AT2,)
-        FT2 = Reactant.promote_traced_type(FT2, eltype(NF))
+        FT2 = Reactant.promote_transmute_type(FT2, eltype(NF))
     end
 
     res = MyGrid2{FT2,AT2}
     return res
 end
 
-@inline Reactant.make_tracer(seen, @nospecialize(prev::MyGrid2), args...; kwargs...) =
-    Reactant.make_tracer_via_immutable_constructor(seen, prev, args...; kwargs...)
+@inline Reactant.transmute(seen, @nospecialize(prev::MyGrid2), args...; kwargs...) =
+    Reactant.transmute_via_immutable_constructor(seen, prev, args...; kwargs...)
 
 function update!(g)
     @allowscalar g.data[1] = g.radius

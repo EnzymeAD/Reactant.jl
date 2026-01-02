@@ -204,38 +204,38 @@ Base.@nospecializeinfer function Base.promote_rule(
     end
 end
 
-Base.@nospecializeinfer function Reactant.promote_traced_type(
+Base.@nospecializeinfer function Reactant.promote_transmute_type(
     @nospecialize(a::Type{<:CuTracedRNumber{T,A}}),
     @nospecialize(b::Type{<:CuTracedRNumber{T2,A}})
 ) where {T,T2,A}
-    return CuTracedRNumber{Reactant.promote_traced_type(T, T2),A}
+    return CuTracedRNumber{Reactant.promote_transmute_type(T, T2),A}
 end
-Base.@nospecializeinfer function Reactant.promote_traced_type(
+Base.@nospecializeinfer function Reactant.promote_transmute_type(
     ::Type{Any}, @nospecialize(b::Type{<:CuTracedRNumber})
 )
     return Any
 end
-Base.@nospecializeinfer function Reactant.promote_traced_type(
+Base.@nospecializeinfer function Reactant.promote_transmute_type(
     @nospecialize(a::Type{<:CuTracedRNumber}), ::Type{Any}
 )
     return Any
 end
-Base.@nospecializeinfer function Reactant.promote_traced_type(
+Base.@nospecializeinfer function Reactant.promote_transmute_type(
     @nospecialize(T2::Type), ::Type{<:CuTracedRNumber{T,A}}
 ) where {T,A}
     if T == T2
         return CuTracedRNumber{T,A}
     else
-        return CuTracedRNumber{Reactant.promote_trace_type(T, T2),A}
+        return CuTracedRNumber{Reactant.promote_transmute_type(T, T2),A}
     end
 end
-Base.@nospecializeinfer function Reactant.promote_traced_type(
+Base.@nospecializeinfer function Reactant.promote_transmute_type(
     ::Type{<:CuTracedRNumber{T,A}}, @nospecialize(T2::Type)
 ) where {T,A}
     if T == T2
         return CuTracedRNumber{T,A}
     else
-        return CuTracedRNumber{Reactant.promote_trace_type(T, T2),A}
+        return CuTracedRNumber{Reactant.promote_transmute_type(T, T2),A}
     end
 end
 
@@ -1021,21 +1021,21 @@ function to_bytes(x)
     end
 end
 
-function Reactant.make_tracer(
+function Reactant.transmute(
     seen, @nospecialize(prev::CuTracedArray), @nospecialize(path), mode; kwargs...
 )
     x = Base.unsafe_pointer_to_objref(Base.reinterpret(Ptr{Cvoid}, prev.ptr))
     x = x::TracedRArray
-    Reactant.make_tracer(seen, x, path, mode; kwargs...)
+    Reactant.transmute(seen, x, path, mode; kwargs...)
     return prev
 end
 
-function Reactant.make_tracer(
+function Reactant.transmute(
     seen, @nospecialize(prev::CuTracedRNumber), @nospecialize(path), mode; kwargs...
 )
     x = Base.unsafe_pointer_to_objref(Base.reinterpret(Ptr{Cvoid}, prev.ptr))
     x = x::TracedRNumber
-    Reactant.make_tracer(seen, x, path, mode; kwargs...)
+    Reactant.transmute(seen, x, path, mode; kwargs...)
     return prev
 end
 
@@ -1101,7 +1101,7 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
     kernelargsym = gensym("kernelarg")
 
     for (i, prev) in enumerate(Any[func.f, args...])
-        Reactant.make_tracer(seen, prev, (kernelargsym, i), Reactant.NoStopTracedTrack)
+        Reactant.transmute(seen, prev, (kernelargsym, i), Reactant.NoStopTracedTrack)
     end
     wrapper_tys = MLIR.IR.Type[]
     for arg in values(seen)
@@ -1345,10 +1345,10 @@ Reactant.@reactant_overlay @noinline function CUDA.cufunction(
     return Core.Typeof(res)(f, res.entry)
 end
 
-Base.@nospecializeinfer function Reactant.traced_type_inner(
+Base.@nospecializeinfer function Reactant.transmute_type_inner(
     @nospecialize(A::Type{<:CuTracedArray}),
     seen,
-    @nospecialize(mode::Reactant.TraceMode),
+    @nospecialize(mode::Reactant.TransmutationMode),
     @nospecialize(track_numbers::Type),
     @nospecialize(sharding),
     @nospecialize(runtime)
@@ -1356,10 +1356,10 @@ Base.@nospecializeinfer function Reactant.traced_type_inner(
     return A
 end
 
-Base.@nospecializeinfer function Reactant.traced_type_inner(
+Base.@nospecializeinfer function Reactant.transmute_type_inner(
     @nospecialize(A::Type{<:CuTracedRNumber}),
     seen,
-    @nospecialize(mode::Reactant.TraceMode),
+    @nospecialize(mode::Reactant.TransmutationMode),
     @nospecialize(track_numbers::Type),
     @nospecialize(sharding),
     @nospecialize(runtime)
@@ -1367,10 +1367,10 @@ Base.@nospecializeinfer function Reactant.traced_type_inner(
     return A
 end
 
-Base.@nospecializeinfer function Reactant.traced_type_inner(
+Base.@nospecializeinfer function Reactant.transmute_type_inner(
     @nospecialize(A::Type{<:CUDA.CuArray}),
     seen,
-    mode::Reactant.TraceMode,
+    mode::Reactant.TransmutationMode,
     @nospecialize(track_numbers::Type),
     @nospecialize(sharding),
     @nospecialize(runtime)
@@ -1385,10 +1385,10 @@ Base.@nospecializeinfer function Reactant.traced_type_inner(
         end
         error("Unsupported runtime $runtime")
     else
-        TT = Reactant.traced_type_inner(T, seen, mode, track_numbers, sharding, runtime)
+        TT = Reactant.transmute_type_inner(T, seen, mode, track_numbers, sharding, runtime)
         TT === T && return A
         return Array{
-            Reactant.traced_type_inner(
+            Reactant.transmute_type_inner(
                 T, seen, mode, track_numbers, Base.getproperty(sharding, 1), runtime
             ),
             N,
@@ -1396,7 +1396,7 @@ Base.@nospecializeinfer function Reactant.traced_type_inner(
     end
 end
 
-function Reactant.make_tracer(
+function Reactant.transmute(
     seen,
     @nospecialize(prev::CUDA.CuArray),
     @nospecialize(path),
@@ -1420,7 +1420,7 @@ function Reactant.make_tracer(
         end
         error("Unsupported runtime $runtime")
     end
-    TT = Reactant.traced_type(eltype(RT), Val(mode), track_numbers, sharding, runtime)
+    TT = Reactant.transmute_type(eltype(RT), Val(mode), track_numbers, sharding, runtime)
     if TT === eltype(RT)
         return prev
     end
@@ -1430,7 +1430,7 @@ function Reactant.make_tracer(
     for I in eachindex(prev)
         if isassigned(prev, I)
             pv = prev[I]
-            nv = Reactant.make_tracer(
+            nv = Reactant.transmute(
                 seen,
                 pv,
                 append_path(path, I),

@@ -31,14 +31,14 @@ function MPI.Wait(req::TracedRequest)
     return Ops.wait(req)
 end
 
-# TODO use `make_tracer` to linearize arbitrary types? check out `MPI.Buffer`
+# TODO use `transmute` to linearize arbitrary types? check out `MPI.Buffer`
 function MPI.Send(buf::TracedRArray, dest::Integer, tag::Integer, comm::MPI.Comm)
     tag = Reactant.Ops.constant(tag)
     dest = Reactant.Ops.constant(dest)
     return MPI.Send(buf, dest, tag, comm)
 end
 
-# TODO use `make_tracer` to linearize arbitrary types? check out `MPI.Buffer`
+# TODO use `transmute` to linearize arbitrary types? check out `MPI.Buffer`
 function MPI.Send(
     buf::TracedRArray, dest::TracedRNumber, tag::TracedRNumber, comm::MPI.Comm
 )
@@ -62,7 +62,7 @@ function MPI.Isend(
     return request
 end
 
-# TODO use `make_tracer` to linearize arbitrary types? check out `MPI.Buffer`
+# TODO use `transmute` to linearize arbitrary types? check out `MPI.Buffer`
 function MPI.Isend(
     buf::TracedRArray, dest::TracedRNumber, tag::TracedRNumber, comm::MPI.Comm
 )
@@ -94,7 +94,7 @@ end
 #     return MPI.Recv!(buf, source, tag, comm)
 # end
 
-# TODO use `make_tracer` to delinearize arbitrary types? check out `MPI.Buffer`
+# TODO use `transmute` to delinearize arbitrary types? check out `MPI.Buffer`
 function MPI.Recv!(
     buf::TracedRArray, source::TracedRNumber, tag::TracedRNumber, comm::MPI.Comm
 )
@@ -117,7 +117,7 @@ function MPI.Irecv!(
     return request
 end
 
-# TODO use `make_tracer` to delinearize arbitrary types? check out `MPI.Buffer`
+# TODO use `transmute` to delinearize arbitrary types? check out `MPI.Buffer`
 function MPI.Irecv!(
     buf::TracedRArray, source::TracedRNumber, tag::TracedRNumber, comm::MPI.Comm
 )

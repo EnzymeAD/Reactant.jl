@@ -50,9 +50,11 @@ OptimizeCommunicationOptions
 ShardyPropagationOptions
 ```
 
-## Tracing customization
+## Transmutation
 
 ```@docs
+Reactant.transmute
+Reactant.transmute_type
 Reactant.@skip_rewrite_func
 Reactant.@skip_rewrite_type
 ```

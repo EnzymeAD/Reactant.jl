@@ -20,15 +20,15 @@ mutable struct MutableMockTensor{T,N,A<:AbstractArray{T,N}} <: AbstractArray{T,N
     inds::Vector{Symbol}
 end
 
-Base.@nospecializeinfer function Reactant.traced_type_inner(
+Base.@nospecializeinfer function Reactant.transmute_type_inner(
     @nospecialize(A::Type{<:MockTensor}),
     seen,
-    mode::Reactant.TraceMode,
+    mode::Reactant.TransmutationMode,
     @nospecialize(track_numbers::Type),
     @nospecialize(sharding),
     @nospecialize(runtime)
 )
-    T2 = Reactant.traced_type_inner(
+    T2 = Reactant.transmute_type_inner(
         A.parameters[3], seen, mode, track_numbers, sharding, runtime
     )
     MT = MockTensor{eltype(T2),ndims(A),T2}
