@@ -1386,7 +1386,7 @@ function Reactant.make_tracer(
         end
         error("Unsupported runtime $runtime")
     end
-    TT = Reactant.traced_type(eltype(RT), Val(mode), track_numbers, sharding, runtime)
+    TT = Reactant.traced_type(eltype(RT), Val(mode), track_numbers, runtime)
     if TT === eltype(RT)
         return prev
     end
