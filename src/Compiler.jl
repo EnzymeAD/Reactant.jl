@@ -143,7 +143,12 @@ end
         end
     end
 
-    if field !== :data || typeof(val) == typeof(getfield(obj, field))
+    if (
+        field !== :data || (
+            typeof(val) == typeof(getfield(obj, field)) &&
+            length(val) == length(getfield(obj, field))
+        )
+    )
         return Base.setproperty!(obj, field, val)
     end
 
