@@ -820,6 +820,7 @@ function optimization_passes(
         "if_remove_unused",
         "transpose_reshape_to_broadcast",
         "reshape_transpose_to_broadcast",
+        "reshape_broadcast",
         "dus_dus",
         "dus_dus_concat",
         "abs_positive_simplify",
@@ -923,6 +924,7 @@ function optimization_passes(
         "reduce_delete_dims",
         "dot_general_insert_dim_contraction_simplification",
         "fuse_reshape_collapse_or_expand_dims_into_reduce",
+        "split_reduce_add_mul_to_add_dot_general",
     ]
 
     if !is_sharded
