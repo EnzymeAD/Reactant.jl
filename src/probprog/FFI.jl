@@ -1,5 +1,28 @@
 using ..Reactant: MLIR, Profiler
 
+
+function from_row_major(ptr::Ptr{T}, shape::NTuple{N,<:Integer}) where {T,N}
+    if N <= 1
+        return copy(unsafe_wrap(Array, ptr, shape))
+    end
+    reversed_shape = reverse(shape)
+    transposed = unsafe_wrap(Array, ptr, reversed_shape)
+    return permutedims(transposed, N:-1:1)
+end
+
+function to_row_major!(ptr::Ptr{T}, src::AbstractArray{T,N}, shape::NTuple{N,<:Integer}) where {T,N}
+    if N <= 1
+        dest = unsafe_wrap(Array, ptr, shape)
+        copyto!(dest, src)
+    else
+        reversed_shape = reverse(shape)
+        dest = unsafe_wrap(Array, ptr, reversed_shape)
+        src_permuted = permutedims(src, N:-1:1)
+        copyto!(dest, src_permuted)
+    end
+    return nothing
+end
+
 function initTrace(trace_ptr_ptr::Ptr{Ptr{Any}})
     activity_id = @ccall MLIR.API.mlir_c.ProfilerActivityStart(
         "ProbProg.initTrace"::Cstring, Profiler.TRACE_ME_LEVEL_CRITICAL::Cint
@@ -70,8 +93,8 @@ function addSampleToTrace(
         if ndims == 0
             push!(vals, unsafe_load(Ptr{julia_type}(sample_ptr)))
         else
-            shape = unsafe_wrap(Array, shape_ptr, ndims)
-            push!(vals, copy(unsafe_wrap(Array, Ptr{julia_type}(sample_ptr), Tuple(shape))))
+            shape = Tuple(unsafe_wrap(Array, shape_ptr, ndims))
+            push!(vals, from_row_major(Ptr{julia_type}(sample_ptr), shape))
         end
     end
 
@@ -189,8 +212,8 @@ function addRetvalToTrace(
         if ndims == 0
             push!(vals, unsafe_load(Ptr{julia_type}(retval_ptr)))
         else
-            shape = unsafe_wrap(Array, shape_ptr, ndims)
-            push!(vals, copy(unsafe_wrap(Array, Ptr{julia_type}(retval_ptr), Tuple(shape))))
+            shape = Tuple(unsafe_wrap(Array, shape_ptr, ndims))
+            push!(vals, from_row_major(Ptr{julia_type}(retval_ptr), shape))
         end
     end
 
@@ -268,23 +291,19 @@ function getSampleFromConstraint(
         if ndims == 0
             unsafe_store!(Ptr{julia_type}(sample_ptr), tostore[i])
         else
-            shape = unsafe_wrap(Array, shape_ptr, ndims)
-            dest = unsafe_wrap(Array, Ptr{julia_type}(sample_ptr), Tuple(shape))
+            shape = Tuple(unsafe_wrap(Array, shape_ptr, ndims))
 
-            dest_size = size(dest)
-            src_size = size(tostore[i])
-
-            if dest_size != src_size
+            if shape != size(tostore[i])
                 @ccall printf(
-                    "Shape mismatch in constrained sample: expected %zd dims, got %zd\n"::Cstring,
-                    length(dest_size)::Csize_t,
-                    length(src_size)::Csize_t,
+                    "Shape mismatch in constrained sample: expected %s, got %s\n"::Cstring,
+                    string(shape)::Cstring,
+                    string(size(tostore[i]))::Cstring,
                 )::Cvoid
                 @ccall MLIR.API.mlir_c.ProfilerActivityEnd(activity_id::Int64)::Cvoid
                 return nothing
             end
 
-            copyto!(dest, tostore[i])
+            to_row_major!(Ptr{julia_type}(sample_ptr), tostore[i], shape)
         end
     end
 
@@ -406,23 +425,19 @@ function getSampleFromTrace(
         if ndims == 0
             unsafe_store!(Ptr{julia_type}(sample_ptr), tostore[i])
         else
-            shape = unsafe_wrap(Array, shape_ptr, ndims)
-            dest = unsafe_wrap(Array, Ptr{julia_type}(sample_ptr), Tuple(shape))
+            shape = Tuple(unsafe_wrap(Array, shape_ptr, ndims))
 
-            dest_size = size(dest)
-            src_size = size(tostore[i])
-
-            if dest_size != src_size
+            if shape != size(tostore[i])
                 @ccall printf(
-                    "Shape mismatch in trace sample: expected %zd dims, got %zd\n"::Cstring,
-                    length(dest_size)::Csize_t,
-                    length(src_size)::Csize_t,
+                    "Shape mismatch in trace sample: expected %s, got %s\n"::Cstring,
+                    string(shape)::Cstring,
+                    string(size(tostore[i]))::Cstring,
                 )::Cvoid
                 @ccall MLIR.API.mlir_c.ProfilerActivityEnd(activity_id::Int64)::Cvoid
                 return nothing
             end
 
-            copyto!(dest, tostore[i])
+            to_row_major!(Ptr{julia_type}(sample_ptr), tostore[i], shape)
         end
     end
 
@@ -657,10 +672,10 @@ function dump(
         value = unsafe_load(Ptr{julia_type}(value_ptr))
         println("  Scalar ($julia_type): $value")
     else
-        shape = unsafe_wrap(Array, shape_ptr, ndims)
-        value_array = unsafe_wrap(Array, Ptr{julia_type}(value_ptr), Tuple(shape))
+        shape = Tuple(unsafe_wrap(Array, shape_ptr, ndims))
+        value_array = from_row_major(Ptr{julia_type}(value_ptr), shape)
 
-        println("  Shape: $(Tuple(shape))")
+        println("  Shape: $shape")
         println("  Type: Array{$julia_type}")
         println("  Values:")
 
