@@ -1,4 +1,5 @@
 using Base: ReentrantLock
+using OrderedCollections: OrderedSet
 using ..Reactant: AbstractConcreteNumber, AbstractConcreteArray
 
 mutable struct ProbProgTrace
@@ -65,7 +66,7 @@ Base.get(c::Constraint, k::Address, default) = get(c.dict, k, default)
 
 extract_addresses(constraint::Constraint) = Set(keys(constraint))
 
-const Selection = Set{Address}
+const Selection = OrderedSet{Address}
 
 const _probprog_ref_lock = ReentrantLock()
 const _probprog_refs = IdDict()
@@ -81,4 +82,4 @@ function _keepalive!(tr::Any)
 end
 
 get_choices(trace::ProbProgTrace) = trace.choices
-select(addrs::Address...) = Set{Address}([addrs...])
+select(addrs::Address...) = OrderedSet{Address}([addrs...])
