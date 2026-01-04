@@ -12,6 +12,8 @@ function mcmc(
     num_steps::Int=10,
     max_tree_depth::Int=10,
     max_delta_energy::Float64=1000.0,
+    num_samples::Int=1,
+    thinning::Int=1,
 ) where {Nargs}
     args = (rng, args...)
     (; f_name, mlir_caller_args, mlir_result_types, traced_result, linear_results, fnwrapped, argprefix, resprefix) = process_probprog_function(
@@ -48,7 +50,13 @@ function mcmc(
     trace_ty = @ccall MLIR.API.mlir_c.enzymeTraceTypeGet(
         MLIR.IR.context()::MLIR.API.MlirContext
     )::MLIR.IR.Type
-    accepted_ty = MLIR.IR.TensorType(Int64[], MLIR.IR.Type(Bool))
+
+    collection_size = num_samples ÷ thinning
+    accepted_ty = if collection_size == 1
+        MLIR.IR.TensorType(Int64[], MLIR.IR.Type(Bool))
+    else
+        MLIR.IR.TensorType([Int64(collection_size)], MLIR.IR.Type(Bool))
+    end
 
     hmc_config_attr = nothing
     nuts_config_attr = nothing
@@ -89,6 +97,8 @@ function mcmc(
         selection=MLIR.IR.Attribute(selection_attr),
         hmc_config=hmc_config_attr,
         nuts_config=nuts_config_attr,
+        num_samples=Int64(num_samples),
+        thinning=Int64(thinning),
     )
 
     # (new_trace, accepted, output_rng_state)
@@ -114,7 +124,11 @@ function mcmc(
     )
 
     new_trace = TracedRArray{UInt64,0}((), new_trace_ptr, ())
-    accepted = TracedRArray{Bool,0}((), MLIR.IR.result(mcmc_op, 2), ())
+    accepted = if collection_size == 1
+        TracedRArray{Bool,0}((), MLIR.IR.result(mcmc_op, 2), ())
+    else
+        TracedRArray{Bool,1}((), MLIR.IR.result(mcmc_op, 2), (collection_size,))
+    end
 
     return new_trace, accepted, traced_result
 end
