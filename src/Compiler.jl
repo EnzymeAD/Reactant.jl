@@ -1265,6 +1265,7 @@ function optimization_passes(
                 "transpose_if",
                 "transpose_fft",
                 "transpose_reshape",
+                "transpose_scatter",
             ],
         )
         if AGGRESSIVE_PROPAGATION[]
