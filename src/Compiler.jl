@@ -831,6 +831,7 @@ function optimization_passes(
         "slice_reduce_window<1>",
         "while_deadresult",
         "while_dus",
+        "while_updatewithoutcorners",
         "while_op_induction_replacement",
         "dus_concat",
         "slice_dus_to_concat",
@@ -841,10 +842,11 @@ function optimization_passes(
         "slice_if",
         "dus_to_i32",
         "slice_extend",
+        "slice_of_updatewithoutcorners",
         "concat_wrap",
+        "cse_updatewithoutcorners<16>",
         "cse_extend<16>",
         "cse_wrap<16>",
-        "cse_rotate<16>",
         "cse_rotate<16>",
         "concat_concat_axis_swap",
         "concat_concat_to_dus",
@@ -1328,12 +1330,20 @@ function optimization_passes(
     if recognize_comms
         append!(
             transform_passes_list,
-            ["recognize_extend", "recognize_wrap", "recognize_rotate"],
+            [
+                "recognize_extend",
+                "recognize_wrap",
+                "recognize_rotate",
+                "recognize_updatewithoutcorners",
+            ],
         )
     end
 
     if lower_comms
-        append!(lower_transform_passes, ["lower_extend", "lower_wrap", "lower_rotate"])
+        append!(
+            lower_transform_passes,
+            ["lower_extend", "lower_wrap", "lower_rotate", "lower_updatewithoutcorners"],
+        )
     end
 
     transform_passes = join(
@@ -1617,7 +1627,7 @@ end
 function get_optimize_comms_passes(options::Bool)
     if !options
         return [
-            "enzyme-hlo-generate-td{patterns=lower_rotate;lower_wrap;lower_extend}",
+            "enzyme-hlo-generate-td{patterns=lower_rotate;lower_wrap;lower_extend;lower_updatewithoutcorners}",
             "transform-interpreter",
             "enzyme-hlo-remove-transform",
         ]
@@ -1635,7 +1645,7 @@ function get_optimize_comms_passes(options::OptimizeCommunicationOptions)
         "transform-interpreter",
         "enzyme-hlo-remove-transform",
         options_str,
-        "enzyme-hlo-generate-td{patterns=lower_rotate;lower_wrap;lower_extend}",
+        "enzyme-hlo-generate-td{patterns=lower_rotate;lower_wrap;lower_extend;lower_updatewithoutcorners}",
         "transform-interpreter",
         "enzyme-hlo-remove-transform",
         options_str,
