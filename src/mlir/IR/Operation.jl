@@ -5,7 +5,8 @@ mutable struct Operation
     function Operation(operation, owned=true)
         @assert !mlirIsNull(operation) "cannot create Operation with null MlirOperation"
         finalizer(new(operation, owned)) do op
-            if op.owned
+            if op.owned && !mlirIsNull(op.operation)
+                @atomic op.owned = false
                 API.mlirOperationDestroy(op.operation)
             end
         end
