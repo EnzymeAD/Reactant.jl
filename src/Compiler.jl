@@ -1328,7 +1328,7 @@ function optimization_passes(
     if recognize_comms
         append!(
             transform_passes_list,
-            ["recognize_extend", "recognize_wrap", "recognize_rotate"],
+            ["recognize_extend", "recognize_wrap", "recognize_rotate", "recognize_updatewithoutcorners"],
         )
     end
 
