@@ -1335,7 +1335,7 @@ function optimization_passes(
     end
 
     if lower_comms
-        append!(lower_transform_passes, ["lower_extend", "lower_wrap", "lower_rotate"])
+        append!(lower_transform_passes, ["lower_extend", "lower_wrap", "lower_rotate", "lower_updatewithoutcorners"])
     end
 
     transform_passes = join(
@@ -1619,7 +1619,7 @@ end
 function get_optimize_comms_passes(options::Bool)
     if !options
         return [
-            "enzyme-hlo-generate-td{patterns=lower_rotate;lower_wrap;lower_extend}",
+            "enzyme-hlo-generate-td{patterns=lower_rotate;lower_wrap;lower_extend;lower_updatewithoutcorners}",
             "transform-interpreter",
             "enzyme-hlo-remove-transform",
         ]
@@ -1637,7 +1637,7 @@ function get_optimize_comms_passes(options::OptimizeCommunicationOptions)
         "transform-interpreter",
         "enzyme-hlo-remove-transform",
         options_str,
-        "enzyme-hlo-generate-td{patterns=lower_rotate;lower_wrap;lower_extend}",
+        "enzyme-hlo-generate-td{patterns=lower_rotate;lower_wrap;lower_extend;lower_updatewithoutcorners}",
         "transform-interpreter",
         "enzyme-hlo-remove-transform",
         options_str,
