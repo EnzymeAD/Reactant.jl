@@ -1,21 +1,18 @@
-using ScopedValues
-
 mutable struct Context
     context::API.MlirContext
-    owned::Bool
+    @atomic owned::Bool
 
     """
         Context(context::API.MlirContext)
 
     Wraps a given MlirContext in a Context struct and transfers ownership to the caller.
     """
-    function Context(context::API.MlirContext; owned::Bool=true)
+    function Context(context; owned=true)
         @assert !mlirIsNull(context) "cannot create Context with null MlirContext"
-        obj = new(context, owned)
-        return finalizer(obj) do ctx
-            if ctx.owned
-                API.mlirContextDestroy(ctx.context)
-                ctx.context = API.MlirContext(C_NULL)
+        return finalizer(new(context, owned)) do obj
+            if obj.owned && !mlirIsNull(obj.context)
+                @atomic obj.owned = false
+                API.mlirContextDestroy(obj.context)
             end
         end
     end
@@ -48,24 +45,48 @@ end
 
 Base.convert(::Core.Type{API.MlirContext}, c::Context) = c.context
 
-const scoped_context = ScopedValue{Union{Nothing,Context}}(nothing)
+# Global state
 
-has_active_context() = !isnothing(scoped_context[])
+# to simplify the API, we maintain a stack of contexts in task local storage
+# and pass them implicitly to MLIR API's that require them.
+function activate!(ctx::Context)
+    stack = get!(task_local_storage(), :mlir_context_stack) do
+        return Context[]
+    end
+    Base.push!(stack, ctx)
+    return nothing
+end
 
-"""
-    context(; throw_error::Bool=true)
+function deactivate!(ctx::Context)
+    context() == ctx || error("Deactivating wrong context")
+    return Base.pop!(task_local_storage(:mlir_context_stack))
+end
 
-Returns the currently active MLIR context.
-If no context is active and `throw_error` is true, an error is thrown.
-"""
-function context(; throw_error::Bool=true)
-    ctx = scoped_context[]
+function dispose!(ctx::Context)
+    deactivate!(ctx)
+    return API.mlirContextDestroy(ctx.context)
+end
 
-    if isnothing(ctx)
+function has_active_context()
+    return haskey(task_local_storage(), :mlir_context_stack) &&
+           !Base.isempty(task_local_storage(:mlir_context_stack))
+end
+const _has_context = has_active_context
+
+function context(; throw_error::Core.Bool=true)
+    if !_has_context()
         throw_error && error("No MLIR context is active")
     end
+    return last(task_local_storage(:mlir_context_stack))
+end
 
-    return ctx::Context
+function context!(f, ctx::Context)
+    activate!(ctx)
+    try
+        f()
+    finally
+        deactivate!(ctx)
+    end
 end
 
 """
@@ -73,7 +94,14 @@ end
 
 Executes function `f` with the given MLIR context `ctx` activated.
 """
-with_context(f, ctx::Context) = with(f, scoped_context => ctx)
+function with_context(f, ctx::Context)
+    activate!(ctx)
+    try
+        f()
+    finally
+        deactivate!(ctx)
+    end
+end
 
 """
     with_context(f; allow_use_existing=false)
@@ -83,7 +111,7 @@ context, that context is used. Otherwise, a new context is created for the durat
 """
 function with_context(f; allow_use_existing=false)
     delete_context = false
-    if allow_use_existing && has_active_context()
+    if allow_use_existing && _has_context()
         ctx = context()
     else
         delete_context = true
