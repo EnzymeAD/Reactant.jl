@@ -80,15 +80,6 @@ function context(; throw_error::Core.Bool=true)
     return last(task_local_storage(:mlir_context_stack))
 end
 
-function context!(f, ctx::Context)
-    activate!(ctx)
-    try
-        f()
-    finally
-        deactivate!(ctx)
-    end
-end
-
 """
     with_context(f, ctx::Context)
 
