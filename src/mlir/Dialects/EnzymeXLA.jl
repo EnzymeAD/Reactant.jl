@@ -1517,6 +1517,44 @@ function typeAlign(; result::IR.Type, source, location=Location())
     )
 end
 
+function update_without_corners(
+    operand::Value,
+    update::Value;
+    result=nothing::Union{Nothing,IR.Type},
+    dimensionX,
+    x1,
+    x2,
+    dimensionY,
+    y1,
+    y2,
+    location=Location(),
+)
+    op_ty_results = IR.Type[]
+    operands = Value[operand, update]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[
+        namedattribute("dimensionX", dimensionX),
+        namedattribute("x1", x1),
+        namedattribute("x2", x2),
+        namedattribute("dimensionY", dimensionY),
+        namedattribute("y1", y1),
+        namedattribute("y2", y2),
+    ]
+    !isnothing(result) && push!(op_ty_results, result)
+
+    return create_operation(
+        "enzymexla.update_without_corners",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
+    )
+end
+
 function wrap(
     operand::Value;
     result=nothing::Union{Nothing,IR.Type},
