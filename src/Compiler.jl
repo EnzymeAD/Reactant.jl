@@ -3746,6 +3746,9 @@ function compile_xla(
             hlo_modules = length(hlo_modules) == 1 ? only(hlo_modules) : hlo_modules
         end
 
+        # just trying if finalizing `mod` solves #2048
+        finalize(mod)
+
         return mod, exec, hlo_modules, mlir_fn_res, device, client, module_string
     end
 
