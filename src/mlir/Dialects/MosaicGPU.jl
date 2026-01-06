@@ -105,7 +105,7 @@ function async_load(
     !isnothing(predicate) && push!(operands, predicate)
     push!(
         attributes,
-        operandsegmentsizes([1, 1, 1, length(indices), (predicate == nothing) ? 0 : 1]),
+        operandsegmentsizes([1, 1, 1, length(indices), Int(!isnothing(predicate))]),
     )
 
     return create_operation(
@@ -177,10 +177,7 @@ function async_prefetch(
         namedattribute("collective", collective),
     ]
     !isnothing(predicate) && push!(operands, predicate)
-    push!(
-        attributes,
-        operandsegmentsizes([1, length(indices), (predicate == nothing) ? 0 : 1]),
-    )
+    push!(attributes, operandsegmentsizes([1, length(indices), Int(!isnothing(predicate))]))
 
     return create_operation(
         "mosaic_gpu.async_prefetch",
@@ -237,8 +234,7 @@ function async_store(
     attributes = NamedAttribute[namedattribute("slice_lengths", slice_lengths),]
     !isnothing(predicate) && push!(operands, predicate)
     push!(
-        attributes,
-        operandsegmentsizes([1, 1, length(indices), (predicate == nothing) ? 0 : 1]),
+        attributes, operandsegmentsizes([1, 1, length(indices), Int(!isnothing(predicate))])
     )
     !isnothing(commit_group) &&
         push!(attributes, namedattribute("commit_group", commit_group))
@@ -619,7 +615,7 @@ function tcgen05_mma(
     push!(
         attributes,
         operandsegmentsizes([
-            1, 1, 1, 1, (a_scale == nothing) ? 0 : 1, (b_scale == nothing) ? 0 : 1
+            1, 1, 1, 1, Int(!isnothing(a_scale)), Int(!isnothing(b_scale))
         ]),
     )
     !isnothing(collective) && push!(attributes, namedattribute("collective", collective))

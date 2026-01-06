@@ -125,9 +125,9 @@ function barrier(
     push!(
         attributes,
         operandsegmentsizes([
-            (barrierId == nothing) ? 0 : 1,
-            (numberOfThreads == nothing) ? 0 : 1,
-            (reductionPredicate == nothing) ? 0 : 1,
+            Int(!isnothing(barrierId)),
+            Int(!isnothing(numberOfThreads)),
+            Int(!isnothing(reductionPredicate)),
         ]),
     )
     !isnothing(res) && push!(op_ty_results, res)
@@ -1441,7 +1441,7 @@ function cp_async_bulk_shared_cluster_global(
     push!(
         attributes,
         operandsegmentsizes([
-            1, 1, 1, 1, (multicastMask == nothing) ? 0 : 1, (l2CacheHint == nothing) ? 0 : 1
+            1, 1, 1, 1, Int(!isnothing(multicastMask)), Int(!isnothing(l2CacheHint))
         ]),
     )
 
@@ -1552,7 +1552,7 @@ function cp_async_bulk_global_shared_cta(
     push!(
         attributes,
         operandsegmentsizes([
-            1, 1, 1, (l2CacheHint == nothing) ? 0 : 1, (byteMask == nothing) ? 0 : 1
+            1, 1, 1, Int(!isnothing(l2CacheHint)), Int(!isnothing(byteMask))
         ]),
     )
 
@@ -1649,9 +1649,9 @@ function cp_async_bulk_tensor_shared_cluster_global(
             length(coordinates),
             1,
             length(im2colOffsets),
-            (multicastMask == nothing) ? 0 : 1,
-            (l2CacheHint == nothing) ? 0 : 1,
-            (predicate == nothing) ? 0 : 1,
+            Int(!isnothing(multicastMask)),
+            Int(!isnothing(l2CacheHint)),
+            Int(!isnothing(predicate)),
         ]),
     )
     !isnothing(mode) && push!(attributes, namedattribute("mode", mode))
@@ -1699,7 +1699,7 @@ function cp_async_bulk_tensor_prefetch(
     push!(
         attributes,
         operandsegmentsizes([
-            1, length(coordinates), length(im2colOffsets), (l2CacheHint == nothing) ? 0 : 1
+            1, length(coordinates), length(im2colOffsets), Int(!isnothing(l2CacheHint))
         ]),
     )
     !isnothing(mode) && push!(attributes, namedattribute("mode", mode))
@@ -1749,7 +1749,7 @@ function cp_async_bulk_tensor_reduce(
     !isnothing(l2CacheHint) && push!(operands, l2CacheHint)
     push!(
         attributes,
-        operandsegmentsizes([1, 1, length(coordinates), (l2CacheHint == nothing) ? 0 : 1]),
+        operandsegmentsizes([1, 1, length(coordinates), Int(!isnothing(l2CacheHint))]),
     )
     !isnothing(mode) && push!(attributes, namedattribute("mode", mode))
 
@@ -1799,8 +1799,8 @@ function cp_async_bulk_tensor_global_shared_cta(
             1,
             1,
             length(coordinates),
-            (l2CacheHint == nothing) ? 0 : 1,
-            (predicate == nothing) ? 0 : 1,
+            Int(!isnothing(l2CacheHint)),
+            Int(!isnothing(predicate)),
         ]),
     )
     !isnothing(mode) && push!(attributes, namedattribute("mode", mode))
@@ -3130,7 +3130,7 @@ function inline_ptx(
     push!(
         attributes,
         operandsegmentsizes([
-            length(readOnlyArgs), length(readWriteArgs), (predicate == nothing) ? 0 : 1
+            length(readOnlyArgs), length(readWriteArgs), Int(!isnothing(predicate))
         ]),
     )
 
@@ -5096,13 +5096,7 @@ function tcgen05_mma(
     push!(
         attributes,
         operandsegmentsizes([
-            1,
-            1,
-            1,
-            1,
-            1,
-            (scaleInputD == nothing) ? 0 : 1,
-            (disableOutputLane == nothing) ? 0 : 1,
+            1, 1, 1, 1, 1, Int(!isnothing(scaleInputD)), Int(!isnothing(disableOutputLane))
         ]),
     )
     !isnothing(collectorOp) && push!(attributes, namedattribute("collectorOp", collectorOp))
@@ -5241,8 +5235,8 @@ function tcgen05_mma_sp(
             1,
             1,
             1,
-            (scaleInputD == nothing) ? 0 : 1,
-            (disableOutputLane == nothing) ? 0 : 1,
+            Int(!isnothing(scaleInputD)),
+            Int(!isnothing(disableOutputLane)),
         ]),
     )
     !isnothing(collectorOp) && push!(attributes, namedattribute("collectorOp", collectorOp))

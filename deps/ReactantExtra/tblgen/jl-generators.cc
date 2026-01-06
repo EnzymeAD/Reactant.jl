@@ -293,7 +293,7 @@ end
           operandname = "operand_" + std::to_string(i);
         }
         if (named_operand.isOptional()) {
-          operandsegmentsizes += "(" + operandname + "==nothing) ? 0 : 1, ";
+          operandsegmentsizes += "Int(!isnothing(" + operandname + ")), ";
           continue;
         }
         operandsegmentsizes += named_operand.isVariadic()

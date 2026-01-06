@@ -890,10 +890,10 @@ function mcmc(
         operandsegmentsizes([
             length(inputs),
             1,
-            (mass == nothing) ? 0 : 1,
-            (step_size == nothing) ? 0 : 1,
-            (num_steps == nothing) ? 0 : 1,
-            (initial_momentum == nothing) ? 0 : 1,
+            Int(!isnothing(mass)),
+            Int(!isnothing(step_size)),
+            Int(!isnothing(num_steps)),
+            Int(!isnothing(initial_momentum)),
         ]),
     )
     !isnothing(name) && push!(attributes, namedattribute("name", name))
