@@ -820,4 +820,33 @@ function LinearAlgebra.ldiv!(b::Number, A::AnyTracedRArray)
     return A
 end
 
+# uniform scaling
+function Base.:+(
+    A::AnyTracedRMatrix{T1}, B::LinearAlgebra.UniformScaling{T2}
+) where {T1,T2<:Number}
+    m = LinearAlgebra.checksquare(A)
+    return A + diagm(@opcall(fill(B.λ * oneunit(promote_type(T1, T2)), m)))
+end
+
+function Base.:+(
+    A::LinearAlgebra.UniformScaling{T1}, B::AnyTracedRMatrix{T2}
+) where {T1<:Number,T2}
+    m = LinearAlgebra.checksquare(B)
+    return diagm(@opcall(fill(A.λ * oneunit(promote_type(T1, T2)), m))) + B
+end
+
+function Base.:-(
+    A::AnyTracedRMatrix{T1}, B::LinearAlgebra.UniformScaling{T2}
+) where {T1,T2<:Number}
+    m = LinearAlgebra.checksquare(A)
+    return A - diagm(@opcall(fill(B.λ * oneunit(promote_type(T1, T2)), m)))
+end
+
+function Base.:-(
+    A::LinearAlgebra.UniformScaling{T1}, B::AnyTracedRMatrix{T2}
+) where {T1<:Number,T2}
+    m = LinearAlgebra.checksquare(B)
+    return diagm(@opcall(fill(A.λ * oneunit(promote_type(T1, T2)), m))) - B
+end
+
 end
