@@ -945,9 +945,9 @@ function kernel_call(
             1,
             1,
             1,
-            (clusterx == nothing) ? 0 : 1,
-            (clustery == nothing) ? 0 : 1,
-            (clusterz == nothing) ? 0 : 1,
+            Int(!isnothing(clusterx)),
+            Int(!isnothing(clustery)),
+            Int(!isnothing(clusterz)),
             length(inputs),
         ]),
     )
