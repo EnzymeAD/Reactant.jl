@@ -3774,7 +3774,7 @@ function compile_xla(
             hlo_modules = length(hlo_modules) == 1 ? only(hlo_modules) : hlo_modules
         end
 
-        # just trying if finalizing `mod` solves #2048
+        # TODO just trying if finalizing `mod` solves #2048...
         finalize(mod)
 
         return mod, exec, hlo_modules, mlir_fn_res, device, client, module_string
@@ -3791,11 +3791,21 @@ const __thunk_rev_body_cache = Dict{Expr,Symbol}()
 function compile(f, args; kwargs...)
     compile_options, kwargs = __get_compile_options_and_kwargs(; kwargs...)
 
-    _, exec, _, mlir_fn_res, device, client, str = compile_xla(
+    mod, exec, _, mlir_fn_res, device, client, str = compile_xla(
         f, args; compile_options, kwargs...
     )
-    (; linear_args, seen_args, linear_results, preserved_args, concrete_result) =
-        mlir_fn_res
+
+    # TODO just trying if finalizing `mod` solves #2048...
+    finalize(mod)
+
+    (;
+        linear_args,
+        seen_args,
+        linear_results,
+        preserved_args,
+        concrete_result,
+        donated_args_mask,
+    ) = mlir_fn_res
 
     result_stores = Dict{Tuple,Symbol}()
     path_to_shard_info = mlir_fn_res.is_sharded ? Dict{Tuple,Symbol}() : nothing
