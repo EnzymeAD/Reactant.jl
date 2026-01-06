@@ -31,7 +31,7 @@ end
     location=mlir_stacktrace("mpi.comm_size", @__FILE__, @__LINE__)
 )
     size = Reactant.Ops.constant(Int32(-1))
-    ret = enzymexla.comm_size(size.mlir_data; outsize=mlir_type(size), location)
+    ret = enzymexla.mpi_comm_size(size.mlir_data; outsize=mlir_type(size), location)
     size.mlir_data = IR.result(ret)
     return size
 end
@@ -53,7 +53,7 @@ end
 
     count = Reactant.Ops.constant(Int32(length(buf)))
 
-    enzymexla.send(
+    enzymexla.mpi_send(
         buf.mlir_data,
         count.mlir_data,
         dest.mlir_data,
@@ -78,7 +78,7 @@ end
     count = Reactant.Ops.constant(Int32(length(buf)))
     request = Reactant.Ops.constant(Int64(-1))
 
-    ret = enzymexla.isend(
+    ret = enzymexla.mpi_isend(
         buf.mlir_data,
         count.mlir_data,
         dest.mlir_data,
@@ -105,7 +105,7 @@ end
 
     count = Reactant.Ops.constant(Int32(length(buf)))
 
-    ret = enzymexla.recv(
+    ret = enzymexla.mpi_recv(
         buf.mlir_data,
         count.mlir_data,
         src.mlir_data,
@@ -132,7 +132,7 @@ end
     count = Reactant.Ops.constant(Int32(length(buf)))
     request = Reactant.Ops.constant(Int64(-1))
 
-    ret = enzymexla.irecv(
+    ret = enzymexla.mpi_irecv(
         buf.mlir_data,
         count.mlir_data,
         src.mlir_data,
@@ -152,7 +152,7 @@ end
 @noinline function wait(
     req::TracedRequest; location=mlir_stacktrace("mpi.wait", @__FILE__, @__LINE__)
 )
-    enzymexla.wait(req.mlir_data; location)
+    enzymexla.mpi_wait(req.mlir_data; location)
     return nothing
 end
 
@@ -170,7 +170,7 @@ end
 
     count = Reactant.Ops.constant(Int32(length(sendbuf)))
 
-    ret = enzymexla.allreduce(
+    ret = enzymexla.mpi_allreduce(
         sendbuf.mlir_data,
         recvbuf.mlir_data,
         count.mlir_data;
