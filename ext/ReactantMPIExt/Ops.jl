@@ -18,14 +18,18 @@ using MPI: MPI
 #     return mpi.finalize(; location)
 # end
 
-@noinline function comm_rank(; location=mlir_stacktrace("mpi.comm_rank", @__FILE__, @__LINE__))
+@noinline function comm_rank(;
+    location=mlir_stacktrace("mpi.comm_rank", @__FILE__, @__LINE__)
+)
     rank = Reactant.Ops.constant(Int32(-1))
     ret = enzymexla.mpi_comm_rank(; rank=mlir_type(rank), location)
     rank.mlir_data = IR.result(ret)
     return rank
 end
 
-@noinline function comm_size(; location=mlir_stacktrace("mpi.comm_size", @__FILE__, @__LINE__))
+@noinline function comm_size(;
+    location=mlir_stacktrace("mpi.comm_size", @__FILE__, @__LINE__)
+)
     size = Reactant.Ops.constant(Int32(-1))
     ret = enzymexla.comm_size(size.mlir_data; outsize=mlir_type(size), location)
     size.mlir_data = IR.result(ret)
@@ -55,7 +59,7 @@ end
         dest.mlir_data,
         tag.mlir_data;
         datatype=mpi_datatype_name,
-        location
+        location,
     )
 
     return nothing
@@ -90,10 +94,10 @@ end
 end
 
 @noinline function recv!(
-   buf::TracedRArray,
-   src::TracedRNumber,
-   tag::TracedRNumber;
-   location=mlir_stacktrace("mpi.recv", @__FILE__, @__LINE__),
+    buf::TracedRArray,
+    src::TracedRNumber,
+    tag::TracedRNumber;
+    location=mlir_stacktrace("mpi.recv", @__FILE__, @__LINE__),
 )
     T = Reactant.unwrapped_eltype(buf)
     mpi_datatype = MPI.Datatype(T)
@@ -102,13 +106,14 @@ end
     count = Reactant.Ops.constant(Int32(length(buf)))
 
     ret = enzymexla.recv(
-        buf.mlir_data, 
-        count.mlir_data, 
-        src.mlir_data, 
-        tag.mlir_data; 
-        outbuf=mlir_type(buf), 
+        buf.mlir_data,
+        count.mlir_data,
+        src.mlir_data,
+        tag.mlir_data;
+        outbuf=mlir_type(buf),
         datatype=mpi_datatype_name,
-        location)
+        location,
+    )
 
     buf.mlir_data = IR.result(ret)
     return buf
@@ -139,9 +144,9 @@ end
         location,
     )
 
-   buf.mlir_data = IR.result(ret, 1)
-   request.mlir_data = IR.result(ret, 2)
-   return request # we return a TracedRNumber, converted to TracedRequest in Overrides.jl
+    buf.mlir_data = IR.result(ret, 1)
+    request.mlir_data = IR.result(ret, 2)
+    return request # we return a TracedRNumber, converted to TracedRequest in Overrides.jl
 end
 
 @noinline function wait(
@@ -155,7 +160,7 @@ end
     op,
     sendbuf::TracedRArray,
     recvbuf::TracedRArray;
-    location=mlir_stacktrace("mpi.wait", @__FILE__, @__LINE__)
+    location=mlir_stacktrace("mpi.wait", @__FILE__, @__LINE__),
 )
     mpi_op_name = get_mpi_op_name(op)
 
@@ -172,7 +177,7 @@ end
         outbuf=mlir_type(recvbuf),
         datatype=mpi_datatype_name,
         op=mpi_op_name,
-        location
+        location,
     )
 
     recvbuf.mlir_data = IR.result(ret)
