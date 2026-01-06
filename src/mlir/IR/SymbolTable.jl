@@ -48,11 +48,11 @@ Returns the name of the symbol after insertion.
 Base.push!(st::SymbolTable, op::Operation) = Attribute(API.mlirSymbolTableInsert(st, op))
 
 """
-    delete!(symboltable, operation)
+    Base.delete!(symboltable, operation)
 
 Removes the given operation from the symbol table and erases it.
 """
-delete!(st::SymbolTable, op::Operation) = API.mlirSymbolTableErase(st, op)
+Base.delete!(st::SymbolTable, op::Operation) = API.mlirSymbolTableErase(st, op)
 
 # TODO mlirSymbolTableReplaceAllSymbolUses
 # TODO mlirSymbolTableWalkSymbolTables
