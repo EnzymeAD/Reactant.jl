@@ -20,7 +20,7 @@ using MPI: MPI
 
 @noinline function comm_rank(; location=mlir_stacktrace("mpi.comm_rank", @__FILE__, @__LINE__))
     rank = Reactant.Ops.constant(Int32(-1))
-    ret = enzymexla.comm_rank(rank.mlir_data; outrank=mlir_type(rank), location)
+    ret = enzymexla.mpi_comm_rank(; rank=mlir_type(rank), location)
     rank.mlir_data = IR.result(ret)
     return rank
 end
