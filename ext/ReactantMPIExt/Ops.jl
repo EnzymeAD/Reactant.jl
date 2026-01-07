@@ -82,9 +82,8 @@ end
         buf.mlir_data,
         count.mlir_data,
         dest.mlir_data,
-        tag.mlir_data,
-        request.mlir_data;
-        outrequest=mlir_type(request),
+        tag.mlir_data;
+        request=mlir_type(request),
         datatype=mpi_datatype_name,
         location,
     )
