@@ -3,7 +3,19 @@ mutable struct Module
 
     function Module(module_)
         @assert !mlirIsNull(module_) "cannot create Module with null MlirModule"
-        return finalizer(API.mlirModuleDestroy, new(module_))
+        mod = new(module_)
+
+        # keep track of context dependencies for garbage collection
+        register_context_dep(context(mod), mod)
+
+        return finalizer(mod) do obj
+            if !mlirIsNull(obj.module_)
+                # remove context dependency
+                unregister_context_dep(context(obj), obj)
+
+                API.mlirModuleDestroy(obj.module_)
+            end
+        end
     end
 end
 
