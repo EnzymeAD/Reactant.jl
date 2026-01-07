@@ -31,7 +31,7 @@ end
     location=mlir_stacktrace("mpi.comm_size", @__FILE__, @__LINE__)
 )
     size = Reactant.Ops.constant(Int32(-1))
-    ret = enzymexla.mpi_comm_size(size.mlir_data; outsize=mlir_type(size), location)
+    ret = enzymexla.mpi_comm_size(; size=mlir_type(size), location)
     size.mlir_data = IR.result(ret)
     return size
 end
