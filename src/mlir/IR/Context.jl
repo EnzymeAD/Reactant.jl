@@ -1,3 +1,15 @@
+function context_finalizer(ctx)
+    if ctx.owned && !mlirIsNull(ctx.context)
+        if has_context_dep(ctx)
+            # defer destruction until all dependent modules are gone
+            finalizer(context_finalizer, ctx)
+        else
+            @atomic ctx.owned = false
+            API.mlirContextDestroy(ctx.context)
+        end
+    end
+end
+
 mutable struct Context
     context::API.MlirContext
     @atomic owned::Bool
@@ -9,12 +21,7 @@ mutable struct Context
     """
     function Context(context; owned=true)
         @assert !mlirIsNull(context) "cannot create Context with null MlirContext"
-        return finalizer(new(context, owned)) do obj
-            if obj.owned && !mlirIsNull(obj.context)
-                @atomic obj.owned = false
-                API.mlirContextDestroy(obj.context)
-            end
-        end
+        return finalizer(context_finalizer, new(context, owned))
     end
 end
 

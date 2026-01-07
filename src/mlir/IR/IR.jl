@@ -170,4 +170,33 @@ function tryinjectop!(sym_name, code; mod=mmodule(), location=Location())
     end
 end
 
+# use types from API to avoid interfering with GC
+const __context_gc_module = Dict{API.MlirContext, Set{API.MlirModule}}()
+const __context_gc_module_lock = ReentrantLock()
+
+function register_context_dep(ctx::Context, mod::Module)
+    @lock __context_gc_module_lock begin
+        s = get!(Set{API.MlirModule}, __context_gc_module, ctx.context)
+        push!(s, mod.module_)
+    end
+end
+
+function unregister_context_dep(ctx::Context, mod::Module)
+    @lock __context_gc_module_lock begin
+        if haskey(__context_gc_module, ctx.context)
+            s = __context_gc_module[ctx.context]
+            delete!(s, mod.module_)
+            if isempty(s)
+                delete!(__context_gc_module, ctx.context)
+            end
+        end
+    end
+end
+
+function has_context_dep(ctx::Context)
+    @lock __context_gc_module_lock begin
+        haskey(__context_gc_module, ctx.context)
+    end
+end
+
 end # module IR
