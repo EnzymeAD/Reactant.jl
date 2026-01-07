@@ -9,11 +9,14 @@ function mcmc(
     algorithm::Symbol=:HMC,
     inverse_mass_matrix=nothing,
     step_size=nothing,
-    num_steps::Int=10,
+    trajectory_length::Float64=2π,
     max_tree_depth::Int=10,
     max_delta_energy::Float64=1000.0,
+    num_warmup::Int=0,
     num_samples::Int=1,
     thinning::Int=1,
+    adapt_step_size::Bool=true,
+    adapt_mass_matrix::Bool=true,
 ) where {Nargs}
     args = (rng, args...)
     (; f_name, mlir_caller_args, mlir_result_types, traced_result, linear_results, fnwrapped, argprefix, resprefix) = process_probprog_function(
@@ -63,13 +66,15 @@ function mcmc(
 
     if algorithm == :HMC
         hmc_config_attr = @ccall MLIR.API.mlir_c.enzymeHMCConfigAttrGet(
-            MLIR.IR.context()::MLIR.API.MlirContext, num_steps::Int64
+            MLIR.IR.context()::MLIR.API.MlirContext, trajectory_length::Float64, adapt_step_size::Bool, adapt_mass_matrix::Bool
         )::MLIR.IR.Attribute
     elseif algorithm == :NUTS
         nuts_config_attr = @ccall MLIR.API.mlir_c.enzymeNUTSConfigAttrGet(
             MLIR.IR.context()::MLIR.API.MlirContext,
             max_tree_depth::Int64,
-            max_delta_energy::Float64
+            max_delta_energy::Float64,
+            adapt_step_size::Bool,
+            adapt_mass_matrix::Bool
         )::MLIR.IR.Attribute
     else
         error("Unknown MCMC algorithm: $algorithm. Supported algorithms are :HMC and :NUTS")
@@ -97,6 +102,7 @@ function mcmc(
         selection=MLIR.IR.Attribute(selection_attr),
         hmc_config=hmc_config_attr,
         nuts_config=nuts_config_attr,
+        num_warmup=Int64(num_warmup),
         num_samples=Int64(num_samples),
         thinning=Int64(thinning),
     )
