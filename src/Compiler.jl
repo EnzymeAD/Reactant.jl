@@ -836,6 +836,7 @@ function optimization_passes(
         "dus_concat",
         "slice_dus_to_concat",
         "sink_dus",
+        "hoist_slice",
         "while_induction_reduction",
         "slice_broadcast",
         "associative_common_mul_op_reordering",
