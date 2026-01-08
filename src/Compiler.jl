@@ -929,6 +929,8 @@ function optimization_passes(
         "dot_general_insert_dim_contraction_simplification",
         "fuse_reshape_collapse_or_expand_dims_into_reduce",
         "split_reduce_add_mul_to_add_dot_general",
+        # FIXME: enable once upstream bug is fixed
+        # "recognize_from_constant($(max_constant_threshold))",
     ]
 
     if !is_sharded
@@ -961,6 +963,9 @@ function optimization_passes(
                 # scatter patterns
                 "scatter_to_dynamic_update_slice<1>",
                 "scatter_multiply_simplify",
+                "scatter_sub_simplify",
+                "scatter_add_simplify",
+                "scatter_div_simplify",
                 "unary_elementwise_scatter_simplify",
                 "scatter_indices_are_unique",
                 ## const prop patterns
@@ -969,6 +974,7 @@ function optimization_passes(
                 "dynamic_gather_op_is_not_dynamic<16>",
                 "gather_op_canon<16>",
                 "gather_elementwise",
+                "gather_of_scatter_simplify",
                 ## const prop patterns
                 "gather_const_prop",
                 "scatter_const_fold($max_constant_threshold)",
@@ -1207,6 +1213,7 @@ function optimization_passes(
                 "reshape_wrap",
                 "reshape_rotate",
                 "reshape_extend",
+                "delete_dims_broadcast",
             ],
         )
         if AGGRESSIVE_PROPAGATION[]
