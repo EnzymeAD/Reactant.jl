@@ -743,6 +743,7 @@ function optimization_passes(
         "cse_neg<16>",
         "cse_abs<16>",
         "cse_concatenate<16>",
+        "cse_compare<16>",
         "concatenate_op_canon<16>($max_constant_threshold)",
         "select_op_canon<16>($max_constant_threshold)",
         "add_simplify<16>",
@@ -978,6 +979,8 @@ function optimization_passes(
                 ## const prop patterns
                 "gather_const_prop",
                 "scatter_const_fold($max_constant_threshold)",
+                "cse_gather",
+                "cse_scatter",
             ],
         )
     end
@@ -1067,6 +1070,9 @@ function optimization_passes(
                 "reverse_licm(0)",
                 "convolution_licm(0)",
                 "dynamic_slice_licm(0)",
+                "scatter_licm(0)",
+                "gather_licm(0)",
+                "iota_licm(0)",
             ],
         )
     end
