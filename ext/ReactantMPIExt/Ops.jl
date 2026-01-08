@@ -71,8 +71,7 @@ end
     location=mlir_stacktrace("mpi.isend", @__FILE__, @__LINE__),
 )
     T = Reactant.unwrapped_eltype(buf)
-    mpi_datatype = MPI.Datatype(T)
-    mpi_datatype_name = get_mpi_datatype_name(mpi_datatype)
+    mpi_datatype = get_mpi_datatype_enum(MPI.Datatype(T))
 
     count = Reactant.Ops.constant(Int32(length(buf)))
     request = Reactant.Ops.constant(Int64(-1))
@@ -83,7 +82,7 @@ end
         dest.mlir_data,
         tag.mlir_data;
         request=mlir_type(request),
-        datatype=mpi_datatype_name,
+        datatype=MLIR.API.enzymexlaMPIDatatypeAttrGet(MLIR.IR.context(), mpi_datatype),
         location,
     )
 
@@ -98,8 +97,7 @@ end
     location=mlir_stacktrace("mpi.recv", @__FILE__, @__LINE__),
 )
     T = Reactant.unwrapped_eltype(buf)
-    mpi_datatype = MPI.Datatype(T)
-    mpi_datatype_name = get_mpi_datatype_name(mpi_datatype)
+    mpi_datatype = get_mpi_datatype_enum(MPI.Datatype(T))
 
     count = Reactant.Ops.constant(Int32(length(buf)))
 
@@ -109,7 +107,7 @@ end
         src.mlir_data,
         tag.mlir_data;
         outbuf=mlir_type(buf),
-        datatype=mpi_datatype_name,
+        datatype=MLIR.API.enzymexlaMPIDatatypeAttrGet(MLIR.IR.context(), mpi_datatype),
         location,
     )
 
@@ -124,8 +122,7 @@ end
     location=mlir_stacktrace("mpi.irecv", @__FILE__, @__LINE__),
 )
     T = Reactant.unwrapped_eltype(buf)
-    mpi_datatype = MPI.Datatype(T)
-    mpi_datatype_name = get_mpi_datatype_name(mpi_datatype)
+    mpi_datatype = get_mpi_datatype_enum(MPI.Datatype(T))
 
     count = Reactant.Ops.constant(Int32(length(buf)))
     request = Reactant.Ops.constant(Int64(-1))
@@ -137,7 +134,7 @@ end
         tag.mlir_data;
         outbuf=mlir_type(buf),
         request=mlir_type(request),
-        datatype=mpi_datatype_name,
+        datatype=MLIR.API.enzymexlaMPIDatatypeAttrGet(MLIR.IR.context(), mpi_datatype),
         location,
     )
 
@@ -162,8 +159,7 @@ end
     mpi_op_name = get_mpi_op_name(op)
 
     T = Reactant.unwrapped_eltype(sendbuf)
-    mpi_datatype = MPI.Datatype(T)
-    mpi_datatype_name = get_mpi_datatype_name(mpi_datatype)
+    mpi_datatype = get_mpi_datatype_enum(MPI.Datatype(T))
 
     count = Reactant.Ops.constant(Int32(length(sendbuf)))
 
@@ -172,7 +168,7 @@ end
         recvbuf.mlir_data,
         count.mlir_data;
         outbuf=mlir_type(recvbuf),
-        datatype=mpi_datatype_name,
+        datatype=MLIR.API.enzymexlaMPIDatatypeAttrGet(MLIR.IR.context(), mpi_datatype),
         op=mpi_op_name,
         location,
     )
