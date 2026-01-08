@@ -10,7 +10,7 @@ end
 Base.convert(::Core.Type{API.MlirDialect}, dialect::Dialect) = dialect.dialect
 Base.:(==)(a::Dialect, b::Dialect) = API.mlirDialectEqual(a, b)
 
-context(dialect::Dialect) = Context(API.mlirDialectGetContext(dialect); owned=false)
+context(dialect::Dialect) = Context(API.mlirDialectGetContext(dialect))
 namespace(dialect::Dialect) = String(API.mlirDialectGetNamespace(dialect))
 
 function Base.show(io::IO, dialect::Dialect)

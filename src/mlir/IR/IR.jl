@@ -3,10 +3,11 @@ module IR
 using ..Reactant
 using ..API
 
-# do not export `Type`, as it is already defined in Core
-# also, use `Core.Type` inside this module to avoid clash with MLIR `Type`
+# WARN do not export `Type` nor `Module` as they are already defined in Core
+# also, use `Core.Type` and `Core.Module` inside this module to avoid clash with
+# MLIR `Type` and `Module`
 export Attribute, Block, Context, Dialect, Location, Operation, Region, Value
-export activate!, deactivate!, with_context, enable_multithreading!
+export dispose!, @scope, current_block, current_module, current_region
 export context, type, type!, location, typeid, block, dialect
 export nattrs,
     attr,
@@ -26,32 +27,7 @@ export @affinemap
 
 using Random: randstring
 
-function mlirIsNull(val)
-    return val.ptr == C_NULL
-end
-
-function print_callback(str::API.MlirStringRef, userdata)
-    data = unsafe_wrap(Array, Base.convert(Ptr{Cchar}, str.data), str.length; own=false)
-    write(userdata isa Base.RefValue ? userdata[] : userdata, data)
-    return Cvoid()
-end
-
-macro llvmversioned(pred, expr)
-    @assert Meta.isexpr(pred, :(=)) "Expected an expression as the first argument"
-
-    predname, version = pred.args
-    @assert predname in (:min, :max) "Expected 'min' or 'max' as the first argument"
-
-    @assert Meta.isexpr(version, :macrocall) && version.args[1] == Symbol("@v_str") "Expected a VersionNumber"
-    version = eval(version)
-
-    if predname == :min && VersionNumber(19) >= version ||
-        predname == :max && VersionNumber(19) <= version
-        esc(expr)
-    else
-        esc(:(nothing))
-    end
-end
+include("Utils.jl")
 
 include("LogicalResult.jl")
 include("Context.jl")
@@ -76,67 +52,8 @@ include("Iterators.jl")
 include("ExecutionEngine.jl")
 include("Pass.jl")
 
-# MlirStringRef is a non-owning reference to a string,
-# we thus need to ensure that the Julia string remains alive
-# over the use. For that we use the cconvert/unsafe_convert mechanism
-# for foreign-calls. The returned value of the cconvert is rooted across
-# foreign-call.
-Base.cconvert(::Core.Type{API.MlirStringRef}, s::Union{Symbol,String}) = s
-function Base.cconvert(::Core.Type{API.MlirStringRef}, s::AbstractString)
-    return Base.cconvert(API.MlirStringRef, String(s)::String)
-end
-
-# Directly create `MlirStringRef` instead of adding an extra ccall.
-function Base.unsafe_convert(
-    ::Core.Type{API.MlirStringRef}, s::Union{Symbol,String,AbstractVector{UInt8}}
-)
-    p = Base.unsafe_convert(Ptr{Cchar}, s)
-    return API.MlirStringRef(p, sizeof(s))
-end
-
-function Base.String(str::API.MlirStringRef)
-    return Base.unsafe_string(pointer(str.data), str.length)
-end
-
-Base.String(str::API.MlirIdentifier) = String(API.mlirIdentifierStr(str))
-
-### Utils
-
-function visit(f, op)
-    all_ok = true
-    for region in RegionIterator(op)
-        for block in BlockIterator(region)
-            for op in OperationIterator(block)
-                all_ok &= f(op)
-            end
-        end
-    end
-    return all_ok
-end
-
-"""
-    verifyall(operation; debug=false)
-
-Prints the operations which could not be verified.
-"""
-function verifyall(operation::Operation; debug=false)
-    io = IOBuffer()
-    visit(operation) do op
-        ok = verifyall(op; debug)
-        if !ok || !verify(op)
-            if ok
-                show(IOContext(io, :debug => debug), op)
-                error(String(take!(io)))
-            end
-            false
-        else
-            true
-        end
-    end
-end
-verifyall(module_::Module; debug=false) = verifyall(Operation(module_); debug)
-
-function tryinject!(sym_name, code; verify=false, mod=mmodule(), location=Location())
+# TODO try to fuse it with Ops.hlo_call?
+function tryinject!(sym_name, code; verify=false, mod=current_module(), location=Location())
     fn = lookup(SymbolTable(Operation(mod)), sym_name)
 
     if fn === nothing
@@ -159,7 +76,7 @@ function inject!(sym_name, code; kwargs...)
     @assert success "Failed injecting MLIR to top-level block"
 end
 
-function tryinjectop!(sym_name, code; mod=mmodule(), location=Location())
+function tryinjectop!(sym_name, code; mod=current_module(), location=Location())
     fn = lookup(SymbolTable(Operation(mod)), sym_name)
 
     if isnothing(fn)
@@ -167,35 +84,6 @@ function tryinjectop!(sym_name, code; mod=mmodule(), location=Location())
         return parse(Operation, code; block=top_level_block, location)
     else
         return nothing
-    end
-end
-
-# use types from API to avoid interfering with GC
-const __context_gc_module = Dict{API.MlirContext, Set{API.MlirModule}}()
-const __context_gc_module_lock = ReentrantLock()
-
-function register_context_dep(ctx::Context, mod::Module)
-    @lock __context_gc_module_lock begin
-        s = get!(Set{API.MlirModule}, __context_gc_module, ctx.context)
-        push!(s, mod.module_)
-    end
-end
-
-function unregister_context_dep(ctx::Context, mod::Module)
-    @lock __context_gc_module_lock begin
-        if haskey(__context_gc_module, ctx.context)
-            s = __context_gc_module[ctx.context]
-            delete!(s, mod.module_)
-            if isempty(s)
-                delete!(__context_gc_module, ctx.context)
-            end
-        end
-    end
-end
-
-function has_context_dep(ctx::Context)
-    @lock __context_gc_module_lock begin
-        haskey(__context_gc_module, ctx.context)
     end
 end
 

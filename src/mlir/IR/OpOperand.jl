@@ -25,7 +25,7 @@ end
 
 Returns the owner operation of an op operand.
 """
-owner(op::OpOperand) = Operation(API.mlirOpOperandGetOwner(op), false)
+owner(op::OpOperand) = Operation(API.mlirOpOperandGetOwner(op))
 
 """
     operandindex(opOperand)

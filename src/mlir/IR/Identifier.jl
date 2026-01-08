@@ -24,7 +24,7 @@ Base.:(==)(a::Identifier, b::Identifier) = API.mlirIdentifierEqual(a, b)
 
 Returns the context associated with this identifier
 """
-context(id::Identifier) = Context(API.mlirIdentifierGetContext(id.identifier); owned=false)
+context(id::Identifier) = Context(API.mlirIdentifierGetContext(id.identifier))
 
 """
     String(ident)

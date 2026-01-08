@@ -335,9 +335,9 @@ function make_mlir_fn(
     )
 
     Ops.activate_constant_context!(fnbody)
-    @assert MLIR.IR._has_block()
+    @assert MLIR.IR.has_current_block()
 
-    # Explicitly don't use block! to avoid creating a closure, which creates
+    # Explicitly don't use with_block to avoid creating a closure, which creates
     # both compile-time and relocatability issues
     MLIR.IR.activate!(fnbody)
 
@@ -500,7 +500,7 @@ function prepare_mlir_fn_args(
         sym_visibility = MLIR.IR.Attribute("private")
     end
 
-    mod = MLIR.IR.mmodule()
+    mod = MLIR.IR.current_module()
 
     # Insert meshes for the sharded arguments
     traced_args_to_shardings = OrderedIdDict()
@@ -516,7 +516,7 @@ function prepare_mlir_fn_args(
         end
     end
 
-    func = MLIR.IR.block!(MLIR.IR.body(mod)) do
+    func = MLIR.IR.with_block(MLIR.IR.body(mod)) do
         return MLIR.Dialects.func.func_(;
             sym_name=name * "_tmp",
             function_type=MLIR.IR.FunctionType(in_tys, Vector{MLIR.IR.Type}(undef, 0)),
@@ -855,7 +855,7 @@ function finalize_mlir_fn(
         MLIR.IR.deactivate!(fnbody)
     end
 
-    func2 = MLIR.IR.block!(MLIR.IR.body(mod)) do
+    func2 = MLIR.IR.with_block(MLIR.IR.body(mod)) do
         return MLIR.Dialects.func.func_(;
             sym_name=__lookup_unique_name_in_module(mod, name),
             function_type=MLIR.IR.FunctionType(in_tys, out_tys),
