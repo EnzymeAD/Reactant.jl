@@ -2113,16 +2113,22 @@ function compile_mlir!(
         )
         # We tried propagating reshapes and transposes up. If at this point we are left
         # with them, we propagate them down to minimize the number of Ops in the IR.
+        # Since this might enable certain raising, we do push down -> push up -> push down
+        common_kwargs = (;
+            recognize_comms,
+            lower_comms,
+            backend,
+            is_sharded,
+            raise_shlo_to_blas_lapack=false,
+        )
+        opt_passes_down = optimization_passes(
+            Reactant.__compile_options_with_reversed_propagation(compile_options);
+            common_kwargs...,
+        )
+        opt_passes_up = optimization_passes(compile_options; common_kwargs...)
         run_pass_pipeline!(
             mod,
-            optimization_passes(
-                Reactant.__compile_options_with_reversed_propagation(compile_options);
-                recognize_comms,
-                lower_comms,
-                backend,
-                is_sharded,
-                raise_shlo_to_blas_lapack=false,
-            ),
+            join([opt_passes_down, opt_passes_up, opt_passes_down], ","),
             "post_op_transpose_reshape",
         )
     end
