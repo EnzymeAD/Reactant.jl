@@ -48,8 +48,7 @@ end
     location=mlir_stacktrace("mpi.send", @__FILE__, @__LINE__),
 )
     T = Reactant.unwrapped_eltype(buf)
-    mpi_datatype = MPI.Datatype(T)
-    mpi_datatype_name = get_mpi_datatype_name(mpi_datatype)
+    mpi_datatype = get_mpi_datatype_enum(MPI.Datatype(T))
 
     count = Reactant.Ops.constant(Int32(length(buf)))
 
@@ -58,7 +57,7 @@ end
         count.mlir_data,
         dest.mlir_data,
         tag.mlir_data;
-        datatype=mpi_datatype_name,
+        datatype=MLIR.API.enzymexlaMPIDatatypeAttrGet(MLIR.IR.context(), mpi_datatype),
         location,
     )
 
@@ -292,6 +291,94 @@ function get_mpi_datatype_name(datatype)
     elseif datatype == MPI.COUNT
         return "MPI_COUNT"
     else
+        throw(ArgumentError("Unknown MPI datatype `$datatype`"))
+    end
+end
+
+@enum MPIDataTypeEnum begin
+    MPI_DATATYPE_NULL_ENUM = 0
+    MPI_BYTE_ENUM = 1
+    MPI_CHAR_ENUM = 2
+    MPI_SHORT_ENUM = 3
+    MPI_INT_ENUM = 4
+    MPI_LONG_ENUM = 5
+    MPI_FLOAT_ENUM = 6
+    MPI_DOUBLE_ENUM = 7
+    MPI_UNSIGNED_CHAR_ENUM = 8
+    MPI_SIGNED_CHAR_ENUM = 9
+    MPI_UNSIGNED_SHORT_ENUM = 10
+    MPI_UNSIGNED_LONG_ENUM = 11
+    MPI_UNSIGNED_ENUM = 12
+    MPI_WCHAR_ENUM = 13
+    MPI_LONG_LONG_INT_ENUM = 14
+    MPI_UNSIGNED_LONG_LONG_ENUM = 15
+    MPI_INT8_T_ENUM = 16
+    MPI_UINT8_T_ENUM = 17
+    MPI_INT16_T_ENUM = 18
+    MPI_UINT16_T_ENUM = 19
+    MPI_INT32_T_ENUM = 20
+    MPI_UINT32_T_ENUM = 21
+    MPI_INT64_T_ENUM = 22
+    MPI_UINT64_T_ENUM = 23
+    MPI_AINT_ENUM = 24
+    MPI_OFFSET_ENUM = 25
+    MPI_C_BOOL_ENUM = 26
+    MPI_C_FLOAT_COMPLEX_ENUM = 27
+    MPI_C_DOUBLE_COMPLEX_ENUM = 28
+    MPI_COUNT_ENUM = 29
+    MPI_PACKED_ENUM = 30
+    MPI_FLOAT_INT_ENUM = 31
+    MPI_DOUBLE_INT_ENUM = 32
+    MPI_LONG_DOUBLE_INT_ENUM = 33
+    MPI_LONG_INT_ENUM = 34
+    MPI_SHORT_INT_ENUM = 35
+    MPI_UB_ENUM = 36
+    MPI_LB_ENUM = 37
+end
+
+const MPI_DATATYPE_MAP = Dict(
+    MPI.DATATYPE_NULL => MPI_DATATYPE_NULL_ENUM,
+    MPI.BYTE => MPI_BYTE_ENUM,
+    # MPI.PACKED => MPI_PACKED_ENUM,
+    MPI.CHAR => MPI_CHAR_ENUM,
+    MPI.SHORT => MPI_SHORT_ENUM,
+    MPI.INT => MPI_INT_ENUM,
+    MPI.LONG => MPI_LONG_ENUM,
+    MPI.FLOAT => MPI_FLOAT_ENUM,
+    MPI.DOUBLE => MPI_DOUBLE_ENUM,
+    MPI.UNSIGNED_CHAR => MPI_UNSIGNED_CHAR_ENUM,
+    MPI.SIGNED_CHAR => MPI_SIGNED_CHAR_ENUM,
+    MPI.UNSIGNED_SHORT => MPI_UNSIGNED_SHORT_ENUM,
+    MPI.UNSIGNED_LONG => MPI_UNSIGNED_LONG_ENUM,
+    MPI.UNSIGNED => MPI_UNSIGNED_ENUM,
+    # MPI.FLOAT_INT => MPI_FLOAT_INT_ENUM,
+    # MPI.DOUBLE_INT => MPI_DOUBLE_INT_ENUM,
+    # MPI.LONG_DOUBLE_INT => MPI_LONG_DOUBLE_INT_ENUM,
+    # MPI.LONG_INT => MPI_LONG_INT_ENUM,
+    # MPI.SHORT_INT => MPI_SHORT_INT_ENUM,
+    # MPI.UB => MPI_UB_ENUM,
+    # MPI.LB => MPI_LB_ENUM,
+    MPI.WCHAR => MPI_WCHAR_ENUM,
+    MPI.LONG_LONG_INT => MPI_LONG_LONG_INT_ENUM,
+    MPI.UNSIGNED_LONG_LONG => MPI_UNSIGNED_LONG_LONG_ENUM,
+    MPI.INT8_T => MPI_INT8_T_ENUM,
+    MPI.UINT8_T => MPI_UINT8_T_ENUM,
+    MPI.INT16_T => MPI_INT16_T_ENUM,
+    MPI.UINT16_T => MPI_UINT16_T_ENUM,
+    MPI.INT32_T => MPI_INT32_T_ENUM,
+    MPI.UINT32_T => MPI_UINT32_T_ENUM,
+    MPI.INT64_T => MPI_INT64_T_ENUM,
+    MPI.UINT64_T => MPI_UINT64_T_ENUM,
+    # MPI.AINT => MPI_AINT_ENUM,
+    # MPI.OFFSET => MPI_OFFSET_ENUM,
+    MPI.C_BOOL => MPI_C_BOOL_ENUM,
+    MPI.C_FLOAT_COMPLEX => MPI_C_FLOAT_COMPLEX_ENUM,
+    MPI.C_DOUBLE_COMPLEX => MPI_C_DOUBLE_COMPLEX_ENUM,
+    # MPI.COUNT => MPI_COUNT_ENUM
+)
+
+function get_mpi_datatype_enum(datatype)
+    return get(MPI_DATATYPE_MAP, datatype) do
         throw(ArgumentError("Unknown MPI datatype `$datatype`"))
     end
 end
