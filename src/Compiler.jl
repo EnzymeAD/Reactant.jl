@@ -1716,7 +1716,7 @@ function compile_mlir!(
 )
     client = client !== nothing ? client : XLA.default_backend()
 
-    # Explicitly don't use block! to avoid creating a closure, which creates
+    # Explicitly don't use with_block to avoid creating a closure, which creates
     # both compile-time and relocatability issues
 
     MLIR.IR.activate!(mod)
@@ -2440,7 +2440,7 @@ function compile_mlir!(
 
     MLIR.API.mlirOperationDestroy(ret.operation)
     ret.operation = MLIR.API.MlirOperation(C_NULL)
-    MLIR.IR.block!(fnbody) do
+    MLIR.IR.with_block(fnbody) do
         return MLIR.Dialects.func.return_(nresults)
     end
 

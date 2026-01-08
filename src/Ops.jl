@@ -1851,7 +1851,7 @@ julia> Reactant.@jit(
     module_suffix = string(hash(code); base=16)
     name_to_call = _hlo_call_name(func_name, module_suffix)
 
-    current_module = MLIR.IR.mmodule()
+    current_module = MLIR.IR.current_module()
     top_level_block = MLIR.IR.body(current_module)
 
     symbol_attr_name = String(MLIR.API.mlirSymbolTableGetSymbolAttributeName())
@@ -2279,8 +2279,8 @@ end
     sym_visibility = MLIR.IR.Attribute("private")
 
     # compile the true branch without any returns first
-    true_fn_mod = MLIR.IR.mmodule()
-    true_func_tmp = MLIR.IR.block!(MLIR.IR.body(true_fn_mod)) do
+    true_fn_mod = MLIR.IR.current_module()
+    true_func_tmp = MLIR.IR.with_block(MLIR.IR.body(true_fn_mod)) do
         return MLIR.Dialects.func.func_(;
             sym_name=string(true_fn) * "_tb_tmp",
             function_type=MLIR.IR.FunctionType(input_types, []),
@@ -2345,8 +2345,8 @@ end
     ]
 
     # compile the false branch without any returns similar to the true branch
-    false_fn_mod = MLIR.IR.mmodule()
-    false_func_tmp = MLIR.IR.block!(MLIR.IR.body(false_fn_mod)) do
+    false_fn_mod = MLIR.IR.current_module()
+    false_func_tmp = MLIR.IR.with_block(MLIR.IR.body(false_fn_mod)) do
         return MLIR.Dialects.func.func_(;
             sym_name=string(false_fn) * "_fb_tmp",
             function_type=MLIR.IR.FunctionType(input_types, []),
@@ -2574,7 +2574,7 @@ end
     # With the corrected results, we can compile the true and false branches
     tb_out_types = [mlir_type(tr) for tr in tb_corrected_linear_results]
 
-    true_fn_compiled = MLIR.IR.block!(MLIR.IR.body(true_fn_mod)) do
+    true_fn_compiled = MLIR.IR.with_block(MLIR.IR.body(true_fn_mod)) do
         return MLIR.Dialects.func.func_(;
             sym_name=Reactant.TracedUtils.__lookup_unique_name_in_module(
                 true_fn_mod, string(true_fn) * "_tb"
@@ -2592,7 +2592,7 @@ end
 
     fb_out_types = [mlir_type(fr) for fr in fb_corrected_linear_results]
 
-    false_fn_compiled = MLIR.IR.block!(MLIR.IR.body(false_fn_mod)) do
+    false_fn_compiled = MLIR.IR.with_block(MLIR.IR.body(false_fn_mod)) do
         return MLIR.Dialects.func.func_(;
             sym_name=Reactant.TracedUtils.__lookup_unique_name_in_module(
                 false_fn_mod, string(false_fn) * "_fb"
@@ -2766,7 +2766,7 @@ end
 # Shardy Ops
 """
     mesh(
-        mesh::Reactant.Sharding.Mesh; mod::MLIR.IR.Module=MLIR.IR.mmodule(),
+        mesh::Reactant.Sharding.Mesh; mod::MLIR.IR.Module=MLIR.IR.current_module(),
         sym_name::String="mesh",
         location=mlir_stacktrace("mesh", @__FILE__, @__LINE__)
     )
@@ -2774,7 +2774,7 @@ end
         mesh_axes::Vector{<:Pair{<:Union{String,Symbol},Int64}},
         logical_device_ids::Vector{Int64};
         sym_name::String="mesh",
-        mod::MLIR.IR.Module=MLIR.IR.mmodule(),
+        mod::MLIR.IR.Module=MLIR.IR.current_module(),
         location=mlir_stacktrace("mesh", @__FILE__, @__LINE__)
     )
 
@@ -2801,7 +2801,7 @@ We return a NamedTuple with the following fields:
 """
 @noinline function mesh(
     m::Reactant.Sharding.Mesh;
-    mod::MLIR.IR.Module=MLIR.IR.mmodule(),
+    mod::MLIR.IR.Module=MLIR.IR.current_module(),
     sym_name::String="mesh",
     location=mlir_stacktrace("mesh", @__FILE__, @__LINE__),
 )
@@ -2822,7 +2822,7 @@ end
 @noinline function mesh(
     mesh_axes::Vector{<:Pair{<:Union{String,Symbol},Int64}},
     logical_device_ids::AbstractVector{Int64};
-    mod::MLIR.IR.Module=MLIR.IR.mmodule(),
+    mod::MLIR.IR.Module=MLIR.IR.current_module(),
     sym_name::String="mesh",
     location=mlir_stacktrace("mesh", @__FILE__, @__LINE__),
 )
@@ -2859,7 +2859,7 @@ end
 
     sym_name = Reactant.TracedUtils.__lookup_unique_name_in_module(mod, sym_name)
 
-    mesh_op = MLIR.IR.mmodule!(mod) do
+    mesh_op = MLIR.IR.with_module(mod) do
         return MLIR.Dialects.sdy.mesh(; sym_name, mesh=mesh_attr, location)
     end
 

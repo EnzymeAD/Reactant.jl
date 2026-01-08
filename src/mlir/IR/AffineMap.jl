@@ -36,7 +36,7 @@ compose(expr::AffineExpr, map::AffineMap) = AffineExpr(API.mlirAffineExprCompose
 
 Gets the context that the given affine map was created with.
 """
-context(map::AffineMap) = Context(API.mlirAffineMapGetContext(map); owned=false)
+context(map::AffineMap) = Context(API.mlirAffineMapGetContext(map))
 
 """
     AffineMap(ndims, nsymbols; context=context())
