@@ -760,6 +760,7 @@ function optimization_passes(
         "simplify_extend<16>",
         "simplify_wrap<16>",
         "simplify_rotate<16>",
+        "extend_splat<16>",
         "noop_slice<16>",
         "noop_reverse<16>",
         "slice_slice<16>",
@@ -1082,6 +1083,7 @@ function optimization_passes(
         append!(
             transform_passes_list,
             [
+                "extend_pad",
                 "dus_pad",
                 "cse_pad<16>",
                 "pad_simplify<16>($max_constant_threshold)",
