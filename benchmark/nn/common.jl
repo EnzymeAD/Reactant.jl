@@ -43,12 +43,12 @@ function run_lux_benchmark!(
     common_opts = (; no_nan=true, all_finite=true)
 
     fwd_options = [
-        ("XLA", Reactant.DefaultXLACompileOptions()),
+        ("NoOpt", Reactant.DefaultXLACompileOptions()),
         ("Default", Reactant.CompileOptions(; common_opts...)),
     ]
 
     bwd_options = [
-        ("XLA", Reactant.DefaultXLACompileOptions()),
+        ("NoOpt", Reactant.DefaultXLACompileOptions()),
         [
             (
                 "Default" * join(uppercasefirst.(split(string(pass), "_")), ""),
