@@ -41,23 +41,33 @@ for op in (:rfft, :fft, :ifft)
         )
     end
 
+    @eval function AbstractFFTs.$(Symbol(op, "!"))(x::AnyTracedRArray, dims)
+        y = AbstractFFTs.$(op)(x, dims)
+        copyto!(x, y)
+        return x
+    end
+
     # Out-of-place plan
     plan_name = Symbol("Reactant", uppercase(string(op)), "Plan")
     plan_f = Symbol("plan_", op)
-    @eval struct $(plan_name){T} <: AbstractFFTs.Plan{T} end
-    @eval AbstractFFTs.$(plan_f)(::Reactant.TracedRArray{T}) where {T} = $(plan_name){T}()
-    @eval Base.:*(::$(plan_name){T}, x::Reactant.TracedRArray{T}) where {T} =
-        AbstractFFTs.$(op)(x)
+    @eval struct $(plan_name){T, D} <: AbstractFFTs.Plan{T} 
+        dims::D
+    end
+    @eval AbstractFFTs.$(plan_f)(x::Reactant.TracedRArray{T}, dims=1:ndims(x)) where {T} = $(plan_name){T}(dims)
+    @eval Base.:*(p::$(plan_name){T}, x::Reactant.TracedRArray{T}) where {T} =
+        AbstractFFTs.$(op)(x, p.region)
 
     # In-place plan
     if op !== :rfft
         plan_name! = Symbol("Reactant", uppercase(string(op)), "InPlacePlan")
         plan_f! = Symbol("plan_", op, "!")
-        @eval struct $(plan_name!){T} <: AbstractFFTs.Plan{T} end
-        @eval AbstractFFTs.$(plan_f!)(::Reactant.TracedRArray{T}) where {T} =
-            $(plan_name!){T}()
-        @eval Base.:*(::$(plan_name!){T}, x::Reactant.TracedRArray{T}) where {T} =
-            copyto!(x, AbstractFFTs.$(op)(x))
+        @eval struct $(plan_name!){T, D} <: AbstractFFTs.Plan{T} 
+            dims::D
+        end
+        @eval AbstractFFTs.$(plan_f!)(::Reactant.TracedRArray{T}, dims=1:ndims(x)) where {T} =
+            $(plan_name!){T}(dims)
+        @eval Base.:*(p::$(plan_name!){T}, x::Reactant.TracedRArray{T}) where {T} =
+            copyto!(x, AbstractFFTs.$(op)(x, p.dims))
     end
 end
 
@@ -89,6 +99,13 @@ for op in (:irfft,)
             invperm(perm),
         )
     end
+
+    @eval function AbstractFFTs.$(Symbol(op, "!"))(x::AnyTracedRArray, d::Integer, dims)
+        y = AbstractFFTs.$(op)(x, d, dims)
+        copyto!(x, y)
+        return x
+    end
+
 end
 
 end

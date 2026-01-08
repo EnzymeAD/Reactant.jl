@@ -35,6 +35,26 @@ using FFTW, Reactant, Test
     end
 end
 
+@testset "fft!" begin
+    x = Reactant.TestUtils.construct_test_array(ComplexF32, 2, 3, 4)
+    x_ra = Reactant.to_rarray(x)
+    x_ra_copy = copy(x_ra)
+
+    y_ra = @jit(fft!(x_ra))
+    @test y_ra ≈ fft(x)
+    @test x_ra ≈ y_ra
+    @test x_ra ≉ x_ra_copy
+
+    x = Reactant.TestUtils.construct_test_array(ComplexF32, 2, 3, 4)
+    x_ra = Reactant.to_rarray(x)
+    x_ra_copy = copy(x_ra)
+    y_ra = @jit(fft!(x_ra, (1, 2)))
+    @test y_ra ≈ fft(x, (1, 2))
+    @test x_ra ≈ y_ra
+    @test x_ra ≉ x_ra_copy
+
+end
+
 @testset "rfft" begin
     x = Reactant.TestUtils.construct_test_array(Float32, 2, 2, 3, 4)
     x_ra = Reactant.to_rarray(x)
@@ -87,6 +107,15 @@ end
         @test compiled_planned_fft(x_r) ≈ fft(x)
         # Make sure the operation is not in-place
         @test x_r == copied_x_r
+
+        if length(size) > 1
+            planned_fft_dims(x, dims) = plan(x, dims) * x
+            compiled_planned_fft_dims = @compile planned_fft_dims(x_r, (1,))
+            # Make sure the result is correct
+            @test compiled_planned_fft_dims(x_r) ≈ fft(x, (1,))
+            # Make sure the operation is not in-place
+            @test x_r == copied_x_r
+        end
     end
 
     @testset "In-place [$(fft!), size $(size)]" for size in ((16,), (16, 16)),
