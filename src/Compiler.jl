@@ -1351,6 +1351,7 @@ function optimization_passes(
                 "recognize_wrap",
                 "recognize_rotate",
                 "recognize_updatewithoutcorners",
+                "dusdus_to_dusextend",
             ],
         )
     end
