@@ -743,6 +743,7 @@ function optimization_passes(
         "cse_neg<16>",
         "cse_abs<16>",
         "cse_concatenate<16>",
+        "cse_compare<16>",
         "concatenate_op_canon<16>($max_constant_threshold)",
         "select_op_canon<16>($max_constant_threshold)",
         "add_simplify<16>",
@@ -930,6 +931,8 @@ function optimization_passes(
         "dot_general_insert_dim_contraction_simplification",
         "fuse_reshape_collapse_or_expand_dims_into_reduce",
         "split_reduce_add_mul_to_add_dot_general",
+        # FIXME: enable once upstream bug is fixed
+        # "recognize_from_constant($(max_constant_threshold))",
     ]
 
     if !is_sharded
@@ -962,6 +965,9 @@ function optimization_passes(
                 # scatter patterns
                 "scatter_to_dynamic_update_slice<1>",
                 "scatter_multiply_simplify",
+                "scatter_sub_simplify",
+                "scatter_add_simplify",
+                "scatter_div_simplify",
                 "unary_elementwise_scatter_simplify",
                 "scatter_indices_are_unique",
                 ## const prop patterns
@@ -970,9 +976,12 @@ function optimization_passes(
                 "dynamic_gather_op_is_not_dynamic<16>",
                 "gather_op_canon<16>",
                 "gather_elementwise",
+                "gather_of_scatter_simplify",
                 ## const prop patterns
                 "gather_const_prop",
                 "scatter_const_fold($max_constant_threshold)",
+                "cse_gather",
+                "cse_scatter",
             ],
         )
     end
@@ -1062,6 +1071,9 @@ function optimization_passes(
                 "reverse_licm(0)",
                 "convolution_licm(0)",
                 "dynamic_slice_licm(0)",
+                "scatter_licm(0)",
+                "gather_licm(0)",
+                "iota_licm(0)",
             ],
         )
     end
@@ -1208,6 +1220,7 @@ function optimization_passes(
                 "reshape_wrap",
                 "reshape_rotate",
                 "reshape_extend",
+                "delete_dims_broadcast",
             ],
         )
         if AGGRESSIVE_PROPAGATION[]
@@ -2107,16 +2120,22 @@ function compile_mlir!(
         )
         # We tried propagating reshapes and transposes up. If at this point we are left
         # with them, we propagate them down to minimize the number of Ops in the IR.
+        # Since this might enable certain raising, we do push down -> push up -> push down
+        common_kwargs = (;
+            recognize_comms,
+            lower_comms,
+            backend,
+            is_sharded,
+            raise_shlo_to_blas_lapack=false,
+        )
+        opt_passes_down = optimization_passes(
+            Reactant.__compile_options_with_reversed_propagation(compile_options);
+            common_kwargs...,
+        )
+        opt_passes_up = optimization_passes(compile_options; common_kwargs...)
         run_pass_pipeline!(
             mod,
-            optimization_passes(
-                Reactant.__compile_options_with_reversed_propagation(compile_options);
-                recognize_comms,
-                lower_comms,
-                backend,
-                is_sharded,
-                raise_shlo_to_blas_lapack=false,
-            ),
+            join([opt_passes_down, opt_passes_up, opt_passes_down], ","),
             "post_op_transpose_reshape",
         )
     end
