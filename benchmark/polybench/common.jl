@@ -50,7 +50,7 @@ function run_benchmark!(
     compile_modes = [("Default", Reactant.CompileOptions())]
     # NOTE: extremely slow to benchmark
     # if backend == "CPU"
-    #     push!(compile_modes, ("XLA", Reactant.DefaultXLACompileOptions()))
+    #     push!(compile_modes, ("NoOpt", Reactant.DefaultXLACompileOptions()))
     #     push!(
     #         compile_modes,
     #         ("NoRaising", Reactant.CompileOptions(; disable_loop_raising_passes=true)),
