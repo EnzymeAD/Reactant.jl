@@ -834,7 +834,6 @@ function optimization_passes(
         "reduce_window_wrap<1>",
         "slice_reduce_window<1>",
         "while_deadresult",
-        "while_idempotent_dus",
         "while_dus",
         "while_updatewithoutcorners",
         "while_op_induction_replacement",
