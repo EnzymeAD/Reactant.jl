@@ -67,6 +67,7 @@ end
         @safetestset "Python" include("integration/python.jl")
         @safetestset "Optimisers" include("integration/optimisers.jl")
         @safetestset "FillArrays" include("integration/fillarrays.jl")
+        @safetestset "ReactantExport" include("integration/reactant_export.jl")
         if ENZYMEJAX_INSTALLED[] && !Sys.isapple()
             @safetestset "EnzymeJAX Export" include("integration/enzymejax.jl")
         end
