@@ -1453,10 +1453,11 @@ end
 @static if !Sys.isapple()
     @setup_workload begin
         Reactant.MLIR.IR.initialize_dialect()
-        Reactant.MLIR.IR.@dispose ctx = Reactant.MLIR.IR.Context(Reactant.MLIR.IR.default_registry[]) begin
+        Reactant.MLIR.IR.@dispose ctx = Reactant.MLIR.IR.Context(
+            Reactant.MLIR.IR.default_registry[]
+        ) begin
             Reactant.MLIR.IR.register_enzymexla_dialects(ctx)
             Reactant.MLIR.IR.@scope ctx begin
-
                 if Reactant.XLA.REACTANT_XLA_RUNTIME == "PJRT"
                     client = Reactant.XLA.PJRT.CPUClient(; checkcount=false)
                 elseif Reactant.XLA.REACTANT_XLA_RUNTIME == "IFRT"
