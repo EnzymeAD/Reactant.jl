@@ -634,7 +634,7 @@ function sharding_to_array_slices(
                 )
 
                 mlir_attr = MLIR.API.mlirDictionaryAttrGetElementByName(
-                    MLIR.IR.attr(func, "res_attrs")[0], "sdy.sharding"
+                    MLIR.IR.getattr(func, "res_attrs")[0], "sdy.sharding"
                 )
                 @assert mlir_attr.ptr != C_NULL
                 sharding = sdy_tensor_sharding_to_named_sharding(
@@ -1167,7 +1167,7 @@ function sdy_sharding_to_reactant_sharding(attr, global_device_ids, mod)
         false,
     )
     return sdy_tensor_sharding_to_named_sharding(
-        sdy_mesh_to_reactant_mesh(MLIR.IR.attr(mesh_op, "mesh"), global_device_ids),
+        sdy_mesh_to_reactant_mesh(MLIR.IR.getattr(mesh_op, "mesh"), global_device_ids),
         MLIR.IR.Attribute(mlir_attr),
     )
 end

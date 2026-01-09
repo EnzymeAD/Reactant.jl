@@ -265,7 +265,7 @@ mutable struct CompiledMlirFnResult{F,TR,Re,Rt,LA,LR,PA,CR,M,MA,RS,GD,DA}
 end
 
 function is_pure(func)
-    attr = MLIR.IR.attr(func, "enzymexla.memory_effects")
+    attr = MLIR.IR.getattr(func, "enzymexla.memory_effects")
     # conservatively assume is not pure
     if attr isa Nothing
         return false
@@ -860,16 +860,16 @@ function finalize_mlir_fn(
             sym_name=__lookup_unique_name_in_module(mod, name),
             function_type=MLIR.IR.FunctionType(in_tys, out_tys),
             body=MLIR.IR.Region(),
-            arg_attrs=MLIR.IR.attr(func, "arg_attrs"),
-            res_attrs=MLIR.IR.attr(func, "res_attrs"),
-            no_inline=MLIR.IR.attr(func, "no_inline"),
+            arg_attrs=MLIR.IR.getattr(func, "arg_attrs"),
+            res_attrs=MLIR.IR.getattr(func, "res_attrs"),
+            no_inline=MLIR.IR.getattr(func, "no_inline"),
             sym_visibility,
         )
     end
 
-    mem = MLIR.IR.attr(func, "enzymexla.memory_effects")
+    mem = MLIR.IR.getattr(func, "enzymexla.memory_effects")
     if !(mem isa Nothing)
-        MLIR.IR.attr!(func2, "enzymexla.memory_effects", mem)
+        MLIR.IR.setattr!(func2, "enzymexla.memory_effects", mem)
     end
 
     MLIR.API.mlirRegionTakeBody(MLIR.IR.region(func2, 1), MLIR.IR.region(func, 1))
@@ -991,8 +991,8 @@ function finalize_mlir_fn(
         num_partitions = 1
     end
 
-    MLIR.API.mlirOperationDestroy(func.operation)
-    func.operation = MLIR.API.MlirOperation(C_NULL)
+    MLIR.API.mlirOperationDestroy(func.ref)
+    func.ref = MLIR.API.MlirOperation(C_NULL)
 
     return (
         func2,
@@ -1239,7 +1239,7 @@ function elem_apply(f, args::Vararg{Any,Nargs}) where {Nargs}
         seen_results, result, (), Reactant.TracedSetPath; tobatch=OutShape
     )
 
-    func2.operation = MLIR.API.MlirOperation(C_NULL)
+    func2.ref = MLIR.API.MlirOperation(C_NULL)
 
     return traced2_result
 end

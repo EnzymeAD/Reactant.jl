@@ -86,7 +86,7 @@ function XLA.compile(
         exec = MLIR.IR.try_compile_dump_mlir(mod) do
             @ccall MLIR.API.mlir_c.ifrt_compile_with_proto(
                 client.client::Ptr{Cvoid},
-                mod.module_::MLIR.API.MlirModule,
+                mod.ref::MLIR.API.MlirModule,
                 compile_options_bytes::Ptr{UInt8},
                 length(compile_options_bytes)::Csize_t,
             )::Ptr{Cvoid}

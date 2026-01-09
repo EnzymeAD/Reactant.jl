@@ -1,13 +1,9 @@
-struct Value
-    value::API.MlirValue
-
-    function Value(value)
-        @assert !mlirIsNull(value) "cannot create Value with null MlirValue"
-        return new(value)
-    end
+@checked struct Value
+    ref::API.MlirValue
 end
 
-Base.convert(::Core.Type{API.MlirValue}, value::Value) = value.value
+Base.cconvert(::Core.Type{API.MlirValue}, value::Value) = value.ref
+
 Base.size(value::Value) = Base.size(type(value))
 Base.ndims(value::Value) = Base.ndims(type(value))
 
@@ -39,7 +35,7 @@ Returns the block in which this value is defined as an argument. Asserts if the 
 """
 function block_owner(value::Value)
     @assert is_block_arg(value) "could not get owner, value is not a block argument"
-    return Block(API.mlirBlockArgumentGetOwner(value), false)
+    return Block(API.mlirBlockArgumentGetOwner(value))
 end
 
 """
@@ -49,18 +45,18 @@ Returns an operation that produced this value as its result. Asserts if the valu
 """
 function op_owner(value::Value)
     @assert is_op_res(value) "could not get owner, value is not an op result"
-    return Operation(API.mlirOpResultGetOwner(value), false)
+    return Operation(API.mlirOpResultGetOwner(value))
 end
 
 function owner(value::Value)
     if is_block_arg(value)
         raw_block = API.mlirBlockArgumentGetOwner(value)
         mlirIsNull(raw_block) && return nothing
-        return Block(raw_block, false)
+        return Block(raw_block)
     elseif is_op_res(value)
         raw_op = API.mlirOpResultGetOwner(value)
         mlirIsNull(raw_op) && return nothing
-        return Operation(raw_op, false)
+        return Operation(raw_op)
     else
         error("Value is neither a block argument nor an op result")
     end
@@ -104,11 +100,11 @@ Returns the type of the value.
 type(value::Value) = Type(API.mlirValueGetType(value))
 
 """
-    set_type!(value, type)
+    settype!(value, type)
 
 Sets the type of the block argument to the given type.
 """
-function type!(value, type)
+function settype!(value, type)
     @assert is_block_arg(value) "could not set type, value is not a block argument"
     API.mlirBlockArgumentSetType(value, type)
     return value

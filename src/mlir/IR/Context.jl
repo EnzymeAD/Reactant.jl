@@ -1,15 +1,5 @@
-struct Context
-    context::API.MlirContext
-
-    """
-        Context(context::API.MlirContext)
-
-    Wraps a given MlirContext in a Context struct and transfers ownership to the caller.
-    """
-    function Context(context)
-        @assert !mlirIsNull(context) "cannot create Context with null MlirContext"
-        return new(context)
-    end
+@checked struct Context
+    ref::API.MlirContext
 end
 
 """
@@ -44,12 +34,12 @@ Disposes the given context and releases its resources.
 After calling this function, the context must not be used anymore.
 """
 function dispose!(ctx::Context)
-    @assert !mlirIsNull(ctx.context) "Context already disposed"
-    API.mlirContextDestroy(ctx.context)
+    @assert !mlirIsNull(ctx.ref) "Context already disposed"
+    # deactivate!(ctx)
+    API.mlirContextDestroy(ctx.ref)
 end
 
-Base.cconvert(::Core.Type{API.MlirContext}, c::Context) = c.context
-Base.unsafe_convert(::Core.Type{API.MlirContext}, c::Context) = c.context
+Base.cconvert(::Core.Type{API.MlirContext}, c::Context) = c.ref
 
 Base.:(==)(a::Context, b::Context) = API.mlirContextEqual(a, b)
 
@@ -64,32 +54,27 @@ end
 function activate!(ctx::Context)
     stack = get!(task_local_storage(), :mlir_context_stack) do
         return Context[]
-    end
+    end::Vector{Context}
     Base.push!(stack, ctx)
     return nothing
 end
 
 function deactivate!(ctx::Context)
     context() == ctx || error("Deactivating wrong context")
-    return Base.pop!(task_local_storage(:mlir_context_stack))
+    return Base.pop!(task_local_storage(:mlir_context_stack)::Vector{Context})
 end
 
-function dispose!(ctx::Context)
-    deactivate!(ctx)
-    return API.mlirContextDestroy(ctx.context)
-end
-
-function has_active_context()
+function has_context()
     return haskey(task_local_storage(), :mlir_context_stack) &&
-           !Base.isempty(task_local_storage(:mlir_context_stack))
+           !Base.isempty(task_local_storage(:mlir_context_stack)::Vector{Context})
 end
-const _has_context = has_active_context
+const _has_context = has_context
 
 function context(; throw_error::Core.Bool=true)
-    if !has_active_context()
+    if !has_context()
         throw_error && error("No MLIR context is active")
     end
-    return last(task_local_storage(:mlir_context_stack))
+    return last(task_local_storage(:mlir_context_stack)::Vector{Context})
 end
 
 """
@@ -111,7 +96,7 @@ context, that context is used. Otherwise, a new context is created for the durat
 """
 function with_context(f; allow_use_existing=false)
     delete_context = false
-    if allow_use_existing && has_active_context()
+    if allow_use_existing && has_context()
         ctx = context()
     else
         delete_context = true

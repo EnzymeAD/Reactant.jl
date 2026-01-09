@@ -1,5 +1,5 @@
-struct Attribute
-    attribute::API.MlirAttribute
+@checked struct Attribute
+    ref::API.MlirAttribute
 end
 
 """
@@ -9,7 +9,7 @@ Returns an empty attribute.
 """
 Attribute() = Attribute(API.mlirAttributeGetNull())
 
-Base.convert(::Core.Type{API.MlirAttribute}, attribute::Attribute) = attribute.attribute
+Base.cconvert(::Core.Type{API.MlirAttribute}, attribute::Attribute) = attribute.ref
 
 """
     parse(::Core.Type{Attribute}, str; context=context())
@@ -859,21 +859,23 @@ function Base.show(io::IO, attribute::Attribute)
     return print(io, " =#)")
 end
 
-struct NamedAttribute
-    named_attribute::API.MlirNamedAttribute
-end
-
 """
     NamedAttribute(name, attr)
 
-Associates an attribute with the name. Takes ownership of neither.
+Associates an attribute with the name.
 """
-function NamedAttribute(name, attribute; context=context(attribute))
-    @assert !mlirIsNull(attribute.attribute)
-    name = API.mlirIdentifierGet(context, name)
-    return NamedAttribute(API.mlirNamedAttributeGet(name, attribute))
+@checked struct NamedAttribute
+    ref::API.MlirNamedAttribute
 end
 
-function Base.convert(::Core.Type{API.MlirAttribute}, named_attribute::NamedAttribute)
-    return named_attribute.named_attribute
+function NamedAttribute(name::String, attribute; context=context(attribute))
+    nameid = Identifier(name; context)
+    return NamedAttribute(nameid, attribute)
 end
+
+function NamedAttribute(name::Identifier, attr::Attribute; context=context(attr))
+    @assert !mlirIsNull(attribute.ref)
+    return NamedAttribute(API.mlirNamedAttributeGet(name, attr))
+end
+
+Base.cconvert(::Core.Type{API.MlirAttribute}, attr::NamedAttribute) = attr.ref

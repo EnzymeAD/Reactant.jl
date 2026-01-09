@@ -1251,11 +1251,11 @@ end
         ).f
     @assert MLIR.IR.nregions(func) == 1
     fn_name = String(
-        MLIR.IR.attr(func, String(MLIR.API.mlirSymbolTableGetSymbolAttributeName()))
+        MLIR.IR.getattr(func, String(MLIR.API.mlirSymbolTableGetSymbolAttributeName()))
     )
     #C5:
     @assert fn_name == "comparator" "$comparator: no function generated"
-    ftype_attr = MLIR.IR.attr(func, "function_type")
+    ftype_attr = MLIR.IR.getattr(func, "function_type")
     ftype = MLIR.IR.Type(ftype_attr)
     @assert MLIR.IR.result(ftype) == MLIR.IR.TensorType(Int[], MLIR.IR.Type(Bool)) error(
         "$comparator return type is not tensor<i1>"
@@ -1314,7 +1314,7 @@ end
         ).f
     @assert MLIR.IR.nregions(func) == 1
     fn_name = MLIR.IR.FlatSymbolRefAttribute(
-        String(MLIR.IR.attr(func, String(MLIR.API.mlirSymbolTableGetSymbolAttributeName())))
+        String(MLIR.IR.getattr(func, String(MLIR.API.mlirSymbolTableGetSymbolAttributeName())))
     )
 
     iota_arg = iota(Int32, collect(Int64, size(x)); iota_dimension=dimension, location)
@@ -1863,11 +1863,11 @@ julia> Reactant.@jit(
         new_mod = parse(MLIR.IR.Module, code)
         new_mod_op = MLIR.IR.Operation(new_mod)
         body = MLIR.IR.body(new_mod)
+        operations = collect(body)
 
-        operations = collect(MLIR.IR.OperationIterator(body))
         for op in operations
             if MLIR.IR.name(op) == "func.func"
-                fn_name = String(MLIR.IR.attr(op, symbol_attr_name))
+                fn_name = String(MLIR.IR.getattr(op, symbol_attr_name))
                 if fn_name == func_name
                     fn = op
                 end
@@ -1881,14 +1881,14 @@ julia> Reactant.@jit(
                 @assert res == MLIR.IR.success() "hlo_call: failed to rename $fn_name"
 
                 # Set function private
-                MLIR.IR.attr!(
+                MLIR.IR.setattr!(
                     op,
                     MLIR.API.mlirSymbolTableGetVisibilityAttributeName(),
                     MLIR.IR.Attribute("private"),
                 )
 
                 # Change function name
-                MLIR.IR.attr!(op, symbol_attr_name, MLIR.IR.Attribute(new_name))
+                MLIR.IR.setattr!(op, symbol_attr_name, MLIR.IR.Attribute(new_name))
             end
         end
 
@@ -1902,7 +1902,7 @@ julia> Reactant.@jit(
         error("hlo_call: could not find function $func_name in the provided module")
     end
 
-    ftype_attr = MLIR.IR.attr(fn, "function_type")
+    ftype_attr = MLIR.IR.getattr(fn, "function_type")
     ftype = MLIR.IR.Type(ftype_attr)
 
     @assert all(Base.Fix2(isa, Union{TracedRArray,TracedRNumber}), args) "hlo_call: all inputs to hlo_call should be reactant arrays or numbers"
@@ -2220,11 +2220,11 @@ end
     )
 
     if !mincut
-        MLIR.IR.attr!(while_op, "enzyme.disable_mincut", MLIR.IR.UnitAttribute())
+        MLIR.IR.setattr!(while_op, "enzyme.disable_mincut", MLIR.IR.UnitAttribute())
     end
 
     if checkpointing
-        MLIR.IR.attr!(while_op, "enzymexla.enable_checkpointing", MLIR.IR.Attribute(true))
+        MLIR.IR.setattr!(while_op, "enzymexla.enable_checkpointing", MLIR.IR.Attribute(true))
     end
 
     return map(enumerate(linear_args)) do (i, arg)
@@ -2587,8 +2587,8 @@ end
     MLIR.API.mlirRegionTakeBody(
         MLIR.IR.region(true_fn_compiled, 1), MLIR.IR.region(true_func_tmp, 1)
     )
-    MLIR.API.mlirOperationDestroy(true_func_tmp.operation)
-    true_func_tmp.operation = MLIR.API.MlirOperation(C_NULL)
+    MLIR.API.mlirOperationDestroy(true_func_tmp.ref)
+    true_func_tmp.ref = MLIR.API.MlirOperation(C_NULL)
 
     fb_out_types = [mlir_type(fr) for fr in fb_corrected_linear_results]
 
@@ -2605,8 +2605,8 @@ end
     MLIR.API.mlirRegionTakeBody(
         MLIR.IR.region(false_fn_compiled, 1), MLIR.IR.region(false_func_tmp, 1)
     )
-    MLIR.API.mlirOperationDestroy(false_func_tmp.operation)
-    false_func_tmp.operation = MLIR.API.MlirOperation(C_NULL)
+    MLIR.API.mlirOperationDestroy(false_func_tmp.ref)
+    false_func_tmp.ref = MLIR.API.MlirOperation(C_NULL)
 
     tb_region = Reactant.TracedUtils.__take_region(true_fn_compiled)
     fb_region = Reactant.TracedUtils.__take_region(false_fn_compiled)
@@ -2932,7 +2932,7 @@ function _construct_reduce_function(f::F, Ts::Type...) where {F}
         ).f
 
     @assert MLIR.IR.nregions(func) == 1
-    ftype_attr = MLIR.IR.attr(func, "function_type")
+    ftype_attr = MLIR.IR.getattr(func, "function_type")
     ftype = MLIR.IR.Type(ftype_attr)
 
     @assert MLIR.IR.nresults(ftype) == length(Ts)

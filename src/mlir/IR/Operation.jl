@@ -1,18 +1,60 @@
-struct Operation
-    operation::API.MlirOperation
-
-    function Operation(operation)
-        @assert !mlirIsNull(operation) "cannot create Operation with null MlirOperation"
-        new(operation)
-    end
+@checked struct Operation
+    ref::API.MlirOperation
 end
 
-Base.cconvert(::Core.Type{API.MlirOperation}, op::Operation) = op
-function Base.unsafe_convert(::Core.Type{API.MlirOperation}, op::Operation)
-    return op.operation
+function dispose!(op::Operation)
+    @assert !mlirIsNull(op.ref) "Operation already disposed"
+    API.mlirOperationDestroy(op.ref)
+end
+
+function Base.cconvert(::Core.Type{API.MlirOperation}, op::Operation)
+    return op.ref
 end
 
 Base.:(==)(op::Operation, other::Operation) = API.mlirOperationEqual(op, other)
+
+"""
+    parse(::Type{Operation}, code; context=context())
+
+Parses an operation from the string and transfers ownership to the caller.
+"""
+function Base.parse(
+    ::Core.Type{Operation},
+    code;
+    verify::Bool=false,
+    context::Context=context(),
+    block=Block(),
+    location::Location=Location(),
+)
+    return Operation(
+        @ccall API.mlir_c.mlirOperationParse(
+            context::API.MlirContext,
+            block::API.MlirBlock,
+            code::API.MlirStringRef,
+            location::API.MlirLocation,
+            verify::Bool,
+        )::API.MlirOperation
+    )
+end
+
+function Base.show(io::IO, op::Operation)
+    if mlirIsNull(op.ref)
+        return write(io, "Operation(NULL)")
+    end
+
+    c_print_callback = @cfunction(print_callback, Cvoid, (API.MlirStringRef, Any))
+
+    buffer = IOBuffer()
+    ref = Ref(buffer)
+
+    flags = API.mlirOpPrintingFlagsCreate()
+
+    API.mlirOpPrintingFlagsEnableDebugInfo(flags, get(io, :debug, false), false)
+    API.mlirOperationPrintWithFlags(op, flags, c_print_callback, ref)
+    API.mlirOpPrintingFlagsDestroy(flags)
+
+    return write(io, rstrip(String(take!(buffer))))
+end
 
 """
     copy(op)
@@ -147,11 +189,11 @@ Return an array of all operands of the operation.
 operands(op) = Value[operand(op, i) for i in 1:noperands(op)]
 
 """
-    operand!(op, i, value)
+    setoperand!(op, i, value)
 
 Sets the `i`-th operand of the operation.
 """
-function operand!(op::Operation, i, value)
+function setoperand!(op::Operation, i, value)
     i ∉ 1:noperands(op) && throw(BoundsError(op, i))
     API.mlirOperationSetOperand(op, i - 1, value)
     return value
@@ -173,7 +215,7 @@ function successor(op::Operation, i)
     if i ∉ 1:nsuccessors(op)
         throw(BoundsError(op, i))
     end
-    return Block(API.mlirOperationGetSuccessor(op, i - 1), false)
+    return Block(API.mlirOperationGetSuccessor(op, i - 1))
 end
 
 """
@@ -184,11 +226,11 @@ Returns the number of attributes attached to the operation.
 nattrs(op::Operation) = API.mlirOperationGetNumAttributes(op)
 
 """
-    attr(op, i)
+    getattr(op, i)
 
 Return `i`-th attribute of the operation.
 """
-function attr(op::Operation, i)
+function getattr(op::Operation, i)
     if i ∉ 1:nattrs(op)
         throw(BoundsError(op, i))
     end
@@ -196,11 +238,11 @@ function attr(op::Operation, i)
 end
 
 """
-    attr(op, name)
+    getattr(op, name)
 
 Returns an attribute attached to the operation given its name.
 """
-function attr(op::Operation, name::AbstractString)
+function getattr(op::Operation, name::AbstractString)
     raw_attr = API.mlirOperationGetAttributeByName(op, name)
     if mlirIsNull(raw_attr)
         return nothing
@@ -209,11 +251,11 @@ function attr(op::Operation, name::AbstractString)
 end
 
 """
-    attr!(op, name, attr)
+    setattr!(op, name, attr)
 
 Sets an attribute by name, replacing the existing if it exists or adding a new one otherwise.
 """
-function attr!(op::Operation, name, attribute)
+function setattr!(op::Operation, name, attribute)
     API.mlirOperationSetAttributeByName(op, name, attribute)
     return op
 end
@@ -224,49 +266,6 @@ end
 Removes an attribute by name. Returns false if the attribute was not found and true if removed.
 """
 rmattr!(op::Operation, name) = API.mlirOperationRemoveAttributeByName(op, name)
-
-function Base.show(io::IO, op::Operation)
-    if mlirIsNull(op.operation)
-        return write(io, "Operation(NULL)")
-    end
-
-    c_print_callback = @cfunction(print_callback, Cvoid, (API.MlirStringRef, Any))
-
-    buffer = IOBuffer()
-    ref = Ref(buffer)
-
-    flags = API.mlirOpPrintingFlagsCreate()
-
-    API.mlirOpPrintingFlagsEnableDebugInfo(flags, get(io, :debug, false), false)
-    API.mlirOperationPrintWithFlags(op, flags, c_print_callback, ref)
-    API.mlirOpPrintingFlagsDestroy(flags)
-
-    return write(io, rstrip(String(take!(buffer))))
-end
-
-"""
-    parse(::Type{Operation}, code; context=context())
-
-Parses an operation from the string and transfers ownership to the caller.
-"""
-function Base.parse(
-    ::Core.Type{Operation},
-    code;
-    verify::Bool=false,
-    context::Context=context(),
-    block=Block(),
-    location::Location=Location(),
-)
-    return Operation(
-        @ccall API.mlir_c.mlirOperationParse(
-            context::API.MlirContext,
-            block::API.MlirBlock,
-            code::API.MlirStringRef,
-            location::API.MlirLocation,
-            verify::Bool,
-        )::API.MlirOperation
-    )
-end
 
 """
     verify(op)
@@ -303,6 +302,30 @@ This will return true if the dialect is loaded and the operation is registered w
 """
 function is_registered(opname; context::Context=context())
     API.mlirContextIsRegisteredOperation(context, opname)
+end
+
+Base.eltype(::Operation) = Region
+Base.length(it::Operation) = nregions(it.op)
+
+function Base.iterate(it::Operation)
+    raw_region = API.mlirOperationGetFirstRegion(it.op)
+    if mlirIsNull(raw_region)
+        nothing
+    else
+        region = Region(raw_region)
+        (it, region)
+    end
+end
+
+function Base.iterate(it::Operation, region)
+    raw_region = API.mlirRegionGetNextInOperation(region)
+    if mlirIsNull(raw_region)
+        nothing
+    else
+        region = Region(raw_region)
+        (it, region)
+    end
+end
 
 function create_operation_common(
     name,
@@ -328,7 +351,7 @@ function create_operation_common(
         if !isnothing(owned_regions)
             lose_ownership!.(owned_regions)
             GC.@preserve owned_regions begin
-                mlir_regions = Base.unsafe_convert.(API.MlirRegion, owned_regions)
+                mlir_regions = Base.cconvert.(API.MlirRegion, owned_regions)
                 API.mlirOperationStateAddOwnedRegions(
                     state, length(mlir_regions), mlir_regions
                 )
@@ -336,7 +359,7 @@ function create_operation_common(
         end
         if !isnothing(successors)
             GC.@preserve successors begin
-                mlir_blocks = Base.unsafe_convert.(API.MlirBlock, successors)
+                mlir_blocks = Base.cconvert.(API.MlirBlock, successors)
                 API.mlirOperationStateAddSuccessors(state, length(mlir_blocks), mlir_blocks)
             end
         end

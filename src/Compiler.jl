@@ -2208,11 +2208,11 @@ function compile_mlir!(
             func_with_padding = MLIR.Dialects.func.func_(;
                 sym_name=fnname,
                 function_type=MLIR.IR.FunctionType(in_tys_padded, out_tys_padded),
-                arg_attrs=MLIR.IR.attr(compiled_f, "arg_attrs"),
-                res_attrs=MLIR.IR.attr(compiled_f, "res_attrs"),
-                no_inline=MLIR.IR.attr(compiled_f, "no_inline"),
+                arg_attrs=MLIR.IR.getattr(compiled_f, "arg_attrs"),
+                res_attrs=MLIR.IR.getattr(compiled_f, "res_attrs"),
+                no_inline=MLIR.IR.getattr(compiled_f, "no_inline"),
                 body=MLIR.IR.Region(),
-                sym_visibility=MLIR.IR.attr(compiled_f, "private"),
+                sym_visibility=MLIR.IR.getattr(compiled_f, "private"),
             )
             fnbody = MLIR.IR.Block(
                 in_tys_padded,
@@ -2247,7 +2247,7 @@ function compile_mlir!(
                     call_args[i] = MLIR.IR.result(unpad_op, 1)
                 end
 
-                ftype = MLIR.IR.Type(MLIR.IR.attr(compiled_f, "function_type"))
+                ftype = MLIR.IR.Type(MLIR.IR.getattr(compiled_f, "function_type"))
                 call_op = MLIR.Dialects.func.call(
                     call_args;
                     result_0=[MLIR.IR.result(ftype, i) for i in 1:MLIR.IR.nresults(ftype)],
@@ -2306,7 +2306,7 @@ function compile_mlir!(
                 )
             end
 
-            MLIR.IR.attr!(compiled_f, "sym_visibility", MLIR.IR.Attribute("private"))
+            MLIR.IR.setattr!(compiled_f, "sym_visibility", MLIR.IR.Attribute("private"))
             run_pass_pipeline!(
                 mod,
                 "inline{default-pipeline=canonicalize max-iterations=4}",
@@ -2338,9 +2338,9 @@ function compile_mlir!(
 
         func_op = MLIR.API.mlirSymbolTableLookup(MLIR.IR.SymbolTable(module_op), fnname)
         @assert func_op.ptr !== C_NULL
-        func_op_new_module = MLIR.IR.Operation(func_op, false)
+        func_op_new_module = MLIR.IR.Operation(func_op)
 
-        result_attrs = MLIR.IR.attr(func_op_new_module, "res_attrs")
+        result_attrs = MLIR.IR.getattr(func_op_new_module, "res_attrs")
         if result_attrs !== nothing
             result_shardings = Vector{Union{Sharding.NamedSharding,Sharding.Replicated}}(
                 undef, length(result_attrs)
@@ -2417,7 +2417,7 @@ function compile_mlir!(
         MLIR.IR.SymbolTable(MLIR.IR.Operation(mod)), fnname
     )
     @assert func_op.ptr !== C_NULL
-    func_op = MLIR.IR.Operation(func_op, false)
+    func_op = MLIR.IR.Operation(func_op)
     fnbody = MLIR.IR.first_block(MLIR.IR.region(func_op, 1))::MLIR.IR.Block
     ret = MLIR.IR.terminator(fnbody)::MLIR.IR.Operation
 
@@ -2438,15 +2438,15 @@ function compile_mlir!(
         push!(preserved_args, (linear_results[i], MLIR.IR.block_arg_num(op)))
     end
 
-    MLIR.API.mlirOperationDestroy(ret.operation)
-    ret.operation = MLIR.API.MlirOperation(C_NULL)
+    MLIR.API.mlirOperationDestroy(ret.ref)
+    ret.ref = MLIR.API.MlirOperation(C_NULL)
     MLIR.IR.with_block(fnbody) do
         return MLIR.Dialects.func.return_(nresults)
     end
 
     out_tys2 = [MLIR.IR.type(a) for a in nresults]
 
-    res_attrs = MLIR.IR.attr(compiled_f, "res_attrs")
+    res_attrs = MLIR.IR.getattr(compiled_f, "res_attrs")
     if res_attrs isa MLIR.IR.Attribute
         res_attrs = MLIR.IR.Attribute[
             res_attrs[i - 1] for (i, present) in enumerate(results_mask) if present
@@ -2467,22 +2467,22 @@ function compile_mlir!(
     func3 = MLIR.Dialects.func.func_(;
         sym_name="main",
         function_type=MLIR.IR.FunctionType(in_tys, out_tys2),
-        arg_attrs=MLIR.IR.attr(compiled_f, "arg_attrs"),
+        arg_attrs=MLIR.IR.getattr(compiled_f, "arg_attrs"),
         res_attrs,
-        no_inline=MLIR.IR.attr(compiled_f, "no_inline"),
+        no_inline=MLIR.IR.getattr(compiled_f, "no_inline"),
         body=MLIR.IR.Region(),
     )
     MLIR.API.mlirRegionTakeBody(MLIR.IR.region(func3, 1), MLIR.IR.region(compiled_f, 1))
 
     push!(MLIR.IR.body(mod), func3)
 
-    mem = MLIR.IR.attr(compiled_f, "enzymexla.memory_effects")
+    mem = MLIR.IR.getattr(compiled_f, "enzymexla.memory_effects")
     if !(mem isa Nothing)
-        MLIR.IR.attr!(func3, "enzymexla.memory_effects", mem)
+        MLIR.IR.setattr!(func3, "enzymexla.memory_effects", mem)
     end
 
-    MLIR.API.mlirOperationDestroy(compiled_f.operation)
-    compiled_f.operation = MLIR.API.MlirOperation(C_NULL)
+    MLIR.API.mlirOperationDestroy(compiled_f.ref)
+    compiled_f.ref = MLIR.API.MlirOperation(C_NULL)
 
     # Add a `donated` attr to the function arguments. This doesn't affect XLA, but lets us
     # check which arguments were donated.
@@ -2512,10 +2512,10 @@ function compile_mlir!(
 
     # drop certain operations from the module if using TPU backend
     if backend == "tpu"
-        for op in collect(MLIR.IR.OperationIterator(MLIR.IR.body(mod)))
+        for op in collect(MLIR.IR.body(mod))
             if MLIR.IR.dialect(op) == :llvm
-                MLIR.API.mlirOperationDestroy(op.operation)
-                op.operation = MLIR.API.MlirOperation(C_NULL)
+                MLIR.API.mlirOperationDestroy(op.ref)
+                op.ref = MLIR.API.MlirOperation(C_NULL)
             end
         end
     end
@@ -3616,9 +3616,9 @@ function __add_mhlo_attributes_and_name!(
         mod, "reactant_" * fname
     )
     module_name = MLIR.IR.Attribute(module_name)
-    MLIR.IR.attr!(moduleop, "mhlo.num_partitions", MLIR.IR.Attribute(num_partitions))
-    MLIR.IR.attr!(moduleop, "mhlo.num_replicas", MLIR.IR.Attribute(num_replicas))
-    MLIR.IR.attr!(
+    MLIR.IR.setattr!(moduleop, "mhlo.num_partitions", MLIR.IR.Attribute(num_partitions))
+    MLIR.IR.setattr!(moduleop, "mhlo.num_replicas", MLIR.IR.Attribute(num_replicas))
+    MLIR.IR.setattr!(
         moduleop, String(MLIR.API.mlirSymbolTableGetSymbolAttributeName()), module_name
     )
     return nothing
@@ -3678,7 +3678,7 @@ function compile_xla(
     kwargs...,
 )
     # register MLIR dialects
-    ctx = MLIR.IR.Context(Reactant.registry[], false)
+    ctx = MLIR.IR.Context(Reactant.registry[])
     context_gc_vector[ctx] = Vector{Union{TracedRArray,TracedRNumber}}(undef, 0)
     @ccall MLIR.API.mlir_c.RegisterDialects(ctx::MLIR.API.MlirContext)::Cvoid
 
