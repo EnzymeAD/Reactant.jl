@@ -90,9 +90,7 @@ const passes_initialized = Ref(false)
 
 function initialize_dialect()
     default_registry[] = DialectRegistry()
-    @ccall API.mlir_c.InitializeRegistry(
-        default_registry[]::API.MlirDialectRegistry
-    )::Cvoid
+    @ccall API.mlir_c.InitializeRegistry(default_registry[]::API.MlirDialectRegistry)::Cvoid
     if !passes_initialized[]
         @ccall API.mlir_c.InitializePasses(
             default_registry[]::API.MlirDialectRegistry
@@ -115,7 +113,7 @@ function __init__()
     # this Context is freed at exit
     ctx = Context(default_registry[]; threading=false)
     register_enzymexla_dialects(ctx)
-    activate!(ctx)
+    return activate!(ctx)
 end
 
 # TODO try to fuse it with Ops.hlo_call?

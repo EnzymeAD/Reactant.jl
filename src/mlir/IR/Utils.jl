@@ -55,14 +55,13 @@ in reverse order) after executing a block of code. This is often equivalent to c
 recourse constructor with do-block syntax, but without using (potentially costly) closures.
 """
 macro dispose(ex...)
-    resources = ex[1:end-1]
+    resources = ex[1:(end - 1)]
     code = ex[end]
 
     Meta.isexpr(code, :block) ||
         error("Expected a code block as final argument to LLVM.@dispose")
 
-    cleanup = quote
-    end
+    cleanup = quote end
     for res in reverse(resources)
         Meta.isexpr(res, :(=)) ||
             error("Resource arguments to LLVM.@dispose should be assignments")
@@ -78,7 +77,7 @@ macro dispose(ex...)
             end
         end
     end
-    esc(ex)
+    return esc(ex)
 end
 
 # TODO potentially move to `ScopedValues.@with` if we move from task-local storage to ScopedValues

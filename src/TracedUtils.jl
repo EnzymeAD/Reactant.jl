@@ -339,7 +339,9 @@ function make_mlir_fn(
 
     result = MLIR.IR.@scope fnbody begin
         try
-            process_linear_args!(linear_args, fnbody, do_transpose, optimize_then_pad, inv_map)
+            process_linear_args!(
+                linear_args, fnbody, do_transpose, optimize_then_pad, inv_map
+            )
 
             if isempty(kwargs)
                 Reactant.call_with_reactant(f, traced_args...)

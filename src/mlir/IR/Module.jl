@@ -7,7 +7,8 @@ end
 
 Creates a new, empty module and transfers ownership to the caller.
 """
-Module(; location::Location=Location()) = Module(mark_alloc(API.mlirModuleCreateEmpty(location)))
+Module(; location::Location=Location()) =
+    Module(mark_alloc(API.mlirModuleCreateEmpty(location)))
 
 Module(op::Operation) = Module(mark_alloc(API.mlirModuleFromOperation(op)))
 
@@ -31,7 +32,7 @@ function Base.parse(::Core.Type{Module}, str; context::Context=context())
 end
 
 macro mlir_str(code)
-    :(parse(Module, $code))
+    return :(parse(Module, $code))
 end
 
 """

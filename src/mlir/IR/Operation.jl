@@ -21,15 +21,17 @@ function Base.parse(
     block=Block(),
     location::Location=Location(),
 )
-    return Operation(mark_alloc(
-        @ccall API.mlir_c.mlirOperationParse(
-            context::API.MlirContext,
-            block::API.MlirBlock,
-            code::API.MlirStringRef,
-            location::API.MlirLocation,
-            verify::Bool,
-        )::API.MlirOperation
-    ))
+    return Operation(
+        mark_alloc(
+            @ccall API.mlir_c.mlirOperationParse(
+                context::API.MlirContext,
+                block::API.MlirBlock,
+                code::API.MlirStringRef,
+                location::API.MlirLocation,
+                verify::Bool,
+            )::API.MlirOperation
+        ),
+    )
 end
 
 function Base.show(io::IO, op::Operation)
