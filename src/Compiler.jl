@@ -837,6 +837,7 @@ function optimization_passes(
         "while_updatewithoutcorners",
         "while_op_induction_replacement",
         "dus_concat",
+        "dusdus_to_duspad",
         "slice_dus_to_concat",
         "sink_dus",
         "hoist_slice",
