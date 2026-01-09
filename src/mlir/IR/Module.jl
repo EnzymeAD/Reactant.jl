@@ -7,9 +7,9 @@ end
 
 Creates a new, empty module and transfers ownership to the caller.
 """
-Module(loc::Location=Location()) = Module(API.mlirModuleCreateEmpty(loc))
+Module(; location::Location=Location()) = Module(mark_alloc(API.mlirModuleCreateEmpty(location)))
 
-Module(op::Operation) = Module(API.mlirModuleFromOperation(op))
+Module(op::Operation) = Module(mark_alloc(API.mlirModuleFromOperation(op)))
 
 """
     dispose!(module)
@@ -17,12 +17,9 @@ Module(op::Operation) = Module(API.mlirModuleFromOperation(op))
 Disposes the given module and releases its resources.
 After calling this function, the module must not be used anymore.
 """
-function dispose!(mod_::Module)
-    @assert !mlirIsNull(mod_.ref) "Module already disposed"
-    return API.mlirModuleDestroy(mod_.ref)
-end
+dispose!(mod_::Module) = mark_dispose(API.mlirModuleDestroy, mod_)
 
-Base.cconvert(::Core.Type{API.MlirModule}, mod_::Module) = mod_.ref
+Base.cconvert(::Core.Type{API.MlirModule}, mod_::Module) = mark_use(mod_).ref
 
 """
     parse(::Type{Module}, module; context=context())
@@ -30,7 +27,7 @@ Base.cconvert(::Core.Type{API.MlirModule}, mod_::Module) = mod_.ref
 Parses a module from the string and transfers ownership to the caller.
 """
 function Base.parse(::Core.Type{Module}, str; context::Context=context())
-    return Module(API.mlirModuleCreateParse(context, str))
+    return Module(mark_alloc(API.mlirModuleCreateParse(context, str)))
 end
 
 macro mlir_str(code)

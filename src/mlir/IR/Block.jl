@@ -7,7 +7,7 @@ A `Block` is a sequence of operations with a list of arguments.
     ref::API.MlirBlock
 end
 
-Block() = Block(API.mlirBlockCreate(0, C_NULL, C_NULL))
+Block() = Block(mark_alloc(API.mlirBlockCreate(0, C_NULL, C_NULL)))
 
 """
     Block(args, locs)
@@ -16,7 +16,7 @@ Creates a new empty block with the given argument types and transfers ownership 
 """
 function Block(args::Vector{Type}, locs::Vector{Location})
     @assert length(args) == length(locs) "there should be one args for each locs (got $(length(args)) & $(length(locs)))"
-    return Block(API.mlirBlockCreate(length(args), args, locs))
+    return Block(mark_alloc(API.mlirBlockCreate(length(args), args, locs)))
 end
 
 """
@@ -25,12 +25,9 @@ end
 Disposes the given block and releases its resources.
 After calling this function, the block must not be used anymore.
 """
-function dispose!(blk::Block)
-    @assert !mlirIsNull(blk.ref) "Block already disposed"
-    return API.mlirBlockDestroy(blk.ref)
-end
+dispose!(blk::Block) = mark_dispose(API.mlirBlockDestroy, blk)
 
-Base.cconvert(::Core.Type{API.MlirBlock}, block::Block) = block.ref
+Base.cconvert(::Core.Type{API.MlirBlock}, block::Block) = mark_use(block).ref
 
 """
     ==(block, other)
@@ -137,7 +134,7 @@ Base.IteratorSize(::Core.Type{Block}) = Base.SizeUnknown()
 Base.eltype(::Block) = Operation
 
 function Base.iterate(it::Block)
-    raw_op = API.mlirBlockGetFirstOperation(it.ref)
+    raw_op = API.mlirBlockGetFirstOperation(it)
     if mlirIsNull(raw_op)
         nothing
     else

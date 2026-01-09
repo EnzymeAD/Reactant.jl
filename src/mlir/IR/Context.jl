@@ -3,7 +3,7 @@
 end
 
 """
-    Context(registry = DEFAULT_DIALECT_REGISTRY[]; threading = false)
+    Context(registry = default_registry[]; threading = false)
 
 Creates an MLIR context.
 
@@ -14,11 +14,11 @@ If you want to use a custom or empty registry, just pass it as the first argumen
 Context(DialectRegistry())
 ```
 """
-function Context(registry = DEFAULT_DIALECT_REGISTRY[]; threading::Bool=false)
+function Context(registry = default_registry[]; threading::Bool=false)
     if isnothing(registry)
         registry = DialectRegistry()
     end
-    return Context(API.mlirContextCreateWithRegistry(registry, threading))
+    return Context(mark_alloc(API.mlirContextCreateWithRegistry(registry, threading)))
 end
 
 """
@@ -28,12 +28,11 @@ Disposes the given context and releases its resources.
 After calling this function, the context must not be used anymore.
 """
 function dispose!(ctx::Context)
-    @assert !mlirIsNull(ctx.ref) "Context already disposed"
     # deactivate!(ctx)
-    return API.mlirContextDestroy(ctx.ref)
+    return mark_dispose(API.mlirContextDestroy, ctx)
 end
 
-Base.cconvert(::Core.Type{API.MlirContext}, c::Context) = c.ref
+Base.cconvert(::Core.Type{API.MlirContext}, c::Context) = mark_use(c).ref
 
 Base.:(==)(a::Context, b::Context) = API.mlirContextEqual(a, b)
 

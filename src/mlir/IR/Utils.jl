@@ -44,6 +44,43 @@ function visit(f, op)
     return all_ok
 end
 
+# imported from LLVM.jl
+"""
+    @dispose foo=Foo() bar=Bar() begin
+        ...
+    end
+
+Helper macro for disposing resources (by calling the `dispose` function for every resource
+in reverse order) after executing a block of code. This is often equivalent to calling the
+recourse constructor with do-block syntax, but without using (potentially costly) closures.
+"""
+macro dispose(ex...)
+    resources = ex[1:end-1]
+    code = ex[end]
+
+    Meta.isexpr(code, :block) ||
+        error("Expected a code block as final argument to LLVM.@dispose")
+
+    cleanup = quote
+    end
+    for res in reverse(resources)
+        Meta.isexpr(res, :(=)) ||
+            error("Resource arguments to LLVM.@dispose should be assignments")
+        push!(cleanup.args, :($dispose($(res.args[1]))))
+    end
+
+    ex = quote
+        let $(resources...)
+            try
+                $code
+            finally
+                $(cleanup.args...)
+            end
+        end
+    end
+    esc(ex)
+end
+
 # TODO potentially move to `ScopedValues.@with` if we move from task-local storage to ScopedValues
 """
     @scope obj begin
@@ -53,6 +90,11 @@ end
 Activates `obj` for the duration of `body`, then deactivates it.
 """
 macro scope(obj, body)
+    bodybody = if Base.isexpr(body, :block)
+        body.args
+    else
+        [body]
+    end
     if Base.isexpr(obj, :(=))
         prologue = esc(obj)
         symbol = obj.args[1]
@@ -64,7 +106,7 @@ macro scope(obj, body)
         $prologue
         activate!($symbol)
         try
-            $(esc(body))
+            $(esc.(bodybody)...)
         finally
             deactivate!($symbol)
         end

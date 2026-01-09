@@ -21,7 +21,7 @@ end
 Create a new top-level PassManager.
 """
 function PassManager(; context::Context=context())
-    return PassManager(API.mlirPassManagerCreate(context))
+    return PassManager(mark_alloc(API.mlirPassManagerCreate(context)))
 end
 
 """
@@ -30,12 +30,12 @@ end
 Create a new top-level PassManager anchored on `anchorOp`.
 """
 function PassManager(anchor_op::Operation; context::Context=context())
-    return PassManager(API.mlirPassManagerCreateOnOperation(context, anchor_op))
+    return PassManager(mark_alloc(API.mlirPassManagerCreateOnOperation(context, anchor_op)))
 end
 
-dispose!(pass::PassManager) = API.mlirPassManagerDestroy(pass.ref)
+dispose!(pass::PassManager) = mark_dispose(API.mlirPassManagerDestroy, pass)
 
-Base.cconvert(::Core.Type{API.MlirPassManager}, pass::PassManager) = pass.ref
+Base.cconvert(::Core.Type{API.MlirPassManager}, pass::PassManager) = mark_use(pass).ref
 
 """
     enable_ir_printing!(passManager)

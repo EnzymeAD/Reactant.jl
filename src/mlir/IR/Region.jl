@@ -7,7 +7,7 @@ end
 
 Creates a new empty region and transfers ownership to the caller.
 """
-Region() = Region(API.mlirRegionCreate())
+Region() = Region(mark_alloc(API.mlirRegionCreate()))
 
 """
     dispose!(region::Region)
@@ -15,12 +15,9 @@ Region() = Region(API.mlirRegionCreate())
 Disposes the given region and releases its resources.
 After calling this function, the region must not be used anymore.
 """
-function dispose!(region::Region)
-    @assert !mlirIsNull(region.ref) "Region already disposed"
-    return API.mlirRegionDestroy(region.ref)
-end
+dispose!(region::Region) = mark_dispose(API.mlirRegionDestroy, region)
 
-Base.cconvert(::Core.Type{API.MlirRegion}, region::Region) = region.ref
+Base.cconvert(::Core.Type{API.MlirRegion}, region::Region) = mark_use(region).ref
 
 """
     ==(region, other)
@@ -33,8 +30,7 @@ Base.IteratorSize(::Core.Type{Region}) = Base.SizeUnknown()
 Base.eltype(::Region) = Block
 
 function Base.iterate(it::Region)
-    reg = it.ref
-    raw_block = API.mlirRegionGetFirstBlock(reg)
+    raw_block = API.mlirRegionGetFirstBlock(it)
     if mlirIsNull(raw_block)
         nothing
     else

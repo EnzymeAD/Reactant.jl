@@ -54,47 +54,53 @@ end
 
 if Reactant_jll.is_available()
     @setup_workload begin
-        initialize_dialect()
+        MLIR.IR.initialize_dialect()
+        MLIR.IR.@dispose ctx = MLIR.IR.Context(MLIR.IR.default_registry[]) begin
+            MLIR.IR.register_enzymexla_dialects(ctx)
+            MLIR.IR.@scope ctx begin
 
-        if XLA.REACTANT_XLA_RUNTIME == "PJRT"
-            client = XLA.PJRT.CPUClient(; checkcount=false)
-        elseif XLA.REACTANT_XLA_RUNTIME == "IFRT"
-            client = XLA.IFRT.CPUClient(; checkcount=false)
-        else
-            error("Unsupported runtime: $(XLA.REACTANT_XLA_RUNTIME)")
-        end
-
-        @compile_workload begin
-            @static if precompilation_supported()
-                x = ConcreteRNumber(2.0; client)
-                compile(sin, (x,); client, optimize=:all)
-                if x isa ConcreteIFRTNumber
-                    XLA.free_buffer(x.data.buffer)
-                    x.data.buffer.buffer = C_NULL
+                if XLA.REACTANT_XLA_RUNTIME == "PJRT"
+                    client = XLA.PJRT.CPUClient(; checkcount=false)
+                elseif XLA.REACTANT_XLA_RUNTIME == "IFRT"
+                    client = XLA.IFRT.CPUClient(; checkcount=false)
                 else
-                    for dat in x.data
-                        XLA.free_buffer(dat.buffer)
-                        dat.buffer.buffer = C_NULL
+                    error("Unsupported runtime: $(XLA.REACTANT_XLA_RUNTIME)")
+                end
+
+                @compile_workload begin
+                    @static if precompilation_supported()
+                        x = ConcreteRNumber(2.0; client)
+                        compile(sin, (x,); client, optimize=:all)
+                        if x isa ConcreteIFRTNumber
+                            XLA.free_buffer(x.data.buffer)
+                            x.data.buffer.buffer = C_NULL
+                        else
+                            for dat in x.data
+                                XLA.free_buffer(dat.buffer)
+                                dat.buffer.buffer = C_NULL
+                            end
+                        end
+
+                        y = ConcreteRArray([2.0]; client)
+                        compile(Base.sum, (y,); client, optimize=:all)
+                        if y isa ConcreteIFRTArray
+                            XLA.free_buffer(y.data.buffer)
+                            y.data.buffer.buffer = C_NULL
+                        else
+                            for dat in y.data
+                                XLA.free_buffer(dat.buffer)
+                                dat.buffer.buffer = C_NULL
+                            end
+                        end
                     end
                 end
 
-                y = ConcreteRArray([2.0]; client)
-                compile(Base.sum, (y,); client, optimize=:all)
-                if y isa ConcreteIFRTArray
-                    XLA.free_buffer(y.data.buffer)
-                    y.data.buffer.buffer = C_NULL
-                else
-                    for dat in y.data
-                        XLA.free_buffer(dat.buffer)
-                        dat.buffer.buffer = C_NULL
-                    end
-                end
+                XLA.free_client(client)
+                client.client = C_NULL
             end
         end
-
-        XLA.free_client(client)
-        client.client = C_NULL
-        deinitialize_dialect()
+        
+        MLIR.IR.deinitialize_dialect()
         clear_oc_cache()
     end
 end
