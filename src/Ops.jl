@@ -2361,9 +2361,9 @@ end
     push!(MLIR.IR.region(false_func_tmp, 1), false_fn_body)
     false_fn_args = false_fn_names[1]
 
-    MLIR.IR.@scope false_fn_body begin
+    fb_result = MLIR.IR.@scope false_fn_body begin
         activate_constant_context!(false_fn_body)
-        fb_result = try
+        try
             for (i, arg) in enumerate(fb_linear_args)
                 # find the right path to index the traced arg.
                 path = nothing
