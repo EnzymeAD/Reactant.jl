@@ -1,21 +1,17 @@
-struct Type
-    type::API.MlirType
-
-    function Type(type)
-        @assert !mlirIsNull(type) "cannot create Type with null MlirType"
-        return new(type)
-    end
+@checked struct Type
+    ref::API.MlirType
 end
 
-Base.convert(::Core.Type{API.MlirType}, type::Type) = type.type
+Base.cconvert(::Core.Type{API.MlirType}, type::Type) = type.ref
 
 """
     parse(type; context=context())
 
 Parses a type. The type is owned by the context.
 """
-Base.parse(::Core.Type{Type}, s; context::Context=context()) =
+function Base.parse(::Core.Type{Type}, s; context::Context=context())
     Type(API.mlirTypeParseGet(context, s))
+end
 
 """
     ==(t1, t2)
@@ -73,8 +69,9 @@ isindex(type::Type) = API.mlirTypeIsAIndex(type)
 
 Creates a 1-bit signless integer type in the context. The type is owned by the context.
 """
-Type(::Core.Type{Bool}; context::Context=context()) =
+function Type(::Core.Type{Bool}; context::Context=context())
     Type(API.mlirIntegerTypeGet(context, 1))
+end
 
 # Integer types
 """
@@ -82,24 +79,27 @@ Type(::Core.Type{Bool}; context::Context=context()) =
 
 Creates a signless integer type of the given bitwidth in the context. The type is owned by the context.
 """
-Type(T::Core.Type{<:Integer}; context::Context=context()) =
+function Type(T::Core.Type{<:Integer}; context::Context=context())
     Type(API.mlirIntegerTypeGet(context, sizeof(T) * 8))
+end
 
 """
     Type(T::Core.Type{<:Signed}; context=context()
 
 Creates a signed integer type of the given bitwidth in the context. The type is owned by the context.
 """
-Type(T::Core.Type{<:Signed}; context::Context=context()) =
+function Type(T::Core.Type{<:Signed}; context::Context=context())
     Type(API.mlirIntegerTypeGet(context, sizeof(T) * 8))
+end
 
 """
     Type(T::Core.Type{<:Unsigned}; context=context()
 
 Creates an unsigned integer type of the given bitwidth in the context. The type is owned by the context.
 """
-Type(T::Core.Type{<:Unsigned}; context::Context=context()) =
+function Type(T::Core.Type{<:Unsigned}; context::Context=context())
     Type(API.mlirIntegerTypeUnsignedGet(context, sizeof(T) * 8))
+end
 
 """
     isinteger(type)

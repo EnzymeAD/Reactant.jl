@@ -82,7 +82,7 @@ function XLA.compile(
         exec = MLIR.IR.try_compile_dump_mlir(mod) do
             @ccall MLIR.API.mlir_c.ClientCompile(
                 client.client::Ptr{Cvoid},
-                mod.module_::MLIR.API.MlirModule,
+                mod.ref::MLIR.API.MlirModule,
                 device_id::Clong,
                 global_device_ids::Ptr{Clong},
                 length(global_device_ids)::Clong,

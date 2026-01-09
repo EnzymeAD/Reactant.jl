@@ -303,7 +303,7 @@ function replicate_array_to_all_devices(array::Array, sharding, mesh, size_arr)
     )
 
     # Manually write the MLIR for resharding resharding
-    ctx = MLIR.IR.Context(Reactant.registry[], false)
+    ctx = MLIR.IR.Context(Reactant.registry[])
     Reactant.Compiler.context_gc_vector[ctx] = Vector{
         Union{Reactant.TracedRArray,Reactant.TracedRNumber}
     }(

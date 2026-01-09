@@ -3,16 +3,11 @@
 
 A `Block` is a sequence of operations with a list of arguments.
 """
-struct Block
-    block::API.MlirBlock
-
-    function Block(block::API.MlirBlock)
-        @assert !mlirIsNull(block) "cannot create Block with null MlirBlock"
-        new(block)
-    end
+@checked struct Block
+    ref::API.MlirBlock
 end
 
-Block() = Block(Type[], Location[])
+Block() = Block(API.mlirBlockCreate(0, C_NULL, C_NULL))
 
 """
     Block(args, locs)
@@ -31,12 +26,11 @@ Disposes the given block and releases its resources.
 After calling this function, the block must not be used anymore.
 """
 function dispose!(blk::Block)
-    @assert !mlirIsNull(blk.block) "Block already disposed"
-    API.mlirBlockDestroy(blk.block)
+    @assert !mlirIsNull(blk.ref) "Block already disposed"
+    API.mlirBlockDestroy(blk.ref)
 end
 
-Base.cconvert(::Core.Type{API.MlirBlock}, block::Block) = block
-Base.unsafe_convert(::Core.Type{API.MlirBlock}, block::Block) = block.block
+Base.cconvert(::Core.Type{API.MlirBlock}, block::Block) = block.ref
 
 """
     ==(block, other)
@@ -139,6 +133,29 @@ function terminator(block::Block)
     return Operation(op)
 end
 
+Base.IteratorSize(::Core.Type{Block}) = Base.SizeUnknown()
+Base.eltype(::Block) = Operation
+
+function Base.iterate(it::Block)
+    raw_op = API.mlirBlockGetFirstOperation(it.ref)
+    if mlirIsNull(raw_op)
+        nothing
+    else
+        op = Operation(raw_op)
+        (it, op)
+    end
+end
+
+function Base.iterate(::Block, op)
+    raw_op = API.mlirOperationGetNextInBlock(op)
+    if mlirIsNull(raw_op)
+        nothing
+    else
+        op = Operation(raw_op)
+        (it, op)
+    end
+end
+
 """
     push!(block, operation)
 
@@ -191,14 +208,14 @@ end
 function activate!(blk::Block)
     stack = get!(task_local_storage(), :mlir_block_stack) do
         return Block[]
-    end
+    end::Vector{Block}
     Base.push!(stack, blk)
     return nothing
 end
 
 function deactivate!(blk::Block)
     current_block() == blk || error("Deactivating wrong block")
-    return Base.pop!(task_local_storage(:mlir_block_stack))
+    return Base.pop!(task_local_storage(:mlir_block_stack)::Vector{Block})
 end
 
 function has_current_block()

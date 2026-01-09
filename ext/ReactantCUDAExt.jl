@@ -981,7 +981,7 @@ function compile(job)
         @assert mmod != C_NULL
 
         linkRes = @ccall MLIR.API.mlir_c.LinkInModule(
-            MLIR.IR.mmodule()::MLIR.API.MlirModule,
+            MLIR.IR.current_module()::MLIR.API.MlirModule,
             mmod::MLIR.API.MlirModule,
             entryname::Cstring,
         )::MLIR.API.MlirOperation
@@ -1080,7 +1080,7 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
 ) where {F,tt}
     blockdim = CUDA.CuDim3(blocks)
     threaddim = CUDA.CuDim3(threads)
-    mod = MLIR.IR.mmodule()
+    mod = MLIR.IR.current_module()
 
     if convert == Val(true)
         args = recudaconvert.(args)
@@ -1117,9 +1117,9 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
     )
     voidty = MLIR.IR.Type(MLIR.API.mlirLLVMVoidTypeGet(ctx))
     wrapftype = MLIR.IR.Type(
-        MLIR.API.mlirLLVMFunctionTypeGet(voidty, length(wrapper_tys), wrapper_tys, false)
+        MLIR.API.mlirLLVMFunctionTypeGet(voidty, length(wrapper_tys), wrapper_tys)
     )
-    wrapfunc = MLIR.IR.block!(MLIR.IR.body(mod)) do
+    wrapfunc = MLIR.IR.with_block(MLIR.IR.body(mod)) do
         return MLIR.Dialects.llvm.func(;
             sym_name,
             sym_visibility=MLIR.IR.Attribute("private"),
@@ -1144,7 +1144,7 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
 
     symtab = MLIR.IR.SymbolTable(MLIR.IR.Operation(mod))
     gpufunc = MLIR.IR.lookup(symtab, fname)
-    MLIR.IR.attr!(
+    MLIR.IR.setattr!(
         gpufunc,
         "CConv",
         MLIR.IR.Attribute(MLIR.API.mlirLLVMCConvAttrGet(ctx, MLIR.API.MlirLLVMCConvC)),
@@ -1166,7 +1166,7 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
         end
 
         # TODO check for only integer and explicitly non cutraced types
-        MLIR.IR.block!(wrapbody) do
+        MLIR.IR.with_block(wrapbody) do
             argty = MLIR.IR.Type(
                 MLIR.API.mlirLLVMFunctionTypeGetInput(gpu_function_type, trueidx - 1)
             )
@@ -1237,7 +1237,7 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
             julia_arg = allargs[p[2]]
 
             offset = get_field_offset(typeof(julia_arg), p[3:end])
-            MLIR.IR.block!(wrapbody) do
+            MLIR.IR.with_block(wrapbody) do
                 ptr = MLIR.IR.result(
                     MLIR.Dialects.llvm.getelementptr(
                         alloc,
@@ -1254,7 +1254,7 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
         argidx += 1
     end
 
-    MLIR.IR.block!(wrapbody) do
+    MLIR.IR.with_block(wrapbody) do
         for arg in allocs
             if arg === nothing
                 continue
