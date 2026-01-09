@@ -57,18 +57,14 @@ for op in (:rfft, :fft, :ifft)
         dims::D
     end
     @eval AbstractFFTs.fftdims(p::$(plan_name)) = p.dims
-    @eval AbstractFFTs.$(plan_f)(x::Reactant.TracedRArray{T}, dims=1:ndims(x)) where {T} = $(
-        plan_name
-    ){
-        T,typeof(dims)
-    }(
-        dims
-    )
-    @eval Base.:*(p::$(plan_name){T}, x::Reactant.TracedRArray{T}) where {T} = AbstractFFTs.$(
-        op
-    )(
-        x, p.dims
-    )
+    @eval function AbstractFFTs.$(plan_f)(
+        x::Reactant.TracedRArray{T}, dims=1:ndims(x)
+    ) where {T}
+        return $(plan_name){T,typeof(dims)}(dims)
+    end
+    @eval function Base.:*(p::$(plan_name){T}, x::Reactant.TracedRArray{T}) where {T}
+        return AbstractFFTs.$(op)(x, p.dims)
+    end
 
     # In-place plan
     if op !== :rfft
@@ -79,16 +75,14 @@ for op in (:rfft, :fft, :ifft)
         end
 
         @eval AbstractFFTs.fftdims(p::$(plan_name!)) = p.dims
-        @eval AbstractFFTs.$(plan_f!)(x::Reactant.TracedRArray{T}, dims=1:ndims(x)) where {T} = $(
-            plan_name!
-        ){
-            T,typeof(dims)
-        }(
-            dims
-        )
-        @eval Base.:*(p::$(plan_name!){T}, x::Reactant.TracedRArray{T}) where {T} = copyto!(
-            x, AbstractFFTs.$(op)(x, p.dims)
-        )
+        @eval function AbstractFFTs.$(plan_f!)(
+            x::Reactant.TracedRArray{T}, dims=1:ndims(x)
+        ) where {T}
+            return $(plan_name!){T,typeof(dims)}(dims)
+        end
+        @eval function Base.:*(p::$(plan_name!){T}, x::Reactant.TracedRArray{T}) where {T}
+            return copyto!(x, AbstractFFTs.$(op)(x, p.dims))
+        end
     end
 end
 
@@ -124,23 +118,20 @@ for op in (:irfft,)
     #Inverse plan I need to store the real array length along the first dim in dims
     plan_name = Symbol("Reactant", uppercase(string(op)), "Plan")
     plan_f = Symbol("plan_", op)
-    @eval struct $(plan_name){T,D,I} <: AbstractFFTs.Plan{T}
+    @eval struct $(plan_name){T,D} <: AbstractFFTs.Plan{T}
         dims::D
-        length::I
+        length::Int
     end
     @eval AbstractFFTs.fftdims(p::$(plan_name)) = p.dims
-    @eval AbstractFFTs.$(plan_f)(x::Reactant.TracedRArray{T}, d::Integer, dims=1:ndims(x)) where {T} = $(
-        plan_name
-    ){
-        T,typeof(dims),typeof(d)
-    }(
-        dims, d
-    )
-    @eval Base.:*(p::$(plan_name){T}, x::Reactant.TracedRArray{T}) where {T} = AbstractFFTs.$(
-        op
-    )(
-        x, p.length, p.dims
-    )
+    @eval function AbstractFFTs.$(plan_f)(
+        x::Reactant.TracedRArray{T}, d::Integer, dims=1:ndims(x)
+    ) where {T}
+        return $(plan_name){T,typeof(dims)}(dims, d)
+    end
+
+    @eval function Base.:*(p::$(plan_name){T}, x::Reactant.TracedRArray{T}) where {T}
+        return AbstractFFTs.$(op)(x, p.length, p.dims)
+    end
 end
 
 end
