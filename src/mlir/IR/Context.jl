@@ -14,7 +14,7 @@ If you want to use a custom or empty registry, just pass it as the first argumen
 Context(DialectRegistry())
 ```
 """
-function Context(registry = default_registry[]; threading::Bool=false)
+function Context(registry=default_registry[]; threading::Bool=false)
     if isnothing(registry)
         registry = DialectRegistry()
     end

@@ -1456,7 +1456,7 @@ end
 
 # helper for debug purposes: String -> Text
 function run_pass_pipeline_on_source(source, pass_pipeline; enable_verifier=true)
-    return MLIR.IR.@dispose ctx=Context() begin
+    return MLIR.IR.@dispose ctx = Context() begin
         MLIR.IR.register_enzymexla_dialects(ctx)
         MLIR.IR.@scope ctx begin
             mod = parse(MLIR.IR.Module, source)
@@ -1713,7 +1713,7 @@ function compile_mlir!(
             activate_callcache!(callcache)
             activate_sdycache!(sdycache)
             activate_sdygroupidcache!(sdygroupidcache)
-        
+
             # Save in the TLS whether we are raising.  We identify that condition by
             # checking whether the user set an explicit list of passes, or chose
             # `raise=true` to use the default passes.
@@ -1723,7 +1723,7 @@ function compile_mlir!(
             end
             is_raising = raise isa String || raise
             activate_raising!(is_raising)
-        
+
             fnname = string(f)
             try
                 Reactant.TracedUtils.make_mlir_fn(
@@ -3685,10 +3685,7 @@ function compile_xla(
 
     # Resolve client and device
     client, device = __resolve_device_and_client(
-        client,
-        mlir_fn_res.seen_args,
-        mlir_fn_res.linear_args,
-        mlir_fn_res.is_sharded,
+        client, mlir_fn_res.seen_args, mlir_fn_res.linear_args, mlir_fn_res.is_sharded
     )
 
     # Attach a name, and partitioning attributes to the module

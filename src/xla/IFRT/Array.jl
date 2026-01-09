@@ -308,7 +308,7 @@ function replicate_array_to_all_devices(array::Array, sharding, mesh, size_arr)
         MLIR.IR.@scope ctx begin
             sdycache = Reactant.Compiler.default_sdycache()
             Reactant.Compiler.activate_sdycache!(sdycache)
-            
+
             try
                 data_mlir_type = [
                     MLIR.IR.TensorType(
@@ -343,7 +343,9 @@ function replicate_array_to_all_devices(array::Array, sharding, mesh, size_arr)
                 end
                 push!(MLIR.IR.body(mod), func)
 
-                MLIR.API.mlirFuncSetArgAttr(func, 0, "sdy.sharding", input_tensor_sharding_attr)
+                MLIR.API.mlirFuncSetArgAttr(
+                    func, 0, "sdy.sharding", input_tensor_sharding_attr
+                )
                 MLIR.API.mlirFuncSetResultAttr(
                     func, 0, "sdy.sharding", output_tensor_sharding_attr
                 )
