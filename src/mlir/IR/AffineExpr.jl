@@ -52,7 +52,7 @@ ismultipleof(expr::AffineExpr, factor) = API.mlirAffineExprIsMultipleOf(expr, fa
 Checks whether the given affine expression involves AffineDimExpr 'position'.
 """
 function isfunctionofdimexpr(expr::AffineExpr, position)
-    API.mlirAffineExprIsFunctionOfDim(expr, position)
+    return API.mlirAffineExprIsFunctionOfDim(expr, position)
 end
 
 """
@@ -68,7 +68,7 @@ isdimexpr(expr::AffineExpr) = API.mlirAffineExprIsADim(expr)
 Creates an affine dimension expression with 'position' in the context.
 """
 function AffineDimensionExpr(position; context::Context=context())
-    AffineExpr(API.mlirAffineDimExprGet(context, position))
+    return AffineExpr(API.mlirAffineDimExprGet(context, position))
 end
 
 """
@@ -84,7 +84,7 @@ issymbolexpr(expr::AffineExpr) = API.mlirAffineExprIsASymbol(expr)
 Creates an affine symbol expression with 'position' in the context.
 """
 function SymbolExpr(position; context::Context=context())
-    AffineExpr(API.mlirAffineSymbolExprGet(context, position))
+    return AffineExpr(API.mlirAffineSymbolExprGet(context, position))
 end
 
 """
@@ -119,7 +119,7 @@ isconstantexpr(expr::AffineExpr) = API.mlirAffineExprIsAConstant(expr)
 Creates an affine constant expression with 'constant' in the context.
 """
 function ConstantExpr(constant; context::Context=context())
-    AffineExpr(API.mlirAffineConstantExprGet(context, constant))
+    return AffineExpr(API.mlirAffineConstantExprGet(context, constant))
 end
 
 """
@@ -189,7 +189,7 @@ isfloordiv(expr::AffineExpr) = API.mlirAffineExprIsAFloorDiv(expr)
 Creates an affine floordiv expression with 'lhs' and 'rhs'.
 """
 function Base.div(lhs::AffineExpr, rhs::AffineExpr)
-    AffineExpr(API.mlirAffineFloorDivExprGet(lhs, rhs))
+    return AffineExpr(API.mlirAffineFloorDivExprGet(lhs, rhs))
 end
 
 Base.fld(lhs::AffineExpr, rhs::AffineExpr) = div(lhs, rhs)
@@ -207,7 +207,7 @@ isceildiv(expr::AffineExpr) = API.mlirAffineExprIsACeilDiv(expr)
 Creates an affine ceildiv expression with 'lhs' and 'rhs'.
 """
 function Base.cld(lhs::AffineExpr, rhs::AffineExpr)
-    AffineExpr(API.mlirAffineCeilDivExprGet(lhs, rhs))
+    return AffineExpr(API.mlirAffineCeilDivExprGet(lhs, rhs))
 end
 
 """
