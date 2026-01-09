@@ -156,7 +156,7 @@ end
     recvbuf::TracedRArray;
     location=mlir_stacktrace("mpi.wait", @__FILE__, @__LINE__),
 )
-    mpi_op_name = get_mpi_op_name(op)
+    mpi_op = get_mpi_op_enum(op)
 
     T = Reactant.unwrapped_eltype(sendbuf)
     mpi_datatype = get_mpi_datatype_enum(MPI.Datatype(T))
@@ -169,7 +169,7 @@ end
         count.mlir_data;
         outbuf=mlir_type(recvbuf),
         datatype=MLIR.API.enzymexlaMPIDatatypeAttrGet(MLIR.IR.context(), mpi_datatype),
-        op=mpi_op_name,
+        op=MLIR.API.enzymexlaMPIOpAttrGet(MLIR.IR.context(), mpi_op),
         location,
     )
 
@@ -177,35 +177,41 @@ end
     return recvbuf
 end
 
-function get_mpi_op_name(op)
-    if op == MPI.OP_NULL
-        return "MPI_OP_NULL"
-    elseif op == MPI.MAX
-        return "MPI_MAX"
-    elseif op == MPI.MIN
-        return "MPI_MIN"
-    elseif op == MPI.SUM
-        return "MPI_SUM"
-    elseif op == MPI.PROD
-        return "MPI_PROD"
-    elseif op == MPI.LAND
-        return "MPI_LAND"
-    elseif op == MPI.BAND
-        return "MPI_BAND"
-    elseif op == MPI.LOR
-        return "MPI_LOR"
-    elseif op == MPI.BOR
-        return "MPI_BOR"
-    elseif op == MPI.LXOR
-        return "MPI_LXOR"
-    elseif op == MPI.BXOR
-        return "MPI_BXOR"
-    elseif op == MPI.REPLACE
-        return "MPI_REPLACE"
-    elseif op == MPI.NO_OP
-        return "MPI_NO_OP"
-    else
-        throw(ArgumentError("Unknown MPI operation `$op`"))
+@enum MPIOpEnum begin
+    MPI_OP_NULL_ENUM = 0
+    MPI_BAND_ENUM = 1
+    MPI_BOR_ENUM = 2
+    MPI_BXOR_ENUM = 3
+    MPI_LAND_ENUM = 4
+    MPI_LOR_ENUM = 5
+    MPI_LXOR_ENUM = 6
+    MPI_MAX_ENUM = 7
+    MPI_MIN_ENUM = 8
+    MPI_PROD_ENUM = 9
+    MPI_REPLACE_ENUM = 10
+    MPI_SUM_ENUM = 11
+    MPI_NO_OP_ENUM = 12
+end
+
+const MPI_OP_MAP = Dict(
+    MPI.OP_NULL => MPI_OP_NULL_ENUM,
+    MPI.BAND => MPI_BAND_ENUM,
+    MPI.BOR => MPI_BOR_ENUM,
+    MPI.BXOR => MPI_BXOR_ENUM,
+    MPI.LAND => MPI_LAND_ENUM,
+    MPI.LOR => MPI_LOR_ENUM,
+    MPI.LXOR => MPI_LXOR_ENUM,
+    MPI.MAX => MPI_MAX_ENUM,
+    MPI.MIN => MPI_MIN_ENUM,
+    MPI.PROD => MPI_PROD_ENUM,
+    MPI.REPLACE => MPI_REPLACE_ENUM,
+    MPI.SUM => MPI_SUM_ENUM,
+    MPI.NO_OP => MPI_NO_OP_ENUM
+)
+
+function get_mpi_op_enum(op)
+    return get(MPI_OP_MAP, op) do
+        throw(ArgumentError("Unknown MPI op `$op`"))
     end
 end
 
