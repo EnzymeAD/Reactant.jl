@@ -1,4 +1,4 @@
-using FFTW, Reactant, Test
+using FFTW, Reactant, Test, LinearAlgebra
 
 @testset "fft" begin
     x = Reactant.TestUtils.construct_test_array(ComplexF32, 2, 2, 3, 4)
