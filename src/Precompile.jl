@@ -13,7 +13,6 @@ if Reactant_jll.is_available()
         MLIR.IR.@dispose ctx = MLIR.IR.Context(MLIR.IR.default_registry[]) begin
             MLIR.IR.register_enzymexla_dialects(ctx)
             MLIR.IR.@scope ctx begin
-
                 if XLA.REACTANT_XLA_RUNTIME == "PJRT"
                     client = XLA.PJRT.CPUClient(; checkcount=false)
                 elseif XLA.REACTANT_XLA_RUNTIME == "IFRT"
@@ -70,7 +69,7 @@ if Reactant_jll.is_available()
                 client.client = C_NULL
             end
         end
-        
+
         MLIR.IR.deinitialize_dialect()
     end
 end
