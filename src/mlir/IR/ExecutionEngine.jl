@@ -1,10 +1,5 @@
-struct ExecutionEngine
-    engine::API.MlirExecutionEngine
-
-    function ExecutionEngine(engine)
-        @assert !mlirIsNull(engine) "cannot create ExecutionEngine with null MlirExecutionEngine"
-        return finalizer(API.mlirExecutionEngineDestroy, new(engine))
-    end
+@checked struct ExecutionEngine
+    ref::API.MlirExecutionEngine
 end
 
 """
@@ -31,7 +26,9 @@ function ExecutionEngine(
     )
 end
 
-Base.convert(::Core.Type{API.MlirExecutionEngine}, engine::ExecutionEngine) = engine.engine
+dispose!(engine::ExecutionEngine) = API.mlirExecutionEngineDestroy(engine)
+
+Base.cconvert(::Core.Type{API.MlirExecutionEngine}, engine::ExecutionEngine) = engine.ref
 
 # TODO mlirExecutionEngineInvokePacked
 
@@ -56,5 +53,6 @@ end
 
 Dump as an object in `fileName`.
 """
-Base.write(filename::String, jit::ExecutionEngine) =
+function Base.write(filename::String, jit::ExecutionEngine)
     API.mlirExecutionEngineDumpToObjectFile(jit, filename)
+end

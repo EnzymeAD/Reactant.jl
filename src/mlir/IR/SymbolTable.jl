@@ -1,20 +1,17 @@
-mutable struct SymbolTable
-    st::API.MlirSymbolTable
-
-    function SymbolTable(st)
-        @assert !mlirIsNull(st) "cannot create SymbolTable with null MlirSymbolTable"
-        return finalizer(API.mlirSymbolTableDestroy, new(st))
-    end
+@checked struct SymbolTable
+    ref::API.MlirSymbolTable
 end
 
 """
-    mlirSymbolTableCreate(operation)
+    SymbolTable(operation)
 
 Creates a symbol table for the given operation. If the operation does not have the SymbolTable trait, returns a null symbol table.
 """
 SymbolTable(op::Operation) = SymbolTable(API.mlirSymbolTableCreate(op))
 
-Base.convert(::Core.Type{API.MlirSymbolTable}, st::SymbolTable) = st.st
+dispose!(st::SymbolTable) = API.mlirSymbolTableDestroy(st)
+
+Base.cconvert(::Core.Type{API.MlirSymbolTable}, st::SymbolTable) = st.ref
 
 # TODO mlirSymbolTableGetSymbolAttributeName
 # TODO mlirSymbolTableGetVisibilityAttributeName
@@ -30,7 +27,7 @@ function lookup(st::SymbolTable, name::AbstractString)
     if raw_op.ptr == C_NULL
         nothing
     else
-        Operation(raw_op, false)
+        Operation(raw_op)
     end
 end
 function Base.getindex(st::SymbolTable, name::AbstractString)

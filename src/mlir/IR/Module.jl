@@ -1,10 +1,5 @@
-struct Module
-    module_::API.MlirModule
-
-    function Module(mod)
-        @assert !mlirIsNull(mod) "cannot create Module with null MlirModule"
-        new(mod)
-    end
+@checked struct Module
+    ref::API.MlirModule
 end
 
 """
@@ -22,20 +17,20 @@ Module(op::Operation) = Module(API.mlirModuleFromOperation(op))
 Disposes the given module and releases its resources.
 After calling this function, the module must not be used anymore.
 """
-function dispose!(module_::Module)
-    @assert !mlirIsNull(module_.module_) "Module already disposed"
-    API.mlirModuleDestroy(module_.module_)
+function dispose!(mod_::Module)
+    @assert !mlirIsNull(mod_.ref) "Module already disposed"
+    API.mlirModuleDestroy(mod_.ref)
 end
 
-Base.convert(::Core.Type{API.MlirModule}, module_::Module) = module_.module_
+Base.cconvert(::Core.Type{API.MlirModule}, mod_::Module) = mod_.ref
 
 """
     parse(::Type{Module}, module; context=context())
 
 Parses a module from the string and transfers ownership to the caller.
 """
-function Base.parse(::Core.Type{Module}, module_; context::Context=context())
-    Module(API.mlirModuleCreateParse(context, module_))
+function Base.parse(::Core.Type{Module}, str; context::Context=context())
+    Module(API.mlirModuleCreateParse(context, str))
 end
 
 macro mlir_str(code)
@@ -57,7 +52,7 @@ context(mod_::Module) = Context(API.mlirModuleGetContext(mod_))
 
 Gets the body of the module, i.e. the only block it contains.
 """
-body(mod_) = Block(API.mlirModuleGetBody(mod_))
+body(mod_::Module) = Block(API.mlirModuleGetBody(mod_))
 
 """
     Operation(module)
@@ -70,21 +65,21 @@ function Base.show(io::IO, mod_::Module)
     return show(io, Operation(mod_))
 end
 
-verifyall(module_::Module; debug=false) = verifyall(Operation(module_); debug)
+verifyall(mod_::Module; debug=false) = verifyall(Operation(mod_); debug)
 
 # to simplify the API, we maintain a stack of modules in task local storage
 # and pass them implicitly to MLIR API's that require them.
 function activate!(_mod::Module)
     stack = get!(task_local_storage(), :mlir_module_stack) do
         return Module[]
-    end
+    end::Vector{Module}
     Base.push!(stack, _mod)
     return nothing
 end
 
 function deactivate!(_mod::Module)
     current_module() == _mod || error("Deactivating wrong block")
-    return Base.pop!(task_local_storage(:mlir_module_stack))
+    return Base.pop!(task_local_storage(:mlir_module_stack)::Vector{Module})
 end
 
 function _has_module()
@@ -97,7 +92,7 @@ function current_module(; throw_error::Core.Bool=true)
         throw_error && error("No MLIR module is active")
         return nothing
     end
-    return last(task_local_storage(:mlir_module_stack))
+    return last(task_local_storage(:mlir_module_stack)::Vector{Module})
 end
 
 @noinline function with_module(f, module_::Module)

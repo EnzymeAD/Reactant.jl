@@ -359,6 +359,6 @@ end
 # Not part of the public API. Exclusively for testing purposes.
 include("TestUtils.jl")
 
-include("Precompile.jl")
+# include("Precompile.jl")
 
 end # module

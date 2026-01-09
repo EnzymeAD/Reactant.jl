@@ -19,7 +19,7 @@ function Base.cconvert(::Core.Type{API.MlirStringRef}, s::AbstractString)
 end
 
 # Directly create `MlirStringRef` instead of adding an extra ccall.
-function Base.unsafe_convert(
+function Base.cconvert(
     ::Core.Type{API.MlirStringRef}, s::Union{Symbol,String,AbstractVector{UInt8}}
 )
     p = Base.unsafe_convert(Ptr{Cchar}, s)

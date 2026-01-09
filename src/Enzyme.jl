@@ -493,7 +493,7 @@ function overload_autodiff(
         residx += 1
     end
 
-    func2.operation = MLIR.API.MlirOperation(C_NULL)
+    func2.ref = MLIR.API.MlirOperation(C_NULL)
 
     if reverse
         if EnzymeCore.needs_primal(CMode)

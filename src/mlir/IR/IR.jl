@@ -3,26 +3,27 @@ module IR
 using ..Reactant
 using ..API
 
+using LLVM: @checked, @dispose
+import LLVM: activate, deactivate, dispose, refcheck
+const activate! = activate
+const deactivate! = deactivate
+const dispose! = dispose
+
+# fix for `@checked` on MLIR.API types
+for AT in [:MlirDialectRegistry, :MlirContext, :MlirLocation, :MlirTypeID, :MlirModule, :MlirOperation, :MlirBlock, :MlirRegion, :MlirValue, :MlirLogicalResult]
+    @eval refcheck(T::Type, ref::API.$AT) = refcheck(T, ref.ptr)
+end
+
 # WARN do not export `Type` nor `Module` as they are already defined in Core
 # also, use `Core.Type` and `Core.Module` inside this module to avoid clash with
 # MLIR `Type` and `Module`
 export Attribute, Block, Context, Dialect, Location, Operation, Region, Value
 export dispose!, @scope, current_block, current_module, current_region
-export context, type, type!, location, typeid, block, dialect
-export nattrs,
-    attr,
-    attr!,
-    rmattr!,
-    nregions,
-    region,
-    nresults,
-    result,
-    noperands,
-    operand,
-    operand!,
-    nsuccessors,
-    successor
-export BlockIterator, RegionIterator, OperationIterator
+export context, type, settype!, location, typeid, block, dialect
+export nattrs, getattr, setattr!, rmattr!
+export nregions, region
+export nresults, result, noperands, operand, setoperand!
+export nsuccessors, successor
 export @affinemap
 
 using Random: randstring
@@ -47,7 +48,6 @@ include("AffineExpr.jl")
 include("AffineMap.jl")
 include("Attribute.jl")
 include("IntegerSet.jl")
-include("Iterators.jl")
 
 include("ExecutionEngine.jl")
 include("Pass.jl")

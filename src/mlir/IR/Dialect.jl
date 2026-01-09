@@ -1,13 +1,8 @@
-struct Dialect
-    dialect::API.MlirDialect
-
-    function Dialect(dialect)
-        @assert !mlirIsNull(dialect) "cannot create Dialect from null MlirDialect"
-        return new(dialect)
-    end
+@checked struct Dialect
+    ref::API.MlirDialect
 end
 
-Base.convert(::Core.Type{API.MlirDialect}, dialect::Dialect) = dialect.dialect
+Base.cconvert(::Core.Type{API.MlirDialect}, dialect::Dialect) = dialect.ref
 Base.:(==)(a::Dialect, b::Dialect) = API.mlirDialectEqual(a, b)
 
 context(dialect::Dialect) = Context(API.mlirDialectGetContext(dialect))
@@ -41,8 +36,8 @@ function get_or_load_dialect!(name::String; context::Context=context())
     return Dialect(dialect)
 end
 
-struct DialectHandle
-    handle::API.MlirDialectHandle
+@checked struct DialectHandle
+    ref::API.MlirDialectHandle
 end
 
 function DialectHandle(s::Symbol)
@@ -50,7 +45,7 @@ function DialectHandle(s::Symbol)
     return DialectHandle(getproperty(API, s)())
 end
 
-Base.convert(::Core.Type{API.MlirDialectHandle}, handle::DialectHandle) = handle.handle
+Base.cconvert(::Core.Type{API.MlirDialectHandle}, handle::DialectHandle) = handle.ref
 
 namespace(handle::DialectHandle) = String(API.mlirDialectHandleGetNamespace(handle))
 
@@ -67,22 +62,21 @@ function load_dialect!(handle::DialectHandle; context::Context=context())
     return Dialect(API.mlirDialectHandleLoadDialect(handle, context))
 end
 
-mutable struct DialectRegistry
-    registry::API.MlirDialectRegistry
-
-    function DialectRegistry(registry)
-        @assert !mlirIsNull(registry) "cannot create DialectRegistry with null MlirDialectRegistry"
-        finalizer(new(registry)) do registry
-            return API.mlirDialectRegistryDestroy(registry.registry)
-        end
-    end
+@checked struct DialectRegistry
+    ref::API.MlirDialectRegistry
 end
 
 DialectRegistry() = DialectRegistry(API.mlirDialectRegistryCreate())
 
-function Base.convert(::Core.Type{API.MlirDialectRegistry}, registry::DialectRegistry)
-    return registry.registry
+function dispose!(registry::DialectRegistry)
+    @assert !mlirIsNull(registry.ref) "DialectRegistry already disposed"
+    API.mlirDialectRegistryDestroy(registry.ref)
 end
+
+function Base.cconvert(::Core.Type{API.MlirDialectRegistry}, registry::DialectRegistry)
+    return registry.ref
+end
+
 function Base.push!(registry::DialectRegistry, handle::DialectHandle)
     return API.mlirDialectHandleInsertDialect(handle, registry)
 end

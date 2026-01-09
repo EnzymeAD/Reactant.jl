@@ -1,10 +1,5 @@
-struct IntegerSet
-    set::API.MlirIntegerSet
-
-    function IntegerSet(set)
-        @assert !mlirIsNull(set) "cannot create IntegerSet with null MlirIntegerSet"
-        return new(set)
-    end
+@checked struct IntegerSet
+    ref::API.MlirIntegerSet
 end
 
 """
@@ -12,8 +7,9 @@ end
 
 Gets or creates a new canonically empty integer set with the give number of dimensions and symbols in the given context.
 """
-IntegerSet(ndims, nsymbols; context::Context=context()) =
+function IntegerSet(ndims, nsymbols; context::Context=context())
     IntegerSet(API.mlirIntegerSetEmptyGet(context, ndims, nsymbols))
+end
 
 """
     IntegerSet(ndims, nsymbols, constraints, eqflags; context=context())
@@ -22,30 +18,42 @@ Gets or creates a new integer set in the given context.
 The set is defined by a list of affine constraints, with the given number of input dimensions and symbols, which are treated as either equalities (eqflags is 1) or inequalities (eqflags is 0).
 Both `constraints` and `eqflags` need to be arrays of the same length.
 """
-IntegerSet(ndims, nsymbols, constraints, eqflags; context::Context=context()) = IntegerSet(
-    API.mlirIntegerSetGet(
-        context, ndims, nsymbols, length(constraints), constraints, eqflags
-    ),
-)
+function IntegerSet(ndims, nsymbols, constraints, eqflags; context::Context=context())
+    IntegerSet(
+        API.mlirIntegerSetGet(
+            context, ndims, nsymbols, length(constraints), constraints, eqflags
+        )
+    )
+end
+
+Base.cconvert(::Core.Type{API.MlirIntegerSet}, set::IntegerSet) = set.ref
+
+function Base.show(io::IO, set::IntegerSet)
+    print(io, "IntegerSet(#= ")
+    c_print_callback = @cfunction(print_callback, Cvoid, (API.MlirStringRef, Any))
+    ref = Ref(io)
+    API.mlirIntegerSetPrint(set, c_print_callback, ref)
+    return print(io, " =#)")
+end
 
 """
-    mlirIntegerSetReplaceGet(set, dimReplacements, symbolReplacements, numResultDims, numResultSymbols)
+    Base.replace(set::IntegerSet, dimReplacements, symbolReplacements, numResultDims, numResultSymbols)
 
 Gets or creates a new integer set in which the values and dimensions of the given set are replaced with the given affine expressions.
 `dimReplacements` and `symbolReplacements` are expected to point to at least as many consecutive expressions as the given set has dimensions and symbols, respectively.
 The new set will have `numResultDims` and `numResultSymbols` dimensions and symbols, respectively.
 """
-Base.replace(set::IntegerSet, dim_replacements, symbol_replacements) = IntegerSet(
-    API.mlirIntegerSetReplaceGet(
-        set,
-        dim_replacements,
-        symbol_replacements,
-        length(dim_replacements),
-        length(symbol_replacements),
-    ),
-)
-
-Base.convert(::Core.Type{API.MlirIntegerSet}, set::IntegerSet) = set.set
+function Base.replace(set::IntegerSet, dim_replacements, symbol_replacements)
+    IntegerSet(
+        API.mlirIntegerSetReplaceGet(
+            set,
+            dim_replacements,
+            symbol_replacements,
+            length(dim_replacements),
+            length(symbol_replacements),
+        )
+    )
+end
 
 """
     ==(s1, s2)
@@ -62,7 +70,7 @@ Base.:(==)(a::IntegerSet, b::IntegerSet) = API.mlirIntegerSetEqual(a, b)
 
 Gets the context in which the given integer set lives.
 """
-context(set::IntegerSet) = Context(API.mlirIntegerSetGetContext(set.set); owned=false)
+context(set::IntegerSet) = Context(API.mlirIntegerSetGetContext(set.set))
 
 """
     isempty(set)
@@ -126,11 +134,3 @@ constraint(set::IntegerSet, i) = API.mlirIntegerSetGetConstraint(set, i)
 Returns `true` of the `i`-th constraint of the set is an equality constraint, `false` otherwise.
 """
 isconstrainteq(set::IntegerSet, i) = API.mlirIntegerSetIsConstraintEq(set, i)
-
-function Base.show(io::IO, set::IntegerSet)
-    print(io, "IntegerSet(#= ")
-    c_print_callback = @cfunction(print_callback, Cvoid, (API.MlirStringRef, Any))
-    ref = Ref(io)
-    API.mlirIntegerSetPrint(set, c_print_callback, ref)
-    return print(io, " =#)")
-end

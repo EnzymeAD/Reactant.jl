@@ -1,5 +1,5 @@
 struct Region
-    region::API.MlirRegion
+    ref::API.MlirRegion
 
     function Region(region)
         @assert !mlirIsNull(region)
@@ -21,12 +21,11 @@ Disposes the given region and releases its resources.
 After calling this function, the region must not be used anymore.
 """
 function dispose!(region::Region)
-    @assert !mlirIsNull(region.region) "Region already disposed"
-    API.mlirRegionDestroy(region.region)
+    @assert !mlirIsNull(region.ref) "Region already disposed"
+    API.mlirRegionDestroy(region.ref)
 end
 
-Base.cconvert(::Core.Type{API.MlirRegion}, region::Region) = region
-Base.unsafe_convert(::Core.Type{API.MlirRegion}, region::Region) = region.region
+Base.cconvert(::Core.Type{API.MlirRegion}, region::Region) = region.ref
 
 """
     ==(region, other)
@@ -34,6 +33,30 @@ Base.unsafe_convert(::Core.Type{API.MlirRegion}, region::Region) = region.region
 Checks whether two region handles point to the same region. This does not perform deep comparison.
 """
 Base.:(==)(a::Region, b::Region) = API.mlirRegionEqual(a, b)
+
+Base.IteratorSize(::Core.Type{Region}) = Base.SizeUnknown()
+Base.eltype(::Region) = Block
+
+function Base.iterate(it::Region)
+    reg = it.ref
+    raw_block = API.mlirRegionGetFirstBlock(reg)
+    if mlirIsNull(raw_block)
+        nothing
+    else
+        b = Block(raw_block)
+        (it, b)
+    end
+end
+
+function Base.iterate(it::Region, block)
+    raw_block = API.mlirBlockGetNextInRegion(block)
+    if mlirIsNull(raw_block)
+        nothing
+    else
+        b = Block(raw_block)
+        (it, b)
+    end
+end
 
 """
     first_block(region)
@@ -43,7 +66,7 @@ Gets the first block in the region.
 function first_block(region::Region)
     block = API.mlirRegionGetFirstBlock(region)
     mlirIsNull(block) && return nothing
-    return Block(block, false)
+    return Block(block)
 end
 Base.first(region::Region) = first_block(region)
 
@@ -96,14 +119,14 @@ end
 function activate!(region::Region)
     stack = get!(task_local_storage(), :mlir_region_stack) do
         return Region[]
-    end
+    end::Vector{Region}
     Base.push!(stack, region)
     return nothing
 end
 
 function deactivate!(region::Region)
     current_region() == region || error("Deactivating wrong region")
-    return Base.pop!(task_local_storage(:mlir_region_stack))
+    return Base.pop!(task_local_storage(:mlir_region_stack)::Vector{Region})
 end
 
 function has_current_region()
