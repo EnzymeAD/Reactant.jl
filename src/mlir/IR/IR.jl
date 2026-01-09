@@ -36,7 +36,7 @@ for AT in [
     :MlirPassManager,
     :MlirOpPassManager,
 ]
-    @eval refcheck(T::Type, ref::API.$AT) = refcheck(T, ref.ptr)
+    @eval refcheck(T::Core.Type, ref::API.$AT) = refcheck(T, ref.ptr)
 end
 
 # WARN do not export `Type` nor `Module` as they are already defined in Core
