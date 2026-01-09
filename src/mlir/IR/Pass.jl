@@ -123,6 +123,9 @@ function dump_mlir(
     catch err
         @error "Couldn't save MLIR module" exception = err
     end
+    flush(stdout)
+    flush(stderr)
+    return nothing
 end
 
 function try_compile_dump_mlir(f, mod::Module, pm=nothing)
