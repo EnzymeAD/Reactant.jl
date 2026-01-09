@@ -16,34 +16,36 @@ end
 end
 
 function test()
-    MLIR.IR.with_context() do
-        mod = MLIR.IR.Module(MLIR.IR.Location())
-        modbody = MLIR.IR.body(mod)
+    MLIR.IR.@dispose ctx = Context() begin
+        MLIR.IR.@scope ctx begin
+            mod = MLIR.IR.Module(MLIR.IR.Location())
+            modbody = MLIR.IR.body(mod)
 
-        in_tys = [MLIR.IR.TensorType([4], MLIR.IR.Type(Float64))]
+            in_tys = [MLIR.IR.TensorType([4], MLIR.IR.Type(Float64))]
 
-        func = MLIR.Dialects.func.func_(;
-            sym_name="main_tmp",
-            function_type=MLIR.IR.FunctionType(in_tys, []),
-            body=MLIR.IR.Region(),
-        )
+            func = MLIR.Dialects.func.func_(;
+                sym_name="main_tmp",
+                function_type=MLIR.IR.FunctionType(in_tys, []),
+                body=MLIR.IR.Region(),
+            )
 
-        fnbody = MLIR.IR.Block(in_tys, [MLIR.IR.Location() for _ in in_tys])
-        push!(MLIR.IR.region(func, 1), fnbody)
+            fnbody = MLIR.IR.Block(in_tys, [MLIR.IR.Location() for _ in in_tys])
+            push!(MLIR.IR.region(func, 1), fnbody)
 
-        GC.@preserve mod func fnbody begin
-            MLIR.IR.with_block(fnbody) do
-                a = ones(4)
-                b = ones(4)
-                d = Data(
-                    Reactant.TracedRArray{Float64,1}((), MLIR.IR.argument(fnbody, 1), (4,))
-                )
+            GC.@preserve mod func fnbody begin
+                MLIR.IR.@scope fnbody begin
+                    a = ones(4)
+                    b = ones(4)
+                    d = Data(
+                        Reactant.TracedRArray{Float64,1}((), MLIR.IR.argument(fnbody, 1), (4,))
+                    )
 
-                return tmp(a, b, d)
+                    return tmp(a, b, d)
+                end
             end
-        end
 
-        return string(mod)
+            return string(mod)
+        end
     end
 end
 @test test() == "module {\n}"

@@ -265,7 +265,8 @@ The rhs can only contains dimensions and symbols present on the left hand side o
 ```julia
 julia> using Reactant.MLIR: IR
 
-julia> IR.with_context(IR.Context()) do
+julia> ctx = IR.Context()
+julia> IR.@scope ctx begin
            IR.@affinemap (d1, d2)[s0] -> (d1 + s0, d2 % 10)
        end
 MLIR.IR.AffineMap(#= (d0, d1)[s0] -> (d0 + s0, d1 mod 10) =#)

@@ -5,7 +5,7 @@ A logical result value, essentially a boolean with named states.
 LLVM convention for using boolean values to designate success or failure of an operation is a moving target, so MLIR opted for an explicit class.
 Instances of [`LogicalResult`](@ref) must only be inspected using the associated functions.
 """
-@checked struct LogicalResult
+struct LogicalResult
     ref::API.MlirLogicalResult
 end
 

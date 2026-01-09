@@ -580,14 +580,9 @@ function sharding_to_array_slices(
     if needs_padding
         # MLIR for identity operation, avoid tracing here
         ctx = MLIR.IR.Context(Reactant.registry[], false)
-        Reactant.Compiler.context_gc_vector[ctx] = Vector{
-            Union{Reactant.TracedRArray,Reactant.TracedRNumber}
-        }(
-            undef, 0
-        )
-        @ccall MLIR.API.mlir_c.RegisterDialects(ctx::MLIR.API.MlirContext)::Cvoid
+        MLIR.IR.register_enzymexla_dialects(ctx)
 
-        MLIR.IR.with_context(ctx) do
+        MLIR.IR.@scope ctx begin
             sdycache = Reactant.Compiler.default_sdycache()
             Reactant.Compiler.activate_sdycache!(sdycache)
 
@@ -842,9 +837,9 @@ function HloSharding(sharding::DimsSharding, size_x)
 end
 
 function Base.convert(::Type{HloSharding}, sharding::NamedSharding)
-    MLIR.IR.with_context(; allow_use_existing=true) do
-        ctx = MLIR.IR.context()
-
+    # MLIR.IR.with_context(; allow_use_existing=true) do
+    ctx = MLIR.IR.context()
+    MLIR.IR.@scope ctx begin
         mesh_op = Reactant.Ops.mesh(
             sharding.mesh; mod=MLIR.IR.Module(MLIR.IR.Location(; context=ctx))
         )

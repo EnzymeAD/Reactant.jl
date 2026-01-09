@@ -267,7 +267,7 @@ export ConcreteRArray,
     @trace,
     within_compile
 
-const registry = Ref{Union{Nothing,MLIR.IR.DialectRegistry}}()
+const registry = MLIR.IR.DEFAULT_DIALECT_REGISTRY
 
 const passes_initialized = Ref(false)
 function initialize_dialect()
@@ -356,6 +356,6 @@ end
 # Not part of the public API. Exclusively for testing purposes.
 include("TestUtils.jl")
 
-# include("Precompile.jl")
+include("Precompile.jl")
 
 end # module

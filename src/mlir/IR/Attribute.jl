@@ -1,4 +1,5 @@
-@checked struct Attribute
+# ref is allowed to be null
+struct Attribute
     ref::API.MlirAttribute
 end
 
@@ -880,7 +881,7 @@ end
 
 Associates an attribute with the name.
 """
-@checked struct NamedAttribute
+struct NamedAttribute
     ref::API.MlirNamedAttribute
 end
 
@@ -890,7 +891,7 @@ function NamedAttribute(name::String, attribute; context=context(attribute))
 end
 
 function NamedAttribute(name::Identifier, attr::Attribute; context=context(attr))
-    @assert !mlirIsNull(attribute.ref)
+    @assert !mlirIsNull(attr.ref)
     return NamedAttribute(API.mlirNamedAttributeGet(name, attr))
 end
 
