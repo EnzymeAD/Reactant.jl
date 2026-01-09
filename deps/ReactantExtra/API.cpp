@@ -413,9 +413,24 @@ enzymeRngDistributionAttrGet(MlirContext ctx, int32_t val) {
 }
 
 REACTANT_ABI MLIR_CAPI_EXPORTED MlirAttribute
-enzymeMCMCAlgorithmAttrGet(MlirContext ctx, int32_t val) {
-  return wrap(mlir::enzyme::MCMCAlgorithmAttr::get(
-      unwrap(ctx), (mlir::enzyme::MCMCAlgorithm)val));
+enzymeHMCConfigAttrGet(MlirContext ctx, double trajectory_length,
+                       bool adapt_step_size, bool adapt_mass_matrix) {
+  auto *context = unwrap(ctx);
+  mlir::FloatAttr trajectoryLengthAttr =
+      mlir::FloatAttr::get(mlir::Float64Type::get(context), trajectory_length);
+  return wrap(mlir::enzyme::HMCConfigAttr::get(
+      context, trajectoryLengthAttr, adapt_step_size, adapt_mass_matrix));
+}
+
+REACTANT_ABI MLIR_CAPI_EXPORTED MlirAttribute enzymeNUTSConfigAttrGet(
+    MlirContext ctx, int64_t max_tree_depth, double max_delta_energy,
+    bool adapt_step_size, bool adapt_mass_matrix) {
+  auto *context = unwrap(ctx);
+  mlir::FloatAttr maxDeltaEnergyAttr =
+      mlir::FloatAttr::get(mlir::Float64Type::get(context), max_delta_energy);
+  return wrap(mlir::enzyme::NUTSConfigAttr::get(
+      context, max_tree_depth, maxDeltaEnergyAttr, adapt_step_size,
+      adapt_mass_matrix));
 }
 
 // Create profiler session and start profiling
