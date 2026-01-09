@@ -299,8 +299,11 @@ function is_registered(opname; context::Context=context())
     return API.mlirContextIsRegisteredOperation(context, opname)
 end
 
-Base.eltype(::Operation) = Region
+Base.IteratorSize(::Core.Type{Operation}) = Base.HasLength()
 Base.length(it::Operation) = nregions(it.op)
+
+Base.IteratorEltype(::Core.Type{Operation}) = Base.HasEltype()
+Base.eltype(::Operation) = Region
 
 function Base.iterate(it::Operation)
     raw_region = API.mlirOperationGetFirstRegion(it.op)
@@ -308,17 +311,17 @@ function Base.iterate(it::Operation)
         nothing
     else
         region = Region(raw_region)
-        (it, region)
+        (region, region)
     end
 end
 
-function Base.iterate(it::Operation, region)
+function Base.iterate(::Operation, region)
     raw_region = API.mlirRegionGetNextInOperation(region)
     if mlirIsNull(raw_region)
         nothing
     else
         region = Region(raw_region)
-        (it, region)
+        (region, region)
     end
 end
 
