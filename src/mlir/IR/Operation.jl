@@ -2,14 +2,9 @@
     ref::API.MlirOperation
 end
 
-function dispose!(op::Operation)
-    @assert !mlirIsNull(op.ref) "Operation already disposed"
-    return API.mlirOperationDestroy(op)
-end
+dispose!(op::Operation) = mark_dispose(API.mlirOperationDestroy, op)
 
-function Base.cconvert(::Core.Type{API.MlirOperation}, op::Operation)
-    return op.ref
-end
+Base.cconvert(::Core.Type{API.MlirOperation}, op::Operation) = mark_use(op).ref
 
 Base.:(==)(op::Operation, other::Operation) = API.mlirOperationEqual(op, other)
 
@@ -26,7 +21,7 @@ function Base.parse(
     block=Block(),
     location::Location=Location(),
 )
-    return Operation(
+    return Operation(mark_alloc(
         @ccall API.mlir_c.mlirOperationParse(
             context::API.MlirContext,
             block::API.MlirBlock,
@@ -34,7 +29,7 @@ function Base.parse(
             location::API.MlirLocation,
             verify::Bool,
         )::API.MlirOperation
-    )
+    ))
 end
 
 function Base.show(io::IO, op::Operation)
@@ -61,7 +56,7 @@ end
 
 Creates a deep copy of an operation. The operation is not inserted and ownership is transferred to the caller.
 """
-Base.copy(op::Operation) = Operation(API.mlirOperationClone(op))
+Base.copy(op::Operation) = Operation(mark_alloc(API.mlirOperationClone(op)))
 
 """
     context(op)
@@ -366,7 +361,7 @@ function create_operation_common(
         if result_inference
             API.mlirOperationStateEnableResultTypeInference(state)
         end
-        op = API.mlirOperationCreate(state)
+        op = mark_alloc(API.mlirOperationCreate(state))
         if mlirIsNull(op)
             error("Create Operation '$name' failed")
         end

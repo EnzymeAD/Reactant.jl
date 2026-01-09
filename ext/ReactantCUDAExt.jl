@@ -1111,7 +1111,7 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
     )
     voidty = MLIR.IR.Type(MLIR.API.mlirLLVMVoidTypeGet(ctx))
     wrapftype = MLIR.IR.Type(
-        MLIR.API.mlirLLVMFunctionTypeGet(voidty, length(wrapper_tys), wrapper_tys)
+        MLIR.API.mlirLLVMFunctionTypeGet(voidty, length(wrapper_tys), wrapper_tys, false)
     )
     blk = MLIR.IR.body(mod)
     wrapfunc = MLIR.IR.@scope blk begin
@@ -1281,7 +1281,7 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
         inputs=mlir_args,
         result_0=restys,
         fn=MLIR.IR.FlatSymbolRefAttribute(sym_name),
-        output_operand_aliases=MLIR.IR.Attribute(output_operand_aliases),
+        output_operand_aliases=output_operand_aliases,
         xla_side_effect_free=MLIR.IR.UnitAttribute(),
     )
 
