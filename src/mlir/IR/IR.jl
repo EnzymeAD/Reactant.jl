@@ -10,7 +10,32 @@ const deactivate! = deactivate
 const dispose! = dispose
 
 # fix for `@checked` on MLIR.API types
-for AT in [:MlirDialectRegistry, :MlirContext, :MlirLocation, :MlirTypeID, :MlirModule, :MlirOperation, :MlirBlock, :MlirRegion, :MlirValue, :MlirLogicalResult]
+for AT in [
+    :MlirDialect,
+    :MlirDialectHandle,
+    :MlirDialectRegistry,
+    :MlirContext,
+    :MlirLocation,
+    :MlirTypeID,
+    :MlirTypeIDAllocator,
+    :MlirModule,
+    :MlirOperation,
+    :MlirOpOperand,
+    :MlirBlock,
+    :MlirRegion,
+    :MlirValue,
+    :MlirLogicalResult,
+    :MlirAffineExpr,
+    :MlirAffineMap,
+    :MlirAttribute,
+    :MlirNamedAttribute,
+    :MlirIntegerSet,
+    :MlirIdentifier,
+    :MlirSymbolTable,
+    :MlirExecutionEngine,
+    :MlirPassManager,
+    :MlirOpPassManager,
+]
     @eval refcheck(T::Type, ref::API.$AT) = refcheck(T, ref.ptr)
 end
 
