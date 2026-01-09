@@ -744,6 +744,7 @@ function optimization_passes(
         "cse_abs<16>",
         "cse_concatenate<16>",
         "cse_compare<16>",
+        "cse_select<16>",
         "concatenate_op_canon<16>($max_constant_threshold)",
         "select_op_canon<16>($max_constant_threshold)",
         "add_simplify<16>",
