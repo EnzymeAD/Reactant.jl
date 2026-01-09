@@ -52,7 +52,6 @@ end
     @test y_ra ≈ fft(x, (1, 2))
     @test x_ra ≈ y_ra
     @test x_ra ≉ x_ra_copy
-
 end
 
 @testset "rfft" begin
@@ -162,7 +161,6 @@ end
     end
 end
 
-
 @testset "FFTW Plans with Traced Arrays" begin
     @testset "Complex Plans" begin
         x = Reactant.TestUtils.construct_test_array(ComplexF32, 2, 3, 4)
@@ -203,8 +201,6 @@ end
         @jit LinearAlgebra.mul!(y_r, ip!, copy(x_r))
         @jit(ip! * x_r)
         @test y_r ≈ x_r
-
-
     end
 
     @testset "r2c plans" begin
@@ -229,7 +225,6 @@ end
         y_r23 = similar(Reactant.to_rarray(rfft(x, (2, 3))))
         @jit LinearAlgebra.mul!(y_r23, p23, x_r)
         @test y_r23 ≈ @jit(p23 * x_r)
-
 
         c = rand(ComplexF32, size(y_r)...)
         ip = plan_irfft(copy(c), size(x, 1))
