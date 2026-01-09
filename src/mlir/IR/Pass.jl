@@ -12,7 +12,7 @@ end
 end
 
 function PassManager(pm::API.MlirPassManager)
-    PassManager(pm, TypeIDAllocator(), Dict{TypeID,ExternalPassHandle}())
+    return PassManager(pm, TypeIDAllocator(), Dict{TypeID,ExternalPassHandle}())
 end
 
 """
@@ -21,7 +21,7 @@ end
 Create a new top-level PassManager.
 """
 function PassManager(; context::Context=context())
-    PassManager(API.mlirPassManagerCreate(context))
+    return PassManager(API.mlirPassManagerCreate(context))
 end
 
 """
@@ -30,7 +30,7 @@ end
 Create a new top-level PassManager anchored on `anchorOp`.
 """
 function PassManager(anchor_op::Operation; context::Context=context())
-    PassManager(API.mlirPassManagerCreateOnOperation(context, anchor_op))
+    return PassManager(API.mlirPassManagerCreateOnOperation(context, anchor_op))
 end
 
 dispose!(pass::PassManager) = API.mlirPassManagerDestroy(pass.ref)
@@ -191,7 +191,7 @@ end
 Cast a top-level `PassManager` to a generic `OpPassManager`.
 """
 function OpPassManager(pm::PassManager)
-    OpPassManager(API.mlirPassManagerGetAsOpPassManager(pm), pm)
+    return OpPassManager(API.mlirPassManagerGetAsOpPassManager(pm), pm)
 end
 
 """
@@ -201,7 +201,7 @@ Nest an `OpPassManager` under the top-level PassManager, the nested passmanager 
 The returned `OpPassManager` will be destroyed when the parent is destroyed. To further nest more `OpPassManager` under the newly returned one, see `mlirOpPassManagerNest` below.
 """
 function OpPassManager(pm::PassManager, opname)
-    OpPassManager(API.mlirPassManagerGetNestedUnder(pm, opname), pm)
+    return OpPassManager(API.mlirPassManagerGetNestedUnder(pm, opname), pm)
 end
 
 """
@@ -210,7 +210,7 @@ end
 Nest an `OpPassManager` under the provided `OpPassManager`, the nested passmanager will only run on operations matching the provided name. The returned `OpPassManager` will be destroyed when the parent is destroyed.
 """
 function OpPassManager(opm::OpPassManager, opname)
-    OpPassManager(API.mlirOpPassManagerGetNestedUnder(opm, opname), opm.ref)
+    return OpPassManager(API.mlirOpPassManagerGetNestedUnder(opm, opname), opm.ref)
 end
 
 Base.cconvert(::Core.Type{API.MlirOpPassManager}, op_pass::OpPassManager) = op_pass.ref

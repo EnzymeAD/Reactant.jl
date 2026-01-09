@@ -19,7 +19,7 @@ After calling this function, the module must not be used anymore.
 """
 function dispose!(mod_::Module)
     @assert !mlirIsNull(mod_.ref) "Module already disposed"
-    API.mlirModuleDestroy(mod_.ref)
+    return API.mlirModuleDestroy(mod_.ref)
 end
 
 Base.cconvert(::Core.Type{API.MlirModule}, mod_::Module) = mod_.ref
@@ -30,7 +30,7 @@ Base.cconvert(::Core.Type{API.MlirModule}, mod_::Module) = mod_.ref
 Parses a module from the string and transfers ownership to the caller.
 """
 function Base.parse(::Core.Type{Module}, str; context::Context=context())
-    Module(API.mlirModuleCreateParse(context, str))
+    return Module(API.mlirModuleCreateParse(context, str))
 end
 
 macro mlir_str(code)

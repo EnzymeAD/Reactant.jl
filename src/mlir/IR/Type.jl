@@ -10,7 +10,7 @@ Base.cconvert(::Core.Type{API.MlirType}, type::Type) = type.ref
 Parses a type. The type is owned by the context.
 """
 function Base.parse(::Core.Type{Type}, s; context::Context=context())
-    Type(API.mlirTypeParseGet(context, s))
+    return Type(API.mlirTypeParseGet(context, s))
 end
 
 """
@@ -70,7 +70,7 @@ isindex(type::Type) = API.mlirTypeIsAIndex(type)
 Creates a 1-bit signless integer type in the context. The type is owned by the context.
 """
 function Type(::Core.Type{Bool}; context::Context=context())
-    Type(API.mlirIntegerTypeGet(context, 1))
+    return Type(API.mlirIntegerTypeGet(context, 1))
 end
 
 # Integer types
@@ -80,7 +80,7 @@ end
 Creates a signless integer type of the given bitwidth in the context. The type is owned by the context.
 """
 function Type(T::Core.Type{<:Integer}; context::Context=context())
-    Type(API.mlirIntegerTypeGet(context, sizeof(T) * 8))
+    return Type(API.mlirIntegerTypeGet(context, sizeof(T) * 8))
 end
 
 """
@@ -89,7 +89,7 @@ end
 Creates a signed integer type of the given bitwidth in the context. The type is owned by the context.
 """
 function Type(T::Core.Type{<:Signed}; context::Context=context())
-    Type(API.mlirIntegerTypeGet(context, sizeof(T) * 8))
+    return Type(API.mlirIntegerTypeGet(context, sizeof(T) * 8))
 end
 
 """
@@ -98,7 +98,7 @@ end
 Creates an unsigned integer type of the given bitwidth in the context. The type is owned by the context.
 """
 function Type(T::Core.Type{<:Unsigned}; context::Context=context())
-    Type(API.mlirIntegerTypeUnsignedGet(context, sizeof(T) * 8))
+    return Type(API.mlirIntegerTypeUnsignedGet(context, sizeof(T) * 8))
 end
 
 """

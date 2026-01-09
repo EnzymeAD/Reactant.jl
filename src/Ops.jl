@@ -1314,7 +1314,9 @@ end
         ).f
     @assert MLIR.IR.nregions(func) == 1
     fn_name = MLIR.IR.FlatSymbolRefAttribute(
-        String(MLIR.IR.getattr(func, String(MLIR.API.mlirSymbolTableGetSymbolAttributeName())))
+        String(
+            MLIR.IR.getattr(func, String(MLIR.API.mlirSymbolTableGetSymbolAttributeName()))
+        ),
     )
 
     iota_arg = iota(Int32, collect(Int64, size(x)); iota_dimension=dimension, location)
@@ -2224,7 +2226,9 @@ end
     end
 
     if checkpointing
-        MLIR.IR.setattr!(while_op, "enzymexla.enable_checkpointing", MLIR.IR.Attribute(true))
+        MLIR.IR.setattr!(
+            while_op, "enzymexla.enable_checkpointing", MLIR.IR.Attribute(true)
+        )
     end
 
     return map(enumerate(linear_args)) do (i, arg)

@@ -20,8 +20,7 @@ Base.:(==)(a::TypeID, b::TypeID) = API.mlirTypeIDEqual(a, b)
 
 Returns the hash value of the type id.
 """
-Base.hash(typeid::TypeID) = API.mlirTypeIDHashValue(typeid.ref)
-
+Base.hash(typeid::TypeID) = API.mlirTypeIDHashValue(typeid)
 
 @checked struct TypeIDAllocator
     ref::API.MlirTypeIDAllocator
@@ -29,10 +28,10 @@ end
 
 TypeIDAllocator() = TypeIDAllocator(API.mlirTypeIDAllocatorCreate())
 
-dispose!(alloc::TypeIDAllocator) = API.mlirTypeIDAllocatorDestroy(alloc.ref)
+dispose!(alloc::TypeIDAllocator) = API.mlirTypeIDAllocatorDestroy(alloc)
 
 function Base.cconvert(::Core.Type{API.MlirTypeIDAllocator}, alloc::TypeIDAllocator)
-    alloc.ref
+    return alloc.ref
 end
 
 function TypeID(allocator::TypeIDAllocator)

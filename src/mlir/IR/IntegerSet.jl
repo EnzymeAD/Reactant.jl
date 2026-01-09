@@ -8,7 +8,7 @@ end
 Gets or creates a new canonically empty integer set with the give number of dimensions and symbols in the given context.
 """
 function IntegerSet(ndims, nsymbols; context::Context=context())
-    IntegerSet(API.mlirIntegerSetEmptyGet(context, ndims, nsymbols))
+    return IntegerSet(API.mlirIntegerSetEmptyGet(context, ndims, nsymbols))
 end
 
 """
@@ -19,10 +19,10 @@ The set is defined by a list of affine constraints, with the given number of inp
 Both `constraints` and `eqflags` need to be arrays of the same length.
 """
 function IntegerSet(ndims, nsymbols, constraints, eqflags; context::Context=context())
-    IntegerSet(
+    return IntegerSet(
         API.mlirIntegerSetGet(
             context, ndims, nsymbols, length(constraints), constraints, eqflags
-        )
+        ),
     )
 end
 
@@ -44,14 +44,14 @@ Gets or creates a new integer set in which the values and dimensions of the give
 The new set will have `numResultDims` and `numResultSymbols` dimensions and symbols, respectively.
 """
 function Base.replace(set::IntegerSet, dim_replacements, symbol_replacements)
-    IntegerSet(
+    return IntegerSet(
         API.mlirIntegerSetReplaceGet(
             set,
             dim_replacements,
             symbol_replacements,
             length(dim_replacements),
             length(symbol_replacements),
-        )
+        ),
     )
 end
 

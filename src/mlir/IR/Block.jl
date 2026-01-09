@@ -27,7 +27,7 @@ After calling this function, the block must not be used anymore.
 """
 function dispose!(blk::Block)
     @assert !mlirIsNull(blk.ref) "Block already disposed"
-    API.mlirBlockDestroy(blk.ref)
+    return API.mlirBlockDestroy(blk.ref)
 end
 
 Base.cconvert(::Core.Type{API.MlirBlock}, block::Block) = block.ref
@@ -94,7 +94,7 @@ end
 Appends an argument of the specified type to the block. Returns the newly added argument.
 """
 function push_argument!(block::Block, type; location::Location=Location())
-    Value(API.mlirBlockAddArgument(block, type, location))
+    return Value(API.mlirBlockAddArgument(block, type, location))
 end
 
 """

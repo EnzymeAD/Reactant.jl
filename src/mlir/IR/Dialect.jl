@@ -70,7 +70,7 @@ DialectRegistry() = DialectRegistry(API.mlirDialectRegistryCreate())
 
 function dispose!(registry::DialectRegistry)
     @assert !mlirIsNull(registry.ref) "DialectRegistry already disposed"
-    API.mlirDialectRegistryDestroy(registry.ref)
+    return API.mlirDialectRegistryDestroy(registry.ref)
 end
 
 function Base.cconvert(::Core.Type{API.MlirDialectRegistry}, registry::DialectRegistry)
