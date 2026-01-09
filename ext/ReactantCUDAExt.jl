@@ -1452,46 +1452,51 @@ end
 # <https://github.com/EnzymeAD/Reactant.jl/issues/614>.
 @static if !Sys.isapple()
     @setup_workload begin
-        Reactant.initialize_dialect()
+        Reactant.MLIR.IR.initialize_dialect()
+        Reactant.MLIR.IR.@dispose ctx = Reactant.MLIR.IR.Context(Reactant.MLIR.IR.default_registry[]) begin
+            Reactant.MLIR.IR.register_enzymexla_dialects(ctx)
+            Reactant.MLIR.IR.@scope ctx begin
 
-        if Reactant.XLA.REACTANT_XLA_RUNTIME == "PJRT"
-            client = Reactant.XLA.PJRT.CPUClient(; checkcount=false)
-        elseif Reactant.XLA.REACTANT_XLA_RUNTIME == "IFRT"
-            client = Reactant.XLA.IFRT.CPUClient(; checkcount=false)
-        else
-            error("Unsupported runtime: $(Reactant.XLA.REACTANT_XLA_RUNTIME)")
-        end
-
-        @compile_workload begin
-            @static if Reactant.precompilation_supported() && VERSION != v"1.11.3"
-                function square_kernel!(x)
-                    i = CUDA.threadIdx().x
-                    x[i] *= x[i]
-                    return nothing
-                end
-
-                function square!(x)
-                    CUDA.@cuda blocks = 1 threads = length(x) square_kernel!(x)
-                    return nothing
-                end
-                y = Reactant.ConcreteRArray([2.0]; client)
-                Reactant.Compiler.compile_mlir(square!, (y,); optimize=false)
-
-                if y isa Reactant.ConcreteIFRTArray
-                    Reactant.XLA.free_buffer(y.data.buffer)
-                    y.data.buffer.buffer = C_NULL
+                if Reactant.XLA.REACTANT_XLA_RUNTIME == "PJRT"
+                    client = Reactant.XLA.PJRT.CPUClient(; checkcount=false)
+                elseif Reactant.XLA.REACTANT_XLA_RUNTIME == "IFRT"
+                    client = Reactant.XLA.IFRT.CPUClient(; checkcount=false)
                 else
-                    for dat in y.data
-                        Reactant.XLA.free_buffer(dat.buffer)
-                        dat.buffer.buffer = C_NULL
+                    error("Unsupported runtime: $(Reactant.XLA.REACTANT_XLA_RUNTIME)")
+                end
+
+                @compile_workload begin
+                    @static if Reactant.precompilation_supported() && VERSION != v"1.11.3"
+                        function square_kernel!(x)
+                            i = CUDA.threadIdx().x
+                            x[i] *= x[i]
+                            return nothing
+                        end
+
+                        function square!(x)
+                            CUDA.@cuda blocks = 1 threads = length(x) square_kernel!(x)
+                            return nothing
+                        end
+                        y = Reactant.ConcreteRArray([2.0]; client)
+                        Reactant.Compiler.compile_mlir(square!, (y,); optimize=false)
+
+                        if y isa Reactant.ConcreteIFRTArray
+                            Reactant.XLA.free_buffer(y.data.buffer)
+                            y.data.buffer.buffer = C_NULL
+                        else
+                            for dat in y.data
+                                Reactant.XLA.free_buffer(dat.buffer)
+                                dat.buffer.buffer = C_NULL
+                            end
+                        end
                     end
                 end
+
+                Reactant.XLA.free_client(client)
+                client.client = C_NULL
             end
         end
-
-        Reactant.XLA.free_client(client)
-        client.client = C_NULL
-        Reactant.deinitialize_dialect()
+        Reactant.MLIR.IR.deinitialize_dialect()
         Reactant.clear_oc_cache()
     end
 end
