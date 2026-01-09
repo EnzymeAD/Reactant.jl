@@ -1,32 +1,34 @@
 using Reactant: MLIR
 
 @testset "inject" begin
-    mod = MLIR.IR.with_context() do
-        mod = MLIR.IR.Module()
+    mod = MLIR.IR.@dispose ctx=MLIR.IR.Context() begin
+        MLIR.IR.@scope ctx begin
+            mod = MLIR.IR.Module()
 
-        MLIR.IR.with_module(mod) do
-            MLIR.IR.inject!(
-                "MPI_COMM_WORLD",
-                "llvm.mlir.global constant @MPI_COMM_WORLD() : !llvm.ptr",
-            )
+            MLIR.IR.@scope mod begin
+                MLIR.IR.inject!(
+                    "MPI_COMM_WORLD",
+                    "llvm.mlir.global constant @MPI_COMM_WORLD() : !llvm.ptr",
+                )
 
-            MLIR.IR.inject!(
-                "MPI_Comm_rank", "llvm.func @MPI_Comm_rank(!llvm.ptr, !llvm.ptr) -> i32"
-            )
+                MLIR.IR.inject!(
+                    "MPI_Comm_rank", "llvm.func @MPI_Comm_rank(!llvm.ptr, !llvm.ptr) -> i32"
+                )
 
-            MLIR.IR.inject!(
-                "wrapper_function",
-                """
-                llvm.func @wrapper_function(%rank_ptr : !llvm.ptr) -> () {
-                    %comm = llvm.mlir.addressof @MPI_COMM_WORLD : !llvm.ptr
-                    %errcode = llvm.call @MPI_Comm_rank(%comm, %rank_ptr) : (!llvm.ptr, !llvm.ptr) -> (i32)
-                    llvm.return
-                }
-                """,
-            )
+                MLIR.IR.inject!(
+                    "wrapper_function",
+                    """
+                    llvm.func @wrapper_function(%rank_ptr : !llvm.ptr) -> () {
+                        %comm = llvm.mlir.addressof @MPI_COMM_WORLD : !llvm.ptr
+                        %errcode = llvm.call @MPI_Comm_rank(%comm, %rank_ptr) : (!llvm.ptr, !llvm.ptr) -> (i32)
+                        llvm.return
+                    }
+                    """,
+                )
+            end
         end
 
-        return mod
+        mod
     end
 
     mod_op = MLIR.IR.Operation(mod)

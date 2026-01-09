@@ -16,6 +16,7 @@ for AT in [
     :MlirDialectRegistry,
     :MlirContext,
     :MlirLocation,
+    :MlirType,
     :MlirTypeID,
     :MlirTypeIDAllocator,
     :MlirModule,
@@ -24,11 +25,11 @@ for AT in [
     :MlirBlock,
     :MlirRegion,
     :MlirValue,
-    :MlirLogicalResult,
+    # :MlirLogicalResult,
     :MlirAffineExpr,
     :MlirAffineMap,
-    :MlirAttribute,
-    :MlirNamedAttribute,
+    # :MlirAttribute,
+    # :MlirNamedAttribute,
     :MlirIntegerSet,
     :MlirIdentifier,
     :MlirSymbolTable,
@@ -76,6 +77,13 @@ include("IntegerSet.jl")
 
 include("ExecutionEngine.jl")
 include("Pass.jl")
+
+# MLIR extra from ReactantExtra
+const DEFAULT_DIALECT_REGISTRY = Ref{Union{Nothing,DialectRegistry}}(nothing)
+
+function register_enzymexla_dialects(ctx::Context)
+    @ccall API.mlir_c.RegisterDialects(ctx::API.MlirContext)::Cvoid
+end
 
 # TODO try to fuse it with Ops.hlo_call?
 function tryinject!(sym_name, code; verify=false, mod=current_module(), location=Location())

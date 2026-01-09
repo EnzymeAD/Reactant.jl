@@ -44,8 +44,11 @@ function export_as_saved_model(
                PythonCall hasn't been installed and loaded.")
     end
 
-    mlir_mod = MLIR.IR.with_context() do
-        parse(MLIR.IR.Module, thunk.module_string)
+    mlir_mod = MLIR.IR.@dispose ctx=Context() begin
+        MLIR.IR.register_enzymexla_dialects(ctx)
+        MLIR.IR.@scope ctx begin
+            parse(MLIR.IR.Module, thunk.module_string)
+        end
     end
 
     ftype = MLIR.IR.FunctionType(first(MLIR.IR.body(mlir_mod)))

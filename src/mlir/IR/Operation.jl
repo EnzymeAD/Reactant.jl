@@ -105,18 +105,16 @@ Gets the operation that owns this operation, returning null if the operation is 
 """
 parent_op(op::Operation) = Operation(API.mlirOperationGetParentOperation(op))
 
-# TODO find an alternative to ownership
-# """
-#     rmfromparent!(op)
+"""
+    rmfromparent!(op)
 
-# Removes the given operation from its parent block. The operation is not destroyed.
-# The ownership of the operation is transferred to the caller.
-# """
-# function rmfromparent!(operation::Operation)
-#     API.mlirOperationRemoveFromParent(operation)
-#     @atomic operation.owned = true
-#     return operation
-# end
+Removes the given operation from its parent block. The operation is not destroyed.
+The ownership of the operation is transferred to the caller.
+"""
+function rmfromparent!(operation::Operation)
+    API.mlirOperationRemoveFromParent(operation)
+    return operation
+end
 
 dialect(op::Operation) = Symbol(first(split(name(op), '.')))
 
@@ -349,7 +347,6 @@ function create_operation_common(
             API.mlirOperationStateAddOperands(state, length(operands), operands)
         end
         if !isnothing(owned_regions)
-            lose_ownership!.(owned_regions)
             GC.@preserve owned_regions begin
                 mlir_regions = Base.cconvert.(API.MlirRegion, owned_regions)
                 API.mlirOperationStateAddOwnedRegions(

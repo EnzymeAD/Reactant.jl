@@ -53,12 +53,20 @@ end
 Activates `obj` for the duration of `body`, then deactivates it.
 """
 macro scope(obj, body)
+    if Base.isexpr(obj, :(=))
+        prologue = esc(obj)
+        symbol = obj.args[1]
+    else
+        prologue = nothing
+        symbol = esc(obj)
+    end
     quote
-        activate!($(esc(obj)))
+        $prologue
+        activate!($symbol)
         try
             $(esc(body))
         finally
-            deactivate!($(esc(obj)))
+            deactivate!($symbol)
         end
     end
 end
