@@ -2295,9 +2295,9 @@ end
     push!(MLIR.IR.region(true_func_tmp, 1), true_fn_body)
     true_fn_args = true_fn_names[1]
 
-    MLIR.IR.@scope true_fn_body begin
+    tb_result = MLIR.IR.@scope true_fn_body begin
         activate_constant_context!(true_fn_body)
-        tb_result = try
+        try
             for (i, arg) in enumerate(tb_linear_args)
                 # find the right path to index the traced arg.
                 path = nothing
