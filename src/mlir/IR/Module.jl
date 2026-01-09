@@ -35,8 +35,11 @@ end
 
 macro mlir_str(code)
     quote
-        ctx = Context()
-        parse(Module, $code)
+        @dispose ctx = Context() begin
+            @scope ctx begin
+                parse(Module, $code)
+            end
+        end
     end
 end
 
@@ -61,9 +64,7 @@ Views the module as a generic operation.
 """
 Operation(mod_::Module) = Operation(API.mlirModuleGetOperation(mod_))
 
-function Base.show(io::IO, mod_::Module)
-    return show(io, Operation(mod_))
-end
+Base.show(io::IO, mod_::Module) = show(io, Operation(mod_))
 
 verifyall(mod_::Module; debug=false) = verifyall(Operation(mod_); debug)
 
