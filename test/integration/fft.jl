@@ -118,6 +118,30 @@ end
         end
     end
 
+    @testset "Out-of-place irfft" begin
+        size = (16, 16)
+        x = randn(ComplexF32, size)
+        x_r = Reactant.to_rarray(x)
+        # We make a copy of the original array to make sure the operation does
+        # not modify the input.
+        copied_x_r = copy(x_r)
+
+        d = 31 # original real length
+        planned_irfft(x, d) = FFTW.plan_irfft(x, d) * x
+        compiled_planned_irfft = @compile planned_irfft(x_r, d)
+        # Make sure the result is correct
+        @test compiled_planned_irfft(x_r, d) ≈ irfft(x, d)
+        # Make sure the operation is not in-place
+        @test x_r == copied_x_r
+
+        planned_irfft_dims(x, d, dims) = FFTW.plan_irfft(x, d, dims) * x
+        compiled_planned_irfft_dims = @compile planned_irfft_dims(x_r, d, (1,))
+        # Make sure the result is correct
+        @test compiled_planned_irfft_dims(x_r, d, (1,)) ≈ irfft(x, d, (1,))
+        # Make sure the operation is not in-place
+        @test x_r == copied_x_r
+    end
+
     @testset "In-place [$(fft!), size $(size)]" for size in ((16,), (16, 16)),
         (plan!, fft!) in ((FFTW.plan_fft!, FFTW.fft!), (FFTW.plan_ifft!, FFTW.ifft!))
 
