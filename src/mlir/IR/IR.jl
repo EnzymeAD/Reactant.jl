@@ -3,7 +3,7 @@ module IR
 using ..Reactant
 using ..API
 
-using LLVM: LLVM, @checked, @dispose
+using LLVM: LLVM, @checked, mark_alloc, mark_use, mark_dispose
 import LLVM: activate, deactivate, dispose, refcheck
 const activate! = activate
 const deactivate! = deactivate
@@ -79,10 +79,43 @@ include("ExecutionEngine.jl")
 include("Pass.jl")
 
 # MLIR extra from ReactantExtra
-const DEFAULT_DIALECT_REGISTRY = Ref{Union{Nothing,DialectRegistry}}(nothing)
+const default_registry = Ref{Union{Nothing,DialectRegistry}}(nothing)
 
 function register_enzymexla_dialects(ctx::Context)
     @ccall API.mlir_c.RegisterDialects(ctx::API.MlirContext)::Cvoid
+end
+
+# pass initialization state is required to avoid multiple initialization on precompilation
+const passes_initialized = Ref(false)
+
+function initialize_dialect()
+    default_registry[] = DialectRegistry()
+    @ccall API.mlir_c.InitializeRegistry(
+        default_registry[]::API.MlirDialectRegistry
+    )::Cvoid
+    if !passes_initialized[]
+        @ccall API.mlir_c.InitializePasses(
+            default_registry[]::API.MlirDialectRegistry
+        )::Cvoid
+        passes_initialized[] = true
+    end
+    return nothing
+end
+
+function deinitialize_dialect()
+    passes_initialized[] = false
+    return default_registry[] = nothing
+end
+
+function __init__()
+    initialize_dialect()
+
+    # create a persistent context to hold data along the program lifetime
+    # if any op/module is used after calling `compile`, MLIR attrs/types/... will segfault
+    # this Context is freed at exit
+    ctx = Context(default_registry[]; threading=false)
+    register_enzymexla_dialects(ctx)
+    activate!(ctx)
 end
 
 # TODO try to fuse it with Ops.hlo_call?

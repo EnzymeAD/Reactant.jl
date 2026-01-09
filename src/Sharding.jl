@@ -596,7 +596,7 @@ function sharding_to_array_slices(
                         collect(Int64, reverse(size_x)), MLIR.IR.Type(Float32)
                     ),
                 ]
-                mod = MLIR.IR.Module(MLIR.IR.Location(; context=ctx))
+                mod = MLIR.IR.Module(; location=MLIR.IR.Location(; context=ctx))
 
                 (; sym_name, mesh_attr) = Reactant.Ops.mesh(sharding.mesh; mod)
 
@@ -845,7 +845,7 @@ function Base.convert(::Type{HloSharding}, sharding::NamedSharding)
     ctx = MLIR.IR.context()
     MLIR.IR.@scope ctx begin
         mesh_op = Reactant.Ops.mesh(
-            sharding.mesh; mod=MLIR.IR.Module(MLIR.IR.Location(; context=ctx))
+            sharding.mesh; mod=MLIR.IR.Module(; location=MLIR.IR.Location(; context=ctx))
         )
 
         tensor_sharding_attr, _ = get_tensor_sharding_attribute(

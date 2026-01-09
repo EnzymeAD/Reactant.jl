@@ -274,27 +274,8 @@ export ConcreteRArray,
     @trace,
     within_compile
 
-const registry = MLIR.IR.DEFAULT_DIALECT_REGISTRY
-
-const passes_initialized = Ref(false)
-function initialize_dialect()
-    registry[] = MLIR.IR.DialectRegistry()
-    @ccall MLIR.API.mlir_c.InitializeRegistry(
-        registry[]::MLIR.API.MlirDialectRegistry
-    )::Cvoid
-    if !passes_initialized[]
-        @ccall MLIR.API.mlir_c.InitializePasses(
-            registry[]::MLIR.API.MlirDialectRegistry
-        )::Cvoid
-        passes_initialized[] = true
-    end
-    return nothing
-end
-
-function deinitialize_dialect()
-    passes_initialized[] = false
-    return registry[] = nothing
-end
+# here for backwards compatibility
+const registry = MLIR.IR.default_registry
 
 function initialize_ptrs()
     for name in (
@@ -323,7 +304,6 @@ end
 function __init__()
     if Reactant_jll.is_available()
         initialize_ptrs()
-        initialize_dialect()
     else
         @warn "Reactant_jll isn't availble for your platform $(Reactant_jll.host_platform)"
     end

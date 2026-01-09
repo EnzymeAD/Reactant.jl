@@ -1,7 +1,7 @@
 using Reactant: MLIR
 
 @testset "inject" begin
-    mod = MLIR.IR.@dispose ctx=MLIR.IR.Context() begin
+    MLIR.IR.@dispose ctx=MLIR.IR.Context() begin
         MLIR.IR.@scope ctx begin
             mod = MLIR.IR.Module()
 
@@ -26,11 +26,9 @@ using Reactant: MLIR
                     """,
                 )
             end
+            
+            mod_op = MLIR.IR.Operation(mod)
+            @test MLIR.IR.verify(mod_op)
         end
-
-        mod
     end
-
-    mod_op = MLIR.IR.Operation(mod)
-    @test MLIR.API.mlirOperationVerify(mod_op)
 end
