@@ -131,6 +131,7 @@ function terminator(block::Block)
 end
 
 Base.IteratorSize(::Core.Type{Block}) = Base.SizeUnknown()
+Base.IteratorEltype(::Core.Type{Block}) = Base.HasEltype()
 Base.eltype(::Block) = Operation
 
 function Base.iterate(it::Block)
@@ -139,7 +140,7 @@ function Base.iterate(it::Block)
         nothing
     else
         op = Operation(raw_op)
-        (it, op)
+        (op, op)
     end
 end
 
@@ -149,7 +150,7 @@ function Base.iterate(::Block, op)
         nothing
     else
         op = Operation(raw_op)
-        (it, op)
+        (op, op)
     end
 end
 
