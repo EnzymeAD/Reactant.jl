@@ -3,7 +3,7 @@ module IR
 using ..Reactant
 using ..API
 
-using LLVM: @checked, @dispose
+using LLVM: LLVM, @checked, @dispose
 import LLVM: activate, deactivate, dispose, refcheck
 const activate! = activate
 const deactivate! = deactivate
