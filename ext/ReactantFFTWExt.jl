@@ -1,7 +1,8 @@
 module ReactantFFTWExt
 
 using FFTW
-using FFTW: AbstractFFTs, LinearAlgebra
+using AbstractFFTs
+using LinearAlgebra
 using Reactant
 
 const FORWARD = -1
