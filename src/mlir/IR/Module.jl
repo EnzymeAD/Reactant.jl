@@ -34,13 +34,7 @@ function Base.parse(::Core.Type{Module}, str; context::Context=context())
 end
 
 macro mlir_str(code)
-    quote
-        @dispose ctx = Context() begin
-            @scope ctx begin
-                parse(Module, $code)
-            end
-        end
-    end
+    :(parse(Module, $code))
 end
 
 """

@@ -27,9 +27,6 @@ struct CuTracedArray{T,N,A,Size} <: DenseArray{T,N}
     ptr::Core.LLVMPtr{T,A}
 
     function CuTracedArray{T,N,A,Size}(xs::TracedRArray) where {T,N,A,Size}
-        gc_vec = Reactant.Compiler.context_gc_vector[MLIR.IR.context()]
-        push!(gc_vec, xs)
-        @assert gc_vec[end] === xs
         ptr = Base.reinterpret(Core.LLVMPtr{T,CUDA.AS.Global}, Base.pointer_from_objref(xs))
         return new(ptr)
     end
@@ -41,9 +38,6 @@ struct CuTracedRNumber{T,A} <: Number
     ptr::Core.LLVMPtr{T,A}
 
     function CuTracedRNumber{T,A}(xs::TracedRNumber) where {T,A}
-        gc_vec = Reactant.Compiler.context_gc_vector[MLIR.IR.context()]
-        push!(gc_vec, xs)
-        @assert gc_vec[end] === xs
         ptr = Base.reinterpret(Core.LLVMPtr{T,CUDA.AS.Global}, Base.pointer_from_objref(xs))
         return new(ptr)
     end
@@ -1110,8 +1104,9 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
     wrapftype = MLIR.IR.Type(
         MLIR.API.mlirLLVMFunctionTypeGet(voidty, length(wrapper_tys), wrapper_tys)
     )
-    wrapfunc = MLIR.IR.with_block(MLIR.IR.body(mod)) do
-        return MLIR.Dialects.llvm.func(;
+    blk = MLIR.IR.body(mod)
+    wrapfunc = MLIR.IR.@scope blk begin
+        MLIR.Dialects.llvm.func(;
             sym_name,
             sym_visibility=MLIR.IR.Attribute("private"),
             function_type=wrapftype,
@@ -1157,7 +1152,7 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
         end
 
         # TODO check for only integer and explicitly non cutraced types
-        MLIR.IR.with_block(wrapbody) do
+        MLIR.IR.@scope wrapbody begin
             argty = MLIR.IR.Type(
                 MLIR.API.mlirLLVMFunctionTypeGetInput(gpu_function_type, trueidx - 1)
             )
@@ -1228,7 +1223,7 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
             julia_arg = allargs[p[2]]
 
             offset = get_field_offset(typeof(julia_arg), p[3:end])
-            MLIR.IR.with_block(wrapbody) do
+            MLIR.IR.@scope wrapbody begin
                 ptr = MLIR.IR.result(
                     MLIR.Dialects.llvm.getelementptr(
                         alloc,
@@ -1245,7 +1240,7 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
         argidx += 1
     end
 
-    MLIR.IR.with_block(wrapbody) do
+    MLIR.IR.@scope wrapbody begin
         for arg in allocs
             if arg === nothing
                 continue

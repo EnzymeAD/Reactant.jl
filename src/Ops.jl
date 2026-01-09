@@ -2284,8 +2284,10 @@ end
 
     # compile the true branch without any returns first
     true_fn_mod = MLIR.IR.current_module()
-    true_func_tmp = MLIR.IR.with_block(MLIR.IR.body(true_fn_mod)) do
-        return MLIR.Dialects.func.func_(;
+
+    blk = MLIR.IR.body(true_fn_mod)
+    true_func_tmp = MLIR.IR.@scope blk begin
+        MLIR.Dialects.func.func_(;
             sym_name=string(true_fn) * "_tb_tmp",
             function_type=MLIR.IR.FunctionType(input_types, []),
             body=MLIR.IR.Region(),
@@ -2294,36 +2296,35 @@ end
     end
     true_fn_body = MLIR.IR.Block()
     push!(MLIR.IR.region(true_func_tmp, 1), true_fn_body)
-
     true_fn_args = true_fn_names[1]
 
-    MLIR.IR.activate!(true_fn_body)
-    activate_constant_context!(true_fn_body)
-    tb_result = try
-        for (i, arg) in enumerate(tb_linear_args)
-            # find the right path to index the traced arg.
-            path = nothing
-            for p in Reactant.TracedUtils.get_paths(arg)
-                if length(p) > 0 && p[1] == true_fn_args
-                    path = p[2:end]
+    MLIR.IR.@scope true_fn_body begin
+        activate_constant_context!(true_fn_body)
+        tb_result = try
+            for (i, arg) in enumerate(tb_linear_args)
+                # find the right path to index the traced arg.
+                path = nothing
+                for p in Reactant.TracedUtils.get_paths(arg)
+                    if length(p) > 0 && p[1] == true_fn_args
+                        path = p[2:end]
+                    end
                 end
-            end
-            if isnothing(path)
-                error("if_condition: could not find path for linear arg $i")
-            end
-            Reactant.TracedUtils.set_mlir_data!(
-                arg,
-                only(
-                    Reactant.TracedUtils.push_val!(
-                        [], tb_traced_args[path[1]], path[2:end]
+                if isnothing(path)
+                    error("if_condition: could not find path for linear arg $i")
+                end
+                Reactant.TracedUtils.set_mlir_data!(
+                    arg,
+                    only(
+                        Reactant.TracedUtils.push_val!(
+                            [], tb_traced_args[path[1]], path[2:end]
+                        ),
                     ),
-                ),
-            )
+                )
+            end
+            Reactant.call_with_reactant(true_fn, tb_traced_args...)
+        finally
+            deactivate_constant_context!(true_fn_body)
         end
-        Reactant.call_with_reactant(true_fn, tb_traced_args...)
-    finally
-        deactivate_constant_context!(true_fn_body)
-        MLIR.IR.deactivate!(true_fn_body)
     end
 
     seen_true_results = Reactant.OrderedIdDict()
@@ -2350,8 +2351,9 @@ end
 
     # compile the false branch without any returns similar to the true branch
     false_fn_mod = MLIR.IR.current_module()
-    false_func_tmp = MLIR.IR.with_block(MLIR.IR.body(false_fn_mod)) do
-        return MLIR.Dialects.func.func_(;
+    blk = MLIR.IR.body(false_fn_mod)
+    false_func_tmp = MLIR.IR.@scope blk begin
+        MLIR.Dialects.func.func_(;
             sym_name=string(false_fn) * "_fb_tmp",
             function_type=MLIR.IR.FunctionType(input_types, []),
             body=MLIR.IR.Region(),
@@ -2360,35 +2362,35 @@ end
     end
     false_fn_body = MLIR.IR.Block()
     push!(MLIR.IR.region(false_func_tmp, 1), false_fn_body)
-
     false_fn_args = false_fn_names[1]
-    MLIR.IR.activate!(false_fn_body)
-    activate_constant_context!(false_fn_body)
-    fb_result = try
-        for (i, arg) in enumerate(fb_linear_args)
-            # find the right path to index the traced arg.
-            path = nothing
-            for p in Reactant.TracedUtils.get_paths(arg)
-                if length(p) > 0 && p[1] == false_fn_args
-                    path = p[2:end]
+
+    MLIR.IR.@scope false_fn_body begin
+        activate_constant_context!(false_fn_body)
+        fb_result = try
+            for (i, arg) in enumerate(fb_linear_args)
+                # find the right path to index the traced arg.
+                path = nothing
+                for p in Reactant.TracedUtils.get_paths(arg)
+                    if length(p) > 0 && p[1] == false_fn_args
+                        path = p[2:end]
+                    end
                 end
-            end
-            if isnothing(path)
-                error("if_condition: could not find path for linear arg $i")
-            end
-            Reactant.TracedUtils.set_mlir_data!(
-                arg,
-                only(
-                    Reactant.TracedUtils.push_val!(
-                        [], fb_traced_args[path[1]], path[2:end]
+                if isnothing(path)
+                    error("if_condition: could not find path for linear arg $i")
+                end
+                Reactant.TracedUtils.set_mlir_data!(
+                    arg,
+                    only(
+                        Reactant.TracedUtils.push_val!(
+                            [], fb_traced_args[path[1]], path[2:end]
+                        ),
                     ),
-                ),
-            )
+                )
+            end
+            Reactant.call_with_reactant(false_fn, fb_traced_args...)
+        finally
+            deactivate_constant_context!(false_fn_body)
         end
-        Reactant.call_with_reactant(false_fn, fb_traced_args...)
-    finally
-        deactivate_constant_context!(false_fn_body)
-        MLIR.IR.deactivate!(false_fn_body)
     end
 
     seen_false_results = Reactant.OrderedIdDict()
@@ -2468,37 +2470,37 @@ end
     @assert length(fb_paths) == length(all_paths)
 
     # finalize the true branch by adding the missing values
-    MLIR.IR.activate!(true_fn_body)
-    activate_constant_context!(true_fn_body)
-    tb_corrected_linear_results = Reactant.TracedType[]
-    try
-        for (i, _) in enumerate(tb_paths)
-            if haskey(tb_results_dict, tb_paths[i])
-                push!(tb_corrected_linear_results, tb_results_dict[tb_paths[i]])
-            else
-                push!(tb_corrected_linear_results, zero(fb_results_dict[fb_paths[i]]))
+    MLIR.IR.@scope true_fn_body begin
+        activate_constant_context!(true_fn_body)
+        tb_corrected_linear_results = Reactant.TracedType[]
+        try
+            for (i, _) in enumerate(tb_paths)
+                if haskey(tb_results_dict, tb_paths[i])
+                    push!(tb_corrected_linear_results, tb_results_dict[tb_paths[i]])
+                else
+                    push!(tb_corrected_linear_results, zero(fb_results_dict[fb_paths[i]]))
+                end
             end
+        finally
+            deactivate_constant_context!(true_fn_body)
         end
-    finally
-        MLIR.IR.deactivate!(true_fn_body)
-        deactivate_constant_context!(true_fn_body)
     end
 
     # finalize the false branch by adding the missing values
-    MLIR.IR.activate!(false_fn_body)
-    activate_constant_context!(false_fn_body)
-    fb_corrected_linear_results = Reactant.TracedType[]
-    try
-        for (i, _) in enumerate(fb_paths)
-            if haskey(fb_results_dict, fb_paths[i])
-                push!(fb_corrected_linear_results, fb_results_dict[fb_paths[i]])
-            else
-                push!(fb_corrected_linear_results, zero(tb_results_dict[tb_paths[i]]))
+    MLIR.IR.@scope false_fn_body begin
+        activate_constant_context!(false_fn_body)
+        fb_corrected_linear_results = Reactant.TracedType[]
+        try
+            for (i, _) in enumerate(fb_paths)
+                if haskey(fb_results_dict, fb_paths[i])
+                    push!(fb_corrected_linear_results, fb_results_dict[fb_paths[i]])
+                else
+                    push!(fb_corrected_linear_results, zero(tb_results_dict[tb_paths[i]]))
+                end
             end
+        finally
+            deactivate_constant_context!(false_fn_body)
         end
-    finally
-        MLIR.IR.deactivate!(false_fn_body)
-        deactivate_constant_context!(false_fn_body)
     end
 
     # All MissingTracedValues must be replaced with zeroes
@@ -2578,8 +2580,8 @@ end
     # With the corrected results, we can compile the true and false branches
     tb_out_types = [mlir_type(tr) for tr in tb_corrected_linear_results]
 
-    true_fn_compiled = MLIR.IR.with_block(MLIR.IR.body(true_fn_mod)) do
-        return MLIR.Dialects.func.func_(;
+    true_fn_compiled = MLIR.IR.@scope MLIR.IR.body(true_fn_mod) begin
+        MLIR.Dialects.func.func_(;
             sym_name=Reactant.TracedUtils.__lookup_unique_name_in_module(
                 true_fn_mod, string(true_fn) * "_tb"
             ),
@@ -2591,13 +2593,12 @@ end
     MLIR.API.mlirRegionTakeBody(
         MLIR.IR.region(true_fn_compiled, 1), MLIR.IR.region(true_func_tmp, 1)
     )
-    MLIR.API.mlirOperationDestroy(true_func_tmp.ref)
-    true_func_tmp.ref = MLIR.API.MlirOperation(C_NULL)
+    MLIR.IR.dispose!(true_func_tmp)
 
     fb_out_types = [mlir_type(fr) for fr in fb_corrected_linear_results]
 
-    false_fn_compiled = MLIR.IR.with_block(MLIR.IR.body(false_fn_mod)) do
-        return MLIR.Dialects.func.func_(;
+    false_fn_compiled = MLIR.IR.@scope MLIR.IR.body(false_fn_mod) begin
+        MLIR.Dialects.func.func_(;
             sym_name=Reactant.TracedUtils.__lookup_unique_name_in_module(
                 false_fn_mod, string(false_fn) * "_fb"
             ),
@@ -2609,8 +2610,7 @@ end
     MLIR.API.mlirRegionTakeBody(
         MLIR.IR.region(false_fn_compiled, 1), MLIR.IR.region(false_func_tmp, 1)
     )
-    MLIR.API.mlirOperationDestroy(false_func_tmp.ref)
-    false_func_tmp.ref = MLIR.API.MlirOperation(C_NULL)
+    MLIR.IR.dispose!(false_func_tmp)
 
     tb_region = Reactant.TracedUtils.__take_region(true_fn_compiled)
     fb_region = Reactant.TracedUtils.__take_region(false_fn_compiled)
@@ -2863,8 +2863,8 @@ end
 
     sym_name = Reactant.TracedUtils.__lookup_unique_name_in_module(mod, sym_name)
 
-    mesh_op = MLIR.IR.with_module(mod) do
-        return MLIR.Dialects.sdy.mesh(; sym_name, mesh=mesh_attr, location)
+    mesh_op = MLIR.IR.@scope mod begin
+        MLIR.Dialects.sdy.mesh(; sym_name, mesh=mesh_attr, location)
     end
 
     # mesh_op needs to be moved to the beginning of the module

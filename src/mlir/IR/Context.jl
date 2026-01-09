@@ -3,27 +3,21 @@
 end
 
 """
-    Context()
+    Context(registry = DEFAULT_DIALECT_REGISTRY[]; threading = false)
 
-Creates an MLIR context and transfers its ownership to the caller.
-"""
-Context() = Context(API.mlirContextCreate())
+Creates an MLIR context.
 
-"""
-    Context(threading::Bool)
+If `isnothing(registry)`, then it will use Reactant's registry of dialects.
+If you want to use a custom or empty registry, just pass it as the first argument.
 
-Creates an MLIR context with or without multithreading support.
+```julia
+Context(DialectRegistry())
+```
 """
-function Context(threading::Bool)
-    return Context(API.mlirContextCreateWithThreading(threading))
-end
-
-"""
-    Context(registry::DialectRegistry, threading::Bool)
-
-Creates an MLIR context with the given dialect registry and with or without multithreading support.
-"""
-function Context(registry, threading)
+function Context(registry = DEFAULT_DIALECT_REGISTRY[]; threading::Bool=false)
+    if isnothing(registry)
+        registry = DialectRegistry()
+    end
     return Context(API.mlirContextCreateWithRegistry(registry, threading))
 end
 
@@ -83,7 +77,7 @@ end
 Executes function `f` with the given MLIR context `ctx` activated.
 """
 function with_context(f, ctx::Context)
-    depwarn("`with_context` is deprecated, use `@scope` instead.", :with_block)
+    depwarn("`with_context` is deprecated, use `@scope` instead.", :with_context)
     @scope ctx f()
 end
 
@@ -95,23 +89,12 @@ Executes function `f` with an active MLIR context. If `allow_use_existing` is tr
 context, that context is used. Otherwise, a new context is created for the duration of `f`.
 """
 function with_context(f; allow_use_existing=false)
-    delete_context = false
     if allow_use_existing && has_context()
         ctx = context()
     else
-        delete_context = true
         ctx = Context(Reactant.registry[], false)
-        Reactant.Compiler.context_gc_vector[ctx] = Vector{
-            Union{Reactant.TracedRArray,Reactant.TracedRNumber}
-        }(
-            undef, 0
-        )
         @ccall API.mlir_c.RegisterDialects(ctx::API.MlirContext)::Cvoid
     end
 
-    result = with_context(f, ctx)
-
-    delete_context && Base.delete!(Reactant.Compiler.context_gc_vector, ctx)
-
-    return result
+    return with_context(f, ctx)
 end

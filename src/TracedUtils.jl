@@ -337,21 +337,18 @@ function make_mlir_fn(
     Ops.activate_constant_context!(fnbody)
     @assert MLIR.IR.has_current_block()
 
-    # Explicitly don't use with_block to avoid creating a closure, which creates
-    # both compile-time and relocatability issues
-    MLIR.IR.activate!(fnbody)
+    result = MLIR.IR.@scope fnbody begin
+        try
+            process_linear_args!(linear_args, fnbody, do_transpose, optimize_then_pad, inv_map)
 
-    result = try
-        process_linear_args!(linear_args, fnbody, do_transpose, optimize_then_pad, inv_map)
-
-        if isempty(kwargs)
-            Reactant.call_with_reactant(f, traced_args...)
-        else
-            Reactant.call_with_reactant(Core.kwcall, kwargs, f, traced_args...)
+            if isempty(kwargs)
+                Reactant.call_with_reactant(f, traced_args...)
+            else
+                Reactant.call_with_reactant(Core.kwcall, kwargs, f, traced_args...)
+            end
+        finally
+            Ops.deactivate_constant_context!(fnbody)
         end
-    finally
-        MLIR.IR.deactivate!(fnbody)
-        Ops.deactivate_constant_context!(fnbody)
     end
 
     # check which arguments have been mutated
@@ -516,8 +513,8 @@ function prepare_mlir_fn_args(
         end
     end
 
-    func = MLIR.IR.with_block(MLIR.IR.body(mod)) do
-        return MLIR.Dialects.func.func_(;
+    func = MLIR.IR.@scope MLIR.IR.body(mod) begin
+        MLIR.Dialects.func.func_(;
             sym_name=name * "_tmp",
             function_type=MLIR.IR.FunctionType(in_tys, Vector{MLIR.IR.Type}(undef, 0)),
             body=MLIR.IR.Region(),
@@ -855,8 +852,8 @@ function finalize_mlir_fn(
         MLIR.IR.deactivate!(fnbody)
     end
 
-    func2 = MLIR.IR.with_block(MLIR.IR.body(mod)) do
-        return MLIR.Dialects.func.func_(;
+    func2 = MLIR.IR.@scope MLIR.IR.body(mod) begin
+        MLIR.Dialects.func.func_(;
             sym_name=__lookup_unique_name_in_module(mod, name),
             function_type=MLIR.IR.FunctionType(in_tys, out_tys),
             body=MLIR.IR.Region(),
@@ -991,8 +988,7 @@ function finalize_mlir_fn(
         num_partitions = 1
     end
 
-    MLIR.API.mlirOperationDestroy(func.ref)
-    func.ref = MLIR.API.MlirOperation(C_NULL)
+    MLIR.IR.dispose!(func)
 
     return (
         func2,
@@ -1239,7 +1235,8 @@ function elem_apply(f, args::Vararg{Any,Nargs}) where {Nargs}
         seen_results, result, (), Reactant.TracedSetPath; tobatch=OutShape
     )
 
-    func2.ref = MLIR.API.MlirOperation(C_NULL)
+    # TODO should we dispose func2 here?
+    # func2.ref = MLIR.API.MlirOperation(C_NULL)
 
     return traced2_result
 end
