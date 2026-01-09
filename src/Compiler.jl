@@ -934,8 +934,7 @@ function optimization_passes(
         "dot_general_insert_dim_contraction_simplification",
         "fuse_reshape_collapse_or_expand_dims_into_reduce",
         "split_reduce_add_mul_to_add_dot_general",
-        # FIXME: enable once upstream bug is fixed
-        # "recognize_from_constant($(max_constant_threshold))",
+        "recognize_from_constant($(max_constant_threshold))",
     ]
 
     if !is_sharded
