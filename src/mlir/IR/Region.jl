@@ -1,10 +1,5 @@
-struct Region
+@checked struct Region
     ref::API.MlirRegion
-
-    function Region(region)
-        @assert !mlirIsNull(region)
-        new(region, owned)
-    end
 end
 
 """
@@ -22,7 +17,7 @@ After calling this function, the region must not be used anymore.
 """
 function dispose!(region::Region)
     @assert !mlirIsNull(region.ref) "Region already disposed"
-    API.mlirRegionDestroy(region.ref)
+    return API.mlirRegionDestroy(region.ref)
 end
 
 Base.cconvert(::Core.Type{API.MlirRegion}, region::Region) = region.ref
@@ -101,7 +96,7 @@ end
 Takes a block owned by the caller and inserts it after the (non-owned) reference block in the given region. The reference block must belong to the region. If the reference block is null, prepends the block to the region.
 """
 function insert_after!(region::Region, reference::Block, block::Block)
-    API.mlirRegionInsertOwnedBlockAfter(region, reference, block)
+    return API.mlirRegionInsertOwnedBlockAfter(region, reference, block)
 end
 
 """
@@ -110,7 +105,7 @@ end
 Takes a block owned by the caller and inserts it before the (non-owned) reference block in the given region. The reference block must belong to the region. If the reference block is null, appends the block to the region.
 """
 function insert_before!(region::Region, reference::Block, block::Block)
-    API.mlirRegionInsertOwnedBlockBefore(region, reference, block)
+    return API.mlirRegionInsertOwnedBlockBefore(region, reference, block)
 end
 
 # Global state

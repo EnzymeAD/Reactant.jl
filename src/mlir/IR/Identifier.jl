@@ -8,7 +8,7 @@ end
 Gets an identifier with the given string value.
 """
 function Identifier(str::String; context::Context=context())
-    Identifier(API.mlirIdentifierGet(context, str))
+    return Identifier(API.mlirIdentifierGet(context, str))
 end
 
 Base.cconvert(::Core.Type{API.MlirIdentifier}, id::Identifier) = id.ref

@@ -36,7 +36,7 @@ After calling this function, the context must not be used anymore.
 function dispose!(ctx::Context)
     @assert !mlirIsNull(ctx.ref) "Context already disposed"
     # deactivate!(ctx)
-    API.mlirContextDestroy(ctx.ref)
+    return API.mlirContextDestroy(ctx.ref)
 end
 
 Base.cconvert(::Core.Type{API.MlirContext}, c::Context) = c.ref

@@ -54,5 +54,5 @@ end
 Dump as an object in `fileName`.
 """
 function Base.write(filename::String, jit::ExecutionEngine)
-    API.mlirExecutionEngineDumpToObjectFile(jit, filename)
+    return API.mlirExecutionEngineDumpToObjectFile(jit, filename)
 end

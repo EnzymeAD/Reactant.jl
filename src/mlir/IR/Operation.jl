@@ -4,7 +4,7 @@ end
 
 function dispose!(op::Operation)
     @assert !mlirIsNull(op.ref) "Operation already disposed"
-    API.mlirOperationDestroy(op.ref)
+    return API.mlirOperationDestroy(op)
 end
 
 function Base.cconvert(::Core.Type{API.MlirOperation}, op::Operation)
@@ -301,7 +301,7 @@ Returns whether the given fully-qualified operation (i.e. 'dialect.operation') i
 This will return true if the dialect is loaded and the operation is registered within the dialect.
 """
 function is_registered(opname; context::Context=context())
-    API.mlirContextIsRegisteredOperation(context, opname)
+    return API.mlirContextIsRegisteredOperation(context, opname)
 end
 
 Base.eltype(::Operation) = Region
