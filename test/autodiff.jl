@@ -5,7 +5,7 @@ square(x) = x * 2
 fwd(Mode, RT, x, y) = Enzyme.autodiff(Mode, square, RT, Duplicated(x, y))
 
 @testset "Activity" begin
-    @test Enzyme.guess_activity(Reactant.ConcretePJRTArray{Float32,2,1}, Enzyme.Reverse) <:
+    @test Enzyme.guess_activity(Reactant.ConcretePJRTArray{Float32,2}, Enzyme.Reverse) <:
         Enzyme.Duplicated
 
     @test Enzyme.guess_activity(Reactant.ConcretePJRTArray{Float32}, Enzyme.Reverse) <:
@@ -14,13 +14,7 @@ fwd(Mode, RT, x, y) = Enzyme.autodiff(Mode, square, RT, Duplicated(x, y))
     @test Enzyme.guess_activity(Reactant.ConcreteIFRTArray{Float32,2}, Enzyme.Reverse) <:
         Enzyme.Duplicated
 
-    @test Enzyme.guess_activity(Reactant.ConcretePJRTNumber{Float32,1}, Enzyme.Reverse) <:
-        Enzyme.Duplicated
-
-    @test Enzyme.guess_activity(Reactant.ConcretePJRTNumber{Float32}, Enzyme.Reverse) <:
-        Enzyme.Duplicated
-
-    @test Enzyme.guess_activity(Reactant.ConcretePJRTNumber{Float32,1}, Enzyme.Reverse) <:
+    @test Enzyme.guess_activity(Reactant.ConcreteIFRTArray{Float32}, Enzyme.Reverse) <:
         Enzyme.Duplicated
 
     @test Enzyme.guess_activity(Reactant.ConcretePJRTNumber{Float32}, Enzyme.Reverse) <:

@@ -1350,7 +1350,6 @@ Base.@nospecializeinfer function Reactant.traced_type_inner(
     seen,
     @nospecialize(mode::Reactant.TraceMode),
     @nospecialize(track_numbers::Type),
-    @nospecialize(sharding),
     @nospecialize(runtime)
 )
     return A
@@ -1361,7 +1360,6 @@ Base.@nospecializeinfer function Reactant.traced_type_inner(
     seen,
     @nospecialize(mode::Reactant.TraceMode),
     @nospecialize(track_numbers::Type),
-    @nospecialize(sharding),
     @nospecialize(runtime)
 )
     return A
@@ -1372,27 +1370,21 @@ Base.@nospecializeinfer function Reactant.traced_type_inner(
     seen,
     mode::Reactant.TraceMode,
     @nospecialize(track_numbers::Type),
-    @nospecialize(sharding),
     @nospecialize(runtime)
-)
+) where {ndevices}
     T = eltype(A)
     N = ndims(A)
     if mode == Reactant.ArrayToConcrete && T <: Reactant.ReactantPrimitive
         if runtime isa Val{:PJRT}
-            return Reactant.ConcretePJRTArray{T,N,Reactant.Sharding.ndevices(sharding)}
+            return Reactant.ConcretePJRTArray{T,N}
         elseif runtime isa Val{:IFRT}
             return Reactant.ConcreteIFRTArray{T,N}
         end
         error("Unsupported runtime $runtime")
     else
-        TT = Reactant.traced_type_inner(T, seen, mode, track_numbers, sharding, runtime)
+        TT = Reactant.traced_type_inner(T, seen, mode, track_numbers, runtime)
         TT === T && return A
-        return Array{
-            Reactant.traced_type_inner(
-                T, seen, mode, track_numbers, Base.getproperty(sharding, 1), runtime
-            ),
-            N,
-        }
+        return Array{Reactant.traced_type_inner(T, seen, mode, track_numbers, runtime),N}
     end
 end
 
@@ -1420,7 +1412,7 @@ function Reactant.make_tracer(
         end
         error("Unsupported runtime $runtime")
     end
-    TT = Reactant.traced_type(eltype(RT), Val(mode), track_numbers, sharding, runtime)
+    TT = Reactant.traced_type(eltype(RT), Val(mode), track_numbers, runtime)
     if TT === eltype(RT)
         return prev
     end

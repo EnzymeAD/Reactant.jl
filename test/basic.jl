@@ -387,11 +387,19 @@ tuple_byref2(x) = abs2.(x), tuple_byref(x)
 
 @testset "Tuple byref" begin
     x = Reactant.to_rarray([1.0 -2.0; -3.0 4.0])
-    @test @jit(tuple_byref(x)).a.b.data === x.data
+    if x.data isa Vector
+        @test @jit(tuple_byref(x)).a.b.data[1] === x.data[1]
+    else
+        @test @jit(tuple_byref(x)).a.b.data === x.data
+    end
 
     f2 = @compile tuple_byref2(x)
     r2 = f2(x)
-    @test r2[2].a.b.data === x.data
+    if x.data isa Vector
+        @test r2[2].a.b.data[1] === x.data[1]
+    else
+        @test r2[2].a.b.data === x.data
+    end
     @test r2[1] == abs2.([1.0 -2.0; -3.0 4.0])
 end
 
