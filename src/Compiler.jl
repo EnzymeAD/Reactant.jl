@@ -744,6 +744,7 @@ function optimization_passes(
         "cse_abs<16>",
         "cse_concatenate<16>",
         "cse_compare<16>",
+        "cse_select<16>",
         "concatenate_op_canon<16>($max_constant_threshold)",
         "select_op_canon<16>($max_constant_threshold)",
         "add_simplify<16>",
@@ -933,8 +934,7 @@ function optimization_passes(
         "dot_general_insert_dim_contraction_simplification",
         "fuse_reshape_collapse_or_expand_dims_into_reduce",
         "split_reduce_add_mul_to_add_dot_general",
-        # FIXME: enable once upstream bug is fixed
-        # "recognize_from_constant($(max_constant_threshold))",
+        "recognize_from_constant($(max_constant_threshold))",
     ]
 
     if !is_sharded
