@@ -965,6 +965,7 @@ function optimization_passes(
             transform_passes_list,
             [
                 # scatter patterns
+                "scatter_op_canon<16>",
                 "scatter_to_dynamic_update_slice<1>",
                 "scatter_multiply_simplify",
                 "scatter_sub_simplify",
