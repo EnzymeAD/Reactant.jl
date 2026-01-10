@@ -1,0 +1,43 @@
+import ProtoBuf as PB
+using ProtoBuf: OneOf
+using ProtoBuf.EnumX: @enumx
+
+export Duration
+
+
+struct Duration
+    seconds::Int64
+    nanos::Int32
+end
+Duration(;seconds = zero(Int64), nanos = zero(Int32)) = Duration(seconds, nanos)
+PB.default_values(::Type{Duration}) = (;seconds = zero(Int64), nanos = zero(Int32))
+PB.field_numbers(::Type{Duration}) = (;seconds = 1, nanos = 2)
+
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:Duration})
+    seconds = zero(Int64)
+    nanos = zero(Int32)
+    while !PB.message_done(d)
+        field_number, wire_type = PB.decode_tag(d)
+        if field_number == 1
+            seconds = PB.decode(d, Int64)
+        elseif field_number == 2
+            nanos = PB.decode(d, Int32)
+        else
+            Base.skip(d, wire_type)
+        end
+    end
+    return Duration(seconds, nanos)
+end
+
+function PB.encode(e::PB.AbstractProtoEncoder, x::Duration)
+    initpos = position(e.io)
+    x.seconds != zero(Int64) && PB.encode(e, 1, x.seconds)
+    x.nanos != zero(Int32) && PB.encode(e, 2, x.nanos)
+    return position(e.io) - initpos
+end
+function PB._encoded_size(x::Duration)
+    encoded_size = 0
+    x.seconds != zero(Int64) && (encoded_size += PB._encoded_size(x.seconds, 1))
+    x.nanos != zero(Int32) && (encoded_size += PB._encoded_size(x.nanos, 2))
+    return encoded_size
+end
