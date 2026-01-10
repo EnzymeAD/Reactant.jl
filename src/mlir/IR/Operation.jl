@@ -1,246 +1,12 @@
-mutable struct Operation
-    operation::API.MlirOperation
-    @atomic owned::Bool
-
-    function Operation(operation, owned=true)
-        @assert !mlirIsNull(operation) "cannot create Operation with null MlirOperation"
-        finalizer(new(operation, owned)) do op
-            if op.owned
-                API.mlirOperationDestroy(op.operation)
-            end
-        end
-    end
+@checked struct Operation
+    ref::API.MlirOperation
 end
 
-Base.cconvert(::Core.Type{API.MlirOperation}, operation::Operation) = operation
-function Base.unsafe_convert(::Core.Type{API.MlirOperation}, operation::Operation)
-    return operation.operation
-end
+dispose!(op::Operation) = mark_dispose(API.mlirOperationDestroy, op)
+
+Base.cconvert(::Core.Type{API.MlirOperation}, op::Operation) = mark_use(op).ref
+
 Base.:(==)(op::Operation, other::Operation) = API.mlirOperationEqual(op, other)
-
-"""
-    copy(op)
-
-Creates a deep copy of an operation. The operation is not inserted and ownership is transferred to the caller.
-"""
-Base.copy(operation::Operation) = Operation(API.mlirOperationClone(operation))
-
-"""
-    context(op)
-
-Gets the context this operation is associated with.
-"""
-context(operation::Operation) = Context(API.mlirOperationGetContext(operation))
-
-"""
-    location(op)
-
-Gets the location of the operation.
-"""
-location(operation::Operation) = Location(API.mlirOperationGetLocation(operation))
-
-"""
-    typeid(op)
-
-Gets the type id of the operation. Returns null if the operation does not have a registered operation description.
-"""
-typeid(op::Operation) = TypeID(API.mlirOperationGetTypeID(op))
-
-"""
-    name(op)
-
-Gets the name of the operation as an identifier.
-"""
-name(operation::Operation) = String(API.mlirOperationGetName(operation))
-
-"""
-    block(op)
-
-Gets the block that owns this operation, returning null if the operation is not owned.
-"""
-block(operation::Operation) = Block(API.mlirOperationGetBlock(operation), false)
-
-"""
-    parent_op(op)
-
-Gets the operation that owns this operation, returning null if the operation is not owned.
-"""
-parent_op(operation::Operation) =
-    Operation(API.mlirOperationGetParentOperation(operation), false)
-
-"""
-    rmfromparent!(op)
-
-Removes the given operation from its parent block. The operation is not destroyed.
-The ownership of the operation is transferred to the caller.
-"""
-function rmfromparent!(operation::Operation)
-    API.mlirOperationRemoveFromParent(operation)
-    @atomic operation.owned = true
-    return operation
-end
-
-dialect(operation::Operation) = Symbol(first(split(name(operation), '.')))
-
-"""
-    nregions(op)
-
-Returns the number of regions attached to the given operation.
-"""
-nregions(operation::Operation) = API.mlirOperationGetNumRegions(operation)
-
-"""
-    region(op, i)
-
-Returns `i`-th region attached to the operation.
-"""
-function region(operation::Operation, i)
-    i ∉ 1:nregions(operation) && throw(BoundsError(operation, i))
-    return Region(API.mlirOperationGetRegion(operation, i - 1), false)
-end
-
-"""
-    nresults(op)
-
-Returns the number of results of the operation.
-"""
-nresults(operation::Operation) = API.mlirOperationGetNumResults(operation)
-
-"""
-    result(op, i)
-
-Returns `i`-th result of the operation.
-"""
-function result(operation::Operation, i=1)
-    i ∉ 1:nresults(operation) && throw(BoundsError(operation, i))
-    return Value(API.mlirOperationGetResult(operation, i - 1))
-end
-results(operation) = [result(operation, i) for i in 1:nresults(operation)]
-
-"""
-    noperands(op)
-
-Returns the number of operands of the operation.
-"""
-noperands(operation::Operation) = API.mlirOperationGetNumOperands(operation)
-
-"""
-    operand(op, i)
-
-Returns `i`-th operand of the operation.
-"""
-function operand(operation::Operation, i=1)
-    i ∉ 1:noperands(operation) && throw(BoundsError(operation, i))
-    return Value(API.mlirOperationGetOperand(operation, i - 1))
-end
-
-"""
-    operands(op)
-
-Return an array of all operands of the operation.
-"""
-operands(op) = Value[operand(op, i) for i in 1:noperands(op)]
-
-"""
-    operand!(op, i, value)
-
-Sets the `i`-th operand of the operation.
-"""
-function operand!(operation::Operation, i, value)
-    i ∉ 1:noperands(operation) && throw(BoundsError(operation, i))
-    API.mlirOperationSetOperand(operation, i - 1, value)
-    return value
-end
-
-"""
-    nsuccessors(op)
-
-Returns the number of successor blocks of the operation.
-"""
-nsuccessors(operation::Operation) = API.mlirOperationGetNumSuccessors(operation)
-
-"""
-    successor(op, i)
-
-Returns `i`-th successor of the operation.
-"""
-function successor(operation::Operation, i)
-    i ∉ 1:nsuccessors(operation) && throw(BoundsError(operation, i))
-    return Block(API.mlirOperationGetSuccessor(operation, i - 1), false)
-end
-
-"""
-    nattrs(op)
-
-Returns the number of attributes attached to the operation.
-"""
-nattrs(operation::Operation) = API.mlirOperationGetNumAttributes(operation)
-
-"""
-    attr(op, i)
-
-Return `i`-th attribute of the operation.
-"""
-function attr(operation::Operation, i)
-    i ∉ 1:nattrs(operation) && throw(BoundsError(operation, i))
-    return NamedAttribute(API.mlirOperationGetAttribute(operation, i - 1))
-end
-
-"""
-    attr(op, name)
-
-Returns an attribute attached to the operation given its name.
-"""
-function attr(operation::Operation, name::AbstractString)
-    raw_attr = API.mlirOperationGetAttributeByName(operation, name)
-    if mlirIsNull(raw_attr)
-        return nothing
-    end
-    return Attribute(raw_attr)
-end
-
-"""
-    attr!(op, name, attr)
-
-Sets an attribute by name, replacing the existing if it exists or adding a new one otherwise.
-"""
-function attr!(operation::Operation, name, attribute)
-    API.mlirOperationSetAttributeByName(operation, name, attribute)
-    return operation
-end
-
-"""
-    rmattr!(op, name)
-
-Removes an attribute by name. Returns false if the attribute was not found and true if removed.
-"""
-rmattr!(operation::Operation, name) =
-    API.mlirOperationRemoveAttributeByName(operation, name)
-
-function lose_ownership!(operation::Operation)
-    @assert operation.owned
-    @atomic operation.owned = false
-    return operation
-end
-
-function Base.show(io::IO, operation::Operation)
-    if mlirIsNull(operation.operation)
-        return write(io, "Operation(NULL)")
-    end
-
-    c_print_callback = @cfunction(print_callback, Cvoid, (API.MlirStringRef, Any))
-
-    buffer = IOBuffer()
-    ref = Ref(buffer)
-
-    flags = API.mlirOpPrintingFlagsCreate()
-
-    API.mlirOpPrintingFlagsEnableDebugInfo(flags, get(io, :debug, false), false)
-    API.mlirOperationPrintWithFlags(operation, flags, c_print_callback, ref)
-    API.mlirOpPrintingFlagsDestroy(flags)
-
-    return write(io, rstrip(String(take!(buffer))))
-end
 
 """
     parse(::Type{Operation}, code; context=context())
@@ -256,32 +22,262 @@ function Base.parse(
     location::Location=Location(),
 )
     return Operation(
-        @ccall API.mlir_c.mlirOperationParse(
-            context::API.MlirContext,
-            block::API.MlirBlock,
-            code::API.MlirStringRef,
-            location::API.MlirLocation,
-            verify::Bool,
-        )::API.MlirOperation
+        mark_alloc(
+            @ccall API.mlir_c.mlirOperationParse(
+                context::API.MlirContext,
+                block::API.MlirBlock,
+                code::API.MlirStringRef,
+                location::API.MlirLocation,
+                verify::Bool,
+            )::API.MlirOperation
+        ),
     )
 end
+
+function Base.show(io::IO, op::Operation)
+    if mlirIsNull(op.ref)
+        return write(io, "Operation(NULL)")
+    end
+
+    c_print_callback = @cfunction(print_callback, Cvoid, (API.MlirStringRef, Any))
+
+    buffer = IOBuffer()
+    ref = Ref(buffer)
+
+    flags = API.mlirOpPrintingFlagsCreate()
+
+    API.mlirOpPrintingFlagsEnableDebugInfo(flags, get(io, :debug, false), false)
+    API.mlirOperationPrintWithFlags(op, flags, c_print_callback, ref)
+    API.mlirOpPrintingFlagsDestroy(flags)
+
+    return write(io, rstrip(String(take!(buffer))))
+end
+
+"""
+    copy(op)
+
+Creates a deep copy of an operation. The operation is not inserted and ownership is transferred to the caller.
+"""
+Base.copy(op::Operation) = Operation(mark_alloc(API.mlirOperationClone(op)))
+
+"""
+    context(op)
+
+Gets the context this operation is associated with.
+"""
+context(op::Operation) = Context(API.mlirOperationGetContext(op))
+
+"""
+    location(op)
+
+Gets the location of the operation.
+"""
+location(op::Operation) = Location(API.mlirOperationGetLocation(op))
+
+"""
+    typeid(op)
+
+Gets the type id of the operation. Returns null if the operation does not have a registered operation description.
+"""
+typeid(op::Operation) = TypeID(API.mlirOperationGetTypeID(op))
+
+"""
+    name(op)
+
+Gets the name of the operation as an identifier.
+"""
+name(op::Operation) = String(API.mlirOperationGetName(op))
+
+"""
+    block(op)
+
+Gets the block that owns this operation, returning null if the operation is not owned.
+"""
+block(op::Operation) = Block(API.mlirOperationGetBlock(op))
+
+"""
+    parent_op(op)
+
+Gets the operation that owns this operation, returning null if the operation is not owned.
+"""
+parent_op(op::Operation) = Operation(API.mlirOperationGetParentOperation(op))
+
+"""
+    rmfromparent!(op)
+
+Removes the given operation from its parent block. The operation is not destroyed.
+The ownership of the operation is transferred to the caller.
+"""
+function rmfromparent!(operation::Operation)
+    API.mlirOperationRemoveFromParent(operation)
+    return operation
+end
+
+dialect(op::Operation) = Symbol(first(split(name(op), '.')))
+
+"""
+    nregions(op)
+
+Returns the number of regions attached to the given operation.
+"""
+nregions(op::Operation) = API.mlirOperationGetNumRegions(op)
+
+"""
+    region(op, i)
+
+Returns `i`-th region attached to the operation.
+"""
+function region(op::Operation, i)
+    if i ∉ 1:nregions(op)
+        throw(BoundsError(op, i))
+    end
+    return Region(API.mlirOperationGetRegion(op, i - 1))
+end
+
+regions(op::Operation) = collect(op)
+
+"""
+    nresults(op)
+
+Returns the number of results of the operation.
+"""
+nresults(op::Operation) = API.mlirOperationGetNumResults(op)
+
+"""
+    result(op, i)
+
+Returns `i`-th result of the operation.
+"""
+function result(op::Operation, i=1)
+    if i ∉ 1:nresults(op)
+        throw(BoundsError(op, i))
+    end
+    return Value(API.mlirOperationGetResult(op, i - 1))
+end
+
+results(op::Operation) = [result(op, i) for i in 1:nresults(op)]
+
+"""
+    noperands(op)
+
+Returns the number of operands of the operation.
+"""
+noperands(op::Operation) = API.mlirOperationGetNumOperands(op)
+
+"""
+    operand(op, i)
+
+Returns `i`-th operand of the operation.
+"""
+function operand(op::Operation, i=1)
+    if i ∉ 1:noperands(op)
+        throw(BoundsError(op, i))
+    end
+    return Value(API.mlirOperationGetOperand(op, i - 1))
+end
+
+"""
+    operands(op)
+
+Return an array of all operands of the operation.
+"""
+operands(op) = Value[operand(op, i) for i in 1:noperands(op)]
+
+"""
+    setoperand!(op, i, value)
+
+Sets the `i`-th operand of the operation.
+"""
+function setoperand!(op::Operation, i, value)
+    i ∉ 1:noperands(op) && throw(BoundsError(op, i))
+    API.mlirOperationSetOperand(op, i - 1, value)
+    return value
+end
+
+"""
+    nsuccessors(op)
+
+Returns the number of successor blocks of the operation.
+"""
+nsuccessors(op::Operation) = API.mlirOperationGetNumSuccessors(op)
+
+"""
+    successor(op, i)
+
+Returns `i`-th successor of the operation.
+"""
+function successor(op::Operation, i)
+    if i ∉ 1:nsuccessors(op)
+        throw(BoundsError(op, i))
+    end
+    return Block(API.mlirOperationGetSuccessor(op, i - 1))
+end
+
+"""
+    nattrs(op)
+
+Returns the number of attributes attached to the operation.
+"""
+nattrs(op::Operation) = API.mlirOperationGetNumAttributes(op)
+
+"""
+    getattr(op, i)
+
+Return `i`-th attribute of the operation.
+"""
+function getattr(op::Operation, i)
+    if i ∉ 1:nattrs(op)
+        throw(BoundsError(op, i))
+    end
+    return NamedAttribute(API.mlirOperationGetAttribute(op, i - 1))
+end
+
+"""
+    getattr(op, name)
+
+Returns an attribute attached to the operation given its name.
+"""
+function getattr(op::Operation, name::AbstractString)
+    raw_attr = API.mlirOperationGetAttributeByName(op, name)
+    if mlirIsNull(raw_attr)
+        return nothing
+    end
+    return Attribute(raw_attr)
+end
+
+"""
+    setattr!(op, name, attr)
+
+Sets an attribute by name, replacing the existing if it exists or adding a new one otherwise.
+"""
+function setattr!(op::Operation, name, attribute)
+    API.mlirOperationSetAttributeByName(op, name, attribute)
+    return op
+end
+
+"""
+    rmattr!(op, name)
+
+Removes an attribute by name. Returns false if the attribute was not found and true if removed.
+"""
+rmattr!(op::Operation, name) = API.mlirOperationRemoveAttributeByName(op, name)
 
 """
     verify(op)
 
 Verify the operation and return true if it passes, false if it fails.
 """
-verify(operation::Operation) = API.mlirOperationVerify(operation)
+verify(op::Operation) = API.mlirOperationVerify(op)
 
 """
     move_after!(op, other)
 
-Moves the given operation immediately after the other operation in its parent block. The given operation may be owned by the caller or by its current block. The other operation must belong to a block. In any case, the ownership is transferred to the block of the other operation.
+Moves the given operation immediately after the other operation in its parent block.
+The given operation may be owned by the caller or by its current block.
+The other operation must belong to a block.
+In any case, the ownership is transferred to the block of the other operation.
 """
-function move_after!(operation::Operation, other::Operation)
-    lose_ownership!(operation)
-    return API.mlirOperationMoveAfter(operation, other)
-end
+move_after!(op::Operation, other::Operation) = API.mlirOperationMoveAfter(op, other)
 
 """
     move_before!(op, other)
@@ -291,10 +287,7 @@ The given operation may be owner by the caller or by its current block.
 The other operation must belong to a block.
 In any case, the ownership is transferred to the block of the other operation.
 """
-function move_before!(operation::Operation, other::Operation)
-    lose_ownership!(operation)
-    return API.mlirOperationMoveBefore(operation, other)
-end
+move_before!(op::Operation, other::Operation) = API.mlirOperationMoveBefore(op, other)
 
 """
     is_registered(name; context=context())
@@ -302,8 +295,35 @@ end
 Returns whether the given fully-qualified operation (i.e. 'dialect.operation') is registered with the context.
 This will return true if the dialect is loaded and the operation is registered within the dialect.
 """
-is_registered(opname; context::Context=context()) =
-    API.mlirContextIsRegisteredOperation(context, opname)
+function is_registered(opname; context::Context=context())
+    return API.mlirContextIsRegisteredOperation(context, opname)
+end
+
+Base.IteratorSize(::Core.Type{Operation}) = Base.HasLength()
+Base.length(it::Operation) = nregions(it.op)
+
+Base.IteratorEltype(::Core.Type{Operation}) = Base.HasEltype()
+Base.eltype(::Operation) = Region
+
+function Base.iterate(it::Operation)
+    raw_region = API.mlirOperationGetFirstRegion(it.op)
+    if mlirIsNull(raw_region)
+        nothing
+    else
+        region = Region(raw_region)
+        (region, region)
+    end
+end
+
+function Base.iterate(::Operation, region)
+    raw_region = API.mlirRegionGetNextInOperation(region)
+    if mlirIsNull(raw_region)
+        nothing
+    else
+        region = Region(raw_region)
+        (region, region)
+    end
+end
 
 function create_operation_common(
     name,
@@ -327,9 +347,8 @@ function create_operation_common(
             API.mlirOperationStateAddOperands(state, length(operands), operands)
         end
         if !isnothing(owned_regions)
-            lose_ownership!.(owned_regions)
             GC.@preserve owned_regions begin
-                mlir_regions = Base.unsafe_convert.(API.MlirRegion, owned_regions)
+                mlir_regions = Base.cconvert.(API.MlirRegion, owned_regions)
                 API.mlirOperationStateAddOwnedRegions(
                     state, length(mlir_regions), mlir_regions
                 )
@@ -337,7 +356,7 @@ function create_operation_common(
         end
         if !isnothing(successors)
             GC.@preserve successors begin
-                mlir_blocks = Base.unsafe_convert.(API.MlirBlock, successors)
+                mlir_blocks = Base.cconvert.(API.MlirBlock, successors)
                 API.mlirOperationStateAddSuccessors(state, length(mlir_blocks), mlir_blocks)
             end
         end
@@ -347,25 +366,25 @@ function create_operation_common(
         if result_inference
             API.mlirOperationStateEnableResultTypeInference(state)
         end
-        op = API.mlirOperationCreate(state)
+        op = mark_alloc(API.mlirOperationCreate(state))
         if mlirIsNull(op)
             error("Create Operation '$name' failed")
         end
-        return Operation(op, true)
+        return Operation(op)
     end
 end
 
 function create_operation(args...; kwargs...)
     res = create_operation_common(args...; kwargs...)
-    if _has_block()
-        push!(block(), res)
+    if has_current_block()
+        push!(current_block(), res)
     end
     return res
 end
 
 function create_operation_at_front(args...; kwargs...)
     res = create_operation_common(args...; kwargs...)
-    Base.pushfirst!(block(), res)
+    Base.pushfirst!(current_block(), res)
     return res
 end
 
@@ -381,5 +400,26 @@ function FunctionType(op::Operation)
         )
     else
         throw("operation is not a function operation")
+    end
+end
+
+"""
+    verifyall(operation; debug=false)
+
+Prints the operations which could not be verified.
+"""
+function verifyall(operation::Operation; debug=false)
+    io = IOBuffer()
+    visit(operation) do op
+        ok = verifyall(op; debug)
+        if !ok || !verify(op)
+            if ok
+                show(IOContext(io, :debug => debug), op)
+                error(String(take!(io)))
+            end
+            false
+        else
+            true
+        end
     end
 end

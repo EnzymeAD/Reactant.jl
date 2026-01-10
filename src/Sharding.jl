@@ -101,7 +101,7 @@ struct Mesh{D,ID<:AbstractVector{Int}}
 end
 
 function sdy_mesh_to_reactant_mesh(mesh_attr::MLIR.IR.Attribute, global_device_ids)
-    @assert MLIR.API.sdyAttributeIsAMeshAttr(mesh_attr.attribute)
+    @assert MLIR.API.sdyAttributeIsAMeshAttr(mesh_attr.ref)
 
     ndevice_ids = MLIR.API.sdyMeshAttrGetDeviceIdsSize(mesh_attr)
     logical_device_ids = Vector{Int64}(undef, ndevice_ids)
@@ -362,7 +362,7 @@ function sdy_tensor_sharding_to_named_sharding(mesh::Mesh, tensor_sharding_attr)
             subaxisinfo = MLIR.IR.Attribute(
                 MLIR.API.sdyAxisRefAttrGetSubAxisInfo(axis_elem)
             )
-            if subaxisinfo.attribute.ptr == C_NULL
+            if subaxisinfo.ref.ptr == C_NULL
                 subaxes[i][j] = nothing
             else
                 pre_size = MLIR.API.sdySubAxisInfoAttrGetPreSize(subaxisinfo)
@@ -579,14 +579,9 @@ function sharding_to_array_slices(
 
     if needs_padding
         # MLIR for identity operation, avoid tracing here
-        ctx = MLIR.IR.Context(Reactant.registry[], false)
-        Reactant.Compiler.context_gc_vector[ctx] = Vector{
-            Union{Reactant.TracedRArray,Reactant.TracedRNumber}
-        }(
-            undef, 0
-        )
-        @ccall MLIR.API.mlir_c.RegisterDialects(ctx::MLIR.API.MlirContext)::Cvoid
-        MLIR.IR.activate!(ctx)
+        # ctx = MLIR.IR.Context(Reactant.registry[])
+        # MLIR.IR.register_enzymexla_dialects(ctx)
+        # MLIR.IR.activate!(ctx)
 
         sdycache = Reactant.Compiler.default_sdycache()
         Reactant.Compiler.activate_sdycache!(sdycache)
@@ -595,7 +590,7 @@ function sharding_to_array_slices(
             data_mlir_type = [
                 MLIR.IR.TensorType(collect(Int64, reverse(size_x)), MLIR.IR.Type(Float32))
             ]
-            mod = MLIR.IR.Module(MLIR.IR.Location(; context=ctx))
+            mod = MLIR.IR.Module()
 
             (; sym_name, mesh_attr) = Reactant.Ops.mesh(sharding.mesh; mod)
 
@@ -607,16 +602,13 @@ function sharding_to_array_slices(
             )
             fnbody = MLIR.IR.Block(data_mlir_type, [MLIR.IR.Location()])
             push!(MLIR.IR.region(func, 1), fnbody)
-            MLIR.IR.activate!(fnbody)
-            try
+            MLIR.IR.@scope fnbody begin
                 MLIR.Dialects.func.return_([MLIR.IR.argument(fnbody, 1)])
-            finally
-                MLIR.IR.deactivate!(fnbody)
             end
             push!(MLIR.IR.body(mod), func)
 
             input_tensor_sharding_attr, _ = get_tensor_sharding_attribute(
-                sharding, ctx, sym_name, mesh_attr, size_x; dialect=:sdy
+                sharding, MLIR.IR.context(), sym_name, mesh_attr, size_x; dialect=:sdy
             )
 
             MLIR.API.mlirFuncSetArgAttr(func, 0, "sdy.sharding", input_tensor_sharding_attr)
@@ -626,7 +618,7 @@ function sharding_to_array_slices(
             )
 
             mlir_attr = MLIR.API.mlirDictionaryAttrGetElementByName(
-                MLIR.IR.attr(func, "res_attrs")[0], "sdy.sharding"
+                MLIR.IR.getattr(func, "res_attrs")[0], "sdy.sharding"
             )
             @assert mlir_attr.ptr != C_NULL
             sharding = sdy_tensor_sharding_to_named_sharding(
@@ -643,7 +635,8 @@ function sharding_to_array_slices(
             @assert !needs_padding "This shouldn't happen. Open an issue on Reactant.jl.\nInput shape: $(size_x).\nOriginal Sharding: $(string(hlo_sharding.hlo_sharding)).\nNew sharding: $(string(new_hlo_sharding)).\nArray Slices: $(device_to_array_slices)."
         finally
             Reactant.Compiler.deactivate_sdycache!(sdycache)
-            MLIR.IR.deactivate!(ctx)
+            # MLIR.IR.deactivate!(ctx)
+            # MLIR.IR.dispose!(ctx)
         end
     end
 
@@ -838,34 +831,34 @@ function HloSharding(sharding::DimsSharding, size_x)
 end
 
 function Base.convert(::Type{HloSharding}, sharding::NamedSharding)
-    MLIR.IR.with_context(; allow_use_existing=true) do ctx
-        mesh_op = Reactant.Ops.mesh(
-            sharding.mesh; mod=MLIR.IR.Module(MLIR.IR.Location(; context=ctx))
-        )
+    MLIR.IR.@dispose ctx = MLIR.IR.Context() begin
+        MLIR.IR.register_enzymexla_dialects(ctx)
+        MLIR.IR.@scope ctx begin
+            mesh_op = Reactant.Ops.mesh(sharding.mesh; mod=MLIR.IR.Module())
 
-        tensor_sharding_attr, _ = get_tensor_sharding_attribute(
-            sharding, ctx, mesh_op.sym_name, mesh_op.mesh_attr, nothing; dialect=:sdy
-        )
+            tensor_sharding_attr, _ = get_tensor_sharding_attribute(
+                sharding, ctx, mesh_op.sym_name, mesh_op.mesh_attr, nothing; dialect=:sdy
+            )
 
-        return HloSharding(
-            hlo_sharding_from_sdy_tensor_sharding_attr(
-                tensor_sharding_attr, mesh_op.mesh_attr
-            ),
-            sharding.mesh,
-            sharding.is_closed,
-            sharding.priority,
-        )
+            return HloSharding(
+                hlo_sharding_from_sdy_tensor_sharding_attr(
+                    tensor_sharding_attr, mesh_op.mesh_attr
+                ),
+                sharding.mesh,
+                sharding.is_closed,
+                sharding.priority,
+            )
+        end
     end
 end
 
 function hlo_sharding_from_sdy_tensor_sharding_attr(attr, mesh_attr)
-    @assert MLIR.API.sdyAttributeIsATensorShardingAttr(attr.attribute)
-    @assert MLIR.API.sdyAttributeIsAMeshAttr(mesh_attr.attribute)
+    @assert MLIR.API.sdyAttributeIsATensorShardingAttr(attr.ref)
+    @assert MLIR.API.sdyAttributeIsAMeshAttr(mesh_attr.ref)
     GC.@preserve attr begin
         return XLA.HloSharding(
             @ccall MLIR.API.mlir_c.hloShardingFromTensorShardingAttr(
-                attr.attribute::MLIR.API.MlirAttribute,
-                mesh_attr.attribute::MLIR.API.MlirAttribute,
+                attr.ref::MLIR.API.MlirAttribute, mesh_attr.ref::MLIR.API.MlirAttribute
             )::Ptr{Cvoid}
         )
     end
@@ -1039,8 +1032,8 @@ function get_tensor_sharding_attribute(
                 @ccall MLIR.API.mlir_c.hloShardingToTensorShardingAttr(
                     ctx::MLIR.API.MlirContext,
                     sharding.hlo_sharding.ptr::Ptr{Cvoid},
-                    string_mesh_name.attribute::MLIR.API.MlirAttribute,
-                    mesh_attr.attribute::MLIR.API.MlirAttribute,
+                    string_mesh_name.ref::MLIR.API.MlirAttribute,
+                    mesh_attr.ref::MLIR.API.MlirAttribute,
                     Int64(length(sharding.is_closed))::Int64,
                     Bool[sharding.is_closed...]::Ptr{Bool},
                     Int64[sharding.priority...]::Ptr{Int64},
@@ -1154,10 +1147,9 @@ function sdy_sharding_to_reactant_sharding(attr, global_device_ids, mod)
                 MLIR.IR.Attribute(MLIR.API.sdyTensorShardingAttrGetMeshOrRef(mlir_attr))
             ),
         ),
-        false,
     )
     return sdy_tensor_sharding_to_named_sharding(
-        sdy_mesh_to_reactant_mesh(MLIR.IR.attr(mesh_op, "mesh"), global_device_ids),
+        sdy_mesh_to_reactant_mesh(MLIR.IR.getattr(mesh_op, "mesh"), global_device_ids),
         MLIR.IR.Attribute(mlir_attr),
     )
 end

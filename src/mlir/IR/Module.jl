@@ -1,10 +1,5 @@
-mutable struct Module
-    module_::API.MlirModule
-
-    function Module(module_)
-        @assert !mlirIsNull(module_) "cannot create Module with null MlirModule"
-        return finalizer(API.mlirModuleDestroy, new(module_))
-    end
+@checked struct Module
+    ref::API.MlirModule
 end
 
 """
@@ -12,25 +7,32 @@ end
 
 Creates a new, empty module and transfers ownership to the caller.
 """
-Module(loc::Location=Location()) = Module(API.mlirModuleCreateEmpty(loc))
+Module(; location::Location=Location()) =
+    Module(mark_alloc(API.mlirModuleCreateEmpty(location)))
 
-Module(op::Operation) = Module(API.mlirModuleFromOperation(lose_ownership!(op)))
+Module(op::Operation) = Module(mark_alloc(API.mlirModuleFromOperation(op)))
 
-Base.convert(::Core.Type{API.MlirModule}, module_::Module) = module_.module_
+"""
+    dispose!(module)
+
+Disposes the given module and releases its resources.
+After calling this function, the module must not be used anymore.
+"""
+dispose!(mod_::Module) = mark_dispose(API.mlirModuleDestroy, mod_)
+
+Base.cconvert(::Core.Type{API.MlirModule}, mod_::Module) = mark_use(mod_).ref
 
 """
     parse(::Type{Module}, module; context=context())
 
 Parses a module from the string and transfers ownership to the caller.
 """
-Base.parse(::Core.Type{Module}, module_; context::Context=context()) =
-    Module(API.mlirModuleCreateParse(context, module_))
+function Base.parse(::Core.Type{Module}, str; context::Context=context())
+    return Module(mark_alloc(API.mlirModuleCreateParse(context, str)))
+end
 
 macro mlir_str(code)
-    quote
-        ctx = Context()
-        parse(Module, $code)
-    end
+    return :(parse(Module, $code))
 end
 
 """
@@ -38,59 +40,55 @@ end
 
 Gets the context that a module was created with.
 """
-context(module_::Module) = Context(API.mlirModuleGetContext(module_))
+context(mod_::Module) = Context(API.mlirModuleGetContext(mod_))
 
 """
     body(module)
 
 Gets the body of the module, i.e. the only block it contains.
 """
-body(module_) = Block(API.mlirModuleGetBody(module_), false)
+body(mod_::Module) = Block(API.mlirModuleGetBody(mod_))
 
 """
     Operation(module)
 
 Views the module as a generic operation.
 """
-Operation(module_::Module) = Operation(API.mlirModuleGetOperation(module_), false)
+Operation(mod_::Module) = Operation(API.mlirModuleGetOperation(mod_))
 
-function Base.show(io::IO, module_::Module)
-    return show(io, Operation(module_))
-end
+Base.show(io::IO, mod_::Module) = show(io, Operation(mod_))
 
-# to simplify the API, we maintain a stack of contexts in task local storage
+verifyall(mod_::Module; debug=false) = verifyall(Operation(mod_); debug)
+
+# to simplify the API, we maintain a stack of modules in task local storage
 # and pass them implicitly to MLIR API's that require them.
-function activate!(blk::Module)
-    stack = get!(task_local_storage(), :mlir_module) do
+function activate!(_mod::Module)
+    stack = get!(task_local_storage(), :mlir_module_stack) do
         return Module[]
-    end
-    Base.push!(stack, blk)
+    end::Vector{Module}
+    Base.push!(stack, _mod)
     return nothing
 end
 
-function deactivate!(blk::Module)
-    mmodule() == blk || error("Deactivating wrong block")
-    return Base.pop!(task_local_storage(:mlir_module))
+function deactivate!(_mod::Module)
+    current_module() == _mod || error("Deactivating wrong block")
+    return Base.pop!(task_local_storage(:mlir_module_stack)::Vector{Module})
 end
 
 function _has_module()
-    return haskey(task_local_storage(), :mlir_module) &&
-           !Base.isempty(task_local_storage(:mlir_module))
+    return haskey(task_local_storage(), :mlir_module_stack) &&
+           !Base.isempty(task_local_storage(:mlir_module_stack))
 end
 
-function mmodule(; throw_error::Core.Bool=true)
+function current_module(; throw_error::Core.Bool=true)
     if !_has_module()
         throw_error && error("No MLIR module is active")
         return nothing
     end
-    return last(task_local_storage(:mlir_module))
+    return last(task_local_storage(:mlir_module_stack)::Vector{Module})
 end
 
-function mmodule!(f, blk::Module)
-    activate!(blk)
-    try
-        f()
-    finally
-        deactivate!(blk)
-    end
+@noinline function with_module(f, module_::Module)
+    depwarn("`with_module` is deprecated, use `@scope` instead.", :with_module)
+    @scope module_ f()
 end
