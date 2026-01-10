@@ -36,6 +36,9 @@ is_extension_loaded(::Val) = false
 
 include("PersistentCompileCache.jl")
 
+include("proto/Proto.jl")
+include("ProtoUtils.jl")
+
 # auxiliary types and functions
 include("OrderedIdDict.jl")
 
