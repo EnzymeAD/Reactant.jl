@@ -970,7 +970,9 @@ function compile(job)
         entryname, string(mod)
     end
 
-    return LLVMFunc{job.source.specTypes.parameters[1],job.source.specTypes}(nothing, entryname, modstr)
+    return LLVMFunc{job.source.specTypes.parameters[1],job.source.specTypes}(
+        nothing, entryname, modstr
+    )
 end
 
 function link_llvm_module_to_mlir_module(func::LLVMFunc, _mod::MLIR.IR.Module)
@@ -982,9 +984,7 @@ function link_llvm_module_to_mlir_module(func::LLVMFunc, _mod::MLIR.IR.Module)
     @assert mmod != C_NULL
 
     linkRes = @ccall MLIR.API.mlir_c.LinkInModule(
-        _mod::MLIR.API.MlirModule,
-        mmod::MLIR.API.MlirModule,
-        func.entryname::Cstring,
+        _mod::MLIR.API.MlirModule, mmod::MLIR.API.MlirModule, func.entryname::Cstring
     )::MLIR.API.MlirOperation
 
     MLIR.IR.dispose!(mmod)
