@@ -1258,8 +1258,6 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
         MLIR.Dialects.llvm.return_(nothing)
     end
 
-    output_operand_aliases = MLIR.IR.Attribute(aliases)
-
     blk_operands = MLIR.IR.Value[]
     for idx in
         (blockdim.x, blockdim.y, blockdim.z, threaddim.x, threaddim.y, threaddim.z, shmem)
@@ -1272,7 +1270,7 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
         inputs=mlir_args,
         result_0=restys,
         fn=MLIR.IR.FlatSymbolRefAttribute(sym_name),
-        output_operand_aliases=output_operand_aliases,
+        output_operand_aliases=MLIR.IR.Attribute(aliases),
         xla_side_effect_free=MLIR.IR.UnitAttribute(),
     )
 
