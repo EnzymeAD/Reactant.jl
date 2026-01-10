@@ -585,6 +585,7 @@ function sharding_to_array_slices(
         # MLIR for identity operation, avoid tracing here
         # ctx = MLIR.IR.Context(Reactant.registry[])
         # MLIR.IR.register_enzymexla_dialects(ctx)
+        # MLIR.IR.activate!(ctx)
 
         sdycache = Reactant.Compiler.default_sdycache()
         Reactant.Compiler.activate_sdycache!(sdycache)
@@ -595,7 +596,7 @@ function sharding_to_array_slices(
                     collect(Int64, reverse(size_x)), MLIR.IR.Type(Float32)
                 ),
             ]
-            mod = MLIR.IR.Module(; location=MLIR.IR.Location(; context=ctx))
+            mod = MLIR.IR.Module()
 
             (; sym_name, mesh_attr) = Reactant.Ops.mesh(sharding.mesh; mod)
 
