@@ -135,6 +135,11 @@ end
         @test compiled_planned_irfft_dims(x_r, d, (1,)) ≈ irfft(x, d, (1,))
         # Make sure the operation is not in-place
         @test x_r == copied_x_r
+
+        y_r = Reactant.to_rarray(similar(irfft(x, d)))
+        @jit LinearAlgebra.mul!(y_r, FFTW.plan_irfft(x, d), x_r)
+        @test y_r ≈ plan_irfft(x, d) * x
+
     end
 
     @testset "In-place [$(fft!), size $(size)]" for size in ((16,), (16, 16)),

@@ -70,22 +70,16 @@ end
 
 function LinearAlgebra.mul!(
     y::Reactant.TracedRArray{<:Complex},
-    plan::FFTW.rFFTWPlan{T,FORWARD},
-    x::Reactant.TracedRArray{T},
-) where {T<:Real}
+    plan::FFTW.rFFTWPlan{<:Real,FORWARD},
+    x::Reactant.TracedRArray{<:Real},
+)
     return copyto!(y, rfft(x, fftdims(plan)))
 end
 
-function LinearAlgebra.mul!(
-    y::Reactant.TracedRArray{<:Complex}, plan::IrFFTWPlan{T}, x::Reactant.TracedRArray{T}
-) where {T<:Real}
-    d = reallength(plan) # original real length
-    return copyto!(y, irfft(x, d, fftdims(plan)))
-end
 
 function LinearAlgebra.mul!(
-    y::Reactant.TracedRArray{<:Real}, plan::IrFFTWPlan{T}, x::Reactant.TracedRArray{T}
-) where {T<:Complex}
+    y::Reactant.TracedRArray{<:Real}, plan::IrFFTWPlan{<:Complex}, x::Reactant.TracedRArray{<:Complex}
+)
     d = reallength(plan) # original real length
     return copyto!(y, irfft(x, d, fftdims(plan)))
 end
