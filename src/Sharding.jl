@@ -588,9 +588,7 @@ function sharding_to_array_slices(
 
         try
             data_mlir_type = [
-                MLIR.IR.TensorType(
-                    collect(Int64, reverse(size_x)), MLIR.IR.Type(Float32)
-                ),
+                MLIR.IR.TensorType(collect(Int64, reverse(size_x)), MLIR.IR.Type(Float32))
             ]
             mod = MLIR.IR.Module()
 
@@ -613,9 +611,7 @@ function sharding_to_array_slices(
                 sharding, ctx, sym_name, mesh_attr, size_x; dialect=:sdy
             )
 
-            MLIR.API.mlirFuncSetArgAttr(
-                func, 0, "sdy.sharding", input_tensor_sharding_attr
-            )
+            MLIR.API.mlirFuncSetArgAttr(func, 0, "sdy.sharding", input_tensor_sharding_attr)
 
             Reactant.Compiler.run_pass_pipeline!(
                 mod, join(["sdy-propagation-pipeline", "sdy-close-shardings"], ",")
@@ -838,9 +834,7 @@ function Base.convert(::Type{HloSharding}, sharding::NamedSharding)
     MLIR.IR.@dispose ctx = MLIR.IR.Context() begin
         MLIR.IR.register_enzymexla_dialects(ctx)
         MLIR.IR.@scope ctx begin
-            mesh_op = Reactant.Ops.mesh(
-                sharding.mesh; mod=MLIR.IR.Module()
-            )
+            mesh_op = Reactant.Ops.mesh(sharding.mesh; mod=MLIR.IR.Module())
 
             tensor_sharding_attr, _ = get_tensor_sharding_attribute(
                 sharding, ctx, mesh_op.sym_name, mesh_op.mesh_attr, nothing; dialect=:sdy
