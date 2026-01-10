@@ -10,6 +10,8 @@ Returns an empty attribute.
 """
 Attribute() = Attribute(API.mlirAttributeGetNull())
 
+Attribute(attr::Attribute) = attr
+
 Base.cconvert(::Core.Type{API.MlirAttribute}, attribute::Attribute) = attribute.ref
 
 """

@@ -2470,9 +2470,9 @@ end
     @assert length(fb_paths) == length(all_paths)
 
     # finalize the true branch by adding the missing values
+    tb_corrected_linear_results = Reactant.TracedType[]
     MLIR.IR.@scope true_fn_body begin
         activate_constant_context!(true_fn_body)
-        tb_corrected_linear_results = Reactant.TracedType[]
         try
             for (i, _) in enumerate(tb_paths)
                 if haskey(tb_results_dict, tb_paths[i])
@@ -2487,9 +2487,9 @@ end
     end
 
     # finalize the false branch by adding the missing values
+    fb_corrected_linear_results = Reactant.TracedType[]
     MLIR.IR.@scope false_fn_body begin
         activate_constant_context!(false_fn_body)
-        fb_corrected_linear_results = Reactant.TracedType[]
         try
             for (i, _) in enumerate(fb_paths)
                 if haskey(fb_results_dict, fb_paths[i])

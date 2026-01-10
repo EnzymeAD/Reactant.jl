@@ -16,7 +16,7 @@ end
 end
 
 function test()
-    MLIR.IR.@dispose ctx = Context() begin
+    MLIR.IR.@dispose ctx = MLIR.IR.Context() begin
         MLIR.IR.@scope ctx begin
             mod = MLIR.IR.Module()
             modbody = MLIR.IR.body(mod)
