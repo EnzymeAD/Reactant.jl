@@ -1,4 +1,5 @@
 using Reactant, Test, Aqua, ExplicitImports, MethodAnalysis
+using Suppressor: @suppress_err
 
 function get_all_submodules(base_module::Module)
     mods = Module[]
@@ -82,60 +83,54 @@ end
 end
 
 @testset "ExplicitImports" begin
-    @testset "Explicit Imports" begin
-        @test check_no_implicit_imports(
+    @suppress_err begin
+        test_explicit_imports(
             Reactant;
-            allow_unanalyzable=(
-                Reactant.DotGeneralAlgorithmPreset,
-                Reactant.MLIR.Dialects,
-                get_all_submodules(Reactant.MLIR.Dialects)...,
-                # get_all_submodules(Reactant.Proto)...,
-                Reactant.XLA.OpShardingType,
-                Reactant.Accelerators.TPU.TPUVersion,
-                Reactant.PrecisionConfig,
+            no_implicit_imports = (;
+                allow_unanalyzable = (
+                    Reactant.DotGeneralAlgorithmPreset,
+                    Reactant.MLIR.Dialects,
+                    get_all_submodules(Reactant.MLIR.Dialects)...,
+                    get_all_submodules(Reactant.Proto)...,
+                    Reactant.XLA.OpShardingType,
+                    Reactant.Accelerators.TPU.TPUVersion,
+                    Reactant.PrecisionConfig,
+                ),
+                ignore = (Reactant.Proto,),
             ),
-            # ignore=(Reactant.Proto,),
-        ) === nothing
-    end
-    @testset "Import via Owner" begin
-        @test check_all_explicit_imports_via_owners(Reactant) === nothing
-    end
-    @testset "Stale Explicit Imports" begin
-        @test check_no_stale_explicit_imports(
-            Reactant;
-            allow_unanalyzable=(
-                Reactant.DotGeneralAlgorithmPreset,
-                Reactant.MLIR.Dialects,
-                get_all_submodules(Reactant.MLIR.Dialects)...,
-                # get_all_submodules(Reactant.Proto)...,
-                Reactant.XLA.OpShardingType,
-                Reactant.Accelerators.TPU.TPUVersion,
-                Reactant.PrecisionConfig,
+            all_explicit_imports_are_public=false,
+            all_explicit_imports_via_owners=true,
+            no_stale_explicit_imports = (;
+                allow_unanalyzable = (
+                    Reactant.DotGeneralAlgorithmPreset,
+                    Reactant.MLIR.Dialects,
+                    get_all_submodules(Reactant.MLIR.Dialects)...,
+                    get_all_submodules(Reactant.Proto)...,
+                    Reactant.XLA.OpShardingType,
+                    Reactant.Accelerators.TPU.TPUVersion,
+                    Reactant.PrecisionConfig,
+                ),
+                ignore = (
+                    Reactant.Proto,
+                    :p7zip,
+                    :ShardyPropagationOptions,
+                    :OneOf,
+                    Symbol("@profile"),
+                    Symbol("@time"),
+                    Symbol("@timed"),
+                ),
             ),
-            # OneOf is used inside Proto files
-            ignore=(
-                :p7zip,
-                :ShardyPropagationOptions,
-                :OneOf,
-                Symbol("@profile"),
-                Symbol("@time"),
-                Symbol("@timed"),
-            ),
-        ) === nothing
-    end
-    @testset "Qualified Accesses" begin
-        @test check_all_qualified_accesses_via_owners(Reactant) === nothing
-    end
-    @testset "Self Qualified Accesses" begin
-        @test check_no_self_qualified_accesses(
-            Reactant;
-            ignore=(
-                :REACTANT_METHOD_TABLE,
-                :__skip_rewrite_func_set,
-                :__skip_rewrite_func_set_lock,
-                :__skip_rewrite_type_constructor_list,
-                :__skip_rewrite_type_constructor_list_lock,
-            ),
-        ) === nothing
+            all_qualified_accesses_via_owners=true,
+            all_qualified_accesses_are_public=false,
+            no_self_qualified_accesses= (;
+                ignore = (
+                    :REACTANT_METHOD_TABLE,
+                    :__skip_rewrite_func_set,
+                    :__skip_rewrite_func_set_lock,
+                    :__skip_rewrite_type_constructor_list,
+                    :__skip_rewrite_type_constructor_list_lock,
+                ),
+            )
+        )
     end
 end
