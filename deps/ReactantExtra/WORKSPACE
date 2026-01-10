@@ -4,7 +4,7 @@ NSYNC_COMMIT = "82b118aa7ace3132e517e2c467f8732978cf4023"
 
 NSYNC_SHA256 = ""
 
-ENZYMEXLA_COMMIT = "ddea75dacb5b9ba708e0b44a0161d4acf9adae31"
+ENZYMEXLA_COMMIT = "1cf033da942ed38658120cb2c4c821474732dd53"
 
 ENZYMEXLA_SHA256 = ""
 
@@ -13,6 +13,17 @@ http_archive(
     sha256 = NSYNC_SHA256,
     strip_prefix = "nsync-" + NSYNC_COMMIT,
     urls = ["https://github.com/wsmoses/nsync/archive/{commit}.tar.gz".format(commit = NSYNC_COMMIT)],
+)
+
+XPROF_COMMIT = "e2f03b3f236c581ec2ce70a548b753546f587c3d"
+
+XPROF_SHA256 = ""
+
+http_archive(
+    name = "org_xprof",
+    sha256 = XPROF_SHA256,
+    strip_prefix = "xprof-" + XPROF_COMMIT,
+    urls = ["https://github.com/openxla/xprof/archive/{commit}.tar.gz".format(commit = XPROF_COMMIT)],
 )
 
 http_archive(
@@ -226,11 +237,6 @@ load(
 
 cuda_json_init_repository()
 
-load(
-    "@cuda_redist_json//:distributions.bzl",
-    "CUDA_REDISTRIBUTIONS",
-    "CUDNN_REDISTRIBUTIONS",
-)
 load(
     "@cuda_redist_json//:distributions.bzl",
     "CUDA_REDISTRIBUTIONS",

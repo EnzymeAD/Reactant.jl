@@ -3030,11 +3030,22 @@ end
 end
 
 function standardize_start_index(
-    sz::Int, start_index::Union{Integer,TracedRNumber{<:Integer}}
+    sz::Int,
+    update_sz::Union{Int,Nothing},
+    start_index::Union{Integer,TracedRNumber{<:Integer}},
+    idx::Integer,
 )
     if (start_index isa Integer && start_index ≤ typemax(Int32)) || sz ≤ typemax(Int32)
+        if start_index isa Integer && update_sz !== nothing
+            @assert start_index + update_sz - 1 ≤ sz "Index $(idx) out of bounds: \
+                                                      start_index=$(start_index), \
+                                                      update_sz=$(update_sz), sz=$(sz)"
+        end
         start_index = Reactant.promote_to(TracedRNumber{Int32}, start_index)
-    elseif start_index isa Integer
+    elseif start_index isa Integer && update_sz !== nothing
+        @assert start_index + update_sz - 1 ≤ sz "Index $(idx) out of bounds: \
+                                                  start_index=$(start_index), \
+                                                  update_sz=$(update_sz), sz=$(sz)"
         start_index = Reactant.promote_to(TracedRNumber, start_index)
     end
 
@@ -3043,11 +3054,16 @@ function standardize_start_index(
 end
 
 function standardize_start_indices(
-    operand::TracedRArray{T,N}, start_indices::Vector
+    operand::TracedRArray{T,N}, update, start_indices::Vector
 ) where {T,N}
     @assert length(start_indices) == N
     return [
-        standardize_start_index(size(operand, i), start_indices[i]).mlir_data for i in 1:N
+        standardize_start_index(
+            size(operand, i),
+            update === nothing ? nothing : size(update, i),
+            start_indices[i],
+            i,
+        ).mlir_data for i in 1:N
     ]
 end
 
@@ -3061,7 +3077,7 @@ end
         stablehlo.dynamic_update_slice(
             operand.mlir_data,
             update.mlir_data,
-            standardize_start_indices(operand, start_indices);
+            standardize_start_indices(operand, update, start_indices);
             location,
         ),
         1,
@@ -3078,7 +3094,7 @@ end
     res = MLIR.IR.result(
         stablehlo.dynamic_slice(
             operand.mlir_data,
-            standardize_start_indices(operand, start_indices);
+            standardize_start_indices(operand, nothing, start_indices);
             slice_sizes=collect(Int64, slice_sizes),
             location,
         ),
@@ -3137,7 +3153,7 @@ end
         (),
         "unbatched_" * string(f),
         false;
-        args_in_result=:none,
+        args_in_result=:result,
         do_transpose=false,
         argprefix,
     )

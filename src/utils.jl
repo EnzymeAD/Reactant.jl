@@ -224,7 +224,10 @@ macro skip_rewrite_type(typ)
 end
 
 function should_rewrite_call(@nospecialize(ft))
-    # Don't rewrite builtin or intrinsics
+    # Don't rewrite builtin or intrinsics, unless they are apply iter or kwcall
+    if ft === typeof(Core.kwcall) || ft === typeof(Core._apply_iterate)
+        return true
+    end
     if ft <: Core.IntrinsicFunction || ft <: Core.Builtin
         return false
     end

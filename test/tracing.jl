@@ -29,6 +29,13 @@ end
     @test !(Vector{Union{}} <: Reactant.AnyTracedRArray)
 end
 
+mul(a, b) = a .* b
+
+struct MyFix{N,FT,XT} <: Base.Function
+    f::FT
+    x::XT
+end
+
 @testset "Tracing" begin
     @testset "trace_type" begin
         @testset "mode = ConcreteToTraced" begin
@@ -134,6 +141,13 @@ end
                     Base.RefValue{ConcreteRArray{Float64,1}},
                     Base.RefValue{TracedRArray{Float64,1}},
                     Base.RefValue{TracedRArray{Float64,1}},
+                ),
+
+                # Function types
+                (
+                    MyFix{2,typeof(mul),ConcreteRArray{Float64,1}},
+                    MyFix{2,typeof(mul),TracedRArray{Float64,1}},
+                    MyFix{2,typeof(mul),TracedRArray{Float64,1}},
                 ),
 
                 # Val types
@@ -269,6 +283,15 @@ end
                 },
                 [true, true, false],
             )
+
+            @test Reactant.apply_type_with_promotion(
+                Foo,
+                [
+                    ConcreteRNumber{Float64},
+                    Bar{ConcreteRNumber{Float64}},
+                    ConcreteRArray{Float64,1},
+                ],
+            ) == (Foo{Float64,Bar{Float64},ConcreteRArray{Float64,1}}, [true, true, false])
         end
     end
 

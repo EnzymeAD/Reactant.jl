@@ -743,6 +743,8 @@ function optimization_passes(
         "cse_neg<16>",
         "cse_abs<16>",
         "cse_concatenate<16>",
+        "cse_compare<16>",
+        "cse_select<16>",
         "concatenate_op_canon<16>($max_constant_threshold)",
         "select_op_canon<16>($max_constant_threshold)",
         "add_simplify<16>",
@@ -759,6 +761,7 @@ function optimization_passes(
         "simplify_extend<16>",
         "simplify_wrap<16>",
         "simplify_rotate<16>",
+        "extend_splat<16>",
         "noop_slice<16>",
         "noop_reverse<16>",
         "slice_slice<16>",
@@ -820,6 +823,7 @@ function optimization_passes(
         "if_remove_unused",
         "transpose_reshape_to_broadcast",
         "reshape_transpose_to_broadcast",
+        "reshape_broadcast",
         "dus_dus",
         "dus_dus_concat",
         "abs_positive_simplify",
@@ -827,12 +831,17 @@ function optimization_passes(
         "select_comp_iota_const_simplify<1>",
         "sign_abs_simplify<1>",
         "broadcastindim_is_reshape",
+        "reduce_window_wrap<1>",
         "slice_reduce_window<1>",
         "while_deadresult",
         "while_dus",
+        "while_updatewithoutcorners",
         "while_op_induction_replacement",
         "dus_concat",
+        "dusdus_to_duspad",
         "slice_dus_to_concat",
+        "sink_dus",
+        "hoist_slice",
         "while_induction_reduction",
         "slice_broadcast",
         "associative_common_mul_op_reordering",
@@ -840,10 +849,11 @@ function optimization_passes(
         "slice_if",
         "dus_to_i32",
         "slice_extend",
+        "slice_of_updatewithoutcorners",
         "concat_wrap",
+        "cse_updatewithoutcorners<16>",
         "cse_extend<16>",
         "cse_wrap<16>",
-        "cse_rotate<16>",
         "cse_rotate<16>",
         "concat_concat_axis_swap",
         "concat_concat_to_dus",
@@ -894,9 +904,9 @@ function optimization_passes(
         # "compare_mul",
         "compare_convert",
         "add_selects",
-        "self_subtract_to_convolution_like($(Int(backend == "tpu")))",
-        "self_add_to_convolution_like($(Int(backend == "tpu")))",
-        "self_mul_to_convolution_like($(Int(backend == "tpu")))",
+        "self_subtract_to_convolution_like(0)",
+        "self_add_to_convolution_like(0)",
+        "self_mul_to_convolution_like(0)",
         "subtract_multiply_const_to_add_mul_const",
         "trivial_reduce_window_to_reduce_op",
         "case_to_if",
@@ -907,44 +917,88 @@ function optimization_passes(
         "split_variadic_scatter_op",
         "dynamic_slice_simplify",
         "enzyme_hlo_unroll($(WHILE_UNROLL_THRESHOLD[]))",
-        "dot_general_only_diagonal_access",
-        "transpose_symmetric_simplify",
         "divide_negated_operands_simplify",
         "multiply_negated_operands_simplify",
-        "transpose_syrk_to_syrk",
-        "fuse_mul_into_syrk",
-        "fuse_add_into_syrk",
         "factor_scalars_in_dot_general",
         "reduce_mul_to_dot_general",
         "dot_general_broadcast_in_dim",
         "dot_general_broadcast_in_dim_sort_dims",
         "dus_dynamic_slice_simplify",
+        "while_dus_dus_simplify",
         "while_dus_ds_simplify",
+        "reshape_slice_reshape",
+        "dynamic_slice_elementwise",
+        "dot_general_remove_batch_dimensions",
+        "delete_dims_reduce",
+        "reduce_delete_dims",
+        "dot_general_insert_dim_contraction_simplification",
+        "fuse_reshape_collapse_or_expand_dims_into_reduce",
+        "split_reduce_add_mul_to_add_dot_general",
+        "recognize_from_constant($(max_constant_threshold))",
     ]
 
     if !is_sharded
         # these passes don't have optimized sharding implementations
         if raise_shlo_to_blas_lapack
-            append!(transform_passes_list, ["dot_general_to_syrk"])
+            if !compile_options.disable_structured_tensors_detection_passes
+                append!(transform_passes_list, ["dot_general_to_syrk"])
+            end
         end
     end
 
-    if !compile_options.disable_auto_batching_passes
+    if !compile_options.disable_structured_tensors_passes
         append!(
             transform_passes_list,
             [
-                "add_reduce_slice_fusion",
-                "mul_reduce_slice_fusion",
-                "min_reduce_slice_fusion",
-                "max_reduce_slice_fusion",
-                "concat_insert_dim_dot_general",
-                "concat_insert_dim_gather",
-                "concat_insert_dim_iota",
-                "concat_insert_dim_reduce",
-                "concat_insert_dim_sort",
-                "concat_insert_dim_reduce_window",
-                "concat_insert_dim_elementwise",
-                "concat_insert_dim_convolution",
+                "transpose_syrk_to_syrk",
+                "fuse_mul_into_syrk",
+                "fuse_add_into_syrk",
+                "dot_general_only_diagonal_access",
+                "transpose_symmetric_simplify",
+                "syrk_simplify_output_uplo",
+            ],
+        )
+    end
+
+    if !compile_options.disable_scatter_gather_optimization_passes
+        append!(
+            transform_passes_list,
+            [
+                # scatter patterns
+                "scatter_to_dynamic_update_slice<1>",
+                "scatter_multiply_simplify",
+                "scatter_sub_simplify",
+                "scatter_add_simplify",
+                "scatter_div_simplify",
+                "unary_elementwise_scatter_simplify",
+                "scatter_indices_are_unique",
+                ## const prop patterns
+                "scatter_update_computation_const_prop",
+                # gather patterns
+                "dynamic_gather_op_is_not_dynamic<16>",
+                "gather_op_canon<16>",
+                "gather_elementwise",
+                "gather_of_scatter_simplify",
+                ## const prop patterns
+                "gather_const_prop",
+                "scatter_const_fold($max_constant_threshold)",
+                "cse_gather",
+                "cse_scatter",
+            ],
+        )
+    end
+
+    if (
+        !compile_options.disable_scatter_gather_optimization_passes &&
+        !compile_options.disable_structured_tensors_passes
+    )
+        append!(transform_passes_list, ["diagonal_tensor_dot_general_rewrite"])
+    end
+
+    if !compile_options.disable_slice_to_batch_passes
+        append!(
+            transform_passes_list,
+            [
                 "dot_general_slice_to_batch",
                 "gather_slice_to_batch",
                 "iota_slice_to_batch",
@@ -955,7 +1009,48 @@ function optimization_passes(
                 "reducewindow_slice_to_batch",
                 "elementwise_slice_to_batch",
                 "convolution_slice_to_batch",
+            ],
+        )
+    end
+
+    if !compile_options.disable_reduce_slice_fusion_passes
+        append!(
+            transform_passes_list,
+            [
+                "add_reduce_slice_fusion",
+                "mul_reduce_slice_fusion",
+                "min_reduce_slice_fusion",
+                "max_reduce_slice_fusion",
+                "and_reduce_slice_fusion",
+                "xor_reduce_slice_fusion",
+                "or_reduce_slice_fusion",
+            ],
+        )
+    end
+
+    if !compile_options.disable_concat_to_batch_passes
+        append!(
+            transform_passes_list,
+            [
+                "concat_insert_dim_dot_general",
+                "concat_insert_dim_gather",
+                "concat_insert_dim_iota",
+                "concat_insert_dim_reduce",
+                "concat_insert_dim_sort",
+                "concat_insert_dim_reduce_window",
+                "concat_insert_dim_elementwise",
+                "concat_insert_dim_convolution",
+            ],
+        )
+    end
+
+    if !compile_options.disable_loop_raising_passes
+        append!(
+            transform_passes_list,
+            [
                 "greedy_while_loop_batch_fission",
+                "while_elementwise_reduction_to_reduce",
+                "remove_loop_carried_dependencies_from_while_load_operations",
             ],
         )
     end
@@ -977,29 +1072,13 @@ function optimization_passes(
                 "reduce_window_licm(0)",
                 "reverse_licm(0)",
                 "convolution_licm(0)",
-            ],
-        )
-    end
-
-    if !compile_options.disable_scatter_gather_optimization_passes
-        append!(
-            transform_passes_list,
-            [
-                # scatter patterns
-                "scatter_to_dynamic_update_slice<1>",
-                "scatter_multiply_simplify",
-                "unary_elementwise_scatter_simplify",
-                "scatter_indices_are_unique",
-                "diagonal_tensor_dot_general_rewrite",
-                ## const prop patterns
-                "scatter_update_computation_const_prop",
-                # gather patterns
-                "dynamic_gather_op_is_not_dynamic<16>",
-                "gather_op_canon<16>",
-                "gather_elementwise",
-                ## const prop patterns
-                "gather_const_prop",
-                "scatter_const_fold($max_constant_threshold)",
+                "dynamic_slice_licm(0)",
+                "scatter_licm(0)",
+                "gather_licm(0)",
+                "iota_licm(0)",
+                "rotate_licm(0)",
+                "wrap_licm(0)",
+                "extend_licm(0)",
             ],
         )
     end
@@ -1008,6 +1087,7 @@ function optimization_passes(
         append!(
             transform_passes_list,
             [
+                "extend_pad",
                 "dus_pad",
                 "cse_pad<16>",
                 "pad_simplify<16>($max_constant_threshold)",
@@ -1146,6 +1226,7 @@ function optimization_passes(
                 "reshape_wrap",
                 "reshape_rotate",
                 "reshape_extend",
+                "delete_dims_broadcast",
             ],
         )
         if AGGRESSIVE_PROPAGATION[]
@@ -1174,6 +1255,11 @@ function optimization_passes(
                 "elementwise_reshape_like",
             ],
         )
+        if AGGRESSIVE_PROPAGATION[]
+            push!(transform_passes_list, "reshape_elementwise_only_fusible(0)")
+        else
+            push!(transform_passes_list, "reshape_elementwise_only_fusible(1)")
+        end
     end
 
     if compile_options.transpose_propagate === :up
@@ -1215,6 +1301,7 @@ function optimization_passes(
                 "reorder_elementwise_and_shape_op<16>",
                 "elementwise_all_transpose_operands_simplify",
                 "slice_transpose",
+                "dynamic_slice_transpose",
                 "einsum_transpose<1>",
                 "slice_reshape_transpose<1>",
                 "reduce_transpose_simplify",
@@ -1265,12 +1352,21 @@ function optimization_passes(
     if recognize_comms
         append!(
             transform_passes_list,
-            ["recognize_extend", "recognize_wrap", "recognize_rotate"],
+            [
+                "recognize_extend",
+                "recognize_wrap",
+                "recognize_rotate",
+                "recognize_updatewithoutcorners",
+                "dusdus_to_dusextend",
+            ],
         )
     end
 
     if lower_comms
-        append!(lower_transform_passes, ["lower_extend", "lower_wrap", "lower_rotate"])
+        append!(
+            lower_transform_passes,
+            ["lower_extend", "lower_wrap", "lower_rotate", "lower_updatewithoutcorners"],
+        )
     end
 
     transform_passes = join(
@@ -1554,7 +1650,7 @@ end
 function get_optimize_comms_passes(options::Bool)
     if !options
         return [
-            "enzyme-hlo-generate-td{patterns=lower_rotate;lower_wrap;lower_extend}",
+            "enzyme-hlo-generate-td{patterns=lower_rotate;lower_wrap;lower_extend;lower_updatewithoutcorners}",
             "transform-interpreter",
             "enzyme-hlo-remove-transform",
         ]
@@ -1565,14 +1661,14 @@ end
 function get_optimize_comms_passes(options::OptimizeCommunicationOptions)
     options_str = String(options)
     res = [
-        "enzyme-hlo-generate-td{patterns=lower_rotate;concat_to_onedim_dus;concat_to_onedim_dusslice;concatreshape_to_onedim_dus}",
+        "enzyme-hlo-generate-td{patterns=concat_to_onedim_dus;concat_to_onedim_dusslice;concatreshape_to_onedim_dus}",
         "transform-interpreter",
         "enzyme-hlo-remove-transform",
         "enzyme-hlo-generate-td{patterns=reshape_to_broadcast}",
         "transform-interpreter",
         "enzyme-hlo-remove-transform",
         options_str,
-        "enzyme-hlo-generate-td{patterns=lower_rotate;lower_wrap;lower_extend}",
+        "enzyme-hlo-generate-td{patterns=lower_rotate;lower_wrap;lower_extend;lower_updatewithoutcorners}",
         "transform-interpreter",
         "enzyme-hlo-remove-transform",
         options_str,
@@ -2031,16 +2127,22 @@ function compile_mlir!(
         )
         # We tried propagating reshapes and transposes up. If at this point we are left
         # with them, we propagate them down to minimize the number of Ops in the IR.
+        # Since this might enable certain raising, we do push down -> push up -> push down
+        common_kwargs = (;
+            recognize_comms,
+            lower_comms,
+            backend,
+            is_sharded,
+            raise_shlo_to_blas_lapack=false,
+        )
+        opt_passes_down = optimization_passes(
+            Reactant.__compile_options_with_reversed_propagation(compile_options);
+            common_kwargs...,
+        )
+        opt_passes_up = optimization_passes(compile_options; common_kwargs...)
         run_pass_pipeline!(
             mod,
-            optimization_passes(
-                Reactant.__compile_options_with_reversed_propagation(compile_options);
-                recognize_comms,
-                lower_comms,
-                backend,
-                is_sharded,
-                raise_shlo_to_blas_lapack=false,
-            ),
+            join([opt_passes_down, opt_passes_up, opt_passes_down], ","),
             "post_op_transpose_reshape",
         )
     end
@@ -3796,6 +3898,7 @@ function compile(f, args; kwargs...)
         client,
         mlir_fn_res.global_device_ids,
         mlir_fn_res.donated_args_mask,
+        compile_options.sync,
     )
 end
 
@@ -3807,6 +3910,7 @@ struct Thunk{FTy,tag,IsClosure,ArgTypes,ExecTy,DeviceTy,ClientTy,GD,DAM}
     client::ClientTy
     global_device_ids::GD
     donated_args_mask::DAM
+    compiled_with_sync::Bool
 end
 
 for fn in (:get_tag, :get_isclosure, :get_compiled_argtypes)
@@ -3886,6 +3990,7 @@ function register_thunk(
     client,
     global_device_ids,
     donated_args_mask,
+    compiled_with_sync::Bool,
 )
     return Thunk{
         Core.Typeof(f),
@@ -3898,7 +4003,14 @@ function register_thunk(
         Core.Typeof(global_device_ids),
         Core.Typeof(donated_args_mask),
     }(
-        f, exec, device, module_string, client, global_device_ids, donated_args_mask
+        f,
+        exec,
+        device,
+        module_string,
+        client,
+        global_device_ids,
+        donated_args_mask,
+        compiled_with_sync,
     )
 end
 

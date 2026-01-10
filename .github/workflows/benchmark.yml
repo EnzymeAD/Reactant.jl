@@ -18,6 +18,7 @@ on:
       - "ext/**"
       - "lib/**"
       - "src/**"
+      - "benchmark/**"
       - "Project.toml"
 
 concurrency:
@@ -25,9 +26,31 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  check-benchmark-changes:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    outputs:
+      benchmark_changed: ${{ steps.filter.outputs.benchmark }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            benchmark:
+              - 'benchmark/**'
+
   benchmark:
     timeout-minutes: 90
-    if: ${{ (github.ref == 'refs/heads/main' && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')) || (github.event_name == 'pull_request' && contains(join(github.event.pull_request.labels.*.name, ','), 'run benchmarks')) }}
+    needs: [check-benchmark-changes]
+    if: |
+      always() && (
+        (github.ref == 'refs/heads/main' && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')) ||
+        (github.event_name == 'pull_request' && (
+          contains(join(github.event.pull_request.labels.*.name, ','), 'run benchmarks') ||
+          needs.check-benchmark-changes.outputs.benchmark_changed == 'true'
+        ))
+      )
     runs-on: ${{ matrix.os }}
     container:
       image: ${{ contains(matrix.os, 'linux') && 'ghcr.io/enzymead/reactant-docker-images@sha256:7004a6ebbdd77bd047900b2bffc542e8576864056dc27a9c94d30666d6f7ea01' || '' }}
@@ -52,8 +75,10 @@ jobs:
       - name: "Run Benchmarks"
         run: |
           julia --color=yes --project=benchmark benchmark/runbenchmarks.jl
+        env:
+          XLA_FLAGS: "--xla_gpu_experimental_use_raft_select_k=true"
       - name: Upload PProf Results
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         timeout-minutes: 10
         with:
           name: pprof-results-${{ matrix.os }}
@@ -61,7 +86,7 @@ jobs:
           retention-days: 90
           overwrite: false
       - name: Upload Benchmark Results
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         timeout-minutes: 10
         with:
           name: benchmark-results-${{ matrix.os }}
@@ -70,8 +95,15 @@ jobs:
           overwrite: false
 
   benchmark-aggregate:
-    if: ${{ (github.ref == 'refs/heads/main' && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')) || (github.event_name == 'pull_request' && contains(join(github.event.pull_request.labels.*.name, ','), 'run benchmarks')) }}
-    needs: benchmark
+    if: |
+      always() && (
+        (github.ref == 'refs/heads/main' && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')) ||
+        (github.event_name == 'pull_request' && (
+          contains(join(github.event.pull_request.labels.*.name, ','), 'run benchmarks') ||
+          needs.check-benchmark-changes.outputs.benchmark_changed == 'true'
+        ))
+      ) && needs.benchmark.result == 'success'
+    needs: [check-benchmark-changes, benchmark]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -95,7 +127,7 @@ jobs:
 
            echo "path=$(find benchmark -type f -name combinedbenchmarks.json 2>/dev/null)" >> $GITHUB_OUTPUT
       - name: Upload benchmark results as artifact
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: benchmark-results
           path: ${{ steps.locate.outputs.path }}

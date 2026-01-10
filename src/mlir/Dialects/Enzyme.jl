@@ -141,6 +141,33 @@ function addWeightToTrace(
     )
 end
 
+function affine_atomic_rmw(
+    value::Value,
+    memref::Value,
+    indices::Vector{Value};
+    result::IR.Type,
+    kind,
+    map,
+    location=Location(),
+)
+    op_ty_results = IR.Type[result,]
+    operands = Value[value, memref, indices...]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[namedattribute("kind", kind), namedattribute("map", map)]
+
+    return create_operation(
+        "enzyme.affine_atomic_rmw",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
 function autodiff(
     inputs::Vector{Value};
     outputs::Vector{IR.Type},
@@ -404,6 +431,40 @@ function fwddiff(
 
     return create_operation(
         "enzyme.fwddiff",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+function fwddiff_region(
+    inputs::Vector{Value};
+    outputs::Vector{IR.Type},
+    activity,
+    ret_activity,
+    width=nothing,
+    strong_zero=nothing,
+    fn=nothing,
+    body::Region,
+    location=Location(),
+)
+    op_ty_results = IR.Type[outputs...,]
+    operands = Value[inputs...,]
+    owned_regions = Region[body,]
+    successors = Block[]
+    attributes = NamedAttribute[
+        namedattribute("activity", activity), namedattribute("ret_activity", ret_activity)
+    ]
+    !isnothing(width) && push!(attributes, namedattribute("width", width))
+    !isnothing(strong_zero) && push!(attributes, namedattribute("strong_zero", strong_zero))
+    !isnothing(fn) && push!(attributes, namedattribute("fn", fn))
+
+    return create_operation(
+        "enzyme.fwddiff_region",
         location;
         operands,
         owned_regions,
@@ -829,10 +890,10 @@ function mcmc(
         operandsegmentsizes([
             length(inputs),
             1,
-            (mass == nothing) ? 0 : 1,
-            (step_size == nothing) ? 0 : 1,
-            (num_steps == nothing) ? 0 : 1,
-            (initial_momentum == nothing) ? 0 : 1,
+            Int(!isnothing(mass)),
+            Int(!isnothing(step_size)),
+            Int(!isnothing(num_steps)),
+            Int(!isnothing(initial_momentum)),
         ]),
     )
     !isnothing(name) && push!(attributes, namedattribute("name", name))

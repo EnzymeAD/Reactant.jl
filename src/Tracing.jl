@@ -90,39 +90,6 @@ Base.@nospecializeinfer function traced_type_inner(
     return C
 end
 
-Base.@nospecializeinfer function traced_type_inner(
-    @nospecialize(T::Type{<:Function}),
-    seen,
-    mode::TraceMode,
-    @nospecialize(track_numbers::Type),
-    @nospecialize(sharding),
-    @nospecialize(runtime)
-)
-    # functions are directly returned
-    if T === Function || sizeof(T) == 0
-        return T
-    end
-
-    # in closures, enclosured variables need to be traced
-    N = fieldcount(T)
-    changed = false
-    traced_fieldtypes = Type[]
-    for i in 1:N
-        next = traced_type_inner(
-            fieldtype(T, i), seen, mode, track_numbers, getproperty(sharding, i), runtime
-        )
-        changed |= next != fieldtype(T, i)
-        push!(traced_fieldtypes, next)
-    end
-
-    if !changed
-        return T
-    end
-
-    # closure are struct types with the types of enclosured vars as type parameters
-    return Core.apply_type(T.name.wrapper, traced_fieldtypes...)
-end
-
 Base.@nospecializeinfer function traced_tuple_type_inner(
     @nospecialize(T::Type{<:Tuple}),
     seen,
@@ -910,9 +877,16 @@ const traced_type_cache = Dict{Tuple{TraceMode,Type,Any},Dict{Type,Type}}()
 #     $(Expr(:meta, :generated, traced_type_generator))
 # end
 
+resolve_conflict(t1::Type{<:ConcreteRNumber{T}}, t2::Type{T}) where {T} = T
+resolve_conflict(t1::Type{T}, t2::Type{<:ConcreteRNumber{T}}) where {T} = T
+resolve_conflict(t1, t2) = promote_type(t1, t2)
+
 """
 This function tries to apply the param types to the wrapper type.
-When there's a constraint conflict, it tries to resolve it by promoting the conflicting types. The new param type is then propagated in any param type that depends on it.
+When there's a constraint conflict, it tries to resolve it:
+* ConcreteRNumber{T} vs T: resolves to T
+* other cases: resolve by `promote_type`
+The new param type is then propagated in any param type that depends on it.
 Apart from the applied type, it also returns a boolean array indicating which of the param types were changed.
 
 For example:
@@ -970,15 +944,15 @@ function apply_type_with_promotion(wrapper, params, relevant_typevars=typevar_di
                     (!(value isa Type) || value <: params[param_i]) && continue
 
                     # Found a conflict! Figure out a new param type by promoting:
-                    promoted = promote_type(value, params[param_i])
-                    params[param_i] = promoted
+                    resolved = resolve_conflict(value, params[param_i])
+                    params[param_i] = resolved
 
-                    if value != promoted
+                    if value != resolved
                         # This happens when `value` lost the promotion battle.
                         # At this point, we need to update the problematic parameter in`value`.
                         d = typevar_dict(rewrapped)
-                        v = [param.parameters...]
-                        v[d[typevar]] = promoted
+                        v = Any[param.parameters...]
+                        v[d[typevar]] = resolved
                         params[i], _changed_params = apply_type_with_promotion(rewrapped, v)
                     end
                     changed = true
@@ -1294,14 +1268,14 @@ Base.@nospecializeinfer function make_tracer_unknown(
                     else
                         throw(
                             AssertionError(
-                                "Could not recursively make tracer of object of type $RT into $TT at field $i (named $(fieldname(TT, i))), need object of type $(fieldtype(TT, i)) found object of type $(Core.Typeof(xi2)) ",
+                                "Could not recursively make tracer of object of type $RT into $TT at field $i (named $(fieldname(TT, i))), need object of type $FT found object of type $(Core.Typeof(xi2)) ",
                             ),
                         )
                     end
                 else
                     throw(
                         AssertionError(
-                            "Could not recursively make tracer of object of type $RT into $TT at field $i (named $(fieldname(TT, i))), need object of type $(fieldtype(TT, i)) found object of type $(Core.Typeof(xi2)) ",
+                            "Could not recursively make tracer of object of type $RT into $TT at field $i (named $(fieldname(TT, i))), need object of type $FT found object of type $(Core.Typeof(xi2)) ",
                         ),
                     )
                 end

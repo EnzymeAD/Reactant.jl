@@ -8,16 +8,20 @@ communication.
 @kwdef struct OptimizeCommunicationOptions
     periodic_concat::Int = 0
     rotate_comm::Int = 0
-    rotate_to_pad_comm::Int = 1
+    rotate_to_pad_comm::Int = 0
     wrap_comm::Int = 0
     extend_comm::Int = 0
     dus_to_pad_manual_comp_comm::Int = 0 # 2
     dus_to_pad_comm::Int = 0
     concat_two_operands_comm::Int = 0
-    concat_to_pad_comm::Int = 1
+    concat_to_pad_comm::Int = 0
+    concat_to_dus::Int = 1
     extend_to_pad_comm::Int = 0
     extend_to_pad_comm2::Int = 1
-    wrap_to_pad_comm::Int = 1
+    wrap_to_pad_comm::Int = 0
+    rotate_spmd::Int = 1
+    wrap_to_rotate::Int = 1
+    updatewithoutcorners_to_select::Int = 1
 end
 
 function Base.String(options::OptimizeCommunicationOptions)
@@ -94,7 +98,7 @@ Fine-grained control over the compilation options for the Reactant compiler.
     the computation graph. If `:down`, they will be propagated down. Defaults to `:up`.
   - `max_constant_threshold`: If the number of elements in a constant is greater than this
     threshold (for a non-splatted constant), we will throw an error.
-  - `inline`: If `true`, all functions will be inlined. This is `true` by default.
+  - `inline`: If `true`, all functions will be inlined. (Default: `true`).
 
 ## Raising Options
 
@@ -107,7 +111,7 @@ Fine-grained control over the compilation options for the Reactant compiler.
 ## Dialect Specific Options
 
   - `legalize_chlo_to_stablehlo`: If `true`, `chlo` dialect ops will be converted to
-    `stablehlo` ops. This is `false` by default.
+    `stablehlo` ops. (Default: `false`).
 
 ## Backend Specific Options
 
@@ -153,13 +157,23 @@ Fine-grained control over the compilation options for the Reactant compiler.
     notice or deprecation cycle.
 
   - `disable_scatter_gather_optimization_passes`: Disables the scatter-gather
-    optimization passes. This is `false` by default.
+    optimization passes. (Default: `false`).
   - `disable_pad_optimization_passes`: Disables the pad optimization passes. This is
     `false` by default.
   - `disable_licm_optimization_passes`: Disables the Loop Invariant Code Motion (LICM)
-    optimization passes. This is `false` by default.
-  - `disable_auto_batching_passes`: Disables the auto-batching optimization passes. This
-    is `false` by default.
+    optimization passes. (Default: `false`).
+  - `disable_reduce_slice_fusion_passes`: Disables fusion of slice elementwise and reduce
+    operations. (Default `false`).
+  - `disable_slice_to_batch_passes`: Disables the slice to batch fusion optimization passes.
+    (Default: `true`). _(Note that this is generally an expensive pass to run)_
+  - `disable_concat_to_batch_passes`: Disables concatenate to batch fusion passes.
+    (Default: `false`).
+  - `disable_loop_raising_passes`: Disables raising passes for `stablehlo.while`.
+    (Default: `false`).
+  - `disable_structured_tensors_detection_passes`: Disables structured tensors detection
+    passes. (Default `true`).
+  - `disable_structured_tensors_passes`: Disables structured tensors optimization passes.
+    (Default `false`).
 """
 struct CompileOptions
     optimization_passes::Union{Symbol,String}
@@ -188,7 +202,12 @@ struct CompileOptions
     disable_scatter_gather_optimization_passes::Bool
     disable_pad_optimization_passes::Bool
     disable_licm_optimization_passes::Bool
-    disable_auto_batching_passes::Bool
+    disable_reduce_slice_fusion_passes::Bool
+    disable_slice_to_batch_passes::Bool
+    disable_concat_to_batch_passes::Bool
+    disable_loop_raising_passes::Bool
+    disable_structured_tensors_detection_passes::Bool
+    disable_structured_tensors_passes::Bool
 end
 
 function CompileOptions(;
@@ -212,7 +231,12 @@ function CompileOptions(;
     disable_scatter_gather_optimization_passes::Bool=false,
     disable_pad_optimization_passes::Bool=false,
     disable_licm_optimization_passes::Bool=false,
-    disable_auto_batching_passes::Bool=false,
+    disable_reduce_slice_fusion_passes::Bool=false,
+    disable_slice_to_batch_passes::Bool=true, # expensive + introduces all-to-all in GB25
+    disable_concat_to_batch_passes::Bool=false,
+    disable_loop_raising_passes::Bool=false,
+    disable_structured_tensors_detection_passes::Bool=true,  # missing optimization passes currently
+    disable_structured_tensors_passes::Bool=false,
 )
     optimization_passes isa Bool &&
         (optimization_passes = ifelse(optimization_passes, :all, :none))
@@ -261,7 +285,12 @@ function CompileOptions(;
         disable_scatter_gather_optimization_passes,
         disable_pad_optimization_passes,
         disable_licm_optimization_passes,
-        disable_auto_batching_passes,
+        disable_reduce_slice_fusion_passes,
+        disable_slice_to_batch_passes,
+        disable_concat_to_batch_passes,
+        disable_loop_raising_passes,
+        disable_structured_tensors_detection_passes,
+        disable_structured_tensors_passes,
     )
 end
 
@@ -303,7 +332,46 @@ function __compile_options_with_reversed_propagation(compile_options::CompileOpt
         compile_options.disable_scatter_gather_optimization_passes,
         compile_options.disable_pad_optimization_passes,
         compile_options.disable_licm_optimization_passes,
-        compile_options.disable_auto_batching_passes,
+        compile_options.disable_reduce_slice_fusion_passes,
+        compile_options.disable_slice_to_batch_passes,
+        compile_options.disable_concat_to_batch_passes,
+        compile_options.disable_loop_raising_passes,
+        compile_options.disable_structured_tensors_detection_passes,
+        compile_options.disable_structured_tensors_passes,
+    )
+end
+
+function __compile_options_with_updated_sync(compile_options::CompileOptions, sync::Bool)
+    if compile_options.sync == sync
+        return compile_options
+    end
+    return CompileOptions(
+        compile_options.optimization_passes,
+        compile_options.no_nan,
+        compile_options.all_finite,
+        compile_options.inline,
+        compile_options.transpose_propagate,
+        compile_options.reshape_propagate,
+        compile_options.max_constant_threshold,
+        compile_options.raise,
+        compile_options.raise_first,
+        compile_options.legalize_chlo_to_stablehlo,
+        compile_options.cudnn_hlo_optimize,
+        compile_options.shardy_passes,
+        compile_options.optimize_then_pad,
+        compile_options.optimize_communications,
+        compile_options.assert_nonallocating,
+        compile_options.donated_args,
+        sync,
+        compile_options.disable_scatter_gather_optimization_passes,
+        compile_options.disable_pad_optimization_passes,
+        compile_options.disable_licm_optimization_passes,
+        compile_options.disable_reduce_slice_fusion_passes,
+        compile_options.disable_slice_to_batch_passes,
+        compile_options.disable_concat_to_batch_passes,
+        compile_options.disable_loop_raising_passes,
+        compile_options.disable_structured_tensors_detection_passes,
+        compile_options.disable_structured_tensors_passes,
     )
 end
 

@@ -73,7 +73,17 @@ Reactant.set_default_backend("cpu")
 
 ```julia [NVIDIA GPUs]
 using Reactant
+# Set backend to use a GPU if available
 Reactant.set_default_backend("gpu")
+# Set backend to specifically a CUDA GPU
+# Reactant.set_default_backend("cuda")
+```
+
+```julia [AMD GPUs]
+using Reactant
+Reactant.set_default_backend("gpu")
+# Set backend to specifically an AMD GPU
+# Reactant.set_default_backend("rocm")
 ```
 
 ```julia [Cloud TPUs]
