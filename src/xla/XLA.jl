@@ -43,6 +43,8 @@ include("PJRT/PJRT.jl")
 
 include("IFRT/IFRT.jl")
 
+include("CompileOptions.jl")
+
 abstract type AbstractBackendState end
 
 for runtime in (:PJRT, :IFRT)
