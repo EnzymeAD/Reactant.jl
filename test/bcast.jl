@@ -42,7 +42,7 @@ function test()
                         ),
                     )
 
-                    return tmp(a, b, d)
+                    tmp(a, b, d)
                 end
             end
 
