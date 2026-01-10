@@ -869,8 +869,7 @@ function hlo_sharding_from_sdy_tensor_sharding_attr(attr, mesh_attr)
     GC.@preserve attr begin
         return XLA.HloSharding(
             @ccall MLIR.API.mlir_c.hloShardingFromTensorShardingAttr(
-                attr.ref::MLIR.API.MlirAttribute,
-                mesh_attr.ref::MLIR.API.MlirAttribute,
+                attr.ref::MLIR.API.MlirAttribute, mesh_attr.ref::MLIR.API.MlirAttribute
             )::Ptr{Cvoid}
         )
     end
