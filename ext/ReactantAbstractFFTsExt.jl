@@ -41,23 +41,48 @@ for op in (:rfft, :fft, :ifft)
         )
     end
 
+    # No in-place rfft (different array size)
+    if op !== :rfft
+        @eval function AbstractFFTs.$(Symbol(op, "!"))(x::AnyTracedRArray, dims)
+            y = AbstractFFTs.$(op)(x, dims)
+            copyto!(x, y)
+            return x
+        end
+    end
+
     # Out-of-place plan
     plan_name = Symbol("Reactant", uppercase(string(op)), "Plan")
     plan_f = Symbol("plan_", op)
-    @eval struct $(plan_name){T} <: AbstractFFTs.Plan{T} end
-    @eval AbstractFFTs.$(plan_f)(::Reactant.TracedRArray{T}) where {T} = $(plan_name){T}()
-    @eval Base.:*(::$(plan_name){T}, x::Reactant.TracedRArray{T}) where {T} =
-        AbstractFFTs.$(op)(x)
+    @eval struct $(plan_name){T,D} <: AbstractFFTs.Plan{T}
+        dims::D
+    end
+    @eval AbstractFFTs.fftdims(p::$(plan_name)) = p.dims
+    @eval function AbstractFFTs.$(plan_f)(
+        x::Reactant.TracedRArray{T}, dims=1:ndims(x)
+    ) where {T}
+        return $(plan_name){T,typeof(dims)}(dims)
+    end
+    @eval function Base.:*(p::$(plan_name){T}, x::Reactant.TracedRArray{T}) where {T}
+        return AbstractFFTs.$(op)(x, p.dims)
+    end
 
     # In-place plan
     if op !== :rfft
         plan_name! = Symbol("Reactant", uppercase(string(op)), "InPlacePlan")
         plan_f! = Symbol("plan_", op, "!")
-        @eval struct $(plan_name!){T} <: AbstractFFTs.Plan{T} end
-        @eval AbstractFFTs.$(plan_f!)(::Reactant.TracedRArray{T}) where {T} =
-            $(plan_name!){T}()
-        @eval Base.:*(::$(plan_name!){T}, x::Reactant.TracedRArray{T}) where {T} =
-            copyto!(x, AbstractFFTs.$(op)(x))
+        @eval struct $(plan_name!){T,D} <: AbstractFFTs.Plan{T}
+            dims::D
+        end
+
+        @eval AbstractFFTs.fftdims(p::$(plan_name!)) = p.dims
+        @eval function AbstractFFTs.$(plan_f!)(
+            x::Reactant.TracedRArray{T}, dims=1:ndims(x)
+        ) where {T}
+            return $(plan_name!){T,typeof(dims)}(dims)
+        end
+        @eval function Base.:*(p::$(plan_name!){T}, x::Reactant.TracedRArray{T}) where {T}
+            return copyto!(x, AbstractFFTs.$(op)(x, p.dims))
+        end
     end
 end
 
@@ -72,7 +97,7 @@ for op in (:irfft,)
         if __is_valid_stablehlo_fft_dims(dims, ndims(x))
             return @opcall fft(
                 TracedUtils.materialize_traced_array(x);
-                type=$(uppercase(string(op))),
+                type=($(uppercase(string(op)))),
                 length=fft_lengths,
             )
         end
@@ -82,12 +107,30 @@ for op in (:irfft,)
             @opcall(
                 fft(
                     TracedUtils.materialize_traced_array(permutedims(x, perm));
-                    type=$(uppercase(string(op))),
+                    type=($(uppercase(string(op)))),
                     length=fft_lengths,
                 )
             ),
             invperm(perm),
         )
+    end
+
+    #Inverse plan I need to store the real array length along the first dim in dims
+    plan_name = Symbol("Reactant", uppercase(string(op)), "Plan")
+    plan_f = Symbol("plan_", op)
+    @eval struct $(plan_name){T,D} <: AbstractFFTs.Plan{T}
+        dims::D
+        length::Int
+    end
+    @eval AbstractFFTs.fftdims(p::$(plan_name)) = p.dims
+    @eval function AbstractFFTs.$(plan_f)(
+        x::Reactant.TracedRArray{T}, d::Integer, dims=1:ndims(x)
+    ) where {T}
+        return $(plan_name){T,typeof(dims)}(dims, d)
+    end
+
+    @eval function Base.:*(p::$(plan_name){T}, x::Reactant.TracedRArray{T}) where {T}
+        return AbstractFFTs.$(op)(x, p.length, p.dims)
     end
 end
 
