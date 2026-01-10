@@ -579,7 +579,7 @@ function sharding_to_array_slices(
 
     if needs_padding
         # MLIR for identity operation, avoid tracing here
-        ctx = MLIR.IR.Context(Reactant.registry[], false)
+        ctx = MLIR.IR.Context(Reactant.registry[])
         MLIR.IR.register_enzymexla_dialects(ctx)
 
         MLIR.IR.@scope ctx begin
@@ -640,14 +640,15 @@ function sharding_to_array_slices(
                 )
 
                 @assert !needs_padding "This shouldn't happen. Open an issue on Reactant.jl.\nInput shape: $(size_x).\nOriginal Sharding: $(string(hlo_sharding.hlo_sharding)).\nNew sharding: $(string(new_hlo_sharding)).\nArray Slices: $(device_to_array_slices)."
+
+                return_updated_sharding isa Val{true} &&
+                    return (device_to_array_slices, sharding)
+                return device_to_array_slices
             finally
                 Reactant.Compiler.deactivate_sdycache!(sdycache)
             end
         end
     end
-
-    return_updated_sharding isa Val{true} && return (device_to_array_slices, sharding)
-    return device_to_array_slices
 end
 
 # TODO: Something like NamedDims.jl will allow us to support NamedDimsSharding similar to
