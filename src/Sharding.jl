@@ -612,7 +612,7 @@ function sharding_to_array_slices(
             push!(MLIR.IR.body(mod), func)
 
             input_tensor_sharding_attr, _ = get_tensor_sharding_attribute(
-                sharding, ctx, sym_name, mesh_attr, size_x; dialect=:sdy
+                sharding, MLIR.IR.context(), sym_name, mesh_attr, size_x; dialect=:sdy
             )
 
             MLIR.API.mlirFuncSetArgAttr(func, 0, "sdy.sharding", input_tensor_sharding_attr)
