@@ -61,19 +61,6 @@ yr = square_compiled(xr)
 The Reactant-compiled function `square_compiled` now runs on whatever device Reactant uses, including CPU, GPU, TPU or distributed settings.
 It will not run on the default device, nor will it require a CUDA-enabled device.
 
-## Kernel raising
-
-[Raising](@ref) is achieved by passing the keyword `raise = true` during compilation:
-
-```@example
-square_compiled_raised = @compile raise=true square(xr)
-```
-
-```@example
-yr2 = square_compiled_raised(xr)
-@assert yr2 == xr .^ 2  # hide
-```
-
 ## Kernel differentiation
 
 If you want to compute derivatives of your kernel, combining Reactant with [Enzyme.jl](https://github.com/EnzymeAD/Enzyme.jl) is the best choice.
@@ -82,8 +69,11 @@ If you want to compute derivatives of your kernel, combining Reactant with [Enzy
 import Enzyme
 ```
 
-Currently, you must use the `raise_first = true` compilation option to make sure the kernel is raised before Enzyme performs automatic differentiation on the program.
+Currently, you must use the `raise = true` and `raise_first = true` compilation options to make sure the kernel is raised before Enzyme performs automatic differentiation on the program.
 This restriction will be removed in future versions.
+
+!!! tip
+    See the [Raising](@ref) documentation for more details on what raising does.
 
 ```@example
 sumsquare(x) = sum(square(x))
