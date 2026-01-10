@@ -149,6 +149,20 @@ Fine-grained control over the compilation options for the Reactant compiler.
 
 # Extended Help
 
+## Internal XLA Options
+
+!!! warning
+
+    We have limited control over these options (in terms of semantic versioning) since
+    they are tied to XLA upstream.
+
+  - `xla_executable_build_options`: XLA executable build options. Additional options
+    that are passed to ExecutableBuildOptionsProto.
+  - `xla_compile_options`: XLA compile options. Additional options that are passed to
+    CompileOptionsProto.
+  - `xla_debug_options`: XLA debug options. Additional options that are passed to
+    DebugOptionsProto.
+
 ## Private Options
 
 !!! warning
@@ -198,6 +212,10 @@ struct CompileOptions
     assert_nonallocating::Bool
     donated_args::Symbol
     sync::Bool
+    ## internal XLA options
+    xla_executable_build_options::NamedTuple
+    xla_compile_options::NamedTuple
+    xla_debug_options::NamedTuple
     ## private options for ablation studies
     disable_scatter_gather_optimization_passes::Bool
     disable_pad_optimization_passes::Bool
@@ -228,6 +246,9 @@ function CompileOptions(;
     assert_nonallocating::Bool=false,
     donated_args::Symbol=:auto,
     sync::Bool=false,
+    xla_executable_build_options::NamedTuple=NamedTuple(),
+    xla_compile_options::NamedTuple=NamedTuple(),
+    xla_debug_options::NamedTuple=NamedTuple(),
     disable_scatter_gather_optimization_passes::Bool=false,
     disable_pad_optimization_passes::Bool=false,
     disable_licm_optimization_passes::Bool=false,
@@ -282,6 +303,9 @@ function CompileOptions(;
         assert_nonallocating,
         donated_args,
         sync,
+        xla_executable_build_options,
+        xla_compile_options,
+        xla_debug_options,
         disable_scatter_gather_optimization_passes,
         disable_pad_optimization_passes,
         disable_licm_optimization_passes,
@@ -329,6 +353,9 @@ function __compile_options_with_reversed_propagation(compile_options::CompileOpt
         compile_options.assert_nonallocating,
         compile_options.donated_args,
         compile_options.sync,
+        compile_options.xla_executable_build_options,
+        compile_options.xla_compile_options,
+        compile_options.xla_debug_options,
         compile_options.disable_scatter_gather_optimization_passes,
         compile_options.disable_pad_optimization_passes,
         compile_options.disable_licm_optimization_passes,
@@ -363,6 +390,9 @@ function __compile_options_with_updated_sync(compile_options::CompileOptions, sy
         compile_options.assert_nonallocating,
         compile_options.donated_args,
         sync,
+        compile_options.xla_executable_build_options,
+        compile_options.xla_compile_options,
+        compile_options.xla_debug_options,
         compile_options.disable_scatter_gather_optimization_passes,
         compile_options.disable_pad_optimization_passes,
         compile_options.disable_licm_optimization_passes,
