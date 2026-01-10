@@ -579,76 +579,72 @@ function sharding_to_array_slices(
 
     if needs_padding
         # MLIR for identity operation, avoid tracing here
-        ctx = MLIR.IR.Context(Reactant.registry[])
-        MLIR.IR.register_enzymexla_dialects(ctx)
+        # ctx = MLIR.IR.Context(Reactant.registry[])
+        # MLIR.IR.register_enzymexla_dialects(ctx)
 
-        MLIR.IR.@scope ctx begin
-            sdycache = Reactant.Compiler.default_sdycache()
-            Reactant.Compiler.activate_sdycache!(sdycache)
+        sdycache = Reactant.Compiler.default_sdycache()
+        Reactant.Compiler.activate_sdycache!(sdycache)
 
-            try
-                data_mlir_type = [
-                    MLIR.IR.TensorType(
-                        collect(Int64, reverse(size_x)), MLIR.IR.Type(Float32)
-                    ),
-                ]
-                mod = MLIR.IR.Module(; location=MLIR.IR.Location(; context=ctx))
+        try
+            data_mlir_type = [
+                MLIR.IR.TensorType(
+                    collect(Int64, reverse(size_x)), MLIR.IR.Type(Float32)
+                ),
+            ]
+            mod = MLIR.IR.Module(; location=MLIR.IR.Location(; context=ctx))
 
-                (; sym_name, mesh_attr) = Reactant.Ops.mesh(sharding.mesh; mod)
+            (; sym_name, mesh_attr) = Reactant.Ops.mesh(sharding.mesh; mod)
 
-                func = MLIR.Dialects.func.func_(;
-                    sym_name="main",
-                    function_type=MLIR.IR.FunctionType(data_mlir_type, data_mlir_type),
-                    no_inline=true,
-                    body=MLIR.IR.Region(),
-                )
-                fnbody = MLIR.IR.Block(data_mlir_type, [MLIR.IR.Location()])
-                push!(MLIR.IR.region(func, 1), fnbody)
-                MLIR.IR.activate!(fnbody)
-                try
-                    MLIR.Dialects.func.return_([MLIR.IR.argument(fnbody, 1)])
-                finally
-                    MLIR.IR.deactivate!(fnbody)
-                end
-                push!(MLIR.IR.body(mod), func)
-
-                input_tensor_sharding_attr, _ = get_tensor_sharding_attribute(
-                    sharding, ctx, sym_name, mesh_attr, size_x; dialect=:sdy
-                )
-
-                MLIR.API.mlirFuncSetArgAttr(
-                    func, 0, "sdy.sharding", input_tensor_sharding_attr
-                )
-
-                Reactant.Compiler.run_pass_pipeline!(
-                    mod, join(["sdy-propagation-pipeline", "sdy-close-shardings"], ",")
-                )
-
-                mlir_attr = MLIR.API.mlirDictionaryAttrGetElementByName(
-                    MLIR.IR.getattr(func, "res_attrs")[0], "sdy.sharding"
-                )
-                @assert mlir_attr.ptr != C_NULL
-                sharding = sdy_tensor_sharding_to_named_sharding(
-                    sharding.mesh, MLIR.IR.Attribute(mlir_attr)
-                )
-
-                new_hlo_sharding = convert(HloSharding, sharding).hlo_sharding
-                condensed_op_sharding = convert(XLA.CondensedOpSharding, new_hlo_sharding)
-
-                device_to_array_slices, needs_padding = XLA.sharding_to_concrete_array_indices(
-                    condensed_op_sharding, size_x, sharding.mesh.logical_device_ids
-                )
-
-                @assert !needs_padding "This shouldn't happen. Open an issue on Reactant.jl.\nInput shape: $(size_x).\nOriginal Sharding: $(string(hlo_sharding.hlo_sharding)).\nNew sharding: $(string(new_hlo_sharding)).\nArray Slices: $(device_to_array_slices)."
-
-                return_updated_sharding isa Val{true} &&
-                    return (device_to_array_slices, sharding)
-                return device_to_array_slices
-            finally
-                Reactant.Compiler.deactivate_sdycache!(sdycache)
+            func = MLIR.Dialects.func.func_(;
+                sym_name="main",
+                function_type=MLIR.IR.FunctionType(data_mlir_type, data_mlir_type),
+                no_inline=true,
+                body=MLIR.IR.Region(),
+            )
+            fnbody = MLIR.IR.Block(data_mlir_type, [MLIR.IR.Location()])
+            push!(MLIR.IR.region(func, 1), fnbody)
+            MLIR.IR.@scope fnbody begin
+                MLIR.Dialects.func.return_([MLIR.IR.argument(fnbody, 1)])
             end
+            push!(MLIR.IR.body(mod), func)
+
+            input_tensor_sharding_attr, _ = get_tensor_sharding_attribute(
+                sharding, ctx, sym_name, mesh_attr, size_x; dialect=:sdy
+            )
+
+            MLIR.API.mlirFuncSetArgAttr(
+                func, 0, "sdy.sharding", input_tensor_sharding_attr
+            )
+
+            Reactant.Compiler.run_pass_pipeline!(
+                mod, join(["sdy-propagation-pipeline", "sdy-close-shardings"], ",")
+            )
+
+            mlir_attr = MLIR.API.mlirDictionaryAttrGetElementByName(
+                MLIR.IR.getattr(func, "res_attrs")[0], "sdy.sharding"
+            )
+            @assert mlir_attr.ptr != C_NULL
+            sharding = sdy_tensor_sharding_to_named_sharding(
+                sharding.mesh, MLIR.IR.Attribute(mlir_attr)
+            )
+
+            new_hlo_sharding = convert(HloSharding, sharding).hlo_sharding
+            condensed_op_sharding = convert(XLA.CondensedOpSharding, new_hlo_sharding)
+
+            device_to_array_slices, needs_padding = XLA.sharding_to_concrete_array_indices(
+                condensed_op_sharding, size_x, sharding.mesh.logical_device_ids
+            )
+
+            @assert !needs_padding "This shouldn't happen. Open an issue on Reactant.jl.\nInput shape: $(size_x).\nOriginal Sharding: $(string(hlo_sharding.hlo_sharding)).\nNew sharding: $(string(new_hlo_sharding)).\nArray Slices: $(device_to_array_slices)."
+        finally
+            Reactant.Compiler.deactivate_sdycache!(sdycache)
+            # MLIR.IR.deactivate!(ctx)
+            # MLIR.IR.dispose!(ctx)
         end
     end
+
+    return_updated_sharding isa Val{true} && return (device_to_array_slices, sharding)
+    return device_to_array_slices
 end
 
 # TODO: Something like NamedDims.jl will allow us to support NamedDimsSharding similar to
