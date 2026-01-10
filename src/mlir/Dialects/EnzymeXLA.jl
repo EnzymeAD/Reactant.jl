@@ -1002,6 +1002,214 @@ function linalg_lu(
     )
 end
 
+function mpi_allreduce(
+    sendbuf::Value,
+    inbuf::Value,
+    count::Value;
+    outbuf::IR.Type,
+    datatype,
+    op,
+    location=Location(),
+)
+    op_ty_results = IR.Type[outbuf,]
+    operands = Value[sendbuf, inbuf, count]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[
+        namedattribute("datatype", datatype), namedattribute("op", op)
+    ]
+
+    return create_operation(
+        "enzymexla.mpi.allreduce",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+function mpi_barrier(; location=Location())
+    op_ty_results = IR.Type[]
+    operands = Value[]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+
+    return create_operation(
+        "enzymexla.mpi.barrier",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+function mpi_comm_rank(; rank::IR.Type, location=Location())
+    op_ty_results = IR.Type[rank,]
+    operands = Value[]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+
+    return create_operation(
+        "enzymexla.mpi.comm_rank",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+function mpi_comm_size(; size::IR.Type, location=Location())
+    op_ty_results = IR.Type[size,]
+    operands = Value[]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+
+    return create_operation(
+        "enzymexla.mpi.comm_size",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+function mpi_irecv(
+    inbuf::Value,
+    count::Value,
+    source::Value,
+    tag::Value;
+    outbuf::IR.Type,
+    request::IR.Type,
+    datatype,
+    location=Location(),
+)
+    op_ty_results = IR.Type[outbuf, request]
+    operands = Value[inbuf, count, source, tag]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[namedattribute("datatype", datatype),]
+
+    return create_operation(
+        "enzymexla.mpi.irecv",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+function mpi_isend(
+    buf::Value,
+    count::Value,
+    dest::Value,
+    tag::Value;
+    request::IR.Type,
+    datatype,
+    location=Location(),
+)
+    op_ty_results = IR.Type[request,]
+    operands = Value[buf, count, dest, tag]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[namedattribute("datatype", datatype),]
+
+    return create_operation(
+        "enzymexla.mpi.isend",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+function mpi_recv(
+    inbuf::Value,
+    count::Value,
+    source::Value,
+    tag::Value;
+    outbuf::IR.Type,
+    datatype,
+    location=Location(),
+)
+    op_ty_results = IR.Type[outbuf,]
+    operands = Value[inbuf, count, source, tag]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[namedattribute("datatype", datatype),]
+
+    return create_operation(
+        "enzymexla.mpi.recv",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+function mpi_send(
+    buf::Value, count::Value, dest::Value, tag::Value; datatype, location=Location()
+)
+    op_ty_results = IR.Type[]
+    operands = Value[buf, count, dest, tag]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[namedattribute("datatype", datatype),]
+
+    return create_operation(
+        "enzymexla.mpi.send",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+function mpi_wait(request::Value; location=Location())
+    op_ty_results = IR.Type[]
+    operands = Value[request,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+
+    return create_operation(
+        "enzymexla.mpi.wait",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
 """
 `memcpy`
 
