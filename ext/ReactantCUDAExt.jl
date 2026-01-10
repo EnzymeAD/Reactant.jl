@@ -594,7 +594,8 @@ end
 # and not the operation itself).
 struct LLVMFunc{F,tt}
     f::Union{F,Nothing}
-    entry::String
+    entryname::String
+    mod::String
 end
 
 function Base.getproperty(f::LLVMFunc{F,tt}, sym::Symbol) where {F,tt}
@@ -883,7 +884,7 @@ end
 function compile(job)
     # lower to PTX
     # TODO: on 1.9, this actually creates a context. cache those.
-    entry = GPUCompiler.JuliaContext() do ctx
+    entryname, modstr = GPUCompiler.JuliaContext() do ctx
         mod, meta = GPUCompiler.compile(
             # :llvm, job; optimize=false, cleanup=false, validate=false, libraries=true
             :llvm,
@@ -963,27 +964,32 @@ function compile(job)
         if !isempty(errors)
             throw(GPUCompiler.InvalidIRError(job, errors))
         end
-        # LLVM.strip_debuginfo!(mod)
-        modstr = string(mod)
-        # This is a bit weird since we're taking a module from julia's llvm into reactant's llvm version
+        # TODO This is a bit weird since we're taking a module from julia's llvm into reactant's llvm version
         # it is probably safer to reparse a string using the right llvm module api, so we will do that.
-        mmod = MLIR.IR.Module(
-            @ccall MLIR.API.mlir_c.ConvertLLVMStrToMLIR(
-                modstr::Cstring, MLIR.IR.context()::MLIR.API.MlirContext
-            )::MLIR.API.MlirModule
-        )
-        @assert mmod != C_NULL
-
-        linkRes = @ccall MLIR.API.mlir_c.LinkInModule(
-            MLIR.IR.current_module()::MLIR.API.MlirModule,
-            mmod::MLIR.API.MlirModule,
-            entryname::Cstring,
-        )::MLIR.API.MlirOperation
-
-        String(Reactant.TracedUtils.get_attribute_by_name(linkRes, "sym_name"))
+        # LLVM.strip_debuginfo!(mod)
+        entryname, string(mod)
     end
 
-    return LLVMFunc{job.source.specTypes.parameters[1],job.source.specTypes}(nothing, entry)
+    return LLVMFunc{job.source.specTypes.parameters[1],job.source.specTypes}(nothing, entryname, modstr)
+end
+
+function link_llvm_module_to_mlir_module(func::LLVMFunc, _mod::MLIR.IR.Module)
+    mmod = MLIR.IR.Module(
+        @ccall MLIR.API.mlir_c.ConvertLLVMStrToMLIR(
+            func.mod::Cstring, MLIR.IR.context()::MLIR.API.MlirContext
+        )::MLIR.API.MlirModule
+    )
+    @assert mmod != C_NULL
+
+    linkRes = @ccall MLIR.API.mlir_c.LinkInModule(
+        _mod::MLIR.API.MlirModule,
+        mmod::MLIR.API.MlirModule,
+        func.entryname::Cstring,
+    )::MLIR.API.MlirOperation
+
+    MLIR.IR.dispose!(mmod)
+
+    return String(Reactant.TracedUtils.get_attribute_by_name(linkRes, "sym_name"))
 end
 
 # link into an executable kernel
@@ -1084,7 +1090,7 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
     restys = MLIR.IR.Type[]
     aliases = MLIR.IR.Attribute[]
 
-    fname = func.entry
+    fname = link_llvm_module_to_mlir_module(func, MLIR.IR.current_module())
 
     wrapper_tys = MLIR.IR.Type[]
     ctx = MLIR.IR.context()
@@ -1335,7 +1341,7 @@ Reactant.@reactant_overlay @noinline function CUDA.cufunction(
         )
         GPUCompiler.cached_compilation(cache, source, config, compile, link)
     end
-    return Core.Typeof(res)(f, res.entry)
+    return Core.Typeof(res)(f, res.entryname, res.mod)
 end
 
 Base.@nospecializeinfer function Reactant.traced_type_inner(
