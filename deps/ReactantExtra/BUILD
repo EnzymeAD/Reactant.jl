@@ -1139,6 +1139,7 @@ cc_library(
             "-Wl,-exported_symbol,_BufferToHost",
             "-Wl,-exported_symbol,_FreeClient",
             "-Wl,-exported_symbol,_ClientCompile",
+            "-Wl,-exported_symbol,_ClientCompileWithProto",
             "-Wl,-exported_symbol,_ConvertLLVMStrToMLIR",
             "-Wl,-exported_symbol,_LinkInModule",
             "-Wl,-exported_symbol,_FreeFuture",
