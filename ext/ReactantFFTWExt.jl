@@ -30,10 +30,10 @@ end
 
 # This is the actual ifft! operation. Backwards in FFTW actually means bfft
 const IcFFTWPlan{T,inplace} = AbstractFFTs.ScaledPlan{
-    T,<: FFTW.cFFTWPlan{T,BACKWARD,inplace}
+    T,<:FFTW.cFFTWPlan{T,BACKWARD,inplace}
 }
 const IrFFTWPlan{T,inplace} = AbstractFFTs.ScaledPlan{
-    T,<: FFTW.rFFTWPlan{T,BACKWARD,inplace}
+    T,<:FFTW.rFFTWPlan{T,BACKWARD,inplace}
 }
 # TODO support bfft
 function Base.:*(plan::IcFFTWPlan{T,true}, x::Reactant.TracedRArray{T}) where {T}
@@ -76,9 +76,10 @@ function LinearAlgebra.mul!(
     return copyto!(y, rfft(x, fftdims(plan)))
 end
 
-
 function LinearAlgebra.mul!(
-    y::Reactant.TracedRArray{<:Real}, plan::IrFFTWPlan{<:Complex}, x::Reactant.TracedRArray{<:Complex}
+    y::Reactant.TracedRArray{<:Real},
+    plan::IrFFTWPlan{<:Complex},
+    x::Reactant.TracedRArray{<:Complex},
 )
     d = reallength(plan) # original real length
     return copyto!(y, irfft(x, d, fftdims(plan)))

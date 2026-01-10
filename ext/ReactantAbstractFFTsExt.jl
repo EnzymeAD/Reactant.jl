@@ -24,7 +24,7 @@ for op in (:rfft, :fft, :ifft)
         if __is_valid_stablehlo_fft_dims(dims, ndims(x))
             return @opcall fft(
                 TracedUtils.materialize_traced_array(x);
-                type=($(uppercase(string(op)))),
+                type=$(uppercase(string(op))),
                 length=fft_lengths,
             )
         end
@@ -33,7 +33,7 @@ for op in (:rfft, :fft, :ifft)
             @opcall(
                 fft(
                     TracedUtils.materialize_traced_array(permutedims(x, perm));
-                    type=($(uppercase(string(op)))),
+                    type=$(uppercase(string(op))),
                     length=fft_lengths,
                 )
             ),

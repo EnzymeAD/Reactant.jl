@@ -139,7 +139,6 @@ end
         y_r = Reactant.to_rarray(similar(irfft(x, d)))
         @jit LinearAlgebra.mul!(y_r, FFTW.plan_irfft(x, d), x_r)
         @test y_r ≈ plan_irfft(x, d) * x
-
     end
 
     @testset "In-place [$(fft!), size $(size)]" for size in ((16,), (16, 16)),
@@ -232,7 +231,7 @@ end
         @jit LinearAlgebra.mul!(y_r, ip, c_r)
         @test y_r ≈ @jit(ip * c_r)
 
-        c12 = rand(ComplexF32, size(p12*x)...)
+        c12 = rand(ComplexF32, size(p12 * x)...)
         ip12 = plan_irfft(copy(c12), size(x, 1), (1, 2))
         c12_r = Reactant.to_rarray(c12)
         @test @jit(ip12 * c12_r) ≈ ip12 * c12
@@ -240,7 +239,7 @@ end
         @jit LinearAlgebra.mul!(y_r, ip12, c12_r)
         @test y_r ≈ @jit(ip12 * c12_r)
 
-        c23 = rand(ComplexF32, size(p23*x)...)
+        c23 = rand(ComplexF32, size(p23 * x)...)
         ip23 = plan_irfft(copy(c23), size(x, 2), (2, 3))
         c23_r = Reactant.to_rarray(c23)
         @test @jit(ip23 * c23_r) ≈ ip23 * c23
