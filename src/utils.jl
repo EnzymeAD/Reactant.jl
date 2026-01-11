@@ -1025,7 +1025,8 @@ end
 end
 
 
-
+@noinline barrier(@nospecialize(x), @nospecialize(T::Type = Any)) =
+    CC.inferencebarrier(x)::T
 
 function call_llvm_generator(world::UInt, source::LineNumberNode, self, @nospecialize(args))
     f = args[1]
@@ -1102,24 +1103,26 @@ function call_llvm_generator(world::UInt, source::LineNumberNode, self, @nospeci
         args_vec = push_inst!(Expr(:call, GlobalRef(Base, :pointer), args_vec))
         n_args = length(fn_args)
         llvm_tuple = push_inst!(Expr(:call, Core.GlobalRef(Core, :tuple), string(llvm_module), llvm_fn_name))
+        rt  = Any
         result = push_inst!(
             Expr(
                 :call,
                 GlobalRef(Base, :llvmcall),
                 llvm_tuple,
-                Ptr{Any}, #Change to RT
-                Core.svec(Any, Ptr{Any}, Int),
+                Ptr{rt}, #Change to RT
+                Tuple{Any, Ptr{Any}, Int},
                 f_arg,
                 args_vec,
                 n_args
             ),
         )
         result = push_inst!(Expr(:call, GlobalRef(Base, :unsafe_pointer_to_objref), result))
+        result = push_inst!(Expr(:call, GlobalRef(@__MODULE__, :barrier), result, rt))
         push_inst!(Core.ReturnNode(result))
 
         code_info.min_world = typemin(UInt)
         code_info.max_world = typemax(UInt)
-        code_info.slotnames = Any[:call_with_reactant_, REDUB_ARGUMENTS_NAME]
+        code_info.slotnames = Any[:call_llvm_generator, REDUB_ARGUMENTS_NAME]
         code_info.slotflags = UInt8[0x00, 0x00]
         code_info.code = overdubbed_code
         code_info.codelocs = overdubbed_codelocs
