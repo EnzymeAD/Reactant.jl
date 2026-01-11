@@ -1,8 +1,23 @@
 module ReactantAbstractFFTsExt
 
-using AbstractFFTs: AbstractFFTs
+using AbstractFFTs: AbstractFFTs, fftdims
+using LinearAlgebra
 using Reactant: Reactant, MLIR, Ops, AnyTracedRArray, TracedRArray, TracedUtils
 using Reactant.Ops: @opcall
+
+# To automatically convert FFT plans to traced versions
+# To extend a user needs to extend Reactant.reactant_fftplan for their plan type
+# see ReactantFFTWExt.jl for an example implementation
+function Reactant.make_tracer(
+    seen, @nospecialize(prev::AbstractFFTs.Plan{T}), @nospecialize(path), mode; kwargs...
+) where {T}
+    return reactant_fftplan(prev)
+end
+
+abstract type AbstractReactantFFTPlan{T} <: AbstractFFTs.Plan{T} end
+AbstractFFTs.fftdims(p::AbstractReactantFFTPlan) = p.dims
+
+reactant_fftplan(p::AbstractReactantFFTPlan) = p
 
 function __permutation_to_move_dims_to_end(dims, N::Integer)
     perm = [i for i in 1:N if i ∉ Set(dims)]
@@ -53,28 +68,36 @@ for op in (:rfft, :fft, :ifft)
     # Out-of-place plan
     plan_name = Symbol("Reactant", uppercase(string(op)), "Plan")
     plan_f = Symbol("plan_", op)
-    @eval struct $(plan_name){T,D} <: AbstractFFTs.Plan{T}
+    @eval struct $(plan_name){T,D} <: AbstractReactantFFTPlan{T}
         dims::D
     end
-    @eval AbstractFFTs.fftdims(p::$(plan_name)) = p.dims
+    @eval $(plan_name){T}(dims) where {T} = $(plan_name){T,typeof(dims)}(dims)
+
     @eval function AbstractFFTs.$(plan_f)(
         x::Reactant.TracedRArray{T}, dims=1:ndims(x)
     ) where {T}
         return $(plan_name){T,typeof(dims)}(dims)
     end
+
     @eval function Base.:*(p::$(plan_name){T}, x::Reactant.TracedRArray{T}) where {T}
         return AbstractFFTs.$(op)(x, p.dims)
+    end
+
+    @eval function LinearAlgebra.mul!(
+        y::Reactant.TracedRArray, p::$(plan_name), x::Reactant.TracedRArray
+    )
+        return copyto!(y, AbstractFFTs.$(op)(x, fftdims(p)))
     end
 
     # In-place plan
     if op !== :rfft
         plan_name! = Symbol("Reactant", uppercase(string(op)), "InPlacePlan")
         plan_f! = Symbol("plan_", op, "!")
-        @eval struct $(plan_name!){T,D} <: AbstractFFTs.Plan{T}
+        @eval struct $(plan_name!){T,D} <: AbstractReactantFFTPlan{T}
             dims::D
         end
+        @eval $(plan_name!){T}(dims) where {T} = $(plan_name!){T,typeof(dims)}(dims)
 
-        @eval AbstractFFTs.fftdims(p::$(plan_name!)) = p.dims
         @eval function AbstractFFTs.$(plan_f!)(
             x::Reactant.TracedRArray{T}, dims=1:ndims(x)
         ) where {T}
@@ -82,6 +105,12 @@ for op in (:rfft, :fft, :ifft)
         end
         @eval function Base.:*(p::$(plan_name!){T}, x::Reactant.TracedRArray{T}) where {T}
             return copyto!(x, AbstractFFTs.$(op)(x, p.dims))
+        end
+
+        @eval function LinearAlgebra.mul!(
+            y::Reactant.TracedRArray, p::$(plan_name!), x::Reactant.TracedRArray
+        )
+            return copyto!(y, AbstractFFTs.$(op)(x, fftdims(p)))
         end
     end
 end
@@ -118,11 +147,12 @@ for op in (:irfft,)
     #Inverse plan I need to store the real array length along the first dim in dims
     plan_name = Symbol("Reactant", uppercase(string(op)), "Plan")
     plan_f = Symbol("plan_", op)
-    @eval struct $(plan_name){T,D} <: AbstractFFTs.Plan{T}
+    @eval struct $(plan_name){T,D} <: AbstractReactantFFTPlan{T}
         dims::D
         length::Int
     end
-    @eval AbstractFFTs.fftdims(p::$(plan_name)) = p.dims
+    @eval $(plan_name){T}(dims, length) where {T} =
+        $(plan_name){T,typeof(dims)}(dims, length)
     @eval function AbstractFFTs.$(plan_f)(
         x::Reactant.TracedRArray{T}, d::Integer, dims=1:ndims(x)
     ) where {T}
@@ -131,6 +161,12 @@ for op in (:irfft,)
 
     @eval function Base.:*(p::$(plan_name){T}, x::Reactant.TracedRArray{T}) where {T}
         return AbstractFFTs.$(op)(x, p.length, p.dims)
+    end
+
+    @eval function LinearAlgebra.mul!(
+        y::Reactant.TracedRArray{<:Real}, p::$(plan_name){T}, x::Reactant.TracedRArray{T}
+    ) where {T<:Complex}
+        return copyto!(y, AbstractFFTs.$(op)(x, p.length, fftdims(p)))
     end
 end
 
