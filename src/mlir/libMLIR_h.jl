@@ -11428,6 +11428,14 @@ function enzymexlaGeluApproximationAttrGet(ctx, mode)
     )::MlirAttribute
 end
 
+function enzymexlaMPIDatatypeAttrGet(ctx, mode)
+    @ccall mlir_c.enzymexlaMPIDatatypeAttrGet(ctx::MlirContext, mode::Int32)::MlirAttribute
+end
+
+function enzymexlaMPIOpAttrGet(ctx, mode)
+    @ccall mlir_c.enzymexlaMPIOpAttrGet(ctx::MlirContext, mode::Int32)::MlirAttribute
+end
+
 function enzymexlaGuaranteedAnalysisResultAttrGet(ctx, mode)
     @ccall mlir_c.enzymexlaGuaranteedAnalysisResultAttrGet(
         ctx::MlirContext, mode::Int32
