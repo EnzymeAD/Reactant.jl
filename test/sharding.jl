@@ -10,6 +10,13 @@ function fn_test1(x)
     return y, x, z
 end
 
+@testset "Number" begin
+    if length(addressable_devices) ≥ 2
+        mesh = Sharding.Mesh(collect(Int64, 0:(length(addressable_devices)-1)), ("x",))
+        ConcreteRNumber(2.0; sharding=Sharding.Replicated(mesh))
+    end
+end
+
 @testset "Sharding Across 2 Devices" begin
     if length(addressable_devices) ≥ 2
         mesh = Sharding.Mesh([0 1;], ("x", "y"))

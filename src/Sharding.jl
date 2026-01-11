@@ -413,7 +413,7 @@ function (sharding::NamedSharding)(
     data = ntuple(length(sharding.mesh)) do i
         XLA.PJRT.AsyncBuffer(
             client,
-            x[device_to_array_slices[i]...],
+            length(device_to_array_slices[i]) == 0 ? x : x[device_to_array_slices[i]...],
             XLA.get_device(client, sharding.mesh.device_ids[i]),
         )
     end
