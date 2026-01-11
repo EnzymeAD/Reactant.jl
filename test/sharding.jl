@@ -282,13 +282,15 @@ end
         @test Array(@jit shardy_passes = :to_mhlo_shardings fn_test2(x_ra)) ≈ fn_test2(x)
         @test Array(@jit optimize_then_pad = false fn_test2(x_ra)) ≈ fn_test2(x)
 
-        @testset "Handle Sub-Axis Info" begin
-            @test Reactant.to_rarray(
-                Reactant.TestUtils.construct_test_array(Float32, 142, 142);
-                sharding=Sharding.NamedSharding(
-                    Sharding.Mesh(reshape(0:11, 3, 4), (:x, :y)), (:x, :y)
-                ),
-            ) isa Reactant.ConcreteRArray
+        if length(Reactant.addressable_devices()) ≥ 12
+            @testset "Handle Sub-Axis Info" begin
+                @test Reactant.to_rarray(
+                    Reactant.TestUtils.construct_test_array(Float32, 142, 142);
+                    sharding=Sharding.NamedSharding(
+                        Sharding.Mesh(reshape(0:11, 3, 4), (:x, :y)), (:x, :y)
+                    ),
+                ) isa Reactant.ConcreteRArray
+            end
         end
     else
         @warn "Not enough addressable devices to run sharding tests"
