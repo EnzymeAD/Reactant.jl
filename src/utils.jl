@@ -1,3 +1,61 @@
+#leak each argument to a global variable
+macro lk(args...)
+    quote
+        $([:(
+            let val = $(esc(p))
+                global $(esc(p)) = val
+            end
+        ) for p in args]...)
+    end
+end
+
+using GPUCompiler
+CC = Core.Compiler
+
+
+
+
+struct CompilerParams <: AbstractCompilerParams
+    function CompilerParams()
+        return new()
+    end
+end
+
+NativeCompilerJob = CompilerJob{NativeCompilerTarget,CompilerParams}
+GPUCompiler.can_throw(@nospecialize(job::NativeCompilerJob)) = true
+function GPUCompiler.method_table(@nospecialize(job::NativeCompilerJob))
+    return CC.method_table(GPUCompiler.get_interpreter(job))
+end
+
+ReactantInterp = Enzyme.Compiler.Interpreter.EnzymeInterpreter{typeof(Reactant.set_reactant_abi)}
+function GPUCompiler.get_interpreter(@nospecialize(job::NativeCompilerJob))
+    Reactant.ReactantInterpreter(; world=job.world)
+end
+
+
+call_with_reactant_context_stack = Ref([])
+#TODO: verify this: cannot be used: a call without reactant doesn't need to be transformed
+function optimize(interp::ReactantInterp, opt::CC.OptimizationState, caller::CC.InferenceResult)
+    CC.@timeit "optimizer" ir = CC.run_passes_ipo_safe(opt.src, opt, caller)
+    CC.ipo_dataflow_analysis!(interp, ir, caller)
+    mi = opt.linfo
+    @error mi
+    if !isempty(call_with_reactant_context_stack[]) &&  last(call_with_reactant_context_stack[]) == mi && !(
+        is_reactant_method(mi) || (
+            mi.def.sig isa DataType &&
+            !should_rewrite_invoke(
+                mi.def.sig.parameters[1], Tuple{mi.def.sig.parameters[2:end]...}
+            )
+        )
+    )
+        @error "rewrite_insts" ir
+        ir, _ = rewrite_insts!(ir, interp, false)
+        @error "rewrited_insts" ir
+    end
+
+    return CC.finish(interp, opt, ir, caller)
+end
+
 struct CallWithReactant{F} <: Function
     f::F
 end
@@ -901,11 +959,7 @@ function call_with_reactant_generator(
 
     push!(oc_capture_vec, dict)
 
-    oc = if false && Base.issingletontype(fn)
-        res = Core._call_in_world_total(
-            world, make_oc, dict, octup, rt, src, ocnargs, ocva, fn.instance
-        )::Core.OpaqueClosure
-    else
+    oc = begin
         farg = fn_args[1]
         farg = nothing
         rep = Expr(:call, make_oc, dict, octup, rt, src, ocnargs, ocva, farg)
@@ -941,13 +995,271 @@ function call_with_reactant_generator(
         safe_print("code_info", code_info)
     end
 
+
+    config = CompilerConfig(
+        NativeCompilerTarget(; jlruntime=true, llvm_always_inline=false),
+        CompilerParams();
+        kernel=false,
+        libraries=false,
+        toplevel=true,
+        validate=false,
+        strip=false,
+        optimize=true,
+        entry_abi=:func)
+
+    job = CompilerJob(mi, config, world)
+    @lk job
+    JuliaContext() do ctx
+        push!(call_with_reactant_context_stack[], mi)
+        ir, _ = GPUCompiler.compile(:llvm, job; validate=false)
+        pop!(call_with_reactant_context_stack[])
+        @error mi ir
+    end
+
     return code_info
 end
 
-@eval function call_with_reactant($REDUB_ARGUMENTS_NAME...)
+@eval function call_with_reactant2($REDUB_ARGUMENTS_NAME...)
     $(Expr(:meta, :generated_only))
     return $(Expr(:meta, :generated, call_with_reactant_generator))
 end
+
+
+
+
+function call_llvm_generator(world::UInt, source::LineNumberNode, self, @nospecialize(args))
+    f = args[1]
+    tt = Tuple{f,args[2:end]...}
+    match = CC._findsup(tt, REACTANT_METHOD_TABLE, world)
+    match = isnothing(match[1]) ? CC._findsup(tt, nothing, world) : match
+
+    stub = Core.GeneratedFunctionStub(
+        identity, Core.svec(:call_with_reactant, REDUB_ARGUMENTS_NAME), Core.svec()
+    )
+
+    if isnothing(match[1])
+        method_error = :(throw(
+            MethodError($REDUB_ARGUMENTS_NAME[1], $REDUB_ARGUMENTS_NAME[2:end], $world)
+        ))
+        return stub(world, source, method_error)
+    end
+
+    mi = CC.specialize_method(match[1])
+
+    config = CompilerConfig(
+        NativeCompilerTarget(; jlruntime=true, llvm_always_inline=false),
+        CompilerParams();
+        kernel=false,
+        libraries=false,
+        toplevel=true,
+        validate=false,
+        strip=false,
+        optimize=true,
+        entry_abi=:func)
+
+    @error "world" world
+    job = CompilerJob(mi, config, world)
+    @lk job
+        push!(call_with_reactant_context_stack[], mi)
+        llvm_module, p = GPUCompiler.compile(:llvm, job; validate=false)
+        pop!(call_with_reactant_context_stack[])
+        llvm_fn_name = first(p.compiled)[2][end-1]
+
+         code_info = begin
+            ir = CC.IRCode()
+            src = @ccall jl_new_code_info_uninit()::Ref{CC.CodeInfo}
+            src.slotnames = fill(:none, length(ir.argtypes) + 1)
+            src.slotflags = fill(zero(UInt8), length(ir.argtypes))
+            src.slottypes = copy(ir.argtypes)
+            src.rettype = UInt64
+            CC.ir_to_codeinf!(src, ir)
+        end
+
+        overdubbed_code = Any[]
+        overdubbed_codelocs = Int32[]
+        function push_inst!(inst)
+            push!(overdubbed_code, inst)
+            push!(overdubbed_codelocs, code_info.codelocs[1])
+            return Core.SSAValue(length(overdubbed_code))
+        end
+        code_info.edges = Core.MethodInstance[job.source]
+        code_info.rettype = Any
+
+
+        fn_args = []
+        for i in 2:length(args)
+            named_tuple_ssa = Expr(
+                :call, Core.GlobalRef(Core, :getfield), Core.SlotNumber(2), i
+            )
+            arg = push_inst!(named_tuple_ssa)
+            push!(fn_args, arg)
+        end
+        
+        f_arg = push_inst!(Expr(:call, Core.GlobalRef(Core, :getfield), Core.SlotNumber(2), 1))
+        args_vec = push_inst!(
+            Expr(:call, GlobalRef(Base, :getindex), GlobalRef(Base, :Any), fn_args...)
+        )
+        args_vec = push_inst!(Expr(:call, GlobalRef(Base, :pointer), args_vec))
+        n_args = length(fn_args)
+        llvm_tuple = push_inst!(Expr(:call, Core.GlobalRef(Core, :tuple), string(llvm_module), llvm_fn_name))
+        result = push_inst!(
+            Expr(
+                :call,
+                GlobalRef(Base, :llvmcall),
+                llvm_tuple,
+                Ptr{Any}, #Change to RT
+                Core.svec(Any, Ptr{Any}, Int),
+                f_arg,
+                args_vec,
+                n_args
+            ),
+        )
+        result = push_inst!(Expr(:call, GlobalRef(Base, :unsafe_pointer_to_objref), result))
+        push_inst!(Core.ReturnNode(result))
+
+        code_info.min_world = typemin(UInt)
+        code_info.max_world = typemax(UInt)
+        code_info.slotnames = Any[:call_with_reactant_, REDUB_ARGUMENTS_NAME]
+        code_info.slotflags = UInt8[0x00, 0x00]
+        code_info.code = overdubbed_code
+        code_info.codelocs = overdubbed_codelocs
+        code_info.ssavaluetypes = length(overdubbed_code)
+        code_info.ssaflags = [0x00 for _ in 1:length(overdubbed_code)]
+        @error code_info
+        return code_info
+end
+
+@eval function call_llvm($(REDUB_ARGUMENTS_NAME)...)
+    $(Expr(:meta, :generated_only))
+    return $(Expr(:meta, :generated,call_llvm_generator))
+end
+
+
+struct Thunk{F}
+    mi::Core.MethodInstance
+end
+
+
+@noinline function (t::Thunk{F} where {F})(args...)
+        mi = t.mi
+        config = CompilerConfig(
+        NativeCompilerTarget(; jlruntime=true, llvm_always_inline=false),
+        CompilerParams();
+        kernel=false,
+        libraries=false,
+        toplevel=true,
+        validate=false,
+        strip=false,
+        optimize=true,
+        entry_abi=:func)
+
+    job = CompilerJob(mi, config, Base.get_world_counter())
+    JuliaContext() do ctx
+        push!(call_with_reactant_context_stack[], mi)
+        ir, p = GPUCompiler.compile(:llvm, job; validate=false)
+        @error ir
+        pop!(call_with_reactant_context_stack[])
+        llvm_fn_name = first(p.compiled)[2][end-1]
+        @lk ir p llvm_fn_name args
+        call_llvm(ir, llvm_fn_name, Any, args...)
+    end
+end
+
+
+function thunk_llvm(f, args...)
+    JuliaContext() do ctx
+        call_llvm(f, args...)
+    end
+end
+
+const REDUB_ARGUMENTS_NAME2 = gensym("redub_arguments")
+
+function cr_generated(
+    world::UInt, source::LineNumberNode, self, @nospecialize(args)
+)
+    f = args[1]
+    tt = Tuple{f,args[2:end]...}
+    match = CC._findsup(tt, REACTANT_METHOD_TABLE, world)
+    match = isnothing(match[1]) ? CC._findsup(tt, nothing, world) : match
+
+    stub = Core.GeneratedFunctionStub(
+        identity, Core.svec(:call_with_reactant, REDUB_ARGUMENTS_NAME), Core.svec()
+    )
+
+    if isnothing(match[1])
+        method_error = :(throw(
+            MethodError($REDUB_ARGUMENTS_NAME2[1], $REDUB_ARGUMENTS_NAME2[2:end], $world)
+        ))
+        return stub(world, source, method_error)
+    end
+
+    mi = CC.specialize_method(match[1])
+
+     #build CodeInfo directly 
+    code_info = begin
+        ir = CC.IRCode()
+        src = @ccall jl_new_code_info_uninit()::Ref{CC.CodeInfo}
+        src.slotnames = fill(:none, length(ir.argtypes) + 1)
+        src.slotflags = fill(zero(UInt8), length(ir.argtypes))
+        src.slottypes = copy(ir.argtypes)
+        src.rettype = UInt64
+        CC.ir_to_codeinf!(src, ir)
+    end
+
+    overdubbed_code = Any[]
+    overdubbed_codelocs = Int32[]
+    function push_inst!(inst)
+        push!(overdubbed_code, inst)
+        push!(overdubbed_codelocs, code_info.codelocs[1])
+        return Core.SSAValue(length(overdubbed_code))
+    end
+    code_info.edges = Core.MethodInstance[mi]
+    code_info.rettype = Any #TODO: change this
+
+    
+    fn_args = []
+    for i in 2:length(args)
+        named_tuple_ssa = Expr(
+            :call, Core.GlobalRef(Core, :getfield), Core.SlotNumber(2), i
+        )
+        arg = push_inst!(named_tuple_ssa)
+        push!(fn_args, arg)
+    end
+
+    thunk = Thunk{f}(mi)
+    mi_thunk = Base.method_instance(thunk, args[2:end]; world)
+    #@error CC._findsup(Tuple{thunk,args[2:end]...}, nothing, world)
+    @lk thunk mi_thunk args
+
+    isnothing(mi_thunk) &&
+        return stub(world, source, :(throw("Thunk method instance is invalid")))
+    
+    result = push_inst!(
+        Expr(
+            :invoke,
+            mi_thunk, thunk,
+            fn_args...
+        ),
+    )
+    push_inst!(Core.ReturnNode(result))
+
+    code_info.min_world = typemin(UInt)
+    code_info.max_world = typemax(UInt)
+    code_info.slotnames = Any[:cr, REDUB_ARGUMENTS_NAME2]
+    code_info.slotflags = UInt8[0x00, 0x00]
+    code_info.code = overdubbed_code
+    code_info.codelocs = overdubbed_codelocs
+    code_info.ssavaluetypes = length(overdubbed_code)
+    code_info.ssaflags = [0x00 for _ in 1:length(overdubbed_code)]
+    @error code_info
+    return code_info
+end
+
+@eval function cr($(REDUB_ARGUMENTS_NAME2)...)
+    $(Expr(:meta, :generated_only))
+    return $(Expr(:meta, :generated, cr_generated))
+end
+
 
 @static if isdefined(Core, :BFloat16)
     nmantissa(::Type{Core.BFloat16}) = 7
