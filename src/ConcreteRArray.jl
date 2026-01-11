@@ -823,6 +823,10 @@ function Base.map!(f, R::Union{AnyConcreteIFRTArray,AnyConcretePJRTArray}, A::Ab
     return R
 end
 
+function myfill(val, dims)
+    @opcall fill(val, dims)
+end
+
 # Directly initialize a Device Array
 for T in (Number, Integer)
     @eval function Base.fill(
@@ -833,10 +837,8 @@ for T in (Number, Integer)
     )
         output_shardings = Sharding.is_sharded(sharding) ? Dict(1 => sharding) : nothing
         dims = collect(Int64, last.(dims))
-        fn = compile((); output_shardings) do
-            return @opcall fill(val, dims)
-        end
-        return fn()
+        fn = compile(myfill, (val, dims); output_shardings)
+        return fn(val, dims)
     end
 end
 
