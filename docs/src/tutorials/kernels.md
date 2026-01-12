@@ -58,7 +58,7 @@ yr = square_compiled(xr)
 @assert yr == xr .^ 2  # hide
 ```
 
-The Reactant-compiled function `square_compiled` now runs on whatever device Reactant requests, including CPU, GPU, TPU or distributed settings.
+The Reactant-compiled function `square_compiled` now runs on whatever device you request from Reactant, including CPU, GPU, TPU or distributed settings.
 It will not run on the device it was written for, nor will it require a CUDA-enabled device.
 
 ## Kernel raising
@@ -68,14 +68,13 @@ For more information, see the [corresponding documentation](@ref "Raising").
 
 ## Kernel differentiation
 
-If you want to compute derivatives of your kernel, combining Reactant with [Enzyme.jl](https://github.com/EnzymeAD/Enzyme.jl) is the best choice.
+You can combine with [Enzyme.jl](https://github.com/EnzymeAD/Enzyme.jl) to take derivatives of kernels. For more information of differntiating generic code with Enzyme+Reactant, see the [corresponding documentation](@ref "automatic-differentiation").
 
 ```@example
 import Enzyme
 ```
 
-Currently, you must use the `raise = true` and `raise_first = true` compilation options to make sure the kernel is raised before Enzyme performs automatic differentiation on the program.
-This restriction will be removed in future versions.
+When differentiating computational kernels, Enzyme can either differentiate the kernel directly, or differentiated the raised linear algebra. Using Enzyme outside of Reactant, Enzyme.jl differentiates the kernel directly. Currently within Reactant, only differentiating the raised code is supported (though supporting both is in progress). As a result, you must use the `raise = true` and `raise_first = true` compilation options to make sure the kernel is raised before Enzyme performs automatic differentiation on the program.
 
 ```@example
 sumsquare(x) = sum(square(x))
