@@ -1061,23 +1061,26 @@ function call_llvm_generator(world::UInt, source::LineNumberNode, self, @nospeci
     @error "world" world
     job = CompilerJob(mi, config, world)
     @lk job
+
+    overdubbed_code = Any[]
+    overdubbed_codelocs = Int32[]
+    code_info = begin
+        ir = CC.IRCode()
+        src = @ccall jl_new_code_info_uninit()::Ref{CC.CodeInfo}
+        src.slotnames = fill(:none, length(ir.argtypes) + 1)
+        src.slotflags = fill(zero(UInt8), length(ir.argtypes))
+        src.slottypes = copy(ir.argtypes)
+        src.rettype = UInt64
+        CC.ir_to_codeinf!(src, ir)
+        end
+
+    JuliaContext() do ctx
         push!(call_with_reactant_context_stack[], mi)
         llvm_module, p = GPUCompiler.compile(:llvm, job; validate=false)
         pop!(call_with_reactant_context_stack[])
         llvm_fn_name = first(p.compiled)[2][end-1]
 
-         code_info = begin
-            ir = CC.IRCode()
-            src = @ccall jl_new_code_info_uninit()::Ref{CC.CodeInfo}
-            src.slotnames = fill(:none, length(ir.argtypes) + 1)
-            src.slotflags = fill(zero(UInt8), length(ir.argtypes))
-            src.slottypes = copy(ir.argtypes)
-            src.rettype = UInt64
-            CC.ir_to_codeinf!(src, ir)
-        end
 
-        overdubbed_code = Any[]
-        overdubbed_codelocs = Int32[]
         function push_inst!(inst)
             push!(overdubbed_code, inst)
             push!(overdubbed_codelocs, code_info.codelocs[1])
@@ -1119,6 +1122,7 @@ function call_llvm_generator(world::UInt, source::LineNumberNode, self, @nospeci
         result = push_inst!(Expr(:call, GlobalRef(Base, :unsafe_pointer_to_objref), result))
         result = push_inst!(Expr(:call, GlobalRef(@__MODULE__, :barrier), result, rt))
         push_inst!(Core.ReturnNode(result))
+    end
 
         code_info.min_world = typemin(UInt)
         code_info.max_world = typemax(UInt)
@@ -1132,137 +1136,12 @@ function call_llvm_generator(world::UInt, source::LineNumberNode, self, @nospeci
         return code_info
 end
 
-@eval function call_llvm($(REDUB_ARGUMENTS_NAME)...)
+@eval function call_with_reactant($(REDUB_ARGUMENTS_NAME)...)
     $(Expr(:meta, :generated_only))
-    return $(Expr(:meta, :generated,call_llvm_generator))
-end
-
-
-struct Thunk{F}
-    mi::Core.MethodInstance
-end
-
-
-@noinline function (t::Thunk{F} where {F})(args...)
-        mi = t.mi
-        config = CompilerConfig(
-        NativeCompilerTarget(; jlruntime=true, llvm_always_inline=false),
-        CompilerParams();
-        kernel=false,
-        libraries=false,
-        toplevel=true,
-        validate=false,
-        strip=false,
-        optimize=true,
-        entry_abi=:func)
-
-    job = CompilerJob(mi, config, Base.get_world_counter())
-    JuliaContext() do ctx
-        push!(call_with_reactant_context_stack[], mi)
-        ir, p = GPUCompiler.compile(:llvm, job; validate=false)
-        @error ir
-        pop!(call_with_reactant_context_stack[])
-        llvm_fn_name = first(p.compiled)[2][end-1]
-        @lk ir p llvm_fn_name args
-        call_llvm(ir, llvm_fn_name, Any, args...)
-    end
-end
-
-
-function thunk_llvm(f, args...)
-    JuliaContext() do ctx
-        call_llvm(f, args...)
-    end
+    return $(Expr(:meta, :generated, call_llvm_generator))
 end
 
 const REDUB_ARGUMENTS_NAME2 = gensym("redub_arguments")
-
-function cr_generated(
-    world::UInt, source::LineNumberNode, self, @nospecialize(args)
-)
-    f = args[1]
-    tt = Tuple{f,args[2:end]...}
-    match = CC._findsup(tt, REACTANT_METHOD_TABLE, world)
-    match = isnothing(match[1]) ? CC._findsup(tt, nothing, world) : match
-
-    stub = Core.GeneratedFunctionStub(
-        identity, Core.svec(:call_with_reactant, REDUB_ARGUMENTS_NAME), Core.svec()
-    )
-
-    if isnothing(match[1])
-        method_error = :(throw(
-            MethodError($REDUB_ARGUMENTS_NAME2[1], $REDUB_ARGUMENTS_NAME2[2:end], $world)
-        ))
-        return stub(world, source, method_error)
-    end
-
-    mi = CC.specialize_method(match[1])
-
-     #build CodeInfo directly 
-    code_info = begin
-        ir = CC.IRCode()
-        src = @ccall jl_new_code_info_uninit()::Ref{CC.CodeInfo}
-        src.slotnames = fill(:none, length(ir.argtypes) + 1)
-        src.slotflags = fill(zero(UInt8), length(ir.argtypes))
-        src.slottypes = copy(ir.argtypes)
-        src.rettype = UInt64
-        CC.ir_to_codeinf!(src, ir)
-    end
-
-    overdubbed_code = Any[]
-    overdubbed_codelocs = Int32[]
-    function push_inst!(inst)
-        push!(overdubbed_code, inst)
-        push!(overdubbed_codelocs, code_info.codelocs[1])
-        return Core.SSAValue(length(overdubbed_code))
-    end
-    code_info.edges = Core.MethodInstance[mi]
-    code_info.rettype = Any #TODO: change this
-
-    
-    fn_args = []
-    for i in 2:length(args)
-        named_tuple_ssa = Expr(
-            :call, Core.GlobalRef(Core, :getfield), Core.SlotNumber(2), i
-        )
-        arg = push_inst!(named_tuple_ssa)
-        push!(fn_args, arg)
-    end
-
-    thunk = Thunk{f}(mi)
-    mi_thunk = Base.method_instance(thunk, args[2:end]; world)
-    #@error CC._findsup(Tuple{thunk,args[2:end]...}, nothing, world)
-    @lk thunk mi_thunk args
-
-    isnothing(mi_thunk) &&
-        return stub(world, source, :(throw("Thunk method instance is invalid")))
-    
-    result = push_inst!(
-        Expr(
-            :invoke,
-            mi_thunk, thunk,
-            fn_args...
-        ),
-    )
-    push_inst!(Core.ReturnNode(result))
-
-    code_info.min_world = typemin(UInt)
-    code_info.max_world = typemax(UInt)
-    code_info.slotnames = Any[:cr, REDUB_ARGUMENTS_NAME2]
-    code_info.slotflags = UInt8[0x00, 0x00]
-    code_info.code = overdubbed_code
-    code_info.codelocs = overdubbed_codelocs
-    code_info.ssavaluetypes = length(overdubbed_code)
-    code_info.ssaflags = [0x00 for _ in 1:length(overdubbed_code)]
-    @error code_info
-    return code_info
-end
-
-@eval function cr($(REDUB_ARGUMENTS_NAME2)...)
-    $(Expr(:meta, :generated_only))
-    return $(Expr(:meta, :generated, cr_generated))
-end
-
 
 @static if isdefined(Core, :BFloat16)
     nmantissa(::Type{Core.BFloat16}) = 7
