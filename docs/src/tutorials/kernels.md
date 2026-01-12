@@ -58,8 +58,8 @@ yr = square_compiled(xr)
 @assert yr == xr .^ 2  # hide
 ```
 
-The Reactant-compiled function `square_compiled` now runs on whatever device Reactant uses, including CPU, GPU, TPU or distributed settings.
-It will not run on the default device, nor will it require a CUDA-enabled device.
+The Reactant-compiled function `square_compiled` now runs on whatever device Reactant requests, including CPU, GPU, TPU or distributed settings.
+It will not run on the device it was written for, nor will it require a CUDA-enabled device.
 
 ## Kernel raising
 
