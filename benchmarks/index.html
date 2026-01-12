@@ -1,0 +1,717 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, minimum-scale=1.0, initial-scale=1, user-scalable=yes"
+    />
+    <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/modern-normalize@2.0.0/modern-normalize.min.css"
+    />
+    <style>
+      html {
+        font-family: "Comic Sans", BlinkMacSystemFont, -apple-system, "Segoe UI",
+          Roboto, Oxygen, Ubuntu, Cantarell, "Fira Sans", "Droid Sans",
+          "Helvetica Neue", Helvetica, Arial, sans-serif;
+        -webkit-font-smoothing: antialiased;
+        background-color: #fff;
+        font-size: 14px;
+      }
+      body {
+        color: #4a4a4a;
+        margin: 4px;
+        font-size: 1em;
+        font-weight: 400;
+        line-height: 1.2;
+      }
+      header {
+        margin-bottom: 4px;
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+      }
+      .header-item {
+        font-size: 0.9em;
+        line-height: 1.2;
+      }
+      .header-label {
+        margin-right: 4px;
+      }
+      main {
+        width: 100%;
+        display: flex;
+        flex-direction: column;
+      }
+      a {
+        color: #3273dc;
+        cursor: pointer;
+        text-decoration: none;
+      }
+      a:hover {
+        color: #000;
+      }
+      button {
+        color: #fff;
+        background-color: #3298dc;
+        border-color: transparent;
+        cursor: pointer;
+        text-align: center;
+        padding: 4px 8px;
+        border-radius: 3px;
+        font-size: 0.9em;
+      }
+      button:hover {
+        background-color: #2793da;
+        flex: none;
+      }
+      .spacer {
+        flex: auto;
+      }
+      .small {
+        font-size: 0.75rem;
+      }
+      footer {
+        margin-top: 8px;
+        display: flex;
+        align-items: center;
+      }
+      .header-label {
+        margin-right: 4px;
+      }
+      .benchmarks-container {
+        width: 100%;
+      }
+      .table-of-contents {
+        margin: 16px 0 24px 0;
+        padding: 16px;
+        background-color: #f8f9fa;
+        border: 1px solid #e9ecef;
+        border-radius: 8px;
+      }
+      .toc-header {
+        font-size: 20px;
+        font-weight: bold;
+        color: #2c3e50;
+        margin: 0 0 12px 0;
+        padding-bottom: 8px;
+        border-bottom: 2px solid #3498db;
+      }
+      .toc-list {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+      .toc-item {
+        display: inline-block;
+        padding: 6px 12px;
+        background-color: #ffffff;
+        color: #3498db;
+        text-decoration: none;
+        border: 1px solid #3498db;
+        border-radius: 4px;
+        font-size: 14px;
+        font-weight: 500;
+        transition: all 0.2s ease;
+      }
+      .toc-item:hover {
+        background-color: #3498db;
+        color: #ffffff;
+        text-decoration: none;
+      }
+      .benchmark-section {
+        margin-bottom: 24px;
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        padding: 16px;
+        background-color: #f9f9f9;
+      }
+      .benchmark-header {
+        font-size: 18px;
+        font-weight: bold;
+        color: #2c3e50;
+        margin: 0 0 16px 0;
+        padding-bottom: 8px;
+        border-bottom: 2px solid #3498db;
+      }
+      .device-section {
+        margin-bottom: 16px;
+      }
+      .device-header {
+        font-size: 14px;
+        font-weight: 600;
+        color: #34495e;
+        margin: 0 0 8px 0;
+        padding: 4px 8px;
+        background-color: #ecf0f1;
+        border-radius: 4px;
+        display: inline-block;
+      }
+      .device-charts {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(max(200px, 20vw), 1fr));
+        gap: clamp(6px, 1vw, 12px);
+        padding: clamp(4px, 1vw, 8px);
+      }
+      @media (max-width: 768px) {
+        .device-charts {
+          grid-template-columns: 1fr;
+          gap: clamp(6px, 1vw, 10px);
+          padding: clamp(3px, 0.5vw, 6px);
+        }
+        .benchmark-section {
+          padding: 12px;
+        }
+        .table-of-contents {
+          padding: 12px;
+        }
+        .toc-list {
+          gap: 6px;
+        }
+        .toc-item {
+          padding: 4px 8px;
+          font-size: 13px;
+        }
+        .chartCard {
+          max-width: 95vw;
+          height: clamp(280px, 35vh, 380px);
+        }
+      }
+      @media (max-width: 480px) {
+        .device-charts {
+          grid-template-columns: 1fr;
+          gap: clamp(4px, 0.8vw, 8px);
+          padding: clamp(2px, 0.5vw, 4px);
+        }
+        .benchmark-section {
+          padding: 8px;
+          margin-bottom: 16px;
+        }
+        .benchmark-header {
+          font-size: 16px;
+        }
+        .device-header {
+          font-size: 12px;
+        }
+        .table-of-contents {
+          padding: 8px;
+          margin: 8px 0 16px 0;
+        }
+        .toc-header {
+          font-size: 16px;
+        }
+        .toc-list {
+          gap: 4px;
+        }
+        .toc-item {
+          padding: 3px 6px;
+          font-size: 12px;
+        }
+        .chartCard {
+          max-width: 98vw;
+          height: clamp(240px, 30vh, 320px);
+          padding: 4px;
+        }
+        .chart-title {
+          font-size: 11px;
+          margin-bottom: 2px;
+        }
+        .chart-container {
+          margin-bottom: 8px;
+        }
+      }
+      .chartCard {
+        width: 100%;
+        max-width: min(95vw, 800px);
+        height: clamp(350px, 45vh, 550px);
+        padding: clamp(6px, 1vw, 12px);
+        margin: 0;
+        border: 1px solid #e0e0e0;
+        border-radius: 6px;
+        background-color: #fafafa;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        transition: box-shadow 0.2s ease;
+        overflow: hidden;
+      }
+      .chartCard:hover {
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+      }
+      .chart-title {
+        font-size: 13px;
+        font-weight: 600;
+        color: #333;
+        margin-bottom: 4px;
+        text-align: center;
+        border-bottom: 1px solid #3273dc;
+        padding-bottom: 2px;
+        width: 100%;
+      }
+      .chart-container {
+        margin-bottom: 8px;
+        width: 100%;
+      }
+      .option-container {
+        display: flex;
+      }
+      .option-label {
+        margin-right: 8px;
+      }
+      .option {
+        margin-right: 4px;
+      }
+      .disabled {
+        color: #ccc;
+        cursor: default;
+        pointer-events: none;
+      }
+    </style>
+    <title>Benchmarks</title>
+  </head>
+
+  <body>
+    <header id="header">
+      <div class="header-item">
+        <strong class="header-label">Last Update:</strong>
+        <span id="last-update"></span>
+      </div>
+      <div class="header-item">
+        <strong class="header-label">Repository:</strong>
+        <a id="repository-link" rel="noopener"></a>
+      </div>
+      <!-- Only time plots shown -->
+    </header>
+    <main id="main"></main>
+    <footer>
+      <button id="dl-button">Download data as JSON</button>
+      <div class="spacer"></div>
+      <div class="small">
+        Powered by
+        <a
+          rel="noopener"
+          href="https://github.com/marketplace/actions/continuous-benchmark"
+          >github-action-benchmark</a
+        >
+      </div>
+    </footer>
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@2.9.2/dist/Chart.min.js"></script>
+    <script src="data.js"></script>
+    <script id="main-script">
+      "use strict";
+      (function () {
+        // Get option from query string
+        const pageOption = "time";
+
+        // Color palette for cycling
+        const colorPalette = [
+          "#00add8",
+          "#a270ba",
+          "#dea584",
+          "#f1e05a",
+          "#5D6D7E",
+          "#EC7063",
+          "#F4D03F",
+          "#52BE80",
+          "#FF5733",
+          "#33FF57",
+          "#3357FF",
+          "#FF33A1",
+          "#A133FF",
+          "#33FFF6",
+          "#FFC133",
+          "#FF3333",
+        ];
+
+        // Maximum number of commits to show in plots
+        const MAX_COMMITS = 20;
+
+        function init() {
+          function collectBenchesPerTestCase(entries) {
+            const map = new Map();
+            for (const entry of entries) {
+              const { commit, date, tool, benches } = entry;
+              for (const bench of benches) {
+                const result = { commit, date, tool, bench };
+                const splitted_name = bench.name.split("/");
+                const benchmarkName = splitted_name[0];
+                const variant = splitted_name[3];
+                const device = splitted_name[2];
+                const passes = splitted_name[1];
+
+                if (map.get(benchmarkName) === undefined) {
+                  map.set(benchmarkName, new Map());
+                }
+
+                const mapBenchmarkName = map.get(benchmarkName);
+                if (mapBenchmarkName.get(device) === undefined) {
+                  mapBenchmarkName.set(device, new Map());
+                }
+
+                const mapDevice = mapBenchmarkName.get(device);
+                if (mapDevice.get(passes) === undefined) {
+                  mapDevice.set(passes, new Map());
+                }
+
+                const mapPasses = mapDevice.get(passes);
+                if (mapPasses.get(variant) === undefined) {
+                  mapPasses.set(variant, [result]);
+                } else {
+                  mapPasses.get(variant).push(result);
+                }
+              }
+            }
+            return map;
+          }
+
+          const data = window.BENCHMARK_DATA;
+
+          // Render header
+          document.getElementById("last-update").textContent = new Date(
+            data.lastUpdate
+          ).toString();
+          const repoLink = document.getElementById("repository-link");
+          repoLink.href = data.repoUrl;
+          repoLink.textContent = data.repoUrl;
+
+          // Only time option, so no links to render
+
+          // Render footer
+          document.getElementById("dl-button").onclick = () => {
+            const dataUrl = "data:," + JSON.stringify(data, null, 2);
+            const a = document.createElement("a");
+            a.href = dataUrl;
+            a.download = "benchmark_data.json";
+            a.click();
+          };
+
+          // Prepare data points for charts
+          return Object.keys(data.entries).map((name) => ({
+            name,
+            dataSet: collectBenchesPerTestCase(data.entries[name]),
+          }));
+        }
+
+        function renderAllChars(dataSets) {
+          function renderGraph(parent, name, graphData) {
+            const canvas = document.createElement("canvas");
+            canvas.style.width = "100%";
+            canvas.style.height = "100%";
+            canvas.style.maxWidth = "100%";
+            canvas.style.maxHeight = "100%";
+            canvas.style.display = "block"; // Ensure canvas is block level
+            parent.appendChild(canvas);
+
+            // Ensure canvas has dimensions before creating chart
+            const setCanvasDimensions = () => {
+              const rect = canvas.getBoundingClientRect();
+              if (rect.width > 0 && rect.height > 0) {
+                canvas.width = rect.width * window.devicePixelRatio;
+                canvas.height = rect.height * window.devicePixelRatio;
+                canvas.style.width = rect.width + "px";
+                canvas.style.height = rect.height + "px";
+                const ctx = canvas.getContext("2d");
+                ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
+                return true;
+              }
+              return false;
+            };
+
+            // Try to set dimensions immediately, fallback to next frame
+            if (!setCanvasDimensions()) {
+              requestAnimationFrame(setCanvasDimensions);
+            }
+
+            const datasets = [];
+            // Compute min value for y-axis
+            let minY = Infinity;
+            const allCommits = new Map();
+            for (const variantData of graphData.values()) {
+              for (const result of variantData) {
+                allCommits.set(result.commit.id, {
+                  id: result.commit.id,
+                  date: result.date,
+                  commit: result.commit,
+                });
+              }
+            }
+            const sortedCommits = Array.from(allCommits.values())
+              .sort((a, b) => a.date - b.date)  // Oldest first, so latest appears on right
+              .slice(-MAX_COMMITS);  // Take the last MAX_COMMITS (most recent)
+
+            const data = {
+              labels: sortedCommits.map((c) => c.id.slice(0, 7)),
+              datasets,
+            };
+
+            const variantIndices = new Map();
+            const variantNames = [...graphData.keys()].sort();
+            let datasetIndex = 0;
+
+            for (const variantName of variantNames) {
+              const variantData = graphData.get(variantName);
+              const color = colorPalette[datasetIndex % colorPalette.length];
+              // Extract variant for the label
+              const displayLabel = variantName.trim();
+
+              // Create data points aligned with sorted commits
+              const commitMap = new Map(
+                variantData.map((result) => [result.commit.id, result])
+              );
+              const alignedData = sortedCommits.map((commit) => {
+                const result = commitMap.get(commit.id);
+                if (result) {
+                  const val = result.bench.value;
+                  if (val < minY) minY = val;
+                  return val;
+                }
+                return null; // Missing data point
+              });
+
+              const lineData = {
+                label: displayLabel,
+                data: alignedData,
+                borderColor: color,
+                fill: false,
+                lineTension: 0,
+                spanGaps: true, // Connect across missing data points
+              };
+              datasets.push(lineData);
+              variantIndices.set(datasetIndex, variantName);
+              datasetIndex++;
+            }
+
+            const yAxisLabel = "Time (s)";
+            const options = {
+              legend: {
+                display: true,
+                position: "bottom",
+                labels: {
+                  boxWidth: 4,
+                  fontSize: 12,
+                  padding: 4,
+                },
+              },
+              scales: {
+                xAxes: [
+                  {
+                    scaleLabel: {
+                      display: true,
+                      labelString: "commit",
+                    },
+                  },
+                ],
+                yAxes: [
+                  {
+                    scaleLabel: {
+                      display: true,
+                      labelString: yAxisLabel,
+                    },
+                    ticks: {
+                      maxTicksLimit: 5,
+                      callback: function (value, index, values) {
+                        // Format as regular numbers with appropriate precision
+                        if (value === 0) return "0";
+                        if (value < 0.001) return value.toExponential(2);
+                        return value.toFixed(4);
+                      },
+                    },
+                  },
+                ],
+              },
+              tooltips: {
+                enabled: true,
+                mode: "index",
+                intersect: true,
+                callbacks: {
+                  afterTitle: function (items) {
+                    const item = items[0];
+                    const datasetIndex = item.datasetIndex;
+                    const dataIndex = item.index;
+                    const variantName = variantIndices.get(datasetIndex);
+                    const variantData = graphData.get(variantName);
+                    const commitId = sortedCommits[dataIndex].id;
+
+                    // Find the result for this variant and commit
+                    const result = variantData.find(r => r.commit.id === commitId);
+                    if (!result) return ""; // No data for this commit
+
+                    const commit = result.commit;
+                    return (
+                      "\n" +
+                      commit.message +
+                      "\n\n" +
+                      commit.timestamp +
+                      " committed by @" +
+                      commit.author.username +
+                      "\n"
+                    );
+                  },
+                  label: function (item) {
+                    const datasetIndex = item.datasetIndex;
+                    const variantName = variantIndices.get(datasetIndex);
+                    let label = variantName + ": " + item.value;
+                    label += " s";
+                    return label;
+                  },
+                  afterLabel: function (item) {
+                    const datasetIndex = item.datasetIndex;
+                    const dataIndex = item.index;
+                    const variantName = variantIndices.get(datasetIndex);
+                    const variantData = graphData.get(variantName);
+                    const commitId = sortedCommits[dataIndex].id;
+
+                    // Find the result for this variant and commit
+                    const result = variantData.find(r => r.commit.id === commitId);
+                    if (!result || !result.bench.extra) return "";
+
+                    return "\n" + result.bench.extra;
+                  },
+                },
+              },
+              onClick: function (_mouseEvent, activeElems) {
+                if (activeElems.length === 0) {
+                  console.log("got here");
+                  return;
+                }
+
+                const datasetIndex = activeElems[0]._datasetIndex;
+                const dataIndex = activeElems[0]._index;
+                const variantName = variantIndices.get(datasetIndex);
+                const variantData = graphData.get(variantName);
+                const commitId = sortedCommits[dataIndex].id;
+
+                // Find the result for this variant and commit
+                const result = variantData.find(r => r.commit.id === commitId);
+                if (!result) return; // No data for this commit
+
+                window.open(result.commit.url, "_blank");
+              },
+            };
+
+            new Chart(canvas, {
+              type: "line",
+              data,
+              options,
+            });
+          }
+
+          function renderDevice(benchmarkName, device, deviceData, parent) {
+            // Create device section
+            const deviceSection = document.createElement("div");
+            deviceSection.className = "device-section";
+            parent.appendChild(deviceSection);
+
+            // Device header
+            const deviceHeader = document.createElement("h4");
+            deviceHeader.textContent = device.toUpperCase();
+            deviceHeader.className = "device-header";
+            deviceSection.appendChild(deviceHeader);
+
+            // Container for charts in this device
+            const deviceCharts = document.createElement("div");
+            deviceCharts.className = "device-charts";
+            deviceSection.appendChild(deviceCharts);
+
+            const passes = [...deviceData.keys()].sort();
+            for (const pass of passes) {
+              const chartContainer = document.createElement("div");
+              chartContainer.className = "chart-container";
+              deviceCharts.appendChild(chartContainer);
+
+              const graphTitle = pass;
+
+              const titleElem = document.createElement("h6");
+              titleElem.textContent = graphTitle.toUpperCase();
+              titleElem.className = "chart-title";
+              chartContainer.appendChild(titleElem);
+
+              const graphsElem = document.createElement("div");
+              graphsElem.className = "chartCard";
+              chartContainer.appendChild(graphsElem);
+
+              renderGraph(
+                graphsElem,
+                `${benchmarkName} - ${device} - ${pass}`,
+                deviceData.get(pass)
+              );
+            }
+          }
+
+          function renderBenchmark(benchmarkName, benchmarkData, parent) {
+            // Create benchmark section
+            const benchmarkSection = document.createElement("div");
+            benchmarkSection.className = "benchmark-section";
+            benchmarkSection.id = `benchmark-${benchmarkName
+              .toLowerCase()
+              .replace(/[^a-z0-9]/g, "-")}`;
+            parent.appendChild(benchmarkSection);
+
+            // Benchmark header
+            const benchmarkHeader = document.createElement("h3");
+            benchmarkHeader.textContent = benchmarkName.toUpperCase();
+            benchmarkHeader.className = "benchmark-header";
+            benchmarkSection.appendChild(benchmarkHeader);
+
+            const devices = [...benchmarkData.keys()].sort();
+            for (const device of devices) {
+              renderDevice(
+                benchmarkName,
+                device,
+                benchmarkData.get(device),
+                benchmarkSection
+              );
+            }
+          }
+
+          function createTableOfContents(benchmarkNames, parent) {
+            const tocSection = document.createElement("div");
+            tocSection.className = "table-of-contents";
+
+            const tocHeader = document.createElement("h2");
+            tocHeader.textContent = "Benchmark Groups";
+            tocHeader.className = "toc-header";
+            tocSection.appendChild(tocHeader);
+
+            const tocList = document.createElement("div");
+            tocList.className = "toc-list";
+
+            benchmarkNames.forEach((benchmarkName) => {
+              const tocItem = document.createElement("a");
+              tocItem.href = `#benchmark-${benchmarkName
+                .toLowerCase()
+                .replace(/[^a-z0-9]/g, "-")}`;
+              tocItem.textContent = benchmarkName;
+              tocItem.className = "toc-item";
+              tocList.appendChild(tocItem);
+            });
+
+            tocSection.appendChild(tocList);
+            parent.appendChild(tocSection);
+          }
+
+          const main = document.getElementById("main");
+          const dataSet = dataSets[0].dataSet;
+          const benchmarkNames = [...dataSet.keys()].sort();
+
+          // Create table of contents
+          createTableOfContents(benchmarkNames, main);
+
+          const container = document.createElement("div");
+          container.className = "benchmarks-container";
+          main.appendChild(container);
+
+          for (const benchmarkName of benchmarkNames) {
+            renderBenchmark(
+              benchmarkName,
+              dataSet.get(benchmarkName),
+              container
+            );
+          }
+        }
+
+        renderAllChars(init()); // Start
+      })();
+    </script>
+  </body>
+</html>
