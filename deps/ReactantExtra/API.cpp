@@ -159,6 +159,7 @@
 // Cost Analysis
 #include "xla/hlo/ir/hlo_module.h"
 #include "xla/service/hlo_cost_analysis.h"
+#include "xla/xla.pb.h"
 
 #if defined(REACTANT_CUDA) || defined(REACTANT_ROCM)
 #include "xla/service/gpu/model/gpu_hlo_cost_analysis.h"
@@ -177,6 +178,9 @@
 #include "plugin/xprof/worker/stub_factory.h"
 #include "xprof/convert/tool_options.h"
 #include "xprof/pywrap/profiler_plugin_impl.h"
+
+#include "absl/status/statusor.h"
+#include "xla/pjrt/proto/compile_options.pb.h"
 
 using namespace mlir;
 using namespace xla;
@@ -1313,23 +1317,33 @@ GenerateCompileOptions(int64_t device_id, const int64_t *mesh_ids,
   return options;
 }
 
-REACTANT_ABI xla::PjRtLoadedExecutable *
-ClientCompile(PjRtClient *client, MlirModule cmod, int64_t device_id,
-              const int64_t *mesh_ids, int64_t num_mesh_ids,
-              const char *xla_gpu_cuda_data_dir, bool use_shardy_partitioner,
-              int64_t num_replicas, int64_t num_partitions,
-              bool use_spmd_partitioning, bool kernel_cache_enabled,
-              const char *kernel_cache_path, bool autotune_cache_enabled,
-              const char *autotune_cache_path, int process_id) {
-  xla::CompileOptions options = GenerateCompileOptions(
-      device_id, mesh_ids, num_mesh_ids, xla_gpu_cuda_data_dir,
-      use_shardy_partitioner, num_replicas, num_partitions,
-      use_spmd_partitioning, kernel_cache_enabled, kernel_cache_path,
-      autotune_cache_enabled, autotune_cache_path, process_id);
+xla::CompileOptions GenerateCompileOptions(const char *compile_options_proto,
+                                           size_t compile_options_proto_size) {
+  if (compile_options_proto == nullptr || compile_options_proto_size == 0) {
+    return xla::CompileOptions();
+  }
 
+  xla::CompileOptionsProto proto;
+  if (!proto.ParseFromArray(compile_options_proto,
+                            compile_options_proto_size)) {
+    ReactantThrowError("Failed to parse CompileOptionsProto protobuf");
+  }
+
+  auto options_or = xla::CompileOptions::FromProto(proto);
+  if (!options_or.ok()) {
+    ReactantThrowError(options_or.status().ToString().c_str());
+  }
+
+  return std::move(options_or).value();
+}
+
+xla::PjRtLoadedExecutable *ClientCompileInternal(PjRtClient *client,
+                                                 MlirModule cmod,
+                                                 xla::CompileOptions options) {
   mlir::ModuleOp cmod_op = cast<ModuleOp>(*unwrap(cmod));
 
-  if (use_spmd_partitioning && use_shardy_partitioner) {
+  if (options.executable_build_options.use_spmd_partitioning() &&
+      options.executable_build_options.use_shardy_partitioner()) {
     // https://github.com/openxla/xla/blob/b3c641b05692f3712fb3c272e38665fdfa28bdf8/xla/python/py_client.cc#L460
     auto status = xla::ExportShardyForHloRoundTrip(cmod_op);
     if (!status.ok()) {
@@ -1347,6 +1361,33 @@ ClientCompile(PjRtClient *client, MlirModule cmod, int64_t device_id,
     ReactantThrowError(err_stream.str().c_str());
   }
   return std::move(exec_err).value().release();
+}
+
+REACTANT_ABI xla::PjRtLoadedExecutable *
+ClientCompile(PjRtClient *client, MlirModule cmod, int64_t device_id,
+              const int64_t *mesh_ids, int64_t num_mesh_ids,
+              const char *xla_gpu_cuda_data_dir, bool use_shardy_partitioner,
+              int64_t num_replicas, int64_t num_partitions,
+              bool use_spmd_partitioning, bool kernel_cache_enabled,
+              const char *kernel_cache_path, bool autotune_cache_enabled,
+              const char *autotune_cache_path, int process_id) {
+  return ClientCompileInternal(
+      client, cmod,
+      GenerateCompileOptions(
+          device_id, mesh_ids, num_mesh_ids, xla_gpu_cuda_data_dir,
+          use_shardy_partitioner, num_replicas, num_partitions,
+          use_spmd_partitioning, kernel_cache_enabled, kernel_cache_path,
+          autotune_cache_enabled, autotune_cache_path, process_id));
+}
+
+REACTANT_ABI xla::PjRtLoadedExecutable *
+ClientCompileWithProto(PjRtClient *client, MlirModule cmod,
+                       const char *compile_options_proto,
+                       size_t compile_options_proto_size) {
+  return ClientCompileInternal(
+      client, cmod,
+      GenerateCompileOptions(compile_options_proto,
+                             compile_options_proto_size));
 }
 
 REACTANT_ABI void
@@ -1804,28 +1845,18 @@ ifrt_pjrt_array_create(ifrt::PjRtClient *client,
           client, buffer->obj(), /*has_custom_layout*/ false))));
 }
 
-// we might me interested in the `Compiler::Compile` method variant that accepts
-// `Topology`
-REACTANT_ABI HeldIfrtLoadedExecutable *
-ifrt_compile(ifrt::Client *client, MlirModule cmod, int64_t device_id,
-             const int64_t *mesh_ids, int64_t num_mesh_ids,
-             const char *xla_gpu_cuda_data_dir, bool use_shardy_partitioner,
-             int64_t num_replicas, int64_t num_partitions,
-             bool use_spmd_partitioning, bool kernel_cache_enabled,
-             const char *kernel_cache_path, bool autotune_cache_enabled,
-             const char *autotune_cache_path, int process_id) {
-  xla::CompileOptions compile_options = GenerateCompileOptions(
-      device_id, mesh_ids, num_mesh_ids, xla_gpu_cuda_data_dir,
-      use_shardy_partitioner, num_replicas, num_partitions,
-      use_spmd_partitioning, kernel_cache_enabled, kernel_cache_path,
-      autotune_cache_enabled, autotune_cache_path, process_id);
+HeldIfrtLoadedExecutable *
+ifrt_compile_internal(ifrt::Client *client, MlirModule cmod,
+                      xla::CompileOptions compile_options) {
+
   xla::ifrt::DeviceListRef devices = MyValueOrThrow(
       xla::ifrt::GetDeviceListFromXlaCompileOptions(client, compile_options));
   auto options = std::make_unique<xla::ifrt::XlaCompileOptions>(
       compile_options, std::move(devices));
 
   mlir::ModuleOp cmod_op = cast<ModuleOp>(*unwrap(cmod));
-  if (use_spmd_partitioning && use_shardy_partitioner) {
+  if (compile_options.executable_build_options.use_spmd_partitioning() &&
+      compile_options.executable_build_options.use_shardy_partitioner()) {
     // https://github.com/openxla/xla/blob/b3c641b05692f3712fb3c272e38665fdfa28bdf8/xla/python/py_client.cc#L460
     auto status = xla::ExportShardyForHloRoundTrip(cmod_op);
     if (!status.ok()) {
@@ -1839,6 +1870,35 @@ ifrt_compile(ifrt::Client *client, MlirModule cmod, int64_t device_id,
 
   return reactant::capture(MyValueOrThrow(
       compiler->CompileAndLoad(std::move(program), std::move(options))));
+}
+
+// we might me interested in the `Compiler::Compile` method variant that accepts
+// `Topology`
+REACTANT_ABI HeldIfrtLoadedExecutable *
+ifrt_compile(ifrt::Client *client, MlirModule cmod, int64_t device_id,
+             const int64_t *mesh_ids, int64_t num_mesh_ids,
+             const char *xla_gpu_cuda_data_dir, bool use_shardy_partitioner,
+             int64_t num_replicas, int64_t num_partitions,
+             bool use_spmd_partitioning, bool kernel_cache_enabled,
+             const char *kernel_cache_path, bool autotune_cache_enabled,
+             const char *autotune_cache_path, int process_id) {
+  return ifrt_compile_internal(
+      client, cmod,
+      GenerateCompileOptions(
+          device_id, mesh_ids, num_mesh_ids, xla_gpu_cuda_data_dir,
+          use_shardy_partitioner, num_replicas, num_partitions,
+          use_spmd_partitioning, kernel_cache_enabled, kernel_cache_path,
+          autotune_cache_enabled, autotune_cache_path, process_id));
+}
+
+REACTANT_ABI HeldIfrtLoadedExecutable *
+ifrt_compile_with_proto(ifrt::Client *client, MlirModule cmod,
+                        const char *compile_options_proto,
+                        size_t compile_options_proto_size) {
+  return ifrt_compile_internal(
+      client, cmod,
+      GenerateCompileOptions(compile_options_proto,
+                             compile_options_proto_size));
 }
 
 REACTANT_ABI void
@@ -3278,19 +3338,8 @@ REACTANT_ABI void reactantXLAExec(LinkableRuntime **__restrict__ lrtP,
       exit(1);
     }
 
-    int device_id = lrt->device;
-    int64_t *mesh_ids = nullptr;
-    int num_mesh_ids = 0;
-    const char *xla_gpu_cuda_data_dir = "";
-    bool use_shardy_partitioner = false;
-    int64_t num_replicas = 1;
-    int64_t num_partitions = 1;
-    bool use_spmd_partitioning = false;
     auto exec =
-        ClientCompile(lrt->client, wrap(module.get()), device_id, mesh_ids,
-                      num_mesh_ids, xla_gpu_cuda_data_dir,
-                      use_shardy_partitioner, num_replicas, num_partitions,
-                      use_spmd_partitioning, false, nullptr, false, nullptr, 0);
+        ClientCompileWithProto(lrt->client, wrap(module.get()), nullptr, 0);
 
     iter = cache.try_emplace(sizeKey, exec).first;
   }

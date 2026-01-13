@@ -1,8 +1,8 @@
 using Reactant, Test, Aqua, ExplicitImports, MethodAnalysis
 
-function get_all_dialects()
+function get_all_submodules(base_module::Module)
     mods = Module[]
-    visit(Reactant.MLIR.Dialects) do obj
+    visit(base_module) do obj
         if isa(obj, Module)
             push!(mods, obj)
             return true     # descend into submodules
@@ -10,6 +10,16 @@ function get_all_dialects()
         false   # but don't descend into anything else (MethodTables, etc.)
     end
     return mods
+end
+
+function issubmodule(mod::Module, parent::Module)
+    while parentmodule(mod) !== mod
+        if parentmodule(mod) === parent
+            return true
+        end
+        mod = parentmodule(mod)
+    end
+    return false
 end
 
 @testset "Aqua" begin
@@ -35,7 +45,15 @@ end
         Aqua.test_undefined_exports(Reactant)
     end
     @testset "Unbound Args" begin
-        Aqua.test_unbound_args(Reactant)
+        methods_with_unbound_args = Aqua.detect_unbound_args_recursively(Reactant)
+        num_unbound_args = 0
+        for method in methods_with_unbound_args
+            if !issubmodule(parentmodule(method), Reactant.Proto)
+                num_unbound_args += 1
+                @warn "Method $(method) has unbound args"
+            end
+        end
+        @test num_unbound_args == 0
     end
     @testset "Project Extras" begin
         Aqua.test_project_extras(Reactant)
@@ -70,11 +88,13 @@ end
             allow_unanalyzable=(
                 Reactant.DotGeneralAlgorithmPreset,
                 Reactant.MLIR.Dialects,
-                get_all_dialects()...,
+                get_all_submodules(Reactant.MLIR.Dialects)...,
+                get_all_submodules(Reactant.Proto)...,
                 Reactant.XLA.OpShardingType,
                 Reactant.Accelerators.TPU.TPUVersion,
                 Reactant.PrecisionConfig,
             ),
+            ignore=(Reactant.Proto,),
         ) === nothing
     end
     @testset "Import via Owner" begin
@@ -86,12 +106,14 @@ end
             allow_unanalyzable=(
                 Reactant.DotGeneralAlgorithmPreset,
                 Reactant.MLIR.Dialects,
-                get_all_dialects()...,
+                get_all_submodules(Reactant.MLIR.Dialects)...,
+                get_all_submodules(Reactant.Proto)...,
                 Reactant.XLA.OpShardingType,
                 Reactant.Accelerators.TPU.TPUVersion,
                 Reactant.PrecisionConfig,
             ),
-            ignore=(:p7zip, :ShardyPropagationOptions),
+            # OneOf is used inside Proto files
+            ignore=(:p7zip, :ShardyPropagationOptions, :OneOf),
         ) === nothing
     end
     @testset "Qualified Accesses" begin

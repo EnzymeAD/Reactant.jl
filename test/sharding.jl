@@ -10,6 +10,13 @@ function fn_test1(x)
     return y, x, z
 end
 
+@testset "Number" begin
+    if length(addressable_devices) ≥ 2
+        mesh = Sharding.Mesh(collect(Int64, 0:(length(addressable_devices) - 1)), ("x",))
+        ConcreteRNumber(2.0; sharding=Sharding.Replicated(mesh))
+    end
+end
+
 @testset "Sharding Across 2 Devices" begin
     if length(addressable_devices) ≥ 2
         mesh = Sharding.Mesh([0 1;], ("x", "y"))
@@ -275,13 +282,15 @@ end
         @test Array(@jit shardy_passes = :to_mhlo_shardings fn_test2(x_ra)) ≈ fn_test2(x)
         @test Array(@jit optimize_then_pad = false fn_test2(x_ra)) ≈ fn_test2(x)
 
-        @testset "Handle Sub-Axis Info" begin
-            @test Reactant.to_rarray(
-                Reactant.TestUtils.construct_test_array(Float32, 142, 142);
-                sharding=Sharding.NamedSharding(
-                    Sharding.Mesh(reshape(0:11, 3, 4), (:x, :y)), (:x, :y)
-                ),
-            ) isa Reactant.ConcreteRArray
+        if length(Reactant.addressable_devices()) ≥ 12
+            @testset "Handle Sub-Axis Info" begin
+                @test Reactant.to_rarray(
+                    Reactant.TestUtils.construct_test_array(Float32, 142, 142);
+                    sharding=Sharding.NamedSharding(
+                        Sharding.Mesh(reshape(0:11, 3, 4), (:x, :y)), (:x, :y)
+                    ),
+                ) isa Reactant.ConcreteRArray
+            end
         end
     else
         @warn "Not enough addressable devices to run sharding tests"

@@ -10,6 +10,180 @@ package(
     default_applicable_licenses = [],
     default_visibility = ["//:__subpackages__"],
 )
+# =============================================================================
+# Proto file collection for Julia bindings generation
+# =============================================================================
+#
+# This section defines rules to collect proto files from XLA/TSL dependencies
+# and stage them for Julia binding generation using ProtoBuf.jl.
+#
+# Usage:
+#   bazel build //:proto_files
+#   julia --project=. make-proto-bindings.jl bazel-bin/proto_files_staging
+#
+# The proto files are exported via exports_files() in the external repos.
+# We reference them using the tf_proto_library source pattern.
+
+# Collect all XLA proto source files into a tar archive
+# The Julia script will extract this to get the proto files with proper structure
+genrule(
+    name = "proto_files",
+    srcs = [
+        # XLA core protos
+        "@xla//xla:xla.proto",
+        "@xla//xla:xla_data.proto",
+        "@xla//xla:autotuning.proto",
+        "@xla//xla:autotune_results.proto",
+        "@xla//xla/service:hlo.proto",
+        "@xla//xla/service:metrics.proto",
+        "@xla//xla/pjrt/proto:execute_options.proto",
+        "@xla//xla/pjrt/proto:compile_options.proto",
+        "@xla//xla/stream_executor:device_description.proto",
+        "@xla//xla/stream_executor/cuda:cuda_compute_capability.proto",
+        "@xla//xla/tsl/protobuf:dnn.proto",
+        # Xprof protos - main files
+        "@org_xprof//plugin/xprof/protobuf:op_metrics.proto",
+        "@org_xprof//plugin/xprof/protobuf:op_stats.proto",
+        "@org_xprof//plugin/xprof/protobuf:op_profile.proto",
+        "@org_xprof//plugin/xprof/protobuf:hlo_stats.proto",
+        "@org_xprof//plugin/xprof/protobuf:kernel_stats.proto",
+        "@org_xprof//plugin/xprof/protobuf:memory_profile.proto",
+        "@org_xprof//plugin/xprof/protobuf:overview_page.proto",
+        "@org_xprof//plugin/xprof/protobuf:input_pipeline.proto",
+        "@org_xprof//plugin/xprof/protobuf:roofline_model.proto",
+        "@org_xprof//plugin/xprof/protobuf:diagnostics.proto",
+        "@org_xprof//plugin/xprof/protobuf:hardware_types.proto",
+        "@org_xprof//plugin/xprof/protobuf:steps_db.proto",
+        "@org_xprof//plugin/xprof/protobuf:trace_events.proto",
+        # Xprof protos - dependencies
+        "@org_xprof//plugin/xprof/protobuf:topology.proto",
+        "@org_xprof//plugin/xprof/protobuf:source_info.proto",
+        "@org_xprof//plugin/xprof/protobuf:task.proto",
+        "@org_xprof//plugin/xprof/protobuf:power_metrics.proto",
+        "@org_xprof//plugin/xprof/protobuf:source_stats.proto",
+        "@org_xprof//plugin/xprof/protobuf:tf_function.proto",
+        # TSL profiler protos
+        "@tsl//tsl/profiler/protobuf:xplane.proto",
+        "@tsl//tsl/profiler/protobuf:profiler_options.proto",
+        "@tsl//tsl/profiler/protobuf:profile.proto",
+        "@tsl//tsl/profiler/protobuf:trace_events.proto",
+    ],
+    outs = ["proto_files.tar"],
+    cmd = """
+        # Create a temporary staging directory
+        STAGING=$$(mktemp -d)
+        mkdir -p $$STAGING/xla
+        mkdir -p $$STAGING/xla/pjrt/proto
+        mkdir -p $$STAGING/xla/service
+        mkdir -p $$STAGING/xla/stream_executor/cuda
+        mkdir -p $$STAGING/xla/tsl/protobuf
+        mkdir -p $$STAGING/tsl/profiler/protobuf
+        mkdir -p $$STAGING/google/protobuf
+        mkdir -p $$STAGING/plugin/xprof/protobuf
+
+        # Process each source file, preserving directory structure
+        for src in $(SRCS); do
+            # Route to correct directory based on path patterns
+            if echo "$$src" | grep -q "xla/service"; then
+                cp $$src $$STAGING/xla/service/
+            elif echo "$$src" | grep -q "xla/pjrt/proto"; then
+                cp $$src $$STAGING/xla/pjrt/proto/
+            elif echo "$$src" | grep -q "xla/stream_executor/cuda"; then
+                cp $$src $$STAGING/xla/stream_executor/cuda/
+            elif echo "$$src" | grep -q "xla/stream_executor"; then
+                cp $$src $$STAGING/xla/stream_executor/
+            elif echo "$$src" | grep -q "xla/tsl/protobuf"; then
+                cp $$src $$STAGING/xla/tsl/protobuf/
+            elif echo "$$src" | grep -q "xla/xla"; then
+                cp $$src $$STAGING/xla/
+            elif echo "$$src" | grep -q "/xla:"; then
+                cp $$src $$STAGING/xla/
+            elif echo "$$src" | grep -q "tsl/profiler"; then
+                cp $$src $$STAGING/tsl/profiler/protobuf/
+            elif echo "$$src" | grep -q "xprof/protobuf"; then
+                cp $$src $$STAGING/plugin/xprof/protobuf/
+            else
+                # Fallback: put in root
+                cp $$src $$STAGING/
+            fi
+        done
+
+        # Patch xla/autotune_results.proto to be package autotune_results
+        sed -i 's/package xla;/package xla_autotuning;/g' $$STAGING/xla/autotune_results.proto
+        sed -i 's/package xla;/package xla_autotuning;/g' $$STAGING/xla/autotuning.proto
+        sed -i 's/package stream_executor.dnn;/package xla_tsl_dnn;/g' $$STAGING/xla/tsl/protobuf/dnn.proto
+
+        # Update usages of stream_executor.dnn to xla_tsl_dnn
+        find $$STAGING -name "*.proto" -type f -exec sed -i 's/stream_executor\\.dnn/xla_tsl_dnn/g' {} +
+
+        # Update usages of xla.AutotuneResults to autotune_results.AutotuneResults
+        find $$STAGING -name "*.proto" -type f -exec sed -i \
+            -e 's/xla\\.AutotuneResults/xla_autotuning.AutotuneResults/g' \
+            -e 's/xla\\.AutotuneLogs/xla_autotuning.AutotuneLogs/g' \
+            -e 's/xla\\.AutotuneResult/xla_autotuning.AutotuneResult/g' \
+            -e 's/xla\\.AutotuningLog/xla_autotuning.AutotuningLog/g' \
+            -e 's/xla\\.CudnnVersion/xla_autotuning.CudnnVersion/g' \
+            -e 's/xla\\.ComputeCapability/xla_autotuning.ComputeCapability/g' \
+            -e 's/xla\\.TritonGemmConfigsProto/xla_autotuning.TritonGemmConfigsProto/g' \
+            {} +
+
+        # Copy google well-known types from the protobuf external repo
+        # These are needed for imports like google/protobuf/any.proto
+        if [ -d "external/com_google_protobuf/src/google/protobuf" ]; then
+            cp external/com_google_protobuf/src/google/protobuf/any.proto $$STAGING/google/protobuf/ 2>/dev/null || true
+            cp external/com_google_protobuf/src/google/protobuf/duration.proto $$STAGING/google/protobuf/ 2>/dev/null || true
+            cp external/com_google_protobuf/src/google/protobuf/timestamp.proto $$STAGING/google/protobuf/ 2>/dev/null || true
+            cp external/com_google_protobuf/src/google/protobuf/wrappers.proto $$STAGING/google/protobuf/ 2>/dev/null || true
+            cp external/com_google_protobuf/src/google/protobuf/empty.proto $$STAGING/google/protobuf/ 2>/dev/null || true
+            cp external/com_google_protobuf/src/google/protobuf/descriptor.proto $$STAGING/google/protobuf/ 2>/dev/null || true
+        fi
+
+        # Create tar archive
+        tar -cf $@ -C $$STAGING .
+
+        # Cleanup
+        rm -rf $$STAGING
+    """,
+    tags = ["proto"],
+    visibility = ["//visibility:public"],
+)
+
+# Julia proto bindings generation rule
+# This invokes ProtoBuf.jl to generate Julia code from the staged protos
+genrule(
+    name = "julia_proto_bindings",
+    srcs = [
+        ":proto_files",
+        "//:Project.toml",
+        "//:Manifest.toml",
+        "//:make-proto-bindings.jl",
+    ],
+    outs = ["proto_bindings.tar"],
+    cmd = """
+        # Create temp directories
+        PROTO_DIR=$$(mktemp -d)
+        OUT_DIR=$$(mktemp -d)
+        
+        # Extract proto files
+        tar -xf $(location :proto_files) -C $$PROTO_DIR
+        
+        # Run Julia to generate bindings
+        $$JULIA --color=yes --project=$(location //:Project.toml) \
+            $(location //:make-proto-bindings.jl) \
+            $$PROTO_DIR $$OUT_DIR
+        
+        # Create output tar
+        tar -cf $@ -C $$OUT_DIR .
+        
+        # Cleanup
+        rm -rf $$PROTO_DIR $$OUT_DIR
+    """,
+    tags = [
+        "jlrule",
+        "proto",
+    ],
+    visibility = ["//visibility:public"],
+)
 
 cc_toolchain_suite(
     name = "ygg_host_toolchain_suite",
@@ -965,6 +1139,7 @@ cc_library(
             "-Wl,-exported_symbol,_BufferToHost",
             "-Wl,-exported_symbol,_FreeClient",
             "-Wl,-exported_symbol,_ClientCompile",
+            "-Wl,-exported_symbol,_ClientCompileWithProto",
             "-Wl,-exported_symbol,_ConvertLLVMStrToMLIR",
             "-Wl,-exported_symbol,_LinkInModule",
             "-Wl,-exported_symbol,_FreeFuture",
@@ -1200,6 +1375,7 @@ cc_library(
         "@xla//xla/tsl/platform:env",
         "@xla//xla/tsl/platform:errors",
         "@xla//xla/service:hlo_proto_cc_impl",
+        "@xla//xla/pjrt/proto:compile_options_proto_cc_impl",
         "@com_google_absl//absl/status:statusor",
     ] + if_cuda([
         "@xla//xla/stream_executor/cuda:cuda_compute_capability_proto_cc_impl",
