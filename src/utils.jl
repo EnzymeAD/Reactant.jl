@@ -314,7 +314,7 @@ end
     end
     quote
         Base.@_inline_meta
-        call_with_reactant(applyfn, ert, $(newargs...))
+        call_with_reactant(ert, applyfn, $(newargs...))
     end
 end
 
