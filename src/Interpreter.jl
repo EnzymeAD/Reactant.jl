@@ -69,10 +69,11 @@ end
 
     # Improve inference by considering call_with_reactant as having the same results as
     # the original call
-    if f === call_with_reactant
-        arginfo2 = ArgInfo(fargs isa Nothing ? nothing : fargs[2:end], argtypes[2:end])
-        return abstract_call(interp, arginfo2::ArgInfo, si, sv, max_methods)
-    end
+    # if f === call_with_reactant
+    #     ccall(:jl_, Cvoid,(Any,), (fargs, argtypes))
+    #     arginfo2 = ArgInfo(fargs isa Nothing ? nothing : fargs[2:end], argtypes[2:end])
+    #     return abstract_call(interp, arginfo2::ArgInfo, si, sv, max_methods)
+    # end
 
     if !should_rewrite_call(typeof(f))
         ninterp = Core.Compiler.NativeInterpreter(interp.world)
