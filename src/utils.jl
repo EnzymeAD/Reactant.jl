@@ -1,6 +1,5 @@
 using LLVM
 using GPUCompiler
-CC = Core.Compiler
 
 struct CompilerParams <: AbstractCompilerParams
     use_native_interp::Bool
@@ -9,7 +8,7 @@ end
 NativeCompilerJob = CompilerJob{NativeCompilerTarget,CompilerParams}
 GPUCompiler.can_throw(@nospecialize(job::NativeCompilerJob)) = true
 function GPUCompiler.method_table(@nospecialize(job::NativeCompilerJob))
-    return CC.method_table(GPUCompiler.get_interpreter(job))
+    return Core.Compiler.method_table(GPUCompiler.get_interpreter(job))
 end
 
 ReactantInterp = Enzyme.Compiler.Interpreter.EnzymeInterpreter{
@@ -23,11 +22,11 @@ function GPUCompiler.get_interpreter(@nospecialize(job::NativeCompilerJob))
     end
 end
 
-function CC.optimize(
-    interp::ReactantInterp, opt::CC.OptimizationState, caller::CC.InferenceResult
+function Core.Compiler.optimize(
+    interp::ReactantInterp, opt::Core.Compiler.OptimizationState, caller::Core.Compiler.InferenceResult
 )
-    CC.@timeit "optimizer" ir = CC.run_passes_ipo_safe(opt.src, opt, caller)
-    CC.ipo_dataflow_analysis!(interp, ir, caller)
+    Core.Compiler.@timeit "optimizer" ir = Core.Compiler.run_passes_ipo_safe(opt.src, opt, caller)
+    Core.Compiler.ipo_dataflow_analysis!(interp, ir, caller)
     mi = opt.linfo
     if !(
         is_reactant_method(mi) || (
@@ -42,8 +41,7 @@ function CC.optimize(
     )
         ir, _ = rewrite_insts!(ir, interp)
     end
-    @error mi ir
-    return CC.finish(interp, opt, ir, caller)
+    return Core.Compiler.finish(interp, opt, ir, caller)
 end
 
 struct CallWithReactant{F} <: Function
