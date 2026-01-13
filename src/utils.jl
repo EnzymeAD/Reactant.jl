@@ -33,20 +33,9 @@ function Core.Compiler.optimize(
     end
     safe_print("pre ir", ir)
     mi = opt.linfo
-    if !(
-        is_reactant_method(mi) || (
-            mi.def.sig isa DataType &&
-            !Core._call_in_world_total(
-                interp.world,
-                should_rewrite_invoke,
-                mi.def.sig.parameters[1],
-                Tuple{mi.def.sig.parameters[2:end]...},
-            )
-        )
-    )
-        ir, _ = rewrite_insts!(ir, interp)
-    end
+    ir, _ = rewrite_insts!(ir, interp)
     safe_print("post ir", ir)
+    Core.Compiler.verify_ir(ir)
     return Core.Compiler.finish(interp, opt, ir, caller)
 end
 
@@ -99,10 +88,6 @@ This originates from https://github.com/JuliaLabs/Cassette.jl/blob/c29b237c1ec0d
 """
 const REDUB_ARGUMENTS_NAME = gensym("redub_arguments")
 
-function throw_method_error(argtys)
-    throw(MethodError(argtys[1], argtys[2:end]))
-end
-
 function has_ancestor(query::Module, target::Module)
     query == target && return true
     while true
@@ -112,15 +97,6 @@ function has_ancestor(query::Module, target::Module)
         query = next
     end
 end
-
-function certain_error()
-    throw(
-        AssertionError(
-            "The inferred code was guaranteed to throw this error. And yet, it didn't. So here we are...",
-        ),
-    )
-end
-
 
 const __skip_rewrite_func_set_lock = ReentrantLock()
 const __skip_rewrite_func_set = Set([
@@ -146,7 +122,6 @@ const __skip_rewrite_func_set = Set([
     typeof(Base.print_to_string),
     typeof(Base.println),
     typeof(Base.Filesystem.joinpath),
-    typeof(certain_error),
     typeof(Base.collect),
     typeof(Base.show),
     typeof(Base.show_delim_array),
@@ -413,7 +388,7 @@ function rewrite_inst(inst, ir, interp, RT)
             return true, rep, Any
         end
     end
-    if isa(inst, Core.ReturnNode) && (!isdefined(inst, :val))
+    if false && isa(inst, Core.ReturnNode) && (!isdefined(inst, :val))
         min_world = Ref{UInt}(typemin(UInt))
         max_world = Ref{UInt}(typemax(UInt))
 
@@ -501,11 +476,21 @@ function rewrite_argnumbers_by_one!(ir)
 end
 
 const call_with_reactant_lock = ReentrantLock()
-const call_with_reactant_cache = Dict{UInt,Tuple{String,String}}()
+const call_with_reactant_cache = Dict{UInt,Tuple{String, Type}}()
 
 @inline function push_inst!(overdubbed_code::Vector{Any}, @nospecialize(inst::Any))
     push!(overdubbed_code, inst)
     return Core.SSAValue(length(overdubbed_code))
+end
+
+struct ReactantRuntimeException
+    msg::Cstring
+end
+
+function Base.showerror(io::IO, ece::ReactantRuntimeException)
+    print(io, "ReactantRuntimeException: Reactant interpretation failed.\n")
+    msg = Base.unsafe_string(ece.msg)
+    print(io, msg, '\n')
 end
 
 # Generator function which ensures that all calls to the function are executed within the ReactantInterpreter
@@ -521,6 +506,7 @@ function call_llvm_generator(world::UInt, source::LineNumberNode, self, @nospeci
     min_world = Ref{UInt}(typemin(UInt))
     max_world = Ref{UInt}(typemax(UInt))
 
+    safe_print("calling llvm_generator", tt)
     use_native_interpreter =
         !Core._call_in_world_total(world, should_rewrite_invoke, f, Tuple{args[2:end]...})
     interp = if use_native_interpreter
@@ -570,7 +556,6 @@ function call_llvm_generator(world::UInt, source::LineNumberNode, self, @nospeci
         overdubbed_code, Expr(:call, Core.GlobalRef(Core, :getfield), Core.SlotNumber(2), 1)
     )
 
-    rt = Enzyme.Compiler.return_type(interp, mi)
 
     if use_native_interpreter
         result = push_inst!(overdubbed_code, Expr(:call, f_arg, fn_args...))
@@ -593,7 +578,6 @@ function call_llvm_generator(world::UInt, source::LineNumberNode, self, @nospeci
         end
 
         code_info.edges = edges
-        code_info.rettype = rt
 
         return code_info
     end
@@ -624,10 +608,74 @@ function call_llvm_generator(world::UInt, source::LineNumberNode, self, @nospeci
             obj = try
                 llvm_module, p = GPUCompiler.compile(:llvm, job)
                 llvm_fn_name = LLVM.name(p.entry)
+		safe_print("meta", p.compiled[mi])
+		safe_print("meta.ci", p.compiled[mi].ci)
+		
+		jlvaluet = convert(LLVMType, Any; allow_boxed=true)
+		ptrt = convert(LLVMType, Core.LLVMPtr{Any, 0}; allow_boxed=true)
+		wrapper_ft = LLVM.FunctionType(jlvaluet, LLVM.LLVMType[jlvaluet, ptrt, LLVM.Int32Type()])
+		wrapper_f = LLVM.Function(llvm_module, "entry", wrapper_ft)
+
+		sfn = LLVM.get_subprogram(p.entry)
+	        if sfn !== nothing
+		   LLVM.set_subprogram!(wrapper_f, sfn)
+	        end
+
+
+		for f in LLVM.functions(llvm_module)
+		    for b in LLVM.blocks(f)
+			term = LLVM.terminator(b)
+			if isa(term, LLVM.UnreachableInst)
+			    shouldemit = true
+			    tmp = term
+			    while true
+				tmp = LLVM.API.LLVMGetPreviousInstruction(tmp)
+				if tmp == C_NULL
+				    break
+				end
+				tmp = LLVM.Instruction(tmp)
+				if isa(tmp, LLVM.CallInst)
+				    cf = LLVM.called_operand(tmp)
+				    if isa(cf, LLVM.Function)
+					nm = LLVM.name(cf)
+					if nm == "gpu_signal_exception" ||
+					   nm == "gpu_report_exception" ||
+					   nm == "ijl_throw" ||
+					   nm == "jl_throw"
+					    shouldemit = false
+					    break
+					end
+				    end
+				end
+			    end
+
+			    if shouldemit
+				b = LLVM.IRBuilder()
+				LLVM.position!(b, term)
+				Enzyme.Compiler.emit_error(
+				    b,
+				    term,
+				    "Reactant: The original primal code hits this error condition, thus differentiating it does not make sense",
+				    ReactantRuntimeException
+				)
+			    end
+			end
+		    end
+	    end
+		builder = LLVM.IRBuilder()
+		entry = LLVM.BasicBlock(wrapper_f, "entry")
+		LLVM.position!(builder, entry)
+
+		args = collect(LLVM.Value, LLVM.parameters(wrapper_f))
+		args[2] = LLVM.bitcast!(builder, args[2], LLVM.PointerType(jlvaluet))
+		res = LLVM.call!(builder, LLVM.function_type(p.entry), p.entry, args)
+		LLVM.ret!(builder, res)
+		push!(LLVM.function_attributes(wrapper_f), LLVM.EnumAttribute("alwaysinline"))
+
 
                 Enzyme.API.EnzymeDumpModuleRef(llvm_module.ref)
                 mod = string(llvm_module)
-                (mod, llvm_fn_name)
+		mod, p.compiled[mi].ci.rettype
             finally
                 LLVM.deactivate(ctx)
                 LLVM.dispose(ts_ctx)
@@ -639,15 +687,21 @@ function call_llvm_generator(world::UInt, source::LineNumberNode, self, @nospeci
         unlock(call_with_reactant_lock)
     end
 
-    (mod, fn) = cached_compilation::Tuple{String,String}
+    mod, rt = cached_compilation::Tuple{String, Type}
+
 
     args_vec = push_inst!(
         overdubbed_code,
-        Expr(:call, GlobalRef(Base, :getindex), GlobalRef(Base, :Any), fn_args...),
-    )
+	Expr(:call, Vector{Any}, undef, length(fn_args)))
+
+    for (i, v) in enumerate(fn_args)
+    push_inst!(overdubbed_code, Expr(:call,
+	       GlobalRef(Base, :setindex!), args_vec, v, i))
+    end
 
     preserve = push_inst!(overdubbed_code, Expr(:gc_preserve_begin, args_vec))
     args_vec = push_inst!(overdubbed_code, Expr(:call, GlobalRef(Base, :pointer), args_vec))
+    args_vec = push_inst!(overdubbed_code, Expr(:call, GlobalRef(Base, :reinterpret), Core.LLVMPtr{Any, 0}, args_vec))
     n_args = length(fn_args)
 
     result = push_inst!(
@@ -655,12 +709,12 @@ function call_llvm_generator(world::UInt, source::LineNumberNode, self, @nospeci
         Expr(
             :call,
             GlobalRef(Base, :llvmcall),
-            (mod, fn),
+            (mod, "entry"),
             Any,
-            Tuple{Any,Ptr{Any},Int},
+	    Tuple{Any,Core.LLVMPtr{Any, 0},Int32},
             f_arg,
             args_vec,
-            n_args,
+	    Int32(n_args),
         ),
     )
 

@@ -36,7 +36,7 @@ end
 
 # Precompilation on 1.10 hits an apparent bug: https://github.com/JuliaLang/julia/issues/56947
 function precompilation_supported()
-    return (VERSION >= v"1.11" || VERSION >= v"1.10.8") && (VERSION < v"1.12-")
+    return VERSION >= v"1.10.8"
 end
 
 if Reactant_jll.is_available()
