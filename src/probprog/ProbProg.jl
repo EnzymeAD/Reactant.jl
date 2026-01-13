@@ -5,6 +5,7 @@ using ..Reactant:
 using ..Compiler: @jit, @compile
 
 include("Types.jl")
+include("Distributions.jl")
 include("FFI.jl")
 include("Modeling.jl")
 include("Display.jl")
@@ -13,6 +14,9 @@ include("MCMC.jl")
 
 # Types.
 export ProbProgTrace, Constraint, Selection, Address
+
+# Distributions.
+export Distribution, Normal
 
 # Utility functions.
 export get_choices, select
