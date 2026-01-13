@@ -1,39 +1,5 @@
 using PrecompileTools: @setup_workload, @compile_workload
 
-function infer_sig(sig)
-    interp = ReactantInterpreter()
-
-    min_world = Ref{UInt}(typemin(UInt))
-    max_world = Ref{UInt}(typemax(UInt))
-
-    lookup_result = lookup_world(
-        sig, interp.world, Core.Compiler.method_table(interp), min_world, max_world
-    )
-    match = lookup_result::Core.MethodMatch
-    # look up the method and code instance
-    mi = ccall(
-        :jl_specializations_get_linfo,
-        Ref{Core.MethodInstance},
-        (Any, Any, Any),
-        match.method,
-        match.spec_types,
-        match.sparams,
-    )
-
-    @static if VERSION < v"1.11"
-        # For older Julia versions, we vendor in some of the code to prevent
-        # having to build the MethodInstance twice.
-        result = CC.InferenceResult(mi, CC.typeinf_lattice(interp))
-        frame = CC.InferenceState(result, :no, interp)
-        @assert !isnothing(frame)
-        CC.typeinf(interp, frame)
-        ir = CC.run_passes(frame.src, CC.OptimizationState(frame, interp), result, nothing)
-        rt = CC.widenconst(CC.ignorelimited(result.result))
-    else
-        ir, rt = CC.typeinf_ircode(interp, mi, nothing)
-    end
-end
-
 # Precompilation on 1.10 hits an apparent bug: https://github.com/JuliaLang/julia/issues/56947
 function precompilation_supported()
     return VERSION >= v"1.10.8"
@@ -54,7 +20,17 @@ if Reactant_jll.is_available()
         @compile_workload begin
             @static if precompilation_supported()
                 x = ConcreteRNumber(2.0; client)
-                compile(sin, (x,); client, optimize=:all)
+		@static if VERSION >= v"1.11"
+                   compile(sin, (x,); client, optimize=:all)
+		else
+		   try
+                     compile(sin, (x,); client, optimize=:all)
+		   catch e
+			   if !(e isa ReactantPrecompilationException)
+				   rethrow()
+			end
+	           end
+		end
                 if x isa ConcreteIFRTNumber
                     XLA.free_buffer(x.data.buffer)
                     x.data.buffer.buffer = C_NULL
@@ -66,7 +42,15 @@ if Reactant_jll.is_available()
                 end
 
                 y = ConcreteRArray([2.0]; client)
-                compile(Base.sum, (y,); client, optimize=:all)
+		@static if VERSION >= v"1.11"
+		  try
+			compile(Base.sum, (y,); client, optimize=:all)
+		   catch e
+			   if !(e isa ReactantPrecompilationException)
+				   rethrow()
+			end
+	           end
+		end
                 if y isa ConcreteIFRTArray
                     XLA.free_buffer(y.data.buffer)
                     y.data.buffer.buffer = C_NULL

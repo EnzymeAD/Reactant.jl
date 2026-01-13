@@ -483,7 +483,7 @@ const call_with_reactant_cache = Dict{UInt,Tuple{String, Type}}()
     return Core.SSAValue(length(overdubbed_code))
 end
 
-struct ReactantRuntimeException
+struct ReactantRuntimeException <: Base.Exception
     msg::Cstring
 end
 
@@ -491,6 +491,13 @@ function Base.showerror(io::IO, ece::ReactantRuntimeException)
     print(io, "ReactantRuntimeException: Reactant interpretation failed.\n")
     msg = Base.unsafe_string(ece.msg)
     print(io, msg, '\n')
+end
+
+struct ReactantPrecompilationException <: Base.Exception
+end
+
+function Base.showerror(io::IO, ece::ReactantPrecompilationException)
+    print(io, "ReactantPrecopmilationException: Precompilation not supported due to null global\n")
 end
 
 # Generator function which ensures that all calls to the function are executed within the ReactantInterpreter
@@ -586,11 +593,12 @@ function call_llvm_generator(world::UInt, source::LineNumberNode, self, @nospeci
         NativeCompilerTarget(; jlruntime=true, llvm_always_inline=false),
         CompilerParams(use_native_interpreter);
         kernel=false,
-        libraries=false,
+        libraries=true,
         toplevel=true,
-        validate=false,
-        strip=false,
         optimize=false,
+	cleanup=false,
+	only_entry=false,
+	validate=false,
         entry_abi=:func,
     )
 
@@ -606,7 +614,13 @@ function call_llvm_generator(world::UInt, source::LineNumberNode, self, @nospeci
             ctx = LLVM.context(ts_ctx)
             LLVM.activate(ctx)
             obj = try
-                llvm_module, p = GPUCompiler.compile(:llvm, job)
+                llvm_module, p = GPUCompiler.emit_llvm(job)
+		for g in LLVM.globals(llvm_module)
+		    if LLVM.haskey(LLVM.metadata(g), "julia.constgv") && LLVM.isnull(LLVM.initializer(g))
+		        throw(ReactantPrecompilationException())
+		    end
+		end
+                Enzyme.API.EnzymeDumpModuleRef(llvm_module.ref)
                 llvm_fn_name = LLVM.name(p.entry)
 		safe_print("meta", p.compiled[mi])
 		safe_print("meta.ci", p.compiled[mi].ci)
@@ -661,7 +675,18 @@ function call_llvm_generator(world::UInt, source::LineNumberNode, self, @nospeci
 			    end
 			end
 		    end
-	    end
+		    if false && !isempty(LLVM.blocks(f))
+			 LLVM.name!(f, "reactant\$"*LLVM.name(f))
+			if Enzyme.Compiler.has_fn_attr(f, LLVM.EnumAttribute("optnone"))
+			    LLVM.delete!(LLVM.function_attributes(f), LLVM.EnumAttribute("optnone"))
+			end
+			if Enzyme.Compiler.has_fn_attr(f, LLVM.EnumAttribute("noinline"))
+			    LLVM.delete!(LLVM.function_attributes(f), LLVM.EnumAttribute("noinline"))
+			end
+			LLVM.linkage!(f, LLVM.API.LLVMInternalLinkage)
+		    end
+		end
+
 		builder = LLVM.IRBuilder()
 		entry = LLVM.BasicBlock(wrapper_f, "entry")
 		LLVM.position!(builder, entry)
@@ -672,6 +697,7 @@ function call_llvm_generator(world::UInt, source::LineNumberNode, self, @nospeci
 		LLVM.ret!(builder, res)
 		push!(LLVM.function_attributes(wrapper_f), LLVM.EnumAttribute("alwaysinline"))
 
+		LLVM.run!(LLVM.GlobalOptPass(), llvm_module)
 
                 Enzyme.API.EnzymeDumpModuleRef(llvm_module.ref)
                 mod = string(llvm_module)
