@@ -11,6 +11,8 @@ function GPUCompiler.method_table(@nospecialize(job::NativeCompilerJob))
     return Core.Compiler.method_table(GPUCompiler.get_interpreter(job))
 end
 
+const DEBUG_INTERP = Ref(false)
+
 ReactantInterp = Enzyme.Compiler.Interpreter.EnzymeInterpreter{
     typeof(Reactant.set_reactant_abi)
 }
@@ -32,7 +34,13 @@ function Core.Compiler.optimize(
         Core.Compiler.ipo_dataflow_analysis!(interp, ir, caller)
     end
     mi = opt.linfo
+		if DEBUG_INTERP[]
+		   safe_print("pre rewrite_insts", ir)
+		end
     ir, _ = rewrite_insts!(ir, interp)
+		if DEBUG_INTERP[]
+		   safe_print("post rewrite_insts", ir)
+		end
     Core.Compiler.verify_ir(ir)
     res = Core.Compiler.finish(interp, opt, ir, caller)
 
@@ -503,7 +511,7 @@ function rewrite_argnumbers_by_one!(ir)
 end
 
 const call_with_reactant_lock = ReentrantLock()
-const call_with_reactant_cache = Dict{UInt,Tuple{String, Type}}()
+const call_with_reactant_cache = Dict{UInt,Tuple{String, Type, Vector{Any}}}()
 
 @inline function push_inst!(overdubbed_code::Vector{Any}, @nospecialize(inst::Any))
     push!(overdubbed_code, inst)
@@ -554,6 +562,10 @@ function call_llvm_generator(world::UInt, source::LineNumberNode, self, ::Type{t
         ReactantInterpreter(; world)
     end
 
+    if DEBUG_INTERP[]
+	safe_print("tt, native_interp", (tt, use_native_interpreter))
+    end
+
     lookup_result = Enzyme.lookup_world(
         tt, world, Core.Compiler.method_table(interp), min_world, max_world
     )
@@ -579,6 +591,10 @@ function call_llvm_generator(world::UInt, source::LineNumberNode, self, ::Type{t
         match.spec_types,
         match.sparams,
     )
+    
+    if DEBUG_INTERP[]
+	safe_print("mi", mi)
+    end
 
     slotnames = Any[:call_llvm_generator, REDUB_ARGUMENTS_NAME]
     overdubbed_code = Any[]
@@ -591,16 +607,28 @@ function call_llvm_generator(world::UInt, source::LineNumberNode, self, ::Type{t
     f_arg = push_inst!(
        overdubbed_code, Expr(:call, Core.GlobalRef(Core, :getfield), Core.SlotNumber(2), 1 + (RT !== nothing))
     )
+    if DEBUG_INTERP[]
+       push_inst!(
+			  overdubbed_code, Expr(:call, safe_print2, "f_arg", f_arg))
+    end
     for i in 2:length(args)
         named_tuple_ssa = push_inst!(overdubbed_code, Expr(
 	       :call, Core.GlobalRef(Core, :getfield), Core.SlotNumber(2), i + (RT !== nothing)
         ))
+        if DEBUG_INTERP[]
+          push_inst!(
+		     overdubbed_code, Expr(:call, safe_print2, "args[$i]", named_tuple_ssa))
+        end
         push!(fn_args, named_tuple_ssa)
     end
 
 
     if use_native_interpreter
         result = push_inst!(overdubbed_code, Expr(:call, f_arg, fn_args...))
+        if DEBUG_INTERP[]
+          push_inst!(
+		     overdubbed_code, Expr(:call, safe_print2, "resultNative", result))
+        end
     	if RT !== nothing
 	    result = push_inst!(overdubbed_code, Expr(:call, Core.typeassert, result, RT))
 	end
@@ -624,6 +652,10 @@ function call_llvm_generator(world::UInt, source::LineNumberNode, self, ::Type{t
         end
 
         code_info.edges = edges
+        
+	if DEBUG_INTERP[]
+		safe_print("code_infoNative", code_info)
+        end
     
         return code_info
     end
@@ -654,16 +686,26 @@ function call_llvm_generator(world::UInt, source::LineNumberNode, self, ::Type{t
             LLVM.activate(ctx)
             obj = try
                 llvm_module, p = GPUCompiler.emit_llvm(job)
+		gmap = Dict{String, UInt}()
 		for g in LLVM.globals(llvm_module)
 		    if LLVM.haskey(LLVM.metadata(g), "julia.constgv") && LLVM.isnull(LLVM.initializer(g))
 		        throw(ReactantPrecompilationException())
 		    end
+		    if LLVM.haskey(LLVM.metadata(g), "julia.constgv")
+		       addr = LLVM.initializer(g)
+		       addr, _ = Enzyme.Compiler.get_base_and_offset(addr; offsetAllowed=false, inttoptr=true)
+		       @assert isa(addr, LLVM.ConstantInt)
+		       gmap[LLVM.name(g)] = convert(UInt, addr)
+		       LLVM.linkage!(g, LLVM.API.LLVMExternalLinkage)
+		       LLVM.initializer!(g, LLVM.null(LLVM.value_type(LLVM.initializer(g))))
+		    end
 		end
-                llvm_fn_name = LLVM.name(p.entry)
+	
+		llvm_fn_name = LLVM.name(p.entry)
 		
 		jlvaluet = convert(LLVMType, Any; allow_boxed=true)
 		ptrt = convert(LLVMType, Core.LLVMPtr{Any, 0}; allow_boxed=true)
-		wrapper_ft = LLVM.FunctionType(jlvaluet, LLVM.LLVMType[jlvaluet, ptrt, LLVM.Int32Type()])
+		wrapper_ft = LLVM.FunctionType(jlvaluet, LLVM.LLVMType[jlvaluet, ptrt, LLVM.Int32Type(), ptrt])
 		wrapper_f = LLVM.Function(llvm_module, "entry", wrapper_ft)
 
 		sfn = LLVM.subprogram(p.entry)
@@ -722,6 +764,7 @@ function call_llvm_generator(world::UInt, source::LineNumberNode, self, ::Type{t
 			LLVM.linkage!(f, LLVM.API.LLVMInternalLinkage)
 		    end
 		end
+		
 
 		builder = LLVM.IRBuilder()
 		entry = LLVM.BasicBlock(wrapper_f, "entry")
@@ -729,14 +772,28 @@ function call_llvm_generator(world::UInt, source::LineNumberNode, self, ::Type{t
 
 		args = collect(LLVM.Value, LLVM.parameters(wrapper_f))
 		args[2] = LLVM.bitcast!(builder, args[2], LLVM.PointerType(jlvaluet))
-		res = LLVM.call!(builder, LLVM.function_type(p.entry), p.entry, args)
+		args[4] = LLVM.bitcast!(builder, args[4], LLVM.PointerType(jlvaluet))
+		
+		globals = Any[]
+		for g in LLVM.globals(llvm_module)
+		    if !LLVM.haskey(LLVM.metadata(g), "julia.constgv")
+			continue
+		    end
+		    gval = load!(builder, jlvaluet, gep!(builder, jlvaluet, args[4], LLVM.Value[LLVM.ConstantInt(length(globals))]))
+		    push!(globals, unsafe_pointer_to_objref(Base.reinterpret(Ptr{Cvoid}, gmap[LLVM.name(g)])))
+		    store!(builder, gval, bitcast!(builder, g, LLVM.PointerType(jlvaluet)))
+		end
+		res = LLVM.call!(builder, LLVM.function_type(p.entry), p.entry, args[1:3])
 		LLVM.ret!(builder, res)
 		push!(LLVM.function_attributes(wrapper_f), LLVM.EnumAttribute("alwaysinline"))
 
 		LLVM.run!(LLVM.GlobalOptPass(), llvm_module)
 
+		if DEBUG_INTERP[]
+			Enzyme.API.EnzymeDumpModuleRef(llvm_module.ref)
+		end
                 mod = string(llvm_module)
-		mod, p.compiled[mi].ci.rettype
+		mod, p.compiled[mi].ci.rettype, globals
             finally
                 LLVM.deactivate(ctx)
                 LLVM.dispose(ts_ctx)
@@ -748,7 +805,7 @@ function call_llvm_generator(world::UInt, source::LineNumberNode, self, ::Type{t
         unlock(call_with_reactant_lock)
     end
 
-    mod, rt = cached_compilation::Tuple{String, Type}
+    mod, rt, globals = cached_compilation::Tuple{String, Type, Vector{Any}}
     if RT !== nothing
 	    @assert rt <: RT
     end
@@ -763,8 +820,12 @@ function call_llvm_generator(world::UInt, source::LineNumberNode, self, ::Type{t
     end
 
     preserve = push_inst!(overdubbed_code, Expr(:gc_preserve_begin, args_vec))
+    preserve2 = push_inst!(overdubbed_code, Expr(:gc_preserve_begin, globals))
     args_vec = push_inst!(overdubbed_code, Expr(:call, GlobalRef(Base, :pointer), args_vec))
     args_vec = push_inst!(overdubbed_code, Expr(:call, GlobalRef(Base, :reinterpret), Core.LLVMPtr{Any, 0}, args_vec))
+    
+    globals_vec = push_inst!(overdubbed_code, Expr(:call, GlobalRef(Base, :pointer), globals))
+    globals_vec = push_inst!(overdubbed_code, Expr(:call, GlobalRef(Base, :reinterpret), Core.LLVMPtr{Any, 0}, globals_vec))
     n_args = length(fn_args)
 
     result = push_inst!(
@@ -774,15 +835,21 @@ function call_llvm_generator(world::UInt, source::LineNumberNode, self, ::Type{t
             GlobalRef(Base, :llvmcall),
             (mod, "entry"),
             Any,
-	    Tuple{Any,Core.LLVMPtr{Any, 0},Int32},
+	    Tuple{Any,Core.LLVMPtr{Any, 0},Int32, Core.LLVMPtr{Any, 0}},
             f_arg,
             args_vec,
 	    Int32(n_args),
+	    globals_vec
         ),
     )
 
     push_inst!(overdubbed_code, Expr(:gc_preserve_end, preserve))
+    push_inst!(overdubbed_code, Expr(:gc_preserve_end, preserve2))
     result = push_inst!(overdubbed_code, Expr(:call, Core.typeassert, result, rt))
+        if DEBUG_INTERP[]
+          push_inst!(
+		     overdubbed_code, Expr(:call, safe_print2, "result", result))
+        end
     push_inst!(overdubbed_code, Core.ReturnNode(result))
 
     code_info = Enzyme.create_fresh_codeinfo(
@@ -803,6 +870,9 @@ function call_llvm_generator(world::UInt, source::LineNumberNode, self, ::Type{t
 
     code_info.edges = edges
     code_info.rettype = rt
+        if DEBUG_INTERP[]
+		safe_print("code_info", code_info)
+        end
     return code_info
 end
 
