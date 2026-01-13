@@ -298,8 +298,8 @@ function is_reactant_method(mi::Core.MethodInstance)
 end
 
 @generated function applyiterate_with_reactant(
-    iteratefn, applyfn, args::Vararg{Any,N}
-) where {N}
+    ert::EnsureReturnType, iteratefn, applyfn, args::Vararg{Any,N}
+) where {N, RT0}
     if iteratefn != typeof(Base.iterate)
         return quote
             error("Unhandled apply_iterate with iteratefn=$iteratefn")
@@ -311,7 +311,7 @@ end
     end
     quote
         Base.@_inline_meta
-        call_with_reactant(applyfn, $(newargs...))
+        call_with_reactant(applyfn, ert, $(newargs...))
     end
 end
 
@@ -666,7 +666,7 @@ function call_llvm_generator(world::UInt, source::LineNumberNode, self, ::Type{t
 		wrapper_ft = LLVM.FunctionType(jlvaluet, LLVM.LLVMType[jlvaluet, ptrt, LLVM.Int32Type()])
 		wrapper_f = LLVM.Function(llvm_module, "entry", wrapper_ft)
 
-		sfn = LLVM.get_subprogram(p.entry)
+		sfn = LLVM.subprogram(p.entry)
 	        if sfn !== nothing
 		   LLVM.set_subprogram!(wrapper_f, sfn)
 	        end
