@@ -302,7 +302,7 @@ end
 
 @generated function applyiterate_with_reactant(
     ert::EnsureReturnType, iteratefn, applyfn, args::Vararg{Any,N}
-) where {N, RT0}
+) where {N}
     if iteratefn != typeof(Base.iterate)
         return quote
             error("Unhandled apply_iterate with iteratefn=$iteratefn")
