@@ -31,10 +31,8 @@ function Core.Compiler.optimize(
         Core.Compiler.@timeit "optimizer" ir = Core.Compiler.run_passes_ipo_safe(opt.src, opt, caller)
         Core.Compiler.ipo_dataflow_analysis!(interp, ir, caller)
     end
-    safe_print("pre ir", ir)
     mi = opt.linfo
     ir, _ = rewrite_insts!(ir, interp)
-    safe_print("post ir", ir)
     Core.Compiler.verify_ir(ir)
     return Core.Compiler.finish(interp, opt, ir, caller)
 end
@@ -513,7 +511,6 @@ function call_llvm_generator(world::UInt, source::LineNumberNode, self, @nospeci
     min_world = Ref{UInt}(typemin(UInt))
     max_world = Ref{UInt}(typemax(UInt))
 
-    safe_print("calling llvm_generator", tt)
     use_native_interpreter =
         !Core._call_in_world_total(world, should_rewrite_invoke, f, Tuple{args[2:end]...})
     interp = if use_native_interpreter
@@ -622,8 +619,6 @@ function call_llvm_generator(world::UInt, source::LineNumberNode, self, @nospeci
 		end
                 Enzyme.API.EnzymeDumpModuleRef(llvm_module.ref)
                 llvm_fn_name = LLVM.name(p.entry)
-		safe_print("meta", p.compiled[mi])
-		safe_print("meta.ci", p.compiled[mi].ci)
 		
 		jlvaluet = convert(LLVMType, Any; allow_boxed=true)
 		ptrt = convert(LLVMType, Core.LLVMPtr{Any, 0}; allow_boxed=true)
@@ -766,7 +761,6 @@ function call_llvm_generator(world::UInt, source::LineNumberNode, self, @nospeci
 
     code_info.edges = edges
     code_info.rettype = rt
-    safe_print("code_info", code_info)
     return code_info
 end
 
