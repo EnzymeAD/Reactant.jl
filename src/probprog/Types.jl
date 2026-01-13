@@ -82,4 +82,8 @@ function _keepalive!(tr::Any)
 end
 
 get_choices(trace::ProbProgTrace) = trace.choices
-select(addrs::Address...) = OrderedSet{Address}([addrs...])
+
+function select(addrs::Address...)
+    sorted_addrs = sort(collect(addrs); by=a -> Tuple(string.(a.path)))
+    return OrderedSet{Address}(sorted_addrs)
+end
