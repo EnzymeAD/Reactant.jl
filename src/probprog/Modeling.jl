@@ -56,6 +56,12 @@ function sample(
     return traced_result
 end
 
+function sample(
+    rng::AbstractRNG, dist::D; symbol::Symbol=gensym("sample")
+) where {D<:Distribution}
+    return sample(rng, sampler(D), params(dist)...; symbol=symbol, logpdf=logpdf_fn(D))
+end
+
 function untraced_call(rng::AbstractRNG, f::Function, args::Vararg{Any,Nargs}) where {Nargs}
     args_with_rng = (rng, args...)
 
