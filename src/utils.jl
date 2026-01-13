@@ -1,24 +1,9 @@
-#leak each argument to a global variable
-macro lk(args...)
-    quote
-        $([:(
-            let val = $(esc(p))
-                global $(esc(p)) = val
-            end
-        ) for p in args]...)
-    end
-end
-
+using LLVM
 using GPUCompiler
 CC = Core.Compiler
 
-
-
-
 struct CompilerParams <: AbstractCompilerParams
-    function CompilerParams()
-        return new()
-    end
+    use_native_interp::Bool
 end
 
 NativeCompilerJob = CompilerJob{NativeCompilerTarget,CompilerParams}
@@ -27,32 +12,37 @@ function GPUCompiler.method_table(@nospecialize(job::NativeCompilerJob))
     return CC.method_table(GPUCompiler.get_interpreter(job))
 end
 
-ReactantInterp = Enzyme.Compiler.Interpreter.EnzymeInterpreter{typeof(Reactant.set_reactant_abi)}
+ReactantInterp = Enzyme.Compiler.Interpreter.EnzymeInterpreter{
+    typeof(Reactant.set_reactant_abi)
+}
 function GPUCompiler.get_interpreter(@nospecialize(job::NativeCompilerJob))
-    Reactant.ReactantInterpreter(; world=job.world)
+    return if job.config.params.use_native_interp
+        Core.Compiler.NativeInterpreter(job.world)
+    else
+        Reactant.ReactantInterpreter(; world=job.world)
+    end
 end
 
-
-call_with_reactant_context_stack = Ref([])
-#TODO: verify this: cannot be used: a call without reactant doesn't need to be transformed
-function optimize(interp::ReactantInterp, opt::CC.OptimizationState, caller::CC.InferenceResult)
+function CC.optimize(
+    interp::ReactantInterp, opt::CC.OptimizationState, caller::CC.InferenceResult
+)
     CC.@timeit "optimizer" ir = CC.run_passes_ipo_safe(opt.src, opt, caller)
     CC.ipo_dataflow_analysis!(interp, ir, caller)
     mi = opt.linfo
-    @error mi
-    if !isempty(call_with_reactant_context_stack[]) &&  last(call_with_reactant_context_stack[]) == mi && !(
+    if !(
         is_reactant_method(mi) || (
             mi.def.sig isa DataType &&
-            !should_rewrite_invoke(
-                mi.def.sig.parameters[1], Tuple{mi.def.sig.parameters[2:end]...}
+            !Core._call_in_world_total(
+                interp.world,
+                should_rewrite_invoke,
+                mi.def.sig.parameters[1],
+                Tuple{mi.def.sig.parameters[2:end]...},
             )
         )
     )
-        @error "rewrite_insts" ir
-        ir, _ = rewrite_insts!(ir, interp, false)
-        @error "rewrited_insts" ir
+        ir, _ = rewrite_insts!(ir, interp)
     end
-
+    @error mi ir
     return CC.finish(interp, opt, ir, caller)
 end
 
@@ -109,52 +99,6 @@ function throw_method_error(argtys)
     throw(MethodError(argtys[1], argtys[2:end]))
 end
 
-@inline function lookup_world(
-    @nospecialize(sig::Type),
-    world::UInt,
-    mt::Union{Nothing,Core.MethodTable},
-    min_world::Ref{UInt},
-    max_world::Ref{UInt},
-)
-    res = ccall(
-        :jl_gf_invoke_lookup_worlds,
-        Any,
-        (Any, Any, Csize_t, Ref{Csize_t}, Ref{Csize_t}),
-        sig,
-        mt,
-        world,
-        min_world,
-        max_world,
-    )
-    return res
-end
-
-@inline function lookup_world(
-    @nospecialize(sig::Type),
-    world::UInt,
-    mt::Core.Compiler.InternalMethodTable,
-    min_world::Ref{UInt},
-    max_world::Ref{UInt},
-)
-    res = lookup_world(sig, mt.world, nothing, min_world, max_world)
-    return res
-end
-
-@inline function lookup_world(
-    @nospecialize(sig::Type),
-    world::UInt,
-    mt::Core.Compiler.OverlayMethodTable,
-    min_world::Ref{UInt},
-    max_world::Ref{UInt},
-)
-    res = lookup_world(sig, mt.world, mt.mt, min_world, max_world)
-    if res !== nothing
-        return res
-    else
-        return lookup_world(sig, mt.world, nothing, min_world, max_world)
-    end
-end
-
 function has_ancestor(query::Module, target::Module)
     query == target && return true
     while true
@@ -164,6 +108,15 @@ function has_ancestor(query::Module, target::Module)
         query = next
     end
 end
+
+function certain_error()
+    throw(
+        AssertionError(
+            "The inferred code was guaranteed to throw this error. And yet, it didn't. So here we are...",
+        ),
+    )
+end
+
 
 const __skip_rewrite_func_set_lock = ReentrantLock()
 const __skip_rewrite_func_set = Set([
@@ -186,7 +139,11 @@ const __skip_rewrite_func_set = Set([
     typeof(Base.argtail),
     typeof(Base.identity),
     typeof(Base.print),
+    typeof(Base.print_to_string),
     typeof(Base.println),
+    typeof(Base.Filesystem.joinpath),
+    typeof(certain_error),
+    typeof(Base.collect),
     typeof(Base.show),
     typeof(Base.show_delim_array),
     typeof(Base.sprint),
@@ -338,6 +295,9 @@ function should_rewrite_invoke(@nospecialize(ft), @nospecialize(args))
     if ft <: typeof(repeat) && (args == Tuple{String,Int64} || args == Tuple{Char,Int64})
         return false
     end
+    if ft === typeof(call_with_reactant)
+        return false
+    end
     return should_rewrite_call(ft)
 end
 
@@ -352,8 +312,6 @@ function is_reactant_method(mi::Core.MethodInstance)
     mt = meth.external_mt
     return mt === REACTANT_METHOD_TABLE
 end
-
-struct MustThrowError end
 
 @generated function applyiterate_with_reactant(
     iteratefn, applyfn, args::Vararg{Any,N}
@@ -373,29 +331,7 @@ struct MustThrowError end
     end
 end
 
-@generated function applyiterate_with_reactant(
-    mt::MustThrowError, iteratefn, applyfn, args::Vararg{Any,N}
-) where {N}
-    @assert iteratefn == typeof(Base.iterate)
-    newargs = Vector{Expr}(undef, N)
-    for i in 1:N
-        @inbounds newargs[i] = :(args[$i]...)
-    end
-    quote
-        Base.@_inline_meta
-        call_with_reactant(mt, applyfn, $(newargs...))
-    end
-end
-
-function certain_error()
-    throw(
-        AssertionError(
-            "The inferred code was guaranteed to throw this error. And yet, it didn't. So here we are...",
-        ),
-    )
-end
-
-function rewrite_inst(inst, ir, interp, RT, guaranteed_error)
+function rewrite_inst(inst, ir, interp, RT)
     if Meta.isexpr(inst, :call)
         # Even if type unstable we do not want (or need) to replace intrinsic
         # calls or builtins with our version.
@@ -405,28 +341,13 @@ function rewrite_inst(inst, ir, interp, RT, guaranteed_error)
         end
         if ft == typeof(Core._apply_iterate)
             ft = Core.Compiler.widenconst(maybe_argextype(inst.args[3], ir))
-            if Base.invokelatest(should_rewrite_call, ft)
-                if RT === Union{}
-                    rep = Expr(
-                        :call,
-                        applyiterate_with_reactant,
-                        MustThrowError(),
-                        inst.args[2:end]...,
-                    )
-                    return true, rep, Union{}
-                else
-                    rep = Expr(:call, applyiterate_with_reactant, inst.args[2:end]...)
-                    return true, rep, Any
-                end
-            end
-        elseif Base.invokelatest(should_rewrite_call, ft)
-            if RT === Union{}
-                rep = Expr(:call, call_with_reactant, MustThrowError(), inst.args...)
-                return true, rep, Union{}
-            else
-                rep = Expr(:call, call_with_reactant, inst.args...)
+            if Core._call_in_world_total(interp.world, should_rewrite_call, ft)
+                rep = Expr(:call, applyiterate_with_reactant, inst.args[2:end]...)
                 return true, rep, Any
             end
+        elseif Core._call_in_world_total(interp.world, should_rewrite_call, ft)
+            rep = Expr(:call, call_with_reactant, inst.args...)
+            return true, rep, Any
         end
     end
     if Meta.isexpr(inst, :invoke)
@@ -443,7 +364,8 @@ function rewrite_inst(inst, ir, interp, RT, guaranteed_error)
             argsig = sig.parameters[4:end]
         end
         argsig = Core.apply_type(Core.Tuple, argsig...)
-        if Base.invokelatest(should_rewrite_invoke, ft, argsig) && !is_reactant_method(omi)
+        if Core._call_in_world_total(interp.world, should_rewrite_invoke, ft, argsig) &&
+            !is_reactant_method(omi)
             method = omi.def::Core.Method
 
             min_world = Ref{UInt}(typemin(UInt))
@@ -452,13 +374,7 @@ function rewrite_inst(inst, ir, interp, RT, guaranteed_error)
             # RT = Any
 
             if !method.isva || !Base.isvarargtype(sig.parameters[end])
-                if RT === Union{}
-                    sig2 = Tuple{
-                        typeof(call_with_reactant),MustThrowError,sig.parameters...
-                    }
-                else
-                    sig2 = Tuple{typeof(call_with_reactant),sig.parameters...}
-                end
+                sig2 = Tuple{typeof(call_with_reactant),sig.parameters...}
             else
                 vartup = inst.args[end]
                 ns = Type[]
@@ -466,21 +382,12 @@ function rewrite_inst(inst, ir, interp, RT, guaranteed_error)
                 for i in 1:(length(inst.args) - 1 - (length(sig.parameters) - 1))
                     push!(ns, eT)
                 end
-                if RT === Union{}
-                    sig2 = Tuple{
-                        typeof(call_with_reactant),
-                        MustThrowError,
-                        sig.parameters[1:(end - 1)]...,
-                        ns...,
-                    }
-                else
-                    sig2 = Tuple{
-                        typeof(call_with_reactant),sig.parameters[1:(end - 1)]...,ns...
-                    }
-                end
+                sig2 = Tuple{
+                    typeof(call_with_reactant),sig.parameters[1:(end - 1)]...,ns...
+                }
             end
 
-            lookup_result = lookup_world(
+            lookup_result = Enzyme.lookup_world(
                 sig2, interp.world, Core.Compiler.method_table(interp), min_world, max_world
             )
 
@@ -495,24 +402,17 @@ function rewrite_inst(inst, ir, interp, RT, guaranteed_error)
                 match.sparams,
             )
             n_method_args = method.nargs
-            if RT === Union{}
-                rep = Expr(
-                    :invoke, mi, call_with_reactant, MustThrowError(), inst.args[2:end]...
-                )
-                return true, rep, Union{}
-            else
-                rep = Expr(:invoke, mi, call_with_reactant, inst.args[2:end]...)
-                return true, rep, Any
-            end
+            rep = Expr(:invoke, mi, call_with_reactant, inst.args[2:end]...)
+            return true, rep, Any
         end
     end
-    if isa(inst, Core.ReturnNode) && (!isdefined(inst, :val) || guaranteed_error)
+    if isa(inst, Core.ReturnNode) && (!isdefined(inst, :val))
         min_world = Ref{UInt}(typemin(UInt))
         max_world = Ref{UInt}(typemax(UInt))
 
         sig2 = Tuple{typeof(certain_error)}
 
-        lookup_result = lookup_world(
+        lookup_result = Enzyme.lookup_world(
             sig2, interp.world, Core.Compiler.method_table(interp), min_world, max_world
         )
 
@@ -536,24 +436,22 @@ function safe_print(name, x)
     return ccall(:jl_, Cvoid, (Any,), name * " " * string(x))
 end
 
-const DEBUG_INTERP = Ref(false)
-
 # Rewrite type unstable calls to recurse into call_with_reactant to ensure
 # they continue to use our interpreter. Reset the derived return type
 # to Any if our interpreter would change the return type of any result.
 # Also rewrite invoke (type stable call) to be :call, since otherwise apparently
 # screws up type inference after this (TODO this should be fixed).
-function rewrite_insts!(ir, interp, guaranteed_error)
+function rewrite_insts!(ir, interp)
     any_changed = false
     for (i, inst) in enumerate(ir.stmts)
         # Explicitly skip any code which returns Union{} so that we throw the error
         # instead of risking a segfault
         RT = inst[:type]
         @static if VERSION < v"1.11"
-            changed, next, RT = rewrite_inst(inst[:inst], ir, interp, RT, guaranteed_error)
+            changed, next, RT = rewrite_inst(inst[:inst], ir, interp, RT)
             Core.Compiler.setindex!(ir.stmts[i], next, :inst)
         else
-            changed, next, RT = rewrite_inst(inst[:stmt], ir, interp, RT, guaranteed_error)
+            changed, next, RT = rewrite_inst(inst[:stmt], ir, interp, RT)
             Core.Compiler.setindex!(ir.stmts[i], next, :stmt)
         end
         if changed
@@ -595,10 +493,13 @@ function rewrite_argnumbers_by_one!(ir)
     return nothing
 end
 
+const call_with_reactant_lock = ReentrantLock()
+const call_with_reactant_cache = Dict{UInt,Tuple{String,String}}()
 
-@noinline barrier(@nospecialize(x), @nospecialize(T::Type = Any)) =
-    CC.inferencebarrier(x)::T
-
+@inline function push_inst!(overdubbed_code::Vector{Any}, @nospecialize(inst::Any))
+    push!(overdubbed_code, inst)
+    return Core.SSAValue(length(overdubbed_code))
+end
 
 # Generator function which ensures that all calls to the function are executed within the ReactantInterpreter
 # In particular this entails two pieces:
@@ -610,116 +511,180 @@ end
 function call_llvm_generator(world::UInt, source::LineNumberNode, self, @nospecialize(args))
     f = args[1]
     tt = Tuple{f,args[2:end]...}
-    match = CC._findsup(tt, REACTANT_METHOD_TABLE, world)
-    match = isnothing(match[1]) ? CC._findsup(tt, nothing, world) : match
+    min_world = Ref{UInt}(typemin(UInt))
+    max_world = Ref{UInt}(typemax(UInt))
+
+    use_native_interpreter =
+        !Core._call_in_world_total(world, should_rewrite_invoke, f, Tuple{args[2:end]...})
+    interp = if use_native_interpreter
+        Core.Compiler.NativeInterpreter(world)
+    else
+        ReactantInterpreter(; world)
+    end
+
+    lookup_result = Enzyme.lookup_world(
+        tt, world, Core.Compiler.method_table(interp), min_world, max_world
+    )
+
+    match = lookup_result::Core.MethodMatch
 
     stub = Core.GeneratedFunctionStub(
         identity, Core.svec(:call_with_reactant, REDUB_ARGUMENTS_NAME), Core.svec()
     )
 
-    if isnothing(match[1])
+    if isnothing(match)
         method_error = :(throw(
             MethodError($REDUB_ARGUMENTS_NAME[1], $REDUB_ARGUMENTS_NAME[2:end], $world)
         ))
         return stub(world, source, method_error)
     end
 
-    mi = CC.specialize_method(match[1])
+    mi = ccall(
+        :jl_specializations_get_linfo,
+        Ref{Core.MethodInstance},
+        (Any, Any, Any),
+        match.method,
+        match.spec_types,
+        match.sparams,
+    )
+
+    slotnames = Any[:call_llvm_generator, REDUB_ARGUMENTS_NAME]
+    overdubbed_code = Any[]
+
+    fn_args = Core.SSAValue[]
+    for i in 2:length(args)
+        named_tuple_ssa = Expr(
+            :call, Core.GlobalRef(Core, :getfield), Core.SlotNumber(2), i
+        )
+        arg = push_inst!(overdubbed_code, named_tuple_ssa)
+        push!(fn_args, arg)
+    end
+    f_arg = push_inst!(
+        overdubbed_code, Expr(:call, Core.GlobalRef(Core, :getfield), Core.SlotNumber(2), 1)
+    )
+
+    rt = Enzyme.Compiler.return_type(interp, mi)
+
+    if use_native_interpreter
+        result = push_inst!(overdubbed_code, Expr(:call, f_arg, fn_args...))
+        push_inst!(overdubbed_code, Core.ReturnNode(result))
+
+        code_info = Enzyme.create_fresh_codeinfo(
+            call_with_reactant, source, world, slotnames, overdubbed_code
+        )
+
+        code_info.min_world = min_world[]
+        code_info.max_world = max_world[]
+
+        edges = Any[mi]
+
+        for gen_sig in (
+            Tuple{typeof(should_rewrite_invoke),Type,Type},
+            Tuple{typeof(should_rewrite_call),Type},
+        )
+            Enzyme.add_edge!(edges, gen_sig)
+        end
+
+        code_info.edges = edges
+        code_info.rettype = rt
+
+        return code_info
+    end
 
     config = CompilerConfig(
         NativeCompilerTarget(; jlruntime=true, llvm_always_inline=false),
-        CompilerParams();
+        CompilerParams(use_native_interpreter);
         kernel=false,
         libraries=false,
         toplevel=true,
         validate=false,
         strip=false,
-        optimize=true,
-        entry_abi=:func)
+        optimize=false,
+        entry_abi=:func,
+    )
 
-    @error "world" mi Int(world) "mi def" Int(mi.def.primary_world)
     job = CompilerJob(mi, config, world)
-    @lk job
+    key = hash(job)
 
-    overdubbed_code = Any[]
-    overdubbed_codelocs = Int32[]
-    code_info = begin
-        ir = CC.IRCode()
-        src = @ccall jl_new_code_info_uninit()::Ref{CC.CodeInfo}
-        src.slotnames = fill(:none, length(ir.argtypes) + 1)
-        src.slotflags = fill(zero(UInt8), length(ir.argtypes))
-        src.slottypes = copy(ir.argtypes)
-        src.rettype = UInt64
-        CC.ir_to_codeinf!(src, ir)
+    # NOTE: no use of lock(::Function)/@lock/get! to keep stack traces clean
+    lock(call_with_reactant_lock)
+    cached_compilation = try
+        obj = Base.get(call_with_reactant_cache, key, nothing)
+        if obj === nothing
+            ts_ctx = JuliaContext()
+            ctx = LLVM.context(ts_ctx)
+            LLVM.activate(ctx)
+            obj = try
+                llvm_module, p = GPUCompiler.compile(:llvm, job)
+                llvm_fn_name = LLVM.name(p.entry)
+
+                mod = string(llvm_module)
+                (mod, llvm_fn_name)
+            finally
+                LLVM.deactivate(ctx)
+                LLVM.dispose(ts_ctx)
+            end
+            call_with_reactant_cache[key] = obj
         end
-
-    JuliaContext() do ctx
-        push!(call_with_reactant_context_stack[], mi)
-        llvm_module, p = GPUCompiler.compile(:llvm, job; validate=false)
-        pop!(call_with_reactant_context_stack[])
-        llvm_fn_name = first(p.compiled)[2][end-1]
-
-
-        function push_inst!(inst)
-            push!(overdubbed_code, inst)
-            push!(overdubbed_codelocs, code_info.codelocs[1])
-            return Core.SSAValue(length(overdubbed_code))
-        end
-        code_info.edges = Core.MethodInstance[job.source]
-        code_info.rettype = Any
-
-
-        fn_args = []
-        for i in 2:length(args)
-            named_tuple_ssa = Expr(
-                :call, Core.GlobalRef(Core, :getfield), Core.SlotNumber(2), i
-            )
-            arg = push_inst!(named_tuple_ssa)
-            push!(fn_args, arg)
-        end
-        
-        f_arg = push_inst!(Expr(:call, Core.GlobalRef(Core, :getfield), Core.SlotNumber(2), 1))
-        args_vec = push_inst!(
-            Expr(:call, GlobalRef(Base, :getindex), GlobalRef(Base, :Any), fn_args...)
-        )
-        args_vec = push_inst!(Expr(:call, GlobalRef(Base, :pointer), args_vec))
-        n_args = length(fn_args)
-        llvm_tuple = push_inst!(Expr(:call, Core.GlobalRef(Core, :tuple), string(llvm_module), llvm_fn_name))
-        rt  = Any
-        result = push_inst!(
-            Expr(
-                :call,
-                GlobalRef(Base, :llvmcall),
-                llvm_tuple,
-                Ptr{rt}, #Change to RT
-                Tuple{Any, Ptr{Any}, Int},
-                f_arg,
-                args_vec,
-                n_args
-            ),
-        )
-        result = push_inst!(Expr(:call, GlobalRef(Base, :unsafe_pointer_to_objref), result))
-        result = push_inst!(Expr(:call, GlobalRef(@__MODULE__, :barrier), result, rt))
-        push_inst!(Core.ReturnNode(result))
+        obj
+    finally
+        unlock(call_with_reactant_lock)
     end
 
-        code_info.min_world = typemin(UInt)
-        code_info.max_world = typemax(UInt)
-        code_info.slotnames = Any[:call_llvm_generator, REDUB_ARGUMENTS_NAME]
-        code_info.slotflags = UInt8[0x00, 0x00]
-        code_info.code = overdubbed_code
-        code_info.codelocs = overdubbed_codelocs
-        code_info.ssavaluetypes = length(overdubbed_code)
-        code_info.ssaflags = [0x00 for _ in 1:length(overdubbed_code)]
-        @error code_info
-        return code_info
+    (mod, fn) = cached_compilation::Tuple{String,String}
+
+    args_vec = push_inst!(
+        overdubbed_code,
+        Expr(:call, GlobalRef(Base, :getindex), GlobalRef(Base, :Any), fn_args...),
+    )
+
+    preserve = push_inst!(overdubbed_code, Expr(:gc_preserve_begin, args_vec))
+    args_vec = push_inst!(overdubbed_code, Expr(:call, GlobalRef(Base, :pointer), args_vec))
+    n_args = length(fn_args)
+
+    result = push_inst!(
+        overdubbed_code,
+        Expr(
+            :call,
+            GlobalRef(Base, :llvmcall),
+            (mod, fn),
+            Any,
+            Tuple{Any,Ptr{Any},Int},
+            f_arg,
+            args_vec,
+            n_args,
+        ),
+    )
+
+    push_inst!(overdubbed_code, Expr(:gc_preserve_end, preserve))
+    result = push_inst!(overdubbed_code, Expr(:call, Core.typeassert, result, rt))
+    push_inst!(overdubbed_code, Core.ReturnNode(result))
+
+    code_info = Enzyme.create_fresh_codeinfo(
+        call_with_reactant, source, world, slotnames, overdubbed_code
+    )
+
+    code_info.min_world = min_world[]
+    code_info.max_world = max_world[]
+
+    edges = Any[mi]
+
+    for gen_sig in (
+        Tuple{typeof(should_rewrite_invoke),Type,Type},
+        Tuple{typeof(should_rewrite_call),Type},
+    )
+        Enzyme.add_edge!(edges, gen_sig)
+    end
+
+    code_info.edges = edges
+    code_info.rettype = rt
+    return code_info
 end
 
 @eval function call_with_reactant($(REDUB_ARGUMENTS_NAME)...)
     $(Expr(:meta, :generated_only))
     return $(Expr(:meta, :generated, call_llvm_generator))
 end
-
 
 @static if isdefined(Core, :BFloat16)
     nmantissa(::Type{Core.BFloat16}) = 7
