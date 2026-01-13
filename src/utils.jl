@@ -31,6 +31,7 @@ function Core.Compiler.optimize(
         Core.Compiler.@timeit "optimizer" ir = Core.Compiler.run_passes_ipo_safe(opt.src, opt, caller)
         Core.Compiler.ipo_dataflow_analysis!(interp, ir, caller)
     end
+    safe_print("pre ir", ir)
     mi = opt.linfo
     if !(
         is_reactant_method(mi) || (
@@ -45,6 +46,7 @@ function Core.Compiler.optimize(
     )
         ir, _ = rewrite_insts!(ir, interp)
     end
+    safe_print("post ir", ir)
     return Core.Compiler.finish(interp, opt, ir, caller)
 end
 
@@ -246,6 +248,9 @@ function should_rewrite_call(@nospecialize(ft))
         return true
     end
     if ft <: Core.IntrinsicFunction || ft <: Core.Builtin
+        return false
+    end
+    if ft === typeof(Base.string)
         return false
     end
     if ft <: Core.Function
@@ -620,6 +625,7 @@ function call_llvm_generator(world::UInt, source::LineNumberNode, self, @nospeci
                 llvm_module, p = GPUCompiler.compile(:llvm, job)
                 llvm_fn_name = LLVM.name(p.entry)
 
+                Enzyme.API.EnzymeDumpModuleRef(llvm_module.ref)
                 mod = string(llvm_module)
                 (mod, llvm_fn_name)
             finally
@@ -680,6 +686,7 @@ function call_llvm_generator(world::UInt, source::LineNumberNode, self, @nospeci
 
     code_info.edges = edges
     code_info.rettype = rt
+    safe_show("code_info", code_info)
     return code_info
 end
 
