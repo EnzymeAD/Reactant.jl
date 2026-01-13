@@ -18,6 +18,9 @@ abstract type AbstractReactantFFTPlan{T} <: AbstractFFTs.Plan{T} end
 AbstractFFTs.fftdims(p::AbstractReactantFFTPlan) = p.dims
 
 reactant_fftplan(p::AbstractReactantFFTPlan) = p
+function reactant_fftplan(p::AbstractFFTs.ScaledPlan) 
+    return AbstractFFTs.ScaledPlan(reactant_fftplan(p.plan), p.scale)
+end
 
 function __permutation_to_move_dims_to_end(dims, N::Integer)
     perm = [i for i in 1:N if i ∉ Set(dims)]
@@ -169,5 +172,47 @@ for op in (:irfft,)
         return copyto!(y, AbstractFFTs.$(op)(x, p.length, fftdims(p)))
     end
 end
+
+
+# Because XLA defines ifft and irfft directly we need to support bfft by adding a normalization
+# factor ifft operations. This is inverse of the usual AbstractFFTs normalization.
+normbfft(::Type{T}, size, dims) where {T} = inv(AbstractFFTs.normalization(real(T), size, dims))
+normbrfft(::Type{T}, size, dims) where {T} = normbfft(T, AbstractFFTs.brfft_output_size(x, d, region), region)
+
+for op in (:bfft, :brfft)
+    normop = Symbol("norm", op)
+    iop = Symbol(replace(string(op), "b" => "i"))
+    @eval function AbstractFFTs.$(op)(x::AnyTracedRArray{T}, dims) where {T}
+        return $(normop)(real(T), size(x), dims) * AbstractFFTs.$(iop)(x, dims)
+    end
+
+
+    planop = Symbol("plan_", op)
+    planiop = Symbol("plan_", iop)
+    @eval function AbstractFFTs.$(planop)(x::Reactant.TracedRArray{T}, dims=1:ndims(x)) where {T}
+        return $(normop)(real(T), size(x), dims) * AbstractFFTs.$(planiop)(x, dims)
+    end
+
+    # No in-place brfft (different array size)
+    if op !== :brfft
+
+        inplaceop = Symbol(op, "!")
+        inplaceiop = Symbol(iop, "!")
+        @eval function AbstractFFTs.$(inplaceop)(x::AnyTracedRArray{T}, dims) where {T}
+            AbstractFFTs.$(inplaceiop)(x, dims)
+            x .*= $(normop)(real(T), size(x), dims)
+            return x
+        end
+
+
+        planop! = Symbol(planop, "!")
+        planiop! = Symbol(planiop, "!")
+        @eval function AbstractFFTs.$(planop!)(x::Reactant.TracedRArray{T}, dims=1:ndims(x)) where {T}
+            return $(normop)(real(T), size(x), dims) * AbstractFFTs.$(planiop!)(x, dims)
+        end
+    end
+end
+
+
 
 end
