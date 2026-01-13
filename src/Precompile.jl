@@ -5,6 +5,9 @@ function precompilation_supported()
      return VERSION >= v"1.10.8"
 end
 
+function clear_oc_cache()
+end
+
 if Reactant_jll.is_available()
     @setup_workload begin
         initialize_dialect()
