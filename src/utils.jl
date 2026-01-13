@@ -686,7 +686,7 @@ function call_llvm_generator(world::UInt, source::LineNumberNode, self, @nospeci
 
     code_info.edges = edges
     code_info.rettype = rt
-    safe_show("code_info", code_info)
+    safe_print("code_info", code_info)
     return code_info
 end
 
