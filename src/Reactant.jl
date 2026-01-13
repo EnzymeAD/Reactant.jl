@@ -123,6 +123,7 @@ unwrapped_eltype(::Type{<:AbstractArray{T,N}}) where {T,N} = unwrapped_eltype(T)
 unwrapped_eltype(::AbstractArray{T,N}) where {T,N} = unwrapped_eltype(T)
 
 include("Ops.jl")
+no_rewrite_ancestor_modules.push_back(Reactant.Ops)
 
 using .Ops: @opcall
 
