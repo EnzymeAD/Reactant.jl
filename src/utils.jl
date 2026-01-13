@@ -224,7 +224,7 @@ macro skip_rewrite_type(typ)
     end
 end
 
-const no_rewrite_ancestor_modules = Module[Reactant.TracedUtils, Reactant.MLIR]
+const no_rewrite_ancestor_modules = Module[Reactant.MLIR]
 function should_rewrite_call(@nospecialize(ft))
     # Don't rewrite builtin or intrinsics, unless they are apply iter or kwcall
     if ft === typeof(Core.kwcall) || ft === typeof(Core._apply_iterate)
