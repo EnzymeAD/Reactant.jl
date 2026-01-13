@@ -157,6 +157,7 @@
 #include "xla/python/ifrt_proxy/server/grpc_server.h"
 
 // Cost Analysis
+#include "xla/debug_options_flags.h"
 #include "xla/hlo/ir/hlo_module.h"
 #include "xla/service/hlo_cost_analysis.h"
 #include "xla/xla.pb.h"
@@ -3678,4 +3679,22 @@ REACTANT_ABI int XSpaceToToolsData(
   *is_binary = result->second;
 
   return 0;
+}
+
+REACTANT_ABI void *ReactantGetDebugOptions(size_t *size) {
+  xla::DebugOptions options = xla::GetDebugOptionsFromFlags();
+  std::string serialized = options.SerializeAsString();
+  *size = serialized.size();
+  void *data = malloc(*size);
+  memcpy(data, serialized.data(), *size);
+  return data;
+}
+
+REACTANT_ABI void *ReactantGetCompileOptions(size_t *size) {
+  xla::CompileOptions options;
+  std::string serialized = options.ToProto()->SerializeAsString();
+  *size = serialized.size();
+  void *data = malloc(*size);
+  memcpy(data, serialized.data(), *size);
+  return data;
 }
