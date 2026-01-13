@@ -120,7 +120,6 @@ const __skip_rewrite_func_set = Set([
     typeof(Base.print_to_string),
     typeof(Base.println),
     typeof(Base.Filesystem.joinpath),
-    typeof(Base.collect),
     typeof(Base.show),
     typeof(Base.show_delim_array),
     typeof(Base.sprint),
