@@ -194,6 +194,7 @@ end
 
 include("TracedPromotion.jl")
 include("TracedUtils.jl")
+no_rewrite_ancestor_modules.push_back(Reactant.TracedUtils)
 
 include("TracedRNumber.jl")
 include("TracedRArray.jl")
