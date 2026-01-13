@@ -154,7 +154,7 @@ function generate_bindings(staging_dir::String, output_dir::String)
             output_dir;
             always_use_modules=true,
             parametrize_oneofs=false,
-            add_kwarg_constructors=true,
+            add_kwarg_constructors=false,
         )
         println("    ✓ Generated bindings for $(length(proto_rel_paths)) proto files")
     catch e
