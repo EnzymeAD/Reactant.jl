@@ -123,7 +123,7 @@ unwrapped_eltype(::Type{<:AbstractArray{T,N}}) where {T,N} = unwrapped_eltype(T)
 unwrapped_eltype(::AbstractArray{T,N}) where {T,N} = unwrapped_eltype(T)
 
 include("Ops.jl")
-push_back!(no_rewrite_ancestor_modules, Reactant.Ops)
+Base.push!(no_rewrite_ancestor_modules, Reactant.Ops)
 
 using .Ops: @opcall
 
@@ -194,7 +194,7 @@ end
 
 include("TracedPromotion.jl")
 include("TracedUtils.jl")
-push_back!(no_rewrite_ancestor_modules, Reactant.TracedUtils)
+Base.push!(no_rewrite_ancestor_modules, Reactant.TracedUtils)
 
 include("TracedRNumber.jl")
 include("TracedRArray.jl")
