@@ -15,7 +15,6 @@ struct PrecisionStats
     compute_16bit_ps::UInt64
     compute_32bit_ps::UInt64
 end
-PrecisionStats(;compute_16bit_ps = zero(UInt64), compute_32bit_ps = zero(UInt64)) = PrecisionStats(compute_16bit_ps, compute_32bit_ps)
 PB.default_values(::Type{PrecisionStats}) = (;compute_16bit_ps = zero(UInt64), compute_32bit_ps = zero(UInt64))
 PB.field_numbers(::Type{PrecisionStats}) = (;compute_16bit_ps = 1, compute_32bit_ps = 2)
 
@@ -65,7 +64,6 @@ struct var"PerformanceInfo.MemoryAccessed"
     memory_space::var"PerformanceInfo.MemoryAccessed.MemorySpace".T
     bytes_accessed::Int64
 end
-var"PerformanceInfo.MemoryAccessed"(;is_read = false, memory_space = var"PerformanceInfo.MemoryAccessed.MemorySpace".UNKNOWN, bytes_accessed = zero(Int64)) = var"PerformanceInfo.MemoryAccessed"(is_read, memory_space, bytes_accessed)
 PB.default_values(::Type{var"PerformanceInfo.MemoryAccessed"}) = (;is_read = false, memory_space = var"PerformanceInfo.MemoryAccessed.MemorySpace".UNKNOWN, bytes_accessed = zero(Int64))
 PB.field_numbers(::Type{var"PerformanceInfo.MemoryAccessed"}) = (;is_read = 1, memory_space = 2, bytes_accessed = 3)
 
@@ -108,7 +106,6 @@ struct var"LayoutAnalysis.Dimension"
     alignment::Int32
     semantics::LayoutDimensionSemantics.T
 end
-var"LayoutAnalysis.Dimension"(;size = zero(Int32), alignment = zero(Int32), semantics = LayoutDimensionSemantics.UNKNOWN_SEMANTICS) = var"LayoutAnalysis.Dimension"(size, alignment, semantics)
 PB.default_values(::Type{var"LayoutAnalysis.Dimension"}) = (;size = zero(Int32), alignment = zero(Int32), semantics = LayoutDimensionSemantics.UNKNOWN_SEMANTICS)
 PB.field_numbers(::Type{var"LayoutAnalysis.Dimension"}) = (;size = 1, alignment = 2, semantics = 3)
 
@@ -151,7 +148,6 @@ struct var"OpMetrics.MemoryAccessed"
     memory_space::UInt64
     bytes_accessed::UInt64
 end
-var"OpMetrics.MemoryAccessed"(;operation_type = var"OpMetrics.MemoryAccessed.OperationType".UNKNOWN, memory_space = zero(UInt64), bytes_accessed = zero(UInt64)) = var"OpMetrics.MemoryAccessed"(operation_type, memory_space, bytes_accessed)
 PB.default_values(::Type{var"OpMetrics.MemoryAccessed"}) = (;operation_type = var"OpMetrics.MemoryAccessed.OperationType".UNKNOWN, memory_space = zero(UInt64), bytes_accessed = zero(UInt64))
 PB.field_numbers(::Type{var"OpMetrics.MemoryAccessed"}) = (;operation_type = 1, memory_space = 2, bytes_accessed = 3)
 
@@ -194,7 +190,6 @@ struct PerformanceInfo
     bytes_accessed::Int64
     memory_accessed_breakdown::Vector{var"PerformanceInfo.MemoryAccessed"}
 end
-PerformanceInfo(;flops = zero(Int64), bytes_accessed = zero(Int64), memory_accessed_breakdown = Vector{var"PerformanceInfo.MemoryAccessed"}()) = PerformanceInfo(flops, bytes_accessed, memory_accessed_breakdown)
 PB.reserved_fields(::Type{PerformanceInfo}) = (names = String[], numbers = Union{Int,UnitRange{Int}}[4])
 PB.default_values(::Type{PerformanceInfo}) = (;flops = zero(Int64), bytes_accessed = zero(Int64), memory_accessed_breakdown = Vector{var"PerformanceInfo.MemoryAccessed"}())
 PB.field_numbers(::Type{PerformanceInfo}) = (;flops = 1, bytes_accessed = 2, memory_accessed_breakdown = 3)
@@ -236,7 +231,6 @@ end
 struct LayoutAnalysis
     dimensions::Vector{var"LayoutAnalysis.Dimension"}
 end
-LayoutAnalysis(;dimensions = Vector{var"LayoutAnalysis.Dimension"}()) = LayoutAnalysis(dimensions)
 PB.default_values(::Type{LayoutAnalysis}) = (;dimensions = Vector{var"LayoutAnalysis.Dimension"}())
 PB.field_numbers(::Type{LayoutAnalysis}) = (;dimensions = 1)
 
@@ -267,7 +261,6 @@ end
 struct MemoryAccessBreakdown
     memory_accessed::Vector{var"OpMetrics.MemoryAccessed"}
 end
-MemoryAccessBreakdown(;memory_accessed = Vector{var"OpMetrics.MemoryAccessed"}()) = MemoryAccessBreakdown(memory_accessed)
 PB.default_values(::Type{MemoryAccessBreakdown}) = (;memory_accessed = Vector{var"OpMetrics.MemoryAccessed"}())
 PB.field_numbers(::Type{MemoryAccessBreakdown}) = (;memory_accessed = 1)
 
@@ -337,7 +330,6 @@ struct var"##Stub#OpMetricsDb" <: var"##Abstract#OpMetricsDb"
 end
 
 const OpMetrics = var"##Stub#OpMetrics"{var"##Stub#OpMetricsDb"}
-OpMetrics(;hlo_module_id = zero(UInt64), name = "", long_name = "", category = "", provenance = "", is_eager = false, occurrences = zero(UInt32), time_ps = zero(UInt64), normalized_time_ps = zero(UInt64), min_time_ps = zero(UInt64), self_time_ps = zero(UInt64), flops = zero(UInt64), model_flops = zero(UInt64), fingerprint = zero(UInt64), bytes_accessed = zero(UInt64), memory_accessed_breakdown = Vector{var"OpMetrics.MemoryAccessed"}(), dma_stall_ps = zero(UInt64), layout = nothing, deduplicated_name = "", children = nothing, num_cores = zero(UInt32), computation_primitive_size = zero(UInt32), autotuned = false, source_info = nothing, core_type = var"OpMetrics.TpuCoreType".UNKNOWN) = OpMetrics(hlo_module_id, name, long_name, category, provenance, is_eager, occurrences, time_ps, normalized_time_ps, min_time_ps, self_time_ps, flops, model_flops, fingerprint, bytes_accessed, memory_accessed_breakdown, dma_stall_ps, layout, deduplicated_name, children, num_cores, computation_primitive_size, autotuned, source_info, core_type)
 PB.reserved_fields(::Type{OpMetrics}) = (names = String[], numbers = Union{Int,UnitRange{Int}}[4, 8, 9])
 PB.default_values(::Type{OpMetrics}) = (;hlo_module_id = zero(UInt64), name = "", long_name = "", category = "", provenance = "", is_eager = false, occurrences = zero(UInt32), time_ps = zero(UInt64), normalized_time_ps = zero(UInt64), min_time_ps = zero(UInt64), self_time_ps = zero(UInt64), flops = zero(UInt64), model_flops = zero(UInt64), fingerprint = zero(UInt64), bytes_accessed = zero(UInt64), memory_accessed_breakdown = Vector{var"OpMetrics.MemoryAccessed"}(), dma_stall_ps = zero(UInt64), layout = nothing, deduplicated_name = "", children = nothing, num_cores = zero(UInt32), computation_primitive_size = zero(UInt32), autotuned = false, source_info = nothing, core_type = var"OpMetrics.TpuCoreType".UNKNOWN)
 PB.field_numbers(::Type{OpMetrics}) = (;hlo_module_id = 13, name = 6, long_name = 20, category = 11, provenance = 12, is_eager = 18, occurrences = 3, time_ps = 7, normalized_time_ps = 27, min_time_ps = 17, self_time_ps = 1, flops = 2, model_flops = 24, fingerprint = 25, bytes_accessed = 5, memory_accessed_breakdown = 19, dma_stall_ps = 10, layout = 14, deduplicated_name = 15, children = 16, num_cores = 21, computation_primitive_size = 22, autotuned = 23, source_info = 26, core_type = 28)
@@ -487,7 +479,6 @@ function PB._encoded_size(x::OpMetrics)
 end
 
 const OpMetricsDb = var"##Stub#OpMetricsDb"
-OpMetricsDb(;metrics_db = Vector{OpMetrics}(), total_host_infeed_enq_duration_ps = zero(UInt64), total_host_infeed_enq_start_timestamp_ps_diff = zero(UInt64), total_time_ps = zero(UInt64), total_op_time_ps = zero(UInt64), normalized_total_op_time_ps = zero(UInt64), precision_stats = nothing, idle_time_ps = zero(UInt64), busy_time_ps = zero(UInt64)) = OpMetricsDb(metrics_db, total_host_infeed_enq_duration_ps, total_host_infeed_enq_start_timestamp_ps_diff, total_time_ps, total_op_time_ps, normalized_total_op_time_ps, precision_stats, idle_time_ps, busy_time_ps)
 PB.reserved_fields(::Type{OpMetricsDb}) = (names = String[], numbers = Union{Int,UnitRange{Int}}[1, 4, 5, 6, 7, 8, 9])
 PB.default_values(::Type{OpMetricsDb}) = (;metrics_db = Vector{OpMetrics}(), total_host_infeed_enq_duration_ps = zero(UInt64), total_host_infeed_enq_start_timestamp_ps_diff = zero(UInt64), total_time_ps = zero(UInt64), total_op_time_ps = zero(UInt64), normalized_total_op_time_ps = zero(UInt64), precision_stats = nothing, idle_time_ps = zero(UInt64), busy_time_ps = zero(UInt64))
 PB.field_numbers(::Type{OpMetricsDb}) = (;metrics_db = 10, total_host_infeed_enq_duration_ps = 2, total_host_infeed_enq_start_timestamp_ps_diff = 3, total_time_ps = 11, total_op_time_ps = 12, normalized_total_op_time_ps = 16, precision_stats = 13, idle_time_ps = 14, busy_time_ps = 15)

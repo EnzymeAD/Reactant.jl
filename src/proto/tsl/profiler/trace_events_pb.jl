@@ -10,7 +10,6 @@ struct Resource
     resource_id::UInt32
     sort_index::UInt32
 end
-Resource(;name = "", resource_id = zero(UInt32), sort_index = zero(UInt32)) = Resource(name, resource_id, sort_index)
 PB.default_values(::Type{Resource}) = (;name = "", resource_id = zero(UInt32), sort_index = zero(UInt32))
 PB.field_numbers(::Type{Resource}) = (;name = 1, resource_id = 2, sort_index = 3)
 
@@ -56,7 +55,6 @@ struct TraceEvent
     duration_ps::UInt64
     args::Dict{String,String}
 end
-TraceEvent(;device_id = zero(UInt32), resource_id = zero(UInt32), name = "", timestamp_ps = zero(UInt64), duration_ps = zero(UInt64), args = Dict{String,String}()) = TraceEvent(device_id, resource_id, name, timestamp_ps, duration_ps, args)
 PB.default_values(::Type{TraceEvent}) = (;device_id = zero(UInt32), resource_id = zero(UInt32), name = "", timestamp_ps = zero(UInt64), duration_ps = zero(UInt64), args = Dict{String,String}())
 PB.field_numbers(::Type{TraceEvent}) = (;device_id = 1, resource_id = 2, name = 3, timestamp_ps = 9, duration_ps = 10, args = 11)
 
@@ -114,7 +112,6 @@ struct Device
     device_id::UInt32
     resources::Dict{UInt32,Resource}
 end
-Device(;name = "", device_id = zero(UInt32), resources = Dict{UInt32,Resource}()) = Device(name, device_id, resources)
 PB.default_values(::Type{Device}) = (;name = "", device_id = zero(UInt32), resources = Dict{UInt32,Resource}())
 PB.field_numbers(::Type{Device}) = (;name = 1, device_id = 2, resources = 3)
 
@@ -156,7 +153,6 @@ struct Trace
     devices::Dict{UInt32,Device}
     trace_events::Vector{TraceEvent}
 end
-Trace(;devices = Dict{UInt32,Device}(), trace_events = Vector{TraceEvent}()) = Trace(devices, trace_events)
 PB.default_values(::Type{Trace}) = (;devices = Dict{UInt32,Device}(), trace_events = Vector{TraceEvent}())
 PB.field_numbers(::Type{Trace}) = (;devices = 1, trace_events = 4)
 

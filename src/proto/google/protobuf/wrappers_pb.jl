@@ -9,7 +9,6 @@ export BytesValue, StringValue
 struct BoolValue
     value::Bool
 end
-BoolValue(;value = false) = BoolValue(value)
 PB.default_values(::Type{BoolValue}) = (;value = false)
 PB.field_numbers(::Type{BoolValue}) = (;value = 1)
 
@@ -40,7 +39,6 @@ end
 struct Int64Value
     value::Int64
 end
-Int64Value(;value = zero(Int64)) = Int64Value(value)
 PB.default_values(::Type{Int64Value}) = (;value = zero(Int64))
 PB.field_numbers(::Type{Int64Value}) = (;value = 1)
 
@@ -71,7 +69,6 @@ end
 struct FloatValue
     value::Float32
 end
-FloatValue(;value = zero(Float32)) = FloatValue(value)
 PB.default_values(::Type{FloatValue}) = (;value = zero(Float32))
 PB.field_numbers(::Type{FloatValue}) = (;value = 1)
 
@@ -102,7 +99,6 @@ end
 struct Int32Value
     value::Int32
 end
-Int32Value(;value = zero(Int32)) = Int32Value(value)
 PB.default_values(::Type{Int32Value}) = (;value = zero(Int32))
 PB.field_numbers(::Type{Int32Value}) = (;value = 1)
 
@@ -133,7 +129,6 @@ end
 struct DoubleValue
     value::Float64
 end
-DoubleValue(;value = zero(Float64)) = DoubleValue(value)
 PB.default_values(::Type{DoubleValue}) = (;value = zero(Float64))
 PB.field_numbers(::Type{DoubleValue}) = (;value = 1)
 
@@ -164,7 +159,6 @@ end
 struct UInt64Value
     value::UInt64
 end
-UInt64Value(;value = zero(UInt64)) = UInt64Value(value)
 PB.default_values(::Type{UInt64Value}) = (;value = zero(UInt64))
 PB.field_numbers(::Type{UInt64Value}) = (;value = 1)
 
@@ -195,7 +189,6 @@ end
 struct UInt32Value
     value::UInt32
 end
-UInt32Value(;value = zero(UInt32)) = UInt32Value(value)
 PB.default_values(::Type{UInt32Value}) = (;value = zero(UInt32))
 PB.field_numbers(::Type{UInt32Value}) = (;value = 1)
 
@@ -226,7 +219,6 @@ end
 struct BytesValue
     value::Vector{UInt8}
 end
-BytesValue(;value = UInt8[]) = BytesValue(value)
 PB.default_values(::Type{BytesValue}) = (;value = UInt8[])
 PB.field_numbers(::Type{BytesValue}) = (;value = 1)
 
@@ -257,7 +249,6 @@ end
 struct StringValue
     value::String
 end
-StringValue(;value = "") = StringValue(value)
 PB.default_values(::Type{StringValue}) = (;value = "")
 PB.field_numbers(::Type{StringValue}) = (;value = 1)
 

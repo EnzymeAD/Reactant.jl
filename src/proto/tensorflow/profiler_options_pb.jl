@@ -10,7 +10,6 @@ export RemoteProfilerSessionManagerOptions
 struct var"ProfileOptions.TraceOptions"
     host_traceme_filter_mask::UInt64
 end
-var"ProfileOptions.TraceOptions"(;host_traceme_filter_mask = zero(UInt64)) = var"ProfileOptions.TraceOptions"(host_traceme_filter_mask)
 PB.default_values(::Type{var"ProfileOptions.TraceOptions"}) = (;host_traceme_filter_mask = zero(UInt64))
 PB.field_numbers(::Type{var"ProfileOptions.TraceOptions"}) = (;host_traceme_filter_mask = 1)
 
@@ -43,7 +42,6 @@ end
 struct var"ProfileOptions.AdvancedConfigValue"
     value::Union{Nothing,OneOf{<:Union{String,Bool,Int64}}}
 end
-var"ProfileOptions.AdvancedConfigValue"(;value = nothing) = var"ProfileOptions.AdvancedConfigValue"(value)
 PB.oneof_field_types(::Type{var"ProfileOptions.AdvancedConfigValue"}) = (;
     value = (;string_value=String, bool_value=Bool, int64_value=Int64),
 )
@@ -108,7 +106,6 @@ struct ProfileOptions
     raise_error_on_start_failure::Bool
     session_id::String
 end
-ProfileOptions(;version = zero(UInt32), device_type = var"ProfileOptions.DeviceType".UNSPECIFIED, include_dataset_ops = false, host_tracer_level = zero(UInt32), device_tracer_level = zero(UInt32), python_tracer_level = zero(UInt32), enable_hlo_proto = false, start_timestamp_ns = zero(UInt64), duration_ms = zero(UInt64), repository_path = "", trace_options = nothing, advanced_configuration = Dict{String,var"ProfileOptions.AdvancedConfigValue"}(), raise_error_on_start_failure = false, session_id = "") = ProfileOptions(version, device_type, include_dataset_ops, host_tracer_level, device_tracer_level, python_tracer_level, enable_hlo_proto, start_timestamp_ns, duration_ms, repository_path, trace_options, advanced_configuration, raise_error_on_start_failure, session_id)
 PB.default_values(::Type{ProfileOptions}) = (;version = zero(UInt32), device_type = var"ProfileOptions.DeviceType".UNSPECIFIED, include_dataset_ops = false, host_tracer_level = zero(UInt32), device_tracer_level = zero(UInt32), python_tracer_level = zero(UInt32), enable_hlo_proto = false, start_timestamp_ns = zero(UInt64), duration_ms = zero(UInt64), repository_path = "", trace_options = nothing, advanced_configuration = Dict{String,var"ProfileOptions.AdvancedConfigValue"}(), raise_error_on_start_failure = false, session_id = "")
 PB.field_numbers(::Type{ProfileOptions}) = (;version = 5, device_type = 6, include_dataset_ops = 1, host_tracer_level = 2, device_tracer_level = 3, python_tracer_level = 4, enable_hlo_proto = 7, start_timestamp_ns = 8, duration_ms = 9, repository_path = 10, trace_options = 11, advanced_configuration = 12, raise_error_on_start_failure = 13, session_id = 14)
 
@@ -208,7 +205,6 @@ struct RemoteProfilerSessionManagerOptions
     max_session_duration_ms::UInt64
     delay_ms::UInt64
 end
-RemoteProfilerSessionManagerOptions(;profiler_options = nothing, service_addresses = Vector{String}(), session_creation_timestamp_ns = zero(UInt64), max_session_duration_ms = zero(UInt64), delay_ms = zero(UInt64)) = RemoteProfilerSessionManagerOptions(profiler_options, service_addresses, session_creation_timestamp_ns, max_session_duration_ms, delay_ms)
 PB.default_values(::Type{RemoteProfilerSessionManagerOptions}) = (;profiler_options = nothing, service_addresses = Vector{String}(), session_creation_timestamp_ns = zero(UInt64), max_session_duration_ms = zero(UInt64), delay_ms = zero(UInt64))
 PB.field_numbers(::Type{RemoteProfilerSessionManagerOptions}) = (;profiler_options = 1, service_addresses = 2, session_creation_timestamp_ns = 3, max_session_duration_ms = 4, delay_ms = 5)
 

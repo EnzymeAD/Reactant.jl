@@ -12,7 +12,6 @@ struct CudaComputeCapabilityProto
     minor::Int32
     feature_extension::var"CudaComputeCapabilityProto.FeatureExtension".T
 end
-CudaComputeCapabilityProto(;major = zero(Int32), minor = zero(Int32), feature_extension = var"CudaComputeCapabilityProto.FeatureExtension".UNSPECIFIED) = CudaComputeCapabilityProto(major, minor, feature_extension)
 PB.default_values(::Type{CudaComputeCapabilityProto}) = (;major = zero(Int32), minor = zero(Int32), feature_extension = var"CudaComputeCapabilityProto.FeatureExtension".UNSPECIFIED)
 PB.field_numbers(::Type{CudaComputeCapabilityProto}) = (;major = 1, minor = 2, feature_extension = 3)
 

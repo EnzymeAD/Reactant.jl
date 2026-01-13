@@ -14,7 +14,6 @@ struct HostIndependentJobInfoResult
     build_target::String
     profile_duration_ms::UInt32
 end
-HostIndependentJobInfoResult(;change_list = zero(Int64), workspace_id = "", snapshot = zero(Int64), build_time = zero(Int64), build_target = "", profile_duration_ms = zero(UInt32)) = HostIndependentJobInfoResult(change_list, workspace_id, snapshot, build_time, build_target, profile_duration_ms)
 PB.default_values(::Type{HostIndependentJobInfoResult}) = (;change_list = zero(Int64), workspace_id = "", snapshot = zero(Int64), build_time = zero(Int64), build_target = "", profile_duration_ms = zero(UInt32))
 PB.field_numbers(::Type{HostIndependentJobInfoResult}) = (;change_list = 1, workspace_id = 5, snapshot = 6, build_time = 2, build_target = 3, profile_duration_ms = 4)
 
@@ -76,7 +75,6 @@ struct CoreDetails
     global_core_id::UInt32
     is_sparse_core::Bool
 end
-CoreDetails(;hostname = "", device_ordinal = zero(UInt32), core_num = zero(UInt32), local_chip_id = zero(UInt32), global_chip_id = zero(UInt32), global_core_id = zero(UInt32), is_sparse_core = false) = CoreDetails(hostname, device_ordinal, core_num, local_chip_id, global_chip_id, global_core_id, is_sparse_core)
 PB.default_values(::Type{CoreDetails}) = (;hostname = "", device_ordinal = zero(UInt32), core_num = zero(UInt32), local_chip_id = zero(UInt32), global_chip_id = zero(UInt32), global_core_id = zero(UInt32), is_sparse_core = false)
 PB.field_numbers(::Type{CoreDetails}) = (;hostname = 1, device_ordinal = 2, core_num = 3, local_chip_id = 4, global_chip_id = 5, global_core_id = 6, is_sparse_core = 7)
 
@@ -141,7 +139,6 @@ struct HostDependentJobInfoResult
     bns_address::String
     profile_time_ns::UInt64
 end
-HostDependentJobInfoResult(;host_id = "", command_line = "", start_time = zero(Int64), bns_address = "", profile_time_ns = zero(UInt64)) = HostDependentJobInfoResult(host_id, command_line, start_time, bns_address, profile_time_ns)
 PB.default_values(::Type{HostDependentJobInfoResult}) = (;host_id = "", command_line = "", start_time = zero(Int64), bns_address = "", profile_time_ns = zero(UInt64))
 PB.field_numbers(::Type{HostDependentJobInfoResult}) = (;host_id = 1, command_line = 2, start_time = 3, bns_address = 4, profile_time_ns = 5)
 
@@ -195,7 +192,6 @@ struct SystemTopology
     z_dimension::Int64
     num_expected_reduced_chips::Int64
 end
-SystemTopology(;x_dimension = zero(Int64), y_dimension = zero(Int64), z_dimension = zero(Int64), num_expected_reduced_chips = zero(Int64)) = SystemTopology(x_dimension, y_dimension, z_dimension, num_expected_reduced_chips)
 PB.default_values(::Type{SystemTopology}) = (;x_dimension = zero(Int64), y_dimension = zero(Int64), z_dimension = zero(Int64), num_expected_reduced_chips = zero(Int64))
 PB.field_numbers(::Type{SystemTopology}) = (;x_dimension = 1, y_dimension = 2, z_dimension = 3, num_expected_reduced_chips = 4)
 
@@ -242,7 +238,6 @@ struct PerformanceCounterResult
     matrix_unit_utilization_percent::Float64
     hbm_utilization_percent::Float64
 end
-PerformanceCounterResult(;matrix_unit_utilization_percent = zero(Float64), hbm_utilization_percent = zero(Float64)) = PerformanceCounterResult(matrix_unit_utilization_percent, hbm_utilization_percent)
 PB.default_values(::Type{PerformanceCounterResult}) = (;matrix_unit_utilization_percent = zero(Float64), hbm_utilization_percent = zero(Float64))
 PB.field_numbers(::Type{PerformanceCounterResult}) = (;matrix_unit_utilization_percent = 1, hbm_utilization_percent = 2)
 
@@ -285,7 +280,6 @@ struct PerfEnv
     has_merged_vmem::Bool
     has_megacore::Bool
 end
-PerfEnv(;peak_tera_flops_per_second = zero(Float64), peak_bw_giga_bytes_per_second = zero(Float64), peak_hbm_bw_giga_bytes_per_second = zero(Float64), peak_bws_giga_bytes_per_second = Vector{Float64}(), ridge_point = zero(Float64), has_cmem = false, has_merged_vmem = false, has_megacore = false) = PerfEnv(peak_tera_flops_per_second, peak_bw_giga_bytes_per_second, peak_hbm_bw_giga_bytes_per_second, peak_bws_giga_bytes_per_second, ridge_point, has_cmem, has_merged_vmem, has_megacore)
 PB.default_values(::Type{PerfEnv}) = (;peak_tera_flops_per_second = zero(Float64), peak_bw_giga_bytes_per_second = zero(Float64), peak_hbm_bw_giga_bytes_per_second = zero(Float64), peak_bws_giga_bytes_per_second = Vector{Float64}(), ridge_point = zero(Float64), has_cmem = false, has_merged_vmem = false, has_megacore = false)
 PB.field_numbers(::Type{PerfEnv}) = (;peak_tera_flops_per_second = 1, peak_bw_giga_bytes_per_second = 4, peak_hbm_bw_giga_bytes_per_second = 2, peak_bws_giga_bytes_per_second = 5, ridge_point = 3, has_cmem = 6, has_merged_vmem = 7, has_megacore = 8)
 
@@ -364,7 +358,6 @@ struct RunEnvironment
     power_metrics::Union{Nothing,PowerMetrics}
     hardware_type::HardwareType.T
 end
-RunEnvironment(;host_count = zero(Int32), task_count = zero(Int32), hostnames = Dict{String,Bool}(), device_type = "", device_core_count = zero(Int32), host_independent_job_info = nothing, host_dependent_job_info = Vector{HostDependentJobInfoResult}(), replica_count = zero(Int32), num_cores_per_replica = zero(Int32), host_trace_level = zero(UInt32), system_topology = nothing, is_training = false, power_metrics = nothing, hardware_type = HardwareType.UNKNOWN_HARDWARE) = RunEnvironment(host_count, task_count, hostnames, device_type, device_core_count, host_independent_job_info, host_dependent_job_info, replica_count, num_cores_per_replica, host_trace_level, system_topology, is_training, power_metrics, hardware_type)
 PB.reserved_fields(::Type{RunEnvironment}) = (names = String[], numbers = Union{Int,UnitRange{Int}}[6, 11])
 PB.default_values(::Type{RunEnvironment}) = (;host_count = zero(Int32), task_count = zero(Int32), hostnames = Dict{String,Bool}(), device_type = "", device_core_count = zero(Int32), host_independent_job_info = nothing, host_dependent_job_info = Vector{HostDependentJobInfoResult}(), replica_count = zero(Int32), num_cores_per_replica = zero(Int32), host_trace_level = zero(UInt32), system_topology = nothing, is_training = false, power_metrics = nothing, hardware_type = HardwareType.UNKNOWN_HARDWARE)
 PB.field_numbers(::Type{RunEnvironment}) = (;host_count = 1, task_count = 2, hostnames = 3, device_type = 4, device_core_count = 5, host_independent_job_info = 7, host_dependent_job_info = 8, replica_count = 9, num_cores_per_replica = 10, host_trace_level = 12, system_topology = 13, is_training = 14, power_metrics = 15, hardware_type = 16)
@@ -473,7 +466,6 @@ struct OpStats
     performance_counter_result::Union{Nothing,PerformanceCounterResult}
     source_stats::Union{Nothing,SourceStats}
 end
-OpStats(;host_op_metrics_db = nothing, device_op_metrics_db = nothing, hlo_metrics_db_complete_steps_only = nothing, perf_env = nothing, step_db = nothing, run_environment = nothing, kernel_stats_db = nothing, tf_function_db = nothing, core_id_to_details = Dict{UInt32,CoreDetails}(), diagnostics = nothing, program_id_to_name_map = Dict{UInt64,String}(), performance_counter_result = nothing, source_stats = nothing) = OpStats(host_op_metrics_db, device_op_metrics_db, hlo_metrics_db_complete_steps_only, perf_env, step_db, run_environment, kernel_stats_db, tf_function_db, core_id_to_details, diagnostics, program_id_to_name_map, performance_counter_result, source_stats)
 PB.reserved_fields(::Type{OpStats}) = (names = String[], numbers = Union{Int,UnitRange{Int}}[7])
 PB.default_values(::Type{OpStats}) = (;host_op_metrics_db = nothing, device_op_metrics_db = nothing, hlo_metrics_db_complete_steps_only = nothing, perf_env = nothing, step_db = nothing, run_environment = nothing, kernel_stats_db = nothing, tf_function_db = nothing, core_id_to_details = Dict{UInt32,CoreDetails}(), diagnostics = nothing, program_id_to_name_map = Dict{UInt64,String}(), performance_counter_result = nothing, source_stats = nothing)
 PB.field_numbers(::Type{OpStats}) = (;host_op_metrics_db = 1, device_op_metrics_db = 2, hlo_metrics_db_complete_steps_only = 10, perf_env = 3, step_db = 4, run_environment = 5, kernel_stats_db = 6, tf_function_db = 8, core_id_to_details = 11, diagnostics = 9, program_id_to_name_map = 12, performance_counter_result = 13, source_stats = 14)

@@ -8,7 +8,6 @@ export AutotuningLogs, var"AutotuneResults.Entry", AutotuneResults
 struct AutotuningLogs
     logs::Vector{AutotuningLog}
 end
-AutotuningLogs(;logs = Vector{AutotuningLog}()) = AutotuningLogs(logs)
 PB.default_values(::Type{AutotuningLogs}) = (;logs = Vector{AutotuningLog}())
 PB.field_numbers(::Type{AutotuningLogs}) = (;logs = 1)
 
@@ -42,7 +41,6 @@ struct var"AutotuneResults.Entry"
     result::Union{Nothing,AutotuneResult}
     version::Int32
 end
-var"AutotuneResults.Entry"(;device = "", hlo = "", result = nothing, version = zero(Int32)) = var"AutotuneResults.Entry"(device, hlo, result, version)
 PB.default_values(::Type{var"AutotuneResults.Entry"}) = (;device = "", hlo = "", result = nothing, version = zero(Int32))
 PB.field_numbers(::Type{var"AutotuneResults.Entry"}) = (;device = 1, hlo = 2, result = 3, version = 4)
 
@@ -89,7 +87,6 @@ struct AutotuneResults
     version::Int32
     results::Vector{var"AutotuneResults.Entry"}
 end
-AutotuneResults(;version = zero(Int32), results = Vector{var"AutotuneResults.Entry"}()) = AutotuneResults(version, results)
 PB.reserved_fields(::Type{AutotuneResults}) = (names = String[], numbers = Union{Int,UnitRange{Int}}[2, 3])
 PB.default_values(::Type{AutotuneResults}) = (;version = zero(Int32), results = Vector{var"AutotuneResults.Entry"}())
 PB.field_numbers(::Type{AutotuneResults}) = (;version = 1, results = 4)

@@ -21,7 +21,6 @@ struct KernelReport
     occurrences::UInt32
     occupancy_pct::Float32
 end
-KernelReport(;name = "", registers_per_thread = zero(UInt32), static_shmem_bytes = zero(UInt32), dynamic_shmem_bytes = zero(UInt32), block_dim = Vector{UInt32}(), grid_dim = Vector{UInt32}(), total_duration_ns = zero(UInt64), min_duration_ns = zero(UInt64), max_duration_ns = zero(UInt64), is_kernel_using_tensor_core = false, is_op_tensor_core_eligible = false, op_name = "", occurrences = zero(UInt32), occupancy_pct = zero(Float32)) = KernelReport(name, registers_per_thread, static_shmem_bytes, dynamic_shmem_bytes, block_dim, grid_dim, total_duration_ns, min_duration_ns, max_duration_ns, is_kernel_using_tensor_core, is_op_tensor_core_eligible, op_name, occurrences, occupancy_pct)
 PB.default_values(::Type{KernelReport}) = (;name = "", registers_per_thread = zero(UInt32), static_shmem_bytes = zero(UInt32), dynamic_shmem_bytes = zero(UInt32), block_dim = Vector{UInt32}(), grid_dim = Vector{UInt32}(), total_duration_ns = zero(UInt64), min_duration_ns = zero(UInt64), max_duration_ns = zero(UInt64), is_kernel_using_tensor_core = false, is_op_tensor_core_eligible = false, op_name = "", occurrences = zero(UInt32), occupancy_pct = zero(Float32))
 PB.field_numbers(::Type{KernelReport}) = (;name = 1, registers_per_thread = 2, static_shmem_bytes = 3, dynamic_shmem_bytes = 4, block_dim = 5, grid_dim = 6, total_duration_ns = 7, min_duration_ns = 8, max_duration_ns = 9, is_kernel_using_tensor_core = 10, is_op_tensor_core_eligible = 11, op_name = 12, occurrences = 13, occupancy_pct = 14)
 
@@ -117,7 +116,6 @@ end
 struct KernelStatsDb
     reports::Vector{KernelReport}
 end
-KernelStatsDb(;reports = Vector{KernelReport}()) = KernelStatsDb(reports)
 PB.default_values(::Type{KernelStatsDb}) = (;reports = Vector{KernelReport}())
 PB.field_numbers(::Type{KernelStatsDb}) = (;reports = 1)
 

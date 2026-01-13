@@ -14,7 +14,6 @@ struct InputTimeBreakdown
     enqueue_us::Float64
     unclassified_non_enqueue_us::Float64
 end
-InputTimeBreakdown(;demanded_file_read_us = zero(Float64), advanced_file_read_us = zero(Float64), preprocessing_us = zero(Float64), enqueue_us = zero(Float64), unclassified_non_enqueue_us = zero(Float64)) = InputTimeBreakdown(demanded_file_read_us, advanced_file_read_us, preprocessing_us, enqueue_us, unclassified_non_enqueue_us)
 PB.default_values(::Type{InputTimeBreakdown}) = (;demanded_file_read_us = zero(Float64), advanced_file_read_us = zero(Float64), preprocessing_us = zero(Float64), enqueue_us = zero(Float64), unclassified_non_enqueue_us = zero(Float64))
 PB.field_numbers(::Type{InputTimeBreakdown}) = (;demanded_file_read_us = 1, advanced_file_read_us = 2, preprocessing_us = 3, enqueue_us = 4, unclassified_non_enqueue_us = 5)
 
@@ -77,7 +76,6 @@ struct PerGenericStepDetails
     host_prepare_ms::Float64
     host_compile_ms::Float64
 end
-PerGenericStepDetails(;step_number = zero(Int32), step_name = "", step_time_ms = zero(Float64), unknown_time_ms = zero(Float64), host_wait_input_ms = zero(Float64), host_to_device_ms = zero(Float64), output_ms = zero(Float64), device_compute_ms = zero(Float64), device_to_device_ms = zero(Float64), device_collectives_ms = zero(Float64), host_compute_ms = zero(Float64), host_prepare_ms = zero(Float64), host_compile_ms = zero(Float64)) = PerGenericStepDetails(step_number, step_name, step_time_ms, unknown_time_ms, host_wait_input_ms, host_to_device_ms, output_ms, device_compute_ms, device_to_device_ms, device_collectives_ms, host_compute_ms, host_prepare_ms, host_compile_ms)
 PB.reserved_fields(::Type{PerGenericStepDetails}) = (names = String[], numbers = Union{Int,UnitRange{Int}}[4])
 PB.default_values(::Type{PerGenericStepDetails}) = (;step_number = zero(Int32), step_name = "", step_time_ms = zero(Float64), unknown_time_ms = zero(Float64), host_wait_input_ms = zero(Float64), host_to_device_ms = zero(Float64), output_ms = zero(Float64), device_compute_ms = zero(Float64), device_to_device_ms = zero(Float64), device_collectives_ms = zero(Float64), host_compute_ms = zero(Float64), host_prepare_ms = zero(Float64), host_compile_ms = zero(Float64))
 PB.field_numbers(::Type{PerGenericStepDetails}) = (;step_number = 1, step_name = 14, step_time_ms = 2, unknown_time_ms = 3, host_wait_input_ms = 11, host_to_device_ms = 12, output_ms = 5, device_compute_ms = 6, device_to_device_ms = 7, device_collectives_ms = 13, host_compute_ms = 8, host_prepare_ms = 9, host_compile_ms = 10)
@@ -180,7 +178,6 @@ struct BottleneckAnalysis
     device_collectives_classification::String
     device_collectives_statement::String
 end
-BottleneckAnalysis(;input_percent = zero(Float64), output_percent = zero(Float64), idle_percent = zero(Float64), compute_percent = zero(Float64), input_classification = "", input_statement = "", kernel_launch_classification = "", kernel_launch_statement = "", all_other_classification = "", all_other_statement = "", device_collectives_classification = "", device_collectives_statement = "") = BottleneckAnalysis(input_percent, output_percent, idle_percent, compute_percent, input_classification, input_statement, kernel_launch_classification, kernel_launch_statement, all_other_classification, all_other_statement, device_collectives_classification, device_collectives_statement)
 PB.default_values(::Type{BottleneckAnalysis}) = (;input_percent = zero(Float64), output_percent = zero(Float64), idle_percent = zero(Float64), compute_percent = zero(Float64), input_classification = "", input_statement = "", kernel_launch_classification = "", kernel_launch_statement = "", all_other_classification = "", all_other_statement = "", device_collectives_classification = "", device_collectives_statement = "")
 PB.field_numbers(::Type{BottleneckAnalysis}) = (;input_percent = 7, output_percent = 8, idle_percent = 9, compute_percent = 10, input_classification = 1, input_statement = 2, kernel_launch_classification = 3, kernel_launch_statement = 4, all_other_classification = 5, all_other_statement = 6, device_collectives_classification = 11, device_collectives_statement = 12)
 
@@ -268,7 +265,6 @@ struct InputPipelineAnalysisRecommendation
     bottleneck_analysis::Union{Nothing,google.protobuf.var"#Any"}
     summary_next_step::String
 end
-InputPipelineAnalysisRecommendation(;details = Vector{String}(), bottleneck_analysis = nothing, summary_next_step = "") = InputPipelineAnalysisRecommendation(details, bottleneck_analysis, summary_next_step)
 PB.default_values(::Type{InputPipelineAnalysisRecommendation}) = (;details = Vector{String}(), bottleneck_analysis = nothing, summary_next_step = "")
 PB.field_numbers(::Type{InputPipelineAnalysisRecommendation}) = (;details = 1, bottleneck_analysis = 2, summary_next_step = 3)
 
@@ -315,7 +311,6 @@ struct InputOpDetails
     self_time_in_percent::Float64
     category::String
 end
-InputOpDetails(;op_name = "", count = zero(UInt64), time_in_ms = zero(Float64), time_in_percent = zero(Float64), self_time_in_ms = zero(Float64), self_time_in_percent = zero(Float64), category = "") = InputOpDetails(op_name, count, time_in_ms, time_in_percent, self_time_in_ms, self_time_in_percent, category)
 PB.default_values(::Type{InputOpDetails}) = (;op_name = "", count = zero(UInt64), time_in_ms = zero(Float64), time_in_percent = zero(Float64), self_time_in_ms = zero(Float64), self_time_in_percent = zero(Float64), category = "")
 PB.field_numbers(::Type{InputOpDetails}) = (;op_name = 1, count = 2, time_in_ms = 3, time_in_percent = 4, self_time_in_ms = 5, self_time_in_percent = 6, category = 7)
 
@@ -379,7 +374,6 @@ struct StepSummary
     minimum::Float64
     maximum::Float64
 end
-StepSummary(;average = zero(Float64), standard_deviation = zero(Float64), minimum = zero(Float64), maximum = zero(Float64)) = StepSummary(average, standard_deviation, minimum, maximum)
 PB.default_values(::Type{StepSummary}) = (;average = zero(Float64), standard_deviation = zero(Float64), minimum = zero(Float64), maximum = zero(Float64))
 PB.field_numbers(::Type{StepSummary}) = (;average = 1, standard_deviation = 2, minimum = 3, maximum = 4)
 
@@ -435,7 +429,6 @@ struct GenericStepTimeBreakdown
     host_prepare_ms_summary::Union{Nothing,StepSummary}
     host_compile_ms_summary::Union{Nothing,StepSummary}
 end
-GenericStepTimeBreakdown(;unknown_time_ms_summary = nothing, host_wait_input_ms_summary = nothing, host_to_device_ms_summary = nothing, input_ms_summary = nothing, output_ms_summary = nothing, device_compute_ms_summary = nothing, device_to_device_ms_summary = nothing, device_collectives_ms_summary = nothing, host_compute_ms_summary = nothing, host_prepare_ms_summary = nothing, host_compile_ms_summary = nothing) = GenericStepTimeBreakdown(unknown_time_ms_summary, host_wait_input_ms_summary, host_to_device_ms_summary, input_ms_summary, output_ms_summary, device_compute_ms_summary, device_to_device_ms_summary, device_collectives_ms_summary, host_compute_ms_summary, host_prepare_ms_summary, host_compile_ms_summary)
 PB.reserved_fields(::Type{GenericStepTimeBreakdown}) = (names = String[], numbers = Union{Int,UnitRange{Int}}[2])
 PB.default_values(::Type{GenericStepTimeBreakdown}) = (;unknown_time_ms_summary = nothing, host_wait_input_ms_summary = nothing, host_to_device_ms_summary = nothing, input_ms_summary = nothing, output_ms_summary = nothing, device_compute_ms_summary = nothing, device_to_device_ms_summary = nothing, device_collectives_ms_summary = nothing, host_compute_ms_summary = nothing, host_prepare_ms_summary = nothing, host_compile_ms_summary = nothing)
 PB.field_numbers(::Type{GenericStepTimeBreakdown}) = (;unknown_time_ms_summary = 1, host_wait_input_ms_summary = 9, host_to_device_ms_summary = 10, input_ms_summary = 11, output_ms_summary = 3, device_compute_ms_summary = 4, device_to_device_ms_summary = 5, device_collectives_ms_summary = 12, host_compute_ms_summary = 6, host_prepare_ms_summary = 7, host_compile_ms_summary = 8)
@@ -530,7 +523,6 @@ struct InputPipelineAnalysisResult
     step_time_breakdown::Union{Nothing,google.protobuf.var"#Any"}
     diagnostics::Union{Nothing,Diagnostics}
 end
-InputPipelineAnalysisResult(;tag = false, hardware_type = "", step_time_summary = nothing, input_percent_summary = nothing, input_percent = zero(Float64), output_percent = zero(Float64), idle_percent = zero(Float64), compute_percent = zero(Float64), step_details = Vector{google.protobuf.var"#Any"}(), input_time_breakdown = nothing, input_op_details = Vector{InputOpDetails}(), recommendation = nothing, step_time_breakdown = nothing, diagnostics = nothing) = InputPipelineAnalysisResult(tag, hardware_type, step_time_summary, input_percent_summary, input_percent, output_percent, idle_percent, compute_percent, step_details, input_time_breakdown, input_op_details, recommendation, step_time_breakdown, diagnostics)
 PB.reserved_fields(::Type{InputPipelineAnalysisResult}) = (names = String[], numbers = Union{Int,UnitRange{Int}}[1, 10])
 PB.default_values(::Type{InputPipelineAnalysisResult}) = (;tag = false, hardware_type = "", step_time_summary = nothing, input_percent_summary = nothing, input_percent = zero(Float64), output_percent = zero(Float64), idle_percent = zero(Float64), compute_percent = zero(Float64), step_details = Vector{google.protobuf.var"#Any"}(), input_time_breakdown = nothing, input_op_details = Vector{InputOpDetails}(), recommendation = nothing, step_time_breakdown = nothing, diagnostics = nothing)
 PB.field_numbers(::Type{InputPipelineAnalysisResult}) = (;tag = 16, hardware_type = 9, step_time_summary = 2, input_percent_summary = 3, input_percent = 11, output_percent = 13, idle_percent = 14, compute_percent = 15, step_details = 4, input_time_breakdown = 5, input_op_details = 6, recommendation = 7, step_time_breakdown = 8, diagnostics = 12)

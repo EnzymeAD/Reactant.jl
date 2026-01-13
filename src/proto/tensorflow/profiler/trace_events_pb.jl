@@ -16,7 +16,6 @@ struct Resource
     resource_id::UInt64
     num_events::UInt32
 end
-Resource(;name = "", resource_id = zero(UInt64), num_events = zero(UInt32)) = Resource(name, resource_id, num_events)
 PB.default_values(::Type{Resource}) = (;name = "", resource_id = zero(UInt64), num_events = zero(UInt32))
 PB.field_numbers(::Type{Resource}) = (;name = 1, resource_id = 2, num_events = 3)
 
@@ -68,7 +67,6 @@ struct TraceEvent
     flow_category::UInt32
     serial::UInt32
 end
-TraceEvent(;var"#type" = var"TraceEvent.EventType".EVENT_TYPE_UNSPECIFIED, device_id = zero(UInt32), resource_id = zero(UInt64), name_oneof = nothing, group_id = Int64(-1), timestamp_ps = zero(UInt64), duration_ps = zero(UInt64), raw_data = UInt8[], flow_id = zero(UInt64), flow_entry_type = var"TraceEvent.FlowEntryType".FLOW_NONE, flow_category = zero(UInt32), serial = zero(UInt32)) = TraceEvent(var"#type", device_id, resource_id, name_oneof, group_id, timestamp_ps, duration_ps, raw_data, flow_id, flow_entry_type, flow_category, serial)
 PB.reserved_fields(::Type{TraceEvent}) = (names = String[], numbers = Union{Int,UnitRange{Int}}[4])
 PB.oneof_field_types(::Type{TraceEvent}) = (;
     name_oneof = (;name=String, name_ref=UInt64),
@@ -172,7 +170,6 @@ struct Device
     device_id::UInt32
     resources::Dict{UInt64,Resource}
 end
-Device(;name = "", device_id = zero(UInt32), resources = Dict{UInt64,Resource}()) = Device(name, device_id, resources)
 PB.reserved_fields(::Type{Device}) = (names = String[], numbers = Union{Int,UnitRange{Int}}[4])
 PB.default_values(::Type{Device}) = (;name = "", device_id = zero(UInt32), resources = Dict{UInt64,Resource}())
 PB.field_numbers(::Type{Device}) = (;name = 1, device_id = 2, resources = 3)
@@ -219,7 +216,6 @@ struct Trace
     num_events::UInt64
     name_table::Dict{UInt64,String}
 end
-Trace(;devices = Dict{UInt32,Device}(), tasks = Dict{UInt32,Task}(), min_timestamp_ps = zero(UInt64), max_timestamp_ps = zero(UInt64), num_events = zero(UInt64), name_table = Dict{UInt64,String}()) = Trace(devices, tasks, min_timestamp_ps, max_timestamp_ps, num_events, name_table)
 PB.reserved_fields(::Type{Trace}) = (names = String[], numbers = Union{Int,UnitRange{Int}}[2, 3])
 PB.default_values(::Type{Trace}) = (;devices = Dict{UInt32,Device}(), tasks = Dict{UInt32,Task}(), min_timestamp_ps = zero(UInt64), max_timestamp_ps = zero(UInt64), num_events = zero(UInt64), name_table = Dict{UInt64,String}())
 PB.field_numbers(::Type{Trace}) = (;devices = 1, tasks = 6, min_timestamp_ps = 4, max_timestamp_ps = 5, num_events = 7, name_table = 8)

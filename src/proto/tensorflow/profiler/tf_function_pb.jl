@@ -10,7 +10,6 @@ struct TfFunctionMetrics
     count::UInt64
     self_time_ps::UInt64
 end
-TfFunctionMetrics(;count = zero(UInt64), self_time_ps = zero(UInt64)) = TfFunctionMetrics(count, self_time_ps)
 PB.default_values(::Type{TfFunctionMetrics}) = (;count = zero(UInt64), self_time_ps = zero(UInt64))
 PB.field_numbers(::Type{TfFunctionMetrics}) = (;count = 1, self_time_ps = 2)
 
@@ -53,7 +52,6 @@ struct TfFunction
     compiler::TfFunctionCompiler.T
     expensive_call_percent::Float64
 end
-TfFunction(;metrics = Dict{Int32,TfFunctionMetrics}(), total_tracing_count = zero(Int64), compiler = TfFunctionCompiler.INVALID_COMPILER, expensive_call_percent = zero(Float64)) = TfFunction(metrics, total_tracing_count, compiler, expensive_call_percent)
 PB.default_values(::Type{TfFunction}) = (;metrics = Dict{Int32,TfFunctionMetrics}(), total_tracing_count = zero(Int64), compiler = TfFunctionCompiler.INVALID_COMPILER, expensive_call_percent = zero(Float64))
 PB.field_numbers(::Type{TfFunction}) = (;metrics = 1, total_tracing_count = 2, compiler = 3, expensive_call_percent = 4)
 
@@ -99,7 +97,6 @@ end
 struct TfFunctionDb
     tf_functions::Dict{String,TfFunction}
 end
-TfFunctionDb(;tf_functions = Dict{String,TfFunction}()) = TfFunctionDb(tf_functions)
 PB.default_values(::Type{TfFunctionDb}) = (;tf_functions = Dict{String,TfFunction}())
 PB.field_numbers(::Type{TfFunctionDb}) = (;tf_functions = 1)
 

@@ -9,7 +9,6 @@ struct Duration
     seconds::Int64
     nanos::Int32
 end
-Duration(;seconds = zero(Int64), nanos = zero(Int32)) = Duration(seconds, nanos)
 PB.default_values(::Type{Duration}) = (;seconds = zero(Int64), nanos = zero(Int32))
 PB.field_numbers(::Type{Duration}) = (;seconds = 1, nanos = 2)
 

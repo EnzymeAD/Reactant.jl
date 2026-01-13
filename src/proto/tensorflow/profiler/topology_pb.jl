@@ -11,7 +11,6 @@ struct var"LogicalTopology.HostNetworkAddress"
     address::String
     interface_name::String
 end
-var"LogicalTopology.HostNetworkAddress"(;address = "", interface_name = "") = var"LogicalTopology.HostNetworkAddress"(address, interface_name)
 PB.default_values(::Type{var"LogicalTopology.HostNetworkAddress"}) = (;address = "", interface_name = "")
 PB.field_numbers(::Type{var"LogicalTopology.HostNetworkAddress"}) = (;address = 1, interface_name = 2)
 
@@ -54,7 +53,6 @@ struct TopologyLocation
     index_on_host::Int32
     global_id::Int32
 end
-TopologyLocation(;x = zero(Int32), y = zero(Int32), z = zero(Int32), host_x = zero(Int32), host_y = zero(Int32), host_z = zero(Int32), index_on_host = zero(Int32), global_id = zero(Int32)) = TopologyLocation(x, y, z, host_x, host_y, host_z, index_on_host, global_id)
 PB.default_values(::Type{TopologyLocation}) = (;x = zero(Int32), y = zero(Int32), z = zero(Int32), host_x = zero(Int32), host_y = zero(Int32), host_z = zero(Int32), index_on_host = zero(Int32), global_id = zero(Int32))
 PB.field_numbers(::Type{TopologyLocation}) = (;x = 1, y = 2, z = 3, host_x = 4, host_y = 5, host_z = 6, index_on_host = 7, global_id = 8)
 
@@ -122,7 +120,6 @@ struct TopologyDimension
     y::Int32
     z::Int32
 end
-TopologyDimension(;x = zero(Int32), y = zero(Int32), z = zero(Int32)) = TopologyDimension(x, y, z)
 PB.default_values(::Type{TopologyDimension}) = (;x = zero(Int32), y = zero(Int32), z = zero(Int32))
 PB.field_numbers(::Type{TopologyDimension}) = (;x = 1, y = 2, z = 3)
 
@@ -165,7 +162,6 @@ struct var"LogicalTopology.LogicalDevice"
     slice_local_id::Int32
     host_local_id::Int32
 end
-var"LogicalTopology.LogicalDevice"(;global_id = zero(Int32), slice_local_id = zero(Int32), host_local_id = zero(Int32)) = var"LogicalTopology.LogicalDevice"(global_id, slice_local_id, host_local_id)
 PB.default_values(::Type{var"LogicalTopology.LogicalDevice"}) = (;global_id = zero(Int32), slice_local_id = zero(Int32), host_local_id = zero(Int32))
 PB.field_numbers(::Type{var"LogicalTopology.LogicalDevice"}) = (;global_id = 1, slice_local_id = 2, host_local_id = 3)
 
@@ -208,7 +204,6 @@ struct Topology
     host_bounds::Union{Nothing,TopologyDimension}
     mesh_location::Vector{TopologyLocation}
 end
-Topology(;chips_per_host_bounds = nothing, host_bounds = nothing, mesh_location = Vector{TopologyLocation}()) = Topology(chips_per_host_bounds, host_bounds, mesh_location)
 PB.default_values(::Type{Topology}) = (;chips_per_host_bounds = nothing, host_bounds = nothing, mesh_location = Vector{TopologyLocation}())
 PB.field_numbers(::Type{Topology}) = (;chips_per_host_bounds = 1, host_bounds = 2, mesh_location = 3)
 
@@ -251,7 +246,6 @@ struct var"LogicalTopology.LogicalHost"
     network_addresses::Vector{var"LogicalTopology.HostNetworkAddress"}
     devices::Vector{var"LogicalTopology.LogicalDevice"}
 end
-var"LogicalTopology.LogicalHost"(;slice_local_id = zero(Int32), network_addresses = Vector{var"LogicalTopology.HostNetworkAddress"}(), devices = Vector{var"LogicalTopology.LogicalDevice"}()) = var"LogicalTopology.LogicalHost"(slice_local_id, network_addresses, devices)
 PB.default_values(::Type{var"LogicalTopology.LogicalHost"}) = (;slice_local_id = zero(Int32), network_addresses = Vector{var"LogicalTopology.HostNetworkAddress"}(), devices = Vector{var"LogicalTopology.LogicalDevice"}())
 PB.field_numbers(::Type{var"LogicalTopology.LogicalHost"}) = (;slice_local_id = 1, network_addresses = 2, devices = 3)
 
@@ -293,7 +287,6 @@ struct var"LogicalTopology.LogicalSlice"
     global_id::Int32
     hosts::Vector{var"LogicalTopology.LogicalHost"}
 end
-var"LogicalTopology.LogicalSlice"(;global_id = zero(Int32), hosts = Vector{var"LogicalTopology.LogicalHost"}()) = var"LogicalTopology.LogicalSlice"(global_id, hosts)
 PB.default_values(::Type{var"LogicalTopology.LogicalSlice"}) = (;global_id = zero(Int32), hosts = Vector{var"LogicalTopology.LogicalHost"}())
 PB.field_numbers(::Type{var"LogicalTopology.LogicalSlice"}) = (;global_id = 1, hosts = 2)
 
@@ -329,7 +322,6 @@ end
 struct LogicalTopology
     slices::Vector{var"LogicalTopology.LogicalSlice"}
 end
-LogicalTopology(;slices = Vector{var"LogicalTopology.LogicalSlice"}()) = LogicalTopology(slices)
 PB.default_values(::Type{LogicalTopology}) = (;slices = Vector{var"LogicalTopology.LogicalSlice"}())
 PB.field_numbers(::Type{LogicalTopology}) = (;slices = 1)
 

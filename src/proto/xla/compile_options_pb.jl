@@ -9,7 +9,6 @@ export ExecutableAndOptionsProto
 struct OptionOverrideProto
     value::Union{Nothing,OneOf{<:Union{String,Bool,Int64,Float64}}}
 end
-OptionOverrideProto(;value = nothing) = OptionOverrideProto(value)
 PB.oneof_field_types(::Type{OptionOverrideProto}) = (;
     value = (;string_field=String, bool_field=Bool, int_field=Int64, double_field=Float64),
 )
@@ -92,7 +91,6 @@ struct ExecutableBuildOptionsProto
     process_count::Int64
     slice_size::Int64
 end
-ExecutableBuildOptionsProto(;device_ordinal = zero(Int64), result_layout = nothing, comp_envs = nothing, debug_options = nothing, num_replicas = zero(Int64), num_partitions = zero(Int64), use_spmd_partitioning = false, use_auto_spmd_partitioning = false, exec_time_optimization_effort = zero(Float32), memory_fitting_effort = zero(Float32), optimization_level = var"ExecutionOptions.EffortLevel".EFFORT_UNKNOWN, memory_fitting_level = var"ExecutionOptions.EffortLevel".EFFORT_UNKNOWN, deduplicate_hlo = false, device_assignment = nothing, alias_passthrough_params = false, run_backend_only = false, allow_spmd_sharding_propagation_to_parameters = Vector{Bool}(), allow_spmd_sharding_propagation_to_output = Vector{Bool}(), fdo_profile = UInt8[], device_memory_size = zero(Int64), auto_spmd_partitioning_mesh_shape = Vector{Int64}(), auto_spmd_partitioning_mesh_ids = Vector{Int64}(), use_shardy_partitioner = false, process_index = zero(Int64), process_count = zero(Int64), slice_size = zero(Int64)) = ExecutableBuildOptionsProto(device_ordinal, result_layout, comp_envs, debug_options, num_replicas, num_partitions, use_spmd_partitioning, use_auto_spmd_partitioning, exec_time_optimization_effort, memory_fitting_effort, optimization_level, memory_fitting_level, deduplicate_hlo, device_assignment, alias_passthrough_params, run_backend_only, allow_spmd_sharding_propagation_to_parameters, allow_spmd_sharding_propagation_to_output, fdo_profile, device_memory_size, auto_spmd_partitioning_mesh_shape, auto_spmd_partitioning_mesh_ids, use_shardy_partitioner, process_index, process_count, slice_size)
 PB.default_values(::Type{ExecutableBuildOptionsProto}) = (;device_ordinal = zero(Int64), result_layout = nothing, comp_envs = nothing, debug_options = nothing, num_replicas = zero(Int64), num_partitions = zero(Int64), use_spmd_partitioning = false, use_auto_spmd_partitioning = false, exec_time_optimization_effort = zero(Float32), memory_fitting_effort = zero(Float32), optimization_level = var"ExecutionOptions.EffortLevel".EFFORT_UNKNOWN, memory_fitting_level = var"ExecutionOptions.EffortLevel".EFFORT_UNKNOWN, deduplicate_hlo = false, device_assignment = nothing, alias_passthrough_params = false, run_backend_only = false, allow_spmd_sharding_propagation_to_parameters = Vector{Bool}(), allow_spmd_sharding_propagation_to_output = Vector{Bool}(), fdo_profile = UInt8[], device_memory_size = zero(Int64), auto_spmd_partitioning_mesh_shape = Vector{Int64}(), auto_spmd_partitioning_mesh_ids = Vector{Int64}(), use_shardy_partitioner = false, process_index = zero(Int64), process_count = zero(Int64), slice_size = zero(Int64))
 PB.field_numbers(::Type{ExecutableBuildOptionsProto}) = (;device_ordinal = 1, result_layout = 2, comp_envs = 13, debug_options = 3, num_replicas = 4, num_partitions = 5, use_spmd_partitioning = 6, use_auto_spmd_partitioning = 7, exec_time_optimization_effort = 20, memory_fitting_effort = 21, optimization_level = 24, memory_fitting_level = 25, deduplicate_hlo = 8, device_assignment = 9, alias_passthrough_params = 10, run_backend_only = 11, allow_spmd_sharding_propagation_to_parameters = 18, allow_spmd_sharding_propagation_to_output = 12, fdo_profile = 14, device_memory_size = 15, auto_spmd_partitioning_mesh_shape = 16, auto_spmd_partitioning_mesh_ids = 17, use_shardy_partitioner = 19, process_index = 22, process_count = 23, slice_size = 26)
 
@@ -257,7 +255,6 @@ struct CompileOptionsProto
     allow_in_place_mlir_modification::Bool
     matrix_unit_operand_precision::var"PrecisionConfig.Precision".T
 end
-CompileOptionsProto(;argument_layouts = Vector{ShapeProto}(), parameter_is_tupled_arguments = false, executable_build_options = nothing, compile_portable_executable = false, profile_version = zero(Int64), serialized_multi_slice_config = UInt8[], env_option_overrides = Dict{String,OptionOverrideProto}(), target_config = nothing, allow_in_place_mlir_modification = false, matrix_unit_operand_precision = var"PrecisionConfig.Precision".DEFAULT) = CompileOptionsProto(argument_layouts, parameter_is_tupled_arguments, executable_build_options, compile_portable_executable, profile_version, serialized_multi_slice_config, env_option_overrides, target_config, allow_in_place_mlir_modification, matrix_unit_operand_precision)
 PB.default_values(::Type{CompileOptionsProto}) = (;argument_layouts = Vector{ShapeProto}(), parameter_is_tupled_arguments = false, executable_build_options = nothing, compile_portable_executable = false, profile_version = zero(Int64), serialized_multi_slice_config = UInt8[], env_option_overrides = Dict{String,OptionOverrideProto}(), target_config = nothing, allow_in_place_mlir_modification = false, matrix_unit_operand_precision = var"PrecisionConfig.Precision".DEFAULT)
 PB.field_numbers(::Type{CompileOptionsProto}) = (;argument_layouts = 1, parameter_is_tupled_arguments = 2, executable_build_options = 3, compile_portable_executable = 4, profile_version = 5, serialized_multi_slice_config = 6, env_option_overrides = 7, target_config = 8, allow_in_place_mlir_modification = 9, matrix_unit_operand_precision = 10)
 
@@ -335,7 +332,6 @@ struct ExecutableAndOptionsProto
     compile_options::Union{Nothing,CompileOptionsProto}
     pjrt_client_name::String
 end
-ExecutableAndOptionsProto(;serialized_executable = UInt8[], compile_options = nothing, pjrt_client_name = "") = ExecutableAndOptionsProto(serialized_executable, compile_options, pjrt_client_name)
 PB.default_values(::Type{ExecutableAndOptionsProto}) = (;serialized_executable = UInt8[], compile_options = nothing, pjrt_client_name = "")
 PB.field_numbers(::Type{ExecutableAndOptionsProto}) = (;serialized_executable = 1, compile_options = 2, pjrt_client_name = 3)
 

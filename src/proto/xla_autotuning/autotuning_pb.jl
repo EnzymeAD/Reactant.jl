@@ -20,7 +20,6 @@ struct var"AutotuneResult.TritonGemmKey"
     is_tma_allowed::Bool
     is_warp_specialization_allowed::Bool
 end
-var"AutotuneResult.TritonGemmKey"(;block_m = zero(Int64), block_n = zero(Int64), block_k = zero(Int64), split_k = zero(Int64), num_stages = zero(Int64), num_warps = zero(Int64), num_ctas = zero(Int64), is_tma_allowed = false, is_warp_specialization_allowed = false) = var"AutotuneResult.TritonGemmKey"(block_m, block_n, block_k, split_k, num_stages, num_warps, num_ctas, is_tma_allowed, is_warp_specialization_allowed)
 PB.default_values(::Type{var"AutotuneResult.TritonGemmKey"}) = (;block_m = zero(Int64), block_n = zero(Int64), block_k = zero(Int64), split_k = zero(Int64), num_stages = zero(Int64), num_warps = zero(Int64), num_ctas = zero(Int64), is_tma_allowed = false, is_warp_specialization_allowed = false)
 PB.field_numbers(::Type{var"AutotuneResult.TritonGemmKey"}) = (;block_m = 1, block_n = 2, block_k = 3, split_k = 4, num_stages = 5, num_warps = 6, num_ctas = 7, is_tma_allowed = 8, is_warp_specialization_allowed = 9)
 
@@ -92,7 +91,6 @@ struct var"AutotuneResult.BackendConfigKey"
     name::String
     config::Union{Nothing,google.protobuf.var"#Any"}
 end
-var"AutotuneResult.BackendConfigKey"(;name = "", config = nothing) = var"AutotuneResult.BackendConfigKey"(name, config)
 PB.default_values(::Type{var"AutotuneResult.BackendConfigKey"}) = (;name = "", config = nothing)
 PB.field_numbers(::Type{var"AutotuneResult.BackendConfigKey"}) = (;name = 1, config = 2)
 
@@ -129,7 +127,6 @@ struct var"AutotuneResult.ConvKey"
     algorithm::Int64
     tensor_ops_enabled::Bool
 end
-var"AutotuneResult.ConvKey"(;algorithm = zero(Int64), tensor_ops_enabled = false) = var"AutotuneResult.ConvKey"(algorithm, tensor_ops_enabled)
 PB.default_values(::Type{var"AutotuneResult.ConvKey"}) = (;algorithm = zero(Int64), tensor_ops_enabled = false)
 PB.field_numbers(::Type{var"AutotuneResult.ConvKey"}) = (;algorithm = 1, tensor_ops_enabled = 2)
 
@@ -167,7 +164,6 @@ struct CudnnVersion
     minor::Int32
     patch::Int32
 end
-CudnnVersion(;major = zero(Int32), minor = zero(Int32), patch = zero(Int32)) = CudnnVersion(major, minor, patch)
 PB.default_values(::Type{CudnnVersion}) = (;major = zero(Int32), minor = zero(Int32), patch = zero(Int32))
 PB.field_numbers(::Type{CudnnVersion}) = (;major = 1, minor = 2, patch = 3)
 
@@ -210,7 +206,6 @@ end
 struct var"AutotuneResult.GemmKey"
     algorithm::Int64
 end
-var"AutotuneResult.GemmKey"(;algorithm = zero(Int64)) = var"AutotuneResult.GemmKey"(algorithm)
 PB.default_values(::Type{var"AutotuneResult.GemmKey"}) = (;algorithm = zero(Int64))
 PB.field_numbers(::Type{var"AutotuneResult.GemmKey"}) = (;algorithm = 1)
 
@@ -241,7 +236,6 @@ end
 struct var"AutotuneResult.CustomKernelFusionKey"
     kernel_index::Int64
 end
-var"AutotuneResult.CustomKernelFusionKey"(;kernel_index = zero(Int64)) = var"AutotuneResult.CustomKernelFusionKey"(kernel_index)
 PB.default_values(::Type{var"AutotuneResult.CustomKernelFusionKey"}) = (;kernel_index = zero(Int64))
 PB.field_numbers(::Type{var"AutotuneResult.CustomKernelFusionKey"}) = (;kernel_index = 1)
 
@@ -272,7 +266,6 @@ end
 struct var"AutotuneResult.CudaConvPlanKey"
     exec_plan_id::String
 end
-var"AutotuneResult.CudaConvPlanKey"(;exec_plan_id = "") = var"AutotuneResult.CudaConvPlanKey"(exec_plan_id)
 PB.default_values(::Type{var"AutotuneResult.CudaConvPlanKey"}) = (;exec_plan_id = "")
 PB.field_numbers(::Type{var"AutotuneResult.CudaConvPlanKey"}) = (;exec_plan_id = 1)
 
@@ -304,7 +297,6 @@ struct ComputeCapability
     major::Int32
     minor::Int32
 end
-ComputeCapability(;major = zero(Int32), minor = zero(Int32)) = ComputeCapability(major, minor)
 PB.default_values(::Type{ComputeCapability}) = (;major = zero(Int32), minor = zero(Int32))
 PB.field_numbers(::Type{ComputeCapability}) = (;major = 1, minor = 2)
 
@@ -340,7 +332,6 @@ end
 struct TritonGemmConfigsProto
     config::Vector{var"AutotuneResult.TritonGemmKey"}
 end
-TritonGemmConfigsProto(;config = Vector{var"AutotuneResult.TritonGemmKey"}()) = TritonGemmConfigsProto(config)
 PB.default_values(::Type{TritonGemmConfigsProto}) = (;config = Vector{var"AutotuneResult.TritonGemmKey"}())
 PB.field_numbers(::Type{TritonGemmConfigsProto}) = (;config = 1)
 
@@ -374,7 +365,6 @@ struct var"AutotuneResult.FailureResult"
     key::Union{Nothing,OneOf{<:Union{var"AutotuneResult.ConvKey",var"AutotuneResult.GemmKey",var"AutotuneResult.CudaConvPlanKey",xla_tsl_dnn.AlgorithmProto}}}
     buffer_address::Int64
 end
-var"AutotuneResult.FailureResult"(;kind = var"AutotuneResult.FailureKind".UNKNOWN, msg = "", key = nothing, buffer_address = zero(Int64)) = var"AutotuneResult.FailureResult"(kind, msg, key, buffer_address)
 PB.oneof_field_types(::Type{var"AutotuneResult.FailureResult"}) = (;
     key = (;reference_conv=var"AutotuneResult.ConvKey", reference_gemm=var"AutotuneResult.GemmKey", reference_cuda_conv_plan=var"AutotuneResult.CudaConvPlanKey", reference_algorithm=xla_tsl_dnn.AlgorithmProto),
 )
@@ -450,7 +440,6 @@ struct AutotuneResult
     failure::Union{Nothing,var"AutotuneResult.FailureResult"}
     key::Union{Nothing,OneOf{<:Union{var"AutotuneResult.ConvKey",var"AutotuneResult.GemmKey",var"AutotuneResult.TritonGemmKey",var"AutotuneResult.CudaConvPlanKey",var"AutotuneResult.CustomKernelFusionKey",xla_tsl_dnn.AlgorithmProto,var"AutotuneResult.BackendConfigKey"}}}
 end
-AutotuneResult(;scratch_bytes = zero(Int64), run_time = nothing, failure = nothing, key = nothing) = AutotuneResult(scratch_bytes, run_time, failure, key)
 PB.oneof_field_types(::Type{AutotuneResult}) = (;
     key = (;conv=var"AutotuneResult.ConvKey", gemm=var"AutotuneResult.GemmKey", triton=var"AutotuneResult.TritonGemmKey", cuda_conv_plan=var"AutotuneResult.CudaConvPlanKey", custom_kernel_fusion=var"AutotuneResult.CustomKernelFusionKey", algorithm=xla_tsl_dnn.AlgorithmProto, other=var"AutotuneResult.BackendConfigKey"),
 )
@@ -549,7 +538,6 @@ struct AutotuningLog
     fusion_count::Int64
     selected_backend::String
 end
-AutotuningLog(;instr = nothing, results = Vector{AutotuneResult}(), cudnn_version = nothing, compute_capability = nothing, device_pci_bus_id = "", blas_version = "", fusion_name = "", fusion_count = zero(Int64), selected_backend = "") = AutotuningLog(instr, results, cudnn_version, compute_capability, device_pci_bus_id, blas_version, fusion_name, fusion_count, selected_backend)
 PB.default_values(::Type{AutotuningLog}) = (;instr = nothing, results = Vector{AutotuneResult}(), cudnn_version = nothing, compute_capability = nothing, device_pci_bus_id = "", blas_version = "", fusion_name = "", fusion_count = zero(Int64), selected_backend = "")
 PB.field_numbers(::Type{AutotuningLog}) = (;instr = 1, results = 2, cudnn_version = 3, compute_capability = 4, device_pci_bus_id = 5, blas_version = 6, fusion_name = 7, fusion_count = 8, selected_backend = 9)
 

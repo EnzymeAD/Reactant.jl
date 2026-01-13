@@ -12,7 +12,6 @@ struct var"SourceStats.Metric"
     flops::UInt64
     flops_utilization::Float64
 end
-var"SourceStats.Metric"(;occurrences = zero(UInt64), self_time_ps = zero(UInt64), time_ps = zero(UInt64), flops = zero(UInt64), flops_utilization = zero(Float64)) = var"SourceStats.Metric"(occurrences, self_time_ps, time_ps, flops, flops_utilization)
 PB.default_values(::Type{var"SourceStats.Metric"}) = (;occurrences = zero(UInt64), self_time_ps = zero(UInt64), time_ps = zero(UInt64), flops = zero(UInt64), flops_utilization = zero(Float64))
 PB.field_numbers(::Type{var"SourceStats.Metric"}) = (;occurrences = 1, self_time_ps = 2, time_ps = 3, flops = 4, flops_utilization = 5)
 
@@ -63,7 +62,6 @@ end
 struct var"SourceStats.FileMetrics"
     line_number_to_metric::Dict{Int32,var"SourceStats.Metric"}
 end
-var"SourceStats.FileMetrics"(;line_number_to_metric = Dict{Int32,var"SourceStats.Metric"}()) = var"SourceStats.FileMetrics"(line_number_to_metric)
 PB.default_values(::Type{var"SourceStats.FileMetrics"}) = (;line_number_to_metric = Dict{Int32,var"SourceStats.Metric"}())
 PB.field_numbers(::Type{var"SourceStats.FileMetrics"}) = (;line_number_to_metric = 1)
 
@@ -94,7 +92,6 @@ end
 struct SourceStats
     file_name_to_metrics::Dict{String,var"SourceStats.FileMetrics"}
 end
-SourceStats(;file_name_to_metrics = Dict{String,var"SourceStats.FileMetrics"}()) = SourceStats(file_name_to_metrics)
 PB.default_values(::Type{SourceStats}) = (;file_name_to_metrics = Dict{String,var"SourceStats.FileMetrics"}())
 PB.field_numbers(::Type{SourceStats}) = (;file_name_to_metrics = 1)
 
