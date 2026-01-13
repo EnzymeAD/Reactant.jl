@@ -297,6 +297,9 @@ function is_reactant_method(mi::Core.MethodInstance)
     return mt === REACTANT_METHOD_TABLE
 end
 
+struct EnsureReturnType{T}
+end
+
 @generated function applyiterate_with_reactant(
     ert::EnsureReturnType, iteratefn, applyfn, args::Vararg{Any,N}
 ) where {N, RT0}
@@ -313,9 +316,6 @@ end
         Base.@_inline_meta
         call_with_reactant(applyfn, ert, $(newargs...))
     end
-end
-
-struct EnsureReturnType{T}
 end
 
 function rewrite_inst(inst, ir, interp, RT)
