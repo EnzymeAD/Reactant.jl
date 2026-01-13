@@ -37,7 +37,6 @@ struct ConvolutionDescriptorProto
     convolution_mode::ConvolutionMode.T
     name::String
 end
-ConvolutionDescriptorProto(;paddings = Vector{Int64}(), strides = Vector{Int64}(), dilations = Vector{Int64}(), compute_mode = var"#DataType".kFloat, group_count = zero(Int32), convolution_mode = ConvolutionMode.CROSS_CORRELATION, name = "") = ConvolutionDescriptorProto(paddings, strides, dilations, compute_mode, group_count, convolution_mode, name)
 PB.default_values(::Type{ConvolutionDescriptorProto}) = (;paddings = Vector{Int64}(), strides = Vector{Int64}(), dilations = Vector{Int64}(), compute_mode = var"#DataType".kFloat, group_count = zero(Int32), convolution_mode = ConvolutionMode.CROSS_CORRELATION, name = "")
 PB.field_numbers(::Type{ConvolutionDescriptorProto}) = (;paddings = 1, strides = 2, dilations = 3, compute_mode = 4, group_count = 5, convolution_mode = 6, name = 7)
 
@@ -102,7 +101,6 @@ struct AlgorithmProto
     is_cudnn_frontend::Bool
     workspace_size::Union{Nothing,google.protobuf.UInt64Value}
 end
-AlgorithmProto(;algo_id = zero(Int64), math_type = var"AlgorithmProto.MathType".DEFAULT_MATH, tuning_knobs = Dict{Int64,Int64}(), is_cudnn_frontend = false, workspace_size = nothing) = AlgorithmProto(algo_id, math_type, tuning_knobs, is_cudnn_frontend, workspace_size)
 PB.reserved_fields(::Type{AlgorithmProto}) = (names = String[], numbers = Union{Int,UnitRange{Int}}[3])
 PB.default_values(::Type{AlgorithmProto}) = (;algo_id = zero(Int64), math_type = var"AlgorithmProto.MathType".DEFAULT_MATH, tuning_knobs = Dict{Int64,Int64}(), is_cudnn_frontend = false, workspace_size = nothing)
 PB.field_numbers(::Type{AlgorithmProto}) = (;algo_id = 1, math_type = 2, tuning_knobs = 4, is_cudnn_frontend = 5, workspace_size = 6)
@@ -156,7 +154,6 @@ struct TensorDescriptorProto
     data_type::var"#DataType".T
     layout_oneof::Union{Nothing,OneOf{<:Union{DataLayout.T,FilterLayout.T}}}
 end
-TensorDescriptorProto(;dimensions = Vector{Int64}(), data_type = var"#DataType".kFloat, layout_oneof = nothing) = TensorDescriptorProto(dimensions, data_type, layout_oneof)
 PB.oneof_field_types(::Type{TensorDescriptorProto}) = (;
     layout_oneof = (;data_layout=DataLayout.T, filter_layout=FilterLayout.T),
 )
@@ -214,7 +211,6 @@ struct AlgorithmConfigProto
     optional_algorithm_no_scratch::Union{Nothing,OneOf{AlgorithmProto}}
     optional_scratch_size::Union{Nothing,OneOf{Int64}}
 end
-AlgorithmConfigProto(;optional_algorithm = nothing, optional_algorithm_no_scratch = nothing, optional_scratch_size = nothing) = AlgorithmConfigProto(optional_algorithm, optional_algorithm_no_scratch, optional_scratch_size)
 PB.oneof_field_types(::Type{AlgorithmConfigProto}) = (;
     optional_algorithm = (;algorithm=AlgorithmProto),
     optional_algorithm_no_scratch = (;algorithm_no_scratch=AlgorithmProto),

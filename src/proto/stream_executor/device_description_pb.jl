@@ -9,7 +9,6 @@ export GpuDeviceInfoProto, GpuComputeCapabilityProto, GpuTargetConfigProto
 struct RocmComputeCapabilityProto
     gcn_arch_name::String
 end
-RocmComputeCapabilityProto(;gcn_arch_name = "") = RocmComputeCapabilityProto(gcn_arch_name)
 PB.default_values(::Type{RocmComputeCapabilityProto}) = (;gcn_arch_name = "")
 PB.field_numbers(::Type{RocmComputeCapabilityProto}) = (;gcn_arch_name = 1)
 
@@ -42,7 +41,6 @@ struct DnnVersionInfoProto
     minor::Int32
     patch::Int32
 end
-DnnVersionInfoProto(;major = zero(Int32), minor = zero(Int32), patch = zero(Int32)) = DnnVersionInfoProto(major, minor, patch)
 PB.default_values(::Type{DnnVersionInfoProto}) = (;major = zero(Int32), minor = zero(Int32), patch = zero(Int32))
 PB.field_numbers(::Type{DnnVersionInfoProto}) = (;major = 1, minor = 2, patch = 3)
 
@@ -85,7 +83,6 @@ struct RuntimeVersionProto
     minor::Int32
     patch::Int32
 end
-RuntimeVersionProto(;major = zero(Int32), minor = zero(Int32), patch = zero(Int32)) = RuntimeVersionProto(major, minor, patch)
 PB.default_values(::Type{RuntimeVersionProto}) = (;major = zero(Int32), minor = zero(Int32), patch = zero(Int32))
 PB.field_numbers(::Type{RuntimeVersionProto}) = (;major = 1, minor = 2, patch = 3)
 
@@ -143,7 +140,6 @@ struct GpuDeviceInfoProto
     registers_per_core_limit::Int64
     registers_per_block_limit::Int64
 end
-GpuDeviceInfoProto(;threads_per_block_limit = zero(Int32), threads_per_warp = zero(Int32), shared_memory_per_block = zero(Int32), shared_memory_per_core = zero(Int32), threads_per_core_limit = zero(Int32), core_count = zero(Int32), fpus_per_core = zero(Int64), block_dim_limit_x = zero(Int32), block_dim_limit_y = zero(Int32), block_dim_limit_z = zero(Int32), memory_bandwidth = zero(Int64), l2_cache_size = zero(Int64), clock_rate_ghz = zero(Float32), device_memory_size = zero(Int64), shared_memory_per_block_optin = zero(Int32), compute_capability = nothing, registers_per_core_limit = zero(Int64), registers_per_block_limit = zero(Int64)) = GpuDeviceInfoProto(threads_per_block_limit, threads_per_warp, shared_memory_per_block, shared_memory_per_core, threads_per_core_limit, core_count, fpus_per_core, block_dim_limit_x, block_dim_limit_y, block_dim_limit_z, memory_bandwidth, l2_cache_size, clock_rate_ghz, device_memory_size, shared_memory_per_block_optin, compute_capability, registers_per_core_limit, registers_per_block_limit)
 PB.oneof_field_types(::Type{GpuDeviceInfoProto}) = (;
     compute_capability = (;cuda_compute_capability=CudaComputeCapabilityProto, rocm_compute_capability=RocmComputeCapabilityProto),
 )
@@ -274,7 +270,6 @@ end
 struct GpuComputeCapabilityProto
     compute_capability::Union{Nothing,OneOf{<:Union{CudaComputeCapabilityProto,RocmComputeCapabilityProto}}}
 end
-GpuComputeCapabilityProto(;compute_capability = nothing) = GpuComputeCapabilityProto(compute_capability)
 PB.oneof_field_types(::Type{GpuComputeCapabilityProto}) = (;
     compute_capability = (;cuda_compute_capability=CudaComputeCapabilityProto, rocm_compute_capability=RocmComputeCapabilityProto),
 )
@@ -325,7 +320,6 @@ struct GpuTargetConfigProto
     autotune_results::Union{Nothing,xla_autotuning.AutotuneResults}
     device_description_str::String
 end
-GpuTargetConfigProto(;gpu_device_info = nothing, platform_name = "", dnn_version_info = nothing, runtime_version = nothing, autotune_results = nothing, device_description_str = "") = GpuTargetConfigProto(gpu_device_info, platform_name, dnn_version_info, runtime_version, autotune_results, device_description_str)
 PB.reserved_fields(::Type{GpuTargetConfigProto}) = (names = ["cuda_compute_capability", "rocm_compute_capability"], numbers = Union{Int,UnitRange{Int}}[2, 3])
 PB.default_values(::Type{GpuTargetConfigProto}) = (;gpu_device_info = nothing, platform_name = "", dnn_version_info = nothing, runtime_version = nothing, autotune_results = nothing, device_description_str = "")
 PB.field_numbers(::Type{GpuTargetConfigProto}) = (;gpu_device_info = 1, platform_name = 4, dnn_version_info = 5, runtime_version = 8, autotune_results = 6, device_description_str = 7)

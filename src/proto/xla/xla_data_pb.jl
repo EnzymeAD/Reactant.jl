@@ -39,7 +39,6 @@ struct Statistic
     stat_name::String
     stat_val::Float64
 end
-Statistic(;stat_name = "", stat_val = zero(Float64)) = Statistic(stat_name, stat_val)
 PB.default_values(::Type{Statistic}) = (;stat_name = "", stat_val = zero(Float64))
 PB.field_numbers(::Type{Statistic}) = (;stat_name = 1, stat_val = 2)
 
@@ -78,7 +77,6 @@ struct var"WhileLoopBackendConfig.KnownInitStep"
     init::Int64
     step::Int64
 end
-var"WhileLoopBackendConfig.KnownInitStep"(;init = zero(Int64), step = zero(Int64)) = var"WhileLoopBackendConfig.KnownInitStep"(init, step)
 PB.default_values(::Type{var"WhileLoopBackendConfig.KnownInitStep"}) = (;init = zero(Int64), step = zero(Int64))
 PB.field_numbers(::Type{var"WhileLoopBackendConfig.KnownInitStep"}) = (;init = 1, step = 2)
 
@@ -121,7 +119,6 @@ struct GatherDimensionNumbers
     operand_batching_dims::Vector{Int64}
     start_indices_batching_dims::Vector{Int64}
 end
-GatherDimensionNumbers(;offset_dims = Vector{Int64}(), collapsed_slice_dims = Vector{Int64}(), start_index_map = Vector{Int64}(), index_vector_dim = zero(Int64), operand_batching_dims = Vector{Int64}(), start_indices_batching_dims = Vector{Int64}()) = GatherDimensionNumbers(offset_dims, collapsed_slice_dims, start_index_map, index_vector_dim, operand_batching_dims, start_indices_batching_dims)
 PB.default_values(::Type{GatherDimensionNumbers}) = (;offset_dims = Vector{Int64}(), collapsed_slice_dims = Vector{Int64}(), start_index_map = Vector{Int64}(), index_vector_dim = zero(Int64), operand_batching_dims = Vector{Int64}(), start_indices_batching_dims = Vector{Int64}())
 PB.field_numbers(::Type{GatherDimensionNumbers}) = (;offset_dims = 1, collapsed_slice_dims = 2, start_index_map = 3, index_vector_dim = 4, operand_batching_dims = 5, start_indices_batching_dims = 6)
 
@@ -177,7 +174,6 @@ end
 struct var"DeviceAssignmentProto.ComputationDevice"
     replica_device_ids::Vector{Int64}
 end
-var"DeviceAssignmentProto.ComputationDevice"(;replica_device_ids = Vector{Int64}()) = var"DeviceAssignmentProto.ComputationDevice"(replica_device_ids)
 PB.default_values(::Type{var"DeviceAssignmentProto.ComputationDevice"}) = (;replica_device_ids = Vector{Int64}())
 PB.field_numbers(::Type{var"DeviceAssignmentProto.ComputationDevice"}) = (;replica_device_ids = 1)
 
@@ -209,7 +205,6 @@ struct SplitConfigProto
     dimension::Int64
     split_indices::Vector{Int64}
 end
-SplitConfigProto(;dimension = zero(Int64), split_indices = Vector{Int64}()) = SplitConfigProto(dimension, split_indices)
 PB.default_values(::Type{SplitConfigProto}) = (;dimension = zero(Int64), split_indices = Vector{Int64}())
 PB.field_numbers(::Type{SplitConfigProto}) = (;dimension = 1, split_indices = 2)
 
@@ -251,7 +246,6 @@ end
 struct var"WhileLoopBackendConfig.KnownTripCount"
     n::Int64
 end
-var"WhileLoopBackendConfig.KnownTripCount"(;n = zero(Int64)) = var"WhileLoopBackendConfig.KnownTripCount"(n)
 PB.default_values(::Type{var"WhileLoopBackendConfig.KnownTripCount"}) = (;n = zero(Int64))
 PB.field_numbers(::Type{var"WhileLoopBackendConfig.KnownTripCount"}) = (;n = 1)
 
@@ -286,7 +280,6 @@ end
 struct ParameterReplication
     replicated_at_leaf_buffers::Vector{Bool}
 end
-ParameterReplication(;replicated_at_leaf_buffers = Vector{Bool}()) = ParameterReplication(replicated_at_leaf_buffers)
 PB.default_values(::Type{ParameterReplication}) = (;replicated_at_leaf_buffers = Vector{Bool}())
 PB.field_numbers(::Type{ParameterReplication}) = (;replicated_at_leaf_buffers = 1)
 
@@ -321,7 +314,6 @@ end
 struct SortOptions
     descending::Bool
 end
-SortOptions(;descending = false) = SortOptions(descending)
 PB.default_values(::Type{SortOptions}) = (;descending = false)
 PB.field_numbers(::Type{SortOptions}) = (;descending = 1)
 
@@ -352,7 +344,6 @@ end
 struct ReplicaGroup
     replica_ids::Vector{Int64}
 end
-ReplicaGroup(;replica_ids = Vector{Int64}()) = ReplicaGroup(replica_ids)
 PB.default_values(::Type{ReplicaGroup}) = (;replica_ids = Vector{Int64}())
 PB.field_numbers(::Type{ReplicaGroup}) = (;replica_ids = 1)
 
@@ -385,7 +376,6 @@ struct var"ResultAccuracy.Tolerance"
     rtol::Float64
     ulps::Int64
 end
-var"ResultAccuracy.Tolerance"(;atol = zero(Float64), rtol = zero(Float64), ulps = zero(Int64)) = var"ResultAccuracy.Tolerance"(atol, rtol, ulps)
 PB.default_values(::Type{var"ResultAccuracy.Tolerance"}) = (;atol = zero(Float64), rtol = zero(Float64), ulps = zero(Int64))
 PB.field_numbers(::Type{var"ResultAccuracy.Tolerance"}) = (;atol = 1, rtol = 2, ulps = 3)
 
@@ -426,7 +416,6 @@ end
 struct TileProto
     dimensions::Vector{Int64}
 end
-TileProto(;dimensions = Vector{Int64}()) = TileProto(dimensions)
 PB.default_values(::Type{TileProto}) = (;dimensions = Vector{Int64}())
 PB.field_numbers(::Type{TileProto}) = (;dimensions = 1)
 
@@ -462,7 +451,6 @@ struct ScatterDimensionNumbers
     input_batching_dims::Vector{Int64}
     scatter_indices_batching_dims::Vector{Int64}
 end
-ScatterDimensionNumbers(;update_window_dims = Vector{Int64}(), inserted_window_dims = Vector{Int64}(), scatter_dims_to_operand_dims = Vector{Int64}(), index_vector_dim = zero(Int64), input_batching_dims = Vector{Int64}(), scatter_indices_batching_dims = Vector{Int64}()) = ScatterDimensionNumbers(update_window_dims, inserted_window_dims, scatter_dims_to_operand_dims, index_vector_dim, input_batching_dims, scatter_indices_batching_dims)
 PB.default_values(::Type{ScatterDimensionNumbers}) = (;update_window_dims = Vector{Int64}(), inserted_window_dims = Vector{Int64}(), scatter_dims_to_operand_dims = Vector{Int64}(), index_vector_dim = zero(Int64), input_batching_dims = Vector{Int64}(), scatter_indices_batching_dims = Vector{Int64}())
 PB.field_numbers(::Type{ScatterDimensionNumbers}) = (;update_window_dims = 1, inserted_window_dims = 2, scatter_dims_to_operand_dims = 3, index_vector_dim = 4, input_batching_dims = 5, scatter_indices_batching_dims = 6)
 
@@ -519,7 +507,6 @@ struct SourceTarget
     source::Int64
     target::Int64
 end
-SourceTarget(;source = zero(Int64), target = zero(Int64)) = SourceTarget(source, target)
 PB.default_values(::Type{SourceTarget}) = (;source = zero(Int64), target = zero(Int64))
 PB.field_numbers(::Type{SourceTarget}) = (;source = 1, target = 2)
 
@@ -555,7 +542,6 @@ end
 struct ExecutionHandle
     handle::Int64
 end
-ExecutionHandle(;handle = zero(Int64)) = ExecutionHandle(handle)
 PB.default_values(::Type{ExecutionHandle}) = (;handle = zero(Int64))
 PB.field_numbers(::Type{ExecutionHandle}) = (;handle = 1)
 
@@ -586,7 +572,6 @@ end
 struct GlobalDataHandle
     handle::Int64
 end
-GlobalDataHandle(;handle = zero(Int64)) = GlobalDataHandle(handle)
 PB.default_values(::Type{GlobalDataHandle}) = (;handle = zero(Int64))
 PB.field_numbers(::Type{GlobalDataHandle}) = (;handle = 1)
 
@@ -624,7 +609,6 @@ struct DotDimensionNumbers
     lhs_batch_dimensions::Vector{Int64}
     rhs_batch_dimensions::Vector{Int64}
 end
-DotDimensionNumbers(;lhs_contracting_dimensions = Vector{Int64}(), rhs_contracting_dimensions = Vector{Int64}(), lhs_batch_dimensions = Vector{Int64}(), rhs_batch_dimensions = Vector{Int64}()) = DotDimensionNumbers(lhs_contracting_dimensions, rhs_contracting_dimensions, lhs_batch_dimensions, rhs_batch_dimensions)
 PB.default_values(::Type{DotDimensionNumbers}) = (;lhs_contracting_dimensions = Vector{Int64}(), rhs_contracting_dimensions = Vector{Int64}(), lhs_batch_dimensions = Vector{Int64}(), rhs_batch_dimensions = Vector{Int64}())
 PB.field_numbers(::Type{DotDimensionNumbers}) = (;lhs_contracting_dimensions = 1, rhs_contracting_dimensions = 2, lhs_batch_dimensions = 3, rhs_batch_dimensions = 4)
 
@@ -671,7 +655,6 @@ struct DeviceHandle
     handle::Int64
     device_count::Int64
 end
-DeviceHandle(;handle = zero(Int64), device_count = zero(Int64)) = DeviceHandle(handle, device_count)
 PB.default_values(::Type{DeviceHandle}) = (;handle = zero(Int64), device_count = zero(Int64))
 PB.field_numbers(::Type{DeviceHandle}) = (;handle = 1, device_count = 2)
 
@@ -715,7 +698,6 @@ struct WindowDimension
     base_dilation::Int64
     window_reversal::Bool
 end
-WindowDimension(;size = zero(Int64), stride = zero(Int64), padding_low = zero(Int64), padding_high = zero(Int64), window_dilation = zero(Int64), base_dilation = zero(Int64), window_reversal = false) = WindowDimension(size, stride, padding_low, padding_high, window_dilation, base_dilation, window_reversal)
 PB.default_values(::Type{WindowDimension}) = (;size = zero(Int64), stride = zero(Int64), padding_low = zero(Int64), padding_high = zero(Int64), window_dilation = zero(Int64), base_dilation = zero(Int64), window_reversal = false)
 PB.field_numbers(::Type{WindowDimension}) = (;size = 1, stride = 2, padding_low = 3, padding_high = 4, window_dilation = 5, base_dilation = 6, window_reversal = 7)
 
@@ -784,7 +766,6 @@ struct ConvolutionDimensionNumbers
     output_feature_dimension::Int64
     output_spatial_dimensions::Vector{Int64}
 end
-ConvolutionDimensionNumbers(;input_batch_dimension = zero(Int64), input_feature_dimension = zero(Int64), input_spatial_dimensions = Vector{Int64}(), kernel_input_feature_dimension = zero(Int64), kernel_output_feature_dimension = zero(Int64), kernel_spatial_dimensions = Vector{Int64}(), output_batch_dimension = zero(Int64), output_feature_dimension = zero(Int64), output_spatial_dimensions = Vector{Int64}()) = ConvolutionDimensionNumbers(input_batch_dimension, input_feature_dimension, input_spatial_dimensions, kernel_input_feature_dimension, kernel_output_feature_dimension, kernel_spatial_dimensions, output_batch_dimension, output_feature_dimension, output_spatial_dimensions)
 PB.default_values(::Type{ConvolutionDimensionNumbers}) = (;input_batch_dimension = zero(Int64), input_feature_dimension = zero(Int64), input_spatial_dimensions = Vector{Int64}(), kernel_input_feature_dimension = zero(Int64), kernel_output_feature_dimension = zero(Int64), kernel_spatial_dimensions = Vector{Int64}(), output_batch_dimension = zero(Int64), output_feature_dimension = zero(Int64), output_spatial_dimensions = Vector{Int64}())
 PB.field_numbers(::Type{ConvolutionDimensionNumbers}) = (;input_batch_dimension = 7, input_feature_dimension = 8, input_spatial_dimensions = 11, kernel_input_feature_dimension = 3, kernel_output_feature_dimension = 4, kernel_spatial_dimensions = 6, output_batch_dimension = 9, output_feature_dimension = 10, output_spatial_dimensions = 12)
 
@@ -858,7 +839,6 @@ struct IotaReplicaGroupListProto
     iota_reshape_dims::Vector{Int64}
     iota_transpose_perm::Vector{Int32}
 end
-IotaReplicaGroupListProto(;num_replica_groups = zero(Int64), num_devices_per_group = zero(Int64), iota_reshape_dims = Vector{Int64}(), iota_transpose_perm = Vector{Int32}()) = IotaReplicaGroupListProto(num_replica_groups, num_devices_per_group, iota_reshape_dims, iota_transpose_perm)
 PB.default_values(::Type{IotaReplicaGroupListProto}) = (;num_replica_groups = zero(Int64), num_devices_per_group = zero(Int64), iota_reshape_dims = Vector{Int64}(), iota_transpose_perm = Vector{Int32}())
 PB.field_numbers(::Type{IotaReplicaGroupListProto}) = (;num_replica_groups = 1, num_devices_per_group = 2, iota_reshape_dims = 3, iota_transpose_perm = 4)
 
@@ -905,7 +885,6 @@ struct OriginalArrayProto
     instruction_name::String
     shape_index::Vector{Int64}
 end
-OriginalArrayProto(;instruction_name = "", shape_index = Vector{Int64}()) = OriginalArrayProto(instruction_name, shape_index)
 PB.default_values(::Type{OriginalArrayProto}) = (;instruction_name = "", shape_index = Vector{Int64}())
 PB.field_numbers(::Type{OriginalArrayProto}) = (;instruction_name = 1, shape_index = 2)
 
@@ -942,7 +921,6 @@ struct ComputationStats
     flop_count::Float64
     transcendental_count::Float64
 end
-ComputationStats(;flop_count = zero(Float64), transcendental_count = zero(Float64)) = ComputationStats(flop_count, transcendental_count)
 PB.default_values(::Type{ComputationStats}) = (;flop_count = zero(Float64), transcendental_count = zero(Float64))
 PB.field_numbers(::Type{ComputationStats}) = (;flop_count = 1, transcendental_count = 2)
 
@@ -978,7 +956,6 @@ end
 struct FrontendAttributes
     map::Dict{String,String}
 end
-FrontendAttributes(;map = Dict{String,String}()) = FrontendAttributes(map)
 PB.default_values(::Type{FrontendAttributes}) = (;map = Dict{String,String}())
 PB.field_numbers(::Type{FrontendAttributes}) = (;map = 1)
 
@@ -1013,7 +990,6 @@ end
 struct var"WhileLoopBackendConfig.KnownInductionVariable"
     tuple_index::Int64
 end
-var"WhileLoopBackendConfig.KnownInductionVariable"(;tuple_index = zero(Int64)) = var"WhileLoopBackendConfig.KnownInductionVariable"(tuple_index)
 PB.default_values(::Type{var"WhileLoopBackendConfig.KnownInductionVariable"}) = (;tuple_index = zero(Int64))
 PB.field_numbers(::Type{var"WhileLoopBackendConfig.KnownInductionVariable"}) = (;tuple_index = 1)
 
@@ -1046,7 +1022,6 @@ struct var"PaddingConfig.PaddingConfigDimension"
     edge_padding_high::Int64
     interior_padding::Int64
 end
-var"PaddingConfig.PaddingConfigDimension"(;edge_padding_low = zero(Int64), edge_padding_high = zero(Int64), interior_padding = zero(Int64)) = var"PaddingConfig.PaddingConfigDimension"(edge_padding_low, edge_padding_high, interior_padding)
 PB.default_values(::Type{var"PaddingConfig.PaddingConfigDimension"}) = (;edge_padding_low = zero(Int64), edge_padding_high = zero(Int64), interior_padding = zero(Int64))
 PB.field_numbers(::Type{var"PaddingConfig.PaddingConfigDimension"}) = (;edge_padding_low = 1, edge_padding_high = 2, interior_padding = 3)
 
@@ -1091,7 +1066,6 @@ struct GemmPerfTableEntry
     k::Int64
     flops::Dict{String,Int64}
 end
-GemmPerfTableEntry(;b = zero(Int64), m = zero(Int64), n = zero(Int64), k = zero(Int64), flops = Dict{String,Int64}()) = GemmPerfTableEntry(b, m, n, k, flops)
 PB.default_values(::Type{GemmPerfTableEntry}) = (;b = zero(Int64), m = zero(Int64), n = zero(Int64), k = zero(Int64), flops = Dict{String,Int64}())
 PB.field_numbers(::Type{GemmPerfTableEntry}) = (;b = 1, m = 2, n = 3, k = 4, flops = 5)
 
@@ -1144,7 +1118,6 @@ struct OutputOperandAliasing
     operand_index::Int64
     operand_shape_index::Vector{Int64}
 end
-OutputOperandAliasing(;output_shape_index = Vector{Int64}(), operand_index = zero(Int64), operand_shape_index = Vector{Int64}()) = OutputOperandAliasing(output_shape_index, operand_index, operand_shape_index)
 PB.default_values(::Type{OutputOperandAliasing}) = (;output_shape_index = Vector{Int64}(), operand_index = zero(Int64), operand_shape_index = Vector{Int64}())
 PB.field_numbers(::Type{OutputOperandAliasing}) = (;output_shape_index = 1, operand_index = 2, operand_shape_index = 3)
 
@@ -1194,7 +1167,6 @@ struct ExecutionProfile
     profile_cache_hit::Bool
     warmup_run_executed::Bool
 end
-ExecutionProfile(;compilation_cache_hit = false, compile_time_ms = zero(Int64), compute_cycle_count = zero(Int64), compute_time_ns = zero(Int64), compute_and_transfer_time_ns = zero(Int64), executable_size_in_bytes = zero(Int64), profile_cache_hit = false, warmup_run_executed = false) = ExecutionProfile(compilation_cache_hit, compile_time_ms, compute_cycle_count, compute_time_ns, compute_and_transfer_time_ns, executable_size_in_bytes, profile_cache_hit, warmup_run_executed)
 PB.default_values(::Type{ExecutionProfile}) = (;compilation_cache_hit = false, compile_time_ms = zero(Int64), compute_cycle_count = zero(Int64), compute_time_ns = zero(Int64), compute_and_transfer_time_ns = zero(Int64), executable_size_in_bytes = zero(Int64), profile_cache_hit = false, warmup_run_executed = false)
 PB.field_numbers(::Type{ExecutionProfile}) = (;compilation_cache_hit = 1, compile_time_ms = 2, compute_cycle_count = 3, compute_time_ns = 4, compute_and_transfer_time_ns = 5, executable_size_in_bytes = 6, profile_cache_hit = 7, warmup_run_executed = 8)
 
@@ -1261,7 +1233,6 @@ struct var"AxisRefProto.SubAxis"
     pre_size::Int64
     size::Int64
 end
-var"AxisRefProto.SubAxis"(;pre_size = zero(Int64), size = zero(Int64)) = var"AxisRefProto.SubAxis"(pre_size, size)
 PB.default_values(::Type{var"AxisRefProto.SubAxis"}) = (;pre_size = zero(Int64), size = zero(Int64))
 PB.field_numbers(::Type{var"AxisRefProto.SubAxis"}) = (;pre_size = 1, size = 2)
 
@@ -1302,7 +1273,6 @@ struct var"MeshProto.MeshAxis"
     name::String
     size::Int64
 end
-var"MeshProto.MeshAxis"(;name = "", size = zero(Int64)) = var"MeshProto.MeshAxis"(name, size)
 PB.default_values(::Type{var"MeshProto.MeshAxis"}) = (;name = "", size = zero(Int64))
 PB.field_numbers(::Type{var"MeshProto.MeshAxis"}) = (;name = 1, size = 2)
 
@@ -1340,7 +1310,6 @@ end
 struct CholeskyOptions
     lower::Bool
 end
-CholeskyOptions(;lower = false) = CholeskyOptions(lower)
 PB.default_values(::Type{CholeskyOptions}) = (;lower = false)
 PB.field_numbers(::Type{CholeskyOptions}) = (;lower = 1)
 
@@ -1372,7 +1341,6 @@ struct StatisticsViz
     stat_index_to_visualize::Int64
     statistics::Vector{Statistic}
 end
-StatisticsViz(;stat_index_to_visualize = zero(Int64), statistics = Vector{Statistic}()) = StatisticsViz(stat_index_to_visualize, statistics)
 PB.default_values(::Type{StatisticsViz}) = (;stat_index_to_visualize = zero(Int64), statistics = Vector{Statistic}())
 PB.field_numbers(::Type{StatisticsViz}) = (;stat_index_to_visualize = 1, statistics = 2)
 
@@ -1411,7 +1379,6 @@ struct TriangularSolveOptions
     unit_diagonal::Bool
     transpose_a::var"TriangularSolveOptions.Transpose".T
 end
-TriangularSolveOptions(;left_side = false, lower = false, unit_diagonal = false, transpose_a = var"TriangularSolveOptions.Transpose".TRANSPOSE_INVALID) = TriangularSolveOptions(left_side, lower, unit_diagonal, transpose_a)
 PB.default_values(::Type{TriangularSolveOptions}) = (;left_side = false, lower = false, unit_diagonal = false, transpose_a = var"TriangularSolveOptions.Transpose".TRANSPOSE_INVALID)
 PB.field_numbers(::Type{TriangularSolveOptions}) = (;left_side = 1, lower = 2, unit_diagonal = 3, transpose_a = 4)
 
@@ -1459,7 +1426,6 @@ struct DeviceAssignmentProto
     computation_count::Int32
     computation_devices::Vector{var"DeviceAssignmentProto.ComputationDevice"}
 end
-DeviceAssignmentProto(;replica_count = zero(Int32), computation_count = zero(Int32), computation_devices = Vector{var"DeviceAssignmentProto.ComputationDevice"}()) = DeviceAssignmentProto(replica_count, computation_count, computation_devices)
 PB.default_values(::Type{DeviceAssignmentProto}) = (;replica_count = zero(Int32), computation_count = zero(Int32), computation_devices = Vector{var"DeviceAssignmentProto.ComputationDevice"}())
 PB.field_numbers(::Type{DeviceAssignmentProto}) = (;replica_count = 1, computation_count = 2, computation_devices = 3)
 
@@ -1501,7 +1467,6 @@ struct ChannelHandle
     handle::Int64
     var"#type"::var"ChannelHandle.ChannelType".T
 end
-ChannelHandle(;handle = zero(Int64), var"#type" = var"ChannelHandle.ChannelType".CHANNEL_TYPE_INVALID) = ChannelHandle(handle, var"#type")
 PB.default_values(::Type{ChannelHandle}) = (;handle = zero(Int64), var"#type" = var"ChannelHandle.ChannelType".CHANNEL_TYPE_INVALID)
 PB.field_numbers(::Type{ChannelHandle}) = (;handle = 1, var"#type" = 2)
 
@@ -1537,7 +1502,6 @@ end
 struct ResultAccuracy
     specs::Union{Nothing,OneOf{<:Union{var"ResultAccuracy.Mode".T,var"ResultAccuracy.Tolerance"}}}
 end
-ResultAccuracy(;specs = nothing) = ResultAccuracy(specs)
 PB.oneof_field_types(::Type{ResultAccuracy}) = (;
     specs = (;mode=var"ResultAccuracy.Mode".T, tolerance=var"ResultAccuracy.Tolerance"),
 )
@@ -1585,7 +1549,6 @@ struct RaggedDotDimensionNumbers
     lhs_ragged_dimensions::Vector{Int64}
     rhs_group_dimensions::Vector{Int64}
 end
-RaggedDotDimensionNumbers(;dot_dimension_numbers = nothing, lhs_ragged_dimensions = Vector{Int64}(), rhs_group_dimensions = Vector{Int64}()) = RaggedDotDimensionNumbers(dot_dimension_numbers, lhs_ragged_dimensions, rhs_group_dimensions)
 PB.default_values(::Type{RaggedDotDimensionNumbers}) = (;dot_dimension_numbers = nothing, lhs_ragged_dimensions = Vector{Int64}(), rhs_group_dimensions = Vector{Int64}())
 PB.field_numbers(::Type{RaggedDotDimensionNumbers}) = (;dot_dimension_numbers = 1, lhs_ragged_dimensions = 2, rhs_group_dimensions = 3)
 
@@ -1626,7 +1589,6 @@ end
 struct Window
     dimensions::Vector{WindowDimension}
 end
-Window(;dimensions = Vector{WindowDimension}()) = Window(dimensions)
 PB.default_values(::Type{Window}) = (;dimensions = Vector{WindowDimension}())
 PB.field_numbers(::Type{Window}) = (;dimensions = 1)
 
@@ -1658,7 +1620,6 @@ struct CollectiveDeviceListProto
     replica_groups::Vector{ReplicaGroup}
     iota_replica_group_list::Union{Nothing,IotaReplicaGroupListProto}
 end
-CollectiveDeviceListProto(;replica_groups = Vector{ReplicaGroup}(), iota_replica_group_list = nothing) = CollectiveDeviceListProto(replica_groups, iota_replica_group_list)
 PB.default_values(::Type{CollectiveDeviceListProto}) = (;replica_groups = Vector{ReplicaGroup}(), iota_replica_group_list = nothing)
 PB.field_numbers(::Type{CollectiveDeviceListProto}) = (;replica_groups = 1, iota_replica_group_list = 2)
 
@@ -1695,7 +1656,6 @@ struct OriginalValueElementProto
     shape_index::Vector{Int64}
     original_array::Union{Nothing,OriginalArrayProto}
 end
-OriginalValueElementProto(;shape_index = Vector{Int64}(), original_array = nothing) = OriginalValueElementProto(shape_index, original_array)
 PB.default_values(::Type{OriginalValueElementProto}) = (;shape_index = Vector{Int64}(), original_array = nothing)
 PB.field_numbers(::Type{OriginalValueElementProto}) = (;shape_index = 1, original_array = 2)
 
@@ -1733,7 +1693,6 @@ struct WhileLoopBackendConfig
     known_init_step::Union{Nothing,var"WhileLoopBackendConfig.KnownInitStep"}
     known_induction_variable::Union{Nothing,var"WhileLoopBackendConfig.KnownInductionVariable"}
 end
-WhileLoopBackendConfig(;known_trip_count = nothing, known_init_step = nothing, known_induction_variable = nothing) = WhileLoopBackendConfig(known_trip_count, known_init_step, known_induction_variable)
 PB.default_values(::Type{WhileLoopBackendConfig}) = (;known_trip_count = nothing, known_init_step = nothing, known_induction_variable = nothing)
 PB.field_numbers(::Type{WhileLoopBackendConfig}) = (;known_trip_count = 1, known_init_step = 2, known_induction_variable = 3)
 
@@ -1774,7 +1733,6 @@ end
 struct PaddingConfig
     dimensions::Vector{var"PaddingConfig.PaddingConfigDimension"}
 end
-PaddingConfig(;dimensions = Vector{var"PaddingConfig.PaddingConfigDimension"}()) = PaddingConfig(dimensions)
 PB.default_values(::Type{PaddingConfig}) = (;dimensions = Vector{var"PaddingConfig.PaddingConfigDimension"}())
 PB.field_numbers(::Type{PaddingConfig}) = (;dimensions = 1)
 
@@ -1805,7 +1763,6 @@ end
 struct GemmPerfTableEntryValues
     entries::Vector{GemmPerfTableEntry}
 end
-GemmPerfTableEntryValues(;entries = Vector{GemmPerfTableEntry}()) = GemmPerfTableEntryValues(entries)
 PB.default_values(::Type{GemmPerfTableEntryValues}) = (;entries = Vector{GemmPerfTableEntry}())
 PB.field_numbers(::Type{GemmPerfTableEntryValues}) = (;entries = 1)
 
@@ -1837,7 +1794,6 @@ struct PrecisionConfig
     operand_precision::Vector{var"PrecisionConfig.Precision".T}
     algorithm::var"PrecisionConfig.Algorithm".T
 end
-PrecisionConfig(;operand_precision = Vector{var"PrecisionConfig.Precision".T}(), algorithm = var"PrecisionConfig.Algorithm".ALG_UNSET) = PrecisionConfig(operand_precision, algorithm)
 PB.default_values(::Type{PrecisionConfig}) = (;operand_precision = Vector{var"PrecisionConfig.Precision".T}(), algorithm = var"PrecisionConfig.Algorithm".ALG_UNSET)
 PB.field_numbers(::Type{PrecisionConfig}) = (;operand_precision = 1, algorithm = 2)
 
@@ -1874,7 +1830,6 @@ struct AxisRefProto
     mesh_axis_index::Int64
     sub_axis_info::Union{Nothing,var"AxisRefProto.SubAxis"}
 end
-AxisRefProto(;mesh_axis_index = zero(Int64), sub_axis_info = nothing) = AxisRefProto(mesh_axis_index, sub_axis_info)
 PB.default_values(::Type{AxisRefProto}) = (;mesh_axis_index = zero(Int64), sub_axis_info = nothing)
 PB.field_numbers(::Type{AxisRefProto}) = (;mesh_axis_index = 1, sub_axis_info = 2)
 
@@ -1914,7 +1869,6 @@ struct var"OpMetadata.ProfileInfo"
     compilation_event::CompilationEvent.T
     profile_generation_strategy::ProfileGenerationStrategy.T
 end
-var"OpMetadata.ProfileInfo"(;profile_type = Vector{ProfileType.T}(), relative_speedup = zero(Float64), profile_source = ProfileSource.PROFILE_SOURCE_UNKNOWN_SOURCE, compilation_event = CompilationEvent.COMPILATION_EVENT_UNKNOWN_EVENT, profile_generation_strategy = ProfileGenerationStrategy.PROFILE_GENERATION_STRATEGY_UNKNOWN) = var"OpMetadata.ProfileInfo"(profile_type, relative_speedup, profile_source, compilation_event, profile_generation_strategy)
 PB.default_values(::Type{var"OpMetadata.ProfileInfo"}) = (;profile_type = Vector{ProfileType.T}(), relative_speedup = zero(Float64), profile_source = ProfileSource.PROFILE_SOURCE_UNKNOWN_SOURCE, compilation_event = CompilationEvent.COMPILATION_EVENT_UNKNOWN_EVENT, profile_generation_strategy = ProfileGenerationStrategy.PROFILE_GENERATION_STRATEGY_UNKNOWN)
 PB.field_numbers(::Type{var"OpMetadata.ProfileInfo"}) = (;profile_type = 1, relative_speedup = 2, profile_source = 3, compilation_event = 4, profile_generation_strategy = 5)
 
@@ -1966,7 +1920,6 @@ struct MeshProto
     axes::Vector{var"MeshProto.MeshAxis"}
     device_ids::Vector{Int64}
 end
-MeshProto(;axes = Vector{var"MeshProto.MeshAxis"}(), device_ids = Vector{Int64}()) = MeshProto(axes, device_ids)
 PB.default_values(::Type{MeshProto}) = (;axes = Vector{var"MeshProto.MeshAxis"}(), device_ids = Vector{Int64}())
 PB.field_numbers(::Type{MeshProto}) = (;axes = 1, device_ids = 2)
 
@@ -2003,7 +1956,6 @@ struct OriginalValueProto
     elements::Vector{OriginalValueElementProto}
     is_synthetic_call::Bool
 end
-OriginalValueProto(;elements = Vector{OriginalValueElementProto}(), is_synthetic_call = false) = OriginalValueProto(elements, is_synthetic_call)
 PB.default_values(::Type{OriginalValueProto}) = (;elements = Vector{OriginalValueElementProto}(), is_synthetic_call = false)
 PB.field_numbers(::Type{OriginalValueProto}) = (;elements = 1, is_synthetic_call = 2)
 
@@ -2039,7 +1991,6 @@ end
 struct GemmPerfTable
     entries::Dict{String,GemmPerfTableEntryValues}
 end
-GemmPerfTable(;entries = Dict{String,GemmPerfTableEntryValues}()) = GemmPerfTable(entries)
 PB.default_values(::Type{GemmPerfTable}) = (;entries = Dict{String,GemmPerfTableEntryValues}())
 PB.field_numbers(::Type{GemmPerfTable}) = (;entries = 1)
 
@@ -2071,7 +2022,6 @@ struct var"NamedShardingProto.DimensionSharding"
     axes::Vector{AxisRefProto}
     is_closed::Bool
 end
-var"NamedShardingProto.DimensionSharding"(;axes = Vector{AxisRefProto}(), is_closed = false) = var"NamedShardingProto.DimensionSharding"(axes, is_closed)
 PB.default_values(::Type{var"NamedShardingProto.DimensionSharding"}) = (;axes = Vector{AxisRefProto}(), is_closed = false)
 PB.field_numbers(::Type{var"NamedShardingProto.DimensionSharding"}) = (;axes = 1, is_closed = 2)
 
@@ -2120,7 +2070,6 @@ struct OpMetadata
     stack_frame_id::Int32
     scheduling_name::String
 end
-OpMetadata(;op_type = "", op_name = "", source_file = "", source_line = zero(Int32), source_end_line = zero(Int32), source_column = zero(Int32), source_end_column = zero(Int32), profile_type = Vector{ProfileType.T}(), size_of_generated_code_in_bytes = zero(Int64), size_of_memory_working_set_in_bytes = zero(Int64), profile_info = nothing, deduplicated_name = "", stack_frame_id = zero(Int32), scheduling_name = "") = OpMetadata(op_type, op_name, source_file, source_line, source_end_line, source_column, source_end_column, profile_type, size_of_generated_code_in_bytes, size_of_memory_working_set_in_bytes, profile_info, deduplicated_name, stack_frame_id, scheduling_name)
 PB.reserved_fields(::Type{OpMetadata}) = (names = ["creation_pass_id", "logical_creation_pass_id"], numbers = Union{Int,UnitRange{Int}}[6, 7, 11, 13, 14])
 PB.default_values(::Type{OpMetadata}) = (;op_type = "", op_name = "", source_file = "", source_line = zero(Int32), source_end_line = zero(Int32), source_column = zero(Int32), source_end_column = zero(Int32), profile_type = Vector{ProfileType.T}(), size_of_generated_code_in_bytes = zero(Int64), size_of_memory_working_set_in_bytes = zero(Int64), profile_info = nothing, deduplicated_name = "", stack_frame_id = zero(Int32), scheduling_name = "")
 PB.field_numbers(::Type{OpMetadata}) = (;op_type = 1, op_name = 2, source_file = 3, source_line = 4, source_end_line = 17, source_column = 18, source_end_column = 19, profile_type = 5, size_of_generated_code_in_bytes = 8, size_of_memory_working_set_in_bytes = 9, profile_info = 10, deduplicated_name = 12, stack_frame_id = 15, scheduling_name = 16)
@@ -2218,7 +2167,6 @@ struct MeshAxesReplicaGroupListProto
     mesh::Union{Nothing,MeshProto}
     axes::Vector{AxisRefProto}
 end
-MeshAxesReplicaGroupListProto(;mesh = nothing, axes = Vector{AxisRefProto}()) = MeshAxesReplicaGroupListProto(mesh, axes)
 PB.default_values(::Type{MeshAxesReplicaGroupListProto}) = (;mesh = nothing, axes = Vector{AxisRefProto}())
 PB.field_numbers(::Type{MeshAxesReplicaGroupListProto}) = (;mesh = 1, axes = 2)
 
@@ -2258,7 +2206,6 @@ struct NamedShardingProto
     unreduced_axes::Vector{AxisRefProto}
     metadata::Vector{OpMetadata}
 end
-NamedShardingProto(;mesh = nothing, dim_shardings = Vector{var"NamedShardingProto.DimensionSharding"}(), replicated_axes = Vector{AxisRefProto}(), unreduced_axes = Vector{AxisRefProto}(), metadata = Vector{OpMetadata}()) = NamedShardingProto(mesh, dim_shardings, replicated_axes, unreduced_axes, metadata)
 PB.reserved_fields(::Type{NamedShardingProto}) = (names = String[], numbers = Union{Int,UnitRange{Int}}[1])
 PB.default_values(::Type{NamedShardingProto}) = (;mesh = nothing, dim_shardings = Vector{var"NamedShardingProto.DimensionSharding"}(), replicated_axes = Vector{AxisRefProto}(), unreduced_axes = Vector{AxisRefProto}(), metadata = Vector{OpMetadata}())
 PB.field_numbers(::Type{NamedShardingProto}) = (;mesh = 2, dim_shardings = 3, replicated_axes = 4, unreduced_axes = 5, metadata = 6)
@@ -2392,7 +2339,6 @@ struct var"##Stub#ShapeProto" <: var"##Abstract#ShapeProto"
 end
 
 const LayoutProto = var"##Stub#LayoutProto"{var"##Stub#ShapeProto"}
-LayoutProto(;minor_to_major = Vector{Int64}(), dim_level_types = Vector{DimLevelType.T}(), dim_unique = Vector{Bool}(), dim_ordered = Vector{Bool}(), tiles = Vector{TileProto}(), tail_padding_alignment_in_elements = zero(Int64), element_size_in_bits = zero(Int64), memory_space = zero(Int64), index_primitive_type = PrimitiveType.PRIMITIVE_TYPE_INVALID, pointer_primitive_type = PrimitiveType.PRIMITIVE_TYPE_INVALID, physical_shape = nothing, dynamic_shape_metadata_prefix_bytes = zero(Int64), split_configs = Vector{SplitConfigProto}()) = LayoutProto(minor_to_major, dim_level_types, dim_unique, dim_ordered, tiles, tail_padding_alignment_in_elements, element_size_in_bits, memory_space, index_primitive_type, pointer_primitive_type, physical_shape, dynamic_shape_metadata_prefix_bytes, split_configs)
 PB.reserved_fields(::Type{LayoutProto}) = (names = ["padded_dimensions", "padding_value", "format", "max_sparse_elements"], numbers = Union{Int,UnitRange{Int}}[2, 3, 4, 5])
 PB.default_values(::Type{LayoutProto}) = (;minor_to_major = Vector{Int64}(), dim_level_types = Vector{DimLevelType.T}(), dim_unique = Vector{Bool}(), dim_ordered = Vector{Bool}(), tiles = Vector{TileProto}(), tail_padding_alignment_in_elements = zero(Int64), element_size_in_bits = zero(Int64), memory_space = zero(Int64), index_primitive_type = PrimitiveType.PRIMITIVE_TYPE_INVALID, pointer_primitive_type = PrimitiveType.PRIMITIVE_TYPE_INVALID, physical_shape = nothing, dynamic_shape_metadata_prefix_bytes = zero(Int64), split_configs = Vector{SplitConfigProto}())
 PB.field_numbers(::Type{LayoutProto}) = (;minor_to_major = 1, dim_level_types = 9, dim_unique = 13, dim_ordered = 14, tiles = 6, tail_padding_alignment_in_elements = 16, element_size_in_bits = 7, memory_space = 8, index_primitive_type = 11, pointer_primitive_type = 12, physical_shape = 10, dynamic_shape_metadata_prefix_bytes = 15, split_configs = 17)
@@ -2482,7 +2428,6 @@ function PB._encoded_size(x::LayoutProto)
 end
 
 const LiteralProto = var"##Stub#LiteralProto"{var"##Stub#ShapeProto"}
-LiteralProto(;shape = nothing, preds = Vector{Bool}(), s1s = UInt8[], s2s = UInt8[], s4s = UInt8[], s8s = UInt8[], u1s = UInt8[], u2s = UInt8[], u4s = UInt8[], u8s = UInt8[], s32s = Vector{Int32}(), s64s = Vector{Int64}(), u32s = Vector{UInt32}(), u64s = Vector{UInt64}(), f32s = Vector{Float32}(), f64s = Vector{Float64}(), c64s = Vector{Float32}(), c128s = Vector{Float64}(), tuple_literals = Vector{LiteralProto}(), f16s = UInt8[], bf16s = UInt8[], u16s = UInt8[], s16s = UInt8[], f4e2m1fns = UInt8[], f8e3m4s = UInt8[], f8e4m3b11fnuzs = UInt8[], f8e4m3fns = UInt8[], f8e4m3fnuzs = UInt8[], f8e4m3s = UInt8[], f8e5m2fnuzs = UInt8[], f8e5m2s = UInt8[], f8e8m0fnus = UInt8[], sparse_indices = Vector{Int64}()) = LiteralProto(shape, preds, s1s, s2s, s4s, s8s, u1s, u2s, u4s, u8s, s32s, s64s, u32s, u64s, f32s, f64s, c64s, c128s, tuple_literals, f16s, bf16s, u16s, s16s, f4e2m1fns, f8e3m4s, f8e4m3b11fnuzs, f8e4m3fns, f8e4m3fnuzs, f8e4m3s, f8e5m2fnuzs, f8e5m2s, f8e8m0fnus, sparse_indices)
 PB.default_values(::Type{LiteralProto}) = (;shape = nothing, preds = Vector{Bool}(), s1s = UInt8[], s2s = UInt8[], s4s = UInt8[], s8s = UInt8[], u1s = UInt8[], u2s = UInt8[], u4s = UInt8[], u8s = UInt8[], s32s = Vector{Int32}(), s64s = Vector{Int64}(), u32s = Vector{UInt32}(), u64s = Vector{UInt64}(), f32s = Vector{Float32}(), f64s = Vector{Float64}(), c64s = Vector{Float32}(), c128s = Vector{Float64}(), tuple_literals = Vector{LiteralProto}(), f16s = UInt8[], bf16s = UInt8[], u16s = UInt8[], s16s = UInt8[], f4e2m1fns = UInt8[], f8e3m4s = UInt8[], f8e4m3b11fnuzs = UInt8[], f8e4m3fns = UInt8[], f8e4m3fnuzs = UInt8[], f8e4m3s = UInt8[], f8e5m2fnuzs = UInt8[], f8e5m2s = UInt8[], f8e8m0fnus = UInt8[], sparse_indices = Vector{Int64}())
 PB.field_numbers(::Type{LiteralProto}) = (;shape = 1, preds = 2, s1s = 30, s2s = 26, s4s = 21, s8s = 15, u1s = 31, u2s = 27, u4s = 22, u8s = 3, s32s = 4, s64s = 5, u32s = 6, u64s = 7, f32s = 8, f64s = 9, c64s = 12, c128s = 18, tuple_literals = 10, f16s = 11, bf16s = 13, u16s = 16, s16s = 17, f4e2m1fns = 32, f8e3m4s = 29, f8e4m3b11fnuzs = 23, f8e4m3fns = 20, f8e4m3fnuzs = 25, f8e4m3s = 28, f8e5m2fnuzs = 24, f8e5m2s = 19, f8e8m0fnus = 33, sparse_indices = 14)
 
@@ -2671,7 +2616,6 @@ function PB._encoded_size(x::LiteralProto)
 end
 
 const OpSharding = var"##Stub#OpSharding"{var"##Stub#ShapeProto"}
-OpSharding(;var"#type" = var"OpSharding.Type".REPLICATED, tile_shape = nothing, tile_assignment_dimensions = Vector{Int64}(), tile_assignment_devices = Vector{Int64}(), tuple_shardings = Vector{OpSharding}(), replicate_on_last_tile_dim = false, metadata = Vector{OpMetadata}(), last_tile_dims = Vector{var"OpSharding.Type".T}(), iota_reshape_dims = Vector{Int64}(), iota_transpose_perm = Vector{Int32}(), is_shard_group = false, shard_group_id = zero(Int64), shard_group_type = var"OpSharding.ShardGroupType".AS, named_sharding = nothing) = OpSharding(var"#type", tile_shape, tile_assignment_dimensions, tile_assignment_devices, tuple_shardings, replicate_on_last_tile_dim, metadata, last_tile_dims, iota_reshape_dims, iota_transpose_perm, is_shard_group, shard_group_id, shard_group_type, named_sharding)
 PB.default_values(::Type{OpSharding}) = (;var"#type" = var"OpSharding.Type".REPLICATED, tile_shape = nothing, tile_assignment_dimensions = Vector{Int64}(), tile_assignment_devices = Vector{Int64}(), tuple_shardings = Vector{OpSharding}(), replicate_on_last_tile_dim = false, metadata = Vector{OpMetadata}(), last_tile_dims = Vector{var"OpSharding.Type".T}(), iota_reshape_dims = Vector{Int64}(), iota_transpose_perm = Vector{Int32}(), is_shard_group = false, shard_group_id = zero(Int64), shard_group_type = var"OpSharding.ShardGroupType".AS, named_sharding = nothing)
 PB.field_numbers(::Type{OpSharding}) = (;var"#type" = 1, tile_shape = 2, tile_assignment_dimensions = 3, tile_assignment_devices = 4, tuple_shardings = 5, replicate_on_last_tile_dim = 6, metadata = 7, last_tile_dims = 8, iota_reshape_dims = 9, iota_transpose_perm = 10, is_shard_group = 11, shard_group_id = 12, shard_group_type = 13, named_sharding = 14)
 
@@ -2765,7 +2709,6 @@ function PB._encoded_size(x::OpSharding)
 end
 
 const ProgramShapeProto = var"##Stub#ProgramShapeProto"{var"##Stub#ShapeProto"}
-ProgramShapeProto(;parameters = Vector{ShapeProto}(), result = nothing, parameter_names = Vector{String}()) = ProgramShapeProto(parameters, result, parameter_names)
 PB.default_values(::Type{ProgramShapeProto}) = (;parameters = Vector{ShapeProto}(), result = nothing, parameter_names = Vector{String}())
 PB.field_numbers(::Type{ProgramShapeProto}) = (;parameters = 1, result = 2, parameter_names = 3)
 
@@ -2804,7 +2747,6 @@ function PB._encoded_size(x::ProgramShapeProto)
 end
 
 const ShapeProto = var"##Stub#ShapeProto"
-ShapeProto(;element_type = PrimitiveType.PRIMITIVE_TYPE_INVALID, dimensions = Vector{Int64}(), is_dynamic_dimension = Vector{Bool}(), tuple_shapes = Vector{ShapeProto}(), layout = nothing) = ShapeProto(element_type, dimensions, is_dynamic_dimension, tuple_shapes, layout)
 PB.reserved_fields(::Type{ShapeProto}) = (names = ["rank"], numbers = Union{Int,UnitRange{Int}}[1])
 PB.default_values(::Type{ShapeProto}) = (;element_type = PrimitiveType.PRIMITIVE_TYPE_INVALID, dimensions = Vector{Int64}(), is_dynamic_dimension = Vector{Bool}(), tuple_shapes = Vector{ShapeProto}(), layout = nothing)
 PB.field_numbers(::Type{ShapeProto}) = (;element_type = 2, dimensions = 3, is_dynamic_dimension = 6, tuple_shapes = 4, layout = 5)

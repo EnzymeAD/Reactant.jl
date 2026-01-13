@@ -9,7 +9,6 @@ struct var"#Any"
     type_url::String
     value::Vector{UInt8}
 end
-var"#Any"(;type_url = "", value = UInt8[]) = var"#Any"(type_url, value)
 PB.default_values(::Type{var"#Any"}) = (;type_url = "", value = UInt8[])
 PB.field_numbers(::Type{var"#Any"}) = (;type_url = 1, value = 2)
 

@@ -16,7 +16,6 @@ struct ExecuteOptionsProto
     execution_mode::ExecutionModeProto.T
     non_donatable_input_indices::Vector{Int32}
 end
-ExecuteOptionsProto(;arguments_are_tupled = false, untuple_result = false, launch_id = zero(Int32), strict_shape_checking = false, use_major_to_minor_data_layout_for_callbacks = false, execution_mode = ExecutionModeProto.EXECUTION_MODE_UNSPECIFIED, non_donatable_input_indices = Vector{Int32}()) = ExecuteOptionsProto(arguments_are_tupled, untuple_result, launch_id, strict_shape_checking, use_major_to_minor_data_layout_for_callbacks, execution_mode, non_donatable_input_indices)
 PB.default_values(::Type{ExecuteOptionsProto}) = (;arguments_are_tupled = false, untuple_result = false, launch_id = zero(Int32), strict_shape_checking = false, use_major_to_minor_data_layout_for_callbacks = false, execution_mode = ExecutionModeProto.EXECUTION_MODE_UNSPECIFIED, non_donatable_input_indices = Vector{Int32}())
 PB.field_numbers(::Type{ExecuteOptionsProto}) = (;arguments_are_tupled = 1, untuple_result = 2, launch_id = 3, strict_shape_checking = 4, use_major_to_minor_data_layout_for_callbacks = 8, execution_mode = 6, non_donatable_input_indices = 7)
 

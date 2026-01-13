@@ -10,7 +10,6 @@ struct SourceInfo
     line_number::Int32
     stack_frame::String
 end
-SourceInfo(;file_name = "", line_number = zero(Int32), stack_frame = "") = SourceInfo(file_name, line_number, stack_frame)
 PB.default_values(::Type{SourceInfo}) = (;file_name = "", line_number = zero(Int32), stack_frame = "")
 PB.field_numbers(::Type{SourceInfo}) = (;file_name = 1, line_number = 2, stack_frame = 3)
 

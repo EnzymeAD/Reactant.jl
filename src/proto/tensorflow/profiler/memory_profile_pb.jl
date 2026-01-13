@@ -16,7 +16,6 @@ struct MemoryAggregationStats
     fragmentation::Float64
     peak_bytes_in_use::Int64
 end
-MemoryAggregationStats(;stack_reserved_bytes = zero(Int64), heap_allocated_bytes = zero(Int64), free_memory_bytes = zero(Int64), fragmentation = zero(Float64), peak_bytes_in_use = zero(Int64)) = MemoryAggregationStats(stack_reserved_bytes, heap_allocated_bytes, free_memory_bytes, fragmentation, peak_bytes_in_use)
 PB.default_values(::Type{MemoryAggregationStats}) = (;stack_reserved_bytes = zero(Int64), heap_allocated_bytes = zero(Int64), free_memory_bytes = zero(Int64), fragmentation = zero(Float64), peak_bytes_in_use = zero(Int64))
 PB.field_numbers(::Type{MemoryAggregationStats}) = (;stack_reserved_bytes = 1, heap_allocated_bytes = 2, free_memory_bytes = 3, fragmentation = 4, peak_bytes_in_use = 5)
 
@@ -69,7 +68,6 @@ struct ActiveAllocation
     special_index::Int64
     num_occurrences::Int64
 end
-ActiveAllocation(;snapshot_index = zero(Int64), special_index = zero(Int64), num_occurrences = zero(Int64)) = ActiveAllocation(snapshot_index, special_index, num_occurrences)
 PB.default_values(::Type{ActiveAllocation}) = (;snapshot_index = zero(Int64), special_index = zero(Int64), num_occurrences = zero(Int64))
 PB.field_numbers(::Type{ActiveAllocation}) = (;snapshot_index = 1, special_index = 2, num_occurrences = 3)
 
@@ -118,7 +116,6 @@ struct MemoryActivityMetadata
     data_type::String
     tensor_shape::String
 end
-MemoryActivityMetadata(;memory_activity = MemoryActivity.UNKNOWN_ACTIVITY, requested_bytes = zero(Int64), allocation_bytes = zero(Int64), address = zero(UInt64), tf_op_name = "", step_id = zero(Int64), region_type = "", data_type = "", tensor_shape = "") = MemoryActivityMetadata(memory_activity, requested_bytes, allocation_bytes, address, tf_op_name, step_id, region_type, data_type, tensor_shape)
 PB.default_values(::Type{MemoryActivityMetadata}) = (;memory_activity = MemoryActivity.UNKNOWN_ACTIVITY, requested_bytes = zero(Int64), allocation_bytes = zero(Int64), address = zero(UInt64), tf_op_name = "", step_id = zero(Int64), region_type = "", data_type = "", tensor_shape = "")
 PB.field_numbers(::Type{MemoryActivityMetadata}) = (;memory_activity = 1, requested_bytes = 2, allocation_bytes = 3, address = 4, tf_op_name = 5, step_id = 6, region_type = 7, data_type = 8, tensor_shape = 9)
 
@@ -192,7 +189,6 @@ struct MemoryProfileSummary
     peak_stats_time_ps::Int64
     memory_capacity::Int64
 end
-MemoryProfileSummary(;peak_bytes_usage_lifetime = zero(Int64), peak_stats = nothing, peak_stats_time_ps = zero(Int64), memory_capacity = zero(Int64)) = MemoryProfileSummary(peak_bytes_usage_lifetime, peak_stats, peak_stats_time_ps, memory_capacity)
 PB.default_values(::Type{MemoryProfileSummary}) = (;peak_bytes_usage_lifetime = zero(Int64), peak_stats = nothing, peak_stats_time_ps = zero(Int64), memory_capacity = zero(Int64))
 PB.field_numbers(::Type{MemoryProfileSummary}) = (;peak_bytes_usage_lifetime = 1, peak_stats = 2, peak_stats_time_ps = 3, memory_capacity = 4)
 
@@ -240,7 +236,6 @@ struct MemoryProfileSnapshot
     aggregation_stats::Union{Nothing,MemoryAggregationStats}
     activity_metadata::Union{Nothing,MemoryActivityMetadata}
 end
-MemoryProfileSnapshot(;time_offset_ps = zero(Int64), aggregation_stats = nothing, activity_metadata = nothing) = MemoryProfileSnapshot(time_offset_ps, aggregation_stats, activity_metadata)
 PB.default_values(::Type{MemoryProfileSnapshot}) = (;time_offset_ps = zero(Int64), aggregation_stats = nothing, activity_metadata = nothing)
 PB.field_numbers(::Type{MemoryProfileSnapshot}) = (;time_offset_ps = 1, aggregation_stats = 2, activity_metadata = 3)
 
@@ -285,7 +280,6 @@ struct PerAllocatorMemoryProfile
     special_allocations::Vector{MemoryActivityMetadata}
     sampled_timeline_snapshots::Vector{MemoryProfileSnapshot}
 end
-PerAllocatorMemoryProfile(;memory_profile_snapshots = Vector{MemoryProfileSnapshot}(), profile_summary = nothing, active_allocations = Vector{ActiveAllocation}(), special_allocations = Vector{MemoryActivityMetadata}(), sampled_timeline_snapshots = Vector{MemoryProfileSnapshot}()) = PerAllocatorMemoryProfile(memory_profile_snapshots, profile_summary, active_allocations, special_allocations, sampled_timeline_snapshots)
 PB.default_values(::Type{PerAllocatorMemoryProfile}) = (;memory_profile_snapshots = Vector{MemoryProfileSnapshot}(), profile_summary = nothing, active_allocations = Vector{ActiveAllocation}(), special_allocations = Vector{MemoryActivityMetadata}(), sampled_timeline_snapshots = Vector{MemoryProfileSnapshot}())
 PB.field_numbers(::Type{PerAllocatorMemoryProfile}) = (;memory_profile_snapshots = 1, profile_summary = 2, active_allocations = 3, special_allocations = 4, sampled_timeline_snapshots = 5)
 
@@ -339,7 +333,6 @@ struct MemoryProfile
     memory_ids::Vector{String}
     version::Int32
 end
-MemoryProfile(;memory_profile_per_allocator = Dict{String,PerAllocatorMemoryProfile}(), num_hosts = zero(Int32), memory_ids = Vector{String}(), version = zero(Int32)) = MemoryProfile(memory_profile_per_allocator, num_hosts, memory_ids, version)
 PB.reserved_fields(::Type{MemoryProfile}) = (names = String[], numbers = Union{Int,UnitRange{Int}}[4])
 PB.default_values(::Type{MemoryProfile}) = (;memory_profile_per_allocator = Dict{String,PerAllocatorMemoryProfile}(), num_hosts = zero(Int32), memory_ids = Vector{String}(), version = zero(Int32))
 PB.field_numbers(::Type{MemoryProfile}) = (;memory_profile_per_allocator = 1, num_hosts = 2, memory_ids = 3, version = 5)

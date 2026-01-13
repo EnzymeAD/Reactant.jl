@@ -16,7 +16,6 @@ struct JobInfo
     process_id::Int64
     thread_id::Int64
 end
-JobInfo(;name = "", cell = "", user = "", uid = zero(Int64), task_id = zero(Int64), task_uid = zero(Int64), process_id = zero(Int64), thread_id = zero(Int64)) = JobInfo(name, cell, user, uid, task_id, task_uid, process_id, thread_id)
 PB.default_values(::Type{JobInfo}) = (;name = "", cell = "", user = "", uid = zero(Int64), task_id = zero(Int64), task_uid = zero(Int64), process_id = zero(Int64), thread_id = zero(Int64))
 PB.field_numbers(::Type{JobInfo}) = (;name = 1, cell = 2, user = 3, uid = 4, task_id = 5, task_uid = 6, process_id = 7, thread_id = 8)
 
@@ -83,7 +82,6 @@ struct TagMetric
     key::String
     value::String
 end
-TagMetric(;key = "", value = "") = TagMetric(key, value)
 PB.default_values(::Type{TagMetric}) = (;key = "", value = "")
 PB.field_numbers(::Type{TagMetric}) = (;key = 1, value = 2)
 
@@ -122,7 +120,6 @@ struct KeyValueMetric
     key::String
     value::Int64
 end
-KeyValueMetric(;key = "", value = zero(Int64)) = KeyValueMetric(key, value)
 PB.default_values(::Type{KeyValueMetric}) = (;key = "", value = zero(Int64))
 PB.field_numbers(::Type{KeyValueMetric}) = (;key = 1, value = 2)
 
@@ -162,7 +159,6 @@ struct PassMetrics
     custom_metrics::Union{Nothing,google.protobuf.var"#Any"}
     kv_metrics::Vector{KeyValueMetric}
 end
-PassMetrics(;module_id = zero(UInt64), pass_name = "", pass_duration = nothing, custom_metrics = nothing, kv_metrics = Vector{KeyValueMetric}()) = PassMetrics(module_id, pass_name, pass_duration, custom_metrics, kv_metrics)
 PB.default_values(::Type{PassMetrics}) = (;module_id = zero(UInt64), pass_name = "", pass_duration = nothing, custom_metrics = nothing, kv_metrics = Vector{KeyValueMetric}())
 PB.field_numbers(::Type{PassMetrics}) = (;module_id = 1, pass_name = 2, pass_duration = 3, custom_metrics = 4, kv_metrics = 5)
 
@@ -221,7 +217,6 @@ struct CompilationLogEntry
     hlo_module_name::String
     tag::Vector{TagMetric}
 end
-CompilationLogEntry(;timestamp = nothing, stage = var"CompilationLogEntry.CompilationStage".UNSPECIFIED, duration = nothing, task_index = zero(Int32), pass_metrics = Vector{PassMetrics}(), module_ids = Vector{UInt64}(), job_info = nothing, hlo_module_name = "", tag = Vector{TagMetric}()) = CompilationLogEntry(timestamp, stage, duration, task_index, pass_metrics, module_ids, job_info, hlo_module_name, tag)
 PB.default_values(::Type{CompilationLogEntry}) = (;timestamp = nothing, stage = var"CompilationLogEntry.CompilationStage".UNSPECIFIED, duration = nothing, task_index = zero(Int32), pass_metrics = Vector{PassMetrics}(), module_ids = Vector{UInt64}(), job_info = nothing, hlo_module_name = "", tag = Vector{TagMetric}())
 PB.field_numbers(::Type{CompilationLogEntry}) = (;timestamp = 1, stage = 2, duration = 3, task_index = 4, pass_metrics = 5, module_ids = 6, job_info = 7, hlo_module_name = 8, tag = 9)
 

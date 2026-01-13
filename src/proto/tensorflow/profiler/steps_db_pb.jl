@@ -12,7 +12,6 @@ struct DeviceMemoryTransfer
     time_us::Float64
     bytes_transferred::UInt64
 end
-DeviceMemoryTransfer(;occurrence = zero(UInt64), time_us = zero(Float64), bytes_transferred = zero(UInt64)) = DeviceMemoryTransfer(occurrence, time_us, bytes_transferred)
 PB.default_values(::Type{DeviceMemoryTransfer}) = (;occurrence = zero(UInt64), time_us = zero(Float64), bytes_transferred = zero(UInt64))
 PB.field_numbers(::Type{DeviceMemoryTransfer}) = (;occurrence = 1, time_us = 2, bytes_transferred = 3)
 
@@ -54,7 +53,6 @@ struct GenericStepBreakdown
     type_ps::Dict{Int32,UInt64}
     category_ps::Dict{String,UInt64}
 end
-GenericStepBreakdown(;type_ps = Dict{Int32,UInt64}(), category_ps = Dict{String,UInt64}()) = GenericStepBreakdown(type_ps, category_ps)
 PB.default_values(::Type{GenericStepBreakdown}) = (;type_ps = Dict{Int32,UInt64}(), category_ps = Dict{String,UInt64}())
 PB.field_numbers(::Type{GenericStepBreakdown}) = (;type_ps = 1, category_ps = 2)
 
@@ -95,7 +93,6 @@ struct AllReduceInfo
     end_time_ps::UInt64
     byte_size::UInt64
 end
-AllReduceInfo(;id = zero(UInt64), name = "", all_reduce_id = zero(UInt64), start_time_ps = zero(UInt64), end_time_ps = zero(UInt64), byte_size = zero(UInt64)) = AllReduceInfo(id, name, all_reduce_id, start_time_ps, end_time_ps, byte_size)
 PB.default_values(::Type{AllReduceInfo}) = (;id = zero(UInt64), name = "", all_reduce_id = zero(UInt64), start_time_ps = zero(UInt64), end_time_ps = zero(UInt64), byte_size = zero(UInt64))
 PB.field_numbers(::Type{AllReduceInfo}) = (;id = 1, name = 2, all_reduce_id = 3, start_time_ps = 4, end_time_ps = 5, byte_size = 6)
 
@@ -155,7 +152,6 @@ struct SparseCoreStepBreakdown
     sc_idle_ps::UInt64
     sc_busy_ps::UInt64
 end
-SparseCoreStepBreakdown(;sc_compute_ps = zero(UInt64), sc_infeed_ps = zero(UInt64), sc_outfeed_ps = zero(UInt64), sc_idle_ps = zero(UInt64), sc_busy_ps = zero(UInt64)) = SparseCoreStepBreakdown(sc_compute_ps, sc_infeed_ps, sc_outfeed_ps, sc_idle_ps, sc_busy_ps)
 PB.default_values(::Type{SparseCoreStepBreakdown}) = (;sc_compute_ps = zero(UInt64), sc_infeed_ps = zero(UInt64), sc_outfeed_ps = zero(UInt64), sc_idle_ps = zero(UInt64), sc_busy_ps = zero(UInt64))
 PB.field_numbers(::Type{SparseCoreStepBreakdown}) = (;sc_compute_ps = 1, sc_infeed_ps = 2, sc_outfeed_ps = 3, sc_idle_ps = 4, sc_busy_ps = 5)
 
@@ -223,7 +219,6 @@ struct TpuStepBreakdown
     scv0_busy_ps::UInt64
     scv0_step_ps::UInt64
 end
-TpuStepBreakdown(;infeed_duration_ps = zero(UInt64), host_outfeed_ps = zero(UInt64), wait_for_scv0_duration_ps = zero(UInt64), scv0_infeed_transform_ps = zero(UInt64), scv0_outfeed_ps = zero(UInt64), crs_duration_ps = zero(UInt64), scv0_infeed_percent = zero(Float64), send_duration_ps = zero(UInt64), recv_duration_ps = zero(UInt64), host_send_duration_ps = zero(UInt64), host_recv_duration_ps = zero(UInt64), wait_for_megacore_fusion_peer_duration_ps = zero(UInt64), overlay_wait_duration_ps = zero(UInt64), high_flops_compute_ps = zero(UInt64), tc_idle_ps = zero(UInt64), tc_busy_ps = zero(UInt64), scv0_busy_ps = zero(UInt64), scv0_step_ps = zero(UInt64)) = TpuStepBreakdown(infeed_duration_ps, host_outfeed_ps, wait_for_scv0_duration_ps, scv0_infeed_transform_ps, scv0_outfeed_ps, crs_duration_ps, scv0_infeed_percent, send_duration_ps, recv_duration_ps, host_send_duration_ps, host_recv_duration_ps, wait_for_megacore_fusion_peer_duration_ps, overlay_wait_duration_ps, high_flops_compute_ps, tc_idle_ps, tc_busy_ps, scv0_busy_ps, scv0_step_ps)
 PB.reserved_fields(::Type{TpuStepBreakdown}) = (names = String[], numbers = Union{Int,UnitRange{Int}}[10])
 PB.default_values(::Type{TpuStepBreakdown}) = (;infeed_duration_ps = zero(UInt64), host_outfeed_ps = zero(UInt64), wait_for_scv0_duration_ps = zero(UInt64), scv0_infeed_transform_ps = zero(UInt64), scv0_outfeed_ps = zero(UInt64), crs_duration_ps = zero(UInt64), scv0_infeed_percent = zero(Float64), send_duration_ps = zero(UInt64), recv_duration_ps = zero(UInt64), host_send_duration_ps = zero(UInt64), host_recv_duration_ps = zero(UInt64), wait_for_megacore_fusion_peer_duration_ps = zero(UInt64), overlay_wait_duration_ps = zero(UInt64), high_flops_compute_ps = zero(UInt64), tc_idle_ps = zero(UInt64), tc_busy_ps = zero(UInt64), scv0_busy_ps = zero(UInt64), scv0_step_ps = zero(UInt64))
 PB.field_numbers(::Type{TpuStepBreakdown}) = (;infeed_duration_ps = 1, host_outfeed_ps = 2, wait_for_scv0_duration_ps = 3, scv0_infeed_transform_ps = 4, scv0_outfeed_ps = 5, crs_duration_ps = 6, scv0_infeed_percent = 7, send_duration_ps = 8, recv_duration_ps = 9, host_send_duration_ps = 15, host_recv_duration_ps = 16, wait_for_megacore_fusion_peer_duration_ps = 14, overlay_wait_duration_ps = 11, high_flops_compute_ps = 12, tc_idle_ps = 13, tc_busy_ps = 17, scv0_busy_ps = 18, scv0_step_ps = 19)
@@ -345,7 +340,6 @@ struct StepInfoResult
     step_breakdown::Union{Nothing,google.protobuf.var"#Any"}
     collectives::Union{Nothing,DeviceMemoryTransfer}
 end
-StepInfoResult(;step_num = zero(UInt32), step_name = "", duration_ps = zero(UInt64), begin_ps = zero(UInt64), step_breakdown = nothing, collectives = nothing) = StepInfoResult(step_num, step_name, duration_ps, begin_ps, step_breakdown, collectives)
 PB.default_values(::Type{StepInfoResult}) = (;step_num = zero(UInt32), step_name = "", duration_ps = zero(UInt64), begin_ps = zero(UInt64), step_breakdown = nothing, collectives = nothing)
 PB.field_numbers(::Type{StepInfoResult}) = (;step_num = 1, step_name = 5, duration_ps = 2, begin_ps = 3, step_breakdown = 4, collectives = 6)
 
@@ -401,7 +395,6 @@ end
 struct AllReduceDbResult
     all_reduce_info::Vector{AllReduceInfo}
 end
-AllReduceDbResult(;all_reduce_info = Vector{AllReduceInfo}()) = AllReduceDbResult(all_reduce_info)
 PB.default_values(::Type{AllReduceDbResult}) = (;all_reduce_info = Vector{AllReduceInfo}())
 PB.field_numbers(::Type{AllReduceDbResult}) = (;all_reduce_info = 1)
 
@@ -437,7 +430,6 @@ struct PerCoreStepInfo
     all_reduce_db_per_core::Dict{UInt32,AllReduceDbResult}
     device_memory_transfers::Vector{DeviceMemoryTransfer}
 end
-PerCoreStepInfo(;step_num = zero(UInt32), step_info_per_core = Dict{UInt32,StepInfoResult}(), hlo_metrics_db = nothing, core_id_to_replica_id_map = Dict{UInt32,UInt32}(), all_reduce_db_per_core = Dict{UInt32,AllReduceDbResult}(), device_memory_transfers = Vector{DeviceMemoryTransfer}()) = PerCoreStepInfo(step_num, step_info_per_core, hlo_metrics_db, core_id_to_replica_id_map, all_reduce_db_per_core, device_memory_transfers)
 PB.reserved_fields(::Type{PerCoreStepInfo}) = (names = String[], numbers = Union{Int,UnitRange{Int}}[4])
 PB.default_values(::Type{PerCoreStepInfo}) = (;step_num = zero(UInt32), step_info_per_core = Dict{UInt32,StepInfoResult}(), hlo_metrics_db = nothing, core_id_to_replica_id_map = Dict{UInt32,UInt32}(), all_reduce_db_per_core = Dict{UInt32,AllReduceDbResult}(), device_memory_transfers = Vector{DeviceMemoryTransfer}())
 PB.field_numbers(::Type{PerCoreStepInfo}) = (;step_num = 1, step_info_per_core = 2, hlo_metrics_db = 3, core_id_to_replica_id_map = 5, all_reduce_db_per_core = 6, device_memory_transfers = 7)
@@ -497,7 +489,6 @@ struct StepDatabaseResult
     num_steps_dropped::UInt32
     empty_intersect::Bool
 end
-StepDatabaseResult(;step_sequence = Vector{PerCoreStepInfo}(), use_incomplete_step = false, num_steps_dropped = zero(UInt32), empty_intersect = false) = StepDatabaseResult(step_sequence, use_incomplete_step, num_steps_dropped, empty_intersect)
 PB.default_values(::Type{StepDatabaseResult}) = (;step_sequence = Vector{PerCoreStepInfo}(), use_incomplete_step = false, num_steps_dropped = zero(UInt32), empty_intersect = false)
 PB.field_numbers(::Type{StepDatabaseResult}) = (;step_sequence = 1, use_incomplete_step = 2, num_steps_dropped = 3, empty_intersect = 4)
 

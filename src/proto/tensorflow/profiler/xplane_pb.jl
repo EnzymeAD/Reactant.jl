@@ -10,7 +10,6 @@ struct XStatMetadata
     name::String
     description::String
 end
-XStatMetadata(;id = zero(Int64), name = "", description = "") = XStatMetadata(id, name, description)
 PB.default_values(::Type{XStatMetadata}) = (;id = zero(Int64), name = "", description = "")
 PB.field_numbers(::Type{XStatMetadata}) = (;id = 1, name = 2, description = 3)
 
@@ -52,7 +51,6 @@ struct XStat
     metadata_id::Int64
     value::Union{Nothing,OneOf{<:Union{Float64,UInt64,Int64,String,Vector{UInt8}}}}
 end
-XStat(;metadata_id = zero(Int64), value = nothing) = XStat(metadata_id, value)
 PB.oneof_field_types(::Type{XStat}) = (;
     value = (;double_value=Float64, uint64_value=UInt64, int64_value=Int64, str_value=String, bytes_value=Vector{UInt8}, ref_value=UInt64),
 )
@@ -132,7 +130,6 @@ struct XEventMetadata
     stats::Vector{XStat}
     child_id::Vector{Int64}
 end
-XEventMetadata(;id = zero(Int64), name = "", display_name = "", metadata = UInt8[], stats = Vector{XStat}(), child_id = Vector{Int64}()) = XEventMetadata(id, name, display_name, metadata, stats, child_id)
 PB.default_values(::Type{XEventMetadata}) = (;id = zero(Int64), name = "", display_name = "", metadata = UInt8[], stats = Vector{XStat}(), child_id = Vector{Int64}())
 PB.field_numbers(::Type{XEventMetadata}) = (;id = 1, name = 2, display_name = 4, metadata = 3, stats = 5, child_id = 6)
 
@@ -191,7 +188,6 @@ struct XEvent
     duration_ps::Int64
     stats::Vector{XStat}
 end
-XEvent(;metadata_id = zero(Int64), data = nothing, duration_ps = zero(Int64), stats = Vector{XStat}()) = XEvent(metadata_id, data, duration_ps, stats)
 PB.oneof_field_types(::Type{XEvent}) = (;
     data = (;offset_ps=Int64, num_occurrences=Int64),
 )
@@ -258,7 +254,6 @@ struct XLine
     duration_ps::Int64
     events::Vector{XEvent}
 end
-XLine(;id = zero(Int64), display_id = zero(Int64), name = "", display_name = "", timestamp_ns = zero(Int64), duration_ps = zero(Int64), events = Vector{XEvent}()) = XLine(id, display_id, name, display_name, timestamp_ns, duration_ps, events)
 PB.reserved_fields(::Type{XLine}) = (names = String[], numbers = Union{Int,UnitRange{Int}}[5, 6, 7, 8])
 PB.default_values(::Type{XLine}) = (;id = zero(Int64), display_id = zero(Int64), name = "", display_name = "", timestamp_ns = zero(Int64), duration_ps = zero(Int64), events = Vector{XEvent}())
 PB.field_numbers(::Type{XLine}) = (;id = 1, display_id = 10, name = 2, display_name = 11, timestamp_ns = 3, duration_ps = 9, events = 4)
@@ -325,7 +320,6 @@ struct XPlane
     stat_metadata::Dict{Int64,XStatMetadata}
     stats::Vector{XStat}
 end
-XPlane(;id = zero(Int64), name = "", lines = Vector{XLine}(), event_metadata = Dict{Int64,XEventMetadata}(), stat_metadata = Dict{Int64,XStatMetadata}(), stats = Vector{XStat}()) = XPlane(id, name, lines, event_metadata, stat_metadata, stats)
 PB.default_values(::Type{XPlane}) = (;id = zero(Int64), name = "", lines = Vector{XLine}(), event_metadata = Dict{Int64,XEventMetadata}(), stat_metadata = Dict{Int64,XStatMetadata}(), stats = Vector{XStat}())
 PB.field_numbers(::Type{XPlane}) = (;id = 1, name = 2, lines = 3, event_metadata = 4, stat_metadata = 5, stats = 6)
 
@@ -384,7 +378,6 @@ struct XSpace
     warnings::Vector{String}
     hostnames::Vector{String}
 end
-XSpace(;planes = Vector{XPlane}(), errors = Vector{String}(), warnings = Vector{String}(), hostnames = Vector{String}()) = XSpace(planes, errors, warnings, hostnames)
 PB.default_values(::Type{XSpace}) = (;planes = Vector{XPlane}(), errors = Vector{String}(), warnings = Vector{String}(), hostnames = Vector{String}())
 PB.field_numbers(::Type{XSpace}) = (;planes = 1, errors = 2, warnings = 3, hostnames = 4)
 

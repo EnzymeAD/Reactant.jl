@@ -9,7 +9,6 @@ struct Timestamp
     seconds::Int64
     nanos::Int32
 end
-Timestamp(;seconds = zero(Int64), nanos = zero(Int32)) = Timestamp(seconds, nanos)
 PB.default_values(::Type{Timestamp}) = (;seconds = zero(Int64), nanos = zero(Int32))
 PB.field_numbers(::Type{Timestamp}) = (;seconds = 1, nanos = 2)
 

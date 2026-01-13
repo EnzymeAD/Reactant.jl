@@ -10,7 +10,6 @@ struct Diagnostics
     warnings::Vector{String}
     errors::Vector{String}
 end
-Diagnostics(;info = Vector{String}(), warnings = Vector{String}(), errors = Vector{String}()) = Diagnostics(info, warnings, errors)
 PB.default_values(::Type{Diagnostics}) = (;info = Vector{String}(), warnings = Vector{String}(), errors = Vector{String}())
 PB.field_numbers(::Type{Diagnostics}) = (;info = 1, warnings = 2, errors = 3)
 

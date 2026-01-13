@@ -29,7 +29,6 @@ abstract type var"##Abstract#HloUnoptimizedSnapshot" end
 struct var"HloScheduleProto.InstructionSequence"
     instruction_ids::Vector{Int64}
 end
-var"HloScheduleProto.InstructionSequence"(;instruction_ids = Vector{Int64}()) = var"HloScheduleProto.InstructionSequence"(instruction_ids)
 PB.default_values(::Type{var"HloScheduleProto.InstructionSequence"}) = (;instruction_ids = Vector{Int64}())
 PB.field_numbers(::Type{var"HloScheduleProto.InstructionSequence"}) = (;instruction_ids = 1)
 
@@ -63,7 +62,6 @@ struct var"StackFrameIndexProto.StackFrame"
     file_location_id::Int32
     parent_frame_id::Int32
 end
-var"StackFrameIndexProto.StackFrame"(;file_location_id = zero(Int32), parent_frame_id = zero(Int32)) = var"StackFrameIndexProto.StackFrame"(file_location_id, parent_frame_id)
 PB.default_values(::Type{var"StackFrameIndexProto.StackFrame"}) = (;file_location_id = zero(Int32), parent_frame_id = zero(Int32))
 PB.field_numbers(::Type{var"StackFrameIndexProto.StackFrame"}) = (;file_location_id = 1, parent_frame_id = 2)
 
@@ -100,7 +98,6 @@ struct var"HloInputs.LiteralDescriptor"
     version::Int32
     argument_size_bytes::UInt64
 end
-var"HloInputs.LiteralDescriptor"(;version = zero(Int32), argument_size_bytes = zero(UInt64)) = var"HloInputs.LiteralDescriptor"(version, argument_size_bytes)
 PB.default_values(::Type{var"HloInputs.LiteralDescriptor"}) = (;version = zero(Int32), argument_size_bytes = zero(UInt64))
 PB.field_numbers(::Type{var"HloInputs.LiteralDescriptor"}) = (;version = 1, argument_size_bytes = 2)
 
@@ -146,7 +143,6 @@ struct HloPassMetadata
     custom_metadata::Union{Nothing,google.protobuf.var"#Any"}
     kv_metrics::Vector{KeyValueMetric}
 end
-HloPassMetadata(;pass_id = zero(Int64), pass_name = "", pipeline_name = "", dump_filenames = Vector{String}(), module_changed = false, module_id = zero(Int64), module_group_module_ids = Vector{Int64}(), start_timestamp_usec = zero(Int64), end_timestamp_usec = zero(Int64), custom_metadata = nothing, kv_metrics = Vector{KeyValueMetric}()) = HloPassMetadata(pass_id, pass_name, pipeline_name, dump_filenames, module_changed, module_id, module_group_module_ids, start_timestamp_usec, end_timestamp_usec, custom_metadata, kv_metrics)
 PB.default_values(::Type{HloPassMetadata}) = (;pass_id = zero(Int64), pass_name = "", pipeline_name = "", dump_filenames = Vector{String}(), module_changed = false, module_id = zero(Int64), module_group_module_ids = Vector{Int64}(), start_timestamp_usec = zero(Int64), end_timestamp_usec = zero(Int64), custom_metadata = nothing, kv_metrics = Vector{KeyValueMetric}())
 PB.field_numbers(::Type{HloPassMetadata}) = (;pass_id = 1, pass_name = 2, pipeline_name = 3, dump_filenames = 4, module_changed = 5, module_id = 6, module_group_module_ids = 7, start_timestamp_usec = 8, end_timestamp_usec = 9, custom_metadata = 10, kv_metrics = 11)
 
@@ -230,7 +226,6 @@ struct var"BufferAllocationProto.Assigned"
     size::Int64
     element_type::PrimitiveType.T
 end
-var"BufferAllocationProto.Assigned"(;logical_buffer_id = zero(Int64), offset = zero(Int64), size = zero(Int64), element_type = PrimitiveType.PRIMITIVE_TYPE_INVALID) = var"BufferAllocationProto.Assigned"(logical_buffer_id, offset, size, element_type)
 PB.default_values(::Type{var"BufferAllocationProto.Assigned"}) = (;logical_buffer_id = zero(Int64), offset = zero(Int64), size = zero(Int64), element_type = PrimitiveType.PRIMITIVE_TYPE_INVALID)
 PB.field_numbers(::Type{var"BufferAllocationProto.Assigned"}) = (;logical_buffer_id = 1, offset = 2, size = 3, element_type = 4)
 
@@ -283,7 +278,6 @@ struct var"StackFrameIndexProto.FileLocation"
     column::Int32
     end_column::Int32
 end
-var"StackFrameIndexProto.FileLocation"(;file_name_id = zero(Int32), function_name_id = zero(Int32), line = zero(Int32), end_line = zero(Int32), column = zero(Int32), end_column = zero(Int32)) = var"StackFrameIndexProto.FileLocation"(file_name_id, function_name_id, line, end_line, column, end_column)
 PB.default_values(::Type{var"StackFrameIndexProto.FileLocation"}) = (;file_name_id = zero(Int32), function_name_id = zero(Int32), line = zero(Int32), end_line = zero(Int32), column = zero(Int32), end_column = zero(Int32))
 PB.field_numbers(::Type{var"StackFrameIndexProto.FileLocation"}) = (;file_name_id = 1, function_name_id = 2, line = 3, end_line = 5, column = 4, end_column = 6)
 
@@ -341,7 +335,6 @@ struct var"LogicalBufferProto.Location"
     instruction_id::Int64
     shape_index::Vector{Int64}
 end
-var"LogicalBufferProto.Location"(;instruction_name = "", instruction_id = zero(Int64), shape_index = Vector{Int64}()) = var"LogicalBufferProto.Location"(instruction_name, instruction_id, shape_index)
 PB.reserved_fields(::Type{var"LogicalBufferProto.Location"}) = (names = String[], numbers = Union{Int,UnitRange{Int}}[1])
 PB.default_values(::Type{var"LogicalBufferProto.Location"}) = (;instruction_name = "", instruction_id = zero(Int64), shape_index = Vector{Int64}())
 PB.field_numbers(::Type{var"LogicalBufferProto.Location"}) = (;instruction_name = 2, instruction_id = 4, shape_index = 3)
@@ -385,7 +378,6 @@ struct CrossProgramPrefetch
     index::Vector{Int64}
     offset::Int64
 end
-CrossProgramPrefetch(;parameter = zero(Int64), index = Vector{Int64}(), offset = zero(Int64)) = CrossProgramPrefetch(parameter, index, offset)
 PB.default_values(::Type{CrossProgramPrefetch}) = (;parameter = zero(Int64), index = Vector{Int64}(), offset = zero(Int64))
 PB.field_numbers(::Type{CrossProgramPrefetch}) = (;parameter = 1, index = 2, offset = 3)
 
@@ -427,7 +419,6 @@ struct var"HloBufferDonorProto.BufferDonorEntryProto"
     parameter_number::Int64
     parameter_shape_index::Vector{Int64}
 end
-var"HloBufferDonorProto.BufferDonorEntryProto"(;parameter_number = zero(Int64), parameter_shape_index = Vector{Int64}()) = var"HloBufferDonorProto.BufferDonorEntryProto"(parameter_number, parameter_shape_index)
 PB.default_values(::Type{var"HloBufferDonorProto.BufferDonorEntryProto"}) = (;parameter_number = zero(Int64), parameter_shape_index = Vector{Int64}())
 PB.field_numbers(::Type{var"HloBufferDonorProto.BufferDonorEntryProto"}) = (;parameter_number = 1, parameter_shape_index = 2)
 
@@ -465,7 +456,6 @@ struct var"HloInstructionProto.SliceDimensions"
     limit::Int64
     stride::Int64
 end
-var"HloInstructionProto.SliceDimensions"(;start = zero(Int64), limit = zero(Int64), stride = zero(Int64)) = var"HloInstructionProto.SliceDimensions"(start, limit, stride)
 PB.default_values(::Type{var"HloInstructionProto.SliceDimensions"}) = (;start = zero(Int64), limit = zero(Int64), stride = zero(Int64))
 PB.field_numbers(::Type{var"HloInstructionProto.SliceDimensions"}) = (;start = 1, limit = 2, stride = 3)
 
@@ -512,7 +502,6 @@ end
 struct HloScheduleProto
     sequences::Dict{Int64,var"HloScheduleProto.InstructionSequence"}
 end
-HloScheduleProto(;sequences = Dict{Int64,var"HloScheduleProto.InstructionSequence"}()) = HloScheduleProto(sequences)
 PB.default_values(::Type{HloScheduleProto}) = (;sequences = Dict{Int64,var"HloScheduleProto.InstructionSequence"}())
 PB.field_numbers(::Type{HloScheduleProto}) = (;sequences = 1)
 
@@ -544,7 +533,6 @@ struct HloInputs
     arguments::Vector{LiteralProto}
     arguments_descriptors::Vector{var"HloInputs.LiteralDescriptor"}
 end
-HloInputs(;arguments = Vector{LiteralProto}(), arguments_descriptors = Vector{var"HloInputs.LiteralDescriptor"}()) = HloInputs(arguments, arguments_descriptors)
 PB.default_values(::Type{HloInputs}) = (;arguments = Vector{LiteralProto}(), arguments_descriptors = Vector{var"HloInputs.LiteralDescriptor"}())
 PB.field_numbers(::Type{HloInputs}) = (;arguments = 1, arguments_descriptors = 2)
 
@@ -584,7 +572,6 @@ struct HloModuleMetadataProto
     partitioned_module_ids::Vector{Int64}
     pass_metadata::Vector{HloPassMetadata}
 end
-HloModuleMetadataProto(;canonical_module_id = zero(Int64), module_group_name = "", original_module_id = zero(Int64), partitioned_module_ids = Vector{Int64}(), pass_metadata = Vector{HloPassMetadata}()) = HloModuleMetadataProto(canonical_module_id, module_group_name, original_module_id, partitioned_module_ids, pass_metadata)
 PB.default_values(::Type{HloModuleMetadataProto}) = (;canonical_module_id = zero(Int64), module_group_name = "", original_module_id = zero(Int64), partitioned_module_ids = Vector{Int64}(), pass_metadata = Vector{HloPassMetadata}())
 PB.field_numbers(::Type{HloModuleMetadataProto}) = (;canonical_module_id = 1, module_group_name = 2, original_module_id = 3, partitioned_module_ids = 4, pass_metadata = 5)
 
@@ -646,7 +633,6 @@ struct BufferAllocationProto
     color::Int64
     assigned::Vector{var"BufferAllocationProto.Assigned"}
 end
-BufferAllocationProto(;index = zero(Int64), size = zero(Int64), is_thread_local = false, is_tuple = false, is_entry_computation_parameter = false, is_constant = false, parameter_number = zero(Int64), parameter_shape_index = Vector{Int64}(), is_parameter_aliased_with_output = false, maybe_live_out = false, color = zero(Int64), assigned = Vector{var"BufferAllocationProto.Assigned"}()) = BufferAllocationProto(index, size, is_thread_local, is_tuple, is_entry_computation_parameter, is_constant, parameter_number, parameter_shape_index, is_parameter_aliased_with_output, maybe_live_out, color, assigned)
 PB.default_values(::Type{BufferAllocationProto}) = (;index = zero(Int64), size = zero(Int64), is_thread_local = false, is_tuple = false, is_entry_computation_parameter = false, is_constant = false, parameter_number = zero(Int64), parameter_shape_index = Vector{Int64}(), is_parameter_aliased_with_output = false, maybe_live_out = false, color = zero(Int64), assigned = Vector{var"BufferAllocationProto.Assigned"}())
 PB.field_numbers(::Type{BufferAllocationProto}) = (;index = 1, size = 2, is_thread_local = 3, is_tuple = 11, is_entry_computation_parameter = 5, is_constant = 12, parameter_number = 6, parameter_shape_index = 10, is_parameter_aliased_with_output = 13, maybe_live_out = 7, color = 8, assigned = 9)
 
@@ -735,7 +721,6 @@ struct var"HloInputOutputAliasProto.AliasEntryProto"
     parameter_shape_index::Vector{Int64}
     kind::Kind.T
 end
-var"HloInputOutputAliasProto.AliasEntryProto"(;output_shape_index = Vector{Int64}(), parameter_number = zero(Int64), parameter_shape_index = Vector{Int64}(), kind = Kind.UNDEFINED_ALIAS) = var"HloInputOutputAliasProto.AliasEntryProto"(output_shape_index, parameter_number, parameter_shape_index, kind)
 PB.default_values(::Type{var"HloInputOutputAliasProto.AliasEntryProto"}) = (;output_shape_index = Vector{Int64}(), parameter_number = zero(Int64), parameter_shape_index = Vector{Int64}(), kind = Kind.UNDEFINED_ALIAS)
 PB.field_numbers(::Type{var"HloInputOutputAliasProto.AliasEntryProto"}) = (;output_shape_index = 1, parameter_number = 2, parameter_shape_index = 3, kind = 4)
 
@@ -784,7 +769,6 @@ struct StackFrameIndexProto
     file_locations::Vector{var"StackFrameIndexProto.FileLocation"}
     stack_frames::Vector{var"StackFrameIndexProto.StackFrame"}
 end
-StackFrameIndexProto(;file_names = Vector{String}(), function_names = Vector{String}(), file_locations = Vector{var"StackFrameIndexProto.FileLocation"}(), stack_frames = Vector{var"StackFrameIndexProto.StackFrame"}()) = StackFrameIndexProto(file_names, function_names, file_locations, stack_frames)
 PB.default_values(::Type{StackFrameIndexProto}) = (;file_names = Vector{String}(), function_names = Vector{String}(), file_locations = Vector{var"StackFrameIndexProto.FileLocation"}(), stack_frames = Vector{var"StackFrameIndexProto.StackFrame"}())
 PB.field_numbers(::Type{StackFrameIndexProto}) = (;file_names = 1, function_names = 2, file_locations = 3, stack_frames = 4)
 
@@ -833,7 +817,6 @@ struct LogicalBufferProto
     defined_at::Union{Nothing,var"LogicalBufferProto.Location"}
     color::Int64
 end
-LogicalBufferProto(;id = zero(Int64), size = zero(Int64), defined_at = nothing, color = zero(Int64)) = LogicalBufferProto(id, size, defined_at, color)
 PB.default_values(::Type{LogicalBufferProto}) = (;id = zero(Int64), size = zero(Int64), defined_at = nothing, color = zero(Int64))
 PB.field_numbers(::Type{LogicalBufferProto}) = (;id = 1, size = 2, defined_at = 3, color = 4)
 
@@ -880,7 +863,6 @@ struct var"BufferAssignmentProto.BufferAlias"
     source_buffer_id::Int64
     location::Union{Nothing,var"LogicalBufferProto.Location"}
 end
-var"BufferAssignmentProto.BufferAlias"(;source_buffer_id = zero(Int64), location = nothing) = var"BufferAssignmentProto.BufferAlias"(source_buffer_id, location)
 PB.default_values(::Type{var"BufferAssignmentProto.BufferAlias"}) = (;source_buffer_id = zero(Int64), location = nothing)
 PB.field_numbers(::Type{var"BufferAssignmentProto.BufferAlias"}) = (;source_buffer_id = 1, location = 2)
 
@@ -916,7 +898,6 @@ end
 struct HloBufferDonorProto
     entries::Vector{var"HloBufferDonorProto.BufferDonorEntryProto"}
 end
-HloBufferDonorProto(;entries = Vector{var"HloBufferDonorProto.BufferDonorEntryProto"}()) = HloBufferDonorProto(entries)
 PB.default_values(::Type{HloBufferDonorProto}) = (;entries = Vector{var"HloBufferDonorProto.BufferDonorEntryProto"}())
 PB.field_numbers(::Type{HloBufferDonorProto}) = (;entries = 1)
 
@@ -954,7 +935,6 @@ struct var"HloModuleProto.ProfileInfo"
     original_changelist::Int64
     changelist::Int64
 end
-var"HloModuleProto.ProfileInfo"(;profile_type = var"HloModuleProto.ProfileType".INVALID, relative_speedup = zero(Float64), profile_source = ProfileSource.PROFILE_SOURCE_UNKNOWN_SOURCE, compilation_event = CompilationEvent.COMPILATION_EVENT_UNKNOWN_EVENT, fingerprint = "", profile_generation_strategy = ProfileGenerationStrategy.PROFILE_GENERATION_STRATEGY_UNKNOWN, original_changelist = zero(Int64), changelist = zero(Int64)) = var"HloModuleProto.ProfileInfo"(profile_type, relative_speedup, profile_source, compilation_event, fingerprint, profile_generation_strategy, original_changelist, changelist)
 PB.default_values(::Type{var"HloModuleProto.ProfileInfo"}) = (;profile_type = var"HloModuleProto.ProfileType".INVALID, relative_speedup = zero(Float64), profile_source = ProfileSource.PROFILE_SOURCE_UNKNOWN_SOURCE, compilation_event = CompilationEvent.COMPILATION_EVENT_UNKNOWN_EVENT, fingerprint = "", profile_generation_strategy = ProfileGenerationStrategy.PROFILE_GENERATION_STRATEGY_UNKNOWN, original_changelist = zero(Int64), changelist = zero(Int64))
 PB.field_numbers(::Type{var"HloModuleProto.ProfileInfo"}) = (;profile_type = 1, relative_speedup = 2, profile_source = 3, compilation_event = 4, fingerprint = 5, profile_generation_strategy = 6, original_changelist = 7, changelist = 8)
 
@@ -1094,7 +1074,6 @@ struct HloInstructionProto
     is_composite::Bool
     result_accuracy::Union{Nothing,ResultAccuracy}
 end
-HloInstructionProto(;name = "", opcode = "", shape = nothing, metadata = nothing, literal = nothing, parameter_number = zero(Int64), fusion_kind = "", tuple_index = zero(Int64), dimensions = Vector{Int64}(), window = nothing, convolution_dimension_numbers = nothing, feature_group_count = zero(Int64), batch_group_count = zero(Int64), slice_dimensions = Vector{var"HloInstructionProto.SliceDimensions"}(), exponent_bits = zero(Int32), mantissa_bits = zero(Int32), dynamic_slice_sizes = Vector{Int64}(), padding_config = nothing, outfeed_config = UInt8[], distribution = RandomDistribution.RNG_INVALID, epsilon = zero(Float32), feature_index = zero(Int64), channel_id = zero(Int64), infeed_config = UInt8[], custom_call_target = "", outfeed_shape = nothing, dot_dimension_numbers = nothing, ragged_dot_dimension_numbers = nothing, fft_type = FftType.FFT, fft_length = Vector{Int64}(), comparison_direction = "", gather_dimension_numbers = nothing, gather_slice_sizes = Vector{Int64}(), id = zero(Int64), operand_ids = Vector{Int64}(), control_predecessor_ids = Vector{Int64}(), called_computation_ids = Vector{Int64}(), sharding = nothing, backend_config = UInt8[], replica_groups = Vector{ReplicaGroup}(), all_reduce_id = zero(Int64), use_global_device_ids = false, is_host_transfer = false, is_stable = false, scatter_dimension_numbers = nothing, precision_config = nothing, source_target_pairs = Vector{SourceTarget}(), domain_entry_sharding = nothing, domain_exit_sharding = nothing, constrain_layout = false, operand_shapes_with_layout = Vector{ShapeProto}(), triangular_solve_options = nothing, cholesky_options = nothing, parameter_replication = nothing, custom_call_has_side_effect = false, output_operand_aliasing = Vector{OutputOperandAliasing}(), custom_call_schedule = CustomCallSchedule.SCHEDULE_NONE, delta = zero(Int64), indices_are_sorted = false, frontend_attributes = nothing, unique_indices = false, rng_algorithm = RandomAlgorithm.RNG_DEFAULT, comparison_type = "", is_cross_program_prefetch = false, optional_cross_program_prefetch_index = nothing, padding_type = PaddingType.PADDING_INVALID, custom_call_api_version = CustomCallApiVersion.API_VERSION_UNSPECIFIED, async_execution_thread = "", k = zero(Int64), largest = false, statistics_viz = nothing, collective_device_list = nothing, original_value = nothing, is_composite = false, result_accuracy = nothing) = HloInstructionProto(name, opcode, shape, metadata, literal, parameter_number, fusion_kind, tuple_index, dimensions, window, convolution_dimension_numbers, feature_group_count, batch_group_count, slice_dimensions, exponent_bits, mantissa_bits, dynamic_slice_sizes, padding_config, outfeed_config, distribution, epsilon, feature_index, channel_id, infeed_config, custom_call_target, outfeed_shape, dot_dimension_numbers, ragged_dot_dimension_numbers, fft_type, fft_length, comparison_direction, gather_dimension_numbers, gather_slice_sizes, id, operand_ids, control_predecessor_ids, called_computation_ids, sharding, backend_config, replica_groups, all_reduce_id, use_global_device_ids, is_host_transfer, is_stable, scatter_dimension_numbers, precision_config, source_target_pairs, domain_entry_sharding, domain_exit_sharding, constrain_layout, operand_shapes_with_layout, triangular_solve_options, cholesky_options, parameter_replication, custom_call_has_side_effect, output_operand_aliasing, custom_call_schedule, delta, indices_are_sorted, frontend_attributes, unique_indices, rng_algorithm, comparison_type, is_cross_program_prefetch, optional_cross_program_prefetch_index, padding_type, custom_call_api_version, async_execution_thread, k, largest, statistics_viz, collective_device_list, original_value, is_composite, result_accuracy)
 PB.reserved_fields(::Type{HloInstructionProto}) = (names = ["parameter_name", "fused_instructions_computation", "operand_names", "control_predecessor_names", "called_computation_names", "replica_group_ids", "custom_call_opaque", "all_reduce_barrier"], numbers = Union{Int,UnitRange{Int}}[10, 12, 4, 5, 6, 44, 53, 46, 41, 42, 64, 78, 83, 84, 86])
 PB.oneof_field_types(::Type{HloInstructionProto}) = (;
     optional_cross_program_prefetch_index = (;cross_program_prefetch_index=Int32),
@@ -1509,7 +1488,6 @@ struct var"HeapSimulatorTrace.Event"
     instruction_name::String
     share_with_canonical_id::Int64
 end
-var"HeapSimulatorTrace.Event"(;kind = var"HeapSimulatorTrace.Event.Kind".ALLOC, buffer_id = zero(Int64), computation_name = "", instruction_name = "", share_with_canonical_id = zero(Int64)) = var"HeapSimulatorTrace.Event"(kind, buffer_id, computation_name, instruction_name, share_with_canonical_id)
 PB.default_values(::Type{var"HeapSimulatorTrace.Event"}) = (;kind = var"HeapSimulatorTrace.Event.Kind".ALLOC, buffer_id = zero(Int64), computation_name = "", instruction_name = "", share_with_canonical_id = zero(Int64))
 PB.field_numbers(::Type{var"HeapSimulatorTrace.Event"}) = (;kind = 1, buffer_id = 2, computation_name = 3, instruction_name = 4, share_with_canonical_id = 5)
 
@@ -1560,7 +1538,6 @@ end
 struct HloInputOutputAliasProto
     entries::Vector{var"HloInputOutputAliasProto.AliasEntryProto"}
 end
-HloInputOutputAliasProto(;entries = Vector{var"HloInputOutputAliasProto.AliasEntryProto"}()) = HloInputOutputAliasProto(entries)
 PB.default_values(::Type{HloInputOutputAliasProto}) = (;entries = Vector{var"HloInputOutputAliasProto.AliasEntryProto"}())
 PB.field_numbers(::Type{HloInputOutputAliasProto}) = (;entries = 1)
 
@@ -1597,7 +1574,6 @@ struct HloComputationProto
     is_fusion_computation::Bool
     execution_thread::String
 end
-HloComputationProto(;name = "", instructions = Vector{HloInstructionProto}(), program_shape = nothing, id = zero(Int64), root_id = zero(Int64), is_fusion_computation = false, execution_thread = "") = HloComputationProto(name, instructions, program_shape, id, root_id, is_fusion_computation, execution_thread)
 PB.reserved_fields(::Type{HloComputationProto}) = (names = ["root_name"], numbers = Union{Int,UnitRange{Int}}[3])
 PB.default_values(::Type{HloComputationProto}) = (;name = "", instructions = Vector{HloInstructionProto}(), program_shape = nothing, id = zero(Int64), root_id = zero(Int64), is_fusion_computation = false, execution_thread = "")
 PB.field_numbers(::Type{HloComputationProto}) = (;name = 1, instructions = 2, program_shape = 4, id = 5, root_id = 6, is_fusion_computation = 7, execution_thread = 8)
@@ -1661,7 +1637,6 @@ struct HeapSimulatorTrace
     whole_module_simulation::Bool
     buffer_allocation_index::Int64
 end
-HeapSimulatorTrace(;events = Vector{var"HeapSimulatorTrace.Event"}(), whole_module_simulation = false, buffer_allocation_index = zero(Int64)) = HeapSimulatorTrace(events, whole_module_simulation, buffer_allocation_index)
 PB.default_values(::Type{HeapSimulatorTrace}) = (;events = Vector{var"HeapSimulatorTrace.Event"}(), whole_module_simulation = false, buffer_allocation_index = zero(Int64))
 PB.field_numbers(::Type{HeapSimulatorTrace}) = (;events = 1, whole_module_simulation = 2, buffer_allocation_index = 3)
 
@@ -1705,7 +1680,6 @@ struct BufferAssignmentProto
     buffer_allocations::Vector{BufferAllocationProto}
     heap_simulator_traces::Vector{HeapSimulatorTrace}
 end
-BufferAssignmentProto(;logical_buffers = Vector{LogicalBufferProto}(), buffer_aliases = Vector{var"BufferAssignmentProto.BufferAlias"}(), buffer_allocations = Vector{BufferAllocationProto}(), heap_simulator_traces = Vector{HeapSimulatorTrace}()) = BufferAssignmentProto(logical_buffers, buffer_aliases, buffer_allocations, heap_simulator_traces)
 PB.default_values(::Type{BufferAssignmentProto}) = (;logical_buffers = Vector{LogicalBufferProto}(), buffer_aliases = Vector{var"BufferAssignmentProto.BufferAlias"}(), buffer_allocations = Vector{BufferAllocationProto}(), heap_simulator_traces = Vector{HeapSimulatorTrace}())
 PB.field_numbers(::Type{BufferAssignmentProto}) = (;logical_buffers = 1, buffer_aliases = 2, buffer_allocations = 3, heap_simulator_traces = 4)
 
@@ -1805,7 +1779,6 @@ struct var"##Stub#OriginalValueRecoveryTableProto.Entry" <: var"##Abstract#Origi
 end
 
 const HloModuleGroupProto = var"##Stub#HloModuleGroupProto"{var"##Stub#HloModuleProto"{var"##Stub#OriginalValueRecoveryTableProto"{var"##Stub#OriginalValueRecoveryTableProto.Entry"}}}
-HloModuleGroupProto(;name = "", hlo_modules = Vector{HloModuleProto}()) = HloModuleGroupProto(name, hlo_modules)
 PB.default_values(::Type{HloModuleGroupProto}) = (;name = "", hlo_modules = Vector{HloModuleProto}())
 PB.field_numbers(::Type{HloModuleGroupProto}) = (;name = 1, hlo_modules = 2)
 
@@ -1839,7 +1812,6 @@ function PB._encoded_size(x::HloModuleGroupProto)
 end
 
 const HloModuleProto = var"##Stub#HloModuleProto"{var"##Stub#OriginalValueRecoveryTableProto"{var"##Stub#OriginalValueRecoveryTableProto.Entry"}}
-HloModuleProto(;name = "", entry_computation_name = "", entry_computation_id = zero(Int64), computations = Vector{HloComputationProto}(), host_program_shape = nothing, id = zero(Int64), schedule = nothing, input_output_alias = nothing, buffer_donor = nothing, cross_program_prefetches = Vector{CrossProgramPrefetch}(), is_dynamic = false, spmd_output_sharding = nothing, spmd_parameters_shardings = Vector{OpSharding}(), use_auto_spmd_partitioning = false, profile_info = Vector{var"HloModuleProto.ProfileInfo"}(), device_assignment = nothing, stack_frame_index = nothing, frontend_attributes = nothing, original_value_recovery_table = nothing) = HloModuleProto(name, entry_computation_name, entry_computation_id, computations, host_program_shape, id, schedule, input_output_alias, buffer_donor, cross_program_prefetches, is_dynamic, spmd_output_sharding, spmd_parameters_shardings, use_auto_spmd_partitioning, profile_info, device_assignment, stack_frame_index, frontend_attributes, original_value_recovery_table)
 PB.reserved_fields(::Type{HloModuleProto}) = (names = ["dynamic_parameter_binding"], numbers = Union{Int,UnitRange{Int}}[9])
 PB.default_values(::Type{HloModuleProto}) = (;name = "", entry_computation_name = "", entry_computation_id = zero(Int64), computations = Vector{HloComputationProto}(), host_program_shape = nothing, id = zero(Int64), schedule = nothing, input_output_alias = nothing, buffer_donor = nothing, cross_program_prefetches = Vector{CrossProgramPrefetch}(), is_dynamic = false, spmd_output_sharding = nothing, spmd_parameters_shardings = Vector{OpSharding}(), use_auto_spmd_partitioning = false, profile_info = Vector{var"HloModuleProto.ProfileInfo"}(), device_assignment = nothing, stack_frame_index = nothing, frontend_attributes = nothing, original_value_recovery_table = nothing)
 PB.field_numbers(::Type{HloModuleProto}) = (;name = 1, entry_computation_name = 2, entry_computation_id = 6, computations = 3, host_program_shape = 4, id = 5, schedule = 7, input_output_alias = 8, buffer_donor = 18, cross_program_prefetches = 10, is_dynamic = 11, spmd_output_sharding = 12, spmd_parameters_shardings = 14, use_auto_spmd_partitioning = 16, profile_info = 13, device_assignment = 15, stack_frame_index = 17, frontend_attributes = 19, original_value_recovery_table = 20)
@@ -1959,7 +1931,6 @@ function PB._encoded_size(x::HloModuleProto)
 end
 
 const HloProto = var"##Stub#HloProto"{var"##Stub#OriginalValueRecoveryTableProto"{var"##Stub#OriginalValueRecoveryTableProto.Entry"}}
-HloProto(;hlo_module = nothing, buffer_assignment = nothing) = HloProto(hlo_module, buffer_assignment)
 PB.reserved_fields(::Type{HloProto}) = (names = ["hlo_ordering"], numbers = Union{Int,UnitRange{Int}}[2])
 PB.default_values(::Type{HloProto}) = (;hlo_module = nothing, buffer_assignment = nothing)
 PB.field_numbers(::Type{HloProto}) = (;hlo_module = 1, buffer_assignment = 3)
@@ -1994,7 +1965,6 @@ function PB._encoded_size(x::HloProto)
 end
 
 const HloSnapshot = var"##Stub#HloSnapshot"{var"##Stub#OriginalValueRecoveryTableProto"{var"##Stub#OriginalValueRecoveryTableProto.Entry"}}
-HloSnapshot(;hlo = nothing, arguments = Vector{LiteralProto}(), result = nothing, execution_platform = "") = HloSnapshot(hlo, arguments, result, execution_platform)
 PB.default_values(::Type{HloSnapshot}) = (;hlo = nothing, arguments = Vector{LiteralProto}(), result = nothing, execution_platform = "")
 PB.field_numbers(::Type{HloSnapshot}) = (;hlo = 1, arguments = 2, result = 3, execution_platform = 4)
 
@@ -2038,7 +2008,6 @@ function PB._encoded_size(x::HloSnapshot)
 end
 
 const HloUnoptimizedSnapshot = var"##Stub#HloUnoptimizedSnapshot"{var"##Stub#OriginalValueRecoveryTableProto"{var"##Stub#OriginalValueRecoveryTableProto.Entry"}}
-HloUnoptimizedSnapshot(;hlo_module = nothing, partitions = Vector{HloInputs}(), version = zero(Int32)) = HloUnoptimizedSnapshot(hlo_module, partitions, version)
 PB.default_values(::Type{HloUnoptimizedSnapshot}) = (;hlo_module = nothing, partitions = Vector{HloInputs}(), version = zero(Int32))
 PB.field_numbers(::Type{HloUnoptimizedSnapshot}) = (;hlo_module = 1, partitions = 2, version = 3)
 
@@ -2077,7 +2046,6 @@ function PB._encoded_size(x::HloUnoptimizedSnapshot)
 end
 
 const OriginalValueRecoveryTableProto = var"##Stub#OriginalValueRecoveryTableProto"{var"##Stub#OriginalValueRecoveryTableProto.Entry"}
-OriginalValueRecoveryTableProto(;entries = Vector{var"OriginalValueRecoveryTableProto.Entry"}()) = OriginalValueRecoveryTableProto(entries)
 PB.default_values(::Type{OriginalValueRecoveryTableProto}) = (;entries = Vector{var"OriginalValueRecoveryTableProto.Entry"}())
 PB.field_numbers(::Type{OriginalValueRecoveryTableProto}) = (;entries = 1)
 
@@ -2106,7 +2074,6 @@ function PB._encoded_size(x::OriginalValueRecoveryTableProto)
 end
 
 const var"OriginalValueRecoveryTableProto.Entry" = var"##Stub#OriginalValueRecoveryTableProto.Entry"
-var"OriginalValueRecoveryTableProto.Entry"(;old_original_array = nothing, new_original_array = nothing, recovery_module = nothing) = var"OriginalValueRecoveryTableProto.Entry"(old_original_array, new_original_array, recovery_module)
 PB.default_values(::Type{var"OriginalValueRecoveryTableProto.Entry"}) = (;old_original_array = nothing, new_original_array = nothing, recovery_module = nothing)
 PB.field_numbers(::Type{var"OriginalValueRecoveryTableProto.Entry"}) = (;old_original_array = 1, new_original_array = 2, recovery_module = 3)
 

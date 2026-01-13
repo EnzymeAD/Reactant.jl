@@ -11,7 +11,6 @@ struct GPUComputeCapability
     major::UInt32
     minor::UInt32
 end
-GPUComputeCapability(;major = zero(UInt32), minor = zero(UInt32)) = GPUComputeCapability(major, minor)
 PB.default_values(::Type{GPUComputeCapability}) = (;major = zero(UInt32), minor = zero(UInt32))
 PB.field_numbers(::Type{GPUComputeCapability}) = (;major = 1, minor = 2)
 
@@ -52,7 +51,6 @@ struct DeviceCapabilities
     compute_capability::Union{Nothing,GPUComputeCapability}
     device_vendor::String
 end
-DeviceCapabilities(;clock_rate_in_ghz = zero(Float64), num_cores = zero(UInt32), memory_size_in_bytes = zero(UInt64), memory_bandwidth = zero(UInt64), compute_capability = nothing, device_vendor = "") = DeviceCapabilities(clock_rate_in_ghz, num_cores, memory_size_in_bytes, memory_bandwidth, compute_capability, device_vendor)
 PB.default_values(::Type{DeviceCapabilities}) = (;clock_rate_in_ghz = zero(Float64), num_cores = zero(UInt32), memory_size_in_bytes = zero(UInt64), memory_bandwidth = zero(UInt64), compute_capability = nothing, device_vendor = "")
 PB.field_numbers(::Type{DeviceCapabilities}) = (;clock_rate_in_ghz = 1, num_cores = 2, memory_size_in_bytes = 3, memory_bandwidth = 4, compute_capability = 5, device_vendor = 6)
 

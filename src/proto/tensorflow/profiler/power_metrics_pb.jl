@@ -16,7 +16,6 @@ struct PowerComponentMetrics
     sample_count::UInt64
     max_moving_avg_power_1s::Float64
 end
-PowerComponentMetrics(;component_name = "", max_power = zero(Float64), avg_power = zero(Float64), max_moving_avg_power_100us = zero(Float64), max_moving_avg_power_1ms = zero(Float64), max_moving_avg_power_10ms = zero(Float64), timescale_us = zero(UInt32), sample_count = zero(UInt64), max_moving_avg_power_1s = zero(Float64)) = PowerComponentMetrics(component_name, max_power, avg_power, max_moving_avg_power_100us, max_moving_avg_power_1ms, max_moving_avg_power_10ms, timescale_us, sample_count, max_moving_avg_power_1s)
 PB.default_values(::Type{PowerComponentMetrics}) = (;component_name = "", max_power = zero(Float64), avg_power = zero(Float64), max_moving_avg_power_100us = zero(Float64), max_moving_avg_power_1ms = zero(Float64), max_moving_avg_power_10ms = zero(Float64), timescale_us = zero(UInt32), sample_count = zero(UInt64), max_moving_avg_power_1s = zero(Float64))
 PB.field_numbers(::Type{PowerComponentMetrics}) = (;component_name = 1, max_power = 2, avg_power = 3, max_moving_avg_power_100us = 4, max_moving_avg_power_1ms = 5, max_moving_avg_power_10ms = 6, timescale_us = 7, sample_count = 8, max_moving_avg_power_1s = 9)
 
@@ -87,7 +86,6 @@ end
 struct PowerMetrics
     power_component_metrics::Vector{PowerComponentMetrics}
 end
-PowerMetrics(;power_component_metrics = Vector{PowerComponentMetrics}()) = PowerMetrics(power_component_metrics)
 PB.default_values(::Type{PowerMetrics}) = (;power_component_metrics = Vector{PowerComponentMetrics}())
 PB.field_numbers(::Type{PowerMetrics}) = (;power_component_metrics = 1)
 

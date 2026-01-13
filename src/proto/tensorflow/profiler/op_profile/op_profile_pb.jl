@@ -31,7 +31,6 @@ struct var"Node.XLAInstruction.LayoutAnalysis.Dimension"
     alignment::Int32
     semantics::String
 end
-var"Node.XLAInstruction.LayoutAnalysis.Dimension"(;size = zero(Int32), alignment = zero(Int32), semantics = "") = var"Node.XLAInstruction.LayoutAnalysis.Dimension"(size, alignment, semantics)
 PB.default_values(::Type{var"Node.XLAInstruction.LayoutAnalysis.Dimension"}) = (;size = zero(Int32), alignment = zero(Int32), semantics = "")
 PB.field_numbers(::Type{var"Node.XLAInstruction.LayoutAnalysis.Dimension"}) = (;size = 1, alignment = 2, semantics = 3)
 
@@ -81,7 +80,6 @@ struct Metrics
     occurrences::UInt32
     avg_time_ps::Float64
 end
-Metrics(;flops = zero(Float64), uncapped_flops = zero(Float64), bandwidth_utils = Vector{Float64}(), raw_time = zero(Float64), raw_flops = zero(Float64), bf16_flops = zero(Float64), normalized_time_ps = zero(Float64), raw_bytes_accessed_array = Vector{Float64}(), occurrences = zero(UInt32), avg_time_ps = zero(Float64)) = Metrics(flops, uncapped_flops, bandwidth_utils, raw_time, raw_flops, bf16_flops, normalized_time_ps, raw_bytes_accessed_array, occurrences, avg_time_ps)
 PB.reserved_fields(::Type{Metrics}) = (names = String[], numbers = Union{Int,UnitRange{Int}}[1, 3, 4, 13, 14])
 PB.default_values(::Type{Metrics}) = (;flops = zero(Float64), uncapped_flops = zero(Float64), bandwidth_utils = Vector{Float64}(), raw_time = zero(Float64), raw_flops = zero(Float64), bf16_flops = zero(Float64), normalized_time_ps = zero(Float64), raw_bytes_accessed_array = Vector{Float64}(), occurrences = zero(UInt32), avg_time_ps = zero(Float64))
 PB.field_numbers(::Type{Metrics}) = (;flops = 2, uncapped_flops = 19, bandwidth_utils = 5, raw_time = 11, raw_flops = 12, bf16_flops = 18, normalized_time_ps = 20, raw_bytes_accessed_array = 15, occurrences = 16, avg_time_ps = 17)
@@ -158,7 +156,6 @@ end
 struct var"Node.XLAInstruction.LayoutAnalysis"
     dimensions::Vector{var"Node.XLAInstruction.LayoutAnalysis.Dimension"}
 end
-var"Node.XLAInstruction.LayoutAnalysis"(;dimensions = Vector{var"Node.XLAInstruction.LayoutAnalysis.Dimension"}()) = var"Node.XLAInstruction.LayoutAnalysis"(dimensions)
 PB.default_values(::Type{var"Node.XLAInstruction.LayoutAnalysis"}) = (;dimensions = Vector{var"Node.XLAInstruction.LayoutAnalysis.Dimension"}())
 PB.field_numbers(::Type{var"Node.XLAInstruction.LayoutAnalysis"}) = (;dimensions = 1)
 
@@ -198,7 +195,6 @@ struct var"Node.XLAInstruction"
     source_info::Union{Nothing,tensorflow.profiler.SourceInfo}
     xprof_kernel_metadata::String
 end
-var"Node.XLAInstruction"(;op = "", expression = "", provenance = "", category = "", layout = nothing, computation_primitive_size = zero(UInt32), fingerprint = zero(UInt64), program_id = zero(UInt64), source_info = nothing, xprof_kernel_metadata = "") = var"Node.XLAInstruction"(op, expression, provenance, category, layout, computation_primitive_size, fingerprint, program_id, source_info, xprof_kernel_metadata)
 PB.default_values(::Type{var"Node.XLAInstruction"}) = (;op = "", expression = "", provenance = "", category = "", layout = nothing, computation_primitive_size = zero(UInt32), fingerprint = zero(UInt64), program_id = zero(UInt64), source_info = nothing, xprof_kernel_metadata = "")
 PB.field_numbers(::Type{var"Node.XLAInstruction"}) = (;op = 1, expression = 2, provenance = 3, category = 4, layout = 5, computation_primitive_size = 6, fingerprint = 7, program_id = 8, source_info = 9, xprof_kernel_metadata = 10)
 
@@ -278,7 +274,6 @@ struct Node
     contents::Union{Nothing,OneOf{<:Union{var"Node.InstructionCategory",var"Node.XLAInstruction"}}}
     num_children::Int32
 end
-Node(;name = "", metrics = nothing, children = Vector{Node}(), contents = nothing, num_children = zero(Int32)) = Node(name, metrics, children, contents, num_children)
 PB.oneof_field_types(::Type{Node}) = (;
     contents = (;category=var"Node.InstructionCategory", xla=var"Node.XLAInstruction"),
 )
@@ -351,7 +346,6 @@ struct Profile
     by_provenance::Union{Nothing,Node}
     by_provenance_exclude_idle::Union{Nothing,Node}
 end
-Profile(;by_category = nothing, by_program = nothing, device_type = "", agg_dvfs_time_scale_multiplier = zero(Float64), by_category_exclude_idle = nothing, by_program_exclude_idle = nothing, by_provenance = nothing, by_provenance_exclude_idle = nothing) = Profile(by_category, by_program, device_type, agg_dvfs_time_scale_multiplier, by_category_exclude_idle, by_program_exclude_idle, by_provenance, by_provenance_exclude_idle)
 PB.reserved_fields(::Type{Profile}) = (names = ["by_program_structure", "per_program"], numbers = Union{Int,UnitRange{Int}}[2, 3])
 PB.default_values(::Type{Profile}) = (;by_category = nothing, by_program = nothing, device_type = "", agg_dvfs_time_scale_multiplier = zero(Float64), by_category_exclude_idle = nothing, by_program_exclude_idle = nothing, by_provenance = nothing, by_provenance_exclude_idle = nothing)
 PB.field_numbers(::Type{Profile}) = (;by_category = 1, by_program = 4, device_type = 5, agg_dvfs_time_scale_multiplier = 10, by_category_exclude_idle = 6, by_program_exclude_idle = 7, by_provenance = 8, by_provenance_exclude_idle = 9)
