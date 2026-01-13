@@ -29,9 +29,12 @@ function Core.Compiler.optimize(
 )
     @static if VERSION < v"1.11"
         Core.Compiler.@timeit "optimizer" ir = Core.Compiler.run_passes(opt.src, opt, caller)
-    else
+    elseif VERSION < v"1.12"
         Core.Compiler.@timeit "optimizer" ir = Core.Compiler.run_passes_ipo_safe(opt.src, opt, caller)
         Core.Compiler.ipo_dataflow_analysis!(interp, ir, caller)
+    else
+        Core.Compiler.@timeit "optimizer" ir = Core.Compiler.run_passes_ipo_safe(opt.src, opt)
+        Core.Compiler.ipo_dataflow_analysis!(interp, opt, ir, caller)
     end
     mi = opt.linfo
 		if DEBUG_INTERP[]
