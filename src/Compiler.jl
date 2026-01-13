@@ -1698,6 +1698,7 @@ function compile_mlir!(
     f,
     args,
     compile_options::CompileOptions,
+    elem_apply_cache=default_elem_apply_cache(),
     callcache=default_callcache(),
     sdycache=default_sdycache(),
     sdygroupidcache=default_sdygroupidcache();
@@ -1718,6 +1719,7 @@ function compile_mlir!(
     activate_callcache!(callcache)
     activate_sdycache!(sdycache)
     activate_sdygroupidcache!(sdygroupidcache)
+    activate_elem_apply_cache!(elem_apply_cache)
 
     # Save in the TLS whether we are raising.  We identify that condition by
     # checking whether the user set an explicit list of passes, or chose
@@ -1746,6 +1748,7 @@ function compile_mlir!(
         deactivate_sdycache!(sdycache)
         deactivate_sdygroupidcache!(sdygroupidcache)
         deactivate_callcache!(callcache)
+        deactivate_elem_apply_cache!(elem_apply_cache)
         MLIR.IR.deactivate!(MLIR.IR.body(mod))
         MLIR.IR.deactivate!(mod)
     end
@@ -4015,7 +4018,7 @@ function register_thunk(
     )
 end
 
-for cache_type in (:callcache, :sdycache, :sdygroupidcache)
+for cache_type in (:callcache, :sdycache, :sdygroupidcache, :elem_apply_cache)
     activate_fn = Symbol(:activate_, cache_type, :!)
     deactivate_fn = Symbol(:deactivate_, cache_type, :!)
     has_fn = Symbol(:_has_, cache_type)
@@ -4083,6 +4086,22 @@ function default_callcache()
             argprefix::Symbol,
             resprefix::Symbol,
             resargprefix::Symbol,
+        }
+    }()
+end
+
+function default_elem_apply_cache()
+    return Dict{
+        Vector,
+        @NamedTuple{
+            f_name::String,
+            result::Any,
+            seen_args::OrderedIdDict,
+            linear_args::Vector,
+            linear_results::Vector{Reactant.TracedType},
+            fnwrapped::Bool,
+            argprefix::Symbol,
+            resprefix::Symbol,
         }
     }()
 end
