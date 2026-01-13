@@ -25,8 +25,12 @@ end
 function Core.Compiler.optimize(
     interp::ReactantInterp, opt::Core.Compiler.OptimizationState, caller::Core.Compiler.InferenceResult
 )
-    Core.Compiler.@timeit "optimizer" ir = Core.Compiler.run_passes_ipo_safe(opt.src, opt, caller)
-    Core.Compiler.ipo_dataflow_analysis!(interp, ir, caller)
+    @static if VERSION < v"1.11"
+        Core.Compiler.@timeit "optimizer" ir = Core.Compiler.run_passes(opt.src, opt, caller)
+    else
+        Core.Compiler.@timeit "optimizer" ir = Core.Compiler.run_passes_ipo_safe(opt.src, opt, caller)
+        Core.Compiler.ipo_dataflow_analysis!(interp, ir, caller)
+    end
     mi = opt.linfo
     if !(
         is_reactant_method(mi) || (
