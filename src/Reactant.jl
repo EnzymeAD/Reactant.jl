@@ -30,6 +30,8 @@ using EnzymeCore:
     ReverseMode,
     ForwardMode
 
+@info "Reactant.jl is loaded"
+
 export allowscalar, @allowscalar # re-exported from GPUArraysCore
 
 is_extension_loaded(::Val) = false
