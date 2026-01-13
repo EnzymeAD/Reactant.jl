@@ -224,6 +224,7 @@ macro skip_rewrite_type(typ)
     end
 end
 
+const no_rewrite_ancestor_modules = Module[Reactant.TracedUtils, Reactant.MLIR]
 function should_rewrite_call(@nospecialize(ft))
     # Don't rewrite builtin or intrinsics, unless they are apply iter or kwcall
     if ft === typeof(Core.kwcall) || ft === typeof(Core._apply_iterate)
@@ -255,11 +256,11 @@ function should_rewrite_call(@nospecialize(ft))
         if hasfield(typeof(ft), :name) && hasfield(typeof(ft.name), :module)
             mod = ft.name.module
             # Don't rewrite primitive ops, tracing utilities, or any MLIR-based functions
-            if has_ancestor(mod, Ops) ||
-                has_ancestor(mod, TracedUtils) ||
-                has_ancestor(mod, MLIR)
-                return false
-            end
+	    for nrwmod in no_rewrite_ancestor_modules
+		if has_ancestor(mod, nrwmod)
+			return false
+		end
+	    end
             if string(mod) == "CUDA"
                 if ft.name.name == Symbol("#launch_configuration")
                     return false
@@ -542,8 +543,7 @@ end
 #      replaced with calls to `call_with_reactant`. This allows us to circumvent long standing issues in Julia
 #      using a custom interpreter in type unstable code.
 # `redub_arguments` is `(typeof(original_function), map(typeof, original_args_tuple)...)`
-# function call_llvm_generator(world::UInt, source::LineNumberNode, self, ::Type{typeof(Reactant.call_with_reactant)}, args::Tuple{Vararg{DataType}})
-function call_llvm_generator(world::UInt, source::LineNumberNode, self, ::Type{typeof(Reactant.call_with_reactant)}, @nospecialize(args::Tuple{Vararg{DataType}}))
+function call_llvm_generator(world::UInt, source, self, ::Type{typeof(Reactant.call_with_reactant)}, @nospecialize(args::Tuple{Vararg{DataType}}))
     RT = nothing
     if args[1] <: EnsureReturnType
         RT = args[1].parameters[1]
