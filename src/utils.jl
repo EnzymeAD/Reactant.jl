@@ -32,7 +32,9 @@ function Core.Compiler.optimize(
         Core.Compiler.ipo_dataflow_analysis!(interp, ir, caller)
     end
     mi = opt.linfo
+    safe_print("pre opt ir", ir)
     ir, _ = rewrite_insts!(ir, interp)
+    safe_print("post opt ir", ir)
     Core.Compiler.verify_ir(ir)
     return Core.Compiler.finish(interp, opt, ir, caller)
 end
@@ -601,6 +603,7 @@ function call_llvm_generator(world::UInt, source::LineNumberNode, self, @nospeci
     job = CompilerJob(mi, config, world)
     key = hash(job)
 
+    safe_print("mi", mi)
     # NOTE: no use of lock(::Function)/@lock/get! to keep stack traces clean
     lock(call_with_reactant_lock)
     cached_compilation = try
