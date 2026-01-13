@@ -48,10 +48,10 @@ end
         methods_with_unbound_args = Aqua.detect_unbound_args_recursively(Reactant)
         num_unbound_args = 0
         for method in methods_with_unbound_args
-            if !issubmodule(parentmodule(method), Reactant.Proto)
-                num_unbound_args += 1
-                @warn "Method $(method) has unbound args"
-            end
+            # if !issubmodule(parentmodule(method), Reactant.Proto)
+            num_unbound_args += 1
+            @warn "Method $(method) has unbound args"
+            # end
         end
         @test num_unbound_args == 0
     end
@@ -89,12 +89,12 @@ end
                 Reactant.DotGeneralAlgorithmPreset,
                 Reactant.MLIR.Dialects,
                 get_all_submodules(Reactant.MLIR.Dialects)...,
-                get_all_submodules(Reactant.Proto)...,
+                # get_all_submodules(Reactant.Proto)...,
                 Reactant.XLA.OpShardingType,
                 Reactant.Accelerators.TPU.TPUVersion,
                 Reactant.PrecisionConfig,
             ),
-            ignore=(Reactant.Proto,),
+            # ignore=(Reactant.Proto,),
         ) === nothing
     end
     @testset "Import via Owner" begin
@@ -107,13 +107,20 @@ end
                 Reactant.DotGeneralAlgorithmPreset,
                 Reactant.MLIR.Dialects,
                 get_all_submodules(Reactant.MLIR.Dialects)...,
-                get_all_submodules(Reactant.Proto)...,
+                # get_all_submodules(Reactant.Proto)...,
                 Reactant.XLA.OpShardingType,
                 Reactant.Accelerators.TPU.TPUVersion,
                 Reactant.PrecisionConfig,
             ),
             # OneOf is used inside Proto files
-            ignore=(:p7zip, :ShardyPropagationOptions, :OneOf),
+            ignore=(
+                :p7zip,
+                :ShardyPropagationOptions,
+                :OneOf,
+                Symbol("@profile"),
+                Symbol("@time"),
+                Symbol("@timed"),
+            ),
         ) === nothing
     end
     @testset "Qualified Accesses" begin
