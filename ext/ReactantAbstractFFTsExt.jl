@@ -178,41 +178,27 @@ end
 function normbfft(::Type{T}, size, dims) where {T}
     return inv(AbstractFFTs.normalization(real(T), size, dims))
 end
-for op in (:bfft,)
-    normop = Symbol("norm", op)
-    iop = Symbol(replace(string(op), "b" => "i"))
-    @eval function AbstractFFTs.$(op)(x::AnyTracedRArray{T}, dims) where {T}
-        y = AbstractFFTs.$(iop)(x, dims)
-        y .*= $(normop)(real(T), size(x), dims)
-        return y
-    end
 
-    planop = Symbol("plan_", op)
-    planiop = Symbol("plan_", iop)
-    @eval function AbstractFFTs.$(planop)(
-        x::Reactant.TracedRArray{T}, dims=1:ndims(x)
-    ) where {T}
-        y = AbstractFFTs.$(planiop)(x, dims)
-        return $(normop)(real(T), size(x), dims) * y # ScaledPlan
-    end
+function AbstractFFTs.bfft(x::AnyTracedRArray{T}, dims) where {T}
+    y = AbstractFFTs.ifft(x, dims)
+    y .*= normbfft(real(T), size(x), dims)
+    return y
+end
 
-    # No in-place brfft (different array size)
+function AbstractFFTs.plan_bfft(x::Reactant.TracedRArray{T}, dims=1:ndims(x)) where {T}
+    pl = AbstractFFTs.plan_ifft(x, dims)
+    return normbfft(real(T), size(x), dims) * pl # ScaledPlan
+end
 
-    inplaceop = Symbol(op, "!")
-    inplaceiop = Symbol(iop, "!")
-    @eval function AbstractFFTs.$(inplaceop)(x::AnyTracedRArray{T}, dims) where {T}
-        AbstractFFTs.$(inplaceiop)(x, dims)
-        x .*= $(normop)(real(T), size(x), dims)
-        return x
-    end
+function AbstractFFTs.bfft!(x::AnyTracedRArray{T}, dims) where {T}
+    AbstractFFTs.ifft!(x, dims)
+    x .*= normbfft(real(T), size(x), dims)
+    return x
+end
 
-    planop! = Symbol(planop, "!")
-    planiop! = Symbol(planiop, "!")
-    @eval function AbstractFFTs.$(planop!)(
-        x::Reactant.TracedRArray{T}, dims=1:ndims(x)
-    ) where {T}
-        return $(normop)(real(T), size(x), dims) * AbstractFFTs.$(planiop!)(x, dims)
-    end
+function AbstractFFTs.plan_bfft!(x::Reactant.TracedRArray{T}, dims=1:ndims(x)) where {T}
+    pl = AbstractFFTs.plan_ifft!(x, dims)
+    return normbfft(real(T), size(x), dims) * pl # ScaledPlan
 end
 
 # This must be implemented for bfft

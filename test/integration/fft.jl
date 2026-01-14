@@ -194,14 +194,19 @@ end
 end
 
 @testset "FFTW Plans with Traced Arrays" begin
+
     @testset "Complex Plans" begin
+
         for (plan, fft) in (
             (FFTW.plan_fft, FFTW.fft),
             (FFTW.plan_ifft, FFTW.ifft),
             (FFTW.plan_bfft, FFTW.bfft),
         )
+
             x = Reactant.TestUtils.construct_test_array(ComplexF32, 2, 3, 4)
             x_r = Reactant.to_rarray(x)
+            y_r = similar(x_r)
+
             p = plan(copy(x))
             p12 = plan(copy(x), (1, 2))
 
@@ -213,20 +218,30 @@ end
             @test y_r ≈ @jit(p * x_r)
         end
 
-        for (plan!, fft!) in (
-            (FFTW.plan_fft!, FFTW.fft!),
-            (FFTW.plan_ifft!, FFTW.ifft!),
-            (FFTW.plan_bfft!, FFTW.bfft!),
+        for (plan!, fft) in (
+            (FFTW.plan_fft!, FFTW.fft),
+            (FFTW.plan_ifft!, FFTW.ifft),
+            (FFTW.plan_bfft!, FFTW.bfft),
         )
+
+
+            x = Reactant.TestUtils.construct_test_array(ComplexF32, 2, 3, 4)
+            x_r = Reactant.to_rarray(x)
+            y_r = similar(x_r)
 
             # In-place plans
             p! = plan!(copy(x))
+            @jit(p! * x_r) 
+            @test x_r ≈ fft(x)
+            @jit LinearAlgebra.mul!(y_r, p!, Reactant.to_rarray(x))
+            @test y_r ≈ fft(x)
+
+            pd! = plan!(copy(x), (1, 2))
             x_r = Reactant.to_rarray(x)
-            @test @jit(p! * x_r) ≈ p! * x
-            fill!(y_r, 0)
-            @jit LinearAlgebra.mul!(y_r, p!, copy(x_r))
-            @jit(p! * x_r)
-            @test y_r ≈ x_r
+            @jit(pd! * x_r) 
+            @test x_r ≈ fft(x, (1, 2))
+            @jit LinearAlgebra.mul!(y_r, pd!, Reactant.to_rarray(x))
+            @test y_r ≈ fft(x, (1, 2))
         end
     end
 
