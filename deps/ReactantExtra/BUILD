@@ -1238,6 +1238,8 @@ cc_library(
             "-Wl,-exported_symbol,_InitializeXProfStubs",
             "-Wl,-exported_symbol,_StartGrpcServer",
             "-Wl,-exported_symbol,_XSpaceToToolsData",
+            "-Wl,-exported_symbol,_ReactantGetDebugOptions",
+            "-Wl,-exported_symbol,_ReactantGetCompileOptions",
         ],
     }),
     linkstatic = True,
