@@ -789,7 +789,7 @@ function call_llvm_generator(world::UInt, source, self, ::Type{typeof(Reactant.c
 			continue
 		    end
 		    if !haskey(gmap, LLVM.name(g))
-			if Reactant.isprecompiling()
+			if Reactant.precompiling()
 		            throw(ReactantPrecompilationException())
 			end
 			continue
