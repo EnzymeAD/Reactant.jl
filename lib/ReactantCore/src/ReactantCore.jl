@@ -141,11 +141,13 @@ The behavior of loops can be configured with the following configuration options
 
  - `track_numbers::Union{Bool,Datatype}` - whether Julia numbers should be automatically promoted to traced numbers upon entering the loop.
  - `checkpointing::Bool` - whether or not to enable checkpointing when performing reverse mode differentiation (default: `false`).
+ - `checkpoints::Union{Nothing,Int}` - the number of checkpoints to use when `checkpointing=true`. If not specified, defaults to `isqrt(num_iters)` for `for` loops with static (non-traced) bounds. Must be specified explicitly for `while` loops or `for` loops with dynamic (traced) bounds when checkpointing is enabled.
  - `mincut::Bool` - whether or not to enable the mincut algorithm when performing reverse mode differentiation (default: `false`).
 """
 macro trace(args...)
     track_numbers = true
     checkpointing = false
+    checkpoints = nothing
     mincut = false
 
     expr = first(args)
@@ -153,14 +155,16 @@ macro trace(args...)
         if Meta.isexpr(args[1], :(=))
             tn_expr = args[1]
             key, val = tn_expr.args
-            key ∈ (:track_numbers, :checkpointing, :mincut) || error(
-                "@trace supports setting track_numbers, checkpointing or mincut, but got $(tn_expr)",
+            key ∈ (:track_numbers, :checkpointing, :checkpoints, :mincut) || error(
+                "@trace supports setting track_numbers, checkpointing, checkpoints or mincut, but got $(tn_expr)",
             )
 
             if key === :track_numbers
                 track_numbers = val
             elseif key === :checkpointing
                 checkpointing = val
+            elseif key === :checkpoints
+                checkpoints = val
             elseif key === :mincut
                 mincut = val
             end
@@ -213,10 +217,10 @@ macro trace(args...)
     Meta.isexpr(expr, :if) && return esc(trace_if(expr; track_numbers))
 
     Meta.isexpr(expr, :for) &&
-        return (esc(trace_for(expr; track_numbers, checkpointing, mincut)))
+        return (esc(trace_for(expr; track_numbers, checkpointing, checkpoints, mincut)))
 
     Meta.isexpr(expr, :while) &&
-        return (esc(trace_while(expr; track_numbers, checkpointing, mincut)))
+        return (esc(trace_while(expr; track_numbers, checkpointing, checkpoints, mincut)))
 
     return error(
         "Only `if-elseif-else` blocks, function definitions, `function calls`, `for` and \
@@ -293,11 +297,25 @@ function trace_function_definition(mod, expr)
     end
 end
 
-function trace_while(expr; track_numbers, mincut, checkpointing, first_arg=nothing)
+function trace_while(
+    expr; track_numbers, mincut, checkpointing, checkpoints=nothing, first_arg=nothing
+)
     Meta.isexpr(expr, :while, 2) || error("expected while expr")
     cond, body = expr.args
 
     error_if_any_control_flow(body)
+
+    # Validate checkpoints usage
+    if checkpoints !== nothing && !checkpointing
+        error("checkpoints can only be specified when checkpointing=true")
+    end
+    if checkpointing && checkpoints === nothing && first_arg === nothing
+        # This is a raw while loop (not from trace_for), require explicit checkpoints
+        error(
+            "checkpoints must be explicitly specified for while loops when checkpointing=true. " *
+            "Use `@trace checkpointing=true checkpoints=N while ...` where N is the number of checkpoints.",
+        )
+    end
 
     cond_symbols = ExpressionExplorer.compute_symbols_state(cond)
     body_symbols = ExpressionExplorer.compute_symbols_state(body)
@@ -362,6 +380,7 @@ function trace_while(expr; track_numbers, mincut, checkpointing, first_arg=nothi
                 verify_arg_names=($(verify_arg_names_sym)),
                 mincut=($(mincut)),
                 checkpointing=($(checkpointing)),
+                checkpoints=($(checkpoints)),
             )
         end
     end
@@ -376,7 +395,7 @@ function trace_while(expr; track_numbers, mincut, checkpointing, first_arg=nothi
     end
 end
 
-function trace_for(expr; track_numbers, checkpointing, mincut)
+function trace_for(expr; track_numbers, checkpointing, checkpoints, mincut)
     Meta.isexpr(expr, :for, 2) || error("expected for expr")
     assign, body = expr.args
 
@@ -387,10 +406,16 @@ function trace_for(expr; track_numbers, checkpointing, mincut)
         )
     end
 
+    # Validate checkpoints usage
+    if checkpoints !== nothing && !checkpointing
+        error("checkpoints can only be specified when checkpointing=true")
+    end
+
     induction, range = assign.args
 
     counter = gensym(:i)
     num_iters = gensym(:num_iters)
+    checkpoints_sym = gensym(:checkpoints)
     range_sym = gensym(:range)
 
     start_sym = gensym(:start)
@@ -418,9 +443,40 @@ function trace_for(expr; track_numbers, checkpointing, mincut)
         end
     end
 
+    # Compute checkpoints: use user-provided value or default to isqrt(num_iters)
+    # This must be computed BEFORE bounds are promoted to traced values
+    # If bounds are already traced (dynamic), we require explicit checkpoints
+    checkpoints_computation = if checkpointing
+        if checkpoints !== nothing
+            # User provided explicit checkpoints value
+            :($checkpoints_sym = $checkpoints)
+        else
+            # Default to isqrt(num_iters) for sqrt checkpointing behavior
+            # Computed before promotion so we get a Julia integer
+            # If any of the bounds is already traced, we error since we can't compute isqrt
+            quote
+                if $(is_traced)($start_sym) ||
+                    $(is_traced)($limit_sym) ||
+                    $(is_traced)($step_sym)
+                    error(
+                        "checkpoints must be explicitly specified when loop bounds are traced (dynamic). " *
+                        "Use `@trace checkpointing=true checkpoints=N for i in ...` where N is the number of checkpoints.",
+                    )
+                end
+                $checkpoints_sym = isqrt(div($limit_sym - $start_sym, $step_sym) + 1)
+            end
+        end
+    else
+        :($checkpoints_sym = nothing)
+    end
+
     return quote
         local $start_sym, $limit_sym, $step_sym
         $bounds_defs
+
+        # Compute checkpoints before promotion to traced values
+        local $checkpoints_sym
+        $checkpoints_computation
 
         if $(within_compile)()
             $start_sym = $(ReactantCore.promote_to_traced)($start_sym)
@@ -446,6 +502,7 @@ function trace_for(expr; track_numbers, checkpointing, mincut)
             track_numbers,
             first_arg=counter,
             checkpointing,
+            checkpoints=checkpoints_sym,
             mincut,
         ))
     end
