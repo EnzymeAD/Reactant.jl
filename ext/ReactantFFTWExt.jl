@@ -25,7 +25,8 @@ end
 
 # XLA does plan based on IFFT not BFFT so we need to renormalize
 function AFTEx.reactant_fftplan(plan::FFTW.cFFTWPlan{T,BACKWARD,true}) where {T}
-    return AFTEx.ReactantIFFTInPlacePlan{T}(fftdims(plan)) * AFTEx.normbfft(T, size(plan), fftdims(plan))
+    return AFTEx.ReactantIFFTInPlacePlan{T}(fftdims(plan)) *
+           AFTEx.normbfft(T, size(plan), fftdims(plan))
 end
 
 function AFTEx.reactant_fftplan(plan::FFTW.cFFTWPlan{T,BACKWARD,false}) where {T}
@@ -33,13 +34,13 @@ function AFTEx.reactant_fftplan(plan::FFTW.cFFTWPlan{T,BACKWARD,false}) where {T
     return AFTEx.ReactantIFFTPlan{T}(fftdims(plan)) * nrm
 end
 
-AFTEx.reallength(p::FFTW.rFFTWPlan{T, BACKWARD}) where {T} = p.osz[first(fftdims(p))] # original real length
+AFTEx.reallength(p::FFTW.rFFTWPlan{T,BACKWARD}) where {T} = p.osz[first(fftdims(p))] # original real length
 # We don't define the inplace versions becuase the types always differ
 function AFTEx.reactant_fftplan(plan::FFTW.rFFTWPlan{T,FORWARD,false}) where {T}
     return AFTEx.ReactantRFFTPlan{T}(fftdims(plan))
 end
 
-function AFTEx.reactant_fftplan(plan::FFTW.rFFTWPlan{T, BACKWARD}) where {T}
+function AFTEx.reactant_fftplan(plan::FFTW.rFFTWPlan{T,BACKWARD}) where {T}
     osz = AbstractFFTs.brfft_output_size(size(plan), AFTEx.reallength(plan), fftdims(plan)) # just to make sure it is defined
     nrm = AFTEx.normbfft(real(T), osz, fftdims(plan))
     return AFTEx.ReactantIRFFTPlan{T}(fftdims(plan), AFTEx.reallength(plan)) * nrm

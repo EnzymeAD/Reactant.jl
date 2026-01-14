@@ -100,7 +100,7 @@ end
     @test_throws AssertionError @jit(bfft(x_ra, (1, 4)))
 
     y_ra = @jit(bfft(x_ra))
-    @test y_ra./length(y_ra) ≈ ifft(x)
+    @test y_ra ./ length(y_ra) ≈ ifft(x)
 end
 
 @testset "Planned FFTs" begin
@@ -108,8 +108,8 @@ end
         (plan, fft) in (
             (FFTW.plan_fft, FFTW.fft),
             (FFTW.plan_ifft, FFTW.ifft),
+            (FFTW.plan_bfft, FFTW.bfft),
             (FFTW.plan_rfft, FFTW.rfft),
-            (FFTW.plan_bfft, FFTW.bfft)
         )
 
         x = randn(fft === FFTW.rfft ? Float32 : ComplexF32, size)
@@ -125,6 +125,11 @@ end
         # Make sure the operation is not in-place
         @test x_r == copied_x_r
 
+        y = fft(x)
+        y_r = Reactant.to_rarray(similar(y))
+        @jit LinearAlgebra.mul!(y_r, plan(x), x_r)
+        @test y_r ≈ y
+
         if length(size) > 1
             planned_fft_dims(x, dims) = plan(x, dims) * x
             compiled_planned_fft_dims = @compile planned_fft_dims(x_r, (1,))
@@ -132,61 +137,47 @@ end
             @test compiled_planned_fft_dims(x_r, (1,)) ≈ fft(x, (1,))
             # Make sure the operation is not in-place
             @test x_r == copied_x_r
+
+            y = fft(x, (1,))
+            y_r = Reactant.to_rarray(similar(y))
+            @jit LinearAlgebra.mul!(y_r, plan(x, (1,)), x_r)
+            @test y_r ≈ y
         end
     end
 
-    @testset "Out-of-place irfft" begin
-        size = (16, 16)
-        x = randn(ComplexF32, size)
-        x_r = Reactant.to_rarray(x)
-        copied_x_r = copy(x_r) # I think FFTW may sometimes modify input?
+    @testset "Out-of-place irfft/brfft" begin
+        for size in ((16,), (16, 16)),
+            (plan, fft) in ((FFTW.plan_irfft, FFTW.irfft), (FFTW.plan_brfft, FFTW.brfft))
 
-        d = 31 # original real length
-        planned_irfft(x, d) = FFTW.plan_irfft(x, d) * x
-        compiled_planned_irfft = @compile planned_irfft(x_r, d)
-        @test compiled_planned_irfft(x_r, d) ≈ irfft(x, d)
-        # Make sure the operation is not in-place
-        @test x_r == copied_x_r
+            x = randn(ComplexF32, size)
+            x_r = Reactant.to_rarray(x)
+            copied_x_r = copy(x_r) # I think FFTW may sometimes modify input?
 
-        planned_irfft_dims(x, d, dims) = FFTW.plan_irfft(x, d, dims) * x
-        compiled_planned_irfft_dims = @compile planned_irfft_dims(x_r, d, (1,))
-        @test compiled_planned_irfft_dims(x_r, d, (1,)) ≈ irfft(x, d, (1,))
-        # Make sure the operation is not in-place
-        @test x_r == copied_x_r
+            d = 31 # original real length
+            planned_fft(x, d) = plan(x, d) * x
+            compiled_planned_fft = @compile planned_fft(x_r, d)
+            @test compiled_planned_fft(x_r, d) ≈ fft(x, d)
+            # Make sure the operation is not in-place
+            @test x_r == copied_x_r
 
-        y_r = Reactant.to_rarray(similar(irfft(x, d)))
-        @jit LinearAlgebra.mul!(y_r, FFTW.plan_irfft(x, d), x_r)
-        @test y_r ≈ plan_irfft(x, d) * x
+            planned_fft_dims(x, d, dims) = plan(x, d, dims) * x
+            compiled_planned_fft_dims = @compile planned_fft_dims(x_r, d, (1,))
+            @test compiled_planned_fft_dims(x_r, d, (1,)) ≈ fft(x, d, (1,))
+            # Make sure the operation is not in-place
+            @test x_r == copied_x_r
+
+            y_r = Reactant.to_rarray(similar(fft(x, d)))
+            @jit LinearAlgebra.mul!(y_r, plan(x, d), x_r)
+            @test y_r ≈ plan(x, d) * x
+        end
     end
-
-    @testset "Out-of-place brfft" begin
-        size = (16, 16)
-        x = randn(ComplexF32, size)
-        x_r = Reactant.to_rarray(x)
-        copied_x_r = copy(x_r) # I think FFTW may sometimes modify input?
-
-        d = 31 # original real length
-        planned_brfft(x, d) = FFTW.plan_brfft(x, d) * x
-        compiled_planned_brfft = @compile planned_brfft(x_r, d)
-        @test compiled_planned_brfft(x_r, d) ≈ brfft(x, d)
-        # Make sure the operation is not in-place
-        @test x_r == copied_x_r
-
-        planned_brfft_dims(x, d, dims) = FFTW.plan_brfft(x, d, dims) * x
-        compiled_planned_brfft_dims = @compile planned_brfft_dims(x_r, d, (1,))
-        @test compiled_planned_brfft_dims(x_r, d, (1,)) ≈ brfft(x, d, (1,))
-        # Make sure the operation is not in-place
-        @test x_r == copied_x_r
-
-        y_r = Reactant.to_rarray(similar(brfft(x, d)))
-        @jit LinearAlgebra.mul!(y_r, FFTW.plan_brfft(x, d), x_r)
-        @test y_r ≈ plan_brfft(x, d) * x
-    end
-
 
     @testset "In-place [$(fft!), size $(size)]" for size in ((16,), (16, 16)),
-        (plan!, fft!) in ((FFTW.plan_fft!, FFTW.fft!), (FFTW.plan_ifft!, FFTW.ifft!), 
-                          (FFTW.plan_bfft!, FFTW.bfft!))
+        (plan!, fft!) in (
+            (FFTW.plan_fft!, FFTW.fft!),
+            (FFTW.plan_ifft!, FFTW.ifft!),
+            (FFTW.plan_bfft!, FFTW.bfft!),
+        )
 
         x = randn(ComplexF32, size)
         x_r = Reactant.to_rarray(x)
@@ -204,44 +195,39 @@ end
 
 @testset "FFTW Plans with Traced Arrays" begin
     @testset "Complex Plans" begin
-        x = Reactant.TestUtils.construct_test_array(ComplexF32, 2, 3, 4)
-        x_r = Reactant.to_rarray(x)
-        p = plan_fft(copy(x))
-        p12 = plan_fft(copy(x), (1, 2))
+        for (plan, fft) in (
+            (FFTW.plan_fft, FFTW.fft),
+            (FFTW.plan_ifft, FFTW.ifft),
+            (FFTW.plan_bfft, FFTW.bfft),
+        )
+            x = Reactant.TestUtils.construct_test_array(ComplexF32, 2, 3, 4)
+            x_r = Reactant.to_rarray(x)
+            p = plan(copy(x))
+            p12 = plan(copy(x), (1, 2))
 
-        @test @jit(p * x_r) ≈ p * x
-        @test @jit(p12 * x_r) ≈ p12 * x
+            @test @jit(p * x_r) ≈ p * x
+            @test @jit(p12 * x_r) ≈ p12 * x
 
-        y_r = similar(x_r)
-        @jit LinearAlgebra.mul!(y_r, p, x_r)
-        @test y_r ≈ @jit(p * x_r)
+            y_r = similar(x_r)
+            @jit LinearAlgebra.mul!(y_r, p, x_r)
+            @test y_r ≈ @jit(p * x_r)
+        end
 
-        ip = plan_ifft(copy(x))
-        @test @jit(ip * x_r) ≈ ip * x
+        for (plan!, fft!) in (
+            (FFTW.plan_fft!, FFTW.fft!),
+            (FFTW.plan_ifft!, FFTW.ifft!),
+            (FFTW.plan_bfft!, FFTW.bfft!),
+        )
 
-        ip12 = plan_ifft(copy(x), (1, 2))
-        @test @jit(ip12 * x_r) ≈ ip12 * x
-
-        y_r = similar(x_r)
-        @jit LinearAlgebra.mul!(y_r, ip, x_r)
-        @test y_r ≈ @jit(ip * x_r)
-
-        # In-place plans
-        p! = plan_fft!(copy(x))
-        x_r = Reactant.to_rarray(x)
-        @test @jit(p! * x_r) ≈ p! * x
-        fill!(y_r, 0)
-        @jit LinearAlgebra.mul!(y_r, p!, copy(x_r))
-        @jit(p! * x_r)
-        @test y_r ≈ x_r
-
-        ip! = plan_ifft!(copy(x))
-        x_r = Reactant.to_rarray(x)
-        @test @jit(ip! * x_r) ≈ ip! * x
-        fill!(y_r, 0)
-        @jit LinearAlgebra.mul!(y_r, ip!, copy(x_r))
-        @jit(ip! * x_r)
-        @test y_r ≈ x_r
+            # In-place plans
+            p! = plan!(copy(x))
+            x_r = Reactant.to_rarray(x)
+            @test @jit(p! * x_r) ≈ p! * x
+            fill!(y_r, 0)
+            @jit LinearAlgebra.mul!(y_r, p!, copy(x_r))
+            @jit(p! * x_r)
+            @test y_r ≈ x_r
+        end
     end
 
     @testset "r2c plans" begin
@@ -267,29 +253,29 @@ end
         @jit LinearAlgebra.mul!(y_r23, p23, x_r)
         @test y_r23 ≈ @jit(p23 * x_r)
 
-        c = rand(ComplexF32, size(y_r)...)
-        ip = plan_irfft(copy(c), size(x, 1))
-        c_r = Reactant.to_rarray(c)
-        @test @jit(ip * c_r) ≈ ip * c
-        y_r = similar(Reactant.to_rarray(irfft(c, size(x, 1))))
-        @jit LinearAlgebra.mul!(y_r, ip, c_r)
-        @test y_r ≈ @jit(ip * c_r)
+        for plan in (FFTW.plan_irfft, FFTW.plan_brfft)
+            r_r = zero(x_r)
+            c = rand(ComplexF32, size(y_r)...)
+            ip = plan(copy(c), size(x, 1))
+            c_r = Reactant.to_rarray(c)
+            @test @jit(ip * c_r) ≈ ip * c
+            @jit LinearAlgebra.mul!(r_r, ip, c_r)
+            @test r_r ≈ @jit(ip * c_r)
 
-        c12 = rand(ComplexF32, size(p12 * x)...)
-        ip12 = plan_irfft(copy(c12), size(x, 1), (1, 2))
-        c12_r = Reactant.to_rarray(c12)
-        @test @jit(ip12 * c12_r) ≈ ip12 * c12
-        y_r = similar(Reactant.to_rarray(irfft(c12, size(x, 1), (1, 2))))
-        @jit LinearAlgebra.mul!(y_r, ip12, c12_r)
-        @test y_r ≈ @jit(ip12 * c12_r)
+            c12 = rand(ComplexF32, size(y_r12)...)
+            ip12 = plan(copy(c12), size(x, 1), (1, 2))
+            c12_r = Reactant.to_rarray(c12)
+            @test @jit(ip12 * c12_r) ≈ ip12 * c12
+            @jit LinearAlgebra.mul!(r_r, ip12, c12_r)
+            @test r_r ≈ @jit(ip12 * c12_r)
 
-        c23 = rand(ComplexF32, size(p23 * x)...)
-        ip23 = plan_irfft(copy(c23), size(x, 2), (2, 3))
-        c23_r = Reactant.to_rarray(c23)
-        @test @jit(ip23 * c23_r) ≈ ip23 * c23
-        y_r = similar(Reactant.to_rarray(irfft(c23, size(x, 2), (2, 3))))
-        @jit LinearAlgebra.mul!(y_r, ip23, c23_r)
-        @test y_r ≈ @jit(ip23 * c23_r)
+            c23 = rand(ComplexF32, size(y_r23)...)
+            ip23 = plan(copy(c23), size(x, 2), (2, 3))
+            c23_r = Reactant.to_rarray(c23)
+            @test @jit(ip23 * c23_r) ≈ ip23 * c23
+            @jit LinearAlgebra.mul!(r_r, ip23, c23_r)
+            @test r_r ≈ @jit(ip23 * c23_r)
+        end
     end
 end
 

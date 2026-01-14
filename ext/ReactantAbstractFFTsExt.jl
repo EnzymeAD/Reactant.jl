@@ -18,7 +18,7 @@ abstract type AbstractReactantFFTPlan{T} <: AbstractFFTs.Plan{T} end
 AbstractFFTs.fftdims(p::AbstractReactantFFTPlan) = p.dims
 
 reactant_fftplan(p::AbstractReactantFFTPlan) = p
-function reactant_fftplan(p::AbstractFFTs.ScaledPlan) 
+function reactant_fftplan(p::AbstractFFTs.ScaledPlan)
     return AbstractFFTs.ScaledPlan(reactant_fftplan(p.p), p.scale)
 end
 
@@ -173,23 +173,25 @@ for op in (:irfft,)
     end
 end
 
-
 # Because XLA defines ifft and irfft directly we need to support bfft by adding a normalization
 # factor ifft operations. This is inverse of the usual AbstractFFTs normalization.
-normbfft(::Type{T}, size, dims) where {T} = inv(AbstractFFTs.normalization(real(T), size, dims))
+function normbfft(::Type{T}, size, dims) where {T}
+    return inv(AbstractFFTs.normalization(real(T), size, dims))
+end
 for op in (:bfft,)
     normop = Symbol("norm", op)
     iop = Symbol(replace(string(op), "b" => "i"))
     @eval function AbstractFFTs.$(op)(x::AnyTracedRArray{T}, dims) where {T}
         y = AbstractFFTs.$(iop)(x, dims)
-        y .*= $(normop)(real(T), size(x), dims) 
+        y .*= $(normop)(real(T), size(x), dims)
         return y
     end
 
-
     planop = Symbol("plan_", op)
     planiop = Symbol("plan_", iop)
-    @eval function AbstractFFTs.$(planop)(x::Reactant.TracedRArray{T}, dims=1:ndims(x)) where {T}
+    @eval function AbstractFFTs.$(planop)(
+        x::Reactant.TracedRArray{T}, dims=1:ndims(x)
+    ) where {T}
         y = AbstractFFTs.$(planiop)(x, dims)
         return $(normop)(real(T), size(x), dims) * y # ScaledPlan
     end
@@ -206,7 +208,9 @@ for op in (:bfft,)
 
     planop! = Symbol(planop, "!")
     planiop! = Symbol(planiop, "!")
-    @eval function AbstractFFTs.$(planop!)(x::Reactant.TracedRArray{T}, dims=1:ndims(x)) where {T}
+    @eval function AbstractFFTs.$(planop!)(
+        x::Reactant.TracedRArray{T}, dims=1:ndims(x)
+    ) where {T}
         return $(normop)(real(T), size(x), dims) * AbstractFFTs.$(planiop!)(x, dims)
     end
 end
@@ -216,23 +220,26 @@ function reallength end
 
 function AbstractFFTs.brfft(x::AnyTracedRArray{T}, dims) where {T}
     y = AbstractFFTs.$(iop)(x, dims)
-    y .*= normbfft(real(T), size(y), dims) 
+    y .*= normbfft(real(T), size(y), dims)
     return y
 end
 
-function AbstractFFTs.plan_brfft(x::Reactant.TracedRArray{T}, length::Integer, dims=1:ndims(x)) where {T}
+function AbstractFFTs.plan_brfft(
+    x::Reactant.TracedRArray{T}, length::Integer, dims=1:ndims(x)
+) where {T}
     y = AbstractFFTs.plan_irfft(x, length, dims)
     sz = AbstractFFTs.brfft_output_size(size(x), length, dims)
     return normbfft(real(T), sz, dims) * y # ScaledPlan
 end
 
-function LinearAlgebra.mul!(y::Reactant.TracedRArray, p::AbstractFFTs.ScaledPlan{<:AbstractReactantFFTPlan}, x::Reactant.TracedRArray)
+function LinearAlgebra.mul!(
+    y::Reactant.TracedRArray,
+    p::AbstractFFTs.ScaledPlan{<:AbstractReactantFFTPlan},
+    x::Reactant.TracedRArray,
+)
     mul!(y, p.p, x)
     y .*= p.scale
     return y
 end
-
-
-
 
 end
