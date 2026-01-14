@@ -796,6 +796,7 @@ function call_llvm_generator(world::UInt, source, self, ::Type{typeof(Reactant.c
 			continue
 		    end
 		    gval = load!(builder, jlvaluet, gep!(builder, jlvaluet, args[4], LLVM.Value[LLVM.ConstantInt(length(globals))]))
+            LLVM.linkage!(g, LLVM.API.LLVMPrivateLinkage)
 		    push!(globals, unsafe_pointer_to_objref(Base.reinterpret(Ptr{Cvoid}, gmap[LLVM.name(g)])))
 		    store!(builder, gval, bitcast!(builder, g, LLVM.PointerType(jlvaluet)))
 		end
