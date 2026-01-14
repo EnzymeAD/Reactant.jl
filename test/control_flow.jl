@@ -686,7 +686,8 @@ end
 end
 
 function for_no_track_numbers(x, n)
-    @trace mincut = false checkpointing = true track_numbers = false for i in n:16
+    # checkpoints required for dynamic bounds (n:16 where n is traced)
+    @trace mincut = false checkpointing = true checkpoints = 3 track_numbers = false for i in n:16
         x = x .+ 1
     end
     return x
@@ -708,6 +709,55 @@ end
     ir = sprint(show, @code_hlo optimize = "enzyme-batch" for_no_track_numbers(x_ra, n_ra))
     @test contains(ir, "enzyme.disable_mincut")
     @test contains(ir, "enzymexla.enable_checkpointing")
+    @test contains(ir, "enzymexla.checkpoints = 3")
+end
+
+function for_explicit_checkpoints(x, n)
+    @trace mincut = false checkpointing = true checkpoints = 5 track_numbers = false for i in n:16
+        x = x .+ 1
+    end
+    return x
+end
+
+@testset "for: explicit checkpoints" begin
+    x = [1, 2, 3]
+    x_ra = Reactant.to_rarray(x)
+
+    n = 12
+    n_ra = Reactant.ConcreteRNumber(n)
+
+    # set optimize to only do enzyme-batch to prevent crash in opt
+    for_explicit_checkpoints_ra = @compile optimize = "enzyme-batch" for_explicit_checkpoints(
+        x_ra, n_ra
+    )
+    @test for_explicit_checkpoints_ra(x_ra, n_ra) == for_explicit_checkpoints(x, n)
+
+    ir = sprint(show, @code_hlo optimize = "enzyme-batch" for_explicit_checkpoints(x_ra, n_ra))
+    @test contains(ir, "enzymexla.enable_checkpointing")
+    @test contains(ir, "enzymexla.checkpoints = 5")
+end
+
+function for_default_checkpoints(x)
+    @trace checkpointing = true track_numbers = false for i in 1:100
+        x = x .+ 1
+    end
+    return x
+end
+
+@testset "for: default checkpoints (sqrt)" begin
+    x = [1, 2, 3]
+    x_ra = Reactant.to_rarray(x)
+
+    # set optimize to only do enzyme-batch to prevent crash in opt
+    for_default_checkpoints_ra = @compile optimize = "enzyme-batch" for_default_checkpoints(
+        x_ra
+    )
+    @test for_default_checkpoints_ra(x_ra) == for_default_checkpoints(x)
+
+    ir = sprint(show, @code_hlo optimize = "enzyme-batch" for_default_checkpoints(x_ra))
+    @test contains(ir, "enzymexla.enable_checkpointing")
+    # isqrt(100) = 10
+    @test contains(ir, "enzymexla.checkpoints = 10")
 end
 
 _call1(a, b) = a
