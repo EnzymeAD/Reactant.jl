@@ -20,6 +20,7 @@ using FFTW, Reactant, Test, LinearAlgebra
 
     y_ra = @jit(fft(x_ra))
     @test @jit(ifft(y_ra)) ≈ x
+    @test @jit(bfft(y_ra)) ≈ x * length(x)
 
     shifted_fft = @jit(fftshift(y_ra))
     @test shifted_fft ≈ fftshift(Array(y_ra))
@@ -32,6 +33,8 @@ using FFTW, Reactant, Test, LinearAlgebra
         @test @jit(fft(x_ra)) ≈ fft(x)
         @test @jit(fft(x_ra, (1, 2))) ≈ fft(x, (1, 2))
         @test @jit(fft(x_ra, (1, 2, 3))) ≈ fft(x, (1, 2, 3))
+        @test @jit(ifft(x_ra)) ≈ ifft(x)
+        @test @jit(bfft(x_ra)) ≈ bfft(x)
     end
 end
 
@@ -41,17 +44,39 @@ end
     x_ra_copy = copy(x_ra)
 
     y_ra = @jit(fft!(x_ra))
-    @test y_ra ≈ fft(x)
-    @test x_ra ≈ y_ra
+    @test x_ra ≈ fft(x)
+    @test y_ra == x_ra # These really should be the same memory right?
     @test x_ra ≉ x_ra_copy
+
+    y_ra = @jit(ifft!(x_ra))
+    @test y_ra == x_ra # These really should be the same memory right?
+    @test x_ra ≈ x
+
+    x_ra .= fft(x)
+    y_ra = @jit(bfft!(x_ra))
+    @test x_ra ≈ (bfft(fft(x)))
+    @test y_ra ≈ x_ra
+    @test y_ra == x_ra # These really should be the same memory right?
+    @test x_ra ≈ x .* length(x)
 
     x = Reactant.TestUtils.construct_test_array(ComplexF32, 2, 3, 4)
     x_ra = Reactant.to_rarray(x)
     x_ra_copy = copy(x_ra)
-    y_ra = @jit(fft!(x_ra, (1, 2)))
-    @test y_ra ≈ fft(x, (1, 2))
-    @test x_ra ≈ y_ra
+    @jit(fft!(x_ra, (1, 2)))
+    @test x_ra ≈ fft(x, (1, 2))
     @test x_ra ≉ x_ra_copy
+
+    y_ra = @jit(ifft!(x_ra, (1, 2)))
+    @test y_ra ≈ x_ra
+    @test y_ra == x_ra # These really should be the same memory right?
+    @test x_ra ≈ x
+
+    x_ra .= fft(x, (1, 2))
+    y_ra = @jit(bfft!(x_ra, (1, 2)))
+    @test x_ra ≈ (bfft(fft(x, (1, 2)), (1, 2)))
+    @test y_ra ≈ x_ra
+    @test y_ra == x_ra # These really should be the same memory right?
+    @test x_ra ≈ x ./ AbstractFFTs.normalization(real(eltype(x)), size(x), (1, 2))
 end
 
 @testset "rfft" begin
@@ -75,32 +100,18 @@ end
     y_ra = @jit(rfft(x_ra))
     @test @jit(irfft(y_ra, 2)) ≈ x
     @test @jit(irfft(y_ra, 3)) ≈ irfft(rfft(x), 3)
+    @test @jit(brfft(y_ra, 2)) ≈ x * length(x)
+    @test @jit(brfft(y_ra, 3)) ≈ brfft(rfft(x), 3)
 
     @testset "irfft real input" begin
         y_ra_real = @jit(real(y_ra))
         y_real = Array(y_ra_real)
 
-        @test @jit(rfft(x_ra)) ≈ rfft(x)
-        @test @jit(rfft(x_ra, (1, 2))) ≈ rfft(x, (1, 2))
-        @test @jit(rfft(x_ra, (1, 2, 3))) ≈ rfft(x, (1, 2, 3))
+        @test @jit(irfft(y_ra_real, 2)) ≈ irfft(y_real, 2)
+        @test @jit(irfft(y_ra_real, 2, (1, 2))) ≈ irfft(y_real, 2, (1, 2))
+        @test @jit(brfft(y_ra_real, 2)) ≈ brfft(y_real, 2)
+        @test @jit(brfft(y_ra_real, 2, (1, 2))) ≈ brfft(y_real, 2, (1, 2))
     end
-end
-
-@testset "bfft" begin
-    x = Reactant.TestUtils.construct_test_array(ComplexF32, 2, 3, 4)
-    x_ra = Reactant.to_rarray(x)
-
-    @test @jit(bfft(x_ra)) ≈ bfft(x)
-    @test @jit(bfft(x_ra, (1, 2))) ≈ bfft(x, (1, 2))
-    @test @jit(bfft(x_ra, (1, 2, 3))) ≈ bfft(x, (1, 2, 3))
-    @test @jit(bfft(x_ra, (2, 3))) ≈ bfft(x, (2, 3))
-    @test @jit(bfft(x_ra, (1, 3))) ≈ bfft(x, (1, 3))
-
-    @test @jit(bfft(x_ra, (3, 2))) ≈ bfft(x, (3, 2))
-    @test_throws AssertionError @jit(bfft(x_ra, (1, 4)))
-
-    y_ra = @jit(bfft(x_ra))
-    @test y_ra ./ length(y_ra) ≈ ifft(x)
 end
 
 @testset "Planned FFTs" begin
@@ -194,15 +205,12 @@ end
 end
 
 @testset "FFTW Plans with Traced Arrays" begin
-
     @testset "Complex Plans" begin
-
         for (plan, fft) in (
             (FFTW.plan_fft, FFTW.fft),
             (FFTW.plan_ifft, FFTW.ifft),
             (FFTW.plan_bfft, FFTW.bfft),
         )
-
             x = Reactant.TestUtils.construct_test_array(ComplexF32, 2, 3, 4)
             x_r = Reactant.to_rarray(x)
             y_r = similar(x_r)
@@ -223,22 +231,20 @@ end
             (FFTW.plan_ifft!, FFTW.ifft),
             (FFTW.plan_bfft!, FFTW.bfft),
         )
-
-
             x = Reactant.TestUtils.construct_test_array(ComplexF32, 2, 3, 4)
             x_r = Reactant.to_rarray(x)
             y_r = similar(x_r)
 
             # In-place plans
             p! = plan!(copy(x))
-            @jit(p! * x_r) 
+            @jit(p! * x_r)
             @test x_r ≈ fft(x)
             @jit LinearAlgebra.mul!(y_r, p!, Reactant.to_rarray(x))
             @test y_r ≈ fft(x)
 
             pd! = plan!(copy(x), (1, 2))
             x_r = Reactant.to_rarray(x)
-            @jit(pd! * x_r) 
+            @jit(pd! * x_r)
             @test x_r ≈ fft(x, (1, 2))
             @jit LinearAlgebra.mul!(y_r, pd!, Reactant.to_rarray(x))
             @test y_r ≈ fft(x, (1, 2))

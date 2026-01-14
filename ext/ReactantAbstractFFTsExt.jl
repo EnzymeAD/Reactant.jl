@@ -179,21 +179,11 @@ function normbfft(::Type{T}, size, dims) where {T}
     return inv(AbstractFFTs.normalization(real(T), size, dims))
 end
 
-function AbstractFFTs.bfft(x::AnyTracedRArray{T}, dims) where {T}
-    y = AbstractFFTs.ifft(x, dims)
-    y .*= normbfft(real(T), size(x), dims)
-    return y
-end
-
+# Because we override the plan_bfft and plan_brfft functions we actually do not need to define
+# AbstractFFTs.bfft functions since they come for free via the plan mechanism.
 function AbstractFFTs.plan_bfft(x::Reactant.TracedRArray{T}, dims=1:ndims(x)) where {T}
     pl = AbstractFFTs.plan_ifft(x, dims)
     return normbfft(real(T), size(x), dims) * pl # ScaledPlan
-end
-
-function AbstractFFTs.bfft!(x::AnyTracedRArray{T}, dims) where {T}
-    AbstractFFTs.ifft!(x, dims)
-    x .*= normbfft(real(T), size(x), dims)
-    return x
 end
 
 function AbstractFFTs.plan_bfft!(x::Reactant.TracedRArray{T}, dims=1:ndims(x)) where {T}
@@ -204,12 +194,6 @@ end
 # This must be implemented for bfft
 function reallength end
 
-function AbstractFFTs.brfft(x::AnyTracedRArray{T}, dims) where {T}
-    y = AbstractFFTs.$(iop)(x, dims)
-    y .*= normbfft(real(T), size(y), dims)
-    return y
-end
-
 function AbstractFFTs.plan_brfft(
     x::Reactant.TracedRArray{T}, length::Integer, dims=1:ndims(x)
 ) where {T}
@@ -218,14 +202,14 @@ function AbstractFFTs.plan_brfft(
     return normbfft(real(T), sz, dims) * y # ScaledPlan
 end
 
-function LinearAlgebra.mul!(
-    y::Reactant.TracedRArray,
-    p::AbstractFFTs.ScaledPlan{<:AbstractReactantFFTPlan},
-    x::Reactant.TracedRArray,
-)
-    mul!(y, p.p, x)
-    y .*= p.scale
-    return y
-end
+# function LinearAlgebra.mul!(
+#     y::Reactant.TracedRArray,
+#     p::AbstractFFTs.ScaledPlan{<:AbstractReactantFFTPlan},
+#     x::Reactant.TracedRArray,
+# )
+#     mul!(y, p.p, x)
+#     y .*= p.scale
+#     return y
+# end
 
 end
