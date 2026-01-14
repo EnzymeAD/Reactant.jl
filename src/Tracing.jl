@@ -1308,27 +1308,14 @@ function make_tracer(
     @nospecialize(prev::Base.RefValue),
     @nospecialize(path),
     mode;
-    @nospecialize(toscalar=false),
+    @nospecialize(toscalar = false),
     kwargs...,
 )
     if toscalar && mode == TracedSetPath
-        return make_tracer(
-            seen,
-            prev[],
-            append_path(path, :x),
-            mode;
-            toscalar=false,
-        )
+        return make_tracer(seen, prev[], append_path(path, :x), mode; toscalar=false)
     end
     @assert !toscalar
-    return make_tracer_unknown(
-            seen,
-            prev,
-            path,
-            mode;
-            toscalar,
-            kwargs...,
-        )
+    return make_tracer_unknown(seen, prev, path, mode; toscalar, kwargs...)
 end
 
 Base.@nospecializeinfer function make_tracer(
