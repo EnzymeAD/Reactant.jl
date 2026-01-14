@@ -86,12 +86,30 @@ end
     end
 end
 
+@testset "bfft" begin
+    x = Reactant.TestUtils.construct_test_array(ComplexF32, 2, 3, 4)
+    x_ra = Reactant.to_rarray(x)
+
+    @test @jit(bfft(x_ra)) ≈ bfft(x)
+    @test @jit(bfft(x_ra, (1, 2))) ≈ bfft(x, (1, 2))
+    @test @jit(bfft(x_ra, (1, 2, 3))) ≈ bfft(x, (1, 2, 3))
+    @test @jit(bfft(x_ra, (2, 3))) ≈ bfft(x, (2, 3))
+    @test @jit(bfft(x_ra, (1, 3))) ≈ bfft(x, (1, 3))
+
+    @test @jit(bfft(x_ra, (3, 2))) ≈ bfft(x, (3, 2))
+    @test_throws AssertionError @jit(bfft(x_ra, (1, 4)))
+
+    y_ra = @jit(bfft(x_ra))
+    @test y_ra./length(y_ra) ≈ ifft(x)
+end
+
 @testset "Planned FFTs" begin
     @testset "Out-of-place [$(fft), size $(size)]" for size in ((16,), (16, 16)),
         (plan, fft) in (
             (FFTW.plan_fft, FFTW.fft),
             (FFTW.plan_ifft, FFTW.ifft),
             (FFTW.plan_rfft, FFTW.rfft),
+            (FFTW.plan_bfft, FFTW.bfft)
         )
 
         x = randn(fft === FFTW.rfft ? Float32 : ComplexF32, size)
@@ -141,8 +159,34 @@ end
         @test y_r ≈ plan_irfft(x, d) * x
     end
 
+    @testset "Out-of-place brfft" begin
+        size = (16, 16)
+        x = randn(ComplexF32, size)
+        x_r = Reactant.to_rarray(x)
+        copied_x_r = copy(x_r) # I think FFTW may sometimes modify input?
+
+        d = 31 # original real length
+        planned_brfft(x, d) = FFTW.plan_brfft(x, d) * x
+        compiled_planned_brfft = @compile planned_brfft(x_r, d)
+        @test compiled_planned_brfft(x_r, d) ≈ brfft(x, d)
+        # Make sure the operation is not in-place
+        @test x_r == copied_x_r
+
+        planned_brfft_dims(x, d, dims) = FFTW.plan_brfft(x, d, dims) * x
+        compiled_planned_brfft_dims = @compile planned_brfft_dims(x_r, d, (1,))
+        @test compiled_planned_brfft_dims(x_r, d, (1,)) ≈ brfft(x, d, (1,))
+        # Make sure the operation is not in-place
+        @test x_r == copied_x_r
+
+        y_r = Reactant.to_rarray(similar(brfft(x, d)))
+        @jit LinearAlgebra.mul!(y_r, FFTW.plan_brfft(x, d), x_r)
+        @test y_r ≈ plan_brfft(x, d) * x
+    end
+
+
     @testset "In-place [$(fft!), size $(size)]" for size in ((16,), (16, 16)),
-        (plan!, fft!) in ((FFTW.plan_fft!, FFTW.fft!), (FFTW.plan_ifft!, FFTW.ifft!))
+        (plan!, fft!) in ((FFTW.plan_fft!, FFTW.fft!), (FFTW.plan_ifft!, FFTW.ifft!), 
+                          (FFTW.plan_bfft!, FFTW.bfft!))
 
         x = randn(ComplexF32, size)
         x_r = Reactant.to_rarray(x)

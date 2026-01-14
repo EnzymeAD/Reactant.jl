@@ -29,19 +29,20 @@ function AFTEx.reactant_fftplan(plan::FFTW.cFFTWPlan{T,BACKWARD,true}) where {T}
 end
 
 function AFTEx.reactant_fftplan(plan::FFTW.cFFTWPlan{T,BACKWARD,false}) where {T}
-    nrm = AbstractFFTs.normalization(real(T), size(plan), fftdims(plan))
-    return AFTEx.ReactantFFTPlan{T}(fftdims(plan)) * AFTEx.normbfft(T, size(plan), fftdims(plan))
+    nrm = AFTEx.normbfft(T, size(plan), fftdims(plan))
+    return AFTEx.ReactantIFFTPlan{T}(fftdims(plan)) * nrm
 end
 
-reallength(p::IrFFTWPlan{T}) where {T} = p.p.osz[first(fftdims(p))] # original real length
+AFTEx.reallength(p::FFTW.rFFTWPlan{T, BACKWARD}) where {T} = p.osz[first(fftdims(p))] # original real length
 # We don't define the inplace versions becuase the types always differ
 function AFTEx.reactant_fftplan(plan::FFTW.rFFTWPlan{T,FORWARD,false}) where {T}
     return AFTEx.ReactantRFFTPlan{T}(fftdims(plan))
 end
 
-function AFTEx.reactant_fftplan(plan::FFTW.rFFTWPlan{T,BACKWARD,false}) where {T}
-    nrm = AFTEx.normbrfft(T, size(plan), fftdims(plan))
-    return AFTEx.ReactantIRFFTPlan{T}(fftdims(plan), reallength(plan)) * nrm
+function AFTEx.reactant_fftplan(plan::FFTW.rFFTWPlan{T, BACKWARD}) where {T}
+    osz = AbstractFFTs.brfft_output_size(size(plan), AFTEx.reallength(plan), fftdims(plan)) # just to make sure it is defined
+    nrm = AFTEx.normbfft(real(T), osz, fftdims(plan))
+    return AFTEx.ReactantIRFFTPlan{T}(fftdims(plan), AFTEx.reallength(plan)) * nrm
 end
 
 end
