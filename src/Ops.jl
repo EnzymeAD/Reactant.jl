@@ -2147,6 +2147,7 @@ end
     track_numbers,
     verify_arg_names=nothing,
     checkpointing=false,
+    checkpoints=nothing,
     mincut=false,
     location=mlir_stacktrace("while_loop", @__FILE__, @__LINE__),
 ) where {CFn,BFn}
@@ -2222,6 +2223,10 @@ end
 
     if checkpointing
         MLIR.IR.attr!(while_op, "enzymexla.enable_checkpointing", MLIR.IR.Attribute(true))
+    end
+
+    if checkpoints !== nothing
+        MLIR.IR.attr!(while_op, "enzymexla.checkpoints", MLIR.IR.Attribute(checkpoints))
     end
 
     return map(enumerate(linear_args)) do (i, arg)
