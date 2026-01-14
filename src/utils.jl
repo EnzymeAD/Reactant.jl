@@ -533,10 +533,11 @@ function Base.showerror(io::IO, ece::ReactantRuntimeException)
 end
 
 struct ReactantPrecompilationException <: Base.Exception
+   str::String
 end
 
 function Base.showerror(io::IO, ece::ReactantPrecompilationException)
-    print(io, "ReactantPrecopmilationException: Precompilation not supported due to null global\n")
+   print(io, "ReactantPrecopmilationException: Precompilation not supported due to null global: $(ece.str)\n")
 end
 
 # Generator function which ensures that all calls to the function are executed within the ReactantInterpreter
@@ -790,7 +791,7 @@ function call_llvm_generator(world::UInt, source, self, ::Type{typeof(Reactant.c
 		    end
 		    if !haskey(gmap, LLVM.name(g))
 			if Reactant.precompiling()
-		            throw(ReactantPrecompilationException())
+				throw(ReactantPrecompilationException(string(g)))
 			end
 			continue
 		    end
