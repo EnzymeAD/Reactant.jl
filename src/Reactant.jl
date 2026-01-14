@@ -1,7 +1,7 @@
 module Reactant
 
 using ReactantCore:
-    ReactantCore, @trace, within_compile, MissingTracedValue, materialize_traced_array
+    ReactantCore, @trace, within_compile, MissingTracedValue, materialize_traced_array, Periodic
 
 using LinearAlgebra: LinearAlgebra, RowMaximum, NoPivot
 using Random: Random, AbstractRNG
@@ -294,7 +294,8 @@ export ConcreteRArray,
     @code_xla,
     @jit,
     @trace,
-    within_compile
+    within_compile,
+    Periodic
 
 const registry = Ref{Union{Nothing,MLIR.IR.DialectRegistry}}()
 
