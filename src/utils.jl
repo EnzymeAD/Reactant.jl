@@ -594,7 +594,8 @@ function call_llvm_generator(world::UInt, source, self, ::Type{typeof(Reactant.c
         match.spec_types,
         match.sparams,
     )
-    
+    method = mi.def
+
     if DEBUG_INTERP[]
 	safe_print("mi", mi)
     end
@@ -641,6 +642,14 @@ function call_llvm_generator(world::UInt, source, self, ::Type{typeof(Reactant.c
         code_info = Enzyme.create_fresh_codeinfo(
             call_with_reactant, source, world, slotnames, overdubbed_code
         )
+
+	if code_info.method_for_inference_limit_heuristics === nothing
+	    code_info.method_for_inference_limit_heuristics = method
+    	end
+    
+	if VERSION >= v"1.12-"
+            code_info.isva = true
+	end
 
         code_info.min_world = min_world[]
         code_info.max_world = max_world[]
@@ -691,10 +700,7 @@ function call_llvm_generator(world::UInt, source, self, ::Type{typeof(Reactant.c
                 llvm_module, p = GPUCompiler.emit_llvm(job)
 		gmap = Dict{String, UInt}()
 		for g in LLVM.globals(llvm_module)
-		    if LLVM.haskey(LLVM.metadata(g), "julia.constgv") && LLVM.isnull(LLVM.initializer(g))
-		        throw(ReactantPrecompilationException())
-		    end
-		    if LLVM.haskey(LLVM.metadata(g), "julia.constgv")
+		    if LLVM.haskey(LLVM.metadata(g), "julia.constgv") && !LLVM.isnull(LLVM.initializer(g))
 		       addr = LLVM.initializer(g)
 		       addr, _ = Enzyme.Compiler.get_base_and_offset(addr; offsetAllowed=false, inttoptr=true)
 		       @assert isa(addr, LLVM.ConstantInt)
@@ -782,6 +788,12 @@ function call_llvm_generator(world::UInt, source, self, ::Type{typeof(Reactant.c
 		    if !LLVM.haskey(LLVM.metadata(g), "julia.constgv")
 			continue
 		    end
+		    if !haskey(gmap, LLVM.name(g))
+			if Reactant.isprecompiling()
+		            throw(ReactantPrecompilationException())
+			end
+			continue
+		    end
 		    gval = load!(builder, jlvaluet, gep!(builder, jlvaluet, args[4], LLVM.Value[LLVM.ConstantInt(length(globals))]))
 		    push!(globals, unsafe_pointer_to_objref(Base.reinterpret(Ptr{Cvoid}, gmap[LLVM.name(g)])))
 		    store!(builder, gval, bitcast!(builder, g, LLVM.PointerType(jlvaluet)))
@@ -858,6 +870,14 @@ function call_llvm_generator(world::UInt, source, self, ::Type{typeof(Reactant.c
     code_info = Enzyme.create_fresh_codeinfo(
         call_with_reactant, source, world, slotnames, overdubbed_code
     )
+	
+    if code_info.method_for_inference_limit_heuristics === nothing
+        code_info.method_for_inference_limit_heuristics = method
+    end
+
+    if VERSION >= v"1.12-"
+        code_info.isva = true
+    end
 
     code_info.min_world = min_world[]
     code_info.max_world = max_world[]
@@ -875,6 +895,7 @@ function call_llvm_generator(world::UInt, source, self, ::Type{typeof(Reactant.c
     code_info.rettype = rt
         if DEBUG_INTERP[]
 		safe_print("code_info", code_info)
+		safe_print("code_info nargs, isva", (code_info.nargs, code_info.isva))
         end
     return code_info
 end
