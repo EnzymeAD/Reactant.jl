@@ -23,7 +23,7 @@ using StructArrays, Reactant, Test
     }
 
     @test typeof(
-        make_tracer(Reactant.OrderedIdDict(), x_ra, (), Reactant.ConcreteToTraced)
+        Reactant.make_tracer(Reactant.OrderedIdDict(), x_ra, (), Reactant.ConcreteToTraced)
     ) == StructArray{
         @NamedTuple{
             a::Reactant.TracedRNumber{Float64},
