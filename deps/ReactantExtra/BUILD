@@ -1856,3 +1856,46 @@ genrule(
         "jlrule",
     ],
 )
+
+genrule(
+    name = "julia_pjrt_capi_bindings",
+    srcs = [
+        "@xla//xla/pjrt/c:pjrt_c_api.h",
+        "@xla//xla/pjrt/c:pjrt_c_api_callback_extension.h",
+        "@xla//xla/pjrt/c:pjrt_c_api_tpu_topology_extension.h",
+        "@xla//xla/pjrt/c:pjrt_c_api_ffi_extension.h",
+        "@xla//xla/pjrt/c:pjrt_c_api_phase_compile_extension.h",
+        "@xla//xla/pjrt/c:pjrt_c_api_triton_extension.h",
+        "@xla//xla/pjrt/c:pjrt_c_api_gpu_extension.h",
+        "@xla//xla/pjrt/c:pjrt_c_api_stream_extension.h",
+        "@xla//xla/pjrt/c:pjrt_c_api_profiler_extension.h",
+        "@xla//xla/pjrt/c:pjrt_c_api_raw_buffer_extension.h",
+        "@xla//xla/pjrt/c:pjrt_c_api_custom_partitioner_extension.h",
+        "@xla//xla/pjrt/c:pjrt_c_api_layouts_extension.h",
+        "@xla//xla/pjrt/c:pjrt_c_api_memory_descriptions_extension.h",
+        "//:Project.toml",
+        "//:Manifest.toml",
+        "//:wrap.toml",
+        "//:missing_defs.jl",
+        "//:make.jl",
+    ],
+    outs = ["CAPI.jl"],
+    cmd = "$$JULIA \"--color=yes\" \"--project=$(location //:Project.toml)\" \"$(location //:make.jl)\" \
+        \"$(location @xla//xla/pjrt/c:pjrt_c_api.h)\" \
+        \"$(location @xla//xla/pjrt/c:pjrt_c_api_callback_extension.h)\" \
+        \"$(location @xla//xla/pjrt/c:pjrt_c_api_tpu_topology_extension.h)\" \
+        \"$(location @xla//xla/pjrt/c:pjrt_c_api_ffi_extension.h)\" \
+        \"$(location @xla//xla/pjrt/c:pjrt_c_api_phase_compile_extension.h)\" \
+        \"$(location @xla//xla/pjrt/c:pjrt_c_api_triton_extension.h)\" \
+        \"$(location @xla//xla/pjrt/c:pjrt_c_api_gpu_extension.h)\" \
+        \"$(location @xla//xla/pjrt/c:pjrt_c_api_stream_extension.h)\" \
+        \"$(location @xla//xla/pjrt/c:pjrt_c_api_profiler_extension.h)\" \
+        \"$(location @xla//xla/pjrt/c:pjrt_c_api_raw_buffer_extension.h)\" \
+        \"$(location @xla//xla/pjrt/c:pjrt_c_api_custom_partitioner_extension.h)\" \
+        \"$(location @xla//xla/pjrt/c:pjrt_c_api_layouts_extension.h)\" \
+        \"$(location @xla//xla/pjrt/c:pjrt_c_api_memory_descriptions_extension.h)\" \
+        \"$@\"",
+    tags = [
+        "jlrule",
+    ],
+)
