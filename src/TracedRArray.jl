@@ -1381,7 +1381,7 @@ end
 (s::__DropDims{D})(x) where {D} = dropdims(x; dims=s.dims)
 
 function unwrapped_broadcast(f::F, x::Base.Iterators.Zip, original_dims) where {F}
-    min_length = call_with_native(minimum, length, x.is)
+    min_length = Reactant.call_with_native(minimum, length, x.is)
     itrs = [length(itr) > min_length ? itr[1:min_length] : itr for itr in x.is]
     result = if any(Base.Fix2(isa, AnyTracedRArray), itrs)
         broadcast(BroadcastIterator(f), itrs...)
