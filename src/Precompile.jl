@@ -45,7 +45,6 @@ if Reactant_jll.is_available()
                 end
 
                 y = ConcreteRArray([2.0]; client)
-		@static if VERSION >= v"1.11"
 		  try
 			compile(Base.sum, (y,); client, optimize=:all)
 		   catch e
@@ -53,7 +52,6 @@ if Reactant_jll.is_available()
 				   rethrow()
 			end
 	           end
-		end
                 if y isa ConcreteIFRTArray
                     XLA.free_buffer(y.data.buffer)
                     y.data.buffer.buffer = C_NULL
