@@ -4110,7 +4110,7 @@ function llvm_compiler_cache(_mod::MLIR.IR.Module)
     cache = get(_llvm_compiler_caches, _mod, nothing)
     if cache === nothing
         cache = Dict{Any,LLVMFunc}()
-        _compiler_caches[_mod] = cache
+        _llvm_compiler_caches[_mod] = cache
     end
     return cache
 end
