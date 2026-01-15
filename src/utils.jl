@@ -789,6 +789,9 @@ function call_llvm_generator(world::UInt, source, self, ::Type{typeof(Reactant.c
 		
 		globals = Any[]
 		for g in LLVM.globals(llvm_module)
+		    if LLVM.initializer(g) !== nothing
+			LLVM.linkage!(g, LLVM.API.LLVMInternalLinkage)
+		    end
 		    if !LLVM.haskey(LLVM.metadata(g), "julia.constgv")
 			continue
 		    end
@@ -799,7 +802,6 @@ function call_llvm_generator(world::UInt, source, self, ::Type{typeof(Reactant.c
 			continue
 		    end
 		    gval = load!(builder, jlvaluet, gep!(builder, jlvaluet, args[4], LLVM.Value[LLVM.ConstantInt(length(globals))]))
-            LLVM.linkage!(g, LLVM.API.LLVMPrivateLinkage)
 		    push!(globals, unsafe_pointer_to_objref(Base.reinterpret(Ptr{Cvoid}, gmap[LLVM.name(g)])))
 		    store!(builder, gval, bitcast!(builder, g, LLVM.PointerType(jlvaluet)))
 		end
@@ -826,9 +828,6 @@ function call_llvm_generator(world::UInt, source, self, ::Type{typeof(Reactant.c
     end
 
     mod, rt, globals = cached_compilation::Tuple{String, Type, Vector{Any}}
-    if RT !== nothing
-	    @assert rt <: RT
-    end
 
     args_vec = push_inst!(
         overdubbed_code,
@@ -865,6 +864,11 @@ function call_llvm_generator(world::UInt, source, self, ::Type{typeof(Reactant.c
 
     push_inst!(overdubbed_code, Expr(:gc_preserve_end, preserve))
     push_inst!(overdubbed_code, Expr(:gc_preserve_end, preserve2))
+    if RT !== nothing
+        if !(rt <: RT)
+    		push_inst!(overdubbed_code, Expr(:call, Core.typeassert, result, RT))
+        end
+    end
     result = push_inst!(overdubbed_code, Expr(:call, Core.typeassert, result, rt))
         if DEBUG_INTERP[]
           push_inst!(
