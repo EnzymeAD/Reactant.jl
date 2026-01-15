@@ -50,6 +50,8 @@ function Core.Compiler.optimize(
     return res
 end
 
+@noinline call_with_native(@nospecialize(f), @nospecialize(args...)) = f(args...)
+
 struct CallWithReactant{F} <: Function
     f::F
 end
@@ -111,6 +113,7 @@ end
 
 const __skip_rewrite_func_set_lock = ReentrantLock()
 const __skip_rewrite_func_set = Set([
+    typeof(call_with_native),
     # Avoid the 1.10 stackoverflow
     typeof(Base.typed_hvcat),
     typeof(Base.hvcat),
@@ -809,7 +812,7 @@ function call_llvm_generator(world::UInt, source, self, ::Type{typeof(Reactant.c
 		if DEBUG_INTERP[]
 			Enzyme.API.EnzymeDumpModuleRef(llvm_module.ref)
 		end
-                mod = string(llvm_module)
+        mod = string(llvm_module)
 		mod, p.compiled[mi].ci.rettype, globals
             finally
                 LLVM.deactivate(ctx)
