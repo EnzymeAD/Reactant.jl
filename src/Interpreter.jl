@@ -8,7 +8,6 @@ using Enzyme
 
 import Core.Compiler:
     AbstractInterpreter,
-    abstract_call,
     abstract_call_known,
     ArgInfo,
     StmtInfo,

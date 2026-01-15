@@ -1,11 +1,11 @@
-using LLVM
-using GPUCompiler
+using LLVM: LLVM
+using GPUCompiler: GPUCompiler
 
-struct CompilerParams <: AbstractCompilerParams
+struct CompilerParams <: GPUCompiler.AbstractCompilerParams
     use_native_interp::Bool
 end
 
-NativeCompilerJob = CompilerJob{NativeCompilerTarget,CompilerParams}
+NativeCompilerJob = GPUCompiler.CompilerJob{GPUCompiler.NativeCompilerTarget,CompilerParams}
 GPUCompiler.can_throw(@nospecialize(job::NativeCompilerJob)) = true
 function GPUCompiler.method_table(@nospecialize(job::NativeCompilerJob))
     return Core.Compiler.method_table(GPUCompiler.get_interpreter(job))
@@ -676,8 +676,8 @@ function call_llvm_generator(world::UInt, source, self, ::Type{typeof(Reactant.c
         return code_info
     end
 
-    config = CompilerConfig(
-        NativeCompilerTarget(; jlruntime=true, llvm_always_inline=false),
+    config = GPUCompiler.CompilerConfig(
+        GPUCompiler.NativeCompilerTarget(; jlruntime=true, llvm_always_inline=false),
         CompilerParams(use_native_interpreter);
         kernel=false,
         libraries=true,
@@ -689,7 +689,7 @@ function call_llvm_generator(world::UInt, source, self, ::Type{typeof(Reactant.c
         entry_abi=:func,
     )
 
-    job = CompilerJob(mi, config, world)
+    job = GPUCompiler.CompilerJob(mi, config, world)
     key = hash(job)
 
     # NOTE: no use of lock(::Function)/@lock/get! to keep stack traces clean
@@ -697,7 +697,7 @@ function call_llvm_generator(world::UInt, source, self, ::Type{typeof(Reactant.c
     cached_compilation = try
         obj = Base.get(call_with_reactant_cache, key, nothing)
         if obj === nothing
-            ts_ctx = JuliaContext()
+            ts_ctx = GPUCompiler.JuliaContext()
             ctx = LLVM.context(ts_ctx)
             LLVM.activate(ctx)
             obj = try
@@ -716,8 +716,8 @@ function call_llvm_generator(world::UInt, source, self, ::Type{typeof(Reactant.c
 	
 		llvm_fn_name = LLVM.name(p.entry)
 		
-		jlvaluet = convert(LLVMType, Any; allow_boxed=true)
-		ptrt = convert(LLVMType, Core.LLVMPtr{Any, 0}; allow_boxed=true)
+		jlvaluet = convert(LLVM.LLVMType, Any; allow_boxed=true)
+		ptrt = convert(LLVM.LLVMType, Core.LLVMPtr{Any, 0}; allow_boxed=true)
 		wrapper_ft = LLVM.FunctionType(jlvaluet, LLVM.LLVMType[jlvaluet, ptrt, LLVM.Int32Type(), ptrt])
 		wrapper_f = LLVM.Function(llvm_module, "entry", wrapper_ft)
 
@@ -769,10 +769,10 @@ function call_llvm_generator(world::UInt, source, self, ::Type{typeof(Reactant.c
 		    if false && !isempty(LLVM.blocks(f))
 			 LLVM.name!(f, "reactant\$"*LLVM.name(f))
 			if Enzyme.Compiler.has_fn_attr(f, LLVM.EnumAttribute("optnone"))
-			    LLVM.delete!(LLVM.function_attributes(f), LLVM.EnumAttribute("optnone"))
+			    delete!(LLVM.function_attributes(f), LLVM.EnumAttribute("optnone"))
 			end
 			if Enzyme.Compiler.has_fn_attr(f, LLVM.EnumAttribute("noinline"))
-			    LLVM.delete!(LLVM.function_attributes(f), LLVM.EnumAttribute("noinline"))
+			    delete!(LLVM.function_attributes(f), LLVM.EnumAttribute("noinline"))
 			end
 			LLVM.linkage!(f, LLVM.API.LLVMInternalLinkage)
 		    end
@@ -792,7 +792,7 @@ function call_llvm_generator(world::UInt, source, self, ::Type{typeof(Reactant.c
 		    if LLVM.initializer(g) !== nothing
 			LLVM.linkage!(g, LLVM.API.LLVMInternalLinkage)
 		    end
-		    if !LLVM.haskey(LLVM.metadata(g), "julia.constgv")
+		    if !haskey(LLVM.metadata(g), "julia.constgv")
 			continue
 		    end
 		    if !haskey(gmap, LLVM.name(g))
@@ -801,9 +801,9 @@ function call_llvm_generator(world::UInt, source, self, ::Type{typeof(Reactant.c
 			end
 			continue
 		    end
-		    gval = load!(builder, jlvaluet, gep!(builder, jlvaluet, args[4], LLVM.Value[LLVM.ConstantInt(length(globals))]))
+		    gval = LLVM.load!(builder, jlvaluet, LLVM.gep!(builder, jlvaluet, args[4], LLVM.Value[LLVM.ConstantInt(length(globals))]))
 		    push!(globals, unsafe_pointer_to_objref(Base.reinterpret(Ptr{Cvoid}, gmap[LLVM.name(g)])))
-		    store!(builder, gval, bitcast!(builder, g, LLVM.PointerType(jlvaluet)))
+		    LLVM.store!(builder, gval, LLVM.bitcast!(builder, g, LLVM.PointerType(jlvaluet)))
 		end
 		res = LLVM.call!(builder, LLVM.function_type(p.entry), p.entry, args[1:3])
 		LLVM.ret!(builder, res)
