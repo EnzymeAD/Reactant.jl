@@ -12,7 +12,7 @@ sumabs2(x) = sum(abs2, x)
         @test enz_grad[1] ≈ zyg_grad[1]
 
         @testset "Disable Overlay" begin
-            @test_throws Zygote.CompileError Reactant.with_config(;
+            @test_throws ErrorException Reactant.with_config(;
                 overlay_zygote_calls=false
             ) do
                 @jit Zygote.gradient(sumabs2, x)
