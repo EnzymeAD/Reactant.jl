@@ -144,7 +144,7 @@ for (cT, aT, bT) in (
             if use_overlayed_version((C2, A, B))
                TracedLinearAlgebra.overloaded_mul!(C2, A, B, α, β)
                if C2 !== C
-	           Base.copyto(C, C2)
+	           Base.copyto!(C, C2)
                end
             else
                 # Inference barrier is required when calling function recursively within
