@@ -79,4 +79,4 @@ Zygote = "0.7"
 Reactant_jll = "0192cb87-2b54-54ad-80e0-3be72ad8a3c0"
 
 [sources]
-ReactantCore = {path = ".."}
+Reactant = {path = ".."}
