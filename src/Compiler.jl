@@ -1748,6 +1748,7 @@ function compile_mlir!(
         deactivate_sdygroupidcache!(sdygroupidcache)
         deactivate_callcache!(callcache)
         MLIR.IR.deactivate!(MLIR.IR.body(mod))
+        clear_llvm_compiler_cache!(mod)
         MLIR.IR.deactivate!(mod)
     end
     (;
@@ -4086,6 +4087,37 @@ function default_callcache()
             resargprefix::Symbol,
         }
     }()
+end
+
+# Since we cache these objects we cannot cache data containing MLIR operations (e.g. the entry must be a string
+# and not the operation itself).
+struct LLVMFunc{F,tt}
+    f::Union{F,Nothing}
+    entry::String
+end
+
+function Base.getproperty(f::LLVMFunc{F,tt}, sym::Symbol) where {F,tt}
+    if sym === :fun
+        f
+    else
+        Base.getfield(f, sym)
+    end
+end
+
+# cache of compilation caches, per module
+const _llvm_compiler_caches = Dict{MLIR.IR.Module,Dict{Any,LLVMFunc}}()
+function llvm_compiler_cache(_mod::MLIR.IR.Module)
+    cache = get(_llvm_compiler_caches, _mod, nothing)
+    if cache === nothing
+        cache = Dict{Any,LLVMFunc}()
+        _compiler_caches[_mod] = cache
+    end
+    return cache
+end
+
+function clear_llvm_compiler_cache!(_mod::MLIR.IR.Module)
+    delete!(_llvm_compiler_caches, _mod)
+    return nothing
 end
 
 end
