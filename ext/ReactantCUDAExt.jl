@@ -1480,7 +1480,14 @@ end
                     return nothing
                 end
                 y = Reactant.ConcreteRArray([2.0]; client)
-                Reactant.Compiler.compile_mlir(square!, (y,); optimize=false)
+		try
+		   Reactant.Compiler.compile_mlir(square!, (y,); optimize=false)
+		catch e
+		    if !(e isa ReactantPrecompilationException)
+                                  rethrow()
+                     end
+
+		end
 
                 if y isa Reactant.ConcreteIFRTArray
                     Reactant.XLA.free_buffer(y.data.buffer)
