@@ -814,7 +814,10 @@ function call_llvm_generator(world::UInt, source, self, ::Type{typeof(Reactant.c
 		if DEBUG_INTERP[]
 			Enzyme.API.EnzymeDumpModuleRef(llvm_module.ref)
 		end
-        mod = string(llvm_module)
+		mod = string(llvm_module)
+		if VERSION < v"1.11" && occursin("inttoptr", mod) && Reactant.precompiling()
+		   throw(ReactantPrecompilationException("Baked in global"))
+		end
 		mod, p.compiled[mi].ci.rettype, globals
             finally
                 LLVM.deactivate(ctx)
