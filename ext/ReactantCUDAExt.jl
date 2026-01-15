@@ -1301,12 +1301,12 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
 end
 
 # cache of compilation caches, per context
-const _compiler_caches = Dict{MLIR.IR.Context,Dict{Any,LLVMFunc}}()
-function compiler_cache(ctx::MLIR.IR.Context)
-    cache = get(_compiler_caches, ctx, nothing)
+const _compiler_caches = Dict{MLIR.IR.Module,Dict{Any,LLVMFunc}}()
+function compiler_cache(_mod::MLIR.IR.Module)
+    cache = get(_compiler_caches, _mod, nothing)
     if cache === nothing
         cache = Dict{Any,LLVMFunc}()
-        _compiler_caches[ctx] = cache
+        _compiler_caches[_mod] = cache
     end
     return cache
 end
@@ -1316,7 +1316,7 @@ Reactant.@reactant_overlay @noinline function CUDA.cufunction(
 ) where {F,TT}
     res = Base.@lock CUDA.cufunction_lock begin
         # compile the function
-        cache = compiler_cache(MLIR.IR.context())
+        cache = compiler_cache(MLIR.IR.mmodule())
         source = CUDA.methodinstance(F, tt)
         # cuda = CUDA.active_state()
         device = nothing # cuda.device
