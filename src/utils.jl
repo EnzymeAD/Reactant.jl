@@ -50,7 +50,7 @@ function Core.Compiler.optimize(
     return res
 end
 
-@noinline call_with_native(@nospecialize(f), @nospecialize(args...)) = f(args...)
+@noinline call_with_native(@nospecialize(f), @nospecialize(args...); @nospecialize(kwargs...)) = f(args...; kwargs...)
 
 struct CallWithReactant{F} <: Function
     f::F
