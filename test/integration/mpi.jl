@@ -10,7 +10,7 @@ datatypes = [
     Cchar, Cuchar, Cwchar_t,
     Float32, Float64,
     ComplexF32, ComplexF64,
-    # Bool
+    # Bool # currently not working anywhere
 ]
 
 MPI.Init()
@@ -27,11 +27,78 @@ end
     @test nranks == @jit MPI.Comm_size(comm)
 end
 
+# @testset "Allreduce" begin
+#     comm = MPI.COMM_WORLD
+#     x = ConcreteRArray(fill(1))
+#     nranks = MPI.Comm_size(comm)
+#     @test nranks == @jit MPI.Allreduce(x, MPI.SUM, MPI.COMM_WORLD)
+# end
+
 @testset "Allreduce" begin
+    operations = [
+        # ("OP_NULL", MPI.OP_NULL),
+        ("BAND", MPI.BAND),
+        ("BOR", MPI.BOR),
+        ("BXOR", MPI.BXOR),
+        ("LAND", MPI.LAND),
+        ("LOR", MPI.LOR),
+        ("LXOR", MPI.LXOR),
+        ("MAX", MPI.MAX),
+        ("MIN", MPI.MIN),
+        ("PROD", MPI.PROD),
+        # ("REPLACE", MPI.REPLACE), # not working for any datatypes
+        ("SUM", MPI.SUM),
+        # ("NO_OP", MPI.NO_OP)
+    ]
+
     comm = MPI.COMM_WORLD
-    x = ConcreteRArray(fill(1))
     nranks = MPI.Comm_size(comm)
-    @test nranks == @jit MPI.Allreduce(x, MPI.SUM, MPI.COMM_WORLD)
+    rank = MPI.Comm_rank(comm)
+
+    for (opname, op) in operations
+        for T in datatypes
+            # debug
+            if (T <: Complex)
+                continue
+            end
+            # op in [MPI.PROD, MPI.SUM] && continue # hangs
+
+            # Skip invalid combinations
+            if op in [MPI.BAND, MPI.BOR, MPI.BXOR] && T <: Union{AbstractFloat, Complex}
+                continue  # Bitwise ops don't work with floats/complex
+            end
+
+            x = ConcreteRArray(fill(T(1)))
+
+            # Compute expected result based on operation
+            expected = if op == MPI.SUM
+                ConcreteRArray(fill(T(nranks)))
+            elseif op in [MPI.PROD, MPI.MAX, MPI.MIN, MPI.REPLACE]
+                ConcreteRArray(fill(T(1)))
+            elseif op in [MPI.BAND, MPI.LAND]
+                ConcreteRArray(fill(T(1)))  # AND of all 1s = 1
+            elseif op in [MPI.BOR, MPI.LOR]
+                ConcreteRArray(fill(T(1)))  # OR of all 1s = 1
+            elseif op in [MPI.BXOR, MPI.LXOR]
+                ConcreteRArray(fill(T(nranks % 2)))  # XOR of 1s: odd ranks → 1, even ranks → 0
+            elseif op in [MPI.OP_NULL]
+                continue  # Skip these operations
+            elseif op in [MPI.OP_NULL, MPI.NO_OP]
+                ConcreteRArray(fill(T(1)))
+            else
+                error("Unexpected operation: $op")
+            end
+
+            @test expected == @jit MPI.Allreduce(x, op, MPI.COMM_WORLD)
+
+            # debug
+            # rank==0 && println("")
+            # rank==0 && println("datatype=$T, op=$opname, $(expected == @jit MPI.Allreduce(x, op, MPI.COMM_WORLD))")
+            # rank==0 && println("       result=$(@jit MPI.Allreduce(x, op, MPI.COMM_WORLD))")
+            # rank==0 && println("       expect=$expected")
+            # rank==0 && println("")
+        end
+    end
 end
 
 @testset "Barrier" begin
