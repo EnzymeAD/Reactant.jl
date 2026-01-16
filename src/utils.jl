@@ -820,7 +820,7 @@ function call_llvm_generator(world::UInt, source, self, ::Type{typeof(Reactant.c
 
         # Required for windows
         for f in LLVM.functions(llvm_module)
-            if LLVM.isempty(LLVM.blocks(f))
+            if isempty(LLVM.blocks(f))
                 continue
             end
             if !Enzyme.Compiler.has_fn_attr(f, LLVM.StringAttribute("frame-pointer"))
