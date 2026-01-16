@@ -704,7 +704,7 @@ function call_llvm_generator(world::UInt, source, self, ::Type{typeof(Reactant.c
                 llvm_module, p = GPUCompiler.emit_llvm(job)
 		gmap = Dict{String, UInt}()
 		for g in LLVM.globals(llvm_module)
-		    if LLVM.haskey(LLVM.metadata(g), "julia.constgv") && !LLVM.isnull(LLVM.initializer(g))
+		    if haskey(LLVM.metadata(g), "julia.constgv") && !LLVM.isnull(LLVM.initializer(g))
 		       addr = LLVM.initializer(g)
 		       addr, _ = Enzyme.Compiler.get_base_and_offset(addr; offsetAllowed=false, inttoptr=true)
 		       @assert isa(addr, LLVM.ConstantInt)
