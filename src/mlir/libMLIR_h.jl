@@ -1797,6 +1797,17 @@ function mlirOperationWalk(op, callback, userData, walkOrder)
 end
 
 """
+    mlirOperationReplaceUsesOfWith(op, of, with)
+
+Replace uses of 'of' value with the 'with' value inside the 'op' operation.
+"""
+function mlirOperationReplaceUsesOfWith(op, of, with)
+    @ccall mlir_c.mlirOperationReplaceUsesOfWith(
+        op::MlirOperation, of::MlirValue, with::MlirValue
+    )::Cvoid
+end
+
+"""
     mlirRegionCreate()
 
 Creates a new empty region and transfers ownership to the caller.
