@@ -264,21 +264,6 @@ REACTANT_ABI void ReactantHandleCuResult(uint32_t curesult) {
 
 // MLIR C-API extras
 #pragma region MLIR Extra
-REACTANT_ABI MlirAttribute mlirComplexAttrDoubleGet(MlirContext ctx,
-                                                    MlirType type, double real,
-                                                    double imag) {
-  return wrap(
-      complex::NumberAttr::get(cast<ComplexType>(unwrap(type)), real, imag));
-}
-
-REACTANT_ABI MlirAttribute mlirComplexAttrDoubleGetChecked(MlirLocation loc,
-                                                           MlirType type,
-                                                           double real,
-                                                           double imag) {
-  return wrap(complex::NumberAttr::getChecked(
-      unwrap(loc), cast<ComplexType>(unwrap(type)), real, imag));
-}
-
 REACTANT_ABI bool mlirOperationInject(MlirContext ctx, MlirBlock block,
                                       MlirStringRef code, MlirLocation location,
                                       bool verify_after_parse) {
