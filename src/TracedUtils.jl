@@ -1100,7 +1100,7 @@ function __elem_apply_loop_body(idx_ref, fn_ref::F, res_ref, args_ref, L_ref) wh
     res = res_ref[]
     idx = idx_ref[] + 1
 
-    scalar_args = [@allowscalar(arg[idx]) for arg in args]
+    scalar_args = [@allowscalar((@inbounds arg[idx])) for arg in args]
     @allowscalar res[idx] = fn(scalar_args...)
 
     idx_ref[] = idx
@@ -1116,7 +1116,12 @@ function elem_apply_via_while_loop(f, args::Vararg{Any,Nargs}) where {Nargs}
 
     # This wont be a mutating function so we can safely execute it once
     res_tmp = @allowscalar(f([@allowscalar(arg[1]) for arg in flat_args]...))
-    result = similar(first(flat_args), Reactant.unwrapped_eltype(res_tmp), L)
+
+    # TODO: perhaps instead of this logic, we should have
+    # `similar(::TracedRArray, TracedRNumber{T}) where T = similar(::TracedRArray, T)`
+    # and just not unwrap here?
+    T_res = typeof(res_tmp) <: TracedRNumber ? unwrapped_eltype(res_tmp) : typeof(res_tmp)
+    result = similar(first(flat_args), T_res, L)
 
     ind_var = Ref(0)
     f_ref = Ref(f)

@@ -63,6 +63,7 @@ end
         @safetestset "OneHotArrays" include("integration/onehotarrays.jl")
         @safetestset "AbstractFFTs" include("integration/fft.jl")
         @safetestset "SpecialFunctions" include("integration/special_functions.jl")
+        @safetestset "StructArrays" include("integration/structarrays.jl")
         @safetestset "Random" include("integration/random.jl")
         @safetestset "Python" include("integration/python.jl")
         @safetestset "Optimisers" include("integration/optimisers.jl")
