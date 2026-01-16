@@ -155,7 +155,7 @@ function Base.promote_rule(::Type{TracedRNumber{T}}, S::Type{>:Missing}) where {
     return Union{Missing,TracedRNumber{nonmissingtype(promote_type(T, S))}}
 end
 
-function Base.promote_rule(::Type{>:Nothing}, ::Type{TracedRNumber{S}}) where {S}
+function Base.promote_rule(T::Type{>:Nothing}, ::Type{TracedRNumber{S}}) where {S}
     return Union{Nothing,TracedRNumber{Base.nonnothingtype(promote_type(S, T))}}
 end
 

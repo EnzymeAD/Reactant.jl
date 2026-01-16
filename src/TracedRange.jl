@@ -105,7 +105,7 @@ function Base._reverse(r::TracedStepRangeLen, ::Colon)
     # invalid. As `reverse(r)` is also empty, any offset would work so we keep
     # `r.offset`
     offset = isempty(r) ? r.offset : length(r) - r.offset + 1
-    return typeof(r)(r.ref, negate(r.step), length(r), offset)
+    return typeof(r)(r.ref, -r.step, length(r), offset)
 end
 
 function Base.:(==)(r::T, s::T) where {T<:TracedStepRangeLen}
@@ -124,7 +124,7 @@ end
 TracedUnitRange(start::T, stop::T) where {T} = TracedUnitRange{T}(start, stop)
 function TracedUnitRange(start, stop)
     startstop_promoted = promote(start, stop)
-    not_sametype((start, stop), startstop_promoted)
+    Base.not_sametype((start, stop), startstop_promoted)
     return TracedUnitRange(startstop_promoted...)
 end
 TracedUnitRange{T}(r::TracedUnitRange{T}) where {T<:Real} = r
@@ -137,7 +137,7 @@ TracedUnitRange(r::AbstractUnitRange) = TracedUnitRange(first(r), last(r))
 function Base.promote_rule(
     a::Type{TracedUnitRange{T1}}, b::Type{TracedUnitRange{T2}}
 ) where {T1,T2}
-    return el_same(promote_type(T1, T2), a, b)
+    return Base.el_same(promote_type(T1, T2), a, b)
 end
 
 function Base.promote_rule(

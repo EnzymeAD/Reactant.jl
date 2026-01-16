@@ -90,7 +90,7 @@ end
     return Base.setproperty!(obj, field, val)
 end
 
-@inline traced_setfield!(@nospecialize(obj), field, val, path) =
+@inline traced_setfield!(@nospecialize(obj), field, val, _path) =
     Base.setfield!(obj, field, val)
 
 @inline function traced_setfield!(
@@ -111,7 +111,7 @@ end
     return setfield_carray!(obj, field, val, path)
 end
 
-@inline function traced_setfield!(@nospecialize(obj::Dict), field, val, path)
+@inline function traced_setfield!(@nospecialize(obj::Dict), field, val, _path)
     return Base.setindex!(obj, field, val)
 end
 
@@ -163,7 +163,7 @@ function traced_setfield_buffer!(runtime::Val, cache_dict, concrete_res, obj, fi
     )
 end
 
-function traced_setfield_buffer!(::Val, cache_dict, val, concrete_res, obj, field, path)
+function traced_setfield_buffer!(::Val, _cache_dict, val, concrete_res, _obj, _field, path)
     return traced_setfield!(val, :data, concrete_res, path)
 end
 
@@ -278,8 +278,8 @@ function create_result(
     result_stores,
     path_to_shard_info,
     to_unreshard_results,
-    unresharded_code::Vector{Expr},
-    unresharded_arrays_cache,
+    _unresharded_code::Vector{Expr},
+    _unresharded_arrays_cache,
     used_shardinfo,
     result_cache,
     var_idx,
@@ -320,8 +320,8 @@ function create_result(
     result_stores,
     path_to_shard_info,
     to_unreshard_results,
-    unresharded_code::Vector{Expr},
-    unresharded_arrays_cache,
+    _unresharded_code::Vector{Expr},
+    _unresharded_arrays_cache,
     used_shardinfo,
     result_cache,
     var_idx,
@@ -362,8 +362,8 @@ function create_result(
     result_stores,
     path_to_shard_info,
     to_unreshard_results,
-    unresharded_code::Vector{Expr},
-    unresharded_arrays_cache,
+    _unresharded_code::Vector{Expr},
+    _unresharded_arrays_cache,
     used_shardinfo,
     result_cache,
     var_idx,
@@ -593,7 +593,7 @@ function create_result(
         resultgen_code,
     )
     elems = Union{Symbol,Expr}[]
-    for (i, (k, v)) in enumerate(pairs(tocopy))
+    for (i, (_, v)) in enumerate(pairs(tocopy))
         push!(elems, create_result(v, append_path(path, i), args...))
     end
     return :(NamedTuple{$K}(($(elems...),)))
@@ -655,32 +655,32 @@ end
 
 function create_result(
     tocopy::Reactant.XLA.AbstractDevice,
-    path,
-    result_stores,
-    path_to_shard_info,
-    to_unreshard_results,
-    unresharded_code::Vector{Expr},
-    unresharded_arrays_cache,
-    used_shardinfo,
-    result_cache,
-    var_idx,
-    resultgen_code,
+    _path,
+    _result_stores,
+    _path_to_shard_info,
+    _to_unreshard_results,
+    _unresharded_code::Vector{Expr},
+    _unresharded_arrays_cache,
+    _used_shardinfo,
+    _result_cache,
+    _var_idx,
+    _resultgen_code,
 )
     return Meta.quot(:($(tocopy)))
 end
 
 function create_result(
     tocopy::Union{Integer,AbstractFloat,AbstractString,Nothing,Type,Symbol,Char},
-    path,
-    result_stores,
-    path_to_shard_info,
-    to_unreshard_results,
-    unresharded_code::Vector{Expr},
-    unresharded_arrays_cache,
-    used_shardinfo,
-    result_cache,
-    var_idx,
-    resultgen_code,
+    _path,
+    _result_stores,
+    _path_to_shard_info,
+    _to_unreshard_results,
+    _unresharded_code::Vector{Expr},
+    _unresharded_arrays_cache,
+    _used_shardinfo,
+    _result_cache,
+    _var_idx,
+    _resultgen_code,
 )
     return Meta.quot(tocopy)
 end
@@ -1460,7 +1460,7 @@ const context_gc_vector = Dict{MLIR.IR.Context,Vector{Union{TracedRArray,TracedR
 
 # helper for debug purposes: String -> Text
 function run_pass_pipeline_on_source(source, pass_pipeline; enable_verifier=true)
-    return MLIR.IR.with_context() do ctx
+    return MLIR.IR.with_context() do _
         mod = parse(MLIR.IR.Module, source)
         run_pass_pipeline!(mod, pass_pipeline; enable_verifier)
         MLIR.IR.verifyall(MLIR.IR.Operation(mod); debug=true)
@@ -1524,10 +1524,10 @@ function compile_mlir(f, args; client=nothing, drop_unsupported_attributes=false
         backend = "cpu"
     end
 
-    results = MLIR.IR.with_context() do ctx
+    results = MLIR.IR.with_context() do _
         mod = MLIR.IR.Module(MLIR.IR.Location())
 
-        compile_options, kwargs = __get_compile_options_and_kwargs(; kwargs...)
+        compile_options, kwargs_inner = __get_compile_options_and_kwargs(; kwargs...)
         mlir_fn_res = compile_mlir!(
             mod,
             f,
@@ -1536,7 +1536,7 @@ function compile_mlir(f, args; client=nothing, drop_unsupported_attributes=false
             backend,
             runtime=XLA.runtime(client),
             client,
-            kwargs...,
+            kwargs_inner...,
         )
 
         # Attach a name, and partitioning attributes to the module
@@ -1575,8 +1575,7 @@ function cubinFeatures()
     ver2 = @ccall MLIR.API.mlir_c.ReactantHermeticCudaGetVersion()::UInt32
     ver = min(ver, ver2)
     major, ver = divrem(ver, 1000)
-    minor, patch = divrem(ver, 10)
-    version = VersionNumber(major, minor, patch)
+    minor, _ = divrem(ver, 10)
     # From https://github.com/llvm/llvm-project/blob/b60aed6fbabc291a7afbcb460453f9dcdce76f34/clang/lib/Driver/ToolChains/Cuda.cpp#L686
     cuver_map = Dict([
         (128, 87),
@@ -1755,7 +1754,6 @@ function compile_mlir!(
         fnwrapped,
         traced_result,
         seen_args,
-        ret,
         linear_args,
         skipped_args,
         in_tys,
@@ -2528,7 +2526,7 @@ function compile_mlir!(
                     length(nresults) = $(length(nresults))
                     linear_args = $linear_args
                     linear_results = $linear_results
-                    $((MLIR.IR.argument(fnbody, i) for i in 1:length(in_tys))...)
+                    $(join((MLIR.IR.argument(fnbody, i) for i in 1:length(in_tys)), ", "))
                     preserved_args = $(preserved_args_idx)
                     $str
                     """,
@@ -2777,7 +2775,7 @@ macro jit(args...)
     #! format: on
 end
 
-function compile_call_expr(mod, compiler, options::Dict, args...)
+function compile_call_expr(_mod, compiler, options::Dict, args...)
     while length(args) > 1
         option, args = args[1], args[2:end]
         if !Meta.isexpr(option, :(=))
@@ -2859,7 +2857,7 @@ end
 function assert_mismatched_sharding(
     hlo_sharding_from_input::Reactant.XLA.HloSharding,
     hlo_sharding_from_executable::Reactant.XLA.HloSharding,
-    size_x,
+    _size_x,
 )
     @assert hlo_sharding_from_executable == hlo_sharding_from_input "Sharding provided by the user ($(string(hlo_sharding_from_input))) does not match the sharding computed by XLA ($(string(hlo_sharding_from_executable))). This generally means that Reactant.jl made an error in generating the executable. Please open an issue with the error message and an MWE."
 end
@@ -2896,11 +2894,14 @@ function codegen_flatten!(
     runtime = XLA.runtime(client)
     resharded_inputs = Dict{Tuple,Any}()
 
-    if is_sharded
-        inv_seen_args = Reactant.OrderedIdDict()
+    inv_seen_args = if is_sharded
+        result = Reactant.OrderedIdDict()
         for (k, v) in seen_args
-            inv_seen_args[v] = k
+            result[v] = k
         end
+        result
+    else
+        nothing
     end
 
     xla_parameter_sharding_sym = missing
@@ -3769,14 +3770,8 @@ function compile(f, args; kwargs...)
     _, exec, _, mlir_fn_res, device, client, str = compile_xla(
         f, args; compile_options, kwargs...
     )
-    (;
-        linear_args,
-        seen_args,
-        linear_results,
-        preserved_args,
-        concrete_result,
-        donated_args_mask,
-    ) = mlir_fn_res
+    (; linear_args, seen_args, linear_results, preserved_args, concrete_result) =
+        mlir_fn_res
 
     result_stores = Dict{Tuple,Symbol}()
     path_to_shard_info = mlir_fn_res.is_sharded ? Dict{Tuple,Symbol}() : nothing

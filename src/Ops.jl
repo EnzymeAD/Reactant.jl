@@ -13,6 +13,7 @@ using ..Reactant:
     MissingTracedValue,
     unwrapped_eltype
 using ReactantCore: ReactantCore
+using GPUArraysCore: GPUArraysCore
 
 function _function_macro_error()
     throw(ArgumentError("`caller_function` is not available in this context"))
@@ -128,10 +129,9 @@ end
     st = stacktrace()
     deleteat!(st, 1)
     return mapfoldl(MLIR.IR.Location, st) do stackframe
-        name = string(stackframe.func)
-        file = stackframe.file
-        line = stackframe.line
-        return MLIR.IR.Location(name, MLIR.IR.Location(file, line, 0))
+        return MLIR.IR.Location(
+            string(stackframe.func), MLIR.IR.Location(stackframe.file, stackframe.line, 0)
+        )
     end
 end
 
@@ -304,7 +304,10 @@ end
         @inbounds concat_inputs[i] = inp.mlir_data
     end
     res = MLIR.IR.result(
-        MLIR.Dialects.stablehlo.concatenate(concat_inputs; dimension=(dimension - 1)), 1
+        MLIR.Dialects.stablehlo.concatenate(
+            concat_inputs; dimension=(dimension - 1), location
+        ),
+        1,
     )
     return TracedRArray{T,N}((), res, size(MLIR.IR.type(res)))
 end
@@ -1951,7 +1954,7 @@ instead.
     @assert size(scatter_indices, 2) == N
 
     return scatter(
-        (a, b) -> b,
+        (_, b) -> b,
         [dest],
         scatter_indices,
         [convert(TracedRArray{T,1}, updates)];
@@ -2164,7 +2167,7 @@ end
     end
 
     linear_args = Reactant.TracedType[]
-    for (k, v) in seen_args
+    for (_, v) in seen_args
         v isa Reactant.TracedType || continue
         push!(linear_args, v)
     end
@@ -2427,14 +2430,14 @@ end
     end
 
     all_paths = []
-    for (path, tr) in tb_results_dict
+    for (path, _) in tb_results_dict
         if path[1] == true_fn_names[2]
             push!(all_paths, (:result, path[2:end]...))
         elseif path[1] == true_fn_names[3]
             push!(all_paths, (:resarg, path[2:end]...))
         end
     end
-    for (path, fr) in fb_results_dict
+    for (path, _) in fb_results_dict
         if path[1] == false_fn_names[2]
             push!(all_paths, (:result, path[2:end]...))
         elseif path[1] == false_fn_names[3]
@@ -2465,7 +2468,7 @@ end
     activate_constant_context!(true_fn_body)
     tb_corrected_linear_results = Reactant.TracedType[]
     try
-        for (i, path) in enumerate(tb_paths)
+        for (i, _) in enumerate(tb_paths)
             if haskey(tb_results_dict, tb_paths[i])
                 push!(tb_corrected_linear_results, tb_results_dict[tb_paths[i]])
             else
@@ -2482,7 +2485,7 @@ end
     activate_constant_context!(false_fn_body)
     fb_corrected_linear_results = Reactant.TracedType[]
     try
-        for (i, path) in enumerate(fb_paths)
+        for (i, _) in enumerate(fb_paths)
             if haskey(fb_results_dict, fb_paths[i])
                 push!(fb_corrected_linear_results, fb_results_dict[fb_paths[i]])
             else
@@ -2634,7 +2637,7 @@ end
     @assert length(all_paths) == length(result_types)
 
     residx = 0
-    for (i, path) in enumerate(all_paths)
+    for (_, path) in enumerate(all_paths)
         if path[1] == :result
             residx += 1
             Reactant.TracedUtils.set!(
@@ -2705,7 +2708,7 @@ end
     )
     linear_args = []
     mlir_caller_args = Reactant.MLIR.IR.Value[]
-    for (k, v) in seen_cache
+    for (_, v) in seen_cache
         v isa Reactant.TracedType || continue
         push!(linear_args, v)
         push!(mlir_caller_args, v.mlir_data)

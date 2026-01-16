@@ -226,7 +226,7 @@ end
 
 function Base.show(io::IO, op_pass::OpPassManager)
     println(io, "OpPassManager(\"\"\"")
-    print_pass_pipeline(io, opm)
+    print_pass_pipeline(io, op_pass)
     return print(io, "\n\"\"\")")
 end
 
@@ -308,15 +308,15 @@ end
 
     # AbstractPass interface:
     opname(::AbstractPass) = ""
-    function pass_run(::Context, ::P, op) where {P<:AbstractPass}
+    function pass_run(::Context, ::P, _) where {P<:AbstractPass}
         return error("pass $P does not implement `MLIR.pass_run`")
     end
 
-    function _pass_construct(ptr::ExternalPassHandle)
+    function _pass_construct(::ExternalPassHandle)
         return nothing
     end
 
-    function _pass_destruct(ptr::ExternalPassHandle)
+    function _pass_destruct(::ExternalPassHandle)
         return nothing
     end
 

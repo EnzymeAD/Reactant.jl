@@ -16,7 +16,7 @@ __lt(o::Base.Order.ReverseOrdering, a, b) = __lt(o.fwd, b, a)
 __lt(o::Base.Order.By, a, b) = __lt(o.order, o.by.(a), o.by.(b))
 __lt(o::Base.Order.Lt, a, b) = o.lt.(a, b)
 
-ReactantCore.is_traced(::TracedRArray, seen) = true
+ReactantCore.is_traced(::TracedRArray, _) = true
 ReactantCore.is_traced(::TracedRArray) = true
 
 Base.strides(x::TracedRArray) = Base.size_to_strides(1, size(x)...)
@@ -51,7 +51,7 @@ function maybe_assert_scalar_setindexing(
     return nothing
 end
 
-maybe_assert_scalar_setindexing(args...) = nothing
+maybe_assert_scalar_setindexing(_args...) = nothing
 
 function _setindex_scalar!(
     a::TracedRArray{T,N}, v, index::Union{Int,TracedRNumber{Int}}
@@ -209,7 +209,7 @@ function Base.setindex!(a::TracedRArray{T,N}, v, indices::Vararg{Any,N}) where {
 
         res = @opcall(
             scatter(
-                (xᵢ, xⱼ) -> xⱼ,
+                (_, xⱼ) -> xⱼ,
                 [a],
                 gather_dims.start_indices,
                 [updates];
@@ -280,7 +280,7 @@ function Base.show(io::IOty, X::TracedRArray{T,N}) where {T,N,IOty<:Union{IO,IOC
     return print(io, "TracedRArray{", T, ",", N, "N}(", X.paths, ", size=", size(X), ")")
 end
 
-for (jlop, hloop, hlocomp, merge) in
+for (jlop, _, _, merge) in
     ((:(Base.:(==)), :compare, "EQ", :all), (:(Base.:(!=)), :compare, "NE", :any))
     @eval function $jlop(
         @nospecialize(lhs::TracedRArray{T,N}), @nospecialize(rhs::TracedRArray{T,N})
@@ -592,14 +592,14 @@ function Base._typed_hvncat(
     return _typed_hvncat_internal(T, dims, row_first, a, as...)
 end
 function Base._typed_hvncat(
-    ::Type{T}, dims::Tuple{Int}, row_first::Bool, a::TracedRArray, as::TracedRArray...
+    ::Type{T}, dims::Tuple{Int}, ::Bool, a::TracedRArray, as::TracedRArray...
 ) where {T}
-    return _typed_hvncat_internal(T, dims, row_first, a, as...)
+    return Base._typed_hvncat_1d(T, dims[1], Val(false), a, as...)
 end
 function Base._typed_hvncat(
-    ::Type{T}, dims::Tuple{}, row_first::Bool, a::TracedRArray, as::TracedRArray...
+    ::Type{T}, ::Tuple{}, ::Bool, a::TracedRArray, as::TracedRArray...
 ) where {T}
-    return _typed_hvncat_internal(T, dims, row_first, a, as...)
+    return Base._typed_hvncat(T, Val(0), a, as...)
 end
 
 function _typed_hvncat_internal(
@@ -833,7 +833,7 @@ function Base.sortperm!(
     @assert alg === missing "Reactant doesn't support `alg` kwarg for `sortperm!`"
 
     ordering = Base.ord(lt, by, rev, order)
-    comparator = (a, b, i1, i2) -> __lt(ordering, a, b)
+    comparator = (a, b, _, _) -> __lt(ordering, a, b)
 
     idxs = @opcall constant(collect(LinearIndices(x)))
     _, res = @opcall sort(materialize_traced_array(x), idxs; dimension=dims, comparator)
@@ -905,7 +905,7 @@ function overloaded_partialsort_descending(
             materialize_traced_array(x),
             @opcall(constant(collect(LinearIndices(x))));
             dimension=1,
-            comparator=(a, b, i1, i2) -> !lt(by(a), by(b)),
+            comparator=(a, b, _, _) -> !lt(by(a), by(b)),
         )
         return (getindex(sorted_x, 1:maximum(k)), getindex(sorted_idxs, 1:maximum(k)))
     end
@@ -914,7 +914,7 @@ function overloaded_partialsort_descending(
         result = @opcall approx_top_k(
             materialize_traced_array(x),
             maximum(k);
-            comparator=(a, b, i1, i2) -> a > b,
+            comparator=(a, b, _, _) -> a > b,
             dimension=1,
             init_val=typemin(T),
         )
@@ -935,7 +935,7 @@ function overloaded_partialsort_ascending(
             materialize_traced_array(x),
             @opcall(constant(collect(LinearIndices(x))));
             dimension=1,
-            comparator=(a, b, i1, i2) -> !lt(by(a), by(b)),
+            comparator=(a, b, _, _) -> !lt(by(a), by(b)),
         )
         return (getindex(sorted_x, 1:maximum(k)), getindex(sorted_idxs, 1:maximum(k)))
     end
@@ -944,7 +944,7 @@ function overloaded_partialsort_ascending(
         result = @opcall approx_top_k(
             materialize_traced_array(x),
             maximum(k);
-            comparator=(a, b, i1, i2) -> a < b,
+            comparator=(a, b, _, _) -> a < b,
             dimension=1,
             init_val=typemax(T),
         )

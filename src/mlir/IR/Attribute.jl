@@ -623,13 +623,15 @@ end
 Creates a dense elements attribute with the given shaped type from string elements.
 """
 function DenseElementsAttribute(values::AbstractArray{String})
-    # TODO may fail because `Type(String)` is not defined
-    shaped_type = TensorType(collect(Int, size(values)), Type(String))
-    return Attribute(
-        API.mlirDenseElementsAttrStringGet(
-            shaped_type, length(values), to_row_major(values)
-        ),
-    )
+    # Builtin dialect doesn't have string type. If we want to support this,
+    # we need to add this in our dialect.
+    throw(MethodError(DenseElementsAttribute, (values,)))
+    # shaped_type = TensorType(collect(Int, size(values)), Type(String))
+    # return Attribute(
+    #     API.mlirDenseElementsAttrStringGet(
+    #         shaped_type, length(values), to_row_major(values)
+    #     ),
+    # )
 end
 
 """
@@ -642,7 +644,7 @@ function Base.reshape(attr::Attribute, shape::Vector{Int})
     @assert length(attr) == prod(shape) "new shape $(shape) has a different number of elements than the original attribute"
     element_type = eltype(type(attr))
     shaped_type = TensorType(shape, element_type)
-    return Attribute(API.mlirDenseElementsAttrReshape(attr, shaped_type))
+    return Attribute(API.mlirDenseElementsAttrReshapeGet(attr, shaped_type))
 end
 
 """
@@ -740,7 +742,7 @@ function Base.length(attr::Attribute)
             T -> isdensearray(attr, T), [Bool, Int8, Int16, Int32, Int64, Float32, Float64]
         )
         if _isdensearray
-            API.mlirDenseBoolArrayGetNumElements(attr)
+            API.mlirDenseArrayGetNumElements(attr)
         end
     end
 end
