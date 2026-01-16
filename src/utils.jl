@@ -722,9 +722,9 @@ function call_llvm_generator(world::UInt, source, self, ::Type{typeof(Reactant.c
 		wrapper_f = LLVM.Function(llvm_module, "entry", wrapper_ft)
 
 		sfn = LLVM.subprogram(p.entry)
-	        if sfn !== nothing
+	    if sfn !== nothing
 		   LLVM.set_subprogram!(wrapper_f, sfn)
-	        end
+	    end
 
 
 		for f in LLVM.functions(llvm_module)
@@ -757,6 +757,10 @@ function call_llvm_generator(world::UInt, source, self, ::Type{typeof(Reactant.c
 			    if shouldemit
 				b = LLVM.IRBuilder()
 				LLVM.position!(b, term)
+
+                if LLVM.subprogram(f) !== nothing
+                    LLVM.debuglocation!(b, LLVM.DILocation(0, 0, LLVM.subprogram(f)))
+                end
 				Enzyme.Compiler.emit_error(
 				    b,
 				    term,
@@ -781,6 +785,9 @@ function call_llvm_generator(world::UInt, source, self, ::Type{typeof(Reactant.c
 
 		builder = LLVM.IRBuilder()
 		entry = LLVM.BasicBlock(wrapper_f, "entry")
+        if LLVM.subprogram(wrapper_f) !== nothing
+            LLVM.debuglocation!(builder, LLVM.DILocation(0, 0, LLVM.subprogram(wrapper_f)))
+        end
 		LLVM.position!(builder, entry)
 
 		args = collect(LLVM.Value, LLVM.parameters(wrapper_f))
@@ -810,6 +817,16 @@ function call_llvm_generator(world::UInt, source, self, ::Type{typeof(Reactant.c
 		push!(LLVM.function_attributes(wrapper_f), LLVM.EnumAttribute("alwaysinline"))
 
 		LLVM.run!(LLVM.GlobalOptPass(), llvm_module)
+
+        # Required for windows
+        for f in LLVM.functions(llvm_module)
+            if LLVM.isempty(LLVM.blocks(f))
+                continue
+            end
+            if !Enzyme.Compiler.has_fn_attr(f, LLVM.StringAttribute("frame-pointer"))
+                push!(LLVM.function_attributes(f), LLVM.StringAttribute("frame-pointer", "all"))
+            end
+        end
 
 		if DEBUG_INTERP[]
 			Enzyme.API.EnzymeDumpModuleRef(llvm_module.ref)
@@ -907,7 +924,7 @@ function call_llvm_generator(world::UInt, source, self, ::Type{typeof(Reactant.c
     code_info.rettype = rt
         if DEBUG_INTERP[]
 		safe_print("code_info", code_info)
-		safe_print("code_info nargs, isva", (code_info.nargs, code_info.isva))
+		safe_print("method nargs, isva", (method.nargs, method.isva))
         end
     return code_info
 end
