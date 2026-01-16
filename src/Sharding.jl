@@ -583,9 +583,9 @@ function sharding_to_array_slices(
 
     if needs_padding
         # MLIR for identity operation, avoid tracing here
-        # ctx = MLIR.IR.Context(Reactant.registry[])
-        # MLIR.IR.register_enzymexla_dialects(ctx)
-        # MLIR.IR.activate!(ctx)
+        ctx = MLIR.IR.Context(Reactant.registry[])
+        MLIR.IR.register_enzymexla_dialects(ctx)
+        MLIR.IR.activate!(ctx)
 
         sdycache = Reactant.Compiler.default_sdycache()
         Reactant.Compiler.activate_sdycache!(sdycache)
@@ -639,8 +639,8 @@ function sharding_to_array_slices(
             @assert !needs_padding "This shouldn't happen. Open an issue on Reactant.jl.\nInput shape: $(size_x).\nOriginal Sharding: $(string(hlo_sharding.hlo_sharding)).\nNew sharding: $(string(new_hlo_sharding)).\nArray Slices: $(device_to_array_slices)."
         finally
             Reactant.Compiler.deactivate_sdycache!(sdycache)
-            # MLIR.IR.deactivate!(ctx)
-            # MLIR.IR.dispose!(ctx)
+            MLIR.IR.deactivate!(ctx)
+            MLIR.IR.dispose!(ctx)
         end
     end
 
