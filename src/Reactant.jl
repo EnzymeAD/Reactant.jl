@@ -340,12 +340,9 @@ function __init__()
     @static if VERSION ≥ v"1.12-"
         if ccall(:jl_generating_output, Cint, ()) == 1
             @warn """
-            Reactant.jl currently doesn't support versions of Julia 1.12 or newer. We are
-            actively working on adding support for newer versions of Julia. For the time
+            Reactant.jl support for Julia 1.12 is currently awaiting a GPUCompiler.jl release with
+	    https://github.com/JuliaGPU/GPUCompiler.jl/pull/755. Until that time,
             being we recommend using 1.11 or LTS.
-
-            For latest updates, check the status of support for Julia 1.12+ at
-            https://github.com/EnzymeAD/Reactant.jl/issues/1736.
             """ maxlog = 1
         end
     end
