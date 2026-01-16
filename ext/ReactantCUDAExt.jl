@@ -1289,7 +1289,7 @@ Reactant.@reactant_overlay @noinline function CUDA.cufunction(
 ) where {F,TT}
     res = Base.@lock CUDA.cufunction_lock begin
         # compile the function
-        cache = llvm_compiler_cache(MLIR.IR.mmodule())
+        cache = llvm_compiler_cache(MLIR.IR.current_module())
         source = CUDA.methodinstance(F, tt)
         # cuda = CUDA.active_state()
         device = nothing # cuda.device
