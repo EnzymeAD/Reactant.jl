@@ -362,7 +362,7 @@ function replicate_array_to_all_devices(array::Array, sharding, mesh, size_arr)
         compile_options = XLA.make_compile_options(;
             device_id=-1,
             num_partitions=length(mesh.device_ids),
-            mesh_ids=global_device_ids,
+            mesh_ids=vec(mesh.device_ids),
         )
 
         exec = XLA.compile(

@@ -86,8 +86,8 @@ end
     @suppress_err begin
         test_explicit_imports(
             Reactant;
-            no_implicit_imports = (;
-                allow_unanalyzable = (
+            no_implicit_imports=(;
+                allow_unanalyzable=(
                     Reactant.DotGeneralAlgorithmPreset,
                     Reactant.MLIR.Dialects,
                     get_all_submodules(Reactant.MLIR.Dialects)...,
@@ -96,12 +96,12 @@ end
                     Reactant.Accelerators.TPU.TPUVersion,
                     Reactant.PrecisionConfig,
                 ),
-                ignore = (Reactant.Proto,),
+                ignore=(Reactant.Proto,),
             ),
             all_explicit_imports_are_public=false,
             all_explicit_imports_via_owners=true,
-            no_stale_explicit_imports = (;
-                allow_unanalyzable = (
+            no_stale_explicit_imports=(;
+                allow_unanalyzable=(
                     Reactant.DotGeneralAlgorithmPreset,
                     Reactant.MLIR.Dialects,
                     get_all_submodules(Reactant.MLIR.Dialects)...,
@@ -110,7 +110,7 @@ end
                     Reactant.Accelerators.TPU.TPUVersion,
                     Reactant.PrecisionConfig,
                 ),
-                ignore = (
+                ignore=(
                     Reactant.Proto,
                     :p7zip,
                     :ShardyPropagationOptions,
@@ -122,15 +122,15 @@ end
             ),
             all_qualified_accesses_via_owners=true,
             all_qualified_accesses_are_public=false,
-            no_self_qualified_accesses= (;
-                ignore = (
+            no_self_qualified_accesses=(;
+                ignore=(
                     :REACTANT_METHOD_TABLE,
                     :__skip_rewrite_func_set,
                     :__skip_rewrite_func_set_lock,
                     :__skip_rewrite_type_constructor_list,
                     :__skip_rewrite_type_constructor_list_lock,
                 ),
-            )
+            ),
         )
     end
 end
