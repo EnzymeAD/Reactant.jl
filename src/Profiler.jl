@@ -257,7 +257,7 @@ function serve_to_perfetto(path_to_trace_file)
 end
 
 @inline function free_profiler(exec)
-    @ccall MLIR.API.mlir_c.ProfilerServerStop(exec.exec::Ptr{Cvoid})::Cvoid
+    @ccall Reactant.MLIR.API.mlir_c.ProfilerServerStop(exec.exec::Ptr{Cvoid})::Cvoid
 end
 
 mutable struct ProfileServer
@@ -726,7 +726,7 @@ function profile_with_xprof(
 ) where {F}
     if fn isa Reactant.Compiler.Thunk
         return profile_thunk_with_xprof(
-            fn, args...; nrepeat, warmup, profile_dir, compile_time_ns, kwargs...
+            fn, args...; nrepeat, warmup, profile_dir, compile_time_ns=0, kwargs...
         )
     end
 
@@ -1033,11 +1033,11 @@ function print_kernel_report(reports::Vector{KernelReport}; io::IO=stdout)
 
     # Create highlighters using PrettyTables
     hl_top90 = PrettyTables.TextHighlighter(
-        (data, i, j) -> j in duration_cols && raw_durations[i, dur_col_to_raw[j]] >= q90,
+        (_, i, j) -> j in duration_cols && raw_durations[i, dur_col_to_raw[j]] >= q90,
         Crayon(; foreground=:red, bold=true),
     )
     hl_top75 = PrettyTables.TextHighlighter(
-        (data, i, j) ->
+        (_, i, j) ->
             j in duration_cols &&
                 raw_durations[i, dur_col_to_raw[j]] >= q75 &&
                 raw_durations[i, dur_col_to_raw[j]] < q90,
@@ -1209,11 +1209,11 @@ function print_framework_op_stats(reports::Vector{FrameworkOpStats}; io::IO=stdo
 
     # Create highlighters using PrettyTables
     hl_top90 = PrettyTables.TextHighlighter(
-        (data, i, j) -> j in duration_cols && raw_durations[i, dur_col_to_raw[j]] >= q90,
+        (_, i, j) -> j in duration_cols && raw_durations[i, dur_col_to_raw[j]] >= q90,
         Crayon(; foreground=:red, bold=true),
     )
     hl_top75 = PrettyTables.TextHighlighter(
-        (data, i, j) ->
+        (_, i, j) ->
             j in duration_cols &&
                 raw_durations[i, dur_col_to_raw[j]] >= q75 &&
                 raw_durations[i, dur_col_to_raw[j]] < q90,

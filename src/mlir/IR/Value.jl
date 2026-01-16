@@ -109,7 +109,7 @@ type(value::Value) = Type(API.mlirValueGetType(value))
 Sets the type of the block argument to the given type.
 """
 function type!(value, type)
-    @assert is_a_block_argument(value) "could not set type, value is not a block argument"
+    @assert is_block_arg(value) "could not set type, value is not a block argument"
     API.mlirBlockArgumentSetType(value, type)
     return value
 end

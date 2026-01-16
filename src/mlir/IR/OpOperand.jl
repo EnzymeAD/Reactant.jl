@@ -15,7 +15,7 @@ Base.convert(::Core.Type{API.MlirOpOperand}, op::OpOperand) = op.op
 Returns an `OpOperand` representing the first use of the value, or a `nothing` if there are no uses.
 """
 function first_use(value::Value)
-    operand = API.mlirOperationGetFirstResult(value)
+    operand = API.mlirValueGetFirstUse(value)
     mlirIsNull(operand) && return nothing
     return OpOperand(operand)
 end
