@@ -1,6 +1,6 @@
 module ReactantCUDAExt
 
-using Reactant: Reactant, TracedRArray, AnyConcretePJRTArray, MLIR, TracedRNumber
+using Reactant: Reactant, TracedRArray, AnyConcretePJRTArray, MLIR, TracedRNumber, ReactantPrecompilationException
 using Reactant.Compiler: raising
 using Reactant.Ops: @opcall
 
