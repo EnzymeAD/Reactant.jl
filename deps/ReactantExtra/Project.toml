@@ -1,9 +1,11 @@
 [deps]
 Clang = "40e3b903-d033-50b4-a0cc-940c62c95e31"
 BinaryBuilderBase = "7f725544-6523-48cd-82d1-3fa08ff4056e"
+ProtoBuf = "3349acd9-ac6a-5e09-bcdb-63829b23a429"
 
 [compat]
 Clang = "0.19"
+ProtoBuf = "1"
 
 [sources]
 Clang = {url = "https://github.com/wsmoses/Clang.jl", rev = "patch-1"}

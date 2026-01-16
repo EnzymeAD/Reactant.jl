@@ -1797,6 +1797,17 @@ function mlirOperationWalk(op, callback, userData, walkOrder)
 end
 
 """
+    mlirOperationReplaceUsesOfWith(op, of, with)
+
+Replace uses of 'of' value with the 'with' value inside the 'op' operation.
+"""
+function mlirOperationReplaceUsesOfWith(op, of, with)
+    @ccall mlir_c.mlirOperationReplaceUsesOfWith(
+        op::MlirOperation, of::MlirValue, with::MlirValue
+    )::Cvoid
+end
+
+"""
     mlirRegionCreate()
 
 Creates a new empty region and transfers ownership to the caller.
@@ -11426,6 +11437,14 @@ function enzymexlaGeluApproximationAttrGet(ctx, mode)
     @ccall mlir_c.enzymexlaGeluApproximationAttrGet(
         ctx::MlirContext, mode::Int32
     )::MlirAttribute
+end
+
+function enzymexlaMPIDatatypeAttrGet(ctx, mode)
+    @ccall mlir_c.enzymexlaMPIDatatypeAttrGet(ctx::MlirContext, mode::Int32)::MlirAttribute
+end
+
+function enzymexlaMPIOpAttrGet(ctx, mode)
+    @ccall mlir_c.enzymexlaMPIOpAttrGet(ctx::MlirContext, mode::Int32)::MlirAttribute
 end
 
 function enzymexlaGuaranteedAnalysisResultAttrGet(ctx, mode)

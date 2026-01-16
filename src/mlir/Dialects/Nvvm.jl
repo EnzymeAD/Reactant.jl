@@ -4006,6 +4006,97 @@ function memory_barrier(; scope, location=Location())
 end
 
 """
+`mma_block_scale`
+
+The `nvvm.mma.block_scale` operation collectively performs the operation
+`D = matmul(A * SF_A, B * SF_B) + C` using all threads in a warp.
+
+A, B, C and D are dense matrices and SF_A and SF_B are scaling factors.
+Dimensions of SF_A and SF_B are based on scale vector sizes (x1, x2, x4),
+and the data type must be either ue8m0 or ue4m3.
+
+All the threads in the warp must execute the same `mma.block_scale` operation.
+
+This operation follows the same design pattern as `nvvm.mma.sync`, with additional
+scaling operands for both A and B matrices.
+
+# Example
+```mlir
+%d = nvvm.mma.block_scale A[%a0, %a1] B[%b0, %b1] C[%c0, %c1]
+                          scaleA[%scaleAData, %byteIdA, %threadIdA]
+                          scaleB[%scaleBData, %byteIdB, %threadIdB]
+                          {shape = #nvvm.shape<m = 16, n = 8, k = 64>,
+                           multiplicandAPtxType = #nvvm.mma_type<e2m1>,
+                           multiplicandBPtxType = #nvvm.mma_type<e2m1>,
+                           scaleVecSize = #nvvm.scale_vec_size<x2>,
+                           blockScaleFormat = #nvvm.block_scale_format<ue8m0>,
+                           kind = #nvvm.block_scale_kind<mxf4nvf4>}
+    : (vector<4xf16>, vector<2xf16>, vector<2xf32>) -> !llvm.struct<(f32, f32)>
+```
+"""
+function mma_block_scale(
+    operandA::Vector{Value},
+    operandB::Vector{Value},
+    operandC::Vector{Value},
+    scaleAData::Value,
+    byteIdA::Value,
+    threadIdA::Value,
+    scaleBData::Value,
+    byteIdB::Value,
+    threadIdB::Value;
+    res::IR.Type,
+    shape,
+    multiplicandAPtxType=nothing,
+    multiplicandBPtxType=nothing,
+    scaleVecSize,
+    blockScaleFormat,
+    kind,
+    location=Location(),
+)
+    op_ty_results = IR.Type[res,]
+    operands = Value[
+        operandA...,
+        operandB...,
+        operandC...,
+        scaleAData,
+        byteIdA,
+        threadIdA,
+        scaleBData,
+        byteIdB,
+        threadIdB,
+    ]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[
+        namedattribute("shape", shape),
+        namedattribute("scaleVecSize", scaleVecSize),
+        namedattribute("blockScaleFormat", blockScaleFormat),
+        namedattribute("kind", kind),
+    ]
+    push!(
+        attributes,
+        operandsegmentsizes([
+            length(operandA), length(operandB), length(operandC), 1, 1, 1, 1, 1, 1
+        ]),
+    )
+    !isnothing(multiplicandAPtxType) &&
+        push!(attributes, namedattribute("multiplicandAPtxType", multiplicandAPtxType))
+    !isnothing(multiplicandBPtxType) &&
+        push!(attributes, namedattribute("multiplicandBPtxType", multiplicandBPtxType))
+
+    return create_operation(
+        "nvvm.mma.block_scale",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+"""
 `mma_sync`
 
 The `nvvm.mma.sync` operation collectively performs the operation
@@ -4110,6 +4201,116 @@ function mma_sync(
 
     return create_operation(
         "nvvm.mma.sync",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+"""
+`mma_sp_block_scale`
+
+The `nvvm.mma.sp.block_scale` operation collectively performs the operation
+`D = matmul(A_sparse * SF_A, B * SF_B) + C` using all threads in a warp.
+
+A is a sparse matrix, and B, C and D are dense matrices.
+SF_A and SF_B are scaling factors.
+Dimensions of SF_A and SF_B are based on scale vector sizes (x1, x2, x4),
+and the data type must be either ue8m0 or ue4m3.
+
+This operation is similar to `nvvm.mma.block_scale` but with structured sparsity
+in the A operand. The sparsity follows the 2:4 structured sparse pattern
+where 2 out of every 4 elements are non-zero.
+
+All the threads in the warp must execute the same `mma.sp.block_scale` operation.
+
+The `sparseMetadata` operand provides the sparsity indices that indicate
+which elements in the A operand are non-zero. The `sparsitySelector`
+controls how the indices are distributed among threads in the warp and
+should typically be 0 or 1.
+
+This operation follows the same design pattern as `nvvm.mma.sp.sync`, with additional
+scaling operands for both A and B matrices. Note that sparse block scale operations
+always use ordered metadata (sm_90+).
+
+# Example
+```mlir
+%d = nvvm.mma.sp.block_scale A[%a0, %a1] B[%b0, %b1] C[%c0, %c1]
+                             sparseMetadata[%meta] selector[%sel]
+                             scaleA[%scaleAData, %byteIdA, %threadIdA]
+                             scaleB[%scaleBData, %byteIdB, %threadIdB]
+                             {shape = #nvvm.shape<m = 16, n = 8, k = 128>,
+                              multiplicandAPtxType = #nvvm.mma_type<e2m1>,
+                              multiplicandBPtxType = #nvvm.mma_type<e2m1>,
+                              scaleVecSize = #nvvm.scale_vec_size<x2>,
+                              blockScaleFormat = #nvvm.block_scale_format<ue8m0>,
+                              kind = #nvvm.block_scale_kind<mxf4>}
+    : (vector<2xf16>, vector<2xf16>, vector<2xf32>) -> !llvm.struct<(f32, f32)>
+```
+"""
+function mma_sp_block_scale(
+    operandA::Vector{Value},
+    operandB::Vector{Value},
+    operandC::Vector{Value},
+    sparseMetadata::Value,
+    sparsitySelector::Value,
+    scaleAData::Value,
+    byteIdA::Value,
+    threadIdA::Value,
+    scaleBData::Value,
+    byteIdB::Value,
+    threadIdB::Value;
+    res::IR.Type,
+    shape,
+    multiplicandAPtxType=nothing,
+    multiplicandBPtxType=nothing,
+    scaleVecSize,
+    blockScaleFormat,
+    kind,
+    orderedMetadata=nothing,
+    location=Location(),
+)
+    op_ty_results = IR.Type[res,]
+    operands = Value[
+        operandA...,
+        operandB...,
+        operandC...,
+        sparseMetadata,
+        sparsitySelector,
+        scaleAData,
+        byteIdA,
+        threadIdA,
+        scaleBData,
+        byteIdB,
+        threadIdB,
+    ]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[
+        namedattribute("shape", shape),
+        namedattribute("scaleVecSize", scaleVecSize),
+        namedattribute("blockScaleFormat", blockScaleFormat),
+        namedattribute("kind", kind),
+    ]
+    push!(
+        attributes,
+        operandsegmentsizes([
+            length(operandA), length(operandB), length(operandC), 1, 1, 1, 1, 1, 1, 1, 1
+        ]),
+    )
+    !isnothing(multiplicandAPtxType) &&
+        push!(attributes, namedattribute("multiplicandAPtxType", multiplicandAPtxType))
+    !isnothing(multiplicandBPtxType) &&
+        push!(attributes, namedattribute("multiplicandBPtxType", multiplicandBPtxType))
+    !isnothing(orderedMetadata) &&
+        push!(attributes, namedattribute("orderedMetadata", orderedMetadata))
+
+    return create_operation(
+        "nvvm.mma.sp.block_scale",
         location;
         operands,
         owned_regions,
@@ -4978,7 +5179,7 @@ The `shared memory descriptor` can be generated using `tcgen05.mma_smem_desc` Op
 - `idesc` is a 32 bit value representing the [Instruction Descriptor](https://docs.nvidia.com/cuda/parallel-thread-execution/#tcgen05-instruction-descriptor)
 
 Required Attributes:
-- `kind` is a Tcgen05MMABlockScaleKind attribute
+- `kind` is a MMABlockScaleKind attribute
 
 - `ctaGroup` specifies CTA group configuration
   * cta_1: MMA will be performed on the current thread\'s CTA

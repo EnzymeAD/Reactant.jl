@@ -279,3 +279,5 @@ benchmark/results/*
 
 package-lock.json
 node_modules
+
+deps/ReactantExtra/proto_staging

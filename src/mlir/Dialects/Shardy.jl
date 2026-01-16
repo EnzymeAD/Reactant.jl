@@ -636,6 +636,58 @@ function reduce_scatter(
 end
 
 """
+`replicated_to_unreduced`
+
+The `axes` should be implicitly or explicitly replicated in the operand.
+This operation makes them unreduced in the result. We have the following
+relationship:
+
+all-reduce(replicated-to-unreduced(x, axes), axes) = x
+
+# Example
+```mlir
+%1 = stablehlo.tanh(%0) {sdy.sharding = #sdy.sharding_per_value<[<@mesh, [{\"b\"}, {}, {}\\], replicated={\"c\", \"d\"}, unreduced={\"e\"}>]>} : tensor<8x8x8xf32>
+%2 = sdy.replicated_to_unreduced {\"a\", \"c\", \"f\"} %1 out_sharding=<@mesh, [{\"b\"}, {}, {}\\], replicated={\"d\"}, unreduced={\"a\", \"c\", \"e\", \"f\"}> : tensor<8x8x8xf32>
+```
+
+**Constraints:**
+- Must satisfy the constraints listed in `Sdy_CollectiveOpInterface`.
+- `axes` must satisfy the constraints listed in `AxisRefListAttr`.
+- `axes` must be sorted w.r.t. the mesh.
+- `axes` are not empty.
+- The input and output sharding must have the same dimension shardings.
+- `axes` must be implicitly or explicitly replicated in the operand sharding.
+- inUnreducedAxes + axes = outUnreducedAxes.
+"""
+function replicated_to_unreduced(
+    tensor::Value;
+    result=nothing::Union{Nothing,IR.Type},
+    axes,
+    out_sharding,
+    location=Location(),
+)
+    op_ty_results = IR.Type[]
+    operands = Value[tensor,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[
+        namedattribute("axes", axes), namedattribute("out_sharding", out_sharding)
+    ]
+    !isnothing(result) && push!(op_ty_results, result)
+
+    return create_operation(
+        "sdy.replicated_to_unreduced",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
+    )
+end
+
+"""
 `reshard`
 
 Reshards the input tensor with the specified sharding, which is different
@@ -705,8 +757,8 @@ all-gather, sharded-to-unreduced, all-reduce are applied on the same axes.
 
 # Example
 ```mlir
-%1 = stablehlo.tanh(%0) {sdy.sharding = #sdy.sharding_per_value<[<@mesh, [{\"a\", \"b\", \"c\"}, {}, {\"d\"}\\], unreduced = [\"e\"]>]>} : tensor<8x8x8xf32>
-%2 = sdy.sharded_to_unreduced [{\"b\", \"c\"}, {}, {\"d\"}\\] %1 out_sharding=<@mesh, [{\"a\"}, {}, {}\\], unreduced = [\"b\", \"c\", \"d\", \"e\"]> : tensor<8x8x8xf32>
+%1 = stablehlo.tanh(%0) {sdy.sharding = #sdy.sharding_per_value<[<@mesh, [{\"a\", \"b\", \"c\"}, {}, {\"d\"}\\], unreduced={\"e\"}>]>} : tensor<8x8x8xf32>
+%2 = sdy.sharded_to_unreduced [{\"b\", \"c\"}, {}, {\"d\"}\\] %1 out_sharding=<@mesh, [{\"a\"}, {}, {}\\], unreduced={\"b\", \"c\", \"d\", \"e\"}> : tensor<8x8x8xf32>
 ```
 
 **Constraints:**

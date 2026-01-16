@@ -79,7 +79,7 @@ jobs:
           julia_version: ${{ inputs.julia_version }}
 
       # Local build of libReactant
-      - uses: bazel-contrib/setup-bazel@0.15.0
+      - uses: bazel-contrib/setup-bazel@0.17.0
         if: ${{ inputs.localjll }}
         name: Set up Bazel
         with:
