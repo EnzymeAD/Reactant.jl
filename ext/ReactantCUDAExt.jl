@@ -1,7 +1,7 @@
 module ReactantCUDAExt
 
 using Reactant: Reactant, TracedRArray, AnyConcretePJRTArray, MLIR, TracedRNumber, ReactantPrecompilationException
-using Reactant.Compiler: raising
+using Reactant.Compiler: raising, LLVMFunc, llvm_compiler_cache
 using Reactant.Ops: @opcall
 
 using Adapt: Adapt, adapt
@@ -594,21 +594,6 @@ function Adapt.adapt_storage(::ReactantKernelAdaptor, r::Base.TwicePrecision)
         Adapt.adapt(ReactantKernelAdaptor(), r.hi),
         Adapt.adapt(ReactantKernelAdaptor(), r.lo),
     )
-end
-
-# Since we cache these objects we cannot cache data containing MLIR operations (e.g. the entry must be a string
-# and not the operation itself).
-struct LLVMFunc{F,tt}
-    f::Union{F,Nothing}
-    entry::String
-end
-
-function Base.getproperty(f::LLVMFunc{F,tt}, sym::Symbol) where {F,tt}
-    if sym === :fun
-        f
-    else
-        Base.getfield(f, sym)
-    end
 end
 
 # TODO in the future we may want to avoid doing a second cufunction compilation
@@ -1300,23 +1285,12 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
     end
 end
 
-# cache of compilation caches, per context
-const _compiler_caches = Dict{MLIR.IR.Context,Dict{Any,LLVMFunc}}()
-function compiler_cache(ctx::MLIR.IR.Context)
-    cache = get(_compiler_caches, ctx, nothing)
-    if cache === nothing
-        cache = Dict{Any,LLVMFunc}()
-        _compiler_caches[ctx] = cache
-    end
-    return cache
-end
-
 Reactant.@reactant_overlay @noinline function CUDA.cufunction(
     f::F, tt::TT=Tuple{}; kwargs...
 ) where {F,TT}
     res = Base.@lock CUDA.cufunction_lock begin
         # compile the function
-        cache = compiler_cache(MLIR.IR.context())
+        cache = llvm_compiler_cache(MLIR.IR.mmodule())
         source = CUDA.methodinstance(F, tt)
         # cuda = CUDA.active_state()
         device = nothing # cuda.device
