@@ -254,6 +254,7 @@ function CompileOptions(;
             :canonicalize,
             :just_batch,
             :none,
+            :probprog,
         ]
     end
 
