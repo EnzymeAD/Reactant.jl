@@ -10,33 +10,26 @@ datatypes = [
     Cchar, Cuchar, Cwchar_t,
     Float32, Float64,
     ComplexF32, ComplexF64,
-    # Bool # currently not working for send/recv isend/irecv
+    Bool
 ]
 
 MPI.Init()
 
 @testset "Comm_rank" begin
     comm = MPI.COMM_WORLD
-    rank = MPI.Comm_rank(comm)
-    @test rank == @jit MPI.Comm_rank(comm)
+    expected = MPI.Comm_rank(comm)
+    @test expected == @jit MPI.Comm_rank(comm)
 end
 
 @testset "Comm_size" begin
     comm = MPI.COMM_WORLD
-    nranks = MPI.Comm_size(comm)
-    @test nranks == @jit MPI.Comm_size(comm)
+    expected = MPI.Comm_size(comm)
+    @test expected == @jit MPI.Comm_size(comm)
 end
-
-# @testset "Allreduce" begin
-#     comm = MPI.COMM_WORLD
-#     x = ConcreteRArray(fill(1))
-#     nranks = MPI.Comm_size(comm)
-#     @test nranks == @jit MPI.Allreduce(x, MPI.SUM, MPI.COMM_WORLD)
-# end
 
 @testset "Allreduce" begin
     operations = [
-        # ("OP_NULL", MPI.OP_NULL),
+        ("OP_NULL", MPI.OP_NULL),
         ("BAND", MPI.BAND),
         ("BOR", MPI.BOR),
         ("BXOR", MPI.BXOR),
@@ -48,7 +41,7 @@ end
         ("PROD", MPI.PROD),
         ("REPLACE", MPI.REPLACE),
         ("SUM", MPI.SUM),
-        # ("NO_OP", MPI.NO_OP)
+        ("NO_OP", MPI.NO_OP)
     ]
 
     comm = MPI.COMM_WORLD
