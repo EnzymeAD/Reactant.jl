@@ -205,31 +205,37 @@ end
 
 struct var"AutotuneResult.GemmKey"
     algorithm::Int64
+    autotune_workspace_size::Int64
 end
-PB.default_values(::Type{var"AutotuneResult.GemmKey"}) = (;algorithm = zero(Int64))
-PB.field_numbers(::Type{var"AutotuneResult.GemmKey"}) = (;algorithm = 1)
+PB.default_values(::Type{var"AutotuneResult.GemmKey"}) = (;algorithm = zero(Int64), autotune_workspace_size = zero(Int64))
+PB.field_numbers(::Type{var"AutotuneResult.GemmKey"}) = (;algorithm = 1, autotune_workspace_size = 2)
 
 function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:var"AutotuneResult.GemmKey"})
     algorithm = zero(Int64)
+    autotune_workspace_size = zero(Int64)
     while !PB.message_done(d)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             algorithm = PB.decode(d, Int64)
+        elseif field_number == 2
+            autotune_workspace_size = PB.decode(d, Int64)
         else
             Base.skip(d, wire_type)
         end
     end
-    return var"AutotuneResult.GemmKey"(algorithm)
+    return var"AutotuneResult.GemmKey"(algorithm, autotune_workspace_size)
 end
 
 function PB.encode(e::PB.AbstractProtoEncoder, x::var"AutotuneResult.GemmKey")
     initpos = position(e.io)
     x.algorithm != zero(Int64) && PB.encode(e, 1, x.algorithm)
+    x.autotune_workspace_size != zero(Int64) && PB.encode(e, 2, x.autotune_workspace_size)
     return position(e.io) - initpos
 end
 function PB._encoded_size(x::var"AutotuneResult.GemmKey")
     encoded_size = 0
     x.algorithm != zero(Int64) && (encoded_size += PB._encoded_size(x.algorithm, 1))
+    x.autotune_workspace_size != zero(Int64) && (encoded_size += PB._encoded_size(x.autotune_workspace_size, 2))
     return encoded_size
 end
 

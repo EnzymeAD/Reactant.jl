@@ -1692,14 +1692,16 @@ struct WhileLoopBackendConfig
     known_trip_count::Union{Nothing,var"WhileLoopBackendConfig.KnownTripCount"}
     known_init_step::Union{Nothing,var"WhileLoopBackendConfig.KnownInitStep"}
     known_induction_variable::Union{Nothing,var"WhileLoopBackendConfig.KnownInductionVariable"}
+    dynamic_variable_tuple_indices::Vector{Int64}
 end
-PB.default_values(::Type{WhileLoopBackendConfig}) = (;known_trip_count = nothing, known_init_step = nothing, known_induction_variable = nothing)
-PB.field_numbers(::Type{WhileLoopBackendConfig}) = (;known_trip_count = 1, known_init_step = 2, known_induction_variable = 3)
+PB.default_values(::Type{WhileLoopBackendConfig}) = (;known_trip_count = nothing, known_init_step = nothing, known_induction_variable = nothing, dynamic_variable_tuple_indices = Vector{Int64}())
+PB.field_numbers(::Type{WhileLoopBackendConfig}) = (;known_trip_count = 1, known_init_step = 2, known_induction_variable = 3, dynamic_variable_tuple_indices = 4)
 
 function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:WhileLoopBackendConfig})
     known_trip_count = Ref{Union{Nothing,var"WhileLoopBackendConfig.KnownTripCount"}}(nothing)
     known_init_step = Ref{Union{Nothing,var"WhileLoopBackendConfig.KnownInitStep"}}(nothing)
     known_induction_variable = Ref{Union{Nothing,var"WhileLoopBackendConfig.KnownInductionVariable"}}(nothing)
+    dynamic_variable_tuple_indices = PB.BufferedVector{Int64}()
     while !PB.message_done(d)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
@@ -1708,11 +1710,13 @@ function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:WhileLoopBackendConfig})
             PB.decode!(d, known_init_step)
         elseif field_number == 3
             PB.decode!(d, known_induction_variable)
+        elseif field_number == 4
+            PB.decode!(d, wire_type, dynamic_variable_tuple_indices)
         else
             Base.skip(d, wire_type)
         end
     end
-    return WhileLoopBackendConfig(known_trip_count[], known_init_step[], known_induction_variable[])
+    return WhileLoopBackendConfig(known_trip_count[], known_init_step[], known_induction_variable[], dynamic_variable_tuple_indices[])
 end
 
 function PB.encode(e::PB.AbstractProtoEncoder, x::WhileLoopBackendConfig)
@@ -1720,6 +1724,7 @@ function PB.encode(e::PB.AbstractProtoEncoder, x::WhileLoopBackendConfig)
     !isnothing(x.known_trip_count) && PB.encode(e, 1, x.known_trip_count)
     !isnothing(x.known_init_step) && PB.encode(e, 2, x.known_init_step)
     !isnothing(x.known_induction_variable) && PB.encode(e, 3, x.known_induction_variable)
+    !isempty(x.dynamic_variable_tuple_indices) && PB.encode(e, 4, x.dynamic_variable_tuple_indices)
     return position(e.io) - initpos
 end
 function PB._encoded_size(x::WhileLoopBackendConfig)
@@ -1727,6 +1732,7 @@ function PB._encoded_size(x::WhileLoopBackendConfig)
     !isnothing(x.known_trip_count) && (encoded_size += PB._encoded_size(x.known_trip_count, 1))
     !isnothing(x.known_init_step) && (encoded_size += PB._encoded_size(x.known_init_step, 2))
     !isnothing(x.known_induction_variable) && (encoded_size += PB._encoded_size(x.known_induction_variable, 3))
+    !isempty(x.dynamic_variable_tuple_indices) && (encoded_size += PB._encoded_size(x.dynamic_variable_tuple_indices, 4))
     return encoded_size
 end
 
