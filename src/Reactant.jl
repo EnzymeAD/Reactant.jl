@@ -97,6 +97,8 @@ include("Devices.jl")
 include("Interpreter.jl")
 include("Profiler.jl")
 include("Types.jl")
+
+include(joinpath("extern", "hostlists.jl"))
 include("Distributed.jl")
 
 using .Profiler: @time, @timed, @profile
