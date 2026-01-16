@@ -5,12 +5,30 @@ Reactant.set_default_backend("cpu")
 
 # Julia types which map surjectively to MPI datatypes in MPI.jl
 datatypes = [
-    Int8, UInt8, Int16, UInt16, Int32, UInt32, Int64, UInt64,
-    Cshort, Cushort, Cint, Cuint, Clong, Culong, Clonglong, Culonglong,
-    Cchar, Cuchar, Cwchar_t,
-    Float32, Float64,
-    ComplexF32, ComplexF64,
-    Bool
+    Int8,
+    UInt8,
+    Int16,
+    UInt16,
+    Int32,
+    UInt32,
+    Int64,
+    UInt64,
+    Cshort,
+    Cushort,
+    Cint,
+    Cuint,
+    Clong,
+    Culong,
+    Clonglong,
+    Culonglong,
+    Cchar,
+    Cuchar,
+    Cwchar_t,
+    Float32,
+    Float64,
+    ComplexF32,
+    ComplexF64,
+    Bool,
 ]
 
 MPI.Init()
@@ -41,7 +59,7 @@ end
         ("PROD", MPI.PROD),
         ("REPLACE", MPI.REPLACE),
         ("SUM", MPI.SUM),
-        ("NO_OP", MPI.NO_OP)
+        ("NO_OP", MPI.NO_OP),
     ]
 
     comm = MPI.COMM_WORLD
@@ -54,13 +72,14 @@ end
 
             # skip invalid combinations of T and op
             expected = try
-                 ConcreteRArray( MPI.Allreduce(sendbuf, op, MPI.COMM_WORLD) )
+                ConcreteRArray(MPI.Allreduce(sendbuf, op, MPI.COMM_WORLD))
             catch
                 continue
             end
 
-            @test expected == @jit MPI.Allreduce(ConcreteRArray(sendbuf), op, MPI.COMM_WORLD)
-            
+            @test expected ==
+                @jit MPI.Allreduce(ConcreteRArray(sendbuf), op, MPI.COMM_WORLD)
+
             # debug
             # rank==0 && println("")
             # rank==0 && println("datatype=$T, op=$opname, $(expected == @jit MPI.Allreduce(ConcreteRArray(sendbuf), op, MPI.COMM_WORLD))")
