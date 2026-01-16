@@ -206,7 +206,7 @@ const MPI_OP_MAP = Dict(
     MPI.PROD => MPI_PROD_ENUM,
     MPI.REPLACE => MPI_REPLACE_ENUM,
     MPI.SUM => MPI_SUM_ENUM,
-    MPI.NO_OP => MPI_NO_OP_ENUM
+    MPI.NO_OP => MPI_NO_OP_ENUM,
 )
 
 function get_mpi_op_enum(op)
@@ -272,7 +272,7 @@ const MPI_DATATYPE_MAP = Dict(
     MPI.DOUBLE => MPI_DOUBLE_ENUM,
     MPI.C_FLOAT_COMPLEX => MPI_C_FLOAT_COMPLEX_ENUM,
     MPI.C_DOUBLE_COMPLEX => MPI_C_DOUBLE_COMPLEX_ENUM,
-    MPI.C_BOOL => MPI_C_BOOL_ENUM
+    MPI.C_BOOL => MPI_C_BOOL_ENUM,
 )
 
 function get_mpi_datatype_enum(datatype)
