@@ -63,8 +63,6 @@ end
     ]
 
     comm = MPI.COMM_WORLD
-    nranks = MPI.Comm_size(comm)
-    rank = MPI.Comm_rank(comm)
 
     for (opname, op) in operations
         for T in datatypes
@@ -81,6 +79,7 @@ end
                 @jit MPI.Allreduce(ConcreteRArray(sendbuf), op, MPI.COMM_WORLD)
 
             # debug
+            # rank = MPI.Comm_rank(comm)
             # rank==0 && println("")
             # rank==0 && println("datatype=$T, op=$opname, $(expected == @jit MPI.Allreduce(ConcreteRArray(sendbuf), op, MPI.COMM_WORLD))")
             # rank==0 && println("       result=$(@jit MPI.Allreduce(ConcreteRArray(sendbuf), op, MPI.COMM_WORLD))")
@@ -108,7 +107,6 @@ end
 @testset "Send / Recv!" begin
     comm = MPI.COMM_WORLD
     rank = MPI.Comm_rank(comm)
-    nranks = MPI.Comm_size(comm)
 
     # # useful for isolating whether Reactant Send or Recv! is the issue
     # @testset "MPI.jl Send / Reactant Recv!" begin
@@ -180,7 +178,6 @@ end
 @testset "Isend / Irecv! / Wait" begin
     comm = MPI.COMM_WORLD
     rank = MPI.Comm_rank(comm)
-    nranks = MPI.Comm_size(comm)
 
     for T in datatypes
         # NOTE: currently don't allow a request to cross the compile boundary
