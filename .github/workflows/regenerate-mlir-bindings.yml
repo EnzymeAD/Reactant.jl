@@ -61,6 +61,11 @@ jobs:
         working-directory: ./deps/ReactantExtra
         env:
           JULIA_DEPOT_PATH: ${{ runner.temp }}/julia_depot
+      - name: Generate XLA PjRT Plugin Bindings
+        run: julia --project=. --color=yes make-pjrt-plugin-bindings.jl
+        working-directory: ./deps/ReactantExtra
+        env:
+          JULIA_DEPOT_PATH: ${{ runner.temp }}/julia_depot
       - name: Format code
         shell: julia --color=yes {0}
         run: |
