@@ -7,10 +7,13 @@ using Libdl: Libdl
 using EnumX: @enumx
 using Enzyme: Compiler
 using Preferences: load_preference
+using UUIDs: UUID
 
 const XLA_REACTANT_GPU_MEM_FRACTION = Ref{Float64}(0.75)
 const XLA_REACTANT_GPU_PREALLOCATE = Ref{Bool}(true)
-const REACTANT_XLA_RUNTIME = load_preference(Reactant, "xla_runtime", "PJRT")
+const REACTANT_XLA_RUNTIME = load_preference(
+    UUID("3c362404-f566-11ee-1572-e11a4b42c853"), "xla_runtime", "PJRT"
+)
 
 const CUDA_DATA_DIR = Ref(
     isdefined(Reactant_jll, :ptxas_path) ? dirname(dirname(Reactant_jll.ptxas_path)) : ""
