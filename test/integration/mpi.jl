@@ -3,6 +3,16 @@ using Test, MPI, Reactant
 client = Reactant.XLA.default_backend()
 Reactant.set_default_backend("cpu")
 
+# Julia types which map surjectively to MPI datatypes in MPI.jl
+datatypes = [
+    Int8, UInt8, Int16, UInt16, Int32, UInt32, Int64, UInt64,
+    Cshort, Cushort, Cint, Cuint, Clong, Culong, Clonglong, Culonglong,
+    Cchar, Cuchar, Cwchar_t,
+    Float32, Float64,
+    ComplexF32, ComplexF64,
+    # Bool
+]
+
 MPI.Init()
 
 @testset "Comm_rank" begin
@@ -72,36 +82,42 @@ end
 
     # test Reactant Send/Recv
     @testset "Reactant Send / Recv! - compiled separately" begin
-        send_buf = ConcreteRArray(ones(5))
-        tag = 43
-        if rank == 0
-            dest = 1
-            @jit MPI.Send(send_buf, dest, tag, comm)
-        elseif rank == 1
-            recv_buf = ConcreteRArray(zeros(5))
-            src = 0
-            @jit MPI.Recv!(recv_buf, src, tag, comm)
-            @test recv_buf == send_buf
+        for T in datatypes
+            @testset "Type: $T" begin
+                send_buf = ConcreteRArray(ones(T, 5))
+                tag = 43
+                if rank == 0
+                    dest = 1
+                    @jit MPI.Send(send_buf, dest, tag, comm)
+                elseif rank == 1
+                    recv_buf = ConcreteRArray(zeros(T, 5))
+                    src = 0
+                    @jit MPI.Recv!(recv_buf, src, tag, comm)
+                    @test recv_buf == send_buf
+                end
+            end
         end
     end
 
     @testset "Reactant Send / Recv! - compiled together" begin
-        send_buf = ConcreteRArray(ones(5))
-        recv_buf = ConcreteRArray(zeros(5))
-        tag = 43
-        function sendrecv!(comm, rank, send_buf, recv_buf, tag)
-            if rank == 0
-                dest = 1
-                MPI.Send(send_buf, dest, tag, comm)
-                return nothing
-            elseif rank == 1
-                src = 0
-                MPI.Recv!(recv_buf, src, tag, comm)
-                return nothing
+        for T in datatypes
+            send_buf = ConcreteRArray(ones(T, 5))
+            recv_buf = ConcreteRArray(zeros(T, 5))
+            tag = 43
+            function sendrecv!(comm, rank, send_buf, recv_buf, tag)
+                if rank == 0
+                    dest = 1
+                    MPI.Send(send_buf, dest, tag, comm)
+                    return nothing
+                elseif rank == 1
+                    src = 0
+                    MPI.Recv!(recv_buf, src, tag, comm)
+                    return nothing
+                end
             end
+            @jit sendrecv!(comm, rank, send_buf, recv_buf, tag)
+            rank == 1 && @test recv_buf == send_buf
         end
-        @jit sendrecv!(comm, rank, send_buf, recv_buf, tag)
-        rank == 1 && @test recv_buf == send_buf
     end
 end
 
@@ -110,27 +126,29 @@ end
     rank = MPI.Comm_rank(comm)
     nranks = MPI.Comm_size(comm)
 
-    # NOTE: currently don't allow a request to cross the compile boundary
-    # debugging tip: if this fails, can use pair Send with Irecv! + Wait, or Recv! with
-    # Isend + Wait to isolate the issue
-    send_buf = ConcreteRArray(ones(5))
-    recv_buf = ConcreteRArray(zeros(5))
-    tag = 42
-    function isendirecvwait(send_buf, recv_buf, rank, tag, comm)
-        if rank == 0
-            dest = 1
-            req = MPI.Isend(send_buf, dest, tag, comm)
-            MPI.Wait(req)
-            return nothing
-        elseif rank == 1
-            src = 0
-            req = MPI.Irecv!(recv_buf, src, tag, comm)
-            MPI.Wait(req)
-            return nothing
+    for T in datatypes
+        # NOTE: currently don't allow a request to cross the compile boundary
+        # debugging tip: if this fails, can use pair Send with Irecv! + Wait, or Recv! with
+        # Isend + Wait to isolate the issue
+        send_buf = ConcreteRArray(ones(T, 5))
+        recv_buf = ConcreteRArray(zeros(T, 5))
+        tag = 42
+        function isendirecvwait(send_buf, recv_buf, rank, tag, comm)
+            if rank == 0
+                dest = 1
+                req = MPI.Isend(send_buf, dest, tag, comm)
+                MPI.Wait(req)
+                return nothing
+            elseif rank == 1
+                src = 0
+                req = MPI.Irecv!(recv_buf, src, tag, comm)
+                MPI.Wait(req)
+                return nothing
+            end
         end
+        @jit isendirecvwait(send_buf, recv_buf, rank, tag, comm)
+        rank == 1 && @test recv_buf == send_buf
     end
-    @jit isendirecvwait(send_buf, recv_buf, rank, tag, comm)
-    rank == 1 && @test recv_buf == send_buf
 end
 
 MPI.Finalize()
