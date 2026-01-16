@@ -22,7 +22,7 @@ using Enzyme: Enzyme, Reverse, Active, Const, Duplicated
                and hence reliance on this behavior is strongly discouraged."
         return Enzyme.gradient(Reverse, Const(f), args...)
     else
-        return Base.inferencebarrier(Zygote.gradient)(CallWithReactant(f), args...)
+        return Reactant.call_with_native(Zygote.gradient, f, args...)
     end
 end
 
