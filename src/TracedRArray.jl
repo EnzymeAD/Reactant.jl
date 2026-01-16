@@ -11,6 +11,8 @@ using ..TracedUtils: TracedUtils, get_mlir_data, set_mlir_data!, materialize_tra
 using ReactantCore: ReactantCore
 using GPUArraysCore: GPUArraysCore, @allowscalar
 
+using StructArrays: StructArray
+
 __lt(::Base.Order.ForwardOrdering, a, b) = isless.(a, b)
 __lt(o::Base.Order.ReverseOrdering, a, b) = __lt(o.fwd, b, a)
 __lt(o::Base.Order.By, a, b) = __lt(o.order, o.by.(a), o.by.(b))
@@ -1486,6 +1488,18 @@ function Base.permutedims!(dest::TracedRArray, src::AnyTracedRArray, perm)
     result = @opcall transpose(materialize_traced_array(src), Int64[perm...])
     TracedUtils.set_mlir_data!(dest, result.mlir_data)
     return dest
+end
+
+function Base._extrema(f::F, x::AnyTracedRArray, ::Colon) where {F}
+    mapped_f = f.(x)
+    return (minimum(mapped_f), maximum(mapped_f))
+end
+
+function Base._extrema(f::F, x::AnyTracedRArray, dims) where {F}
+    mapped_f = f.(x)
+    min_val = minimum(mapped_f; dims)
+    max_val = maximum(mapped_f; dims)
+    return StructArray((min_val, max_val))
 end
 
 end
