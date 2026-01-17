@@ -73,7 +73,6 @@ end
 
 function XLA.compile(
     client::Client,
-    device::Union{Device,Nothing},
     mod::MLIR.IR.Module;
     compile_options::Reactant.Proto.xla.CompileOptionsProto,
     num_parameters::Int64,

@@ -1,13 +1,29 @@
+const DEFAULT_XLA_DEBUG_OPTIONS = Ref{Union{Nothing,Reactant.Proto.xla.DebugOptions}}(
+    nothing
+)
+const DEFAULT_XLA_COMPILE_OPTIONS = Ref{
+    Union{Nothing,Reactant.Proto.xla.CompileOptionsProto}
+}(
+    nothing
+)
+
 function get_default_debug_options()
+    if !isnothing(DEFAULT_XLA_DEBUG_OPTIONS[])
+        return DEFAULT_XLA_DEBUG_OPTIONS[]::Reactant.Proto.xla.DebugOptions
+    end
     size = Ref{Csize_t}(0)
     data = @ccall MLIR.API.mlir_c.ReactantGetDebugOptions(size::Ptr{Csize_t})::Ptr{UInt8}
     bytes = unsafe_wrap(Array, data, (size[],); own=false)
     proto = Reactant.ProtoUtils.proto_from_bytes(Reactant.Proto.xla.DebugOptions, bytes)
     @ccall free(data::Ptr{UInt8})::Cvoid
+    DEFAULT_XLA_DEBUG_OPTIONS[] = proto
     return proto
 end
 
 function get_default_compile_options()
+    if !isnothing(DEFAULT_XLA_COMPILE_OPTIONS[])
+        return DEFAULT_XLA_COMPILE_OPTIONS[]::Reactant.Proto.xla.CompileOptionsProto
+    end
     size = Ref{Csize_t}(0)
     data = @ccall MLIR.API.mlir_c.ReactantGetCompileOptions(size::Ptr{Csize_t})::Ptr{UInt8}
     bytes = unsafe_wrap(Array, data, (size[],); own=false)
@@ -15,12 +31,14 @@ function get_default_compile_options()
         Reactant.Proto.xla.CompileOptionsProto, bytes
     )
     @ccall free(data::Ptr{UInt8})::Cvoid
+    DEFAULT_XLA_COMPILE_OPTIONS[] = proto
     return proto
 end
 
 function get_debug_options(; kwargs...)
     debug_options = get_default_debug_options()
 
+    # default overrides. can we changed by the user by passing in kwargs
     @set! debug_options.xla_gpu_cuda_data_dir = CUDA_DATA_DIR[]
     @set! debug_options.xla_enable_enzyme_comms_opt = true
     @set! debug_options.xla_gpu_experimental_use_raft_select_k = true
@@ -40,7 +58,7 @@ function get_debug_options(; kwargs...)
         end
     end
 
-    for (key, value) in kwargs
+    for (key, value) in pairs(kwargs)
         debug_options = Setfield.set(debug_options, Setfield.PropertyLens{key}(), value)
     end
 
@@ -51,8 +69,6 @@ function make_compile_options(;
     device_id::Int64,
     num_replicas::Int64=1,
     num_partitions::Int64=1,
-    use_shardy_partitioner::Bool=true,
-    use_spmd_partitioning::Bool=true,
     mesh_ids::Union{Vector{Int64},Nothing}=nothing,
     xla_debug_options=(;),
     xla_executable_build_options=(;),
@@ -64,13 +80,13 @@ function make_compile_options(;
     @set! executable_build_options.debug_options = get_debug_options(; xla_debug_options...)
     @set! executable_build_options.num_replicas = num_replicas
     @set! executable_build_options.num_partitions = num_partitions
-    @set! executable_build_options.use_spmd_partitioning = use_spmd_partitioning
-    @set! executable_build_options.use_shardy_partitioner = use_shardy_partitioner
+
+    # default overrides. can we changed by the user by passing in kwargs
     @set! executable_build_options.allow_spmd_sharding_propagation_to_parameters = [false]
     @set! executable_build_options.allow_spmd_sharding_propagation_to_output = [false]
 
     if device_id < 0
-        @assert !isnothing(mesh_ids)
+        @assert mesh_ids !== nothing
         @assert length(mesh_ids) == num_replicas * num_partitions
 
         computation_devices = [
@@ -90,7 +106,7 @@ function make_compile_options(;
         )
     end
 
-    for (key, val) in xla_executable_build_options
+    for (key, val) in pairs(xla_executable_build_options)
         executable_build_options = Setfield.set(
             executable_build_options, Setfield.PropertyLens{key}(), val
         )
@@ -98,7 +114,7 @@ function make_compile_options(;
 
     @set! compile_options.executable_build_options = executable_build_options
 
-    for (key, val) in xla_compile_options
+    for (key, val) in pairs(xla_compile_options)
         compile_options = Setfield.set(compile_options, Setfield.PropertyLens{key}(), val)
     end
 

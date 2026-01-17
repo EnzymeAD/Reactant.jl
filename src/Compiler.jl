@@ -3747,19 +3747,22 @@ function compile_xla(
                 else
                     Int64(XLA.device_ordinal(device))
                 end,
-                xla_debug_options=compile_options.xla_debug_options,
-                xla_executable_build_options=compile_options.xla_executable_build_options,
                 xla_compile_options=compile_options.xla_compile_options,
                 num_replicas=mlir_fn_res.num_replicas,
                 num_partitions=mlir_fn_res.num_partitions,
-                use_shardy_partitioner=mlir_fn_res.use_shardy_partitioner,
-                use_spmd_partitioning=mlir_fn_res.use_shardy_partitioner,
                 mesh_ids=mlir_fn_res.is_sharded ? global_device_ids : nothing,
+                xla_debug_options=compile_options.xla_debug_options,
+                xla_executable_build_options=merge(
+                    (;
+                        use_shardy_partitioner=mlir_fn_res.use_shardy_partitioner,
+                        use_spmd_partitioning=mlir_fn_res.is_sharded,
+                    ),
+                    compile_options.xla_executable_build_options,
+                ),
             )
 
             exec = XLA.compile(
                 client,
-                device,
                 mod;
                 compile_options=xla_compile_options,
                 num_outputs=length(mlir_fn_res.linear_results),
