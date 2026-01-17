@@ -81,7 +81,7 @@ ReactantZygoteExt = "Zygote"
 
 [compat]
 AbstractFFTs = "1.5"
-Adapt = "4.1"
+Adapt = "4.4"
 ArrayInterface = "7.17.1"
 CEnum = "0.5"
 CUDA = "5.9"
