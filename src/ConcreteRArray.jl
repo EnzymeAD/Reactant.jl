@@ -300,10 +300,16 @@ function Base.showarg(
     toplevel || print(io, "::")
     print(io, "$(typeof(a).name.wrapper){$T,$N}")
     if Sharding.is_sharded(a)
-        (; hlo_sharding) = Sharding.HloSharding(
-            Sharding.unwrap_shardinfo(a.sharding), size(a)
-        )
-        print(io, " with \"mhlo.sharding = $(string(hlo_sharding))\"")
+        # `showarg` is called by another task so the context stack is empty here
+        MLIR.IR.@dispose ctx = MLIR.IR.Context(Reactant.registry[]) begin
+            MLIR.IR.register_enzymexla_dialects(ctx)
+            MLIR.IR.@scope ctx begin
+                (; hlo_sharding) = Sharding.HloSharding(
+                    Sharding.unwrap_shardinfo(a.sharding), size(a)
+                )
+                print(io, " with \"mhlo.sharding = $(string(hlo_sharding))\"")
+            end
+        end
     end
     return nothing
 end
