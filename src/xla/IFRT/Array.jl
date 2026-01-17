@@ -363,11 +363,16 @@ function replicate_array_to_all_devices(array::Array, sharding, mesh, size_arr)
             device_id=-1,
             num_partitions=length(mesh.device_ids),
             mesh_ids=vec(mesh.device_ids),
+            xla_executable_build_options=(;
+                use_shardy_partitioner=true,
+                use_spmd_partitioning=true,
+                allow_spmd_sharding_propagation_to_parameters=[false],
+                allow_spmd_sharding_propagation_to_output=[false],
+            ),
         )
 
         exec = XLA.compile(
             XLA.client(array),
-            nothing,
             mod;
             compile_options,
             num_outputs=1,                # unused

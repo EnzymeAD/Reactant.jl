@@ -1,5 +1,4 @@
 using Reactant, Test, Aqua, ExplicitImports, MethodAnalysis
-using Suppressor: @suppress_err
 
 function get_all_submodules(base_module::Module)
     mods = Module[]
@@ -49,10 +48,10 @@ end
         methods_with_unbound_args = Aqua.detect_unbound_args_recursively(Reactant)
         num_unbound_args = 0
         for method in methods_with_unbound_args
-            # if !issubmodule(parentmodule(method), Reactant.Proto)
-            num_unbound_args += 1
-            @warn "Method $(method) has unbound args"
-            # end
+            if !issubmodule(parentmodule(method), Reactant.Proto)
+                num_unbound_args += 1
+                @warn "Method $(method) has unbound args"
+            end
         end
         @test num_unbound_args == 0
     end
@@ -83,54 +82,52 @@ end
 end
 
 @testset "ExplicitImports" begin
-    @suppress_err begin
-        test_explicit_imports(
-            Reactant;
-            no_implicit_imports=(;
-                allow_unanalyzable=(
-                    Reactant.DotGeneralAlgorithmPreset,
-                    Reactant.MLIR.Dialects,
-                    get_all_submodules(Reactant.MLIR.Dialects)...,
-                    get_all_submodules(Reactant.Proto)...,
-                    Reactant.XLA.OpShardingType,
-                    Reactant.Accelerators.TPU.TPUVersion,
-                    Reactant.PrecisionConfig,
-                ),
-                ignore=(Reactant.Proto,),
+    test_explicit_imports(
+        Reactant;
+        no_implicit_imports=(;
+            allow_unanalyzable=(
+                Reactant.DotGeneralAlgorithmPreset,
+                Reactant.MLIR.Dialects,
+                get_all_submodules(Reactant.MLIR.Dialects)...,
+                get_all_submodules(Reactant.Proto)...,
+                Reactant.XLA.OpShardingType,
+                Reactant.Accelerators.TPU.TPUVersion,
+                Reactant.PrecisionConfig,
             ),
-            all_explicit_imports_are_public=false,
-            all_explicit_imports_via_owners=true,
-            no_stale_explicit_imports=(;
-                allow_unanalyzable=(
-                    Reactant.DotGeneralAlgorithmPreset,
-                    Reactant.MLIR.Dialects,
-                    get_all_submodules(Reactant.MLIR.Dialects)...,
-                    get_all_submodules(Reactant.Proto)...,
-                    Reactant.XLA.OpShardingType,
-                    Reactant.Accelerators.TPU.TPUVersion,
-                    Reactant.PrecisionConfig,
-                ),
-                ignore=(
-                    Reactant.Proto,
-                    :p7zip,
-                    :ShardyPropagationOptions,
-                    :OneOf,
-                    Symbol("@profile"),
-                    Symbol("@time"),
-                    Symbol("@timed"),
-                ),
+            ignore=(Reactant.Proto,),
+        ),
+        all_explicit_imports_are_public=false,
+        all_explicit_imports_via_owners=true,
+        no_stale_explicit_imports=(;
+            allow_unanalyzable=(
+                Reactant.DotGeneralAlgorithmPreset,
+                Reactant.MLIR.Dialects,
+                get_all_submodules(Reactant.MLIR.Dialects)...,
+                get_all_submodules(Reactant.Proto)...,
+                Reactant.XLA.OpShardingType,
+                Reactant.Accelerators.TPU.TPUVersion,
+                Reactant.PrecisionConfig,
             ),
-            all_qualified_accesses_via_owners=true,
-            all_qualified_accesses_are_public=false,
-            no_self_qualified_accesses=(;
-                ignore=(
-                    :REACTANT_METHOD_TABLE,
-                    :__skip_rewrite_func_set,
-                    :__skip_rewrite_func_set_lock,
-                    :__skip_rewrite_type_constructor_list,
-                    :__skip_rewrite_type_constructor_list_lock,
-                ),
+            ignore=(
+                Reactant.Proto,
+                :p7zip,
+                :ShardyPropagationOptions,
+                :OneOf,
+                Symbol("@profile"),
+                Symbol("@time"),
+                Symbol("@timed"),
             ),
-        )
-    end
+        ),
+        all_qualified_accesses_via_owners=true,
+        all_qualified_accesses_are_public=false,
+        no_self_qualified_accesses=(;
+            ignore=(
+                :REACTANT_METHOD_TABLE,
+                :__skip_rewrite_func_set,
+                :__skip_rewrite_func_set_lock,
+                :__skip_rewrite_type_constructor_list,
+                :__skip_rewrite_type_constructor_list_lock,
+            ),
+        ),
+    )
 end

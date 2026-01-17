@@ -36,7 +36,9 @@ is_extension_loaded(::Val) = false
 
 include("PersistentCompileCache.jl")
 
+#! explicit-imports: off
 include("proto/Proto.jl")
+#! explicit-imports: on
 include("ProtoUtils.jl")
 
 # auxiliary types and functions
