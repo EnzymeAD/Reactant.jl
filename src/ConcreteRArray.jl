@@ -23,12 +23,14 @@ function Base.copy(x::Union{AbstractConcreteArray,AbstractConcreteNumber})
     return fn(x)
 end
 
-function Base.copy(X::ConcreteIFRTArray{T,D,P}) where {T,D,P}
+function Base.copy(X::ConcreteIFRTArray{T,D}) where {T,D}
     return ConcreteIFRTArray{T,D}(Base.copy(X.data), X.shape, X.sharding, X.padding)
 end
 
 function Base.copy(X::ConcretePJRTArray)
-    return Core.Typeof(X)(Base.copy.(X.data), X.shape, X.sharding)
+    return Core.Typeof(X)(
+        XLA.PJRT.AsyncBuffer[Base.copy(d) for d in X.data], X.shape, X.sharding
+    )
 end
 
 function Base.copy(X::ConcreteIFRTNumber)
@@ -36,7 +38,7 @@ function Base.copy(X::ConcreteIFRTNumber)
 end
 
 function Base.copy(X::ConcretePJRTNumber)
-    return Core.Typeof(X)(Base.copy.(X.data), X.sharding)
+    return Core.Typeof(X)(XLA.PJRT.AsyncBuffer[Base.copy(d) for d in X.data], X.sharding)
 end
 
 # deepcopy
@@ -422,17 +424,17 @@ function Base.similar(
 end
 
 function Base.similar(
-    a::ConcretePJRTArray{T,N,D}, ::Type{S}=T, dims::Dims=size(a)
-) where {S,T,N,D}
+    a::ConcretePJRTArray{T,N}, ::Type{S}=T, dims::Dims=size(a)
+) where {S,T,N}
     device_to_array_slices, sharding = Sharding.sharding_to_array_slices(
         a.sharding, dims; return_updated_sharding=Val(true), client=XLA.client(a)
     )
-    @assert length(device_to_array_slices) == D
-    sdata = ntuple(Val(D)) do i
-        Base.@_inline_meta
-        similar(a.data[i], S, Dims(length.(device_to_array_slices[i])))
-    end
-    return ConcretePJRTArray{S,length(dims),D}(sdata, dims, a.sharding)
+    @assert length(device_to_array_slices) == length(a.data)
+    sdata = XLA.PJRT.AsyncBuffer[
+        similar(a.data[i], S, Dims(length.(device_to_array_slices[i]))) for
+        i in 1:length(a.data)
+    ]
+    return ConcretePJRTArray{S,length(dims)}(sdata, dims, a.sharding)
 end
 
 Base.similar(a::ConcretePJRTArray, dims::Dims) = similar(a, eltype(a), dims)

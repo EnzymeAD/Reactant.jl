@@ -341,8 +341,11 @@ end
 
     res = @jit write_with_broadcast1!(x_ra, y_ra)
 
-    if res.data isa Tuple
-        @test res.data[1] === x_ra.data[1]
+    if res.data isa Vector
+        @assert length(res.data) == length(x_ra.data)
+        for (d1, d2) in zip(res.data, x_ra.data)
+            @test d1 === d2
+        end
     else
         @test res.data === x_ra.data
     end
@@ -356,8 +359,11 @@ end
 
     res = @jit write_with_broadcast2!(x_ra, y_ra)
 
-    if res.data isa Tuple
-        @test res.data[1] === x_ra.data[1]
+    if res.data isa Vector
+        @assert length(res.data) == length(x_ra.data)
+        for (d1, d2) in zip(res.data, x_ra.data)
+            @test d1 === d2
+        end
     else
         @test res.data === x_ra.data
     end
