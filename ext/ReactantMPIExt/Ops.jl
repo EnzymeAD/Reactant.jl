@@ -55,7 +55,7 @@ end
         count.mlir_data,
         dest.mlir_data,
         tag.mlir_data;
-        datatype=MLIR.API.enzymexlaMPIDatatypeAttrGet(MLIR.IR.context(), mpi_datatype),
+        datatype=MLIR.API.enzymexlaMPIDatatypeAttrGet(IR.context(), mpi_datatype),
         location,
     )
 
@@ -74,15 +74,17 @@ end
     count = Reactant.Ops.constant(Int32(length(buf)))
     request = mlir_type(TracedRArray{Int64,0}, ())
 
-    res = IR.result(enzymexla.mpi_isend(
-        buf.mlir_data,
-        count.mlir_data,
-        dest.mlir_data,
-        tag.mlir_data;
-        request,
-        datatype=MLIR.API.enzymexlaMPIDatatypeAttrGet(MLIR.IR.context(), mpi_datatype),
-        location,
-       ))
+    res = IR.result(
+        enzymexla.mpi_isend(
+            buf.mlir_data,
+            count.mlir_data,
+            dest.mlir_data,
+            tag.mlir_data;
+            request,
+            datatype=MLIR.API.enzymexlaMPIDatatypeAttrGet(IR.context(), mpi_datatype),
+            location,
+        ),
+    )
 
     return TracedRNumber{Int64}((), res)
 end
@@ -104,7 +106,7 @@ end
         src.mlir_data,
         tag.mlir_data;
         outbuf=mlir_type(buf),
-        datatype=MLIR.API.enzymexlaMPIDatatypeAttrGet(MLIR.IR.context(), mpi_datatype),
+        datatype=MLIR.API.enzymexlaMPIDatatypeAttrGet(IR.context(), mpi_datatype),
         location,
     )
 
@@ -131,7 +133,7 @@ end
         tag.mlir_data;
         outbuf=mlir_type(buf),
         request,
-        datatype=MLIR.API.enzymexlaMPIDatatypeAttrGet(MLIR.IR.context(), mpi_datatype),
+        datatype=MLIR.API.enzymexlaMPIDatatypeAttrGet(IR.context(), mpi_datatype),
         location,
     )
 
@@ -165,8 +167,8 @@ end
         recvbuf.mlir_data,
         count.mlir_data;
         outbuf=mlir_type(recvbuf),
-        datatype=MLIR.API.enzymexlaMPIDatatypeAttrGet(MLIR.IR.context(), mpi_datatype),
-        op=MLIR.API.enzymexlaMPIOpAttrGet(MLIR.IR.context(), mpi_op),
+        datatype=MLIR.API.enzymexlaMPIDatatypeAttrGet(IR.context(), mpi_datatype),
+        op=MLIR.API.enzymexlaMPIOpAttrGet(IR.context(), mpi_op),
         location,
     )
 
