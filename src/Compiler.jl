@@ -1456,15 +1456,16 @@ function run_pass_pipeline!(
     return mod
 end
 
-const context_gc_vector = Dict{MLIR.IR.Context,Vector{Union{TracedRArray,TracedRNumber}}}()
-
 # helper for debug purposes: String -> Text
 function run_pass_pipeline_on_source(source, pass_pipeline; enable_verifier=true)
-    return MLIR.IR.with_context() do ctx
-        mod = parse(MLIR.IR.Module, source)
-        run_pass_pipeline!(mod, pass_pipeline; enable_verifier)
-        MLIR.IR.verifyall(MLIR.IR.Operation(mod); debug=true)
-        Text(repr(mod))
+    return MLIR.IR.@dispose ctx = Context() begin
+        MLIR.IR.register_enzymexla_dialects(ctx)
+        MLIR.IR.@scope ctx begin
+            mod = parse(MLIR.IR.Module, source)
+            run_pass_pipeline!(mod, pass_pipeline; enable_verifier)
+            MLIR.IR.verifyall(MLIR.IR.Operation(mod); debug=true)
+            Text(repr(mod))
+        end
     end
 end
 
@@ -1524,35 +1525,32 @@ function compile_mlir(f, args; client=nothing, drop_unsupported_attributes=false
         backend = "cpu"
     end
 
-    results = MLIR.IR.with_context() do ctx
-        mod = MLIR.IR.Module(MLIR.IR.Location())
+    # TODO wrap `mod` in a `@scope`?
+    mod = MLIR.IR.Module()
 
-        compile_options, kwargs = __get_compile_options_and_kwargs(; kwargs...)
-        mlir_fn_res = compile_mlir!(
-            mod,
-            f,
-            args,
-            compile_options;
-            backend,
-            runtime=XLA.runtime(client),
-            client,
-            kwargs...,
-        )
+    compile_options, kwargs = __get_compile_options_and_kwargs(; kwargs...)
+    mlir_fn_res = compile_mlir!(
+        mod,
+        f,
+        args,
+        compile_options;
+        backend,
+        runtime=XLA.runtime(client),
+        client,
+        kwargs...,
+    )
 
-        # Attach a name, and partitioning attributes to the module
-        __add_mhlo_attributes_and_name!(
-            mod, f; mlir_fn_res.num_partitions, mlir_fn_res.num_replicas
-        )
+    # Attach a name, and partitioning attributes to the module
+    __add_mhlo_attributes_and_name!(
+        mod, f; mlir_fn_res.num_partitions, mlir_fn_res.num_replicas
+    )
 
-        if drop_unsupported_attributes
-            # Drop some of our attributes
-            run_pass_pipeline!(mod, "drop-unsupported-attributes", "drop_enzymexla_attributes")
-        end
-
-        return mod, mlir_fn_res
+    if drop_unsupported_attributes
+        # Drop some of our attributes
+        run_pass_pipeline!(mod, "drop-unsupported-attributes", "drop_enzymexla_attributes")
     end
 
-    return results
+    return mod, mlir_fn_res
 end
 
 const PartitionKA = Ref{Bool}(true)
@@ -1711,45 +1709,43 @@ function compile_mlir!(
 )
     client = client !== nothing ? client : XLA.default_backend()
 
-    # Explicitly don't use block! to avoid creating a closure, which creates
-    # both compile-time and relocatability issues
+    mlir_fn_res = MLIR.IR.@scope mod begin
+        blk = MLIR.IR.body(mod)
+        MLIR.IR.@scope blk begin
+            activate_callcache!(callcache)
+            activate_sdycache!(sdycache)
+            activate_sdygroupidcache!(sdygroupidcache)
 
-    MLIR.IR.activate!(mod)
-    MLIR.IR.activate!(MLIR.IR.body(mod))
-    activate_callcache!(callcache)
-    activate_sdycache!(sdycache)
-    activate_sdygroupidcache!(sdygroupidcache)
+            # Save in the TLS whether we are raising.  We identify that condition by
+            # checking whether the user set an explicit list of passes, or chose
+            # `raise=true` to use the default passes.
+            raise = compile_options.raise
+            if backend == "tpu" && raise isa Bool
+                raise = true
+            end
+            is_raising = raise isa String || raise
+            activate_raising!(is_raising)
 
-    # Save in the TLS whether we are raising.  We identify that condition by
-    # checking whether the user set an explicit list of passes, or chose
-    # `raise=true` to use the default passes.
-    raise = compile_options.raise
-    if backend == "tpu" && raise isa Bool
-        raise = true
-    end
-    is_raising = raise isa String || raise
-    activate_raising!(is_raising)
-
-    fnname = string(f)
-    mlir_fn_res = try
-        Reactant.TracedUtils.make_mlir_fn(
-            f,
-            args,
-            fn_kwargs,
-            fnname,
-            true;
-            runtime,
-            compile_options.optimize_then_pad,
-            kwargs...,
-        )
-    finally
-        deactivate_raising!(is_raising)
-        deactivate_sdycache!(sdycache)
-        deactivate_sdygroupidcache!(sdygroupidcache)
-        deactivate_callcache!(callcache)
-        MLIR.IR.deactivate!(MLIR.IR.body(mod))
-        clear_llvm_compiler_cache!(mod)
-        MLIR.IR.deactivate!(mod)
+            fnname = string(f)
+            try
+                Reactant.TracedUtils.make_mlir_fn(
+                    f,
+                    args,
+                    fn_kwargs,
+                    fnname,
+                    true;
+                    runtime,
+                    compile_options.optimize_then_pad,
+                    kwargs...,
+                )
+            finally
+                deactivate_raising!(is_raising)
+                deactivate_sdycache!(sdycache)
+                deactivate_sdygroupidcache!(sdygroupidcache)
+                deactivate_callcache!(callcache)
+                clear_llvm_compiler_cache!(mod)
+            end
+        end
     end
     (;
         fnwrapped,
@@ -2204,11 +2200,11 @@ function compile_mlir!(
             func_with_padding = MLIR.Dialects.func.func_(;
                 sym_name=fnname,
                 function_type=MLIR.IR.FunctionType(in_tys_padded, out_tys_padded),
-                arg_attrs=MLIR.IR.attr(compiled_f, "arg_attrs"),
-                res_attrs=MLIR.IR.attr(compiled_f, "res_attrs"),
-                no_inline=MLIR.IR.attr(compiled_f, "no_inline"),
+                arg_attrs=MLIR.IR.getattr(compiled_f, "arg_attrs"),
+                res_attrs=MLIR.IR.getattr(compiled_f, "res_attrs"),
+                no_inline=MLIR.IR.getattr(compiled_f, "no_inline"),
                 body=MLIR.IR.Region(),
-                sym_visibility=MLIR.IR.attr(compiled_f, "private"),
+                sym_visibility=MLIR.IR.getattr(compiled_f, "private"),
             )
             fnbody = MLIR.IR.Block(
                 in_tys_padded,
@@ -2243,7 +2239,7 @@ function compile_mlir!(
                     call_args[i] = MLIR.IR.result(unpad_op, 1)
                 end
 
-                ftype = MLIR.IR.Type(MLIR.IR.attr(compiled_f, "function_type"))
+                ftype = MLIR.IR.Type(MLIR.IR.getattr(compiled_f, "function_type"))
                 call_op = MLIR.Dialects.func.call(
                     call_args;
                     result_0=[MLIR.IR.result(ftype, i) for i in 1:MLIR.IR.nresults(ftype)],
@@ -2302,7 +2298,7 @@ function compile_mlir!(
                 )
             end
 
-            MLIR.IR.attr!(compiled_f, "sym_visibility", MLIR.IR.Attribute("private"))
+            MLIR.IR.setattr!(compiled_f, "sym_visibility", MLIR.IR.Attribute("private"))
             run_pass_pipeline!(
                 mod,
                 "inline{default-pipeline=canonicalize max-iterations=4}",
@@ -2334,9 +2330,9 @@ function compile_mlir!(
 
         func_op = MLIR.API.mlirSymbolTableLookup(MLIR.IR.SymbolTable(module_op), fnname)
         @assert func_op.ptr !== C_NULL
-        func_op_new_module = MLIR.IR.Operation(func_op, false)
+        func_op_new_module = MLIR.IR.Operation(func_op)
 
-        result_attrs = MLIR.IR.attr(func_op_new_module, "res_attrs")
+        result_attrs = MLIR.IR.getattr(func_op_new_module, "res_attrs")
         if result_attrs !== nothing
             result_shardings = Vector{Union{Sharding.NamedSharding,Sharding.Replicated}}(
                 undef, length(result_attrs)
@@ -2412,8 +2408,7 @@ function compile_mlir!(
     func_op = MLIR.API.mlirSymbolTableLookup(
         MLIR.IR.SymbolTable(MLIR.IR.Operation(mod)), fnname
     )
-    @assert func_op.ptr !== C_NULL
-    func_op = MLIR.IR.Operation(func_op, false)
+    func_op = MLIR.IR.Operation(func_op)
     fnbody = MLIR.IR.first_block(MLIR.IR.region(func_op, 1))::MLIR.IR.Block
     ret = MLIR.IR.terminator(fnbody)::MLIR.IR.Operation
 
@@ -2433,16 +2428,15 @@ function compile_mlir!(
         end
         push!(preserved_args, (linear_results[i], MLIR.IR.block_arg_num(op)))
     end
+    MLIR.IR.dispose!(ret)
 
-    MLIR.API.mlirOperationDestroy(ret.operation)
-    ret.operation = MLIR.API.MlirOperation(C_NULL)
-    MLIR.IR.block!(fnbody) do
-        return MLIR.Dialects.func.return_(nresults)
+    MLIR.IR.@scope fnbody begin
+        MLIR.Dialects.func.return_(nresults)
     end
 
     out_tys2 = [MLIR.IR.type(a) for a in nresults]
 
-    res_attrs = MLIR.IR.attr(compiled_f, "res_attrs")
+    res_attrs = MLIR.IR.getattr(compiled_f, "res_attrs")
     if res_attrs isa MLIR.IR.Attribute
         res_attrs = MLIR.IR.Attribute[
             res_attrs[i - 1] for (i, present) in enumerate(results_mask) if present
@@ -2463,22 +2457,21 @@ function compile_mlir!(
     func3 = MLIR.Dialects.func.func_(;
         sym_name="main",
         function_type=MLIR.IR.FunctionType(in_tys, out_tys2),
-        arg_attrs=MLIR.IR.attr(compiled_f, "arg_attrs"),
+        arg_attrs=MLIR.IR.getattr(compiled_f, "arg_attrs"),
         res_attrs,
-        no_inline=MLIR.IR.attr(compiled_f, "no_inline"),
+        no_inline=MLIR.IR.getattr(compiled_f, "no_inline"),
         body=MLIR.IR.Region(),
     )
     MLIR.API.mlirRegionTakeBody(MLIR.IR.region(func3, 1), MLIR.IR.region(compiled_f, 1))
 
     push!(MLIR.IR.body(mod), func3)
 
-    mem = MLIR.IR.attr(compiled_f, "enzymexla.memory_effects")
+    mem = MLIR.IR.getattr(compiled_f, "enzymexla.memory_effects")
     if !(mem isa Nothing)
-        MLIR.IR.attr!(func3, "enzymexla.memory_effects", mem)
+        MLIR.IR.setattr!(func3, "enzymexla.memory_effects", mem)
     end
 
-    MLIR.API.mlirOperationDestroy(compiled_f.operation)
-    compiled_f.operation = MLIR.API.MlirOperation(C_NULL)
+    MLIR.IR.dispose!(compiled_f)
 
     # Add a `donated` attr to the function arguments. This doesn't affect XLA, but lets us
     # check which arguments were donated.
@@ -2508,10 +2501,9 @@ function compile_mlir!(
 
     # drop certain operations from the module if using TPU backend
     if backend == "tpu"
-        for op in collect(MLIR.IR.OperationIterator(MLIR.IR.body(mod)))
+        for op in collect(MLIR.IR.body(mod))
             if MLIR.IR.dialect(op) == :llvm
-                MLIR.API.mlirOperationDestroy(op.operation)
-                op.operation = MLIR.API.MlirOperation(C_NULL)
+                MLIR.IR.dispose!(op)
             end
         end
     end
@@ -3609,9 +3601,9 @@ function __add_mhlo_attributes_and_name!(
         mod, "reactant_" * fname
     )
     module_name = MLIR.IR.Attribute(module_name)
-    MLIR.IR.attr!(moduleop, "mhlo.num_partitions", MLIR.IR.Attribute(num_partitions))
-    MLIR.IR.attr!(moduleop, "mhlo.num_replicas", MLIR.IR.Attribute(num_replicas))
-    MLIR.IR.attr!(
+    MLIR.IR.setattr!(moduleop, "mhlo.num_partitions", MLIR.IR.Attribute(num_partitions))
+    MLIR.IR.setattr!(moduleop, "mhlo.num_replicas", MLIR.IR.Attribute(num_replicas))
+    MLIR.IR.setattr!(
         moduleop, String(MLIR.API.mlirSymbolTableGetSymbolAttributeName()), module_name
     )
     return nothing
@@ -3670,11 +3662,6 @@ function compile_xla(
     serializable::Bool=false,
     kwargs...,
 )
-    # register MLIR dialects
-    ctx = MLIR.IR.Context(Reactant.registry[], false)
-    context_gc_vector[ctx] = Vector{Union{TracedRArray,TracedRNumber}}(undef, 0)
-    @ccall MLIR.API.mlir_c.RegisterDialects(ctx::MLIR.API.MlirContext)::Cvoid
-
     client = client !== nothing ? client : XLA.default_backend()
     backend = XLA.platform_name(client)
 
@@ -3684,79 +3671,68 @@ function compile_xla(
         backend = "cpu"
     end
 
-    MLIR.IR.activate!(ctx)
-    results = try
-        # compile function to MLIR module
-        mod = MLIR.IR.Module(MLIR.IR.Location())
+    # compile function to MLIR module
+    mod = MLIR.IR.Module()
 
-        compile_options, kwargs = __get_compile_options_and_kwargs(; kwargs...)
-        mlir_fn_res = compile_mlir!(
-            mod,
-            f,
-            args,
-            compile_options;
-            backend,
-            runtime=XLA.runtime(client),
-            client,
-            kwargs...,
-        )
+    compile_options, kwargs = __get_compile_options_and_kwargs(; kwargs...)
+    mlir_fn_res = compile_mlir!(
+        mod,
+        f,
+        args,
+        compile_options;
+        backend,
+        runtime=XLA.runtime(client),
+        client,
+        kwargs...,
+    )
 
-        # Resolve client and device
-        client, device = __resolve_device_and_client(
-            client,
-            mlir_fn_res.seen_args,
-            mlir_fn_res.linear_args,
-            mlir_fn_res.is_sharded,
-        )
+    # Resolve client and device
+    client, device = __resolve_device_and_client(
+        client, mlir_fn_res.seen_args, mlir_fn_res.linear_args, mlir_fn_res.is_sharded
+    )
 
-        # Attach a name, and partitioning attributes to the module
-        __add_mhlo_attributes_and_name!(
-            mod, f; mlir_fn_res.num_partitions, mlir_fn_res.num_replicas
-        )
+    # Attach a name, and partitioning attributes to the module
+    __add_mhlo_attributes_and_name!(
+        mod, f; mlir_fn_res.num_partitions, mlir_fn_res.num_replicas
+    )
 
-        # Drop some of our attributes
-        run_pass_pipeline!(mod, "drop-unsupported-attributes", "drop_enzymexla_attributes")
+    # Drop some of our attributes
+    run_pass_pipeline!(mod, "drop-unsupported-attributes", "drop_enzymexla_attributes")
 
-        # compile MLIR module to XLA executable
-        global_device_ids = collect(Int64, mlir_fn_res.global_device_ids)
-        mlir_fn_res.is_sharded && (device = nothing)
+    # compile MLIR module to XLA executable
+    global_device_ids = collect(Int64, mlir_fn_res.global_device_ids)
+    mlir_fn_res.is_sharded && (device = nothing)
 
-        # XLA.compile mutates the module, for serialization we need to keep a copy
-        if serializable
-            iobuffer = IOBuffer()
-            show(IOContext(iobuffer, :debug => true), mod)
-            module_string = String(take!(iobuffer))
-        else
-            module_string = ""
-        end
-
-        if before_xla_optimizations
-            exec = nothing
-            hlo_modules = XLA.HloModule(mod)
-        else
-            exec = XLA.compile(
-                client,
-                device,
-                mod;
-                num_outputs=length(mlir_fn_res.linear_results),
-                num_parameters=length(mlir_fn_res.linear_args),
-                mlir_fn_res.is_sharded,
-                global_device_ids,
-                mlir_fn_res.num_replicas,
-                mlir_fn_res.num_partitions,
-                mlir_fn_res.use_shardy_partitioner,
-            )
-            hlo_modules = XLA.get_hlo_modules(exec)
-            hlo_modules = length(hlo_modules) == 1 ? only(hlo_modules) : hlo_modules
-        end
-
-        return mod, exec, hlo_modules, mlir_fn_res, device, client, module_string
-    finally
-        MLIR.IR.deactivate!(ctx)
+    # XLA.compile mutates the module, for serialization we need to keep a copy
+    if serializable
+        iobuffer = IOBuffer()
+        show(IOContext(iobuffer, :debug => true), mod)
+        module_string = String(take!(iobuffer))
+    else
+        module_string = ""
     end
 
-    Base.delete!(context_gc_vector, ctx)
-    return results
+    if before_xla_optimizations
+        exec = nothing
+        hlo_modules = XLA.HloModule(mod)
+    else
+        exec = XLA.compile(
+            client,
+            device,
+            mod;
+            num_outputs=length(mlir_fn_res.linear_results),
+            num_parameters=length(mlir_fn_res.linear_args),
+            mlir_fn_res.is_sharded,
+            global_device_ids,
+            mlir_fn_res.num_replicas,
+            mlir_fn_res.num_partitions,
+            mlir_fn_res.use_shardy_partitioner,
+        )
+        hlo_modules = XLA.get_hlo_modules(exec)
+        hlo_modules = length(hlo_modules) == 1 ? only(hlo_modules) : hlo_modules
+    end
+
+    return mod, exec, hlo_modules, mlir_fn_res, device, client, module_string
 end
 
 # inspired by RuntimeGeneratedFunction.jl
@@ -3766,9 +3742,11 @@ const __thunk_rev_body_cache = Dict{Expr,Symbol}()
 function compile(f, args; kwargs...)
     compile_options, kwargs = __get_compile_options_and_kwargs(; kwargs...)
 
+    # TODO should we dispose the MLIR module (here as `_`) here?
     _, exec, _, mlir_fn_res, device, client, str = compile_xla(
         f, args; compile_options, kwargs...
     )
+
     (;
         linear_args,
         seen_args,

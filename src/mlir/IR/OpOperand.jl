@@ -1,13 +1,8 @@
-struct OpOperand
-    op::API.MlirOpOperand
-
-    function OpOperand(op::API.MlirOpOperand)
-        @assert mlirIsNull(op) "cannot create OpOperand with null MlirOpOperand"
-        return new(op)
-    end
+@checked struct OpOperand
+    ref::API.MlirOpOperand
 end
 
-Base.convert(::Core.Type{API.MlirOpOperand}, op::OpOperand) = op.op
+Base.cconvert(::Core.Type{API.MlirOpOperand}, op::OpOperand) = op.ref
 
 """
     first_use(value)
@@ -25,7 +20,7 @@ end
 
 Returns the owner operation of an op operand.
 """
-owner(op::OpOperand) = Operation(API.mlirOpOperandGetOwner(op), false)
+owner(op::OpOperand) = Operation(API.mlirOpOperandGetOwner(op))
 
 """
     operandindex(opOperand)

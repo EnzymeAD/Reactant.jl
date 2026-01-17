@@ -21,9 +21,6 @@ struct CuTracedArray{T,N,A,Size} <: DenseArray{T,N}
     ptr::Core.LLVMPtr{T,A}
 
     function CuTracedArray{T,N,A,Size}(xs::TracedRArray) where {T,N,A,Size}
-        gc_vec = Reactant.Compiler.context_gc_vector[MLIR.IR.context()]
-        push!(gc_vec, xs)
-        @assert gc_vec[end] === xs
         ptr = Base.reinterpret(Core.LLVMPtr{T,CUDA.AS.Global}, Base.pointer_from_objref(xs))
         return new(ptr)
     end
@@ -35,9 +32,6 @@ struct CuTracedRNumber{T,A} <: Number
     ptr::Core.LLVMPtr{T,A}
 
     function CuTracedRNumber{T,A}(xs::TracedRNumber) where {T,A}
-        gc_vec = Reactant.Compiler.context_gc_vector[MLIR.IR.context()]
-        push!(gc_vec, xs)
-        @assert gc_vec[end] === xs
         ptr = Base.reinterpret(Core.LLVMPtr{T,CUDA.AS.Global}, Base.pointer_from_objref(xs))
         return new(ptr)
     end
@@ -966,7 +960,7 @@ function compile(job)
         @assert mmod != C_NULL
 
         linkRes = @ccall MLIR.API.mlir_c.LinkInModule(
-            MLIR.IR.mmodule()::MLIR.API.MlirModule,
+            MLIR.IR.current_module()::MLIR.API.MlirModule,
             mmod::MLIR.API.MlirModule,
             entryname::Cstring,
         )::MLIR.API.MlirOperation
@@ -1065,7 +1059,7 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
 ) where {F,tt}
     blockdim = CUDA.CuDim3(blocks)
     threaddim = CUDA.CuDim3(threads)
-    mod = MLIR.IR.mmodule()
+    mod = MLIR.IR.current_module()
 
     if convert == Val(true)
         args = recudaconvert.(args)
@@ -1104,8 +1098,9 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
     wrapftype = MLIR.IR.Type(
         MLIR.API.mlirLLVMFunctionTypeGet(voidty, length(wrapper_tys), wrapper_tys, false)
     )
-    wrapfunc = MLIR.IR.block!(MLIR.IR.body(mod)) do
-        return MLIR.Dialects.llvm.func(;
+    blk = MLIR.IR.body(mod)
+    wrapfunc = MLIR.IR.@scope blk begin
+        MLIR.Dialects.llvm.func(;
             sym_name,
             sym_visibility=MLIR.IR.Attribute("private"),
             function_type=wrapftype,
@@ -1129,7 +1124,7 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
 
     symtab = MLIR.IR.SymbolTable(MLIR.IR.Operation(mod))
     gpufunc = MLIR.IR.lookup(symtab, fname)
-    MLIR.IR.attr!(
+    MLIR.IR.setattr!(
         gpufunc,
         "CConv",
         MLIR.IR.Attribute(MLIR.API.mlirLLVMCConvAttrGet(ctx, MLIR.API.MlirLLVMCConvC)),
@@ -1151,7 +1146,7 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
         end
 
         # TODO check for only integer and explicitly non cutraced types
-        MLIR.IR.block!(wrapbody) do
+        MLIR.IR.@scope wrapbody begin
             argty = MLIR.IR.Type(
                 MLIR.API.mlirLLVMFunctionTypeGetInput(gpu_function_type, trueidx - 1)
             )
@@ -1222,7 +1217,7 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
             julia_arg = allargs[p[2]]
 
             offset = get_field_offset(typeof(julia_arg), p[3:end])
-            MLIR.IR.block!(wrapbody) do
+            MLIR.IR.@scope wrapbody begin
                 ptr = MLIR.IR.result(
                     MLIR.Dialects.llvm.getelementptr(
                         alloc,
@@ -1239,7 +1234,7 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
         argidx += 1
     end
 
-    MLIR.IR.block!(wrapbody) do
+    MLIR.IR.@scope wrapbody begin
         for arg in allocs
             if arg === nothing
                 continue
@@ -1257,8 +1252,6 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
         MLIR.Dialects.llvm.return_(nothing)
     end
 
-    output_operand_aliases = MLIR.IR.Attribute(aliases)
-
     blk_operands = MLIR.IR.Value[]
     for idx in
         (blockdim.x, blockdim.y, blockdim.z, threaddim.x, threaddim.y, threaddim.z, shmem)
@@ -1271,7 +1264,7 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
         inputs=mlir_args,
         result_0=restys,
         fn=MLIR.IR.FlatSymbolRefAttribute(sym_name),
-        output_operand_aliases=MLIR.IR.Attribute(output_operand_aliases),
+        output_operand_aliases=MLIR.IR.Attribute(aliases),
         xla_side_effect_free=MLIR.IR.UnitAttribute(),
     )
 
@@ -1290,7 +1283,7 @@ Reactant.@reactant_overlay @noinline function CUDA.cufunction(
 ) where {F,TT}
     res = Base.@lock CUDA.cufunction_lock begin
         # compile the function
-        cache = llvm_compiler_cache(MLIR.IR.mmodule())
+        cache = llvm_compiler_cache(MLIR.IR.current_module())
         source = CUDA.methodinstance(F, tt)
         # cuda = CUDA.active_state()
         device = nothing # cuda.device
@@ -1431,46 +1424,52 @@ end
 # <https://github.com/EnzymeAD/Reactant.jl/issues/614>.
 @static if !Sys.isapple()
     @setup_workload begin
-        Reactant.initialize_dialect()
-
-        if Reactant.XLA.REACTANT_XLA_RUNTIME == "PJRT"
-            client = Reactant.XLA.PJRT.CPUClient(; checkcount=false)
-        elseif Reactant.XLA.REACTANT_XLA_RUNTIME == "IFRT"
-            client = Reactant.XLA.IFRT.CPUClient(; checkcount=false)
-        else
-            error("Unsupported runtime: $(Reactant.XLA.REACTANT_XLA_RUNTIME)")
-        end
-
-        @compile_workload begin
-            @static if Reactant.precompilation_supported() && VERSION != v"1.11.3"
-                function square_kernel!(x)
-                    i = CUDA.threadIdx().x
-                    x[i] *= x[i]
-                    return nothing
-                end
-
-                function square!(x)
-                    CUDA.@cuda blocks = 1 threads = length(x) square_kernel!(x)
-                    return nothing
-                end
-                y = Reactant.ConcreteRArray([2.0]; client)
-                Reactant.Compiler.compile_mlir(square!, (y,); optimize=false)
-
-                if y isa Reactant.ConcreteIFRTArray
-                    Reactant.XLA.free_buffer(y.data.buffer)
-                    y.data.buffer.buffer = C_NULL
+        Reactant.MLIR.IR.initialize_dialect()
+        Reactant.MLIR.IR.@dispose ctx = Reactant.MLIR.IR.Context(
+            Reactant.MLIR.IR.default_registry[]
+        ) begin
+            Reactant.MLIR.IR.register_enzymexla_dialects(ctx)
+            Reactant.MLIR.IR.@scope ctx begin
+                if Reactant.XLA.REACTANT_XLA_RUNTIME == "PJRT"
+                    client = Reactant.XLA.PJRT.CPUClient(; checkcount=false)
+                elseif Reactant.XLA.REACTANT_XLA_RUNTIME == "IFRT"
+                    client = Reactant.XLA.IFRT.CPUClient(; checkcount=false)
                 else
-                    for dat in y.data
-                        Reactant.XLA.free_buffer(dat.buffer)
-                        dat.buffer.buffer = C_NULL
+                    error("Unsupported runtime: $(Reactant.XLA.REACTANT_XLA_RUNTIME)")
+                end
+
+                @compile_workload begin
+                    @static if Reactant.precompilation_supported() && VERSION != v"1.11.3"
+                        function square_kernel!(x)
+                            i = CUDA.threadIdx().x
+                            x[i] *= x[i]
+                            return nothing
+                        end
+
+                        function square!(x)
+                            CUDA.@cuda blocks = 1 threads = length(x) square_kernel!(x)
+                            return nothing
+                        end
+                        y = Reactant.ConcreteRArray([2.0]; client)
+                        Reactant.Compiler.compile_mlir(square!, (y,); optimize=false)
+
+                        if y isa Reactant.ConcreteIFRTArray
+                            Reactant.XLA.free_buffer(y.data.buffer)
+                            y.data.buffer.buffer = C_NULL
+                        else
+                            for dat in y.data
+                                Reactant.XLA.free_buffer(dat.buffer)
+                                dat.buffer.buffer = C_NULL
+                            end
+                        end
                     end
                 end
+
+                Reactant.XLA.free_client(client)
+                client.client = C_NULL
             end
         end
-
-        Reactant.XLA.free_client(client)
-        client.client = C_NULL
-        Reactant.deinitialize_dialect()
+        Reactant.MLIR.IR.deinitialize_dialect()
         Reactant.clear_oc_cache()
     end
 end
