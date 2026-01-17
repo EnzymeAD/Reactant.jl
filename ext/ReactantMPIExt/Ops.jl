@@ -21,19 +21,17 @@ using MPI: MPI
 @noinline function comm_rank(;
     location=mlir_stacktrace("mpi.comm_rank", @__FILE__, @__LINE__)
 )
-    rank = Reactant.Ops.constant(Int32(-1))
-    ret = enzymexla.mpi_comm_rank(; rank=mlir_type(rank), location)
-    rank.mlir_data = IR.result(ret)
-    return rank
+    rank = mlir_type(TracedRArray{Int32,0}, ())
+    res = IR.result(enzymexla.mpi_comm_rank(; rank, location))
+    return TracedRNumber{Int32}((), res)
 end
 
 @noinline function comm_size(;
     location=mlir_stacktrace("mpi.comm_size", @__FILE__, @__LINE__)
 )
-    size = Reactant.Ops.constant(Int32(-1))
-    ret = enzymexla.mpi_comm_size(; size=mlir_type(size), location)
-    size.mlir_data = IR.result(ret)
-    return size
+    size = mlir_type(TracedRArray{Int32,0}, ())
+    res = IR.result(enzymexla.mpi_comm_size(; size, location))
+    return TracedRNumber{Int32}((), res)
 end
 
 @noinline function barrier(; location=mlir_stacktrace("mpi.barrier", @__FILE__, @__LINE__))
@@ -74,20 +72,19 @@ end
     mpi_datatype = get_mpi_datatype_enum(MPI.Datatype(T))
 
     count = Reactant.Ops.constant(Int32(length(buf)))
-    request = Reactant.Ops.constant(Int64(-1))
+    request = mlir_type(TracedRArray{Int64,0}, ())
 
-    ret = enzymexla.mpi_isend(
+    res = IR.result(enzymexla.mpi_isend(
         buf.mlir_data,
         count.mlir_data,
         dest.mlir_data,
         tag.mlir_data;
-        request=mlir_type(request),
+        request,
         datatype=MLIR.API.enzymexlaMPIDatatypeAttrGet(MLIR.IR.context(), mpi_datatype),
         location,
-    )
+       ))
 
-    request.mlir_data = IR.result(ret)
-    return request # we return a TracedRNumber, converted to TracedRequest in Overrides.jl
+    return TracedRNumber{Int64}((), res)
 end
 
 @noinline function recv!(
@@ -125,7 +122,7 @@ end
     mpi_datatype = get_mpi_datatype_enum(MPI.Datatype(T))
 
     count = Reactant.Ops.constant(Int32(length(buf)))
-    request = Reactant.Ops.constant(Int64(-1))
+    request = mlir_type(TracedRArray{Int64,0}, ())
 
     ret = enzymexla.mpi_irecv(
         buf.mlir_data,
@@ -133,14 +130,14 @@ end
         src.mlir_data,
         tag.mlir_data;
         outbuf=mlir_type(buf),
-        request=mlir_type(request),
+        request,
         datatype=MLIR.API.enzymexlaMPIDatatypeAttrGet(MLIR.IR.context(), mpi_datatype),
         location,
     )
 
     buf.mlir_data = IR.result(ret, 1)
-    request.mlir_data = IR.result(ret, 2)
-    return request # we return a TracedRNumber, converted to TracedRequest in Overrides.jl
+    request = TracedRNumber{Int64}((), IR.result(ret, 2))
+    return request
 end
 
 @noinline function wait(
