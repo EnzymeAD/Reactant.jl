@@ -502,14 +502,20 @@ function rewrite_insts!(ir, interp)
         RT = inst[:type]
         @static if VERSION < v"1.11"
             changed, next, RT = rewrite_inst(inst[:inst], ir, interp, RT)
-            Base.setindex!(ir.stmts[i], next, :inst)
+            #! explicit-imports: off
+            Core.Compiler.setindex!(ir.stmts[i], next, :inst)
+            #! explicit-imports: on
         else
             changed, next, RT = rewrite_inst(inst[:stmt], ir, interp, RT)
-            Base.setindex!(ir.stmts[i], next, :stmt)
+            #! explicit-imports: off
+            Core.Compiler.setindex!(ir.stmts[i], next, :stmt)
+            #! explicit-imports: on
         end
         if changed
             any_changed = true
-            Base.setindex!(ir.stmts[i], RT, :type)
+            #! explicit-imports: off
+            Core.Compiler.setindex!(ir.stmts[i], RT, :type)
+            #! explicit-imports: on
         end
     end
     return ir, any_changed
@@ -529,16 +535,22 @@ function rewrite_argnumbers_by_one!(ir)
             old = Base.getindex(ur)
             if old isa Core.Argument
                 # Replace the Argument(n) with Argument(n + 1)
-                Base.setindex!(ur, Core.Argument(old.n + 1))
+                #! explicit-imports: off
+                Core.Compiler.setindex!(ur, Core.Argument(old.n + 1))
+                #! explicit-imports: on
                 changed = true
             end
             it = Base.iterate(urs, next)
         end
         if changed
             @static if VERSION < v"1.11"
-                Base.setindex!(ir.stmts[idx], Base.getindex(urs), :inst)
+                #! explicit-imports: off
+                Core.Compiler.setindex!(ir.stmts[idx], Core.Compiler.getindex(urs), :inst)
+                #! explicit-imports: on
             else
-                Base.setindex!(ir.stmts[idx], Base.getindex(urs), :stmt)
+                #! explicit-imports: off
+                Core.Compiler.setindex!(ir.stmts[idx], Core.Compiler.getindex(urs), :stmt)
+                #! explicit-imports: on
             end
         end
     end
