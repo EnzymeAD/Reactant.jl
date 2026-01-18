@@ -150,45 +150,45 @@ declare void @XLAExecute($ptr %exec, $cint %op_args_len, [$N x $ptr]* readonly n
     """
 
     res = if n_outs == 0
-"""
-$decls
+        """
+        $decls
 
-define { i8 } @f($ptr %exec, $args) alwaysinline {
-   entry:
-   	%inpa = alloca [$N x $ptr]
-   	%dona = alloca [$M x i8]
-   	%mesha = alloca [$nmesh_ids x $ptr]
-   	$stores
-   	%futa = alloca i8
-   	call void $fn($ptr %exec, $cint $N, [$N x $ptr]* nocapture readonly %inpa, $extra_str2, [$M x i8]* nocapture readonly %dona, $cint $n_outs, [$n_outs x $ptr]* nocapture readnone null, i8* nocapture writeonly %futa, [$n_outs x $ptr]* nocapture readnone null)
-   	%fut = load i8, i8* %futa
-   	%fca.2.insert = insertvalue { i8 } undef, i8 %fut, 0
-   	ret { i8 } %fca.2.insert
-}
-   """
+        define { i8 } @f($ptr %exec, $args) alwaysinline {
+           entry:
+           	%inpa = alloca [$N x $ptr]
+           	%dona = alloca [$M x i8]
+           	%mesha = alloca [$nmesh_ids x $ptr]
+           	$stores
+           	%futa = alloca i8
+           	call void $fn($ptr %exec, $cint $N, [$N x $ptr]* nocapture readonly %inpa, $extra_str2, [$M x i8]* nocapture readonly %dona, $cint $n_outs, [$n_outs x $ptr]* nocapture readnone null, i8* nocapture writeonly %futa, [$n_outs x $ptr]* nocapture readnone null)
+           	%fut = load i8, i8* %futa
+           	%fca.2.insert = insertvalue { i8 } undef, i8 %fut, 0
+           	ret { i8 } %fca.2.insert
+        }
+           """
     else
-"""
-$decls
+        """
+        $decls
 
-define { [$n_outs x $ptr], [$n_outs x $ptr], i8 } @f($ptr %exec, $args) alwaysinline {
-   entry:
-   	%inpa = alloca [$N x $ptr]
-   	%dona = alloca [$M x i8]
-   	%outa = alloca [$n_outs x $ptr]
-   	%futpa = alloca [$n_outs x $ptr]
-   	%mesha = alloca [$nmesh_ids x $ptr]
-   	$stores
-   	%futa = alloca i8
-   	call void $fn($ptr %exec, $cint $N, [$N x $ptr]* nocapture readonly %inpa, $extra_str2, [$M x i8]* nocapture readonly %dona, $cint $n_outs, [$n_outs x $ptr]* nocapture writeonly %outa, i8* nocapture writeonly %futa, [$n_outs x $ptr]* nocapture writeonly %futpa)
-   	%out = load [$n_outs x $ptr], [$n_outs x $ptr]* %outa
-   	%fut = load i8, i8* %futa
-   	%futp = load [$n_outs x $ptr], [$n_outs x $ptr]* %futpa
-   	%fca.0.insert = insertvalue { [$n_outs x $ptr], [$n_outs x $ptr], i8 } undef, [$n_outs x $ptr] %out, 0
-   	%fca.1.insert = insertvalue { [$n_outs x $ptr], [$n_outs x $ptr], i8 } %fca.0.insert, [$n_outs x $ptr] %futp, 1
-   	%fca.2.insert = insertvalue { [$n_outs x $ptr], [$n_outs x $ptr], i8 } %fca.1.insert, i8 %fut, 2
-   	ret { [$n_outs x $ptr], [$n_outs x $ptr], i8 } %fca.2.insert
-}
-   """
+        define { [$n_outs x $ptr], [$n_outs x $ptr], i8 } @f($ptr %exec, $args) alwaysinline {
+           entry:
+           	%inpa = alloca [$N x $ptr]
+           	%dona = alloca [$M x i8]
+           	%outa = alloca [$n_outs x $ptr]
+           	%futpa = alloca [$n_outs x $ptr]
+           	%mesha = alloca [$nmesh_ids x $ptr]
+           	$stores
+           	%futa = alloca i8
+           	call void $fn($ptr %exec, $cint $N, [$N x $ptr]* nocapture readonly %inpa, $extra_str2, [$M x i8]* nocapture readonly %dona, $cint $n_outs, [$n_outs x $ptr]* nocapture writeonly %outa, i8* nocapture writeonly %futa, [$n_outs x $ptr]* nocapture writeonly %futpa)
+           	%out = load [$n_outs x $ptr], [$n_outs x $ptr]* %outa
+           	%fut = load i8, i8* %futa
+           	%futp = load [$n_outs x $ptr], [$n_outs x $ptr]* %futpa
+           	%fca.0.insert = insertvalue { [$n_outs x $ptr], [$n_outs x $ptr], i8 } undef, [$n_outs x $ptr] %out, 0
+           	%fca.1.insert = insertvalue { [$n_outs x $ptr], [$n_outs x $ptr], i8 } %fca.0.insert, [$n_outs x $ptr] %futp, 1
+           	%fca.2.insert = insertvalue { [$n_outs x $ptr], [$n_outs x $ptr], i8 } %fca.1.insert, i8 %fut, 2
+           	ret { [$n_outs x $ptr], [$n_outs x $ptr], i8 } %fca.2.insert
+        }
+           """
     end
 
     return res
