@@ -1825,13 +1825,13 @@ REACTANT_ABI HeldIfrtArray *ifrt_client_assemble_array_from_single_shards(
     HeldValue<std::shared_ptr<const ifrt::Sharding>> *sharding, int32_t narrays,
     HeldIfrtArray **c_arrays, int32_t c_semantics) {
   ifrt::Shape shape = ifrt::Shape(absl::Span<const int64_t>(c_shape, ndims));
-  std::vector<tsl::RCReference<ifrt::Array>> arrays;
+  std::vector<tsl::RCReference<ifrt::Array>> arrays(narrays);
   for (int i = 0; i < narrays; i++) {
-    arrays.emplace_back(c_arrays[i]->obj());
+    arrays[i] = c_arrays[i]->obj();
   }
   return reactant::capture(
       MyValueOrThrow(client->AssembleArrayFromSingleDeviceArrays(
-          shape, sharding->obj(), absl::MakeSpan(arrays),
+          arrays[0]->dtype(), shape, sharding->obj(), absl::MakeSpan(arrays),
           static_cast<ifrt::ArrayCopySemantics>(c_semantics),
           ifrt::SingleDeviceShardSemantics::kAddressableShards)));
 }
@@ -2548,7 +2548,8 @@ REACTANT_ABI void ifrt_sharding_to_index_domains(HeldIfrtSharding *sharding,
   auto array_shape = xla::ifrt::Shape(array_size_span);
 
   std::vector<ifrt::IndexDomain> index_domains =
-      MyValueOrThrow(sharding->obj()->IndexDomains(array_shape));
+      MyValueOrThrow(sharding->obj()->IndexDomains(
+          array_shape, xla::ifrt::SingleDeviceShardSemantics::kAllShards));
 
   for (int i = 0; i < index_domains.size(); i++) {
     auto index_domain = index_domains[i];

@@ -67,35 +67,22 @@ end
 
 function XLA.compile(
     client::Client,
-    device::Union{Device,Nothing},
     mod::MLIR.IR.Module;
-    is_sharded::Bool=false,
-    global_device_ids::Vector{Int64}=Int64[],
-    num_outputs::Int64,
+    compile_options::Reactant.Proto.xla.CompileOptionsProto,
     num_parameters::Int64,
+    num_outputs::Int64,
+    is_sharded::Bool,
     num_replicas::Int64,
     num_partitions::Int64,
-    use_shardy_partitioner::Bool,
 )
-    device_id = is_sharded ? Int64(-1) : Int64(XLA.device_ordinal(device))
-    GC.@preserve client mod begin
+    compile_options_bytes = Reactant.ProtoUtils.proto_to_bytes(compile_options)
+    GC.@preserve client mod compile_options_bytes begin
         exec = MLIR.IR.try_compile_dump_mlir(mod) do
-            @ccall MLIR.API.mlir_c.ClientCompile(
+            @ccall MLIR.API.mlir_c.ClientCompileWithProto(
                 client.client::Ptr{Cvoid},
                 mod.module_::MLIR.API.MlirModule,
-                device_id::Clong,
-                global_device_ids::Ptr{Clong},
-                length(global_device_ids)::Clong,
-                XLA.CUDA_DATA_DIR[]::Cstring,
-                use_shardy_partitioner::Bool,
-                num_replicas::Int64,
-                num_partitions::Int64,
-                is_sharded::Bool,
-                Reactant.PersistentCompileCache.kernel_cache_enabled()::Bool,
-                Reactant.PersistentCompileCache.get_kernel_cache_path()::Cstring,
-                Reactant.PersistentCompileCache.autotune_cache_enabled()::Bool,
-                Reactant.PersistentCompileCache.get_autotune_cache_directory()::Cstring,
-                Reactant.Distributed.local_rank()::Cint,
+                compile_options_bytes::Ptr{UInt8},
+                length(compile_options_bytes)::Csize_t,
             )::Ptr{Cvoid}
         end
     end

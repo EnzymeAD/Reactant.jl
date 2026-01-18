@@ -1487,6 +1487,9 @@ function __get_compile_options_and_kwargs(;
     assert_nonallocating::Bool=false,
     donated_args::Symbol=:auto,
     sync::Bool=false,
+    xla_debug_options=(;),
+    xla_executable_build_options=(;),
+    xla_compile_options=(;),
     kwargs...,
 )
     return (
@@ -1509,6 +1512,9 @@ function __get_compile_options_and_kwargs(;
             assert_nonallocating,
             donated_args,
             sync,
+            xla_debug_options,
+            xla_executable_build_options,
+            xla_compile_options,
         ),
         kwargs,
     )
@@ -3735,17 +3741,35 @@ function compile_xla(
             exec = nothing
             hlo_modules = XLA.HloModule(mod)
         else
+            xla_compile_options = XLA.make_compile_options(;
+                device_id=if mlir_fn_res.is_sharded
+                    -1
+                else
+                    Int64(XLA.device_ordinal(device))
+                end,
+                xla_compile_options=compile_options.xla_compile_options,
+                num_replicas=mlir_fn_res.num_replicas,
+                num_partitions=mlir_fn_res.num_partitions,
+                mesh_ids=mlir_fn_res.is_sharded ? global_device_ids : nothing,
+                xla_debug_options=compile_options.xla_debug_options,
+                xla_executable_build_options=merge(
+                    (;
+                        use_shardy_partitioner=mlir_fn_res.use_shardy_partitioner,
+                        use_spmd_partitioning=mlir_fn_res.is_sharded,
+                    ),
+                    compile_options.xla_executable_build_options,
+                ),
+            )
+
             exec = XLA.compile(
                 client,
-                device,
                 mod;
+                compile_options=xla_compile_options,
                 num_outputs=length(mlir_fn_res.linear_results),
                 num_parameters=length(mlir_fn_res.linear_args),
                 mlir_fn_res.is_sharded,
-                global_device_ids,
                 mlir_fn_res.num_replicas,
                 mlir_fn_res.num_partitions,
-                mlir_fn_res.use_shardy_partitioner,
             )
             hlo_modules = XLA.get_hlo_modules(exec)
             hlo_modules = length(hlo_modules) == 1 ? only(hlo_modules) : hlo_modules
