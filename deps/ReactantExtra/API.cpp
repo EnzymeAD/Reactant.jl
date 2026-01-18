@@ -2548,7 +2548,8 @@ REACTANT_ABI void ifrt_sharding_to_index_domains(HeldIfrtSharding *sharding,
   auto array_shape = xla::ifrt::Shape(array_size_span);
 
   std::vector<ifrt::IndexDomain> index_domains =
-      MyValueOrThrow(sharding->obj()->IndexDomains(array_shape));
+      MyValueOrThrow(sharding->obj()->IndexDomains(
+          array_shape, xla::ifrt::SingleDeviceShardSemantics::kAllShards));
 
   for (int i = 0; i < index_domains.size(); i++) {
     auto index_domain = index_domains[i];
