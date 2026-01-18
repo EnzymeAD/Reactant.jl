@@ -19,7 +19,7 @@ jobs:
         with:
           version: '1.11'
       - uses: julia-actions/cache@v2
-      - uses: bazel-contrib/setup-bazel@0.17.0
+      - uses: bazel-contrib/setup-bazel@0.18.0
         name: Set up Bazel
         with:
           # Avoid downloading Bazel every time.
