@@ -581,7 +581,7 @@ function call_llvm_generator(world::UInt, source, self, ::Type{typeof(Reactant.c
         identity, Core.svec(:call_with_reactant, REDUB_ARGUMENTS_NAME), Core.svec()
     )
 
-    if isnothing(match)
+    if isnothing(lookup_result)
         method_error = :(throw(
             MethodError($REDUB_ARGUMENTS_NAME[1], $REDUB_ARGUMENTS_NAME[2:end], $world)
         ))
