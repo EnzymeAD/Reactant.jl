@@ -1,5 +1,7 @@
 using LuxLib, Reactant, Enzyme, NNlib, Test
 
+const MightUseMIOpen = contains(lowercase(string(Reactant.devices()[1])), "rocm")
+
 @testset "Fused Dense" begin
     sumabs2fuseddense(act, weight, x, bias) =
         sum(abs2, fused_dense_bias_activation(act, weight, x, bias))
@@ -182,15 +184,21 @@ end
             padding in ((0, 0), (2, 2), (2, 0)),
             dilation in ((1, 1), (1, 2))
 
+            if any(!=(1), dilation) && MightUseMIOpen
+                continue # MIOpen doesn't support dilation != 1 yet
+            end
+
+            might_fail = MightUseMIOpen && any(!=(1), dilation)
+
             conv_dims = DenseConvDims(x, weight; stride, padding, dilation, groups)
 
-            reactant_res = @jit fused_conv_bias_activation(
-                act, weight_reactant, x_reactant, bias_reactant, conv_dims
-            )
-
-            luxlib_res = fused_conv_bias_activation(act, weight, x, bias, conv_dims)
-
-            @test reactant_res ≈ luxlib_res atol = 1e-5 rtol = 1e-2
+            @test begin
+                reactant_res = @jit fused_conv_bias_activation(
+                    act, weight_reactant, x_reactant, bias_reactant, conv_dims
+                )
+                luxlib_res = fused_conv_bias_activation(act, weight, x, bias, conv_dims)
+                isapprox(reactant_res, luxlib_res; atol=1e-5, rtol=1e-2)
+            end broken = might_fail
         end
 
         # TODO: test for gradients
