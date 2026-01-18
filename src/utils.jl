@@ -473,14 +473,14 @@ function rewrite_insts!(ir, interp)
         RT = inst[:type]
         @static if VERSION < v"1.11"
             changed, next, RT = rewrite_inst(inst[:inst], ir, interp, RT)
-            Core.Compiler.setindex!(ir.stmts[i], next, :inst)
+            Base.setindex!(ir.stmts[i], next, :inst)
         else
             changed, next, RT = rewrite_inst(inst[:stmt], ir, interp, RT)
-            Core.Compiler.setindex!(ir.stmts[i], next, :stmt)
+            Base.setindex!(ir.stmts[i], next, :stmt)
         end
         if changed
             any_changed = true
-            Core.Compiler.setindex!(ir.stmts[i], RT, :type)
+            Base.setindex!(ir.stmts[i], RT, :type)
         end
     end
     return ir, any_changed
@@ -500,16 +500,16 @@ function rewrite_argnumbers_by_one!(ir)
             old = Base.getindex(ur)
             if old isa Core.Argument
                 # Replace the Argument(n) with Argument(n + 1)
-                Core.Compiler.setindex!(ur, Core.Argument(old.n + 1))
+                Base.setindex!(ur, Core.Argument(old.n + 1))
                 changed = true
             end
-            it = Core.Compiler.iterate(urs, next)
+            it = Base.iterate(urs, next)
         end
         if changed
             @static if VERSION < v"1.11"
-                Core.Compiler.setindex!(ir.stmts[idx], Core.Compiler.getindex(urs), :inst)
+                Base.setindex!(ir.stmts[idx], Base.getindex(urs), :inst)
             else
-                Core.Compiler.setindex!(ir.stmts[idx], Core.Compiler.getindex(urs), :stmt)
+                Base.setindex!(ir.stmts[idx], Base.getindex(urs), :stmt)
             end
         end
     end
