@@ -577,8 +577,6 @@ function call_llvm_generator(world::UInt, source, self, ::Type{typeof(Reactant.c
         tt, world, Core.Compiler.method_table(interp), min_world, max_world
     )
 
-    match = lookup_result::Core.MethodMatch
-
     stub = Core.GeneratedFunctionStub(
         identity, Core.svec(:call_with_reactant, REDUB_ARGUMENTS_NAME), Core.svec()
     )
@@ -589,6 +587,8 @@ function call_llvm_generator(world::UInt, source, self, ::Type{typeof(Reactant.c
         ))
         return stub(world, source, method_error)
     end
+    
+    match = lookup_result::Core.MethodMatch
 
     mi = ccall(
         :jl_specializations_get_linfo,
