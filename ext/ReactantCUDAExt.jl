@@ -1,6 +1,6 @@
 module ReactantCUDAExt
 
-using Reactant: Reactant, TracedRArray, AnyConcretePJRTArray, MLIR, TracedRNumber
+using Reactant: Reactant, TracedRArray, AnyConcretePJRTArray, MLIR, TracedRNumber, ReactantPrecompilationException
 using Reactant.Compiler: raising, LLVMFunc, llvm_compiler_cache
 using Reactant.Ops: @opcall
 
@@ -1451,7 +1451,14 @@ end
                     return nothing
                 end
                 y = Reactant.ConcreteRArray([2.0]; client)
-                Reactant.Compiler.compile_mlir(square!, (y,); optimize=false)
+		try
+		   Reactant.Compiler.compile_mlir(square!, (y,); optimize=false)
+		catch e
+		    if !(e isa ReactantPrecompilationException)
+                                  rethrow()
+                     end
+
+		end
 
                 if y isa Reactant.ConcreteIFRTArray
                     Reactant.XLA.free_buffer(y.data.buffer)
@@ -1468,7 +1475,6 @@ end
         Reactant.XLA.free_client(client)
         client.client = C_NULL
         Reactant.deinitialize_dialect()
-        Reactant.clear_oc_cache()
     end
 end
 

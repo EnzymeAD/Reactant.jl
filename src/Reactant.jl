@@ -125,6 +125,7 @@ unwrapped_eltype(::Type{<:AbstractArray{T,N}}) where {T,N} = unwrapped_eltype(T)
 unwrapped_eltype(::AbstractArray{T,N}) where {T,N} = unwrapped_eltype(T)
 
 include("Ops.jl")
+Base.push!(no_rewrite_ancestor_modules, Reactant.Ops)
 
 using .Ops: @opcall
 
@@ -195,6 +196,7 @@ end
 
 include("TracedPromotion.jl")
 include("TracedUtils.jl")
+Base.push!(no_rewrite_ancestor_modules, Reactant.TracedUtils)
 
 include("TracedRNumber.jl")
 include("TracedRArray.jl")
@@ -334,19 +336,6 @@ function __init__()
                    but CUDA.jl is not loaded.\nLoad CUDA.jl using `using CUDA`. You might \
                    need to restart the Julia process (even if Revise.jl is loaded).",
             )
-        end
-    end
-
-    @static if VERSION ≥ v"1.12-"
-        if ccall(:jl_generating_output, Cint, ()) == 1
-            @warn """
-            Reactant.jl currently doesn't support versions of Julia 1.12 or newer. We are
-            actively working on adding support for newer versions of Julia. For the time
-            being we recommend using 1.11 or LTS.
-
-            For latest updates, check the status of support for Julia 1.12+ at
-            https://github.com/EnzymeAD/Reactant.jl/issues/1736.
-            """ maxlog = 1
         end
     end
 
