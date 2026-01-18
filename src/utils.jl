@@ -473,14 +473,14 @@ function rewrite_insts!(ir, interp)
         RT = inst[:type]
         @static if VERSION < v"1.11"
             changed, next, RT = rewrite_inst(inst[:inst], ir, interp, RT)
-            Base.setindex!(ir.stmts[i], next, :inst)
+            Core.Compiler.setindex!(ir.stmts[i], next, :inst)
         else
             changed, next, RT = rewrite_inst(inst[:stmt], ir, interp, RT)
-            Base.setindex!(ir.stmts[i], next, :stmt)
+            Core.Compiler.setindex!(ir.stmts[i], next, :stmt)
         end
         if changed
             any_changed = true
-            Base.setindex!(ir.stmts[i], RT, :type)
+            Core.Compiler.setindex!(ir.stmts[i], RT, :type)
         end
     end
     return ir, any_changed
