@@ -681,8 +681,17 @@ for AT in (
     end
 end
 
-LinearAlgebra._istriu(A::AnyTracedRMatrix, k) = all(iszero, overloaded_tril(A, k - 1))
-LinearAlgebra._istril(A::AnyTracedRMatrix, k) = all(iszero, overloaded_triu(A, k + 1))
+_istriu(A::AnyTracedRMatrix, k) = all(iszero, overloaded_tril(A, k - 1))
+_istril(A::AnyTracedRMatrix, k) = all(iszero, overloaded_triu(A, k + 1))
+
+LinearAlgebra._istriu(A::AnyTracedRMatrix, k) = _istriu(A, k)
+LinearAlgebra._istril(A::AnyTracedRMatrix, k) = _istril(A, k)
+
+@static if isdefined(LinearAlgebra, :_isbanded_impl)
+    function LinearAlgebra._isbanded_impl(A::AnyTracedRMatrix, kl, ku)
+        return _istriu(A, kl) & _istril(A, ku)
+    end
+end
 
 # Only needed because we lack automatic if tracing
 function LinearAlgebra.det(A::AnyTracedRMatrix)
