@@ -162,7 +162,7 @@ define { i8 } @f($ptr %exec, $args) alwaysinline {
    	%futa = alloca i8
    	call void $fn($ptr %exec, $cint $N, [$N x $ptr]* nocapture readonly %inpa, $extra_str2, [$M x i8]* nocapture readonly %dona, $cint $n_outs, [$n_outs x $ptr]* nocapture readnone null, i8* nocapture writeonly %futa, [$n_outs x $ptr]* nocapture readnone null)
    	%fut = load i8, i8* %futa
-   	%fca.2.insert = insertvalue { [$n_outs x $ptr], [$n_outs x $ptr], i8 } undef, i8 %fut, 2
+   	%fca.2.insert = insertvalue { i8 } undef, i8 %fut, 2
    	ret { i8 } %fca.2.insert
 }
    """
