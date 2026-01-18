@@ -24,11 +24,11 @@ Base.@nospecializeinfer function Reactant.traced_type_inner(
     seen,
     mode::Reactant.TraceMode,
     @nospecialize(track_numbers::Type),
-    @nospecialize(sharding),
+    @nospecialize(ndevices),
     @nospecialize(runtime)
 ) where {FT,AT}
-    FT2 = Reactant.traced_type_inner(FT, seen, mode, track_numbers, sharding, runtime)
-    AT2 = Reactant.traced_type_inner(AT, seen, mode, track_numbers, sharding, runtime)
+    FT2 = Reactant.traced_type_inner(FT, seen, mode, track_numbers, ndevices, runtime)
+    AT2 = Reactant.traced_type_inner(AT, seen, mode, track_numbers, ndevices, runtime)
 
     for NF in (AT2,)
         FT2 = Reactant.promote_traced_type(FT2, eltype(NF))
@@ -66,11 +66,11 @@ Base.@nospecializeinfer function Reactant.traced_type_inner(
     seen,
     mode::Reactant.TraceMode,
     @nospecialize(track_numbers::Type),
-    @nospecialize(sharding),
+    @nospecialize(ndevices),
     @nospecialize(runtime)
 ) where {FT,AT}
-    FT2 = Reactant.traced_type_inner(FT, seen, mode, track_numbers, sharding, runtime)
-    AT2 = Reactant.traced_type_inner(AT, seen, mode, track_numbers, sharding, runtime)
+    FT2 = Reactant.traced_type_inner(FT, seen, mode, track_numbers, ndevices, runtime)
+    AT2 = Reactant.traced_type_inner(AT, seen, mode, track_numbers, ndevices, runtime)
 
     for NF in (AT2,)
         FT2 = Reactant.promote_traced_type(FT2, eltype(NF))

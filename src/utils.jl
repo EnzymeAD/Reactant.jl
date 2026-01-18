@@ -941,4 +941,5 @@ nmantissa(::Type{Float16}) = 10
 nmantissa(::Type{Float32}) = 23
 nmantissa(::Type{Float64}) = 52
 
-_unwrap_val(::Val{T}) where {T} = T
+@inline _unwrap_val(x) = x
+@inline _unwrap_val(::Val{val}) where {val} = _unwrap_val(val)

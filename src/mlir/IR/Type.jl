@@ -621,7 +621,7 @@ Returns the affine map of the given MemRef type.
 """
 function affinemap(type::Type)
     @assert ismemref(type) "expected a MemRef type"
-    return AffineMap(API.mlirMemRefTypeGetAffineMaps(type))
+    return AffineMap(API.mlirMemRefTypeGetAffineMap(type))
 end
 
 """

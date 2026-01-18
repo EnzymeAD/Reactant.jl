@@ -1324,7 +1324,7 @@ Base.@nospecializeinfer function Reactant.traced_type_inner(
     seen,
     @nospecialize(mode::Reactant.TraceMode),
     @nospecialize(track_numbers::Type),
-    @nospecialize(sharding),
+    @nospecialize(ndevices),
     @nospecialize(runtime)
 )
     return A
@@ -1335,7 +1335,7 @@ Base.@nospecializeinfer function Reactant.traced_type_inner(
     seen,
     @nospecialize(mode::Reactant.TraceMode),
     @nospecialize(track_numbers::Type),
-    @nospecialize(sharding),
+    @nospecialize(ndevices),
     @nospecialize(runtime)
 )
     return A
@@ -1346,26 +1346,23 @@ Base.@nospecializeinfer function Reactant.traced_type_inner(
     seen,
     mode::Reactant.TraceMode,
     @nospecialize(track_numbers::Type),
-    @nospecialize(sharding),
+    @nospecialize(ndevices),
     @nospecialize(runtime)
 )
     T = eltype(A)
     N = ndims(A)
     if mode == Reactant.ArrayToConcrete && T <: Reactant.ReactantPrimitive
         if runtime isa Val{:PJRT}
-            return Reactant.ConcretePJRTArray{T,N,Reactant.Sharding.ndevices(sharding)}
+            return Reactant.ConcretePJRTArray{T,N,Reactant._unwrap_val(ndevices)}
         elseif runtime isa Val{:IFRT}
             return Reactant.ConcreteIFRTArray{T,N}
         end
         error("Unsupported runtime $runtime")
     else
-        TT = Reactant.traced_type_inner(T, seen, mode, track_numbers, sharding, runtime)
+        TT = Reactant.traced_type_inner(T, seen, mode, track_numbers, ndevices, runtime)
         TT === T && return A
         return Array{
-            Reactant.traced_type_inner(
-                T, seen, mode, track_numbers, Base.getproperty(sharding, 1), runtime
-            ),
-            N,
+            Reactant.traced_type_inner(T, seen, mode, track_numbers, ndevices, runtime),N
         }
     end
 end
