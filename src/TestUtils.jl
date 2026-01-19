@@ -111,7 +111,7 @@ function finite_difference_gradient(
             new_arguments = TracedRArray[]
 
             elT = Reactant.unwrapped_eltype(arg)
-            if elT <: Integer
+            if Enzyme.Compiler.guaranteed_const(elT)
                 push!(gradient_result_map_path, TracedUtils.get_idx(arg, argprefix))
                 push!(gradient_results, zero(arg))
                 continue
