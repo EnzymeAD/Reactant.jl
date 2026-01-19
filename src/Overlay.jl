@@ -138,14 +138,14 @@ for (cT, aT, bT) in (
     @eval begin
         @reactant_overlay @noinline function LinearAlgebra.mul!(
             C::CT, A::AT, B::BT, α::Number, β::Number
-	) where {CT<:$cT, AT<:$aT, BT<:$bT}
+        ) where {CT<:$cT,AT<:$aT,BT<:$bT}
             A, B = aos_to_soa(A), aos_to_soa(B)
-	    C2 = aos_to_soa(C)
+            C2 = aos_to_soa(C)
             if use_overlayed_version((C2, A, B))
-               TracedLinearAlgebra.overloaded_mul!(C2, A, B, α, β)
-               if C2 !== C
-	           C .= C2
-               end
+                TracedLinearAlgebra.overloaded_mul!(C2, A, B, α, β)
+                if C2 !== C
+                    C .= C2
+                end
             else
                 # Inference barrier is required when calling function recursively within
                 # overload. This is required since otherwise type inference will think this
@@ -156,7 +156,9 @@ for (cT, aT, bT) in (
         end
 
         # Needed mostly for 1.10 where 3-arg mul is often specialized
-        @reactant_overlay @noinline function LinearAlgebra.mul!(C::CT, A::AT, B::BT) where {CT<:$cT, AT<:$aT, BT<:$bT}
+        @reactant_overlay @noinline function LinearAlgebra.mul!(
+            C::CT, A::AT, B::BT
+        ) where {CT<:$cT,AT<:$aT,BT<:$bT}
             call_with_reactant(LinearAlgebra.mul!, C, A, B, true, false)
             return C
         end
@@ -198,8 +200,8 @@ end
     if use_overlayed_version(A)
         return TracedRArrayOverrides.overloaded_mapreduce(f, op, A; kwargs...)
     else
-        return call_with_native(Base.mapreduce,
-            CallWithReactant(f), CallWithReactant(op), A; kwargs...
+        return call_with_native(
+            Base.mapreduce, CallWithReactant(f), CallWithReactant(op), A; kwargs...
         )
     end
 end
