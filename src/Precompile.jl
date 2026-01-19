@@ -2,11 +2,10 @@ using PrecompileTools: @setup_workload, @compile_workload
 
 # Precompilation on 1.10 hits an apparent bug: https://github.com/JuliaLang/julia/issues/56947
 function precompilation_supported()
-     return VERSION >= v"1.10.8" && false
+    return VERSION >= v"1.10.8" && false
 end
 
-function clear_oc_cache()
-end
+function clear_oc_cache() end
 
 if Reactant_jll.is_available()
     @setup_workload begin
@@ -23,17 +22,17 @@ if Reactant_jll.is_available()
         @compile_workload begin
             @static if precompilation_supported()
                 x = ConcreteRNumber(2.0; client)
-		@static if VERSION >= v"1.11"
-                   compile(sin, (x,); client, optimize=:all)
-		else
-		   try
-                     compile(sin, (x,); client, optimize=:all)
-		   catch e
-			   if !(e isa ReactantPrecompilationException)
-				   rethrow()
-			end
-	           end
-		end
+                @static if VERSION >= v"1.11"
+                    compile(sin, (x,); client, optimize=:all)
+                else
+                    try
+                        compile(sin, (x,); client, optimize=:all)
+                    catch e
+                        if !(e isa ReactantPrecompilationException)
+                            rethrow()
+                        end
+                    end
+                end
                 if x isa ConcreteIFRTNumber
                     XLA.free_buffer(x.data.buffer)
                     x.data.buffer.buffer = C_NULL
@@ -45,13 +44,13 @@ if Reactant_jll.is_available()
                 end
 
                 y = ConcreteRArray([2.0]; client)
-		  try
-			compile(Base.sum, (y,); client, optimize=:all)
-		   catch e
-			   if !(e isa ReactantPrecompilationException)
-				   rethrow()
-			end
-	           end
+                try
+                    compile(Base.sum, (y,); client, optimize=:all)
+                catch e
+                    if !(e isa ReactantPrecompilationException)
+                        rethrow()
+                    end
+                end
                 if y isa ConcreteIFRTArray
                     XLA.free_buffer(y.data.buffer)
                     y.data.buffer.buffer = C_NULL
