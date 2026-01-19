@@ -5,10 +5,22 @@ Pkg.instantiate()
 import BinaryBuilderBase:
     PkgSpec, Prefix, temp_prefix, setup_dependencies, cleanup_dependencies, destdir
 using Clang.Generators
+using Clang: CLLinkageSpec, children
+
+# Add support for extern "C" blocks - Clang.jl doesn't handle these by default
+# We need to recurse into the children of the linkage spec to process the declarations inside
+function Generators.collect_top_level_nodes!(
+    nodes::Vector{ExprNode}, cursor::CLLinkageSpec, options
+)
+    for child in children(cursor)
+        Generators.collect_top_level_nodes!(nodes, child, options)
+    end
+    return nodes
+end
 
 options = load_options(joinpath(@__DIR__, "wrap.toml"))
 
-function rewrite!(dag::ExprDAG) end
+function rewrite!(::ExprDAG) end
 
 @add_def off_t
 @add_def MlirTypesCallback
@@ -23,6 +35,9 @@ let options = deepcopy(options)
     genarg = first(eachsplit(ARGS[3], " "))
 
     gen_include_dir = joinpath(splitpath(genarg)[1:(end - 4)]...)
+    # Also add the llvm include dir from bazel-out for generated files
+    gen_llvm_include_dir = joinpath(splitpath(ARGS[2])[1:(end - 2)]...)
+
     hlo_include_dir = joinpath(splitpath(ARGS[end - 6])[1:(end - 1)]...)
     sdy_include_dir = joinpath(splitpath(ARGS[end - 5])[1:(end - 1)]...)
     triton_include_dir = joinpath(splitpath(ARGS[end - 4])[1:(end - 1)]...)
@@ -39,6 +54,8 @@ let options = deepcopy(options)
             ll_include_dir,
             "-I",
             gen_include_dir,
+            "-I",
+            gen_llvm_include_dir,
             "-I",
             hlo_include_dir,
             "-I",
