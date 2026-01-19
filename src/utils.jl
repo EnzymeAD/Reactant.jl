@@ -583,14 +583,15 @@ end
 function Base.showerror(io::IO, ece::ReactantPrecompilationException)
     return print(
         io,
-"""ReactantPrecopmilationException: Precompilation not supported due to bad Julia Version.
-You're using Julia $VERSION, which is known to have a bug in global relocation during precompilation.
-As a result, this method cannot be safely precompiled (but can be compiled and called normally).
-For precompilation support please select the following Julia versions:
-   For 1.10: 1.10.11 or above
-   For 1.11: 1.11.9  or above
-   For 1.12: 1.12.5  or above
-""")
+        """ReactantPrecopmilationException: Precompilation not supported due to bad Julia Version.
+        You're using Julia $VERSION, which is known to have a bug in global relocation during precompilation.
+        As a result, this method cannot be safely precompiled (but can be compiled and called normally).
+        For precompilation support please select the following Julia versions:
+           For 1.10: 1.10.11 or above
+           For 1.11: 1.11.9  or above
+           For 1.12: 1.12.5  or above
+        """,
+    )
 end
 
 # Generator function which ensures that all calls to the function are executed within the ReactantInterpreter
@@ -766,8 +767,8 @@ function call_llvm_generator(
             LLVM.activate(ctx)
             obj = try
                 llvm_module, p = GPUCompiler.emit_llvm(job)
-                
-		gmap = p.gv_to_value
+
+                gmap = p.gv_to_value
                 for g in LLVM.globals(llvm_module)
                     if haskey(LLVM.metadata(g), "julia.constgv") &&
                         !LLVM.isnull(LLVM.initializer(g))
@@ -875,7 +876,7 @@ function call_llvm_generator(
                     if !haskey(LLVM.metadata(g), "julia.constgv")
                         continue
                     end
-		    if !haskey(gmap, LLVM.name(g)) || gmap[LLVM.name(g)] == C_NULL
+                    if !haskey(gmap, LLVM.name(g)) || gmap[LLVM.name(g)] == C_NULL
                         throw(ReactantPrecompilationException(LLVM.name(g)))
                     end
                     gval = LLVM.load!(
@@ -936,9 +937,9 @@ function call_llvm_generator(
                 LLVM.deactivate(ctx)
                 LLVM.dispose(ts_ctx)
             end
-	    if !has_null_global
-		call_with_reactant_cache[key] = obj
-	    end
+            if !has_null_global
+                call_with_reactant_cache[key] = obj
+            end
         end
         obj
     finally
