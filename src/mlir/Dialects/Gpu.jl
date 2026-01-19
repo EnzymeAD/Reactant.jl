@@ -1103,7 +1103,6 @@ function func(;
     private_attrib_attrs=nothing,
     known_block_size=nothing,
     known_grid_size=nothing,
-    known_cluster_size=nothing,
     body::Region,
     location=Location(),
 )
@@ -1122,8 +1121,6 @@ function func(;
         push!(attributes, namedattribute("known_block_size", known_block_size))
     !isnothing(known_grid_size) &&
         push!(attributes, namedattribute("known_grid_size", known_grid_size))
-    !isnothing(known_cluster_size) &&
-        push!(attributes, namedattribute("known_cluster_size", known_cluster_size))
 
     return create_operation(
         "gpu.func",

@@ -13,25 +13,6 @@ import ...IR:
 import ..Dialects: namedattribute, operandsegmentsizes
 import ...API
 
-function read_ptx_sreg_aggr_smem_size(; res::IR.Type, location=Location())
-    op_ty_results = IR.Type[res,]
-    operands = Value[]
-    owned_regions = Region[]
-    successors = Block[]
-    attributes = NamedAttribute[]
-
-    return create_operation(
-        "nvvm.read.ptx.sreg.aggr.smem.size",
-        location;
-        operands,
-        owned_regions,
-        successors,
-        attributes,
-        results=op_ty_results,
-        result_inference=false,
-    )
-end
-
 """
 `barrier0`
 
@@ -2056,25 +2037,6 @@ function dot_accumulate_4way(
 
     return create_operation(
         "nvvm.dot.accumulate.4way",
-        location;
-        operands,
-        owned_regions,
-        successors,
-        attributes,
-        results=op_ty_results,
-        result_inference=false,
-    )
-end
-
-function read_ptx_sreg_dynamic_smem_size(; res::IR.Type, location=Location())
-    op_ty_results = IR.Type[res,]
-    operands = Value[]
-    owned_regions = Region[]
-    successors = Block[]
-    attributes = NamedAttribute[]
-
-    return create_operation(
-        "nvvm.read.ptx.sreg.dynamic.smem.size",
         location;
         operands,
         owned_regions,
@@ -5910,25 +5872,6 @@ function read_ptx_sreg_tid_z(; res::IR.Type, range=nothing, location=Location())
 
     return create_operation(
         "nvvm.read.ptx.sreg.tid.z",
-        location;
-        operands,
-        owned_regions,
-        successors,
-        attributes,
-        results=op_ty_results,
-        result_inference=false,
-    )
-end
-
-function read_ptx_sreg_total_smem_size(; res::IR.Type, location=Location())
-    op_ty_results = IR.Type[res,]
-    operands = Value[]
-    owned_regions = Region[]
-    successors = Block[]
-    attributes = NamedAttribute[]
-
-    return create_operation(
-        "nvvm.read.ptx.sreg.total.smem.size",
         location;
         operands,
         owned_regions,
