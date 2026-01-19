@@ -110,7 +110,14 @@ function finite_difference_gradient(
             # we will naively insert the args here, cse will take care of the rest
             new_arguments = TracedRArray[]
 
-            epsilon = default_epslion(method, Reactant.unwrapped_eltype(arg))
+            elT = Reactant.unwrapped_eltype(arg)
+            if elT <: Integer
+                push!(gradient_result_map_path, TracedUtils.get_idx(arg, argprefix))
+                push!(gradient_results, zero(arg))
+                continue
+            end
+
+            epsilon = default_epslion(method, elT)
             pertubed_arg = generate_perturbed_array(method, arg, epsilon)
 
             bsize = size(pertubed_arg, 1)
@@ -128,7 +135,7 @@ function finite_difference_gradient(
                         Int64[bsize, size(linear_args[j])...],
                     )
                 end
-                new_arg = @opcall transpose(new_arg, Int64[1, ((ndims(new_arg)):-1:2)...];)
+                new_arg = @opcall transpose(new_arg, Int64[1, ((ndims(new_arg)):-1:2)...])
                 push!(new_arguments, new_arg)
             end
 
@@ -158,7 +165,7 @@ function finite_difference_gradient(
             push!(gradient_result_map_path, TracedUtils.get_idx(arg, argprefix))
             push!(
                 gradient_results,
-                ReactantCore.materialize_traced_array(reshape(grad_res, size(arg))),
+                ReactantCore.materialize_traced_array(elT.(reshape(grad_res, size(arg)))),
             )
         end
     end
