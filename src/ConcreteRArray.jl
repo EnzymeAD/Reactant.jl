@@ -319,6 +319,31 @@ function Base.show(io::IO, X::Union{AnyConcretePJRTArray,AnyConcreteIFRTArray})
     return nothing
 end
 
+# To avoid ambiguity
+function Base.show(
+    io::IO,
+    v::LinearAlgebra.Adjoint{
+        <:Real,<:Union{AnyConcretePJRTArray{T,1},AnyConcreteIFRTArray{T,1}}
+    },
+) where {T}
+    print(io, "adjoint(")
+    show(io, parent(v))
+    print(io, ")")
+    return nothing
+end
+
+function Base.show(
+    io::IO,
+    v::LinearAlgebra.Transpose{
+        <:Number,<:Union{AnyConcretePJRTArray{T,1},AnyConcreteIFRTArray{T,1}}
+    },
+) where {T}
+    print(io, "transpose(")
+    show(io, parent(v))
+    print(io, ")")
+    return nothing
+end
+
 function Base.getindex(
     a::ConcretePJRTArray{T,N}, args::Vararg{Int,N}
 ) where {T<:ReactantPrimitive,N}
