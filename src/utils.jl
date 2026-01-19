@@ -876,7 +876,10 @@ function call_llvm_generator(
                         continue
                     end
                     if !haskey(gmap, LLVM.name(g)) || gmap[LLVM.name(g)] == C_NULL
-                        throw(ReactantPrecompilationException(LLVM.name(g)))
+                        if precompiling()
+                            throw(ReactantPrecompilationException(LLVM.name(g)))
+                        end
+                        continue
                     end
                     gval = LLVM.load!(
                         builder,
