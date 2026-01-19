@@ -13,14 +13,13 @@ end
 
 const DEBUG_INTERP = Ref(false)
 
-ReactantInterp = Enzyme.Compiler.Interpreter.EnzymeInterpreter{
-    typeof(Reactant.set_reactant_abi)
-}
+ReactantInterp = Enzyme.Compiler.Interpreter.EnzymeInterpreter{typeof(set_reactant_abi)}
+
 function GPUCompiler.get_interpreter(@nospecialize(job::NativeCompilerJob))
     return if job.config.params.use_native_interp
         Core.Compiler.NativeInterpreter(job.world)
     else
-        Reactant.ReactantInterpreter(; world=job.world)
+        ReactantInterpreter(; world=job.world)
     end
 end
 
@@ -240,7 +239,8 @@ macro skip_rewrite_type(typ)
     end
 end
 
-const no_rewrite_ancestor_modules = Module[Reactant.MLIR]
+const no_rewrite_ancestor_modules = Module[MLIR]
+
 function should_rewrite_call(@nospecialize(ft))
     # Don't rewrite builtin or intrinsics, unless they are apply iter or kwcall
     if ft === typeof(Core.kwcall) || ft === typeof(Core._apply_iterate)
@@ -598,7 +598,7 @@ function call_llvm_generator(
     world::UInt,
     source,
     self,
-    ::Type{typeof(Reactant.call_with_reactant)},
+    ::Type{typeof(call_with_reactant)},
     @nospecialize(args::Tuple{Vararg{DataType}})
 )
     RT = nothing
@@ -869,7 +869,7 @@ function call_llvm_generator(
                         continue
                     end
                     if !haskey(gmap, LLVM.name(g))
-                        if Reactant.precompiling()
+                        if precompiling()
                             throw(ReactantPrecompilationException(string(g)))
                         end
                         continue
@@ -924,7 +924,7 @@ function call_llvm_generator(
                     Enzyme.API.EnzymeDumpModuleRef(llvm_module.ref)
                 end
                 mod = string(llvm_module)
-                if VERSION < v"1.11" && occursin("inttoptr", mod) && Reactant.precompiling()
+                if VERSION < v"1.11" && occursin("inttoptr", mod) && precompiling()
                     throw(ReactantPrecompilationException("Baked in global"))
                 end
                 mod, p.compiled[mi].ci.rettype, globals
