@@ -758,7 +758,6 @@ function call_llvm_generator(
 
     # NOTE: no use of lock(::Function)/@lock/get! to keep stack traces clean
     lock(call_with_reactant_lock)
-    has_null_global = false
     cached_compilation = try
         obj = Base.get(call_with_reactant_cache, key, nothing)
         if obj === nothing
@@ -937,9 +936,7 @@ function call_llvm_generator(
                 LLVM.deactivate(ctx)
                 LLVM.dispose(ts_ctx)
             end
-            if !has_null_global
-                call_with_reactant_cache[key] = obj
-            end
+            call_with_reactant_cache[key] = obj
         end
         obj
     finally
