@@ -2,7 +2,7 @@ using PrecompileTools: @setup_workload, @compile_workload
 
 # Precompilation on 1.10 hits an apparent bug: https://github.com/JuliaLang/julia/issues/56947
 function precompilation_supported()
-    return VERSION >= v"1.10.8" && false
+    return VERSION >= v"1.10.8"
 end
 
 function clear_oc_cache() end
