@@ -4,6 +4,7 @@ using ..Reactant: Reactant, TracedRArray, TracedRNumber, TracedUtils
 using Reactant.Ops: @opcall
 using ReactantCore: ReactantCore
 using LinearAlgebra: LinearAlgebra
+using Enzyme: Enzyme
 
 function construct_test_array(::Type{T}, dims::Int...) where {T<:AbstractFloat}
     flat_vector = collect(T, 1:prod(dims))
