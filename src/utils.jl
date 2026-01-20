@@ -602,9 +602,11 @@ function call_llvm_generator(
     @nospecialize(args::Tuple{Vararg{DataType}})
 )
     RT = nothing
+    ensure_return_type = false
     if args[1] <: EnsureReturnType
         RT = args[1].parameters[1]
         args = args[2:end]
+        ensure_return_type = true
     end
     f = args[1]
     tt = Tuple{f,args[2:end]...}
@@ -632,9 +634,15 @@ function call_llvm_generator(
     )
 
     if isnothing(lookup_result)
-        method_error = :(throw(
-            MethodError($REDUB_ARGUMENTS_NAME[1], $REDUB_ARGUMENTS_NAME[2:end], $world)
-        ))
+        method_error = if ensure_return_type
+            :(throw(
+                MethodError($REDUB_ARGUMENTS_NAME[2], $REDUB_ARGUMENTS_NAME[3:end], $world),
+            ))
+        else
+            :(throw(
+                MethodError($REDUB_ARGUMENTS_NAME[1], $REDUB_ARGUMENTS_NAME[2:end], $world),
+            ))
+        end
         return stub(world, source, method_error)
     end
 
