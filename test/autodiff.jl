@@ -436,14 +436,25 @@ function test_fn(x, nt)
     return sum(abs2, x .+ nt.y .- nt.x)
 end
 
-@testset "Integer Inputs to Finite Differences" begin
+@testset "Finite Differences" begin
     x = Reactant.to_rarray(Reactant.TestUtils.construct_test_array(Float32, 2, 2))
     nt = (;
         x=Reactant.to_rarray(ones(Int64, 2, 2)),
         y=Reactant.to_rarray(Reactant.TestUtils.construct_test_array(Float64, 2, 2)),
     )
 
-    res = @jit Reactant.TestUtils.finite_difference_gradient(test_fn, x, nt)
-    @test res isa typeof((x, nt))
-    @test all(iszero, Array(res[2].x))
+    @testset "Integer Inputs to Finite Differences" begin
+        res = @jit Reactant.TestUtils.finite_difference_gradient(test_fn, x, nt)
+        @test res isa typeof((x, nt))
+        @test all(iszero, Array(res[2].x))
+    end
+
+    @testset "Skip Constant Inputs" begin
+        res = @jit Reactant.TestUtils.finite_difference_gradient(
+            test_fn, x, Enzyme.Const(nt)
+        )
+        @test res isa typeof((x, nt))
+        @test all(iszero, Array(res[2].x))
+        @test all(iszero, Array(res[2].y))
+    end
 end

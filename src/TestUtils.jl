@@ -57,6 +57,14 @@ function generate_perturbed_array(::Val{:forward}, x::AbstractArray{T}, epsilon)
     return cat(x_ .+ perturbation, x_; dims=1)
 end
 
+function _unwrap_annotations(args)
+    return map(args) do arg
+        arg isa Enzyme.Const && return arg.val
+        @assert !(arg isa Enzyme.Annotation) "Only Enzyme.Const annotations are supported."
+        return arg
+    end
+end
+
 function finite_difference_gradient(
     f::F, args...; method::Union{Val{:central},Val{:forward}}=Val(:central)
 ) where {F}
@@ -64,11 +72,12 @@ function finite_difference_gradient(
     resprefix = gensym("finitediffresult")
     resargprefix = gensym("finitediffresarg")
 
+
     # TODO: can we detect and prevent using functions that mutate their arguments?
     mlir_fn_res = TracedUtils.make_mlir_fn(
         f,
-        args,
-        (),
+        _unwrap_annotations(args),
+        (),  # kwargs
         "finite_difference_gradient_fn",
         false;
         args_in_result=:none,
@@ -84,7 +93,7 @@ function finite_difference_gradient(
     end
 
     linear_args = Reactant.TracedType[]
-    for (k, v) in seenargs
+    for (_, v) in seenargs
         v isa Reactant.TracedType || continue
         push!(linear_args, v)
     end
@@ -107,12 +116,11 @@ function finite_difference_gradient(
                 continue
             end
 
-            # We need the gradient wrt this argument
-            # we will naively insert the args here, cse will take care of the rest
-            new_arguments = TracedRArray[]
-
             elT = Reactant.unwrapped_eltype(arg)
-            if Enzyme.Compiler.guaranteed_const(elT)
+            if (
+                Enzyme.Compiler.guaranteed_const(elT) ||
+                (length(path) > 1 && args[path[2]] isa Enzyme.Const)
+            )
                 push!(gradient_result_map_path, TracedUtils.get_idx(arg, argprefix))
                 push!(gradient_results, zero(arg))
                 continue
@@ -121,6 +129,9 @@ function finite_difference_gradient(
             epsilon = default_epslion(method, elT)
             pertubed_arg = generate_perturbed_array(method, arg, epsilon)
 
+            # We need the gradient wrt this argument
+            # we will naively insert the args here, cse will take care of the rest
+            new_arguments = TracedRArray[]
             bsize = size(pertubed_arg, 1)
             for j in 1:length(linear_args)
                 if i == j
@@ -175,6 +186,7 @@ function finite_difference_gradient(
     for (path, grad_res) in zip(gradient_result_map_path, gradient_results)
         TracedUtils.set!(results, path[2:end], grad_res.mlir_data)
     end
+    results = _unwrap_annotations(results)
     length(args) == 1 && return results[1]
     return results
 end
