@@ -916,7 +916,7 @@ function apply_type_with_promotion(wrapper, params, relevant_typevars=typevar_di
                     params[i]::Any, rewrapped::Any, arr::Ptr{Any}, sz::Cint
                 )::Cint) == 1
             !is_subtype && error(
-                "Failed to find a valid type for typevar $i ($(params[i]) <: $(rewrapped) == false)",
+                "Failed to find a valid type for typevar $i ($(params[i]) <: $(rewrapped) == false) in wrapper $wrapper",
             )
 
             # Check whether the required types are supertypes of all the parameter types we currently have:
