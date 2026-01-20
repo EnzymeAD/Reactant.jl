@@ -717,6 +717,23 @@ function call1(a, b)
     return @trace _call1(x, y)
 end
 
+function for_traced_bounds(start, stop)
+    x = zero(start)
+    @trace for i in start:stop
+        x += i
+    end
+    return x
+end
+
+@testset "for: traced bounds" begin
+    start = 1
+    stop = 4
+    start_re = ConcreteRNumber(start)
+    stop_re = ConcreteRNumber(stop)
+
+    @test @jit(for_traced_bounds(start_re, stop_re)) == for_traced_bounds(start, stop)
+end
+
 @testset "call: basic" begin
     a = Reactant.TestUtils.construct_test_array(Float64, 2, 3)
     b = Reactant.TestUtils.construct_test_array(Float64, 2, 3)
