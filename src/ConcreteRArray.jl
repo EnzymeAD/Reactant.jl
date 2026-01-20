@@ -281,7 +281,12 @@ function Base.show(io::IO, X::Union{ConcretePJRTScalar,ConcreteIFRTScalar})
         return nothing
     end
     print(io, "$(typeof(X))(")
-    show(io, to_number(X))
+    MLIR.IR.@dispose ctx = MLIR.IR.Context(registry[]) begin
+        MLIR.IR.register_enzymexla_dialects(ctx)
+        MLIR.IR.@scope ctx begin
+            show(io, to_number(X))
+        end
+    end
     print(io, ")")
     return nothing
 end
@@ -291,7 +296,12 @@ function Base.print_array(io::IO, X::Union{AnyConcretePJRTArray,AnyConcreteIFRTA
         print(io, "<Empty Buffer eltype $(eltype(X)) of size $(size(X))>")
         return nothing
     end
-    return Base.print_array(io, convert(Array, X))
+    MLIR.IR.@dispose ctx = MLIR.IR.Context(registry[]) begin
+        MLIR.IR.register_enzymexla_dialects(ctx)
+        MLIR.IR.@scope ctx begin
+            Base.print_array(io, convert(Array, X))
+        end
+    end
 end
 
 function Base.showarg(
