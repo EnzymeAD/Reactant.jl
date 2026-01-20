@@ -632,9 +632,15 @@ function call_llvm_generator(
     )
 
     if isnothing(lookup_result)
-        method_error = :(throw(
-            MethodError($REDUB_ARGUMENTS_NAME[1], $REDUB_ARGUMENTS_NAME[2:end], $world)
-        ))
+        method_error = if args[1] <: EnsureReturnType
+            :(throw(
+                MethodError($REDUB_ARGUMENTS_NAME[2], $REDUB_ARGUMENTS_NAME[3:end], $world)
+            ))
+        else
+            :(throw(
+                MethodError($REDUB_ARGUMENTS_NAME[1], $REDUB_ARGUMENTS_NAME[2:end], $world)
+            ))
+        end
         return stub(world, source, method_error)
     end
 
