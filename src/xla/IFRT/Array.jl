@@ -314,7 +314,7 @@ function replicate_array_to_all_devices(array::Array, sharding, mesh, size_arr)
         data_mlir_type = [
             MLIR.IR.TensorType(collect(Int, reverse(size_arr)), MLIR.IR.Type(eltype(array)))
         ]
-        mod = MLIR.IR.Module(MLIR.IR.Location(; context=ctx))
+        mod = MLIR.IR.Module(; location=MLIR.IR.Location(; context=ctx))
 
         (; sym_name, mesh_attr) = Reactant.Ops.mesh(mesh; mod)
         common_args = (ctx, sym_name, mesh_attr, size_arr)
