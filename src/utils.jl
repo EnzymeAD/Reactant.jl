@@ -768,8 +768,6 @@ function call_llvm_generator(
                 llvm_module, p = GPUCompiler.emit_llvm(job)
 
                 gmap = p.gv_to_value
-                println(string(llvm_module))
-                println(gmap)
                 for g in LLVM.globals(llvm_module)
                     if haskey(LLVM.metadata(g), "julia.constgv") &&
                         !LLVM.isnull(LLVM.initializer(g))
