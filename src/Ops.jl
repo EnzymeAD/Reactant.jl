@@ -1956,7 +1956,7 @@ instead.
     return scatter(
         (_, b) -> b,
         [dest],
-        convert(TracedRArray{Int64}, scatter_indices),
+        convert(TracedRArray{Int64,2}, scatter_indices),
         [convert(TracedRArray{T,1}, updates)];
         update_window_dims=Int64[],
         inserted_window_dims=collect(Int64, 1:N),
