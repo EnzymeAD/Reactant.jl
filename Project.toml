@@ -1,7 +1,10 @@
 name = "Reactant"
 uuid = "3c362404-f566-11ee-1572-e11a4b42c853"
-authors = ["William Moses <wmoses@mit.edu>", "Valentin Churavy <vchuravy@mit.edu>", "Sergio Sánchez Ramírez <sergio.sanchez.ramirez@bsc.es>", "Paul Berg <paul@plutojl.org>", "Avik Pal <avikpal@mit.edu>", "Mosè Giordano <mose@gnu.org>"]
 version = "0.2.203"
+authors = ["William Moses <wmoses@mit.edu>", "Valentin Churavy <vchuravy@mit.edu>", "Sergio Sánchez Ramírez <sergio.sanchez.ramirez@bsc.es>", "Paul Berg <paul@plutojl.org>", "Avik Pal <avikpal@mit.edu>", "Mosè Giordano <mose@gnu.org>"]
+
+[workspace]
+projects = ["docs", "test", "benchmark"]
 
 [deps]
 Adapt = "79e6a3ab-5dfb-504d-930d-738a2a938a0e"
@@ -30,7 +33,6 @@ ReactantCore = "a3311ec8-5e00-46d5-b541-4f83e724a433"
 Reactant_jll = "0192cb87-2b54-54ad-80e0-3be72ad8a3c0"
 ScopedValues = "7e506255-f358-4e82-b7e4-beb19740aa63"
 Scratch = "6c6a2e73-6563-6170-7368-637461726353"
-Setfield = "efcf1570-3423-57d1-acb7-fd33fddbac46"
 Sockets = "6462fe0b-24de-5631-8697-dd941f90decc"
 UUIDs = "cf7118a7-6976-5b1a-9a39-7adc72f591a4"
 p7zip_jll = "3f19e933-33d8-53b3-aaab-bd5110c3b7a0"
@@ -124,7 +126,6 @@ ReactantCore = "0.1.16"
 Reactant_jll = "0.0.305"
 ScopedValues = "1.3.0"
 Scratch = "1.2"
-Setfield = "1.1.2"
 Sockets = "1.10"
 SparseArrays = "1.10"
 SpecialFunctions = "2.4"
@@ -141,6 +142,3 @@ ArrayInterface = "4fba245c-0d91-5ea0-9b3e-6abc04ee57a9"
 CUDA = "052768ef-5323-5732-b1bb-66c8b64840ba"
 NNlib = "872c559c-99b0-510c-b3b7-b6c96a88d5cd"
 PythonCall = "6099a3de-0909-46bc-b1f4-468b9a2dfc0d"
-
-[workspace]
-projects = ["docs", "test", "benchmark"]

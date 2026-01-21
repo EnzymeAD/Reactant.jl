@@ -9,8 +9,6 @@ using Enzyme: Compiler
 using Preferences: load_preference
 using UUIDs: UUID
 
-using Setfield: Setfield, @set!
-
 const XLA_REACTANT_GPU_MEM_FRACTION = Ref{Float64}(0.75)
 const XLA_REACTANT_GPU_PREALLOCATE = Ref{Bool}(true)
 const REACTANT_XLA_RUNTIME = load_preference(
