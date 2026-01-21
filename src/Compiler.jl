@@ -2178,6 +2178,7 @@ function compile_mlir!(
             for (i, arg) in enumerate(linear_args)
                 if haskey(padded_inputs, arg)
                     push!(input_arg_padded_idxs, i)
+                    # TODO: use inverse_arg??
                     in_tys_padded[i] = MLIR.IR.TensorType(
                         collect(Int, reverse(size(arg) .+ padded_inputs[arg])),
                         MLIR.IR.Type(Reactant.unwrapped_eltype(arg)),

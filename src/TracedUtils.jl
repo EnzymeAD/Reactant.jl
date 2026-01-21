@@ -74,6 +74,15 @@ function ReactantCore.materialize_traced_array(x::AbstractArray{TracedRNumber{T}
     return ReactantCore.materialize_traced_array(as)
 end
 
+collect_dynamic_size(x::AnyTracedRArray) = collect_dynamic_size(size(x))
+collect_dynamic_size(x::TracedRNumber) = collect_dynamic_size(size(x))
+function collect_dynamic_size(tup::Union{Tuple,Vector})
+    return Int64[
+        sz isa TracedRNumber ? Reactant.MLIR.IR.get_dynamic_size() : convert(Int64, sz) for
+        sz in tup
+    ]
+end
+
 get_mlir_data(x::TracedRNumber) = x.mlir_data
 set_mlir_data!(x::TracedRNumber, data) = (x.mlir_data = data; return x)
 get_paths(x::TracedRNumber) = x.paths
@@ -483,7 +492,7 @@ function prepare_mlir_fn_args(
         if toscalar
             in_tys[i] = MLIR.IR.TensorType(Int[], elT)
         else
-            sz = collect(Int, size(arg))
+            sz = collect(Int, size(inv_map[arg]))
             if !optimize_then_pad
                 carg = inv_map[arg]
                 Reactant.has_padding(carg) && (sz .+= Reactant.get_padding(carg))
@@ -1181,7 +1190,8 @@ function elem_apply(f, args::Vararg{Any,Nargs}) where {Nargs}
 
     out_tys2 = MLIR.IR.Type[
         MLIR.IR.TensorType(
-            collect(Int, OutShape), MLIR.IR.Type(Reactant.unwrapped_eltype(arg))
+            TracedUtils.collect_dynamic_size(OutShape),
+            MLIR.IR.Type(Reactant.unwrapped_eltype(arg)),
         ) for arg in linear_results
     ]
 
@@ -1206,7 +1216,7 @@ function elem_apply(f, args::Vararg{Any,Nargs}) where {Nargs}
         batch_inputs;
         outputs=out_tys2,
         fn=fname,
-        batch_shape=MLIR.IR.DenseArrayAttribute([Int64(i) for i in OutShape]),
+        batch_shape=MLIR.IR.DenseArrayAttribute(TracedUtils.collect_dynamic_size(OutShape)),
     )
 
     residx = 1

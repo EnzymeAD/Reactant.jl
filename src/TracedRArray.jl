@@ -256,7 +256,14 @@ end
 
 Base.Tuple(x::TracedRArray) = ntuple(Base.Fix1(getindex, x), length(x))
 
-Base.size(x::TracedRArray) = x.shape
+Base.size(x::TracedRArray) = ntuple(i -> size(x, i), ndims(x))
+function Base.size(x::TracedRArray, dim::Integer)
+    @assert 1 <= dim <= ndims(x) "dimension out of range"
+    if x.shape[dim] < 0 # assume dynamic size
+        return @opcall get_dimension_size(x, dim)
+    end
+    return x.shape[dim]
+end
 
 Base.collect(x::TracedRArray) = copy(x) # XXX: Is this correct?
 
@@ -1225,7 +1232,7 @@ function scan_impl!(
             window_dilations=ones(Int64, N),
             padding_low=padding_low,
             padding_high=zeros(Int64, N),
-            output_shape=collect(Int64, size(output)),
+            output_shape=TracedUtils.collect_dynamic_size(output),
         )
     )[1]
     copyto!(output, reduction_result)
