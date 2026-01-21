@@ -197,9 +197,7 @@ end
 function _get_ancestor_and_indices_linear(x::AnyTracedRArray, indices::AbstractArray)
     indices = CartesianIndices(x)[indices]
     pidxs = parentindices(x)
-    parent_indices = map(indices) do idx
-        CartesianIndex(Base.reindex(pidxs, (idx.I...,)))
-    end
+    parent_indices = vcat(map(idx -> Base.reindex(pidxs, (idx.I...,))[1], indices)...)
     return get_ancestor_and_indices(parent(x), parent_indices)
 end
 

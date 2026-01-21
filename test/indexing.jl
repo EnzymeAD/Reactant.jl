@@ -469,3 +469,20 @@ end
     @test @jit(index_jl_array(idx1_ra, 3)) ≈ index_jl_array(idx1, 3)
     @test @jit(index_jl_array(1, idx2_ra)) ≈ index_jl_array(1, idx2)
 end
+
+function bcast_setindex!(outr, arr, dindx)
+    @allowscalar @inbounds outr[dindx] .= arr
+    return nothing
+end
+
+@testset "bcast setindex!" begin
+    f = rand(ComplexF64, 4, 4)
+    p = rand(ComplexF64, 4 * 4)
+    fr = Reactant.to_rarray(f)
+    pr = Reactant.to_rarray(p)
+    dindxr = Reactant.to_rarray(collect(1:length(fr)))
+
+    bcast_setindex!(f, p, collect(1:length(fr)))
+    @jit bcast_setindex!(fr, pr, dindxr)
+    @test fr ≈ f
+end
