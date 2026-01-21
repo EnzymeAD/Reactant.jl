@@ -174,7 +174,7 @@ end
 
     if T <: Complex{<:Integer}
         error(
-            "Generating a constant of type $T is not supported, eltype of complex must be Float32 or Float64"
+            "Generating a constant of type $T is not supported, eltype of complex must be Float32 or Float64",
         )
     end
 
@@ -228,7 +228,7 @@ end
     x isa TracedRNumber && return x
     if T <: Complex{<:Integer}
         error(
-            "Generating a constant of type $T is not supported, eltype of complex must be Float32 or Float64"
+            "Generating a constant of type $T is not supported, eltype of complex must be Float32 or Float64",
         )
     end
     res = fill(x; location)
@@ -336,7 +336,7 @@ end
     splatattr = MLIR.API.mlirDenseElementsAttrSplatGet(tt, _fill_element_attr(element))
     if T <: Complex{<:Integer}
         error(
-            "Generating a constant of type $T is not supported, eltype of complex must be Float32 or Float64"
+            "Generating a constant of type $T is not supported, eltype of complex must be Float32 or Float64",
         )
     end
     cst_op = stablehlo.constant(; output=tt, value=splatattr, location=location)

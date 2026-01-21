@@ -2,7 +2,7 @@ using Reactant, Test
 
 Base.sum(x::NamedTuple{(:a,),Tuple{T}}) where {T<:Reactant.TracedRArray} = (; a=sum(x.a))
 
-@inline intout(vis::AbstractArray{T}) where {T <: Real} = similar(vis, T)
+@inline intout(vis::AbstractArray{T}) where {T<:Real} = similar(vis, T)
 intout_caller(vis) = @noinline intout(vis)
 
 @testset "compile" begin
