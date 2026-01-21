@@ -153,7 +153,7 @@ end
 
 function set_mlir_data!(x::AnyTracedRArray{T}, data) where {T}
     ancestor, ancestor_indices = get_ancestor_and_indices(x, axes(x)...)
-    setindex!(Reactant.ancestor(x), TracedRArray{T}(data), ancestor_indices...)
+    setindex!(ancestor, TracedRArray{T}(data), ancestor_indices...)
     return x
 end
 
@@ -194,11 +194,17 @@ function get_ancestor_and_indices_inner(
     return a, (idxs isa Tuple ? idxs : (idxs,))
 end
 
+__to_cartesian_index(::Tuple{}) = error("Empty tuple of indices")
+__to_cartesian_index(x::NTuple{N,Int}) where {N} = CartesianIndex(x)
+__to_cartesian_index(x::CartesianIndex{N}) where {N} = x
+__to_cartesian_index(x::NTuple{N,<:TracedRNumber}) where {N} = vcat(x...)
+
 function _get_ancestor_and_indices_linear(x::AnyTracedRArray, indices::AbstractArray)
-    indices = CartesianIndices(x)[indices]
     pidxs = parentindices(x)
-    parent_indices = vcat(map(idx -> Base.reindex(pidxs, (idx.I...,))[1], indices)...)
-    return get_ancestor_and_indices(parent(x), parent_indices)
+    parent_indices = map(CartesianIndices(x)[indices]) do idx
+        __to_cartesian_index(Base.reindex(pidxs, (idx.I...,)))
+    end
+    return get_ancestor_and_indices(parent(x), reduce(vcat, parent_indices))
 end
 
 Base.@nospecializeinfer function batch_ty(

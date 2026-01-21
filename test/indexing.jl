@@ -486,3 +486,14 @@ end
     @jit bcast_setindex!(fr, pr, dindxr)
     @test fr ≈ f
 end
+
+copyto_with_reshaped_view(out, g, I) = copyto!(out, reshape(@view(g[I]), :))
+
+@testset "copyto! with reshaped view" begin
+    outr = Reactant.to_rarray(zeros(6, 6))
+    gr = Reactant.to_rarray(ones(6, 6))
+    Ir = Reactant.to_rarray(eachindex(1:length(outr)))
+
+    @jit copyto_with_reshaped_view(outr, gr, Ir)
+    @test all(isone, Array(outr))
+end
