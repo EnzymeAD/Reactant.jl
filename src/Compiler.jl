@@ -316,7 +316,15 @@ function create_result(
             push!(used_shardinfo, sharding)
             result = :($ConcreteType(($(restore)...,), $sharding))
         else
-            result = :($ConcreteType($restore))
+            # Use the non-parameterized type to get the default sharding
+            ConcreteTypeNoD = if T <: Complex
+                ConcretePJRTComplex{T}
+            elseif T <: Integer || T === Bool
+                ConcretePJRTInteger{T}
+            else
+                ConcretePJRTFloat{T}
+            end
+            result = :($ConcreteTypeNoD($restore))
         end
         push!(
             resultgen_code,
