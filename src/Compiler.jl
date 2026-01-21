@@ -292,15 +292,25 @@ function create_result(
         @assert haskey(result_stores, path) "Expected $(path) in $(keys(result_stores))"
         restore = result_stores[path]
         delete!(result_stores, path)
+        
+        # Determine the concrete type based on T
+        ConcreteType = if T <: Complex
+            ConcretePJRTComplex{T,D}
+        elseif T <: Integer || T === Bool
+            ConcretePJRTInteger{T,D}
+        else
+            ConcretePJRTFloat{T,D}
+        end
+        
         if path_to_shard_info !== nothing && haskey(path_to_shard_info, path)
             if haskey(to_unreshard_results, path)
                 error("TODO: Not yet Implemented. Use IFRT for this.")
             end
             sharding = pop!(path_to_shard_info, path)
             push!(used_shardinfo, sharding)
-            result = :(ConcretePJRTNumber{$T}(($(restore)...,), $sharding))
+            result = :($ConcreteType(($(restore)...,), $sharding))
         else
-            result = :(ConcretePJRTNumber{$T}($restore))
+            result = :($ConcreteType($restore))
         end
         push!(
             resultgen_code,
@@ -334,15 +344,25 @@ function create_result(
         @assert haskey(result_stores, path)
         restore = result_stores[path]
         delete!(result_stores, path)
+        
+        # Determine the concrete type based on T
+        ConcreteType = if T <: Complex
+            ConcreteIFRTComplex{T}
+        elseif T <: Integer || T === Bool
+            ConcreteIFRTInteger{T}
+        else
+            ConcreteIFRTFloat{T}
+        end
+        
         if path_to_shard_info !== nothing && haskey(path_to_shard_info, path)
             if haskey(to_unreshard_results, path)
                 error("TODO: Not yet Implemented.")
             end
             sharding = pop!(path_to_shard_info, path)
             push!(used_shardinfo, sharding)
-            result = :(ConcreteIFRTNumber{$T}($(restore), $sharding))
+            result = :($ConcreteType($(restore), $sharding))
         else
-            result = :(ConcreteIFRTNumber{$T}($restore))
+            result = :($ConcreteType($restore))
         end
         push!(
             resultgen_code,
