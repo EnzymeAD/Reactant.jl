@@ -283,8 +283,8 @@ const ConcretePJRTReal{T,D} = Union{ConcretePJRTInteger{T,D},ConcretePJRTFloat{T
 const ConcretePJRTNumber{T,D} = Union{ConcretePJRTReal{T,D},ConcretePJRTComplex{T,D}}
 
 # Helper function to create appropriate ConcretePJRTNumber based on element type
-@inline function _ConcretePJRTNumber{T,D}(
-    data::NTuple{D,XLA.PJRT.AsyncBuffer}, sharding::Sharding.ShardInfo
+@inline function _ConcretePJRTNumber(
+    ::Type{T}, ::Val{D}, data::NTuple{D,XLA.PJRT.AsyncBuffer}, sharding::Sharding.ShardInfo
 ) where {T,D}
     if T <: Complex
         return ConcretePJRTComplex{T,D}(data, sharding)
@@ -298,11 +298,11 @@ end
 function ConcretePJRTNumber{T}(data::T2; kwargs...) where {T<:Number,T2<:Number}
     carray = ConcretePJRTArray(fill(convert(T, data)); kwargs...)
     if !Sharding.is_sharded(carray.sharding)
-        return _ConcretePJRTNumber{T,1}((carray.data[1],), carray.sharding)
+        return _ConcretePJRTNumber(T, Val(1), (carray.data[1],), carray.sharding)
     end
     @assert all(isnothing, carray.sharding.partition_spec) "ConcretePJRTNumber cannot be \
                                                             sharded"
-    return _ConcretePJRTNumber{T,length(carray.data)}(carray.data, carray.sharding)
+    return _ConcretePJRTNumber(T, Val(length(carray.data)), carray.data, carray.sharding)
 end
 function ConcretePJRTNumber{T}(
     data::ConcretePJRTNumber{T2}; kwargs...
@@ -476,8 +476,8 @@ const ConcreteIFRTReal{T} = Union{ConcreteIFRTInteger{T},ConcreteIFRTFloat{T}}
 const ConcreteIFRTNumber{T} = Union{ConcreteIFRTReal{T},ConcreteIFRTComplex{T}}
 
 # Helper function to create appropriate ConcreteIFRTNumber based on element type
-@inline function _ConcreteIFRTNumber{T}(
-    data::XLA.IFRT.AsyncArray, sharding::Sharding.ShardInfo
+@inline function _ConcreteIFRTNumber(
+    ::Type{T}, data::XLA.IFRT.AsyncArray, sharding::Sharding.ShardInfo
 ) where {T}
     if T <: Complex
         return ConcreteIFRTComplex{T}(data, sharding)
@@ -490,7 +490,7 @@ end
 
 function ConcreteIFRTNumber{T}(data::T2; kwargs...) where {T<:Number,T2<:Number}
     carray = ConcreteIFRTArray(fill(convert(T, data)); kwargs...)
-    return _ConcreteIFRTNumber{T}(carray.data, carray.sharding)
+    return _ConcreteIFRTNumber(T, carray.data, carray.sharding)
 end
 function ConcreteIFRTNumber{T}(
     data::ConcreteIFRTNumber{T2}; kwargs...
