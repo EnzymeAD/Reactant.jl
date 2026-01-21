@@ -4,7 +4,7 @@ using Base: Broadcast
 using Base.Broadcast: Broadcasted, AbstractArrayStyle, instantiate
 
 using ..Reactant: Reactant, TracedRArray, TracedRNumber, AnyTracedRArray, AnyTracedRVector
-using ..Reactant: MLIR, unwrapped_eltype
+using ..Reactant: MLIR, unwrapped_eltype, CuTracedRNumber, CuTracedArray
 using ..Ops: @opcall
 using ..TracedUtils: TracedUtils, get_mlir_data, set_mlir_data!, materialize_traced_array
 
@@ -1235,14 +1235,13 @@ end
 
 for (aType, xType) in (
     (AbstractRange{<:Real}, TracedRNumber{<:Real}),
+    (AbstractRange{<:Real}, CuTracedRNumber{<:Real}),
     (AbstractRange{<:TracedRNumber}, Real),
+    (AbstractRange{<:CuTracedRNumber}, Real),
     (AbstractRange{<:TracedRNumber}, TracedRNumber{<:Real}),
+    (AbstractRange{<:CuTracedRNumber}, CuTracedRNumber{<:Real}),
 )
-    @eval function Base.searchsortedfirst(
-        a::$(aType), x::$(xType), o::Base.DirectOrdering
-    )::TracedRNumber{keytype(a)}
-        x = TracedUtils.promote_to(TracedRNumber{Reactant.unwrapped_eltype(a)}, x)
-
+    @eval function Base.searchsortedfirst(a::$(aType), x::$(xType), o::Base.DirectOrdering)
         f, h, l = first(a), step(a), last(a)
         n = round(Int, (x - f) / h + 1)
 
@@ -1252,27 +1251,27 @@ for (aType, xType) in (
             ifelse(
                 (h == 0) | Base.Order.lt(o, l, x),
                 length(a) + 1,
-                ifelse(Base.Order.lt(o, @allowscalar(a[n]), x), n + 1, n),
+                ifelse(Base.Order.lt(o, a[n], x), n + 1, n),
             ),
         )
     end
 end
 
 function overloaded_searchsortedfirst(v, x, lo::T, hi::T, o::Base.Ordering) where {T}
-    v = TracedUtils.broadcast_to_size(v, size(v))
-    x = TracedUtils.promote_to(TracedRNumber{Reactant.unwrapped_eltype(v)}, x)
+    v = Reactant.broadcast_to_size(v, size(v))
+    x = Reactant.promote_to(TracedRNumber{Reactant.unwrapped_eltype(v)}, x)
     return sum(T.(__lt(o, v[lo:hi], x)); init=lo)
 end
 
 function overloaded_searchsortedlast(v, x, lo::T, hi::T, o::Base.Ordering) where {T}
-    v = TracedUtils.broadcast_to_size(v, size(v))
-    x = TracedUtils.promote_to(TracedRNumber{Reactant.unwrapped_eltype(v)}, x)
+    v = Reactant.broadcast_to_size(v, size(v))
+    x = Reactant.promote_to(TracedRNumber{Reactant.unwrapped_eltype(v)}, x)
     return sum(T.(.!(__lt(o, x, v[lo:hi]))); init=lo - 1)
 end
 
 function overloaded_searchsorted(v, x, lo::T, hi::T, o::Base.Ordering) where {T}
-    v = TracedUtils.broadcast_to_size(v, size(v))
-    x = TracedUtils.promote_to(TracedRNumber{Reactant.unwrapped_eltype(v)}, x)
+    v = Reactant.broadcast_to_size(v, size(v))
+    x = Reactant.promote_to(TracedRNumber{Reactant.unwrapped_eltype(v)}, x)
     firstidx = overloaded_searchsortedfirst(v, x, lo, hi, o)
     lastidx = overloaded_searchsortedlast(v, x, lo, hi, o)
     return Reactant.TracedUnitRange(firstidx, lastidx)
@@ -1281,21 +1280,24 @@ end
 for op in (:searchsortedfirst, :searchsortedlast, :searchsorted)
     rop = Symbol(:overloaded_, op)
 
-    @eval begin
-        function Base.$(op)(
-            x::AnyTracedRVector, v, lo::T, hi::T, o::Base.Ordering
-        ) where {T<:Integer}
-            return $(rop)(x, v, lo, hi, o)
-        end
-        function Base.$(op)(
-            x::AbstractVector, v::TracedRNumber, lo::T, hi::T, o::Base.Ordering
-        ) where {T<:Integer}
-            return $(rop)(x, v, lo, hi, o)
-        end
-        function Base.$(op)(
-            x::AnyTracedRVector, v::TracedRNumber, lo::T, hi::T, o::Base.Ordering
-        ) where {T<:Integer}
-            return $(rop)(x, v, lo, hi, o)
+    @eval function Base.$(op)(
+        x::AnyTracedRVector, v, lo::T, hi::T, o::Base.Ordering
+    ) where {T<:Integer}
+        return $(rop)(x, v, lo, hi, o)
+    end
+
+    for numType in (:TracedRNumber, :CuTracedRNumber)
+        @eval begin
+            function Base.$(op)(
+                x::AbstractVector, v::$(numType), lo::T, hi::T, o::Base.Ordering
+            ) where {T<:Integer}
+                return $(rop)(x, v, lo, hi, o)
+            end
+            function Base.$(op)(
+                x::AnyTracedRVector, v::$(numType), lo::T, hi::T, o::Base.Ordering
+            ) where {T<:Integer}
+                return $(rop)(x, v, lo, hi, o)
+            end
         end
     end
 end

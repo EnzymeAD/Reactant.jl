@@ -2264,7 +2264,7 @@ function compile_mlir!(
 
                     pad_op = MLIR.Dialects.stablehlo.pad(
                         results[i],
-                        Reactant.TracedUtils.promote_to(
+                        Reactant.promote_to(
                             TracedRNumber{Reactant.unwrapped_eltype(res)}, 0
                         ).mlir_data;
                         edge_padding_low=MLIR.IR.DenseArrayAttribute(

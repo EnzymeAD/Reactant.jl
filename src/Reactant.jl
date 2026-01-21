@@ -116,6 +116,7 @@ isa_traced_soa(::AbstractRange{<:TracedRNumber}) = true
 unwrapped_eltype(::Type{T}) where {T<:Number} = T
 unwrapped_eltype(::Type{<:RNumber{T}}) where {T} = T
 unwrapped_eltype(::Type{TracedRNumber{T}}) where {T} = T
+unwrapped_eltype(::Type{<:CuTracedRNumber{T}}) where {T} = T
 
 unwrapped_eltype(::T) where {T<:Number} = T
 unwrapped_eltype(::RNumber{T}) where {T} = T
@@ -143,6 +144,40 @@ function TracedRArray(data::MLIR.IR.Value)
 end
 
 promote_traced_type(a::Type, b::Type) = Base.promote_type(a, b)
+Base.@nospecializeinfer function promote_traced_type(
+    @nospecialize(a::Type{<:CuTracedRNumber{T,A}}),
+    @nospecialize(b::Type{<:CuTracedRNumber{T2,A}})
+) where {T,T2,A}
+    return CuTracedRNumber{promote_traced_type(T, T2),A}
+end
+Base.@nospecializeinfer function promote_traced_type(
+    ::Type{Any}, @nospecialize(b::Type{<:CuTracedRNumber})
+)
+    return Any
+end
+Base.@nospecializeinfer function promote_traced_type(
+    @nospecialize(a::Type{<:CuTracedRNumber}), ::Type{Any}
+)
+    return Any
+end
+Base.@nospecializeinfer function promote_traced_type(
+    @nospecialize(T2::Type), ::Type{<:CuTracedRNumber{T,A}}
+) where {T,A}
+    if T == T2
+        return CuTracedRNumber{T,A}
+    else
+        return CuTracedRNumber{Reactant.promote_trace_type(T, T2),A}
+    end
+end
+Base.@nospecializeinfer function promote_traced_type(
+    ::Type{<:CuTracedRNumber{T,A}}, @nospecialize(T2::Type)
+) where {T,A}
+    if T == T2
+        return CuTracedRNumber{T,A}
+    else
+        return CuTracedRNumber{Reactant.promote_trace_type(T, T2),A}
+    end
+end
 
 aos_to_soa(x::AbstractArray) = x
 
@@ -201,6 +236,7 @@ Base.push!(no_rewrite_ancestor_modules, TracedUtils)
 include("TracedRNumber.jl")
 include("TracedRArray.jl")
 include("TracedRange.jl")
+include("CuTracedOverloads.jl")
 include("Indexing.jl")
 
 include("ConcreteRArray.jl")
@@ -220,7 +256,9 @@ use_overlayed_version(::MissingTracedValue) = true
 use_overlayed_version(rng::ReactantRNG) = use_overlayed_version(rng.seed)
 use_overlayed_version(::AbstractArray{<:TracedRNumber}) = true
 use_overlayed_version(::TracedRArray) = true
+use_overlayed_version(::CuTracedArray) = true
 use_overlayed_version(::TracedRNumber) = true
+use_overlayed_version(::CuTracedRNumber) = true
 use_overlayed_version(::TracedStepRangeLen) = true
 use_overlayed_version(::TracedUnitRange) = true
 function use_overlayed_version(x::AbstractArray)
