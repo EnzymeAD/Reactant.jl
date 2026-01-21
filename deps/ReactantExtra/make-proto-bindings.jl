@@ -165,6 +165,9 @@ function generate_bindings(staging_dir::String, output_dir::String)
     # Remove headers from generated files to minimize diffs
     remove_proto_headers(output_dir)
 
+    # Convert all structs to mutable structs
+    make_structs_mutable(output_dir)
+
     # Create a main module that includes all generated files
     write_main_module(output_dir, proto_rel_paths)
 
@@ -198,6 +201,33 @@ function remove_proto_headers(output_dir::String)
                         println(io, lines[i])
                     end
                 end
+            end
+        end
+    end
+end
+
+"""
+    make_structs_mutable(output_dir::String)
+
+Convert all `struct` declarations to `mutable struct` in generated Julia files.
+This allows proto message types to be modified after construction.
+"""
+function make_structs_mutable(output_dir::String)
+    println("\n  Converting structs to mutable structs...")
+    for (root, dirs, files) in walkdir(output_dir)
+        for file in files
+            endswith(file, ".jl") || continue
+            file == "Proto.jl" && continue
+
+            path = joinpath(root, file)
+            content = read(path, String)
+
+            # Replace "struct " with "mutable struct " but avoid double-replacement
+            # Use word boundary to avoid replacing inside other words
+            new_content = replace(content, r"\bstruct\s+" => "mutable struct ")
+
+            if content != new_content
+                write(path, new_content)
             end
         end
     end
