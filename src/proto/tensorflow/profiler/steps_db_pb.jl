@@ -7,7 +7,7 @@ export TpuStepBreakdown, StepInfoResult, AllReduceDbResult, PerCoreStepInfo
 export StepDatabaseResult
 
 
-struct DeviceMemoryTransfer
+mutable struct DeviceMemoryTransfer
     occurrence::UInt64
     time_us::Float64
     bytes_transferred::UInt64
@@ -49,7 +49,7 @@ function PB._encoded_size(x::DeviceMemoryTransfer)
     return encoded_size
 end
 
-struct GenericStepBreakdown
+mutable struct GenericStepBreakdown
     type_ps::Dict{Int32,UInt64}
     category_ps::Dict{String,UInt64}
 end
@@ -85,7 +85,7 @@ function PB._encoded_size(x::GenericStepBreakdown)
     return encoded_size
 end
 
-struct AllReduceInfo
+mutable struct AllReduceInfo
     id::UInt64
     name::String
     all_reduce_id::UInt64
@@ -145,7 +145,7 @@ function PB._encoded_size(x::AllReduceInfo)
     return encoded_size
 end
 
-struct SparseCoreStepBreakdown
+mutable struct SparseCoreStepBreakdown
     sc_compute_ps::UInt64
     sc_infeed_ps::UInt64
     sc_outfeed_ps::UInt64
@@ -199,29 +199,51 @@ function PB._encoded_size(x::SparseCoreStepBreakdown)
     return encoded_size
 end
 
-struct TpuStepBreakdown
-    infeed_duration_ps::UInt64
-    host_outfeed_ps::UInt64
-    wait_for_scv0_duration_ps::UInt64
-    scv0_infeed_transform_ps::UInt64
-    scv0_outfeed_ps::UInt64
-    crs_duration_ps::UInt64
-    scv0_infeed_percent::Float64
-    send_duration_ps::UInt64
-    recv_duration_ps::UInt64
-    host_send_duration_ps::UInt64
-    host_recv_duration_ps::UInt64
-    wait_for_megacore_fusion_peer_duration_ps::UInt64
-    overlay_wait_duration_ps::UInt64
-    high_flops_compute_ps::UInt64
-    tc_idle_ps::UInt64
-    tc_busy_ps::UInt64
-    scv0_busy_ps::UInt64
-    scv0_step_ps::UInt64
+mutable struct TpuStepBreakdown
+    __data::Dict{Symbol,Any}
 end
-PB.reserved_fields(::Type{TpuStepBreakdown}) = (names = String[], numbers = Union{Int,UnitRange{Int}}[10])
-PB.default_values(::Type{TpuStepBreakdown}) = (;infeed_duration_ps = zero(UInt64), host_outfeed_ps = zero(UInt64), wait_for_scv0_duration_ps = zero(UInt64), scv0_infeed_transform_ps = zero(UInt64), scv0_outfeed_ps = zero(UInt64), crs_duration_ps = zero(UInt64), scv0_infeed_percent = zero(Float64), send_duration_ps = zero(UInt64), recv_duration_ps = zero(UInt64), host_send_duration_ps = zero(UInt64), host_recv_duration_ps = zero(UInt64), wait_for_megacore_fusion_peer_duration_ps = zero(UInt64), overlay_wait_duration_ps = zero(UInt64), high_flops_compute_ps = zero(UInt64), tc_idle_ps = zero(UInt64), tc_busy_ps = zero(UInt64), scv0_busy_ps = zero(UInt64), scv0_step_ps = zero(UInt64))
-PB.field_numbers(::Type{TpuStepBreakdown}) = (;infeed_duration_ps = 1, host_outfeed_ps = 2, wait_for_scv0_duration_ps = 3, scv0_infeed_transform_ps = 4, scv0_outfeed_ps = 5, crs_duration_ps = 6, scv0_infeed_percent = 7, send_duration_ps = 8, recv_duration_ps = 9, host_send_duration_ps = 15, host_recv_duration_ps = 16, wait_for_megacore_fusion_peer_duration_ps = 14, overlay_wait_duration_ps = 11, high_flops_compute_ps = 12, tc_idle_ps = 13, tc_busy_ps = 17, scv0_busy_ps = 18, scv0_step_ps = 19)
+
+# Default values for TpuStepBreakdown fields
+const _TpuStepBreakdown_defaults = Dict{Symbol,Any}(
+    :infeed_duration_ps => zero(UInt64),
+    :host_outfeed_ps => zero(UInt64),
+    :wait_for_scv0_duration_ps => zero(UInt64),
+    :scv0_infeed_transform_ps => zero(UInt64),
+    :scv0_outfeed_ps => zero(UInt64),
+    :crs_duration_ps => zero(UInt64),
+    :scv0_infeed_percent => zero(Float64),
+    :send_duration_ps => zero(UInt64),
+    :recv_duration_ps => zero(UInt64),
+    :host_send_duration_ps => zero(UInt64),
+    :host_recv_duration_ps => zero(UInt64),
+    :wait_for_megacore_fusion_peer_duration_ps => zero(UInt64),
+    :overlay_wait_duration_ps => zero(UInt64),
+    :high_flops_compute_ps => zero(UInt64),
+    :tc_idle_ps => zero(UInt64),
+    :tc_busy_ps => zero(UInt64),
+    :scv0_busy_ps => zero(UInt64),
+    :scv0_step_ps => zero(UInt64)
+)
+
+# Keyword constructor for TpuStepBreakdown
+function TpuStepBreakdown(; kwargs...)
+    __data = Dict{Symbol,Any}(kwargs)
+    return TpuStepBreakdown(__data)
+end
+
+# Field accessors for TpuStepBreakdown
+function Base.getproperty(x::TpuStepBreakdown, s::Symbol)
+    s === :__data && return getfield(x, :__data)
+    d = getfield(x, :__data)
+    return get(d, s, get(_TpuStepBreakdown_defaults, s, nothing))
+end
+function Base.setproperty!(x::TpuStepBreakdown, s::Symbol, v)
+    getfield(x, :__data)[s] = v
+end
+Base.propertynames(::TpuStepBreakdown) = (:infeed_duration_ps, :host_outfeed_ps, :wait_for_scv0_duration_ps, :scv0_infeed_transform_ps, :scv0_outfeed_ps, :crs_duration_ps, :scv0_infeed_percent, :send_duration_ps, :recv_duration_ps, :host_send_duration_ps, :host_recv_duration_ps, :wait_for_megacore_fusion_peer_duration_ps, :overlay_wait_duration_ps, :high_flops_compute_ps, :tc_idle_ps, :tc_busy_ps, :scv0_busy_ps, :scv0_step_ps,)
+# PB.reserved_fields(::Type{TpuStepBreakdown}) = (names = String[], numbers = Union{Int,UnitRange{Int}}[10])
+# PB.default_values(::Type{TpuStepBreakdown}) = (;infeed_duration_ps = zero(UInt64), host_outfeed_ps = zero(UInt64), wait_for_scv0_duration_ps = zero(UInt64), scv0_infeed_transform_ps = zero(UInt64), scv0_outfeed_ps = zero(UInt64), crs_duration_ps = zero(UInt64), scv0_infeed_percent = zero(Float64), send_duration_ps = zero(UInt64), recv_duration_ps = zero(UInt64), host_send_duration_ps = zero(UInt64), host_recv_duration_ps = zero(UInt64), wait_for_megacore_fusion_peer_duration_ps = zero(UInt64), overlay_wait_duration_ps = zero(UInt64), high_flops_compute_ps = zero(UInt64), tc_idle_ps = zero(UInt64), tc_busy_ps = zero(UInt64), scv0_busy_ps = zero(UInt64), scv0_step_ps = zero(UInt64))
+# PB.field_numbers(::Type{TpuStepBreakdown}) = (;infeed_duration_ps = 1, host_outfeed_ps = 2, wait_for_scv0_duration_ps = 3, scv0_infeed_transform_ps = 4, scv0_outfeed_ps = 5, crs_duration_ps = 6, scv0_infeed_percent = 7, send_duration_ps = 8, recv_duration_ps = 9, host_send_duration_ps = 15, host_recv_duration_ps = 16, wait_for_megacore_fusion_peer_duration_ps = 14, overlay_wait_duration_ps = 11, high_flops_compute_ps = 12, tc_idle_ps = 13, tc_busy_ps = 17, scv0_busy_ps = 18, scv0_step_ps = 19)
 
 function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:TpuStepBreakdown})
     infeed_duration_ps = zero(UInt64)
@@ -284,7 +306,7 @@ function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:TpuStepBreakdown})
             Base.skip(d, wire_type)
         end
     end
-    return TpuStepBreakdown(infeed_duration_ps, host_outfeed_ps, wait_for_scv0_duration_ps, scv0_infeed_transform_ps, scv0_outfeed_ps, crs_duration_ps, scv0_infeed_percent, send_duration_ps, recv_duration_ps, host_send_duration_ps, host_recv_duration_ps, wait_for_megacore_fusion_peer_duration_ps, overlay_wait_duration_ps, high_flops_compute_ps, tc_idle_ps, tc_busy_ps, scv0_busy_ps, scv0_step_ps)
+    return TpuStepBreakdown(; infeed_duration_ps=infeed_duration_ps, host_outfeed_ps=host_outfeed_ps, wait_for_scv0_duration_ps=wait_for_scv0_duration_ps, scv0_infeed_transform_ps=scv0_infeed_transform_ps, scv0_outfeed_ps=scv0_outfeed_ps, crs_duration_ps=crs_duration_ps, scv0_infeed_percent=scv0_infeed_percent, send_duration_ps=send_duration_ps, recv_duration_ps=recv_duration_ps, host_send_duration_ps=host_send_duration_ps, host_recv_duration_ps=host_recv_duration_ps, wait_for_megacore_fusion_peer_duration_ps=wait_for_megacore_fusion_peer_duration_ps, overlay_wait_duration_ps=overlay_wait_duration_ps, high_flops_compute_ps=high_flops_compute_ps, tc_idle_ps=tc_idle_ps, tc_busy_ps=tc_busy_ps, scv0_busy_ps=scv0_busy_ps, scv0_step_ps=scv0_step_ps)
 end
 
 function PB.encode(e::PB.AbstractProtoEncoder, x::TpuStepBreakdown)
@@ -332,7 +354,7 @@ function PB._encoded_size(x::TpuStepBreakdown)
     return encoded_size
 end
 
-struct StepInfoResult
+mutable struct StepInfoResult
     step_num::UInt32
     step_name::String
     duration_ps::UInt64
@@ -392,7 +414,7 @@ function PB._encoded_size(x::StepInfoResult)
     return encoded_size
 end
 
-struct AllReduceDbResult
+mutable struct AllReduceDbResult
     all_reduce_info::Vector{AllReduceInfo}
 end
 PB.default_values(::Type{AllReduceDbResult}) = (;all_reduce_info = Vector{AllReduceInfo}())
@@ -422,7 +444,7 @@ function PB._encoded_size(x::AllReduceDbResult)
     return encoded_size
 end
 
-struct PerCoreStepInfo
+mutable struct PerCoreStepInfo
     step_num::UInt32
     step_info_per_core::Dict{UInt32,StepInfoResult}
     hlo_metrics_db::Union{Nothing,OpMetricsDb}
@@ -483,7 +505,7 @@ function PB._encoded_size(x::PerCoreStepInfo)
     return encoded_size
 end
 
-struct StepDatabaseResult
+mutable struct StepDatabaseResult
     step_sequence::Vector{PerCoreStepInfo}
     use_incomplete_step::Bool
     num_steps_dropped::UInt32

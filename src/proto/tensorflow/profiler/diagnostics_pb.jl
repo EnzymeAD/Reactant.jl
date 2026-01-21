@@ -5,7 +5,7 @@ using ProtoBuf.EnumX: @enumx
 export Diagnostics
 
 
-struct Diagnostics
+mutable struct Diagnostics
     info::Vector{String}
     warnings::Vector{String}
     errors::Vector{String}

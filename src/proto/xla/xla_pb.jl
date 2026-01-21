@@ -7,13 +7,12 @@ export var"DebugOptions.LibNvJitLinkMode", var"DebugOptions.LibraryFusionType"
 export var"DebugOptions.PipelineParallelismOptLevel", ShardableValueUpdatePairProto
 export var"DebugOptions.AutotuneCacheMode", var"DebugOptions.CommandBufferSchedulingMode"
 export var"DebugOptions.PartitioningAlgorithm", var"HloModuleConfigProto.Int64List"
-export var"ScheduleProto.SchedulerStatisticsProto", var"DebugOptions.AutotuneBackend"
-export var"HloModuleConfigProto.BoolList", var"DebugOptions.StepMarkerLocation"
-export var"DebugOptions.CollectiveOpType", var"DebugOptions.ShapeChecks"
-export var"DebugOptions.XnnGraphFusionMode", GpuCompilationEnvironment
-export var"ScheduleConfigProto.Instruction", var"DebugOptions.WhileLoopUnrolling"
-export NodeShardingConfigProto, IntRangeInclusive, CompilationEnvironmentsProto
-export var"DebugOptions.PGLEStrictnessLevel"
+export var"ScheduleProto.SchedulerStatisticsProto", var"HloModuleConfigProto.BoolList"
+export var"DebugOptions.StepMarkerLocation", var"DebugOptions.CollectiveOpType"
+export var"DebugOptions.ShapeChecks", var"DebugOptions.XnnGraphFusionMode"
+export GpuCompilationEnvironment, var"ScheduleConfigProto.Instruction"
+export var"DebugOptions.WhileLoopUnrolling", NodeShardingConfigProto, IntRangeInclusive
+export CompilationEnvironmentsProto, var"DebugOptions.PGLEStrictnessLevel"
 export var"HloModuleConfigProto.FusionConfigCollection", var"DebugOptions.DetectionMode"
 export var"DebugOptions.CommandBufferCmdType", var"HloModuleConfigProto.Int64ListList"
 export var"ScheduleProto.ComputationScheduleProto", ScheduleConfigProto
@@ -21,7 +20,7 @@ export ShardingConfigProto, ThunkBufferDebugFilter, ScheduleProto, DebugOptions
 export HloModuleConfigProto, ExecutionOptions, HloModuleProtoWithConfig
 
 
-struct var"ScheduleProto.Instruction"
+mutable struct var"ScheduleProto.Instruction"
     id::Int64
     start_timestamp_cycles::Float64
     end_timestamp_cycles::Float64
@@ -84,7 +83,7 @@ end
 @enumx var"DebugOptions.PipelineParallelismOptLevel" PIPELINE_PARALLELISM_OPT_LEVEL_DISABLE=0 PIPELINE_PARALLELISM_OPT_LEVEL_ENABLE=1
 PB.reserved_fields(::Type{var"DebugOptions.PipelineParallelismOptLevel".T}) = (names = ["PIPELINE_PARALLELISM_OPT_LEVEL_ENABLE_CYCLE_DECOMPOSER"], numbers = Union{Int,UnitRange{Int}}[2])
 
-struct ShardableValueUpdatePairProto
+mutable struct ShardableValueUpdatePairProto
     input_parameter_number::Int64
     parameter_shape_index::Vector{Int64}
     output_shape_index::Vector{Int64}
@@ -132,7 +131,7 @@ end
 
 @enumx var"DebugOptions.PartitioningAlgorithm" PARTITIONING_ALGORITHM_NOOP=0 PARTITIONING_ALGORITHM_EXP0=1 PARTITIONING_ALGORITHM_EXP1=2 PARTITIONING_ALGORITHM_EXP2=3
 
-struct var"HloModuleConfigProto.Int64List"
+mutable struct var"HloModuleConfigProto.Int64List"
     vals::Vector{Int64}
 end
 PB.default_values(::Type{var"HloModuleConfigProto.Int64List"}) = (;vals = Vector{Int64}())
@@ -162,23 +161,45 @@ function PB._encoded_size(x::var"HloModuleConfigProto.Int64List")
     return encoded_size
 end
 
-struct var"ScheduleProto.SchedulerStatisticsProto"
-    all_gather_wasted_cycles::Float64
-    all_reduce_wasted_cycles::Float64
-    collective_broadcast_wasted_cycles::Float64
-    collective_permute_wasted_cycles::Float64
-    all_to_all_wasted_cycles::Float64
-    ragged_all_to_all_wasted_cycles::Float64
-    reduce_scatter_wasted_cycles::Float64
-    send_wasted_cycles::Float64
-    recv_wasted_cycles::Float64
-    call_wasted_cycles::Float64
-    total_wasted_cycles::Float64
-    total_cycles::Float64
-    memory_pressure_peak::Int64
+mutable struct var"ScheduleProto.SchedulerStatisticsProto"
+    __data::Dict{Symbol,Any}
 end
-PB.default_values(::Type{var"ScheduleProto.SchedulerStatisticsProto"}) = (;all_gather_wasted_cycles = zero(Float64), all_reduce_wasted_cycles = zero(Float64), collective_broadcast_wasted_cycles = zero(Float64), collective_permute_wasted_cycles = zero(Float64), all_to_all_wasted_cycles = zero(Float64), ragged_all_to_all_wasted_cycles = zero(Float64), reduce_scatter_wasted_cycles = zero(Float64), send_wasted_cycles = zero(Float64), recv_wasted_cycles = zero(Float64), call_wasted_cycles = zero(Float64), total_wasted_cycles = zero(Float64), total_cycles = zero(Float64), memory_pressure_peak = zero(Int64))
-PB.field_numbers(::Type{var"ScheduleProto.SchedulerStatisticsProto"}) = (;all_gather_wasted_cycles = 1, all_reduce_wasted_cycles = 2, collective_broadcast_wasted_cycles = 3, collective_permute_wasted_cycles = 4, all_to_all_wasted_cycles = 5, ragged_all_to_all_wasted_cycles = 6, reduce_scatter_wasted_cycles = 7, send_wasted_cycles = 8, recv_wasted_cycles = 9, call_wasted_cycles = 10, total_wasted_cycles = 11, total_cycles = 12, memory_pressure_peak = 13)
+
+# Default values for var"ScheduleProto.SchedulerStatisticsProto" fields
+const _ScheduleProto_SchedulerStatisticsProto_defaults = Dict{Symbol,Any}(
+    :all_gather_wasted_cycles => zero(Float64),
+    :all_reduce_wasted_cycles => zero(Float64),
+    :collective_broadcast_wasted_cycles => zero(Float64),
+    :collective_permute_wasted_cycles => zero(Float64),
+    :all_to_all_wasted_cycles => zero(Float64),
+    :ragged_all_to_all_wasted_cycles => zero(Float64),
+    :reduce_scatter_wasted_cycles => zero(Float64),
+    :send_wasted_cycles => zero(Float64),
+    :recv_wasted_cycles => zero(Float64),
+    :call_wasted_cycles => zero(Float64),
+    :total_wasted_cycles => zero(Float64),
+    :total_cycles => zero(Float64),
+    :memory_pressure_peak => zero(Int64)
+)
+
+# Keyword constructor for var"ScheduleProto.SchedulerStatisticsProto"
+function var"ScheduleProto.SchedulerStatisticsProto"(; kwargs...)
+    __data = Dict{Symbol,Any}(kwargs)
+    return var"ScheduleProto.SchedulerStatisticsProto"(__data)
+end
+
+# Field accessors for var"ScheduleProto.SchedulerStatisticsProto"
+function Base.getproperty(x::var"ScheduleProto.SchedulerStatisticsProto", s::Symbol)
+    s === :__data && return getfield(x, :__data)
+    d = getfield(x, :__data)
+    return get(d, s, get(_ScheduleProto_SchedulerStatisticsProto_defaults, s, nothing))
+end
+function Base.setproperty!(x::var"ScheduleProto.SchedulerStatisticsProto", s::Symbol, v)
+    getfield(x, :__data)[s] = v
+end
+Base.propertynames(::var"ScheduleProto.SchedulerStatisticsProto") = (:all_gather_wasted_cycles, :all_reduce_wasted_cycles, :collective_broadcast_wasted_cycles, :collective_permute_wasted_cycles, :all_to_all_wasted_cycles, :ragged_all_to_all_wasted_cycles, :reduce_scatter_wasted_cycles, :send_wasted_cycles, :recv_wasted_cycles, :call_wasted_cycles, :total_wasted_cycles, :total_cycles, :memory_pressure_peak,)
+# PB.default_values(::Type{var"ScheduleProto.SchedulerStatisticsProto"}) = (;all_gather_wasted_cycles = zero(Float64), all_reduce_wasted_cycles = zero(Float64), collective_broadcast_wasted_cycles = zero(Float64), collective_permute_wasted_cycles = zero(Float64), all_to_all_wasted_cycles = zero(Float64), ragged_all_to_all_wasted_cycles = zero(Float64), reduce_scatter_wasted_cycles = zero(Float64), send_wasted_cycles = zero(Float64), recv_wasted_cycles = zero(Float64), call_wasted_cycles = zero(Float64), total_wasted_cycles = zero(Float64), total_cycles = zero(Float64), memory_pressure_peak = zero(Int64))
+# PB.field_numbers(::Type{var"ScheduleProto.SchedulerStatisticsProto"}) = (;all_gather_wasted_cycles = 1, all_reduce_wasted_cycles = 2, collective_broadcast_wasted_cycles = 3, collective_permute_wasted_cycles = 4, all_to_all_wasted_cycles = 5, ragged_all_to_all_wasted_cycles = 6, reduce_scatter_wasted_cycles = 7, send_wasted_cycles = 8, recv_wasted_cycles = 9, call_wasted_cycles = 10, total_wasted_cycles = 11, total_cycles = 12, memory_pressure_peak = 13)
 
 function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:var"ScheduleProto.SchedulerStatisticsProto"})
     all_gather_wasted_cycles = zero(Float64)
@@ -226,7 +247,7 @@ function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:var"ScheduleProto.Schedu
             Base.skip(d, wire_type)
         end
     end
-    return var"ScheduleProto.SchedulerStatisticsProto"(all_gather_wasted_cycles, all_reduce_wasted_cycles, collective_broadcast_wasted_cycles, collective_permute_wasted_cycles, all_to_all_wasted_cycles, ragged_all_to_all_wasted_cycles, reduce_scatter_wasted_cycles, send_wasted_cycles, recv_wasted_cycles, call_wasted_cycles, total_wasted_cycles, total_cycles, memory_pressure_peak)
+    return var"ScheduleProto.SchedulerStatisticsProto"(; all_gather_wasted_cycles=all_gather_wasted_cycles, all_reduce_wasted_cycles=all_reduce_wasted_cycles, collective_broadcast_wasted_cycles=collective_broadcast_wasted_cycles, collective_permute_wasted_cycles=collective_permute_wasted_cycles, all_to_all_wasted_cycles=all_to_all_wasted_cycles, ragged_all_to_all_wasted_cycles=ragged_all_to_all_wasted_cycles, reduce_scatter_wasted_cycles=reduce_scatter_wasted_cycles, send_wasted_cycles=send_wasted_cycles, recv_wasted_cycles=recv_wasted_cycles, call_wasted_cycles=call_wasted_cycles, total_wasted_cycles=total_wasted_cycles, total_cycles=total_cycles, memory_pressure_peak=memory_pressure_peak)
 end
 
 function PB.encode(e::PB.AbstractProtoEncoder, x::var"ScheduleProto.SchedulerStatisticsProto")
@@ -264,9 +285,7 @@ function PB._encoded_size(x::var"ScheduleProto.SchedulerStatisticsProto")
     return encoded_size
 end
 
-@enumx var"DebugOptions.AutotuneBackend" AUTOTUNE_BACKEND_ALL=0 AUTOTUNE_BACKEND_CUDNN=1 AUTOTUNE_BACKEND_TRITON=2 AUTOTUNE_BACKEND_CUBLAS=3 AUTOTUNE_BACKEND_CUBLASLT=4
-
-struct var"HloModuleConfigProto.BoolList"
+mutable struct var"HloModuleConfigProto.BoolList"
     vals::Vector{Bool}
 end
 PB.default_values(::Type{var"HloModuleConfigProto.BoolList"}) = (;vals = Vector{Bool}())
@@ -304,7 +323,7 @@ end
 
 @enumx var"DebugOptions.XnnGraphFusionMode" XNN_GRAPH_FUSION_MODE_DISABLED=0 XNN_GRAPH_FUSION_MODE_GREEDY=1 XNN_GRAPH_FUSION_MODE_GREEDY_SLINKY=2 XNN_GRAPH_FUSION_MODE_BYPASS_COST_MODEL=3
 
-struct GpuCompilationEnvironment
+mutable struct GpuCompilationEnvironment
     dummy_flag::Int64
 end
 PB.default_values(::Type{GpuCompilationEnvironment}) = (;dummy_flag = zero(Int64))
@@ -334,7 +353,7 @@ function PB._encoded_size(x::GpuCompilationEnvironment)
     return encoded_size
 end
 
-struct var"ScheduleConfigProto.Instruction"
+mutable struct var"ScheduleConfigProto.Instruction"
     name::String
 end
 PB.default_values(::Type{var"ScheduleConfigProto.Instruction"}) = (;name = "")
@@ -366,7 +385,7 @@ end
 
 @enumx var"DebugOptions.WhileLoopUnrolling" WHILE_LOOP_UNROLLING_NO_UNROLL=0 WHILE_LOOP_UNROLLING_DOUBLE_BUFFER=1 WHILE_LOOP_UNROLLING_FULL_UNROLL=2 WHILE_LOOP_UNROLLING_AUTO_UNROLL=3
 
-struct NodeShardingConfigProto
+mutable struct NodeShardingConfigProto
     sharding::Union{Nothing,OpSharding}
     nodes::Vector{NodeShardingConfigProto}
 end
@@ -402,7 +421,7 @@ function PB._encoded_size(x::NodeShardingConfigProto)
     return encoded_size
 end
 
-struct IntRangeInclusive
+mutable struct IntRangeInclusive
     first::Int64
     last::Int64
 end
@@ -438,7 +457,7 @@ function PB._encoded_size(x::IntRangeInclusive)
     return encoded_size
 end
 
-struct CompilationEnvironmentsProto
+mutable struct CompilationEnvironmentsProto
     environments::Vector{google.protobuf.var"#Any"}
 end
 PB.default_values(::Type{CompilationEnvironmentsProto}) = (;environments = Vector{google.protobuf.var"#Any"}())
@@ -476,7 +495,7 @@ end
 
 @enumx var"DebugOptions.CommandBufferCmdType" INVALID=0 FUSION=1 CUBLAS=2 CUDNN=3 COLLECTIVES=4 CONDITIONAL=5 WHILE=6 CUSTOM_CALL=7 CUBLASLT=8 DYNAMIC_SLICE_FUSION=9 DYNAMIC_SLICE_COPY_FUSION=10
 
-struct var"HloModuleConfigProto.Int64ListList"
+mutable struct var"HloModuleConfigProto.Int64ListList"
     lists::Vector{var"HloModuleConfigProto.Int64List"}
 end
 PB.default_values(::Type{var"HloModuleConfigProto.Int64ListList"}) = (;lists = Vector{var"HloModuleConfigProto.Int64List"}())
@@ -506,7 +525,7 @@ function PB._encoded_size(x::var"HloModuleConfigProto.Int64ListList")
     return encoded_size
 end
 
-struct var"ScheduleProto.ComputationScheduleProto"
+mutable struct var"ScheduleProto.ComputationScheduleProto"
     computation_id::Int64
     instructions::Vector{var"ScheduleProto.Instruction"}
     scheduler_statistics::Union{Nothing,var"ScheduleProto.SchedulerStatisticsProto"}
@@ -554,7 +573,7 @@ function PB._encoded_size(x::var"ScheduleProto.ComputationScheduleProto")
     return encoded_size
 end
 
-struct ScheduleConfigProto
+mutable struct ScheduleConfigProto
     sequence::Vector{var"ScheduleConfigProto.Instruction"}
 end
 PB.default_values(::Type{ScheduleConfigProto}) = (;sequence = Vector{var"ScheduleConfigProto.Instruction"}())
@@ -584,7 +603,7 @@ function PB._encoded_size(x::ScheduleConfigProto)
     return encoded_size
 end
 
-struct ShardingConfigProto
+mutable struct ShardingConfigProto
     nodes::Vector{NodeShardingConfigProto}
 end
 PB.default_values(::Type{ShardingConfigProto}) = (;nodes = Vector{NodeShardingConfigProto}())
@@ -614,7 +633,7 @@ function PB._encoded_size(x::ShardingConfigProto)
     return encoded_size
 end
 
-struct ThunkBufferDebugFilter
+mutable struct ThunkBufferDebugFilter
     thunk_id_ranges::Vector{IntRangeInclusive}
     profile_annotation_regexes::Vector{String}
 end
@@ -650,7 +669,7 @@ function PB._encoded_size(x::ThunkBufferDebugFilter)
     return encoded_size
 end
 
-struct ScheduleProto
+mutable struct ScheduleProto
     hlo_module::Union{Nothing,HloModuleProto}
     computation_schedules::Vector{var"ScheduleProto.ComputationScheduleProto"}
 end
@@ -686,281 +705,300 @@ function PB._encoded_size(x::ScheduleProto)
     return encoded_size
 end
 
-struct DebugOptions
-    xla_allow_h2h_copy_when_automatic_host_compute_offload_disabled::Bool
-    xla_disable_automatic_host_compute_offload::Bool
-    xla_enable_scoped_logging_timers::Bool
-    xla_hlo_pass_fix_detect_cycles::Bool
-    xla_keep_shardings_after_spmd::Bool
-    xla_unsupported_crash_on_hlo_pass_fix_max_iterations::Bool
-    xla_unsupported_crash_on_hlo_pass_noop_change::Bool
-    xla_unsupported_crash_on_hlo_pass_silent_hlo_change::Bool
-    xla_cpu_collective_call_terminate_timeout_seconds::Int32
-    xla_cpu_collective_call_warn_stuck_seconds::Int32
-    xla_cpu_collective_timeout_seconds::Int32
-    xla_cpu_copy_insertion_use_region_analysis::Bool
-    xla_cpu_emitter_verification_level::Int32
-    xla_cpu_enable_concurrency_optimized_scheduler::Bool
-    xla_cpu_enable_fast_math::Bool
-    xla_cpu_enable_fast_min_max::Bool
-    xla_cpu_enable_platform_dependent_math::Bool
-    xla_cpu_experimental_onednn_custom_call::Bool
-    xla_cpu_experimental_onednn_fusion_type::Vector{var"DebugOptions.LibraryFusionType".T}
-    xla_cpu_experimental_xnn_fusion_type::Vector{var"DebugOptions.LibraryFusionType".T}
-    xla_cpu_experimental_xnn_graph_fusion_mode::var"DebugOptions.XnnGraphFusionMode".T
-    xla_cpu_experimental_ynn_fusion_type::Vector{var"DebugOptions.LibraryFusionType".T}
-    xla_cpu_fast_math_honor_division::Bool
-    xla_cpu_fast_math_honor_functions::Bool
-    xla_cpu_fast_math_honor_infs::Bool
-    xla_cpu_fast_math_honor_nans::Bool
-    xla_cpu_generate_unique_c_style_kernel_entry_points::Bool
-    xla_cpu_max_isa::String
-    xla_cpu_parallel_codegen_split_count::Int32
-    xla_cpu_prefer_vector_width::Int32
-    xla_cpu_use_fusion_emitters::Bool
-    xla_cpu_use_xnnpack::Bool
-    xla_enable_fast_math::Bool
-    xla_gpu_experimental_thunk_buffer_debug_filter::Union{Nothing,ThunkBufferDebugFilter}
-    xla_dump_hlo_unoptimized_snapshots::Bool
-    xla_enable_enzyme_comms_opt::Bool
-    xla_gpu_algorithm_denylist_path::String
-    xla_gpu_all_gather_combine_threshold_bytes::Int64
-    xla_gpu_all_reduce_blueconnect_num_devices_per_host::Int32
-    xla_gpu_all_reduce_combine_threshold_bytes::Int64
-    xla_gpu_analytical_latency_estimator_options::Dict{String,String}
-    xla_gpu_async_dot::Bool
-    xla_gpu_auto_spmd_partitioning_memory_budget_gb::Int32
-    xla_gpu_auto_spmd_partitioning_memory_budget_ratio::Float32
-    xla_gpu_autotune_gemm_rtol::Float32
-    xla_gpu_autotune_level::Int32
-    xla_gpu_autotune_max_solutions::Int64
-    xla_gpu_collect_cost_model_stats::Bool
-    xla_gpu_collective_inflation_factor::Int32
-    xla_gpu_collective_permute_combine_threshold_bytes::Int64
-    xla_gpu_collective_permute_decomposer_threshold::Int64
-    xla_gpu_collectives_use_persistent_cliques::Bool
-    xla_gpu_command_buffer_scheduling_mode::var"DebugOptions.CommandBufferSchedulingMode".T
-    xla_gpu_command_buffer_unroll_loops::Bool
-    xla_gpu_copy_insertion_use_region_analysis::Bool
-    xla_gpu_crash_on_verification_failures::Bool
-    xla_gpu_cublas_fallback::Bool
-    xla_gpu_cuda_data_dir::String
-    xla_gpu_cudnn_gemm_fusion_level::Int32
-    xla_gpu_cudnn_gemm_max_plans::Int32
-    xla_gpu_default_to_alg_dot_bf16_bf16_f32::Bool
-    xla_gpu_deterministic_ops::Bool
-    xla_gpu_disable_async_collectives::Vector{var"DebugOptions.CollectiveOpType".T}
-    xla_gpu_disable_gpuasm_optimizations::Bool
-    xla_gpu_dot_merger_threshold_mb::Int32
-    xla_gpu_dump_autotune_logs_to::String
-    xla_gpu_dump_autotune_results_to::String
-    xla_gpu_dump_autotuned_gemm_fusions::Bool
-    xla_gpu_dump_llvmir::Bool
-    xla_gpu_enable_all_gather_combine_by_dim::Bool
-    xla_gpu_enable_analytical_latency_estimator::Bool
-    xla_gpu_enable_analytical_sol_latency_estimator::Bool
-    xla_gpu_enable_approx_costly_collectives::Bool
-    xla_gpu_enable_command_buffer::Vector{var"DebugOptions.CommandBufferCmdType".T}
-    xla_gpu_enable_cub_radix_sort::Bool
-    xla_gpu_enable_cublaslt::Bool
-    xla_gpu_enable_cudnn_int8x32_convolution_reordering::Bool
-    xla_gpu_enable_cudnn_layer_norm::Bool
-    xla_gpu_enable_dynamic_slice_fusion::Bool
-    xla_gpu_enable_fast_min_max::Bool
-    xla_gpu_enable_highest_priority_async_stream::Bool
-    xla_gpu_enable_host_memory_offloading::Bool
-    xla_gpu_enable_latency_hiding_scheduler::Bool
-    xla_gpu_enable_libnvptxcompiler::Bool
-    xla_gpu_enable_llvm_module_compilation_parallelism::Bool
-    xla_gpu_enable_nccl_clique_optimization::Bool
-    xla_gpu_enable_nccl_comm_splitting::Bool
-    xla_gpu_enable_nccl_user_buffers::Bool
-    xla_gpu_enable_pipelined_all_gather::Bool
-    xla_gpu_enable_pipelined_all_reduce::Bool
-    xla_gpu_enable_pipelined_collectives::Bool
-    xla_gpu_enable_pipelined_host_offloading::Bool
-    xla_gpu_enable_pipelined_p2p::Bool
-    xla_gpu_enable_pipelined_reduce_scatter::Bool
-    xla_gpu_enable_reassociation_for_converted_ar::Bool
-    xla_gpu_enable_reduce_scatter_combine_by_dim::Bool
-    xla_gpu_enable_reduction_epilogue_fusion::Bool
-    xla_gpu_enable_scatter_determinism_expander::Bool
-    xla_gpu_enable_shared_constants::Bool
-    xla_gpu_enable_split_k_autotuning::Bool
-    xla_gpu_enable_triton_gemm::Bool
-    xla_gpu_enable_while_loop_double_buffering::Bool
-    xla_gpu_enable_while_loop_reduce_scatter_code_motion::Bool
-    xla_gpu_enable_while_loop_unrolling::var"DebugOptions.WhileLoopUnrolling".T
-    xla_gpu_exclude_nondeterministic_ops::Bool
-    xla_gpu_executable_embed_debug_info::Bool
-    xla_gpu_executable_terminate_timeout_seconds::Int32
-    xla_gpu_executable_warn_stuck_timeout_seconds::Int32
-    xla_gpu_exhaustive_tiling_search::Bool
-    xla_gpu_experimental_allow_unroll_factor_eight::Bool
-    xla_gpu_experimental_aot_compiled_thunks::Bool
-    xla_gpu_experimental_autotune_backends::Vector{var"DebugOptions.AutotuneBackend".T}
-    xla_gpu_experimental_autotune_cache_mode::var"DebugOptions.AutotuneCacheMode".T
-    xla_gpu_experimental_autotuner_cache_dir::String
-    xla_gpu_experimental_collective_cse_distance_threshold::Int64
-    xla_gpu_experimental_collective_perf_table_path::String
-    xla_gpu_experimental_disable_binary_libraries::Bool
-    xla_gpu_experimental_dump_fdo_profiles::Bool
-    xla_gpu_experimental_dump_gpu_executable::Bool
-    xla_gpu_experimental_enable_alltoall_windowed_einsum::Bool
-    xla_gpu_experimental_enable_buffer_saver_on_thunks::Bool
-    xla_gpu_experimental_enable_checksum_tracing_on_thunks::Bool
-    xla_gpu_experimental_enable_fusion_autotuner::Bool
-    xla_gpu_experimental_enable_fusion_block_level_rewriter::Bool
-    xla_gpu_experimental_enable_heuristic_collective_combining::Bool
-    xla_gpu_experimental_enable_nccl_symmetric_buffers::Bool
-    xla_gpu_experimental_enable_nvshmem::Bool
-    xla_gpu_experimental_enable_split_k_rewrite::Bool
-    xla_gpu_experimental_enable_subchannel_dequantisation_fusion::Bool
-    xla_gpu_experimental_enable_triton_heroless_priority_fusion::Bool
-    xla_gpu_experimental_enable_triton_warp_specialization::Bool
-    xla_gpu_experimental_pack_dot_operands_along_k_dimension::Bool
-    xla_gpu_experimental_parallel_collective_overlap_limit::Int32
-    xla_gpu_experimental_pipeline_parallelism_opt_level::var"DebugOptions.PipelineParallelismOptLevel".T
-    xla_gpu_experimental_stream_annotation::Bool
-    xla_gpu_experimental_use_autotuner_pass::Bool
-    xla_gpu_experimental_use_ragged_dot_fusion::Bool
-    xla_gpu_fail_ptx_compilation_on_register_spilling::Bool
-    xla_gpu_filter_kernels_spilling_registers_on_autotuning::Bool
-    xla_gpu_first_collective_call_terminate_timeout_seconds::Int32
-    xla_gpu_first_collective_call_warn_stuck_timeout_seconds::Int32
-    xla_gpu_force_compilation_parallelism::Int32
-    xla_gpu_force_conv_nchw::Bool
-    xla_gpu_force_conv_nhwc::Bool
-    xla_gpu_ftz::Bool
-    xla_gpu_fused_attention_use_cudnn_rng::Bool
-    xla_gpu_gemm_autotuner_override_file::String
-    xla_gpu_gemm_rewrite_size_threshold::Int64
-    xla_gpu_generate_debug_info::Bool
-    xla_gpu_generate_line_info::Bool
-    xla_gpu_graph_enable_concurrent_region::Bool
-    xla_gpu_graph_min_graph_size::Int32
-    xla_gpu_kernel_cache_file::String
-    xla_gpu_libnvjitlink_mode::var"DebugOptions.LibNvJitLinkMode".T
-    xla_gpu_llvm_ir_file::Vector{String}
-    xla_gpu_llvm_verification_level::Int32
-    xla_gpu_load_autotune_results_from::String
-    xla_gpu_memory_limit_slop_factor::Int32
-    xla_gpu_mock_custom_calls::Bool
-    xla_gpu_multi_streamed_windowed_einsum::Bool
-    xla_gpu_nccl_async_execution::Bool
-    xla_gpu_nccl_blocking_communicators::Bool
-    xla_gpu_nccl_collective_max_nchannels::Int64
-    xla_gpu_nccl_init_max_rank_per_root_ratio::Int64
-    xla_gpu_nccl_p2p_max_nchannels::Int64
-    xla_gpu_nccl_terminate_on_error::Bool
-    xla_gpu_nccl_termination_timeout_seconds::Int64
-    xla_gpu_operand_bytes_threshold_for_windowed_einsum::Int64
-    xla_gpu_override_gemm_autotuner::String
-    xla_gpu_per_fusion_autotune_cache_dir::String
-    xla_gpu_pgle_accuracy_checker::var"DebugOptions.PGLEStrictnessLevel".T
-    xla_gpu_pgle_profile_file_or_directory_path::String
-    xla_gpu_ptx_file::Vector{String}
-    xla_gpu_reduce_scatter_combine_threshold_bytes::Int64
-    xla_gpu_redzone_padding_bytes::Int64
-    xla_gpu_require_complete_aot_autotune_results::Bool
-    xla_gpu_require_exclusive_lock::Bool
-    xla_gpu_shape_checks::var"DebugOptions.ShapeChecks".T
-    xla_gpu_shard_autotuning::Bool
-    xla_gpu_strict_conv_algorithm_picker::Bool
-    xla_gpu_target_config_filename::String
-    xla_gpu_temp_buffer_use_separate_color::Bool
-    xla_gpu_threshold_for_windowed_einsum_mib::Int64
-    xla_gpu_triton_gemm_any::Bool
-    xla_gpu_unsafe_fallback_to_driver_on_ptxas_not_found::Bool
-    xla_gpu_unsupported_enable_all_reduce_decomposer::Bool
-    xla_gpu_unsupported_enable_ragged_all_to_all_decomposer::Bool
-    xla_gpu_unsupported_enable_ragged_all_to_all_multi_host_decomposer::Bool
-    xla_gpu_unsupported_enable_triton_gemm::Bool
-    xla_gpu_unsupported_enable_triton_multi_output_fusion::Bool
-    xla_gpu_unsupported_override_fast_interconnect_slice_size::Int64
-    xla_gpu_unsupported_use_all_reduce_one_shot_kernel::Bool
-    xla_gpu_unsupported_use_ragged_all_to_all_one_shot_kernel::Bool
-    xla_gpu_use_embeded_device_lib::Bool
-    xla_gpu_use_inprocess_lld::Bool
-    xla_gpu_use_memcpy_local_p2p::Bool
-    xla_gpu_use_runtime_fusion::Bool
-    xla_gpu_verify_triton_fusion_numerics::Bool
-    xla_hlo_graph_addresses::Bool
-    xla_hlo_profile::Bool
-    xla_disable_hlo_passes::Vector{String}
-    xla_enable_hlo_passes_only::Vector{String}
-    xla_disable_all_hlo_passes::Bool
-    xla_backend_optimization_level::Int32
-    xla_embed_ir_in_executable::Bool
-    xla_eliminate_hlo_implicit_broadcast::Bool
-    xla_cpu_multi_thread_eigen::Bool
-    xla_llvm_enable_alias_scope_metadata::Bool
-    xla_llvm_enable_noalias_metadata::Bool
-    xla_llvm_enable_invariant_load_metadata::Bool
-    xla_llvm_disable_expensive_passes::Bool
-    xla_test_all_output_layouts::Bool
-    xla_test_all_input_layouts::Bool
-    xla_hlo_graph_sharding_color::Bool
-    xla_cpu_use_onednn::Bool
-    xla_allow_excess_precision::Bool
-    xla_force_host_platform_device_count::Int32
-    xla_hlo_evaluator_use_fast_path::Bool
-    xla_allow_scalar_index_dynamic_ops::Bool
-    xla_step_marker_location::var"DebugOptions.StepMarkerLocation".T
-    xla_dump_to::String
-    xla_flags_reset::Bool
-    xla_dump_hlo_module_re::String
-    xla_dump_hlo_pass_re::String
-    xla_dump_emitter_re::String
-    xla_dump_hlo_as_text::Bool
-    xla_dump_hlo_as_proto::Bool
-    xla_dump_hlo_as_dot::Bool
-    xla_dump_hlo_as_url::Bool
-    xla_dump_hlo_as_html::Bool
-    xla_dump_fusion_visualization::Bool
-    xla_dump_hlo_snapshots::Bool
-    xla_dump_include_timestamp::Bool
-    xla_dump_max_hlo_modules::Int32
-    xla_dump_module_metadata::Bool
-    xla_dump_compress_protos::Bool
-    xla_dump_hlo_as_long_text::Bool
-    xla_dump_enable_mlir_pretty_form::Bool
-    xla_dump_full_hlo_config::Bool
-    xla_tpu_detect_nan::Bool
-    xla_tpu_detect_inf::Bool
-    xla_cpu_enable_xprof_traceme::Bool
-    xla_multiheap_size_constraint_per_heap::Int32
-    xla_detailed_logging::Bool
-    xla_enable_dumping::Bool
-    xla_llvm_force_inline_before_split::Bool
-    xla_dump_disable_metadata::Bool
-    xla_dump_hlo_pipeline_re::String
-    xla_cpu_use_acl::Bool
-    xla_cpu_strict_dot_conv_math::Bool
-    xla_dump_latency_hiding_schedule::Bool
-    xla_partitioning_algorithm::var"DebugOptions.PartitioningAlgorithm".T
-    xla_debug_buffer_assignment_show_max::Int64
-    xla_detect_unstable_reductions::var"DebugOptions.DetectionMode".T
-    xla_detect_unstable_reductions_post_optimizations::var"DebugOptions.DetectionMode".T
-    xla_gpu_detect_nan::var"DebugOptions.DetectionMode".T
-    xla_gpu_detect_inf::var"DebugOptions.DetectionMode".T
-    xla_dump_large_constants::Bool
-    xla_reduce_window_rewrite_base_length::Int64
-    xla_cmd_buffer_trace_cache_size::Int64
-    xla_syntax_sugar_async_ops::Bool
-    xla_enable_command_buffers_during_profiling::Bool
-    xla_ignore_channel_id::Bool
-    xla_pjrt_allow_auto_layout_in_hlo::Bool
-    xla_test_add_command_buffer_mode::Bool
-    xla_gpu_experimental_matmul_perf_table_path::String
-    xla_early_exit_with_layouts::Bool
-    xla_gpu_experimental_scaled_dot_with_triton::Bool
-    xla_gpu_experimental_use_raft_select_k::Bool
-    xla_backend_extra_options::Dict{String,String}
+mutable struct DebugOptions
+    __data::Dict{Symbol,Any}
 end
-PB.reserved_fields(::Type{DebugOptions}) = (names = ["hlo_reduce_precision_options", "legacy_command_buffer_custom_call_targets", "xla_allow_get_default_platform", "xla_cpu_dump_unoptimized_hlo_snapshots", "xla_cpu_enable_custom_matmul_tiling", "xla_cpu_enable_experimental_deallocation", "xla_cpu_enable_mlir_fusion_outlining", "xla_cpu_enable_mlir_lowering", "xla_cpu_enable_mlir_tiling_and_fusion", "xla_cpu_matmul_tiling_k_dim", "xla_cpu_matmul_tiling_m_dim", "xla_cpu_matmul_tiling_n_dim", "xla_cpu_sparse_cuda_threads", "xla_cpu_use_thunk_runtime", "xla_cpu_use_xla_runtime", "xla_detailed_logging_and_dumping", "xla_dump_ir", "xla_experimental_exec_time_optimization_effort", "xla_gpu_all_reduce_contiguous", "xla_gpu_allow_all_reduce_kernel", "xla_gpu_asm_extra_flags", "xla_gpu_bef_executable", "xla_gpu_bef_thunk", "xla_gpu_deterministic_reductions", "xla_gpu_disable_multi_streaming", "xla_gpu_dump_hlo_unoptimized_snapshots", "xla_gpu_enable_all_reduce_splitter", "xla_gpu_enable_async_all_gather", "xla_gpu_enable_async_all_reduce", "xla_gpu_enable_async_all_to_all", "xla_gpu_enable_async_collective_broadcast", "xla_gpu_enable_async_collective_permute", "xla_gpu_enable_async_collectives", "xla_gpu_enable_async_reduce_scatter", "xla_gpu_enable_bf16_3way_gemm", "xla_gpu_enable_bf16_6way_gemm", "xla_gpu_enable_cuda_graphs", "xla_gpu_enable_cudnn_fmha", "xla_gpu_enable_cudnn_frontend", "xla_gpu_enable_custom_fusions_re", "xla_gpu_enable_custom_fusions", "xla_gpu_enable_dot_strength_reduction", "xla_gpu_enable_experimental_block_size", "xla_gpu_enable_gpu2_hal", "xla_gpu_enable_gpu2_runtime", "xla_gpu_enable_heuristic_pass_configuration", "xla_gpu_enable_libnvjitlink", "xla_gpu_enable_mlir_emitters", "xla_gpu_enable_mlir_lowering", "xla_gpu_enable_nccl_per_stream_comms", "xla_gpu_enable_persistent_temp_buffers", "xla_gpu_enable_pgle_accuracy_checker", "xla_gpu_enable_priority_fusion", "xla_gpu_enable_softmax_fusion", "xla_gpu_enable_triton_gemm_int4", "xla_gpu_enable_triton_hopper", "xla_gpu_enable_triton_softmax_fusion", "xla_gpu_enable_triton_softmax_priority_fusion", "xla_gpu_enable_xla_runtime_executable", "xla_gpu_ensure_minor_dot_contraction_dims", "xla_gpu_experimental_enable_dynamic_dot_search_space", "xla_gpu_experimental_enable_nan_counter_on_thunks", "xla_gpu_experimental_enable_triton_i4_rewrites", "xla_gpu_experimental_enable_triton_softmax_priority_fusion", "xla_gpu_graph_eviction_timeout_seconds", "xla_gpu_graph_level", "xla_gpu_graph_num_runs_to_instantiate", "xla_gpu_lhs_enable_gpu_async_tracker", "xla_gpu_max_kernel_unroll_factor", "xla_gpu_max_mlir_kernels", "xla_gpu_mlir_emitter_level", "xla_gpu_normalize_layouts", "xla_gpu_redzone_scratch_max_megabytes", "xla_gpu_run_post_layout_collective_pipeliner", "xla_gpu_simplify_all_fp_conversions", "xla_gpu_simplify_gathers", "xla_gpu_simplify_scatters", "xla_gpu_single_wave_autotuning", "xla_gpu_skip_mlir_kernels", "xla_gpu_triton_fusion_level", "xla_gpu_triton_gemm_disable_reduced_precision_reduction", "xla_gpu_unsafe_fallback_to_driver_on_ptxas_error", "xla_gpu_unsafe_pipelined_loop_annotator", "xla_gpu_unsupported_enable_generic_triton_emitter_for_gemms", "xla_gpu_unsupported_force_triton_gemm", "xla_gpu_unsupported_generic_triton_emitter_features", "xla_gpu_use_cudnn_batchnorm", "xla_gpu_use_horizontal_fusion", "xla_gpu_use_random_streams", "xla_hlo_dump_as_graphdef", "xla_hlo_tfgraph_device_scopes", "xla_use_shardy", "xla_gpu_unsupported_annotate_with_emitter_loc", "xla_gpu_experimental_enable_command_buffer_on_thunks", "xla_gpu_experimental_enable_triton_tma"], numbers = Union{Int,UnitRange{Int}}[5, 63, 80, 93, 94, 98, 117, 130, 133, 134, 139, 141, 143, 152, 158, 160, 161, 162, 167, 168, 169, 171, 172, 173, 176, 177, 178, 179, 180, 183, 184, 191, 192, 193, 194, 195, 196, 197, 198, 199, 200, 201, 202, 204, 206, 207, 211, 214, 218, 220, 221, 226, 229, 230, 233, 234, 238, 242, 249, 263, 264, 266, 270, 271, 275, 276, 278, 279, 281, 282, 286, 298, 299, 302, 303, 309, 313, 314, 319, 320, 325, 326, 332, 346, 352, 355, 358, 361, 367, 369, 371, 385, 394, 398, 402, 423])
-PB.default_values(::Type{DebugOptions}) = (;xla_allow_h2h_copy_when_automatic_host_compute_offload_disabled = false, xla_disable_automatic_host_compute_offload = false, xla_enable_scoped_logging_timers = false, xla_hlo_pass_fix_detect_cycles = false, xla_keep_shardings_after_spmd = false, xla_unsupported_crash_on_hlo_pass_fix_max_iterations = false, xla_unsupported_crash_on_hlo_pass_noop_change = false, xla_unsupported_crash_on_hlo_pass_silent_hlo_change = false, xla_cpu_collective_call_terminate_timeout_seconds = zero(Int32), xla_cpu_collective_call_warn_stuck_seconds = zero(Int32), xla_cpu_collective_timeout_seconds = zero(Int32), xla_cpu_copy_insertion_use_region_analysis = false, xla_cpu_emitter_verification_level = zero(Int32), xla_cpu_enable_concurrency_optimized_scheduler = false, xla_cpu_enable_fast_math = false, xla_cpu_enable_fast_min_max = false, xla_cpu_enable_platform_dependent_math = false, xla_cpu_experimental_onednn_custom_call = false, xla_cpu_experimental_onednn_fusion_type = Vector{var"DebugOptions.LibraryFusionType".T}(), xla_cpu_experimental_xnn_fusion_type = Vector{var"DebugOptions.LibraryFusionType".T}(), xla_cpu_experimental_xnn_graph_fusion_mode = var"DebugOptions.XnnGraphFusionMode".XNN_GRAPH_FUSION_MODE_DISABLED, xla_cpu_experimental_ynn_fusion_type = Vector{var"DebugOptions.LibraryFusionType".T}(), xla_cpu_fast_math_honor_division = false, xla_cpu_fast_math_honor_functions = false, xla_cpu_fast_math_honor_infs = false, xla_cpu_fast_math_honor_nans = false, xla_cpu_generate_unique_c_style_kernel_entry_points = false, xla_cpu_max_isa = "", xla_cpu_parallel_codegen_split_count = zero(Int32), xla_cpu_prefer_vector_width = zero(Int32), xla_cpu_use_fusion_emitters = false, xla_cpu_use_xnnpack = false, xla_enable_fast_math = false, xla_gpu_experimental_thunk_buffer_debug_filter = nothing, xla_dump_hlo_unoptimized_snapshots = false, xla_enable_enzyme_comms_opt = false, xla_gpu_algorithm_denylist_path = "", xla_gpu_all_gather_combine_threshold_bytes = zero(Int64), xla_gpu_all_reduce_blueconnect_num_devices_per_host = zero(Int32), xla_gpu_all_reduce_combine_threshold_bytes = zero(Int64), xla_gpu_analytical_latency_estimator_options = Dict{String,String}(), xla_gpu_async_dot = false, xla_gpu_auto_spmd_partitioning_memory_budget_gb = zero(Int32), xla_gpu_auto_spmd_partitioning_memory_budget_ratio = zero(Float32), xla_gpu_autotune_gemm_rtol = zero(Float32), xla_gpu_autotune_level = zero(Int32), xla_gpu_autotune_max_solutions = zero(Int64), xla_gpu_collect_cost_model_stats = false, xla_gpu_collective_inflation_factor = zero(Int32), xla_gpu_collective_permute_combine_threshold_bytes = zero(Int64), xla_gpu_collective_permute_decomposer_threshold = zero(Int64), xla_gpu_collectives_use_persistent_cliques = false, xla_gpu_command_buffer_scheduling_mode = var"DebugOptions.CommandBufferSchedulingMode".SERIALIZE, xla_gpu_command_buffer_unroll_loops = false, xla_gpu_copy_insertion_use_region_analysis = false, xla_gpu_crash_on_verification_failures = false, xla_gpu_cublas_fallback = false, xla_gpu_cuda_data_dir = "", xla_gpu_cudnn_gemm_fusion_level = zero(Int32), xla_gpu_cudnn_gemm_max_plans = zero(Int32), xla_gpu_default_to_alg_dot_bf16_bf16_f32 = false, xla_gpu_deterministic_ops = false, xla_gpu_disable_async_collectives = Vector{var"DebugOptions.CollectiveOpType".T}(), xla_gpu_disable_gpuasm_optimizations = false, xla_gpu_dot_merger_threshold_mb = zero(Int32), xla_gpu_dump_autotune_logs_to = "", xla_gpu_dump_autotune_results_to = "", xla_gpu_dump_autotuned_gemm_fusions = false, xla_gpu_dump_llvmir = false, xla_gpu_enable_all_gather_combine_by_dim = false, xla_gpu_enable_analytical_latency_estimator = false, xla_gpu_enable_analytical_sol_latency_estimator = false, xla_gpu_enable_approx_costly_collectives = false, xla_gpu_enable_command_buffer = Vector{var"DebugOptions.CommandBufferCmdType".T}(), xla_gpu_enable_cub_radix_sort = false, xla_gpu_enable_cublaslt = false, xla_gpu_enable_cudnn_int8x32_convolution_reordering = false, xla_gpu_enable_cudnn_layer_norm = false, xla_gpu_enable_dynamic_slice_fusion = false, xla_gpu_enable_fast_min_max = false, xla_gpu_enable_highest_priority_async_stream = false, xla_gpu_enable_host_memory_offloading = false, xla_gpu_enable_latency_hiding_scheduler = false, xla_gpu_enable_libnvptxcompiler = false, xla_gpu_enable_llvm_module_compilation_parallelism = false, xla_gpu_enable_nccl_clique_optimization = false, xla_gpu_enable_nccl_comm_splitting = false, xla_gpu_enable_nccl_user_buffers = false, xla_gpu_enable_pipelined_all_gather = false, xla_gpu_enable_pipelined_all_reduce = false, xla_gpu_enable_pipelined_collectives = false, xla_gpu_enable_pipelined_host_offloading = false, xla_gpu_enable_pipelined_p2p = false, xla_gpu_enable_pipelined_reduce_scatter = false, xla_gpu_enable_reassociation_for_converted_ar = false, xla_gpu_enable_reduce_scatter_combine_by_dim = false, xla_gpu_enable_reduction_epilogue_fusion = false, xla_gpu_enable_scatter_determinism_expander = false, xla_gpu_enable_shared_constants = false, xla_gpu_enable_split_k_autotuning = false, xla_gpu_enable_triton_gemm = false, xla_gpu_enable_while_loop_double_buffering = false, xla_gpu_enable_while_loop_reduce_scatter_code_motion = false, xla_gpu_enable_while_loop_unrolling = var"DebugOptions.WhileLoopUnrolling".WHILE_LOOP_UNROLLING_NO_UNROLL, xla_gpu_exclude_nondeterministic_ops = false, xla_gpu_executable_embed_debug_info = false, xla_gpu_executable_terminate_timeout_seconds = zero(Int32), xla_gpu_executable_warn_stuck_timeout_seconds = zero(Int32), xla_gpu_exhaustive_tiling_search = false, xla_gpu_experimental_allow_unroll_factor_eight = false, xla_gpu_experimental_aot_compiled_thunks = false, xla_gpu_experimental_autotune_backends = Vector{var"DebugOptions.AutotuneBackend".T}(), xla_gpu_experimental_autotune_cache_mode = var"DebugOptions.AutotuneCacheMode".AUTOTUNE_CACHE_MODE_UNSPECIFIED, xla_gpu_experimental_autotuner_cache_dir = "", xla_gpu_experimental_collective_cse_distance_threshold = zero(Int64), xla_gpu_experimental_collective_perf_table_path = "", xla_gpu_experimental_disable_binary_libraries = false, xla_gpu_experimental_dump_fdo_profiles = false, xla_gpu_experimental_dump_gpu_executable = false, xla_gpu_experimental_enable_alltoall_windowed_einsum = false, xla_gpu_experimental_enable_buffer_saver_on_thunks = false, xla_gpu_experimental_enable_checksum_tracing_on_thunks = false, xla_gpu_experimental_enable_fusion_autotuner = false, xla_gpu_experimental_enable_fusion_block_level_rewriter = false, xla_gpu_experimental_enable_heuristic_collective_combining = false, xla_gpu_experimental_enable_nccl_symmetric_buffers = false, xla_gpu_experimental_enable_nvshmem = false, xla_gpu_experimental_enable_split_k_rewrite = false, xla_gpu_experimental_enable_subchannel_dequantisation_fusion = false, xla_gpu_experimental_enable_triton_heroless_priority_fusion = false, xla_gpu_experimental_enable_triton_warp_specialization = false, xla_gpu_experimental_pack_dot_operands_along_k_dimension = false, xla_gpu_experimental_parallel_collective_overlap_limit = zero(Int32), xla_gpu_experimental_pipeline_parallelism_opt_level = var"DebugOptions.PipelineParallelismOptLevel".PIPELINE_PARALLELISM_OPT_LEVEL_DISABLE, xla_gpu_experimental_stream_annotation = false, xla_gpu_experimental_use_autotuner_pass = false, xla_gpu_experimental_use_ragged_dot_fusion = false, xla_gpu_fail_ptx_compilation_on_register_spilling = false, xla_gpu_filter_kernels_spilling_registers_on_autotuning = false, xla_gpu_first_collective_call_terminate_timeout_seconds = zero(Int32), xla_gpu_first_collective_call_warn_stuck_timeout_seconds = zero(Int32), xla_gpu_force_compilation_parallelism = zero(Int32), xla_gpu_force_conv_nchw = false, xla_gpu_force_conv_nhwc = false, xla_gpu_ftz = false, xla_gpu_fused_attention_use_cudnn_rng = false, xla_gpu_gemm_autotuner_override_file = "", xla_gpu_gemm_rewrite_size_threshold = zero(Int64), xla_gpu_generate_debug_info = false, xla_gpu_generate_line_info = false, xla_gpu_graph_enable_concurrent_region = false, xla_gpu_graph_min_graph_size = zero(Int32), xla_gpu_kernel_cache_file = "", xla_gpu_libnvjitlink_mode = var"DebugOptions.LibNvJitLinkMode".LIB_NV_JIT_LINK_MODE_AUTO, xla_gpu_llvm_ir_file = Vector{String}(), xla_gpu_llvm_verification_level = zero(Int32), xla_gpu_load_autotune_results_from = "", xla_gpu_memory_limit_slop_factor = zero(Int32), xla_gpu_mock_custom_calls = false, xla_gpu_multi_streamed_windowed_einsum = false, xla_gpu_nccl_async_execution = false, xla_gpu_nccl_blocking_communicators = false, xla_gpu_nccl_collective_max_nchannels = zero(Int64), xla_gpu_nccl_init_max_rank_per_root_ratio = zero(Int64), xla_gpu_nccl_p2p_max_nchannels = zero(Int64), xla_gpu_nccl_terminate_on_error = false, xla_gpu_nccl_termination_timeout_seconds = zero(Int64), xla_gpu_operand_bytes_threshold_for_windowed_einsum = zero(Int64), xla_gpu_override_gemm_autotuner = "", xla_gpu_per_fusion_autotune_cache_dir = "", xla_gpu_pgle_accuracy_checker = var"DebugOptions.PGLEStrictnessLevel".PGLE_STRICTNESS_LEVEL_OFF, xla_gpu_pgle_profile_file_or_directory_path = "", xla_gpu_ptx_file = Vector{String}(), xla_gpu_reduce_scatter_combine_threshold_bytes = zero(Int64), xla_gpu_redzone_padding_bytes = zero(Int64), xla_gpu_require_complete_aot_autotune_results = false, xla_gpu_require_exclusive_lock = false, xla_gpu_shape_checks = var"DebugOptions.ShapeChecks".IGNORE, xla_gpu_shard_autotuning = false, xla_gpu_strict_conv_algorithm_picker = false, xla_gpu_target_config_filename = "", xla_gpu_temp_buffer_use_separate_color = false, xla_gpu_threshold_for_windowed_einsum_mib = zero(Int64), xla_gpu_triton_gemm_any = false, xla_gpu_unsafe_fallback_to_driver_on_ptxas_not_found = false, xla_gpu_unsupported_enable_all_reduce_decomposer = false, xla_gpu_unsupported_enable_ragged_all_to_all_decomposer = false, xla_gpu_unsupported_enable_ragged_all_to_all_multi_host_decomposer = false, xla_gpu_unsupported_enable_triton_gemm = false, xla_gpu_unsupported_enable_triton_multi_output_fusion = false, xla_gpu_unsupported_override_fast_interconnect_slice_size = zero(Int64), xla_gpu_unsupported_use_all_reduce_one_shot_kernel = false, xla_gpu_unsupported_use_ragged_all_to_all_one_shot_kernel = false, xla_gpu_use_embeded_device_lib = false, xla_gpu_use_inprocess_lld = false, xla_gpu_use_memcpy_local_p2p = false, xla_gpu_use_runtime_fusion = false, xla_gpu_verify_triton_fusion_numerics = false, xla_hlo_graph_addresses = false, xla_hlo_profile = false, xla_disable_hlo_passes = Vector{String}(), xla_enable_hlo_passes_only = Vector{String}(), xla_disable_all_hlo_passes = false, xla_backend_optimization_level = zero(Int32), xla_embed_ir_in_executable = false, xla_eliminate_hlo_implicit_broadcast = false, xla_cpu_multi_thread_eigen = false, xla_llvm_enable_alias_scope_metadata = false, xla_llvm_enable_noalias_metadata = false, xla_llvm_enable_invariant_load_metadata = false, xla_llvm_disable_expensive_passes = false, xla_test_all_output_layouts = false, xla_test_all_input_layouts = false, xla_hlo_graph_sharding_color = false, xla_cpu_use_onednn = false, xla_allow_excess_precision = false, xla_force_host_platform_device_count = zero(Int32), xla_hlo_evaluator_use_fast_path = false, xla_allow_scalar_index_dynamic_ops = false, xla_step_marker_location = var"DebugOptions.StepMarkerLocation".STEP_MARK_AT_ENTRY, xla_dump_to = "", xla_flags_reset = false, xla_dump_hlo_module_re = "", xla_dump_hlo_pass_re = "", xla_dump_emitter_re = "", xla_dump_hlo_as_text = false, xla_dump_hlo_as_proto = false, xla_dump_hlo_as_dot = false, xla_dump_hlo_as_url = false, xla_dump_hlo_as_html = false, xla_dump_fusion_visualization = false, xla_dump_hlo_snapshots = false, xla_dump_include_timestamp = false, xla_dump_max_hlo_modules = zero(Int32), xla_dump_module_metadata = false, xla_dump_compress_protos = false, xla_dump_hlo_as_long_text = false, xla_dump_enable_mlir_pretty_form = false, xla_dump_full_hlo_config = false, xla_tpu_detect_nan = false, xla_tpu_detect_inf = false, xla_cpu_enable_xprof_traceme = false, xla_multiheap_size_constraint_per_heap = zero(Int32), xla_detailed_logging = false, xla_enable_dumping = false, xla_llvm_force_inline_before_split = false, xla_dump_disable_metadata = false, xla_dump_hlo_pipeline_re = "", xla_cpu_use_acl = false, xla_cpu_strict_dot_conv_math = false, xla_dump_latency_hiding_schedule = false, xla_partitioning_algorithm = var"DebugOptions.PartitioningAlgorithm".PARTITIONING_ALGORITHM_NOOP, xla_debug_buffer_assignment_show_max = zero(Int64), xla_detect_unstable_reductions = var"DebugOptions.DetectionMode".DETECTION_MODE_NONE, xla_detect_unstable_reductions_post_optimizations = var"DebugOptions.DetectionMode".DETECTION_MODE_NONE, xla_gpu_detect_nan = var"DebugOptions.DetectionMode".DETECTION_MODE_NONE, xla_gpu_detect_inf = var"DebugOptions.DetectionMode".DETECTION_MODE_NONE, xla_dump_large_constants = false, xla_reduce_window_rewrite_base_length = zero(Int64), xla_cmd_buffer_trace_cache_size = zero(Int64), xla_syntax_sugar_async_ops = false, xla_enable_command_buffers_during_profiling = false, xla_ignore_channel_id = false, xla_pjrt_allow_auto_layout_in_hlo = false, xla_test_add_command_buffer_mode = false, xla_gpu_experimental_matmul_perf_table_path = "", xla_early_exit_with_layouts = false, xla_gpu_experimental_scaled_dot_with_triton = false, xla_gpu_experimental_use_raft_select_k = false, xla_backend_extra_options = Dict{String,String}())
-PB.field_numbers(::Type{DebugOptions}) = (;xla_allow_h2h_copy_when_automatic_host_compute_offload_disabled = 439, xla_disable_automatic_host_compute_offload = 408, xla_enable_scoped_logging_timers = 436, xla_hlo_pass_fix_detect_cycles = 370, xla_keep_shardings_after_spmd = 419, xla_unsupported_crash_on_hlo_pass_fix_max_iterations = 363, xla_unsupported_crash_on_hlo_pass_noop_change = 379, xla_unsupported_crash_on_hlo_pass_silent_hlo_change = 380, xla_cpu_collective_call_terminate_timeout_seconds = 417, xla_cpu_collective_call_warn_stuck_seconds = 418, xla_cpu_collective_timeout_seconds = 438, xla_cpu_copy_insertion_use_region_analysis = 337, xla_cpu_emitter_verification_level = 395, xla_cpu_enable_concurrency_optimized_scheduler = 307, xla_cpu_enable_fast_math = 99, xla_cpu_enable_fast_min_max = 140, xla_cpu_enable_platform_dependent_math = 425, xla_cpu_experimental_onednn_custom_call = 412, xla_cpu_experimental_onednn_fusion_type = 399, xla_cpu_experimental_xnn_fusion_type = 400, xla_cpu_experimental_xnn_graph_fusion_mode = 365, xla_cpu_experimental_ynn_fusion_type = 422, xla_cpu_fast_math_honor_division = 126, xla_cpu_fast_math_honor_functions = 129, xla_cpu_fast_math_honor_infs = 121, xla_cpu_fast_math_honor_nans = 120, xla_cpu_generate_unique_c_style_kernel_entry_points = 372, xla_cpu_max_isa = 333, xla_cpu_parallel_codegen_split_count = 323, xla_cpu_prefer_vector_width = 308, xla_cpu_use_fusion_emitters = 376, xla_cpu_use_xnnpack = 359, xla_enable_fast_math = 335, xla_gpu_experimental_thunk_buffer_debug_filter = 424, xla_dump_hlo_unoptimized_snapshots = 405, xla_enable_enzyme_comms_opt = 429, xla_gpu_algorithm_denylist_path = 128, xla_gpu_all_gather_combine_threshold_bytes = 212, xla_gpu_all_reduce_blueconnect_num_devices_per_host = 159, xla_gpu_all_reduce_combine_threshold_bytes = 157, xla_gpu_analytical_latency_estimator_options = 357, xla_gpu_async_dot = 321, xla_gpu_auto_spmd_partitioning_memory_budget_gb = 224, xla_gpu_auto_spmd_partitioning_memory_budget_ratio = 225, xla_gpu_autotune_gemm_rtol = 316, xla_gpu_autotune_level = 123, xla_gpu_autotune_max_solutions = 288, xla_gpu_collect_cost_model_stats = 240, xla_gpu_collective_inflation_factor = 205, xla_gpu_collective_permute_combine_threshold_bytes = 378, xla_gpu_collective_permute_decomposer_threshold = 237, xla_gpu_collectives_use_persistent_cliques = 354, xla_gpu_command_buffer_scheduling_mode = 404, xla_gpu_command_buffer_unroll_loops = 411, xla_gpu_copy_insertion_use_region_analysis = 236, xla_gpu_crash_on_verification_failures = 101, xla_gpu_cublas_fallback = 247, xla_gpu_cuda_data_dir = 61, xla_gpu_cudnn_gemm_fusion_level = 285, xla_gpu_cudnn_gemm_max_plans = 318, xla_gpu_default_to_alg_dot_bf16_bf16_f32 = 441, xla_gpu_deterministic_ops = 148, xla_gpu_disable_async_collectives = 289, xla_gpu_disable_gpuasm_optimizations = 103, xla_gpu_dot_merger_threshold_mb = 331, xla_gpu_dump_autotune_logs_to = 292, xla_gpu_dump_autotune_results_to = 222, xla_gpu_dump_autotuned_gemm_fusions = 232, xla_gpu_dump_llvmir = 155, xla_gpu_enable_all_gather_combine_by_dim = 254, xla_gpu_enable_analytical_latency_estimator = 255, xla_gpu_enable_analytical_sol_latency_estimator = 356, xla_gpu_enable_approx_costly_collectives = 305, xla_gpu_enable_command_buffer = 258, xla_gpu_enable_cub_radix_sort = 259, xla_gpu_enable_cublaslt = 166, xla_gpu_enable_cudnn_int8x32_convolution_reordering = 189, xla_gpu_enable_cudnn_layer_norm = 262, xla_gpu_enable_dynamic_slice_fusion = 105, xla_gpu_enable_fast_min_max = 100, xla_gpu_enable_highest_priority_async_stream = 216, xla_gpu_enable_host_memory_offloading = 296, xla_gpu_enable_latency_hiding_scheduler = 186, xla_gpu_enable_libnvptxcompiler = 269, xla_gpu_enable_llvm_module_compilation_parallelism = 268, xla_gpu_enable_nccl_clique_optimization = 244, xla_gpu_enable_nccl_comm_splitting = 272, xla_gpu_enable_nccl_user_buffers = 267, xla_gpu_enable_pipelined_all_gather = 227, xla_gpu_enable_pipelined_all_reduce = 217, xla_gpu_enable_pipelined_collectives = 239, xla_gpu_enable_pipelined_host_offloading = 440, xla_gpu_enable_pipelined_p2p = 246, xla_gpu_enable_pipelined_reduce_scatter = 231, xla_gpu_enable_reassociation_for_converted_ar = 209, xla_gpu_enable_reduce_scatter_combine_by_dim = 257, xla_gpu_enable_reduction_epilogue_fusion = 243, xla_gpu_enable_scatter_determinism_expander = 345, xla_gpu_enable_shared_constants = 165, xla_gpu_enable_split_k_autotuning = 241, xla_gpu_enable_triton_gemm = 188, xla_gpu_enable_while_loop_double_buffering = 248, xla_gpu_enable_while_loop_reduce_scatter_code_motion = 203, xla_gpu_enable_while_loop_unrolling = 294, xla_gpu_exclude_nondeterministic_ops = 297, xla_gpu_executable_embed_debug_info = 437, xla_gpu_executable_terminate_timeout_seconds = 328, xla_gpu_executable_warn_stuck_timeout_seconds = 327, xla_gpu_exhaustive_tiling_search = 219, xla_gpu_experimental_allow_unroll_factor_eight = 430, xla_gpu_experimental_aot_compiled_thunks = 435, xla_gpu_experimental_autotune_backends = 442, xla_gpu_experimental_autotune_cache_mode = 324, xla_gpu_experimental_autotuner_cache_dir = 407, xla_gpu_experimental_collective_cse_distance_threshold = 374, xla_gpu_experimental_collective_perf_table_path = 377, xla_gpu_experimental_disable_binary_libraries = 329, xla_gpu_experimental_dump_fdo_profiles = 338, xla_gpu_experimental_dump_gpu_executable = 427, xla_gpu_experimental_enable_alltoall_windowed_einsum = 360, xla_gpu_experimental_enable_buffer_saver_on_thunks = 431, xla_gpu_experimental_enable_checksum_tracing_on_thunks = 414, xla_gpu_experimental_enable_fusion_autotuner = 409, xla_gpu_experimental_enable_fusion_block_level_rewriter = 334, xla_gpu_experimental_enable_heuristic_collective_combining = 366, xla_gpu_experimental_enable_nccl_symmetric_buffers = 406, xla_gpu_experimental_enable_nvshmem = 388, xla_gpu_experimental_enable_split_k_rewrite = 386, xla_gpu_experimental_enable_subchannel_dequantisation_fusion = 368, xla_gpu_experimental_enable_triton_heroless_priority_fusion = 340, xla_gpu_experimental_enable_triton_warp_specialization = 421, xla_gpu_experimental_pack_dot_operands_along_k_dimension = 362, xla_gpu_experimental_parallel_collective_overlap_limit = 336, xla_gpu_experimental_pipeline_parallelism_opt_level = 351, xla_gpu_experimental_stream_annotation = 342, xla_gpu_experimental_use_autotuner_pass = 396, xla_gpu_experimental_use_ragged_dot_fusion = 401, xla_gpu_fail_ptx_compilation_on_register_spilling = 353, xla_gpu_filter_kernels_spilling_registers_on_autotuning = 250, xla_gpu_first_collective_call_terminate_timeout_seconds = 392, xla_gpu_first_collective_call_warn_stuck_timeout_seconds = 391, xla_gpu_force_compilation_parallelism = 147, xla_gpu_force_conv_nchw = 125, xla_gpu_force_conv_nhwc = 146, xla_gpu_ftz = 62, xla_gpu_fused_attention_use_cudnn_rng = 235, xla_gpu_gemm_autotuner_override_file = 434, xla_gpu_gemm_rewrite_size_threshold = 283, xla_gpu_generate_debug_info = 348, xla_gpu_generate_line_info = 349, xla_gpu_graph_enable_concurrent_region = 215, xla_gpu_graph_min_graph_size = 208, xla_gpu_kernel_cache_file = 306, xla_gpu_libnvjitlink_mode = 343, xla_gpu_llvm_ir_file = 150, xla_gpu_llvm_verification_level = 256, xla_gpu_load_autotune_results_from = 223, xla_gpu_memory_limit_slop_factor = 260, xla_gpu_mock_custom_calls = 245, xla_gpu_multi_streamed_windowed_einsum = 280, xla_gpu_nccl_async_execution = 393, xla_gpu_nccl_blocking_communicators = 390, xla_gpu_nccl_collective_max_nchannels = 273, xla_gpu_nccl_init_max_rank_per_root_ratio = 277, xla_gpu_nccl_p2p_max_nchannels = 274, xla_gpu_nccl_terminate_on_error = 301, xla_gpu_nccl_termination_timeout_seconds = 163, xla_gpu_operand_bytes_threshold_for_windowed_einsum = 339, xla_gpu_override_gemm_autotuner = 295, xla_gpu_per_fusion_autotune_cache_dir = 310, xla_gpu_pgle_accuracy_checker = 341, xla_gpu_pgle_profile_file_or_directory_path = 210, xla_gpu_ptx_file = 127, xla_gpu_reduce_scatter_combine_threshold_bytes = 213, xla_gpu_redzone_padding_bytes = 228, xla_gpu_require_complete_aot_autotune_results = 284, xla_gpu_require_exclusive_lock = 347, xla_gpu_shape_checks = 170, xla_gpu_shard_autotuning = 304, xla_gpu_strict_conv_algorithm_picker = 156, xla_gpu_target_config_filename = 261, xla_gpu_temp_buffer_use_separate_color = 312, xla_gpu_threshold_for_windowed_einsum_mib = 265, xla_gpu_triton_gemm_any = 190, xla_gpu_unsafe_fallback_to_driver_on_ptxas_not_found = 138, xla_gpu_unsupported_enable_all_reduce_decomposer = 384, xla_gpu_unsupported_enable_ragged_all_to_all_decomposer = 350, xla_gpu_unsupported_enable_ragged_all_to_all_multi_host_decomposer = 415, xla_gpu_unsupported_enable_triton_gemm = 322, xla_gpu_unsupported_enable_triton_multi_output_fusion = 382, xla_gpu_unsupported_override_fast_interconnect_slice_size = 416, xla_gpu_unsupported_use_all_reduce_one_shot_kernel = 387, xla_gpu_unsupported_use_ragged_all_to_all_one_shot_kernel = 375, xla_gpu_use_embeded_device_lib = 420, xla_gpu_use_inprocess_lld = 389, xla_gpu_use_memcpy_local_p2p = 287, xla_gpu_use_runtime_fusion = 181, xla_gpu_verify_triton_fusion_numerics = 291, xla_hlo_graph_addresses = 2, xla_hlo_profile = 9, xla_disable_hlo_passes = 30, xla_enable_hlo_passes_only = 124, xla_disable_all_hlo_passes = 104, xla_backend_optimization_level = 31, xla_embed_ir_in_executable = 33, xla_eliminate_hlo_implicit_broadcast = 35, xla_cpu_multi_thread_eigen = 60, xla_llvm_enable_alias_scope_metadata = 70, xla_llvm_enable_noalias_metadata = 71, xla_llvm_enable_invariant_load_metadata = 72, xla_llvm_disable_expensive_passes = 73, xla_test_all_output_layouts = 90, xla_test_all_input_layouts = 91, xla_hlo_graph_sharding_color = 92, xla_cpu_use_onednn = 97, xla_allow_excess_precision = 122, xla_force_host_platform_device_count = 102, xla_hlo_evaluator_use_fast_path = 106, xla_allow_scalar_index_dynamic_ops = 107, xla_step_marker_location = 108, xla_dump_to = 109, xla_flags_reset = 364, xla_dump_hlo_module_re = 110, xla_dump_hlo_pass_re = 111, xla_dump_emitter_re = 433, xla_dump_hlo_as_text = 112, xla_dump_hlo_as_proto = 113, xla_dump_hlo_as_dot = 114, xla_dump_hlo_as_url = 115, xla_dump_hlo_as_html = 116, xla_dump_fusion_visualization = 149, xla_dump_hlo_snapshots = 118, xla_dump_include_timestamp = 131, xla_dump_max_hlo_modules = 132, xla_dump_module_metadata = 144, xla_dump_compress_protos = 151, xla_dump_hlo_as_long_text = 164, xla_dump_enable_mlir_pretty_form = 185, xla_dump_full_hlo_config = 381, xla_tpu_detect_nan = 135, xla_tpu_detect_inf = 136, xla_cpu_enable_xprof_traceme = 137, xla_multiheap_size_constraint_per_heap = 142, xla_detailed_logging = 252, xla_enable_dumping = 253, xla_llvm_force_inline_before_split = 300, xla_dump_disable_metadata = 153, xla_dump_hlo_pipeline_re = 154, xla_cpu_use_acl = 174, xla_cpu_strict_dot_conv_math = 175, xla_dump_latency_hiding_schedule = 182, xla_partitioning_algorithm = 187, xla_debug_buffer_assignment_show_max = 251, xla_detect_unstable_reductions = 403, xla_detect_unstable_reductions_post_optimizations = 432, xla_gpu_detect_nan = 426, xla_gpu_detect_inf = 428, xla_dump_large_constants = 290, xla_reduce_window_rewrite_base_length = 293, xla_cmd_buffer_trace_cache_size = 311, xla_syntax_sugar_async_ops = 315, xla_enable_command_buffers_during_profiling = 317, xla_ignore_channel_id = 330, xla_pjrt_allow_auto_layout_in_hlo = 344, xla_test_add_command_buffer_mode = 373, xla_gpu_experimental_matmul_perf_table_path = 383, xla_early_exit_with_layouts = 397, xla_gpu_experimental_scaled_dot_with_triton = 410, xla_gpu_experimental_use_raft_select_k = 413, xla_backend_extra_options = 500)
+
+# Default values for DebugOptions fields
+const _DebugOptions_defaults = Dict{Symbol,Any}(
+    :xla_allow_h2h_copy_when_automatic_host_compute_offload_disabled => false,
+    :xla_disable_automatic_host_compute_offload => false,
+    :xla_enable_scoped_logging_timers => false,
+    :xla_hlo_pass_fix_detect_cycles => false,
+    :xla_keep_shardings_after_spmd => false,
+    :xla_unsupported_crash_on_hlo_pass_fix_max_iterations => false,
+    :xla_unsupported_crash_on_hlo_pass_noop_change => false,
+    :xla_unsupported_crash_on_hlo_pass_silent_hlo_change => false,
+    :xla_cpu_collective_call_terminate_timeout_seconds => zero(Int32),
+    :xla_cpu_collective_call_warn_stuck_seconds => zero(Int32),
+    :xla_cpu_collective_timeout_seconds => zero(Int32),
+    :xla_cpu_copy_insertion_use_region_analysis => false,
+    :xla_cpu_emitter_verification_level => zero(Int32),
+    :xla_cpu_enable_concurrency_optimized_scheduler => false,
+    :xla_cpu_enable_fast_math => false,
+    :xla_cpu_enable_fast_min_max => false,
+    :xla_cpu_enable_platform_dependent_math => false,
+    :xla_cpu_experimental_onednn_custom_call => false,
+    :xla_cpu_experimental_onednn_fusion_type => Vector{var"DebugOptions.LibraryFusionType".T}(),
+    :xla_cpu_experimental_xnn_fusion_type => Vector{var"DebugOptions.LibraryFusionType".T}(),
+    :xla_cpu_experimental_xnn_graph_fusion_mode => nothing,
+    :xla_cpu_experimental_ynn_fusion_type => Vector{var"DebugOptions.LibraryFusionType".T}(),
+    :xla_cpu_fast_math_honor_division => false,
+    :xla_cpu_fast_math_honor_functions => false,
+    :xla_cpu_fast_math_honor_infs => false,
+    :xla_cpu_fast_math_honor_nans => false,
+    :xla_cpu_generate_unique_c_style_kernel_entry_points => false,
+    :xla_cpu_max_isa => "",
+    :xla_cpu_parallel_codegen_split_count => zero(Int32),
+    :xla_cpu_prefer_vector_width => zero(Int32),
+    :xla_cpu_use_fusion_emitters => false,
+    :xla_cpu_use_xnnpack => false,
+    :xla_enable_fast_math => false,
+    :xla_gpu_experimental_thunk_buffer_debug_filter => nothing,
+    :xla_dump_hlo_unoptimized_snapshots => false,
+    :xla_enable_enzyme_comms_opt => false,
+    :xla_gpu_algorithm_denylist_path => "",
+    :xla_gpu_all_gather_combine_threshold_bytes => zero(Int64),
+    :xla_gpu_all_reduce_blueconnect_num_devices_per_host => zero(Int32),
+    :xla_gpu_all_reduce_combine_threshold_bytes => zero(Int64),
+    :xla_gpu_analytical_latency_estimator_options => Dict{String,String}(),
+    :xla_gpu_async_dot => false,
+    :xla_gpu_auto_spmd_partitioning_memory_budget_gb => zero(Int32),
+    :xla_gpu_auto_spmd_partitioning_memory_budget_ratio => zero(Float32),
+    :xla_gpu_autotune_gemm_rtol => zero(Float32),
+    :xla_gpu_autotune_level => zero(Int32),
+    :xla_gpu_autotune_max_solutions => zero(Int64),
+    :xla_gpu_collect_cost_model_stats => false,
+    :xla_gpu_collective_inflation_factor => zero(Int32),
+    :xla_gpu_collective_permute_combine_threshold_bytes => zero(Int64),
+    :xla_gpu_collective_permute_decomposer_threshold => zero(Int64),
+    :xla_gpu_collectives_use_persistent_cliques => false,
+    :xla_gpu_command_buffer_scheduling_mode => nothing,
+    :xla_gpu_command_buffer_unroll_loops => false,
+    :xla_gpu_copy_insertion_use_region_analysis => false,
+    :xla_gpu_crash_on_verification_failures => false,
+    :xla_gpu_cublas_fallback => false,
+    :xla_gpu_cuda_data_dir => "",
+    :xla_gpu_cudnn_gemm_fusion_level => zero(Int32),
+    :xla_gpu_cudnn_gemm_max_plans => zero(Int32),
+    :xla_gpu_deterministic_ops => false,
+    :xla_gpu_disable_async_collectives => Vector{var"DebugOptions.CollectiveOpType".T}(),
+    :xla_gpu_disable_gpuasm_optimizations => false,
+    :xla_gpu_dot_merger_threshold_mb => zero(Int32),
+    :xla_gpu_dump_autotune_logs_to => "",
+    :xla_gpu_dump_autotune_results_to => "",
+    :xla_gpu_dump_autotuned_gemm_fusions => false,
+    :xla_gpu_dump_llvmir => false,
+    :xla_gpu_enable_all_gather_combine_by_dim => false,
+    :xla_gpu_enable_analytical_latency_estimator => false,
+    :xla_gpu_enable_analytical_sol_latency_estimator => false,
+    :xla_gpu_enable_approx_costly_collectives => false,
+    :xla_gpu_enable_command_buffer => Vector{var"DebugOptions.CommandBufferCmdType".T}(),
+    :xla_gpu_enable_cub_radix_sort => false,
+    :xla_gpu_enable_cublaslt => false,
+    :xla_gpu_enable_cudnn_int8x32_convolution_reordering => false,
+    :xla_gpu_enable_cudnn_layer_norm => false,
+    :xla_gpu_enable_dynamic_slice_fusion => false,
+    :xla_gpu_enable_fast_min_max => false,
+    :xla_gpu_enable_highest_priority_async_stream => false,
+    :xla_gpu_enable_host_memory_offloading => false,
+    :xla_gpu_enable_latency_hiding_scheduler => false,
+    :xla_gpu_enable_libnvptxcompiler => false,
+    :xla_gpu_enable_llvm_module_compilation_parallelism => false,
+    :xla_gpu_enable_nccl_clique_optimization => false,
+    :xla_gpu_enable_nccl_comm_splitting => false,
+    :xla_gpu_enable_nccl_user_buffers => false,
+    :xla_gpu_enable_pipelined_all_gather => false,
+    :xla_gpu_enable_pipelined_all_reduce => false,
+    :xla_gpu_enable_pipelined_collectives => false,
+    :xla_gpu_enable_pipelined_p2p => false,
+    :xla_gpu_enable_pipelined_reduce_scatter => false,
+    :xla_gpu_enable_reassociation_for_converted_ar => false,
+    :xla_gpu_enable_reduce_scatter_combine_by_dim => false,
+    :xla_gpu_enable_reduction_epilogue_fusion => false,
+    :xla_gpu_enable_scatter_determinism_expander => false,
+    :xla_gpu_enable_shared_constants => false,
+    :xla_gpu_enable_split_k_autotuning => false,
+    :xla_gpu_enable_triton_gemm => false,
+    :xla_gpu_enable_while_loop_double_buffering => false,
+    :xla_gpu_enable_while_loop_reduce_scatter_code_motion => false,
+    :xla_gpu_enable_while_loop_unrolling => nothing,
+    :xla_gpu_exclude_nondeterministic_ops => false,
+    :xla_gpu_executable_embed_debug_info => false,
+    :xla_gpu_executable_terminate_timeout_seconds => zero(Int32),
+    :xla_gpu_executable_warn_stuck_timeout_seconds => zero(Int32),
+    :xla_gpu_exhaustive_tiling_search => false,
+    :xla_gpu_experimental_allow_unroll_factor_eight => false,
+    :xla_gpu_experimental_aot_compiled_thunks => false,
+    :xla_gpu_experimental_autotune_cache_mode => nothing,
+    :xla_gpu_experimental_autotuner_cache_dir => "",
+    :xla_gpu_experimental_collective_cse_distance_threshold => zero(Int64),
+    :xla_gpu_experimental_collective_perf_table_path => "",
+    :xla_gpu_experimental_disable_binary_libraries => false,
+    :xla_gpu_experimental_dump_fdo_profiles => false,
+    :xla_gpu_experimental_dump_gpu_executable => false,
+    :xla_gpu_experimental_enable_alltoall_windowed_einsum => false,
+    :xla_gpu_experimental_enable_buffer_saver_on_thunks => false,
+    :xla_gpu_experimental_enable_checksum_tracing_on_thunks => false,
+    :xla_gpu_experimental_enable_fusion_autotuner => false,
+    :xla_gpu_experimental_enable_fusion_block_level_rewriter => false,
+    :xla_gpu_experimental_enable_heuristic_collective_combining => false,
+    :xla_gpu_experimental_enable_nccl_symmetric_buffers => false,
+    :xla_gpu_experimental_enable_nvshmem => false,
+    :xla_gpu_experimental_enable_split_k_rewrite => false,
+    :xla_gpu_experimental_enable_subchannel_dequantisation_fusion => false,
+    :xla_gpu_experimental_enable_triton_heroless_priority_fusion => false,
+    :xla_gpu_experimental_enable_triton_warp_specialization => false,
+    :xla_gpu_experimental_pack_dot_operands_along_k_dimension => false,
+    :xla_gpu_experimental_parallel_collective_overlap_limit => zero(Int32),
+    :xla_gpu_experimental_pipeline_parallelism_opt_level => nothing,
+    :xla_gpu_experimental_stream_annotation => false,
+    :xla_gpu_experimental_use_autotuner_pass => false,
+    :xla_gpu_experimental_use_ragged_dot_fusion => false,
+    :xla_gpu_fail_ptx_compilation_on_register_spilling => false,
+    :xla_gpu_filter_kernels_spilling_registers_on_autotuning => false,
+    :xla_gpu_first_collective_call_terminate_timeout_seconds => zero(Int32),
+    :xla_gpu_first_collective_call_warn_stuck_timeout_seconds => zero(Int32),
+    :xla_gpu_force_compilation_parallelism => zero(Int32),
+    :xla_gpu_force_conv_nchw => false,
+    :xla_gpu_force_conv_nhwc => false,
+    :xla_gpu_ftz => false,
+    :xla_gpu_fused_attention_use_cudnn_rng => false,
+    :xla_gpu_gemm_autotuner_override_file => "",
+    :xla_gpu_gemm_rewrite_size_threshold => zero(Int64),
+    :xla_gpu_generate_debug_info => false,
+    :xla_gpu_generate_line_info => false,
+    :xla_gpu_graph_enable_concurrent_region => false,
+    :xla_gpu_graph_min_graph_size => zero(Int32),
+    :xla_gpu_kernel_cache_file => "",
+    :xla_gpu_libnvjitlink_mode => nothing,
+    :xla_gpu_llvm_ir_file => Vector{String}(),
+    :xla_gpu_llvm_verification_level => zero(Int32),
+    :xla_gpu_load_autotune_results_from => "",
+    :xla_gpu_memory_limit_slop_factor => zero(Int32),
+    :xla_gpu_mock_custom_calls => false,
+    :xla_gpu_multi_streamed_windowed_einsum => false,
+    :xla_gpu_nccl_async_execution => false,
+    :xla_gpu_nccl_blocking_communicators => false,
+    :xla_gpu_nccl_collective_max_nchannels => zero(Int64),
+    :xla_gpu_nccl_init_max_rank_per_root_ratio => zero(Int64),
+    :xla_gpu_nccl_p2p_max_nchannels => zero(Int64),
+    :xla_gpu_nccl_terminate_on_error => false,
+    :xla_gpu_nccl_termination_timeout_seconds => zero(Int64),
+    :xla_gpu_operand_bytes_threshold_for_windowed_einsum => zero(Int64),
+    :xla_gpu_override_gemm_autotuner => "",
+    :xla_gpu_per_fusion_autotune_cache_dir => "",
+    :xla_gpu_pgle_accuracy_checker => nothing,
+    :xla_gpu_pgle_profile_file_or_directory_path => "",
+    :xla_gpu_ptx_file => Vector{String}(),
+    :xla_gpu_reduce_scatter_combine_threshold_bytes => zero(Int64),
+    :xla_gpu_redzone_padding_bytes => zero(Int64),
+    :xla_gpu_require_complete_aot_autotune_results => false,
+    :xla_gpu_require_exclusive_lock => false,
+    :xla_gpu_shape_checks => nothing,
+    :xla_gpu_shard_autotuning => false,
+    :xla_gpu_strict_conv_algorithm_picker => false,
+    :xla_gpu_target_config_filename => "",
+    :xla_gpu_temp_buffer_use_separate_color => false,
+    :xla_gpu_threshold_for_windowed_einsum_mib => zero(Int64),
+    :xla_gpu_triton_gemm_any => false,
+    :xla_gpu_unsafe_fallback_to_driver_on_ptxas_not_found => false,
+    :xla_gpu_unsupported_enable_all_reduce_decomposer => false,
+    :xla_gpu_unsupported_enable_ragged_all_to_all_decomposer => false,
+    :xla_gpu_unsupported_enable_ragged_all_to_all_multi_host_decomposer => false,
+    :xla_gpu_unsupported_enable_triton_gemm => false,
+    :xla_gpu_unsupported_enable_triton_multi_output_fusion => false,
+    :xla_gpu_unsupported_override_fast_interconnect_slice_size => zero(Int64),
+    :xla_gpu_unsupported_use_all_reduce_one_shot_kernel => false,
+    :xla_gpu_unsupported_use_ragged_all_to_all_one_shot_kernel => false,
+    :xla_gpu_use_embeded_device_lib => false,
+    :xla_gpu_use_inprocess_lld => false,
+    :xla_gpu_use_memcpy_local_p2p => false,
+    :xla_gpu_use_runtime_fusion => false,
+    :xla_gpu_verify_triton_fusion_numerics => false,
+    :xla_hlo_graph_addresses => false,
+    :xla_hlo_profile => false,
+    :xla_disable_hlo_passes => Vector{String}(),
+    :xla_enable_hlo_passes_only => Vector{String}(),
+    :xla_disable_all_hlo_passes => false,
+    :xla_backend_optimization_level => zero(Int32),
+    :xla_embed_ir_in_executable => false,
+    :xla_eliminate_hlo_implicit_broadcast => false,
+    :xla_cpu_multi_thread_eigen => false,
+    :xla_llvm_enable_alias_scope_metadata => false,
+    :xla_llvm_enable_noalias_metadata => false,
+    :xla_llvm_enable_invariant_load_metadata => false,
+    :xla_llvm_disable_expensive_passes => false,
+    :xla_test_all_output_layouts => false,
+    :xla_test_all_input_layouts => false,
+    :xla_hlo_graph_sharding_color => false,
+    :xla_cpu_use_onednn => false,
+    :xla_allow_excess_precision => false,
+    :xla_force_host_platform_device_count => zero(Int32),
+    :xla_hlo_evaluator_use_fast_path => false,
+    :xla_allow_scalar_index_dynamic_ops => false,
+    :xla_step_marker_location => nothing,
+    :xla_dump_to => "",
+    :xla_flags_reset => false,
+    :xla_dump_hlo_module_re => "",
+    :xla_dump_hlo_pass_re => "",
+    :xla_dump_emitter_re => "",
+    :xla_dump_hlo_as_text => false,
+    :xla_dump_hlo_as_proto => false,
+    :xla_dump_hlo_as_dot => false,
+    :xla_dump_hlo_as_url => false,
+    :xla_dump_hlo_as_html => false,
+    :xla_dump_fusion_visualization => false,
+    :xla_dump_hlo_snapshots => false,
+    :xla_dump_include_timestamp => false,
+    :xla_dump_max_hlo_modules => zero(Int32),
+    :xla_dump_module_metadata => false,
+    :xla_dump_compress_protos => false,
+    :xla_dump_hlo_as_long_text => false,
+    :xla_dump_enable_mlir_pretty_form => false,
+    :xla_dump_full_hlo_config => false,
+    :xla_tpu_detect_nan => false,
+    :xla_tpu_detect_inf => false,
+    :xla_cpu_enable_xprof_traceme => false,
+    :xla_multiheap_size_constraint_per_heap => zero(Int32),
+    :xla_detailed_logging => false,
+    :xla_enable_dumping => false,
+    :xla_llvm_force_inline_before_split => false,
+    :xla_dump_disable_metadata => false,
+    :xla_dump_hlo_pipeline_re => "",
+    :xla_cpu_use_acl => false,
+    :xla_cpu_strict_dot_conv_math => false,
+    :xla_dump_latency_hiding_schedule => false,
+    :xla_partitioning_algorithm => nothing,
+    :xla_debug_buffer_assignment_show_max => zero(Int64),
+    :xla_detect_unstable_reductions => nothing,
+    :xla_detect_unstable_reductions_post_optimizations => nothing,
+    :xla_gpu_detect_nan => nothing,
+    :xla_gpu_detect_inf => nothing,
+    :xla_dump_large_constants => false,
+    :xla_reduce_window_rewrite_base_length => zero(Int64),
+    :xla_cmd_buffer_trace_cache_size => zero(Int64),
+    :xla_syntax_sugar_async_ops => false,
+    :xla_enable_command_buffers_during_profiling => false,
+    :xla_ignore_channel_id => false,
+    :xla_pjrt_allow_auto_layout_in_hlo => false,
+    :xla_test_add_command_buffer_mode => false,
+    :xla_gpu_experimental_matmul_perf_table_path => "",
+    :xla_early_exit_with_layouts => false,
+    :xla_gpu_experimental_scaled_dot_with_triton => false,
+    :xla_gpu_experimental_use_raft_select_k => false,
+    :xla_backend_extra_options => Dict{String,String}()
+)
+
+# Keyword constructor for DebugOptions
+function DebugOptions(; kwargs...)
+    __data = Dict{Symbol,Any}(kwargs)
+    return DebugOptions(__data)
+end
+
+# Field accessors for DebugOptions
+function Base.getproperty(x::DebugOptions, s::Symbol)
+    s === :__data && return getfield(x, :__data)
+    d = getfield(x, :__data)
+    return get(d, s, get(_DebugOptions_defaults, s, nothing))
+end
+function Base.setproperty!(x::DebugOptions, s::Symbol, v)
+    getfield(x, :__data)[s] = v
+end
+Base.propertynames(::DebugOptions) = (:xla_allow_h2h_copy_when_automatic_host_compute_offload_disabled, :xla_disable_automatic_host_compute_offload, :xla_enable_scoped_logging_timers, :xla_hlo_pass_fix_detect_cycles, :xla_keep_shardings_after_spmd, :xla_unsupported_crash_on_hlo_pass_fix_max_iterations, :xla_unsupported_crash_on_hlo_pass_noop_change, :xla_unsupported_crash_on_hlo_pass_silent_hlo_change, :xla_cpu_collective_call_terminate_timeout_seconds, :xla_cpu_collective_call_warn_stuck_seconds, :xla_cpu_collective_timeout_seconds, :xla_cpu_copy_insertion_use_region_analysis, :xla_cpu_emitter_verification_level, :xla_cpu_enable_concurrency_optimized_scheduler, :xla_cpu_enable_fast_math, :xla_cpu_enable_fast_min_max, :xla_cpu_enable_platform_dependent_math, :xla_cpu_experimental_onednn_custom_call, :xla_cpu_experimental_onednn_fusion_type, :xla_cpu_experimental_xnn_fusion_type, :xla_cpu_experimental_xnn_graph_fusion_mode, :xla_cpu_experimental_ynn_fusion_type, :xla_cpu_fast_math_honor_division, :xla_cpu_fast_math_honor_functions, :xla_cpu_fast_math_honor_infs, :xla_cpu_fast_math_honor_nans, :xla_cpu_generate_unique_c_style_kernel_entry_points, :xla_cpu_max_isa, :xla_cpu_parallel_codegen_split_count, :xla_cpu_prefer_vector_width, :xla_cpu_use_fusion_emitters, :xla_cpu_use_xnnpack, :xla_enable_fast_math, :xla_gpu_experimental_thunk_buffer_debug_filter, :xla_dump_hlo_unoptimized_snapshots, :xla_enable_enzyme_comms_opt, :xla_gpu_algorithm_denylist_path, :xla_gpu_all_gather_combine_threshold_bytes, :xla_gpu_all_reduce_blueconnect_num_devices_per_host, :xla_gpu_all_reduce_combine_threshold_bytes, :xla_gpu_analytical_latency_estimator_options, :xla_gpu_async_dot, :xla_gpu_auto_spmd_partitioning_memory_budget_gb, :xla_gpu_auto_spmd_partitioning_memory_budget_ratio, :xla_gpu_autotune_gemm_rtol, :xla_gpu_autotune_level, :xla_gpu_autotune_max_solutions, :xla_gpu_collect_cost_model_stats, :xla_gpu_collective_inflation_factor, :xla_gpu_collective_permute_combine_threshold_bytes, :xla_gpu_collective_permute_decomposer_threshold, :xla_gpu_collectives_use_persistent_cliques, :xla_gpu_command_buffer_scheduling_mode, :xla_gpu_command_buffer_unroll_loops, :xla_gpu_copy_insertion_use_region_analysis, :xla_gpu_crash_on_verification_failures, :xla_gpu_cublas_fallback, :xla_gpu_cuda_data_dir, :xla_gpu_cudnn_gemm_fusion_level, :xla_gpu_cudnn_gemm_max_plans, :xla_gpu_deterministic_ops, :xla_gpu_disable_async_collectives, :xla_gpu_disable_gpuasm_optimizations, :xla_gpu_dot_merger_threshold_mb, :xla_gpu_dump_autotune_logs_to, :xla_gpu_dump_autotune_results_to, :xla_gpu_dump_autotuned_gemm_fusions, :xla_gpu_dump_llvmir, :xla_gpu_enable_all_gather_combine_by_dim, :xla_gpu_enable_analytical_latency_estimator, :xla_gpu_enable_analytical_sol_latency_estimator, :xla_gpu_enable_approx_costly_collectives, :xla_gpu_enable_command_buffer, :xla_gpu_enable_cub_radix_sort, :xla_gpu_enable_cublaslt, :xla_gpu_enable_cudnn_int8x32_convolution_reordering, :xla_gpu_enable_cudnn_layer_norm, :xla_gpu_enable_dynamic_slice_fusion, :xla_gpu_enable_fast_min_max, :xla_gpu_enable_highest_priority_async_stream, :xla_gpu_enable_host_memory_offloading, :xla_gpu_enable_latency_hiding_scheduler, :xla_gpu_enable_libnvptxcompiler, :xla_gpu_enable_llvm_module_compilation_parallelism, :xla_gpu_enable_nccl_clique_optimization, :xla_gpu_enable_nccl_comm_splitting, :xla_gpu_enable_nccl_user_buffers, :xla_gpu_enable_pipelined_all_gather, :xla_gpu_enable_pipelined_all_reduce, :xla_gpu_enable_pipelined_collectives, :xla_gpu_enable_pipelined_p2p, :xla_gpu_enable_pipelined_reduce_scatter, :xla_gpu_enable_reassociation_for_converted_ar, :xla_gpu_enable_reduce_scatter_combine_by_dim, :xla_gpu_enable_reduction_epilogue_fusion, :xla_gpu_enable_scatter_determinism_expander, :xla_gpu_enable_shared_constants, :xla_gpu_enable_split_k_autotuning, :xla_gpu_enable_triton_gemm, :xla_gpu_enable_while_loop_double_buffering, :xla_gpu_enable_while_loop_reduce_scatter_code_motion, :xla_gpu_enable_while_loop_unrolling, :xla_gpu_exclude_nondeterministic_ops, :xla_gpu_executable_embed_debug_info, :xla_gpu_executable_terminate_timeout_seconds, :xla_gpu_executable_warn_stuck_timeout_seconds, :xla_gpu_exhaustive_tiling_search, :xla_gpu_experimental_allow_unroll_factor_eight, :xla_gpu_experimental_aot_compiled_thunks, :xla_gpu_experimental_autotune_cache_mode, :xla_gpu_experimental_autotuner_cache_dir, :xla_gpu_experimental_collective_cse_distance_threshold, :xla_gpu_experimental_collective_perf_table_path, :xla_gpu_experimental_disable_binary_libraries, :xla_gpu_experimental_dump_fdo_profiles, :xla_gpu_experimental_dump_gpu_executable, :xla_gpu_experimental_enable_alltoall_windowed_einsum, :xla_gpu_experimental_enable_buffer_saver_on_thunks, :xla_gpu_experimental_enable_checksum_tracing_on_thunks, :xla_gpu_experimental_enable_fusion_autotuner, :xla_gpu_experimental_enable_fusion_block_level_rewriter, :xla_gpu_experimental_enable_heuristic_collective_combining, :xla_gpu_experimental_enable_nccl_symmetric_buffers, :xla_gpu_experimental_enable_nvshmem, :xla_gpu_experimental_enable_split_k_rewrite, :xla_gpu_experimental_enable_subchannel_dequantisation_fusion, :xla_gpu_experimental_enable_triton_heroless_priority_fusion, :xla_gpu_experimental_enable_triton_warp_specialization, :xla_gpu_experimental_pack_dot_operands_along_k_dimension, :xla_gpu_experimental_parallel_collective_overlap_limit, :xla_gpu_experimental_pipeline_parallelism_opt_level, :xla_gpu_experimental_stream_annotation, :xla_gpu_experimental_use_autotuner_pass, :xla_gpu_experimental_use_ragged_dot_fusion, :xla_gpu_fail_ptx_compilation_on_register_spilling, :xla_gpu_filter_kernels_spilling_registers_on_autotuning, :xla_gpu_first_collective_call_terminate_timeout_seconds, :xla_gpu_first_collective_call_warn_stuck_timeout_seconds, :xla_gpu_force_compilation_parallelism, :xla_gpu_force_conv_nchw, :xla_gpu_force_conv_nhwc, :xla_gpu_ftz, :xla_gpu_fused_attention_use_cudnn_rng, :xla_gpu_gemm_autotuner_override_file, :xla_gpu_gemm_rewrite_size_threshold, :xla_gpu_generate_debug_info, :xla_gpu_generate_line_info, :xla_gpu_graph_enable_concurrent_region, :xla_gpu_graph_min_graph_size, :xla_gpu_kernel_cache_file, :xla_gpu_libnvjitlink_mode, :xla_gpu_llvm_ir_file, :xla_gpu_llvm_verification_level, :xla_gpu_load_autotune_results_from, :xla_gpu_memory_limit_slop_factor, :xla_gpu_mock_custom_calls, :xla_gpu_multi_streamed_windowed_einsum, :xla_gpu_nccl_async_execution, :xla_gpu_nccl_blocking_communicators, :xla_gpu_nccl_collective_max_nchannels, :xla_gpu_nccl_init_max_rank_per_root_ratio, :xla_gpu_nccl_p2p_max_nchannels, :xla_gpu_nccl_terminate_on_error, :xla_gpu_nccl_termination_timeout_seconds, :xla_gpu_operand_bytes_threshold_for_windowed_einsum, :xla_gpu_override_gemm_autotuner, :xla_gpu_per_fusion_autotune_cache_dir, :xla_gpu_pgle_accuracy_checker, :xla_gpu_pgle_profile_file_or_directory_path, :xla_gpu_ptx_file, :xla_gpu_reduce_scatter_combine_threshold_bytes, :xla_gpu_redzone_padding_bytes, :xla_gpu_require_complete_aot_autotune_results, :xla_gpu_require_exclusive_lock, :xla_gpu_shape_checks, :xla_gpu_shard_autotuning, :xla_gpu_strict_conv_algorithm_picker, :xla_gpu_target_config_filename, :xla_gpu_temp_buffer_use_separate_color, :xla_gpu_threshold_for_windowed_einsum_mib, :xla_gpu_triton_gemm_any, :xla_gpu_unsafe_fallback_to_driver_on_ptxas_not_found, :xla_gpu_unsupported_enable_all_reduce_decomposer, :xla_gpu_unsupported_enable_ragged_all_to_all_decomposer, :xla_gpu_unsupported_enable_ragged_all_to_all_multi_host_decomposer, :xla_gpu_unsupported_enable_triton_gemm, :xla_gpu_unsupported_enable_triton_multi_output_fusion, :xla_gpu_unsupported_override_fast_interconnect_slice_size, :xla_gpu_unsupported_use_all_reduce_one_shot_kernel, :xla_gpu_unsupported_use_ragged_all_to_all_one_shot_kernel, :xla_gpu_use_embeded_device_lib, :xla_gpu_use_inprocess_lld, :xla_gpu_use_memcpy_local_p2p, :xla_gpu_use_runtime_fusion, :xla_gpu_verify_triton_fusion_numerics, :xla_hlo_graph_addresses, :xla_hlo_profile, :xla_disable_hlo_passes, :xla_enable_hlo_passes_only, :xla_disable_all_hlo_passes, :xla_backend_optimization_level, :xla_embed_ir_in_executable, :xla_eliminate_hlo_implicit_broadcast, :xla_cpu_multi_thread_eigen, :xla_llvm_enable_alias_scope_metadata, :xla_llvm_enable_noalias_metadata, :xla_llvm_enable_invariant_load_metadata, :xla_llvm_disable_expensive_passes, :xla_test_all_output_layouts, :xla_test_all_input_layouts, :xla_hlo_graph_sharding_color, :xla_cpu_use_onednn, :xla_allow_excess_precision, :xla_force_host_platform_device_count, :xla_hlo_evaluator_use_fast_path, :xla_allow_scalar_index_dynamic_ops, :xla_step_marker_location, :xla_dump_to, :xla_flags_reset, :xla_dump_hlo_module_re, :xla_dump_hlo_pass_re, :xla_dump_emitter_re, :xla_dump_hlo_as_text, :xla_dump_hlo_as_proto, :xla_dump_hlo_as_dot, :xla_dump_hlo_as_url, :xla_dump_hlo_as_html, :xla_dump_fusion_visualization, :xla_dump_hlo_snapshots, :xla_dump_include_timestamp, :xla_dump_max_hlo_modules, :xla_dump_module_metadata, :xla_dump_compress_protos, :xla_dump_hlo_as_long_text, :xla_dump_enable_mlir_pretty_form, :xla_dump_full_hlo_config, :xla_tpu_detect_nan, :xla_tpu_detect_inf, :xla_cpu_enable_xprof_traceme, :xla_multiheap_size_constraint_per_heap, :xla_detailed_logging, :xla_enable_dumping, :xla_llvm_force_inline_before_split, :xla_dump_disable_metadata, :xla_dump_hlo_pipeline_re, :xla_cpu_use_acl, :xla_cpu_strict_dot_conv_math, :xla_dump_latency_hiding_schedule, :xla_partitioning_algorithm, :xla_debug_buffer_assignment_show_max, :xla_detect_unstable_reductions, :xla_detect_unstable_reductions_post_optimizations, :xla_gpu_detect_nan, :xla_gpu_detect_inf, :xla_dump_large_constants, :xla_reduce_window_rewrite_base_length, :xla_cmd_buffer_trace_cache_size, :xla_syntax_sugar_async_ops, :xla_enable_command_buffers_during_profiling, :xla_ignore_channel_id, :xla_pjrt_allow_auto_layout_in_hlo, :xla_test_add_command_buffer_mode, :xla_gpu_experimental_matmul_perf_table_path, :xla_early_exit_with_layouts, :xla_gpu_experimental_scaled_dot_with_triton, :xla_gpu_experimental_use_raft_select_k, :xla_backend_extra_options,)
+# PB.reserved_fields(::Type{DebugOptions}) = (names = ["hlo_reduce_precision_options", "legacy_command_buffer_custom_call_targets", "xla_allow_get_default_platform", "xla_cpu_dump_unoptimized_hlo_snapshots", "xla_cpu_enable_custom_matmul_tiling", "xla_cpu_enable_experimental_deallocation", "xla_cpu_enable_mlir_fusion_outlining", "xla_cpu_enable_mlir_lowering", "xla_cpu_enable_mlir_tiling_and_fusion", "xla_cpu_matmul_tiling_k_dim", "xla_cpu_matmul_tiling_m_dim", "xla_cpu_matmul_tiling_n_dim", "xla_cpu_sparse_cuda_threads", "xla_cpu_use_thunk_runtime", "xla_cpu_use_xla_runtime", "xla_detailed_logging_and_dumping", "xla_dump_ir", "xla_experimental_exec_time_optimization_effort", "xla_gpu_all_reduce_contiguous", "xla_gpu_allow_all_reduce_kernel", "xla_gpu_asm_extra_flags", "xla_gpu_bef_executable", "xla_gpu_bef_thunk", "xla_gpu_deterministic_reductions", "xla_gpu_disable_multi_streaming", "xla_gpu_dump_hlo_unoptimized_snapshots", "xla_gpu_enable_all_reduce_splitter", "xla_gpu_enable_async_all_gather", "xla_gpu_enable_async_all_reduce", "xla_gpu_enable_async_all_to_all", "xla_gpu_enable_async_collective_broadcast", "xla_gpu_enable_async_collective_permute", "xla_gpu_enable_async_collectives", "xla_gpu_enable_async_reduce_scatter", "xla_gpu_enable_bf16_3way_gemm", "xla_gpu_enable_bf16_6way_gemm", "xla_gpu_enable_cuda_graphs", "xla_gpu_enable_cudnn_fmha", "xla_gpu_enable_cudnn_frontend", "xla_gpu_enable_custom_fusions_re", "xla_gpu_enable_custom_fusions", "xla_gpu_enable_dot_strength_reduction", "xla_gpu_enable_experimental_block_size", "xla_gpu_enable_gpu2_hal", "xla_gpu_enable_gpu2_runtime", "xla_gpu_enable_heuristic_pass_configuration", "xla_gpu_enable_libnvjitlink", "xla_gpu_enable_mlir_emitters", "xla_gpu_enable_mlir_lowering", "xla_gpu_enable_nccl_per_stream_comms", "xla_gpu_enable_persistent_temp_buffers", "xla_gpu_enable_pgle_accuracy_checker", "xla_gpu_enable_priority_fusion", "xla_gpu_enable_softmax_fusion", "xla_gpu_enable_triton_gemm_int4", "xla_gpu_enable_triton_hopper", "xla_gpu_enable_triton_softmax_fusion", "xla_gpu_enable_triton_softmax_priority_fusion", "xla_gpu_enable_xla_runtime_executable", "xla_gpu_ensure_minor_dot_contraction_dims", "xla_gpu_experimental_enable_dynamic_dot_search_space", "xla_gpu_experimental_enable_nan_counter_on_thunks", "xla_gpu_experimental_enable_triton_i4_rewrites", "xla_gpu_experimental_enable_triton_softmax_priority_fusion", "xla_gpu_graph_eviction_timeout_seconds", "xla_gpu_graph_level", "xla_gpu_graph_num_runs_to_instantiate", "xla_gpu_lhs_enable_gpu_async_tracker", "xla_gpu_max_kernel_unroll_factor", "xla_gpu_max_mlir_kernels", "xla_gpu_mlir_emitter_level", "xla_gpu_normalize_layouts", "xla_gpu_redzone_scratch_max_megabytes", "xla_gpu_run_post_layout_collective_pipeliner", "xla_gpu_simplify_all_fp_conversions", "xla_gpu_simplify_gathers", "xla_gpu_simplify_scatters", "xla_gpu_single_wave_autotuning", "xla_gpu_skip_mlir_kernels", "xla_gpu_triton_fusion_level", "xla_gpu_triton_gemm_disable_reduced_precision_reduction", "xla_gpu_unsafe_fallback_to_driver_on_ptxas_error", "xla_gpu_unsafe_pipelined_loop_annotator", "xla_gpu_unsupported_enable_generic_triton_emitter_for_gemms", "xla_gpu_unsupported_force_triton_gemm", "xla_gpu_unsupported_generic_triton_emitter_features", "xla_gpu_use_cudnn_batchnorm", "xla_gpu_use_horizontal_fusion", "xla_gpu_use_random_streams", "xla_hlo_dump_as_graphdef", "xla_hlo_tfgraph_device_scopes", "xla_use_shardy", "xla_gpu_unsupported_annotate_with_emitter_loc", "xla_gpu_experimental_enable_command_buffer_on_thunks", "xla_gpu_experimental_enable_triton_tma"], numbers = Union{Int,UnitRange{Int}}[5, 63, 80, 93, 94, 98, 117, 130, 133, 134, 139, 141, 143, 152, 158, 160, 161, 162, 167, 168, 169, 171, 172, 173, 176, 177, 178, 179, 180, 183, 184, 191, 192, 193, 194, 195, 196, 197, 198, 199, 200, 201, 202, 204, 206, 207, 211, 214, 218, 220, 221, 226, 229, 230, 233, 234, 238, 242, 249, 263, 264, 266, 270, 271, 275, 276, 278, 279, 281, 282, 286, 298, 299, 302, 303, 309, 313, 314, 319, 320, 325, 326, 332, 346, 352, 355, 358, 361, 367, 369, 371, 385, 394, 398, 402, 423])
+# PB.default_values(::Type{DebugOptions}) = (;xla_allow_h2h_copy_when_automatic_host_compute_offload_disabled = false, xla_disable_automatic_host_compute_offload = false, xla_enable_scoped_logging_timers = false, xla_hlo_pass_fix_detect_cycles = false, xla_keep_shardings_after_spmd = false, xla_unsupported_crash_on_hlo_pass_fix_max_iterations = false, xla_unsupported_crash_on_hlo_pass_noop_change = false, xla_unsupported_crash_on_hlo_pass_silent_hlo_change = false, xla_cpu_collective_call_terminate_timeout_seconds = zero(Int32), xla_cpu_collective_call_warn_stuck_seconds = zero(Int32), xla_cpu_collective_timeout_seconds = zero(Int32), xla_cpu_copy_insertion_use_region_analysis = false, xla_cpu_emitter_verification_level = zero(Int32), xla_cpu_enable_concurrency_optimized_scheduler = false, xla_cpu_enable_fast_math = false, xla_cpu_enable_fast_min_max = false, xla_cpu_enable_platform_dependent_math = false, xla_cpu_experimental_onednn_custom_call = false, xla_cpu_experimental_onednn_fusion_type = Vector{var"DebugOptions.LibraryFusionType".T}(), xla_cpu_experimental_xnn_fusion_type = Vector{var"DebugOptions.LibraryFusionType".T}(), xla_cpu_experimental_xnn_graph_fusion_mode = var"DebugOptions.XnnGraphFusionMode".XNN_GRAPH_FUSION_MODE_DISABLED, xla_cpu_experimental_ynn_fusion_type = Vector{var"DebugOptions.LibraryFusionType".T}(), xla_cpu_fast_math_honor_division = false, xla_cpu_fast_math_honor_functions = false, xla_cpu_fast_math_honor_infs = false, xla_cpu_fast_math_honor_nans = false, xla_cpu_generate_unique_c_style_kernel_entry_points = false, xla_cpu_max_isa = "", xla_cpu_parallel_codegen_split_count = zero(Int32), xla_cpu_prefer_vector_width = zero(Int32), xla_cpu_use_fusion_emitters = false, xla_cpu_use_xnnpack = false, xla_enable_fast_math = false, xla_gpu_experimental_thunk_buffer_debug_filter = nothing, xla_dump_hlo_unoptimized_snapshots = false, xla_enable_enzyme_comms_opt = false, xla_gpu_algorithm_denylist_path = "", xla_gpu_all_gather_combine_threshold_bytes = zero(Int64), xla_gpu_all_reduce_blueconnect_num_devices_per_host = zero(Int32), xla_gpu_all_reduce_combine_threshold_bytes = zero(Int64), xla_gpu_analytical_latency_estimator_options = Dict{String,String}(), xla_gpu_async_dot = false, xla_gpu_auto_spmd_partitioning_memory_budget_gb = zero(Int32), xla_gpu_auto_spmd_partitioning_memory_budget_ratio = zero(Float32), xla_gpu_autotune_gemm_rtol = zero(Float32), xla_gpu_autotune_level = zero(Int32), xla_gpu_autotune_max_solutions = zero(Int64), xla_gpu_collect_cost_model_stats = false, xla_gpu_collective_inflation_factor = zero(Int32), xla_gpu_collective_permute_combine_threshold_bytes = zero(Int64), xla_gpu_collective_permute_decomposer_threshold = zero(Int64), xla_gpu_collectives_use_persistent_cliques = false, xla_gpu_command_buffer_scheduling_mode = var"DebugOptions.CommandBufferSchedulingMode".SERIALIZE, xla_gpu_command_buffer_unroll_loops = false, xla_gpu_copy_insertion_use_region_analysis = false, xla_gpu_crash_on_verification_failures = false, xla_gpu_cublas_fallback = false, xla_gpu_cuda_data_dir = "", xla_gpu_cudnn_gemm_fusion_level = zero(Int32), xla_gpu_cudnn_gemm_max_plans = zero(Int32), xla_gpu_deterministic_ops = false, xla_gpu_disable_async_collectives = Vector{var"DebugOptions.CollectiveOpType".T}(), xla_gpu_disable_gpuasm_optimizations = false, xla_gpu_dot_merger_threshold_mb = zero(Int32), xla_gpu_dump_autotune_logs_to = "", xla_gpu_dump_autotune_results_to = "", xla_gpu_dump_autotuned_gemm_fusions = false, xla_gpu_dump_llvmir = false, xla_gpu_enable_all_gather_combine_by_dim = false, xla_gpu_enable_analytical_latency_estimator = false, xla_gpu_enable_analytical_sol_latency_estimator = false, xla_gpu_enable_approx_costly_collectives = false, xla_gpu_enable_command_buffer = Vector{var"DebugOptions.CommandBufferCmdType".T}(), xla_gpu_enable_cub_radix_sort = false, xla_gpu_enable_cublaslt = false, xla_gpu_enable_cudnn_int8x32_convolution_reordering = false, xla_gpu_enable_cudnn_layer_norm = false, xla_gpu_enable_dynamic_slice_fusion = false, xla_gpu_enable_fast_min_max = false, xla_gpu_enable_highest_priority_async_stream = false, xla_gpu_enable_host_memory_offloading = false, xla_gpu_enable_latency_hiding_scheduler = false, xla_gpu_enable_libnvptxcompiler = false, xla_gpu_enable_llvm_module_compilation_parallelism = false, xla_gpu_enable_nccl_clique_optimization = false, xla_gpu_enable_nccl_comm_splitting = false, xla_gpu_enable_nccl_user_buffers = false, xla_gpu_enable_pipelined_all_gather = false, xla_gpu_enable_pipelined_all_reduce = false, xla_gpu_enable_pipelined_collectives = false, xla_gpu_enable_pipelined_p2p = false, xla_gpu_enable_pipelined_reduce_scatter = false, xla_gpu_enable_reassociation_for_converted_ar = false, xla_gpu_enable_reduce_scatter_combine_by_dim = false, xla_gpu_enable_reduction_epilogue_fusion = false, xla_gpu_enable_scatter_determinism_expander = false, xla_gpu_enable_shared_constants = false, xla_gpu_enable_split_k_autotuning = false, xla_gpu_enable_triton_gemm = false, xla_gpu_enable_while_loop_double_buffering = false, xla_gpu_enable_while_loop_reduce_scatter_code_motion = false, xla_gpu_enable_while_loop_unrolling = var"DebugOptions.WhileLoopUnrolling".WHILE_LOOP_UNROLLING_NO_UNROLL, xla_gpu_exclude_nondeterministic_ops = false, xla_gpu_executable_embed_debug_info = false, xla_gpu_executable_terminate_timeout_seconds = zero(Int32), xla_gpu_executable_warn_stuck_timeout_seconds = zero(Int32), xla_gpu_exhaustive_tiling_search = false, xla_gpu_experimental_allow_unroll_factor_eight = false, xla_gpu_experimental_aot_compiled_thunks = false, xla_gpu_experimental_autotune_cache_mode = var"DebugOptions.AutotuneCacheMode".AUTOTUNE_CACHE_MODE_UNSPECIFIED, xla_gpu_experimental_autotuner_cache_dir = "", xla_gpu_experimental_collective_cse_distance_threshold = zero(Int64), xla_gpu_experimental_collective_perf_table_path = "", xla_gpu_experimental_disable_binary_libraries = false, xla_gpu_experimental_dump_fdo_profiles = false, xla_gpu_experimental_dump_gpu_executable = false, xla_gpu_experimental_enable_alltoall_windowed_einsum = false, xla_gpu_experimental_enable_buffer_saver_on_thunks = false, xla_gpu_experimental_enable_checksum_tracing_on_thunks = false, xla_gpu_experimental_enable_fusion_autotuner = false, xla_gpu_experimental_enable_fusion_block_level_rewriter = false, xla_gpu_experimental_enable_heuristic_collective_combining = false, xla_gpu_experimental_enable_nccl_symmetric_buffers = false, xla_gpu_experimental_enable_nvshmem = false, xla_gpu_experimental_enable_split_k_rewrite = false, xla_gpu_experimental_enable_subchannel_dequantisation_fusion = false, xla_gpu_experimental_enable_triton_heroless_priority_fusion = false, xla_gpu_experimental_enable_triton_warp_specialization = false, xla_gpu_experimental_pack_dot_operands_along_k_dimension = false, xla_gpu_experimental_parallel_collective_overlap_limit = zero(Int32), xla_gpu_experimental_pipeline_parallelism_opt_level = var"DebugOptions.PipelineParallelismOptLevel".PIPELINE_PARALLELISM_OPT_LEVEL_DISABLE, xla_gpu_experimental_stream_annotation = false, xla_gpu_experimental_use_autotuner_pass = false, xla_gpu_experimental_use_ragged_dot_fusion = false, xla_gpu_fail_ptx_compilation_on_register_spilling = false, xla_gpu_filter_kernels_spilling_registers_on_autotuning = false, xla_gpu_first_collective_call_terminate_timeout_seconds = zero(Int32), xla_gpu_first_collective_call_warn_stuck_timeout_seconds = zero(Int32), xla_gpu_force_compilation_parallelism = zero(Int32), xla_gpu_force_conv_nchw = false, xla_gpu_force_conv_nhwc = false, xla_gpu_ftz = false, xla_gpu_fused_attention_use_cudnn_rng = false, xla_gpu_gemm_autotuner_override_file = "", xla_gpu_gemm_rewrite_size_threshold = zero(Int64), xla_gpu_generate_debug_info = false, xla_gpu_generate_line_info = false, xla_gpu_graph_enable_concurrent_region = false, xla_gpu_graph_min_graph_size = zero(Int32), xla_gpu_kernel_cache_file = "", xla_gpu_libnvjitlink_mode = var"DebugOptions.LibNvJitLinkMode".LIB_NV_JIT_LINK_MODE_AUTO, xla_gpu_llvm_ir_file = Vector{String}(), xla_gpu_llvm_verification_level = zero(Int32), xla_gpu_load_autotune_results_from = "", xla_gpu_memory_limit_slop_factor = zero(Int32), xla_gpu_mock_custom_calls = false, xla_gpu_multi_streamed_windowed_einsum = false, xla_gpu_nccl_async_execution = false, xla_gpu_nccl_blocking_communicators = false, xla_gpu_nccl_collective_max_nchannels = zero(Int64), xla_gpu_nccl_init_max_rank_per_root_ratio = zero(Int64), xla_gpu_nccl_p2p_max_nchannels = zero(Int64), xla_gpu_nccl_terminate_on_error = false, xla_gpu_nccl_termination_timeout_seconds = zero(Int64), xla_gpu_operand_bytes_threshold_for_windowed_einsum = zero(Int64), xla_gpu_override_gemm_autotuner = "", xla_gpu_per_fusion_autotune_cache_dir = "", xla_gpu_pgle_accuracy_checker = var"DebugOptions.PGLEStrictnessLevel".PGLE_STRICTNESS_LEVEL_OFF, xla_gpu_pgle_profile_file_or_directory_path = "", xla_gpu_ptx_file = Vector{String}(), xla_gpu_reduce_scatter_combine_threshold_bytes = zero(Int64), xla_gpu_redzone_padding_bytes = zero(Int64), xla_gpu_require_complete_aot_autotune_results = false, xla_gpu_require_exclusive_lock = false, xla_gpu_shape_checks = var"DebugOptions.ShapeChecks".IGNORE, xla_gpu_shard_autotuning = false, xla_gpu_strict_conv_algorithm_picker = false, xla_gpu_target_config_filename = "", xla_gpu_temp_buffer_use_separate_color = false, xla_gpu_threshold_for_windowed_einsum_mib = zero(Int64), xla_gpu_triton_gemm_any = false, xla_gpu_unsafe_fallback_to_driver_on_ptxas_not_found = false, xla_gpu_unsupported_enable_all_reduce_decomposer = false, xla_gpu_unsupported_enable_ragged_all_to_all_decomposer = false, xla_gpu_unsupported_enable_ragged_all_to_all_multi_host_decomposer = false, xla_gpu_unsupported_enable_triton_gemm = false, xla_gpu_unsupported_enable_triton_multi_output_fusion = false, xla_gpu_unsupported_override_fast_interconnect_slice_size = zero(Int64), xla_gpu_unsupported_use_all_reduce_one_shot_kernel = false, xla_gpu_unsupported_use_ragged_all_to_all_one_shot_kernel = false, xla_gpu_use_embeded_device_lib = false, xla_gpu_use_inprocess_lld = false, xla_gpu_use_memcpy_local_p2p = false, xla_gpu_use_runtime_fusion = false, xla_gpu_verify_triton_fusion_numerics = false, xla_hlo_graph_addresses = false, xla_hlo_profile = false, xla_disable_hlo_passes = Vector{String}(), xla_enable_hlo_passes_only = Vector{String}(), xla_disable_all_hlo_passes = false, xla_backend_optimization_level = zero(Int32), xla_embed_ir_in_executable = false, xla_eliminate_hlo_implicit_broadcast = false, xla_cpu_multi_thread_eigen = false, xla_llvm_enable_alias_scope_metadata = false, xla_llvm_enable_noalias_metadata = false, xla_llvm_enable_invariant_load_metadata = false, xla_llvm_disable_expensive_passes = false, xla_test_all_output_layouts = false, xla_test_all_input_layouts = false, xla_hlo_graph_sharding_color = false, xla_cpu_use_onednn = false, xla_allow_excess_precision = false, xla_force_host_platform_device_count = zero(Int32), xla_hlo_evaluator_use_fast_path = false, xla_allow_scalar_index_dynamic_ops = false, xla_step_marker_location = var"DebugOptions.StepMarkerLocation".STEP_MARK_AT_ENTRY, xla_dump_to = "", xla_flags_reset = false, xla_dump_hlo_module_re = "", xla_dump_hlo_pass_re = "", xla_dump_emitter_re = "", xla_dump_hlo_as_text = false, xla_dump_hlo_as_proto = false, xla_dump_hlo_as_dot = false, xla_dump_hlo_as_url = false, xla_dump_hlo_as_html = false, xla_dump_fusion_visualization = false, xla_dump_hlo_snapshots = false, xla_dump_include_timestamp = false, xla_dump_max_hlo_modules = zero(Int32), xla_dump_module_metadata = false, xla_dump_compress_protos = false, xla_dump_hlo_as_long_text = false, xla_dump_enable_mlir_pretty_form = false, xla_dump_full_hlo_config = false, xla_tpu_detect_nan = false, xla_tpu_detect_inf = false, xla_cpu_enable_xprof_traceme = false, xla_multiheap_size_constraint_per_heap = zero(Int32), xla_detailed_logging = false, xla_enable_dumping = false, xla_llvm_force_inline_before_split = false, xla_dump_disable_metadata = false, xla_dump_hlo_pipeline_re = "", xla_cpu_use_acl = false, xla_cpu_strict_dot_conv_math = false, xla_dump_latency_hiding_schedule = false, xla_partitioning_algorithm = var"DebugOptions.PartitioningAlgorithm".PARTITIONING_ALGORITHM_NOOP, xla_debug_buffer_assignment_show_max = zero(Int64), xla_detect_unstable_reductions = var"DebugOptions.DetectionMode".DETECTION_MODE_NONE, xla_detect_unstable_reductions_post_optimizations = var"DebugOptions.DetectionMode".DETECTION_MODE_NONE, xla_gpu_detect_nan = var"DebugOptions.DetectionMode".DETECTION_MODE_NONE, xla_gpu_detect_inf = var"DebugOptions.DetectionMode".DETECTION_MODE_NONE, xla_dump_large_constants = false, xla_reduce_window_rewrite_base_length = zero(Int64), xla_cmd_buffer_trace_cache_size = zero(Int64), xla_syntax_sugar_async_ops = false, xla_enable_command_buffers_during_profiling = false, xla_ignore_channel_id = false, xla_pjrt_allow_auto_layout_in_hlo = false, xla_test_add_command_buffer_mode = false, xla_gpu_experimental_matmul_perf_table_path = "", xla_early_exit_with_layouts = false, xla_gpu_experimental_scaled_dot_with_triton = false, xla_gpu_experimental_use_raft_select_k = false, xla_backend_extra_options = Dict{String,String}())
+# PB.field_numbers(::Type{DebugOptions}) = (;xla_allow_h2h_copy_when_automatic_host_compute_offload_disabled = 439, xla_disable_automatic_host_compute_offload = 408, xla_enable_scoped_logging_timers = 436, xla_hlo_pass_fix_detect_cycles = 370, xla_keep_shardings_after_spmd = 419, xla_unsupported_crash_on_hlo_pass_fix_max_iterations = 363, xla_unsupported_crash_on_hlo_pass_noop_change = 379, xla_unsupported_crash_on_hlo_pass_silent_hlo_change = 380, xla_cpu_collective_call_terminate_timeout_seconds = 417, xla_cpu_collective_call_warn_stuck_seconds = 418, xla_cpu_collective_timeout_seconds = 438, xla_cpu_copy_insertion_use_region_analysis = 337, xla_cpu_emitter_verification_level = 395, xla_cpu_enable_concurrency_optimized_scheduler = 307, xla_cpu_enable_fast_math = 99, xla_cpu_enable_fast_min_max = 140, xla_cpu_enable_platform_dependent_math = 425, xla_cpu_experimental_onednn_custom_call = 412, xla_cpu_experimental_onednn_fusion_type = 399, xla_cpu_experimental_xnn_fusion_type = 400, xla_cpu_experimental_xnn_graph_fusion_mode = 365, xla_cpu_experimental_ynn_fusion_type = 422, xla_cpu_fast_math_honor_division = 126, xla_cpu_fast_math_honor_functions = 129, xla_cpu_fast_math_honor_infs = 121, xla_cpu_fast_math_honor_nans = 120, xla_cpu_generate_unique_c_style_kernel_entry_points = 372, xla_cpu_max_isa = 333, xla_cpu_parallel_codegen_split_count = 323, xla_cpu_prefer_vector_width = 308, xla_cpu_use_fusion_emitters = 376, xla_cpu_use_xnnpack = 359, xla_enable_fast_math = 335, xla_gpu_experimental_thunk_buffer_debug_filter = 424, xla_dump_hlo_unoptimized_snapshots = 405, xla_enable_enzyme_comms_opt = 429, xla_gpu_algorithm_denylist_path = 128, xla_gpu_all_gather_combine_threshold_bytes = 212, xla_gpu_all_reduce_blueconnect_num_devices_per_host = 159, xla_gpu_all_reduce_combine_threshold_bytes = 157, xla_gpu_analytical_latency_estimator_options = 357, xla_gpu_async_dot = 321, xla_gpu_auto_spmd_partitioning_memory_budget_gb = 224, xla_gpu_auto_spmd_partitioning_memory_budget_ratio = 225, xla_gpu_autotune_gemm_rtol = 316, xla_gpu_autotune_level = 123, xla_gpu_autotune_max_solutions = 288, xla_gpu_collect_cost_model_stats = 240, xla_gpu_collective_inflation_factor = 205, xla_gpu_collective_permute_combine_threshold_bytes = 378, xla_gpu_collective_permute_decomposer_threshold = 237, xla_gpu_collectives_use_persistent_cliques = 354, xla_gpu_command_buffer_scheduling_mode = 404, xla_gpu_command_buffer_unroll_loops = 411, xla_gpu_copy_insertion_use_region_analysis = 236, xla_gpu_crash_on_verification_failures = 101, xla_gpu_cublas_fallback = 247, xla_gpu_cuda_data_dir = 61, xla_gpu_cudnn_gemm_fusion_level = 285, xla_gpu_cudnn_gemm_max_plans = 318, xla_gpu_deterministic_ops = 148, xla_gpu_disable_async_collectives = 289, xla_gpu_disable_gpuasm_optimizations = 103, xla_gpu_dot_merger_threshold_mb = 331, xla_gpu_dump_autotune_logs_to = 292, xla_gpu_dump_autotune_results_to = 222, xla_gpu_dump_autotuned_gemm_fusions = 232, xla_gpu_dump_llvmir = 155, xla_gpu_enable_all_gather_combine_by_dim = 254, xla_gpu_enable_analytical_latency_estimator = 255, xla_gpu_enable_analytical_sol_latency_estimator = 356, xla_gpu_enable_approx_costly_collectives = 305, xla_gpu_enable_command_buffer = 258, xla_gpu_enable_cub_radix_sort = 259, xla_gpu_enable_cublaslt = 166, xla_gpu_enable_cudnn_int8x32_convolution_reordering = 189, xla_gpu_enable_cudnn_layer_norm = 262, xla_gpu_enable_dynamic_slice_fusion = 105, xla_gpu_enable_fast_min_max = 100, xla_gpu_enable_highest_priority_async_stream = 216, xla_gpu_enable_host_memory_offloading = 296, xla_gpu_enable_latency_hiding_scheduler = 186, xla_gpu_enable_libnvptxcompiler = 269, xla_gpu_enable_llvm_module_compilation_parallelism = 268, xla_gpu_enable_nccl_clique_optimization = 244, xla_gpu_enable_nccl_comm_splitting = 272, xla_gpu_enable_nccl_user_buffers = 267, xla_gpu_enable_pipelined_all_gather = 227, xla_gpu_enable_pipelined_all_reduce = 217, xla_gpu_enable_pipelined_collectives = 239, xla_gpu_enable_pipelined_p2p = 246, xla_gpu_enable_pipelined_reduce_scatter = 231, xla_gpu_enable_reassociation_for_converted_ar = 209, xla_gpu_enable_reduce_scatter_combine_by_dim = 257, xla_gpu_enable_reduction_epilogue_fusion = 243, xla_gpu_enable_scatter_determinism_expander = 345, xla_gpu_enable_shared_constants = 165, xla_gpu_enable_split_k_autotuning = 241, xla_gpu_enable_triton_gemm = 188, xla_gpu_enable_while_loop_double_buffering = 248, xla_gpu_enable_while_loop_reduce_scatter_code_motion = 203, xla_gpu_enable_while_loop_unrolling = 294, xla_gpu_exclude_nondeterministic_ops = 297, xla_gpu_executable_embed_debug_info = 437, xla_gpu_executable_terminate_timeout_seconds = 328, xla_gpu_executable_warn_stuck_timeout_seconds = 327, xla_gpu_exhaustive_tiling_search = 219, xla_gpu_experimental_allow_unroll_factor_eight = 430, xla_gpu_experimental_aot_compiled_thunks = 435, xla_gpu_experimental_autotune_cache_mode = 324, xla_gpu_experimental_autotuner_cache_dir = 407, xla_gpu_experimental_collective_cse_distance_threshold = 374, xla_gpu_experimental_collective_perf_table_path = 377, xla_gpu_experimental_disable_binary_libraries = 329, xla_gpu_experimental_dump_fdo_profiles = 338, xla_gpu_experimental_dump_gpu_executable = 427, xla_gpu_experimental_enable_alltoall_windowed_einsum = 360, xla_gpu_experimental_enable_buffer_saver_on_thunks = 431, xla_gpu_experimental_enable_checksum_tracing_on_thunks = 414, xla_gpu_experimental_enable_fusion_autotuner = 409, xla_gpu_experimental_enable_fusion_block_level_rewriter = 334, xla_gpu_experimental_enable_heuristic_collective_combining = 366, xla_gpu_experimental_enable_nccl_symmetric_buffers = 406, xla_gpu_experimental_enable_nvshmem = 388, xla_gpu_experimental_enable_split_k_rewrite = 386, xla_gpu_experimental_enable_subchannel_dequantisation_fusion = 368, xla_gpu_experimental_enable_triton_heroless_priority_fusion = 340, xla_gpu_experimental_enable_triton_warp_specialization = 421, xla_gpu_experimental_pack_dot_operands_along_k_dimension = 362, xla_gpu_experimental_parallel_collective_overlap_limit = 336, xla_gpu_experimental_pipeline_parallelism_opt_level = 351, xla_gpu_experimental_stream_annotation = 342, xla_gpu_experimental_use_autotuner_pass = 396, xla_gpu_experimental_use_ragged_dot_fusion = 401, xla_gpu_fail_ptx_compilation_on_register_spilling = 353, xla_gpu_filter_kernels_spilling_registers_on_autotuning = 250, xla_gpu_first_collective_call_terminate_timeout_seconds = 392, xla_gpu_first_collective_call_warn_stuck_timeout_seconds = 391, xla_gpu_force_compilation_parallelism = 147, xla_gpu_force_conv_nchw = 125, xla_gpu_force_conv_nhwc = 146, xla_gpu_ftz = 62, xla_gpu_fused_attention_use_cudnn_rng = 235, xla_gpu_gemm_autotuner_override_file = 434, xla_gpu_gemm_rewrite_size_threshold = 283, xla_gpu_generate_debug_info = 348, xla_gpu_generate_line_info = 349, xla_gpu_graph_enable_concurrent_region = 215, xla_gpu_graph_min_graph_size = 208, xla_gpu_kernel_cache_file = 306, xla_gpu_libnvjitlink_mode = 343, xla_gpu_llvm_ir_file = 150, xla_gpu_llvm_verification_level = 256, xla_gpu_load_autotune_results_from = 223, xla_gpu_memory_limit_slop_factor = 260, xla_gpu_mock_custom_calls = 245, xla_gpu_multi_streamed_windowed_einsum = 280, xla_gpu_nccl_async_execution = 393, xla_gpu_nccl_blocking_communicators = 390, xla_gpu_nccl_collective_max_nchannels = 273, xla_gpu_nccl_init_max_rank_per_root_ratio = 277, xla_gpu_nccl_p2p_max_nchannels = 274, xla_gpu_nccl_terminate_on_error = 301, xla_gpu_nccl_termination_timeout_seconds = 163, xla_gpu_operand_bytes_threshold_for_windowed_einsum = 339, xla_gpu_override_gemm_autotuner = 295, xla_gpu_per_fusion_autotune_cache_dir = 310, xla_gpu_pgle_accuracy_checker = 341, xla_gpu_pgle_profile_file_or_directory_path = 210, xla_gpu_ptx_file = 127, xla_gpu_reduce_scatter_combine_threshold_bytes = 213, xla_gpu_redzone_padding_bytes = 228, xla_gpu_require_complete_aot_autotune_results = 284, xla_gpu_require_exclusive_lock = 347, xla_gpu_shape_checks = 170, xla_gpu_shard_autotuning = 304, xla_gpu_strict_conv_algorithm_picker = 156, xla_gpu_target_config_filename = 261, xla_gpu_temp_buffer_use_separate_color = 312, xla_gpu_threshold_for_windowed_einsum_mib = 265, xla_gpu_triton_gemm_any = 190, xla_gpu_unsafe_fallback_to_driver_on_ptxas_not_found = 138, xla_gpu_unsupported_enable_all_reduce_decomposer = 384, xla_gpu_unsupported_enable_ragged_all_to_all_decomposer = 350, xla_gpu_unsupported_enable_ragged_all_to_all_multi_host_decomposer = 415, xla_gpu_unsupported_enable_triton_gemm = 322, xla_gpu_unsupported_enable_triton_multi_output_fusion = 382, xla_gpu_unsupported_override_fast_interconnect_slice_size = 416, xla_gpu_unsupported_use_all_reduce_one_shot_kernel = 387, xla_gpu_unsupported_use_ragged_all_to_all_one_shot_kernel = 375, xla_gpu_use_embeded_device_lib = 420, xla_gpu_use_inprocess_lld = 389, xla_gpu_use_memcpy_local_p2p = 287, xla_gpu_use_runtime_fusion = 181, xla_gpu_verify_triton_fusion_numerics = 291, xla_hlo_graph_addresses = 2, xla_hlo_profile = 9, xla_disable_hlo_passes = 30, xla_enable_hlo_passes_only = 124, xla_disable_all_hlo_passes = 104, xla_backend_optimization_level = 31, xla_embed_ir_in_executable = 33, xla_eliminate_hlo_implicit_broadcast = 35, xla_cpu_multi_thread_eigen = 60, xla_llvm_enable_alias_scope_metadata = 70, xla_llvm_enable_noalias_metadata = 71, xla_llvm_enable_invariant_load_metadata = 72, xla_llvm_disable_expensive_passes = 73, xla_test_all_output_layouts = 90, xla_test_all_input_layouts = 91, xla_hlo_graph_sharding_color = 92, xla_cpu_use_onednn = 97, xla_allow_excess_precision = 122, xla_force_host_platform_device_count = 102, xla_hlo_evaluator_use_fast_path = 106, xla_allow_scalar_index_dynamic_ops = 107, xla_step_marker_location = 108, xla_dump_to = 109, xla_flags_reset = 364, xla_dump_hlo_module_re = 110, xla_dump_hlo_pass_re = 111, xla_dump_emitter_re = 433, xla_dump_hlo_as_text = 112, xla_dump_hlo_as_proto = 113, xla_dump_hlo_as_dot = 114, xla_dump_hlo_as_url = 115, xla_dump_hlo_as_html = 116, xla_dump_fusion_visualization = 149, xla_dump_hlo_snapshots = 118, xla_dump_include_timestamp = 131, xla_dump_max_hlo_modules = 132, xla_dump_module_metadata = 144, xla_dump_compress_protos = 151, xla_dump_hlo_as_long_text = 164, xla_dump_enable_mlir_pretty_form = 185, xla_dump_full_hlo_config = 381, xla_tpu_detect_nan = 135, xla_tpu_detect_inf = 136, xla_cpu_enable_xprof_traceme = 137, xla_multiheap_size_constraint_per_heap = 142, xla_detailed_logging = 252, xla_enable_dumping = 253, xla_llvm_force_inline_before_split = 300, xla_dump_disable_metadata = 153, xla_dump_hlo_pipeline_re = 154, xla_cpu_use_acl = 174, xla_cpu_strict_dot_conv_math = 175, xla_dump_latency_hiding_schedule = 182, xla_partitioning_algorithm = 187, xla_debug_buffer_assignment_show_max = 251, xla_detect_unstable_reductions = 403, xla_detect_unstable_reductions_post_optimizations = 432, xla_gpu_detect_nan = 426, xla_gpu_detect_inf = 428, xla_dump_large_constants = 290, xla_reduce_window_rewrite_base_length = 293, xla_cmd_buffer_trace_cache_size = 311, xla_syntax_sugar_async_ops = 315, xla_enable_command_buffers_during_profiling = 317, xla_ignore_channel_id = 330, xla_pjrt_allow_auto_layout_in_hlo = 344, xla_test_add_command_buffer_mode = 373, xla_gpu_experimental_matmul_perf_table_path = 383, xla_early_exit_with_layouts = 397, xla_gpu_experimental_scaled_dot_with_triton = 410, xla_gpu_experimental_use_raft_select_k = 413, xla_backend_extra_options = 500)
 
 function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:DebugOptions})
     xla_allow_h2h_copy_when_automatic_host_compute_offload_disabled = false
@@ -1023,7 +1061,6 @@ function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:DebugOptions})
     xla_gpu_cuda_data_dir = ""
     xla_gpu_cudnn_gemm_fusion_level = zero(Int32)
     xla_gpu_cudnn_gemm_max_plans = zero(Int32)
-    xla_gpu_default_to_alg_dot_bf16_bf16_f32 = false
     xla_gpu_deterministic_ops = false
     xla_gpu_disable_async_collectives = PB.BufferedVector{var"DebugOptions.CollectiveOpType".T}()
     xla_gpu_disable_gpuasm_optimizations = false
@@ -1054,7 +1091,6 @@ function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:DebugOptions})
     xla_gpu_enable_pipelined_all_gather = false
     xla_gpu_enable_pipelined_all_reduce = false
     xla_gpu_enable_pipelined_collectives = false
-    xla_gpu_enable_pipelined_host_offloading = false
     xla_gpu_enable_pipelined_p2p = false
     xla_gpu_enable_pipelined_reduce_scatter = false
     xla_gpu_enable_reassociation_for_converted_ar = false
@@ -1074,7 +1110,6 @@ function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:DebugOptions})
     xla_gpu_exhaustive_tiling_search = false
     xla_gpu_experimental_allow_unroll_factor_eight = false
     xla_gpu_experimental_aot_compiled_thunks = false
-    xla_gpu_experimental_autotune_backends = PB.BufferedVector{var"DebugOptions.AutotuneBackend".T}()
     xla_gpu_experimental_autotune_cache_mode = var"DebugOptions.AutotuneCacheMode".AUTOTUNE_CACHE_MODE_UNSPECIFIED
     xla_gpu_experimental_autotuner_cache_dir = ""
     xla_gpu_experimental_collective_cse_distance_threshold = zero(Int64)
@@ -1355,8 +1390,6 @@ function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:DebugOptions})
             xla_gpu_cudnn_gemm_fusion_level = PB.decode(d, Int32)
         elseif field_number == 318
             xla_gpu_cudnn_gemm_max_plans = PB.decode(d, Int32)
-        elseif field_number == 441
-            xla_gpu_default_to_alg_dot_bf16_bf16_f32 = PB.decode(d, Bool)
         elseif field_number == 148
             xla_gpu_deterministic_ops = PB.decode(d, Bool)
         elseif field_number == 289
@@ -1417,8 +1450,6 @@ function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:DebugOptions})
             xla_gpu_enable_pipelined_all_reduce = PB.decode(d, Bool)
         elseif field_number == 239
             xla_gpu_enable_pipelined_collectives = PB.decode(d, Bool)
-        elseif field_number == 440
-            xla_gpu_enable_pipelined_host_offloading = PB.decode(d, Bool)
         elseif field_number == 246
             xla_gpu_enable_pipelined_p2p = PB.decode(d, Bool)
         elseif field_number == 231
@@ -1457,8 +1488,6 @@ function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:DebugOptions})
             xla_gpu_experimental_allow_unroll_factor_eight = PB.decode(d, Bool)
         elseif field_number == 435
             xla_gpu_experimental_aot_compiled_thunks = PB.decode(d, Bool)
-        elseif field_number == 442
-            PB.decode!(d, wire_type, xla_gpu_experimental_autotune_backends)
         elseif field_number == 324
             xla_gpu_experimental_autotune_cache_mode = PB.decode(d, var"DebugOptions.AutotuneCacheMode".T)
         elseif field_number == 407
@@ -1779,7 +1808,7 @@ function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:DebugOptions})
             Base.skip(d, wire_type)
         end
     end
-    return DebugOptions(xla_allow_h2h_copy_when_automatic_host_compute_offload_disabled, xla_disable_automatic_host_compute_offload, xla_enable_scoped_logging_timers, xla_hlo_pass_fix_detect_cycles, xla_keep_shardings_after_spmd, xla_unsupported_crash_on_hlo_pass_fix_max_iterations, xla_unsupported_crash_on_hlo_pass_noop_change, xla_unsupported_crash_on_hlo_pass_silent_hlo_change, xla_cpu_collective_call_terminate_timeout_seconds, xla_cpu_collective_call_warn_stuck_seconds, xla_cpu_collective_timeout_seconds, xla_cpu_copy_insertion_use_region_analysis, xla_cpu_emitter_verification_level, xla_cpu_enable_concurrency_optimized_scheduler, xla_cpu_enable_fast_math, xla_cpu_enable_fast_min_max, xla_cpu_enable_platform_dependent_math, xla_cpu_experimental_onednn_custom_call, xla_cpu_experimental_onednn_fusion_type[], xla_cpu_experimental_xnn_fusion_type[], xla_cpu_experimental_xnn_graph_fusion_mode, xla_cpu_experimental_ynn_fusion_type[], xla_cpu_fast_math_honor_division, xla_cpu_fast_math_honor_functions, xla_cpu_fast_math_honor_infs, xla_cpu_fast_math_honor_nans, xla_cpu_generate_unique_c_style_kernel_entry_points, xla_cpu_max_isa, xla_cpu_parallel_codegen_split_count, xla_cpu_prefer_vector_width, xla_cpu_use_fusion_emitters, xla_cpu_use_xnnpack, xla_enable_fast_math, xla_gpu_experimental_thunk_buffer_debug_filter[], xla_dump_hlo_unoptimized_snapshots, xla_enable_enzyme_comms_opt, xla_gpu_algorithm_denylist_path, xla_gpu_all_gather_combine_threshold_bytes, xla_gpu_all_reduce_blueconnect_num_devices_per_host, xla_gpu_all_reduce_combine_threshold_bytes, xla_gpu_analytical_latency_estimator_options, xla_gpu_async_dot, xla_gpu_auto_spmd_partitioning_memory_budget_gb, xla_gpu_auto_spmd_partitioning_memory_budget_ratio, xla_gpu_autotune_gemm_rtol, xla_gpu_autotune_level, xla_gpu_autotune_max_solutions, xla_gpu_collect_cost_model_stats, xla_gpu_collective_inflation_factor, xla_gpu_collective_permute_combine_threshold_bytes, xla_gpu_collective_permute_decomposer_threshold, xla_gpu_collectives_use_persistent_cliques, xla_gpu_command_buffer_scheduling_mode, xla_gpu_command_buffer_unroll_loops, xla_gpu_copy_insertion_use_region_analysis, xla_gpu_crash_on_verification_failures, xla_gpu_cublas_fallback, xla_gpu_cuda_data_dir, xla_gpu_cudnn_gemm_fusion_level, xla_gpu_cudnn_gemm_max_plans, xla_gpu_default_to_alg_dot_bf16_bf16_f32, xla_gpu_deterministic_ops, xla_gpu_disable_async_collectives[], xla_gpu_disable_gpuasm_optimizations, xla_gpu_dot_merger_threshold_mb, xla_gpu_dump_autotune_logs_to, xla_gpu_dump_autotune_results_to, xla_gpu_dump_autotuned_gemm_fusions, xla_gpu_dump_llvmir, xla_gpu_enable_all_gather_combine_by_dim, xla_gpu_enable_analytical_latency_estimator, xla_gpu_enable_analytical_sol_latency_estimator, xla_gpu_enable_approx_costly_collectives, xla_gpu_enable_command_buffer[], xla_gpu_enable_cub_radix_sort, xla_gpu_enable_cublaslt, xla_gpu_enable_cudnn_int8x32_convolution_reordering, xla_gpu_enable_cudnn_layer_norm, xla_gpu_enable_dynamic_slice_fusion, xla_gpu_enable_fast_min_max, xla_gpu_enable_highest_priority_async_stream, xla_gpu_enable_host_memory_offloading, xla_gpu_enable_latency_hiding_scheduler, xla_gpu_enable_libnvptxcompiler, xla_gpu_enable_llvm_module_compilation_parallelism, xla_gpu_enable_nccl_clique_optimization, xla_gpu_enable_nccl_comm_splitting, xla_gpu_enable_nccl_user_buffers, xla_gpu_enable_pipelined_all_gather, xla_gpu_enable_pipelined_all_reduce, xla_gpu_enable_pipelined_collectives, xla_gpu_enable_pipelined_host_offloading, xla_gpu_enable_pipelined_p2p, xla_gpu_enable_pipelined_reduce_scatter, xla_gpu_enable_reassociation_for_converted_ar, xla_gpu_enable_reduce_scatter_combine_by_dim, xla_gpu_enable_reduction_epilogue_fusion, xla_gpu_enable_scatter_determinism_expander, xla_gpu_enable_shared_constants, xla_gpu_enable_split_k_autotuning, xla_gpu_enable_triton_gemm, xla_gpu_enable_while_loop_double_buffering, xla_gpu_enable_while_loop_reduce_scatter_code_motion, xla_gpu_enable_while_loop_unrolling, xla_gpu_exclude_nondeterministic_ops, xla_gpu_executable_embed_debug_info, xla_gpu_executable_terminate_timeout_seconds, xla_gpu_executable_warn_stuck_timeout_seconds, xla_gpu_exhaustive_tiling_search, xla_gpu_experimental_allow_unroll_factor_eight, xla_gpu_experimental_aot_compiled_thunks, xla_gpu_experimental_autotune_backends[], xla_gpu_experimental_autotune_cache_mode, xla_gpu_experimental_autotuner_cache_dir, xla_gpu_experimental_collective_cse_distance_threshold, xla_gpu_experimental_collective_perf_table_path, xla_gpu_experimental_disable_binary_libraries, xla_gpu_experimental_dump_fdo_profiles, xla_gpu_experimental_dump_gpu_executable, xla_gpu_experimental_enable_alltoall_windowed_einsum, xla_gpu_experimental_enable_buffer_saver_on_thunks, xla_gpu_experimental_enable_checksum_tracing_on_thunks, xla_gpu_experimental_enable_fusion_autotuner, xla_gpu_experimental_enable_fusion_block_level_rewriter, xla_gpu_experimental_enable_heuristic_collective_combining, xla_gpu_experimental_enable_nccl_symmetric_buffers, xla_gpu_experimental_enable_nvshmem, xla_gpu_experimental_enable_split_k_rewrite, xla_gpu_experimental_enable_subchannel_dequantisation_fusion, xla_gpu_experimental_enable_triton_heroless_priority_fusion, xla_gpu_experimental_enable_triton_warp_specialization, xla_gpu_experimental_pack_dot_operands_along_k_dimension, xla_gpu_experimental_parallel_collective_overlap_limit, xla_gpu_experimental_pipeline_parallelism_opt_level, xla_gpu_experimental_stream_annotation, xla_gpu_experimental_use_autotuner_pass, xla_gpu_experimental_use_ragged_dot_fusion, xla_gpu_fail_ptx_compilation_on_register_spilling, xla_gpu_filter_kernels_spilling_registers_on_autotuning, xla_gpu_first_collective_call_terminate_timeout_seconds, xla_gpu_first_collective_call_warn_stuck_timeout_seconds, xla_gpu_force_compilation_parallelism, xla_gpu_force_conv_nchw, xla_gpu_force_conv_nhwc, xla_gpu_ftz, xla_gpu_fused_attention_use_cudnn_rng, xla_gpu_gemm_autotuner_override_file, xla_gpu_gemm_rewrite_size_threshold, xla_gpu_generate_debug_info, xla_gpu_generate_line_info, xla_gpu_graph_enable_concurrent_region, xla_gpu_graph_min_graph_size, xla_gpu_kernel_cache_file, xla_gpu_libnvjitlink_mode, xla_gpu_llvm_ir_file[], xla_gpu_llvm_verification_level, xla_gpu_load_autotune_results_from, xla_gpu_memory_limit_slop_factor, xla_gpu_mock_custom_calls, xla_gpu_multi_streamed_windowed_einsum, xla_gpu_nccl_async_execution, xla_gpu_nccl_blocking_communicators, xla_gpu_nccl_collective_max_nchannels, xla_gpu_nccl_init_max_rank_per_root_ratio, xla_gpu_nccl_p2p_max_nchannels, xla_gpu_nccl_terminate_on_error, xla_gpu_nccl_termination_timeout_seconds, xla_gpu_operand_bytes_threshold_for_windowed_einsum, xla_gpu_override_gemm_autotuner, xla_gpu_per_fusion_autotune_cache_dir, xla_gpu_pgle_accuracy_checker, xla_gpu_pgle_profile_file_or_directory_path, xla_gpu_ptx_file[], xla_gpu_reduce_scatter_combine_threshold_bytes, xla_gpu_redzone_padding_bytes, xla_gpu_require_complete_aot_autotune_results, xla_gpu_require_exclusive_lock, xla_gpu_shape_checks, xla_gpu_shard_autotuning, xla_gpu_strict_conv_algorithm_picker, xla_gpu_target_config_filename, xla_gpu_temp_buffer_use_separate_color, xla_gpu_threshold_for_windowed_einsum_mib, xla_gpu_triton_gemm_any, xla_gpu_unsafe_fallback_to_driver_on_ptxas_not_found, xla_gpu_unsupported_enable_all_reduce_decomposer, xla_gpu_unsupported_enable_ragged_all_to_all_decomposer, xla_gpu_unsupported_enable_ragged_all_to_all_multi_host_decomposer, xla_gpu_unsupported_enable_triton_gemm, xla_gpu_unsupported_enable_triton_multi_output_fusion, xla_gpu_unsupported_override_fast_interconnect_slice_size, xla_gpu_unsupported_use_all_reduce_one_shot_kernel, xla_gpu_unsupported_use_ragged_all_to_all_one_shot_kernel, xla_gpu_use_embeded_device_lib, xla_gpu_use_inprocess_lld, xla_gpu_use_memcpy_local_p2p, xla_gpu_use_runtime_fusion, xla_gpu_verify_triton_fusion_numerics, xla_hlo_graph_addresses, xla_hlo_profile, xla_disable_hlo_passes[], xla_enable_hlo_passes_only[], xla_disable_all_hlo_passes, xla_backend_optimization_level, xla_embed_ir_in_executable, xla_eliminate_hlo_implicit_broadcast, xla_cpu_multi_thread_eigen, xla_llvm_enable_alias_scope_metadata, xla_llvm_enable_noalias_metadata, xla_llvm_enable_invariant_load_metadata, xla_llvm_disable_expensive_passes, xla_test_all_output_layouts, xla_test_all_input_layouts, xla_hlo_graph_sharding_color, xla_cpu_use_onednn, xla_allow_excess_precision, xla_force_host_platform_device_count, xla_hlo_evaluator_use_fast_path, xla_allow_scalar_index_dynamic_ops, xla_step_marker_location, xla_dump_to, xla_flags_reset, xla_dump_hlo_module_re, xla_dump_hlo_pass_re, xla_dump_emitter_re, xla_dump_hlo_as_text, xla_dump_hlo_as_proto, xla_dump_hlo_as_dot, xla_dump_hlo_as_url, xla_dump_hlo_as_html, xla_dump_fusion_visualization, xla_dump_hlo_snapshots, xla_dump_include_timestamp, xla_dump_max_hlo_modules, xla_dump_module_metadata, xla_dump_compress_protos, xla_dump_hlo_as_long_text, xla_dump_enable_mlir_pretty_form, xla_dump_full_hlo_config, xla_tpu_detect_nan, xla_tpu_detect_inf, xla_cpu_enable_xprof_traceme, xla_multiheap_size_constraint_per_heap, xla_detailed_logging, xla_enable_dumping, xla_llvm_force_inline_before_split, xla_dump_disable_metadata, xla_dump_hlo_pipeline_re, xla_cpu_use_acl, xla_cpu_strict_dot_conv_math, xla_dump_latency_hiding_schedule, xla_partitioning_algorithm, xla_debug_buffer_assignment_show_max, xla_detect_unstable_reductions, xla_detect_unstable_reductions_post_optimizations, xla_gpu_detect_nan, xla_gpu_detect_inf, xla_dump_large_constants, xla_reduce_window_rewrite_base_length, xla_cmd_buffer_trace_cache_size, xla_syntax_sugar_async_ops, xla_enable_command_buffers_during_profiling, xla_ignore_channel_id, xla_pjrt_allow_auto_layout_in_hlo, xla_test_add_command_buffer_mode, xla_gpu_experimental_matmul_perf_table_path, xla_early_exit_with_layouts, xla_gpu_experimental_scaled_dot_with_triton, xla_gpu_experimental_use_raft_select_k, xla_backend_extra_options)
+    return DebugOptions(; xla_allow_h2h_copy_when_automatic_host_compute_offload_disabled=xla_allow_h2h_copy_when_automatic_host_compute_offload_disabled, xla_disable_automatic_host_compute_offload=xla_disable_automatic_host_compute_offload, xla_enable_scoped_logging_timers=xla_enable_scoped_logging_timers, xla_hlo_pass_fix_detect_cycles=xla_hlo_pass_fix_detect_cycles, xla_keep_shardings_after_spmd=xla_keep_shardings_after_spmd, xla_unsupported_crash_on_hlo_pass_fix_max_iterations=xla_unsupported_crash_on_hlo_pass_fix_max_iterations, xla_unsupported_crash_on_hlo_pass_noop_change=xla_unsupported_crash_on_hlo_pass_noop_change, xla_unsupported_crash_on_hlo_pass_silent_hlo_change=xla_unsupported_crash_on_hlo_pass_silent_hlo_change, xla_cpu_collective_call_terminate_timeout_seconds=xla_cpu_collective_call_terminate_timeout_seconds, xla_cpu_collective_call_warn_stuck_seconds=xla_cpu_collective_call_warn_stuck_seconds, xla_cpu_collective_timeout_seconds=xla_cpu_collective_timeout_seconds, xla_cpu_copy_insertion_use_region_analysis=xla_cpu_copy_insertion_use_region_analysis, xla_cpu_emitter_verification_level=xla_cpu_emitter_verification_level, xla_cpu_enable_concurrency_optimized_scheduler=xla_cpu_enable_concurrency_optimized_scheduler, xla_cpu_enable_fast_math=xla_cpu_enable_fast_math, xla_cpu_enable_fast_min_max=xla_cpu_enable_fast_min_max, xla_cpu_enable_platform_dependent_math=xla_cpu_enable_platform_dependent_math, xla_cpu_experimental_onednn_custom_call=xla_cpu_experimental_onednn_custom_call, xla_cpu_experimental_onednn_fusion_type=xla_cpu_experimental_onednn_fusion_type[], xla_cpu_experimental_xnn_fusion_type=xla_cpu_experimental_xnn_fusion_type[], xla_cpu_experimental_xnn_graph_fusion_mode=xla_cpu_experimental_xnn_graph_fusion_mode, xla_cpu_experimental_ynn_fusion_type=xla_cpu_experimental_ynn_fusion_type[], xla_cpu_fast_math_honor_division=xla_cpu_fast_math_honor_division, xla_cpu_fast_math_honor_functions=xla_cpu_fast_math_honor_functions, xla_cpu_fast_math_honor_infs=xla_cpu_fast_math_honor_infs, xla_cpu_fast_math_honor_nans=xla_cpu_fast_math_honor_nans, xla_cpu_generate_unique_c_style_kernel_entry_points=xla_cpu_generate_unique_c_style_kernel_entry_points, xla_cpu_max_isa=xla_cpu_max_isa, xla_cpu_parallel_codegen_split_count=xla_cpu_parallel_codegen_split_count, xla_cpu_prefer_vector_width=xla_cpu_prefer_vector_width, xla_cpu_use_fusion_emitters=xla_cpu_use_fusion_emitters, xla_cpu_use_xnnpack=xla_cpu_use_xnnpack, xla_enable_fast_math=xla_enable_fast_math, xla_gpu_experimental_thunk_buffer_debug_filter=xla_gpu_experimental_thunk_buffer_debug_filter[], xla_dump_hlo_unoptimized_snapshots=xla_dump_hlo_unoptimized_snapshots, xla_enable_enzyme_comms_opt=xla_enable_enzyme_comms_opt, xla_gpu_algorithm_denylist_path=xla_gpu_algorithm_denylist_path, xla_gpu_all_gather_combine_threshold_bytes=xla_gpu_all_gather_combine_threshold_bytes, xla_gpu_all_reduce_blueconnect_num_devices_per_host=xla_gpu_all_reduce_blueconnect_num_devices_per_host, xla_gpu_all_reduce_combine_threshold_bytes=xla_gpu_all_reduce_combine_threshold_bytes, xla_gpu_analytical_latency_estimator_options=xla_gpu_analytical_latency_estimator_options, xla_gpu_async_dot=xla_gpu_async_dot, xla_gpu_auto_spmd_partitioning_memory_budget_gb=xla_gpu_auto_spmd_partitioning_memory_budget_gb, xla_gpu_auto_spmd_partitioning_memory_budget_ratio=xla_gpu_auto_spmd_partitioning_memory_budget_ratio, xla_gpu_autotune_gemm_rtol=xla_gpu_autotune_gemm_rtol, xla_gpu_autotune_level=xla_gpu_autotune_level, xla_gpu_autotune_max_solutions=xla_gpu_autotune_max_solutions, xla_gpu_collect_cost_model_stats=xla_gpu_collect_cost_model_stats, xla_gpu_collective_inflation_factor=xla_gpu_collective_inflation_factor, xla_gpu_collective_permute_combine_threshold_bytes=xla_gpu_collective_permute_combine_threshold_bytes, xla_gpu_collective_permute_decomposer_threshold=xla_gpu_collective_permute_decomposer_threshold, xla_gpu_collectives_use_persistent_cliques=xla_gpu_collectives_use_persistent_cliques, xla_gpu_command_buffer_scheduling_mode=xla_gpu_command_buffer_scheduling_mode, xla_gpu_command_buffer_unroll_loops=xla_gpu_command_buffer_unroll_loops, xla_gpu_copy_insertion_use_region_analysis=xla_gpu_copy_insertion_use_region_analysis, xla_gpu_crash_on_verification_failures=xla_gpu_crash_on_verification_failures, xla_gpu_cublas_fallback=xla_gpu_cublas_fallback, xla_gpu_cuda_data_dir=xla_gpu_cuda_data_dir, xla_gpu_cudnn_gemm_fusion_level=xla_gpu_cudnn_gemm_fusion_level, xla_gpu_cudnn_gemm_max_plans=xla_gpu_cudnn_gemm_max_plans, xla_gpu_deterministic_ops=xla_gpu_deterministic_ops, xla_gpu_disable_async_collectives=xla_gpu_disable_async_collectives[], xla_gpu_disable_gpuasm_optimizations=xla_gpu_disable_gpuasm_optimizations, xla_gpu_dot_merger_threshold_mb=xla_gpu_dot_merger_threshold_mb, xla_gpu_dump_autotune_logs_to=xla_gpu_dump_autotune_logs_to, xla_gpu_dump_autotune_results_to=xla_gpu_dump_autotune_results_to, xla_gpu_dump_autotuned_gemm_fusions=xla_gpu_dump_autotuned_gemm_fusions, xla_gpu_dump_llvmir=xla_gpu_dump_llvmir, xla_gpu_enable_all_gather_combine_by_dim=xla_gpu_enable_all_gather_combine_by_dim, xla_gpu_enable_analytical_latency_estimator=xla_gpu_enable_analytical_latency_estimator, xla_gpu_enable_analytical_sol_latency_estimator=xla_gpu_enable_analytical_sol_latency_estimator, xla_gpu_enable_approx_costly_collectives=xla_gpu_enable_approx_costly_collectives, xla_gpu_enable_command_buffer=xla_gpu_enable_command_buffer[], xla_gpu_enable_cub_radix_sort=xla_gpu_enable_cub_radix_sort, xla_gpu_enable_cublaslt=xla_gpu_enable_cublaslt, xla_gpu_enable_cudnn_int8x32_convolution_reordering=xla_gpu_enable_cudnn_int8x32_convolution_reordering, xla_gpu_enable_cudnn_layer_norm=xla_gpu_enable_cudnn_layer_norm, xla_gpu_enable_dynamic_slice_fusion=xla_gpu_enable_dynamic_slice_fusion, xla_gpu_enable_fast_min_max=xla_gpu_enable_fast_min_max, xla_gpu_enable_highest_priority_async_stream=xla_gpu_enable_highest_priority_async_stream, xla_gpu_enable_host_memory_offloading=xla_gpu_enable_host_memory_offloading, xla_gpu_enable_latency_hiding_scheduler=xla_gpu_enable_latency_hiding_scheduler, xla_gpu_enable_libnvptxcompiler=xla_gpu_enable_libnvptxcompiler, xla_gpu_enable_llvm_module_compilation_parallelism=xla_gpu_enable_llvm_module_compilation_parallelism, xla_gpu_enable_nccl_clique_optimization=xla_gpu_enable_nccl_clique_optimization, xla_gpu_enable_nccl_comm_splitting=xla_gpu_enable_nccl_comm_splitting, xla_gpu_enable_nccl_user_buffers=xla_gpu_enable_nccl_user_buffers, xla_gpu_enable_pipelined_all_gather=xla_gpu_enable_pipelined_all_gather, xla_gpu_enable_pipelined_all_reduce=xla_gpu_enable_pipelined_all_reduce, xla_gpu_enable_pipelined_collectives=xla_gpu_enable_pipelined_collectives, xla_gpu_enable_pipelined_p2p=xla_gpu_enable_pipelined_p2p, xla_gpu_enable_pipelined_reduce_scatter=xla_gpu_enable_pipelined_reduce_scatter, xla_gpu_enable_reassociation_for_converted_ar=xla_gpu_enable_reassociation_for_converted_ar, xla_gpu_enable_reduce_scatter_combine_by_dim=xla_gpu_enable_reduce_scatter_combine_by_dim, xla_gpu_enable_reduction_epilogue_fusion=xla_gpu_enable_reduction_epilogue_fusion, xla_gpu_enable_scatter_determinism_expander=xla_gpu_enable_scatter_determinism_expander, xla_gpu_enable_shared_constants=xla_gpu_enable_shared_constants, xla_gpu_enable_split_k_autotuning=xla_gpu_enable_split_k_autotuning, xla_gpu_enable_triton_gemm=xla_gpu_enable_triton_gemm, xla_gpu_enable_while_loop_double_buffering=xla_gpu_enable_while_loop_double_buffering, xla_gpu_enable_while_loop_reduce_scatter_code_motion=xla_gpu_enable_while_loop_reduce_scatter_code_motion, xla_gpu_enable_while_loop_unrolling=xla_gpu_enable_while_loop_unrolling, xla_gpu_exclude_nondeterministic_ops=xla_gpu_exclude_nondeterministic_ops, xla_gpu_executable_embed_debug_info=xla_gpu_executable_embed_debug_info, xla_gpu_executable_terminate_timeout_seconds=xla_gpu_executable_terminate_timeout_seconds, xla_gpu_executable_warn_stuck_timeout_seconds=xla_gpu_executable_warn_stuck_timeout_seconds, xla_gpu_exhaustive_tiling_search=xla_gpu_exhaustive_tiling_search, xla_gpu_experimental_allow_unroll_factor_eight=xla_gpu_experimental_allow_unroll_factor_eight, xla_gpu_experimental_aot_compiled_thunks=xla_gpu_experimental_aot_compiled_thunks, xla_gpu_experimental_autotune_cache_mode=xla_gpu_experimental_autotune_cache_mode, xla_gpu_experimental_autotuner_cache_dir=xla_gpu_experimental_autotuner_cache_dir, xla_gpu_experimental_collective_cse_distance_threshold=xla_gpu_experimental_collective_cse_distance_threshold, xla_gpu_experimental_collective_perf_table_path=xla_gpu_experimental_collective_perf_table_path, xla_gpu_experimental_disable_binary_libraries=xla_gpu_experimental_disable_binary_libraries, xla_gpu_experimental_dump_fdo_profiles=xla_gpu_experimental_dump_fdo_profiles, xla_gpu_experimental_dump_gpu_executable=xla_gpu_experimental_dump_gpu_executable, xla_gpu_experimental_enable_alltoall_windowed_einsum=xla_gpu_experimental_enable_alltoall_windowed_einsum, xla_gpu_experimental_enable_buffer_saver_on_thunks=xla_gpu_experimental_enable_buffer_saver_on_thunks, xla_gpu_experimental_enable_checksum_tracing_on_thunks=xla_gpu_experimental_enable_checksum_tracing_on_thunks, xla_gpu_experimental_enable_fusion_autotuner=xla_gpu_experimental_enable_fusion_autotuner, xla_gpu_experimental_enable_fusion_block_level_rewriter=xla_gpu_experimental_enable_fusion_block_level_rewriter, xla_gpu_experimental_enable_heuristic_collective_combining=xla_gpu_experimental_enable_heuristic_collective_combining, xla_gpu_experimental_enable_nccl_symmetric_buffers=xla_gpu_experimental_enable_nccl_symmetric_buffers, xla_gpu_experimental_enable_nvshmem=xla_gpu_experimental_enable_nvshmem, xla_gpu_experimental_enable_split_k_rewrite=xla_gpu_experimental_enable_split_k_rewrite, xla_gpu_experimental_enable_subchannel_dequantisation_fusion=xla_gpu_experimental_enable_subchannel_dequantisation_fusion, xla_gpu_experimental_enable_triton_heroless_priority_fusion=xla_gpu_experimental_enable_triton_heroless_priority_fusion, xla_gpu_experimental_enable_triton_warp_specialization=xla_gpu_experimental_enable_triton_warp_specialization, xla_gpu_experimental_pack_dot_operands_along_k_dimension=xla_gpu_experimental_pack_dot_operands_along_k_dimension, xla_gpu_experimental_parallel_collective_overlap_limit=xla_gpu_experimental_parallel_collective_overlap_limit, xla_gpu_experimental_pipeline_parallelism_opt_level=xla_gpu_experimental_pipeline_parallelism_opt_level, xla_gpu_experimental_stream_annotation=xla_gpu_experimental_stream_annotation, xla_gpu_experimental_use_autotuner_pass=xla_gpu_experimental_use_autotuner_pass, xla_gpu_experimental_use_ragged_dot_fusion=xla_gpu_experimental_use_ragged_dot_fusion, xla_gpu_fail_ptx_compilation_on_register_spilling=xla_gpu_fail_ptx_compilation_on_register_spilling, xla_gpu_filter_kernels_spilling_registers_on_autotuning=xla_gpu_filter_kernels_spilling_registers_on_autotuning, xla_gpu_first_collective_call_terminate_timeout_seconds=xla_gpu_first_collective_call_terminate_timeout_seconds, xla_gpu_first_collective_call_warn_stuck_timeout_seconds=xla_gpu_first_collective_call_warn_stuck_timeout_seconds, xla_gpu_force_compilation_parallelism=xla_gpu_force_compilation_parallelism, xla_gpu_force_conv_nchw=xla_gpu_force_conv_nchw, xla_gpu_force_conv_nhwc=xla_gpu_force_conv_nhwc, xla_gpu_ftz=xla_gpu_ftz, xla_gpu_fused_attention_use_cudnn_rng=xla_gpu_fused_attention_use_cudnn_rng, xla_gpu_gemm_autotuner_override_file=xla_gpu_gemm_autotuner_override_file, xla_gpu_gemm_rewrite_size_threshold=xla_gpu_gemm_rewrite_size_threshold, xla_gpu_generate_debug_info=xla_gpu_generate_debug_info, xla_gpu_generate_line_info=xla_gpu_generate_line_info, xla_gpu_graph_enable_concurrent_region=xla_gpu_graph_enable_concurrent_region, xla_gpu_graph_min_graph_size=xla_gpu_graph_min_graph_size, xla_gpu_kernel_cache_file=xla_gpu_kernel_cache_file, xla_gpu_libnvjitlink_mode=xla_gpu_libnvjitlink_mode, xla_gpu_llvm_ir_file=xla_gpu_llvm_ir_file[], xla_gpu_llvm_verification_level=xla_gpu_llvm_verification_level, xla_gpu_load_autotune_results_from=xla_gpu_load_autotune_results_from, xla_gpu_memory_limit_slop_factor=xla_gpu_memory_limit_slop_factor, xla_gpu_mock_custom_calls=xla_gpu_mock_custom_calls, xla_gpu_multi_streamed_windowed_einsum=xla_gpu_multi_streamed_windowed_einsum, xla_gpu_nccl_async_execution=xla_gpu_nccl_async_execution, xla_gpu_nccl_blocking_communicators=xla_gpu_nccl_blocking_communicators, xla_gpu_nccl_collective_max_nchannels=xla_gpu_nccl_collective_max_nchannels, xla_gpu_nccl_init_max_rank_per_root_ratio=xla_gpu_nccl_init_max_rank_per_root_ratio, xla_gpu_nccl_p2p_max_nchannels=xla_gpu_nccl_p2p_max_nchannels, xla_gpu_nccl_terminate_on_error=xla_gpu_nccl_terminate_on_error, xla_gpu_nccl_termination_timeout_seconds=xla_gpu_nccl_termination_timeout_seconds, xla_gpu_operand_bytes_threshold_for_windowed_einsum=xla_gpu_operand_bytes_threshold_for_windowed_einsum, xla_gpu_override_gemm_autotuner=xla_gpu_override_gemm_autotuner, xla_gpu_per_fusion_autotune_cache_dir=xla_gpu_per_fusion_autotune_cache_dir, xla_gpu_pgle_accuracy_checker=xla_gpu_pgle_accuracy_checker, xla_gpu_pgle_profile_file_or_directory_path=xla_gpu_pgle_profile_file_or_directory_path, xla_gpu_ptx_file=xla_gpu_ptx_file[], xla_gpu_reduce_scatter_combine_threshold_bytes=xla_gpu_reduce_scatter_combine_threshold_bytes, xla_gpu_redzone_padding_bytes=xla_gpu_redzone_padding_bytes, xla_gpu_require_complete_aot_autotune_results=xla_gpu_require_complete_aot_autotune_results, xla_gpu_require_exclusive_lock=xla_gpu_require_exclusive_lock, xla_gpu_shape_checks=xla_gpu_shape_checks, xla_gpu_shard_autotuning=xla_gpu_shard_autotuning, xla_gpu_strict_conv_algorithm_picker=xla_gpu_strict_conv_algorithm_picker, xla_gpu_target_config_filename=xla_gpu_target_config_filename, xla_gpu_temp_buffer_use_separate_color=xla_gpu_temp_buffer_use_separate_color, xla_gpu_threshold_for_windowed_einsum_mib=xla_gpu_threshold_for_windowed_einsum_mib, xla_gpu_triton_gemm_any=xla_gpu_triton_gemm_any, xla_gpu_unsafe_fallback_to_driver_on_ptxas_not_found=xla_gpu_unsafe_fallback_to_driver_on_ptxas_not_found, xla_gpu_unsupported_enable_all_reduce_decomposer=xla_gpu_unsupported_enable_all_reduce_decomposer, xla_gpu_unsupported_enable_ragged_all_to_all_decomposer=xla_gpu_unsupported_enable_ragged_all_to_all_decomposer, xla_gpu_unsupported_enable_ragged_all_to_all_multi_host_decomposer=xla_gpu_unsupported_enable_ragged_all_to_all_multi_host_decomposer, xla_gpu_unsupported_enable_triton_gemm=xla_gpu_unsupported_enable_triton_gemm, xla_gpu_unsupported_enable_triton_multi_output_fusion=xla_gpu_unsupported_enable_triton_multi_output_fusion, xla_gpu_unsupported_override_fast_interconnect_slice_size=xla_gpu_unsupported_override_fast_interconnect_slice_size, xla_gpu_unsupported_use_all_reduce_one_shot_kernel=xla_gpu_unsupported_use_all_reduce_one_shot_kernel, xla_gpu_unsupported_use_ragged_all_to_all_one_shot_kernel=xla_gpu_unsupported_use_ragged_all_to_all_one_shot_kernel, xla_gpu_use_embeded_device_lib=xla_gpu_use_embeded_device_lib, xla_gpu_use_inprocess_lld=xla_gpu_use_inprocess_lld, xla_gpu_use_memcpy_local_p2p=xla_gpu_use_memcpy_local_p2p, xla_gpu_use_runtime_fusion=xla_gpu_use_runtime_fusion, xla_gpu_verify_triton_fusion_numerics=xla_gpu_verify_triton_fusion_numerics, xla_hlo_graph_addresses=xla_hlo_graph_addresses, xla_hlo_profile=xla_hlo_profile, xla_disable_hlo_passes=xla_disable_hlo_passes[], xla_enable_hlo_passes_only=xla_enable_hlo_passes_only[], xla_disable_all_hlo_passes=xla_disable_all_hlo_passes, xla_backend_optimization_level=xla_backend_optimization_level, xla_embed_ir_in_executable=xla_embed_ir_in_executable, xla_eliminate_hlo_implicit_broadcast=xla_eliminate_hlo_implicit_broadcast, xla_cpu_multi_thread_eigen=xla_cpu_multi_thread_eigen, xla_llvm_enable_alias_scope_metadata=xla_llvm_enable_alias_scope_metadata, xla_llvm_enable_noalias_metadata=xla_llvm_enable_noalias_metadata, xla_llvm_enable_invariant_load_metadata=xla_llvm_enable_invariant_load_metadata, xla_llvm_disable_expensive_passes=xla_llvm_disable_expensive_passes, xla_test_all_output_layouts=xla_test_all_output_layouts, xla_test_all_input_layouts=xla_test_all_input_layouts, xla_hlo_graph_sharding_color=xla_hlo_graph_sharding_color, xla_cpu_use_onednn=xla_cpu_use_onednn, xla_allow_excess_precision=xla_allow_excess_precision, xla_force_host_platform_device_count=xla_force_host_platform_device_count, xla_hlo_evaluator_use_fast_path=xla_hlo_evaluator_use_fast_path, xla_allow_scalar_index_dynamic_ops=xla_allow_scalar_index_dynamic_ops, xla_step_marker_location=xla_step_marker_location, xla_dump_to=xla_dump_to, xla_flags_reset=xla_flags_reset, xla_dump_hlo_module_re=xla_dump_hlo_module_re, xla_dump_hlo_pass_re=xla_dump_hlo_pass_re, xla_dump_emitter_re=xla_dump_emitter_re, xla_dump_hlo_as_text=xla_dump_hlo_as_text, xla_dump_hlo_as_proto=xla_dump_hlo_as_proto, xla_dump_hlo_as_dot=xla_dump_hlo_as_dot, xla_dump_hlo_as_url=xla_dump_hlo_as_url, xla_dump_hlo_as_html=xla_dump_hlo_as_html, xla_dump_fusion_visualization=xla_dump_fusion_visualization, xla_dump_hlo_snapshots=xla_dump_hlo_snapshots, xla_dump_include_timestamp=xla_dump_include_timestamp, xla_dump_max_hlo_modules=xla_dump_max_hlo_modules, xla_dump_module_metadata=xla_dump_module_metadata, xla_dump_compress_protos=xla_dump_compress_protos, xla_dump_hlo_as_long_text=xla_dump_hlo_as_long_text, xla_dump_enable_mlir_pretty_form=xla_dump_enable_mlir_pretty_form, xla_dump_full_hlo_config=xla_dump_full_hlo_config, xla_tpu_detect_nan=xla_tpu_detect_nan, xla_tpu_detect_inf=xla_tpu_detect_inf, xla_cpu_enable_xprof_traceme=xla_cpu_enable_xprof_traceme, xla_multiheap_size_constraint_per_heap=xla_multiheap_size_constraint_per_heap, xla_detailed_logging=xla_detailed_logging, xla_enable_dumping=xla_enable_dumping, xla_llvm_force_inline_before_split=xla_llvm_force_inline_before_split, xla_dump_disable_metadata=xla_dump_disable_metadata, xla_dump_hlo_pipeline_re=xla_dump_hlo_pipeline_re, xla_cpu_use_acl=xla_cpu_use_acl, xla_cpu_strict_dot_conv_math=xla_cpu_strict_dot_conv_math, xla_dump_latency_hiding_schedule=xla_dump_latency_hiding_schedule, xla_partitioning_algorithm=xla_partitioning_algorithm, xla_debug_buffer_assignment_show_max=xla_debug_buffer_assignment_show_max, xla_detect_unstable_reductions=xla_detect_unstable_reductions, xla_detect_unstable_reductions_post_optimizations=xla_detect_unstable_reductions_post_optimizations, xla_gpu_detect_nan=xla_gpu_detect_nan, xla_gpu_detect_inf=xla_gpu_detect_inf, xla_dump_large_constants=xla_dump_large_constants, xla_reduce_window_rewrite_base_length=xla_reduce_window_rewrite_base_length, xla_cmd_buffer_trace_cache_size=xla_cmd_buffer_trace_cache_size, xla_syntax_sugar_async_ops=xla_syntax_sugar_async_ops, xla_enable_command_buffers_during_profiling=xla_enable_command_buffers_during_profiling, xla_ignore_channel_id=xla_ignore_channel_id, xla_pjrt_allow_auto_layout_in_hlo=xla_pjrt_allow_auto_layout_in_hlo, xla_test_add_command_buffer_mode=xla_test_add_command_buffer_mode, xla_gpu_experimental_matmul_perf_table_path=xla_gpu_experimental_matmul_perf_table_path, xla_early_exit_with_layouts=xla_early_exit_with_layouts, xla_gpu_experimental_scaled_dot_with_triton=xla_gpu_experimental_scaled_dot_with_triton, xla_gpu_experimental_use_raft_select_k=xla_gpu_experimental_use_raft_select_k, xla_backend_extra_options=xla_backend_extra_options)
 end
 
 function PB.encode(e::PB.AbstractProtoEncoder, x::DebugOptions)
@@ -1844,7 +1873,6 @@ function PB.encode(e::PB.AbstractProtoEncoder, x::DebugOptions)
     !isempty(x.xla_gpu_cuda_data_dir) && PB.encode(e, 61, x.xla_gpu_cuda_data_dir)
     x.xla_gpu_cudnn_gemm_fusion_level != zero(Int32) && PB.encode(e, 285, x.xla_gpu_cudnn_gemm_fusion_level)
     x.xla_gpu_cudnn_gemm_max_plans != zero(Int32) && PB.encode(e, 318, x.xla_gpu_cudnn_gemm_max_plans)
-    x.xla_gpu_default_to_alg_dot_bf16_bf16_f32 != false && PB.encode(e, 441, x.xla_gpu_default_to_alg_dot_bf16_bf16_f32)
     x.xla_gpu_deterministic_ops != false && PB.encode(e, 148, x.xla_gpu_deterministic_ops)
     !isempty(x.xla_gpu_disable_async_collectives) && PB.encode(e, 289, x.xla_gpu_disable_async_collectives)
     x.xla_gpu_disable_gpuasm_optimizations != false && PB.encode(e, 103, x.xla_gpu_disable_gpuasm_optimizations)
@@ -1875,7 +1903,6 @@ function PB.encode(e::PB.AbstractProtoEncoder, x::DebugOptions)
     x.xla_gpu_enable_pipelined_all_gather != false && PB.encode(e, 227, x.xla_gpu_enable_pipelined_all_gather)
     x.xla_gpu_enable_pipelined_all_reduce != false && PB.encode(e, 217, x.xla_gpu_enable_pipelined_all_reduce)
     x.xla_gpu_enable_pipelined_collectives != false && PB.encode(e, 239, x.xla_gpu_enable_pipelined_collectives)
-    x.xla_gpu_enable_pipelined_host_offloading != false && PB.encode(e, 440, x.xla_gpu_enable_pipelined_host_offloading)
     x.xla_gpu_enable_pipelined_p2p != false && PB.encode(e, 246, x.xla_gpu_enable_pipelined_p2p)
     x.xla_gpu_enable_pipelined_reduce_scatter != false && PB.encode(e, 231, x.xla_gpu_enable_pipelined_reduce_scatter)
     x.xla_gpu_enable_reassociation_for_converted_ar != false && PB.encode(e, 209, x.xla_gpu_enable_reassociation_for_converted_ar)
@@ -1895,7 +1922,6 @@ function PB.encode(e::PB.AbstractProtoEncoder, x::DebugOptions)
     x.xla_gpu_exhaustive_tiling_search != false && PB.encode(e, 219, x.xla_gpu_exhaustive_tiling_search)
     x.xla_gpu_experimental_allow_unroll_factor_eight != false && PB.encode(e, 430, x.xla_gpu_experimental_allow_unroll_factor_eight)
     x.xla_gpu_experimental_aot_compiled_thunks != false && PB.encode(e, 435, x.xla_gpu_experimental_aot_compiled_thunks)
-    !isempty(x.xla_gpu_experimental_autotune_backends) && PB.encode(e, 442, x.xla_gpu_experimental_autotune_backends)
     x.xla_gpu_experimental_autotune_cache_mode != var"DebugOptions.AutotuneCacheMode".AUTOTUNE_CACHE_MODE_UNSPECIFIED && PB.encode(e, 324, x.xla_gpu_experimental_autotune_cache_mode)
     !isempty(x.xla_gpu_experimental_autotuner_cache_dir) && PB.encode(e, 407, x.xla_gpu_experimental_autotuner_cache_dir)
     x.xla_gpu_experimental_collective_cse_distance_threshold != zero(Int64) && PB.encode(e, 374, x.xla_gpu_experimental_collective_cse_distance_threshold)
@@ -2118,7 +2144,6 @@ function PB._encoded_size(x::DebugOptions)
     !isempty(x.xla_gpu_cuda_data_dir) && (encoded_size += PB._encoded_size(x.xla_gpu_cuda_data_dir, 61))
     x.xla_gpu_cudnn_gemm_fusion_level != zero(Int32) && (encoded_size += PB._encoded_size(x.xla_gpu_cudnn_gemm_fusion_level, 285))
     x.xla_gpu_cudnn_gemm_max_plans != zero(Int32) && (encoded_size += PB._encoded_size(x.xla_gpu_cudnn_gemm_max_plans, 318))
-    x.xla_gpu_default_to_alg_dot_bf16_bf16_f32 != false && (encoded_size += PB._encoded_size(x.xla_gpu_default_to_alg_dot_bf16_bf16_f32, 441))
     x.xla_gpu_deterministic_ops != false && (encoded_size += PB._encoded_size(x.xla_gpu_deterministic_ops, 148))
     !isempty(x.xla_gpu_disable_async_collectives) && (encoded_size += PB._encoded_size(x.xla_gpu_disable_async_collectives, 289))
     x.xla_gpu_disable_gpuasm_optimizations != false && (encoded_size += PB._encoded_size(x.xla_gpu_disable_gpuasm_optimizations, 103))
@@ -2149,7 +2174,6 @@ function PB._encoded_size(x::DebugOptions)
     x.xla_gpu_enable_pipelined_all_gather != false && (encoded_size += PB._encoded_size(x.xla_gpu_enable_pipelined_all_gather, 227))
     x.xla_gpu_enable_pipelined_all_reduce != false && (encoded_size += PB._encoded_size(x.xla_gpu_enable_pipelined_all_reduce, 217))
     x.xla_gpu_enable_pipelined_collectives != false && (encoded_size += PB._encoded_size(x.xla_gpu_enable_pipelined_collectives, 239))
-    x.xla_gpu_enable_pipelined_host_offloading != false && (encoded_size += PB._encoded_size(x.xla_gpu_enable_pipelined_host_offloading, 440))
     x.xla_gpu_enable_pipelined_p2p != false && (encoded_size += PB._encoded_size(x.xla_gpu_enable_pipelined_p2p, 246))
     x.xla_gpu_enable_pipelined_reduce_scatter != false && (encoded_size += PB._encoded_size(x.xla_gpu_enable_pipelined_reduce_scatter, 231))
     x.xla_gpu_enable_reassociation_for_converted_ar != false && (encoded_size += PB._encoded_size(x.xla_gpu_enable_reassociation_for_converted_ar, 209))
@@ -2169,7 +2193,6 @@ function PB._encoded_size(x::DebugOptions)
     x.xla_gpu_exhaustive_tiling_search != false && (encoded_size += PB._encoded_size(x.xla_gpu_exhaustive_tiling_search, 219))
     x.xla_gpu_experimental_allow_unroll_factor_eight != false && (encoded_size += PB._encoded_size(x.xla_gpu_experimental_allow_unroll_factor_eight, 430))
     x.xla_gpu_experimental_aot_compiled_thunks != false && (encoded_size += PB._encoded_size(x.xla_gpu_experimental_aot_compiled_thunks, 435))
-    !isempty(x.xla_gpu_experimental_autotune_backends) && (encoded_size += PB._encoded_size(x.xla_gpu_experimental_autotune_backends, 442))
     x.xla_gpu_experimental_autotune_cache_mode != var"DebugOptions.AutotuneCacheMode".AUTOTUNE_CACHE_MODE_UNSPECIFIED && (encoded_size += PB._encoded_size(x.xla_gpu_experimental_autotune_cache_mode, 324))
     !isempty(x.xla_gpu_experimental_autotuner_cache_dir) && (encoded_size += PB._encoded_size(x.xla_gpu_experimental_autotuner_cache_dir, 407))
     x.xla_gpu_experimental_collective_cse_distance_threshold != zero(Int64) && (encoded_size += PB._encoded_size(x.xla_gpu_experimental_collective_cse_distance_threshold, 374))
@@ -2331,52 +2354,74 @@ function PB._encoded_size(x::DebugOptions)
     return encoded_size
 end
 
-struct HloModuleConfigProto
-    entry_computation_layout::Union{Nothing,ProgramShapeProto}
-    seed::UInt64
-    launch_id::Int32
-    replica_count::Int64
-    num_partitions::Int64
-    param_requires_broadcast_via_collectives::Vector{Bool}
-    use_spmd_partitioning::Bool
-    use_auto_spmd_partitioning::Bool
-    auto_spmd_partitioning_mesh_shape::Vector{Int64}
-    auto_spmd_partitioning_mesh_ids::Vector{Int64}
-    exec_time_optimization_effort::Float32
-    memory_fitting_effort::Float32
-    optimization_level::var"ExecutionOptions.EffortLevel".T
-    memory_fitting_level::var"ExecutionOptions.EffortLevel".T
-    deduplicate_hlo::Bool
-    intra_op_parallelism_threads::Int64
-    device_type::String
-    debug_options::Union{Nothing,DebugOptions}
-    static_device_assignment::Union{Nothing,DeviceAssignmentProto}
-    pre_simulation_device_assignment::Union{Nothing,DeviceAssignmentProto}
-    allow_separate_sharding_programs::Bool
-    shardable_value_update_pairs::Vector{ShardableValueUpdatePairProto}
-    alias_passthrough_params::Bool
-    content_aware_computation_sorting::Bool
-    fusion_config_collection::var"HloModuleConfigProto.FusionConfigCollection".T
-    fusion_config::Vector{var"HloModuleConfigProto.BoolList"}
-    dot_config::Dict{String,var"HloModuleConfigProto.Int64List"}
-    layout_config::Vector{var"HloModuleConfigProto.Int64ListList"}
-    memory_space_assignment_config::Vector{UInt64}
-    phase_ordering_config::Vector{var"HloModuleConfigProto.BoolList"}
-    phase_index::Int32
-    allow_spmd_sharding_propagation_to_parameters::Vector{Bool}
-    allow_spmd_sharding_propagation_to_output::Vector{Bool}
-    analysis_allowance_map::Dict{String,Int64}
-    matrix_unit_operand_precision::var"PrecisionConfig.Precision".T
-    fdo_profile::Vector{UInt8}
-    device_memory_size::Int64
-    use_shardy_partitioner::Bool
-    sharding_config::Union{Nothing,ShardingConfigProto}
-    schedule_config::Union{Nothing,ScheduleConfigProto}
-    partition_size::Int64
+mutable struct HloModuleConfigProto
+    __data::Dict{Symbol,Any}
 end
-PB.reserved_fields(::Type{HloModuleConfigProto}) = (names = ["flag_config"], numbers = Union{Int,UnitRange{Int}}[26])
-PB.default_values(::Type{HloModuleConfigProto}) = (;entry_computation_layout = nothing, seed = zero(UInt64), launch_id = zero(Int32), replica_count = zero(Int64), num_partitions = zero(Int64), param_requires_broadcast_via_collectives = Vector{Bool}(), use_spmd_partitioning = false, use_auto_spmd_partitioning = false, auto_spmd_partitioning_mesh_shape = Vector{Int64}(), auto_spmd_partitioning_mesh_ids = Vector{Int64}(), exec_time_optimization_effort = zero(Float32), memory_fitting_effort = zero(Float32), optimization_level = var"ExecutionOptions.EffortLevel".EFFORT_UNKNOWN, memory_fitting_level = var"ExecutionOptions.EffortLevel".EFFORT_UNKNOWN, deduplicate_hlo = false, intra_op_parallelism_threads = zero(Int64), device_type = "", debug_options = nothing, static_device_assignment = nothing, pre_simulation_device_assignment = nothing, allow_separate_sharding_programs = false, shardable_value_update_pairs = Vector{ShardableValueUpdatePairProto}(), alias_passthrough_params = false, content_aware_computation_sorting = false, fusion_config_collection = var"HloModuleConfigProto.FusionConfigCollection".OFF, fusion_config = Vector{var"HloModuleConfigProto.BoolList"}(), dot_config = Dict{String,var"HloModuleConfigProto.Int64List"}(), layout_config = Vector{var"HloModuleConfigProto.Int64ListList"}(), memory_space_assignment_config = Vector{UInt64}(), phase_ordering_config = Vector{var"HloModuleConfigProto.BoolList"}(), phase_index = zero(Int32), allow_spmd_sharding_propagation_to_parameters = Vector{Bool}(), allow_spmd_sharding_propagation_to_output = Vector{Bool}(), analysis_allowance_map = Dict{String,Int64}(), matrix_unit_operand_precision = var"PrecisionConfig.Precision".DEFAULT, fdo_profile = UInt8[], device_memory_size = zero(Int64), use_shardy_partitioner = false, sharding_config = nothing, schedule_config = nothing, partition_size = zero(Int64))
-PB.field_numbers(::Type{HloModuleConfigProto}) = (;entry_computation_layout = 1, seed = 2, launch_id = 3, replica_count = 4, num_partitions = 5, param_requires_broadcast_via_collectives = 6, use_spmd_partitioning = 7, use_auto_spmd_partitioning = 8, auto_spmd_partitioning_mesh_shape = 9, auto_spmd_partitioning_mesh_ids = 10, exec_time_optimization_effort = 36, memory_fitting_effort = 37, optimization_level = 39, memory_fitting_level = 40, deduplicate_hlo = 11, intra_op_parallelism_threads = 12, device_type = 13, debug_options = 14, static_device_assignment = 15, pre_simulation_device_assignment = 35, allow_separate_sharding_programs = 30, shardable_value_update_pairs = 16, alias_passthrough_params = 17, content_aware_computation_sorting = 18, fusion_config_collection = 19, fusion_config = 20, dot_config = 21, layout_config = 22, memory_space_assignment_config = 23, phase_ordering_config = 24, phase_index = 25, allow_spmd_sharding_propagation_to_parameters = 33, allow_spmd_sharding_propagation_to_output = 27, analysis_allowance_map = 28, matrix_unit_operand_precision = 29, fdo_profile = 31, device_memory_size = 32, use_shardy_partitioner = 34, sharding_config = 38, schedule_config = 41, partition_size = 42)
+
+# Default values for HloModuleConfigProto fields
+const _HloModuleConfigProto_defaults = Dict{Symbol,Any}(
+    :entry_computation_layout => nothing,
+    :seed => zero(UInt64),
+    :launch_id => zero(Int32),
+    :replica_count => zero(Int64),
+    :num_partitions => zero(Int64),
+    :param_requires_broadcast_via_collectives => Vector{Bool}(),
+    :use_spmd_partitioning => false,
+    :use_auto_spmd_partitioning => false,
+    :auto_spmd_partitioning_mesh_shape => Vector{Int64}(),
+    :auto_spmd_partitioning_mesh_ids => Vector{Int64}(),
+    :exec_time_optimization_effort => zero(Float32),
+    :memory_fitting_effort => zero(Float32),
+    :optimization_level => nothing,
+    :memory_fitting_level => nothing,
+    :deduplicate_hlo => false,
+    :intra_op_parallelism_threads => zero(Int64),
+    :device_type => "",
+    :debug_options => nothing,
+    :static_device_assignment => nothing,
+    :pre_simulation_device_assignment => nothing,
+    :allow_separate_sharding_programs => false,
+    :shardable_value_update_pairs => Vector{ShardableValueUpdatePairProto}(),
+    :alias_passthrough_params => false,
+    :content_aware_computation_sorting => false,
+    :fusion_config_collection => nothing,
+    :fusion_config => Vector{var"HloModuleConfigProto.BoolList"}(),
+    :dot_config => Dict{String,var"HloModuleConfigProto.Int64List"}(),
+    :layout_config => Vector{var"HloModuleConfigProto.Int64ListList"}(),
+    :memory_space_assignment_config => Vector{UInt64}(),
+    :phase_ordering_config => Vector{var"HloModuleConfigProto.BoolList"}(),
+    :phase_index => zero(Int32),
+    :allow_spmd_sharding_propagation_to_parameters => Vector{Bool}(),
+    :allow_spmd_sharding_propagation_to_output => Vector{Bool}(),
+    :analysis_allowance_map => Dict{String,Int64}(),
+    :matrix_unit_operand_precision => nothing,
+    :fdo_profile => Vector{UInt8}(),
+    :device_memory_size => zero(Int64),
+    :use_shardy_partitioner => false,
+    :sharding_config => nothing,
+    :schedule_config => nothing,
+    :partition_size => zero(Int64)
+)
+
+# Keyword constructor for HloModuleConfigProto
+function HloModuleConfigProto(; kwargs...)
+    __data = Dict{Symbol,Any}(kwargs)
+    return HloModuleConfigProto(__data)
+end
+
+# Field accessors for HloModuleConfigProto
+function Base.getproperty(x::HloModuleConfigProto, s::Symbol)
+    s === :__data && return getfield(x, :__data)
+    d = getfield(x, :__data)
+    return get(d, s, get(_HloModuleConfigProto_defaults, s, nothing))
+end
+function Base.setproperty!(x::HloModuleConfigProto, s::Symbol, v)
+    getfield(x, :__data)[s] = v
+end
+Base.propertynames(::HloModuleConfigProto) = (:entry_computation_layout, :seed, :launch_id, :replica_count, :num_partitions, :param_requires_broadcast_via_collectives, :use_spmd_partitioning, :use_auto_spmd_partitioning, :auto_spmd_partitioning_mesh_shape, :auto_spmd_partitioning_mesh_ids, :exec_time_optimization_effort, :memory_fitting_effort, :optimization_level, :memory_fitting_level, :deduplicate_hlo, :intra_op_parallelism_threads, :device_type, :debug_options, :static_device_assignment, :pre_simulation_device_assignment, :allow_separate_sharding_programs, :shardable_value_update_pairs, :alias_passthrough_params, :content_aware_computation_sorting, :fusion_config_collection, :fusion_config, :dot_config, :layout_config, :memory_space_assignment_config, :phase_ordering_config, :phase_index, :allow_spmd_sharding_propagation_to_parameters, :allow_spmd_sharding_propagation_to_output, :analysis_allowance_map, :matrix_unit_operand_precision, :fdo_profile, :device_memory_size, :use_shardy_partitioner, :sharding_config, :schedule_config, :partition_size,)
+# PB.reserved_fields(::Type{HloModuleConfigProto}) = (names = ["flag_config"], numbers = Union{Int,UnitRange{Int}}[26])
+# PB.default_values(::Type{HloModuleConfigProto}) = (;entry_computation_layout = nothing, seed = zero(UInt64), launch_id = zero(Int32), replica_count = zero(Int64), num_partitions = zero(Int64), param_requires_broadcast_via_collectives = Vector{Bool}(), use_spmd_partitioning = false, use_auto_spmd_partitioning = false, auto_spmd_partitioning_mesh_shape = Vector{Int64}(), auto_spmd_partitioning_mesh_ids = Vector{Int64}(), exec_time_optimization_effort = zero(Float32), memory_fitting_effort = zero(Float32), optimization_level = var"ExecutionOptions.EffortLevel".EFFORT_UNKNOWN, memory_fitting_level = var"ExecutionOptions.EffortLevel".EFFORT_UNKNOWN, deduplicate_hlo = false, intra_op_parallelism_threads = zero(Int64), device_type = "", debug_options = nothing, static_device_assignment = nothing, pre_simulation_device_assignment = nothing, allow_separate_sharding_programs = false, shardable_value_update_pairs = Vector{ShardableValueUpdatePairProto}(), alias_passthrough_params = false, content_aware_computation_sorting = false, fusion_config_collection = var"HloModuleConfigProto.FusionConfigCollection".OFF, fusion_config = Vector{var"HloModuleConfigProto.BoolList"}(), dot_config = Dict{String,var"HloModuleConfigProto.Int64List"}(), layout_config = Vector{var"HloModuleConfigProto.Int64ListList"}(), memory_space_assignment_config = Vector{UInt64}(), phase_ordering_config = Vector{var"HloModuleConfigProto.BoolList"}(), phase_index = zero(Int32), allow_spmd_sharding_propagation_to_parameters = Vector{Bool}(), allow_spmd_sharding_propagation_to_output = Vector{Bool}(), analysis_allowance_map = Dict{String,Int64}(), matrix_unit_operand_precision = var"PrecisionConfig.Precision".DEFAULT, fdo_profile = UInt8[], device_memory_size = zero(Int64), use_shardy_partitioner = false, sharding_config = nothing, schedule_config = nothing, partition_size = zero(Int64))
+# PB.field_numbers(::Type{HloModuleConfigProto}) = (;entry_computation_layout = 1, seed = 2, launch_id = 3, replica_count = 4, num_partitions = 5, param_requires_broadcast_via_collectives = 6, use_spmd_partitioning = 7, use_auto_spmd_partitioning = 8, auto_spmd_partitioning_mesh_shape = 9, auto_spmd_partitioning_mesh_ids = 10, exec_time_optimization_effort = 36, memory_fitting_effort = 37, optimization_level = 39, memory_fitting_level = 40, deduplicate_hlo = 11, intra_op_parallelism_threads = 12, device_type = 13, debug_options = 14, static_device_assignment = 15, pre_simulation_device_assignment = 35, allow_separate_sharding_programs = 30, shardable_value_update_pairs = 16, alias_passthrough_params = 17, content_aware_computation_sorting = 18, fusion_config_collection = 19, fusion_config = 20, dot_config = 21, layout_config = 22, memory_space_assignment_config = 23, phase_ordering_config = 24, phase_index = 25, allow_spmd_sharding_propagation_to_parameters = 33, allow_spmd_sharding_propagation_to_output = 27, analysis_allowance_map = 28, matrix_unit_operand_precision = 29, fdo_profile = 31, device_memory_size = 32, use_shardy_partitioner = 34, sharding_config = 38, schedule_config = 41, partition_size = 42)
 
 function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:HloModuleConfigProto})
     entry_computation_layout = Ref{Union{Nothing,ProgramShapeProto}}(nothing)
@@ -2508,7 +2553,7 @@ function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:HloModuleConfigProto})
             Base.skip(d, wire_type)
         end
     end
-    return HloModuleConfigProto(entry_computation_layout[], seed, launch_id, replica_count, num_partitions, param_requires_broadcast_via_collectives[], use_spmd_partitioning, use_auto_spmd_partitioning, auto_spmd_partitioning_mesh_shape[], auto_spmd_partitioning_mesh_ids[], exec_time_optimization_effort, memory_fitting_effort, optimization_level, memory_fitting_level, deduplicate_hlo, intra_op_parallelism_threads, device_type, debug_options[], static_device_assignment[], pre_simulation_device_assignment[], allow_separate_sharding_programs, shardable_value_update_pairs[], alias_passthrough_params, content_aware_computation_sorting, fusion_config_collection, fusion_config[], dot_config, layout_config[], memory_space_assignment_config[], phase_ordering_config[], phase_index, allow_spmd_sharding_propagation_to_parameters[], allow_spmd_sharding_propagation_to_output[], analysis_allowance_map, matrix_unit_operand_precision, fdo_profile, device_memory_size, use_shardy_partitioner, sharding_config[], schedule_config[], partition_size)
+    return HloModuleConfigProto(; entry_computation_layout=entry_computation_layout[], seed=seed, launch_id=launch_id, replica_count=replica_count, num_partitions=num_partitions, param_requires_broadcast_via_collectives=param_requires_broadcast_via_collectives[], use_spmd_partitioning=use_spmd_partitioning, use_auto_spmd_partitioning=use_auto_spmd_partitioning, auto_spmd_partitioning_mesh_shape=auto_spmd_partitioning_mesh_shape[], auto_spmd_partitioning_mesh_ids=auto_spmd_partitioning_mesh_ids[], exec_time_optimization_effort=exec_time_optimization_effort, memory_fitting_effort=memory_fitting_effort, optimization_level=optimization_level, memory_fitting_level=memory_fitting_level, deduplicate_hlo=deduplicate_hlo, intra_op_parallelism_threads=intra_op_parallelism_threads, device_type=device_type, debug_options=debug_options[], static_device_assignment=static_device_assignment[], pre_simulation_device_assignment=pre_simulation_device_assignment[], allow_separate_sharding_programs=allow_separate_sharding_programs, shardable_value_update_pairs=shardable_value_update_pairs[], alias_passthrough_params=alias_passthrough_params, content_aware_computation_sorting=content_aware_computation_sorting, fusion_config_collection=fusion_config_collection, fusion_config=fusion_config[], dot_config=dot_config, layout_config=layout_config[], memory_space_assignment_config=memory_space_assignment_config[], phase_ordering_config=phase_ordering_config[], phase_index=phase_index, allow_spmd_sharding_propagation_to_parameters=allow_spmd_sharding_propagation_to_parameters[], allow_spmd_sharding_propagation_to_output=allow_spmd_sharding_propagation_to_output[], analysis_allowance_map=analysis_allowance_map, matrix_unit_operand_precision=matrix_unit_operand_precision, fdo_profile=fdo_profile, device_memory_size=device_memory_size, use_shardy_partitioner=use_shardy_partitioner, sharding_config=sharding_config[], schedule_config=schedule_config[], partition_size=partition_size)
 end
 
 function PB.encode(e::PB.AbstractProtoEncoder, x::HloModuleConfigProto)
@@ -2602,37 +2647,59 @@ function PB._encoded_size(x::HloModuleConfigProto)
     return encoded_size
 end
 
-struct ExecutionOptions
-    shape_with_output_layout::Union{Nothing,ShapeProto}
-    seed::UInt64
-    debug_options::Union{Nothing,DebugOptions}
-    device_handles::Vector{DeviceHandle}
-    num_replicas::Int32
-    device_assignment::Union{Nothing,DeviceAssignmentProto}
-    alias_passthrough_params::Bool
-    num_partitions::Int32
-    launch_id::Int32
-    use_spmd_partitioning::Bool
-    use_auto_spmd_partitioning::Bool
-    auto_spmd_partitioning_mesh_shape::Vector{Int64}
-    auto_spmd_partitioning_mesh_ids::Vector{Int64}
-    exec_time_optimization_effort::Float32
-    memory_fitting_effort::Float32
-    optimization_level::var"ExecutionOptions.EffortLevel".T
-    memory_fitting_level::var"ExecutionOptions.EffortLevel".T
-    deduplicate_hlo::Bool
-    allow_spmd_sharding_propagation_to_parameters::Vector{Bool}
-    allow_spmd_sharding_propagation_to_output::Vector{Bool}
-    param_requires_broadcast_via_collectives::Vector{Bool}
-    allow_separate_sharding_programs::Bool
-    shardable_value_update_pairs::Vector{ShardableValueUpdatePairProto}
-    fdo_profile::Vector{UInt8}
-    device_memory_size::Int64
-    use_shardy_partitioner::Bool
+mutable struct ExecutionOptions
+    __data::Dict{Symbol,Any}
 end
-PB.reserved_fields(::Type{ExecutionOptions}) = (names = ["broadcast_replicated_parameters_via_collectives"], numbers = Union{Int,UnitRange{Int}}[13])
-PB.default_values(::Type{ExecutionOptions}) = (;shape_with_output_layout = nothing, seed = zero(UInt64), debug_options = nothing, device_handles = Vector{DeviceHandle}(), num_replicas = zero(Int32), device_assignment = nothing, alias_passthrough_params = false, num_partitions = zero(Int32), launch_id = zero(Int32), use_spmd_partitioning = false, use_auto_spmd_partitioning = false, auto_spmd_partitioning_mesh_shape = Vector{Int64}(), auto_spmd_partitioning_mesh_ids = Vector{Int64}(), exec_time_optimization_effort = zero(Float32), memory_fitting_effort = zero(Float32), optimization_level = var"ExecutionOptions.EffortLevel".EFFORT_UNKNOWN, memory_fitting_level = var"ExecutionOptions.EffortLevel".EFFORT_UNKNOWN, deduplicate_hlo = false, allow_spmd_sharding_propagation_to_parameters = Vector{Bool}(), allow_spmd_sharding_propagation_to_output = Vector{Bool}(), param_requires_broadcast_via_collectives = Vector{Bool}(), allow_separate_sharding_programs = false, shardable_value_update_pairs = Vector{ShardableValueUpdatePairProto}(), fdo_profile = UInt8[], device_memory_size = zero(Int64), use_shardy_partitioner = false)
-PB.field_numbers(::Type{ExecutionOptions}) = (;shape_with_output_layout = 2, seed = 3, debug_options = 4, device_handles = 5, num_replicas = 6, device_assignment = 7, alias_passthrough_params = 8, num_partitions = 9, launch_id = 10, use_spmd_partitioning = 11, use_auto_spmd_partitioning = 15, auto_spmd_partitioning_mesh_shape = 16, auto_spmd_partitioning_mesh_ids = 17, exec_time_optimization_effort = 25, memory_fitting_effort = 26, optimization_level = 27, memory_fitting_level = 28, deduplicate_hlo = 12, allow_spmd_sharding_propagation_to_parameters = 23, allow_spmd_sharding_propagation_to_output = 14, param_requires_broadcast_via_collectives = 18, allow_separate_sharding_programs = 19, shardable_value_update_pairs = 20, fdo_profile = 21, device_memory_size = 22, use_shardy_partitioner = 24)
+
+# Default values for ExecutionOptions fields
+const _ExecutionOptions_defaults = Dict{Symbol,Any}(
+    :shape_with_output_layout => nothing,
+    :seed => zero(UInt64),
+    :debug_options => nothing,
+    :device_handles => Vector{DeviceHandle}(),
+    :num_replicas => zero(Int32),
+    :device_assignment => nothing,
+    :alias_passthrough_params => false,
+    :num_partitions => zero(Int32),
+    :launch_id => zero(Int32),
+    :use_spmd_partitioning => false,
+    :use_auto_spmd_partitioning => false,
+    :auto_spmd_partitioning_mesh_shape => Vector{Int64}(),
+    :auto_spmd_partitioning_mesh_ids => Vector{Int64}(),
+    :exec_time_optimization_effort => zero(Float32),
+    :memory_fitting_effort => zero(Float32),
+    :optimization_level => nothing,
+    :memory_fitting_level => nothing,
+    :deduplicate_hlo => false,
+    :allow_spmd_sharding_propagation_to_parameters => Vector{Bool}(),
+    :allow_spmd_sharding_propagation_to_output => Vector{Bool}(),
+    :param_requires_broadcast_via_collectives => Vector{Bool}(),
+    :allow_separate_sharding_programs => false,
+    :shardable_value_update_pairs => Vector{ShardableValueUpdatePairProto}(),
+    :fdo_profile => Vector{UInt8}(),
+    :device_memory_size => zero(Int64),
+    :use_shardy_partitioner => false
+)
+
+# Keyword constructor for ExecutionOptions
+function ExecutionOptions(; kwargs...)
+    __data = Dict{Symbol,Any}(kwargs)
+    return ExecutionOptions(__data)
+end
+
+# Field accessors for ExecutionOptions
+function Base.getproperty(x::ExecutionOptions, s::Symbol)
+    s === :__data && return getfield(x, :__data)
+    d = getfield(x, :__data)
+    return get(d, s, get(_ExecutionOptions_defaults, s, nothing))
+end
+function Base.setproperty!(x::ExecutionOptions, s::Symbol, v)
+    getfield(x, :__data)[s] = v
+end
+Base.propertynames(::ExecutionOptions) = (:shape_with_output_layout, :seed, :debug_options, :device_handles, :num_replicas, :device_assignment, :alias_passthrough_params, :num_partitions, :launch_id, :use_spmd_partitioning, :use_auto_spmd_partitioning, :auto_spmd_partitioning_mesh_shape, :auto_spmd_partitioning_mesh_ids, :exec_time_optimization_effort, :memory_fitting_effort, :optimization_level, :memory_fitting_level, :deduplicate_hlo, :allow_spmd_sharding_propagation_to_parameters, :allow_spmd_sharding_propagation_to_output, :param_requires_broadcast_via_collectives, :allow_separate_sharding_programs, :shardable_value_update_pairs, :fdo_profile, :device_memory_size, :use_shardy_partitioner,)
+# PB.reserved_fields(::Type{ExecutionOptions}) = (names = ["broadcast_replicated_parameters_via_collectives"], numbers = Union{Int,UnitRange{Int}}[13])
+# PB.default_values(::Type{ExecutionOptions}) = (;shape_with_output_layout = nothing, seed = zero(UInt64), debug_options = nothing, device_handles = Vector{DeviceHandle}(), num_replicas = zero(Int32), device_assignment = nothing, alias_passthrough_params = false, num_partitions = zero(Int32), launch_id = zero(Int32), use_spmd_partitioning = false, use_auto_spmd_partitioning = false, auto_spmd_partitioning_mesh_shape = Vector{Int64}(), auto_spmd_partitioning_mesh_ids = Vector{Int64}(), exec_time_optimization_effort = zero(Float32), memory_fitting_effort = zero(Float32), optimization_level = var"ExecutionOptions.EffortLevel".EFFORT_UNKNOWN, memory_fitting_level = var"ExecutionOptions.EffortLevel".EFFORT_UNKNOWN, deduplicate_hlo = false, allow_spmd_sharding_propagation_to_parameters = Vector{Bool}(), allow_spmd_sharding_propagation_to_output = Vector{Bool}(), param_requires_broadcast_via_collectives = Vector{Bool}(), allow_separate_sharding_programs = false, shardable_value_update_pairs = Vector{ShardableValueUpdatePairProto}(), fdo_profile = UInt8[], device_memory_size = zero(Int64), use_shardy_partitioner = false)
+# PB.field_numbers(::Type{ExecutionOptions}) = (;shape_with_output_layout = 2, seed = 3, debug_options = 4, device_handles = 5, num_replicas = 6, device_assignment = 7, alias_passthrough_params = 8, num_partitions = 9, launch_id = 10, use_spmd_partitioning = 11, use_auto_spmd_partitioning = 15, auto_spmd_partitioning_mesh_shape = 16, auto_spmd_partitioning_mesh_ids = 17, exec_time_optimization_effort = 25, memory_fitting_effort = 26, optimization_level = 27, memory_fitting_level = 28, deduplicate_hlo = 12, allow_spmd_sharding_propagation_to_parameters = 23, allow_spmd_sharding_propagation_to_output = 14, param_requires_broadcast_via_collectives = 18, allow_separate_sharding_programs = 19, shardable_value_update_pairs = 20, fdo_profile = 21, device_memory_size = 22, use_shardy_partitioner = 24)
 
 function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:ExecutionOptions})
     shape_with_output_layout = Ref{Union{Nothing,ShapeProto}}(nothing)
@@ -2719,7 +2786,7 @@ function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:ExecutionOptions})
             Base.skip(d, wire_type)
         end
     end
-    return ExecutionOptions(shape_with_output_layout[], seed, debug_options[], device_handles[], num_replicas, device_assignment[], alias_passthrough_params, num_partitions, launch_id, use_spmd_partitioning, use_auto_spmd_partitioning, auto_spmd_partitioning_mesh_shape[], auto_spmd_partitioning_mesh_ids[], exec_time_optimization_effort, memory_fitting_effort, optimization_level, memory_fitting_level, deduplicate_hlo, allow_spmd_sharding_propagation_to_parameters[], allow_spmd_sharding_propagation_to_output[], param_requires_broadcast_via_collectives[], allow_separate_sharding_programs, shardable_value_update_pairs[], fdo_profile, device_memory_size, use_shardy_partitioner)
+    return ExecutionOptions(; shape_with_output_layout=shape_with_output_layout[], seed=seed, debug_options=debug_options[], device_handles=device_handles[], num_replicas=num_replicas, device_assignment=device_assignment[], alias_passthrough_params=alias_passthrough_params, num_partitions=num_partitions, launch_id=launch_id, use_spmd_partitioning=use_spmd_partitioning, use_auto_spmd_partitioning=use_auto_spmd_partitioning, auto_spmd_partitioning_mesh_shape=auto_spmd_partitioning_mesh_shape[], auto_spmd_partitioning_mesh_ids=auto_spmd_partitioning_mesh_ids[], exec_time_optimization_effort=exec_time_optimization_effort, memory_fitting_effort=memory_fitting_effort, optimization_level=optimization_level, memory_fitting_level=memory_fitting_level, deduplicate_hlo=deduplicate_hlo, allow_spmd_sharding_propagation_to_parameters=allow_spmd_sharding_propagation_to_parameters[], allow_spmd_sharding_propagation_to_output=allow_spmd_sharding_propagation_to_output[], param_requires_broadcast_via_collectives=param_requires_broadcast_via_collectives[], allow_separate_sharding_programs=allow_separate_sharding_programs, shardable_value_update_pairs=shardable_value_update_pairs[], fdo_profile=fdo_profile, device_memory_size=device_memory_size, use_shardy_partitioner=use_shardy_partitioner)
 end
 
 function PB.encode(e::PB.AbstractProtoEncoder, x::ExecutionOptions)
@@ -2783,7 +2850,7 @@ function PB._encoded_size(x::ExecutionOptions)
     return encoded_size
 end
 
-struct HloModuleProtoWithConfig
+mutable struct HloModuleProtoWithConfig
     hlo_module::Union{Nothing,HloModuleProto}
     config::Union{Nothing,HloModuleConfigProto}
 end

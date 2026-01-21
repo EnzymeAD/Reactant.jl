@@ -5,28 +5,50 @@ using ProtoBuf.EnumX: @enumx
 export Task
 
 
-struct Task
-    changelist::Int64
-    workspace_id::String
-    snapshot::Int64
-    clean_build::Bool
-    build_time::Int64
-    build_target::String
-    command_line::String
-    start_time::Int64
-    task_address::String
-    profile_time_ns::UInt64
-    profile_duration_ms::UInt32
-    host_trace_level::UInt32
-    tensor_core_freq_hz::UInt64
-    sparse_core_freq_hz::UInt64
-    gtc_freq_hz::UInt64
-    peak_memory_usage::UInt64
-    cpu_limit::Float64
-    cpu_usage::Float64
+mutable struct Task
+    __data::Dict{Symbol,Any}
 end
-PB.default_values(::Type{Task}) = (;changelist = zero(Int64), workspace_id = "", snapshot = zero(Int64), clean_build = false, build_time = zero(Int64), build_target = "", command_line = "", start_time = zero(Int64), task_address = "", profile_time_ns = zero(UInt64), profile_duration_ms = zero(UInt32), host_trace_level = zero(UInt32), tensor_core_freq_hz = zero(UInt64), sparse_core_freq_hz = zero(UInt64), gtc_freq_hz = zero(UInt64), peak_memory_usage = zero(UInt64), cpu_limit = zero(Float64), cpu_usage = zero(Float64))
-PB.field_numbers(::Type{Task}) = (;changelist = 1, workspace_id = 17, snapshot = 18, clean_build = 2, build_time = 3, build_target = 4, command_line = 5, start_time = 6, task_address = 7, profile_time_ns = 8, profile_duration_ms = 9, host_trace_level = 10, tensor_core_freq_hz = 11, sparse_core_freq_hz = 12, gtc_freq_hz = 13, peak_memory_usage = 14, cpu_limit = 15, cpu_usage = 16)
+
+# Default values for Task fields
+const _Task_defaults = Dict{Symbol,Any}(
+    :changelist => zero(Int64),
+    :workspace_id => "",
+    :snapshot => zero(Int64),
+    :clean_build => false,
+    :build_time => zero(Int64),
+    :build_target => "",
+    :command_line => "",
+    :start_time => zero(Int64),
+    :task_address => "",
+    :profile_time_ns => zero(UInt64),
+    :profile_duration_ms => zero(UInt32),
+    :host_trace_level => zero(UInt32),
+    :tensor_core_freq_hz => zero(UInt64),
+    :sparse_core_freq_hz => zero(UInt64),
+    :gtc_freq_hz => zero(UInt64),
+    :peak_memory_usage => zero(UInt64),
+    :cpu_limit => zero(Float64),
+    :cpu_usage => zero(Float64)
+)
+
+# Keyword constructor for Task
+function Task(; kwargs...)
+    __data = Dict{Symbol,Any}(kwargs)
+    return Task(__data)
+end
+
+# Field accessors for Task
+function Base.getproperty(x::Task, s::Symbol)
+    s === :__data && return getfield(x, :__data)
+    d = getfield(x, :__data)
+    return get(d, s, get(_Task_defaults, s, nothing))
+end
+function Base.setproperty!(x::Task, s::Symbol, v)
+    getfield(x, :__data)[s] = v
+end
+Base.propertynames(::Task) = (:changelist, :workspace_id, :snapshot, :clean_build, :build_time, :build_target, :command_line, :start_time, :task_address, :profile_time_ns, :profile_duration_ms, :host_trace_level, :tensor_core_freq_hz, :sparse_core_freq_hz, :gtc_freq_hz, :peak_memory_usage, :cpu_limit, :cpu_usage,)
+# PB.default_values(::Type{Task}) = (;changelist = zero(Int64), workspace_id = "", snapshot = zero(Int64), clean_build = false, build_time = zero(Int64), build_target = "", command_line = "", start_time = zero(Int64), task_address = "", profile_time_ns = zero(UInt64), profile_duration_ms = zero(UInt32), host_trace_level = zero(UInt32), tensor_core_freq_hz = zero(UInt64), sparse_core_freq_hz = zero(UInt64), gtc_freq_hz = zero(UInt64), peak_memory_usage = zero(UInt64), cpu_limit = zero(Float64), cpu_usage = zero(Float64))
+# PB.field_numbers(::Type{Task}) = (;changelist = 1, workspace_id = 17, snapshot = 18, clean_build = 2, build_time = 3, build_target = 4, command_line = 5, start_time = 6, task_address = 7, profile_time_ns = 8, profile_duration_ms = 9, host_trace_level = 10, tensor_core_freq_hz = 11, sparse_core_freq_hz = 12, gtc_freq_hz = 13, peak_memory_usage = 14, cpu_limit = 15, cpu_usage = 16)
 
 function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:Task})
     changelist = zero(Int64)
@@ -89,7 +111,7 @@ function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:Task})
             Base.skip(d, wire_type)
         end
     end
-    return Task(changelist, workspace_id, snapshot, clean_build, build_time, build_target, command_line, start_time, task_address, profile_time_ns, profile_duration_ms, host_trace_level, tensor_core_freq_hz, sparse_core_freq_hz, gtc_freq_hz, peak_memory_usage, cpu_limit, cpu_usage)
+    return Task(; changelist=changelist, workspace_id=workspace_id, snapshot=snapshot, clean_build=clean_build, build_time=build_time, build_target=build_target, command_line=command_line, start_time=start_time, task_address=task_address, profile_time_ns=profile_time_ns, profile_duration_ms=profile_duration_ms, host_trace_level=host_trace_level, tensor_core_freq_hz=tensor_core_freq_hz, sparse_core_freq_hz=sparse_core_freq_hz, gtc_freq_hz=gtc_freq_hz, peak_memory_usage=peak_memory_usage, cpu_limit=cpu_limit, cpu_usage=cpu_usage)
 end
 
 function PB.encode(e::PB.AbstractProtoEncoder, x::Task)

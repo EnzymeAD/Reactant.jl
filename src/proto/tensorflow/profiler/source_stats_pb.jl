@@ -5,7 +5,7 @@ using ProtoBuf.EnumX: @enumx
 export var"SourceStats.Metric", var"SourceStats.FileMetrics", SourceStats
 
 
-struct var"SourceStats.Metric"
+mutable struct var"SourceStats.Metric"
     occurrences::UInt64
     self_time_ps::UInt64
     time_ps::UInt64
@@ -59,7 +59,7 @@ function PB._encoded_size(x::var"SourceStats.Metric")
     return encoded_size
 end
 
-struct var"SourceStats.FileMetrics"
+mutable struct var"SourceStats.FileMetrics"
     line_number_to_metric::Dict{Int32,var"SourceStats.Metric"}
 end
 PB.default_values(::Type{var"SourceStats.FileMetrics"}) = (;line_number_to_metric = Dict{Int32,var"SourceStats.Metric"}())
@@ -89,7 +89,7 @@ function PB._encoded_size(x::var"SourceStats.FileMetrics")
     return encoded_size
 end
 
-struct SourceStats
+mutable struct SourceStats
     file_name_to_metrics::Dict{String,var"SourceStats.FileMetrics"}
 end
 PB.default_values(::Type{SourceStats}) = (;file_name_to_metrics = Dict{String,var"SourceStats.FileMetrics"}())

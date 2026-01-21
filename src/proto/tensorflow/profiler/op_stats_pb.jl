@@ -6,7 +6,7 @@ export HostIndependentJobInfoResult, CoreDetails, HostDependentJobInfoResult
 export SystemTopology, PerformanceCounterResult, PerfEnv, RunEnvironment, OpStats
 
 
-struct HostIndependentJobInfoResult
+mutable struct HostIndependentJobInfoResult
     change_list::Int64
     workspace_id::String
     snapshot::Int64
@@ -66,7 +66,7 @@ function PB._encoded_size(x::HostIndependentJobInfoResult)
     return encoded_size
 end
 
-struct CoreDetails
+mutable struct CoreDetails
     hostname::String
     device_ordinal::UInt32
     core_num::UInt32
@@ -132,7 +132,7 @@ function PB._encoded_size(x::CoreDetails)
     return encoded_size
 end
 
-struct HostDependentJobInfoResult
+mutable struct HostDependentJobInfoResult
     host_id::String
     command_line::String
     start_time::Int64
@@ -186,7 +186,7 @@ function PB._encoded_size(x::HostDependentJobInfoResult)
     return encoded_size
 end
 
-struct SystemTopology
+mutable struct SystemTopology
     x_dimension::Int64
     y_dimension::Int64
     z_dimension::Int64
@@ -234,7 +234,7 @@ function PB._encoded_size(x::SystemTopology)
     return encoded_size
 end
 
-struct PerformanceCounterResult
+mutable struct PerformanceCounterResult
     matrix_unit_utilization_percent::Float64
     hbm_utilization_percent::Float64
 end
@@ -270,7 +270,7 @@ function PB._encoded_size(x::PerformanceCounterResult)
     return encoded_size
 end
 
-struct PerfEnv
+mutable struct PerfEnv
     peak_tera_flops_per_second::Float64
     peak_bw_giga_bytes_per_second::Float64
     peak_hbm_bw_giga_bytes_per_second::Float64
@@ -342,25 +342,47 @@ function PB._encoded_size(x::PerfEnv)
     return encoded_size
 end
 
-struct RunEnvironment
-    host_count::Int32
-    task_count::Int32
-    hostnames::Dict{String,Bool}
-    device_type::String
-    device_core_count::Int32
-    host_independent_job_info::Union{Nothing,HostIndependentJobInfoResult}
-    host_dependent_job_info::Vector{HostDependentJobInfoResult}
-    replica_count::Int32
-    num_cores_per_replica::Int32
-    host_trace_level::UInt32
-    system_topology::Union{Nothing,Topology}
-    is_training::Bool
-    power_metrics::Union{Nothing,PowerMetrics}
-    hardware_type::HardwareType.T
+mutable struct RunEnvironment
+    __data::Dict{Symbol,Any}
 end
-PB.reserved_fields(::Type{RunEnvironment}) = (names = String[], numbers = Union{Int,UnitRange{Int}}[6, 11])
-PB.default_values(::Type{RunEnvironment}) = (;host_count = zero(Int32), task_count = zero(Int32), hostnames = Dict{String,Bool}(), device_type = "", device_core_count = zero(Int32), host_independent_job_info = nothing, host_dependent_job_info = Vector{HostDependentJobInfoResult}(), replica_count = zero(Int32), num_cores_per_replica = zero(Int32), host_trace_level = zero(UInt32), system_topology = nothing, is_training = false, power_metrics = nothing, hardware_type = HardwareType.UNKNOWN_HARDWARE)
-PB.field_numbers(::Type{RunEnvironment}) = (;host_count = 1, task_count = 2, hostnames = 3, device_type = 4, device_core_count = 5, host_independent_job_info = 7, host_dependent_job_info = 8, replica_count = 9, num_cores_per_replica = 10, host_trace_level = 12, system_topology = 13, is_training = 14, power_metrics = 15, hardware_type = 16)
+
+# Default values for RunEnvironment fields
+const _RunEnvironment_defaults = Dict{Symbol,Any}(
+    :host_count => zero(Int32),
+    :task_count => zero(Int32),
+    :hostnames => Dict{String,Bool}(),
+    :device_type => "",
+    :device_core_count => zero(Int32),
+    :host_independent_job_info => nothing,
+    :host_dependent_job_info => Vector{HostDependentJobInfoResult}(),
+    :replica_count => zero(Int32),
+    :num_cores_per_replica => zero(Int32),
+    :host_trace_level => zero(UInt32),
+    :system_topology => nothing,
+    :is_training => false,
+    :power_metrics => nothing,
+    :hardware_type => nothing
+)
+
+# Keyword constructor for RunEnvironment
+function RunEnvironment(; kwargs...)
+    __data = Dict{Symbol,Any}(kwargs)
+    return RunEnvironment(__data)
+end
+
+# Field accessors for RunEnvironment
+function Base.getproperty(x::RunEnvironment, s::Symbol)
+    s === :__data && return getfield(x, :__data)
+    d = getfield(x, :__data)
+    return get(d, s, get(_RunEnvironment_defaults, s, nothing))
+end
+function Base.setproperty!(x::RunEnvironment, s::Symbol, v)
+    getfield(x, :__data)[s] = v
+end
+Base.propertynames(::RunEnvironment) = (:host_count, :task_count, :hostnames, :device_type, :device_core_count, :host_independent_job_info, :host_dependent_job_info, :replica_count, :num_cores_per_replica, :host_trace_level, :system_topology, :is_training, :power_metrics, :hardware_type,)
+# PB.reserved_fields(::Type{RunEnvironment}) = (names = String[], numbers = Union{Int,UnitRange{Int}}[6, 11])
+# PB.default_values(::Type{RunEnvironment}) = (;host_count = zero(Int32), task_count = zero(Int32), hostnames = Dict{String,Bool}(), device_type = "", device_core_count = zero(Int32), host_independent_job_info = nothing, host_dependent_job_info = Vector{HostDependentJobInfoResult}(), replica_count = zero(Int32), num_cores_per_replica = zero(Int32), host_trace_level = zero(UInt32), system_topology = nothing, is_training = false, power_metrics = nothing, hardware_type = HardwareType.UNKNOWN_HARDWARE)
+# PB.field_numbers(::Type{RunEnvironment}) = (;host_count = 1, task_count = 2, hostnames = 3, device_type = 4, device_core_count = 5, host_independent_job_info = 7, host_dependent_job_info = 8, replica_count = 9, num_cores_per_replica = 10, host_trace_level = 12, system_topology = 13, is_training = 14, power_metrics = 15, hardware_type = 16)
 
 function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:RunEnvironment})
     host_count = zero(Int32)
@@ -411,7 +433,7 @@ function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:RunEnvironment})
             Base.skip(d, wire_type)
         end
     end
-    return RunEnvironment(host_count, task_count, hostnames, device_type, device_core_count, host_independent_job_info[], host_dependent_job_info[], replica_count, num_cores_per_replica, host_trace_level, system_topology[], is_training, power_metrics[], hardware_type)
+    return RunEnvironment(; host_count=host_count, task_count=task_count, hostnames=hostnames, device_type=device_type, device_core_count=device_core_count, host_independent_job_info=host_independent_job_info[], host_dependent_job_info=host_dependent_job_info[], replica_count=replica_count, num_cores_per_replica=num_cores_per_replica, host_trace_level=host_trace_level, system_topology=system_topology[], is_training=is_training, power_metrics=power_metrics[], hardware_type=hardware_type)
 end
 
 function PB.encode(e::PB.AbstractProtoEncoder, x::RunEnvironment)
@@ -451,24 +473,46 @@ function PB._encoded_size(x::RunEnvironment)
     return encoded_size
 end
 
-struct OpStats
-    host_op_metrics_db::Union{Nothing,OpMetricsDb}
-    device_op_metrics_db::Union{Nothing,OpMetricsDb}
-    hlo_metrics_db_complete_steps_only::Union{Nothing,OpMetricsDb}
-    perf_env::Union{Nothing,PerfEnv}
-    step_db::Union{Nothing,StepDatabaseResult}
-    run_environment::Union{Nothing,RunEnvironment}
-    kernel_stats_db::Union{Nothing,KernelStatsDb}
-    tf_function_db::Union{Nothing,TfFunctionDb}
-    core_id_to_details::Dict{UInt32,CoreDetails}
-    diagnostics::Union{Nothing,Diagnostics}
-    program_id_to_name_map::Dict{UInt64,String}
-    performance_counter_result::Union{Nothing,PerformanceCounterResult}
-    source_stats::Union{Nothing,SourceStats}
+mutable struct OpStats
+    __data::Dict{Symbol,Any}
 end
-PB.reserved_fields(::Type{OpStats}) = (names = String[], numbers = Union{Int,UnitRange{Int}}[7])
-PB.default_values(::Type{OpStats}) = (;host_op_metrics_db = nothing, device_op_metrics_db = nothing, hlo_metrics_db_complete_steps_only = nothing, perf_env = nothing, step_db = nothing, run_environment = nothing, kernel_stats_db = nothing, tf_function_db = nothing, core_id_to_details = Dict{UInt32,CoreDetails}(), diagnostics = nothing, program_id_to_name_map = Dict{UInt64,String}(), performance_counter_result = nothing, source_stats = nothing)
-PB.field_numbers(::Type{OpStats}) = (;host_op_metrics_db = 1, device_op_metrics_db = 2, hlo_metrics_db_complete_steps_only = 10, perf_env = 3, step_db = 4, run_environment = 5, kernel_stats_db = 6, tf_function_db = 8, core_id_to_details = 11, diagnostics = 9, program_id_to_name_map = 12, performance_counter_result = 13, source_stats = 14)
+
+# Default values for OpStats fields
+const _OpStats_defaults = Dict{Symbol,Any}(
+    :host_op_metrics_db => nothing,
+    :device_op_metrics_db => nothing,
+    :hlo_metrics_db_complete_steps_only => nothing,
+    :perf_env => nothing,
+    :step_db => nothing,
+    :run_environment => nothing,
+    :kernel_stats_db => nothing,
+    :tf_function_db => nothing,
+    :core_id_to_details => Dict{UInt32,CoreDetails}(),
+    :diagnostics => nothing,
+    :program_id_to_name_map => Dict{UInt64,String}(),
+    :performance_counter_result => nothing,
+    :source_stats => nothing
+)
+
+# Keyword constructor for OpStats
+function OpStats(; kwargs...)
+    __data = Dict{Symbol,Any}(kwargs)
+    return OpStats(__data)
+end
+
+# Field accessors for OpStats
+function Base.getproperty(x::OpStats, s::Symbol)
+    s === :__data && return getfield(x, :__data)
+    d = getfield(x, :__data)
+    return get(d, s, get(_OpStats_defaults, s, nothing))
+end
+function Base.setproperty!(x::OpStats, s::Symbol, v)
+    getfield(x, :__data)[s] = v
+end
+Base.propertynames(::OpStats) = (:host_op_metrics_db, :device_op_metrics_db, :hlo_metrics_db_complete_steps_only, :perf_env, :step_db, :run_environment, :kernel_stats_db, :tf_function_db, :core_id_to_details, :diagnostics, :program_id_to_name_map, :performance_counter_result, :source_stats,)
+# PB.reserved_fields(::Type{OpStats}) = (names = String[], numbers = Union{Int,UnitRange{Int}}[7])
+# PB.default_values(::Type{OpStats}) = (;host_op_metrics_db = nothing, device_op_metrics_db = nothing, hlo_metrics_db_complete_steps_only = nothing, perf_env = nothing, step_db = nothing, run_environment = nothing, kernel_stats_db = nothing, tf_function_db = nothing, core_id_to_details = Dict{UInt32,CoreDetails}(), diagnostics = nothing, program_id_to_name_map = Dict{UInt64,String}(), performance_counter_result = nothing, source_stats = nothing)
+# PB.field_numbers(::Type{OpStats}) = (;host_op_metrics_db = 1, device_op_metrics_db = 2, hlo_metrics_db_complete_steps_only = 10, perf_env = 3, step_db = 4, run_environment = 5, kernel_stats_db = 6, tf_function_db = 8, core_id_to_details = 11, diagnostics = 9, program_id_to_name_map = 12, performance_counter_result = 13, source_stats = 14)
 
 function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:OpStats})
     host_op_metrics_db = Ref{Union{Nothing,OpMetricsDb}}(nothing)
@@ -516,7 +560,7 @@ function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:OpStats})
             Base.skip(d, wire_type)
         end
     end
-    return OpStats(host_op_metrics_db[], device_op_metrics_db[], hlo_metrics_db_complete_steps_only[], perf_env[], step_db[], run_environment[], kernel_stats_db[], tf_function_db[], core_id_to_details, diagnostics[], program_id_to_name_map, performance_counter_result[], source_stats[])
+    return OpStats(; host_op_metrics_db=host_op_metrics_db[], device_op_metrics_db=device_op_metrics_db[], hlo_metrics_db_complete_steps_only=hlo_metrics_db_complete_steps_only[], perf_env=perf_env[], step_db=step_db[], run_environment=run_environment[], kernel_stats_db=kernel_stats_db[], tf_function_db=tf_function_db[], core_id_to_details=core_id_to_details, diagnostics=diagnostics[], program_id_to_name_map=program_id_to_name_map, performance_counter_result=performance_counter_result[], source_stats=source_stats[])
 end
 
 function PB.encode(e::PB.AbstractProtoEncoder, x::OpStats)

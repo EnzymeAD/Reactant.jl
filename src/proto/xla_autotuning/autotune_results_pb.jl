@@ -5,7 +5,7 @@ using ProtoBuf.EnumX: @enumx
 export AutotuningLogs, var"AutotuneResults.Entry", AutotuneResults
 
 
-struct AutotuningLogs
+mutable struct AutotuningLogs
     logs::Vector{AutotuningLog}
 end
 PB.default_values(::Type{AutotuningLogs}) = (;logs = Vector{AutotuningLog}())
@@ -35,7 +35,7 @@ function PB._encoded_size(x::AutotuningLogs)
     return encoded_size
 end
 
-struct var"AutotuneResults.Entry"
+mutable struct var"AutotuneResults.Entry"
     device::String
     hlo::String
     result::Union{Nothing,AutotuneResult}
@@ -83,7 +83,7 @@ function PB._encoded_size(x::var"AutotuneResults.Entry")
     return encoded_size
 end
 
-struct AutotuneResults
+mutable struct AutotuneResults
     version::Int32
     results::Vector{var"AutotuneResults.Entry"}
 end

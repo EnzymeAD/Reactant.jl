@@ -6,7 +6,7 @@ export RocmComputeCapabilityProto, DnnVersionInfoProto, RuntimeVersionProto
 export GpuDeviceInfoProto, GpuComputeCapabilityProto, GpuTargetConfigProto
 
 
-struct RocmComputeCapabilityProto
+mutable struct RocmComputeCapabilityProto
     gcn_arch_name::String
 end
 PB.default_values(::Type{RocmComputeCapabilityProto}) = (;gcn_arch_name = "")
@@ -36,7 +36,7 @@ function PB._encoded_size(x::RocmComputeCapabilityProto)
     return encoded_size
 end
 
-struct DnnVersionInfoProto
+mutable struct DnnVersionInfoProto
     major::Int32
     minor::Int32
     patch::Int32
@@ -78,7 +78,7 @@ function PB._encoded_size(x::DnnVersionInfoProto)
     return encoded_size
 end
 
-struct RuntimeVersionProto
+mutable struct RuntimeVersionProto
     major::Int32
     minor::Int32
     patch::Int32
@@ -120,31 +120,53 @@ function PB._encoded_size(x::RuntimeVersionProto)
     return encoded_size
 end
 
-struct GpuDeviceInfoProto
-    threads_per_block_limit::Int32
-    threads_per_warp::Int32
-    shared_memory_per_block::Int32
-    shared_memory_per_core::Int32
-    threads_per_core_limit::Int32
-    core_count::Int32
-    fpus_per_core::Int64
-    block_dim_limit_x::Int32
-    block_dim_limit_y::Int32
-    block_dim_limit_z::Int32
-    memory_bandwidth::Int64
-    l2_cache_size::Int64
-    clock_rate_ghz::Float32
-    device_memory_size::Int64
-    shared_memory_per_block_optin::Int32
-    compute_capability::Union{Nothing,OneOf{<:Union{CudaComputeCapabilityProto,RocmComputeCapabilityProto}}}
-    registers_per_core_limit::Int64
-    registers_per_block_limit::Int64
+mutable struct GpuDeviceInfoProto
+    __data::Dict{Symbol,Any}
 end
+
+# Default values for GpuDeviceInfoProto fields
+const _GpuDeviceInfoProto_defaults = Dict{Symbol,Any}(
+    :threads_per_block_limit => zero(Int32),
+    :threads_per_warp => zero(Int32),
+    :shared_memory_per_block => zero(Int32),
+    :shared_memory_per_core => zero(Int32),
+    :threads_per_core_limit => zero(Int32),
+    :core_count => zero(Int32),
+    :fpus_per_core => zero(Int64),
+    :block_dim_limit_x => zero(Int32),
+    :block_dim_limit_y => zero(Int32),
+    :block_dim_limit_z => zero(Int32),
+    :memory_bandwidth => zero(Int64),
+    :l2_cache_size => zero(Int64),
+    :clock_rate_ghz => zero(Float32),
+    :device_memory_size => zero(Int64),
+    :shared_memory_per_block_optin => zero(Int32),
+    :compute_capability => nothing,
+    :registers_per_core_limit => zero(Int64),
+    :registers_per_block_limit => zero(Int64)
+)
+
+# Keyword constructor for GpuDeviceInfoProto
+function GpuDeviceInfoProto(; kwargs...)
+    __data = Dict{Symbol,Any}(kwargs)
+    return GpuDeviceInfoProto(__data)
+end
+
+# Field accessors for GpuDeviceInfoProto
+function Base.getproperty(x::GpuDeviceInfoProto, s::Symbol)
+    s === :__data && return getfield(x, :__data)
+    d = getfield(x, :__data)
+    return get(d, s, get(_GpuDeviceInfoProto_defaults, s, nothing))
+end
+function Base.setproperty!(x::GpuDeviceInfoProto, s::Symbol, v)
+    getfield(x, :__data)[s] = v
+end
+Base.propertynames(::GpuDeviceInfoProto) = (:threads_per_block_limit, :threads_per_warp, :shared_memory_per_block, :shared_memory_per_core, :threads_per_core_limit, :core_count, :fpus_per_core, :block_dim_limit_x, :block_dim_limit_y, :block_dim_limit_z, :memory_bandwidth, :l2_cache_size, :clock_rate_ghz, :device_memory_size, :shared_memory_per_block_optin, :compute_capability, :registers_per_core_limit, :registers_per_block_limit,)
 PB.oneof_field_types(::Type{GpuDeviceInfoProto}) = (;
     compute_capability = (;cuda_compute_capability=CudaComputeCapabilityProto, rocm_compute_capability=RocmComputeCapabilityProto),
 )
-PB.default_values(::Type{GpuDeviceInfoProto}) = (;threads_per_block_limit = zero(Int32), threads_per_warp = zero(Int32), shared_memory_per_block = zero(Int32), shared_memory_per_core = zero(Int32), threads_per_core_limit = zero(Int32), core_count = zero(Int32), fpus_per_core = zero(Int64), block_dim_limit_x = zero(Int32), block_dim_limit_y = zero(Int32), block_dim_limit_z = zero(Int32), memory_bandwidth = zero(Int64), l2_cache_size = zero(Int64), clock_rate_ghz = zero(Float32), device_memory_size = zero(Int64), shared_memory_per_block_optin = zero(Int32), cuda_compute_capability = nothing, rocm_compute_capability = nothing, registers_per_core_limit = zero(Int64), registers_per_block_limit = zero(Int64))
-PB.field_numbers(::Type{GpuDeviceInfoProto}) = (;threads_per_block_limit = 1, threads_per_warp = 2, shared_memory_per_block = 3, shared_memory_per_core = 4, threads_per_core_limit = 5, core_count = 6, fpus_per_core = 7, block_dim_limit_x = 8, block_dim_limit_y = 9, block_dim_limit_z = 10, memory_bandwidth = 11, l2_cache_size = 12, clock_rate_ghz = 13, device_memory_size = 14, shared_memory_per_block_optin = 15, cuda_compute_capability = 16, rocm_compute_capability = 17, registers_per_core_limit = 18, registers_per_block_limit = 19)
+# PB.default_values(::Type{GpuDeviceInfoProto}) = (;threads_per_block_limit = zero(Int32), threads_per_warp = zero(Int32), shared_memory_per_block = zero(Int32), shared_memory_per_core = zero(Int32), threads_per_core_limit = zero(Int32), core_count = zero(Int32), fpus_per_core = zero(Int64), block_dim_limit_x = zero(Int32), block_dim_limit_y = zero(Int32), block_dim_limit_z = zero(Int32), memory_bandwidth = zero(Int64), l2_cache_size = zero(Int64), clock_rate_ghz = zero(Float32), device_memory_size = zero(Int64), shared_memory_per_block_optin = zero(Int32), cuda_compute_capability = nothing, rocm_compute_capability = nothing, registers_per_core_limit = zero(Int64), registers_per_block_limit = zero(Int64))
+# PB.field_numbers(::Type{GpuDeviceInfoProto}) = (;threads_per_block_limit = 1, threads_per_warp = 2, shared_memory_per_block = 3, shared_memory_per_core = 4, threads_per_core_limit = 5, core_count = 6, fpus_per_core = 7, block_dim_limit_x = 8, block_dim_limit_y = 9, block_dim_limit_z = 10, memory_bandwidth = 11, l2_cache_size = 12, clock_rate_ghz = 13, device_memory_size = 14, shared_memory_per_block_optin = 15, cuda_compute_capability = 16, rocm_compute_capability = 17, registers_per_core_limit = 18, registers_per_block_limit = 19)
 
 function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:GpuDeviceInfoProto})
     threads_per_block_limit = zero(Int32)
@@ -209,7 +231,7 @@ function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:GpuDeviceInfoProto})
             Base.skip(d, wire_type)
         end
     end
-    return GpuDeviceInfoProto(threads_per_block_limit, threads_per_warp, shared_memory_per_block, shared_memory_per_core, threads_per_core_limit, core_count, fpus_per_core, block_dim_limit_x, block_dim_limit_y, block_dim_limit_z, memory_bandwidth, l2_cache_size, clock_rate_ghz, device_memory_size, shared_memory_per_block_optin, compute_capability, registers_per_core_limit, registers_per_block_limit)
+    return GpuDeviceInfoProto(; threads_per_block_limit=threads_per_block_limit, threads_per_warp=threads_per_warp, shared_memory_per_block=shared_memory_per_block, shared_memory_per_core=shared_memory_per_core, threads_per_core_limit=threads_per_core_limit, core_count=core_count, fpus_per_core=fpus_per_core, block_dim_limit_x=block_dim_limit_x, block_dim_limit_y=block_dim_limit_y, block_dim_limit_z=block_dim_limit_z, memory_bandwidth=memory_bandwidth, l2_cache_size=l2_cache_size, clock_rate_ghz=clock_rate_ghz, device_memory_size=device_memory_size, shared_memory_per_block_optin=shared_memory_per_block_optin, compute_capability=compute_capability, registers_per_core_limit=registers_per_core_limit, registers_per_block_limit=registers_per_block_limit)
 end
 
 function PB.encode(e::PB.AbstractProtoEncoder, x::GpuDeviceInfoProto)
@@ -267,7 +289,7 @@ function PB._encoded_size(x::GpuDeviceInfoProto)
     return encoded_size
 end
 
-struct GpuComputeCapabilityProto
+mutable struct GpuComputeCapabilityProto
     compute_capability::Union{Nothing,OneOf{<:Union{CudaComputeCapabilityProto,RocmComputeCapabilityProto}}}
 end
 PB.oneof_field_types(::Type{GpuComputeCapabilityProto}) = (;
@@ -312,7 +334,7 @@ function PB._encoded_size(x::GpuComputeCapabilityProto)
     return encoded_size
 end
 
-struct GpuTargetConfigProto
+mutable struct GpuTargetConfigProto
     gpu_device_info::Union{Nothing,GpuDeviceInfoProto}
     platform_name::String
     dnn_version_info::Union{Nothing,DnnVersionInfoProto}

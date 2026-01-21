@@ -7,7 +7,7 @@ export Metrics, var"Node.XLAInstruction.LayoutAnalysis", var"Node.XLAInstruction
 export Profile
 
 
-struct var"Node.InstructionCategory" end
+mutable struct var"Node.InstructionCategory" end
 
 function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:var"Node.InstructionCategory"})
     while !PB.message_done(d)
@@ -26,7 +26,7 @@ function PB._encoded_size(x::var"Node.InstructionCategory")
     return encoded_size
 end
 
-struct var"Node.XLAInstruction.LayoutAnalysis.Dimension"
+mutable struct var"Node.XLAInstruction.LayoutAnalysis.Dimension"
     size::Int32
     alignment::Int32
     semantics::String
@@ -68,21 +68,43 @@ function PB._encoded_size(x::var"Node.XLAInstruction.LayoutAnalysis.Dimension")
     return encoded_size
 end
 
-struct Metrics
-    flops::Float64
-    uncapped_flops::Float64
-    bandwidth_utils::Vector{Float64}
-    raw_time::Float64
-    raw_flops::Float64
-    bf16_flops::Float64
-    normalized_time_ps::Float64
-    raw_bytes_accessed_array::Vector{Float64}
-    occurrences::UInt32
-    avg_time_ps::Float64
+mutable struct Metrics
+    __data::Dict{Symbol,Any}
 end
-PB.reserved_fields(::Type{Metrics}) = (names = String[], numbers = Union{Int,UnitRange{Int}}[1, 3, 4, 13, 14])
-PB.default_values(::Type{Metrics}) = (;flops = zero(Float64), uncapped_flops = zero(Float64), bandwidth_utils = Vector{Float64}(), raw_time = zero(Float64), raw_flops = zero(Float64), bf16_flops = zero(Float64), normalized_time_ps = zero(Float64), raw_bytes_accessed_array = Vector{Float64}(), occurrences = zero(UInt32), avg_time_ps = zero(Float64))
-PB.field_numbers(::Type{Metrics}) = (;flops = 2, uncapped_flops = 19, bandwidth_utils = 5, raw_time = 11, raw_flops = 12, bf16_flops = 18, normalized_time_ps = 20, raw_bytes_accessed_array = 15, occurrences = 16, avg_time_ps = 17)
+
+# Default values for Metrics fields
+const _Metrics_defaults = Dict{Symbol,Any}(
+    :flops => zero(Float64),
+    :uncapped_flops => zero(Float64),
+    :bandwidth_utils => Vector{Float64}(),
+    :raw_time => zero(Float64),
+    :raw_flops => zero(Float64),
+    :bf16_flops => zero(Float64),
+    :normalized_time_ps => zero(Float64),
+    :raw_bytes_accessed_array => Vector{Float64}(),
+    :occurrences => zero(UInt32),
+    :avg_time_ps => zero(Float64)
+)
+
+# Keyword constructor for Metrics
+function Metrics(; kwargs...)
+    __data = Dict{Symbol,Any}(kwargs)
+    return Metrics(__data)
+end
+
+# Field accessors for Metrics
+function Base.getproperty(x::Metrics, s::Symbol)
+    s === :__data && return getfield(x, :__data)
+    d = getfield(x, :__data)
+    return get(d, s, get(_Metrics_defaults, s, nothing))
+end
+function Base.setproperty!(x::Metrics, s::Symbol, v)
+    getfield(x, :__data)[s] = v
+end
+Base.propertynames(::Metrics) = (:flops, :uncapped_flops, :bandwidth_utils, :raw_time, :raw_flops, :bf16_flops, :normalized_time_ps, :raw_bytes_accessed_array, :occurrences, :avg_time_ps,)
+# PB.reserved_fields(::Type{Metrics}) = (names = String[], numbers = Union{Int,UnitRange{Int}}[1, 3, 4, 13, 14])
+# PB.default_values(::Type{Metrics}) = (;flops = zero(Float64), uncapped_flops = zero(Float64), bandwidth_utils = Vector{Float64}(), raw_time = zero(Float64), raw_flops = zero(Float64), bf16_flops = zero(Float64), normalized_time_ps = zero(Float64), raw_bytes_accessed_array = Vector{Float64}(), occurrences = zero(UInt32), avg_time_ps = zero(Float64))
+# PB.field_numbers(::Type{Metrics}) = (;flops = 2, uncapped_flops = 19, bandwidth_utils = 5, raw_time = 11, raw_flops = 12, bf16_flops = 18, normalized_time_ps = 20, raw_bytes_accessed_array = 15, occurrences = 16, avg_time_ps = 17)
 
 function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:Metrics})
     flops = zero(Float64)
@@ -121,7 +143,7 @@ function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:Metrics})
             Base.skip(d, wire_type)
         end
     end
-    return Metrics(flops, uncapped_flops, bandwidth_utils[], raw_time, raw_flops, bf16_flops, normalized_time_ps, raw_bytes_accessed_array[], occurrences, avg_time_ps)
+    return Metrics(; flops=flops, uncapped_flops=uncapped_flops, bandwidth_utils=bandwidth_utils[], raw_time=raw_time, raw_flops=raw_flops, bf16_flops=bf16_flops, normalized_time_ps=normalized_time_ps, raw_bytes_accessed_array=raw_bytes_accessed_array[], occurrences=occurrences, avg_time_ps=avg_time_ps)
 end
 
 function PB.encode(e::PB.AbstractProtoEncoder, x::Metrics)
@@ -153,7 +175,7 @@ function PB._encoded_size(x::Metrics)
     return encoded_size
 end
 
-struct var"Node.XLAInstruction.LayoutAnalysis"
+mutable struct var"Node.XLAInstruction.LayoutAnalysis"
     dimensions::Vector{var"Node.XLAInstruction.LayoutAnalysis.Dimension"}
 end
 PB.default_values(::Type{var"Node.XLAInstruction.LayoutAnalysis"}) = (;dimensions = Vector{var"Node.XLAInstruction.LayoutAnalysis.Dimension"}())
@@ -183,20 +205,42 @@ function PB._encoded_size(x::var"Node.XLAInstruction.LayoutAnalysis")
     return encoded_size
 end
 
-struct var"Node.XLAInstruction"
-    op::String
-    expression::String
-    provenance::String
-    category::String
-    layout::Union{Nothing,var"Node.XLAInstruction.LayoutAnalysis"}
-    computation_primitive_size::UInt32
-    fingerprint::UInt64
-    program_id::UInt64
-    source_info::Union{Nothing,tensorflow.profiler.SourceInfo}
-    xprof_kernel_metadata::String
+mutable struct var"Node.XLAInstruction"
+    __data::Dict{Symbol,Any}
 end
-PB.default_values(::Type{var"Node.XLAInstruction"}) = (;op = "", expression = "", provenance = "", category = "", layout = nothing, computation_primitive_size = zero(UInt32), fingerprint = zero(UInt64), program_id = zero(UInt64), source_info = nothing, xprof_kernel_metadata = "")
-PB.field_numbers(::Type{var"Node.XLAInstruction"}) = (;op = 1, expression = 2, provenance = 3, category = 4, layout = 5, computation_primitive_size = 6, fingerprint = 7, program_id = 8, source_info = 9, xprof_kernel_metadata = 10)
+
+# Default values for var"Node.XLAInstruction" fields
+const _Node_XLAInstruction_defaults = Dict{Symbol,Any}(
+    :op => "",
+    :expression => "",
+    :provenance => "",
+    :category => "",
+    :layout => nothing,
+    :computation_primitive_size => zero(UInt32),
+    :fingerprint => zero(UInt64),
+    :program_id => zero(UInt64),
+    :source_info => nothing,
+    :xprof_kernel_metadata => ""
+)
+
+# Keyword constructor for var"Node.XLAInstruction"
+function var"Node.XLAInstruction"(; kwargs...)
+    __data = Dict{Symbol,Any}(kwargs)
+    return var"Node.XLAInstruction"(__data)
+end
+
+# Field accessors for var"Node.XLAInstruction"
+function Base.getproperty(x::var"Node.XLAInstruction", s::Symbol)
+    s === :__data && return getfield(x, :__data)
+    d = getfield(x, :__data)
+    return get(d, s, get(_Node_XLAInstruction_defaults, s, nothing))
+end
+function Base.setproperty!(x::var"Node.XLAInstruction", s::Symbol, v)
+    getfield(x, :__data)[s] = v
+end
+Base.propertynames(::var"Node.XLAInstruction") = (:op, :expression, :provenance, :category, :layout, :computation_primitive_size, :fingerprint, :program_id, :source_info, :xprof_kernel_metadata,)
+# PB.default_values(::Type{var"Node.XLAInstruction"}) = (;op = "", expression = "", provenance = "", category = "", layout = nothing, computation_primitive_size = zero(UInt32), fingerprint = zero(UInt64), program_id = zero(UInt64), source_info = nothing, xprof_kernel_metadata = "")
+# PB.field_numbers(::Type{var"Node.XLAInstruction"}) = (;op = 1, expression = 2, provenance = 3, category = 4, layout = 5, computation_primitive_size = 6, fingerprint = 7, program_id = 8, source_info = 9, xprof_kernel_metadata = 10)
 
 function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:var"Node.XLAInstruction"})
     op = ""
@@ -235,7 +279,7 @@ function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:var"Node.XLAInstruction"
             Base.skip(d, wire_type)
         end
     end
-    return var"Node.XLAInstruction"(op, expression, provenance, category, layout[], computation_primitive_size, fingerprint, program_id, source_info[], xprof_kernel_metadata)
+    return var"Node.XLAInstruction"(; op=op, expression=expression, provenance=provenance, category=category, layout=layout[], computation_primitive_size=computation_primitive_size, fingerprint=fingerprint, program_id=program_id, source_info=source_info[], xprof_kernel_metadata=xprof_kernel_metadata)
 end
 
 function PB.encode(e::PB.AbstractProtoEncoder, x::var"Node.XLAInstruction")
@@ -267,7 +311,7 @@ function PB._encoded_size(x::var"Node.XLAInstruction")
     return encoded_size
 end
 
-struct Node
+mutable struct Node
     name::String
     metrics::Union{Nothing,Metrics}
     children::Vector{Node}
@@ -336,7 +380,7 @@ function PB._encoded_size(x::Node)
     return encoded_size
 end
 
-struct Profile
+mutable struct Profile
     by_category::Union{Nothing,Node}
     by_program::Union{Nothing,Node}
     device_type::String

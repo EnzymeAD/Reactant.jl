@@ -7,7 +7,7 @@ export ExecutionModeProto, ExecuteOptionsProto
 
 @enumx ExecutionModeProto EXECUTION_MODE_UNSPECIFIED=0 EXECUTION_MODE_DEFAULT=1 EXECUTION_MODE_SYNCHRONOUS=2 EXECUTION_MODE_ASYNCHRONOUS=3
 
-struct ExecuteOptionsProto
+mutable struct ExecuteOptionsProto
     arguments_are_tupled::Bool
     untuple_result::Bool
     launch_id::Int32
