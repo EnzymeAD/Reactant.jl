@@ -115,11 +115,17 @@ isa_traced_soa(::AbstractRange{<:TracedRNumber}) = true
 
 unwrapped_eltype(::Type{T}) where {T<:Number} = T
 unwrapped_eltype(::Type{<:RNumber{T}}) where {T} = T
-unwrapped_eltype(::Type{TracedRNumber{T}}) where {T} = T
+unwrapped_eltype(::Type{<:TracedRNumber{T}}) where {T} = T
+unwrapped_eltype(::Type{<:TracedRInteger{T}}) where {T} = T
+unwrapped_eltype(::Type{<:TracedRFloat{T}}) where {T} = T
+unwrapped_eltype(::Type{<:TracedRComplex{T}}) where {T} = T
 
 unwrapped_eltype(::T) where {T<:Number} = T
 unwrapped_eltype(::RNumber{T}) where {T} = T
 unwrapped_eltype(::TracedRNumber{T}) where {T} = T
+unwrapped_eltype(::TracedRInteger{T}) where {T} = T
+unwrapped_eltype(::TracedRFloat{T}) where {T} = T
+unwrapped_eltype(::TracedRComplex{T}) where {T} = T
 
 unwrapped_eltype(::Type{<:AbstractArray{T,N}}) where {T,N} = unwrapped_eltype(T)
 unwrapped_eltype(::AbstractArray{T,N}) where {T,N} = unwrapped_eltype(T)
@@ -264,8 +270,18 @@ export ConcreteRArray,
     ConcreteRNumber,
     ConcretePJRTArray,
     ConcretePJRTNumber,
+    ConcretePJRTInteger,
+    ConcretePJRTFloat,
+    ConcretePJRTComplex,
     ConcreteIFRTArray,
     ConcreteIFRTNumber,
+    ConcreteIFRTInteger,
+    ConcreteIFRTFloat,
+    ConcreteIFRTComplex,
+    TracedRNumber,
+    TracedRInteger,
+    TracedRFloat,
+    TracedRComplex,
     @compile,
     @code_hlo,
     @code_mhlo,

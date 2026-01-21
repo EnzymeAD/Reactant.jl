@@ -1,6 +1,15 @@
 module TracedRNumberOverrides
 
-using ..Reactant: Reactant, TracedRNumber, TracedRArray, Ops, unwrapped_eltype
+using ..Reactant:
+    Reactant,
+    TracedRNumber,
+    TracedRInteger,
+    TracedRFloat,
+    TracedRComplex,
+    TracedRReal,
+    TracedRArray,
+    Ops,
+    unwrapped_eltype
 using ..Ops: @opcall
 using ReactantCore: ReactantCore, @trace
 using Adapt: Adapt
@@ -17,32 +26,46 @@ ReactantCore.is_traced(::TracedRNumber) = true
 
 Base.to_index(x::TracedRNumber{<:Integer}) = x
 
-Base.zero(::TracedRNumber{T}) where {T} = Reactant.promote_to(TracedRNumber{T}, zero(T))
-Base.one(::TracedRNumber{T}) where {T} = Reactant.promote_to(TracedRNumber{T}, one(T))
+Base.zero(::TracedRInteger{T}) where {T} = Reactant.promote_to(TracedRInteger{T}, zero(T))
+Base.zero(::TracedRFloat{T}) where {T} = Reactant.promote_to(TracedRFloat{T}, zero(T))
+Base.zero(::TracedRComplex{T}) where {T} = Reactant.promote_to(TracedRComplex{T}, zero(T))
+
+Base.one(::TracedRInteger{T}) where {T} = Reactant.promote_to(TracedRInteger{T}, one(T))
+Base.one(::TracedRFloat{T}) where {T} = Reactant.promote_to(TracedRFloat{T}, one(T))
+Base.one(::TracedRComplex{T}) where {T} = Reactant.promote_to(TracedRComplex{T}, one(T))
+
 Base.collect(x::TracedRNumber{T}) where {T} = TracedRArray{T,0}((), x.mlir_data, ())
 
-Base.copy(x::TracedRNumber{T}) where {T} = TracedRNumber{T}((), x.mlir_data)
+Base.copy(x::TracedRInteger{T}) where {T} = TracedRInteger{T}((), x.mlir_data)
+Base.copy(x::TracedRFloat{T}) where {T} = TracedRFloat{T}((), x.mlir_data)
+Base.copy(x::TracedRComplex{T}) where {T} = TracedRComplex{T}((), x.mlir_data)
 
-function Base.eps(::Type{TracedRNumber{T}}) where {T}
-    return Reactant.promote_to(TracedRNumber{T}, eps(T))
+function Base.eps(::Type{TracedRFloat{T}}) where {T}
+    return Reactant.promote_to(TracedRFloat{T}, eps(T))
 end
-Base.eps(x::TracedRNumber{T}) where {T} = eps(typeof(x))
+Base.eps(x::TracedRFloat{T}) where {T} = eps(typeof(x))
 
-function Base.typemin(::Type{TracedRNumber{T}}) where {T}
-    return Reactant.promote_to(TracedRNumber{T}, typemin(T))
+function Base.typemin(::Type{TracedRInteger{T}}) where {T}
+    return Reactant.promote_to(TracedRInteger{T}, typemin(T))
 end
-Base.typemin(x::TracedRNumber{T}) where {T} = typemin(typeof(x))
-
-function Base.typemax(::Type{TracedRNumber{T}}) where {T}
-    return Reactant.promote_to(TracedRNumber{T}, typemax(T))
+function Base.typemin(::Type{TracedRFloat{T}}) where {T}
+    return Reactant.promote_to(TracedRFloat{T}, typemin(T))
 end
-Base.typemax(x::TracedRNumber{T}) where {T} = typemax(typeof(x))
+Base.typemin(x::TracedRReal{T}) where {T} = typemin(typeof(x))
 
-function Base.nextfloat(x::TracedRNumber{T}) where {T<:AbstractFloat}
+function Base.typemax(::Type{TracedRInteger{T}}) where {T}
+    return Reactant.promote_to(TracedRInteger{T}, typemax(T))
+end
+function Base.typemax(::Type{TracedRFloat{T}}) where {T}
+    return Reactant.promote_to(TracedRFloat{T}, typemax(T))
+end
+Base.typemax(x::TracedRReal{T}) where {T} = typemax(typeof(x))
+
+function Base.nextfloat(x::TracedRFloat{T}) where {T<:AbstractFloat}
     return @opcall next_after(x, typemax(x))
 end
 
-function Base.prevfloat(x::TracedRNumber{T}) where {T<:AbstractFloat}
+function Base.prevfloat(x::TracedRFloat{T}) where {T<:AbstractFloat}
     return @opcall next_after(x, typemin(x))
 end
 
@@ -50,24 +73,32 @@ function Base.rtoldefault(T::Type{<:TracedRNumber})
     return T(Base.rtoldefault(unwrapped_eltype(T)))
 end
 
-function Base.isfinite(x::TracedRNumber{<:Complex})
+function Base.isfinite(x::TracedRComplex{<:Complex})
     return isfinite(real(x)) & isfinite(imag(x))
 end
-Base.isfinite(x::TracedRNumber{<:AbstractFloat}) = @opcall is_finite(x)
+Base.isfinite(x::TracedRFloat{<:AbstractFloat}) = @opcall is_finite(x)
 
-function Base.isnan(x::TracedRNumber{<:Complex})
+function Base.isnan(x::TracedRComplex{<:Complex})
     return isnan(real(x)) | isnan(imag(x))
 end
-function Base.isnan(x::TracedRNumber{T}) where {T<:AbstractFloat}
+function Base.isnan(x::TracedRFloat{T}) where {T<:AbstractFloat}
     return !isfinite(x) & (x != typemax(T)) & (x != typemin(T))
 end
 
-Base.isinf(x::TracedRNumber{<:Complex}) = isinf(real(x)) | isinf(imag(x))
-Base.isinf(x::TracedRNumber{<:AbstractFloat}) = @opcall is_inf(x)
-Base.isinf(::TracedRNumber{<:Integer}) = false
+Base.isinf(x::TracedRComplex{<:Complex}) = isinf(real(x)) | isinf(imag(x))
+Base.isinf(x::TracedRFloat{<:AbstractFloat}) = @opcall is_inf(x)
+Base.isinf(::TracedRInteger{<:Integer}) = false
 
-function Base.show(io::IOty, X::TracedRNumber{T}) where {T,IOty<:Union{IO,IOContext}}
-    return print(io, "TracedRNumber{", T, "}(", X.paths, ")")
+function Base.show(io::IOty, X::TracedRInteger{T}) where {T,IOty<:Union{IO,IOContext}}
+    return print(io, "TracedRInteger{", T, "}(", X.paths, ")")
+end
+
+function Base.show(io::IOty, X::TracedRFloat{T}) where {T,IOty<:Union{IO,IOContext}}
+    return print(io, "TracedRFloat{", T, "}(", X.paths, ")")
+end
+
+function Base.show(io::IOty, X::TracedRComplex{T}) where {T,IOty<:Union{IO,IOContext}}
+    return print(io, "TracedRComplex{", T, "}(", X.paths, ")")
 end
 
 Base.only(A::TracedRNumber{T}) where {T} = A
