@@ -197,7 +197,7 @@ end
     A::Union{AbstractArray,Base.Iterators.Zip,Base.Iterators.Enumerate,Base.Generator};
     kwargs...,
 )
-    if use_overlayed_version(A)
+    if use_overlayed_version(A) || use_overlayed_version(f)
         return TracedRArrayOverrides.overloaded_mapreduce(f, op, A; kwargs...)
     else
         return call_with_native(

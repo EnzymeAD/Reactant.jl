@@ -1807,3 +1807,19 @@ end
 
     @test @jit(meshgrid(x_ra, y_ra)) ≈ meshgrid(x, y)
 end
+
+function mapreduce_with_closure(a, A)
+    return sum(A) do Ax
+        return log(a + Ax)
+    end
+end
+
+@testset "mapreduce with closure" begin
+    ρr = ConcreteRNumber(2.0)
+    x = Reactant.TestUtils.construct_test_array(Float64, 5, 5)
+
+    hlo = repr(@code_hlo mapreduce_with_closure(ρr, x))
+    @test contains(hlo, "stablehlo.reduce")
+
+    @test @jit(mapreduce_with_closure(ρr, x)) ≈ mapreduce_with_closure(2.0, x)
+end
