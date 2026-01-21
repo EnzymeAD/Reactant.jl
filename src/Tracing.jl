@@ -66,33 +66,15 @@ Base.@nospecializeinfer function traced_type_inner(
 )
     if mode == ArrayToConcrete && T <: track_numbers
         if runtime isa Val{:PJRT}
-            if T <: Complex
-                return ConcretePJRTComplex{T,_unwrap_val(ndevices)}
-            elseif T <: Integer || T === Bool
-                return ConcretePJRTInteger{T,_unwrap_val(ndevices)}
-            else
-                return ConcretePJRTFloat{T,_unwrap_val(ndevices)}
-            end
+            return pjrt_number_type(T, ndevices)
         elseif runtime isa Val{:IFRT}
-            if T <: Complex
-                return ConcreteIFRTComplex{T}
-            elseif T <: Integer || T === Bool
-                return ConcreteIFRTInteger{T}
-            else
-                return ConcreteIFRTFloat{T}
-            end
+            return ifrt_number_type(T)
         else
             error("Unsupported runtime $runtime")
         end
     elseif (mode == NoStopTracedTrack || mode == TracedTrack || mode == TracedSetPath) &&
         T <: track_numbers
-        if T <: Complex
-            return TracedRComplex{T}
-        elseif T <: Integer || T === Bool
-            return TracedRInteger{T}
-        else
-            return TracedRFloat{T}
-        end
+        return traced_number_type(T)
     end
     return T
 end
@@ -252,24 +234,12 @@ Base.@nospecializeinfer function traced_type_inner(
     end
 
     if mode == ConcreteToTraced
-        if T <: Complex
-            return TracedRComplex{T}
-        elseif T <: Integer || T === Bool
-            return TracedRInteger{T}
-        else
-            return TracedRFloat{T}
-        end
+        return traced_number_type(T)
     elseif mode == TracedToConcrete
         return T0
     elseif mode == ArrayToConcrete
         @assert runtime isa Val{:PJRT}
-        if T <: Complex
-            return ConcretePJRTComplex{T,_unwrap_val(ndevices)}
-        elseif T <: Integer || T === Bool
-            return ConcretePJRTInteger{T,_unwrap_val(ndevices)}
-        else
-            return ConcretePJRTFloat{T,_unwrap_val(ndevices)}
-        end
+        return pjrt_number_type(T, ndevices)
     else
         throw("Unsupported mode: $mode")
     end
@@ -286,24 +256,12 @@ Base.@nospecializeinfer function traced_type_inner(
     T = T0 isa UnionAll ? T0.body.parameters[1] : T0.parameters[1]
 
     if mode == ConcreteToTraced
-        if T <: Complex
-            return TracedRComplex{T}
-        elseif T <: Integer || T === Bool
-            return TracedRInteger{T}
-        else
-            return TracedRFloat{T}
-        end
+        return traced_number_type(T)
     elseif mode == TracedToConcrete
         return T0
     elseif mode == ArrayToConcrete
         @assert runtime isa Val{:IFRT}
-        if T <: Complex
-            return ConcreteIFRTComplex{T}
-        elseif T <: Integer || T === Bool
-            return ConcreteIFRTInteger{T}
-        else
-            return ConcreteIFRTFloat{T}
-        end
+        return ifrt_number_type(T)
     else
         throw("Unsupported mode: $mode")
     end
@@ -424,38 +382,16 @@ Base.@nospecializeinfer function traced_type_inner(
         elT = T isa UnionAll ? T.var : T.parameters[1]
         if runtime isa Val{:PJRT}
             if T isa UnionAll
-                if elT <: Complex
-                    return UnionAll(T.var, ConcretePJRTComplex{T.var,_unwrap_val(ndevices)})
-                elseif elT <: Integer || elT === Bool
-                    return UnionAll(T.var, ConcretePJRTInteger{T.var,_unwrap_val(ndevices)})
-                else
-                    return UnionAll(T.var, ConcretePJRTFloat{T.var,_unwrap_val(ndevices)})
-                end
+                ConcreteType = pjrt_number_type_unparameterized(elT, ndevices)
+                return UnionAll(T.var, ConcreteType{T.var,_unwrap_val(ndevices)})
             end
-            if elT <: Complex
-                return ConcretePJRTComplex{elT,_unwrap_val(ndevices)}
-            elseif elT <: Integer || elT === Bool
-                return ConcretePJRTInteger{elT,_unwrap_val(ndevices)}
-            else
-                return ConcretePJRTFloat{elT,_unwrap_val(ndevices)}
-            end
+            return pjrt_number_type(elT, ndevices)
         elseif runtime isa Val{:IFRT}
             if T isa UnionAll
-                if elT <: Complex
-                    return UnionAll(T.var, ConcreteIFRTComplex{T.var})
-                elseif elT <: Integer || elT === Bool
-                    return UnionAll(T.var, ConcreteIFRTInteger{T.var})
-                else
-                    return UnionAll(T.var, ConcreteIFRTFloat{T.var})
-                end
+                ConcreteType = ifrt_number_type_unparameterized(elT)
+                return UnionAll(T.var, ConcreteType{T.var})
             end
-            if elT <: Complex
-                return ConcreteIFRTComplex{elT}
-            elseif elT <: Integer || elT === Bool
-                return ConcreteIFRTInteger{elT}
-            else
-                return ConcreteIFRTFloat{elT}
-            end
+            return ifrt_number_type(elT)
         end
         error("Unsupported runtime $runtime")
     elseif mode == TracedToJAX
@@ -1430,13 +1366,7 @@ Base.@nospecializeinfer function make_tracer(
     end
     mode == ArrayToConcrete && return ConcretePJRTNumber(prev; sharding, device, client)
     mode != ConcreteToTraced && throw("Cannot trace existing trace type")
-    TRN = if T <: Complex
-        TracedRComplex{T}
-    elseif T <: Integer || T === Bool
-        TracedRInteger{T}
-    else
-        TracedRFloat{T}
-    end
+    TRN = traced_number_type(T)
     haskey(seen, prev) && return seen[prev]::TRN
     res = TRN((path,), nothing)
     seen[prev] = res
@@ -1458,13 +1388,7 @@ Base.@nospecializeinfer function make_tracer(
     end
     mode == ArrayToConcrete && return ConcreteIFRTNumber(prev; sharding, device, client)
     mode != ConcreteToTraced && throw("Cannot trace existing trace type")
-    TRN = if T <: Complex
-        TracedRComplex{T}
-    elseif T <: Integer || T === Bool
-        TracedRInteger{T}
-    else
-        TracedRFloat{T}
-    end
+    TRN = traced_number_type(T)
     haskey(seen, prev) && return seen[prev]::TRN
     res = TRN((path,), nothing)
     seen[prev] = res
@@ -1610,13 +1534,7 @@ Base.@nospecializeinfer function make_tracer(
 
     if mode == TracedToConcrete
         if runtime isa Val{:PJRT}
-            CRN = if T <: Complex
-                ConcretePJRTComplex{T,1}
-            elseif T <: Integer || T === Bool
-                ConcretePJRTInteger{T,1}
-            else
-                ConcretePJRTFloat{T,1}
-            end
+            CRN = pjrt_number_type(T, Val(1))
             haskey(seen, prev) && return seen[prev]::CRN
             if !Sharding.is_sharded(sharding)
                 res = CRN((XLA.PJRT.AsyncEmptyBuffer,), Sharding.NoShardInfo())
@@ -1626,13 +1544,7 @@ Base.@nospecializeinfer function make_tracer(
             seen[prev] = res
             return res
         elseif runtime isa Val{:IFRT}
-            CRN = if T <: Complex
-                ConcreteIFRTComplex{T}
-            elseif T <: Integer || T === Bool
-                ConcreteIFRTInteger{T}
-            else
-                ConcreteIFRTFloat{T}
-            end
+            CRN = ifrt_number_type(T)
             haskey(seen, prev) && return seen[prev]::CRN
             if !Sharding.is_sharded(sharding)
                 res = CRN(XLA.IFRT.AsyncEmptyArray, Sharding.NoShardInfo())
@@ -1722,13 +1634,7 @@ Base.@nospecializeinfer function make_tracer(
             error("Unsupported runtime $runtime")
         else
             if mode == TracedTrack || mode == NoStopTracedTrack
-                TRN = if RT <: Complex
-                    TracedRComplex{RT}
-                elseif RT <: Integer || RT === Bool
-                    TracedRInteger{RT}
-                else
-                    TracedRFloat{RT}
-                end
+                TRN = traced_number_type(RT)
                 res = TRN((path,), broadcast_to_size(prev, ()).mlir_data)
                 if Base.ismutable(prev) && !haskey(seen, prev)
                     return seen[prev] = res
@@ -1737,13 +1643,7 @@ Base.@nospecializeinfer function make_tracer(
                 return res
             elseif mode == TracedSetPath
                 haskey(seen, prev) && return seen[prev]
-                TRN = if RT <: Complex
-                    TracedRComplex{RT}
-                elseif RT <: Integer || RT === Bool
-                    TracedRInteger{RT}
-                else
-                    TracedRFloat{RT}
-                end
+                TRN = traced_number_type(RT)
                 res = TRN((path,), broadcast_to_size(prev, ()).mlir_data)
                 seen[prev] = res
                 return res

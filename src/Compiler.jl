@@ -28,6 +28,10 @@ import ..Reactant:
     TracedToConcrete,
     append_path,
     ancestor,
+    traced_number_type,
+    pjrt_number_type,
+    pjrt_number_type_nod,
+    ifrt_number_type,
     TracedType
 import Reactant: OptimizeCommunicationOptions, ShardyPropagationOptions, CompileOptions
 using Reactant_jll: Reactant_jll
@@ -300,13 +304,7 @@ function create_result(
         delete!(result_stores, path)
         
         # Determine the concrete type based on T
-        ConcreteType = if T <: Complex
-            ConcretePJRTComplex{T,D}
-        elseif T <: Integer || T === Bool
-            ConcretePJRTInteger{T,D}
-        else
-            ConcretePJRTFloat{T,D}
-        end
+        ConcreteType = pjrt_number_type(T, Val(D))
         
         if path_to_shard_info !== nothing && haskey(path_to_shard_info, path)
             if haskey(to_unreshard_results, path)
@@ -316,14 +314,8 @@ function create_result(
             push!(used_shardinfo, sharding)
             result = :($ConcreteType(($(restore)...,), $sharding))
         else
-            # Use the non-parameterized type to get the default sharding
-            ConcreteTypeNoD = if T <: Complex
-                ConcretePJRTComplex{T}
-            elseif T <: Integer || T === Bool
-                ConcretePJRTInteger{T}
-            else
-                ConcretePJRTFloat{T}
-            end
+            # Use the non-parameterized type (without D) for the convenience constructor
+            ConcreteTypeNoD = pjrt_number_type_nod(T)
             result = :($ConcreteTypeNoD($restore))
         end
         push!(
@@ -360,13 +352,7 @@ function create_result(
         delete!(result_stores, path)
         
         # Determine the concrete type based on T
-        ConcreteType = if T <: Complex
-            ConcreteIFRTComplex{T}
-        elseif T <: Integer || T === Bool
-            ConcreteIFRTInteger{T}
-        else
-            ConcreteIFRTFloat{T}
-        end
+        ConcreteType = ifrt_number_type(T)
         
         if path_to_shard_info !== nothing && haskey(path_to_shard_info, path)
             if haskey(to_unreshard_results, path)

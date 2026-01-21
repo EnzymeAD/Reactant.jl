@@ -72,13 +72,7 @@ end
 
 # TracedRNumber{T} dispatches to the appropriate specific type
 function promote_to(::Type{TracedRNumber{T}}, rhs) where {T}
-    if T <: Complex
-        return promote_to(TracedRComplex{T}, rhs)
-    elseif T <: Integer || T === Bool
-        return promote_to(TracedRInteger{T}, rhs)
-    else
-        return promote_to(TracedRFloat{T}, rhs)
-    end
+    return promote_to(traced_number_type(T), rhs)
 end
 
 promote_to(::Type{TracedRNumber{T}}, rhs::TracedRNumber{T}) where {T} = rhs

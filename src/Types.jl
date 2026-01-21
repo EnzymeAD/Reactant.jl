@@ -104,16 +104,40 @@ end
 const TracedRReal{T} = Union{TracedRInteger{T},TracedRFloat{T}}
 const TracedRNumber{T} = Union{TracedRReal{T},TracedRComplex{T}}
 
-# Helper function to create appropriate traced type based on element type
-@inline function TracedRNumber{T}(paths::Tuple, mlir_data) where {T}
-    if T <: Complex
-        return TracedRComplex{T}(paths, mlir_data)
-    elseif T <: Integer || T === Bool
-        return TracedRInteger{T}(paths, mlir_data)
-    else
-        return TracedRFloat{T}(paths, mlir_data)
-    end
-end
+# Type-returning helper functions for dispatch on element type
+@inline traced_number_type(::Type{T}) where {T<:Complex} = TracedRComplex{T}
+@inline traced_number_type(::Type{T}) where {T<:Integer} = TracedRInteger{T}
+@inline traced_number_type(::Type{Bool}) = TracedRInteger{Bool}
+@inline traced_number_type(::Type{T}) where {T<:AbstractFloat} = TracedRFloat{T}
+
+@inline pjrt_number_type(::Type{T}, ::Val{D}) where {T<:Complex,D} = ConcretePJRTComplex{T,D}
+@inline pjrt_number_type(::Type{T}, ::Val{D}) where {T<:Integer,D} = ConcretePJRTInteger{T,D}
+@inline pjrt_number_type(::Type{Bool}, ::Val{D}) where {D} = ConcretePJRTInteger{Bool,D}
+@inline pjrt_number_type(::Type{T}, ::Val{D}) where {T<:AbstractFloat,D} = ConcretePJRTFloat{T,D}
+
+@inline ifrt_number_type(::Type{T}) where {T<:Complex} = ConcreteIFRTComplex{T}
+@inline ifrt_number_type(::Type{T}) where {T<:Integer} = ConcreteIFRTInteger{T}
+@inline ifrt_number_type(::Type{Bool}) = ConcreteIFRTInteger{Bool}
+@inline ifrt_number_type(::Type{T}) where {T<:AbstractFloat} = ConcreteIFRTFloat{T}
+
+# Type without dimension parameter (for convenience constructors)
+@inline pjrt_number_type_nod(::Type{T}) where {T<:Complex} = ConcretePJRTComplex{T}
+@inline pjrt_number_type_nod(::Type{T}) where {T<:Integer} = ConcretePJRTInteger{T}
+@inline pjrt_number_type_nod(::Type{Bool}) = ConcretePJRTInteger{Bool}
+@inline pjrt_number_type_nod(::Type{T}) where {T<:AbstractFloat} = ConcretePJRTFloat{T}
+
+# Unparameterized type constructors for use with TypeVar in UnionAll handling
+@inline pjrt_number_type_unparameterized(::TypeVar, ::Val{D}) where {D} = ConcretePJRTFloat
+@inline ifrt_number_type_unparameterized(::TypeVar) = ConcreteIFRTFloat
+
+# Helper methods to create appropriate traced type based on element type
+@inline TracedRNumber{T}(paths::Tuple, mlir_data) where {T<:Complex} =
+    TracedRComplex{T}(paths, mlir_data)
+@inline TracedRNumber{T}(paths::Tuple, mlir_data) where {T<:Integer} =
+    TracedRInteger{T}(paths, mlir_data)
+@inline TracedRNumber{Bool}(paths::Tuple, mlir_data) = TracedRInteger{Bool}(paths, mlir_data)
+@inline TracedRNumber{T}(paths::Tuple, mlir_data) where {T<:AbstractFloat} =
+    TracedRFloat{T}(paths, mlir_data)
 
 Base.elsize(::Type{<:TracedRNumber{T}}) where {T} = sizeof(T)
 Base.elsize(::Type{<:RNumber{T}}) where {T} = sizeof(T)
