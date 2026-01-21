@@ -444,3 +444,28 @@ end
 
     @test @jit(odef(du_ra, u_ra, p_ra, t_ra)) ≈ odef(du, u, p, t)
 end
+
+function index_jl_array(idxs)
+    a = collect(1:10)
+    return @allowscalar @inbounds a[idxs]
+end
+
+function index_jl_array(idx1, idx2)
+    a = reshape(collect(1:10), 2, 5)
+    return @allowscalar @inbounds a[idx1, idx2]
+end
+
+@testset "Indexing JL Array with Traced Arrays" begin
+    idxs = [2, 4, 7]
+    idxs_ra = Reactant.to_rarray(idxs)
+    @test @jit(index_jl_array(idxs_ra)) ≈ index_jl_array(idxs)
+
+    idx1 = [1]
+    idx2 = [1, 3, 5]
+    idx1_ra = Reactant.to_rarray(idx1)
+    idx2_ra = Reactant.to_rarray(idx2)
+
+    @test @jit(index_jl_array(idx1_ra, idx2_ra)) ≈ index_jl_array(idx1, idx2)
+    @test @jit(index_jl_array(idx1_ra, 3)) ≈ index_jl_array(idx1, 3)
+    @test @jit(index_jl_array(1, idx2_ra)) ≈ index_jl_array(1, idx2)
+end

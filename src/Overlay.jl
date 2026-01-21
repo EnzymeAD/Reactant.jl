@@ -249,6 +249,14 @@ end
     end
 end
 
+@reactant_overlay @noinline function Base._getindex(::IndexLinear, x::Array{T, N}, idxs::Vararg{Any, N}) where {T, N}
+    if use_overlayed_version(idxs)
+        return TracedIndexing.overloaded_unsafe_getindex(IndexLinear(), x, idxs...)
+    else
+        return call_with_native(Base._getindex, IndexLinear(), x, idxs...)
+    end
+end
+
 # LinearAlgebra
 ## Various factorizations
 ## TODO: specialize for `cholesky!` --> cholcopy
