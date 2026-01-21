@@ -457,6 +457,12 @@ function getindex_general(a::TracedRArray{T,N}, indices::Vararg{Any,N}) where {T
     return x
 end
 
+function overloaded_unsafe_getindex(
+    ::IndexLinear, a::Array{T,N}, idxs::Vararg{Any,N}
+) where {T,N}
+    return Base.unsafe_getindex(@opcall(constant(a)), idxs...)
+end
+
 # TODO: move the setindex! here as well
 
 end
