@@ -6,6 +6,19 @@ for (jlop, hloop) in (
     @eval $(jlop)(x::TracedRNumber) = @opcall $(hloop)(x)
 end
 
+# See https://github.com/EnzymeAD/Reactant.jl/issues/1420
+# Without this we will never fuse the gelu into gemm
+if isdefined(NNlib, :gelu_tanh)
+    function NNlib.gelu_tanh(x::TracedRNumber)
+        return Reactant.Ops.gelu(x, Reactant.NNLIB_GELU_APPROXIMATION[])
+    end
+
+    NNlib.gelu_erf(x::TracedRNumber) = Reactant.Ops.gelu(x, "NONE")
+else
+    # Older versions of NNlib do not have gelu_tanh (gelu refers to the tanh version)
+    NNlib.gelu(x::TracedRNumber) = Reactant.Ops.gelu(x, Reactant.NNLIB_GELU_APPROXIMATION[])
+end
+
 function NNlib.softmax!(out::AnyTracedRArray{T,N}, x::AbstractArray; dims=1) where {T,N}
     x = T.(materialize_traced_array(x))
     max_ = maximum(x; dims)
