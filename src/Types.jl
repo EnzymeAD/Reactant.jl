@@ -282,17 +282,29 @@ end
 const ConcretePJRTReal{T,D} = Union{ConcretePJRTInteger{T,D},ConcretePJRTFloat{T,D}}
 const ConcretePJRTNumber{T,D} = Union{ConcretePJRTReal{T,D},ConcretePJRTComplex{T,D}}
 
-# Helper function to create appropriate ConcretePJRTNumber based on element type
+# Helper functions to create appropriate ConcretePJRTNumber based on element type
 @inline function _ConcretePJRTNumber(
     ::Type{T}, ::Val{D}, data::NTuple{D,XLA.PJRT.AsyncBuffer}, sharding::Sharding.ShardInfo
-) where {T,D}
-    if T <: Complex
-        return ConcretePJRTComplex{T,D}(data, sharding)
-    elseif T <: Integer || T === Bool
-        return ConcretePJRTInteger{T,D}(data, sharding)
-    else
-        return ConcretePJRTFloat{T,D}(data, sharding)
-    end
+) where {T<:Complex,D}
+    return ConcretePJRTComplex{T,D}(data, sharding)
+end
+
+@inline function _ConcretePJRTNumber(
+    ::Type{T}, ::Val{D}, data::NTuple{D,XLA.PJRT.AsyncBuffer}, sharding::Sharding.ShardInfo
+) where {T<:Integer,D}
+    return ConcretePJRTInteger{T,D}(data, sharding)
+end
+
+@inline function _ConcretePJRTNumber(
+    ::Type{Bool}, ::Val{D}, data::NTuple{D,XLA.PJRT.AsyncBuffer}, sharding::Sharding.ShardInfo
+) where {D}
+    return ConcretePJRTInteger{Bool,D}(data, sharding)
+end
+
+@inline function _ConcretePJRTNumber(
+    ::Type{T}, ::Val{D}, data::NTuple{D,XLA.PJRT.AsyncBuffer}, sharding::Sharding.ShardInfo
+) where {T<:AbstractFloat,D}
+    return ConcretePJRTFloat{T,D}(data, sharding)
 end
 
 function ConcretePJRTNumber{T}(data::T2; kwargs...) where {T<:Number,T2<:Number}
@@ -475,17 +487,29 @@ end
 const ConcreteIFRTReal{T} = Union{ConcreteIFRTInteger{T},ConcreteIFRTFloat{T}}
 const ConcreteIFRTNumber{T} = Union{ConcreteIFRTReal{T},ConcreteIFRTComplex{T}}
 
-# Helper function to create appropriate ConcreteIFRTNumber based on element type
+# Helper functions to create appropriate ConcreteIFRTNumber based on element type
 @inline function _ConcreteIFRTNumber(
     ::Type{T}, data::XLA.IFRT.AsyncArray, sharding::Sharding.ShardInfo
-) where {T}
-    if T <: Complex
-        return ConcreteIFRTComplex{T}(data, sharding)
-    elseif T <: Integer || T === Bool
-        return ConcreteIFRTInteger{T}(data, sharding)
-    else
-        return ConcreteIFRTFloat{T}(data, sharding)
-    end
+) where {T<:Complex}
+    return ConcreteIFRTComplex{T}(data, sharding)
+end
+
+@inline function _ConcreteIFRTNumber(
+    ::Type{T}, data::XLA.IFRT.AsyncArray, sharding::Sharding.ShardInfo
+) where {T<:Integer}
+    return ConcreteIFRTInteger{T}(data, sharding)
+end
+
+@inline function _ConcreteIFRTNumber(
+    ::Type{Bool}, data::XLA.IFRT.AsyncArray, sharding::Sharding.ShardInfo
+)
+    return ConcreteIFRTInteger{Bool}(data, sharding)
+end
+
+@inline function _ConcreteIFRTNumber(
+    ::Type{T}, data::XLA.IFRT.AsyncArray, sharding::Sharding.ShardInfo
+) where {T<:AbstractFloat}
+    return ConcreteIFRTFloat{T}(data, sharding)
 end
 
 function ConcreteIFRTNumber{T}(data::T2; kwargs...) where {T<:Number,T2<:Number}
