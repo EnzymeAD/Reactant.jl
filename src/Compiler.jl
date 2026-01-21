@@ -3763,8 +3763,8 @@ function compile_xla(
 
             exec = XLA.compile(
                 client,
-                mod;
-                compile_options=xla_compile_options,
+                mod,
+                xla_compile_options;
                 num_outputs=length(mlir_fn_res.linear_results),
                 num_parameters=length(mlir_fn_res.linear_args),
                 mlir_fn_res.is_sharded,

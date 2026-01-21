@@ -26,6 +26,8 @@ function LLVMclopts(opts...)
     )::Cvoid
 end
 
+include("CompileOptions.jl")
+
 include("Distributed.jl")
 include("Client.jl")
 include("Device.jl")
@@ -45,8 +47,6 @@ include("IR/PerformanceModel.jl")
 include("PJRT/PJRT.jl")
 
 include("IFRT/IFRT.jl")
-
-include("CompileOptions.jl")
 
 abstract type AbstractBackendState end
 

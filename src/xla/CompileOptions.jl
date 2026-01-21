@@ -21,7 +21,7 @@ end
 function get_debug_options(; kwargs...)
     debug_options = get_default_debug_options()
 
-    # default overrides. can we changed by the user by passing in kwargs
+    # default overrides. can be changed by the user by passing in kwargs
     debug_options.xla_gpu_cuda_data_dir = CUDA_DATA_DIR[]
     debug_options.xla_enable_enzyme_comms_opt = true
     debug_options.xla_gpu_experimental_use_raft_select_k = true
@@ -48,6 +48,13 @@ function get_debug_options(; kwargs...)
     return debug_options
 end
 
+struct CompileOptionsWithoutProto
+    device_id::Int64
+    global_device_ids::Vector{Int64}
+    use_shardy_partitioner::Bool
+    use_spmd_partitioning::Bool
+end
+
 function make_compile_options(;
     device_id::Int64,
     num_replicas::Int64=1,
@@ -57,6 +64,25 @@ function make_compile_options(;
     xla_executable_build_options=(;),
     xla_compile_options=(;),
 )
+    if (
+        isempty(xla_debug_options) &&
+        (
+            isempty(xla_executable_build_options) || (
+                length(xla_executable_build_options) == 2 &&
+                haskey(xla_executable_build_options, :use_shardy_partitioner) &&
+                haskey(xla_executable_build_options, :use_spmd_partitioning)
+            )
+        ) &&
+        isempty(xla_compile_options)
+    )
+        return CompileOptionsWithoutProto(
+            device_id,
+            mesh_ids === nothing ? Int64[] : mesh_ids,
+            get(xla_executable_build_options, :use_shardy_partitioner, false),
+            get(xla_executable_build_options, :use_spmd_partitioning, false),
+        )
+    end
+
     compile_options = get_default_compile_options()
     executable_build_options = compile_options.executable_build_options
 
@@ -64,7 +90,7 @@ function make_compile_options(;
     executable_build_options.num_replicas = num_replicas
     executable_build_options.num_partitions = num_partitions
 
-    # default overrides. can we changed by the user by passing in kwargs
+    # default overrides. can be changed by the user by passing in kwargs
     executable_build_options.allow_spmd_sharding_propagation_to_parameters = [false]
     executable_build_options.allow_spmd_sharding_propagation_to_output = [false]
 
