@@ -8,7 +8,7 @@ export OverviewPageAnalysis, OverviewInferenceLatency, OverviewPageRecommendatio
 export OverviewPageRunEnvironment, OverviewPage
 
 
-struct OverviewTfOp
+mutable struct OverviewTfOp
     name::String
     category::String
     self_time_fraction::Float64
@@ -74,7 +74,7 @@ function PB._encoded_size(x::OverviewTfOp)
     return encoded_size
 end
 
-struct OverviewPageHostDependentJobInfo
+mutable struct OverviewPageHostDependentJobInfo
     host_id::String
     command_line::String
     start_time::Int64
@@ -128,7 +128,7 @@ function PB._encoded_size(x::OverviewPageHostDependentJobInfo)
     return encoded_size
 end
 
-struct OverviewLatencyBreakdown
+mutable struct OverviewLatencyBreakdown
     total_latency_us::Float64
     host_latency_us::Float64
     device_latency_us::Float64
@@ -176,7 +176,7 @@ function PB._encoded_size(x::OverviewLatencyBreakdown)
     return encoded_size
 end
 
-struct GenericRecommendation
+mutable struct GenericRecommendation
     kernel_launch_bottleneck::String
     kernel_launch_statement::String
     all_other_bottleneck::String
@@ -242,7 +242,7 @@ function PB._encoded_size(x::GenericRecommendation)
     return encoded_size
 end
 
-struct OverviewPageTip
+mutable struct OverviewPageTip
     link::String
 end
 PB.default_values(::Type{OverviewPageTip}) = (;link = "")
@@ -272,7 +272,7 @@ function PB._encoded_size(x::OverviewPageTip)
     return encoded_size
 end
 
-struct OverviewPageHostIndependentJobInfo
+mutable struct OverviewPageHostIndependentJobInfo
     change_list::Int64
     workspace_id::String
     snapshot::Int64
@@ -332,7 +332,7 @@ function PB._encoded_size(x::OverviewPageHostIndependentJobInfo)
     return encoded_size
 end
 
-struct OverviewPageAnalysis
+mutable struct OverviewPageAnalysis
     mxu_utilization_percent::Float64
     device_idle_time_percent::Float64
     host_idle_time_percent::Float64
@@ -542,7 +542,7 @@ function PB._encoded_size(x::OverviewPageAnalysis)
     return encoded_size
 end
 
-struct OverviewInferenceLatency
+mutable struct OverviewInferenceLatency
     percentile_numbers::Vector{Float64}
     latency_breakdowns::Vector{OverviewLatencyBreakdown}
     max_latency_us::Float64
@@ -596,7 +596,7 @@ function PB._encoded_size(x::OverviewInferenceLatency)
     return encoded_size
 end
 
-struct OverviewPageRecommendation
+mutable struct OverviewPageRecommendation
     bottleneck::String
     statement::String
     input_tips::Vector{OverviewPageTip}
@@ -698,7 +698,7 @@ function PB._encoded_size(x::OverviewPageRecommendation)
     return encoded_size
 end
 
-struct OverviewPageRunEnvironment
+mutable struct OverviewPageRunEnvironment
     host_count::Int32
     task_count::Int32
     hostnames::Dict{String,Bool}
@@ -789,7 +789,7 @@ function PB._encoded_size(x::OverviewPageRunEnvironment)
     return encoded_size
 end
 
-struct OverviewPage
+mutable struct OverviewPage
     run_environment::Union{Nothing,OverviewPageRunEnvironment}
     input_analysis::Union{Nothing,InputPipelineAnalysisResult}
     analysis::Union{Nothing,OverviewPageAnalysis}

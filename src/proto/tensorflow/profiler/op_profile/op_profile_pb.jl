@@ -7,7 +7,7 @@ export Metrics, var"Node.XLAInstruction.LayoutAnalysis", var"Node.XLAInstruction
 export Profile
 
 
-struct var"Node.InstructionCategory" end
+mutable struct var"Node.InstructionCategory" end
 
 function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:var"Node.InstructionCategory"})
     while !PB.message_done(d)
@@ -26,7 +26,7 @@ function PB._encoded_size(x::var"Node.InstructionCategory")
     return encoded_size
 end
 
-struct var"Node.XLAInstruction.LayoutAnalysis.Dimension"
+mutable struct var"Node.XLAInstruction.LayoutAnalysis.Dimension"
     size::Int32
     alignment::Int32
     semantics::String
@@ -68,7 +68,7 @@ function PB._encoded_size(x::var"Node.XLAInstruction.LayoutAnalysis.Dimension")
     return encoded_size
 end
 
-struct Metrics
+mutable struct Metrics
     flops::Float64
     uncapped_flops::Float64
     bandwidth_utils::Vector{Float64}
@@ -153,7 +153,7 @@ function PB._encoded_size(x::Metrics)
     return encoded_size
 end
 
-struct var"Node.XLAInstruction.LayoutAnalysis"
+mutable struct var"Node.XLAInstruction.LayoutAnalysis"
     dimensions::Vector{var"Node.XLAInstruction.LayoutAnalysis.Dimension"}
 end
 PB.default_values(::Type{var"Node.XLAInstruction.LayoutAnalysis"}) = (;dimensions = Vector{var"Node.XLAInstruction.LayoutAnalysis.Dimension"}())
@@ -183,7 +183,7 @@ function PB._encoded_size(x::var"Node.XLAInstruction.LayoutAnalysis")
     return encoded_size
 end
 
-struct var"Node.XLAInstruction"
+mutable struct var"Node.XLAInstruction"
     op::String
     expression::String
     provenance::String
@@ -267,7 +267,7 @@ function PB._encoded_size(x::var"Node.XLAInstruction")
     return encoded_size
 end
 
-struct Node
+mutable struct Node
     name::String
     metrics::Union{Nothing,Metrics}
     children::Vector{Node}
@@ -336,7 +336,7 @@ function PB._encoded_size(x::Node)
     return encoded_size
 end
 
-struct Profile
+mutable struct Profile
     by_category::Union{Nothing,Node}
     by_program::Union{Nothing,Node}
     device_type::String

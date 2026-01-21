@@ -5,7 +5,7 @@ using ProtoBuf.EnumX: @enumx
 export XStatMetadata, XStat, XEventMetadata, XEvent, XLine, XPlane, XSpace
 
 
-struct XStatMetadata
+mutable struct XStatMetadata
     id::Int64
     name::String
     description::String
@@ -47,7 +47,7 @@ function PB._encoded_size(x::XStatMetadata)
     return encoded_size
 end
 
-struct XStat
+mutable struct XStat
     metadata_id::Int64
     value::Union{Nothing,OneOf{<:Union{Float64,UInt64,Int64,String,Vector{UInt8}}}}
 end
@@ -122,7 +122,7 @@ function PB._encoded_size(x::XStat)
     return encoded_size
 end
 
-struct XEventMetadata
+mutable struct XEventMetadata
     id::Int64
     name::String
     display_name::String
@@ -182,7 +182,7 @@ function PB._encoded_size(x::XEventMetadata)
     return encoded_size
 end
 
-struct XEvent
+mutable struct XEvent
     metadata_id::Int64
     data::Union{Nothing,OneOf{Int64}}
     duration_ps::Int64
@@ -245,7 +245,7 @@ function PB._encoded_size(x::XEvent)
     return encoded_size
 end
 
-struct XLine
+mutable struct XLine
     id::Int64
     display_id::Int64
     name::String
@@ -312,7 +312,7 @@ function PB._encoded_size(x::XLine)
     return encoded_size
 end
 
-struct XPlane
+mutable struct XPlane
     id::Int64
     name::String
     lines::Vector{XLine}
@@ -372,7 +372,7 @@ function PB._encoded_size(x::XPlane)
     return encoded_size
 end
 
-struct XSpace
+mutable struct XSpace
     planes::Vector{XPlane}
     errors::Vector{String}
     warnings::Vector{String}

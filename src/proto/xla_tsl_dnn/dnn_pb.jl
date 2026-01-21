@@ -28,7 +28,7 @@ export AlgorithmConfigProto
 
 @enumx FilterLayout kOutputInputYX=0 kOutputYXInput=1 kOutputInputYX4=2 kOutputInputYX32=5 kOutputInputYX32_CudnnReordered=6 kInputYXOutput=3 kYXInputOutput=4
 
-struct ConvolutionDescriptorProto
+mutable struct ConvolutionDescriptorProto
     paddings::Vector{Int64}
     strides::Vector{Int64}
     dilations::Vector{Int64}
@@ -94,7 +94,7 @@ function PB._encoded_size(x::ConvolutionDescriptorProto)
     return encoded_size
 end
 
-struct AlgorithmProto
+mutable struct AlgorithmProto
     algo_id::Int64
     math_type::var"AlgorithmProto.MathType".T
     tuning_knobs::Dict{Int64,Int64}
@@ -149,7 +149,7 @@ function PB._encoded_size(x::AlgorithmProto)
     return encoded_size
 end
 
-struct TensorDescriptorProto
+mutable struct TensorDescriptorProto
     dimensions::Vector{Int64}
     data_type::var"#DataType".T
     layout_oneof::Union{Nothing,OneOf{<:Union{DataLayout.T,FilterLayout.T}}}
@@ -206,7 +206,7 @@ function PB._encoded_size(x::TensorDescriptorProto)
     return encoded_size
 end
 
-struct AlgorithmConfigProto
+mutable struct AlgorithmConfigProto
     optional_algorithm::Union{Nothing,OneOf{AlgorithmProto}}
     optional_algorithm_no_scratch::Union{Nothing,OneOf{AlgorithmProto}}
     optional_scratch_size::Union{Nothing,OneOf{Int64}}

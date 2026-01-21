@@ -5,7 +5,7 @@ using ProtoBuf.EnumX: @enumx
 export Task
 
 
-struct Task
+mutable struct Task
     changelist::Int64
     workspace_id::String
     snapshot::Int64

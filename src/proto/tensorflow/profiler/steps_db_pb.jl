@@ -7,7 +7,7 @@ export TpuStepBreakdown, StepInfoResult, AllReduceDbResult, PerCoreStepInfo
 export StepDatabaseResult
 
 
-struct DeviceMemoryTransfer
+mutable struct DeviceMemoryTransfer
     occurrence::UInt64
     time_us::Float64
     bytes_transferred::UInt64
@@ -49,7 +49,7 @@ function PB._encoded_size(x::DeviceMemoryTransfer)
     return encoded_size
 end
 
-struct GenericStepBreakdown
+mutable struct GenericStepBreakdown
     type_ps::Dict{Int32,UInt64}
     category_ps::Dict{String,UInt64}
 end
@@ -85,7 +85,7 @@ function PB._encoded_size(x::GenericStepBreakdown)
     return encoded_size
 end
 
-struct AllReduceInfo
+mutable struct AllReduceInfo
     id::UInt64
     name::String
     all_reduce_id::UInt64
@@ -145,7 +145,7 @@ function PB._encoded_size(x::AllReduceInfo)
     return encoded_size
 end
 
-struct SparseCoreStepBreakdown
+mutable struct SparseCoreStepBreakdown
     sc_compute_ps::UInt64
     sc_infeed_ps::UInt64
     sc_outfeed_ps::UInt64
@@ -199,7 +199,7 @@ function PB._encoded_size(x::SparseCoreStepBreakdown)
     return encoded_size
 end
 
-struct TpuStepBreakdown
+mutable struct TpuStepBreakdown
     infeed_duration_ps::UInt64
     host_outfeed_ps::UInt64
     wait_for_scv0_duration_ps::UInt64
@@ -332,7 +332,7 @@ function PB._encoded_size(x::TpuStepBreakdown)
     return encoded_size
 end
 
-struct StepInfoResult
+mutable struct StepInfoResult
     step_num::UInt32
     step_name::String
     duration_ps::UInt64
@@ -392,7 +392,7 @@ function PB._encoded_size(x::StepInfoResult)
     return encoded_size
 end
 
-struct AllReduceDbResult
+mutable struct AllReduceDbResult
     all_reduce_info::Vector{AllReduceInfo}
 end
 PB.default_values(::Type{AllReduceDbResult}) = (;all_reduce_info = Vector{AllReduceInfo}())
@@ -422,7 +422,7 @@ function PB._encoded_size(x::AllReduceDbResult)
     return encoded_size
 end
 
-struct PerCoreStepInfo
+mutable struct PerCoreStepInfo
     step_num::UInt32
     step_info_per_core::Dict{UInt32,StepInfoResult}
     hlo_metrics_db::Union{Nothing,OpMetricsDb}
@@ -483,7 +483,7 @@ function PB._encoded_size(x::PerCoreStepInfo)
     return encoded_size
 end
 
-struct StepDatabaseResult
+mutable struct StepDatabaseResult
     step_sequence::Vector{PerCoreStepInfo}
     use_incomplete_step::Bool
     num_steps_dropped::UInt32

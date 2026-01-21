@@ -6,7 +6,7 @@ export OptionOverrideProto, ExecutableBuildOptionsProto, CompileOptionsProto
 export ExecutableAndOptionsProto
 
 
-struct OptionOverrideProto
+mutable struct OptionOverrideProto
     value::Union{Nothing,OneOf{<:Union{String,Bool,Int64,Float64}}}
 end
 PB.oneof_field_types(::Type{OptionOverrideProto}) = (;
@@ -63,7 +63,7 @@ function PB._encoded_size(x::OptionOverrideProto)
     return encoded_size
 end
 
-struct ExecutableBuildOptionsProto
+mutable struct ExecutableBuildOptionsProto
     device_ordinal::Int64
     result_layout::Union{Nothing,ShapeProto}
     comp_envs::Union{Nothing,CompilationEnvironmentsProto}
@@ -243,7 +243,7 @@ function PB._encoded_size(x::ExecutableBuildOptionsProto)
     return encoded_size
 end
 
-struct CompileOptionsProto
+mutable struct CompileOptionsProto
     argument_layouts::Vector{ShapeProto}
     parameter_is_tupled_arguments::Bool
     executable_build_options::Union{Nothing,ExecutableBuildOptionsProto}
@@ -327,7 +327,7 @@ function PB._encoded_size(x::CompileOptionsProto)
     return encoded_size
 end
 
-struct ExecutableAndOptionsProto
+mutable struct ExecutableAndOptionsProto
     serialized_executable::Vector{UInt8}
     compile_options::Union{Nothing,CompileOptionsProto}
     pjrt_client_name::String

@@ -6,7 +6,7 @@ export HostIndependentJobInfoResult, CoreDetails, HostDependentJobInfoResult
 export SystemTopology, PerformanceCounterResult, PerfEnv, RunEnvironment, OpStats
 
 
-struct HostIndependentJobInfoResult
+mutable struct HostIndependentJobInfoResult
     change_list::Int64
     workspace_id::String
     snapshot::Int64
@@ -66,7 +66,7 @@ function PB._encoded_size(x::HostIndependentJobInfoResult)
     return encoded_size
 end
 
-struct CoreDetails
+mutable struct CoreDetails
     hostname::String
     device_ordinal::UInt32
     core_num::UInt32
@@ -132,7 +132,7 @@ function PB._encoded_size(x::CoreDetails)
     return encoded_size
 end
 
-struct HostDependentJobInfoResult
+mutable struct HostDependentJobInfoResult
     host_id::String
     command_line::String
     start_time::Int64
@@ -186,7 +186,7 @@ function PB._encoded_size(x::HostDependentJobInfoResult)
     return encoded_size
 end
 
-struct SystemTopology
+mutable struct SystemTopology
     x_dimension::Int64
     y_dimension::Int64
     z_dimension::Int64
@@ -234,7 +234,7 @@ function PB._encoded_size(x::SystemTopology)
     return encoded_size
 end
 
-struct PerformanceCounterResult
+mutable struct PerformanceCounterResult
     matrix_unit_utilization_percent::Float64
     hbm_utilization_percent::Float64
 end
@@ -270,7 +270,7 @@ function PB._encoded_size(x::PerformanceCounterResult)
     return encoded_size
 end
 
-struct PerfEnv
+mutable struct PerfEnv
     peak_tera_flops_per_second::Float64
     peak_bw_giga_bytes_per_second::Float64
     peak_hbm_bw_giga_bytes_per_second::Float64
@@ -342,7 +342,7 @@ function PB._encoded_size(x::PerfEnv)
     return encoded_size
 end
 
-struct RunEnvironment
+mutable struct RunEnvironment
     host_count::Int32
     task_count::Int32
     hostnames::Dict{String,Bool}
@@ -451,7 +451,7 @@ function PB._encoded_size(x::RunEnvironment)
     return encoded_size
 end
 
-struct OpStats
+mutable struct OpStats
     host_op_metrics_db::Union{Nothing,OpMetricsDb}
     device_op_metrics_db::Union{Nothing,OpMetricsDb}
     hlo_metrics_db_complete_steps_only::Union{Nothing,OpMetricsDb}

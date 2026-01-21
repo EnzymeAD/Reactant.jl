@@ -7,7 +7,7 @@ export RecordType, RooflineModelRecord, RooflineModelDatabase
 
 @enumx RecordType INVALID_RECORD_TYPE=0 ALL=1 AVERAGE_STEP=2 PER_STEP=3 ALL_HW=4
 
-struct RooflineModelRecord
+mutable struct RooflineModelRecord
     record_type::RecordType.T
     step_num::UInt32
     rank::UInt64
@@ -278,7 +278,7 @@ function PB._encoded_size(x::RooflineModelRecord)
     return encoded_size
 end
 
-struct RooflineModelDatabase
+mutable struct RooflineModelDatabase
     device_type::String
     megacore::Bool
     has_cmem::Bool

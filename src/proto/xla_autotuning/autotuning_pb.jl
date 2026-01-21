@@ -9,7 +9,7 @@ export var"AutotuneResult.CudaConvPlanKey", ComputeCapability, TritonGemmConfigs
 export var"AutotuneResult.FailureResult", AutotuneResult, AutotuningLog
 
 
-struct var"AutotuneResult.TritonGemmKey"
+mutable struct var"AutotuneResult.TritonGemmKey"
     block_m::Int64
     block_n::Int64
     block_k::Int64
@@ -87,7 +87,7 @@ function PB._encoded_size(x::var"AutotuneResult.TritonGemmKey")
     return encoded_size
 end
 
-struct var"AutotuneResult.BackendConfigKey"
+mutable struct var"AutotuneResult.BackendConfigKey"
     name::String
     config::Union{Nothing,google.protobuf.var"#Any"}
 end
@@ -123,7 +123,7 @@ function PB._encoded_size(x::var"AutotuneResult.BackendConfigKey")
     return encoded_size
 end
 
-struct var"AutotuneResult.ConvKey"
+mutable struct var"AutotuneResult.ConvKey"
     algorithm::Int64
     tensor_ops_enabled::Bool
 end
@@ -159,7 +159,7 @@ function PB._encoded_size(x::var"AutotuneResult.ConvKey")
     return encoded_size
 end
 
-struct CudnnVersion
+mutable struct CudnnVersion
     major::Int32
     minor::Int32
     patch::Int32
@@ -203,43 +203,37 @@ end
 
 @enumx var"AutotuneResult.FailureKind" UNKNOWN=0 REDZONE_MODIFIED=1 WRONG_RESULT=2 DISQUALIFIED=3
 
-struct var"AutotuneResult.GemmKey"
+mutable struct var"AutotuneResult.GemmKey"
     algorithm::Int64
-    autotune_workspace_size::Int64
 end
-PB.default_values(::Type{var"AutotuneResult.GemmKey"}) = (;algorithm = zero(Int64), autotune_workspace_size = zero(Int64))
-PB.field_numbers(::Type{var"AutotuneResult.GemmKey"}) = (;algorithm = 1, autotune_workspace_size = 2)
+PB.default_values(::Type{var"AutotuneResult.GemmKey"}) = (;algorithm = zero(Int64))
+PB.field_numbers(::Type{var"AutotuneResult.GemmKey"}) = (;algorithm = 1)
 
 function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:var"AutotuneResult.GemmKey"})
     algorithm = zero(Int64)
-    autotune_workspace_size = zero(Int64)
     while !PB.message_done(d)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             algorithm = PB.decode(d, Int64)
-        elseif field_number == 2
-            autotune_workspace_size = PB.decode(d, Int64)
         else
             Base.skip(d, wire_type)
         end
     end
-    return var"AutotuneResult.GemmKey"(algorithm, autotune_workspace_size)
+    return var"AutotuneResult.GemmKey"(algorithm)
 end
 
 function PB.encode(e::PB.AbstractProtoEncoder, x::var"AutotuneResult.GemmKey")
     initpos = position(e.io)
     x.algorithm != zero(Int64) && PB.encode(e, 1, x.algorithm)
-    x.autotune_workspace_size != zero(Int64) && PB.encode(e, 2, x.autotune_workspace_size)
     return position(e.io) - initpos
 end
 function PB._encoded_size(x::var"AutotuneResult.GemmKey")
     encoded_size = 0
     x.algorithm != zero(Int64) && (encoded_size += PB._encoded_size(x.algorithm, 1))
-    x.autotune_workspace_size != zero(Int64) && (encoded_size += PB._encoded_size(x.autotune_workspace_size, 2))
     return encoded_size
 end
 
-struct var"AutotuneResult.CustomKernelFusionKey"
+mutable struct var"AutotuneResult.CustomKernelFusionKey"
     kernel_index::Int64
 end
 PB.default_values(::Type{var"AutotuneResult.CustomKernelFusionKey"}) = (;kernel_index = zero(Int64))
@@ -269,7 +263,7 @@ function PB._encoded_size(x::var"AutotuneResult.CustomKernelFusionKey")
     return encoded_size
 end
 
-struct var"AutotuneResult.CudaConvPlanKey"
+mutable struct var"AutotuneResult.CudaConvPlanKey"
     exec_plan_id::String
 end
 PB.default_values(::Type{var"AutotuneResult.CudaConvPlanKey"}) = (;exec_plan_id = "")
@@ -299,7 +293,7 @@ function PB._encoded_size(x::var"AutotuneResult.CudaConvPlanKey")
     return encoded_size
 end
 
-struct ComputeCapability
+mutable struct ComputeCapability
     major::Int32
     minor::Int32
 end
@@ -335,7 +329,7 @@ function PB._encoded_size(x::ComputeCapability)
     return encoded_size
 end
 
-struct TritonGemmConfigsProto
+mutable struct TritonGemmConfigsProto
     config::Vector{var"AutotuneResult.TritonGemmKey"}
 end
 PB.default_values(::Type{TritonGemmConfigsProto}) = (;config = Vector{var"AutotuneResult.TritonGemmKey"}())
@@ -365,7 +359,7 @@ function PB._encoded_size(x::TritonGemmConfigsProto)
     return encoded_size
 end
 
-struct var"AutotuneResult.FailureResult"
+mutable struct var"AutotuneResult.FailureResult"
     kind::var"AutotuneResult.FailureKind".T
     msg::String
     key::Union{Nothing,OneOf{<:Union{var"AutotuneResult.ConvKey",var"AutotuneResult.GemmKey",var"AutotuneResult.CudaConvPlanKey",xla_tsl_dnn.AlgorithmProto}}}
@@ -440,7 +434,7 @@ function PB._encoded_size(x::var"AutotuneResult.FailureResult")
     return encoded_size
 end
 
-struct AutotuneResult
+mutable struct AutotuneResult
     scratch_bytes::Int64
     run_time::Union{Nothing,google.protobuf.Duration}
     failure::Union{Nothing,var"AutotuneResult.FailureResult"}
@@ -533,7 +527,7 @@ function PB._encoded_size(x::AutotuneResult)
     return encoded_size
 end
 
-struct AutotuningLog
+mutable struct AutotuningLog
     instr::Union{Nothing,google.protobuf.var"#Any"}
     results::Vector{AutotuneResult}
     cudnn_version::Union{Nothing,CudnnVersion}

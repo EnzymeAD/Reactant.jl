@@ -6,7 +6,7 @@ export RocmComputeCapabilityProto, DnnVersionInfoProto, RuntimeVersionProto
 export GpuDeviceInfoProto, GpuComputeCapabilityProto, GpuTargetConfigProto
 
 
-struct RocmComputeCapabilityProto
+mutable struct RocmComputeCapabilityProto
     gcn_arch_name::String
 end
 PB.default_values(::Type{RocmComputeCapabilityProto}) = (;gcn_arch_name = "")
@@ -36,7 +36,7 @@ function PB._encoded_size(x::RocmComputeCapabilityProto)
     return encoded_size
 end
 
-struct DnnVersionInfoProto
+mutable struct DnnVersionInfoProto
     major::Int32
     minor::Int32
     patch::Int32
@@ -78,7 +78,7 @@ function PB._encoded_size(x::DnnVersionInfoProto)
     return encoded_size
 end
 
-struct RuntimeVersionProto
+mutable struct RuntimeVersionProto
     major::Int32
     minor::Int32
     patch::Int32
@@ -120,7 +120,7 @@ function PB._encoded_size(x::RuntimeVersionProto)
     return encoded_size
 end
 
-struct GpuDeviceInfoProto
+mutable struct GpuDeviceInfoProto
     threads_per_block_limit::Int32
     threads_per_warp::Int32
     shared_memory_per_block::Int32
@@ -267,7 +267,7 @@ function PB._encoded_size(x::GpuDeviceInfoProto)
     return encoded_size
 end
 
-struct GpuComputeCapabilityProto
+mutable struct GpuComputeCapabilityProto
     compute_capability::Union{Nothing,OneOf{<:Union{CudaComputeCapabilityProto,RocmComputeCapabilityProto}}}
 end
 PB.oneof_field_types(::Type{GpuComputeCapabilityProto}) = (;
@@ -312,7 +312,7 @@ function PB._encoded_size(x::GpuComputeCapabilityProto)
     return encoded_size
 end
 
-struct GpuTargetConfigProto
+mutable struct GpuTargetConfigProto
     gpu_device_info::Union{Nothing,GpuDeviceInfoProto}
     platform_name::String
     dnn_version_info::Union{Nothing,DnnVersionInfoProto}
