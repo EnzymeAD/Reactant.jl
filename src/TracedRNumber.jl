@@ -103,8 +103,76 @@ end
 
 Base.only(A::TracedRNumber{T}) where {T} = A
 
+# Promotion rules for TracedRNumber union
 function Base.promote_rule(::Type{TracedRNumber{T}}, ::Type{TracedRNumber{S}}) where {T,S}
     return TracedRNumber{Base.promote_type(T, S)}
+end
+
+# Promotion rules for TracedRInteger
+function Base.promote_rule(::Type{TracedRInteger{T}}, ::Type{TracedRInteger{S}}) where {T,S}
+    return TracedRInteger{Base.promote_type(T, S)}
+end
+function Base.promote_rule(::Type{TracedRInteger{T}}, ::Type{S}) where {T,S<:Integer}
+    return TracedRInteger{Base.promote_type(T, S)}
+end
+function Base.promote_rule(::Type{S}, ::Type{TracedRInteger{T}}) where {T,S<:Integer}
+    return TracedRInteger{Base.promote_type(T, S)}
+end
+
+# Promotion rules for TracedRFloat
+function Base.promote_rule(::Type{TracedRFloat{T}}, ::Type{TracedRFloat{S}}) where {T,S}
+    return TracedRFloat{Base.promote_type(T, S)}
+end
+function Base.promote_rule(::Type{TracedRFloat{T}}, ::Type{S}) where {T,S<:AbstractFloat}
+    return TracedRFloat{Base.promote_type(T, S)}
+end
+function Base.promote_rule(::Type{S}, ::Type{TracedRFloat{T}}) where {T,S<:AbstractFloat}
+    return TracedRFloat{Base.promote_type(T, S)}
+end
+function Base.promote_rule(::Type{TracedRFloat{T}}, ::Type{S}) where {T,S<:Integer}
+    return TracedRFloat{Base.promote_type(T, S)}
+end
+function Base.promote_rule(::Type{S}, ::Type{TracedRFloat{T}}) where {T,S<:Integer}
+    return TracedRFloat{Base.promote_type(T, S)}
+end
+
+# Promotion rules for TracedRComplex
+function Base.promote_rule(::Type{TracedRComplex{T}}, ::Type{TracedRComplex{S}}) where {T,S}
+    return TracedRComplex{Base.promote_type(T, S)}
+end
+function Base.promote_rule(::Type{TracedRComplex{T}}, ::Type{S}) where {T,S<:Complex}
+    return TracedRComplex{Base.promote_type(T, S)}
+end
+function Base.promote_rule(::Type{S}, ::Type{TracedRComplex{T}}) where {T,S<:Complex}
+    return TracedRComplex{Base.promote_type(T, S)}
+end
+function Base.promote_rule(::Type{TracedRComplex{T}}, ::Type{S}) where {T,S<:Real}
+    return TracedRComplex{Base.promote_type(T, complex(S))}
+end
+function Base.promote_rule(::Type{S}, ::Type{TracedRComplex{T}}) where {T,S<:Real}
+    return TracedRComplex{Base.promote_type(T, complex(S))}
+end
+
+# Cross-type promotion: TracedRInteger + TracedRFloat
+function Base.promote_rule(::Type{TracedRFloat{T}}, ::Type{TracedRInteger{S}}) where {T,S}
+    return TracedRFloat{Base.promote_type(T, S)}
+end
+function Base.promote_rule(::Type{TracedRInteger{T}}, ::Type{TracedRFloat{S}}) where {T,S}
+    return TracedRFloat{Base.promote_type(T, S)}
+end
+
+# Cross-type promotion: TracedRReal + TracedRComplex
+function Base.promote_rule(::Type{TracedRComplex{T}}, ::Type{TracedRInteger{S}}) where {T,S}
+    return TracedRComplex{Base.promote_type(T, complex(S))}
+end
+function Base.promote_rule(::Type{TracedRComplex{T}}, ::Type{TracedRFloat{S}}) where {T,S}
+    return TracedRComplex{Base.promote_type(T, complex(S))}
+end
+function Base.promote_rule(::Type{TracedRInteger{T}}, ::Type{TracedRComplex{S}}) where {T,S}
+    return TracedRComplex{Base.promote_type(complex(T), S)}
+end
+function Base.promote_rule(::Type{TracedRFloat{T}}, ::Type{TracedRComplex{S}}) where {T,S}
+    return TracedRComplex{Base.promote_type(complex(T), S)}
 end
 
 # Bool has special promotion rules in Base
@@ -210,6 +278,28 @@ function TracedRNumber{T}(x::TracedRNumber) where {T}
 end
 function TracedRNumber{T}(x::Number) where {T}
     return Reactant.promote_to(TracedRNumber{unwrapped_eltype(T)}, x)
+end
+
+# Base.convert for specific traced types
+function Base.convert(::Type{TracedRInteger{T}}, x::TracedRInteger{T}) where {T}
+    return x
+end
+function Base.convert(::Type{TracedRInteger{T}}, x::Number) where {T}
+    return Reactant.promote_to(TracedRInteger{T}, x)
+end
+
+function Base.convert(::Type{TracedRFloat{T}}, x::TracedRFloat{T}) where {T}
+    return x
+end
+function Base.convert(::Type{TracedRFloat{T}}, x::Number) where {T}
+    return Reactant.promote_to(TracedRFloat{T}, x)
+end
+
+function Base.convert(::Type{TracedRComplex{T}}, x::TracedRComplex{T}) where {T}
+    return x
+end
+function Base.convert(::Type{TracedRComplex{T}}, x::Number) where {T}
+    return Reactant.promote_to(TracedRComplex{T}, x)
 end
 
 for T in Base.uniontypes(Reactant.ReactantFloat8)
