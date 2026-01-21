@@ -249,7 +249,9 @@ end
     end
 end
 
-@reactant_overlay @noinline function Base._getindex(::IndexLinear, x::Array{T, N}, idxs::Vararg{Any, N}) where {T, N}
+@reactant_overlay @noinline function Base._getindex(
+    ::IndexLinear, x::Array{T,N}, idxs::Vararg{Any,N}
+) where {T,N}
     if use_overlayed_version(idxs)
         return TracedIndexing.overloaded_unsafe_getindex(IndexLinear(), x, idxs...)
     else
