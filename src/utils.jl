@@ -583,7 +583,14 @@ end
 function Base.showerror(io::IO, ece::ReactantPrecompilationException)
     return print(
         io,
-        "ReactantPrecopmilationException: Precompilation not supported due to null global: $(ece.str)\n",
+        """ReactantPrecopmilationException: Precompilation not supported due to bad Julia Version.
+        You're using Julia $VERSION, which is known to have a bug in global relocation during precompilation.
+        As a result, this method cannot be safely precompiled (but can be compiled and called normally).
+        For precompilation support please select the following Julia versions:
+           For 1.10: 1.10.11 or above
+           For 1.11: 1.11.9  or above
+           For 1.12: 1.12.5  or above
+        """,
     )
 end
 
@@ -767,7 +774,8 @@ function call_llvm_generator(
             LLVM.activate(ctx)
             obj = try
                 llvm_module, p = GPUCompiler.emit_llvm(job)
-                gmap = Dict{String,UInt}()
+
+                gmap = p.gv_to_value
                 for g in LLVM.globals(llvm_module)
                     if haskey(LLVM.metadata(g), "julia.constgv") &&
                         !LLVM.isnull(LLVM.initializer(g))
@@ -776,7 +784,6 @@ function call_llvm_generator(
                             addr; offsetAllowed=false, inttoptr=true
                         )
                         @assert isa(addr, LLVM.ConstantInt)
-                        gmap[LLVM.name(g)] = convert(UInt, addr)
                         LLVM.linkage!(g, LLVM.API.LLVMExternalLinkage)
                         LLVM.initializer!(
                             g, LLVM.null(LLVM.value_type(LLVM.initializer(g)))
@@ -876,9 +883,9 @@ function call_llvm_generator(
                     if !haskey(LLVM.metadata(g), "julia.constgv")
                         continue
                     end
-                    if !haskey(gmap, LLVM.name(g))
+                    if !haskey(gmap, LLVM.name(g)) || gmap[LLVM.name(g)] == C_NULL
                         if precompiling()
-                            throw(ReactantPrecompilationException(string(g)))
+                            throw(ReactantPrecompilationException(LLVM.name(g)))
                         end
                         continue
                     end
