@@ -443,7 +443,7 @@ function Base.similar(
 end
 
 function Base.similar(
-    ::Broadcasted{AbstractReactantArrayStyle{N}}, ::Type{TracedRNumber{T}}, dims
+    ::Broadcasted{AbstractReactantArrayStyle{N}}, ::Type{<:TracedRNumber{T}}, dims
 ) where {T<:Reactant.ReactantPrimitive,N}
     @assert N isa Int
     return @opcall fill(zero(T), dims)
