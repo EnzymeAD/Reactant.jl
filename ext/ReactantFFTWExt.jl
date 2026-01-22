@@ -20,15 +20,14 @@ dimstype(::Type{<:FFTW.cFFTWPlan{T,K,inplace,N,G}}) where {T,K,inplace,N,G} = G
 dimstype(::Type{<:FFTW.rFFTWPlan{T,K,inplace,N,G}}) where {T,K,inplace,N,G} = G
 
 function AFTEx.reactant_fftplan_type(P::Type{<:FFTW.cFFTWPlan{T,FORWARD,true}}) where {T}
-    return AFTEx.ReactantFFTInPlacePlan{T, dimstype(P)}
+    return AFTEx.ReactantFFTInPlacePlan{T,dimstype(P)}
 end
 function AFTEx.make_reactant_fftplan(plan::FFTW.cFFTWPlan{T,FORWARD,true}) where {T}
     return AFTEx.ReactantFFTInPlacePlan{T}(fftdims(plan))
 end
 
-
 function AFTEx.reactant_fftplan_type(P::Type{<:FFTW.cFFTWPlan{T,FORWARD,false}}) where {T}
-    return AFTEx.ReactantFFTPlan{T, dimstype(P)}
+    return AFTEx.ReactantFFTPlan{T,dimstype(P)}
 end
 function AFTEx.make_reactant_fftplan(plan::FFTW.cFFTWPlan{T,FORWARD,false}) where {T}
     return AFTEx.ReactantFFTPlan{T}(fftdims(plan))
@@ -36,7 +35,7 @@ end
 
 # XLA does plan based on IFFT not BFFT so we need to renormalize
 function AFTEx.reactant_fftplan_type(P::Type{<:FFTW.cFFTWPlan{T,BACKWARD,true}}) where {T}
-    return AbstractFFTs.ScaledPlan{T, AFTEx.ReactantIFFTInPlacePlan{T, dimstype(P)}, real(T)}
+    return AbstractFFTs.ScaledPlan{T,AFTEx.ReactantIFFTInPlacePlan{T,dimstype(P)},real(T)}
 end
 function AFTEx.make_reactant_fftplan(plan::FFTW.cFFTWPlan{T,BACKWARD,true}) where {T}
     return AFTEx.ReactantIFFTInPlacePlan{T}(fftdims(plan)) *
@@ -44,7 +43,7 @@ function AFTEx.make_reactant_fftplan(plan::FFTW.cFFTWPlan{T,BACKWARD,true}) wher
 end
 
 function AFTEx.reactant_fftplan_type(P::Type{<:FFTW.cFFTWPlan{T,BACKWARD,false}}) where {T}
-    return AbstractFFTs.ScaledPlan{T, AFTEx.ReactantIFFTPlan{T, dimstype(P)}, real(T)}
+    return AbstractFFTs.ScaledPlan{T,AFTEx.ReactantIFFTPlan{T,dimstype(P)},real(T)}
 end
 function AFTEx.make_reactant_fftplan(plan::FFTW.cFFTWPlan{T,BACKWARD,false}) where {T}
     nrm = AFTEx.normbfft(T, size(plan), fftdims(plan))
@@ -54,14 +53,14 @@ end
 AFTEx.reallength(p::FFTW.rFFTWPlan{T,BACKWARD}) where {T} = p.osz[first(fftdims(p))] # original real length
 # We don't define the inplace versions becuase the types always differ
 function AFTEx.reactant_fftplan_type(P::Type{<:FFTW.rFFTWPlan{T,FORWARD}}) where {T}
-    return AFTEx.ReactantRFFTPlan{T, dimstype(P)}
+    return AFTEx.ReactantRFFTPlan{T,dimstype(P)}
 end
 function AFTEx.make_reactant_fftplan(plan::FFTW.rFFTWPlan{T,FORWARD,false}) where {T}
     return AFTEx.ReactantRFFTPlan{T}(fftdims(plan))
 end
 
 function AFTEx.reactant_fftplan_type(P::Type{<:FFTW.rFFTWPlan{T,BACKWARD}}) where {T}
-    return AbstractFFTs.ScaledPlan{T, AFTEx.ReactantIRFFTPlan{T, dimstype(P)}, real(T)}
+    return AbstractFFTs.ScaledPlan{T,AFTEx.ReactantIRFFTPlan{T,dimstype(P)},real(T)}
 end
 
 function AFTEx.make_reactant_fftplan(plan::FFTW.rFFTWPlan{T,BACKWARD}) where {T}

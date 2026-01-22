@@ -316,8 +316,6 @@ end
     @test spectral_conv(x, weight) ≈ @jit(spectral_conv(x_r, weight_r))
 end
 
-
-
 @testset "Wrapped Plan" begin
     struct MyPlan{T}
         plan::T

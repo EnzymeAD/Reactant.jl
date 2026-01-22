@@ -9,16 +9,15 @@ using Reactant.Ops: @opcall
 # To extend a user needs to extend Reactant.reactant_fftplan for their plan type
 # see ReactantFFTWExt.jl for an example implementation
 function Reactant.make_tracer(
-    seen, 
-    @nospecialize(prev::AbstractFFTs.Plan{T}), 
-    @nospecialize(path), 
+    seen,
+    @nospecialize(prev::AbstractFFTs.Plan{T}),
+    @nospecialize(path),
     mode;
     @nospecialize(track_numbers::Type = Union{}),
     @nospecialize(sharding = Reactant.Sharding.NoSharding()),
     @nospecialize(runtime),
-    kwargs...
+    kwargs...,
 ) where {T}
-
     RT = Reactant.traced_type(typeof(prev), Val(mode), track_numbers, sharding, runtime)
     return reactant_fftplan(RT, prev)
 end
@@ -47,10 +46,12 @@ end
 reactant_fftplan_type(T::Type{<:AbstractReactantFFTPlan}) = T
 make_reactant_fftplan(p::AbstractReactantFFTPlan) = p
 
-function reactant_fftplan_type(::Type{<:AbstractFFTs.ScaledPlan{T, P, N}}) where {T, P, N}
-    return AbstractFFTs.ScaledPlan{T, reactant_fftplan_type(P), N}
+function reactant_fftplan_type(::Type{<:AbstractFFTs.ScaledPlan{T,P,N}}) where {T,P,N}
+    return AbstractFFTs.ScaledPlan{T,reactant_fftplan_type(P),N}
 end
-function make_reactant_fftplan(p::AbstractFFTs.ScaledPlan{T, P, N}) where {T, P<:AbstractFFTs.Plan, N}
+function make_reactant_fftplan(
+    p::AbstractFFTs.ScaledPlan{T,P,N}
+) where {T,P<:AbstractFFTs.Plan,N}
     rp = make_reactant_fftplan(p.p)
     return AbstractFFTs.ScaledPlan(rp, p.scale)
 end
@@ -110,17 +111,17 @@ for op in (:rfft, :fft, :ifft)
     @eval $(plan_name){T}(dims) where {T} = $(plan_name){T,typeof(dims)}(dims)
 
     @eval function AbstractFFTs.$(plan_f)(
-        x::Reactant.TracedRArray{T}, dims=1:ndims(x)
+        x::Reactant.AnyTracedRArray{T}, dims=1:ndims(x)
     ) where {T}
         return $(plan_name){T,typeof(dims)}(dims)
     end
 
-    @eval function Base.:*(p::$(plan_name){T}, x::Reactant.TracedRArray{T}) where {T}
+    @eval function Base.:*(p::$(plan_name){T}, x::Reactant.AnyTracedRArray{T}) where {T}
         return AbstractFFTs.$(op)(x, p.dims)
     end
 
     @eval function LinearAlgebra.mul!(
-        y::Reactant.TracedRArray, p::$(plan_name), x::Reactant.TracedRArray
+        y::Reactant.AnyTracedRArray, p::$(plan_name), x::Reactant.AnyTracedRArray
     )
         return copyto!(y, AbstractFFTs.$(op)(x, fftdims(p)))
     end
@@ -135,16 +136,18 @@ for op in (:rfft, :fft, :ifft)
         @eval $(plan_name!){T}(dims) where {T} = $(plan_name!){T,typeof(dims)}(dims)
 
         @eval function AbstractFFTs.$(plan_f!)(
-            x::Reactant.TracedRArray{T}, dims=1:ndims(x)
+            x::Reactant.AnyTracedRArray{T}, dims=1:ndims(x)
         ) where {T}
             return $(plan_name!){T,typeof(dims)}(dims)
         end
-        @eval function Base.:*(p::$(plan_name!){T}, x::Reactant.TracedRArray{T}) where {T}
+        @eval function Base.:*(
+            p::$(plan_name!){T}, x::Reactant.AnyTracedRArray{T}
+        ) where {T}
             return copyto!(x, AbstractFFTs.$(op)(x, p.dims))
         end
 
         @eval function LinearAlgebra.mul!(
-            y::Reactant.TracedRArray, p::$(plan_name!), x::Reactant.TracedRArray
+            y::Reactant.AnyTracedRArray, p::$(plan_name!), x::Reactant.AnyTracedRArray
         )
             return copyto!(y, AbstractFFTs.$(op)(x, fftdims(p)))
         end
@@ -190,17 +193,19 @@ for op in (:irfft,)
     @eval $(plan_name){T}(dims, length) where {T} =
         $(plan_name){T,typeof(dims)}(dims, length)
     @eval function AbstractFFTs.$(plan_f)(
-        x::Reactant.TracedRArray{T}, d::Integer, dims=1:ndims(x)
+        x::Reactant.AnyTracedRArray{T}, d::Integer, dims=1:ndims(x)
     ) where {T}
         return $(plan_name){T,typeof(dims)}(dims, d)
     end
 
-    @eval function Base.:*(p::$(plan_name){T}, x::Reactant.TracedRArray{T}) where {T}
+    @eval function Base.:*(p::$(plan_name){T}, x::Reactant.AnyTracedRArray{T}) where {T}
         return AbstractFFTs.$(op)(x, p.length, p.dims)
     end
 
     @eval function LinearAlgebra.mul!(
-        y::Reactant.TracedRArray{<:Real}, p::$(plan_name){T}, x::Reactant.TracedRArray{T}
+        y::Reactant.AnyTracedRArray{<:Real},
+        p::$(plan_name){T},
+        x::Reactant.AnyTracedRArray{T},
     ) where {T<:Complex}
         return copyto!(y, AbstractFFTs.$(op)(x, p.length, fftdims(p)))
     end
@@ -214,12 +219,12 @@ end
 
 # Because we override the plan_bfft and plan_brfft functions we actually do not need to define
 # AbstractFFTs.bfft functions since they come for free via the plan mechanism.
-function AbstractFFTs.plan_bfft(x::Reactant.TracedRArray{T}, dims=1:ndims(x)) where {T}
+function AbstractFFTs.plan_bfft(x::Reactant.AnyTracedRArray{T}, dims=1:ndims(x)) where {T}
     pl = AbstractFFTs.plan_ifft(x, dims)
     return normbfft(real(T), size(x), dims) * pl # ScaledPlan
 end
 
-function AbstractFFTs.plan_bfft!(x::Reactant.TracedRArray{T}, dims=1:ndims(x)) where {T}
+function AbstractFFTs.plan_bfft!(x::Reactant.AnyTracedRArray{T}, dims=1:ndims(x)) where {T}
     pl = AbstractFFTs.plan_ifft!(x, dims)
     return normbfft(real(T), size(x), dims) * pl # ScaledPlan
 end
@@ -228,21 +233,11 @@ end
 function reallength end
 
 function AbstractFFTs.plan_brfft(
-    x::Reactant.TracedRArray{T}, length::Integer, dims=1:ndims(x)
+    x::Reactant.AnyTracedRArray{T}, length::Integer, dims=1:ndims(x)
 ) where {T}
     y = AbstractFFTs.plan_irfft(x, length, dims)
     sz = AbstractFFTs.brfft_output_size(size(x), length, dims)
     return normbfft(real(T), sz, dims) * y # ScaledPlan
 end
-
-# function LinearAlgebra.mul!(
-#     y::Reactant.TracedRArray,
-#     p::AbstractFFTs.ScaledPlan{<:AbstractReactantFFTPlan},
-#     x::Reactant.TracedRArray,
-# )
-#     mul!(y, p.p, x)
-#     y .*= p.scale
-#     return y
-# end
 
 end
