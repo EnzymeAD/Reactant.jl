@@ -56,25 +56,36 @@ function _scaled_plan_type(::Type{<:AbstractFFTs.ScaledPlan{T,P,N}}) where {T,P,
     return AbstractFFTs.ScaledPlan{T,PI,NI}
 end
 
-# BFFT plan will return a scaled plan so we need to unwrap it
-function _scaled_plan_inner(P::Type{<:AbstractFFTs.Plan})
-    return _scaled_plan_inner(reactant_fftplan_type(P))
-end
-
-function _scaled_plan_inner(T::Type{<:AbstractReactantFFTPlan})
-    return T
-end
-
+# Recursion to get inner plan type for ScaledPlan since the constructors make it so that you have have
+# ScaledPlan{ReactantFFTPlan, N}
 function _scaled_plan_inner(::Type{<:AbstractFFTs.ScaledPlan{T,P,N}}) where {T,P,N}
     return _scaled_plan_inner(P)
 end
 
-function _scaled_plan_norm(::Type{<:AbstractFFTs.Plan}, N::Type)
-    return N
+# reactant_fftplan_type may return another ScaledPlan so we need to recurse on that too
+function _scaled_plan_inner(P::Type{<:AbstractFFTs.Plan})
+    return _scaled_plan_inner(reactant_fftplan_type(P))
 end
 
+# Base case
+function _scaled_plan_inner(T::Type{<:AbstractReactantFFTPlan})
+    return T
+end
+
+# Recursion to get scaled type for ScaledPlan since the constructors make it so that you have have
+# ScaledPlan{ReactantFFTPlan, N}
 function _scaled_plan_norm(::Type{<:AbstractFFTs.ScaledPlan{T,P,N}}, M::Type) where {T,P,N}
     return _scaled_plan_norm(P, promote_type(N, M))
+end
+
+# reactant_fftplan_type may return another ScaledPlan so we need to recurse on that too
+function _scaled_plan_norm(P::Type{<:AbstractFFTs.Plan}, N::Type)
+    return _scaled_plan_norm(reactant_fftplan_type(P), N)
+end
+
+# Base case
+function _scaled_plan_norm(::Type{<:AbstractReactantFFTPlan}, N::Type)
+    return N
 end
 
 function make_reactant_fftplan(
