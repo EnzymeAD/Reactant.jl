@@ -5,7 +5,7 @@ using ProtoBuf.EnumX: @enumx
 export PowerComponentMetrics, PowerMetrics
 
 
-struct PowerComponentMetrics
+mutable struct PowerComponentMetrics
     component_name::String
     max_power::Float64
     avg_power::Float64
@@ -83,7 +83,7 @@ function PB._encoded_size(x::PowerComponentMetrics)
     return encoded_size
 end
 
-struct PowerMetrics
+mutable struct PowerMetrics
     power_component_metrics::Vector{PowerComponentMetrics}
 end
 PB.default_values(::Type{PowerMetrics}) = (;power_component_metrics = Vector{PowerComponentMetrics}())

@@ -370,8 +370,8 @@ function replicate_array_to_all_devices(array::Array, sharding, mesh, size_arr)
 
         exec = XLA.compile(
             XLA.client(array),
-            mod;
-            compile_options,
+            mod,
+            compile_options;
             num_outputs=1,                # unused
             num_parameters=1,             # unused
             is_sharded=true,

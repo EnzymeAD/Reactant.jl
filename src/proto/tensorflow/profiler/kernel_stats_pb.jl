@@ -5,7 +5,7 @@ using ProtoBuf.EnumX: @enumx
 export KernelReport, KernelStatsDb
 
 
-struct KernelReport
+mutable struct KernelReport
     name::String
     registers_per_thread::UInt32
     static_shmem_bytes::UInt32
@@ -113,7 +113,7 @@ function PB._encoded_size(x::KernelReport)
     return encoded_size
 end
 
-struct KernelStatsDb
+mutable struct KernelStatsDb
     reports::Vector{KernelReport}
 end
 PB.default_values(::Type{KernelStatsDb}) = (;reports = Vector{KernelReport}())

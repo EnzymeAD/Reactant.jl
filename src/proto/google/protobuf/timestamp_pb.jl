@@ -5,7 +5,7 @@ using ProtoBuf.EnumX: @enumx
 export Timestamp
 
 
-struct Timestamp
+mutable struct Timestamp
     seconds::Int64
     nanos::Int32
 end

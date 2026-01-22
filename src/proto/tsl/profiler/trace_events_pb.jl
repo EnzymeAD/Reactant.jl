@@ -5,7 +5,7 @@ using ProtoBuf.EnumX: @enumx
 export Resource, TraceEvent, Device, Trace
 
 
-struct Resource
+mutable struct Resource
     name::String
     resource_id::UInt32
     sort_index::UInt32
@@ -47,7 +47,7 @@ function PB._encoded_size(x::Resource)
     return encoded_size
 end
 
-struct TraceEvent
+mutable struct TraceEvent
     device_id::UInt32
     resource_id::UInt32
     name::String
@@ -107,7 +107,7 @@ function PB._encoded_size(x::TraceEvent)
     return encoded_size
 end
 
-struct Device
+mutable struct Device
     name::String
     device_id::UInt32
     resources::Dict{UInt32,Resource}
@@ -149,7 +149,7 @@ function PB._encoded_size(x::Device)
     return encoded_size
 end
 
-struct Trace
+mutable struct Trace
     devices::Dict{UInt32,Device}
     trace_events::Vector{TraceEvent}
 end

@@ -7,7 +7,7 @@ export var"ProfileOptions.AdvancedConfigValue", ProfileOptions
 export RemoteProfilerSessionManagerOptions
 
 
-struct var"ProfileOptions.TraceOptions"
+mutable struct var"ProfileOptions.TraceOptions"
     host_traceme_filter_mask::UInt64
 end
 PB.default_values(::Type{var"ProfileOptions.TraceOptions"}) = (;host_traceme_filter_mask = zero(UInt64))
@@ -39,7 +39,7 @@ end
 
 @enumx var"ProfileOptions.DeviceType" UNSPECIFIED=0 CPU=1 GPU=2 TPU=3 PLUGGABLE_DEVICE=4
 
-struct var"ProfileOptions.AdvancedConfigValue"
+mutable struct var"ProfileOptions.AdvancedConfigValue"
     value::Union{Nothing,OneOf{<:Union{String,Bool,Int64}}}
 end
 PB.oneof_field_types(::Type{var"ProfileOptions.AdvancedConfigValue"}) = (;
@@ -90,7 +90,7 @@ function PB._encoded_size(x::var"ProfileOptions.AdvancedConfigValue")
     return encoded_size
 end
 
-struct ProfileOptions
+mutable struct ProfileOptions
     version::UInt32
     device_type::var"ProfileOptions.DeviceType".T
     include_dataset_ops::Bool
@@ -198,7 +198,7 @@ function PB._encoded_size(x::ProfileOptions)
     return encoded_size
 end
 
-struct RemoteProfilerSessionManagerOptions
+mutable struct RemoteProfilerSessionManagerOptions
     profiler_options::Union{Nothing,ProfileOptions}
     service_addresses::Vector{String}
     session_creation_timestamp_ns::UInt64

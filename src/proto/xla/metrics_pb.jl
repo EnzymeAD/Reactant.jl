@@ -6,7 +6,7 @@ export JobInfo, TagMetric, var"CompilationLogEntry.CompilationStage", KeyValueMe
 export PassMetrics, CompilationLogEntry
 
 
-struct JobInfo
+mutable struct JobInfo
     name::String
     cell::String
     user::String
@@ -78,7 +78,7 @@ function PB._encoded_size(x::JobInfo)
     return encoded_size
 end
 
-struct TagMetric
+mutable struct TagMetric
     key::String
     value::String
 end
@@ -116,7 +116,7 @@ end
 
 @enumx var"CompilationLogEntry.CompilationStage" UNSPECIFIED=0 END_TO_END=1 HLO_PASSES=2 CODE_GENERATION=3 BACKEND_PASSES=4
 
-struct KeyValueMetric
+mutable struct KeyValueMetric
     key::String
     value::Int64
 end
@@ -152,7 +152,7 @@ function PB._encoded_size(x::KeyValueMetric)
     return encoded_size
 end
 
-struct PassMetrics
+mutable struct PassMetrics
     module_id::UInt64
     pass_name::String
     pass_duration::Union{Nothing,google.protobuf.Duration}
@@ -206,7 +206,7 @@ function PB._encoded_size(x::PassMetrics)
     return encoded_size
 end
 
-struct CompilationLogEntry
+mutable struct CompilationLogEntry
     timestamp::Union{Nothing,google.protobuf.Timestamp}
     stage::var"CompilationLogEntry.CompilationStage".T
     duration::Union{Nothing,google.protobuf.Duration}

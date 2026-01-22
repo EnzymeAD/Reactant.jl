@@ -7,7 +7,7 @@ export InputPipelineAnalysisRecommendation, InputOpDetails, StepSummary
 export GenericStepTimeBreakdown, InputPipelineAnalysisResult
 
 
-struct InputTimeBreakdown
+mutable struct InputTimeBreakdown
     demanded_file_read_us::Float64
     advanced_file_read_us::Float64
     preprocessing_us::Float64
@@ -61,7 +61,7 @@ function PB._encoded_size(x::InputTimeBreakdown)
     return encoded_size
 end
 
-struct PerGenericStepDetails
+mutable struct PerGenericStepDetails
     step_number::Int32
     step_name::String
     step_time_ms::Float64
@@ -164,7 +164,7 @@ function PB._encoded_size(x::PerGenericStepDetails)
     return encoded_size
 end
 
-struct BottleneckAnalysis
+mutable struct BottleneckAnalysis
     input_percent::Float64
     output_percent::Float64
     idle_percent::Float64
@@ -260,7 +260,7 @@ function PB._encoded_size(x::BottleneckAnalysis)
     return encoded_size
 end
 
-struct InputPipelineAnalysisRecommendation
+mutable struct InputPipelineAnalysisRecommendation
     details::Vector{String}
     bottleneck_analysis::Union{Nothing,google.protobuf.var"#Any"}
     summary_next_step::String
@@ -302,7 +302,7 @@ function PB._encoded_size(x::InputPipelineAnalysisRecommendation)
     return encoded_size
 end
 
-struct InputOpDetails
+mutable struct InputOpDetails
     op_name::String
     count::UInt64
     time_in_ms::Float64
@@ -368,7 +368,7 @@ function PB._encoded_size(x::InputOpDetails)
     return encoded_size
 end
 
-struct StepSummary
+mutable struct StepSummary
     average::Float64
     standard_deviation::Float64
     minimum::Float64
@@ -416,7 +416,7 @@ function PB._encoded_size(x::StepSummary)
     return encoded_size
 end
 
-struct GenericStepTimeBreakdown
+mutable struct GenericStepTimeBreakdown
     unknown_time_ms_summary::Union{Nothing,StepSummary}
     host_wait_input_ms_summary::Union{Nothing,StepSummary}
     host_to_device_ms_summary::Union{Nothing,StepSummary}
@@ -507,7 +507,7 @@ function PB._encoded_size(x::GenericStepTimeBreakdown)
     return encoded_size
 end
 
-struct InputPipelineAnalysisResult
+mutable struct InputPipelineAnalysisResult
     tag::Bool
     hardware_type::String
     step_time_summary::Union{Nothing,StepSummary}

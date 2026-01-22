@@ -6,7 +6,7 @@ export BoolValue, Int64Value, FloatValue, Int32Value, DoubleValue, UInt64Value, 
 export BytesValue, StringValue
 
 
-struct BoolValue
+mutable struct BoolValue
     value::Bool
 end
 PB.default_values(::Type{BoolValue}) = (;value = false)
@@ -36,7 +36,7 @@ function PB._encoded_size(x::BoolValue)
     return encoded_size
 end
 
-struct Int64Value
+mutable struct Int64Value
     value::Int64
 end
 PB.default_values(::Type{Int64Value}) = (;value = zero(Int64))
@@ -66,7 +66,7 @@ function PB._encoded_size(x::Int64Value)
     return encoded_size
 end
 
-struct FloatValue
+mutable struct FloatValue
     value::Float32
 end
 PB.default_values(::Type{FloatValue}) = (;value = zero(Float32))
@@ -96,7 +96,7 @@ function PB._encoded_size(x::FloatValue)
     return encoded_size
 end
 
-struct Int32Value
+mutable struct Int32Value
     value::Int32
 end
 PB.default_values(::Type{Int32Value}) = (;value = zero(Int32))
@@ -126,7 +126,7 @@ function PB._encoded_size(x::Int32Value)
     return encoded_size
 end
 
-struct DoubleValue
+mutable struct DoubleValue
     value::Float64
 end
 PB.default_values(::Type{DoubleValue}) = (;value = zero(Float64))
@@ -156,7 +156,7 @@ function PB._encoded_size(x::DoubleValue)
     return encoded_size
 end
 
-struct UInt64Value
+mutable struct UInt64Value
     value::UInt64
 end
 PB.default_values(::Type{UInt64Value}) = (;value = zero(UInt64))
@@ -186,7 +186,7 @@ function PB._encoded_size(x::UInt64Value)
     return encoded_size
 end
 
-struct UInt32Value
+mutable struct UInt32Value
     value::UInt32
 end
 PB.default_values(::Type{UInt32Value}) = (;value = zero(UInt32))
@@ -216,7 +216,7 @@ function PB._encoded_size(x::UInt32Value)
     return encoded_size
 end
 
-struct BytesValue
+mutable struct BytesValue
     value::Vector{UInt8}
 end
 PB.default_values(::Type{BytesValue}) = (;value = UInt8[])
@@ -246,7 +246,7 @@ function PB._encoded_size(x::BytesValue)
     return encoded_size
 end
 
-struct StringValue
+mutable struct StringValue
     value::String
 end
 PB.default_values(::Type{StringValue}) = (;value = "")

@@ -73,8 +73,8 @@ end
 
 function XLA.compile(
     client::Client,
-    mod::MLIR.IR.Module;
-    compile_options::Reactant.Proto.xla.CompileOptionsProto,
+    mod::MLIR.IR.Module,
+    compile_options::Reactant.Proto.xla.CompileOptionsProto;
     num_parameters::Int64,
     num_outputs::Int64,
     is_sharded::Bool,
@@ -89,6 +89,42 @@ function XLA.compile(
                 mod.module_::MLIR.API.MlirModule,
                 compile_options_bytes::Ptr{UInt8},
                 length(compile_options_bytes)::Csize_t,
+            )::Ptr{Cvoid}
+        end
+    end
+    return LoadedExecutable(
+        exec, num_outputs, num_parameters, is_sharded, num_replicas, num_partitions
+    )
+end
+
+function XLA.compile(
+    client::Client,
+    mod::MLIR.IR.Module,
+    compile_options::Reactant.XLA.CompileOptionsWithoutProto;
+    num_parameters::Int64,
+    num_outputs::Int64,
+    is_sharded::Bool,
+    num_replicas::Int64,
+    num_partitions::Int64,
+)
+    GC.@preserve client mod begin
+        exec = MLIR.IR.try_compile_dump_mlir(mod) do
+            @ccall MLIR.API.mlir_c.ifrt_compile(
+                client.client::Ptr{Cvoid},
+                mod.module_::MLIR.API.MlirModule,
+                compile_options.device_id::Clong,
+                compile_options.global_device_ids::Ptr{Clong},
+                length(compile_options.global_device_ids)::Clong,
+                XLA.CUDA_DATA_DIR[]::Cstring,
+                compile_options.use_shardy_partitioner::Bool,
+                num_replicas::Int64,
+                num_partitions::Int64,
+                compile_options.use_spmd_partitioning::Bool,
+                Reactant.PersistentCompileCache.kernel_cache_enabled()::Bool,
+                Reactant.PersistentCompileCache.get_kernel_cache_path()::Cstring,
+                Reactant.PersistentCompileCache.autotune_cache_enabled()::Bool,
+                Reactant.PersistentCompileCache.get_autotune_cache_directory()::Cstring,
+                Reactant.Distributed.local_rank()::Cint,
             )::Ptr{Cvoid}
         end
     end

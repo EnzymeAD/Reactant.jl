@@ -5,7 +5,7 @@ using ProtoBuf.EnumX: @enumx
 export Line, Label, ValueType, Mapping, Function, Location, Sample, Profile
 
 
-struct Line
+mutable struct Line
     function_id::UInt64
     line::Int64
 end
@@ -41,7 +41,7 @@ function PB._encoded_size(x::Line)
     return encoded_size
 end
 
-struct Label
+mutable struct Label
     key::Int64
     str::Int64
     num::Int64
@@ -83,7 +83,7 @@ function PB._encoded_size(x::Label)
     return encoded_size
 end
 
-struct ValueType
+mutable struct ValueType
     var"#type"::Int64
     unit::Int64
 end
@@ -119,7 +119,7 @@ function PB._encoded_size(x::ValueType)
     return encoded_size
 end
 
-struct Mapping
+mutable struct Mapping
     id::UInt64
     memory_start::UInt64
     memory_limit::UInt64
@@ -203,7 +203,7 @@ function PB._encoded_size(x::Mapping)
     return encoded_size
 end
 
-struct Function
+mutable struct Function
     id::UInt64
     name::Int64
     system_name::Int64
@@ -257,7 +257,7 @@ function PB._encoded_size(x::Function)
     return encoded_size
 end
 
-struct Location
+mutable struct Location
     id::UInt64
     mapping_id::UInt64
     address::UInt64
@@ -305,7 +305,7 @@ function PB._encoded_size(x::Location)
     return encoded_size
 end
 
-struct Sample
+mutable struct Sample
     location_id::Vector{UInt64}
     value::Vector{Int64}
     label::Vector{Label}
@@ -347,7 +347,7 @@ function PB._encoded_size(x::Sample)
     return encoded_size
 end
 
-struct Profile
+mutable struct Profile
     sample_type::Vector{ValueType}
     sample::Vector{Sample}
     mapping::Vector{Mapping}

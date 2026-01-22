@@ -5,7 +5,7 @@ using ProtoBuf.EnumX: @enumx
 export HloStatsRecord, HloStatsDatabase
 
 
-struct HloStatsRecord
+mutable struct HloStatsRecord
     rank::UInt64
     program_id::UInt64
     hlo_category::String
@@ -240,7 +240,7 @@ function PB._encoded_size(x::HloStatsRecord)
     return encoded_size
 end
 
-struct HloStatsDatabase
+mutable struct HloStatsDatabase
     hlo_stats_record::Vector{HloStatsRecord}
 end
 PB.default_values(::Type{HloStatsDatabase}) = (;hlo_stats_record = Vector{HloStatsRecord}())

@@ -7,7 +7,7 @@ export HardwareType, GPUComputeCapability, DeviceCapabilities
 
 @enumx HardwareType UNKNOWN_HARDWARE=0 CPU_ONLY=1 GPU=2 TPU=3
 
-struct GPUComputeCapability
+mutable struct GPUComputeCapability
     major::UInt32
     minor::UInt32
 end
@@ -43,7 +43,7 @@ function PB._encoded_size(x::GPUComputeCapability)
     return encoded_size
 end
 
-struct DeviceCapabilities
+mutable struct DeviceCapabilities
     clock_rate_in_ghz::Float64
     num_cores::UInt32
     memory_size_in_bytes::UInt64
