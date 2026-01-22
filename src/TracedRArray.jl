@@ -356,12 +356,25 @@ end
 function overloaded_mapreduce(
     @nospecialize(f),
     @nospecialize(op),
-    @nospecialize(A::AnyTracedRArray{T,N});
+    @nospecialize(A::AbstractArray{<:Reactant.ReactantPrimitive});
+    kwargs...,
+)
+    return overloaded_mapreduce(f, op, TracedUtils.promote_to(TracedRArray, A); kwargs...)
+end
+
+function overloaded_mapreduce(
+    @nospecialize(f), @nospecialize(op), @nospecialize(A::AnyTracedRArray); kwargs...
+)
+    return overloaded_mapreduce(f, op, materialize_traced_array(A); kwargs...)
+end
+
+function overloaded_mapreduce(
+    @nospecialize(f),
+    @nospecialize(op),
+    @nospecialize(A::TracedRArray{T,N});
     dims=:,
     init=Base._InitialValue(),
 ) where {T,N}
-    A = materialize_traced_array(A)
-
     original_dims = dims
     dims isa Int && (dims = Int64[dims])
     dims isa Colon && (dims = collect(Int64, 1:N))
