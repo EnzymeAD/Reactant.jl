@@ -138,9 +138,7 @@ for op in (:rfft, :fft, :ifft)
     end
     @eval $(plan_name){T}(dims) where {T} = $(plan_name){T,typeof(dims)}(dims)
 
-    @eval function AbstractFFTs.$(plan_f)(
-        x::AnyTracedRArray{T}, dims=1:ndims(x)
-    ) where {T}
+    @eval function AbstractFFTs.$(plan_f)(x::AnyTracedRArray{T}, dims=1:ndims(x)) where {T}
         return $(plan_name){T,typeof(dims)}(dims)
     end
 
@@ -168,9 +166,7 @@ for op in (:rfft, :fft, :ifft)
         ) where {T}
             return $(plan_name!){T,typeof(dims)}(dims)
         end
-        @eval function Base.:*(
-            p::$(plan_name!){T}, x::AnyTracedRArray{T}
-        ) where {T}
+        @eval function Base.:*(p::$(plan_name!){T}, x::AnyTracedRArray{T}) where {T}
             return copyto!(x, AbstractFFTs.$(op)(x, p.dims))
         end
 
@@ -231,9 +227,7 @@ for op in (:irfft,)
     end
 
     @eval function LinearAlgebra.mul!(
-        y::AnyTracedRArray{<:Real},
-        p::$(plan_name){T},
-        x::AnyTracedRArray{T},
+        y::AnyTracedRArray{<:Real}, p::$(plan_name){T}, x::AnyTracedRArray{T}
     ) where {T<:Complex}
         return copyto!(y, AbstractFFTs.$(op)(x, p.length, fftdims(p)))
     end
