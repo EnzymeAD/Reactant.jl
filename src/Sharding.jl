@@ -101,7 +101,7 @@ struct Mesh{D,ID<:AbstractVector{Int}}
 end
 
 function sdy_mesh_to_reactant_mesh(mesh_attr::MLIR.IR.Attribute, global_device_ids)
-    @assert MLIR.API.sdyAttributeIsAMeshAttr(mesh_attr.attribute)
+    @assert MLIR.API.sdyAttributeIsAMeshAttr(mesh_attr)
 
     ndevice_ids = MLIR.API.sdyMeshAttrGetDeviceIdsSize(mesh_attr)
     logical_device_ids = Vector{Int64}(undef, ndevice_ids)
@@ -362,7 +362,7 @@ function sdy_tensor_sharding_to_named_sharding(mesh::Mesh, tensor_sharding_attr)
             subaxisinfo = MLIR.IR.Attribute(
                 MLIR.API.sdyAxisRefAttrGetSubAxisInfo(axis_elem)
             )
-            if subaxisinfo.attribute.ptr == C_NULL
+            if subaxisinfo.ref.ptr == C_NULL
                 subaxes[i][j] = nothing
             else
                 pre_size = MLIR.API.sdySubAxisInfoAttrGetPreSize(subaxisinfo)
@@ -630,7 +630,7 @@ function sharding_to_array_slices(
             )
 
             mlir_attr = MLIR.API.mlirDictionaryAttrGetElementByName(
-                MLIR.IR.attr(func, "res_attrs")[0], "sdy.sharding"
+                MLIR.IR.getattr(func, "res_attrs")[0], "sdy.sharding"
             )
             @assert mlir_attr.ptr != C_NULL
             sharding = sdy_tensor_sharding_to_named_sharding(
@@ -863,13 +863,12 @@ function Base.convert(::Type{HloSharding}, sharding::NamedSharding)
 end
 
 function hlo_sharding_from_sdy_tensor_sharding_attr(attr, mesh_attr)
-    @assert MLIR.API.sdyAttributeIsATensorShardingAttr(attr.attribute)
-    @assert MLIR.API.sdyAttributeIsAMeshAttr(mesh_attr.attribute)
+    @assert MLIR.API.sdyAttributeIsATensorShardingAttr(attr)
+    @assert MLIR.API.sdyAttributeIsAMeshAttr(mesh_attr)
     GC.@preserve attr begin
         return XLA.HloSharding(
             @ccall MLIR.API.mlir_c.hloShardingFromTensorShardingAttr(
-                attr.attribute::MLIR.API.MlirAttribute,
-                mesh_attr.attribute::MLIR.API.MlirAttribute,
+                attr::MLIR.API.MlirAttribute, mesh_attr::MLIR.API.MlirAttribute
             )::Ptr{Cvoid}
         )
     end
@@ -1043,8 +1042,8 @@ function get_tensor_sharding_attribute(
                 @ccall MLIR.API.mlir_c.hloShardingToTensorShardingAttr(
                     ctx::MLIR.API.MlirContext,
                     sharding.hlo_sharding.ptr::Ptr{Cvoid},
-                    string_mesh_name.attribute::MLIR.API.MlirAttribute,
-                    mesh_attr.attribute::MLIR.API.MlirAttribute,
+                    string_mesh_name::MLIR.API.MlirAttribute,
+                    mesh_attr::MLIR.API.MlirAttribute,
                     Int64(length(sharding.is_closed))::Int64,
                     Bool[sharding.is_closed...]::Ptr{Bool},
                     Int64[sharding.priority...]::Ptr{Int64},
@@ -1161,7 +1160,7 @@ function sdy_sharding_to_reactant_sharding(attr, global_device_ids, mod)
         false,
     )
     return sdy_tensor_sharding_to_named_sharding(
-        sdy_mesh_to_reactant_mesh(MLIR.IR.attr(mesh_op, "mesh"), global_device_ids),
+        sdy_mesh_to_reactant_mesh(MLIR.IR.getattr(mesh_op, "mesh"), global_device_ids),
         MLIR.IR.Attribute(mlir_attr),
     )
 end

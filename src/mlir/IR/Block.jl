@@ -1,12 +1,12 @@
 mutable struct Block
-    block::API.MlirBlock
+    ref::API.MlirBlock
     @atomic owned::Bool
 
     function Block(block::API.MlirBlock, owned::Bool=true)
         @assert !mlirIsNull(block) "cannot create Block with null MlirBlock"
         finalizer(new(block, owned)) do block
             if block.owned
-                API.mlirBlockDestroy(block.block)
+                API.mlirBlockDestroy(block.ref)
             end
         end
     end
@@ -30,8 +30,22 @@ end
 Checks whether two blocks handles point to the same block. This does not perform deep comparison.
 """
 Base.:(==)(a::Block, b::Block) = API.mlirBlockEqual(a, b)
+
 Base.cconvert(::Core.Type{API.MlirBlock}, block::Block) = block
-Base.unsafe_convert(::Core.Type{API.MlirBlock}, block::Block) = block.block
+Base.unsafe_convert(::Core.Type{API.MlirBlock}, block::Block) = block.ref
+
+function lose_ownership!(block::Block)
+    @assert block.owned
+    # API.mlirBlockDetach(block)
+    @atomic block.owned = false
+    return block
+end
+
+function Base.show(io::IO, block::Block)
+    c_print_callback = @cfunction(print_callback, Cvoid, (API.MlirStringRef, Any))
+    ref = Ref(io)
+    return API.mlirBlockPrint(block, c_print_callback, ref)
+end
 
 """
     parent_op(block)
@@ -82,8 +96,9 @@ end
 
 Appends an argument of the specified type to the block. Returns the newly added argument.
 """
-push_argument!(block::Block, type; location::Location=Location()) =
-    Value(API.mlirBlockAddArgument(block, type, location))
+function push_argument!(block::Block, type; location::Location=Location())
+    return Value(API.mlirBlockAddArgument(block, type, location))
+end
 
 """
     erase_argument!(block, i)
@@ -167,19 +182,6 @@ function insert_before!(block::Block, reference::Operation, op::Operation)
     return op
 end
 
-function lose_ownership!(block::Block)
-    @assert block.owned
-    # API.mlirBlockDetach(block)
-    @atomic block.owned = false
-    return block
-end
-
-function Base.show(io::IO, block::Block)
-    c_print_callback = @cfunction(print_callback, Cvoid, (API.MlirStringRef, Any))
-    ref = Ref(io)
-    return API.mlirBlockPrint(block, c_print_callback, ref)
-end
-
 # to simplify the API, we maintain a stack of contexts in task local storage
 # and pass them implicitly to MLIR API's that require them.
 function activate!(blk::Block)
@@ -191,24 +193,24 @@ function activate!(blk::Block)
 end
 
 function deactivate!(blk::Block)
-    block() == blk || error("Deactivating wrong block")
+    current_block() == blk || error("Deactivating wrong block")
     return Base.pop!(task_local_storage(:mlir_block))
 end
 
-function _has_block()
+function has_current_block()
     return haskey(task_local_storage(), :mlir_block) &&
            !Base.isempty(task_local_storage(:mlir_block))
 end
 
-function block(; throw_error::Core.Bool=true)
-    if !_has_block()
+function current_block(; throw_error::Core.Bool=true)
+    if !has_current_block()
         throw_error && error("No MLIR block is active")
         return nothing
     end
     return last(task_local_storage(:mlir_block))
 end
 
-function block!(f, blk::Block)
+function with_block(f, blk::Block)
     activate!(blk)
     try
         f()

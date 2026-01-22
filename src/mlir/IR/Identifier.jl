@@ -1,5 +1,5 @@
 struct Identifier
-    identifier::API.MlirIdentifier
+    ref::API.MlirIdentifier
 end
 
 """
@@ -7,10 +7,12 @@ end
 
 Gets an identifier with the given string value.
 """
-Identifier(str::String; context::Context=context()) =
-    Identifier(API.mlirIdentifierGet(context, str))
+function Identifier(str::String; context::Context=current_context())
+    return Identifier(API.mlirIdentifierGet(context, str))
+end
 
-Base.convert(::Core.Type{API.MlirIdentifier}, id::Identifier) = id.identifier
+Base.cconvert(::Core.Type{API.MlirIdentifier}, id::Identifier) = id
+Base.unsafe_convert(::Core.Type{API.MlirIdentifier}, id::Identifier) = id.ref
 
 """
     ==(ident, other)

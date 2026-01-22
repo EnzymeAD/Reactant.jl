@@ -6,10 +6,11 @@ LLVM convention for using boolean values to designate success or failure of an o
 Instances of [`LogicalResult`](@ref) must only be inspected using the associated functions.
 """
 struct LogicalResult
-    result::API.MlirLogicalResult
+    ref::API.MlirLogicalResult
 end
 
-Base.convert(::Core.Type{API.MlirLogicalResult}, result::LogicalResult) = result.result
+Base.cconvert(::Core.Type{API.MlirLogicalResult}, result::LogicalResult) = result
+Base.unsafe_convert(::Core.Type{API.MlirLogicalResult}, result::LogicalResult) = result.ref
 
 """
     success()
@@ -30,11 +31,11 @@ failure() = LogicalResult(API.MlirLogicalResult(0))
 
 Checks if the given logical result represents a success.
 """
-issuccess(result::LogicalResult) = result.result.value != 0
+issuccess(result::LogicalResult) = result.ref.value != 0
 
 """
     isfailure(res)
 
 Checks if the given logical result represents a failure.
 """
-isfailure(result::LogicalResult) = result.result.value == 0
+isfailure(result::LogicalResult) = result.ref.value == 0
