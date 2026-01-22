@@ -81,7 +81,7 @@ end
 	else
 	    StmtInfo(true, false)
 	end
-        return abstract_call(interp, arginfo2::ArgInfo, si, sv2, max_methods)
+        return Core.Compiler.abstract_call(interp, arginfo2::ArgInfo, si, sv2, max_methods)
     end
 
     if !should_rewrite_call(typeof(f))
