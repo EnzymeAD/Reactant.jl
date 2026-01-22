@@ -497,3 +497,20 @@ copyto_with_reshaped_view(out, g, I) = copyto!(out, reshape(@view(g[I]), :))
     @jit copyto_with_reshaped_view(outr, gr, Ir)
     @test all(isone, Array(outr))
 end
+
+function comparison_of_views(a, b)
+    view(parent(a), 1:1, 1:1, 1:1) .= view(parent(b), 1:1, 1:1, 1:1)
+    return a
+end
+
+@testset "comparison of views" begin
+    a = zeros(208, 142, 1)
+    b = ones(208, 112, 1)
+
+    a_r = Reactant.to_rarray(a)
+    b_r = Reactant.to_rarray(b)
+
+    c_r = comparison_of_views(a_r, b_r)
+    c = comparison_of_views(a, b)
+    @test c_r ≈ c
+end
