@@ -46,9 +46,37 @@ end
 reactant_fftplan_type(T::Type{<:AbstractReactantFFTPlan}) = T
 make_reactant_fftplan(p::AbstractReactantFFTPlan) = p
 
-function reactant_fftplan_type(::Type{<:AbstractFFTs.ScaledPlan{T,P,N}}) where {T,P,N}
-    return AbstractFFTs.ScaledPlan{T,reactant_fftplan_type(P),N}
+function reactant_fftplan_type(T::Type{<:AbstractFFTs.ScaledPlan})
+    return _scaled_plan_type(T)
 end
+
+function _scaled_plan_type(::Type{<:AbstractFFTs.ScaledPlan{T,P,N}}) where {T,P,N}
+    PI = _scaled_plan_inner(P)
+    NI = _scaled_plan_norm(P, N)
+    return AbstractFFTs.ScaledPlan{T,PI,NI}
+end
+
+# BFFT plan will return a scaled plan so we need to unwrap it
+function _scaled_plan_inner(P::Type{<:AbstractFFTs.Plan})
+    return _scaled_plan_inner(reactant_fftplan_type(P))
+end
+
+function _scaled_plan_inner(T::Type{<:AbstractReactantFFTPlan})
+    return T
+end
+
+function _scaled_plan_inner(::Type{<:AbstractFFTs.ScaledPlan{T,P,N}}) where {T,P,N}
+    return _scaled_plan_inner(P)
+end
+
+function _scaled_plan_norm(::Type{<:AbstractFFTs.Plan}, N::Type)
+    return N
+end
+
+function _scaled_plan_norm(::Type{<:AbstractFFTs.ScaledPlan{T,P,N}}, M::Type) where {T,P,N}
+    return _scaled_plan_norm(P, promote_type(N, M))
+end
+
 function make_reactant_fftplan(
     p::AbstractFFTs.ScaledPlan{T,P,N}
 ) where {T,P<:AbstractFFTs.Plan,N}
@@ -221,12 +249,12 @@ end
 # AbstractFFTs.bfft functions since they come for free via the plan mechanism.
 function AbstractFFTs.plan_bfft(x::Reactant.AnyTracedRArray{T}, dims=1:ndims(x)) where {T}
     pl = AbstractFFTs.plan_ifft(x, dims)
-    return normbfft(real(T), size(x), dims) * pl # ScaledPlan
+    return normbfft(real(T), size(x), dims) * pl
 end
 
 function AbstractFFTs.plan_bfft!(x::Reactant.AnyTracedRArray{T}, dims=1:ndims(x)) where {T}
     pl = AbstractFFTs.plan_ifft!(x, dims)
-    return normbfft(real(T), size(x), dims) * pl # ScaledPlan
+    return normbfft(real(T), size(x), dims) * pl
 end
 
 # This must be implemented for bfft
@@ -237,7 +265,7 @@ function AbstractFFTs.plan_brfft(
 ) where {T}
     y = AbstractFFTs.plan_irfft(x, length, dims)
     sz = AbstractFFTs.brfft_output_size(size(x), length, dims)
-    return normbfft(real(T), sz, dims) * y # ScaledPlan
+    return normbfft(real(T), sz, dims) * y
 end
 
 end
