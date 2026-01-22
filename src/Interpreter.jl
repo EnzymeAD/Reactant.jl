@@ -70,7 +70,7 @@ end
     # the original call
     if f === call_with_reactant
         ccall(:jl_, Cvoid,(Any,), (fargs, argtypes))
-	arginfo2 = if length(argtypes) >= 2 && widenconst(argtypes[2]) <: EnsureReturnType
+	arginfo2 = if length(argtypes) >= 2 && Core.Compiler.widenconst(argtypes[2]) <: EnsureReturnType
            ArgInfo(fargs isa Nothing ? nothing : fargs[3:end], argtypes[3:end])
 	else
            ArgInfo(fargs isa Nothing ? nothing : fargs[2:end], argtypes[2:end])
