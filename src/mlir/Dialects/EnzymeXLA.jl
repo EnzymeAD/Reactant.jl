@@ -10,7 +10,7 @@ import ...IR:
     create_operation,
     context,
     IndexType
-import ..Dialects: namedattribute, operandsegmentsizes
+import ..Dialects: operandsegmentsizes
 import ...API
 
 function scope(
@@ -39,7 +39,7 @@ function store_var(variables::Vector{Value}; type, location=Location())
     operands = Value[variables...,]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("type", type),]
+    attributes = NamedAttribute[NamedAttribute("type", type),]
 
     return create_operation(
         "enzymexla.store_var",
@@ -349,9 +349,9 @@ function extend(
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[
-        namedattribute("lhs", lhs),
-        namedattribute("rhs", rhs),
-        namedattribute("dimension", dimension),
+        NamedAttribute("lhs", lhs),
+        NamedAttribute("rhs", rhs),
+        NamedAttribute("dimension", dimension),
     ]
     !isnothing(result) && push!(op_ty_results, result)
 
@@ -416,7 +416,7 @@ function gpu_kernel_address(; result::IR.Type, fn, location=Location())
     operands = Value[]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("fn", fn),]
+    attributes = NamedAttribute[NamedAttribute("fn", fn),]
 
     return create_operation(
         "enzymexla.gpu_kernel_address",
@@ -442,7 +442,7 @@ function gpu_occupancy(
     operands = Value[blockSize, dynamicSMemSize, flags]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("fn", fn),]
+    attributes = NamedAttribute[NamedAttribute("fn", fn),]
 
     return create_operation(
         "enzymexla.gpu_occupancy",
@@ -519,7 +519,7 @@ function ml_gelu(
     operands = Value[input,]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("gelu_approximation", gelu_approximation),]
+    attributes = NamedAttribute[NamedAttribute("gelu_approximation", gelu_approximation),]
     !isnothing(result) && push!(op_ty_results, result)
 
     return create_operation(
@@ -552,8 +552,8 @@ function lapack_gemqrt(
     operands = Value[V, T, C]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("side", side),]
-    !isnothing(transpose) && push!(attributes, namedattribute("transpose", transpose))
+    attributes = NamedAttribute[NamedAttribute("side", side),]
+    !isnothing(transpose) && push!(attributes, NamedAttribute("transpose", transpose))
 
     return create_operation(
         "enzymexla.lapack.gemqrt",
@@ -622,7 +622,7 @@ function lapack_geqrt(
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
-    !isnothing(blocksize) && push!(attributes, namedattribute("blocksize", blocksize))
+    !isnothing(blocksize) && push!(attributes, NamedAttribute("blocksize", blocksize))
 
     return create_operation(
         "enzymexla.lapack.geqrt",
@@ -651,8 +651,8 @@ function lapack_gesdd(
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
-    !isnothing(full) && push!(attributes, namedattribute("full", full))
-    !isnothing(compute_uv) && push!(attributes, namedattribute("compute_uv", compute_uv))
+    !isnothing(full) && push!(attributes, NamedAttribute("full", full))
+    !isnothing(compute_uv) && push!(attributes, NamedAttribute("compute_uv", compute_uv))
 
     return create_operation(
         "enzymexla.lapack.gesdd",
@@ -681,8 +681,8 @@ function lapack_gesvd(
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
-    !isnothing(full) && push!(attributes, namedattribute("full", full))
-    !isnothing(compute_uv) && push!(attributes, namedattribute("compute_uv", compute_uv))
+    !isnothing(full) && push!(attributes, NamedAttribute("full", full))
+    !isnothing(compute_uv) && push!(attributes, NamedAttribute("compute_uv", compute_uv))
 
     return create_operation(
         "enzymexla.lapack.gesvd",
@@ -711,8 +711,8 @@ function lapack_gesvj(
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
-    !isnothing(full) && push!(attributes, namedattribute("full", full))
-    !isnothing(compute_uv) && push!(attributes, namedattribute("compute_uv", compute_uv))
+    !isnothing(full) && push!(attributes, NamedAttribute("full", full))
+    !isnothing(compute_uv) && push!(attributes, NamedAttribute("compute_uv", compute_uv))
 
     return create_operation(
         "enzymexla.lapack.gesvj",
@@ -851,19 +851,19 @@ function jit_call(
     operands = Value[inputs...,]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("fn", fn),]
+    attributes = NamedAttribute[NamedAttribute("fn", fn),]
     !isnothing(backend_config) &&
-        push!(attributes, namedattribute("backend_config", backend_config))
+        push!(attributes, NamedAttribute("backend_config", backend_config))
     !isnothing(operand_layouts) &&
-        push!(attributes, namedattribute("operand_layouts", operand_layouts))
+        push!(attributes, NamedAttribute("operand_layouts", operand_layouts))
     !isnothing(result_layouts) &&
-        push!(attributes, namedattribute("result_layouts", result_layouts))
-    !isnothing(arg_attrs) && push!(attributes, namedattribute("arg_attrs", arg_attrs))
-    !isnothing(res_attrs) && push!(attributes, namedattribute("res_attrs", res_attrs))
+        push!(attributes, NamedAttribute("result_layouts", result_layouts))
+    !isnothing(arg_attrs) && push!(attributes, NamedAttribute("arg_attrs", arg_attrs))
+    !isnothing(res_attrs) && push!(attributes, NamedAttribute("res_attrs", res_attrs))
     !isnothing(output_operand_aliases) &&
-        push!(attributes, namedattribute("output_operand_aliases", output_operand_aliases))
+        push!(attributes, NamedAttribute("output_operand_aliases", output_operand_aliases))
     !isnothing(xla_side_effect_free) &&
-        push!(attributes, namedattribute("xla_side_effect_free", xla_side_effect_free))
+        push!(attributes, NamedAttribute("xla_side_effect_free", xla_side_effect_free))
 
     return create_operation(
         "enzymexla.jit_call",
@@ -931,7 +931,7 @@ function kernel_call(
     operands = Value[gridx, gridy, gridz, blockx, blocky, blockz, shmem, inputs...]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("fn", fn),]
+    attributes = NamedAttribute[NamedAttribute("fn", fn),]
     !isnothing(clusterx) && push!(operands, clusterx)
     !isnothing(clustery) && push!(operands, clustery)
     !isnothing(clusterz) && push!(operands, clusterz)
@@ -952,17 +952,17 @@ function kernel_call(
         ]),
     )
     !isnothing(backend_config) &&
-        push!(attributes, namedattribute("backend_config", backend_config))
+        push!(attributes, NamedAttribute("backend_config", backend_config))
     !isnothing(operand_layouts) &&
-        push!(attributes, namedattribute("operand_layouts", operand_layouts))
+        push!(attributes, NamedAttribute("operand_layouts", operand_layouts))
     !isnothing(result_layouts) &&
-        push!(attributes, namedattribute("result_layouts", result_layouts))
-    !isnothing(arg_attrs) && push!(attributes, namedattribute("arg_attrs", arg_attrs))
-    !isnothing(res_attrs) && push!(attributes, namedattribute("res_attrs", res_attrs))
+        push!(attributes, NamedAttribute("result_layouts", result_layouts))
+    !isnothing(arg_attrs) && push!(attributes, NamedAttribute("arg_attrs", arg_attrs))
+    !isnothing(res_attrs) && push!(attributes, NamedAttribute("res_attrs", res_attrs))
     !isnothing(output_operand_aliases) &&
-        push!(attributes, namedattribute("output_operand_aliases", output_operand_aliases))
+        push!(attributes, NamedAttribute("output_operand_aliases", output_operand_aliases))
     !isnothing(xla_side_effect_free) &&
-        push!(attributes, namedattribute("xla_side_effect_free", xla_side_effect_free))
+        push!(attributes, NamedAttribute("xla_side_effect_free", xla_side_effect_free))
 
     return create_operation(
         "enzymexla.kernel_call",
@@ -1016,7 +1016,7 @@ function mpi_allreduce(
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[
-        namedattribute("datatype", datatype), namedattribute("op", op)
+        NamedAttribute("datatype", datatype), NamedAttribute("op", op)
     ]
 
     return create_operation(
@@ -1102,7 +1102,7 @@ function mpi_irecv(
     operands = Value[inbuf, count, source, tag]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("datatype", datatype),]
+    attributes = NamedAttribute[NamedAttribute("datatype", datatype),]
 
     return create_operation(
         "enzymexla.mpi.irecv",
@@ -1129,7 +1129,7 @@ function mpi_isend(
     operands = Value[buf, count, dest, tag]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("datatype", datatype),]
+    attributes = NamedAttribute[NamedAttribute("datatype", datatype),]
 
     return create_operation(
         "enzymexla.mpi.isend",
@@ -1156,7 +1156,7 @@ function mpi_recv(
     operands = Value[inbuf, count, source, tag]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("datatype", datatype),]
+    attributes = NamedAttribute[NamedAttribute("datatype", datatype),]
 
     return create_operation(
         "enzymexla.mpi.recv",
@@ -1177,7 +1177,7 @@ function mpi_send(
     operands = Value[buf, count, dest, tag]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("datatype", datatype),]
+    attributes = NamedAttribute[NamedAttribute("datatype", datatype),]
 
     return create_operation(
         "enzymexla.mpi.send",
@@ -1335,8 +1335,8 @@ function lapack_ormqr(
     operands = Value[A, tau, C]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("side", side),]
-    !isnothing(transpose) && push!(attributes, namedattribute("transpose", transpose))
+    attributes = NamedAttribute[NamedAttribute("side", side),]
+    !isnothing(transpose) && push!(attributes, NamedAttribute("transpose", transpose))
 
     return create_operation(
         "enzymexla.lapack.ormqr",
@@ -1410,7 +1410,7 @@ function linalg_qr(
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
-    !isnothing(algorithm) && push!(attributes, namedattribute("algorithm", algorithm))
+    !isnothing(algorithm) && push!(attributes, NamedAttribute("algorithm", algorithm))
 
     return create_operation(
         "enzymexla.linalg.qr",
@@ -1456,7 +1456,7 @@ function rotate(
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[
-        namedattribute("amount", amount), namedattribute("dimension", dimension)
+        NamedAttribute("amount", amount), NamedAttribute("dimension", dimension)
     ]
     !isnothing(result) && push!(op_ty_results, result)
 
@@ -1487,8 +1487,8 @@ function linalg_svd(
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
-    !isnothing(full) && push!(attributes, namedattribute("full", full))
-    !isnothing(algorithm) && push!(attributes, namedattribute("algorithm", algorithm))
+    !isnothing(full) && push!(attributes, NamedAttribute("full", full))
+    !isnothing(algorithm) && push!(attributes, NamedAttribute("algorithm", algorithm))
 
     return create_operation(
         "enzymexla.linalg.svd",
@@ -1604,7 +1604,7 @@ function blas_symm(
     operands = Value[A, B, C, alpha, beta]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("side", side), namedattribute("uplo", uplo)]
+    attributes = NamedAttribute[NamedAttribute("side", side), NamedAttribute("uplo", uplo)]
 
     return create_operation(
         "enzymexla.blas.symm",
@@ -1651,9 +1651,9 @@ function blas_syrk(
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[
-        namedattribute("uplo", uplo), namedattribute("output_uplo", output_uplo)
+        NamedAttribute("uplo", uplo), NamedAttribute("output_uplo", output_uplo)
     ]
-    !isnothing(transpose) && push!(attributes, namedattribute("transpose", transpose))
+    !isnothing(transpose) && push!(attributes, NamedAttribute("transpose", transpose))
 
     return create_operation(
         "enzymexla.blas.syrk",
@@ -1689,9 +1689,9 @@ function blas_trmm(
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[
-        namedattribute("side", side),
-        namedattribute("uplo", uplo),
-        namedattribute("transpose", transpose),
+        NamedAttribute("side", side),
+        NamedAttribute("uplo", uplo),
+        NamedAttribute("transpose", transpose),
     ]
 
     return create_operation(
@@ -1711,7 +1711,7 @@ function typeAlign(; result::IR.Type, source, location=Location())
     operands = Value[]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("source", source),]
+    attributes = NamedAttribute[NamedAttribute("source", source),]
 
     return create_operation(
         "enzymexla.typeAlign",
@@ -1742,12 +1742,12 @@ function update_without_corners(
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[
-        namedattribute("dimensionX", dimensionX),
-        namedattribute("x1", x1),
-        namedattribute("x2", x2),
-        namedattribute("dimensionY", dimensionY),
-        namedattribute("y1", y1),
-        namedattribute("y2", y2),
+        NamedAttribute("dimensionX", dimensionX),
+        NamedAttribute("x1", x1),
+        NamedAttribute("x2", x2),
+        NamedAttribute("dimensionY", dimensionY),
+        NamedAttribute("y1", y1),
+        NamedAttribute("y2", y2),
     ]
     !isnothing(result) && push!(op_ty_results, result)
 
@@ -1776,9 +1776,9 @@ function wrap(
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[
-        namedattribute("lhs", lhs),
-        namedattribute("rhs", rhs),
-        namedattribute("dimension", dimension),
+        NamedAttribute("lhs", lhs),
+        NamedAttribute("rhs", rhs),
+        NamedAttribute("dimension", dimension),
     ]
     !isnothing(result) && push!(op_ty_results, result)
 
@@ -1801,9 +1801,9 @@ function xla_wrapper(
     operands = Value[inputs...,]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("fn", fn),]
-    !isnothing(arg_attrs) && push!(attributes, namedattribute("arg_attrs", arg_attrs))
-    !isnothing(res_attrs) && push!(attributes, namedattribute("res_attrs", res_attrs))
+    attributes = NamedAttribute[NamedAttribute("fn", fn),]
+    !isnothing(arg_attrs) && push!(attributes, NamedAttribute("arg_attrs", arg_attrs))
+    !isnothing(res_attrs) && push!(attributes, NamedAttribute("res_attrs", res_attrs))
 
     return create_operation(
         "enzymexla.xla_wrapper",

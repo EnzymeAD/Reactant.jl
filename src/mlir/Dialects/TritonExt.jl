@@ -10,7 +10,7 @@ import ...IR:
     create_operation,
     context,
     IndexType
-import ..Dialects: namedattribute, operandsegmentsizes
+import ..Dialects: operandsegmentsizes
 import ...API
 
 function call(
@@ -36,19 +36,19 @@ function call(
     operands = Value[gridx, gridy, gridz, clusterx, clustery, clusterz, inputs...]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("fn", fn),]
+    attributes = NamedAttribute[NamedAttribute("fn", fn),]
     !isnothing(backend_config) &&
-        push!(attributes, namedattribute("backend_config", backend_config))
+        push!(attributes, NamedAttribute("backend_config", backend_config))
     !isnothing(operand_layouts) &&
-        push!(attributes, namedattribute("operand_layouts", operand_layouts))
+        push!(attributes, NamedAttribute("operand_layouts", operand_layouts))
     !isnothing(result_layouts) &&
-        push!(attributes, namedattribute("result_layouts", result_layouts))
-    !isnothing(arg_attrs) && push!(attributes, namedattribute("arg_attrs", arg_attrs))
-    !isnothing(res_attrs) && push!(attributes, namedattribute("res_attrs", res_attrs))
+        push!(attributes, NamedAttribute("result_layouts", result_layouts))
+    !isnothing(arg_attrs) && push!(attributes, NamedAttribute("arg_attrs", arg_attrs))
+    !isnothing(res_attrs) && push!(attributes, NamedAttribute("res_attrs", res_attrs))
     !isnothing(output_operand_aliases) &&
-        push!(attributes, namedattribute("output_operand_aliases", output_operand_aliases))
+        push!(attributes, NamedAttribute("output_operand_aliases", output_operand_aliases))
     !isnothing(xla_side_effect_free) &&
-        push!(attributes, namedattribute("xla_side_effect_free", xla_side_effect_free))
+        push!(attributes, NamedAttribute("xla_side_effect_free", xla_side_effect_free))
 
     return create_operation(
         "enzymexla_tt_ext.call",
@@ -67,7 +67,7 @@ function module_(; sym_name, bodyRegion::Region, location=Location())
     operands = Value[]
     owned_regions = Region[bodyRegion,]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("sym_name", sym_name),]
+    attributes = NamedAttribute[NamedAttribute("sym_name", sym_name),]
 
     return create_operation(
         "enzymexla_tt_ext.module",

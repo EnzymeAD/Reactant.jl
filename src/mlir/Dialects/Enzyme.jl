@@ -10,7 +10,7 @@ import ...IR:
     create_operation,
     context,
     IndexType
-import ..Dialects: namedattribute, operandsegmentsizes
+import ..Dialects: operandsegmentsizes
 import ...API
 
 """
@@ -51,7 +51,7 @@ function addSampleToTrace(
     operands = Value[trace, sample...]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("symbol", symbol),]
+    attributes = NamedAttribute[NamedAttribute("symbol", symbol),]
 
     return create_operation(
         "enzyme.addSampleToTrace",
@@ -77,7 +77,7 @@ function addSubtrace(
     operands = Value[subtrace, trace]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("symbol", symbol),]
+    attributes = NamedAttribute[NamedAttribute("symbol", symbol),]
 
     return create_operation(
         "enzyme.addSubtrace",
@@ -154,7 +154,7 @@ function affine_atomic_rmw(
     operands = Value[value, memref, indices...]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("kind", kind), namedattribute("map", map)]
+    attributes = NamedAttribute[NamedAttribute("kind", kind), NamedAttribute("map", map)]
 
     return create_operation(
         "enzyme.affine_atomic_rmw",
@@ -183,12 +183,12 @@ function autodiff(
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[
-        namedattribute("fn", fn),
-        namedattribute("activity", activity),
-        namedattribute("ret_activity", ret_activity),
+        NamedAttribute("fn", fn),
+        NamedAttribute("activity", activity),
+        NamedAttribute("ret_activity", ret_activity),
     ]
-    !isnothing(width) && push!(attributes, namedattribute("width", width))
-    !isnothing(strong_zero) && push!(attributes, namedattribute("strong_zero", strong_zero))
+    !isnothing(width) && push!(attributes, NamedAttribute("width", width))
+    !isnothing(strong_zero) && push!(attributes, NamedAttribute("strong_zero", strong_zero))
 
     return create_operation(
         "enzyme.autodiff",
@@ -218,11 +218,11 @@ function autodiff_region(
     owned_regions = Region[body,]
     successors = Block[]
     attributes = NamedAttribute[
-        namedattribute("activity", activity), namedattribute("ret_activity", ret_activity)
+        NamedAttribute("activity", activity), NamedAttribute("ret_activity", ret_activity)
     ]
-    !isnothing(width) && push!(attributes, namedattribute("width", width))
-    !isnothing(strong_zero) && push!(attributes, namedattribute("strong_zero", strong_zero))
-    !isnothing(fn) && push!(attributes, namedattribute("fn", fn))
+    !isnothing(width) && push!(attributes, NamedAttribute("width", width))
+    !isnothing(strong_zero) && push!(attributes, NamedAttribute("strong_zero", strong_zero))
+    !isnothing(fn) && push!(attributes, NamedAttribute("fn", fn))
 
     return create_operation(
         "enzyme.autodiff_region",
@@ -244,7 +244,7 @@ function batch(
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[
-        namedattribute("fn", fn), namedattribute("batch_shape", batch_shape)
+        NamedAttribute("fn", fn), NamedAttribute("batch_shape", batch_shape)
     ]
 
     return create_operation(
@@ -272,7 +272,7 @@ function broadcast(input::Value; output::IR.Type, shape, location=Location())
     operands = Value[input,]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("shape", shape),]
+    attributes = NamedAttribute[NamedAttribute("shape", shape),]
 
     return create_operation(
         "enzyme.broadcast",
@@ -369,7 +369,7 @@ function dump(value::Value; output::IR.Type, label, location=Location())
     operands = Value[value,]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("label", label),]
+    attributes = NamedAttribute[NamedAttribute("label", label),]
 
     return create_operation(
         "enzyme.dump",
@@ -393,7 +393,7 @@ function extract(input::Value; output::IR.Type, index, location=Location())
     operands = Value[input,]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("index", index),]
+    attributes = NamedAttribute[NamedAttribute("index", index),]
 
     return create_operation(
         "enzyme.extract",
@@ -422,12 +422,12 @@ function fwddiff(
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[
-        namedattribute("fn", fn),
-        namedattribute("activity", activity),
-        namedattribute("ret_activity", ret_activity),
+        NamedAttribute("fn", fn),
+        NamedAttribute("activity", activity),
+        NamedAttribute("ret_activity", ret_activity),
     ]
-    !isnothing(width) && push!(attributes, namedattribute("width", width))
-    !isnothing(strong_zero) && push!(attributes, namedattribute("strong_zero", strong_zero))
+    !isnothing(width) && push!(attributes, NamedAttribute("width", width))
+    !isnothing(strong_zero) && push!(attributes, NamedAttribute("strong_zero", strong_zero))
 
     return create_operation(
         "enzyme.fwddiff",
@@ -457,11 +457,11 @@ function fwddiff_region(
     owned_regions = Region[body,]
     successors = Block[]
     attributes = NamedAttribute[
-        namedattribute("activity", activity), namedattribute("ret_activity", ret_activity)
+        NamedAttribute("activity", activity), NamedAttribute("ret_activity", ret_activity)
     ]
-    !isnothing(width) && push!(attributes, namedattribute("width", width))
-    !isnothing(strong_zero) && push!(attributes, namedattribute("strong_zero", strong_zero))
-    !isnothing(fn) && push!(attributes, namedattribute("fn", fn))
+    !isnothing(width) && push!(attributes, NamedAttribute("width", width))
+    !isnothing(strong_zero) && push!(attributes, NamedAttribute("strong_zero", strong_zero))
+    !isnothing(fn) && push!(attributes, NamedAttribute("fn", fn))
 
     return create_operation(
         "enzyme.fwddiff_region",
@@ -501,10 +501,10 @@ function generate(
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[
-        namedattribute("fn", fn),
-        namedattribute("constrained_addresses", constrained_addresses),
+        NamedAttribute("fn", fn),
+        NamedAttribute("constrained_addresses", constrained_addresses),
     ]
-    !isnothing(name) && push!(attributes, namedattribute("name", name))
+    !isnothing(name) && push!(attributes, NamedAttribute("name", name))
 
     return create_operation(
         "enzyme.generate",
@@ -534,13 +534,13 @@ function genericAdjoint(
     owned_regions = Region[region,]
     successors = Block[]
     attributes = NamedAttribute[
-        namedattribute("indexing_maps", indexing_maps),
-        namedattribute("iterator_types", iterator_types),
+        NamedAttribute("indexing_maps", indexing_maps),
+        NamedAttribute("iterator_types", iterator_types),
     ]
     push!(attributes, operandsegmentsizes([length(inputs), length(outputs)]))
-    !isnothing(doc) && push!(attributes, namedattribute("doc", doc))
+    !isnothing(doc) && push!(attributes, NamedAttribute("doc", doc))
     !isnothing(library_call) &&
-        push!(attributes, namedattribute("library_call", library_call))
+        push!(attributes, NamedAttribute("library_call", library_call))
 
     return create_operation(
         "enzyme.genericAdjoint",
@@ -567,7 +567,7 @@ function getFlattenedSamplesFromTrace(
     operands = Value[trace,]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("selection", selection),]
+    attributes = NamedAttribute[NamedAttribute("selection", selection),]
 
     return create_operation(
         "enzyme.getFlattenedSamplesFromTrace",
@@ -612,7 +612,7 @@ function getSampleFromConstraint(
     operands = Value[constraint,]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("symbol", symbol),]
+    attributes = NamedAttribute[NamedAttribute("symbol", symbol),]
 
     return create_operation(
         "enzyme.getSampleFromConstraint",
@@ -638,7 +638,7 @@ function getSampleFromTrace(
     operands = Value[trace,]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("symbol", symbol),]
+    attributes = NamedAttribute[NamedAttribute("symbol", symbol),]
 
     return create_operation(
         "enzyme.getSampleFromTrace",
@@ -664,7 +664,7 @@ function getSubconstraint(
     operands = Value[constraint,]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("symbol", symbol),]
+    attributes = NamedAttribute[NamedAttribute("symbol", symbol),]
 
     return create_operation(
         "enzyme.getSubconstraint",
@@ -688,7 +688,7 @@ function getSubtrace(trace::Value; subtrace::IR.Type, symbol, location=Location(
     operands = Value[trace,]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("symbol", symbol),]
+    attributes = NamedAttribute[NamedAttribute("symbol", symbol),]
 
     return create_operation(
         "enzyme.getSubtrace",
@@ -877,9 +877,9 @@ function mcmc(
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[
-        namedattribute("alg", alg),
-        namedattribute("fn", fn),
-        namedattribute("selection", selection),
+        NamedAttribute("alg", alg),
+        NamedAttribute("fn", fn),
+        NamedAttribute("selection", selection),
     ]
     !isnothing(mass) && push!(operands, mass)
     !isnothing(step_size) && push!(operands, step_size)
@@ -896,7 +896,7 @@ function mcmc(
             Int(!isnothing(initial_momentum)),
         ]),
     )
-    !isnothing(name) && push!(attributes, namedattribute("name", name))
+    !isnothing(name) && push!(attributes, NamedAttribute("name", name))
 
     return create_operation(
         "enzyme.mcmc",
@@ -935,9 +935,9 @@ function mh(
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[
-        namedattribute("fn", fn), namedattribute("selection", selection)
+        NamedAttribute("fn", fn), NamedAttribute("selection", selection)
     ]
-    !isnothing(name) && push!(attributes, namedattribute("name", name))
+    !isnothing(name) && push!(attributes, NamedAttribute("name", name))
 
     return create_operation(
         "enzyme.mh",
@@ -1042,7 +1042,7 @@ function random(
     operands = Value[rng_state, a, b]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("rng_distribution", rng_distribution),]
+    attributes = NamedAttribute[NamedAttribute("rng_distribution", rng_distribution),]
 
     return create_operation(
         "enzyme.random",
@@ -1080,9 +1080,9 @@ function regenerate(
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[
-        namedattribute("fn", fn), namedattribute("selection", selection)
+        NamedAttribute("fn", fn), NamedAttribute("selection", selection)
     ]
-    !isnothing(name) && push!(attributes, namedattribute("name", name))
+    !isnothing(name) && push!(attributes, NamedAttribute("name", name))
 
     return create_operation(
         "enzyme.regenerate",
@@ -1115,10 +1115,10 @@ function sample(
     operands = Value[inputs...,]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("fn", fn),]
-    !isnothing(logpdf) && push!(attributes, namedattribute("logpdf", logpdf))
-    !isnothing(symbol) && push!(attributes, namedattribute("symbol", symbol))
-    !isnothing(name) && push!(attributes, namedattribute("name", name))
+    attributes = NamedAttribute[NamedAttribute("fn", fn),]
+    !isnothing(logpdf) && push!(attributes, NamedAttribute("logpdf", logpdf))
+    !isnothing(symbol) && push!(attributes, NamedAttribute("symbol", symbol))
+    !isnothing(name) && push!(attributes, NamedAttribute("name", name))
 
     return create_operation(
         "enzyme.sample",
@@ -1203,8 +1203,8 @@ function simulate(
     operands = Value[inputs...,]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("fn", fn),]
-    !isnothing(name) && push!(attributes, namedattribute("name", name))
+    attributes = NamedAttribute[NamedAttribute("fn", fn),]
+    !isnothing(name) && push!(attributes, NamedAttribute("name", name))
 
     return create_operation(
         "enzyme.simulate",
@@ -1248,7 +1248,7 @@ function unflatten_slice(position::Value; result::IR.Type, offset, location=Loca
     operands = Value[position,]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("offset", offset),]
+    attributes = NamedAttribute[NamedAttribute("offset", offset),]
 
     return create_operation(
         "enzyme.unflatten_slice",
@@ -1275,8 +1275,8 @@ function untracedCall(
     operands = Value[inputs...,]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("fn", fn),]
-    !isnothing(name) && push!(attributes, namedattribute("name", name))
+    attributes = NamedAttribute[NamedAttribute("fn", fn),]
+    !isnothing(name) && push!(attributes, NamedAttribute("name", name))
 
     return create_operation(
         "enzyme.untracedCall",
@@ -1315,9 +1315,9 @@ function update(
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[
-        namedattribute("fn", fn), namedattribute("selection", selection)
+        NamedAttribute("fn", fn), NamedAttribute("selection", selection)
     ]
-    !isnothing(name) && push!(attributes, namedattribute("name", name))
+    !isnothing(name) && push!(attributes, NamedAttribute("name", name))
 
     return create_operation(
         "enzyme.update",

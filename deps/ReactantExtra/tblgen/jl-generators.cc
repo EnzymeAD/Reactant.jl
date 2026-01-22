@@ -172,7 +172,7 @@ bool emitOpTableDefs(const llvm::RecordKeeper &recordKeeper,
   if (disableModuleWrap) {
     moduleTemplate =
         R"(import ...IR: IR, NamedAttribute, Value, Location, Block, Region, Attribute, create_operation, context, IndexType
-import ..Dialects: namedattribute, operandsegmentsizes
+import ..Dialects: operandsegmentsizes
 import ...API
 
 {0}
@@ -181,7 +181,7 @@ import ...API
     moduleTemplate = R"(module {0}
 using ...IR
 import ...IR: NamedAttribute, Value, Location, Block, Region, Attribute, create_operation, context, IndexType
-import ..Dialects: namedattribute, operandsegmentsizes
+import ..Dialects: operandsegmentsizes
 import ...API
 
 {1}
@@ -365,12 +365,12 @@ end
 
       if (optional) {
         optionals += llvm::formatv(
-            R"(!isnothing({1}) && push!(attributes, namedattribute("{0}", {1}))
+            R"(!isnothing({1}) && push!(attributes, NamedAttribute("{0}", {1}))
     )",
             attributename, sanitizedname);
         defaultvalue = "=nothing";
       } else {
-        attributecontainer += "namedattribute(\"" + attributename + "\", " +
+        attributecontainer += "NamedAttribute(\"" + attributename + "\", " +
                               sanitizedname + "), ";
       }
       attributearguments += sanitizedname + defaultvalue + ", ";

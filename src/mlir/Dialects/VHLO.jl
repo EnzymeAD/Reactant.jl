@@ -10,7 +10,7 @@ import ...IR:
     create_operation,
     context,
     IndexType
-import ..Dialects: namedattribute, operandsegmentsizes
+import ..Dialects: operandsegmentsizes
 import ...API
 
 function abs_v1(operand::Value; result::IR.Type, location=Location())
@@ -84,10 +84,10 @@ function all_gather_v1(
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[
-        namedattribute("all_gather_dim", all_gather_dim),
-        namedattribute("replica_groups", replica_groups),
-        namedattribute("channel_id", channel_id),
-        namedattribute("use_global_device_ids", use_global_device_ids),
+        NamedAttribute("all_gather_dim", all_gather_dim),
+        NamedAttribute("replica_groups", replica_groups),
+        NamedAttribute("channel_id", channel_id),
+        NamedAttribute("use_global_device_ids", use_global_device_ids),
     ]
 
     return create_operation(
@@ -116,10 +116,10 @@ function all_gather_v2(
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[
-        namedattribute("all_gather_dim", all_gather_dim),
-        namedattribute("replica_groups", replica_groups),
-        namedattribute("channel_id", channel_id),
-        namedattribute("use_global_device_ids", use_global_device_ids),
+        NamedAttribute("all_gather_dim", all_gather_dim),
+        NamedAttribute("replica_groups", replica_groups),
+        NamedAttribute("channel_id", channel_id),
+        NamedAttribute("use_global_device_ids", use_global_device_ids),
     ]
 
     return create_operation(
@@ -148,9 +148,9 @@ function all_reduce_v1(
     owned_regions = Region[computation,]
     successors = Block[]
     attributes = NamedAttribute[
-        namedattribute("replica_groups", replica_groups),
-        namedattribute("channel_id", channel_id),
-        namedattribute("use_global_device_ids", use_global_device_ids),
+        NamedAttribute("replica_groups", replica_groups),
+        NamedAttribute("channel_id", channel_id),
+        NamedAttribute("use_global_device_ids", use_global_device_ids),
     ]
 
     return create_operation(
@@ -179,9 +179,9 @@ function all_reduce_v2(
     owned_regions = Region[computation,]
     successors = Block[]
     attributes = NamedAttribute[
-        namedattribute("replica_groups", replica_groups),
-        namedattribute("channel_id", channel_id),
-        namedattribute("use_global_device_ids", use_global_device_ids),
+        NamedAttribute("replica_groups", replica_groups),
+        NamedAttribute("channel_id", channel_id),
+        NamedAttribute("use_global_device_ids", use_global_device_ids),
     ]
 
     return create_operation(
@@ -211,11 +211,11 @@ function all_to_all_v1(
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[
-        namedattribute("split_dimension", split_dimension),
-        namedattribute("concat_dimension", concat_dimension),
-        namedattribute("split_count", split_count),
-        namedattribute("replica_groups", replica_groups),
-        namedattribute("channel_id", channel_id),
+        NamedAttribute("split_dimension", split_dimension),
+        NamedAttribute("concat_dimension", concat_dimension),
+        NamedAttribute("split_count", split_count),
+        NamedAttribute("replica_groups", replica_groups),
+        NamedAttribute("channel_id", channel_id),
     ]
 
     return create_operation(
@@ -245,11 +245,11 @@ function all_to_all_v2(
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[
-        namedattribute("split_dimension", split_dimension),
-        namedattribute("concat_dimension", concat_dimension),
-        namedattribute("split_count", split_count),
-        namedattribute("replica_groups", replica_groups),
-        namedattribute("channel_id", channel_id),
+        NamedAttribute("split_dimension", split_dimension),
+        NamedAttribute("concat_dimension", concat_dimension),
+        NamedAttribute("split_count", split_count),
+        NamedAttribute("replica_groups", replica_groups),
+        NamedAttribute("channel_id", channel_id),
     ]
 
     return create_operation(
@@ -320,7 +320,7 @@ function batch_norm_grad_v1(
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[
-        namedattribute("epsilon", epsilon), namedattribute("feature_index", feature_index)
+        NamedAttribute("epsilon", epsilon), NamedAttribute("feature_index", feature_index)
     ]
 
     return create_operation(
@@ -351,7 +351,7 @@ function batch_norm_inference_v1(
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[
-        namedattribute("epsilon", epsilon), namedattribute("feature_index", feature_index)
+        NamedAttribute("epsilon", epsilon), NamedAttribute("feature_index", feature_index)
     ]
 
     return create_operation(
@@ -382,7 +382,7 @@ function batch_norm_training_v1(
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[
-        namedattribute("epsilon", epsilon), namedattribute("feature_index", feature_index)
+        NamedAttribute("epsilon", epsilon), NamedAttribute("feature_index", feature_index)
     ]
 
     return create_operation(
@@ -423,7 +423,7 @@ function broadcast_in_dim_v1(
     operands = Value[operand,]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute(
+    attributes = NamedAttribute[NamedAttribute(
         "broadcast_dimensions", broadcast_dimensions
     ),]
 
@@ -444,7 +444,7 @@ function broadcast_v1(operand::Value; result::IR.Type, broadcast_sizes, location
     operands = Value[operand,]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("broadcast_sizes", broadcast_sizes),]
+    attributes = NamedAttribute[NamedAttribute("broadcast_sizes", broadcast_sizes),]
 
     return create_operation(
         "vhlo.broadcast_v1",
@@ -465,7 +465,7 @@ function call_v1(
     operands = Value[operands...,]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("callee", callee),]
+    attributes = NamedAttribute[NamedAttribute("callee", callee),]
 
     return create_operation(
         "vhlo.call_v1",
@@ -524,7 +524,7 @@ function cbrt_v2(operand::Value; result::IR.Type, result_accuracy, location=Loca
     operands = Value[operand,]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("result_accuracy", result_accuracy),]
+    attributes = NamedAttribute[NamedAttribute("result_accuracy", result_accuracy),]
 
     return create_operation(
         "vhlo.cbrt_v2",
@@ -562,7 +562,7 @@ function cholesky_v1(a::Value; result::IR.Type, lower, location=Location())
     operands = Value[a,]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("lower", lower),]
+    attributes = NamedAttribute[NamedAttribute("lower", lower),]
 
     return create_operation(
         "vhlo.cholesky_v1",
@@ -624,8 +624,8 @@ function collective_broadcast_v1(
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[
-        namedattribute("replica_groups", replica_groups),
-        namedattribute("channel_id", channel_id),
+        NamedAttribute("replica_groups", replica_groups),
+        NamedAttribute("channel_id", channel_id),
     ]
 
     return create_operation(
@@ -648,8 +648,8 @@ function collective_permute_v1(
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[
-        namedattribute("source_target_pairs", source_target_pairs),
-        namedattribute("channel_id", channel_id),
+        NamedAttribute("source_target_pairs", source_target_pairs),
+        NamedAttribute("channel_id", channel_id),
     ]
 
     return create_operation(
@@ -677,8 +677,8 @@ function compare_v1(
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[
-        namedattribute("comparison_direction", comparison_direction),
-        namedattribute("compare_type", compare_type),
+        NamedAttribute("comparison_direction", comparison_direction),
+        NamedAttribute("compare_type", compare_type),
     ]
 
     return create_operation(
@@ -726,10 +726,10 @@ function composite_v1(
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[
-        namedattribute("name", name),
-        namedattribute("composite_attributes", composite_attributes),
-        namedattribute("decomposition", decomposition),
-        namedattribute("version", version),
+        NamedAttribute("name", name),
+        NamedAttribute("composite_attributes", composite_attributes),
+        NamedAttribute("decomposition", decomposition),
+        NamedAttribute("version", version),
     ]
 
     return create_operation(
@@ -751,7 +751,7 @@ function concatenate_v1(
     operands = Value[inputs...,]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("dimension", dimension),]
+    attributes = NamedAttribute[NamedAttribute("dimension", dimension),]
 
     return create_operation(
         "vhlo.concatenate_v1",
@@ -770,7 +770,7 @@ function constant_v1(; output::IR.Type, value, location=Location())
     operands = Value[]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("value", value),]
+    attributes = NamedAttribute[NamedAttribute("value", value),]
 
     return create_operation(
         "vhlo.constant_v1",
@@ -831,23 +831,23 @@ function convolution_v1(
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[
-        namedattribute("window_strides", window_strides),
-        namedattribute("padding", padding),
-        namedattribute("lhs_dilation", lhs_dilation),
-        namedattribute("rhs_dilation", rhs_dilation),
-        namedattribute("window_reversal", window_reversal),
-        namedattribute("input_batch_dimension", input_batch_dimension),
-        namedattribute("input_feature_dimension", input_feature_dimension),
-        namedattribute("input_spatial_dimensions", input_spatial_dimensions),
-        namedattribute("kernel_input_feature_dimension", kernel_input_feature_dimension),
-        namedattribute("kernel_output_feature_dimension", kernel_output_feature_dimension),
-        namedattribute("kernel_spatial_dimensions", kernel_spatial_dimensions),
-        namedattribute("output_batch_dimension", output_batch_dimension),
-        namedattribute("output_feature_dimension", output_feature_dimension),
-        namedattribute("output_spatial_dimensions", output_spatial_dimensions),
-        namedattribute("feature_group_count", feature_group_count),
-        namedattribute("batch_group_count", batch_group_count),
-        namedattribute("precision_config", precision_config),
+        NamedAttribute("window_strides", window_strides),
+        NamedAttribute("padding", padding),
+        NamedAttribute("lhs_dilation", lhs_dilation),
+        NamedAttribute("rhs_dilation", rhs_dilation),
+        NamedAttribute("window_reversal", window_reversal),
+        NamedAttribute("input_batch_dimension", input_batch_dimension),
+        NamedAttribute("input_feature_dimension", input_feature_dimension),
+        NamedAttribute("input_spatial_dimensions", input_spatial_dimensions),
+        NamedAttribute("kernel_input_feature_dimension", kernel_input_feature_dimension),
+        NamedAttribute("kernel_output_feature_dimension", kernel_output_feature_dimension),
+        NamedAttribute("kernel_spatial_dimensions", kernel_spatial_dimensions),
+        NamedAttribute("output_batch_dimension", output_batch_dimension),
+        NamedAttribute("output_feature_dimension", output_feature_dimension),
+        NamedAttribute("output_spatial_dimensions", output_spatial_dimensions),
+        NamedAttribute("feature_group_count", feature_group_count),
+        NamedAttribute("batch_group_count", batch_group_count),
+        NamedAttribute("precision_config", precision_config),
     ]
 
     return create_operation(
@@ -886,7 +886,7 @@ function cosine_v2(operand::Value; result::IR.Type, result_accuracy, location=Lo
     operands = Value[operand,]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("result_accuracy", result_accuracy),]
+    attributes = NamedAttribute[NamedAttribute("result_accuracy", result_accuracy),]
 
     return create_operation(
         "vhlo.cosine_v2",
@@ -926,7 +926,7 @@ function cross_replica_sum_v1(
     operands = Value[operand,]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("replica_groups", replica_groups),]
+    attributes = NamedAttribute[NamedAttribute("replica_groups", replica_groups),]
 
     return create_operation(
         "vhlo.cross-replica-sum_v1",
@@ -958,14 +958,14 @@ function custom_call_v1(
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[
-        namedattribute("call_target_name", call_target_name),
-        namedattribute("has_side_effect", has_side_effect),
-        namedattribute("backend_config", backend_config),
-        namedattribute("api_version", api_version),
-        namedattribute("called_computations", called_computations),
-        namedattribute("operand_layouts", operand_layouts),
-        namedattribute("result_layouts", result_layouts),
-        namedattribute("output_operand_aliases", output_operand_aliases),
+        NamedAttribute("call_target_name", call_target_name),
+        NamedAttribute("has_side_effect", has_side_effect),
+        NamedAttribute("backend_config", backend_config),
+        NamedAttribute("api_version", api_version),
+        NamedAttribute("called_computations", called_computations),
+        NamedAttribute("operand_layouts", operand_layouts),
+        NamedAttribute("result_layouts", result_layouts),
+        NamedAttribute("output_operand_aliases", output_operand_aliases),
     ]
 
     return create_operation(
@@ -1015,11 +1015,11 @@ function dot_general_v1(
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[
-        namedattribute("lhs_batching_dimensions", lhs_batching_dimensions),
-        namedattribute("rhs_batching_dimensions", rhs_batching_dimensions),
-        namedattribute("lhs_contracting_dimensions", lhs_contracting_dimensions),
-        namedattribute("rhs_contracting_dimensions", rhs_contracting_dimensions),
-        namedattribute("precision_config", precision_config),
+        NamedAttribute("lhs_batching_dimensions", lhs_batching_dimensions),
+        NamedAttribute("rhs_batching_dimensions", rhs_batching_dimensions),
+        NamedAttribute("lhs_contracting_dimensions", lhs_contracting_dimensions),
+        NamedAttribute("rhs_contracting_dimensions", rhs_contracting_dimensions),
+        NamedAttribute("precision_config", precision_config),
     ]
 
     return create_operation(
@@ -1057,18 +1057,18 @@ function dot_general_v2(
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[
-        namedattribute("lhs_batching_dimensions", lhs_batching_dimensions),
-        namedattribute("rhs_batching_dimensions", rhs_batching_dimensions),
-        namedattribute("lhs_contracting_dimensions", lhs_contracting_dimensions),
-        namedattribute("rhs_contracting_dimensions", rhs_contracting_dimensions),
-        namedattribute("precision_config", precision_config),
-        namedattribute("lhs_precision_type", lhs_precision_type),
-        namedattribute("rhs_precision_type", rhs_precision_type),
-        namedattribute("accumulation_type", accumulation_type),
-        namedattribute("lhs_component_count", lhs_component_count),
-        namedattribute("rhs_component_count", rhs_component_count),
-        namedattribute("num_primitive_operations", num_primitive_operations),
-        namedattribute("allow_imprecise_accumulation", allow_imprecise_accumulation),
+        NamedAttribute("lhs_batching_dimensions", lhs_batching_dimensions),
+        NamedAttribute("rhs_batching_dimensions", rhs_batching_dimensions),
+        NamedAttribute("lhs_contracting_dimensions", lhs_contracting_dimensions),
+        NamedAttribute("rhs_contracting_dimensions", rhs_contracting_dimensions),
+        NamedAttribute("precision_config", precision_config),
+        NamedAttribute("lhs_precision_type", lhs_precision_type),
+        NamedAttribute("rhs_precision_type", rhs_precision_type),
+        NamedAttribute("accumulation_type", accumulation_type),
+        NamedAttribute("lhs_component_count", lhs_component_count),
+        NamedAttribute("rhs_component_count", rhs_component_count),
+        NamedAttribute("num_primitive_operations", num_primitive_operations),
+        NamedAttribute("allow_imprecise_accumulation", allow_imprecise_accumulation),
     ]
 
     return create_operation(
@@ -1090,7 +1090,7 @@ function dot_v1(
     operands = Value[lhs, rhs]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("precision_config", precision_config),]
+    attributes = NamedAttribute[NamedAttribute("precision_config", precision_config),]
 
     return create_operation(
         "vhlo.dot_v1",
@@ -1118,9 +1118,9 @@ function dynamic_broadcast_in_dim_v1(
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[
-        namedattribute("broadcast_dimensions", broadcast_dimensions),
-        namedattribute("known_expanding_dimensions", known_expanding_dimensions),
-        namedattribute("known_nonexpanding_dimensions", known_nonexpanding_dimensions),
+        NamedAttribute("broadcast_dimensions", broadcast_dimensions),
+        NamedAttribute("known_expanding_dimensions", known_expanding_dimensions),
+        NamedAttribute("known_nonexpanding_dimensions", known_nonexpanding_dimensions),
     ]
 
     return create_operation(
@@ -1164,23 +1164,23 @@ function dynamic_conv_v1(
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[
-        namedattribute("window_strides", window_strides),
-        namedattribute("padding", padding),
-        namedattribute("lhs_dilation", lhs_dilation),
-        namedattribute("rhs_dilation", rhs_dilation),
-        namedattribute("window_reversal", window_reversal),
-        namedattribute("input_batch_dimension", input_batch_dimension),
-        namedattribute("input_feature_dimension", input_feature_dimension),
-        namedattribute("input_spatial_dimensions", input_spatial_dimensions),
-        namedattribute("kernel_input_feature_dimension", kernel_input_feature_dimension),
-        namedattribute("kernel_output_feature_dimension", kernel_output_feature_dimension),
-        namedattribute("kernel_spatial_dimensions", kernel_spatial_dimensions),
-        namedattribute("output_batch_dimension", output_batch_dimension),
-        namedattribute("output_feature_dimension", output_feature_dimension),
-        namedattribute("output_spatial_dimensions", output_spatial_dimensions),
-        namedattribute("feature_group_count", feature_group_count),
-        namedattribute("batch_group_count", batch_group_count),
-        namedattribute("precision_config", precision_config),
+        NamedAttribute("window_strides", window_strides),
+        NamedAttribute("padding", padding),
+        NamedAttribute("lhs_dilation", lhs_dilation),
+        NamedAttribute("rhs_dilation", rhs_dilation),
+        NamedAttribute("window_reversal", window_reversal),
+        NamedAttribute("input_batch_dimension", input_batch_dimension),
+        NamedAttribute("input_feature_dimension", input_feature_dimension),
+        NamedAttribute("input_spatial_dimensions", input_spatial_dimensions),
+        NamedAttribute("kernel_input_feature_dimension", kernel_input_feature_dimension),
+        NamedAttribute("kernel_output_feature_dimension", kernel_output_feature_dimension),
+        NamedAttribute("kernel_spatial_dimensions", kernel_spatial_dimensions),
+        NamedAttribute("output_batch_dimension", output_batch_dimension),
+        NamedAttribute("output_feature_dimension", output_feature_dimension),
+        NamedAttribute("output_spatial_dimensions", output_spatial_dimensions),
+        NamedAttribute("feature_group_count", feature_group_count),
+        NamedAttribute("batch_group_count", batch_group_count),
+        NamedAttribute("precision_config", precision_config),
     ]
 
     return create_operation(
@@ -1223,22 +1223,22 @@ function dynamic_conv_v2(
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[
-        namedattribute("window_strides", window_strides),
-        namedattribute("lhs_dilation", lhs_dilation),
-        namedattribute("rhs_dilation", rhs_dilation),
-        namedattribute("window_reversal", window_reversal),
-        namedattribute("input_batch_dimension", input_batch_dimension),
-        namedattribute("input_feature_dimension", input_feature_dimension),
-        namedattribute("input_spatial_dimensions", input_spatial_dimensions),
-        namedattribute("kernel_input_feature_dimension", kernel_input_feature_dimension),
-        namedattribute("kernel_output_feature_dimension", kernel_output_feature_dimension),
-        namedattribute("kernel_spatial_dimensions", kernel_spatial_dimensions),
-        namedattribute("output_batch_dimension", output_batch_dimension),
-        namedattribute("output_feature_dimension", output_feature_dimension),
-        namedattribute("output_spatial_dimensions", output_spatial_dimensions),
-        namedattribute("feature_group_count", feature_group_count),
-        namedattribute("batch_group_count", batch_group_count),
-        namedattribute("precision_config", precision_config),
+        NamedAttribute("window_strides", window_strides),
+        NamedAttribute("lhs_dilation", lhs_dilation),
+        NamedAttribute("rhs_dilation", rhs_dilation),
+        NamedAttribute("window_reversal", window_reversal),
+        NamedAttribute("input_batch_dimension", input_batch_dimension),
+        NamedAttribute("input_feature_dimension", input_feature_dimension),
+        NamedAttribute("input_spatial_dimensions", input_spatial_dimensions),
+        NamedAttribute("kernel_input_feature_dimension", kernel_input_feature_dimension),
+        NamedAttribute("kernel_output_feature_dimension", kernel_output_feature_dimension),
+        NamedAttribute("kernel_spatial_dimensions", kernel_spatial_dimensions),
+        NamedAttribute("output_batch_dimension", output_batch_dimension),
+        NamedAttribute("output_feature_dimension", output_feature_dimension),
+        NamedAttribute("output_spatial_dimensions", output_spatial_dimensions),
+        NamedAttribute("feature_group_count", feature_group_count),
+        NamedAttribute("batch_group_count", batch_group_count),
+        NamedAttribute("precision_config", precision_config),
     ]
 
     return create_operation(
@@ -1270,11 +1270,11 @@ function dynamic_gather_v1(
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[
-        namedattribute("offset_dims", offset_dims),
-        namedattribute("collapsed_slice_dims", collapsed_slice_dims),
-        namedattribute("start_index_map", start_index_map),
-        namedattribute("index_vector_dim", index_vector_dim),
-        namedattribute("indices_are_sorted", indices_are_sorted),
+        NamedAttribute("offset_dims", offset_dims),
+        NamedAttribute("collapsed_slice_dims", collapsed_slice_dims),
+        NamedAttribute("start_index_map", start_index_map),
+        NamedAttribute("index_vector_dim", index_vector_dim),
+        NamedAttribute("indices_are_sorted", indices_are_sorted),
     ]
 
     return create_operation(
@@ -1308,13 +1308,13 @@ function dynamic_gather_v2(
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[
-        namedattribute("offset_dims", offset_dims),
-        namedattribute("collapsed_slice_dims", collapsed_slice_dims),
-        namedattribute("operand_batching_dims", operand_batching_dims),
-        namedattribute("start_indices_batching_dims", start_indices_batching_dims),
-        namedattribute("start_index_map", start_index_map),
-        namedattribute("index_vector_dim", index_vector_dim),
-        namedattribute("indices_are_sorted", indices_are_sorted),
+        NamedAttribute("offset_dims", offset_dims),
+        NamedAttribute("collapsed_slice_dims", collapsed_slice_dims),
+        NamedAttribute("operand_batching_dims", operand_batching_dims),
+        NamedAttribute("start_indices_batching_dims", start_indices_batching_dims),
+        NamedAttribute("start_index_map", start_index_map),
+        NamedAttribute("index_vector_dim", index_vector_dim),
+        NamedAttribute("indices_are_sorted", indices_are_sorted),
     ]
 
     return create_operation(
@@ -1336,7 +1336,7 @@ function dynamic_iota_v1(
     operands = Value[output_shape,]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("iota_dimension", iota_dimension),]
+    attributes = NamedAttribute[NamedAttribute("iota_dimension", iota_dimension),]
 
     return create_operation(
         "vhlo.dynamic_iota_v1",
@@ -1411,7 +1411,7 @@ function dynamic_slice_v1(
     operands = Value[operand, start_indices...]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("slice_sizes", slice_sizes),]
+    attributes = NamedAttribute[NamedAttribute("slice_sizes", slice_sizes),]
 
     return create_operation(
         "vhlo.dynamic_slice_v1",
@@ -1457,7 +1457,7 @@ function einsum_v1(
     operands = Value[lhs, rhs]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("einsum_config", einsum_config),]
+    attributes = NamedAttribute[NamedAttribute("einsum_config", einsum_config),]
 
     return create_operation(
         "vhlo.einsum_v1",
@@ -1497,7 +1497,7 @@ function exponential_v2(
     operands = Value[operand,]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("result_accuracy", result_accuracy),]
+    attributes = NamedAttribute[NamedAttribute("result_accuracy", result_accuracy),]
 
     return create_operation(
         "vhlo.exponential_v2",
@@ -1537,7 +1537,7 @@ function exponential_minus_one_v2(
     operands = Value[operand,]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("result_accuracy", result_accuracy),]
+    attributes = NamedAttribute[NamedAttribute("result_accuracy", result_accuracy),]
 
     return create_operation(
         "vhlo.exponential_minus_one_v2",
@@ -1557,7 +1557,7 @@ function fft_v1(operand::Value; result::IR.Type, fft_type, fft_length, location=
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[
-        namedattribute("fft_type", fft_type), namedattribute("fft_length", fft_length)
+        NamedAttribute("fft_type", fft_type), NamedAttribute("fft_length", fft_length)
     ]
 
     return create_operation(
@@ -1605,11 +1605,11 @@ function func_v1(;
     owned_regions = Region[body,]
     successors = Block[]
     attributes = NamedAttribute[
-        namedattribute("sym_name", sym_name),
-        namedattribute("function_type", function_type),
-        namedattribute("sym_visibility", sym_visibility),
-        namedattribute("arg_attrs", arg_attrs),
-        namedattribute("res_attrs", res_attrs),
+        NamedAttribute("sym_name", sym_name),
+        NamedAttribute("function_type", function_type),
+        NamedAttribute("sym_visibility", sym_visibility),
+        NamedAttribute("arg_attrs", arg_attrs),
+        NamedAttribute("res_attrs", res_attrs),
     ]
 
     return create_operation(
@@ -1641,12 +1641,12 @@ function gather_v1(
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[
-        namedattribute("offset_dims", offset_dims),
-        namedattribute("collapsed_slice_dims", collapsed_slice_dims),
-        namedattribute("start_index_map", start_index_map),
-        namedattribute("index_vector_dim", index_vector_dim),
-        namedattribute("slice_sizes", slice_sizes),
-        namedattribute("indices_are_sorted", indices_are_sorted),
+        NamedAttribute("offset_dims", offset_dims),
+        NamedAttribute("collapsed_slice_dims", collapsed_slice_dims),
+        NamedAttribute("start_index_map", start_index_map),
+        NamedAttribute("index_vector_dim", index_vector_dim),
+        NamedAttribute("slice_sizes", slice_sizes),
+        NamedAttribute("indices_are_sorted", indices_are_sorted),
     ]
 
     return create_operation(
@@ -1680,14 +1680,14 @@ function gather_v2(
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[
-        namedattribute("offset_dims", offset_dims),
-        namedattribute("collapsed_slice_dims", collapsed_slice_dims),
-        namedattribute("operand_batching_dims", operand_batching_dims),
-        namedattribute("start_indices_batching_dims", start_indices_batching_dims),
-        namedattribute("start_index_map", start_index_map),
-        namedattribute("index_vector_dim", index_vector_dim),
-        namedattribute("slice_sizes", slice_sizes),
-        namedattribute("indices_are_sorted", indices_are_sorted),
+        NamedAttribute("offset_dims", offset_dims),
+        NamedAttribute("collapsed_slice_dims", collapsed_slice_dims),
+        NamedAttribute("operand_batching_dims", operand_batching_dims),
+        NamedAttribute("start_indices_batching_dims", start_indices_batching_dims),
+        NamedAttribute("start_index_map", start_index_map),
+        NamedAttribute("index_vector_dim", index_vector_dim),
+        NamedAttribute("slice_sizes", slice_sizes),
+        NamedAttribute("indices_are_sorted", indices_are_sorted),
     ]
 
     return create_operation(
@@ -1709,7 +1709,7 @@ function get_dimension_size_v1(
     operands = Value[operand,]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("dimension", dimension),]
+    attributes = NamedAttribute[NamedAttribute("dimension", dimension),]
 
     return create_operation(
         "vhlo.get_dimension_size_v1",
@@ -1728,7 +1728,7 @@ function get_tuple_element_v1(operand::Value; result::IR.Type, index, location=L
     operands = Value[operand,]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("index", index),]
+    attributes = NamedAttribute[NamedAttribute("index", index),]
 
     return create_operation(
         "vhlo.get_tuple_element_v1",
@@ -1794,7 +1794,7 @@ function infeed_v1(
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[
-        namedattribute("infeed_config", infeed_config), namedattribute("layout", layout)
+        NamedAttribute("infeed_config", infeed_config), NamedAttribute("layout", layout)
     ]
 
     return create_operation(
@@ -1814,7 +1814,7 @@ function iota_v1(; output::IR.Type, iota_dimension, location=Location())
     operands = Value[]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("iota_dimension", iota_dimension),]
+    attributes = NamedAttribute[NamedAttribute("iota_dimension", iota_dimension),]
 
     return create_operation(
         "vhlo.iota_v1",
@@ -1873,7 +1873,7 @@ function log_plus_one_v2(
     operands = Value[operand,]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("result_accuracy", result_accuracy),]
+    attributes = NamedAttribute[NamedAttribute("result_accuracy", result_accuracy),]
 
     return create_operation(
         "vhlo.log_plus_one_v2",
@@ -1911,7 +1911,7 @@ function log_v2(operand::Value; result::IR.Type, result_accuracy, location=Locat
     operands = Value[operand,]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("result_accuracy", result_accuracy),]
+    attributes = NamedAttribute[NamedAttribute("result_accuracy", result_accuracy),]
 
     return create_operation(
         "vhlo.log_v2",
@@ -1949,7 +1949,7 @@ function logistic_v2(operand::Value; result::IR.Type, result_accuracy, location=
     operands = Value[operand,]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("result_accuracy", result_accuracy),]
+    attributes = NamedAttribute[NamedAttribute("result_accuracy", result_accuracy),]
 
     return create_operation(
         "vhlo.logistic_v2",
@@ -1974,7 +1974,7 @@ function map_v1(
     operands = Value[inputs...,]
     owned_regions = Region[computation,]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("dimensions", dimensions),]
+    attributes = NamedAttribute[NamedAttribute("dimensions", dimensions),]
 
     return create_operation(
         "vhlo.map_v1",
@@ -2134,7 +2134,7 @@ function outfeed_v1(
     operands = Value[inputs..., token]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("outfeed_config", outfeed_config),]
+    attributes = NamedAttribute[NamedAttribute("outfeed_config", outfeed_config),]
 
     return create_operation(
         "vhlo.outfeed_v1",
@@ -2162,9 +2162,9 @@ function pad_v1(
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[
-        namedattribute("edge_padding_low", edge_padding_low),
-        namedattribute("edge_padding_high", edge_padding_high),
-        namedattribute("interior_padding", interior_padding),
+        NamedAttribute("edge_padding_low", edge_padding_low),
+        NamedAttribute("edge_padding_high", edge_padding_high),
+        NamedAttribute("interior_padding", interior_padding),
     ]
 
     return create_operation(
@@ -2294,9 +2294,9 @@ function recv_v1(
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[
-        namedattribute("channel_id", channel_id),
-        namedattribute("channel_type", channel_type),
-        namedattribute("is_host_transfer", is_host_transfer),
+        NamedAttribute("channel_id", channel_id),
+        NamedAttribute("channel_type", channel_type),
+        NamedAttribute("is_host_transfer", is_host_transfer),
     ]
 
     return create_operation(
@@ -2325,10 +2325,10 @@ function recv_v2(
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[
-        namedattribute("channel_id", channel_id),
-        namedattribute("channel_type", channel_type),
-        namedattribute("is_host_transfer", is_host_transfer),
-        namedattribute("source_target_pairs", source_target_pairs),
+        NamedAttribute("channel_id", channel_id),
+        NamedAttribute("channel_type", channel_type),
+        NamedAttribute("is_host_transfer", is_host_transfer),
+        NamedAttribute("source_target_pairs", source_target_pairs),
     ]
 
     return create_operation(
@@ -2355,7 +2355,7 @@ function reduce_v1(
     operands = Value[inputs..., init_values...]
     owned_regions = Region[body,]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("dimensions", dimensions),]
+    attributes = NamedAttribute[NamedAttribute("dimensions", dimensions),]
 
     return create_operation(
         "vhlo.reduce_v1",
@@ -2377,8 +2377,8 @@ function reduce_precision_v1(
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[
-        namedattribute("exponent_bits", exponent_bits),
-        namedattribute("mantissa_bits", mantissa_bits),
+        NamedAttribute("exponent_bits", exponent_bits),
+        NamedAttribute("mantissa_bits", mantissa_bits),
     ]
 
     return create_operation(
@@ -2408,10 +2408,10 @@ function reduce_scatter_v1(
     owned_regions = Region[computation,]
     successors = Block[]
     attributes = NamedAttribute[
-        namedattribute("scatter_dimension", scatter_dimension),
-        namedattribute("replica_groups", replica_groups),
-        namedattribute("channel_id", channel_id),
-        namedattribute("use_global_device_ids", use_global_device_ids),
+        NamedAttribute("scatter_dimension", scatter_dimension),
+        NamedAttribute("replica_groups", replica_groups),
+        NamedAttribute("channel_id", channel_id),
+        NamedAttribute("use_global_device_ids", use_global_device_ids),
     ]
 
     return create_operation(
@@ -2443,11 +2443,11 @@ function reduce_window_v1(
     owned_regions = Region[body,]
     successors = Block[]
     attributes = NamedAttribute[
-        namedattribute("window_dimensions", window_dimensions),
-        namedattribute("window_strides", window_strides),
-        namedattribute("base_dilations", base_dilations),
-        namedattribute("window_dilations", window_dilations),
-        namedattribute("padding", padding),
+        NamedAttribute("window_dimensions", window_dimensions),
+        NamedAttribute("window_strides", window_strides),
+        NamedAttribute("base_dilations", base_dilations),
+        NamedAttribute("window_dilations", window_dilations),
+        NamedAttribute("padding", padding),
     ]
 
     return create_operation(
@@ -2543,7 +2543,7 @@ function reverse_v1(operand::Value; result::IR.Type, dimensions, location=Locati
     operands = Value[operand,]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("dimensions", dimensions),]
+    attributes = NamedAttribute[NamedAttribute("dimensions", dimensions),]
 
     return create_operation(
         "vhlo.reverse_v1",
@@ -2568,7 +2568,7 @@ function rng_bit_generator_v1(
     operands = Value[initial_state,]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("rng_algorithm", rng_algorithm),]
+    attributes = NamedAttribute[NamedAttribute("rng_algorithm", rng_algorithm),]
 
     return create_operation(
         "vhlo.rng_bit_generator_v1",
@@ -2589,7 +2589,7 @@ function rng_v1(
     operands = Value[a, b, shape]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("rng_distribution", rng_distribution),]
+    attributes = NamedAttribute[NamedAttribute("rng_distribution", rng_distribution),]
 
     return create_operation(
         "vhlo.rng_v1",
@@ -2665,7 +2665,7 @@ function rsqrt_v2(operand::Value; result::IR.Type, result_accuracy, location=Loc
     operands = Value[operand,]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("result_accuracy", result_accuracy),]
+    attributes = NamedAttribute[NamedAttribute("result_accuracy", result_accuracy),]
 
     return create_operation(
         "vhlo.rsqrt_v2",
@@ -2698,12 +2698,12 @@ function scatter_v1(
     owned_regions = Region[update_computation,]
     successors = Block[]
     attributes = NamedAttribute[
-        namedattribute("update_window_dims", update_window_dims),
-        namedattribute("inserted_window_dims", inserted_window_dims),
-        namedattribute("scatter_dims_to_operand_dims", scatter_dims_to_operand_dims),
-        namedattribute("index_vector_dim", index_vector_dim),
-        namedattribute("indices_are_sorted", indices_are_sorted),
-        namedattribute("unique_indices", unique_indices),
+        NamedAttribute("update_window_dims", update_window_dims),
+        NamedAttribute("inserted_window_dims", inserted_window_dims),
+        NamedAttribute("scatter_dims_to_operand_dims", scatter_dims_to_operand_dims),
+        NamedAttribute("index_vector_dim", index_vector_dim),
+        NamedAttribute("indices_are_sorted", indices_are_sorted),
+        NamedAttribute("unique_indices", unique_indices),
     ]
 
     return create_operation(
@@ -2739,14 +2739,14 @@ function scatter_v2(
     owned_regions = Region[update_computation,]
     successors = Block[]
     attributes = NamedAttribute[
-        namedattribute("update_window_dims", update_window_dims),
-        namedattribute("inserted_window_dims", inserted_window_dims),
-        namedattribute("input_batching_dims", input_batching_dims),
-        namedattribute("scatter_indices_batching_dims", scatter_indices_batching_dims),
-        namedattribute("scatter_dims_to_operand_dims", scatter_dims_to_operand_dims),
-        namedattribute("index_vector_dim", index_vector_dim),
-        namedattribute("indices_are_sorted", indices_are_sorted),
-        namedattribute("unique_indices", unique_indices),
+        NamedAttribute("update_window_dims", update_window_dims),
+        NamedAttribute("inserted_window_dims", inserted_window_dims),
+        NamedAttribute("input_batching_dims", input_batching_dims),
+        NamedAttribute("scatter_indices_batching_dims", scatter_indices_batching_dims),
+        NamedAttribute("scatter_dims_to_operand_dims", scatter_dims_to_operand_dims),
+        NamedAttribute("index_vector_dim", index_vector_dim),
+        NamedAttribute("indices_are_sorted", indices_are_sorted),
+        NamedAttribute("unique_indices", unique_indices),
     ]
 
     return create_operation(
@@ -2778,9 +2778,9 @@ function select_and_scatter_v1(
     owned_regions = Region[select, scatter]
     successors = Block[]
     attributes = NamedAttribute[
-        namedattribute("window_dimensions", window_dimensions),
-        namedattribute("window_strides", window_strides),
-        namedattribute("padding", padding),
+        NamedAttribute("window_dimensions", window_dimensions),
+        NamedAttribute("window_strides", window_strides),
+        NamedAttribute("padding", padding),
     ]
 
     return create_operation(
@@ -2830,9 +2830,9 @@ function send_v1(
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[
-        namedattribute("channel_id", channel_id),
-        namedattribute("channel_type", channel_type),
-        namedattribute("is_host_transfer", is_host_transfer),
+        NamedAttribute("channel_id", channel_id),
+        NamedAttribute("channel_type", channel_type),
+        NamedAttribute("is_host_transfer", is_host_transfer),
     ]
 
     return create_operation(
@@ -2862,10 +2862,10 @@ function send_v2(
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[
-        namedattribute("channel_id", channel_id),
-        namedattribute("channel_type", channel_type),
-        namedattribute("is_host_transfer", is_host_transfer),
-        namedattribute("source_target_pairs", source_target_pairs),
+        NamedAttribute("channel_id", channel_id),
+        NamedAttribute("channel_type", channel_type),
+        NamedAttribute("is_host_transfer", is_host_transfer),
+        NamedAttribute("source_target_pairs", source_target_pairs),
     ]
 
     return create_operation(
@@ -2887,7 +2887,7 @@ function set_dimension_size_v1(
     operands = Value[operand, size]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("dimension", dimension),]
+    attributes = NamedAttribute[NamedAttribute("dimension", dimension),]
 
     return create_operation(
         "vhlo.set_dimension_size_v1",
@@ -3005,7 +3005,7 @@ function sine_v2(operand::Value; result::IR.Type, result_accuracy, location=Loca
     operands = Value[operand,]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("result_accuracy", result_accuracy),]
+    attributes = NamedAttribute[NamedAttribute("result_accuracy", result_accuracy),]
 
     return create_operation(
         "vhlo.sine_v2",
@@ -3032,9 +3032,9 @@ function slice_v1(
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[
-        namedattribute("start_indices", start_indices),
-        namedattribute("limit_indices", limit_indices),
-        namedattribute("strides", strides),
+        NamedAttribute("start_indices", start_indices),
+        NamedAttribute("limit_indices", limit_indices),
+        NamedAttribute("strides", strides),
     ]
 
     return create_operation(
@@ -3062,7 +3062,7 @@ function sort_v1(
     owned_regions = Region[comparator,]
     successors = Block[]
     attributes = NamedAttribute[
-        namedattribute("dimension", dimension), namedattribute("is_stable", is_stable)
+        NamedAttribute("dimension", dimension), NamedAttribute("is_stable", is_stable)
     ]
 
     return create_operation(
@@ -3101,7 +3101,7 @@ function sqrt_v2(operand::Value; result::IR.Type, result_accuracy, location=Loca
     operands = Value[operand,]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("result_accuracy", result_accuracy),]
+    attributes = NamedAttribute[NamedAttribute("result_accuracy", result_accuracy),]
 
     return create_operation(
         "vhlo.sqrt_v2",
@@ -3158,7 +3158,7 @@ function tan_v2(operand::Value; result::IR.Type, result_accuracy, location=Locat
     operands = Value[operand,]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("result_accuracy", result_accuracy),]
+    attributes = NamedAttribute[NamedAttribute("result_accuracy", result_accuracy),]
 
     return create_operation(
         "vhlo.tan_v2",
@@ -3196,7 +3196,7 @@ function tanh_v2(operand::Value; result::IR.Type, result_accuracy, location=Loca
     operands = Value[operand,]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("result_accuracy", result_accuracy),]
+    attributes = NamedAttribute[NamedAttribute("result_accuracy", result_accuracy),]
 
     return create_operation(
         "vhlo.tanh_v2",
@@ -3218,7 +3218,7 @@ function torch_index_select_v1(
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[
-        namedattribute("dim", dim), namedattribute("batch_dims", batch_dims)
+        NamedAttribute("dim", dim), NamedAttribute("batch_dims", batch_dims)
     ]
 
     return create_operation(
@@ -3238,7 +3238,7 @@ function transpose_v1(operand::Value; result::IR.Type, permutation, location=Loc
     operands = Value[operand,]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("permutation", permutation),]
+    attributes = NamedAttribute[NamedAttribute("permutation", permutation),]
 
     return create_operation(
         "vhlo.transpose_v1",
@@ -3267,10 +3267,10 @@ function triangular_solve_v1(
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[
-        namedattribute("left_side", left_side),
-        namedattribute("lower", lower),
-        namedattribute("unit_diagonal", unit_diagonal),
-        namedattribute("transpose_a", transpose_a),
+        NamedAttribute("left_side", left_side),
+        NamedAttribute("lower", lower),
+        NamedAttribute("unit_diagonal", unit_diagonal),
+        NamedAttribute("transpose_a", transpose_a),
     ]
 
     return create_operation(
@@ -3311,7 +3311,7 @@ function unary_einsum_v1(
     operands = Value[operand,]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("einsum_config", einsum_config),]
+    attributes = NamedAttribute[NamedAttribute("einsum_config", einsum_config),]
 
     return create_operation(
         "vhlo.unary_einsum_v1",

@@ -9,6 +9,8 @@ Returns an empty attribute.
 """
 Attribute() = Attribute(API.mlirAttributeGetNull())
 
+Attribute(attr::Attribute) = attr
+
 Base.convert(::Core.Type{API.MlirAttribute}, attribute::Attribute) = attribute.attribute
 
 """
@@ -853,19 +855,25 @@ function Base.show(io::IO, attribute::Attribute)
     return print(io, " =#)")
 end
 
-struct NamedAttribute
-    named_attribute::API.MlirNamedAttribute
-end
-
 """
     NamedAttribute(name, attr)
 
 Associates an attribute with the name. Takes ownership of neither.
 """
-function NamedAttribute(name, attribute; context=context(attribute))
-    @assert !mlirIsNull(attribute.attribute)
-    name = API.mlirIdentifierGet(context, name)
-    return NamedAttribute(API.mlirNamedAttributeGet(name, attribute))
+struct NamedAttribute
+    named_attribute::API.MlirNamedAttribute
+end
+
+function NamedAttribute(name::String, attr; context=context(attr))
+    nameid = Identifier(name; context)
+    attr = Attribute(attr)
+    return NamedAttribute(nameid, attr)
+end
+
+function NamedAttribute(name::Identifier, attr; context=context(attr))
+    @assert !mlirIsNull(attr.ref)
+    attr = Attribute(attr)
+    return NamedAttribute(API.mlirNamedAttributeGet(name, attr))
 end
 
 function Base.convert(::Core.Type{API.MlirAttribute}, named_attribute::NamedAttribute)

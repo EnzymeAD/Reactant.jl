@@ -10,7 +10,7 @@ import ...IR:
     create_operation,
     context,
     IndexType
-import ..Dialects: namedattribute, operandsegmentsizes
+import ..Dialects: operandsegmentsizes
 import ...API
 
 """
@@ -40,9 +40,9 @@ function module_(;
     owned_regions = Region[bodyRegion,]
     successors = Block[]
     attributes = NamedAttribute[]
-    !isnothing(sym_name) && push!(attributes, namedattribute("sym_name", sym_name))
+    !isnothing(sym_name) && push!(attributes, NamedAttribute("sym_name", sym_name))
     !isnothing(sym_visibility) &&
-        push!(attributes, namedattribute("sym_visibility", sym_visibility))
+        push!(attributes, NamedAttribute("sym_visibility", sym_visibility))
 
     return create_operation(
         "builtin.module",

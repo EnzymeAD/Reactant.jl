@@ -5,16 +5,8 @@ import ..API
 
 using Reactant_jll: Reactant_jll
 
-namedattribute(name, val) = namedattribute(name, Attribute(val))
-namedattribute(name, val::Attribute) = NamedAttribute(name, val)
-function namedattribute(name, val::NamedAttribute)
-    @assert true # TODO(jm): check whether name of attribute is correct, getting the name might need to be added to IR.jl?
-    return val
-end
 
-function operandsegmentsizes(segments)
-    return namedattribute("operand_segment_sizes", Attribute(Int32.(segments)))
-end
+operandsegmentsizes(segments) = NamedAttribute("operand_segment_sizes", Int32.(segments))
 
 #! explicit-imports: off
 for file in readdir(joinpath(@__DIR__, "Dialects"))

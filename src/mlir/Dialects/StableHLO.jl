@@ -10,7 +10,7 @@ import ...IR:
     create_operation,
     context,
     IndexType
-import ..Dialects: namedattribute, operandsegmentsizes
+import ..Dialects: operandsegmentsizes
 import ...API
 
 """
@@ -152,13 +152,13 @@ function all_gather(
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[
-        namedattribute("all_gather_dim", all_gather_dim),
-        namedattribute("replica_groups", replica_groups),
+        NamedAttribute("all_gather_dim", all_gather_dim),
+        NamedAttribute("replica_groups", replica_groups),
     ]
     !isnothing(channel_handle) &&
-        push!(attributes, namedattribute("channel_handle", channel_handle))
+        push!(attributes, NamedAttribute("channel_handle", channel_handle))
     !isnothing(use_global_device_ids) &&
-        push!(attributes, namedattribute("use_global_device_ids", use_global_device_ids))
+        push!(attributes, NamedAttribute("use_global_device_ids", use_global_device_ids))
 
     return create_operation(
         "stablehlo.all_gather",
@@ -207,11 +207,11 @@ function all_reduce(
     operands = Value[operands...,]
     owned_regions = Region[computation,]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("replica_groups", replica_groups),]
+    attributes = NamedAttribute[NamedAttribute("replica_groups", replica_groups),]
     !isnothing(channel_handle) &&
-        push!(attributes, namedattribute("channel_handle", channel_handle))
+        push!(attributes, NamedAttribute("channel_handle", channel_handle))
     !isnothing(use_global_device_ids) &&
-        push!(attributes, namedattribute("use_global_device_ids", use_global_device_ids))
+        push!(attributes, NamedAttribute("use_global_device_ids", use_global_device_ids))
 
     return create_operation(
         "stablehlo.all_reduce",
@@ -261,14 +261,14 @@ function all_to_all(
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[
-        namedattribute("split_dimension", split_dimension),
-        namedattribute("concat_dimension", concat_dimension),
-        namedattribute("split_count", split_count),
-        namedattribute("replica_groups", replica_groups),
+        NamedAttribute("split_dimension", split_dimension),
+        NamedAttribute("concat_dimension", concat_dimension),
+        NamedAttribute("split_count", split_count),
+        NamedAttribute("replica_groups", replica_groups),
     ]
     !isnothing(result_0) && push!(op_ty_results, result_0...)
     !isnothing(channel_handle) &&
-        push!(attributes, namedattribute("channel_handle", channel_handle))
+        push!(attributes, NamedAttribute("channel_handle", channel_handle))
 
     return create_operation(
         "stablehlo.all_to_all",
@@ -392,7 +392,7 @@ function batch_norm_grad(
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[
-        namedattribute("epsilon", epsilon), namedattribute("feature_index", feature_index)
+        NamedAttribute("epsilon", epsilon), NamedAttribute("feature_index", feature_index)
     ]
     !isnothing(grad_operand) && push!(op_ty_results, grad_operand)
     !isnothing(grad_scale) && push!(op_ty_results, grad_scale)
@@ -443,7 +443,7 @@ function batch_norm_inference(
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[
-        namedattribute("epsilon", epsilon), namedattribute("feature_index", feature_index)
+        NamedAttribute("epsilon", epsilon), NamedAttribute("feature_index", feature_index)
     ]
     !isnothing(result) && push!(op_ty_results, result)
 
@@ -494,7 +494,7 @@ function batch_norm_training(
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[
-        namedattribute("epsilon", epsilon), namedattribute("feature_index", feature_index)
+        NamedAttribute("epsilon", epsilon), NamedAttribute("feature_index", feature_index)
     ]
     !isnothing(output) && push!(op_ty_results, output)
     !isnothing(batch_mean) && push!(op_ty_results, batch_mean)
@@ -567,7 +567,7 @@ function broadcast_in_dim(
     operands = Value[operand,]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute(
+    attributes = NamedAttribute[NamedAttribute(
         "broadcast_dimensions", broadcast_dimensions
     ),]
 
@@ -607,7 +607,7 @@ function broadcast(
     operands = Value[operand,]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("broadcast_sizes", broadcast_sizes),]
+    attributes = NamedAttribute[NamedAttribute("broadcast_sizes", broadcast_sizes),]
     !isnothing(result_0) && push!(op_ty_results, result_0)
 
     return create_operation(
@@ -688,7 +688,7 @@ function cbrt(
     attributes = NamedAttribute[]
     !isnothing(result) && push!(op_ty_results, result)
     !isnothing(result_accuracy) &&
-        push!(attributes, namedattribute("result_accuracy", result_accuracy))
+        push!(attributes, NamedAttribute("result_accuracy", result_accuracy))
 
     return create_operation(
         "stablehlo.cbrt",
@@ -757,7 +757,7 @@ function cholesky(
     successors = Block[]
     attributes = NamedAttribute[]
     !isnothing(result) && push!(op_ty_results, result)
-    !isnothing(lower) && push!(attributes, namedattribute("lower", lower))
+    !isnothing(lower) && push!(attributes, NamedAttribute("lower", lower))
 
     return create_operation(
         "stablehlo.cholesky",
@@ -876,10 +876,10 @@ function collective_broadcast(
     operands = Value[operand,]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("replica_groups", replica_groups),]
+    attributes = NamedAttribute[NamedAttribute("replica_groups", replica_groups),]
     !isnothing(result_0) && push!(op_ty_results, result_0)
     !isnothing(channel_handle) &&
-        push!(attributes, namedattribute("channel_handle", channel_handle))
+        push!(attributes, NamedAttribute("channel_handle", channel_handle))
 
     return create_operation(
         "stablehlo.collective_broadcast",
@@ -922,10 +922,10 @@ function collective_permute(
     operands = Value[operand,]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("source_target_pairs", source_target_pairs),]
+    attributes = NamedAttribute[NamedAttribute("source_target_pairs", source_target_pairs),]
     !isnothing(result_0) && push!(op_ty_results, result_0)
     !isnothing(channel_handle) &&
-        push!(attributes, namedattribute("channel_handle", channel_handle))
+        push!(attributes, NamedAttribute("channel_handle", channel_handle))
 
     return create_operation(
         "stablehlo.collective_permute",
@@ -965,12 +965,12 @@ function compare(
     operands = Value[lhs, rhs]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute(
+    attributes = NamedAttribute[NamedAttribute(
         "comparison_direction", comparison_direction
     ),]
     !isnothing(result_0) && push!(op_ty_results, result_0)
     !isnothing(compare_type) &&
-        push!(attributes, namedattribute("compare_type", compare_type))
+        push!(attributes, NamedAttribute("compare_type", compare_type))
 
     return create_operation(
         "stablehlo.compare",
@@ -1059,11 +1059,11 @@ function composite(
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[
-        namedattribute("name", name), namedattribute("decomposition", decomposition)
+        NamedAttribute("name", name), NamedAttribute("decomposition", decomposition)
     ]
     !isnothing(composite_attributes) &&
-        push!(attributes, namedattribute("composite_attributes", composite_attributes))
-    !isnothing(version) && push!(attributes, namedattribute("version", version))
+        push!(attributes, NamedAttribute("composite_attributes", composite_attributes))
+    !isnothing(version) && push!(attributes, NamedAttribute("version", version))
 
     return create_operation(
         "stablehlo.composite",
@@ -1102,7 +1102,7 @@ function concatenate(
     operands = Value[inputs...,]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("dimension", dimension),]
+    attributes = NamedAttribute[NamedAttribute("dimension", dimension),]
     !isnothing(result_0) && push!(op_ty_results, result_0)
 
     return create_operation(
@@ -1135,7 +1135,7 @@ function constant(; output=nothing::Union{Nothing,IR.Type}, value, location=Loca
     operands = Value[]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("value", value),]
+    attributes = NamedAttribute[NamedAttribute("value", value),]
     !isnothing(output) && push!(op_ty_results, output)
 
     return create_operation(
@@ -1230,21 +1230,21 @@ function convolution(
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[
-        namedattribute("dimension_numbers", dimension_numbers),
-        namedattribute("feature_group_count", feature_group_count),
-        namedattribute("batch_group_count", batch_group_count),
+        NamedAttribute("dimension_numbers", dimension_numbers),
+        NamedAttribute("feature_group_count", feature_group_count),
+        NamedAttribute("batch_group_count", batch_group_count),
     ]
     !isnothing(window_strides) &&
-        push!(attributes, namedattribute("window_strides", window_strides))
-    !isnothing(padding) && push!(attributes, namedattribute("padding", padding))
+        push!(attributes, NamedAttribute("window_strides", window_strides))
+    !isnothing(padding) && push!(attributes, NamedAttribute("padding", padding))
     !isnothing(lhs_dilation) &&
-        push!(attributes, namedattribute("lhs_dilation", lhs_dilation))
+        push!(attributes, NamedAttribute("lhs_dilation", lhs_dilation))
     !isnothing(rhs_dilation) &&
-        push!(attributes, namedattribute("rhs_dilation", rhs_dilation))
+        push!(attributes, NamedAttribute("rhs_dilation", rhs_dilation))
     !isnothing(window_reversal) &&
-        push!(attributes, namedattribute("window_reversal", window_reversal))
+        push!(attributes, NamedAttribute("window_reversal", window_reversal))
     !isnothing(precision_config) &&
-        push!(attributes, namedattribute("precision_config", precision_config))
+        push!(attributes, NamedAttribute("precision_config", precision_config))
 
     return create_operation(
         "stablehlo.convolution",
@@ -1285,7 +1285,7 @@ function cosine(
     attributes = NamedAttribute[]
     !isnothing(result) && push!(op_ty_results, result)
     !isnothing(result_accuracy) &&
-        push!(attributes, namedattribute("result_accuracy", result_accuracy))
+        push!(attributes, NamedAttribute("result_accuracy", result_accuracy))
 
     return create_operation(
         "stablehlo.cosine",
@@ -1361,7 +1361,7 @@ function cross_replica_sum(
     operands = Value[operand,]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("replica_groups", replica_groups),]
+    attributes = NamedAttribute[NamedAttribute("replica_groups", replica_groups),]
     !isnothing(result_0) && push!(op_ty_results, result_0)
 
     return create_operation(
@@ -1416,20 +1416,20 @@ function custom_call(
     operands = Value[inputs...,]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("call_target_name", call_target_name),]
+    attributes = NamedAttribute[NamedAttribute("call_target_name", call_target_name),]
     !isnothing(has_side_effect) &&
-        push!(attributes, namedattribute("has_side_effect", has_side_effect))
+        push!(attributes, NamedAttribute("has_side_effect", has_side_effect))
     !isnothing(backend_config) &&
-        push!(attributes, namedattribute("backend_config", backend_config))
-    !isnothing(api_version) && push!(attributes, namedattribute("api_version", api_version))
+        push!(attributes, NamedAttribute("backend_config", backend_config))
+    !isnothing(api_version) && push!(attributes, NamedAttribute("api_version", api_version))
     !isnothing(called_computations) &&
-        push!(attributes, namedattribute("called_computations", called_computations))
+        push!(attributes, NamedAttribute("called_computations", called_computations))
     !isnothing(operand_layouts) &&
-        push!(attributes, namedattribute("operand_layouts", operand_layouts))
+        push!(attributes, NamedAttribute("operand_layouts", operand_layouts))
     !isnothing(result_layouts) &&
-        push!(attributes, namedattribute("result_layouts", result_layouts))
+        push!(attributes, NamedAttribute("result_layouts", result_layouts))
     !isnothing(output_operand_aliases) &&
-        push!(attributes, namedattribute("output_operand_aliases", output_operand_aliases))
+        push!(attributes, NamedAttribute("output_operand_aliases", output_operand_aliases))
 
     return create_operation(
         "stablehlo.custom_call",
@@ -1511,12 +1511,12 @@ function dot_general(
     operands = Value[lhs, rhs]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute(
+    attributes = NamedAttribute[NamedAttribute(
         "dot_dimension_numbers", dot_dimension_numbers
     ),]
     !isnothing(precision_config) &&
-        push!(attributes, namedattribute("precision_config", precision_config))
-    !isnothing(algorithm) && push!(attributes, namedattribute("algorithm", algorithm))
+        push!(attributes, NamedAttribute("precision_config", precision_config))
+    !isnothing(algorithm) && push!(attributes, NamedAttribute("algorithm", algorithm))
 
     return create_operation(
         "stablehlo.dot_general",
@@ -1553,7 +1553,7 @@ function dot(
     successors = Block[]
     attributes = NamedAttribute[]
     !isnothing(precision_config) &&
-        push!(attributes, namedattribute("precision_config", precision_config))
+        push!(attributes, NamedAttribute("precision_config", precision_config))
 
     return create_operation(
         "stablehlo.dot",
@@ -1606,16 +1606,16 @@ function dynamic_broadcast_in_dim(
     operands = Value[operand, output_dimensions]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute(
+    attributes = NamedAttribute[NamedAttribute(
         "broadcast_dimensions", broadcast_dimensions
     ),]
     !isnothing(known_expanding_dimensions) && push!(
         attributes,
-        namedattribute("known_expanding_dimensions", known_expanding_dimensions),
+        NamedAttribute("known_expanding_dimensions", known_expanding_dimensions),
     )
     !isnothing(known_nonexpanding_dimensions) && push!(
         attributes,
-        namedattribute("known_nonexpanding_dimensions", known_nonexpanding_dimensions),
+        NamedAttribute("known_nonexpanding_dimensions", known_nonexpanding_dimensions),
     )
 
     return create_operation(
@@ -1672,20 +1672,20 @@ function dynamic_conv(
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[
-        namedattribute("dimension_numbers", dimension_numbers),
-        namedattribute("feature_group_count", feature_group_count),
-        namedattribute("batch_group_count", batch_group_count),
+        NamedAttribute("dimension_numbers", dimension_numbers),
+        NamedAttribute("feature_group_count", feature_group_count),
+        NamedAttribute("batch_group_count", batch_group_count),
     ]
     !isnothing(window_strides) &&
-        push!(attributes, namedattribute("window_strides", window_strides))
+        push!(attributes, NamedAttribute("window_strides", window_strides))
     !isnothing(lhs_dilation) &&
-        push!(attributes, namedattribute("lhs_dilation", lhs_dilation))
+        push!(attributes, NamedAttribute("lhs_dilation", lhs_dilation))
     !isnothing(rhs_dilation) &&
-        push!(attributes, namedattribute("rhs_dilation", rhs_dilation))
+        push!(attributes, NamedAttribute("rhs_dilation", rhs_dilation))
     !isnothing(window_reversal) &&
-        push!(attributes, namedattribute("window_reversal", window_reversal))
+        push!(attributes, NamedAttribute("window_reversal", window_reversal))
     !isnothing(precision_config) &&
-        push!(attributes, namedattribute("precision_config", precision_config))
+        push!(attributes, NamedAttribute("precision_config", precision_config))
 
     return create_operation(
         "stablehlo.dynamic_conv",
@@ -1732,10 +1732,10 @@ function dynamic_gather(
     operands = Value[operand, start_indices, slice_sizes]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("dimension_numbers", dimension_numbers),]
+    attributes = NamedAttribute[NamedAttribute("dimension_numbers", dimension_numbers),]
     !isnothing(result_0) && push!(op_ty_results, result_0)
     !isnothing(indices_are_sorted) &&
-        push!(attributes, namedattribute("indices_are_sorted", indices_are_sorted))
+        push!(attributes, NamedAttribute("indices_are_sorted", indices_are_sorted))
 
     return create_operation(
         "stablehlo.dynamic_gather",
@@ -1772,7 +1772,7 @@ function dynamic_iota(
     operands = Value[output_shape,]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("iota_dimension", iota_dimension),]
+    attributes = NamedAttribute[NamedAttribute("iota_dimension", iota_dimension),]
 
     return create_operation(
         "stablehlo.dynamic_iota",
@@ -1899,7 +1899,7 @@ function dynamic_slice(
     operands = Value[operand, start_indices...]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("slice_sizes", slice_sizes),]
+    attributes = NamedAttribute[NamedAttribute("slice_sizes", slice_sizes),]
     !isnothing(result) && push!(op_ty_results, result)
 
     return create_operation(
@@ -1979,7 +1979,7 @@ function einsum(
     operands = Value[lhs, rhs]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("einsum_config", einsum_config),]
+    attributes = NamedAttribute[NamedAttribute("einsum_config", einsum_config),]
 
     return create_operation(
         "stablehlo.einsum",
@@ -2020,7 +2020,7 @@ function exponential(
     attributes = NamedAttribute[]
     !isnothing(result) && push!(op_ty_results, result)
     !isnothing(result_accuracy) &&
-        push!(attributes, namedattribute("result_accuracy", result_accuracy))
+        push!(attributes, NamedAttribute("result_accuracy", result_accuracy))
 
     return create_operation(
         "stablehlo.exponential",
@@ -2061,7 +2061,7 @@ function exponential_minus_one(
     attributes = NamedAttribute[]
     !isnothing(result) && push!(op_ty_results, result)
     !isnothing(result_accuracy) &&
-        push!(attributes, namedattribute("result_accuracy", result_accuracy))
+        push!(attributes, NamedAttribute("result_accuracy", result_accuracy))
 
     return create_operation(
         "stablehlo.exponential_minus_one",
@@ -2101,7 +2101,7 @@ function fft(
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[
-        namedattribute("fft_type", fft_type), namedattribute("fft_length", fft_length)
+        NamedAttribute("fft_type", fft_type), NamedAttribute("fft_length", fft_length)
     ]
     !isnothing(result_0) && push!(op_ty_results, result_0)
 
@@ -2189,12 +2189,12 @@ function gather(
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[
-        namedattribute("dimension_numbers", dimension_numbers),
-        namedattribute("slice_sizes", slice_sizes),
+        NamedAttribute("dimension_numbers", dimension_numbers),
+        NamedAttribute("slice_sizes", slice_sizes),
     ]
     !isnothing(result) && push!(op_ty_results, result)
     !isnothing(indices_are_sorted) &&
-        push!(attributes, namedattribute("indices_are_sorted", indices_are_sorted))
+        push!(attributes, NamedAttribute("indices_are_sorted", indices_are_sorted))
 
     return create_operation(
         "stablehlo.gather",
@@ -2228,7 +2228,7 @@ function get_dimension_size(
     operands = Value[operand,]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("dimension", dimension),]
+    attributes = NamedAttribute[NamedAttribute("dimension", dimension),]
     !isnothing(result_0) && push!(op_ty_results, result_0)
 
     return create_operation(
@@ -2264,7 +2264,7 @@ function get_tuple_element(
     operands = Value[operand,]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("index", index),]
+    attributes = NamedAttribute[NamedAttribute("index", index),]
     !isnothing(result_0) && push!(op_ty_results, result_0)
 
     return create_operation(
@@ -2381,8 +2381,8 @@ function infeed(
     successors = Block[]
     attributes = NamedAttribute[]
     !isnothing(infeed_config) &&
-        push!(attributes, namedattribute("infeed_config", infeed_config))
-    !isnothing(layout) && push!(attributes, namedattribute("layout", layout))
+        push!(attributes, NamedAttribute("infeed_config", infeed_config))
+    !isnothing(layout) && push!(attributes, NamedAttribute("layout", layout))
 
     return create_operation(
         "stablehlo.infeed",
@@ -2415,7 +2415,7 @@ function iota(; output::IR.Type, iota_dimension, location=Location())
     operands = Value[]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("iota_dimension", iota_dimension),]
+    attributes = NamedAttribute[NamedAttribute("iota_dimension", iota_dimension),]
 
     return create_operation(
         "stablehlo.iota",
@@ -2490,7 +2490,7 @@ function log_plus_one(
     attributes = NamedAttribute[]
     !isnothing(result) && push!(op_ty_results, result)
     !isnothing(result_accuracy) &&
-        push!(attributes, namedattribute("result_accuracy", result_accuracy))
+        push!(attributes, NamedAttribute("result_accuracy", result_accuracy))
 
     return create_operation(
         "stablehlo.log_plus_one",
@@ -2531,7 +2531,7 @@ function log(
     attributes = NamedAttribute[]
     !isnothing(result) && push!(op_ty_results, result)
     !isnothing(result_accuracy) &&
-        push!(attributes, namedattribute("result_accuracy", result_accuracy))
+        push!(attributes, NamedAttribute("result_accuracy", result_accuracy))
 
     return create_operation(
         "stablehlo.log",
@@ -2572,7 +2572,7 @@ function logistic(
     attributes = NamedAttribute[]
     !isnothing(result) && push!(op_ty_results, result)
     !isnothing(result_accuracy) &&
-        push!(attributes, namedattribute("result_accuracy", result_accuracy))
+        push!(attributes, NamedAttribute("result_accuracy", result_accuracy))
 
     return create_operation(
         "stablehlo.logistic",
@@ -2617,7 +2617,7 @@ function map(
     operands = Value[inputs...,]
     owned_regions = Region[computation,]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("dimensions", dimensions),]
+    attributes = NamedAttribute[NamedAttribute("dimensions", dimensions),]
 
     return create_operation(
         "stablehlo.map",
@@ -2911,7 +2911,7 @@ function outfeed(
     attributes = NamedAttribute[]
     !isnothing(result_0) && push!(op_ty_results, result_0)
     !isnothing(outfeed_config) &&
-        push!(attributes, namedattribute("outfeed_config", outfeed_config))
+        push!(attributes, NamedAttribute("outfeed_config", outfeed_config))
 
     return create_operation(
         "stablehlo.outfeed",
@@ -2954,9 +2954,9 @@ function pad(
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[
-        namedattribute("edge_padding_low", edge_padding_low),
-        namedattribute("edge_padding_high", edge_padding_high),
-        namedattribute("interior_padding", interior_padding),
+        NamedAttribute("edge_padding_low", edge_padding_low),
+        NamedAttribute("edge_padding_high", edge_padding_high),
+        NamedAttribute("interior_padding", interior_padding),
     ]
     !isnothing(result_0) && push!(op_ty_results, result_0)
 
@@ -3181,11 +3181,11 @@ function recv(
     operands = Value[token,]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("channel_handle", channel_handle),]
+    attributes = NamedAttribute[NamedAttribute("channel_handle", channel_handle),]
     !isnothing(is_host_transfer) &&
-        push!(attributes, namedattribute("is_host_transfer", is_host_transfer))
+        push!(attributes, NamedAttribute("is_host_transfer", is_host_transfer))
     !isnothing(source_target_pairs) &&
-        push!(attributes, namedattribute("source_target_pairs", source_target_pairs))
+        push!(attributes, NamedAttribute("source_target_pairs", source_target_pairs))
 
     return create_operation(
         "stablehlo.recv",
@@ -3231,7 +3231,7 @@ function reduce(
     operands = Value[inputs..., init_values...]
     owned_regions = Region[body,]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("dimensions", dimensions),]
+    attributes = NamedAttribute[NamedAttribute("dimensions", dimensions),]
 
     return create_operation(
         "stablehlo.reduce",
@@ -3272,8 +3272,8 @@ function reduce_precision(
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[
-        namedattribute("exponent_bits", exponent_bits),
-        namedattribute("mantissa_bits", mantissa_bits),
+        NamedAttribute("exponent_bits", exponent_bits),
+        NamedAttribute("mantissa_bits", mantissa_bits),
     ]
     !isnothing(output) && push!(op_ty_results, output)
 
@@ -3328,13 +3328,13 @@ function reduce_scatter(
     owned_regions = Region[computation,]
     successors = Block[]
     attributes = NamedAttribute[
-        namedattribute("scatter_dimension", scatter_dimension),
-        namedattribute("replica_groups", replica_groups),
+        NamedAttribute("scatter_dimension", scatter_dimension),
+        NamedAttribute("replica_groups", replica_groups),
     ]
     !isnothing(channel_handle) &&
-        push!(attributes, namedattribute("channel_handle", channel_handle))
+        push!(attributes, NamedAttribute("channel_handle", channel_handle))
     !isnothing(use_global_device_ids) &&
-        push!(attributes, namedattribute("use_global_device_ids", use_global_device_ids))
+        push!(attributes, NamedAttribute("use_global_device_ids", use_global_device_ids))
 
     return create_operation(
         "stablehlo.reduce_scatter",
@@ -3388,14 +3388,14 @@ function reduce_window(
     operands = Value[inputs..., init_values...]
     owned_regions = Region[body,]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("window_dimensions", window_dimensions),]
+    attributes = NamedAttribute[NamedAttribute("window_dimensions", window_dimensions),]
     !isnothing(window_strides) &&
-        push!(attributes, namedattribute("window_strides", window_strides))
+        push!(attributes, NamedAttribute("window_strides", window_strides))
     !isnothing(base_dilations) &&
-        push!(attributes, namedattribute("base_dilations", base_dilations))
+        push!(attributes, NamedAttribute("base_dilations", base_dilations))
     !isnothing(window_dilations) &&
-        push!(attributes, namedattribute("window_dilations", window_dilations))
-    !isnothing(padding) && push!(attributes, namedattribute("padding", padding))
+        push!(attributes, NamedAttribute("window_dilations", window_dilations))
+    !isnothing(padding) && push!(attributes, NamedAttribute("padding", padding))
 
     return create_operation(
         "stablehlo.reduce_window",
@@ -3550,7 +3550,7 @@ function reverse(
     operands = Value[operand,]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("dimensions", dimensions),]
+    attributes = NamedAttribute[NamedAttribute("dimensions", dimensions),]
     !isnothing(result) && push!(op_ty_results, result)
 
     return create_operation(
@@ -3591,7 +3591,7 @@ function rng_bit_generator(
     operands = Value[initial_state,]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("rng_algorithm", rng_algorithm),]
+    attributes = NamedAttribute[NamedAttribute("rng_algorithm", rng_algorithm),]
 
     return create_operation(
         "stablehlo.rng_bit_generator",
@@ -3631,7 +3631,7 @@ function rng(
     operands = Value[a, b, shape]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("rng_distribution", rng_distribution),]
+    attributes = NamedAttribute[NamedAttribute("rng_distribution", rng_distribution),]
     !isnothing(result) && push!(op_ty_results, result)
 
     return create_operation(
@@ -3747,7 +3747,7 @@ function rsqrt(
     attributes = NamedAttribute[]
     !isnothing(result) && push!(op_ty_results, result)
     !isnothing(result_accuracy) &&
-        push!(attributes, namedattribute("result_accuracy", result_accuracy))
+        push!(attributes, NamedAttribute("result_accuracy", result_accuracy))
 
     return create_operation(
         "stablehlo.rsqrt",
@@ -3805,13 +3805,13 @@ function scatter(
     operands = Value[inputs..., scatter_indices, updates...]
     owned_regions = Region[update_computation,]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute(
+    attributes = NamedAttribute[NamedAttribute(
         "scatter_dimension_numbers", scatter_dimension_numbers
     ),]
     !isnothing(indices_are_sorted) &&
-        push!(attributes, namedattribute("indices_are_sorted", indices_are_sorted))
+        push!(attributes, NamedAttribute("indices_are_sorted", indices_are_sorted))
     !isnothing(unique_indices) &&
-        push!(attributes, namedattribute("unique_indices", unique_indices))
+        push!(attributes, NamedAttribute("unique_indices", unique_indices))
 
     return create_operation(
         "stablehlo.scatter",
@@ -3870,10 +3870,10 @@ function select_and_scatter(
     successors = Block[]
     attributes = NamedAttribute[]
     !isnothing(window_dimensions) &&
-        push!(attributes, namedattribute("window_dimensions", window_dimensions))
+        push!(attributes, NamedAttribute("window_dimensions", window_dimensions))
     !isnothing(window_strides) &&
-        push!(attributes, namedattribute("window_strides", window_strides))
-    !isnothing(padding) && push!(attributes, namedattribute("padding", padding))
+        push!(attributes, NamedAttribute("window_strides", window_strides))
+    !isnothing(padding) && push!(attributes, NamedAttribute("padding", padding))
 
     return create_operation(
         "stablehlo.select_and_scatter",
@@ -3957,12 +3957,12 @@ function send(
     operands = Value[inputs..., token]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("channel_handle", channel_handle),]
+    attributes = NamedAttribute[NamedAttribute("channel_handle", channel_handle),]
     !isnothing(result_0) && push!(op_ty_results, result_0)
     !isnothing(is_host_transfer) &&
-        push!(attributes, namedattribute("is_host_transfer", is_host_transfer))
+        push!(attributes, NamedAttribute("is_host_transfer", is_host_transfer))
     !isnothing(source_target_pairs) &&
-        push!(attributes, namedattribute("source_target_pairs", source_target_pairs))
+        push!(attributes, NamedAttribute("source_target_pairs", source_target_pairs))
 
     return create_operation(
         "stablehlo.send",
@@ -4001,7 +4001,7 @@ function set_dimension_size(
     operands = Value[operand, size]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("dimension", dimension),]
+    attributes = NamedAttribute[NamedAttribute("dimension", dimension),]
     !isnothing(result_0) && push!(op_ty_results, result_0)
 
     return create_operation(
@@ -4185,7 +4185,7 @@ function sine(
     attributes = NamedAttribute[]
     !isnothing(result) && push!(op_ty_results, result)
     !isnothing(result_accuracy) &&
-        push!(attributes, namedattribute("result_accuracy", result_accuracy))
+        push!(attributes, NamedAttribute("result_accuracy", result_accuracy))
 
     return create_operation(
         "stablehlo.sine",
@@ -4237,9 +4237,9 @@ function slice(
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[
-        namedattribute("start_indices", start_indices),
-        namedattribute("limit_indices", limit_indices),
-        namedattribute("strides", strides),
+        NamedAttribute("start_indices", start_indices),
+        NamedAttribute("limit_indices", limit_indices),
+        NamedAttribute("strides", strides),
     ]
     !isnothing(result_0) && push!(op_ty_results, result_0)
 
@@ -4289,8 +4289,8 @@ function sort(
     owned_regions = Region[comparator,]
     successors = Block[]
     attributes = NamedAttribute[]
-    !isnothing(dimension) && push!(attributes, namedattribute("dimension", dimension))
-    !isnothing(is_stable) && push!(attributes, namedattribute("is_stable", is_stable))
+    !isnothing(dimension) && push!(attributes, NamedAttribute("dimension", dimension))
+    !isnothing(is_stable) && push!(attributes, NamedAttribute("is_stable", is_stable))
 
     return create_operation(
         "stablehlo.sort",
@@ -4331,7 +4331,7 @@ function sqrt(
     attributes = NamedAttribute[]
     !isnothing(result) && push!(op_ty_results, result)
     !isnothing(result_accuracy) &&
-        push!(attributes, namedattribute("result_accuracy", result_accuracy))
+        push!(attributes, NamedAttribute("result_accuracy", result_accuracy))
 
     return create_operation(
         "stablehlo.sqrt",
@@ -4408,7 +4408,7 @@ function tan(
     attributes = NamedAttribute[]
     !isnothing(result) && push!(op_ty_results, result)
     !isnothing(result_accuracy) &&
-        push!(attributes, namedattribute("result_accuracy", result_accuracy))
+        push!(attributes, NamedAttribute("result_accuracy", result_accuracy))
 
     return create_operation(
         "stablehlo.tan",
@@ -4449,7 +4449,7 @@ function tanh(
     attributes = NamedAttribute[]
     !isnothing(result) && push!(op_ty_results, result)
     !isnothing(result_accuracy) &&
-        push!(attributes, namedattribute("result_accuracy", result_accuracy))
+        push!(attributes, NamedAttribute("result_accuracy", result_accuracy))
 
     return create_operation(
         "stablehlo.tanh",
@@ -4493,7 +4493,7 @@ function torch_index_select(
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[
-        namedattribute("dim", dim), namedattribute("batch_dims", batch_dims)
+        NamedAttribute("dim", dim), NamedAttribute("batch_dims", batch_dims)
     ]
 
     return create_operation(
@@ -4529,7 +4529,7 @@ function transpose(
     operands = Value[operand,]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("permutation", permutation),]
+    attributes = NamedAttribute[NamedAttribute("permutation", permutation),]
     !isnothing(result) && push!(op_ty_results, result)
 
     return create_operation(
@@ -4578,10 +4578,10 @@ function triangular_solve(
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[
-        namedattribute("left_side", left_side),
-        namedattribute("lower", lower),
-        namedattribute("unit_diagonal", unit_diagonal),
-        namedattribute("transpose_a", transpose_a),
+        NamedAttribute("left_side", left_side),
+        NamedAttribute("lower", lower),
+        NamedAttribute("unit_diagonal", unit_diagonal),
+        NamedAttribute("transpose_a", transpose_a),
     ]
     !isnothing(result_0) && push!(op_ty_results, result_0)
 
@@ -4653,7 +4653,7 @@ function unary_einsum(operand::Value; result_0::IR.Type, einsum_config, location
     operands = Value[operand,]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("einsum_config", einsum_config),]
+    attributes = NamedAttribute[NamedAttribute("einsum_config", einsum_config),]
 
     return create_operation(
         "stablehlo.unary_einsum",

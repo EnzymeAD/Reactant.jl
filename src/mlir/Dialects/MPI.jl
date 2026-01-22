@@ -10,7 +10,7 @@ import ...IR:
     create_operation,
     context,
     IndexType
-import ..Dialects: namedattribute, operandsegmentsizes
+import ..Dialects: operandsegmentsizes
 import ...API
 
 """
@@ -39,7 +39,7 @@ function allreduce(
     operands = Value[sendbuf, recvbuf, comm]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("op", op),]
+    attributes = NamedAttribute[NamedAttribute("op", op),]
     !isnothing(retval) && push!(op_ty_results, retval)
 
     return create_operation(
@@ -417,7 +417,7 @@ function retval_check(val::Value; res::IR.Type, errclass, location=Location())
     operands = Value[val,]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("errclass", errclass),]
+    attributes = NamedAttribute[NamedAttribute("errclass", errclass),]
 
     return create_operation(
         "mpi.retval_check",
