@@ -123,6 +123,7 @@ end
 const __skip_rewrite_func_set_lock = ReentrantLock()
 const __skip_rewrite_func_set = Set([
     typeof(call_with_native),
+    typeof(Core.Typeof),
     # Avoid the 1.10 stackoverflow
     typeof(Base.typed_hvcat),
     typeof(Base.hvcat),
@@ -164,12 +165,20 @@ const __skip_rewrite_func_set = Set([
     typeof(Base.checkindex),
     typeof(Base.to_index),
     typeof(Base._maybe_reindex),
+    typeof(Base.isnothing),
+    typeof(Base.CoreLogging.current_logger_for_env),
+    typeof(Base.CoreLogging.current_logstate),
+
     @static(
         if VERSION >= v"1.11.0"
             typeof(Base.memoryref)
         end
     ),
     typeof(materialize_traced_array),
+    typeof(Core.throw_inexacterror),
+    typeof(Base.throw_boundserror),
+    typeof(Core.is_top_bit_set),
+    typeof(Core.check_sign_bit),
 ])
 
 """
@@ -211,7 +220,15 @@ const __skip_rewrite_type_constructor_list = [
     Type{<:MLIR.IR.Block},
     Type{<:NamedTuple},
     Type{<:Tuple},
-    Type{<:Base.Pairs}
+    Type{<:Base.Pairs},
+    Type{<:Array},
+    @static(
+        if VERSION >= v"1.11.0"
+	    Type{<:GenericMemory}
+        end
+    ),
+    Type{<:Integer},
+    Type{<:IEEEFloat},
 ]
 
 """
