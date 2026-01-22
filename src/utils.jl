@@ -209,6 +209,8 @@ const __skip_rewrite_type_constructor_list = [
     Type{<:TracedRNumber},
     Type{MLIR.IR.Location},
     Type{MLIR.IR.Block},
+    Type{<:NamedTuple},
+    Type{<:Tuple},
 ]
 
 """
@@ -240,7 +242,7 @@ macro skip_rewrite_type(typ)
     end
 end
 
-const no_rewrite_ancestor_modules = Module[MLIR]
+const no_rewrite_ancestor_modules = Module[MLIR, XLA, ProtoUtils, Proto]
 
 function should_rewrite_call(@nospecialize(ft))
     # Don't rewrite builtin or intrinsics, unless they are apply iter or kwcall
