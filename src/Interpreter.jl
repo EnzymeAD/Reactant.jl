@@ -108,8 +108,6 @@ end
         end
         return result
     else
-	ccall(:jl_, Cvoid, (Any,), "f="*string(f))
-	ccall(:jl_, Cvoid, (Any,), f)
         return Base.@invoke abstract_call_known(
             interp::AbstractInterpreter,
             f::Any,
