@@ -185,7 +185,7 @@ end
 function activate!(blk::Block)
     stack = get!(task_local_storage(), :mlir_block) do
         return Block[]
-    end
+    end::Vector{Block}
     Base.push!(stack, blk)
     return nothing
 end
@@ -197,7 +197,7 @@ end
 
 function _has_block()
     return haskey(task_local_storage(), :mlir_block) &&
-           !Base.isempty(task_local_storage(:mlir_block))
+           !Base.isempty(task_local_storage(:mlir_block)::Vector{Block})
 end
 
 function block(; throw_error::Core.Bool=true)
@@ -205,7 +205,7 @@ function block(; throw_error::Core.Bool=true)
         throw_error && error("No MLIR block is active")
         return nothing
     end
-    return last(task_local_storage(:mlir_block))
+    return last(task_local_storage(:mlir_block)::Vector{Block})
 end
 
 function block!(f, blk::Block)

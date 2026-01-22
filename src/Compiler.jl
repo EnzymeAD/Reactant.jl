@@ -1625,21 +1625,24 @@ const SROA_ATTRIBUTOR = Ref{Bool}(true)
 function activate_raising!(is_raising::Bool)
     stack = get!(task_local_storage(), :reactant_is_raising) do
         Bool[]
-    end
+    end::Vector{Bool}
     push!(stack, is_raising)
     return nothing
 end
 
 function deactivate_raising!(is_raising::Bool)
     key = :reactant_is_raising
-    is_raising === last(task_local_storage(key)) ||
+    is_raising === last(task_local_storage(key)::Vector{Bool}) ||
         error("Deactivating wrong Reactant raising context")
-    return pop!(task_local_storage(key))
+    return pop!(task_local_storage(key)::Vector{Bool})
 end
 
 function raising(; throw_error::Bool=true)
     key = :reactant_is_raising
-    if !(haskey(task_local_storage(), key) && !Base.isempty(task_local_storage(key)))
+    if !(
+        haskey(task_local_storage(), key) &&
+        !Base.isempty(task_local_storage(key)::Vector{Bool})
+    )
         throw_error && error("No Reactant raising context")
     end
     return last(task_local_storage(key)::Vector{Bool})
@@ -4045,20 +4048,20 @@ for cache_type in (:callcache, :sdycache, :sdygroupidcache)
         function $(activate_fn)(cache)
             stack = get!(task_local_storage(), $(Meta.quot(cache_type))) do
                 return []
-            end
+            end::Vector
             push!(stack, cache)
             return nothing
         end
 
         function $(deactivate_fn)(cache)
-            cache === last(task_local_storage($(Meta.quot(cache_type)))) ||
+            cache === last(task_local_storage($(Meta.quot(cache_type)))::Vector) ||
                 error("Deactivating wrong cache")
-            return pop!(task_local_storage($(Meta.quot(cache_type))))
+            return pop!(task_local_storage($(Meta.quot(cache_type)))::Vector)
         end
 
         function $(has_fn)()
             return haskey(task_local_storage(), $(Meta.quot(cache_type))) &&
-                   !Base.isempty(task_local_storage($(Meta.quot(cache_type))))
+                   !Base.isempty(task_local_storage($(Meta.quot(cache_type)))::Vector)
         end
 
         function $(cache_type)(; throw_error::Bool=true)
@@ -4066,7 +4069,7 @@ for cache_type in (:callcache, :sdycache, :sdygroupidcache)
                 throw_error && error("No cache is active")
                 return nothing
             end
-            return last(task_local_storage($(Meta.quot(cache_type))))
+            return last(task_local_storage($(Meta.quot(cache_type)))::Vector)
         end
     end
 end
