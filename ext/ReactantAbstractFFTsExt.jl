@@ -2,7 +2,7 @@ module ReactantAbstractFFTsExt
 
 using AbstractFFTs: AbstractFFTs, fftdims
 using LinearAlgebra
-using Reactant: Reactant, MLIR, Ops, AnyTracedRArray, TracedRArray, TracedUtils
+using Reactant: Reactant, MLIR, Ops, AnyTracedRArray, TracedUtils
 using Reactant.Ops: @opcall
 
 # To automatically convert FFT plans to traced versions
@@ -139,17 +139,17 @@ for op in (:rfft, :fft, :ifft)
     @eval $(plan_name){T}(dims) where {T} = $(plan_name){T,typeof(dims)}(dims)
 
     @eval function AbstractFFTs.$(plan_f)(
-        x::Reactant.AnyTracedRArray{T}, dims=1:ndims(x)
+        x::AnyTracedRArray{T}, dims=1:ndims(x)
     ) where {T}
         return $(plan_name){T,typeof(dims)}(dims)
     end
 
-    @eval function Base.:*(p::$(plan_name){T}, x::Reactant.AnyTracedRArray{T}) where {T}
+    @eval function Base.:*(p::$(plan_name){T}, x::AnyTracedRArray{T}) where {T}
         return AbstractFFTs.$(op)(x, p.dims)
     end
 
     @eval function LinearAlgebra.mul!(
-        y::Reactant.AnyTracedRArray, p::$(plan_name), x::Reactant.AnyTracedRArray
+        y::AnyTracedRArray, p::$(plan_name), x::AnyTracedRArray
     )
         return copyto!(y, AbstractFFTs.$(op)(x, fftdims(p)))
     end
@@ -164,18 +164,18 @@ for op in (:rfft, :fft, :ifft)
         @eval $(plan_name!){T}(dims) where {T} = $(plan_name!){T,typeof(dims)}(dims)
 
         @eval function AbstractFFTs.$(plan_f!)(
-            x::Reactant.AnyTracedRArray{T}, dims=1:ndims(x)
+            x::AnyTracedRArray{T}, dims=1:ndims(x)
         ) where {T}
             return $(plan_name!){T,typeof(dims)}(dims)
         end
         @eval function Base.:*(
-            p::$(plan_name!){T}, x::Reactant.AnyTracedRArray{T}
+            p::$(plan_name!){T}, x::AnyTracedRArray{T}
         ) where {T}
             return copyto!(x, AbstractFFTs.$(op)(x, p.dims))
         end
 
         @eval function LinearAlgebra.mul!(
-            y::Reactant.AnyTracedRArray, p::$(plan_name!), x::Reactant.AnyTracedRArray
+            y::AnyTracedRArray, p::$(plan_name!), x::AnyTracedRArray
         )
             return copyto!(y, AbstractFFTs.$(op)(x, fftdims(p)))
         end
@@ -221,19 +221,19 @@ for op in (:irfft,)
     @eval $(plan_name){T}(dims, length) where {T} =
         $(plan_name){T,typeof(dims)}(dims, length)
     @eval function AbstractFFTs.$(plan_f)(
-        x::Reactant.AnyTracedRArray{T}, d::Integer, dims=1:ndims(x)
+        x::AnyTracedRArray{T}, d::Integer, dims=1:ndims(x)
     ) where {T}
         return $(plan_name){T,typeof(dims)}(dims, d)
     end
 
-    @eval function Base.:*(p::$(plan_name){T}, x::Reactant.AnyTracedRArray{T}) where {T}
+    @eval function Base.:*(p::$(plan_name){T}, x::AnyTracedRArray{T}) where {T}
         return AbstractFFTs.$(op)(x, p.length, p.dims)
     end
 
     @eval function LinearAlgebra.mul!(
-        y::Reactant.AnyTracedRArray{<:Real},
+        y::AnyTracedRArray{<:Real},
         p::$(plan_name){T},
-        x::Reactant.AnyTracedRArray{T},
+        x::AnyTracedRArray{T},
     ) where {T<:Complex}
         return copyto!(y, AbstractFFTs.$(op)(x, p.length, fftdims(p)))
     end
@@ -247,12 +247,12 @@ end
 
 # Because we override the plan_bfft and plan_brfft functions we actually do not need to define
 # AbstractFFTs.bfft functions since they come for free via the plan mechanism.
-function AbstractFFTs.plan_bfft(x::Reactant.AnyTracedRArray{T}, dims=1:ndims(x)) where {T}
+function AbstractFFTs.plan_bfft(x::AnyTracedRArray{T}, dims=1:ndims(x)) where {T}
     pl = AbstractFFTs.plan_ifft(x, dims)
     return normbfft(real(T), size(x), dims) * pl
 end
 
-function AbstractFFTs.plan_bfft!(x::Reactant.AnyTracedRArray{T}, dims=1:ndims(x)) where {T}
+function AbstractFFTs.plan_bfft!(x::AnyTracedRArray{T}, dims=1:ndims(x)) where {T}
     pl = AbstractFFTs.plan_ifft!(x, dims)
     return normbfft(real(T), size(x), dims) * pl
 end
@@ -261,7 +261,7 @@ end
 function reallength end
 
 function AbstractFFTs.plan_brfft(
-    x::Reactant.AnyTracedRArray{T}, length::Integer, dims=1:ndims(x)
+    x::AnyTracedRArray{T}, length::Integer, dims=1:ndims(x)
 ) where {T}
     y = AbstractFFTs.plan_irfft(x, length, dims)
     sz = AbstractFFTs.brfft_output_size(size(x), length, dims)
