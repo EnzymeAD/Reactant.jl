@@ -39,7 +39,7 @@ AbstractFFTs.fftdims(p::AbstractReactantFFTPlan) = p.dims
 
 function reactant_fftplan(RT, p::AbstractFFTs.Plan)
     rp = make_reactant_fftplan(p)
-    # @assert RT === typeof(rp) "reactant_fftplan returned type $(typeof(rp)) but expected $RT"
+    @assert RT === typeof(rp) "reactant_fftplan returned type $(typeof(rp)) but expected $RT"
     return rp
 end
 
