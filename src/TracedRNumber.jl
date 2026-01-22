@@ -779,7 +779,13 @@ end
 # TODO: actually perform bounds checking
 function Base.checkindex(::Type{Bool}, _inds, ::TracedRNumber)
     @warn "Currently we don't perform bounds checking for TracedRNumber. This will be \
-           fixed in a future version of Reactant." maxlog=1
+           fixed in a future version of Reactant." maxlog = 1
+    return true
+end
+
+function Base.checkindex(::Type{Bool}, ::AbstractUnitRange, ::TracedRNumber)
+    @warn "Currently we don't perform bounds checking for TracedRNumber. This will be \
+           fixed in a future version of Reactant." maxlog = 1
     return true
 end
 
