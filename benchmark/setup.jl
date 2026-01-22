@@ -28,6 +28,7 @@ using Random: Random
 
 include("misc/common.jl")
 include("misc/newton_schulz.jl")
+include("misc/bloch_rf_optimization.jl")
 
 end
 
@@ -64,6 +65,7 @@ function run_benchmarks(backend::String)
 
     # misc benchmarks
     Misc.run_newton_schulz_benchmark!(results, backend)
+    Misc.run_bloch_rf_optimization_benchmark!(results, backend)
 
     return results
 end
