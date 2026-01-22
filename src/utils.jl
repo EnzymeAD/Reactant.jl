@@ -176,9 +176,7 @@ const __skip_rewrite_func_set = Set([
     ),
     typeof(materialize_traced_array),
     typeof(Core.throw_inexacterror),
-    typeof(Base.throw_boundserror),
-    typeof(Core.is_top_bit_set),
-    typeof(Core.check_sign_bit),
+    typeof(Base.throw_boundserror)
 ])
 
 """
