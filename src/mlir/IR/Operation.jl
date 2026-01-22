@@ -191,11 +191,11 @@ Return an array of all operands of the operation.
 operands(op) = Value[operand(op, i) for i in 1:noperands(op)]
 
 """
-    operand!(op, i, value)
+    setoperand!(op, i, value)
 
 Sets the `i`-th operand of the operation.
 """
-function operand!(op::Operation, i, value)
+function setoperand!(op::Operation, i, value)
     i ∉ 1:noperands(op) && throw(BoundsError(op, i))
     API.mlirOperationSetOperand(op, i - 1, value)
     return value
@@ -357,7 +357,7 @@ end
 
 function create_operation(args...; kwargs...)
     res = create_operation_common(args...; kwargs...)
-    if has_current_block()
+    if has_block()
         push!(current_block(), res)
     end
     return res

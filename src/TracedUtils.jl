@@ -342,7 +342,7 @@ function make_mlir_fn(
     )
 
     Ops.activate_constant_context!(fnbody)
-    @assert MLIR.IR.has_current_block()
+    @assert MLIR.IR.has_block()
 
     # Explicitly don't use with_block to avoid creating a closure, which creates
     # both compile-time and relocatability issues

@@ -197,13 +197,13 @@ function deactivate!(blk::Block)
     return Base.pop!(task_local_storage(:mlir_block))
 end
 
-function has_current_block()
+function has_block()
     return haskey(task_local_storage(), :mlir_block) &&
            !Base.isempty(task_local_storage(:mlir_block))
 end
 
 function current_block(; throw_error::Core.Bool=true)
-    if !has_current_block()
+    if !has_block()
         throw_error && error("No MLIR block is active")
         return nothing
     end
