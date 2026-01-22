@@ -926,4 +926,5 @@ function NamedAttribute(name::Identifier, attr::Attribute; context=context(attr)
     return NamedAttribute(API.mlirNamedAttributeGet(name, attr))
 end
 
-Base.cconvert(::Core.Type{API.MlirAttribute}, attr::NamedAttribute) = attr.ref
+Base.cconvert(::Core.Type{API.MlirAttribute}, attr::NamedAttribute) = attr
+Base.unsafe_convert(::Core.Type{API.MlirAttribute}, attr::NamedAttribute) = attr.ref
