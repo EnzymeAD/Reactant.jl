@@ -226,7 +226,7 @@ const __skip_rewrite_type_constructor_list = [
         end
     ),
     Type{<:Integer},
-    Type{<:IEEEFloat},
+    Type{<:Base.IEEEFloat},
 ]
 
 """
