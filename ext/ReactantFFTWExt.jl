@@ -70,18 +70,3 @@ function AFTEx.make_reactant_fftplan(plan::FFTW.rFFTWPlan{T,BACKWARD}) where {T}
 end
 
 end
-
-AbstractFFTs.ScaledPlan{
-    ComplexF32,
-    ReactantAbstractFFTsExt.ReactantIFFTPlan{ComplexF32,Tuple{Int64,Int64}},
-    Float32,
-}
-AbstractFFTs.ScaledPlan{
-    ComplexF32,
-    AbstractFFTs.ScaledPlan{
-        ComplexF32,
-        ReactantAbstractFFTsExt.ReactantIFFTPlan{ComplexF32,Tuple{Int64,Int64}},
-        Float32,
-    },
-    Float32,
-}
