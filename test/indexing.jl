@@ -469,3 +469,31 @@ end
     @test @jit(index_jl_array(idx1_ra, 3)) ≈ index_jl_array(idx1, 3)
     @test @jit(index_jl_array(1, idx2_ra)) ≈ index_jl_array(1, idx2)
 end
+
+function bcast_setindex!(outr, arr, dindx)
+    @allowscalar @inbounds outr[dindx] .= arr
+    return nothing
+end
+
+@testset "bcast setindex!" begin
+    f = rand(ComplexF32, 4, 4)
+    p = rand(ComplexF32, 4 * 4)
+    fr = Reactant.to_rarray(f)
+    pr = Reactant.to_rarray(p)
+    dindxr = Reactant.to_rarray(collect(1:length(fr)))
+
+    bcast_setindex!(f, p, collect(1:length(fr)))
+    @jit bcast_setindex!(fr, pr, dindxr)
+    @test fr ≈ f
+end
+
+copyto_with_reshaped_view(out, g, I) = copyto!(out, reshape(@view(g[I]), :))
+
+@testset "copyto! with reshaped view" begin
+    outr = Reactant.to_rarray(zeros(6, 6))
+    gr = Reactant.to_rarray(ones(6, 6))
+    Ir = Reactant.to_rarray(eachindex(1:length(outr)))
+
+    @jit copyto_with_reshaped_view(outr, gr, Ir)
+    @test all(isone, Array(outr))
+end
