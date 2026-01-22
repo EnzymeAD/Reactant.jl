@@ -76,12 +76,12 @@ end
            ArgInfo(fargs isa Nothing ? nothing : fargs[2:end], argtypes[2:end])
 	end
 
-	sv2 = if VERSION < v"1.12"
+	si2 = if VERSION < v"1.12"
 	    StmtInfo(true)
 	else
 	    StmtInfo(true, false)
 	end
-        return Core.Compiler.abstract_call(interp, arginfo2::ArgInfo, si, sv2, max_methods)
+        return Core.Compiler.abstract_call(interp, arginfo2::ArgInfo, si2, sv, max_methods)
     end
 
     if !should_rewrite_call(typeof(f))
