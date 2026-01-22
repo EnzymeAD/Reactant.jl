@@ -211,6 +211,7 @@ const __skip_rewrite_type_constructor_list = [
     Type{<:MLIR.IR.Block},
     Type{<:NamedTuple},
     Type{<:Tuple},
+    Type{<:Base.Pairs}
 ]
 
 """
