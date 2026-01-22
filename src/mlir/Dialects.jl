@@ -5,7 +5,6 @@ import ..API
 
 using Reactant_jll: Reactant_jll
 
-
 operandsegmentsizes(segments) = NamedAttribute("operand_segment_sizes", Int32.(segments))
 
 #! explicit-imports: off
