@@ -76,7 +76,7 @@ Base.IteratorSize(::Core.Type{OperationIterator}) = Base.SizeUnknown()
 Base.eltype(::OperationIterator) = Operation
 
 function Base.iterate(it::OperationIterator)
-    raw_op = API.mlirBlockGetFirstOperation(it.ref)
+    raw_op = API.mlirBlockGetFirstOperation(it.block)
     if mlirIsNull(raw_op)
         nothing
     else
