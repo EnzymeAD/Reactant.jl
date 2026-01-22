@@ -76,7 +76,9 @@ for randfun in (:rand, :randn, :randexp)
             rng::AbstractRNG, ::Type{T}, dims::Dims
         ) where {T}
             if unwrapped_eltype(T) <: ReactantPrimitive
-                return call_with_native(TracedRandom.$(overload_randfun), rng, unwrapped_eltype(T), dims)
+                return call_with_native(
+                    TracedRandom.$(overload_randfun), rng, unwrapped_eltype(T), dims
+                )
             end
             @warn "Reactant doesn't support sampling of $(T) with the current \
                    interpreter. Falling back to native interpreter." maxlog = 1
@@ -198,7 +200,9 @@ end
     kwargs...,
 )
     if use_overlayed_version(A) || use_overlayed_version(f)
-        return call_with_native(TracedRArrayOverrides.overloaded_mapreduce, f, op, A; kwargs...)
+        return call_with_native(
+            TracedRArrayOverrides.overloaded_mapreduce, f, op, A; kwargs...
+        )
     else
         return call_with_native(
             Base.mapreduce, CallWithReactant(f), CallWithReactant(op), A; kwargs...
@@ -253,7 +257,9 @@ end
     ::IndexLinear, x::Array{T,N}, idxs::Vararg{Any,N}
 ) where {T,N}
     if use_overlayed_version(idxs)
-        return call_with_native(TracedIndexing.overloaded_unsafe_getindex, IndexLinear(), x, idxs...)
+        return call_with_native(
+            TracedIndexing.overloaded_unsafe_getindex, IndexLinear(), x, idxs...
+        )
     else
         return call_with_native(Base._getindex, IndexLinear(), x, idxs...)
     end
@@ -277,8 +283,11 @@ for (jlop, rop, default_pivot) in (
         )
             if use_overlayed_version(x)
                 pivot = $(default_pivot)()
-                return call_with_native(TracedLinearAlgebra.$(rop),
-                    factorization_copy(LinearAlgebra.$(jlop), x, pivot), pivot; kwargs...
+                return call_with_native(
+                    TracedLinearAlgebra.$(rop),
+                    factorization_copy(LinearAlgebra.$(jlop), x, pivot),
+                    pivot;
+                    kwargs...,
                 )
             else
                 return call_with_native(LinearAlgebra.$(jlop), x; kwargs...)
@@ -289,8 +298,11 @@ for (jlop, rop, default_pivot) in (
             x::AbstractArray, pivot::$(default_pivot); kwargs...
         )
             if use_overlayed_version(x)
-                return call_with_native(TracedLinearAlgebra.$(rop),
-                    factorization_copy(LinearAlgebra.$(jlop), x, pivot), pivot; kwargs...
+                return call_with_native(
+                    TracedLinearAlgebra.$(rop),
+                    factorization_copy(LinearAlgebra.$(jlop), x, pivot),
+                    pivot;
+                    kwargs...,
                 )
             else
                 return call_with_native(LinearAlgebra.$(jlop), x, pivot; kwargs...)
@@ -305,8 +317,10 @@ for (jlop, rop) in ((:svd, :overloaded_svd),)
             x::AbstractArray; kwargs...
         )
             if use_overlayed_version(x)
-                return call_with_native(TracedLinearAlgebra.$(rop),
-                    factorization_copy(LinearAlgebra.$(jlop), x); kwargs...
+                return call_with_native(
+                    TracedLinearAlgebra.$(rop),
+                    factorization_copy(LinearAlgebra.$(jlop), x);
+                    kwargs...,
                 )
             else
                 return call_with_native(LinearAlgebra.$(jlop), x; kwargs...)
