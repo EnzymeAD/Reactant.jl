@@ -163,6 +163,7 @@ const __skip_rewrite_func_set = Set([
     typeof(Base.ht_keyindex),
     typeof(Base.checkindex),
     typeof(Base.to_index),
+    typeof(Base._maybe_reindex),
     @static(
         if VERSION >= v"1.11.0"
             typeof(Base.memoryref)
