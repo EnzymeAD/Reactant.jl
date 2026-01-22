@@ -476,8 +476,8 @@ function bcast_setindex!(outr, arr, dindx)
 end
 
 @testset "bcast setindex!" begin
-    f = rand(ComplexF64, 4, 4)
-    p = rand(ComplexF64, 4 * 4)
+    f = rand(ComplexF32, 4, 4)
+    p = rand(ComplexF32, 4 * 4)
     fr = Reactant.to_rarray(f)
     pr = Reactant.to_rarray(p)
     dindxr = Reactant.to_rarray(collect(1:length(fr)))
