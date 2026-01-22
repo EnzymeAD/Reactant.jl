@@ -225,7 +225,7 @@ function OpPassManager(opm::OpPassManager, opname)
 end
 
 Base.cconvert(::Core.Type{API.MlirOpPassManager}, op_pass::OpPassManager) = op_pass
-Base.unsafe_convert(::Core.Type{API.MlirOpPassManager}, op_pass::OpPassManager) = op_pass.ref
+Base.unsafe_convert(::Core.Type{API.MlirOpPassManager}, opm::OpPassManager) = opm.ref
 
 """
     pass_pipeline(opPassManager) -> String

@@ -39,6 +39,8 @@ mutable struct TypeIDAllocator
 end
 
 Base.cconvert(::Core.Type{API.MlirTypeIDAllocator}, alloc::TypeIDAllocator) = alloc
-Base.unsafe_convert(::Core.Type{API.MlirTypeIDAllocator}, alloc::TypeIDAllocator) = alloc.ref
+function Base.unsafe_convert(::Core.Type{API.MlirTypeIDAllocator}, alloc::TypeIDAllocator)
+    return alloc.ref
+end
 
 TypeID(alloc::TypeIDAllocator) = TypeID(API.mlirTypeIDAllocatorAllocateTypeID(alloc))

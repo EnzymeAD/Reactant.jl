@@ -81,9 +81,10 @@ end
 
 DialectRegistry() = DialectRegistry(API.mlirDialectRegistryCreate())
 
-
 Base.cconvert(::Core.Type{API.MlirDialectRegistry}, registry::DialectRegistry) = registry
-function Base.unsafe_convert(::Core.Type{API.MlirDialectRegistry}, registry::DialectRegistry)
+function Base.unsafe_convert(
+    ::Core.Type{API.MlirDialectRegistry}, registry::DialectRegistry
+)
     return registry.ref
 end
 

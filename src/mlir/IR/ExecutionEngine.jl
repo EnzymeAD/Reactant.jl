@@ -32,7 +32,9 @@ function ExecutionEngine(
 end
 
 Base.cconvert(::Core.Type{API.MlirExecutionEngine}, engine::ExecutionEngine) = engine
-Base.unsafe_convert(::Core.Type{API.MlirExecutionEngine}, engine::ExecutionEngine) = engine.ref
+function Base.unsafe_convert(::Core.Type{API.MlirExecutionEngine}, engine::ExecutionEngine)
+    return engine.ref
+end
 
 # TODO mlirExecutionEngineInvokePacked
 
