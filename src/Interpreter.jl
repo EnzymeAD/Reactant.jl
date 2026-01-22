@@ -69,7 +69,6 @@ end
     # Improve inference by considering call_with_reactant as having the same results as
     # the original call
     if f === call_with_reactant
-        ccall(:jl_, Cvoid,(Any,), (fargs, argtypes))
 	arginfo2 = if length(argtypes) >= 2 && Core.Compiler.widenconst(argtypes[2]) <: EnsureReturnType
            ArgInfo(fargs isa Nothing ? nothing : fargs[3:end], argtypes[3:end])
 	else
