@@ -79,7 +79,7 @@ jobs:
           julia_version: ${{ inputs.julia_version }}
 
       # Local build of libReactant
-      - uses: bazel-contrib/setup-bazel@0.15.0
+      - uses: bazel-contrib/setup-bazel@0.18.0
         if: ${{ inputs.localjll }}
         name: Set up Bazel
         with:
@@ -185,7 +185,7 @@ jobs:
           REACTANT_TEST_GROUP: ${{ inputs.test_group }}
 
       - name: "Upload MLIR modules"
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         timeout-minutes: 10
         if: always()
         with:

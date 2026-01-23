@@ -89,6 +89,21 @@ end
     @test res1[1] ≈ fill(2.0, 3, 2)
 end
 
+function error_not_within_autodiff()
+    !Enzyme.within_autodiff() && error("Not within autodiff")
+    return nothing
+end
+
+fwd_within_autodiff(Mode, RT) = Enzyme.autodiff(Mode, error_not_within_autodiff, RT)
+
+@testset "within_autodiff" begin
+    @test_throws ErrorException error_not_within_autodiff()
+    @test fwd_within_autodiff(Forward, Const) == ()
+
+    @test_throws ErrorException @jit error_not_within_autodiff()
+    @test (@jit fwd_within_autodiff(Forward, Const)) == ()
+end
+
 function gw(z)
     return Enzyme.gradient(Forward, sum, z; chunk=Val(1))
 end
@@ -415,4 +430,31 @@ end
     res = autodiff(Reverse, sum, Duplicated(x, zero(x)))
     res_reactant = @jit autodiff(Reverse, sum, Duplicated(xr, zero(xr)))
     @test length(res) == length(res_reactant)
+end
+
+function test_fn(x, nt)
+    return sum(abs2, x .+ nt.y .- nt.x)
+end
+
+@testset "Finite Differences" begin
+    x = Reactant.to_rarray(Reactant.TestUtils.construct_test_array(Float32, 2, 2))
+    nt = (;
+        x=Reactant.to_rarray(ones(Int64, 2, 2)),
+        y=Reactant.to_rarray(Reactant.TestUtils.construct_test_array(Float64, 2, 2)),
+    )
+
+    @testset "Integer Inputs to Finite Differences" begin
+        res = @jit Reactant.TestUtils.finite_difference_gradient(test_fn, x, nt)
+        @test res isa typeof((x, nt))
+        @test all(iszero, Array(res[2].x))
+    end
+
+    @testset "Skip Constant Inputs" begin
+        res = @jit Reactant.TestUtils.finite_difference_gradient(
+            test_fn, x, Enzyme.Const(nt)
+        )
+        @test res isa typeof((x, nt))
+        @test all(iszero, Array(res[2].x))
+        @test all(iszero, Array(res[2].y))
+    end
 end

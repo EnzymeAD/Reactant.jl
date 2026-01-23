@@ -13,6 +13,7 @@ using ..Reactant:
     MissingTracedValue,
     unwrapped_eltype
 using ReactantCore: ReactantCore
+using GPUArraysCore: GPUArraysCore
 
 function _function_macro_error()
     throw(ArgumentError("`caller_function` is not available in this context"))
@@ -128,10 +129,9 @@ end
     st = stacktrace()
     deleteat!(st, 1)
     return mapfoldl(MLIR.IR.Location, st) do stackframe
-        name = string(stackframe.func)
-        file = stackframe.file
-        line = stackframe.line
-        return MLIR.IR.Location(name, MLIR.IR.Location(file, line, 0))
+        return MLIR.IR.Location(
+            string(stackframe.func), MLIR.IR.Location(stackframe.file, stackframe.line, 0)
+        )
     end
 end
 
@@ -170,6 +170,12 @@ end
                 mlir_stacktrace("constant", @__FILE__, @__LINE__)
             end
         end
+    end
+
+    if T <: Complex{<:Integer}
+        error(
+            "Generating a constant of type $T is not supported, eltype of complex must be Float32 or Float64",
+        )
     end
 
     value = MLIR.IR.DenseElementsAttribute(x)
@@ -220,6 +226,11 @@ end
     x::T; location=mlir_stacktrace("constant", @__FILE__, @__LINE__)
 ) where {T<:Number}
     x isa TracedRNumber && return x
+    if T <: Complex{<:Integer}
+        error(
+            "Generating a constant of type $T is not supported, eltype of complex must be Float32 or Float64",
+        )
+    end
     res = fill(x; location)
     return TracedRNumber{T}((), res.mlir_data)
 end
@@ -304,7 +315,10 @@ end
         @inbounds concat_inputs[i] = inp.mlir_data
     end
     res = MLIR.IR.result(
-        MLIR.Dialects.stablehlo.concatenate(concat_inputs; dimension=(dimension - 1)), 1
+        MLIR.Dialects.stablehlo.concatenate(
+            concat_inputs; dimension=(dimension - 1), location
+        ),
+        1,
     )
     return TracedRArray{T,N}((), res, size(MLIR.IR.type(res)))
 end
@@ -320,6 +334,11 @@ end
 ) where {T}
     tt = MLIR.IR.TensorType(shape, MLIR.IR.Type(T))
     splatattr = MLIR.API.mlirDenseElementsAttrSplatGet(tt, _fill_element_attr(element))
+    if T <: Complex{<:Integer}
+        error(
+            "Generating a constant of type $T is not supported, eltype of complex must be Float32 or Float64",
+        )
+    end
     cst_op = stablehlo.constant(; output=tt, value=splatattr, location=location)
     cst = MLIR.IR.result(cst_op)
     ta = TracedRArray{T,length(shape)}((), cst, shape)
@@ -1951,9 +1970,9 @@ instead.
     @assert size(scatter_indices, 2) == N
 
     return scatter(
-        (a, b) -> b,
+        (_, b) -> b,
         [dest],
-        scatter_indices,
+        convert(TracedRArray{Int64,2}, scatter_indices),
         [convert(TracedRArray{T,1}, updates)];
         update_window_dims=Int64[],
         inserted_window_dims=collect(Int64, 1:N),
@@ -2164,7 +2183,7 @@ end
     end
 
     linear_args = Reactant.TracedType[]
-    for (k, v) in seen_args
+    for (_, v) in seen_args
         v isa Reactant.TracedType || continue
         push!(linear_args, v)
     end
@@ -2427,14 +2446,14 @@ end
     end
 
     all_paths = []
-    for (path, tr) in tb_results_dict
+    for (path, _) in tb_results_dict
         if path[1] == true_fn_names[2]
             push!(all_paths, (:result, path[2:end]...))
         elseif path[1] == true_fn_names[3]
             push!(all_paths, (:resarg, path[2:end]...))
         end
     end
-    for (path, fr) in fb_results_dict
+    for (path, _) in fb_results_dict
         if path[1] == false_fn_names[2]
             push!(all_paths, (:result, path[2:end]...))
         elseif path[1] == false_fn_names[3]
@@ -2465,7 +2484,7 @@ end
     activate_constant_context!(true_fn_body)
     tb_corrected_linear_results = Reactant.TracedType[]
     try
-        for (i, path) in enumerate(tb_paths)
+        for (i, _) in enumerate(tb_paths)
             if haskey(tb_results_dict, tb_paths[i])
                 push!(tb_corrected_linear_results, tb_results_dict[tb_paths[i]])
             else
@@ -2482,7 +2501,7 @@ end
     activate_constant_context!(false_fn_body)
     fb_corrected_linear_results = Reactant.TracedType[]
     try
-        for (i, path) in enumerate(fb_paths)
+        for (i, _) in enumerate(fb_paths)
             if haskey(fb_results_dict, fb_paths[i])
                 push!(fb_corrected_linear_results, fb_results_dict[fb_paths[i]])
             else
@@ -2634,7 +2653,7 @@ end
     @assert length(all_paths) == length(result_types)
 
     residx = 0
-    for (i, path) in enumerate(all_paths)
+    for (_, path) in enumerate(all_paths)
         if path[1] == :result
             residx += 1
             Reactant.TracedUtils.set!(
@@ -2705,7 +2724,7 @@ end
     )
     linear_args = []
     mlir_caller_args = Reactant.MLIR.IR.Value[]
-    for (k, v) in seen_cache
+    for (_, v) in seen_cache
         v isa Reactant.TracedType || continue
         push!(linear_args, v)
         push!(mlir_caller_args, v.mlir_data)
@@ -3030,11 +3049,22 @@ end
 end
 
 function standardize_start_index(
-    sz::Int, start_index::Union{Integer,TracedRNumber{<:Integer}}
+    sz::Int,
+    update_sz::Union{Int,Nothing},
+    start_index::Union{Integer,TracedRNumber{<:Integer}},
+    idx::Integer,
 )
     if (start_index isa Integer && start_index ≤ typemax(Int32)) || sz ≤ typemax(Int32)
+        if start_index isa Integer && update_sz !== nothing
+            @assert start_index + update_sz - 1 ≤ sz "Index $(idx) out of bounds: \
+                                                      start_index=$(start_index), \
+                                                      update_sz=$(update_sz), sz=$(sz)"
+        end
         start_index = Reactant.promote_to(TracedRNumber{Int32}, start_index)
-    elseif start_index isa Integer
+    elseif start_index isa Integer && update_sz !== nothing
+        @assert start_index + update_sz - 1 ≤ sz "Index $(idx) out of bounds: \
+                                                  start_index=$(start_index), \
+                                                  update_sz=$(update_sz), sz=$(sz)"
         start_index = Reactant.promote_to(TracedRNumber, start_index)
     end
 
@@ -3043,11 +3073,16 @@ function standardize_start_index(
 end
 
 function standardize_start_indices(
-    operand::TracedRArray{T,N}, start_indices::Vector
+    operand::TracedRArray{T,N}, update, start_indices::Vector
 ) where {T,N}
     @assert length(start_indices) == N
     return [
-        standardize_start_index(size(operand, i), start_indices[i]).mlir_data for i in 1:N
+        standardize_start_index(
+            size(operand, i),
+            update === nothing ? nothing : size(update, i),
+            start_indices[i],
+            i,
+        ).mlir_data for i in 1:N
     ]
 end
 
@@ -3061,7 +3096,7 @@ end
         stablehlo.dynamic_update_slice(
             operand.mlir_data,
             update.mlir_data,
-            standardize_start_indices(operand, start_indices);
+            standardize_start_indices(operand, update, start_indices);
             location,
         ),
         1,
@@ -3078,7 +3113,7 @@ end
     res = MLIR.IR.result(
         stablehlo.dynamic_slice(
             operand.mlir_data,
-            standardize_start_indices(operand, start_indices);
+            standardize_start_indices(operand, nothing, start_indices);
             slice_sizes=collect(Int64, slice_sizes),
             location,
         ),
@@ -3137,7 +3172,7 @@ end
         (),
         "unbatched_" * string(f),
         false;
-        args_in_result=:none,
+        args_in_result=:result,
         do_transpose=false,
         argprefix,
     )
@@ -3688,12 +3723,16 @@ end
                                               $(size(input, dimension)) (got $(lhs))"
     @assert 0 ≤ rhs ≤ size(input, dimension) "rhs must be between 0 and \
                                               $(size(input, dimension)) (got $(rhs))"
+
+    sz = collect(Int64, size(input))
+    sz[dimension] = sz[dimension] + lhs + rhs
+
     return TracedRArray{T,N}(
         (),
         MLIR.IR.result(
             enzymexla.wrap(input.mlir_data; lhs, rhs, dimension=dimension - 1, location), 1
         ),
-        size(input),
+        sz,
     )
 end
 

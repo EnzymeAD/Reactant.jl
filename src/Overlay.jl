@@ -9,16 +9,34 @@
 end
 
 # Enzyme.jl overlays
+const WITHIN_AUTODIFF = Ref(false)
+
+@reactant_overlay @noinline function Enzyme.within_autodiff()
+    return WITHIN_AUTODIFF[]
+end
+
 @reactant_overlay @noinline function Enzyme.autodiff_deferred(
     rmode::Enzyme.Mode, f::FA, rt::Type{A}, args::Vararg{Annotation,Nargs}
 ) where {FA<:Annotation,A<:Annotation,Nargs}
-    return overload_autodiff(rmode, f, rt, args...)
+    original_within_autodiff = WITHIN_AUTODIFF[]
+    try
+        WITHIN_AUTODIFF[] = true
+        return overload_autodiff(rmode, f, rt, args...)
+    finally
+        WITHIN_AUTODIFF[] = original_within_autodiff
+    end
 end
 
 @reactant_overlay @noinline function Enzyme.autodiff(
     rmode::Enzyme.Mode, f::FA, rt::Type{A}, args::Vararg{Annotation,Nargs}
 ) where {FA<:Annotation,A<:Annotation,Nargs}
-    return overload_autodiff(rmode, f, rt, args...)
+    original_within_autodiff = WITHIN_AUTODIFF[]
+    try
+        WITHIN_AUTODIFF[] = true
+        return overload_autodiff(rmode, f, rt, args...)
+    finally
+        WITHIN_AUTODIFF[] = original_within_autodiff
+    end
 end
 
 @reactant_overlay function EnzymeCore.ignore_derivatives(args...)
@@ -58,11 +76,13 @@ for randfun in (:rand, :randn, :randexp)
             rng::AbstractRNG, ::Type{T}, dims::Dims
         ) where {T}
             if unwrapped_eltype(T) <: ReactantPrimitive
-                return TracedRandom.$(overload_randfun)(rng, unwrapped_eltype(T), dims)
+                return call_with_native(
+                    TracedRandom.$(overload_randfun), rng, unwrapped_eltype(T), dims
+                )
             end
             @warn "Reactant doesn't support sampling of $(T) with the current \
                    interpreter. Falling back to native interpreter." maxlog = 1
-            return Base.inferencebarrier(Random.$(randfun))(rng, T, dims)
+            return call_with_native(Random.$(randfun), rng, T, dims)
         end
 
         @reactant_overlay @noinline function Random.$(randfun)(
@@ -81,7 +101,7 @@ for randfun in (:rand, :randn, :randexp)
             end
             @warn "Reactant doesn't support sampling of $(T) with the current \
                    interpreter. Falling back to native interpreter." maxlog = 1
-            return Base.inferencebarrier(Random.$(randfun))(rng, T, dim1, dims...)
+            return call_with_native(Random.$(randfun), rng, T, dim1, dims...)
         end
 
         # scalars
@@ -93,14 +113,14 @@ for randfun in (:rand, :randn, :randexp)
             end
             @warn "Reactant doesn't support sampling of $(T) with the current \
                    interpreter. Falling back to native interpreter." maxlog = 1
-            return Base.inferencebarrier(Random.$(randfun))(rng, T)
+            return call_with_native(Random.$(randfun), rng, T)
         end
 
         # inplace
         @reactant_overlay @noinline function Random.$(randfun!)(
             rng::AbstractRNG, A::AnyTracedRArray
         )
-            return TracedRandom.$(overload_randfun!)(rng, A)
+            return call_with_native(TracedRandom.$(overload_randfun!), rng, A)
         end
         @reactant_overlay @noinline function Random.$(randfun!)(A::AnyTracedRArray)
             return TracedRandom.$(overload_randfun!)(
@@ -119,12 +139,12 @@ for (cT, aT, bT) in (
 )
     @eval begin
         @reactant_overlay @noinline function LinearAlgebra.mul!(
-            C::$cT, A::$aT, B::$bT, α::Number, β::Number
-        )
+            C::CT, A::AT, B::BT, α::Number, β::Number
+        ) where {CT<:$cT,AT<:$aT,BT<:$bT}
             A, B = aos_to_soa(A), aos_to_soa(B)
             C2 = aos_to_soa(C)
             if use_overlayed_version((C2, A, B))
-                TracedLinearAlgebra.overloaded_mul!(C2, A, B, α, β)
+                call_with_native(TracedLinearAlgebra.overloaded_mul!, C2, A, B, α, β)
                 if C2 !== C
                     C .= C2
                 end
@@ -132,13 +152,15 @@ for (cT, aT, bT) in (
                 # Inference barrier is required when calling function recursively within
                 # overload. This is required since otherwise type inference will think this
                 # is a recursive edge rather than a call to the base method
-                Base.inferencebarrier(LinearAlgebra.mul!)(C, A, B, α, β)
+                call_with_native(LinearAlgebra.mul!, C, A, B, α, β)
             end
             return C
         end
 
         # Needed mostly for 1.10 where 3-arg mul is often specialized
-        @reactant_overlay @noinline function LinearAlgebra.mul!(C::$cT, A::$aT, B::$bT)
+        @reactant_overlay @noinline function LinearAlgebra.mul!(
+            C::CT, A::AT, B::BT
+        ) where {CT<:$cT,AT<:$aT,BT<:$bT}
             call_with_reactant(LinearAlgebra.mul!, C, A, B, true, false)
             return C
         end
@@ -148,16 +170,16 @@ end
 # Base overloads
 @reactant_overlay @noinline function Base._stack(dims::Union{Integer,Colon}, iter)
     if use_overlayed_version(iter)
-        return TracedRArrayOverrides.overloaded_stack(dims, iter)
+        return call_with_native(TracedRArrayOverrides.overloaded_stack, dims, iter)
     else
         iter2 = collect(iter)
         if any(use_overlayed_version, iter2)
-            return TracedRArrayOverrides.overloaded_stack(dims, iter2)
+            return call_with_native(TracedRArrayOverrides.overloaded_stack, dims, iter2)
         else
             # Inference barrier is required when calling function recursively within
             # overload. This is required since otherwise type inference will think this is
             # a recursive edge rather than a call to the base method
-            return Base.inferencebarrier(Base._stack)(dims, iter2)
+            return call_with_native(Base._stack, dims, iter2)
         end
     end
 end
@@ -167,7 +189,7 @@ end
     if use_overlayed_version(A)
         error("Reactant doesn't have a `Base._unique_dims` with the current interpreter.")
     else
-        Base.inferencebarrier(Base._unique_dims)(A, dims)
+        call_with_native(Base._unique_dims, A, dims)
     end
 end
 
@@ -177,11 +199,13 @@ end
     A::Union{AbstractArray,Base.Iterators.Zip,Base.Iterators.Enumerate,Base.Generator};
     kwargs...,
 )
-    if use_overlayed_version(A)
-        return TracedRArrayOverrides.overloaded_mapreduce(f, op, A; kwargs...)
+    if use_overlayed_version(A) || use_overlayed_version(f)
+        return call_with_native(
+            TracedRArrayOverrides.overloaded_mapreduce, f, op, A; kwargs...
+        )
     else
-        return Base.inferencebarrier(Base.mapreduce)(
-            CallWithReactant(f), CallWithReactant(op), A; kwargs...
+        return call_with_native(
+            Base.mapreduce, CallWithReactant(f), CallWithReactant(op), A; kwargs...
         )
     end
 end
@@ -192,9 +216,9 @@ end
         use_overlayed_version(f) ||
         looped_any(use_overlayed_version, ys)
     )
-        return TracedRArrayOverrides.overloaded_map(f, x, ys...)
+        return call_with_native(TracedRArrayOverrides.overloaded_map, f, x, ys...)
     else
-        return Base.inferencebarrier(Base.map)(CallWithReactant(f), x, ys...)
+        return call_with_native(Base.map, CallWithReactant(f), x, ys...)
     end
 end
 
@@ -207,25 +231,37 @@ end
         use_overlayed_version(f) ||
         looped_any(use_overlayed_version, xs)
     )
-        return TracedRArrayOverrides.overloaded_map!(f, y, x, xs...)
+        return call_with_native(TracedRArrayOverrides.overloaded_map!, f, y, x, xs...)
     else
-        return Base.inferencebarrier(Base.map!)(CallWithReactant(f), y, x, xs...)
+        return call_with_native(Base.map!, CallWithReactant(f), y, x, xs...)
     end
 end
 
 @reactant_overlay @noinline function Base._all(f, x::AbstractArray, dims)
     if use_overlayed_version(x) || use_overlayed_version(f)
-        return TracedRArrayOverrides.overloaded_mapreduce(f, &, x; dims)
+        return call_with_native(TracedRArrayOverrides.overloaded_mapreduce, f, &, x; dims)
     else
-        return Base.inferencebarrier(Base._all)(CallWithReactant(f), x, dims)
+        return call_with_native(Base._all, CallWithReactant(f), x, dims)
     end
 end
 
 @reactant_overlay @noinline function Base._any(f, x::AbstractArray, dims)
     if use_overlayed_version(x) || use_overlayed_version(f)
-        return TracedRArrayOverrides.overloaded_mapreduce(f, |, x; dims)
+        return call_with_native(TracedRArrayOverrides.overloaded_mapreduce, f, |, x; dims)
     else
-        return Base.inferencebarrier(Base._any)(CallWithReactant(f), x, dims)
+        return call_with_native(Base._any, CallWithReactant(f), x, dims)
+    end
+end
+
+@reactant_overlay @noinline function Base._getindex(
+    ::IndexLinear, x::Array{T,N}, idxs::Vararg{Any,N}
+) where {T,N}
+    if use_overlayed_version(idxs)
+        return call_with_native(
+            TracedIndexing.overloaded_unsafe_getindex, IndexLinear(), x, idxs...
+        )
+    else
+        return call_with_native(Base._getindex, IndexLinear(), x, idxs...)
     end
 end
 
@@ -247,11 +283,14 @@ for (jlop, rop, default_pivot) in (
         )
             if use_overlayed_version(x)
                 pivot = $(default_pivot)()
-                return TracedLinearAlgebra.$(rop)(
-                    factorization_copy(LinearAlgebra.$(jlop), x, pivot), pivot; kwargs...
+                return call_with_native(
+                    TracedLinearAlgebra.$(rop),
+                    factorization_copy(LinearAlgebra.$(jlop), x, pivot),
+                    pivot;
+                    kwargs...,
                 )
             else
-                return Base.inferencebarrier(LinearAlgebra.$(jlop))(x; kwargs...)
+                return call_with_native(LinearAlgebra.$(jlop), x; kwargs...)
             end
         end
 
@@ -259,11 +298,14 @@ for (jlop, rop, default_pivot) in (
             x::AbstractArray, pivot::$(default_pivot); kwargs...
         )
             if use_overlayed_version(x)
-                return TracedLinearAlgebra.$(rop)(
-                    factorization_copy(LinearAlgebra.$(jlop), x, pivot), pivot; kwargs...
+                return call_with_native(
+                    TracedLinearAlgebra.$(rop),
+                    factorization_copy(LinearAlgebra.$(jlop), x, pivot),
+                    pivot;
+                    kwargs...,
                 )
             else
-                return Base.inferencebarrier(LinearAlgebra.$(jlop))(x, pivot; kwargs...)
+                return call_with_native(LinearAlgebra.$(jlop), x, pivot; kwargs...)
             end
         end
     end
@@ -275,11 +317,13 @@ for (jlop, rop) in ((:svd, :overloaded_svd),)
             x::AbstractArray; kwargs...
         )
             if use_overlayed_version(x)
-                return TracedLinearAlgebra.$(rop)(
-                    factorization_copy(LinearAlgebra.$(jlop), x); kwargs...
+                return call_with_native(
+                    TracedLinearAlgebra.$(rop),
+                    factorization_copy(LinearAlgebra.$(jlop), x);
+                    kwargs...,
                 )
             else
-                return Base.inferencebarrier(LinearAlgebra.$(jlop))(x; kwargs...)
+                return call_with_native(LinearAlgebra.$(jlop), x; kwargs...)
             end
         end
     end
@@ -287,17 +331,17 @@ end
 
 @reactant_overlay @noinline function LinearAlgebra.dot(x::AbstractArray, y::AbstractArray)
     if use_overlayed_version(x) || use_overlayed_version(y)
-        return TracedLinearAlgebra.overloaded_dot(x, y)
+        return call_with_native(TracedLinearAlgebra.overloaded_dot, x, y)
     else
-        return Base.inferencebarrier(LinearAlgebra.dot)(x, y)
+        return call_with_native(LinearAlgebra.dot, x, y)
     end
 end
 @reactant_overlay @noinline function LinearAlgebra.dot(
     x::AbstractVector, A::AbstractMatrix, y::AbstractVector
 )
     if use_overlayed_version(x) || use_overlayed_version(A) || use_overlayed_version(y)
-        return TracedLinearAlgebra.overloaded_dot(x, A, y)
+        return call_with_native(TracedLinearAlgebra.overloaded_dot, x, A, y)
     else
-        return Base.inferencebarrier(LinearAlgebra.dot)(x, A, y)
+        return call_with_native(LinearAlgebra.dot, x, A, y)
     end
 end

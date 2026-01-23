@@ -319,6 +319,31 @@ function Base.show(io::IO, X::Union{AnyConcretePJRTArray,AnyConcreteIFRTArray})
     return nothing
 end
 
+# To avoid ambiguity
+function Base.show(
+    io::IO,
+    v::LinearAlgebra.Adjoint{
+        <:Real,<:Union{AnyConcretePJRTArray{T,1},AnyConcreteIFRTArray{T,1}}
+    },
+) where {T}
+    print(io, "adjoint(")
+    show(io, parent(v))
+    print(io, ")")
+    return nothing
+end
+
+function Base.show(
+    io::IO,
+    v::LinearAlgebra.Transpose{
+        <:Number,<:Union{AnyConcretePJRTArray{T,1},AnyConcreteIFRTArray{T,1}}
+    },
+) where {T}
+    print(io, "transpose(")
+    show(io, parent(v))
+    print(io, ")")
+    return nothing
+end
+
 function Base.getindex(
     a::ConcretePJRTArray{T,N}, args::Vararg{Int,N}
 ) where {T<:ReactantPrimitive,N}
@@ -823,6 +848,10 @@ function Base.map!(f, R::Union{AnyConcreteIFRTArray,AnyConcretePJRTArray}, A::Ab
     return R
 end
 
+function myfill(val, dims)
+    @opcall fill(val, dims)
+end
+
 # Directly initialize a Device Array
 for T in (Number, Integer)
     @eval function Base.fill(
@@ -833,9 +862,50 @@ for T in (Number, Integer)
     )
         output_shardings = Sharding.is_sharded(sharding) ? Dict(1 => sharding) : nothing
         dims = collect(Int64, last.(dims))
-        fn = compile((); output_shardings) do
-            return @opcall fill(val, dims)
-        end
-        return fn()
+        fn = compile(myfill, (val, dims); output_shardings)
+        return fn(val, dims)
     end
+end
+
+Base.isinf(x::ConcreteRNumber{T}) where {T} = Base.isinf(convert(T, x))
+Base.round(x::ConcreteRNumber{T}) where {T} = Base.round(convert(T, x))
+
+Base._parentsmatch(A::ConcreteIFRTArray, B::ConcreteIFRTArray) = A === B
+Base._parentsmatch(A::ConcretePJRTArray, B::ConcretePJRTArray) = A === B
+function Base._parentsmatch(
+    A::Union{AnyConcreteIFRTArray,AnyConcretePJRTArray},
+    B::Union{AnyConcreteIFRTArray,AnyConcretePJRTArray},
+)
+    return Base._parentsmatch(ancestor(A), ancestor(B))
+end
+
+function Base.copyto_unaliased!(
+    _deststyle::IndexStyle,
+    dst::Union{AnyConcreteIFRTArray,AnyConcretePJRTArray},
+    _srcstyle::IndexStyle,
+    src::Union{AnyConcreteIFRTArray,AnyConcretePJRTArray},
+)
+    fn = compile(Base.copyto!, (dst, src))
+    fn(dst, src)
+    return dst
+end
+function Base.copyto_unaliased!(
+    _deststyle::IndexStyle,
+    dst::Union{AnyConcreteIFRTArray,AnyConcretePJRTArray},
+    _srcstyle::IndexStyle,
+    src::AbstractArray,
+)
+    fn = compile(Base.copyto!, (dst, src))
+    fn(dst, src)
+    return dst
+end
+function Base.copyto_unaliased!(
+    _deststyle::IndexStyle,
+    dst::AbstractArray,
+    _srcstyle::IndexStyle,
+    src::Union{AnyConcreteIFRTArray,AnyConcretePJRTArray},
+)
+    fn = compile(Base.copyto!, (dst, src))
+    fn(dst, src)
+    return dst
 end

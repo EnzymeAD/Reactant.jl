@@ -66,6 +66,19 @@ See the [profiling tutorial](@ref profiling) for more details.
 Reactant.Profiler.with_profiler
 Reactant.Profiler.annotate
 Reactant.Profiler.@annotate
+Reactant.Profiler.@time
+Reactant.Profiler.@timed
+Reactant.Profiler.@profile
+Reactant.Profiler.profiler_activity_start
+Reactant.Profiler.profiler_activity_end
+```
+
+### XProf APIs
+
+```@docs
+Reactant.Profiler.initialize_xprof_stubs
+Reactant.Profiler.start_xprof_grpc_server
+Reactant.Profiler.xspace_to_tools_data
 ```
 
 ## Devices

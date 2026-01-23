@@ -553,9 +553,11 @@ end
 `dot`
 
 \$d = matrix_multiply(\$a, \$b) + \$c. \$inputPrecision describes how to exercise the TC
-when the inputs are f32. It can be one of: tf32, tf32x3, ieee.
+when the inputs are f32. It can be one of: tf32, tf32x3, ieee, bf16x3, bf16x6.
 tf32: use TC with tf32 ops.
 tf32x3: implement the 3xTF32 trick. For more info see the pass in F32DotTC.cpp
+bf16x3: implement the 3xBF16 trick. For more info see the pass in F32DotTC.cpp
+bf16x6: implement the 6xBF16 trick. For more info see the pass in F32DotTC.cpp
 ieee: don\'t use TC, implement dot in software.
 If the GPU does not have Tensor cores or the inputs are not f32, this flag is ignored.
 """
@@ -624,9 +626,7 @@ function dot_scaled(
     !isnothing(b_scale) && push!(operands, b_scale)
     push!(
         attributes,
-        operandsegmentsizes([
-            1, 1, 1, (a_scale == nothing) ? 0 : 1, (b_scale == nothing) ? 0 : 1
-        ]),
+        operandsegmentsizes([1, 1, 1, Int(!isnothing(a_scale)), Int(!isnothing(b_scale))]),
     )
     !isnothing(lhs_k_pack) && push!(attributes, namedattribute("lhs_k_pack", lhs_k_pack))
     !isnothing(rhs_k_pack) && push!(attributes, namedattribute("rhs_k_pack", rhs_k_pack))
@@ -951,8 +951,7 @@ function load(
     !isnothing(mask) && push!(operands, mask)
     !isnothing(other) && push!(operands, other)
     push!(
-        attributes,
-        operandsegmentsizes([1, (mask == nothing) ? 0 : 1, (other == nothing) ? 0 : 1]),
+        attributes, operandsegmentsizes([1, Int(!isnothing(mask)), Int(!isnothing(other))])
     )
     !isnothing(result) && push!(op_ty_results, result)
     !isnothing(boundaryCheck) &&

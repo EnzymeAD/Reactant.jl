@@ -157,8 +157,10 @@
 #include "xla/python/ifrt_proxy/server/grpc_server.h"
 
 // Cost Analysis
+#include "xla/debug_options_flags.h"
 #include "xla/hlo/ir/hlo_module.h"
 #include "xla/service/hlo_cost_analysis.h"
+#include "xla/xla.pb.h"
 
 #if defined(REACTANT_CUDA) || defined(REACTANT_ROCM)
 #include "xla/service/gpu/model/gpu_hlo_cost_analysis.h"
@@ -174,8 +176,16 @@
 #include <llvm/Support/FileSystem.h>
 #include <llvm/Support/raw_ostream.h>
 
+#include "plugin/xprof/worker/stub_factory.h"
+#include "xprof/convert/tool_options.h"
+#include "xprof/pywrap/profiler_plugin_impl.h"
+
+#include "absl/status/statusor.h"
+#include "xla/pjrt/proto/compile_options.pb.h"
+
 using namespace mlir;
 using namespace xla;
+using ::tensorflow::profiler::ToolOptions;
 
 namespace mlir {
 namespace enzyme {
@@ -254,21 +264,6 @@ REACTANT_ABI void ReactantHandleCuResult(uint32_t curesult) {
 
 // MLIR C-API extras
 #pragma region MLIR Extra
-REACTANT_ABI MlirAttribute mlirComplexAttrDoubleGet(MlirContext ctx,
-                                                    MlirType type, double real,
-                                                    double imag) {
-  return wrap(
-      complex::NumberAttr::get(cast<ComplexType>(unwrap(type)), real, imag));
-}
-
-REACTANT_ABI MlirAttribute mlirComplexAttrDoubleGetChecked(MlirLocation loc,
-                                                           MlirType type,
-                                                           double real,
-                                                           double imag) {
-  return wrap(complex::NumberAttr::getChecked(
-      unwrap(loc), cast<ComplexType>(unwrap(type)), real, imag));
-}
-
 REACTANT_ABI bool mlirOperationInject(MlirContext ctx, MlirBlock block,
                                       MlirStringRef code, MlirLocation location,
                                       bool verify_after_parse) {
@@ -1231,6 +1226,7 @@ GenerateCompileOptions(int64_t device_id, const int64_t *mesh_ids,
 
   debug_options->set_xla_gpu_cuda_data_dir(xla_gpu_cuda_data_dir);
   debug_options->set_xla_enable_enzyme_comms_opt(true);
+  debug_options->set_xla_gpu_experimental_use_raft_select_k(true);
 
   if (kernel_cache_enabled) {
     debug_options->set_xla_gpu_kernel_cache_file(kernel_cache_path);
@@ -1307,23 +1303,33 @@ GenerateCompileOptions(int64_t device_id, const int64_t *mesh_ids,
   return options;
 }
 
-REACTANT_ABI xla::PjRtLoadedExecutable *
-ClientCompile(PjRtClient *client, MlirModule cmod, int64_t device_id,
-              const int64_t *mesh_ids, int64_t num_mesh_ids,
-              const char *xla_gpu_cuda_data_dir, bool use_shardy_partitioner,
-              int64_t num_replicas, int64_t num_partitions,
-              bool use_spmd_partitioning, bool kernel_cache_enabled,
-              const char *kernel_cache_path, bool autotune_cache_enabled,
-              const char *autotune_cache_path, int process_id) {
-  xla::CompileOptions options = GenerateCompileOptions(
-      device_id, mesh_ids, num_mesh_ids, xla_gpu_cuda_data_dir,
-      use_shardy_partitioner, num_replicas, num_partitions,
-      use_spmd_partitioning, kernel_cache_enabled, kernel_cache_path,
-      autotune_cache_enabled, autotune_cache_path, process_id);
+xla::CompileOptions GenerateCompileOptions(const char *compile_options_proto,
+                                           size_t compile_options_proto_size) {
+  if (compile_options_proto == nullptr || compile_options_proto_size == 0) {
+    return xla::CompileOptions();
+  }
 
+  xla::CompileOptionsProto proto;
+  if (!proto.ParseFromArray(compile_options_proto,
+                            compile_options_proto_size)) {
+    ReactantThrowError("Failed to parse CompileOptionsProto protobuf");
+  }
+
+  auto options_or = xla::CompileOptions::FromProto(proto);
+  if (!options_or.ok()) {
+    ReactantThrowError(options_or.status().ToString().c_str());
+  }
+
+  return std::move(options_or).value();
+}
+
+xla::PjRtLoadedExecutable *ClientCompileInternal(PjRtClient *client,
+                                                 MlirModule cmod,
+                                                 xla::CompileOptions options) {
   mlir::ModuleOp cmod_op = cast<ModuleOp>(*unwrap(cmod));
 
-  if (use_spmd_partitioning && use_shardy_partitioner) {
+  if (options.executable_build_options.use_spmd_partitioning() &&
+      options.executable_build_options.use_shardy_partitioner()) {
     // https://github.com/openxla/xla/blob/b3c641b05692f3712fb3c272e38665fdfa28bdf8/xla/python/py_client.cc#L460
     auto status = xla::ExportShardyForHloRoundTrip(cmod_op);
     if (!status.ok()) {
@@ -1341,6 +1347,33 @@ ClientCompile(PjRtClient *client, MlirModule cmod, int64_t device_id,
     ReactantThrowError(err_stream.str().c_str());
   }
   return std::move(exec_err).value().release();
+}
+
+REACTANT_ABI xla::PjRtLoadedExecutable *
+ClientCompile(PjRtClient *client, MlirModule cmod, int64_t device_id,
+              const int64_t *mesh_ids, int64_t num_mesh_ids,
+              const char *xla_gpu_cuda_data_dir, bool use_shardy_partitioner,
+              int64_t num_replicas, int64_t num_partitions,
+              bool use_spmd_partitioning, bool kernel_cache_enabled,
+              const char *kernel_cache_path, bool autotune_cache_enabled,
+              const char *autotune_cache_path, int process_id) {
+  return ClientCompileInternal(
+      client, cmod,
+      GenerateCompileOptions(
+          device_id, mesh_ids, num_mesh_ids, xla_gpu_cuda_data_dir,
+          use_shardy_partitioner, num_replicas, num_partitions,
+          use_spmd_partitioning, kernel_cache_enabled, kernel_cache_path,
+          autotune_cache_enabled, autotune_cache_path, process_id));
+}
+
+REACTANT_ABI xla::PjRtLoadedExecutable *
+ClientCompileWithProto(PjRtClient *client, MlirModule cmod,
+                       const char *compile_options_proto,
+                       size_t compile_options_proto_size) {
+  return ClientCompileInternal(
+      client, cmod,
+      GenerateCompileOptions(compile_options_proto,
+                             compile_options_proto_size));
 }
 
 REACTANT_ABI void
@@ -1777,13 +1810,13 @@ REACTANT_ABI HeldIfrtArray *ifrt_client_assemble_array_from_single_shards(
     HeldValue<std::shared_ptr<const ifrt::Sharding>> *sharding, int32_t narrays,
     HeldIfrtArray **c_arrays, int32_t c_semantics) {
   ifrt::Shape shape = ifrt::Shape(absl::Span<const int64_t>(c_shape, ndims));
-  std::vector<tsl::RCReference<ifrt::Array>> arrays;
+  std::vector<tsl::RCReference<ifrt::Array>> arrays(narrays);
   for (int i = 0; i < narrays; i++) {
-    arrays.emplace_back(c_arrays[i]->obj());
+    arrays[i] = c_arrays[i]->obj();
   }
   return reactant::capture(
       MyValueOrThrow(client->AssembleArrayFromSingleDeviceArrays(
-          shape, sharding->obj(), absl::MakeSpan(arrays),
+          arrays[0]->dtype(), shape, sharding->obj(), absl::MakeSpan(arrays),
           static_cast<ifrt::ArrayCopySemantics>(c_semantics),
           ifrt::SingleDeviceShardSemantics::kAddressableShards)));
 }
@@ -1798,28 +1831,18 @@ ifrt_pjrt_array_create(ifrt::PjRtClient *client,
           client, buffer->obj(), /*has_custom_layout*/ false))));
 }
 
-// we might me interested in the `Compiler::Compile` method variant that accepts
-// `Topology`
-REACTANT_ABI HeldIfrtLoadedExecutable *
-ifrt_compile(ifrt::Client *client, MlirModule cmod, int64_t device_id,
-             const int64_t *mesh_ids, int64_t num_mesh_ids,
-             const char *xla_gpu_cuda_data_dir, bool use_shardy_partitioner,
-             int64_t num_replicas, int64_t num_partitions,
-             bool use_spmd_partitioning, bool kernel_cache_enabled,
-             const char *kernel_cache_path, bool autotune_cache_enabled,
-             const char *autotune_cache_path, int process_id) {
-  xla::CompileOptions compile_options = GenerateCompileOptions(
-      device_id, mesh_ids, num_mesh_ids, xla_gpu_cuda_data_dir,
-      use_shardy_partitioner, num_replicas, num_partitions,
-      use_spmd_partitioning, kernel_cache_enabled, kernel_cache_path,
-      autotune_cache_enabled, autotune_cache_path, process_id);
+HeldIfrtLoadedExecutable *
+ifrt_compile_internal(ifrt::Client *client, MlirModule cmod,
+                      xla::CompileOptions compile_options) {
+
   xla::ifrt::DeviceListRef devices = MyValueOrThrow(
       xla::ifrt::GetDeviceListFromXlaCompileOptions(client, compile_options));
   auto options = std::make_unique<xla::ifrt::XlaCompileOptions>(
       compile_options, std::move(devices));
 
   mlir::ModuleOp cmod_op = cast<ModuleOp>(*unwrap(cmod));
-  if (use_spmd_partitioning && use_shardy_partitioner) {
+  if (compile_options.executable_build_options.use_spmd_partitioning() &&
+      compile_options.executable_build_options.use_shardy_partitioner()) {
     // https://github.com/openxla/xla/blob/b3c641b05692f3712fb3c272e38665fdfa28bdf8/xla/python/py_client.cc#L460
     auto status = xla::ExportShardyForHloRoundTrip(cmod_op);
     if (!status.ok()) {
@@ -1833,6 +1856,35 @@ ifrt_compile(ifrt::Client *client, MlirModule cmod, int64_t device_id,
 
   return reactant::capture(MyValueOrThrow(
       compiler->CompileAndLoad(std::move(program), std::move(options))));
+}
+
+// we might me interested in the `Compiler::Compile` method variant that accepts
+// `Topology`
+REACTANT_ABI HeldIfrtLoadedExecutable *
+ifrt_compile(ifrt::Client *client, MlirModule cmod, int64_t device_id,
+             const int64_t *mesh_ids, int64_t num_mesh_ids,
+             const char *xla_gpu_cuda_data_dir, bool use_shardy_partitioner,
+             int64_t num_replicas, int64_t num_partitions,
+             bool use_spmd_partitioning, bool kernel_cache_enabled,
+             const char *kernel_cache_path, bool autotune_cache_enabled,
+             const char *autotune_cache_path, int process_id) {
+  return ifrt_compile_internal(
+      client, cmod,
+      GenerateCompileOptions(
+          device_id, mesh_ids, num_mesh_ids, xla_gpu_cuda_data_dir,
+          use_shardy_partitioner, num_replicas, num_partitions,
+          use_spmd_partitioning, kernel_cache_enabled, kernel_cache_path,
+          autotune_cache_enabled, autotune_cache_path, process_id));
+}
+
+REACTANT_ABI HeldIfrtLoadedExecutable *
+ifrt_compile_with_proto(ifrt::Client *client, MlirModule cmod,
+                        const char *compile_options_proto,
+                        size_t compile_options_proto_size) {
+  return ifrt_compile_internal(
+      client, cmod,
+      GenerateCompileOptions(compile_options_proto,
+                             compile_options_proto_size));
 }
 
 REACTANT_ABI void
@@ -2481,7 +2533,8 @@ REACTANT_ABI void ifrt_sharding_to_index_domains(HeldIfrtSharding *sharding,
   auto array_shape = xla::ifrt::Shape(array_size_span);
 
   std::vector<ifrt::IndexDomain> index_domains =
-      MyValueOrThrow(sharding->obj()->IndexDomains(array_shape));
+      MyValueOrThrow(sharding->obj()->IndexDomains(
+          array_shape, xla::ifrt::SingleDeviceShardSemantics::kAllShards));
 
   for (int i = 0; i < index_domains.size(); i++) {
     auto index_domain = index_domains[i];
@@ -3272,19 +3325,8 @@ REACTANT_ABI void reactantXLAExec(LinkableRuntime **__restrict__ lrtP,
       exit(1);
     }
 
-    int device_id = lrt->device;
-    int64_t *mesh_ids = nullptr;
-    int num_mesh_ids = 0;
-    const char *xla_gpu_cuda_data_dir = "";
-    bool use_shardy_partitioner = false;
-    int64_t num_replicas = 1;
-    int64_t num_partitions = 1;
-    bool use_spmd_partitioning = false;
     auto exec =
-        ClientCompile(lrt->client, wrap(module.get()), device_id, mesh_ids,
-                      num_mesh_ids, xla_gpu_cuda_data_dir,
-                      use_shardy_partitioner, num_replicas, num_partitions,
-                      use_spmd_partitioning, false, nullptr, false, nullptr, 0);
+        ClientCompileWithProto(lrt->client, wrap(module.get()), nullptr, 0);
 
     iter = cache.try_emplace(sizeKey, exec).first;
   }
@@ -3522,3 +3564,123 @@ REACTANT_ABI void EstimateRunTimeForInstruction(void *gpu_performance_model,
 }
 
 #endif
+
+REACTANT_ABI void
+InitializeXProfStubs(const char *cstr_worker_service_address) {
+  std::string worker_service_address = std::string(cstr_worker_service_address);
+  xprof::profiler::InitializeStubs(worker_service_address);
+}
+
+REACTANT_ABI void StartGrpcServer(int port) {
+  xprof::pywrap::StartGrpcServer(port);
+}
+
+// Creates a ToolOptions map from Julia arrays.
+// Takes 6 arrays: 3 pairs of (keys, values) for bool, int, and char* options.
+// Each array pair has a corresponding count parameter.
+ToolOptions ToolOptionsFromJuliaArrays(
+    const char **bool_keys, const bool *bool_values, int64_t bool_count,
+    const char **int_keys, const int *int_values, int64_t int_count,
+    const char **str_keys, const char **str_values, int64_t str_count) {
+  ToolOptions map;
+
+  // Add bool options
+  for (int64_t i = 0; i < bool_count; ++i) {
+    if (bool_keys[i] != nullptr) {
+      map.emplace(std::string(bool_keys[i]),
+                  std::variant<bool, int, std::string>(bool_values[i]));
+    }
+  }
+
+  // Add int options
+  for (int64_t i = 0; i < int_count; ++i) {
+    if (int_keys[i] != nullptr) {
+      map.emplace(std::string(int_keys[i]),
+                  std::variant<bool, int, std::string>(int_values[i]));
+    }
+  }
+
+  // Add string options
+  for (int64_t i = 0; i < str_count; ++i) {
+    if (str_keys[i] != nullptr && str_values[i] != nullptr) {
+      map.emplace(
+          std::string(str_keys[i]),
+          std::variant<bool, int, std::string>(std::string(str_values[i])));
+    }
+  }
+
+  return map;
+}
+
+// C API wrapper for xprof::pywrap::XSpaceToToolsData
+// Returns:
+//   - result_data: pointer to the result data (caller must free with free())
+//   - result_size: size of the result data
+//   - is_binary: whether the result is binary data
+//   - error: error message if failed (caller must free with free())
+// Returns 0 on success, non-zero on failure
+REACTANT_ABI int XSpaceToToolsData(
+    const char **xspace_paths, int64_t num_paths, const char *tool_name,
+    const char **bool_keys, const bool *bool_values, int64_t bool_count,
+    const char **int_keys, const int *int_values, int64_t int_count,
+    const char **str_keys, const char **str_values, int64_t str_count,
+    char **result_data, int64_t *result_size, bool *is_binary, char **error) {
+  *error = nullptr;
+  *result_data = nullptr;
+  *result_size = 0;
+  *is_binary = false;
+
+  // Convert xspace paths to vector
+  std::vector<std::string> xspace_paths_vec;
+  xspace_paths_vec.reserve(num_paths);
+  for (int64_t i = 0; i < num_paths; ++i) {
+    if (xspace_paths[i] != nullptr) {
+      xspace_paths_vec.push_back(std::string(xspace_paths[i]));
+    }
+  }
+
+  // Build tool options
+  ToolOptions tool_options = ToolOptionsFromJuliaArrays(
+      bool_keys, bool_values, bool_count, int_keys, int_values, int_count,
+      str_keys, str_values, str_count);
+
+  // Call XSpaceToToolsData
+  absl::StatusOr<std::pair<std::string, bool>> result =
+      xprof::pywrap::XSpaceToToolsData(xspace_paths_vec, std::string(tool_name),
+                                       tool_options);
+
+  if (!result.ok()) {
+    auto str = result.status().message();
+    char *err = (char *)malloc(str.size() + 1);
+    memcpy(err, str.data(), str.size() + 1);
+    *error = err;
+    return 1;
+  }
+
+  // Copy result data
+  const std::string &data = result->first;
+  *result_size = static_cast<int64_t>(data.size());
+  *result_data = (char *)malloc(data.size());
+  memcpy(*result_data, data.data(), data.size());
+  *is_binary = result->second;
+
+  return 0;
+}
+
+REACTANT_ABI void *ReactantGetDebugOptions(size_t *size) {
+  xla::DebugOptions options = xla::GetDebugOptionsFromFlags();
+  std::string serialized = options.SerializeAsString();
+  *size = serialized.size();
+  void *data = malloc(*size);
+  memcpy(data, serialized.data(), *size);
+  return data;
+}
+
+REACTANT_ABI void *ReactantGetCompileOptions(size_t *size) {
+  xla::CompileOptions options;
+  std::string serialized = options.ToProto()->SerializeAsString();
+  *size = serialized.size();
+  void *data = malloc(*size);
+  memcpy(data, serialized.data(), *size);
+  return data;
+}

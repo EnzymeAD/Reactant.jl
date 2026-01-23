@@ -1,7 +1,13 @@
 module ReactantCUDAExt
 
-using Reactant: Reactant, TracedRArray, AnyConcretePJRTArray, MLIR, TracedRNumber
-using Reactant.Compiler: raising
+using Reactant:
+    Reactant,
+    TracedRArray,
+    AnyConcretePJRTArray,
+    MLIR,
+    TracedRNumber,
+    ReactantPrecompilationException
+using Reactant.Compiler: raising, LLVMFunc, llvm_compiler_cache
 using Reactant.Ops: @opcall
 
 using Adapt: Adapt, adapt
@@ -594,21 +600,6 @@ function Adapt.adapt_storage(::ReactantKernelAdaptor, r::Base.TwicePrecision)
         Adapt.adapt(ReactantKernelAdaptor(), r.hi),
         Adapt.adapt(ReactantKernelAdaptor(), r.lo),
     )
-end
-
-# Since we cache these objects we cannot cache data containing MLIR operations (e.g. the entry must be a string
-# and not the operation itself).
-struct LLVMFunc{F,tt}
-    f::Union{F,Nothing}
-    entry::String
-end
-
-function Base.getproperty(f::LLVMFunc{F,tt}, sym::Symbol) where {F,tt}
-    if sym === :fun
-        f
-    else
-        Base.getfield(f, sym)
-    end
 end
 
 # TODO in the future we may want to avoid doing a second cufunction compilation
@@ -1300,23 +1291,12 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
     end
 end
 
-# cache of compilation caches, per context
-const _compiler_caches = Dict{MLIR.IR.Context,Dict{Any,LLVMFunc}}()
-function compiler_cache(ctx::MLIR.IR.Context)
-    cache = get(_compiler_caches, ctx, nothing)
-    if cache === nothing
-        cache = Dict{Any,LLVMFunc}()
-        _compiler_caches[ctx] = cache
-    end
-    return cache
-end
-
 Reactant.@reactant_overlay @noinline function CUDA.cufunction(
     f::F, tt::TT=Tuple{}; kwargs...
 ) where {F,TT}
     res = Base.@lock CUDA.cufunction_lock begin
         # compile the function
-        cache = compiler_cache(MLIR.IR.context())
+        cache = llvm_compiler_cache(MLIR.IR.mmodule())
         source = CUDA.methodinstance(F, tt)
         # cuda = CUDA.active_state()
         device = nothing # cuda.device
@@ -1350,7 +1330,7 @@ Base.@nospecializeinfer function Reactant.traced_type_inner(
     seen,
     @nospecialize(mode::Reactant.TraceMode),
     @nospecialize(track_numbers::Type),
-    @nospecialize(sharding),
+    @nospecialize(ndevices),
     @nospecialize(runtime)
 )
     return A
@@ -1361,7 +1341,7 @@ Base.@nospecializeinfer function Reactant.traced_type_inner(
     seen,
     @nospecialize(mode::Reactant.TraceMode),
     @nospecialize(track_numbers::Type),
-    @nospecialize(sharding),
+    @nospecialize(ndevices),
     @nospecialize(runtime)
 )
     return A
@@ -1372,26 +1352,23 @@ Base.@nospecializeinfer function Reactant.traced_type_inner(
     seen,
     mode::Reactant.TraceMode,
     @nospecialize(track_numbers::Type),
-    @nospecialize(sharding),
+    @nospecialize(ndevices),
     @nospecialize(runtime)
 )
     T = eltype(A)
     N = ndims(A)
     if mode == Reactant.ArrayToConcrete && T <: Reactant.ReactantPrimitive
         if runtime isa Val{:PJRT}
-            return Reactant.ConcretePJRTArray{T,N,Reactant.Sharding.ndevices(sharding)}
+            return Reactant.ConcretePJRTArray{T,N,Reactant._unwrap_val(ndevices)}
         elseif runtime isa Val{:IFRT}
             return Reactant.ConcreteIFRTArray{T,N}
         end
         error("Unsupported runtime $runtime")
     else
-        TT = Reactant.traced_type_inner(T, seen, mode, track_numbers, sharding, runtime)
+        TT = Reactant.traced_type_inner(T, seen, mode, track_numbers, ndevices, runtime)
         TT === T && return A
         return Array{
-            Reactant.traced_type_inner(
-                T, seen, mode, track_numbers, Base.getproperty(sharding, 1), runtime
-            ),
-            N,
+            Reactant.traced_type_inner(T, seen, mode, track_numbers, ndevices, runtime),N
         }
     end
 end
@@ -1480,7 +1457,13 @@ end
                     return nothing
                 end
                 y = Reactant.ConcreteRArray([2.0]; client)
-                Reactant.Compiler.compile_mlir(square!, (y,); optimize=false)
+                try
+                    Reactant.Compiler.compile_mlir(square!, (y,); optimize=false)
+                catch e
+                    if !(e isa ReactantPrecompilationException)
+                        rethrow()
+                    end
+                end
 
                 if y isa Reactant.ConcreteIFRTArray
                     Reactant.XLA.free_buffer(y.data.buffer)
@@ -1497,7 +1480,6 @@ end
         Reactant.XLA.free_client(client)
         client.client = C_NULL
         Reactant.deinitialize_dialect()
-        Reactant.clear_oc_cache()
     end
 end
 

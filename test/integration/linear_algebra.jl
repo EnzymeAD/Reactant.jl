@@ -737,10 +737,33 @@ raise_to_syrk2(x, y) = 3 .* (transpose(x) * x) .+ 5 .* y
         @testset for (fn, y) in ((raise_to_syrk, y1), (raise_to_syrk2, y2))
             y_ra = Reactant.to_rarray(y)
 
-            hlo = @code_hlo optimize = :before_jit fn(x_ra, y_ra)
+            hlo = @code_hlo compile_options = CompileOptions(;
+                disable_structured_tensors_detection_passes=false,
+                optimization_passes=:before_jit,
+            ) fn(x_ra, y_ra)
             @test occursin("enzymexla.blas.syrk", repr(hlo))
 
-            @test @jit(fn(x_ra, y_ra)) ≈ fn(x, y)
+            fn_compile = @compile compile_options = CompileOptions(;
+                disable_structured_tensors_detection_passes=false
+            ) fn(x_ra, y_ra)
+
+            @test fn_compile(x_ra, y_ra) ≈ fn(x, y)
         end
+    end
+end
+
+@testset "uniform scaling" begin
+    x = Reactant.TestUtils.construct_test_array(Float64, 4, 4)
+    x_ra = Reactant.to_rarray(x)
+
+    y = 3.0f0
+    y_ra = Reactant.to_rarray(y; track_numbers=true)
+
+    @testset for op in (+, -, *)
+        uscale1(x, y) = op(x, y * I)
+        uscale2(x, y) = op(y * I, x)
+
+        @test @jit(uscale1(x_ra, y_ra)) ≈ uscale1(x, y)
+        @test @jit(uscale2(x_ra, y_ra)) ≈ uscale2(x, y)
     end
 end

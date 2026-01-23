@@ -166,3 +166,9 @@ process. These flags are:
    for `VLOG(level)` where `level <= TF_CPP_MAX_VLOG_LEVEL` will be printed.
 2. `TF_CPP_MIN_VLOG_LEVEL`: This set the min verbosity level for XLA, i.e. all logging
    for `VLOG(level)` where `level >= TF_CPP_MIN_VLOG_LEVEL` will be printed.
+
+## Timing Reactant Code
+
+Naively using Julia's builtin profiling mechanisms with `@time`, `@allocated`, etc. will
+produce incorrect results. Refer to [our guide on profiling](@ref profiling)
+for the correct profiling mechanisms.

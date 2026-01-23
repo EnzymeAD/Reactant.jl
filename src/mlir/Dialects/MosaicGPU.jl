@@ -68,6 +68,10 @@ values in `indices` are the starting indices of each dimension and the
 values in `slice_lengths` are the lengths. Providing -1 in `slice_lengths`
 indicates that the slice length is 1 and that the corresponding dimension
 should be collapsed and does not appear in the `destination` MemRef.
+If an index is a vector of ints, its elements serve as GMEM indices from
+which the data should be gathered from GMEM. In this case, the
+`slice_lengths` must have a value equal to the size of the vector. Only one
+index may be a vector.
 
 The data is written in row-major order to the contiguous SMEM `destination`.
 The `source` data does not need to be contiguous, except for the last
@@ -105,7 +109,7 @@ function async_load(
     !isnothing(predicate) && push!(operands, predicate)
     push!(
         attributes,
-        operandsegmentsizes([1, 1, 1, length(indices), (predicate == nothing) ? 0 : 1]),
+        operandsegmentsizes([1, 1, 1, length(indices), Int(!isnothing(predicate))]),
     )
 
     return create_operation(
@@ -153,7 +157,10 @@ The `indices` and `slice_lengths` inputs define what slice of the GMEM
 have a length equal to the rank of the `source`. The values in `indices` are
 the starting indices of each dimension and the values in `slice_lengths` are
 the lengths. Providing -1 in `slice_lengths` indicates that the slice length
-is 1.
+is 1. If an index is a vector of ints, its elements serve as GMEM indices
+from which the data should be gathered from GMEM. In this case, the
+`slice_lengths` must have a value equal to the size of the vector. Only one
+index may be a vector.
 
 The `collective` attribute can be provided to partition the prefetch over
 multiple blocks in a cluster.
@@ -177,10 +184,7 @@ function async_prefetch(
         namedattribute("collective", collective),
     ]
     !isnothing(predicate) && push!(operands, predicate)
-    push!(
-        attributes,
-        operandsegmentsizes([1, length(indices), (predicate == nothing) ? 0 : 1]),
-    )
+    push!(attributes, operandsegmentsizes([1, length(indices), Int(!isnothing(predicate))]))
 
     return create_operation(
         "mosaic_gpu.async_prefetch",
@@ -207,7 +211,10 @@ The `indices` and `slice_lengths` inputs define what slice of the GMEM
 The values in `indices` are the starting indices of each dimension and the
 values in `slice_lengths` are the lengths. Providing -1 in `slice_lengths`
 indicates that this dimension is collapsed in the `source` and needs to be
-expanded to a slice of size 1 in the `destination`.
+expanded to a slice of size 1 in the `destination`. If an index is a vector
+of ints, its elements serve as GMEM indices to which the data should be
+scattered to GMEM. In this case, the `slice_lengths` must have a value equal
+to the size of the vector. Only one index may be a vector.
 
 The data is written in row-major order to the GMEM `destination`. The
 `source` data in SMEM needs to be contiguous, but the `destination` GMEM
@@ -237,8 +244,7 @@ function async_store(
     attributes = NamedAttribute[namedattribute("slice_lengths", slice_lengths),]
     !isnothing(predicate) && push!(operands, predicate)
     push!(
-        attributes,
-        operandsegmentsizes([1, 1, length(indices), (predicate == nothing) ? 0 : 1]),
+        attributes, operandsegmentsizes([1, 1, length(indices), Int(!isnothing(predicate))])
     )
     !isnothing(commit_group) &&
         push!(attributes, namedattribute("commit_group", commit_group))
@@ -619,7 +625,7 @@ function tcgen05_mma(
     push!(
         attributes,
         operandsegmentsizes([
-            1, 1, 1, 1, (a_scale == nothing) ? 0 : 1, (b_scale == nothing) ? 0 : 1
+            1, 1, 1, 1, Int(!isnothing(a_scale)), Int(!isnothing(b_scale))
         ]),
     )
     !isnothing(collective) && push!(attributes, namedattribute("collective", collective))
@@ -938,6 +944,25 @@ function with_transforms(
         attributes,
         results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
         result_inference=(length(op_ty_results) == 0 ? true : false),
+    )
+end
+
+function tma_gather_supported(; location=Location())
+    op_ty_results = IR.Type[]
+    operands = Value[]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+
+    return create_operation(
+        "mosaic_gpu.tma_gather_supported",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
     )
 end
 

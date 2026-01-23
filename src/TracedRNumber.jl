@@ -155,7 +155,7 @@ function Base.promote_rule(::Type{TracedRNumber{T}}, S::Type{>:Missing}) where {
     return Union{Missing,TracedRNumber{nonmissingtype(promote_type(T, S))}}
 end
 
-function Base.promote_rule(::Type{>:Nothing}, ::Type{TracedRNumber{S}}) where {S}
+function Base.promote_rule(T::Type{>:Nothing}, ::Type{TracedRNumber{S}}) where {S}
     return Union{Nothing,TracedRNumber{Base.nonnothingtype(promote_type(S, T))}}
 end
 
@@ -774,6 +774,19 @@ function Base.fill(v::TracedRNumber{T}, dims::Dims{N}) where {T,N}
 end
 function Base.fill(v::TracedRNumber{T}, ::Tuple{}) where {T}
     return @opcall fill(v, ())
+end
+
+# TODO: actually perform bounds checking
+function Base.checkindex(::Type{Bool}, _inds, ::TracedRNumber)
+    @warn "Currently we don't perform bounds checking for TracedRNumber. This will be \
+           fixed in a future version of Reactant." maxlog = 1
+    return true
+end
+
+function Base.checkindex(::Type{Bool}, ::AbstractUnitRange, ::TracedRNumber)
+    @warn "Currently we don't perform bounds checking for TracedRNumber. This will be \
+           fixed in a future version of Reactant." maxlog = 1
+    return true
 end
 
 end # module TracedRNumberOverrides

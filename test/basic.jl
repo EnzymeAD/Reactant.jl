@@ -1742,3 +1742,84 @@ end
     fn = @compile sum(x_ra1)
     @test_throws Reactant.Compiler.MisMatchedThunkTypeError fn(x_ra2)
 end
+
+@testset "Slices" begin
+    @testset "drop=true" begin
+        x = eachslice(
+            Reactant.TestUtils.construct_test_array(Float32, 2, 3, 4, 5); dims=(3, 1)
+        )
+        x_ra = Reactant.to_rarray(x)
+
+        @test @jit(sum(x_ra)) ≈ sum(x)
+
+        @testset for dims in (1, 2, (1, 2), (2, 1))
+            res_ra = @jit sum(x_ra; dims)
+            res = sum(x; dims)
+            @test size(res_ra) == size(res)
+            for (gt, comp) in zip(res_ra, res)
+                @test gt ≈ comp
+            end
+        end
+    end
+
+    @testset "drop=false" begin
+        x = eachslice(
+            Reactant.TestUtils.construct_test_array(Float32, 2, 3, 4, 5);
+            dims=(3, 1),
+            drop=false,
+        )
+        x_ra = Reactant.to_rarray(x)
+
+        @test @jit(sum(x_ra)) ≈ sum(x)
+
+        @testset for dims in (1, 2, 3, 4, (1, 2), (1, 2, 4), (3, 4, 1), (2, 1))
+            res_ra = @jit sum(x_ra; dims)
+            res = sum(x; dims)
+            @test size(res_ra) == size(res)
+            for (gt, comp) in zip(res_ra, res)
+                @test gt ≈ comp
+            end
+        end
+    end
+end
+
+function meshgrid(args::AbstractVector...)
+    return let N = length(args)
+        stack(enumerate(args)) do (i, arg)
+            new_shape = ones(Int, N)
+            new_shape[i] = length(arg)
+            repeat_sizes = collect(Int, map(length, args))
+            repeat_sizes[i] = 1
+            return repeat(reshape(arg, new_shape...), repeat_sizes...)
+        end
+    end
+end
+
+function meshgrid(x::Number, y::Number)
+    return meshgrid(range(eltype(x)(0), x; length=10), range(eltype(y)(0), y; length=10))
+end
+
+@testset "meshgrid" begin
+    x = 10.0f0
+    y = 20.0f0
+    x_ra = ConcreteRNumber(x)
+    y_ra = ConcreteRNumber(y)
+
+    @test @jit(meshgrid(x_ra, y_ra)) ≈ meshgrid(x, y)
+end
+
+function mapreduce_with_closure(a, A)
+    return sum(A) do Ax
+        return log(a + Ax)
+    end
+end
+
+@testset "mapreduce with closure" begin
+    ρr = ConcreteRNumber(2.0)
+    x = Reactant.TestUtils.construct_test_array(Float64, 5, 5)
+
+    hlo = repr(@code_hlo mapreduce_with_closure(ρr, x))
+    @test contains(hlo, "stablehlo.reduce")
+
+    @test @jit(mapreduce_with_closure(ρr, x)) ≈ mapreduce_with_closure(2.0, x)
+end
