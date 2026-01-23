@@ -168,7 +168,6 @@ const __skip_rewrite_func_set = Set([
     typeof(Base.isnothing),
     typeof(Base.CoreLogging.current_logger_for_env),
     typeof(Base.CoreLogging.current_logstate),
-
     @static(
         if VERSION >= v"1.11.0"
             typeof(Base.memoryref)
@@ -176,7 +175,7 @@ const __skip_rewrite_func_set = Set([
     ),
     typeof(materialize_traced_array),
     typeof(Core.throw_inexacterror),
-    typeof(Base.throw_boundserror)
+    typeof(Base.throw_boundserror),
 ])
 
 """
@@ -223,7 +222,7 @@ const __skip_rewrite_type_constructor_list = [
     Type{<:Integer},
     Type{<:Base.IEEEFloat},
 ]
-    
+
 @static if VERSION >= v"1.11"
     push!(__skip_rewrite_type_constructor_list, Type{<:GenericMemory})
 end
@@ -308,9 +307,9 @@ function should_rewrite_call(@nospecialize(ft))
 
     # `ft isa Type` is for performance as it avoids checking against all the list, but can be removed if problematic
     if ft isa Type
-	   if any(Base.Fix1(<:, ft), __skip_rewrite_type_constructor_list)
-		   return false
-	   end
+        if any(Base.Fix1(<:, ft), __skip_rewrite_type_constructor_list)
+            return false
+        end
     end
 
     if ft in __skip_rewrite_func_set

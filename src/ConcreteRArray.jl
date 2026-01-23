@@ -557,9 +557,7 @@ for aType in (:ConcretePJRTArray, :ConcreteIFRTArray)
     end
 end
 
-function Base.copyto!(
-    dest::Union{AnyConcreteIFRTArray,AnyConcretePJRTArray}, src::AbstractConcreteArray
-)
+function Base.copyto!(dest::UnionAnyConcreteRArray, src::AbstractConcreteArray)
     fn = compile(mycopyto!, (dest, src))
     fn(dest, src)
     return dest
@@ -790,7 +788,7 @@ function Base.fill!(
     throw(MethodError(fill!, (a, val)))
 end
 
-function Base.fill!(x::Union{AnyConcreteIFRTArray,AnyConcretePJRTArray}, val)
+function Base.fill!(x::UnionAnyConcreteRArray, val)
     fn = compile(fill!, (x, val))
     fn(x, val)
     return x
@@ -828,7 +826,7 @@ for (fType, opType) in (
     @eval function Base.mapreducedim!(
         f::$(fType),
         op::$(opType),
-        R::Union{AnyConcreteIFRTArray,AnyConcretePJRTArray},
+        R::UnionAnyConcreteRArray,
         A::Union{Base.AbstractBroadcasted,AbstractArray},
     )
         fn = compile(mymapreducedim!, (f, op, R, A))
@@ -842,7 +840,7 @@ function mymap!(f, R, A)
     return nothing
 end
 
-function Base.map!(f, R::Union{AnyConcreteIFRTArray,AnyConcretePJRTArray}, A::AbstractArray)
+function Base.map!(f, R::UnionAnyConcreteRArray, A::AbstractArray)
     fn = compile(mymap!, (f, R, A))
     fn(f, R, A)
     return R
@@ -872,40 +870,29 @@ Base.round(x::ConcreteRNumber{T}) where {T} = Base.round(convert(T, x))
 
 Base._parentsmatch(A::ConcreteIFRTArray, B::ConcreteIFRTArray) = A === B
 Base._parentsmatch(A::ConcretePJRTArray, B::ConcretePJRTArray) = A === B
-function Base._parentsmatch(
-    A::Union{AnyConcreteIFRTArray,AnyConcretePJRTArray},
-    B::Union{AnyConcreteIFRTArray,AnyConcretePJRTArray},
-)
+function Base._parentsmatch(A::UnionAnyConcreteRArray, B::UnionAnyConcreteRArray)
     return Base._parentsmatch(ancestor(A), ancestor(B))
 end
 
-function Base.copyto_unaliased!(
-    _deststyle::IndexStyle,
-    dst::Union{AnyConcreteIFRTArray,AnyConcretePJRTArray},
-    _srcstyle::IndexStyle,
-    src::Union{AnyConcreteIFRTArray,AnyConcretePJRTArray},
-)
-    fn = compile(Base.copyto!, (dst, src))
-    fn(dst, src)
-    return dst
-end
-function Base.copyto_unaliased!(
-    _deststyle::IndexStyle,
-    dst::Union{AnyConcreteIFRTArray,AnyConcretePJRTArray},
-    _srcstyle::IndexStyle,
-    src::AbstractArray,
-)
-    fn = compile(Base.copyto!, (dst, src))
-    fn(dst, src)
-    return dst
-end
-function Base.copyto_unaliased!(
-    _deststyle::IndexStyle,
-    dst::AbstractArray,
-    _srcstyle::IndexStyle,
-    src::Union{AnyConcreteIFRTArray,AnyConcretePJRTArray},
-)
-    fn = compile(Base.copyto!, (dst, src))
-    fn(dst, src)
-    return dst
+for srcStyle in (IndexStyle, IndexCartesian),
+    (dstType, srcType) in [
+        (UnionAnyConcreteRArray, UnionAnyConcreteRArray),
+        (UnionAnyConcreteRArray, AbstractArray),
+        (AbstractArray, UnionAnyConcreteRArray),
+        (
+            AbstractMatrix,
+            Union{
+                LinearAlgebra.AdjOrTransAbsMat{T,M} where {T,S,M<:ConcreteIFRTArray{T,2,S}},
+                LinearAlgebra.AdjOrTransAbsMat{T,M} where {T,S,M<:ConcretePJRTArray{T,2,S}},
+            },
+        ),
+    ]
+
+    @eval function Base.copyto_unaliased!(
+        ::IndexStyle, dst::$(dstType), ::$(srcStyle), src::$(srcType)
+    )
+        fn = compile(Base.copyto!, (dst, src))
+        fn(dst, src)
+        return dst
+    end
 end
