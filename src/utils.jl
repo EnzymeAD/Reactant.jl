@@ -308,7 +308,6 @@ function should_rewrite_call(@nospecialize(ft))
 
     # `ft isa Type` is for performance as it avoids checking against all the list, but can be removed if problematic
     if ft isa Type
-	   ccall(:jl_, Cvoid, (Any,), ft)
 	   if any(Base.Fix1(<:, ft), __skip_rewrite_type_constructor_list)
 		   return false
 	   end
