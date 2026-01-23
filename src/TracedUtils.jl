@@ -1273,14 +1273,7 @@ function elem_apply(f, args::Vararg{Any,Nargs}) where {Nargs}
                     continue
                 end
 
-                if idx == 1 && fnwrap
-                    set!(f, path[3:end], resv)
-                else
-                    if fnwrap
-                        idx -= 1
-                    end
-                    set!(args[idx], path[3:end], resv)
-                end
+	        set!(ogarg, path[3:end], resv)
             end
         end
     end
