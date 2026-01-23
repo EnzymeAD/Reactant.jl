@@ -85,7 +85,7 @@ end
         return Core.Compiler.abstract_call(interp, arginfo2::ArgInfo, si2, sv, max_methods)
     end
 
-    if !should_rewrite_call(typeof(f))
+    if !should_rewrite_call(Core.Typeof(f))
         ninterp = Core.Compiler.NativeInterpreter(interp.world)
         # Note: mildly sus, but gabe said this was fine?
         @static if VERSION >= v"1.12"
