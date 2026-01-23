@@ -315,3 +315,18 @@ end
 
     @test spectral_conv(x, weight) ≈ @jit(spectral_conv(x_r, weight_r))
 end
+
+@testset "Wrapped Plan" begin
+    struct MyPlan{T}
+        plan::T
+    end
+
+    myfft(mp::MyPlan, x) = mp.plan * x
+
+    x = rand(ComplexF64, 16)
+    mp = MyPlan(plan_fft!(copy(x)))
+
+    xr = Reactant.to_rarray(x)
+    cmp = @compile myfft(mp, xr)
+    @test cmp(mp, xr) ≈ myfft(mp, x)
+end
