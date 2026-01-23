@@ -457,6 +457,19 @@ end
         @test all(iszero, Array(res[2].x))
         @test all(iszero, Array(res[2].y))
     end
+
+    @testset "Complex Arrays" begin
+        x_ra = Reactant.to_rarray(Reactant.TestUtils.construct_test_array(ComplexF32, 2, 2))
+
+        _, dx_fd = @jit Reactant.TestUtils.finite_difference_gradient(sum, abs2, x_ra)
+        _, dx_fd2 = @jit Reactant.TestUtils.finite_difference_gradient(
+            sum, abs2, x_ra; method=Val(:forward)
+        )
+        _, dx_enz = @jit Enzyme.gradient(ReverseHolomorphic, sum, abs2, x_ra)
+
+        @test dx_fd ≈ dx_enz atol = 1e-3
+        @test dx_fd2 ≈ dx_enz atol = 5e-2
+    end
 end
 
 function _fn_with_func(f::F, x, w) where {F}
