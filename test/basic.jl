@@ -1823,3 +1823,19 @@ end
 
     @test @jit(mapreduce_with_closure(ρr, x)) ≈ mapreduce_with_closure(2.0, x)
 end
+
+@testset "traced size" begin
+    x_ra = Reactant.to_rarray(Reactant.TestUtils.construct_test_array(Float64, 5, 32, 7))
+    @test @jit(size(x_ra, ConcreteRNumber(1))) == 5
+    @test @jit(size(x_ra, ConcreteRNumber(2))) == 32
+    @test @jit(size(x_ra, ConcreteRNumber(3))) == 7
+end
+
+mapreduce_closure_not_traced(x) = prod(Base.Fix1(size, x), [1, 3])
+
+@testset "mapreduce closure not traced" begin
+    x = Reactant.TestUtils.construct_test_array(Float64, 5, 32, 7)
+    x_ra = Reactant.to_rarray(x)
+
+    @test @jit(mapreduce_closure_not_traced(x_ra)) == prod(size(x)[[1, 3]])
+end

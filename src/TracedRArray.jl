@@ -47,6 +47,15 @@ TracedRArray{T,N}(x::AbstractArray) where {T,N} = convert(TracedRArray{T,N}, x)
 Base.Tuple(x::TracedRArray) = ntuple(Base.Fix1(getindex, x), length(x))
 
 Base.size(x::TracedRArray) = x.shape
+Base.size(x::TracedRArray, i::Integer) = x.shape[i]
+
+function Base.size(x::TracedRArray, i::TracedRNumber{<:Integer})
+    branches = []
+    for idx in 1:ndims(x)
+        push!(branches, () -> TracedRNumber{Int32}(size(x, idx)))
+    end
+    return @opcall case(i - 1, branches; track_numbers=false)
+end
 
 Base.collect(x::TracedRArray) = copy(x) # XXX: Is this correct?
 
