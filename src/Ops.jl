@@ -2670,6 +2670,345 @@ end
     return corrected_traced_results
 end
 
+"""
+    case(
+        index::TracedRNumber{<:Integer}, branch_fns::Vector, args...;
+        track_numbers, location
+    )
+
+Produces a `stablehlo.case` operation. Given an integer `index` and a vector of branch
+functions, executes the branch function at position `index` (0-indexed). If `index` is
+out of bounds, executes the last branch function.
+
+Each branch function should take the same arguments and return results of the same type
+and shape.
+
+See: https://github.com/openxla/stablehlo/blob/main/docs/spec.md#case
+
+# Arguments
+- `index`: A scalar integer tensor that determines which branch to execute (0-indexed)
+- `branch_fns`: A vector of functions, each taking `args...` and returning results
+- `args...`: Arguments to pass to the selected branch function
+
+# Keyword Arguments
+- `track_numbers`: Whether to track numbers during tracing
+- `location`: MLIR location for debugging
+
+# Example
+```julia
+result = Ops.case(
+    index,
+    [
+        (x, y) -> x + y,      # branch 0
+        (x, y) -> x - y,      # branch 1
+        (x, y) -> x * y,      # branch 2 (default if index >= 2)
+    ],
+    x, y;
+    track_numbers=Reactant.TracedTrackNumbers,
+)
+```
+"""
+@noinline function case(
+    index::TracedRNumber{<:Integer},
+    branch_fns::Vector,
+    args...;
+    track_numbers,
+    location=mlir_stacktrace("case", @__FILE__, @__LINE__),
+)
+    # stablehlo.case requires the index to be a 32-bit integer
+    index = convert(TracedRNumber{Int32}, index)
+
+    n_branches = length(branch_fns)
+    @assert n_branches >= 1 "case: at least one branch function is required"
+
+    # Generate unique names for each branch
+    branch_names = [
+        (
+            gensym(Symbol(:branch_, i, :_args)),
+            gensym(Symbol(:branch_, i, :_result)),
+            gensym(Symbol(:branch_, i, :_resargs)),
+        ) for i in 1:n_branches
+    ]
+
+    # Make all the args traced or concrete for each branch
+    N = length(args)
+    branch_seen_args = [Reactant.OrderedIdDict() for _ in 1:n_branches]
+    branch_traced_args = [Vector{Any}(undef, N) for _ in 1:n_branches]
+
+    for b in 1:n_branches
+        for i in 1:N
+            @inbounds branch_traced_args[b][i] = Reactant.make_tracer(
+                branch_seen_args[b],
+                args[i],
+                (branch_names[b][1], i),
+                Reactant.TracedSetPath;
+                track_numbers,
+            )
+        end
+    end
+
+    branch_linear_args = [
+        Reactant.TracedType[v for v in values(seen) if v isa Reactant.TracedType] for
+        seen in branch_seen_args
+    ]
+
+    # Input types from first branch (all should be the same)
+    input_types = [mlir_type(arg) for arg in branch_linear_args[1]]
+    sym_visibility = MLIR.IR.Attribute("private")
+
+    # Compile each branch without returns first
+    branch_mods = [MLIR.IR.mmodule() for _ in 1:n_branches]
+    branch_func_tmps = Vector{MLIR.IR.Operation}(undef, n_branches)
+    branch_bodies = Vector{MLIR.IR.Block}(undef, n_branches)
+    branch_results = Vector{Any}(undef, n_branches)
+
+    for b in 1:n_branches
+        branch_func_tmps[b] = MLIR.IR.block!(MLIR.IR.body(branch_mods[b])) do
+            return MLIR.Dialects.func.func_(;
+                sym_name=string(branch_fns[b]) * "_branch$(b)_tmp",
+                function_type=MLIR.IR.FunctionType(input_types, []),
+                body=MLIR.IR.Region(),
+                sym_visibility,
+            )
+        end
+        branch_bodies[b] = MLIR.IR.Block()
+        push!(MLIR.IR.region(branch_func_tmps[b], 1), branch_bodies[b])
+
+        branch_fn_args = branch_names[b][1]
+
+        MLIR.IR.activate!(branch_bodies[b])
+        activate_constant_context!(branch_bodies[b])
+        branch_results[b] = try
+            for (i, arg) in enumerate(branch_linear_args[b])
+                path = nothing
+                for p in Reactant.TracedUtils.get_paths(arg)
+                    if length(p) > 0 && p[1] == branch_fn_args
+                        path = p[2:end]
+                    end
+                end
+                if isnothing(path)
+                    error("case: could not find path for linear arg $i in branch $b")
+                end
+                Reactant.TracedUtils.set_mlir_data!(
+                    arg,
+                    only(
+                        Reactant.TracedUtils.push_val!(
+                            [], branch_traced_args[b][path[1]], path[2:end]
+                        ),
+                    ),
+                )
+            end
+            Reactant.call_with_reactant(branch_fns[b], branch_traced_args[b]...)
+        finally
+            deactivate_constant_context!(branch_bodies[b])
+            MLIR.IR.deactivate!(branch_bodies[b])
+        end
+    end
+
+    # Collect results from each branch
+    seen_branch_results = [Reactant.OrderedIdDict() for _ in 1:n_branches]
+    traced_branch_results = Vector{Any}(undef, n_branches)
+
+    for b in 1:n_branches
+        traced_branch_results[b] = Reactant.make_tracer(
+            seen_branch_results[b],
+            branch_results[b],
+            (branch_names[b][2],),
+            Reactant.NoStopTracedTrack;
+            track_numbers,
+        )
+        for (i, arg) in enumerate(branch_traced_args[b])
+            Reactant.make_tracer(
+                seen_branch_results[b],
+                arg,
+                (branch_names[b][3], i),
+                Reactant.NoStopTracedTrack;
+                track_numbers,
+            )
+        end
+    end
+
+    branch_linear_results = [
+        Reactant.TracedType[v for v in values(seen) if v isa Reactant.TracedType] for
+        seen in seen_branch_results
+    ]
+
+    # Build dictionaries mapping paths to traced values for each branch
+    branch_results_dicts = [Dict{Tuple,Reactant.TracedType}() for _ in 1:n_branches]
+    for b in 1:n_branches
+        for tr in branch_linear_results[b]
+            for path in Reactant.TracedUtils.get_paths(tr)
+                if length(path) > 0 &&
+                    (path[1] == branch_names[b][2] || path[1] == branch_names[b][3])
+                    branch_results_dicts[b][path] = tr
+                end
+            end
+        end
+    end
+
+    # Collect all unique paths across all branches
+    all_paths = []
+    for b in 1:n_branches
+        for (path, _) in branch_results_dicts[b]
+            if path[1] == branch_names[b][2]
+                push!(all_paths, (:result, path[2:end]...))
+            elseif path[1] == branch_names[b][3]
+                push!(all_paths, (:resarg, path[2:end]...))
+            end
+        end
+    end
+    all_paths = sort!(unique!(all_paths))
+
+    # Map canonical paths to branch-specific paths
+    branch_paths = [
+        [
+            if path[1] == :result
+                (branch_names[b][2], path[2:end]...)
+            else
+                (branch_names[b][3], path[2:end]...)
+            end for path in all_paths
+        ] for b in 1:n_branches
+    ]
+
+    # Correct each branch's results to include all paths
+    branch_corrected_linear_results = [Reactant.TracedType[] for _ in 1:n_branches]
+
+    for b in 1:n_branches
+        MLIR.IR.activate!(branch_bodies[b])
+        activate_constant_context!(branch_bodies[b])
+        try
+            for (i, _) in enumerate(branch_paths[b])
+                if haskey(branch_results_dicts[b], branch_paths[b][i])
+                    push!(
+                        branch_corrected_linear_results[b],
+                        branch_results_dicts[b][branch_paths[b][i]],
+                    )
+                else
+                    # Find a non-missing value from another branch to determine the type
+                    found_type = nothing
+                    for other_b in 1:n_branches
+                        if haskey(branch_results_dicts[other_b], branch_paths[other_b][i])
+                            found_type = branch_results_dicts[other_b][branch_paths[other_b][i]]
+                            break
+                        end
+                    end
+                    if isnothing(found_type)
+                        push!(branch_corrected_linear_results[b], MissingTracedValue())
+                    else
+                        push!(branch_corrected_linear_results[b], zero(found_type))
+                    end
+                end
+            end
+        finally
+            MLIR.IR.deactivate!(branch_bodies[b])
+            deactivate_constant_context!(branch_bodies[b])
+        end
+    end
+
+    # Handle MissingTracedValue across branches
+    result_types = MLIR.IR.Type[]
+    for i in 1:length(all_paths)
+        all_missing = all(
+            b -> branch_corrected_linear_results[b][i] isa MissingTracedValue, 1:n_branches
+        )
+        if all_missing
+            z = zero(TracedRNumber{Int})
+            for b in 1:n_branches
+                branch_corrected_linear_results[b][i] = z
+            end
+            push!(result_types, mlir_type(z))
+        else
+            # Find first non-missing to get the type
+            for b in 1:n_branches
+                res = branch_corrected_linear_results[b][i]
+                if !(res isa MissingTracedValue)
+                    push!(result_types, mlir_type(res))
+                    # Replace missing values in other branches with zeros
+                    for other_b in 1:n_branches
+                        if branch_corrected_linear_results[other_b][i] isa
+                            MissingTracedValue
+                            MLIR.IR.activate!(branch_bodies[other_b])
+                            activate_constant_context!(branch_bodies[other_b])
+                            try
+                                branch_corrected_linear_results[other_b][i] = zero(res)
+                            finally
+                                MLIR.IR.deactivate!(branch_bodies[other_b])
+                                deactivate_constant_context!(branch_bodies[other_b])
+                            end
+                        end
+                    end
+                    break
+                end
+            end
+        end
+    end
+
+    # Add return statements to each branch
+    for b in 1:n_branches
+        MLIR.IR.activate!(branch_bodies[b])
+        activate_constant_context!(branch_bodies[b])
+        try
+            vals = MLIR.IR.Value[
+                Reactant.TracedUtils.get_mlir_data(res) for
+                res in branch_corrected_linear_results[b] if !(res isa MissingTracedValue)
+            ]
+            MLIR.Dialects.stablehlo.return_(vals; location)
+        finally
+            MLIR.IR.deactivate!(branch_bodies[b])
+            deactivate_constant_context!(branch_bodies[b])
+        end
+    end
+
+    # Build regions for each branch
+    branch_regions = MLIR.IR.Region[]
+    for b in 1:n_branches
+        branch_out_types = [mlir_type(tr) for tr in branch_corrected_linear_results[b]]
+
+        branch_fn_compiled = MLIR.IR.block!(MLIR.IR.body(branch_mods[b])) do
+            return MLIR.Dialects.func.func_(;
+                sym_name=Reactant.TracedUtils.__lookup_unique_name_in_module(
+                    branch_mods[b], string(branch_fns[b]) * "_branch$(b)"
+                ),
+                function_type=MLIR.IR.FunctionType(input_types, branch_out_types),
+                body=MLIR.IR.Region(),
+                sym_visibility,
+            )
+        end
+        MLIR.API.mlirRegionTakeBody(
+            MLIR.IR.region(branch_fn_compiled, 1), MLIR.IR.region(branch_func_tmps[b], 1)
+        )
+        MLIR.API.mlirOperationDestroy(branch_func_tmps[b].operation)
+        branch_func_tmps[b].operation = MLIR.API.MlirOperation(C_NULL)
+
+        push!(branch_regions, Reactant.TracedUtils.__take_region(branch_fn_compiled))
+        MLIR.IR.rmfromparent!(branch_fn_compiled)
+    end
+
+    # Create the case operation
+    case_op = MLIR.Dialects.stablehlo.case(
+        index.mlir_data; branches=branch_regions, result_0=result_types, location
+    )
+
+    # Use the first branch's traced results as a template
+    corrected_traced_results = traced_branch_results[1]
+
+    # Set results from case operation
+    residx = 0
+    for (_, path) in enumerate(all_paths)
+        if path[1] == :result
+            residx += 1
+            Reactant.TracedUtils.set!(
+                corrected_traced_results, path[2:end], MLIR.IR.result(case_op, residx)
+            )
+        elseif path[1] == :resarg
+            residx += 1
+            Reactant.TracedUtils.set!(args, path[2:end], MLIR.IR.result(case_op, residx))
+        end
+    end
+
+    return corrected_traced_results
+end
+
 @noinline function call(f, args...; location=mlir_stacktrace("call", @__FILE__, @__LINE__))
     seen = Reactant.OrderedIdDict()
     cache_key = []
@@ -3015,6 +3354,24 @@ Applies a reduction function `fn` along the specified `dimensions` of input `x`,
     location=mlir_stacktrace("reduce", @__FILE__, @__LINE__),
 ) where {T,F}
     return only(reduce([x], [init_values], dimensions, fn; location))
+end
+
+@noinline function reduce(
+    x::TracedRArray{T},
+    init_values::TracedRNumber,
+    dimensions::Vector{Int},
+    fn::F;
+    location=mlir_stacktrace("reduce", @__FILE__, @__LINE__),
+) where {T,F}
+    return only(
+        reduce(
+            [x],
+            [Reactant.promote_to(TracedRNumber{T}, init_values)],
+            dimensions,
+            fn;
+            location,
+        ),
+    )
 end
 
 @noinline function reduce(

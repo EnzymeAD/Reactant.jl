@@ -74,6 +74,41 @@ end
     # @test Array(x) .^ (1//3) ≈ @jit Ops.cbrt(x)
 end
 
+@testset "case" begin
+    function compute_with_case(idx, x, y)
+        return Reactant.Ops.case(
+            idx,
+            [
+                (a, b) -> a .+ b,      # branch 0: addition
+                (a, b) -> a .- b,      # branch 1: subtraction
+                (a, b) -> a .* b,      # branch 2: multiplication
+            ],
+            x,
+            y;
+            track_numbers=Number,
+        )
+    end
+
+    x = Reactant.to_rarray(Float32[1.0, 2.0, 3.0])
+    y = Reactant.to_rarray(Float32[4.0, 5.0, 6.0])
+
+    # Test branch 0 (addition)
+    idx0 = ConcreteRNumber(0)
+    @test Float32[5.0, 7.0, 9.0] ≈ @jit compute_with_case(idx0, x, y)
+
+    # Test branch 1 (subtraction)
+    idx1 = ConcreteRNumber(1)
+    @test Float32[-3.0, -3.0, -3.0] ≈ @jit compute_with_case(idx1, x, y)
+
+    # Test branch 2 (multiplication)
+    idx2 = ConcreteRNumber(2)
+    @test Float32[4.0, 10.0, 18.0] ≈ @jit compute_with_case(idx2, x, y)
+
+    # Test out of bounds (should use last branch per StableHLO spec)
+    idx5 = ConcreteRNumber(5)
+    @test Float32[4.0, 10.0, 18.0] ≈ @jit compute_with_case(idx5, x, y)
+end
+
 @testset "ceil" begin
     x = Reactant.to_rarray(
         [
