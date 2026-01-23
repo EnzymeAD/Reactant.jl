@@ -50,11 +50,7 @@ Base.size(x::TracedRArray) = x.shape
 Base.size(x::TracedRArray, i::Integer) = x.shape[i]
 
 function Base.size(x::TracedRArray, i::TracedRNumber{<:Integer})
-    branches = []
-    for idx in 1:ndims(x)
-        push!(branches, () -> TracedRNumber{Int32}(size(x, idx)))
-    end
-    return @opcall case(i - 1, branches; track_numbers=false)
+    return @allowscalar getindex(@opcall(constant([x.shape...])), i)
 end
 
 Base.collect(x::TracedRArray) = copy(x) # XXX: Is this correct?
