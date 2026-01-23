@@ -30,21 +30,6 @@ function newton_schulz_muon(G; steps=12, eps=1e-7)
 end
 
 function run_newton_schulz_benchmark!(results, backend)
-    compile_modes = [
-        (
-            "StructuredTensors",
-            CompileOptions(; disable_structured_tensors_detection_passes=false),
-        ),
-        (
-            "StructuredTensors (Only Detection)",
-            CompileOptions(;
-                disable_structured_tensors_detection_passes=false,
-                disable_structured_tensors_passes=true,
-            ),
-        ),
-        ("Default", CompileOptions(; disable_structured_tensors_detection_passes=true)),
-    ]
-
     # Using a set of sizes to show scaling
     for N in [256, 1024, 4096]
         benchmark_name = "NewtonSchulz [$(N) x $(N)]/primal"
@@ -57,35 +42,35 @@ function run_newton_schulz_benchmark!(results, backend)
         # Move to Reactant Device
         x_ra = Reactant.to_rarray(X)
 
-        if backend == "CPU"
-            full_benchmark_name = string(benchmark_name, "/CPU/Julia")
-
-            # Warmup
-            newton_schulz_muon(X)
-
-            # Benchmark
-            bench = @b newton_schulz_muon($X) seconds = 5 evals = 1 samples = 100
-
-            results[full_benchmark_name] = bench.time
-
-            print_stmt = @sprintf "%100s     :     %.5gs" full_benchmark_name bench.time
-            @info print_stmt
-            GC.gc(true)
-        end
-
-        for (tag, options) in compile_modes
-            full_benchmark_name = string(benchmark_name, "/", backend, "/", tag)
-
-            time = Reactant.Profiler.profile_with_xprof(
-                newton_schulz_muon, x_ra; nrepeat=25, compile_options=options
-            )
-            time = time.profiling_result.runtime_ns / 1e9
-            results[full_benchmark_name] = time
-
-            print_stmt = @sprintf "%100s     :     %.5gs" full_benchmark_name time
-            @info print_stmt
-            GC.gc(true)
-        end
+        run_benchmark!(
+            results,
+            backend,
+            benchmark_name,
+            newton_schulz_muon,
+            (X,),
+            (x_ra,);
+            configs=[
+                BenchmarkConfiguration(
+                    "StructuredTensors";
+                    compile_options=Reactant.CompileOptions(;
+                        disable_structured_tensors_detection_passes=false
+                    ),
+                ),
+                BenchmarkConfiguration(
+                    "StructuredTensors (Only Detection)";
+                    compile_options=Reactant.CompileOptions(;
+                        disable_structured_tensors_detection_passes=false,
+                        disable_structured_tensors_passes=true,
+                    ),
+                ),
+                BenchmarkConfiguration(
+                    "Default";
+                    compile_options=Reactant.CompileOptions(;
+                        disable_structured_tensors_detection_passes=true
+                    ),
+                ),
+            ],
+        )
     end
     return nothing
 end
