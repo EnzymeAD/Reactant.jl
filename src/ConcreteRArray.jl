@@ -869,3 +869,43 @@ end
 
 Base.isinf(x::ConcreteRNumber{T}) where {T} = Base.isinf(convert(T, x))
 Base.round(x::ConcreteRNumber{T}) where {T} = Base.round(convert(T, x))
+
+Base._parentsmatch(A::ConcreteIFRTArray, B::ConcreteIFRTArray) = A === B
+Base._parentsmatch(A::ConcretePJRTArray, B::ConcretePJRTArray) = A === B
+function Base._parentsmatch(
+    A::Union{AnyConcreteIFRTArray,AnyConcretePJRTArray},
+    B::Union{AnyConcreteIFRTArray,AnyConcretePJRTArray},
+)
+    return Base._parentsmatch(ancestor(A), ancestor(B))
+end
+
+function Base.copyto_unaliased!(
+    _deststyle::IndexStyle,
+    dst::Union{AnyConcreteIFRTArray,AnyConcretePJRTArray},
+    _srcstyle::IndexStyle,
+    src::Union{AnyConcreteIFRTArray,AnyConcretePJRTArray},
+)
+    fn = compile(Base.copyto!, (dst, src))
+    fn(dst, src)
+    return dst
+end
+function Base.copyto_unaliased!(
+    _deststyle::IndexStyle,
+    dst::Union{AnyConcreteIFRTArray,AnyConcretePJRTArray},
+    _srcstyle::IndexStyle,
+    src::AbstractArray,
+)
+    fn = compile(Base.copyto!, (dst, src))
+    fn(dst, src)
+    return dst
+end
+function Base.copyto_unaliased!(
+    _deststyle::IndexStyle,
+    dst::AbstractArray,
+    _srcstyle::IndexStyle,
+    src::Union{AnyConcreteIFRTArray,AnyConcretePJRTArray},
+)
+    fn = compile(Base.copyto!, (dst, src))
+    fn(dst, src)
+    return dst
+end
