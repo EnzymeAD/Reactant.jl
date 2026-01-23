@@ -16,14 +16,14 @@ const zmax = 8.0f-3
 const fmax = TBP / Trf
 
 const Nrf = 64
-const Δt_physics = 10.0f-6
+const Δt_physics = 12.5f-6
 const N_substeps = Int(Trf / Nrf / Δt_physics)
 const Nt_total = Nrf * N_substeps
 
 function bloch_forward!(
-    M_xy_r, M_xy_i, M_z, p_z, s_Gz, s_Δt, s_B1_r, s_B1_i, ::Val{N_Δt}
-) where {N_Δt}
-    Reactant.@trace for s_idx in 1:N_Δt
+    M_xy_r, M_xy_i, M_z, p_z, s_Gz, s_Δt, s_B1_r, s_B1_i, N_Δt, checkpointing::Bool
+)
+    Reactant.@trace checkpointing = checkpointing for s_idx in 1:N_Δt
         Bz = @. p_z * s_Gz[s_idx]
         B1_r = s_B1_r[s_idx]
         B1_i = s_B1_i[s_idx]
@@ -61,14 +61,14 @@ function bloch_forward!(
 end
 
 function loss_fn(
-    B1_r_tl, B1_i_tl, p_z, Gz, Δt, target_r, target_i, invN_val, ::Val{N_Δt}
-) where {N_Δt}
+    B1_r_tl, B1_i_tl, p_z, Gz, Δt, target_r, target_i, invN_val, N_Δt, checkpointing::Bool
+)
     M_xy_r = zero(p_z)
     M_xy_i = zero(p_z)
     M_z = one.(p_z)
 
     M_xy_r, M_xy_i, M_z = bloch_forward!(
-        M_xy_r, M_xy_i, M_z, p_z, Gz, Δt, B1_r_tl, B1_i_tl, Val(N_Δt)
+        M_xy_r, M_xy_i, M_z, p_z, Gz, Δt, B1_r_tl, B1_i_tl, N_Δt, checkpointing
     )
 
     d_r = @. M_xy_r - target_r
@@ -78,8 +78,18 @@ function loss_fn(
 end
 
 function train_step(
-    B1_r_tl, B1_i_tl, p_z, Gz, Δt, target_r, target_i, invN_val, lr, ::Val{N_DT}
-) where {N_DT}
+    B1_r_tl,
+    B1_i_tl,
+    p_z,
+    Gz,
+    Δt,
+    target_r,
+    target_i,
+    invN_val,
+    lr,
+    N_DT,
+    checkpointing::Bool,
+)
     (; val, derivs) = Enzyme.gradient(
         ReverseWithPrimal,
         loss_fn,
@@ -91,7 +101,8 @@ function train_step(
         Const(target_r),
         Const(target_i),
         Const(invN_val),
-        Const(Val(N_DT)),
+        Const(N_DT),
+        Const(checkpointing),
     )
 
     B1_r_new = B1_r_tl .- lr .* derivs[1]
@@ -116,7 +127,6 @@ function setup_bloch_benchmark(Nspins::Int)
     target_i = Float32.(0.5 ./ (1 .+ (z_cpu ./ (Δz / 2)) .^ 10))
 
     invN = Float32(1 / Nspins)
-    N_Δt_val = Val(Nt)
 
     # CPU arrays for native Julia benchmark
     cpu = (;
@@ -128,7 +138,7 @@ function setup_bloch_benchmark(Nspins::Int)
         target_r,
         target_i,
         invN,
-        N_Δt_val,
+        Nt,
     )
 
     # RArrays for Reactant benchmark
@@ -141,61 +151,34 @@ function setup_bloch_benchmark(Nspins::Int)
         target_r=Reactant.to_rarray(target_r),
         target_i=Reactant.to_rarray(target_i),
         invN,
-        N_Δt_val,
+        Nt,
     )
 
     return (; cpu, ra, Nspins, Nt)
 end
 
 function run_bloch_rf_optimization_benchmark!(results, backend)
-    spin_counts = [100, 1_000, 5_000]
-    lr = Float32(2e-8)
+    spin_counts = [128, 1_024, 8_192]
+    lr = 2.0f-8
 
     for Nspins in spin_counts
         ctx = setup_bloch_benchmark(Nspins)
-        benchmark_name = "bloch_rf [$(Nspins) spins]/train_step"
 
-        if backend == "CPU"
-            full_benchmark_name = string(benchmark_name, "/CPU/Julia")
+        cpu_args = (
+            ctx.cpu.B1_r,
+            ctx.cpu.B1_i,
+            ctx.cpu.p_z,
+            ctx.cpu.Gz,
+            ctx.cpu.Δt,
+            ctx.cpu.target_r,
+            ctx.cpu.target_i,
+            ctx.cpu.invN,
+            lr,
+            ctx.cpu.Nt,
+            false,
+        )
 
-            # Warmup with CPU arrays
-            train_step(
-                ctx.cpu.B1_r,
-                ctx.cpu.B1_i,
-                ctx.cpu.p_z,
-                ctx.cpu.Gz,
-                ctx.cpu.Δt,
-                ctx.cpu.target_r,
-                ctx.cpu.target_i,
-                ctx.cpu.invN,
-                lr,
-                ctx.cpu.N_Δt_val,
-            )
-
-            bench = @b train_step(
-                $(ctx.cpu.B1_r),
-                $(ctx.cpu.B1_i),
-                $(ctx.cpu.p_z),
-                $(ctx.cpu.Gz),
-                $(ctx.cpu.Δt),
-                $(ctx.cpu.target_r),
-                $(ctx.cpu.target_i),
-                $(ctx.cpu.invN),
-                $lr,
-                $(ctx.cpu.N_Δt_val),
-            ) seconds = 5 evals = 1 samples = 100
-
-            results[full_benchmark_name] = bench.time
-
-            print_stmt = @sprintf "%100s     :     %.5gs" full_benchmark_name bench.time
-            @info print_stmt
-            GC.gc(true)
-        end
-
-        full_benchmark_name = string(benchmark_name, "/", backend, "/Default")
-
-        time = Reactant.Profiler.profile_with_xprof(
-            train_step,
+        ra_args = (
             ctx.ra.B1_r,
             ctx.ra.B1_i,
             ctx.ra.p_z,
@@ -205,15 +188,33 @@ function run_bloch_rf_optimization_benchmark!(results, backend)
             ctx.ra.target_i,
             ctx.ra.invN,
             lr,
-            ctx.ra.N_Δt_val;
-            nrepeat=25,
+            ctx.ra.Nt,
         )
-        time = time.profiling_result.runtime_ns / 1e9
-        results[full_benchmark_name] = time
 
-        print_stmt = @sprintf "%100s     :     %.5gs" full_benchmark_name time
-        @info print_stmt
-        GC.gc(true)
+        run_benchmark!(
+            results,
+            backend,
+            "bloch_rf [$(Nspins) spins]/reverse",
+            train_step,
+            cpu_args,
+            (ra_args..., false);
+            configs=[
+                BenchmarkConfiguration("Default"; compile_options=Reactant.CompileOptions())
+            ],
+        )
+
+        run_benchmark!(
+            results,
+            backend,
+            "bloch_rf [$(Nspins) spins] [checkpointing]/reverse",
+            train_step,
+            (),
+            (ra_args..., true);
+            configs=[
+                BenchmarkConfiguration("Default"; compile_options=Reactant.CompileOptions())
+            ],
+            skip_cpu=true,
+        )
     end
 
     return nothing
