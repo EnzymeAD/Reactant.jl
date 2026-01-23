@@ -206,12 +206,14 @@ function run_bloch_rf_optimization_benchmark!(results, backend)
         run_benchmark!(
             results,
             backend,
-            "bloch_rf [$(Nspins) spins] [checkpointing]/reverse",
+            "bloch_rf [$(Nspins) spins]/reverse",
             train_step,
             (),
             (ra_args..., true);
             configs=[
-                BenchmarkConfiguration("Default"; compile_options=Reactant.CompileOptions())
+                BenchmarkConfiguration(
+                    "Default_Checkpointing"; compile_options=Reactant.CompileOptions()
+                ),
             ],
             skip_cpu=true,
         )
