@@ -518,6 +518,10 @@ elseif XLA.REACTANT_XLA_RUNTIME == "IFRT"
     const AnyConcreteRArray = AnyConcreteIFRTArray
 end
 
+const UnionAnyConcreteRArray{T,N,S} = Union{
+    AnyConcreteIFRTArray{T,N,S},AnyConcretePJRTArray{T,N,S}
+}
+
 for aType in (:ConcretePJRTArray, :ConcreteIFRTArray)
     @eval function $(aType){T}(::UndefInitializer, shape::Integer...; kwargs...) where {T}
         return $(aType){T}(undef, Dims(shape); kwargs...)
