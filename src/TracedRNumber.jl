@@ -116,6 +116,10 @@ end
 function Base.promote_rule(::Type{TracedRInteger{T}}, ::Type{S}) where {T,S<:Integer}
     return TracedRInteger{Base.promote_type(T, S)}
 end
+# TracedRInteger with AbstractFloat promotes to TracedRFloat
+function Base.promote_rule(::Type{TracedRInteger{T}}, ::Type{S}) where {T,S<:AbstractFloat}
+    return TracedRFloat{Base.promote_type(T, S)}
+end
 
 # TracedRFloat promotion rules
 function Base.promote_rule(::Type{TracedRFloat{T}}, ::Type{TracedRFloat{S}}) where {T,S}
@@ -143,10 +147,26 @@ end
 function Base.promote_rule(::Type{TracedRFloat{T}}, ::Type{TracedRInteger{S}}) where {T,S}
     return TracedRFloat{Base.promote_type(T, S)}
 end
+function Base.promote_rule(::Type{TracedRInteger{T}}, ::Type{TracedRFloat{S}}) where {T,S}
+    return TracedRFloat{Base.promote_type(T, S)}
+end
 
 # Cross-type promotion: TracedRComplex wins over TracedRReal
 function Base.promote_rule(::Type{TracedRComplex{T}}, ::Type{<:TracedRReal{S}}) where {T,S}
     return TracedRComplex{Base.promote_type(T, complex(S))}
+end
+function Base.promote_rule(::Type{<:TracedRReal{T}}, ::Type{TracedRComplex{S}}) where {T,S}
+    return TracedRComplex{Base.promote_type(complex(T), S)}
+end
+
+# TracedRReal promotion rules with regular Number types
+function Base.promote_rule(::Type{<:TracedRReal{T}}, ::Type{S}) where {T,S<:Real}
+    return TracedRNumber{Base.promote_type(T, S)}
+end
+
+# TracedRComplex promotion rules with regular Number types  
+function Base.promote_rule(::Type{TracedRComplex{T}}, ::Type{S}) where {T,S<:Number}
+    return TracedRNumber{Base.promote_type(T, S)}
 end
 
 # Cross-type promotion: TracedRNumber (union) vs concrete traced types
