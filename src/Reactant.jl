@@ -115,7 +115,7 @@ isa_traced_soa(::AbstractRange{<:TracedRNumber}) = true
 
 unwrapped_eltype(::Type{T}) where {T<:Number} = T
 unwrapped_eltype(::Type{<:RNumber{T}}) where {T} = T
-unwrapped_eltype(::Type{TracedRNumber{T}}) where {T} = T
+unwrapped_eltype(::Type{<:TracedRNumber{T}}) where {T} = T
 
 unwrapped_eltype(::T) where {T<:Number} = T
 unwrapped_eltype(::RNumber{T}) where {T} = T
@@ -264,8 +264,21 @@ export ConcreteRArray,
     ConcreteRNumber,
     ConcretePJRTArray,
     ConcretePJRTNumber,
+    ConcretePJRTInteger,
+    ConcretePJRTFloat,
+    ConcretePJRTComplex,
     ConcreteIFRTArray,
     ConcreteIFRTNumber,
+    ConcreteIFRTInteger,
+    ConcreteIFRTFloat,
+    ConcreteIFRTComplex,
+    RInteger,
+    RFloat,
+    RComplex,
+    TracedRNumber,
+    TracedRInteger,
+    TracedRFloat,
+    TracedRComplex,
     @compile,
     @code_hlo,
     @code_mhlo,
@@ -350,6 +363,6 @@ end
 # Not part of the public API. Exclusively for testing purposes.
 include("TestUtils.jl")
 
-include("Precompile.jl")
+#include("Precompile.jl")
 
 end # module

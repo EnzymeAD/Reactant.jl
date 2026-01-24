@@ -1,6 +1,19 @@
-abstract type RNumber{T<:ReactantPrimitive} <: Number end
+# Abstract type hierarchy for Reactant numbers
+# RInteger and RFloat are subtypes of Integer and AbstractFloat respectively
+# This allows Reactant to trace through code that uses methods specializing on Real
+abstract type RInteger{T<:ReactantPrimitive} <: Integer end
+abstract type RFloat{T<:ReactantPrimitive} <: AbstractFloat end
+abstract type RComplex{T<:ReactantPrimitive} <: Number end
 
-abstract type AbstractConcreteNumber{T} <: RNumber{T} end
+const RReal{T} = Union{RInteger{T},RFloat{T}}
+const RNumber{T} = Union{RReal{T},RComplex{T}}
+
+abstract type AbstractConcreteInteger{T} <: RInteger{T} end
+abstract type AbstractConcreteFloat{T} <: RFloat{T} end
+abstract type AbstractConcreteComplex{T} <: RComplex{T} end
+
+const AbstractConcreteReal{T} = Union{AbstractConcreteInteger{T},AbstractConcreteFloat{T}}
+const AbstractConcreteNumber{T} = Union{AbstractConcreteReal{T},AbstractConcreteComplex{T}}
 
 abstract type RArray{T,N} <: DenseArray{T,N} end
 
@@ -37,31 +50,85 @@ end
 ## MissingTracedValue -- defined in ReactantCore
 @leaf MissingTracedValue
 
-## TracedRNumber
-mutable struct TracedRNumber{T} <: RNumber{T}
-    paths::Tuple
-    mlir_data::Union{Nothing,MLIR.IR.Value}
+## TracedRInteger, TracedRFloat, TracedRComplex
+for (TracedType, BaseType) in (
+    (:TracedRInteger, :RInteger),
+    (:TracedRFloat, :RFloat),
+    (:TracedRComplex, :RComplex),
+)
+    @eval begin
+        mutable struct $TracedType{T} <: $BaseType{T}
+            paths::Tuple
+            mlir_data::Union{Nothing,MLIR.IR.Value}
 
-    function TracedRNumber{T}(
-        paths::Tuple, mlir_data::Union{Nothing,MLIR.IR.Value}
-    ) where {T}
-        if !isnothing(mlir_data)
-            @assert size(MLIR.IR.type(mlir_data)) == ()
+            function $TracedType{T}(
+                paths::Tuple, mlir_data::Union{Nothing,MLIR.IR.Value}
+            ) where {T}
+                if !isnothing(mlir_data)
+                    @assert size(MLIR.IR.type(mlir_data)) == ()
+                end
+                return new{T}(paths, mlir_data)
+            end
         end
-        return new{T}(paths, mlir_data)
+
+        @leaf $TracedType
     end
 end
 
-Base.elsize(::Type{TracedRNumber{T}}) where {T} = sizeof(T)
-Base.elsize(::Type{RNumber{T}}) where {T} = sizeof(T)
+const TracedRReal{T} = Union{TracedRInteger{T},TracedRFloat{T}}
+const TracedRNumber{T} = Union{TracedRReal{T},TracedRComplex{T}}
+
+# Type-returning helper functions for dispatch on element type
+@inline traced_number_type(::Type{T}) where {T<:Complex} = TracedRComplex{T}
+@inline traced_number_type(::Type{T}) where {T<:Integer} = TracedRInteger{T}
+@inline traced_number_type(::Type{Bool}) = TracedRInteger{Bool}
+@inline traced_number_type(::Type{T}) where {T<:AbstractFloat} = TracedRFloat{T}
+
+@inline pjrt_number_type(::Type{T}, ::Val{D}) where {T<:Complex,D} = ConcretePJRTComplex{T,D}
+@inline pjrt_number_type(::Type{T}, ::Val{D}) where {T<:Integer,D} = ConcretePJRTInteger{T,D}
+@inline pjrt_number_type(::Type{Bool}, ::Val{D}) where {D} = ConcretePJRTInteger{Bool,D}
+@inline pjrt_number_type(::Type{T}, ::Val{D}) where {T<:AbstractFloat,D} = ConcretePJRTFloat{T,D}
+
+@inline ifrt_number_type(::Type{T}) where {T<:Complex} = ConcreteIFRTComplex{T}
+@inline ifrt_number_type(::Type{T}) where {T<:Integer} = ConcreteIFRTInteger{T}
+@inline ifrt_number_type(::Type{Bool}) = ConcreteIFRTInteger{Bool}
+@inline ifrt_number_type(::Type{T}) where {T<:AbstractFloat} = ConcreteIFRTFloat{T}
+
+# Type without dimension parameter (for convenience constructors)
+@inline pjrt_number_type_nod(::Type{T}) where {T<:Complex} = ConcretePJRTComplex{T}
+@inline pjrt_number_type_nod(::Type{T}) where {T<:Integer} = ConcretePJRTInteger{T}
+@inline pjrt_number_type_nod(::Type{Bool}) = ConcretePJRTInteger{Bool}
+@inline pjrt_number_type_nod(::Type{T}) where {T<:AbstractFloat} = ConcretePJRTFloat{T}
+
+# Unparameterized type constructors for use with TypeVar in UnionAll handling
+@inline pjrt_number_type_unparameterized(::TypeVar, ::Val{D}) where {D} = ConcretePJRTFloat
+@inline ifrt_number_type_unparameterized(::TypeVar) = ConcreteIFRTFloat
+
+# Helper methods to create appropriate traced type based on element type
+@inline TracedRNumber{T}(paths::Tuple, mlir_data) where {T<:Complex} =
+    TracedRComplex{T}(paths, mlir_data)
+@inline TracedRNumber{T}(paths::Tuple, mlir_data) where {T<:Integer} =
+    TracedRInteger{T}(paths, mlir_data)
+@inline TracedRNumber{Bool}(paths::Tuple, mlir_data) = TracedRInteger{Bool}(paths, mlir_data)
+@inline TracedRNumber{T}(paths::Tuple, mlir_data) where {T<:AbstractFloat} =
+    TracedRFloat{T}(paths, mlir_data)
+
+Base.elsize(::Type{<:TracedRNumber{T}}) where {T} = sizeof(T)
+Base.elsize(::Type{<:RNumber{T}}) where {T} = sizeof(T)
 Base.elsize(::Type{<:AbstractConcreteNumber{T}}) where {T} = sizeof(T)
 Base.elsize(::Type{<:AbstractConcreteArray{T}}) where {T} = sizeof(T)
 
-function repath(x::TracedRNumber{T}, paths) where {T}
-    return TracedRNumber{T}(paths, x.mlir_data)
+function repath(x::TracedRInteger{T}, paths) where {T}
+    return TracedRInteger{T}(paths, x.mlir_data)
 end
 
-@leaf TracedRNumber
+function repath(x::TracedRFloat{T}, paths) where {T}
+    return TracedRFloat{T}(paths, x.mlir_data)
+end
+
+function repath(x::TracedRComplex{T}, paths) where {T}
+    return TracedRComplex{T}(paths, x.mlir_data)
+end
 
 ## TracedRArray
 mutable struct TracedRArray{T,N} <: RArray{TracedRNumber{T},N}
@@ -123,45 +190,89 @@ end
 @leaf TracedUnitRange
 Adapt.parent_type(::Type{TracedUnitRange{T}}) where {T} = TracedUnitRange{T}
 
-const AnyTracedRArray{T,N} = AbstractArray{TracedRNumber{T},N}
+const AnyTracedRArray{T,N} = AbstractArray{<:TracedRNumber{T},N}
 const AnyTracedRVector{T} = AnyTracedRArray{T,1}
 const AnyTracedRMatrix{T} = AnyTracedRArray{T,2}
 const AnyTracedRVecOrMat{T} = Union{AnyTracedRVector{T},AnyTracedRMatrix{T}}
 
-# Concrete Types
-## ConcretePJRTNumber
-mutable struct ConcretePJRTNumber{T,D} <: AbstractConcreteNumber{T}
-    data::NTuple{D,XLA.PJRT.AsyncBuffer}
-    sharding::Sharding.ShardInfo
-    donated::Bool
+const TracedRVector{T} = TracedRArray{T,1}
+const TracedRMatrix{T} = TracedRArray{T,2}
+const TracedRVecOrMat{T} = Union{TracedRVector{T},TracedRMatrix{T}}
 
-    function ConcretePJRTNumber{T,D}(
-        data::NTuple{D,XLA.PJRT.AsyncBuffer}, sharding::Sharding.ShardInfo
-    ) where {T,D}
-        return new{T,D}(data, sharding, false)
+const WrappedTracedRArray{T,N} = WrappedArray{T,N,TracedRArray,TracedRArray{T,N}}
+
+# Concrete Types
+## ConcretePJRTInteger, ConcretePJRTFloat, ConcretePJRTComplex
+for (ConcreteType, BaseType) in (
+    (:ConcretePJRTInteger, :AbstractConcreteInteger),
+    (:ConcretePJRTFloat, :AbstractConcreteFloat),
+    (:ConcretePJRTComplex, :AbstractConcreteComplex),
+)
+    @eval begin
+        mutable struct $ConcreteType{T,D} <: $BaseType{T}
+            data::NTuple{D,XLA.PJRT.AsyncBuffer}
+            sharding::Sharding.ShardInfo
+            donated::Bool
+
+            function $ConcreteType{T,D}(
+                data::NTuple{D,XLA.PJRT.AsyncBuffer}, sharding::Sharding.ShardInfo
+            ) where {T,D}
+                return new{T,D}(data, sharding, false)
+            end
+        end
+
+        $ConcreteType{T,1}(x::Number) where {T} = $ConcreteType{T}(x)
+
+        function $ConcreteType{T}(data::Tuple{XLA.PJRT.AsyncBuffer}) where {T}
+            return $ConcreteType{T,1}(data, Sharding.NoShardInfo())
+        end
+
+        function $ConcreteType{T}(
+            data::NTuple{D,XLA.PJRT.AsyncBuffer}, sharding
+        ) where {T,D}
+            return $ConcreteType{T,D}(data, sharding)
+        end
+
+        @leaf $ConcreteType
     end
 end
 
-ConcretePJRTNumber{T,1}(x::Number) where {T} = ConcretePJRTNumber{T}(x)
+const ConcretePJRTReal{T,D} = Union{ConcretePJRTInteger{T,D},ConcretePJRTFloat{T,D}}
+const ConcretePJRTNumber{T,D} = Union{ConcretePJRTReal{T,D},ConcretePJRTComplex{T,D}}
 
-function ConcretePJRTNumber{T}(data::Tuple{XLA.PJRT.AsyncBuffer}) where {T}
-    return ConcretePJRTNumber{T,1}(data, Sharding.NoShardInfo())
+# Helper functions to create appropriate ConcretePJRTNumber based on element type
+@inline function _ConcretePJRTNumber(
+    ::Type{T}, ::Val{D}, data::NTuple{D,XLA.PJRT.AsyncBuffer}, sharding::Sharding.ShardInfo
+) where {T<:Complex,D}
+    return ConcretePJRTComplex{T,D}(data, sharding)
 end
 
-function ConcretePJRTNumber{T}(data::NTuple{D,XLA.PJRT.AsyncBuffer}, sharding) where {T,D}
-    return ConcretePJRTNumber{T,D}(data, sharding)
+@inline function _ConcretePJRTNumber(
+    ::Type{T}, ::Val{D}, data::NTuple{D,XLA.PJRT.AsyncBuffer}, sharding::Sharding.ShardInfo
+) where {T<:Integer,D}
+    return ConcretePJRTInteger{T,D}(data, sharding)
 end
 
-@leaf ConcretePJRTNumber
+@inline function _ConcretePJRTNumber(
+    ::Type{Bool}, ::Val{D}, data::NTuple{D,XLA.PJRT.AsyncBuffer}, sharding::Sharding.ShardInfo
+) where {D}
+    return ConcretePJRTInteger{Bool,D}(data, sharding)
+end
+
+@inline function _ConcretePJRTNumber(
+    ::Type{T}, ::Val{D}, data::NTuple{D,XLA.PJRT.AsyncBuffer}, sharding::Sharding.ShardInfo
+) where {T<:AbstractFloat,D}
+    return ConcretePJRTFloat{T,D}(data, sharding)
+end
 
 function ConcretePJRTNumber{T}(data::T2; kwargs...) where {T<:Number,T2<:Number}
     carray = ConcretePJRTArray(fill(convert(T, data)); kwargs...)
     if !Sharding.is_sharded(carray.sharding)
-        return ConcretePJRTNumber{T,1}((carray.data[1],), carray.sharding)
+        return _ConcretePJRTNumber(T, Val(1), (carray.data[1],), carray.sharding)
     end
     @assert all(isnothing, carray.sharding.partition_spec) "ConcretePJRTNumber cannot be \
                                                             sharded"
-    return ConcretePJRTNumber{T,length(carray.data)}(carray.data, carray.sharding)
+    return _ConcretePJRTNumber(T, Val(length(carray.data)), carray.data, carray.sharding)
 end
 function ConcretePJRTNumber{T}(
     data::ConcretePJRTNumber{T2}; kwargs...
@@ -274,28 +385,64 @@ end
 
 # While sharding is part of IFRT.Array, we still need to carry it around for compiling the
 # MLIR module.
-## ConcreteIFRTNumber
-mutable struct ConcreteIFRTNumber{T} <: AbstractConcreteNumber{T}
-    data::XLA.IFRT.AsyncArray
-    sharding::Sharding.ShardInfo
-    donated::Bool
+## ConcreteIFRTInteger, ConcreteIFRTFloat, ConcreteIFRTComplex
+for (ConcreteType, BaseType) in (
+    (:ConcreteIFRTInteger, :AbstractConcreteInteger),
+    (:ConcreteIFRTFloat, :AbstractConcreteFloat),
+    (:ConcreteIFRTComplex, :AbstractConcreteComplex),
+)
+    @eval begin
+        mutable struct $ConcreteType{T} <: $BaseType{T}
+            data::XLA.IFRT.AsyncArray
+            sharding::Sharding.ShardInfo
+            donated::Bool
 
-    function ConcreteIFRTNumber{T}(
-        data::XLA.IFRT.AsyncArray, sharding::Sharding.ShardInfo
-    ) where {T}
-        return new{T}(data, sharding, false)
+            function $ConcreteType{T}(
+                data::XLA.IFRT.AsyncArray, sharding::Sharding.ShardInfo
+            ) where {T}
+                return new{T}(data, sharding, false)
+            end
+        end
+
+        function $ConcreteType{T}(data::XLA.IFRT.AsyncArray) where {T}
+            return $ConcreteType{T}(data, Sharding.NoShardInfo())
+        end
+
+        @leaf $ConcreteType
     end
 end
 
-function ConcreteIFRTNumber{T}(data::XLA.IFRT.AsyncArray) where {T}
-    return ConcreteIFRTNumber{T}(data, Sharding.NoShardInfo())
+const ConcreteIFRTReal{T} = Union{ConcreteIFRTInteger{T},ConcreteIFRTFloat{T}}
+const ConcreteIFRTNumber{T} = Union{ConcreteIFRTReal{T},ConcreteIFRTComplex{T}}
+
+# Helper functions to create appropriate ConcreteIFRTNumber based on element type
+@inline function _ConcreteIFRTNumber(
+    ::Type{T}, data::XLA.IFRT.AsyncArray, sharding::Sharding.ShardInfo
+) where {T<:Complex}
+    return ConcreteIFRTComplex{T}(data, sharding)
 end
 
-@leaf ConcreteIFRTNumber
+@inline function _ConcreteIFRTNumber(
+    ::Type{T}, data::XLA.IFRT.AsyncArray, sharding::Sharding.ShardInfo
+) where {T<:Integer}
+    return ConcreteIFRTInteger{T}(data, sharding)
+end
+
+@inline function _ConcreteIFRTNumber(
+    ::Type{Bool}, data::XLA.IFRT.AsyncArray, sharding::Sharding.ShardInfo
+)
+    return ConcreteIFRTInteger{Bool}(data, sharding)
+end
+
+@inline function _ConcreteIFRTNumber(
+    ::Type{T}, data::XLA.IFRT.AsyncArray, sharding::Sharding.ShardInfo
+) where {T<:AbstractFloat}
+    return ConcreteIFRTFloat{T}(data, sharding)
+end
 
 function ConcreteIFRTNumber{T}(data::T2; kwargs...) where {T<:Number,T2<:Number}
     carray = ConcreteIFRTArray(fill(convert(T, data)); kwargs...)
-    return ConcreteIFRTNumber{T}(carray.data, carray.sharding)
+    return _ConcreteIFRTNumber(T, carray.data, carray.sharding)
 end
 function ConcreteIFRTNumber{T}(
     data::ConcreteIFRTNumber{T2}; kwargs...

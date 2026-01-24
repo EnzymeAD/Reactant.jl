@@ -8,6 +8,9 @@ using ..Reactant:
     Reactant,
     TracedRArray,
     TracedRNumber,
+    TracedRInteger,
+    TracedRFloat,
+    TracedRComplex,
     RArray,
     RNumber,
     MissingTracedValue,
@@ -1816,17 +1819,19 @@ end
     )
 end
 
-@noinline function convert(
-    ::Type{TracedRNumber{T}},
-    x::TracedRNumber;
-    location=mlir_stacktrace("convert", @__FILE__, @__LINE__),
-) where {T}
-    return TracedRNumber{T}(
-        (),
-        MLIR.IR.result(
-            stablehlo.convert(x.mlir_data; result=mlir_type(TracedRNumber{T}), location)
-        ),
-    )
+for TracedRType in (TracedRNumber, TracedRInteger, TracedRFloat, TracedRComplex)
+    @eval @noinline function convert(
+        ::Type{$TracedRType{T}},
+        x::TracedRNumber;
+        location=mlir_stacktrace("convert", @__FILE__, @__LINE__),
+    ) where {T}
+        return $TracedRType{T}(
+            (),
+            MLIR.IR.result(
+                stablehlo.convert(x.mlir_data; result=mlir_type(TracedRNumber{T}), location)
+            ),
+        )
+    end
 end
 
 # Generate a unique name given a module hash and a function name.

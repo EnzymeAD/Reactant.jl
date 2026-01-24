@@ -12,8 +12,14 @@ import ..Reactant:
     Sharding,
     ConcretePJRTArray,
     ConcretePJRTNumber,
+    ConcretePJRTInteger,
+    ConcretePJRTFloat,
+    ConcretePJRTComplex,
     ConcreteIFRTArray,
     ConcreteIFRTNumber,
+    ConcreteIFRTInteger,
+    ConcreteIFRTFloat,
+    ConcreteIFRTComplex,
     TracedRArray,
     TracedRNumber,
     RArray,
@@ -22,6 +28,10 @@ import ..Reactant:
     TracedToConcrete,
     append_path,
     ancestor,
+    traced_number_type,
+    pjrt_number_type,
+    pjrt_number_type_nod,
+    ifrt_number_type,
     TracedType
 import Reactant: OptimizeCommunicationOptions, ShardyPropagationOptions, CompileOptions
 using Reactant_jll: Reactant_jll
@@ -292,15 +302,21 @@ function create_result(
         @assert haskey(result_stores, path) "Expected $(path) in $(keys(result_stores))"
         restore = result_stores[path]
         delete!(result_stores, path)
+        
+        # Determine the concrete type based on T
+        ConcreteType = pjrt_number_type(T, Val(D))
+        
         if path_to_shard_info !== nothing && haskey(path_to_shard_info, path)
             if haskey(to_unreshard_results, path)
                 error("TODO: Not yet Implemented. Use IFRT for this.")
             end
             sharding = pop!(path_to_shard_info, path)
             push!(used_shardinfo, sharding)
-            result = :(ConcretePJRTNumber{$T}(($(restore)...,), $sharding))
+            result = :($ConcreteType(($(restore)...,), $sharding))
         else
-            result = :(ConcretePJRTNumber{$T}($restore))
+            # Use the non-parameterized type (without D) for the convenience constructor
+            ConcreteTypeNoD = pjrt_number_type_nod(T)
+            result = :($ConcreteTypeNoD($restore))
         end
         push!(
             resultgen_code,
@@ -334,15 +350,19 @@ function create_result(
         @assert haskey(result_stores, path)
         restore = result_stores[path]
         delete!(result_stores, path)
+        
+        # Determine the concrete type based on T
+        ConcreteType = ifrt_number_type(T)
+        
         if path_to_shard_info !== nothing && haskey(path_to_shard_info, path)
             if haskey(to_unreshard_results, path)
                 error("TODO: Not yet Implemented.")
             end
             sharding = pop!(path_to_shard_info, path)
             push!(used_shardinfo, sharding)
-            result = :(ConcreteIFRTNumber{$T}($(restore), $sharding))
+            result = :($ConcreteType($(restore), $sharding))
         else
-            result = :(ConcreteIFRTNumber{$T}($restore))
+            result = :($ConcreteType($restore))
         end
         push!(
             resultgen_code,

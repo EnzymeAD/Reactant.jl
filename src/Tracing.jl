@@ -63,15 +63,15 @@ Base.@nospecializeinfer function traced_type_inner(
 )
     if mode == ArrayToConcrete && T <: track_numbers
         if runtime isa Val{:PJRT}
-            return ConcretePJRTNumber{T,_unwrap_val(ndevices)}
+            return pjrt_number_type(T, ndevices)
         elseif runtime isa Val{:IFRT}
-            return ConcreteIFRTNumber{T}
+            return ifrt_number_type(T)
         else
             error("Unsupported runtime $runtime")
         end
     elseif (mode == NoStopTracedTrack || mode == TracedTrack || mode == TracedSetPath) &&
         T <: track_numbers
-        return TracedRNumber{T}
+        return traced_number_type(T)
     end
     return T
 end
@@ -231,12 +231,12 @@ Base.@nospecializeinfer function traced_type_inner(
     end
 
     if mode == ConcreteToTraced
-        return TracedRNumber{T}
+        return traced_number_type(T)
     elseif mode == TracedToConcrete
         return T0
     elseif mode == ArrayToConcrete
         @assert runtime isa Val{:PJRT}
-        return ConcretePJRTNumber{T,_unwrap_val(ndevices)}
+        return pjrt_number_type(T, ndevices)
     else
         throw("Unsupported mode: $mode")
     end
@@ -253,12 +253,12 @@ Base.@nospecializeinfer function traced_type_inner(
     T = T0 isa UnionAll ? T0.body.parameters[1] : T0.parameters[1]
 
     if mode == ConcreteToTraced
-        return TracedRNumber{T}
+        return traced_number_type(T)
     elseif mode == TracedToConcrete
         return T0
     elseif mode == ArrayToConcrete
         @assert runtime isa Val{:IFRT}
-        return ConcreteIFRTNumber{T}
+        return ifrt_number_type(T)
     else
         throw("Unsupported mode: $mode")
     end
@@ -376,16 +376,19 @@ Base.@nospecializeinfer function traced_type_inner(
     if mode == ConcreteToTraced
         throw("TracedRNumber cannot be traced")
     elseif mode == TracedToConcrete
+        elT = T isa UnionAll ? T.var : T.parameters[1]
         if runtime isa Val{:PJRT}
             if T isa UnionAll
-                return UnionAll(T.var, ConcretePJRTNumber{T.var,_unwrap_val(ndevices)})
+                ConcreteType = pjrt_number_type_unparameterized(elT, ndevices)
+                return UnionAll(T.var, ConcreteType{T.var,_unwrap_val(ndevices)})
             end
-            return ConcretePJRTNumber{T.parameters[1],_unwrap_val(ndevices)}
+            return pjrt_number_type(elT, ndevices)
         elseif runtime isa Val{:IFRT}
             if T isa UnionAll
-                return UnionAll(T.var, ConcreteIFRTNumber{T.var})
+                ConcreteType = ifrt_number_type_unparameterized(elT)
+                return UnionAll(T.var, ConcreteType{T.var})
             end
-            return ConcreteIFRTNumber{T.parameters[1]}
+            return ifrt_number_type(elT)
         end
         error("Unsupported runtime $runtime")
     elseif mode == TracedToJAX
@@ -1360,8 +1363,9 @@ Base.@nospecializeinfer function make_tracer(
     end
     mode == ArrayToConcrete && return ConcretePJRTNumber(prev; sharding, device, client)
     mode != ConcreteToTraced && throw("Cannot trace existing trace type")
-    haskey(seen, prev) && return seen[prev]::TracedRNumber{T}
-    res = TracedRNumber{T}((path,), nothing)
+    TRN = traced_number_type(T)
+    haskey(seen, prev) && return seen[prev]::TRN
+    res = TRN((path,), nothing)
     seen[prev] = res
     return res
 end
@@ -1381,8 +1385,9 @@ Base.@nospecializeinfer function make_tracer(
     end
     mode == ArrayToConcrete && return ConcreteIFRTNumber(prev; sharding, device, client)
     mode != ConcreteToTraced && throw("Cannot trace existing trace type")
-    haskey(seen, prev) && return seen[prev]::TracedRNumber{T}
-    res = TracedRNumber{T}((path,), nothing)
+    TRN = traced_number_type(T)
+    haskey(seen, prev) && return seen[prev]::TRN
+    res = TRN((path,), nothing)
     seen[prev] = res
     return res
 end
@@ -1526,22 +1531,20 @@ Base.@nospecializeinfer function make_tracer(
 
     if mode == TracedToConcrete
         if runtime isa Val{:PJRT}
-            haskey(seen, prev) && return seen[prev]::ConcretePJRTNumber{T}
+            CRN = pjrt_number_type(T, Val(1))
+            haskey(seen, prev) && return seen[prev]::CRN
             if !Sharding.is_sharded(sharding)
-                res = ConcretePJRTNumber{T,1}(
-                    (XLA.PJRT.AsyncEmptyBuffer,), Sharding.NoShardInfo()
-                )
+                res = CRN((XLA.PJRT.AsyncEmptyBuffer,), Sharding.NoShardInfo())
             else
                 error("TODO: implement sharding")
             end
             seen[prev] = res
             return res
         elseif runtime isa Val{:IFRT}
-            haskey(seen, prev) && return seen[prev]::ConcreteIFRTNumber{T}
+            CRN = ifrt_number_type(T)
+            haskey(seen, prev) && return seen[prev]::CRN
             if !Sharding.is_sharded(sharding)
-                res = ConcreteIFRTNumber{T}(
-                    XLA.IFRT.AsyncEmptyArray, Sharding.NoShardInfo()
-                )
+                res = CRN(XLA.IFRT.AsyncEmptyArray, Sharding.NoShardInfo())
             else
                 error("TODO: implement sharding")
             end
@@ -1628,7 +1631,8 @@ Base.@nospecializeinfer function make_tracer(
             error("Unsupported runtime $runtime")
         else
             if mode == TracedTrack || mode == NoStopTracedTrack
-                res = TracedRNumber{RT}((path,), broadcast_to_size(prev, ()).mlir_data)
+                TRN = traced_number_type(RT)
+                res = TRN((path,), broadcast_to_size(prev, ()).mlir_data)
                 if Base.ismutable(prev) && !haskey(seen, prev)
                     return seen[prev] = res
                 end
@@ -1636,7 +1640,8 @@ Base.@nospecializeinfer function make_tracer(
                 return res
             elseif mode == TracedSetPath
                 haskey(seen, prev) && return seen[prev]
-                res = TracedRNumber{RT}((path,), broadcast_to_size(prev, ()).mlir_data)
+                TRN = traced_number_type(RT)
+                res = TRN((path,), broadcast_to_size(prev, ()).mlir_data)
                 seen[prev] = res
                 return res
             elseif mode == TracedToConcrete
