@@ -26,20 +26,6 @@ ReactantCore.is_traced(::TracedRNumber) = true
 
 Base.to_index(x::TracedRNumber{<:Integer}) = x
 
-Base.zero(::TracedRInteger{T}) where {T} = Reactant.promote_to(TracedRInteger{T}, zero(T))
-Base.zero(::TracedRFloat{T}) where {T} = Reactant.promote_to(TracedRFloat{T}, zero(T))
-Base.zero(::TracedRComplex{T}) where {T} = Reactant.promote_to(TracedRComplex{T}, zero(T))
-
-Base.one(::TracedRInteger{T}) where {T} = Reactant.promote_to(TracedRInteger{T}, one(T))
-Base.one(::TracedRFloat{T}) where {T} = Reactant.promote_to(TracedRFloat{T}, one(T))
-Base.one(::TracedRComplex{T}) where {T} = Reactant.promote_to(TracedRComplex{T}, one(T))
-
-Base.collect(x::TracedRNumber{T}) where {T} = TracedRArray{T,0}((), x.mlir_data, ())
-
-Base.copy(x::TracedRInteger{T}) where {T} = TracedRInteger{T}((), x.mlir_data)
-Base.copy(x::TracedRFloat{T}) where {T} = TracedRFloat{T}((), x.mlir_data)
-Base.copy(x::TracedRComplex{T}) where {T} = TracedRComplex{T}((), x.mlir_data)
-
 function Base.eps(::Type{TracedRFloat{T}}) where {T}
     return Reactant.promote_to(TracedRFloat{T}, eps(T))
 end
@@ -103,171 +89,90 @@ end
 
 Base.only(A::TracedRNumber{T}) where {T} = A
 
-# Promotion rules for TracedRNumber union
+# Generic zero/one for all TracedRNumber subtypes
+Base.zero(x::TracedRNumber{T}) where {T} = Reactant.promote_to(typeof(x), zero(T))
+Base.one(x::TracedRNumber{T}) where {T} = Reactant.promote_to(typeof(x), one(T))
+
+Base.collect(x::TracedRNumber{T}) where {T} = TracedRArray{T,0}((), x.mlir_data, ())
+
+# Generic copy for all TracedRNumber subtypes
+function Base.copy(x::T) where {S,T<:TracedRNumber{S}}
+    return T((), x.mlir_data)
+end
+
+# Promotion rules - Julia's promotion is symmetric, only define one direction
+# TracedRNumber (union type) promotion rules
 function Base.promote_rule(::Type{TracedRNumber{T}}, ::Type{TracedRNumber{S}}) where {T,S}
     return TracedRNumber{Base.promote_type(T, S)}
 end
+function Base.promote_rule(::Type{TracedRNumber{T}}, ::Type{S}) where {T,S<:Number}
+    return TracedRNumber{Base.promote_type(T, S)}
+end
 
-# Promotion rules for TracedRInteger
+# TracedRInteger promotion rules
 function Base.promote_rule(::Type{TracedRInteger{T}}, ::Type{TracedRInteger{S}}) where {T,S}
     return TracedRInteger{Base.promote_type(T, S)}
 end
 function Base.promote_rule(::Type{TracedRInteger{T}}, ::Type{S}) where {T,S<:Integer}
     return TracedRInteger{Base.promote_type(T, S)}
 end
-function Base.promote_rule(::Type{S}, ::Type{TracedRInteger{T}}) where {T,S<:Integer}
-    return TracedRInteger{Base.promote_type(T, S)}
-end
 
-# Promotion rules for TracedRFloat
+# TracedRFloat promotion rules
 function Base.promote_rule(::Type{TracedRFloat{T}}, ::Type{TracedRFloat{S}}) where {T,S}
     return TracedRFloat{Base.promote_type(T, S)}
 end
 function Base.promote_rule(::Type{TracedRFloat{T}}, ::Type{S}) where {T,S<:AbstractFloat}
     return TracedRFloat{Base.promote_type(T, S)}
 end
-function Base.promote_rule(::Type{S}, ::Type{TracedRFloat{T}}) where {T,S<:AbstractFloat}
-    return TracedRFloat{Base.promote_type(T, S)}
-end
 function Base.promote_rule(::Type{TracedRFloat{T}}, ::Type{S}) where {T,S<:Integer}
     return TracedRFloat{Base.promote_type(T, S)}
 end
-function Base.promote_rule(::Type{S}, ::Type{TracedRFloat{T}}) where {T,S<:Integer}
-    return TracedRFloat{Base.promote_type(T, S)}
-end
 
-# Promotion rules for TracedRComplex
+# TracedRComplex promotion rules
 function Base.promote_rule(::Type{TracedRComplex{T}}, ::Type{TracedRComplex{S}}) where {T,S}
     return TracedRComplex{Base.promote_type(T, S)}
 end
 function Base.promote_rule(::Type{TracedRComplex{T}}, ::Type{S}) where {T,S<:Complex}
     return TracedRComplex{Base.promote_type(T, S)}
 end
-function Base.promote_rule(::Type{S}, ::Type{TracedRComplex{T}}) where {T,S<:Complex}
-    return TracedRComplex{Base.promote_type(T, S)}
-end
 function Base.promote_rule(::Type{TracedRComplex{T}}, ::Type{S}) where {T,S<:Real}
     return TracedRComplex{Base.promote_type(T, complex(S))}
 end
-function Base.promote_rule(::Type{S}, ::Type{TracedRComplex{T}}) where {T,S<:Real}
-    return TracedRComplex{Base.promote_type(T, complex(S))}
-end
 
-# Cross-type promotion: TracedRInteger + TracedRFloat
+# Cross-type promotion: TracedRFloat wins over TracedRInteger
 function Base.promote_rule(::Type{TracedRFloat{T}}, ::Type{TracedRInteger{S}}) where {T,S}
     return TracedRFloat{Base.promote_type(T, S)}
 end
-function Base.promote_rule(::Type{TracedRInteger{T}}, ::Type{TracedRFloat{S}}) where {T,S}
-    return TracedRFloat{Base.promote_type(T, S)}
-end
 
-# Cross-type promotion: TracedRReal + TracedRComplex
-function Base.promote_rule(::Type{TracedRComplex{T}}, ::Type{TracedRInteger{S}}) where {T,S}
+# Cross-type promotion: TracedRComplex wins over TracedRReal
+function Base.promote_rule(::Type{TracedRComplex{T}}, ::Type{<:TracedRReal{S}}) where {T,S}
     return TracedRComplex{Base.promote_type(T, complex(S))}
 end
-function Base.promote_rule(::Type{TracedRComplex{T}}, ::Type{TracedRFloat{S}}) where {T,S}
-    return TracedRComplex{Base.promote_type(T, complex(S))}
-end
-function Base.promote_rule(::Type{TracedRInteger{T}}, ::Type{TracedRComplex{S}}) where {T,S}
-    return TracedRComplex{Base.promote_type(complex(T), S)}
-end
-function Base.promote_rule(::Type{TracedRFloat{T}}, ::Type{TracedRComplex{S}}) where {T,S}
-    return TracedRComplex{Base.promote_type(complex(T), S)}
-end
 
-# Bool has special promotion rules in Base
-function Base.promote_rule(::Type{Bool}, ::Type{TracedRNumber{T}}) where {T}
-    return TracedRNumber{T}
-end
-
-function Base.promote_rule(::Type{TracedRNumber{T}}, ::Type{Bool}) where {T}
-    return TracedRNumber{T}
-end
-
-function Base.promote_rule(::Type{T}, ::Type{TracedRNumber{S}}) where {T,S}
-    return TracedRNumber{Base.promote_type(T, S)}
-end
-
-function Base.promote_rule(::Type{TracedRNumber{T}}, ::Type{S}) where {T,S}
-    return TracedRNumber{Base.promote_type(T, S)}
-end
-
-function Base.promote_rule(
-    T::Type{<:AbstractIrrational}, ::Type{Reactant.TracedRNumber{S}}
-) where {S}
-    return TracedRNumber{Base.promote_type(T, S)}
-end
-
-function Base.promote_rule(
-    ::Type{Reactant.TracedRNumber{S}}, T::Type{<:AbstractIrrational}
-) where {S}
-    return TracedRNumber{Base.promote_type(T, S)}
-end
-
-function Base.promote_rule(::Type{Nothing}, ::Type{TracedRNumber{S}}) where {S}
-    return Union{Nothing,TracedRNumber{S}}
-end
-
-function Base.promote_rule(::Type{TracedRNumber{T}}, ::Type{Nothing}) where {T}
+# Special type promotion rules for Nothing/Missing
+function Base.promote_rule(::Type{Nothing}, ::Type{TracedRNumber{T}}) where {T}
     return Union{Nothing,TracedRNumber{T}}
 end
-
-function Base.promote_rule(::Type{Missing}, ::Type{TracedRNumber{S}}) where {S}
-    return Union{Missing,TracedRNumber{S}}
-end
-
-function Base.promote_rule(::Type{TracedRNumber{T}}, ::Type{Missing}) where {T}
+function Base.promote_rule(::Type{Missing}, ::Type{TracedRNumber{T}}) where {T}
     return Union{Missing,TracedRNumber{T}}
 end
-
-function Base.promote_rule(
-    ::Type{Union{Nothing,Missing}}, ::Type{TracedRNumber{S}}
-) where {S}
-    return Union{Nothing,Missing,TracedRNumber{S}}
-end
-
-function Base.promote_rule(
-    ::Type{TracedRNumber{T}}, ::Type{Union{Nothing,Missing}}
-) where {T}
+function Base.promote_rule(::Type{Union{Nothing,Missing}}, ::Type{TracedRNumber{T}}) where {T}
     return Union{Nothing,Missing,TracedRNumber{T}}
 end
-
-function Base.promote_rule(
-    T::Type{>:Union{Nothing,Missing}}, ::Type{TracedRNumber{S}}
-) where {S}
+function Base.promote_rule(T::Type{>:Union{Nothing,Missing}}, ::Type{TracedRNumber{S}}) where {S}
     T2 = nonmissingtype(Base.nonnothingtype(promote_rule(T, S)))
     return Union{Nothing,Missing,TracedRNumber{T2}}
 end
-
-function Base.promote_rule(
-    ::Type{TracedRNumber{T}}, S::Type{>:Union{Nothing,Missing}}
-) where {T}
-    T2 = nonmissingtype(Base.nonnothingtype(promote_rule(T, S)))
-    return Union{Nothing,Missing,TracedRNumber{T2}}
-end
-
 function Base.promote_rule(T::Type{>:Missing}, ::Type{TracedRNumber{S}}) where {S}
     return Union{Missing,TracedRNumber{nonmissingtype(promote_type(S, T))}}
 end
-
-function Base.promote_rule(::Type{TracedRNumber{T}}, S::Type{>:Missing}) where {T}
-    return Union{Missing,TracedRNumber{nonmissingtype(promote_type(T, S))}}
-end
-
 function Base.promote_rule(T::Type{>:Nothing}, ::Type{TracedRNumber{S}}) where {S}
     return Union{Nothing,TracedRNumber{Base.nonnothingtype(promote_type(S, T))}}
 end
 
-function Base.promote_rule(::Type{TracedRNumber{T}}, S::Type{>:Nothing}) where {T}
-    return Union{Nothing,TracedRNumber{Base.nonnothingtype(promote_type(T, S))}}
-end
-
+# TwicePrecision promotion
 function Base.promote_rule(::Type{TwicePrecision{T}}, ::Type{TracedRNumber{S}}) where {T,S}
     return TwicePrecision{Base.promote_type(T, TracedRNumber{S})}
-end
-
-function Base.promote_rule(::Type{TracedRNumber{T}}, ::Type{TwicePrecision{S}}) where {T,S}
-    return TwicePrecision{Base.promote_type(TracedRNumber{T}, S)}
 end
 
 # NOTE: This is inconsistent with the behavior of `convert` but we do it since it is a very
