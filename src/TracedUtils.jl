@@ -1184,7 +1184,7 @@ function elem_apply(f, args::Vararg{Any,Nargs}) where {Nargs}
         if !(k isa Reactant.TracedType)
             continue
         end
-        idx, path = TracedUtils.get_argidx(k, argprefix)
+        idx, path = get_argidx(k, argprefix)
 
         ogarg = if idx == 1 && fnwrap
             f
