@@ -1853,5 +1853,5 @@ end
 
     res = @jit tobc(nt, x)
 
-    @test res ≈ tobc(x, (10.0, 10.0))
+    @test res ≈ tobc((10.0, 10.0), x)
 end
