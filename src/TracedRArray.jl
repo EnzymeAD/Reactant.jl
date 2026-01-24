@@ -449,6 +449,36 @@ function Base.similar(
     return @opcall fill(zero(T), dims)
 end
 
+# Fallback for abstract supertypes like Number (from combine_eltypes)
+# We use Float64 as the default element type in this case
+function Base.similar(
+    bc::Broadcasted{AbstractReactantArrayStyle{N}}, ::Type{T}, dims
+) where {T>:Number,N}
+    @assert N isa Int
+    # Try to infer the actual element type from the arguments
+    # If there's a traced array, use its element type
+    eltypes = map(bc.args) do arg
+        if arg isa TracedRArray
+            return unwrapped_eltype(arg)
+        elseif arg isa AbstractArray
+            return unwrapped_eltype(eltype(arg))
+        elseif arg isa TracedRNumber
+            return unwrapped_eltype(arg)
+        else
+            return typeof(arg)
+        end
+    end
+    # Find the first ReactantPrimitive type
+    actual_T = Float64  # default fallback
+    for et in eltypes
+        if et <: Reactant.ReactantPrimitive
+            actual_T = et
+            break
+        end
+    end
+    return @opcall fill(zero(actual_T), dims)
+end
+
 function Base.copy(bc::Broadcasted{<:AbstractReactantArrayStyle{0}})
     ElType = Broadcast.combine_eltypes(bc.f, bc.args)
     dest = copyto!(similar(bc, ElType), bc)

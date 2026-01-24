@@ -3,6 +3,14 @@
 promote_to(::TracedRArray{T,N}, rhs) where {T,N} = promote_to(TracedRArray{T,N}, rhs)
 promote_to(::TracedRNumber{T}, rhs) where {T} = promote_to(TracedRNumber{T}, rhs)
 
+# Pseudo-constructors for TracedRNumber{T}(value) and concrete types
+# This allows using TracedRNumber{T}(x) as a convenient way to promote values
+# NOTE: These must be defined after promote_to is available
+@inline (::Type{TracedRNumber{T}})(x) where {T} = promote_to(TracedRNumber{T}, x)
+@inline (::Type{TracedRInteger{T}})(x) where {T} = promote_to(TracedRInteger{T}, x)
+@inline (::Type{TracedRFloat{T}})(x) where {T} = promote_to(TracedRFloat{T}, x)
+@inline (::Type{TracedRComplex{T}})(x) where {T} = promote_to(TracedRComplex{T}, x)
+
 ## Array types
 function promote_to(::Type{TracedRArray}, rhs)
     return promote_to(TracedRArray{unwrapped_eltype(rhs),ndims(rhs)}, rhs)
