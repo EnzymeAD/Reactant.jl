@@ -1843,7 +1843,7 @@ end
 bc_apply(t::NTuple{N, T}, x) where {N, T} = sum(ntuple(n->t[n], Val(N)))*x
 function tobc(nt, x)
     nt = Ref(nt)
-    apply.(nt, x)
+    bc_apply.(nt, x)
 end
 
 @testset "Broadcast Ref" begin
