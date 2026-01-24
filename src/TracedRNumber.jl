@@ -185,27 +185,9 @@ function TracedRNumber{T}(x::Number) where {T}
     return Reactant.promote_to(TracedRNumber{unwrapped_eltype(T)}, x)
 end
 
-# Base.convert for specific traced types
-function Base.convert(::Type{TracedRInteger{T}}, x::TracedRInteger{T}) where {T}
-    return x
-end
-function Base.convert(::Type{TracedRInteger{T}}, x::Number) where {T}
-    return Reactant.promote_to(TracedRInteger{T}, x)
-end
-
-function Base.convert(::Type{TracedRFloat{T}}, x::TracedRFloat{T}) where {T}
-    return x
-end
-function Base.convert(::Type{TracedRFloat{T}}, x::Number) where {T}
-    return Reactant.promote_to(TracedRFloat{T}, x)
-end
-
-function Base.convert(::Type{TracedRComplex{T}}, x::TracedRComplex{T}) where {T}
-    return x
-end
-function Base.convert(::Type{TracedRComplex{T}}, x::Number) where {T}
-    return Reactant.promote_to(TracedRComplex{T}, x)
-end
+# Generic convert for all TracedRNumber subtypes
+Base.convert(::Type{T}, x::T) where {T<:TracedRNumber} = x
+Base.convert(::Type{T}, x::Number) where {T<:TracedRNumber} = Reactant.promote_to(T, x)
 
 for T in Base.uniontypes(Reactant.ReactantFloat8)
     @eval TracedRNumber{T}(x::$T) where {T} = Reactant.promote_to(TracedRNumber{T}, x)
