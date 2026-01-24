@@ -1179,18 +1179,32 @@ function elem_apply(f, args::Vararg{Any,Nargs}) where {Nargs}
         invmap[v] = k
     end
 
-    keys_seen = Reactant.TracedType[k for k in keys(seen_args) if k isa Reactant.TracedType]
-    input_shapes = size.(keys_seen)
+    input_shapes = Tuple{Vararg{Int}}[]
+    for k in keys(seen_args)
+        if !(k isa Reactant.TracedType)
+            continue
+        end
+        idx, path = get_argidx(k, argprefix)
+
+        ogarg = if idx == 1 && fnwrap
+            f
+        else
+            if fnwrap
+                idx -= 1
+            end
+            args[idx]
+        end
+
+        if ogarg isa Base.RefValue
+            continue
+        end
+        push!(input_shapes, size(k))
+    end
+
+    @assert length(input_shapes) > 0
+
     # by the time we reach here all args must have same size
     @assert allequal(input_shapes) "input shapes are $(input_shapes)"
-    OutShape = isempty(seen_args) ? nothing : first(input_shapes)
-    @assert !isnothing(OutShape)
-
-    out_tys2 = MLIR.IR.Type[
-        MLIR.IR.TensorType(
-            collect(Int, OutShape), MLIR.IR.Type(Reactant.unwrapped_eltype(arg))
-        ) for arg in linear_results
-    ]
 
     fname = get_attribute_by_name(func2, "sym_name")
     fname = MLIR.IR.FlatSymbolRefAttribute(Base.String(fname))
@@ -1199,15 +1213,31 @@ function elem_apply(f, args::Vararg{Any,Nargs}) where {Nargs}
 
     for a in linear_args
         idx, path = get_argidx(a, argprefix)
-        if idx == 1 && fnwrap
-            push_val!(batch_inputs, f, path[3:end])
+
+        ogarg = if idx == 1 && fnwrap
+            f
         else
             if fnwrap
                 idx -= 1
             end
-            push_val!(batch_inputs, args[idx], path[3:end])
+            args[idx]
+        end
+
+        push_val!(batch_inputs, ogarg, path[3:end])
+
+        if ogarg isa Base.RefValue
+            batch_inputs[end] = (@opcall broadcast_in_dim(TracedRArray(batch_inputs[end]), Int64[], collect(Int64, input_shapes[1]))).mlir_data
         end
     end
+
+    OutShape = isempty(seen_args) ? nothing : first(input_shapes)
+    @assert !isnothing(OutShape)
+
+    out_tys2 = MLIR.IR.Type[
+        MLIR.IR.TensorType(
+            collect(Int, OutShape), MLIR.IR.Type(Reactant.unwrapped_eltype(arg))
+        ) for arg in linear_results
+    ]
 
     res = MLIR.Dialects.enzyme.batch(
         batch_inputs;
@@ -1229,14 +1259,21 @@ function elem_apply(f, args::Vararg{Any,Nargs}) where {Nargs}
                 set!(result, path[2:end], resv)
             elseif path[1] == argprefix
                 idx = path[2]::Int
-                if idx == 1 && fnwrap
-                    set!(f, path[3:end], resv)
+
+                ogarg = if idx == 1 && fnwrap
+                    f
                 else
                     if fnwrap
                         idx -= 1
                     end
-                    set!(args[idx], path[3:end], resv)
+                    args[idx]
                 end
+
+                if ogarg isa Base.RefValue
+                    continue
+                end
+
+	        set!(ogarg, path[3:end], resv)
             end
         end
     end
