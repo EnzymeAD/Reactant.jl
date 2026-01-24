@@ -21,7 +21,6 @@ using FFTW, Reactant, Test, LinearAlgebra
     @test @jit(ifft(x_ra, 2)) ≈ ifft(x, 2)
     @test @jit(ifft(x_ra, 3)) ≈ ifft(x, 3)
 
-
     @test @jit(fft(x_ra, (3, 2))) ≈ fft(x, (3, 2))
     @test_throws AssertionError @jit(fft(x_ra, (1, 4)))
 
@@ -45,7 +44,6 @@ using FFTW, Reactant, Test, LinearAlgebra
         @test @jit(fft(x_ra, 1)) ≈ fft(x, 1)
         @test @jit(fft(x_ra, 2)) ≈ fft(x, 2)
         @test @jit(fft(x_ra, 3)) ≈ fft(x, 3)
-
     end
 end
 
