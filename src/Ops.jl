@@ -14,7 +14,8 @@ using ..Reactant:
     RArray,
     RNumber,
     MissingTracedValue,
-    unwrapped_eltype
+    unwrapped_eltype,
+    traced_number_type
 using ReactantCore: ReactantCore
 using GPUArraysCore: GPUArraysCore
 

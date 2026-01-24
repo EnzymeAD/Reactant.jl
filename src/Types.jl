@@ -78,6 +78,15 @@ end
 const TracedRReal{T} = Union{TracedRInteger{T},TracedRFloat{T}}
 const TracedRNumber{T} = Union{TracedRReal{T},TracedRComplex{T}}
 
+# Pseudo-constructor for TracedRNumber{T} with internal (paths, mlir_data) signature
+# This allows using TracedRNumber{T}(paths, mlir_data) and getting the correct concrete type
+@inline (::Type{TracedRNumber{T}})(paths::Tuple, mlir_data) where {T} =
+    traced_number_type(T)(paths, mlir_data)
+
+# Pseudo-constructor for TracedRNumber{T}(value) that converts a value to traced form
+# This allows using TracedRNumber{T}(x) as a convenient way to promote values
+@inline (::Type{TracedRNumber{T}})(x) where {T} = promote_to(TracedRNumber{T}, x)
+
 # Type-returning helper functions for dispatch on element type
 @inline traced_number_type(::Type{T}) where {T<:Complex} = TracedRComplex{T}
 @inline traced_number_type(::Type{T}) where {T<:Integer} = TracedRInteger{T}
