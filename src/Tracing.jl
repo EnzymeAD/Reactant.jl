@@ -224,10 +224,23 @@ Base.@nospecializeinfer function traced_type_inner(
     @nospecialize(ndevices),
     @nospecialize(runtime)
 )
-    if T0 isa UnionAll
-        T = T0.body isa UnionAll ? T0.body.body.parameters[1] : T0.body.parameters[1]
+    # Handle the case where T0 is a Union type (since ConcretePJRTNumber is a Union alias)
+    T = if T0 isa UnionAll
+        body = T0.body
+        while body isa UnionAll
+            body = body.body
+        end
+        if body isa Union
+            # Get type parameter from one of the union members
+            body.a.parameters[1]
+        else
+            body.parameters[1]
+        end
+    elseif T0 isa Union
+        # Direct union - get type parameter from one of the members
+        T0.a.parameters[1]
     else
-        T = T0.parameters[1]
+        T0.parameters[1]
     end
 
     if mode == ConcreteToTraced
@@ -250,7 +263,22 @@ Base.@nospecializeinfer function traced_type_inner(
     @nospecialize(ndevices),
     @nospecialize(runtime)
 )
-    T = T0 isa UnionAll ? T0.body.parameters[1] : T0.parameters[1]
+    # Handle the case where T0 is a Union type (since ConcreteIFRTNumber is a Union alias)
+    T = if T0 isa UnionAll
+        body = T0.body
+        while body isa UnionAll
+            body = body.body
+        end
+        if body isa Union
+            body.a.parameters[1]
+        else
+            body.parameters[1]
+        end
+    elseif T0 isa Union
+        T0.a.parameters[1]
+    else
+        T0.parameters[1]
+    end
 
     if mode == ConcreteToTraced
         return traced_number_type(T)
