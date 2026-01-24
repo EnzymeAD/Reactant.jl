@@ -705,8 +705,8 @@ for aType in (:ConcretePJRTArray, :ConcreteIFRTArray)
         end
 
         function Base.copyto!(
-            dest::SubArray{TracedRNumber{T1},<:Any,<:$(aType)},
-            src::SubArray{TracedRNumber{T2},<:Any,<:Array},
+            dest::SubArray{<:TracedRNumber{T1},<:Any,<:$(aType)},
+            src::SubArray{<:TracedRNumber{T2},<:Any,<:Array},
         ) where {T1,T2}
             throw(MethodError(copyto!, (dest, src)))
         end
@@ -751,7 +751,7 @@ function Base.zero(x::ConcreteIFRTArray{T,N}) where {T,N}
 end
 
 function Base.fill!(
-    a::ConcretePJRTArray{TracedRNumber{T},N}, val::TracedRNumber{T2}
+    a::ConcretePJRTArray{<:TracedRNumber{T},N}, val::TracedRNumber{T2}
 ) where {T,T2,N}
     throw(MethodError(fill!, (a, val)))
 end
@@ -785,7 +785,7 @@ function Base.fill!(a::ConcreteIFRTArray{T,N}, val) where {T,N}
 end
 
 function Base.fill!(
-    a::ConcreteIFRTArray{TracedRNumber{T},N}, val::TracedRNumber{T2}
+    a::ConcreteIFRTArray{<:TracedRNumber{T},N}, val::TracedRNumber{T2}
 ) where {T,T2,N}
     throw(MethodError(fill!, (a, val)))
 end

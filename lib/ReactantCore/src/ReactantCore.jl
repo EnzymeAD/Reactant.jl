@@ -729,7 +729,7 @@ end
 """
     materialize_traced_array(AbstractArray{<:TracedRNumber})::TracedRArray
 
-Given an AbstractArray{TracedRNumber}, return or create an equivalent TracedRArray.
+Given an AbstractArray{<:TracedRNumber}, return or create an equivalent TracedRArray.
 
 """
 function materialize_traced_array end

@@ -1618,7 +1618,7 @@ end
 end
 
 @noinline function rng_bit_generator(
-    ::Type{TracedRNumber{T}}, seed::TracedRArray{UInt64,1}, shape; kwargs...
+    ::Type{<:TracedRNumber{T}}, seed::TracedRArray{UInt64,1}, shape; kwargs...
 ) where {T}
     return rng_bit_generator(T, seed, shape; kwargs...)
 end
@@ -1678,7 +1678,7 @@ end
 end
 
 @noinline function randn(
-    ::Type{TracedRNumber{T}}, seed::TracedRArray{UInt64,1}, shape; kwargs...
+    ::Type{<:TracedRNumber{T}}, seed::TracedRArray{UInt64,1}, shape; kwargs...
 ) where {T}
     return randn(T, seed, shape; kwargs...)
 end
