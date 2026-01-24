@@ -230,7 +230,7 @@ function TracedUtils.set_mlir_data!(
     return x
 end
 
-Reactant.aos_to_soa(x::Tridiagonal{TracedRNumber{T}}) where {T} = x
+Reactant.aos_to_soa(x::Tridiagonal{<:TracedRNumber{T}}) where {T} = x
 
 # Core functions
 function overloaded_mul!(
@@ -584,7 +584,7 @@ tfun_to_char(::typeof(transpose)) = 'T'
 tfun_to_char(::typeof(adjoint)) = 'C'
 
 function LinearAlgebra.generic_trimatdiv!(
-    C::AbstractVecOrMat{TracedRNumber{T}},
+    C::AbstractVecOrMat{<:TracedRNumber{T}},
     uploc,
     isunitc,
     tfun::Function,
@@ -607,7 +607,7 @@ function LinearAlgebra.generic_trimatdiv!(
 end
 
 function LinearAlgebra.generic_trimatdiv!(
-    C::AbstractVecOrMat{TracedRNumber{T}},
+    C::AbstractVecOrMat{<:TracedRNumber{T}},
     uploc,
     isunitc,
     tfun::Function,
@@ -621,7 +621,7 @@ function LinearAlgebra.generic_trimatdiv!(
 end
 
 function LinearAlgebra.generic_mattridiv!(
-    C::AbstractMatrix{TracedRNumber{T}},
+    C::AbstractMatrix{<:TracedRNumber{T}},
     uploc,
     isunitc,
     tfun::Function,
@@ -644,7 +644,7 @@ function LinearAlgebra.generic_mattridiv!(
 end
 
 function LinearAlgebra.generic_mattridiv!(
-    C::AbstractMatrix{TracedRNumber{T}},
+    C::AbstractMatrix{<:TracedRNumber{T}},
     uploc,
     isunitc,
     tfun::Function,

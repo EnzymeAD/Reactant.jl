@@ -7,11 +7,11 @@ using ReactantCore: ReactantCore
 using Reactant.Ops: @opcall
 
 __compatible_eltype(::Type{T}, ::Type{U}) where {T,U} = T
-function __compatible_eltype(::Type{TracedRNumber{T}}, ::Type{TracedRNumber{U}}) where {T,U}
+function __compatible_eltype(::Type{<:TracedRNumber{T}}, ::Type{<:TracedRNumber{U}}) where {T,U}
     return TracedRNumber{T}
 end
-__compatible_eltype(::Type{TracedRNumber{T}}, ::Type{U}) where {T,U} = T
-__compatible_eltype(::Type{T}, ::Type{TracedRNumber{U}}) where {T,U} = TracedRNumber{T}
+__compatible_eltype(::Type{<:TracedRNumber{T}}, ::Type{U}) where {T,U} = T
+__compatible_eltype(::Type{T}, ::Type{<:TracedRNumber{U}}) where {T,U} = TracedRNumber{T}
 
 function Reactant.traced_type_inner(
     @nospecialize(_::Type{OneHotArray{T,N,Np1,I}}),

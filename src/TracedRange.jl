@@ -152,7 +152,7 @@ function Base._in_unit_range(
     return (i > 0) & (val <= v.stop) & (val >= v.start)
 end
 
-@inline function Base.length(r::TracedUnitRange{TracedRNumber{T}}) where {T}
+@inline function Base.length(r::TracedUnitRange{<:TracedRNumber{T}}) where {T}
     start, stop = first(r), last(r)
     a = Base.oneunit(Base.zero(stop) - Base.zero(start))
     if a isa Signed

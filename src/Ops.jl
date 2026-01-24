@@ -3409,7 +3409,7 @@ end
 @noinline function reduce_window(
     f::F,
     inputs::Vector{TracedRArray{T,N}},
-    init_values::Vector{TracedRNumber{T}};
+    init_values::Vector{<:TracedRNumber{T}};
     window_dimensions::Vector{Int},
     window_strides::Vector{Int},
     base_dilations::Vector{Int},

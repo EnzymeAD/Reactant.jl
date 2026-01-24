@@ -88,7 +88,7 @@ function Base.getindex(
 end
 
 function Base.getindex(
-    a::AbstractRange{TracedRNumber{T}}, index::Union{Int,TracedRNumber{Int}}
+    a::AbstractRange{<:TracedRNumber{T}}, index::Union{Int,TracedRNumber{Int}}
 ) where {T}
     return getindex(Reactant.promote_to(TracedRArray{T,1}, a), index)
 end
@@ -110,8 +110,8 @@ end
 
 ### Specialize certain dispatches for better codegen
 for aType in (
-    Base.ReshapedArray{TracedRNumber{T}} where {T},
-    PermutedDimsArray{TracedRNumber{T}} where {T},
+    Base.ReshapedArray{<:TracedRNumber{T}} where {T},
+    PermutedDimsArray{<:TracedRNumber{T}} where {T},
 )
     @eval begin
         function Base.getindex(a::$(aType), indices::Union{Int,TracedRNumber{Int}}...)
@@ -125,37 +125,37 @@ for aType in (
 end
 
 for aType in
-    (Base.ReshapedArray{TracedRNumber{T},N,P,Tuple{}} where {T,N,P<:AbstractArray},)
+    (Base.ReshapedArray{<:TracedRNumber{T},N,P,Tuple{}} where {T,N,P<:AbstractArray},)
     @eval function Base.getindex(a::$(aType), indices::Int)
         return getindex(materialize_traced_array(a), indices)
     end
 end
 
 function Base.getindex(
-    x::Base.ReshapedArray{TracedRNumber{T}}, index::Base.ReshapedIndex
+    x::Base.ReshapedArray{<:TracedRNumber{T}}, index::Base.ReshapedIndex
 ) where {T}
     return getindex(parent(x), index.parentindex)
 end
 
 function Base.getindex(
-    x::Base.Sort.WithoutMissingVector{TracedRNumber{T}}, i::Int
+    x::Base.Sort.WithoutMissingVector{<:TracedRNumber{T}}, i::Int
 ) where {T}
     out = getindex(x.data, i)
     @assert !(out isa Missing)
     return out
 end
 
-function Base.getindex(x::Base.OneTo{TracedRNumber{T}}, i::Int) where {T}
+function Base.getindex(x::Base.OneTo{<:TracedRNumber{T}}, i::Int) where {T}
     return @allowscalar getindex(Reactant.promote_to(TracedRNumber{T}, x), i)
 end
 
 function Base.getindex(
-    x::Union{LinRange{TracedRNumber{T}},StepRangeLen{TracedRNumber{T}}}, i::Int
+    x::Union{LinRange{<:TracedRNumber{T}},StepRangeLen{<:TracedRNumber{T}}}, i::Int
 ) where {T}
     return @allowscalar getindex(Reactant.promote_to(TracedRNumber{T}, x), i)
 end
 
-function Base.getindex(x::Base.UnitRange{TracedRNumber{T}}, i::Int) where {T}
+function Base.getindex(x::Base.UnitRange{<:TracedRNumber{T}}, i::Int) where {T}
     return @allowscalar getindex(Reactant.promote_to(TracedRNumber{T}, x), i)
 end
 
@@ -289,7 +289,7 @@ function generate_index_list(i1, is...)
 end
 
 function scalar_index_to_cartesian(
-    idx::AbstractVector{TracedRNumber{T}}, sz::NTuple{N,Int}
+    idx::AbstractVector{<:TracedRNumber{T}}, sz::NTuple{N,Int}
 ) where {T,N}
     idx = materialize_traced_array(idx)
     idx = @opcall(subtract(idx, @opcall(fill(T(1), size(idx)))))
