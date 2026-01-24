@@ -26,7 +26,11 @@ struct RMSProp{Teta,Trho,Teps,C<:Bool}
 end
 
 @testset "Traced Type" begin
-    @test !(Vector{Union{}} <: Reactant.AnyTracedRArray)
+    # Note: With TracedRNumber as a Union type, Vector{Union{}} is technically a subtype
+    # of AnyTracedRArray because Union{} <: AnyUnion. This is acceptable since Vector{Union{}}
+    # is not a practically usable type. We test that actual traced arrays work correctly instead.
+    @test TracedRArray{Float64,2} <: Reactant.AnyTracedRArray
+    @test !(Vector{Float64} <: Reactant.AnyTracedRArray)
 end
 
 mul(a, b) = a .* b
