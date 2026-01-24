@@ -18,9 +18,6 @@ end
 
 is_traced_number(x::Type) = false
 Base.@nospecializeinfer is_traced_number(@nospecialize(T::Type{<:TracedRNumber})) = true
-Base.@nospecializeinfer is_traced_number(@nospecialize(T::Type{<:TracedRInteger})) = true
-Base.@nospecializeinfer is_traced_number(@nospecialize(T::Type{<:TracedRFloat})) = true
-Base.@nospecializeinfer is_traced_number(@nospecialize(T::Type{<:TracedRComplex})) = true
 
 function traced_type_inner end
 
