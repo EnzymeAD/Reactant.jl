@@ -64,11 +64,20 @@ end
 
     comm = MPI.COMM_WORLD
 
+    # Operations that only work with integer/boolean types
+    integer_bool_ops = Set([MPI.LAND, MPI.LOR, MPI.LXOR, MPI.BAND, MPI.BOR, MPI.BXOR])
+
     for (opname, op) in operations
         for T in datatypes
+            # Skip some invalid combinations of T and op
+            if op in integer_bool_ops && !(T <: Integer || T <: Bool)
+                continue
+            end
+
             sendbuf = ones(T, 5)
 
-            # skip invalid combinations of T and op
+            # try block catches any invalid combinations we missed above, depending on
+            # mpi implem
             expected = try
                 ConcreteRArray(MPI.Allreduce(sendbuf, op, MPI.COMM_WORLD))
             catch
