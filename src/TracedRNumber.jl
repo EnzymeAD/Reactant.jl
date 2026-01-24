@@ -149,6 +149,21 @@ function Base.promote_rule(::Type{TracedRComplex{T}}, ::Type{<:TracedRReal{S}}) 
     return TracedRComplex{Base.promote_type(T, complex(S))}
 end
 
+# Cross-type promotion: TracedRNumber (union) vs concrete traced types
+# These handle cases where promote_type might call promote_rule with union and concrete types
+function Base.promote_rule(::Type{TracedRNumber{T}}, ::Type{TracedRInteger{S}}) where {T,S}
+    return TracedRNumber{Base.promote_type(T, S)}
+end
+function Base.promote_rule(::Type{TracedRNumber{T}}, ::Type{TracedRFloat{S}}) where {T,S}
+    return TracedRNumber{Base.promote_type(T, S)}
+end
+function Base.promote_rule(::Type{TracedRNumber{T}}, ::Type{TracedRComplex{S}}) where {T,S}
+    return TracedRNumber{Base.promote_type(T, S)}
+end
+function Base.promote_rule(::Type{TracedRNumber{T}}, ::Type{TracedRReal{S}}) where {T,S}
+    return TracedRNumber{Base.promote_type(T, S)}
+end
+
 # Special type promotion rules for Nothing/Missing
 function Base.promote_rule(::Type{Nothing}, ::Type{TracedRNumber{T}}) where {T}
     return Union{Nothing,TracedRNumber{T}}
