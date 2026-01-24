@@ -14,6 +14,13 @@ using FFTW, Reactant, Test, LinearAlgebra
     @test @jit(fft(x_ra, (1, 2, 3))) ≈ fft(x, (1, 2, 3))
     @test @jit(fft(x_ra, (2, 3))) ≈ fft(x, (2, 3))
     @test @jit(fft(x_ra, (1, 3))) ≈ fft(x, (1, 3))
+    @test @jit(fft(x_ra, 1)) ≈ fft(x, 1)
+    @test @jit(fft(x_ra, 2)) ≈ fft(x, 2)
+    @test @jit(fft(x_ra, 3)) ≈ fft(x, 3)
+    @test @jit(ifft(x_ra, 1)) ≈ ifft(x, 1)
+    @test @jit(ifft(x_ra, 2)) ≈ ifft(x, 2)
+    @test @jit(ifft(x_ra, 3)) ≈ ifft(x, 3)
+
 
     @test @jit(fft(x_ra, (3, 2))) ≈ fft(x, (3, 2))
     @test_throws AssertionError @jit(fft(x_ra, (1, 4)))
@@ -35,6 +42,10 @@ using FFTW, Reactant, Test, LinearAlgebra
         @test @jit(fft(x_ra, (1, 2, 3))) ≈ fft(x, (1, 2, 3))
         @test @jit(ifft(x_ra)) ≈ ifft(x)
         @test @jit(bfft(x_ra)) ≈ bfft(x)
+        @test @jit(fft(x_ra, 1)) ≈ fft(x, 1)
+        @test @jit(fft(x_ra, 2)) ≈ fft(x, 2)
+        @test @jit(fft(x_ra, 3)) ≈ fft(x, 3)
+
     end
 end
 
@@ -93,6 +104,9 @@ end
     @test @jit(rfft(x_ra, (1, 2, 3))) ≈ rfft(x, (1, 2, 3))
     @test @jit(rfft(x_ra, (2, 3))) ≈ rfft(x, (2, 3))
     @test @jit(rfft(x_ra, (1, 3))) ≈ rfft(x, (1, 3))
+    @test @jit(rfft(x_ra, 1)) ≈ rfft(x, 1)
+    @test @jit(rfft(x_ra, 2)) ≈ rfft(x, 2)
+    @test @jit(rfft(x_ra, 3)) ≈ rfft(x, 3)
 
     @test @jit(rfft(x_ra, (3, 2))) ≈ rfft(x, (3, 2))
     @test_throws AssertionError @jit(rfft(x_ra, (1, 4)))
@@ -111,6 +125,7 @@ end
         @test @jit(irfft(y_ra_real, 2, (1, 2))) ≈ irfft(y_real, 2, (1, 2))
         @test @jit(brfft(y_ra_real, 2)) ≈ brfft(y_real, 2)
         @test @jit(brfft(y_ra_real, 2, (1, 2))) ≈ brfft(y_real, 2, (1, 2))
+        @test @jit(irfft(y_ra_real, 2, 1)) ≈ irfft(y_real, 2, 1)
     end
 end
 

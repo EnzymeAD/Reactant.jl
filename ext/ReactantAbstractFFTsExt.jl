@@ -111,6 +111,8 @@ for op in (:rfft, :fft, :ifft)
     @eval function AbstractFFTs.$(op)(x::AnyTracedRArray, dims)
         @assert maximum(dims) <= ndims(x) "Invalid dimensions for fft: $(dims)"
 
+       (dims isa Union{Integer, Reactant.TracedRNumber{<:Integer}} && (dims = (dims,)))
+
         fft_lengths = Int64[size(x, dim) for dim in reverse(dims)]
         if __is_valid_stablehlo_fft_dims(dims, ndims(x))
             return @opcall fft(
@@ -194,6 +196,8 @@ for op in (:irfft,)
 
     @eval function AbstractFFTs.$(op)(x::AnyTracedRArray, d::Integer, dims)
         @assert maximum(dims) <= ndims(x) "Invalid dimensions for irfft: $(dims)"
+
+        (dims isa Union{Integer, Reactant.TracedRNumber{<:Integer}} && (dims = (dims,)))
 
         fft_lengths = vcat(Int64[size(x, dim) for dim in reverse(dims[2:end])], d)
 
