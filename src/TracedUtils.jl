@@ -1226,7 +1226,12 @@ function elem_apply(f, args::Vararg{Any,Nargs}) where {Nargs}
         push_val!(batch_inputs, ogarg, path[3:end])
 
         if ogarg isa Base.RefValue
-            batch_inputs[end] = (@opcall broadcast_in_dim(TracedRArray(batch_inputs[end]), Int64[], collect(Int64, input_shapes[1]))).mlir_data
+            batch_inputs[end] =
+                (@opcall broadcast_in_dim(
+                    TracedRArray(batch_inputs[end]),
+                    Int64[],
+                    collect(Int64, input_shapes[1]),
+                )).mlir_data
         end
     end
 
@@ -1273,7 +1278,7 @@ function elem_apply(f, args::Vararg{Any,Nargs}) where {Nargs}
                     continue
                 end
 
-	        set!(ogarg, path[3:end], resv)
+                set!(ogarg, path[3:end], resv)
             end
         end
     end

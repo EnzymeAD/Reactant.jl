@@ -1840,10 +1840,10 @@ mapreduce_closure_not_traced(x) = prod(Base.Fix1(size, x), [1, 3])
     @test @jit(mapreduce_closure_not_traced(x_ra)) == prod(size(x)[[1, 3]])
 end
 
-bc_apply(t::NTuple{N, T}, x) where {N, T} = sum(ntuple(n->t[n], Val(N)))*x
+bc_apply(t::NTuple{N,T}, x) where {N,T} = sum(ntuple(n -> t[n], Val(N))) * x
 function tobc(nt, x)
     nt = Ref(nt)
-    bc_apply.(nt, x)
+    return bc_apply.(nt, x)
 end
 
 @testset "Broadcast Ref" begin
