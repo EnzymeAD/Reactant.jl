@@ -60,7 +60,7 @@ function OneHotArrays.onehotbatch(data::AnyTracedRArray{<:Any,N}, labels) where 
     )
     data = ReactantCore.materialize_traced_array(reshape(data, 1, size(data)...))
     indices = UInt32.(@opcall(findfirst(data .== labels_expanded; dimension=1)))
-    return OneHotArray{TracedRInteger{UInt32},N,N + 1,typeof(indices)}(
+    return OneHotArray{traced_number_type(UInt32),N,N + 1,typeof(indices)}(
         indices, length(labels)
     )
 end
@@ -70,10 +70,10 @@ function OneHotArrays.onehotbatch(
 ) where {N}
     # TODO: add checkbounds once we support that with TracedRNumber
     indices = map(
-        TracedRInteger{UInt32} ∘ Base.Fix2(+, 1 - first(labels)),
+        traced_number_type(UInt32) ∘ Base.Fix2(+, 1 - first(labels)),
         ReactantCore.materialize_traced_array(data),
     )
-    return OneHotArray{TracedRInteger{UInt32},N,N + 1,typeof(indices)}(
+    return OneHotArray{traced_number_type(UInt32),N,N + 1,typeof(indices)}(
         indices, length(labels)
     )
 end
