@@ -124,6 +124,12 @@ unwrapped_eltype(::TracedRNumber{T}) where {T} = T
 unwrapped_eltype(::Type{<:AbstractArray{T,N}}) where {T,N} = unwrapped_eltype(T)
 unwrapped_eltype(::AbstractArray{T,N}) where {T,N} = unwrapped_eltype(T)
 
+# TracedRArray{T,N,RT} <: RArray{RT,N}, so the generic AbstractArray method would
+# extract RT (a TracedRNumber) instead of T. These methods extract T directly.
+unwrapped_eltype(::Type{<:TracedRArray{T,N}}) where {T,N} = T
+unwrapped_eltype(::Type{<:TracedRArray{T,N,RT}}) where {T,N,RT} = T
+unwrapped_eltype(::TracedRArray{T,N}) where {T,N} = T
+
 include("Ops.jl")
 Base.push!(no_rewrite_ancestor_modules, Ops)
 
