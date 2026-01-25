@@ -14,16 +14,16 @@ fwd(Mode, RT, x, y) = Enzyme.autodiff(Mode, square, RT, Duplicated(x, y))
     @test Enzyme.guess_activity(Reactant.ConcreteIFRTArray{Float32,2}, Enzyme.Reverse) <:
         Enzyme.Duplicated
 
-    @test Enzyme.guess_activity(Reactant.ConcretePJRTNumber{Float32,1}, Enzyme.Reverse) <:
+    @test Enzyme.guess_activity(Reactant.ConcretePJRTFloat{Float32,1}, Enzyme.Reverse) <:
         Enzyme.Duplicated
 
-    @test Enzyme.guess_activity(Reactant.ConcretePJRTNumber{Float32}, Enzyme.Reverse) <:
+    @test Enzyme.guess_activity(Reactant.ConcretePJRTFloat{Float32}, Enzyme.Reverse) <:
         Enzyme.Duplicated
 
-    @test Enzyme.guess_activity(Reactant.ConcretePJRTNumber{Float32,1}, Enzyme.Reverse) <:
+    @test Enzyme.guess_activity(Reactant.ConcretePJRTFloat{Float32,1}, Enzyme.Reverse) <:
         Enzyme.Duplicated
 
-    @test Enzyme.guess_activity(Reactant.ConcretePJRTNumber{Float32}, Enzyme.Reverse) <:
+    @test Enzyme.guess_activity(Reactant.ConcretePJRTFloat{Float32}, Enzyme.Reverse) <:
         Enzyme.Duplicated
 
     @test Enzyme.guess_activity(Reactant.ConcreteIFRTNumber{Float32}, Enzyme.Reverse) <:
@@ -35,7 +35,7 @@ fwd(Mode, RT, x, y) = Enzyme.autodiff(Mode, square, RT, Duplicated(x, y))
     @test Enzyme.guess_activity(Reactant.TracedRArray{Float32}, Enzyme.Reverse) <:
         Enzyme.Duplicated
 
-    @test Enzyme.guess_activity(Reactant.TracedRNumber{Float32}, Enzyme.Reverse) <:
+    @test Enzyme.guess_activity(Reactant.TracedRFloat{Float32}, Enzyme.Reverse) <:
         Enzyme.Duplicated
 end
 

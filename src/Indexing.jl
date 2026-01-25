@@ -199,10 +199,10 @@ function overloaded_unsafe_getindex(
     offsetT = typeof(v.offset)
     if i isa TracedRNumber
         if !(T <: TracedRNumber)
-            finalT = TracedRNumber{T}
+            finalT = traced_number_type(T)
         end
         if !(v.offset isa TracedRNumber)
-            offsetT = TracedRNumber{offsetT}
+            offsetT = traced_number_type(offsetT)
         end
     end
     return finalT(v.ref + (convert(offsetT, i) - v.offset) * v.step)
@@ -218,11 +218,11 @@ function overloaded_unsafe_getindex(
     # Very similar to _getindex_hiprec, but optimized to avoid a 2nd call to add12
     @inline
     i isa TracedRNumber{Bool} && throw(ArgumentError("invalid index: $i of type Bool"))
-    OT = TracedRNumber{unwrapped_eltype(r.offset)}
+    OT = traced_number_type(unwrapped_eltype(r.offset))
     u = Base.convert(OT, i)::OT - r.offset
     shift_hi, shift_lo = u * r.step.hi, u * r.step.lo
     x_hi, x_lo = Base.add12(r.ref.hi, shift_hi)
-    T2 = TracedRNumber{unwrapped_eltype(T)}
+    T2 = traced_number_type(unwrapped_eltype(T))
     return T2(x_hi + (x_lo + (shift_lo + r.ref.lo)))
 end
 

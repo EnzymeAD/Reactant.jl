@@ -1168,11 +1168,11 @@ end
         if init !== nothing
             init isa TracedRNumber && (init = zero(unwrapped_eltype(init)))
         end
-        return TracedRNumber{
+        return traced_number_type(
             unwrapped_eltype(
                 Base._accumulate_promote_op(op, Array{T,ndims(A)}(undef, size(A)); init)
             ),
-        }
+        )
     end
 end
 

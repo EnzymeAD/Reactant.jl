@@ -554,7 +554,7 @@ end
 end
 
 @noinline function abs(
-    x::TracedRNumber{Complex{T}}; location=mlir_stacktrace("abs", @__FILE__, @__LINE__)
+    x::TracedRComplex{Complex{T}}; location=mlir_stacktrace("abs", @__FILE__, @__LINE__)
 ) where {T}
     res = MLIR.IR.result(
         stablehlo.abs(x.mlir_data; result=mlir_type(TracedRArray{T,0}, ()), location)

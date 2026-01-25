@@ -26,26 +26,26 @@ ReactantCore.is_traced(::TracedRNumber) = true
 
 Base.to_index(x::TracedRNumber{<:Integer}) = x
 
+Base.zero(x::TracedRNumber{T}) where {T} = Reactant.promote_to(typeof(x), zero(T))
+Base.one(x::TracedRNumber{T}) where {T} = Reactant.promote_to(typeof(x), one(T))
+Base.collect(x::TracedRNumber{T}) where {T} = TracedRArray{T,0}((), x.mlir_data, ())
+
+Base.copy(x::TracedRNumber{T}) where {T} = TracedRNumber{T}((), x.mlir_data)
+
 function Base.eps(::Type{TracedRFloat{T}}) where {T}
     return Reactant.promote_to(TracedRFloat{T}, eps(T))
 end
 Base.eps(x::TracedRFloat{T}) where {T} = eps(typeof(x))
 
-function Base.typemin(::Type{TracedRInteger{T}}) where {T}
-    return Reactant.promote_to(TracedRInteger{T}, typemin(T))
+function Base.typemin(::Type{TracedRNumber{T}}) where {T}
+    return Reactant.promote_to(TracedRNumber{T}, typemin(T))
 end
-function Base.typemin(::Type{TracedRFloat{T}}) where {T}
-    return Reactant.promote_to(TracedRFloat{T}, typemin(T))
-end
-Base.typemin(x::TracedRReal{T}) where {T} = typemin(typeof(x))
+Base.typemin(x::TracedRNumber{T}) where {T} = typemin(typeof(x))
 
-function Base.typemax(::Type{TracedRInteger{T}}) where {T}
-    return Reactant.promote_to(TracedRInteger{T}, typemax(T))
+function Base.typemax(::Type{TracedRNumber{T}}) where {T}
+    return Reactant.promote_to(TracedRNumber{T}, typemax(T))
 end
-function Base.typemax(::Type{TracedRFloat{T}}) where {T}
-    return Reactant.promote_to(TracedRFloat{T}, typemax(T))
-end
-Base.typemax(x::TracedRReal{T}) where {T} = typemax(typeof(x))
+Base.typemax(x::TracedRNumber{T}) where {T} = typemax(typeof(x))
 
 function Base.nextfloat(x::TracedRFloat{T}) where {T<:AbstractFloat}
     return @opcall next_after(x, typemax(x))
@@ -89,24 +89,11 @@ end
 
 Base.only(A::TracedRNumber{T}) where {T} = A
 
-# Generic zero/one for all TracedRNumber subtypes
-Base.zero(x::TracedRNumber{T}) where {T} = Reactant.promote_to(typeof(x), zero(T))
-Base.one(x::TracedRNumber{T}) where {T} = Reactant.promote_to(typeof(x), one(T))
-
-Base.collect(x::TracedRNumber{T}) where {T} = TracedRArray{T,0}((), x.mlir_data, ())
-
-# Generic copy for all TracedRNumber subtypes
-function Base.copy(x::T) where {S,T<:TracedRNumber{S}}
-    return T((), x.mlir_data)
-end
-
-# Promotion rules - Julia's promotion is symmetric, only define one direction
-# TracedRNumber (union type) promotion rules
 function Base.promote_rule(::Type{TracedRNumber{T}}, ::Type{TracedRNumber{S}}) where {T,S}
-    return TracedRNumber{Base.promote_type(T, S)}
+    return traced_number_type(Base.promote_type(T, S))
 end
 function Base.promote_rule(::Type{TracedRNumber{T}}, ::Type{S}) where {T,S<:Number}
-    return TracedRNumber{Base.promote_type(T, S)}
+    return traced_number_type(Base.promote_type(T, S))
 end
 
 # TracedRInteger promotion rules
@@ -161,27 +148,27 @@ end
 
 # TracedRReal promotion rules with regular Number types
 function Base.promote_rule(::Type{<:TracedRReal{T}}, ::Type{S}) where {T,S<:Real}
-    return TracedRNumber{Base.promote_type(T, S)}
+    return traced_number_type(Base.promote_type(T, S))
 end
 
 # TracedRComplex promotion rules with regular Number types  
 function Base.promote_rule(::Type{TracedRComplex{T}}, ::Type{S}) where {T,S<:Number}
-    return TracedRNumber{Base.promote_type(T, S)}
+    return traced_number_type(Base.promote_type(T, S))
 end
 
 # Cross-type promotion: TracedRNumber (union) vs concrete traced types
 # These handle cases where promote_type might call promote_rule with union and concrete types
 function Base.promote_rule(::Type{TracedRNumber{T}}, ::Type{TracedRInteger{S}}) where {T,S}
-    return TracedRNumber{Base.promote_type(T, S)}
+    return traced_number_type(Base.promote_type(T, S))
 end
 function Base.promote_rule(::Type{TracedRNumber{T}}, ::Type{TracedRFloat{S}}) where {T,S}
-    return TracedRNumber{Base.promote_type(T, S)}
+    return traced_number_type(Base.promote_type(T, S))
 end
 function Base.promote_rule(::Type{TracedRNumber{T}}, ::Type{TracedRComplex{S}}) where {T,S}
-    return TracedRNumber{Base.promote_type(T, S)}
+    return traced_number_type(Base.promote_type(T, S))
 end
 function Base.promote_rule(::Type{TracedRNumber{T}}, ::Type{TracedRReal{S}}) where {T,S}
-    return TracedRNumber{Base.promote_type(T, S)}
+    return traced_number_type(Base.promote_type(T, S))
 end
 
 # Special type promotion rules for Nothing/Missing
@@ -199,13 +186,12 @@ function Base.promote_rule(T::Type{>:Union{Nothing,Missing}}, ::Type{TracedRNumb
     return Union{Nothing,Missing,TracedRNumber{T2}}
 end
 function Base.promote_rule(T::Type{>:Missing}, ::Type{TracedRNumber{S}}) where {S}
-    return Union{Missing,TracedRNumber{nonmissingtype(promote_type(S, T))}}
+    return Union{Missing,traced_number_type(nonmissingtype(promote_type(S, T)))}
 end
 function Base.promote_rule(T::Type{>:Nothing}, ::Type{TracedRNumber{S}}) where {S}
-    return Union{Nothing,TracedRNumber{Base.nonnothingtype(promote_type(S, T))}}
+    return Union{Nothing,traced_number_type(Base.nonnothingtype(promote_type(S, T)))}
 end
 
-# TwicePrecision promotion
 function Base.promote_rule(::Type{TwicePrecision{T}}, ::Type{TracedRNumber{S}}) where {T,S}
     return TwicePrecision{Base.promote_type(T, TracedRNumber{S})}
 end
@@ -245,7 +231,7 @@ Base.Complex(x::TracedRNumber{<:Real}) = @opcall complex(x, zero(x))
 Base.Complex(x::TracedRNumber{<:Complex}) = x
 
 # Base.complex
-Base.complex(::Type{TracedRNumber{T}}) where {T} = TracedRNumber{complex(T)}
+Base.complex(::Type{TracedRNumber{T}}) where {T} = traced_number_type(complex(T))
 Base.complex(x::TracedRNumber{<:Real}) = complex(x, zero(x))
 function Base.complex(x::TracedRNumber{<:Real}, y::TracedRNumber{<:Real})
     T = promote_type(unwrapped_eltype(x), unwrapped_eltype(y))
@@ -387,7 +373,7 @@ for (jlop, hloop, hlocomp) in (
         function $(jlop)(
             @nospecialize(lhs::TracedRNumber{T1}), @nospecialize(rhs::TracedRNumber{T2})
         ) where {T1,T2}
-            commonTy = TracedRNumber{Base.promote_type(T1, T2)}
+            commonTy = traced_number_type(Base.promote_type(T1, T2))
             lhs = Reactant.promote_to(commonTy, lhs)
             rhs = Reactant.promote_to(commonTy, rhs)
             return $(jlop)(lhs, rhs)

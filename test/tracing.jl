@@ -58,29 +58,28 @@ end
 
                 # Numeric types
                 (AbstractFloat, AbstractFloat, AbstractFloat),
-                (Float16, Float16, TracedRNumber{Float16}),
-                (Float32, Float32, TracedRNumber{Float32}),
-                (Float64, Float64, TracedRNumber{Float64}),
+                (Float16, Float16, TracedRFloat{Float16}),
+                (Float32, Float32, TracedRFloat{Float32}),
+                (Float64, Float64, TracedRFloat{Float64}),
                 (Integer, Integer, Integer),
-                (Int8, Int8, TracedRNumber{Int8}),
-                (Int16, Int16, TracedRNumber{Int16}),
-                (Int32, Int32, TracedRNumber{Int32}),
-                (Int64, Int64, TracedRNumber{Int64}),
-                (UInt8, UInt8, TracedRNumber{UInt8}),
-                (UInt16, UInt16, TracedRNumber{UInt16}),
-                (UInt32, UInt32, TracedRNumber{UInt32}),
-                (UInt64, UInt64, TracedRNumber{UInt64}),
-                (Complex{Float32}, Complex{Float32}, TracedRNumber{Complex{Float32}}),
-                (Complex{Float64}, Complex{Float64}, TracedRNumber{Complex{Float64}}),
-                (Complex{Int8}, Complex{Int8}, TracedRNumber{Complex{Int8}}),
-                (Complex{Int16}, Complex{Int16}, TracedRNumber{Complex{Int16}}),
-                (Complex{Int32}, Complex{Int32}, TracedRNumber{Complex{Int32}}),
-                (Complex{Int64}, Complex{Int64}, TracedRNumber{Complex{Int64}}),
-                (Complex{UInt8}, Complex{UInt8}, TracedRNumber{Complex{UInt8}}),
-                (Complex{UInt16}, Complex{UInt16}, TracedRNumber{Complex{UInt16}}),
-                (Complex{UInt32}, Complex{UInt32}, TracedRNumber{Complex{UInt32}}),
-                (Complex{UInt64}, Complex{UInt64}, TracedRNumber{Complex{UInt64}}),
-
+                (Int8, Int8, TracedRInteger{Int8}),
+                (Int16, Int16, TracedRInteger{Int16}),
+                (Int32, Int32, TracedRInteger{Int32}),
+                (Int64, Int64, TracedRInteger{Int64}),
+                (UInt8, UInt8, TracedRInteger{UInt8}),
+                (UInt16, UInt16, TracedRInteger{UInt16}),
+                (UInt32, UInt32, TracedRInteger{UInt32}),
+                (UInt64, UInt64, TracedRInteger{UInt64}),
+                (Complex{Float32}, Complex{Float32}, TracedRComplex{Complex{Float32}}),
+                (Complex{Float64}, Complex{Float64}, TracedRComplex{Complex{Float64}}),
+                (Complex{Int8}, Complex{Int8}, TracedRComplex{Complex{Int8}}),
+                (Complex{Int16}, Complex{Int16}, TracedRComplex{Complex{Int16}}),
+                (Complex{Int32}, Complex{Int32}, TracedRComplex{Complex{Int32}}),
+                (Complex{Int64}, Complex{Int64}, TracedRComplex{Complex{Int64}}),
+                (Complex{UInt8}, Complex{UInt8}, TracedRComplex{Complex{UInt8}}),
+                (Complex{UInt16}, Complex{UInt16}, TracedRComplex{Complex{UInt16}}),
+                (Complex{UInt32}, Complex{UInt32}, TracedRComplex{Complex{UInt32}}),
+                (Complex{UInt64}, Complex{UInt64}, TracedRComplex{Complex{UInt64}}),
                 # RArray types
                 (
                     ConcreteRArray{Float64,0},
@@ -104,7 +103,7 @@ end
                 ),
 
                 # Array types
-                (Array{Float64,1}, Array{Float64,1}, Array{TracedRNumber{Float64},1}),
+                (Array{Float64,1}, Array{Float64,1}, Array{TracedRFloat{Float64},1}),
                 (
                     Array{ConcreteRArray{Float64,2},1},
                     Array{TracedRArray{Float64,2},1},
@@ -112,7 +111,7 @@ end
                 ),
 
                 # Union types
-                (Union{Nothing,Int}, Union{Nothing,Int}, Union{Nothing,TracedRNumber{Int}}),
+                (Union{Nothing,Int}, Union{Nothing,Int}, Union{Nothing,TracedRInteger{Int}}),
                 (
                     Union{Nothing,ConcreteRArray{Float64,1}},
                     Union{Nothing,TracedRArray{Float64,1}},
@@ -120,7 +119,7 @@ end
                 ),
 
                 # Ptr types
-                (Ptr{Float64}, Ptr{Float64}, Ptr{TracedRNumber{Float64}}),
+                (Ptr{Float64}, Ptr{Float64}, Ptr{TracedRFloat{Float64}}),
                 (
                     Ptr{ConcreteRArray{Float64,1}},
                     Ptr{TracedRArray{Float64,1}},
@@ -129,7 +128,7 @@ end
                 (
                     Core.LLVMPtr{Float64},
                     Core.LLVMPtr{Float64},
-                    Core.LLVMPtr{TracedRNumber{Float64}},
+                    Core.LLVMPtr{TracedRFloat{Float64}},
                 ),
                 (
                     Core.LLVMPtr{ConcreteRArray{Float64,1}},
@@ -139,7 +138,7 @@ end
                 (
                     Base.RefValue{Float64},
                     Base.RefValue{Float64},
-                    Base.RefValue{TracedRNumber{Float64}},
+                    Base.RefValue{TracedRFloat{Float64}},
                 ),
                 (
                     Base.RefValue{ConcreteRArray{Float64,1}},
@@ -206,15 +205,15 @@ end
                 (
                     Wrapper{Float64,Vector{Float64}},
                     Wrapper{Float64,Vector{Float64}},
-                    Wrapper{TracedRNumber{Float64},Vector{Float64}},
+                    Wrapper{TracedRFloat{Float64},Vector{Float64}},
                 ),
                 (
                     Wrapper{Float64,ConcreteRArray{Float64,1}},
                     Wrapper{Float64,TracedRArray{Float64,1}},
-                    Wrapper{TracedRNumber{Float64},TracedRArray{Float64,1}},
+                    Wrapper{TracedRFloat{Float64},TracedRArray{Float64,1}},
                 ),
                 (Wrapper{Symbol}, Wrapper{Symbol}, Wrapper{Symbol}),
-                (Wrapper{Float64}, Wrapper{Float64}, Wrapper{TracedRNumber{Float64}}),
+                (Wrapper{Float64}, Wrapper{Float64}, Wrapper{TracedRFloat{Float64}}),
                 (
                     Wrapper{ConcreteRArray{Float64,1}},
                     Wrapper{TracedRArray{Float64,1}},
@@ -281,8 +280,8 @@ end
                 Foo, [Float64, Bar{Float64}, Reactant.TracedRArray{Float64,1}]
             ) == (
                 Foo{
-                    TracedRNumber{Float64},
-                    Bar{TracedRNumber{Float64}},
+                    TracedRFloat{Float64},
+                    Bar{TracedRFloat{Float64}},
                     Reactant.TracedRArray{Float64,1},
                 },
                 [true, true, false],
