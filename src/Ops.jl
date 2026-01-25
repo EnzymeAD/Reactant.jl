@@ -100,6 +100,24 @@ function mlir_type(RT::Type{<:RArray{T,N}}, shape) where {T,N}
     return MLIR.IR.TensorType(collect(Int, shape), MLIR.IR.Type(unwrapped_eltype(RT)))
 end
 
+# Handle UnionAll types like TracedRArray{T,N} where RT is unbound
+# This happens when TracedRArray{T,N} is used without specifying RT explicitly
+function mlir_type(RT::UnionAll, shape)
+    # Unwrap the UnionAll to get the body type
+    body = RT
+    while body isa UnionAll
+        body = body.body
+    end
+    # Extract T and N from TracedRArray{T,N,RT}
+    if body <: TracedRArray
+        T, N = body.parameters[1], body.parameters[2]
+        @assert length(shape) == N
+        return MLIR.IR.TensorType(collect(Int, shape), MLIR.IR.Type(T))
+    else
+        throw(ArgumentError("Unsupported UnionAll type: $RT"))
+    end
+end
+
 # ToDo: Possibly remove this in the future, should be handled by
 # `mlir_type(RT::Type{<:RArray{T,N}}, shape)` already. Keep it for now
 # so we can perform a sanity check on `RT` matching `traced_number_type(T)`.
