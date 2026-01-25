@@ -237,6 +237,15 @@ function looped_any(f::F, itr) where {F}
     return false
 end
 
+function looped_any(f::F, itr::AbstractArray) where {F}
+    for I in eachindex(itr)
+        if isassigned(itr, I)
+            f(@inbounds itr[I]) && return true
+        end
+    end
+    return false
+end
+
 # StdLib Overloads
 include("stdlibs/LinearAlgebra.jl")
 include("stdlibs/Random.jl")
