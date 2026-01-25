@@ -136,28 +136,36 @@ function repath(x::TracedRComplex{T}, paths) where {T}
 end
 
 ## TracedRArray
-mutable struct TracedRArray{T,N} <: RArray{TracedRNumber{T},N}
+mutable struct TracedRArray{T,N,RT<:TracedRNumber{T}} <: RArray{RT,N}
     paths::Tuple
     mlir_data::Union{Nothing,MLIR.IR.Value}
     shape::NTuple{N,Int}
 
-    function TracedRArray{T,N}(
+    function TracedRArray{T,N,RT}(
         paths::Tuple, mlir_data::Union{Nothing,MLIR.IR.Value}, shape
-    ) where {T,N}
+    ) where {T,N,RT<:TracedRNumber{T}}
         shape = Tuple(shape)
         if !isnothing(mlir_data)
             @assert size(MLIR.IR.type(mlir_data)) == shape "Expected: $(shape), got: $(size(MLIR.IR.type(mlir_data)))"
         end
-        return new{T,N}(paths, mlir_data, shape)
+        return new{T,N,RT}(paths, mlir_data, shape)
     end
 end
 
-function repath(x::TracedRArray{T,N}, paths) where {T,N}
-    return TracedRArray{T,N}(paths, x.mlir_data, x.shape)
+# Convenience constructor that automatically determines RT from T
+function TracedRArray{T,N}(
+    paths::Tuple, mlir_data::Union{Nothing,MLIR.IR.Value}, shape
+) where {T,N}
+    RT = traced_number_type(T)
+    return TracedRArray{T,N,RT}(paths, mlir_data, shape)
+end
+
+function repath(x::TracedRArray{T,N,RT}, paths) where {T,N,RT}
+    return TracedRArray{T,N,RT}(paths, x.mlir_data, x.shape)
 end
 
 @leaf TracedRArray
-Adapt.parent_type(::Type{TracedRArray{T,N}}) where {T,N} = TracedRArray{T,N}
+Adapt.parent_type(::Type{<:TracedRArray{T,N}}) where {T,N} = TracedRArray{T,N}
 
 ## TracedStepRangeLen
 struct TracedStepRangeLen{T,R,S,L} <: AbstractRange{T}
@@ -204,7 +212,7 @@ const TracedRVector{T} = TracedRArray{T,1}
 const TracedRMatrix{T} = TracedRArray{T,2}
 const TracedRVecOrMat{T} = Union{TracedRVector{T},TracedRMatrix{T}}
 
-const WrappedTracedRArray{T,N} = WrappedArray{T,N,TracedRArray,TracedRArray{T,N}}
+const WrappedTracedRArray{T,N} = WrappedArray{<:TracedRNumber{T},N,TracedRArray,<:TracedRArray{T,N}}
 
 # Concrete Types
 ## ConcretePJRTInteger, ConcretePJRTFloat, ConcretePJRTComplex
