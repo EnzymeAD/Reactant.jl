@@ -100,11 +100,13 @@ function mlir_type(RT::Type{<:RArray{T,N}}, shape) where {T,N}
     return MLIR.IR.TensorType(collect(Int, shape), MLIR.IR.Type(unwrapped_eltype(RT)))
 end
 
-# TracedRArray{T,N} without RT specified is a UnionAll that doesn't match Type{<:RArray{T,N}}.
-# This method handles that case by extracting T directly.
-function mlir_type(::Type{TracedRArray{T,N}}, shape) where {T,N}
+# ToDo: Possibly remove this in the future, should be handled by
+# `mlir_type(RT::Type{<:RArray{T,N}}, shape)` already. Keep it for now
+# so we can perform a sanity check on `RT` matching `traced_number_type(T)`.
+function mlir_type(::Type{TracedRArray{T,N,RT}}, shape) where {T,N,RT}
     @assert length(shape) == N
-    return MLIR.IR.TensorType(collect(Int, shape), MLIR.IR.Type(T))
+    @assert RT == traced_number_type(T) # Sanity check
+    return MLIR.IR.TensorType(collect(Int, shape), MLIR.IR.Type(unwrapped_eltype(RT)))
 end
 
 function mlir_type(RT::Type{<:RNumber})::MLIR.IR.Type
