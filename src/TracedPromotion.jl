@@ -19,19 +19,19 @@ function promote_to(::Type{TracedRArray{T}}, rhs) where {T}
     return promote_to(TracedRArray{T,ndims(rhs)}, rhs)
 end
 
-promote_to(::Type{TracedRArray{T,N}}, rhs::TracedRArray{T,N}) where {T,N} = rhs
-function promote_to(::Type{TracedRArray{T,N}}, rhs::TracedRArray{T2,N}) where {T,T2,N}
+promote_to(::Type{<:TracedRArray{T,N}}, rhs::TracedRArray{T,N}) where {T,N} = rhs
+function promote_to(::Type{<:TracedRArray{T,N}}, rhs::TracedRArray{T2,N}) where {T,T2,N}
     return @opcall convert(TracedRArray{T,N}, rhs)
 end
 
 function promote_to(
-    ::Type{TracedRArray{T,N}}, rhs::AbstractArray{<:TracedRNumber,N}
+    ::Type{<:TracedRArray{T,N}}, rhs::AbstractArray{<:TracedRNumber,N}
 ) where {T,N}
     return @opcall convert(TracedRArray{T,N}, aos_to_soa(materialize_traced_array(rhs)))
 end
 
 function promote_to(
-    ::Type{TracedRArray{T,1}},
+    ::Type{<:TracedRArray{T,1}},
     rhs::Union{UnitRange,UnitRange{<:TracedRNumber},<:TracedUnitRange},
 ) where {T}
     return @opcall add(
@@ -41,7 +41,7 @@ function promote_to(
 end
 
 function promote_to(
-    ::Type{TracedRArray{T,1}},
+    ::Type{<:TracedRArray{T,1}},
     rhs::Union{
         StepRange,
         StepRangeLen,
@@ -56,15 +56,15 @@ function promote_to(
     return @opcall add(@opcall(multiply(step_arr, iota)), first_arr)
 end
 
-function promote_to(::Type{TracedRArray{T,1}}, rhs::Base.OneTo) where {T}
+function promote_to(::Type{<:TracedRArray{T,1}}, rhs::Base.OneTo) where {T}
     return promote_to(TracedRArray{T,1}, first(rhs):last(rhs))
 end
 
-function promote_to(::Type{TracedRArray{T,N}}, rhs::LinearAlgebra.Diagonal) where {T,N}
+function promote_to(::Type{<:TracedRArray{T,N}}, rhs::LinearAlgebra.Diagonal) where {T,N}
     return LinearAlgebra.diagm(promote_to(TracedRArray{T,1}, rhs.diag))
 end
 
-function promote_to(::Type{TracedRArray{T,N}}, rhs::AbstractArray{<:Any,N}) where {T,N}
+function promote_to(::Type{<:TracedRArray{T,N}}, rhs::AbstractArray{<:Any,N}) where {T,N}
     if ancestor(rhs) isa AnyTracedRArray
         return promote_to(TracedRArray{T,N}, materialize_traced_array(rhs))
     end
@@ -102,10 +102,10 @@ for TracedType in (TracedRInteger, TracedRFloat, TracedRComplex)
     end
 end
 
-function promote_to(::Type{TracedRArray{T,0}}, rhs::TracedRNumber{T2}) where {T,T2}
+function promote_to(::Type{<:TracedRArray{T,0}}, rhs::TracedRNumber{T2}) where {T,T2}
     return TracedRArray{T,0}((), @opcall(convert(TracedRNumber{T}, rhs)).mlir_data, ())
 end
-function promote_to(::Type{TracedRNumber{T}}, rhs::TracedRArray{T2,0}) where {T,T2}
+function promote_to(::Type{<:TracedRNumber{T}}, rhs::TracedRArray{T2,0}) where {T,T2}
     return TracedRNumber{T}((), @opcall(convert(TracedRArray{T,0}, rhs)).mlir_data)
 end
 
