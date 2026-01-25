@@ -311,7 +311,8 @@ Base.@nospecializeinfer function traced_type_inner(
     end
 
     if mode == ConcreteToTraced
-        return TracedRArray{elT,N}
+        RT = traced_number_type(elT)
+        return TracedRArray{elT,N,RT}
     elseif mode == TracedToConcrete
         return T
     elseif mode == ArrayToConcrete
@@ -341,7 +342,8 @@ Base.@nospecializeinfer function traced_type_inner(
     end
 
     if mode == ConcreteToTraced
-        return TracedRArray{elT,N}
+        RT = traced_number_type(elT)
+        return TracedRArray{elT,N,RT}
     elseif mode == TracedToConcrete
         return T
     elseif mode == ArrayToConcrete

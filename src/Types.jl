@@ -165,7 +165,7 @@ function repath(x::TracedRArray{T,N,RT}, paths) where {T,N,RT}
 end
 
 @leaf TracedRArray
-Adapt.parent_type(::Type{<:TracedRArray{T,N}}) where {T,N} = TracedRArray{T,N}
+Adapt.parent_type(::Type{<:TracedRArray{T,N}}) where {T,N} = TracedRArray{T,N,traced_number_type(T)}
 
 ## TracedStepRangeLen
 struct TracedStepRangeLen{T,R,S,L} <: AbstractRange{T}
