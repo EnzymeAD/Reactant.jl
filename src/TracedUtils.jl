@@ -672,7 +672,7 @@ function finalize_mlir_fn(
     skipped_results = Reactant.TracedType[]
     for (k, v) in seen_results
         v isa Reactant.TracedType || continue
-        if Reactant.looped_any(Base.Fix1(===, k), skipped_args)
+        if Reactant.call_with_native(any, Base.Fix1(===, k), skipped_args)
             push!(skipped_results, v)
 
             _, argpath = get_argidx(v, argprefix)

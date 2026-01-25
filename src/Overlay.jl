@@ -211,11 +211,7 @@ end
 end
 
 @reactant_overlay @noinline function Base.map(f, x::AbstractArray, ys::AbstractArray...)
-    if (
-        use_overlayed_version(x) ||
-        use_overlayed_version(f) ||
-        looped_any(use_overlayed_version, ys)
-    )
+    if use_overlayed_version((f, x, ys...))
         return call_with_native(TracedRArrayOverrides.overloaded_map, f, x, ys...)
     else
         return call_with_native(Base.map, CallWithReactant(f), x, ys...)
@@ -225,12 +221,7 @@ end
 @reactant_overlay @noinline function Base.map!(
     f, y::AbstractArray, x::AbstractArray, xs::AbstractArray...
 )
-    if (
-        use_overlayed_version(y) ||
-        use_overlayed_version(x) ||
-        use_overlayed_version(f) ||
-        looped_any(use_overlayed_version, xs)
-    )
+    if use_overlayed_version((f, y, x, xs...))
         return call_with_native(TracedRArrayOverrides.overloaded_map!, f, y, x, xs...)
     else
         return call_with_native(Base.map!, CallWithReactant(f), y, x, xs...)

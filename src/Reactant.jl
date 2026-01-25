@@ -212,9 +212,9 @@ end
 use_overlayed_version(x::Base.Generator) = use_overlayed_version((x.f, x.iter))
 use_overlayed_version(x::Base.Iterators.Zip) = use_overlayed_version(x.is)
 use_overlayed_version(x::Base.Iterators.Enumerate) = use_overlayed_version(x.itr)
-use_overlayed_version(x::Vector) = looped_any(use_overlayed_version, x)
-use_overlayed_version(iter::Tuple) = looped_any(use_overlayed_version, iter)
-use_overlayed_version(iter::NamedTuple) = looped_any(use_overlayed_version, values(iter))
+function use_overlayed_version(x::Union{Vector,Tuple,NamedTuple})
+    return call_with_native(any, use_overlayed_version, values(x))
+end
 use_overlayed_version(::Number) = false
 use_overlayed_version(::MissingTracedValue) = true
 use_overlayed_version(rng::ReactantRNG) = use_overlayed_version(rng.seed)
@@ -227,14 +227,6 @@ function use_overlayed_version(x::AbstractArray)
     a = ancestor(x)
     a === x && return false
     return use_overlayed_version(a)
-end
-
-## We avoid calling into `any` to avoid triggering the `any` overlay
-function looped_any(f::F, itr) where {F}
-    @inbounds for x in itr
-        f(x) && return true
-    end
-    return false
 end
 
 # StdLib Overloads
