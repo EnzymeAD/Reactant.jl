@@ -1,0 +1,138 @@
+#!/usr/bin/env julia
+"""
+Script to update TODO/FIXME/XXX comments to reference GitHub issues.
+
+Usage:
+    julia scripts/update_todos.jl <mapping_file>
+
+The mapping file should be a CSV with columns: id,issue_number
+"""
+
+function load_mapping(mapping_file::String)
+    mapping = Dict{Int, Int}()
+    
+    lines = readlines(mapping_file)
+    # Skip header
+    for line in lines[2:end]
+        if isempty(strip(line))
+            continue
+        end
+        parts = split(line, ',')
+        if length(parts) >= 2
+            id = parse(Int, strip(parts[1]))
+            issue_str = strip(parts[2])
+            if !isempty(issue_str)
+                issue_num = parse(Int, issue_str)
+                mapping[id] = issue_num
+            end
+        end
+    end
+    
+    return mapping
+end
+
+function update_todo_in_file(filepath::String, line_num::Int, old_line::String, issue_number::Int)
+    lines = readlines(filepath; keep=true)
+    
+    if line_num > length(lines)
+        @warn "Line number $line_num out of range in $filepath"
+        return false
+    end
+    
+    # Check if the line still matches
+    current_line = rstrip(lines[line_num], '\n')
+    if strip(current_line) != strip(old_line)
+        @warn "Line content mismatch in $filepath:$line_num"
+        @warn "Expected: $(strip(old_line))"
+        @warn "Found: $(strip(current_line))"
+        return false
+    end
+    
+    # Update the line to include issue reference
+    # Detect comment style
+    comment_pattern = r"^(\s*(?://|#|--))"
+    m = match(comment_pattern, current_line)
+    
+    if m === nothing
+        # Not a comment line, skip
+        @warn "Line is not a comment: $filepath:$line_num"
+        return false
+    end
+    
+    # Check if issue reference already exists
+    if occursin(r"#\d+", current_line) || occursin(r"github\.com/.*/issues/\d+", current_line)
+        @info "Issue reference already exists in $filepath:$line_num"
+        return false
+    end
+    
+    # Add issue reference
+    new_line = rstrip(current_line) * " (see #$issue_number)\n"
+    lines[line_num] = new_line
+    
+    # Write back
+    write(filepath, join(lines, ""))
+    
+    return true
+end
+
+function main(args)
+    if length(args) < 1
+        println("Usage: julia scripts/update_todos.jl <mapping_file>")
+        println("  mapping_file: CSV file with id,issue_number columns")
+        exit(1)
+    end
+    
+    mapping_file = args[1]
+    root_dir = dirname(dirname(@__FILE__))
+    
+    # Load the todos CSV
+    todos_file = joinpath(root_dir, "scripts", "todos.csv")
+    if !isfile(todos_file)
+        error("TODOs file not found. Run collect_todos.jl first.")
+    end
+    
+    # Load mapping
+    mapping = load_mapping(mapping_file)
+    println("Loaded $(length(mapping)) issue mappings")
+    
+    # Read todos
+    todos_lines = readlines(todos_file)
+    updated_count = 0
+    skipped_count = 0
+    
+    for line in todos_lines[2:end]  # Skip header
+        if isempty(strip(line))
+            continue
+        end
+        
+        # Parse CSV line (simple parser, assumes no commas in text field)
+        parts = split(line, ',')
+        id = parse(Int, strip(parts[1]))
+        file = strip(parts[2], '"')
+        line_num = parse(Int, strip(parts[3]))
+        # text starts at index 5 (skip id, file, line, type)
+        text = join(parts[5:end], ',')
+        text = strip(text, '"')
+        
+        # Check if we have a mapping for this TODO
+        if haskey(mapping, id)
+            issue_num = mapping[id]
+            filepath = joinpath(root_dir, file)
+            
+            if update_todo_in_file(filepath, line_num, text, issue_num)
+                updated_count += 1
+                println("✓ Updated $file:$line_num -> #$issue_num")
+            else
+                skipped_count += 1
+            end
+        end
+    end
+    
+    println("\nSummary:")
+    println("  Updated: $updated_count")
+    println("  Skipped: $skipped_count")
+end
+
+if abspath(PROGRAM_FILE) == @__FILE__
+    main(ARGS)
+end

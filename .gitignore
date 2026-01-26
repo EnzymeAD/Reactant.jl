@@ -281,3 +281,10 @@ package-lock.json
 node_modules
 
 deps/ReactantExtra/proto_staging
+
+# Generated TODO tracking files (keep the scripts, ignore generated reports)
+scripts/todos.csv
+scripts/todos_report.md
+scripts/proposed_issues.md
+scripts/todo_mapping_template.csv
+
