@@ -40,13 +40,17 @@ julia scripts/categorize_todos.jl
 - `scripts/proposed_issues.md` - Proposed GitHub issues with grouped TODOs
 - `scripts/todo_mapping_template.csv` - Template for mapping TODOs to issue numbers
 
-### 3. `create_github_issues.sh`
+### 3. `create_github_issues.sh` / `create_github_issues_gh.jl`
 
 Automatically creates GitHub tracking issues using the GitHub CLI (`gh`).
 
 **Usage:**
 ```bash
+# Via bash wrapper
 bash scripts/create_github_issues.sh
+
+# Or directly with Julia
+julia scripts/create_github_issues_gh.jl
 ```
 
 **Prerequisites:** 
@@ -55,7 +59,7 @@ bash scripts/create_github_issues.sh
 - Run `categorize_todos.jl` first
 
 **Outputs:**
-- Creates 13 GitHub issues
+- Creates 13 GitHub issues with full TODO lists
 - `scripts/created_issues.csv` - Mapping of categories to issue numbers
 
 ### 4. `map_todos_to_issues.jl`
