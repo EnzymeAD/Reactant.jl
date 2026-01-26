@@ -1,7 +1,6 @@
 
 using Pkg;
 Pkg.activate(@__DIR__);
-@__DIR__
 # DO this because 1.10 doesn't support sources
 Pkg.add([
     PackageSpec(; name="Reactant", path = joinpath(@__DIR__, "../../..")),
@@ -173,7 +172,7 @@ function sky(θ, metadata)
     return ContinuousImage(rast, grid, DeltaPulse{3}())
 end
 
-@testset "Comrade Integration Imaging" begin
+# @testset "Comrade Integration Imaging" begin
     obs = ehtim.obsdata.load_uvfits(dataf)
     obsavg = scan_average(obs).add_fractional_noise(0.02)
     dvis = extract_table(obsavg, Visibilities())
@@ -220,4 +219,4 @@ end
     x = prior_sample(tpost)
     xr = Reactant.to_rarray(x)
     @test @jit(logdensityof(tpostr, xr)) ≈ logdensityof(tpost, x)
-end
+# end

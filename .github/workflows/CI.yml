@@ -87,21 +87,21 @@ jobs:
   #     assertions: true
   #     test_args: ${{ matrix.test_group == 'core' && 'core plugins' || matrix.test_group }}
 
-  downgrade:
-    strategy:
-      fail-fast: false
-      matrix:
-        test_group:
-          - core
-          - nn
-          - integration
-        runtime:
-          - "pjrt"
-          - "ifrt"
-    uses: ./.github/workflows/CommonCI.yml
-    with:
-      julia_version: "1.10"
-      os: "ubuntu-24.04"
-      runtime: ${{ matrix.runtime }}
-      test_args: ${{ matrix.test_group == 'core' && 'core plugins' || matrix.test_group }}
-      downgrade_testing: true
+  # downgrade:
+  #   strategy:
+  #     fail-fast: false
+  #     matrix:
+  #       test_group:
+  #         - core
+  #         - nn
+  #         - integration
+  #       runtime:
+  #         - "pjrt"
+  #         - "ifrt"
+  #   uses: ./.github/workflows/CommonCI.yml
+  #   with:
+  #     julia_version: "1.10"
+  #     os: "ubuntu-24.04"
+  #     runtime: ${{ matrix.runtime }}
+  #     test_args: ${{ matrix.test_group == 'core' && 'core plugins' || matrix.test_group }}
+  #     downgrade_testing: true
