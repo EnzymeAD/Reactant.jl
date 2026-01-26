@@ -40,7 +40,41 @@ julia scripts/categorize_todos.jl
 - `scripts/proposed_issues.md` - Proposed GitHub issues with grouped TODOs
 - `scripts/todo_mapping_template.csv` - Template for mapping TODOs to issue numbers
 
-### 3. `update_todos.jl`
+### 3. `create_github_issues.sh`
+
+Automatically creates GitHub tracking issues using the GitHub CLI (`gh`).
+
+**Usage:**
+```bash
+bash scripts/create_github_issues.sh
+```
+
+**Prerequisites:** 
+- GitHub CLI installed (`gh`)
+- Authenticated with `gh auth login`
+- Run `categorize_todos.jl` first
+
+**Outputs:**
+- Creates 13 GitHub issues
+- `scripts/created_issues.csv` - Mapping of categories to issue numbers
+
+### 4. `map_todos_to_issues.jl`
+
+Creates a complete mapping from TODO IDs to issue numbers based on created issues.
+
+**Usage:**
+```bash
+julia scripts/map_todos_to_issues.jl
+```
+
+**Prerequisites:**
+- Run `categorize_todos.jl` first
+- Run `create_github_issues.sh` first
+
+**Outputs:**
+- `scripts/todo_mapping.csv` - Complete TODO-to-issue mapping
+
+### 5. `update_todos.jl`
 
 Updates TODO comments in the codebase to reference GitHub issues based on a mapping file.
 
@@ -51,8 +85,8 @@ julia scripts/update_todos.jl <mapping_file.csv>
 
 **Prerequisites:** 
 1. Run `collect_todos.jl` to generate the TODOs catalog
-2. Create GitHub issues based on `proposed_issues.md`
-3. Create a mapping CSV file with columns: `todo_id,issue_number`
+2. Create GitHub issues (manually or via `create_github_issues.sh`)
+3. Have a mapping CSV file with columns: `todo_id,issue_number`
 
 **Example mapping file:**
 ```csv
@@ -65,7 +99,36 @@ todo_id,issue_number
 
 ## Workflow
 
-### Step 1: Collect and Analyze TODOs
+### Automated Workflow (Using GitHub CLI)
+
+If you have the GitHub CLI (`gh`) installed and authenticated:
+
+```bash
+# Step 1: Collect and categorize TODOs
+julia scripts/collect_todos.jl
+julia scripts/categorize_todos.jl
+
+# Step 2: Create GitHub issues automatically
+bash scripts/create_github_issues.sh
+
+# Step 3: Map TODOs to created issues
+julia scripts/map_todos_to_issues.jl
+
+# Step 4: Update the codebase
+julia scripts/update_todos.jl scripts/todo_mapping.csv
+```
+
+This will:
+1. Scan the codebase for TODOs (219 items)
+2. Group them into 13 thematic categories
+3. Create 13 GitHub tracking issues
+4. Update all TODO comments to reference the appropriate issue
+
+**Time:** ~5 minutes
+
+### Manual Workflow (Without GitHub CLI)
+
+If you don't have `gh` installed or prefer manual control:
 
 ```bash
 # Collect all TODOs

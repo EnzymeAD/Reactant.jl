@@ -287,4 +287,6 @@ scripts/todos.csv
 scripts/todos_report.md
 scripts/proposed_issues.md
 scripts/todo_mapping_template.csv
+scripts/created_issues.csv
+scripts/todo_mapping.csv
 
