@@ -14,6 +14,12 @@ using FFTW, Reactant, Test, LinearAlgebra
     @test @jit(fft(x_ra, (1, 2, 3))) ≈ fft(x, (1, 2, 3))
     @test @jit(fft(x_ra, (2, 3))) ≈ fft(x, (2, 3))
     @test @jit(fft(x_ra, (1, 3))) ≈ fft(x, (1, 3))
+    @test @jit(fft(x_ra, 1)) ≈ fft(x, 1)
+    @test @jit(fft(x_ra, 2)) ≈ fft(x, 2)
+    @test @jit(fft(x_ra, 3)) ≈ fft(x, 3)
+    @test @jit(ifft(x_ra, 1)) ≈ ifft(x, 1)
+    @test @jit(ifft(x_ra, 2)) ≈ ifft(x, 2)
+    @test @jit(ifft(x_ra, 3)) ≈ ifft(x, 3)
 
     @test @jit(fft(x_ra, (3, 2))) ≈ fft(x, (3, 2))
     @test_throws AssertionError @jit(fft(x_ra, (1, 4)))
@@ -35,6 +41,9 @@ using FFTW, Reactant, Test, LinearAlgebra
         @test @jit(fft(x_ra, (1, 2, 3))) ≈ fft(x, (1, 2, 3))
         @test @jit(ifft(x_ra)) ≈ ifft(x)
         @test @jit(bfft(x_ra)) ≈ bfft(x)
+        @test @jit(fft(x_ra, 1)) ≈ fft(x, 1)
+        @test @jit(fft(x_ra, 2)) ≈ fft(x, 2)
+        @test @jit(fft(x_ra, 3)) ≈ fft(x, 3)
     end
 end
 
@@ -93,6 +102,9 @@ end
     @test @jit(rfft(x_ra, (1, 2, 3))) ≈ rfft(x, (1, 2, 3))
     @test @jit(rfft(x_ra, (2, 3))) ≈ rfft(x, (2, 3))
     @test @jit(rfft(x_ra, (1, 3))) ≈ rfft(x, (1, 3))
+    @test @jit(rfft(x_ra, 1)) ≈ rfft(x, 1)
+    @test @jit(rfft(x_ra, 2)) ≈ rfft(x, 2)
+    @test @jit(rfft(x_ra, 3)) ≈ rfft(x, 3)
 
     @test @jit(rfft(x_ra, (3, 2))) ≈ rfft(x, (3, 2))
     @test_throws AssertionError @jit(rfft(x_ra, (1, 4)))
@@ -111,6 +123,7 @@ end
         @test @jit(irfft(y_ra_real, 2, (1, 2))) ≈ irfft(y_real, 2, (1, 2))
         @test @jit(brfft(y_ra_real, 2)) ≈ brfft(y_real, 2)
         @test @jit(brfft(y_ra_real, 2, (1, 2))) ≈ brfft(y_real, 2, (1, 2))
+        @test @jit(irfft(y_ra_real, 2, 1)) ≈ irfft(y_real, 2, 1)
     end
 end
 
@@ -314,4 +327,19 @@ end
     weight_r = Reactant.to_rarray(weight)
 
     @test spectral_conv(x, weight) ≈ @jit(spectral_conv(x_r, weight_r))
+end
+
+@testset "Wrapped Plan" begin
+    struct MyPlan{T}
+        plan::T
+    end
+
+    myfft(mp::MyPlan, x) = mp.plan * x
+
+    x = rand(ComplexF64, 16)
+    mp = MyPlan(plan_fft!(copy(x)))
+
+    xr = Reactant.to_rarray(x)
+    cmp = @compile myfft(mp, xr)
+    @test cmp(mp, xr) ≈ myfft(mp, x)
 end

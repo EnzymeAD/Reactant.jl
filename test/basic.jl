@@ -871,6 +871,47 @@ end
     @test @jit(rem.(Reactant.to_rarray(a), b)) ≈ expected_rem
 end
 
+@testset "rem2pi" begin
+    a = [-1.1, 7.7, -3.3, 9.9, -5.5]
+
+    @testset "$T" for (convfn, T) in [
+        (identity, Float64), (x -> Float32.(x), Float32), (x -> floor.(Int32, x), Int32)
+    ]
+        if RunningOnTPU
+            @warn "Skipping rem2pi test on TPU. F64 bitcast not supported on TPU"
+            break
+        end
+
+        @testset for round_mode in
+                     (Base.RoundUp, Base.RoundDown, Base.RoundNearest, Base.RoundToZero)
+            a_ = convfn(a)
+            expected_mod2pi = rem2pi.(a_, round_mode)
+            reactant_mod2pi = @jit(rem2pi.(Reactant.to_rarray(a_), round_mode))
+            @test reactant_mod2pi ≈ expected_mod2pi
+            @test Reactant.unwrapped_eltype(reactant_mod2pi) == eltype(expected_mod2pi)
+        end
+    end
+end
+
+@testset "mod2pi" begin
+    a = [-1.1, 7.7, -3.3, 9.9, -5.5]
+
+    @testset "$T" for (convfn, T) in [
+        (identity, Float64), (x -> Float32.(x), Float32), (x -> floor.(Int32, x), Int32)
+    ]
+        if RunningOnTPU
+            @warn "Skipping rem2pi test on TPU. F64 bitcast not supported on TPU"
+            break
+        end
+
+        a_ = convfn(a)
+        expected_mod2pi = mod2pi.(a_)
+        reactant_mod2pi = @jit(mod2pi.(Reactant.to_rarray(a_)))
+        @test reactant_mod2pi ≈ expected_mod2pi
+        @test Reactant.unwrapped_eltype(reactant_mod2pi) == eltype(expected_mod2pi)
+    end
+end
+
 @testset "xor" begin
     for a in (true, false), b in (true, false)
         @test @jit(xor(ConcreteRNumber(a), ConcreteRNumber(b))) == xor(a, b)
@@ -1822,4 +1863,36 @@ end
     @test contains(hlo, "stablehlo.reduce")
 
     @test @jit(mapreduce_with_closure(ρr, x)) ≈ mapreduce_with_closure(2.0, x)
+end
+
+@testset "traced size" begin
+    x_ra = Reactant.to_rarray(Reactant.TestUtils.construct_test_array(Float64, 5, 32, 7))
+    @test @jit(size(x_ra, ConcreteRNumber(1))) == 5
+    @test @jit(size(x_ra, ConcreteRNumber(2))) == 32
+    @test @jit(size(x_ra, ConcreteRNumber(3))) == 7
+end
+
+mapreduce_closure_not_traced(x) = prod(Base.Fix1(size, x), [1, 3])
+
+@testset "mapreduce closure not traced" begin
+    x = Reactant.TestUtils.construct_test_array(Float64, 5, 32, 7)
+    x_ra = Reactant.to_rarray(x)
+
+    @test @jit(mapreduce_closure_not_traced(x_ra)) == prod(size(x)[[1, 3]])
+end
+
+bc_apply(t::NTuple{N,T}, x) where {N,T} = sum(ntuple(n -> t[n], Val(N))) * x
+function tobc(nt, x)
+    nt = Ref(nt)
+    return bc_apply.(nt, x)
+end
+
+@testset "Broadcast Ref" begin
+    x = [2.7, 3.1]
+    xr = Reactant.to_rarray(x)
+    nt = map(ConcreteRNumber, (10.0, 10.0))
+
+    res = @jit tobc(nt, x)
+
+    @test res ≈ tobc((10.0, 10.0), x)
 end

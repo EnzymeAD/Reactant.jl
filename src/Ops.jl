@@ -814,7 +814,7 @@ end
         stablehlo.fft(
             x.mlir_data;
             result_0=mlir_type(TracedRArray{Tout,N}, rsize),
-            fft_type=MLIR.API.stablehloFftTypeAttrGet(MLIR.IR.context(), type),
+            fft_type=MLIR.API.stablehloFftTypeAttrGet(MLIR.IR.current_context(), type),
             fft_length=MLIR.IR.DenseArrayAttribute(length),
             location,
         ),
@@ -908,7 +908,7 @@ end
     @assert size(padding, 2) == num_spatial_dims
 
     dimension_numbers = MLIR.API.stablehloConvDimensionNumbersGet(
-        MLIR.IR.context(),
+        MLIR.IR.current_context(),
         Int64(input_batch_dim - 1),
         Int64(input_feature_dim - 1),
         length(input_spatial_dims),
@@ -1040,7 +1040,7 @@ Base.@nospecializeinfer @noinline function dot_general(
     rhs_batching_dimensions = rhs_batching_dimensions .- 1
     lhs_contracting_dimensions = lhs_contracting_dimensions .- 1
     rhs_contracting_dimensions = rhs_contracting_dimensions .- 1
-    ctx = MLIR.IR.context()
+    ctx = MLIR.IR.current_context()
 
     dot_dimension_numbers = GC.@preserve ctx lhs_contracting_dimensions rhs_contracting_dimensions lhs_batching_dimensions rhs_batching_dimensions begin
         MLIR.IR.Attribute(
@@ -1148,7 +1148,7 @@ end
 )
     values = [operand.mlir_data for operand in operands]
     channel_handle = MLIR.API.stablehloChannelHandleGet(
-        MLIR.IR.context(), channel_id, channel_type
+        MLIR.IR.current_context(), channel_id, channel_type
     )
     is_host_transfer = if isnothing(is_host_transfer)
         nothing
@@ -1170,7 +1170,7 @@ end
     location=mlir_stacktrace("recv", @__FILE__, @__LINE__),
 )
     channel_handle = MLIR.API.stablehloChannelHandleGet(
-        MLIR.IR.context(), channel_id, channel_type
+        MLIR.IR.current_context(), channel_id, channel_type
     )
     is_host_transfer = if isnothing(is_host_transfer)
         nothing
@@ -1267,11 +1267,11 @@ end
         ).f
     @assert MLIR.IR.nregions(func) == 1
     fn_name = String(
-        MLIR.IR.attr(func, String(MLIR.API.mlirSymbolTableGetSymbolAttributeName()))
+        MLIR.IR.getattr(func, String(MLIR.API.mlirSymbolTableGetSymbolAttributeName()))
     )
     #C5:
     @assert fn_name == "comparator" "$comparator: no function generated"
-    ftype_attr = MLIR.IR.attr(func, "function_type")
+    ftype_attr = MLIR.IR.getattr(func, "function_type")
     ftype = MLIR.IR.Type(ftype_attr)
     @assert MLIR.IR.result(ftype) == MLIR.IR.TensorType(Int[], MLIR.IR.Type(Bool)) error(
         "$comparator return type is not tensor<i1>"
@@ -1330,7 +1330,9 @@ end
         ).f
     @assert MLIR.IR.nregions(func) == 1
     fn_name = MLIR.IR.FlatSymbolRefAttribute(
-        String(MLIR.IR.attr(func, String(MLIR.API.mlirSymbolTableGetSymbolAttributeName())))
+        String(
+            MLIR.IR.getattr(func, String(MLIR.API.mlirSymbolTableGetSymbolAttributeName()))
+        ),
     )
 
     iota_arg = iota(Int32, collect(Int64, size(x)); iota_dimension=dimension, location)
@@ -1546,7 +1548,9 @@ with the following fields:
 
     output = MLIR.IR.TensorType(collect(Int, shape), MLIR.IR.Type(T))
     output_state = MLIR.IR.TensorType(collect(Int, size(seed)), MLIR.IR.Type(UInt64))
-    rng_algorithm = MLIR.API.stablehloRngAlgorithmAttrGet(MLIR.IR.context(), algorithm)
+    rng_algorithm = MLIR.API.stablehloRngAlgorithmAttrGet(
+        MLIR.IR.current_context(), algorithm
+    )
     op = stablehlo.rng_bit_generator(
         seed.mlir_data; output, output_state, rng_algorithm, location
     )
@@ -1787,7 +1791,7 @@ end
             lhs.mlir_data,
             rhs.mlir_data;
             comparison_direction=MLIR.API.stablehloComparisonDirectionAttrGet(
-                MLIR.IR.context(), comparison_direction
+                MLIR.IR.current_context(), comparison_direction
             ),
             compare_type,
             location,
@@ -1867,7 +1871,7 @@ julia> Reactant.@jit(
     module_suffix = string(hash(code); base=16)
     name_to_call = _hlo_call_name(func_name, module_suffix)
 
-    current_module = MLIR.IR.mmodule()
+    current_module = MLIR.IR.current_module()
     top_level_block = MLIR.IR.body(current_module)
 
     symbol_attr_name = String(MLIR.API.mlirSymbolTableGetSymbolAttributeName())
@@ -1883,7 +1887,7 @@ julia> Reactant.@jit(
         operations = collect(MLIR.IR.OperationIterator(body))
         for op in operations
             if MLIR.IR.name(op) == "func.func"
-                fn_name = String(MLIR.IR.attr(op, symbol_attr_name))
+                fn_name = String(MLIR.IR.getattr(op, symbol_attr_name))
                 if fn_name == func_name
                     fn = op
                 end
@@ -1897,14 +1901,14 @@ julia> Reactant.@jit(
                 @assert res == MLIR.IR.success() "hlo_call: failed to rename $fn_name"
 
                 # Set function private
-                MLIR.IR.attr!(
+                MLIR.IR.setattr!(
                     op,
                     MLIR.API.mlirSymbolTableGetVisibilityAttributeName(),
                     MLIR.IR.Attribute("private"),
                 )
 
                 # Change function name
-                MLIR.IR.attr!(op, symbol_attr_name, MLIR.IR.Attribute(new_name))
+                MLIR.IR.setattr!(op, symbol_attr_name, MLIR.IR.Attribute(new_name))
             end
         end
 
@@ -1918,7 +1922,7 @@ julia> Reactant.@jit(
         error("hlo_call: could not find function $func_name in the provided module")
     end
 
-    ftype_attr = MLIR.IR.attr(fn, "function_type")
+    ftype_attr = MLIR.IR.getattr(fn, "function_type")
     ftype = MLIR.IR.Type(ftype_attr)
 
     @assert all(Base.Fix2(isa, Union{TracedRArray,TracedRNumber}), args) "hlo_call: all inputs to hlo_call should be reactant arrays or numbers"
@@ -2042,7 +2046,7 @@ end
 
     #! format: off
     scatter_dimension_numbers = MLIR.API.stablehloScatterDimensionNumbersGet(
-        MLIR.IR.context(),
+        MLIR.IR.current_context(),
         length(update_window_dims), update_window_dims,
         length(inserted_window_dims), inserted_window_dims,
         length(input_batching_dims), input_batching_dims,
@@ -2134,7 +2138,7 @@ end
 
     #! format: off
     dimension_numbers = MLIR.API.stablehloGatherDimensionNumbersGet(
-        MLIR.IR.context(),
+        MLIR.IR.current_context(),
         Int64(length(offset_dims)), offset_dims,
         Int64(length(collapsed_slice_dims)), collapsed_slice_dims,
         Int64(length(operand_batching_dims)), operand_batching_dims,
@@ -2236,11 +2240,13 @@ end
     )
 
     if !mincut
-        MLIR.IR.attr!(while_op, "enzyme.disable_mincut", MLIR.IR.UnitAttribute())
+        MLIR.IR.setattr!(while_op, "enzyme.disable_mincut", MLIR.IR.UnitAttribute())
     end
 
     if checkpointing
-        MLIR.IR.attr!(while_op, "enzymexla.enable_checkpointing", MLIR.IR.Attribute(true))
+        MLIR.IR.setattr!(
+            while_op, "enzymexla.enable_checkpointing", MLIR.IR.Attribute(true)
+        )
     end
 
     return map(enumerate(linear_args)) do (i, arg)
@@ -2295,8 +2301,8 @@ end
     sym_visibility = MLIR.IR.Attribute("private")
 
     # compile the true branch without any returns first
-    true_fn_mod = MLIR.IR.mmodule()
-    true_func_tmp = MLIR.IR.block!(MLIR.IR.body(true_fn_mod)) do
+    true_fn_mod = MLIR.IR.current_module()
+    true_func_tmp = MLIR.IR.with_block(MLIR.IR.body(true_fn_mod)) do
         return MLIR.Dialects.func.func_(;
             sym_name=string(true_fn) * "_tb_tmp",
             function_type=MLIR.IR.FunctionType(input_types, []),
@@ -2361,8 +2367,8 @@ end
     ]
 
     # compile the false branch without any returns similar to the true branch
-    false_fn_mod = MLIR.IR.mmodule()
-    false_func_tmp = MLIR.IR.block!(MLIR.IR.body(false_fn_mod)) do
+    false_fn_mod = MLIR.IR.current_module()
+    false_func_tmp = MLIR.IR.with_block(MLIR.IR.body(false_fn_mod)) do
         return MLIR.Dialects.func.func_(;
             sym_name=string(false_fn) * "_fb_tmp",
             function_type=MLIR.IR.FunctionType(input_types, []),
@@ -2590,7 +2596,7 @@ end
     # With the corrected results, we can compile the true and false branches
     tb_out_types = [mlir_type(tr) for tr in tb_corrected_linear_results]
 
-    true_fn_compiled = MLIR.IR.block!(MLIR.IR.body(true_fn_mod)) do
+    true_fn_compiled = MLIR.IR.with_block(MLIR.IR.body(true_fn_mod)) do
         return MLIR.Dialects.func.func_(;
             sym_name=Reactant.TracedUtils.__lookup_unique_name_in_module(
                 true_fn_mod, string(true_fn) * "_tb"
@@ -2603,12 +2609,12 @@ end
     MLIR.API.mlirRegionTakeBody(
         MLIR.IR.region(true_fn_compiled, 1), MLIR.IR.region(true_func_tmp, 1)
     )
-    MLIR.API.mlirOperationDestroy(true_func_tmp.operation)
-    true_func_tmp.operation = MLIR.API.MlirOperation(C_NULL)
+    MLIR.API.mlirOperationDestroy(true_func_tmp)
+    true_func_tmp.ref = MLIR.API.MlirOperation(C_NULL)
 
     fb_out_types = [mlir_type(fr) for fr in fb_corrected_linear_results]
 
-    false_fn_compiled = MLIR.IR.block!(MLIR.IR.body(false_fn_mod)) do
+    false_fn_compiled = MLIR.IR.with_block(MLIR.IR.body(false_fn_mod)) do
         return MLIR.Dialects.func.func_(;
             sym_name=Reactant.TracedUtils.__lookup_unique_name_in_module(
                 false_fn_mod, string(false_fn) * "_fb"
@@ -2621,8 +2627,8 @@ end
     MLIR.API.mlirRegionTakeBody(
         MLIR.IR.region(false_fn_compiled, 1), MLIR.IR.region(false_func_tmp, 1)
     )
-    MLIR.API.mlirOperationDestroy(false_func_tmp.operation)
-    false_func_tmp.operation = MLIR.API.MlirOperation(C_NULL)
+    MLIR.API.mlirOperationDestroy(false_func_tmp)
+    false_func_tmp.ref = MLIR.API.MlirOperation(C_NULL)
 
     tb_region = Reactant.TracedUtils.__take_region(true_fn_compiled)
     fb_region = Reactant.TracedUtils.__take_region(false_fn_compiled)
@@ -2664,6 +2670,345 @@ end
             Reactant.TracedUtils.set!(
                 args, path[2:end], MLIR.IR.result(if_compiled, residx)
             )
+        end
+    end
+
+    return corrected_traced_results
+end
+
+"""
+    case(
+        index::TracedRNumber{<:Integer}, branch_fns::Vector, args...;
+        track_numbers, location
+    )
+
+Produces a `stablehlo.case` operation. Given an integer `index` and a vector of branch
+functions, executes the branch function at position `index` (0-indexed). If `index` is
+out of bounds, executes the last branch function.
+
+Each branch function should take the same arguments and return results of the same type
+and shape.
+
+See: https://github.com/openxla/stablehlo/blob/main/docs/spec.md#case
+
+# Arguments
+- `index`: A scalar integer tensor that determines which branch to execute (0-indexed)
+- `branch_fns`: A vector of functions, each taking `args...` and returning results
+- `args...`: Arguments to pass to the selected branch function
+
+# Keyword Arguments
+- `track_numbers`: Whether to track numbers during tracing
+- `location`: MLIR location for debugging
+
+# Example
+```julia
+result = Ops.case(
+    index,
+    [
+        (x, y) -> x + y,      # branch 0
+        (x, y) -> x - y,      # branch 1
+        (x, y) -> x * y,      # branch 2 (default if index >= 2)
+    ],
+    x, y;
+    track_numbers=Reactant.TracedTrackNumbers,
+)
+```
+"""
+@noinline function case(
+    index::TracedRNumber{<:Integer},
+    branch_fns::Vector,
+    args...;
+    track_numbers,
+    location=mlir_stacktrace("case", @__FILE__, @__LINE__),
+)
+    # stablehlo.case requires the index to be a 32-bit integer
+    index = convert(TracedRNumber{Int32}, index)
+
+    n_branches = length(branch_fns)
+    @assert n_branches >= 1 "case: at least one branch function is required"
+
+    # Generate unique names for each branch
+    branch_names = [
+        (
+            gensym(Symbol(:branch_, i, :_args)),
+            gensym(Symbol(:branch_, i, :_result)),
+            gensym(Symbol(:branch_, i, :_resargs)),
+        ) for i in 1:n_branches
+    ]
+
+    # Make all the args traced or concrete for each branch
+    N = length(args)
+    branch_seen_args = [Reactant.OrderedIdDict() for _ in 1:n_branches]
+    branch_traced_args = [Vector{Any}(undef, N) for _ in 1:n_branches]
+
+    for b in 1:n_branches
+        for i in 1:N
+            @inbounds branch_traced_args[b][i] = Reactant.make_tracer(
+                branch_seen_args[b],
+                args[i],
+                (branch_names[b][1], i),
+                Reactant.TracedSetPath;
+                track_numbers,
+            )
+        end
+    end
+
+    branch_linear_args = [
+        Reactant.TracedType[v for v in values(seen) if v isa Reactant.TracedType] for
+        seen in branch_seen_args
+    ]
+
+    # Input types from first branch (all should be the same)
+    input_types = [mlir_type(arg) for arg in branch_linear_args[1]]
+    sym_visibility = MLIR.IR.Attribute("private")
+
+    # Compile each branch without returns first
+    branch_mods = [MLIR.IR.current_module() for _ in 1:n_branches]
+    branch_func_tmps = Vector{MLIR.IR.Operation}(undef, n_branches)
+    branch_bodies = Vector{MLIR.IR.Block}(undef, n_branches)
+    branch_results = Vector{Any}(undef, n_branches)
+
+    for b in 1:n_branches
+        branch_func_tmps[b] = MLIR.IR.with_block(MLIR.IR.body(branch_mods[b])) do
+            return MLIR.Dialects.func.func_(;
+                sym_name=string(branch_fns[b]) * "_branch$(b)_tmp",
+                function_type=MLIR.IR.FunctionType(input_types, []),
+                body=MLIR.IR.Region(),
+                sym_visibility,
+            )
+        end
+        branch_bodies[b] = MLIR.IR.Block()
+        push!(MLIR.IR.region(branch_func_tmps[b], 1), branch_bodies[b])
+
+        branch_fn_args = branch_names[b][1]
+
+        MLIR.IR.activate!(branch_bodies[b])
+        activate_constant_context!(branch_bodies[b])
+        branch_results[b] = try
+            for (i, arg) in enumerate(branch_linear_args[b])
+                path = nothing
+                for p in Reactant.TracedUtils.get_paths(arg)
+                    if length(p) > 0 && p[1] == branch_fn_args
+                        path = p[2:end]
+                    end
+                end
+                if isnothing(path)
+                    error("case: could not find path for linear arg $i in branch $b")
+                end
+                Reactant.TracedUtils.set_mlir_data!(
+                    arg,
+                    only(
+                        Reactant.TracedUtils.push_val!(
+                            [], branch_traced_args[b][path[1]], path[2:end]
+                        ),
+                    ),
+                )
+            end
+            Reactant.call_with_reactant(branch_fns[b], branch_traced_args[b]...)
+        finally
+            deactivate_constant_context!(branch_bodies[b])
+            MLIR.IR.deactivate!(branch_bodies[b])
+        end
+    end
+
+    # Collect results from each branch
+    seen_branch_results = [Reactant.OrderedIdDict() for _ in 1:n_branches]
+    traced_branch_results = Vector{Any}(undef, n_branches)
+
+    for b in 1:n_branches
+        traced_branch_results[b] = Reactant.make_tracer(
+            seen_branch_results[b],
+            branch_results[b],
+            (branch_names[b][2],),
+            Reactant.NoStopTracedTrack;
+            track_numbers,
+        )
+        for (i, arg) in enumerate(branch_traced_args[b])
+            Reactant.make_tracer(
+                seen_branch_results[b],
+                arg,
+                (branch_names[b][3], i),
+                Reactant.NoStopTracedTrack;
+                track_numbers,
+            )
+        end
+    end
+
+    branch_linear_results = [
+        Reactant.TracedType[v for v in values(seen) if v isa Reactant.TracedType] for
+        seen in seen_branch_results
+    ]
+
+    # Build dictionaries mapping paths to traced values for each branch
+    branch_results_dicts = [Dict{Tuple,Reactant.TracedType}() for _ in 1:n_branches]
+    for b in 1:n_branches
+        for tr in branch_linear_results[b]
+            for path in Reactant.TracedUtils.get_paths(tr)
+                if length(path) > 0 &&
+                    (path[1] == branch_names[b][2] || path[1] == branch_names[b][3])
+                    branch_results_dicts[b][path] = tr
+                end
+            end
+        end
+    end
+
+    # Collect all unique paths across all branches
+    all_paths = []
+    for b in 1:n_branches
+        for (path, _) in branch_results_dicts[b]
+            if path[1] == branch_names[b][2]
+                push!(all_paths, (:result, path[2:end]...))
+            elseif path[1] == branch_names[b][3]
+                push!(all_paths, (:resarg, path[2:end]...))
+            end
+        end
+    end
+    all_paths = sort!(unique!(all_paths))
+
+    # Map canonical paths to branch-specific paths
+    branch_paths = [
+        [
+            if path[1] == :result
+                (branch_names[b][2], path[2:end]...)
+            else
+                (branch_names[b][3], path[2:end]...)
+            end for path in all_paths
+        ] for b in 1:n_branches
+    ]
+
+    # Correct each branch's results to include all paths
+    branch_corrected_linear_results = [Reactant.TracedType[] for _ in 1:n_branches]
+
+    for b in 1:n_branches
+        MLIR.IR.activate!(branch_bodies[b])
+        activate_constant_context!(branch_bodies[b])
+        try
+            for (i, _) in enumerate(branch_paths[b])
+                if haskey(branch_results_dicts[b], branch_paths[b][i])
+                    push!(
+                        branch_corrected_linear_results[b],
+                        branch_results_dicts[b][branch_paths[b][i]],
+                    )
+                else
+                    # Find a non-missing value from another branch to determine the type
+                    found_type = nothing
+                    for other_b in 1:n_branches
+                        if haskey(branch_results_dicts[other_b], branch_paths[other_b][i])
+                            found_type = branch_results_dicts[other_b][branch_paths[other_b][i]]
+                            break
+                        end
+                    end
+                    if isnothing(found_type)
+                        push!(branch_corrected_linear_results[b], MissingTracedValue())
+                    else
+                        push!(branch_corrected_linear_results[b], zero(found_type))
+                    end
+                end
+            end
+        finally
+            MLIR.IR.deactivate!(branch_bodies[b])
+            deactivate_constant_context!(branch_bodies[b])
+        end
+    end
+
+    # Handle MissingTracedValue across branches
+    result_types = MLIR.IR.Type[]
+    for i in 1:length(all_paths)
+        all_missing = all(
+            b -> branch_corrected_linear_results[b][i] isa MissingTracedValue, 1:n_branches
+        )
+        if all_missing
+            z = zero(TracedRNumber{Int})
+            for b in 1:n_branches
+                branch_corrected_linear_results[b][i] = z
+            end
+            push!(result_types, mlir_type(z))
+        else
+            # Find first non-missing to get the type
+            for b in 1:n_branches
+                res = branch_corrected_linear_results[b][i]
+                if !(res isa MissingTracedValue)
+                    push!(result_types, mlir_type(res))
+                    # Replace missing values in other branches with zeros
+                    for other_b in 1:n_branches
+                        if branch_corrected_linear_results[other_b][i] isa
+                            MissingTracedValue
+                            MLIR.IR.activate!(branch_bodies[other_b])
+                            activate_constant_context!(branch_bodies[other_b])
+                            try
+                                branch_corrected_linear_results[other_b][i] = zero(res)
+                            finally
+                                MLIR.IR.deactivate!(branch_bodies[other_b])
+                                deactivate_constant_context!(branch_bodies[other_b])
+                            end
+                        end
+                    end
+                    break
+                end
+            end
+        end
+    end
+
+    # Add return statements to each branch
+    for b in 1:n_branches
+        MLIR.IR.activate!(branch_bodies[b])
+        activate_constant_context!(branch_bodies[b])
+        try
+            vals = MLIR.IR.Value[
+                Reactant.TracedUtils.get_mlir_data(res) for
+                res in branch_corrected_linear_results[b] if !(res isa MissingTracedValue)
+            ]
+            MLIR.Dialects.stablehlo.return_(vals; location)
+        finally
+            MLIR.IR.deactivate!(branch_bodies[b])
+            deactivate_constant_context!(branch_bodies[b])
+        end
+    end
+
+    # Build regions for each branch
+    branch_regions = MLIR.IR.Region[]
+    for b in 1:n_branches
+        branch_out_types = [mlir_type(tr) for tr in branch_corrected_linear_results[b]]
+
+        branch_fn_compiled = MLIR.IR.with_block(MLIR.IR.body(branch_mods[b])) do
+            return MLIR.Dialects.func.func_(;
+                sym_name=Reactant.TracedUtils.__lookup_unique_name_in_module(
+                    branch_mods[b], string(branch_fns[b]) * "_branch$(b)"
+                ),
+                function_type=MLIR.IR.FunctionType(input_types, branch_out_types),
+                body=MLIR.IR.Region(),
+                sym_visibility,
+            )
+        end
+        MLIR.API.mlirRegionTakeBody(
+            MLIR.IR.region(branch_fn_compiled, 1), MLIR.IR.region(branch_func_tmps[b], 1)
+        )
+        MLIR.API.mlirOperationDestroy(branch_func_tmps[b].ref)
+        branch_func_tmps[b].ref = MLIR.API.MlirOperation(C_NULL)
+
+        push!(branch_regions, Reactant.TracedUtils.__take_region(branch_fn_compiled))
+        MLIR.IR.rmfromparent!(branch_fn_compiled)
+    end
+
+    # Create the case operation
+    case_op = MLIR.Dialects.stablehlo.case(
+        index.mlir_data; branches=branch_regions, result_0=result_types, location
+    )
+
+    # Use the first branch's traced results as a template
+    corrected_traced_results = traced_branch_results[1]
+
+    # Set results from case operation
+    residx = 0
+    for (_, path) in enumerate(all_paths)
+        if path[1] == :result
+            residx += 1
+            Reactant.TracedUtils.set!(
+                corrected_traced_results, path[2:end], MLIR.IR.result(case_op, residx)
+            )
+        elseif path[1] == :resarg
+            residx += 1
+            Reactant.TracedUtils.set!(args, path[2:end], MLIR.IR.result(case_op, residx))
         end
     end
 
@@ -2782,15 +3127,16 @@ end
 # Shardy Ops
 """
     mesh(
-        mesh::Reactant.Sharding.Mesh; mod::MLIR.IR.Module=MLIR.IR.mmodule(),
+        mesh::Reactant.Sharding.Mesh;
+        mod::MLIR.IR.Module=MLIR.IR.current_module(),
         sym_name::String="mesh",
         location=mlir_stacktrace("mesh", @__FILE__, @__LINE__)
     )
     mesh(
         mesh_axes::Vector{<:Pair{<:Union{String,Symbol},Int64}},
         logical_device_ids::Vector{Int64};
+        mod::MLIR.IR.Module=MLIR.IR.current_module(),
         sym_name::String="mesh",
-        mod::MLIR.IR.Module=MLIR.IR.mmodule(),
         location=mlir_stacktrace("mesh", @__FILE__, @__LINE__)
     )
 
@@ -2817,7 +3163,7 @@ We return a NamedTuple with the following fields:
 """
 @noinline function mesh(
     m::Reactant.Sharding.Mesh;
-    mod::MLIR.IR.Module=MLIR.IR.mmodule(),
+    mod::MLIR.IR.Module=MLIR.IR.current_module(),
     sym_name::String="mesh",
     location=mlir_stacktrace("mesh", @__FILE__, @__LINE__),
 )
@@ -2838,7 +3184,7 @@ end
 @noinline function mesh(
     mesh_axes::Vector{<:Pair{<:Union{String,Symbol},Int64}},
     logical_device_ids::AbstractVector{Int64};
-    mod::MLIR.IR.Module=MLIR.IR.mmodule(),
+    mod::MLIR.IR.Module=MLIR.IR.current_module(),
     sym_name::String="mesh",
     location=mlir_stacktrace("mesh", @__FILE__, @__LINE__),
 )
@@ -2861,7 +3207,7 @@ end
     # specify them for simplicity
     logical_device_ids == sorted_logical_device_ids && (logical_device_ids = Int64[])
 
-    ctx = MLIR.IR.context()
+    ctx = MLIR.IR.current_context()
     mesh_axis_attrs = [
         MLIR.API.sdyMeshAxisAttrGet(ctx, String(name), size) for (name, size) in mesh_axes
     ]
@@ -2875,7 +3221,7 @@ end
 
     sym_name = Reactant.TracedUtils.__lookup_unique_name_in_module(mod, sym_name)
 
-    mesh_op = MLIR.IR.mmodule!(mod) do
+    mesh_op = MLIR.IR.with_module(mod) do
         return MLIR.Dialects.sdy.mesh(; sym_name, mesh=mesh_attr, location)
     end
 
@@ -2916,7 +3262,12 @@ Produces a [`Reactant.MLIR.Dialects.sdy.sharding_constraint`](@ref) operation wi
     (; sym_name, mesh_attr) = cache[key]
 
     tensor_sharding_attr, dialect = Reactant.Sharding.get_tensor_sharding_attribute(
-        sharding, MLIR.IR.context(), sym_name, mesh_attr, size(input); do_transpose=false
+        sharding,
+        MLIR.IR.current_context(),
+        sym_name,
+        mesh_attr,
+        size(input);
+        do_transpose=false,
     )
     @assert dialect == :sdy "Expected dialect to be `sdy`, got $(dialect)"
 
@@ -2948,7 +3299,7 @@ function _construct_reduce_function(f::F, Ts::Type...) where {F}
         ).f
 
     @assert MLIR.IR.nregions(func) == 1
-    ftype_attr = MLIR.IR.attr(func, "function_type")
+    ftype_attr = MLIR.IR.getattr(func, "function_type")
     ftype = MLIR.IR.Type(ftype_attr)
 
     @assert MLIR.IR.nresults(ftype) == length(Ts)
@@ -3015,6 +3366,24 @@ Applies a reduction function `fn` along the specified `dimensions` of input `x`,
     location=mlir_stacktrace("reduce", @__FILE__, @__LINE__),
 ) where {T,F}
     return only(reduce([x], [init_values], dimensions, fn; location))
+end
+
+@noinline function reduce(
+    x::TracedRArray{T},
+    init_values::TracedRNumber,
+    dimensions::Vector{Int},
+    fn::F;
+    location=mlir_stacktrace("reduce", @__FILE__, @__LINE__),
+) where {T,F}
+    return only(
+        reduce(
+            [x],
+            [Reactant.promote_to(TracedRNumber{T}, init_values)],
+            dimensions,
+            fn;
+            location,
+        ),
+    )
 end
 
 @noinline function reduce(
@@ -3277,7 +3646,7 @@ function triangular_solve(
 
     @assert transpose_a in ('N', 'T', 'C') "transpose_a must be one of 'N', 'T', or 'C'"
     transpose_attr = MLIR.API.stablehloTransposeAttrGet(
-        MLIR.IR.context(),
+        MLIR.IR.current_context(),
         if transpose_a == 'N'
             "NO_TRANSPOSE"
         elseif transpose_a == 'T'
@@ -3384,7 +3753,7 @@ end
         Vt=mlir_type(TracedRArray{T,N}, Vt_size),
         info=mlir_type(TracedRArray{iT,N - 2}, info_size),
         full=full,
-        algorithm=MLIR.API.enzymexlaSVDAlgorithmAttrGet(MLIR.IR.context(), algint),
+        algorithm=MLIR.API.enzymexlaSVDAlgorithmAttrGet(MLIR.IR.current_context(), algint),
         location,
     )
 

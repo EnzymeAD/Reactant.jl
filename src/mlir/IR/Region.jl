@@ -1,12 +1,12 @@
 mutable struct Region
-    region::API.MlirRegion
+    ref::API.MlirRegion
     @atomic owned::Bool
 
     function Region(region, owned=true)
         @assert !mlirIsNull(region)
         finalizer(new(region, owned)) do region
             if region.owned
-                API.mlirRegionDestroy(region.region)
+                API.mlirRegionDestroy(region.ref)
             end
         end
     end
@@ -20,7 +20,7 @@ Creates a new empty region and transfers ownership to the caller.
 Region() = Region(API.mlirRegionCreate())
 
 Base.cconvert(::Core.Type{API.MlirRegion}, region::Region) = region
-Base.unsafe_convert(::Core.Type{API.MlirRegion}, region::Region) = region.region
+Base.unsafe_convert(::Core.Type{API.MlirRegion}, region::Region) = region.ref
 
 """
     ==(region, other)
@@ -59,16 +59,18 @@ end
 
 Takes a block owned by the caller and inserts it after the (non-owned) reference block in the given region. The reference block must belong to the region. If the reference block is null, prepends the block to the region.
 """
-insert_after!(region::Region, reference::Block, block::Block) =
-    API.mlirRegionInsertOwnedBlockAfter(region, reference, lose_ownership!(block))
+function insert_after!(region::Region, reference::Block, block::Block)
+    return API.mlirRegionInsertOwnedBlockAfter(region, reference, lose_ownership!(block))
+end
 
 """
     insert_before!(region, reference, block)
 
 Takes a block owned by the caller and inserts it before the (non-owned) reference block in the given region. The reference block must belong to the region. If the reference block is null, appends the block to the region.
 """
-insert_before!(region::Region, reference::Block, block::Block) =
-    API.mlirRegionInsertOwnedBlockBefore(region, reference, lose_ownership!(block))
+function insert_before!(region::Region, reference::Block, block::Block)
+    return API.mlirRegionInsertOwnedBlockBefore(region, reference, lose_ownership!(block))
+end
 
 """
     first_block(region)

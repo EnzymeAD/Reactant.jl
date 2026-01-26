@@ -1,5 +1,5 @@
 struct TypeID
-    typeid::API.MlirTypeID
+    ref::API.MlirTypeID
 
     function TypeID(typeid)
         @assert !mlirIsNull(typeid) "cannot create TypeID with null MlirTypeID"
@@ -11,14 +11,8 @@ TypeID(type::Type) = TypeID(API.mlirTypeGetTypeID(type))
 
 # mlirTypeIDCreate
 
-"""
-    hash(typeID)
-
-Returns the hash value of the type id.
-"""
-Base.hash(typeid::TypeID) = API.mlirTypeIDHashValue(typeid.typeid)
-
-Base.convert(::Core.Type{API.MlirTypeID}, typeid::TypeID) = typeid.typeid
+Base.cconvert(::Core.Type{API.MlirTypeID}, typeid::TypeID) = typeid
+Base.unsafe_convert(::Core.Type{API.MlirTypeID}, typeid::TypeID) = typeid.ref
 
 """
     ==(typeID1, typeID2)
@@ -27,30 +21,26 @@ Checks if two type ids are equal.
 """
 Base.:(==)(a::TypeID, b::TypeID) = API.mlirTypeIDEqual(a, b)
 
-@static if isdefined(API, :MlirTypeIDAllocator)
-    mutable struct TypeIDAllocator
-        allocator::API.MlirTypeIDAllocator
+"""
+    hash(typeID)
 
-        function TypeIDAllocator()
-            ptr = API.mlirTypeIDAllocatorCreate()
-            @assert ptr != C_NULL "cannot create TypeIDAllocator"
-            return finalizer(API.mlirTypeIDAllocatorDestroy, new(ptr))
-        end
-    end
+Returns the hash value of the type id.
+"""
+Base.hash(typeid::TypeID) = API.mlirTypeIDHashValue(typeid.ref)
 
-    function Base.cconvert(::Core.Type{API.MlirTypeIDAllocator}, allocator::TypeIDAllocator)
-        return allocator
-    end
-    function Base.unsafe_convert(
-        ::Core.Type{API.MlirTypeIDAllocator}, allocator::TypeIDAllocator
-    )
-        return allocator.allocator
-    end
+mutable struct TypeIDAllocator
+    ref::API.MlirTypeIDAllocator
 
-    function TypeID(allocator::TypeIDAllocator)
-        return TypeID(API.mlirTypeIDAllocatorAllocateTypeID(allocator))
+    function TypeIDAllocator()
+        ptr = API.mlirTypeIDAllocatorCreate()
+        @assert ptr != C_NULL "cannot create TypeIDAllocator"
+        return finalizer(API.mlirTypeIDAllocatorDestroy, new(ptr))
     end
-
-else
-    struct TypeIDAllocator end
 end
+
+Base.cconvert(::Core.Type{API.MlirTypeIDAllocator}, alloc::TypeIDAllocator) = alloc
+function Base.unsafe_convert(::Core.Type{API.MlirTypeIDAllocator}, alloc::TypeIDAllocator)
+    return alloc.ref
+end
+
+TypeID(alloc::TypeIDAllocator) = TypeID(API.mlirTypeIDAllocatorAllocateTypeID(alloc))

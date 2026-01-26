@@ -123,6 +123,7 @@ end
 const __skip_rewrite_func_set_lock = ReentrantLock()
 const __skip_rewrite_func_set = Set([
     typeof(call_with_native),
+    typeof(Core.Typeof),
     # Avoid the 1.10 stackoverflow
     typeof(Base.typed_hvcat),
     typeof(Base.hvcat),
@@ -163,12 +164,18 @@ const __skip_rewrite_func_set = Set([
     typeof(Base.ht_keyindex),
     typeof(Base.checkindex),
     typeof(Base.to_index),
+    typeof(Base._maybe_reindex),
+    typeof(Base.isnothing),
+    typeof(Base.CoreLogging.current_logger_for_env),
+    typeof(Base.CoreLogging.current_logstate),
     @static(
         if VERSION >= v"1.11.0"
             typeof(Base.memoryref)
         end
     ),
     typeof(materialize_traced_array),
+    typeof(Core.throw_inexacterror),
+    typeof(Base.throw_boundserror),
 ])
 
 """
@@ -200,15 +207,25 @@ end
 const __skip_rewrite_type_constructor_list_lock = ReentrantLock()
 const __skip_rewrite_type_constructor_list = [
     # Don't rewrite Val
-    Type{Base.Val},
+    Type{<:Base.Val},
     # Don't rewrite exception constructors
     Type{<:Core.Exception},
     # Don't rewrite traced constructors
     Type{<:TracedRArray},
     Type{<:TracedRNumber},
-    Type{MLIR.IR.Location},
-    Type{MLIR.IR.Block},
+    Type{<:MLIR.IR.Location},
+    Type{<:MLIR.IR.Block},
+    Type{<:NamedTuple},
+    Type{<:Tuple},
+    Type{<:Base.Pairs},
+    Type{<:Array},
+    Type{<:Integer},
+    Type{<:Base.IEEEFloat},
 ]
+
+@static if VERSION >= v"1.11"
+    push!(__skip_rewrite_type_constructor_list, Type{<:GenericMemory})
+end
 
 """
     @skip_rewrite_type MyStruct
@@ -239,7 +256,7 @@ macro skip_rewrite_type(typ)
     end
 end
 
-const no_rewrite_ancestor_modules = Module[MLIR]
+const no_rewrite_ancestor_modules = Module[MLIR, XLA, ProtoUtils, Proto, Enzyme.Compiler]
 
 function should_rewrite_call(@nospecialize(ft))
     # Don't rewrite builtin or intrinsics, unless they are apply iter or kwcall
@@ -289,8 +306,10 @@ function should_rewrite_call(@nospecialize(ft))
     end
 
     # `ft isa Type` is for performance as it avoids checking against all the list, but can be removed if problematic
-    if ft isa Type && any(t -> ft <: t, __skip_rewrite_type_constructor_list)
-        return false
+    if ft isa Type
+        if any(Base.Fix1(<:, ft), __skip_rewrite_type_constructor_list)
+            return false
+        end
     end
 
     if ft in __skip_rewrite_func_set
