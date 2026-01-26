@@ -2970,7 +2970,7 @@ result = Ops.case(
     for b in 1:n_branches
         branch_out_types = [mlir_type(tr) for tr in branch_corrected_linear_results[b]]
 
-        branch_fn_compiled = MLIR.IR.block!(MLIR.IR.body(branch_mods[b])) do
+        branch_fn_compiled = MLIR.IR.with_block(MLIR.IR.body(branch_mods[b])) do
             return MLIR.Dialects.func.func_(;
                 sym_name=Reactant.TracedUtils.__lookup_unique_name_in_module(
                     branch_mods[b], string(branch_fns[b]) * "_branch$(b)"
