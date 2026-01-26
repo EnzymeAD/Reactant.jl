@@ -2983,8 +2983,8 @@ result = Ops.case(
         MLIR.API.mlirRegionTakeBody(
             MLIR.IR.region(branch_fn_compiled, 1), MLIR.IR.region(branch_func_tmps[b], 1)
         )
-        MLIR.API.mlirOperationDestroy(branch_func_tmps[b].operation)
-        branch_func_tmps[b].operation = MLIR.API.MlirOperation(C_NULL)
+        MLIR.API.mlirOperationDestroy(branch_func_tmps[b].ref)
+        branch_func_tmps[b].ref = MLIR.API.MlirOperation(C_NULL)
 
         push!(branch_regions, Reactant.TracedUtils.__take_region(branch_fn_compiled))
         MLIR.IR.rmfromparent!(branch_fn_compiled)
