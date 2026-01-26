@@ -79,7 +79,9 @@ for F in (:MappingRF, :FilteringRF)
             return Base.reduce_empty(Base.$F(f.f, f.rf.f), T)
         end
 
-        function Base.reduce_empty(f::Base.$F{<:CallWithReactant,<:CallWithReactant}, T::Type)
+        function Base.reduce_empty(
+            f::Base.$F{<:CallWithReactant,<:CallWithReactant}, T::Type
+        )
             return Base.reduce_empty(Base.$F(f.f.f, f.rf.f), T)
         end
     end
