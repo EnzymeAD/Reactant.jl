@@ -69,6 +69,30 @@ function Base.reducedim_init(f::F, op::CallWithReactant, A::AbstractArray, regio
     return Base.reducedim_init(f, op.f, A, region)
 end
 
+for F in (:MappingRF, :FilteringRF)
+    @eval begin
+        function Base.reduce_empty(f::Base.$F{<:CallWithReactant,<:Any}, T::Type)
+            return Base.reduce_empty(Base.$F(f.f.f, f.rf), T)
+        end
+
+        function Base.reduce_empty(f::Base.$F{<:Any,<:CallWithReactant}, T::Type)
+            return Base.reduce_empty(Base.$F(f.f, f.rf.f), T)
+        end
+
+        function Base.reduce_empty(f::Base.$F{<:CallWithReactant,<:CallWithReactant}, T::Type)
+            return Base.reduce_empty(Base.$F(f.f.f, f.rf.f), T)
+        end
+    end
+end
+
+function Base.reduce_empty(f::Base.BottomRF{<:CallWithReactant}, T::Type)
+    return Base.reduce_empty(BottomRF(f.rf.f), T)
+end
+
+function Base.reduce_empty(f::Base.FlipArgs{<:CallWithReactant}, T::Type)
+    return Base.reduce_empty(Base.FlipArgs(f.f.f), T)
+end
+
 function (f::CallWithReactant{F})(args...; kwargs...) where {F}
     if isempty(kwargs)
         return call_with_reactant(f.f, args...)
