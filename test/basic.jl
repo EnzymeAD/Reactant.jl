@@ -871,6 +871,37 @@ end
     @test @jit(rem.(Reactant.to_rarray(a), b)) ≈ expected_rem
 end
 
+@testset "rem2pi" begin
+    a = [-1.1, 7.7, -3.3, 9.9, -5.5]
+
+    @testset "$T" for (convfn, T) in [
+        (identity, Float64), (x -> Float32.(x), Float32), (x -> floor.(Int32, x), Int32)
+    ]
+        @testset for round_mode in
+                     (Base.RoundUp, Base.RoundDown, Base.RoundNearest, Base.RoundToZero)
+            a_ = convfn(a)
+            expected_mod2pi = rem2pi.(a_, round_mode)
+            reactant_mod2pi = @jit(rem2pi.(Reactant.to_rarray(a_), round_mode))
+            @test reactant_mod2pi ≈ expected_mod2pi
+            @test Reactant.unwrapped_eltype(reactant_mod2pi) == eltype(expected_mod2pi)
+        end
+    end
+end
+
+@testset "mod2pi" begin
+    a = [-1.1, 7.7, -3.3, 9.9, -5.5]
+
+    @testset "$T" for (convfn, T) in [
+        (identity, Float64), (x -> Float32.(x), Float32), (x -> floor.(Int32, x), Int32)
+    ]
+        a_ = convfn(a)
+        expected_mod2pi = mod2pi.(a_)
+        reactant_mod2pi = @jit(mod2pi.(Reactant.to_rarray(a_)))
+        @test reactant_mod2pi ≈ expected_mod2pi
+        @test Reactant.unwrapped_eltype(reactant_mod2pi) == eltype(expected_mod2pi)
+    end
+end
+
 @testset "xor" begin
     for a in (true, false), b in (true, false)
         @test @jit(xor(ConcreteRNumber(a), ConcreteRNumber(b))) == xor(a, b)
