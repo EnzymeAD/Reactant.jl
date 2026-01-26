@@ -24,6 +24,8 @@ function extract_todos(root_dir::String)
     extensions = [".jl", ".cpp", ".h", ".md", ".toml", ".yaml", ".yml", ".bzl", ".bazelrc"]
     
     # Directories to skip
+    # Note: We skip scripts/ to avoid scanning the TODO management scripts themselves
+    # and the generated report files, which would create noise in the results
     skip_dirs = [".git", ".buildkite", "build", ".github/agents", "scripts"]
     
     for (root, dirs, files) in walkdir(root_dir)

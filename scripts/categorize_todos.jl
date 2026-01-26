@@ -20,6 +20,9 @@ function load_todos(csv_file::String)
     todos = TodoItem[]
     
     lines = readlines(csv_file)
+    # Note: This uses simple CSV parsing since we generate this CSV ourselves
+    # and control the format. The text field may contain commas but we use limit
+    # to handle this correctly.
     for line in lines[2:end]  # Skip header
         if isempty(strip(line))
             continue

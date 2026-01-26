@@ -63,12 +63,8 @@ function process_file(filepath::String, line_numbers::Vector{Int}, issue_number:
     end
     
     if modified
-        # Write back the file
-        open(filepath, "w") do io
-            for line in lines
-                println(io, line)
-            end
-        end
+        # Write back the file with proper newlines
+        write(filepath, join(lines, "\n") * "\n")
         return true
     end
     
