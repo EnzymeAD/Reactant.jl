@@ -24,7 +24,7 @@ function extract_todos(root_dir::String)
     extensions = [".jl", ".cpp", ".h", ".md", ".toml", ".yaml", ".yml", ".bzl", ".bazelrc"]
     
     # Directories to skip
-    skip_dirs = [".git", ".buildkite", "build", ".github/agents"]
+    skip_dirs = [".git", ".buildkite", "build", ".github/agents", "scripts"]
     
     for (root, dirs, files) in walkdir(root_dir)
         # Filter out skip directories
