@@ -158,7 +158,7 @@ function setup_bloch_benchmark(Nspins::Int)
 end
 
 function run_bloch_rf_optimization_benchmark!(results, backend)
-    spin_counts = [128, 1_024, 8_192]
+    spin_counts = [128, 1_024, 8_192, 16_384]
     lr = 2.0f-8
 
     for Nspins in spin_counts
@@ -199,7 +199,15 @@ function run_bloch_rf_optimization_benchmark!(results, backend)
             cpu_args,
             (ra_args..., false);
             configs=[
-                BenchmarkConfiguration("Default"; compile_options=Reactant.CompileOptions())
+                BenchmarkConfiguration(
+                    "Default"; compile_options=Reactant.CompileOptions()
+                ),
+                BenchmarkConfiguration(
+                    "Default_NoBatching";
+                    compile_options=Reactant.CompileOptions(;
+                        disable_loop_raising_passes=true
+                    ),
+                ),
             ],
         )
 
@@ -213,6 +221,12 @@ function run_bloch_rf_optimization_benchmark!(results, backend)
             configs=[
                 BenchmarkConfiguration(
                     "Default_Checkpointing"; compile_options=Reactant.CompileOptions()
+                ),
+                BenchmarkConfiguration(
+                    "Default_NoBatching_Checkpointing";
+                    compile_options=Reactant.CompileOptions(;
+                        disable_loop_raising_passes=true
+                    ),
                 ),
             ],
             skip_cpu=true,
