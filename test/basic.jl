@@ -899,6 +899,11 @@ end
     @testset "$T" for (convfn, T) in [
         (identity, Float64), (x -> Float32.(x), Float32), (x -> floor.(Int32, x), Int32)
     ]
+        if RunningOnTPU
+            @warn "Skipping rem2pi test on TPU. F64 bitcast not supported on TPU"
+            break
+        end
+
         a_ = convfn(a)
         expected_mod2pi = mod2pi.(a_)
         reactant_mod2pi = @jit(mod2pi.(Reactant.to_rarray(a_)))
