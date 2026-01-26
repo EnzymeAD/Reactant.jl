@@ -250,7 +250,7 @@ include("Overlay.jl")
 # Serialization
 include("serialization/Serialization.jl")
 
-using .Compiler: @compile, @code_hlo, @code_mhlo, @jit, @code_xla, traced_getfield, compile
+using .Compiler: @compile, @code_hlo, @code_mhlo, @jit, @code_xla, @tessera_op, traced_getfield, compile
 export ConcreteRArray,
     ConcreteRNumber,
     ConcretePJRTArray,
@@ -263,6 +263,7 @@ export ConcreteRArray,
     @code_xla,
     @jit,
     @trace,
+    @tessera_op,
     within_compile
 
 const registry = Ref{Union{Nothing,MLIR.IR.DialectRegistry}}()

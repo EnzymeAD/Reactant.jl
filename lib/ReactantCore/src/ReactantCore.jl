@@ -250,7 +250,7 @@ function trace_function_definition(mod, expr; tessera=false)
     internal_fn = MacroTools.splitdef(expr)
     orig_fname = internal_fn[:name]
 
-    tessera_name = tessera ? String(orig_fname) : nothing
+    tessera_op = tessera ? String(orig_fname) : nothing
 
     isfunctor = Meta.isexpr(orig_fname, :(::))
     fname = gensym(Symbol(orig_fname, :internal))
@@ -277,7 +277,7 @@ function trace_function_definition(mod, expr; tessera=false)
 
     if isempty(new_fn[:kwargs])
         traced_call_expr =
-            :($(traced_call)($(fname), $(argnames...); tessera_name=$(tessera_name)))
+            :($(traced_call)($(fname), $(argnames...); tessera_op=$(tessera_op)))
         untraced_call_expr = :($(fname)($(argnames...)))
     else
         kws = first.(get_argname.(new_fn[:kwargs]))
@@ -286,7 +286,7 @@ function trace_function_definition(mod, expr; tessera=false)
             (; $(kws...)),
             $(fname),
             $(argnames...);
-            tessera_name=$(tessera_name),
+            tessera_op=$(tessera_op),
         ))
         untraced_call_expr = :(Core.kwcall((; $(kws...)), $(fname), $(argnames...)))
     end
