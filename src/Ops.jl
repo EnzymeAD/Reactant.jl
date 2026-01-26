@@ -814,7 +814,7 @@ end
         stablehlo.fft(
             x.mlir_data;
             result_0=mlir_type(TracedRArray{Tout,N}, rsize),
-            fft_type=MLIR.API.stablehloFftTypeAttrGet(MLIR.IR.context(), type),
+            fft_type=MLIR.API.stablehloFftTypeAttrGet(MLIR.IR.current_context(), type),
             fft_length=MLIR.IR.DenseArrayAttribute(length),
             location,
         ),
@@ -908,7 +908,7 @@ end
     @assert size(padding, 2) == num_spatial_dims
 
     dimension_numbers = MLIR.API.stablehloConvDimensionNumbersGet(
-        MLIR.IR.context(),
+        MLIR.IR.current_context(),
         Int64(input_batch_dim - 1),
         Int64(input_feature_dim - 1),
         length(input_spatial_dims),
@@ -1040,7 +1040,7 @@ Base.@nospecializeinfer @noinline function dot_general(
     rhs_batching_dimensions = rhs_batching_dimensions .- 1
     lhs_contracting_dimensions = lhs_contracting_dimensions .- 1
     rhs_contracting_dimensions = rhs_contracting_dimensions .- 1
-    ctx = MLIR.IR.context()
+    ctx = MLIR.IR.current_context()
 
     dot_dimension_numbers = GC.@preserve ctx lhs_contracting_dimensions rhs_contracting_dimensions lhs_batching_dimensions rhs_batching_dimensions begin
         MLIR.IR.Attribute(
@@ -1148,7 +1148,7 @@ end
 )
     values = [operand.mlir_data for operand in operands]
     channel_handle = MLIR.API.stablehloChannelHandleGet(
-        MLIR.IR.context(), channel_id, channel_type
+        MLIR.IR.current_context(), channel_id, channel_type
     )
     is_host_transfer = if isnothing(is_host_transfer)
         nothing
@@ -1170,7 +1170,7 @@ end
     location=mlir_stacktrace("recv", @__FILE__, @__LINE__),
 )
     channel_handle = MLIR.API.stablehloChannelHandleGet(
-        MLIR.IR.context(), channel_id, channel_type
+        MLIR.IR.current_context(), channel_id, channel_type
     )
     is_host_transfer = if isnothing(is_host_transfer)
         nothing
@@ -1267,11 +1267,11 @@ end
         ).f
     @assert MLIR.IR.nregions(func) == 1
     fn_name = String(
-        MLIR.IR.attr(func, String(MLIR.API.mlirSymbolTableGetSymbolAttributeName()))
+        MLIR.IR.getattr(func, String(MLIR.API.mlirSymbolTableGetSymbolAttributeName()))
     )
     #C5:
     @assert fn_name == "comparator" "$comparator: no function generated"
-    ftype_attr = MLIR.IR.attr(func, "function_type")
+    ftype_attr = MLIR.IR.getattr(func, "function_type")
     ftype = MLIR.IR.Type(ftype_attr)
     @assert MLIR.IR.result(ftype) == MLIR.IR.TensorType(Int[], MLIR.IR.Type(Bool)) error(
         "$comparator return type is not tensor<i1>"
@@ -1330,7 +1330,9 @@ end
         ).f
     @assert MLIR.IR.nregions(func) == 1
     fn_name = MLIR.IR.FlatSymbolRefAttribute(
-        String(MLIR.IR.attr(func, String(MLIR.API.mlirSymbolTableGetSymbolAttributeName())))
+        String(
+            MLIR.IR.getattr(func, String(MLIR.API.mlirSymbolTableGetSymbolAttributeName()))
+        ),
     )
 
     iota_arg = iota(Int32, collect(Int64, size(x)); iota_dimension=dimension, location)
@@ -1546,7 +1548,9 @@ with the following fields:
 
     output = MLIR.IR.TensorType(collect(Int, shape), MLIR.IR.Type(T))
     output_state = MLIR.IR.TensorType(collect(Int, size(seed)), MLIR.IR.Type(UInt64))
-    rng_algorithm = MLIR.API.stablehloRngAlgorithmAttrGet(MLIR.IR.context(), algorithm)
+    rng_algorithm = MLIR.API.stablehloRngAlgorithmAttrGet(
+        MLIR.IR.current_context(), algorithm
+    )
     op = stablehlo.rng_bit_generator(
         seed.mlir_data; output, output_state, rng_algorithm, location
     )
@@ -1787,7 +1791,7 @@ end
             lhs.mlir_data,
             rhs.mlir_data;
             comparison_direction=MLIR.API.stablehloComparisonDirectionAttrGet(
-                MLIR.IR.context(), comparison_direction
+                MLIR.IR.current_context(), comparison_direction
             ),
             compare_type,
             location,
@@ -1867,7 +1871,7 @@ julia> Reactant.@jit(
     module_suffix = string(hash(code); base=16)
     name_to_call = _hlo_call_name(func_name, module_suffix)
 
-    current_module = MLIR.IR.mmodule()
+    current_module = MLIR.IR.current_module()
     top_level_block = MLIR.IR.body(current_module)
 
     symbol_attr_name = String(MLIR.API.mlirSymbolTableGetSymbolAttributeName())
@@ -1883,7 +1887,7 @@ julia> Reactant.@jit(
         operations = collect(MLIR.IR.OperationIterator(body))
         for op in operations
             if MLIR.IR.name(op) == "func.func"
-                fn_name = String(MLIR.IR.attr(op, symbol_attr_name))
+                fn_name = String(MLIR.IR.getattr(op, symbol_attr_name))
                 if fn_name == func_name
                     fn = op
                 end
@@ -1897,14 +1901,14 @@ julia> Reactant.@jit(
                 @assert res == MLIR.IR.success() "hlo_call: failed to rename $fn_name"
 
                 # Set function private
-                MLIR.IR.attr!(
+                MLIR.IR.setattr!(
                     op,
                     MLIR.API.mlirSymbolTableGetVisibilityAttributeName(),
                     MLIR.IR.Attribute("private"),
                 )
 
                 # Change function name
-                MLIR.IR.attr!(op, symbol_attr_name, MLIR.IR.Attribute(new_name))
+                MLIR.IR.setattr!(op, symbol_attr_name, MLIR.IR.Attribute(new_name))
             end
         end
 
@@ -1918,7 +1922,7 @@ julia> Reactant.@jit(
         error("hlo_call: could not find function $func_name in the provided module")
     end
 
-    ftype_attr = MLIR.IR.attr(fn, "function_type")
+    ftype_attr = MLIR.IR.getattr(fn, "function_type")
     ftype = MLIR.IR.Type(ftype_attr)
 
     @assert all(Base.Fix2(isa, Union{TracedRArray,TracedRNumber}), args) "hlo_call: all inputs to hlo_call should be reactant arrays or numbers"
@@ -2042,7 +2046,7 @@ end
 
     #! format: off
     scatter_dimension_numbers = MLIR.API.stablehloScatterDimensionNumbersGet(
-        MLIR.IR.context(),
+        MLIR.IR.current_context(),
         length(update_window_dims), update_window_dims,
         length(inserted_window_dims), inserted_window_dims,
         length(input_batching_dims), input_batching_dims,
@@ -2134,7 +2138,7 @@ end
 
     #! format: off
     dimension_numbers = MLIR.API.stablehloGatherDimensionNumbersGet(
-        MLIR.IR.context(),
+        MLIR.IR.current_context(),
         Int64(length(offset_dims)), offset_dims,
         Int64(length(collapsed_slice_dims)), collapsed_slice_dims,
         Int64(length(operand_batching_dims)), operand_batching_dims,
@@ -2236,11 +2240,13 @@ end
     )
 
     if !mincut
-        MLIR.IR.attr!(while_op, "enzyme.disable_mincut", MLIR.IR.UnitAttribute())
+        MLIR.IR.setattr!(while_op, "enzyme.disable_mincut", MLIR.IR.UnitAttribute())
     end
 
     if checkpointing
-        MLIR.IR.attr!(while_op, "enzymexla.enable_checkpointing", MLIR.IR.Attribute(true))
+        MLIR.IR.setattr!(
+            while_op, "enzymexla.enable_checkpointing", MLIR.IR.Attribute(true)
+        )
     end
 
     return map(enumerate(linear_args)) do (i, arg)
@@ -2295,8 +2301,8 @@ end
     sym_visibility = MLIR.IR.Attribute("private")
 
     # compile the true branch without any returns first
-    true_fn_mod = MLIR.IR.mmodule()
-    true_func_tmp = MLIR.IR.block!(MLIR.IR.body(true_fn_mod)) do
+    true_fn_mod = MLIR.IR.current_module()
+    true_func_tmp = MLIR.IR.with_block(MLIR.IR.body(true_fn_mod)) do
         return MLIR.Dialects.func.func_(;
             sym_name=string(true_fn) * "_tb_tmp",
             function_type=MLIR.IR.FunctionType(input_types, []),
@@ -2361,8 +2367,8 @@ end
     ]
 
     # compile the false branch without any returns similar to the true branch
-    false_fn_mod = MLIR.IR.mmodule()
-    false_func_tmp = MLIR.IR.block!(MLIR.IR.body(false_fn_mod)) do
+    false_fn_mod = MLIR.IR.current_module()
+    false_func_tmp = MLIR.IR.with_block(MLIR.IR.body(false_fn_mod)) do
         return MLIR.Dialects.func.func_(;
             sym_name=string(false_fn) * "_fb_tmp",
             function_type=MLIR.IR.FunctionType(input_types, []),
@@ -2590,7 +2596,7 @@ end
     # With the corrected results, we can compile the true and false branches
     tb_out_types = [mlir_type(tr) for tr in tb_corrected_linear_results]
 
-    true_fn_compiled = MLIR.IR.block!(MLIR.IR.body(true_fn_mod)) do
+    true_fn_compiled = MLIR.IR.with_block(MLIR.IR.body(true_fn_mod)) do
         return MLIR.Dialects.func.func_(;
             sym_name=Reactant.TracedUtils.__lookup_unique_name_in_module(
                 true_fn_mod, string(true_fn) * "_tb"
@@ -2603,12 +2609,12 @@ end
     MLIR.API.mlirRegionTakeBody(
         MLIR.IR.region(true_fn_compiled, 1), MLIR.IR.region(true_func_tmp, 1)
     )
-    MLIR.API.mlirOperationDestroy(true_func_tmp.operation)
-    true_func_tmp.operation = MLIR.API.MlirOperation(C_NULL)
+    MLIR.API.mlirOperationDestroy(true_func_tmp)
+    true_func_tmp.ref = MLIR.API.MlirOperation(C_NULL)
 
     fb_out_types = [mlir_type(fr) for fr in fb_corrected_linear_results]
 
-    false_fn_compiled = MLIR.IR.block!(MLIR.IR.body(false_fn_mod)) do
+    false_fn_compiled = MLIR.IR.with_block(MLIR.IR.body(false_fn_mod)) do
         return MLIR.Dialects.func.func_(;
             sym_name=Reactant.TracedUtils.__lookup_unique_name_in_module(
                 false_fn_mod, string(false_fn) * "_fb"
@@ -2621,8 +2627,8 @@ end
     MLIR.API.mlirRegionTakeBody(
         MLIR.IR.region(false_fn_compiled, 1), MLIR.IR.region(false_func_tmp, 1)
     )
-    MLIR.API.mlirOperationDestroy(false_func_tmp.operation)
-    false_func_tmp.operation = MLIR.API.MlirOperation(C_NULL)
+    MLIR.API.mlirOperationDestroy(false_func_tmp)
+    false_func_tmp.ref = MLIR.API.MlirOperation(C_NULL)
 
     tb_region = Reactant.TracedUtils.__take_region(true_fn_compiled)
     fb_region = Reactant.TracedUtils.__take_region(false_fn_compiled)
@@ -2757,13 +2763,13 @@ result = Ops.case(
     sym_visibility = MLIR.IR.Attribute("private")
 
     # Compile each branch without returns first
-    branch_mods = [MLIR.IR.mmodule() for _ in 1:n_branches]
+    branch_mods = [MLIR.IR.current_module() for _ in 1:n_branches]
     branch_func_tmps = Vector{MLIR.IR.Operation}(undef, n_branches)
     branch_bodies = Vector{MLIR.IR.Block}(undef, n_branches)
     branch_results = Vector{Any}(undef, n_branches)
 
     for b in 1:n_branches
-        branch_func_tmps[b] = MLIR.IR.block!(MLIR.IR.body(branch_mods[b])) do
+        branch_func_tmps[b] = MLIR.IR.with_block(MLIR.IR.body(branch_mods[b])) do
             return MLIR.Dialects.func.func_(;
                 sym_name=string(branch_fns[b]) * "_branch$(b)_tmp",
                 function_type=MLIR.IR.FunctionType(input_types, []),
@@ -2964,7 +2970,7 @@ result = Ops.case(
     for b in 1:n_branches
         branch_out_types = [mlir_type(tr) for tr in branch_corrected_linear_results[b]]
 
-        branch_fn_compiled = MLIR.IR.block!(MLIR.IR.body(branch_mods[b])) do
+        branch_fn_compiled = MLIR.IR.with_block(MLIR.IR.body(branch_mods[b])) do
             return MLIR.Dialects.func.func_(;
                 sym_name=Reactant.TracedUtils.__lookup_unique_name_in_module(
                     branch_mods[b], string(branch_fns[b]) * "_branch$(b)"
@@ -2977,8 +2983,8 @@ result = Ops.case(
         MLIR.API.mlirRegionTakeBody(
             MLIR.IR.region(branch_fn_compiled, 1), MLIR.IR.region(branch_func_tmps[b], 1)
         )
-        MLIR.API.mlirOperationDestroy(branch_func_tmps[b].operation)
-        branch_func_tmps[b].operation = MLIR.API.MlirOperation(C_NULL)
+        MLIR.API.mlirOperationDestroy(branch_func_tmps[b].ref)
+        branch_func_tmps[b].ref = MLIR.API.MlirOperation(C_NULL)
 
         push!(branch_regions, Reactant.TracedUtils.__take_region(branch_fn_compiled))
         MLIR.IR.rmfromparent!(branch_fn_compiled)
@@ -3121,15 +3127,16 @@ end
 # Shardy Ops
 """
     mesh(
-        mesh::Reactant.Sharding.Mesh; mod::MLIR.IR.Module=MLIR.IR.mmodule(),
+        mesh::Reactant.Sharding.Mesh;
+        mod::MLIR.IR.Module=MLIR.IR.current_module(),
         sym_name::String="mesh",
         location=mlir_stacktrace("mesh", @__FILE__, @__LINE__)
     )
     mesh(
         mesh_axes::Vector{<:Pair{<:Union{String,Symbol},Int64}},
         logical_device_ids::Vector{Int64};
+        mod::MLIR.IR.Module=MLIR.IR.current_module(),
         sym_name::String="mesh",
-        mod::MLIR.IR.Module=MLIR.IR.mmodule(),
         location=mlir_stacktrace("mesh", @__FILE__, @__LINE__)
     )
 
@@ -3156,7 +3163,7 @@ We return a NamedTuple with the following fields:
 """
 @noinline function mesh(
     m::Reactant.Sharding.Mesh;
-    mod::MLIR.IR.Module=MLIR.IR.mmodule(),
+    mod::MLIR.IR.Module=MLIR.IR.current_module(),
     sym_name::String="mesh",
     location=mlir_stacktrace("mesh", @__FILE__, @__LINE__),
 )
@@ -3177,7 +3184,7 @@ end
 @noinline function mesh(
     mesh_axes::Vector{<:Pair{<:Union{String,Symbol},Int64}},
     logical_device_ids::AbstractVector{Int64};
-    mod::MLIR.IR.Module=MLIR.IR.mmodule(),
+    mod::MLIR.IR.Module=MLIR.IR.current_module(),
     sym_name::String="mesh",
     location=mlir_stacktrace("mesh", @__FILE__, @__LINE__),
 )
@@ -3200,7 +3207,7 @@ end
     # specify them for simplicity
     logical_device_ids == sorted_logical_device_ids && (logical_device_ids = Int64[])
 
-    ctx = MLIR.IR.context()
+    ctx = MLIR.IR.current_context()
     mesh_axis_attrs = [
         MLIR.API.sdyMeshAxisAttrGet(ctx, String(name), size) for (name, size) in mesh_axes
     ]
@@ -3214,7 +3221,7 @@ end
 
     sym_name = Reactant.TracedUtils.__lookup_unique_name_in_module(mod, sym_name)
 
-    mesh_op = MLIR.IR.mmodule!(mod) do
+    mesh_op = MLIR.IR.with_module(mod) do
         return MLIR.Dialects.sdy.mesh(; sym_name, mesh=mesh_attr, location)
     end
 
@@ -3255,7 +3262,12 @@ Produces a [`Reactant.MLIR.Dialects.sdy.sharding_constraint`](@ref) operation wi
     (; sym_name, mesh_attr) = cache[key]
 
     tensor_sharding_attr, dialect = Reactant.Sharding.get_tensor_sharding_attribute(
-        sharding, MLIR.IR.context(), sym_name, mesh_attr, size(input); do_transpose=false
+        sharding,
+        MLIR.IR.current_context(),
+        sym_name,
+        mesh_attr,
+        size(input);
+        do_transpose=false,
     )
     @assert dialect == :sdy "Expected dialect to be `sdy`, got $(dialect)"
 
@@ -3287,7 +3299,7 @@ function _construct_reduce_function(f::F, Ts::Type...) where {F}
         ).f
 
     @assert MLIR.IR.nregions(func) == 1
-    ftype_attr = MLIR.IR.attr(func, "function_type")
+    ftype_attr = MLIR.IR.getattr(func, "function_type")
     ftype = MLIR.IR.Type(ftype_attr)
 
     @assert MLIR.IR.nresults(ftype) == length(Ts)
@@ -3634,7 +3646,7 @@ function triangular_solve(
 
     @assert transpose_a in ('N', 'T', 'C') "transpose_a must be one of 'N', 'T', or 'C'"
     transpose_attr = MLIR.API.stablehloTransposeAttrGet(
-        MLIR.IR.context(),
+        MLIR.IR.current_context(),
         if transpose_a == 'N'
             "NO_TRANSPOSE"
         elseif transpose_a == 'T'
@@ -3741,7 +3753,7 @@ end
         Vt=mlir_type(TracedRArray{T,N}, Vt_size),
         info=mlir_type(TracedRArray{iT,N - 2}, info_size),
         full=full,
-        algorithm=MLIR.API.enzymexlaSVDAlgorithmAttrGet(MLIR.IR.context(), algint),
+        algorithm=MLIR.API.enzymexlaSVDAlgorithmAttrGet(MLIR.IR.current_context(), algint),
         location,
     )
 

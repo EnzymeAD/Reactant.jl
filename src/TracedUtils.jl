@@ -272,7 +272,7 @@ mutable struct CompiledMlirFnResult{F,TR,Re,Rt,LA,LR,PA,CR,M,MA,RS,GD,DA}
 end
 
 function is_pure(func)
-    attr = MLIR.IR.attr(func, "enzymexla.memory_effects")
+    attr = MLIR.IR.getattr(func, "enzymexla.memory_effects")
     # conservatively assume is not pure
     if attr isa Nothing
         return false
@@ -342,9 +342,9 @@ function make_mlir_fn(
     )
 
     Ops.activate_constant_context!(fnbody)
-    @assert MLIR.IR._has_block()
+    @assert MLIR.IR.has_block()
 
-    # Explicitly don't use block! to avoid creating a closure, which creates
+    # Explicitly don't use with_block to avoid creating a closure, which creates
     # both compile-time and relocatability issues
     MLIR.IR.activate!(fnbody)
 
@@ -507,7 +507,7 @@ function prepare_mlir_fn_args(
         sym_visibility = MLIR.IR.Attribute("private")
     end
 
-    mod = MLIR.IR.mmodule()
+    mod = MLIR.IR.current_module()
 
     # Insert meshes for the sharded arguments
     traced_args_to_shardings = OrderedIdDict()
@@ -523,7 +523,7 @@ function prepare_mlir_fn_args(
         end
     end
 
-    func = MLIR.IR.block!(MLIR.IR.body(mod)) do
+    func = MLIR.IR.with_block(MLIR.IR.body(mod)) do
         return MLIR.Dialects.func.func_(;
             sym_name=name * "_tmp",
             function_type=MLIR.IR.FunctionType(in_tys, Vector{MLIR.IR.Type}(undef, 0)),
@@ -862,21 +862,21 @@ function finalize_mlir_fn(
         MLIR.IR.deactivate!(fnbody)
     end
 
-    func2 = MLIR.IR.block!(MLIR.IR.body(mod)) do
+    func2 = MLIR.IR.with_block(MLIR.IR.body(mod)) do
         return MLIR.Dialects.func.func_(;
             sym_name=__lookup_unique_name_in_module(mod, name),
             function_type=MLIR.IR.FunctionType(in_tys, out_tys),
             body=MLIR.IR.Region(),
-            arg_attrs=MLIR.IR.attr(func, "arg_attrs"),
-            res_attrs=MLIR.IR.attr(func, "res_attrs"),
-            no_inline=MLIR.IR.attr(func, "no_inline"),
+            arg_attrs=MLIR.IR.getattr(func, "arg_attrs"),
+            res_attrs=MLIR.IR.getattr(func, "res_attrs"),
+            no_inline=MLIR.IR.getattr(func, "no_inline"),
             sym_visibility,
         )
     end
 
-    mem = MLIR.IR.attr(func, "enzymexla.memory_effects")
+    mem = MLIR.IR.getattr(func, "enzymexla.memory_effects")
     if !(mem isa Nothing)
-        MLIR.IR.attr!(func2, "enzymexla.memory_effects", mem)
+        MLIR.IR.setattr!(func2, "enzymexla.memory_effects", mem)
     end
 
     MLIR.API.mlirRegionTakeBody(MLIR.IR.region(func2, 1), MLIR.IR.region(func, 1))
@@ -902,7 +902,7 @@ function finalize_mlir_fn(
             end
         end
 
-        ctx = MLIR.IR.context()
+        ctx = MLIR.IR.current_context()
         # Attach `sdy.sharding` attribute to the argument
         for (i, arg) in enumerate(linear_args)
             if haskey(traced_args_to_shardings, arg)
@@ -998,8 +998,8 @@ function finalize_mlir_fn(
         num_partitions = 1
     end
 
-    MLIR.API.mlirOperationDestroy(func.operation)
-    func.operation = MLIR.API.MlirOperation(C_NULL)
+    MLIR.API.mlirOperationDestroy(func.ref)
+    func.ref = MLIR.API.MlirOperation(C_NULL)
 
     return (
         func2,
@@ -1288,7 +1288,7 @@ function elem_apply(f, args::Vararg{Any,Nargs}) where {Nargs}
         seen_results, result, (), Reactant.TracedSetPath; tobatch=OutShape
     )
 
-    func2.operation = MLIR.API.MlirOperation(C_NULL)
+    func2.ref = MLIR.API.MlirOperation(C_NULL)
 
     return traced2_result
 end

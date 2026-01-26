@@ -1,5 +1,5 @@
 struct Dialect
-    dialect::API.MlirDialect
+    ref::API.MlirDialect
 
     function Dialect(dialect)
         @assert !mlirIsNull(dialect) "cannot create Dialect from null MlirDialect"
@@ -7,7 +7,9 @@ struct Dialect
     end
 end
 
-Base.convert(::Core.Type{API.MlirDialect}, dialect::Dialect) = dialect.dialect
+Base.cconvert(::Core.Type{API.MlirDialect}, dialect::Dialect) = dialect
+Base.unsafe_convert(::Core.Type{API.MlirDialect}, dialect::Dialect) = dialect.ref
+
 Base.:(==)(a::Dialect, b::Dialect) = API.mlirDialectEqual(a, b)
 
 context(dialect::Dialect) = Context(API.mlirDialectGetContext(dialect))
@@ -17,32 +19,32 @@ function Base.show(io::IO, dialect::Dialect)
     return print(io, "Dialect(\"", namespace(dialect), "\")")
 end
 
-function allow_unregistered_dialects(; context::Context=context())
+function allow_unregistered_dialects(; context::Context=current_context())
     return API.mlirContextGetAllowUnregisteredDialects(context)
 end
-function allow_unregistered_dialects!(allow::Bool=true; context::Context=context())
+function allow_unregistered_dialects!(allow::Bool=true; context::Context=current_context())
     return API.mlirContextSetAllowUnregisteredDialects(context, allow)
 end
 
-function num_registered_dialects(; context::Context=context())
+function num_registered_dialects(; context::Context=current_context())
     return API.mlirContextGetNumRegisteredDialects(context)
 end
-function num_loaded_dialects(; context::Context=context())
+function num_loaded_dialects(; context::Context=current_context())
     return API.mlirContextGetNumLoadedDialects(context)
 end
 
-function load_all_available_dialects(; context::Context=context())
+function load_all_available_dialects(; context::Context=current_context())
     return API.mlirContextLoadAllAvailableDialects(context)
 end
 
-function get_or_load_dialect!(name::String; context::Context=context())
+function get_or_load_dialect!(name::String; context::Context=current_context())
     dialect = API.mlirContextGetOrLoadDialect(context, name)
     mlirIsNull(dialect) && error("could not load dialect $name")
     return Dialect(dialect)
 end
 
 struct DialectHandle
-    handle::API.MlirDialectHandle
+    ref::API.MlirDialectHandle
 end
 
 function DialectHandle(s::Symbol)
@@ -50,39 +52,42 @@ function DialectHandle(s::Symbol)
     return DialectHandle(getproperty(API, s)())
 end
 
-Base.convert(::Core.Type{API.MlirDialectHandle}, handle::DialectHandle) = handle.handle
+Base.cconvert(::Core.Type{API.MlirDialectHandle}, handle::DialectHandle) = handle
+Base.unsafe_convert(::Core.Type{API.MlirDialectHandle}, handle::DialectHandle) = handle.ref
 
 namespace(handle::DialectHandle) = String(API.mlirDialectHandleGetNamespace(handle))
 
-function get_or_load_dialect!(handle::DialectHandle; context::Context=context())
+function get_or_load_dialect!(handle::DialectHandle; context::Context=current_context())
     dialect = API.mlirDialectHandleLoadDialect(handle, context)
     mlirIsNull(dialect) && error("could not load dialect from handle $handle")
     return Dialect(dialect)
 end
 
-function register_dialect!(handle::DialectHandle; context::Context=context())
+function register_dialect!(handle::DialectHandle; context::Context=current_context())
     return API.mlirDialectHandleRegisterDialect(handle, context)
 end
-function load_dialect!(handle::DialectHandle; context::Context=context())
+function load_dialect!(handle::DialectHandle; context::Context=current_context())
     return Dialect(API.mlirDialectHandleLoadDialect(handle, context))
 end
 
 mutable struct DialectRegistry
-    registry::API.MlirDialectRegistry
+    ref::API.MlirDialectRegistry
 
     function DialectRegistry(registry)
         @assert !mlirIsNull(registry) "cannot create DialectRegistry with null MlirDialectRegistry"
-        finalizer(new(registry)) do registry
-            return API.mlirDialectRegistryDestroy(registry.registry)
-        end
+        return finalizer(API.mlirDialectRegistryDestroy, new(registry))
     end
 end
 
 DialectRegistry() = DialectRegistry(API.mlirDialectRegistryCreate())
 
-function Base.convert(::Core.Type{API.MlirDialectRegistry}, registry::DialectRegistry)
-    return registry.registry
+Base.cconvert(::Core.Type{API.MlirDialectRegistry}, registry::DialectRegistry) = registry
+function Base.unsafe_convert(
+    ::Core.Type{API.MlirDialectRegistry}, registry::DialectRegistry
+)
+    return registry.ref
 end
+
 function Base.push!(registry::DialectRegistry, handle::DialectHandle)
     return API.mlirDialectHandleInsertDialect(handle, registry)
 end
