@@ -2763,13 +2763,13 @@ result = Ops.case(
     sym_visibility = MLIR.IR.Attribute("private")
 
     # Compile each branch without returns first
-    branch_mods = [MLIR.IR.mmodule() for _ in 1:n_branches]
+    branch_mods = [MLIR.IR.current_module() for _ in 1:n_branches]
     branch_func_tmps = Vector{MLIR.IR.Operation}(undef, n_branches)
     branch_bodies = Vector{MLIR.IR.Block}(undef, n_branches)
     branch_results = Vector{Any}(undef, n_branches)
 
     for b in 1:n_branches
-        branch_func_tmps[b] = MLIR.IR.block!(MLIR.IR.body(branch_mods[b])) do
+        branch_func_tmps[b] = MLIR.IR.with_block(MLIR.IR.body(branch_mods[b])) do
             return MLIR.Dialects.func.func_(;
                 sym_name=string(branch_fns[b]) * "_branch$(b)_tmp",
                 function_type=MLIR.IR.FunctionType(input_types, []),
