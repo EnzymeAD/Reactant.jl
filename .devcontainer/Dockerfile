@@ -16,11 +16,20 @@ RUN apt-get update && apt-get install -y \
     binutils \
     xxd
 
+RUN update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-14 100 && \
+    update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-14 100
+
 # Install Julia via juliaup for vscode user
 USER vscode
-RUN curl -fsSL https://install.julialang.org | sh -s -- -y
-ENV PATH="/home/vscode/.juliaup/bin:${PATH}"
-USER root
+RUN curl -fsSL https://install.julialang.org | sh -s -- --yes --default-channel release && \
+    /home/vscode/.juliaup/bin/juliaup add release && \
+    /home/vscode/.juliaup/bin/juliaup default release && \
+    ln -sf /home/vscode/.juliaup/bin/julialauncher /home/vscode/.juliaup/bin/julia && \
+    echo '' >> /home/vscode/.bashrc && \
+    echo '# Added by Juliaup' >> /home/vscode/.bashrc && \
+    echo 'export PATH="$HOME/.juliaup/bin:$PATH"' >> /home/vscode/.bashrc
+
+ENV PATH="/home/vscode/.juliaup/bin:$PATH"
 
 # Install Clang-18
 RUN wget https://apt.llvm.org/llvm.sh && \

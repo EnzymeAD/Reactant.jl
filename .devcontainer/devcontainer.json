@@ -1,5 +1,5 @@
 {
-    "name": "Enzyme-JAX Build Env",
+    "name": "Reactant.jl Build Env",
     "build": {
         "dockerfile": "Dockerfile"
     },
@@ -8,9 +8,21 @@
             "extensions": [
                 "bazelbuild.vscode-bazel",
                 "ms-vscode.cpptools",
-                "ms-python.python"
+                "ms-python.python",
+                "julialang.language-julia"
             ]
         }
     },
-    "remoteUser": "vscode"
+    "remoteUser": "vscode",
+    "runArgs": [
+        "--cap-add=SYS_PTRACE",
+        "--security-opt", "seccomp=unconfined",
+        "--device", "/dev/nvidia0:/dev/nvidia0",
+        "--device", "/dev/nvidiactl:/dev/nvidiactl",
+        "--device", "/dev/nvidia-uvm:/dev/nvidia-uvm",
+    ],
+    "mounts": [
+        "source=${localWorkspaceFolder}/../Enzyme-JAX,target=/workspaces/Enzyme-JAX,type=bind"
+    ]
 }
+
