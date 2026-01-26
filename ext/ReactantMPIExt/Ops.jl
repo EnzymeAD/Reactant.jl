@@ -81,7 +81,9 @@ end
             dest.mlir_data,
             tag.mlir_data;
             request,
-            datatype=MLIR.API.enzymexlaMPIDatatypeAttrGet(IR.current_context(), mpi_datatype),
+            datatype=MLIR.API.enzymexlaMPIDatatypeAttrGet(
+                IR.current_context(), mpi_datatype
+            ),
             location,
         ),
     )
