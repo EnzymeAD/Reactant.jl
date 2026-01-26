@@ -40,6 +40,14 @@ end
     @test @jit(fastmax(a)) ≈ r_res
 end
 
+@testset "Empty reduce (#2226)" begin
+    empty_prod() = prod(Int[])
+    @test empty_prod() == @jit(empty_prod())
+
+    empty_sum() = sum(Int[])
+    @test empty_sum() == @jit(empty_sum())
+end
+
 sinexp(x) = sin(exp(x))
 sinexpbc(x) = sinexp.(x)
 
