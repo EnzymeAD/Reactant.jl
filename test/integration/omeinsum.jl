@@ -3,7 +3,7 @@ using Reactant
 using OMEinsum
 
 @testset "sum" begin
-    a = Reactant.TestUtils.construct_test_array(ComplexF64, 2, 3)
+    a = Reactant.TestUtils.construct_test_array(ComplexF32, 2, 3)
     a_re = Reactant.to_rarray(a)
 
     f = ein"ij->"
@@ -23,7 +23,7 @@ using OMEinsum
 end
 
 @testset "trace" begin
-    a = Reactant.TestUtils.construct_test_array(ComplexF64, 3, 3)
+    a = Reactant.TestUtils.construct_test_array(ComplexF32, 3, 3)
     a_re = Reactant.to_rarray(a)
 
     f = ein"ii->"
@@ -33,7 +33,7 @@ end
 end
 
 @testset "transpose" begin
-    a = Reactant.TestUtils.construct_test_array(ComplexF64, 2, 3)
+    a = Reactant.TestUtils.construct_test_array(ComplexF32, 2, 3)
     a_re = Reactant.to_rarray(a)
 
     f = ein"ij->ji"
@@ -41,7 +41,7 @@ end
     c_re = @jit f(a_re)
     @test c ≈ c_re
 
-    a = Reactant.TestUtils.construct_test_array(ComplexF64, 2, 3, 4, 5)
+    a = Reactant.TestUtils.construct_test_array(ComplexF32, 2, 3, 4, 5)
     a_re = Reactant.to_rarray(a)
 
     f = ein"ijkl->jilk"
@@ -51,8 +51,8 @@ end
 end
 
 @testset "matmul" begin
-    a = Reactant.TestUtils.construct_test_array(ComplexF64, 2, 3)
-    b = Reactant.TestUtils.construct_test_array(ComplexF64, 3, 4)
+    a = Reactant.TestUtils.construct_test_array(ComplexF32, 2, 3)
+    b = Reactant.TestUtils.construct_test_array(ComplexF32, 3, 4)
     a_re = Reactant.to_rarray(a)
     b_re = Reactant.to_rarray(b)
 
@@ -63,8 +63,8 @@ end
 end
 
 @testset "hadamard product" begin
-    a = Reactant.TestUtils.construct_test_array(ComplexF64, 2, 3)
-    b = Reactant.TestUtils.construct_test_array(ComplexF64, 2, 3)
+    a = Reactant.TestUtils.construct_test_array(ComplexF32, 2, 3)
+    b = Reactant.TestUtils.construct_test_array(ComplexF32, 2, 3)
     a_re = Reactant.to_rarray(a)
     b_re = Reactant.to_rarray(b)
 
@@ -73,7 +73,7 @@ end
     c_re = @jit f(a_re, b_re)
     @test c ≈ c_re
 
-    b = Reactant.TestUtils.construct_test_array(ComplexF64, 3, 2)
+    b = Reactant.TestUtils.construct_test_array(ComplexF32, 3, 2)
     b_re = Reactant.to_rarray(b)
     f = ein"ij,ji->ij"
     c = f(a, b)
@@ -82,8 +82,8 @@ end
 end
 
 @testset "inner product" begin
-    a = Reactant.TestUtils.construct_test_array(ComplexF64, 4, 3)
-    b = Reactant.TestUtils.construct_test_array(ComplexF64, 3, 4)
+    a = Reactant.TestUtils.construct_test_array(ComplexF32, 4, 3)
+    b = Reactant.TestUtils.construct_test_array(ComplexF32, 3, 4)
     a_re = Reactant.to_rarray(a)
     b_re = Reactant.to_rarray(b)
 
@@ -94,8 +94,8 @@ end
 end
 
 @testset "outer product" begin
-    a = Reactant.TestUtils.construct_test_array(ComplexF64, 2, 3)
-    b = Reactant.TestUtils.construct_test_array(ComplexF64, 4, 5)
+    a = Reactant.TestUtils.construct_test_array(ComplexF32, 2, 3)
+    b = Reactant.TestUtils.construct_test_array(ComplexF32, 4, 5)
     a_re = Reactant.to_rarray(a)
     b_re = Reactant.to_rarray(b)
 
@@ -116,8 +116,8 @@ end
 end
 
 @testset "scale" begin
-    a = Reactant.TestUtils.construct_test_array(ComplexF64, 2, 3)
-    b = ComplexF64[2.0]
+    a = Reactant.TestUtils.construct_test_array(ComplexF32, 2, 3)
+    b = ComplexF32[2.0]
     a_re = Reactant.to_rarray(a)
     b_re = Reactant.to_rarray(b)
 
@@ -128,8 +128,8 @@ end
 end
 
 @testset "batch matmul" begin
-    a = Reactant.TestUtils.construct_test_array(ComplexF64, 2, 3, 6)
-    b = Reactant.TestUtils.construct_test_array(ComplexF64, 3, 4, 6)
+    a = Reactant.TestUtils.construct_test_array(ComplexF32, 2, 3, 6)
+    b = Reactant.TestUtils.construct_test_array(ComplexF32, 3, 4, 6)
     a_re = Reactant.to_rarray(a)
     b_re = Reactant.to_rarray(b)
 
@@ -145,8 +145,8 @@ end
 end
 
 @testset "tensor contraction" begin
-    a = Reactant.TestUtils.construct_test_array(ComplexF64, 2, 4, 3)
-    b = Reactant.TestUtils.construct_test_array(ComplexF64, 4, 5, 3)
+    a = Reactant.TestUtils.construct_test_array(ComplexF32, 2, 4, 3)
+    b = Reactant.TestUtils.construct_test_array(ComplexF32, 4, 5, 3)
     a_re = Reactant.to_rarray(a)
     b_re = Reactant.to_rarray(b)
 
