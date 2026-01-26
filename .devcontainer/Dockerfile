@@ -11,7 +11,10 @@ RUN apt-get update && apt-get install -y \
     git \
     curl \
     gcc-14 \
-    g++-14
+    g++-14 \
+    lld \
+    binutils \
+    xxd
 
 # Install Julia via juliaup for vscode user
 USER vscode

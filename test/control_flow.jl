@@ -1,6 +1,7 @@
 using Reactant, Test
 using LinearAlgebra
 using Reactant.ReactantCore
+using Reactant.ReactantCore: Periodic
 
 function condition1(x)
     y = sum(x)
@@ -686,8 +687,8 @@ end
 end
 
 function for_no_track_numbers(x, n)
-    # checkpoints required for dynamic bounds (n:16 where n is traced)
-    @trace mincut = false checkpointing = true checkpoints = 3 track_numbers = false for i in n:16
+    # Periodic(n) required for dynamic bounds (n:16 where n is traced)
+    @trace mincut = false checkpointing = Periodic(3) track_numbers = false for i in n:16
         x = x .+ 1
     end
     return x
@@ -713,7 +714,7 @@ end
 end
 
 function for_explicit_checkpoints(x, n)
-    @trace mincut = false checkpointing = true checkpoints = 5 track_numbers = false for i in n:16
+    @trace mincut = false checkpointing = Periodic(5) track_numbers = false for i in n:16
         x = x .+ 1
     end
     return x

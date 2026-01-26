@@ -2172,7 +2172,6 @@ end
     track_numbers,
     verify_arg_names=nothing,
     checkpointing=false,
-    checkpoints=nothing,
     mincut=false,
     location=mlir_stacktrace("while_loop", @__FILE__, @__LINE__),
 ) where {CFn,BFn}
@@ -2246,14 +2245,11 @@ end
         MLIR.IR.setattr!(while_op, "enzyme.disable_mincut", MLIR.IR.UnitAttribute())
     end
 
-    if checkpointing
-        MLIR.IR.setattr!(
-            while_op, "enzymexla.enable_checkpointing", MLIR.IR.Attribute(true)
-        )
-    end
-
-    if checkpoints !== nothing
-        MLIR.IR.attr!(while_op, "enzymexla.checkpoints", MLIR.IR.Attribute(checkpoints))
+    if checkpointing isa ReactantCore.Periodic
+        MLIR.IR.setattr!(while_op, "enzymexla.enable_checkpointing", MLIR.IR.Attribute(true))
+        MLIR.IR.setattr!(while_op, "enzymexla.checkpoints", MLIR.IR.Attribute(checkpointing.n))
+    elseif checkpointing === true
+        MLIR.IR.setattr!(while_op, "enzymexla.enable_checkpointing", MLIR.IR.Attribute(true))
     end
 
     return map(enumerate(linear_args)) do (i, arg)

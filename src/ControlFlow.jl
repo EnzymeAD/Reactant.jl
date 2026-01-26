@@ -15,7 +15,6 @@ function ReactantCore.traced_while(
     track_numbers=Number,
     verify_arg_names=nothing,
     checkpointing=false,
-    checkpoints=nothing,
     mincut=false,
 ) where {CFn,BFn}
     return @opcall while_loop(
@@ -25,7 +24,6 @@ function ReactantCore.traced_while(
         track_numbers,
         verify_arg_names,
         checkpointing,
-        checkpoints,
         mincut,
     )
 end
