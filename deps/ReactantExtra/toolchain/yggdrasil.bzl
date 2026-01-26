@@ -19,7 +19,7 @@ def ygg_cc_toolchain(cpu, toolchain_identifier, target_system_name, bb_target, b
         toolchain_identifier = "ygg_toolchain",
     )
 
-    # TODO distinguish between clang and gcc toolchains?
+    # TODO(#2247) distinguish between clang and gcc toolchains?
     cc_toolchain_config(
         name = "ygg_target_toolchain_config",
         cpu = cpu,
@@ -73,7 +73,7 @@ def ygg_cc_toolchain(cpu, toolchain_identifier, target_system_name, bb_target, b
             "-Wunused-but-set-parameter",
             "-Wno-free-nonheap-object",
             "-fno-omit-frame-pointer",
-            # TODO cxx_builtin_include_directories doesn't seem to be working, so we add the INCLUDE_PATHs manually
+            # TODO(#2247) cxx_builtin_include_directories doesn't seem to be working, so we add the INCLUDE_PATHs manually
             "-isystem /opt/" + bb_target + "/lib/gcc/" + bb_target + "/10.2.0/include",
             "-isystem /opt/" + bb_target + "/lib/gcc/" + bb_target + "/10.2.0/include-fixed",
             "-isystem /opt/" + bb_target + "/" + bb_target + "/include",
@@ -112,6 +112,6 @@ def ygg_cc_toolchain(cpu, toolchain_identifier, target_system_name, bb_target, b
         coverage_compile_flags = ["--coverage"],
         coverage_link_flags = ["--coverage"],
         host_system_name = "linux",
-        # TODO gcc doesn't support it, only put it on clang (maybe even only for clang on aarch64-darwin?)
+        # TODO(#2247) gcc doesn't support it, only put it on clang (maybe even only for clang on aarch64-darwin?)
         supports_start_end_lib = supports_start_end_lib,
     )

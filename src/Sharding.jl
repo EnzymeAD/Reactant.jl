@@ -1,6 +1,6 @@
 module Sharding
 
-# XXX: Import ShardyPropagationOptions here to avoid breaking old code
+# TODO(#2229): Import ShardyPropagationOptions here to avoid breaking old code
 using ..Reactant: Reactant, XLA, MLIR, ShardyPropagationOptions
 using ReactantCore: ReactantCore
 
@@ -69,7 +69,7 @@ struct Mesh{D,ID<:AbstractVector{Int}}
         )
     end
 
-    # XXX (Deprecated): remove in v0.3
+    # TODO(#2229): (Deprecated): remove in v0.3
     function Mesh(
         devices::NTuple{D,<:XLA.AbstractDevice}, shape::Dims{D}, axis_names
     ) where {D}
@@ -83,7 +83,7 @@ struct Mesh{D,ID<:AbstractVector{Int}}
         return Mesh(global_ids, axis_names)
     end
 
-    # XXX (Deprecated): remove in v0.3
+    # TODO(#2229): (Deprecated): remove in v0.3
     function Mesh(
         device_ids::Dims{D1}, shape::Dims{D}, axis_names::NTuple{D,Union{String,Symbol}}
     ) where {D,D1}
@@ -96,7 +96,7 @@ struct Mesh{D,ID<:AbstractVector{Int}}
         return Mesh(reshape(collect(Int64, device_ids), shape), axis_names)
     end
 
-    # XXX (Deprecated): remove in v0.3
+    # TODO(#2229): (Deprecated): remove in v0.3
     Mesh(::Tuple{}, ::Tuple{}, ::Tuple{}) = throw(MethodError(Mesh, ((), (), ())))
 end
 
@@ -655,7 +655,7 @@ function sharding_to_array_slices(
     return device_to_array_slices
 end
 
-# TODO: Something like NamedDims.jl will allow us to support NamedDimsSharding similar to
+# TODO(#2232): Something like NamedDims.jl will allow us to support NamedDimsSharding similar to
 #       `levanter`
 
 """
@@ -952,7 +952,7 @@ function HloSharding(sharding::NamedSharding, client::XLA.IFRT.Client, _, x)
     )
     data = XLA.IFRT.AsyncArray(client, x, ifrt_sharding)
 
-    # XXX: Can we auto-pad this case too? Will think about it later, for now use
+    # TODO(#2232): Can we auto-pad this case too? Will think about it later, for now use
     #      NamedSharding
     return data, ShardInfo(hlo_sharding, device_to_array_slices), nothing
 end
@@ -1000,7 +1000,7 @@ function (sharding::HloSharding)(
     )
     data = XLA.IFRT.AsyncArray(client, x, ifrt_sharding)
 
-    # XXX: Can we auto-pad this case too? Will think about it later, for now use
+    # TODO(#2232): Can we auto-pad this case too? Will think about it later, for now use
     #      NamedSharding
     return data, ShardInfo(sharding, device_to_array_slices), nothing
 end
@@ -1036,7 +1036,7 @@ function get_tensor_sharding_attribute(
             )
         end
 
-        # XXX: Not recommended path
+        # TODO(#2232): Not recommended path
         string_mesh_name = MLIR.IR.Attribute(MLIR.IR.flatsymbol(mesh_name); context=ctx)
         GC.@preserve sharding begin
             attr = MLIR.IR.Attribute(

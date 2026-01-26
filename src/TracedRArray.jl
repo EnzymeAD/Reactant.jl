@@ -53,7 +53,7 @@ function Base.size(x::TracedRArray, i::TracedRNumber{<:Integer})
     return @allowscalar getindex(@opcall(constant([x.shape...])), i)
 end
 
-Base.collect(x::TracedRArray) = copy(x) # XXX: Is this correct?
+Base.collect(x::TracedRArray) = copy(x) # Note: Is this correct?
 
 Base.copy(A::TracedRArray{T,N}) where {T,N} = TracedRArray{T,N}((), A.mlir_data, size(A))
 
@@ -442,7 +442,7 @@ function _typed_hvncat_internal(
 
         for (i, col) in
             zip(eachindex(Bs), eachslice(As; dims=Tuple(2:ndims(As)), drop=true))
-            # TODO row_first affects the flattening?
+            # Note: row_first affects the flattening?
             Bs[i] = Base._cat_t(d, T, col...)
         end
 
@@ -475,7 +475,7 @@ function Base._cat_t(dims, ::Type{T}, X::TracedRArray...) where {T}
     return TracedRArray{RT,length(shape)}(
         (),
         MLIR.IR.result(
-            # TODO maybe we should do some conversion?
+            # Note: maybe we should do some conversion?
             MLIR.Dialects.stablehlo.concatenate(
                 collect(TracedUtils.get_mlir_data.(X));
                 result_0=MLIR.IR.TensorType(collect(Int, shape), MLIR.IR.Type(RT)),
@@ -801,13 +801,13 @@ Base.argmax(x::AnyTracedRArray; kwargs...) = findmax(identity, x; kwargs...)[2]
 Base.findfirst(x::AnyTracedRArray) = findfirst(identity, x)
 Base.findlast(x::AnyTracedRArray) = findlast(identity, x)
 
-# FIXME: we need to conditionally return `nothing` here if idx < 0
+# FIXME(#2236): we need to conditionally return `nothing` here if idx < 0
 function Base.findfirst(f::Function, x::AnyTracedRArray)
     idx = @opcall findfirst(materialize_traced_array(vec(f.(x))))
     return TracedRNumber{Int}((), idx.mlir_data)
 end
 
-# FIXME: we need to conditionally return `nothing` here if idx < 0
+# FIXME(#2236): we need to conditionally return `nothing` here if idx < 0
 function Base.findlast(f::Function, x::AnyTracedRArray)
     fA = @opcall reverse(materialize_traced_array(vec(f.(x))); dimensions=[1])
     idx = @opcall findfirst(fA)
@@ -1016,7 +1016,7 @@ function scan_impl!(
             input = riT.(input)
         end
     else
-        # TODO: fix this for TPUs
+        # Note: fix this for TPUs
         if contains(string(first(Reactant.devices())), "TPU")
             initT = __default_init(T, op)
             if initT != init && initT != something(init)
@@ -1280,7 +1280,7 @@ function unwrapped_broadcast(f::F, xs, original_dims) where {F}
     return _maybe_reshape(unrolled_map(f, xs), xs), original_dims, __Identity()
 end
 
-# TODO: once traced_call supports internal mutations, we can use traced_call here
+# Note: once traced_call supports internal mutations, we can use traced_call here
 function unrolled_map(f::F, itr) where {F}
     y = Reactant.call_with_reactant(iterate, itr)
     y === nothing && return []

@@ -181,7 +181,7 @@ function Base.Int64(attr::Attribute)
     return API.mlirIntegerAttrGetValueInt(attr)
 end
 
-# TODO mlirIntegerAttrGetValueSInt
+# TODO(#2244) mlirIntegerAttrGetValueSInt
 
 """
     UInt64(attr)
@@ -257,7 +257,7 @@ Returns the raw data as a string reference. The data remains live as long as the
 """
 function data(attr::Attribute)
     @assert isopaque(attr) "attribute $(attr) is not an opaque attribute"
-    return String(API.mlirOpaqueAttrGetData(attr)) # TODO return as Base.CodeUnits{Int8,String}? or as a Vector{Int8}? or Pointer?
+    return String(API.mlirOpaqueAttrGetData(attr)) # TODO(#2244) return as Base.CodeUnits{Int8,String}? or as a Vector{Int8}? or Pointer?
 end
 
 """
@@ -408,8 +408,8 @@ Checks whether the given attribute is an elements attribute.
 """
 iselements(attr::Attribute) = API.mlirAttributeIsAElements(attr)
 
-# TODO mlirElementsAttrGetValue
-# TODO mlirElementsAttrIsValidIndex
+# TODO(#2244) mlirElementsAttrGetValue
+# TODO(#2244) mlirElementsAttrIsValidIndex
 
 """
     isdenseelements(attr)
@@ -430,7 +430,7 @@ function DenseElementsAttribute(shaped_type::Type, elements::AbstractArray)
     return Attribute(API.mlirDenseElementsAttrGet(shaped_type, length(elements), elements))
 end
 
-# TODO mlirDenseElementsAttrRawBufferGet
+# TODO(#2244) mlirDenseElementsAttrRawBufferGet
 
 """
     fill(attr, shapedType)
@@ -654,10 +654,10 @@ Checks whether the given dense elements attribute contains a single replicated v
 """
 function issplat(attr::Attribute)
     @assert isdenseelements(attr) "attribute $(attr) is not a dense elements attribute"
-    return API.mlirDenseElementsAttrIsSplat(attr) # TODO Base.allequal?
+    return API.mlirDenseElementsAttrIsSplat(attr) # TODO(#2244) Base.allequal?
 end
 
-# TODO mlirDenseElementsAttrGetRawData
+# TODO(#2244) mlirDenseElementsAttrGetRawData
 
 """
     issparseelements(attr)
@@ -666,9 +666,9 @@ Checks whether the given attribute is a sparse elements attribute.
 """
 issparseelements(attr::Attribute) = API.mlirAttributeIsASparseElements(attr)
 
-# TODO mlirSparseElementsAttribute
-# TODO mlirSparseElementsAttrGetIndices
-# TODO mlirSparseElementsAttrGetValues
+# TODO(#2244) mlirSparseElementsAttribute
+# TODO(#2244) mlirSparseElementsAttrGetIndices
+# TODO(#2244) mlirSparseElementsAttrGetValues
 
 @llvmversioned min = v"16" """
       isdensearray(attr, ::Core.Type{T})
@@ -780,7 +780,7 @@ function Base.getindex(attr::Attribute, i)
             API.mlirDenseElementsAttrGetFloatValue(attr, i)
         elseif elem_type isa Float64
             API.mlirDenseElementsAttrGetDoubleValue(attr, i)
-        elseif elem_type isa String # TODO does this case work?
+        elseif elem_type isa String # TODO(#2244) does this case work?
             String(API.mlirDenseElementsAttrGetStringValue(attr, i))
         else
             throw("unsupported element type $(elem_type)")
@@ -838,7 +838,7 @@ function Base.getindex(attr::Attribute)
         API.mlirDenseElementsAttrGetFloatSplatValue(attr)
     elseif elem_type isa Float64
         API.mlirDenseElementsAttrGetDoubleSplatValue(attr)
-    elseif elem_type isa String # TODO does this case work?
+    elseif elem_type isa String # TODO(#2244) does this case work?
         String(API.mlirDenseElementsAttrGetStringSplatValue(attr))
     else
         throw("unsupported element type $(elem_type)")

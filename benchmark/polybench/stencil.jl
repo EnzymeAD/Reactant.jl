@@ -3,8 +3,8 @@ Reactant.allowscalar(true)
 
 include("common.jl")
 
-# TODO: adi --> needs prefix sum raising to work
-# TODO: seidel_2d --> the loops are sequential in nature. (prefix sum raising might help?)
+# TODO(#2249): adi --> needs prefix sum raising to work
+# TODO(#2249): seidel_2d --> the loops are sequential in nature. (prefix sum raising might help?)
 
 function fdtd_2d(
     EX::AbstractMatrix{T},

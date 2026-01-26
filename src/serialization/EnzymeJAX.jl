@@ -176,7 +176,7 @@ function _extract_sharding_info(x::Reactant.ConcreteRArray)
     if sharding isa Reactant.Sharding.ShardInfo
         inner_sharding = sharding.sharding
         if inner_sharding isa Reactant.Sharding.NamedSharding
-            # TODO: we need to export is_closed, priority, and subaxes at some point
+            # TODO(#2260): we need to export is_closed, priority, and subaxes at some point
             return (;
                 type="NamedSharding",
                 mesh=inner_sharding.mesh,

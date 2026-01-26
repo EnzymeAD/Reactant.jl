@@ -22,7 +22,7 @@ end
     y = @compile -(Reactant.to_rarray(ones(2)))
 
     @test typeof(x) == typeof(y)
-    # TODO, currently x and y are not equal as x.exec != y.exec
+    # TODO(#2253), currently x and y are not equal as x.exec != y.exec
     # as the executable we generate is itself not cached
     # (which clearly we should do to improve jit time)
 end
@@ -1459,7 +1459,7 @@ end
 
     for desto in 1:alen, srco in 1:blen, l in 1:min(blen - srco + 1, alen - desto + 1)
 
-        # TODO offset-enabled copy not implemented for IFRTArray
+        # TODO(#2234) offset-enabled copy not implemented for IFRTArray
         if src isa ConcretePJRTArray
             expected = copyto!(copy(a), desto, b, srco, l)
 
@@ -1470,7 +1470,7 @@ end
         end
     end
 
-    # TODO direct copy not implemented for IFRTArray
+    # TODO(#2234) direct copy not implemented for IFRTArray
     dest = Reactant.@jit Reactant.Ops.fill(0.0f0, (alen,))
     if dest isa ConcretePJRTArray
         src = fill(0.0f0, blen)

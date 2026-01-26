@@ -476,7 +476,7 @@ function TensorType(elem_type::Type; location::Location=Location(), check::Bool=
     )
 end
 
-# TODO maybe add these helper methods?
+# TODO(#2245) maybe add these helper methods?
 # Type(a::AbstractArray{T}) where {T} = Type(Type(T), size(a))
 # Type(::Core.Type{<:AbstractArray{T,N}}, dims) where {T,N} =
 #     Type(API.mlirRankedTensorTypeGetChecked(
@@ -680,7 +680,7 @@ function FunctionType(inputs, results; context::Context=context())
     )
 end
 
-# TODO maybe add this helper method?
+# TODO(#2245) maybe add this helper method?
 # Type(ft::Pair) = Type(API.mlirFunctionTypeGet(context(),
 #     length(ft.first), [Type(t) for t in ft.first],
 #     length(ft.second), [Type(t) for t in ft.second]))

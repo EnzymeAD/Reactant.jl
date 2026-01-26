@@ -130,7 +130,7 @@ const __skip_rewrite_func_set = Set([
     typeof(Core.Compiler.concrete_eval_eligible),
     typeof(Core.Compiler.typeinf_type),
     typeof(Core.Compiler.typeinf_ext),
-    # TODO: perhaps problematic calls in `traced_call`
+    # TODO(#2250): perhaps problematic calls in `traced_call`
     # should be moved to TracedUtils.jl:
     typeof(ReactantCore.traced_call),
     typeof(ReactantCore.is_traced),
@@ -322,7 +322,7 @@ end
 
 # by default, same as `should_rewrite_call`
 function should_rewrite_invoke(@nospecialize(ft), @nospecialize(args))
-    # TODO how can we extend `@skip_rewrite` to methods?
+    # TODO(#2251) how can we extend `@skip_rewrite` to methods?
     if ft <: typeof(repeat) && (args == Tuple{String,Int64} || args == Tuple{Char,Int64})
         return false
     end
@@ -512,7 +512,7 @@ end
 # they continue to use our interpreter. Reset the derived return type
 # to Any if our interpreter would change the return type of any result.
 # Also rewrite invoke (type stable call) to be :call, since otherwise apparently
-# screws up type inference after this (TODO this should be fixed).
+# screws up type inference after this (TODO(#2251) this should be fixed).
 function rewrite_insts!(ir, interp)
     any_changed = false
     for (i, inst) in enumerate(ir.stmts)

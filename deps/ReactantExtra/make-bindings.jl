@@ -22,7 +22,7 @@ dialect_files = [
     "Nvvm.jl",
     "Gpu.jl",
     "Affine.jl",
-    # "TPU.jl", # XXX: currently broken - causes segfault in mlir-jl-tblgen
+    # "TPU.jl", # TODO(#2264): currently broken - causes segfault in mlir-jl-tblgen
     "MosaicGPU.jl",
     "Triton.jl",
     "Shardy.jl",

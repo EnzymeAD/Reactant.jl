@@ -230,7 +230,7 @@ Asserts that all maps in `affineMaps` are normalized to the same number of dims 
 Takes a callback `populateResult` to fill the `res` container with value `m` at entry `idx`.
 This allows returning without worrying about ownership considerations.
 """
-# TODO simplify(map::AffineMap, ...) = AffineMap(API.mlirAffineMapCompressUnusedSymbols(map, ...))
+# TODO(#2246) simplify(map::AffineMap, ...) = AffineMap(API.mlirAffineMapCompressUnusedSymbols(map, ...))
 
 function Base.show(io::IO, map::AffineMap)
     print(io, "AffineMap(#= ")

@@ -16,8 +16,8 @@ SymbolTable(op::Operation) = SymbolTable(API.mlirSymbolTableCreate(op))
 
 Base.convert(::Core.Type{API.MlirSymbolTable}, st::SymbolTable) = st.st
 
-# TODO mlirSymbolTableGetSymbolAttributeName
-# TODO mlirSymbolTableGetVisibilityAttributeName
+# TODO(#2246) mlirSymbolTableGetSymbolAttributeName
+# TODO(#2246) mlirSymbolTableGetVisibilityAttributeName
 
 """
     lookup(symboltable, name)
@@ -54,5 +54,5 @@ Removes the given operation from the symbol table and erases it.
 """
 delete!(st::SymbolTable, op::Operation) = API.mlirSymbolTableErase(st, op)
 
-# TODO mlirSymbolTableReplaceAllSymbolUses
-# TODO mlirSymbolTableWalkSymbolTables
+# TODO(#2246) mlirSymbolTableReplaceAllSymbolUses
+# TODO(#2246) mlirSymbolTableWalkSymbolTables

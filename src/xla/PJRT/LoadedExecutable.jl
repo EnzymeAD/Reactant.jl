@@ -254,7 +254,7 @@ end
     end
 end
 
-# XXX: Fix this
+# TODO(#2235): Fix this
 # @generated function XLA.execute(
 #     exec::LoadedExecutable,
 #     mesh_ids::Vector{Int64},

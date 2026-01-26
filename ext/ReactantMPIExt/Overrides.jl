@@ -26,19 +26,19 @@ end
     return Ops.barrier()
 end
 
-# TODO status not supported yet
+# TODO(#2241) status not supported yet
 function MPI.Wait(req::TracedRequest)
     return Ops.wait(req)
 end
 
-# TODO use `make_tracer` to linearize arbitrary types? check out `MPI.Buffer`
+# TODO(#2241) use `make_tracer` to linearize arbitrary types? check out `MPI.Buffer`
 function MPI.Send(buf::TracedRArray, dest::Integer, tag::Integer, comm::MPI.Comm)
     tag = Reactant.Ops.constant(Int32(tag))
     dest = Reactant.Ops.constant(Int32(dest))
     return MPI.Send(buf, dest, tag, comm)
 end
 
-# TODO use `make_tracer` to linearize arbitrary types? check out `MPI.Buffer`
+# TODO(#2241) use `make_tracer` to linearize arbitrary types? check out `MPI.Buffer`
 function MPI.Send(
     buf::TracedRArray, dest::TracedRNumber, tag::TracedRNumber, comm::MPI.Comm
 )
@@ -46,7 +46,7 @@ function MPI.Send(
     return Ops.send(buf, dest, tag)
 end
 
-# TODO should we error if other `AbstractRequest` types are passed in?
+# TODO(#2241) should we error if other `AbstractRequest` types are passed in?
 function MPI.Isend(
     buf::TracedRArray,
     dest::Integer,
@@ -62,7 +62,7 @@ function MPI.Isend(
     return request
 end
 
-# TODO use `make_tracer` to linearize arbitrary types? check out `MPI.Buffer`
+# TODO(#2241) use `make_tracer` to linearize arbitrary types? check out `MPI.Buffer`
 function MPI.Isend(
     buf::TracedRArray, dest::TracedRNumber, tag::TracedRNumber, comm::MPI.Comm
 )
@@ -77,7 +77,7 @@ function MPI.Recv!(buf::TracedRArray, source::Integer, tag::Integer, comm::MPI.C
     return MPI.Recv!(buf, source, tag, comm)
 end
 
-# TODO use `make_tracer` to delinearize arbitrary types? check out `MPI.Buffer`
+# TODO(#2241) use `make_tracer` to delinearize arbitrary types? check out `MPI.Buffer`
 function MPI.Recv!(
     buf::TracedRArray, source::TracedRNumber, tag::TracedRNumber, comm::MPI.Comm
 )
@@ -100,7 +100,7 @@ function MPI.Irecv!(
     return request
 end
 
-# TODO use `make_tracer` to delinearize arbitrary types? check out `MPI.Buffer`
+# TODO(#2241) use `make_tracer` to delinearize arbitrary types? check out `MPI.Buffer`
 function MPI.Irecv!(
     buf::TracedRArray, source::TracedRNumber, tag::TracedRNumber, comm::MPI.Comm
 )

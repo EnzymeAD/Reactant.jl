@@ -49,7 +49,7 @@ function Base.convert(::Type{inT}, x::T) where {T<:ReactantFloat8,inT<:ReactantF
 end
 Base.convert(::Type{T}, x::T) where {T<:ReactantFloat8} = x
 
-# TODO: Quantized types
+# TODO(#2254): Quantized types
 
 @static if isdefined(Core, :BFloat16)
     const ReactantFloat = Union{
