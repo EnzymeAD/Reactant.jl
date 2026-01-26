@@ -16,6 +16,9 @@ The Reactant.jl codebase contains **216 TODO/FIXME/XXX comments** across 72 file
 - **Tests** (test/): 23 items
 - **Documentation** (docs/): 7 items
 - **Benchmarks** (benchmark/): 4 items
+- **Other**: 3 items
+
+**Total: 219 TODO/FIXME/XXX comments**
 
 ### Categorization by Theme
 1. **General Improvements**: 87 items
