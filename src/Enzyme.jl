@@ -55,6 +55,36 @@ end
     throw(AssertionError("BatchDuplicatedNoNeed not yet supported"))
 end
 
+# Reactant array and number types should be treated as Duplicated for autodiff,
+# even though TracedRFloat <: Real and TracedRInteger <: Integer.
+# This is because they are mutable wrappers around MLIR values.
+for T in (
+    :TracedRArray,
+    :TracedRNumber,
+    :TracedRReal,
+    :TracedRFloat,
+    :TracedRInteger,
+    :TracedRComplex,
+    :ConcretePJRTArray,
+    :ConcretePJRTNumber,
+    :ConcretePJRTFloat,
+    :ConcretePJRTInteger,
+    :ConcretePJRTComplex,
+    :ConcreteIFRTArray,
+    :ConcreteIFRTNumber,
+    :ConcreteIFRTFloat,
+    :ConcreteIFRTInteger,
+    :ConcreteIFRTComplex,
+)
+    @eval begin
+        @inline function Enzyme.guess_activity(
+            ::Type{<:$T}, ::Enzyme.Mode
+        )
+            return Duplicated{<:$T}
+        end
+    end
+end
+
 @inline function Enzyme.make_zero(x::RNumber)
     return zero(Core.Typeof(x))
 end
