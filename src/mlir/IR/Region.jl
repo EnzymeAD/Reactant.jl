@@ -48,7 +48,7 @@ function Base.iterate(it::Region)
     end
 end
 
-function Base.iterate(::Region, block::Block)
+function Base.iterate(::Region, block)
     raw_block = API.mlirBlockGetNextInRegion(block)
     if mlirIsNull(raw_block)
         nothing

@@ -53,7 +53,7 @@ function Base.iterate(it::Block)
     end
 end
 
-function Base.iterate(::Block, op::Operation)
+function Base.iterate(::Block, op)
     raw_op = API.mlirOperationGetNextInBlock(op)
     if mlirIsNull(raw_op)
         nothing

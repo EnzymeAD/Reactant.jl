@@ -80,7 +80,7 @@ function Base.iterate(it::Operation)
     end
 end
 
-function Base.iterate(::Operation, region::Region)
+function Base.iterate(::Operation, region)
     raw_region = API.mlirRegionGetNextInOperation(region)
     if mlirIsNull(raw_region)
         nothing
