@@ -12,6 +12,7 @@ dialect_files = [
     "Builtin.jl",
     "Arith.jl",
     "Affine.jl",
+    "Complex.jl",
     "Func.jl",
     "Enzyme.jl",
     "EnzymeXLA.jl",
@@ -29,6 +30,8 @@ dialect_files = [
     "MPI.jl",
     "MemRef.jl",
     "SparseTensor.jl",
+    "Tensor.jl",
+    "Shape.jl",
     "TritonExt.jl",
 ]
 

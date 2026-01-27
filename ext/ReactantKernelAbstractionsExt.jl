@@ -40,7 +40,7 @@ function KA.ones(b::ReactantBackend, ::Type{T}, dims::Tuple) where {T}
 end
 
 KA.get_backend(::Reactant.AnyTracedRArray) = ReactantBackend()
-KA.get_backend(::Reactant.AnyConcreteRArray) = ReactantBackend()
+KA.get_backend(::Reactant.UnionAnyConcreteRArray) = ReactantBackend()
 function KA.synchronize(::ReactantBackend) end
 
 Adapt.adapt_storage(::ReactantBackend, a::Array) = a

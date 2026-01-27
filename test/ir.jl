@@ -4,7 +4,7 @@ using Reactant: MLIR
     mod = MLIR.IR.with_context() do ctx
         mod = MLIR.IR.Module()
 
-        MLIR.IR.mmodule!(mod) do
+        MLIR.IR.with_module(mod) do
             MLIR.IR.inject!(
                 "MPI_COMM_WORLD",
                 "llvm.mlir.global constant @MPI_COMM_WORLD() : !llvm.ptr",

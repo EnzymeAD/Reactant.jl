@@ -101,7 +101,8 @@ export default defineConfig({
             text: "Persistent Compilation Cache",
             link: "/tutorials/persistent_compile_cache",
           },
-          { text: "Raising", link: "/tutorials/raising" }
+          { text: "Raising", link: "/tutorials/raising" },
+          { text: "Computational kernels", link: "/tutorials/kernels" }
         ],
       },
       {
@@ -119,6 +120,7 @@ export default defineConfig({
               { text: "Affine", link: "/api/dialects/affine" },
               { text: "Builtin", link: "/api/dialects/builtin" },
               { text: "Chlo", link: "/api/dialects/chlo" },
+              { text: "Complex", link: "/api/dialects/complex" },
               { text: "Enzyme", link: "/api/dialects/enzyme" },
               { text: "EnzymeXLA", link: "/api/dialects/enzymexla" },
               { text: "Func", link: "/api/dialects/func" },
@@ -128,9 +130,11 @@ export default defineConfig({
               { text: "MemRef", link: "/api/dialects/memref" },
               { text: "Mosaic GPU", link: "/api/dialects/mosaicgpu" },
               { text: "NVVM", link: "/api/dialects/nvvm" },
+              { text: "Shape", link: "/api/dialects/shape" },
               { text: "Shardy", link: "/api/dialects/shardy" },
               { text: "SparseTensor", link: "/api/dialects/sparsetensor" },
               { text: "StableHLO", link: "/api/dialects/stablehlo" },
+              { text: "Tensor", link: "/api/dialects/tensor" },
               { text: "Triton", link: "/api/dialects/triton" },
               { text: "TritonExt", link: "/api/dialects/tritonext" },
               { text: "TPU", link: "/api/dialects/tpu" },
@@ -186,7 +190,8 @@ export default defineConfig({
             text: "Persistent Compilation Cache",
             link: "/tutorials/persistent_compile_cache",
           },
-          { text: "Raising", link: "/tutorials/raising" }
+          { text: "Raising", link: "/tutorials/raising" },
+          { text: "Computational kernels", link: "/tutorials/kernels" }
         ],
       }
     ],
@@ -211,6 +216,7 @@ export default defineConfig({
               { text: "Affine", link: "/api/dialects/affine" },
               { text: "Builtin", link: "/api/dialects/builtin" },
               { text: "Chlo", link: "/api/dialects/chlo" },
+              { text: "Complex", link: "/api/dialects/complex" },
               { text: "Enzyme", link: "/api/dialects/enzyme" },
               { text: "EnzymeXLA", link: "/api/dialects/enzymexla" },
               { text: "Func", link: "/api/dialects/func" },
@@ -220,9 +226,11 @@ export default defineConfig({
               { text: "MemRef", link: "/api/dialects/memref" },
               { text: "Mosaic GPU", link: "/api/dialects/mosaicgpu" },
               { text: "NVVM", link: "/api/dialects/nvvm" },
+              { text: "Shape", link: "/api/dialects/shape" },
               { text: "Shardy", link: "/api/dialects/shardy" },
               { text: "SparseTensor", link: "/api/dialects/sparsetensor" },
               { text: "StableHLO", link: "/api/dialects/stablehlo" },
+              { text: "Tensor", link: "/api/dialects/tensor" },
               { text: "Triton", link: "/api/dialects/triton" },
               { text: "TritonExt", link: "/api/dialects/tritonext" },
               { text: "TPU", link: "/api/dialects/tpu" },
