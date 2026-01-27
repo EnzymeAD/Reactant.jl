@@ -1855,7 +1855,8 @@ ifrt_compile_internal(ifrt::Client *client, MlirModule cmod,
   auto compiler = client->GetDefaultCompiler();
 
   return reactant::capture(MyValueOrThrow(
-      compiler->CompileAndLoad(std::move(program), std::move(options))));
+      compiler->CompileAndLoad(std::move(program), std::move(options))
+          .Await()));
 }
 
 // we might me interested in the `Compiler::Compile` method variant that accepts

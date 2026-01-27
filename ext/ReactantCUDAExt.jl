@@ -27,7 +27,7 @@ struct CuTracedArray{T,N,A,Size} <: DenseArray{T,N}
     ptr::Core.LLVMPtr{T,A}
 
     function CuTracedArray{T,N,A,Size}(xs::TracedRArray) where {T,N,A,Size}
-        gc_vec = Reactant.Compiler.context_gc_vector[MLIR.IR.context()]
+        gc_vec = Reactant.Compiler.context_gc_vector[MLIR.IR.current_context()]
         push!(gc_vec, xs)
         @assert gc_vec[end] === xs
         ptr = Base.reinterpret(Core.LLVMPtr{T,CUDA.AS.Global}, Base.pointer_from_objref(xs))
@@ -41,7 +41,7 @@ struct CuTracedRNumber{T,A} <: Number
     ptr::Core.LLVMPtr{T,A}
 
     function CuTracedRNumber{T,A}(xs::TracedRNumber) where {T,A}
-        gc_vec = Reactant.Compiler.context_gc_vector[MLIR.IR.context()]
+        gc_vec = Reactant.Compiler.context_gc_vector[MLIR.IR.current_context()]
         push!(gc_vec, xs)
         @assert gc_vec[end] === xs
         ptr = Base.reinterpret(Core.LLVMPtr{T,CUDA.AS.Global}, Base.pointer_from_objref(xs))
@@ -966,13 +966,13 @@ function compile(job)
         # it is probably safer to reparse a string using the right llvm module api, so we will do that.
         mmod = MLIR.IR.Module(
             @ccall MLIR.API.mlir_c.ConvertLLVMStrToMLIR(
-                modstr::Cstring, MLIR.IR.context()::MLIR.API.MlirContext
+                modstr::Cstring, MLIR.IR.current_context()::MLIR.API.MlirContext
             )::MLIR.API.MlirModule
         )
         @assert mmod != C_NULL
 
         linkRes = @ccall MLIR.API.mlir_c.LinkInModule(
-            MLIR.IR.mmodule()::MLIR.API.MlirModule,
+            MLIR.IR.current_module()::MLIR.API.MlirModule,
             mmod::MLIR.API.MlirModule,
             entryname::Cstring,
         )::MLIR.API.MlirOperation
@@ -1071,7 +1071,7 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
 ) where {F,tt}
     blockdim = CUDA.CuDim3(blocks)
     threaddim = CUDA.CuDim3(threads)
-    mod = MLIR.IR.mmodule()
+    mod = MLIR.IR.current_module()
 
     if convert == Val(true)
         args = recudaconvert.(args)
@@ -1084,7 +1084,7 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
     fname = func.entry
 
     wrapper_tys = MLIR.IR.Type[]
-    ctx = MLIR.IR.context()
+    ctx = MLIR.IR.current_context()
     cullvm_ty = MLIR.IR.Type(MLIR.API.mlirLLVMPointerTypeGet(ctx, 1))
 
     # linearize kernel arguments
@@ -1110,7 +1110,7 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
     wrapftype = MLIR.IR.Type(
         MLIR.API.mlirLLVMFunctionTypeGet(voidty, length(wrapper_tys), wrapper_tys, false)
     )
-    wrapfunc = MLIR.IR.block!(MLIR.IR.body(mod)) do
+    wrapfunc = MLIR.IR.with_block(MLIR.IR.body(mod)) do
         return MLIR.Dialects.llvm.func(;
             sym_name,
             sym_visibility=MLIR.IR.Attribute("private"),
@@ -1135,7 +1135,7 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
 
     symtab = MLIR.IR.SymbolTable(MLIR.IR.Operation(mod))
     gpufunc = MLIR.IR.lookup(symtab, fname)
-    MLIR.IR.attr!(
+    MLIR.IR.setattr!(
         gpufunc,
         "CConv",
         MLIR.IR.Attribute(MLIR.API.mlirLLVMCConvAttrGet(ctx, MLIR.API.MlirLLVMCConvC)),
@@ -1156,8 +1156,8 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
             continue
         end
 
-        # TODO(#2240) check for only integer and explicitly non cutraced types
-        MLIR.IR.block!(wrapbody) do
+        # TODO(#2240): check for only integer and explicitly non cutraced types
+        MLIR.IR.with_block(wrapbody) do
             argty = MLIR.IR.Type(
                 MLIR.API.mlirLLVMFunctionTypeGetInput(gpu_function_type, trueidx - 1)
             )
@@ -1201,7 +1201,7 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
         push!(restys, MLIR.IR.type(arg))
         push!(mlir_args, arg)
 
-        ctx = MLIR.IR.context()
+        ctx = MLIR.IR.current_context()
         out_tup = Ref{Int64}(argidx - 1)
         push!(
             aliases,
@@ -1228,7 +1228,7 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
             julia_arg = allargs[p[2]]
 
             offset = get_field_offset(typeof(julia_arg), p[3:end])
-            MLIR.IR.block!(wrapbody) do
+            MLIR.IR.with_block(wrapbody) do
                 ptr = MLIR.IR.result(
                     MLIR.Dialects.llvm.getelementptr(
                         alloc,
@@ -1245,7 +1245,7 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
         argidx += 1
     end
 
-    MLIR.IR.block!(wrapbody) do
+    MLIR.IR.with_block(wrapbody) do
         for arg in allocs
             if arg === nothing
                 continue
@@ -1296,7 +1296,7 @@ Reactant.@reactant_overlay @noinline function CUDA.cufunction(
 ) where {F,TT}
     res = Base.@lock CUDA.cufunction_lock begin
         # compile the function
-        cache = llvm_compiler_cache(MLIR.IR.mmodule())
+        cache = llvm_compiler_cache(MLIR.IR.current_module())
         source = CUDA.methodinstance(F, tt)
         # cuda = CUDA.active_state()
         device = nothing # cuda.device

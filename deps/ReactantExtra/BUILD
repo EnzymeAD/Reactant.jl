@@ -1508,6 +1508,24 @@ gentbl_cc_library(
 )
 
 gentbl_cc_library(
+    name = "ComplexJLIncGen",
+    tbl_outs = [
+        (
+            [
+                "--generator=jl-op-defs",
+                "--disable-module-wrap=0",
+            ],
+            "Complex.jl",
+        ),
+    ],
+    tblgen = "//:mlir-jl-tblgen",
+    td_file = "@llvm-project//mlir:include/mlir/Dialect/Complex/IR/ComplexOps.td",
+    deps = [
+        "@llvm-project//mlir:ComplexOpsTdFiles",
+    ],
+)
+
+gentbl_cc_library(
     name = "FuncJLIncGen",
     tbl_outs = [
         (
@@ -1815,6 +1833,42 @@ gentbl_cc_library(
     td_file = "@llvm-project//mlir:include/mlir/Dialect/SparseTensor/IR/SparseTensorOps.td",
     deps = [
         "@llvm-project//mlir:SparseTensorTdFiles",
+    ],
+)
+
+gentbl_cc_library(
+    name = "TensorJLIncGen",
+    tbl_outs = [
+        (
+            [
+                "--generator=jl-op-defs",
+                "--disable-module-wrap=0",
+            ],
+            "Tensor.jl",
+        ),
+    ],
+    tblgen = "//:mlir-jl-tblgen",
+    td_file = "@llvm-project//mlir:include/mlir/Dialect/Tensor/IR/TensorOps.td",
+    deps = [
+        "@llvm-project//mlir:TensorOpsTdFiles",
+    ],
+)
+
+gentbl_cc_library(
+    name = "ShapeJLIncGen",
+    tbl_outs = [
+        (
+            [
+                "--generator=jl-op-defs",
+                "--disable-module-wrap=0",
+            ],
+            "Shape.jl",
+        ),
+    ],
+    tblgen = "//:mlir-jl-tblgen",
+    td_file = "@llvm-project//mlir:include/mlir/Dialect/Shape/IR/ShapeOps.td",
+    deps = [
+        "@llvm-project//mlir:ShapeOpsTdFiles",
     ],
 )
 

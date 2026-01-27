@@ -32,7 +32,7 @@ function test()
         push!(MLIR.IR.region(func, 1), fnbody)
 
         GC.@preserve mod func fnbody begin
-            MLIR.IR.block!(fnbody) do
+            MLIR.IR.with_block(fnbody) do
                 a = ones(4)
                 b = ones(4)
                 d = Data(

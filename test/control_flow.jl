@@ -836,7 +836,7 @@ end
         @test @jit(traced_add(a_ra, b_ra)) ≈ traced_add(a, b)
         ir = @code_hlo optimize = false traced_add(a_ra, b_ra)
         func_names = [
-            String(Reactant.MLIR.IR.attr(op, "sym_name")) for
+            String(Reactant.MLIR.IR.getattr(op, "sym_name")) for
             op in Reactant.MLIR.IR.OperationIterator(Reactant.MLIR.IR.body(ir))
         ]
         @test any(contains("traced_add"), func_names)
@@ -859,7 +859,7 @@ end
         @test @jit(traced_multiply(a_ra, b_ra)) ≈ traced_multiply(a, b)
         ir = @code_hlo optimize = false traced_multiply(a_ra, b_ra)
         func_names = [
-            String(Reactant.MLIR.IR.attr(op, "sym_name")) for
+            String(Reactant.MLIR.IR.getattr(op, "sym_name")) for
             op in Reactant.MLIR.IR.OperationIterator(Reactant.MLIR.IR.body(ir))
         ]
         @test any(contains("traced_multiply"), func_names)
@@ -876,7 +876,7 @@ end
         @test @jit(singleline(a_ra)) ≈ singleline(a)
         ir = @code_hlo optimize = false singleline(a_ra)
         func_names = [
-            String(Reactant.MLIR.IR.attr(op, "sym_name")) for
+            String(Reactant.MLIR.IR.getattr(op, "sym_name")) for
             op in Reactant.MLIR.IR.OperationIterator(Reactant.MLIR.IR.body(ir))
         ]
         @test any(contains("singleline"), func_names)
@@ -901,7 +901,7 @@ end
         @test @jit(fn1(a_ra)) ≈ fn1(a)
         ir = @code_hlo optimize = false fn1(a_ra)
         func_names = [
-            String(Reactant.MLIR.IR.attr(op, "sym_name")) for
+            String(Reactant.MLIR.IR.getattr(op, "sym_name")) for
             op in Reactant.MLIR.IR.OperationIterator(Reactant.MLIR.IR.body(ir))
         ]
         @test any(contains("FunctorTest1"), func_names)
@@ -920,7 +920,7 @@ end
         @test @jit(func_with_kwargs(a_ra; y=2.0f0)) ≈ func_with_kwargs(a; y=2.0f0)
         ir = @code_hlo optimize = false func_with_kwargs(a_ra; y=2.0f0)
         func_names = [
-            String(Reactant.MLIR.IR.attr(op, "sym_name")) for
+            String(Reactant.MLIR.IR.getattr(op, "sym_name")) for
             op in Reactant.MLIR.IR.OperationIterator(Reactant.MLIR.IR.body(ir))
         ]
         @test any(contains("kwcall"), func_names)
