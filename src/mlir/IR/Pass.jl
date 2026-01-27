@@ -89,14 +89,19 @@ const MLIR_DUMP_COUNTER = Threads.Atomic{Int}(0)
 
 const DUMP_RNG = StableRNG(0)
 
-dump_mlir(
+function dump_mlir(
     mod::Module, pm::Union{Nothing,PassManager}=nothing, mode::String=""; failed::Bool=false
-) = dump_mlir(Operation(mod), pm, mode; failed)
+)
+    return dump_mlir(Operation(mod), pm, mode; failed)
+end
 
 # Utilities for dumping to a file the module of a failed compilation, useful for
 # debugging purposes.
 function dump_mlir(
-    mod::Operation, pm::Union{Nothing,PassManager}=nothing, mode::String=""; failed::Bool=false
+    mod::Operation,
+    pm::Union{Nothing,PassManager}=nothing,
+    mode::String="";
+    failed::Bool=false,
 )
     try
         # If `DUMP_MLIR_DIR` is `nothing`, create a persistent new temp
@@ -174,7 +179,8 @@ Run the provided `passManager` on the given `module`.
 """
 function run!(pm::PassManager, operation, key::String="")
     # Dump MLIR before running the pass manager, but also print the list of passes that will be called later.
-    DUMP_MLIR_ALWAYS[] && dump_mlir(operation, pm, isempty(key) ? "pre_pm" : "pre_$(key)_pm")
+    DUMP_MLIR_ALWAYS[] &&
+        dump_mlir(operation, pm, isempty(key) ? "pre_pm" : "pre_$(key)_pm")
     status = LogicalResult(@static if isdefined(API, :mlirPassManagerRunOnOp)
         API.mlirPassManagerRunOnOp(pm, operation)
     else
