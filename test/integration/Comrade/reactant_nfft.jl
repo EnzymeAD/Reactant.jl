@@ -86,6 +86,8 @@ end
 function ReactantNFFTPlan(
     k::AbstractArray{T}, N::NTuple{D,Int}; fftflags=nothing, kwargs...
 ) where {T,D}
+
+
     dims = 1:D
     CT = complex(T)
     params, N, NOut, J, Ñ, dims_ = NFFT.initParams(k, N, dims; kwargs...)
@@ -93,17 +95,18 @@ function ReactantNFFTPlan(
     BP = plan_bfft!(zeros(CT, N))
     params.storeDeconvolutionIdx = true # GPU_NFFT only works this way
     params.precompute = NFFT.FULL # GPU_NFFT only works this way
-    tmpVec = ConcreteRArray(zeros(CT, Ñ))
 
     windowLinInterp, windowPolyInterp, windowHatInvLUT, deconvolveIdx, B = NFFT.precomputation(
         k, N[dims_], Ñ[dims_], params
     )
 
     U = params.storeDeconvolutionIdx ? N : ntuple(d -> 0, Val(D))
+
+    tmpVec = ConcreteRArray(zeros(CT, Ñ))
     tmpVecHat = ConcreteRArray(zeros(CT, U))
     deconvIdx = ConcreteRArray(Int.(deconvolveIdx))
     winHatInvLUT = ConcreteRArray(complex(windowHatInvLUT[1]))
-    B_ = ConcreteRArray(complex(Array(B))) # Bit hacky
+    B_ = (ConcreteRArray(complex.(Array(B))))
 
     return ReactantNFFTPlan{
         T,

@@ -1,26 +1,42 @@
+using Pkg; Pkg.activate(@__DIR__)
 using NFFT
 using CUDA
 using Reactant
 using VLBISkyModels
 using LinearAlgebra
+using Accessors
+using AbstractFFTs
+using BenchmarkTools
+using NonuniformFFTs
 
 include("reactant_nfft.jl")
 
 
-sz =  (128, 128)
-ksz = 256
+T = Float32
 
-k = rand(2, ksz) .- 0.5
+sz =  (128, 128)
+ksz = 500
+
+k = rand(T, 2, ksz) .- T(0.5)
 
 pnf = plan_nfft(NFFTBackend(), k, sz; precompute=NFFT.TENSOR)
 
 kcu = CuArray(k)
+
+# CUDA NFFT plan (sparse)
 pnfcu = plan_nfft(NFFTBackend(), CuArray, kcu, sz)
+
+# Make a dense version of the plan for comparison
+pnfcu_dense = @set pnfcu.B = CuArray(Array(pnfcu.B))
+
+# Reactant NFFT plan
 pre = ReactantNFFTPlan(k, sz)
 
+# NonuniformFFTs plan
+pnu = NonuniformFFTs.NFFTPlan(kcu, sz)
 
-img = rand(ComplexF64, sz...)
-out = zeros(ComplexF64, ksz)
+img = rand(Complex{T}, sz...)
+out = zeros(Complex{T}, ksz)
 
 outcu = CuArray(out)
 imgcu = CuArray(img)
@@ -28,9 +44,22 @@ imgcu = CuArray(img)
 imgr = Reactant.to_rarray(img)
 outr = Reactant.to_rarray(out)
 
-rnfft! = @compile sync=true mul!(outr, pre, imgr)
-@benchmark rnfft!(outr, pre, imgr)
+# Reactant NFFT
+Reactant.@profile mul!(outr, pre, imgr)
+nfftr! = @compile sync=true mul!(outr, pre, imgr)
+@benchmark nfftr!($outr, $pre, $imgr)
 
+# CUDA Dense
+CUDA.@profile mul!(outcu, pnfcu_dense, imgcu)
+@benchmark CUDA.@sync mul!($outcu, $pnfcu_dense, $imgcu)
+
+# CUDA Sparse
+CUDA.@profile mul!(outcu, pnfcu, imgcu)
 @benchmark CUDA.@sync mul!($outcu, $pnfcu, $imgcu)
 
+# NonuniformFFTs (CUDA)
+CUDA.@profile mul!(outcu, pnu, imgcu)
+@benchmark CUDA.@sync mul!($outcu, $pnu, $imgcu)
+
+# NFFT (CPU)
 @benchmark mul!($out, $pnf, $img)
