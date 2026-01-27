@@ -1,21 +1,22 @@
 
-using Pkg;
-Pkg.activate(@__DIR__);
-# DO this because 1.10 doesn't support sources
-Pkg.add([
-    PackageSpec(; name="Reactant", path = joinpath(@__DIR__, "../../..")),
-    PackageSpec(; name="ComradeBase", rev="ptiede-reactantex"),
-    PackageSpec(; name="Comrade", rev="ptiede-reactant"),
-    PackageSpec(; name="VLBISkyModels", rev="ptiede-copyto"),
-    PackageSpec(; name="VLBILikelihoods", rev="ptiede-reactant"),
-    PackageSpec(; name="VLBIImagePriors", rev="ptiede-reactantperf"),
-    PackageSpec(;
-        url="https://github.com/ptiede/TransformVariables.jl", rev="ptiede-reactant"
-    ),
-])
+# using Pkg;
+# Pkg.activate(@__DIR__);
+# # DO this because 1.10 doesn't support sources
+# Pkg.add([
+#     PackageSpec(; name="Reactant", path = joinpath(@__DIR__, "../../..")),
+#     PackageSpec(; name="ComradeBase", rev="ptiede-reactantex"),
+#     PackageSpec(; name="Comrade", rev="ptiede-reactant"),
+#     PackageSpec(; name="VLBISkyModels", rev="ptiede-copyto"),
+#     PackageSpec(; name="VLBILikelihoods", rev="ptiede-reactant"),
+#     PackageSpec(; name="VLBIImagePriors", rev="ptiede-reactantperf"),
+#     PackageSpec(;
+#         url="https://github.com/ptiede/TransformVariables.jl", rev="ptiede-reactant"
+#     ),
+# ])
 
-Pkg.instantiate()
-Pkg.precompile()
+# Pkg.instantiate()
+# Pkg.precompile()
+
 using Reactant
 using NFFT
 using LinearAlgebra
