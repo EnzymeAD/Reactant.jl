@@ -60,6 +60,36 @@ function Base.show(io::IO, operation::Operation)
     return write(io, rstrip(String(take!(buffer))))
 end
 
+Base.IteratorSize(::Core.Type{Operation}) = Base.HasLength()
+Base.IteratorEltype(::Core.Type{Operation}) = Base.HasEltype()
+Base.eltype(::Operation) = Region
+Base.length(it::Operation) = nregions(it)
+
+"""
+    Base.iterate(op::Operation)
+
+Iterates over all sub-regions for the given operation.
+"""
+function Base.iterate(it::Operation)
+    raw_region = API.mlirOperationGetFirstRegion(it)
+    if mlirIsNull(raw_region)
+        nothing
+    else
+        region = Region(raw_region, false)
+        (region, region)
+    end
+end
+
+function Base.iterate(::Operation, region)
+    raw_region = API.mlirRegionGetNextInOperation(region)
+    if mlirIsNull(raw_region)
+        nothing
+    else
+        region = Region(raw_region, false)
+        (region, region)
+    end
+end
+
 function lose_ownership!(operation::Operation)
     @assert operation.owned
     @atomic operation.owned = false

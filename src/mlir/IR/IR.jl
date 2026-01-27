@@ -15,7 +15,6 @@ export nattrs, getattr, setattr!, rmattr!
 export nregions, region
 export nresults, result, noperands, operand, setoperand!
 export nsuccessors, successor
-export BlockIterator, RegionIterator, OperationIterator
 export @affinemap
 
 using Random: randstring
@@ -40,7 +39,6 @@ include("AffineExpr.jl")
 include("AffineMap.jl")
 include("Attribute.jl")
 include("IntegerSet.jl")
-include("Iterators.jl")
 
 include("ExecutionEngine.jl")
 include("Pass.jl")

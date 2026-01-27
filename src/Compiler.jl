@@ -2524,7 +2524,7 @@ function compile_mlir!(
 
     # drop certain operations from the module if using TPU backend
     if backend == "tpu"
-        for op in collect(MLIR.IR.OperationIterator(MLIR.IR.body(mod)))
+        for op in collect(MLIR.IR.body(mod))
             if MLIR.IR.dialect(op) == :llvm
                 MLIR.API.mlirOperationDestroy(op)
                 op.ref = MLIR.API.MlirOperation(C_NULL)
