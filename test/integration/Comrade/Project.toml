@@ -39,4 +39,4 @@ url = "https://github.com/ptiede/VLBILikelihoods.jl"
 
 [sources.VLBISkyModels]
 rev = "ptiede-copyto"
-url = "https://github.com/ptiede/VLBISkyModels.jl"
+url = "https://github.com/EHTJulia/VLBISkyModels.jl"
