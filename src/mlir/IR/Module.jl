@@ -65,19 +65,19 @@ verifyall(mod_::Module; debug=false) = verifyall(Operation(mod_); debug)
 function activate!(blk::Module)
     stack = get!(task_local_storage(), :mlir_module) do
         return Module[]
-    end
+    end::Vector{Module}
     Base.push!(stack, blk)
     return nothing
 end
 
 function deactivate!(blk::Module)
     current_module() == blk || error("Deactivating wrong block")
-    return Base.pop!(task_local_storage(:mlir_module))
+    return Base.pop!(task_local_storage(:mlir_module)::Vector{Module})
 end
 
 function has_module()
     return haskey(task_local_storage(), :mlir_module) &&
-           !Base.isempty(task_local_storage(:mlir_module))
+           !Base.isempty(task_local_storage(:mlir_module)::Vector{Module})
 end
 
 function current_module(; throw_error::Core.Bool=true)
@@ -85,7 +85,7 @@ function current_module(; throw_error::Core.Bool=true)
         throw_error && error("No MLIR module is active")
         return nothing
     end
-    return last(task_local_storage(:mlir_module))
+    return last(task_local_storage(:mlir_module)::Vector{Module})
 end
 
 function with_module(f, blk::Module)

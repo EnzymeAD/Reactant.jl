@@ -139,21 +139,23 @@ struct Token
     mlir_data::MLIR.IR.Value
 end
 
+const __TLSEntryBlockType = Tuple{MLIR.IR.Block,Dict{MLIR.IR.Attribute,TracedRArray}}
+
 function activate_constant_context!(blk::MLIR.IR.Block)
     stack = get!(task_local_storage(), :entry_block) do
-        return Tuple{MLIR.IR.Block,Dict{MLIR.IR.Attribute,TracedRArray}}[]
-    end
+        return __TLSEntryBlockType[]
+    end::Vector{__TLSEntryBlockType}
     Base.push!(stack, (blk, Dict{MLIR.IR.Attribute,TracedRArray}()))
     return nothing
 end
 
 function constant_context(; throw_error::Core.Bool=true)
-    return last(task_local_storage(:entry_block))
+    return last(task_local_storage(:entry_block)::Vector{__TLSEntryBlockType})
 end
 
 function deactivate_constant_context!(blk::MLIR.IR.Block)
     constant_context()[1] == blk || error("Deactivating wrong block")
-    return Base.pop!(task_local_storage(:entry_block))
+    return Base.pop!(task_local_storage(:entry_block)::Vector{__TLSEntryBlockType})
 end
 
 # constant ops
