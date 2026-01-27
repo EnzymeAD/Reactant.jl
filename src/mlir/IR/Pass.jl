@@ -89,10 +89,14 @@ const MLIR_DUMP_COUNTER = Threads.Atomic{Int}(0)
 
 const DUMP_RNG = StableRNG(0)
 
+dump_mlir(
+    mod::Module, pm::Union{Nothing,PassManager}=nothing, mode::String=""; failed::Bool=false
+) = dump_mlir(Operation(mod), pm, mode; failed)
+
 # Utilities for dumping to a file the module of a failed compilation, useful for
 # debugging purposes.
 function dump_mlir(
-    mod::Module, pm::Union{Nothing,PassManager}=nothing, mode::String=""; failed::Bool=false
+    mod::Operation, pm::Union{Nothing,PassManager}=nothing, mode::String=""; failed::Bool=false
 )
     try
         # If `DUMP_MLIR_DIR` is `nothing`, create a persistent new temp
@@ -109,7 +113,7 @@ function dump_mlir(
         mkpath(dir)
 
         # Attempt to get the name of the module if that exists
-        module_op = Operation(mod)
+        module_op = mod
         mod_name = getattr(module_op, String(API.mlirSymbolTableGetSymbolAttributeName()))
         fname = mod_name === nothing ? randstring(DUMP_RNG, 4) : String(mod_name)
         fname = "module_" * lpad(MLIR_DUMP_COUNTER[], 3, "0") * "_$(fname)"
@@ -158,7 +162,7 @@ function try_compile_dump_mlir(f, mod::Module, pm=nothing)
         rethrow()
     finally
         if failed || DUMP_MLIR_ALWAYS[]
-            dump_mlir(mod, pm, "post_xla_compile"; failed)
+            dump_mlir(Operation(mod), pm, "post_xla_compile"; failed)
         end
     end
 end
@@ -168,22 +172,22 @@ end
 
 Run the provided `passManager` on the given `module`.
 """
-function run!(pm::PassManager, mod::Module, key::String="")
+function run!(pm::PassManager, operation, key::String="")
     # Dump MLIR before running the pass manager, but also print the list of passes that will be called later.
-    DUMP_MLIR_ALWAYS[] && dump_mlir(mod, pm, isempty(key) ? "pre_pm" : "pre_$(key)_pm")
+    DUMP_MLIR_ALWAYS[] && dump_mlir(operation, pm, isempty(key) ? "pre_pm" : "pre_$(key)_pm")
     status = LogicalResult(@static if isdefined(API, :mlirPassManagerRunOnOp)
-        API.mlirPassManagerRunOnOp(pm, Operation(mod))
+        API.mlirPassManagerRunOnOp(pm, operation)
     else
-        API.mlirPassManagerRun(pm, mod)
+        API.mlirPassManagerRun(pm, Module(operation))
     end)
     failed = isfailure(status)
     if failed || DUMP_MLIR_ALWAYS[]
-        dump_mlir(mod, pm, isempty(key) ? "post_pm" : "post_$(key)_pm"; failed)
+        dump_mlir(operation, pm, isempty(key) ? "post_pm" : "post_$(key)_pm"; failed)
     end
     if failed
         throw("failed to run pass manager on module")
     end
-    return mod
+    return operation
 end
 
 struct OpPassManager

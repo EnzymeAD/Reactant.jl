@@ -1432,7 +1432,7 @@ function run_pass_pipeline!(mod, pass_pipeline, key=""; enable_verifier=true)
     MLIR.IR.enable_verifier!(pm, enable_verifier)
     opm = MLIR.IR.OpPassManager(pm)
     MLIR.IR.add_pipeline!(opm, pass_pipeline)
-    MLIR.IR.run!(pm, mod, key)
+    MLIR.IR.run!(pm, MLIR.IR.Operation(mod), key)
     return mod
 end
 
