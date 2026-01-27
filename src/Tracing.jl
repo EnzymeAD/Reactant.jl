@@ -46,7 +46,6 @@ for T in (
         seen,
         @nospecialize(mode::TraceMode),
         @nospecialize(track_numbers::Type),
-        @nospecialize(ndevices),
         @nospecialize(runtime)
     )
         return T
@@ -58,12 +57,11 @@ Base.@nospecializeinfer function traced_type_inner(
     seen,
     @nospecialize(mode::TraceMode),
     @nospecialize(track_numbers::Type),
-    @nospecialize(ndevices),
     @nospecialize(runtime)
 )
     if mode == ArrayToConcrete && T <: track_numbers
         if runtime isa Val{:PJRT}
-            return ConcretePJRTNumber{T,_unwrap_val(ndevices)}
+            return ConcretePJRTNumber{T}
         elseif runtime isa Val{:IFRT}
             return ConcreteIFRTNumber{T}
         else
@@ -81,11 +79,10 @@ Base.@nospecializeinfer function traced_type_inner(
     seen,
     @nospecialize(mode::TraceMode),
     @nospecialize(track_numbers::Type),
-    @nospecialize(ndevices),
     @nospecialize(runtime)
 )
     C isa UnionAll || return Complex{
-        traced_type_inner(C.parameters[1], seen, mode, track_numbers, ndevices, runtime)
+        traced_type_inner(C.parameters[1], seen, mode, track_numbers, runtime)
     }
     return C
 end
@@ -95,7 +92,6 @@ Base.@nospecializeinfer function traced_tuple_type_inner(
     seen,
     @nospecialize(mode::TraceMode),
     @nospecialize(track_numbers::Type),
-    @nospecialize(ndevices),
     @nospecialize(runtime)
 )
     if T === Tuple
@@ -104,17 +100,14 @@ Base.@nospecializeinfer function traced_tuple_type_inner(
     if T isa UnionAll
         if T.var.lb === Union{} && T.var.ub === Any
             return UnionAll(
-                T.var,
-                traced_type_inner(T.body, seen, mode, track_numbers, ndevices, runtime),
+                T.var, traced_type_inner(T.body, seen, mode, track_numbers, runtime)
             )
         end
         throw(AssertionError("Type $T is not concrete type or concrete tuple"))
     end
     TT = Union{Type,Core.TypeofVararg}[]
     for i in 1:length(T.parameters)
-        st = traced_type_inner(
-            T.parameters[i], seen, mode, track_numbers, ndevices, runtime
-        )
+        st = traced_type_inner(T.parameters[i], seen, mode, track_numbers, runtime)
         push!(TT, st)
     end
     return Tuple{TT...}
@@ -125,10 +118,9 @@ Base.@nospecializeinfer function traced_type_inner(
     seen,
     mode::TraceMode,
     @nospecialize(track_numbers::Type),
-    @nospecialize(ndevices),
     @nospecialize(runtime)
 )
-    return traced_tuple_type_inner(T, seen, mode, track_numbers, ndevices, runtime)
+    return traced_tuple_type_inner(T, seen, mode, track_numbers, runtime)
 end
 
 Base.@nospecializeinfer function traced_type_inner(
@@ -136,10 +128,9 @@ Base.@nospecializeinfer function traced_type_inner(
     seen,
     @nospecialize(mode::TraceMode),
     @nospecialize(track_numbers::Type),
-    @nospecialize(ndevices),
     @nospecialize(runtime)
 )
-    return Vararg{traced_type_inner(T.T, seen, mode, track_numbers, ndevices, runtime),T.N}
+    return Vararg{traced_type_inner(T.T, seen, mode, track_numbers, runtime),T.N}
 end
 
 Base.@nospecializeinfer function traced_type_inner(
@@ -147,7 +138,6 @@ Base.@nospecializeinfer function traced_type_inner(
     seen,
     @nospecialize(mode::TraceMode),
     @nospecialize(track_numbers::Type),
-    @nospecialize(ndevices),
     @nospecialize(runtime)
 )
     if T.lb === Union{} && T.ub === Any
@@ -161,12 +151,11 @@ Base.@nospecializeinfer function traced_type_inner(
     seen,
     @nospecialize(mode::TraceMode),
     @nospecialize(track_numbers::Type),
-    @nospecialize(ndevices),
     @nospecialize(runtime)
 )
     N = T.parameters[1]
     V = T.parameters[2]
-    return NamedTuple{N,traced_type_inner(V, seen, mode, track_numbers, ndevices, runtime)}
+    return NamedTuple{N,traced_type_inner(V, seen, mode, track_numbers, runtime)}
 end
 
 Base.@nospecializeinfer @inline dict_key(::Type{<:AbstractDict}) = nothing
@@ -191,7 +180,6 @@ Base.@nospecializeinfer function traced_type_inner(
     seen,
     @nospecialize(mode::TraceMode),
     @nospecialize(track_numbers::Type),
-    @nospecialize(ndevices),
     @nospecialize(runtime)
 )
     V = dict_value(T)
@@ -199,7 +187,7 @@ Base.@nospecializeinfer function traced_type_inner(
         return T
     else
         K = dict_key(T)
-        V2 = traced_type_inner(V, seen, mode, track_numbers, ndevices, runtime)
+        V2 = traced_type_inner(V, seen, mode, track_numbers, runtime)
         if V == V2
             return T
         end
@@ -221,7 +209,6 @@ Base.@nospecializeinfer function traced_type_inner(
     seen,
     @nospecialize(mode::TraceMode),
     @nospecialize(track_numbers::Type),
-    @nospecialize(ndevices),
     @nospecialize(runtime)
 )
     if T0 isa UnionAll
@@ -236,7 +223,7 @@ Base.@nospecializeinfer function traced_type_inner(
         return T0
     elseif mode == ArrayToConcrete
         @assert runtime isa Val{:PJRT}
-        return ConcretePJRTNumber{T,_unwrap_val(ndevices)}
+        return ConcretePJRTNumber{T}
     else
         throw("Unsupported mode: $mode")
     end
@@ -247,7 +234,6 @@ Base.@nospecializeinfer function traced_type_inner(
     seen,
     @nospecialize(mode::TraceMode),
     @nospecialize(track_numbers::Type),
-    @nospecialize(ndevices),
     @nospecialize(runtime)
 )
     T = T0 isa UnionAll ? T0.body.parameters[1] : T0.parameters[1]
@@ -269,7 +255,6 @@ Base.@nospecializeinfer function traced_type_inner(
     seen,
     @nospecialize(mode::TraceMode),
     @nospecialize(track_numbers::Type),
-    @nospecialize(ndevices),
     @nospecialize(runtime)
 )
     if T isa UnionAll
@@ -288,7 +273,7 @@ Base.@nospecializeinfer function traced_type_inner(
         return T
     elseif mode == ArrayToConcrete
         @assert runtime isa Val{:PJRT}
-        return ConcretePJRTArray{elT,N,_unwrap_val(ndevices)}
+        return ConcretePJRTArray{elT,N}
     else
         throw("Unsupported mode: $mode")
     end
@@ -299,7 +284,6 @@ Base.@nospecializeinfer function traced_type_inner(
     seen,
     @nospecialize(mode::TraceMode),
     @nospecialize(track_numbers::Type),
-    @nospecialize(ndevices),
     @nospecialize(runtime)
 )
     if T isa UnionAll
@@ -329,7 +313,6 @@ Base.@nospecializeinfer function traced_type_inner(
     seen,
     mode::TraceMode,
     @nospecialize(track_numbers::Type),
-    @nospecialize(ndevices),
     @nospecialize(runtime)
 )
     return error("This should not happen")
@@ -340,20 +323,15 @@ Base.@nospecializeinfer function traced_type_inner(
     seen,
     mode::TraceMode,
     @nospecialize(track_numbers::Type),
-    @nospecialize(ndevices),
     @nospecialize(runtime)
 )
     if mode == ConcreteToTraced
         throw("TracedRArray cannot be traced")
     elseif mode == TracedToConcrete
         if runtime isa Val{:PJRT}
-            return ConcretePJRTArray{T.parameters[1],T.parameters[2],_unwrap_val(ndevices)}
+            return ConcretePJRTArray{T.parameters[1],T.parameters[2]}
         elseif runtime isa Val{:IFRT}
-            return ConcreteIFRTArray{
-                T.parameters[1],
-                T.parameters[2],
-                Nothing, # TODO: check if we can ensure no padding??
-            }
+            return ConcreteIFRTArray{T.parameters[1],T.parameters[2]}
         end
         error("Unsupported runtime $runtime")
     elseif mode == TracedToJAX
@@ -370,7 +348,6 @@ Base.@nospecializeinfer function traced_type_inner(
     seen,
     mode::TraceMode,
     @nospecialize(track_numbers::Type),
-    @nospecialize(ndevices),
     @nospecialize(runtime)
 )
     if mode == ConcreteToTraced
@@ -378,9 +355,9 @@ Base.@nospecializeinfer function traced_type_inner(
     elseif mode == TracedToConcrete
         if runtime isa Val{:PJRT}
             if T isa UnionAll
-                return UnionAll(T.var, ConcretePJRTNumber{T.var,_unwrap_val(ndevices)})
+                return UnionAll(T.var, ConcretePJRTNumber{T.var})
             end
-            return ConcretePJRTNumber{T.parameters[1],_unwrap_val(ndevices)}
+            return ConcretePJRTNumber{T.parameters[1]}
         elseif runtime isa Val{:IFRT}
             if T isa UnionAll
                 return UnionAll(T.var, ConcreteIFRTNumber{T.var})
@@ -402,7 +379,6 @@ Base.@nospecializeinfer function traced_type_inner(
     seen,
     @nospecialize(mode::TraceMode),
     @nospecialize(track_numbers::Type),
-    @nospecialize(ndevices),
     @nospecialize(runtime)
 )
     return A
@@ -413,12 +389,11 @@ Base.@nospecializeinfer function traced_type_inner(
     seen,
     mode::TraceMode,
     @nospecialize(track_numbers::Type),
-    @nospecialize(ndevices),
     @nospecialize(runtime)
 ) where {T}
     if mode == ConcreteToTraced
         return AbstractArray{
-            traced_type_inner(eltype(A), seen, mode, track_numbers, ndevices, runtime)
+            traced_type_inner(eltype(A), seen, mode, track_numbers, runtime)
         }
     else
         return A
@@ -430,13 +405,11 @@ Base.@nospecializeinfer function traced_type_inner(
     seen,
     mode::TraceMode,
     @nospecialize(track_numbers::Type),
-    @nospecialize(ndevices),
     @nospecialize(runtime)
 ) where {T,N}
     if mode == ConcreteToTraced
         return AbstractArray{
-            traced_type_inner(eltype(A), seen, mode, track_numbers, ndevices, runtime),
-            ndims(A),
+            traced_type_inner(eltype(A), seen, mode, track_numbers, runtime),ndims(A)
         }
     else
         return A
@@ -448,7 +421,6 @@ Base.@nospecializeinfer function traced_type_inner(
     seen,
     mode::TraceMode,
     @nospecialize(track_numbers::Type),
-    @nospecialize(ndevices),
     @nospecialize(runtime)
 )
     T = eltype(A)
@@ -458,25 +430,18 @@ Base.@nospecializeinfer function traced_type_inner(
             runtime isa Val{:IFRT} && return ConcreteIFRTArray{T}
             error("Unsupported runtime $runtime")
         else
-            return Array{traced_type_inner(T, seen, mode, track_numbers, ndevices, runtime)}
+            return Array{traced_type_inner(T, seen, mode, track_numbers, runtime)}
         end
     else
         N = ndims(A)
         if mode == ArrayToConcrete && T <: ReactantPrimitive
-            runtime isa Val{:PJRT} && return ConcretePJRTArray{T,N,_unwrap_val(ndevices)}
+            runtime isa Val{:PJRT} && return ConcretePJRTArray{T,N}
             if runtime isa Val{:IFRT}
-                # For IFRT, when ndevices is 1, it's not sharded
-                if ndevices isa Val{1}
-                    return ConcreteIFRTArray{T,N,Nothing}
-                else
-                    return ConcreteIFRTArray{T,N}
-                end
+                return ConcreteIFRTArray{T,N}
             end
             error("Unsupported runtime $runtime")
         else
-            return Array{
-                traced_type_inner(T, seen, mode, track_numbers, ndevices, runtime),N
-            }
+            return Array{traced_type_inner(T, seen, mode, track_numbers, runtime),N}
         end
     end
 end
@@ -486,11 +451,10 @@ Base.@nospecializeinfer function traced_type_inner(
     seen,
     mode::TraceMode,
     @nospecialize(track_numbers::Type),
-    @nospecialize(ndevices),
     @nospecialize(runtime)
 ) where {T,N,P,I,L}
-    P2 = traced_type_inner(P, seen, mode, track_numbers, ndevices, runtime)
-    I2 = traced_type_inner(I, seen, mode, track_numbers, ndevices, runtime)
+    P2 = traced_type_inner(P, seen, mode, track_numbers, runtime)
+    I2 = traced_type_inner(I, seen, mode, track_numbers, runtime)
     T2 = eltype(P2)
     return SubArray{T2,N,P2,I2,L}
 end
@@ -501,7 +465,6 @@ for P in (Ptr, Core.LLVMPtr, Base.RefValue)
         seen,
         @nospecialize(mode::TraceMode),
         @nospecialize(track_numbers::Type),
-        @nospecialize(ndevices),
         @nospecialize(runtime)
     )
         return $(P)
@@ -513,14 +476,9 @@ for P in (Ptr, Base.RefValue)
         seen,
         @nospecialize(mode::TraceMode),
         @nospecialize(track_numbers::Type),
-        @nospecialize(ndevices),
         @nospecialize(runtime)
     ) where {T}
-        return $P{
-            traced_type_inner(
-                PT.parameters[1], seen, mode, track_numbers, ndevices, runtime
-            ),
-        }
+        return $P{traced_type_inner(PT.parameters[1], seen, mode, track_numbers, runtime)}
     end
 end
 
@@ -529,13 +487,10 @@ Base.@nospecializeinfer function traced_type_inner(
     seen,
     @nospecialize(mode::TraceMode),
     @nospecialize(track_numbers::Type),
-    @nospecialize(ndevices),
     @nospecialize(runtime)
 ) where {T}
     return Core.LLVMPtr{
-        traced_type_inner(
-            PT.body.parameters[1], seen, mode, track_numbers, ndevices, runtime
-        ),
+        traced_type_inner(PT.body.parameters[1], seen, mode, track_numbers, runtime)
     }
 end
 Base.@nospecializeinfer function traced_type_inner(
@@ -543,11 +498,10 @@ Base.@nospecializeinfer function traced_type_inner(
     seen,
     @nospecialize(mode::TraceMode),
     @nospecialize(track_numbers::Type),
-    @nospecialize(ndevices),
     @nospecialize(runtime)
 ) where {T,A}
     return Core.LLVMPtr{
-        traced_type_inner(PT.parameters[1], seen, mode, track_numbers, ndevices, runtime),A
+        traced_type_inner(PT.parameters[1], seen, mode, track_numbers, runtime),A
     }
 end
 
@@ -556,10 +510,9 @@ Base.@nospecializeinfer function traced_type_inner(
     seen,
     @nospecialize(mode::TraceMode),
     @nospecialize(track_numbers::Type),
-    @nospecialize(ndevices),
     @nospecialize(runtime)
 ) where {S}
-    return ReactantRNG{traced_type_inner(S, seen, mode, track_numbers, ndevices, runtime)}
+    return ReactantRNG{traced_type_inner(S, seen, mode, track_numbers, runtime)}
 end
 
 Base.@nospecializeinfer function traced_type_inner(
@@ -567,12 +520,11 @@ Base.@nospecializeinfer function traced_type_inner(
     seen,
     @nospecialize(mode::TraceMode),
     @nospecialize(track_numbers::Type),
-    @nospecialize(ndevices),
     @nospecialize(runtime)
 )
     if mode == ArrayToConcrete
         return ReactantRNG{
-            traced_type_inner(Array{UInt64,1}, seen, mode, track_numbers, ndevices, runtime)
+            traced_type_inner(Array{UInt64,1}, seen, mode, track_numbers, runtime)
         }
     end
     return PT
@@ -605,7 +557,6 @@ Base.@nospecializeinfer function traced_type_inner(
     seen,
     mode::TraceMode,
     @nospecialize(track_numbers::Type),
-    @nospecialize(ndevices),
     @nospecialize(runtime)
 )
     if T === Any
@@ -625,15 +576,14 @@ Base.@nospecializeinfer function traced_type_inner(
     end
 
     if T <: Tuple
-        return traced_tuple_type_inner(T, seen, mode, track_numbers, ndevices, runtime)
+        return traced_tuple_type_inner(T, seen, mode, track_numbers, runtime)
     end
 
     # unknown number of fields
     if Base.inferencebarrier(T) isa UnionAll
         if T.var.lb === Union{} && T.var.ub === Any || T <: Type
             return UnionAll(
-                T.var,
-                traced_type_inner(T.body, seen, mode, track_numbers, ndevices, runtime),
+                T.var, traced_type_inner(T.body, seen, mode, track_numbers, runtime)
             )
         end
         aT = Base.argument_datatype(T)
@@ -648,8 +598,8 @@ Base.@nospecializeinfer function traced_type_inner(
 
     if T isa Union
         return Union{
-            traced_type_inner(T.a, seen, mode, track_numbers, ndevices, runtime),
-            traced_type_inner(T.b, seen, mode, track_numbers, ndevices, runtime),
+            traced_type_inner(T.a, seen, mode, track_numbers, runtime),
+            traced_type_inner(T.b, seen, mode, track_numbers, runtime),
         }
     end
 
@@ -662,7 +612,7 @@ Base.@nospecializeinfer function traced_type_inner(
     end
 
     if T <: Tuple
-        return traced_tuple_type_inner(T, seen, mode, track_numbers, ndevices, runtime)
+        return traced_tuple_type_inner(T, seen, mode, track_numbers, runtime)
     end
 
     if haskey(seen, T)
@@ -676,7 +626,7 @@ Base.@nospecializeinfer function traced_type_inner(
     subTys = Union{Type,TypeVar}[]
     for f in 1:fieldcount(T)
         subT = fieldtype(T, f)
-        subTT = traced_type_inner(subT, seen2, mode, track_numbers, ndevices, runtime)
+        subTT = traced_type_inner(subT, seen2, mode, track_numbers, runtime)
         changed |= subT != subTT
         push!(subTys, subTT)
     end
@@ -696,27 +646,22 @@ Base.@nospecializeinfer function traced_type_inner(
     for (i, SST) in enumerate(T.parameters)
         if wrapped_cpjrt_array && i == 1 && SST isa Type && SST <: ReactantPrimitive
             TrT = traced_type_inner(
-                ConcretePJRTNumber{SST,_unwrap_val(ndevices)},
-                seen,
-                mode,
-                track_numbers,
-                ndevices,
-                runtime,
+                ConcretePJRTNumber{SST}, seen, mode, track_numbers, runtime
             )
             push!(subParms, TrT)
         elseif wrapped_cifrt_array && i == 1 && SST isa Type && SST <: ReactantPrimitive
             TrT = traced_type_inner(
-                ConcreteIFRTNumber{SST}, seen, mode, track_numbers, ndevices, runtime
+                ConcreteIFRTNumber{SST}, seen, mode, track_numbers, runtime
             )
             push!(subParms, TrT)
         elseif wrapped_tracedarray && i == 1 && SST isa Type && SST <: TracedRNumber
             TrT = traced_type_inner(
-                unwrapped_eltype(SST), seen, mode, track_numbers, ndevices, runtime
+                unwrapped_eltype(SST), seen, mode, track_numbers, runtime
             )
             push!(subParms, TrT)
         else
             if SST isa Type
-                TrT = traced_type_inner(SST, seen, mode, track_numbers, ndevices, runtime)
+                TrT = traced_type_inner(SST, seen, mode, track_numbers, runtime)
                 push!(subParms, TrT)
             else
                 push!(subParms, SST)
@@ -756,7 +701,7 @@ Base.@nospecializeinfer function traced_type_inner(
 
             subT = fieldtype(T, f)
             subT2 = fieldtype(TT2, f)
-            subTT = traced_type_inner(subT, seen3, mode, track_numbers, ndevices, runtime)
+            subTT = traced_type_inner(subT, seen3, mode, track_numbers, runtime)
             if subT2 != subTT
                 legal = false
                 break
@@ -773,7 +718,7 @@ Base.@nospecializeinfer function traced_type_inner(
     throw(NoFieldMatchError(T, TT2, subTys))
 end
 
-const traced_type_cache = Dict{Tuple{TraceMode,Type,Any},Dict{Type,Type}}()
+const traced_type_cache = Dict{Tuple{TraceMode,Type},Dict{Type,Type}}()
 
 # function traced_type_generator(world::UInt, source, self, @nospecialize(T::Type), @nospecialize(mode::Type{<:Val}), @nospecialize(track_numbers::Type))
 #     @nospecialize
@@ -963,7 +908,7 @@ function typevar_dict(t)
 end
 
 Base.@assume_effects :total @inline function traced_type(
-    T::Type, ::Val{mode}, track_numbers::Type, sharding, runtime
+    T::Type, ::Val{mode}, track_numbers::Type, runtime
 ) where {mode}
     if mode == TracedSetPath || mode == TracedTrack || mode == TracedToTypes
         return T
@@ -971,14 +916,14 @@ Base.@assume_effects :total @inline function traced_type(
 
     ndevices = Sharding.ndevices(sharding)
     cache = nothing
-    cache_key = (mode, track_numbers, ndevices)
+    cache_key = (mode, track_numbers)
     if haskey(traced_type_cache, cache_key)
         cache = traced_type_cache[cache_key]
     else
         cache = Dict{Type,Type}()
         traced_type_cache[cache_key] = cache
     end
-    return traced_type_inner(T, cache, mode, track_numbers, Val(ndevices), runtime)
+    return traced_type_inner(T, cache, mode, track_numbers, runtime)
 end
 
 abstract type TracedTypeException <: Exception end
@@ -1056,7 +1001,7 @@ Base.@nospecializeinfer function make_tracer_via_immutable_constructor(
         push!(path, RT)
         seen[prev] = VisitedObject(length(seen) + 1)
     end
-    TT = traced_type(RT, Val(mode), track_numbers, sharding, runtime)
+    TT = traced_type(RT, Val(mode), track_numbers, runtime)
     @assert !Base.isabstracttype(RT)
     @assert Base.isconcretetype(RT)
     nf = fieldcount(RT)
@@ -1140,7 +1085,7 @@ Base.@nospecializeinfer function make_tracer_unknown(
         push!(path, RT)
         seen[prev] = VisitedObject(length(seen) + 1)
     end
-    TT = traced_type(RT, Val(mode), track_numbers, sharding, runtime)
+    TT = traced_type(RT, Val(mode), track_numbers, runtime)
     @assert !Base.isabstracttype(RT)
     @assert Base.isconcretetype(RT)
     nf = fieldcount(RT)
@@ -1454,8 +1399,8 @@ Base.@nospecializeinfer function make_tracer(
         if runtime isa Val{:PJRT}
             haskey(seen, prev) && return seen[prev]::ConcretePJRTArray{T,N}
             if !Sharding.is_sharded(sharding)
-                res = ConcretePJRTArray{T,N,1}(
-                    (XLA.PJRT.AsyncEmptyBuffer,), size(prev), Sharding.NoShardInfo()
+                res = ConcretePJRTArray{T,N}(
+                    [XLA.PJRT.AsyncEmptyBuffer], size(prev), Sharding.NoShardInfo()
                 )
             else
                 error("TODO: implement sharding")
@@ -1543,8 +1488,8 @@ Base.@nospecializeinfer function make_tracer(
         if runtime isa Val{:PJRT}
             haskey(seen, prev) && return seen[prev]::ConcretePJRTNumber{T}
             if !Sharding.is_sharded(sharding)
-                res = ConcretePJRTNumber{T,1}(
-                    (XLA.PJRT.AsyncEmptyBuffer,), Sharding.NoShardInfo()
+                res = ConcretePJRTNumber{T}(
+                    [XLA.PJRT.AsyncEmptyBuffer], Sharding.NoShardInfo()
                 )
             else
                 error("TODO: implement sharding")
@@ -1760,7 +1705,7 @@ Base.@nospecializeinfer function make_tracer(
         end
         return nothing
     end
-    TT = traced_type(eltype(RT), Val(mode), track_numbers, sharding, runtime)
+    TT = traced_type(eltype(RT), Val(mode), track_numbers, runtime)
     newa = Array{TT,ndims(RT)}(undef, size(prev))
     seen[prev] = newa
     same = true
@@ -1856,7 +1801,7 @@ Base.@nospecializeinfer function make_tracer(
         end
         return nothing
     end
-    Value2 = traced_type(Value, Val(mode), track_numbers, sharding, runtime)
+    Value2 = traced_type(Value, Val(mode), track_numbers, runtime)
     newa = Dict{Key,Value2}()
     seen[prev] = newa
     same = true
@@ -1938,7 +1883,7 @@ Base.@nospecializeinfer function make_tracer(
         end
         return nothing
     end
-    return NamedTuple{A,traced_type(RT, Val(mode), track_numbers, sharding, runtime)}((
+    return NamedTuple{A,traced_type(RT, Val(mode), track_numbers, runtime)}((
         (
             make_tracer(
                 seen,
@@ -2202,11 +2147,10 @@ function traced_type_inner(
     seen,
     mode::TraceMode,
     track_numbers::Type,
-    @nospecialize(ndevices),
     runtime,
 )
     (T,) = RT.parameters
-    newT = traced_type_inner(T, seen, mode, track_numbers, ndevices, runtime)
+    newT = traced_type_inner(T, seen, mode, track_numbers, runtime)
     if T == newT
         return RT
     else
@@ -2243,14 +2187,13 @@ function traced_type_inner(
     seen,
     mode::TraceMode,
     track_numbers::Type,
-    @nospecialize(ndevices),
     runtime,
 )
     T, R, S, L = RT.parameters
-    newT = traced_type_inner(T, seen, mode, track_numbers, ndevices, runtime)
-    newR = traced_type_inner(R, seen, mode, track_numbers, ndevices, runtime)
-    newS = traced_type_inner(S, seen, mode, track_numbers, ndevices, runtime)
-    newL = traced_type_inner(L, seen, mode, track_numbers, ndevices, runtime)
+    newT = traced_type_inner(T, seen, mode, track_numbers, runtime)
+    newR = traced_type_inner(R, seen, mode, track_numbers, runtime)
+    newS = traced_type_inner(S, seen, mode, track_numbers, runtime)
+    newL = traced_type_inner(L, seen, mode, track_numbers, runtime)
     if T == newT && R == newR && S == newS && L == newL
         return RT
     else

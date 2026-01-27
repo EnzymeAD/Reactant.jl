@@ -25,12 +25,9 @@ Base.@nospecializeinfer function Reactant.traced_type_inner(
     seen,
     mode::Reactant.TraceMode,
     @nospecialize(track_numbers::Type),
-    @nospecialize(ndevices),
     @nospecialize(runtime)
 )
-    T2 = Reactant.traced_type_inner(
-        A.parameters[3], seen, mode, track_numbers, ndevices, runtime
-    )
+    T2 = Reactant.traced_type_inner(A.parameters[3], seen, mode, track_numbers, runtime)
     MT = MockTensor{eltype(T2),ndims(A),T2}
     return MT
 end

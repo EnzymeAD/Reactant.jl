@@ -15,13 +15,10 @@ for AT in (Fill, Ones, Zeros)
         seen,
         mode::Reactant.TraceMode,
         @nospecialize(track_numbers::Type),
-        @nospecialize(ndevices),
         @nospecialize(runtime)
     ) where {T,N,Axes}
         # T will be a number so we need to trace it
-        return $(AT){
-            Reactant.traced_type_inner(T, seen, mode, Number, ndevices, runtime),N,Axes
-        }
+        return $(AT){Reactant.traced_type_inner(T, seen, mode, Number, runtime),N,Axes}
     end
 end
 
@@ -41,11 +38,10 @@ Base.@nospecializeinfer function Reactant.make_tracer(
     @nospecialize(prev::Ones{T,N,Axes}),
     @nospecialize(path),
     mode;
-    @nospecialize(sharding = Sharding.NoSharding()),
     @nospecialize(runtime = nothing),
     kwargs...,
 ) where {T,N,Axes}
-    return Ones(Reactant.traced_type(T, Val(mode), Number, sharding, runtime), prev.axes)
+    return Ones(Reactant.traced_type(T, Val(mode), Number, runtime), prev.axes)
 end
 
 Base.@nospecializeinfer function Reactant.make_tracer(
@@ -53,11 +49,10 @@ Base.@nospecializeinfer function Reactant.make_tracer(
     @nospecialize(prev::Zeros{T,N,Axes}),
     @nospecialize(path),
     mode;
-    @nospecialize(sharding = Sharding.NoSharding()),
     @nospecialize(runtime = nothing),
     kwargs...,
 ) where {T,N,Axes}
-    return Zeros(Reactant.traced_type(T, Val(mode), Number, sharding, runtime), prev.axes)
+    return Zeros(Reactant.traced_type(T, Val(mode), Number, runtime), prev.axes)
 end
 
 Base.@nospecializeinfer function Reactant.traced_type_inner(
@@ -65,13 +60,10 @@ Base.@nospecializeinfer function Reactant.traced_type_inner(
     seen,
     mode::Reactant.TraceMode,
     @nospecialize(track_numbers::Type),
-    @nospecialize(ndevices),
     @nospecialize(runtime)
 ) where {T,N,I,A}
     # T will be a number so we need to trace it
-    return OneElement{
-        Reactant.traced_type_inner(T, seen, mode, Number, ndevices, runtime),N,I,A
-    }
+    return OneElement{Reactant.traced_type_inner(T, seen, mode, Number, runtime),N,I,A}
 end
 
 Base.@nospecializeinfer function Reactant.make_tracer(
