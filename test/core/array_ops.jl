@@ -528,3 +528,66 @@ end
     @test @jit(size(x_ra, ConcreteRNumber(3))) == 7
     @test @jit(size(x_ra, ConcreteRNumber(4))) == 1
 end
+
+@testset "push!/pop! on TracedRArray" begin
+    @testset "push!" begin
+        function f_push(x)
+            push!(x, 4.0)
+            return x
+        end
+        x = Reactant.to_rarray([1.0, 2.0, 3.0])
+        result = @jit f_push(x)
+        @test Array(result) ≈ [1.0, 2.0, 3.0, 4.0]
+    end
+
+    @testset "push! multiple" begin
+        function f_push_multi(x)
+            push!(x, 4.0, 5.0)
+            return x
+        end
+        x = Reactant.to_rarray([1.0, 2.0, 3.0])
+        result = @jit f_push_multi(x)
+        @test Array(result) ≈ [1.0, 2.0, 3.0, 4.0, 5.0]
+    end
+
+    @testset "pushfirst!" begin
+        function f_pushfirst(x)
+            pushfirst!(x, 0.0)
+            return x
+        end
+        x = Reactant.to_rarray([1.0, 2.0, 3.0])
+        result = @jit f_pushfirst(x)
+        @test Array(result) ≈ [0.0, 1.0, 2.0, 3.0]
+    end
+
+    @testset "pop!" begin
+        function f_pop(x)
+            pop!(x)
+            return x
+        end
+        x = Reactant.to_rarray([1.0, 2.0, 3.0])
+        result = @jit f_pop(x)
+        @test Array(result) ≈ [1.0, 2.0]
+    end
+
+    @testset "popfirst!" begin
+        function f_popfirst(x)
+            popfirst!(x)
+            return x
+        end
+        x = Reactant.to_rarray([1.0, 2.0, 3.0])
+        result = @jit f_popfirst(x)
+        @test Array(result) ≈ [2.0, 3.0]
+    end
+
+    @testset "append!" begin
+        function f_append(x, y)
+            append!(x, y)
+            return x
+        end
+        x = Reactant.to_rarray([1.0, 2.0])
+        y = Reactant.to_rarray([3.0, 4.0])
+        result = @jit f_append(x, y)
+        @test Array(result) ≈ [1.0, 2.0, 3.0, 4.0]
+    end
+end

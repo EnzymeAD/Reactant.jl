@@ -2700,7 +2700,7 @@ function compile_mlir!(
                 donated_args_mask[i] = true
 
                 residx = findfirst(Base.Fix1(===, arg), linear_results2)
-                if residx !== nothing
+                if residx !== nothing && in_tys[i] == out_tys2[residx]
                     MLIR.API.mlirFuncSetArgAttr(
                         func3,
                         i - 1,

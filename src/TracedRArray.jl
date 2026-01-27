@@ -1323,4 +1323,55 @@ function Base.permutedims!(dest::TracedRArray, src::AnyTracedRArray, perm)
     return dest
 end
 
+function Base.push!(a::TracedRArray{T,1}, items...) where {T}
+    for x in items
+        x_num = Reactant.promote_to(TracedRNumber{T}, x)
+        x_arr = TracedRArray{T,1}(
+            (), @opcall(reshape(TracedRArray{T,0}((), x_num.mlir_data, ()), 1)).mlir_data, (1,)
+        )
+        result = @opcall concatenate(TracedRArray{T,1}[a, x_arr], 1)
+        a.mlir_data = result.mlir_data
+        a.shape = result.shape
+    end
+    return a
+end
+
+function Base.pushfirst!(a::TracedRArray{T,1}, items...) where {T}
+    for x in Iterators.reverse(items)
+        x_num = Reactant.promote_to(TracedRNumber{T}, x)
+        x_arr = TracedRArray{T,1}(
+            (), @opcall(reshape(TracedRArray{T,0}((), x_num.mlir_data, ()), 1)).mlir_data, (1,)
+        )
+        result = @opcall concatenate(TracedRArray{T,1}[x_arr, a], 1)
+        a.mlir_data = result.mlir_data
+        a.shape = result.shape
+    end
+    return a
+end
+
+function Base.pop!(a::TracedRArray{T,1}) where {T}
+    @assert length(a) > 0
+    val = @allowscalar a[end]
+    sliced = @opcall slice(a, [1], [length(a) - 1])
+    a.mlir_data = sliced.mlir_data
+    a.shape = sliced.shape
+    return val
+end
+
+function Base.popfirst!(a::TracedRArray{T,1}) where {T}
+    @assert length(a) > 0
+    val = @allowscalar a[1]
+    sliced = @opcall slice(a, [2], [length(a)])
+    a.mlir_data = sliced.mlir_data
+    a.shape = sliced.shape
+    return val
+end
+
+function Base.append!(a::TracedRArray{T,1}, b::TracedRArray{T,1}) where {T}
+    result = @opcall concatenate(TracedRArray{T,1}[a, b], 1)
+    a.mlir_data = result.mlir_data
+    a.shape = result.shape
+    return a
+end
+
 end
