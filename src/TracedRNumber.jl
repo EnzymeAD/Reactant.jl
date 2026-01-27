@@ -352,6 +352,25 @@ for (jlop, hloop, hlocomp) in (
         $(jlop)(@nospecialize(lhs::TracedRNumber), @nospecialize(::Missing)) = missing
         $(jlop)(@nospecialize(::Missing), @nospecialize(rhs::TracedRNumber)) = missing
 
+        # These methods handle TracedRReal (which <: Real) with plain Real values,
+        # resolving ambiguity with Base.:(<=)(::Real, ::Real) etc.
+        # Also need TracedRReal{T} with TracedRReal{T} to resolve ambiguity with the above.
+        function $(jlop)(
+            @nospecialize(lhs::TracedRReal{T}), @nospecialize(rhs::TracedRReal{T})
+        ) where {T}
+            return @opcall compare(lhs, rhs; comparison_direction=$(hlocomp))
+        end
+        function $(jlop)(
+            @nospecialize(lhs::TracedRReal{T}), @nospecialize(rhs::Real)
+        ) where {T}
+            return $(jlop)(lhs, Reactant.promote_to(lhs, rhs))
+        end
+        function $(jlop)(
+            @nospecialize(lhs::Real), @nospecialize(rhs::TracedRReal{T})
+        ) where {T}
+            return $(jlop)(Reactant.promote_to(rhs, lhs), rhs)
+        end
+
         function $(jlop)(@nospecialize(lhs::TracedRNumber{T}), @nospecialize(rhs)) where {T}
             return $(jlop)(lhs, Reactant.promote_to(lhs, rhs))
         end
