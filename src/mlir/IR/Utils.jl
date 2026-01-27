@@ -34,10 +34,14 @@ Base.String(str::API.MlirIdentifier) = String(API.mlirIdentifierStr(str))
 
 function visit(f, op)
     all_ok = true
-    for region in op
-        for block in region
-            for op in block
-                all_ok &= f(op)
+    for region in RegionIterator(op)
+        for block in BlockIterator(region)
+            for op in OperationIterator(block)
+                all_ok &= visit(f, op)
+                r = f(op)
+                if r isa Bool
+                    all_ok &= r
+                end
             end
         end
     end
