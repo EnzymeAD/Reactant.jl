@@ -62,7 +62,7 @@ CUDA.@profile mul!(outcu, pnfcu_dense, imgcu)
 @benchmark CUDA.@sync mul!($outcu, $pnfcu_dense, $imgcu)
 
 # CUDA Sparse
-CUDA.@sync mul!(outcu, pnfcu_dense, imgcu)  # warmup
+CUDA.@sync mul!(outcu, pnfcu, imgcu)  # warmup
 CUDA.@profile mul!(outcu, pnfcu, imgcu)
 @benchmark CUDA.@sync mul!($outcu, $pnfcu, $imgcu)
 
