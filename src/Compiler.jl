@@ -974,6 +974,7 @@ function optimization_passes(
                 "scatter_div_simplify",
                 "unary_elementwise_scatter_simplify",
                 "scatter_indices_are_unique",
+                "split_complex_scatter_setindex",
                 ## const prop patterns
                 "scatter_update_computation_const_prop",
                 # gather patterns
