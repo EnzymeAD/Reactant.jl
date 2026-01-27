@@ -6,7 +6,7 @@ using ReactantCore: ReactantCore, @trace
 using Adapt: Adapt
 
 # This isn't technically necessary in this module, but this type used to be
-# defined in this module so we keep this alias here for compatibility.  TODO:
+# defined in this module so we keep this alias here for compatibility.  TODO(#2236):
 # can be removed in future breaking version of Reactant.
 const TracedStepRangeLen = Reactant.TracedStepRangeLen
 
@@ -818,7 +818,7 @@ for Ti in (Int8, Int16, Int32, Int64, Int128, UInt8, UInt16, UInt32, UInt64, UIn
             # rounded to `Inf` (e.g. when `Ti==UInt128 && Tf==Float32`).
             @eval begin
                 function Base.trunc(::Type{$Ti}, x::TracedRNumber{$Tf})
-                    # TODO throw error within traced
+                    # TODO(#2236) throw error within traced
                     # if $(Tf(typemin(Ti))-one(Tf)) < x < $(Tf(typemax(Ti))+one(Tf))
                     return Base.unsafe_trunc($Ti, x)
                     # else
@@ -833,7 +833,7 @@ for Ti in (Int8, Int16, Int32, Int64, Int128, UInt8, UInt16, UInt32, UInt64, UIn
             # these types, but not for `Float16` or larger integer types.
             @eval begin
                 function Base.trunc(::Type{$Ti}, x::TracedRNumber{$Tf})
-                    # TODO throw error within traced
+                    # TODO(#2236) throw error within traced
                     # if $(Tf(typemin(Ti))) <= x < $(Tf(typemax(Ti)))
                     return Base.unsafe_trunc($Ti, x)
                     # else
@@ -939,7 +939,7 @@ function Base.fill(v::TracedRNumber{T}, ::Tuple{}) where {T}
     return @opcall fill(v, ())
 end
 
-# TODO: actually perform bounds checking
+# TODO(#2236): actually perform bounds checking
 function Base.checkindex(::Type{Bool}, _inds, ::TracedRNumber)
     @warn "Currently we don't perform bounds checking for TracedRNumber. This will be \
            fixed in a future version of Reactant." maxlog = 1

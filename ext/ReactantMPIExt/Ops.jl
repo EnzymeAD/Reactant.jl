@@ -8,12 +8,12 @@ using Reactant.Ops: mlir_stacktrace, mlir_type
 using ..ReactantMPIExt: TracedRequest
 using MPI: MPI
 
-# TODO
+# TODO(#2242)
 # function init(; location=mlir_stacktrace("mpi.init", @__FILE__, @__LINE__))
 #     return mpi.init(; location)
 # end
 
-# TODO
+# TODO(#2242)
 # function finalize(; location=mlir_stacktrace("mpi.finalize", @__FILE__, @__LINE__))
 #     return mpi.finalize(; location)
 # end

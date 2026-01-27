@@ -348,7 +348,7 @@ toolchain(
     toolchain_type = "@bazel_tools//tools/cpp:toolchain_type",
 )
 
-# TODO distinguish between clang and gcc toolchains?
+# TODO(#2247) distinguish between clang and gcc toolchains?
 cc_toolchain_config(
     name = "ygg_x86_toolchain_config",
     abi_libc_version = "local",
@@ -360,7 +360,7 @@ cc_toolchain_config(
         "-Wunused-but-set-parameter",
         "-Wno-free-nonheap-object",
         "-fno-omit-frame-pointer",
-        # TODO cxx_builtin_include_directories doesn't seem to be working, so we add the INCLUDE_PATHs manually
+        # TODO(#2247) cxx_builtin_include_directories doesn't seem to be working, so we add the INCLUDE_PATHs manually
         "-isystem /opt/BB_TARGET/lib/gcc/BB_TARGET/GCC_VERSION/include",
         "-isystem /opt/BB_TARGET/lib/gcc/BB_TARGET/GCC_VERSION/include-fixed",
         "-isystem /opt/BB_TARGET/BB_TARGET/include",
@@ -406,7 +406,7 @@ cc_toolchain_config(
         "-fdata-sections",
     ],
     opt_link_flags = ["-Wl,--gc-sections"],
-    # TODO gcc doesn't support it, only put it on clang (maybe even only for clang on aarch64-darwin?)
+    # TODO(#2247) gcc doesn't support it, only put it on clang (maybe even only for clang on aarch64-darwin?)
     supports_start_end_lib = False,
     target_libc = "",
     target_system_name = "x86-unknown-linux-gnu",
@@ -477,7 +477,7 @@ toolchain(
     toolchain_type = "@bazel_tools//tools/cpp:toolchain_type",
 )
 
-# TODO distinguish between clang and gcc toolchains?
+# TODO(#2247) distinguish between clang and gcc toolchains?
 cc_toolchain_config(
     name = "ygg_aarch64_toolchain_config",
     abi_libc_version = "local",
@@ -489,7 +489,7 @@ cc_toolchain_config(
         "-Wunused-but-set-parameter",
         "-Wno-free-nonheap-object",
         "-fno-omit-frame-pointer",
-        # TODO cxx_builtin_include_directories doesn't seem to be working, so we add the INCLUDE_PATHs manually
+        # TODO(#2247) cxx_builtin_include_directories doesn't seem to be working, so we add the INCLUDE_PATHs manually
         "-isystem /opt/BB_TARGET/lib/gcc/BB_TARGET/GCC_VERSION/include",
         "-isystem /opt/BB_TARGET/lib/gcc/BB_TARGET/GCC_VERSION/include-fixed",
         "-isystem /opt/BB_TARGET/BB_TARGET/include",
@@ -535,7 +535,7 @@ cc_toolchain_config(
         "-fdata-sections",
     ],
     opt_link_flags = ["-Wl,--gc-sections"],
-    # TODO gcc doesn't support it, only put it on clang (maybe even only for clang on aarch64-darwin?)
+    # TODO(#2247) gcc doesn't support it, only put it on clang (maybe even only for clang on aarch64-darwin?)
     supports_start_end_lib = False,
     target_libc = "",
     target_system_name = "aarch64-unknown-linux-gnu",
@@ -606,7 +606,7 @@ toolchain(
     toolchain_type = "@bazel_tools//tools/cpp:toolchain_type",
 )
 
-# TODO distinguish between clang and gcc toolchains?
+# TODO(#2247) distinguish between clang and gcc toolchains?
 cc_toolchain_config(
     name = "ygg_darwin_x86_toolchain_config",
     abi_libc_version = "local",
@@ -726,7 +726,7 @@ toolchain(
     toolchain_type = "@bazel_tools//tools/cpp:toolchain_type",
 )
 
-# TODO distinguish between clang and gcc toolchains?
+# TODO(#2247) distinguish between clang and gcc toolchains?
 cc_toolchain_config(
     name = "ygg_darwin_arm64_toolchain_config",
     abi_libc_version = "local",
@@ -847,7 +847,7 @@ toolchain(
     toolchain_type = "@bazel_tools//tools/cpp:toolchain_type",
 )
 
-# TODO distinguish between clang and gcc toolchains?
+# TODO(#2247) distinguish between clang and gcc toolchains?
 cc_toolchain_config(
     name = "ygg_win_x86_toolchain_config",
     abi_libc_version = "local",

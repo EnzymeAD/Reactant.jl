@@ -297,8 +297,8 @@ REACTANT_ABI bool mlirIsFunctionOpInterface(MlirOperation op) {
   return llvm::isa<mlir::FunctionOpInterface>(unwrap(op));
 }
 
-// TODO mlirComplexAttrGetnValue
-// TODO REACTANT_ABI MlirTypeID mlirComplexAttrGetTypeID(void) { return
+// TODO(#2252) mlirComplexAttrGetnValue
+// TODO(#2252) REACTANT_ABI MlirTypeID mlirComplexAttrGetTypeID(void) { return
 // wrap(complex::NumberAttr::getTypeID()); }
 
 REACTANT_ABI void ReactantFuncSetResultAttr(MlirOperation op, intptr_t pos,
@@ -1015,7 +1015,7 @@ REACTANT_ABI void CopyToBuffer(PjRtClient *client, PjRtBuffer *buffer,
   auto pid = client->platform_id();
   if (pid == xla::TpuId()) {
     auto dims = buffer->on_device_shape().dimensions();
-    // TODO: note this assume that we want to copy the entire buffer size.
+    // TODO(#2252): note this assume that we want to copy the entire buffer size.
     auto buf2 = ArrayFromHostBuffer(client, data, buffer->element_type(),
                                     dims.size(), dims.data(), buffer->device());
     *bufferP = buf2;
@@ -1077,7 +1077,7 @@ REACTANT_ABI void CopyFromBuffer(PjRtClient *client, PjRtBuffer *buffer,
 
   auto pid = client->platform_id();
   if (pid == xla::TpuId()) {
-    // TODO: note this assume that we want to copy the entire buffer size.
+    // TODO(#2252): note this assume that we want to copy the entire buffer size.
     BufferToHost(buffer, data);
     return;
   }
@@ -1942,7 +1942,7 @@ REACTANT_ABI void FreeHloModule(HeldHloModule *hlo_module) {
 
 #pragma region IfRtClient
 
-// XXX: Bring back with the correct API
+// TODO(#2252): Bring back with the correct API
 // REACTANT_ABI ifrt::proxy::GrpcServer *
 // ifrt_proxy_grpc_server_create_from_ifrt_client_factory_cpu(
 //     const char *c_address, uint8_t asynchronous, int node_id) {
@@ -2088,7 +2088,7 @@ ifrt_make_pjrt_cpu_client(uint8_t asynchronous, int node_id, int num_nodes,
     if (mpi_trampoline_path) {
 #if defined(__linux__) || defined(__APPLE__)
       // Use MPI
-      // TODO: How do we Finalize??
+      // TODO(#2252): How do we Finalize??
       auto mpi_collectives = std::make_shared<xla::cpu::MpiCollectives>();
       collectives = mpi_collectives;
       static_cast<xla::cpu::MpiCollectives *>(mpi_collectives.get())->Init();
@@ -2767,7 +2767,7 @@ hloShardingFromTensorShardingAttr(mlir::sdy::TensorShardingAttr attr,
       xla::sdy::convertToHloSharding(attr, get_mesh_attr, manual_axes));
 }
 
-// XXX: This is incorrect for multiple meshes. We need to use the current mesh
+// TODO(#2252): This is incorrect for multiple meshes. We need to use the current mesh
 // to generate this instead of the global mesh Currently we are storing only a
 // single mesh, so we can just use this.
 REACTANT_ABI mlir::sdy::TensorShardingAttr hloShardingToTensorShardingAttr(
@@ -3064,7 +3064,7 @@ ifrt_make_arrays_from_host_buffer_shards_spec(
   };
 }
 
-// TODO: We can batch the construction of multiple arrays into a single call.
+// TODO(#2252): We can batch the construction of multiple arrays into a single call.
 REACTANT_ABI HeldIfrtArray *ifrt_make_array_from_host_buffer_shards(
     ifrt::Client *client, const void **host_buffers, int num_buffers,
     const int64_t **host_buffer_shapes,

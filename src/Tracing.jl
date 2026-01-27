@@ -352,7 +352,7 @@ Base.@nospecializeinfer function traced_type_inner(
             return ConcreteIFRTArray{
                 T.parameters[1],
                 T.parameters[2],
-                Nothing, # TODO: check if we can ensure no padding??
+                Nothing, # TODO(#2251): check if we can ensure no padding??
             }
         end
         error("Unsupported runtime $runtime")
@@ -1458,7 +1458,7 @@ Base.@nospecializeinfer function make_tracer(
                     (XLA.PJRT.AsyncEmptyBuffer,), size(prev), Sharding.NoShardInfo()
                 )
             else
-                error("TODO: implement sharding")
+                error("TODO(#2230): implement sharding")
             end
             seen[prev] = res
             return res
@@ -1469,7 +1469,7 @@ Base.@nospecializeinfer function make_tracer(
                     XLA.IFRT.AsyncEmptyArray, size(prev), Sharding.NoShardInfo()
                 )
             else
-                error("TODO: implement sharding")
+                error("TODO(#2230): implement sharding")
             end
             seen[prev] = res
             return res
@@ -1482,7 +1482,7 @@ Base.@nospecializeinfer function make_tracer(
         if !Sharding.is_sharded(sharding)
             res = convert_to_jax_dtype_struct(prev)
         else
-            error("TODO: implement sharding")
+            error("TODO(#2230): implement sharding")
         end
         seen[prev] = res
         return res
@@ -1547,7 +1547,7 @@ Base.@nospecializeinfer function make_tracer(
                     (XLA.PJRT.AsyncEmptyBuffer,), Sharding.NoShardInfo()
                 )
             else
-                error("TODO: implement sharding")
+                error("TODO(#2230): implement sharding")
             end
             seen[prev] = res
             return res
@@ -1558,7 +1558,7 @@ Base.@nospecializeinfer function make_tracer(
                     XLA.IFRT.AsyncEmptyArray, Sharding.NoShardInfo()
                 )
             else
-                error("TODO: implement sharding")
+                error("TODO(#2230): implement sharding")
             end
             seen[prev] = res
             return res
@@ -1571,7 +1571,7 @@ Base.@nospecializeinfer function make_tracer(
         if !Sharding.is_sharded(sharding)
             res = convert_to_jax_dtype_struct(prev)
         else
-            error("TODO: implement sharding")
+            error("TODO(#2230): implement sharding")
         end
         seen[prev] = res
         return res
@@ -1716,7 +1716,7 @@ Base.@nospecializeinfer function make_tracer(
     kwargs...,
 )
     RT = Core.Typeof(prev)
-    # XXX: If someone wants to shard the same array with different shardings, we need to
+    # TODO(#2231): If someone wants to shard the same array with different shardings, we need to
     #      somehow handle this correctly... Right now we just use the first sharding.
     if mode != NoStopTracedTrack && haskey(seen, prev)
         if mode == TracedToTypes

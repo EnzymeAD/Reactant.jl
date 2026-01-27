@@ -777,7 +777,7 @@ end
     return TracedRNumber{U}((), res)
 end
 
-# TODO: See https://github.com/jax-ml/jax/blob/6c18aa8a468e35b8c11b101dceaa43d05b497177/jax/_src/numpy/fft.py#L106
+# TODO(#2243): See https://github.com/jax-ml/jax/blob/6c18aa8a468e35b8c11b101dceaa43d05b497177/jax/_src/numpy/fft.py#L106
 @noinline function fft(
     x::TracedRArray{T,N};
     type::String,
@@ -2175,7 +2175,7 @@ end
     mincut=false,
     location=mlir_stacktrace("while_loop", @__FILE__, @__LINE__),
 ) where {CFn,BFn}
-    # TODO: detect and prevent mutation within the condition
+    # TODO(#2250): detect and prevent mutation within the condition
 
     # Make all the args traced or concrete
     N = length(args)

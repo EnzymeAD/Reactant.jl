@@ -294,7 +294,7 @@ function create_result(
         delete!(result_stores, path)
         if path_to_shard_info !== nothing && haskey(path_to_shard_info, path)
             if haskey(to_unreshard_results, path)
-                error("TODO: Not yet Implemented. Use IFRT for this.")
+                error("TODO(#2234): Not yet Implemented. Use IFRT for this.")
             end
             sharding = pop!(path_to_shard_info, path)
             push!(used_shardinfo, sharding)
@@ -336,7 +336,7 @@ function create_result(
         delete!(result_stores, path)
         if path_to_shard_info !== nothing && haskey(path_to_shard_info, path)
             if haskey(to_unreshard_results, path)
-                error("TODO: Not yet Implemented.")
+                error("TODO(#2234): Not yet Implemented.")
             end
             sharding = pop!(path_to_shard_info, path)
             push!(used_shardinfo, sharding)
@@ -378,7 +378,7 @@ function create_result(
         delete!(result_stores, path)
         if path_to_shard_info !== nothing && haskey(path_to_shard_info, path)
             if haskey(to_unreshard_results, path)
-                error("TODO: Not yet Implemented. Use IFRT for this.")
+                error("TODO(#2234): Not yet Implemented. Use IFRT for this.")
             end
             sharding = pop!(path_to_shard_info, path)
             push!(used_shardinfo, sharding)
@@ -883,9 +883,9 @@ function optimization_passes(
         "real_conj_simplify",
         "conj_complex_simplify",
         "split_convolution_into_reverse_convolution",
-        # TODO we want to enable but may cause an infinite compile time
+        # TODO(#2251) we want to enable but may cause an infinite compile time
         # "concat_to_onedim_dusslice",
-        # TODO expose an option to enable this
+        # TODO(#2251) expose an option to enable this
         # "chained_multiply_to_power",
         "power_multiply_to_power",
         "log_simplify",
@@ -1223,7 +1223,7 @@ function optimization_passes(
                 "reshape_dus",
                 "dot_reshape_pad<1>",
                 "pad_dot_general<1>(0)",
-                # XXX: see https://github.com/EnzymeAD/Enzyme-JAX/issues/1445
+                # TODO(#2251): see https://github.com/EnzymeAD/Enzyme-JAX/issues/1445
                 # "pad_dot_general<1>(1)",
                 "reshape_pad",
                 "reshape_wrap",
@@ -1424,7 +1424,7 @@ function optimization_passes(
     return join(passes, ',')
 end
 
-# TODO we want to be able to run the more advanced passes via transform dialect as an enzyme intermediate
+# TODO(#2251) we want to be able to run the more advanced passes via transform dialect as an enzyme intermediate
 # However, this errs as we cannot attach the transform with to the funcop itself [as we run a functionpass].
 const enzyme_pass::String = "enzyme{postpasses=\"arith-raise{stablehlo=true},canonicalize,cse,canonicalize,remove-unnecessary-enzyme-ops,enzyme-simplify-math,canonicalize,cse,canonicalize,arith-raise{stablehlo=true}\"}"
 
@@ -1835,7 +1835,7 @@ function compile_mlir!(
     elseif raise
 
         # Raise enabled but use default passes
-        # TODO remove redundant libdevice raise after fixing phase ordering
+        # TODO(#2240) remove redundant libdevice raise after fixing phase ordering
         result =
             "canonicalize,llvm-to-memref-access,canonicalize,convert-llvm-to-cf,canonicalize,enzyme-lift-cf-to-scf,canonicalize,func.func(canonicalize-loops),canonicalize-scf-for,canonicalize,libdevice-funcs-raise,canonicalize,affine-cfg,canonicalize,func.func(canonicalize-loops),canonicalize,llvm-to-affine-access,canonicalize,delinearize-indexing,canonicalize,simplify-affine-exprs,affine-cfg,canonicalize,func.func(affine-loop-invariant-code-motion),canonicalize,sort-memory,raise-affine-to-stablehlo{prefer_while_raising=false dump_failed_lockstep=$(DUMP_FAILED_LOCKSTEP[])},canonicalize,arith-raise{stablehlo=true}," *
             opt_passes2
@@ -3181,7 +3181,7 @@ function donate_argument!(
     end
 end
 
-# XXX: Currently we copy to host and then make the transfer to the sharded devices. This is
+# TODO(#2233): Currently we copy to host and then make the transfer to the sharded devices. This is
 #      not ideal, we should be able to do a direct transfer using remapplan
 function ifrt_resharded_buffer(
     ::Type{T}, ifrt_array, sz, client, reactant_sharding, global_device_ids, opsharding
@@ -3308,7 +3308,7 @@ function codegen_unflatten!(
 
                 if length(path) > 0
                     needs_cache_dict = true
-                    # XXX: we might need to handle sharding here
+                    # TODO(#2233): we might need to handle sharding here
                     unflatcode = quote
                         traced_setfield_buffer!(
                             $(runtime),
@@ -3364,7 +3364,7 @@ function codegen_unflatten!(
             need_to_unreshard = get(resharded_inputs, (:args, argpath[2:end]...), nothing)
             if need_to_unreshard !== nothing
                 # TODO(@avik-pal): I need an MWE to debug this codepath
-                error("TODO: Not yet Implemented. Open an issue on Reactant.jl.")
+                error("TODO(#2234): Not yet Implemented. Open an issue on Reactant.jl.")
             end
 
             argres = :(args[$(argpath[2])])
@@ -3431,7 +3431,7 @@ function codegen_unflatten!(
             need_to_unreshard = get(resharded_inputs, (:args, argpath[2:end]...), nothing)
             if need_to_unreshard !== nothing
                 # TODO(@avik-pal): I need an MWE to debug this codepath
-                error("TODO: Not yet Implemented. Open an issue on Reactant.jl.")
+                error("TODO(#2234): Not yet Implemented. Open an issue on Reactant.jl.")
             end
 
             argres = :(args[$(argpath[2])])
@@ -3838,7 +3838,7 @@ function compile(f, args; kwargs...)
         linear_args,
         seen_args,
         mlir_fn_res.is_sharded,
-        XLA.get_parameter_shardings(exec), # TODO: use the same workflow as output shardings to parse the tensor sharding attributes directly if possible
+        XLA.get_parameter_shardings(exec), # TODO(#2233): use the same workflow as output shardings to parse the tensor sharding attributes directly if possible
         client,
         ndevices,
     )

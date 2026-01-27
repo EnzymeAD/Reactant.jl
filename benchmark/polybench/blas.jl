@@ -3,9 +3,9 @@ Reactant.allowscalar(true)
 
 include("common.jl")
 
-# TODO: we are having trouble raising symm.
+# TODO(#2249): we are having trouble raising symm.
 #       See https://github.com/EnzymeAD/Enzyme-JAX/issues/1864
-# TODO: For supporting trmm we need to support non-static loop starts/limits
+# TODO(#2249): For supporting trmm we need to support non-static loop starts/limits
 
 function gemm(
     alpha::T, beta::T, A::AbstractMatrix{T}, B::AbstractMatrix{T}, C::AbstractMatrix{T}

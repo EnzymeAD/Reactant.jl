@@ -99,7 +99,7 @@ A = Reactant.to_rarray(fill(1))
 @jit tuplef2(A)
 @test all(Array(A) .≈ 5)
 
-# TODO this same code fails if we use a 0-d array...?
+# TODO(#2253) this same code fails if we use a 0-d array...?
 # maybe weird cuda things
 function aliased!(tup)
     x, y = tup

@@ -496,7 +496,7 @@ function Base.similar(
     return similar(ConcreteIFRTArray, T, axes(bc))
 end
 
-# TODO replace this copy for `setindex!` maybe? how to copy data to already existing buffer? (i.e. `copyto!`)
+# TODO(#2255) replace this copy for `setindex!` maybe? how to copy data to already existing buffer? (i.e. `copyto!`)
 function Base.copy(bc::Base.Broadcast.Broadcasted{Broadcast.ArrayStyle{ConcretePJRTArray}})
     bc = Broadcast.flatten(bc)
     for x in bc.args
@@ -521,7 +521,7 @@ function Base.copy(bc::Base.Broadcast.Broadcasted{Broadcast.ArrayStyle{ConcreteP
         aux = similar(ConcretePJRTArray, ElType, length.(axes(bc)))
 
         copyto!(aux, convert(Broadcast.Broadcasted{Nothing}, bc))
-        return ConcretePJRTArray(aux) # XXX: result should be on correct device?
+        return ConcretePJRTArray(aux) # TODO(#2255): result should be on correct device?
     end
 
     fn = compile(Broadcast.BroadcastFunction(bc.f), (bc.args...,))

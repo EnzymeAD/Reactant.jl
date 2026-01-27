@@ -173,7 +173,7 @@ function XLA.to_host(buffer::Buffer, data, sharding)
     return data
 end
 
-# TODO: users themselves need to gc preserve here
+# TODO(#2235): users themselves need to gc preserve here
 function XLA.unsafe_buffer_pointer(buffer::Buffer)
     @ccall MLIR.API.mlir_c.UnsafeBufferPointer(buffer.buffer::Ptr{Cvoid})::Ptr{Cvoid}
 end
