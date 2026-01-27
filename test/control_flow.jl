@@ -727,7 +727,7 @@ end
 
     # check whether the func for _call1 was only generated once:
     ir = @code_hlo optimize = false call1(a_ra, b_ra)
-    ops = [op for op in Reactant.MLIR.IR.OperationIterator(Reactant.MLIR.IR.body(ir))]
+    ops = [op for op in Reactant.MLIR.IR.body(ir)]
     @test length(ops) == 2 # call1, _call1
 
     # With different operand sizes, different functions need to be generated:
@@ -736,7 +736,7 @@ end
 
     @test @jit(call1(a_ra, c_ra)) ≈ call1(a, c)
     ir = @code_hlo optimize = false call1(a_ra, c_ra)
-    ops = [op for op in Reactant.MLIR.IR.OperationIterator(Reactant.MLIR.IR.body(ir))]
+    ops = [op for op in Reactant.MLIR.IR.body(ir)]
     @test length(ops) == 3
 end
 
@@ -771,7 +771,7 @@ end
     y_ra = Reactant.to_rarray(y)
 
     ir = @code_hlo optimize = false call3(y_ra)
-    ops = [op for op in Reactant.MLIR.IR.OperationIterator(Reactant.MLIR.IR.body(ir))]
+    ops = [op for op in Reactant.MLIR.IR.body(ir)]
     @test length(ops) == 5 # call3, .+, .*, _call3 (2X)
 end
 
@@ -796,7 +796,7 @@ end
     foo2 = Foo(Reactant.to_rarray(b))
     bar = Foo(Bar(Reactant.to_rarray(b))) # typeof(foo) == typeof(bar), but these don't match!
     ir = @code_hlo optimize = false call4(foo, foo2, bar)
-    ops = [op for op in Reactant.MLIR.IR.OperationIterator(Reactant.MLIR.IR.body(ir))]
+    ops = [op for op in Reactant.MLIR.IR.body(ir)]
     @test length(ops) == 3 # call4, _call4 for {foo, foo2}, and _call4 for bar
 end
 
@@ -837,7 +837,7 @@ end
         ir = @code_hlo optimize = false traced_add(a_ra, b_ra)
         func_names = [
             String(Reactant.MLIR.IR.getattr(op, "sym_name")) for
-            op in Reactant.MLIR.IR.OperationIterator(Reactant.MLIR.IR.body(ir))
+            op in Reactant.MLIR.IR.body(ir)
         ]
         @test any(contains("traced_add"), func_names)
 
@@ -860,7 +860,7 @@ end
         ir = @code_hlo optimize = false traced_multiply(a_ra, b_ra)
         func_names = [
             String(Reactant.MLIR.IR.getattr(op, "sym_name")) for
-            op in Reactant.MLIR.IR.OperationIterator(Reactant.MLIR.IR.body(ir))
+            op in Reactant.MLIR.IR.body(ir)
         ]
         @test any(contains("traced_multiply"), func_names)
 
@@ -877,7 +877,7 @@ end
         ir = @code_hlo optimize = false singleline(a_ra)
         func_names = [
             String(Reactant.MLIR.IR.getattr(op, "sym_name")) for
-            op in Reactant.MLIR.IR.OperationIterator(Reactant.MLIR.IR.body(ir))
+            op in Reactant.MLIR.IR.body(ir)
         ]
         @test any(contains("singleline"), func_names)
 
@@ -902,7 +902,7 @@ end
         ir = @code_hlo optimize = false fn1(a_ra)
         func_names = [
             String(Reactant.MLIR.IR.getattr(op, "sym_name")) for
-            op in Reactant.MLIR.IR.OperationIterator(Reactant.MLIR.IR.body(ir))
+            op in Reactant.MLIR.IR.body(ir)
         ]
         @test any(contains("FunctorTest1"), func_names)
 
@@ -921,7 +921,7 @@ end
         ir = @code_hlo optimize = false func_with_kwargs(a_ra; y=2.0f0)
         func_names = [
             String(Reactant.MLIR.IR.getattr(op, "sym_name")) for
-            op in Reactant.MLIR.IR.OperationIterator(Reactant.MLIR.IR.body(ir))
+            op in Reactant.MLIR.IR.body(ir)
         ]
         @test any(contains("kwcall"), func_names)
 

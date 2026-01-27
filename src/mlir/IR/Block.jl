@@ -34,6 +34,35 @@ Base.:(==)(a::Block, b::Block) = API.mlirBlockEqual(a, b)
 Base.cconvert(::Core.Type{API.MlirBlock}, block::Block) = block
 Base.unsafe_convert(::Core.Type{API.MlirBlock}, block::Block) = block.ref
 
+Base.IteratorSize(::Core.Type{Block}) = Base.SizeUnknown()
+Base.IteratorEltype(::Core.Type{Block}) = Base.HasEltype()
+Base.eltype(::Block) = Operation
+
+"""
+    Base.iterate(block::Block)
+
+Iterates over all operations for the given block.
+"""
+function Base.iterate(it::Block)
+    raw_op = API.mlirBlockGetFirstOperation(it)
+    if mlirIsNull(raw_op)
+        nothing
+    else
+        op = Operation(raw_op, false)
+        (op, op)
+    end
+end
+
+function Base.iterate(::Block, op::Operation)
+    raw_op = API.mlirOperationGetNextInBlock(op)
+    if mlirIsNull(raw_op)
+        nothing
+    else
+        op = Operation(raw_op, false)
+        (op, op)
+    end
+end
+
 function lose_ownership!(block::Block)
     @assert block.owned
     # API.mlirBlockDetach(block)

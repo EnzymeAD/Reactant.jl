@@ -1886,7 +1886,7 @@ julia> Reactant.@jit(
         new_mod_op = MLIR.IR.Operation(new_mod)
         body = MLIR.IR.body(new_mod)
 
-        operations = collect(MLIR.IR.OperationIterator(body))
+        operations = collect(body)
         for op in operations
             if MLIR.IR.name(op) == "func.func"
                 fn_name = String(MLIR.IR.getattr(op, symbol_attr_name))

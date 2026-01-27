@@ -29,6 +29,35 @@ Checks whether two region handles point to the same region. This does not perfor
 """
 Base.:(==)(a::Region, b::Region) = API.mlirRegionEqual(a, b)
 
+Base.IteratorSize(::Core.Type{Region}) = Base.SizeUnknown()
+Base.IteratorEltype(::Core.Type{Region}) = Base.HasEltype()
+Base.eltype(::Region) = Block
+
+"""
+    Base.iterate(region::Region)
+
+Iterates over all [`Block`](@ref) in the given region.
+"""
+function Base.iterate(it::Region)
+    raw_block = API.mlirRegionGetFirstBlock(it)
+    if mlirIsNull(raw_block)
+        nothing
+    else
+        b = Block(raw_block, false)
+        (b, b)
+    end
+end
+
+function Base.iterate(::Region, block::Block)
+    raw_block = API.mlirBlockGetNextInRegion(block)
+    if mlirIsNull(raw_block)
+        nothing
+    else
+        b = Block(raw_block, false)
+        (b, b)
+    end
+end
+
 """
     push!(region, block)
 
