@@ -53,7 +53,7 @@ function Base.size(x::TracedRArray, i::TracedRNumber{<:Integer})
     return @allowscalar getindex(@opcall(constant([x.shape...])), i)
 end
 
-Base.collect(x::TracedRArray) = copy(x) # Note: Is this correct?
+Base.collect(x::TracedRArray) = copy(x)
 
 Base.copy(A::TracedRArray{T,N}) where {T,N} = TracedRArray{T,N}((), A.mlir_data, size(A))
 
@@ -442,7 +442,7 @@ function _typed_hvncat_internal(
 
         for (i, col) in
             zip(eachindex(Bs), eachslice(As; dims=Tuple(2:ndims(As)), drop=true))
-            # Note: row_first affects the flattening?
+            # TODO: row_first affects the flattening?
             Bs[i] = Base._cat_t(d, T, col...)
         end
 
@@ -475,7 +475,7 @@ function Base._cat_t(dims, ::Type{T}, X::TracedRArray...) where {T}
     return TracedRArray{RT,length(shape)}(
         (),
         MLIR.IR.result(
-            # Note: maybe we should do some conversion?
+            # TODO: maybe we should do some conversion?
             MLIR.Dialects.stablehlo.concatenate(
                 collect(TracedUtils.get_mlir_data.(X));
                 result_0=MLIR.IR.TensorType(collect(Int, shape), MLIR.IR.Type(RT)),
