@@ -1,5 +1,3 @@
-struct ReactantAlg <: VLBISkyModels.NUFT end
-
 struct ReactantNFFTPlan{T,D,K<:AbstractArray,arrTc,vecI,vecII,FP,BP,INV,SM} <:
        AbstractNFFTPlan{T,D,1}
     N::NTuple{D,Int}
@@ -18,22 +16,6 @@ struct ReactantNFFTPlan{T,D,K<:AbstractArray,arrTc,vecI,vecII,FP,BP,INV,SM} <:
     B::SM
 end
 
-function VLBISkyModels.plan_nuft_spatial(
-    ::ReactantAlg,
-    imgdomain::ComradeBase.AbstractRectiGrid,
-    visdomain::ComradeBase.UnstructuredDomain,
-)
-    visp = domainpoints(visdomain)
-    uv2 = similar(visp.U, (2, length(visdomain)))
-    dpx = pixelsizes(imgdomain)
-    dx = dpx.X
-    dy = dpx.Y
-    rm = ComradeBase.rotmat(imgdomain)'
-    # Here we flip the sign because the NFFT uses the -2pi convention
-    uv2[1, :] .= -VLBISkyModels._rotatex.(visp.U, visp.V, Ref(rm)) .* dx
-    uv2[2, :] .= -VLBISkyModels._rotatey.(visp.U, visp.V, Ref(rm)) .* dy
-    return ReactantNFFTPlan(uv2, size(imgdomain))
-end
 
 function AbstractNFFTs.plan_nfft(
     arr::Type{<:Reactant.AnyTracedRArray},
@@ -70,18 +52,6 @@ function Reactant.traced_type_inner(
     return T
 end
 
-function VLBISkyModels.make_phases(
-    ::ReactantAlg,
-    imgdomain::ComradeBase.AbstractRectiGrid,
-    visdomain::ComradeBase.UnstructuredDomain,
-)
-    return VLBISkyModels.make_phases(NFFTAlg(), imgdomain, visdomain)
-end
-
-function VLBISkyModels._jlnuft!(out, A::ReactantNFFTPlan, inp::Reactant.AnyTracedRArray)
-    LinearAlgebra.mul!(out, A, inp)
-    return nothing
-end
 
 function ReactantNFFTPlan(
     k::AbstractArray{T}, N::NTuple{D,Int}; fftflags=nothing, kwargs...

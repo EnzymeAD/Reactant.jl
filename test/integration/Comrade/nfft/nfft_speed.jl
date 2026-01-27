@@ -1,15 +1,22 @@
 using Pkg; Pkg.activate(@__DIR__)
+
+@static if VERSION ≥ v"1.10-" && VERSION < v"1.11"
+    Pkg.add([
+        PackageSpec(; name="Reactant", path=joinpath(@__DIR__, "../../..")),
+    ])
+end
+
+
 using NFFT
 using CUDA
 using Reactant
-using VLBISkyModels
 using LinearAlgebra
 using Accessors
 using AbstractFFTs
 using BenchmarkTools
 using NonuniformFFTs
 
-include("reactant_nfft.jl")
+include(joinpath("..", "reactant_nfft.jl"))
 
 
 T = Float32
@@ -50,14 +57,17 @@ nfftr! = @compile sync=true mul!(outr, pre, imgr)
 @benchmark nfftr!($outr, $pre, $imgr)
 
 # CUDA Dense
+CUDA.@sync mul!(outcu, pnfcu_dense, imgcu)
 CUDA.@profile mul!(outcu, pnfcu_dense, imgcu)
 @benchmark CUDA.@sync mul!($outcu, $pnfcu_dense, $imgcu)
 
 # CUDA Sparse
+CUDA.@sync mul!(outcu, pnfcu_dense, imgcu)  # warmup
 CUDA.@profile mul!(outcu, pnfcu, imgcu)
 @benchmark CUDA.@sync mul!($outcu, $pnfcu, $imgcu)
 
 # NonuniformFFTs (CUDA)
+CUDA.@sync mul!(outcu, pnu, imgcu)  # warmup
 CUDA.@profile mul!(outcu, pnu, imgcu)
 @benchmark CUDA.@sync mul!($outcu, $pnu, $imgcu)
 

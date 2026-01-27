@@ -43,6 +43,42 @@ using Test
 const dataurl = "https://de.cyverse.org/anon-files/iplant/home/shared/commons_repo/curated/EHTC_M87pol2017_Nov2023/hops_data/April06/SR2_M87_2017_096_lo_hops_ALMArot.uvfits"
 const dataf = Base.download(dataurl)
 
+
+# TODO upstream to VLBISkyModels
+struct ReactantAlg <: VLBISkyModels.NUFT end
+
+function VLBISkyModels.plan_nuft_spatial(
+    ::ReactantAlg,
+    imgdomain::ComradeBase.AbstractRectiGrid,
+    visdomain::ComradeBase.UnstructuredDomain,
+)
+    visp = domainpoints(visdomain)
+    uv2 = similar(visp.U, (2, length(visdomain)))
+    dpx = pixelsizes(imgdomain)
+    dx = dpx.X
+    dy = dpx.Y
+    rm = ComradeBase.rotmat(imgdomain)'
+    # Here we flip the sign because the NFFT uses the -2pi convention
+    uv2[1, :] .= -VLBISkyModels._rotatex.(visp.U, visp.V, Ref(rm)) .* dx
+    uv2[2, :] .= -VLBISkyModels._rotatey.(visp.U, visp.V, Ref(rm)) .* dy
+    return ReactantNFFTPlan(uv2, size(imgdomain))
+end
+
+function VLBISkyModels.make_phases(
+    ::ReactantAlg,
+    imgdomain::ComradeBase.AbstractRectiGrid,
+    visdomain::ComradeBase.UnstructuredDomain,
+)
+    return VLBISkyModels.make_phases(NFFTAlg(), imgdomain, visdomain)
+end
+
+function VLBISkyModels._jlnuft!(out, A::ReactantNFFTPlan, inp::Reactant.AnyTracedRArray)
+    LinearAlgebra.mul!(out, A, inp)
+    return nothing
+end
+
+
+
 # TODO Make ReactantLogExpFunctionsExt.
 function LogExpFunctions.logistic(@nospecialize x::Reactant.TracedRNumber)
     Reactant.@opcall logistic(x)
