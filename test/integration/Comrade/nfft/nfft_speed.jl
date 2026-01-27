@@ -2,7 +2,7 @@ using Pkg; Pkg.activate(@__DIR__)
 
 @static if VERSION ≥ v"1.10-" && VERSION < v"1.11"
     Pkg.add([
-        PackageSpec(; name="Reactant", path=joinpath(@__DIR__, "../../..")),
+        PackageSpec(; name="Reactant", path=joinpath(@__DIR__, "../../../../")),
     ])
 end
 
@@ -22,7 +22,7 @@ include(joinpath("..", "reactant_nfft.jl"))
 T = Float32
 
 sz =  (128, 128)
-ksz = 500
+ksz = 5*10^2
 
 k = rand(T, 2, ksz) .- T(0.5)
 
@@ -56,12 +56,12 @@ Reactant.@profile mul!(outr, pre, imgr)
 nfftr! = @compile sync=true mul!(outr, pre, imgr)
 @benchmark nfftr!($outr, $pre, $imgr)
 
-# CUDA Dense
+# NFFT CUDA Dense
 CUDA.@sync mul!(outcu, pnfcu_dense, imgcu)
 CUDA.@profile mul!(outcu, pnfcu_dense, imgcu)
 @benchmark CUDA.@sync mul!($outcu, $pnfcu_dense, $imgcu)
 
-# CUDA Sparse
+# NFFT CUDA Sparse
 CUDA.@sync mul!(outcu, pnfcu, imgcu)  # warmup
 CUDA.@profile mul!(outcu, pnfcu, imgcu)
 @benchmark CUDA.@sync mul!($outcu, $pnfcu, $imgcu)
