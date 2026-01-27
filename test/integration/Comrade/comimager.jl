@@ -40,7 +40,6 @@ using Distributions
 using Pyehtim
 using Test
 
-
 const dataurl = "https://de.cyverse.org/anon-files/iplant/home/shared/commons_repo/curated/EHTC_M87pol2017_Nov2023/hops_data/April06/SR2_M87_2017_096_lo_hops_ALMArot.uvfits"
 const dataf = Base.download(dataurl)
 
@@ -192,11 +191,7 @@ skymeta = (; srf=pl, grid=grd)
 
 ρs = ntuple(Returns(Uniform(0.01, max(size(grd)...))), 3)
 zprior = std_dist(pl)
-prior = (
-        z = zprior, 
-        ρs = ρs,
-        σ = Exponential(1.0)
-    )
+prior = (z=zprior, ρs=ρs, σ=Exponential(1.0))
 
 skymr = SkyModel(sky, prior, grd; metadata=skymeta, algorithm=ReactantAlg()) # Need to do this so that we allocate proper Reactant arrays for internal stuff
 skym = SkyModel(sky, prior, grd; metadata=skymeta)
@@ -204,11 +199,18 @@ skym = SkyModel(sky, prior, grd; metadata=skymeta)
 g(x) = exp(complex(x.lg, x.gp))
 G = SingleStokesGain(g)
 
-    intpr = (
-        lg = ArrayPrior(IIDSitePrior(ScanSeg(), Normal(0.0, 0.2)); LM = IIDSitePrior(ScanSeg(), Normal(0.0, 1.0))),
-        gp = ArrayPrior(IIDSitePrior(ScanSeg(), DiagonalVonMises(0.0, inv(π^2))); refant = SEFDReference(0.0), phase = true),
-    )
-    intmodel = InstrumentModel(G, intpr)
+intpr = (
+    lg=ArrayPrior(
+        IIDSitePrior(ScanSeg(), Normal(0.0, 0.2));
+        LM=IIDSitePrior(ScanSeg(), Normal(0.0, 1.0)),
+    ),
+    gp=ArrayPrior(
+        IIDSitePrior(ScanSeg(), DiagonalVonMises(0.0, inv(π^2)));
+        refant=SEFDReference(0.0),
+        phase=true,
+    ),
+)
+intmodel = InstrumentModel(G, intpr)
 
 postr = VLBIPosterior(skymr, intmodel, dvis)
 post = VLBIPosterior(skym, intmodel, dvis)
