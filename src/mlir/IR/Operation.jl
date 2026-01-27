@@ -236,7 +236,7 @@ function getattr(op::Operation, i)
 end
 
 """
-    attr(op, name)
+    getattr(op, name)
 
 Returns an attribute attached to the operation given its name.
 """
@@ -278,7 +278,7 @@ verify(operation::Operation) = API.mlirOperationVerify(operation)
 Moves the given operation immediately after the other operation in its parent block. The given operation may be owned by the caller or by its current block. The other operation must belong to a block. In any case, the ownership is transferred to the block of the other operation.
 """
 function move_after!(operation::Operation, other::Operation)
-    lose_ownership!(operation)
+    op.owned && lose_ownership!(operation)
     return API.mlirOperationMoveAfter(operation, other)
 end
 
@@ -291,7 +291,7 @@ The other operation must belong to a block.
 In any case, the ownership is transferred to the block of the other operation.
 """
 function move_before!(op::Operation, other::Operation)
-    lose_ownership!(op)
+    op.owned && lose_ownership!(op)
     return API.mlirOperationMoveBefore(op, other)
 end
 
