@@ -335,12 +335,13 @@ function _pass_destruct(::ExternalPassHandle)
 end
 
 function _pass_initialize(ctx, handle::ExternalPassHandle)
-    try
+    (; ref) = try
         handle.ctx = Context(ctx)
         success()
     catch
         failure()
     end
+    return ref
 end
 
 function _pass_clone(handle::ExternalPassHandle)
