@@ -661,7 +661,38 @@ end
 
 @testset "send" begin end
 
-@testset "set_dimension_size" begin end
+@testset "set_dimension_size" begin
+    # Test with 1D array
+    x = Reactant.to_rarray(Float32[1.0, 2.0, 3.0, 4.0])
+    dim_size = ConcreteRNumber(Int32(4))
+    g1(x, s) = Ops.set_dimension_size(x, s, 1)
+    result = @jit(g1(x, dim_size))
+    @test size(result) == (4,)
+    @test Array(result) ≈ Float32[1.0, 2.0, 3.0, 4.0]
+
+    # Test with 2D array, setting dimension 1
+    x2d = Reactant.to_rarray(Float32[1.0 2.0; 3.0 4.0; 5.0 6.0])
+    dim_size = ConcreteRNumber(Int32(3))
+    g2(x, s) = Ops.set_dimension_size(x, s, 1)
+    result = @jit(g2(x2d, dim_size))
+    @test size(result) == (3, 2)
+    @test Array(result) ≈ Float32[1.0 2.0; 3.0 4.0; 5.0 6.0]
+
+    # Test with 2D array, setting dimension 2
+    dim_size = ConcreteRNumber(Int32(2))
+    g3(x, s) = Ops.set_dimension_size(x, s, 2)
+    result = @jit(g3(x2d, dim_size))
+    @test size(result) == (3, 2)
+    @test Array(result) ≈ Float32[1.0 2.0; 3.0 4.0; 5.0 6.0]
+
+    # Test with different element types (Int32 array)
+    x_int = Reactant.to_rarray(Int32[1, 2, 3])
+    dim_size = ConcreteRNumber(Int32(3))
+    g4(x, s) = Ops.set_dimension_size(x, s, 1)
+    result = @jit(g4(x_int, dim_size))
+    @test size(result) == (3,)
+    @test Array(result) == Int32[1, 2, 3]
+end
 
 @testset "shift_left" begin
     a = Reactant.to_rarray([-1, 0, 1])
