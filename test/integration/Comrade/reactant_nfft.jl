@@ -1,3 +1,6 @@
+using AbstractFFTs
+const AFTR = Base.get_extension(Reactant, :ReactantAbstractFFTsExt)
+
 struct ReactantNFFTPlan{T,D,K<:AbstractArray,arrTc,vecI,vecII,FP,BP,INV,SM} <:
        AbstractNFFTPlan{T,D,1}
     N::NTuple{D,Int}
@@ -63,6 +66,10 @@ function ReactantNFFTPlan(
     params, N, NOut, J, Ñ, dims_ = NFFT.initParams(k, N, dims; kwargs...)
     FP = plan_fft!(zeros(CT, N))
     BP = plan_bfft!(zeros(CT, N))
+
+    FP = AFTR.reactant_fftplan(AFTR.reactant_fftplan_type(typeof(FP)), FP)
+    BP = AFTR.reactant_fftplan(AFTR.reactant_fftplan_type(typeof(BP)), BP)
+
     params.storeDeconvolutionIdx = true # GPU_NFFT only works this way
     params.precompute = NFFT.FULL # GPU_NFFT only works this way
 

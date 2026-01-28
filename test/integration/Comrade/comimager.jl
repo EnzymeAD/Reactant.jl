@@ -2,6 +2,8 @@
 using Pkg;
 Pkg.activate(@__DIR__);
 
+# ENV["JULIA_DEBUG"] = "Reactant"
+
 @static if VERSION ≥ v"1.10-" && VERSION < v"1.11"
     Pkg.add([
         PackageSpec(; name="Reactant", path=joinpath(@__DIR__, "../../..")),
@@ -20,6 +22,7 @@ Pkg.instantiate()
 Pkg.precompile()
 
 using Reactant
+# Reactant.MLIR.IR.DUMP_MLIR_ALWAYS[] = true
 using NFFT
 using LinearAlgebra
 using AbstractFFTs
@@ -36,6 +39,7 @@ include("reactant_nfft.jl")
 
 using Downloads
 using Distributions
+using Enzyme
 
 using Pyehtim
 using Test
@@ -257,4 +261,7 @@ tpostr = asflat(postr)
 x = prior_sample(tpost)
 xr = Reactant.to_rarray(x)
 @test @jit(logdensityof(tpostr, xr)) ≈ logdensityof(tpost, x)
+
+logdensityofref(tpostr, xr) = logdensityof(tpostr[], xr)
+@jit Enzyme.gradient(Reverse, logdensityofref, Ref(tpostr), xr)
 # end
