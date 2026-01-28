@@ -261,7 +261,19 @@ tpostr = asflat(postr)
 x = prior_sample(tpost)
 xr = Reactant.to_rarray(x)
 @test @jit(logdensityof(tpostr, xr)) ≈ logdensityof(tpost, x)
+l(tpostr, xr) = logdensityof(tpostr, xr)
+lr = @compile sync=true l(tpostr, xr)
+@benchmark lr($tpostr, $xr)
 
 logdensityofref(tpostr, xr) = logdensityof(tpostr[], xr)
-@jit Enzyme.gradient(Reverse, logdensityofref, Ref(tpostr), xr)
+gl(tpostr, xr) = last(Enzyme.gradient(Reverse, logdensityofref, Ref(tpostr), xr))
+Reactant.@profile gl(tpostr, xr)
+glr = @compile sync=true gl(tpostr, xr)
+
+using FiniteDifferences
+fdm = central_fdm(5, 1)
+gfd,  = grad(fdm, tpost, x)
+@test glr(tpostr, xr) ≈ gfd
+
+
 # end

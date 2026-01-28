@@ -31,29 +31,32 @@ function AbstractNFFTs.plan_nfft(
     return p
 end
 
-function Reactant.make_tracer(
-    seen,
-    @nospecialize(prev::LinearAlgebra.Adjoint{T,<:NFFT.AbstractNFFTPlan}),
-    @nospecialize(path),
-    mode;
-    @nospecialize(track_numbers::Type = Union{}),
-    @nospecialize(sharding = Reactant.Sharding.NoSharding()),
-    @nospecialize(runtime),
-    kwargs...,
-) where {T}
-    return prev
-end
+# function Reactant.make_tracer(
+#     seen,
+#     @nospecialize(prev::LinearAlgebra.Adjoint{T,<:NFFT.AbstractNFFTPlan}),
+#     @nospecialize(path),
+#     mode;
+#     @nospecialize(track_numbers::Type = Union{}),
+#     @nospecialize(sharding = Reactant.Sharding.NoSharding()),
+#     @nospecialize(runtime),
+#     kwargs...,
+# ) where {T}
+#     return prev
+# end
 
-function Reactant.traced_type_inner(
-    @nospecialize(T::Type{<:LinearAlgebra.Adjoint{F,<:NFFT.AbstractNFFTPlan}}),
-    seen,
-    mode::Reactant.TraceMode,
-    @nospecialize(track_numbers::Type),
-    @nospecialize(ndevices),
-    @nospecialize(runtime)
-) where {F}
-    return T
-end
+# function Reactant.traced_type_inner(
+#     @nospecialize(T::Type{<:LinearAlgebra.Adjoint{F,<:NFFT.AbstractNFFTPlan}}),
+#     seen,
+#     mode::Reactant.TraceMode,
+#     @nospecialize(track_numbers::Type),
+#     @nospecialize(ndevices),
+#     @nospecialize(runtime)
+# ) where {F}
+#     return T
+# end
+
+# pass through for now because previously it was only used for Enzyme autodiff
+Base.adjoint(p::ReactantNFFTPlan) = p
 
 
 function ReactantNFFTPlan(
