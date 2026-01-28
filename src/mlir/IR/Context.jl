@@ -79,31 +79,21 @@ function with_context(f, ctx::Context)
     end
 end
 
+# TODO replace this method on all call sites for the one accepting a context argument
 function with_context(f; allow_use_existing=false)
-    delete_context = false
     if allow_use_existing && has_context()
         ctx = current_context()
     else
-        delete_context = true
         ctx = Context(Reactant.registry[], false)
-        Reactant.Compiler.context_gc_vector[ctx] = Vector{
-            Union{Reactant.TracedRArray,Reactant.TracedRNumber}
-        }(
-            undef, 0
-        )
         @ccall API.mlir_c.RegisterDialects(ctx::API.MlirContext)::Cvoid
     end
 
     activate!(ctx)
-    result = try
-        f(ctx)
+    try
+        return f(ctx)
     finally
         deactivate!(ctx)
     end
-
-    delete_context && delete!(Reactant.Compiler.context_gc_vector, ctx)
-
-    return result
 end
 
 function enable_multithreading!(enable::Bool=true; context::Context=current_context())
