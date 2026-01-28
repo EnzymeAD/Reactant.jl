@@ -3029,10 +3029,7 @@ end
         # cache lookup:
         (; f_name, mlir_result_types, traced_result, mutated_args, linear_results, fnwrapped, argprefix, resprefix, resargprefix) = cache[cache_key]
         if !isnothing(tessera_op)
-            MLIR.IR.attr!(fnwrapped, "tessera_op", MLIR.IR.Attribute(tessera_op))
-        end
-        if !isnothing(tessera_op)
-            MLIR.IR.attr!(call_op, "tessera_op", MLIR.IR.Attribute(tessera_op))
+            MLIR.IR.setattr!(fnwrapped, "tessera_op", MLIR.IR.Attribute(tessera_op))
         end
     else
         f_name = String(gensym(Symbol(f)))
@@ -3069,7 +3066,7 @@ end
             resargprefix,
         )
         if !isnothing(tessera_op)
-            MLIR.IR.attr!(temp.f, "tessera_op", MLIR.IR.Attribute(tessera_op))
+            MLIR.IR.setattr!(temp.f, "tessera_op", MLIR.IR.Attribute(tessera_op))
         end
     end
 
