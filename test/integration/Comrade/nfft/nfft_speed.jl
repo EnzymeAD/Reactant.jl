@@ -56,6 +56,24 @@ Reactant.@profile mul!(outr, pre, imgr)
 nfftr! = @compile sync=true mul!(outr, pre, imgr)
 @benchmark nfftr!($outr, $pre, $imgr)
 
+function f(outr, pre, imgr)
+    mul!(outr, pre[], imgr)
+    return sum(abs2, outr)
+end
+
+function gf(outr, pre, imgr)
+    grad = Enzyme.gradient(Reverse, f, outr, pre, imgr)
+    return last(grad)
+end
+
+using Enzyme
+gr = @jit gf(outr, Ref(pre), imgr)
+
+using FiniteDifferences
+fdm = FiniteDifferences.central_fdm(5, 1)
+gfd, = grad(fdm, x->sum(abs2, pnf*x), img)
+
+
 # NFFT CUDA Dense
 CUDA.@sync mul!(outcu, pnfcu_dense, imgcu)
 CUDA.@profile mul!(outcu, pnfcu_dense, imgcu)
