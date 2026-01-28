@@ -3737,10 +3737,7 @@ function compile_xla(
 
         # Resolve client and device
         client, device = __resolve_device_and_client(
-            client,
-            mlir_fn_res.seen_args,
-            mlir_fn_res.linear_args,
-            mlir_fn_res.is_sharded,
+            client, mlir_fn_res.seen_args, mlir_fn_res.linear_args, mlir_fn_res.is_sharded
         )
 
         # Attach a name, and partitioning attributes to the module
