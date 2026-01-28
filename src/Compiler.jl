@@ -1459,7 +1459,7 @@ end
 
 const __module_gc_vector = Dict{MLIR.IR.Module,Vector{Union{TracedRArray,TracedRNumber}}}()
 
-function guard_from_gc_for_module!(mod::MLIR.IR.Module, x)
+function guard_from_gc_for_module(mod::MLIR.IR.Module, x)
     if !haskey(__module_gc_vector, mod)
         __module_gc_vector[mod] = Union{TracedRArray,TracedRNumber}[x]
     else
@@ -1469,7 +1469,7 @@ function guard_from_gc_for_module!(mod::MLIR.IR.Module, x)
     return nothing
 end
 
-function release_guard_from_gc_for_module!(mod::MLIR.IR.Module)
+function release_guard_from_gc_for_module(mod::MLIR.IR.Module)
     delete!(__module_gc_vector, mod)
     return nothing
 end
@@ -1773,7 +1773,7 @@ function compile_mlir!(
         deactivate_callcache!(callcache)
         MLIR.IR.deactivate!(MLIR.IR.body(mod))
         clear_llvm_compiler_cache!(mod)
-        release_guard_from_gc_for_module!(mod)
+        release_guard_from_gc_for_module(mod)
         MLIR.IR.deactivate!(mod)
     end
     (;
