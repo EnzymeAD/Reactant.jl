@@ -332,7 +332,9 @@ end
     @test ComplexF32[1.0, -1.0, 1.0, -1.0] ≈ @jit(gifft(x))
 
     # Test FFT followed by IFFT recovers original (round-trip)
-    original = Reactant.to_rarray(ComplexF32[1.0 + 2.0im, 3.0 - 1.0im, -2.0 + 0.5im, 0.0 - 3.0im])
+    original = Reactant.to_rarray(
+        ComplexF32[1.0 + 2.0im, 3.0 - 1.0im, -2.0 + 0.5im, 0.0 - 3.0im]
+    )
     fft_result = @jit(gfft(original))
     @test Array(original) ≈ @jit(gifft(Reactant.to_rarray(fft_result)))
 
