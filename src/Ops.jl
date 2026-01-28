@@ -2611,8 +2611,7 @@ end
     MLIR.API.mlirRegionTakeBody(
         MLIR.IR.region(true_fn_compiled, 1), MLIR.IR.region(true_func_tmp, 1)
     )
-    MLIR.API.mlirOperationDestroy(true_func_tmp)
-    true_func_tmp.ref = MLIR.API.MlirOperation(C_NULL)
+    MLIR.IR.dispose(true_func_tmp)
 
     fb_out_types = [mlir_type(fr) for fr in fb_corrected_linear_results]
 
@@ -2629,8 +2628,7 @@ end
     MLIR.API.mlirRegionTakeBody(
         MLIR.IR.region(false_fn_compiled, 1), MLIR.IR.region(false_func_tmp, 1)
     )
-    MLIR.API.mlirOperationDestroy(false_func_tmp)
-    false_func_tmp.ref = MLIR.API.MlirOperation(C_NULL)
+    MLIR.IR.dispose(false_func_tmp)
 
     tb_region = Reactant.TracedUtils.__take_region(true_fn_compiled)
     fb_region = Reactant.TracedUtils.__take_region(false_fn_compiled)
@@ -2985,8 +2983,7 @@ result = Ops.case(
         MLIR.API.mlirRegionTakeBody(
             MLIR.IR.region(branch_fn_compiled, 1), MLIR.IR.region(branch_func_tmps[b], 1)
         )
-        MLIR.API.mlirOperationDestroy(branch_func_tmps[b].ref)
-        branch_func_tmps[b].ref = MLIR.API.MlirOperation(C_NULL)
+        MLIR.IR.dispose(branch_func_tmps[b])
 
         push!(branch_regions, Reactant.TracedUtils.__take_region(branch_fn_compiled))
         MLIR.IR.rmfromparent!(branch_fn_compiled)
