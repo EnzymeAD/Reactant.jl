@@ -1,0 +1,28 @@
+name: "Open PR to update Xprof commit"
+
+on:
+  schedule:
+    - cron: '19 04 * * *'
+  workflow_dispatch:
+    inputs:
+      xprof_commit:
+        description: 'The Xprof commit to update to (optional)'
+        default: ''
+        type: 'string'
+
+concurrency:
+  # Skip intermediate builds: always.
+  # Cancel intermediate builds: only if it is a pull request build.
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ startsWith(github.ref, 'refs/pull/') }}
+
+jobs:
+  pr-latest-xprof:
+    name: 'Update XPROF_COMMIT'
+    uses: EnzymeAD/Enzyme-JAX/.github/workflows/update-dependency.yml@main
+    with:
+      upstream_repo: 'openxla/xprof/'
+      upstream_commit: ${{ inputs.xprof_commit }}
+      variable_name: 'XPROF_COMMIT'
+      workspace_path: 'deps/ReactantExtra/WORKSPACE'
+    secrets: inherit
