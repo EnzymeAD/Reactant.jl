@@ -36,4 +36,6 @@ function Base.unsafe_convert(::Core.Type{API.MlirTypeIDAllocator}, alloc::TypeID
     return alloc.ref
 end
 
-TypeID(alloc::TypeIDAllocator) = TypeID(mark_alloc(API.mlirTypeIDAllocatorAllocateTypeID(alloc)))
+function TypeID(alloc::TypeIDAllocator)
+    return TypeID(mark_alloc(API.mlirTypeIDAllocatorAllocateTypeID(alloc)))
+end
