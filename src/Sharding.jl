@@ -584,11 +584,6 @@ function sharding_to_array_slices(
     if needs_padding
         # MLIR for identity operation, avoid tracing here
         ctx = MLIR.IR.Context(Reactant.registry[], false)
-        Reactant.Compiler.context_gc_vector[ctx] = Vector{
-            Union{Reactant.TracedRArray,Reactant.TracedRNumber}
-        }(
-            undef, 0
-        )
         @ccall MLIR.API.mlir_c.RegisterDialects(ctx::MLIR.API.MlirContext)::Cvoid
         MLIR.IR.activate!(ctx)
 
