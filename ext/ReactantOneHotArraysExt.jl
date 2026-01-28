@@ -18,10 +18,10 @@ function Reactant.traced_type_inner(
     seen,
     @nospecialize(mode::Reactant.TraceMode),
     @nospecialize(track_numbers::Type),
-    @nospecialize(sharding),
+    @nospecialize(ndevices),
     @nospecialize(runtime)
 ) where {T,N,Np1,I}
-    I2 = Reactant.traced_type_inner(I, seen, mode, track_numbers, sharding, runtime)
+    I2 = Reactant.traced_type_inner(I, seen, mode, track_numbers, ndevices, runtime)
     return OneHotArray{__compatible_eltype(T, eltype(I2)),N,Np1,I2}
 end
 
@@ -49,7 +49,7 @@ function Base.Array(
 end
 
 function OneHotArrays.onehotbatch(data::AnyTracedRArray{<:Any,N}, labels) where {N}
-    # TODO: add checkbounds once we support that with TracedRNumber
+    # TODO(#2238): add checkbounds once we support that with TracedRNumber
     labels_expanded = @opcall broadcast_in_dim(
         Reactant.promote_to(
             TracedRArray{Reactant.unwrapped_eltype(labels),1},
@@ -68,7 +68,7 @@ end
 function OneHotArrays.onehotbatch(
     data::AnyTracedRArray{<:Integer,N}, labels::AbstractUnitRange{<:Integer}
 ) where {N}
-    # TODO: add checkbounds once we support that with TracedRNumber
+    # TODO(#2238): add checkbounds once we support that with TracedRNumber
     indices = map(
         TracedRNumber{UInt32} ∘ Base.Fix2(+, 1 - first(labels)),
         ReactantCore.materialize_traced_array(data),
@@ -87,7 +87,7 @@ function OneHotArrays.onecold(y::AnyTracedRArray{T,1}, labels=1:length(y)) where
         ),
     )
     imax = argmax(y)
-    # TODO: error if ymax is nan
+    # TODO(#2238): error if ymax is nan
     labels_arr = Reactant.promote_to(
         TracedRArray{Reactant.unwrapped_eltype(labels),1}, labels
     )

@@ -51,6 +51,7 @@ end
         @safetestset "Cluster Detection" include("cluster_detector.jl")
         @safetestset "Config" include("config.jl")
         @safetestset "Batching" include("batching.jl")
+        @safetestset "Profiling" include("profiling.jl")
         @safetestset "QA" include("qa.jl")
         @safetestset "Tessera" include("tessera.jl")
     end

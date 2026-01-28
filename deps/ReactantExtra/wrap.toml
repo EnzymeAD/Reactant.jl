@@ -13,6 +13,10 @@ show_c_function_prototype = false
 printer_blacklist = [
     "MAKE_MLIR_PYTHON_QUALNAME",
 ]
+output_ignorelist = [
+    "MLIR_PYTHON_API_EXPORTED",
+    "MLIR_CAPI_EXPORTED",
+]
 
 [codegen]
 use_julia_bool = true

@@ -1,5 +1,5 @@
 struct Value
-    value::API.MlirValue
+    ref::API.MlirValue
 
     function Value(value)
         @assert !mlirIsNull(value) "cannot create Value with null MlirValue"
@@ -7,7 +7,9 @@ struct Value
     end
 end
 
-Base.convert(::Core.Type{API.MlirValue}, value::Value) = value.value
+Base.cconvert(::Core.Type{API.MlirValue}, value::Value) = value
+Base.unsafe_convert(::Core.Type{API.MlirValue}, value::Value) = value.ref
+
 Base.size(value::Value) = Base.size(type(value))
 Base.ndims(value::Value) = Base.ndims(type(value))
 
@@ -104,12 +106,12 @@ Returns the type of the value.
 type(value::Value) = Type(API.mlirValueGetType(value))
 
 """
-    set_type!(value, type)
+    settype!(value, type)
 
 Sets the type of the block argument to the given type.
 """
-function type!(value, type)
-    @assert is_a_block_argument(value) "could not set type, value is not a block argument"
+function settype!(value, type)
+    @assert is_block_arg(value) "could not set type, value is not a block argument"
     API.mlirBlockArgumentSetType(value, type)
     return value
 end

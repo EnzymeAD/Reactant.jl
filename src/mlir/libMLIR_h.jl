@@ -1797,6 +1797,17 @@ function mlirOperationWalk(op, callback, userData, walkOrder)
 end
 
 """
+    mlirOperationReplaceUsesOfWith(op, of, with)
+
+Replace uses of 'of' value with the 'with' value inside the 'op' operation.
+"""
+function mlirOperationReplaceUsesOfWith(op, of, with)
+    @ccall mlir_c.mlirOperationReplaceUsesOfWith(
+        op::MlirOperation, of::MlirValue, with::MlirValue
+    )::Cvoid
+end
+
+"""
     mlirRegionCreate()
 
 Creates a new empty region and transfers ownership to the caller.
@@ -3563,6 +3574,10 @@ function mlirAffineMapAttrGet(map)
     @ccall mlir_c.mlirAffineMapAttrGet(map::MlirAffineMap)::MlirAttribute
 end
 
+function mlirAffineMapAttrGetName()
+    @ccall mlir_c.mlirAffineMapAttrGetName()::MlirStringRef
+end
+
 """
     mlirAffineMapAttrGetValue(attr)
 
@@ -3599,6 +3614,10 @@ function mlirArrayAttrGet(ctx, numElements, elements)
     @ccall mlir_c.mlirArrayAttrGet(
         ctx::MlirContext, numElements::Cptrdiff_t, elements::Ptr{MlirAttribute}
     )::MlirAttribute
+end
+
+function mlirArrayAttrGetName()
+    @ccall mlir_c.mlirArrayAttrGetName()::MlirStringRef
 end
 
 """
@@ -3650,6 +3669,10 @@ function mlirDictionaryAttrGet(ctx, numElements, elements)
     )::MlirAttribute
 end
 
+function mlirDictionaryAttrGetName()
+    @ccall mlir_c.mlirDictionaryAttrGetName()::MlirStringRef
+end
+
 """
     mlirDictionaryAttrGetNumElements(attr)
 
@@ -3697,6 +3720,10 @@ Checks whether the given attribute is a floating point attribute.
 """
 function mlirAttributeIsAFloat(attr)
     @ccall mlir_c.mlirAttributeIsAFloat(attr::MlirAttribute)::Bool
+end
+
+function mlirFloatAttrGetName()
+    @ccall mlir_c.mlirFloatAttrGetName()::MlirStringRef
 end
 
 """
@@ -3755,6 +3782,10 @@ Creates an integer attribute of the given type with the given integer value.
 """
 function mlirIntegerAttrGet(type, value)
     @ccall mlir_c.mlirIntegerAttrGet(type::MlirType, value::Int64)::MlirAttribute
+end
+
+function mlirIntegerAttrGetName()
+    @ccall mlir_c.mlirIntegerAttrGetName()::MlirStringRef
 end
 
 """
@@ -3838,6 +3869,10 @@ function mlirIntegerSetAttrGet(set)
     @ccall mlir_c.mlirIntegerSetAttrGet(set::MlirIntegerSet)::MlirAttribute
 end
 
+function mlirIntegerSetAttrGetName()
+    @ccall mlir_c.mlirIntegerSetAttrGetName()::MlirStringRef
+end
+
 """
     mlirIntegerSetAttrGetValue(attr)
 
@@ -3878,6 +3913,10 @@ function mlirOpaqueAttrGet(ctx, dialectNamespace, dataLength, data, type)
         data::Cstring,
         type::MlirType,
     )::MlirAttribute
+end
+
+function mlirOpaqueAttrGetName()
+    @ccall mlir_c.mlirOpaqueAttrGetName()::MlirStringRef
 end
 
 """
@@ -3923,6 +3962,10 @@ Creates a string attribute in the given context containing the given string.
 """
 function mlirStringAttrGet(ctx, str)
     @ccall mlir_c.mlirStringAttrGet(ctx::MlirContext, str::MlirStringRef)::MlirAttribute
+end
+
+function mlirStringAttrGetName()
+    @ccall mlir_c.mlirStringAttrGetName()::MlirStringRef
 end
 
 """
@@ -3973,6 +4016,10 @@ function mlirSymbolRefAttrGet(ctx, symbol, numReferences, references)
         numReferences::Cptrdiff_t,
         references::Ptr{MlirAttribute},
     )::MlirAttribute
+end
+
+function mlirSymbolRefAttrGetName()
+    @ccall mlir_c.mlirSymbolRefAttrGetName()::MlirStringRef
 end
 
 """
@@ -4051,6 +4098,10 @@ function mlirFlatSymbolRefAttrGet(ctx, symbol)
     )::MlirAttribute
 end
 
+function mlirFlatSymbolRefAttrGetName()
+    @ccall mlir_c.mlirFlatSymbolRefAttrGetName()::MlirStringRef
+end
+
 """
     mlirFlatSymbolRefAttrGetValue(attr)
 
@@ -4076,6 +4127,10 @@ Creates a type attribute wrapping the given type in the same context as the type
 """
 function mlirTypeAttrGet(type)
     @ccall mlir_c.mlirTypeAttrGet(type::MlirType)::MlirAttribute
+end
+
+function mlirTypeAttrGetName()
+    @ccall mlir_c.mlirTypeAttrGetName()::MlirStringRef
 end
 
 """
@@ -4112,6 +4167,10 @@ Creates a unit attribute in the given context.
 """
 function mlirUnitAttrGet(ctx)
     @ccall mlir_c.mlirUnitAttrGet(ctx::MlirContext)::MlirAttribute
+end
+
+function mlirUnitAttrGetName()
+    @ccall mlir_c.mlirUnitAttrGetName()::MlirStringRef
 end
 
 """
@@ -4687,6 +4746,10 @@ function mlirUnmanagedDenseResourceElementsAttrGet(
     )::MlirAttribute
 end
 
+function mlirDenseResourceElementsAttrGetName()
+    @ccall mlir_c.mlirDenseResourceElementsAttrGetName()::MlirStringRef
+end
+
 function mlirUnmanagedDenseBoolResourceElementsAttrGet(
     shapedType, name, numElements, elements
 )
@@ -4936,6 +4999,10 @@ function mlirStridedLayoutAttrGet(ctx, offset, numStrides, strides)
     )::MlirAttribute
 end
 
+function mlirStridedLayoutAttrGetName()
+    @ccall mlir_c.mlirStridedLayoutAttrGetName()::MlirStringRef
+end
+
 function mlirStridedLayoutAttrGetOffset(attr)
     @ccall mlir_c.mlirStridedLayoutAttrGetOffset(attr::MlirAttribute)::Int64
 end
@@ -4984,6 +5051,10 @@ Creates a signless integer type of the given bitwidth in the context. The type i
 """
 function mlirIntegerTypeGet(ctx, bitwidth)
     @ccall mlir_c.mlirIntegerTypeGet(ctx::MlirContext, bitwidth::Cuint)::MlirType
+end
+
+function mlirIntegerTypeGetName()
+    @ccall mlir_c.mlirIntegerTypeGetName()::MlirStringRef
 end
 
 """
@@ -5067,6 +5138,10 @@ function mlirIndexTypeGet(ctx)
     @ccall mlir_c.mlirIndexTypeGet(ctx::MlirContext)::MlirType
 end
 
+function mlirIndexTypeGetName()
+    @ccall mlir_c.mlirIndexTypeGetName()::MlirStringRef
+end
+
 """
     mlirTypeIsAFloat(type)
 
@@ -5112,6 +5187,10 @@ function mlirFloat4E2M1FNTypeGet(ctx)
     @ccall mlir_c.mlirFloat4E2M1FNTypeGet(ctx::MlirContext)::MlirType
 end
 
+function mlirFloat4E2M1FNTypeGetName()
+    @ccall mlir_c.mlirFloat4E2M1FNTypeGetName()::MlirStringRef
+end
+
 """
     mlirFloat6E2M3FNTypeGetTypeID()
 
@@ -5137,6 +5216,10 @@ Creates an f6E2M3FN type in the given context. The type is owned by the context.
 """
 function mlirFloat6E2M3FNTypeGet(ctx)
     @ccall mlir_c.mlirFloat6E2M3FNTypeGet(ctx::MlirContext)::MlirType
+end
+
+function mlirFloat6E2M3FNTypeGetName()
+    @ccall mlir_c.mlirFloat6E2M3FNTypeGetName()::MlirStringRef
 end
 
 """
@@ -5166,6 +5249,10 @@ function mlirFloat6E3M2FNTypeGet(ctx)
     @ccall mlir_c.mlirFloat6E3M2FNTypeGet(ctx::MlirContext)::MlirType
 end
 
+function mlirFloat6E3M2FNTypeGetName()
+    @ccall mlir_c.mlirFloat6E3M2FNTypeGetName()::MlirStringRef
+end
+
 """
     mlirFloat8E5M2TypeGetTypeID()
 
@@ -5191,6 +5278,10 @@ Creates an f8E5M2 type in the given context. The type is owned by the context.
 """
 function mlirFloat8E5M2TypeGet(ctx)
     @ccall mlir_c.mlirFloat8E5M2TypeGet(ctx::MlirContext)::MlirType
+end
+
+function mlirFloat8E5M2TypeGetName()
+    @ccall mlir_c.mlirFloat8E5M2TypeGetName()::MlirStringRef
 end
 
 """
@@ -5220,6 +5311,10 @@ function mlirFloat8E4M3TypeGet(ctx)
     @ccall mlir_c.mlirFloat8E4M3TypeGet(ctx::MlirContext)::MlirType
 end
 
+function mlirFloat8E4M3TypeGetName()
+    @ccall mlir_c.mlirFloat8E4M3TypeGetName()::MlirStringRef
+end
+
 """
     mlirFloat8E4M3FNTypeGetTypeID()
 
@@ -5245,6 +5340,10 @@ Creates an f8E4M3FN type in the given context. The type is owned by the context.
 """
 function mlirFloat8E4M3FNTypeGet(ctx)
     @ccall mlir_c.mlirFloat8E4M3FNTypeGet(ctx::MlirContext)::MlirType
+end
+
+function mlirFloat8E4M3FNTypeGetName()
+    @ccall mlir_c.mlirFloat8E4M3FNTypeGetName()::MlirStringRef
 end
 
 """
@@ -5274,6 +5373,10 @@ function mlirFloat8E5M2FNUZTypeGet(ctx)
     @ccall mlir_c.mlirFloat8E5M2FNUZTypeGet(ctx::MlirContext)::MlirType
 end
 
+function mlirFloat8E5M2FNUZTypeGetName()
+    @ccall mlir_c.mlirFloat8E5M2FNUZTypeGetName()::MlirStringRef
+end
+
 """
     mlirFloat8E4M3FNUZTypeGetTypeID()
 
@@ -5299,6 +5402,10 @@ Creates an f8E4M3FNUZ type in the given context. The type is owned by the contex
 """
 function mlirFloat8E4M3FNUZTypeGet(ctx)
     @ccall mlir_c.mlirFloat8E4M3FNUZTypeGet(ctx::MlirContext)::MlirType
+end
+
+function mlirFloat8E4M3FNUZTypeGetName()
+    @ccall mlir_c.mlirFloat8E4M3FNUZTypeGetName()::MlirStringRef
 end
 
 """
@@ -5328,6 +5435,10 @@ function mlirFloat8E4M3B11FNUZTypeGet(ctx)
     @ccall mlir_c.mlirFloat8E4M3B11FNUZTypeGet(ctx::MlirContext)::MlirType
 end
 
+function mlirFloat8E4M3B11FNUZTypeGetName()
+    @ccall mlir_c.mlirFloat8E4M3B11FNUZTypeGetName()::MlirStringRef
+end
+
 """
     mlirFloat8E3M4TypeGetTypeID()
 
@@ -5353,6 +5464,10 @@ Creates an f8E3M4 type in the given context. The type is owned by the context.
 """
 function mlirFloat8E3M4TypeGet(ctx)
     @ccall mlir_c.mlirFloat8E3M4TypeGet(ctx::MlirContext)::MlirType
+end
+
+function mlirFloat8E3M4TypeGetName()
+    @ccall mlir_c.mlirFloat8E3M4TypeGetName()::MlirStringRef
 end
 
 """
@@ -5382,6 +5497,10 @@ function mlirFloat8E8M0FNUTypeGet(ctx)
     @ccall mlir_c.mlirFloat8E8M0FNUTypeGet(ctx::MlirContext)::MlirType
 end
 
+function mlirFloat8E8M0FNUTypeGetName()
+    @ccall mlir_c.mlirFloat8E8M0FNUTypeGetName()::MlirStringRef
+end
+
 """
     mlirBFloat16TypeGetTypeID()
 
@@ -5407,6 +5526,10 @@ Creates a bf16 type in the given context. The type is owned by the context.
 """
 function mlirBF16TypeGet(ctx)
     @ccall mlir_c.mlirBF16TypeGet(ctx::MlirContext)::MlirType
+end
+
+function mlirBF16TypeGetName()
+    @ccall mlir_c.mlirBF16TypeGetName()::MlirStringRef
 end
 
 """
@@ -5436,6 +5559,10 @@ function mlirF16TypeGet(ctx)
     @ccall mlir_c.mlirF16TypeGet(ctx::MlirContext)::MlirType
 end
 
+function mlirF16TypeGetName()
+    @ccall mlir_c.mlirF16TypeGetName()::MlirStringRef
+end
+
 """
     mlirFloat32TypeGetTypeID()
 
@@ -5461,6 +5588,10 @@ Creates an f32 type in the given context. The type is owned by the context.
 """
 function mlirF32TypeGet(ctx)
     @ccall mlir_c.mlirF32TypeGet(ctx::MlirContext)::MlirType
+end
+
+function mlirF32TypeGetName()
+    @ccall mlir_c.mlirF32TypeGetName()::MlirStringRef
 end
 
 """
@@ -5490,6 +5621,10 @@ function mlirF64TypeGet(ctx)
     @ccall mlir_c.mlirF64TypeGet(ctx::MlirContext)::MlirType
 end
 
+function mlirF64TypeGetName()
+    @ccall mlir_c.mlirF64TypeGetName()::MlirStringRef
+end
+
 """
     mlirFloatTF32TypeGetTypeID()
 
@@ -5515,6 +5650,10 @@ Creates a TF32 type in the given context. The type is owned by the context.
 """
 function mlirTF32TypeGet(ctx)
     @ccall mlir_c.mlirTF32TypeGet(ctx::MlirContext)::MlirType
+end
+
+function mlirTF32TypeGetName()
+    @ccall mlir_c.mlirTF32TypeGetName()::MlirStringRef
 end
 
 """
@@ -5544,6 +5683,10 @@ function mlirNoneTypeGet(ctx)
     @ccall mlir_c.mlirNoneTypeGet(ctx::MlirContext)::MlirType
 end
 
+function mlirNoneTypeGetName()
+    @ccall mlir_c.mlirNoneTypeGetName()::MlirStringRef
+end
+
 """
     mlirComplexTypeGetTypeID()
 
@@ -5569,6 +5712,10 @@ Creates a complex type with the given element type in the same context as the el
 """
 function mlirComplexTypeGet(elementType)
     @ccall mlir_c.mlirComplexTypeGet(elementType::MlirType)::MlirType
+end
+
+function mlirComplexTypeGetName()
+    @ccall mlir_c.mlirComplexTypeGetName()::MlirStringRef
 end
 
 """
@@ -5735,6 +5882,10 @@ function mlirVectorTypeGet(rank, shape, elementType)
     )::MlirType
 end
 
+function mlirVectorTypeGetName()
+    @ccall mlir_c.mlirVectorTypeGetName()::MlirStringRef
+end
+
 """
     mlirVectorTypeGetChecked(loc, rank, shape, elementType)
 
@@ -5846,6 +5997,10 @@ function mlirRankedTensorTypeGet(rank, shape, elementType, encoding)
     )::MlirType
 end
 
+function mlirRankedTensorTypeGetName()
+    @ccall mlir_c.mlirRankedTensorTypeGetName()::MlirStringRef
+end
+
 """
     mlirRankedTensorTypeGetChecked(loc, rank, shape, elementType, encoding)
 
@@ -5877,6 +6032,10 @@ Creates an unranked tensor type with the given element type in the same context 
 """
 function mlirUnrankedTensorTypeGet(elementType)
     @ccall mlir_c.mlirUnrankedTensorTypeGet(elementType::MlirType)::MlirType
+end
+
+function mlirUnrankedTensorTypeGetName()
+    @ccall mlir_c.mlirUnrankedTensorTypeGetName()::MlirStringRef
 end
 
 """
@@ -5941,6 +6100,10 @@ function mlirMemRefTypeGet(elementType, rank, shape, layout, memorySpace)
     )::MlirType
 end
 
+function mlirMemRefTypeGetName()
+    @ccall mlir_c.mlirMemRefTypeGetName()::MlirStringRef
+end
+
 """
     mlirMemRefTypeGetChecked(loc, elementType, rank, shape, layout, memorySpace)
 
@@ -5995,6 +6158,10 @@ function mlirUnrankedMemRefTypeGet(elementType, memorySpace)
     @ccall mlir_c.mlirUnrankedMemRefTypeGet(
         elementType::MlirType, memorySpace::MlirAttribute
     )::MlirType
+end
+
+function mlirUnrankedMemRefTypeGetName()
+    @ccall mlir_c.mlirUnrankedMemRefTypeGetName()::MlirStringRef
 end
 
 """
@@ -6084,6 +6251,10 @@ function mlirTupleTypeGet(ctx, numElements, elements)
     )::MlirType
 end
 
+function mlirTupleTypeGetName()
+    @ccall mlir_c.mlirTupleTypeGetName()::MlirStringRef
+end
+
 """
     mlirTupleTypeGetNumTypes(type)
 
@@ -6133,6 +6304,10 @@ function mlirFunctionTypeGet(ctx, numInputs, inputs, numResults, results)
         numResults::Cptrdiff_t,
         results::Ptr{MlirType},
     )::MlirType
+end
+
+function mlirFunctionTypeGetName()
+    @ccall mlir_c.mlirFunctionTypeGetName()::MlirStringRef
 end
 
 """
@@ -6198,6 +6373,10 @@ function mlirOpaqueTypeGet(ctx, dialectNamespace, typeData)
     @ccall mlir_c.mlirOpaqueTypeGet(
         ctx::MlirContext, dialectNamespace::MlirStringRef, typeData::MlirStringRef
     )::MlirType
+end
+
+function mlirOpaqueTypeGetName()
+    @ccall mlir_c.mlirOpaqueTypeGetName()::MlirStringRef
 end
 
 """
@@ -6384,16 +6563,158 @@ function mlirGetDialectHandle__amdgpu__()
     @ccall mlir_c.mlirGetDialectHandle__amdgpu__()::MlirDialectHandle
 end
 
+function mlirTypeIsAAMDGPUTDMBaseType(type)
+    @ccall mlir_c.mlirTypeIsAAMDGPUTDMBaseType(type::MlirType)::Bool
+end
+
+function mlirAMDGPUTDMBaseTypeGetTypeID()
+    @ccall mlir_c.mlirAMDGPUTDMBaseTypeGetTypeID()::MlirTypeID
+end
+
+function mlirAMDGPUTDMBaseTypeGet(ctx, elementType)
+    @ccall mlir_c.mlirAMDGPUTDMBaseTypeGet(
+        ctx::MlirContext, elementType::MlirType
+    )::MlirType
+end
+
+function mlirAMDGPUTDMBaseTypeGetName()
+    @ccall mlir_c.mlirAMDGPUTDMBaseTypeGetName()::MlirStringRef
+end
+
+function mlirTypeIsAAMDGPUTDMDescriptorType(type)
+    @ccall mlir_c.mlirTypeIsAAMDGPUTDMDescriptorType(type::MlirType)::Bool
+end
+
+function mlirAMDGPUTDMDescriptorTypeGetTypeID()
+    @ccall mlir_c.mlirAMDGPUTDMDescriptorTypeGetTypeID()::MlirTypeID
+end
+
+function mlirAMDGPUTDMDescriptorTypeGet(ctx)
+    @ccall mlir_c.mlirAMDGPUTDMDescriptorTypeGet(ctx::MlirContext)::MlirType
+end
+
+function mlirAMDGPUTDMDescriptorTypeGetName()
+    @ccall mlir_c.mlirAMDGPUTDMDescriptorTypeGetName()::MlirStringRef
+end
+
+function mlirTypeIsAAMDGPUTDMGatherBaseType(type)
+    @ccall mlir_c.mlirTypeIsAAMDGPUTDMGatherBaseType(type::MlirType)::Bool
+end
+
+function mlirAMDGPUTDMGatherBaseTypeGetTypeID()
+    @ccall mlir_c.mlirAMDGPUTDMGatherBaseTypeGetTypeID()::MlirTypeID
+end
+
+function mlirAMDGPUTDMGatherBaseTypeGet(ctx, elementType, indexType)
+    @ccall mlir_c.mlirAMDGPUTDMGatherBaseTypeGet(
+        ctx::MlirContext, elementType::MlirType, indexType::MlirType
+    )::MlirType
+end
+
+function mlirAMDGPUTDMGatherBaseTypeGetName()
+    @ccall mlir_c.mlirAMDGPUTDMGatherBaseTypeGetName()::MlirStringRef
+end
+
+function mlirGetDialectHandle__amx__()
+    @ccall mlir_c.mlirGetDialectHandle__amx__()::MlirDialectHandle
+end
+
+function mlirGetDialectHandle__affine__()
+    @ccall mlir_c.mlirGetDialectHandle__affine__()::MlirDialectHandle
+end
+
 function mlirGetDialectHandle__arith__()
     @ccall mlir_c.mlirGetDialectHandle__arith__()::MlirDialectHandle
+end
+
+function mlirGetDialectHandle__arm_neon__()
+    @ccall mlir_c.mlirGetDialectHandle__arm_neon__()::MlirDialectHandle
+end
+
+function mlirGetDialectHandle__arm_sme__()
+    @ccall mlir_c.mlirGetDialectHandle__arm_sme__()::MlirDialectHandle
+end
+
+function mlirGetDialectHandle__arm_sve__()
+    @ccall mlir_c.mlirGetDialectHandle__arm_sve__()::MlirDialectHandle
 end
 
 function mlirGetDialectHandle__async__()
     @ccall mlir_c.mlirGetDialectHandle__async__()::MlirDialectHandle
 end
 
+function mlirGetDialectHandle__bufferization__()
+    @ccall mlir_c.mlirGetDialectHandle__bufferization__()::MlirDialectHandle
+end
+
+function mlirGetDialectHandle__complex__()
+    @ccall mlir_c.mlirGetDialectHandle__complex__()::MlirDialectHandle
+end
+
+"""
+    mlirAttributeIsAComplex(attr)
+
+Checks whether the given attribute is a complex attribute.
+"""
+function mlirAttributeIsAComplex(attr)
+    @ccall mlir_c.mlirAttributeIsAComplex(attr::MlirAttribute)::Bool
+end
+
+"""
+    mlirComplexAttrDoubleGet(ctx, type, real, imag)
+
+Creates a complex attribute in the given context with the given double real and imaginary values and double-precision FP semantics.
+"""
+function mlirComplexAttrDoubleGet(ctx, type, real, imag)
+    @ccall mlir_c.mlirComplexAttrDoubleGet(
+        ctx::MlirContext, type::MlirType, real::Cdouble, imag::Cdouble
+    )::MlirAttribute
+end
+
+"""
+    mlirComplexAttrDoubleGetChecked(loc, type, real, imag)
+
+Same as "[`mlirComplexAttrDoubleGet`](@ref)", but if the type is not valid for a construction of a ComplexAttr, returns a null [`MlirAttribute`](@ref).
+"""
+function mlirComplexAttrDoubleGetChecked(loc, type, real, imag)
+    @ccall mlir_c.mlirComplexAttrDoubleGetChecked(
+        loc::MlirLocation, type::MlirType, real::Cdouble, imag::Cdouble
+    )::MlirAttribute
+end
+
+"""
+    mlirComplexAttrGetRealDouble(attr)
+
+Returns the real value stored in the given complex attribute, interpreting the value as double.
+"""
+function mlirComplexAttrGetRealDouble(attr)
+    @ccall mlir_c.mlirComplexAttrGetRealDouble(attr::MlirAttribute)::Cdouble
+end
+
+"""
+    mlirComplexAttrGetImagDouble(attr)
+
+Returns the imaginaryvalue stored in the given complex attribute, interpreting the value as double.
+"""
+function mlirComplexAttrGetImagDouble(attr)
+    @ccall mlir_c.mlirComplexAttrGetImagDouble(attr::MlirAttribute)::Cdouble
+end
+
+"""
+    mlirComplexAttrGetTypeID()
+
+Returns the typeID of a Complex attribute.
+"""
+function mlirComplexAttrGetTypeID()
+    @ccall mlir_c.mlirComplexAttrGetTypeID()::MlirTypeID
+end
+
 function mlirGetDialectHandle__cf__()
     @ccall mlir_c.mlirGetDialectHandle__cf__()::MlirDialectHandle
+end
+
+function mlirGetDialectHandle__dlti__()
+    @ccall mlir_c.mlirGetDialectHandle__dlti__()::MlirDialectHandle
 end
 
 function mlirGetDialectHandle__emitc__()
@@ -6424,6 +6745,10 @@ function mlirEmitCArrayTypeGet(nDims, shape, elementType)
     )::MlirType
 end
 
+function mlirEmitCArrayTypeGetName()
+    @ccall mlir_c.mlirEmitCArrayTypeGetName()::MlirStringRef
+end
+
 function mlirTypeIsAEmitCLValueType(type)
     @ccall mlir_c.mlirTypeIsAEmitCLValueType(type::MlirType)::Bool
 end
@@ -6434,6 +6759,10 @@ end
 
 function mlirEmitCLValueTypeGet(valueType)
     @ccall mlir_c.mlirEmitCLValueTypeGet(valueType::MlirType)::MlirType
+end
+
+function mlirEmitCLValueTypeGetName()
+    @ccall mlir_c.mlirEmitCLValueTypeGetName()::MlirStringRef
 end
 
 function mlirTypeIsAEmitCOpaqueType(type)
@@ -6448,6 +6777,10 @@ function mlirEmitCOpaqueTypeGet(ctx, value)
     @ccall mlir_c.mlirEmitCOpaqueTypeGet(ctx::MlirContext, value::MlirStringRef)::MlirType
 end
 
+function mlirEmitCOpaqueTypeGetName()
+    @ccall mlir_c.mlirEmitCOpaqueTypeGetName()::MlirStringRef
+end
+
 function mlirTypeIsAEmitCPointerType(type)
     @ccall mlir_c.mlirTypeIsAEmitCPointerType(type::MlirType)::Bool
 end
@@ -6458,6 +6791,10 @@ end
 
 function mlirEmitCPointerTypeGet(pointee)
     @ccall mlir_c.mlirEmitCPointerTypeGet(pointee::MlirType)::MlirType
+end
+
+function mlirEmitCPointerTypeGetName()
+    @ccall mlir_c.mlirEmitCPointerTypeGetName()::MlirStringRef
 end
 
 function mlirTypeIsAEmitCPtrDiffTType(type)
@@ -6472,6 +6809,10 @@ function mlirEmitCPtrDiffTTypeGet(ctx)
     @ccall mlir_c.mlirEmitCPtrDiffTTypeGet(ctx::MlirContext)::MlirType
 end
 
+function mlirEmitCPtrDiffTTypeGetName()
+    @ccall mlir_c.mlirEmitCPtrDiffTTypeGetName()::MlirStringRef
+end
+
 function mlirTypeIsAEmitCSignedSizeTType(type)
     @ccall mlir_c.mlirTypeIsAEmitCSignedSizeTType(type::MlirType)::Bool
 end
@@ -6482,6 +6823,10 @@ end
 
 function mlirEmitCSignedSizeTTypeGet(ctx)
     @ccall mlir_c.mlirEmitCSignedSizeTTypeGet(ctx::MlirContext)::MlirType
+end
+
+function mlirEmitCSignedSizeTTypeGetName()
+    @ccall mlir_c.mlirEmitCSignedSizeTTypeGetName()::MlirStringRef
 end
 
 function mlirTypeIsAEmitCSizeTType(type)
@@ -6496,6 +6841,10 @@ function mlirEmitCSizeTTypeGet(ctx)
     @ccall mlir_c.mlirEmitCSizeTTypeGet(ctx::MlirContext)::MlirType
 end
 
+function mlirEmitCSizeTTypeGetName()
+    @ccall mlir_c.mlirEmitCSizeTTypeGetName()::MlirStringRef
+end
+
 function mlirAttributeIsAEmitCCmpPredicate(attr)
     @ccall mlir_c.mlirAttributeIsAEmitCCmpPredicate(attr::MlirAttribute)::Bool
 end
@@ -6504,6 +6853,10 @@ function mlirEmitCCmpPredicateAttrGet(ctx, val)
     @ccall mlir_c.mlirEmitCCmpPredicateAttrGet(
         ctx::MlirContext, val::MlirEmitCCmpPredicate
     )::MlirAttribute
+end
+
+function mlirEmitCCmpPredicateAttrGetName()
+    @ccall mlir_c.mlirEmitCCmpPredicateAttrGetName()::MlirStringRef
 end
 
 function mlirEmitCCmpPredicateAttrGetValue(attr)
@@ -6524,6 +6877,10 @@ function mlirEmitCOpaqueAttrGet(ctx, value)
     @ccall mlir_c.mlirEmitCOpaqueAttrGet(
         ctx::MlirContext, value::MlirStringRef
     )::MlirAttribute
+end
+
+function mlirEmitCOpaqueAttrGetName()
+    @ccall mlir_c.mlirEmitCOpaqueAttrGetName()::MlirStringRef
 end
 
 function mlirEmitCOpaqueAttrGetValue(attr)
@@ -6567,6 +6924,10 @@ function mlirGPUAsyncTokenTypeGet(ctx)
     @ccall mlir_c.mlirGPUAsyncTokenTypeGet(ctx::MlirContext)::MlirType
 end
 
+function mlirGPUAsyncTokenTypeGetName()
+    @ccall mlir_c.mlirGPUAsyncTokenTypeGetName()::MlirStringRef
+end
+
 function mlirAttributeIsAGPUObjectAttr(attr)
     @ccall mlir_c.mlirAttributeIsAGPUObjectAttr(attr::MlirAttribute)::Bool
 end
@@ -6579,6 +6940,10 @@ function mlirGPUObjectAttrGet(mlirCtx, target, format, objectStrRef, mlirObjectP
         objectStrRef::MlirStringRef,
         mlirObjectProps::MlirAttribute,
     )::MlirAttribute
+end
+
+function mlirGPUObjectAttrGetName()
+    @ccall mlir_c.mlirGPUObjectAttrGetName()::MlirStringRef
 end
 
 function mlirGPUObjectAttrGetWithKernels(
@@ -6643,10 +7008,18 @@ function mlirIRDLVariadicityAttrGet(ctx, value)
     )::MlirAttribute
 end
 
+function mlirIRDLVariadicityAttrGetName()
+    @ccall mlir_c.mlirIRDLVariadicityAttrGetName()::MlirStringRef
+end
+
 function mlirIRDLVariadicityArrayAttrGet(ctx, nValues, values)
     @ccall mlir_c.mlirIRDLVariadicityArrayAttrGet(
         ctx::MlirContext, nValues::Cptrdiff_t, values::Ptr{MlirAttribute}
     )::MlirAttribute
+end
+
+function mlirIRDLVariadicityArrayAttrGetName()
+    @ccall mlir_c.mlirIRDLVariadicityArrayAttrGetName()::MlirStringRef
 end
 
 function mlirGetDialectHandle__index__()
@@ -6664,6 +7037,10 @@ Creates an llvm.ptr type.
 """
 function mlirLLVMPointerTypeGet(ctx, addressSpace)
     @ccall mlir_c.mlirLLVMPointerTypeGet(ctx::MlirContext, addressSpace::Cuint)::MlirType
+end
+
+function mlirLLVMPointerTypeGetName()
+    @ccall mlir_c.mlirLLVMPointerTypeGetName()::MlirStringRef
 end
 
 function mlirLLVMPointerTypeGetTypeID()
@@ -6697,6 +7074,10 @@ function mlirLLVMVoidTypeGet(ctx)
     @ccall mlir_c.mlirLLVMVoidTypeGet(ctx::MlirContext)::MlirType
 end
 
+function mlirLLVMVoidTypeGetName()
+    @ccall mlir_c.mlirLLVMVoidTypeGetName()::MlirStringRef
+end
+
 """
     mlirLLVMArrayTypeGet(elementType, numElements)
 
@@ -6704,6 +7085,10 @@ Creates an llvm.array type.
 """
 function mlirLLVMArrayTypeGet(elementType, numElements)
     @ccall mlir_c.mlirLLVMArrayTypeGet(elementType::MlirType, numElements::Cuint)::MlirType
+end
+
+function mlirLLVMArrayTypeGetName()
+    @ccall mlir_c.mlirLLVMArrayTypeGetName()::MlirStringRef
 end
 
 """
@@ -6727,6 +7112,10 @@ function mlirLLVMFunctionTypeGet(resultType, nArgumentTypes, argumentTypes, isVa
         argumentTypes::Ptr{MlirType},
         isVarArg::Bool,
     )::MlirType
+end
+
+function mlirLLVMFunctionTypeGetName()
+    @ccall mlir_c.mlirLLVMFunctionTypeGetName()::MlirStringRef
 end
 
 """
@@ -6767,6 +7156,10 @@ end
 
 function mlirLLVMStructTypeGetTypeID()
     @ccall mlir_c.mlirLLVMStructTypeGetTypeID()::MlirTypeID
+end
+
+function mlirLLVMStructTypeGetName()
+    @ccall mlir_c.mlirLLVMStructTypeGetName()::MlirStringRef
 end
 
 """
@@ -6957,6 +7350,10 @@ function mlirLLVMCConvAttrGet(ctx, cconv)
     )::MlirAttribute
 end
 
+function mlirLLVMCConvAttrGetName()
+    @ccall mlir_c.mlirLLVMCConvAttrGetName()::MlirStringRef
+end
+
 @cenum MlirLLVMComdat::UInt32 begin
     MlirLLVMComdatAny = 0x0000000000000000
     MlirLLVMComdatExactMatch = 0x0000000000000001
@@ -6974,6 +7371,10 @@ function mlirLLVMComdatAttrGet(ctx, comdat)
     @ccall mlir_c.mlirLLVMComdatAttrGet(
         ctx::MlirContext, comdat::MlirLLVMComdat
     )::MlirAttribute
+end
+
+function mlirLLVMComdatAttrGetName()
+    @ccall mlir_c.mlirLLVMComdatAttrGetName()::MlirStringRef
 end
 
 @cenum MlirLLVMLinkage::UInt32 begin
@@ -7001,6 +7402,10 @@ function mlirLLVMLinkageAttrGet(ctx, linkage)
     )::MlirAttribute
 end
 
+function mlirLLVMLinkageAttrGetName()
+    @ccall mlir_c.mlirLLVMLinkageAttrGetName()::MlirStringRef
+end
+
 """
     mlirLLVMDINullTypeAttrGet(ctx)
 
@@ -7008,6 +7413,10 @@ Creates a LLVM DINullType attribute.
 """
 function mlirLLVMDINullTypeAttrGet(ctx)
     @ccall mlir_c.mlirLLVMDINullTypeAttrGet(ctx::MlirContext)::MlirAttribute
+end
+
+function mlirLLVMDINullTypeAttrGetName()
+    @ccall mlir_c.mlirLLVMDINullTypeAttrGetName()::MlirStringRef
 end
 
 """
@@ -7021,6 +7430,10 @@ function mlirLLVMDIExpressionElemAttrGet(ctx, opcode, nArguments, arguments)
     )::MlirAttribute
 end
 
+function mlirLLVMDIExpressionElemAttrGetName()
+    @ccall mlir_c.mlirLLVMDIExpressionElemAttrGetName()::MlirStringRef
+end
+
 """
     mlirLLVMDIExpressionAttrGet(ctx, nOperations, operations)
 
@@ -7030,6 +7443,10 @@ function mlirLLVMDIExpressionAttrGet(ctx, nOperations, operations)
     @ccall mlir_c.mlirLLVMDIExpressionAttrGet(
         ctx::MlirContext, nOperations::Cptrdiff_t, operations::Ptr{MlirAttribute}
     )::MlirAttribute
+end
+
+function mlirLLVMDIExpressionAttrGetName()
+    @ccall mlir_c.mlirLLVMDIExpressionAttrGetName()::MlirStringRef
 end
 
 @cenum MlirLLVMTypeEncoding::UInt32 begin
@@ -7068,6 +7485,10 @@ function mlirLLVMDIBasicTypeAttrGet(ctx, tag, name, sizeInBits, encoding)
         sizeInBits::UInt64,
         encoding::MlirLLVMTypeEncoding,
     )::MlirAttribute
+end
+
+function mlirLLVMDIBasicTypeAttrGetName()
+    @ccall mlir_c.mlirLLVMDIBasicTypeAttrGetName()::MlirStringRef
 end
 
 """
@@ -7126,6 +7547,10 @@ function mlirLLVMDICompositeTypeAttrGet(
     )::MlirAttribute
 end
 
+function mlirLLVMDICompositeTypeAttrGetName()
+    @ccall mlir_c.mlirLLVMDICompositeTypeAttrGetName()::MlirStringRef
+end
+
 """
     mlirLLVMDIDerivedTypeAttrGet(ctx, tag, name, baseType, sizeInBits, alignInBits, offsetInBits, dwarfAddressSpace, extraData)
 
@@ -7155,6 +7580,10 @@ function mlirLLVMDIDerivedTypeAttrGet(
     )::MlirAttribute
 end
 
+function mlirLLVMDIDerivedTypeAttrGetName()
+    @ccall mlir_c.mlirLLVMDIDerivedTypeAttrGetName()::MlirStringRef
+end
+
 function mlirLLVMDIStringTypeAttrGet(
     ctx,
     tag,
@@ -7179,6 +7608,10 @@ function mlirLLVMDIStringTypeAttrGet(
     )::MlirAttribute
 end
 
+function mlirLLVMDIStringTypeAttrGetName()
+    @ccall mlir_c.mlirLLVMDIStringTypeAttrGetName()::MlirStringRef
+end
+
 """
     mlirLLVMDIDerivedTypeAttrGetBaseType(diDerivedType)
 
@@ -7199,6 +7632,10 @@ function mlirLLVMDIFileAttrGet(ctx, name, directory)
     @ccall mlir_c.mlirLLVMDIFileAttrGet(
         ctx::MlirContext, name::MlirAttribute, directory::MlirAttribute
     )::MlirAttribute
+end
+
+function mlirLLVMDIFileAttrGetName()
+    @ccall mlir_c.mlirLLVMDIFileAttrGetName()::MlirStringRef
 end
 
 @cenum MlirLLVMDIEmissionKind::UInt32 begin
@@ -7244,6 +7681,10 @@ function mlirLLVMDICompileUnitAttrGet(
     )::MlirAttribute
 end
 
+function mlirLLVMDICompileUnitAttrGetName()
+    @ccall mlir_c.mlirLLVMDICompileUnitAttrGetName()::MlirStringRef
+end
+
 """
     mlirLLVMDIFlagsAttrGet(ctx, value)
 
@@ -7251,6 +7692,10 @@ Creates a LLVM DIFlags attribute.
 """
 function mlirLLVMDIFlagsAttrGet(ctx, value)
     @ccall mlir_c.mlirLLVMDIFlagsAttrGet(ctx::MlirContext, value::UInt64)::MlirAttribute
+end
+
+function mlirLLVMDIFlagsAttrGetName()
+    @ccall mlir_c.mlirLLVMDIFlagsAttrGetName()::MlirStringRef
 end
 
 """
@@ -7268,6 +7713,10 @@ function mlirLLVMDILexicalBlockAttrGet(ctx, scope, file, line, column)
     )::MlirAttribute
 end
 
+function mlirLLVMDILexicalBlockAttrGetName()
+    @ccall mlir_c.mlirLLVMDILexicalBlockAttrGetName()::MlirStringRef
+end
+
 """
     mlirLLVMDILexicalBlockFileAttrGet(ctx, scope, file, discriminator)
 
@@ -7277,6 +7726,10 @@ function mlirLLVMDILexicalBlockFileAttrGet(ctx, scope, file, discriminator)
     @ccall mlir_c.mlirLLVMDILexicalBlockFileAttrGet(
         ctx::MlirContext, scope::MlirAttribute, file::MlirAttribute, discriminator::Cuint
     )::MlirAttribute
+end
+
+function mlirLLVMDILexicalBlockFileAttrGetName()
+    @ccall mlir_c.mlirLLVMDILexicalBlockFileAttrGetName()::MlirStringRef
 end
 
 """
@@ -7298,6 +7751,10 @@ function mlirLLVMDILocalVariableAttrGet(
         diType::MlirAttribute,
         flags::Int64,
     )::MlirAttribute
+end
+
+function mlirLLVMDILocalVariableAttrGetName()
+    @ccall mlir_c.mlirLLVMDILocalVariableAttrGetName()::MlirStringRef
 end
 
 """
@@ -7354,6 +7811,10 @@ function mlirLLVMDISubprogramAttrGet(
     )::MlirAttribute
 end
 
+function mlirLLVMDISubprogramAttrGetName()
+    @ccall mlir_c.mlirLLVMDISubprogramAttrGetName()::MlirStringRef
+end
+
 """
     mlirLLVMDIAnnotationAttrGet(ctx, name, value)
 
@@ -7363,6 +7824,10 @@ function mlirLLVMDIAnnotationAttrGet(ctx, name, value)
     @ccall mlir_c.mlirLLVMDIAnnotationAttrGet(
         ctx::MlirContext, name::MlirAttribute, value::MlirAttribute
     )::MlirAttribute
+end
+
+function mlirLLVMDIAnnotationAttrGetName()
+    @ccall mlir_c.mlirLLVMDIAnnotationAttrGetName()::MlirStringRef
 end
 
 """
@@ -7441,6 +7906,10 @@ function mlirLLVMDISubroutineTypeAttrGet(ctx, callingConvention, nTypes, types)
     )::MlirAttribute
 end
 
+function mlirLLVMDISubroutineTypeAttrGetName()
+    @ccall mlir_c.mlirLLVMDISubroutineTypeAttrGetName()::MlirStringRef
+end
+
 """
     mlirLLVMDIModuleAttrGet(ctx, file, scope, name, configMacros, includePath, apinotes, line, isDecl)
 
@@ -7462,6 +7931,10 @@ function mlirLLVMDIModuleAttrGet(
     )::MlirAttribute
 end
 
+function mlirLLVMDIModuleAttrGetName()
+    @ccall mlir_c.mlirLLVMDIModuleAttrGetName()::MlirStringRef
+end
+
 """
     mlirLLVMDIImportedEntityAttrGet(ctx, tag, scope, entity, file, line, name, nElements, elements)
 
@@ -7481,6 +7954,10 @@ function mlirLLVMDIImportedEntityAttrGet(
         nElements::Cptrdiff_t,
         elements::Ptr{MlirAttribute},
     )::MlirAttribute
+end
+
+function mlirLLVMDIImportedEntityAttrGetName()
+    @ccall mlir_c.mlirLLVMDIImportedEntityAttrGetName()::MlirStringRef
 end
 
 """
@@ -7557,6 +8034,10 @@ function mlirGetDialectHandle__ml_program__()
     @ccall mlir_c.mlirGetDialectHandle__ml_program__()::MlirDialectHandle
 end
 
+function mlirGetDialectHandle__mpi__()
+    @ccall mlir_c.mlirGetDialectHandle__mpi__()::MlirDialectHandle
+end
+
 function mlirGetDialectHandle__math__()
     @ccall mlir_c.mlirGetDialectHandle__math__()::MlirDialectHandle
 end
@@ -7586,8 +8067,16 @@ function mlirNVGPUTensorMapDescriptorTypeGet(
     )::MlirType
 end
 
+function mlirNVGPUTensorMapDescriptorTypeGetName()
+    @ccall mlir_c.mlirNVGPUTensorMapDescriptorTypeGetName()::MlirStringRef
+end
+
 function mlirGetDialectHandle__nvvm__()
     @ccall mlir_c.mlirGetDialectHandle__nvvm__()::MlirDialectHandle
+end
+
+function mlirGetDialectHandle__acc__()
+    @ccall mlir_c.mlirGetDialectHandle__acc__()::MlirDialectHandle
 end
 
 function mlirGetDialectHandle__omp__()
@@ -7606,24 +8095,48 @@ function mlirTypeIsAPDLAttributeType(type)
     @ccall mlir_c.mlirTypeIsAPDLAttributeType(type::MlirType)::Bool
 end
 
+function mlirPDLAttributeTypeGetTypeID()
+    @ccall mlir_c.mlirPDLAttributeTypeGetTypeID()::MlirTypeID
+end
+
 function mlirPDLAttributeTypeGet(ctx)
     @ccall mlir_c.mlirPDLAttributeTypeGet(ctx::MlirContext)::MlirType
+end
+
+function mlirPDLAttributeTypeGetName()
+    @ccall mlir_c.mlirPDLAttributeTypeGetName()::MlirStringRef
 end
 
 function mlirTypeIsAPDLOperationType(type)
     @ccall mlir_c.mlirTypeIsAPDLOperationType(type::MlirType)::Bool
 end
 
+function mlirPDLOperationTypeGetTypeID()
+    @ccall mlir_c.mlirPDLOperationTypeGetTypeID()::MlirTypeID
+end
+
 function mlirPDLOperationTypeGet(ctx)
     @ccall mlir_c.mlirPDLOperationTypeGet(ctx::MlirContext)::MlirType
+end
+
+function mlirPDLOperationTypeGetName()
+    @ccall mlir_c.mlirPDLOperationTypeGetName()::MlirStringRef
 end
 
 function mlirTypeIsAPDLRangeType(type)
     @ccall mlir_c.mlirTypeIsAPDLRangeType(type::MlirType)::Bool
 end
 
+function mlirPDLRangeTypeGetTypeID()
+    @ccall mlir_c.mlirPDLRangeTypeGetTypeID()::MlirTypeID
+end
+
 function mlirPDLRangeTypeGet(elementType)
     @ccall mlir_c.mlirPDLRangeTypeGet(elementType::MlirType)::MlirType
+end
+
+function mlirPDLRangeTypeGetName()
+    @ccall mlir_c.mlirPDLRangeTypeGetName()::MlirStringRef
 end
 
 function mlirPDLRangeTypeGetElementType(type)
@@ -7634,16 +8147,40 @@ function mlirTypeIsAPDLTypeType(type)
     @ccall mlir_c.mlirTypeIsAPDLTypeType(type::MlirType)::Bool
 end
 
+function mlirPDLTypeTypeGetTypeID()
+    @ccall mlir_c.mlirPDLTypeTypeGetTypeID()::MlirTypeID
+end
+
 function mlirPDLTypeTypeGet(ctx)
     @ccall mlir_c.mlirPDLTypeTypeGet(ctx::MlirContext)::MlirType
+end
+
+function mlirPDLTypeTypeGetName()
+    @ccall mlir_c.mlirPDLTypeTypeGetName()::MlirStringRef
 end
 
 function mlirTypeIsAPDLValueType(type)
     @ccall mlir_c.mlirTypeIsAPDLValueType(type::MlirType)::Bool
 end
 
+function mlirPDLValueTypeGetTypeID()
+    @ccall mlir_c.mlirPDLValueTypeGetTypeID()::MlirTypeID
+end
+
 function mlirPDLValueTypeGet(ctx)
     @ccall mlir_c.mlirPDLValueTypeGet(ctx::MlirContext)::MlirType
+end
+
+function mlirPDLValueTypeGetName()
+    @ccall mlir_c.mlirPDLValueTypeGetName()::MlirStringRef
+end
+
+function mlirGetDialectHandle__pdl_interp__()
+    @ccall mlir_c.mlirGetDialectHandle__pdl_interp__()::MlirDialectHandle
+end
+
+function mlirGetDialectHandle__ptr__()
+    @ccall mlir_c.mlirGetDialectHandle__ptr__()::MlirDialectHandle
 end
 
 function mlirGetDialectHandle__quant__()
@@ -7833,6 +8370,10 @@ function mlirTypeIsAAnyQuantizedType(type)
     @ccall mlir_c.mlirTypeIsAAnyQuantizedType(type::MlirType)::Bool
 end
 
+function mlirAnyQuantizedTypeGetTypeID()
+    @ccall mlir_c.mlirAnyQuantizedTypeGetTypeID()::MlirTypeID
+end
+
 """
     mlirAnyQuantizedTypeGet(flags, storageType, expressedType, storageTypeMin, storageTypeMax)
 
@@ -7850,6 +8391,10 @@ function mlirAnyQuantizedTypeGet(
     )::MlirType
 end
 
+function mlirAnyQuantizedTypeGetName()
+    @ccall mlir_c.mlirAnyQuantizedTypeGetName()::MlirStringRef
+end
+
 """
     mlirTypeIsAUniformQuantizedType(type)
 
@@ -7857,6 +8402,10 @@ Returns `true` if the given type is a UniformQuantizedType.
 """
 function mlirTypeIsAUniformQuantizedType(type)
     @ccall mlir_c.mlirTypeIsAUniformQuantizedType(type::MlirType)::Bool
+end
+
+function mlirUniformQuantizedTypeGetTypeID()
+    @ccall mlir_c.mlirUniformQuantizedTypeGetTypeID()::MlirTypeID
 end
 
 """
@@ -7876,6 +8425,10 @@ function mlirUniformQuantizedTypeGet(
         storageTypeMin::Int64,
         storageTypeMax::Int64,
     )::MlirType
+end
+
+function mlirUniformQuantizedTypeGetName()
+    @ccall mlir_c.mlirUniformQuantizedTypeGetName()::MlirStringRef
 end
 
 """
@@ -7914,6 +8467,10 @@ function mlirTypeIsAUniformQuantizedPerAxisType(type)
     @ccall mlir_c.mlirTypeIsAUniformQuantizedPerAxisType(type::MlirType)::Bool
 end
 
+function mlirUniformQuantizedPerAxisTypeGetTypeID()
+    @ccall mlir_c.mlirUniformQuantizedPerAxisTypeGetTypeID()::MlirTypeID
+end
+
 """
     mlirUniformQuantizedPerAxisTypeGet(flags, storageType, expressedType, nDims, scales, zeroPoints, quantizedDimension, storageTypeMin, storageTypeMax)
 
@@ -7941,6 +8498,10 @@ function mlirUniformQuantizedPerAxisTypeGet(
         storageTypeMin::Int64,
         storageTypeMax::Int64,
     )::MlirType
+end
+
+function mlirUniformQuantizedPerAxisTypeGetName()
+    @ccall mlir_c.mlirUniformQuantizedPerAxisTypeGetName()::MlirStringRef
 end
 
 """
@@ -8003,6 +8564,10 @@ function mlirTypeIsAUniformQuantizedSubChannelType(type)
     @ccall mlir_c.mlirTypeIsAUniformQuantizedSubChannelType(type::MlirType)::Bool
 end
 
+function mlirUniformQuantizedSubChannelTypeGetTypeID()
+    @ccall mlir_c.mlirUniformQuantizedSubChannelTypeGetTypeID()::MlirTypeID
+end
+
 """
     mlirUniformQuantizedSubChannelTypeGet(flags, storageType, expressedType, scalesAttr, zeroPointsAttr, blockSizeInfoLength, quantizedDimensions, blockSizes, storageTypeMin, storageTypeMax)
 
@@ -8034,6 +8599,10 @@ function mlirUniformQuantizedSubChannelTypeGet(
         storageTypeMin::Int64,
         storageTypeMax::Int64,
     )::MlirType
+end
+
+function mlirUniformQuantizedSubChannelTypeGetName()
+    @ccall mlir_c.mlirUniformQuantizedSubChannelTypeGetName()::MlirStringRef
 end
 
 """
@@ -8098,6 +8667,10 @@ function mlirTypeIsACalibratedQuantizedType(type)
     @ccall mlir_c.mlirTypeIsACalibratedQuantizedType(type::MlirType)::Bool
 end
 
+function mlirCalibratedQuantizedTypeGetTypeID()
+    @ccall mlir_c.mlirCalibratedQuantizedTypeGetTypeID()::MlirTypeID
+end
+
 """
     mlirCalibratedQuantizedTypeGet(expressedType, min, max)
 
@@ -8107,6 +8680,10 @@ function mlirCalibratedQuantizedTypeGet(expressedType, min, max)
     @ccall mlir_c.mlirCalibratedQuantizedTypeGet(
         expressedType::MlirType, min::Cdouble, max::Cdouble
     )::MlirType
+end
+
+function mlirCalibratedQuantizedTypeGetName()
+    @ccall mlir_c.mlirCalibratedQuantizedTypeGetName()::MlirStringRef
 end
 
 """
@@ -8195,6 +8772,10 @@ function mlirSMTTypeGetBitVector(ctx, width)
     @ccall mlir_c.mlirSMTTypeGetBitVector(ctx::MlirContext, width::Int32)::MlirType
 end
 
+function mlirSMTBitVectorTypeGetName()
+    @ccall mlir_c.mlirSMTBitVectorTypeGetName()::MlirStringRef
+end
+
 """
     mlirSMTTypeIsABool(type)
 
@@ -8213,6 +8794,10 @@ function mlirSMTTypeGetBool(ctx)
     @ccall mlir_c.mlirSMTTypeGetBool(ctx::MlirContext)::MlirType
 end
 
+function mlirSMTBoolTypeGetName()
+    @ccall mlir_c.mlirSMTBoolTypeGetName()::MlirStringRef
+end
+
 """
     mlirSMTTypeIsAInt(type)
 
@@ -8229,6 +8814,10 @@ Creates a smt::IntType.
 """
 function mlirSMTTypeGetInt(ctx)
     @ccall mlir_c.mlirSMTTypeGetInt(ctx::MlirContext)::MlirType
+end
+
+function mlirSMTIntTypeGetName()
+    @ccall mlir_c.mlirSMTIntTypeGetName()::MlirStringRef
 end
 
 """
@@ -8345,6 +8934,10 @@ function mlirGetDialectHandle__shape__()
     @ccall mlir_c.mlirGetDialectHandle__shape__()::MlirDialectHandle
 end
 
+function mlirGetDialectHandle__shard__()
+    @ccall mlir_c.mlirGetDialectHandle__shard__()::MlirDialectHandle
+end
+
 function mlirGetDialectHandle__sparse_tensor__()
     @ccall mlir_c.mlirGetDialectHandle__sparse_tensor__()::MlirDialectHandle
 end
@@ -8399,6 +8992,10 @@ function mlirSparseTensorEncodingAttrGet(
         explicitVal::MlirAttribute,
         implicitVal::MlirAttribute,
     )::MlirAttribute
+end
+
+function mlirSparseTensorEncodingAttrGetName()
+    @ccall mlir_c.mlirSparseTensorEncodingAttrGetName()::MlirStringRef
 end
 
 """
@@ -8520,6 +9117,10 @@ function mlirGetDialectHandle__tensor__()
     @ccall mlir_c.mlirGetDialectHandle__tensor__()::MlirDialectHandle
 end
 
+function mlirGetDialectHandle__tosa__()
+    @ccall mlir_c.mlirGetDialectHandle__tosa__()::MlirDialectHandle
+end
+
 function mlirGetDialectHandle__transform__()
     @ccall mlir_c.mlirGetDialectHandle__transform__()::MlirDialectHandle
 end
@@ -8536,6 +9137,10 @@ function mlirTransformAnyOpTypeGet(ctx)
     @ccall mlir_c.mlirTransformAnyOpTypeGet(ctx::MlirContext)::MlirType
 end
 
+function mlirTransformAnyOpTypeGetName()
+    @ccall mlir_c.mlirTransformAnyOpTypeGetName()::MlirStringRef
+end
+
 function mlirTypeIsATransformAnyParamType(type)
     @ccall mlir_c.mlirTypeIsATransformAnyParamType(type::MlirType)::Bool
 end
@@ -8548,6 +9153,10 @@ function mlirTransformAnyParamTypeGet(ctx)
     @ccall mlir_c.mlirTransformAnyParamTypeGet(ctx::MlirContext)::MlirType
 end
 
+function mlirTransformAnyParamTypeGetName()
+    @ccall mlir_c.mlirTransformAnyParamTypeGetName()::MlirStringRef
+end
+
 function mlirTypeIsATransformAnyValueType(type)
     @ccall mlir_c.mlirTypeIsATransformAnyValueType(type::MlirType)::Bool
 end
@@ -8558,6 +9167,10 @@ end
 
 function mlirTransformAnyValueTypeGet(ctx)
     @ccall mlir_c.mlirTransformAnyValueTypeGet(ctx::MlirContext)::MlirType
+end
+
+function mlirTransformAnyValueTypeGetName()
+    @ccall mlir_c.mlirTransformAnyValueTypeGetName()::MlirStringRef
 end
 
 function mlirTypeIsATransformOperationType(type)
@@ -8574,6 +9187,10 @@ function mlirTransformOperationTypeGet(ctx, operationName)
     )::MlirType
 end
 
+function mlirTransformOperationTypeGetName()
+    @ccall mlir_c.mlirTransformOperationTypeGetName()::MlirStringRef
+end
+
 function mlirTransformOperationTypeGetOperationName(type)
     @ccall mlir_c.mlirTransformOperationTypeGetOperationName(type::MlirType)::MlirStringRef
 end
@@ -8588,6 +9205,10 @@ end
 
 function mlirTransformParamTypeGet(ctx, type)
     @ccall mlir_c.mlirTransformParamTypeGet(ctx::MlirContext, type::MlirType)::MlirType
+end
+
+function mlirTransformParamTypeGetName()
+    @ccall mlir_c.mlirTransformParamTypeGetName()::MlirStringRef
 end
 
 function mlirTransformParamTypeGetType(type)
@@ -8689,8 +9310,32 @@ function mlirMergeSymbolsIntoFromClone(target, other)
     )::MlirLogicalResult
 end
 
+function mlirGetDialectHandle__ub__()
+    @ccall mlir_c.mlirGetDialectHandle__ub__()::MlirDialectHandle
+end
+
+function mlirGetDialectHandle__vcix__()
+    @ccall mlir_c.mlirGetDialectHandle__vcix__()::MlirDialectHandle
+end
+
 function mlirGetDialectHandle__vector__()
     @ccall mlir_c.mlirGetDialectHandle__vector__()::MlirDialectHandle
+end
+
+function mlirGetDialectHandle__wasmssa__()
+    @ccall mlir_c.mlirGetDialectHandle__wasmssa__()::MlirDialectHandle
+end
+
+function mlirGetDialectHandle__x86vector__()
+    @ccall mlir_c.mlirGetDialectHandle__x86vector__()::MlirDialectHandle
+end
+
+function mlirGetDialectHandle__xegpu__()
+    @ccall mlir_c.mlirGetDialectHandle__xegpu__()::MlirDialectHandle
+end
+
+function mlirGetDialectHandle__xevm__()
+    @ccall mlir_c.mlirGetDialectHandle__xevm__()::MlirDialectHandle
 end
 
 struct MlirExecutionEngine
@@ -9240,6 +9885,28 @@ struct MlirGreedyRewriteDriverConfig
     ptr::Ptr{Cvoid}
 end
 
+"""
+    MlirGreedyRewriteStrictness
+
+Greedy rewrite strictness levels.
+"""
+@cenum MlirGreedyRewriteStrictness::UInt32 begin
+    MLIR_GREEDY_REWRITE_STRICTNESS_ANY_OP = 0x0000000000000000
+    MLIR_GREEDY_REWRITE_STRICTNESS_EXISTING_AND_NEW_OPS = 0x0000000000000001
+    MLIR_GREEDY_REWRITE_STRICTNESS_EXISTING_OPS = 0x0000000000000002
+end
+
+"""
+    MlirGreedySimplifyRegionLevel
+
+Greedy simplify region levels.
+"""
+@cenum MlirGreedySimplifyRegionLevel::UInt32 begin
+    MLIR_GREEDY_SIMPLIFY_REGION_LEVEL_DISABLED = 0x0000000000000000
+    MLIR_GREEDY_SIMPLIFY_REGION_LEVEL_NORMAL = 0x0000000000000001
+    MLIR_GREEDY_SIMPLIFY_REGION_LEVEL_AGGRESSIVE = 0x0000000000000002
+end
+
 struct MlirRewritePatternSet
     ptr::Ptr{Cvoid}
 end
@@ -9708,12 +10375,197 @@ function mlirApplyPatternsAndFoldGreedilyWithOp(op, patterns, arg3)
     )::MlirLogicalResult
 end
 
-function mlirApplyPatternsAndFoldGreedily(op, patterns, arg3)
+function mlirApplyPatternsAndFoldGreedily(op, patterns, config)
     @ccall mlir_c.mlirApplyPatternsAndFoldGreedily(
         op::MlirModule,
         patterns::MlirFrozenRewritePatternSet,
-        arg3::MlirGreedyRewriteDriverConfig,
+        config::MlirGreedyRewriteDriverConfig,
     )::MlirLogicalResult
+end
+
+"""
+    mlirGreedyRewriteDriverConfigCreate()
+
+Creates a greedy rewrite driver configuration with default settings.
+"""
+function mlirGreedyRewriteDriverConfigCreate()
+    @ccall mlir_c.mlirGreedyRewriteDriverConfigCreate()::MlirGreedyRewriteDriverConfig
+end
+
+"""
+    mlirGreedyRewriteDriverConfigDestroy(config)
+
+Destroys a greedy rewrite driver configuration.
+"""
+function mlirGreedyRewriteDriverConfigDestroy(config)
+    @ccall mlir_c.mlirGreedyRewriteDriverConfigDestroy(
+        config::MlirGreedyRewriteDriverConfig
+    )::Cvoid
+end
+
+"""
+    mlirGreedyRewriteDriverConfigSetMaxIterations(config, maxIterations)
+
+Sets the maximum number of iterations for the greedy rewrite driver. Use -1 for no limit.
+"""
+function mlirGreedyRewriteDriverConfigSetMaxIterations(config, maxIterations)
+    @ccall mlir_c.mlirGreedyRewriteDriverConfigSetMaxIterations(
+        config::MlirGreedyRewriteDriverConfig, maxIterations::Int64
+    )::Cvoid
+end
+
+"""
+    mlirGreedyRewriteDriverConfigSetMaxNumRewrites(config, maxNumRewrites)
+
+Sets the maximum number of rewrites within an iteration. Use -1 for no limit.
+"""
+function mlirGreedyRewriteDriverConfigSetMaxNumRewrites(config, maxNumRewrites)
+    @ccall mlir_c.mlirGreedyRewriteDriverConfigSetMaxNumRewrites(
+        config::MlirGreedyRewriteDriverConfig, maxNumRewrites::Int64
+    )::Cvoid
+end
+
+"""
+    mlirGreedyRewriteDriverConfigSetUseTopDownTraversal(config, useTopDownTraversal)
+
+Sets whether to use top-down traversal for the initial population of the worklist.
+"""
+function mlirGreedyRewriteDriverConfigSetUseTopDownTraversal(config, useTopDownTraversal)
+    @ccall mlir_c.mlirGreedyRewriteDriverConfigSetUseTopDownTraversal(
+        config::MlirGreedyRewriteDriverConfig, useTopDownTraversal::Bool
+    )::Cvoid
+end
+
+"""
+    mlirGreedyRewriteDriverConfigEnableFolding(config, enable)
+
+Enables or disables folding during greedy rewriting.
+"""
+function mlirGreedyRewriteDriverConfigEnableFolding(config, enable)
+    @ccall mlir_c.mlirGreedyRewriteDriverConfigEnableFolding(
+        config::MlirGreedyRewriteDriverConfig, enable::Bool
+    )::Cvoid
+end
+
+"""
+    mlirGreedyRewriteDriverConfigSetStrictness(config, strictness)
+
+Sets the strictness level for the greedy rewrite driver.
+"""
+function mlirGreedyRewriteDriverConfigSetStrictness(config, strictness)
+    @ccall mlir_c.mlirGreedyRewriteDriverConfigSetStrictness(
+        config::MlirGreedyRewriteDriverConfig, strictness::MlirGreedyRewriteStrictness
+    )::Cvoid
+end
+
+"""
+    mlirGreedyRewriteDriverConfigSetRegionSimplificationLevel(config, level)
+
+Sets the region simplification level.
+"""
+function mlirGreedyRewriteDriverConfigSetRegionSimplificationLevel(config, level)
+    @ccall mlir_c.mlirGreedyRewriteDriverConfigSetRegionSimplificationLevel(
+        config::MlirGreedyRewriteDriverConfig, level::MlirGreedySimplifyRegionLevel
+    )::Cvoid
+end
+
+"""
+    mlirGreedyRewriteDriverConfigEnableConstantCSE(config, enable)
+
+Enables or disables constant CSE.
+"""
+function mlirGreedyRewriteDriverConfigEnableConstantCSE(config, enable)
+    @ccall mlir_c.mlirGreedyRewriteDriverConfigEnableConstantCSE(
+        config::MlirGreedyRewriteDriverConfig, enable::Bool
+    )::Cvoid
+end
+
+"""
+    mlirGreedyRewriteDriverConfigGetMaxIterations(config)
+
+Gets the maximum number of iterations for the greedy rewrite driver.
+"""
+function mlirGreedyRewriteDriverConfigGetMaxIterations(config)
+    @ccall mlir_c.mlirGreedyRewriteDriverConfigGetMaxIterations(
+        config::MlirGreedyRewriteDriverConfig
+    )::Int64
+end
+
+"""
+    mlirGreedyRewriteDriverConfigGetMaxNumRewrites(config)
+
+Gets the maximum number of rewrites within an iteration.
+"""
+function mlirGreedyRewriteDriverConfigGetMaxNumRewrites(config)
+    @ccall mlir_c.mlirGreedyRewriteDriverConfigGetMaxNumRewrites(
+        config::MlirGreedyRewriteDriverConfig
+    )::Int64
+end
+
+"""
+    mlirGreedyRewriteDriverConfigGetUseTopDownTraversal(config)
+
+Gets whether top-down traversal is used for initial worklist population.
+"""
+function mlirGreedyRewriteDriverConfigGetUseTopDownTraversal(config)
+    @ccall mlir_c.mlirGreedyRewriteDriverConfigGetUseTopDownTraversal(
+        config::MlirGreedyRewriteDriverConfig
+    )::Bool
+end
+
+"""
+    mlirGreedyRewriteDriverConfigIsFoldingEnabled(config)
+
+Gets whether folding is enabled during greedy rewriting.
+"""
+function mlirGreedyRewriteDriverConfigIsFoldingEnabled(config)
+    @ccall mlir_c.mlirGreedyRewriteDriverConfigIsFoldingEnabled(
+        config::MlirGreedyRewriteDriverConfig
+    )::Bool
+end
+
+"""
+    mlirGreedyRewriteDriverConfigGetStrictness(config)
+
+Gets the strictness level for the greedy rewrite driver.
+"""
+function mlirGreedyRewriteDriverConfigGetStrictness(config)
+    @ccall mlir_c.mlirGreedyRewriteDriverConfigGetStrictness(
+        config::MlirGreedyRewriteDriverConfig
+    )::MlirGreedyRewriteStrictness
+end
+
+"""
+    mlirGreedyRewriteDriverConfigGetRegionSimplificationLevel(config)
+
+Gets the region simplification level.
+"""
+function mlirGreedyRewriteDriverConfigGetRegionSimplificationLevel(config)
+    @ccall mlir_c.mlirGreedyRewriteDriverConfigGetRegionSimplificationLevel(
+        config::MlirGreedyRewriteDriverConfig
+    )::MlirGreedySimplifyRegionLevel
+end
+
+"""
+    mlirGreedyRewriteDriverConfigIsConstantCSEEnabled(config)
+
+Gets whether constant CSE is enabled.
+"""
+function mlirGreedyRewriteDriverConfigIsConstantCSEEnabled(config)
+    @ccall mlir_c.mlirGreedyRewriteDriverConfigIsConstantCSEEnabled(
+        config::MlirGreedyRewriteDriverConfig
+    )::Bool
+end
+
+"""
+    mlirWalkAndApplyPatterns(op, patterns)
+
+Applies the given patterns to the given op by a fast walk-based pattern rewrite driver.
+"""
+function mlirWalkAndApplyPatterns(op, patterns)
+    @ccall mlir_c.mlirWalkAndApplyPatterns(
+        op::MlirOperation, patterns::MlirFrozenRewritePatternSet
+    )::Cvoid
 end
 
 """
@@ -11276,6 +12128,10 @@ function mlirGetDialectHandle__triton__()
     @ccall mlir_c.mlirGetDialectHandle__triton__()::MlirDialectHandle
 end
 
+function mlirTritonPointerTypeGetTypeID()
+    @ccall mlir_c.mlirTritonPointerTypeGetTypeID()::MlirTypeID
+end
+
 function mlirTritonPointerTypeGet(pointeeType, addressSpace)
     @ccall mlir_c.mlirTritonPointerTypeGet(
         pointeeType::MlirType, addressSpace::Cint
@@ -11426,6 +12282,14 @@ function enzymexlaGeluApproximationAttrGet(ctx, mode)
     @ccall mlir_c.enzymexlaGeluApproximationAttrGet(
         ctx::MlirContext, mode::Int32
     )::MlirAttribute
+end
+
+function enzymexlaMPIDatatypeAttrGet(ctx, mode)
+    @ccall mlir_c.enzymexlaMPIDatatypeAttrGet(ctx::MlirContext, mode::Int32)::MlirAttribute
+end
+
+function enzymexlaMPIOpAttrGet(ctx, mode)
+    @ccall mlir_c.enzymexlaMPIOpAttrGet(ctx::MlirContext, mode::Int32)::MlirAttribute
 end
 
 function enzymexlaGuaranteedAnalysisResultAttrGet(ctx, mode)

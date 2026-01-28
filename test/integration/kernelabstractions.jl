@@ -21,7 +21,7 @@ function matmul!(output, a)
     return KernelAbstractions.synchronize(backend)
 end
 
-# TODO: raising fails on TPU CI.
+# TODO(#2253): raising fails on TPU CI.
 #       https://github.com/EnzymeAD/Reactant.jl/pull/1923#discussion_r2580461294
 if !Reactant.Accelerators.TPU.has_tpu()
     @testset "KernelAbstractions Matmul" begin

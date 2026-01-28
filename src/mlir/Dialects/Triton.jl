@@ -626,9 +626,7 @@ function dot_scaled(
     !isnothing(b_scale) && push!(operands, b_scale)
     push!(
         attributes,
-        operandsegmentsizes([
-            1, 1, 1, (a_scale == nothing) ? 0 : 1, (b_scale == nothing) ? 0 : 1
-        ]),
+        operandsegmentsizes([1, 1, 1, Int(!isnothing(a_scale)), Int(!isnothing(b_scale))]),
     )
     !isnothing(lhs_k_pack) && push!(attributes, namedattribute("lhs_k_pack", lhs_k_pack))
     !isnothing(rhs_k_pack) && push!(attributes, namedattribute("rhs_k_pack", rhs_k_pack))
@@ -953,8 +951,7 @@ function load(
     !isnothing(mask) && push!(operands, mask)
     !isnothing(other) && push!(operands, other)
     push!(
-        attributes,
-        operandsegmentsizes([1, (mask == nothing) ? 0 : 1, (other == nothing) ? 0 : 1]),
+        attributes, operandsegmentsizes([1, Int(!isnothing(mask)), Int(!isnothing(other))])
     )
     !isnothing(result) && push!(op_ty_results, result)
     !isnothing(boundaryCheck) &&

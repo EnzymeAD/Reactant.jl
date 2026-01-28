@@ -1,39 +1,45 @@
 abstract type AbstractPass end
 
+using StableRNGs: StableRNG
+
 mutable struct ExternalPassHandle
     ctx::Union{Nothing,Context}
     pass::AbstractPass
 end
 
 mutable struct PassManager
-    pass::API.MlirPassManager
+    ref::API.MlirPassManager
     allocator::TypeIDAllocator
     passes::Dict{TypeID,ExternalPassHandle}
 
     function PassManager(pm::API.MlirPassManager)
         @assert !mlirIsNull(pm) "cannot create PassManager with null MlirPassManager"
         finalizer(new(pm, TypeIDAllocator(), Dict{TypeID,ExternalPassHandle}())) do pm
-            return API.mlirPassManagerDestroy(pm.pass)
+            return API.mlirPassManagerDestroy(pm.ref)
         end
     end
 end
 
 """
-    PassManager(; context=context())
+    PassManager(; context=current_context())
 
 Create a new top-level PassManager.
 """
-PassManager(; context::Context=context()) = PassManager(API.mlirPassManagerCreate(context))
+function PassManager(; context::Context=current_context())
+    return PassManager(API.mlirPassManagerCreate(context))
+end
 
 """
-    PassManager(anchorOp; context=context())
+    PassManager(anchorOp; context=current_context())
 
 Create a new top-level PassManager anchored on `anchorOp`.
 """
-PassManager(anchor_op::Operation; context::Context=context()) =
-    PassManager(API.mlirPassManagerCreateOnOperation(context, anchor_op))
+function PassManager(anchor_op::Operation; context::Context=current_context())
+    return PassManager(API.mlirPassManagerCreateOnOperation(context, anchor_op))
+end
 
-Base.convert(::Core.Type{API.MlirPassManager}, pass::PassManager) = pass.pass
+Base.cconvert(::Core.Type{API.MlirPassManager}, pass::PassManager) = pass
+Base.unsafe_convert(::Core.Type{API.MlirPassManager}, pass::PassManager) = pass.ref
 
 """
     enable_ir_printing!(passManager)
@@ -64,6 +70,16 @@ function enable_verifier!(pm, enable=true)
     return pm
 end
 
+"""
+    add_owned_pass!(passManager, pass)
+
+Add a pass and transfer ownership to the provided top-level `PassManager`. If the pass is not a generic operation pass or a `ModulePass`, a new `OpPassManager` is implicitly nested under the provided PassManager.
+"""
+function add_owned_pass!(pm::PassManager, pass)
+    API.mlirPassManagerAddOwnedPass(pm, pass)
+    return pm
+end
+
 # Where to dump the MLIR modules
 const DUMP_MLIR_DIR = Ref{Union{Nothing,String}}(nothing)
 # Whether to always dump MLIR, regardless of failure
@@ -71,10 +87,21 @@ const DUMP_MLIR_ALWAYS = Ref{Bool}(false)
 # Counter for dumping MLIR modules
 const MLIR_DUMP_COUNTER = Threads.Atomic{Int}(0)
 
+const DUMP_RNG = StableRNG(0)
+
+function dump_mlir(
+    mod::Module, pm::Union{Nothing,PassManager}=nothing, mode::String=""; failed::Bool=false
+)
+    return dump_mlir(Operation(mod), pm, mode; failed)
+end
+
 # Utilities for dumping to a file the module of a failed compilation, useful for
 # debugging purposes.
 function dump_mlir(
-    mod::Module, pm::Union{Nothing,PassManager}=nothing, mode::String=""; failed::Bool=false
+    op::Operation,
+    pm::Union{Nothing,PassManager}=nothing,
+    mode::String="";
+    failed::Bool=false,
 )
     try
         # If `DUMP_MLIR_DIR` is `nothing`, create a persistent new temp
@@ -91,9 +118,8 @@ function dump_mlir(
         mkpath(dir)
 
         # Attempt to get the name of the module if that exists
-        module_op = Operation(mod)
-        mod_name = attr(module_op, String(API.mlirSymbolTableGetSymbolAttributeName()))
-        fname = mod_name === nothing ? randstring(4) : String(mod_name)
+        mod_name = getattr(op, String(API.mlirSymbolTableGetSymbolAttributeName()))
+        fname = mod_name === nothing ? randstring(DUMP_RNG, 4) : String(mod_name)
         fname = "module_" * lpad(MLIR_DUMP_COUNTER[], 3, "0") * "_$(fname)"
         if isempty(mode)
             fname *= ".mlir"
@@ -113,7 +139,7 @@ function dump_mlir(
                 print_pass_pipeline(io, OpPassManager(pm))
                 println(io)
             end
-            show(IOContext(io, :debug => true), mod)
+            show(IOContext(io, :debug => true), op)
         end
         if failed
             @error "Compilation failed, MLIR module written to $(path)"
@@ -123,6 +149,9 @@ function dump_mlir(
     catch err
         @error "Couldn't save MLIR module" exception = err
     end
+    flush(stdout)
+    flush(stderr)
+    return nothing
 end
 
 function try_compile_dump_mlir(f, mod::Module, pm=nothing)
@@ -137,36 +166,37 @@ function try_compile_dump_mlir(f, mod::Module, pm=nothing)
         rethrow()
     finally
         if failed || DUMP_MLIR_ALWAYS[]
-            dump_mlir(mod, pm, "post_xla_compile"; failed)
+            dump_mlir(Operation(mod), pm, "post_xla_compile"; failed)
         end
     end
 end
 
-"""
-    run!(passManager, module)
-
-Run the provided `passManager` on the given `module`.
-"""
 function run!(pm::PassManager, mod::Module, key::String="")
+    return run!(pm, Operation(mod), key)
+end
+
+"""
+    run!(passManager, operation, key="")
+
+Run the provided `passManager` on the given `operation`.
+"""
+function run!(pm::PassManager, operation, key::String="")
     # Dump MLIR before running the pass manager, but also print the list of passes that will be called later.
-    DUMP_MLIR_ALWAYS[] && dump_mlir(mod, pm, isempty(key) ? "pre_pm" : "pre_$(key)_pm")
-    status = LogicalResult(@static if isdefined(API, :mlirPassManagerRunOnOp)
-        API.mlirPassManagerRunOnOp(pm, Operation(mod))
-    else
-        API.mlirPassManagerRun(pm, mod)
-    end)
+    DUMP_MLIR_ALWAYS[] &&
+        dump_mlir(operation, pm, isempty(key) ? "pre_pm" : "pre_$(key)_pm")
+    status = LogicalResult(API.mlirPassManagerRunOnOp(pm, operation))
     failed = isfailure(status)
     if failed || DUMP_MLIR_ALWAYS[]
-        dump_mlir(mod, pm, isempty(key) ? "post_pm" : "post_$(key)_pm"; failed)
+        dump_mlir(operation, pm, isempty(key) ? "post_pm" : "post_$(key)_pm"; failed)
     end
     if failed
         throw("failed to run pass manager on module")
     end
-    return mod
+    return operation
 end
 
 struct OpPassManager
-    op_pass::API.MlirOpPassManager
+    ref::API.MlirOpPassManager
     pass::PassManager
 
     function OpPassManager(op_pass, pass)
@@ -180,8 +210,9 @@ end
 
 Cast a top-level `PassManager` to a generic `OpPassManager`.
 """
-OpPassManager(pm::PassManager) =
-    OpPassManager(API.mlirPassManagerGetAsOpPassManager(pm), pm)
+function OpPassManager(pm::PassManager)
+    return OpPassManager(API.mlirPassManagerGetAsOpPassManager(pm), pm)
+end
 
 """
     OpPassManager(passManager, operationName)
@@ -189,18 +220,21 @@ OpPassManager(pm::PassManager) =
 Nest an `OpPassManager` under the top-level PassManager, the nested passmanager will only run on operations matching the provided name.
 The returned `OpPassManager` will be destroyed when the parent is destroyed. To further nest more `OpPassManager` under the newly returned one, see `mlirOpPassManagerNest` below.
 """
-OpPassManager(pm::PassManager, opname) =
-    OpPassManager(API.mlirPassManagerGetNestedUnder(pm, opname), pm)
+function OpPassManager(pm::PassManager, opname)
+    return OpPassManager(API.mlirPassManagerGetNestedUnder(pm, opname), pm)
+end
 
 """
     OpPassManager(opPassManager, operationName)
 
 Nest an `OpPassManager` under the provided `OpPassManager`, the nested passmanager will only run on operations matching the provided name. The returned `OpPassManager` will be destroyed when the parent is destroyed.
 """
-OpPassManager(opm::OpPassManager, opname) =
-    OpPassManager(API.mlirOpPassManagerGetNestedUnder(opm, opname), opm.pass)
+function OpPassManager(opm::OpPassManager, opname)
+    return OpPassManager(API.mlirOpPassManagerGetNestedUnder(opm, opname), opm.ref)
+end
 
-Base.convert(::Core.Type{API.MlirOpPassManager}, op_pass::OpPassManager) = op_pass.op_pass
+Base.cconvert(::Core.Type{API.MlirOpPassManager}, op_pass::OpPassManager) = op_pass
+Base.unsafe_convert(::Core.Type{API.MlirOpPassManager}, opm::OpPassManager) = opm.ref
 
 """
     pass_pipeline(opPassManager) -> String
@@ -223,7 +257,7 @@ end
 
 function Base.show(io::IO, op_pass::OpPassManager)
     println(io, "OpPassManager(\"\"\"")
-    print_pass_pipeline(io, opm)
+    print_pass_pipeline(io, op_pass)
     return print(io, "\n\"\"\")")
 end
 
@@ -234,16 +268,6 @@ end
 function Base.showerror(io::IO, err::AddPipelineException)
     print(io, "failed to add pipeline:", err.message)
     return nothing
-end
-
-"""
-    add_owned_pass!(passManager, pass)
-
-Add a pass and transfer ownership to the provided top-level `PassManager`. If the pass is not a generic operation pass or a `ModulePass`, a new `OpPassManager` is implicitly nested under the provided PassManager.
-"""
-function add_owned_pass!(pm::PassManager, pass)
-    API.mlirPassManagerAddOwnedPass(pm, pass)
-    return pm
 end
 
 """
@@ -299,81 +323,80 @@ function add_pipeline!(op_pass::OpPassManager, pipeline)
     return op_pass
 end
 
-@static if isdefined(API, :mlirCreateExternalPass)
+### Pass
 
-    ### Pass
+# AbstractPass interface:
+opname(::AbstractPass) = ""
+function pass_run(::Context, ::P, _) where {P<:AbstractPass}
+    return error("pass $P does not implement `MLIR.pass_run`")
+end
 
-    # AbstractPass interface:
-    opname(::AbstractPass) = ""
-    function pass_run(::Context, ::P, op) where {P<:AbstractPass}
-        return error("pass $P does not implement `MLIR.pass_run`")
+function _pass_construct(::ExternalPassHandle)
+    return nothing
+end
+
+function _pass_destruct(::ExternalPassHandle)
+    return nothing
+end
+
+function _pass_initialize(ctx, handle::ExternalPassHandle)
+    (; ref) = try
+        handle.ctx = Context(ctx)
+        success()
+    catch
+        failure()
     end
+    return ref
+end
 
-    function _pass_construct(ptr::ExternalPassHandle)
-        return nothing
-    end
+function _pass_clone(handle::ExternalPassHandle)
+    return ExternalPassHandle(handle.ctx, deepcopy(handle.pass))
+end
 
-    function _pass_destruct(ptr::ExternalPassHandle)
-        return nothing
+function _pass_run(rawop, external_pass, handle::ExternalPassHandle)
+    op = Operation(rawop, false)
+    try
+        pass_run(handle.ctx, handle.pass, op)
+    catch ex
+        @error "Something went wrong running pass" exception = (ex, catch_backtrace())
+        API.mlirExternalPassSignalFailure(external_pass)
     end
+    return nothing
+end
 
-    function _pass_initialize(ctx, handle::ExternalPassHandle)
-        try
-            handle.ctx = Context(ctx)
-            success()
-        catch
-            failure()
-        end
-    end
+function create_external_pass!(oppass::OpPassManager, args...)
+    return create_external_pass!(oppass.ref, args...)
+end
 
-    function _pass_clone(handle::ExternalPassHandle)
-        return ExternalPassHandle(handle.ctx, deepcopy(handle.pass))
-    end
-
-    function _pass_run(rawop, external_pass, handle::ExternalPassHandle)
-        op = Operation(rawop, false)
-        try
-            pass_run(handle.ctx, handle.pass, op)
-        catch ex
-            @error "Something went wrong running pass" exception = (ex, catch_backtrace())
-            API.mlirExternalPassSignalFailure(external_pass)
-        end
-        return nothing
-    end
-
-    function create_external_pass!(oppass::OpPassManager, args...)
-        return create_external_pass!(oppass.pass, args...)
-    end
-    function create_external_pass!(
-        manager,
-        pass,
+function create_external_pass!(
+    manager,
+    pass,
+    name,
+    argument,
+    description,
+    opname=opname(pass),
+    dependent_dialects=API.MlirDialectHandle[],
+)
+    passid = TypeID(manager.allocator)
+    callbacks = API.MlirExternalPassCallbacks(
+        @cfunction(_pass_construct, Cvoid, (Any,)),
+        @cfunction(_pass_destruct, Cvoid, (Any,)),
+        @cfunction(_pass_initialize, API.MlirLogicalResult, (API.MlirContext, Any)),
+        @cfunction(_pass_clone, Any, (Any,)),
+        @cfunction(_pass_run, Cvoid, (API.MlirOperation, API.MlirExternalPass, Any))
+    )
+    pass_handle = manager.passes[passid] = ExternalPassHandle(nothing, pass)
+    userdata = Base.pointer_from_objref(pass_handle)
+    mlir_pass = API.mlirCreateExternalPass(
+        passid,
         name,
         argument,
         description,
-        opname=opname(pass),
-        dependent_dialects=API.MlirDialectHandle[],
+        opname,
+        length(dependent_dialects),
+        dependent_dialects,
+        callbacks,
+        userdata,
     )
-        passid = TypeID(manager.allocator)
-        callbacks = API.MlirExternalPassCallbacks(
-            @cfunction(_pass_construct, Cvoid, (Any,)),
-            @cfunction(_pass_destruct, Cvoid, (Any,)),
-            @cfunction(_pass_initialize, API.MlirLogicalResult, (API.MlirContext, Any)),
-            @cfunction(_pass_clone, Any, (Any,)),
-            @cfunction(_pass_run, Cvoid, (API.MlirOperation, API.MlirExternalPass, Any))
-        )
-        pass_handle = manager.passes[passid] = ExternalPassHandle(nothing, pass)
-        userdata = Base.pointer_from_objref(pass_handle)
-        mlir_pass = API.mlirCreateExternalPass(
-            passid,
-            name,
-            argument,
-            description,
-            opname,
-            length(dependent_dialects),
-            dependent_dialects,
-            callbacks,
-            userdata,
-        )
-        return mlir_pass
-    end
+    return mlir_pass
 end

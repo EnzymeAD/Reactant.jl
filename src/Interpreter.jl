@@ -8,12 +8,10 @@ using Enzyme
 
 import Core.Compiler:
     AbstractInterpreter,
-    abstract_call,
     abstract_call_known,
     ArgInfo,
     StmtInfo,
     AbsIntState,
-    get_max_methods,
     CallMeta,
     Effects,
     NoCallInfo,
@@ -27,16 +25,15 @@ function var"@reactant_overlay"(__source__::LineNumberNode, __module__::Module, 
     )
 end
 
-function set_reactant_abi(
-    interp,
+@inline function set_reactant_abi(
+    interp::Enzyme.Compiler.Interpreter.EnzymeInterpreter{typeof(set_reactant_abi)},
     @nospecialize(f),
     arginfo::ArgInfo,
     si::StmtInfo,
     sv::AbsIntState,
-    max_methods::Int=get_max_methods(interp, f, sv),
+    max_methods::Int,
 )
     (; fargs, argtypes) = arginfo
-
     if f === ReactantCore.within_compile
         if length(argtypes) != 1
             @static if VERSION < v"1.11.0-"
@@ -72,18 +69,56 @@ function set_reactant_abi(
     # Improve inference by considering call_with_reactant as having the same results as
     # the original call
     if f === call_with_reactant
-        arginfo2 = ArgInfo(fargs isa Nothing ? nothing : fargs[2:end], argtypes[2:end])
-        return abstract_call(interp, arginfo2::ArgInfo, si, sv, max_methods)
+        arginfo2 =
+            if length(argtypes) >= 2 &&
+                Core.Compiler.widenconst(argtypes[2]) <: EnsureReturnType
+                ArgInfo(fargs isa Nothing ? nothing : fargs[3:end], argtypes[3:end])
+            else
+                ArgInfo(fargs isa Nothing ? nothing : fargs[2:end], argtypes[2:end])
+            end
+
+        si2 = if VERSION < v"1.12"
+            StmtInfo(true)
+        else
+            StmtInfo(true, false)
+        end
+        return Core.Compiler.abstract_call(interp, arginfo2::ArgInfo, si2, sv, max_methods)
     end
 
-    return Base.@invoke abstract_call_known(
-        interp::AbstractInterpreter,
-        f::Any,
-        arginfo::ArgInfo,
-        si::StmtInfo,
-        sv::AbsIntState,
-        max_methods::Int,
-    )
+    if !should_rewrite_call(Core.Typeof(f))
+        ninterp = Core.Compiler.NativeInterpreter(interp.world)
+        # Note: mildly sus, but gabe said this was fine?
+        @static if VERSION >= v"1.12"
+            if hasproperty(sv, :interp)
+                sv.interp = ninterp
+                # sv2 = Compiler.OptimizationState(sv.result.linfo, ninterp)
+            end
+        end
+
+        result = Base.@invoke abstract_call_known(
+            ninterp::Core.Compiler.NativeInterpreter,
+            f::Any,
+            arginfo::ArgInfo,
+            si::StmtInfo,
+            sv::AbsIntState,
+            max_methods::Int,
+        )
+        @static if VERSION >= v"1.12"
+            if hasproperty(sv, :interp)
+                sv.interp = interp
+            end
+        end
+        return result
+    else
+        return Base.@invoke abstract_call_known(
+            interp::AbstractInterpreter,
+            f::Any,
+            arginfo::ArgInfo,
+            si::StmtInfo,
+            sv::AbsIntState,
+            max_methods::Int,
+        )
+    end
 end
 
 @static if Enzyme.GPUCompiler.HAS_INTEGRATED_CACHE

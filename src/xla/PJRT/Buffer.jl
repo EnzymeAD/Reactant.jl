@@ -22,55 +22,51 @@ function Buffer(client::Client, array::Array{T,N}, device::Device) where {T,N}
 end
 
 function Base.similar(a::Buffer)
-    buffer = GC.@preserve a begin
+    new_buffer = GC.@preserve a begin
         @ccall MLIR.API.mlir_c.UninitPJRTBuffer(
             XLA.client(a).client::Ptr{Cvoid},
             XLA.device(a).device::Ptr{Cvoid},
             (@ccall MLIR.API.mlir_c.BufferPrimitiveType(
-                buffer.buffer::Ptr{Cvoid}
+                a.buffer::Ptr{Cvoid}
             )::Cint)::UInt64,
-            (@ccall MLIR.API.mlir_c.BufferNDimensions(
-                buffer.buffer::Ptr{Cvoid}
-            )::Cint)::UInt64,
+            (@ccall MLIR.API.mlir_c.BufferNDimensions(a.buffer::Ptr{Cvoid})::Cint)::UInt64,
             (@ccall MLIR.API.mlir_c.BufferShape(
-                buffer.buffer::Ptr{Cvoid}
+                a.buffer::Ptr{Cvoid}
             )::Ptr{Int64})::Ptr{Int64},
         )::Ptr{Cvoid}
     end
-    return Buffer(buffer)
+    return Buffer(new_buffer)
 end
 
 function Base.similar(a::Buffer, S::Type)
-    buffer = GC.@preserve a begin
+    new_buffer = GC.@preserve a begin
         @ccall MLIR.API.mlir_c.UninitPJRTBuffer(
             XLA.client(a).client::Ptr{Cvoid},
             XLA.device(a).device::Ptr{Cvoid},
             XLA.primitive_type(S)::UInt64,
-            (@ccall MLIR.API.mlir_c.BufferNDimensions(
-                buffer.buffer::Ptr{Cvoid}
-            )::Cint)::UInt64,
+            (@ccall MLIR.API.mlir_c.BufferNDimensions(a.buffer::Ptr{Cvoid})::Cint)::UInt64,
             (@ccall MLIR.API.mlir_c.BufferShape(
-                buffer.buffer::Ptr{Cvoid}
+                a.buffer::Ptr{Cvoid}
             )::Ptr{Int64})::Ptr{Int64},
         )::Ptr{Cvoid}
     end
-    return Buffer(buffer)
+    return Buffer(new_buffer)
 end
 
 function Base.similar(a::Buffer, dims::Dims)
     sizear = collect(Int64, reverse(dims))
-    buffer = GC.@preserve a sizear begin
+    new_buffer = GC.@preserve a sizear begin
         @ccall MLIR.API.mlir_c.UninitPJRTBuffer(
             XLA.client(a).client::Ptr{Cvoid},
             XLA.device(a).device::Ptr{Cvoid},
             (@ccall MLIR.API.mlir_c.BufferPrimitiveType(
-                buffer.buffer::Ptr{Cvoid}
+                a.buffer::Ptr{Cvoid}
             )::Cint)::UInt64,
             length(dims)::UInt64,
             pointer(sizear)::Ptr{Int64},
         )::Ptr{Cvoid}
     end
-    return Buffer(buffer)
+    return Buffer(new_buffer)
 end
 
 @inline function Base.similar(
@@ -177,7 +173,7 @@ function XLA.to_host(buffer::Buffer, data, sharding)
     return data
 end
 
-# TODO: users themselves need to gc preserve here
+# TODO(#2235): users themselves need to gc preserve here
 function XLA.unsafe_buffer_pointer(buffer::Buffer)
     @ccall MLIR.API.mlir_c.UnsafeBufferPointer(buffer.buffer::Ptr{Cvoid})::Ptr{Cvoid}
 end

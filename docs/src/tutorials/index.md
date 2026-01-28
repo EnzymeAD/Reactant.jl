@@ -8,5 +8,7 @@
 - [Multi-Host Environments](@ref distributed).
 - [Local build of ReactantExtra](@ref local-build).
 - [Persistent Compilation Cache](@ref persistent_compile_cache).
+- [Raising](@ref Raising).
+- [Computational kernels](@ref computational-kernels).
 
 We are currently working on adding more tutorials to Reactant!! Please check back soon!

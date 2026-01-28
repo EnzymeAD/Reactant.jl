@@ -29,6 +29,13 @@ end
     @test !(Vector{Union{}} <: Reactant.AnyTracedRArray)
 end
 
+mul(a, b) = a .* b
+
+struct MyFix{N,FT,XT} <: Base.Function
+    f::FT
+    x::XT
+end
+
 @testset "Tracing" begin
     @testset "trace_type" begin
         @testset "mode = ConcreteToTraced" begin
@@ -134,6 +141,13 @@ end
                     Base.RefValue{ConcreteRArray{Float64,1}},
                     Base.RefValue{TracedRArray{Float64,1}},
                     Base.RefValue{TracedRArray{Float64,1}},
+                ),
+
+                # Function types
+                (
+                    MyFix{2,typeof(mul),ConcreteRArray{Float64,1}},
+                    MyFix{2,typeof(mul),TracedRArray{Float64,1}},
+                    MyFix{2,typeof(mul),TracedRArray{Float64,1}},
                 ),
 
                 # Val types
@@ -269,6 +283,15 @@ end
                 },
                 [true, true, false],
             )
+
+            @test Reactant.apply_type_with_promotion(
+                Foo,
+                [
+                    ConcreteRNumber{Float64},
+                    Bar{ConcreteRNumber{Float64}},
+                    ConcreteRArray{Float64,1},
+                ],
+            ) == (Foo{Float64,Bar{Float64},ConcreteRArray{Float64,1}}, [true, true, false])
         end
     end
 
@@ -310,7 +333,7 @@ end
     @testset "@skip_rewrite_func" begin
         a = ConcreteRArray([1.0 2.0; 3.0 4.0])
 
-        # TODO we should test it with a type-unstable method
+        # TODO(#2253) we should test it with a type-unstable method
         add_skip_rewrite(x) = x + x
         Reactant.@skip_rewrite_func add_skip_rewrite
 

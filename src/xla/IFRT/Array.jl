@@ -359,17 +359,24 @@ function replicate_array_to_all_devices(array::Array, sharding, mesh, size_arr)
             ),
         )
 
+        compile_options = XLA.make_compile_options(;
+            device_id=-1,
+            num_partitions=length(mesh.device_ids),
+            mesh_ids=vec(mesh.device_ids),
+            xla_executable_build_options=(;
+                use_shardy_partitioner=true, use_spmd_partitioning=true
+            ),
+        )
+
         exec = XLA.compile(
             XLA.client(array),
-            nothing,
             mod;
-            is_sharded=true,
-            global_device_ids=vec(mesh.device_ids),
-            num_replicas=1,
-            num_partitions=length(mesh.device_ids),
+            compile_options,
             num_outputs=1,                # unused
             num_parameters=1,             # unused
-            use_shardy_partitioner=true,  # unused
+            is_sharded=true,
+            num_replicas=1,
+            num_partitions=length(mesh.device_ids),
         )
 
         only(XLA.execute(exec, (array.buffer,), (UInt8(0),), Val(1)))
@@ -401,7 +408,7 @@ function XLA.sharding(buffer::Array)
 end
 
 function copy_arrays_to_device_with_sharding(buffers::Vector{Array}, sharding::Sharding)
-    ifrt_client = XLA.client(first(buffers)) # TODO: check all clients are the same?
+    ifrt_client = XLA.client(first(buffers)) # TODO(#2235): check all clients are the same?
     src_buffers = [buffer.buffer for buffer in buffers]
     GC.@preserve buffers ifrt_client begin
         dst_buffers = @ccall MLIR.API.mlir_c.ifrt_copy_arrays_to_device_with_sharding(

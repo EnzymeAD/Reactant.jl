@@ -319,6 +319,31 @@ function Base.show(io::IO, X::Union{AnyConcretePJRTArray,AnyConcreteIFRTArray})
     return nothing
 end
 
+# To avoid ambiguity
+function Base.show(
+    io::IO,
+    v::LinearAlgebra.Adjoint{
+        <:Real,<:Union{AnyConcretePJRTArray{T,1},AnyConcreteIFRTArray{T,1}}
+    },
+) where {T}
+    print(io, "adjoint(")
+    show(io, parent(v))
+    print(io, ")")
+    return nothing
+end
+
+function Base.show(
+    io::IO,
+    v::LinearAlgebra.Transpose{
+        <:Number,<:Union{AnyConcretePJRTArray{T,1},AnyConcreteIFRTArray{T,1}}
+    },
+) where {T}
+    print(io, "transpose(")
+    show(io, parent(v))
+    print(io, ")")
+    return nothing
+end
+
 function Base.getindex(
     a::ConcretePJRTArray{T,N}, args::Vararg{Int,N}
 ) where {T<:ReactantPrimitive,N}
@@ -471,7 +496,7 @@ function Base.similar(
     return similar(ConcreteIFRTArray, T, axes(bc))
 end
 
-# TODO replace this copy for `setindex!` maybe? how to copy data to already existing buffer? (i.e. `copyto!`)
+# TODO(#2255) replace this copy for `setindex!` maybe? how to copy data to already existing buffer? (i.e. `copyto!`)
 function Base.copy(bc::Base.Broadcast.Broadcasted{Broadcast.ArrayStyle{ConcretePJRTArray}})
     bc = Broadcast.flatten(bc)
     for x in bc.args
@@ -496,7 +521,7 @@ function Base.copy(bc::Base.Broadcast.Broadcasted{Broadcast.ArrayStyle{ConcreteP
         aux = similar(ConcretePJRTArray, ElType, length.(axes(bc)))
 
         copyto!(aux, convert(Broadcast.Broadcasted{Nothing}, bc))
-        return ConcretePJRTArray(aux) # XXX: result should be on correct device?
+        return ConcretePJRTArray(aux) # TODO(#2255): result should be on correct device?
     end
 
     fn = compile(Broadcast.BroadcastFunction(bc.f), (bc.args...,))
@@ -532,9 +557,7 @@ for aType in (:ConcretePJRTArray, :ConcreteIFRTArray)
     end
 end
 
-function Base.copyto!(
-    dest::Union{AnyConcreteIFRTArray,AnyConcretePJRTArray}, src::AbstractConcreteArray
-)
+function Base.copyto!(dest::UnionAnyConcreteRArray, src::AbstractConcreteArray)
     fn = compile(mycopyto!, (dest, src))
     fn(dest, src)
     return dest
@@ -765,7 +788,7 @@ function Base.fill!(
     throw(MethodError(fill!, (a, val)))
 end
 
-function Base.fill!(x::Union{AnyConcreteIFRTArray,AnyConcretePJRTArray}, val)
+function Base.fill!(x::UnionAnyConcreteRArray, val)
     fn = compile(fill!, (x, val))
     fn(x, val)
     return x
@@ -803,7 +826,7 @@ for (fType, opType) in (
     @eval function Base.mapreducedim!(
         f::$(fType),
         op::$(opType),
-        R::Union{AnyConcreteIFRTArray,AnyConcretePJRTArray},
+        R::UnionAnyConcreteRArray,
         A::Union{Base.AbstractBroadcasted,AbstractArray},
     )
         fn = compile(mymapreducedim!, (f, op, R, A))
@@ -817,10 +840,14 @@ function mymap!(f, R, A)
     return nothing
 end
 
-function Base.map!(f, R::Union{AnyConcreteIFRTArray,AnyConcretePJRTArray}, A::AbstractArray)
+function Base.map!(f, R::UnionAnyConcreteRArray, A::AbstractArray)
     fn = compile(mymap!, (f, R, A))
     fn(f, R, A)
     return R
+end
+
+function myfill(val, dims)
+    @opcall fill(val, dims)
 end
 
 # Directly initialize a Device Array
@@ -833,9 +860,39 @@ for T in (Number, Integer)
     )
         output_shardings = Sharding.is_sharded(sharding) ? Dict(1 => sharding) : nothing
         dims = collect(Int64, last.(dims))
-        fn = compile((); output_shardings) do
-            return @opcall fill(val, dims)
-        end
-        return fn()
+        fn = compile(myfill, (val, dims); output_shardings)
+        return fn(val, dims)
+    end
+end
+
+Base.isinf(x::ConcreteRNumber{T}) where {T} = Base.isinf(convert(T, x))
+Base.round(x::ConcreteRNumber{T}) where {T} = Base.round(convert(T, x))
+
+Base._parentsmatch(A::ConcreteIFRTArray, B::ConcreteIFRTArray) = A === B
+Base._parentsmatch(A::ConcretePJRTArray, B::ConcretePJRTArray) = A === B
+function Base._parentsmatch(A::UnionAnyConcreteRArray, B::UnionAnyConcreteRArray)
+    return Base._parentsmatch(ancestor(A), ancestor(B))
+end
+
+for srcStyle in (IndexStyle, IndexCartesian),
+    (dstType, srcType) in [
+        (UnionAnyConcreteRArray, UnionAnyConcreteRArray),
+        (UnionAnyConcreteRArray, AbstractArray),
+        (AbstractArray, UnionAnyConcreteRArray),
+        (
+            AbstractMatrix,
+            Union{
+                LinearAlgebra.AdjOrTransAbsMat{T,M} where {T,S,M<:ConcreteIFRTArray{T,2,S}},
+                LinearAlgebra.AdjOrTransAbsMat{T,M} where {T,S,M<:ConcretePJRTArray{T,2,S}},
+            },
+        ),
+    ]
+
+    @eval function Base.copyto_unaliased!(
+        ::IndexStyle, dst::$(dstType), ::$(srcStyle), src::$(srcType)
+    )
+        fn = compile(Base.copyto!, (dst, src))
+        fn(dst, src)
+        return dst
     end
 end

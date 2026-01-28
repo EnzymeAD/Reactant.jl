@@ -1,13 +1,14 @@
 struct AffineExpr
-    expr::API.MlirAffineExpr
+    ref::API.MlirAffineExpr
 
-    function AffineExpr(expr)
-        @assert !mlirIsNull(expr) "cannot create AffineExpr with null MlirAffineExpr"
-        return new(expr)
+    function AffineExpr(ref::API.MlirAffineExpr)
+        @assert !mlirIsNull(ref) "cannot create AffineExpr with null MlirAffineExpr"
+        return new(ref)
     end
 end
 
-Base.convert(::Core.Type{API.MlirAffineExpr}, expr::AffineExpr) = expr.expr
+Base.cconvert(::Core.Type{API.MlirAffineExpr}, expr::AffineExpr) = expr
+Base.unsafe_convert(::Core.Type{API.MlirAffineExpr}, expr::AffineExpr) = expr.ref
 
 """
     ==(a, b)
@@ -56,8 +57,9 @@ ismultipleof(expr::AffineExpr, factor) = API.mlirAffineExprIsMultipleOf(expr, fa
 
 Checks whether the given affine expression involves AffineDimExpr 'position'.
 """
-isfunctionofdimexpr(expr::AffineExpr, position) =
-    API.mlirAffineExprIsFunctionOfDim(expr, position)
+function isfunctionofdimexpr(expr::AffineExpr, position)
+    return API.mlirAffineExprIsFunctionOfDim(expr, position)
+end
 
 """
     isdimexpr(affineExpr)
@@ -71,8 +73,9 @@ isdimexpr(expr::AffineExpr) = API.mlirAffineExprIsADim(expr)
 
 Creates an affine dimension expression with 'position' in the context.
 """
-AffineDimensionExpr(position; context::Context=context()) =
-    AffineExpr(API.mlirAffineDimExprGet(context, position))
+function AffineDimensionExpr(position; context::Context=current_context())
+    return AffineExpr(API.mlirAffineDimExprGet(context, position))
+end
 
 """
     issymbolexpr(affineExpr)
@@ -82,12 +85,13 @@ Checks whether the given affine expression is a symbol expression.
 issymbolexpr(expr::AffineExpr) = API.mlirAffineExprIsASymbol(expr)
 
 """
-    SymbolExpr(position; context=context())
+    SymbolExpr(position; context=current_context())
 
 Creates an affine symbol expression with 'position' in the context.
 """
-SymbolExpr(position; context::Context=context()) =
-    AffineExpr(API.mlirAffineSymbolExprGet(context, position))
+function SymbolExpr(position; context::Context=current_context())
+    return AffineExpr(API.mlirAffineSymbolExprGet(context, position))
+end
 
 """
     position(affineExpr)
@@ -116,12 +120,13 @@ Checks whether the given affine expression is a constant expression.
 isconstantexpr(expr::AffineExpr) = API.mlirAffineExprIsAConstant(expr)
 
 """
-    ConstantExpr(constant::Int; context=context())
+    ConstantExpr(constant::Int; context=current_context())
 
 Creates an affine constant expression with 'constant' in the context.
 """
-ConstantExpr(constant; context::Context=context()) =
-    AffineExpr(API.mlirAffineConstantExprGet(context, constant))
+function ConstantExpr(constant; context::Context=current_context())
+    return AffineExpr(API.mlirAffineConstantExprGet(context, constant))
+end
 
 """
     value(affineExpr)
@@ -189,8 +194,10 @@ isfloordiv(expr::AffineExpr) = API.mlirAffineExprIsAFloorDiv(expr)
 
 Creates an affine floordiv expression with 'lhs' and 'rhs'.
 """
-Base.div(lhs::AffineExpr, rhs::AffineExpr) =
-    AffineExpr(API.mlirAffineFloorDivExprGet(lhs, rhs))
+function Base.div(lhs::AffineExpr, rhs::AffineExpr)
+    return AffineExpr(API.mlirAffineFloorDivExprGet(lhs, rhs))
+end
+
 Base.fld(lhs::AffineExpr, rhs::AffineExpr) = div(lhs, rhs)
 
 """
@@ -205,8 +212,9 @@ isceildiv(expr::AffineExpr) = API.mlirAffineExprIsACeilDiv(expr)
 
 Creates an affine ceildiv expression with 'lhs' and 'rhs'.
 """
-Base.cld(lhs::AffineExpr, rhs::AffineExpr) =
-    AffineExpr(API.mlirAffineCeilDivExprGet(lhs, rhs))
+function Base.cld(lhs::AffineExpr, rhs::AffineExpr)
+    return AffineExpr(API.mlirAffineCeilDivExprGet(lhs, rhs))
+end
 
 """
     isbinary(affineExpr)
