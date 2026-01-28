@@ -1,15 +1,5 @@
-mutable struct Region
+@checked struct Region
     ref::API.MlirRegion
-    @atomic owned::Bool
-
-    function Region(region, owned=true)
-        @assert !mlirIsNull(region)
-        finalizer(new(region, owned)) do region
-            if region.owned
-                API.mlirRegionDestroy(region.ref)
-            end
-        end
-    end
 end
 
 """
@@ -17,7 +7,15 @@ end
 
 Creates a new empty region and transfers ownership to the caller.
 """
-Region() = Region(API.mlirRegionCreate())
+Region() = Region(mark_alloc(API.mlirRegionCreate()))
+
+"""
+    dispose(region::Region)
+
+Disposes the given region and releases its resources.
+After calling this function, the region must not be used anymore.
+"""
+dispose(region::Region) = mark_dispose(API.mlirRegionDestroy, region)
 
 Base.cconvert(::Core.Type{API.MlirRegion}, region::Region) = region
 Base.unsafe_convert(::Core.Type{API.MlirRegion}, region::Region) = region.ref
@@ -43,7 +41,7 @@ function Base.iterate(it::Region)
     if mlirIsNull(raw_block)
         nothing
     else
-        b = Block(raw_block, false)
+        b = Block(raw_block)
         (b, b)
     end
 end
@@ -53,7 +51,7 @@ function Base.iterate(::Region, block)
     if mlirIsNull(raw_block)
         nothing
     else
-        b = Block(raw_block, false)
+        b = Block(raw_block)
         (b, b)
     end
 end
@@ -109,12 +107,13 @@ Gets the first block in the region.
 function first_block(region::Region)
     block = API.mlirRegionGetFirstBlock(region)
     mlirIsNull(block) && return nothing
-    return Block(block, false)
+    return Block(block)
 end
 Base.first(region::Region) = first_block(region)
 
+# TODO use lose_ownership! to as `mark_dealloc`-like semantics
 function lose_ownership!(region::Region)
-    @assert region.owned
-    @atomic region.owned = false
+    # @assert region.owned
+    # @atomic region.owned = false
     return region
 end
