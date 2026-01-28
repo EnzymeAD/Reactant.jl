@@ -21,7 +21,7 @@ jobs:
     name: 'Update XPROF_COMMIT'
     uses: EnzymeAD/Enzyme-JAX/.github/workflows/update-dependency.yml@main
     with:
-      upstream_repo: 'openxla/xprof/'
+      upstream_repo: 'openxla/xprof'
       upstream_commit: ${{ inputs.xprof_commit }}
       variable_name: 'XPROF_COMMIT'
       workspace_path: 'deps/ReactantExtra/WORKSPACE'
