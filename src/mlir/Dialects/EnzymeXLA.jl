@@ -1538,6 +1538,17 @@ function ml_relu(input::Value; result=nothing::Union{Nothing,IR.Type}, location=
     )
 end
 
+"""
+`rotate`
+
+Performs a left rotation (circular shift) along `dimension` by `amount` elements.
+Elements are shifted left, with the first `amount` elements wrapping around to the end.
+
+i.e.:
+```
+rotate([a, b, c, d, e], amount=2, dimension=0) → [c, d, e, a, b]
+```
+"""
 function rotate(
     operand::Value;
     result=nothing::Union{Nothing,IR.Type},
