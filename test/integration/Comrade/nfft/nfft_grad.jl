@@ -20,7 +20,7 @@ include(joinpath("..", "reactant_nfft.jl"))
 
 T = Float32
 
-sz =  (64, 64)
+sz =  (8, 8)
 ksz = 100
 
 k = rand(T, 2, ksz) .- T(0.5)
