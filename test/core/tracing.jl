@@ -116,7 +116,12 @@ end
                 ),
 
                 # UnionAll types
-                (ConcreteRArray, TracedRArray, TracedRArray),
+                (
+                    ConcreteRArray,
+                    TracedRArray{T,N} where {T,N},
+                    TracedRArray{T,N} where {T,N},
+                ),
+                (Array, Array{Any}, Array{Any}),
 
                 # Ptr types
                 (Ptr{Float64}, Ptr{Float64}, Ptr{TracedRNumber{Float64}}),
