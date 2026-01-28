@@ -1,5 +1,5 @@
 mutable struct SymbolTable
-    st::API.MlirSymbolTable
+    ref::API.MlirSymbolTable
 
     function SymbolTable(st)
         @assert !mlirIsNull(st) "cannot create SymbolTable with null MlirSymbolTable"
@@ -14,10 +14,11 @@ Creates a symbol table for the given operation. If the operation does not have t
 """
 SymbolTable(op::Operation) = SymbolTable(API.mlirSymbolTableCreate(op))
 
-Base.convert(::Core.Type{API.MlirSymbolTable}, st::SymbolTable) = st.st
+Base.cconvert(::Core.Type{API.MlirSymbolTable}, st::SymbolTable) = st
+Base.unsafe_convert(::Core.Type{API.MlirSymbolTable}, st::SymbolTable) = st.ref
 
-# TODO mlirSymbolTableGetSymbolAttributeName
-# TODO mlirSymbolTableGetVisibilityAttributeName
+# TODO(#2246) mlirSymbolTableGetSymbolAttributeName
+# TODO(#2246) mlirSymbolTableGetVisibilityAttributeName
 
 """
     lookup(symboltable, name)
@@ -38,7 +39,7 @@ function Base.getindex(st::SymbolTable, name::AbstractString)
 end
 
 """
-    push!(symboltable, operation)
+    Base.push!(symboltable, operation)
 
 Inserts the given operation into the given symbol table. The operation must have the symbol trait.
 If the symbol table already has a symbol with the same name, renames the symbol being inserted to ensure name uniqueness.
@@ -48,11 +49,11 @@ Returns the name of the symbol after insertion.
 Base.push!(st::SymbolTable, op::Operation) = Attribute(API.mlirSymbolTableInsert(st, op))
 
 """
-    delete!(symboltable, operation)
+    Base.delete!(symboltable, operation)
 
 Removes the given operation from the symbol table and erases it.
 """
-delete!(st::SymbolTable, op::Operation) = API.mlirSymbolTableErase(st, op)
+Base.delete!(st::SymbolTable, op::Operation) = API.mlirSymbolTableErase(st, op)
 
-# TODO mlirSymbolTableReplaceAllSymbolUses
-# TODO mlirSymbolTableWalkSymbolTables
+# TODO(#2246) mlirSymbolTableReplaceAllSymbolUses
+# TODO(#2246) mlirSymbolTableWalkSymbolTables

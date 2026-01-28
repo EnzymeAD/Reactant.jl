@@ -44,7 +44,7 @@ end
 end
 
 @testset "after_all" begin
-    # TODO
+    # TODO(#2253)
 end
 
 @testset "and" begin
@@ -62,16 +62,51 @@ end
     b = Reactant.to_rarray([5.5, 6.6, -7.7, -8.8])
     @test atan.(Array(a), Array(b)) ≈ @jit Ops.atan2(a, b)
 
-    # TODO couldn't find the definition of complex atan2 to compare against, but it should be implemented
+    # TODO(#2253) couldn't find the definition of complex atan2 to compare against, but it should be implemented
 end
 
 @testset "cbrt" begin
     x = Reactant.to_rarray([1.0, 8.0, 27.0, 64.0])
     @test [1.0, 2.0, 3.0, 4.0] ≈ @jit Ops.cbrt(x)
 
-    # TODO currently crashes, reenable when #291 is fixed
+    # TODO(#2253) currently crashes, reenable when #291 is fixed
     # x = Reactant.to_rarray([1.0 + 2.0im, 8.0 + 16.0im, 27.0 + 54.0im, 64.0 + 128.0im])
     # @test Array(x) .^ (1//3) ≈ @jit Ops.cbrt(x)
+end
+
+@testset "case" begin
+    function compute_with_case(idx, x, y)
+        return Reactant.Ops.case(
+            idx,
+            [
+                (a, b) -> a .+ b,      # branch 0: addition
+                (a, b) -> a .- b,      # branch 1: subtraction
+                (a, b) -> a .* b,      # branch 2: multiplication
+            ],
+            x,
+            y;
+            track_numbers=Number,
+        )
+    end
+
+    x = Reactant.to_rarray(Float32[1.0, 2.0, 3.0])
+    y = Reactant.to_rarray(Float32[4.0, 5.0, 6.0])
+
+    # Test branch 0 (addition)
+    idx0 = ConcreteRNumber(0)
+    @test Float32[5.0, 7.0, 9.0] ≈ @jit compute_with_case(idx0, x, y)
+
+    # Test branch 1 (subtraction)
+    idx1 = ConcreteRNumber(1)
+    @test Float32[-3.0, -3.0, -3.0] ≈ @jit compute_with_case(idx1, x, y)
+
+    # Test branch 2 (multiplication)
+    idx2 = ConcreteRNumber(2)
+    @test Float32[4.0, 10.0, 18.0] ≈ @jit compute_with_case(idx2, x, y)
+
+    # Test out of bounds (should use last branch per StableHLO spec)
+    idx5 = ConcreteRNumber(5)
+    @test Float32[4.0, 10.0, 18.0] ≈ @jit compute_with_case(idx5, x, y)
 end
 
 @testset "ceil" begin
@@ -460,8 +495,8 @@ end
 end
 
 @testset "optimization_barrier" begin
-    # TODO is there a better way to test this? we're only testing for identify
-    # TODO crashing for just 1 argument
+    # TODO(#2253) is there a better way to test this? we're only testing for identify
+    # TODO(#2253) crashing for just 1 argument
     x = Reactant.to_rarray([1, 2, 3, 4])
     y = Reactant.to_rarray([5, 6, -7, -8])
     @test (x, y) == @jit Ops.optimization_barrier(x, y)
@@ -763,7 +798,7 @@ end
 end
 
 @testset "tan" begin
-    # TODO: tan(π/2) is not inf
+    # TODO(#2253): tan(π/2) is not inf
     x = Reactant.to_rarray([0, π / 4, π / 3, 3π / 4, π])
 
     @test [0.0, 1.0, 1.73205, -1.0, 0.0] ≈ @jit(Ops.tan(x)) atol = 1e-5 rtol = 1e-3 broken =

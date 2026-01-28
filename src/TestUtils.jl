@@ -72,7 +72,7 @@ function finite_difference_gradient(
     resprefix = gensym("finitediffresult")
     resargprefix = gensym("finitediffresarg")
 
-    # TODO: can we detect and prevent using functions that mutate their arguments?
+    # TODO(#2250): can we detect and prevent using functions that mutate their arguments?
     mlir_fn_res = TracedUtils.make_mlir_fn(
         f,
         _unwrap_annotations(args),

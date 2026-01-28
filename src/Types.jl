@@ -210,7 +210,7 @@ function Adapt.parent_type(::Type{ConcretePJRTArray{T,N,D}}) where {T,N,D}
     return ConcretePJRTArray{T,N,D}
 end
 
-# XXX (Deprecated): remove in v0.3
+# TODO(#2229): (Deprecated): remove in v0.3
 Base.@deprecate ConcretePJRTArray(data::Number; kwargs...) ConcretePJRTNumber(
     data; kwargs...
 )
@@ -374,7 +374,7 @@ end
 # Assemble data from multiple arrays. Needed in distributed setting where each process wont
 # have enough host memory to hold all the arrays. We assume that the data is only provided
 # for all of the addressable devices.
-# TODO: Implement Padding for this version. A bit more finicky that the above case
+# TODO(#2257): Implement Padding for this version. A bit more finicky that the above case
 function ConcreteIFRTArray(
     data::Vector{Array{T,N}},
     array_size::Dims{N},
@@ -517,6 +517,10 @@ end
 elseif XLA.REACTANT_XLA_RUNTIME == "IFRT"
     const AnyConcreteRArray = AnyConcreteIFRTArray
 end
+
+const UnionAnyConcreteRArray{T,N,S} = Union{
+    AnyConcreteIFRTArray{T,N,S},AnyConcretePJRTArray{T,N,S}
+}
 
 for aType in (:ConcretePJRTArray, :ConcreteIFRTArray)
     @eval function $(aType){T}(::UndefInitializer, shape::Integer...; kwargs...) where {T}

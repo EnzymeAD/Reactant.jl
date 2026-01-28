@@ -80,7 +80,7 @@ function XLA.compile(
         exec = MLIR.IR.try_compile_dump_mlir(mod) do
             @ccall MLIR.API.mlir_c.ClientCompileWithProto(
                 client.client::Ptr{Cvoid},
-                mod.module_::MLIR.API.MlirModule,
+                mod::MLIR.API.MlirModule,
                 compile_options_bytes::Ptr{UInt8},
                 length(compile_options_bytes)::Csize_t,
             )::Ptr{Cvoid}
@@ -254,7 +254,7 @@ end
     end
 end
 
-# XXX: Fix this
+# TODO(#2235): Fix this
 # @generated function XLA.execute(
 #     exec::LoadedExecutable,
 #     mesh_ids::Vector{Int64},

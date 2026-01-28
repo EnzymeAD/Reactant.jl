@@ -247,7 +247,7 @@ end
 #     return MLIR.IR.TensorType(collect(Int, ()), MLIR.IR.Type(Int64))
 # end
 #
-# TODO for this to work properly in finalize_mlir_fn(), need to add TracedRequest to TracedTypes, currently const
+# TODO(#2242) for this to work properly in finalize_mlir_fn(), need to add TracedRequest to TracedTypes, currently const
 # Base.@nospecializeinfer function Reactant.make_tracer(
 #     seen,
 #     @nospecialize(prev::TracedRequest),
@@ -302,7 +302,7 @@ end
 #         if path_to_shard_info !== nothing && haskey(path_to_shard_info, path)
 #             error("Attempting to use sharding and MPI simultaneously")
 #         else
-#             # TODO
+#             # TODO(#2242)
 #             # restore = result_buffer1 = linearized_results[1] = result of XLA.executesharded()
 #             # but what is actually returned from XLA.executesharded? 
 #             # Same thing as returned from MPI.Isend (ie, TracedRequest)?

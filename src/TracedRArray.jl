@@ -44,221 +44,16 @@ end
 
 TracedRArray{T,N}(x::AbstractArray) where {T,N} = convert(TracedRArray{T,N}, x)
 
-function maybe_assert_scalar_setindexing(
-    ::TracedRArray{T,N}, ::Vararg{Union{Int,TracedRNumber{Int}},N}
-) where {T,N}
-    GPUArraysCore.assertscalar("setindex!(::TracedRArray, v, ::Vararg{Int, N})")
-    return nothing
-end
-
-maybe_assert_scalar_setindexing(_args...) = nothing
-
-function _setindex_scalar!(
-    a::TracedRArray{T,N}, v, index::Union{Int,TracedRNumber{Int}}
-) where {T,N}
-    GPUArraysCore.assertscalar(
-        "setindex!(::TracedRArray, v, ::Union{Int, TracedRNumber{Int}})"
-    )
-
-    res = @opcall(
-        reshape(
-            @opcall(
-                dynamic_update_slice(
-                    a,
-                    Reactant.broadcast_to_size(
-                        Reactant.promote_to(TracedRNumber{T}, v), ntuple(Returns(1), N)
-                    ),
-                    collect(
-                        Reactant.TracedIndexing.scalar_index_to_cartesian(index, size(a))
-                    ),
-                )
-            ),
-            collect(size(a)),
-        )
-    )
-    set_mlir_data!(a, get_mlir_data(res))
-    return a
-end
-
-function Base.setindex!(
-    a::TracedRArray{T,N}, v, index::Union{Int,TracedRNumber{Int}}
-) where {T,N}
-    return _setindex_scalar!(a, v, index)
-end
-function Base.setindex!(
-    a::TracedRArray{T,1}, v, index::Union{Int,TracedRNumber{Int}}
-) where {T}
-    return _setindex_scalar!(a, v, index)
-end
-
-function _setindex_scalar_cartesian!(
-    a::TracedRArray{T,N}, v, index::CartesianIndex{N}
-) where {T,N}
-    GPUArraysCore.assertscalar("setindex!(::TracedRArray, v, ::CartesianIndex{N})")
-    res = @opcall(
-        reshape(
-            @opcall(
-                dynamic_update_slice(
-                    a,
-                    Reactant.broadcast_to_size(T(v), ntuple(Returns(1), N)),
-                    collect(Int64, index.I),
-                )
-            ),
-            collect(size(a)),
-        )
-    )
-    set_mlir_data!(a, get_mlir_data(res))
-    return a
-end
-
-function Base.setindex!(a::TracedRArray{T,N}, v, index::CartesianIndex{N}) where {T,N}
-    return _setindex_scalar_cartesian!(a, v, index)
-end
-function Base.setindex!(a::TracedRArray{T,1}, v, index::CartesianIndex{1}) where {T}
-    return _setindex_scalar_cartesian!(a, v, index)
-end
-
-function _setindex_linear!(a::TracedRArray{T,N}, v, indices::AbstractArray) where {T,N}
-    if !(indices isa Reactant.TracedType) && TracedUtils.__contiguous_indices(vec(indices))
-        res = @opcall(
-            reshape(
-                @opcall(
-                    dynamic_update_slice(
-                        materialize_traced_array(vec(a)),
-                        Reactant.broadcast_to_size(T.(vec(v)), (length(indices),)),
-                        [first(indices)],
-                    )
-                ),
-                collect(size(a)),
-            )
-        )
-        set_mlir_data!(a, get_mlir_data(res))
-        return a
-    end
-
-    if !(indices isa TracedRArray)
-        indices = collect(indices)
-        eltype(indices) <: CartesianIndex && (indices = LinearIndices(size(a))[indices])
-        indices = Reactant.promote_to(TracedRArray{Int,ndims(indices)}, indices)
-    end
-    res = @opcall scatter_setindex(
-        a,
-        Reactant.TracedIndexing.scalar_index_to_cartesian(vec(indices), size(a)),
-        Reactant.promote_to(TracedRArray{T,1}, materialize_traced_array(vec(v))),
-    )
-    set_mlir_data!(a, get_mlir_data(res))
-    return a
-end
-
-function Base.setindex!(a::TracedRArray{T,N}, v, indices::AbstractArray) where {T,N}
-    return _setindex_linear!(a, v, indices)
-end
-function Base.setindex!(a::TracedRArray{T,1}, v, indices::AbstractArray) where {T}
-    return _setindex_linear!(a, v, indices)
-end
-
-function Base.setindex!(a::TracedRArray{T,N}, v, indices::Vararg{Any,N}) where {T,N}
-    if (N == 1) && (indices isa Colon)
-        # Remove ambiguity from the previous
-        # ```julia
-        # Base.setindex!(a::TracedRArray{T,N}, v, ::Colon) where {T,N}
-        # ```
-        # signature, which would be confused with this one for N=1.
-        v = Reactant.broadcast_to_size(v, size(a))
-        set_mlir_data!(a, get_mlir_data(v))
-        return a
-    end
-    maybe_assert_scalar_setindexing(a, indices...)
-
-    indices = Base.to_indices(a, indices)
-
-    use_scatter_setindex = false
-    for idxs in indices
-        idxs isa Number && continue
-        if idxs isa Reactant.TracedType
-            use_scatter_setindex = true
-            break
-        end
-        contiguous = TracedUtils.__contiguous_indices(idxs)
-        if typeof(contiguous) <: Bool && !contiguous
-            use_scatter_setindex = true
-            break
-        end
-    end
-
-    if use_scatter_setindex
-        # TODO: This will create a dynamically sized tensor and we need to implement
-        #       `findall` for it.
-        if any(i -> unwrapped_eltype(i) <: Bool, indices)
-            error("Boolean indexing with TracedRArrays isn't fully supported yet.")
-        end
-
-        gather_dims = TracedUtils.indices_to_gather_dims(indices...)
-
-        v = @opcall convert(
-            TracedRArray{T,ndims(v)},
-            Reactant.promote_to(TracedRArray{unwrapped_eltype(v),ndims(v)}, v),
-        )
-
-        updates = @opcall transpose(v, invperm(gather_dims.permutation))
-        n_collapsed = length(gather_dims.collapsed_slice_dims)
-        updates_shape = Int64[
-            prod(size(updates)[1:n_collapsed]), size(updates)[(n_collapsed + 1):end]...
-        ]
-        updates = @opcall reshape(updates, updates_shape)
-
-        res = @opcall(
-            scatter(
-                (_, xⱼ) -> xⱼ,
-                [a],
-                gather_dims.start_indices,
-                [updates];
-                update_window_dims=gather_dims.offset_dims,
-                inserted_window_dims=gather_dims.collapsed_slice_dims,
-                input_batching_dims=Int64[],
-                scatter_indices_batching_dims=Int64[],
-                scatter_dims_to_operand_dims=gather_dims.start_index_map,
-                index_vector_dim=gather_dims.index_vector_dim,
-            )
-        )[1]
-        set_mlir_data!(a, get_mlir_data(res))
-        return v
-    end
-
-    if v isa Number
-        v = Reactant.broadcast_to_size(v, length.(indices))
-        v = Reactant.promote_to(TracedRArray{T,N}, v)
-    else
-        v = Reactant.promote_to(TracedRArray{T,ndims(v)}, v)
-        non_integer_indices = [
-            !(idx isa Union{Integer,TracedRNumber{<:Integer}}) for idx in indices
-        ]
-        broadcast_dims = findall(non_integer_indices)
-        if length(broadcast_dims) == N
-            v = Reactant.broadcast_to_size(v, length.(indices))
-        else
-            v = @opcall broadcast_in_dim(
-                materialize_traced_array(v),
-                broadcast_dims,
-                collect(Int64, length.(indices)),
-            )
-        end
-    end
-
-    set_mlir_data!(
-        a,
-        @opcall(
-            dynamic_update_slice(a, v, [i isa Colon ? 1 : first(i) for i in indices])
-        ).mlir_data,
-    )
-    return v
-end
-
 Base.Tuple(x::TracedRArray) = ntuple(Base.Fix1(getindex, x), length(x))
 
 Base.size(x::TracedRArray) = x.shape
+Base.size(x::TracedRArray, i::Integer) = x.shape[i]
 
-Base.collect(x::TracedRArray) = copy(x) # XXX: Is this correct?
+function Base.size(x::TracedRArray, i::TracedRNumber{<:Integer})
+    return @allowscalar getindex(@opcall(constant([x.shape...])), i)
+end
+
+Base.collect(x::TracedRArray) = copy(x)
 
 Base.copy(A::TracedRArray{T,N}) where {T,N} = TracedRArray{T,N}((), A.mlir_data, size(A))
 
@@ -500,15 +295,10 @@ end
 
 Base.copyto!(dest::AnyTracedRArray, bc::Broadcasted{Nothing}) = _copyto!(dest, bc) # Keep it for ArrayConflict
 
-function Base.copyto!(dest::AnyTracedRArray{T,N}, src::TracedRArray{T,N}) where {T,N}
-    TracedUtils.set_mlir_data!(dest, src.mlir_data)
-    return dest
-end
-
 function Base.copyto!(
-    dest::Reactant.TracedRArray{T},
+    dest::AnyTracedRArray{T},
     dstart::Integer,
-    src::Reactant.TracedRArray{T},
+    src::TracedRArray{T},
     sstart::Integer,
     n::Integer,
 ) where {T}
@@ -516,24 +306,45 @@ function Base.copyto!(
     return dest
 end
 
-function Base.copyto!(dest::TracedRArray{T,N}, src::TracedRArray{T2,N}) where {T,T2,N}
-    src2 = if T != T2
-        @opcall convert(TracedRArray{T,N}, src)
-    else
-        src
-    end
-    TracedUtils.set_mlir_data!(dest, src2.mlir_data)
-    return dest
+function Base.copyto!(
+    dest::AnyTracedRArray{T},
+    dstart::Integer,
+    src::TracedRArray,
+    sstart::Integer,
+    n::Integer,
+) where {T}
+    return copyto!(
+        dest, dstart, @opcall(convert(TracedRArray{T,ndims(src)}, src)), sstart, n
+    )
 end
 
 function Base.copyto!(
-    dest::AnyTracedRArray{T1,N} where {T1}, src::AnyTracedRArray{T2,N} where {T2}
-) where {N}
-    return copyto!(dest, materialize_traced_array(src))
+    dest::AnyTracedRArray,
+    dstart::Integer,
+    src::AnyTracedRArray,
+    sstart::Integer,
+    n::Integer,
+)
+    return copyto!(dest, dstart, materialize_traced_array(src), sstart, n)
 end
 
-function Base.copyto!(dest::AnyTracedRArray{T,N}, src::Array{T2,N}) where {T,T2,N}
-    return copyto!(dest, Reactant.promote_to(TracedRArray{T2,N}, src))
+function Base.copyto!(dest::AnyTracedRArray{T}, src::AnyTracedRArray{T}) where {T}
+    TracedUtils.set_mlir_data!(
+        dest,
+        materialize_traced_array(
+            reshape(materialize_traced_array(src)[1:length(dest)], size(dest))
+        ).mlir_data,
+    )
+    return dest
+end
+
+function Base.copyto!(dest::AnyTracedRArray{T}, src::AnyTracedRArray) where {T}
+    src = materialize_traced_array(src)
+    return copyto!(dest, @opcall(convert(TracedRArray{T,ndims(src)}, src)))
+end
+
+function Base.copyto!(dest::AnyTracedRArray, src::Array)
+    return copyto!(dest, Reactant.promote_to(TracedRArray, src))
 end
 
 function _copyto!(dest::AnyTracedRArray, bc::Broadcasted)
@@ -631,7 +442,7 @@ function _typed_hvncat_internal(
 
         for (i, col) in
             zip(eachindex(Bs), eachslice(As; dims=Tuple(2:ndims(As)), drop=true))
-            # TODO row_first affects the flattening?
+            # TODO: row_first affects the flattening?
             Bs[i] = Base._cat_t(d, T, col...)
         end
 
@@ -664,7 +475,7 @@ function Base._cat_t(dims, ::Type{T}, X::TracedRArray...) where {T}
     return TracedRArray{RT,length(shape)}(
         (),
         MLIR.IR.result(
-            # TODO maybe we should do some conversion?
+            # TODO: maybe we should do some conversion?
             MLIR.Dialects.stablehlo.concatenate(
                 collect(TracedUtils.get_mlir_data.(X));
                 result_0=MLIR.IR.TensorType(collect(Int, shape), MLIR.IR.Type(RT)),
@@ -990,13 +801,13 @@ Base.argmax(x::AnyTracedRArray; kwargs...) = findmax(identity, x; kwargs...)[2]
 Base.findfirst(x::AnyTracedRArray) = findfirst(identity, x)
 Base.findlast(x::AnyTracedRArray) = findlast(identity, x)
 
-# FIXME: we need to conditionally return `nothing` here if idx < 0
+# FIXME(#2236): we need to conditionally return `nothing` here if idx < 0
 function Base.findfirst(f::Function, x::AnyTracedRArray)
     idx = @opcall findfirst(materialize_traced_array(vec(f.(x))))
     return TracedRNumber{Int}((), idx.mlir_data)
 end
 
-# FIXME: we need to conditionally return `nothing` here if idx < 0
+# FIXME(#2236): we need to conditionally return `nothing` here if idx < 0
 function Base.findlast(f::Function, x::AnyTracedRArray)
     fA = @opcall reverse(materialize_traced_array(vec(f.(x))); dimensions=[1])
     idx = @opcall findfirst(fA)
@@ -1205,7 +1016,7 @@ function scan_impl!(
             input = riT.(input)
         end
     else
-        # TODO: fix this for TPUs
+        # Note: fix this for TPUs
         if contains(string(first(Reactant.devices())), "TPU")
             initT = __default_init(T, op)
             if initT != init && initT != something(init)
@@ -1469,7 +1280,7 @@ function unwrapped_broadcast(f::F, xs, original_dims) where {F}
     return _maybe_reshape(unrolled_map(f, xs), xs), original_dims, __Identity()
 end
 
-# TODO: once traced_call supports internal mutations, we can use traced_call here
+# Note: once traced_call supports internal mutations, we can use traced_call here
 function unrolled_map(f::F, itr) where {F}
     y = Reactant.call_with_reactant(iterate, itr)
     y === nothing && return []

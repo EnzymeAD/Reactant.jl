@@ -30,7 +30,7 @@ end
 # SpecialFunctions.invdigamma
 
 function SpecialFunctions.trigamma(x::TracedRNumber{<:ReactantFloatInt})
-    #TODO: change Ops definition
+    #TODO(#2262): change Ops definition
     return @opcall(polygamma(@opcall(constant(Float64(1))), float(x)))
 end
 
@@ -65,7 +65,7 @@ function SpecialFunctions.logbeta(
     return log(abs(SpecialFunctions.beta(x, y)))
 end
 
-#TODO: sign function
+#TODO(#2262): sign function
 #SpecialFunctions.logabsbeta
 #SpecialFunctions.logabsbinomial
 

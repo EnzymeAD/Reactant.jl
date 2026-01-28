@@ -59,7 +59,7 @@ function XLA.memories(device::Device)
     return [Memory(unsafe_load(ptr, i)) for i in 1:memories_size[]]
 end
 
-# TODO: https://github.com/openxla/xla/blob/ad0814d221883609f784e57dd26914b17f92fbbc/xla/python/ifrt/sharding.cc#L60
+# TODO(#2235): https://github.com/openxla/xla/blob/ad0814d221883609f784e57dd26914b17f92fbbc/xla/python/ifrt/sharding.cc#L60
 function XLA.default_memory(device_list::AbstractVector{Device})
     default_memories = XLA.default_memory.(device_list)
     default_memory_kinds = convert.(MemoryKind, default_memories)

@@ -36,20 +36,20 @@ primitive type TF32 <: AbstractFloat 32 end # currently only used to set precisi
 const ReactantFloat8 = Union{F8E5M2,F8E4M3FN,F8E4M3B11FNUZ,F8E5M2FNUZ,F8E4M3FNUZ}
 
 function Base.convert(::Type{T}, x::inT) where {T<:ReactantFloat8,inT<:Number}
-    @assert MLIR.IR._has_context() "currently only supported inside compiled functions"
+    @assert MLIR.IR.has_context() "currently only supported inside compiled functions"
     return promote_to(TracedRNumber{T}, x)
 end
 function Base.convert(::Type{inT}, x::T) where {T<:ReactantFloat8,inT<:Number}
-    @assert MLIR.IR._has_context() "currently only supported inside compiled functions"
+    @assert MLIR.IR.has_context() "currently only supported inside compiled functions"
     return promote_to(TracedRNumber{inT}, x)
 end
 function Base.convert(::Type{inT}, x::T) where {T<:ReactantFloat8,inT<:ReactantFloat8}
-    @assert MLIR.IR._has_context() "currently only supported inside compiled functions"
+    @assert MLIR.IR.has_context() "currently only supported inside compiled functions"
     return promote_to(TracedRNumber{inT}, x)
 end
 Base.convert(::Type{T}, x::T) where {T<:ReactantFloat8} = x
 
-# TODO: Quantized types
+# TODO(#2254): Quantized types
 
 @static if isdefined(Core, :BFloat16)
     const ReactantFloat = Union{

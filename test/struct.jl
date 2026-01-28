@@ -106,7 +106,7 @@ end
         x2 = list(x...)
         x3 = Reactant.to_rarray(x2)
 
-        # TODO this should be able to run without problems, but crashes
+        # TODO(#2253) this should be able to run without problems, but crashes
         @test_broken isapprox(@jit(identity(x3)), x3)
 
         @test isapprox(@allowscalar(sum(x3)), only(@jit(sum(x3))))

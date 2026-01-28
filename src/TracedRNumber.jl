@@ -6,7 +6,7 @@ using ReactantCore: ReactantCore, @trace
 using Adapt: Adapt
 
 # This isn't technically necessary in this module, but this type used to be
-# defined in this module so we keep this alias here for compatibility.  TODO:
+# defined in this module so we keep this alias here for compatibility.  TODO(#2236):
 # can be removed in future breaking version of Reactant.
 const TracedStepRangeLen = Reactant.TracedStepRangeLen
 
@@ -242,6 +242,12 @@ for (jlop, hloop) in (
     end
 end
 
+function Base.rem(x::TracedRNumber, y::TracedRNumber, ::typeof(Base.RoundFromZero))
+    return ifelse(
+        signbit(x) == signbit(y), rem(x, y, Base.RoundUp), rem(x, y, Base.RoundDown)
+    )
+end
+
 function Base.:*(x::TracedRNumber{T}, z::Complex{Bool}) where {T<:Real}
     # this is to support multiplication by im (Complex{Bool}(false, true))
     z_re, z_im = real(z), imag(z)
@@ -281,20 +287,168 @@ for op in (:mod, :mod1, :rem)
     end
 end
 
-function Base.div(@nospecialize(lhs::TracedRNumber{T}), rhs) where {T<:Integer}
+function Base.div(
+    @nospecialize(lhs::TracedRNumber{T}), rhs, r::Base.RoundingMode
+) where {T<:Integer}
+    return div(lhs, Reactant.promote_to(TracedRNumber{T}, rhs), r)
+end
+function Base.div(
+    lhs, @nospecialize(rhs::TracedRNumber{T}), r::Base.RoundingMode
+) where {T<:Integer}
+    return div(Reactant.promote_to(TracedRNumber{T}, lhs), rhs, r)
+end
+function Base.div(
+    @nospecialize(lhs::TracedRNumber{T1}),
+    @nospecialize(rhs::TracedRNumber{T2}),
+    r::Base.RoundingMode,
+) where {T1<:Integer,T2<:Integer}
+    T = promote_type(T1, T2)
+    return div(
+        Reactant.promote_to(TracedRNumber{T}, lhs),
+        Reactant.promote_to(TracedRNumber{T}, rhs),
+        r,
+    )
+end
+
+function Base.div(@nospecialize(lhs::TracedRNumber{T}), rhs) where {T}
     return @opcall divide(lhs, Reactant.promote_to(TracedRNumber{T}, rhs))
+end
+function Base.div(lhs, @nospecialize(rhs::TracedRNumber{T})) where {T}
+    return @opcall divide(Reactant.promote_to(TracedRNumber{T}, lhs), rhs)
+end
+function Base.div(
+    @nospecialize(lhs::TracedRNumber{T1}), @nospecialize(rhs::TracedRNumber{T2})
+) where {T1,T2}
+    T = promote_type(T1, T2)
+    return @opcall divide(
+        Reactant.promote_to(TracedRNumber{T}, lhs),
+        Reactant.promote_to(TracedRNumber{T}, rhs),
+    )
 end
 
 function Base.div(
-    @nospecialize(lhs::TracedRNumber{T}), rhs, ::typeof(RoundDown)
+    @nospecialize(lhs::TracedRNumber{T}),
+    @nospecialize(rhs::TracedRNumber{T}),
+    ::typeof(RoundDown),
 ) where {T<:Integer}
-    return @opcall divide(lhs, Reactant.promote_to(TracedRNumber{T}, rhs))
+    return @opcall divide(lhs, rhs)
+end
+function Base.div(
+    @nospecialize(lhs::TracedRNumber{T}),
+    @nospecialize(rhs::TracedRNumber{T}),
+    ::typeof(RoundFromZero),
+) where {T<:Integer}
+    return ifelse(
+        signbit(lhs) == signbit(rhs), div(lhs, rhs, RoundUp), div(lhs, rhs, RoundDown)
+    )
+end
+function Base.div(
+    @nospecialize(lhs::TracedRNumber{T}),
+    @nospecialize(rhs::TracedRNumber{T}),
+    r::Union{typeof(RoundNearest),typeof(RoundNearestTiesAway),typeof(RoundNearestTiesUp)},
+) where {T<:Integer}
+    return divrem(lhs, rhs, r)[1]
 end
 
 function Base.div(
-    @nospecialize(lhs::TracedRNumber{T}), ::Missing, ::typeof(RoundDown)
+    @nospecialize(x::TracedRNumber{T}), @nospecialize(y::TracedRNumber{T}), r::RoundingMode
+) where {T<:AbstractFloat}
+    return round(div(x, y), r)
+end
+
+Base.div(@nospecialize(lhs::TracedRNumber{<:Integer}), ::Missing, ::RoundingMode) = missing
+Base.div(::Missing, @nospecialize(rhs::TracedRNumber{<:Integer}), ::RoundingMode) = missing
+
+function Base.divrem(
+    @nospecialize(a::TracedRNumber{T}),
+    @nospecialize(b::TracedRNumber{T}),
+    r::Union{typeof(RoundUp),typeof(RoundDown),typeof(RoundToZero)},
 ) where {T<:Integer}
-    return missing
+    if r === RoundToZero
+        d = div(a, b)
+        return (d, a - d * b)
+    elseif r === RoundDown
+        d = fld(a, b)
+        return (d, a - d * b)
+    elseif r === RoundUp
+        d = div(a, b, r)
+        return (d, a - d * b)
+    end
+end
+
+function Base.divrem(
+    @nospecialize(x::TracedRNumber{T}),
+    @nospecialize(y::TracedRNumber{T}),
+    ::typeof(RoundNearest),
+) where {T<:Integer}
+    (q, r) = divrem(x, y)
+    threshold = isodd(y) | iseven(q)
+    half_y = y ÷ 2
+    # x >= 0, y >= 0
+    q1, r1 = ifelse(r >= half_y + threshold, (q + true, r - y), (q, r))
+    # x >= 0, y < 0
+    q2, r2 = ifelse(r >= -half_y + threshold, (q - true, r + y), (q, r))
+    # x < 0, y >= 0
+    q3, r3 = ifelse(r <= -half_y - threshold, (q - true, r + y), (q, r))
+    # x < 0, y < 0
+    q4, r4 = ifelse(r <= half_y - threshold, (q + true, r - y), (q, r))
+    # Combine with ifelse based on signs
+    q_pos_y, r_pos_y = ifelse(y >= 0, (q1, r1), (q2, r2))
+    q_neg_y, r_neg_y = ifelse(y >= 0, (q3, r3), (q4, r4))
+    return ifelse(x >= 0, (q_pos_y, r_pos_y), (q_neg_y, r_neg_y))
+end
+
+function Base.divrem(
+    @nospecialize(x::TracedRNumber{T}),
+    @nospecialize(y::TracedRNumber{T}),
+    ::typeof(RoundNearestTiesAway),
+) where {T<:Integer}
+    (q, r) = divrem(x, y)
+    threshold = isodd(y)
+    half_y = y ÷ 2
+    # x >= 0, y >= 0
+    q1, r1 = ifelse(r >= half_y + threshold, (q + true, r - y), (q, r))
+    # x >= 0, y < 0
+    q2, r2 = ifelse(r >= -half_y + threshold, (q - true, r + y), (q, r))
+    # x < 0, y >= 0
+    q3, r3 = ifelse(r <= -half_y - threshold, (q - true, r + y), (q, r))
+    # x < 0, y < 0
+    q4, r4 = ifelse(r <= half_y - threshold, (q + true, r - y), (q, r))
+    # Combine with ifelse based on signs
+    q_pos_y, r_pos_y = ifelse(y >= 0, (q1, r1), (q2, r2))
+    q_neg_y, r_neg_y = ifelse(y >= 0, (q3, r3), (q4, r4))
+    return ifelse(x >= 0, (q_pos_y, r_pos_y), (q_neg_y, r_neg_y))
+end
+
+function Base.divrem(
+    @nospecialize(x::TracedRNumber{T}),
+    @nospecialize(y::TracedRNumber{T}),
+    ::typeof(RoundNearestTiesUp),
+) where {T<:Integer}
+    (q, r) = divrem(x, y)
+    half_y = y ÷ 2
+    # x >= 0, y >= 0
+    q1, r1 = ifelse(r >= half_y + isodd(y), (q + true, r - y), (q, r))
+    # x >= 0, y < 0
+    q2, r2 = ifelse(r >= -half_y + true, (q - true, r + y), (q, r))
+    # x < 0, y >= 0
+    q3, r3 = ifelse(r <= -half_y - true, (q - true, r + y), (q, r))
+    # x < 0, y < 0
+    q4, r4 = ifelse(r <= half_y - isodd(y), (q + true, r - y), (q, r))
+    # Combine with ifelse based on signs
+    q_pos_y, r_pos_y = ifelse(y >= 0, (q1, r1), (q2, r2))
+    q_neg_y, r_neg_y = ifelse(y >= 0, (q3, r3), (q4, r4))
+    return ifelse(x >= 0, (q_pos_y, r_pos_y), (q_neg_y, r_neg_y))
+end
+
+function Base.divrem(
+    @nospecialize(x::TracedRNumber{T}),
+    @nospecialize(y::TracedRNumber{T}),
+    ::typeof(RoundFromZero),
+) where {T<:Integer}
+    q_up, r_up = divrem(x, y, RoundUp)
+    q_down, r_down = divrem(x, y, RoundDown)
+    return ifelse(signbit(x) == signbit(y), (q_up, r_up), (q_down, r_down))
 end
 
 function Base.:/(
@@ -636,6 +790,15 @@ using Reactant: ReactantFloat, ReactantInt
 
 Base.round(A::TracedRNumber{<:ReactantFloat}) = @opcall round_nearest_even(A)
 Base.round(A::TracedRNumber{<:ReactantInt}) = A
+function Base.round(A::TracedRNumber{<:ReactantFloat}, ::typeof(RoundNearest))
+    return @opcall round_nearest_even(A)
+end
+function Base.round(A::TracedRNumber{<:ReactantFloat}, ::typeof(RoundNearestTiesAway))
+    return @opcall round_nearest_afz(A)
+end
+Base.round(A::TracedRNumber{<:ReactantFloat}, ::typeof(RoundUp)) = ceil(A)
+Base.round(A::TracedRNumber{<:ReactantFloat}, ::typeof(RoundDown)) = floor(A)
+
 Base.floor(A::TracedRNumber{<:ReactantFloat}) = @opcall floor(A)
 Base.floor(A::TracedRNumber{<:ReactantInt}) = A
 Base.ceil(A::TracedRNumber{<:ReactantFloat}) = @opcall ceil(A)
@@ -655,7 +818,7 @@ for Ti in (Int8, Int16, Int32, Int64, Int128, UInt8, UInt16, UInt32, UInt64, UIn
             # rounded to `Inf` (e.g. when `Ti==UInt128 && Tf==Float32`).
             @eval begin
                 function Base.trunc(::Type{$Ti}, x::TracedRNumber{$Tf})
-                    # TODO throw error within traced
+                    # TODO(#2236) throw error within traced
                     # if $(Tf(typemin(Ti))-one(Tf)) < x < $(Tf(typemax(Ti))+one(Tf))
                     return Base.unsafe_trunc($Ti, x)
                     # else
@@ -670,7 +833,7 @@ for Ti in (Int8, Int16, Int32, Int64, Int128, UInt8, UInt16, UInt32, UInt64, UIn
             # these types, but not for `Float16` or larger integer types.
             @eval begin
                 function Base.trunc(::Type{$Ti}, x::TracedRNumber{$Tf})
-                    # TODO throw error within traced
+                    # TODO(#2236) throw error within traced
                     # if $(Tf(typemin(Ti))) <= x < $(Tf(typemax(Ti)))
                     return Base.unsafe_trunc($Ti, x)
                     # else
@@ -775,5 +938,30 @@ end
 function Base.fill(v::TracedRNumber{T}, ::Tuple{}) where {T}
     return @opcall fill(v, ())
 end
+
+# TODO(#2236): actually perform bounds checking
+function Base.checkindex(::Type{Bool}, _inds, ::TracedRNumber)
+    @warn "Currently we don't perform bounds checking for TracedRNumber. This will be \
+           fixed in a future version of Reactant." maxlog = 1
+    return true
+end
+
+function Base.checkindex(::Type{Bool}, ::AbstractUnitRange, ::TracedRNumber)
+    @warn "Currently we don't perform bounds checking for TracedRNumber. This will be \
+           fixed in a future version of Reactant." maxlog = 1
+    return true
+end
+
+# rem2pi: fallback to rem for now.
+# TODO(#2259): we should replace with the more numerically stable version.
+# https://github.com/JuliaLang/julia/blob/4d04bb6b3b1b879f4dbb918d194c5c939a1e7f3c/base/special/rem2pi.jl#L133
+Base.rem2pi(x::TracedRNumber, r::Base.RoundingMode) = rem(x, typeof(x)(2π), r)
+
+function Base.rem2pi(
+    x::T, r::Base.RoundingMode
+) where {T<:TracedRNumber{<:Union{Float16,Float32}}}
+    return T(rem2pi(TracedRNumber{Float64}(x), r))
+end
+Base.rem2pi(x::TracedRNumber{<:Integer}, r::Base.RoundingMode) = rem2pi(float(x), r)
 
 end # module TracedRNumberOverrides
