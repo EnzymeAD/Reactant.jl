@@ -1,18 +1,13 @@
-mutable struct Block
-    ref::API.MlirBlock
-    @atomic owned::Bool
+"""
+    Block
 
-    function Block(block::API.MlirBlock, owned::Bool=true)
-        @assert !mlirIsNull(block) "cannot create Block with null MlirBlock"
-        finalizer(new(block, owned)) do block
-            if block.owned
-                API.mlirBlockDestroy(block.ref)
-            end
-        end
-    end
+A `Block` is a sequence of [`Operation`](@ref)s with a list of arguments.
+"""
+@checked struct Block
+    ref::API.MlirBlock
 end
 
-Block() = Block(Type[], Location[])
+Block() = Block(mark_alloc(API.mlirBlockCreate(0, C_NULL, C_NULL)))
 
 """
     Block(args, locs)
@@ -21,8 +16,16 @@ Creates a new empty block with the given argument types and transfers ownership 
 """
 function Block(args::Vector{Type}, locs::Vector{Location})
     @assert length(args) == length(locs) "there should be one args for each locs (got $(length(args)) & $(length(locs)))"
-    return Block(API.mlirBlockCreate(length(args), args, locs))
+    return Block(mark_alloc(API.mlirBlockCreate(length(args), args, locs)))
 end
+
+"""
+    dispose(blk::Block)
+
+Disposes the given block and releases its resources.
+After calling this function, the block must not be used anymore.
+"""
+dispose(blk::Block) = mark_dispose(API.mlirBlockDestroy, blk)
 
 """
     ==(block, other)
@@ -48,7 +51,7 @@ function Base.iterate(it::Block)
     if mlirIsNull(raw_op)
         nothing
     else
-        op = Operation(raw_op, false)
+        op = Operation(raw_op)
         (op, op)
     end
 end
@@ -58,17 +61,19 @@ function Base.iterate(::Block, op)
     if mlirIsNull(raw_op)
         nothing
     else
-        op = Operation(raw_op, false)
+        op = Operation(raw_op)
         (op, op)
     end
 end
 
-function lose_ownership!(block::Block)
-    @assert block.owned
-    # API.mlirBlockDetach(block)
-    @atomic block.owned = false
-    return block
-end
+# TODO use lose_ownership! to as `mark_dealloc`-like semantics
+# function lose_ownership!(block::Block)
+#     @assert block.owned
+#     # API.mlirBlockDetach(block)
+#     @atomic block.owned = false
+#     return block
+# end
+lose_ownership!(block::Block) = block
 
 function Base.show(io::IO, block::Block)
     c_print_callback = @cfunction(print_callback, Cvoid, (API.MlirStringRef, Any))
@@ -81,14 +86,14 @@ end
 
 Returns the closest surrounding operation that contains this block.
 """
-parent_op(block::Block) = Operation(API.mlirBlockGetParentOperation(block), false)
+parent_op(block::Block) = Operation(API.mlirBlockGetParentOperation(block))
 
 """
     parent_region(block)
 
 Returns the region that contains this block.
 """
-parent_region(block::Block) = Region(API.mlirBlockGetParentRegion(block), false)
+parent_region(block::Block) = Region(API.mlirBlockGetParentRegion(block))
 
 Base.parent(block::Block) = parent_region(block)
 
@@ -150,7 +155,7 @@ Returns the first operation in the block or `nothing` if empty.
 function first_op(block::Block)
     op = API.mlirBlockGetFirstOperation(block)
     mlirIsNull(op) && return nothing
-    return Operation(op, false)
+    return Operation(op)
 end
 Base.first(block::Block) = first_op(block)
 
@@ -162,7 +167,7 @@ Returns the terminator operation in the block or `nothing` if no terminator.
 function terminator(block::Block)
     op = API.mlirBlockGetTerminator(block)
     mlirIsNull(op) && return nothing
-    return Operation(op, false)
+    return Operation(op)
 end
 
 """

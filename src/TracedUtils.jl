@@ -998,8 +998,7 @@ function finalize_mlir_fn(
         num_partitions = 1
     end
 
-    MLIR.API.mlirOperationDestroy(func.ref)
-    func.ref = MLIR.API.MlirOperation(C_NULL)
+    MLIR.IR.dispose(func)
 
     return (
         func2,
@@ -1288,7 +1287,7 @@ function elem_apply(f, args::Vararg{Any,Nargs}) where {Nargs}
         seen_results, result, (), Reactant.TracedSetPath; tobatch=OutShape
     )
 
-    func2.ref = MLIR.API.MlirOperation(C_NULL)
+    MLIR.IR.dispose(func2)
 
     return traced2_result
 end

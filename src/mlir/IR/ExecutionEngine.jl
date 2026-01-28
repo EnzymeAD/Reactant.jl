@@ -1,10 +1,5 @@
-struct ExecutionEngine
+@checked struct ExecutionEngine
     ref::API.MlirExecutionEngine
-
-    function ExecutionEngine(engine)
-        @assert !mlirIsNull(engine) "cannot create ExecutionEngine with null MlirExecutionEngine"
-        return finalizer(API.mlirExecutionEngineDestroy, new(engine))
-    end
 end
 
 """
@@ -30,6 +25,8 @@ function ExecutionEngine(
         ),
     )
 end
+
+dispose(engine::ExecutionEngine) = API.mlirExecutionEngineDestroy(engine)
 
 Base.cconvert(::Core.Type{API.MlirExecutionEngine}, engine::ExecutionEngine) = engine
 function Base.unsafe_convert(::Core.Type{API.MlirExecutionEngine}, engine::ExecutionEngine)

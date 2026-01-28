@@ -3,8 +3,46 @@ module IR
 using ..Reactant
 using ..API
 
-# do not export `Type`, as it is already defined in Core
-# also, use `Core.Type` inside this module to avoid clash with MLIR `Type`
+using LLVM: LLVM, @checked, mark_alloc, mark_use, mark_dispose
+import LLVM: activate, deactivate, dispose, refcheck
+const activate! = activate
+const deactivate! = deactivate
+const dispose! = dispose
+
+# fix for `@checked` on MLIR.API types
+for AT in [
+    :MlirDialect,
+    :MlirDialectHandle,
+    :MlirDialectRegistry,
+    :MlirContext,
+    :MlirLocation,
+    :MlirType,
+    :MlirTypeID,
+    :MlirTypeIDAllocator,
+    :MlirModule,
+    :MlirOperation,
+    :MlirOpOperand,
+    :MlirBlock,
+    :MlirRegion,
+    :MlirValue,
+    # :MlirLogicalResult,
+    :MlirAffineExpr,
+    :MlirAffineMap,
+    # :MlirAttribute,
+    # :MlirNamedAttribute,
+    :MlirIntegerSet,
+    :MlirIdentifier,
+    :MlirSymbolTable,
+    :MlirExecutionEngine,
+    :MlirPassManager,
+    :MlirOpPassManager,
+]
+    @eval refcheck(T::Core.Type, ref::API.$AT) = refcheck(T, ref.ptr)
+end
+
+# WARN do not export `Type` nor `Module` as they are already defined in Core
+# also, use `Core.Type` and `Core.Module` inside this module to avoid clash with
+# MLIR `Type` and `Module`
 export Attribute, Block, Context, Dialect, Location, Operation, Region, Value
 export activate!, deactivate!, dispose!, enable_multithreading!
 export context, current_context, has_context, with_context
