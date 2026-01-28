@@ -233,7 +233,7 @@ if cc_is_gcc
             push!(build_cmd_list, "--define=xnn_enable_avx512fp16=false")
         end
         if gcc_version < v"11"
-            # TODO: this is not sufficient to complete a build with GCC 10.
+            # TODO(#2247): this is not sufficient to complete a build with GCC 10.
             push!(build_cmd_list, "--define=xnn_enable_avxvnni=false")
         end
     end

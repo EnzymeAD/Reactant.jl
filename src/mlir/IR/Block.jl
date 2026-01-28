@@ -34,6 +34,35 @@ Base.:(==)(a::Block, b::Block) = API.mlirBlockEqual(a, b)
 Base.cconvert(::Core.Type{API.MlirBlock}, block::Block) = block
 Base.unsafe_convert(::Core.Type{API.MlirBlock}, block::Block) = block.ref
 
+Base.IteratorSize(::Core.Type{Block}) = Base.SizeUnknown()
+Base.IteratorEltype(::Core.Type{Block}) = Base.HasEltype()
+Base.eltype(::Block) = Operation
+
+"""
+    Base.iterate(block::Block)
+
+Iterates over all operations for the given block.
+"""
+function Base.iterate(it::Block)
+    raw_op = API.mlirBlockGetFirstOperation(it)
+    if mlirIsNull(raw_op)
+        nothing
+    else
+        op = Operation(raw_op, false)
+        (op, op)
+    end
+end
+
+function Base.iterate(::Block, op)
+    raw_op = API.mlirOperationGetNextInBlock(op)
+    if mlirIsNull(raw_op)
+        nothing
+    else
+        op = Operation(raw_op, false)
+        (op, op)
+    end
+end
+
 function lose_ownership!(block::Block)
     @assert block.owned
     # API.mlirBlockDetach(block)
@@ -187,7 +216,7 @@ end
 function activate!(blk::Block)
     stack = get!(task_local_storage(), :mlir_block) do
         return Block[]
-    end
+    end::Vector{Block}
     Base.push!(stack, blk)
     return nothing
 end
@@ -199,7 +228,7 @@ end
 
 function has_block()
     return haskey(task_local_storage(), :mlir_block) &&
-           !Base.isempty(task_local_storage(:mlir_block))
+           !Base.isempty(task_local_storage(:mlir_block)::Vector{Block})
 end
 
 function current_block(; throw_error::Core.Bool=true)
@@ -207,7 +236,7 @@ function current_block(; throw_error::Core.Bool=true)
         throw_error && error("No MLIR block is active")
         return nothing
     end
-    return last(task_local_storage(:mlir_block))
+    return last(task_local_storage(:mlir_block)::Vector{Block})
 end
 
 function with_block(f, blk::Block)

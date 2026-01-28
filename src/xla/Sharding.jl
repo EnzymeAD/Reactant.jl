@@ -157,7 +157,7 @@ function generate_device_list_from_iota_tile(
     # We need to ensure that we account for the col-major ordering in julia. See the
     # unit tests for examples.
     if !isempty(iota_transpose_perm)
-        # XXX: Simplify the permutedims
+        # TODO(#2261): Simplify the permutedims
         iota_devices = collect(Int64, reshape(0:(num_devices - 1), reverse(ird)...))
 
         iota_devices = permutedims(iota_devices, reverse(1:ndims(iota_devices)))

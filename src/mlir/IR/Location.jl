@@ -37,7 +37,7 @@ function Base.show(io::IO, location::Location)
     return print(io, " =#)")
 end
 
-# TODO rename to merge?
+# TODO(#2245): rename to merge?
 function fuse(locations::Vector{Location}, metadata; context::Context=current_context())
     return Location(
         API.mlirLocationFusedGet(context, length(locations), locations, metadata)

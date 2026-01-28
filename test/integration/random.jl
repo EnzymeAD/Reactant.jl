@@ -25,7 +25,7 @@ using StatsBase, Statistics, HypothesisTests, Distributions
     @test contains(repr(hlo), "stablehlo.rng_bit_generator")
 
     fn(x) = begin
-        # XXX: MersenneTwister without seed leads to illegal instructions
+        # TODO(#2253): MersenneTwister without seed leads to illegal instructions
         rng = MersenneTwister(0)
         Random.rand!(rng, x)
         return x
@@ -34,7 +34,7 @@ using StatsBase, Statistics, HypothesisTests, Distributions
     @test contains(repr(hlo), "stablehlo.rng_bit_generator")
 
     fn2() = begin
-        # XXX: MersenneTwister without seed leads to illegal instructions
+        # TODO(#2253): MersenneTwister without seed leads to illegal instructions
         rng = MersenneTwister(0)
         x = zeros(Float64, 2, 3)
         Random.rand!(rng, x)

@@ -4,7 +4,7 @@ using FFTW, Reactant, Test, LinearAlgebra
     x = Reactant.TestUtils.construct_test_array(ComplexF32, 2, 2, 3, 4)
     x_ra = Reactant.to_rarray(x)
 
-    @test_throws AssertionError @jit(fft(x_ra)) # TODO: support this
+    @test_throws AssertionError @jit(fft(x_ra)) # TODO(#2243): support this
 
     x = Reactant.TestUtils.construct_test_array(ComplexF32, 2, 3, 4)
     x_ra = Reactant.to_rarray(x)
@@ -92,7 +92,7 @@ end
     x = Reactant.TestUtils.construct_test_array(Float32, 2, 2, 3, 4)
     x_ra = Reactant.to_rarray(x)
 
-    @test_throws AssertionError @jit(rfft(x_ra)) # TODO: support this
+    @test_throws AssertionError @jit(rfft(x_ra)) # TODO(#2243): support this
 
     x = Reactant.TestUtils.construct_test_array(Float32, 2, 3, 4)
     x_ra = Reactant.to_rarray(x)

@@ -652,12 +652,12 @@ function vendored_optimize_module!(
     @nospecialize(job), mod::LLVM.Module, instcombine::Bool=false
 )
     tm = GPUCompiler.llvm_machine(job.config.target)
-    # TODO: Use the registered target passes (JuliaGPU/GPUCompiler.jl#450)
+    # TODO(#2239): Use the registered target passes (JuliaGPU/GPUCompiler.jl#450)
     LLVM.@dispose pb = LLVM.NewPMPassBuilder() begin
         LLVM.register!(pb, GPUCompiler.NVVMReflectPass())
 
         LLVM.add!(pb, LLVM.NewPMFunctionPassManager()) do fpm
-            # TODO: need to run this earlier; optimize_module! is called after addOptimizationPasses!
+            # TODO(#2239): need to run this earlier; optimize_module! is called after addOptimizationPasses!
             LLVM.add!(fpm, GPUCompiler.NVVMReflectPass())
 
             # needed by GemmKernels.jl-like code
@@ -699,7 +699,7 @@ function vendored_buildEarlyOptimizerPipeline(
     mpm, @nospecialize(job), opt_level; instcombine=false
 )
     LLVM.add!(mpm, LLVM.NewPMCGSCCPassManager()) do cgpm
-        # TODO invokeCGSCCCallbacks
+        # TODO(#2239) invokeCGSCCCallbacks
         LLVM.add!(cgpm, LLVM.NewPMFunctionPassManager()) do fpm
             LLVM.add!(fpm, LLVM.Interop.AllocOptPass())
             LLVM.add!(fpm, LLVM.Float2IntPass())
@@ -730,7 +730,7 @@ function vendored_buildEarlyOptimizerPipeline(
                 LLVM.add!(fpm, LLVM.EarlyCSEPass())
             end
         end
-        # TODO invokePeepholeCallbacks
+        # TODO(#2239) invokePeepholeCallbacks
     end
 end
 
@@ -750,7 +750,7 @@ function vendored_buildIntrinsicLoweringPipeline(
     # NOTE: we can only do so here, as GC lowering can introduce calls to the runtime,
     #       and thus additional uses of the kernel state intrinsics.
     if job.config.kernel
-        # TODO: now that all kernel state-related passes are being run here, merge some?
+        # TODO(#2239): now that all kernel state-related passes are being run here, merge some?
         LLVM.add!(mpm, AddKernelStatePass())
         LLVM.add!(mpm, LLVM.NewPMFunctionPassManager()) do fpm
             LLVM.add!(fpm, LowerKernelStatePass())
@@ -811,7 +811,7 @@ function vendored_buildIntrinsicLoweringPipeline(
     LLVM.add!(mpm, LLVM.Interop.RemoveJuliaAddrspacesPass())
 
     # Julia's operand bundles confuse the inliner, so repeat here now they are gone.
-    # FIXME: we should fix the inliner so that inlined code gets optimized early-on
+    # FIXME(#2239): we should fix the inliner so that inlined code gets optimized early-on
     return LLVM.add!(mpm, LLVM.AlwaysInlinerPass())
 end
 
@@ -840,7 +840,7 @@ function vendored_buildScalarOptimizerPipeline(
     end
     if opt_level >= 2
         LLVM.add!(fpm, LLVM.DSEPass())
-        # TODO invokePeepholeCallbacks
+        # TODO(#2239) invokePeepholeCallbacks
         LLVM.add!(fpm, LLVM.SimplifyCFGPass(; GPUCompiler.AggressiveSimplifyCFGOptions...))
         LLVM.add!(fpm, LLVM.Interop.AllocOptPass())
         LLVM.add!(fpm, LLVM.NewPMLoopPassManager()) do lpm
@@ -849,7 +849,7 @@ function vendored_buildScalarOptimizerPipeline(
         end
         LLVM.add!(fpm, LLVM.LoopDistributePass())
     end
-    # TODO invokeScalarOptimizerCallbacks
+    # TODO(#2239) invokeScalarOptimizerCallbacks
 end
 
 function vendored_buildNewPMPipeline!(mpm, @nospecialize(job), opt_level)
@@ -862,9 +862,9 @@ function vendored_buildNewPMPipeline!(mpm, @nospecialize(job), opt_level)
         GPUCompiler.buildLoopOptimizerPipeline(fpm, job, opt_level)
         vendored_buildScalarOptimizerPipeline(fpm, job, opt_level)
         if GPUCompiler.uses_julia_runtime(job) && opt_level >= 2
-            # XXX: we disable vectorization, as this generally isn't useful for GPU targets
+            # TODO(#2240): we disable vectorization, as this generally isn't useful for GPU targets
             #      and actually causes issues with some back-end compilers (like Metal).
-            # TODO: Make this not dependent on `uses_julia_runtime` (likely CPU), but it's own control
+            # TODO(#2240): Make this not dependent on `uses_julia_runtime` (likely CPU), but it's own control
             # Doesn't call instcombine
             GPUCompiler.buildVectorPipeline(fpm, job, opt_level)
         end
@@ -879,7 +879,7 @@ end
 # compile to executable machine code
 function compile(job)
     # lower to PTX
-    # TODO: on 1.9, this actually creates a context. cache those.
+    # TODO(#2240): on 1.9, this actually creates a context. cache those.
     entry = GPUCompiler.JuliaContext() do ctx
         mod, meta = GPUCompiler.compile(
             # :llvm, job; optimize=false, cleanup=false, validate=false, libraries=true
@@ -1156,7 +1156,7 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
             continue
         end
 
-        # TODO check for only integer and explicitly non cutraced types
+        # TODO(#2240): check for only integer and explicitly non cutraced types
         MLIR.IR.with_block(wrapbody) do
             argty = MLIR.IR.Type(
                 MLIR.API.mlirLLVMFunctionTypeGetInput(gpu_function_type, trueidx - 1)
@@ -1384,7 +1384,7 @@ function Reactant.make_tracer(
     kwargs...,
 )
     RT = Core.Typeof(prev)
-    # XXX: If someone wants to shard the same array with different shardings, we need to
+    # TODO(#2231): If someone wants to shard the same array with different shardings, we need to
     #      somehow handle this correctly... Right now we just use the first sharding.
     if haskey(seen, prev)
         return seen[prev]

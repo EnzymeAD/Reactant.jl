@@ -49,7 +49,7 @@ function Base.Array(
 end
 
 function OneHotArrays.onehotbatch(data::AnyTracedRArray{<:Any,N}, labels) where {N}
-    # TODO: add checkbounds once we support that with TracedRNumber
+    # TODO(#2238): add checkbounds once we support that with TracedRNumber
     labels_expanded = @opcall broadcast_in_dim(
         Reactant.promote_to(
             TracedRArray{Reactant.unwrapped_eltype(labels),1},
@@ -68,7 +68,7 @@ end
 function OneHotArrays.onehotbatch(
     data::AnyTracedRArray{<:Integer,N}, labels::AbstractUnitRange{<:Integer}
 ) where {N}
-    # TODO: add checkbounds once we support that with TracedRNumber
+    # TODO(#2238): add checkbounds once we support that with TracedRNumber
     indices = map(
         TracedRNumber{UInt32} ∘ Base.Fix2(+, 1 - first(labels)),
         ReactantCore.materialize_traced_array(data),
@@ -87,7 +87,7 @@ function OneHotArrays.onecold(y::AnyTracedRArray{T,1}, labels=1:length(y)) where
         ),
     )
     imax = argmax(y)
-    # TODO: error if ymax is nan
+    # TODO(#2238): error if ymax is nan
     labels_arr = Reactant.promote_to(
         TracedRArray{Reactant.unwrapped_eltype(labels),1}, labels
     )

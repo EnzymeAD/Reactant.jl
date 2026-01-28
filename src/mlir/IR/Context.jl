@@ -42,14 +42,14 @@ Base.unsafe_convert(::Core.Type{API.MlirContext}, c::Context) = c.ref
 function activate!(ctx::Context)
     stack = get!(task_local_storage(), :mlir_context_stack) do
         return Context[]
-    end
+    end::Vector{Context}
     Base.push!(stack, ctx)
     return nothing
 end
 
 function deactivate!(ctx::Context)
     current_context() == ctx || error("Deactivating wrong context")
-    return Base.pop!(task_local_storage(:mlir_context_stack))
+    return Base.pop!(task_local_storage(:mlir_context_stack)::Vector{Context})
 end
 
 function dispose!(ctx::Context)
@@ -59,7 +59,7 @@ end
 
 function has_context()
     return haskey(task_local_storage(), :mlir_context_stack) &&
-           !Base.isempty(task_local_storage(:mlir_context_stack))
+           !Base.isempty(task_local_storage(:mlir_context_stack)::Vector{Context})
 end
 
 function current_context(; throw_error::Core.Bool=true)
@@ -67,7 +67,7 @@ function current_context(; throw_error::Core.Bool=true)
         throw_error && error("No MLIR context is active")
         return nothing
     end
-    return last(task_local_storage(:mlir_context_stack))
+    return last(task_local_storage(:mlir_context_stack)::Vector{Context})
 end
 
 function with_context(f, ctx::Context)

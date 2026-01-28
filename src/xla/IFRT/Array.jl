@@ -408,7 +408,7 @@ function XLA.sharding(buffer::Array)
 end
 
 function copy_arrays_to_device_with_sharding(buffers::Vector{Array}, sharding::Sharding)
-    ifrt_client = XLA.client(first(buffers)) # TODO: check all clients are the same?
+    ifrt_client = XLA.client(first(buffers)) # TODO(#2235): check all clients are the same?
     src_buffers = [buffer.buffer for buffer in buffers]
     GC.@preserve buffers ifrt_client begin
         dst_buffers = @ccall MLIR.API.mlir_c.ifrt_copy_arrays_to_device_with_sharding(

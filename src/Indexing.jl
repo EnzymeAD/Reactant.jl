@@ -27,7 +27,7 @@ function Base.getindex(r::Union{Base.StepRangeLen,Base.LinRange}, i::TracedRNumb
 end
 function Base.getindex(r::Base.UnitRange, i::I) where {I<:TracedRNumber{Int}}
     val = convert(I, r.start + (i - oneunit(i)))
-    # TODO: we should have error messages at some point.
+    # TODO(#2237): we should have error messages at some point.
     # @boundscheck Base._in_unit_range(v, val, i) || throw_boundserror(v, i)
     return val
 end
@@ -265,12 +265,12 @@ Base.getindex(v::TracedUnitRange, ::Colon) = v
 for iType in (Int, TracedRNumber{Int}, Integer)
     @eval function Base.getindex(v::TracedUnitRange{T}, i::$iType) where {T}
         return convert(T, v.start + (i - oneunit(i)))
-        # TODO: we should have error messages at some point.
+        # TODO(#2237): we should have error messages at some point.
         # @boundscheck Base._in_unit_range(v, val, i) || throw_boundserror(v, i)
     end
 end
 
-# TODO: some of these dispatches can be optimized
+# TODO(#2237): some of these dispatches can be optimized
 for idxtype in (AbstractArray, AbstractUnitRange{<:Integer}, StepRange{<:Integer})
     @eval function Base.getindex(v::TracedUnitRange{T}, i::$idxtype) where {T}
         return getindex(Reactant.promote_to(TracedRArray{T,1}, v), i)
@@ -333,7 +333,7 @@ function Base.setindex!(a::TracedRArray{T,N}, v, indices::Vararg{Any,N}) where {
     end
 
     if use_scatter_setindex
-        # TODO: This will create a dynamically sized tensor and we need to implement
+        # TODO(#2237): This will create a dynamically sized tensor and we need to implement
         #       `findall` for it.
         if any(i -> unwrapped_eltype(i) <: Bool, indices)
             error("Boolean indexing with TracedRArrays isn't fully supported yet.")
@@ -530,7 +530,7 @@ function getindex_general(a::TracedRArray{T,N}, indices::Vararg{Any,N}) where {T
     end
 
     if use_gather_getindex
-        # TODO: This will create a dynamically sized tensor and we need to implement
+        # TODO(#2237): This will create a dynamically sized tensor and we need to implement
         #       `findall` for it.
         if any(i -> unwrapped_eltype(i) <: Bool, indices)
             error("Boolean indexing with TracedRArrays isn't fully supported yet.")

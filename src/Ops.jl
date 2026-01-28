@@ -139,21 +139,23 @@ struct Token
     mlir_data::MLIR.IR.Value
 end
 
+const __TLSEntryBlockType = Tuple{MLIR.IR.Block,Dict{MLIR.IR.Attribute,TracedRArray}}
+
 function activate_constant_context!(blk::MLIR.IR.Block)
     stack = get!(task_local_storage(), :entry_block) do
-        return Tuple{MLIR.IR.Block,Dict{MLIR.IR.Attribute,TracedRArray}}[]
-    end
+        return __TLSEntryBlockType[]
+    end::Vector{__TLSEntryBlockType}
     Base.push!(stack, (blk, Dict{MLIR.IR.Attribute,TracedRArray}()))
     return nothing
 end
 
 function constant_context(; throw_error::Core.Bool=true)
-    return last(task_local_storage(:entry_block))
+    return last(task_local_storage(:entry_block)::Vector{__TLSEntryBlockType})
 end
 
 function deactivate_constant_context!(blk::MLIR.IR.Block)
     constant_context()[1] == blk || error("Deactivating wrong block")
-    return Base.pop!(task_local_storage(:entry_block))
+    return Base.pop!(task_local_storage(:entry_block)::Vector{__TLSEntryBlockType})
 end
 
 # constant ops
@@ -775,7 +777,7 @@ end
     return TracedRNumber{U}((), res)
 end
 
-# TODO: See https://github.com/jax-ml/jax/blob/6c18aa8a468e35b8c11b101dceaa43d05b497177/jax/_src/numpy/fft.py#L106
+# TODO(#2243): See https://github.com/jax-ml/jax/blob/6c18aa8a468e35b8c11b101dceaa43d05b497177/jax/_src/numpy/fft.py#L106
 @noinline function fft(
     x::TracedRArray{T,N};
     type::String,
@@ -1884,7 +1886,7 @@ julia> Reactant.@jit(
         new_mod_op = MLIR.IR.Operation(new_mod)
         body = MLIR.IR.body(new_mod)
 
-        operations = collect(MLIR.IR.OperationIterator(body))
+        operations = collect(body)
         for op in operations
             if MLIR.IR.name(op) == "func.func"
                 fn_name = String(MLIR.IR.getattr(op, symbol_attr_name))
@@ -2173,7 +2175,7 @@ end
     mincut=false,
     location=mlir_stacktrace("while_loop", @__FILE__, @__LINE__),
 ) where {CFn,BFn}
-    # TODO: detect and prevent mutation within the condition
+    # TODO(#2250): detect and prevent mutation within the condition
 
     # Make all the args traced or concrete
     N = length(args)

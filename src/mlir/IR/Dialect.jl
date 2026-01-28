@@ -92,7 +92,7 @@ function Base.push!(registry::DialectRegistry, handle::DialectHandle)
     return API.mlirDialectHandleInsertDialect(handle, registry)
 end
 
-# TODO is `append!` the right name?
+# TODO(#2245) is `append!` the right name?
 function Base.append!(registry::DialectRegistry; context::Context)
     return API.mlirContextAppendDialectRegistry(context, registry)
 end
