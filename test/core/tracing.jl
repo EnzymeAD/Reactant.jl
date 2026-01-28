@@ -115,6 +115,13 @@ end
                     Union{Nothing,TracedRArray{Float64,1}},
                 ),
 
+                # UnionAll types
+                (
+                    ConcreteRArray,
+                    TracedRArray,
+                    TracedRArray,
+                ),
+
                 # Ptr types
                 (Ptr{Float64}, Ptr{Float64}, Ptr{TracedRNumber{Float64}}),
                 (
