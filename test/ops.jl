@@ -281,7 +281,41 @@ end
     x = Reactant.to_rarray(ComplexF32[1.0, -1.0, 1.0, -1.0])
     @test ComplexF32[0.0, 0.0, 4.0, 0.0] ≈ @jit(gfft(x))
 
-    # TODO test with complex numbers and inverse FFT
+    # Test IFFT (inverse FFT)
+    gifft(x) = Ops.fft(x; type="IFFT", length=[4])
+
+    # IFFT of [4, 0, 0, 0] should give [1, 1, 1, 1]
+    x = Reactant.to_rarray(ComplexF32[4.0, 0.0, 0.0, 0.0])
+    @test ComplexF32[1.0, 1.0, 1.0, 1.0] ≈ @jit(gifft(x))
+
+    # IFFT of [0, -2im, 0, 2im] should give [0, 1, 0, -1]
+    x = Reactant.to_rarray(ComplexF32[0.0, -2.0im, 0.0, 2.0im])
+    @test ComplexF32[0.0, 1.0, 0.0, -1.0] ≈ @jit(gifft(x))
+
+    # IFFT of [0, 0, 4, 0] should give [1, -1, 1, -1]
+    x = Reactant.to_rarray(ComplexF32[0.0, 0.0, 4.0, 0.0])
+    @test ComplexF32[1.0, -1.0, 1.0, -1.0] ≈ @jit(gifft(x))
+
+    # Test FFT followed by IFFT recovers original (round-trip)
+    original = Reactant.to_rarray(ComplexF32[1.0 + 2.0im, 3.0 - 1.0im, -2.0 + 0.5im, 0.0 - 3.0im])
+    fft_result = @jit(gfft(original))
+    @test Array(original) ≈ @jit(gifft(Reactant.to_rarray(fft_result)))
+
+    # Test IRFFT (inverse real FFT)
+    girfft(x) = Ops.fft(x; type="IRFFT", length=[4])
+
+    # IRFFT of [4, 0, 0] should give [1, 1, 1, 1] (real output)
+    x = Reactant.to_rarray(ComplexF32[4.0, 0.0, 0.0])
+    @test Float32[1.0, 1.0, 1.0, 1.0] ≈ @jit(girfft(x))
+
+    # IRFFT of [0, -2im, 0] should give [0, 1, 0, -1] (real output)
+    x = Reactant.to_rarray(ComplexF32[0.0, -2.0im, 0.0])
+    @test Float32[0.0, 1.0, 0.0, -1.0] ≈ @jit(girfft(x))
+
+    # Test RFFT followed by IRFFT recovers original (round-trip)
+    original_real = Reactant.to_rarray(Float32[1.5, -2.3, 0.7, 3.1])
+    rfft_result = @jit(grfft(original_real))
+    @test Array(original_real) ≈ @jit(girfft(Reactant.to_rarray(rfft_result)))
 end
 
 @testset "floor" begin
