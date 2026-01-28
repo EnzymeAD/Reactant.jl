@@ -26,7 +26,7 @@ import ..Reactant:
 import Reactant: OptimizeCommunicationOptions, ShardyPropagationOptions, CompileOptions
 using Reactant_jll: Reactant_jll
 
-import ..ReactantCore: correct_maybe_bcast_call
+import ..ReactantCore: correct_maybe_bcast_call, trace_function_definition
 
 const DEBUG_PRINT_CODEGEN = Ref(false)
 const DEBUG_DISABLE_RESHARDING = Ref(false)
@@ -2729,10 +2729,13 @@ macro tessera_op(name, func_expr)
     # Extract just the symbol if it's a call expression
     fname_sym = fname_expr isa Symbol ? fname_expr : fname_expr.args[1]
     
-    # Return expression that defines function and registers tessera_op
+    traced_expr = trace_function_definition(__module__, func_expr; tessera_op=op_name)
+
     return quote
-        @noinline $(esc(func_expr))
-        Compiler.set_tessera_op($(esc(fname_sym)), $(op_name))
+        # Define the function and register tessera_op
+        $(esc(traced_expr))
+        Compiler.set_tessera_op($(esc(fname_sym)), $op_name)
+        $(esc(fname_sym))
     end
 end
 

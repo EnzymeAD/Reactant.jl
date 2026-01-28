@@ -2654,6 +2654,8 @@ end
 @noinline function call(
     f, args...; location=mlir_stacktrace("call", @__FILE__, @__LINE__), tessera_op=nothing
 )
+    println("DEBUG: call() invoked with tessera_op = ", tessera_op)
+
     seen = Reactant.OrderedIdDict()
     cache_key = Any[f, tessera_op]
     Reactant.make_tracer(seen, (f, args...), cache_key, Reactant.TracedToTypes)
@@ -2663,6 +2665,9 @@ end
         (; f_name, mlir_result_types, traced_result, mutated_args, linear_results, fnwrapped, argprefix, resprefix, resargprefix) = cache[cache_key]
         if !isnothing(tessera_op)
             MLIR.IR.attr!(fnwrapped, "tessera.op", MLIR.IR.Attribute(tessera_op))
+        end
+        if !isnothing(tessera_op)
+            MLIR.IR.attr!(call_op, "tessera.op", MLIR.IR.Attribute(tessera_op))
         end
     else
         f_name = String(gensym(Symbol(f)))

@@ -246,11 +246,17 @@ function get_argname(expr)
     return expr, expr
 end
 
-function trace_function_definition(mod, expr; tessera=false)
+function trace_function_definition(mod, expr; tessera=false, tessera_op=nothing)
     internal_fn = MacroTools.splitdef(expr)
     orig_fname = internal_fn[:name]
 
-    tessera_op = tessera ? String(orig_fname) : nothing
+    tessera_op = if !isnothing(tessera_op)
+        tessera_op
+    elseif tessera
+        String(orig_fname)
+    else
+        nothing
+    end
 
     isfunctor = Meta.isexpr(orig_fname, :(::))
     fname = gensym(Symbol(orig_fname, :internal))
@@ -706,7 +712,7 @@ end
 
 function traced_while end # defined inside Reactant.jl
 
-traced_call(f, args...; kwargs...) = f(args...; kwargs...)
+traced_call(f, args...; tessera_op=nothing, kwargs...) = f(args...; kwargs...)
 
 function cleanup_expr_to_avoid_boxing(expr, prepend::Symbol, all_vars)
     return MacroTools.postwalk(expr) do x
