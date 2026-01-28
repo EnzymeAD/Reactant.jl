@@ -69,6 +69,20 @@ end
     return Base.zero(x)
 end
 
+@inline function Enzyme.tupstack(
+    data::Tuple{<:RArray, Vararg{<:RArray}},
+    outshape::Tuple{Vararg{Int}},
+    inshape::Tuple{Vararg{Int}},
+)
+    res = similar(first(data), outshape..., inshape...)
+    c = CartesianIndices(outshape)
+    tail_dims = map(Returns(:), inshape)
+    for (i, val) in enumerate(data)
+        @inbounds res[c[i], tail_dims...] = val
+    end
+    return res
+end
+
 macro register_make_zero_inplace(sym)
     quote
         @inline function $sym(prev::RArray{T,N})::Nothing where {T<:AbstractFloat,N}
