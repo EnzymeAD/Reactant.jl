@@ -90,7 +90,7 @@ end
     return Base.setproperty!(obj, field, val)
 end
 
-@inline traced_setfield!(@nospecialize(obj), field, val, path) =
+@inline traced_setfield!(@nospecialize(obj), field, val, _path) =
     Base.setfield!(obj, field, val)
 
 @inline function traced_setfield!(
@@ -111,7 +111,7 @@ end
     return setfield_carray!(obj, field, val, path)
 end
 
-@inline function traced_setfield!(@nospecialize(obj::Dict), field, val, path)
+@inline function traced_setfield!(@nospecialize(obj::Dict), field, val, _path)
     return Base.setindex!(obj, field, val)
 end
 
@@ -163,7 +163,7 @@ function traced_setfield_buffer!(runtime::Val, cache_dict, concrete_res, obj, fi
     )
 end
 
-function traced_setfield_buffer!(::Val, cache_dict, val, concrete_res, obj, field, path)
+function traced_setfield_buffer!(::Val, _cache_dict, val, concrete_res, _obj, _field, path)
     return traced_setfield!(val, :data, concrete_res, path)
 end
 
@@ -278,8 +278,8 @@ function create_result(
     result_stores,
     path_to_shard_info,
     to_unreshard_results,
-    unresharded_code::Vector{Expr},
-    unresharded_arrays_cache,
+    _unresharded_code::Vector{Expr},
+    _unresharded_arrays_cache,
     used_shardinfo,
     result_cache,
     var_idx,
@@ -294,7 +294,7 @@ function create_result(
         delete!(result_stores, path)
         if path_to_shard_info !== nothing && haskey(path_to_shard_info, path)
             if haskey(to_unreshard_results, path)
-                error("TODO: Not yet Implemented. Use IFRT for this.")
+                error("TODO(#2234): Not yet Implemented. Use IFRT for this.")
             end
             sharding = pop!(path_to_shard_info, path)
             push!(used_shardinfo, sharding)
@@ -320,8 +320,8 @@ function create_result(
     result_stores,
     path_to_shard_info,
     to_unreshard_results,
-    unresharded_code::Vector{Expr},
-    unresharded_arrays_cache,
+    _unresharded_code::Vector{Expr},
+    _unresharded_arrays_cache,
     used_shardinfo,
     result_cache,
     var_idx,
@@ -336,7 +336,7 @@ function create_result(
         delete!(result_stores, path)
         if path_to_shard_info !== nothing && haskey(path_to_shard_info, path)
             if haskey(to_unreshard_results, path)
-                error("TODO: Not yet Implemented.")
+                error("TODO(#2234): Not yet Implemented.")
             end
             sharding = pop!(path_to_shard_info, path)
             push!(used_shardinfo, sharding)
@@ -362,8 +362,8 @@ function create_result(
     result_stores,
     path_to_shard_info,
     to_unreshard_results,
-    unresharded_code::Vector{Expr},
-    unresharded_arrays_cache,
+    _unresharded_code::Vector{Expr},
+    _unresharded_arrays_cache,
     used_shardinfo,
     result_cache,
     var_idx,
@@ -378,7 +378,7 @@ function create_result(
         delete!(result_stores, path)
         if path_to_shard_info !== nothing && haskey(path_to_shard_info, path)
             if haskey(to_unreshard_results, path)
-                error("TODO: Not yet Implemented. Use IFRT for this.")
+                error("TODO(#2234): Not yet Implemented. Use IFRT for this.")
             end
             sharding = pop!(path_to_shard_info, path)
             push!(used_shardinfo, sharding)
@@ -593,7 +593,7 @@ function create_result(
         resultgen_code,
     )
     elems = Union{Symbol,Expr}[]
-    for (i, (k, v)) in enumerate(pairs(tocopy))
+    for (i, (_, v)) in enumerate(pairs(tocopy))
         push!(elems, create_result(v, append_path(path, i), args...))
     end
     return :(NamedTuple{$K}(($(elems...),)))
@@ -655,32 +655,32 @@ end
 
 function create_result(
     tocopy::Reactant.XLA.AbstractDevice,
-    path,
-    result_stores,
-    path_to_shard_info,
-    to_unreshard_results,
-    unresharded_code::Vector{Expr},
-    unresharded_arrays_cache,
-    used_shardinfo,
-    result_cache,
-    var_idx,
-    resultgen_code,
+    _path,
+    _result_stores,
+    _path_to_shard_info,
+    _to_unreshard_results,
+    _unresharded_code::Vector{Expr},
+    _unresharded_arrays_cache,
+    _used_shardinfo,
+    _result_cache,
+    _var_idx,
+    _resultgen_code,
 )
     return Meta.quot(:($(tocopy)))
 end
 
 function create_result(
     tocopy::Union{Integer,AbstractFloat,AbstractString,Nothing,Type,Symbol,Char},
-    path,
-    result_stores,
-    path_to_shard_info,
-    to_unreshard_results,
-    unresharded_code::Vector{Expr},
-    unresharded_arrays_cache,
-    used_shardinfo,
-    result_cache,
-    var_idx,
-    resultgen_code,
+    _path,
+    _result_stores,
+    _path_to_shard_info,
+    _to_unreshard_results,
+    _unresharded_code::Vector{Expr},
+    _unresharded_arrays_cache,
+    _used_shardinfo,
+    _result_cache,
+    _var_idx,
+    _resultgen_code,
 )
     return Meta.quot(tocopy)
 end
@@ -883,9 +883,9 @@ function optimization_passes(
         "real_conj_simplify",
         "conj_complex_simplify",
         "split_convolution_into_reverse_convolution",
-        # TODO we want to enable but may cause an infinite compile time
+        # TODO(#2251) we want to enable but may cause an infinite compile time
         # "concat_to_onedim_dusslice",
-        # TODO expose an option to enable this
+        # TODO(#2251) expose an option to enable this
         # "chained_multiply_to_power",
         "power_multiply_to_power",
         "log_simplify",
@@ -974,6 +974,7 @@ function optimization_passes(
                 "scatter_div_simplify",
                 "unary_elementwise_scatter_simplify",
                 "scatter_indices_are_unique",
+                "split_complex_scatter_setindex",
                 ## const prop patterns
                 "scatter_update_computation_const_prop",
                 # gather patterns
@@ -1222,7 +1223,7 @@ function optimization_passes(
                 "reshape_dus",
                 "dot_reshape_pad<1>",
                 "pad_dot_general<1>(0)",
-                # XXX: see https://github.com/EnzymeAD/Enzyme-JAX/issues/1445
+                # TODO(#2251): see https://github.com/EnzymeAD/Enzyme-JAX/issues/1445
                 # "pad_dot_general<1>(1)",
                 "reshape_pad",
                 "reshape_wrap",
@@ -1423,7 +1424,7 @@ function optimization_passes(
     return join(passes, ',')
 end
 
-# TODO we want to be able to run the more advanced passes via transform dialect as an enzyme intermediate
+# TODO(#2251) we want to be able to run the more advanced passes via transform dialect as an enzyme intermediate
 # However, this errs as we cannot attach the transform with to the funcop itself [as we run a functionpass].
 const enzyme_pass::String = "enzyme{postpasses=\"arith-raise{stablehlo=true},canonicalize,cse,canonicalize,remove-unnecessary-enzyme-ops,enzyme-simplify-math,canonicalize,cse,canonicalize,arith-raise{stablehlo=true}\"}"
 
@@ -1432,7 +1433,7 @@ function run_pass_pipeline!(mod, pass_pipeline, key=""; enable_verifier=true)
     MLIR.IR.enable_verifier!(pm, enable_verifier)
     opm = MLIR.IR.OpPassManager(pm)
     MLIR.IR.add_pipeline!(opm, pass_pipeline)
-    MLIR.IR.run!(pm, mod, key)
+    MLIR.IR.run!(pm, MLIR.IR.Operation(mod), key)
     return mod
 end
 
@@ -1456,11 +1457,26 @@ function run_pass_pipeline!(
     return mod
 end
 
-const context_gc_vector = Dict{MLIR.IR.Context,Vector{Union{TracedRArray,TracedRNumber}}}()
+const __module_gc_vector = Dict{MLIR.IR.Module,Vector{Union{TracedRArray,TracedRNumber}}}()
+
+function guard_from_gc_for_module(mod::MLIR.IR.Module, x)
+    if !haskey(__module_gc_vector, mod)
+        __module_gc_vector[mod] = Union{TracedRArray,TracedRNumber}[x]
+    else
+        push!(__module_gc_vector[mod], x)
+    end
+    @assert __module_gc_vector[mod][end] === x
+    return nothing
+end
+
+function release_guard_from_gc_for_module(mod::MLIR.IR.Module)
+    delete!(__module_gc_vector, mod)
+    return nothing
+end
 
 # helper for debug purposes: String -> Text
 function run_pass_pipeline_on_source(source, pass_pipeline; enable_verifier=true)
-    return MLIR.IR.with_context() do ctx
+    return MLIR.IR.with_context() do _
         mod = parse(MLIR.IR.Module, source)
         run_pass_pipeline!(mod, pass_pipeline; enable_verifier)
         MLIR.IR.verifyall(MLIR.IR.Operation(mod); debug=true)
@@ -1487,6 +1503,9 @@ function __get_compile_options_and_kwargs(;
     assert_nonallocating::Bool=false,
     donated_args::Symbol=:auto,
     sync::Bool=false,
+    xla_debug_options=(;),
+    xla_executable_build_options=(;),
+    xla_compile_options=(;),
     kwargs...,
 )
     return (
@@ -1509,6 +1528,9 @@ function __get_compile_options_and_kwargs(;
             assert_nonallocating,
             donated_args,
             sync,
+            xla_debug_options,
+            xla_executable_build_options,
+            xla_compile_options,
         ),
         kwargs,
     )
@@ -1524,10 +1546,10 @@ function compile_mlir(f, args; client=nothing, drop_unsupported_attributes=false
         backend = "cpu"
     end
 
-    results = MLIR.IR.with_context() do ctx
+    results = MLIR.IR.with_context() do _
         mod = MLIR.IR.Module(MLIR.IR.Location())
 
-        compile_options, kwargs = __get_compile_options_and_kwargs(; kwargs...)
+        compile_options, kwargs_inner = __get_compile_options_and_kwargs(; kwargs...)
         mlir_fn_res = compile_mlir!(
             mod,
             f,
@@ -1536,7 +1558,7 @@ function compile_mlir(f, args; client=nothing, drop_unsupported_attributes=false
             backend,
             runtime=XLA.runtime(client),
             client,
-            kwargs...,
+            kwargs_inner...,
         )
 
         # Attach a name, and partitioning attributes to the module
@@ -1575,8 +1597,7 @@ function cubinFeatures()
     ver2 = @ccall MLIR.API.mlir_c.ReactantHermeticCudaGetVersion()::UInt32
     ver = min(ver, ver2)
     major, ver = divrem(ver, 1000)
-    minor, patch = divrem(ver, 10)
-    version = VersionNumber(major, minor, patch)
+    minor, _ = divrem(ver, 10)
     # From https://github.com/llvm/llvm-project/blob/b60aed6fbabc291a7afbcb460453f9dcdce76f34/clang/lib/Driver/ToolChains/Cuda.cpp#L686
     cuver_map = Dict([
         (128, 87),
@@ -1620,21 +1641,24 @@ const SROA_ATTRIBUTOR = Ref{Bool}(true)
 function activate_raising!(is_raising::Bool)
     stack = get!(task_local_storage(), :reactant_is_raising) do
         Bool[]
-    end
+    end::Vector{Bool}
     push!(stack, is_raising)
     return nothing
 end
 
 function deactivate_raising!(is_raising::Bool)
     key = :reactant_is_raising
-    is_raising === last(task_local_storage(key)) ||
+    is_raising === last(task_local_storage(key)::Vector{Bool}) ||
         error("Deactivating wrong Reactant raising context")
-    return pop!(task_local_storage(key))
+    return pop!(task_local_storage(key)::Vector{Bool})
 end
 
 function raising(; throw_error::Bool=true)
     key = :reactant_is_raising
-    if !(haskey(task_local_storage(), key) && !Base.isempty(task_local_storage(key)))
+    if !(
+        haskey(task_local_storage(), key) &&
+        !Base.isempty(task_local_storage(key)::Vector{Bool})
+    )
         throw_error && error("No Reactant raising context")
     end
     return last(task_local_storage(key)::Vector{Bool})
@@ -1711,7 +1735,7 @@ function compile_mlir!(
 )
     client = client !== nothing ? client : XLA.default_backend()
 
-    # Explicitly don't use block! to avoid creating a closure, which creates
+    # Explicitly don't use with_block to avoid creating a closure, which creates
     # both compile-time and relocatability issues
 
     MLIR.IR.activate!(mod)
@@ -1748,13 +1772,14 @@ function compile_mlir!(
         deactivate_sdygroupidcache!(sdygroupidcache)
         deactivate_callcache!(callcache)
         MLIR.IR.deactivate!(MLIR.IR.body(mod))
+        clear_llvm_compiler_cache!(mod)
+        release_guard_from_gc_for_module(mod)
         MLIR.IR.deactivate!(mod)
     end
     (;
         fnwrapped,
         traced_result,
         seen_args,
-        ret,
         linear_args,
         skipped_args,
         in_tys,
@@ -1826,7 +1851,7 @@ function compile_mlir!(
     elseif raise
 
         # Raise enabled but use default passes
-        # TODO remove redundant libdevice raise after fixing phase ordering
+        # TODO(#2240) remove redundant libdevice raise after fixing phase ordering
         result =
             "canonicalize,llvm-to-memref-access,canonicalize,convert-llvm-to-cf,canonicalize,enzyme-lift-cf-to-scf,canonicalize,func.func(canonicalize-loops),canonicalize-scf-for,canonicalize,libdevice-funcs-raise,canonicalize,affine-cfg,canonicalize,func.func(canonicalize-loops),canonicalize,llvm-to-affine-access,canonicalize,delinearize-indexing,canonicalize,simplify-affine-exprs,affine-cfg,canonicalize,func.func(affine-loop-invariant-code-motion),canonicalize,sort-memory,raise-affine-to-stablehlo{prefer_while_raising=false dump_failed_lockstep=$(DUMP_FAILED_LOCKSTEP[])},canonicalize,arith-raise{stablehlo=true}," *
             opt_passes2
@@ -1855,6 +1880,8 @@ function compile_mlir!(
                                    blas_int_width=$blas_int_width},\
                                    lower-enzymexla-lapack{backend=$backend \
                                    blas_int_width=$blas_int_width}"
+
+    lower_enzymexla_mpi_pass = "lower-enzymexla-mpi{backend=$backend}"
 
     legalize_chlo_to_stablehlo =
         if legalize_stablehlo_to_mhlo || compile_options.legalize_chlo_to_stablehlo
@@ -1885,6 +1912,7 @@ function compile_mlir!(
                         legalize_chlo_to_stablehlo...,
                         opt_passes2,
                         lower_enzymexla_linalg_pass,
+                        lower_enzymexla_mpi_pass,
                         jit,
                     ]
                 else
@@ -1903,6 +1931,7 @@ function compile_mlir!(
                         kern,
                         raise_passes,
                         lower_enzymexla_linalg_pass,
+                        lower_enzymexla_mpi_pass,
                         jit,
                     ]
                 end,
@@ -2056,6 +2085,7 @@ function compile_mlir!(
                         legalize_chlo_to_stablehlo...,
                         opt_passes2,
                         lower_enzymexla_linalg_pass,
+                        lower_enzymexla_mpi_pass,
                         jit,
                     ]
                 else
@@ -2071,6 +2101,7 @@ function compile_mlir!(
                         kern,
                         raise_passes,
                         lower_enzymexla_linalg_pass,
+                        lower_enzymexla_mpi_pass,
                         jit,
                     ]
                 end,
@@ -2093,6 +2124,7 @@ function compile_mlir!(
                         enzyme_pass,
                         "canonicalize,remove-unnecessary-enzyme-ops,enzyme-simplify-math",
                         lower_enzymexla_linalg_pass,
+                        lower_enzymexla_mpi_pass,
                         jit,
                     ]
                 else
@@ -2106,6 +2138,7 @@ function compile_mlir!(
                         kern,
                         raise_passes,
                         lower_enzymexla_linalg_pass,
+                        lower_enzymexla_mpi_pass,
                         jit,
                     ]
                 end,
@@ -2203,11 +2236,11 @@ function compile_mlir!(
             func_with_padding = MLIR.Dialects.func.func_(;
                 sym_name=fnname,
                 function_type=MLIR.IR.FunctionType(in_tys_padded, out_tys_padded),
-                arg_attrs=MLIR.IR.attr(compiled_f, "arg_attrs"),
-                res_attrs=MLIR.IR.attr(compiled_f, "res_attrs"),
-                no_inline=MLIR.IR.attr(compiled_f, "no_inline"),
+                arg_attrs=MLIR.IR.getattr(compiled_f, "arg_attrs"),
+                res_attrs=MLIR.IR.getattr(compiled_f, "res_attrs"),
+                no_inline=MLIR.IR.getattr(compiled_f, "no_inline"),
                 body=MLIR.IR.Region(),
-                sym_visibility=MLIR.IR.attr(compiled_f, "private"),
+                sym_visibility=MLIR.IR.getattr(compiled_f, "private"),
             )
             fnbody = MLIR.IR.Block(
                 in_tys_padded,
@@ -2242,7 +2275,7 @@ function compile_mlir!(
                     call_args[i] = MLIR.IR.result(unpad_op, 1)
                 end
 
-                ftype = MLIR.IR.Type(MLIR.IR.attr(compiled_f, "function_type"))
+                ftype = MLIR.IR.Type(MLIR.IR.getattr(compiled_f, "function_type"))
                 call_op = MLIR.Dialects.func.call(
                     call_args;
                     result_0=[MLIR.IR.result(ftype, i) for i in 1:MLIR.IR.nresults(ftype)],
@@ -2301,7 +2334,7 @@ function compile_mlir!(
                 )
             end
 
-            MLIR.IR.attr!(compiled_f, "sym_visibility", MLIR.IR.Attribute("private"))
+            MLIR.IR.setattr!(compiled_f, "sym_visibility", MLIR.IR.Attribute("private"))
             run_pass_pipeline!(
                 mod,
                 "inline{default-pipeline=canonicalize max-iterations=4}",
@@ -2335,7 +2368,7 @@ function compile_mlir!(
         @assert func_op.ptr !== C_NULL
         func_op_new_module = MLIR.IR.Operation(func_op, false)
 
-        result_attrs = MLIR.IR.attr(func_op_new_module, "res_attrs")
+        result_attrs = MLIR.IR.getattr(func_op_new_module, "res_attrs")
         if result_attrs !== nothing
             result_shardings = Vector{Union{Sharding.NamedSharding,Sharding.Replicated}}(
                 undef, length(result_attrs)
@@ -2433,15 +2466,15 @@ function compile_mlir!(
         push!(preserved_args, (linear_results[i], MLIR.IR.block_arg_num(op)))
     end
 
-    MLIR.API.mlirOperationDestroy(ret.operation)
-    ret.operation = MLIR.API.MlirOperation(C_NULL)
-    MLIR.IR.block!(fnbody) do
+    MLIR.API.mlirOperationDestroy(ret)
+    ret.ref = MLIR.API.MlirOperation(C_NULL)
+    MLIR.IR.with_block(fnbody) do
         return MLIR.Dialects.func.return_(nresults)
     end
 
     out_tys2 = [MLIR.IR.type(a) for a in nresults]
 
-    res_attrs = MLIR.IR.attr(compiled_f, "res_attrs")
+    res_attrs = MLIR.IR.getattr(compiled_f, "res_attrs")
     if res_attrs isa MLIR.IR.Attribute
         res_attrs = MLIR.IR.Attribute[
             res_attrs[i - 1] for (i, present) in enumerate(results_mask) if present
@@ -2462,22 +2495,22 @@ function compile_mlir!(
     func3 = MLIR.Dialects.func.func_(;
         sym_name="main",
         function_type=MLIR.IR.FunctionType(in_tys, out_tys2),
-        arg_attrs=MLIR.IR.attr(compiled_f, "arg_attrs"),
+        arg_attrs=MLIR.IR.getattr(compiled_f, "arg_attrs"),
         res_attrs,
-        no_inline=MLIR.IR.attr(compiled_f, "no_inline"),
+        no_inline=MLIR.IR.getattr(compiled_f, "no_inline"),
         body=MLIR.IR.Region(),
     )
     MLIR.API.mlirRegionTakeBody(MLIR.IR.region(func3, 1), MLIR.IR.region(compiled_f, 1))
 
     push!(MLIR.IR.body(mod), func3)
 
-    mem = MLIR.IR.attr(compiled_f, "enzymexla.memory_effects")
+    mem = MLIR.IR.getattr(compiled_f, "enzymexla.memory_effects")
     if !(mem isa Nothing)
-        MLIR.IR.attr!(func3, "enzymexla.memory_effects", mem)
+        MLIR.IR.setattr!(func3, "enzymexla.memory_effects", mem)
     end
 
-    MLIR.API.mlirOperationDestroy(compiled_f.operation)
-    compiled_f.operation = MLIR.API.MlirOperation(C_NULL)
+    MLIR.API.mlirOperationDestroy(compiled_f)
+    compiled_f.ref = MLIR.API.MlirOperation(C_NULL)
 
     # Add a `donated` attr to the function arguments. This doesn't affect XLA, but lets us
     # check which arguments were donated.
@@ -2507,10 +2540,10 @@ function compile_mlir!(
 
     # drop certain operations from the module if using TPU backend
     if backend == "tpu"
-        for op in collect(MLIR.IR.OperationIterator(MLIR.IR.body(mod)))
+        for op in collect(MLIR.IR.body(mod))
             if MLIR.IR.dialect(op) == :llvm
-                MLIR.API.mlirOperationDestroy(op.operation)
-                op.operation = MLIR.API.MlirOperation(C_NULL)
+                MLIR.API.mlirOperationDestroy(op)
+                op.ref = MLIR.API.MlirOperation(C_NULL)
             end
         end
     end
@@ -2527,7 +2560,7 @@ function compile_mlir!(
                     length(nresults) = $(length(nresults))
                     linear_args = $linear_args
                     linear_results = $linear_results
-                    $((MLIR.IR.argument(fnbody, i) for i in 1:length(in_tys))...)
+                    $(join((MLIR.IR.argument(fnbody, i) for i in 1:length(in_tys)), ", "))
                     preserved_args = $(preserved_args_idx)
                     $str
                     """,
@@ -2776,7 +2809,7 @@ macro jit(args...)
     #! format: on
 end
 
-function compile_call_expr(mod, compiler, options::Dict, args...)
+function compile_call_expr(_mod, compiler, options::Dict, args...)
     while length(args) > 1
         option, args = args[1], args[2:end]
         if !Meta.isexpr(option, :(=))
@@ -2858,7 +2891,7 @@ end
 function assert_mismatched_sharding(
     hlo_sharding_from_input::Reactant.XLA.HloSharding,
     hlo_sharding_from_executable::Reactant.XLA.HloSharding,
-    size_x,
+    _size_x,
 )
     @assert hlo_sharding_from_executable == hlo_sharding_from_input "Sharding provided by the user ($(string(hlo_sharding_from_input))) does not match the sharding computed by XLA ($(string(hlo_sharding_from_executable))). This generally means that Reactant.jl made an error in generating the executable. Please open an issue with the error message and an MWE."
 end
@@ -2895,11 +2928,14 @@ function codegen_flatten!(
     runtime = XLA.runtime(client)
     resharded_inputs = Dict{Tuple,Any}()
 
-    if is_sharded
-        inv_seen_args = Reactant.OrderedIdDict()
+    inv_seen_args = if is_sharded
+        result = Reactant.OrderedIdDict()
         for (k, v) in seen_args
-            inv_seen_args[v] = k
+            result[v] = k
         end
+        result
+    else
+        nothing
     end
 
     xla_parameter_sharding_sym = missing
@@ -3161,7 +3197,7 @@ function donate_argument!(
     end
 end
 
-# XXX: Currently we copy to host and then make the transfer to the sharded devices. This is
+# TODO(#2233): Currently we copy to host and then make the transfer to the sharded devices. This is
 #      not ideal, we should be able to do a direct transfer using remapplan
 function ifrt_resharded_buffer(
     ::Type{T}, ifrt_array, sz, client, reactant_sharding, global_device_ids, opsharding
@@ -3288,7 +3324,7 @@ function codegen_unflatten!(
 
                 if length(path) > 0
                     needs_cache_dict = true
-                    # XXX: we might need to handle sharding here
+                    # TODO(#2233): we might need to handle sharding here
                     unflatcode = quote
                         traced_setfield_buffer!(
                             $(runtime),
@@ -3344,7 +3380,7 @@ function codegen_unflatten!(
             need_to_unreshard = get(resharded_inputs, (:args, argpath[2:end]...), nothing)
             if need_to_unreshard !== nothing
                 # TODO(@avik-pal): I need an MWE to debug this codepath
-                error("TODO: Not yet Implemented. Open an issue on Reactant.jl.")
+                error("TODO(#2234): Not yet Implemented. Open an issue on Reactant.jl.")
             end
 
             argres = :(args[$(argpath[2])])
@@ -3411,7 +3447,7 @@ function codegen_unflatten!(
             need_to_unreshard = get(resharded_inputs, (:args, argpath[2:end]...), nothing)
             if need_to_unreshard !== nothing
                 # TODO(@avik-pal): I need an MWE to debug this codepath
-                error("TODO: Not yet Implemented. Open an issue on Reactant.jl.")
+                error("TODO(#2234): Not yet Implemented. Open an issue on Reactant.jl.")
             end
 
             argres = :(args[$(argpath[2])])
@@ -3608,9 +3644,9 @@ function __add_mhlo_attributes_and_name!(
         mod, "reactant_" * fname
     )
     module_name = MLIR.IR.Attribute(module_name)
-    MLIR.IR.attr!(moduleop, "mhlo.num_partitions", MLIR.IR.Attribute(num_partitions))
-    MLIR.IR.attr!(moduleop, "mhlo.num_replicas", MLIR.IR.Attribute(num_replicas))
-    MLIR.IR.attr!(
+    MLIR.IR.setattr!(moduleop, "mhlo.num_partitions", MLIR.IR.Attribute(num_partitions))
+    MLIR.IR.setattr!(moduleop, "mhlo.num_replicas", MLIR.IR.Attribute(num_replicas))
+    MLIR.IR.setattr!(
         moduleop, String(MLIR.API.mlirSymbolTableGetSymbolAttributeName()), module_name
     )
     return nothing
@@ -3671,7 +3707,6 @@ function compile_xla(
 )
     # register MLIR dialects
     ctx = MLIR.IR.Context(Reactant.registry[], false)
-    context_gc_vector[ctx] = Vector{Union{TracedRArray,TracedRNumber}}(undef, 0)
     @ccall MLIR.API.mlir_c.RegisterDialects(ctx::MLIR.API.MlirContext)::Cvoid
 
     client = client !== nothing ? client : XLA.default_backend()
@@ -3684,7 +3719,7 @@ function compile_xla(
     end
 
     MLIR.IR.activate!(ctx)
-    results = try
+    try
         # compile function to MLIR module
         mod = MLIR.IR.Module(MLIR.IR.Location())
 
@@ -3702,10 +3737,7 @@ function compile_xla(
 
         # Resolve client and device
         client, device = __resolve_device_and_client(
-            client,
-            mlir_fn_res.seen_args,
-            mlir_fn_res.linear_args,
-            mlir_fn_res.is_sharded,
+            client, mlir_fn_res.seen_args, mlir_fn_res.linear_args, mlir_fn_res.is_sharded
         )
 
         # Attach a name, and partitioning attributes to the module
@@ -3733,17 +3765,35 @@ function compile_xla(
             exec = nothing
             hlo_modules = XLA.HloModule(mod)
         else
+            xla_compile_options = XLA.make_compile_options(;
+                device_id=if mlir_fn_res.is_sharded
+                    -1
+                else
+                    Int64(XLA.device_ordinal(device))
+                end,
+                xla_compile_options=compile_options.xla_compile_options,
+                num_replicas=mlir_fn_res.num_replicas,
+                num_partitions=mlir_fn_res.num_partitions,
+                mesh_ids=mlir_fn_res.is_sharded ? global_device_ids : nothing,
+                xla_debug_options=compile_options.xla_debug_options,
+                xla_executable_build_options=merge(
+                    (;
+                        use_shardy_partitioner=mlir_fn_res.use_shardy_partitioner,
+                        use_spmd_partitioning=mlir_fn_res.is_sharded,
+                    ),
+                    compile_options.xla_executable_build_options,
+                ),
+            )
+
             exec = XLA.compile(
                 client,
-                device,
                 mod;
+                compile_options=xla_compile_options,
                 num_outputs=length(mlir_fn_res.linear_results),
                 num_parameters=length(mlir_fn_res.linear_args),
                 mlir_fn_res.is_sharded,
-                global_device_ids,
                 mlir_fn_res.num_replicas,
                 mlir_fn_res.num_partitions,
-                mlir_fn_res.use_shardy_partitioner,
             )
             hlo_modules = XLA.get_hlo_modules(exec)
             hlo_modules = length(hlo_modules) == 1 ? only(hlo_modules) : hlo_modules
@@ -3753,9 +3803,6 @@ function compile_xla(
     finally
         MLIR.IR.deactivate!(ctx)
     end
-
-    Base.delete!(context_gc_vector, ctx)
-    return results
 end
 
 # inspired by RuntimeGeneratedFunction.jl
@@ -3768,14 +3815,8 @@ function compile(f, args; kwargs...)
     _, exec, _, mlir_fn_res, device, client, str = compile_xla(
         f, args; compile_options, kwargs...
     )
-    (;
-        linear_args,
-        seen_args,
-        linear_results,
-        preserved_args,
-        concrete_result,
-        donated_args_mask,
-    ) = mlir_fn_res
+    (; linear_args, seen_args, linear_results, preserved_args, concrete_result) =
+        mlir_fn_res
 
     result_stores = Dict{Tuple,Symbol}()
     path_to_shard_info = mlir_fn_res.is_sharded ? Dict{Tuple,Symbol}() : nothing
@@ -3806,7 +3847,7 @@ function compile(f, args; kwargs...)
         linear_args,
         seen_args,
         mlir_fn_res.is_sharded,
-        XLA.get_parameter_shardings(exec), # TODO: use the same workflow as output shardings to parse the tensor sharding attributes directly if possible
+        XLA.get_parameter_shardings(exec), # TODO(#2233): use the same workflow as output shardings to parse the tensor sharding attributes directly if possible
         client,
         ndevices,
     )
@@ -4025,20 +4066,20 @@ for cache_type in (:callcache, :sdycache, :sdygroupidcache)
         function $(activate_fn)(cache)
             stack = get!(task_local_storage(), $(Meta.quot(cache_type))) do
                 return []
-            end
+            end::Vector
             push!(stack, cache)
             return nothing
         end
 
         function $(deactivate_fn)(cache)
-            cache === last(task_local_storage($(Meta.quot(cache_type)))) ||
+            cache === last(task_local_storage($(Meta.quot(cache_type)))::Vector) ||
                 error("Deactivating wrong cache")
-            return pop!(task_local_storage($(Meta.quot(cache_type))))
+            return pop!(task_local_storage($(Meta.quot(cache_type)))::Vector)
         end
 
         function $(has_fn)()
             return haskey(task_local_storage(), $(Meta.quot(cache_type))) &&
-                   !Base.isempty(task_local_storage($(Meta.quot(cache_type))))
+                   !Base.isempty(task_local_storage($(Meta.quot(cache_type)))::Vector)
         end
 
         function $(cache_type)(; throw_error::Bool=true)
@@ -4046,7 +4087,7 @@ for cache_type in (:callcache, :sdycache, :sdygroupidcache)
                 throw_error && error("No cache is active")
                 return nothing
             end
-            return last(task_local_storage($(Meta.quot(cache_type))))
+            return last(task_local_storage($(Meta.quot(cache_type)))::Vector)
         end
     end
 end
@@ -4086,6 +4127,37 @@ function default_callcache()
             resargprefix::Symbol,
         }
     }()
+end
+
+# Since we cache these objects we cannot cache data containing MLIR operations (e.g. the entry must be a string
+# and not the operation itself).
+struct LLVMFunc{F,tt}
+    f::Union{F,Nothing}
+    entry::String
+end
+
+function Base.getproperty(f::LLVMFunc{F,tt}, sym::Symbol) where {F,tt}
+    if sym === :fun
+        f
+    else
+        Base.getfield(f, sym)
+    end
+end
+
+# cache of compilation caches, per module
+const _llvm_compiler_caches = Dict{MLIR.IR.Module,Dict{Any,LLVMFunc}}()
+function llvm_compiler_cache(_mod::MLIR.IR.Module)
+    cache = get(_llvm_compiler_caches, _mod, nothing)
+    if cache === nothing
+        cache = Dict{Any,LLVMFunc}()
+        _llvm_compiler_caches[_mod] = cache
+    end
+    return cache
+end
+
+function clear_llvm_compiler_cache!(_mod::MLIR.IR.Module)
+    delete!(_llvm_compiler_caches, _mod)
+    return nothing
 end
 
 end

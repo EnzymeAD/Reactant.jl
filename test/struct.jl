@@ -25,11 +25,11 @@ Base.@nospecializeinfer function Reactant.traced_type_inner(
     seen,
     mode::Reactant.TraceMode,
     @nospecialize(track_numbers::Type),
-    @nospecialize(sharding),
+    @nospecialize(ndevices),
     @nospecialize(runtime)
 )
     T2 = Reactant.traced_type_inner(
-        A.parameters[3], seen, mode, track_numbers, sharding, runtime
+        A.parameters[3], seen, mode, track_numbers, ndevices, runtime
     )
     MT = MockTensor{eltype(T2),ndims(A),T2}
     return MT
@@ -106,7 +106,7 @@ end
         x2 = list(x...)
         x3 = Reactant.to_rarray(x2)
 
-        # TODO this should be able to run without problems, but crashes
+        # TODO(#2253) this should be able to run without problems, but crashes
         @test_broken isapprox(@jit(identity(x3)), x3)
 
         @test isapprox(@allowscalar(sum(x3)), only(@jit(sum(x3))))

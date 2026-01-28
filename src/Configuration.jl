@@ -117,7 +117,7 @@ function MLIR.IR.Attribute(precision::PrecisionConfig.T)
         "HIGHEST"
     end
     return MLIR.IR.Attribute(
-        MLIR.API.stablehloPrecisionAttrGet(MLIR.IR.context(), precision_str)
+        MLIR.API.stablehloPrecisionAttrGet(MLIR.IR.current_context(), precision_str)
     )
 end
 
@@ -173,7 +173,7 @@ function MLIR.IR.Attribute(
 ) where {lhsT,rhsT,accumT}
     return MLIR.IR.Attribute(
         MLIR.API.stablehloDotAlgorithmGet(
-            MLIR.IR.context(),
+            MLIR.IR.current_context(),
             MLIR.IR.Type(lhsT),
             MLIR.IR.Type(rhsT),
             MLIR.IR.Type(accumT),

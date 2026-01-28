@@ -1,6 +1,6 @@
 module Sharding
 
-# XXX: Import ShardyPropagationOptions here to avoid breaking old code
+# TODO(#2229): Import ShardyPropagationOptions here to avoid breaking old code
 using ..Reactant: Reactant, XLA, MLIR, ShardyPropagationOptions
 using ReactantCore: ReactantCore
 
@@ -69,7 +69,7 @@ struct Mesh{D,ID<:AbstractVector{Int}}
         )
     end
 
-    # XXX (Deprecated): remove in v0.3
+    # TODO(#2229): (Deprecated): remove in v0.3
     function Mesh(
         devices::NTuple{D,<:XLA.AbstractDevice}, shape::Dims{D}, axis_names
     ) where {D}
@@ -83,7 +83,7 @@ struct Mesh{D,ID<:AbstractVector{Int}}
         return Mesh(global_ids, axis_names)
     end
 
-    # XXX (Deprecated): remove in v0.3
+    # TODO(#2229): (Deprecated): remove in v0.3
     function Mesh(
         device_ids::Dims{D1}, shape::Dims{D}, axis_names::NTuple{D,Union{String,Symbol}}
     ) where {D,D1}
@@ -96,12 +96,12 @@ struct Mesh{D,ID<:AbstractVector{Int}}
         return Mesh(reshape(collect(Int64, device_ids), shape), axis_names)
     end
 
-    # XXX (Deprecated): remove in v0.3
+    # TODO(#2229): (Deprecated): remove in v0.3
     Mesh(::Tuple{}, ::Tuple{}, ::Tuple{}) = throw(MethodError(Mesh, ((), (), ())))
 end
 
 function sdy_mesh_to_reactant_mesh(mesh_attr::MLIR.IR.Attribute, global_device_ids)
-    @assert MLIR.API.sdyAttributeIsAMeshAttr(mesh_attr.attribute)
+    @assert MLIR.API.sdyAttributeIsAMeshAttr(mesh_attr)
 
     ndevice_ids = MLIR.API.sdyMeshAttrGetDeviceIdsSize(mesh_attr)
     logical_device_ids = Vector{Int64}(undef, ndevice_ids)
@@ -362,7 +362,7 @@ function sdy_tensor_sharding_to_named_sharding(mesh::Mesh, tensor_sharding_attr)
             subaxisinfo = MLIR.IR.Attribute(
                 MLIR.API.sdyAxisRefAttrGetSubAxisInfo(axis_elem)
             )
-            if subaxisinfo.attribute.ptr == C_NULL
+            if subaxisinfo.ref.ptr == C_NULL
                 subaxes[i][j] = nothing
             else
                 pre_size = MLIR.API.sdySubAxisInfoAttrGetPreSize(subaxisinfo)
@@ -584,11 +584,6 @@ function sharding_to_array_slices(
     if needs_padding
         # MLIR for identity operation, avoid tracing here
         ctx = MLIR.IR.Context(Reactant.registry[], false)
-        Reactant.Compiler.context_gc_vector[ctx] = Vector{
-            Union{Reactant.TracedRArray,Reactant.TracedRNumber}
-        }(
-            undef, 0
-        )
         @ccall MLIR.API.mlir_c.RegisterDialects(ctx::MLIR.API.MlirContext)::Cvoid
         MLIR.IR.activate!(ctx)
 
@@ -630,7 +625,7 @@ function sharding_to_array_slices(
             )
 
             mlir_attr = MLIR.API.mlirDictionaryAttrGetElementByName(
-                MLIR.IR.attr(func, "res_attrs")[0], "sdy.sharding"
+                MLIR.IR.getattr(func, "res_attrs")[0], "sdy.sharding"
             )
             @assert mlir_attr.ptr != C_NULL
             sharding = sdy_tensor_sharding_to_named_sharding(
@@ -655,7 +650,7 @@ function sharding_to_array_slices(
     return device_to_array_slices
 end
 
-# TODO: Something like NamedDims.jl will allow us to support NamedDimsSharding similar to
+# TODO(#2232): Something like NamedDims.jl will allow us to support NamedDimsSharding similar to
 #       `levanter`
 
 """
@@ -863,13 +858,12 @@ function Base.convert(::Type{HloSharding}, sharding::NamedSharding)
 end
 
 function hlo_sharding_from_sdy_tensor_sharding_attr(attr, mesh_attr)
-    @assert MLIR.API.sdyAttributeIsATensorShardingAttr(attr.attribute)
-    @assert MLIR.API.sdyAttributeIsAMeshAttr(mesh_attr.attribute)
+    @assert MLIR.API.sdyAttributeIsATensorShardingAttr(attr)
+    @assert MLIR.API.sdyAttributeIsAMeshAttr(mesh_attr)
     GC.@preserve attr begin
         return XLA.HloSharding(
             @ccall MLIR.API.mlir_c.hloShardingFromTensorShardingAttr(
-                attr.attribute::MLIR.API.MlirAttribute,
-                mesh_attr.attribute::MLIR.API.MlirAttribute,
+                attr::MLIR.API.MlirAttribute, mesh_attr::MLIR.API.MlirAttribute
             )::Ptr{Cvoid}
         )
     end
@@ -952,7 +946,7 @@ function HloSharding(sharding::NamedSharding, client::XLA.IFRT.Client, _, x)
     )
     data = XLA.IFRT.AsyncArray(client, x, ifrt_sharding)
 
-    # XXX: Can we auto-pad this case too? Will think about it later, for now use
+    # TODO(#2232): Can we auto-pad this case too? Will think about it later, for now use
     #      NamedSharding
     return data, ShardInfo(hlo_sharding, device_to_array_slices), nothing
 end
@@ -1000,7 +994,7 @@ function (sharding::HloSharding)(
     )
     data = XLA.IFRT.AsyncArray(client, x, ifrt_sharding)
 
-    # XXX: Can we auto-pad this case too? Will think about it later, for now use
+    # TODO(#2232): Can we auto-pad this case too? Will think about it later, for now use
     #      NamedSharding
     return data, ShardInfo(sharding, device_to_array_slices), nothing
 end
@@ -1036,15 +1030,15 @@ function get_tensor_sharding_attribute(
             )
         end
 
-        # XXX: Not recommended path
+        # TODO(#2232): Not recommended path
         string_mesh_name = MLIR.IR.Attribute(MLIR.IR.flatsymbol(mesh_name); context=ctx)
         GC.@preserve sharding begin
             attr = MLIR.IR.Attribute(
                 @ccall MLIR.API.mlir_c.hloShardingToTensorShardingAttr(
                     ctx::MLIR.API.MlirContext,
                     sharding.hlo_sharding.ptr::Ptr{Cvoid},
-                    string_mesh_name.attribute::MLIR.API.MlirAttribute,
-                    mesh_attr.attribute::MLIR.API.MlirAttribute,
+                    string_mesh_name::MLIR.API.MlirAttribute,
+                    mesh_attr::MLIR.API.MlirAttribute,
                     Int64(length(sharding.is_closed))::Int64,
                     Bool[sharding.is_closed...]::Ptr{Bool},
                     Int64[sharding.priority...]::Ptr{Int64},
@@ -1161,7 +1155,7 @@ function sdy_sharding_to_reactant_sharding(attr, global_device_ids, mod)
         false,
     )
     return sdy_tensor_sharding_to_named_sharding(
-        sdy_mesh_to_reactant_mesh(MLIR.IR.attr(mesh_op, "mesh"), global_device_ids),
+        sdy_mesh_to_reactant_mesh(MLIR.IR.getattr(mesh_op, "mesh"), global_device_ids),
         MLIR.IR.Attribute(mlir_attr),
     )
 end

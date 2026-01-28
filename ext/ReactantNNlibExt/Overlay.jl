@@ -2,7 +2,7 @@
     if any(Reactant.use_overlayed_version, (y, x, w))
         overloaded_conv!(y, x, w, cdims; kwargs...)
     else
-        Base.inferencebarrier(NNlib.conv!)(y, x, w, cdims; kwargs...)
+        Reactant.call_with_native(NNlib.conv!, y, x, w, cdims; kwargs...)
     end
 end
 
@@ -10,7 +10,7 @@ end
     if any(Reactant.use_overlayed_version, (y, x))
         overloaded_maxpool!(y, x, pdims; kwargs...)
     else
-        Base.inferencebarrier(NNlib.maxpool!)(y, x, pdims; kwargs...)
+        Reactant.call_with_native(NNlib.maxpool!, y, x, pdims; kwargs...)
     end
 end
 
@@ -18,7 +18,7 @@ end
     if any(Reactant.use_overlayed_version, (y, x))
         overloaded_meanpool!(y, x, pdims; kwargs...)
     else
-        Base.inferencebarrier(NNlib.meanpool!)(y, x, pdims; kwargs...)
+        Reactant.call_with_native(NNlib.meanpool!, y, x, pdims; kwargs...)
     end
 end
 
@@ -28,7 +28,7 @@ end
     if any(Reactant.use_overlayed_version, (dw, x, dy))
         overloaded_∇conv_filter!(dw, x, dy, cdims; kwargs...)
     else
-        Base.inferencebarrier(NNlib.∇conv_filter!)(dw, x, dy, cdims; kwargs...)
+        Reactant.call_with_native(NNlib.∇conv_filter!, dw, x, dy, cdims; kwargs...)
     end
 end
 
@@ -38,6 +38,6 @@ end
     if any(Reactant.use_overlayed_version, (dx, dy, w))
         overloaded_∇conv_data!(dx, dy, w, cdims; kwargs...)
     else
-        Base.inferencebarrier(NNlib.∇conv_data!)(dx, dy, w, cdims; kwargs...)
+        Reactant.call_with_native(NNlib.∇conv_data!, dx, dy, w, cdims; kwargs...)
     end
 end

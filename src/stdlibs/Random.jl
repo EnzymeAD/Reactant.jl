@@ -137,7 +137,10 @@ for randfun in (:rand, :randn, :randexp, :rand!, :randn!, :randexp!)
     @eval begin
         @noinline function $(overload_randfun)(rng::AbstractRNG, args...)
             rng = ReactantRNG(
-                Reactant.promote_to(TracedRArray, make_seed(rng)), rng_algorithm(rng)
+                Reactant.promote_to(
+                    TracedRArray, Reactant.call_with_native(make_seed, rng)
+                ),
+                rng_algorithm(rng),
             )
             return $(internal_overload_randfun)(rng, args...)
         end

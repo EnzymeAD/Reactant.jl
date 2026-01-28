@@ -153,7 +153,7 @@ end
 
 function set_mlir_data!(x::AnyTracedRArray{T}, data) where {T}
     ancestor, ancestor_indices = get_ancestor_and_indices(x, axes(x)...)
-    setindex!(Reactant.ancestor(x), TracedRArray{T}(data), ancestor_indices...)
+    setindex!(ancestor, TracedRArray{T}(data), ancestor_indices...)
     return x
 end
 
@@ -180,6 +180,9 @@ end
 function get_ancestor_and_indices_inner(x::AnyTracedRArray{T,1}, indices) where {T}
     return get_ancestor_and_indices(parent(x), Base.reindex(parentindices(x), indices))
 end
+function get_ancestor_and_indices_inner(x::AnyTracedRArray{T,N}, linear_index) where {T,N}
+    return get_ancestor_and_indices_inner(x, [linear_index])
+end
 
 function get_ancestor_and_indices_inner(
     x::AnyTracedRArray{T,N}, linear_indices::AbstractArray
@@ -194,13 +197,17 @@ function get_ancestor_and_indices_inner(
     return a, (idxs isa Tuple ? idxs : (idxs,))
 end
 
+__to_cartesian_index(::Tuple{}) = error("Empty tuple of indices")
+__to_cartesian_index(x::NTuple{N,Int}) where {N} = CartesianIndex(x)
+__to_cartesian_index(x::CartesianIndex{N}) where {N} = x
+__to_cartesian_index(x::NTuple{N,<:TracedRNumber}) where {N} = vcat(x...)
+
 function _get_ancestor_and_indices_linear(x::AnyTracedRArray, indices::AbstractArray)
-    indices = CartesianIndices(x)[indices]
     pidxs = parentindices(x)
-    parent_indices = map(indices) do idx
-        CartesianIndex(Base.reindex(pidxs, (idx.I...,)))
+    parent_indices = map(CartesianIndices(x)[indices]) do idx
+        __to_cartesian_index(Base.reindex(pidxs, (idx.I...,)))
     end
-    return get_ancestor_and_indices(parent(x), parent_indices)
+    return get_ancestor_and_indices(parent(x), reduce(vcat, parent_indices))
 end
 
 Base.@nospecializeinfer function batch_ty(
@@ -265,7 +272,7 @@ mutable struct CompiledMlirFnResult{F,TR,Re,Rt,LA,LR,PA,CR,M,MA,RS,GD,DA}
 end
 
 function is_pure(func)
-    attr = MLIR.IR.attr(func, "enzymexla.memory_effects")
+    attr = MLIR.IR.getattr(func, "enzymexla.memory_effects")
     # conservatively assume is not pure
     if attr isa Nothing
         return false
@@ -335,9 +342,9 @@ function make_mlir_fn(
     )
 
     Ops.activate_constant_context!(fnbody)
-    @assert MLIR.IR._has_block()
+    @assert MLIR.IR.has_block()
 
-    # Explicitly don't use block! to avoid creating a closure, which creates
+    # Explicitly don't use with_block to avoid creating a closure, which creates
     # both compile-time and relocatability issues
     MLIR.IR.activate!(fnbody)
 
@@ -500,7 +507,7 @@ function prepare_mlir_fn_args(
         sym_visibility = MLIR.IR.Attribute("private")
     end
 
-    mod = MLIR.IR.mmodule()
+    mod = MLIR.IR.current_module()
 
     # Insert meshes for the sharded arguments
     traced_args_to_shardings = OrderedIdDict()
@@ -516,7 +523,7 @@ function prepare_mlir_fn_args(
         end
     end
 
-    func = MLIR.IR.block!(MLIR.IR.body(mod)) do
+    func = MLIR.IR.with_block(MLIR.IR.body(mod)) do
         return MLIR.Dialects.func.func_(;
             sym_name=name * "_tmp",
             function_type=MLIR.IR.FunctionType(in_tys, Vector{MLIR.IR.Type}(undef, 0)),
@@ -855,21 +862,21 @@ function finalize_mlir_fn(
         MLIR.IR.deactivate!(fnbody)
     end
 
-    func2 = MLIR.IR.block!(MLIR.IR.body(mod)) do
+    func2 = MLIR.IR.with_block(MLIR.IR.body(mod)) do
         return MLIR.Dialects.func.func_(;
             sym_name=__lookup_unique_name_in_module(mod, name),
             function_type=MLIR.IR.FunctionType(in_tys, out_tys),
             body=MLIR.IR.Region(),
-            arg_attrs=MLIR.IR.attr(func, "arg_attrs"),
-            res_attrs=MLIR.IR.attr(func, "res_attrs"),
-            no_inline=MLIR.IR.attr(func, "no_inline"),
+            arg_attrs=MLIR.IR.getattr(func, "arg_attrs"),
+            res_attrs=MLIR.IR.getattr(func, "res_attrs"),
+            no_inline=MLIR.IR.getattr(func, "no_inline"),
             sym_visibility,
         )
     end
 
-    mem = MLIR.IR.attr(func, "enzymexla.memory_effects")
+    mem = MLIR.IR.getattr(func, "enzymexla.memory_effects")
     if !(mem isa Nothing)
-        MLIR.IR.attr!(func2, "enzymexla.memory_effects", mem)
+        MLIR.IR.setattr!(func2, "enzymexla.memory_effects", mem)
     end
 
     MLIR.API.mlirRegionTakeBody(MLIR.IR.region(func2, 1), MLIR.IR.region(func, 1))
@@ -895,7 +902,7 @@ function finalize_mlir_fn(
             end
         end
 
-        ctx = MLIR.IR.context()
+        ctx = MLIR.IR.current_context()
         # Attach `sdy.sharding` attribute to the argument
         for (i, arg) in enumerate(linear_args)
             if haskey(traced_args_to_shardings, arg)
@@ -991,8 +998,8 @@ function finalize_mlir_fn(
         num_partitions = 1
     end
 
-    MLIR.API.mlirOperationDestroy(func.operation)
-    func.operation = MLIR.API.MlirOperation(C_NULL)
+    MLIR.API.mlirOperationDestroy(func.ref)
+    func.ref = MLIR.API.MlirOperation(C_NULL)
 
     return (
         func2,
@@ -1172,18 +1179,32 @@ function elem_apply(f, args::Vararg{Any,Nargs}) where {Nargs}
         invmap[v] = k
     end
 
-    keys_seen = Reactant.TracedType[k for k in keys(seen_args) if k isa Reactant.TracedType]
-    input_shapes = size.(keys_seen)
+    input_shapes = Tuple{Vararg{Int}}[]
+    for k in keys(seen_args)
+        if !(k isa Reactant.TracedType)
+            continue
+        end
+        idx, path = get_argidx(k, argprefix)
+
+        ogarg = if idx == 1 && fnwrap
+            f
+        else
+            if fnwrap
+                idx -= 1
+            end
+            args[idx]
+        end
+
+        if ogarg isa Base.RefValue
+            continue
+        end
+        push!(input_shapes, size(k))
+    end
+
+    @assert length(input_shapes) > 0
+
     # by the time we reach here all args must have same size
     @assert allequal(input_shapes) "input shapes are $(input_shapes)"
-    OutShape = isempty(seen_args) ? nothing : first(input_shapes)
-    @assert !isnothing(OutShape)
-
-    out_tys2 = MLIR.IR.Type[
-        MLIR.IR.TensorType(
-            collect(Int, OutShape), MLIR.IR.Type(Reactant.unwrapped_eltype(arg))
-        ) for arg in linear_results
-    ]
 
     fname = get_attribute_by_name(func2, "sym_name")
     fname = MLIR.IR.FlatSymbolRefAttribute(Base.String(fname))
@@ -1192,15 +1213,36 @@ function elem_apply(f, args::Vararg{Any,Nargs}) where {Nargs}
 
     for a in linear_args
         idx, path = get_argidx(a, argprefix)
-        if idx == 1 && fnwrap
-            push_val!(batch_inputs, f, path[3:end])
+
+        ogarg = if idx == 1 && fnwrap
+            f
         else
             if fnwrap
                 idx -= 1
             end
-            push_val!(batch_inputs, args[idx], path[3:end])
+            args[idx]
+        end
+
+        push_val!(batch_inputs, ogarg, path[3:end])
+
+        if ogarg isa Base.RefValue
+            batch_inputs[end] =
+                (@opcall broadcast_in_dim(
+                    TracedRArray(batch_inputs[end]),
+                    Int64[],
+                    collect(Int64, input_shapes[1]),
+                )).mlir_data
         end
     end
+
+    OutShape = isempty(seen_args) ? nothing : first(input_shapes)
+    @assert !isnothing(OutShape)
+
+    out_tys2 = MLIR.IR.Type[
+        MLIR.IR.TensorType(
+            collect(Int, OutShape), MLIR.IR.Type(Reactant.unwrapped_eltype(arg))
+        ) for arg in linear_results
+    ]
 
     res = MLIR.Dialects.enzyme.batch(
         batch_inputs;
@@ -1222,14 +1264,21 @@ function elem_apply(f, args::Vararg{Any,Nargs}) where {Nargs}
                 set!(result, path[2:end], resv)
             elseif path[1] == argprefix
                 idx = path[2]::Int
-                if idx == 1 && fnwrap
-                    set!(f, path[3:end], resv)
+
+                ogarg = if idx == 1 && fnwrap
+                    f
                 else
                     if fnwrap
                         idx -= 1
                     end
-                    set!(args[idx], path[3:end], resv)
+                    args[idx]
                 end
+
+                if ogarg isa Base.RefValue
+                    continue
+                end
+
+                set!(ogarg, path[3:end], resv)
             end
         end
     end
@@ -1239,7 +1288,7 @@ function elem_apply(f, args::Vararg{Any,Nargs}) where {Nargs}
         seen_results, result, (), Reactant.TracedSetPath; tobatch=OutShape
     )
 
-    func2.operation = MLIR.API.MlirOperation(C_NULL)
+    func2.ref = MLIR.API.MlirOperation(C_NULL)
 
     return traced2_result
 end

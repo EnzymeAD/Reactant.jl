@@ -148,7 +148,7 @@ end
     @test @jit(diagm(1 => x_ra1, 1 => x_ra2)) ≈ diagm(1 => x1, 1 => x2)
 end
 
-# TODO: Currently <Wrapper Type>(x) * x goes down the generic matmul path but it should
+# TODO(#2253): Currently <Wrapper Type>(x) * x goes down the generic matmul path but it should
 #       clearly be optimized
 mul_diagonal(x) = Diagonal(x) * x
 mul_tridiagonal(x) = Tridiagonal(x) * x

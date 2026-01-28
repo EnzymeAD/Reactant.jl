@@ -6,25 +6,13 @@ else
     error("Could not find `bazel` or `bazelisk` in PATH!")
 end
 
-function build_file(output_path)
-    file = basename(output_path)
-    run(
-        Cmd(
-            `$(bazel_cmd) build --action_env=JULIA=$(Base.julia_cmd().exec[1]) --jobs=$(Threads.nthreads()) --action_env=JULIA_DEPOT_PATH=$(Base.DEPOT_PATH) --repo_env HERMETIC_PYTHON_VERSION="3.10" --check_visibility=false --verbose_failures //:$file`;
-            dir=@__DIR__,
-        ),
-    )
-    return Base.Filesystem.cp(
-        joinpath(@__DIR__, "bazel-bin", file), output_path; force=true
-    )
-end
-
 src_dir = joinpath(dirname(dirname(@__DIR__)), "src")
 
-for file in [
+dialect_files = [
     "Builtin.jl",
     "Arith.jl",
     "Affine.jl",
+    "Complex.jl",
     "Func.jl",
     "Enzyme.jl",
     "EnzymeXLA.jl",
@@ -35,16 +23,42 @@ for file in [
     "Nvvm.jl",
     "Gpu.jl",
     "Affine.jl",
-    # "TPU.jl", # XXX: currently broken
+    # "TPU.jl", # TODO(#2264): currently broken - causes segfault in mlir-jl-tblgen
     "MosaicGPU.jl",
     "Triton.jl",
     "Shardy.jl",
     "MPI.jl",
     "MemRef.jl",
     "SparseTensor.jl",
+    "Tensor.jl",
+    "Shape.jl",
     "TritonExt.jl",
 ]
-    build_file(joinpath(src_dir, "mlir", "Dialects", file))
+
+other_files = ["libMLIR_h.jl"]
+
+all_files = vcat(dialect_files, other_files)
+bazel_targets = ["//:$f" for f in all_files]
+
+# Build all targets simultaneously
+run(
+    Cmd(
+        `$(bazel_cmd) build --action_env=JULIA=$(Base.julia_cmd().exec[1]) --jobs=$(Threads.nthreads()) --action_env=JULIA_DEPOT_PATH=$(Base.DEPOT_PATH) --repo_env HERMETIC_PYTHON_VERSION="3.12" --check_visibility=false --verbose_failures $bazel_targets`;
+        dir=@__DIR__,
+    ),
+)
+
+# Copy built files to their destinations
+for file in dialect_files
+    Base.Filesystem.cp(
+        joinpath(@__DIR__, "bazel-bin", file),
+        joinpath(src_dir, "mlir", "Dialects", file);
+        force=true,
+    )
 end
 
-build_file(joinpath(src_dir, "mlir", "libMLIR_h.jl"))
+for file in other_files
+    Base.Filesystem.cp(
+        joinpath(@__DIR__, "bazel-bin", file), joinpath(src_dir, "mlir", file); force=true
+    )
+end

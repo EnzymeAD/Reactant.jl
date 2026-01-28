@@ -2,6 +2,15 @@ using Reactant, Test
 
 Base.sum(x::NamedTuple{(:a,),Tuple{T}}) where {T<:Reactant.TracedRArray} = (; a=sum(x.a))
 
+@inline intout(vis::AbstractArray{T}) where {T<:Real} = similar(vis, T)
+intout_caller(vis) = @noinline intout(vis)
+
+@testset "compile" begin
+    vis = rand(Float64, 64)
+    visr = Reactant.to_rarray(vis)
+    @test_throws MethodError @compile intout_caller(visr)
+end
+
 @testset "compile" begin
     @testset "create_result" begin
         @testset "NamedTuple" begin

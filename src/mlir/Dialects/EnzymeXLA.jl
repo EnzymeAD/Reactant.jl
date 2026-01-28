@@ -1274,6 +1274,100 @@ function memref2pointer(source::Value; result::IR.Type, location=Location())
     )
 end
 
+"""
+`multi_rotate`
+
+MultiRotate operation produces multiple rotated versions of the input tensor.
+Given left_amount=L and right_amount=R, it produces L+R+1 results:
+- L results for left rotations (from L to 1)
+- 1 result for no rotation (amount=0)
+- R results for right rotations (from 1 to R)
+
+For example, with left_amount=2 and right_amount=2:
+results[0] = rotate left by 2
+results[1] = rotate left by 1
+results[2] = no rotation (amount=0)
+results[3] = rotate right by 1
+results[4] = rotate right by 2
+"""
+function multi_rotate(
+    operand::Value;
+    results::Vector{IR.Type},
+    dimension,
+    left_amount,
+    right_amount,
+    location=Location(),
+)
+    op_ty_results = IR.Type[results...,]
+    operands = Value[operand,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[
+        namedattribute("dimension", dimension),
+        namedattribute("left_amount", left_amount),
+        namedattribute("right_amount", right_amount),
+    ]
+
+    return create_operation(
+        "enzymexla.multi_rotate",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+"""
+`multi_slice`
+
+MultiSlice operation produces multiple slice versions of the input tensor.
+Given left_amount=L and right_amount=R, it produces L+R+1 results:
+- L results for slices shifted left
+- 1 result for the center slice
+- R results for slices shifted right
+
+The slice parameters (start_indices, limit_indices, strides) define the center slice.
+Each left/right result is offset along the specified dimension.
+"""
+function multi_slice(
+    operand::Value;
+    results::Vector{IR.Type},
+    start_indices,
+    limit_indices,
+    strides,
+    dimension,
+    left_amount,
+    right_amount,
+    location=Location(),
+)
+    op_ty_results = IR.Type[results...,]
+    operands = Value[operand,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[
+        namedattribute("start_indices", start_indices),
+        namedattribute("limit_indices", limit_indices),
+        namedattribute("strides", strides),
+        namedattribute("dimension", dimension),
+        namedattribute("left_amount", left_amount),
+        namedattribute("right_amount", right_amount),
+    ]
+
+    return create_operation(
+        "enzymexla.multi_slice",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
 function noop(blockDims::Vector{Value}; location=Location())
     op_ty_results = IR.Type[]
     operands = Value[blockDims...,]
@@ -1444,6 +1538,17 @@ function ml_relu(input::Value; result=nothing::Union{Nothing,IR.Type}, location=
     )
 end
 
+"""
+`rotate`
+
+Performs a left rotation (circular shift) along `dimension` by `amount` elements.
+Elements are shifted left, with the first `amount` elements wrapping around to the end.
+
+i.e.:
+```
+rotate([a, b, c, d, e], amount=2, dimension=0) → [c, d, e, a, b]
+```
+"""
 function rotate(
     operand::Value;
     result=nothing::Union{Nothing,IR.Type},

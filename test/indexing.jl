@@ -444,3 +444,73 @@ end
 
     @test @jit(odef(du_ra, u_ra, p_ra, t_ra)) ≈ odef(du, u, p, t)
 end
+
+function index_jl_array(idxs)
+    a = collect(1:10)
+    return @allowscalar @inbounds a[idxs]
+end
+
+function index_jl_array(idx1, idx2)
+    a = reshape(collect(1:10), 2, 5)
+    return @allowscalar @inbounds a[idx1, idx2]
+end
+
+@testset "Indexing JL Array with Traced Arrays" begin
+    idxs = [2, 4, 7]
+    idxs_ra = Reactant.to_rarray(idxs)
+    @test @jit(index_jl_array(idxs_ra)) ≈ index_jl_array(idxs)
+
+    idx1 = [1]
+    idx2 = [1, 3, 5]
+    idx1_ra = Reactant.to_rarray(idx1)
+    idx2_ra = Reactant.to_rarray(idx2)
+
+    @test @jit(index_jl_array(idx1_ra, idx2_ra)) ≈ index_jl_array(idx1, idx2)
+    @test @jit(index_jl_array(idx1_ra, 3)) ≈ index_jl_array(idx1, 3)
+    @test @jit(index_jl_array(1, idx2_ra)) ≈ index_jl_array(1, idx2)
+end
+
+function bcast_setindex!(outr, arr, dindx)
+    @allowscalar @inbounds outr[dindx] .= arr
+    return nothing
+end
+
+@testset "bcast setindex!" begin
+    f = rand(ComplexF32, 4, 4)
+    p = rand(ComplexF32, 4 * 4)
+    fr = Reactant.to_rarray(f)
+    pr = Reactant.to_rarray(p)
+    dindxr = Reactant.to_rarray(collect(1:length(fr)))
+
+    bcast_setindex!(f, p, collect(1:length(fr)))
+    @jit bcast_setindex!(fr, pr, dindxr)
+    @test fr ≈ f
+end
+
+copyto_with_reshaped_view(out, g, I) = copyto!(out, reshape(@view(g[I]), :))
+
+@testset "copyto! with reshaped view" begin
+    outr = Reactant.to_rarray(zeros(6, 6))
+    gr = Reactant.to_rarray(ones(6, 6))
+    Ir = Reactant.to_rarray(eachindex(1:length(outr)))
+
+    @jit copyto_with_reshaped_view(outr, gr, Ir)
+    @test all(isone, Array(outr))
+end
+
+function comparison_of_views(a, b)
+    view(parent(a), 1:1, 1:1, 1:1) .= view(parent(b), 1:1, 1:1, 1:1)
+    return a
+end
+
+@testset "comparison of views" begin
+    a = zeros(208, 142, 1)
+    b = ones(208, 112, 1)
+
+    a_r = Reactant.to_rarray(a)
+    b_r = Reactant.to_rarray(b)
+
+    c_r = comparison_of_views(a_r, b_r)
+    c = comparison_of_views(a, b)
+    @test c_r ≈ c
+end

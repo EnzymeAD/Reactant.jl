@@ -333,7 +333,7 @@ end
     @testset "@skip_rewrite_func" begin
         a = ConcreteRArray([1.0 2.0; 3.0 4.0])
 
-        # TODO we should test it with a type-unstable method
+        # TODO(#2253) we should test it with a type-unstable method
         add_skip_rewrite(x) = x + x
         Reactant.@skip_rewrite_func add_skip_rewrite
 
