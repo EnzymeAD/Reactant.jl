@@ -11,13 +11,13 @@ using StructArrays, Reactant, Test
     # In order for the element type to match the backing arrays, we need to use ConcreteRNumbers here as well:
     @test typeof(x_ra) == StructArray{
         @NamedTuple{
-            a::ConcretePJRTNumber{Float64,1}, b::String, c::ConcretePJRTNumber{Float32,1}
+            a::ConcreteRNumber{Float64,1}, b::String, c::ConcreteRNumber{Float32,1}
         },
         2,
         @NamedTuple{
-            a::ConcretePJRTArray{Float64,2,1},
+            a::ConcreteRArray{Float64,2,1},
             b::Matrix{String},
-            c::ConcretePJRTArray{Float32,2,1},
+            c::ConcreteRArray{Float32,2,1},
         },
         CartesianIndex{2},
     }
@@ -56,8 +56,8 @@ end
     result = @jit broadcast_elwise(x_ra)
 
     @test typeof(result) == StructVector{
-        @NamedTuple{c::ConcretePJRTNumber{Float32,1}, d::ConcretePJRTNumber{Float64,1}},
-        @NamedTuple{c::ConcretePJRTArray{Float32,1,1}, d::ConcretePJRTArray{Float64,1,1}},
+        @NamedTuple{c::ConcreteRNumber{Float32,1}, d::ConcreteRNumber{Float64,1}},
+        @NamedTuple{c::ConcreteRArray{Float32,1,1}, d::ConcreteRArray{Float64,1,1}},
         CartesianIndex{1},
     }
     for (component_ra, component) in
