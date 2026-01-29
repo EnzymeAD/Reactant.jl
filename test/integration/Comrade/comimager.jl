@@ -263,7 +263,7 @@ xr = Reactant.to_rarray(x)
 @test @jit(logdensityof(tpostr, xr)) ≈ logdensityof(tpost, x)
 l(tpostr, xr) = logdensityof(tpostr, xr)
 lr = @compile sync=true l(tpostr, xr)
-@benchmark lr($tpostr, $xr)
+# @benchmark lr($tpostr, $xr)
 
 logdensityofref(tpostr, xr) = logdensityof(tpostr[], xr)
 gl(tpostr, xr) = last(Enzyme.gradient(Reverse, logdensityofref, Ref(tpostr), xr))
