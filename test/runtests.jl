@@ -53,6 +53,7 @@ end
         @safetestset "Batching" include("batching.jl")
         @safetestset "Profiling" include("profiling.jl")
         @safetestset "QA" include("qa.jl")
+        @safetestset "Tessera" include("tessera.jl")
     end
 
     if REACTANT_TEST_GROUP == "all" || REACTANT_TEST_GROUP == "integration"

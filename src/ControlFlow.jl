@@ -4,8 +4,11 @@ function ReactantCore.traced_if(
     return @opcall if_condition(cond, true_fn, false_fn, args...; track_numbers)
 end
 
-function ReactantCore.traced_call(f::Function, args...)
-    return @opcall call(f, args...)
+function ReactantCore.traced_call(f::Function, args...; tessera_op=nothing)
+    if isnothing(tessera_op)
+        tessera_op = Reactant.Compiler.get_tessera_op(f)
+    end
+    return @opcall call(f, args...; tessera_op)
 end
 
 function ReactantCore.traced_while(
