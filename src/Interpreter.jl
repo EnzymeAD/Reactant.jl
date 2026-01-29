@@ -156,3 +156,96 @@ else
         )
     end
 end
+
+# Based on Enzyme.jl/src/typeutils/inference.jl
+function return_type(interp::CC.AbstractInterpreter, mi::Core.MethodInstance)::Type
+    @static if VERSION < v"1.11.0"
+        code = CC.get(CC.code_cache(interp), mi, nothing)
+        if code isa CC.CodeInstance
+            return code.rettype
+        end
+        result = CC.InferenceResult(mi, CC.typeinf_lattice(interp))
+        CC.typeinf(interp, result, :global)
+        CC.is_inferred(result) || return Any
+        CC.widenconst(CC.ignorelimited(result.result))
+    else
+        something(CC.typeinf_type(interp, mi), Any)
+    end
+end
+
+function primal_interp_world(::Mode, world::UInt)
+    return ReactantInterpreter(; world)
+end
+
+function primal_return_type_world(
+    @nospecialize(mode::Mode), world::UInt, @nospecialize(TT::Type)
+)
+    return CC._return_type(primal_interp_world(mode, world), TT)
+end
+
+function primal_return_type_world(
+    @nospecialize(mode::Mode), world::UInt, mi::Core.MethodInstance
+)
+    interp = primal_interp_world(mode, world)
+    return return_type(interp, mi)
+end
+
+function primal_return_type_world(
+    @nospecialize(mode::Mode), world::UInt, @nospecialize(FT::Type), @nospecialize(TT::Type)
+)
+    return primal_return_type_world(mode, world, Tuple{FT,TT.parameters...})
+end
+
+function primal_return_type end
+
+function primal_return_type_generator(
+    world::UInt,
+    source,
+    self,
+    @nospecialize(mode::Type),
+    @nospecialize(ft::Type),
+    @nospecialize(tt::Type)
+)
+    @nospecialize
+    @assert CC.isType(ft) && CC.isType(tt)
+    @assert mode <: Mode
+    mode = mode()
+    ft = ft.parameters[1]
+    tt = tt.parameters[1]
+
+    # validation
+    ft <: Core.Builtin &&
+        error("$(GPUCompiler.unsafe_function_from_type(ft)) is not a generic function")
+
+    # look up the method    
+    min_world = Ref{UInt}(typemin(UInt))
+    max_world = Ref{UInt}(typemax(UInt))
+
+    mi = Enzyme.my_methodinstance(mode, ft, tt, world, min_world, max_world)
+
+    slotnames = Core.svec(Symbol("#self#"), :mode, :ft, :tt)
+    stub = Core.GeneratedFunctionStub(primal_return_type, slotnames, Core.svec())
+    mi === nothing && return stub(world, source, :(throw(MethodError(ft, tt, $world))))
+
+    result = primal_return_type_world(mode, world, mi)
+    code = Any[CC.ReturnNode(result)]
+    # create an empty CodeInfo to return the result
+    ci = Enzyme.create_fresh_codeinfo(primal_return_type, source, world, slotnames, code)
+    ci.max_world = max_world[]
+
+    ci.edges = Any[]
+    # XXX: setting this edge does not give us proper method invalidation, see
+    #      JuliaLang/julia#34962 which demonstrates we also need to "call" the kernel.
+    #      invoking `code_llvm` also does the necessary codegen, as does calling the
+    #      underlying C methods -- which GPUCompiler does, so everything Just Works.
+    Enzyme.add_edge!(ci.edges, mi)
+
+    return ci
+end
+
+@eval Base.@assume_effects :removable :foldable :nothrow @inline function primal_return_type(
+    mode::Mode, ft::Type, tt::Type
+)
+    $(Expr(:meta, :generated_only))
+    return $(Expr(:meta, :generated, primal_return_type_generator))
+end

@@ -295,6 +295,26 @@ function act_attr(val)
     return MLIR.IR.Attribute(val)
 end
 
+function infer_activity(
+    mode::CMode, ::FA, args::Vararg{Annotation,Nargs}
+) where {CMode<:Mode,FA<:Annotation,Nargs}
+    return Enzyme.guess_activity(
+        call_with_native(
+            primal_return_type,
+            mode isa ForwardMode ? Forward : Reverse,
+            eltype(FA),
+            Enzyme.vaEltypeof(args...),
+        ),
+        mode,
+    )
+end
+
+function overload_autodiff(
+    mode::CMode, f::FA, args::Vararg{Annotation,Nargs}
+) where {CMode<:Mode,FA<:Annotation,Nargs}
+    return overload_autodiff(mode, f, infer_activity(mode, f, args...), args...)
+end
+
 function overload_autodiff(
     ::CMode, f::FA, ::Type{A}, args::Vararg{Annotation,Nargs}
 ) where {CMode<:Mode,FA<:Annotation,A<:Annotation,Nargs}
