@@ -71,6 +71,7 @@ const ReactantFloatInt = Union{
 
 const ReactantPrimitive = Union{
     Bool,
+    Complex{Bool},
     Base.uniontypes(ReactantFloatInt)...,
     Base.uniontypes(ReactantComplexInt)...,
     Base.uniontypes(ReactantComplexFloat)...,
