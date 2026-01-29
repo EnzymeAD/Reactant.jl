@@ -1015,44 +1015,21 @@ function scan_impl!(
             op_in_T = riT
             input = riT.(input)
         end
-    else
-        # Note: fix this for TPUs
-        if contains(string(first(Reactant.devices())), "TPU")
-            initT = __default_init(T, op)
-            if initT != init && initT != something(init)
-                throw(
-                    AssertionError(
-                        "Currently, `init` is not supported on TPUs, provided value $init does not match identity $initT.",
-                    ),
-                )
-            end
-        end
     end
+
+    input = materialize_traced_array(input)
 
     init = something(init) # unwrap Some
     init = Reactant.promote_to(TracedRNumber{unwrapped_eltype(init)}, init)
+    init = Reactant.broadcast_to_size(init, deleteat!(collect(Int64, size(input)), dims))
 
-    window_dimensions = ones(Int64, N)
-    window_dimensions[dims] = size(input, dims)
+    function scan_fn(a, c)
+        res = a .+ c
+        return res, copy(res) # force 2 returns
+    end
 
-    padding_low = zeros(Int64, N)
-    padding_low[dims] = size(input, dims) - 1
-
-    reduction_result = @opcall(
-        reduce_window(
-            op,
-            [materialize_traced_array(input)],
-            [init];
-            window_dimensions=window_dimensions,
-            window_strides=ones(Int64, N),
-            base_dilations=ones(Int64, N),
-            window_dilations=ones(Int64, N),
-            padding_low=padding_low,
-            padding_high=zeros(Int64, N),
-            output_shape=collect(Int64, size(output)),
-        )
-    )[1]
-    copyto!(output, reduction_result)
+    scan_result, _ = @opcall scan(input, init, scan_fn, dims)
+    copyto!(output, scan_result)
 
     return output
 end

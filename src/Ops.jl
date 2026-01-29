@@ -3419,6 +3419,182 @@ end
     ]
 end
 
+"""
+    scan(
+        inputs::Vector{<:TracedRArray},
+        init_values::Vector{<:TracedRNumber},
+        fn::Function,
+        dimension::Int;
+        is_reverse::Bool=false,
+        is_associative::Bool=false,
+        location=mlir_stacktrace("scan", @__FILE__, @__LINE__)
+    )
+
+Applies a scan (prefix reduction) function `fn` along the specified `dimension` of `inputs`,
+starting from `init_values`. Returns both the outputs and the final carry values.
+
+# Arguments
+
+- `inputs`: A vector of input arrays to scan over.
+- `init_values`: A vector of initial values (one per input). These define the carry shape.
+- `fn`: A function that takes `(input_slices..., carries...)` where each input_slice has the
+  scan dimension removed, and returns `(output_slices..., new_carries...)`.
+- `dimension`: The dimension to scan along (1-indexed).
+
+# Keyword Arguments
+
+- `is_reverse`: If `true`, the scan is performed in reverse order. Default is `false`.
+- `is_associative`: Indicates whether the reduction function is associative. Default is `false`.
+
+# Returns
+
+A tuple `(outputs, carries)` where:
+- `outputs`: A vector of arrays with the scan dimension present, containing the scan results.
+- `carries`: A vector of the final carry values (same shape as init_values).
+
+# Notes
+
+The body function receives:
+- For each input: a slice with the scan dimension removed
+- For each init: the carry value (same shape as init)
+
+The body function must return:
+- Output values: these will have the scan dimension added at position `dimension`
+- Carry values: same shape as init_values
+
+See: https://www.tensorflow.org/xla/operation_semantics#scan
+"""
+@noinline function scan(
+    inputs::Vector{<:TracedRArray},
+    init_values::Vector{<:Union{<:TracedRNumber,<:TracedRArray}},
+    fn::F,
+    dimension::Int;
+    is_reverse::Bool=false,
+    is_associative::Bool=false,
+    location=mlir_stacktrace("scan", @__FILE__, @__LINE__),
+) where {F}
+    @assert length(inputs) == length(init_values) "Number of inputs must match number of \
+                                                   init_values"
+    @assert !isempty(inputs) "At least one input is required"
+    @assert allequal(size.(inputs)) "All input arrays must have the same size."
+    @assert 1 <= dimension <= ndims(inputs[1]) "Dimension $(dimension) is out of bounds \
+                                                for input with $(ndims(inputs[1])) \
+                                                dimensions"
+
+    input_shape = size(inputs[1])
+    # Shape of input slices (scan dimension removed)
+    slice_shape = Tuple(deleteat!(collect(Int64, input_shape), dimension))
+    scan_dim_size = input_shape[dimension]
+
+    n_inputs = length(inputs)
+    n_carries = length(init_values)
+
+    # Create sample inputs for constructing the body function:
+    # - For inputs: slices with scan dimension removed (rank N-1)
+    # - For inits: scalar TracedRNumbers (rank 0)
+    sample_input_slices = [
+        Reactant.promote_to(
+            TracedRArray{unwrapped_eltype(inputs[i]),length(slice_shape)},
+            zeros(unwrapped_eltype(inputs[i]), slice_shape...),
+        ) for i in 1:n_inputs
+    ]
+
+    # Construct the body region
+    func =
+        Reactant.TracedUtils.make_mlir_fn(
+            fn,
+            (sample_input_slices..., init_values...),
+            (),
+            "scan_fn" * string(fn),
+            false;
+            args_in_result=:result,
+            return_dialect=:stablehlo,
+        ).f
+
+    @assert MLIR.IR.nregions(func) == 1
+    ftype_attr = MLIR.IR.getattr(func, "function_type")
+    ftype = MLIR.IR.Type(ftype_attr)
+
+    n_results = MLIR.IR.nresults(ftype)
+    @assert n_results >= n_carries "Body function must return at least $(n_carries) \
+                                    values (carries)"
+    n_outputs = n_results - n_carries
+
+    # Extract the body region
+    body_region = MLIR.IR.Region()
+    MLIR.API.mlirRegionTakeBody(body_region, MLIR.IR.region(func, 1))
+    MLIR.IR.rmfromparent!(func)
+
+    # Compute output types: body output types with scan dimension inserted
+    output_types = MLIR.IR.Type[]
+    for i in 1:n_outputs
+        body_result_type = MLIR.IR.result(ftype, i)
+        body_result_shape = collect(Int64, size(body_result_type))
+        # Insert scan dimension at the correct position
+        output_shape = insert!(body_result_shape, dimension, scan_dim_size)
+        push!(output_types, MLIR.IR.TensorType(output_shape, eltype(body_result_type)))
+    end
+
+    # Compute carry types: same as body carry return types
+    carry_types = MLIR.IR.Type[]
+    for i in 1:n_carries
+        push!(carry_types, MLIR.IR.result(ftype, n_outputs + i))
+    end
+
+    op = chlo.scan(
+        [x.mlir_data for x in inputs],
+        [init_value.mlir_data for init_value in init_values];
+        outputs=output_types,
+        carries=carry_types,
+        dimension=dimension - 1,  # Convert to 0-indexed
+        is_reverse,
+        is_associative,
+        body=body_region,
+        location,
+    )
+
+    # Extract outputs (with scan dimension)
+    outputs = [
+        TracedRArray{
+            MLIR.IR.julia_type(eltype(output_types[i])),length(size(output_types[i]))
+        }(
+            (), MLIR.IR.result(op, i), Tuple(size(output_types[i]))
+        ) for i in 1:n_outputs
+    ]
+
+    # Extract carries
+    carries = [
+        if length(size(carry_types[i])) == 0
+            TracedRNumber{MLIR.IR.julia_type(eltype(carry_types[i]))}(
+                (), MLIR.IR.result(op, n_outputs + i)
+            )
+        else
+            TracedRArray{
+                MLIR.IR.julia_type(eltype(carry_types[i])),length(size(carry_types[i]))
+            }(
+                (), MLIR.IR.result(op, n_outputs + i), Tuple(size(carry_types[i]))
+            )
+        end for i in 1:n_carries
+    ]
+
+    return outputs, carries
+end
+
+@noinline function scan(
+    x::TracedRArray{T},
+    init_value::Union{TracedRNumber{T},TracedRArray{T}},
+    fn::F,
+    dimension::Int;
+    is_reverse::Bool=false,
+    is_associative::Bool=false,
+    location=mlir_stacktrace("scan", @__FILE__, @__LINE__),
+) where {T,F}
+    outputs, carries = scan(
+        [x], [init_value], fn, dimension; is_reverse, is_associative, location
+    )
+    return only(outputs), only(carries)
+end
+
 function standardize_start_index(
     sz::Int,
     update_sz::Union{Int,Nothing},
