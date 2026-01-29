@@ -8,7 +8,7 @@ using Reactant_jll: Reactant_jll
 operandsegmentsizes(segments) = NamedAttribute("operand_segment_sizes", Int32.(segments))
 
 function resultsegmentsizes(segments)
-    return namedattribute("result_segment_sizes", Attribute(Int32.(segments)))
+    return NamedAttribute("result_segment_sizes", Attribute(Int32.(segments)))
 end
 
 #! explicit-imports: off

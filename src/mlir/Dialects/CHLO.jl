@@ -1480,12 +1480,12 @@ function scan(
     operands = Value[inputs..., inits...]
     owned_regions = Region[body,]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("dimension", dimension),]
+    attributes = NamedAttribute[NamedAttribute("dimension", dimension),]
     push!(attributes, operandsegmentsizes([length(inputs), length(inits)]))
     push!(attributes, resultsegmentsizes([length(outputs), length(carries)]))
-    !isnothing(is_reverse) && push!(attributes, namedattribute("is_reverse", is_reverse))
+    !isnothing(is_reverse) && push!(attributes, NamedAttribute("is_reverse", is_reverse))
     !isnothing(is_associative) &&
-        push!(attributes, namedattribute("is_associative", is_associative))
+        push!(attributes, NamedAttribute("is_associative", is_associative))
 
     return create_operation(
         "chlo.scan",

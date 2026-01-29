@@ -1303,9 +1303,9 @@ function multi_rotate(
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[
-        namedattribute("dimension", dimension),
-        namedattribute("left_amount", left_amount),
-        namedattribute("right_amount", right_amount),
+        NamedAttribute("dimension", dimension),
+        NamedAttribute("left_amount", left_amount),
+        NamedAttribute("right_amount", right_amount),
     ]
 
     return create_operation(
@@ -1348,12 +1348,12 @@ function multi_slice(
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[
-        namedattribute("start_indices", start_indices),
-        namedattribute("limit_indices", limit_indices),
-        namedattribute("strides", strides),
-        namedattribute("dimension", dimension),
-        namedattribute("left_amount", left_amount),
-        namedattribute("right_amount", right_amount),
+        NamedAttribute("start_indices", start_indices),
+        NamedAttribute("limit_indices", limit_indices),
+        NamedAttribute("strides", strides),
+        NamedAttribute("dimension", dimension),
+        NamedAttribute("left_amount", left_amount),
+        NamedAttribute("right_amount", right_amount),
     ]
 
     return create_operation(
