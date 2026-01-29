@@ -3509,6 +3509,7 @@ See: https://www.tensorflow.org/xla/operation_semantics#scan
             false;
             args_in_result=:result,
             return_dialect=:stablehlo,
+            do_transpose=false,
         ).f
 
     @assert MLIR.IR.nregions(func) == 1
