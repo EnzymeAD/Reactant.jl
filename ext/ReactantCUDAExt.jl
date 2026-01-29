@@ -27,9 +27,7 @@ struct CuTracedArray{T,N,A,Size} <: DenseArray{T,N}
     ptr::Core.LLVMPtr{T,A}
 
     function CuTracedArray{T,N,A,Size}(xs::TracedRArray) where {T,N,A,Size}
-        gc_vec = Reactant.Compiler.context_gc_vector[MLIR.IR.current_context()]
-        push!(gc_vec, xs)
-        @assert gc_vec[end] === xs
+        Reactant.Compiler.guard_from_gc_for_module(MLIR.IR.current_module(), xs)
         ptr = Base.reinterpret(Core.LLVMPtr{T,CUDA.AS.Global}, Base.pointer_from_objref(xs))
         return new(ptr)
     end
@@ -41,9 +39,7 @@ struct CuTracedRNumber{T,A} <: Number
     ptr::Core.LLVMPtr{T,A}
 
     function CuTracedRNumber{T,A}(xs::TracedRNumber) where {T,A}
-        gc_vec = Reactant.Compiler.context_gc_vector[MLIR.IR.current_context()]
-        push!(gc_vec, xs)
-        @assert gc_vec[end] === xs
+        Reactant.Compiler.guard_from_gc_for_module(MLIR.IR.current_module(), xs)
         ptr = Base.reinterpret(Core.LLVMPtr{T,CUDA.AS.Global}, Base.pointer_from_objref(xs))
         return new(ptr)
     end

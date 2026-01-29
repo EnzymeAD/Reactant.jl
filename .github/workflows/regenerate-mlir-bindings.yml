@@ -45,12 +45,12 @@ jobs:
           Clang.JLLEnvs.get_system_includes()
         working-directory: ./deps/ReactantExtra
         env:
-          JULIA_DEPOT_PATH: ${{ runner.temp }}/julia_depot
+          JULIA_DEPOT_PATH: "${{ runner.temp }}/julia_depot:"
       - name: Generate MLIR Bindings
         run: julia --project=. --color=yes make-bindings.jl
         working-directory: ./deps/ReactantExtra
         env:
-          JULIA_DEPOT_PATH: ${{ runner.temp }}/julia_depot
+          JULIA_DEPOT_PATH: "${{ runner.temp }}/julia_depot:"
       - name: Make generated files writable
         run: |
           chmod -R u+rw ./src/mlir/Dialects/
@@ -60,7 +60,12 @@ jobs:
         run: julia --project=. --color=yes make-proto-bindings.jl
         working-directory: ./deps/ReactantExtra
         env:
-          JULIA_DEPOT_PATH: ${{ runner.temp }}/julia_depot
+          JULIA_DEPOT_PATH: "${{ runner.temp }}/julia_depot:"
+      - name: Generate XLA PjRT Plugin Bindings
+        run: julia --project=. --color=yes make-pjrt-plugin-bindings.jl
+        working-directory: ./deps/ReactantExtra
+        env:
+          JULIA_DEPOT_PATH: "${{ runner.temp }}/julia_depot:"
       - name: Format code
         shell: julia --color=yes {0}
         run: |

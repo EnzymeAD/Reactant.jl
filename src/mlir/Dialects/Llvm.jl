@@ -10,7 +10,7 @@ import ...IR:
     create_operation,
     context,
     IndexType
-import ..Dialects: namedattribute, operandsegmentsizes
+import ..Dialects: operandsegmentsizes, resultsegmentsizes
 import ...API
 
 function ashr(
@@ -26,7 +26,7 @@ function ashr(
     successors = Block[]
     attributes = NamedAttribute[]
     !isnothing(res) && push!(op_ty_results, res)
-    !isnothing(isExact) && push!(attributes, namedattribute("isExact", isExact))
+    !isnothing(isExact) && push!(attributes, NamedAttribute("isExact", isExact))
 
     return create_operation(
         "llvm.ashr",
@@ -124,7 +124,7 @@ function mlir_addressof(; res::IR.Type, global_name, location=Location())
     operands = Value[]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("global_name", global_name),]
+    attributes = NamedAttribute[NamedAttribute("global_name", global_name),]
 
     return create_operation(
         "llvm.mlir.addressof",
@@ -190,16 +190,16 @@ function mlir_alias(;
     owned_regions = Region[initializer,]
     successors = Block[]
     attributes = NamedAttribute[
-        namedattribute("alias_type", alias_type),
-        namedattribute("sym_name", sym_name),
-        namedattribute("linkage", linkage),
+        NamedAttribute("alias_type", alias_type),
+        NamedAttribute("sym_name", sym_name),
+        NamedAttribute("linkage", linkage),
     ]
-    !isnothing(dso_local) && push!(attributes, namedattribute("dso_local", dso_local))
+    !isnothing(dso_local) && push!(attributes, NamedAttribute("dso_local", dso_local))
     !isnothing(thread_local_) &&
-        push!(attributes, namedattribute("thread_local_", thread_local_))
+        push!(attributes, NamedAttribute("thread_local_", thread_local_))
     !isnothing(unnamed_addr) &&
-        push!(attributes, namedattribute("unnamed_addr", unnamed_addr))
-    !isnothing(visibility_) && push!(attributes, namedattribute("visibility_", visibility_))
+        push!(attributes, NamedAttribute("unnamed_addr", unnamed_addr))
+    !isnothing(visibility_) && push!(attributes, NamedAttribute("visibility_", visibility_))
 
     return create_operation(
         "llvm.mlir.alias",
@@ -225,9 +225,9 @@ function alloca(
     operands = Value[arraySize,]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("elem_type", elem_type),]
-    !isnothing(alignment) && push!(attributes, namedattribute("alignment", alignment))
-    !isnothing(inalloca) && push!(attributes, namedattribute("inalloca", inalloca))
+    attributes = NamedAttribute[NamedAttribute("elem_type", elem_type),]
+    !isnothing(alignment) && push!(attributes, NamedAttribute("alignment", alignment))
+    !isnothing(inalloca) && push!(attributes, NamedAttribute("inalloca", inalloca))
 
     return create_operation(
         "llvm.alloca",
@@ -285,21 +285,21 @@ function cmpxchg(
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[
-        namedattribute("success_ordering", success_ordering),
-        namedattribute("failure_ordering", failure_ordering),
+        NamedAttribute("success_ordering", success_ordering),
+        NamedAttribute("failure_ordering", failure_ordering),
     ]
     !isnothing(res) && push!(op_ty_results, res)
-    !isnothing(syncscope) && push!(attributes, namedattribute("syncscope", syncscope))
-    !isnothing(alignment) && push!(attributes, namedattribute("alignment", alignment))
-    !isnothing(weak) && push!(attributes, namedattribute("weak", weak))
-    !isnothing(volatile_) && push!(attributes, namedattribute("volatile_", volatile_))
+    !isnothing(syncscope) && push!(attributes, NamedAttribute("syncscope", syncscope))
+    !isnothing(alignment) && push!(attributes, NamedAttribute("alignment", alignment))
+    !isnothing(weak) && push!(attributes, NamedAttribute("weak", weak))
+    !isnothing(volatile_) && push!(attributes, NamedAttribute("volatile_", volatile_))
     !isnothing(access_groups) &&
-        push!(attributes, namedattribute("access_groups", access_groups))
+        push!(attributes, NamedAttribute("access_groups", access_groups))
     !isnothing(alias_scopes) &&
-        push!(attributes, namedattribute("alias_scopes", alias_scopes))
+        push!(attributes, NamedAttribute("alias_scopes", alias_scopes))
     !isnothing(noalias_scopes) &&
-        push!(attributes, namedattribute("noalias_scopes", noalias_scopes))
-    !isnothing(tbaa) && push!(attributes, namedattribute("tbaa", tbaa))
+        push!(attributes, NamedAttribute("noalias_scopes", noalias_scopes))
+    !isnothing(tbaa) && push!(attributes, NamedAttribute("tbaa", tbaa))
 
     return create_operation(
         "llvm.cmpxchg",
@@ -333,19 +333,19 @@ function atomicrmw(
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[
-        namedattribute("bin_op", bin_op), namedattribute("ordering", ordering)
+        NamedAttribute("bin_op", bin_op), NamedAttribute("ordering", ordering)
     ]
     !isnothing(res) && push!(op_ty_results, res)
-    !isnothing(syncscope) && push!(attributes, namedattribute("syncscope", syncscope))
-    !isnothing(alignment) && push!(attributes, namedattribute("alignment", alignment))
-    !isnothing(volatile_) && push!(attributes, namedattribute("volatile_", volatile_))
+    !isnothing(syncscope) && push!(attributes, NamedAttribute("syncscope", syncscope))
+    !isnothing(alignment) && push!(attributes, NamedAttribute("alignment", alignment))
+    !isnothing(volatile_) && push!(attributes, NamedAttribute("volatile_", volatile_))
     !isnothing(access_groups) &&
-        push!(attributes, namedattribute("access_groups", access_groups))
+        push!(attributes, NamedAttribute("access_groups", access_groups))
     !isnothing(alias_scopes) &&
-        push!(attributes, namedattribute("alias_scopes", alias_scopes))
+        push!(attributes, NamedAttribute("alias_scopes", alias_scopes))
     !isnothing(noalias_scopes) &&
-        push!(attributes, namedattribute("noalias_scopes", noalias_scopes))
-    !isnothing(tbaa) && push!(attributes, namedattribute("tbaa", tbaa))
+        push!(attributes, NamedAttribute("noalias_scopes", noalias_scopes))
+    !isnothing(tbaa) && push!(attributes, NamedAttribute("tbaa", tbaa))
 
     return create_operation(
         "llvm.atomicrmw",
@@ -405,7 +405,7 @@ function blockaddress(; res::IR.Type, block_addr, location=Location())
     operands = Value[]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("block_addr", block_addr),]
+    attributes = NamedAttribute[NamedAttribute("block_addr", block_addr),]
 
     return create_operation(
         "llvm.blockaddress",
@@ -446,7 +446,7 @@ function blocktag(; tag, location=Location())
     operands = Value[]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("tag", tag),]
+    attributes = NamedAttribute[NamedAttribute("tag", tag),]
 
     return create_operation(
         "llvm.blocktag",
@@ -469,7 +469,7 @@ function br(
     successors = Block[dest,]
     attributes = NamedAttribute[]
     !isnothing(loop_annotation) &&
-        push!(attributes, namedattribute("loop_annotation", loop_annotation))
+        push!(attributes, NamedAttribute("loop_annotation", loop_annotation))
 
     return create_operation(
         "llvm.br",
@@ -506,16 +506,16 @@ function call_intrinsic(
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[
-        namedattribute("intrin", intrin), namedattribute("op_bundle_sizes", op_bundle_sizes)
+        NamedAttribute("intrin", intrin), NamedAttribute("op_bundle_sizes", op_bundle_sizes)
     ]
     push!(attributes, operandsegmentsizes([length(args), length(op_bundle_operands)]))
     !isnothing(results) && push!(op_ty_results, results)
     !isnothing(fastmathFlags) &&
-        push!(attributes, namedattribute("fastmathFlags", fastmathFlags))
+        push!(attributes, NamedAttribute("fastmathFlags", fastmathFlags))
     !isnothing(op_bundle_tags) &&
-        push!(attributes, namedattribute("op_bundle_tags", op_bundle_tags))
-    !isnothing(arg_attrs) && push!(attributes, namedattribute("arg_attrs", arg_attrs))
-    !isnothing(res_attrs) && push!(attributes, namedattribute("res_attrs", res_attrs))
+        push!(attributes, NamedAttribute("op_bundle_tags", op_bundle_tags))
+    !isnothing(arg_attrs) && push!(attributes, NamedAttribute("arg_attrs", arg_attrs))
+    !isnothing(res_attrs) && push!(attributes, NamedAttribute("res_attrs", res_attrs))
 
     return create_operation(
         "llvm.call_intrinsic",
@@ -603,40 +603,40 @@ function call(
     operands = Value[callee_operands..., op_bundle_operands...]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("op_bundle_sizes", op_bundle_sizes),]
+    attributes = NamedAttribute[NamedAttribute("op_bundle_sizes", op_bundle_sizes),]
     push!(
         attributes,
         operandsegmentsizes([length(callee_operands), length(op_bundle_operands)]),
     )
     !isnothing(result) && push!(op_ty_results, result)
     !isnothing(var_callee_type) &&
-        push!(attributes, namedattribute("var_callee_type", var_callee_type))
-    !isnothing(callee) && push!(attributes, namedattribute("callee", callee))
+        push!(attributes, NamedAttribute("var_callee_type", var_callee_type))
+    !isnothing(callee) && push!(attributes, NamedAttribute("callee", callee))
     !isnothing(fastmathFlags) &&
-        push!(attributes, namedattribute("fastmathFlags", fastmathFlags))
-    !isnothing(CConv) && push!(attributes, namedattribute("CConv", CConv))
+        push!(attributes, NamedAttribute("fastmathFlags", fastmathFlags))
+    !isnothing(CConv) && push!(attributes, NamedAttribute("CConv", CConv))
     !isnothing(TailCallKind) &&
-        push!(attributes, namedattribute("TailCallKind", TailCallKind))
+        push!(attributes, NamedAttribute("TailCallKind", TailCallKind))
     !isnothing(memory_effects) &&
-        push!(attributes, namedattribute("memory_effects", memory_effects))
-    !isnothing(convergent) && push!(attributes, namedattribute("convergent", convergent))
-    !isnothing(no_unwind) && push!(attributes, namedattribute("no_unwind", no_unwind))
-    !isnothing(will_return) && push!(attributes, namedattribute("will_return", will_return))
+        push!(attributes, NamedAttribute("memory_effects", memory_effects))
+    !isnothing(convergent) && push!(attributes, NamedAttribute("convergent", convergent))
+    !isnothing(no_unwind) && push!(attributes, NamedAttribute("no_unwind", no_unwind))
+    !isnothing(will_return) && push!(attributes, NamedAttribute("will_return", will_return))
     !isnothing(op_bundle_tags) &&
-        push!(attributes, namedattribute("op_bundle_tags", op_bundle_tags))
-    !isnothing(arg_attrs) && push!(attributes, namedattribute("arg_attrs", arg_attrs))
-    !isnothing(res_attrs) && push!(attributes, namedattribute("res_attrs", res_attrs))
-    !isnothing(no_inline) && push!(attributes, namedattribute("no_inline", no_inline))
+        push!(attributes, NamedAttribute("op_bundle_tags", op_bundle_tags))
+    !isnothing(arg_attrs) && push!(attributes, NamedAttribute("arg_attrs", arg_attrs))
+    !isnothing(res_attrs) && push!(attributes, NamedAttribute("res_attrs", res_attrs))
+    !isnothing(no_inline) && push!(attributes, NamedAttribute("no_inline", no_inline))
     !isnothing(always_inline) &&
-        push!(attributes, namedattribute("always_inline", always_inline))
-    !isnothing(inline_hint) && push!(attributes, namedattribute("inline_hint", inline_hint))
+        push!(attributes, NamedAttribute("always_inline", always_inline))
+    !isnothing(inline_hint) && push!(attributes, NamedAttribute("inline_hint", inline_hint))
     !isnothing(access_groups) &&
-        push!(attributes, namedattribute("access_groups", access_groups))
+        push!(attributes, NamedAttribute("access_groups", access_groups))
     !isnothing(alias_scopes) &&
-        push!(attributes, namedattribute("alias_scopes", alias_scopes))
+        push!(attributes, NamedAttribute("alias_scopes", alias_scopes))
     !isnothing(noalias_scopes) &&
-        push!(attributes, namedattribute("noalias_scopes", noalias_scopes))
-    !isnothing(tbaa) && push!(attributes, namedattribute("tbaa", tbaa))
+        push!(attributes, NamedAttribute("noalias_scopes", noalias_scopes))
+    !isnothing(tbaa) && push!(attributes, NamedAttribute("tbaa", tbaa))
 
     return create_operation(
         "llvm.call",
@@ -668,7 +668,7 @@ function comdat(; sym_name, body::Region, location=Location())
     operands = Value[]
     owned_regions = Region[body,]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("sym_name", sym_name),]
+    attributes = NamedAttribute[NamedAttribute("sym_name", sym_name),]
 
     return create_operation(
         "llvm.comdat",
@@ -701,7 +701,7 @@ function comdat_selector(; sym_name, comdat, location=Location())
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[
-        namedattribute("sym_name", sym_name), namedattribute("comdat", comdat)
+        NamedAttribute("sym_name", sym_name), NamedAttribute("comdat", comdat)
     ]
 
     return create_operation(
@@ -736,9 +736,9 @@ function cond_br(
         operandsegmentsizes([1, length(trueDestOperands), length(falseDestOperands)]),
     )
     !isnothing(branch_weights) &&
-        push!(attributes, namedattribute("branch_weights", branch_weights))
+        push!(attributes, NamedAttribute("branch_weights", branch_weights))
     !isnothing(loop_annotation) &&
-        push!(attributes, namedattribute("loop_annotation", loop_annotation))
+        push!(attributes, NamedAttribute("loop_annotation", loop_annotation))
 
     return create_operation(
         "llvm.cond_br",
@@ -808,7 +808,7 @@ function mlir_constant(; res::IR.Type, value, location=Location())
     operands = Value[]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("value", value),]
+    attributes = NamedAttribute[NamedAttribute("value", value),]
 
     return create_operation(
         "llvm.mlir.constant",
@@ -847,7 +847,7 @@ function dso_local_equivalent(; res::IR.Type, function_name, location=Location()
     operands = Value[]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("function_name", function_name),]
+    attributes = NamedAttribute[NamedAttribute("function_name", function_name),]
 
     return create_operation(
         "llvm.dso_local_equivalent",
@@ -888,7 +888,7 @@ function extractvalue(container::Value; res::IR.Type, position, location=Locatio
     operands = Value[container,]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("position", position),]
+    attributes = NamedAttribute[NamedAttribute("position", position),]
 
     return create_operation(
         "llvm.extractvalue",
@@ -916,7 +916,7 @@ function fadd(
     attributes = NamedAttribute[]
     !isnothing(res) && push!(op_ty_results, res)
     !isnothing(fastmathFlags) &&
-        push!(attributes, namedattribute("fastmathFlags", fastmathFlags))
+        push!(attributes, NamedAttribute("fastmathFlags", fastmathFlags))
 
     return create_operation(
         "llvm.fadd",
@@ -942,10 +942,10 @@ function fcmp(
     operands = Value[lhs, rhs]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("predicate", predicate),]
+    attributes = NamedAttribute[NamedAttribute("predicate", predicate),]
     !isnothing(res) && push!(op_ty_results, res)
     !isnothing(fastmathFlags) &&
-        push!(attributes, namedattribute("fastmathFlags", fastmathFlags))
+        push!(attributes, NamedAttribute("fastmathFlags", fastmathFlags))
 
     return create_operation(
         "llvm.fcmp",
@@ -973,7 +973,7 @@ function fdiv(
     attributes = NamedAttribute[]
     !isnothing(res) && push!(op_ty_results, res)
     !isnothing(fastmathFlags) &&
-        push!(attributes, namedattribute("fastmathFlags", fastmathFlags))
+        push!(attributes, NamedAttribute("fastmathFlags", fastmathFlags))
 
     return create_operation(
         "llvm.fdiv",
@@ -1001,7 +1001,7 @@ function fmul(
     attributes = NamedAttribute[]
     !isnothing(res) && push!(op_ty_results, res)
     !isnothing(fastmathFlags) &&
-        push!(attributes, namedattribute("fastmathFlags", fastmathFlags))
+        push!(attributes, NamedAttribute("fastmathFlags", fastmathFlags))
 
     return create_operation(
         "llvm.fmul",
@@ -1028,7 +1028,7 @@ function fneg(
     attributes = NamedAttribute[]
     !isnothing(res) && push!(op_ty_results, res)
     !isnothing(fastmathFlags) &&
-        push!(attributes, namedattribute("fastmathFlags", fastmathFlags))
+        push!(attributes, NamedAttribute("fastmathFlags", fastmathFlags))
 
     return create_operation(
         "llvm.fneg",
@@ -1132,7 +1132,7 @@ function frem(
     attributes = NamedAttribute[]
     !isnothing(res) && push!(op_ty_results, res)
     !isnothing(fastmathFlags) &&
-        push!(attributes, namedattribute("fastmathFlags", fastmathFlags))
+        push!(attributes, NamedAttribute("fastmathFlags", fastmathFlags))
 
     return create_operation(
         "llvm.frem",
@@ -1160,7 +1160,7 @@ function fsub(
     attributes = NamedAttribute[]
     !isnothing(res) && push!(op_ty_results, res)
     !isnothing(fastmathFlags) &&
-        push!(attributes, namedattribute("fastmathFlags", fastmathFlags))
+        push!(attributes, NamedAttribute("fastmathFlags", fastmathFlags))
 
     return create_operation(
         "llvm.fsub",
@@ -1179,8 +1179,8 @@ function fence(; ordering, syncscope=nothing, location=Location())
     operands = Value[]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("ordering", ordering),]
-    !isnothing(syncscope) && push!(attributes, namedattribute("syncscope", syncscope))
+    attributes = NamedAttribute[NamedAttribute("ordering", ordering),]
+    !isnothing(syncscope) && push!(attributes, NamedAttribute("syncscope", syncscope))
 
     return create_operation(
         "llvm.fence",
@@ -1258,8 +1258,8 @@ function getelementptr(
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[
-        namedattribute("rawConstantIndices", rawConstantIndices),
-        namedattribute("elem_type", elem_type),
+        NamedAttribute("rawConstantIndices", rawConstantIndices),
+        NamedAttribute("elem_type", elem_type),
     ]
 
     return create_operation(
@@ -1302,9 +1302,9 @@ function mlir_global_ctors(; ctors, priorities, data, location=Location())
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[
-        namedattribute("ctors", ctors),
-        namedattribute("priorities", priorities),
-        namedattribute("data", data),
+        NamedAttribute("ctors", ctors),
+        NamedAttribute("priorities", priorities),
+        NamedAttribute("data", data),
     ]
 
     return create_operation(
@@ -1346,9 +1346,9 @@ function mlir_global_dtors(; dtors, priorities, data, location=Location())
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[
-        namedattribute("dtors", dtors),
-        namedattribute("priorities", priorities),
-        namedattribute("data", data),
+        NamedAttribute("dtors", dtors),
+        NamedAttribute("priorities", priorities),
+        NamedAttribute("data", data),
     ]
 
     return create_operation(
@@ -1501,27 +1501,27 @@ function mlir_global(;
     owned_regions = Region[initializer,]
     successors = Block[]
     attributes = NamedAttribute[
-        namedattribute("global_type", global_type),
-        namedattribute("sym_name", sym_name),
-        namedattribute("linkage", linkage),
+        NamedAttribute("global_type", global_type),
+        NamedAttribute("sym_name", sym_name),
+        NamedAttribute("linkage", linkage),
     ]
-    !isnothing(constant) && push!(attributes, namedattribute("constant", constant))
-    !isnothing(dso_local) && push!(attributes, namedattribute("dso_local", dso_local))
+    !isnothing(constant) && push!(attributes, NamedAttribute("constant", constant))
+    !isnothing(dso_local) && push!(attributes, NamedAttribute("dso_local", dso_local))
     !isnothing(thread_local_) &&
-        push!(attributes, namedattribute("thread_local_", thread_local_))
+        push!(attributes, NamedAttribute("thread_local_", thread_local_))
     !isnothing(externally_initialized) &&
-        push!(attributes, namedattribute("externally_initialized", externally_initialized))
-    !isnothing(value) && push!(attributes, namedattribute("value", value))
-    !isnothing(alignment) && push!(attributes, namedattribute("alignment", alignment))
-    !isnothing(addr_space) && push!(attributes, namedattribute("addr_space", addr_space))
+        push!(attributes, NamedAttribute("externally_initialized", externally_initialized))
+    !isnothing(value) && push!(attributes, NamedAttribute("value", value))
+    !isnothing(alignment) && push!(attributes, NamedAttribute("alignment", alignment))
+    !isnothing(addr_space) && push!(attributes, NamedAttribute("addr_space", addr_space))
     !isnothing(unnamed_addr) &&
-        push!(attributes, namedattribute("unnamed_addr", unnamed_addr))
-    !isnothing(section) && push!(attributes, namedattribute("section", section))
-    !isnothing(comdat) && push!(attributes, namedattribute("comdat", comdat))
-    !isnothing(dbg_exprs) && push!(attributes, namedattribute("dbg_exprs", dbg_exprs))
-    !isnothing(visibility_) && push!(attributes, namedattribute("visibility_", visibility_))
+        push!(attributes, NamedAttribute("unnamed_addr", unnamed_addr))
+    !isnothing(section) && push!(attributes, NamedAttribute("section", section))
+    !isnothing(comdat) && push!(attributes, NamedAttribute("comdat", comdat))
+    !isnothing(dbg_exprs) && push!(attributes, NamedAttribute("dbg_exprs", dbg_exprs))
+    !isnothing(visibility_) && push!(attributes, NamedAttribute("visibility_", visibility_))
     !isnothing(target_specific_attrs) &&
-        push!(attributes, namedattribute("target_specific_attrs", target_specific_attrs))
+        push!(attributes, NamedAttribute("target_specific_attrs", target_specific_attrs))
 
     return create_operation(
         "llvm.mlir.global",
@@ -1546,7 +1546,7 @@ function icmp(
     operands = Value[lhs, rhs]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("predicate", predicate),]
+    attributes = NamedAttribute[NamedAttribute("predicate", predicate),]
     !isnothing(res) && push!(op_ty_results, res)
 
     return create_operation(
@@ -1612,18 +1612,18 @@ function mlir_ifunc(;
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[
-        namedattribute("sym_name", sym_name),
-        namedattribute("i_func_type", i_func_type),
-        namedattribute("resolver", resolver),
-        namedattribute("resolver_type", resolver_type),
-        namedattribute("linkage", linkage),
+        NamedAttribute("sym_name", sym_name),
+        NamedAttribute("i_func_type", i_func_type),
+        NamedAttribute("resolver", resolver),
+        NamedAttribute("resolver_type", resolver_type),
+        NamedAttribute("linkage", linkage),
     ]
-    !isnothing(dso_local) && push!(attributes, namedattribute("dso_local", dso_local))
+    !isnothing(dso_local) && push!(attributes, NamedAttribute("dso_local", dso_local))
     !isnothing(address_space) &&
-        push!(attributes, namedattribute("address_space", address_space))
+        push!(attributes, NamedAttribute("address_space", address_space))
     !isnothing(unnamed_addr) &&
-        push!(attributes, namedattribute("unnamed_addr", unnamed_addr))
-    !isnothing(visibility_) && push!(attributes, namedattribute("visibility_", visibility_))
+        push!(attributes, NamedAttribute("unnamed_addr", unnamed_addr))
+    !isnothing(visibility_) && push!(attributes, NamedAttribute("visibility_", visibility_))
 
     return create_operation(
         "llvm.mlir.ifunc",
@@ -1680,7 +1680,7 @@ function indirectbr(
     operands = Value[addr, succOperands...]
     owned_regions = Region[]
     successors = Block[successors...,]
-    attributes = NamedAttribute[namedattribute(
+    attributes = NamedAttribute[NamedAttribute(
         "indbr_operand_segments", indbr_operand_segments
     ),]
 
@@ -1726,18 +1726,18 @@ function inline_asm(
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[
-        namedattribute("asm_string", asm_string), namedattribute("constraints", constraints)
+        NamedAttribute("asm_string", asm_string), NamedAttribute("constraints", constraints)
     ]
     !isnothing(res) && push!(op_ty_results, res)
     !isnothing(has_side_effects) &&
-        push!(attributes, namedattribute("has_side_effects", has_side_effects))
+        push!(attributes, NamedAttribute("has_side_effects", has_side_effects))
     !isnothing(is_align_stack) &&
-        push!(attributes, namedattribute("is_align_stack", is_align_stack))
+        push!(attributes, NamedAttribute("is_align_stack", is_align_stack))
     !isnothing(tail_call_kind) &&
-        push!(attributes, namedattribute("tail_call_kind", tail_call_kind))
-    !isnothing(asm_dialect) && push!(attributes, namedattribute("asm_dialect", asm_dialect))
+        push!(attributes, NamedAttribute("tail_call_kind", tail_call_kind))
+    !isnothing(asm_dialect) && push!(attributes, NamedAttribute("asm_dialect", asm_dialect))
     !isnothing(operand_attrs) &&
-        push!(attributes, namedattribute("operand_attrs", operand_attrs))
+        push!(attributes, NamedAttribute("operand_attrs", operand_attrs))
 
     return create_operation(
         "llvm.inline_asm",
@@ -1788,7 +1788,7 @@ function insertvalue(
     operands = Value[container, value]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("position", position),]
+    attributes = NamedAttribute[NamedAttribute("position", position),]
     !isnothing(res) && push!(op_ty_results, res)
 
     return create_operation(
@@ -1810,7 +1810,7 @@ function inttoptr(arg::Value; res::IR.Type, dereferenceable=nothing, location=Lo
     successors = Block[]
     attributes = NamedAttribute[]
     !isnothing(dereferenceable) &&
-        push!(attributes, namedattribute("dereferenceable", dereferenceable))
+        push!(attributes, NamedAttribute("dereferenceable", dereferenceable))
 
     return create_operation(
         "llvm.inttoptr",
@@ -1851,7 +1851,7 @@ function invoke(
     ]
     owned_regions = Region[]
     successors = Block[normalDest, unwindDest]
-    attributes = NamedAttribute[namedattribute("op_bundle_sizes", op_bundle_sizes),]
+    attributes = NamedAttribute[NamedAttribute("op_bundle_sizes", op_bundle_sizes),]
     push!(
         attributes,
         operandsegmentsizes([
@@ -1863,15 +1863,15 @@ function invoke(
     )
     !isnothing(result) && push!(op_ty_results, result)
     !isnothing(var_callee_type) &&
-        push!(attributes, namedattribute("var_callee_type", var_callee_type))
-    !isnothing(callee) && push!(attributes, namedattribute("callee", callee))
-    !isnothing(arg_attrs) && push!(attributes, namedattribute("arg_attrs", arg_attrs))
-    !isnothing(res_attrs) && push!(attributes, namedattribute("res_attrs", res_attrs))
+        push!(attributes, NamedAttribute("var_callee_type", var_callee_type))
+    !isnothing(callee) && push!(attributes, NamedAttribute("callee", callee))
+    !isnothing(arg_attrs) && push!(attributes, NamedAttribute("arg_attrs", arg_attrs))
+    !isnothing(res_attrs) && push!(attributes, NamedAttribute("res_attrs", res_attrs))
     !isnothing(branch_weights) &&
-        push!(attributes, namedattribute("branch_weights", branch_weights))
-    !isnothing(CConv) && push!(attributes, namedattribute("CConv", CConv))
+        push!(attributes, NamedAttribute("branch_weights", branch_weights))
+    !isnothing(CConv) && push!(attributes, NamedAttribute("CConv", CConv))
     !isnothing(op_bundle_tags) &&
-        push!(attributes, namedattribute("op_bundle_tags", op_bundle_tags))
+        push!(attributes, NamedAttribute("op_bundle_tags", op_bundle_tags))
 
     return create_operation(
         "llvm.invoke",
@@ -1976,95 +1976,95 @@ function func(;
     owned_regions = Region[body,]
     successors = Block[]
     attributes = NamedAttribute[
-        namedattribute("sym_name", sym_name), namedattribute("function_type", function_type)
+        NamedAttribute("sym_name", sym_name), NamedAttribute("function_type", function_type)
     ]
     !isnothing(sym_visibility) &&
-        push!(attributes, namedattribute("sym_visibility", sym_visibility))
-    !isnothing(linkage) && push!(attributes, namedattribute("linkage", linkage))
-    !isnothing(dso_local) && push!(attributes, namedattribute("dso_local", dso_local))
-    !isnothing(CConv) && push!(attributes, namedattribute("CConv", CConv))
-    !isnothing(comdat) && push!(attributes, namedattribute("comdat", comdat))
-    !isnothing(convergent) && push!(attributes, namedattribute("convergent", convergent))
-    !isnothing(personality) && push!(attributes, namedattribute("personality", personality))
+        push!(attributes, NamedAttribute("sym_visibility", sym_visibility))
+    !isnothing(linkage) && push!(attributes, NamedAttribute("linkage", linkage))
+    !isnothing(dso_local) && push!(attributes, NamedAttribute("dso_local", dso_local))
+    !isnothing(CConv) && push!(attributes, NamedAttribute("CConv", CConv))
+    !isnothing(comdat) && push!(attributes, NamedAttribute("comdat", comdat))
+    !isnothing(convergent) && push!(attributes, NamedAttribute("convergent", convergent))
+    !isnothing(personality) && push!(attributes, NamedAttribute("personality", personality))
     !isnothing(garbageCollector) &&
-        push!(attributes, namedattribute("garbageCollector", garbageCollector))
-    !isnothing(passthrough) && push!(attributes, namedattribute("passthrough", passthrough))
-    !isnothing(arg_attrs) && push!(attributes, namedattribute("arg_attrs", arg_attrs))
-    !isnothing(res_attrs) && push!(attributes, namedattribute("res_attrs", res_attrs))
+        push!(attributes, NamedAttribute("garbageCollector", garbageCollector))
+    !isnothing(passthrough) && push!(attributes, NamedAttribute("passthrough", passthrough))
+    !isnothing(arg_attrs) && push!(attributes, NamedAttribute("arg_attrs", arg_attrs))
+    !isnothing(res_attrs) && push!(attributes, NamedAttribute("res_attrs", res_attrs))
     !isnothing(function_entry_count) &&
-        push!(attributes, namedattribute("function_entry_count", function_entry_count))
+        push!(attributes, NamedAttribute("function_entry_count", function_entry_count))
     !isnothing(memory_effects) &&
-        push!(attributes, namedattribute("memory_effects", memory_effects))
-    !isnothing(visibility_) && push!(attributes, namedattribute("visibility_", visibility_))
+        push!(attributes, NamedAttribute("memory_effects", memory_effects))
+    !isnothing(visibility_) && push!(attributes, NamedAttribute("visibility_", visibility_))
     !isnothing(arm_streaming) &&
-        push!(attributes, namedattribute("arm_streaming", arm_streaming))
+        push!(attributes, NamedAttribute("arm_streaming", arm_streaming))
     !isnothing(arm_locally_streaming) &&
-        push!(attributes, namedattribute("arm_locally_streaming", arm_locally_streaming))
+        push!(attributes, NamedAttribute("arm_locally_streaming", arm_locally_streaming))
     !isnothing(arm_streaming_compatible) && push!(
-        attributes, namedattribute("arm_streaming_compatible", arm_streaming_compatible)
+        attributes, NamedAttribute("arm_streaming_compatible", arm_streaming_compatible)
     )
-    !isnothing(arm_new_za) && push!(attributes, namedattribute("arm_new_za", arm_new_za))
-    !isnothing(arm_in_za) && push!(attributes, namedattribute("arm_in_za", arm_in_za))
-    !isnothing(arm_out_za) && push!(attributes, namedattribute("arm_out_za", arm_out_za))
+    !isnothing(arm_new_za) && push!(attributes, NamedAttribute("arm_new_za", arm_new_za))
+    !isnothing(arm_in_za) && push!(attributes, NamedAttribute("arm_in_za", arm_in_za))
+    !isnothing(arm_out_za) && push!(attributes, NamedAttribute("arm_out_za", arm_out_za))
     !isnothing(arm_inout_za) &&
-        push!(attributes, namedattribute("arm_inout_za", arm_inout_za))
+        push!(attributes, NamedAttribute("arm_inout_za", arm_inout_za))
     !isnothing(arm_preserves_za) &&
-        push!(attributes, namedattribute("arm_preserves_za", arm_preserves_za))
-    !isnothing(section) && push!(attributes, namedattribute("section", section))
+        push!(attributes, NamedAttribute("arm_preserves_za", arm_preserves_za))
+    !isnothing(section) && push!(attributes, NamedAttribute("section", section))
     !isnothing(unnamed_addr) &&
-        push!(attributes, namedattribute("unnamed_addr", unnamed_addr))
-    !isnothing(alignment) && push!(attributes, namedattribute("alignment", alignment))
+        push!(attributes, NamedAttribute("unnamed_addr", unnamed_addr))
+    !isnothing(alignment) && push!(attributes, NamedAttribute("alignment", alignment))
     !isnothing(vscale_range) &&
-        push!(attributes, namedattribute("vscale_range", vscale_range))
+        push!(attributes, NamedAttribute("vscale_range", vscale_range))
     !isnothing(frame_pointer) &&
-        push!(attributes, namedattribute("frame_pointer", frame_pointer))
-    !isnothing(target_cpu) && push!(attributes, namedattribute("target_cpu", target_cpu))
-    !isnothing(tune_cpu) && push!(attributes, namedattribute("tune_cpu", tune_cpu))
+        push!(attributes, NamedAttribute("frame_pointer", frame_pointer))
+    !isnothing(target_cpu) && push!(attributes, NamedAttribute("target_cpu", target_cpu))
+    !isnothing(tune_cpu) && push!(attributes, NamedAttribute("tune_cpu", tune_cpu))
     !isnothing(reciprocal_estimates) &&
-        push!(attributes, namedattribute("reciprocal_estimates", reciprocal_estimates))
+        push!(attributes, NamedAttribute("reciprocal_estimates", reciprocal_estimates))
     !isnothing(prefer_vector_width) &&
-        push!(attributes, namedattribute("prefer_vector_width", prefer_vector_width))
+        push!(attributes, NamedAttribute("prefer_vector_width", prefer_vector_width))
     !isnothing(target_features) &&
-        push!(attributes, namedattribute("target_features", target_features))
+        push!(attributes, NamedAttribute("target_features", target_features))
     !isnothing(no_infs_fp_math) &&
-        push!(attributes, namedattribute("no_infs_fp_math", no_infs_fp_math))
+        push!(attributes, NamedAttribute("no_infs_fp_math", no_infs_fp_math))
     !isnothing(no_nans_fp_math) &&
-        push!(attributes, namedattribute("no_nans_fp_math", no_nans_fp_math))
+        push!(attributes, NamedAttribute("no_nans_fp_math", no_nans_fp_math))
     !isnothing(no_signed_zeros_fp_math) && push!(
-        attributes, namedattribute("no_signed_zeros_fp_math", no_signed_zeros_fp_math)
+        attributes, NamedAttribute("no_signed_zeros_fp_math", no_signed_zeros_fp_math)
     )
     !isnothing(denormal_fp_math) &&
-        push!(attributes, namedattribute("denormal_fp_math", denormal_fp_math))
+        push!(attributes, NamedAttribute("denormal_fp_math", denormal_fp_math))
     !isnothing(denormal_fp_math_f32) &&
-        push!(attributes, namedattribute("denormal_fp_math_f32", denormal_fp_math_f32))
-    !isnothing(fp_contract) && push!(attributes, namedattribute("fp_contract", fp_contract))
+        push!(attributes, NamedAttribute("denormal_fp_math_f32", denormal_fp_math_f32))
+    !isnothing(fp_contract) && push!(attributes, NamedAttribute("fp_contract", fp_contract))
     !isnothing(instrument_function_entry) && push!(
         attributes,
-        namedattribute("instrument_function_entry", instrument_function_entry),
+        NamedAttribute("instrument_function_entry", instrument_function_entry),
     )
     !isnothing(instrument_function_exit) && push!(
-        attributes, namedattribute("instrument_function_exit", instrument_function_exit)
+        attributes, NamedAttribute("instrument_function_exit", instrument_function_exit)
     )
-    !isnothing(no_inline) && push!(attributes, namedattribute("no_inline", no_inline))
+    !isnothing(no_inline) && push!(attributes, NamedAttribute("no_inline", no_inline))
     !isnothing(always_inline) &&
-        push!(attributes, namedattribute("always_inline", always_inline))
-    !isnothing(inline_hint) && push!(attributes, namedattribute("inline_hint", inline_hint))
-    !isnothing(no_unwind) && push!(attributes, namedattribute("no_unwind", no_unwind))
-    !isnothing(will_return) && push!(attributes, namedattribute("will_return", will_return))
+        push!(attributes, NamedAttribute("always_inline", always_inline))
+    !isnothing(inline_hint) && push!(attributes, NamedAttribute("inline_hint", inline_hint))
+    !isnothing(no_unwind) && push!(attributes, NamedAttribute("no_unwind", no_unwind))
+    !isnothing(will_return) && push!(attributes, NamedAttribute("will_return", will_return))
     !isnothing(optimize_none) &&
-        push!(attributes, namedattribute("optimize_none", optimize_none))
+        push!(attributes, NamedAttribute("optimize_none", optimize_none))
     !isnothing(vec_type_hint) &&
-        push!(attributes, namedattribute("vec_type_hint", vec_type_hint))
+        push!(attributes, NamedAttribute("vec_type_hint", vec_type_hint))
     !isnothing(work_group_size_hint) &&
-        push!(attributes, namedattribute("work_group_size_hint", work_group_size_hint))
+        push!(attributes, NamedAttribute("work_group_size_hint", work_group_size_hint))
     !isnothing(reqd_work_group_size) &&
-        push!(attributes, namedattribute("reqd_work_group_size", reqd_work_group_size))
+        push!(attributes, NamedAttribute("reqd_work_group_size", reqd_work_group_size))
     !isnothing(intel_reqd_sub_group_size) && push!(
         attributes,
-        namedattribute("intel_reqd_sub_group_size", intel_reqd_sub_group_size),
+        NamedAttribute("intel_reqd_sub_group_size", intel_reqd_sub_group_size),
     )
     !isnothing(uwtable_kind) &&
-        push!(attributes, namedattribute("uwtable_kind", uwtable_kind))
+        push!(attributes, NamedAttribute("uwtable_kind", uwtable_kind))
 
     return create_operation(
         "llvm.func",
@@ -2091,7 +2091,7 @@ function lshr(
     successors = Block[]
     attributes = NamedAttribute[]
     !isnothing(res) && push!(op_ty_results, res)
-    !isnothing(isExact) && push!(attributes, namedattribute("isExact", isExact))
+    !isnothing(isExact) && push!(attributes, NamedAttribute("isExact", isExact))
 
     return create_operation(
         "llvm.lshr",
@@ -2113,7 +2113,7 @@ function landingpad(
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
-    !isnothing(cleanup) && push!(attributes, namedattribute("cleanup", cleanup))
+    !isnothing(cleanup) && push!(attributes, NamedAttribute("cleanup", cleanup))
 
     return create_operation(
         "llvm.landingpad",
@@ -2148,7 +2148,7 @@ function linker_options(; options, location=Location())
     operands = Value[]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("options", options),]
+    attributes = NamedAttribute[NamedAttribute("options", options),]
 
     return create_operation(
         "llvm.linker_options",
@@ -2210,23 +2210,23 @@ function load(
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
-    !isnothing(alignment) && push!(attributes, namedattribute("alignment", alignment))
-    !isnothing(volatile_) && push!(attributes, namedattribute("volatile_", volatile_))
-    !isnothing(nontemporal) && push!(attributes, namedattribute("nontemporal", nontemporal))
-    !isnothing(invariant) && push!(attributes, namedattribute("invariant", invariant))
+    !isnothing(alignment) && push!(attributes, NamedAttribute("alignment", alignment))
+    !isnothing(volatile_) && push!(attributes, NamedAttribute("volatile_", volatile_))
+    !isnothing(nontemporal) && push!(attributes, NamedAttribute("nontemporal", nontemporal))
+    !isnothing(invariant) && push!(attributes, NamedAttribute("invariant", invariant))
     !isnothing(invariantGroup) &&
-        push!(attributes, namedattribute("invariantGroup", invariantGroup))
-    !isnothing(ordering) && push!(attributes, namedattribute("ordering", ordering))
-    !isnothing(syncscope) && push!(attributes, namedattribute("syncscope", syncscope))
+        push!(attributes, NamedAttribute("invariantGroup", invariantGroup))
+    !isnothing(ordering) && push!(attributes, NamedAttribute("ordering", ordering))
+    !isnothing(syncscope) && push!(attributes, NamedAttribute("syncscope", syncscope))
     !isnothing(dereferenceable) &&
-        push!(attributes, namedattribute("dereferenceable", dereferenceable))
+        push!(attributes, NamedAttribute("dereferenceable", dereferenceable))
     !isnothing(access_groups) &&
-        push!(attributes, namedattribute("access_groups", access_groups))
+        push!(attributes, NamedAttribute("access_groups", access_groups))
     !isnothing(alias_scopes) &&
-        push!(attributes, namedattribute("alias_scopes", alias_scopes))
+        push!(attributes, NamedAttribute("alias_scopes", alias_scopes))
     !isnothing(noalias_scopes) &&
-        push!(attributes, namedattribute("noalias_scopes", noalias_scopes))
-    !isnothing(tbaa) && push!(attributes, namedattribute("tbaa", tbaa))
+        push!(attributes, NamedAttribute("noalias_scopes", noalias_scopes))
+    !isnothing(tbaa) && push!(attributes, NamedAttribute("tbaa", tbaa))
 
     return create_operation(
         "llvm.load",
@@ -2260,7 +2260,7 @@ function module_flags(; flags, location=Location())
     operands = Value[]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("flags", flags),]
+    attributes = NamedAttribute[NamedAttribute("flags", flags),]
 
     return create_operation(
         "llvm.module_flags",
@@ -2343,7 +2343,7 @@ function or(
     successors = Block[]
     attributes = NamedAttribute[]
     !isnothing(res) && push!(op_ty_results, res)
-    !isnothing(isDisjoint) && push!(attributes, namedattribute("isDisjoint", isDisjoint))
+    !isnothing(isDisjoint) && push!(attributes, NamedAttribute("isDisjoint", isDisjoint))
 
     return create_operation(
         "llvm.or",
@@ -2463,7 +2463,7 @@ function sdiv(
     successors = Block[]
     attributes = NamedAttribute[]
     !isnothing(res) && push!(op_ty_results, res)
-    !isnothing(isExact) && push!(attributes, namedattribute("isExact", isExact))
+    !isnothing(isExact) && push!(attributes, NamedAttribute("isExact", isExact))
 
     return create_operation(
         "llvm.sdiv",
@@ -2552,7 +2552,7 @@ function select(
     attributes = NamedAttribute[]
     !isnothing(res) && push!(op_ty_results, res)
     !isnothing(fastmathFlags) &&
-        push!(attributes, namedattribute("fastmathFlags", fastmathFlags))
+        push!(attributes, NamedAttribute("fastmathFlags", fastmathFlags))
 
     return create_operation(
         "llvm.select",
@@ -2593,7 +2593,7 @@ function shufflevector(v1::Value, v2::Value; res::IR.Type, mask, location=Locati
     operands = Value[v1, v2]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("mask", mask),]
+    attributes = NamedAttribute[NamedAttribute("mask", mask),]
 
     return create_operation(
         "llvm.shufflevector",
@@ -2653,20 +2653,20 @@ function store(
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
-    !isnothing(alignment) && push!(attributes, namedattribute("alignment", alignment))
-    !isnothing(volatile_) && push!(attributes, namedattribute("volatile_", volatile_))
-    !isnothing(nontemporal) && push!(attributes, namedattribute("nontemporal", nontemporal))
+    !isnothing(alignment) && push!(attributes, NamedAttribute("alignment", alignment))
+    !isnothing(volatile_) && push!(attributes, NamedAttribute("volatile_", volatile_))
+    !isnothing(nontemporal) && push!(attributes, NamedAttribute("nontemporal", nontemporal))
     !isnothing(invariantGroup) &&
-        push!(attributes, namedattribute("invariantGroup", invariantGroup))
-    !isnothing(ordering) && push!(attributes, namedattribute("ordering", ordering))
-    !isnothing(syncscope) && push!(attributes, namedattribute("syncscope", syncscope))
+        push!(attributes, NamedAttribute("invariantGroup", invariantGroup))
+    !isnothing(ordering) && push!(attributes, NamedAttribute("ordering", ordering))
+    !isnothing(syncscope) && push!(attributes, NamedAttribute("syncscope", syncscope))
     !isnothing(access_groups) &&
-        push!(attributes, namedattribute("access_groups", access_groups))
+        push!(attributes, NamedAttribute("access_groups", access_groups))
     !isnothing(alias_scopes) &&
-        push!(attributes, namedattribute("alias_scopes", alias_scopes))
+        push!(attributes, NamedAttribute("alias_scopes", alias_scopes))
     !isnothing(noalias_scopes) &&
-        push!(attributes, namedattribute("noalias_scopes", noalias_scopes))
-    !isnothing(tbaa) && push!(attributes, namedattribute("tbaa", tbaa))
+        push!(attributes, NamedAttribute("noalias_scopes", noalias_scopes))
+    !isnothing(tbaa) && push!(attributes, NamedAttribute("tbaa", tbaa))
 
     return create_operation(
         "llvm.store",
@@ -2717,15 +2717,15 @@ function switch(
     operands = Value[value, defaultOperands..., caseOperands...]
     owned_regions = Region[]
     successors = Block[defaultDestination, caseDestinations...]
-    attributes = NamedAttribute[namedattribute(
+    attributes = NamedAttribute[NamedAttribute(
         "case_operand_segments", case_operand_segments
     ),]
     push!(
         attributes, operandsegmentsizes([1, length(defaultOperands), length(caseOperands)])
     )
-    !isnothing(case_values) && push!(attributes, namedattribute("case_values", case_values))
+    !isnothing(case_values) && push!(attributes, NamedAttribute("case_values", case_values))
     !isnothing(branch_weights) &&
-        push!(attributes, namedattribute("branch_weights", branch_weights))
+        push!(attributes, NamedAttribute("branch_weights", branch_weights))
 
     return create_operation(
         "llvm.switch",
@@ -2771,7 +2771,7 @@ function udiv(
     successors = Block[]
     attributes = NamedAttribute[]
     !isnothing(res) && push!(op_ty_results, res)
-    !isnothing(isExact) && push!(attributes, namedattribute("isExact", isExact))
+    !isnothing(isExact) && push!(attributes, NamedAttribute("isExact", isExact))
 
     return create_operation(
         "llvm.udiv",
@@ -2791,7 +2791,7 @@ function uitofp(arg::Value; res::IR.Type, nonNeg=nothing, location=Location())
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
-    !isnothing(nonNeg) && push!(attributes, namedattribute("nonNeg", nonNeg))
+    !isnothing(nonNeg) && push!(attributes, NamedAttribute("nonNeg", nonNeg))
 
     return create_operation(
         "llvm.uitofp",
@@ -2927,7 +2927,7 @@ function zext(arg::Value; res::IR.Type, nonNeg=nothing, location=Location())
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
-    !isnothing(nonNeg) && push!(attributes, namedattribute("nonNeg", nonNeg))
+    !isnothing(nonNeg) && push!(attributes, NamedAttribute("nonNeg", nonNeg))
 
     return create_operation(
         "llvm.zext",

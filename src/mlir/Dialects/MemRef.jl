@@ -10,7 +10,7 @@ import ...IR:
     create_operation,
     context,
     IndexType
-import ..Dialects: namedattribute, operandsegmentsizes
+import ..Dialects: operandsegmentsizes, resultsegmentsizes
 import ...API
 
 """
@@ -34,7 +34,7 @@ function assume_alignment(
     operands = Value[memref,]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("alignment", alignment),]
+    attributes = NamedAttribute[NamedAttribute("alignment", alignment),]
     !isnothing(result) && push!(op_ty_results, result)
 
     return create_operation(
@@ -78,7 +78,7 @@ function atomic_rmw(
     operands = Value[value, memref, indices...]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("kind", kind),]
+    attributes = NamedAttribute[NamedAttribute("kind", kind),]
     !isnothing(result) && push!(op_ty_results, result)
 
     return create_operation(
@@ -289,8 +289,8 @@ function load(
     successors = Block[]
     attributes = NamedAttribute[]
     !isnothing(result) && push!(op_ty_results, result)
-    !isnothing(nontemporal) && push!(attributes, namedattribute("nontemporal", nontemporal))
-    !isnothing(alignment) && push!(attributes, namedattribute("alignment", alignment))
+    !isnothing(nontemporal) && push!(attributes, NamedAttribute("nontemporal", nontemporal))
+    !isnothing(alignment) && push!(attributes, NamedAttribute("alignment", alignment))
 
     return create_operation(
         "memref.load",
@@ -358,7 +358,7 @@ function alloc(
     successors = Block[]
     attributes = NamedAttribute[]
     push!(attributes, operandsegmentsizes([length(dynamicSizes), length(symbolOperands)]))
-    !isnothing(alignment) && push!(attributes, namedattribute("alignment", alignment))
+    !isnothing(alignment) && push!(attributes, NamedAttribute("alignment", alignment))
 
     return create_operation(
         "memref.alloc",
@@ -422,7 +422,7 @@ function alloca(
     successors = Block[]
     attributes = NamedAttribute[]
     push!(attributes, operandsegmentsizes([length(dynamicSizes), length(symbolOperands)]))
-    !isnothing(alignment) && push!(attributes, namedattribute("alignment", alignment))
+    !isnothing(alignment) && push!(attributes, NamedAttribute("alignment", alignment))
 
     return create_operation(
         "memref.alloca",
@@ -638,7 +638,7 @@ function collapse_shape(src::Value; result::IR.Type, reassociation, location=Loc
     operands = Value[src,]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("reassociation", reassociation),]
+    attributes = NamedAttribute[NamedAttribute("reassociation", reassociation),]
 
     return create_operation(
         "memref.collapse_shape",
@@ -907,8 +907,8 @@ function expand_shape(
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[
-        namedattribute("reassociation", reassociation),
-        namedattribute("static_output_shape", static_output_shape),
+        NamedAttribute("reassociation", reassociation),
+        NamedAttribute("static_output_shape", static_output_shape),
     ]
 
     return create_operation(
@@ -1060,7 +1060,7 @@ function get_global(; result::IR.Type, name, location=Location())
     operands = Value[]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("name", name),]
+    attributes = NamedAttribute[NamedAttribute("name", name),]
 
     return create_operation(
         "memref.get_global",
@@ -1126,14 +1126,14 @@ function global_(;
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[
-        namedattribute("sym_name", sym_name), namedattribute("type", type)
+        NamedAttribute("sym_name", sym_name), NamedAttribute("type", type)
     ]
     !isnothing(sym_visibility) &&
-        push!(attributes, namedattribute("sym_visibility", sym_visibility))
+        push!(attributes, NamedAttribute("sym_visibility", sym_visibility))
     !isnothing(initial_value) &&
-        push!(attributes, namedattribute("initial_value", initial_value))
-    !isnothing(constant) && push!(attributes, namedattribute("constant", constant))
-    !isnothing(alignment) && push!(attributes, namedattribute("alignment", alignment))
+        push!(attributes, NamedAttribute("initial_value", initial_value))
+    !isnothing(constant) && push!(attributes, NamedAttribute("constant", constant))
+    !isnothing(alignment) && push!(attributes, NamedAttribute("alignment", alignment))
 
     return create_operation(
         "memref.global",
@@ -1226,9 +1226,9 @@ function prefetch(
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[
-        namedattribute("isWrite", isWrite),
-        namedattribute("localityHint", localityHint),
-        namedattribute("isDataCache", isDataCache),
+        NamedAttribute("isWrite", isWrite),
+        NamedAttribute("localityHint", localityHint),
+        NamedAttribute("isDataCache", isDataCache),
     ]
 
     return create_operation(
@@ -1346,7 +1346,7 @@ function realloc(
     successors = Block[]
     attributes = NamedAttribute[]
     !isnothing(dynamicResultSize) && push!(operands, dynamicResultSize)
-    !isnothing(alignment) && push!(attributes, namedattribute("alignment", alignment))
+    !isnothing(alignment) && push!(attributes, NamedAttribute("alignment", alignment))
 
     return create_operation(
         "memref.realloc",
@@ -1487,9 +1487,9 @@ function reinterpret_cast(
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[
-        namedattribute("static_offsets", static_offsets),
-        namedattribute("static_sizes", static_sizes),
-        namedattribute("static_strides", static_strides),
+        NamedAttribute("static_offsets", static_offsets),
+        NamedAttribute("static_sizes", static_sizes),
+        NamedAttribute("static_strides", static_strides),
     ]
     push!(
         attributes,
@@ -1603,8 +1603,8 @@ function store(
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
-    !isnothing(nontemporal) && push!(attributes, namedattribute("nontemporal", nontemporal))
-    !isnothing(alignment) && push!(attributes, namedattribute("alignment", alignment))
+    !isnothing(nontemporal) && push!(attributes, NamedAttribute("nontemporal", nontemporal))
+    !isnothing(alignment) && push!(attributes, NamedAttribute("alignment", alignment))
 
     return create_operation(
         "memref.store",
@@ -1636,7 +1636,7 @@ function transpose(in::Value; result_0::IR.Type, permutation, location=Location(
     operands = Value[in,]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("permutation", permutation),]
+    attributes = NamedAttribute[NamedAttribute("permutation", permutation),]
 
     return create_operation(
         "memref.transpose",
@@ -1874,9 +1874,9 @@ function subview(
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[
-        namedattribute("static_offsets", static_offsets),
-        namedattribute("static_sizes", static_sizes),
-        namedattribute("static_strides", static_strides),
+        NamedAttribute("static_offsets", static_offsets),
+        NamedAttribute("static_sizes", static_sizes),
+        NamedAttribute("static_strides", static_strides),
     ]
     push!(
         attributes,

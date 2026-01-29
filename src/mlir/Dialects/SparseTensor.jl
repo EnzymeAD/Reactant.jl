@@ -10,7 +10,7 @@ import ...IR:
     create_operation,
     context,
     IndexType
-import ..Dialects: namedattribute, operandsegmentsizes
+import ..Dialects: operandsegmentsizes, resultsegmentsizes
 import ...API
 
 """
@@ -56,7 +56,7 @@ function extract_iteration_space(
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[
-        namedattribute("loLvl", loLvl), namedattribute("hiLvl", hiLvl)
+        NamedAttribute("loLvl", loLvl), NamedAttribute("hiLvl", hiLvl)
     ]
     !isnothing(parentIter) && push!(operands, parentIter)
     !isnothing(extractedSpace) && push!(op_ty_results, extractedSpace)
@@ -185,7 +185,7 @@ function iterate(
     operands = Value[iterSpace, initArgs...]
     owned_regions = Region[region,]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("crdUsedLvls", crdUsedLvls),]
+    attributes = NamedAttribute[NamedAttribute("crdUsedLvls", crdUsedLvls),]
 
     return create_operation(
         "sparse_tensor.iterate",
@@ -377,9 +377,9 @@ function binary(
     successors = Block[]
     attributes = NamedAttribute[]
     !isnothing(left_identity) &&
-        push!(attributes, namedattribute("left_identity", left_identity))
+        push!(attributes, NamedAttribute("left_identity", left_identity))
     !isnothing(right_identity) &&
-        push!(attributes, namedattribute("right_identity", right_identity))
+        push!(attributes, NamedAttribute("right_identity", right_identity))
 
     return create_operation(
         "sparse_tensor.binary",
@@ -476,7 +476,7 @@ function coiterate(
     owned_regions = Region[caseRegions...,]
     successors = Block[]
     attributes = NamedAttribute[
-        namedattribute("crdUsedLvls", crdUsedLvls), namedattribute("cases", cases)
+        NamedAttribute("crdUsedLvls", crdUsedLvls), NamedAttribute("cases", cases)
     ]
     push!(attributes, operandsegmentsizes([length(iterSpaces), length(initArgs)]))
 
@@ -569,7 +569,7 @@ function concatenate(inputs::Vector{Value}; result::IR.Type, dimension, location
     operands = Value[inputs...,]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("dimension", dimension),]
+    attributes = NamedAttribute[NamedAttribute("dimension", dimension),]
 
     return create_operation(
         "sparse_tensor.concatenate",
@@ -666,7 +666,7 @@ function crd_translate(
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[
-        namedattribute("direction", direction), namedattribute("encoder", encoder)
+        NamedAttribute("direction", direction), NamedAttribute("encoder", encoder)
     ]
 
     return create_operation(
@@ -889,7 +889,7 @@ function foreach(
     owned_regions = Region[region,]
     successors = Block[]
     attributes = NamedAttribute[]
-    !isnothing(order) && push!(attributes, namedattribute("order", order))
+    !isnothing(order) && push!(attributes, NamedAttribute("order", order))
 
     return create_operation(
         "sparse_tensor.foreach",
@@ -926,9 +926,9 @@ function storage_specifier_get(
     operands = Value[specifier,]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("specifierKind", specifierKind),]
+    attributes = NamedAttribute[NamedAttribute("specifierKind", specifierKind),]
     !isnothing(result) && push!(op_ty_results, result)
-    !isnothing(level) && push!(attributes, namedattribute("level", level))
+    !isnothing(level) && push!(attributes, NamedAttribute("level", level))
 
     return create_operation(
         "sparse_tensor.storage_specifier.get",
@@ -1019,7 +1019,7 @@ function load(
     successors = Block[]
     attributes = NamedAttribute[]
     !isnothing(result) && push!(op_ty_results, result)
-    !isnothing(hasInserts) && push!(attributes, namedattribute("hasInserts", hasInserts))
+    !isnothing(hasInserts) && push!(attributes, NamedAttribute("hasInserts", hasInserts))
 
     return create_operation(
         "sparse_tensor.load",
@@ -1300,7 +1300,7 @@ function push_back(
     !isnothing(n) && push!(operands, n)
     !isnothing(outBuffer) && push!(op_ty_results, outBuffer)
     !isnothing(newSize) && push!(op_ty_results, newSize)
-    !isnothing(inbounds) && push!(attributes, namedattribute("inbounds", inbounds))
+    !isnothing(inbounds) && push!(attributes, NamedAttribute("inbounds", inbounds))
 
     return create_operation(
         "sparse_tensor.push_back",
@@ -1462,7 +1462,7 @@ function reorder_coo(input_coo::Value; result_coo::IR.Type, algorithm, location=
     operands = Value[input_coo,]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("algorithm", algorithm),]
+    attributes = NamedAttribute[NamedAttribute("algorithm", algorithm),]
 
     return create_operation(
         "sparse_tensor.reorder_coo",
@@ -1573,9 +1573,9 @@ function storage_specifier_set(
     operands = Value[specifier, value]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("specifierKind", specifierKind),]
+    attributes = NamedAttribute[NamedAttribute("specifierKind", specifierKind),]
     !isnothing(result) && push!(op_ty_results, result)
-    !isnothing(level) && push!(attributes, namedattribute("level", level))
+    !isnothing(level) && push!(attributes, NamedAttribute("level", level))
 
     return create_operation(
         "sparse_tensor.storage_specifier.set",
@@ -1626,9 +1626,9 @@ function sort(
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[
-        namedattribute("perm_map", perm_map), namedattribute("algorithm", algorithm)
+        NamedAttribute("perm_map", perm_map), NamedAttribute("algorithm", algorithm)
     ]
-    !isnothing(ny) && push!(attributes, namedattribute("ny", ny))
+    !isnothing(ny) && push!(attributes, NamedAttribute("ny", ny))
 
     return create_operation(
         "sparse_tensor.sort",
@@ -1768,7 +1768,7 @@ function coordinates(
     operands = Value[tensor,]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("level", level),]
+    attributes = NamedAttribute[NamedAttribute("level", level),]
     !isnothing(result) && push!(op_ty_results, result)
 
     return create_operation(
@@ -1810,7 +1810,7 @@ function positions(
     operands = Value[tensor,]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("level", level),]
+    attributes = NamedAttribute[NamedAttribute("level", level),]
     !isnothing(result) && push!(op_ty_results, result)
 
     return create_operation(
@@ -1853,7 +1853,7 @@ function slice_offset(
     operands = Value[slice,]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("dim", dim),]
+    attributes = NamedAttribute[NamedAttribute("dim", dim),]
     !isnothing(offset) && push!(op_ty_results, offset)
 
     return create_operation(
@@ -1897,7 +1897,7 @@ function slice_stride(
     operands = Value[slice,]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("dim", dim),]
+    attributes = NamedAttribute[NamedAttribute("dim", dim),]
     !isnothing(stride) && push!(op_ty_results, stride)
 
     return create_operation(

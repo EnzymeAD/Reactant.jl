@@ -23,6 +23,7 @@ jobs:
     with:
       upstream_repo: 'openxla/xprof'
       upstream_commit: ${{ inputs.xprof_commit }}
+      upstream_branch: 'master'
       variable_name: 'XPROF_COMMIT'
       workspace_path: 'deps/ReactantExtra/WORKSPACE'
     secrets: inherit

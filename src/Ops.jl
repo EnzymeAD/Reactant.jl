@@ -193,7 +193,7 @@ end
         operands = MLIR.IR.Value[]
         owned_regions = MLIR.IR.Region[]
         successors = MLIR.IR.Block[]
-        attributes = MLIR.IR.NamedAttribute[MLIR.Dialects.namedattribute("value", value),]
+        attributes = MLIR.IR.NamedAttribute[MLIR.IR.NamedAttribute("value", value),]
 
         cstop = MLIR.IR.create_operation(
             "stablehlo.constant",
