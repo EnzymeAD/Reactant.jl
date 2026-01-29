@@ -4,10 +4,14 @@ using ..Reactant
 using ..API
 
 using LLVM: LLVM, @checked, mark_alloc, mark_use, mark_dispose
-import LLVM: activate, deactivate, dispose, refcheck
+import LLVM: activate, deactivate, dispose, @dispose, refcheck
+
+# here for backwards-compatibility but we should respect the naming convention of LLVM.jl
 const activate! = activate
 const deactivate! = deactivate
 const dispose! = dispose
+
+mark_donate(x) = mark_dispose(x)
 
 # fix for `@checked` on MLIR.API types
 for AT in [

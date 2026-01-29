@@ -9,7 +9,7 @@ Creates a new, empty module and transfers ownership to the caller.
 """
 Module(loc::Location=Location()) = Module(mark_alloc(API.mlirModuleCreateEmpty(loc)))
 
-Module(op::Operation) = Module(mark_alloc(API.mlirModuleFromOperation(lose_ownership!(op))))
+Module(op::Operation) = Module(mark_alloc(API.mlirModuleFromOperation(mark_donate(op))))
 
 """
     dispose(module)
@@ -20,7 +20,7 @@ After calling this function, the module must not be used anymore.
 dispose(mod_::Module) = mark_dispose(API.mlirModuleDestroy, mod_)
 
 Base.cconvert(::Core.Type{API.MlirModule}, module_::Module) = module_
-Base.unsafe_convert(::Core.Type{API.MlirModule}, module_::Module) = module_.ref
+Base.unsafe_convert(::Core.Type{API.MlirModule}, module_::Module) = mark_use(module_).ref
 
 """
     parse(::Type{Module}, module; context=current_context())
