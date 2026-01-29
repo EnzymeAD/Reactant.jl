@@ -120,6 +120,7 @@ end
                 (Array{Float64}, Array{Float64}, Array{TracedRNumber{Float64}}),
                 (Matrix, Matrix, Matrix),
                 (Array{<:AbstractFloat}, Array{<:AbstractFloat}, Array{<:AbstractFloat}),
+                (Array{>:Float32}, Array{>:Float32}, Array{>:Float32}),
                 (ConcreteRNumber, TracedRNumber, TracedRNumber),
                 (ConcreteRArray, TracedRArray, TracedRArray),
                 (ConcreteRArray{Float64}, TracedRArray{Float64}, TracedRArray{Float64}),
@@ -132,6 +133,11 @@ end
                     ConcreteRArray{<:AbstractFloat},
                     TracedRArray{<:AbstractFloat},
                     TracedRArray{<:AbstractFloat},
+                ),
+                (
+                    ConcreteRArray{>:Float32},
+                    TracedRArray{>:Float32},
+                    TracedRArray{>:Float32},
                 ),
                 (Union{Nothing,Array}, Union{Nothing,Array}, Union{Nothing,Array}),
                 (
