@@ -10,7 +10,7 @@ import ...IR:
     create_operation,
     context,
     IndexType
-import ..Dialects: namedattribute, operandsegmentsizes, resultsegmentsizes
+import ..Dialects: operandsegmentsizes, resultsegmentsizes
 import ...API
 
 """
@@ -281,7 +281,7 @@ function broadcast_add(
     attributes = NamedAttribute[]
     !isnothing(result_0) && push!(op_ty_results, result_0)
     !isnothing(broadcast_dimensions) &&
-        push!(attributes, namedattribute("broadcast_dimensions", broadcast_dimensions))
+        push!(attributes, NamedAttribute("broadcast_dimensions", broadcast_dimensions))
 
     return create_operation(
         "chlo.broadcast_add",
@@ -317,7 +317,7 @@ function broadcast_and(
     attributes = NamedAttribute[]
     !isnothing(result_0) && push!(op_ty_results, result_0)
     !isnothing(broadcast_dimensions) &&
-        push!(attributes, namedattribute("broadcast_dimensions", broadcast_dimensions))
+        push!(attributes, NamedAttribute("broadcast_dimensions", broadcast_dimensions))
 
     return create_operation(
         "chlo.broadcast_and",
@@ -353,7 +353,7 @@ function broadcast_atan2(
     attributes = NamedAttribute[]
     !isnothing(result_0) && push!(op_ty_results, result_0)
     !isnothing(broadcast_dimensions) &&
-        push!(attributes, namedattribute("broadcast_dimensions", broadcast_dimensions))
+        push!(attributes, NamedAttribute("broadcast_dimensions", broadcast_dimensions))
 
     return create_operation(
         "chlo.broadcast_atan2",
@@ -391,14 +391,14 @@ function broadcast_compare(
     operands = Value[lhs, rhs]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute(
+    attributes = NamedAttribute[NamedAttribute(
         "comparison_direction", comparison_direction
     ),]
     !isnothing(result_0) && push!(op_ty_results, result_0)
     !isnothing(broadcast_dimensions) &&
-        push!(attributes, namedattribute("broadcast_dimensions", broadcast_dimensions))
+        push!(attributes, NamedAttribute("broadcast_dimensions", broadcast_dimensions))
     !isnothing(compare_type) &&
-        push!(attributes, namedattribute("compare_type", compare_type))
+        push!(attributes, NamedAttribute("compare_type", compare_type))
 
     return create_operation(
         "chlo.broadcast_compare",
@@ -432,7 +432,7 @@ function broadcast_complex(
     attributes = NamedAttribute[]
     !isnothing(result_0) && push!(op_ty_results, result_0)
     !isnothing(broadcast_dimensions) &&
-        push!(attributes, namedattribute("broadcast_dimensions", broadcast_dimensions))
+        push!(attributes, NamedAttribute("broadcast_dimensions", broadcast_dimensions))
 
     return create_operation(
         "chlo.broadcast_complex",
@@ -468,7 +468,7 @@ function broadcast_divide(
     attributes = NamedAttribute[]
     !isnothing(result_0) && push!(op_ty_results, result_0)
     !isnothing(broadcast_dimensions) &&
-        push!(attributes, namedattribute("broadcast_dimensions", broadcast_dimensions))
+        push!(attributes, NamedAttribute("broadcast_dimensions", broadcast_dimensions))
 
     return create_operation(
         "chlo.broadcast_divide",
@@ -504,7 +504,7 @@ function broadcast_maximum(
     attributes = NamedAttribute[]
     !isnothing(result_0) && push!(op_ty_results, result_0)
     !isnothing(broadcast_dimensions) &&
-        push!(attributes, namedattribute("broadcast_dimensions", broadcast_dimensions))
+        push!(attributes, NamedAttribute("broadcast_dimensions", broadcast_dimensions))
 
     return create_operation(
         "chlo.broadcast_maximum",
@@ -540,7 +540,7 @@ function broadcast_minimum(
     attributes = NamedAttribute[]
     !isnothing(result_0) && push!(op_ty_results, result_0)
     !isnothing(broadcast_dimensions) &&
-        push!(attributes, namedattribute("broadcast_dimensions", broadcast_dimensions))
+        push!(attributes, NamedAttribute("broadcast_dimensions", broadcast_dimensions))
 
     return create_operation(
         "chlo.broadcast_minimum",
@@ -576,7 +576,7 @@ function broadcast_multiply(
     attributes = NamedAttribute[]
     !isnothing(result_0) && push!(op_ty_results, result_0)
     !isnothing(broadcast_dimensions) &&
-        push!(attributes, namedattribute("broadcast_dimensions", broadcast_dimensions))
+        push!(attributes, NamedAttribute("broadcast_dimensions", broadcast_dimensions))
 
     return create_operation(
         "chlo.broadcast_multiply",
@@ -612,7 +612,7 @@ function broadcast_next_after(
     attributes = NamedAttribute[]
     !isnothing(result_0) && push!(op_ty_results, result_0)
     !isnothing(broadcast_dimensions) &&
-        push!(attributes, namedattribute("broadcast_dimensions", broadcast_dimensions))
+        push!(attributes, NamedAttribute("broadcast_dimensions", broadcast_dimensions))
 
     return create_operation(
         "chlo.broadcast_next_after",
@@ -648,7 +648,7 @@ function broadcast_or(
     attributes = NamedAttribute[]
     !isnothing(result_0) && push!(op_ty_results, result_0)
     !isnothing(broadcast_dimensions) &&
-        push!(attributes, namedattribute("broadcast_dimensions", broadcast_dimensions))
+        push!(attributes, NamedAttribute("broadcast_dimensions", broadcast_dimensions))
 
     return create_operation(
         "chlo.broadcast_or",
@@ -681,7 +681,7 @@ function broadcast_polygamma(
     attributes = NamedAttribute[]
     !isnothing(result_0) && push!(op_ty_results, result_0)
     !isnothing(broadcast_dimensions) &&
-        push!(attributes, namedattribute("broadcast_dimensions", broadcast_dimensions))
+        push!(attributes, NamedAttribute("broadcast_dimensions", broadcast_dimensions))
 
     return create_operation(
         "chlo.broadcast_polygamma",
@@ -717,7 +717,7 @@ function broadcast_power(
     attributes = NamedAttribute[]
     !isnothing(result_0) && push!(op_ty_results, result_0)
     !isnothing(broadcast_dimensions) &&
-        push!(attributes, namedattribute("broadcast_dimensions", broadcast_dimensions))
+        push!(attributes, NamedAttribute("broadcast_dimensions", broadcast_dimensions))
 
     return create_operation(
         "chlo.broadcast_power",
@@ -753,7 +753,7 @@ function broadcast_remainder(
     attributes = NamedAttribute[]
     !isnothing(result_0) && push!(op_ty_results, result_0)
     !isnothing(broadcast_dimensions) &&
-        push!(attributes, namedattribute("broadcast_dimensions", broadcast_dimensions))
+        push!(attributes, NamedAttribute("broadcast_dimensions", broadcast_dimensions))
 
     return create_operation(
         "chlo.broadcast_remainder",
@@ -823,7 +823,7 @@ function broadcast_shift_left(
     attributes = NamedAttribute[]
     !isnothing(result_0) && push!(op_ty_results, result_0)
     !isnothing(broadcast_dimensions) &&
-        push!(attributes, namedattribute("broadcast_dimensions", broadcast_dimensions))
+        push!(attributes, NamedAttribute("broadcast_dimensions", broadcast_dimensions))
 
     return create_operation(
         "chlo.broadcast_shift_left",
@@ -859,7 +859,7 @@ function broadcast_shift_right_arithmetic(
     attributes = NamedAttribute[]
     !isnothing(result_0) && push!(op_ty_results, result_0)
     !isnothing(broadcast_dimensions) &&
-        push!(attributes, namedattribute("broadcast_dimensions", broadcast_dimensions))
+        push!(attributes, NamedAttribute("broadcast_dimensions", broadcast_dimensions))
 
     return create_operation(
         "chlo.broadcast_shift_right_arithmetic",
@@ -895,7 +895,7 @@ function broadcast_shift_right_logical(
     attributes = NamedAttribute[]
     !isnothing(result_0) && push!(op_ty_results, result_0)
     !isnothing(broadcast_dimensions) &&
-        push!(attributes, namedattribute("broadcast_dimensions", broadcast_dimensions))
+        push!(attributes, NamedAttribute("broadcast_dimensions", broadcast_dimensions))
 
     return create_operation(
         "chlo.broadcast_shift_right_logical",
@@ -931,7 +931,7 @@ function broadcast_subtract(
     attributes = NamedAttribute[]
     !isnothing(result_0) && push!(op_ty_results, result_0)
     !isnothing(broadcast_dimensions) &&
-        push!(attributes, namedattribute("broadcast_dimensions", broadcast_dimensions))
+        push!(attributes, NamedAttribute("broadcast_dimensions", broadcast_dimensions))
 
     return create_operation(
         "chlo.broadcast_subtract",
@@ -967,7 +967,7 @@ function broadcast_xor(
     attributes = NamedAttribute[]
     !isnothing(result_0) && push!(op_ty_results, result_0)
     !isnothing(broadcast_dimensions) &&
-        push!(attributes, namedattribute("broadcast_dimensions", broadcast_dimensions))
+        push!(attributes, NamedAttribute("broadcast_dimensions", broadcast_dimensions))
 
     return create_operation(
         "chlo.broadcast_xor",
@@ -1004,7 +1004,7 @@ function broadcast_zeta(
     attributes = NamedAttribute[]
     !isnothing(result_0) && push!(op_ty_results, result_0)
     !isnothing(broadcast_dimensions) &&
-        push!(attributes, namedattribute("broadcast_dimensions", broadcast_dimensions))
+        push!(attributes, NamedAttribute("broadcast_dimensions", broadcast_dimensions))
 
     return create_operation(
         "chlo.broadcast_zeta",
@@ -1059,7 +1059,7 @@ function constant_like(
     operands = Value[operand,]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("value", value),]
+    attributes = NamedAttribute[NamedAttribute("value", value),]
     !isnothing(result_0) && push!(op_ty_results, result_0)
 
     return create_operation(
@@ -1084,7 +1084,7 @@ function constant(; output=nothing::Union{Nothing,IR.Type}, value, location=Loca
     operands = Value[]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("value", value),]
+    attributes = NamedAttribute[NamedAttribute("value", value),]
     !isnothing(output) && push!(op_ty_results, output)
 
     return create_operation(
@@ -1434,11 +1434,11 @@ function ragged_dot(
     operands = Value[lhs, rhs, group_sizes]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute(
+    attributes = NamedAttribute[NamedAttribute(
         "ragged_dot_dimension_numbers", ragged_dot_dimension_numbers
     ),]
     !isnothing(precision_config) &&
-        push!(attributes, namedattribute("precision_config", precision_config))
+        push!(attributes, NamedAttribute("precision_config", precision_config))
 
     return create_operation(
         "chlo.ragged_dot",
@@ -1480,12 +1480,12 @@ function scan(
     operands = Value[inputs..., inits...]
     owned_regions = Region[body,]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("dimension", dimension),]
+    attributes = NamedAttribute[NamedAttribute("dimension", dimension),]
     push!(attributes, operandsegmentsizes([length(inputs), length(inits)]))
     push!(attributes, resultsegmentsizes([length(outputs), length(carries)]))
-    !isnothing(is_reverse) && push!(attributes, namedattribute("is_reverse", is_reverse))
+    !isnothing(is_reverse) && push!(attributes, NamedAttribute("is_reverse", is_reverse))
     !isnothing(is_associative) &&
-        push!(attributes, namedattribute("is_associative", is_associative))
+        push!(attributes, NamedAttribute("is_associative", is_associative))
 
     return create_operation(
         "chlo.scan",
@@ -1615,7 +1615,7 @@ function top_k(
     operands = Value[operand,]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("k", k),]
+    attributes = NamedAttribute[NamedAttribute("k", k),]
     !isnothing(values) && push!(op_ty_results, values)
     !isnothing(indices) && push!(op_ty_results, indices)
 

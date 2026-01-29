@@ -10,7 +10,7 @@ import ...IR:
     create_operation,
     context,
     IndexType
-import ..Dialects: namedattribute, operandsegmentsizes, resultsegmentsizes
+import ..Dialects: NamedAttribute, operandsegmentsizes, resultsegmentsizes
 import ...API
 
 """
@@ -112,7 +112,7 @@ function collapse_shape(src::Value; result::IR.Type, reassociation, location=Loc
     operands = Value[src,]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("reassociation", reassociation),]
+    attributes = NamedAttribute[NamedAttribute("reassociation", reassociation),]
 
     return create_operation(
         "tensor.collapse_shape",
@@ -154,7 +154,7 @@ function concat(inputs::Vector{Value}; result::IR.Type, dim, location=Location()
     operands = Value[inputs...,]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("dim", dim),]
+    attributes = NamedAttribute[NamedAttribute("dim", dim),]
 
     return create_operation(
         "tensor.concat",
@@ -290,8 +290,8 @@ function expand_shape(
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[
-        namedattribute("reassociation", reassociation),
-        namedattribute("static_output_shape", static_output_shape),
+        NamedAttribute("reassociation", reassociation),
+        NamedAttribute("static_output_shape", static_output_shape),
     ]
 
     return create_operation(
@@ -422,9 +422,9 @@ function extract_slice(
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[
-        namedattribute("static_offsets", static_offsets),
-        namedattribute("static_sizes", static_sizes),
-        namedattribute("static_strides", static_strides),
+        NamedAttribute("static_offsets", static_offsets),
+        NamedAttribute("static_sizes", static_sizes),
+        NamedAttribute("static_strides", static_strides),
     ]
     push!(
         attributes,
@@ -589,8 +589,8 @@ function gather(
     operands = Value[source, indices]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("gather_dims", gather_dims),]
-    !isnothing(unique) && push!(attributes, namedattribute("unique", unique))
+    attributes = NamedAttribute[NamedAttribute("gather_dims", gather_dims),]
+    !isnothing(unique) && push!(attributes, NamedAttribute("unique", unique))
 
     return create_operation(
         "tensor.gather",
@@ -763,9 +763,9 @@ function insert_slice(
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[
-        namedattribute("static_offsets", static_offsets),
-        namedattribute("static_sizes", static_sizes),
-        namedattribute("static_strides", static_strides),
+        NamedAttribute("static_offsets", static_offsets),
+        NamedAttribute("static_sizes", static_sizes),
+        NamedAttribute("static_strides", static_strides),
     ]
     push!(
         attributes,
@@ -889,10 +889,10 @@ function pad(
     owned_regions = Region[region,]
     successors = Block[]
     attributes = NamedAttribute[
-        namedattribute("static_low", static_low), namedattribute("static_high", static_high)
+        NamedAttribute("static_low", static_low), NamedAttribute("static_high", static_high)
     ]
     push!(attributes, operandsegmentsizes([1, length(low), length(high)]))
-    !isnothing(nofold) && push!(attributes, namedattribute("nofold", nofold))
+    !isnothing(nofold) && push!(attributes, NamedAttribute("nofold", nofold))
 
     return create_operation(
         "tensor.pad",
@@ -982,9 +982,9 @@ function parallel_insert_slice(
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[
-        namedattribute("static_offsets", static_offsets),
-        namedattribute("static_sizes", static_sizes),
-        namedattribute("static_strides", static_strides),
+        NamedAttribute("static_offsets", static_offsets),
+        NamedAttribute("static_sizes", static_sizes),
+        NamedAttribute("static_strides", static_strides),
     ]
     push!(
         attributes,
@@ -1201,8 +1201,8 @@ function scatter(
     operands = Value[source, dest, indices]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("scatter_dims", scatter_dims),]
-    !isnothing(unique) && push!(attributes, namedattribute("unique", unique))
+    attributes = NamedAttribute[NamedAttribute("scatter_dims", scatter_dims),]
+    !isnothing(unique) && push!(attributes, NamedAttribute("unique", unique))
 
     return create_operation(
         "tensor.scatter",

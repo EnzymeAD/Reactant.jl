@@ -10,7 +10,7 @@ import ...IR:
     create_operation,
     context,
     IndexType
-import ..Dialects: namedattribute, operandsegmentsizes, resultsegmentsizes
+import ..Dialects: operandsegmentsizes, resultsegmentsizes
 import ...API
 
 """
@@ -49,7 +49,7 @@ function apply(
     operands = Value[mapOperands...,]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("map", map),]
+    attributes = NamedAttribute[NamedAttribute("map", map),]
     !isnothing(result_0) && push!(op_ty_results, result_0)
 
     return create_operation(
@@ -129,7 +129,7 @@ function delinearize_index(
     operands = Value[linear_index, dynamic_basis...]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("static_basis", static_basis),]
+    attributes = NamedAttribute[NamedAttribute("static_basis", static_basis),]
 
     return create_operation(
         "affine.delinearize_index",
@@ -266,9 +266,9 @@ function for_(
     owned_regions = Region[region,]
     successors = Block[]
     attributes = NamedAttribute[
-        namedattribute("lowerBoundMap", lowerBoundMap),
-        namedattribute("upperBoundMap", upperBoundMap),
-        namedattribute("step", step),
+        NamedAttribute("lowerBoundMap", lowerBoundMap),
+        NamedAttribute("upperBoundMap", upperBoundMap),
+        NamedAttribute("step", step),
     ]
     push!(
         attributes,
@@ -371,7 +371,7 @@ function if_(
     operands = Value[operand_0...,]
     owned_regions = Region[thenRegion, elseRegion]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("condition", condition),]
+    attributes = NamedAttribute[NamedAttribute("condition", condition),]
 
     return create_operation(
         "affine.if",
@@ -449,7 +449,7 @@ function linearize_index(
     operands = Value[multi_index..., dynamic_basis...]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("static_basis", static_basis),]
+    attributes = NamedAttribute[NamedAttribute("static_basis", static_basis),]
     push!(attributes, operandsegmentsizes([length(multi_index), length(dynamic_basis)]))
     !isnothing(linear_index) && push!(op_ty_results, linear_index)
 
@@ -500,7 +500,7 @@ function load(
     operands = Value[memref, indices...]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("map", map),]
+    attributes = NamedAttribute[NamedAttribute("map", map),]
 
     return create_operation(
         "affine.load",
@@ -536,7 +536,7 @@ function max(
     operands = Value[operands...,]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("map", map),]
+    attributes = NamedAttribute[NamedAttribute("map", map),]
     !isnothing(result_0) && push!(op_ty_results, result_0)
 
     return create_operation(
@@ -583,7 +583,7 @@ function min(
     operands = Value[operands...,]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("map", map),]
+    attributes = NamedAttribute[NamedAttribute("map", map),]
     !isnothing(result_0) && push!(op_ty_results, result_0)
 
     return create_operation(
@@ -680,12 +680,12 @@ function parallel(
     owned_regions = Region[region,]
     successors = Block[]
     attributes = NamedAttribute[
-        namedattribute("reductions", reductions),
-        namedattribute("lowerBoundsMap", lowerBoundsMap),
-        namedattribute("lowerBoundsGroups", lowerBoundsGroups),
-        namedattribute("upperBoundsMap", upperBoundsMap),
-        namedattribute("upperBoundsGroups", upperBoundsGroups),
-        namedattribute("steps", steps),
+        NamedAttribute("reductions", reductions),
+        NamedAttribute("lowerBoundsMap", lowerBoundsMap),
+        NamedAttribute("lowerBoundsGroups", lowerBoundsGroups),
+        NamedAttribute("upperBoundsMap", upperBoundsMap),
+        NamedAttribute("upperBoundsGroups", upperBoundsGroups),
+        NamedAttribute("steps", steps),
     ]
 
     return create_operation(
@@ -732,10 +732,10 @@ function prefetch(
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[
-        namedattribute("isWrite", isWrite),
-        namedattribute("localityHint", localityHint),
-        namedattribute("isDataCache", isDataCache),
-        namedattribute("map", map),
+        NamedAttribute("isWrite", isWrite),
+        NamedAttribute("localityHint", localityHint),
+        NamedAttribute("isDataCache", isDataCache),
+        NamedAttribute("map", map),
     ]
 
     return create_operation(
@@ -785,7 +785,7 @@ function store(
     operands = Value[value, memref, indices...]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("map", map),]
+    attributes = NamedAttribute[NamedAttribute("map", map),]
 
     return create_operation(
         "affine.store",
@@ -845,7 +845,7 @@ function vector_load(
     operands = Value[memref, indices...]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("map", map),]
+    attributes = NamedAttribute[NamedAttribute("map", map),]
 
     return create_operation(
         "affine.vector_load",
@@ -907,7 +907,7 @@ function vector_store(
     operands = Value[value, memref, indices...]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("map", map),]
+    attributes = NamedAttribute[NamedAttribute("map", map),]
 
     return create_operation(
         "affine.vector_store",

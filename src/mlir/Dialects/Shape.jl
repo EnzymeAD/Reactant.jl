@@ -10,7 +10,7 @@ import ...IR:
     create_operation,
     context,
     IndexType
-import ..Dialects: namedattribute, operandsegmentsizes, resultsegmentsizes
+import ..Dialects: NamedAttribute, operandsegmentsizes, resultsegmentsizes
 import ...API
 
 """
@@ -211,7 +211,7 @@ function broadcast(
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
-    !isnothing(error) && push!(attributes, namedattribute("error", error))
+    !isnothing(error) && push!(attributes, NamedAttribute("error", error))
 
     return create_operation(
         "shape.broadcast",
@@ -273,7 +273,7 @@ function const_shape(; result=nothing::Union{Nothing,IR.Type}, shape, location=L
     operands = Value[]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("shape", shape),]
+    attributes = NamedAttribute[NamedAttribute("shape", shape),]
     !isnothing(result) && push!(op_ty_results, result)
 
     return create_operation(
@@ -302,7 +302,7 @@ function const_size(; result=nothing::Union{Nothing,IR.Type}, value, location=Lo
     operands = Value[]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("value", value),]
+    attributes = NamedAttribute[NamedAttribute("value", value),]
     !isnothing(result) && push!(op_ty_results, result)
 
     return create_operation(
@@ -339,7 +339,7 @@ function const_witness(;
     operands = Value[]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("passing", passing),]
+    attributes = NamedAttribute[NamedAttribute("passing", passing),]
     !isnothing(result) && push!(op_ty_results, result)
 
     return create_operation(
@@ -452,7 +452,7 @@ function cstr_require(
     operands = Value[pred,]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("msg", msg),]
+    attributes = NamedAttribute[NamedAttribute("msg", msg),]
     !isnothing(result) && push!(op_ty_results, result)
 
     return create_operation(
@@ -649,12 +649,12 @@ function func(;
     owned_regions = Region[body,]
     successors = Block[]
     attributes = NamedAttribute[
-        namedattribute("sym_name", sym_name), namedattribute("function_type", function_type)
+        NamedAttribute("sym_name", sym_name), NamedAttribute("function_type", function_type)
     ]
-    !isnothing(arg_attrs) && push!(attributes, namedattribute("arg_attrs", arg_attrs))
-    !isnothing(res_attrs) && push!(attributes, namedattribute("res_attrs", res_attrs))
+    !isnothing(arg_attrs) && push!(attributes, NamedAttribute("arg_attrs", arg_attrs))
+    !isnothing(res_attrs) && push!(attributes, NamedAttribute("res_attrs", res_attrs))
     !isnothing(sym_visibility) &&
-        push!(attributes, namedattribute("sym_visibility", sym_visibility))
+        push!(attributes, NamedAttribute("sym_visibility", sym_visibility))
 
     return create_operation(
         "shape.func",
@@ -695,10 +695,10 @@ function function_library(;
     owned_regions = Region[body,]
     successors = Block[]
     attributes = NamedAttribute[
-        namedattribute("sym_name", sym_name), namedattribute("mapping", mapping)
+        NamedAttribute("sym_name", sym_name), NamedAttribute("mapping", mapping)
     ]
     !isnothing(sym_visibility) &&
-        push!(attributes, namedattribute("sym_visibility", sym_visibility))
+        push!(attributes, NamedAttribute("sym_visibility", sym_visibility))
 
     return create_operation(
         "shape.function_library",
@@ -881,7 +881,7 @@ function meet(
     successors = Block[]
     attributes = NamedAttribute[]
     !isnothing(result) && push!(op_ty_results, result)
-    !isnothing(error) && push!(attributes, namedattribute("error", error))
+    !isnothing(error) && push!(attributes, NamedAttribute("error", error))
 
     return create_operation(
         "shape.meet",

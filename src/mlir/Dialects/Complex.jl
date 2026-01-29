@@ -10,7 +10,7 @@ import ...IR:
     create_operation,
     context,
     IndexType
-import ..Dialects: namedattribute, operandsegmentsizes, resultsegmentsizes
+import ..Dialects: NamedAttribute, operandsegmentsizes, resultsegmentsizes
 import ...API
 
 """
@@ -36,7 +36,7 @@ function abs(
     successors = Block[]
     attributes = NamedAttribute[]
     !isnothing(result) && push!(op_ty_results, result)
-    !isnothing(fastmath) && push!(attributes, namedattribute("fastmath", fastmath))
+    !isnothing(fastmath) && push!(attributes, NamedAttribute("fastmath", fastmath))
 
     return create_operation(
         "complex.abs",
@@ -74,7 +74,7 @@ function add(
     successors = Block[]
     attributes = NamedAttribute[]
     !isnothing(result) && push!(op_ty_results, result)
-    !isnothing(fastmath) && push!(attributes, namedattribute("fastmath", fastmath))
+    !isnothing(fastmath) && push!(attributes, NamedAttribute("fastmath", fastmath))
 
     return create_operation(
         "complex.add",
@@ -111,7 +111,7 @@ function angle(
     successors = Block[]
     attributes = NamedAttribute[]
     !isnothing(result) && push!(op_ty_results, result)
-    !isnothing(fastmath) && push!(attributes, namedattribute("fastmath", fastmath))
+    !isnothing(fastmath) && push!(attributes, NamedAttribute("fastmath", fastmath))
 
     return create_operation(
         "complex.angle",
@@ -150,7 +150,7 @@ function atan2(
     successors = Block[]
     attributes = NamedAttribute[]
     !isnothing(result) && push!(op_ty_results, result)
-    !isnothing(fastmath) && push!(attributes, namedattribute("fastmath", fastmath))
+    !isnothing(fastmath) && push!(attributes, NamedAttribute("fastmath", fastmath))
 
     return create_operation(
         "complex.atan2",
@@ -217,7 +217,7 @@ function conj(
     successors = Block[]
     attributes = NamedAttribute[]
     !isnothing(result) && push!(op_ty_results, result)
-    !isnothing(fastmath) && push!(attributes, namedattribute("fastmath", fastmath))
+    !isnothing(fastmath) && push!(attributes, NamedAttribute("fastmath", fastmath))
 
     return create_operation(
         "complex.conj",
@@ -248,7 +248,7 @@ function constant(; complex::IR.Type, value, location=Location())
     operands = Value[]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("value", value),]
+    attributes = NamedAttribute[NamedAttribute("value", value),]
 
     return create_operation(
         "complex.constant",
@@ -286,7 +286,7 @@ function cos(
     successors = Block[]
     attributes = NamedAttribute[]
     !isnothing(result) && push!(op_ty_results, result)
-    !isnothing(fastmath) && push!(attributes, namedattribute("fastmath", fastmath))
+    !isnothing(fastmath) && push!(attributes, NamedAttribute("fastmath", fastmath))
 
     return create_operation(
         "complex.cos",
@@ -354,7 +354,7 @@ function div(
     successors = Block[]
     attributes = NamedAttribute[]
     !isnothing(result) && push!(op_ty_results, result)
-    !isnothing(fastmath) && push!(attributes, namedattribute("fastmath", fastmath))
+    !isnothing(fastmath) && push!(attributes, NamedAttribute("fastmath", fastmath))
 
     return create_operation(
         "complex.div",
@@ -426,7 +426,7 @@ function exp(
     successors = Block[]
     attributes = NamedAttribute[]
     !isnothing(result) && push!(op_ty_results, result)
-    !isnothing(fastmath) && push!(attributes, namedattribute("fastmath", fastmath))
+    !isnothing(fastmath) && push!(attributes, NamedAttribute("fastmath", fastmath))
 
     return create_operation(
         "complex.exp",
@@ -463,7 +463,7 @@ function expm1(
     successors = Block[]
     attributes = NamedAttribute[]
     !isnothing(result) && push!(op_ty_results, result)
-    !isnothing(fastmath) && push!(attributes, namedattribute("fastmath", fastmath))
+    !isnothing(fastmath) && push!(attributes, NamedAttribute("fastmath", fastmath))
 
     return create_operation(
         "complex.expm1",
@@ -500,7 +500,7 @@ function im(
     successors = Block[]
     attributes = NamedAttribute[]
     !isnothing(imaginary) && push!(op_ty_results, imaginary)
-    !isnothing(fastmath) && push!(attributes, namedattribute("fastmath", fastmath))
+    !isnothing(fastmath) && push!(attributes, NamedAttribute("fastmath", fastmath))
 
     return create_operation(
         "complex.im",
@@ -540,7 +540,7 @@ function log1p(
     successors = Block[]
     attributes = NamedAttribute[]
     !isnothing(result) && push!(op_ty_results, result)
-    !isnothing(fastmath) && push!(attributes, namedattribute("fastmath", fastmath))
+    !isnothing(fastmath) && push!(attributes, NamedAttribute("fastmath", fastmath))
 
     return create_operation(
         "complex.log1p",
@@ -579,7 +579,7 @@ function log(
     successors = Block[]
     attributes = NamedAttribute[]
     !isnothing(result) && push!(op_ty_results, result)
-    !isnothing(fastmath) && push!(attributes, namedattribute("fastmath", fastmath))
+    !isnothing(fastmath) && push!(attributes, NamedAttribute("fastmath", fastmath))
 
     return create_operation(
         "complex.log",
@@ -615,7 +615,7 @@ function mul(
     successors = Block[]
     attributes = NamedAttribute[]
     !isnothing(result) && push!(op_ty_results, result)
-    !isnothing(fastmath) && push!(attributes, namedattribute("fastmath", fastmath))
+    !isnothing(fastmath) && push!(attributes, NamedAttribute("fastmath", fastmath))
 
     return create_operation(
         "complex.mul",
@@ -652,7 +652,7 @@ function neg(
     successors = Block[]
     attributes = NamedAttribute[]
     !isnothing(result) && push!(op_ty_results, result)
-    !isnothing(fastmath) && push!(attributes, namedattribute("fastmath", fastmath))
+    !isnothing(fastmath) && push!(attributes, NamedAttribute("fastmath", fastmath))
 
     return create_operation(
         "complex.neg",
@@ -725,7 +725,7 @@ function pow(
     successors = Block[]
     attributes = NamedAttribute[]
     !isnothing(result) && push!(op_ty_results, result)
-    !isnothing(fastmath) && push!(attributes, namedattribute("fastmath", fastmath))
+    !isnothing(fastmath) && push!(attributes, NamedAttribute("fastmath", fastmath))
 
     return create_operation(
         "complex.pow",
@@ -765,7 +765,7 @@ function powi(
     successors = Block[]
     attributes = NamedAttribute[]
     !isnothing(result) && push!(op_ty_results, result)
-    !isnothing(fastmath) && push!(attributes, namedattribute("fastmath", fastmath))
+    !isnothing(fastmath) && push!(attributes, NamedAttribute("fastmath", fastmath))
 
     return create_operation(
         "complex.powi",
@@ -802,7 +802,7 @@ function re(
     successors = Block[]
     attributes = NamedAttribute[]
     !isnothing(real) && push!(op_ty_results, real)
-    !isnothing(fastmath) && push!(attributes, namedattribute("fastmath", fastmath))
+    !isnothing(fastmath) && push!(attributes, NamedAttribute("fastmath", fastmath))
 
     return create_operation(
         "complex.re",
@@ -839,7 +839,7 @@ function rsqrt(
     successors = Block[]
     attributes = NamedAttribute[]
     !isnothing(result) && push!(op_ty_results, result)
-    !isnothing(fastmath) && push!(attributes, namedattribute("fastmath", fastmath))
+    !isnothing(fastmath) && push!(attributes, NamedAttribute("fastmath", fastmath))
 
     return create_operation(
         "complex.rsqrt",
@@ -877,7 +877,7 @@ function sign(
     successors = Block[]
     attributes = NamedAttribute[]
     !isnothing(result) && push!(op_ty_results, result)
-    !isnothing(fastmath) && push!(attributes, namedattribute("fastmath", fastmath))
+    !isnothing(fastmath) && push!(attributes, NamedAttribute("fastmath", fastmath))
 
     return create_operation(
         "complex.sign",
@@ -915,7 +915,7 @@ function sin(
     successors = Block[]
     attributes = NamedAttribute[]
     !isnothing(result) && push!(op_ty_results, result)
-    !isnothing(fastmath) && push!(attributes, namedattribute("fastmath", fastmath))
+    !isnothing(fastmath) && push!(attributes, NamedAttribute("fastmath", fastmath))
 
     return create_operation(
         "complex.sin",
@@ -952,7 +952,7 @@ function sqrt(
     successors = Block[]
     attributes = NamedAttribute[]
     !isnothing(result) && push!(op_ty_results, result)
-    !isnothing(fastmath) && push!(attributes, namedattribute("fastmath", fastmath))
+    !isnothing(fastmath) && push!(attributes, NamedAttribute("fastmath", fastmath))
 
     return create_operation(
         "complex.sqrt",
@@ -990,7 +990,7 @@ function sub(
     successors = Block[]
     attributes = NamedAttribute[]
     !isnothing(result) && push!(op_ty_results, result)
-    !isnothing(fastmath) && push!(attributes, namedattribute("fastmath", fastmath))
+    !isnothing(fastmath) && push!(attributes, NamedAttribute("fastmath", fastmath))
 
     return create_operation(
         "complex.sub",
@@ -1028,7 +1028,7 @@ function tan(
     successors = Block[]
     attributes = NamedAttribute[]
     !isnothing(result) && push!(op_ty_results, result)
-    !isnothing(fastmath) && push!(attributes, namedattribute("fastmath", fastmath))
+    !isnothing(fastmath) && push!(attributes, NamedAttribute("fastmath", fastmath))
 
     return create_operation(
         "complex.tan",
@@ -1066,7 +1066,7 @@ function tanh(
     successors = Block[]
     attributes = NamedAttribute[]
     !isnothing(result) && push!(op_ty_results, result)
-    !isnothing(fastmath) && push!(attributes, namedattribute("fastmath", fastmath))
+    !isnothing(fastmath) && push!(attributes, NamedAttribute("fastmath", fastmath))
 
     return create_operation(
         "complex.tanh",

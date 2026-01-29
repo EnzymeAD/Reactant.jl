@@ -10,7 +10,7 @@ import ...IR:
     create_operation,
     context,
     IndexType
-import ..Dialects: namedattribute, operandsegmentsizes, resultsegmentsizes
+import ..Dialects: operandsegmentsizes, resultsegmentsizes
 import ...API
 
 """
@@ -55,8 +55,8 @@ function all_reduce(
     successors = Block[]
     attributes = NamedAttribute[]
     !isnothing(result) && push!(op_ty_results, result)
-    !isnothing(op) && push!(attributes, namedattribute("op", op))
-    !isnothing(uniform) && push!(attributes, namedattribute("uniform", uniform))
+    !isnothing(op) && push!(attributes, NamedAttribute("op", op))
+    !isnothing(uniform) && push!(attributes, NamedAttribute("uniform", uniform))
 
     return create_operation(
         "gpu.all_reduce",
@@ -113,7 +113,7 @@ function alloc(
         ]),
     )
     !isnothing(asyncToken) && push!(op_ty_results, asyncToken)
-    !isnothing(hostShared) && push!(attributes, namedattribute("hostShared", hostShared))
+    !isnothing(hostShared) && push!(attributes, NamedAttribute("hostShared", hostShared))
 
     return create_operation(
         "gpu.alloc",
@@ -197,10 +197,10 @@ function binary(; sym_name, offloadingHandler=nothing, objects, location=Locatio
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[
-        namedattribute("sym_name", sym_name), namedattribute("objects", objects)
+        NamedAttribute("sym_name", sym_name), NamedAttribute("objects", objects)
     ]
     !isnothing(offloadingHandler) &&
-        push!(attributes, namedattribute("offloadingHandler", offloadingHandler))
+        push!(attributes, NamedAttribute("offloadingHandler", offloadingHandler))
 
     return create_operation(
         "gpu.binary",
@@ -249,9 +249,9 @@ function block_dim(;
     operands = Value[]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("dimension", dimension),]
+    attributes = NamedAttribute[NamedAttribute("dimension", dimension),]
     !isnothing(result_0) && push!(op_ty_results, result_0)
-    !isnothing(upper_bound) && push!(attributes, namedattribute("upper_bound", upper_bound))
+    !isnothing(upper_bound) && push!(attributes, NamedAttribute("upper_bound", upper_bound))
 
     return create_operation(
         "gpu.block_dim",
@@ -294,9 +294,9 @@ function block_id(;
     operands = Value[]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("dimension", dimension),]
+    attributes = NamedAttribute[NamedAttribute("dimension", dimension),]
     !isnothing(result_0) && push!(op_ty_results, result_0)
-    !isnothing(upper_bound) && push!(attributes, namedattribute("upper_bound", upper_bound))
+    !isnothing(upper_bound) && push!(attributes, NamedAttribute("upper_bound", upper_bound))
 
     return create_operation(
         "gpu.block_id",
@@ -337,9 +337,9 @@ function cluster_block_id(;
     operands = Value[]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("dimension", dimension),]
+    attributes = NamedAttribute[NamedAttribute("dimension", dimension),]
     !isnothing(result_0) && push!(op_ty_results, result_0)
-    !isnothing(upper_bound) && push!(attributes, namedattribute("upper_bound", upper_bound))
+    !isnothing(upper_bound) && push!(attributes, NamedAttribute("upper_bound", upper_bound))
 
     return create_operation(
         "gpu.cluster_block_id",
@@ -381,9 +381,9 @@ function cluster_dim_blocks(;
     operands = Value[]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("dimension", dimension),]
+    attributes = NamedAttribute[NamedAttribute("dimension", dimension),]
     !isnothing(result_0) && push!(op_ty_results, result_0)
-    !isnothing(upper_bound) && push!(attributes, namedattribute("upper_bound", upper_bound))
+    !isnothing(upper_bound) && push!(attributes, NamedAttribute("upper_bound", upper_bound))
 
     return create_operation(
         "gpu.cluster_dim_blocks",
@@ -425,9 +425,9 @@ function cluster_dim(;
     operands = Value[]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("dimension", dimension),]
+    attributes = NamedAttribute[NamedAttribute("dimension", dimension),]
     !isnothing(result_0) && push!(op_ty_results, result_0)
-    !isnothing(upper_bound) && push!(attributes, namedattribute("upper_bound", upper_bound))
+    !isnothing(upper_bound) && push!(attributes, NamedAttribute("upper_bound", upper_bound))
 
     return create_operation(
         "gpu.cluster_dim",
@@ -469,9 +469,9 @@ function cluster_id(;
     operands = Value[]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("dimension", dimension),]
+    attributes = NamedAttribute[NamedAttribute("dimension", dimension),]
     !isnothing(result_0) && push!(op_ty_results, result_0)
-    !isnothing(upper_bound) && push!(attributes, namedattribute("upper_bound", upper_bound))
+    !isnothing(upper_bound) && push!(attributes, NamedAttribute("upper_bound", upper_bound))
 
     return create_operation(
         "gpu.cluster_id",
@@ -520,7 +520,7 @@ function create_2to4_spmat(
     successors = Block[]
     attributes = NamedAttribute[]
     !isnothing(asyncToken) && push!(op_ty_results, asyncToken)
-    !isnothing(pruneFlag) && push!(attributes, namedattribute("pruneFlag", pruneFlag))
+    !isnothing(pruneFlag) && push!(attributes, NamedAttribute("pruneFlag", pruneFlag))
 
     return create_operation(
         "gpu.create_2to4_spmat",
@@ -1111,19 +1111,19 @@ function func(;
     operands = Value[]
     owned_regions = Region[body,]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("function_type", function_type),]
-    !isnothing(arg_attrs) && push!(attributes, namedattribute("arg_attrs", arg_attrs))
-    !isnothing(res_attrs) && push!(attributes, namedattribute("res_attrs", res_attrs))
+    attributes = NamedAttribute[NamedAttribute("function_type", function_type),]
+    !isnothing(arg_attrs) && push!(attributes, NamedAttribute("arg_attrs", arg_attrs))
+    !isnothing(res_attrs) && push!(attributes, NamedAttribute("res_attrs", res_attrs))
     !isnothing(workgroup_attrib_attrs) &&
-        push!(attributes, namedattribute("workgroup_attrib_attrs", workgroup_attrib_attrs))
+        push!(attributes, NamedAttribute("workgroup_attrib_attrs", workgroup_attrib_attrs))
     !isnothing(private_attrib_attrs) &&
-        push!(attributes, namedattribute("private_attrib_attrs", private_attrib_attrs))
+        push!(attributes, NamedAttribute("private_attrib_attrs", private_attrib_attrs))
     !isnothing(known_block_size) &&
-        push!(attributes, namedattribute("known_block_size", known_block_size))
+        push!(attributes, NamedAttribute("known_block_size", known_block_size))
     !isnothing(known_grid_size) &&
-        push!(attributes, namedattribute("known_grid_size", known_grid_size))
+        push!(attributes, NamedAttribute("known_grid_size", known_grid_size))
     !isnothing(known_cluster_size) &&
-        push!(attributes, namedattribute("known_cluster_size", known_cluster_size))
+        push!(attributes, NamedAttribute("known_cluster_size", known_cluster_size))
 
     return create_operation(
         "gpu.func",
@@ -1187,10 +1187,10 @@ function module_(;
     operands = Value[]
     owned_regions = Region[bodyRegion,]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("sym_name", sym_name),]
-    !isnothing(targets) && push!(attributes, namedattribute("targets", targets))
+    attributes = NamedAttribute[NamedAttribute("sym_name", sym_name),]
+    !isnothing(targets) && push!(attributes, NamedAttribute("targets", targets))
     !isnothing(offloadingHandler) &&
-        push!(attributes, namedattribute("offloadingHandler", offloadingHandler))
+        push!(attributes, NamedAttribute("offloadingHandler", offloadingHandler))
 
     return create_operation(
         "gpu.module",
@@ -1232,9 +1232,9 @@ function global_id(;
     operands = Value[]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("dimension", dimension),]
+    attributes = NamedAttribute[NamedAttribute("dimension", dimension),]
     !isnothing(result_0) && push!(op_ty_results, result_0)
-    !isnothing(upper_bound) && push!(attributes, namedattribute("upper_bound", upper_bound))
+    !isnothing(upper_bound) && push!(attributes, NamedAttribute("upper_bound", upper_bound))
 
     return create_operation(
         "gpu.global_id",
@@ -1284,9 +1284,9 @@ function grid_dim(;
     operands = Value[]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("dimension", dimension),]
+    attributes = NamedAttribute[NamedAttribute("dimension", dimension),]
     !isnothing(result_0) && push!(op_ty_results, result_0)
-    !isnothing(upper_bound) && push!(attributes, namedattribute("upper_bound", upper_bound))
+    !isnothing(upper_bound) && push!(attributes, NamedAttribute("upper_bound", upper_bound))
 
     return create_operation(
         "gpu.grid_dim",
@@ -1382,7 +1382,7 @@ function lane_id(;
     successors = Block[]
     attributes = NamedAttribute[]
     !isnothing(result) && push!(op_ty_results, result)
-    !isnothing(upper_bound) && push!(attributes, namedattribute("upper_bound", upper_bound))
+    !isnothing(upper_bound) && push!(attributes, NamedAttribute("upper_bound", upper_bound))
 
     return create_operation(
         "gpu.lane_id",
@@ -1524,7 +1524,7 @@ function launch_func(
     ]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("kernel", kernel),]
+    attributes = NamedAttribute[NamedAttribute("kernel", kernel),]
     !isnothing(clusterSizeX) && push!(operands, clusterSizeX)
     !isnothing(clusterSizeY) && push!(operands, clusterSizeY)
     !isnothing(clusterSizeZ) && push!(operands, clusterSizeZ)
@@ -1732,8 +1732,8 @@ function launch(
         ]),
     )
     !isnothing(asyncToken) && push!(op_ty_results, asyncToken)
-    !isnothing(module_) && push!(attributes, namedattribute("module", module_))
-    !isnothing(function_) && push!(attributes, namedattribute("function", function_))
+    !isnothing(module_) && push!(attributes, NamedAttribute("module", module_))
+    !isnothing(function_) && push!(attributes, NamedAttribute("function", function_))
 
     return create_operation(
         "gpu.launch",
@@ -1859,7 +1859,7 @@ function num_subgroups(;
     successors = Block[]
     attributes = NamedAttribute[]
     !isnothing(result) && push!(op_ty_results, result)
-    !isnothing(upper_bound) && push!(attributes, namedattribute("upper_bound", upper_bound))
+    !isnothing(upper_bound) && push!(attributes, NamedAttribute("upper_bound", upper_bound))
 
     return create_operation(
         "gpu.num_subgroups",
@@ -1887,7 +1887,7 @@ function printf(args::Vector{Value}; format, location=Location())
     operands = Value[args...,]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("format", format),]
+    attributes = NamedAttribute[NamedAttribute("format", format),]
 
     return create_operation(
         "gpu.printf",
@@ -1970,7 +1970,7 @@ function rotate(
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[
-        namedattribute("offset", offset), namedattribute("width", width)
+        NamedAttribute("offset", offset), NamedAttribute("width", width)
     ]
     !isnothing(rotateResult) && push!(op_ty_results, rotateResult)
     !isnothing(valid) && push!(op_ty_results, valid)
@@ -2025,10 +2025,10 @@ function sddmm_buffer_size(
     operands = Value[asyncDependencies..., dnmatA, dnmatB, spmatC]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("computeType", computeType),]
+    attributes = NamedAttribute[NamedAttribute("computeType", computeType),]
     !isnothing(asyncToken) && push!(op_ty_results, asyncToken)
-    !isnothing(modeA) && push!(attributes, namedattribute("modeA", modeA))
-    !isnothing(modeB) && push!(attributes, namedattribute("modeB", modeB))
+    !isnothing(modeA) && push!(attributes, NamedAttribute("modeA", modeA))
+    !isnothing(modeB) && push!(attributes, NamedAttribute("modeB", modeB))
 
     return create_operation(
         "gpu.sddmm_buffer_size",
@@ -2080,10 +2080,10 @@ function sddmm(
     operands = Value[asyncDependencies..., dnmatA, dnmatB, spmatC, buffer]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("computeType", computeType),]
+    attributes = NamedAttribute[NamedAttribute("computeType", computeType),]
     !isnothing(asyncToken) && push!(op_ty_results, asyncToken)
-    !isnothing(modeA) && push!(attributes, namedattribute("modeA", modeA))
-    !isnothing(modeB) && push!(attributes, namedattribute("modeB", modeB))
+    !isnothing(modeA) && push!(attributes, NamedAttribute("modeA", modeA))
+    !isnothing(modeB) && push!(attributes, NamedAttribute("modeB", modeB))
 
     return create_operation(
         "gpu.sddmm",
@@ -2235,7 +2235,7 @@ function shuffle(
     operands = Value[value, offset, width]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("mode", mode),]
+    attributes = NamedAttribute[NamedAttribute("mode", mode),]
     !isnothing(shuffleResult) && push!(op_ty_results, shuffleResult)
     !isnothing(valid) && push!(op_ty_results, valid)
 
@@ -2287,10 +2287,10 @@ function spgemm_copy(
     operands = Value[asyncDependencies..., desc, spmatA, spmatB, spmatC]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("computeType", computeType),]
+    attributes = NamedAttribute[NamedAttribute("computeType", computeType),]
     !isnothing(asyncToken) && push!(op_ty_results, asyncToken)
-    !isnothing(modeA) && push!(attributes, namedattribute("modeA", modeA))
-    !isnothing(modeB) && push!(attributes, namedattribute("modeB", modeB))
+    !isnothing(modeA) && push!(attributes, NamedAttribute("modeA", modeA))
+    !isnothing(modeB) && push!(attributes, NamedAttribute("modeB", modeB))
 
     return create_operation(
         "gpu.spgemm_copy",
@@ -2437,11 +2437,11 @@ function spgemm_work_estimation_or_compute(
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[
-        namedattribute("computeType", computeType), namedattribute("kind", kind)
+        NamedAttribute("computeType", computeType), NamedAttribute("kind", kind)
     ]
     !isnothing(asyncToken) && push!(op_ty_results, asyncToken)
-    !isnothing(modeA) && push!(attributes, namedattribute("modeA", modeA))
-    !isnothing(modeB) && push!(attributes, namedattribute("modeB", modeB))
+    !isnothing(modeA) && push!(attributes, NamedAttribute("modeA", modeA))
+    !isnothing(modeB) && push!(attributes, NamedAttribute("modeB", modeB))
 
     return create_operation(
         "gpu.spgemm_work_estimation_or_compute",
@@ -2493,11 +2493,11 @@ function spmm_buffer_size(
     operands = Value[asyncDependencies..., spmatA, dnmatB, dnmatC]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("computeType", computeType),]
+    attributes = NamedAttribute[NamedAttribute("computeType", computeType),]
     !isnothing(asyncToken) && push!(op_ty_results, asyncToken)
     push!(attributes, resultsegmentsizes([length(bufferSzs), Int(!isnothing(asyncToken))]))
-    !isnothing(modeA) && push!(attributes, namedattribute("modeA", modeA))
-    !isnothing(modeB) && push!(attributes, namedattribute("modeB", modeB))
+    !isnothing(modeA) && push!(attributes, Namedattribute("modeA", modeA))
+    !isnothing(modeB) && push!(attributes, Namedattribute("modeB", modeB))
 
     return create_operation(
         "gpu.spmm_buffer_size",
@@ -2549,14 +2549,14 @@ function spmm(
     operands = Value[asyncDependencies..., spmatA, dnmatB, dnmatC, buffers...]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("computeType", computeType),]
+    attributes = NamedAttribute[NamedAttribute("computeType", computeType),]
     push!(
         attributes,
         operandsegmentsizes([length(asyncDependencies), 1, 1, 1, length(buffers)]),
     )
     !isnothing(asyncToken) && push!(op_ty_results, asyncToken)
-    !isnothing(modeA) && push!(attributes, namedattribute("modeA", modeA))
-    !isnothing(modeB) && push!(attributes, namedattribute("modeB", modeB))
+    !isnothing(modeA) && push!(attributes, NamedAttribute("modeA", modeA))
+    !isnothing(modeB) && push!(attributes, NamedAttribute("modeB", modeB))
 
     return create_operation(
         "gpu.spmm",
@@ -2607,9 +2607,9 @@ function spmv_buffer_size(
     operands = Value[asyncDependencies..., spmatA, dnX, dnY]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("computeType", computeType),]
+    attributes = NamedAttribute[NamedAttribute("computeType", computeType),]
     !isnothing(asyncToken) && push!(op_ty_results, asyncToken)
-    !isnothing(modeA) && push!(attributes, namedattribute("modeA", modeA))
+    !isnothing(modeA) && push!(attributes, NamedAttribute("modeA", modeA))
 
     return create_operation(
         "gpu.spmv_buffer_size",
@@ -2660,9 +2660,9 @@ function spmv(
     operands = Value[asyncDependencies..., spmatA, dnX, dnY, buffer]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("computeType", computeType),]
+    attributes = NamedAttribute[NamedAttribute("computeType", computeType),]
     !isnothing(asyncToken) && push!(op_ty_results, asyncToken)
-    !isnothing(modeA) && push!(attributes, namedattribute("modeA", modeA))
+    !isnothing(modeA) && push!(attributes, NamedAttribute("modeA", modeA))
 
     return create_operation(
         "gpu.spmv",
@@ -2746,7 +2746,7 @@ function subgroup_broadcast(
     operands = Value[src,]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("broadcast_type", broadcast_type),]
+    attributes = NamedAttribute[NamedAttribute("broadcast_type", broadcast_type),]
     !isnothing(lane) && push!(operands, lane)
     !isnothing(result) && push!(op_ty_results, result)
 
@@ -2787,7 +2787,7 @@ function subgroup_id(;
     successors = Block[]
     attributes = NamedAttribute[]
     !isnothing(result) && push!(op_ty_results, result)
-    !isnothing(upper_bound) && push!(attributes, namedattribute("upper_bound", upper_bound))
+    !isnothing(upper_bound) && push!(attributes, NamedAttribute("upper_bound", upper_bound))
 
     return create_operation(
         "gpu.subgroup_id",
@@ -2847,8 +2847,8 @@ function subgroup_mma_compute(
     successors = Block[]
     attributes = NamedAttribute[]
     !isnothing(res) && push!(op_ty_results, res)
-    !isnothing(a_transpose) && push!(attributes, namedattribute("a_transpose", a_transpose))
-    !isnothing(b_transpose) && push!(attributes, namedattribute("b_transpose", b_transpose))
+    !isnothing(a_transpose) && push!(attributes, NamedAttribute("a_transpose", a_transpose))
+    !isnothing(b_transpose) && push!(attributes, NamedAttribute("b_transpose", b_transpose))
 
     return create_operation(
         "gpu.subgroup_mma_compute",
@@ -2931,7 +2931,7 @@ function subgroup_mma_elementwise(
     operands = Value[args...,]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("opType", opType),]
+    attributes = NamedAttribute[NamedAttribute("opType", opType),]
 
     return create_operation(
         "gpu.subgroup_mma_elementwise",
@@ -3087,8 +3087,8 @@ function subgroup_mma_load_matrix(
     operands = Value[srcMemref, indices...]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("leadDimension", leadDimension),]
-    !isnothing(transpose) && push!(attributes, namedattribute("transpose", transpose))
+    attributes = NamedAttribute[NamedAttribute("leadDimension", leadDimension),]
+    !isnothing(transpose) && push!(attributes, NamedAttribute("transpose", transpose))
 
     return create_operation(
         "gpu.subgroup_mma_load_matrix",
@@ -3137,8 +3137,8 @@ function subgroup_mma_store_matrix(
     operands = Value[src, dstMemref, indices...]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("leadDimension", leadDimension),]
-    !isnothing(transpose) && push!(attributes, namedattribute("transpose", transpose))
+    attributes = NamedAttribute[NamedAttribute("leadDimension", leadDimension),]
+    !isnothing(transpose) && push!(attributes, NamedAttribute("transpose", transpose))
 
     return create_operation(
         "gpu.subgroup_mma_store_matrix",
@@ -3199,13 +3199,13 @@ function subgroup_reduce(
     operands = Value[value,]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("op", op),]
+    attributes = NamedAttribute[NamedAttribute("op", op),]
     !isnothing(result) && push!(op_ty_results, result)
-    !isnothing(uniform) && push!(attributes, namedattribute("uniform", uniform))
+    !isnothing(uniform) && push!(attributes, NamedAttribute("uniform", uniform))
     !isnothing(cluster_size) &&
-        push!(attributes, namedattribute("cluster_size", cluster_size))
+        push!(attributes, NamedAttribute("cluster_size", cluster_size))
     !isnothing(cluster_stride) &&
-        push!(attributes, namedattribute("cluster_stride", cluster_stride))
+        push!(attributes, NamedAttribute("cluster_stride", cluster_stride))
 
     return create_operation(
         "gpu.subgroup_reduce",
@@ -3244,7 +3244,7 @@ function subgroup_size(;
     successors = Block[]
     attributes = NamedAttribute[]
     !isnothing(result) && push!(op_ty_results, result)
-    !isnothing(upper_bound) && push!(attributes, namedattribute("upper_bound", upper_bound))
+    !isnothing(upper_bound) && push!(attributes, NamedAttribute("upper_bound", upper_bound))
 
     return create_operation(
         "gpu.subgroup_size",
@@ -3312,9 +3312,9 @@ function thread_id(;
     operands = Value[]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("dimension", dimension),]
+    attributes = NamedAttribute[NamedAttribute("dimension", dimension),]
     !isnothing(result_0) && push!(op_ty_results, result_0)
-    !isnothing(upper_bound) && push!(attributes, namedattribute("upper_bound", upper_bound))
+    !isnothing(upper_bound) && push!(attributes, NamedAttribute("upper_bound", upper_bound))
 
     return create_operation(
         "gpu.thread_id",
@@ -3499,7 +3499,7 @@ function warp_execute_on_lane_0(
     operands = Value[laneid, args...]
     owned_regions = Region[warpRegion,]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("warp_size", warp_size),]
+    attributes = NamedAttribute[NamedAttribute("warp_size", warp_size),]
 
     return create_operation(
         "gpu.warp_execute_on_lane_0",
