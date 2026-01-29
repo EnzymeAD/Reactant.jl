@@ -435,13 +435,28 @@ Base.@nospecializeinfer function traced_type_inner(
 )
     T = eltype(A)
     if A isa UnionAll
+        A´ = Base.unwrap_unionall(A)
+        T, N = A´.parameters
+        traced_T = traced_type_inner(T, seen, mode, track_numbers, ndevices, runtime)
+        
+        A_wrapper = A´.name.wrapper
         if mode == ArrayToConcrete && T <: ReactantPrimitive
-            runtime isa Val{:PJRT} && return ConcretePJRTArray{T}
-            runtime isa Val{:IFRT} && return ConcreteIFRTArray{T}
-            error("Unsupported runtime $runtime")
-        else
-            return Array{traced_type_inner(T, seen, mode, track_numbers, ndevices, runtime)}
+            if runtime isa Val{:PJRT}
+                A_wrapper = ConcretePJRTArray
+            elseif runtime isa Val{:IFRT}
+                A_wrapper = ConcreteIFRTArray
+            else
+                error("Unsupported runtime $runtime")
+            end
         end
+
+        # WARN replacing typevars first is required to construct the UnionAlls correctly
+        A´´ = A_wrapper{traced_T, N}
+
+        # WARN application order is important for egality between UnionAlls! start from the end
+        A_ret = N isa Core.TypeVar ? UnionAll(N, A´´) : A´´
+        A_ret2 = T isa Core.TypeVar ? UnionAll(traced_T, A_ret) : A_ret
+        return A_ret2
     else
         N = ndims(A)
         if mode == ArrayToConcrete && T <: ReactantPrimitive
@@ -580,6 +595,21 @@ function collect_tvars_in_type!(dependencies, @nospecialize(t))
         collect_tvars_in_type!(dependencies, t.T)
         collect_tvars_in_type!(dependencies, t.N)
     end
+end
+
+Base.@nospecializeinfer function traced_type_inner(
+    @nospecialize(T::Core.TypeVar),
+    seen,
+    mode::TraceMode,
+    @nospecialize(track_numbers::Type),
+    @nospecialize(ndevices),
+    @nospecialize(runtime)
+)
+    return Core.TypeVar(
+        T.name,
+        traced_type_inner(T.lb, seen, mode, track_numbers, ndevices, runtime),
+        traced_type_inner(T.ub, seen, mode, track_numbers, ndevices, runtime),
+    )
 end
 
 Base.@nospecializeinfer function traced_type_inner(
