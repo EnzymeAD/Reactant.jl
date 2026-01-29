@@ -74,7 +74,7 @@ function with_context(f; allow_use_existing=false)
     if allow_use_existing && has_context()
         ctx = current_context()
     else
-        ctx = Context(Reactant.registry[], false)
+        ctx = Context(Reactant.registry[])
         @ccall API.mlir_c.RegisterDialects(ctx::API.MlirContext)::Cvoid
     end
 

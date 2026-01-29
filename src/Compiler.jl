@@ -3713,7 +3713,7 @@ function compile_xla(
     kwargs...,
 )
     # register MLIR dialects
-    ctx = MLIR.IR.Context(Reactant.registry[], false)
+    ctx = MLIR.IR.Context(Reactant.registry[])
     @ccall MLIR.API.mlir_c.RegisterDialects(ctx::MLIR.API.MlirContext)::Cvoid
 
     client = client !== nothing ? client : XLA.default_backend()
