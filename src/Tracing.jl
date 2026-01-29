@@ -152,8 +152,13 @@ Base.@nospecializeinfer function traced_type_inner(
 )
     if T.lb === Union{} && T.ub === Any
         return T
+    else
+        return TypeVar(
+            T.name,
+            traced_type_inner(T.lb, seen, mode, track_numbers, ndevices, runtime),
+            traced_type_inner(T.ub, seen, mode, track_numbers, ndevices, runtime),
+        )
     end
-    throw(AssertionError("Unsupported Typevar $T lb=$(T.lb) ub=$(T.ub)"))
 end
 
 Base.@nospecializeinfer function traced_type_inner(
