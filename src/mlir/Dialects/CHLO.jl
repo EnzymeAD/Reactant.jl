@@ -1453,6 +1453,52 @@ function ragged_dot(
 end
 
 """
+`scan`
+
+Applies a reduction function `body` to `inputs` and `inits` along the
+`dimension` and produces `results` (comprising `outputs` and `carries`).
+
+If `is_reverse` is true, the scan is performed in reverse order.
+`is_associative` indicates whether the reduction function is associative.
+
+See: https://www.tensorflow.org/xla/operation_semantics#scan
+
+ScanOp currently does not have a decomposition to StableHLO.
+"""
+function scan(
+    inputs::Vector{Value},
+    inits::Vector{Value};
+    outputs::Vector{IR.Type},
+    carries::Vector{IR.Type},
+    dimension,
+    is_reverse=nothing,
+    is_associative=nothing,
+    body::Region,
+    location=Location(),
+)
+    op_ty_results = IR.Type[outputs..., carries...]
+    operands = Value[inputs..., inits...]
+    owned_regions = Region[body,]
+    successors = Block[]
+    attributes = NamedAttribute[namedattribute("dimension", dimension),]
+    push!(attributes, operandsegmentsizes([length(inputs), length(inits)]))
+    !isnothing(is_reverse) && push!(attributes, namedattribute("is_reverse", is_reverse))
+    !isnothing(is_associative) &&
+        push!(attributes, namedattribute("is_associative", is_associative))
+
+    return create_operation(
+        "chlo.scan",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+"""
 `sinh`
 
 Returns `Sinh(operand)` element-wise.
