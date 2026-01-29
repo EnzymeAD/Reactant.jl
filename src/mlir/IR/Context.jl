@@ -75,7 +75,7 @@ function with_context(f; allow_use_existing=false)
         ctx = current_context()
     else
         delete_context = true
-        ctx = Context(Reactant.registry[], false)
+        ctx = Context(Reactant.registry[])
         Reactant.Compiler.context_gc_vector[ctx] = Vector{
             Union{Reactant.TracedRArray,Reactant.TracedRNumber}
         }(

@@ -3686,7 +3686,7 @@ function compile_xla(
     kwargs...,
 )
     # register MLIR dialects
-    ctx = MLIR.IR.Context(Reactant.registry[], false)
+    ctx = MLIR.IR.Context(Reactant.registry[])
     context_gc_vector[ctx] = Vector{Union{TracedRArray,TracedRNumber}}(undef, 0)
     @ccall MLIR.API.mlir_c.RegisterDialects(ctx::MLIR.API.MlirContext)::Cvoid
 
