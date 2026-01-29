@@ -1433,7 +1433,7 @@ function run_pass_pipeline!(mod, pass_pipeline, key=""; enable_verifier=true)
     MLIR.IR.enable_verifier!(pm, enable_verifier)
     opm = MLIR.IR.OpPassManager(pm)
     MLIR.IR.add_pipeline!(opm, pass_pipeline)
-    MLIR.IR.run!(pm, mod, key)
+    MLIR.IR.run!(pm, MLIR.IR.Operation(mod), key)
     return mod
 end
 
@@ -1457,7 +1457,22 @@ function run_pass_pipeline!(
     return mod
 end
 
-const context_gc_vector = Dict{MLIR.IR.Context,Vector{Union{TracedRArray,TracedRNumber}}}()
+const __module_gc_vector = Dict{MLIR.IR.Module,Vector{Union{TracedRArray,TracedRNumber}}}()
+
+function guard_from_gc_for_module(mod::MLIR.IR.Module, x)
+    if !haskey(__module_gc_vector, mod)
+        __module_gc_vector[mod] = Union{TracedRArray,TracedRNumber}[x]
+    else
+        push!(__module_gc_vector[mod], x)
+    end
+    @assert __module_gc_vector[mod][end] === x
+    return nothing
+end
+
+function release_guard_from_gc_for_module(mod::MLIR.IR.Module)
+    delete!(__module_gc_vector, mod)
+    return nothing
+end
 
 # helper for debug purposes: String -> Text
 function run_pass_pipeline_on_source(source, pass_pipeline; enable_verifier=true)
@@ -1758,6 +1773,7 @@ function compile_mlir!(
         deactivate_callcache!(callcache)
         MLIR.IR.deactivate!(MLIR.IR.body(mod))
         clear_llvm_compiler_cache!(mod)
+        release_guard_from_gc_for_module(mod)
         MLIR.IR.deactivate!(mod)
     end
     (;
@@ -3691,7 +3707,6 @@ function compile_xla(
 )
     # register MLIR dialects
     ctx = MLIR.IR.Context(Reactant.registry[], false)
-    context_gc_vector[ctx] = Vector{Union{TracedRArray,TracedRNumber}}(undef, 0)
     @ccall MLIR.API.mlir_c.RegisterDialects(ctx::MLIR.API.MlirContext)::Cvoid
 
     client = client !== nothing ? client : XLA.default_backend()
@@ -3704,7 +3719,7 @@ function compile_xla(
     end
 
     MLIR.IR.activate!(ctx)
-    results = try
+    try
         # compile function to MLIR module
         mod = MLIR.IR.Module(MLIR.IR.Location())
 
@@ -3722,10 +3737,7 @@ function compile_xla(
 
         # Resolve client and device
         client, device = __resolve_device_and_client(
-            client,
-            mlir_fn_res.seen_args,
-            mlir_fn_res.linear_args,
-            mlir_fn_res.is_sharded,
+            client, mlir_fn_res.seen_args, mlir_fn_res.linear_args, mlir_fn_res.is_sharded
         )
 
         # Attach a name, and partitioning attributes to the module
@@ -3791,9 +3803,6 @@ function compile_xla(
     finally
         MLIR.IR.deactivate!(ctx)
     end
-
-    delete!(context_gc_vector, ctx)
-    return results
 end
 
 # inspired by RuntimeGeneratedFunction.jl

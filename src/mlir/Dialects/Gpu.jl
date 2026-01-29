@@ -10,7 +10,7 @@ import ...IR:
     create_operation,
     context,
     IndexType
-import ..Dialects: operandsegmentsizes
+import ..Dialects: operandsegmentsizes, resultsegmentsizes
 import ...API
 
 """
@@ -2495,8 +2495,9 @@ function spmm_buffer_size(
     successors = Block[]
     attributes = NamedAttribute[NamedAttribute("computeType", computeType),]
     !isnothing(asyncToken) && push!(op_ty_results, asyncToken)
-    !isnothing(modeA) && push!(attributes, NamedAttribute("modeA", modeA))
-    !isnothing(modeB) && push!(attributes, NamedAttribute("modeB", modeB))
+    push!(attributes, resultsegmentsizes([length(bufferSzs), Int(!isnothing(asyncToken))]))
+    !isnothing(modeA) && push!(attributes, Namedattribute("modeA", modeA))
+    !isnothing(modeB) && push!(attributes, Namedattribute("modeB", modeB))
 
     return create_operation(
         "gpu.spmm_buffer_size",

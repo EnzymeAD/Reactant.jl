@@ -7,6 +7,10 @@ using Reactant_jll: Reactant_jll
 
 operandsegmentsizes(segments) = NamedAttribute("operand_segment_sizes", Int32.(segments))
 
+function resultsegmentsizes(segments)
+    return namedattribute("result_segment_sizes", Attribute(Int32.(segments)))
+end
+
 #! explicit-imports: off
 for file in readdir(joinpath(@__DIR__, "Dialects"))
     endswith(file, ".jl") || continue
