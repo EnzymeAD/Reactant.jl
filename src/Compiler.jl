@@ -982,7 +982,7 @@ function optimization_passes(
                 "scatter_div_simplify",
                 "unary_elementwise_scatter_simplify",
                 "scatter_indices_are_unique",
-                "split_complex_scatter_setindex",
+                "split_complex_scatter",
                 ## const prop patterns
                 "scatter_update_computation_const_prop",
                 # gather patterns
@@ -1117,6 +1117,8 @@ function optimization_passes(
                 "mul_zero_pad<1>",
                 "div_zero_pad<1>",
                 "binop_const_reshape_pad<1>",
+                "binop_pad_to_concat_add<1>",
+                "binop_pad_to_concat_mul<1>",
                 "binop_const_pad_add<1>",
                 "binop_const_pad_subtract<1>",
                 "binop_const_pad_mul<1>",
