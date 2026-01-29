@@ -4,7 +4,6 @@
 # - https://github.com/JuliaLang/julia/blob/v1.10.4/test/compiler/newinterp.jl#L9
 
 const CC = Core.Compiler
-using Enzyme
 
 import Core.Compiler:
     AbstractInterpreter,
@@ -160,8 +159,10 @@ end
 # Based on Enzyme.jl/src/typeutils/inference.jl
 function return_type(interp::CC.AbstractInterpreter, mi::Core.MethodInstance)::Type
     @static if VERSION < v"1.11.0"
+        #! explicit-imports: off
         code = CC.get(CC.code_cache(interp), mi, nothing)
-        if code isa CC.CodeInstance
+        #! explicit-imports: on
+        if code isa Core.CodeInstance
             return code.rettype
         end
         result = CC.InferenceResult(mi, CC.typeinf_lattice(interp))
@@ -207,7 +208,7 @@ function primal_return_type_generator(
     @nospecialize(tt::Type)
 )
     @nospecialize
-    @assert CC.isType(ft) && CC.isType(tt)
+    @assert Base.isType(ft) && Base.isType(tt)
     @assert mode <: Mode
     mode = mode()
     ft = ft.parameters[1]
@@ -228,7 +229,7 @@ function primal_return_type_generator(
     mi === nothing && return stub(world, source, :(throw(MethodError(ft, tt, $world))))
 
     result = primal_return_type_world(mode, world, mi)
-    code = Any[CC.ReturnNode(result)]
+    code = Any[Core.ReturnNode(result)]
     # create an empty CodeInfo to return the result
     ci = Enzyme.create_fresh_codeinfo(primal_return_type, source, world, slotnames, code)
     ci.max_world = max_world[]

@@ -301,7 +301,7 @@ function infer_activity(
     return Enzyme.guess_activity(
         call_with_native(
             primal_return_type,
-            mode isa ForwardMode ? Forward : Reverse,
+            mode isa ForwardMode ? Enzyme.Forward : Enzyme.Reverse,
             eltype(FA),
             Enzyme.vaEltypeof(args...),
         ),
