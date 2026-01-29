@@ -10,7 +10,7 @@ import ...IR:
     create_operation,
     context,
     IndexType
-import ..Dialects: namedattribute, operandsegmentsizes
+import ..Dialects: namedattribute, operandsegmentsizes, resultsegmentsizes
 import ...API
 
 """
@@ -2495,6 +2495,7 @@ function spmm_buffer_size(
     successors = Block[]
     attributes = NamedAttribute[namedattribute("computeType", computeType),]
     !isnothing(asyncToken) && push!(op_ty_results, asyncToken)
+    push!(attributes, resultsegmentsizes([length(bufferSzs), Int(!isnothing(asyncToken))]))
     !isnothing(modeA) && push!(attributes, namedattribute("modeA", modeA))
     !isnothing(modeB) && push!(attributes, namedattribute("modeB", modeB))
 
