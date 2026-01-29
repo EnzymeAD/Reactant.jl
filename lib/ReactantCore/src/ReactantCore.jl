@@ -3,7 +3,30 @@ module ReactantCore
 using ExpressionExplorer: ExpressionExplorer
 using MacroTools: MacroTools, @capture
 
-export @trace, within_compile, MissingTracedValue, promote_to_traced
+export @trace, within_compile, MissingTracedValue, promote_to_traced, Periodic
+
+"""
+    Periodic(n::Int)
+
+Checkpointing strategy for traced loops that specifies periodic checkpointing with `n` checkpoints.
+
+# Examples
+
+```julia
+# Explicit periodic checkpointing with 10 checkpoints
+@trace checkpointing=Periodic(10) for i in 1:100
+    x = x .+ 1
+end
+
+# Default periodic checkpointing (uses isqrt(num_iters) checkpoints for static bounds)
+@trace checkpointing=true for i in 1:100
+    x = x .+ 1
+end
+```
+"""
+struct Periodic
+    n::Int
+end
 
 # Traits
 function is_traced((@nospecialize x::T), seen=Base.IdSet()) where {T}
@@ -140,7 +163,7 @@ end
 The behavior of loops can be configured with the following configuration options:
 
  - `track_numbers::Union{Bool,Datatype}` - whether Julia numbers should be automatically promoted to traced numbers upon entering the loop.
- - `checkpointing::Bool` - whether or not to enable checkpointing when performing reverse mode differentiation (default: `false`).
+ - `checkpointing::Union{Bool,Periodic}` - whether or not to enable checkpointing when performing reverse mode differentiation. Can be `false` (default), `true` (automatic checkpointing), or `Periodic(n)` to specify `n` checkpoints. When `true` is used, defaults to `isqrt(num_iters)` checkpoints for `for` loops with static (non-traced) bounds. `Periodic(n)` must be used for `while` loops or `for` loops with dynamic (traced) bounds when checkpointing is enabled.
  - `mincut::Bool` - whether or not to enable the mincut algorithm when performing reverse mode differentiation (default: `false`).
 """
 macro trace(args...)
@@ -293,11 +316,23 @@ function trace_function_definition(mod, expr)
     end
 end
 
-function trace_while(expr; track_numbers, mincut, checkpointing, first_arg=nothing)
+function trace_while(
+    expr; track_numbers, mincut, checkpointing, first_arg=nothing
+)
     Meta.isexpr(expr, :while, 2) || error("expected while expr")
     cond, body = expr.args
 
     error_if_any_control_flow(body)
+
+    # Validate checkpointing usage - for raw while loops (not from trace_for),
+    # Periodic(n) must be used since we can't compute default checkpoints
+    if checkpointing === true && first_arg === nothing
+        # This is a raw while loop (not from trace_for), require Periodic(n)
+        error(
+            "Periodic(n) must be used for while loops when checkpointing is enabled. " *
+            "Use `@trace checkpointing=Periodic(n) while ...` where n is the number of checkpoints.",
+        )
+    end
 
     cond_symbols = ExpressionExplorer.compute_symbols_state(cond)
     body_symbols = ExpressionExplorer.compute_symbols_state(body)
@@ -391,6 +426,7 @@ function trace_for(expr; track_numbers, checkpointing, mincut)
 
     counter = gensym(:i)
     num_iters = gensym(:num_iters)
+    checkpointing_sym = gensym(:checkpointing)
     range_sym = gensym(:range)
 
     start_sym = gensym(:start)
@@ -418,9 +454,41 @@ function trace_for(expr; track_numbers, checkpointing, mincut)
         end
     end
 
+    # Compute checkpointing value:
+    # - If checkpointing is false/nothing → false
+    # - If checkpointing is Periodic(n) → Periodic(n)
+    # - If checkpointing is true → compute Periodic(isqrt(num_iters))
+    # This must be computed BEFORE bounds are promoted to traced values
+    # If bounds are already traced (dynamic), we require Periodic(n) to be specified
+    checkpointing_computation = if checkpointing === true
+        # Default to Periodic(isqrt(num_iters)) for sqrt checkpointing behavior
+        # Computed before promotion so we get a Julia integer
+        # If any of the bounds is already traced, we error since we can't compute isqrt
+        quote
+            if $(is_traced)($start_sym) ||
+                $(is_traced)($limit_sym) ||
+                $(is_traced)($step_sym)
+                error(
+                    "Periodic(n) must be used when loop bounds are traced (dynamic). " *
+                    "Use `@trace checkpointing=Periodic(n) for i in ...` where n is the number of checkpoints.",
+                )
+            end
+            $checkpointing_sym = $(Periodic)(isqrt(div($limit_sym - $start_sym, $step_sym) + 1))
+        end
+    elseif checkpointing === false
+        :($checkpointing_sym = false)
+    else
+        # Assume it's a Periodic(n) expression or variable
+        :($checkpointing_sym = $checkpointing)
+    end
+
     return quote
         local $start_sym, $limit_sym, $step_sym
         $bounds_defs
+
+        # Compute checkpointing value before promotion to traced values
+        local $checkpointing_sym
+        $checkpointing_computation
 
         if $(within_compile)()
             $start_sym = $(ReactantCore.promote_to_traced)($start_sym)
@@ -445,7 +513,7 @@ function trace_for(expr; track_numbers, checkpointing, mincut)
             );
             track_numbers,
             first_arg=counter,
-            checkpointing,
+            checkpointing=checkpointing_sym,
             mincut,
         ))
     end
