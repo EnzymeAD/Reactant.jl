@@ -1803,7 +1803,7 @@ function compile_mlir!(
         if backend == "tpu"
             jit = "lower-jit{openmp=$(OpenMP[]) backend=cpu},symbol-dce,strip-debuginfo"
         else
-            jit = "lower-jit{openmp=$(OpenMP[]) backend=cpu},symbol-dce"
+            jit = "lower-jit{openmp=$(OpenMP[]) backend=cpu dump_final_module=true},symbol-dce"
         end
     else
         kern = if is_raising
