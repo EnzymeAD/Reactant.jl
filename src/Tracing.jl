@@ -456,7 +456,7 @@ Base.@nospecializeinfer function traced_type_inner(
         A´ = Base.unwrap_unionall(A)
         T, N = A´.parameters
         traced_T = traced_type_inner(T, seen, mode, track_numbers, ndevices, runtime)
-        
+
         A_wrapper = A´.name.wrapper
         if mode == ArrayToConcrete && T <: ReactantPrimitive
             if runtime isa Val{:PJRT}
@@ -469,7 +469,7 @@ Base.@nospecializeinfer function traced_type_inner(
         end
 
         # WARN replacing typevars first is required to construct the UnionAlls correctly
-        A´´ = A_wrapper{traced_T, N}
+        A´´ = A_wrapper{traced_T,N}
 
         # WARN application order is important for egality between UnionAlls! start from the end
         A_ret = N isa Core.TypeVar ? UnionAll(N, A´´) : A´´
