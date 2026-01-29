@@ -10,7 +10,7 @@ import ...IR:
     create_operation,
     context,
     IndexType
-import ..Dialects: namedattribute, operandsegmentsizes
+import ..Dialects: namedattribute, operandsegmentsizes, resultsegmentsizes
 import ...API
 
 """
@@ -1482,6 +1482,7 @@ function scan(
     successors = Block[]
     attributes = NamedAttribute[namedattribute("dimension", dimension),]
     push!(attributes, operandsegmentsizes([length(inputs), length(inits)]))
+    push!(attributes, resultsegmentsizes([length(outputs), length(carries)]))
     !isnothing(is_reverse) && push!(attributes, namedattribute("is_reverse", is_reverse))
     !isnothing(is_associative) &&
         push!(attributes, namedattribute("is_associative", is_associative))

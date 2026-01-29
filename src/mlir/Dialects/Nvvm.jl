@@ -10,7 +10,7 @@ import ...IR:
     create_operation,
     context,
     IndexType
-import ..Dialects: namedattribute, operandsegmentsizes
+import ..Dialects: namedattribute, operandsegmentsizes, resultsegmentsizes
 import ...API
 
 function read_ptx_sreg_aggr_smem_size(; res::IR.Type, location=Location())
