@@ -616,21 +616,6 @@ function collect_tvars_in_type!(dependencies, @nospecialize(t))
 end
 
 Base.@nospecializeinfer function traced_type_inner(
-    @nospecialize(T::Core.TypeVar),
-    seen,
-    mode::TraceMode,
-    @nospecialize(track_numbers::Type),
-    @nospecialize(ndevices),
-    @nospecialize(runtime)
-)
-    return Core.TypeVar(
-        T.name,
-        traced_type_inner(T.lb, seen, mode, track_numbers, ndevices, runtime),
-        traced_type_inner(T.ub, seen, mode, track_numbers, ndevices, runtime),
-    )
-end
-
-Base.@nospecializeinfer function traced_type_inner(
     @nospecialize(T::Type),
     seen,
     mode::TraceMode,
