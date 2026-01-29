@@ -568,7 +568,7 @@ end
     @test res[1] isa ConcreteRArray{Float32}
     @test size(res[1]) == (3, 1, 1, 6)
 
-    @test 2 .* _f_multidim_sum(Array(bx4d)) ≈ Array(res[1]) atol=1e-5 rtol=1e-5
+    @test 2 .* _f_multidim_sum(Array(bx4d)) ≈ Array(res[1]) atol = 1e-5 rtol = 1e-5
 
     @testset "infer_activity" begin
         activity = Reactant.infer_activity(
