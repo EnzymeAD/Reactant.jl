@@ -1,7 +1,7 @@
 module Dialects
 
-import ..IR: Attribute, NamedAttribute
-import ..API
+using ..IR: NamedAttribute
+using ..API
 
 using Reactant_jll: Reactant_jll
 
