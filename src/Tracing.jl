@@ -227,12 +227,16 @@ Base.@nospecializeinfer function traced_type_inner(
     T = Base.unwrap_unionall(T0).parameters[1]
 
     if mode == ConcreteToTraced
-        return TracedRNumber{T}
+        return T0 isa UnionAll ? TracedRNumber : TracedRNumber{T}
     elseif mode == TracedToConcrete
         return T0
     elseif mode == ArrayToConcrete
         @assert runtime isa Val{:PJRT}
-        return ConcretePJRTNumber{T,_unwrap_val(ndevices)}
+        if T0 isa UnionAll
+            return ConcretePJRTNumbe{T,_unwrap_val(ndevices)} where {T}
+        else
+            return ConcretePJRTNumber{T,_unwrap_val(ndevices)}
+        end
     else
         throw("Unsupported mode: $mode")
     end
@@ -249,58 +253,72 @@ Base.@nospecializeinfer function traced_type_inner(
     T = Base.unwrap_unionall(T0).parameters[1]
 
     if mode == ConcreteToTraced
-        return TracedRNumber{T}
+        return T0 isa UnionAll ? TracedRNumber : TracedRNumber{T}
     elseif mode == TracedToConcrete
         return T0
     elseif mode == ArrayToConcrete
         @assert runtime isa Val{:IFRT}
-        return ConcreteIFRTNumber{T}
+        return T0 isa UnionAll ? ConcreteIFRTNumber : ConcreteIFRTNumber{T}
     else
         throw("Unsupported mode: $mode")
     end
 end
 
 Base.@nospecializeinfer function traced_type_inner(
-    @nospecialize(T::Type{<:ConcretePJRTArray}),
+    @nospecialize(A::Type{<:ConcretePJRTArray}),
     seen,
     @nospecialize(mode::TraceMode),
     @nospecialize(track_numbers::Type),
     @nospecialize(ndevices),
     @nospecialize(runtime)
 )
-    unwrapT = Base.unwrap_unionall(T)
-    elT, N = unwrapT.parameters[1], unwrapT.parameters[2]
-
     if mode == ConcreteToTraced
-        return TracedRArray{elT,N}
+        A´ = Base.unwrap_unionall(A)
+        T, N, _ = A´.parameters
+        A´´ = TracedRArray{T,N}
+        A_ret = N isa Core.TypeVar ? UnionAll(N, A´´) : A´´
+        A_ret2 = T isa Core.TypeVar ? UnionAll(T, A_ret) : A_ret
+        return A_ret2
     elseif mode == TracedToConcrete
         return T
     elseif mode == ArrayToConcrete
         @assert runtime isa Val{:PJRT}
-        return ConcretePJRTArray{elT,N,_unwrap_val(ndevices)}
+        A´ = Base.unwrap_unionall(A)
+        T, N, _ = A´.parameters
+        A´´ = ConcretePJRTArray{T,N,_unwrap_val(ndevices)}
+        A_ret = N isa Core.TypeVar ? UnionAll(N, A´´) : A´´
+        A_ret2 = T isa Core.TypeVar ? UnionAll(T, A_ret) : A_ret
+        return A_ret2
     else
         throw("Unsupported mode: $mode")
     end
 end
 
 Base.@nospecializeinfer function traced_type_inner(
-    @nospecialize(T::Type{<:ConcreteIFRTArray}),
+    @nospecialize(A::Type{<:ConcreteIFRTArray}),
     seen,
     @nospecialize(mode::TraceMode),
     @nospecialize(track_numbers::Type),
     @nospecialize(ndevices),
     @nospecialize(runtime)
 )
-    unwrapT = Base.unwrap_unionall(T)
-    elT, N = unwrapT.parameters[1], unwrapT.parameters[2]
-
     if mode == ConcreteToTraced
-        return TracedRArray{elT,N}
+        A´ = Base.unwrap_unionall(A)
+        T, N = A´.parameters
+        A´´ = TracedRArray{T,N}
+        A_ret = N isa Core.TypeVar ? UnionAll(N, A´´) : A´´
+        A_ret2 = T isa Core.TypeVar ? UnionAll(T, A_ret) : A_ret
+        return A_ret2
     elseif mode == TracedToConcrete
         return T
     elseif mode == ArrayToConcrete
-        @assert runtime isa Val{:IFRT}
-        return ConcreteIFRTArray{elT,N}
+        @assert runtime isa Val{:PJRT}
+        A´ = Base.unwrap_unionall(A)
+        T, N = A´.parameters
+        A´´ = ConcreteIFRTArray{T,N}
+        A_ret = N isa Core.TypeVar ? UnionAll(N, A´´) : A´´
+        A_ret2 = T isa Core.TypeVar ? UnionAll(T, A_ret) : A_ret
+        return A_ret2
     else
         throw("Unsupported mode: $mode")
     end
