@@ -116,12 +116,35 @@ end
                 ),
 
                 # UnionAll types
+                (Array, Array, Array),
+                (Array{Float64}, Array{Float64}, Array{TracedRNumber{Float64}}),
+                (Matrix, Matrix, Matrix),
+                (ConcreteRNumber, TracedRNumber, TracedRNumber),
+                (ConcreteRArray, TracedRArray, TracedRArray),
+                (ConcreteRArray{Float64}, TracedRArray{Float64}, TracedRArray{Float64}),
+                (ConcreteRArray{T,2} where {T}, TracedRArray{T,2} where {T}, TracedRArray{T,2} where {T}),
+                (Union{Nothing, Array}, Union{Nothing, Array}, Union{Nothing, Array}),
                 (
-                    ConcreteRArray,
-                    TracedRArray{T,N} where {T,N},
-                    TracedRArray{T,N} where {T,N},
+                    Union{Nothing, Array{Float64}},
+                    Union{Nothing, Array{Float64}},
+                    Union{Nothing, Array{TracedRNumber{Float64}}},
                 ),
-                (Array, Array{Any}, Array{Any}),
+                (Union{Nothing, ConcreteRArray}, Union{Nothing, TracedRArray}, Union{Nothing, TracedRArray}),
+                (
+                    Union{Nothing, ConcreteRArray{Float64}},
+                    Union{Nothing, TracedRArray{Float64}},
+                    Union{Nothing, TracedRArray{Float64}},
+                ),
+                (
+                    Union{Nothing, ConcreteRArray{T, 2} where {T}},
+                    Union{Nothing, TracedRArray{T, 2} where {T}},
+                    Union{Nothing, TracedRArray{T, 2} where {T}},
+                ),
+                (
+                    Union{Nothing, ConcreteRArray{T, 2}} where {T},
+                    Union{Nothing, TracedRArray{T, 2}} where {T},
+                    Union{Nothing, TracedRArray{T, 2}} where {T},
+                ),
 
                 # Ptr types
                 (Ptr{Float64}, Ptr{Float64}, Ptr{TracedRNumber{Float64}}),
