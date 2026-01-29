@@ -23,7 +23,7 @@ function dispose(ctx::Context)
 end
 
 Base.cconvert(::Core.Type{API.MlirContext}, c::Context) = c
-Base.unsafe_convert(::Core.Type{API.MlirContext}, c::Context) = c.ref
+Base.unsafe_convert(::Core.Type{API.MlirContext}, c::Context) = mark_use(c).ref
 
 # Global state
 

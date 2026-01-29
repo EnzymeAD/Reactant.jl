@@ -5,7 +5,7 @@ end
 dispose(op::Operation) = mark_dispose(API.mlirOperationDestroy, op)
 
 Base.cconvert(::Core.Type{API.MlirOperation}, op::Operation) = op
-Base.unsafe_convert(::Core.Type{API.MlirOperation}, op::Operation) = op.ref
+Base.unsafe_convert(::Core.Type{API.MlirOperation}, op::Operation) = mark_use(op).ref
 
 Base.:(==)(op::Operation, other::Operation) = API.mlirOperationEqual(op, other)
 
@@ -82,13 +82,6 @@ function Base.iterate(::Operation, region)
         region = Region(raw_region)
         (region, region)
     end
-end
-
-# TODO use lose_ownership! to as `mark_dealloc`-like semantics
-function lose_ownership!(operation::Operation)
-    # @assert operation.owned
-    # @atomic operation.owned = false
-    return operation
 end
 
 """
@@ -301,8 +294,7 @@ verify(operation::Operation) = API.mlirOperationVerify(operation)
 Moves the given operation immediately after the other operation in its parent block. The given operation may be owned by the caller or by its current block. The other operation must belong to a block. In any case, the ownership is transferred to the block of the other operation.
 """
 function move_after!(operation::Operation, other::Operation)
-    op.owned && lose_ownership!(operation)
-    return API.mlirOperationMoveAfter(operation, other)
+    return API.mlirOperationMoveAfter(mark_donate(operation), other)
 end
 
 """
@@ -314,8 +306,7 @@ The other operation must belong to a block.
 In any case, the ownership is transferred to the block of the other operation.
 """
 function move_before!(op::Operation, other::Operation)
-    op.owned && lose_ownership!(op)
-    return API.mlirOperationMoveBefore(op, other)
+    return API.mlirOperationMoveBefore(mark_donate(op), other)
 end
 
 """
@@ -350,7 +341,7 @@ function create_operation_common(
             API.mlirOperationStateAddOperands(state, length(operands), operands)
         end
         if !isnothing(owned_regions)
-            lose_ownership!.(owned_regions)
+            mark_donate.(owned_regions)
             GC.@preserve owned_regions begin
                 mlir_regions = Base.unsafe_convert.(API.MlirRegion, owned_regions)
                 API.mlirOperationStateAddOwnedRegions(
