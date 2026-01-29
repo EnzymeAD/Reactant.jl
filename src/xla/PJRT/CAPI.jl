@@ -39,7 +39,6 @@ elseif Sys.iswindows() && Sys.ARCH === :x86_64
     const off_t = off32_t
 end
 
-
 @cenum PJRT_Extension_Type::UInt32 begin
     PJRT_Extension_Type_Gpu_Custom_Call = 0x0000000000000000
     PJRT_Extension_Type_Profiler = 0x0000000000000001
@@ -159,7 +158,7 @@ const PJRT_CallbackError = Ptr{Cvoid}
 end
 
 struct PJRT_NamedValue
-    data::NTuple{56, UInt8}
+    data::NTuple{56,UInt8}
 end
 
 function Base.getproperty(x::Ptr{PJRT_NamedValue}, f::Symbol)
@@ -185,15 +184,28 @@ function Base.getproperty(x::PJRT_NamedValue, f::Symbol)
 end
 
 function Base.setproperty!(x::Ptr{PJRT_NamedValue}, f::Symbol, v)
-    unsafe_store!(getproperty(x, f), v)
+    return unsafe_store!(getproperty(x, f), v)
 end
 
-function Base.propertynames(x::PJRT_NamedValue, private::Bool = false)
-    (:struct_size, :extension_start, :name, :name_size, :type, :string_value, :int64_value, :int64_array_value, :float_value, :bool_value, :value_size, if private
+function Base.propertynames(x::PJRT_NamedValue, private::Bool=false)
+    return (
+        :struct_size,
+        :extension_start,
+        :name,
+        :name_size,
+        :type,
+        :string_value,
+        :int64_value,
+        :int64_array_value,
+        :float_value,
+        :bool_value,
+        :value_size,
+        if private
             fieldnames(typeof(x))
         else
             ()
-        end...)
+        end...,
+    )
 end
 
 @cenum __JL_Ctag_6::UInt32 begin
@@ -775,7 +787,8 @@ struct PJRT_AsyncHostToDeviceTransferManager_RetrieveBuffer_Args
 end
 
 @cenum __JL_Ctag_39::UInt32 begin
-    PJRT_AsyncHostToDeviceTransferManager_RetrieveBuffer_Args_STRUCT_SIZE = 0x0000000000000028
+    PJRT_AsyncHostToDeviceTransferManager_RetrieveBuffer_Args_STRUCT_SIZE =
+        0x0000000000000028
 end
 
 # typedef PJRT_Error * PJRT_AsyncHostToDeviceTransferManager_RetrieveBuffer ( PJRT_AsyncHostToDeviceTransferManager_RetrieveBuffer_Args * args )
@@ -835,7 +848,8 @@ struct PJRT_AsyncHostToDeviceTransferManager_SetBufferError_Args
 end
 
 @cenum __JL_Ctag_43::UInt32 begin
-    PJRT_AsyncHostToDeviceTransferManager_SetBufferError_Args_STRUCT_SIZE = 0x0000000000000030
+    PJRT_AsyncHostToDeviceTransferManager_SetBufferError_Args_STRUCT_SIZE =
+        0x0000000000000030
 end
 
 # typedef PJRT_Error * PJRT_AsyncHostToDeviceTransferManager_SetBufferError ( PJRT_AsyncHostToDeviceTransferManager_SetBufferError_Args * args )
@@ -894,7 +908,7 @@ end
 end
 
 struct PJRT_Buffer_MemoryLayout
-    data::NTuple{80, UInt8}
+    data::NTuple{80,UInt8}
 end
 
 function Base.getproperty(x::Ptr{PJRT_Buffer_MemoryLayout}, f::Symbol)
@@ -914,15 +928,22 @@ function Base.getproperty(x::PJRT_Buffer_MemoryLayout, f::Symbol)
 end
 
 function Base.setproperty!(x::Ptr{PJRT_Buffer_MemoryLayout}, f::Symbol, v)
-    unsafe_store!(getproperty(x, f), v)
+    return unsafe_store!(getproperty(x, f), v)
 end
 
-function Base.propertynames(x::PJRT_Buffer_MemoryLayout, private::Bool = false)
-    (:struct_size, :extension_start, :tiled, :strides, :type, if private
+function Base.propertynames(x::PJRT_Buffer_MemoryLayout, private::Bool=false)
+    return (
+        :struct_size,
+        :extension_start,
+        :tiled,
+        :strides,
+        :type,
+        if private
             fieldnames(typeof(x))
         else
             ()
-        end...)
+        end...,
+    )
 end
 
 @cenum __JL_Ctag_47::UInt32 begin
@@ -943,7 +964,8 @@ struct PJRT_AsyncHostToDeviceTransferManager_TransferLiteral_Args
 end
 
 @cenum __JL_Ctag_48::UInt32 begin
-    PJRT_AsyncHostToDeviceTransferManager_TransferLiteral_Args_STRUCT_SIZE = 0x0000000000000050
+    PJRT_AsyncHostToDeviceTransferManager_TransferLiteral_Args_STRUCT_SIZE =
+        0x0000000000000050
 end
 
 # typedef PJRT_Error * PJRT_AsyncHostToDeviceTransferManager_TransferLiteral ( PJRT_AsyncHostToDeviceTransferManager_TransferLiteral_Args * args )
@@ -1969,7 +1991,7 @@ end
 const PJRT_Buffer_DynamicDimensionIndices = Cvoid
 
 struct PJRT_Buffer_GetMemoryLayout_Args
-    data::NTuple{104, UInt8}
+    data::NTuple{104,UInt8}
 end
 
 function Base.getproperty(x::Ptr{PJRT_Buffer_GetMemoryLayout_Args}, f::Symbol)
@@ -1988,15 +2010,17 @@ function Base.getproperty(x::PJRT_Buffer_GetMemoryLayout_Args, f::Symbol)
 end
 
 function Base.setproperty!(x::Ptr{PJRT_Buffer_GetMemoryLayout_Args}, f::Symbol, v)
-    unsafe_store!(getproperty(x, f), v)
+    return unsafe_store!(getproperty(x, f), v)
 end
 
-function Base.propertynames(x::PJRT_Buffer_GetMemoryLayout_Args, private::Bool = false)
-    (:struct_size, :extension_start, :buffer, :layout, if private
+function Base.propertynames(x::PJRT_Buffer_GetMemoryLayout_Args, private::Bool=false)
+    return (
+        :struct_size, :extension_start, :buffer, :layout, if private
             fieldnames(typeof(x))
         else
             ()
-        end...)
+        end...
+    )
 end
 
 @cenum __JL_Ctag_112::UInt32 begin
@@ -2541,7 +2565,9 @@ struct PJRT_Api
     PJRT_Executable_NumReplicas::Ptr{PJRT_Executable_NumReplicas}
     PJRT_Executable_NumPartitions::Ptr{PJRT_Executable_NumPartitions}
     PJRT_Executable_NumOutputs::Ptr{PJRT_Executable_NumOutputs}
-    PJRT_Executable_SizeOfGeneratedCodeInBytes::Ptr{PJRT_Executable_SizeOfGeneratedCodeInBytes}
+    PJRT_Executable_SizeOfGeneratedCodeInBytes::Ptr{
+        PJRT_Executable_SizeOfGeneratedCodeInBytes
+    }
     PJRT_Executable_GetCostAnalysis::Ptr{PJRT_Executable_GetCostAnalysis}
     PJRT_Executable_OutputMemoryKinds::Ptr{PJRT_Executable_OutputMemoryKinds}
     PJRT_Executable_OptimizedProgram::Ptr{PJRT_Executable_OptimizedProgram}
@@ -2570,9 +2596,15 @@ struct PJRT_Api
     PJRT_Buffer_IsOnCpu::Ptr{PJRT_Buffer_IsOnCpu}
     PJRT_Buffer_ReadyEvent::Ptr{PJRT_Buffer_ReadyEvent}
     PJRT_Buffer_UnsafePointer::Ptr{PJRT_Buffer_UnsafePointer}
-    PJRT_Buffer_IncreaseExternalReferenceCount::Ptr{PJRT_Buffer_IncreaseExternalReferenceCount}
-    PJRT_Buffer_DecreaseExternalReferenceCount::Ptr{PJRT_Buffer_DecreaseExternalReferenceCount}
-    PJRT_Buffer_OpaqueDeviceMemoryDataPointer::Ptr{PJRT_Buffer_OpaqueDeviceMemoryDataPointer}
+    PJRT_Buffer_IncreaseExternalReferenceCount::Ptr{
+        PJRT_Buffer_IncreaseExternalReferenceCount
+    }
+    PJRT_Buffer_DecreaseExternalReferenceCount::Ptr{
+        PJRT_Buffer_DecreaseExternalReferenceCount
+    }
+    PJRT_Buffer_OpaqueDeviceMemoryDataPointer::Ptr{
+        PJRT_Buffer_OpaqueDeviceMemoryDataPointer
+    }
     PJRT_CopyToDeviceStream_Destroy::Ptr{PJRT_CopyToDeviceStream_Destroy}
     PJRT_CopyToDeviceStream_AddChunk::Ptr{PJRT_CopyToDeviceStream_AddChunk}
     PJRT_CopyToDeviceStream_TotalBytes::Ptr{PJRT_CopyToDeviceStream_TotalBytes}
@@ -2582,7 +2614,9 @@ struct PJRT_Api
     PJRT_TopologyDescription_Destroy::Ptr{PJRT_TopologyDescription_Destroy}
     PJRT_TopologyDescription_PlatformName::Ptr{PJRT_TopologyDescription_PlatformName}
     PJRT_TopologyDescription_PlatformVersion::Ptr{PJRT_TopologyDescription_PlatformVersion}
-    PJRT_TopologyDescription_GetDeviceDescriptions::Ptr{PJRT_TopologyDescription_GetDeviceDescriptions}
+    PJRT_TopologyDescription_GetDeviceDescriptions::Ptr{
+        PJRT_TopologyDescription_GetDeviceDescriptions
+    }
     PJRT_TopologyDescription_Serialize::Ptr{PJRT_TopologyDescription_Serialize}
     PJRT_TopologyDescription_Attributes::Ptr{PJRT_TopologyDescription_Attributes}
     PJRT_Compile::Ptr{PJRT_Compile}
@@ -2597,15 +2631,33 @@ struct PJRT_Api
     PJRT_ExecuteContext_Create::Ptr{PJRT_ExecuteContext_Create}
     PJRT_ExecuteContext_Destroy::Ptr{PJRT_ExecuteContext_Destroy}
     PJRT_Buffer_CopyRawToHost::Ptr{PJRT_Buffer_CopyRawToHost}
-    PJRT_AsyncHostToDeviceTransferManager_Destroy::Ptr{PJRT_AsyncHostToDeviceTransferManager_Destroy}
-    PJRT_AsyncHostToDeviceTransferManager_TransferData::Ptr{PJRT_AsyncHostToDeviceTransferManager_TransferData}
-    PJRT_Client_CreateBuffersForAsyncHostToDevice::Ptr{PJRT_Client_CreateBuffersForAsyncHostToDevice}
-    PJRT_AsyncHostToDeviceTransferManager_RetrieveBuffer::Ptr{PJRT_AsyncHostToDeviceTransferManager_RetrieveBuffer}
-    PJRT_AsyncHostToDeviceTransferManager_Device::Ptr{PJRT_AsyncHostToDeviceTransferManager_Device}
-    PJRT_AsyncHostToDeviceTransferManager_BufferCount::Ptr{PJRT_AsyncHostToDeviceTransferManager_BufferCount}
-    PJRT_AsyncHostToDeviceTransferManager_BufferSize::Ptr{PJRT_AsyncHostToDeviceTransferManager_BufferSize}
-    PJRT_AsyncHostToDeviceTransferManager_SetBufferError::Ptr{PJRT_AsyncHostToDeviceTransferManager_SetBufferError}
-    PJRT_AsyncHostToDeviceTransferManager_AddMetadata::Ptr{PJRT_AsyncHostToDeviceTransferManager_AddMetadata}
+    PJRT_AsyncHostToDeviceTransferManager_Destroy::Ptr{
+        PJRT_AsyncHostToDeviceTransferManager_Destroy
+    }
+    PJRT_AsyncHostToDeviceTransferManager_TransferData::Ptr{
+        PJRT_AsyncHostToDeviceTransferManager_TransferData
+    }
+    PJRT_Client_CreateBuffersForAsyncHostToDevice::Ptr{
+        PJRT_Client_CreateBuffersForAsyncHostToDevice
+    }
+    PJRT_AsyncHostToDeviceTransferManager_RetrieveBuffer::Ptr{
+        PJRT_AsyncHostToDeviceTransferManager_RetrieveBuffer
+    }
+    PJRT_AsyncHostToDeviceTransferManager_Device::Ptr{
+        PJRT_AsyncHostToDeviceTransferManager_Device
+    }
+    PJRT_AsyncHostToDeviceTransferManager_BufferCount::Ptr{
+        PJRT_AsyncHostToDeviceTransferManager_BufferCount
+    }
+    PJRT_AsyncHostToDeviceTransferManager_BufferSize::Ptr{
+        PJRT_AsyncHostToDeviceTransferManager_BufferSize
+    }
+    PJRT_AsyncHostToDeviceTransferManager_SetBufferError::Ptr{
+        PJRT_AsyncHostToDeviceTransferManager_SetBufferError
+    }
+    PJRT_AsyncHostToDeviceTransferManager_AddMetadata::Ptr{
+        PJRT_AsyncHostToDeviceTransferManager_AddMetadata
+    }
     PJRT_Client_DmaMap::Ptr{PJRT_Client_DmaMap}
     PJRT_Client_DmaUnmap::Ptr{PJRT_Client_DmaUnmap}
     PJRT_Client_CreateUninitializedBuffer::Ptr{PJRT_Client_CreateUninitializedBuffer}
@@ -2613,9 +2665,13 @@ struct PJRT_Api
     PJRT_TopologyDescription_Deserialize::Ptr{PJRT_TopologyDescription_Deserialize}
     PJRT_Client_CreateAliasBuffer::Ptr{PJRT_Client_CreateAliasBuffer}
     PJRT_Client_FulfillAliasBuffer::Ptr{PJRT_Client_FulfillAliasBuffer}
-    PJRT_LoadedExecutable_GetDeviceAssignment::Ptr{PJRT_LoadedExecutable_GetDeviceAssignment}
+    PJRT_LoadedExecutable_GetDeviceAssignment::Ptr{
+        PJRT_LoadedExecutable_GetDeviceAssignment
+    }
     PJRT_Client_CreateErrorBuffer::Ptr{PJRT_Client_CreateErrorBuffer}
-    PJRT_AsyncHostToDeviceTransferManager_TransferLiteral::Ptr{PJRT_AsyncHostToDeviceTransferManager_TransferLiteral}
+    PJRT_AsyncHostToDeviceTransferManager_TransferLiteral::Ptr{
+        PJRT_AsyncHostToDeviceTransferManager_TransferLiteral
+    }
     PJRT_Buffer_CopyRawToHostFuture::Ptr{PJRT_Buffer_CopyRawToHostFuture}
     PJRT_Device_PoisonExecution::Ptr{PJRT_Device_PoisonExecution}
     PJRT_Device_CreateAsyncTrackingEvent::Ptr{PJRT_Device_CreateAsyncTrackingEvent}
@@ -3005,10 +3061,16 @@ struct PJRT_Layouts_Extension
     base::PJRT_Extension_Base
     PJRT_Layouts_MemoryLayout_Destroy::Ptr{PJRT_Layouts_MemoryLayout_Destroy}
     PJRT_Layouts_MemoryLayout_Serialize::Ptr{PJRT_Layouts_MemoryLayout_Serialize}
-    PJRT_Layouts_PJRT_Client_GetDefaultLayout::Ptr{PJRT_Layouts_PJRT_Client_GetDefaultLayout}
+    PJRT_Layouts_PJRT_Client_GetDefaultLayout::Ptr{
+        PJRT_Layouts_PJRT_Client_GetDefaultLayout
+    }
     PJRT_Layouts_PJRT_Buffer_MemoryLayout::Ptr{PJRT_Layouts_PJRT_Buffer_MemoryLayout}
-    PJRT_Layouts_PJRT_Topology_GetDefaultLayout::Ptr{PJRT_Layouts_PJRT_Topology_GetDefaultLayout}
-    PJRT_Layouts_PJRT_Executable_GetOutputLayouts::Ptr{PJRT_Layouts_PJRT_Executable_GetOutputLayouts}
+    PJRT_Layouts_PJRT_Topology_GetDefaultLayout::Ptr{
+        PJRT_Layouts_PJRT_Topology_GetDefaultLayout
+    }
+    PJRT_Layouts_PJRT_Executable_GetOutputLayouts::Ptr{
+        PJRT_Layouts_PJRT_Executable_GetOutputLayouts
+    }
 end
 
 @cenum __JL_Ctag_751::UInt32 begin
@@ -3051,7 +3113,9 @@ const PJRT_MemoryDescription_Kind = Cvoid
 
 struct PJRT_MemoryDescriptions_Extension
     base::PJRT_Extension_Base
-    PJRT_DeviceDescription_MemoryDescriptions::Ptr{PJRT_DeviceDescription_MemoryDescriptions}
+    PJRT_DeviceDescription_MemoryDescriptions::Ptr{
+        PJRT_DeviceDescription_MemoryDescriptions
+    }
     PJRT_MemoryDescription_Kind::Ptr{PJRT_MemoryDescription_Kind}
 end
 
@@ -3728,7 +3792,9 @@ struct PJRT_TpuTopology_Extension
     base::PJRT_Extension_Base
     subslice::Ptr{PJRT_TpuTopology_Subslice}
     is_subslice_topology::Ptr{PJRT_TpuTopology_IsSubsliceTopology}
-    subslice_device_id_from_full_device_id::Ptr{PJRT_TpuTopology_SubsliceDeviceIdFromFullDeviceId}
+    subslice_device_id_from_full_device_id::Ptr{
+        PJRT_TpuTopology_SubsliceDeviceIdFromFullDeviceId
+    }
     replace_host_bounds::Ptr{PJRT_TpuTopology_ReplaceHostBounds}
     is_enhanced_barrier_enabled::Ptr{PJRT_TpuTopology_IsEnhancedBarrierEnabled}
     has_limited_ici_connectivity::Ptr{PJRT_TpuTopology_HasLimitedIciConnectivity}
@@ -3745,10 +3811,14 @@ struct PJRT_TpuTopology_Extension
     process_ids::Ptr{PJRT_TpuTopology_ProcessIds}
     logical_device_ids_on_process::Ptr{PJRT_TpuTopology_LogiDeviceIdsOnProcess}
     proc_id_and_idx_on_proc_for_chip::Ptr{PJRT_TpuTopology_ProcIdAndIdxOnProcForChip}
-    proc_id_and_idx_on_proc_for_logi_device::Ptr{PJRT_TpuTopology_ProcIdAndIdxOnProcForLogiDevice}
+    proc_id_and_idx_on_proc_for_logi_device::Ptr{
+        PJRT_TpuTopology_ProcIdAndIdxOnProcForLogiDevice
+    }
     process_coord_from_id::Ptr{PJRT_TpuTopology_ProcessCoordFromId}
     chip_id_from_coord::Ptr{PJRT_TpuTopology_ChipIdFromCoord}
-    logical_device_id_from_chip_coord_and_idx::Ptr{PJRT_TpuTopology_LogiDeviceIdFromChipCoordAndIdx}
+    logical_device_id_from_chip_coord_and_idx::Ptr{
+        PJRT_TpuTopology_LogiDeviceIdFromChipCoordAndIdx
+    }
     chip_coord_and_idx_for_logi_device::Ptr{PJRT_TpuTopology_ChipCoordAndIdxForLogiDevice}
     chips_per_process_bounds::Ptr{PJRT_TpuTopology_ChipsPerProcessBounds}
     chip_bounds::Ptr{PJRT_TpuTopology_ChipBounds}
@@ -3821,4 +3891,3 @@ const PJRT_API_STREAM_EXTENSION_VERSION = 0
 const PJRT_API_TPU_TOPOLOGY_EXTENSION_VERSION = 1
 
 const PJRT_API_TRITON_EXTENSION_VERSION = 1
-
