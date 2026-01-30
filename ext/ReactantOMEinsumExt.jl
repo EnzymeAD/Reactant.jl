@@ -15,17 +15,17 @@ using OMEinsum: _analyze_binary_input
     end
 end
 
-@reactant_overlay @noinline function OMEinsum.einsum!(
-    ixs, iy, @nospecialize(xs::NTuple{1,Any}), @nospecialize(y), sx, sy, size_dict
-)
-    if looped_any(use_overlayed_version, xs)
-        @assert use_overlayed_version(y)
-        # TODO
-        error("unary einsum support not implemented yet")
+@reactant_overlay @noinline function OMEinsum.tensorpermute!(
+    C::AbstractArray{T,N}, A::AbstractArray{T,N}, perm, sx, sy
+) where {T,N}
+    if use_overlayed_version(A)
+        @assert use_overlayed_version(C)
+        permv = collect(perm)
+        res = sy * C + sx * @opcall transpose(A, permv)
+        C.mlir_data = res.mlir_data
+        return C
     else
-        return Reactant.call_with_native(
-            OMEinsum.einsum!, ixs, iy, xs, y, sx, sy, size_dict
-        )
+        return Reactant.call_with_native(OMEinsum.tensorpermute!, C, A, perm, sx, sy)
     end
 end
 
