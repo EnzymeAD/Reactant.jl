@@ -117,7 +117,7 @@ end
 
 @testset "scale" begin
     a = Reactant.TestUtils.construct_test_array(ComplexF32, 2, 3)
-    b = ComplexF32[2.0]
+    b = fill(ComplexF32(2.0))
     a_re = Reactant.to_rarray(a)
     b_re = Reactant.to_rarray(b)
 
