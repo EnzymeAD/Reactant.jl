@@ -22,6 +22,16 @@ using OMEinsum
     @test c ≈ c_re
 end
 
+@testset "diagonal" begin
+    a = Reactant.TestUtils.construct_test_array(ComplexF32, 3, 3)
+    a_re = Reactant.to_rarray(a)
+
+    f = ein"ii->i"
+    c = f(a)
+    c_re = @jit f(a_re)
+    @test c ≈ c_re
+end
+
 @testset "trace" begin
     a = Reactant.TestUtils.construct_test_array(ComplexF32, 3, 3)
     a_re = Reactant.to_rarray(a)
