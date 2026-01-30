@@ -16,6 +16,21 @@ using OMEinsum: _analyze_binary_input
     end
 end
 
+@reactant_overlay @noinline function OMEinsum.unary_einsum!(
+    ::OMEinsum.Diag, ix, iy, x::AbstractArray, y::AbstractArray, sx, sy
+)
+    if use_overlayed_version(x)
+        @assert use_overlayed_version(y)
+        # TODO we probably would prefer a more efficient implementation here... like a reduction or a specialized op
+        @debug "Diag" ix => iy size.(x)
+        return @allowscalar OMEinsum.compactify!(y, x, ix, iy, sx, sy)
+    else
+        return Reactant.call_with_native(
+            OMEinsum.unary_einsum!, OMEinsum.Diag(), ix, iy, x, y, sx, sy
+        )
+    end
+end
+
 @reactant_overlay @noinline function OMEinsum.tensorpermute!(
     C::AbstractArray{T,N}, A::AbstractArray{T,N}, perm, sx, sy
 ) where {T,N}
