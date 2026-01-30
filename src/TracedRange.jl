@@ -118,10 +118,12 @@ end
 # TracedUnitRange
 AbstractUnitRange{T}(r::TracedUnitRange) where {T} = TracedUnitRange{T}(r)
 
-function TracedUnitRange{T}(start, stop) where {T}
-    return TracedUnitRange{T}(convert(T, start), convert(T, stop))
+function TracedUnitRange{T}(start, stop, len::Int=-1) where {T}
+    return TracedUnitRange{T}(convert(T, start), convert(T, stop), len)
 end
-TracedUnitRange(start::T, stop::T) where {T} = TracedUnitRange{T}(start, stop)
+function TracedUnitRange(start::T, stop::T, len::Int=-1) where {T}
+    return TracedUnitRange{T}(start, stop, len)
+end
 function TracedUnitRange(start, stop)
     startstop_promoted = promote(start, stop)
     Base.not_sametype((start, stop), startstop_promoted)
@@ -153,13 +155,16 @@ function Base._in_unit_range(
 end
 
 @inline function Base.length(r::TracedUnitRange{TracedRNumber{T}}) where {T}
+    if r.length >= 0
+        return r.length
+    end
     start, stop = first(r), last(r)
     a = Base.oneunit(Base.zero(stop) - Base.zero(start))
     if a isa Signed
         # Signed are allowed to go negative
-        @opcall select(stop >= start, a + stop - start, a)
+        return @opcall select(stop >= start, a + stop - start, a)
     else
-        @opcall select(stop >= start, a + stop - start, zero(a))
+        return @opcall select(stop >= start, a + stop - start, zero(a))
     end
 end
 
