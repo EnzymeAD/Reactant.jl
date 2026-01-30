@@ -51,11 +51,6 @@ jobs:
         working-directory: ./deps/ReactantExtra
         env:
           JULIA_DEPOT_PATH: "${{ runner.temp }}/julia_depot:"
-      - name: Make generated files writable
-        run: |
-          chmod -R u+rw ./src/mlir/Dialects/
-          chmod u+rw ./src/mlir/libMLIR_h.jl
-          git config core.fileMode false
       - name: Generate Proto Bindings
         run: julia --project=. --color=yes make-proto-bindings.jl
         working-directory: ./deps/ReactantExtra
@@ -66,6 +61,11 @@ jobs:
         working-directory: ./deps/ReactantExtra
         env:
           JULIA_DEPOT_PATH: "${{ runner.temp }}/julia_depot:"
+      - name: Make generated files writable
+        run: |
+          chmod -R u+rw ./src/mlir/Dialects/ ./src/proto/
+          chmod u+rw ./src/mlir/libMLIR_h.jl ./src/xla/PJRT/CAPI.jl
+          git config core.fileMode false
       - name: Format code
         shell: julia --color=yes {0}
         run: |
