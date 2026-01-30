@@ -264,6 +264,63 @@ end
     end
 end
 
+@testset "round with RoundToZero" begin
+    # Test with Float32 arrays
+    x32 = Float32[-2.7, -2.3, -1.5, -0.9, 0.0, 0.9, 1.5, 2.3, 2.7]
+    x32_ra = Reactant.to_rarray(x32)
+    roundtozero32(arr) = round.(arr, RoundToZero)
+    result32 = @jit(roundtozero32(x32_ra))
+    expected32 = round.(x32, RoundToZero)
+    @test result32 ≈ expected32
+    @test result32 isa ConcreteRArray{Float32,1}
+    @test sign.(Array(result32)) == sign.(expected32)
+
+    # Test with Float64 arrays
+    x64 = Float64[-2.7, -2.3, -1.5, -0.9, 0.0, 0.9, 1.5, 2.3, 2.7]
+    x64_ra = Reactant.to_rarray(x64)
+    roundtozero64(arr) = round.(arr, RoundToZero)
+    result64 = @jit(roundtozero64(x64_ra))
+    expected64 = round.(x64, RoundToZero)
+    @test result64 ≈ expected64
+    @test result64 isa ConcreteRArray{Float64,1}
+    @test sign.(Array(result64)) == sign.(expected64)
+
+    # Test with scalar TracedRNumber (Float32)
+    s32 = Float32(-3.7)
+    s32_ra = Reactant.to_rarray(s32; track_numbers=Number)
+    roundtozero_scalar(x) = round(x, RoundToZero)
+    result_s32 = @jit(roundtozero_scalar(s32_ra))
+    expected_s32 = round(s32, RoundToZero)
+    @test result_s32 ≈ expected_s32
+    @test result_s32 isa ConcreteRNumber{Float32}
+    @test sign(Reactant.to_number(result_s32)) == sign(expected_s32)
+
+    # Test with scalar TracedRNumber (Float64)
+    s64 = Float64(5.9)
+    s64_ra = Reactant.to_rarray(s64; track_numbers=Number)
+    result_s64 = @jit(roundtozero_scalar(s64_ra))
+    expected_s64 = round(s64, RoundToZero)
+    @test result_s64 ≈ expected_s64
+    @test result_s64 isa ConcreteRNumber{Float64}
+    @test sign(Reactant.to_number(result_s64)) == sign(expected_s64)
+
+    # Test edge case: values already integers
+    already_int = Float32[-3.0, 0.0, 4.0]
+    already_int_ra = Reactant.to_rarray(already_int)
+    result_int = @jit(roundtozero32(already_int_ra))
+    expected_int = round.(already_int, RoundToZero)
+    @test result_int ≈ expected_int
+    @test sign.(Array(result_int)) == sign.(expected_int)
+
+    # Test edge case: very small values close to zero
+    small_vals = Float32[-0.1, -0.001, 0.001, 0.1]
+    small_vals_ra = Reactant.to_rarray(small_vals)
+    result_small = @jit(roundtozero32(small_vals_ra))
+    expected_small = round.(small_vals, RoundToZero)
+    @test result_small ≈ expected_small
+    @test sign.(Array(result_small)) == sign.(expected_small)
+end
+
 @testset "clamp" begin
     x = Reactant.TestUtils.construct_test_array(Float64, 2, 3)
     x_ra = Reactant.to_rarray(x)
