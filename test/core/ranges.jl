@@ -21,4 +21,14 @@ broadcast_over_range(a, kx, ky) = a .* (kx .^ 2 .+ ky' .^ 2)
     @test kx_ra isa Reactant.TracedUnitRange
     @test ky_ra isa Reactant.TracedUnitRange
     @test @jit(broadcast_over_range(a_ra, kx_ra, ky_ra)) ≈ broadcast_over_range(a, kx, ky)
+
+    kx_2 = 1.0f0:32.0f0
+    ky_2 = 30.0f0:61.0f0
+    kx_2_ra = Reactant.to_rarray(kx_2)
+    ky_2_ra = Reactant.to_rarray(ky_2)
+
+    @test kx_2_ra isa Reactant.TracedStepRangeLen
+    @test ky_2_ra isa Reactant.TracedStepRangeLen
+    @test @jit(broadcast_over_range(a_ra, kx_2_ra, ky_2_ra)) ≈
+        broadcast_over_range(a, kx_2, ky_2)
 end
