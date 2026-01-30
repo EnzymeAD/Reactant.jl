@@ -8,7 +8,7 @@ steps:
               - "1.12"
             group:
               - core
-              - neural_networks
+              - nn
               - integration
             runtime:
               - "PJRT"
@@ -36,12 +36,11 @@ steps:
 
           julia --project=. -e 'println("--- :julia: Run Tests")
               using Pkg
-              Pkg.test(; coverage="user")'
+              Pkg.test(; coverage="user", test_args=["{{matrix.group}}"])'
         agents:
           queue: "juliagpu"
           cuda: "*"
         env:
-          REACTANT_TEST_GROUP: "{{matrix.group}}"
           JULIA_DEBUG: "Reactant,Reactant_jll"
           CUDA_VISIBLE_DEVICES: 0
           REACTANT_BACKEND_GROUP: "GPU"
@@ -55,7 +54,7 @@ steps:
   #         - "1.12"
   #       group:
   #         - core
-  #         - neural_networks
+  #         - nn
   #         - integration
   #       runtime:
   #         - "IFRT"
@@ -85,9 +84,8 @@ steps:
 
   #     julia --project=. -e 'println("--- :julia: Run Tests")
   #         using Pkg
-  #         Pkg.test(; coverage="user")'
+  #         Pkg.test(; coverage="user", test_args=["{{matrix.group}}"])
   #   env:
-  #     REACTANT_TEST_GROUP: "{{matrix.group}}"
   #     JULIA_DEBUG: "Reactant,Reactant_jll"
   #     CUDA_VISIBLE_DEVICES: 0
     # if: build.message !~ /\[skip tests\]/

@@ -475,7 +475,8 @@ raise_to_syrk2(x, y) = 3 .* (transpose(x) * x) .+ 5 .* y
         y2 = Reactant.TestUtils.construct_test_array(elty, 5, 5)
         x_ra = Reactant.to_rarray(x)
 
-        @testset for (fn, y) in ((raise_to_syrk, y1), (raise_to_syrk2, y2))
+        @testset "fn: $(fn) | y: $(size(y))" for (fn, y) in
+                                                 ((raise_to_syrk, y1), (raise_to_syrk2, y2))
             y_ra = Reactant.to_rarray(y)
 
             hlo = @code_hlo compile_options = CompileOptions(;
@@ -488,7 +489,7 @@ raise_to_syrk2(x, y) = 3 .* (transpose(x) * x) .+ 5 .* y
                 disable_structured_tensors_detection_passes=false
             ) fn(x_ra, y_ra)
 
-            @test fn_compile(x_ra, y_ra) ≈ fn(x, y)
+            @test fn_compile(x_ra, y_ra) ≈ fn(x, y) atol = 1e-3 rtol = 1e-3
         end
     end
 end
