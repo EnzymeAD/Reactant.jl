@@ -10,7 +10,7 @@ import ...IR:
     create_operation,
     context,
     IndexType
-import ..Dialects: namedattribute, operandsegmentsizes
+import ..Dialects: operandsegmentsizes, resultsegmentsizes
 import ...API
 
 """
@@ -39,9 +39,9 @@ function call(
     operands = Value[operands...,]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("callee", callee),]
-    !isnothing(arg_attrs) && push!(attributes, namedattribute("arg_attrs", arg_attrs))
-    !isnothing(res_attrs) && push!(attributes, namedattribute("res_attrs", res_attrs))
+    attributes = NamedAttribute[NamedAttribute("callee", callee),]
+    !isnothing(arg_attrs) && push!(attributes, NamedAttribute("arg_attrs", arg_attrs))
+    !isnothing(res_attrs) && push!(attributes, NamedAttribute("res_attrs", res_attrs))
 
     return create_operation(
         "tt.call",
@@ -108,12 +108,12 @@ function func(;
     owned_regions = Region[body,]
     successors = Block[]
     attributes = NamedAttribute[
-        namedattribute("sym_name", sym_name), namedattribute("function_type", function_type)
+        NamedAttribute("sym_name", sym_name), NamedAttribute("function_type", function_type)
     ]
     !isnothing(sym_visibility) &&
-        push!(attributes, namedattribute("sym_visibility", sym_visibility))
-    !isnothing(arg_attrs) && push!(attributes, namedattribute("arg_attrs", arg_attrs))
-    !isnothing(res_attrs) && push!(attributes, namedattribute("res_attrs", res_attrs))
+        push!(attributes, NamedAttribute("sym_visibility", sym_visibility))
+    !isnothing(arg_attrs) && push!(attributes, NamedAttribute("arg_attrs", arg_attrs))
+    !isnothing(res_attrs) && push!(attributes, NamedAttribute("res_attrs", res_attrs))
 
     return create_operation(
         "tt.func",
@@ -212,7 +212,7 @@ function assert(condition::Value; message, location=Location())
     operands = Value[condition,]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("message", message),]
+    attributes = NamedAttribute[NamedAttribute("message", message),]
 
     return create_operation(
         "tt.assert",
@@ -244,7 +244,7 @@ function atomic_cas(
     operands = Value[ptr, cmp, val]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("sem", sem), namedattribute("scope", scope)]
+    attributes = NamedAttribute[NamedAttribute("sem", sem), NamedAttribute("scope", scope)]
 
     return create_operation(
         "tt.atomic_cas",
@@ -280,9 +280,9 @@ function atomic_rmw(
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[
-        namedattribute("atomic_rmw_op", atomic_rmw_op),
-        namedattribute("sem", sem),
-        namedattribute("scope", scope),
+        NamedAttribute("atomic_rmw_op", atomic_rmw_op),
+        NamedAttribute("sem", sem),
+        NamedAttribute("scope", scope),
     ]
     !isnothing(mask) && push!(operands, mask)
 
@@ -381,7 +381,7 @@ function clampf(
     operands = Value[x, min, max]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("propagateNan", propagateNan),]
+    attributes = NamedAttribute[NamedAttribute("propagateNan", propagateNan),]
     !isnothing(result) && push!(op_ty_results, result)
 
     return create_operation(
@@ -447,8 +447,8 @@ function descriptor_load(
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
-    !isnothing(cache) && push!(attributes, namedattribute("cache", cache))
-    !isnothing(evict) && push!(attributes, namedattribute("evict", evict))
+    !isnothing(cache) && push!(attributes, NamedAttribute("cache", cache))
+    !isnothing(evict) && push!(attributes, NamedAttribute("evict", evict))
 
     return create_operation(
         "tt.descriptor_load",
@@ -476,7 +476,7 @@ function descriptor_reduce(
     operands = Value[desc, src, indices...]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("kind", kind),]
+    attributes = NamedAttribute[NamedAttribute("kind", kind),]
 
     return create_operation(
         "tt.descriptor_reduce",
@@ -577,9 +577,9 @@ function dot(
     attributes = NamedAttribute[]
     !isnothing(d) && push!(op_ty_results, d)
     !isnothing(inputPrecision) &&
-        push!(attributes, namedattribute("inputPrecision", inputPrecision))
+        push!(attributes, NamedAttribute("inputPrecision", inputPrecision))
     !isnothing(maxNumImpreciseAcc) &&
-        push!(attributes, namedattribute("maxNumImpreciseAcc", maxNumImpreciseAcc))
+        push!(attributes, NamedAttribute("maxNumImpreciseAcc", maxNumImpreciseAcc))
 
     return create_operation(
         "tt.dot",
@@ -618,9 +618,9 @@ function dot_scaled(
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[
-        namedattribute("a_elem_type", a_elem_type),
-        namedattribute("b_elem_type", b_elem_type),
-        namedattribute("fastMath", fastMath),
+        NamedAttribute("a_elem_type", a_elem_type),
+        NamedAttribute("b_elem_type", b_elem_type),
+        NamedAttribute("fastMath", fastMath),
     ]
     !isnothing(a_scale) && push!(operands, a_scale)
     !isnothing(b_scale) && push!(operands, b_scale)
@@ -628,8 +628,8 @@ function dot_scaled(
         attributes,
         operandsegmentsizes([1, 1, 1, Int(!isnothing(a_scale)), Int(!isnothing(b_scale))]),
     )
-    !isnothing(lhs_k_pack) && push!(attributes, namedattribute("lhs_k_pack", lhs_k_pack))
-    !isnothing(rhs_k_pack) && push!(attributes, namedattribute("rhs_k_pack", rhs_k_pack))
+    !isnothing(lhs_k_pack) && push!(attributes, NamedAttribute("lhs_k_pack", lhs_k_pack))
+    !isnothing(rhs_k_pack) && push!(attributes, NamedAttribute("rhs_k_pack", rhs_k_pack))
 
     return create_operation(
         "tt.dot_scaled",
@@ -665,10 +665,10 @@ function elementwise_inline_asm(
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[
-        namedattribute("asm_string", asm_string),
-        namedattribute("constraints", constraints),
-        namedattribute("pure", pure),
-        namedattribute("packed_element", packed_element),
+        NamedAttribute("asm_string", asm_string),
+        NamedAttribute("constraints", constraints),
+        NamedAttribute("pure", pure),
+        NamedAttribute("packed_element", packed_element),
     ]
 
     return create_operation(
@@ -690,7 +690,7 @@ function expand_dims(
     operands = Value[src,]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("axis", axis),]
+    attributes = NamedAttribute[NamedAttribute("axis", axis),]
     !isnothing(result) && push!(op_ty_results, result)
 
     return create_operation(
@@ -725,10 +725,10 @@ function extern_elementwise(
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[
-        namedattribute("libname", libname),
-        namedattribute("libpath", libpath),
-        namedattribute("symbol", symbol),
-        namedattribute("pure", pure),
+        NamedAttribute("libname", libname),
+        NamedAttribute("libpath", libpath),
+        NamedAttribute("symbol", symbol),
+        NamedAttribute("pure", pure),
     ]
 
     return create_operation(
@@ -756,7 +756,7 @@ function fp_to_fp(src::Value; result::IR.Type, rounding=nothing, location=Locati
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
-    !isnothing(rounding) && push!(attributes, namedattribute("rounding", rounding))
+    !isnothing(rounding) && push!(attributes, NamedAttribute("rounding", rounding))
 
     return create_operation(
         "tt.fp_to_fp",
@@ -796,10 +796,10 @@ function gather(
     operands = Value[src, indices]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("axis", axis),]
+    attributes = NamedAttribute[NamedAttribute("axis", axis),]
     !isnothing(result) && push!(op_ty_results, result)
     !isnothing(efficient_layout) &&
-        push!(attributes, namedattribute("efficient_layout", efficient_layout))
+        push!(attributes, NamedAttribute("efficient_layout", efficient_layout))
 
     return create_operation(
         "tt.gather",
@@ -820,7 +820,7 @@ function get_num_programs(;
     operands = Value[]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("axis", axis),]
+    attributes = NamedAttribute[NamedAttribute("axis", axis),]
     !isnothing(result) && push!(op_ty_results, result)
 
     return create_operation(
@@ -840,7 +840,7 @@ function get_program_id(; result=nothing::Union{Nothing,IR.Type}, axis, location
     operands = Value[]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("axis", axis),]
+    attributes = NamedAttribute[NamedAttribute("axis", axis),]
     !isnothing(result) && push!(op_ty_results, result)
 
     return create_operation(
@@ -955,11 +955,11 @@ function load(
     )
     !isnothing(result) && push!(op_ty_results, result)
     !isnothing(boundaryCheck) &&
-        push!(attributes, namedattribute("boundaryCheck", boundaryCheck))
-    !isnothing(padding) && push!(attributes, namedattribute("padding", padding))
-    !isnothing(cache) && push!(attributes, namedattribute("cache", cache))
-    !isnothing(evict) && push!(attributes, namedattribute("evict", evict))
-    !isnothing(isVolatile) && push!(attributes, namedattribute("isVolatile", isVolatile))
+        push!(attributes, NamedAttribute("boundaryCheck", boundaryCheck))
+    !isnothing(padding) && push!(attributes, NamedAttribute("padding", padding))
+    !isnothing(cache) && push!(attributes, NamedAttribute("cache", cache))
+    !isnothing(evict) && push!(attributes, NamedAttribute("evict", evict))
+    !isnothing(isVolatile) && push!(attributes, NamedAttribute("isVolatile", isVolatile))
 
     return create_operation(
         "tt.load",
@@ -985,7 +985,7 @@ function make_range(; result::IR.Type, start, end_, location=Location())
     operands = Value[]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("start", start), namedattribute("end", end_)]
+    attributes = NamedAttribute[NamedAttribute("start", start), NamedAttribute("end", end_)]
 
     return create_operation(
         "tt.make_range",
@@ -1018,7 +1018,7 @@ function make_tensor_descriptor(
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
-    !isnothing(padding) && push!(attributes, namedattribute("padding", padding))
+    !isnothing(padding) && push!(attributes, NamedAttribute("padding", padding))
 
     return create_operation(
         "tt.make_tensor_descriptor",
@@ -1051,7 +1051,7 @@ function make_tensor_ptr(
     operands = Value[base, shape..., strides..., offsets...]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("order", order),]
+    attributes = NamedAttribute[NamedAttribute("order", order),]
 
     return create_operation(
         "tt.make_tensor_ptr",
@@ -1076,7 +1076,7 @@ function map_elementwise(
     operands = Value[srcs...,]
     owned_regions = Region[scalarOp,]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("pack", pack),]
+    attributes = NamedAttribute[NamedAttribute("pack", pack),]
 
     return create_operation(
         "tt.map_elementwise",
@@ -1200,9 +1200,9 @@ function print(args::Vector{Value}; prefix, hex, isSigned, location=Location())
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[
-        namedattribute("prefix", prefix),
-        namedattribute("hex", hex),
-        namedattribute("isSigned", isSigned),
+        NamedAttribute("prefix", prefix),
+        NamedAttribute("hex", hex),
+        NamedAttribute("isSigned", isSigned),
     ]
 
     return create_operation(
@@ -1247,7 +1247,7 @@ function reduce(
     operands = Value[srcs...,]
     owned_regions = Region[combineOp,]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("axis", axis),]
+    attributes = NamedAttribute[NamedAttribute("axis", axis),]
 
     return create_operation(
         "tt.reduce",
@@ -1304,9 +1304,9 @@ function reshape(
     successors = Block[]
     attributes = NamedAttribute[]
     !isnothing(allow_reorder) &&
-        push!(attributes, namedattribute("allow_reorder", allow_reorder))
+        push!(attributes, NamedAttribute("allow_reorder", allow_reorder))
     !isnothing(efficient_layout) &&
-        push!(attributes, namedattribute("efficient_layout", efficient_layout))
+        push!(attributes, NamedAttribute("efficient_layout", efficient_layout))
 
     return create_operation(
         "tt.reshape",
@@ -1333,7 +1333,7 @@ function scan(
     owned_regions = Region[combineOp,]
     successors = Block[]
     attributes = NamedAttribute[
-        namedattribute("axis", axis), namedattribute("reverse", reverse)
+        NamedAttribute("axis", axis), NamedAttribute("reverse", reverse)
     ]
 
     return create_operation(
@@ -1437,9 +1437,9 @@ function store(
     attributes = NamedAttribute[]
     !isnothing(mask) && push!(operands, mask)
     !isnothing(boundaryCheck) &&
-        push!(attributes, namedattribute("boundaryCheck", boundaryCheck))
-    !isnothing(cache) && push!(attributes, namedattribute("cache", cache))
-    !isnothing(evict) && push!(attributes, namedattribute("evict", evict))
+        push!(attributes, NamedAttribute("boundaryCheck", boundaryCheck))
+    !isnothing(cache) && push!(attributes, NamedAttribute("cache", cache))
+    !isnothing(evict) && push!(attributes, NamedAttribute("evict", evict))
 
     return create_operation(
         "tt.store",
@@ -1489,7 +1489,7 @@ function trans(
     operands = Value[src,]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("order", order),]
+    attributes = NamedAttribute[NamedAttribute("order", order),]
     !isnothing(result) && push!(op_ty_results, result)
 
     return create_operation(

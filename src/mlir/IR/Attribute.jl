@@ -916,9 +916,14 @@ struct NamedAttribute
     ref::API.MlirNamedAttribute
 end
 
-function NamedAttribute(name::String, attribute; context=context(attribute))
+function NamedAttribute(name, attribute; kwargs...)
+    attr = Attribute(attribute; kwargs...)
+    return NamedAttribute(name, attr; kwargs...)
+end
+
+function NamedAttribute(name, attr::Attribute; context=context(attr))
     nameid = Identifier(name; context)
-    return NamedAttribute(nameid, attribute)
+    return NamedAttribute(nameid, attr; context)
 end
 
 function NamedAttribute(name::Identifier, attr::Attribute; context=context(attr))

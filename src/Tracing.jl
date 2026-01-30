@@ -152,8 +152,13 @@ Base.@nospecializeinfer function traced_type_inner(
 )
     if T.lb === Union{} && T.ub === Any
         return T
+    else
+        return TypeVar(
+            T.name,
+            traced_type_inner(T.lb, seen, mode, track_numbers, ndevices, runtime),
+            traced_type_inner(T.ub, seen, mode, track_numbers, ndevices, runtime),
+        )
     end
-    throw(AssertionError("Unsupported Typevar $T lb=$(T.lb) ub=$(T.ub)"))
 end
 
 Base.@nospecializeinfer function traced_type_inner(
@@ -224,19 +229,19 @@ Base.@nospecializeinfer function traced_type_inner(
     @nospecialize(ndevices),
     @nospecialize(runtime)
 )
-    if T0 isa UnionAll
-        T = T0.body isa UnionAll ? T0.body.body.parameters[1] : T0.body.parameters[1]
-    else
-        T = T0.parameters[1]
-    end
+    T = Base.unwrap_unionall(T0).parameters[1]
 
     if mode == ConcreteToTraced
-        return TracedRNumber{T}
+        return T0 isa UnionAll ? TracedRNumber : TracedRNumber{T}
     elseif mode == TracedToConcrete
         return T0
     elseif mode == ArrayToConcrete
         @assert runtime isa Val{:PJRT}
-        return ConcretePJRTNumber{T,_unwrap_val(ndevices)}
+        if T0 isa UnionAll
+            return ConcretePJRTNumbe{T,_unwrap_val(ndevices)} where {T}
+        else
+            return ConcretePJRTNumber{T,_unwrap_val(ndevices)}
+        end
     else
         throw("Unsupported mode: $mode")
     end
@@ -250,75 +255,75 @@ Base.@nospecializeinfer function traced_type_inner(
     @nospecialize(ndevices),
     @nospecialize(runtime)
 )
-    T = T0 isa UnionAll ? T0.body.parameters[1] : T0.parameters[1]
+    T = Base.unwrap_unionall(T0).parameters[1]
 
     if mode == ConcreteToTraced
-        return TracedRNumber{T}
+        return T0 isa UnionAll ? TracedRNumber : TracedRNumber{T}
     elseif mode == TracedToConcrete
         return T0
     elseif mode == ArrayToConcrete
         @assert runtime isa Val{:IFRT}
-        return ConcreteIFRTNumber{T}
+        return T0 isa UnionAll ? ConcreteIFRTNumber : ConcreteIFRTNumber{T}
     else
         throw("Unsupported mode: $mode")
     end
 end
 
 Base.@nospecializeinfer function traced_type_inner(
-    @nospecialize(T::Type{<:ConcretePJRTArray}),
+    @nospecialize(A::Type{<:ConcretePJRTArray}),
     seen,
     @nospecialize(mode::TraceMode),
     @nospecialize(track_numbers::Type),
     @nospecialize(ndevices),
     @nospecialize(runtime)
 )
-    if T isa UnionAll
-        if T.body isa UnionAll
-            elT, N = T.body.body.parameters[1], T.body.body.parameters[2]
-        else
-            elT, N = T.body.parameters[1], T.body.parameters[2]
-        end
-    else
-        elT, N = T.parameters[1], T.parameters[2]
-    end
-
     if mode == ConcreteToTraced
-        return TracedRArray{elT,N}
+        A´ = Base.unwrap_unionall(A)
+        T, N, _ = A´.parameters
+        A´´ = TracedRArray{T,N}
+        A_ret = N isa Core.TypeVar ? UnionAll(N, A´´) : A´´
+        A_ret2 = T isa Core.TypeVar ? UnionAll(T, A_ret) : A_ret
+        return A_ret2
     elseif mode == TracedToConcrete
         return T
     elseif mode == ArrayToConcrete
         @assert runtime isa Val{:PJRT}
-        return ConcretePJRTArray{elT,N,_unwrap_val(ndevices)}
+        A´ = Base.unwrap_unionall(A)
+        T, N, _ = A´.parameters
+        A´´ = ConcretePJRTArray{T,N,_unwrap_val(ndevices)}
+        A_ret = N isa Core.TypeVar ? UnionAll(N, A´´) : A´´
+        A_ret2 = T isa Core.TypeVar ? UnionAll(T, A_ret) : A_ret
+        return A_ret2
     else
         throw("Unsupported mode: $mode")
     end
 end
 
 Base.@nospecializeinfer function traced_type_inner(
-    @nospecialize(T::Type{<:ConcreteIFRTArray}),
+    @nospecialize(A::Type{<:ConcreteIFRTArray}),
     seen,
     @nospecialize(mode::TraceMode),
     @nospecialize(track_numbers::Type),
     @nospecialize(ndevices),
     @nospecialize(runtime)
 )
-    if T isa UnionAll
-        if T.body isa UnionAll
-            elT, N = T.body.body.parameters[1], T.body.body.parameters[2]
-        else
-            elT, N = T.body.parameters[1], T.body.parameters[2]
-        end
-    else
-        elT, N = T.parameters[1], T.parameters[2]
-    end
-
     if mode == ConcreteToTraced
-        return TracedRArray{elT,N}
+        A´ = Base.unwrap_unionall(A)
+        T, N = A´.parameters
+        A´´ = TracedRArray{T,N}
+        A_ret = N isa Core.TypeVar ? UnionAll(N, A´´) : A´´
+        A_ret2 = T isa Core.TypeVar ? UnionAll(T, A_ret) : A_ret
+        return A_ret2
     elseif mode == TracedToConcrete
         return T
     elseif mode == ArrayToConcrete
-        @assert runtime isa Val{:IFRT}
-        return ConcreteIFRTArray{elT,N}
+        @assert runtime isa Val{:PJRT}
+        A´ = Base.unwrap_unionall(A)
+        T, N = A´.parameters
+        A´´ = ConcreteIFRTArray{T,N}
+        A_ret = N isa Core.TypeVar ? UnionAll(N, A´´) : A´´
+        A_ret2 = T isa Core.TypeVar ? UnionAll(T, A_ret) : A_ret
+        return A_ret2
     else
         throw("Unsupported mode: $mode")
     end
@@ -453,13 +458,28 @@ Base.@nospecializeinfer function traced_type_inner(
 )
     T = eltype(A)
     if A isa UnionAll
+        A´ = Base.unwrap_unionall(A)
+        T, N = A´.parameters
+        traced_T = traced_type_inner(T, seen, mode, track_numbers, ndevices, runtime)
+
+        A_wrapper = A´.name.wrapper
         if mode == ArrayToConcrete && T <: ReactantPrimitive
-            runtime isa Val{:PJRT} && return ConcretePJRTArray{T}
-            runtime isa Val{:IFRT} && return ConcreteIFRTArray{T}
-            error("Unsupported runtime $runtime")
-        else
-            return Array{traced_type_inner(T, seen, mode, track_numbers, ndevices, runtime)}
+            if runtime isa Val{:PJRT}
+                A_wrapper = ConcretePJRTArray
+            elseif runtime isa Val{:IFRT}
+                A_wrapper = ConcreteIFRTArray
+            else
+                error("Unsupported runtime $runtime")
+            end
         end
+
+        # WARN replacing typevars first is required to construct the UnionAlls correctly
+        A´´ = A_wrapper{traced_T,N}
+
+        # WARN application order is important for egality between UnionAlls! start from the end
+        A_ret = N isa Core.TypeVar ? UnionAll(N, A´´) : A´´
+        A_ret2 = T isa Core.TypeVar ? UnionAll(traced_T, A_ret) : A_ret
+        return A_ret2
     else
         N = ndims(A)
         if mode == ArrayToConcrete && T <: ReactantPrimitive

@@ -45,31 +45,40 @@ jobs:
           Clang.JLLEnvs.get_system_includes()
         working-directory: ./deps/ReactantExtra
         env:
-          JULIA_DEPOT_PATH: ${{ runner.temp }}/julia_depot
+          JULIA_DEPOT_PATH: "${{ runner.temp }}/julia_depot:"
       - name: Generate MLIR Bindings
         run: julia --project=. --color=yes make-bindings.jl
         working-directory: ./deps/ReactantExtra
         env:
-          JULIA_DEPOT_PATH: ${{ runner.temp }}/julia_depot
-      - name: Make generated files writable
-        run: |
-          chmod -R u+rw ./src/mlir/Dialects/
-          chmod u+rw ./src/mlir/libMLIR_h.jl
-          git config core.fileMode false
+          JULIA_DEPOT_PATH: "${{ runner.temp }}/julia_depot:"
       - name: Generate Proto Bindings
         run: julia --project=. --color=yes make-proto-bindings.jl
         working-directory: ./deps/ReactantExtra
         env:
-          JULIA_DEPOT_PATH: ${{ runner.temp }}/julia_depot
+          JULIA_DEPOT_PATH: "${{ runner.temp }}/julia_depot:"
+      - name: Generate XLA PjRT Plugin Bindings
+        run: julia --project=. --color=yes make-pjrt-plugin-bindings.jl --force
+        working-directory: ./deps/ReactantExtra
+        env:
+          JULIA_DEPOT_PATH: "${{ runner.temp }}/julia_depot:"
+      - name: Make generated files writable
+        run: |
+          chmod -R u+rw ./src/mlir/Dialects/ ./src/proto/
+          chmod u+rw ./src/mlir/libMLIR_h.jl ./src/xla/PJRT/CAPI.jl
+          git config core.fileMode false
       - name: Format code
         shell: julia --color=yes {0}
         run: |
           using JuliaFormatter
-          format("./src/mlir/Dialects/")
-          format("./src/mlir/libMLIR_h.jl")
+          targets = [
+              "./src/mlir/Dialects/",
+              "./src/mlir/libMLIR_h.jl",
+              "./src/proto/",
+              "./src/xla/PJRT/CAPI.jl",
+          ]
+          format.(targets)
           # Format twice to work around <https://github.com/domluna/JuliaFormatter.jl/issues/897>.
-          format("./src/mlir/Dialects/")
-          format("./src/mlir/libMLIR_h.jl")
+          format.(targets)
       - name: Create Pull Request
         id: cpr
         uses: peter-evans/create-pull-request@v7

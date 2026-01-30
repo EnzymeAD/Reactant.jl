@@ -10,7 +10,7 @@ import ...IR:
     create_operation,
     context,
     IndexType
-import ..Dialects: namedattribute, operandsegmentsizes
+import ..Dialects: operandsegmentsizes, resultsegmentsizes
 import ...API
 
 function arrive_expect_tx(barrier::Value; expect_tx, location=Location())
@@ -18,7 +18,7 @@ function arrive_expect_tx(barrier::Value; expect_tx, location=Location())
     operands = Value[barrier,]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("expect_tx", expect_tx),]
+    attributes = NamedAttribute[NamedAttribute("expect_tx", expect_tx),]
 
     return create_operation(
         "mosaic_gpu.arrive_expect_tx",
@@ -37,7 +37,7 @@ function arrive(barrier::Value; orders_tensor_core, location=Location())
     operands = Value[barrier,]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("orders_tensor_core", orders_tensor_core),]
+    attributes = NamedAttribute[NamedAttribute("orders_tensor_core", orders_tensor_core),]
 
     return create_operation(
         "mosaic_gpu.arrive",
@@ -103,8 +103,8 @@ function async_load(
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[
-        namedattribute("slice_lengths", slice_lengths),
-        namedattribute("collective", collective),
+        NamedAttribute("slice_lengths", slice_lengths),
+        NamedAttribute("collective", collective),
     ]
     !isnothing(predicate) && push!(operands, predicate)
     push!(
@@ -180,8 +180,8 @@ function async_prefetch(
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[
-        namedattribute("slice_lengths", slice_lengths),
-        namedattribute("collective", collective),
+        NamedAttribute("slice_lengths", slice_lengths),
+        NamedAttribute("collective", collective),
     ]
     !isnothing(predicate) && push!(operands, predicate)
     push!(attributes, operandsegmentsizes([1, length(indices), Int(!isnothing(predicate))]))
@@ -241,15 +241,15 @@ function async_store(
     operands = Value[source, destination, indices...]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("slice_lengths", slice_lengths),]
+    attributes = NamedAttribute[NamedAttribute("slice_lengths", slice_lengths),]
     !isnothing(predicate) && push!(operands, predicate)
     push!(
         attributes, operandsegmentsizes([1, 1, length(indices), Int(!isnothing(predicate))])
     )
     !isnothing(commit_group) &&
-        push!(attributes, namedattribute("commit_group", commit_group))
+        push!(attributes, NamedAttribute("commit_group", commit_group))
     !isnothing(reduction_op) &&
-        push!(attributes, namedattribute("reduction_op", reduction_op))
+        push!(attributes, NamedAttribute("reduction_op", reduction_op))
 
     return create_operation(
         "mosaic_gpu.async_store",
@@ -296,7 +296,7 @@ function broadcast_in_dim(
     operands = Value[operand,]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute(
+    attributes = NamedAttribute[NamedAttribute(
         "broadcast_dimensions", broadcast_dimensions
     ),]
 
@@ -323,7 +323,7 @@ function broadcasted_iota(; result_0::IR.Type, dimension, location=Location())
     operands = Value[]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("dimension", dimension),]
+    attributes = NamedAttribute[NamedAttribute("dimension", dimension),]
 
     return create_operation(
         "mosaic_gpu.broadcasted_iota",
@@ -362,9 +362,9 @@ function custom_primitive(
     owned_regions = Region[body,]
     successors = Block[]
     attributes = NamedAttribute[
-        namedattribute("in_layouts", in_layouts),
-        namedattribute("in_transforms", in_transforms),
-        namedattribute("out_layouts", out_layouts),
+        NamedAttribute("in_layouts", in_layouts),
+        NamedAttribute("in_transforms", in_transforms),
+        NamedAttribute("out_layouts", out_layouts),
     ]
 
     return create_operation(
@@ -384,7 +384,7 @@ function debug_print(value::Value; format, location=Location())
     operands = Value[value,]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("format", format),]
+    attributes = NamedAttribute[NamedAttribute("format", format),]
 
     return create_operation(
         "mosaic_gpu.debug_print",
@@ -414,8 +414,8 @@ function initialize_barrier(
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[
-        namedattribute("arrival_count", arrival_count),
-        namedattribute("num_barriers", num_barriers),
+        NamedAttribute("arrival_count", arrival_count),
+        NamedAttribute("num_barriers", num_barriers),
     ]
 
     return create_operation(
@@ -441,7 +441,7 @@ function layout_cast(
     operands = Value[x,]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("new_layout", new_layout),]
+    attributes = NamedAttribute[NamedAttribute("new_layout", new_layout),]
     !isnothing(result_0) && push!(op_ty_results, result_0)
 
     return create_operation(
@@ -485,7 +485,7 @@ function print_layout(value::Value; format, location=Location())
     operands = Value[value,]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("format", format),]
+    attributes = NamedAttribute[NamedAttribute("format", format),]
 
     return create_operation(
         "mosaic_gpu.print_layout",
@@ -559,7 +559,7 @@ function slice_tmem(source::Value; result_0::IR.Type, offset, location=Location(
     operands = Value[source,]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("offset", offset),]
+    attributes = NamedAttribute[NamedAttribute("offset", offset),]
 
     return create_operation(
         "mosaic_gpu.slice_tmem",
@@ -628,7 +628,7 @@ function tcgen05_mma(
             1, 1, 1, 1, Int(!isnothing(a_scale)), Int(!isnothing(b_scale))
         ]),
     )
-    !isnothing(collective) && push!(attributes, namedattribute("collective", collective))
+    !isnothing(collective) && push!(attributes, NamedAttribute("collective", collective))
 
     return create_operation(
         "mosaic_gpu.tcgen05_mma",
@@ -678,8 +678,8 @@ function tmem_alloc(
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
-    !isnothing(collective) && push!(attributes, namedattribute("collective", collective))
-    !isnothing(packing) && push!(attributes, namedattribute("packing", packing))
+    !isnothing(collective) && push!(attributes, NamedAttribute("collective", collective))
+    !isnothing(packing) && push!(attributes, NamedAttribute("packing", packing))
 
     return create_operation(
         "mosaic_gpu.tmem_alloc",
@@ -719,7 +719,7 @@ function tmem_layout_cast(
     operands = Value[ref,]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("new_layout", new_layout),]
+    attributes = NamedAttribute[NamedAttribute("new_layout", new_layout),]
     !isnothing(result_0) && push!(op_ty_results, result_0)
 
     return create_operation(
@@ -750,7 +750,7 @@ function tmem_relinquish_alloc_permit(; collective=nothing, location=Location())
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
-    !isnothing(collective) && push!(attributes, namedattribute("collective", collective))
+    !isnothing(collective) && push!(attributes, NamedAttribute("collective", collective))
 
     return create_operation(
         "mosaic_gpu.tmem_relinquish_alloc_permit",
@@ -786,7 +786,7 @@ function vector_load(
     successors = Block[]
     attributes = NamedAttribute[]
     !isnothing(result_0) && push!(op_ty_results, result_0)
-    !isnothing(optimized) && push!(attributes, namedattribute("optimized", optimized))
+    !isnothing(optimized) && push!(attributes, NamedAttribute("optimized", optimized))
 
     return create_operation(
         "mosaic_gpu.vector_load",
@@ -818,7 +818,7 @@ function vector_store(
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
-    !isnothing(optimized) && push!(attributes, namedattribute("optimized", optimized))
+    !isnothing(optimized) && push!(attributes, NamedAttribute("optimized", optimized))
 
     return create_operation(
         "mosaic_gpu.vector_store",
@@ -932,7 +932,7 @@ function with_transforms(
     operands = Value[ref,]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("transforms", transforms),]
+    attributes = NamedAttribute[NamedAttribute("transforms", transforms),]
     !isnothing(result_0) && push!(op_ty_results, result_0)
 
     return create_operation(

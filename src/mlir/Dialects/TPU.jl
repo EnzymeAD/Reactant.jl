@@ -10,7 +10,7 @@ import ...IR:
     create_operation,
     context,
     IndexType
-import ..Dialects: namedattribute, operandsegmentsizes
+import ..Dialects: operandsegmentsizes
 import ...API
 
 function all_reduce(input::Value; output::IR.Type, dim, kind, location=Location())
@@ -18,7 +18,7 @@ function all_reduce(input::Value; output::IR.Type, dim, kind, location=Location(
     operands = Value[input,]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("dim", dim), namedattribute("kind", kind)]
+    attributes = NamedAttribute[NamedAttribute("dim", dim), NamedAttribute("kind", kind)]
 
     return create_operation(
         "tpu.all_reduce",
@@ -92,7 +92,7 @@ function assume_multiple(
     operands = Value[value,]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("multiple", multiple),]
+    attributes = NamedAttribute[NamedAttribute("multiple", multiple),]
     !isnothing(result) && push!(op_ty_results, result)
 
     return create_operation(
@@ -186,7 +186,7 @@ function broadcast_in_sublanes(source::Value; output::IR.Type, lane, location=Lo
     operands = Value[source,]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("lane", lane),]
+    attributes = NamedAttribute[NamedAttribute("lane", lane),]
 
     return create_operation(
         "tpu.broadcast_in_sublanes",
@@ -210,7 +210,7 @@ function concatenate(
     operands = Value[sources...,]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("dimension", dimension),]
+    attributes = NamedAttribute[NamedAttribute("dimension", dimension),]
     !isnothing(output) && push!(op_ty_results, output)
 
     return create_operation(
@@ -279,7 +279,7 @@ function create_subelement_mask(; output::IR.Type, from, to, location=Location()
     operands = Value[]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("from", from), namedattribute("to", to)]
+    attributes = NamedAttribute[NamedAttribute("from", from), NamedAttribute("to", to)]
 
     return create_operation(
         "tpu.create_subelement_mask",
@@ -360,7 +360,7 @@ function dynamic_gather(
     operands = Value[source, indices]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("dimensions", dimensions),]
+    attributes = NamedAttribute[NamedAttribute("dimensions", dimensions),]
     !isnothing(output) && push!(op_ty_results, output)
 
     return create_operation(
@@ -388,10 +388,10 @@ function dynamic_rotate(
     operands = Value[value, amount]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("dimension", dimension),]
-    !isnothing(stride) && push!(attributes, namedattribute("stride", stride))
+    attributes = NamedAttribute[NamedAttribute("dimension", dimension),]
+    !isnothing(stride) && push!(attributes, NamedAttribute("stride", stride))
     !isnothing(stride_dimension) &&
-        push!(attributes, namedattribute("stride_dimension", stride_dimension))
+        push!(attributes, NamedAttribute("stride_dimension", stride_dimension))
 
     return create_operation(
         "tpu.dynamic_rotate",
@@ -435,9 +435,9 @@ function enqueue_dma(
             (core_id == nothing) ? 0 : 1,
         ]),
     )
-    !isnothing(priority) && push!(attributes, namedattribute("priority", priority))
+    !isnothing(priority) && push!(attributes, NamedAttribute("priority", priority))
     !isnothing(strict_ordering) &&
-        push!(attributes, namedattribute("strict_ordering", strict_ordering))
+        push!(attributes, NamedAttribute("strict_ordering", strict_ordering))
 
     return create_operation(
         "tpu.enqueue_dma",
@@ -466,7 +466,7 @@ function enqueue_indirect_dma(
     successors = Block[]
     attributes = NamedAttribute[]
     !isnothing(offset_filter) && push!(operands, offset_filter)
-    !isnothing(add) && push!(attributes, namedattribute("add", add))
+    !isnothing(add) && push!(attributes, NamedAttribute("add", add))
 
     return create_operation(
         "tpu.enqueue_indirect_dma",
@@ -526,7 +526,7 @@ function fptosi(input::Value; output::IR.Type, rounding_mode, location=Location(
     operands = Value[input,]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("rounding_mode", rounding_mode),]
+    attributes = NamedAttribute[NamedAttribute("rounding_mode", rounding_mode),]
 
     return create_operation(
         "tpu.fptosi",
@@ -546,7 +546,7 @@ function gather(source::Value; output::IR.Type, indices, dimension, location=Loc
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[
-        namedattribute("indices", indices), namedattribute("dimension", dimension)
+        NamedAttribute("indices", indices), NamedAttribute("dimension", dimension)
     ]
 
     return create_operation(
@@ -604,7 +604,7 @@ function iteration_bound(; result=nothing::Union{Nothing,IR.Type}, dim, location
     operands = Value[]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("dim", dim),]
+    attributes = NamedAttribute[NamedAttribute("dim", dim),]
     !isnothing(result) && push!(op_ty_results, result)
 
     return create_operation(
@@ -643,7 +643,7 @@ function iota(; output::IR.Type, dimensions, location=Location())
     operands = Value[]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("dimensions", dimensions),]
+    attributes = NamedAttribute[NamedAttribute("dimensions", dimensions),]
 
     return create_operation(
         "tpu.iota",
@@ -676,9 +676,9 @@ function load(
     operands = Value[base, indices...]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("sublane_mask", sublane_mask),]
+    attributes = NamedAttribute[NamedAttribute("sublane_mask", sublane_mask),]
     !isnothing(sublane_stride) &&
-        push!(attributes, namedattribute("sublane_stride", sublane_stride))
+        push!(attributes, NamedAttribute("sublane_stride", sublane_stride))
 
     return create_operation(
         "tpu.load",
@@ -697,7 +697,7 @@ function log_buffer(input::Value; shape, tag, location=Location())
     operands = Value[input,]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("shape", shape), namedattribute("tag", tag)]
+    attributes = NamedAttribute[NamedAttribute("shape", shape), NamedAttribute("tag", tag)]
 
     return create_operation(
         "tpu.log_buffer",
@@ -716,8 +716,8 @@ function log(inputs::Vector{Value}; tag, formatted=nothing, location=Location())
     operands = Value[inputs...,]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("tag", tag),]
-    !isnothing(formatted) && push!(attributes, namedattribute("formatted", formatted))
+    attributes = NamedAttribute[NamedAttribute("tag", tag),]
+    !isnothing(formatted) && push!(attributes, NamedAttribute("formatted", formatted))
 
     return create_operation(
         "tpu.log",
@@ -777,12 +777,12 @@ function matmul(
     successors = Block[]
     attributes = NamedAttribute[]
     !isnothing(transpose_lhs) &&
-        push!(attributes, namedattribute("transpose_lhs", transpose_lhs))
+        push!(attributes, NamedAttribute("transpose_lhs", transpose_lhs))
     !isnothing(transpose_rhs) &&
-        push!(attributes, namedattribute("transpose_rhs", transpose_rhs))
-    !isnothing(precision) && push!(attributes, namedattribute("precision", precision))
+        push!(attributes, NamedAttribute("transpose_rhs", transpose_rhs))
+    !isnothing(precision) && push!(attributes, NamedAttribute("precision", precision))
     !isnothing(dimension_numbers) &&
-        push!(attributes, namedattribute("dimension_numbers", dimension_numbers))
+        push!(attributes, NamedAttribute("dimension_numbers", dimension_numbers))
 
     return create_operation(
         "tpu.matmul",
@@ -935,7 +935,7 @@ function pack_elementwise(
     operands = Value[sources...,]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("target_type", target_type),]
+    attributes = NamedAttribute[NamedAttribute("target_type", target_type),]
 
     return create_operation(
         "tpu.pack_elementwise",
@@ -976,7 +976,7 @@ function pack_subelements(
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[
-        namedattribute("positions", positions), namedattribute("pack_format", pack_format)
+        NamedAttribute("positions", positions), NamedAttribute("pack_format", pack_format)
     ]
 
     return create_operation(
@@ -1003,7 +1003,7 @@ function reciprocal(
     successors = Block[]
     attributes = NamedAttribute[]
     !isnothing(output) && push!(op_ty_results, output)
-    !isnothing(approx) && push!(attributes, namedattribute("approx", approx))
+    !isnothing(approx) && push!(attributes, NamedAttribute("approx", approx))
 
     return create_operation(
         "tpu.reciprocal",
@@ -1022,7 +1022,7 @@ function reduce_index(input::Value; output::IR.Type, axis, kind, location=Locati
     operands = Value[input,]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("axis", axis), namedattribute("kind", kind)]
+    attributes = NamedAttribute[NamedAttribute("axis", axis), NamedAttribute("kind", kind)]
 
     return create_operation(
         "tpu.reduce_index",
@@ -1100,7 +1100,7 @@ function repeat(source::Value; output::IR.Type, dimension, times, location=Locat
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[
-        namedattribute("dimension", dimension), namedattribute("times", times)
+        NamedAttribute("dimension", dimension), NamedAttribute("times", times)
     ]
 
     return create_operation(
@@ -1174,12 +1174,12 @@ function rotate(
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[
-        namedattribute("amount", amount), namedattribute("dimension", dimension)
+        NamedAttribute("amount", amount), NamedAttribute("dimension", dimension)
     ]
     !isnothing(result) && push!(op_ty_results, result)
-    !isnothing(stride) && push!(attributes, namedattribute("stride", stride))
+    !isnothing(stride) && push!(attributes, NamedAttribute("stride", stride))
     !isnothing(stride_dimension) &&
-        push!(attributes, namedattribute("stride_dimension", stride_dimension))
+        push!(attributes, NamedAttribute("stride_dimension", stride_dimension))
 
     return create_operation(
         "tpu.rotate",
@@ -1198,7 +1198,7 @@ function sitofp(in::Value; output::IR.Type, rounding_mode, location=Location())
     operands = Value[in,]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("rounding_mode", rounding_mode),]
+    attributes = NamedAttribute[NamedAttribute("rounding_mode", rounding_mode),]
 
     return create_operation(
         "tpu.sitofp",
@@ -1266,7 +1266,7 @@ function scan(
     operands = Value[input,]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("kind", kind),]
+    attributes = NamedAttribute[NamedAttribute("kind", kind),]
     !isnothing(mask) && push!(operands, mask)
 
     return create_operation(
@@ -1324,7 +1324,7 @@ function sem_signal(
             1, 1, (device_id == nothing) ? 0 : 1, (core_id == nothing) ? 0 : 1
         ]),
     )
-    !isnothing(core_type) && push!(attributes, namedattribute("core_type", core_type))
+    !isnothing(core_type) && push!(attributes, NamedAttribute("core_type", core_type))
 
     return create_operation(
         "tpu.sem_signal",
@@ -1370,8 +1370,8 @@ function shuffled_load(
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[
-        namedattribute("sublane_mask", sublane_mask),
-        namedattribute("sublane_offsets", sublane_offsets),
+        NamedAttribute("sublane_mask", sublane_mask),
+        NamedAttribute("sublane_offsets", sublane_offsets),
     ]
 
     return create_operation(
@@ -1399,8 +1399,8 @@ function shuffled_store(
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[
-        namedattribute("sublane_mask", sublane_mask),
-        namedattribute("sublane_offsets", sublane_offsets),
+        NamedAttribute("sublane_mask", sublane_mask),
+        NamedAttribute("sublane_offsets", sublane_offsets),
     ]
 
     return create_operation(
@@ -1439,7 +1439,7 @@ function sort(
     successors = Block[]
     attributes = NamedAttribute[]
     !isnothing(mask) && push!(operands, mask)
-    !isnothing(descending) && push!(attributes, namedattribute("descending", descending))
+    !isnothing(descending) && push!(attributes, NamedAttribute("descending", descending))
 
     return create_operation(
         "tpu.sort",
@@ -1460,7 +1460,7 @@ function stochastic_convert_elementwise(
     operands = Value[input, random]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("dst_type", dst_type),]
+    attributes = NamedAttribute[NamedAttribute("dst_type", dst_type),]
 
     return create_operation(
         "tpu.stochastic_convert_elementwise",
@@ -1508,13 +1508,13 @@ function store(
     operands = Value[valueToStore, base, indices...]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("sublane_mask", sublane_mask),]
+    attributes = NamedAttribute[NamedAttribute("sublane_mask", sublane_mask),]
     !isnothing(mask) && push!(operands, mask)
     push!(
         attributes, operandsegmentsizes([1, 1, length(indices), (mask == nothing) ? 0 : 1])
     )
     !isnothing(sublane_stride) &&
-        push!(attributes, namedattribute("sublane_stride", sublane_stride))
+        push!(attributes, NamedAttribute("sublane_stride", sublane_stride))
 
     return create_operation(
         "tpu.store",
@@ -1535,7 +1535,7 @@ function strided_load(
     operands = Value[base, indices...]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("strides", strides),]
+    attributes = NamedAttribute[NamedAttribute("strides", strides),]
 
     return create_operation(
         "tpu.strided_load",
@@ -1556,7 +1556,7 @@ function strided_store(
     operands = Value[valueToStore, base, indices...]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("strides", strides),]
+    attributes = NamedAttribute[NamedAttribute("strides", strides),]
 
     return create_operation(
         "tpu.strided_store",
@@ -1581,7 +1581,7 @@ function sublane_shuffle(
     operands = Value[lhs, rhs]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("pattern", pattern),]
+    attributes = NamedAttribute[NamedAttribute("pattern", pattern),]
     !isnothing(result) && push!(op_ty_results, result)
 
     return create_operation(
@@ -1604,7 +1604,7 @@ function trace(;
     owned_regions = Region[region,]
     successors = Block[]
     attributes = NamedAttribute[
-        namedattribute("message", message), namedattribute("level", level)
+        NamedAttribute("message", message), NamedAttribute("level", level)
     ]
 
     return create_operation(
@@ -1625,7 +1625,7 @@ function trace_start(; message, level, location=Location())
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[
-        namedattribute("message", message), namedattribute("level", level)
+        NamedAttribute("message", message), NamedAttribute("level", level)
     ]
 
     return create_operation(
@@ -1664,7 +1664,7 @@ function transpose(vector::Value; result::IR.Type, permutation, location=Locatio
     operands = Value[vector,]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("permutation", permutation),]
+    attributes = NamedAttribute[NamedAttribute("permutation", permutation),]
 
     return create_operation(
         "tpu.transpose",
@@ -1683,7 +1683,7 @@ function truncf(in::Value; out::IR.Type, rounding_mode, location=Location())
     operands = Value[in,]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("rounding_mode", rounding_mode),]
+    attributes = NamedAttribute[NamedAttribute("rounding_mode", rounding_mode),]
 
     return create_operation(
         "tpu.truncf",
@@ -1715,7 +1715,7 @@ function unpack_elementwise(
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[
-        namedattribute("source_type", source_type), namedattribute("index", index)
+        NamedAttribute("source_type", source_type), NamedAttribute("index", index)
     ]
 
     return create_operation(
@@ -1743,10 +1743,10 @@ function unpack_subelements(
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[
-        namedattribute("index", index), namedattribute("pack_format", pack_format)
+        NamedAttribute("index", index), NamedAttribute("pack_format", pack_format)
     ]
     !isnothing(sign_extended) &&
-        push!(attributes, namedattribute("sign_extended", sign_extended))
+        push!(attributes, NamedAttribute("sign_extended", sign_extended))
 
     return create_operation(
         "tpu.unpack_subelements",
@@ -1818,7 +1818,7 @@ function vector_load(
     operands = Value[base, indices...]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("strides", strides),]
+    attributes = NamedAttribute[NamedAttribute("strides", strides),]
     !isnothing(mask) && push!(operands, mask)
     push!(attributes, operandsegmentsizes([1, length(indices), (mask == nothing) ? 0 : 1]))
 
@@ -1851,7 +1851,7 @@ function vector_store_idx(
     push!(
         attributes, operandsegmentsizes([1, 1, length(indices), (mask == nothing) ? 0 : 1])
     )
-    !isnothing(add) && push!(attributes, namedattribute("add", add))
+    !isnothing(add) && push!(attributes, NamedAttribute("add", add))
 
     return create_operation(
         "tpu.vector_store_idx",
@@ -1878,12 +1878,12 @@ function vector_store(
     operands = Value[valueToStore, base, indices...]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("strides", strides),]
+    attributes = NamedAttribute[NamedAttribute("strides", strides),]
     !isnothing(mask) && push!(operands, mask)
     push!(
         attributes, operandsegmentsizes([1, 1, length(indices), (mask == nothing) ? 0 : 1])
     )
-    !isnothing(add) && push!(attributes, namedattribute("add", add))
+    !isnothing(add) && push!(attributes, NamedAttribute("add", add))
 
     return create_operation(
         "tpu.vector_store",
@@ -1920,7 +1920,7 @@ function wait_dma2(
         ]),
     )
     !isnothing(strict_ordering) &&
-        push!(attributes, namedattribute("strict_ordering", strict_ordering))
+        push!(attributes, NamedAttribute("strict_ordering", strict_ordering))
 
     return create_operation(
         "tpu.wait_dma2",

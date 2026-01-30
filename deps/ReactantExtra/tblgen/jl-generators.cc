@@ -172,7 +172,7 @@ bool emitOpTableDefs(const llvm::RecordKeeper &recordKeeper,
   if (disableModuleWrap) {
     moduleTemplate =
         R"(import ...IR: IR, NamedAttribute, Value, Location, Block, Region, Attribute, create_operation, context, IndexType
-import ..Dialects: namedattribute, operandsegmentsizes
+import ..Dialects: operandsegmentsizes, resultsegmentsizes
 import ...API
 
 {0}
@@ -181,7 +181,7 @@ import ...API
     moduleTemplate = R"(module {0}
 using ...IR
 import ...IR: NamedAttribute, Value, Location, Block, Region, Attribute, create_operation, context, IndexType
-import ..Dialects: namedattribute, operandsegmentsizes
+import ..Dialects: operandsegmentsizes, resultsegmentsizes
 import ...API
 
 {1}
@@ -338,6 +338,26 @@ end
       resultarguments += resultname + defaultvalue + "::" + type + ", ";
     }
 
+    if (op.getTrait("::mlir::OpTrait::AttrSizedResultSegments")) {
+      std::string resultsegmentsizes = "";
+      for (int i = 0; i < op.getNumResults(); i++) {
+        const auto &named_result = op.getResult(i);
+        std::string resultname = named_result.name.str();
+        if (resultname.empty()) {
+          resultname = "result_" + std::to_string(i);
+        }
+        if (named_result.isOptional() || inferrable) {
+          resultsegmentsizes += "Int(!isnothing(" + resultname + ")), ";
+          continue;
+        }
+        resultsegmentsizes +=
+            named_result.isVariadic() ? "length(" + resultname + "), " : "1, ";
+      }
+      optionals += llvm::formatv(R"(push!(attributes, resultsegmentsizes([{0}]))
+    )",
+                                 resultsegmentsizes);
+    }
+
     std::string resultsexpression =
         (inferrable ? "(length(op_ty_results) == 0 ? nothing : op_ty_results)"
                     : "op_ty_results");
@@ -365,12 +385,12 @@ end
 
       if (optional) {
         optionals += llvm::formatv(
-            R"(!isnothing({1}) && push!(attributes, namedattribute("{0}", {1}))
+            R"(!isnothing({1}) && push!(attributes, NamedAttribute("{0}", {1}))
     )",
             attributename, sanitizedname);
         defaultvalue = "=nothing";
       } else {
-        attributecontainer += "namedattribute(\"" + attributename + "\", " +
+        attributecontainer += "NamedAttribute(\"" + attributename + "\", " +
                               sanitizedname + "), ";
       }
       attributearguments += sanitizedname + defaultvalue + ", ";

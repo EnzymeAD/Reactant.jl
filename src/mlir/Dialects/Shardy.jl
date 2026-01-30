@@ -10,7 +10,7 @@ import ...IR:
     create_operation,
     context,
     IndexType
-import ..Dialects: namedattribute, operandsegmentsizes
+import ..Dialects: operandsegmentsizes, resultsegmentsizes
 import ...API
 
 """
@@ -53,8 +53,8 @@ function all_gather(
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[
-        namedattribute("gathering_axes", gathering_axes),
-        namedattribute("out_sharding", out_sharding),
+        NamedAttribute("gathering_axes", gathering_axes),
+        NamedAttribute("out_sharding", out_sharding),
     ]
     !isnothing(result) && push!(op_ty_results, result)
 
@@ -101,8 +101,8 @@ function all_reduce(
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[
-        namedattribute("reduction_axes", reduction_axes),
-        namedattribute("out_sharding", out_sharding),
+        NamedAttribute("reduction_axes", reduction_axes),
+        NamedAttribute("out_sharding", out_sharding),
     ]
     !isnothing(result) && push!(op_ty_results, result)
 
@@ -159,8 +159,8 @@ function all_slice(
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[
-        namedattribute("slicing_axes", slicing_axes),
-        namedattribute("out_sharding", out_sharding),
+        NamedAttribute("slicing_axes", slicing_axes),
+        NamedAttribute("out_sharding", out_sharding),
     ]
     !isnothing(result) && push!(op_ty_results, result)
 
@@ -227,7 +227,7 @@ function all_to_all(
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[
-        namedattribute("params", params), namedattribute("out_sharding", out_sharding)
+        NamedAttribute("params", params), NamedAttribute("out_sharding", out_sharding)
     ]
     !isnothing(result) && push!(op_ty_results, result)
 
@@ -281,7 +281,7 @@ function collective_permute(
     operands = Value[tensor,]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("out_sharding", out_sharding),]
+    attributes = NamedAttribute[NamedAttribute("out_sharding", out_sharding),]
     !isnothing(result) && push!(op_ty_results, result)
 
     return create_operation(
@@ -320,7 +320,7 @@ function constant(; output=nothing::Union{Nothing,IR.Type}, value, location=Loca
     operands = Value[]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("value", value),]
+    attributes = NamedAttribute[NamedAttribute("value", value),]
     !isnothing(output) && push!(op_ty_results, output)
 
     return create_operation(
@@ -403,7 +403,7 @@ function data_flow_edge(
     successors = Block[]
     attributes = NamedAttribute[]
     !isnothing(result) && push!(op_ty_results, result)
-    !isnothing(sharding) && push!(attributes, namedattribute("sharding", sharding))
+    !isnothing(sharding) && push!(attributes, NamedAttribute("sharding", sharding))
 
     return create_operation(
         "sdy.data_flow_edge",
@@ -452,9 +452,9 @@ function manual_computation(
     owned_regions = Region[body,]
     successors = Block[]
     attributes = NamedAttribute[
-        namedattribute("in_shardings", in_shardings),
-        namedattribute("out_shardings", out_shardings),
-        namedattribute("manual_axes", manual_axes),
+        NamedAttribute("in_shardings", in_shardings),
+        NamedAttribute("out_shardings", out_shardings),
+        NamedAttribute("manual_axes", manual_axes),
     ]
 
     return create_operation(
@@ -483,7 +483,7 @@ function mesh(; sym_name, mesh, location=Location())
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[
-        namedattribute("sym_name", sym_name), namedattribute("mesh", mesh)
+        NamedAttribute("sym_name", sym_name), NamedAttribute("mesh", mesh)
     ]
 
     return create_operation(
@@ -533,11 +533,11 @@ function named_computation(
     operands = Value[operands...,]
     owned_regions = Region[body,]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("name", name),]
+    attributes = NamedAttribute[NamedAttribute("name", name),]
     !isnothing(in_shardings) &&
-        push!(attributes, namedattribute("in_shardings", in_shardings))
+        push!(attributes, NamedAttribute("in_shardings", in_shardings))
     !isnothing(out_shardings) &&
-        push!(attributes, namedattribute("out_shardings", out_shardings))
+        push!(attributes, NamedAttribute("out_shardings", out_shardings))
 
     return create_operation(
         "sdy.named_computation",
@@ -576,7 +576,7 @@ function propagation_barrier(
     operands = Value[input,]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("allowed_direction", allowed_direction),]
+    attributes = NamedAttribute[NamedAttribute("allowed_direction", allowed_direction),]
     !isnothing(result) && push!(op_ty_results, result)
 
     return create_operation(
@@ -618,8 +618,8 @@ function reduce_scatter(
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[
-        namedattribute("reduce_scatter_axes", reduce_scatter_axes),
-        namedattribute("out_sharding", out_sharding),
+        NamedAttribute("reduce_scatter_axes", reduce_scatter_axes),
+        NamedAttribute("out_sharding", out_sharding),
     ]
     !isnothing(result) && push!(op_ty_results, result)
 
@@ -671,7 +671,7 @@ function replicated_to_unreduced(
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[
-        namedattribute("axes", axes), namedattribute("out_sharding", out_sharding)
+        NamedAttribute("axes", axes), NamedAttribute("out_sharding", out_sharding)
     ]
     !isnothing(result) && push!(op_ty_results, result)
 
@@ -709,7 +709,7 @@ function reshard(
     operands = Value[input,]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("sharding", sharding),]
+    attributes = NamedAttribute[NamedAttribute("sharding", sharding),]
     !isnothing(result) && push!(op_ty_results, result)
 
     return create_operation(
@@ -775,7 +775,7 @@ function sharded_to_unreduced(
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[
-        namedattribute("axes", axes), namedattribute("out_sharding", out_sharding)
+        NamedAttribute("axes", axes), NamedAttribute("out_sharding", out_sharding)
     ]
     !isnothing(result) && push!(op_ty_results, result)
 
@@ -816,7 +816,7 @@ function sharding_constraint(
     operands = Value[input,]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("sharding", sharding),]
+    attributes = NamedAttribute[NamedAttribute("sharding", sharding),]
     !isnothing(result) && push!(op_ty_results, result)
 
     return create_operation(
@@ -847,7 +847,7 @@ function sharding_group(input::Value; group_id, location=Location())
     operands = Value[input,]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("group_id", group_id),]
+    attributes = NamedAttribute[NamedAttribute("group_id", group_id),]
 
     return create_operation(
         "sdy.sharding_group",

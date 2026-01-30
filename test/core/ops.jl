@@ -316,7 +316,43 @@ end
     x = Reactant.to_rarray(ComplexF32[1.0, -1.0, 1.0, -1.0])
     @test ComplexF32[0.0, 0.0, 4.0, 0.0] ≈ @jit(gfft(x))
 
-    # TODO(#2243) test with complex numbers and inverse FFT
+    # Test IFFT (inverse FFT)
+    gifft(x) = Ops.fft(x; type="IFFT", length=[4])
+
+    # IFFT of [4, 0, 0, 0] should give [1, 1, 1, 1]
+    x = Reactant.to_rarray(ComplexF32[4.0, 0.0, 0.0, 0.0])
+    @test ComplexF32[1.0, 1.0, 1.0, 1.0] ≈ @jit(gifft(x))
+
+    # IFFT of [0, -2im, 0, 2im] should give [0, 1, 0, -1]
+    x = Reactant.to_rarray(ComplexF32[0.0, -2.0im, 0.0, 2.0im])
+    @test ComplexF32[0.0, 1.0, 0.0, -1.0] ≈ @jit(gifft(x))
+
+    # IFFT of [0, 0, 4, 0] should give [1, -1, 1, -1]
+    x = Reactant.to_rarray(ComplexF32[0.0, 0.0, 4.0, 0.0])
+    @test ComplexF32[1.0, -1.0, 1.0, -1.0] ≈ @jit(gifft(x))
+
+    # Test FFT followed by IFFT recovers original (round-trip)
+    original = Reactant.to_rarray(
+        ComplexF32[1.0 + 2.0im, 3.0 - 1.0im, -2.0 + 0.5im, 0.0 - 3.0im]
+    )
+    fft_result = @jit(gfft(original))
+    @test Array(original) ≈ @jit(gifft(Reactant.to_rarray(fft_result)))
+
+    # Test IRFFT (inverse real FFT)
+    girfft(x) = Ops.fft(x; type="IRFFT", length=[4])
+
+    # IRFFT of [4, 0, 0] should give [1, 1, 1, 1] (real output)
+    x = Reactant.to_rarray(ComplexF32[4.0, 0.0, 0.0])
+    @test Float32[1.0, 1.0, 1.0, 1.0] ≈ @jit(girfft(x))
+
+    # IRFFT of [0, -2im, 0] should give [0, 1, 0, -1] (real output)
+    x = Reactant.to_rarray(ComplexF32[0.0, -2.0im, 0.0])
+    @test Float32[0.0, 1.0, 0.0, -1.0] ≈ @jit(girfft(x))
+
+    # Test RFFT followed by IRFFT recovers original (round-trip)
+    original_real = Reactant.to_rarray(Float32[1.5, -2.3, 0.7, 3.1])
+    rfft_result = @jit(grfft(original_real))
+    @test Array(original_real) ≈ @jit(girfft(Reactant.to_rarray(rfft_result)))
 end
 
 @testset "floor" begin
@@ -661,7 +697,38 @@ end
 
 @testset "send" begin end
 
-@testset "set_dimension_size" begin end
+@testset "set_dimension_size" begin
+    # Test with 1D array
+    x = Reactant.to_rarray(Float32[1.0, 2.0, 3.0, 4.0])
+    dim_size = ConcreteRNumber(Int32(4))
+    g1(x, s) = Ops.set_dimension_size(x, s, 1)
+    result = @jit(g1(x, dim_size))
+    @test size(result) == (4,)
+    @test Array(result) ≈ Float32[1.0, 2.0, 3.0, 4.0]
+
+    # Test with 2D array, setting dimension 1
+    x2d = Reactant.to_rarray(Float32[1.0 2.0; 3.0 4.0; 5.0 6.0])
+    dim_size = ConcreteRNumber(Int32(3))
+    g2(x, s) = Ops.set_dimension_size(x, s, 1)
+    result = @jit(g2(x2d, dim_size))
+    @test size(result) == (3, 2)
+    @test Array(result) ≈ Float32[1.0 2.0; 3.0 4.0; 5.0 6.0]
+
+    # Test with 2D array, setting dimension 2
+    dim_size = ConcreteRNumber(Int32(2))
+    g3(x, s) = Ops.set_dimension_size(x, s, 2)
+    result = @jit(g3(x2d, dim_size))
+    @test size(result) == (3, 2)
+    @test Array(result) ≈ Float32[1.0 2.0; 3.0 4.0; 5.0 6.0]
+
+    # Test with different element types (Int32 array)
+    x_int = Reactant.to_rarray(Int32[1, 2, 3])
+    dim_size = ConcreteRNumber(Int32(3))
+    g4(x, s) = Ops.set_dimension_size(x, s, 1)
+    result = @jit(g4(x_int, dim_size))
+    @test size(result) == (3,)
+    @test Array(result) == Int32[1, 2, 3]
+end
 
 @testset "shift_left" begin
     a = Reactant.to_rarray([-1, 0, 1])

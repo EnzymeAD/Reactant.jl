@@ -10,7 +10,7 @@ import ...IR:
     create_operation,
     context,
     IndexType
-import ..Dialects: namedattribute, operandsegmentsizes
+import ..Dialects: operandsegmentsizes, resultsegmentsizes
 import ...API
 
 """
@@ -50,7 +50,7 @@ function addf(
     successors = Block[]
     attributes = NamedAttribute[]
     !isnothing(result) && push!(op_ty_results, result)
-    !isnothing(fastmath) && push!(attributes, namedattribute("fastmath", fastmath))
+    !isnothing(fastmath) && push!(attributes, NamedAttribute("fastmath", fastmath))
 
     return create_operation(
         "arith.addf",
@@ -112,7 +112,7 @@ function addi(
     attributes = NamedAttribute[]
     !isnothing(result) && push!(op_ty_results, result)
     !isnothing(overflowFlags) &&
-        push!(attributes, namedattribute("overflowFlags", overflowFlags))
+        push!(attributes, NamedAttribute("overflowFlags", overflowFlags))
 
     return create_operation(
         "arith.addi",
@@ -366,9 +366,9 @@ function cmpf(
     operands = Value[lhs, rhs]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("predicate", predicate),]
+    attributes = NamedAttribute[NamedAttribute("predicate", predicate),]
     !isnothing(result) && push!(op_ty_results, result)
-    !isnothing(fastmath) && push!(attributes, namedattribute("fastmath", fastmath))
+    !isnothing(fastmath) && push!(attributes, NamedAttribute("fastmath", fastmath))
 
     return create_operation(
         "arith.cmpf",
@@ -458,7 +458,7 @@ function cmpi(
     operands = Value[lhs, rhs]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("predicate", predicate),]
+    attributes = NamedAttribute[NamedAttribute("predicate", predicate),]
     !isnothing(result) && push!(op_ty_results, result)
 
     return create_operation(
@@ -495,7 +495,7 @@ function constant(; result=nothing::Union{Nothing,IR.Type}, value, location=Loca
     operands = Value[]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[namedattribute("value", value),]
+    attributes = NamedAttribute[NamedAttribute("value", value),]
     !isnothing(result) && push!(op_ty_results, result)
 
     return create_operation(
@@ -523,7 +523,7 @@ function divf(
     successors = Block[]
     attributes = NamedAttribute[]
     !isnothing(result) && push!(op_ty_results, result)
-    !isnothing(fastmath) && push!(attributes, namedattribute("fastmath", fastmath))
+    !isnothing(fastmath) && push!(attributes, NamedAttribute("fastmath", fastmath))
 
     return create_operation(
         "arith.divf",
@@ -580,7 +580,7 @@ function divsi(
     successors = Block[]
     attributes = NamedAttribute[]
     !isnothing(result) && push!(op_ty_results, result)
-    !isnothing(isExact) && push!(attributes, namedattribute("isExact", isExact))
+    !isnothing(isExact) && push!(attributes, NamedAttribute("isExact", isExact))
 
     return create_operation(
         "arith.divsi",
@@ -637,7 +637,7 @@ function divui(
     successors = Block[]
     attributes = NamedAttribute[]
     !isnothing(result) && push!(op_ty_results, result)
-    !isnothing(isExact) && push!(attributes, namedattribute("isExact", isExact))
+    !isnothing(isExact) && push!(attributes, NamedAttribute("isExact", isExact))
 
     return create_operation(
         "arith.divui",
@@ -664,7 +664,7 @@ function extf(in::Value; out::IR.Type, fastmath=nothing, location=Location())
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
-    !isnothing(fastmath) && push!(attributes, namedattribute("fastmath", fastmath))
+    !isnothing(fastmath) && push!(attributes, NamedAttribute("fastmath", fastmath))
 
     return create_operation(
         "arith.extf",
@@ -928,7 +928,7 @@ function maxnumf(
     successors = Block[]
     attributes = NamedAttribute[]
     !isnothing(result) && push!(op_ty_results, result)
-    !isnothing(fastmath) && push!(attributes, namedattribute("fastmath", fastmath))
+    !isnothing(fastmath) && push!(attributes, NamedAttribute("fastmath", fastmath))
 
     return create_operation(
         "arith.maxnumf",
@@ -1012,7 +1012,7 @@ function maximumf(
     successors = Block[]
     attributes = NamedAttribute[]
     !isnothing(result) && push!(op_ty_results, result)
-    !isnothing(fastmath) && push!(attributes, namedattribute("fastmath", fastmath))
+    !isnothing(fastmath) && push!(attributes, NamedAttribute("fastmath", fastmath))
 
     return create_operation(
         "arith.maximumf",
@@ -1053,7 +1053,7 @@ function minnumf(
     successors = Block[]
     attributes = NamedAttribute[]
     !isnothing(result) && push!(op_ty_results, result)
-    !isnothing(fastmath) && push!(attributes, namedattribute("fastmath", fastmath))
+    !isnothing(fastmath) && push!(attributes, NamedAttribute("fastmath", fastmath))
 
     return create_operation(
         "arith.minnumf",
@@ -1137,7 +1137,7 @@ function minimumf(
     successors = Block[]
     attributes = NamedAttribute[]
     !isnothing(result) && push!(op_ty_results, result)
-    !isnothing(fastmath) && push!(attributes, namedattribute("fastmath", fastmath))
+    !isnothing(fastmath) && push!(attributes, NamedAttribute("fastmath", fastmath))
 
     return create_operation(
         "arith.minimumf",
@@ -1188,7 +1188,7 @@ function mulf(
     successors = Block[]
     attributes = NamedAttribute[]
     !isnothing(result) && push!(op_ty_results, result)
-    !isnothing(fastmath) && push!(attributes, namedattribute("fastmath", fastmath))
+    !isnothing(fastmath) && push!(attributes, NamedAttribute("fastmath", fastmath))
 
     return create_operation(
         "arith.mulf",
@@ -1250,7 +1250,7 @@ function muli(
     attributes = NamedAttribute[]
     !isnothing(result) && push!(op_ty_results, result)
     !isnothing(overflowFlags) &&
-        push!(attributes, namedattribute("overflowFlags", overflowFlags))
+        push!(attributes, NamedAttribute("overflowFlags", overflowFlags))
 
     return create_operation(
         "arith.muli",
@@ -1393,7 +1393,7 @@ function negf(
     successors = Block[]
     attributes = NamedAttribute[]
     !isnothing(result) && push!(op_ty_results, result)
-    !isnothing(fastmath) && push!(attributes, namedattribute("fastmath", fastmath))
+    !isnothing(fastmath) && push!(attributes, NamedAttribute("fastmath", fastmath))
 
     return create_operation(
         "arith.negf",
@@ -1469,7 +1469,7 @@ function remf(
     successors = Block[]
     attributes = NamedAttribute[]
     !isnothing(result) && push!(op_ty_results, result)
-    !isnothing(fastmath) && push!(attributes, namedattribute("fastmath", fastmath))
+    !isnothing(fastmath) && push!(attributes, NamedAttribute("fastmath", fastmath))
 
     return create_operation(
         "arith.remf",
@@ -1656,7 +1656,7 @@ function scaling_extf(
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
-    !isnothing(fastmath) && push!(attributes, namedattribute("fastmath", fastmath))
+    !isnothing(fastmath) && push!(attributes, NamedAttribute("fastmath", fastmath))
 
     return create_operation(
         "arith.scaling_extf",
@@ -1734,8 +1734,8 @@ function scaling_truncf(
     successors = Block[]
     attributes = NamedAttribute[]
     !isnothing(roundingmode) &&
-        push!(attributes, namedattribute("roundingmode", roundingmode))
-    !isnothing(fastmath) && push!(attributes, namedattribute("fastmath", fastmath))
+        push!(attributes, NamedAttribute("roundingmode", roundingmode))
+    !isnothing(fastmath) && push!(attributes, NamedAttribute("fastmath", fastmath))
 
     return create_operation(
         "arith.scaling_truncf",
@@ -1786,7 +1786,7 @@ function shli(
     attributes = NamedAttribute[]
     !isnothing(result) && push!(op_ty_results, result)
     !isnothing(overflowFlags) &&
-        push!(attributes, namedattribute("overflowFlags", overflowFlags))
+        push!(attributes, NamedAttribute("overflowFlags", overflowFlags))
 
     return create_operation(
         "arith.shli",
@@ -1837,7 +1837,7 @@ function shrsi(
     successors = Block[]
     attributes = NamedAttribute[]
     !isnothing(result) && push!(op_ty_results, result)
-    !isnothing(isExact) && push!(attributes, namedattribute("isExact", isExact))
+    !isnothing(isExact) && push!(attributes, NamedAttribute("isExact", isExact))
 
     return create_operation(
         "arith.shrsi",
@@ -1886,7 +1886,7 @@ function shrui(
     successors = Block[]
     attributes = NamedAttribute[]
     !isnothing(result) && push!(op_ty_results, result)
-    !isnothing(isExact) && push!(attributes, namedattribute("isExact", isExact))
+    !isnothing(isExact) && push!(attributes, NamedAttribute("isExact", isExact))
 
     return create_operation(
         "arith.shrui",
@@ -1937,7 +1937,7 @@ function subf(
     successors = Block[]
     attributes = NamedAttribute[]
     !isnothing(result) && push!(op_ty_results, result)
-    !isnothing(fastmath) && push!(attributes, namedattribute("fastmath", fastmath))
+    !isnothing(fastmath) && push!(attributes, NamedAttribute("fastmath", fastmath))
 
     return create_operation(
         "arith.subf",
@@ -1999,7 +1999,7 @@ function subi(
     attributes = NamedAttribute[]
     !isnothing(result) && push!(op_ty_results, result)
     !isnothing(overflowFlags) &&
-        push!(attributes, namedattribute("overflowFlags", overflowFlags))
+        push!(attributes, NamedAttribute("overflowFlags", overflowFlags))
 
     return create_operation(
         "arith.subi",
@@ -2031,8 +2031,8 @@ function truncf(
     successors = Block[]
     attributes = NamedAttribute[]
     !isnothing(roundingmode) &&
-        push!(attributes, namedattribute("roundingmode", roundingmode))
-    !isnothing(fastmath) && push!(attributes, namedattribute("fastmath", fastmath))
+        push!(attributes, NamedAttribute("roundingmode", roundingmode))
+    !isnothing(fastmath) && push!(attributes, NamedAttribute("fastmath", fastmath))
 
     return create_operation(
         "arith.truncf",
@@ -2082,7 +2082,7 @@ function trunci(in::Value; out::IR.Type, overflowFlags=nothing, location=Locatio
     successors = Block[]
     attributes = NamedAttribute[]
     !isnothing(overflowFlags) &&
-        push!(attributes, namedattribute("overflowFlags", overflowFlags))
+        push!(attributes, NamedAttribute("overflowFlags", overflowFlags))
 
     return create_operation(
         "arith.trunci",

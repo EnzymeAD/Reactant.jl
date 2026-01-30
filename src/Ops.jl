@@ -193,7 +193,7 @@ end
         operands = MLIR.IR.Value[]
         owned_regions = MLIR.IR.Region[]
         successors = MLIR.IR.Block[]
-        attributes = MLIR.IR.NamedAttribute[MLIR.Dialects.namedattribute("value", value),]
+        attributes = MLIR.IR.NamedAttribute[MLIR.IR.NamedAttribute("value", value),]
 
         cstop = MLIR.IR.create_operation(
             "stablehlo.constant",
@@ -587,7 +587,7 @@ end
 
 @noinline function set_dimension_size(
     x::TracedRArray{T,N},
-    size::TracedRNumber{Int},
+    dim_size::TracedRNumber{Int32},
     dim::Int;
     location=mlir_stacktrace("set_dimension_size", @__FILE__, @__LINE__),
 ) where {T,N}
@@ -595,8 +595,8 @@ end
     res = MLIR.IR.result(
         stablehlo.set_dimension_size(
             x.mlir_data,
-            size.mlir_data;
-            result=mlir_type(TracedRArray{T,N}, size(x)),
+            dim_size.mlir_data;
+            result_0=mlir_type(TracedRArray{T,N}, size(x)),
             dimension,
             location,
         ),

@@ -304,23 +304,20 @@ function replicate_array_to_all_devices(array::Array, sharding, mesh, size_arr)
 
     # Manually write the MLIR for resharding resharding
     ctx = MLIR.IR.Context(Reactant.registry[], false)
-    Reactant.Compiler.context_gc_vector[ctx] = Vector{
-        Union{Reactant.TracedRArray,Reactant.TracedRNumber}
-    }(
-        undef, 0
-    )
     @ccall MLIR.API.mlir_c.RegisterDialects(ctx::MLIR.API.MlirContext)::Cvoid
     MLIR.IR.activate!(ctx)
 
     sdycache = Reactant.Compiler.default_sdycache()
     Reactant.Compiler.activate_sdycache!(sdycache)
+
+    mod = MLIR.IR.Module(MLIR.IR.Location(; context=ctx))
+
     output_buffer = try
         data_mlir_type = [
             MLIR.IR.TensorType(
                 collect(Int, reverse(size_arr)), MLIR.IR.Type(eltype(array))
             ),
         ]
-        mod = MLIR.IR.Module(MLIR.IR.Location(; context=ctx))
 
         (; sym_name, mesh_attr) = Reactant.Ops.mesh(mesh; mod)
         common_args = (ctx, sym_name, mesh_attr, size_arr)
@@ -381,10 +378,10 @@ function replicate_array_to_all_devices(array::Array, sharding, mesh, size_arr)
 
         only(XLA.execute(exec, (array.buffer,), (UInt8(0),), Val(1)))
     finally
+        Reactant.Compiler.release_guard_from_gc_for_module(mod)
         Reactant.Compiler.deactivate_sdycache!(sdycache)
         MLIR.IR.deactivate!(ctx)
     end
-    delete!(Reactant.Compiler.context_gc_vector, ctx)
 
     return output_buffer
 end
