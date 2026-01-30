@@ -15,17 +15,23 @@ using OMEinsum: _analyze_binary_input
     end
 end
 
-@reactant_overlay @noinline function OMEinsum.einsum!(ixs, iy, @nospecialize(xs::NTuple{1,Any}), @nospecialize(y), sx, sy, size_dict)
+@reactant_overlay @noinline function OMEinsum.einsum!(
+    ixs, iy, @nospecialize(xs::NTuple{1,Any}), @nospecialize(y), sx, sy, size_dict
+)
     if looped_any(use_overlayed_version, xs)
         @assert use_overlayed_version(y)
         # TODO
         error("unary einsum support not implemented yet")
     else
-        return Reactant.call_with_native(OMEinsum.einsum!, ixs, iy, xs, y, sx, sy, size_dict)
+        return Reactant.call_with_native(
+            OMEinsum.einsum!, ixs, iy, xs, y, sx, sy, size_dict
+        )
     end
 end
 
-@reactant_overlay @noinline function OMEinsum.einsum!(ixs, iy, @nospecialize(xs::NTuple{2,Any}), @nospecialize(y), sx, sy, size_dict)
+@reactant_overlay @noinline function OMEinsum.einsum!(
+    ixs, iy, @nospecialize(xs::NTuple{2,Any}), @nospecialize(y), sx, sy, size_dict
+)
     if looped_any(use_overlayed_version, xs)
         @assert use_overlayed_version(y)
 
@@ -65,7 +71,9 @@ end
         y.mlir_data = c.mlir_data
         return y
     else
-        return Reactant.call_with_native(OMEinsum.einsum!, ixs, iy, xs, y, sx, sy, size_dict)
+        return Reactant.call_with_native(
+            OMEinsum.einsum!, ixs, iy, xs, y, sx, sy, size_dict
+        )
     end
 end
 
