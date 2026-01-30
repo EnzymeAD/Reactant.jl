@@ -22,27 +22,8 @@ function promote_to(
     return @opcall convert(TracedRArray{T,N}, aos_to_soa(materialize_traced_array(rhs)))
 end
 
-function promote_to(::Type{TracedRArray{T,1}}, rhs::AbstractUnitRange) where {T}
-    return @opcall add(
-        @opcall(iota(Reactant.unwrapped_eltype(rhs), [length(rhs)]; iota_dimension=1)),
-        @opcall(fill(first(rhs), [length(rhs)])),
-    )
-end
-
-function promote_to(
-    ::Type{TracedRArray{T,1}},
-    rhs::Union{
-        StepRange,
-        StepRangeLen,
-        StepRange{<:TracedRNumber},
-        StepRangeLen{<:TracedRNumber},
-        TracedStepRangeLen,
-    },
-) where {T}
-    step_arr = broadcast_to_size(step(rhs), (length(rhs),))
-    iota = @opcall iota(unwrapped_eltype(rhs), [length(rhs)]; iota_dimension=1)
-    first_arr = broadcast_to_size(first(rhs), (length(rhs),))
-    return @opcall add(@opcall(multiply(step_arr, iota)), first_arr)
+function promote_to(::Type{TracedRArray{T,1}}, rhs::AbstractRange) where {T}
+    return @opcall convert(TracedRArray{T,1}, materialize_traced_array(rhs))
 end
 
 function promote_to(::Type{TracedRArray{T,1}}, rhs::Base.OneTo) where {T}

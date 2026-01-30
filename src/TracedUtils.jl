@@ -27,11 +27,6 @@ function ReactantCore.materialize_traced_array(x::AbstractRange)
     return Reactant.aos_to_soa(collect(x))
 end
 
-function ReactantCore.materialize_traced_array(::Reactant.TracedStepRangeLen)
-    return error("TODO(#461): currently we dont have a good way to materialize \
-                  TracedStepRangeLen since it produces a dynamically sized array")
-end
-
 function ReactantCore.materialize_traced_array(r::LinRange)
     T = Reactant.unwrapped_eltype(r)
     idxs = @opcall iota(T, [length(r)]; iota_dimension=1)
@@ -48,6 +43,21 @@ function ReactantCore.materialize_traced_array(x::AbstractUnitRange)
         @opcall(iota(Reactant.unwrapped_eltype(x), [length(x)]; iota_dimension=1)),
         @opcall(fill(first(x), [length(x)])),
     )
+end
+
+function ReactantCore.materialize_traced_array(
+    x::Union{
+        StepRange,
+        StepRangeLen,
+        StepRange{<:TracedRNumber},
+        StepRangeLen{<:TracedRNumber},
+        Reactant.TracedStepRangeLen,
+    },
+)
+    step_arr = broadcast_to_size(step(x), (length(x),))
+    iota = @opcall iota(Reactant.unwrapped_eltype(x), [length(x)]; iota_dimension=1)
+    first_arr = broadcast_to_size(first(x), (length(x),))
+    return @opcall add(@opcall(multiply(step_arr, iota)), first_arr)
 end
 
 function ReactantCore.materialize_traced_array(x::SubArray)
