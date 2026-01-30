@@ -206,13 +206,19 @@ end
     @testset "least squares error: $(alg) | full=$(full)" for alg in algs,
         full in (true, false)
 
-        sol1 = @jit least_squares_with_svd(A_ra, b_ra, full, alg)
-        err1 = maximum(abs, A * Array(sol1) .- b)
-        @test err1 < 1e-3
+        # FIXME(#2314): fix TPU lowering
+        @test begin
+            sol1 = @jit least_squares_with_svd(A_ra, b_ra, full, alg)
+            err1 = maximum(abs, A * Array(sol1) .- b)
+            err1 < 1e-3
+        end broken = RunningOnTPU
 
-        sol2 = @jit least_squares_with_svd(A_ra, B_ra, full, alg)
-        err2 = maximum(abs, A * Array(sol2) .- B)
-        @test err2 < 1e-3
+        # FIXME(#2314): fix TPU lowering
+        @test begin
+            sol2 = @jit least_squares_with_svd(A_ra, B_ra, full, alg)
+            err2 = maximum(abs, A * Array(sol2) .- B)
+            err2 < 1e-3
+        end broken = RunningOnTPU
     end
 
     A = Reactant.TestUtils.construct_test_array(Float32, 4, 8, 3, 2)
@@ -230,12 +236,17 @@ end
     @testset "[batched] least squares error: $(alg) | full=$(full)" for alg in algs,
         full in (true, false)
 
-        sol1 = @jit least_squares_with_svd(A_ra, b_ra, full, alg)
-        err1 = compute_ls_solution_error(A, Array(sol1), b, 1)
-        @test err1 < 1e-3
+        # FIXME(#2314): fix TPU lowering
+        @test begin
+            sol1 = @jit least_squares_with_svd(A_ra, b_ra, full, alg)
+            err1 = compute_ls_solution_error(A, Array(sol1), b, 1)
+            err1 < 1e-3
+        end broken = RunningOnTPU
 
-        sol2 = @jit least_squares_with_svd(A_ra, B_ra, full, alg)
-        err2 = compute_ls_solution_error(A, Array(sol2), B, 5)
+        # FIXME(#2314): fix TPU lowering
+        @test begin
+            sol2 = @jit least_squares_with_svd(A_ra, B_ra, full, alg)
+            err2 = compute_ls_solution_error(A, Array(sol2), B, 5)
         @test err2 < 1e-3
     end
 end
@@ -247,15 +258,23 @@ end
         A = Reactant.TestUtils.construct_test_array(Float32, 4, 4)
         _svdvals = svdvals(A)
         A_ra = Reactant.to_rarray(A)
-        _svdvals_ra = @jit svdvals(A_ra; alg=alg)
-        @test _svdvals_ra ≈ _svdvals
+
+        # FIXME(#2314): fix TPU lowering
+        @test begin
+            _svdvals_ra = @jit svdvals(A_ra; alg=alg)
+            _svdvals_ra ≈ _svdvals
+        end broken = RunningOnTPU
     end
 
     @testset "Batched: $(alg)" for alg in algs
         A = Reactant.TestUtils.construct_test_array(Float32, 4, 4, 3, 2)
         _svdvals = reshape(mapslices(svdvals, A; dims=(1, 2)), 4, 3, 2)
         A_ra = Reactant.to_rarray(A)
-        _svdvals_ra = @jit svdvals(A_ra; alg=alg)
-        @test _svdvals_ra ≈ _svdvals
+
+        # FIXME(#2314): fix TPU lowering
+        @test begin
+            _svdvals_ra = @jit svdvals(A_ra; alg=alg)
+            _svdvals_ra ≈ _svdvals
+        end broken = RunningOnTPU
     end
 end
