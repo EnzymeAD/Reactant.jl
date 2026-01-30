@@ -505,7 +505,7 @@ function f_row_major(x::AbstractArray{T}) where {T}
     if x isa Reactant.TracedRArray
         y = Reactant.promote_to(Reactant.TracedRArray{Reactant.unwrapped_eltype(T),2}, y)
     end
-    x .+ y
+    return x .+ y
 end
 
 @testset "array attributes: row major" begin
