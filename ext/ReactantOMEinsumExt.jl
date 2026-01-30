@@ -2,6 +2,7 @@ module ReactantOMEinsumExt
 
 using Reactant
 using Reactant: @reactant_overlay, looped_any, use_overlayed_version, @opcall
+using Reactant.TracedUtils: get_mlir_data, set_mlir_data!
 using OMEinsum
 using OMEinsum: _analyze_binary_input
 
@@ -22,7 +23,7 @@ end
         @assert use_overlayed_version(C)
         permv = collect(perm)
         res = sy * C + sx * @opcall transpose(A, permv)
-        C.mlir_data = res.mlir_data
+        set_mlir_data!(C, get_mlir_data(res))
         return C
     else
         return Reactant.call_with_native(OMEinsum.tensorpermute!, C, A, perm, sx, sy)
@@ -38,7 +39,7 @@ end
         # shortcut for scalar multiplication
         if looped_any(x -> x isa Number, xs)
             c = sy * y + sx * xs[1] * xs[2]
-            y.mlir_data = c.mlir_data
+            set_mlir_data!(y, get_mlir_data(c))
             return y
         end
 
@@ -68,7 +69,7 @@ end
 
         # just like GEMM, we do: y = sy * y + sx * c
         c = sy * y + sx * c
-        y.mlir_data = c.mlir_data
+        set_mlir_data!(y, get_mlir_data(c))
         return y
     else
         return Reactant.call_with_native(
