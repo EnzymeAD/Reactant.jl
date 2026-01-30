@@ -1,4 +1,4 @@
-using Reactant, ParallelTestRunner, CondaPkg
+using Reactant, ParallelTestRunner, CondaPkg, Test
 
 const BACKEND = lowercase(get(ENV, "REACTANT_BACKEND_GROUP", "auto"))
 BACKEND != "auto" && Reactant.set_default_backend(BACKEND)
@@ -18,20 +18,14 @@ if REACTANT_TEST_GROUP == "all" || REACTANT_TEST_GROUP == "integration"
     end
 end
 
-testsuite = find_tests(@__DIR__)
-
 if REACTANT_TEST_GROUP == "core"
-    for k in keys(testsuite)
-        !(startswith(k, "core/") || startswith(k, "plugins/")) && delete!(testsuite, k)
-    end
+    testsuite = merge(find_tests("plugins/"), find_tests("core/"))
 elseif REACTANT_TEST_GROUP == "integration"
-    for k in keys(testsuite)
-        !startswith(k, "integration/") && delete!(testsuite, k)
-    end
+    testsuite = find_tests("integration/")
 elseif REACTANT_TEST_GROUP == "nn"
-    for k in keys(testsuite)
-        !startswith(k, "nn/") && delete!(testsuite, k)
-    end
+    testsuite = find_tests("nn/")
+else
+    testsuite = find_tests(@__DIR__)
 end
 
 if !(Sys.isapple() && haskey(Reactant.XLA.global_backend_state.clients, "metal"))
@@ -49,12 +43,12 @@ end
 # This is run in a special way
 delete!(testsuite, "integration/mpi")
 
-push!(ARGS, "--jobs=1")  # Use a single test runner
 runtests(Reactant, ARGS; testsuite)
 
-# TODO: run this
-# @safetestset "MPI" begin
-#     using MPI
-#     nranks = 2
-#     run(`$(mpiexec()) -n $nranks $(Base.julia_cmd()) integration/mpi.jl`)
-# end
+if REACTANT_TEST_GROUP == "integration" || REACTANT_TEST_GROUP == "all"
+    @testset "MPI" begin
+        using MPI
+        nranks = 2
+        run(`$(mpiexec()) -n $nranks $(Base.julia_cmd()) integration/mpi.jl`)
+    end
+end
