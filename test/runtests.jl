@@ -49,12 +49,21 @@ end
 # This is run in a special way
 delete!(testsuite, "integration/mpi")
 
-runtests(Reactant, ARGS; testsuite)
+total_jobs = min(ParallelTestRunner.default_njobs(), length(keys(testsuite)))
 
-if REACTANT_TEST_GROUP == "integration" || REACTANT_TEST_GROUP == "all"
-    @testset "MPI" begin
-        using MPI
-        nranks = 2
-        run(`$(mpiexec()) -n $nranks $(Base.julia_cmd()) integration/mpi.jl`)
+@testset "Reactant Tests" begin
+    withenv(
+        "XLA_REACTANT_GPU_MEM_FRACTION" => 1 / (total_jobs + 0.1),
+        "XLA_REACTANT_GPU_PREALLOCATE" => false,
+    ) do
+        runtests(Reactant, ARGS; testsuite)
+    end
+
+    if REACTANT_TEST_GROUP == "integration" || REACTANT_TEST_GROUP == "all"
+        @testset "MPI" begin
+            using MPI
+            nranks = 2
+            run(`$(mpiexec()) -n $nranks $(Base.julia_cmd()) integration/mpi.jl`)
+        end
     end
 end
