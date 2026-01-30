@@ -25,16 +25,16 @@ on:
         required: false
         default: false
         type: boolean
-      test_group:
-        description: "Test group"
-        required: false
-        default: "all"
-        type: string
       downgrade_testing:
         description: "Downgrade testing"
         required: false
         default: false
         type: boolean
+      test_args:
+        description: "Test arguments"
+        required: false
+        default: ""
+        type: string
 
 jobs:
   test:
@@ -70,7 +70,7 @@ jobs:
       - uses: julia-actions/cache@v2
         id: julia-cache
         with:
-          cache-name: julia-cache;workflow=${{ inputs.julia_version }}-${{ inputs.os }}-${{ inputs.runtime }}-assertions=${{ inputs.assertions }}-${{ github.event_name }}-${{ inputs.test_group }}-${{ inputs.downgrade_testing }}-${{ inputs.localjll }}
+          cache-name: julia-cache;workflow=${{ inputs.julia_version }}-${{ inputs.os }}-${{ inputs.runtime }}-assertions=${{ inputs.assertions }}-${{ github.event_name }}-${{ inputs.test_args }}-${{ inputs.downgrade_testing }}-${{ inputs.localjll }}
 
       - uses: julia-actions/julia-downgrade-compat@v2
         if: ${{ inputs.downgrade_testing }}
@@ -148,17 +148,13 @@ jobs:
       - name: "Run Tests (PJRT)"
         if: ${{ inputs.runtime == 'pjrt' || inputs.runtime == 'both' }}
         timeout-minutes: 120
-        run: |
-          import Pkg
-          Pkg.Registry.update()
-          Pkg.test(;
-            coverage="user",
-            allow_reresolve=parse(Bool, get(ENV, "ALLOW_RERESOLVE", "true"))
-          )
-        shell: julia --color=yes --code-coverage=user --depwarn=yes --project=. {0}
-        env:
-          ALLOW_RERESOLVE: ${{ !inputs.downgrade_testing }}
-          REACTANT_TEST_GROUP: ${{ inputs.test_group }}
+        uses: julia-actions/julia-runtest@v1
+        with:
+          test_args: ${{ inputs.test_args }}
+          allow_reresolve: ${{ !(inputs.downgrade_testing) }}
+          project: "."
+          coverage: true
+          depwarn: yes
 
       - name: "Setup Runtime Preferences (IFRT)"
         if: ${{ inputs.runtime == 'ifrt' || inputs.runtime == 'both' }}
@@ -172,17 +168,13 @@ jobs:
       - name: "Run Tests (IFRT)"
         if: ${{ inputs.runtime == 'ifrt' || inputs.runtime == 'both' }}
         timeout-minutes: 120
-        run: |
-          import Pkg
-          Pkg.Registry.update()
-          Pkg.test(;
-            coverage="user",
-            allow_reresolve=parse(Bool, get(ENV, "ALLOW_RERESOLVE", "true"))
-          )
-        shell: julia --color=yes --code-coverage=user --depwarn=yes --project=. {0}
-        env:
-          ALLOW_RERESOLVE: ${{ !inputs.downgrade_testing }}
-          REACTANT_TEST_GROUP: ${{ inputs.test_group }}
+        uses: julia-actions/julia-runtest@v1
+        with:
+          test_args: ${{ inputs.test_args }}
+          allow_reresolve: ${{ !(inputs.downgrade_testing) }}
+          project: "."
+          coverage: true
+          depwarn: yes
 
       - name: "Upload MLIR modules"
         uses: actions/upload-artifact@v6

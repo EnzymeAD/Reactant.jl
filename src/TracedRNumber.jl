@@ -798,6 +798,12 @@ function Base.round(A::TracedRNumber{<:ReactantFloat}, ::typeof(RoundNearestTies
 end
 Base.round(A::TracedRNumber{<:ReactantFloat}, ::typeof(RoundUp)) = ceil(A)
 Base.round(A::TracedRNumber{<:ReactantFloat}, ::typeof(RoundDown)) = floor(A)
+function Base.round(A::TracedRNumber{<:ReactantFloat}, ::typeof(RoundToZero))
+    A_truncated = @opcall convert(TracedRNumber{Int}, A)
+    return copysign(
+        @opcall(convert(TracedRNumber{Reactant.unwrapped_eltype(A)}, A_truncated)), A
+    )
+end
 
 Base.floor(A::TracedRNumber{<:ReactantFloat}) = @opcall floor(A)
 Base.floor(A::TracedRNumber{<:ReactantInt}) = A

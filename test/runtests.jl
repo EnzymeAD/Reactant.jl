@@ -2,13 +2,16 @@ using Reactant, ParallelTestRunner, CondaPkg, Test
 
 const BACKEND = lowercase(get(ENV, "REACTANT_BACKEND_GROUP", "auto"))
 
-const REACTANT_TEST_GROUP = lowercase(get(ENV, "REACTANT_TEST_GROUP", "all"))
-@assert REACTANT_TEST_GROUP ∈ ("all", "core", "integration", "neural_networks")
+parsed_args = parse_args(ARGS)
 
 const ENZYMEJAX_INSTALLED = Ref(false)
 
 # Install specific packages. Pkg.test doesn't pick up CondaPkg.toml in test folder
-if REACTANT_TEST_GROUP == "all" || REACTANT_TEST_GROUP == "integration"
+if (
+    isempty(parsed_args.positionals) ||
+    "integration" ∈ parsed_args.positionals ||
+    "integration/enzymejax" ∈ parsed_args.positionals
+)
     CondaPkg.add_pip("jax"; version="==0.5")
     try
         CondaPkg.add_pip("enzyme_ad"; version=">=0.0.9")
@@ -19,19 +22,7 @@ end
 
 testsuite = find_tests(@__DIR__)
 
-if REACTANT_TEST_GROUP == "core"
-    for k in keys(testsuite)
-        !(startswith(k, "core/") || startswith(k, "plugins/")) && delete!(testsuite, k)
-    end
-elseif REACTANT_TEST_GROUP == "integration"
-    for k in keys(testsuite)
-        !startswith(k, "integration/") && delete!(testsuite, k)
-    end
-elseif REACTANT_TEST_GROUP == "neural_networks"
-    for k in keys(testsuite)
-        !startswith(k, "nn/") && delete!(testsuite, k)
-    end
-end
+filter_tests!(testsuite, parsed_args)
 
 delete!(testsuite, "plugins/metal") # Currently completely non functional
 
@@ -51,7 +42,9 @@ if !ENZYMEJAX_INSTALLED[]
     delete!(testsuite, "integration/enzymejax")
 end
 
-total_jobs = min(ParallelTestRunner.default_njobs(), length(keys(testsuite)))
+total_jobs = min(
+    something(parsed_args.jobs, ParallelTestRunner.default_njobs()), length(keys(testsuite))
+)
 
 @testset "Reactant Tests" begin
     withenv(
@@ -69,7 +62,11 @@ total_jobs = min(ParallelTestRunner.default_njobs(), length(keys(testsuite)))
         )
     end
 
-    if REACTANT_TEST_GROUP == "integration" || REACTANT_TEST_GROUP == "all"
+    if (
+        isempty(parsed_args.positionals) ||
+        "integration" ∈ parsed_args.positionals ||
+        "integration/mpi" ∈ parsed_args.positionals
+    )
         @testset "MPI" begin
             using MPI
             nranks = 2

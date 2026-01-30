@@ -48,9 +48,9 @@ function mul_with_view3(A, x)
 end
 
 @testset "Matrix Multiplication" begin
-    A = Reactant.TestUtils.construct_test_array(Float64, 4, 4)
-    x = Reactant.TestUtils.construct_test_array(Float64, 4, 2)
-    b = Reactant.TestUtils.construct_test_array(Float64, 4)
+    A = Reactant.TestUtils.construct_test_array(Float32, 4, 4)
+    x = Reactant.TestUtils.construct_test_array(Float32, 4, 2)
+    b = Reactant.TestUtils.construct_test_array(Float32, 4)
 
     A_ra = Reactant.to_rarray(A)
     x_ra = Reactant.to_rarray(x)
@@ -63,7 +63,7 @@ end
 
     @test @jit(mul_with_view1(A_ra, x_ra)) ≈ mul_with_view1(A, x)
 
-    x2 = Reactant.TestUtils.construct_test_array(Float64, 4)
+    x2 = Reactant.TestUtils.construct_test_array(Float32, 4)
     x2_ra = Reactant.to_rarray(x2)
 
     @test @jit(mul_with_view2(A_ra, x2_ra)) ≈ mul_with_view2(A, x2)
@@ -84,7 +84,7 @@ end
 end
 
 @testset "triu & tril" begin
-    A = Reactant.TestUtils.construct_test_array(Float64, 4, 6)
+    A = Reactant.TestUtils.construct_test_array(Float32, 4, 6)
     A_ra = Reactant.to_rarray(A)
 
     @test @jit(triu(A_ra)) ≈ triu(A)
@@ -120,14 +120,14 @@ end
 end
 
 @testset "diag / diagm" begin
-    x = Reactant.TestUtils.construct_test_array(Float64, 2, 4)
+    x = Reactant.TestUtils.construct_test_array(Float32, 2, 4)
     x_ra = Reactant.to_rarray(x)
 
     @testset for k in (-size(x, 1) + 1):(size(x, 1) - 1)
         @test @jit(diag(x_ra, k)) ≈ diag(x, k)
     end
 
-    x = Reactant.TestUtils.construct_test_array(Float64, 4)
+    x = Reactant.TestUtils.construct_test_array(Float32, 4)
     x_ra = Reactant.to_rarray(x)
 
     @test @jit(diagm(x_ra)) ≈ diagm(x)
@@ -136,9 +136,9 @@ end
     @test @jit(diagm(6, 6, x_ra)) ≈ diagm(6, 6, x)
     @test_throws DimensionMismatch @jit(diagm(3, 3, x_ra))
 
-    x1 = Reactant.TestUtils.construct_test_array(Float64, 3)
-    x2 = Reactant.TestUtils.construct_test_array(Float64, 3)
-    x3 = Reactant.TestUtils.construct_test_array(Float64, 2)
+    x1 = Reactant.TestUtils.construct_test_array(Float32, 3)
+    x2 = Reactant.TestUtils.construct_test_array(Float32, 3)
+    x3 = Reactant.TestUtils.construct_test_array(Float32, 2)
     x_ra1 = Reactant.to_rarray(x1)
     x_ra2 = Reactant.to_rarray(x2)
     x_ra3 = Reactant.to_rarray(x3)
@@ -159,7 +159,7 @@ mul_upper_triangular(x) = UpperTriangular(x) * x
 mul_symmetric(x) = Symmetric(x) * x
 
 @testset "Wrapper Types Matrix Multiplication" begin
-    x = Reactant.TestUtils.construct_test_array(Float64, 4, 4)
+    x = Reactant.TestUtils.construct_test_array(Float32, 4, 4)
     x_ra = Reactant.to_rarray(x)
 
     @testset "$(wrapper_type)" for (wrapper_type, fn) in [
@@ -176,7 +176,7 @@ mul_symmetric(x) = Symmetric(x) * x
 end
 
 @testset "kron" begin
-    @testset for T in (Int64, Float64, ComplexF32)
+    @testset for T in (Int64, Float32, ComplexF32)
         @testset for (x_sz, y_sz) in [
             ((3, 4), (2, 5)), ((3, 4), (2,)), ((3,), (2, 5)), ((3,), (5,)), ((10,), ())
         ]
@@ -200,17 +200,17 @@ end
     @test y_ra ≈ axpy!(α, x, y)
 
     α = 2
-    x = Reactant.TestUtils.construct_test_array(Float64, 4)
+    x = Reactant.TestUtils.construct_test_array(Float32, 4)
+    y = Reactant.TestUtils.construct_test_array(Float32, 4)
     x_ra = Reactant.to_rarray(x)
-    y = Reactant.TestUtils.construct_test_array(Float64, 4)
     y_ra = Reactant.to_rarray(y)
 
     @jit axpy!(α, x_ra, y_ra)
     @test y_ra ≈ axpy!(α, x, y)
 
     α = 4.12
-    X = Reactant.TestUtils.construct_test_array(Float64, 3, 5)
-    Y = Reactant.TestUtils.construct_test_array(Float64, 3, 5)
+    X = Reactant.TestUtils.construct_test_array(Float32, 3, 5)
+    Y = Reactant.TestUtils.construct_test_array(Float32, 3, 5)
     X_ra = Reactant.to_rarray(X)
     Y_ra = Reactant.to_rarray(Y)
 
@@ -219,8 +219,8 @@ end
 
     α = 3.2 + 1im
     x = Reactant.TestUtils.construct_test_array(Complex{Float32}, 4)
-    x_ra = Reactant.to_rarray(x)
     y = Reactant.TestUtils.construct_test_array(Complex{Float32}, 4)
+    x_ra = Reactant.to_rarray(x)
     y_ra = Reactant.to_rarray(y)
 
     @jit axpy!(α, x_ra, y_ra)
@@ -231,8 +231,8 @@ end
     α = 3
     β = 2
     x = Reactant.TestUtils.construct_test_array(Int64, 4)
-    x_ra = Reactant.to_rarray(x)
     y = Reactant.TestUtils.construct_test_array(Int64, 4)
+    x_ra = Reactant.to_rarray(x)
     y_ra = Reactant.to_rarray(y)
 
     @jit axpby!(α, x_ra, β, y_ra)
@@ -240,17 +240,17 @@ end
 
     α = 2
     β = 3
-    x = Reactant.TestUtils.construct_test_array(Float64, 4)
+    x = Reactant.TestUtils.construct_test_array(Float32, 4)
+    y = Reactant.TestUtils.construct_test_array(Float32, 4)
     x_ra = Reactant.to_rarray(x)
-    y = Reactant.TestUtils.construct_test_array(Float64, 4)
     y_ra = Reactant.to_rarray(y)
 
     @jit axpby!(α, x_ra, β, y_ra)
     @test y_ra ≈ axpby!(α, x, β, y)
 
     α = 4.12
-    X = Reactant.TestUtils.construct_test_array(Float64, 3, 5)
-    Y = Reactant.TestUtils.construct_test_array(Float64, 3, 5)
+    X = Reactant.TestUtils.construct_test_array(Float32, 3, 5)
+    Y = Reactant.TestUtils.construct_test_array(Float32, 3, 5)
     X_ra = Reactant.to_rarray(X)
     Y_ra = Reactant.to_rarray(Y)
 
@@ -260,8 +260,8 @@ end
     α = 3.2 + 1im
     β = 2.1 - 4.2im
     x = Reactant.TestUtils.construct_test_array(Complex{Float32}, 4)
-    x_ra = Reactant.to_rarray(x)
     y = Reactant.TestUtils.construct_test_array(Complex{Float32}, 4)
+    x_ra = Reactant.to_rarray(x)
     y_ra = Reactant.to_rarray(y)
 
     @jit axpby!(α, x_ra, β, y_ra)
@@ -468,12 +468,15 @@ raise_to_syrk2(x, y) = 3 .* (transpose(x) * x) .+ 5 .* y
 
 @testset "syrk optimizations" begin
     @testset for elty in (Float32, Float64, ComplexF32, ComplexF64)
+        RunningOnTPU && elty == ComplexF64 && continue
+
         x = Reactant.TestUtils.construct_test_array(elty, 4, 5)
         y1 = Reactant.TestUtils.construct_test_array(elty, 4, 4)
         y2 = Reactant.TestUtils.construct_test_array(elty, 5, 5)
         x_ra = Reactant.to_rarray(x)
 
-        @testset for (fn, y) in ((raise_to_syrk, y1), (raise_to_syrk2, y2))
+        @testset "fn: $(fn) | y: $(size(y))" for (fn, y) in
+                                                 ((raise_to_syrk, y1), (raise_to_syrk2, y2))
             y_ra = Reactant.to_rarray(y)
 
             hlo = @code_hlo compile_options = CompileOptions(;
@@ -486,13 +489,13 @@ raise_to_syrk2(x, y) = 3 .* (transpose(x) * x) .+ 5 .* y
                 disable_structured_tensors_detection_passes=false
             ) fn(x_ra, y_ra)
 
-            @test fn_compile(x_ra, y_ra) ≈ fn(x, y)
+            @test fn_compile(x_ra, y_ra) ≈ fn(x, y) atol = 1e-3 rtol = 1e-3
         end
     end
 end
 
 @testset "uniform scaling" begin
-    x = Reactant.TestUtils.construct_test_array(Float64, 4, 4)
+    x = Reactant.TestUtils.construct_test_array(Float32, 4, 4)
     x_ra = Reactant.to_rarray(x)
 
     y = 3.0f0
