@@ -276,17 +276,19 @@ end
     @test sign.(Array(result32)) == sign.(expected32)
 
     # Test with Float64 arrays
-    x64 = Float64[-2.7, -2.3, -1.5, -0.9, 0.0, 0.9, 1.5, 2.3, 2.7]
-    x64_ra = Reactant.to_rarray(x64)
-    roundtozero64(arr) = round.(arr, RoundToZero)
-    result64 = @jit(roundtozero64(x64_ra))
-    expected64 = round.(x64, RoundToZero)
-    @test result64 ≈ expected64
-    @test result64 isa ConcreteRArray{Float64,1}
-    @test sign.(Array(result64)) == sign.(expected64)
+    if !RunningOnTPU
+        x64 = Float64[-2.7, -2.3, -1.5, -0.9, 0.0, 0.9, 1.5, 2.3, 2.7]
+        x64_ra = Reactant.to_rarray(x64)
+        roundtozero64(arr) = round.(arr, RoundToZero)
+        result64 = @jit(roundtozero64(x64_ra))
+        expected64 = round.(x64, RoundToZero)
+        @test result64 ≈ expected64
+        @test result64 isa ConcreteRArray{Float64,1}
+        @test sign.(Array(result64)) == sign.(expected64)
+    end
 
     # Test with scalar TracedRNumber (Float32)
-    s32 = Float32(-3.7)
+    s32 = -3.7f0
     s32_ra = Reactant.to_rarray(s32; track_numbers=Number)
     roundtozero_scalar(x) = round(x, RoundToZero)
     result_s32 = @jit(roundtozero_scalar(s32_ra))
@@ -296,13 +298,15 @@ end
     @test sign(Reactant.to_number(result_s32)) == sign(expected_s32)
 
     # Test with scalar TracedRNumber (Float64)
-    s64 = Float64(5.9)
-    s64_ra = Reactant.to_rarray(s64; track_numbers=Number)
-    result_s64 = @jit(roundtozero_scalar(s64_ra))
-    expected_s64 = round(s64, RoundToZero)
-    @test result_s64 ≈ expected_s64
-    @test result_s64 isa ConcreteRNumber{Float64}
-    @test sign(Reactant.to_number(result_s64)) == sign(expected_s64)
+    if !RunningOnTPU
+        s64 = 5.9
+        s64_ra = Reactant.to_rarray(s64; track_numbers=Number)
+        result_s64 = @jit(roundtozero_scalar(s64_ra))
+        expected_s64 = round(s64, RoundToZero)
+        @test result_s64 ≈ expected_s64
+        @test result_s64 isa ConcreteRNumber{Float64}
+        @test sign(Reactant.to_number(result_s64)) == sign(expected_s64)
+    end
 
     # Test edge case: values already integers
     already_int = Float32[-3.0, 0.0, 4.0]
