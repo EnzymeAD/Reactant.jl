@@ -101,8 +101,8 @@ function Adapt.parent_type(::Type{TracedStepRangeLen{T,R,S,L}}) where {T,R,S,L}
 end
 
 ## TracedUnitRange
-## NOTE: we are currently storing the size as a temporary fix to avoid dynamic shapes
-## Once we support that, we can remove the size field
+## NOTE(#461): we are currently storing the size as a temporary fix to avoid
+## dynamic shapes. Once we support that, we can remove the size field
 struct TracedUnitRange{T} <: AbstractUnitRange{T}
     start::T
     stop::T
