@@ -29,6 +29,13 @@ end
     if looped_any(use_overlayed_version, xs)
         @assert use_overlayed_version(y)
 
+        # shortcut for scalar multiplication
+        if looped_any(x -> x isa Number, xs)
+            c = sy * y + sx * xs[1] * xs[2]
+            y.mlir_data = c.mlir_data
+            return y
+        end
+
         LT = keytype(size_dict)
         a, b = xs
         ia, ib = collect.(LT, ixs)
