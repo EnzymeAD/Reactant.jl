@@ -4,7 +4,7 @@ const BACKEND = lowercase(get(ENV, "REACTANT_BACKEND_GROUP", "auto"))
 BACKEND != "auto" && Reactant.set_default_backend(BACKEND)
 
 const REACTANT_TEST_GROUP = lowercase(get(ENV, "REACTANT_TEST_GROUP", "all"))
-@assert REACTANT_TEST_GROUP ∈ ("all", "core", "integration", "nn")
+@assert REACTANT_TEST_GROUP ∈ ("all", "core", "integration", "neural_networks")
 
 const ENZYMEJAX_INSTALLED = Ref(false)
 
@@ -18,14 +18,20 @@ if REACTANT_TEST_GROUP == "all" || REACTANT_TEST_GROUP == "integration"
     end
 end
 
+testsuite = find_tests(@__DIR__)
+
 if REACTANT_TEST_GROUP == "core"
-    testsuite = merge(find_tests("plugins/"), find_tests("core/"))
+    for k in keys(testsuite)
+        !(startswith(k, "core/") || startswith(k, "plugins/")) && delete!(testsuite, k)
+    end
 elseif REACTANT_TEST_GROUP == "integration"
-    testsuite = find_tests("integration/")
+    for k in keys(testsuite)
+        !startswith(k, "integration/") && delete!(testsuite, k)
+    end
 elseif REACTANT_TEST_GROUP == "nn"
-    testsuite = find_tests("nn/")
-else
-    testsuite = find_tests(@__DIR__)
+    for k in keys(testsuite)
+        !startswith(k, "nn/") && delete!(testsuite, k)
+    end
 end
 
 if !(Sys.isapple() && haskey(Reactant.XLA.global_backend_state.clients, "metal"))
