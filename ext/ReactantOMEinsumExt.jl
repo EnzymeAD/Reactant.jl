@@ -29,20 +29,28 @@ end
     if looped_any(use_overlayed_version, xs)
         @assert use_overlayed_version(y)
 
+        LT = keytype(size_dict)
         a, b = xs
-        ia, ib = ixs
-        inner, _, _, batch = _analyze_binary_input(ia, ib, iy)
+        ia, ib = collect.(LT, ixs)
+        iyv = collect(LT, iy)
+        inner, a_outer, b_outer, batch = _analyze_binary_input(ia, ib, iyv)
 
         contracting_dimensions = (
-            [findfirst(==(i), ia) for i in inner],
-            [findfirst(==(i), ib) for i in inner],
+            Int[findfirst(==(i), ia) for i in inner],
+            Int[findfirst(==(i), ib) for i in inner],
         )
         batching_dimensions = (
-            [findfirst(==(i), ia) for i in batch],
-            [findfirst(==(i), ib) for i in batch],
+            Int[findfirst(==(i), ia) for i in batch],
+            Int[findfirst(==(i), ib) for i in batch],
         )
 
         c = @opcall dot_general(a, b; contracting_dimensions, batching_dimensions)
+
+        # permute dims to match iy
+        ic = vcat(batch, a_outer, b_outer)
+        perm = Int[findfirst(==(i), ic) for i in iyv]
+        c = @opcall transpose(c, perm)
+
         @assert size(c) == size(y)
         @assert eltype(c) == eltype(y)
 
