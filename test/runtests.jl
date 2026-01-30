@@ -47,6 +47,10 @@ end
 # This is run in a special way
 delete!(testsuite, "integration/mpi")
 
+if !ENZYMEJAX_INSTALLED[]
+    delete!(testsuite, "integration/enzymejax")
+end
+
 total_jobs = min(ParallelTestRunner.default_njobs(), length(keys(testsuite)))
 
 @testset "Reactant Tests" begin
