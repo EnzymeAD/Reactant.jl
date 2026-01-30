@@ -60,6 +60,16 @@ end
     c = f(a, b)
     c_re = @jit f(a_re, b_re)
     @test c ≈ c_re
+
+    @testset "with different eltype" begin
+        b = Reactant.TestUtils.construct_test_array(Float32, 3, 4)
+        b_re = Reactant.to_rarray(b)
+
+        f = ein"ij,jk->ik"
+        c = f(a, b)
+        c_re = @jit f(a_re, b_re)
+        @test c ≈ c_re
+    end
 end
 
 @testset "hadamard product" begin
