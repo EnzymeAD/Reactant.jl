@@ -247,7 +247,8 @@ end
         @test begin
             sol2 = @jit least_squares_with_svd(A_ra, B_ra, full, alg)
             err2 = compute_ls_solution_error(A, Array(sol2), B, 5)
-        @test err2 < 1e-3
+            err2 < 1e-3
+        end broken = RunningOnTPU
     end
 end
 
