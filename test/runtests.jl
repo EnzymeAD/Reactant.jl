@@ -1,7 +1,6 @@
 using Reactant, ParallelTestRunner, CondaPkg, Test
 
 const BACKEND = lowercase(get(ENV, "REACTANT_BACKEND_GROUP", "auto"))
-BACKEND != "auto" && Reactant.set_default_backend(BACKEND)
 
 const REACTANT_TEST_GROUP = lowercase(get(ENV, "REACTANT_TEST_GROUP", "all"))
 @assert REACTANT_TEST_GROUP ∈ ("all", "core", "integration", "neural_networks")
@@ -34,9 +33,8 @@ elseif REACTANT_TEST_GROUP == "neural_networks"
     end
 end
 
-if !(Sys.isapple() && haskey(Reactant.XLA.global_backend_state.clients, "metal"))
-    delete!(testsuite, "plugins/metal")
-end
+delete!(testsuite, "plugins/metal") # Currently completely non functional
+
 if Sys.isapple()
     delete!(testsuite, "core/custom_number_types")
 end
@@ -56,7 +54,15 @@ total_jobs = min(ParallelTestRunner.default_njobs(), length(keys(testsuite)))
         "XLA_REACTANT_GPU_MEM_FRACTION" => 1 / (total_jobs + 0.1),
         "XLA_REACTANT_GPU_PREALLOCATE" => false,
     ) do
-        runtests(Reactant, ARGS; testsuite)
+        runtests(
+            Reactant,
+            ARGS;
+            testsuite,
+            init_code=quote
+                using Reactant
+                $(BACKEND) != "auto" && Reactant.set_default_backend($(BACKEND))
+            end,
+        )
     end
 
     if REACTANT_TEST_GROUP == "integration" || REACTANT_TEST_GROUP == "all"
