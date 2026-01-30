@@ -10,7 +10,7 @@ import ...IR:
     create_operation,
     context,
     IndexType
-import ..Dialects: NamedAttribute, operandsegmentsizes, resultsegmentsizes
+import ..Dialects: operandsegmentsizes, resultsegmentsizes
 import ...API
 
 """

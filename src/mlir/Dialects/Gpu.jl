@@ -2496,8 +2496,8 @@ function spmm_buffer_size(
     attributes = NamedAttribute[NamedAttribute("computeType", computeType),]
     !isnothing(asyncToken) && push!(op_ty_results, asyncToken)
     push!(attributes, resultsegmentsizes([length(bufferSzs), Int(!isnothing(asyncToken))]))
-    !isnothing(modeA) && push!(attributes, Namedattribute("modeA", modeA))
-    !isnothing(modeB) && push!(attributes, Namedattribute("modeB", modeB))
+    !isnothing(modeA) && push!(attributes, NamedAttribute("modeA", modeA))
+    !isnothing(modeB) && push!(attributes, NamedAttribute("modeB", modeB))
 
     return create_operation(
         "gpu.spmm_buffer_size",
