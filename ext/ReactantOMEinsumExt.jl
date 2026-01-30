@@ -57,10 +57,11 @@ end
         ic = vcat(batch, a_outer, b_outer)
         perm = Int[findfirst(==(i), ic) for i in iyv]
         c = @opcall transpose(c, perm)
-
         @assert size(c) == size(y)
         @assert eltype(c) == eltype(y)
 
+        # just like GEMM, we do: y = sy * y + sx * c
+        c = sy * y + sx * c
         y.mlir_data = c.mlir_data
         return y
     else
