@@ -10,7 +10,7 @@ using p7zip_jll: p7zip
 const libtpu_dir = Ref{Union{Nothing,String}}(nothing)
 const RUNNING_IN_CLOUD_TPU_VM = Ref(false)
 
-const LIBTPU_VERSION = "0.0.28.dev20251027"
+const LIBTPU_VERSION = "0.0.35.dev20260129"
 const LIBTPU_SO = "libtpu-$(replace(string(LIBTPU_VERSION), '.' => '_')).so"
 
 function __init__()
@@ -46,7 +46,7 @@ function download_libtpu_if_needed(path=nothing)
         zip_file_path = joinpath(path, "tpu.zip")
         tmp_dir = joinpath(path, "tmp")
         Downloads.download(
-            "https://storage.googleapis.com/libtpu-nightly-releases/wheels/libtpu/libtpu-0.0.33.dev20251224+nightly-cp314-cp314-manylinux_2_31_x86_64.whl",
+            "https://storage.googleapis.com/libtpu-nightly-releases/wheels/libtpu/libtpu-$(LIBTPU_VERSION)+nightly-cp314-cp314-manylinux_2_31_x86_64.whl",
             zip_file_path,
         )
         run(pipeline(`$(p7zip()) x -tzip -o$(tmp_dir) -- $(zip_file_path)`, devnull))

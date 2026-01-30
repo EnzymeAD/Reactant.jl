@@ -53,10 +53,6 @@ end
 
 total_jobs = min(ParallelTestRunner.default_njobs(), length(keys(testsuite)))
 
-if Reactant.Accelerators.TPU.has_tpu()
-    push!(ARGS, "--jobs=1")
-end
-
 @testset "Reactant Tests" begin
     withenv(
         "XLA_REACTANT_GPU_MEM_FRACTION" => 1 / (total_jobs + 0.1),
