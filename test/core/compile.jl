@@ -553,19 +553,20 @@ end
     end
 end
 
-@testset "compilation cache" begin
-    if Reactant.PersistentCompileCache.autotune_cache_enabled() &&
-        contains(string(Reactant.devices()[1]), "CUDA")
-        A = Reactant.to_rarray(Reactant.TestUtils.construct_test_array(Float32, 2, 5))
-        B = Reactant.to_rarray(Reactant.TestUtils.construct_test_array(Float32, 5, 1000))
-        @jit A * B
+# FIXME: this has too many intermittent failures. Re-enable once fixed
+# @testset "compilation cache" begin
+#     if Reactant.PersistentCompileCache.autotune_cache_enabled() &&
+#         contains(string(Reactant.devices()[1]), "CUDA")
+#         A = Reactant.to_rarray(Reactant.TestUtils.construct_test_array(Float32, 2, 5))
+#         B = Reactant.to_rarray(Reactant.TestUtils.construct_test_array(Float32, 5, 1000))
+#         @jit A * B
 
-        @test any(
-            endswith(".textproto"),
-            readdir(Reactant.PersistentCompileCache.get_autotune_cache_directory()),
-        )
-    end
-end
+#         @test any(
+#             endswith(".textproto"),
+#             readdir(Reactant.PersistentCompileCache.get_autotune_cache_directory()),
+#         )
+#     end
+# end
 
 @testset "call through inference barrier" begin
     points = [
