@@ -2185,7 +2185,7 @@ function make_tracer(
         push!(path, Core.Typeof(prev))
         make_tracer(seen, prev.ref, path, mode; sharding, kwargs..., track_numbers)
         make_tracer(seen, prev.step, path, mode; sharding, kwargs..., track_numbers)
-        make_tracer(seen, prev.len, path, mode; sharding, kwargs..., track_numbers)
+        make_tracer(seen, prev.len, path, mode; sharding, kwargs..., track_numbers=Union{})
         make_tracer(seen, prev.offset, path, mode; sharding, kwargs..., track_numbers)
         return nothing
     end
@@ -2196,7 +2196,13 @@ function make_tracer(
         seen, prev.step, append_path(path, :step), mode; sharding, kwargs..., track_numbers
     )
     newlen = make_tracer(
-        seen, prev.len, append_path(path, :len), mode; sharding, kwargs..., track_numbers
+        seen,
+        prev.len,
+        append_path(path, :len),
+        mode;
+        sharding,
+        kwargs...,
+        track_numbers=Union{},
     )
     newoffset = make_tracer(
         seen,
