@@ -1,4 +1,4 @@
-using Enzyme, Reactant, Test, Random
+using Enzyme, Reactant, Test, Random, Statistics
 
 square(x) = x * 2
 
@@ -456,5 +456,124 @@ end
         @test res isa typeof((x, nt))
         @test all(iszero, Array(res[2].x))
         @test all(iszero, Array(res[2].y))
+    end
+end
+
+function _fn_with_func(f::F, x, w) where {F}
+    return sum(abs2, w * f(x))
+end
+
+function _grad_fn_with_func(f::F, x, w) where {F}
+    dx = Enzyme.make_zero(x)
+    dw = Enzyme.make_zero(w)
+    Enzyme.autodiff(
+        ReverseWithPrimal,
+        Const(_fn_with_func),
+        Const(f),
+        Duplicated(x, dx),
+        Duplicated(w, dw),
+    )
+    return dx, dw
+end
+
+_f_with_colon(x) = x .- mean(x; dims=:)
+_f_with_range(x) = x .- mean(x; dims=1:2)
+
+@testset "Gradients with mean function (dims variants)" begin
+    x = Reactant.to_rarray(Reactant.TestUtils.construct_test_array(Float32, 3, 2))
+    w = Reactant.to_rarray(Reactant.TestUtils.construct_test_array(Float32, 1, 3))
+
+    dx1, dw1 = @jit _grad_fn_with_func(_f_with_range, x, w)
+    dx2, dw2 = @jit _grad_fn_with_func(_f_with_colon, x, w)
+
+    @testset "autodiff with dims=1:2 (range)" begin
+        @test dx1 isa ConcreteRArray{Float32,2}
+        @test dw1 isa ConcreteRArray{Float32,2}
+        @test size(dx1) == (3, 2)
+        @test size(dw1) == (1, 3)
+    end
+
+    @testset "autodiff with dims=: (Colon)" begin
+        @test dx2 isa ConcreteRArray{Float32,2}
+        @test dw2 isa ConcreteRArray{Float32,2}
+        @test size(dx2) == (3, 2)
+        @test size(dw2) == (1, 3)
+    end
+
+    @testset "value equality" begin
+        @test dx1 ≈ dx2
+        @test dw1 ≈ dw2
+    end
+
+    @testset "Enzyme.gradient with dims=: (Colon)" begin
+        res = @jit Enzyme.gradient(
+            ReverseWithPrimal, _fn_with_func, Const(_f_with_colon), x, w
+        )
+        @test res.val isa ConcreteRNumber{Float32}
+        @test res.derivs[2] isa ConcreteRArray{Float32,2}
+        @test res.derivs[3] isa ConcreteRArray{Float32,2}
+        @test size(res.derivs[2]) == (3, 2)
+        @test size(res.derivs[3]) == (1, 3)
+
+        @test res.derivs[2] ≈ dx2
+        @test res.derivs[3] ≈ dw2
+    end
+
+    @testset "Enzyme.gradient with dims=1:2 (range)" begin
+        res = @jit Enzyme.gradient(
+            ReverseWithPrimal, _fn_with_func, Const(_f_with_range), x, w
+        )
+        @test res.val isa ConcreteRNumber{Float32}
+        @test res.derivs[2] isa ConcreteRArray{Float32,2}
+        @test res.derivs[3] isa ConcreteRArray{Float32,2}
+        @test size(res.derivs[2]) == (3, 2)
+        @test size(res.derivs[3]) == (1, 3)
+
+        @test res.derivs[2] ≈ dx1
+        @test res.derivs[3] ≈ dw1
+    end
+
+    @testset "infer_activity" begin
+        @testset "ReverseWithPrimal with Colon dims" begin
+            activity = Reactant.infer_activity(
+                ReverseWithPrimal,
+                Const(_fn_with_func),
+                Const(_f_with_colon),
+                Duplicated(x, x),
+                Duplicated(w, w),
+            )
+            @test activity <: Duplicated
+        end
+
+        @testset "ReverseWithPrimal with range dims" begin
+            activity = Reactant.infer_activity(
+                ReverseWithPrimal,
+                Const(_fn_with_func),
+                Const(_f_with_range),
+                Duplicated(x, x),
+                Duplicated(w, w),
+            )
+            @test activity <: Duplicated
+        end
+    end
+end
+
+@testset "Forward mode AD with multi-dimensional dims" begin
+    _f_multidim_sum(x) = sum(abs2, x; dims=(2, 3))
+
+    x4d = Reactant.to_rarray(Reactant.TestUtils.construct_test_array(Float32, 3, 4, 5, 6))
+    bx4d = Reactant.to_rarray(Reactant.TestUtils.construct_test_array(Float32, 3, 4, 5, 6))
+
+    res = @jit Enzyme.autodiff(Forward, _f_multidim_sum, Duplicated(x4d, bx4d))
+    @test res[1] isa ConcreteRArray{Float32}
+    @test size(res[1]) == (3, 1, 1, 6)
+
+    @test 2 .* _f_multidim_sum(Array(bx4d)) ≈ Array(res[1]) atol = 1e-5 rtol = 1e-5
+
+    @testset "infer_activity" begin
+        activity = Reactant.infer_activity(
+            Forward, Const(_f_multidim_sum), Duplicated(x4d, bx4d)
+        )
+        @test activity <: Duplicated
     end
 end

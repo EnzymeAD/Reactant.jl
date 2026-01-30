@@ -16,6 +16,30 @@ const WITHIN_AUTODIFF = Ref(false)
 end
 
 @reactant_overlay @noinline function Enzyme.autodiff_deferred(
+    rmode::Enzyme.Mode, f::FA, args::Vararg{Annotation,Nargs}
+) where {FA<:Annotation,Nargs}
+    original_within_autodiff = WITHIN_AUTODIFF[]
+    try
+        WITHIN_AUTODIFF[] = true
+        return overload_autodiff(rmode, f, args...)
+    finally
+        WITHIN_AUTODIFF[] = original_within_autodiff
+    end
+end
+
+@reactant_overlay @noinline function Enzyme.autodiff(
+    rmode::Enzyme.Mode, f::FA, args::Vararg{Annotation,Nargs}
+) where {FA<:Annotation,Nargs}
+    original_within_autodiff = WITHIN_AUTODIFF[]
+    try
+        WITHIN_AUTODIFF[] = true
+        return overload_autodiff(rmode, f, args...)
+    finally
+        WITHIN_AUTODIFF[] = original_within_autodiff
+    end
+end
+
+@reactant_overlay @noinline function Enzyme.autodiff_deferred(
     rmode::Enzyme.Mode, f::FA, rt::Type{A}, args::Vararg{Annotation,Nargs}
 ) where {FA<:Annotation,A<:Annotation,Nargs}
     original_within_autodiff = WITHIN_AUTODIFF[]
