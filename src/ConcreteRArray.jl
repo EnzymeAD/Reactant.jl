@@ -93,6 +93,27 @@ end
 
 Adapt.adapt_storage(::Type{T}, x::AbstractArray) where {T<:AbstractConcreteArray} = T(x)
 
+# Adapt.jl specializes adapt_structure for ranges, so we override to call adapt_storage
+function Adapt.adapt_structure(
+    ::Type{T}, x::StepRangeLen{S}
+) where {T<:AbstractConcreteArray,S}
+    return Adapt.adapt_storage(T, x)
+end
+function Adapt.adapt_structure(::Type{T}, x::LinRange) where {T<:AbstractConcreteArray}
+    return Adapt.adapt_storage(T, x)
+end
+function Adapt.adapt_structure(::Type{T}, x::UnitRange) where {T<:AbstractConcreteArray}
+    return Adapt.adapt_storage(T, x)
+end
+function Adapt.adapt_structure(::Type{T}, x::Base.OneTo) where {T<:AbstractConcreteArray}
+    return Adapt.adapt_storage(T, x)
+end
+function Adapt.adapt_structure(
+    ::Type{T}, x::Base.ReshapedArray{<:Any,N,<:AbstractRange}
+) where {T<:AbstractConcreteArray,N}
+    return Adapt.adapt_storage(T, collect(x))
+end
+
 Base.size(x::AbstractConcreteArray) = x.shape
 
 function Base.isempty(x::Union{AbstractConcreteArray,AbstractConcreteNumber})
@@ -447,7 +468,7 @@ function Base.similar(
 end
 
 function Base.similar(
-    a::ConcretePJRTArray{T,N,D}, ::Type{S}=T, dims::Dims=size(a)
+    a::ConcretePJRTArray{T,N,D}, (::Type{S})=T, dims::Dims=size(a)
 ) where {S,T,N,D}
     device_to_array_slices, sharding = Sharding.sharding_to_array_slices(
         a.sharding, dims; return_updated_sharding=Val(true), client=XLA.client(a)
@@ -455,7 +476,7 @@ function Base.similar(
     @assert length(device_to_array_slices) == D
     sdata = ntuple(Val(D)) do i
         Base.@_inline_meta
-        similar(a.data[i], S, Dims(length.(device_to_array_slices[i])))
+        return similar(a.data[i], S, Dims(length.(device_to_array_slices[i])))
     end
     return ConcretePJRTArray{S,length(dims),D}(sdata, dims, a.sharding)
 end
@@ -466,7 +487,9 @@ function Base.similar(AT::Type{<:ConcretePJRTArray{T}}, dims::Dims; kwargs...) w
     return similar(AT, T, dims; kwargs...)
 end
 
-function Base.similar(a::ConcreteIFRTArray{T}, ::Type{S}=T, dims::Dims=size(a)) where {T,S}
+function Base.similar(
+    a::ConcreteIFRTArray{T}, (::Type{S})=T, dims::Dims=size(a)
+) where {T,S}
     return ConcreteIFRTArray(
         Array{S}(undef, dims); client=XLA.client(a), device=XLA.device(a), a.sharding
     )
@@ -506,7 +529,7 @@ function Base.copy(bc::Base.Broadcast.Broadcasted{Broadcast.ArrayStyle{ConcreteP
     if all(buffer_on_cpu, bc.args) && all(
         x ->
             !(x isa ConcretePJRTArray) ||
-                (x isa ConcretePJRTArray && !Sharding.is_sharded(x)),
+            (x isa ConcretePJRTArray && !Sharding.is_sharded(x)),
         bc.args,
     )
         ElType = Base.Broadcast.combine_eltypes(bc.f, bc.args)

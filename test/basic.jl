@@ -1,8 +1,39 @@
 using Reactant, Test, Enzyme, Statistics, InteractiveUtils
+using Adapt: adapt
 
 const RunningOnTPU = contains(string(Reactant.devices()[1]), "TPU")
 
 fastmax(x::AbstractArray{T}) where {T} = reduce(max, x; dims=1, init=float(T)(-Inf))
+
+@testset "AbstractRange conversion to ConcreteRArray" begin
+    # Test basic range conversion (issue #2276)
+    r = range(1.0f0, 10.0f0; length=10)
+    a = Reactant.to_rarray(r)
+    @test a isa ConcreteRArray{Float32,1}
+    @test Array(a) ≈ collect(r)
+
+    # Test StepRangeLen conversion
+    r_step = range(1.0f0, 10.0f0; step=0.5f0)
+    a_step = Reactant.to_rarray(r_step)
+    @test a_step isa ConcreteRArray{Float32,1}
+    @test Array(a_step) ≈ collect(r_step)
+
+    # Test reshaped range conversion (the original issue case)
+    r_reshaped = reshape(range(1.0f0, 10.0f0; length=10), 2, 5)
+    a_reshaped = Reactant.to_rarray(r_reshaped)
+    @test a_reshaped isa ConcreteRArray{Float32,2}
+    @test Array(a_reshaped) ≈ collect(r_reshaped)
+
+    # Test that adapt works with AbstractRange
+    r_adapted = adapt(ConcreteRArray, range(1.0, 5.0; length=5))
+    @test r_adapted isa ConcreteRArray{Float64,1}
+    @test Array(r_adapted) ≈ collect(range(1.0, 5.0; length=5))
+
+    # Test reshaped range through adapt
+    r_reshaped_adapt = adapt(ConcreteRArray, reshape(range(1.0, 10.0; length=10), 5, 2))
+    @test r_reshaped_adapt isa ConcreteRArray{Float64,2}
+    @test Array(r_reshaped_adapt) ≈ collect(reshape(range(1.0, 10.0; length=10), 5, 2))
+end
 
 @testset "2D sum" begin
     x = Reactant.TestUtils.construct_test_array(Float64, 2, 10)
@@ -1728,8 +1759,8 @@ mapped_sub(xs...) = stack(map(-, xs...))
     @testset "Vector of Slices" begin
         x_full = Reactant.TestUtils.construct_test_array(Float32, 10, 5, 3)
         y_full = Reactant.TestUtils.construct_test_array(Float32, 10, 5, 3)
-        x = [view(x_full, :, i, :) for i in 1:size(x_full, 2)]
-        y = [view(y_full, :, i, :) for i in 1:size(y_full, 2)]
+        x = [view(x_full,:,i,:) for i in 1:size(x_full, 2)]
+        y = [view(y_full,:,i,:) for i in 1:size(y_full, 2)]
         x_ra = Reactant.to_rarray(x)
         y_ra = Reactant.to_rarray(y)
 

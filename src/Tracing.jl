@@ -2119,6 +2119,28 @@ end
 end
 
 @inline function to_rarray_internal(
+    @nospecialize(x::AbstractRange{<:ReactantPrimitive}),
+    @nospecialize(track_numbers::Type),
+    @nospecialize(sharding),
+    @nospecialize(runtime),
+    @nospecialize(device),
+    @nospecialize(client)
+)
+    return to_rarray_internal(collect(x), track_numbers, sharding, runtime, device, client)
+end
+
+@inline function to_rarray_internal(
+    @nospecialize(x::Base.ReshapedArray{<:ReactantPrimitive,N,<:AbstractRange}),
+    @nospecialize(track_numbers::Type),
+    @nospecialize(sharding),
+    @nospecialize(runtime),
+    @nospecialize(device),
+    @nospecialize(client)
+) where {N}
+    return to_rarray_internal(collect(x), track_numbers, sharding, runtime, device, client)
+end
+
+@inline function to_rarray_internal(
     @nospecialize(x::Array{T}),
     @nospecialize(track_numbers::Type),
     @nospecialize(sharding),

@@ -240,6 +240,16 @@ function ConcretePJRTArray(
     return ConcretePJRTArray{T,N,nsharded}(sharded_data, shape, shardinfo)
 end
 
+function ConcretePJRTArray(
+    data::AbstractRange{T};
+    client::Union{Nothing,XLA.PJRT.Client}=nothing,
+    idx::Union{Int,Nothing}=nothing,
+    device::Union{Nothing,XLA.PJRT.Device}=nothing,
+    sharding::Sharding.AbstractSharding=Sharding.NoSharding(),
+) where {T}
+    return ConcretePJRTArray(collect(data); client, idx, device, sharding)
+end
+
 Base.wait(x::Union{ConcretePJRTArray,ConcretePJRTNumber}) = foreach(wait, x.data)
 XLA.client(x::Union{ConcretePJRTArray,ConcretePJRTNumber}) = XLA.client(x.data)
 function XLA.device(x::Union{ConcretePJRTArray,ConcretePJRTNumber})
@@ -369,6 +379,16 @@ function ConcreteIFRTArray(
     # ToDo: How to use specified device (non-sharded case)?
     sharded_data, shardinfo, padding = sharding(theclient, nothing, data)
     return ConcreteIFRTArray{T,N}(sharded_data, shape, shardinfo, padding)
+end
+
+function ConcreteIFRTArray(
+    data::AbstractRange{T};
+    client::Union{Nothing,XLA.IFRT.Client}=nothing,
+    idx::Union{Int,Nothing}=nothing,
+    device::Union{Nothing,XLA.IFRT.Device}=nothing,
+    sharding::Sharding.AbstractSharding=Sharding.NoSharding(),
+) where {T}
+    return ConcreteIFRTArray(collect(data); client, idx, device, sharding)
 end
 
 # Assemble data from multiple arrays. Needed in distributed setting where each process wont
