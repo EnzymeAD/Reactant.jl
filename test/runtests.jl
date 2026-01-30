@@ -28,7 +28,7 @@ elseif REACTANT_TEST_GROUP == "integration"
     for k in keys(testsuite)
         !startswith(k, "integration/") && delete!(testsuite, k)
     end
-elseif REACTANT_TEST_GROUP == "nn"
+elseif REACTANT_TEST_GROUP == "neural_networks"
     for k in keys(testsuite)
         !startswith(k, "nn/") && delete!(testsuite, k)
     end
