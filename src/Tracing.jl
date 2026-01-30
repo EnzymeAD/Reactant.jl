@@ -1028,6 +1028,51 @@ Base.@assume_effects :total @inline function traced_type(
     return traced_type_inner(T, cache, mode, track_numbers, Val(ndevices), runtime)
 end
 
+function traced_type_inner(
+    @nospecialize(RT::Type{<:UnitRange{<:ReactantPrimitive}}),
+    seen,
+    mode::TraceMode,
+    track_numbers::Type,
+    @nospecialize(ndevices),
+    runtime,
+)
+    (T,) = RT.parameters
+    newT = traced_type_inner(
+        T,
+        seen,
+        mode,
+        update_track_numbers_for_abstract_array(track_numbers),
+        ndevices,
+        runtime,
+    )
+    if T == newT
+        return RT
+    else
+        return TracedUnitRange{newT}
+    end
+end
+
+function traced_type_inner(
+    @nospecialize(RT::Type{<:StepRangeLen}),
+    seen,
+    mode::TraceMode,
+    track_numbers::Type,
+    @nospecialize(ndevices),
+    runtime,
+)
+    T, R, S, L = RT.parameters
+    track_numbers = update_track_numbers_for_abstract_array(track_numbers)
+    newT = traced_type_inner(T, seen, mode, track_numbers, ndevices, runtime)
+    newR = traced_type_inner(R, seen, mode, track_numbers, ndevices, runtime)
+    newS = traced_type_inner(S, seen, mode, track_numbers, ndevices, runtime)
+    newL = traced_type_inner(L, seen, mode, track_numbers, ndevices, runtime)
+    if T == newT && R == newR && S == newS && L == newL
+        return RT
+    else
+        return TracedStepRangeLen{newT,newR,newS,newL}
+    end
+end
+
 abstract type TracedTypeException <: Exception end
 
 struct TracedTypeError <: TracedTypeException
@@ -2094,6 +2139,84 @@ Base.@nospecializeinfer function make_tracer(
     return prev
 end
 
+function make_tracer(
+    seen,
+    @nospecialize(prev::UnitRange),
+    @nospecialize(path),
+    mode;
+    @nospecialize(sharding = Sharding.NoSharding()),
+    @nospecialize(track_numbers::Type = Union{}),
+    kwargs...,
+)
+    Sharding.is_sharded(sharding) && error("Cannot specify sharding for UnitRange")
+    track_numbers = update_track_numbers_for_abstract_array(track_numbers)
+    if mode == TracedToTypes
+        push!(path, Core.Typeof(prev))
+        make_tracer(seen, prev.start, path, mode; kwargs..., track_numbers)
+        make_tracer(seen, prev.stop, path, mode; kwargs..., track_numbers)
+        return nothing
+    end
+    newstart = make_tracer(
+        seen, prev.start, append_path(path, :start), mode; kwargs..., track_numbers
+    )
+    newstop = make_tracer(
+        seen, prev.stop, append_path(path, :stop), mode; kwargs..., track_numbers
+    )
+    if typeof(newstart) == typeof(prev.start) && typeof(newstop) == typeof(prev.stop)
+        return prev
+    else
+        len = length(prev)
+        return TracedUnitRange(newstart, newstop, len isa Integer ? len : -1)
+    end
+end
+
+function make_tracer(
+    seen,
+    @nospecialize(prev::StepRangeLen),
+    @nospecialize(path),
+    mode;
+    @nospecialize(sharding = Sharding.NoSharding()),
+    @nospecialize(track_numbers::Type = Union{}),
+    kwargs...,
+)
+    Sharding.is_sharded(sharding) && error("Cannot specify sharding for StepRangeLen")
+    track_numbers = update_track_numbers_for_abstract_array(track_numbers)
+    if mode == TracedToTypes
+        push!(path, Core.Typeof(prev))
+        make_tracer(seen, prev.ref, path, mode; sharding, kwargs..., track_numbers)
+        make_tracer(seen, prev.step, path, mode; sharding, kwargs..., track_numbers)
+        make_tracer(seen, prev.len, path, mode; sharding, kwargs..., track_numbers)
+        make_tracer(seen, prev.offset, path, mode; sharding, kwargs..., track_numbers)
+        return nothing
+    end
+    newref = make_tracer(
+        seen, prev.ref, append_path(path, :ref), mode; sharding, kwargs..., track_numbers
+    )
+    newstep = make_tracer(
+        seen, prev.step, append_path(path, :step), mode; sharding, kwargs..., track_numbers
+    )
+    newlen = make_tracer(
+        seen, prev.len, append_path(path, :len), mode; sharding, kwargs..., track_numbers
+    )
+    newoffset = make_tracer(
+        seen,
+        prev.offset,
+        append_path(path, :offset),
+        mode;
+        sharding,
+        kwargs...,
+        track_numbers,
+    )
+    if typeof(newref) == typeof(prev.ref) &&
+        typeof(newstep) == typeof(prev.step) &&
+        typeof(newlen) == typeof(prev.len) &&
+        typeof(newoffset) == typeof(prev.offset)
+        return prev
+    else
+        return TracedStepRangeLen(newref, newstep, newlen, newoffset)
+    end
+end
+
 @inline function to_rarray(
     @nospecialize(x);
     runtime::Union{Nothing,Val{:IFRT},Val{:PJRT}}=nothing,
@@ -2254,98 +2377,9 @@ end
     )
 end
 
-function traced_type_inner(
-    @nospecialize(RT::Type{<:UnitRange{<:ReactantPrimitive}}),
-    seen,
-    mode::TraceMode,
-    track_numbers::Type,
-    @nospecialize(ndevices),
-    runtime,
-)
-    (T,) = RT.parameters
-    newT = traced_type_inner(T, seen, mode, track_numbers, ndevices, runtime)
-    if T == newT
-        return RT
-    else
-        return TracedUnitRange{newT}
-    end
-end
-
-function make_tracer(
-    seen,
-    @nospecialize(prev::UnitRange),
-    @nospecialize(path),
-    mode;
-    @nospecialize(sharding = Sharding.NoSharding()),
-    kwargs...,
-)
-    Sharding.is_sharded(sharding) && error("Cannot specify sharding for UnitRange")
-    if mode == TracedToTypes
-        push!(path, Core.Typeof(prev))
-        make_tracer(seen, prev.start, path, mode; kwargs...)
-        make_tracer(seen, prev.stop, path, mode; kwargs...)
-        return nothing
-    end
-    newstart = make_tracer(seen, prev.start, append_path(path, :start), mode; kwargs...)
-    newstop = make_tracer(seen, prev.stop, append_path(path, :stop), mode; kwargs...)
-    if typeof(newstart) == typeof(prev.start) && typeof(newstop) == typeof(prev.stop)
-        return prev
-    else
-        return TracedUnitRange(newstart, newstop)
-    end
-end
-
-function traced_type_inner(
-    @nospecialize(RT::Type{<:StepRangeLen}),
-    seen,
-    mode::TraceMode,
-    track_numbers::Type,
-    @nospecialize(ndevices),
-    runtime,
-)
-    T, R, S, L = RT.parameters
-    newT = traced_type_inner(T, seen, mode, track_numbers, ndevices, runtime)
-    newR = traced_type_inner(R, seen, mode, track_numbers, ndevices, runtime)
-    newS = traced_type_inner(S, seen, mode, track_numbers, ndevices, runtime)
-    newL = traced_type_inner(L, seen, mode, track_numbers, ndevices, runtime)
-    if T == newT && R == newR && S == newS && L == newL
-        return RT
-    else
-        return TracedStepRangeLen{newT,newR,newS,newL}
-    end
-end
-
-function make_tracer(
-    seen,
-    @nospecialize(prev::StepRangeLen),
-    @nospecialize(path),
-    mode;
-    @nospecialize(sharding = Sharding.NoSharding()),
-    kwargs...,
-)
-    Sharding.is_sharded(sharding) && error("Cannot specify sharding for StepRangeLen")
-    if mode == TracedToTypes
-        push!(path, Core.Typeof(prev))
-        make_tracer(seen, prev.ref, path, mode; sharding, kwargs...)
-        make_tracer(seen, prev.step, path, mode; sharding, kwargs...)
-        make_tracer(seen, prev.len, path, mode; sharding, kwargs...)
-        make_tracer(seen, prev.offset, path, mode; sharding, kwargs...)
-        return nothing
-    end
-    newref = make_tracer(seen, prev.ref, append_path(path, :ref), mode; sharding, kwargs...)
-    newstep = make_tracer(
-        seen, prev.step, append_path(path, :step), mode; sharding, kwargs...
-    )
-    newlen = make_tracer(seen, prev.len, append_path(path, :len), mode; sharding, kwargs...)
-    newoffset = make_tracer(
-        seen, prev.offset, append_path(path, :offset), mode; sharding, kwargs...
-    )
-    if typeof(newref) == typeof(prev.ref) &&
-        typeof(newstep) == typeof(prev.step) &&
-        typeof(newlen) == typeof(prev.len) &&
-        typeof(newoffset) == typeof(prev.offset)
-        return prev
-    else
-        return TracedStepRangeLen(newref, newstep, newlen, newoffset)
-    end
-end
+# Certain types like AbstractRange is a abstract array that store its start and stop as
+# number types. Hence our default track_numbers Union{} will not trace it. However, this
+# behavior is inconsistent with how we trace other abstract arrays, so we special case it
+# here.
+update_track_numbers_for_abstract_array(::Type{Union{}}) = Number
+update_track_numbers_for_abstract_array(x::Type) = x
