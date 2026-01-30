@@ -146,7 +146,7 @@ end
 
 @testset "tensor contraction" begin
     a = Reactant.TestUtils.construct_test_array(ComplexF32, 2, 4, 3)
-    b = Reactant.TestUtils.construct_test_array(ComplexF32, 4, 5, 3)
+    b = Reactant.TestUtils.construct_test_array(ComplexF32, 3, 5, 4)
     a_re = Reactant.to_rarray(a)
     b_re = Reactant.to_rarray(b)
 
