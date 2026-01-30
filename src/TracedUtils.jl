@@ -28,10 +28,8 @@ function ReactantCore.materialize_traced_array(x::AbstractRange)
 end
 
 function ReactantCore.materialize_traced_array(::Reactant.TracedStepRangeLen)
-    return error(
-        "TODO: currently we dont have a good way to materialize \
-         TracedStepRangeLen since it produces a dynamically sized array",
-    )
+    return error("TODO(#461): currently we dont have a good way to materialize \
+                  TracedStepRangeLen since it produces a dynamically sized array")
 end
 
 function ReactantCore.materialize_traced_array(r::LinRange)

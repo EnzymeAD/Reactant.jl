@@ -2170,10 +2170,12 @@ function make_tracer(
         kwargs...,
         track_numbers,
     )
-    if typeof(newref) == typeof(prev.ref) &&
+    if (
+        typeof(newref) == typeof(prev.ref) &&
         typeof(newstep) == typeof(prev.step) &&
         typeof(newlen) == typeof(prev.len) &&
         typeof(newoffset) == typeof(prev.offset)
+    )
         return prev
     else
         return TracedStepRangeLen(newref, newstep, newlen, newoffset)

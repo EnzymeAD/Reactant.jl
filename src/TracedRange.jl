@@ -21,7 +21,7 @@ function TracedStepRangeLen{T,R,S}(ref::R, step::S, len, offset=1) where {T,R,S}
     return TracedStepRangeLen{T,R,S,typeof(len)}(ref, step, len, offset)
 end
 function TracedStepRangeLen(ref::R, step::S, len, offset=1) where {R,S}
-    return TracedStepRangeLen{typeof(ref + zero(step)),R,S,typeof(len)}(
+    return TracedStepRangeLen{promote_type(typeof(ref), typeof(zero(step))),R,S,typeof(len)}(
         ref, step, len, offset
     )
 end
