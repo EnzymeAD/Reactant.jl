@@ -18,7 +18,7 @@ function sample(
     fn_attr = MLIR.IR.FlatSymbolRefAttribute(f_name)
     symbol_addr = reinterpret(UInt64, pointer_from_objref(symbol))
     symbol_attr = @ccall MLIR.API.mlir_c.enzymeSymbolAttrGet(
-        MLIR.IR.context()::MLIR.API.MlirContext, symbol_addr::UInt64
+        MLIR.IR.current_context()::MLIR.API.MlirContext, symbol_addr::UInt64
     )::MLIR.IR.Attribute
 
     logpdf_attr = nothing
@@ -112,7 +112,7 @@ function simulate(rng::AbstractRNG, f::Function, args::Vararg{Any,Nargs}) where 
     fn_attr = MLIR.IR.FlatSymbolRefAttribute(f_name)
 
     trace_ty = @ccall MLIR.API.mlir_c.enzymeTraceTypeGet(
-        MLIR.IR.context()::MLIR.API.MlirContext
+        MLIR.IR.current_context()::MLIR.API.MlirContext
     )::MLIR.IR.Type
     weight_ty = MLIR.IR.TensorType(Int64[], MLIR.IR.Type(Float64))
 
@@ -187,7 +187,7 @@ function generate(
     fn_attr = MLIR.IR.FlatSymbolRefAttribute(f_name)
 
     constraint_ty = @ccall MLIR.API.mlir_c.enzymeConstraintTypeGet(
-        MLIR.IR.context()::MLIR.API.MlirContext
+        MLIR.IR.current_context()::MLIR.API.MlirContext
     )::MLIR.IR.Type
 
     constraint_val = MLIR.IR.result(
@@ -205,7 +205,7 @@ function generate(
             push!(
                 address_attr,
                 @ccall MLIR.API.mlir_c.enzymeSymbolAttrGet(
-                    MLIR.IR.context()::MLIR.API.MlirContext, sym_addr::UInt64
+                    MLIR.IR.current_context()::MLIR.API.MlirContext, sym_addr::UInt64
                 )::MLIR.IR.Attribute
             )
         end
@@ -213,7 +213,7 @@ function generate(
     end
 
     trace_ty = @ccall MLIR.API.mlir_c.enzymeTraceTypeGet(
-        MLIR.IR.context()::MLIR.API.MlirContext
+        MLIR.IR.current_context()::MLIR.API.MlirContext
     )::MLIR.IR.Type
     weight_ty = MLIR.IR.TensorType(Int64[], MLIR.IR.Type(Float64))
 

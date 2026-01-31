@@ -25,7 +25,7 @@ function mcmc(
     fn_attr = MLIR.IR.FlatSymbolRefAttribute(f_name)
 
     trace_ty = @ccall MLIR.API.mlir_c.enzymeTraceTypeGet(
-        MLIR.IR.context()::MLIR.API.MlirContext
+        MLIR.IR.current_context()::MLIR.API.MlirContext
     )::MLIR.IR.Type
 
     trace_val = MLIR.IR.result(
@@ -43,7 +43,7 @@ function mcmc(
             push!(
                 address_attr,
                 @ccall MLIR.API.mlir_c.enzymeSymbolAttrGet(
-                    MLIR.IR.context()::MLIR.API.MlirContext, sym_addr::UInt64
+                    MLIR.IR.current_context()::MLIR.API.MlirContext, sym_addr::UInt64
                 )::MLIR.IR.Attribute
             )
         end
@@ -51,7 +51,7 @@ function mcmc(
     end
 
     trace_ty = @ccall MLIR.API.mlir_c.enzymeTraceTypeGet(
-        MLIR.IR.context()::MLIR.API.MlirContext
+        MLIR.IR.current_context()::MLIR.API.MlirContext
     )::MLIR.IR.Type
 
     collection_size = num_samples ÷ thinning
@@ -66,15 +66,18 @@ function mcmc(
 
     if algorithm == :HMC
         hmc_config_attr = @ccall MLIR.API.mlir_c.enzymeHMCConfigAttrGet(
-            MLIR.IR.context()::MLIR.API.MlirContext, trajectory_length::Float64, adapt_step_size::Bool, adapt_mass_matrix::Bool
+            MLIR.IR.current_context()::MLIR.API.MlirContext,
+            trajectory_length::Float64,
+            adapt_step_size::Bool,
+            adapt_mass_matrix::Bool,
         )::MLIR.IR.Attribute
     elseif algorithm == :NUTS
         nuts_config_attr = @ccall MLIR.API.mlir_c.enzymeNUTSConfigAttrGet(
-            MLIR.IR.context()::MLIR.API.MlirContext,
+            MLIR.IR.current_context()::MLIR.API.MlirContext,
             max_tree_depth::Int64,
             max_delta_energy::Float64,
             adapt_step_size::Bool,
-            adapt_mass_matrix::Bool
+            adapt_mass_matrix::Bool,
         )::MLIR.IR.Attribute
     else
         error("Unknown MCMC algorithm: $algorithm. Supported algorithms are :HMC and :NUTS")

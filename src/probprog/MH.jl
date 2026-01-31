@@ -14,7 +14,7 @@ function mh(
     fn_attr = MLIR.IR.FlatSymbolRefAttribute(f_name)
 
     trace_ty = @ccall MLIR.API.mlir_c.enzymeTraceTypeGet(
-        MLIR.IR.context()::MLIR.API.MlirContext
+        MLIR.IR.current_context()::MLIR.API.MlirContext
     )::MLIR.IR.Type
 
     trace_val = MLIR.IR.result(
@@ -32,7 +32,7 @@ function mh(
             push!(
                 address_attr,
                 @ccall MLIR.API.mlir_c.enzymeSymbolAttrGet(
-                    MLIR.IR.context()::MLIR.API.MlirContext, sym_addr::UInt64
+                    MLIR.IR.current_context()::MLIR.API.MlirContext, sym_addr::UInt64
                 )::MLIR.IR.Attribute
             )
         end
@@ -40,7 +40,7 @@ function mh(
     end
 
     trace_ty = @ccall MLIR.API.mlir_c.enzymeTraceTypeGet(
-        MLIR.IR.context()::MLIR.API.MlirContext
+        MLIR.IR.current_context()::MLIR.API.MlirContext
     )::MLIR.IR.Type
     accepted_ty = MLIR.IR.TensorType(Int64[], MLIR.IR.Type(Bool))
 
