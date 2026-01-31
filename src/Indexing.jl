@@ -640,6 +640,28 @@ function _setindex_scalar_cartesian!(
     return a
 end
 
+function _setindex_scalar_cartesian!(
+    a::TracedRArray{T,N}, v::TracedRNumber, index::CartesianIndex{N}
+) where {T,N}
+    assertscalar("setindex!(::TracedRArray, v, ::CartesianIndex{N})")
+    res = @opcall(
+        reshape(
+            @opcall(
+                dynamic_update_slice(
+                    a,
+                    Reactant.broadcast_to_size(
+                        Reactant.promote_to(TracedRNumber{T}, v), ntuple(Returns(1), N)
+                    ),
+                    collect(Int64, index.I),
+                )
+            ),
+            collect(size(a)),
+        )
+    )
+    TracedUtils.set_mlir_data!(a, TracedUtils.get_mlir_data(res))
+    return a
+end
+
 function _setindex_linear!(a::TracedRArray{T,N}, v, indices::AbstractArray) where {T,N}
     if !(indices isa Reactant.TracedType) && TracedUtils.__contiguous_indices(vec(indices))
         res = @opcall(
