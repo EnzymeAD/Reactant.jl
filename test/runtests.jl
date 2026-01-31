@@ -5,6 +5,7 @@ const BACKEND = lowercase(get(ENV, "REACTANT_BACKEND_GROUP", "auto"))
 parsed_args = parse_args(ARGS)
 
 const ENZYMEJAX_INSTALLED = Ref(false)
+const NUMPYRO_INSTALLED = Ref(false)
 
 # Install specific packages. Pkg.test doesn't pick up CondaPkg.toml in test folder
 if (
@@ -16,6 +17,18 @@ if (
     try
         CondaPkg.add_pip("enzyme_ad"; version=">=0.0.9")
         ENZYMEJAX_INSTALLED[] = true
+    catch
+    end
+end
+
+if (
+    isempty(parsed_args.positionals) ||
+    "integration" ∈ parsed_args.positionals ||
+    "integration/numpyro" ∈ parsed_args.positionals
+)
+    try
+        CondaPkg.add_pip("numpyro")
+        NUMPYRO_INSTALLED[] = true
     catch
     end
 end
@@ -40,6 +53,10 @@ delete!(testsuite, "integration/mpi")
 
 if !ENZYMEJAX_INSTALLED[]
     delete!(testsuite, "integration/enzymejax")
+end
+
+if !NUMPYRO_INSTALLED[]
+    delete!(testsuite, "integration/numpyro")
 end
 
 total_jobs = min(
