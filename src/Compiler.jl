@@ -745,6 +745,9 @@ function optimization_passes(
         "cse_concatenate<16>",
         "cse_compare<16>",
         "cse_select<16>",
+        "cse_real<16>",
+        "cse_imag<16>",
+        "cse_conj<16>",
         "concatenate_op_canon<16>($max_constant_threshold)",
         "select_op_canon<16>($max_constant_threshold)",
         "add_simplify<16>",
@@ -881,7 +884,10 @@ function optimization_passes(
         "involution_conj_simplify",
         "involution_not_simplify",
         "real_conj_simplify",
+        "real_convert_simplify",
         "conj_complex_simplify",
+        "conj_convert_simplify",
+        "elementwise_complex_simplify",
         "split_convolution_into_reverse_convolution",
         # TODO(#2251) we want to enable but may cause an infinite compile time
         # "concat_to_onedim_dusslice",
@@ -936,6 +942,8 @@ function optimization_passes(
         "fuse_reshape_collapse_or_expand_dims_into_reduce",
         "split_reduce_add_mul_to_add_dot_general",
         "recognize_from_constant($(max_constant_threshold))",
+        "extend_to_broadcast",
+        "reduce_max_min_mul_positive_scalar",
     ]
 
     if !is_sharded
@@ -974,13 +982,14 @@ function optimization_passes(
                 "scatter_div_simplify",
                 "unary_elementwise_scatter_simplify",
                 "scatter_indices_are_unique",
-                "split_complex_scatter_setindex",
+                "split_complex_scatter",
                 ## const prop patterns
                 "scatter_update_computation_const_prop",
                 # gather patterns
                 "dynamic_gather_op_is_not_dynamic<16>",
                 "gather_op_canon<16>",
                 "gather_elementwise",
+                "elementwise_gather",
                 "gather_of_scatter_simplify",
                 ## const prop patterns
                 "gather_const_prop",
@@ -1108,6 +1117,8 @@ function optimization_passes(
                 "mul_zero_pad<1>",
                 "div_zero_pad<1>",
                 "binop_const_reshape_pad<1>",
+                "binop_pad_to_concat_add<1>",
+                "binop_pad_to_concat_mul<1>",
                 "binop_const_pad_add<1>",
                 "binop_const_pad_subtract<1>",
                 "binop_const_pad_mul<1>",
