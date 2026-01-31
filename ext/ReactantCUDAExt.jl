@@ -965,7 +965,6 @@ function compile(job)
                 modstr::Cstring, MLIR.IR.current_context()::MLIR.API.MlirContext
             )::MLIR.API.MlirModule
         )
-        @assert mmod != C_NULL
 
         linkRes = @ccall MLIR.API.mlir_c.LinkInModule(
             MLIR.IR.current_module()::MLIR.API.MlirModule,
