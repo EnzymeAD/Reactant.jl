@@ -107,6 +107,21 @@ end
                     Array{TracedRArray{Float64,2},1},
                 ),
 
+                # AbstractArray types
+                (
+                    AbstractArray{Float64,1},
+                    AbstractArray{Float64,1},
+                    AbstractArray{TracedRNumber{Float64},1},
+                ),
+                (AbstractArray, AbstractArray, AbstractArray),
+                (
+                    AbstractArray{Float64},
+                    AbstractArray{Float64},
+                    AbstractArray{TracedRNumber{Float64}},
+                ),
+                (AbstractVector, AbstractVector, AbstractVector),
+                (AbstractMatrix, AbstractMatrix, AbstractMatrix),
+
                 # Union types
                 (Union{Nothing,Int}, Union{Nothing,Int}, Union{Nothing,TracedRNumber{Int}}),
                 (

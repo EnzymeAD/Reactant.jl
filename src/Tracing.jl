@@ -431,6 +431,17 @@ Base.@nospecializeinfer function traced_type_inner(
 end
 
 Base.@nospecializeinfer function traced_type_inner(
+    A::Type{AbstractArray{T,N} where {T}},
+    seen,
+    mode::TraceMode,
+    @nospecialize(track_numbers::Type),
+    @nospecialize(ndevices),
+    @nospecialize(runtime)
+) where {N}
+    return A
+end
+
+Base.@nospecializeinfer function traced_type_inner(
     A::Type{AbstractArray{T,N}},
     seen,
     mode::TraceMode,
