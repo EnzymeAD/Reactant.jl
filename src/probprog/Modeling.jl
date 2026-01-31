@@ -3,12 +3,26 @@ using ..Compiler: @compile
 
 include("Utils.jl")
 
+function get_support_kind_int(s::Symbol)
+    s === :real && return Int32(0)
+    s === :positive && return Int32(1)
+    s === :unit_interval && return Int32(2)
+    s === :interval && return Int32(3)
+    s === :greater_than && return Int32(4)
+    s === :less_than && return Int32(5)
+    s === :simplex && return Int32(6)
+    s === :lower_cholesky && return Int32(7)
+    return error("Unknown support type: $s")
+end
+
 function sample(
     rng::AbstractRNG,
     f::Function,
     args::Vararg{Any,Nargs};
     symbol::Symbol=gensym("sample"),
     logpdf::Union{Nothing,Function}=nothing,
+    support::Symbol=:real,
+    bounds::Tuple{Union{Nothing,Real},Union{Nothing,Real}}=(nothing, nothing),
 ) where {Nargs}
     args_with_rng = (rng, args...)
     (; f_name, mlir_caller_args, mlir_result_types, traced_result, linear_results, fnwrapped, argprefix, resprefix) = process_probprog_function(
@@ -33,12 +47,29 @@ function sample(
         )
     end
 
+    lower, upper = bounds
+    has_lower = !isnothing(lower)
+    has_upper = !isnothing(upper)
+    lower_val = isnothing(lower) ? NaN : Float64(lower)
+    upper_val = isnothing(upper) ? NaN : Float64(upper)
+
+    support_kind = get_support_kind_int(support)
+    support_attr = @ccall MLIR.API.mlir_c.enzymeSupportAttrGet(
+        MLIR.IR.current_context()::MLIR.API.MlirContext,
+        support_kind::Int32,
+        lower_val::Float64,
+        has_lower::Bool,
+        upper_val::Float64,
+        has_upper::Bool,
+    )::MLIR.IR.Attribute
+
     sample_op = MLIR.Dialects.enzyme.sample(
         mlir_caller_args;
         outputs=mlir_result_types,
         fn=fn_attr,
         logpdf=logpdf_attr,
         symbol=symbol_attr,
+        support=support_attr,
         name=Base.String(symbol),
     )
 
@@ -59,7 +90,16 @@ end
 function sample(
     rng::AbstractRNG, dist::D; symbol::Symbol=gensym("sample")
 ) where {D<:Distribution}
-    return sample(rng, sampler(D), params(dist)...; symbol=symbol, logpdf=logpdf_fn(D))
+    dist_type = typeof(dist)
+    return sample(
+        rng,
+        sampler(dist_type),
+        params(dist)...;
+        symbol=symbol,
+        logpdf=logpdf_fn(dist_type),
+        support=support(dist_type),
+        bounds=bounds(dist_type),
+    )
 end
 
 function untraced_call(rng::AbstractRNG, f::Function, args::Vararg{Any,Nargs}) where {Nargs}

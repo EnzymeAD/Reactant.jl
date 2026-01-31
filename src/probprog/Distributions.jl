@@ -18,6 +18,10 @@ function support(::Type{D}) where {D<:Distribution}
     return error("support not implemented for $D")
 end
 
+function bounds(::Type{D}) where {D<:Distribution}
+    return (nothing, nothing)
+end
+
 #==============================================================================#
 # Normal Distribution
 #==============================================================================#
