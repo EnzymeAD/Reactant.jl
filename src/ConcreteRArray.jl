@@ -896,3 +896,5 @@ for srcStyle in (IndexStyle, IndexCartesian),
         return dst
     end
 end
+
+Base.to_index(x::AbstractConcreteNumber) = to_number(x)
