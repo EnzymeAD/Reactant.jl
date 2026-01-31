@@ -6,7 +6,7 @@ export OptionOverrideProto, ExecutableBuildOptionsProto, CompileOptionsProto
 export ExecutableAndOptionsProto
 
 
-struct OptionOverrideProto
+mutable struct OptionOverrideProto
     value::Union{Nothing,OneOf{<:Union{String,Bool,Int64,Float64}}}
 end
 PB.oneof_field_types(::Type{OptionOverrideProto}) = (;
@@ -63,36 +63,58 @@ function PB._encoded_size(x::OptionOverrideProto)
     return encoded_size
 end
 
-struct ExecutableBuildOptionsProto
-    device_ordinal::Int64
-    result_layout::Union{Nothing,ShapeProto}
-    comp_envs::Union{Nothing,CompilationEnvironmentsProto}
-    debug_options::Union{Nothing,DebugOptions}
-    num_replicas::Int64
-    num_partitions::Int64
-    use_spmd_partitioning::Bool
-    use_auto_spmd_partitioning::Bool
-    exec_time_optimization_effort::Float32
-    memory_fitting_effort::Float32
-    optimization_level::var"ExecutionOptions.EffortLevel".T
-    memory_fitting_level::var"ExecutionOptions.EffortLevel".T
-    deduplicate_hlo::Bool
-    device_assignment::Union{Nothing,DeviceAssignmentProto}
-    alias_passthrough_params::Bool
-    run_backend_only::Bool
-    allow_spmd_sharding_propagation_to_parameters::Vector{Bool}
-    allow_spmd_sharding_propagation_to_output::Vector{Bool}
-    fdo_profile::Vector{UInt8}
-    device_memory_size::Int64
-    auto_spmd_partitioning_mesh_shape::Vector{Int64}
-    auto_spmd_partitioning_mesh_ids::Vector{Int64}
-    use_shardy_partitioner::Bool
-    process_index::Int64
-    process_count::Int64
-    slice_size::Int64
+mutable struct ExecutableBuildOptionsProto
+    __data::Dict{Symbol,Any}
 end
-PB.default_values(::Type{ExecutableBuildOptionsProto}) = (;device_ordinal = zero(Int64), result_layout = nothing, comp_envs = nothing, debug_options = nothing, num_replicas = zero(Int64), num_partitions = zero(Int64), use_spmd_partitioning = false, use_auto_spmd_partitioning = false, exec_time_optimization_effort = zero(Float32), memory_fitting_effort = zero(Float32), optimization_level = var"ExecutionOptions.EffortLevel".EFFORT_UNKNOWN, memory_fitting_level = var"ExecutionOptions.EffortLevel".EFFORT_UNKNOWN, deduplicate_hlo = false, device_assignment = nothing, alias_passthrough_params = false, run_backend_only = false, allow_spmd_sharding_propagation_to_parameters = Vector{Bool}(), allow_spmd_sharding_propagation_to_output = Vector{Bool}(), fdo_profile = UInt8[], device_memory_size = zero(Int64), auto_spmd_partitioning_mesh_shape = Vector{Int64}(), auto_spmd_partitioning_mesh_ids = Vector{Int64}(), use_shardy_partitioner = false, process_index = zero(Int64), process_count = zero(Int64), slice_size = zero(Int64))
-PB.field_numbers(::Type{ExecutableBuildOptionsProto}) = (;device_ordinal = 1, result_layout = 2, comp_envs = 13, debug_options = 3, num_replicas = 4, num_partitions = 5, use_spmd_partitioning = 6, use_auto_spmd_partitioning = 7, exec_time_optimization_effort = 20, memory_fitting_effort = 21, optimization_level = 24, memory_fitting_level = 25, deduplicate_hlo = 8, device_assignment = 9, alias_passthrough_params = 10, run_backend_only = 11, allow_spmd_sharding_propagation_to_parameters = 18, allow_spmd_sharding_propagation_to_output = 12, fdo_profile = 14, device_memory_size = 15, auto_spmd_partitioning_mesh_shape = 16, auto_spmd_partitioning_mesh_ids = 17, use_shardy_partitioner = 19, process_index = 22, process_count = 23, slice_size = 26)
+
+# Default values for ExecutableBuildOptionsProto fields
+const _ExecutableBuildOptionsProto_defaults = Dict{Symbol,Any}(
+    :device_ordinal => zero(Int64),
+    :result_layout => nothing,
+    :comp_envs => nothing,
+    :debug_options => nothing,
+    :num_replicas => zero(Int64),
+    :num_partitions => zero(Int64),
+    :use_spmd_partitioning => false,
+    :use_auto_spmd_partitioning => false,
+    :exec_time_optimization_effort => zero(Float32),
+    :memory_fitting_effort => zero(Float32),
+    :optimization_level => nothing,
+    :memory_fitting_level => nothing,
+    :deduplicate_hlo => false,
+    :device_assignment => nothing,
+    :alias_passthrough_params => false,
+    :run_backend_only => false,
+    :allow_spmd_sharding_propagation_to_parameters => Vector{Bool}(),
+    :allow_spmd_sharding_propagation_to_output => Vector{Bool}(),
+    :fdo_profile => Vector{UInt8}(),
+    :device_memory_size => zero(Int64),
+    :auto_spmd_partitioning_mesh_shape => Vector{Int64}(),
+    :auto_spmd_partitioning_mesh_ids => Vector{Int64}(),
+    :use_shardy_partitioner => false,
+    :process_index => zero(Int64),
+    :process_count => zero(Int64),
+    :slice_size => zero(Int64)
+)
+
+# Keyword constructor for ExecutableBuildOptionsProto
+function ExecutableBuildOptionsProto(; kwargs...)
+    __data = Dict{Symbol,Any}(kwargs)
+    return ExecutableBuildOptionsProto(__data)
+end
+
+# Field accessors for ExecutableBuildOptionsProto
+function Base.getproperty(x::ExecutableBuildOptionsProto, s::Symbol)
+    s === :__data && return getfield(x, :__data)
+    d = getfield(x, :__data)
+    return get(d, s, get(_ExecutableBuildOptionsProto_defaults, s, nothing))
+end
+function Base.setproperty!(x::ExecutableBuildOptionsProto, s::Symbol, v)
+    getfield(x, :__data)[s] = v
+end
+Base.propertynames(::ExecutableBuildOptionsProto) = (:device_ordinal, :result_layout, :comp_envs, :debug_options, :num_replicas, :num_partitions, :use_spmd_partitioning, :use_auto_spmd_partitioning, :exec_time_optimization_effort, :memory_fitting_effort, :optimization_level, :memory_fitting_level, :deduplicate_hlo, :device_assignment, :alias_passthrough_params, :run_backend_only, :allow_spmd_sharding_propagation_to_parameters, :allow_spmd_sharding_propagation_to_output, :fdo_profile, :device_memory_size, :auto_spmd_partitioning_mesh_shape, :auto_spmd_partitioning_mesh_ids, :use_shardy_partitioner, :process_index, :process_count, :slice_size,)
+# PB.default_values(::Type{ExecutableBuildOptionsProto}) = (;device_ordinal = zero(Int64), result_layout = nothing, comp_envs = nothing, debug_options = nothing, num_replicas = zero(Int64), num_partitions = zero(Int64), use_spmd_partitioning = false, use_auto_spmd_partitioning = false, exec_time_optimization_effort = zero(Float32), memory_fitting_effort = zero(Float32), optimization_level = var"ExecutionOptions.EffortLevel".EFFORT_UNKNOWN, memory_fitting_level = var"ExecutionOptions.EffortLevel".EFFORT_UNKNOWN, deduplicate_hlo = false, device_assignment = nothing, alias_passthrough_params = false, run_backend_only = false, allow_spmd_sharding_propagation_to_parameters = Vector{Bool}(), allow_spmd_sharding_propagation_to_output = Vector{Bool}(), fdo_profile = UInt8[], device_memory_size = zero(Int64), auto_spmd_partitioning_mesh_shape = Vector{Int64}(), auto_spmd_partitioning_mesh_ids = Vector{Int64}(), use_shardy_partitioner = false, process_index = zero(Int64), process_count = zero(Int64), slice_size = zero(Int64))
+# PB.field_numbers(::Type{ExecutableBuildOptionsProto}) = (;device_ordinal = 1, result_layout = 2, comp_envs = 13, debug_options = 3, num_replicas = 4, num_partitions = 5, use_spmd_partitioning = 6, use_auto_spmd_partitioning = 7, exec_time_optimization_effort = 20, memory_fitting_effort = 21, optimization_level = 24, memory_fitting_level = 25, deduplicate_hlo = 8, device_assignment = 9, alias_passthrough_params = 10, run_backend_only = 11, allow_spmd_sharding_propagation_to_parameters = 18, allow_spmd_sharding_propagation_to_output = 12, fdo_profile = 14, device_memory_size = 15, auto_spmd_partitioning_mesh_shape = 16, auto_spmd_partitioning_mesh_ids = 17, use_shardy_partitioner = 19, process_index = 22, process_count = 23, slice_size = 26)
 
 function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:ExecutableBuildOptionsProto})
     device_ordinal = zero(Int64)
@@ -179,7 +201,7 @@ function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:ExecutableBuildOptionsPr
             Base.skip(d, wire_type)
         end
     end
-    return ExecutableBuildOptionsProto(device_ordinal, result_layout[], comp_envs[], debug_options[], num_replicas, num_partitions, use_spmd_partitioning, use_auto_spmd_partitioning, exec_time_optimization_effort, memory_fitting_effort, optimization_level, memory_fitting_level, deduplicate_hlo, device_assignment[], alias_passthrough_params, run_backend_only, allow_spmd_sharding_propagation_to_parameters[], allow_spmd_sharding_propagation_to_output[], fdo_profile, device_memory_size, auto_spmd_partitioning_mesh_shape[], auto_spmd_partitioning_mesh_ids[], use_shardy_partitioner, process_index, process_count, slice_size)
+    return ExecutableBuildOptionsProto(; device_ordinal=device_ordinal, result_layout=result_layout[], comp_envs=comp_envs[], debug_options=debug_options[], num_replicas=num_replicas, num_partitions=num_partitions, use_spmd_partitioning=use_spmd_partitioning, use_auto_spmd_partitioning=use_auto_spmd_partitioning, exec_time_optimization_effort=exec_time_optimization_effort, memory_fitting_effort=memory_fitting_effort, optimization_level=optimization_level, memory_fitting_level=memory_fitting_level, deduplicate_hlo=deduplicate_hlo, device_assignment=device_assignment[], alias_passthrough_params=alias_passthrough_params, run_backend_only=run_backend_only, allow_spmd_sharding_propagation_to_parameters=allow_spmd_sharding_propagation_to_parameters[], allow_spmd_sharding_propagation_to_output=allow_spmd_sharding_propagation_to_output[], fdo_profile=fdo_profile, device_memory_size=device_memory_size, auto_spmd_partitioning_mesh_shape=auto_spmd_partitioning_mesh_shape[], auto_spmd_partitioning_mesh_ids=auto_spmd_partitioning_mesh_ids[], use_shardy_partitioner=use_shardy_partitioner, process_index=process_index, process_count=process_count, slice_size=slice_size)
 end
 
 function PB.encode(e::PB.AbstractProtoEncoder, x::ExecutableBuildOptionsProto)
@@ -243,20 +265,42 @@ function PB._encoded_size(x::ExecutableBuildOptionsProto)
     return encoded_size
 end
 
-struct CompileOptionsProto
-    argument_layouts::Vector{ShapeProto}
-    parameter_is_tupled_arguments::Bool
-    executable_build_options::Union{Nothing,ExecutableBuildOptionsProto}
-    compile_portable_executable::Bool
-    profile_version::Int64
-    serialized_multi_slice_config::Vector{UInt8}
-    env_option_overrides::Dict{String,OptionOverrideProto}
-    target_config::Union{Nothing,stream_executor.GpuTargetConfigProto}
-    allow_in_place_mlir_modification::Bool
-    matrix_unit_operand_precision::var"PrecisionConfig.Precision".T
+mutable struct CompileOptionsProto
+    __data::Dict{Symbol,Any}
 end
-PB.default_values(::Type{CompileOptionsProto}) = (;argument_layouts = Vector{ShapeProto}(), parameter_is_tupled_arguments = false, executable_build_options = nothing, compile_portable_executable = false, profile_version = zero(Int64), serialized_multi_slice_config = UInt8[], env_option_overrides = Dict{String,OptionOverrideProto}(), target_config = nothing, allow_in_place_mlir_modification = false, matrix_unit_operand_precision = var"PrecisionConfig.Precision".DEFAULT)
-PB.field_numbers(::Type{CompileOptionsProto}) = (;argument_layouts = 1, parameter_is_tupled_arguments = 2, executable_build_options = 3, compile_portable_executable = 4, profile_version = 5, serialized_multi_slice_config = 6, env_option_overrides = 7, target_config = 8, allow_in_place_mlir_modification = 9, matrix_unit_operand_precision = 10)
+
+# Default values for CompileOptionsProto fields
+const _CompileOptionsProto_defaults = Dict{Symbol,Any}(
+    :argument_layouts => Vector{ShapeProto}(),
+    :parameter_is_tupled_arguments => false,
+    :executable_build_options => nothing,
+    :compile_portable_executable => false,
+    :profile_version => zero(Int64),
+    :serialized_multi_slice_config => Vector{UInt8}(),
+    :env_option_overrides => Dict{String,OptionOverrideProto}(),
+    :target_config => nothing,
+    :allow_in_place_mlir_modification => false,
+    :matrix_unit_operand_precision => nothing
+)
+
+# Keyword constructor for CompileOptionsProto
+function CompileOptionsProto(; kwargs...)
+    __data = Dict{Symbol,Any}(kwargs)
+    return CompileOptionsProto(__data)
+end
+
+# Field accessors for CompileOptionsProto
+function Base.getproperty(x::CompileOptionsProto, s::Symbol)
+    s === :__data && return getfield(x, :__data)
+    d = getfield(x, :__data)
+    return get(d, s, get(_CompileOptionsProto_defaults, s, nothing))
+end
+function Base.setproperty!(x::CompileOptionsProto, s::Symbol, v)
+    getfield(x, :__data)[s] = v
+end
+Base.propertynames(::CompileOptionsProto) = (:argument_layouts, :parameter_is_tupled_arguments, :executable_build_options, :compile_portable_executable, :profile_version, :serialized_multi_slice_config, :env_option_overrides, :target_config, :allow_in_place_mlir_modification, :matrix_unit_operand_precision,)
+# PB.default_values(::Type{CompileOptionsProto}) = (;argument_layouts = Vector{ShapeProto}(), parameter_is_tupled_arguments = false, executable_build_options = nothing, compile_portable_executable = false, profile_version = zero(Int64), serialized_multi_slice_config = UInt8[], env_option_overrides = Dict{String,OptionOverrideProto}(), target_config = nothing, allow_in_place_mlir_modification = false, matrix_unit_operand_precision = var"PrecisionConfig.Precision".DEFAULT)
+# PB.field_numbers(::Type{CompileOptionsProto}) = (;argument_layouts = 1, parameter_is_tupled_arguments = 2, executable_build_options = 3, compile_portable_executable = 4, profile_version = 5, serialized_multi_slice_config = 6, env_option_overrides = 7, target_config = 8, allow_in_place_mlir_modification = 9, matrix_unit_operand_precision = 10)
 
 function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:CompileOptionsProto})
     argument_layouts = PB.BufferedVector{ShapeProto}()
@@ -295,7 +339,7 @@ function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:CompileOptionsProto})
             Base.skip(d, wire_type)
         end
     end
-    return CompileOptionsProto(argument_layouts[], parameter_is_tupled_arguments, executable_build_options[], compile_portable_executable, profile_version, serialized_multi_slice_config, env_option_overrides, target_config[], allow_in_place_mlir_modification, matrix_unit_operand_precision)
+    return CompileOptionsProto(; argument_layouts=argument_layouts[], parameter_is_tupled_arguments=parameter_is_tupled_arguments, executable_build_options=executable_build_options[], compile_portable_executable=compile_portable_executable, profile_version=profile_version, serialized_multi_slice_config=serialized_multi_slice_config, env_option_overrides=env_option_overrides, target_config=target_config[], allow_in_place_mlir_modification=allow_in_place_mlir_modification, matrix_unit_operand_precision=matrix_unit_operand_precision)
 end
 
 function PB.encode(e::PB.AbstractProtoEncoder, x::CompileOptionsProto)
@@ -327,7 +371,7 @@ function PB._encoded_size(x::CompileOptionsProto)
     return encoded_size
 end
 
-struct ExecutableAndOptionsProto
+mutable struct ExecutableAndOptionsProto
     serialized_executable::Vector{UInt8}
     compile_options::Union{Nothing,CompileOptionsProto}
     pjrt_client_name::String

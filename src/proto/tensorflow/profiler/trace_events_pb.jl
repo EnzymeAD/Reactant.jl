@@ -11,7 +11,7 @@ export Device, Trace
 @enumx var"TraceEvent.EventType" EVENT_TYPE_UNSPECIFIED=0 EVENT_TYPE_COMPLETE=1 EVENT_TYPE_ASYNC=3 EVENT_TYPE_COUNTER=4
 PB.reserved_fields(::Type{var"TraceEvent.EventType".T}) = (names = String[], numbers = Union{Int,UnitRange{Int}}[2])
 
-struct Resource
+mutable struct Resource
     name::String
     resource_id::UInt64
     num_events::UInt32
@@ -53,7 +53,7 @@ function PB._encoded_size(x::Resource)
     return encoded_size
 end
 
-struct TraceEvent
+mutable struct TraceEvent
     var"#type"::var"TraceEvent.EventType".T
     device_id::UInt32
     resource_id::UInt64
@@ -165,7 +165,7 @@ function PB._encoded_size(x::TraceEvent)
     return encoded_size
 end
 
-struct Device
+mutable struct Device
     name::String
     device_id::UInt32
     resources::Dict{UInt64,Resource}
@@ -208,7 +208,7 @@ function PB._encoded_size(x::Device)
     return encoded_size
 end
 
-struct Trace
+mutable struct Trace
     devices::Dict{UInt32,Device}
     tasks::Dict{UInt32,Task}
     min_timestamp_ps::UInt64

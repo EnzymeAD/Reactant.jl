@@ -5,7 +5,7 @@ using ProtoBuf.EnumX: @enumx
 export var"#Any"
 
 
-struct var"#Any"
+mutable struct var"#Any"
     type_url::String
     value::Vector{UInt8}
 end

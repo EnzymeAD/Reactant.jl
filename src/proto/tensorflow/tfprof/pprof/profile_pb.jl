@@ -5,7 +5,7 @@ using ProtoBuf.EnumX: @enumx
 export Line, Label, ValueType, Mapping, Function, Location, Sample, Profile
 
 
-struct Line
+mutable struct Line
     function_id::UInt64
     line::Int64
 end
@@ -41,7 +41,7 @@ function PB._encoded_size(x::Line)
     return encoded_size
 end
 
-struct Label
+mutable struct Label
     key::Int64
     str::Int64
     num::Int64
@@ -83,7 +83,7 @@ function PB._encoded_size(x::Label)
     return encoded_size
 end
 
-struct ValueType
+mutable struct ValueType
     var"#type"::Int64
     unit::Int64
 end
@@ -119,20 +119,42 @@ function PB._encoded_size(x::ValueType)
     return encoded_size
 end
 
-struct Mapping
-    id::UInt64
-    memory_start::UInt64
-    memory_limit::UInt64
-    file_offset::UInt64
-    filename::Int64
-    build_id::Int64
-    has_functions::Bool
-    has_filenames::Bool
-    has_line_numbers::Bool
-    has_inline_frames::Bool
+mutable struct Mapping
+    __data::Dict{Symbol,Any}
 end
-PB.default_values(::Type{Mapping}) = (;id = zero(UInt64), memory_start = zero(UInt64), memory_limit = zero(UInt64), file_offset = zero(UInt64), filename = zero(Int64), build_id = zero(Int64), has_functions = false, has_filenames = false, has_line_numbers = false, has_inline_frames = false)
-PB.field_numbers(::Type{Mapping}) = (;id = 1, memory_start = 2, memory_limit = 3, file_offset = 4, filename = 5, build_id = 6, has_functions = 7, has_filenames = 8, has_line_numbers = 9, has_inline_frames = 10)
+
+# Default values for Mapping fields
+const _Mapping_defaults = Dict{Symbol,Any}(
+    :id => zero(UInt64),
+    :memory_start => zero(UInt64),
+    :memory_limit => zero(UInt64),
+    :file_offset => zero(UInt64),
+    :filename => zero(Int64),
+    :build_id => zero(Int64),
+    :has_functions => false,
+    :has_filenames => false,
+    :has_line_numbers => false,
+    :has_inline_frames => false
+)
+
+# Keyword constructor for Mapping
+function Mapping(; kwargs...)
+    __data = Dict{Symbol,Any}(kwargs)
+    return Mapping(__data)
+end
+
+# Field accessors for Mapping
+function Base.getproperty(x::Mapping, s::Symbol)
+    s === :__data && return getfield(x, :__data)
+    d = getfield(x, :__data)
+    return get(d, s, get(_Mapping_defaults, s, nothing))
+end
+function Base.setproperty!(x::Mapping, s::Symbol, v)
+    getfield(x, :__data)[s] = v
+end
+Base.propertynames(::Mapping) = (:id, :memory_start, :memory_limit, :file_offset, :filename, :build_id, :has_functions, :has_filenames, :has_line_numbers, :has_inline_frames,)
+# PB.default_values(::Type{Mapping}) = (;id = zero(UInt64), memory_start = zero(UInt64), memory_limit = zero(UInt64), file_offset = zero(UInt64), filename = zero(Int64), build_id = zero(Int64), has_functions = false, has_filenames = false, has_line_numbers = false, has_inline_frames = false)
+# PB.field_numbers(::Type{Mapping}) = (;id = 1, memory_start = 2, memory_limit = 3, file_offset = 4, filename = 5, build_id = 6, has_functions = 7, has_filenames = 8, has_line_numbers = 9, has_inline_frames = 10)
 
 function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:Mapping})
     id = zero(UInt64)
@@ -171,7 +193,7 @@ function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:Mapping})
             Base.skip(d, wire_type)
         end
     end
-    return Mapping(id, memory_start, memory_limit, file_offset, filename, build_id, has_functions, has_filenames, has_line_numbers, has_inline_frames)
+    return Mapping(; id=id, memory_start=memory_start, memory_limit=memory_limit, file_offset=file_offset, filename=filename, build_id=build_id, has_functions=has_functions, has_filenames=has_filenames, has_line_numbers=has_line_numbers, has_inline_frames=has_inline_frames)
 end
 
 function PB.encode(e::PB.AbstractProtoEncoder, x::Mapping)
@@ -203,7 +225,7 @@ function PB._encoded_size(x::Mapping)
     return encoded_size
 end
 
-struct Function
+mutable struct Function
     id::UInt64
     name::Int64
     system_name::Int64
@@ -257,7 +279,7 @@ function PB._encoded_size(x::Function)
     return encoded_size
 end
 
-struct Location
+mutable struct Location
     id::UInt64
     mapping_id::UInt64
     address::UInt64
@@ -305,7 +327,7 @@ function PB._encoded_size(x::Location)
     return encoded_size
 end
 
-struct Sample
+mutable struct Sample
     location_id::Vector{UInt64}
     value::Vector{Int64}
     label::Vector{Label}
@@ -347,7 +369,7 @@ function PB._encoded_size(x::Sample)
     return encoded_size
 end
 
-struct Profile
+mutable struct Profile
     sample_type::Vector{ValueType}
     sample::Vector{Sample}
     mapping::Vector{Mapping}

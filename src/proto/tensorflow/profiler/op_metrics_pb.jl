@@ -11,7 +11,7 @@ abstract type var"##Abstract#OpMetrics" end
 abstract type var"##Abstract#OpMetricsDb" end
 
 
-struct PrecisionStats
+mutable struct PrecisionStats
     compute_16bit_ps::UInt64
     compute_32bit_ps::UInt64
 end
@@ -59,7 +59,7 @@ end
 
 @enumx MemorySpace MEMORY_SPACE_UNDEFINED=0 MEMORY_SPACE_HBM=1 MEMORY_SPACE_ON_CHIP=2147483646 MEMORY_SPACE_ALL=2147483647
 
-struct var"PerformanceInfo.MemoryAccessed"
+mutable struct var"PerformanceInfo.MemoryAccessed"
     is_read::Bool
     memory_space::var"PerformanceInfo.MemoryAccessed.MemorySpace".T
     bytes_accessed::Int64
@@ -101,7 +101,7 @@ function PB._encoded_size(x::var"PerformanceInfo.MemoryAccessed")
     return encoded_size
 end
 
-struct var"LayoutAnalysis.Dimension"
+mutable struct var"LayoutAnalysis.Dimension"
     size::Int32
     alignment::Int32
     semantics::LayoutDimensionSemantics.T
@@ -143,7 +143,7 @@ function PB._encoded_size(x::var"LayoutAnalysis.Dimension")
     return encoded_size
 end
 
-struct var"OpMetrics.MemoryAccessed"
+mutable struct var"OpMetrics.MemoryAccessed"
     operation_type::var"OpMetrics.MemoryAccessed.OperationType".T
     memory_space::UInt64
     bytes_accessed::UInt64
@@ -185,7 +185,7 @@ function PB._encoded_size(x::var"OpMetrics.MemoryAccessed")
     return encoded_size
 end
 
-struct PerformanceInfo
+mutable struct PerformanceInfo
     flops::Int64
     bytes_accessed::Int64
     memory_accessed_breakdown::Vector{var"PerformanceInfo.MemoryAccessed"}
@@ -228,7 +228,7 @@ function PB._encoded_size(x::PerformanceInfo)
     return encoded_size
 end
 
-struct LayoutAnalysis
+mutable struct LayoutAnalysis
     dimensions::Vector{var"LayoutAnalysis.Dimension"}
 end
 PB.default_values(::Type{LayoutAnalysis}) = (;dimensions = Vector{var"LayoutAnalysis.Dimension"}())
@@ -258,7 +258,7 @@ function PB._encoded_size(x::LayoutAnalysis)
     return encoded_size
 end
 
-struct MemoryAccessBreakdown
+mutable struct MemoryAccessBreakdown
     memory_accessed::Vector{var"OpMetrics.MemoryAccessed"}
 end
 PB.default_values(::Type{MemoryAccessBreakdown}) = (;memory_accessed = Vector{var"OpMetrics.MemoryAccessed"}())
@@ -289,7 +289,7 @@ function PB._encoded_size(x::MemoryAccessBreakdown)
 end
 
 # Stub definitions for cyclic types
-struct var"##Stub#OpMetrics"{T1<:var"##Abstract#OpMetricsDb"} <: var"##Abstract#OpMetrics"
+mutable struct var"##Stub#OpMetrics"{T1<:var"##Abstract#OpMetricsDb"} <: var"##Abstract#OpMetrics"
     hlo_module_id::UInt64
     name::String
     long_name::String
@@ -317,7 +317,7 @@ struct var"##Stub#OpMetrics"{T1<:var"##Abstract#OpMetricsDb"} <: var"##Abstract#
     core_type::var"OpMetrics.TpuCoreType".T
 end
 
-struct var"##Stub#OpMetricsDb" <: var"##Abstract#OpMetricsDb"
+mutable struct var"##Stub#OpMetricsDb" <: var"##Abstract#OpMetricsDb"
     metrics_db::Vector{var"##Stub#OpMetrics"{var"##Stub#OpMetricsDb"}}
     total_host_infeed_enq_duration_ps::UInt64
     total_host_infeed_enq_start_timestamp_ps_diff::UInt64

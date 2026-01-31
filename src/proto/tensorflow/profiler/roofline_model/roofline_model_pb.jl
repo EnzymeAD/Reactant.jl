@@ -7,52 +7,74 @@ export RecordType, RooflineModelRecord, RooflineModelDatabase
 
 @enumx RecordType INVALID_RECORD_TYPE=0 ALL=1 AVERAGE_STEP=2 PER_STEP=3 ALL_HW=4
 
-struct RooflineModelRecord
-    record_type::RecordType.T
-    step_num::UInt32
-    rank::UInt64
-    hlo_module_id::UInt64
-    hlo_category::String
-    hlo_name::String
-    occurrences::Int64
-    total_time_in_us::Float64
-    total_time_per_core_in_us::Float64
-    total_time_in_percentage::Float64
-    avg_time_in_us::Float64
-    total_self_time_in_us::Float64
-    avg_self_time_in_us::Float64
-    total_self_time_as_fraction::Float64
-    cumulative_total_self_time_as_fraction::Float64
-    dma_stall_fraction::Float64
-    measured_flop_rate::Float64
-    model_flop_rate::Float64
-    measured_memory_bw::Float64
-    hbm_bw::Float64
-    cmem_read_bw::Float64
-    cmem_write_bw::Float64
-    vmem_read_bw::Float64
-    vmem_write_bw::Float64
-    operational_intensity::Float64
-    hbm_operational_intensity::Float64
-    cmem_read_operational_intensity::Float64
-    cmem_write_operational_intensity::Float64
-    vmem_read_operational_intensity::Float64
-    vmem_write_operational_intensity::Float64
-    bottleneck_operational_intensity::Float64
-    bound_by::String
-    optimal_flop_rate::Float64
-    roofline_efficiency::Float64
-    flop_rate_relative_to_hw_limit::Float64
-    memory_bw_relative_to_hw_limit::Float64
-    include_infeed_outfeed::Bool
-    apply_time_scale_multiplier::Bool
-    flops::UInt64
-    bytes_accessed::UInt64
-    source_info::Union{Nothing,tensorflow.profiler.SourceInfo}
+mutable struct RooflineModelRecord
+    __data::Dict{Symbol,Any}
 end
-PB.reserved_fields(::Type{RooflineModelRecord}) = (names = String[], numbers = Union{Int,UnitRange{Int}}[11, 12, 23])
-PB.default_values(::Type{RooflineModelRecord}) = (;record_type = RecordType.INVALID_RECORD_TYPE, step_num = zero(UInt32), rank = zero(UInt64), hlo_module_id = zero(UInt64), hlo_category = "", hlo_name = "", occurrences = zero(Int64), total_time_in_us = zero(Float64), total_time_per_core_in_us = zero(Float64), total_time_in_percentage = zero(Float64), avg_time_in_us = zero(Float64), total_self_time_in_us = zero(Float64), avg_self_time_in_us = zero(Float64), total_self_time_as_fraction = zero(Float64), cumulative_total_self_time_as_fraction = zero(Float64), dma_stall_fraction = zero(Float64), measured_flop_rate = zero(Float64), model_flop_rate = zero(Float64), measured_memory_bw = zero(Float64), hbm_bw = zero(Float64), cmem_read_bw = zero(Float64), cmem_write_bw = zero(Float64), vmem_read_bw = zero(Float64), vmem_write_bw = zero(Float64), operational_intensity = zero(Float64), hbm_operational_intensity = zero(Float64), cmem_read_operational_intensity = zero(Float64), cmem_write_operational_intensity = zero(Float64), vmem_read_operational_intensity = zero(Float64), vmem_write_operational_intensity = zero(Float64), bottleneck_operational_intensity = zero(Float64), bound_by = "", optimal_flop_rate = zero(Float64), roofline_efficiency = zero(Float64), flop_rate_relative_to_hw_limit = zero(Float64), memory_bw_relative_to_hw_limit = zero(Float64), include_infeed_outfeed = false, apply_time_scale_multiplier = false, flops = zero(UInt64), bytes_accessed = zero(UInt64), source_info = nothing)
-PB.field_numbers(::Type{RooflineModelRecord}) = (;record_type = 18, step_num = 19, rank = 1, hlo_module_id = 35, hlo_category = 17, hlo_name = 2, occurrences = 3, total_time_in_us = 4, total_time_per_core_in_us = 20, total_time_in_percentage = 21, avg_time_in_us = 5, total_self_time_in_us = 6, avg_self_time_in_us = 7, total_self_time_as_fraction = 8, cumulative_total_self_time_as_fraction = 9, dma_stall_fraction = 10, measured_flop_rate = 13, model_flop_rate = 38, measured_memory_bw = 14, hbm_bw = 27, cmem_read_bw = 28, cmem_write_bw = 29, vmem_read_bw = 39, vmem_write_bw = 40, operational_intensity = 15, hbm_operational_intensity = 30, cmem_read_operational_intensity = 31, cmem_write_operational_intensity = 32, vmem_read_operational_intensity = 41, vmem_write_operational_intensity = 42, bottleneck_operational_intensity = 33, bound_by = 16, optimal_flop_rate = 22, roofline_efficiency = 34, flop_rate_relative_to_hw_limit = 24, memory_bw_relative_to_hw_limit = 25, include_infeed_outfeed = 26, apply_time_scale_multiplier = 44, flops = 36, bytes_accessed = 37, source_info = 43)
+
+# Default values for RooflineModelRecord fields
+const _RooflineModelRecord_defaults = Dict{Symbol,Any}(
+    :record_type => nothing,
+    :step_num => zero(UInt32),
+    :rank => zero(UInt64),
+    :hlo_module_id => zero(UInt64),
+    :hlo_category => "",
+    :hlo_name => "",
+    :occurrences => zero(Int64),
+    :total_time_in_us => zero(Float64),
+    :total_time_per_core_in_us => zero(Float64),
+    :total_time_in_percentage => zero(Float64),
+    :avg_time_in_us => zero(Float64),
+    :total_self_time_in_us => zero(Float64),
+    :avg_self_time_in_us => zero(Float64),
+    :total_self_time_as_fraction => zero(Float64),
+    :cumulative_total_self_time_as_fraction => zero(Float64),
+    :dma_stall_fraction => zero(Float64),
+    :measured_flop_rate => zero(Float64),
+    :model_flop_rate => zero(Float64),
+    :measured_memory_bw => zero(Float64),
+    :hbm_bw => zero(Float64),
+    :cmem_read_bw => zero(Float64),
+    :cmem_write_bw => zero(Float64),
+    :vmem_read_bw => zero(Float64),
+    :vmem_write_bw => zero(Float64),
+    :operational_intensity => zero(Float64),
+    :hbm_operational_intensity => zero(Float64),
+    :cmem_read_operational_intensity => zero(Float64),
+    :cmem_write_operational_intensity => zero(Float64),
+    :vmem_read_operational_intensity => zero(Float64),
+    :vmem_write_operational_intensity => zero(Float64),
+    :bottleneck_operational_intensity => zero(Float64),
+    :bound_by => "",
+    :optimal_flop_rate => zero(Float64),
+    :roofline_efficiency => zero(Float64),
+    :flop_rate_relative_to_hw_limit => zero(Float64),
+    :memory_bw_relative_to_hw_limit => zero(Float64),
+    :include_infeed_outfeed => false,
+    :apply_time_scale_multiplier => false,
+    :flops => zero(UInt64),
+    :bytes_accessed => zero(UInt64),
+    :source_info => nothing
+)
+
+# Keyword constructor for RooflineModelRecord
+function RooflineModelRecord(; kwargs...)
+    __data = Dict{Symbol,Any}(kwargs)
+    return RooflineModelRecord(__data)
+end
+
+# Field accessors for RooflineModelRecord
+function Base.getproperty(x::RooflineModelRecord, s::Symbol)
+    s === :__data && return getfield(x, :__data)
+    d = getfield(x, :__data)
+    return get(d, s, get(_RooflineModelRecord_defaults, s, nothing))
+end
+function Base.setproperty!(x::RooflineModelRecord, s::Symbol, v)
+    getfield(x, :__data)[s] = v
+end
+Base.propertynames(::RooflineModelRecord) = (:record_type, :step_num, :rank, :hlo_module_id, :hlo_category, :hlo_name, :occurrences, :total_time_in_us, :total_time_per_core_in_us, :total_time_in_percentage, :avg_time_in_us, :total_self_time_in_us, :avg_self_time_in_us, :total_self_time_as_fraction, :cumulative_total_self_time_as_fraction, :dma_stall_fraction, :measured_flop_rate, :model_flop_rate, :measured_memory_bw, :hbm_bw, :cmem_read_bw, :cmem_write_bw, :vmem_read_bw, :vmem_write_bw, :operational_intensity, :hbm_operational_intensity, :cmem_read_operational_intensity, :cmem_write_operational_intensity, :vmem_read_operational_intensity, :vmem_write_operational_intensity, :bottleneck_operational_intensity, :bound_by, :optimal_flop_rate, :roofline_efficiency, :flop_rate_relative_to_hw_limit, :memory_bw_relative_to_hw_limit, :include_infeed_outfeed, :apply_time_scale_multiplier, :flops, :bytes_accessed, :source_info,)
+# PB.reserved_fields(::Type{RooflineModelRecord}) = (names = String[], numbers = Union{Int,UnitRange{Int}}[11, 12, 23])
+# PB.default_values(::Type{RooflineModelRecord}) = (;record_type = RecordType.INVALID_RECORD_TYPE, step_num = zero(UInt32), rank = zero(UInt64), hlo_module_id = zero(UInt64), hlo_category = "", hlo_name = "", occurrences = zero(Int64), total_time_in_us = zero(Float64), total_time_per_core_in_us = zero(Float64), total_time_in_percentage = zero(Float64), avg_time_in_us = zero(Float64), total_self_time_in_us = zero(Float64), avg_self_time_in_us = zero(Float64), total_self_time_as_fraction = zero(Float64), cumulative_total_self_time_as_fraction = zero(Float64), dma_stall_fraction = zero(Float64), measured_flop_rate = zero(Float64), model_flop_rate = zero(Float64), measured_memory_bw = zero(Float64), hbm_bw = zero(Float64), cmem_read_bw = zero(Float64), cmem_write_bw = zero(Float64), vmem_read_bw = zero(Float64), vmem_write_bw = zero(Float64), operational_intensity = zero(Float64), hbm_operational_intensity = zero(Float64), cmem_read_operational_intensity = zero(Float64), cmem_write_operational_intensity = zero(Float64), vmem_read_operational_intensity = zero(Float64), vmem_write_operational_intensity = zero(Float64), bottleneck_operational_intensity = zero(Float64), bound_by = "", optimal_flop_rate = zero(Float64), roofline_efficiency = zero(Float64), flop_rate_relative_to_hw_limit = zero(Float64), memory_bw_relative_to_hw_limit = zero(Float64), include_infeed_outfeed = false, apply_time_scale_multiplier = false, flops = zero(UInt64), bytes_accessed = zero(UInt64), source_info = nothing)
+# PB.field_numbers(::Type{RooflineModelRecord}) = (;record_type = 18, step_num = 19, rank = 1, hlo_module_id = 35, hlo_category = 17, hlo_name = 2, occurrences = 3, total_time_in_us = 4, total_time_per_core_in_us = 20, total_time_in_percentage = 21, avg_time_in_us = 5, total_self_time_in_us = 6, avg_self_time_in_us = 7, total_self_time_as_fraction = 8, cumulative_total_self_time_as_fraction = 9, dma_stall_fraction = 10, measured_flop_rate = 13, model_flop_rate = 38, measured_memory_bw = 14, hbm_bw = 27, cmem_read_bw = 28, cmem_write_bw = 29, vmem_read_bw = 39, vmem_write_bw = 40, operational_intensity = 15, hbm_operational_intensity = 30, cmem_read_operational_intensity = 31, cmem_write_operational_intensity = 32, vmem_read_operational_intensity = 41, vmem_write_operational_intensity = 42, bottleneck_operational_intensity = 33, bound_by = 16, optimal_flop_rate = 22, roofline_efficiency = 34, flop_rate_relative_to_hw_limit = 24, memory_bw_relative_to_hw_limit = 25, include_infeed_outfeed = 26, apply_time_scale_multiplier = 44, flops = 36, bytes_accessed = 37, source_info = 43)
 
 function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:RooflineModelRecord})
     record_type = RecordType.INVALID_RECORD_TYPE
@@ -184,7 +206,7 @@ function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:RooflineModelRecord})
             Base.skip(d, wire_type)
         end
     end
-    return RooflineModelRecord(record_type, step_num, rank, hlo_module_id, hlo_category, hlo_name, occurrences, total_time_in_us, total_time_per_core_in_us, total_time_in_percentage, avg_time_in_us, total_self_time_in_us, avg_self_time_in_us, total_self_time_as_fraction, cumulative_total_self_time_as_fraction, dma_stall_fraction, measured_flop_rate, model_flop_rate, measured_memory_bw, hbm_bw, cmem_read_bw, cmem_write_bw, vmem_read_bw, vmem_write_bw, operational_intensity, hbm_operational_intensity, cmem_read_operational_intensity, cmem_write_operational_intensity, vmem_read_operational_intensity, vmem_write_operational_intensity, bottleneck_operational_intensity, bound_by, optimal_flop_rate, roofline_efficiency, flop_rate_relative_to_hw_limit, memory_bw_relative_to_hw_limit, include_infeed_outfeed, apply_time_scale_multiplier, flops, bytes_accessed, source_info[])
+    return RooflineModelRecord(; record_type=record_type, step_num=step_num, rank=rank, hlo_module_id=hlo_module_id, hlo_category=hlo_category, hlo_name=hlo_name, occurrences=occurrences, total_time_in_us=total_time_in_us, total_time_per_core_in_us=total_time_per_core_in_us, total_time_in_percentage=total_time_in_percentage, avg_time_in_us=avg_time_in_us, total_self_time_in_us=total_self_time_in_us, avg_self_time_in_us=avg_self_time_in_us, total_self_time_as_fraction=total_self_time_as_fraction, cumulative_total_self_time_as_fraction=cumulative_total_self_time_as_fraction, dma_stall_fraction=dma_stall_fraction, measured_flop_rate=measured_flop_rate, model_flop_rate=model_flop_rate, measured_memory_bw=measured_memory_bw, hbm_bw=hbm_bw, cmem_read_bw=cmem_read_bw, cmem_write_bw=cmem_write_bw, vmem_read_bw=vmem_read_bw, vmem_write_bw=vmem_write_bw, operational_intensity=operational_intensity, hbm_operational_intensity=hbm_operational_intensity, cmem_read_operational_intensity=cmem_read_operational_intensity, cmem_write_operational_intensity=cmem_write_operational_intensity, vmem_read_operational_intensity=vmem_read_operational_intensity, vmem_write_operational_intensity=vmem_write_operational_intensity, bottleneck_operational_intensity=bottleneck_operational_intensity, bound_by=bound_by, optimal_flop_rate=optimal_flop_rate, roofline_efficiency=roofline_efficiency, flop_rate_relative_to_hw_limit=flop_rate_relative_to_hw_limit, memory_bw_relative_to_hw_limit=memory_bw_relative_to_hw_limit, include_infeed_outfeed=include_infeed_outfeed, apply_time_scale_multiplier=apply_time_scale_multiplier, flops=flops, bytes_accessed=bytes_accessed, source_info=source_info[])
 end
 
 function PB.encode(e::PB.AbstractProtoEncoder, x::RooflineModelRecord)
@@ -278,24 +300,46 @@ function PB._encoded_size(x::RooflineModelRecord)
     return encoded_size
 end
 
-struct RooflineModelDatabase
-    device_type::String
-    megacore::Bool
-    has_cmem::Bool
-    has_merged_vmem::Bool
-    peak_flop_rate::Float64
-    peak_hbm_bw::Float64
-    peak_cmem_read_bw::Float64
-    peak_cmem_write_bw::Float64
-    peak_vmem_read_bw::Float64
-    peak_vmem_write_bw::Float64
-    roofline_model_record::Vector{RooflineModelRecord}
-    diagnostics::Union{Nothing,tensorflow.profiler.Diagnostics}
-    time_scale_multiplier::Float64
+mutable struct RooflineModelDatabase
+    __data::Dict{Symbol,Any}
 end
-PB.reserved_fields(::Type{RooflineModelDatabase}) = (names = String[], numbers = Union{Int,UnitRange{Int}}[3, 4, 6])
-PB.default_values(::Type{RooflineModelDatabase}) = (;device_type = "", megacore = false, has_cmem = false, has_merged_vmem = false, peak_flop_rate = zero(Float64), peak_hbm_bw = zero(Float64), peak_cmem_read_bw = zero(Float64), peak_cmem_write_bw = zero(Float64), peak_vmem_read_bw = zero(Float64), peak_vmem_write_bw = zero(Float64), roofline_model_record = Vector{RooflineModelRecord}(), diagnostics = nothing, time_scale_multiplier = zero(Float64))
-PB.field_numbers(::Type{RooflineModelDatabase}) = (;device_type = 1, megacore = 12, has_cmem = 8, has_merged_vmem = 15, peak_flop_rate = 2, peak_hbm_bw = 9, peak_cmem_read_bw = 10, peak_cmem_write_bw = 11, peak_vmem_read_bw = 13, peak_vmem_write_bw = 14, roofline_model_record = 5, diagnostics = 7, time_scale_multiplier = 16)
+
+# Default values for RooflineModelDatabase fields
+const _RooflineModelDatabase_defaults = Dict{Symbol,Any}(
+    :device_type => "",
+    :megacore => false,
+    :has_cmem => false,
+    :has_merged_vmem => false,
+    :peak_flop_rate => zero(Float64),
+    :peak_hbm_bw => zero(Float64),
+    :peak_cmem_read_bw => zero(Float64),
+    :peak_cmem_write_bw => zero(Float64),
+    :peak_vmem_read_bw => zero(Float64),
+    :peak_vmem_write_bw => zero(Float64),
+    :roofline_model_record => Vector{RooflineModelRecord}(),
+    :diagnostics => nothing,
+    :time_scale_multiplier => zero(Float64)
+)
+
+# Keyword constructor for RooflineModelDatabase
+function RooflineModelDatabase(; kwargs...)
+    __data = Dict{Symbol,Any}(kwargs)
+    return RooflineModelDatabase(__data)
+end
+
+# Field accessors for RooflineModelDatabase
+function Base.getproperty(x::RooflineModelDatabase, s::Symbol)
+    s === :__data && return getfield(x, :__data)
+    d = getfield(x, :__data)
+    return get(d, s, get(_RooflineModelDatabase_defaults, s, nothing))
+end
+function Base.setproperty!(x::RooflineModelDatabase, s::Symbol, v)
+    getfield(x, :__data)[s] = v
+end
+Base.propertynames(::RooflineModelDatabase) = (:device_type, :megacore, :has_cmem, :has_merged_vmem, :peak_flop_rate, :peak_hbm_bw, :peak_cmem_read_bw, :peak_cmem_write_bw, :peak_vmem_read_bw, :peak_vmem_write_bw, :roofline_model_record, :diagnostics, :time_scale_multiplier,)
+# PB.reserved_fields(::Type{RooflineModelDatabase}) = (names = String[], numbers = Union{Int,UnitRange{Int}}[3, 4, 6])
+# PB.default_values(::Type{RooflineModelDatabase}) = (;device_type = "", megacore = false, has_cmem = false, has_merged_vmem = false, peak_flop_rate = zero(Float64), peak_hbm_bw = zero(Float64), peak_cmem_read_bw = zero(Float64), peak_cmem_write_bw = zero(Float64), peak_vmem_read_bw = zero(Float64), peak_vmem_write_bw = zero(Float64), roofline_model_record = Vector{RooflineModelRecord}(), diagnostics = nothing, time_scale_multiplier = zero(Float64))
+# PB.field_numbers(::Type{RooflineModelDatabase}) = (;device_type = 1, megacore = 12, has_cmem = 8, has_merged_vmem = 15, peak_flop_rate = 2, peak_hbm_bw = 9, peak_cmem_read_bw = 10, peak_cmem_write_bw = 11, peak_vmem_read_bw = 13, peak_vmem_write_bw = 14, roofline_model_record = 5, diagnostics = 7, time_scale_multiplier = 16)
 
 function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:RooflineModelDatabase})
     device_type = ""
@@ -343,7 +387,7 @@ function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:RooflineModelDatabase})
             Base.skip(d, wire_type)
         end
     end
-    return RooflineModelDatabase(device_type, megacore, has_cmem, has_merged_vmem, peak_flop_rate, peak_hbm_bw, peak_cmem_read_bw, peak_cmem_write_bw, peak_vmem_read_bw, peak_vmem_write_bw, roofline_model_record[], diagnostics[], time_scale_multiplier)
+    return RooflineModelDatabase(; device_type=device_type, megacore=megacore, has_cmem=has_cmem, has_merged_vmem=has_merged_vmem, peak_flop_rate=peak_flop_rate, peak_hbm_bw=peak_hbm_bw, peak_cmem_read_bw=peak_cmem_read_bw, peak_cmem_write_bw=peak_cmem_write_bw, peak_vmem_read_bw=peak_vmem_read_bw, peak_vmem_write_bw=peak_vmem_write_bw, roofline_model_record=roofline_model_record[], diagnostics=diagnostics[], time_scale_multiplier=time_scale_multiplier)
 end
 
 function PB.encode(e::PB.AbstractProtoEncoder, x::RooflineModelDatabase)

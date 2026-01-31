@@ -5,46 +5,68 @@ using ProtoBuf.EnumX: @enumx
 export HloStatsRecord, HloStatsDatabase
 
 
-struct HloStatsRecord
-    rank::UInt64
-    program_id::UInt64
-    hlo_category::String
-    hlo_expression::String
-    tf_op_name::String
-    occurrences::Int64
-    total_time_in_us::Float64
-    avg_time_in_us::Float64
-    total_self_time_in_us::Float64
-    avg_self_time_in_us::Float64
-    total_self_time_as_fraction::Float64
-    cumulative_total_self_time_as_fraction::Float64
-    dma_stall_fraction::Float64
-    measured_flop_rate::Float64
-    model_flop_rate::Float64
-    measured_memory_bw::Float64
-    hbm_bw::Float64
-    cmem_read_bw::Float64
-    cmem_write_bw::Float64
-    vmem_read_bw::Float64
-    vmem_write_bw::Float64
-    operational_intensity::Float64
-    hbm_operational_intensity::Float64
-    cmem_read_operational_intensity::Float64
-    cmem_write_operational_intensity::Float64
-    vmem_read_operational_intensity::Float64
-    vmem_write_operational_intensity::Float64
-    bottleneck_operational_intensity::Float64
-    bound_by::String
-    rematerialization::Bool
-    outside_compilation::Bool
-    autotuned::Bool
-    flops::UInt64
-    bytes_accessed::UInt64
-    source_info::Union{Nothing,tensorflow.profiler.SourceInfo}
+mutable struct HloStatsRecord
+    __data::Dict{Symbol,Any}
 end
-PB.reserved_fields(::Type{HloStatsRecord}) = (names = String[], numbers = Union{Int,UnitRange{Int}}[11, 12, 18, 19])
-PB.default_values(::Type{HloStatsRecord}) = (;rank = zero(UInt64), program_id = zero(UInt64), hlo_category = "", hlo_expression = "", tf_op_name = "", occurrences = zero(Int64), total_time_in_us = zero(Float64), avg_time_in_us = zero(Float64), total_self_time_in_us = zero(Float64), avg_self_time_in_us = zero(Float64), total_self_time_as_fraction = zero(Float64), cumulative_total_self_time_as_fraction = zero(Float64), dma_stall_fraction = zero(Float64), measured_flop_rate = zero(Float64), model_flop_rate = zero(Float64), measured_memory_bw = zero(Float64), hbm_bw = zero(Float64), cmem_read_bw = zero(Float64), cmem_write_bw = zero(Float64), vmem_read_bw = zero(Float64), vmem_write_bw = zero(Float64), operational_intensity = zero(Float64), hbm_operational_intensity = zero(Float64), cmem_read_operational_intensity = zero(Float64), cmem_write_operational_intensity = zero(Float64), vmem_read_operational_intensity = zero(Float64), vmem_write_operational_intensity = zero(Float64), bottleneck_operational_intensity = zero(Float64), bound_by = "", rematerialization = false, outside_compilation = false, autotuned = false, flops = zero(UInt64), bytes_accessed = zero(UInt64), source_info = nothing)
-PB.field_numbers(::Type{HloStatsRecord}) = (;rank = 1, program_id = 30, hlo_category = 17, hlo_expression = 2, tf_op_name = 21, occurrences = 3, total_time_in_us = 4, avg_time_in_us = 5, total_self_time_in_us = 6, avg_self_time_in_us = 7, total_self_time_as_fraction = 8, cumulative_total_self_time_as_fraction = 9, dma_stall_fraction = 10, measured_flop_rate = 13, model_flop_rate = 34, measured_memory_bw = 14, hbm_bw = 22, cmem_read_bw = 23, cmem_write_bw = 24, vmem_read_bw = 35, vmem_write_bw = 36, operational_intensity = 15, hbm_operational_intensity = 26, cmem_read_operational_intensity = 27, cmem_write_operational_intensity = 28, vmem_read_operational_intensity = 37, vmem_write_operational_intensity = 38, bottleneck_operational_intensity = 29, bound_by = 16, rematerialization = 20, outside_compilation = 25, autotuned = 31, flops = 32, bytes_accessed = 33, source_info = 39)
+
+# Default values for HloStatsRecord fields
+const _HloStatsRecord_defaults = Dict{Symbol,Any}(
+    :rank => zero(UInt64),
+    :program_id => zero(UInt64),
+    :hlo_category => "",
+    :hlo_expression => "",
+    :tf_op_name => "",
+    :occurrences => zero(Int64),
+    :total_time_in_us => zero(Float64),
+    :avg_time_in_us => zero(Float64),
+    :total_self_time_in_us => zero(Float64),
+    :avg_self_time_in_us => zero(Float64),
+    :total_self_time_as_fraction => zero(Float64),
+    :cumulative_total_self_time_as_fraction => zero(Float64),
+    :dma_stall_fraction => zero(Float64),
+    :measured_flop_rate => zero(Float64),
+    :model_flop_rate => zero(Float64),
+    :measured_memory_bw => zero(Float64),
+    :hbm_bw => zero(Float64),
+    :cmem_read_bw => zero(Float64),
+    :cmem_write_bw => zero(Float64),
+    :vmem_read_bw => zero(Float64),
+    :vmem_write_bw => zero(Float64),
+    :operational_intensity => zero(Float64),
+    :hbm_operational_intensity => zero(Float64),
+    :cmem_read_operational_intensity => zero(Float64),
+    :cmem_write_operational_intensity => zero(Float64),
+    :vmem_read_operational_intensity => zero(Float64),
+    :vmem_write_operational_intensity => zero(Float64),
+    :bottleneck_operational_intensity => zero(Float64),
+    :bound_by => "",
+    :rematerialization => false,
+    :outside_compilation => false,
+    :autotuned => false,
+    :flops => zero(UInt64),
+    :bytes_accessed => zero(UInt64),
+    :source_info => nothing
+)
+
+# Keyword constructor for HloStatsRecord
+function HloStatsRecord(; kwargs...)
+    __data = Dict{Symbol,Any}(kwargs)
+    return HloStatsRecord(__data)
+end
+
+# Field accessors for HloStatsRecord
+function Base.getproperty(x::HloStatsRecord, s::Symbol)
+    s === :__data && return getfield(x, :__data)
+    d = getfield(x, :__data)
+    return get(d, s, get(_HloStatsRecord_defaults, s, nothing))
+end
+function Base.setproperty!(x::HloStatsRecord, s::Symbol, v)
+    getfield(x, :__data)[s] = v
+end
+Base.propertynames(::HloStatsRecord) = (:rank, :program_id, :hlo_category, :hlo_expression, :tf_op_name, :occurrences, :total_time_in_us, :avg_time_in_us, :total_self_time_in_us, :avg_self_time_in_us, :total_self_time_as_fraction, :cumulative_total_self_time_as_fraction, :dma_stall_fraction, :measured_flop_rate, :model_flop_rate, :measured_memory_bw, :hbm_bw, :cmem_read_bw, :cmem_write_bw, :vmem_read_bw, :vmem_write_bw, :operational_intensity, :hbm_operational_intensity, :cmem_read_operational_intensity, :cmem_write_operational_intensity, :vmem_read_operational_intensity, :vmem_write_operational_intensity, :bottleneck_operational_intensity, :bound_by, :rematerialization, :outside_compilation, :autotuned, :flops, :bytes_accessed, :source_info,)
+# PB.reserved_fields(::Type{HloStatsRecord}) = (names = String[], numbers = Union{Int,UnitRange{Int}}[11, 12, 18, 19])
+# PB.default_values(::Type{HloStatsRecord}) = (;rank = zero(UInt64), program_id = zero(UInt64), hlo_category = "", hlo_expression = "", tf_op_name = "", occurrences = zero(Int64), total_time_in_us = zero(Float64), avg_time_in_us = zero(Float64), total_self_time_in_us = zero(Float64), avg_self_time_in_us = zero(Float64), total_self_time_as_fraction = zero(Float64), cumulative_total_self_time_as_fraction = zero(Float64), dma_stall_fraction = zero(Float64), measured_flop_rate = zero(Float64), model_flop_rate = zero(Float64), measured_memory_bw = zero(Float64), hbm_bw = zero(Float64), cmem_read_bw = zero(Float64), cmem_write_bw = zero(Float64), vmem_read_bw = zero(Float64), vmem_write_bw = zero(Float64), operational_intensity = zero(Float64), hbm_operational_intensity = zero(Float64), cmem_read_operational_intensity = zero(Float64), cmem_write_operational_intensity = zero(Float64), vmem_read_operational_intensity = zero(Float64), vmem_write_operational_intensity = zero(Float64), bottleneck_operational_intensity = zero(Float64), bound_by = "", rematerialization = false, outside_compilation = false, autotuned = false, flops = zero(UInt64), bytes_accessed = zero(UInt64), source_info = nothing)
+# PB.field_numbers(::Type{HloStatsRecord}) = (;rank = 1, program_id = 30, hlo_category = 17, hlo_expression = 2, tf_op_name = 21, occurrences = 3, total_time_in_us = 4, avg_time_in_us = 5, total_self_time_in_us = 6, avg_self_time_in_us = 7, total_self_time_as_fraction = 8, cumulative_total_self_time_as_fraction = 9, dma_stall_fraction = 10, measured_flop_rate = 13, model_flop_rate = 34, measured_memory_bw = 14, hbm_bw = 22, cmem_read_bw = 23, cmem_write_bw = 24, vmem_read_bw = 35, vmem_write_bw = 36, operational_intensity = 15, hbm_operational_intensity = 26, cmem_read_operational_intensity = 27, cmem_write_operational_intensity = 28, vmem_read_operational_intensity = 37, vmem_write_operational_intensity = 38, bottleneck_operational_intensity = 29, bound_by = 16, rematerialization = 20, outside_compilation = 25, autotuned = 31, flops = 32, bytes_accessed = 33, source_info = 39)
 
 function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:HloStatsRecord})
     rank = zero(UInt64)
@@ -158,7 +180,7 @@ function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:HloStatsRecord})
             Base.skip(d, wire_type)
         end
     end
-    return HloStatsRecord(rank, program_id, hlo_category, hlo_expression, tf_op_name, occurrences, total_time_in_us, avg_time_in_us, total_self_time_in_us, avg_self_time_in_us, total_self_time_as_fraction, cumulative_total_self_time_as_fraction, dma_stall_fraction, measured_flop_rate, model_flop_rate, measured_memory_bw, hbm_bw, cmem_read_bw, cmem_write_bw, vmem_read_bw, vmem_write_bw, operational_intensity, hbm_operational_intensity, cmem_read_operational_intensity, cmem_write_operational_intensity, vmem_read_operational_intensity, vmem_write_operational_intensity, bottleneck_operational_intensity, bound_by, rematerialization, outside_compilation, autotuned, flops, bytes_accessed, source_info[])
+    return HloStatsRecord(; rank=rank, program_id=program_id, hlo_category=hlo_category, hlo_expression=hlo_expression, tf_op_name=tf_op_name, occurrences=occurrences, total_time_in_us=total_time_in_us, avg_time_in_us=avg_time_in_us, total_self_time_in_us=total_self_time_in_us, avg_self_time_in_us=avg_self_time_in_us, total_self_time_as_fraction=total_self_time_as_fraction, cumulative_total_self_time_as_fraction=cumulative_total_self_time_as_fraction, dma_stall_fraction=dma_stall_fraction, measured_flop_rate=measured_flop_rate, model_flop_rate=model_flop_rate, measured_memory_bw=measured_memory_bw, hbm_bw=hbm_bw, cmem_read_bw=cmem_read_bw, cmem_write_bw=cmem_write_bw, vmem_read_bw=vmem_read_bw, vmem_write_bw=vmem_write_bw, operational_intensity=operational_intensity, hbm_operational_intensity=hbm_operational_intensity, cmem_read_operational_intensity=cmem_read_operational_intensity, cmem_write_operational_intensity=cmem_write_operational_intensity, vmem_read_operational_intensity=vmem_read_operational_intensity, vmem_write_operational_intensity=vmem_write_operational_intensity, bottleneck_operational_intensity=bottleneck_operational_intensity, bound_by=bound_by, rematerialization=rematerialization, outside_compilation=outside_compilation, autotuned=autotuned, flops=flops, bytes_accessed=bytes_accessed, source_info=source_info[])
 end
 
 function PB.encode(e::PB.AbstractProtoEncoder, x::HloStatsRecord)
@@ -240,7 +262,7 @@ function PB._encoded_size(x::HloStatsRecord)
     return encoded_size
 end
 
-struct HloStatsDatabase
+mutable struct HloStatsDatabase
     hlo_stats_record::Vector{HloStatsRecord}
 end
 PB.default_values(::Type{HloStatsDatabase}) = (;hlo_stats_record = Vector{HloStatsRecord}())

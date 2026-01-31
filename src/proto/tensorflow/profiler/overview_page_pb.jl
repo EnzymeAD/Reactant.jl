@@ -8,7 +8,7 @@ export OverviewPageAnalysis, OverviewInferenceLatency, OverviewPageRecommendatio
 export OverviewPageRunEnvironment, OverviewPage
 
 
-struct OverviewTfOp
+mutable struct OverviewTfOp
     name::String
     category::String
     self_time_fraction::Float64
@@ -74,7 +74,7 @@ function PB._encoded_size(x::OverviewTfOp)
     return encoded_size
 end
 
-struct OverviewPageHostDependentJobInfo
+mutable struct OverviewPageHostDependentJobInfo
     host_id::String
     command_line::String
     start_time::Int64
@@ -128,7 +128,7 @@ function PB._encoded_size(x::OverviewPageHostDependentJobInfo)
     return encoded_size
 end
 
-struct OverviewLatencyBreakdown
+mutable struct OverviewLatencyBreakdown
     total_latency_us::Float64
     host_latency_us::Float64
     device_latency_us::Float64
@@ -176,7 +176,7 @@ function PB._encoded_size(x::OverviewLatencyBreakdown)
     return encoded_size
 end
 
-struct GenericRecommendation
+mutable struct GenericRecommendation
     kernel_launch_bottleneck::String
     kernel_launch_statement::String
     all_other_bottleneck::String
@@ -242,7 +242,7 @@ function PB._encoded_size(x::GenericRecommendation)
     return encoded_size
 end
 
-struct OverviewPageTip
+mutable struct OverviewPageTip
     link::String
 end
 PB.default_values(::Type{OverviewPageTip}) = (;link = "")
@@ -272,7 +272,7 @@ function PB._encoded_size(x::OverviewPageTip)
     return encoded_size
 end
 
-struct OverviewPageHostIndependentJobInfo
+mutable struct OverviewPageHostIndependentJobInfo
     change_list::Int64
     workspace_id::String
     snapshot::Int64
@@ -332,41 +332,63 @@ function PB._encoded_size(x::OverviewPageHostIndependentJobInfo)
     return encoded_size
 end
 
-struct OverviewPageAnalysis
-    mxu_utilization_percent::Float64
-    device_idle_time_percent::Float64
-    host_idle_time_percent::Float64
-    top_device_ops::Vector{OverviewTfOp}
-    remark_text::String
-    remark_color::String
-    flop_rate_utilization_relative_to_roofline_percent::Float64
-    memory_bw_utilization_relative_to_hw_limit_percent::Float64
-    device_compute_16bit_percent::Float64
-    device_compute_32bit_percent::Float64
-    host_tf_op_percent::Float64
-    device_tf_op_percent::Float64
-    host_trace_level::UInt32
-    host_op_time_eager_percent::Float64
-    device_op_time_eager_percent::Float64
-    device_op_time_outside_compilation_percent::Float64
-    device_duty_cycle_percent::Float64
-    hbm_utilization_percent::Float64
-    program_goodput_percent::Float64
-    sc_step_time_ms_average::Float64
-    sc_infeed_time_ms_avg::Float64
-    sc_outfeed_time_ms_avg::Float64
-    sc_idle_time_ms_avg::Float64
-    fw_max_vdd_core_pl1_power_watts::Float64
-    fw_max_vdd_core_pl2_power_watts::Float64
-    fw_max_vdd_core_pl3_power_watts::Float64
-    fw_max_vdd_core_pl4_power_watts::Float64
-    fw_max_hbm_pl1_power_watts::Float64
-    fw_max_hbm_pl2_power_watts::Float64
-    fw_max_hbm_pl3_power_watts::Float64
-    fw_max_hbm_pl4_power_watts::Float64
+mutable struct OverviewPageAnalysis
+    __data::Dict{Symbol,Any}
 end
-PB.default_values(::Type{OverviewPageAnalysis}) = (;mxu_utilization_percent = zero(Float64), device_idle_time_percent = zero(Float64), host_idle_time_percent = zero(Float64), top_device_ops = Vector{OverviewTfOp}(), remark_text = "", remark_color = "", flop_rate_utilization_relative_to_roofline_percent = zero(Float64), memory_bw_utilization_relative_to_hw_limit_percent = zero(Float64), device_compute_16bit_percent = zero(Float64), device_compute_32bit_percent = zero(Float64), host_tf_op_percent = zero(Float64), device_tf_op_percent = zero(Float64), host_trace_level = zero(UInt32), host_op_time_eager_percent = zero(Float64), device_op_time_eager_percent = zero(Float64), device_op_time_outside_compilation_percent = zero(Float64), device_duty_cycle_percent = zero(Float64), hbm_utilization_percent = zero(Float64), program_goodput_percent = zero(Float64), sc_step_time_ms_average = zero(Float64), sc_infeed_time_ms_avg = zero(Float64), sc_outfeed_time_ms_avg = zero(Float64), sc_idle_time_ms_avg = zero(Float64), fw_max_vdd_core_pl1_power_watts = zero(Float64), fw_max_vdd_core_pl2_power_watts = zero(Float64), fw_max_vdd_core_pl3_power_watts = zero(Float64), fw_max_vdd_core_pl4_power_watts = zero(Float64), fw_max_hbm_pl1_power_watts = zero(Float64), fw_max_hbm_pl2_power_watts = zero(Float64), fw_max_hbm_pl3_power_watts = zero(Float64), fw_max_hbm_pl4_power_watts = zero(Float64))
-PB.field_numbers(::Type{OverviewPageAnalysis}) = (;mxu_utilization_percent = 1, device_idle_time_percent = 2, host_idle_time_percent = 3, top_device_ops = 4, remark_text = 5, remark_color = 6, flop_rate_utilization_relative_to_roofline_percent = 7, memory_bw_utilization_relative_to_hw_limit_percent = 8, device_compute_16bit_percent = 9, device_compute_32bit_percent = 10, host_tf_op_percent = 11, device_tf_op_percent = 12, host_trace_level = 13, host_op_time_eager_percent = 14, device_op_time_eager_percent = 15, device_op_time_outside_compilation_percent = 16, device_duty_cycle_percent = 17, hbm_utilization_percent = 31, program_goodput_percent = 18, sc_step_time_ms_average = 19, sc_infeed_time_ms_avg = 20, sc_outfeed_time_ms_avg = 21, sc_idle_time_ms_avg = 22, fw_max_vdd_core_pl1_power_watts = 23, fw_max_vdd_core_pl2_power_watts = 24, fw_max_vdd_core_pl3_power_watts = 25, fw_max_vdd_core_pl4_power_watts = 26, fw_max_hbm_pl1_power_watts = 27, fw_max_hbm_pl2_power_watts = 28, fw_max_hbm_pl3_power_watts = 29, fw_max_hbm_pl4_power_watts = 30)
+
+# Default values for OverviewPageAnalysis fields
+const _OverviewPageAnalysis_defaults = Dict{Symbol,Any}(
+    :mxu_utilization_percent => zero(Float64),
+    :device_idle_time_percent => zero(Float64),
+    :host_idle_time_percent => zero(Float64),
+    :top_device_ops => Vector{OverviewTfOp}(),
+    :remark_text => "",
+    :remark_color => "",
+    :flop_rate_utilization_relative_to_roofline_percent => zero(Float64),
+    :memory_bw_utilization_relative_to_hw_limit_percent => zero(Float64),
+    :device_compute_16bit_percent => zero(Float64),
+    :device_compute_32bit_percent => zero(Float64),
+    :host_tf_op_percent => zero(Float64),
+    :device_tf_op_percent => zero(Float64),
+    :host_trace_level => zero(UInt32),
+    :host_op_time_eager_percent => zero(Float64),
+    :device_op_time_eager_percent => zero(Float64),
+    :device_op_time_outside_compilation_percent => zero(Float64),
+    :device_duty_cycle_percent => zero(Float64),
+    :hbm_utilization_percent => zero(Float64),
+    :program_goodput_percent => zero(Float64),
+    :sc_step_time_ms_average => zero(Float64),
+    :sc_infeed_time_ms_avg => zero(Float64),
+    :sc_outfeed_time_ms_avg => zero(Float64),
+    :sc_idle_time_ms_avg => zero(Float64),
+    :fw_max_vdd_core_pl1_power_watts => zero(Float64),
+    :fw_max_vdd_core_pl2_power_watts => zero(Float64),
+    :fw_max_vdd_core_pl3_power_watts => zero(Float64),
+    :fw_max_vdd_core_pl4_power_watts => zero(Float64),
+    :fw_max_hbm_pl1_power_watts => zero(Float64),
+    :fw_max_hbm_pl2_power_watts => zero(Float64),
+    :fw_max_hbm_pl3_power_watts => zero(Float64),
+    :fw_max_hbm_pl4_power_watts => zero(Float64)
+)
+
+# Keyword constructor for OverviewPageAnalysis
+function OverviewPageAnalysis(; kwargs...)
+    __data = Dict{Symbol,Any}(kwargs)
+    return OverviewPageAnalysis(__data)
+end
+
+# Field accessors for OverviewPageAnalysis
+function Base.getproperty(x::OverviewPageAnalysis, s::Symbol)
+    s === :__data && return getfield(x, :__data)
+    d = getfield(x, :__data)
+    return get(d, s, get(_OverviewPageAnalysis_defaults, s, nothing))
+end
+function Base.setproperty!(x::OverviewPageAnalysis, s::Symbol, v)
+    getfield(x, :__data)[s] = v
+end
+Base.propertynames(::OverviewPageAnalysis) = (:mxu_utilization_percent, :device_idle_time_percent, :host_idle_time_percent, :top_device_ops, :remark_text, :remark_color, :flop_rate_utilization_relative_to_roofline_percent, :memory_bw_utilization_relative_to_hw_limit_percent, :device_compute_16bit_percent, :device_compute_32bit_percent, :host_tf_op_percent, :device_tf_op_percent, :host_trace_level, :host_op_time_eager_percent, :device_op_time_eager_percent, :device_op_time_outside_compilation_percent, :device_duty_cycle_percent, :hbm_utilization_percent, :program_goodput_percent, :sc_step_time_ms_average, :sc_infeed_time_ms_avg, :sc_outfeed_time_ms_avg, :sc_idle_time_ms_avg, :fw_max_vdd_core_pl1_power_watts, :fw_max_vdd_core_pl2_power_watts, :fw_max_vdd_core_pl3_power_watts, :fw_max_vdd_core_pl4_power_watts, :fw_max_hbm_pl1_power_watts, :fw_max_hbm_pl2_power_watts, :fw_max_hbm_pl3_power_watts, :fw_max_hbm_pl4_power_watts,)
+# PB.default_values(::Type{OverviewPageAnalysis}) = (;mxu_utilization_percent = zero(Float64), device_idle_time_percent = zero(Float64), host_idle_time_percent = zero(Float64), top_device_ops = Vector{OverviewTfOp}(), remark_text = "", remark_color = "", flop_rate_utilization_relative_to_roofline_percent = zero(Float64), memory_bw_utilization_relative_to_hw_limit_percent = zero(Float64), device_compute_16bit_percent = zero(Float64), device_compute_32bit_percent = zero(Float64), host_tf_op_percent = zero(Float64), device_tf_op_percent = zero(Float64), host_trace_level = zero(UInt32), host_op_time_eager_percent = zero(Float64), device_op_time_eager_percent = zero(Float64), device_op_time_outside_compilation_percent = zero(Float64), device_duty_cycle_percent = zero(Float64), hbm_utilization_percent = zero(Float64), program_goodput_percent = zero(Float64), sc_step_time_ms_average = zero(Float64), sc_infeed_time_ms_avg = zero(Float64), sc_outfeed_time_ms_avg = zero(Float64), sc_idle_time_ms_avg = zero(Float64), fw_max_vdd_core_pl1_power_watts = zero(Float64), fw_max_vdd_core_pl2_power_watts = zero(Float64), fw_max_vdd_core_pl3_power_watts = zero(Float64), fw_max_vdd_core_pl4_power_watts = zero(Float64), fw_max_hbm_pl1_power_watts = zero(Float64), fw_max_hbm_pl2_power_watts = zero(Float64), fw_max_hbm_pl3_power_watts = zero(Float64), fw_max_hbm_pl4_power_watts = zero(Float64))
+# PB.field_numbers(::Type{OverviewPageAnalysis}) = (;mxu_utilization_percent = 1, device_idle_time_percent = 2, host_idle_time_percent = 3, top_device_ops = 4, remark_text = 5, remark_color = 6, flop_rate_utilization_relative_to_roofline_percent = 7, memory_bw_utilization_relative_to_hw_limit_percent = 8, device_compute_16bit_percent = 9, device_compute_32bit_percent = 10, host_tf_op_percent = 11, device_tf_op_percent = 12, host_trace_level = 13, host_op_time_eager_percent = 14, device_op_time_eager_percent = 15, device_op_time_outside_compilation_percent = 16, device_duty_cycle_percent = 17, hbm_utilization_percent = 31, program_goodput_percent = 18, sc_step_time_ms_average = 19, sc_infeed_time_ms_avg = 20, sc_outfeed_time_ms_avg = 21, sc_idle_time_ms_avg = 22, fw_max_vdd_core_pl1_power_watts = 23, fw_max_vdd_core_pl2_power_watts = 24, fw_max_vdd_core_pl3_power_watts = 25, fw_max_vdd_core_pl4_power_watts = 26, fw_max_hbm_pl1_power_watts = 27, fw_max_hbm_pl2_power_watts = 28, fw_max_hbm_pl3_power_watts = 29, fw_max_hbm_pl4_power_watts = 30)
 
 function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:OverviewPageAnalysis})
     mxu_utilization_percent = zero(Float64)
@@ -468,7 +490,7 @@ function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:OverviewPageAnalysis})
             Base.skip(d, wire_type)
         end
     end
-    return OverviewPageAnalysis(mxu_utilization_percent, device_idle_time_percent, host_idle_time_percent, top_device_ops[], remark_text, remark_color, flop_rate_utilization_relative_to_roofline_percent, memory_bw_utilization_relative_to_hw_limit_percent, device_compute_16bit_percent, device_compute_32bit_percent, host_tf_op_percent, device_tf_op_percent, host_trace_level, host_op_time_eager_percent, device_op_time_eager_percent, device_op_time_outside_compilation_percent, device_duty_cycle_percent, hbm_utilization_percent, program_goodput_percent, sc_step_time_ms_average, sc_infeed_time_ms_avg, sc_outfeed_time_ms_avg, sc_idle_time_ms_avg, fw_max_vdd_core_pl1_power_watts, fw_max_vdd_core_pl2_power_watts, fw_max_vdd_core_pl3_power_watts, fw_max_vdd_core_pl4_power_watts, fw_max_hbm_pl1_power_watts, fw_max_hbm_pl2_power_watts, fw_max_hbm_pl3_power_watts, fw_max_hbm_pl4_power_watts)
+    return OverviewPageAnalysis(; mxu_utilization_percent=mxu_utilization_percent, device_idle_time_percent=device_idle_time_percent, host_idle_time_percent=host_idle_time_percent, top_device_ops=top_device_ops[], remark_text=remark_text, remark_color=remark_color, flop_rate_utilization_relative_to_roofline_percent=flop_rate_utilization_relative_to_roofline_percent, memory_bw_utilization_relative_to_hw_limit_percent=memory_bw_utilization_relative_to_hw_limit_percent, device_compute_16bit_percent=device_compute_16bit_percent, device_compute_32bit_percent=device_compute_32bit_percent, host_tf_op_percent=host_tf_op_percent, device_tf_op_percent=device_tf_op_percent, host_trace_level=host_trace_level, host_op_time_eager_percent=host_op_time_eager_percent, device_op_time_eager_percent=device_op_time_eager_percent, device_op_time_outside_compilation_percent=device_op_time_outside_compilation_percent, device_duty_cycle_percent=device_duty_cycle_percent, hbm_utilization_percent=hbm_utilization_percent, program_goodput_percent=program_goodput_percent, sc_step_time_ms_average=sc_step_time_ms_average, sc_infeed_time_ms_avg=sc_infeed_time_ms_avg, sc_outfeed_time_ms_avg=sc_outfeed_time_ms_avg, sc_idle_time_ms_avg=sc_idle_time_ms_avg, fw_max_vdd_core_pl1_power_watts=fw_max_vdd_core_pl1_power_watts, fw_max_vdd_core_pl2_power_watts=fw_max_vdd_core_pl2_power_watts, fw_max_vdd_core_pl3_power_watts=fw_max_vdd_core_pl3_power_watts, fw_max_vdd_core_pl4_power_watts=fw_max_vdd_core_pl4_power_watts, fw_max_hbm_pl1_power_watts=fw_max_hbm_pl1_power_watts, fw_max_hbm_pl2_power_watts=fw_max_hbm_pl2_power_watts, fw_max_hbm_pl3_power_watts=fw_max_hbm_pl3_power_watts, fw_max_hbm_pl4_power_watts=fw_max_hbm_pl4_power_watts)
 end
 
 function PB.encode(e::PB.AbstractProtoEncoder, x::OverviewPageAnalysis)
@@ -542,7 +564,7 @@ function PB._encoded_size(x::OverviewPageAnalysis)
     return encoded_size
 end
 
-struct OverviewInferenceLatency
+mutable struct OverviewInferenceLatency
     percentile_numbers::Vector{Float64}
     latency_breakdowns::Vector{OverviewLatencyBreakdown}
     max_latency_us::Float64
@@ -596,23 +618,45 @@ function PB._encoded_size(x::OverviewInferenceLatency)
     return encoded_size
 end
 
-struct OverviewPageRecommendation
-    bottleneck::String
-    statement::String
-    input_tips::Vector{OverviewPageTip}
-    output_statement::String
-    eager_statement_html::String
-    outside_compilation_statement_html::String
-    tf_function_statement_html::String
-    host_tips::Vector{OverviewPageTip}
-    device_tips::Vector{OverviewPageTip}
-    documentation_tips::Vector{OverviewPageTip}
-    recommendation::Union{Nothing,google.protobuf.var"#Any"}
-    faq_tips::Vector{OverviewPageTip}
-    inference_tips::Vector{OverviewPageTip}
+mutable struct OverviewPageRecommendation
+    __data::Dict{Symbol,Any}
 end
-PB.default_values(::Type{OverviewPageRecommendation}) = (;bottleneck = "", statement = "", input_tips = Vector{OverviewPageTip}(), output_statement = "", eager_statement_html = "", outside_compilation_statement_html = "", tf_function_statement_html = "", host_tips = Vector{OverviewPageTip}(), device_tips = Vector{OverviewPageTip}(), documentation_tips = Vector{OverviewPageTip}(), recommendation = nothing, faq_tips = Vector{OverviewPageTip}(), inference_tips = Vector{OverviewPageTip}())
-PB.field_numbers(::Type{OverviewPageRecommendation}) = (;bottleneck = 1, statement = 2, input_tips = 11, output_statement = 9, eager_statement_html = 12, outside_compilation_statement_html = 13, tf_function_statement_html = 10, host_tips = 3, device_tips = 4, documentation_tips = 5, recommendation = 6, faq_tips = 7, inference_tips = 8)
+
+# Default values for OverviewPageRecommendation fields
+const _OverviewPageRecommendation_defaults = Dict{Symbol,Any}(
+    :bottleneck => "",
+    :statement => "",
+    :input_tips => Vector{OverviewPageTip}(),
+    :output_statement => "",
+    :eager_statement_html => "",
+    :outside_compilation_statement_html => "",
+    :tf_function_statement_html => "",
+    :host_tips => Vector{OverviewPageTip}(),
+    :device_tips => Vector{OverviewPageTip}(),
+    :documentation_tips => Vector{OverviewPageTip}(),
+    :recommendation => nothing,
+    :faq_tips => Vector{OverviewPageTip}(),
+    :inference_tips => Vector{OverviewPageTip}()
+)
+
+# Keyword constructor for OverviewPageRecommendation
+function OverviewPageRecommendation(; kwargs...)
+    __data = Dict{Symbol,Any}(kwargs)
+    return OverviewPageRecommendation(__data)
+end
+
+# Field accessors for OverviewPageRecommendation
+function Base.getproperty(x::OverviewPageRecommendation, s::Symbol)
+    s === :__data && return getfield(x, :__data)
+    d = getfield(x, :__data)
+    return get(d, s, get(_OverviewPageRecommendation_defaults, s, nothing))
+end
+function Base.setproperty!(x::OverviewPageRecommendation, s::Symbol, v)
+    getfield(x, :__data)[s] = v
+end
+Base.propertynames(::OverviewPageRecommendation) = (:bottleneck, :statement, :input_tips, :output_statement, :eager_statement_html, :outside_compilation_statement_html, :tf_function_statement_html, :host_tips, :device_tips, :documentation_tips, :recommendation, :faq_tips, :inference_tips,)
+# PB.default_values(::Type{OverviewPageRecommendation}) = (;bottleneck = "", statement = "", input_tips = Vector{OverviewPageTip}(), output_statement = "", eager_statement_html = "", outside_compilation_statement_html = "", tf_function_statement_html = "", host_tips = Vector{OverviewPageTip}(), device_tips = Vector{OverviewPageTip}(), documentation_tips = Vector{OverviewPageTip}(), recommendation = nothing, faq_tips = Vector{OverviewPageTip}(), inference_tips = Vector{OverviewPageTip}())
+# PB.field_numbers(::Type{OverviewPageRecommendation}) = (;bottleneck = 1, statement = 2, input_tips = 11, output_statement = 9, eager_statement_html = 12, outside_compilation_statement_html = 13, tf_function_statement_html = 10, host_tips = 3, device_tips = 4, documentation_tips = 5, recommendation = 6, faq_tips = 7, inference_tips = 8)
 
 function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:OverviewPageRecommendation})
     bottleneck = ""
@@ -660,7 +704,7 @@ function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:OverviewPageRecommendati
             Base.skip(d, wire_type)
         end
     end
-    return OverviewPageRecommendation(bottleneck, statement, input_tips[], output_statement, eager_statement_html, outside_compilation_statement_html, tf_function_statement_html, host_tips[], device_tips[], documentation_tips[], recommendation[], faq_tips[], inference_tips[])
+    return OverviewPageRecommendation(; bottleneck=bottleneck, statement=statement, input_tips=input_tips[], output_statement=output_statement, eager_statement_html=eager_statement_html, outside_compilation_statement_html=outside_compilation_statement_html, tf_function_statement_html=tf_function_statement_html, host_tips=host_tips[], device_tips=device_tips[], documentation_tips=documentation_tips[], recommendation=recommendation[], faq_tips=faq_tips[], inference_tips=inference_tips[])
 end
 
 function PB.encode(e::PB.AbstractProtoEncoder, x::OverviewPageRecommendation)
@@ -698,22 +742,44 @@ function PB._encoded_size(x::OverviewPageRecommendation)
     return encoded_size
 end
 
-struct OverviewPageRunEnvironment
-    host_count::Int32
-    task_count::Int32
-    hostnames::Dict{String,Bool}
-    device_type::String
-    device_core_count::Int32
-    host_independent_job_info::Union{Nothing,OverviewPageHostIndependentJobInfo}
-    host_dependent_job_info::Vector{OverviewPageHostDependentJobInfo}
-    replica_count::Int32
-    num_cores_per_replica::Int32
-    is_training::Bool
-    power_metrics::Union{Nothing,PowerMetrics}
+mutable struct OverviewPageRunEnvironment
+    __data::Dict{Symbol,Any}
 end
-PB.reserved_fields(::Type{OverviewPageRunEnvironment}) = (names = String[], numbers = Union{Int,UnitRange{Int}}[6])
-PB.default_values(::Type{OverviewPageRunEnvironment}) = (;host_count = zero(Int32), task_count = zero(Int32), hostnames = Dict{String,Bool}(), device_type = "", device_core_count = zero(Int32), host_independent_job_info = nothing, host_dependent_job_info = Vector{OverviewPageHostDependentJobInfo}(), replica_count = zero(Int32), num_cores_per_replica = zero(Int32), is_training = false, power_metrics = nothing)
-PB.field_numbers(::Type{OverviewPageRunEnvironment}) = (;host_count = 1, task_count = 2, hostnames = 3, device_type = 4, device_core_count = 5, host_independent_job_info = 7, host_dependent_job_info = 8, replica_count = 9, num_cores_per_replica = 10, is_training = 11, power_metrics = 12)
+
+# Default values for OverviewPageRunEnvironment fields
+const _OverviewPageRunEnvironment_defaults = Dict{Symbol,Any}(
+    :host_count => zero(Int32),
+    :task_count => zero(Int32),
+    :hostnames => Dict{String,Bool}(),
+    :device_type => "",
+    :device_core_count => zero(Int32),
+    :host_independent_job_info => nothing,
+    :host_dependent_job_info => Vector{OverviewPageHostDependentJobInfo}(),
+    :replica_count => zero(Int32),
+    :num_cores_per_replica => zero(Int32),
+    :is_training => false,
+    :power_metrics => nothing
+)
+
+# Keyword constructor for OverviewPageRunEnvironment
+function OverviewPageRunEnvironment(; kwargs...)
+    __data = Dict{Symbol,Any}(kwargs)
+    return OverviewPageRunEnvironment(__data)
+end
+
+# Field accessors for OverviewPageRunEnvironment
+function Base.getproperty(x::OverviewPageRunEnvironment, s::Symbol)
+    s === :__data && return getfield(x, :__data)
+    d = getfield(x, :__data)
+    return get(d, s, get(_OverviewPageRunEnvironment_defaults, s, nothing))
+end
+function Base.setproperty!(x::OverviewPageRunEnvironment, s::Symbol, v)
+    getfield(x, :__data)[s] = v
+end
+Base.propertynames(::OverviewPageRunEnvironment) = (:host_count, :task_count, :hostnames, :device_type, :device_core_count, :host_independent_job_info, :host_dependent_job_info, :replica_count, :num_cores_per_replica, :is_training, :power_metrics,)
+# PB.reserved_fields(::Type{OverviewPageRunEnvironment}) = (names = String[], numbers = Union{Int,UnitRange{Int}}[6])
+# PB.default_values(::Type{OverviewPageRunEnvironment}) = (;host_count = zero(Int32), task_count = zero(Int32), hostnames = Dict{String,Bool}(), device_type = "", device_core_count = zero(Int32), host_independent_job_info = nothing, host_dependent_job_info = Vector{OverviewPageHostDependentJobInfo}(), replica_count = zero(Int32), num_cores_per_replica = zero(Int32), is_training = false, power_metrics = nothing)
+# PB.field_numbers(::Type{OverviewPageRunEnvironment}) = (;host_count = 1, task_count = 2, hostnames = 3, device_type = 4, device_core_count = 5, host_independent_job_info = 7, host_dependent_job_info = 8, replica_count = 9, num_cores_per_replica = 10, is_training = 11, power_metrics = 12)
 
 function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:OverviewPageRunEnvironment})
     host_count = zero(Int32)
@@ -755,7 +821,7 @@ function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:OverviewPageRunEnvironme
             Base.skip(d, wire_type)
         end
     end
-    return OverviewPageRunEnvironment(host_count, task_count, hostnames, device_type, device_core_count, host_independent_job_info[], host_dependent_job_info[], replica_count, num_cores_per_replica, is_training, power_metrics[])
+    return OverviewPageRunEnvironment(; host_count=host_count, task_count=task_count, hostnames=hostnames, device_type=device_type, device_core_count=device_core_count, host_independent_job_info=host_independent_job_info[], host_dependent_job_info=host_dependent_job_info[], replica_count=replica_count, num_cores_per_replica=num_cores_per_replica, is_training=is_training, power_metrics=power_metrics[])
 end
 
 function PB.encode(e::PB.AbstractProtoEncoder, x::OverviewPageRunEnvironment)
@@ -789,7 +855,7 @@ function PB._encoded_size(x::OverviewPageRunEnvironment)
     return encoded_size
 end
 
-struct OverviewPage
+mutable struct OverviewPage
     run_environment::Union{Nothing,OverviewPageRunEnvironment}
     input_analysis::Union{Nothing,InputPipelineAnalysisResult}
     analysis::Union{Nothing,OverviewPageAnalysis}

@@ -7,7 +7,7 @@ export InputPipelineAnalysisRecommendation, InputOpDetails, StepSummary
 export GenericStepTimeBreakdown, InputPipelineAnalysisResult
 
 
-struct InputTimeBreakdown
+mutable struct InputTimeBreakdown
     demanded_file_read_us::Float64
     advanced_file_read_us::Float64
     preprocessing_us::Float64
@@ -61,24 +61,46 @@ function PB._encoded_size(x::InputTimeBreakdown)
     return encoded_size
 end
 
-struct PerGenericStepDetails
-    step_number::Int32
-    step_name::String
-    step_time_ms::Float64
-    unknown_time_ms::Float64
-    host_wait_input_ms::Float64
-    host_to_device_ms::Float64
-    output_ms::Float64
-    device_compute_ms::Float64
-    device_to_device_ms::Float64
-    device_collectives_ms::Float64
-    host_compute_ms::Float64
-    host_prepare_ms::Float64
-    host_compile_ms::Float64
+mutable struct PerGenericStepDetails
+    __data::Dict{Symbol,Any}
 end
-PB.reserved_fields(::Type{PerGenericStepDetails}) = (names = String[], numbers = Union{Int,UnitRange{Int}}[4])
-PB.default_values(::Type{PerGenericStepDetails}) = (;step_number = zero(Int32), step_name = "", step_time_ms = zero(Float64), unknown_time_ms = zero(Float64), host_wait_input_ms = zero(Float64), host_to_device_ms = zero(Float64), output_ms = zero(Float64), device_compute_ms = zero(Float64), device_to_device_ms = zero(Float64), device_collectives_ms = zero(Float64), host_compute_ms = zero(Float64), host_prepare_ms = zero(Float64), host_compile_ms = zero(Float64))
-PB.field_numbers(::Type{PerGenericStepDetails}) = (;step_number = 1, step_name = 14, step_time_ms = 2, unknown_time_ms = 3, host_wait_input_ms = 11, host_to_device_ms = 12, output_ms = 5, device_compute_ms = 6, device_to_device_ms = 7, device_collectives_ms = 13, host_compute_ms = 8, host_prepare_ms = 9, host_compile_ms = 10)
+
+# Default values for PerGenericStepDetails fields
+const _PerGenericStepDetails_defaults = Dict{Symbol,Any}(
+    :step_number => zero(Int32),
+    :step_name => "",
+    :step_time_ms => zero(Float64),
+    :unknown_time_ms => zero(Float64),
+    :host_wait_input_ms => zero(Float64),
+    :host_to_device_ms => zero(Float64),
+    :output_ms => zero(Float64),
+    :device_compute_ms => zero(Float64),
+    :device_to_device_ms => zero(Float64),
+    :device_collectives_ms => zero(Float64),
+    :host_compute_ms => zero(Float64),
+    :host_prepare_ms => zero(Float64),
+    :host_compile_ms => zero(Float64)
+)
+
+# Keyword constructor for PerGenericStepDetails
+function PerGenericStepDetails(; kwargs...)
+    __data = Dict{Symbol,Any}(kwargs)
+    return PerGenericStepDetails(__data)
+end
+
+# Field accessors for PerGenericStepDetails
+function Base.getproperty(x::PerGenericStepDetails, s::Symbol)
+    s === :__data && return getfield(x, :__data)
+    d = getfield(x, :__data)
+    return get(d, s, get(_PerGenericStepDetails_defaults, s, nothing))
+end
+function Base.setproperty!(x::PerGenericStepDetails, s::Symbol, v)
+    getfield(x, :__data)[s] = v
+end
+Base.propertynames(::PerGenericStepDetails) = (:step_number, :step_name, :step_time_ms, :unknown_time_ms, :host_wait_input_ms, :host_to_device_ms, :output_ms, :device_compute_ms, :device_to_device_ms, :device_collectives_ms, :host_compute_ms, :host_prepare_ms, :host_compile_ms,)
+# PB.reserved_fields(::Type{PerGenericStepDetails}) = (names = String[], numbers = Union{Int,UnitRange{Int}}[4])
+# PB.default_values(::Type{PerGenericStepDetails}) = (;step_number = zero(Int32), step_name = "", step_time_ms = zero(Float64), unknown_time_ms = zero(Float64), host_wait_input_ms = zero(Float64), host_to_device_ms = zero(Float64), output_ms = zero(Float64), device_compute_ms = zero(Float64), device_to_device_ms = zero(Float64), device_collectives_ms = zero(Float64), host_compute_ms = zero(Float64), host_prepare_ms = zero(Float64), host_compile_ms = zero(Float64))
+# PB.field_numbers(::Type{PerGenericStepDetails}) = (;step_number = 1, step_name = 14, step_time_ms = 2, unknown_time_ms = 3, host_wait_input_ms = 11, host_to_device_ms = 12, output_ms = 5, device_compute_ms = 6, device_to_device_ms = 7, device_collectives_ms = 13, host_compute_ms = 8, host_prepare_ms = 9, host_compile_ms = 10)
 
 function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:PerGenericStepDetails})
     step_number = zero(Int32)
@@ -126,7 +148,7 @@ function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:PerGenericStepDetails})
             Base.skip(d, wire_type)
         end
     end
-    return PerGenericStepDetails(step_number, step_name, step_time_ms, unknown_time_ms, host_wait_input_ms, host_to_device_ms, output_ms, device_compute_ms, device_to_device_ms, device_collectives_ms, host_compute_ms, host_prepare_ms, host_compile_ms)
+    return PerGenericStepDetails(; step_number=step_number, step_name=step_name, step_time_ms=step_time_ms, unknown_time_ms=unknown_time_ms, host_wait_input_ms=host_wait_input_ms, host_to_device_ms=host_to_device_ms, output_ms=output_ms, device_compute_ms=device_compute_ms, device_to_device_ms=device_to_device_ms, device_collectives_ms=device_collectives_ms, host_compute_ms=host_compute_ms, host_prepare_ms=host_prepare_ms, host_compile_ms=host_compile_ms)
 end
 
 function PB.encode(e::PB.AbstractProtoEncoder, x::PerGenericStepDetails)
@@ -164,22 +186,44 @@ function PB._encoded_size(x::PerGenericStepDetails)
     return encoded_size
 end
 
-struct BottleneckAnalysis
-    input_percent::Float64
-    output_percent::Float64
-    idle_percent::Float64
-    compute_percent::Float64
-    input_classification::String
-    input_statement::String
-    kernel_launch_classification::String
-    kernel_launch_statement::String
-    all_other_classification::String
-    all_other_statement::String
-    device_collectives_classification::String
-    device_collectives_statement::String
+mutable struct BottleneckAnalysis
+    __data::Dict{Symbol,Any}
 end
-PB.default_values(::Type{BottleneckAnalysis}) = (;input_percent = zero(Float64), output_percent = zero(Float64), idle_percent = zero(Float64), compute_percent = zero(Float64), input_classification = "", input_statement = "", kernel_launch_classification = "", kernel_launch_statement = "", all_other_classification = "", all_other_statement = "", device_collectives_classification = "", device_collectives_statement = "")
-PB.field_numbers(::Type{BottleneckAnalysis}) = (;input_percent = 7, output_percent = 8, idle_percent = 9, compute_percent = 10, input_classification = 1, input_statement = 2, kernel_launch_classification = 3, kernel_launch_statement = 4, all_other_classification = 5, all_other_statement = 6, device_collectives_classification = 11, device_collectives_statement = 12)
+
+# Default values for BottleneckAnalysis fields
+const _BottleneckAnalysis_defaults = Dict{Symbol,Any}(
+    :input_percent => zero(Float64),
+    :output_percent => zero(Float64),
+    :idle_percent => zero(Float64),
+    :compute_percent => zero(Float64),
+    :input_classification => "",
+    :input_statement => "",
+    :kernel_launch_classification => "",
+    :kernel_launch_statement => "",
+    :all_other_classification => "",
+    :all_other_statement => "",
+    :device_collectives_classification => "",
+    :device_collectives_statement => ""
+)
+
+# Keyword constructor for BottleneckAnalysis
+function BottleneckAnalysis(; kwargs...)
+    __data = Dict{Symbol,Any}(kwargs)
+    return BottleneckAnalysis(__data)
+end
+
+# Field accessors for BottleneckAnalysis
+function Base.getproperty(x::BottleneckAnalysis, s::Symbol)
+    s === :__data && return getfield(x, :__data)
+    d = getfield(x, :__data)
+    return get(d, s, get(_BottleneckAnalysis_defaults, s, nothing))
+end
+function Base.setproperty!(x::BottleneckAnalysis, s::Symbol, v)
+    getfield(x, :__data)[s] = v
+end
+Base.propertynames(::BottleneckAnalysis) = (:input_percent, :output_percent, :idle_percent, :compute_percent, :input_classification, :input_statement, :kernel_launch_classification, :kernel_launch_statement, :all_other_classification, :all_other_statement, :device_collectives_classification, :device_collectives_statement,)
+# PB.default_values(::Type{BottleneckAnalysis}) = (;input_percent = zero(Float64), output_percent = zero(Float64), idle_percent = zero(Float64), compute_percent = zero(Float64), input_classification = "", input_statement = "", kernel_launch_classification = "", kernel_launch_statement = "", all_other_classification = "", all_other_statement = "", device_collectives_classification = "", device_collectives_statement = "")
+# PB.field_numbers(::Type{BottleneckAnalysis}) = (;input_percent = 7, output_percent = 8, idle_percent = 9, compute_percent = 10, input_classification = 1, input_statement = 2, kernel_launch_classification = 3, kernel_launch_statement = 4, all_other_classification = 5, all_other_statement = 6, device_collectives_classification = 11, device_collectives_statement = 12)
 
 function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:BottleneckAnalysis})
     input_percent = zero(Float64)
@@ -224,7 +268,7 @@ function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:BottleneckAnalysis})
             Base.skip(d, wire_type)
         end
     end
-    return BottleneckAnalysis(input_percent, output_percent, idle_percent, compute_percent, input_classification, input_statement, kernel_launch_classification, kernel_launch_statement, all_other_classification, all_other_statement, device_collectives_classification, device_collectives_statement)
+    return BottleneckAnalysis(; input_percent=input_percent, output_percent=output_percent, idle_percent=idle_percent, compute_percent=compute_percent, input_classification=input_classification, input_statement=input_statement, kernel_launch_classification=kernel_launch_classification, kernel_launch_statement=kernel_launch_statement, all_other_classification=all_other_classification, all_other_statement=all_other_statement, device_collectives_classification=device_collectives_classification, device_collectives_statement=device_collectives_statement)
 end
 
 function PB.encode(e::PB.AbstractProtoEncoder, x::BottleneckAnalysis)
@@ -260,7 +304,7 @@ function PB._encoded_size(x::BottleneckAnalysis)
     return encoded_size
 end
 
-struct InputPipelineAnalysisRecommendation
+mutable struct InputPipelineAnalysisRecommendation
     details::Vector{String}
     bottleneck_analysis::Union{Nothing,google.protobuf.var"#Any"}
     summary_next_step::String
@@ -302,7 +346,7 @@ function PB._encoded_size(x::InputPipelineAnalysisRecommendation)
     return encoded_size
 end
 
-struct InputOpDetails
+mutable struct InputOpDetails
     op_name::String
     count::UInt64
     time_in_ms::Float64
@@ -368,7 +412,7 @@ function PB._encoded_size(x::InputOpDetails)
     return encoded_size
 end
 
-struct StepSummary
+mutable struct StepSummary
     average::Float64
     standard_deviation::Float64
     minimum::Float64
@@ -416,22 +460,44 @@ function PB._encoded_size(x::StepSummary)
     return encoded_size
 end
 
-struct GenericStepTimeBreakdown
-    unknown_time_ms_summary::Union{Nothing,StepSummary}
-    host_wait_input_ms_summary::Union{Nothing,StepSummary}
-    host_to_device_ms_summary::Union{Nothing,StepSummary}
-    input_ms_summary::Union{Nothing,StepSummary}
-    output_ms_summary::Union{Nothing,StepSummary}
-    device_compute_ms_summary::Union{Nothing,StepSummary}
-    device_to_device_ms_summary::Union{Nothing,StepSummary}
-    device_collectives_ms_summary::Union{Nothing,StepSummary}
-    host_compute_ms_summary::Union{Nothing,StepSummary}
-    host_prepare_ms_summary::Union{Nothing,StepSummary}
-    host_compile_ms_summary::Union{Nothing,StepSummary}
+mutable struct GenericStepTimeBreakdown
+    __data::Dict{Symbol,Any}
 end
-PB.reserved_fields(::Type{GenericStepTimeBreakdown}) = (names = String[], numbers = Union{Int,UnitRange{Int}}[2])
-PB.default_values(::Type{GenericStepTimeBreakdown}) = (;unknown_time_ms_summary = nothing, host_wait_input_ms_summary = nothing, host_to_device_ms_summary = nothing, input_ms_summary = nothing, output_ms_summary = nothing, device_compute_ms_summary = nothing, device_to_device_ms_summary = nothing, device_collectives_ms_summary = nothing, host_compute_ms_summary = nothing, host_prepare_ms_summary = nothing, host_compile_ms_summary = nothing)
-PB.field_numbers(::Type{GenericStepTimeBreakdown}) = (;unknown_time_ms_summary = 1, host_wait_input_ms_summary = 9, host_to_device_ms_summary = 10, input_ms_summary = 11, output_ms_summary = 3, device_compute_ms_summary = 4, device_to_device_ms_summary = 5, device_collectives_ms_summary = 12, host_compute_ms_summary = 6, host_prepare_ms_summary = 7, host_compile_ms_summary = 8)
+
+# Default values for GenericStepTimeBreakdown fields
+const _GenericStepTimeBreakdown_defaults = Dict{Symbol,Any}(
+    :unknown_time_ms_summary => nothing,
+    :host_wait_input_ms_summary => nothing,
+    :host_to_device_ms_summary => nothing,
+    :input_ms_summary => nothing,
+    :output_ms_summary => nothing,
+    :device_compute_ms_summary => nothing,
+    :device_to_device_ms_summary => nothing,
+    :device_collectives_ms_summary => nothing,
+    :host_compute_ms_summary => nothing,
+    :host_prepare_ms_summary => nothing,
+    :host_compile_ms_summary => nothing
+)
+
+# Keyword constructor for GenericStepTimeBreakdown
+function GenericStepTimeBreakdown(; kwargs...)
+    __data = Dict{Symbol,Any}(kwargs)
+    return GenericStepTimeBreakdown(__data)
+end
+
+# Field accessors for GenericStepTimeBreakdown
+function Base.getproperty(x::GenericStepTimeBreakdown, s::Symbol)
+    s === :__data && return getfield(x, :__data)
+    d = getfield(x, :__data)
+    return get(d, s, get(_GenericStepTimeBreakdown_defaults, s, nothing))
+end
+function Base.setproperty!(x::GenericStepTimeBreakdown, s::Symbol, v)
+    getfield(x, :__data)[s] = v
+end
+Base.propertynames(::GenericStepTimeBreakdown) = (:unknown_time_ms_summary, :host_wait_input_ms_summary, :host_to_device_ms_summary, :input_ms_summary, :output_ms_summary, :device_compute_ms_summary, :device_to_device_ms_summary, :device_collectives_ms_summary, :host_compute_ms_summary, :host_prepare_ms_summary, :host_compile_ms_summary,)
+# PB.reserved_fields(::Type{GenericStepTimeBreakdown}) = (names = String[], numbers = Union{Int,UnitRange{Int}}[2])
+# PB.default_values(::Type{GenericStepTimeBreakdown}) = (;unknown_time_ms_summary = nothing, host_wait_input_ms_summary = nothing, host_to_device_ms_summary = nothing, input_ms_summary = nothing, output_ms_summary = nothing, device_compute_ms_summary = nothing, device_to_device_ms_summary = nothing, device_collectives_ms_summary = nothing, host_compute_ms_summary = nothing, host_prepare_ms_summary = nothing, host_compile_ms_summary = nothing)
+# PB.field_numbers(::Type{GenericStepTimeBreakdown}) = (;unknown_time_ms_summary = 1, host_wait_input_ms_summary = 9, host_to_device_ms_summary = 10, input_ms_summary = 11, output_ms_summary = 3, device_compute_ms_summary = 4, device_to_device_ms_summary = 5, device_collectives_ms_summary = 12, host_compute_ms_summary = 6, host_prepare_ms_summary = 7, host_compile_ms_summary = 8)
 
 function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:GenericStepTimeBreakdown})
     unknown_time_ms_summary = Ref{Union{Nothing,StepSummary}}(nothing)
@@ -473,7 +539,7 @@ function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:GenericStepTimeBreakdown
             Base.skip(d, wire_type)
         end
     end
-    return GenericStepTimeBreakdown(unknown_time_ms_summary[], host_wait_input_ms_summary[], host_to_device_ms_summary[], input_ms_summary[], output_ms_summary[], device_compute_ms_summary[], device_to_device_ms_summary[], device_collectives_ms_summary[], host_compute_ms_summary[], host_prepare_ms_summary[], host_compile_ms_summary[])
+    return GenericStepTimeBreakdown(; unknown_time_ms_summary=unknown_time_ms_summary[], host_wait_input_ms_summary=host_wait_input_ms_summary[], host_to_device_ms_summary=host_to_device_ms_summary[], input_ms_summary=input_ms_summary[], output_ms_summary=output_ms_summary[], device_compute_ms_summary=device_compute_ms_summary[], device_to_device_ms_summary=device_to_device_ms_summary[], device_collectives_ms_summary=device_collectives_ms_summary[], host_compute_ms_summary=host_compute_ms_summary[], host_prepare_ms_summary=host_prepare_ms_summary[], host_compile_ms_summary=host_compile_ms_summary[])
 end
 
 function PB.encode(e::PB.AbstractProtoEncoder, x::GenericStepTimeBreakdown)
@@ -507,25 +573,47 @@ function PB._encoded_size(x::GenericStepTimeBreakdown)
     return encoded_size
 end
 
-struct InputPipelineAnalysisResult
-    tag::Bool
-    hardware_type::String
-    step_time_summary::Union{Nothing,StepSummary}
-    input_percent_summary::Union{Nothing,StepSummary}
-    input_percent::Float64
-    output_percent::Float64
-    idle_percent::Float64
-    compute_percent::Float64
-    step_details::Vector{google.protobuf.var"#Any"}
-    input_time_breakdown::Union{Nothing,InputTimeBreakdown}
-    input_op_details::Vector{InputOpDetails}
-    recommendation::Union{Nothing,InputPipelineAnalysisRecommendation}
-    step_time_breakdown::Union{Nothing,google.protobuf.var"#Any"}
-    diagnostics::Union{Nothing,Diagnostics}
+mutable struct InputPipelineAnalysisResult
+    __data::Dict{Symbol,Any}
 end
-PB.reserved_fields(::Type{InputPipelineAnalysisResult}) = (names = String[], numbers = Union{Int,UnitRange{Int}}[1, 10])
-PB.default_values(::Type{InputPipelineAnalysisResult}) = (;tag = false, hardware_type = "", step_time_summary = nothing, input_percent_summary = nothing, input_percent = zero(Float64), output_percent = zero(Float64), idle_percent = zero(Float64), compute_percent = zero(Float64), step_details = Vector{google.protobuf.var"#Any"}(), input_time_breakdown = nothing, input_op_details = Vector{InputOpDetails}(), recommendation = nothing, step_time_breakdown = nothing, diagnostics = nothing)
-PB.field_numbers(::Type{InputPipelineAnalysisResult}) = (;tag = 16, hardware_type = 9, step_time_summary = 2, input_percent_summary = 3, input_percent = 11, output_percent = 13, idle_percent = 14, compute_percent = 15, step_details = 4, input_time_breakdown = 5, input_op_details = 6, recommendation = 7, step_time_breakdown = 8, diagnostics = 12)
+
+# Default values for InputPipelineAnalysisResult fields
+const _InputPipelineAnalysisResult_defaults = Dict{Symbol,Any}(
+    :tag => false,
+    :hardware_type => "",
+    :step_time_summary => nothing,
+    :input_percent_summary => nothing,
+    :input_percent => zero(Float64),
+    :output_percent => zero(Float64),
+    :idle_percent => zero(Float64),
+    :compute_percent => zero(Float64),
+    :step_details => Vector{google.protobuf.var"#Any"}(),
+    :input_time_breakdown => nothing,
+    :input_op_details => Vector{InputOpDetails}(),
+    :recommendation => nothing,
+    :step_time_breakdown => nothing,
+    :diagnostics => nothing
+)
+
+# Keyword constructor for InputPipelineAnalysisResult
+function InputPipelineAnalysisResult(; kwargs...)
+    __data = Dict{Symbol,Any}(kwargs)
+    return InputPipelineAnalysisResult(__data)
+end
+
+# Field accessors for InputPipelineAnalysisResult
+function Base.getproperty(x::InputPipelineAnalysisResult, s::Symbol)
+    s === :__data && return getfield(x, :__data)
+    d = getfield(x, :__data)
+    return get(d, s, get(_InputPipelineAnalysisResult_defaults, s, nothing))
+end
+function Base.setproperty!(x::InputPipelineAnalysisResult, s::Symbol, v)
+    getfield(x, :__data)[s] = v
+end
+Base.propertynames(::InputPipelineAnalysisResult) = (:tag, :hardware_type, :step_time_summary, :input_percent_summary, :input_percent, :output_percent, :idle_percent, :compute_percent, :step_details, :input_time_breakdown, :input_op_details, :recommendation, :step_time_breakdown, :diagnostics,)
+# PB.reserved_fields(::Type{InputPipelineAnalysisResult}) = (names = String[], numbers = Union{Int,UnitRange{Int}}[1, 10])
+# PB.default_values(::Type{InputPipelineAnalysisResult}) = (;tag = false, hardware_type = "", step_time_summary = nothing, input_percent_summary = nothing, input_percent = zero(Float64), output_percent = zero(Float64), idle_percent = zero(Float64), compute_percent = zero(Float64), step_details = Vector{google.protobuf.var"#Any"}(), input_time_breakdown = nothing, input_op_details = Vector{InputOpDetails}(), recommendation = nothing, step_time_breakdown = nothing, diagnostics = nothing)
+# PB.field_numbers(::Type{InputPipelineAnalysisResult}) = (;tag = 16, hardware_type = 9, step_time_summary = 2, input_percent_summary = 3, input_percent = 11, output_percent = 13, idle_percent = 14, compute_percent = 15, step_details = 4, input_time_breakdown = 5, input_op_details = 6, recommendation = 7, step_time_breakdown = 8, diagnostics = 12)
 
 function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:InputPipelineAnalysisResult})
     tag = false
@@ -576,7 +664,7 @@ function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:InputPipelineAnalysisRes
             Base.skip(d, wire_type)
         end
     end
-    return InputPipelineAnalysisResult(tag, hardware_type, step_time_summary[], input_percent_summary[], input_percent, output_percent, idle_percent, compute_percent, step_details[], input_time_breakdown[], input_op_details[], recommendation[], step_time_breakdown[], diagnostics[])
+    return InputPipelineAnalysisResult(; tag=tag, hardware_type=hardware_type, step_time_summary=step_time_summary[], input_percent_summary=input_percent_summary[], input_percent=input_percent, output_percent=output_percent, idle_percent=idle_percent, compute_percent=compute_percent, step_details=step_details[], input_time_breakdown=input_time_breakdown[], input_op_details=input_op_details[], recommendation=recommendation[], step_time_breakdown=step_time_breakdown[], diagnostics=diagnostics[])
 end
 
 function PB.encode(e::PB.AbstractProtoEncoder, x::InputPipelineAnalysisResult)

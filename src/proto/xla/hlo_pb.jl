@@ -26,7 +26,7 @@ abstract type var"##Abstract#HloModuleProto" end
 abstract type var"##Abstract#HloUnoptimizedSnapshot" end
 
 
-struct var"HloScheduleProto.InstructionSequence"
+mutable struct var"HloScheduleProto.InstructionSequence"
     instruction_ids::Vector{Int64}
 end
 PB.default_values(::Type{var"HloScheduleProto.InstructionSequence"}) = (;instruction_ids = Vector{Int64}())
@@ -58,7 +58,7 @@ end
 
 @enumx CustomCallApiVersion API_VERSION_UNSPECIFIED=0 API_VERSION_ORIGINAL=1 API_VERSION_STATUS_RETURNING=2 API_VERSION_STATUS_RETURNING_UNIFIED=3 API_VERSION_TYPED_FFI=4
 
-struct var"StackFrameIndexProto.StackFrame"
+mutable struct var"StackFrameIndexProto.StackFrame"
     file_location_id::Int32
     parent_frame_id::Int32
 end
@@ -94,7 +94,7 @@ function PB._encoded_size(x::var"StackFrameIndexProto.StackFrame")
     return encoded_size
 end
 
-struct var"HloInputs.LiteralDescriptor"
+mutable struct var"HloInputs.LiteralDescriptor"
     version::Int32
     argument_size_bytes::UInt64
 end
@@ -130,21 +130,43 @@ function PB._encoded_size(x::var"HloInputs.LiteralDescriptor")
     return encoded_size
 end
 
-struct HloPassMetadata
-    pass_id::Int64
-    pass_name::String
-    pipeline_name::String
-    dump_filenames::Vector{String}
-    module_changed::Bool
-    module_id::Int64
-    module_group_module_ids::Vector{Int64}
-    start_timestamp_usec::Int64
-    end_timestamp_usec::Int64
-    custom_metadata::Union{Nothing,google.protobuf.var"#Any"}
-    kv_metrics::Vector{KeyValueMetric}
+mutable struct HloPassMetadata
+    __data::Dict{Symbol,Any}
 end
-PB.default_values(::Type{HloPassMetadata}) = (;pass_id = zero(Int64), pass_name = "", pipeline_name = "", dump_filenames = Vector{String}(), module_changed = false, module_id = zero(Int64), module_group_module_ids = Vector{Int64}(), start_timestamp_usec = zero(Int64), end_timestamp_usec = zero(Int64), custom_metadata = nothing, kv_metrics = Vector{KeyValueMetric}())
-PB.field_numbers(::Type{HloPassMetadata}) = (;pass_id = 1, pass_name = 2, pipeline_name = 3, dump_filenames = 4, module_changed = 5, module_id = 6, module_group_module_ids = 7, start_timestamp_usec = 8, end_timestamp_usec = 9, custom_metadata = 10, kv_metrics = 11)
+
+# Default values for HloPassMetadata fields
+const _HloPassMetadata_defaults = Dict{Symbol,Any}(
+    :pass_id => zero(Int64),
+    :pass_name => "",
+    :pipeline_name => "",
+    :dump_filenames => Vector{String}(),
+    :module_changed => false,
+    :module_id => zero(Int64),
+    :module_group_module_ids => Vector{Int64}(),
+    :start_timestamp_usec => zero(Int64),
+    :end_timestamp_usec => zero(Int64),
+    :custom_metadata => nothing,
+    :kv_metrics => Vector{KeyValueMetric}()
+)
+
+# Keyword constructor for HloPassMetadata
+function HloPassMetadata(; kwargs...)
+    __data = Dict{Symbol,Any}(kwargs)
+    return HloPassMetadata(__data)
+end
+
+# Field accessors for HloPassMetadata
+function Base.getproperty(x::HloPassMetadata, s::Symbol)
+    s === :__data && return getfield(x, :__data)
+    d = getfield(x, :__data)
+    return get(d, s, get(_HloPassMetadata_defaults, s, nothing))
+end
+function Base.setproperty!(x::HloPassMetadata, s::Symbol, v)
+    getfield(x, :__data)[s] = v
+end
+Base.propertynames(::HloPassMetadata) = (:pass_id, :pass_name, :pipeline_name, :dump_filenames, :module_changed, :module_id, :module_group_module_ids, :start_timestamp_usec, :end_timestamp_usec, :custom_metadata, :kv_metrics,)
+# PB.default_values(::Type{HloPassMetadata}) = (;pass_id = zero(Int64), pass_name = "", pipeline_name = "", dump_filenames = Vector{String}(), module_changed = false, module_id = zero(Int64), module_group_module_ids = Vector{Int64}(), start_timestamp_usec = zero(Int64), end_timestamp_usec = zero(Int64), custom_metadata = nothing, kv_metrics = Vector{KeyValueMetric}())
+# PB.field_numbers(::Type{HloPassMetadata}) = (;pass_id = 1, pass_name = 2, pipeline_name = 3, dump_filenames = 4, module_changed = 5, module_id = 6, module_group_module_ids = 7, start_timestamp_usec = 8, end_timestamp_usec = 9, custom_metadata = 10, kv_metrics = 11)
 
 function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:HloPassMetadata})
     pass_id = zero(Int64)
@@ -186,7 +208,7 @@ function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:HloPassMetadata})
             Base.skip(d, wire_type)
         end
     end
-    return HloPassMetadata(pass_id, pass_name, pipeline_name, dump_filenames[], module_changed, module_id, module_group_module_ids[], start_timestamp_usec, end_timestamp_usec, custom_metadata[], kv_metrics[])
+    return HloPassMetadata(; pass_id=pass_id, pass_name=pass_name, pipeline_name=pipeline_name, dump_filenames=dump_filenames[], module_changed=module_changed, module_id=module_id, module_group_module_ids=module_group_module_ids[], start_timestamp_usec=start_timestamp_usec, end_timestamp_usec=end_timestamp_usec, custom_metadata=custom_metadata[], kv_metrics=kv_metrics[])
 end
 
 function PB.encode(e::PB.AbstractProtoEncoder, x::HloPassMetadata)
@@ -220,7 +242,7 @@ function PB._encoded_size(x::HloPassMetadata)
     return encoded_size
 end
 
-struct var"BufferAllocationProto.Assigned"
+mutable struct var"BufferAllocationProto.Assigned"
     logical_buffer_id::Int64
     offset::Int64
     size::Int64
@@ -270,7 +292,7 @@ end
 
 @enumx Kind UNDEFINED_ALIAS=0 MAY_ALIAS=1 MUST_ALIAS=2
 
-struct var"StackFrameIndexProto.FileLocation"
+mutable struct var"StackFrameIndexProto.FileLocation"
     file_name_id::Int32
     function_name_id::Int32
     line::Int32
@@ -330,7 +352,7 @@ function PB._encoded_size(x::var"StackFrameIndexProto.FileLocation")
     return encoded_size
 end
 
-struct var"LogicalBufferProto.Location"
+mutable struct var"LogicalBufferProto.Location"
     instruction_name::String
     instruction_id::Int64
     shape_index::Vector{Int64}
@@ -373,7 +395,7 @@ function PB._encoded_size(x::var"LogicalBufferProto.Location")
     return encoded_size
 end
 
-struct CrossProgramPrefetch
+mutable struct CrossProgramPrefetch
     parameter::Int64
     index::Vector{Int64}
     offset::Int64
@@ -415,7 +437,7 @@ function PB._encoded_size(x::CrossProgramPrefetch)
     return encoded_size
 end
 
-struct var"HloBufferDonorProto.BufferDonorEntryProto"
+mutable struct var"HloBufferDonorProto.BufferDonorEntryProto"
     parameter_number::Int64
     parameter_shape_index::Vector{Int64}
 end
@@ -451,7 +473,7 @@ function PB._encoded_size(x::var"HloBufferDonorProto.BufferDonorEntryProto")
     return encoded_size
 end
 
-struct var"HloInstructionProto.SliceDimensions"
+mutable struct var"HloInstructionProto.SliceDimensions"
     start::Int64
     limit::Int64
     stride::Int64
@@ -499,7 +521,7 @@ end
 
 @enumx var"HeapSimulatorTrace.Event.Kind" ALLOC=0 FREE=1 SHARE_WITH=2
 
-struct HloScheduleProto
+mutable struct HloScheduleProto
     sequences::Dict{Int64,var"HloScheduleProto.InstructionSequence"}
 end
 PB.default_values(::Type{HloScheduleProto}) = (;sequences = Dict{Int64,var"HloScheduleProto.InstructionSequence"}())
@@ -529,7 +551,7 @@ function PB._encoded_size(x::HloScheduleProto)
     return encoded_size
 end
 
-struct HloInputs
+mutable struct HloInputs
     arguments::Vector{LiteralProto}
     arguments_descriptors::Vector{var"HloInputs.LiteralDescriptor"}
 end
@@ -565,7 +587,7 @@ function PB._encoded_size(x::HloInputs)
     return encoded_size
 end
 
-struct HloModuleMetadataProto
+mutable struct HloModuleMetadataProto
     canonical_module_id::Int64
     module_group_name::String
     original_module_id::Int64
@@ -619,22 +641,44 @@ function PB._encoded_size(x::HloModuleMetadataProto)
     return encoded_size
 end
 
-struct BufferAllocationProto
-    index::Int64
-    size::Int64
-    is_thread_local::Bool
-    is_tuple::Bool
-    is_entry_computation_parameter::Bool
-    is_constant::Bool
-    parameter_number::Int64
-    parameter_shape_index::Vector{Int64}
-    is_parameter_aliased_with_output::Bool
-    maybe_live_out::Bool
-    color::Int64
-    assigned::Vector{var"BufferAllocationProto.Assigned"}
+mutable struct BufferAllocationProto
+    __data::Dict{Symbol,Any}
 end
-PB.default_values(::Type{BufferAllocationProto}) = (;index = zero(Int64), size = zero(Int64), is_thread_local = false, is_tuple = false, is_entry_computation_parameter = false, is_constant = false, parameter_number = zero(Int64), parameter_shape_index = Vector{Int64}(), is_parameter_aliased_with_output = false, maybe_live_out = false, color = zero(Int64), assigned = Vector{var"BufferAllocationProto.Assigned"}())
-PB.field_numbers(::Type{BufferAllocationProto}) = (;index = 1, size = 2, is_thread_local = 3, is_tuple = 11, is_entry_computation_parameter = 5, is_constant = 12, parameter_number = 6, parameter_shape_index = 10, is_parameter_aliased_with_output = 13, maybe_live_out = 7, color = 8, assigned = 9)
+
+# Default values for BufferAllocationProto fields
+const _BufferAllocationProto_defaults = Dict{Symbol,Any}(
+    :index => zero(Int64),
+    :size => zero(Int64),
+    :is_thread_local => false,
+    :is_tuple => false,
+    :is_entry_computation_parameter => false,
+    :is_constant => false,
+    :parameter_number => zero(Int64),
+    :parameter_shape_index => Vector{Int64}(),
+    :is_parameter_aliased_with_output => false,
+    :maybe_live_out => false,
+    :color => zero(Int64),
+    :assigned => Vector{var"BufferAllocationProto.Assigned"}()
+)
+
+# Keyword constructor for BufferAllocationProto
+function BufferAllocationProto(; kwargs...)
+    __data = Dict{Symbol,Any}(kwargs)
+    return BufferAllocationProto(__data)
+end
+
+# Field accessors for BufferAllocationProto
+function Base.getproperty(x::BufferAllocationProto, s::Symbol)
+    s === :__data && return getfield(x, :__data)
+    d = getfield(x, :__data)
+    return get(d, s, get(_BufferAllocationProto_defaults, s, nothing))
+end
+function Base.setproperty!(x::BufferAllocationProto, s::Symbol, v)
+    getfield(x, :__data)[s] = v
+end
+Base.propertynames(::BufferAllocationProto) = (:index, :size, :is_thread_local, :is_tuple, :is_entry_computation_parameter, :is_constant, :parameter_number, :parameter_shape_index, :is_parameter_aliased_with_output, :maybe_live_out, :color, :assigned,)
+# PB.default_values(::Type{BufferAllocationProto}) = (;index = zero(Int64), size = zero(Int64), is_thread_local = false, is_tuple = false, is_entry_computation_parameter = false, is_constant = false, parameter_number = zero(Int64), parameter_shape_index = Vector{Int64}(), is_parameter_aliased_with_output = false, maybe_live_out = false, color = zero(Int64), assigned = Vector{var"BufferAllocationProto.Assigned"}())
+# PB.field_numbers(::Type{BufferAllocationProto}) = (;index = 1, size = 2, is_thread_local = 3, is_tuple = 11, is_entry_computation_parameter = 5, is_constant = 12, parameter_number = 6, parameter_shape_index = 10, is_parameter_aliased_with_output = 13, maybe_live_out = 7, color = 8, assigned = 9)
 
 function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:BufferAllocationProto})
     index = zero(Int64)
@@ -679,7 +723,7 @@ function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:BufferAllocationProto})
             Base.skip(d, wire_type)
         end
     end
-    return BufferAllocationProto(index, size, is_thread_local, is_tuple, is_entry_computation_parameter, is_constant, parameter_number, parameter_shape_index[], is_parameter_aliased_with_output, maybe_live_out, color, assigned[])
+    return BufferAllocationProto(; index=index, size=size, is_thread_local=is_thread_local, is_tuple=is_tuple, is_entry_computation_parameter=is_entry_computation_parameter, is_constant=is_constant, parameter_number=parameter_number, parameter_shape_index=parameter_shape_index[], is_parameter_aliased_with_output=is_parameter_aliased_with_output, maybe_live_out=maybe_live_out, color=color, assigned=assigned[])
 end
 
 function PB.encode(e::PB.AbstractProtoEncoder, x::BufferAllocationProto)
@@ -715,7 +759,7 @@ function PB._encoded_size(x::BufferAllocationProto)
     return encoded_size
 end
 
-struct var"HloInputOutputAliasProto.AliasEntryProto"
+mutable struct var"HloInputOutputAliasProto.AliasEntryProto"
     output_shape_index::Vector{Int64}
     parameter_number::Int64
     parameter_shape_index::Vector{Int64}
@@ -763,7 +807,7 @@ function PB._encoded_size(x::var"HloInputOutputAliasProto.AliasEntryProto")
     return encoded_size
 end
 
-struct StackFrameIndexProto
+mutable struct StackFrameIndexProto
     file_names::Vector{String}
     function_names::Vector{String}
     file_locations::Vector{var"StackFrameIndexProto.FileLocation"}
@@ -811,7 +855,7 @@ function PB._encoded_size(x::StackFrameIndexProto)
     return encoded_size
 end
 
-struct LogicalBufferProto
+mutable struct LogicalBufferProto
     id::Int64
     size::Int64
     defined_at::Union{Nothing,var"LogicalBufferProto.Location"}
@@ -859,7 +903,7 @@ function PB._encoded_size(x::LogicalBufferProto)
     return encoded_size
 end
 
-struct var"BufferAssignmentProto.BufferAlias"
+mutable struct var"BufferAssignmentProto.BufferAlias"
     source_buffer_id::Int64
     location::Union{Nothing,var"LogicalBufferProto.Location"}
 end
@@ -895,7 +939,7 @@ function PB._encoded_size(x::var"BufferAssignmentProto.BufferAlias")
     return encoded_size
 end
 
-struct HloBufferDonorProto
+mutable struct HloBufferDonorProto
     entries::Vector{var"HloBufferDonorProto.BufferDonorEntryProto"}
 end
 PB.default_values(::Type{HloBufferDonorProto}) = (;entries = Vector{var"HloBufferDonorProto.BufferDonorEntryProto"}())
@@ -925,7 +969,7 @@ function PB._encoded_size(x::HloBufferDonorProto)
     return encoded_size
 end
 
-struct var"HloModuleProto.ProfileInfo"
+mutable struct var"HloModuleProto.ProfileInfo"
     profile_type::var"HloModuleProto.ProfileType".T
     relative_speedup::Float64
     profile_source::ProfileSource.T
@@ -997,90 +1041,111 @@ function PB._encoded_size(x::var"HloModuleProto.ProfileInfo")
     return encoded_size
 end
 
-struct HloInstructionProto
-    name::String
-    opcode::String
-    shape::Union{Nothing,ShapeProto}
-    metadata::Union{Nothing,OpMetadata}
-    literal::Union{Nothing,LiteralProto}
-    parameter_number::Int64
-    fusion_kind::String
-    tuple_index::Int64
-    dimensions::Vector{Int64}
-    window::Union{Nothing,Window}
-    convolution_dimension_numbers::Union{Nothing,ConvolutionDimensionNumbers}
-    feature_group_count::Int64
-    batch_group_count::Int64
-    slice_dimensions::Vector{var"HloInstructionProto.SliceDimensions"}
-    exponent_bits::Int32
-    mantissa_bits::Int32
-    dynamic_slice_sizes::Vector{Int64}
-    padding_config::Union{Nothing,PaddingConfig}
-    outfeed_config::Vector{UInt8}
-    distribution::RandomDistribution.T
-    epsilon::Float32
-    feature_index::Int64
-    channel_id::Int64
-    infeed_config::Vector{UInt8}
-    custom_call_target::String
-    outfeed_shape::Union{Nothing,ShapeProto}
-    dot_dimension_numbers::Union{Nothing,DotDimensionNumbers}
-    ragged_dot_dimension_numbers::Union{Nothing,RaggedDotDimensionNumbers}
-    fft_type::FftType.T
-    fft_length::Vector{Int64}
-    comparison_direction::String
-    gather_dimension_numbers::Union{Nothing,GatherDimensionNumbers}
-    gather_slice_sizes::Vector{Int64}
-    id::Int64
-    operand_ids::Vector{Int64}
-    control_predecessor_ids::Vector{Int64}
-    called_computation_ids::Vector{Int64}
-    sharding::Union{Nothing,OpSharding}
-    backend_config::Vector{UInt8}
-    replica_groups::Vector{ReplicaGroup}
-    all_reduce_id::Int64
-    use_global_device_ids::Bool
-    is_host_transfer::Bool
-    is_stable::Bool
-    scatter_dimension_numbers::Union{Nothing,ScatterDimensionNumbers}
-    precision_config::Union{Nothing,PrecisionConfig}
-    source_target_pairs::Vector{SourceTarget}
-    domain_entry_sharding::Union{Nothing,OpSharding}
-    domain_exit_sharding::Union{Nothing,OpSharding}
-    constrain_layout::Bool
-    operand_shapes_with_layout::Vector{ShapeProto}
-    triangular_solve_options::Union{Nothing,TriangularSolveOptions}
-    cholesky_options::Union{Nothing,CholeskyOptions}
-    parameter_replication::Union{Nothing,ParameterReplication}
-    custom_call_has_side_effect::Bool
-    output_operand_aliasing::Vector{OutputOperandAliasing}
-    custom_call_schedule::CustomCallSchedule.T
-    delta::Int64
-    indices_are_sorted::Bool
-    frontend_attributes::Union{Nothing,FrontendAttributes}
-    unique_indices::Bool
-    rng_algorithm::RandomAlgorithm.T
-    comparison_type::String
-    is_cross_program_prefetch::Bool
-    optional_cross_program_prefetch_index::Union{Nothing,OneOf{Int32}}
-    padding_type::PaddingType.T
-    custom_call_api_version::CustomCallApiVersion.T
-    async_execution_thread::String
-    k::Int64
-    largest::Bool
-    statistics_viz::Union{Nothing,StatisticsViz}
-    replica_group_list::Union{Nothing,OneOf{<:Union{CollectiveDeviceListProto,IotaReplicaGroupListProto,MeshAxesReplicaGroupListProto}}}
-    original_value::Union{Nothing,OriginalValueProto}
-    is_composite::Bool
-    result_accuracy::Union{Nothing,ResultAccuracy}
+mutable struct HloInstructionProto
+    __data::Dict{Symbol,Any}
 end
-PB.reserved_fields(::Type{HloInstructionProto}) = (names = ["parameter_name", "fused_instructions_computation", "operand_names", "control_predecessor_names", "called_computation_names", "replica_group_ids", "custom_call_opaque", "all_reduce_barrier"], numbers = Union{Int,UnitRange{Int}}[10, 12, 4, 5, 6, 44, 53, 46, 41, 42, 64, 78, 83, 84, 86])
+
+# Default values for HloInstructionProto fields
+const _HloInstructionProto_defaults = Dict{Symbol,Any}(
+    :name => "",
+    :opcode => "",
+    :shape => nothing,
+    :metadata => nothing,
+    :literal => nothing,
+    :parameter_number => zero(Int64),
+    :fusion_kind => "",
+    :tuple_index => zero(Int64),
+    :dimensions => Vector{Int64}(),
+    :window => nothing,
+    :convolution_dimension_numbers => nothing,
+    :feature_group_count => zero(Int64),
+    :batch_group_count => zero(Int64),
+    :slice_dimensions => Vector{var"HloInstructionProto.SliceDimensions"}(),
+    :exponent_bits => zero(Int32),
+    :mantissa_bits => zero(Int32),
+    :dynamic_slice_sizes => Vector{Int64}(),
+    :padding_config => nothing,
+    :outfeed_config => Vector{UInt8}(),
+    :distribution => nothing,
+    :epsilon => zero(Float32),
+    :feature_index => zero(Int64),
+    :channel_id => zero(Int64),
+    :infeed_config => Vector{UInt8}(),
+    :custom_call_target => "",
+    :outfeed_shape => nothing,
+    :dot_dimension_numbers => nothing,
+    :ragged_dot_dimension_numbers => nothing,
+    :fft_type => nothing,
+    :fft_length => Vector{Int64}(),
+    :comparison_direction => "",
+    :gather_dimension_numbers => nothing,
+    :gather_slice_sizes => Vector{Int64}(),
+    :id => zero(Int64),
+    :operand_ids => Vector{Int64}(),
+    :control_predecessor_ids => Vector{Int64}(),
+    :called_computation_ids => Vector{Int64}(),
+    :sharding => nothing,
+    :backend_config => Vector{UInt8}(),
+    :replica_groups => Vector{ReplicaGroup}(),
+    :all_reduce_id => zero(Int64),
+    :use_global_device_ids => false,
+    :is_host_transfer => false,
+    :is_stable => false,
+    :scatter_dimension_numbers => nothing,
+    :precision_config => nothing,
+    :source_target_pairs => Vector{SourceTarget}(),
+    :domain_entry_sharding => nothing,
+    :domain_exit_sharding => nothing,
+    :constrain_layout => false,
+    :operand_shapes_with_layout => Vector{ShapeProto}(),
+    :triangular_solve_options => nothing,
+    :cholesky_options => nothing,
+    :parameter_replication => nothing,
+    :custom_call_has_side_effect => false,
+    :output_operand_aliasing => Vector{OutputOperandAliasing}(),
+    :custom_call_schedule => nothing,
+    :delta => zero(Int64),
+    :indices_are_sorted => false,
+    :frontend_attributes => nothing,
+    :unique_indices => false,
+    :rng_algorithm => nothing,
+    :comparison_type => "",
+    :is_cross_program_prefetch => false,
+    :optional_cross_program_prefetch_index => nothing,
+    :padding_type => nothing,
+    :custom_call_api_version => nothing,
+    :async_execution_thread => "",
+    :k => zero(Int64),
+    :largest => false,
+    :statistics_viz => nothing,
+    :collective_device_list => nothing,
+    :original_value => nothing,
+    :is_composite => false,
+    :result_accuracy => nothing
+)
+
+# Keyword constructor for HloInstructionProto
+function HloInstructionProto(; kwargs...)
+    __data = Dict{Symbol,Any}(kwargs)
+    return HloInstructionProto(__data)
+end
+
+# Field accessors for HloInstructionProto
+function Base.getproperty(x::HloInstructionProto, s::Symbol)
+    s === :__data && return getfield(x, :__data)
+    d = getfield(x, :__data)
+    return get(d, s, get(_HloInstructionProto_defaults, s, nothing))
+end
+function Base.setproperty!(x::HloInstructionProto, s::Symbol, v)
+    getfield(x, :__data)[s] = v
+end
+Base.propertynames(::HloInstructionProto) = (:name, :opcode, :shape, :metadata, :literal, :parameter_number, :fusion_kind, :tuple_index, :dimensions, :window, :convolution_dimension_numbers, :feature_group_count, :batch_group_count, :slice_dimensions, :exponent_bits, :mantissa_bits, :dynamic_slice_sizes, :padding_config, :outfeed_config, :distribution, :epsilon, :feature_index, :channel_id, :infeed_config, :custom_call_target, :outfeed_shape, :dot_dimension_numbers, :ragged_dot_dimension_numbers, :fft_type, :fft_length, :comparison_direction, :gather_dimension_numbers, :gather_slice_sizes, :id, :operand_ids, :control_predecessor_ids, :called_computation_ids, :sharding, :backend_config, :replica_groups, :all_reduce_id, :use_global_device_ids, :is_host_transfer, :is_stable, :scatter_dimension_numbers, :precision_config, :source_target_pairs, :domain_entry_sharding, :domain_exit_sharding, :constrain_layout, :operand_shapes_with_layout, :triangular_solve_options, :cholesky_options, :parameter_replication, :custom_call_has_side_effect, :output_operand_aliasing, :custom_call_schedule, :delta, :indices_are_sorted, :frontend_attributes, :unique_indices, :rng_algorithm, :comparison_type, :is_cross_program_prefetch, :optional_cross_program_prefetch_index, :padding_type, :custom_call_api_version, :async_execution_thread, :k, :largest, :statistics_viz, :collective_device_list, :original_value, :is_composite, :result_accuracy,)
+# PB.reserved_fields(::Type{HloInstructionProto}) = (names = ["parameter_name", "fused_instructions_computation", "operand_names", "control_predecessor_names", "called_computation_names", "replica_group_ids", "custom_call_opaque", "all_reduce_barrier"], numbers = Union{Int,UnitRange{Int}}[10, 12, 4, 5, 6, 44, 53, 46, 41, 42, 64, 78, 83, 84, 86])
 PB.oneof_field_types(::Type{HloInstructionProto}) = (;
     optional_cross_program_prefetch_index = (;cross_program_prefetch_index=Int32),
-    replica_group_list = (;collective_device_list=CollectiveDeviceListProto, iota_collective_device_list=IotaReplicaGroupListProto, mesh_axes_replica_group_list=MeshAxesReplicaGroupListProto),
 )
-PB.default_values(::Type{HloInstructionProto}) = (;name = "", opcode = "", shape = nothing, metadata = nothing, literal = nothing, parameter_number = zero(Int64), fusion_kind = "", tuple_index = zero(Int64), dimensions = Vector{Int64}(), window = nothing, convolution_dimension_numbers = nothing, feature_group_count = zero(Int64), batch_group_count = zero(Int64), slice_dimensions = Vector{var"HloInstructionProto.SliceDimensions"}(), exponent_bits = zero(Int32), mantissa_bits = zero(Int32), dynamic_slice_sizes = Vector{Int64}(), padding_config = nothing, outfeed_config = UInt8[], distribution = RandomDistribution.RNG_INVALID, epsilon = zero(Float32), feature_index = zero(Int64), channel_id = zero(Int64), infeed_config = UInt8[], custom_call_target = "", outfeed_shape = nothing, dot_dimension_numbers = nothing, ragged_dot_dimension_numbers = nothing, fft_type = FftType.FFT, fft_length = Vector{Int64}(), comparison_direction = "", gather_dimension_numbers = nothing, gather_slice_sizes = Vector{Int64}(), id = zero(Int64), operand_ids = Vector{Int64}(), control_predecessor_ids = Vector{Int64}(), called_computation_ids = Vector{Int64}(), sharding = nothing, backend_config = UInt8[], replica_groups = Vector{ReplicaGroup}(), all_reduce_id = zero(Int64), use_global_device_ids = false, is_host_transfer = false, is_stable = false, scatter_dimension_numbers = nothing, precision_config = nothing, source_target_pairs = Vector{SourceTarget}(), domain_entry_sharding = nothing, domain_exit_sharding = nothing, constrain_layout = false, operand_shapes_with_layout = Vector{ShapeProto}(), triangular_solve_options = nothing, cholesky_options = nothing, parameter_replication = nothing, custom_call_has_side_effect = false, output_operand_aliasing = Vector{OutputOperandAliasing}(), custom_call_schedule = CustomCallSchedule.SCHEDULE_NONE, delta = zero(Int64), indices_are_sorted = false, frontend_attributes = nothing, unique_indices = false, rng_algorithm = RandomAlgorithm.RNG_DEFAULT, comparison_type = "", is_cross_program_prefetch = false, cross_program_prefetch_index = zero(Int32), padding_type = PaddingType.PADDING_INVALID, custom_call_api_version = CustomCallApiVersion.API_VERSION_UNSPECIFIED, async_execution_thread = "", k = zero(Int64), largest = false, statistics_viz = nothing, collective_device_list = nothing, iota_collective_device_list = nothing, mesh_axes_replica_group_list = nothing, original_value = nothing, is_composite = false, result_accuracy = nothing)
-PB.field_numbers(::Type{HloInstructionProto}) = (;name = 1, opcode = 2, shape = 3, metadata = 7, literal = 8, parameter_number = 9, fusion_kind = 11, tuple_index = 13, dimensions = 14, window = 15, convolution_dimension_numbers = 16, feature_group_count = 50, batch_group_count = 58, slice_dimensions = 17, exponent_bits = 18, mantissa_bits = 19, dynamic_slice_sizes = 20, padding_config = 21, outfeed_config = 22, distribution = 23, epsilon = 24, feature_index = 25, channel_id = 26, infeed_config = 27, custom_call_target = 28, outfeed_shape = 29, dot_dimension_numbers = 30, ragged_dot_dimension_numbers = 90, fft_type = 31, fft_length = 32, comparison_direction = 63, gather_dimension_numbers = 33, gather_slice_sizes = 34, id = 35, operand_ids = 36, control_predecessor_ids = 37, called_computation_ids = 38, sharding = 40, backend_config = 43, replica_groups = 49, all_reduce_id = 45, use_global_device_ids = 71, is_host_transfer = 47, is_stable = 60, scatter_dimension_numbers = 48, precision_config = 51, source_target_pairs = 52, domain_entry_sharding = 54, domain_exit_sharding = 55, constrain_layout = 56, operand_shapes_with_layout = 57, triangular_solve_options = 59, cholesky_options = 62, parameter_replication = 61, custom_call_has_side_effect = 65, output_operand_aliasing = 74, custom_call_schedule = 76, delta = 66, indices_are_sorted = 67, frontend_attributes = 68, unique_indices = 69, rng_algorithm = 70, comparison_type = 72, is_cross_program_prefetch = 73, cross_program_prefetch_index = 80, padding_type = 75, custom_call_api_version = 77, async_execution_thread = 79, k = 81, largest = 85, statistics_viz = 82, collective_device_list = 87, iota_collective_device_list = 92, mesh_axes_replica_group_list = 93, original_value = 88, is_composite = 89, result_accuracy = 91)
+# PB.default_values(::Type{HloInstructionProto}) = (;name = "", opcode = "", shape = nothing, metadata = nothing, literal = nothing, parameter_number = zero(Int64), fusion_kind = "", tuple_index = zero(Int64), dimensions = Vector{Int64}(), window = nothing, convolution_dimension_numbers = nothing, feature_group_count = zero(Int64), batch_group_count = zero(Int64), slice_dimensions = Vector{var"HloInstructionProto.SliceDimensions"}(), exponent_bits = zero(Int32), mantissa_bits = zero(Int32), dynamic_slice_sizes = Vector{Int64}(), padding_config = nothing, outfeed_config = UInt8[], distribution = RandomDistribution.RNG_INVALID, epsilon = zero(Float32), feature_index = zero(Int64), channel_id = zero(Int64), infeed_config = UInt8[], custom_call_target = "", outfeed_shape = nothing, dot_dimension_numbers = nothing, ragged_dot_dimension_numbers = nothing, fft_type = FftType.FFT, fft_length = Vector{Int64}(), comparison_direction = "", gather_dimension_numbers = nothing, gather_slice_sizes = Vector{Int64}(), id = zero(Int64), operand_ids = Vector{Int64}(), control_predecessor_ids = Vector{Int64}(), called_computation_ids = Vector{Int64}(), sharding = nothing, backend_config = UInt8[], replica_groups = Vector{ReplicaGroup}(), all_reduce_id = zero(Int64), use_global_device_ids = false, is_host_transfer = false, is_stable = false, scatter_dimension_numbers = nothing, precision_config = nothing, source_target_pairs = Vector{SourceTarget}(), domain_entry_sharding = nothing, domain_exit_sharding = nothing, constrain_layout = false, operand_shapes_with_layout = Vector{ShapeProto}(), triangular_solve_options = nothing, cholesky_options = nothing, parameter_replication = nothing, custom_call_has_side_effect = false, output_operand_aliasing = Vector{OutputOperandAliasing}(), custom_call_schedule = CustomCallSchedule.SCHEDULE_NONE, delta = zero(Int64), indices_are_sorted = false, frontend_attributes = nothing, unique_indices = false, rng_algorithm = RandomAlgorithm.RNG_DEFAULT, comparison_type = "", is_cross_program_prefetch = false, cross_program_prefetch_index = zero(Int32), padding_type = PaddingType.PADDING_INVALID, custom_call_api_version = CustomCallApiVersion.API_VERSION_UNSPECIFIED, async_execution_thread = "", k = zero(Int64), largest = false, statistics_viz = nothing, collective_device_list = nothing, original_value = nothing, is_composite = false, result_accuracy = nothing)
+# PB.field_numbers(::Type{HloInstructionProto}) = (;name = 1, opcode = 2, shape = 3, metadata = 7, literal = 8, parameter_number = 9, fusion_kind = 11, tuple_index = 13, dimensions = 14, window = 15, convolution_dimension_numbers = 16, feature_group_count = 50, batch_group_count = 58, slice_dimensions = 17, exponent_bits = 18, mantissa_bits = 19, dynamic_slice_sizes = 20, padding_config = 21, outfeed_config = 22, distribution = 23, epsilon = 24, feature_index = 25, channel_id = 26, infeed_config = 27, custom_call_target = 28, outfeed_shape = 29, dot_dimension_numbers = 30, ragged_dot_dimension_numbers = 90, fft_type = 31, fft_length = 32, comparison_direction = 63, gather_dimension_numbers = 33, gather_slice_sizes = 34, id = 35, operand_ids = 36, control_predecessor_ids = 37, called_computation_ids = 38, sharding = 40, backend_config = 43, replica_groups = 49, all_reduce_id = 45, use_global_device_ids = 71, is_host_transfer = 47, is_stable = 60, scatter_dimension_numbers = 48, precision_config = 51, source_target_pairs = 52, domain_entry_sharding = 54, domain_exit_sharding = 55, constrain_layout = 56, operand_shapes_with_layout = 57, triangular_solve_options = 59, cholesky_options = 62, parameter_replication = 61, custom_call_has_side_effect = 65, output_operand_aliasing = 74, custom_call_schedule = 76, delta = 66, indices_are_sorted = 67, frontend_attributes = 68, unique_indices = 69, rng_algorithm = 70, comparison_type = 72, is_cross_program_prefetch = 73, cross_program_prefetch_index = 80, padding_type = 75, custom_call_api_version = 77, async_execution_thread = 79, k = 81, largest = 85, statistics_viz = 82, collective_device_list = 87, original_value = 88, is_composite = 89, result_accuracy = 91)
 
 function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:HloInstructionProto})
     name = ""
@@ -1154,7 +1219,7 @@ function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:HloInstructionProto})
     k = zero(Int64)
     largest = false
     statistics_viz = Ref{Union{Nothing,StatisticsViz}}(nothing)
-    replica_group_list = nothing
+    collective_device_list = Ref{Union{Nothing,CollectiveDeviceListProto}}(nothing)
     original_value = Ref{Union{Nothing,OriginalValueProto}}(nothing)
     is_composite = false
     result_accuracy = Ref{Union{Nothing,ResultAccuracy}}(nothing)
@@ -1303,11 +1368,7 @@ function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:HloInstructionProto})
         elseif field_number == 82
             PB.decode!(d, statistics_viz)
         elseif field_number == 87
-            replica_group_list = OneOf(:collective_device_list, PB.decode(d, Ref{CollectiveDeviceListProto}))
-        elseif field_number == 92
-            replica_group_list = OneOf(:iota_collective_device_list, PB.decode(d, Ref{IotaReplicaGroupListProto}))
-        elseif field_number == 93
-            replica_group_list = OneOf(:mesh_axes_replica_group_list, PB.decode(d, Ref{MeshAxesReplicaGroupListProto}))
+            PB.decode!(d, collective_device_list)
         elseif field_number == 88
             PB.decode!(d, original_value)
         elseif field_number == 89
@@ -1318,7 +1379,7 @@ function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:HloInstructionProto})
             Base.skip(d, wire_type)
         end
     end
-    return HloInstructionProto(name, opcode, shape[], metadata[], literal[], parameter_number, fusion_kind, tuple_index, dimensions[], window[], convolution_dimension_numbers[], feature_group_count, batch_group_count, slice_dimensions[], exponent_bits, mantissa_bits, dynamic_slice_sizes[], padding_config[], outfeed_config, distribution, epsilon, feature_index, channel_id, infeed_config, custom_call_target, outfeed_shape[], dot_dimension_numbers[], ragged_dot_dimension_numbers[], fft_type, fft_length[], comparison_direction, gather_dimension_numbers[], gather_slice_sizes[], id, operand_ids[], control_predecessor_ids[], called_computation_ids[], sharding[], backend_config, replica_groups[], all_reduce_id, use_global_device_ids, is_host_transfer, is_stable, scatter_dimension_numbers[], precision_config[], source_target_pairs[], domain_entry_sharding[], domain_exit_sharding[], constrain_layout, operand_shapes_with_layout[], triangular_solve_options[], cholesky_options[], parameter_replication[], custom_call_has_side_effect, output_operand_aliasing[], custom_call_schedule, delta, indices_are_sorted, frontend_attributes[], unique_indices, rng_algorithm, comparison_type, is_cross_program_prefetch, optional_cross_program_prefetch_index, padding_type, custom_call_api_version, async_execution_thread, k, largest, statistics_viz[], replica_group_list, original_value[], is_composite, result_accuracy[])
+    return HloInstructionProto(; name=name, opcode=opcode, shape=shape[], metadata=metadata[], literal=literal[], parameter_number=parameter_number, fusion_kind=fusion_kind, tuple_index=tuple_index, dimensions=dimensions[], window=window[], convolution_dimension_numbers=convolution_dimension_numbers[], feature_group_count=feature_group_count, batch_group_count=batch_group_count, slice_dimensions=slice_dimensions[], exponent_bits=exponent_bits, mantissa_bits=mantissa_bits, dynamic_slice_sizes=dynamic_slice_sizes[], padding_config=padding_config[], outfeed_config=outfeed_config, distribution=distribution, epsilon=epsilon, feature_index=feature_index, channel_id=channel_id, infeed_config=infeed_config, custom_call_target=custom_call_target, outfeed_shape=outfeed_shape[], dot_dimension_numbers=dot_dimension_numbers[], ragged_dot_dimension_numbers=ragged_dot_dimension_numbers[], fft_type=fft_type, fft_length=fft_length[], comparison_direction=comparison_direction, gather_dimension_numbers=gather_dimension_numbers[], gather_slice_sizes=gather_slice_sizes[], id=id, operand_ids=operand_ids[], control_predecessor_ids=control_predecessor_ids[], called_computation_ids=called_computation_ids[], sharding=sharding[], backend_config=backend_config, replica_groups=replica_groups[], all_reduce_id=all_reduce_id, use_global_device_ids=use_global_device_ids, is_host_transfer=is_host_transfer, is_stable=is_stable, scatter_dimension_numbers=scatter_dimension_numbers[], precision_config=precision_config[], source_target_pairs=source_target_pairs[], domain_entry_sharding=domain_entry_sharding[], domain_exit_sharding=domain_exit_sharding[], constrain_layout=constrain_layout, operand_shapes_with_layout=operand_shapes_with_layout[], triangular_solve_options=triangular_solve_options[], cholesky_options=cholesky_options[], parameter_replication=parameter_replication[], custom_call_has_side_effect=custom_call_has_side_effect, output_operand_aliasing=output_operand_aliasing[], custom_call_schedule=custom_call_schedule, delta=delta, indices_are_sorted=indices_are_sorted, frontend_attributes=frontend_attributes[], unique_indices=unique_indices, rng_algorithm=rng_algorithm, comparison_type=comparison_type, is_cross_program_prefetch=is_cross_program_prefetch, optional_cross_program_prefetch_index=optional_cross_program_prefetch_index, padding_type=padding_type, custom_call_api_version=custom_call_api_version, async_execution_thread=async_execution_thread, k=k, largest=largest, statistics_viz=statistics_viz[], collective_device_list=collective_device_list[], original_value=original_value[], is_composite=is_composite, result_accuracy=result_accuracy[])
 end
 
 function PB.encode(e::PB.AbstractProtoEncoder, x::HloInstructionProto)
@@ -1397,14 +1458,7 @@ function PB.encode(e::PB.AbstractProtoEncoder, x::HloInstructionProto)
     x.k != zero(Int64) && PB.encode(e, 81, x.k)
     x.largest != false && PB.encode(e, 85, x.largest)
     !isnothing(x.statistics_viz) && PB.encode(e, 82, x.statistics_viz)
-    if isnothing(x.replica_group_list);
-    elseif x.replica_group_list.name === :collective_device_list
-        PB.encode(e, 87, x.replica_group_list[]::CollectiveDeviceListProto)
-    elseif x.replica_group_list.name === :iota_collective_device_list
-        PB.encode(e, 92, x.replica_group_list[]::IotaReplicaGroupListProto)
-    elseif x.replica_group_list.name === :mesh_axes_replica_group_list
-        PB.encode(e, 93, x.replica_group_list[]::MeshAxesReplicaGroupListProto)
-    end
+    !isnothing(x.collective_device_list) && PB.encode(e, 87, x.collective_device_list)
     !isnothing(x.original_value) && PB.encode(e, 88, x.original_value)
     x.is_composite != false && PB.encode(e, 89, x.is_composite)
     !isnothing(x.result_accuracy) && PB.encode(e, 91, x.result_accuracy)
@@ -1486,21 +1540,14 @@ function PB._encoded_size(x::HloInstructionProto)
     x.k != zero(Int64) && (encoded_size += PB._encoded_size(x.k, 81))
     x.largest != false && (encoded_size += PB._encoded_size(x.largest, 85))
     !isnothing(x.statistics_viz) && (encoded_size += PB._encoded_size(x.statistics_viz, 82))
-    if isnothing(x.replica_group_list);
-    elseif x.replica_group_list.name === :collective_device_list
-        encoded_size += PB._encoded_size(x.replica_group_list[]::CollectiveDeviceListProto, 87)
-    elseif x.replica_group_list.name === :iota_collective_device_list
-        encoded_size += PB._encoded_size(x.replica_group_list[]::IotaReplicaGroupListProto, 92)
-    elseif x.replica_group_list.name === :mesh_axes_replica_group_list
-        encoded_size += PB._encoded_size(x.replica_group_list[]::MeshAxesReplicaGroupListProto, 93)
-    end
+    !isnothing(x.collective_device_list) && (encoded_size += PB._encoded_size(x.collective_device_list, 87))
     !isnothing(x.original_value) && (encoded_size += PB._encoded_size(x.original_value, 88))
     x.is_composite != false && (encoded_size += PB._encoded_size(x.is_composite, 89))
     !isnothing(x.result_accuracy) && (encoded_size += PB._encoded_size(x.result_accuracy, 91))
     return encoded_size
 end
 
-struct var"HeapSimulatorTrace.Event"
+mutable struct var"HeapSimulatorTrace.Event"
     kind::var"HeapSimulatorTrace.Event.Kind".T
     buffer_id::Int64
     computation_name::String
@@ -1554,7 +1601,7 @@ function PB._encoded_size(x::var"HeapSimulatorTrace.Event")
     return encoded_size
 end
 
-struct HloInputOutputAliasProto
+mutable struct HloInputOutputAliasProto
     entries::Vector{var"HloInputOutputAliasProto.AliasEntryProto"}
 end
 PB.default_values(::Type{HloInputOutputAliasProto}) = (;entries = Vector{var"HloInputOutputAliasProto.AliasEntryProto"}())
@@ -1584,7 +1631,7 @@ function PB._encoded_size(x::HloInputOutputAliasProto)
     return encoded_size
 end
 
-struct HloComputationProto
+mutable struct HloComputationProto
     name::String
     instructions::Vector{HloInstructionProto}
     program_shape::Union{Nothing,ProgramShapeProto}
@@ -1651,7 +1698,7 @@ function PB._encoded_size(x::HloComputationProto)
     return encoded_size
 end
 
-struct HeapSimulatorTrace
+mutable struct HeapSimulatorTrace
     events::Vector{var"HeapSimulatorTrace.Event"}
     whole_module_simulation::Bool
     buffer_allocation_index::Int64
@@ -1693,7 +1740,7 @@ function PB._encoded_size(x::HeapSimulatorTrace)
     return encoded_size
 end
 
-struct BufferAssignmentProto
+mutable struct BufferAssignmentProto
     logical_buffers::Vector{LogicalBufferProto}
     buffer_aliases::Vector{var"BufferAssignmentProto.BufferAlias"}
     buffer_allocations::Vector{BufferAllocationProto}
@@ -1742,12 +1789,12 @@ function PB._encoded_size(x::BufferAssignmentProto)
 end
 
 # Stub definitions for cyclic types
-struct var"##Stub#HloModuleGroupProto"{T1<:var"##Abstract#HloModuleProto"} <: var"##Abstract#HloModuleGroupProto"
+mutable struct var"##Stub#HloModuleGroupProto"{T1<:var"##Abstract#HloModuleProto"} <: var"##Abstract#HloModuleGroupProto"
     name::String
     hlo_modules::Vector{T1}
 end
 
-struct var"##Stub#HloModuleProto"{T1<:var"##Abstract#OriginalValueRecoveryTableProto"} <: var"##Abstract#HloModuleProto"
+mutable struct var"##Stub#HloModuleProto"{T1<:var"##Abstract#OriginalValueRecoveryTableProto"} <: var"##Abstract#HloModuleProto"
     name::String
     entry_computation_name::String
     entry_computation_id::Int64
@@ -1769,29 +1816,29 @@ struct var"##Stub#HloModuleProto"{T1<:var"##Abstract#OriginalValueRecoveryTableP
     original_value_recovery_table::Union{Nothing,T1}
 end
 
-struct var"##Stub#HloProto"{T1<:var"##Abstract#OriginalValueRecoveryTableProto"} <: var"##Abstract#HloProto"
+mutable struct var"##Stub#HloProto"{T1<:var"##Abstract#OriginalValueRecoveryTableProto"} <: var"##Abstract#HloProto"
     hlo_module::Union{Nothing,var"##Stub#HloModuleProto"{T1}}
     buffer_assignment::Union{Nothing,BufferAssignmentProto}
 end
 
-struct var"##Stub#HloSnapshot"{T1<:var"##Abstract#OriginalValueRecoveryTableProto"} <: var"##Abstract#HloSnapshot"
+mutable struct var"##Stub#HloSnapshot"{T1<:var"##Abstract#OriginalValueRecoveryTableProto"} <: var"##Abstract#HloSnapshot"
     hlo::Union{Nothing,var"##Stub#HloProto"{T1}}
     arguments::Vector{LiteralProto}
     result::Union{Nothing,LiteralProto}
     execution_platform::String
 end
 
-struct var"##Stub#HloUnoptimizedSnapshot"{T1<:var"##Abstract#OriginalValueRecoveryTableProto"} <: var"##Abstract#HloUnoptimizedSnapshot"
+mutable struct var"##Stub#HloUnoptimizedSnapshot"{T1<:var"##Abstract#OriginalValueRecoveryTableProto"} <: var"##Abstract#HloUnoptimizedSnapshot"
     hlo_module::Union{Nothing,var"##Stub#HloModuleProto"{T1}}
     partitions::Vector{HloInputs}
     version::Int32
 end
 
-struct var"##Stub#OriginalValueRecoveryTableProto"{T1<:var"##Abstract#OriginalValueRecoveryTableProto.Entry"} <: var"##Abstract#OriginalValueRecoveryTableProto"
+mutable struct var"##Stub#OriginalValueRecoveryTableProto"{T1<:var"##Abstract#OriginalValueRecoveryTableProto.Entry"} <: var"##Abstract#OriginalValueRecoveryTableProto"
     entries::Vector{T1}
 end
 
-struct var"##Stub#OriginalValueRecoveryTableProto.Entry" <: var"##Abstract#OriginalValueRecoveryTableProto.Entry"
+mutable struct var"##Stub#OriginalValueRecoveryTableProto.Entry" <: var"##Abstract#OriginalValueRecoveryTableProto.Entry"
     old_original_array::Union{Nothing,OriginalArrayProto}
     new_original_array::Union{Nothing,OriginalArrayProto}
     recovery_module::Union{Nothing,var"##Stub#HloModuleProto"{var"##Stub#OriginalValueRecoveryTableProto"{var"##Stub#OriginalValueRecoveryTableProto.Entry"}}}

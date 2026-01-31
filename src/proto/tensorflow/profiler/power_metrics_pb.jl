@@ -5,19 +5,41 @@ using ProtoBuf.EnumX: @enumx
 export PowerComponentMetrics, PowerMetrics
 
 
-struct PowerComponentMetrics
-    component_name::String
-    max_power::Float64
-    avg_power::Float64
-    max_moving_avg_power_100us::Float64
-    max_moving_avg_power_1ms::Float64
-    max_moving_avg_power_10ms::Float64
-    timescale_us::UInt32
-    sample_count::UInt64
-    max_moving_avg_power_1s::Float64
+mutable struct PowerComponentMetrics
+    __data::Dict{Symbol,Any}
 end
-PB.default_values(::Type{PowerComponentMetrics}) = (;component_name = "", max_power = zero(Float64), avg_power = zero(Float64), max_moving_avg_power_100us = zero(Float64), max_moving_avg_power_1ms = zero(Float64), max_moving_avg_power_10ms = zero(Float64), timescale_us = zero(UInt32), sample_count = zero(UInt64), max_moving_avg_power_1s = zero(Float64))
-PB.field_numbers(::Type{PowerComponentMetrics}) = (;component_name = 1, max_power = 2, avg_power = 3, max_moving_avg_power_100us = 4, max_moving_avg_power_1ms = 5, max_moving_avg_power_10ms = 6, timescale_us = 7, sample_count = 8, max_moving_avg_power_1s = 9)
+
+# Default values for PowerComponentMetrics fields
+const _PowerComponentMetrics_defaults = Dict{Symbol,Any}(
+    :component_name => "",
+    :max_power => zero(Float64),
+    :avg_power => zero(Float64),
+    :max_moving_avg_power_100us => zero(Float64),
+    :max_moving_avg_power_1ms => zero(Float64),
+    :max_moving_avg_power_10ms => zero(Float64),
+    :timescale_us => zero(UInt32),
+    :sample_count => zero(UInt64),
+    :max_moving_avg_power_1s => zero(Float64)
+)
+
+# Keyword constructor for PowerComponentMetrics
+function PowerComponentMetrics(; kwargs...)
+    __data = Dict{Symbol,Any}(kwargs)
+    return PowerComponentMetrics(__data)
+end
+
+# Field accessors for PowerComponentMetrics
+function Base.getproperty(x::PowerComponentMetrics, s::Symbol)
+    s === :__data && return getfield(x, :__data)
+    d = getfield(x, :__data)
+    return get(d, s, get(_PowerComponentMetrics_defaults, s, nothing))
+end
+function Base.setproperty!(x::PowerComponentMetrics, s::Symbol, v)
+    getfield(x, :__data)[s] = v
+end
+Base.propertynames(::PowerComponentMetrics) = (:component_name, :max_power, :avg_power, :max_moving_avg_power_100us, :max_moving_avg_power_1ms, :max_moving_avg_power_10ms, :timescale_us, :sample_count, :max_moving_avg_power_1s,)
+# PB.default_values(::Type{PowerComponentMetrics}) = (;component_name = "", max_power = zero(Float64), avg_power = zero(Float64), max_moving_avg_power_100us = zero(Float64), max_moving_avg_power_1ms = zero(Float64), max_moving_avg_power_10ms = zero(Float64), timescale_us = zero(UInt32), sample_count = zero(UInt64), max_moving_avg_power_1s = zero(Float64))
+# PB.field_numbers(::Type{PowerComponentMetrics}) = (;component_name = 1, max_power = 2, avg_power = 3, max_moving_avg_power_100us = 4, max_moving_avg_power_1ms = 5, max_moving_avg_power_10ms = 6, timescale_us = 7, sample_count = 8, max_moving_avg_power_1s = 9)
 
 function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:PowerComponentMetrics})
     component_name = ""
@@ -53,7 +75,7 @@ function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:PowerComponentMetrics})
             Base.skip(d, wire_type)
         end
     end
-    return PowerComponentMetrics(component_name, max_power, avg_power, max_moving_avg_power_100us, max_moving_avg_power_1ms, max_moving_avg_power_10ms, timescale_us, sample_count, max_moving_avg_power_1s)
+    return PowerComponentMetrics(; component_name=component_name, max_power=max_power, avg_power=avg_power, max_moving_avg_power_100us=max_moving_avg_power_100us, max_moving_avg_power_1ms=max_moving_avg_power_1ms, max_moving_avg_power_10ms=max_moving_avg_power_10ms, timescale_us=timescale_us, sample_count=sample_count, max_moving_avg_power_1s=max_moving_avg_power_1s)
 end
 
 function PB.encode(e::PB.AbstractProtoEncoder, x::PowerComponentMetrics)
@@ -83,7 +105,7 @@ function PB._encoded_size(x::PowerComponentMetrics)
     return encoded_size
 end
 
-struct PowerMetrics
+mutable struct PowerMetrics
     power_component_metrics::Vector{PowerComponentMetrics}
 end
 PB.default_values(::Type{PowerMetrics}) = (;power_component_metrics = Vector{PowerComponentMetrics}())

@@ -6,7 +6,7 @@ export TfFunctionMetrics, TfFunctionCompiler, TfFunctionExecutionMode, TfFunctio
 export TfFunctionDb
 
 
-struct TfFunctionMetrics
+mutable struct TfFunctionMetrics
     count::UInt64
     self_time_ps::UInt64
 end
@@ -46,7 +46,7 @@ end
 
 @enumx TfFunctionExecutionMode INVALID_MODE=0 EAGER_MODE=1 TRACED_MODE=2 NOT_TRACED_MODE=3 CONCRETE_MODE=4
 
-struct TfFunction
+mutable struct TfFunction
     metrics::Dict{Int32,TfFunctionMetrics}
     total_tracing_count::Int64
     compiler::TfFunctionCompiler.T
@@ -94,7 +94,7 @@ function PB._encoded_size(x::TfFunction)
     return encoded_size
 end
 
-struct TfFunctionDb
+mutable struct TfFunctionDb
     tf_functions::Dict{String,TfFunction}
 end
 PB.default_values(::Type{TfFunctionDb}) = (;tf_functions = Dict{String,TfFunction}())

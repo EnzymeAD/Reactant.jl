@@ -7,7 +7,7 @@ export var"ProfileOptions.AdvancedConfigValue", ProfileOptions
 export RemoteProfilerSessionManagerOptions
 
 
-struct var"ProfileOptions.TraceOptions"
+mutable struct var"ProfileOptions.TraceOptions"
     host_traceme_filter_mask::UInt64
 end
 PB.default_values(::Type{var"ProfileOptions.TraceOptions"}) = (;host_traceme_filter_mask = zero(UInt64))
@@ -39,7 +39,7 @@ end
 
 @enumx var"ProfileOptions.DeviceType" UNSPECIFIED=0 CPU=1 GPU=2 TPU=3 PLUGGABLE_DEVICE=4
 
-struct var"ProfileOptions.AdvancedConfigValue"
+mutable struct var"ProfileOptions.AdvancedConfigValue"
     value::Union{Nothing,OneOf{<:Union{String,Bool,Int64}}}
 end
 PB.oneof_field_types(::Type{var"ProfileOptions.AdvancedConfigValue"}) = (;
@@ -90,24 +90,46 @@ function PB._encoded_size(x::var"ProfileOptions.AdvancedConfigValue")
     return encoded_size
 end
 
-struct ProfileOptions
-    version::UInt32
-    device_type::var"ProfileOptions.DeviceType".T
-    include_dataset_ops::Bool
-    host_tracer_level::UInt32
-    device_tracer_level::UInt32
-    python_tracer_level::UInt32
-    enable_hlo_proto::Bool
-    start_timestamp_ns::UInt64
-    duration_ms::UInt64
-    repository_path::String
-    trace_options::Union{Nothing,var"ProfileOptions.TraceOptions"}
-    advanced_configuration::Dict{String,var"ProfileOptions.AdvancedConfigValue"}
-    raise_error_on_start_failure::Bool
-    session_id::String
+mutable struct ProfileOptions
+    __data::Dict{Symbol,Any}
 end
-PB.default_values(::Type{ProfileOptions}) = (;version = zero(UInt32), device_type = var"ProfileOptions.DeviceType".UNSPECIFIED, include_dataset_ops = false, host_tracer_level = zero(UInt32), device_tracer_level = zero(UInt32), python_tracer_level = zero(UInt32), enable_hlo_proto = false, start_timestamp_ns = zero(UInt64), duration_ms = zero(UInt64), repository_path = "", trace_options = nothing, advanced_configuration = Dict{String,var"ProfileOptions.AdvancedConfigValue"}(), raise_error_on_start_failure = false, session_id = "")
-PB.field_numbers(::Type{ProfileOptions}) = (;version = 5, device_type = 6, include_dataset_ops = 1, host_tracer_level = 2, device_tracer_level = 3, python_tracer_level = 4, enable_hlo_proto = 7, start_timestamp_ns = 8, duration_ms = 9, repository_path = 10, trace_options = 11, advanced_configuration = 12, raise_error_on_start_failure = 13, session_id = 14)
+
+# Default values for ProfileOptions fields
+const _ProfileOptions_defaults = Dict{Symbol,Any}(
+    :version => zero(UInt32),
+    :device_type => nothing,
+    :include_dataset_ops => false,
+    :host_tracer_level => zero(UInt32),
+    :device_tracer_level => zero(UInt32),
+    :python_tracer_level => zero(UInt32),
+    :enable_hlo_proto => false,
+    :start_timestamp_ns => zero(UInt64),
+    :duration_ms => zero(UInt64),
+    :repository_path => "",
+    :trace_options => nothing,
+    :advanced_configuration => Dict{String,var"ProfileOptions.AdvancedConfigValue"}(),
+    :raise_error_on_start_failure => false,
+    :session_id => ""
+)
+
+# Keyword constructor for ProfileOptions
+function ProfileOptions(; kwargs...)
+    __data = Dict{Symbol,Any}(kwargs)
+    return ProfileOptions(__data)
+end
+
+# Field accessors for ProfileOptions
+function Base.getproperty(x::ProfileOptions, s::Symbol)
+    s === :__data && return getfield(x, :__data)
+    d = getfield(x, :__data)
+    return get(d, s, get(_ProfileOptions_defaults, s, nothing))
+end
+function Base.setproperty!(x::ProfileOptions, s::Symbol, v)
+    getfield(x, :__data)[s] = v
+end
+Base.propertynames(::ProfileOptions) = (:version, :device_type, :include_dataset_ops, :host_tracer_level, :device_tracer_level, :python_tracer_level, :enable_hlo_proto, :start_timestamp_ns, :duration_ms, :repository_path, :trace_options, :advanced_configuration, :raise_error_on_start_failure, :session_id,)
+# PB.default_values(::Type{ProfileOptions}) = (;version = zero(UInt32), device_type = var"ProfileOptions.DeviceType".UNSPECIFIED, include_dataset_ops = false, host_tracer_level = zero(UInt32), device_tracer_level = zero(UInt32), python_tracer_level = zero(UInt32), enable_hlo_proto = false, start_timestamp_ns = zero(UInt64), duration_ms = zero(UInt64), repository_path = "", trace_options = nothing, advanced_configuration = Dict{String,var"ProfileOptions.AdvancedConfigValue"}(), raise_error_on_start_failure = false, session_id = "")
+# PB.field_numbers(::Type{ProfileOptions}) = (;version = 5, device_type = 6, include_dataset_ops = 1, host_tracer_level = 2, device_tracer_level = 3, python_tracer_level = 4, enable_hlo_proto = 7, start_timestamp_ns = 8, duration_ms = 9, repository_path = 10, trace_options = 11, advanced_configuration = 12, raise_error_on_start_failure = 13, session_id = 14)
 
 function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:ProfileOptions})
     version = zero(UInt32)
@@ -158,7 +180,7 @@ function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:ProfileOptions})
             Base.skip(d, wire_type)
         end
     end
-    return ProfileOptions(version, device_type, include_dataset_ops, host_tracer_level, device_tracer_level, python_tracer_level, enable_hlo_proto, start_timestamp_ns, duration_ms, repository_path, trace_options[], advanced_configuration, raise_error_on_start_failure, session_id)
+    return ProfileOptions(; version=version, device_type=device_type, include_dataset_ops=include_dataset_ops, host_tracer_level=host_tracer_level, device_tracer_level=device_tracer_level, python_tracer_level=python_tracer_level, enable_hlo_proto=enable_hlo_proto, start_timestamp_ns=start_timestamp_ns, duration_ms=duration_ms, repository_path=repository_path, trace_options=trace_options[], advanced_configuration=advanced_configuration, raise_error_on_start_failure=raise_error_on_start_failure, session_id=session_id)
 end
 
 function PB.encode(e::PB.AbstractProtoEncoder, x::ProfileOptions)
@@ -198,7 +220,7 @@ function PB._encoded_size(x::ProfileOptions)
     return encoded_size
 end
 
-struct RemoteProfilerSessionManagerOptions
+mutable struct RemoteProfilerSessionManagerOptions
     profiler_options::Union{Nothing,ProfileOptions}
     service_addresses::Vector{String}
     session_creation_timestamp_ns::UInt64

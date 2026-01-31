@@ -5,24 +5,46 @@ using ProtoBuf.EnumX: @enumx
 export KernelReport, KernelStatsDb
 
 
-struct KernelReport
-    name::String
-    registers_per_thread::UInt32
-    static_shmem_bytes::UInt32
-    dynamic_shmem_bytes::UInt32
-    block_dim::Vector{UInt32}
-    grid_dim::Vector{UInt32}
-    total_duration_ns::UInt64
-    min_duration_ns::UInt64
-    max_duration_ns::UInt64
-    is_kernel_using_tensor_core::Bool
-    is_op_tensor_core_eligible::Bool
-    op_name::String
-    occurrences::UInt32
-    occupancy_pct::Float32
+mutable struct KernelReport
+    __data::Dict{Symbol,Any}
 end
-PB.default_values(::Type{KernelReport}) = (;name = "", registers_per_thread = zero(UInt32), static_shmem_bytes = zero(UInt32), dynamic_shmem_bytes = zero(UInt32), block_dim = Vector{UInt32}(), grid_dim = Vector{UInt32}(), total_duration_ns = zero(UInt64), min_duration_ns = zero(UInt64), max_duration_ns = zero(UInt64), is_kernel_using_tensor_core = false, is_op_tensor_core_eligible = false, op_name = "", occurrences = zero(UInt32), occupancy_pct = zero(Float32))
-PB.field_numbers(::Type{KernelReport}) = (;name = 1, registers_per_thread = 2, static_shmem_bytes = 3, dynamic_shmem_bytes = 4, block_dim = 5, grid_dim = 6, total_duration_ns = 7, min_duration_ns = 8, max_duration_ns = 9, is_kernel_using_tensor_core = 10, is_op_tensor_core_eligible = 11, op_name = 12, occurrences = 13, occupancy_pct = 14)
+
+# Default values for KernelReport fields
+const _KernelReport_defaults = Dict{Symbol,Any}(
+    :name => "",
+    :registers_per_thread => zero(UInt32),
+    :static_shmem_bytes => zero(UInt32),
+    :dynamic_shmem_bytes => zero(UInt32),
+    :block_dim => Vector{UInt32}(),
+    :grid_dim => Vector{UInt32}(),
+    :total_duration_ns => zero(UInt64),
+    :min_duration_ns => zero(UInt64),
+    :max_duration_ns => zero(UInt64),
+    :is_kernel_using_tensor_core => false,
+    :is_op_tensor_core_eligible => false,
+    :op_name => "",
+    :occurrences => zero(UInt32),
+    :occupancy_pct => zero(Float32)
+)
+
+# Keyword constructor for KernelReport
+function KernelReport(; kwargs...)
+    __data = Dict{Symbol,Any}(kwargs)
+    return KernelReport(__data)
+end
+
+# Field accessors for KernelReport
+function Base.getproperty(x::KernelReport, s::Symbol)
+    s === :__data && return getfield(x, :__data)
+    d = getfield(x, :__data)
+    return get(d, s, get(_KernelReport_defaults, s, nothing))
+end
+function Base.setproperty!(x::KernelReport, s::Symbol, v)
+    getfield(x, :__data)[s] = v
+end
+Base.propertynames(::KernelReport) = (:name, :registers_per_thread, :static_shmem_bytes, :dynamic_shmem_bytes, :block_dim, :grid_dim, :total_duration_ns, :min_duration_ns, :max_duration_ns, :is_kernel_using_tensor_core, :is_op_tensor_core_eligible, :op_name, :occurrences, :occupancy_pct,)
+# PB.default_values(::Type{KernelReport}) = (;name = "", registers_per_thread = zero(UInt32), static_shmem_bytes = zero(UInt32), dynamic_shmem_bytes = zero(UInt32), block_dim = Vector{UInt32}(), grid_dim = Vector{UInt32}(), total_duration_ns = zero(UInt64), min_duration_ns = zero(UInt64), max_duration_ns = zero(UInt64), is_kernel_using_tensor_core = false, is_op_tensor_core_eligible = false, op_name = "", occurrences = zero(UInt32), occupancy_pct = zero(Float32))
+# PB.field_numbers(::Type{KernelReport}) = (;name = 1, registers_per_thread = 2, static_shmem_bytes = 3, dynamic_shmem_bytes = 4, block_dim = 5, grid_dim = 6, total_duration_ns = 7, min_duration_ns = 8, max_duration_ns = 9, is_kernel_using_tensor_core = 10, is_op_tensor_core_eligible = 11, op_name = 12, occurrences = 13, occupancy_pct = 14)
 
 function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:KernelReport})
     name = ""
@@ -73,7 +95,7 @@ function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:KernelReport})
             Base.skip(d, wire_type)
         end
     end
-    return KernelReport(name, registers_per_thread, static_shmem_bytes, dynamic_shmem_bytes, block_dim[], grid_dim[], total_duration_ns, min_duration_ns, max_duration_ns, is_kernel_using_tensor_core, is_op_tensor_core_eligible, op_name, occurrences, occupancy_pct)
+    return KernelReport(; name=name, registers_per_thread=registers_per_thread, static_shmem_bytes=static_shmem_bytes, dynamic_shmem_bytes=dynamic_shmem_bytes, block_dim=block_dim[], grid_dim=grid_dim[], total_duration_ns=total_duration_ns, min_duration_ns=min_duration_ns, max_duration_ns=max_duration_ns, is_kernel_using_tensor_core=is_kernel_using_tensor_core, is_op_tensor_core_eligible=is_op_tensor_core_eligible, op_name=op_name, occurrences=occurrences, occupancy_pct=occupancy_pct)
 end
 
 function PB.encode(e::PB.AbstractProtoEncoder, x::KernelReport)
@@ -113,7 +135,7 @@ function PB._encoded_size(x::KernelReport)
     return encoded_size
 end
 
-struct KernelStatsDb
+mutable struct KernelStatsDb
     reports::Vector{KernelReport}
 end
 PB.default_values(::Type{KernelStatsDb}) = (;reports = Vector{KernelReport}())

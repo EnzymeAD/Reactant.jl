@@ -35,7 +35,7 @@ abstract type var"##Abstract#ProgramShapeProto" end
 
 @enumx RandomDistribution RNG_INVALID=0 RNG_UNIFORM=1 RNG_NORMAL=2
 
-struct Statistic
+mutable struct Statistic
     stat_name::String
     stat_val::Float64
 end
@@ -73,7 +73,7 @@ end
 
 @enumx var"TriangularSolveOptions.Transpose" TRANSPOSE_INVALID=0 NO_TRANSPOSE=1 TRANSPOSE=2 ADJOINT=3
 
-struct var"WhileLoopBackendConfig.KnownInitStep"
+mutable struct var"WhileLoopBackendConfig.KnownInitStep"
     init::Int64
     step::Int64
 end
@@ -111,7 +111,7 @@ end
 
 @enumx var"ResultAccuracy.Mode" DEFAULT=0 HIGHEST=1
 
-struct GatherDimensionNumbers
+mutable struct GatherDimensionNumbers
     offset_dims::Vector{Int64}
     collapsed_slice_dims::Vector{Int64}
     start_index_map::Vector{Int64}
@@ -171,7 +171,7 @@ function PB._encoded_size(x::GatherDimensionNumbers)
     return encoded_size
 end
 
-struct var"DeviceAssignmentProto.ComputationDevice"
+mutable struct var"DeviceAssignmentProto.ComputationDevice"
     replica_device_ids::Vector{Int64}
 end
 PB.default_values(::Type{var"DeviceAssignmentProto.ComputationDevice"}) = (;replica_device_ids = Vector{Int64}())
@@ -201,7 +201,7 @@ function PB._encoded_size(x::var"DeviceAssignmentProto.ComputationDevice")
     return encoded_size
 end
 
-struct SplitConfigProto
+mutable struct SplitConfigProto
     dimension::Int64
     split_indices::Vector{Int64}
 end
@@ -243,7 +243,7 @@ end
 
 @enumx DimLevelType DIM_DENSE=0 DIM_COMPRESSED=1 DIM_SINGLETON=2 DIM_LOOSE_COMPRESSED=3
 
-struct var"WhileLoopBackendConfig.KnownTripCount"
+mutable struct var"WhileLoopBackendConfig.KnownTripCount"
     n::Int64
 end
 PB.default_values(::Type{var"WhileLoopBackendConfig.KnownTripCount"}) = (;n = zero(Int64))
@@ -277,7 +277,7 @@ end
 
 @enumx PrimitiveType PRIMITIVE_TYPE_INVALID=0 PRED=1 S1=30 S2=26 S4=21 S8=2 S16=3 S32=4 S64=5 U1=31 U2=27 U4=22 U8=6 U16=7 U32=8 U64=9 F16=10 F32=11 BF16=16 F64=12 F8E5M2=19 F8E4M3=28 F8E4M3FN=20 F8E4M3B11FNUZ=23 F8E3M4=29 F8E5M2FNUZ=24 F8E4M3FNUZ=25 F4E2M1FN=32 F8E8M0FNU=33 C64=15 C128=18 TUPLE=13 OPAQUE_TYPE=14 TOKEN=17 BUFFER=34
 
-struct ParameterReplication
+mutable struct ParameterReplication
     replicated_at_leaf_buffers::Vector{Bool}
 end
 PB.default_values(::Type{ParameterReplication}) = (;replicated_at_leaf_buffers = Vector{Bool}())
@@ -311,7 +311,7 @@ end
 
 @enumx var"ChannelHandle.ChannelType" CHANNEL_TYPE_INVALID=0 DEVICE_TO_DEVICE=1 DEVICE_TO_HOST=2 HOST_TO_DEVICE=3
 
-struct SortOptions
+mutable struct SortOptions
     descending::Bool
 end
 PB.default_values(::Type{SortOptions}) = (;descending = false)
@@ -341,7 +341,7 @@ function PB._encoded_size(x::SortOptions)
     return encoded_size
 end
 
-struct ReplicaGroup
+mutable struct ReplicaGroup
     replica_ids::Vector{Int64}
 end
 PB.default_values(::Type{ReplicaGroup}) = (;replica_ids = Vector{Int64}())
@@ -371,7 +371,7 @@ function PB._encoded_size(x::ReplicaGroup)
     return encoded_size
 end
 
-struct var"ResultAccuracy.Tolerance"
+mutable struct var"ResultAccuracy.Tolerance"
     atol::Float64
     rtol::Float64
     ulps::Int64
@@ -413,7 +413,7 @@ function PB._encoded_size(x::var"ResultAccuracy.Tolerance")
     return encoded_size
 end
 
-struct TileProto
+mutable struct TileProto
     dimensions::Vector{Int64}
 end
 PB.default_values(::Type{TileProto}) = (;dimensions = Vector{Int64}())
@@ -443,7 +443,7 @@ function PB._encoded_size(x::TileProto)
     return encoded_size
 end
 
-struct ScatterDimensionNumbers
+mutable struct ScatterDimensionNumbers
     update_window_dims::Vector{Int64}
     inserted_window_dims::Vector{Int64}
     scatter_dims_to_operand_dims::Vector{Int64}
@@ -503,7 +503,7 @@ function PB._encoded_size(x::ScatterDimensionNumbers)
     return encoded_size
 end
 
-struct SourceTarget
+mutable struct SourceTarget
     source::Int64
     target::Int64
 end
@@ -539,7 +539,7 @@ function PB._encoded_size(x::SourceTarget)
     return encoded_size
 end
 
-struct ExecutionHandle
+mutable struct ExecutionHandle
     handle::Int64
 end
 PB.default_values(::Type{ExecutionHandle}) = (;handle = zero(Int64))
@@ -569,7 +569,7 @@ function PB._encoded_size(x::ExecutionHandle)
     return encoded_size
 end
 
-struct GlobalDataHandle
+mutable struct GlobalDataHandle
     handle::Int64
 end
 PB.default_values(::Type{GlobalDataHandle}) = (;handle = zero(Int64))
@@ -603,7 +603,7 @@ end
 
 @enumx ProfileSource PROFILE_SOURCE_UNKNOWN_SOURCE=0 PROFILE_SOURCE_EMBEDDED=1 PROFILE_SOURCE_REMOTE=2
 
-struct DotDimensionNumbers
+mutable struct DotDimensionNumbers
     lhs_contracting_dimensions::Vector{Int64}
     rhs_contracting_dimensions::Vector{Int64}
     lhs_batch_dimensions::Vector{Int64}
@@ -651,7 +651,7 @@ function PB._encoded_size(x::DotDimensionNumbers)
     return encoded_size
 end
 
-struct DeviceHandle
+mutable struct DeviceHandle
     handle::Int64
     device_count::Int64
 end
@@ -689,7 +689,7 @@ end
 
 @enumx var"OpSharding.Type" REPLICATED=0 MAXIMAL=1 TUPLE=2 OTHER=3 MANUAL=4 UNKNOWN=5 UNREDUCED=6
 
-struct WindowDimension
+mutable struct WindowDimension
     size::Int64
     stride::Int64
     padding_low::Int64
@@ -755,19 +755,41 @@ function PB._encoded_size(x::WindowDimension)
     return encoded_size
 end
 
-struct ConvolutionDimensionNumbers
-    input_batch_dimension::Int64
-    input_feature_dimension::Int64
-    input_spatial_dimensions::Vector{Int64}
-    kernel_input_feature_dimension::Int64
-    kernel_output_feature_dimension::Int64
-    kernel_spatial_dimensions::Vector{Int64}
-    output_batch_dimension::Int64
-    output_feature_dimension::Int64
-    output_spatial_dimensions::Vector{Int64}
+mutable struct ConvolutionDimensionNumbers
+    __data::Dict{Symbol,Any}
 end
-PB.default_values(::Type{ConvolutionDimensionNumbers}) = (;input_batch_dimension = zero(Int64), input_feature_dimension = zero(Int64), input_spatial_dimensions = Vector{Int64}(), kernel_input_feature_dimension = zero(Int64), kernel_output_feature_dimension = zero(Int64), kernel_spatial_dimensions = Vector{Int64}(), output_batch_dimension = zero(Int64), output_feature_dimension = zero(Int64), output_spatial_dimensions = Vector{Int64}())
-PB.field_numbers(::Type{ConvolutionDimensionNumbers}) = (;input_batch_dimension = 7, input_feature_dimension = 8, input_spatial_dimensions = 11, kernel_input_feature_dimension = 3, kernel_output_feature_dimension = 4, kernel_spatial_dimensions = 6, output_batch_dimension = 9, output_feature_dimension = 10, output_spatial_dimensions = 12)
+
+# Default values for ConvolutionDimensionNumbers fields
+const _ConvolutionDimensionNumbers_defaults = Dict{Symbol,Any}(
+    :input_batch_dimension => zero(Int64),
+    :input_feature_dimension => zero(Int64),
+    :input_spatial_dimensions => Vector{Int64}(),
+    :kernel_input_feature_dimension => zero(Int64),
+    :kernel_output_feature_dimension => zero(Int64),
+    :kernel_spatial_dimensions => Vector{Int64}(),
+    :output_batch_dimension => zero(Int64),
+    :output_feature_dimension => zero(Int64),
+    :output_spatial_dimensions => Vector{Int64}()
+)
+
+# Keyword constructor for ConvolutionDimensionNumbers
+function ConvolutionDimensionNumbers(; kwargs...)
+    __data = Dict{Symbol,Any}(kwargs)
+    return ConvolutionDimensionNumbers(__data)
+end
+
+# Field accessors for ConvolutionDimensionNumbers
+function Base.getproperty(x::ConvolutionDimensionNumbers, s::Symbol)
+    s === :__data && return getfield(x, :__data)
+    d = getfield(x, :__data)
+    return get(d, s, get(_ConvolutionDimensionNumbers_defaults, s, nothing))
+end
+function Base.setproperty!(x::ConvolutionDimensionNumbers, s::Symbol, v)
+    getfield(x, :__data)[s] = v
+end
+Base.propertynames(::ConvolutionDimensionNumbers) = (:input_batch_dimension, :input_feature_dimension, :input_spatial_dimensions, :kernel_input_feature_dimension, :kernel_output_feature_dimension, :kernel_spatial_dimensions, :output_batch_dimension, :output_feature_dimension, :output_spatial_dimensions,)
+# PB.default_values(::Type{ConvolutionDimensionNumbers}) = (;input_batch_dimension = zero(Int64), input_feature_dimension = zero(Int64), input_spatial_dimensions = Vector{Int64}(), kernel_input_feature_dimension = zero(Int64), kernel_output_feature_dimension = zero(Int64), kernel_spatial_dimensions = Vector{Int64}(), output_batch_dimension = zero(Int64), output_feature_dimension = zero(Int64), output_spatial_dimensions = Vector{Int64}())
+# PB.field_numbers(::Type{ConvolutionDimensionNumbers}) = (;input_batch_dimension = 7, input_feature_dimension = 8, input_spatial_dimensions = 11, kernel_input_feature_dimension = 3, kernel_output_feature_dimension = 4, kernel_spatial_dimensions = 6, output_batch_dimension = 9, output_feature_dimension = 10, output_spatial_dimensions = 12)
 
 function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:ConvolutionDimensionNumbers})
     input_batch_dimension = zero(Int64)
@@ -803,7 +825,7 @@ function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:ConvolutionDimensionNumb
             Base.skip(d, wire_type)
         end
     end
-    return ConvolutionDimensionNumbers(input_batch_dimension, input_feature_dimension, input_spatial_dimensions[], kernel_input_feature_dimension, kernel_output_feature_dimension, kernel_spatial_dimensions[], output_batch_dimension, output_feature_dimension, output_spatial_dimensions[])
+    return ConvolutionDimensionNumbers(; input_batch_dimension=input_batch_dimension, input_feature_dimension=input_feature_dimension, input_spatial_dimensions=input_spatial_dimensions[], kernel_input_feature_dimension=kernel_input_feature_dimension, kernel_output_feature_dimension=kernel_output_feature_dimension, kernel_spatial_dimensions=kernel_spatial_dimensions[], output_batch_dimension=output_batch_dimension, output_feature_dimension=output_feature_dimension, output_spatial_dimensions=output_spatial_dimensions[])
 end
 
 function PB.encode(e::PB.AbstractProtoEncoder, x::ConvolutionDimensionNumbers)
@@ -833,7 +855,7 @@ function PB._encoded_size(x::ConvolutionDimensionNumbers)
     return encoded_size
 end
 
-struct IotaReplicaGroupListProto
+mutable struct IotaReplicaGroupListProto
     num_replica_groups::Int64
     num_devices_per_group::Int64
     iota_reshape_dims::Vector{Int64}
@@ -881,7 +903,7 @@ function PB._encoded_size(x::IotaReplicaGroupListProto)
     return encoded_size
 end
 
-struct OriginalArrayProto
+mutable struct OriginalArrayProto
     instruction_name::String
     shape_index::Vector{Int64}
 end
@@ -917,7 +939,7 @@ function PB._encoded_size(x::OriginalArrayProto)
     return encoded_size
 end
 
-struct ComputationStats
+mutable struct ComputationStats
     flop_count::Float64
     transcendental_count::Float64
 end
@@ -953,7 +975,7 @@ function PB._encoded_size(x::ComputationStats)
     return encoded_size
 end
 
-struct FrontendAttributes
+mutable struct FrontendAttributes
     map::Dict{String,String}
 end
 PB.default_values(::Type{FrontendAttributes}) = (;map = Dict{String,String}())
@@ -987,7 +1009,7 @@ end
 
 @enumx AsyncStreamKind ASYNC_STREAM_KIND_COLLECTIVE=0 ASYNC_STREAM_KIND_P2P0=1 ASYNC_STREAM_KIND_P2P1=2 ASYNC_STREAM_KIND_MEMCPYP2P=3
 
-struct var"WhileLoopBackendConfig.KnownInductionVariable"
+mutable struct var"WhileLoopBackendConfig.KnownInductionVariable"
     tuple_index::Int64
 end
 PB.default_values(::Type{var"WhileLoopBackendConfig.KnownInductionVariable"}) = (;tuple_index = zero(Int64))
@@ -1017,7 +1039,7 @@ function PB._encoded_size(x::var"WhileLoopBackendConfig.KnownInductionVariable")
     return encoded_size
 end
 
-struct var"PaddingConfig.PaddingConfigDimension"
+mutable struct var"PaddingConfig.PaddingConfigDimension"
     edge_padding_low::Int64
     edge_padding_high::Int64
     interior_padding::Int64
@@ -1059,7 +1081,7 @@ function PB._encoded_size(x::var"PaddingConfig.PaddingConfigDimension")
     return encoded_size
 end
 
-struct GemmPerfTableEntry
+mutable struct GemmPerfTableEntry
     b::Int64
     m::Int64
     n::Int64
@@ -1113,7 +1135,7 @@ function PB._encoded_size(x::GemmPerfTableEntry)
     return encoded_size
 end
 
-struct OutputOperandAliasing
+mutable struct OutputOperandAliasing
     output_shape_index::Vector{Int64}
     operand_index::Int64
     operand_shape_index::Vector{Int64}
@@ -1157,7 +1179,7 @@ end
 
 @enumx var"PrecisionConfig.Precision" DEFAULT=0 HIGH=1 HIGHEST=2
 
-struct ExecutionProfile
+mutable struct ExecutionProfile
     compilation_cache_hit::Bool
     compile_time_ms::Int64
     compute_cycle_count::Int64
@@ -1229,7 +1251,7 @@ function PB._encoded_size(x::ExecutionProfile)
     return encoded_size
 end
 
-struct var"AxisRefProto.SubAxis"
+mutable struct var"AxisRefProto.SubAxis"
     pre_size::Int64
     size::Int64
 end
@@ -1269,7 +1291,7 @@ end
 
 @enumx PaddingType PADDING_INVALID=0 PADDING_VALID=1 PADDING_SAME=2
 
-struct var"MeshProto.MeshAxis"
+mutable struct var"MeshProto.MeshAxis"
     name::String
     size::Int64
 end
@@ -1307,7 +1329,7 @@ end
 
 @enumx var"OpSharding.ShardGroupType" AS=0 LIKE=1
 
-struct CholeskyOptions
+mutable struct CholeskyOptions
     lower::Bool
 end
 PB.default_values(::Type{CholeskyOptions}) = (;lower = false)
@@ -1337,7 +1359,7 @@ function PB._encoded_size(x::CholeskyOptions)
     return encoded_size
 end
 
-struct StatisticsViz
+mutable struct StatisticsViz
     stat_index_to_visualize::Int64
     statistics::Vector{Statistic}
 end
@@ -1373,7 +1395,7 @@ function PB._encoded_size(x::StatisticsViz)
     return encoded_size
 end
 
-struct TriangularSolveOptions
+mutable struct TriangularSolveOptions
     left_side::Bool
     lower::Bool
     unit_diagonal::Bool
@@ -1421,7 +1443,7 @@ function PB._encoded_size(x::TriangularSolveOptions)
     return encoded_size
 end
 
-struct DeviceAssignmentProto
+mutable struct DeviceAssignmentProto
     replica_count::Int32
     computation_count::Int32
     computation_devices::Vector{var"DeviceAssignmentProto.ComputationDevice"}
@@ -1463,7 +1485,7 @@ function PB._encoded_size(x::DeviceAssignmentProto)
     return encoded_size
 end
 
-struct ChannelHandle
+mutable struct ChannelHandle
     handle::Int64
     var"#type"::var"ChannelHandle.ChannelType".T
 end
@@ -1499,7 +1521,7 @@ function PB._encoded_size(x::ChannelHandle)
     return encoded_size
 end
 
-struct ResultAccuracy
+mutable struct ResultAccuracy
     specs::Union{Nothing,OneOf{<:Union{var"ResultAccuracy.Mode".T,var"ResultAccuracy.Tolerance"}}}
 end
 PB.oneof_field_types(::Type{ResultAccuracy}) = (;
@@ -1544,7 +1566,7 @@ function PB._encoded_size(x::ResultAccuracy)
     return encoded_size
 end
 
-struct RaggedDotDimensionNumbers
+mutable struct RaggedDotDimensionNumbers
     dot_dimension_numbers::Union{Nothing,DotDimensionNumbers}
     lhs_ragged_dimensions::Vector{Int64}
     rhs_group_dimensions::Vector{Int64}
@@ -1586,7 +1608,7 @@ function PB._encoded_size(x::RaggedDotDimensionNumbers)
     return encoded_size
 end
 
-struct Window
+mutable struct Window
     dimensions::Vector{WindowDimension}
 end
 PB.default_values(::Type{Window}) = (;dimensions = Vector{WindowDimension}())
@@ -1616,7 +1638,7 @@ function PB._encoded_size(x::Window)
     return encoded_size
 end
 
-struct CollectiveDeviceListProto
+mutable struct CollectiveDeviceListProto
     replica_groups::Vector{ReplicaGroup}
     iota_replica_group_list::Union{Nothing,IotaReplicaGroupListProto}
 end
@@ -1652,7 +1674,7 @@ function PB._encoded_size(x::CollectiveDeviceListProto)
     return encoded_size
 end
 
-struct OriginalValueElementProto
+mutable struct OriginalValueElementProto
     shape_index::Vector{Int64}
     original_array::Union{Nothing,OriginalArrayProto}
 end
@@ -1688,20 +1710,18 @@ function PB._encoded_size(x::OriginalValueElementProto)
     return encoded_size
 end
 
-struct WhileLoopBackendConfig
+mutable struct WhileLoopBackendConfig
     known_trip_count::Union{Nothing,var"WhileLoopBackendConfig.KnownTripCount"}
     known_init_step::Union{Nothing,var"WhileLoopBackendConfig.KnownInitStep"}
     known_induction_variable::Union{Nothing,var"WhileLoopBackendConfig.KnownInductionVariable"}
-    dynamic_variable_tuple_indices::Vector{Int64}
 end
-PB.default_values(::Type{WhileLoopBackendConfig}) = (;known_trip_count = nothing, known_init_step = nothing, known_induction_variable = nothing, dynamic_variable_tuple_indices = Vector{Int64}())
-PB.field_numbers(::Type{WhileLoopBackendConfig}) = (;known_trip_count = 1, known_init_step = 2, known_induction_variable = 3, dynamic_variable_tuple_indices = 4)
+PB.default_values(::Type{WhileLoopBackendConfig}) = (;known_trip_count = nothing, known_init_step = nothing, known_induction_variable = nothing)
+PB.field_numbers(::Type{WhileLoopBackendConfig}) = (;known_trip_count = 1, known_init_step = 2, known_induction_variable = 3)
 
 function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:WhileLoopBackendConfig})
     known_trip_count = Ref{Union{Nothing,var"WhileLoopBackendConfig.KnownTripCount"}}(nothing)
     known_init_step = Ref{Union{Nothing,var"WhileLoopBackendConfig.KnownInitStep"}}(nothing)
     known_induction_variable = Ref{Union{Nothing,var"WhileLoopBackendConfig.KnownInductionVariable"}}(nothing)
-    dynamic_variable_tuple_indices = PB.BufferedVector{Int64}()
     while !PB.message_done(d)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
@@ -1710,13 +1730,11 @@ function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:WhileLoopBackendConfig})
             PB.decode!(d, known_init_step)
         elseif field_number == 3
             PB.decode!(d, known_induction_variable)
-        elseif field_number == 4
-            PB.decode!(d, wire_type, dynamic_variable_tuple_indices)
         else
             Base.skip(d, wire_type)
         end
     end
-    return WhileLoopBackendConfig(known_trip_count[], known_init_step[], known_induction_variable[], dynamic_variable_tuple_indices[])
+    return WhileLoopBackendConfig(known_trip_count[], known_init_step[], known_induction_variable[])
 end
 
 function PB.encode(e::PB.AbstractProtoEncoder, x::WhileLoopBackendConfig)
@@ -1724,7 +1742,6 @@ function PB.encode(e::PB.AbstractProtoEncoder, x::WhileLoopBackendConfig)
     !isnothing(x.known_trip_count) && PB.encode(e, 1, x.known_trip_count)
     !isnothing(x.known_init_step) && PB.encode(e, 2, x.known_init_step)
     !isnothing(x.known_induction_variable) && PB.encode(e, 3, x.known_induction_variable)
-    !isempty(x.dynamic_variable_tuple_indices) && PB.encode(e, 4, x.dynamic_variable_tuple_indices)
     return position(e.io) - initpos
 end
 function PB._encoded_size(x::WhileLoopBackendConfig)
@@ -1732,11 +1749,10 @@ function PB._encoded_size(x::WhileLoopBackendConfig)
     !isnothing(x.known_trip_count) && (encoded_size += PB._encoded_size(x.known_trip_count, 1))
     !isnothing(x.known_init_step) && (encoded_size += PB._encoded_size(x.known_init_step, 2))
     !isnothing(x.known_induction_variable) && (encoded_size += PB._encoded_size(x.known_induction_variable, 3))
-    !isempty(x.dynamic_variable_tuple_indices) && (encoded_size += PB._encoded_size(x.dynamic_variable_tuple_indices, 4))
     return encoded_size
 end
 
-struct PaddingConfig
+mutable struct PaddingConfig
     dimensions::Vector{var"PaddingConfig.PaddingConfigDimension"}
 end
 PB.default_values(::Type{PaddingConfig}) = (;dimensions = Vector{var"PaddingConfig.PaddingConfigDimension"}())
@@ -1766,7 +1782,7 @@ function PB._encoded_size(x::PaddingConfig)
     return encoded_size
 end
 
-struct GemmPerfTableEntryValues
+mutable struct GemmPerfTableEntryValues
     entries::Vector{GemmPerfTableEntry}
 end
 PB.default_values(::Type{GemmPerfTableEntryValues}) = (;entries = Vector{GemmPerfTableEntry}())
@@ -1796,7 +1812,7 @@ function PB._encoded_size(x::GemmPerfTableEntryValues)
     return encoded_size
 end
 
-struct PrecisionConfig
+mutable struct PrecisionConfig
     operand_precision::Vector{var"PrecisionConfig.Precision".T}
     algorithm::var"PrecisionConfig.Algorithm".T
 end
@@ -1832,7 +1848,7 @@ function PB._encoded_size(x::PrecisionConfig)
     return encoded_size
 end
 
-struct AxisRefProto
+mutable struct AxisRefProto
     mesh_axis_index::Int64
     sub_axis_info::Union{Nothing,var"AxisRefProto.SubAxis"}
 end
@@ -1868,7 +1884,7 @@ function PB._encoded_size(x::AxisRefProto)
     return encoded_size
 end
 
-struct var"OpMetadata.ProfileInfo"
+mutable struct var"OpMetadata.ProfileInfo"
     profile_type::Vector{ProfileType.T}
     relative_speedup::Float64
     profile_source::ProfileSource.T
@@ -1922,7 +1938,7 @@ function PB._encoded_size(x::var"OpMetadata.ProfileInfo")
     return encoded_size
 end
 
-struct MeshProto
+mutable struct MeshProto
     axes::Vector{var"MeshProto.MeshAxis"}
     device_ids::Vector{Int64}
 end
@@ -1958,7 +1974,7 @@ function PB._encoded_size(x::MeshProto)
     return encoded_size
 end
 
-struct OriginalValueProto
+mutable struct OriginalValueProto
     elements::Vector{OriginalValueElementProto}
     is_synthetic_call::Bool
 end
@@ -1994,7 +2010,7 @@ function PB._encoded_size(x::OriginalValueProto)
     return encoded_size
 end
 
-struct GemmPerfTable
+mutable struct GemmPerfTable
     entries::Dict{String,GemmPerfTableEntryValues}
 end
 PB.default_values(::Type{GemmPerfTable}) = (;entries = Dict{String,GemmPerfTableEntryValues}())
@@ -2024,7 +2040,7 @@ function PB._encoded_size(x::GemmPerfTable)
     return encoded_size
 end
 
-struct var"NamedShardingProto.DimensionSharding"
+mutable struct var"NamedShardingProto.DimensionSharding"
     axes::Vector{AxisRefProto}
     is_closed::Bool
 end
@@ -2060,25 +2076,47 @@ function PB._encoded_size(x::var"NamedShardingProto.DimensionSharding")
     return encoded_size
 end
 
-struct OpMetadata
-    op_type::String
-    op_name::String
-    source_file::String
-    source_line::Int32
-    source_end_line::Int32
-    source_column::Int32
-    source_end_column::Int32
-    profile_type::Vector{ProfileType.T}
-    size_of_generated_code_in_bytes::Int64
-    size_of_memory_working_set_in_bytes::Int64
-    profile_info::Union{Nothing,var"OpMetadata.ProfileInfo"}
-    deduplicated_name::String
-    stack_frame_id::Int32
-    scheduling_name::String
+mutable struct OpMetadata
+    __data::Dict{Symbol,Any}
 end
-PB.reserved_fields(::Type{OpMetadata}) = (names = ["creation_pass_id", "logical_creation_pass_id"], numbers = Union{Int,UnitRange{Int}}[6, 7, 11, 13, 14])
-PB.default_values(::Type{OpMetadata}) = (;op_type = "", op_name = "", source_file = "", source_line = zero(Int32), source_end_line = zero(Int32), source_column = zero(Int32), source_end_column = zero(Int32), profile_type = Vector{ProfileType.T}(), size_of_generated_code_in_bytes = zero(Int64), size_of_memory_working_set_in_bytes = zero(Int64), profile_info = nothing, deduplicated_name = "", stack_frame_id = zero(Int32), scheduling_name = "")
-PB.field_numbers(::Type{OpMetadata}) = (;op_type = 1, op_name = 2, source_file = 3, source_line = 4, source_end_line = 17, source_column = 18, source_end_column = 19, profile_type = 5, size_of_generated_code_in_bytes = 8, size_of_memory_working_set_in_bytes = 9, profile_info = 10, deduplicated_name = 12, stack_frame_id = 15, scheduling_name = 16)
+
+# Default values for OpMetadata fields
+const _OpMetadata_defaults = Dict{Symbol,Any}(
+    :op_type => "",
+    :op_name => "",
+    :source_file => "",
+    :source_line => zero(Int32),
+    :source_end_line => zero(Int32),
+    :source_column => zero(Int32),
+    :source_end_column => zero(Int32),
+    :profile_type => Vector{ProfileType.T}(),
+    :size_of_generated_code_in_bytes => zero(Int64),
+    :size_of_memory_working_set_in_bytes => zero(Int64),
+    :profile_info => nothing,
+    :deduplicated_name => "",
+    :stack_frame_id => zero(Int32),
+    :scheduling_name => ""
+)
+
+# Keyword constructor for OpMetadata
+function OpMetadata(; kwargs...)
+    __data = Dict{Symbol,Any}(kwargs)
+    return OpMetadata(__data)
+end
+
+# Field accessors for OpMetadata
+function Base.getproperty(x::OpMetadata, s::Symbol)
+    s === :__data && return getfield(x, :__data)
+    d = getfield(x, :__data)
+    return get(d, s, get(_OpMetadata_defaults, s, nothing))
+end
+function Base.setproperty!(x::OpMetadata, s::Symbol, v)
+    getfield(x, :__data)[s] = v
+end
+Base.propertynames(::OpMetadata) = (:op_type, :op_name, :source_file, :source_line, :source_end_line, :source_column, :source_end_column, :profile_type, :size_of_generated_code_in_bytes, :size_of_memory_working_set_in_bytes, :profile_info, :deduplicated_name, :stack_frame_id, :scheduling_name,)
+# PB.reserved_fields(::Type{OpMetadata}) = (names = ["creation_pass_id", "logical_creation_pass_id"], numbers = Union{Int,UnitRange{Int}}[6, 7, 11, 13, 14])
+# PB.default_values(::Type{OpMetadata}) = (;op_type = "", op_name = "", source_file = "", source_line = zero(Int32), source_end_line = zero(Int32), source_column = zero(Int32), source_end_column = zero(Int32), profile_type = Vector{ProfileType.T}(), size_of_generated_code_in_bytes = zero(Int64), size_of_memory_working_set_in_bytes = zero(Int64), profile_info = nothing, deduplicated_name = "", stack_frame_id = zero(Int32), scheduling_name = "")
+# PB.field_numbers(::Type{OpMetadata}) = (;op_type = 1, op_name = 2, source_file = 3, source_line = 4, source_end_line = 17, source_column = 18, source_end_column = 19, profile_type = 5, size_of_generated_code_in_bytes = 8, size_of_memory_working_set_in_bytes = 9, profile_info = 10, deduplicated_name = 12, stack_frame_id = 15, scheduling_name = 16)
 
 function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:OpMetadata})
     op_type = ""
@@ -2129,7 +2167,7 @@ function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:OpMetadata})
             Base.skip(d, wire_type)
         end
     end
-    return OpMetadata(op_type, op_name, source_file, source_line, source_end_line, source_column, source_end_column, profile_type[], size_of_generated_code_in_bytes, size_of_memory_working_set_in_bytes, profile_info[], deduplicated_name, stack_frame_id, scheduling_name)
+    return OpMetadata(; op_type=op_type, op_name=op_name, source_file=source_file, source_line=source_line, source_end_line=source_end_line, source_column=source_column, source_end_column=source_end_column, profile_type=profile_type[], size_of_generated_code_in_bytes=size_of_generated_code_in_bytes, size_of_memory_working_set_in_bytes=size_of_memory_working_set_in_bytes, profile_info=profile_info[], deduplicated_name=deduplicated_name, stack_frame_id=stack_frame_id, scheduling_name=scheduling_name)
 end
 
 function PB.encode(e::PB.AbstractProtoEncoder, x::OpMetadata)
@@ -2169,7 +2207,7 @@ function PB._encoded_size(x::OpMetadata)
     return encoded_size
 end
 
-struct MeshAxesReplicaGroupListProto
+mutable struct MeshAxesReplicaGroupListProto
     mesh::Union{Nothing,MeshProto}
     axes::Vector{AxisRefProto}
 end
@@ -2205,7 +2243,7 @@ function PB._encoded_size(x::MeshAxesReplicaGroupListProto)
     return encoded_size
 end
 
-struct NamedShardingProto
+mutable struct NamedShardingProto
     mesh::Union{Nothing,MeshProto}
     dim_shardings::Vector{var"NamedShardingProto.DimensionSharding"}
     replicated_axes::Vector{AxisRefProto}
@@ -2261,7 +2299,7 @@ function PB._encoded_size(x::NamedShardingProto)
 end
 
 # Stub definitions for cyclic types
-struct var"##Stub#LayoutProto"{T1<:var"##Abstract#ShapeProto"} <: var"##Abstract#LayoutProto"
+mutable struct var"##Stub#LayoutProto"{T1<:var"##Abstract#ShapeProto"} <: var"##Abstract#LayoutProto"
     minor_to_major::Vector{Int64}
     dim_level_types::Vector{DimLevelType.T}
     dim_unique::Vector{Bool}
@@ -2277,7 +2315,7 @@ struct var"##Stub#LayoutProto"{T1<:var"##Abstract#ShapeProto"} <: var"##Abstract
     split_configs::Vector{SplitConfigProto}
 end
 
-struct var"##Stub#LiteralProto"{T1<:var"##Abstract#ShapeProto"} <: var"##Abstract#LiteralProto"
+mutable struct var"##Stub#LiteralProto"{T1<:var"##Abstract#ShapeProto"} <: var"##Abstract#LiteralProto"
     shape::Union{Nothing,T1}
     preds::Vector{Bool}
     s1s::Vector{UInt8}
@@ -2313,7 +2351,7 @@ struct var"##Stub#LiteralProto"{T1<:var"##Abstract#ShapeProto"} <: var"##Abstrac
     sparse_indices::Vector{Int64}
 end
 
-struct var"##Stub#OpSharding"{T1<:var"##Abstract#ShapeProto"} <: var"##Abstract#OpSharding"
+mutable struct var"##Stub#OpSharding"{T1<:var"##Abstract#ShapeProto"} <: var"##Abstract#OpSharding"
     var"#type"::var"OpSharding.Type".T
     tile_shape::Union{Nothing,T1}
     tile_assignment_dimensions::Vector{Int64}
@@ -2330,13 +2368,13 @@ struct var"##Stub#OpSharding"{T1<:var"##Abstract#ShapeProto"} <: var"##Abstract#
     named_sharding::Union{Nothing,NamedShardingProto}
 end
 
-struct var"##Stub#ProgramShapeProto"{T1<:var"##Abstract#ShapeProto"} <: var"##Abstract#ProgramShapeProto"
+mutable struct var"##Stub#ProgramShapeProto"{T1<:var"##Abstract#ShapeProto"} <: var"##Abstract#ProgramShapeProto"
     parameters::Vector{T1}
     result::Union{Nothing,T1}
     parameter_names::Vector{String}
 end
 
-struct var"##Stub#ShapeProto" <: var"##Abstract#ShapeProto"
+mutable struct var"##Stub#ShapeProto" <: var"##Abstract#ShapeProto"
     element_type::PrimitiveType.T
     dimensions::Vector{Int64}
     is_dynamic_dimension::Vector{Bool}
