@@ -344,8 +344,6 @@ function make_mlir_fn(
     Ops.activate_constant_context!(fnbody)
     @assert MLIR.IR.has_block()
 
-    # Explicitly don't use with_block to avoid creating a closure, which creates
-    # both compile-time and relocatability issues
     MLIR.IR.activate!(fnbody)
 
     result = try
@@ -523,8 +521,8 @@ function prepare_mlir_fn_args(
         end
     end
 
-    func = MLIR.IR.with_block(MLIR.IR.body(mod)) do
-        return MLIR.Dialects.func.func_(;
+    func = @activate MLIR.IR.body(mod) begin
+        MLIR.Dialects.func.func_(;
             sym_name=name * "_tmp",
             function_type=MLIR.IR.FunctionType(in_tys, Vector{MLIR.IR.Type}(undef, 0)),
             body=MLIR.IR.Region(),
@@ -862,8 +860,8 @@ function finalize_mlir_fn(
         MLIR.IR.deactivate!(fnbody)
     end
 
-    func2 = MLIR.IR.with_block(MLIR.IR.body(mod)) do
-        return MLIR.Dialects.func.func_(;
+    func2 = MLIR.IR.@activate MLIR.IR.body(mod) begin
+        MLIR.Dialects.func.func_(;
             sym_name=__lookup_unique_name_in_module(mod, name),
             function_type=MLIR.IR.FunctionType(in_tys, out_tys),
             body=MLIR.IR.Region(),

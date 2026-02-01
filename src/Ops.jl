@@ -2304,8 +2304,8 @@ end
 
     # compile the true branch without any returns first
     true_fn_mod = MLIR.IR.current_module()
-    true_func_tmp = MLIR.IR.with_block(MLIR.IR.body(true_fn_mod)) do
-        return MLIR.Dialects.func.func_(;
+    true_func_tmp = MLIR.IR.@activate MLIR.IR.body(true_fn_mod) begin
+        MLIR.Dialects.func.func_(;
             sym_name=string(true_fn) * "_tb_tmp",
             function_type=MLIR.IR.FunctionType(input_types, []),
             body=MLIR.IR.Region(),
@@ -2370,8 +2370,8 @@ end
 
     # compile the false branch without any returns similar to the true branch
     false_fn_mod = MLIR.IR.current_module()
-    false_func_tmp = MLIR.IR.with_block(MLIR.IR.body(false_fn_mod)) do
-        return MLIR.Dialects.func.func_(;
+    false_func_tmp = MLIR.IR.@activate MLIR.IR.body(false_fn_mod) begin
+        MLIR.Dialects.func.func_(;
             sym_name=string(false_fn) * "_fb_tmp",
             function_type=MLIR.IR.FunctionType(input_types, []),
             body=MLIR.IR.Region(),
@@ -2598,8 +2598,8 @@ end
     # With the corrected results, we can compile the true and false branches
     tb_out_types = [mlir_type(tr) for tr in tb_corrected_linear_results]
 
-    true_fn_compiled = MLIR.IR.with_block(MLIR.IR.body(true_fn_mod)) do
-        return MLIR.Dialects.func.func_(;
+    true_fn_compiled = MLIR.IR.@activate MLIR.IR.body(true_fn_mod) begin
+        MLIR.Dialects.func.func_(;
             sym_name=Reactant.TracedUtils.__lookup_unique_name_in_module(
                 true_fn_mod, string(true_fn) * "_tb"
             ),
@@ -2615,8 +2615,8 @@ end
 
     fb_out_types = [mlir_type(fr) for fr in fb_corrected_linear_results]
 
-    false_fn_compiled = MLIR.IR.with_block(MLIR.IR.body(false_fn_mod)) do
-        return MLIR.Dialects.func.func_(;
+    false_fn_compiled = MLIR.IR.@activate MLIR.IR.body(false_fn_mod) begin
+        MLIR.Dialects.func.func_(;
             sym_name=Reactant.TracedUtils.__lookup_unique_name_in_module(
                 false_fn_mod, string(false_fn) * "_fb"
             ),
@@ -2769,8 +2769,8 @@ result = Ops.case(
     branch_results = Vector{Any}(undef, n_branches)
 
     for b in 1:n_branches
-        branch_func_tmps[b] = MLIR.IR.with_block(MLIR.IR.body(branch_mods[b])) do
-            return MLIR.Dialects.func.func_(;
+        branch_func_tmps[b] = MLIR.IR.@activate MLIR.IR.body(branch_mods[b]) begin
+            MLIR.Dialects.func.func_(;
                 sym_name=string(branch_fns[b]) * "_branch$(b)_tmp",
                 function_type=MLIR.IR.FunctionType(input_types, []),
                 body=MLIR.IR.Region(),
@@ -2970,8 +2970,8 @@ result = Ops.case(
     for b in 1:n_branches
         branch_out_types = [mlir_type(tr) for tr in branch_corrected_linear_results[b]]
 
-        branch_fn_compiled = MLIR.IR.with_block(MLIR.IR.body(branch_mods[b])) do
-            return MLIR.Dialects.func.func_(;
+        branch_fn_compiled = MLIR.IR.@activate MLIR.IR.body(branch_mods[b]) begin
+            MLIR.Dialects.func.func_(;
                 sym_name=Reactant.TracedUtils.__lookup_unique_name_in_module(
                     branch_mods[b], string(branch_fns[b]) * "_branch$(b)"
                 ),

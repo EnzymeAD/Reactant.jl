@@ -268,11 +268,7 @@ On the right hand side are allowed the following function calls:
 The rhs can only contains dimensions and symbols present on the left hand side or integer literals.
 
 ```julia
-julia> using Reactant.MLIR: IR
-
-julia> IR.with_context(IR.Context()) do
-           IR.@affinemap (d1, d2)[s0] -> (d1 + s0, d2 % 10)
-       end
+julia> @affinemap (d1, d2)[s0] -> (d1 + s0, d2 % 10)
 MLIR.IR.AffineMap(#= (d0, d1)[s0] -> (d0 + s0, d1 mod 10) =#)
 ```
 """
