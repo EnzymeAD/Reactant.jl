@@ -2,13 +2,6 @@ using Reactant, Test, Random
 using Statistics
 using Reactant: ProbProg, ReactantRNG, ConcreteRNumber
 
-normal(rng, μ, σ, shape) = μ .+ σ .* randn(rng, shape)
-
-function normal_logpdf(x, μ, σ, _)
-    return -length(x) * log(σ) - length(x) / 2 * log(2π) -
-           sum((x .- μ) .^ 2 ./ (2 .* (σ .^ 2)))
-end
-
 function model(rng, xs)
     _, param_a = ProbProg.sample(rng, ProbProg.Normal(0.0, 5.0, (1,)); symbol=:param_a)
     _, param_b = ProbProg.sample(rng, ProbProg.Normal(0.0, 5.0, (1,)); symbol=:param_b)
