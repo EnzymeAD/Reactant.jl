@@ -236,10 +236,6 @@ function current_block(; throw_error::Core.Bool=true)
 end
 
 function with_block(f, blk::Block)
-    activate!(blk)
-    try
-        f()
-    finally
-        deactivate!(blk)
-    end
+    Base.depwarn("`with_block` is deprecated, use `@activate` instead.", :with_block)
+    @activate blk f()
 end

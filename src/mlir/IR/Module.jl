@@ -91,11 +91,7 @@ function current_module(; throw_error::Core.Bool=true)
     return last(task_local_storage(:mlir_module)::Vector{Module})
 end
 
-function with_module(f, blk::Module)
-    activate!(blk)
-    try
-        f()
-    finally
-        deactivate!(blk)
-    end
+function with_module(f, mod::Module)
+    Base.depwarn("`with_module` is deprecated, use `@activate` instead.", :with_module)
+    @activate mod f()
 end

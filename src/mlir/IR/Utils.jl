@@ -46,13 +46,18 @@ end
 
 # TODO potentially move to `ScopedValues.@with` if we move from task-local storage to ScopedValues
 """
-    @scope obj begin
+    @activate obj begin
         body
     end
 
 Activates `obj` for the duration of `body`, then deactivates it.
+
+!!! warning
+
+    `@activate` doesn't introduce a scope, so variables defined in `body` are
+    accessible after the macro call.
 """
-macro scope(obj, body)
+macro activate(obj, body)
     bodybody = if Base.isexpr(body, :block)
         body.args
     else
@@ -67,11 +72,11 @@ macro scope(obj, body)
     end
     quote
         $prologue
-        activate!($symbol)
+        $activate($symbol)
         try
             $(esc.(bodybody)...)
         finally
-            deactivate!($symbol)
+            deactivate($symbol)
         end
     end
 end

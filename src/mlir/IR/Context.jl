@@ -61,12 +61,8 @@ function current_context(; throw_error::Core.Bool=true)
 end
 
 function with_context(f, ctx::Context)
-    activate!(ctx)
-    try
-        f()
-    finally
-        deactivate!(ctx)
-    end
+    Base.depwarn("`with_context` is deprecated, use `@activate` instead.", :with_context)
+    @activate ctx f()
 end
 
 # TODO replace this method on all call sites for the one accepting a context argument
