@@ -24,6 +24,18 @@ end
         @test Array(k2) == [0xcddb151d375f238f, 0xf67a601be6bdada3]
     end
 
+    @testset "Same split but with unused second key" begin
+        function two_split(rng::TracedRArray{UInt64,1})
+            (k1, _) = random_split(rng, Val(2))
+            return k1
+        end
+
+        seed = ConcreteRArray(UInt64[0, 42])
+        k1 = @jit optimize = :probprog two_split(seed)
+
+        @test Array(k1) == [0x99ba4efe6b200159, 0x4f6cc618de79f4b9]
+    end
+
     @testset "N=2, Seed [42, 0]" begin
         seed = ConcreteRArray(UInt64[42, 0])
         k1, k2 = @jit optimize = :probprog random_split(seed, Val(2))
@@ -65,7 +77,7 @@ end
 # It is solely an intermediate representation within the `enzyme.mcmc` op lowering.
 function rng_distribution_attr(distribution::Int32)
     return @ccall MLIR.API.mlir_c.enzymeRngDistributionAttrGet(
-        MLIR.IR.context()::MLIR.API.MlirContext, distribution::Int32
+        MLIR.IR.current_context()::MLIR.API.MlirContext, distribution::Int32
     )::MLIR.IR.Attribute
 end
 

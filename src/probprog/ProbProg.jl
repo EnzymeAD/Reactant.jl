@@ -9,6 +9,7 @@ include("Distributions.jl")
 include("FFI.jl")
 include("Modeling.jl")
 include("Display.jl")
+include("Stats.jl")
 include("MH.jl")
 include("MCMC.jl")
 
@@ -20,6 +21,9 @@ export Distribution, Normal, Exponential, LogNormal
 
 # Utility functions.
 export get_choices, select
+
+# MCMC Statistics.
+export mcmc_summary
 
 # Core MLIR ops.
 export sample, untraced_call, simulate, generate, mh, mcmc

@@ -1,4 +1,64 @@
 # Reference: https://github.com/probcomp/Gen.jl/blob/91d798f2d2f0c175b1be3dc6daf3a10a8acf5da3/src/choice_map.jl#L104
+
+function _format_array(arr::AbstractArray; n_show::Int=3, indent::Int=0)
+    nd = ndims(arr)
+    if nd == 0
+        return string(arr[])
+    elseif nd == 1
+        len = length(arr)
+        if len <= 2 * n_show
+            return "[" * join(arr, " ") * "]"
+        end
+        first_part = join(arr[1:n_show], " ")
+        last_part = join(arr[(end - n_show + 1):end], " ")
+        return "[$first_part ... $last_part]"
+    else
+        n_slices = size(arr, 1)
+        indent_str = " "^(indent + 1)
+
+        if n_slices <= 2 * n_show
+            slice_strs = [
+                _format_array(selectdim(arr, 1, i); n_show=n_show, indent=indent + 1) for
+                i in 1:n_slices
+            ]
+            return "[" * join(slice_strs, "\n" * indent_str) * "]"
+        else
+            first_slices = [
+                _format_array(selectdim(arr, 1, i); n_show=n_show, indent=indent + 1) for
+                i in 1:n_show
+            ]
+            last_slices = [
+                _format_array(selectdim(arr, 1, i); n_show=n_show, indent=indent + 1) for
+                i in (n_slices - n_show + 1):n_slices
+            ]
+            return "[" *
+                   join(first_slices, "\n" * indent_str) *
+                   "\n" *
+                   indent_str *
+                   "..." *
+                   "\n" *
+                   indent_str *
+                   join(last_slices, "\n" * indent_str) *
+                   "]"
+        end
+    end
+end
+
+function _format_digest(value; n_show::Int=3)
+    if isa(value, Tuple)
+        if length(value) == 1
+            return _format_digest(value[1]; n_show=n_show)
+        else
+            formatted = [_format_digest(v; n_show=n_show) for v in value]
+            return "(" * join(formatted, ", ") * ")"
+        end
+    elseif isa(value, AbstractArray)
+        return _format_array(value; n_show=n_show, indent=0)
+    else
+        return string(value)
+    end
+end
+
 function _show_pretty(io::IO, trace::ProbProgTrace, pre::Int, vert_bars::Tuple)
     VERT = '\u2502'
     PLUS = '\u251C'
@@ -34,7 +94,8 @@ function _show_pretty(io::IO, trace::ProbProgTrace, pre::Int, vert_bars::Tuple)
 
     if trace.retval !== nothing
         print(io, indent_vert_str)
-        print(io, (cur == n ? indent_last_str : indent_str) * "retval : $(trace.retval)\n")
+        retval_str = _format_digest(trace.retval)
+        print(io, (cur == n ? indent_last_str : indent_str) * "retval : $retval_str\n")
         cur += 1
     end
 
@@ -46,7 +107,12 @@ function _show_pretty(io::IO, trace::ProbProgTrace, pre::Int, vert_bars::Tuple)
 
     for (key, value) in sorted_choices
         print(io, indent_vert_str)
-        print(io, (cur == n ? indent_last_str : indent_str) * "$(repr(key)) : $value\n")
+        value_str = _format_digest(value)
+        if contains(value_str, '\n')
+            indent_continuation = " "^(length(indent_str) + length(repr(key)) + 3)
+            value_str = replace(value_str, "\n" => "\n" * indent_continuation)
+        end
+        print(io, (cur == n ? indent_last_str : indent_str) * "$(repr(key)) : $value_str\n")
         cur += 1
     end
 

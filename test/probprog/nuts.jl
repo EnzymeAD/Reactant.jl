@@ -137,10 +137,7 @@ end
         println("="^70 * "\n")
 
         trace, accepted = run_nuts_test(;
-            adapt_step_size=ass,
-            adapt_mass_matrix=amm,
-            num_warmup=amm ? 20 : 10,
-            num_samples=5,
+            adapt_step_size=ass, adapt_mass_matrix=amm, num_warmup=20, num_samples=5
         )
 
         @test trace !== nothing
