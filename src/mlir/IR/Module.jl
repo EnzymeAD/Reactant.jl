@@ -65,7 +65,7 @@ verifyall(mod_::Module; debug=false) = verifyall(Operation(mod_); debug)
 
 # to simplify the API, we maintain a stack of contexts in task local storage
 # and pass them implicitly to MLIR API's that require them.
-function activate!(blk::Module)
+function activate(blk::Module)
     stack = get!(task_local_storage(), :mlir_module) do
         return Module[]
     end::Vector{Module}
@@ -73,7 +73,7 @@ function activate!(blk::Module)
     return nothing
 end
 
-function deactivate!(blk::Module)
+function deactivate(blk::Module)
     current_module() == blk || error("Deactivating wrong block")
     return Base.pop!(task_local_storage(:mlir_module)::Vector{Module})
 end

@@ -1746,8 +1746,8 @@ function compile_mlir!(
 )
     client = client !== nothing ? client : XLA.default_backend()
 
-    MLIR.IR.activate!(mod)
-    MLIR.IR.activate!(MLIR.IR.body(mod))
+    MLIR.IR.activate(mod)
+    MLIR.IR.activate(MLIR.IR.body(mod))
     activate_callcache!(callcache)
     activate_sdycache!(sdycache)
     activate_sdygroupidcache!(sdygroupidcache)
@@ -1779,10 +1779,10 @@ function compile_mlir!(
         deactivate_sdycache!(sdycache)
         deactivate_sdygroupidcache!(sdygroupidcache)
         deactivate_callcache!(callcache)
-        MLIR.IR.deactivate!(MLIR.IR.body(mod))
+        MLIR.IR.deactivate(MLIR.IR.body(mod))
         clear_llvm_compiler_cache!(mod)
         release_guard_from_gc_for_module(mod)
-        MLIR.IR.deactivate!(mod)
+        MLIR.IR.deactivate(mod)
     end
     (;
         fnwrapped,
@@ -2263,7 +2263,7 @@ function compile_mlir!(
                 ],
             )
             push!(MLIR.IR.region(func_with_padding, 1), fnbody)
-            MLIR.IR.activate!(fnbody)
+            MLIR.IR.activate(fnbody)
             push!(MLIR.IR.body(mod), func_with_padding)
 
             try
@@ -2319,7 +2319,7 @@ function compile_mlir!(
 
                 MLIR.Dialects.func.return_(results)
             finally
-                MLIR.IR.deactivate!(fnbody)
+                MLIR.IR.deactivate(fnbody)
             end
 
             # we just need the ops to potentially remove slices / paddings
@@ -3720,7 +3720,7 @@ function compile_xla(
         backend = "cpu"
     end
 
-    MLIR.IR.activate!(ctx)
+    MLIR.IR.activate(ctx)
     try
         # compile function to MLIR module
         mod = MLIR.IR.Module(MLIR.IR.Location())
@@ -3803,7 +3803,7 @@ function compile_xla(
 
         return mod, exec, hlo_modules, mlir_fn_res, device, client, module_string
     finally
-        MLIR.IR.deactivate!(ctx)
+        MLIR.IR.deactivate(ctx)
     end
 end
 

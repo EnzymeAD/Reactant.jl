@@ -305,7 +305,7 @@ function replicate_array_to_all_devices(array::Array, sharding, mesh, size_arr)
     # Manually write the MLIR for resharding resharding
     ctx = MLIR.IR.Context(Reactant.registry[])
     @ccall MLIR.API.mlir_c.RegisterDialects(ctx::MLIR.API.MlirContext)::Cvoid
-    MLIR.IR.activate!(ctx)
+    MLIR.IR.activate(ctx)
 
     sdycache = Reactant.Compiler.default_sdycache()
     Reactant.Compiler.activate_sdycache!(sdycache)
@@ -337,11 +337,11 @@ function replicate_array_to_all_devices(array::Array, sharding, mesh, size_arr)
         )
         fnbody = MLIR.IR.Block(data_mlir_type, [MLIR.IR.Location()])
         push!(MLIR.IR.region(func, 1), fnbody)
-        MLIR.IR.activate!(fnbody)
+        MLIR.IR.activate(fnbody)
         try
             MLIR.Dialects.func.return_([MLIR.IR.argument(fnbody, 1)])
         finally
-            MLIR.IR.deactivate!(fnbody)
+            MLIR.IR.deactivate(fnbody)
         end
         push!(MLIR.IR.body(mod), func)
 
@@ -380,7 +380,7 @@ function replicate_array_to_all_devices(array::Array, sharding, mesh, size_arr)
     finally
         Reactant.Compiler.release_guard_from_gc_for_module(mod)
         Reactant.Compiler.deactivate_sdycache!(sdycache)
-        MLIR.IR.deactivate!(ctx)
+        MLIR.IR.deactivate(ctx)
     end
 
     return output_buffer

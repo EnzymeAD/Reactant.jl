@@ -48,7 +48,7 @@ end
 # also, use `Core.Type` and `Core.Module` inside this module to avoid clash with
 # MLIR `Type` and `Module`
 export Attribute, Block, Context, Dialect, Location, Operation, Region, Value
-export activate!, deactivate!, dispose!, enable_multithreading!
+export activate, deactivate, dispose, enable_multithreading!
 export context, current_context, has_context
 export block, current_block, has_block
 export current_module, has_module
