@@ -4,7 +4,7 @@ using Reactant: MLIR
     mod = MLIR.IR.@dispose ctx = MLIR.IR.Context() MLIR.IR.@activate ctx begin
         mod = MLIR.IR.Module()
 
-        MLIR.IR.with_module(mod) do
+        MLIR.IR.@dispose mod = MLIR.IR.Module() MLIR.IR.@activate mod begin
             MLIR.IR.inject!(
                 "MPI_COMM_WORLD",
                 "llvm.mlir.global constant @MPI_COMM_WORLD() : !llvm.ptr",
@@ -24,11 +24,9 @@ using Reactant: MLIR
                 }
                 """,
             )
+
+            mod_op = MLIR.IR.Operation(mod)
+            @test MLIR.API.mlirOperationVerify(mod_op)
         end
-
-        return mod
     end
-
-    mod_op = MLIR.IR.Operation(mod)
-    @test MLIR.API.mlirOperationVerify(mod_op)
 end
