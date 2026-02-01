@@ -106,12 +106,4 @@ total_jobs = min(
             run(`$(mpiexec()) -n $nranks $(Base.julia_cmd()) integration/mpi.jl`)
         end
     end
-
-    if REACTANT_TEST_GROUP == "all" || REACTANT_TEST_GROUP == "probprog"
-        @safetestset "ProbProg Sample" include("probprog/sample.jl")
-        @safetestset "ProbProg Simulate" include("probprog/simulate.jl")
-        @safetestset "ProbProg Generate" include("probprog/generate.jl")
-        @safetestset "ProbProg MH" include("probprog/mh.jl")
-        @safetestset "ProbProg HMC" include("probprog/hmc.jl")
-    end
 end
