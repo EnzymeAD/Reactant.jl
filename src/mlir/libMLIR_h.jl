@@ -12298,4 +12298,72 @@ function enzymexlaGuaranteedAnalysisResultAttrGet(ctx, mode)
     )::MlirAttribute
 end
 
+function enzymeTraceTypeGet(ctx)
+    @ccall mlir_c.enzymeTraceTypeGet(ctx::MlirContext)::MlirType
+end
+
+function enzymeConstraintTypeGet(ctx)
+    @ccall mlir_c.enzymeConstraintTypeGet(ctx::MlirContext)::MlirType
+end
+
+@cenum EnzymeRngDistribution::UInt32 begin
+    EnzymeRngDistribution_Uniform = 0x0000000000000000
+    EnzymeRngDistribution_Normal = 0x0000000000000001
+    EnzymeRngDistribution_MultiNormal = 0x0000000000000002
+end
+
+function enzymeRngDistributionAttrGet(ctx, dist)
+    @ccall mlir_c.enzymeRngDistributionAttrGet(
+        ctx::MlirContext, dist::EnzymeRngDistribution
+    )::MlirAttribute
+end
+
+@cenum EnzymeSupportKind::UInt32 begin
+    EnzymeSupportKind_Real = 0x0000000000000000
+    EnzymeSupportKind_Positive = 0x0000000000000001
+    EnzymeSupportKind_UnitInterval = 0x0000000000000002
+    EnzymeSupportKind_Interval = 0x0000000000000003
+    EnzymeSupportKind_GreaterThan = 0x0000000000000004
+    EnzymeSupportKind_LessThan = 0x0000000000000005
+end
+
+function enzymeSupportAttrGet(
+    ctx, kind, hasLowerBound, lowerBound, hasUpperBound, upperBound
+)
+    @ccall mlir_c.enzymeSupportAttrGet(
+        ctx::MlirContext,
+        kind::EnzymeSupportKind,
+        hasLowerBound::Bool,
+        lowerBound::Cdouble,
+        hasUpperBound::Bool,
+        upperBound::Cdouble,
+    )::MlirAttribute
+end
+
+function enzymeHMCConfigAttrGet(ctx, trajectoryLength, adaptStepSize, adaptMassMatrix)
+    @ccall mlir_c.enzymeHMCConfigAttrGet(
+        ctx::MlirContext,
+        trajectoryLength::Cdouble,
+        adaptStepSize::Bool,
+        adaptMassMatrix::Bool,
+    )::MlirAttribute
+end
+
+function enzymeNUTSConfigAttrGet(
+    ctx, maxTreeDepth, hasMaxDeltaEnergy, maxDeltaEnergy, adaptStepSize, adaptMassMatrix
+)
+    @ccall mlir_c.enzymeNUTSConfigAttrGet(
+        ctx::MlirContext,
+        maxTreeDepth::Int64,
+        hasMaxDeltaEnergy::Bool,
+        maxDeltaEnergy::Cdouble,
+        adaptStepSize::Bool,
+        adaptMassMatrix::Bool,
+    )::MlirAttribute
+end
+
+function enzymeSymbolAttrGet(ctx, ptr)
+    @ccall mlir_c.enzymeSymbolAttrGet(ctx::MlirContext, ptr::UInt64)::MlirAttribute
+end
+
 const MLIR_CAPI_DWARF_ADDRESS_SPACE_NULL = -1
