@@ -1,6 +1,5 @@
 using ..Reactant: MLIR, Profiler
 
-
 function from_row_major(ptr::Ptr{T}, shape::NTuple{N,<:Integer}) where {T,N}
     if N <= 1
         return copy(unsafe_wrap(Array, ptr, shape))
@@ -10,7 +9,9 @@ function from_row_major(ptr::Ptr{T}, shape::NTuple{N,<:Integer}) where {T,N}
     return permutedims(transposed, N:-1:1)
 end
 
-function to_row_major!(ptr::Ptr{T}, src::AbstractArray{T,N}, shape::NTuple{N,<:Integer}) where {T,N}
+function to_row_major!(
+    ptr::Ptr{T}, src::AbstractArray{T,N}, shape::NTuple{N,<:Integer}
+) where {T,N}
     if N <= 1
         dest = unsafe_wrap(Array, ptr, shape)
         copyto!(dest, src)
