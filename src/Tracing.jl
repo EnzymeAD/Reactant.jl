@@ -520,20 +520,9 @@ Base.@nospecializeinfer function traced_type_inner(
     @nospecialize(ndevices),
     @nospecialize(runtime)
 )
-    N = ndims(A)
-    if mode == ArrayToConcrete
-        runtime isa Val{:PJRT} && return ConcretePJRTArray{Bool,N,_unwrap_val(ndevices)}
-        if runtime isa Val{:IFRT}
-            if ndevices isa Val{1}
-                return ConcreteIFRTArray{Bool,N,Nothing}
-            else
-                return ConcreteIFRTArray{Bool,N}
-            end
-        end
-        error("Unsupported runtime $runtime")
-    else
-        return A
-    end
+    return traced_type_inner(
+        Array{Bool,ndims(A)}, seen, mode, track_numbers, ndevices, runtime
+    )
 end
 
 Base.@nospecializeinfer function traced_type_inner(
@@ -1848,41 +1837,9 @@ Base.@nospecializeinfer function make_tracer(
 end
 
 Base.@nospecializeinfer function make_tracer(
-    seen,
-    @nospecialize(prev::BitArray),
-    @nospecialize(path),
-    mode;
-    @nospecialize(track_numbers::Type = Union{}),
-    @nospecialize(sharding = Sharding.NoSharding()),
-    @nospecialize(runtime = nothing),
-    @nospecialize(device = nothing),
-    @nospecialize(client = nothing),
-    kwargs...,
+    seen, @nospecialize(prev::BitArray), @nospecialize(path), mode; kwargs...
 )
-    if mode != NoStopTracedTrack && haskey(seen, prev)
-        if mode == TracedToTypes
-            visited = seen[prev]
-            push!(path, visited)
-            return nothing
-        end
-        return seen[prev]
-    end
-    if mode == ArrayToConcrete
-        # Convert BitArray to Array{Bool} first, then to ConcreteRArray
-        arr = Array{Bool}(prev)
-        runtime isa Val{:PJRT} &&
-            (return seen[prev] = ConcretePJRTArray(arr; sharding, device, client))
-        runtime isa Val{:IFRT} &&
-            (return seen[prev] = ConcreteIFRTArray(arr; sharding, device, client))
-        error("Unsupported runtime $runtime")
-    elseif mode == TracedToTypes
-        # Store a copy as Array{Bool}
-        push!(path, Array{Bool}(prev))
-        seen[prev] = VisitedObject(length(seen) + 1)
-        return nothing
-    end
-    # For other modes, return as-is
-    return prev
+    return make_tracer(seen, Array{Bool,ndims(prev)}(prev), path, mode; kwargs...)
 end
 
 Base.@nospecializeinfer function make_tracer(

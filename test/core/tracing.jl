@@ -387,6 +387,16 @@ end
         mask2d_ra = Reactant.to_rarray(mask2d)
         @test mask2d_ra isa ConcreteRArray{Bool,2}
         @test Array(mask2d_ra) == Bool[true false; false true]
+
+        struct BitVecStorage{B}
+            v::B
+        end
+
+        mask_struct = BitVecStorage(mask)
+        mask_struct_ra = Reactant.to_rarray(mask_struct)
+        @test mask_struct_ra isa BitVecStorage{<:ConcreteRArray{Bool,1}}
+        @test mask_struct_ra.v isa ConcreteRArray{Bool,1}
+        @test Array(mask_struct_ra.v) == Bool[true, true, false]
     end
 
     @testset "no trace Val" begin
