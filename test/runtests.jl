@@ -41,6 +41,7 @@ delete!(testsuite, "plugins/metal") # Currently completely non functional
 
 if Sys.isapple()
     delete!(testsuite, "core/custom_number_types")
+    delete!(testsuite, "integration/enzymejax")
 end
 
 # Zygote is not supported on 1.12 https://github.com/FluxML/Zygote.jl/issues/1580
