@@ -377,6 +377,18 @@ end
         @test @inferred Reactant.to_rarray(x_ra) isa ConcreteRNumber
     end
 
+    @testset "BitArray" begin
+        mask = BitVector([true, true, false])
+        mask_ra = Reactant.to_rarray(mask)
+        @test mask_ra isa ConcreteRArray{Bool,1}
+        @test Array(mask_ra) == Bool[true, true, false]
+
+        mask2d = BitArray([true false; false true])
+        mask2d_ra = Reactant.to_rarray(mask2d)
+        @test mask2d_ra isa ConcreteRArray{Bool,2}
+        @test Array(mask2d_ra) == Bool[true false; false true]
+    end
+
     @testset "no trace Val" begin
         st = (; a=1, training=Val(true))
         st_traced = Reactant.to_rarray(st; track_numbers=Number)
