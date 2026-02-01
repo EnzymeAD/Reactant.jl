@@ -287,20 +287,21 @@ function broadcast(input::Value; output::IR.Type, shape, location=Location())
 end
 
 """
-`cholesky_solve`
+`cholesky`
 
-Solves the linear system Ax = b for x using Cholesky decomposition.
-Assuming A is symmetric positive definite!
+Computes the Cholesky decomposition of a symmetric positive definite matrix A.
+Returns L such that A = L @ L^T (if lower=true) or A = U^T @ U (if lower=false).
 """
-function cholesky_solve(lhs::Value, rhs::Value; result::IR.Type, location=Location())
+function cholesky(input::Value; result::IR.Type, lower=nothing, location=Location())
     op_ty_results = IR.Type[result,]
-    operands = Value[lhs, rhs]
+    operands = Value[input,]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
+    !isnothing(lower) && push!(attributes, NamedAttribute("lower", lower))
 
     return create_operation(
-        "enzyme.cholesky_solve",
+        "enzyme.cholesky",
         location;
         operands,
         owned_regions,
@@ -338,14 +339,28 @@ end
 """
 `dot`
 
-Computes the dot product of two 1D tensors (vectors).
+Computes a general dot product operation. To be lowered to `stablehlo.dot_general`.
 """
-function dot(lhs::Value, rhs::Value; result::IR.Type, location=Location())
+function dot(
+    lhs::Value,
+    rhs::Value;
+    result::IR.Type,
+    lhs_batching_dimensions,
+    rhs_batching_dimensions,
+    lhs_contracting_dimensions,
+    rhs_contracting_dimensions,
+    location=Location(),
+)
     op_ty_results = IR.Type[result,]
     operands = Value[lhs, rhs]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[]
+    attributes = NamedAttribute[
+        NamedAttribute("lhs_batching_dimensions", lhs_batching_dimensions),
+        NamedAttribute("rhs_batching_dimensions", rhs_batching_dimensions),
+        NamedAttribute("lhs_contracting_dimensions", lhs_contracting_dimensions),
+        NamedAttribute("rhs_contracting_dimensions", rhs_contracting_dimensions),
+    ]
 
     return create_operation(
         "enzyme.dot",
@@ -384,6 +399,56 @@ function dump(value::Value; output::IR.Type, label, location=Location())
 end
 
 """
+`dynamic_extract`
+
+Extracts a slice at the specified dynamic index along the first dimension.
+"""
+function dynamic_extract(input::Value, index::Value; result::IR.Type, location=Location())
+    op_ty_results = IR.Type[result,]
+    operands = Value[input, index]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+
+    return create_operation(
+        "enzyme.dynamic_extract",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+"""
+`dynamic_update`
+
+Returns a new tensor with the slice at the specified dynamic index replaced.
+"""
+function dynamic_update(
+    input::Value, index::Value, value::Value; result::IR.Type, location=Location()
+)
+    op_ty_results = IR.Type[result,]
+    operands = Value[input, index, value]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+
+    return create_operation(
+        "enzyme.dynamic_update",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+"""
 `extract`
 
 Extract value from batched operand at index
@@ -397,6 +462,40 @@ function extract(input::Value; output::IR.Type, index, location=Location())
 
     return create_operation(
         "enzyme.extract",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+"""
+`for_loop`
+
+A counted loop operation that iterates from `lowerBound` to `upperBound`
+by `step`, carrying `iter_args` through each iteration. The iteration
+variable and iter_args are passed to the body region.
+"""
+function for_loop(
+    lowerBound::Value,
+    upperBound::Value,
+    step::Value,
+    initArgs::Vector{Value};
+    results::Vector{IR.Type},
+    region::Region,
+    location=Location(),
+)
+    op_ty_results = IR.Type[results...,]
+    operands = Value[lowerBound, upperBound, step, initArgs...]
+    owned_regions = Region[region,]
+    successors = Block[]
+    attributes = NamedAttribute[]
+
+    return create_operation(
+        "enzyme.for_loop",
         location;
         operands,
         owned_regions,
@@ -726,6 +825,37 @@ function getWeightFromTrace(trace::Value; weight::IR.Type, location=Location())
     )
 end
 
+"""
+`if_`
+
+A conditional operation that executes exactly one of two branches based on a
+boolean predicate.
+"""
+function if_(
+    predicate::Value;
+    results::Vector{IR.Type},
+    trueBranch::Region,
+    falseBranch::Region,
+    location=Location(),
+)
+    op_ty_results = IR.Type[results...,]
+    operands = Value[predicate,]
+    owned_regions = Region[trueBranch, falseBranch]
+    successors = Block[]
+    attributes = NamedAttribute[]
+
+    return create_operation(
+        "enzyme.if",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
 function ignore_derivatives(input::Value; output::IR.Type, location=Location())
     op_ty_results = IR.Type[output,]
     operands = Value[input,]
@@ -808,29 +938,43 @@ function load(cache::Value, indices::Vector{Value}; result::IR.Type, location=Lo
 end
 
 """
-`loop`
+`log_add_exp`
 
-A counted loop operation that iterates from `lowerBound` to `upperBound`
-by `step`, carrying `iter_args` through each iteration. The iteration
-variable and iter_args are passed to the body region.
+Computes log(exp(x) + exp(y)).
 """
-function loop(
-    lowerBound::Value,
-    upperBound::Value,
-    step::Value,
-    initArgs::Vector{Value};
-    results::Vector{IR.Type},
-    region::Region,
-    location=Location(),
-)
-    op_ty_results = IR.Type[results...,]
-    operands = Value[lowerBound, upperBound, step, initArgs...]
-    owned_regions = Region[region,]
+function log_add_exp(lhs::Value, rhs::Value; result::IR.Type, location=Location())
+    op_ty_results = IR.Type[result,]
+    operands = Value[lhs, rhs]
+    owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
 
     return create_operation(
-        "enzyme.loop",
+        "enzyme.log_add_exp",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+"""
+`logistic`
+
+Computes the logistic (sigmoid) function: 1 / (1 + exp(-x)).
+"""
+function logistic(operand::Value; result::IR.Type, location=Location())
+    op_ty_results = IR.Type[result,]
+    operands = Value[operand,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+
+    return create_operation(
+        "enzyme.logistic",
         location;
         operands,
         owned_regions,
@@ -844,31 +988,37 @@ end
 """
 `mcmc`
 
-Perform an MCMC inference step (HMC, NUTS, etc.) on a probabilistic function.
-This operation proposes a new trace using the specified algorithm,
-computes the acceptance probability, and returns the updated trace.
+Performs MCMC inference on a probabilistic function.
+
+By default (num_warmup=0, num_samples=1, thinning=1), performs a single MCMC step
+and returns the resulting trace - backwards compatible with previous behavior.
+
+When num_samples > 1, runs a full MCMC chain and returns a trace where
+sampled values have an additional batch dimension (first dim = num_samples / thinning).
+
+Thinning controls the fraction of samples retained: when thinning=k, every k-th
+sample is kept, resulting in num_samples/k output samples.
+
+Warmup iterations are discarded and used only for adaptation.
+
 By convention, the 0th operand in inputs is the initial RNG state
 and the 0th operand in results is the updated RNG state.
-
-Optional HMC-specific parameters:
-- mass: Mass matrix (identity assumed if not provided)
-- step_size: Leapfrong integration step size
-- num_steps: Number of leapfrog steps
-- initial_momentum: deterministic initial momentum (debug)
 """
 function mcmc(
     inputs::Vector{Value},
     original_trace::Value,
-    mass=nothing::Union{Nothing,Value};
+    inverse_mass_matrix=nothing::Union{Nothing,Value};
     step_size=nothing::Union{Nothing,Value},
-    num_steps=nothing::Union{Nothing,Value},
-    initial_momentum=nothing::Union{Nothing,Value},
     new_trace::IR.Type,
     accepted::IR.Type,
     output_rng_state::IR.Type,
-    alg,
     fn,
     selection,
+    num_warmup=nothing,
+    num_samples=nothing,
+    thinning=nothing,
+    hmc_config=nothing,
+    nuts_config=nothing,
     name=nothing,
     location=Location(),
 )
@@ -877,25 +1027,24 @@ function mcmc(
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[
-        NamedAttribute("alg", alg),
-        NamedAttribute("fn", fn),
-        NamedAttribute("selection", selection),
+        NamedAttribute("fn", fn), NamedAttribute("selection", selection)
     ]
-    !isnothing(mass) && push!(operands, mass)
+    !isnothing(inverse_mass_matrix) && push!(operands, inverse_mass_matrix)
     !isnothing(step_size) && push!(operands, step_size)
-    !isnothing(num_steps) && push!(operands, num_steps)
-    !isnothing(initial_momentum) && push!(operands, initial_momentum)
     push!(
         attributes,
         operandsegmentsizes([
             length(inputs),
             1,
-            Int(!isnothing(mass)),
+            Int(!isnothing(inverse_mass_matrix)),
             Int(!isnothing(step_size)),
-            Int(!isnothing(num_steps)),
-            Int(!isnothing(initial_momentum)),
         ]),
     )
+    !isnothing(num_warmup) && push!(attributes, NamedAttribute("num_warmup", num_warmup))
+    !isnothing(num_samples) && push!(attributes, NamedAttribute("num_samples", num_samples))
+    !isnothing(thinning) && push!(attributes, NamedAttribute("thinning", thinning))
+    !isnothing(hmc_config) && push!(attributes, NamedAttribute("hmc_config", hmc_config))
+    !isnothing(nuts_config) && push!(attributes, NamedAttribute("nuts_config", nuts_config))
     !isnothing(name) && push!(attributes, NamedAttribute("name", name))
 
     return create_operation(
@@ -989,6 +1138,30 @@ function pop(cache::Value; output::IR.Type, location=Location())
     )
 end
 
+"""
+`popcount`
+
+Returns the number of 1-bits elementwise.
+"""
+function popcount(operand::Value; result::IR.Type, location=Location())
+    op_ty_results = IR.Type[result,]
+    operands = Value[operand,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+
+    return create_operation(
+        "enzyme.popcount",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
 function push(cache::Value, value::Value; location=Location())
     op_ty_results = IR.Type[]
     operands = Value[cache, value]
@@ -1057,6 +1230,57 @@ function random(
 end
 
 """
+`randomSplit`
+
+Splits an RNG state into multiple independent RNG states.
+Reference: https://github.com/jax-ml/jax/blob/c25e095fcec9678a4ce5f723afce0c6a3c48a5e7/jax/_src/random.py#L281-L294
+"""
+function randomSplit(
+    rng_state::Value; output_rng_states::Vector{IR.Type}, location=Location()
+)
+    op_ty_results = IR.Type[output_rng_states...,]
+    operands = Value[rng_state,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+
+    return create_operation(
+        "enzyme.randomSplit",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+"""
+`recover_sample`
+
+Recover a sample from a flattened position vector.
+"""
+function recover_sample(position::Value; result::IR.Type, offset, location=Location())
+    op_ty_results = IR.Type[result,]
+    operands = Value[position,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[NamedAttribute("offset", offset),]
+
+    return create_operation(
+        "enzyme.recover_sample",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+"""
 `regenerate`
 
 Regenerate selected addresses in a probabilistic function while keeping
@@ -1108,6 +1332,7 @@ function sample(
     fn,
     logpdf=nothing,
     symbol=nothing,
+    support=nothing,
     name=nothing,
     location=Location(),
 )
@@ -1118,6 +1343,7 @@ function sample(
     attributes = NamedAttribute[NamedAttribute("fn", fn),]
     !isnothing(logpdf) && push!(attributes, NamedAttribute("logpdf", logpdf))
     !isnothing(symbol) && push!(attributes, NamedAttribute("symbol", symbol))
+    !isnothing(support) && push!(attributes, NamedAttribute("support", support))
     !isnothing(name) && push!(attributes, NamedAttribute("name", name))
 
     return create_operation(
@@ -1133,11 +1359,14 @@ function sample(
 end
 
 """
-`selectTrace`
+`select`
 
-Selects between two !enzyme.Trace values (considered scalars here) based on a tensor<i1> condition.
+Extended select operation that supports:
+- `tensor<i1>` conditions with differently-sized operands
+- `!enzyme.Trace` operands
+- standard cases supported by `arith.select`
 """
-function selectTrace(
+function select(
     condition::Value,
     true_value::Value,
     false_value::Value;
@@ -1151,7 +1380,7 @@ function selectTrace(
     attributes = NamedAttribute[]
 
     return create_operation(
-        "enzyme.selectTrace",
+        "enzyme.select",
         location;
         operands,
         owned_regions,
@@ -1238,20 +1467,36 @@ function store(value::Value, cache::Value, indices::Vector{Value}; location=Loca
 end
 
 """
-`unflatten_slice`
+`triangular_solve`
 
-Extract a slice from a 1D position vector starting at the given offset,
-and reconstruct the original multi-dimensional tensor shape (implied by the type).
+Solves a system of linear equations with a triangular coefficient matrix.
+If left_side=true, solves op(A) @ X = B for X.
+If left_side=false, solves X @ op(A) = B for X.
+op(A) is determined by transpose_a: NO_TRANSPOSE, TRANSPOSE, or ADJOINT.
 """
-function unflatten_slice(position::Value; result::IR.Type, offset, location=Location())
+function triangular_solve(
+    a::Value,
+    b::Value;
+    result::IR.Type,
+    left_side=nothing,
+    lower=nothing,
+    unit_diagonal=nothing,
+    transpose_a=nothing,
+    location=Location(),
+)
     op_ty_results = IR.Type[result,]
-    operands = Value[position,]
+    operands = Value[a, b]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[NamedAttribute("offset", offset),]
+    attributes = NamedAttribute[]
+    !isnothing(left_side) && push!(attributes, NamedAttribute("left_side", left_side))
+    !isnothing(lower) && push!(attributes, NamedAttribute("lower", lower))
+    !isnothing(unit_diagonal) &&
+        push!(attributes, NamedAttribute("unit_diagonal", unit_diagonal))
+    !isnothing(transpose_a) && push!(attributes, NamedAttribute("transpose_a", transpose_a))
 
     return create_operation(
-        "enzyme.unflatten_slice",
+        "enzyme.triangular_solve",
         location;
         operands,
         owned_regions,
@@ -1321,6 +1566,37 @@ function update(
 
     return create_operation(
         "enzyme.update",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+"""
+`while_loop`
+
+A while loop operation that continues iterating as long as the condition
+evaluates to true. Intended to be lowered to `stablehlo.while`.
+"""
+function while_loop(
+    initArgs::Vector{Value};
+    results::Vector{IR.Type},
+    conditionRegion::Region,
+    bodyRegion::Region,
+    location=Location(),
+)
+    op_ty_results = IR.Type[results...,]
+    operands = Value[initArgs...,]
+    owned_regions = Region[conditionRegion, bodyRegion]
+    successors = Block[]
+    attributes = NamedAttribute[]
+
+    return create_operation(
+        "enzyme.while_loop",
         location;
         operands,
         owned_regions,
