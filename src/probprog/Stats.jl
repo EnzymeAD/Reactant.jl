@@ -1,5 +1,4 @@
 using Statistics: mean, std, median, quantile
-using MCMCDiagnosticTools: ess, rhat
 using PrettyTables: pretty_table, fmt__printf
 
 struct ParameterSummary
@@ -120,25 +119,8 @@ function Base.show(io::IO, p::ParameterSummary)
     )
 end
 
-function _compute_ess(samples::AbstractVector)
-    x = collect(Float64, samples)
-    n = length(x)
-    if n < 4
-        return Float64(n)
-    end
-    x_matrix = reshape(x, n, 1)
-    return ess(x_matrix)
-end
-
-function _compute_rhat(samples::AbstractVector)
-    x = collect(Float64, samples)
-    n = length(x)
-    if n < 4
-        return NaN
-    end
-    x_matrix = reshape(x, n, 1)
-    return rhat(x_matrix)
-end
+function _compute_ess end
+function _compute_rhat end
 
 function _compute_parameter_summary(name::String, samples::AbstractVector)
     return ParameterSummary(
