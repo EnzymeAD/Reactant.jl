@@ -16,8 +16,8 @@ end
 end
 
 function test()
-    MLIR.IR.with_context() do ctx
-        mod = MLIR.IR.Module(MLIR.IR.Location())
+    MLIR.IR.@dispose ctx = MLIR.IR.Context() MLIR.IR.@activate ctx begin
+        mod = MLIR.IR.Module()
         modbody = MLIR.IR.body(mod)
 
         in_tys = [MLIR.IR.TensorType([4], MLIR.IR.Type(Float64))]

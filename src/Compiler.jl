@@ -1487,7 +1487,7 @@ end
 
 # helper for debug purposes: String -> Text
 function run_pass_pipeline_on_source(source, pass_pipeline; enable_verifier=true)
-    return MLIR.IR.with_context() do _
+    return MLIR.IR.@dispose ctx = MLIR.IR.Context() MLIR.IR.@activate ctx begin
         mod = parse(MLIR.IR.Module, source)
         run_pass_pipeline!(mod, pass_pipeline; enable_verifier)
         MLIR.IR.verifyall(MLIR.IR.Operation(mod); debug=true)
@@ -1557,8 +1557,8 @@ function compile_mlir(f, args; client=nothing, drop_unsupported_attributes=false
         backend = "cpu"
     end
 
-    results = MLIR.IR.with_context() do _
-        mod = MLIR.IR.Module(MLIR.IR.Location())
+    results = MLIR.IR.@dispose ctx = MLIR.IR.Context() MLIR.IR.@activate ctx begin
+        mod = MLIR.IR.Module()
 
         compile_options, kwargs_inner = __get_compile_options_and_kwargs(; kwargs...)
         mlir_fn_res = compile_mlir!(

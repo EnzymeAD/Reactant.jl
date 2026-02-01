@@ -837,24 +837,21 @@ function HloSharding(sharding::DimsSharding, size_x)
 end
 
 function Base.convert(::Type{HloSharding}, sharding::NamedSharding)
-    MLIR.IR.with_context(; allow_use_existing=true) do ctx
-        mesh_op = Reactant.Ops.mesh(
-            sharding.mesh; mod=MLIR.IR.Module(MLIR.IR.Location(; context=ctx))
-        )
+    ctx = MLIR.IR.current_context()
+    mesh_op = Reactant.Ops.mesh(sharding.mesh; mod=MLIR.IR.Module())
 
-        tensor_sharding_attr, _ = get_tensor_sharding_attribute(
-            sharding, ctx, mesh_op.sym_name, mesh_op.mesh_attr, nothing; dialect=:sdy
-        )
+    tensor_sharding_attr, _ = get_tensor_sharding_attribute(
+        sharding, ctx, mesh_op.sym_name, mesh_op.mesh_attr, nothing; dialect=:sdy
+    )
 
-        return HloSharding(
-            hlo_sharding_from_sdy_tensor_sharding_attr(
-                tensor_sharding_attr, mesh_op.mesh_attr
-            ),
-            sharding.mesh,
-            sharding.is_closed,
-            sharding.priority,
-        )
-    end
+    return HloSharding(
+        hlo_sharding_from_sdy_tensor_sharding_attr(
+            tensor_sharding_attr, mesh_op.mesh_attr
+        ),
+        sharding.mesh,
+        sharding.is_closed,
+        sharding.priority,
+    )
 end
 
 function hlo_sharding_from_sdy_tensor_sharding_attr(attr, mesh_attr)
