@@ -38,12 +38,13 @@ let options = deepcopy(options)
     # Also add the llvm include dir from bazel-out for generated files
     gen_llvm_include_dir = joinpath(splitpath(ARGS[2])[1:(end - 2)]...)
 
-    hlo_include_dir = joinpath(splitpath(ARGS[end - 6])[1:(end - 1)]...)
-    sdy_include_dir = joinpath(splitpath(ARGS[end - 5])[1:(end - 1)]...)
-    triton_include_dir = joinpath(splitpath(ARGS[end - 4])[1:(end - 1)]...)
-    mosaic_tpu_include_dir = joinpath(splitpath(ARGS[end - 3])[1:(end - 1)]...)
-    mosaic_gpu_include_dir = joinpath(splitpath(ARGS[end - 2])[1:(end - 1)]...)
-    enzymexla_include_dir = joinpath(splitpath(ARGS[end - 1])[1:(end - 1)]...)
+    hlo_include_dir = joinpath(splitpath(ARGS[end - 7])[1:(end - 1)]...)
+    sdy_include_dir = joinpath(splitpath(ARGS[end - 6])[1:(end - 1)]...)
+    triton_include_dir = joinpath(splitpath(ARGS[end - 5])[1:(end - 1)]...)
+    mosaic_tpu_include_dir = joinpath(splitpath(ARGS[end - 4])[1:(end - 1)]...)
+    mosaic_gpu_include_dir = joinpath(splitpath(ARGS[end - 3])[1:(end - 1)]...)
+    enzymexla_include_dir = joinpath(splitpath(ARGS[end - 2])[1:(end - 1)]...)
+    enzymemlir_include_dir = joinpath(splitpath(ARGS[end - 1])[1:(end - 1)]...)
 
     append!(
         args,
@@ -68,6 +69,8 @@ let options = deepcopy(options)
             mosaic_gpu_include_dir,
             "-I",
             enzymexla_include_dir,
+            "-I",
+            enzymemlir_include_dir,
             "-x",
             "c++",
         ],
@@ -81,6 +84,7 @@ let options = deepcopy(options)
         detect_headers(mosaic_tpu_include_dir, args, Dict())...,
         detect_headers(mosaic_gpu_include_dir, args, Dict())...,
         detect_headers(enzymexla_include_dir, args, Dict())...,
+        detect_headers(enzymemlir_include_dir, args, Dict())...,
     ]
 
     ctx = create_context(headers, args, options)
