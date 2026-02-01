@@ -1847,7 +1847,6 @@ Base.@nospecializeinfer function make_tracer(
     return newa
 end
 
-# BitArray -> ConcretePJRTArray{Bool} / ConcreteIFRTArray{Bool}
 Base.@nospecializeinfer function make_tracer(
     seen,
     @nospecialize(prev::BitArray),
