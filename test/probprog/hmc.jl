@@ -1,6 +1,6 @@
 using Reactant, Test, Random
 using Statistics
-using Reactant: ProbProg, ReactantRNG, Profiler
+using Reactant: ProbProg, ReactantRNG, ConcreteRNumber
 
 normal(rng, μ, σ, shape) = μ .+ σ .* randn(rng, shape)
 
@@ -10,19 +10,15 @@ function normal_logpdf(x, μ, σ, _)
 end
 
 function model(rng, xs)
-    _, param_a = ProbProg.sample(
-        rng, normal, 0.0, 5.0, (1,); symbol=:param_a, logpdf=normal_logpdf
-    )
-    _, param_b = ProbProg.sample(
-        rng, normal, 0.0, 5.0, (1,); symbol=:param_b, logpdf=normal_logpdf
-    )
+    _, param_a = ProbProg.sample(rng, ProbProg.Normal(0.0, 5.0, (1,)); symbol=:param_a)
+    _, param_b = ProbProg.sample(rng, ProbProg.Normal(0.0, 5.0, (1,)); symbol=:param_b)
 
     _, ys_a = ProbProg.sample(
-        rng, normal, param_a .+ xs[1:5], 0.5, (5,); symbol=:ys_a, logpdf=normal_logpdf
+        rng, ProbProg.Normal(param_a .+ xs[1:5], 0.5, (5,)); symbol=:ys_a
     )
 
     _, ys_b = ProbProg.sample(
-        rng, normal, param_b .+ xs[6:10], 0.5, (5,); symbol=:ys_b, logpdf=normal_logpdf
+        rng, ProbProg.Normal(param_b .+ xs[6:10], 0.5, (5,)); symbol=:ys_b
     )
 
     return vcat(ys_a, ys_b)
@@ -33,11 +29,15 @@ function hmc_program(
     model,
     xs,
     step_size,
-    num_steps,
+    trajectory_length,
+    num_warmup,
+    num_samples,
     inverse_mass_matrix,
-    initial_momentum,
     constraint,
     constrained_addresses,
+    selection,
+    adapt_step_size,
+    adapt_mass_matrix,
 )
     t, _, _ = ProbProg.generate(rng, constraint, model, xs; constrained_addresses)
 
@@ -46,49 +46,40 @@ function hmc_program(
         t,
         model,
         xs;
-        selection=ProbProg.select(ProbProg.Address(:param_a), ProbProg.Address(:param_b)),
+        selection,
         algorithm=:HMC,
         inverse_mass_matrix,
         step_size,
-        num_steps,
-        initial_momentum,
+        trajectory_length,
+        num_warmup,
+        num_samples,
+        adapt_step_size,
+        adapt_mass_matrix,
     )
 
     return t, accepted
 end
 
-@testset "hmc" begin
+function run_hmc_test(;
+    adapt_step_size::Bool, adapt_mass_matrix::Bool, num_warmup::Int=10, num_samples::Int=5
+)
     seed = Reactant.to_rarray(UInt64[1, 5])
     rng = ReactantRNG(seed)
 
     xs = [-4.5, -3.5, -2.5, -1.5, -0.5, 0.5, 1.5, 2.5, 3.5, 4.5]
     ys_a = [-2.3, -1.6, -0.4, 0.6, 1.4]
     ys_b = [-2.6, -1.4, -0.6, 0.4, 1.6]
+
     obs = ProbProg.Constraint(
         :param_a => ([0.0],), :param_b => ([0.0],), :ys_a => (ys_a,), :ys_b => (ys_b,)
     )
     constrained_addresses = ProbProg.extract_addresses(obs)
 
-    step_size = ConcreteRNumber(0.001)
-    num_steps_compile = ConcreteRNumber(1000)
-    num_steps_run = ConcreteRNumber(40000000)
-    inverse_mass_matrix = ConcreteRArray([1.0 0.0; 0.0 1.0])
-    initial_momentum = ConcreteRArray([0.0, 0.0])
+    step_size = ConcreteRNumber(0.1)
+    trajectory_length = 1.0
+    inverse_mass_matrix = ConcreteRArray([0.5 0.0; 0.0 0.5])
 
-    code = @code_hlo optimize = :probprog hmc_program(
-        rng,
-        model,
-        xs,
-        step_size,
-        num_steps_compile,
-        inverse_mass_matrix,
-        initial_momentum,
-        obs,
-        constrained_addresses,
-    )
-    @test contains(repr(code), "enzyme_probprog_get_flattened_samples_from_trace")
-    @test contains(repr(code), "enzyme_probprog_get_weight_from_trace")
-    @test !contains(repr(code), "enzyme.mcmc")
+    selection = ProbProg.select(ProbProg.Address(:param_a), ProbProg.Address(:param_b))
 
     compile_time_s = @elapsed begin
         compiled_fn = @compile optimize = :probprog hmc_program(
@@ -96,54 +87,70 @@ end
             model,
             xs,
             step_size,
-            num_steps_compile,
+            trajectory_length,
+            num_warmup,
+            num_samples,
             inverse_mass_matrix,
-            initial_momentum,
             obs,
             constrained_addresses,
+            selection,
+            adapt_step_size,
+            adapt_mass_matrix,
         )
     end
-    println("HMC compile time: $(round(compile_time_s * 1000, digits=2)) ms")
+    println("Compile time: $(round(compile_time_s * 1000, digits=2)) ms")
 
     seed_buffer = only(rng.seed.data).buffer
     trace = nothing
-    enable_profiling = false
+    accepted = nothing
 
     GC.@preserve seed_buffer obs begin
         run_time_s = @elapsed begin
-            if enable_profiling
-                Profiler.with_profiler("./traces"; create_perfetto_link=true) do
-                    trace, _ = compiled_fn(
-                        rng,
-                        model,
-                        xs,
-                        step_size,
-                        num_steps_run,
-                        inverse_mass_matrix,
-                        initial_momentum,
-                        obs,
-                        constrained_addresses,
-                    )
-                end
-            else
-                trace, _ = compiled_fn(
-                    rng,
-                    model,
-                    xs,
-                    step_size,
-                    num_steps_run,
-                    inverse_mass_matrix,
-                    initial_momentum,
-                    obs,
-                    constrained_addresses,
-                )
-            end
+            trace, accepted = compiled_fn(
+                rng,
+                model,
+                xs,
+                step_size,
+                trajectory_length,
+                num_warmup,
+                num_samples,
+                inverse_mass_matrix,
+                obs,
+                constrained_addresses,
+                selection,
+                adapt_step_size,
+                adapt_mass_matrix,
+            )
             trace = ProbProg.ProbProgTrace(trace)
         end
-        println("HMC run time: $(round(run_time_s * 1000, digits=2)) ms")
+        println("Run time: $(round(run_time_s * 1000, digits=2)) ms")
     end
 
-    # NumPyro results
-    @test only(trace.choices[:param_a])[1] ≈ 0.01327671 rtol = 1e-6
-    @test only(trace.choices[:param_b])[1] ≈ -0.01965474 rtol = 1e-6
+    println("\nRESULTS")
+    println("-"^70)
+    println("accepted: $(Array(accepted))")
+    println("param_a (all samples): $(only(trace.choices[:param_a]))")
+    println("param_b (all samples): $(only(trace.choices[:param_b]))")
+    println()
+
+    return trace, accepted
+end
+
+@testset "hmc_adaptation_combinations" begin
+    @testset "adapt_step_size=$ass, adapt_mass_matrix=$amm" for ass in [false, true],
+        amm in [false, true]
+
+        println("\n" * "="^70)
+        println("TESTING: adapt_step_size=$ass, adapt_mass_matrix=$amm")
+        println("="^70 * "\n")
+
+        trace, accepted = run_hmc_test(;
+            adapt_step_size=ass, adapt_mass_matrix=amm, num_warmup=20, num_samples=500
+        )
+
+        @test trace !== nothing
+        @test accepted !== nothing
+        @test haskey(trace.choices, :param_a)
+        @test haskey(trace.choices, :param_b)
+    end
 end

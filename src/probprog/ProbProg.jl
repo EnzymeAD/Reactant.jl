@@ -16,7 +16,7 @@ include("MCMC.jl")
 export ProbProgTrace, Constraint, Selection, Address
 
 # Distributions.
-export Distribution, Normal
+export Distribution, Normal, Exponential, LogNormal
 
 # Utility functions.
 export get_choices, select
