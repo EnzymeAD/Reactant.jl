@@ -52,6 +52,8 @@ include("CompileOptions.jl")
 
 abstract type AbstractBackendState end
 
+function finalize_backend_state end
+
 for runtime in (:PJRT, :IFRT)
     backend_state = Symbol(runtime, :BackendState)
 
@@ -67,9 +69,10 @@ for runtime in (:PJRT, :IFRT)
         end
     end
 
-    function finalize_backend_state(state::AbstractBackendState)
+    @eval function finalize_backend_state(state::$(backend_state))
         @debug "[PID $(process_id)] Finalizing backend state, $state"
     end
+
 end
 
 function Base.getproperty(bs::AbstractBackendState, sym::Symbol)
