@@ -2,8 +2,12 @@ module ReactantAbstractFFTsExt
 
 using AbstractFFTs: AbstractFFTs, fftdims
 using LinearAlgebra
-using Reactant: Reactant, MLIR, Ops, AnyTracedRArray, TracedUtils
+using Reactant: Reactant, MLIR, Ops, AnyTracedRArray, TracedRNumber, TracedUtils
 using Reactant.Ops: @opcall
+
+# FFTW.jl defines methods on StridedArrays, and we have to be more specific than FFTW to
+# catch its methods.
+const AnyStridedTracedRArray{T,N} = StridedArray{TracedRNumber{T},N}
 
 # To automatically convert FFT plans to traced versions
 # To extend a user needs to extend Reactant.reactant_fftplan for their plan type
@@ -176,6 +180,15 @@ for op in (:rfft, :fft, :ifft)
 
         @eval function AbstractFFTs.$(plan_f!)(
             x::AnyTracedRArray{T}, dims=1:ndims(x)
+        ) where {T}
+            return $(plan_name!){T,typeof(dims)}(dims)
+        end
+        # This method with `AnyStridedTracedRArray` is needed to extend methods defined in
+        # `FFTW.jl` for `StridedArray`s which have keyword arguments (which we'll ignore
+        # here).  The body of the method is the same as the above one, but we can't use a
+        # `Union` because it'd still be less specific than the FFTW's methods.
+        @eval function AbstractFFTs.$(plan_f!)(
+            x::AnyStridedTracedRArray{T}, dims=1:ndims(x); _kwargs...
         ) where {T}
             return $(plan_name!){T,typeof(dims)}(dims)
         end
