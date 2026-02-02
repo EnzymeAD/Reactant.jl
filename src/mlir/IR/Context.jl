@@ -78,5 +78,5 @@ function with_context(f; allow_use_existing=false)
 
     Base.depwarn("`with_context` is deprecated, use `@activate` instead.", :with_context)
     @activate ctx f(ctx)
-    with_context(f, ctx)
+    return with_context(f, ctx)
 end

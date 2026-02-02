@@ -1579,7 +1579,9 @@ function compile_mlir(f, args; client=nothing, drop_unsupported_attributes=false
 
         if drop_unsupported_attributes
             # Drop some of our attributes
-            run_pass_pipeline!(mod, "drop-unsupported-attributes", "drop_enzymexla_attributes")
+            run_pass_pipeline!(
+                mod, "drop-unsupported-attributes", "drop_enzymexla_attributes"
+            )
         end
 
         return mod, mlir_fn_res

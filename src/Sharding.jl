@@ -845,9 +845,7 @@ function Base.convert(::Type{HloSharding}, sharding::NamedSharding)
     )
 
     return HloSharding(
-        hlo_sharding_from_sdy_tensor_sharding_attr(
-            tensor_sharding_attr, mesh_op.mesh_attr
-        ),
+        hlo_sharding_from_sdy_tensor_sharding_attr(tensor_sharding_attr, mesh_op.mesh_attr),
         sharding.mesh,
         sharding.is_closed,
         sharding.priority,

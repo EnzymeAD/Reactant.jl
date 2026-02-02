@@ -6,8 +6,7 @@ using Reactant: MLIR
 
         MLIR.IR.@dispose mod = MLIR.IR.Module() MLIR.IR.@activate mod begin
             MLIR.IR.inject!(
-                "MPI_COMM_WORLD",
-                "llvm.mlir.global constant @MPI_COMM_WORLD() : !llvm.ptr",
+                "MPI_COMM_WORLD", "llvm.mlir.global constant @MPI_COMM_WORLD() : !llvm.ptr"
             )
 
             MLIR.IR.inject!(
