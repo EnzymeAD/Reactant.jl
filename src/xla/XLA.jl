@@ -62,7 +62,7 @@ for runtime in (:PJRT, :IFRT)
 
         function $(backend_state)(initialized::Bool = false,
                                   clients::Dict{String,$(runtime).Client} = Dict{String,$(runtime).Client}(), 
-                                  default_client::$(runtime).Client = $(runtime).NullClientclient::Ptr{Cvoid})
+                                  default_client::$(runtime).Client = $(runtime).NullClient)
             return finalizer(finalize_backend_state, new(initialized, clients, default_client))
         end
     end
