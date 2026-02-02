@@ -75,6 +75,7 @@ for runtime in (:PJRT, :IFRT)
             free_client(client)
         end
         empty!(state.clients)
+        state.default_client = $(runtime).NullClient
     end
 
 end
@@ -103,8 +104,8 @@ const global_state = State()
 
 function cleanup_backend_state()
     @debug "[GETPID $(getpid())] Cleanup Backend State, $global_backend_state, $global_state"
+    finalize_backend_state(global_backend_state)
     shutdown(global_state)
-    finalize(global_backend_state)
 end
 
 function client(backend::String)
