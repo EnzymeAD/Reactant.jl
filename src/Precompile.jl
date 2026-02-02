@@ -64,7 +64,6 @@ if Reactant_jll.is_available()
         end
 
         XLA.free_client(client)
-        client.client = C_NULL
         deinitialize_dialect()
     end
 end

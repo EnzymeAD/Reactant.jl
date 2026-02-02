@@ -70,7 +70,7 @@ for runtime in (:PJRT, :IFRT)
     end
 
     @eval function finalize_backend_state(state::$(backend_state))
-        @debug "[PID $(process_id)] Finalizing backend state, $state"
+        @debug "[GETPID $(getpid())] Finalizing backend state, $state"
     end
 
 end
@@ -98,7 +98,7 @@ end
 const global_state = State()
 
 function cleanup_backend_state()
-    @debug "[PID $(process_id)] Cleanup Backend State, $global_backend_state, $global_state"
+    @debug "[GETPID $(getpid())] Cleanup Backend State, $global_backend_state, $global_state"
 end
 
 # Register the cleanup function
