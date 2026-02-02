@@ -52,14 +52,32 @@ include("CompileOptions.jl")
 
 abstract type AbstractBackendState end
 
+function finalize_backend_state end
+
 for runtime in (:PJRT, :IFRT)
     backend_state = Symbol(runtime, :BackendState)
 
-    @eval @kwdef mutable struct $(backend_state) <: AbstractBackendState
-        initialized::Bool = false
-        clients::Dict{String,$(runtime).Client} = Dict{String,$(runtime).Client}()
-        default_client::$(runtime).Client = $(runtime).NullClient
+    @eval mutable struct $(backend_state) <: AbstractBackendState
+        initialized::Bool
+        clients::Dict{String,$(runtime).Client}
+        default_client::$(runtime).Client
+
+        function $(backend_state)(initialized::Bool = false,
+                                  clients::Dict{String,$(runtime).Client} = Dict{String,$(runtime).Client}(), 
+                                  default_client::$(runtime).Client = $(runtime).NullClient)
+            return finalizer(finalize_backend_state, new(initialized, clients, default_client))
+        end
     end
+
+    @eval function finalize_backend_state(state::$(backend_state))
+        @debug "[GETPID $(getpid())] Finalizing backend state, $state"
+        for (_, client) in state.clients
+            free_client(client)
+        end
+        empty!(state.clients)
+        state.default_client = $(runtime).NullClient
+    end
+
 end
 
 function Base.getproperty(bs::AbstractBackendState, sym::Symbol)
@@ -83,6 +101,12 @@ else
            $(REACTANT_XLA_RUNTIME)")
 end
 const global_state = State()
+
+function cleanup_backend_state()
+    @debug "[GETPID $(getpid())] Cleanup Backend State, $global_backend_state, $global_state"
+    finalize_backend_state(global_backend_state)
+    shutdown(global_state)
+end
 
 function client(backend::String)
     if backend == "gpu"
@@ -187,6 +211,9 @@ function __init__()
             end
         end
     end
+
+    # Register the cleanup function
+    atexit(cleanup_backend_state)
 
     return nothing
 end

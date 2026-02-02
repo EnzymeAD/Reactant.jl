@@ -2714,13 +2714,13 @@ GetDistributedRuntimeService(char *c_address, int num_nodes,
 }
 
 REACTANT_ABI void free_distributed_runtime_service(
-    HeldValue<std::shared_ptr<xla::DistributedRuntimeService>> *service) {
+    xla::DistributedRuntimeService* service) {
   delete service;
 }
 
 REACTANT_ABI void distributed_runtime_service_shutdown(
-    HeldValue<std::shared_ptr<xla::DistributedRuntimeService>> *service) {
-  service->obj()->Shutdown();
+    xla::DistributedRuntimeService *service) {
+  service->Shutdown();
 }
 
 #pragma endregion
