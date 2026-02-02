@@ -71,6 +71,10 @@ for runtime in (:PJRT, :IFRT)
 
     @eval function finalize_backend_state(state::$(backend_state))
         @debug "[GETPID $(getpid())] Finalizing backend state, $state"
+        for (_, client) in state.clients
+            free_client(client)
+        end
+        empty!(state.clients)
     end
 
 end
@@ -99,10 +103,9 @@ const global_state = State()
 
 function cleanup_backend_state()
     @debug "[GETPID $(getpid())] Cleanup Backend State, $global_backend_state, $global_state"
+    shutdown(global_state)
+    finalize(global_backend_state)
 end
-
-# Register the cleanup function
-atexit(cleanup_backend_state)
 
 function client(backend::String)
     if backend == "gpu"
@@ -207,6 +210,9 @@ function __init__()
             end
         end
     end
+
+    # Register the cleanup function
+    atexit(cleanup_backend_state)
 
     return nothing
 end
