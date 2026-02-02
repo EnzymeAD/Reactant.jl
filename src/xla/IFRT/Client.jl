@@ -137,7 +137,7 @@ for (backend, counter) in (
             # Only increment the counter if we successfully created a client
             $(counter)[] += 1
         end
-        @debug "[GETPID $(getpid())] $(main_fn) client"
+        @debug "[GETPID $(getpid())] $($(main_fn)) client"
         return Client(client)
     end
 end
