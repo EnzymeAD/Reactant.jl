@@ -1,4 +1,4 @@
-using Reactant, ParallelTestRunner, CondaPkg, Test
+using Reactant, ParallelTestRunner, CondaPkg, Test, Setfield
 
 const BACKEND = lowercase(get(ENV, "REACTANT_BACKEND_GROUP", "auto"))
 
@@ -58,6 +58,10 @@ end
 
 if !NUMPYRO_INSTALLED[]
     delete!(testsuite, "integration/numpyro")
+end
+
+if Reactant.Accelerators.TPU.has_tpu() || BACKEND == "tpu"
+    @set! parsed_args.jobs = Some(1)
 end
 
 total_jobs = min(
