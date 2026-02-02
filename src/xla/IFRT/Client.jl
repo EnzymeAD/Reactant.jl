@@ -2,6 +2,7 @@ mutable struct Client <: XLA.AbstractClient
     client::Ptr{Cvoid}
 
     function Client(client::Ptr{Cvoid}; skip_check::Bool=false)
+        @debug "[PID $(process_id)] Creating Client $client"
         skip_check || (@assert client != C_NULL)
         return new(client)
     end
@@ -11,6 +12,7 @@ const NullClient = Client(C_NULL; skip_check=true)
 
 function XLA.free_client(client::Client)
     @assert client.client != C_NULL "Client is null"
+    @debug "[PID $(process_id)] Freeing Client $client"
     GC.@preserve client begin
         @ccall MLIR.API.mlir_c.ifrt_FreeClient(client.client::Ptr{Cvoid})::Cvoid
     end
