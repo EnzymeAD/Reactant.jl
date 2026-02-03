@@ -19,45 +19,50 @@ if Reactant_jll.is_available()
             error("Unsupported runtime: $(XLA.REACTANT_XLA_RUNTIME)")
         end
 
-        @compile_workload begin
-            @static if precompilation_supported()
-                x = ConcreteRNumber(2.0; client)
-                @static if VERSION >= v"1.11"
-                    compile(sin, (x,); client, optimize=:all)
-                else
-                    try
-                        compile(sin, (x,); client, optimize=:all)
-                    catch e
-                        if !(e isa ReactantPrecompilationException)
-                            rethrow()
+        MLIR.IR.@dispose ctx = MLIR.IR.Context(Reactant.registry[]) begin
+            Reactant.register_enzymexla_dialects(ctx)
+            MLIR.IR.@activate ctx begin
+                @compile_workload begin
+                    @static if precompilation_supported()
+                        x = ConcreteRNumber(2.0; client)
+                        @static if VERSION >= v"1.11"
+                            compile(sin, (x,); client, optimize=:all)
+                        else
+                            try
+                                compile(sin, (x,); client, optimize=:all)
+                            catch e
+                                if !(e isa ReactantPrecompilationException)
+                                    rethrow()
+                                end
+                            end
                         end
-                    end
-                end
-                if x isa ConcreteIFRTNumber
-                    XLA.free_buffer(x.data.buffer)
-                    x.data.buffer.buffer = C_NULL
-                else
-                    for dat in x.data
-                        XLA.free_buffer(dat.buffer)
-                        dat.buffer.buffer = C_NULL
-                    end
-                end
+                        if x isa ConcreteIFRTNumber
+                            XLA.free_buffer(x.data.buffer)
+                            x.data.buffer.buffer = C_NULL
+                        else
+                            for dat in x.data
+                                XLA.free_buffer(dat.buffer)
+                                dat.buffer.buffer = C_NULL
+                            end
+                        end
 
-                y = ConcreteRArray([2.0]; client)
-                try
-                    compile(Base.sum, (y,); client, optimize=:all)
-                catch e
-                    if !(e isa ReactantPrecompilationException)
-                        rethrow()
-                    end
-                end
-                if y isa ConcreteIFRTArray
-                    XLA.free_buffer(y.data.buffer)
-                    y.data.buffer.buffer = C_NULL
-                else
-                    for dat in y.data
-                        XLA.free_buffer(dat.buffer)
-                        dat.buffer.buffer = C_NULL
+                        y = ConcreteRArray([2.0]; client)
+                        try
+                            compile(Base.sum, (y,); client, optimize=:all)
+                        catch e
+                            if !(e isa ReactantPrecompilationException)
+                                rethrow()
+                            end
+                        end
+                        if y isa ConcreteIFRTArray
+                            XLA.free_buffer(y.data.buffer)
+                            y.data.buffer.buffer = C_NULL
+                        else
+                            for dat in y.data
+                                XLA.free_buffer(dat.buffer)
+                                dat.buffer.buffer = C_NULL
+                            end
+                        end
                     end
                 end
             end

@@ -1559,39 +1559,33 @@ function compile_mlir(f, args; client=nothing, drop_unsupported_attributes=false
         backend = "cpu"
     end
 
-    results = MLIR.IR.@dispose ctx = MLIR.IR.Context() begin
-        MLIR.IR.@activate ctx begin
-            mod = MLIR.IR.Module()
+    mod = MLIR.IR.Module()
 
-            compile_options, kwargs_inner = __get_compile_options_and_kwargs(; kwargs...)
-            mlir_fn_res = compile_mlir!(
-                mod,
-                f,
-                args,
-                compile_options;
-                backend,
-                runtime=XLA.runtime(client),
-                client,
-                kwargs_inner...,
-            )
+    compile_options, kwargs_inner = __get_compile_options_and_kwargs(; kwargs...)
+    mlir_fn_res = compile_mlir!(
+        mod,
+        f,
+        args,
+        compile_options;
+        backend,
+        runtime=XLA.runtime(client),
+        client,
+        kwargs_inner...,
+    )
 
-            # Attach a name, and partitioning attributes to the module
-            __add_mhlo_attributes_and_name!(
-                mod, f; mlir_fn_res.num_partitions, mlir_fn_res.num_replicas
-            )
+    # Attach a name, and partitioning attributes to the module
+    __add_mhlo_attributes_and_name!(
+        mod, f; mlir_fn_res.num_partitions, mlir_fn_res.num_replicas
+    )
 
-            if drop_unsupported_attributes
-                # Drop some of our attributes
-                run_pass_pipeline!(
-                    mod, "drop-unsupported-attributes", "drop_enzymexla_attributes"
-                )
-            end
-
-            mod, mlir_fn_res
-        end
+    if drop_unsupported_attributes
+        # Drop some of our attributes
+        run_pass_pipeline!(
+            mod, "drop-unsupported-attributes", "drop_enzymexla_attributes"
+        )
     end
 
-    return results
+    return mod, mlir_fn_res
 end
 
 const PartitionKA = Ref{Bool}(true)
@@ -1752,43 +1746,41 @@ function compile_mlir!(
 )
     client = client !== nothing ? client : XLA.default_backend()
 
-    MLIR.IR.activate(mod)
-    MLIR.IR.activate(MLIR.IR.body(mod))
-    activate_callcache!(callcache)
-    activate_sdycache!(sdycache)
-    activate_sdygroupidcache!(sdygroupidcache)
+    mlir_fn_res = MLIR.IR.@activate [mod, MLIR.IR.body(mod)] begin
+        activate_callcache!(callcache)
+        activate_sdycache!(sdycache)
+        activate_sdygroupidcache!(sdygroupidcache)
 
-    # Save in the TLS whether we are raising.  We identify that condition by
-    # checking whether the user set an explicit list of passes, or chose
-    # `raise=true` to use the default passes.
-    raise = compile_options.raise
-    if backend == "tpu" && raise isa Bool
-        raise = true
-    end
-    is_raising = raise isa String || raise
-    activate_raising!(is_raising)
+        # Save in the TLS whether we are raising.  We identify that condition by
+        # checking whether the user set an explicit list of passes, or chose
+        # `raise=true` to use the default passes.
+        raise = compile_options.raise
+        if backend == "tpu" && raise isa Bool
+            raise = true
+        end
+        is_raising = raise isa String || raise
+        activate_raising!(is_raising)
 
-    fnname = string(f)
-    mlir_fn_res = try
-        Reactant.TracedUtils.make_mlir_fn(
-            f,
-            args,
-            fn_kwargs,
-            fnname,
-            true;
-            runtime,
-            compile_options.optimize_then_pad,
-            kwargs...,
-        )
-    finally
-        deactivate_raising!(is_raising)
-        deactivate_sdycache!(sdycache)
-        deactivate_sdygroupidcache!(sdygroupidcache)
-        deactivate_callcache!(callcache)
-        MLIR.IR.deactivate(MLIR.IR.body(mod))
-        clear_llvm_compiler_cache!(mod)
-        release_guard_from_gc_for_module(mod)
-        MLIR.IR.deactivate(mod)
+        fnname = string(f)
+        try
+            Reactant.TracedUtils.make_mlir_fn(
+                f,
+                args,
+                fn_kwargs,
+                fnname,
+                true;
+                runtime,
+                compile_options.optimize_then_pad,
+                kwargs...,
+            )
+        finally
+            deactivate_raising!(is_raising)
+            deactivate_sdycache!(sdycache)
+            deactivate_sdygroupidcache!(sdygroupidcache)
+            deactivate_callcache!(callcache)
+            clear_llvm_compiler_cache!(mod)
+            release_guard_from_gc_for_module(mod)
+        end
     end
     (;
         fnwrapped,
@@ -3713,10 +3705,6 @@ function compile_xla(
     serializable::Bool=false,
     kwargs...,
 )
-    # register MLIR dialects
-    ctx = MLIR.IR.Context(Reactant.registry[])
-    @ccall MLIR.API.mlir_c.RegisterDialects(ctx::MLIR.API.MlirContext)::Cvoid
-
     client = client !== nothing ? client : XLA.default_backend()
     backend = XLA.platform_name(client)
 
@@ -3726,91 +3714,86 @@ function compile_xla(
         backend = "cpu"
     end
 
-    MLIR.IR.activate(ctx)
-    try
-        # compile function to MLIR module
-        mod = MLIR.IR.Module(MLIR.IR.Location())
+    # compile function to MLIR module
+    mod = MLIR.IR.Module()
 
-        compile_options, kwargs = __get_compile_options_and_kwargs(; kwargs...)
-        mlir_fn_res = compile_mlir!(
-            mod,
-            f,
-            args,
-            compile_options;
-            backend,
-            runtime=XLA.runtime(client),
-            client,
-            kwargs...,
-        )
+    compile_options, kwargs = __get_compile_options_and_kwargs(; kwargs...)
+    mlir_fn_res = compile_mlir!(
+        mod,
+        f,
+        args,
+        compile_options;
+        backend,
+        runtime=XLA.runtime(client),
+        client,
+        kwargs...,
+    )
 
-        # Resolve client and device
-        client, device = __resolve_device_and_client(
-            client, mlir_fn_res.seen_args, mlir_fn_res.linear_args, mlir_fn_res.is_sharded
-        )
+    # Resolve client and device
+    client, device = __resolve_device_and_client(
+        client, mlir_fn_res.seen_args, mlir_fn_res.linear_args, mlir_fn_res.is_sharded
+    )
 
-        # Attach a name, and partitioning attributes to the module
-        __add_mhlo_attributes_and_name!(
-            mod, f; mlir_fn_res.num_partitions, mlir_fn_res.num_replicas
-        )
+    # Attach a name, and partitioning attributes to the module
+    __add_mhlo_attributes_and_name!(
+        mod, f; mlir_fn_res.num_partitions, mlir_fn_res.num_replicas
+    )
 
-        # Drop some of our attributes
-        run_pass_pipeline!(mod, "drop-unsupported-attributes", "drop_enzymexla_attributes")
+    # Drop some of our attributes
+    run_pass_pipeline!(mod, "drop-unsupported-attributes", "drop_enzymexla_attributes")
 
-        # compile MLIR module to XLA executable
-        global_device_ids = collect(Int64, mlir_fn_res.global_device_ids)
-        mlir_fn_res.is_sharded && (device = nothing)
+    # compile MLIR module to XLA executable
+    global_device_ids = collect(Int64, mlir_fn_res.global_device_ids)
+    mlir_fn_res.is_sharded && (device = nothing)
 
-        # XLA.compile mutates the module, for serialization we need to keep a copy
-        if serializable
-            iobuffer = IOBuffer()
-            show(IOContext(iobuffer, :debug => true), mod)
-            module_string = String(take!(iobuffer))
-        else
-            module_string = ""
-        end
-
-        if before_xla_optimizations
-            exec = nothing
-            hlo_modules = XLA.HloModule(mod)
-        else
-            xla_compile_options = XLA.make_compile_options(;
-                device_id=if mlir_fn_res.is_sharded
-                    -1
-                else
-                    Int64(XLA.device_ordinal(device))
-                end,
-                xla_compile_options=compile_options.xla_compile_options,
-                num_replicas=mlir_fn_res.num_replicas,
-                num_partitions=mlir_fn_res.num_partitions,
-                mesh_ids=mlir_fn_res.is_sharded ? global_device_ids : nothing,
-                xla_debug_options=compile_options.xla_debug_options,
-                xla_executable_build_options=merge(
-                    (;
-                        use_shardy_partitioner=mlir_fn_res.use_shardy_partitioner,
-                        use_spmd_partitioning=mlir_fn_res.is_sharded,
-                    ),
-                    compile_options.xla_executable_build_options,
-                ),
-            )
-
-            exec = XLA.compile(
-                client,
-                mod;
-                compile_options=xla_compile_options,
-                num_outputs=length(mlir_fn_res.linear_results),
-                num_parameters=length(mlir_fn_res.linear_args),
-                mlir_fn_res.is_sharded,
-                mlir_fn_res.num_replicas,
-                mlir_fn_res.num_partitions,
-            )
-            hlo_modules = XLA.get_hlo_modules(exec)
-            hlo_modules = length(hlo_modules) == 1 ? only(hlo_modules) : hlo_modules
-        end
-
-        return mod, exec, hlo_modules, mlir_fn_res, device, client, module_string
-    finally
-        MLIR.IR.deactivate(ctx)
+    # XLA.compile mutates the module, for serialization we need to keep a copy
+    if serializable
+        iobuffer = IOBuffer()
+        show(IOContext(iobuffer, :debug => true), mod)
+        module_string = String(take!(iobuffer))
+    else
+        module_string = ""
     end
+
+    if before_xla_optimizations
+        exec = nothing
+        hlo_modules = XLA.HloModule(mod)
+    else
+        xla_compile_options = XLA.make_compile_options(;
+            device_id=if mlir_fn_res.is_sharded
+                -1
+            else
+                Int64(XLA.device_ordinal(device))
+            end,
+            xla_compile_options=compile_options.xla_compile_options,
+            num_replicas=mlir_fn_res.num_replicas,
+            num_partitions=mlir_fn_res.num_partitions,
+            mesh_ids=mlir_fn_res.is_sharded ? global_device_ids : nothing,
+            xla_debug_options=compile_options.xla_debug_options,
+            xla_executable_build_options=merge(
+                (;
+                    use_shardy_partitioner=mlir_fn_res.use_shardy_partitioner,
+                    use_spmd_partitioning=mlir_fn_res.is_sharded,
+                ),
+                compile_options.xla_executable_build_options,
+            ),
+        )
+
+        exec = XLA.compile(
+            client,
+            mod;
+            compile_options=xla_compile_options,
+            num_outputs=length(mlir_fn_res.linear_results),
+            num_parameters=length(mlir_fn_res.linear_args),
+            mlir_fn_res.is_sharded,
+            mlir_fn_res.num_replicas,
+            mlir_fn_res.num_partitions,
+        )
+        hlo_modules = XLA.get_hlo_modules(exec)
+        hlo_modules = length(hlo_modules) == 1 ? only(hlo_modules) : hlo_modules
+    end
+
+    return mod, exec, hlo_modules, mlir_fn_res, device, client, module_string
 end
 
 # inspired by RuntimeGeneratedFunction.jl
@@ -3820,6 +3803,7 @@ const __thunk_rev_body_cache = Dict{Expr,Symbol}()
 function compile(f, args; kwargs...)
     compile_options, kwargs = __get_compile_options_and_kwargs(; kwargs...)
 
+    # TODO should we dispose the MLIR module (here as `_`) here?
     _, exec, _, mlir_fn_res, device, client, str = compile_xla(
         f, args; compile_options, kwargs...
     )
