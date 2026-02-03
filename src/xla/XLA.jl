@@ -105,7 +105,7 @@ else
 end
 const global_state = State()
 
-const is_live = Ref(true)
+const is_live = Threads.Atomic{Bool}(true)
 
 function cleanup_backend_state()
     @debug "[GETPID $(getpid())] Cleanup Backend State, $global_backend_state, $global_state"
