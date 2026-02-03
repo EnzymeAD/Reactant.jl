@@ -1147,7 +1147,6 @@ function sdy_sharding_to_reactant_sharding(attr, global_device_ids, mod)
                 MLIR.IR.Attribute(MLIR.API.sdyTensorShardingAttrGetMeshOrRef(mlir_attr))
             ),
         ),
-        false,
     )
     return sdy_tensor_sharding_to_named_sharding(
         sdy_mesh_to_reactant_mesh(MLIR.IR.getattr(mesh_op, "mesh"), global_device_ids),
