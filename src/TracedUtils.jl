@@ -1281,13 +1281,9 @@ function elem_apply(f, args::Vararg{Any,Nargs}) where {Nargs}
     end
 
     seen_results = OrderedIdDict()
-    traced2_result = Reactant.make_tracer(
+    return Reactant.make_tracer(
         seen_results, result, (), Reactant.TracedSetPath; tobatch=OutShape
     )
-
-    MLIR.IR.dispose(func2)
-
-    return traced2_result
 end
 
 function traced_indices(indices...)
