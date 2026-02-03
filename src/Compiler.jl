@@ -2260,10 +2260,9 @@ function compile_mlir!(
                 ],
             )
             push!(MLIR.IR.region(func_with_padding, 1), fnbody)
-            MLIR.IR.activate(fnbody)
             push!(MLIR.IR.body(mod), func_with_padding)
 
-            try
+            MLIR.IR.@activate fnbody begin
                 call_args = MLIR.IR.Value[
                     MLIR.IR.argument(fnbody, i) for i in 1:length(linear_args)
                 ]
@@ -2315,8 +2314,6 @@ function compile_mlir!(
                 end
 
                 MLIR.Dialects.func.return_(results)
-            finally
-                MLIR.IR.deactivate(fnbody)
             end
 
             # we just need the ops to potentially remove slices / paddings

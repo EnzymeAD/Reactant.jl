@@ -337,11 +337,8 @@ function replicate_array_to_all_devices(array::Array, sharding, mesh, size_arr)
         )
         fnbody = MLIR.IR.Block(data_mlir_type, [MLIR.IR.Location()])
         push!(MLIR.IR.region(func, 1), fnbody)
-        MLIR.IR.activate(fnbody)
-        try
+        MLIR.IR.@activate fnbody begin
             MLIR.Dialects.func.return_([MLIR.IR.argument(fnbody, 1)])
-        finally
-            MLIR.IR.deactivate(fnbody)
         end
         push!(MLIR.IR.body(mod), func)
 
