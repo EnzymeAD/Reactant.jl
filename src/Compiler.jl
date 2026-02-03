@@ -942,8 +942,6 @@ function optimization_passes(
         "fuse_reshape_collapse_or_expand_dims_into_reduce",
         "split_reduce_add_mul_to_add_dot_general",
         "recognize_from_constant($(max_constant_threshold))",
-        "extend_to_broadcast",
-        "reduce_max_min_mul_positive_scalar",
     ]
 
     if !is_sharded
@@ -989,7 +987,6 @@ function optimization_passes(
                 "dynamic_gather_op_is_not_dynamic<16>",
                 "gather_op_canon<16>",
                 "gather_elementwise",
-                "elementwise_gather",
                 "gather_of_scatter_simplify",
                 ## const prop patterns
                 "gather_const_prop",
@@ -1117,8 +1114,6 @@ function optimization_passes(
                 "mul_zero_pad<1>",
                 "div_zero_pad<1>",
                 "binop_const_reshape_pad<1>",
-                "binop_pad_to_concat_add<1>",
-                "binop_pad_to_concat_mul<1>",
                 "binop_const_pad_add<1>",
                 "binop_const_pad_subtract<1>",
                 "binop_const_pad_mul<1>",
