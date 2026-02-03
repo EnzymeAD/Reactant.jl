@@ -1439,34 +1439,38 @@ end
             error("Unsupported runtime: $(Reactant.XLA.REACTANT_XLA_RUNTIME)")
         end
 
-        @compile_workload begin
-            @static if Reactant.precompilation_supported() && VERSION != v"1.11.3"
-                function square_kernel!(x)
-                    i = CUDA.threadIdx().x
-                    x[i] *= x[i]
-                    return nothing
-                end
+        MLIR.IR.@dispose ctx = MLIR.IR.Context(Reactant.registry[]) begin
+            Reactant.register_enzymexla_dialects(ctx)
+                @compile_workload begin
+                    @static if Reactant.precompilation_supported() && VERSION != v"1.11.3"
+                        function square_kernel!(x)
+                            i = CUDA.threadIdx().x
+                            x[i] *= x[i]
+                            return nothing
+                        end
 
-                function square!(x)
-                    CUDA.@cuda blocks = 1 threads = length(x) square_kernel!(x)
-                    return nothing
-                end
-                y = Reactant.ConcreteRArray([2.0]; client)
-                try
-                    Reactant.Compiler.compile_mlir(square!, (y,); optimize=false)
-                catch e
-                    if !(e isa ReactantPrecompilationException)
-                        rethrow()
-                    end
-                end
+                        function square!(x)
+                            CUDA.@cuda blocks = 1 threads = length(x) square_kernel!(x)
+                            return nothing
+                        end
+                        y = Reactant.ConcreteRArray([2.0]; client)
+                        try
+                            Reactant.Compiler.compile_mlir(square!, (y,); optimize=false)
+                        catch e
+                            if !(e isa ReactantPrecompilationException)
+                                rethrow()
+                            end
+                        end
 
-                if y isa Reactant.ConcreteIFRTArray
-                    Reactant.XLA.free_buffer(y.data.buffer)
-                    y.data.buffer.buffer = C_NULL
-                else
-                    for dat in y.data
-                        Reactant.XLA.free_buffer(dat.buffer)
-                        dat.buffer.buffer = C_NULL
+                        if y isa Reactant.ConcreteIFRTArray
+                            Reactant.XLA.free_buffer(y.data.buffer)
+                            y.data.buffer.buffer = C_NULL
+                        else
+                            for dat in y.data
+                                Reactant.XLA.free_buffer(dat.buffer)
+                                dat.buffer.buffer = C_NULL
+                            end
+                        end
                     end
                 end
             end
