@@ -1441,6 +1441,7 @@ end
 
         MLIR.IR.@dispose ctx = MLIR.IR.Context(Reactant.registry[]) begin
             Reactant.register_enzymexla_dialects(ctx)
+            MLIR.IR.@activate ctx begin
                 @compile_workload begin
                     @static if Reactant.precompilation_supported() && VERSION != v"1.11.3"
                         function square_kernel!(x)
