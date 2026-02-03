@@ -585,7 +585,9 @@ Base.@nospecializeinfer function traced_type_inner(
     @nospecialize(ndevices),
     @nospecialize(runtime)
 ) where {T,A}
-    return Core.LLVMPtr{traced_type_inner(T, seen, mode, track_numbers, ndevices, runtime),A}
+    return Core.LLVMPtr{
+        traced_type_inner(T, seen, mode, track_numbers, ndevices, runtime),A
+    }
 end
 
 Base.@nospecializeinfer function traced_type_inner(

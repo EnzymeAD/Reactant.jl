@@ -219,7 +219,7 @@ end
                     Ref{TracedRArray{Float64,1}},
                 ),
                 (Memory{UInt8}, Memory{UInt8}, Memory{TracedRNumber{UInt8}}),
-                
+
                 # Ptr + UnionAll types
                 (Ptr, Ptr, Ptr),
                 (Core.LLVMPtr, Core.LLVMPtr, Core.LLVMPtr),
