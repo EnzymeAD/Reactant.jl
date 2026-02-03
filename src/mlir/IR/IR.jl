@@ -6,12 +6,12 @@ using ..API
 using LLVM: LLVM, @checked, mark_alloc, mark_use, mark_dispose
 import LLVM: activate, deactivate, dispose, @dispose, refcheck
 
-# here for backwards-compatibility but we should respect the naming convention of LLVM.jl
+# here for backward-compatibility but we should respect the naming convention of LLVM.jl
 const activate! = activate
 const deactivate! = deactivate
 const dispose! = dispose
 
-mark_donate(x) = mark_dispose(x)
+mark_donate(x) = (mark_dispose(x); x)
 
 # fix for `@checked` on MLIR.API types
 for AT in [
@@ -84,40 +84,5 @@ include("IntegerSet.jl")
 
 include("ExecutionEngine.jl")
 include("Pass.jl")
-
-# TODO try to fuse it with Ops.hlo_call?
-function tryinject!(sym_name, code; verify=false, mod=current_module(), location=Location())
-    fn = lookup(SymbolTable(Operation(mod)), sym_name)
-
-    if fn === nothing
-        ctx = current_context()
-        block = body(mod)
-        return @ccall API.mlir_c.mlirOperationInject(
-            ctx::API.MlirContext,
-            block::API.MlirBlock,
-            code::API.MlirStringRef,
-            location::API.MlirLocation,
-            verify::Bool,
-        )::Bool
-    else
-        return false
-    end
-end
-
-function inject!(sym_name, code; kwargs...)
-    success = tryinject!(sym_name, code; kwargs...)
-    @assert success "Failed injecting MLIR to top-level block"
-end
-
-function tryinjectop!(sym_name, code; mod=current_module(), location=Location())
-    fn = lookup(SymbolTable(Operation(mod)), sym_name)
-
-    if isnothing(fn)
-        top_level_block = body(mod)
-        return parse(Operation, code; block=top_level_block, location)
-    else
-        return nothing
-    end
-end
 
 end # module IR
