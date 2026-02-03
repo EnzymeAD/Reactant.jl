@@ -513,7 +513,7 @@ function overload_autodiff(
         residx += 1
     end
 
-    MLIR.IR.dispose(func2)
+    # MLIR.IR.mark_donate(func2)
 
     if reverse
         if EnzymeCore.needs_primal(CMode)
