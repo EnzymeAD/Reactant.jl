@@ -1,7 +1,8 @@
 using Reactant: MLIR
 
 @testset "inject" begin
-    mod = MLIR.IR.@dispose ctx = MLIR.IR.Context() mod = MLIR.IR.Module() begin
+    MLIR.IR.@dispose ctx = MLIR.IR.Context() mod = MLIR.IR.Module() begin
+        Reactant.register_enzymexla_dialects(ctx)
         MLIR.IR.@activate [ctx, mod] begin
             MLIR.IR.inject!(
                 "MPI_COMM_WORLD", "llvm.mlir.global constant @MPI_COMM_WORLD() : !llvm.ptr"

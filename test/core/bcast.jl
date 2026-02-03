@@ -17,6 +17,7 @@ end
 
 function test()
     MLIR.IR.@dispose ctx = MLIR.IR.Context() begin
+        Reactant.register_enzymexla_dialects(ctx)
         MLIR.IR.@activate ctx begin
             mod = MLIR.IR.Module()
             modbody = MLIR.IR.body(mod)
