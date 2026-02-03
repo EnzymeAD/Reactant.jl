@@ -3816,6 +3816,46 @@ function mlirIntegerAttrGetValueUInt(attr)
 end
 
 """
+    mlirIntegerAttrGetValueBitWidth(attr)
+
+Returns the bit width of the integer attribute's underlying APInt value. This is useful for determining the size of the integer, especially for values larger than 64 bits.
+"""
+function mlirIntegerAttrGetValueBitWidth(attr)
+    @ccall mlir_c.mlirIntegerAttrGetValueBitWidth(attr::MlirAttribute)::Cuint
+end
+
+"""
+    mlirIntegerAttrGetValueNumWords(attr)
+
+Returns the number of 64-bit words that make up the integer attribute's underlying APInt value. For integers <= 64 bits, this returns 1.
+"""
+function mlirIntegerAttrGetValueNumWords(attr)
+    @ccall mlir_c.mlirIntegerAttrGetValueNumWords(attr::MlirAttribute)::Cuint
+end
+
+"""
+    mlirIntegerAttrGetValueWords(attr, words)
+
+Copies the 64-bit words making up the integer attribute's APInt value into the provided buffer. The buffer must have space for at least [`mlirIntegerAttrGetValueNumWords`](@ref)(attr) elements. Words are stored in little-endian order (least significant word first). The sign information is not encoded in the words themselves; use the type's signedness to interpret the value correctly.
+"""
+function mlirIntegerAttrGetValueWords(attr, words)
+    @ccall mlir_c.mlirIntegerAttrGetValueWords(
+        attr::MlirAttribute, words::Ptr{UInt64}
+    )::Cvoid
+end
+
+"""
+    mlirIntegerAttrGetFromWords(type, numWords, words)
+
+Creates an integer attribute of the given type from an array of 64-bit words. This is useful for creating integer attributes with values with widths larger than 64 bits. Words are in little-endian order (least significant word first). The number of words must match the bit width of the type: numWords = ceil(bitWidth / 64).
+"""
+function mlirIntegerAttrGetFromWords(type, numWords, words)
+    @ccall mlir_c.mlirIntegerAttrGetFromWords(
+        type::MlirType, numWords::Cuint, words::Ptr{UInt64}
+    )::MlirAttribute
+end
+
+"""
     mlirIntegerAttrGetTypeID()
 
 Returns the typeID of an Integer attribute.
@@ -7552,7 +7592,7 @@ function mlirLLVMDICompositeTypeAttrGetName()
 end
 
 """
-    mlirLLVMDIDerivedTypeAttrGet(ctx, tag, name, baseType, sizeInBits, alignInBits, offsetInBits, dwarfAddressSpace, extraData)
+    mlirLLVMDIDerivedTypeAttrGet(ctx, tag, name, baseType, sizeInBits, alignInBits, offsetInBits, dwarfAddressSpace, flags, extraData)
 
 Creates a LLVM DIDerivedType attribute. Note that `dwarfAddressSpace` is an optional field, where [`MLIR_CAPI_DWARF_ADDRESS_SPACE_NULL`](@ref) indicates null and non-negative values indicate a value present.
 """
@@ -7565,6 +7605,7 @@ function mlirLLVMDIDerivedTypeAttrGet(
     alignInBits,
     offsetInBits,
     dwarfAddressSpace,
+    flags,
     extraData,
 )
     @ccall mlir_c.mlirLLVMDIDerivedTypeAttrGet(
@@ -7576,6 +7617,7 @@ function mlirLLVMDIDerivedTypeAttrGet(
         alignInBits::UInt32,
         offsetInBits::UInt64,
         dwarfAddressSpace::Int64,
+        flags::Int64,
         extraData::MlirAttribute,
     )::MlirAttribute
 end

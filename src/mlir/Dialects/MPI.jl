@@ -14,6 +14,48 @@ import ..Dialects: operandsegmentsizes, resultsegmentsizes
 import ...API
 
 """
+`allgather`
+
+MPI_Allgather collects data from all processes in a given communicator and
+stores the gathered data in the receive buffer of each process.
+
+Each process contributes the same amount of data defined by `sendbuf`.
+The MPI call specifies the number of elements contributed by each process
+via the `recvcount` parameter. However, this operation, assumes `recvbuf`
+to be sufficiently large to hold the data contributed by all processes.
+Therefore, `recvcount` is implicitly defined as
+`num_elements(recvbuf) / MPI_Comm_size(comm)`.
+
+This operation may optionally return an !mpi.retval value, which can be
+used for error checking.
+"""
+function allgather(
+    sendbuf::Value,
+    recvbuf::Value,
+    comm::Value;
+    retval=nothing::Union{Nothing,IR.Type},
+    location=Location(),
+)
+    op_ty_results = IR.Type[]
+    operands = Value[sendbuf, recvbuf, comm]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+    !isnothing(retval) && push!(op_ty_results, retval)
+
+    return create_operation(
+        "mpi.allgather",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+"""
 `allreduce`
 
 MPI_Allreduce performs a reduction operation on the values in the sendbuf
