@@ -563,11 +563,7 @@ for P in (Ptr, Base.RefValue, Ref, Memory)
         @nospecialize(ndevices),
         @nospecialize(runtime)
     ) where {T}
-        return $P{
-            traced_type_inner(
-                PT.parameters[1], seen, mode, track_numbers, ndevices, runtime
-            ),
-        }
+        return $P{traced_type_inner(T, seen, mode, track_numbers, ndevices, runtime)}
     end
 end
 
@@ -579,11 +575,7 @@ Base.@nospecializeinfer function traced_type_inner(
     @nospecialize(ndevices),
     @nospecialize(runtime)
 ) where {T}
-    return Core.LLVMPtr{
-        traced_type_inner(
-            PT.body.parameters[1], seen, mode, track_numbers, ndevices, runtime
-        ),
-    }
+    return Core.LLVMPtr{traced_type_inner(T, seen, mode, track_numbers, ndevices, runtime)}
 end
 Base.@nospecializeinfer function traced_type_inner(
     @nospecialize(PT::Type{Core.LLVMPtr{T,A}}),
@@ -593,9 +585,7 @@ Base.@nospecializeinfer function traced_type_inner(
     @nospecialize(ndevices),
     @nospecialize(runtime)
 ) where {T,A}
-    return Core.LLVMPtr{
-        traced_type_inner(PT.parameters[1], seen, mode, track_numbers, ndevices, runtime),A
-    }
+    return Core.LLVMPtr{traced_type_inner(T, seen, mode, track_numbers, ndevices, runtime),A}
 end
 
 Base.@nospecializeinfer function traced_type_inner(
