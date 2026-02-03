@@ -1,10 +1,8 @@
 using Reactant: MLIR
 
 @testset "inject" begin
-    mod = MLIR.IR.@dispose ctx = MLIR.IR.Context() MLIR.IR.@activate ctx begin
-        mod = MLIR.IR.Module()
-
-        MLIR.IR.@dispose mod = MLIR.IR.Module() MLIR.IR.@activate mod begin
+    mod = MLIR.IR.@dispose ctx = MLIR.IR.Context() mod = MLIR.IR.Module() begin
+        MLIR.IR.@activate [ctx, mod] begin
             MLIR.IR.inject!(
                 "MPI_COMM_WORLD", "llvm.mlir.global constant @MPI_COMM_WORLD() : !llvm.ptr"
             )

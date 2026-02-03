@@ -1487,11 +1487,13 @@ end
 
 # helper for debug purposes: String -> Text
 function run_pass_pipeline_on_source(source, pass_pipeline; enable_verifier=true)
-    return MLIR.IR.@dispose ctx = MLIR.IR.Context() MLIR.IR.@activate ctx begin
-        mod = parse(MLIR.IR.Module, source)
-        run_pass_pipeline!(mod, pass_pipeline; enable_verifier)
-        MLIR.IR.verifyall(MLIR.IR.Operation(mod); debug=true)
-        Text(repr(mod))
+    return MLIR.IR.@dispose ctx = MLIR.IR.Context() begin
+        MLIR.IR.@activate ctx begin
+            mod = parse(MLIR.IR.Module, source)
+            run_pass_pipeline!(mod, pass_pipeline; enable_verifier)
+            MLIR.IR.verifyall(MLIR.IR.Operation(mod); debug=true)
+            Text(repr(mod))
+        end
     end
 end
 
@@ -1557,34 +1559,36 @@ function compile_mlir(f, args; client=nothing, drop_unsupported_attributes=false
         backend = "cpu"
     end
 
-    results = MLIR.IR.@dispose ctx = MLIR.IR.Context() MLIR.IR.@activate ctx begin
-        mod = MLIR.IR.Module()
+    results = MLIR.IR.@dispose ctx = MLIR.IR.Context() begin
+        MLIR.IR.@activate ctx begin
+            mod = MLIR.IR.Module()
 
-        compile_options, kwargs_inner = __get_compile_options_and_kwargs(; kwargs...)
-        mlir_fn_res = compile_mlir!(
-            mod,
-            f,
-            args,
-            compile_options;
-            backend,
-            runtime=XLA.runtime(client),
-            client,
-            kwargs_inner...,
-        )
-
-        # Attach a name, and partitioning attributes to the module
-        __add_mhlo_attributes_and_name!(
-            mod, f; mlir_fn_res.num_partitions, mlir_fn_res.num_replicas
-        )
-
-        if drop_unsupported_attributes
-            # Drop some of our attributes
-            run_pass_pipeline!(
-                mod, "drop-unsupported-attributes", "drop_enzymexla_attributes"
+            compile_options, kwargs_inner = __get_compile_options_and_kwargs(; kwargs...)
+            mlir_fn_res = compile_mlir!(
+                mod,
+                f,
+                args,
+                compile_options;
+                backend,
+                runtime=XLA.runtime(client),
+                client,
+                kwargs_inner...,
             )
-        end
 
-        return mod, mlir_fn_res
+            # Attach a name, and partitioning attributes to the module
+            __add_mhlo_attributes_and_name!(
+                mod, f; mlir_fn_res.num_partitions, mlir_fn_res.num_replicas
+            )
+
+            if drop_unsupported_attributes
+                # Drop some of our attributes
+                run_pass_pipeline!(
+                    mod, "drop-unsupported-attributes", "drop_enzymexla_attributes"
+                )
+            end
+
+            mod, mlir_fn_res
+        end
     end
 
     return results

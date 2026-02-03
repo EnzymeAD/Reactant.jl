@@ -66,17 +66,26 @@ macro activate(obj, body)
     if Base.isexpr(obj, :(=))
         prologue = esc(obj)
         symbol = obj.args[1]
+        activation = :($activate($symbol))
+        deactivation = :($deactivate($symbol))
+    elseif Base.isexpr(obj, :tuple) || Base.isexpr(obj, :vect)
+        prologue = nothing
+        symbol = esc(obj)
+        activation = :($activate.($symbol))
+        deactivation = :($deactivate.($symbol))
     else
         prologue = nothing
         symbol = esc(obj)
+        activation = :($activate($symbol))
+        deactivation = :($deactivate($symbol))
     end
     quote
         $prologue
-        $activate($symbol)
+        $activation
         try
             $(esc.(bodybody)...)
         finally
-            deactivate($symbol)
+            $deactivation
         end
     end
 end
