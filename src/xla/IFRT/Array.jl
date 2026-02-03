@@ -304,13 +304,13 @@ function replicate_array_to_all_devices(array::Array, sharding, mesh, size_arr)
 
     # Manually write the MLIR for resharding resharding
     ctx = MLIR.IR.Context(Reactant.registry[])
-    @ccall MLIR.API.mlir_c.RegisterDialects(ctx::MLIR.API.MlirContext)::Cvoid
+    Reactant.register_enzymexla_dialects(ctx)
     MLIR.IR.activate(ctx)
 
     sdycache = Reactant.Compiler.default_sdycache()
     Reactant.Compiler.activate_sdycache!(sdycache)
 
-    mod = MLIR.IR.Module(MLIR.IR.Location(; context=ctx))
+    mod = MLIR.IR.Module()
 
     output_buffer = try
         data_mlir_type = [

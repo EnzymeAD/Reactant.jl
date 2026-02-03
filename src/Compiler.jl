@@ -1488,6 +1488,7 @@ end
 # helper for debug purposes: String -> Text
 function run_pass_pipeline_on_source(source, pass_pipeline; enable_verifier=true)
     return MLIR.IR.@dispose ctx = MLIR.IR.Context() begin
+        Reactant.register_enzymexla_dialects(ctx)
         MLIR.IR.@activate ctx begin
             mod = parse(MLIR.IR.Module, source)
             run_pass_pipeline!(mod, pass_pipeline; enable_verifier)

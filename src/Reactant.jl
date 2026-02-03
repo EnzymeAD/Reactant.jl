@@ -285,7 +285,13 @@ export ConcreteRArray,
 
 const registry = Ref{Union{Nothing,MLIR.IR.DialectRegistry}}()
 
+function register_enzymexla_dialects(ctx::MLIR.IR.Context)
+    @ccall MLIR.API.mlir_c.RegisterDialects(ctx::MLIR.API.MlirContext)::Cvoid
+end
+
+# pass initialization state is required to avoid multiple initialization on precompilation
 const passes_initialized = Ref(false)
+
 function initialize_dialect()
     registry[] = MLIR.IR.DialectRegistry()
     @ccall MLIR.API.mlir_c.InitializeRegistry(
@@ -347,6 +353,13 @@ function __init__()
             )
         end
     end
+
+    # create a persistent context to hold data along the program lifetime
+    # if any op/module is used after calling `compile`, MLIR attrs/types/... will segfault
+    # this Context is freed at exit
+    ctx = MLIR.IR.Context(registry[]; threading=false)
+    register_enzymexla_dialects(ctx)
+    activate!(ctx)
 
     return nothing
 end
