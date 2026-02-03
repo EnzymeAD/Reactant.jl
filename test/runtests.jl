@@ -1,4 +1,4 @@
-using Reactant, ParallelTestRunner, CondaPkg, Test
+using Reactant, ParallelTestRunner, CondaPkg, Test, Setfield
 
 const BACKEND = lowercase(get(ENV, "REACTANT_BACKEND_GROUP", "auto"))
 
@@ -51,6 +51,7 @@ end
 
 # This is run in a special way
 delete!(testsuite, "integration/mpi")
+delete!(testsuite, "core/qa")
 
 if !ENZYMEJAX_INSTALLED[]
     delete!(testsuite, "integration/enzymejax")
@@ -58,6 +59,10 @@ end
 
 if !NUMPYRO_INSTALLED[]
     delete!(testsuite, "integration/numpyro")
+end
+
+if Reactant.Accelerators.TPU.has_tpu() || BACKEND == "tpu"
+    @set! parsed_args.jobs = Some(1)
 end
 
 total_jobs = min(
@@ -78,6 +83,16 @@ total_jobs = min(
                 $(BACKEND) != "auto" && Reactant.set_default_backend($(BACKEND))
             end,
         )
+    end
+
+    if (
+        isempty(parsed_args.positionals) ||
+        "core" ∈ parsed_args.positionals ||
+        "core/qa" ∈ parsed_args.positionals
+    )
+        @testset "QA" begin
+            include("core/qa.jl")
+        end
     end
 
     if (
