@@ -62,10 +62,14 @@ for runtime in (:PJRT, :IFRT)
         clients::Dict{String,$(runtime).Client}
         default_client::$(runtime).Client
 
-        function $(backend_state)(initialized::Bool = false,
-                                  clients::Dict{String,$(runtime).Client} = Dict{String,$(runtime).Client}(), 
-                                  default_client::$(runtime).Client = $(runtime).NullClient)
-            return finalizer(finalize_backend_state, new(initialized, clients, default_client))
+        function $(backend_state)(
+            initialized::Bool=false,
+            clients::Dict{String,$(runtime).Client}=Dict{String,$(runtime).Client}(),
+            default_client::$(runtime).Client=$(runtime).NullClient,
+        )
+            return finalizer(
+                finalize_backend_state, new(initialized, clients, default_client)
+            )
         end
     end
 
@@ -75,9 +79,8 @@ for runtime in (:PJRT, :IFRT)
             free_client(client)
         end
         empty!(state.clients)
-        state.default_client = $(runtime).NullClient
+        return state.default_client = $(runtime).NullClient
     end
-
 end
 
 function Base.getproperty(bs::AbstractBackendState, sym::Symbol)
@@ -105,7 +108,7 @@ const global_state = State()
 function cleanup_backend_state()
     @debug "[GETPID $(getpid())] Cleanup Backend State, $global_backend_state, $global_state"
     finalize_backend_state(global_backend_state)
-    shutdown(global_state)
+    return shutdown(global_state)
 end
 
 function client(backend::String)
