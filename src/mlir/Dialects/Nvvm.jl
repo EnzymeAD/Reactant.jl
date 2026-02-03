@@ -5860,6 +5860,68 @@ function tcgen05_wait(; kind, location=Location())
     )
 end
 
+"""
+`tensormap_replace`
+
+The `nvvm.tensormap.replace` replaces the specified field of the tensor-map 
+object at the location specified by `addr` with a new value (specified by 
+`new_value` or `new_value_attr`).
+
+The `field` argument specifies the field of the tensor-map object to 
+replace.
+
+`new_value` is an `i32`/`i64` argument that specifies the new value to 
+replace the `field` with for the `global_address`, `rank`, `box_dim`, 
+`global_dim`, `global_stride`, and `element_stride` fields. It must be an 
+`i64` for the `global_address` and `global_stride` fields and `i32` for the 
+remaining fields.
+
+For `rank`, `new_value` must be one less than the desired tensor rank as 
+this field uses zero-based numbering.
+
+`new_value_attr` is an attribute that specifies the new value to replace 
+the `field` with for the `elemtype`, `interleave_layout`, `swizzle_mode`, 
+`swizzle_atomicity`, and `fill_mode` fields. It takes the place of 
+`new_value` for these fields. It must be a valid attribute corresponding to 
+the `field` type.
+
+The ordinal `ord` is an immediate integer argument that specifies the 
+ordinal of the `field` across the tensor which needs to be replaced and is 
+required only for the `box_dim`, `global_dim`, `global_stride`, and 
+`element_stride` fields.
+
+[For more information, see PTX ISA.](https://docs.nvidia.com/cuda/parallel-thread-execution/#data-movement-and-conversion-instructions-tensormap-replace)
+"""
+function tensormap_replace(
+    addr::Value,
+    new_value=nothing::Union{Nothing,Value};
+    field,
+    ord=nothing,
+    new_value_attr=nothing,
+    location=Location(),
+)
+    op_ty_results = IR.Type[]
+    operands = Value[addr,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[NamedAttribute("field", field),]
+    !isnothing(new_value) && push!(operands, new_value)
+    !isnothing(ord) && push!(attributes, NamedAttribute("ord", ord))
+    !isnothing(new_value_attr) &&
+        push!(attributes, NamedAttribute("new_value_attr", new_value_attr))
+
+    return create_operation(
+        "nvvm.tensormap.replace",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
 function read_ptx_sreg_tid_x(; res::IR.Type, range=nothing, location=Location())
     op_ty_results = IR.Type[res,]
     operands = Value[]
