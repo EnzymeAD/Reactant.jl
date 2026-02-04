@@ -40,7 +40,7 @@ The path to the generated Julia script as a `String`.
 
 ## Files Generated
 
-  - `{function_name}_{id}.mlir`: The StableHLO/MLIR module (where `{id}` is a numeric counter)
+  - `{function_name}_{id}.mlir`: The StableHLO/MLIR module
   - `{function_name}_{id}_inputs.jls`: Serialized file containing all input arrays
   - `{function_name}.jl`: Julia script that loads and executes the exported function
 
@@ -62,15 +62,20 @@ y = Reactant.to_rarray(rand(Float32, 2, 3))
 julia_file_path = Reactant.Serialization.export_to_reactant_script(my_function, x, y)
 ```
 
-Then in Julia:
 ```julia
 # Run the generated Julia script
 include(julia_file_path)
 ```
 """
 function export_to_reactant_script(
-    f, args...; output_dir::Union{String,Nothing}=nothing, function_name::String=string(f)
+    f,
+    args...;
+    output_dir::Union{String,Nothing}=nothing,
+    function_name::String=string(f),
+    compile_options::Reactant.CompileOptions=Reactant.CompileOptions(),
 )
+    function_name = replace(function_name, "!" => "_")
+
     if output_dir === nothing
         output_dir = mktempdir(; cleanup=false)
         @info "Output directory is $(output_dir)"
@@ -82,7 +87,7 @@ function export_to_reactant_script(
     # This returns compilation result with traced argument information
     argprefix = gensym("exportarg")
     mod, mlir_fn_res = Compiler.compile_mlir(
-        f, args; argprefix, drop_unsupported_attributes=true, shardy_passes=:none
+        f, args; argprefix, drop_unsupported_attributes=true, compile_options
     )
     hlo_code = string(mod)
 
@@ -174,7 +179,7 @@ function _generate_julia_script(
     for load in load_inputs
         push!(load_input_lines, load)
     end
-    load_inputs_code = join(load_input_lines, ",\n            ")
+    load_inputs_code = join(load_input_lines, ",\n        ")
 
     # Build the complete Julia script
     script = """
@@ -204,6 +209,9 @@ function _generate_julia_script(
         return tuple(inputs...)
     end
 
+    _reorder(x::AbstractArray) = permutedims(x, reverse(1:ndims(x)))
+    _reorder(x) = x  # scalars pass through unchanged
+
     function run_$(function_name)($(arg_list))
         \"\"\"
         Execute the exported Julia function using Reactant.
@@ -214,11 +222,9 @@ function _generate_julia_script(
         Returns:
             The result of calling the exported function.
         \"\"\"
-        # Load HLO module from string
-        # TODO: This will use Reactant's HLO execution API once available
-        # For now, we document that this is a placeholder that will be implemented
-        error("Direct HLO execution from loaded IR is not yet implemented in Reactant. " *
-              "This script serves as a template for future functionality.")
+        return Reactant.Ops.hlo_call(
+            HLO_CODE, $(join(["_reorder($arg)" for arg in arg_names], ", "))
+        )
     end
 
     # Main execution when script is run directly
@@ -231,7 +237,7 @@ function _generate_julia_script(
         
         # Run the function
         println("Running $(function_name)...")
-        result = run_$(function_name)($(arg_list))
+        result = Reactant.@jit run_$(function_name)($(arg_list))
         println("Result: ", result)
     end
     """
