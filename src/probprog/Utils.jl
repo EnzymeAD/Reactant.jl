@@ -17,13 +17,17 @@ using ..Reactant:
 import ..Reactant: promote_to, make_tracer
 import ..Compiler: donate_argument!
 
+const TRACING_TRACE = ScopedValue{Union{Nothing,TracedTrace}}(nothing)
+
 function process_probprog_function(f, args, op_name, with_rng=true)
     seen = OrderedIdDict()
     cache_key = []
     make_tracer(seen, (f, args...), cache_key, TracedToTypes)
     cache = Compiler.callcache()
 
-    if haskey(cache, cache_key)
+    collecting_metadata = TRACING_TRACE[] !== nothing
+
+    if !collecting_metadata && haskey(cache, cache_key)
         (; f_name, mlir_result_types, traced_result, mutated_args, linear_results, fnwrapped, argprefix, resprefix, resargprefix) = cache[cache_key]
     else
         f_name = String(gensym(Symbol(f)))
@@ -57,17 +61,19 @@ function process_probprog_function(f, args, op_name, with_rng=true)
         mlir_result_types = [
             MLIR.IR.type(MLIR.IR.operand(ret, i)) for i in 1:MLIR.IR.noperands(ret)
         ]
-        cache[cache_key] = (;
-            f_name,
-            mlir_result_types,
-            traced_result,
-            mutated_args,
-            linear_results,
-            fnwrapped,
-            argprefix,
-            resprefix,
-            resargprefix,
-        )
+        if !collecting_metadata
+            cache[cache_key] = (;
+                f_name,
+                mlir_result_types,
+                traced_result,
+                mutated_args,
+                linear_results,
+                fnwrapped,
+                argprefix,
+                resprefix,
+                resargprefix,
+            )
+        end
     end
 
     seen_cache = OrderedIdDict()
@@ -141,57 +147,41 @@ function process_probprog_outputs(
     return traced_result
 end
 
-function promote_to(::Type{TracedRArray{UInt64,0}}, t::Union{ProbProgTrace,Constraint})
-    return Ops.fill(reinterpret(UInt64, pointer_from_objref(t)), Int64[])
-end
-
-function Base.convert(
-    ::Type{T}, x::AbstractConcreteArray
-) where {T<:Union{ProbProgTrace,Constraint}}
-    while !isready(x)
-        yield()
+function build_selection_attr(trace::TracedTrace)
+    selection = MLIR.IR.Attribute[]
+    for entry in trace.entries
+        addr_path = [entry.parent_path..., entry.symbol]
+        addr_attrs = [
+            (@ccall MLIR.API.mlir_c.enzymeSymbolAttrGet(
+                MLIR.IR.current_context()::MLIR.API.MlirContext,
+                reinterpret(UInt64, pointer_from_objref(sym))::UInt64,
+            )::MLIR.IR.Attribute) for sym in addr_path
+        ]
+        push!(selection, MLIR.IR.Attribute(addr_attrs))
     end
-    return unsafe_pointer_to_objref(Ptr{Any}(collect(x)[1]))::T
+    return MLIR.IR.Attribute(selection)
 end
 
-function Base.convert(
-    ::Type{T}, x::AbstractConcreteNumber
-) where {T<:Union{ProbProgTrace,Constraint}}
-    while !isready(x)
-        yield()
+function unflatten_trace(trace_tensor, weight, entries::Vector{TraceEntry}, retval)
+    result = Trace()
+    result.weight =
+        weight isa AbstractArray ? Float64(only(Array(weight))) : Float64(weight)
+    result.retval = retval
+
+    flat = vec(Array(trace_tensor))
+    for entry in entries
+        start = entry.offset + 1
+        raw = flat[start:(start + entry.num_elements - 1)]
+        value = entry.shape == () ? only(raw) : reshape(raw, entry.shape)
+
+        target = result
+        for psym in entry.parent_path
+            if !haskey(target.subtraces, psym)
+                target.subtraces[psym] = Trace()
+            end
+            target = target.subtraces[psym]
+        end
+        target.choices[entry.symbol] = value
     end
-    return unsafe_pointer_to_objref(Ptr{Any}(to_number(x)))::T
-end
-
-function Base.getproperty(t::Union{ProbProgTrace,Constraint}, s::Symbol)
-    if s === :data
-        return ConcreteRNumber(reinterpret(UInt64, pointer_from_objref(t))).data
-    else
-        return getfield(t, s)
-    end
-end
-
-function donate_argument!(::Any, ::Union{ProbProgTrace,Constraint}, ::Int, ::Any, ::Any)
-    return nothing
-end
-
-Base.@nospecializeinfer function make_tracer(
-    seen,
-    @nospecialize(prev::Union{ProbProgTrace,Constraint}),
-    @nospecialize(path),
-    mode;
-    @nospecialize(sharding = Sharding.NoSharding()),
-    kwargs...,
-)
-    if mode == ConcreteToTraced
-        haskey(seen, prev) && return seen[prev]::TracedRNumber{UInt64}
-        result = TracedRNumber{UInt64}((path,), nothing)
-        seen[prev] = result
-        return result
-    elseif mode == TracedToTypes
-        push!(path, typeof(prev))
-        return nothing
-    else
-        error("Unsupported mode for $(typeof(prev)): $mode")
-    end
+    return result
 end

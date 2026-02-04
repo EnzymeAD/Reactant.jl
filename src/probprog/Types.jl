@@ -1,18 +1,14 @@
-using Base: ReentrantLock
 using OrderedCollections: OrderedSet
 using ..Reactant: AbstractConcreteNumber, AbstractConcreteArray
 
-mutable struct ProbProgTrace
+mutable struct Trace
     choices::Dict{Symbol,Any}
     retval::Any
     weight::Any
     subtraces::Dict{Symbol,Any}
 
-    function ProbProgTrace()
+    function Trace()
         return new(Dict{Symbol,Any}(), nothing, nothing, Dict{Symbol,Any}())
-    end
-    function ProbProgTrace(x::Union{AbstractConcreteNumber,AbstractConcreteArray})
-        return convert(ProbProgTrace, x)
     end
 end
 
@@ -68,20 +64,22 @@ extract_addresses(constraint::Constraint) = Set(keys(constraint))
 
 const Selection = OrderedSet{Address}
 
-const _probprog_ref_lock = ReentrantLock()
-const _probprog_refs = IdDict()
-
-function _keepalive!(tr::Any)
-    lock(_probprog_ref_lock)
-    try
-        _probprog_refs[tr] = tr
-    finally
-        unlock(_probprog_ref_lock)
-    end
-    return tr
+struct TraceEntry
+    symbol::Symbol
+    shape::Tuple
+    num_elements::Int
+    offset::Int
+    parent_path::Vector{Symbol}
 end
 
-get_choices(trace::ProbProgTrace) = trace.choices
+mutable struct TracedTrace
+    entries::Vector{TraceEntry}
+    position_size::Int
+    address_stack::Vector{Symbol}
+end
+TracedTrace() = TracedTrace(TraceEntry[], 0, Symbol[])
+
+get_choices(trace::Trace) = trace.choices
 
 function select(addrs::Address...)
     sorted_addrs = sort(collect(addrs); by=a -> Tuple(string.(a.path)))

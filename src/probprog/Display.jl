@@ -59,7 +59,7 @@ function _format_digest(value; n_show::Int=3)
     end
 end
 
-function _show_pretty(io::IO, trace::ProbProgTrace, pre::Int, vert_bars::Tuple)
+function _show_pretty(io::IO, trace::Trace, pre::Int, vert_bars::Tuple)
     VERT = '\u2502'
     PLUS = '\u251C'
     HORZ = '\u2500'
@@ -129,8 +129,8 @@ function _show_pretty(io::IO, trace::ProbProgTrace, pre::Int, vert_bars::Tuple)
     end
 end
 
-function Base.show(io::IO, ::MIME"text/plain", trace::ProbProgTrace)
-    println(io, "ProbProgTrace:")
+function Base.show(io::IO, ::MIME"text/plain", trace::Trace)
+    println(io, "Trace:")
     if isempty(trace.choices) && trace.retval === nothing && trace.weight === nothing
         println(io, "  (empty)")
     else
@@ -138,11 +138,11 @@ function Base.show(io::IO, ::MIME"text/plain", trace::ProbProgTrace)
     end
 end
 
-function Base.show(io::IO, trace::ProbProgTrace)
+function Base.show(io::IO, trace::Trace)
     if get(io, :compact, false)
         choices_count = length(trace.choices)
         has_retval = trace.retval !== nothing
-        print(io, "ProbProgTrace($(choices_count) choices")
+        print(io, "Trace($(choices_count) choices")
         if has_retval
             print(io, ", retval=$(trace.retval), weight=$(trace.weight)")
         end

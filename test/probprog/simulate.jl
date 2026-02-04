@@ -40,6 +40,19 @@ end
         @test !contains(repr(after), "enzyme.simulate")
     end
 
+    @testset "compiled_simulate" begin
+        shape = (3, 3, 3)
+        seed = Reactant.to_rarray(UInt64[1, 4])
+        rng = ReactantRNG(seed)
+        μ = Reactant.ConcreteRNumber(0.0)
+        σ = Reactant.ConcreteRNumber(1.0)
+
+        compiled = @compile optimize = :probprog ProbProg.simulate(rng, model, μ, σ, shape)
+        trace_t, weight, _ = compiled(rng, model, μ, σ, shape)
+        @test size(trace_t) == (1, 54)
+        @test ndims(weight) == 0
+    end
+
     @testset "normal_simulate" begin
         shape = (3, 3, 3)
         seed = Reactant.to_rarray(UInt64[1, 4])
@@ -52,8 +65,8 @@ end
         @test size(trace.retval[1]) == shape
         @test haskey(trace.choices, :s)
         @test haskey(trace.choices, :t)
-        @test size(trace.choices[:s][1]) == shape
-        @test size(trace.choices[:t][1]) == shape
+        @test size(trace.choices[:s]) == shape
+        @test size(trace.choices[:t]) == shape
         @test trace.weight isa Float64
     end
 
@@ -76,7 +89,7 @@ end
 
         @test Array(trace.retval[1]) == op(rng, x, y)
         @test haskey(trace.choices, :matmul)
-        @test trace.choices[:matmul][1] == op(rng, x, y)
+        @test trace.choices[:matmul] == op(rng, x, y)
         @test trace.weight == logpdf(op(rng, x, y), x, y)
     end
 
@@ -91,20 +104,19 @@ end
 
         @test size(trace.retval[1]) == shape
 
-        @test length(trace.choices) == 2
-        @test haskey(trace.choices, :s)
-        @test haskey(trace.choices, :t)
-
         @test length(trace.subtraces) == 2
+        @test haskey(trace.subtraces, :s)
+        @test haskey(trace.subtraces, :t)
+
         @test haskey(trace.subtraces[:s].choices, :a)
         @test haskey(trace.subtraces[:s].choices, :b)
         @test haskey(trace.subtraces[:t].choices, :a)
         @test haskey(trace.subtraces[:t].choices, :b)
-        @test trace.subtraces[:s].choices[:a][1] !== trace.subtraces[:t].choices[:a][1]
-        @test trace.subtraces[:s].choices[:b][1] !== trace.subtraces[:t].choices[:b][1]
+        @test trace.subtraces[:s].choices[:a] !== trace.subtraces[:t].choices[:a]
+        @test trace.subtraces[:s].choices[:b] !== trace.subtraces[:t].choices[:b]
 
-        @test size(trace.choices[:s][1]) == shape
-        @test size(trace.choices[:t][1]) == shape
+        @test size(trace.subtraces[:s].choices[:a]) == shape
+        @test size(trace.subtraces[:s].choices[:b]) == shape
 
         @test trace.weight isa Float64
     end
@@ -120,20 +132,19 @@ end
 
         @test size(trace.retval[1]) == shape
 
-        @test length(trace.choices) == 2
-        @test haskey(trace.choices, :s)
-        @test haskey(trace.choices, :t)
-
         @test length(trace.subtraces) == 2
+        @test haskey(trace.subtraces, :s)
+        @test haskey(trace.subtraces, :t)
+
         @test haskey(trace.subtraces[:s].choices, :a)
         @test haskey(trace.subtraces[:s].choices, :b)
         @test haskey(trace.subtraces[:t].choices, :a)
         @test haskey(trace.subtraces[:t].choices, :b)
-        @test trace.subtraces[:s].choices[:a][1] !== trace.subtraces[:t].choices[:a][1]
-        @test trace.subtraces[:s].choices[:b][1] !== trace.subtraces[:t].choices[:b][1]
+        @test trace.subtraces[:s].choices[:a] !== trace.subtraces[:t].choices[:a]
+        @test trace.subtraces[:s].choices[:b] !== trace.subtraces[:t].choices[:b]
 
-        @test size(trace.choices[:s][1]) == shape
-        @test size(trace.choices[:t][1]) == shape
+        @test size(trace.subtraces[:s].choices[:a]) == shape
+        @test size(trace.subtraces[:s].choices[:b]) == shape
 
         @test trace.weight isa Float64
     end

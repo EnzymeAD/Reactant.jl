@@ -24,6 +24,13 @@ function sample(
     support::Symbol=:real,
     bounds::Tuple{Union{Nothing,Real},Union{Nothing,Real}}=(nothing, nothing),
 ) where {Nargs}
+    tt = TRACING_TRACE[]
+    is_generative = logpdf === nothing
+
+    if tt !== nothing && is_generative
+        push!(tt.address_stack, symbol)
+    end
+
     args_with_rng = (rng, args...)
     (; f_name, mlir_caller_args, mlir_result_types, traced_result, linear_results, fnwrapped, argprefix, resprefix) = process_probprog_function(
         f, args_with_rng, "sample"
@@ -84,6 +91,20 @@ function sample(
         argprefix,
     )
 
+    if tt !== nothing
+        if !is_generative
+            sample_shape = size(mlir_result_types[2])
+            num_el = max(1, prod(sample_shape))
+            entry = TraceEntry(
+                symbol, sample_shape, num_el, tt.position_size, copy(tt.address_stack)
+            )
+            push!(tt.entries, entry)
+            tt.position_size += num_el
+        else
+            pop!(tt.address_stack)
+        end
+    end
+
     return traced_result
 end
 
@@ -129,39 +150,45 @@ function untraced_call(rng::AbstractRNG, f::Function, args::Vararg{Any,Nargs}) w
     return traced_result
 end
 
-# Gen-like helper function.
-function simulate_(rng::AbstractRNG, f::Function, args::Vararg{Any,Nargs}) where {Nargs}
-    trace = nothing
-
-    compiled_fn = @compile optimize = :probprog simulate(rng, f, args...)
-
-    seed_buffer = only(rng.seed.data).buffer
-    GC.@preserve seed_buffer begin
-        t, _, _ = compiled_fn(rng, f, args...)
-        trace = ProbProgTrace(t)
-    end
-
-    return trace, trace.weight
-end
-
 function simulate(rng::AbstractRNG, f::Function, args::Vararg{Any,Nargs}) where {Nargs}
     args = (rng, args...)
-    (; f_name, mlir_caller_args, mlir_result_types, traced_result, linear_results, fnwrapped, argprefix, resprefix) = process_probprog_function(
-        f, args, "simulate"
-    )
-    fn_attr = MLIR.IR.FlatSymbolRefAttribute(f_name)
 
-    trace_ty = @ccall MLIR.API.mlir_c.enzymeTraceTypeGet(
-        MLIR.IR.current_context()::MLIR.API.MlirContext
-    )::MLIR.IR.Type
-    weight_ty = MLIR.IR.TensorType(Int64[], MLIR.IR.Type(Float64))
+    existing_tt = TRACING_TRACE[]
+    traced_trace = existing_tt !== nothing ? existing_tt : TracedTrace()
+
+    ppf = if existing_tt !== nothing
+        process_probprog_function(f, args, "simulate")
+    else
+        scoped_with(TRACING_TRACE => traced_trace) do
+            process_probprog_function(f, args, "simulate")
+        end
+    end
+
+    (;
+        f_name,
+        mlir_caller_args,
+        mlir_result_types,
+        traced_result,
+        linear_results,
+        fnwrapped,
+        argprefix,
+        resprefix,
+    ) = ppf
+
+    fn_attr = MLIR.IR.FlatSymbolRefAttribute(f_name)
+    selection_attr = build_selection_attr(traced_trace)
+    pos_size = traced_trace.position_size
+
+    trace_type = MLIR.IR.TensorType([1, pos_size], MLIR.IR.Type(Float64))
+    weight_type = MLIR.IR.TensorType(Int64[], MLIR.IR.Type(Float64))
 
     simulate_op = MLIR.Dialects.enzyme.simulate(
         mlir_caller_args;
-        trace=trace_ty,
-        weight=weight_ty,
+        trace=trace_type,
+        weight=weight_type,
         outputs=mlir_result_types,
         fn=fn_attr,
+        selection=selection_attr,
     )
 
     traced_result = process_probprog_outputs(
@@ -176,18 +203,27 @@ function simulate(rng::AbstractRNG, f::Function, args::Vararg{Any,Nargs}) where 
         2,
     )
 
-    trace = MLIR.IR.result(
-        MLIR.Dialects.builtin.unrealized_conversion_cast(
-            [MLIR.IR.result(simulate_op, 1)];
-            outputs=[MLIR.IR.TensorType(Int64[], MLIR.IR.Type(UInt64))],
-        ),
-        1,
-    )
+    trace_val = TracedRArray{Float64,2}((), MLIR.IR.result(simulate_op, 1), (1, pos_size))
+    weight_val = TracedRArray{Float64,0}((), MLIR.IR.result(simulate_op, 2), ())
 
-    trace = TracedRArray{UInt64,0}((), trace, ())
-    weight = TracedRArray{Float64,0}((), MLIR.IR.result(simulate_op, 2), ())
+    return trace_val, weight_val, traced_result
+end
 
-    return trace, weight, traced_result
+# Gen-like helper function.
+function simulate_(rng::AbstractRNG, f::Function, args::Vararg{Any,Nargs}) where {Nargs}
+    traced_trace = TracedTrace()
+
+    compiled_fn = scoped_with(TRACING_TRACE => traced_trace) do
+        @compile optimize = :probprog simulate(rng, f, args...)
+    end
+    entries = copy(traced_trace.entries)
+
+    trace_tensor, weight_val, traced_result = compiled_fn(rng, f, args...)
+
+    retval = traced_result[2:end]
+
+    trace = unflatten_trace(trace_tensor, weight_val, entries, retval)
+    return trace, trace.weight
 end
 
 # Gen-like helper function.
@@ -205,7 +241,7 @@ function generate_(
     seed_buffer = only(rng.seed.data).buffer
     GC.@preserve seed_buffer constraint begin
         t, _, _ = compiled_fn(rng, constraint, f, args...)
-        trace = ProbProgTrace(t)
+        trace = Trace(t)
     end
 
     return trace, trace.weight

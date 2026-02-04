@@ -14,7 +14,7 @@ include("MH.jl")
 include("MCMC.jl")
 
 # Types.
-export ProbProgTrace, Constraint, Selection, Address
+export Trace, Constraint, Selection, Address
 
 # Distributions.
 export Distribution, Normal, Exponential, LogNormal

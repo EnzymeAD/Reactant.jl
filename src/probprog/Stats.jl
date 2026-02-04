@@ -135,7 +135,7 @@ function _compute_parameter_summary(name::String, samples::AbstractVector)
     )
 end
 
-function mcmc_summary(trace::ProbProgTrace)
+function mcmc_summary(trace::Trace)
     sorted_choices = sort(collect(trace.choices); by=x -> string(x[1]))
     parameters = ParameterSummary[]
 
