@@ -1,0 +1,39 @@
+[[pjrt_plugin_tt]]
+arch = "x86_64"
+os = "linux"
+version = "0.6.0"
+git-tree-sha1 = ""
+
+    [[pjrt_plugin_tt.download]]
+    url = "https://pypi.eng.aws.tenstorrent.com/pjrt-plugin-tt/pjrt_plugin_tt-0.6.0.dev20251202-cp311-cp311-linux_x86_64.whl"
+    sha256 = "45ca6a3f2b12281e501e4baf38d375f8e6f2868bc07d08bf3a30bc29412f38bd"
+
+[[libtpu]]
+arch = "x86_64"
+os = "linux"
+version = "0.0.35.dev20260129"
+git-tree-sha1 = ""
+
+    [[libtpu.download]]
+    url = "https://storage.googleapis.com/libtpu-nightly-releases/wheels/libtpu/libtpu-0.0.35.dev20260129+nightly-cp314-cp314-manylinux_2_31_x86_64.whl"
+    sha256 = "e17061a2a5263432b7ec7eb9bb25978cad0d0fa5d3c476835d2ec3cd726047d2"
+
+[[jax_metal]]
+arch = "arm64"
+os = "macos"
+version = "0.1.1"
+git-tree-sha1 = ""
+
+    [[jax_metal.download]]
+    url = "https://files.pythonhosted.org/packages/09/dc/6d8fbfc29d902251cf333414cf7dcfaf4b252a9920c881354584ed36270d/jax_metal-0.1.1-py3-none-macosx_13_0_arm64.whl"
+    sha256 = "f1dbfecb298cdd3ba6da3ad6dc9a2adb63d71741f8b8ece28c296b32d608b6c8"
+
+[[jax_metal]]
+arch = "x86_64"
+os = "macos"
+version = "0.1.1"
+git-tree-sha1 = ""
+
+    [[jax_metal.download]]
+    url = "https://files.pythonhosted.org/packages/87/ec/9bb7f7f0ffd06c3fb89813126b2f698636ac7a4263ed7bdd1ff7d7c94f8f/jax_metal-0.1.1-py3-none-macosx_10_14_x86_64.whl"
+    sha256 = "d918a78443cb808c9491a24a5c2a94cc4eabfd0461d5bcda29a8f332dfbe9b7e"
