@@ -37,7 +37,9 @@ end
     if use_overlayed_version(A)
         @assert use_overlayed_version(C)
         permv = collect(perm)
-        res = sy * C + sx * @opcall transpose(A, permv)
+        sx´ = Reactant.promote_to(T, sx)
+        sy´ = Reactant.promote_to(T, sy)
+        res = sy´ * C + sx´ * @opcall transpose(A, permv)
         set_mlir_data!(C, get_mlir_data(res))
         return C
     else
