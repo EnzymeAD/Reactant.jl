@@ -31,11 +31,14 @@ RUN curl -fsSL https://install.julialang.org | sh -s -- --yes --default-channel 
 
 ENV PATH="/home/vscode/.juliaup/bin:$PATH"
 
+# Switch back to root for system-wide installations
+USER root
+
 # Install Clang-18
-RUN wget https://apt.llvm.org/llvm.sh && \
-    chmod +x llvm.sh && \
-    ./llvm.sh 18 all && \
-    rm llvm.sh
+RUN wget -O /tmp/llvm.sh https://apt.llvm.org/llvm.sh && \
+    chmod +x /tmp/llvm.sh && \
+    /tmp/llvm.sh 18 all && \
+    rm /tmp/llvm.sh
 
 # Install Bazelisk (to provide 'bazel' command)
 RUN wget https://github.com/bazelbuild/bazelisk/releases/latest/download/bazelisk-linux-amd64 -O /usr/local/bin/bazel && \
