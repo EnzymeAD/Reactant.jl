@@ -745,9 +745,6 @@ function optimization_passes(
         "cse_concatenate<16>",
         "cse_compare<16>",
         "cse_select<16>",
-        "cse_real<16>",
-        "cse_imag<16>",
-        "cse_conj<16>",
         "concatenate_op_canon<16>($max_constant_threshold)",
         "select_op_canon<16>($max_constant_threshold)",
         "add_simplify<16>",
@@ -884,10 +881,7 @@ function optimization_passes(
         "involution_conj_simplify",
         "involution_not_simplify",
         "real_conj_simplify",
-        "real_convert_simplify",
         "conj_complex_simplify",
-        "conj_convert_simplify",
-        "elementwise_complex_simplify",
         "split_convolution_into_reverse_convolution",
         # TODO(#2251) we want to enable but may cause an infinite compile time
         # "concat_to_onedim_dusslice",
@@ -980,7 +974,6 @@ function optimization_passes(
                 "scatter_div_simplify",
                 "unary_elementwise_scatter_simplify",
                 "scatter_indices_are_unique",
-                "split_complex_scatter",
                 ## const prop patterns
                 "scatter_update_computation_const_prop",
                 # gather patterns
