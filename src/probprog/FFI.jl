@@ -17,10 +17,6 @@ function dump(
     width_ptr::Ptr{UInt64},
     type_kind_ptr::Ptr{UInt64},
 )
-    activity_id = @ccall MLIR.API.mlir_c.ProfilerActivityStart(
-        "ProbProg.dump"::Cstring, Profiler.TRACE_ME_LEVEL_CRITICAL::Cint
-    )::Int64
-
     label = unsafe_string(label_ptr)
     ndims = unsafe_load(ndims_ptr)
     width = unsafe_load(width_ptr)
@@ -108,8 +104,6 @@ function dump(
     end
 
     println("═══════════════════════════════════")
-
-    @ccall MLIR.API.mlir_c.ProfilerActivityEnd(activity_id::Int64)::Cvoid
     return nothing
 end
 
