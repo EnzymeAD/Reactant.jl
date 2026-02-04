@@ -105,10 +105,14 @@ else
 end
 const global_state = State()
 
+const is_live = Threads.Atomic{Bool}(true)
+
 function cleanup_backend_state()
     @debug "[GETPID $(getpid())] Cleanup Backend State, $global_backend_state, $global_state"
     finalize_backend_state(global_backend_state)
-    return shutdown(global_state)
+    shutdown(global_state)
+    is_live[] = false
+    return nothing
 end
 
 function client(backend::String)

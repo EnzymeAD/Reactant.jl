@@ -112,7 +112,7 @@ end
 
 @inline function XLA.free_buffer(buffer::Buffer)
     sbuffer = buffer.buffer
-    if sbuffer != C_NULL
+    if sbuffer != C_NULL && XLA.is_live[]
         @ccall MLIR.API.mlir_c.PjRtBufferFree(sbuffer::Ptr{Cvoid})::Cvoid
     end
 end
