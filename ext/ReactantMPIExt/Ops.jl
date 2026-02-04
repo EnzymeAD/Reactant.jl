@@ -159,7 +159,7 @@ end
 end
 
 @noinline function wait(
-    req::TracedRequest; location=mlir_stacktrace("mpi.wait", @__FILE__, @__LINE__)
+    req::TracedRNumber; location=mlir_stacktrace("mpi.wait", @__FILE__, @__LINE__)
 )
     MPI_DEBUG[] && println("[MPI DEBUG] Calling wait")
     enzymexla.mpi_wait(req.mlir_data; location)
