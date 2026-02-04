@@ -170,7 +170,7 @@ end
     op,
     sendbuf::TracedRArray,
     recvbuf::TracedRArray;
-    location=mlir_stacktrace("mpi.wait", @__FILE__, @__LINE__),
+    location=mlir_stacktrace("mpi.allreduce", @__FILE__, @__LINE__),
 )
     mpi_op = get_mpi_op_enum(op)
 
