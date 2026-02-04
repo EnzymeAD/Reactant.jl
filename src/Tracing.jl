@@ -520,9 +520,14 @@ Base.@nospecializeinfer function traced_type_inner(
     @nospecialize(ndevices),
     @nospecialize(runtime)
 )
-    return traced_type_inner(
-        Array{Bool,ndims(A)}, seen, mode, track_numbers, ndevices, runtime
-    )
+    if mode == ArrayToConcrete
+        A´ = A isa UnionAll ? Array{Bool} : Array{Bool,ndims(A)}
+        return traced_type_inner(
+            A´, seen, mode, track_numbers, ndevices, runtime
+        )
+    else
+        return A
+    end
 end
 
 Base.@nospecializeinfer function traced_type_inner(
