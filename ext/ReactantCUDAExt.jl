@@ -1474,7 +1474,6 @@ end
         end
 
         Reactant.XLA.free_client(client)
-        client.client = C_NULL
         Reactant.deinitialize_dialect()
     end
 end

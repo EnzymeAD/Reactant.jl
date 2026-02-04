@@ -336,7 +336,7 @@ end
 
     myfft(mp::MyPlan, x) = mp.plan * x
 
-    x = rand(ComplexF64, 16)
+    x = rand(ComplexF32, 16)
     mp = MyPlan(plan_fft!(copy(x)))
 
     xr = Reactant.to_rarray(x)

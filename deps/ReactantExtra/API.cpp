@@ -381,33 +381,6 @@ enzymeActivityAttrGet(MlirContext ctx, int32_t val) {
                                               (mlir::enzyme::Activity)val));
 }
 
-REACTANT_ABI MLIR_CAPI_EXPORTED MlirType enzymeTraceTypeGet(MlirContext ctx) {
-  return wrap(mlir::enzyme::TraceType::get(unwrap(ctx)));
-}
-
-REACTANT_ABI MLIR_CAPI_EXPORTED MlirType
-enzymeConstraintTypeGet(MlirContext ctx) {
-  return wrap(mlir::enzyme::ConstraintType::get(unwrap(ctx)));
-}
-
-REACTANT_ABI MLIR_CAPI_EXPORTED MlirAttribute
-enzymeSymbolAttrGet(MlirContext ctx, uint64_t symbol) {
-  mlir::Attribute attr = mlir::enzyme::SymbolAttr::get(unwrap(ctx), symbol);
-  return wrap(attr);
-}
-
-REACTANT_ABI MLIR_CAPI_EXPORTED MlirAttribute
-enzymeRngDistributionAttrGet(MlirContext ctx, int32_t val) {
-  return wrap(mlir::enzyme::RngDistributionAttr::get(
-      unwrap(ctx), (mlir::enzyme::RngDistribution)val));
-}
-
-REACTANT_ABI MLIR_CAPI_EXPORTED MlirAttribute
-enzymeMCMCAlgorithmAttrGet(MlirContext ctx, int32_t val) {
-  return wrap(mlir::enzyme::MCMCAlgorithmAttr::get(
-      unwrap(ctx), (mlir::enzyme::MCMCAlgorithm)val));
-}
-
 // Create profiler session and start profiling
 REACTANT_ABI tsl::ProfilerSession *
 CreateProfilerSession(uint32_t device_tracer_level,
@@ -2741,13 +2714,13 @@ GetDistributedRuntimeService(char *c_address, int num_nodes,
 }
 
 REACTANT_ABI void free_distributed_runtime_service(
-    HeldValue<std::shared_ptr<xla::DistributedRuntimeService>> *service) {
+    xla::DistributedRuntimeService* service) {
   delete service;
 }
 
 REACTANT_ABI void distributed_runtime_service_shutdown(
-    HeldValue<std::shared_ptr<xla::DistributedRuntimeService>> *service) {
-  service->obj()->Shutdown();
+    xla::DistributedRuntimeService *service) {
+  service->Shutdown();
 }
 
 #pragma endregion

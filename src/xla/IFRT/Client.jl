@@ -1,4 +1,4 @@
-mutable struct Client <: XLA.AbstractClient
+struct Client <: XLA.AbstractClient
     client::Ptr{Cvoid}
 
     function Client(client::Ptr{Cvoid}; skip_check::Bool=false)
@@ -11,6 +11,7 @@ const NullClient = Client(C_NULL; skip_check=true)
 
 function XLA.free_client(client::Client)
     @assert client.client != C_NULL "Client is null"
+    @debug "[GETPID $(getpid())] Freeing Client $client"
     GC.@preserve client begin
         @ccall MLIR.API.mlir_c.ifrt_FreeClient(client.client::Ptr{Cvoid})::Cvoid
     end
@@ -136,6 +137,7 @@ for (backend, counter) in (
             # Only increment the counter if we successfully created a client
             $(counter)[] += 1
         end
+        @debug "[GETPID $(getpid())] $($(main_fn)) client"
         return Client(client)
     end
 end

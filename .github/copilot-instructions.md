@@ -74,7 +74,9 @@ Reactant.jl is a Julia package that compiles Julia functions into MLIR (Multi-Le
 julia --project=. test/runtests.jl
 
 # Run specific test group
-REACTANT_TEST_GROUP=core julia --project=. test/runtests.jl
+julia --project=. test/runtests.jl core
+julia --project=. test/runtests.jl integration
+julia --project=. test/runtests.jl nn
 
 # Run with GPU backend
 REACTANT_BACKEND_GROUP=gpu julia --project=. test/runtests.jl

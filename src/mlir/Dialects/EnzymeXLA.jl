@@ -1324,13 +1324,15 @@ end
 `multi_slice`
 
 MultiSlice operation produces multiple slice versions of the input tensor.
-Given left_amount=L and right_amount=R, it produces L+R+1 results:
-- L results for slices shifted left
-- 1 result for the center slice
-- R results for slices shifted right
+Given amount=N, it produces N+1 results:
+- Result 0 is the slice at the base start/limit indices
+- Result i is the slice shifted by i along the specified dimension
 
-The slice parameters (start_indices, limit_indices, strides) define the center slice.
-Each left/right result is offset along the specified dimension.
+The slice parameters (start_indices, limit_indices, strides) define the first slice.
+Each subsequent result is offset by +1 along the specified dimension.
+
+To achieve the old left/right semantics: if you previously had left_amount=L and
+right_amount=R, set amount=L+R and shift start_indices[dim] left by L.
 """
 function multi_slice(
     operand::Value;
@@ -1339,8 +1341,7 @@ function multi_slice(
     limit_indices,
     strides,
     dimension,
-    left_amount,
-    right_amount,
+    amount,
     location=Location(),
 )
     op_ty_results = IR.Type[results...,]
@@ -1352,8 +1353,7 @@ function multi_slice(
         NamedAttribute("limit_indices", limit_indices),
         NamedAttribute("strides", strides),
         NamedAttribute("dimension", dimension),
-        NamedAttribute("left_amount", left_amount),
-        NamedAttribute("right_amount", right_amount),
+        NamedAttribute("amount", amount),
     ]
 
     return create_operation(

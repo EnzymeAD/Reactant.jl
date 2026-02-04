@@ -159,7 +159,7 @@ function Array(
 end
 
 @inline function XLA.free_buffer(buffer::Array)
-    if buffer.buffer != C_NULL
+    if buffer.buffer != C_NULL && XLA.is_live[]
         @ccall MLIR.API.mlir_c.ifrt_free_array(buffer.buffer::Ptr{Cvoid})::Cvoid
     end
 end

@@ -23,9 +23,9 @@ const NUMPY_SIMPLE_TYPES = Dict(
     Float16 => :float16,
     Float32 => :float32,
     Float64 => :float64,
-    ComplexF16 => :complex16,
-    ComplexF32 => :complex32,
-    ComplexF64 => :complex64,
+    ComplexF16 => :complex32,
+    ComplexF32 => :complex64,
+    ComplexF64 => :complex128,
 )
 
 include("TFSavedModel.jl")
