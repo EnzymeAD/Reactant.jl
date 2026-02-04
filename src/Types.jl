@@ -244,7 +244,6 @@ function ConcretePJRTArray(
 end
 
 Base.wait(x::Union{ConcretePJRTArray,ConcretePJRTNumber}) = foreach(wait, x.data)
-Base.isready(x::Union{ConcretePJRTArray,ConcretePJRTNumber}) = all(isready, x.data)
 XLA.client(x::Union{ConcretePJRTArray,ConcretePJRTNumber}) = XLA.client(x.data)
 function XLA.device(x::Union{ConcretePJRTArray,ConcretePJRTNumber})
     x.sharding isa Sharding.NoShardInfo && return XLA.device(only(x.data))
@@ -424,7 +423,6 @@ function ConcreteIFRTArray(
 end
 
 Base.wait(x::Union{ConcreteIFRTArray,ConcreteIFRTNumber}) = wait(x.data)
-Base.isready(x::Union{ConcreteIFRTArray,ConcreteIFRTNumber}) = isready(x.data)
 XLA.client(x::Union{ConcreteIFRTArray,ConcreteIFRTNumber}) = XLA.client(x.data)
 function XLA.device(x::Union{ConcreteIFRTArray,ConcreteIFRTNumber})
     return XLA.device(x.data)
