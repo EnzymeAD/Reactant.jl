@@ -218,13 +218,13 @@ end
                     Ref{TracedRArray{Float64,1}},
                     Ref{TracedRArray{Float64,1}},
                 ),
-                (Memory{UInt8}, Memory{UInt8}, Memory{TracedRNumber{UInt8}}),
+                (Base.Memory{UInt8}, Base.Memory{UInt8}, Base.Memory{TracedRNumber{UInt8}}),
 
                 # Ptr + UnionAll types
                 (Ptr, Ptr, Ptr),
                 (Core.LLVMPtr, Core.LLVMPtr, Core.LLVMPtr),
                 (Base.RefValue, Base.RefValue, Base.RefValue),
-                (Memory, Memory, Memory),
+                (Base.Memory, Base.Memory, Base.Memory),
 
                 # Function types
                 (
