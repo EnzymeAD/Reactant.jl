@@ -316,9 +316,7 @@ function trace_function_definition(mod, expr)
     end
 end
 
-function trace_while(
-    expr; track_numbers, mincut, checkpointing, first_arg=nothing
-)
+function trace_while(expr; track_numbers, mincut, checkpointing, first_arg=nothing)
     Meta.isexpr(expr, :while, 2) || error("expected while expr")
     cond, body = expr.args
 
@@ -465,15 +463,15 @@ function trace_for(expr; track_numbers, checkpointing, mincut)
         # Computed before promotion so we get a Julia integer
         # If any of the bounds is already traced, we error since we can't compute isqrt
         quote
-            if $(is_traced)($start_sym) ||
-                $(is_traced)($limit_sym) ||
-                $(is_traced)($step_sym)
+            if $(is_traced)($start_sym) || $(is_traced)($limit_sym) || $(is_traced)($step_sym)
                 error(
                     "Periodic(n) must be used when loop bounds are traced (dynamic). " *
                     "Use `@trace checkpointing=Periodic(n) for i in ...` where n is the number of checkpoints.",
                 )
             end
-            $checkpointing_sym = $(Periodic)(isqrt(div($limit_sym - $start_sym, $step_sym) + 1))
+            $checkpointing_sym = $(Periodic)(
+                isqrt(div($limit_sym - $start_sym, $step_sym) + 1)
+            )
         end
     elseif checkpointing === false
         :($checkpointing_sym = false)

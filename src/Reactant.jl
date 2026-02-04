@@ -1,7 +1,12 @@
 module Reactant
 
 using ReactantCore:
-    ReactantCore, @trace, within_compile, MissingTracedValue, materialize_traced_array, Periodic
+    ReactantCore,
+    @trace,
+    within_compile,
+    MissingTracedValue,
+    materialize_traced_array,
+    Periodic
 
 using LinearAlgebra: LinearAlgebra, RowMaximum, NoPivot
 using Random: Random, AbstractRNG

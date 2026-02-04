@@ -734,7 +734,9 @@ end
     )
     @test for_explicit_checkpoints_ra(x_ra, n_ra) == for_explicit_checkpoints(x, n)
 
-    ir = sprint(show, @code_hlo optimize = "enzyme-batch" for_explicit_checkpoints(x_ra, n_ra))
+    ir = sprint(
+        show, @code_hlo optimize = "enzyme-batch" for_explicit_checkpoints(x_ra, n_ra)
+    )
     @test contains(repr(ir), "enzymexla.enable_checkpointing")
     @test contains(repr(ir), "enzymexla.checkpoints = 5")
 end
