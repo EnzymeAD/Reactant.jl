@@ -1,7 +1,7 @@
 module ReactantExport
 
 using ..Reactant: Reactant, Compiler, Serialization
-using Serialization: serialize, deserialize
+using Serialization: serialize
 
 """
     export_to_reactant_script(
