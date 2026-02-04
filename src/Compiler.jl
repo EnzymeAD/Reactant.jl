@@ -1509,7 +1509,7 @@ function create_pass_failure_zip(
     try
         # Create a temporary directory for the files
         temp_dir = mktempdir(; prefix="reactant_failure_", cleanup=false)
-        
+
         # Save the unoptimized IR
         mlir_path = joinpath(temp_dir, "unoptimized_ir.mlir")
         open(mlir_path, "w") do io
@@ -1518,7 +1518,7 @@ function create_pass_failure_zip(
             println(io)
             show(IOContext(io, :debug => true), mod)
         end
-        
+
         # Try to export inputs and create a Julia script using Serialization
         function_name = string(f)
         script_path = nothing
@@ -1532,17 +1532,21 @@ function create_pass_failure_zip(
         catch e
             @debug "Could not create Julia script for reproduction" exception = e
         end
-        
+
         # Create README with instructions
         readme_path = joinpath(temp_dir, "README.md")
         open(readme_path, "w") do io
             println(io, "# Reactant Compilation Failure Report")
             println(io)
-            println(io, "This archive contains information about a failed Reactant compilation.")
+            println(
+                io, "This archive contains information about a failed Reactant compilation."
+            )
             println(io)
             println(io, "## Contents")
             println(io)
-            println(io, "- `unoptimized_ir.mlir`: The MLIR module before optimization passes")
+            println(
+                io, "- `unoptimized_ir.mlir`: The MLIR module before optimization passes"
+            )
             println(io, "- `README.md`: This file")
             if script_path !== nothing
                 println(io, "- `$(function_name).jl`: Julia script for reproduction")
@@ -1562,28 +1566,36 @@ function create_pass_failure_zip(
             println(io, "## How to Report")
             println(io)
             println(io, "1. Upload this zip file to a file sharing service")
-            println(io, "2. Open an issue at https://github.com/EnzymeAD/Reactant.jl/issues")
+            println(
+                io, "2. Open an issue at https://github.com/EnzymeAD/Reactant.jl/issues"
+            )
             println(io, "3. Include the link to the uploaded zip file in your issue")
             println(io, "4. Describe what you were trying to do when the error occurred")
             println(io)
             println(io, "## Debugging")
             println(io)
-            println(io, "You can inspect the `unoptimized_ir.mlir` file to see the IR before it failed.")
+            println(
+                io,
+                "You can inspect the `unoptimized_ir.mlir` file to see the IR before it failed.",
+            )
             if script_path !== nothing
-                println(io, "You can also try running the `$(function_name).jl` script to reproduce the issue.")
+                println(
+                    io,
+                    "You can also try running the `$(function_name).jl` script to reproduce the issue.",
+                )
             end
         end
-        
+
         # Create the zip file
         zip_path = temp_dir * ".zip"
         # Note: temp_files are passed as command arguments (not via shell expansion)
         # which prevents shell injection even if paths contain special characters
         temp_files = readdir(temp_dir; join=true)
         run(pipeline(`$(p7zip()) a -tzip $(zip_path) $(temp_files...)`, devnull))
-        
+
         # Clean up the temp directory (but keep the zip)
         rm(temp_dir; recursive=true, force=true)
-        
+
         return zip_path
     catch e
         @error "Failed to create debug zip file" exception = e
@@ -1667,7 +1679,7 @@ function compile_mlir(f, args; client=nothing, drop_unsupported_attributes=false
         mod = MLIR.IR.Module(MLIR.IR.Location())
 
         compile_options, kwargs_inner = __get_compile_options_and_kwargs(; kwargs...)
-        
+
         # Wrap compile_mlir! to catch pass pipeline failures
         mlir_fn_res = try
             compile_mlir!(
@@ -1692,7 +1704,7 @@ function compile_mlir(f, args; client=nothing, drop_unsupported_attributes=false
                         "A debug zip file has been created at: $(zip_path)\n" *
                         "Please upload this file when reporting the issue at: " *
                         "https://github.com/EnzymeAD/Reactant.jl/issues\n" *
-                        "Original error: $(error_msg)"
+                        "Original error: $(error_msg)",
                     )
                 else
                     # If we couldn't create the zip, just rethrow the original error

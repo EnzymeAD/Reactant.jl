@@ -56,7 +56,9 @@ using Reactant, Test
 
         # Verify the JLS file contains both inputs
         using Serialization
-        inputs_data = open(first(filter(f -> endswith(f, ".jls"), readdir(output_dir; join=true))), "r") do io
+        inputs_data = open(
+            first(filter(f -> endswith(f, ".jls"), readdir(output_dir; join=true))), "r"
+        ) do io
             deserialize(io)
         end
         @test haskey(inputs_data, "arr_1") || haskey(inputs_data, "arr_2")
@@ -119,14 +121,14 @@ using Reactant, Test
         jls_files = filter(f -> endswith(f, ".jls"), readdir(output_dir; join=true))
         @test !isempty(jls_files)
         jls_path = first(jls_files)
-        
+
         # Load the JLS file and verify the data
         using Serialization
         inputs_data = open(jls_path, "r") do io
             deserialize(io)
         end
         @test haskey(inputs_data, "arr_1")
-        
+
         # The data should be in Julia's native format (no transposition needed)
         loaded_data = inputs_data["arr_1"]
         @test size(loaded_data) == size(x_data)

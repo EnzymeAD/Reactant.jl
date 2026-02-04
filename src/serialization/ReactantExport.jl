@@ -69,10 +69,7 @@ include(julia_file_path)
 ```
 """
 function export_to_reactant_script(
-    f,
-    args...;
-    output_dir::Union{String,Nothing}=nothing,
-    function_name::String=string(f),
+    f, args...; output_dir::Union{String,Nothing}=nothing, function_name::String=string(f)
 )
     if output_dir === nothing
         output_dir = mktempdir(; cleanup=false)
@@ -85,11 +82,7 @@ function export_to_reactant_script(
     # This returns compilation result with traced argument information
     argprefix = gensym("exportarg")
     mod, mlir_fn_res = Compiler.compile_mlir(
-        f,
-        args;
-        argprefix,
-        drop_unsupported_attributes=true,
-        shardy_passes=:none,
+        f, args; argprefix, drop_unsupported_attributes=true, shardy_passes=:none
     )
     hlo_code = string(mod)
 
@@ -137,7 +130,9 @@ end
 _to_array(x::Reactant.ConcreteRArray) = Array(x)
 _to_array(x::Reactant.ConcreteRNumber{T}) where {T} = T(x)
 
-function save_inputs_jls(output_path::String, inputs::Dict{String,<:Union{AbstractArray,Number}})
+function save_inputs_jls(
+    output_path::String, inputs::Dict{String,<:Union{AbstractArray,Number}}
+)
     open(output_path, "w") do io
         serialize(io, inputs)
     end
@@ -167,8 +162,7 @@ function _generate_julia_script(
                 "        $(arg_names[i]): Scalar of type $(info.dtype). Path: $(info.path)"
             else
                 "        $(arg_names[i]): Array of shape $(info.shape) and type $(info.dtype). Path: $(info.path)"
-            end
-            for (i, info) in enumerate(input_info)
+            end for (i, info) in enumerate(input_info)
         ],
         "\n",
     )
