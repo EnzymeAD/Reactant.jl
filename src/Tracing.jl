@@ -546,9 +546,7 @@ for P in (Ptr, Core.LLVMPtr, Base.RefValue)
         @nospecialize(ndevices),
         @nospecialize(runtime)
     ) where {T}
-        return $P{
-            traced_type_inner(T, seen, mode, track_numbers, ndevices, runtime),
-        }
+        return $P{traced_type_inner(T, seen, mode, track_numbers, ndevices, runtime)}
     end
 end
 
