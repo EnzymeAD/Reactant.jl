@@ -3,28 +3,34 @@ using ..Reactant: TracedRArray
 function mh(
     rng::AbstractRNG,
     original_trace,
+    original_weight,
     f::Function,
     args::Vararg{Any,Nargs};
     selection::Selection,
 ) where {Nargs}
     args = (rng, args...)
-    (; f_name, mlir_caller_args, mlir_result_types, traced_result, linear_results, fnwrapped, argprefix, resprefix) = process_probprog_function(
-        f, args, "mh"
-    )
+
+    tt = TracedTrace()
+    ppf = scoped_with(TRACING_TRACE => tt) do
+        process_probprog_function(f, args, "mh")
+    end
+
+    (;
+        f_name,
+        mlir_caller_args,
+        mlir_result_types,
+        traced_result,
+        linear_results,
+        fnwrapped,
+        argprefix,
+        resprefix,
+    ) = ppf
+
     fn_attr = MLIR.IR.FlatSymbolRefAttribute(f_name)
+    selection_attr = build_selection_attr(tt)
+    pos_size = tt.position_size
 
-    trace_ty = @ccall MLIR.API.mlir_c.enzymeTraceTypeGet(
-        MLIR.IR.current_context()::MLIR.API.MlirContext
-    )::MLIR.IR.Type
-
-    trace_val = MLIR.IR.result(
-        MLIR.Dialects.builtin.unrealized_conversion_cast(
-            [TracedUtils.get_mlir_data(original_trace)]; outputs=[trace_ty]
-        ),
-        1,
-    )
-
-    selection_attr = MLIR.IR.Attribute[]
+    regenerate_attr = MLIR.IR.Attribute[]
     for address in selection
         address_attr = MLIR.IR.Attribute[]
         for sym in address.path
@@ -36,25 +42,29 @@ function mh(
                 )::MLIR.IR.Attribute
             )
         end
-        push!(selection_attr, MLIR.IR.Attribute(address_attr))
+        push!(regenerate_attr, MLIR.IR.Attribute(address_attr))
     end
 
-    trace_ty = @ccall MLIR.API.mlir_c.enzymeTraceTypeGet(
-        MLIR.IR.current_context()::MLIR.API.MlirContext
-    )::MLIR.IR.Type
-    accepted_ty = MLIR.IR.TensorType(Int64[], MLIR.IR.Type(Bool))
+    trace_type = MLIR.IR.TensorType([1, pos_size], MLIR.IR.Type(Float64))
+    weight_type = MLIR.IR.TensorType(Int64[], MLIR.IR.Type(Float64))
+    accepted_type = MLIR.IR.TensorType(Int64[], MLIR.IR.Type(Bool))
+
+    trace_mlir = TracedUtils.get_mlir_data(original_trace)
+    weight_mlir = TracedUtils.get_mlir_data(original_weight)
 
     mh_op = MLIR.Dialects.enzyme.mh(
-        mlir_caller_args,
-        trace_val;
-        new_trace=trace_ty,
-        accepted=accepted_ty,
-        output_rng_state=mlir_result_types[1], # by convention
+        trace_mlir,
+        weight_mlir,
+        mlir_caller_args;
+        new_trace=trace_type,
+        new_weight=weight_type,
+        accepted=accepted_type,
+        output_rng=mlir_result_types[1],
         fn=fn_attr,
-        selection=MLIR.IR.Attribute(selection_attr),
+        selection=selection_attr,
+        regenerate_addresses=MLIR.IR.Attribute(regenerate_attr),
     )
 
-    # Return (new_trace, accepted, output_rng_state)
     traced_result = process_probprog_outputs(
         mh_op,
         linear_results,
@@ -64,22 +74,15 @@ function mh(
         fnwrapped,
         resprefix,
         argprefix,
-        2,
+        3,
         true,
     )
 
-    new_trace_val = MLIR.IR.result(mh_op, 1)
-    new_trace_ptr = MLIR.IR.result(
-        MLIR.Dialects.builtin.unrealized_conversion_cast(
-            [new_trace_val]; outputs=[MLIR.IR.TensorType(Int64[], MLIR.IR.Type(UInt64))]
-        ),
-        1,
-    )
+    new_trace = TracedRArray{Float64,2}((), MLIR.IR.result(mh_op, 1), (1, pos_size))
+    new_weight = TracedRArray{Float64,0}((), MLIR.IR.result(mh_op, 2), ())
+    accepted = TracedRArray{Bool,0}((), MLIR.IR.result(mh_op, 3), ())
 
-    new_trace = TracedRArray{UInt64,0}((), new_trace_ptr, ())
-    accepted = TracedRArray{Bool,0}((), MLIR.IR.result(mh_op, 2), ())
-
-    return new_trace, accepted, traced_result
+    return new_trace, new_weight, accepted, traced_result
 end
 
 const metropolis_hastings = mh

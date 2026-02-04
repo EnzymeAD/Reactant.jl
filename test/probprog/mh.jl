@@ -31,22 +31,31 @@ function model(rng, xs)
     return ys
 end
 
-function mh_program(rng, model, xs, num_iters, constraint, constrained_addresses)
-    init_trace, _, _ = ProbProg.generate(
-        rng, constraint, model, xs; constrained_addresses=constrained_addresses
+function mh_program(rng, model, xs, num_iters, constraint_tensor, constrained_addresses)
+    trace, weight, _ = ProbProg.generate(
+        rng, constraint_tensor, model, xs; constrained_addresses=constrained_addresses
     )
 
-    trace = init_trace
     @trace for _ in 1:num_iters
-        trace, _ = ProbProg.mh(
-            rng, trace, model, xs; selection=ProbProg.select(ProbProg.Address(:slope))
+        trace, weight, _ = ProbProg.mh(
+            rng,
+            trace,
+            weight,
+            model,
+            xs;
+            selection=ProbProg.select(ProbProg.Address(:slope)),
         )
-        trace, _ = ProbProg.mh(
-            rng, trace, model, xs; selection=ProbProg.select(ProbProg.Address(:intercept))
+        trace, weight, _ = ProbProg.mh(
+            rng,
+            trace,
+            weight,
+            model,
+            xs;
+            selection=ProbProg.select(ProbProg.Address(:intercept)),
         )
     end
 
-    return trace
+    return trace, weight
 end
 
 @testset "linear_regression" begin
@@ -70,31 +79,39 @@ end
 
         xs = [1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0]
         ys = [8.23, 5.87, 3.99, 2.59, 0.23, -0.66, -3.53, -6.91, -7.24, -9.90]
-        obs = ProbProg.Constraint(:ys => (ys,))
+        obs = ProbProg.Constraint(:ys => ys)
         num_iters = ConcreteRNumber(10000)
         constrained_addresses = ProbProg.extract_addresses(obs)
 
-        code = @code_hlo optimize = :probprog mh_program(
-            rng, model, xs, num_iters, obs, constrained_addresses
-        )
-        @test contains(repr(code), "enzyme_probprog_get_sample_from_trace")
-        @test contains(repr(code), "enzyme_probprog_get_weight_from_trace")
+        obs_flat = Float64[]
+        for addr in constrained_addresses
+            append!(obs_flat, vec(obs[addr]))
+        end
+        obs_tensor = Reactant.to_rarray(reshape(obs_flat, 1, :))
+
+        tt = ProbProg.TracedTrace()
+        code = Base.ScopedValues.with(ProbProg.TRACING_TRACE => tt) do
+            @code_hlo optimize = :probprog mh_program(
+                rng, model, xs, num_iters, obs_tensor, constrained_addresses
+            )
+        end
         @test !contains(repr(code), "enzyme.mh")
 
-        compiled_fn = @compile optimize = :probprog mh_program(
-            rng, model, xs, num_iters, obs, constrained_addresses
-        )
-
-        trace = nothing
-        seed_buffer = only(rng.seed.data).buffer
+        tt = ProbProg.TracedTrace()
         num_iters = ConcreteRNumber(1000)
-        GC.@preserve seed_buffer obs begin
-            trace = compiled_fn(rng, model, xs, num_iters, obs, constrained_addresses)
-            trace = ProbProg.ProbProgTrace(trace)
+        compiled_fn = Base.ScopedValues.with(ProbProg.TRACING_TRACE => tt) do
+            @compile optimize = :probprog mh_program(
+                rng, model, xs, num_iters, obs_tensor, constrained_addresses
+            )
         end
 
-        slope = only(trace.choices[:slope])[1]
-        intercept = only(trace.choices[:intercept])[1]
+        trace_tensor, weight_val = compiled_fn(
+            rng, model, xs, num_iters, obs_tensor, constrained_addresses
+        )
+        trace = ProbProg.unflatten_trace(trace_tensor, weight_val, tt.entries, ())
+
+        slope = only(trace.choices[:slope])
+        intercept = only(trace.choices[:intercept])
         @show slope, intercept
 
         @test slope ≈ -2.0 rtol = 0.1
