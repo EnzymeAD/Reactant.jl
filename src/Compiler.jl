@@ -1624,12 +1624,14 @@ function compile_mlir(f, args; client=nothing, drop_unsupported_attributes=false
                 # Create a debug zip file with the unoptimized IR
                 zip_path = create_pass_failure_zip(f, args)
                 if zip_path !== nothing
-                    error(
-                        "Compilation failed during pass pipeline execution. " *
-                        "A debug zip file has been created at: $(zip_path)\n" *
-                        "Please upload this file when reporting the issue at: " *
-                        "https://github.com/EnzymeAD/Reactant.jl/issues\n" *
-                        "Original error: $(error_msg)",
+                    rethrow(
+                        ErrorException(
+                            "Compilation failed during pass pipeline execution.\n" *
+                            "A debug zip file has been created at: $(zip_path)\n" *
+                            "Please upload this file when reporting the issue at: " *
+                            "https://github.com/EnzymeAD/Reactant.jl/issues\n" *
+                            "Original error: $(error_msg)",
+                        ),
                     )
                 end
             end
