@@ -31,6 +31,11 @@ function MPI.Wait(req::TracedRNumber)
     return Ops.wait(req)
 end
 
+# TODO(#2241) status not supported yet
+function MPI.Waitall(req::TracedRArray)
+    return Ops.waitall(req)
+end
+
 # TODO(#2241) use `make_tracer` to linearize arbitrary types? check out `MPI.Buffer`
 function MPI.Send(buf::TracedRArray, dest::Integer, tag::Integer, comm::MPI.Comm)
     tag = Reactant.Ops.constant(Int32(tag))
