@@ -166,6 +166,15 @@ end
     return nothing
 end
 
+@noinline function waitall(
+    req::TracedRArray; location=mlir_stacktrace("mpi.waitall", @__FILE__, @__LINE__)
+)
+    MPI_DEBUG[] && println("[MPI DEBUG] Calling waitall")
+    count = Reactant.Ops.constant(Int32(length(req)))
+    enzymexla.mpi_waitall(count.mlir_data, req.mlir_data; location)
+    return nothing
+end
+
 @noinline function allreduce!(
     op,
     sendbuf::TracedRArray,
