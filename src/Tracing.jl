@@ -513,6 +513,24 @@ Base.@nospecializeinfer function traced_type_inner(
 end
 
 Base.@nospecializeinfer function traced_type_inner(
+    @nospecialize(A::Type{<:BitArray}),
+    seen,
+    mode::TraceMode,
+    @nospecialize(track_numbers::Type),
+    @nospecialize(ndevices),
+    @nospecialize(runtime)
+)
+    if mode == ArrayToConcrete
+        A´ = A isa UnionAll ? Array{Bool} : Array{Bool,ndims(A)}
+        return traced_type_inner(
+            A´, seen, mode, track_numbers, ndevices, runtime
+        )
+    else
+        return A
+    end
+end
+
+Base.@nospecializeinfer function traced_type_inner(
     @nospecialize(OA::Type{SubArray{T,N,P,I,L}}),
     seen,
     mode::TraceMode,
@@ -1821,6 +1839,16 @@ Base.@nospecializeinfer function make_tracer(
         return prev
     end
     return newa
+end
+
+Base.@nospecializeinfer function make_tracer(
+    seen, @nospecialize(prev::BitArray), @nospecialize(path), mode; kwargs...
+)
+    if mode == ArrayToConcrete
+        return make_tracer(seen, Array(prev), path, mode; kwargs...)
+    else
+        return prev
+    end
 end
 
 Base.@nospecializeinfer function make_tracer(
