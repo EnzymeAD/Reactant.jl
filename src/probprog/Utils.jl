@@ -1,3 +1,4 @@
+using Base.ScopedValues: ScopedValue, with as scoped_with
 using ..Reactant:
     MLIR,
     TracedUtils,

@@ -45,17 +45,15 @@ end
         μ = Reactant.ConcreteRNumber(0.0)
         σ = Reactant.ConcreteRNumber(1.0)
 
-        constraint = ProbProg.Constraint(:s => (fill(0.1, shape),))
+        constraint = ProbProg.Constraint(:s => fill(0.1, shape))
 
         trace, weight = ProbProg.generate_(rng, constraint, model, μ, σ, shape)
 
-        @test trace.choices[:s][1] == constraint[ProbProg.Address(:s)][1]
+        @test trace.choices[:s] == constraint[ProbProg.Address(:s)]
 
         expected_weight =
-            normal_logpdf(constraint[ProbProg.Address(:s)][1], 0.0, 1.0, shape) +
-            normal_logpdf(
-                trace.choices[:t][1], constraint[ProbProg.Address(:s)][1], 1.0, shape
-            )
+            normal_logpdf(constraint[ProbProg.Address(:s)], 0.0, 1.0, shape) +
+            normal_logpdf(trace.choices[:t], constraint[ProbProg.Address(:s)], 1.0, shape)
         @test weight ≈ expected_weight atol = 1e-6
     end
 
@@ -67,30 +65,27 @@ end
         σ = Reactant.ConcreteRNumber(1.0)
 
         constraint = ProbProg.Constraint(
-            :s => (fill(0.1, shape),),
-            :t => :x => (fill(0.2, shape),),
-            :u => :y => (fill(0.3, shape),),
+            :s => fill(0.1, shape),
+            :t => :x => fill(0.2, shape),
+            :u => :y => fill(0.3, shape),
         )
 
         trace, weight = ProbProg.generate_(rng, constraint, nested_model, μ, σ, shape)
 
-        @test trace.choices[:s][1] == fill(0.1, shape)
-        @test trace.subtraces[:t].choices[:x][1] == fill(0.2, shape)
-        @test trace.subtraces[:u].choices[:y][1] == fill(0.3, shape)
+        @test trace.choices[:s] == fill(0.1, shape)
+        @test trace.subtraces[:t].choices[:x] == fill(0.2, shape)
+        @test trace.subtraces[:u].choices[:y] == fill(0.3, shape)
 
         s_weight = normal_logpdf(fill(0.1, shape), 0.0, 1.0, shape)
         tx_weight = normal_logpdf(fill(0.2, shape), fill(0.1, shape), 1.0, shape)
         ty_weight = normal_logpdf(
-            trace.subtraces[:t].choices[:y][1], fill(0.2, shape), 1.0, shape
+            trace.subtraces[:t].choices[:y], fill(0.2, shape), 1.0, shape
         )
         ux_weight = normal_logpdf(
-            trace.subtraces[:u].choices[:x][1],
-            trace.subtraces[:t].choices[:y][1],
-            1.0,
-            shape,
+            trace.subtraces[:u].choices[:x], trace.subtraces[:t].choices[:y], 1.0, shape
         )
         uy_weight = normal_logpdf(
-            fill(0.3, shape), trace.subtraces[:u].choices[:x][1], 1.0, shape
+            fill(0.3, shape), trace.subtraces[:u].choices[:x], 1.0, shape
         )
 
         expected_weight = s_weight + tx_weight + ty_weight + ux_weight + uy_weight
@@ -104,30 +99,30 @@ end
         μ = Reactant.ConcreteRNumber(0.0)
         σ = Reactant.ConcreteRNumber(1.0)
 
-        constraint1 = ProbProg.Constraint(:s => (fill(0.1, shape),))
-
+        constraint1 = ProbProg.Constraint(:s => fill(0.1, shape))
         constrained_addresses = ProbProg.extract_addresses(constraint1)
 
-        compiled_fn = @compile optimize = :probprog ProbProg.generate(
-            rng, constraint1, model, μ, σ, shape; constrained_addresses
-        )
-
-        trace1 = nothing
-        seed_buffer = only(rng.seed.data).buffer
-        GC.@preserve seed_buffer constraint1 begin
-            trace1, _ = compiled_fn(rng, constraint1, model, μ, σ, shape)
-            trace1 = ProbProg.ProbProgTrace(trace1)
+        c1_flat = Float64[]
+        for addr in constrained_addresses
+            append!(c1_flat, vec(constraint1[addr]))
         end
+        c1_tensor = Reactant.to_rarray(reshape(c1_flat, 1, :))
 
-        constraint2 = ProbProg.Constraint(:s => (fill(0.2, shape),))
-
-        trace2 = nothing
-        seed_buffer = only(rng.seed.data).buffer
-        GC.@preserve seed_buffer constraint2 begin
-            trace2, _ = compiled_fn(rng, constraint2, model, μ, σ, shape)
-            trace2 = ProbProg.ProbProgTrace(trace2)
+        tt = ProbProg.TracedTrace()
+        compiled_fn = Base.ScopedValues.with(ProbProg.TRACING_TRACE => tt) do
+            @compile optimize = :probprog ProbProg.generate(
+                rng, c1_tensor, model, μ, σ, shape; constrained_addresses
+            )
         end
+        t1, w1, r1 = compiled_fn(rng, c1_tensor, model, μ, σ, shape)
+        trace1 = ProbProg.unflatten_trace(t1, w1, tt.entries, r1[2:end])
 
-        @test trace1.choices[:s][1] != trace2.choices[:s][1]
+        c2_flat = fill(0.2, 1, length(c1_flat))
+        c2_tensor = Reactant.to_rarray(reshape(c2_flat, 1, :))
+
+        t2, w2, r2 = compiled_fn(rng, c2_tensor, model, μ, σ, shape)
+        trace2 = ProbProg.unflatten_trace(t2, w2, tt.entries, r2[2:end])
+
+        @test trace1.choices[:s] != trace2.choices[:s]
     end
 end

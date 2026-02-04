@@ -1,4 +1,4 @@
-using ..Reactant: MLIR, TracedUtils, AbstractRNG, TracedRArray
+using ..Reactant: MLIR, TracedUtils, AbstractRNG, TracedRArray, to_rarray
 using ..Compiler: @compile
 
 include("Utils.jl")
@@ -154,12 +154,12 @@ function simulate(rng::AbstractRNG, f::Function, args::Vararg{Any,Nargs}) where 
     args = (rng, args...)
 
     existing_tt = TRACING_TRACE[]
-    traced_trace = existing_tt !== nothing ? existing_tt : TracedTrace()
+    tt = existing_tt !== nothing ? existing_tt : TracedTrace()
 
     ppf = if existing_tt !== nothing
         process_probprog_function(f, args, "simulate")
     else
-        scoped_with(TRACING_TRACE => traced_trace) do
+        scoped_with(TRACING_TRACE => tt) do
             process_probprog_function(f, args, "simulate")
         end
     end
@@ -176,8 +176,8 @@ function simulate(rng::AbstractRNG, f::Function, args::Vararg{Any,Nargs}) where 
     ) = ppf
 
     fn_attr = MLIR.IR.FlatSymbolRefAttribute(f_name)
-    selection_attr = build_selection_attr(traced_trace)
-    pos_size = traced_trace.position_size
+    selection_attr = build_selection_attr(tt)
+    pos_size = tt.position_size
 
     trace_type = MLIR.IR.TensorType([1, pos_size], MLIR.IR.Type(Float64))
     weight_type = MLIR.IR.TensorType(Int64[], MLIR.IR.Type(Float64))
@@ -211,18 +211,16 @@ end
 
 # Gen-like helper function.
 function simulate_(rng::AbstractRNG, f::Function, args::Vararg{Any,Nargs}) where {Nargs}
-    traced_trace = TracedTrace()
+    tt = TracedTrace()
 
-    compiled_fn = scoped_with(TRACING_TRACE => traced_trace) do
+    compiled_fn = scoped_with(TRACING_TRACE => tt) do
         @compile optimize = :probprog simulate(rng, f, args...)
     end
-    entries = copy(traced_trace.entries)
-
     trace_tensor, weight_val, traced_result = compiled_fn(rng, f, args...)
 
     retval = traced_result[2:end]
 
-    trace = unflatten_trace(trace_tensor, weight_val, entries, retval)
+    trace = unflatten_trace(trace_tensor, weight_val, tt.entries, retval)
     return trace, trace.weight
 end
 
@@ -230,48 +228,61 @@ end
 function generate_(
     rng::AbstractRNG, constraint::Constraint, f::Function, args::Vararg{Any,Nargs}
 ) where {Nargs}
-    trace = nothing
-
+    tt = TracedTrace()
     constrained_addresses = extract_addresses(constraint)
 
-    compiled_fn = @compile optimize = :probprog generate(
-        rng, constraint, f, args...; constrained_addresses
-    )
-
-    seed_buffer = only(rng.seed.data).buffer
-    GC.@preserve seed_buffer constraint begin
-        t, _, _ = compiled_fn(rng, constraint, f, args...)
-        trace = Trace(t)
+    constraint_flat = Float64[]
+    for addr in constrained_addresses
+        append!(constraint_flat, vec(constraint[addr]))
     end
+    constraint_tensor = to_rarray(reshape(constraint_flat, 1, :))
 
+    compiled_fn = scoped_with(TRACING_TRACE => tt) do
+        @compile optimize = :probprog generate(
+            rng, constraint_tensor, f, args...; constrained_addresses
+        )
+    end
+    trace_tensor, weight_val, traced_result = compiled_fn(
+        rng, constraint_tensor, f, args...
+    )
+    retval = traced_result[2:end]
+
+    trace = unflatten_trace(trace_tensor, weight_val, tt.entries, retval)
     return trace, trace.weight
 end
 
 function generate(
     rng::AbstractRNG,
-    constraint,
+    constraint_tensor,
     f::Function,
     args::Vararg{Any,Nargs};
     constrained_addresses::Set{Address},
 ) where {Nargs}
     args = (rng, args...)
 
-    (; f_name, mlir_caller_args, mlir_result_types, traced_result, linear_results, fnwrapped, argprefix, resprefix) = process_probprog_function(
-        f, args, "generate"
-    )
+    existing_tt = TRACING_TRACE[]
+    tt = existing_tt !== nothing ? existing_tt : TracedTrace()
+
+    ppf = if existing_tt !== nothing
+        process_probprog_function(f, args, "generate")
+    else
+        scoped_with(TRACING_TRACE => tt) do
+            process_probprog_function(f, args, "generate")
+        end
+    end
+
+    (;
+        f_name,
+        mlir_caller_args,
+        mlir_result_types,
+        traced_result,
+        linear_results,
+        fnwrapped,
+        argprefix,
+        resprefix,
+    ) = ppf
 
     fn_attr = MLIR.IR.FlatSymbolRefAttribute(f_name)
-
-    constraint_ty = @ccall MLIR.API.mlir_c.enzymeConstraintTypeGet(
-        MLIR.IR.current_context()::MLIR.API.MlirContext
-    )::MLIR.IR.Type
-
-    constraint_val = MLIR.IR.result(
-        MLIR.Dialects.builtin.unrealized_conversion_cast(
-            [TracedUtils.get_mlir_data(constraint)]; outputs=[constraint_ty]
-        ),
-        1,
-    )
 
     constrained_addresses_attr = MLIR.IR.Attribute[]
     for address in constrained_addresses
@@ -288,18 +299,22 @@ function generate(
         push!(constrained_addresses_attr, MLIR.IR.Attribute(address_attr))
     end
 
-    trace_ty = @ccall MLIR.API.mlir_c.enzymeTraceTypeGet(
-        MLIR.IR.current_context()::MLIR.API.MlirContext
-    )::MLIR.IR.Type
-    weight_ty = MLIR.IR.TensorType(Int64[], MLIR.IR.Type(Float64))
+    selection_attr = build_selection_attr(tt)
+    pos_size = tt.position_size
+
+    trace_type = MLIR.IR.TensorType([1, pos_size], MLIR.IR.Type(Float64))
+    weight_type = MLIR.IR.TensorType(Int64[], MLIR.IR.Type(Float64))
+
+    constraint_mlir = TracedUtils.get_mlir_data(constraint_tensor)
 
     generate_op = MLIR.Dialects.enzyme.generate(
         mlir_caller_args,
-        constraint_val;
-        trace=trace_ty,
-        weight=weight_ty,
+        constraint_mlir;
+        trace=trace_type,
+        weight=weight_type,
         outputs=mlir_result_types,
         fn=fn_attr,
+        selection=selection_attr,
         constrained_addresses=MLIR.IR.Attribute(constrained_addresses_attr),
     )
 
@@ -315,16 +330,8 @@ function generate(
         2,
     )
 
-    trace = MLIR.IR.result(
-        MLIR.Dialects.builtin.unrealized_conversion_cast(
-            [MLIR.IR.result(generate_op, 1)];
-            outputs=[MLIR.IR.TensorType(Int64[], MLIR.IR.Type(UInt64))],
-        ),
-        1,
-    )
+    trace_val = TracedRArray{Float64,2}((), MLIR.IR.result(generate_op, 1), (1, pos_size))
+    weight_val = TracedRArray{Float64,0}((), MLIR.IR.result(generate_op, 2), ())
 
-    trace = TracedRArray{UInt64,0}((), trace, ())
-    weight = TracedRArray{Float64,0}((), MLIR.IR.result(generate_op, 2), ())
-
-    return trace, weight, traced_result
+    return trace_val, weight_val, traced_result
 end
