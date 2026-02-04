@@ -1844,7 +1844,11 @@ end
 Base.@nospecializeinfer function make_tracer(
     seen, @nospecialize(prev::BitArray), @nospecialize(path), mode; kwargs...
 )
-    return make_tracer(seen, Array{Bool,ndims(prev)}(prev), path, mode; kwargs...)
+    if mode == ArrayToConcrete
+        return make_tracer(seen, Array(prev), path, mode; kwargs...)
+    else
+        return prev
+    end
 end
 
 Base.@nospecializeinfer function make_tracer(
