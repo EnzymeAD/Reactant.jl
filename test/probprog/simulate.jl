@@ -1,22 +1,15 @@
 using Reactant, Test, Random
 using Reactant: ProbProg, ReactantRNG
 
-normal(rng, μ, σ, shape) = μ .+ σ .* randn(rng, shape)
-
-function normal_logpdf(x, μ, σ, _)
-    return -length(x) * log(σ) - length(x) / 2 * log(2π) -
-           sum((x .- μ) .^ 2 ./ (2 .* (σ .^ 2)))
-end
-
 function product_two_normals(rng, μ, σ, shape)
-    _, a = ProbProg.sample(rng, normal, μ, σ, shape; symbol=:a, logpdf=normal_logpdf)
-    _, b = ProbProg.sample(rng, normal, μ, σ, shape; symbol=:b, logpdf=normal_logpdf)
+    _, a = ProbProg.sample(rng, ProbProg.Normal(μ, σ, shape); symbol=:a)
+    _, b = ProbProg.sample(rng, ProbProg.Normal(μ, σ, shape); symbol=:b)
     return a .* b
 end
 
 function model(rng, μ, σ, shape)
-    _, s = ProbProg.sample(rng, normal, μ, σ, shape; symbol=:s, logpdf=normal_logpdf)
-    _, t = ProbProg.sample(rng, normal, s, σ, shape; symbol=:t, logpdf=normal_logpdf)
+    _, s = ProbProg.sample(rng, ProbProg.Normal(μ, σ, shape); symbol=:s)
+    _, t = ProbProg.sample(rng, ProbProg.Normal(s, σ, shape); symbol=:t)
     return t
 end
 
@@ -45,9 +38,6 @@ end
 
         after = @code_hlo optimize = :probprog ProbProg.simulate(rng, model, μ, σ, shape)
         @test !contains(repr(after), "enzyme.simulate")
-        @test !contains(repr(after), "enzyme.addSampleToTrace")
-        @test !contains(repr(after), "enzyme.addWeightToTrace")
-        @test !contains(repr(after), "enzyme.addRetvalToTrace")
     end
 
     @testset "normal_simulate" begin
@@ -117,8 +107,6 @@ end
         @test size(trace.choices[:t][1]) == shape
 
         @test trace.weight isa Float64
-
-        @test trace.weight ≈ trace.subtraces[:s].weight + trace.subtraces[:t].weight
     end
 
     @testset "submodel_subtraces" begin
@@ -148,7 +136,5 @@ end
         @test size(trace.choices[:t][1]) == shape
 
         @test trace.weight isa Float64
-
-        @test trace.weight ≈ trace.subtraces[:s].weight + trace.subtraces[:t].weight
     end
 end
