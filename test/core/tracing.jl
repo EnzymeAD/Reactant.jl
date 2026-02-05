@@ -218,13 +218,17 @@ end
                     Ref{TracedRArray{Float64,1}},
                     Ref{TracedRArray{Float64,1}},
                 ),
-                (Core.Memory{UInt8}, Core.Memory{UInt8}, Core.Memory{UInt8}),
+                @static if isdefined(Core, :Memory)
+                    (Core.Memory{UInt8}, Core.Memory{UInt8}, Core.Memory{UInt8}),
+                end
 
                 # Ptr + UnionAll types
                 (Ptr, Ptr, Ptr),
                 (Core.LLVMPtr, Core.LLVMPtr, Core.LLVMPtr),
                 (Base.RefValue, Base.RefValue, Base.RefValue),
-                (Base.Memory, Base.Memory, Base.Memory),
+                @static if isdefined(Core, :Memory)
+                    (Core.Memory, Core.Memory, Core.Memory),
+                end
 
                 # Function types
                 (
