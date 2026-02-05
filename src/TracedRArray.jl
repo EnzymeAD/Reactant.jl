@@ -50,7 +50,9 @@ Base.size(x::TracedRArray) = x.shape
 Base.size(x::TracedRArray, i::Integer) = ifelse(i > ndims(x), 1, x.shape[i])
 
 function Base.size(x::TracedRArray, i::TracedRNumber{<:Integer})
-    return @allowscalar ifelse(i > ndims(x), 1, getindex(@opcall(constant([x.shape...])), i))
+    return @allowscalar ifelse(
+        i > ndims(x), 1, getindex(@opcall(constant([x.shape...])), i)
+    )
 end
 
 Base.collect(x::TracedRArray) = copy(x)
