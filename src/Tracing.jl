@@ -542,7 +542,7 @@ Base.@nospecializeinfer function traced_type_inner(
     return SubArray{T2,N,P2,I2,L}
 end
 
-for P in (Ptr, Core.LLVMPtr, Base.RefValue, Ref, Base.Memory)
+for P in (Ptr, Core.LLVMPtr, Base.RefValue, Ref)
     @eval Base.@nospecializeinfer function traced_type_inner(
         @nospecialize(PT::Type{$P}),
         seen,
@@ -554,7 +554,7 @@ for P in (Ptr, Core.LLVMPtr, Base.RefValue, Ref, Base.Memory)
         return $(P)
     end
 end
-for P in (Ptr, Base.RefValue, Ref, Base.Memory)
+for P in (Ptr, Base.RefValue, Ref)
     @eval Base.@nospecializeinfer function traced_type_inner(
         @nospecialize(PT::Type{$P{T}}),
         seen,
@@ -596,6 +596,17 @@ Base.@nospecializeinfer function traced_type_inner(
     return Core.LLVMPtr{
         traced_type_inner(PT.parameters[1], seen, mode, track_numbers, ndevices, runtime),A
     }
+end
+
+Base.@nospecializeinfer function traced_type_inner(
+    @nospecialize(T::Type{<:Base.Memory}),
+    seen,
+    @nospecialize(mode::TraceMode),
+    @nospecialize(track_numbers::Type),
+    @nospecialize(ndevices),
+    @nospecialize(runtime)
+) where {T}
+    return T
 end
 
 Base.@nospecializeinfer function traced_type_inner(
