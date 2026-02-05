@@ -75,26 +75,10 @@ testsuite = [
     (Complex{UInt64}, Complex{UInt64}, TracedRNumber{Complex{UInt64}}),
 
     # RArray types
-    (
-        ConcreteRArray{Float64,0},
-        TracedRArray{Float64,0},
-        TracedRArray{Float64,0},
-    ),
-    (
-        ConcreteRArray{Float64,1},
-        TracedRArray{Float64,1},
-        TracedRArray{Float64,1},
-    ),
-    (
-        ConcreteRArray{Float64,2},
-        TracedRArray{Float64,2},
-        TracedRArray{Float64,2},
-    ),
-    (
-        ConcreteRArray{Float64,3},
-        TracedRArray{Float64,3},
-        TracedRArray{Float64,3},
-    ),
+    (ConcreteRArray{Float64,0}, TracedRArray{Float64,0}, TracedRArray{Float64,0}),
+    (ConcreteRArray{Float64,1}, TracedRArray{Float64,1}, TracedRArray{Float64,1}),
+    (ConcreteRArray{Float64,2}, TracedRArray{Float64,2}, TracedRArray{Float64,2}),
+    (ConcreteRArray{Float64,3}, TracedRArray{Float64,3}, TracedRArray{Float64,3}),
 
     # Array types
     (Array{Float64,1}, Array{Float64,1}, Array{TracedRNumber{Float64},1}),
@@ -111,11 +95,7 @@ testsuite = [
         AbstractArray{TracedRNumber{Float64},1},
     ),
     (AbstractArray, AbstractArray, AbstractArray),
-    (
-        AbstractArray{Float64},
-        AbstractArray{Float64},
-        AbstractArray{TracedRNumber{Float64}},
-    ),
+    (AbstractArray{Float64}, AbstractArray{Float64}, AbstractArray{TracedRNumber{Float64}}),
     (AbstractVector, AbstractVector, AbstractVector),
     (AbstractMatrix, AbstractMatrix, AbstractMatrix),
 
@@ -146,11 +126,7 @@ testsuite = [
         TracedRArray{<:AbstractFloat},
         TracedRArray{<:AbstractFloat},
     ),
-    (
-        ConcreteRArray{>:Float32},
-        TracedRArray{>:Float32},
-        TracedRArray{>:Float32},
-    ),
+    (ConcreteRArray{>:Float32}, TracedRArray{>:Float32}, TracedRArray{>:Float32}),
     (Union{Nothing,Array}, Union{Nothing,Array}, Union{Nothing,Array}),
     (
         Union{Nothing,Array{Float64}},
@@ -185,21 +161,13 @@ testsuite = [
         Ptr{TracedRArray{Float64,1}},
         Ptr{TracedRArray{Float64,1}},
     ),
-    (
-        Core.LLVMPtr{Float64},
-        Core.LLVMPtr{Float64},
-        Core.LLVMPtr{TracedRNumber{Float64}},
-    ),
+    (Core.LLVMPtr{Float64}, Core.LLVMPtr{Float64}, Core.LLVMPtr{TracedRNumber{Float64}}),
     (
         Core.LLVMPtr{ConcreteRArray{Float64,1}},
         Core.LLVMPtr{TracedRArray{Float64,1}},
         Core.LLVMPtr{TracedRArray{Float64,1}},
     ),
-    (
-        Base.RefValue{Float64},
-        Base.RefValue{Float64},
-        Base.RefValue{TracedRNumber{Float64}},
-    ),
+    (Base.RefValue{Float64}, Base.RefValue{Float64}, Base.RefValue{TracedRNumber{Float64}}),
     (
         Base.RefValue{ConcreteRArray{Float64,1}},
         Base.RefValue{TracedRArray{Float64,1}},
@@ -257,21 +225,13 @@ testsuite = [
             } where {nsteps} where {SpectralVariable3D}
         ),
     ),
-    (
-        Base.Pairs{Symbol,Union{}},
-        Base.Pairs{Symbol,Union{}},
-        Base.Pairs{Symbol,Union{}},
-    ),
+    (Base.Pairs{Symbol,Union{}}, Base.Pairs{Symbol,Union{}}, Base.Pairs{Symbol,Union{}}),
     (
         NTuple{nsteps,SpectralVariable3D} where {nsteps,SpectralVariable3D},
         NTuple{nsteps,SpectralVariable3D} where {nsteps,SpectralVariable3D},
         NTuple{nsteps,SpectralVariable3D} where {nsteps,SpectralVariable3D},
     ),
-    (
-        Base.RefValue{A} where {A},
-        Base.RefValue{A} where {A},
-        Base.RefValue{A} where {A},
-    ),
+    (Base.RefValue{A} where {A}, Base.RefValue{A} where {A}, Base.RefValue{A} where {A}),
     (Wrapper{Symbol,Symbol}, Wrapper{Symbol,Symbol}, Wrapper{Symbol,Symbol}),
     (
         Wrapper{Float64,Vector{Float64}},
