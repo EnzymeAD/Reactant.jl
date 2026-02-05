@@ -3286,7 +3286,7 @@ end
     @assert ndevices == length(logical_device_ids) "length(logical_device_ids) should be \
                                                     same as prod(last, mesh_axes)"
     @assert all(Base.Fix2(≥, 0), logical_device_ids) "logical_device_ids must be \
-                                                    non-negative"
+                                                  non-negative"
 
     sorted_logical_device_ids = Base.sort(logical_device_ids)
     @assert sorted_logical_device_ids == 0:(ndevices - 1) "sorted logical_device_ids \
@@ -3516,14 +3516,14 @@ function standardize_start_index(
     if (start_index isa Integer && start_index ≤ typemax(Int32)) || sz ≤ typemax(Int32)
         if start_index isa Integer && update_sz !== nothing
             @assert start_index + update_sz - 1 ≤ sz "Index $(idx) out of bounds: \
-                                                    start_index=$(start_index), \
-                                                    update_sz=$(update_sz), sz=$(sz)"
+                                                  start_index=$(start_index), \
+                                                  update_sz=$(update_sz), sz=$(sz)"
         end
         start_index = Reactant.promote_to(TracedRNumber{Int32}, start_index)
     elseif start_index isa Integer && update_sz !== nothing
         @assert start_index + update_sz - 1 ≤ sz "Index $(idx) out of bounds: \
-                                                start_index=$(start_index), \
-                                                update_sz=$(update_sz), sz=$(sz)"
+                                              start_index=$(start_index), \
+                                              update_sz=$(update_sz), sz=$(sz)"
         start_index = Reactant.promote_to(TracedRNumber, start_index)
     end
 
@@ -4055,9 +4055,9 @@ end
 ) where {T,N}
     @assert 1 ≤ dimension ≤ N "dimension must be between 1 and $(N) (got $(dimension))"
     @assert 0 ≤ lhs ≤ size(input, dimension) "lhs must be between 0 and \
-                                          $(size(input, dimension)) (got $(lhs))"
+                                      $(size(input, dimension)) (got $(lhs))"
     @assert 0 ≤ rhs ≤ size(input, dimension) "rhs must be between 0 and \
-                                          $(size(input, dimension)) (got $(rhs))"
+                                      $(size(input, dimension)) (got $(rhs))"
 
     sz = collect(Int64, size(input))
     sz[dimension] = sz[dimension] + lhs + rhs
@@ -4080,9 +4080,9 @@ end
 ) where {T,N}
     @assert 1 ≤ dimension ≤ N "dimension must be between 1 and $(N) (got $(dimension))"
     @assert 0 ≤ lhs ≤ size(input, dimension) "lhs must be between 0 and \
-                                          $(size(input, dimension)) (got $(lhs))"
+                                      $(size(input, dimension)) (got $(lhs))"
     @assert 0 ≤ rhs ≤ size(input, dimension) "rhs must be between 0 and \
-                                          $(size(input, dimension)) (got $(rhs))"
+                                      $(size(input, dimension)) (got $(rhs))"
     sz = collect(Int64, size(input))
     sz[dimension] = sz[dimension] + lhs + rhs
     return TracedRArray{T,N}(
@@ -4103,7 +4103,7 @@ end
 ) where {T,N}
     @assert 1 ≤ dimension ≤ N "dimension must be between 1 and $(N) (got $(dimension))"
     @assert 0 ≤ amount ≤ size(input, dimension) "amount must be between 0 and \
-                                             $(size(input, dimension)) (got $(amount))"
+                                         $(size(input, dimension)) (got $(amount))"
     return TracedRArray{T,N}(
         (),
         MLIR.IR.result(
