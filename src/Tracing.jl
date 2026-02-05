@@ -605,7 +605,7 @@ Base.@nospecializeinfer function traced_type_inner(
     @nospecialize(track_numbers::Type),
     @nospecialize(ndevices),
     @nospecialize(runtime)
-) where {T}
+)
     return T
 end
 
