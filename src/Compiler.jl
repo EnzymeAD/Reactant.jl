@@ -3835,7 +3835,7 @@ const __thunk_rev_body_cache = Dict{Expr,Symbol}()
 
 function compile(f, args; kwargs...)
     MLIR.IR.@dispose ctx = MLIR.IR.Context(Reactant.registry[]) begin
-        register_enzymexla_dialects(ctx)
+        Reactant.register_enzymexla_dialects(ctx)
         return compile(ctx, f, args; kwargs...)
     end
 end
