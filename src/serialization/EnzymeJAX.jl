@@ -101,16 +101,26 @@ function export_to_enzymejax(
     # Generate the StableHLO/MLIR code using compile_mlir
     # This returns compilation result with traced argument information
     argprefix = gensym("exportarg")
-    mod, mlir_fn_res = Compiler.compile_mlir(
-        f,
-        args;
-        argprefix,
-        drop_unsupported_attributes=true,
-        compile_options,
-        # to support older jax versions which don't support shardy
-        shardy_passes=:to_mhlo_shardings,
-    )
-    hlo_code = string(mod)
+    hlo_code, mlir_fn_res = MLIR.IR.@dispose ctx = MLIR.IR.Context(Reactant.registry[]) begin
+        Reactant.register_enzymexla_dialects(ctx)
+        MLIR.IR.@activate ctx begin
+            mod, mlir_fn_res = Compiler.compile_mlir(
+                ctx,
+                f,
+                args;
+                argprefix,
+                drop_unsupported_attributes=true,
+                compile_options,
+                # to support older jax versions which don't support shardy
+                shardy_passes=:to_mhlo_shardings,
+            )
+            hlo_code = try
+                string(mod)
+            finally
+                MLIR.IR.dispose(mod)
+            end
+        hlo_code, mlir_fn_res
+    end
 
     # Save MLIR code
     fnid = 0

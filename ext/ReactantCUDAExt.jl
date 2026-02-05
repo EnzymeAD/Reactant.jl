@@ -1456,7 +1456,7 @@ end
                         end
                         y = Reactant.ConcreteRArray([2.0]; client)
                         try
-                            Reactant.Compiler.compile_mlir(square!, (y,); optimize=false)
+                            Reactant.Compiler.compile_mlir(ctx, square!, (y,); optimize=false)
                         catch e
                             if !(e isa ReactantPrecompilationException)
                                 rethrow()

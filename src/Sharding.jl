@@ -887,7 +887,7 @@ function sharding_to_array_slices(
         else
             Reactant.ConcreteRArray(ones(Float32, size_x...); kws...)
         end
-        _, exec, _, _, _, _ = Reactant.Compiler.compile_xla(
+        exec, _, _, _, _ = Reactant.Compiler.compile_xla(
             Reactant.Ops.negate, (tmp,); input_shardings=IdDict(tmp => sharding)
         )
 

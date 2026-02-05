@@ -1,6 +1,6 @@
 module ReactantKernelAbstractionsExt
 
-using Reactant: Reactant
+using Reactant: Reactant, MLIR
 
 using Adapt: Adapt
 using KernelAbstractions: KernelAbstractions
@@ -102,7 +102,13 @@ end
 
 function (obj::KA.Kernel{ReactantBackend})(args...; ndrange=nothing, workgroupsize=nothing)
     if Reactant.precompiling()
-        Reactant.@code_hlo optimize = false tokw(ndrange, workgroupsize, obj, args...)
+        # MLIR.IR.@dispose ctx = MLIR.IR.Context(Reactant.registry[]) begin
+        #     Reactant.register_enzymexla_dialects(ctx)
+        #     MLIR.IR.@activate ctx begin
+        ctx = MLIR.IR.current_context()
+        Reactant.Compiler.compile_mlir(ctx, tokw, (ndrange, workgroupsize, obj, args...); optimize=false)
+        #     end
+        # end
     else
         Reactant.@jit tokw(ndrange, workgroupsize, obj, args...)
     end
