@@ -106,7 +106,9 @@ function (obj::KA.Kernel{ReactantBackend})(args...; ndrange=nothing, workgroupsi
         #     Reactant.register_enzymexla_dialects(ctx)
         #     MLIR.IR.@activate ctx begin
         ctx = MLIR.IR.current_context()
-        Reactant.Compiler.compile_mlir(ctx, tokw, (ndrange, workgroupsize, obj, args...); optimize=false)
+        Reactant.Compiler.compile_mlir(
+            ctx, tokw, (ndrange, workgroupsize, obj, args...); optimize=false
+        )
         #     end
         # end
     else

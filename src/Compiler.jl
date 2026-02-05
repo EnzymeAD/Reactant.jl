@@ -1550,7 +1550,9 @@ function __get_compile_options_and_kwargs(;
     )
 end
 
-function compile_mlir(ctx, f, args; client=nothing, drop_unsupported_attributes=false, kwargs...)
+function compile_mlir(
+    ctx, f, args; client=nothing, drop_unsupported_attributes=false, kwargs...
+)
     client = isnothing(client) ? XLA.default_backend() : client
     backend = XLA.platform_name(client)
     if backend == "CUDA"
@@ -1581,7 +1583,9 @@ function compile_mlir(ctx, f, args; client=nothing, drop_unsupported_attributes=
 
         if drop_unsupported_attributes
             # Drop some of our attributes
-            run_pass_pipeline!(mod, "drop-unsupported-attributes", "drop_enzymexla_attributes")
+            run_pass_pipeline!(
+                mod, "drop-unsupported-attributes", "drop_enzymexla_attributes"
+            )
         end
 
         return mod, mlir_fn_res
@@ -2639,7 +2643,7 @@ const SYNC_DOCS = """
 
 struct TextualModule
     ir::String
-    
+
     function TextualModule(mod::MLIR.IR.Module)
         io = IOBuffer()
         show(io, mod)
@@ -2674,18 +2678,20 @@ macro code_hlo(args...)
     )
     mod_symbol = gensym("mod")
 
-    return esc(quote
-        $MLIR.IR.@dispose $ctx = $(MLIR.IR.Context)($(Reactant.registry)[]) begin
-            $(Reactant.register_enzymexla_dialects)($ctx)
-            $(compile_expr)
-            $mod_symbol = $(first)($(compiled))
-            try
-                $TextualModule($mod_symbol)
-            finally
-                $MLIR.IR.dispose($mod_symbol)
+    return esc(
+        quote
+            $MLIR.IR.@dispose $ctx = $(MLIR.IR.Context)($(Reactant.registry)[]) begin
+                $(Reactant.register_enzymexla_dialects)($ctx)
+                $(compile_expr)
+                $mod_symbol = $(first)($(compiled))
+                try
+                    $TextualModule($mod_symbol)
+                finally
+                    $MLIR.IR.dispose($mod_symbol)
+                end
             end
-        end
-    end)
+        end,
+    )
 end
 
 """
@@ -2713,18 +2719,20 @@ macro code_mhlo(args...)
     )
     mod_symbol = gensym("mod")
 
-    return esc(quote
-        $MLIR.IR.@dispose $ctx = $(MLIR.IR.Context)($(Reactant.registry)[]) begin
-            $(Reactant.register_enzymexla_dialects)($ctx)
-            $(compile_expr)
-            $mod_symbol = $(first)($(compiled))
-            try
-                $TextualModule($mod_symbol)
-            finally
-                $MLIR.IR.dispose($mod_symbol)
+    return esc(
+        quote
+            $MLIR.IR.@dispose $ctx = $(MLIR.IR.Context)($(Reactant.registry)[]) begin
+                $(Reactant.register_enzymexla_dialects)($ctx)
+                $(compile_expr)
+                $mod_symbol = $(first)($(compiled))
+                try
+                    $TextualModule($mod_symbol)
+                finally
+                    $MLIR.IR.dispose($mod_symbol)
+                end
             end
-        end
-    end)
+        end,
+    )
 end
 
 """
@@ -2751,13 +2759,15 @@ macro code_xla(args...)
         args...,
     )
 
-    return esc(quote
-        $MLIR.IR.@dispose $ctx = $(MLIR.IR.Context)($(Reactant.registry)[]) begin
-            $(Reactant.register_enzymexla_dialects)($ctx)
-            $(compile_expr)
-            $(compiled)[2]
-        end
-    end)
+    return esc(
+        quote
+            $MLIR.IR.@dispose $ctx = $(MLIR.IR.Context)($(Reactant.registry)[]) begin
+                $(Reactant.register_enzymexla_dialects)($ctx)
+                $(compile_expr)
+                $(compiled)[2]
+            end
+        end,
+    )
 end
 
 """
@@ -2798,13 +2808,15 @@ macro compile(args...)
         ),
         args...,
     )
-    return esc(quote
-        $MLIR.IR.@dispose $ctx = $(MLIR.IR.Context)($(Reactant.registry)[]) begin
-            $(Reactant.register_enzymexla_dialects)($ctx)
-            $(compile_expr)
-            $(compiled)
-        end
-    end)
+    return esc(
+        quote
+            $MLIR.IR.@dispose $ctx = $(MLIR.IR.Context)($(Reactant.registry)[]) begin
+                $(Reactant.register_enzymexla_dialects)($ctx)
+                $(compile_expr)
+                $(compiled)
+            end
+        end,
+    )
 end
 
 """
