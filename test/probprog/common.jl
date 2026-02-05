@@ -111,7 +111,9 @@ function compare_samples_pointwise(
             reactant_vals = vec(reactant_trace.choices[name])
             numpyro_vals = numpyro_samples[name]
             max_abs_diff = maximum(abs.(reactant_vals .- numpyro_vals))
-            max_rel_diff = maximum(abs.(reactant_vals .- numpyro_vals) ./ max.(abs.(numpyro_vals), 1e-300))
+            max_rel_diff = maximum(
+                abs.(reactant_vals .- numpyro_vals) ./ max.(abs.(numpyro_vals), 1e-300)
+            )
             println("  $name: max abs diff = $max_abs_diff, max rel diff = $max_rel_diff")
             @test reactant_vals ≈ numpyro_vals atol = atol rtol = rtol
         end
