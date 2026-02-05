@@ -1,6 +1,6 @@
 module EnzymeJAX
 
-using ..Reactant: Reactant, Compiler, Serialization
+using ..Reactant: Reactant, Compiler, Serialization, MLIR
 
 """
     export_to_enzymejax(
