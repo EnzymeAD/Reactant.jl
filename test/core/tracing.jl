@@ -218,7 +218,7 @@ end
                     Ref{TracedRArray{Float64,1}},
                     Ref{TracedRArray{Float64,1}},
                 ),
-                (Base.Memory{UInt8}, Base.Memory{UInt8}, Base.Memory{UInt8}),
+                (Core.Memory{UInt8}, Core.Memory{UInt8}, Core.Memory{UInt8}),
 
                 # Ptr + UnionAll types
                 (Ptr, Ptr, Ptr),

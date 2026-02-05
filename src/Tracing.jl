@@ -598,15 +598,17 @@ Base.@nospecializeinfer function traced_type_inner(
     }
 end
 
-Base.@nospecializeinfer function traced_type_inner(
-    @nospecialize(T::Type{<:Base.Memory}),
-    seen,
-    @nospecialize(mode::TraceMode),
-    @nospecialize(track_numbers::Type),
-    @nospecialize(ndevices),
-    @nospecialize(runtime)
-)
-    return T
+@static if VERSION >= v"1.11"
+    Base.@nospecializeinfer function traced_type_inner(
+        @nospecialize(T::Type{<:Core.Memory}),
+        seen,
+        @nospecialize(mode::TraceMode),
+        @nospecialize(track_numbers::Type),
+        @nospecialize(ndevices),
+        @nospecialize(runtime)
+    )
+        return T
+    end
 end
 
 Base.@nospecializeinfer function traced_type_inner(
