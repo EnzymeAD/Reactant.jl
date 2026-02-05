@@ -1,5 +1,8 @@
 using ..Reactant: MLIR, Profiler
 
+const DUMP_BUFFER = Vector{Tuple{String,Any}}()
+const DUMP_BUFFER_LOCK = ReentrantLock()
+
 function from_row_major(ptr::Ptr{T}, shape::NTuple{N,<:Integer}) where {T,N}
     if N <= 1
         return copy(unsafe_wrap(Array, ptr, shape))
@@ -28,11 +31,7 @@ function dump(
         elseif width == 64
             Float64
         else
-            @ccall printf(
-                "DUMP ERROR: Unsupported float width: %lld\n"::Cstring, width::Int64
-            )::Cvoid
-            @ccall MLIR.API.mlir_c.ProfilerActivityEnd(activity_id::Int64)::Cvoid
-            return nothing
+            nothing
         end
     elseif type_kind == 1
         if width == 1
@@ -46,12 +45,7 @@ function dump(
         elseif width == 64
             Int64
         else
-            @ccall printf(
-                "DUMP ERROR: Unsupported signed int width: %lld\n"::Cstring,
-                width::Int64,
-            )::Cvoid
-            @ccall MLIR.API.mlir_c.ProfilerActivityEnd(activity_id::Int64)::Cvoid
-            return nothing
+            nothing
         end
     elseif type_kind == 2
         if width == 1
@@ -65,46 +59,60 @@ function dump(
         elseif width == 64
             UInt64
         else
-            @ccall printf(
-                "DUMP ERROR: Unsupported unsigned int width: %lld\n"::Cstring,
-                width::Int64,
-            )::Cvoid
-            @ccall MLIR.API.mlir_c.ProfilerActivityEnd(activity_id::Int64)::Cvoid
-            return nothing
+            nothing
         end
     else
-        @ccall printf("DUMP ERROR: Unknown type kind: %lld\n"::Cstring, type_kind::Int64)::Cvoid
-        @ccall MLIR.API.mlir_c.ProfilerActivityEnd(activity_id::Int64)::Cvoid
+        nothing
+    end
+
+    if julia_type === nothing
         return nothing
     end
 
-    println("═══ DUMP: $label ═══")
-
-    if ndims == 0
-        value = unsafe_load(Ptr{julia_type}(value_ptr))
-        println("  Scalar ($julia_type): $value")
+    value = if ndims == 0
+        unsafe_load(Ptr{julia_type}(value_ptr))
     else
         shape = Tuple(unsafe_wrap(Array, shape_ptr, ndims))
-        value_array = from_row_major(Ptr{julia_type}(value_ptr), shape)
-
-        println("  Shape: $shape")
-        println("  Type: Array{$julia_type}")
-        println("  Values:")
-
-        total_elements = prod(shape)
-        if total_elements <= 20
-            println("    ", value_array)
-        else
-            println("    [$(total_elements) elements]")
-            println("    min: $(minimum(value_array))")
-            println("    max: $(maximum(value_array))")
-            println("    mean: $(sum(value_array) / total_elements)")
-            println("    First 10: $(value_array[1:min(10, total_elements)])")
-        end
+        from_row_major(Ptr{julia_type}(value_ptr), shape)
     end
 
-    println("═══════════════════════════════════")
+    lock(DUMP_BUFFER_LOCK) do
+        push!(DUMP_BUFFER, (label, value))
+    end
+
     return nothing
+end
+
+function clear_dump_buffer!()
+    lock(DUMP_BUFFER_LOCK) do
+        empty!(DUMP_BUFFER)
+    end
+end
+
+function show_dumps()
+    lock(DUMP_BUFFER_LOCK) do
+        println("show_dumps: buffer has $(length(DUMP_BUFFER)) entries")
+        for (label, value) in DUMP_BUFFER
+            println("═══ DUMP: $label ═══")
+            if value isa AbstractArray
+                println("  Shape: $(size(value))")
+                println("  Type: $(typeof(value))")
+                total = length(value)
+                if total <= 20
+                    println("  Values: $value")
+                else
+                    println("  [$(total) elements]")
+                    println("    min: $(minimum(value))")
+                    println("    max: $(maximum(value))")
+                    println("    mean: $(sum(value) / total)")
+                    println("    First 10: $(value[1:min(10, total)])")
+                end
+            else
+                println("  Scalar ($(typeof(value))): $value")
+            end
+            println("═══════════════════════════════════")
+        end
+    end
 end
 
 function __init__()

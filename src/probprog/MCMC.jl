@@ -90,6 +90,7 @@ function mcmc(
         nuts_config_attr = @ccall MLIR.API.mlir_c.enzymeNUTSConfigAttrGet(
             MLIR.IR.current_context()::MLIR.API.MlirContext,
             max_tree_depth::Int64,
+            true::Bool,
             max_delta_energy::Float64,
             adapt_step_size::Bool,
             adapt_mass_matrix::Bool,

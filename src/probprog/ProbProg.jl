@@ -31,4 +31,7 @@ export sample, untraced_call, simulate, generate, mh, mcmc
 # Gen-like helper functions.
 export simulate_, generate_
 
+# Debug utilities.
+export clear_dump_buffer!, show_dumps
+
 end

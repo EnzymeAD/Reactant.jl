@@ -53,6 +53,9 @@ end
 delete!(testsuite, "integration/mpi")
 delete!(testsuite, "core/qa")
 
+# Common code for checking against NumPyro
+delete!(testsuite, "probprog/common")
+
 if !ENZYMEJAX_INSTALLED[]
     delete!(testsuite, "integration/enzymejax")
 end
