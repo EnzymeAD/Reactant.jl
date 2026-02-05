@@ -36,275 +36,272 @@ struct MyFix{N,FT,XT} <: Base.Function
     x::XT
 end
 
+testsuite = [
+    (Any, Any, Any),
+    (Real, Real, Real),
+    (Module, Module, Module),
+    (DataType, DataType, DataType),
+    # (Union{}, Union{}), # fails
+    (Nothing, Nothing, Nothing),
+    (Symbol, Symbol, Symbol),
+    (Char, Char, Char),
+    (AbstractString, AbstractString, AbstractString),
+    (String, String, String),
+    (VersionNumber, VersionNumber, VersionNumber),
+
+    # Numeric types
+    (AbstractFloat, AbstractFloat, AbstractFloat),
+    (Float16, Float16, TracedRNumber{Float16}),
+    (Float32, Float32, TracedRNumber{Float32}),
+    (Float64, Float64, TracedRNumber{Float64}),
+    (Integer, Integer, Integer),
+    (Int8, Int8, TracedRNumber{Int8}),
+    (Int16, Int16, TracedRNumber{Int16}),
+    (Int32, Int32, TracedRNumber{Int32}),
+    (Int64, Int64, TracedRNumber{Int64}),
+    (UInt8, UInt8, TracedRNumber{UInt8}),
+    (UInt16, UInt16, TracedRNumber{UInt16}),
+    (UInt32, UInt32, TracedRNumber{UInt32}),
+    (UInt64, UInt64, TracedRNumber{UInt64}),
+    (Complex{Float32}, Complex{Float32}, TracedRNumber{Complex{Float32}}),
+    (Complex{Float64}, Complex{Float64}, TracedRNumber{Complex{Float64}}),
+    (Complex{Int8}, Complex{Int8}, TracedRNumber{Complex{Int8}}),
+    (Complex{Int16}, Complex{Int16}, TracedRNumber{Complex{Int16}}),
+    (Complex{Int32}, Complex{Int32}, TracedRNumber{Complex{Int32}}),
+    (Complex{Int64}, Complex{Int64}, TracedRNumber{Complex{Int64}}),
+    (Complex{UInt8}, Complex{UInt8}, TracedRNumber{Complex{UInt8}}),
+    (Complex{UInt16}, Complex{UInt16}, TracedRNumber{Complex{UInt16}}),
+    (Complex{UInt32}, Complex{UInt32}, TracedRNumber{Complex{UInt32}}),
+    (Complex{UInt64}, Complex{UInt64}, TracedRNumber{Complex{UInt64}}),
+
+    # RArray types
+    (
+        ConcreteRArray{Float64,0},
+        TracedRArray{Float64,0},
+        TracedRArray{Float64,0},
+    ),
+    (
+        ConcreteRArray{Float64,1},
+        TracedRArray{Float64,1},
+        TracedRArray{Float64,1},
+    ),
+    (
+        ConcreteRArray{Float64,2},
+        TracedRArray{Float64,2},
+        TracedRArray{Float64,2},
+    ),
+    (
+        ConcreteRArray{Float64,3},
+        TracedRArray{Float64,3},
+        TracedRArray{Float64,3},
+    ),
+
+    # Array types
+    (Array{Float64,1}, Array{Float64,1}, Array{TracedRNumber{Float64},1}),
+    (
+        Array{ConcreteRArray{Float64,2},1},
+        Array{TracedRArray{Float64,2},1},
+        Array{TracedRArray{Float64,2},1},
+    ),
+
+    # AbstractArray types
+    (
+        AbstractArray{Float64,1},
+        AbstractArray{Float64,1},
+        AbstractArray{TracedRNumber{Float64},1},
+    ),
+    (AbstractArray, AbstractArray, AbstractArray),
+    (
+        AbstractArray{Float64},
+        AbstractArray{Float64},
+        AbstractArray{TracedRNumber{Float64}},
+    ),
+    (AbstractVector, AbstractVector, AbstractVector),
+    (AbstractMatrix, AbstractMatrix, AbstractMatrix),
+
+    # Union types
+    (Union{Nothing,Int}, Union{Nothing,Int}, Union{Nothing,TracedRNumber{Int}}),
+    (
+        Union{Nothing,ConcreteRArray{Float64,1}},
+        Union{Nothing,TracedRArray{Float64,1}},
+        Union{Nothing,TracedRArray{Float64,1}},
+    ),
+
+    # UnionAll types
+    (Array, Array, Array),
+    (Array{Float64}, Array{Float64}, Array{TracedRNumber{Float64}}),
+    (Matrix, Matrix, Matrix),
+    (Array{<:AbstractFloat}, Array{<:AbstractFloat}, Array{<:AbstractFloat}),
+    (Array{>:Float32}, Array{>:Float32}, Array{>:Float32}),
+    (ConcreteRNumber, TracedRNumber, TracedRNumber),
+    (ConcreteRArray, TracedRArray, TracedRArray),
+    (ConcreteRArray{Float64}, TracedRArray{Float64}, TracedRArray{Float64}),
+    (
+        ConcreteRArray{T,2} where {T},
+        TracedRArray{T,2} where {T},
+        TracedRArray{T,2} where {T},
+    ),
+    (
+        ConcreteRArray{<:AbstractFloat},
+        TracedRArray{<:AbstractFloat},
+        TracedRArray{<:AbstractFloat},
+    ),
+    (
+        ConcreteRArray{>:Float32},
+        TracedRArray{>:Float32},
+        TracedRArray{>:Float32},
+    ),
+    (Union{Nothing,Array}, Union{Nothing,Array}, Union{Nothing,Array}),
+    (
+        Union{Nothing,Array{Float64}},
+        Union{Nothing,Array{Float64}},
+        Union{Nothing,Array{TracedRNumber{Float64}}},
+    ),
+    (
+        Union{Nothing,ConcreteRArray},
+        Union{Nothing,TracedRArray},
+        Union{Nothing,TracedRArray},
+    ),
+    (
+        Union{Nothing,ConcreteRArray{Float64}},
+        Union{Nothing,TracedRArray{Float64}},
+        Union{Nothing,TracedRArray{Float64}},
+    ),
+    (
+        Union{Nothing,ConcreteRArray{T,2} where {T}},
+        Union{Nothing,TracedRArray{T,2} where {T}},
+        Union{Nothing,TracedRArray{T,2} where {T}},
+    ),
+    (
+        Union{Nothing,ConcreteRArray{T,2}} where {T},
+        Union{Nothing,TracedRArray{T,2}} where {T},
+        Union{Nothing,TracedRArray{T,2}} where {T},
+    ),
+
+    # Ptr types
+    (Ptr{Float64}, Ptr{Float64}, Ptr{TracedRNumber{Float64}}),
+    (
+        Ptr{ConcreteRArray{Float64,1}},
+        Ptr{TracedRArray{Float64,1}},
+        Ptr{TracedRArray{Float64,1}},
+    ),
+    (
+        Core.LLVMPtr{Float64},
+        Core.LLVMPtr{Float64},
+        Core.LLVMPtr{TracedRNumber{Float64}},
+    ),
+    (
+        Core.LLVMPtr{ConcreteRArray{Float64,1}},
+        Core.LLVMPtr{TracedRArray{Float64,1}},
+        Core.LLVMPtr{TracedRArray{Float64,1}},
+    ),
+    (
+        Base.RefValue{Float64},
+        Base.RefValue{Float64},
+        Base.RefValue{TracedRNumber{Float64}},
+    ),
+    (
+        Base.RefValue{ConcreteRArray{Float64,1}},
+        Base.RefValue{TracedRArray{Float64,1}},
+        Base.RefValue{TracedRArray{Float64,1}},
+    ),
+    (Ref{Float64}, Ref{Float64}, Ref{TracedRNumber{Float64}}),
+    (
+        Ref{ConcreteRArray{Float64,1}},
+        Ref{TracedRArray{Float64,1}},
+        Ref{TracedRArray{Float64,1}},
+    ),
+
+    # Ptr + UnionAll types
+    (Ptr, Ptr, Ptr),
+    (Core.LLVMPtr, Core.LLVMPtr, Core.LLVMPtr),
+    (Base.RefValue, Base.RefValue, Base.RefValue),
+
+    # Function types
+    (
+        MyFix{2,typeof(mul),ConcreteRArray{Float64,1}},
+        MyFix{2,typeof(mul),TracedRArray{Float64,1}},
+        MyFix{2,typeof(mul),TracedRArray{Float64,1}},
+    ),
+
+    # Val types
+    (Val{0}, Val{0}, Val{0}),
+    (Val{0.5}, Val{0.5}, Val{0.5}),
+    (Val{:x}, Val{:x}, Val{:x}),
+    (
+        Dict{Int,ConcreteRArray{Float64,0}},
+        Dict{Int,TracedRArray{Float64,0}},
+        Dict{Int,TracedRArray{Float64,0}},
+    ),
+    (Dict{Int}, Dict{Int}, Dict{Int}),
+    (Dict, Dict, Dict),
+    (
+        (Dict{A,ConcreteRArray{Float64,0}} where {A}),
+        (Dict{A,TracedRArray{Float64,0}} where {A}),
+        (Dict{A,TracedRArray{Float64,0}} where {A}),
+    ),
+    (
+        (
+            Dict{
+                Symbol,NTuple{nsteps,SpectralVariable3D}
+            } where {nsteps} where {SpectralVariable3D}
+        ),
+        (
+            Dict{
+                Symbol,NTuple{nsteps,SpectralVariable3D}
+            } where {nsteps} where {SpectralVariable3D}
+        ),
+        (
+            Dict{
+                Symbol,NTuple{nsteps,SpectralVariable3D}
+            } where {nsteps} where {SpectralVariable3D}
+        ),
+    ),
+    (
+        Base.Pairs{Symbol,Union{}},
+        Base.Pairs{Symbol,Union{}},
+        Base.Pairs{Symbol,Union{}},
+    ),
+    (
+        NTuple{nsteps,SpectralVariable3D} where {nsteps,SpectralVariable3D},
+        NTuple{nsteps,SpectralVariable3D} where {nsteps,SpectralVariable3D},
+        NTuple{nsteps,SpectralVariable3D} where {nsteps,SpectralVariable3D},
+    ),
+    (
+        Base.RefValue{A} where {A},
+        Base.RefValue{A} where {A},
+        Base.RefValue{A} where {A},
+    ),
+    (Wrapper{Symbol,Symbol}, Wrapper{Symbol,Symbol}, Wrapper{Symbol,Symbol}),
+    (
+        Wrapper{Float64,Vector{Float64}},
+        Wrapper{Float64,Vector{Float64}},
+        Wrapper{TracedRNumber{Float64},Vector{Float64}},
+    ),
+    (
+        Wrapper{Float64,ConcreteRArray{Float64,1}},
+        Wrapper{Float64,TracedRArray{Float64,1}},
+        Wrapper{TracedRNumber{Float64},TracedRArray{Float64,1}},
+    ),
+    (Wrapper{Symbol}, Wrapper{Symbol}, Wrapper{Symbol}),
+    (Wrapper{Float64}, Wrapper{Float64}, Wrapper{TracedRNumber{Float64}}),
+    (
+        Wrapper{ConcreteRArray{Float64,1}},
+        Wrapper{TracedRArray{Float64,1}},
+        Wrapper{TracedRArray{Float64,1}},
+    ),
+    (Wrapper, Wrapper, Wrapper),
+]
+
+if isdefined(Core, :Memory)
+    push!(testsuite, (Core.Memory{UInt8}, Core.Memory{UInt8}, Core.Memory{UInt8}))
+    push!(testsuite, (Core.Memory, Core.Memory, Core.Memory))
+end
+
 @testset "Tracing" begin
     @testset "trace_type" begin
         @testset "mode = ConcreteToTraced" begin
-            @testset "$origty" for (origty, targetty, targettynum) in [
-                (Any, Any, Any),
-                (Real, Real, Real),
-                (Module, Module, Module),
-                (DataType, DataType, DataType),
-                # (Union{}, Union{}), # fails
-                (Nothing, Nothing, Nothing),
-                (Symbol, Symbol, Symbol),
-                (Char, Char, Char),
-                (AbstractString, AbstractString, AbstractString),
-                (String, String, String),
-                (VersionNumber, VersionNumber, VersionNumber),
-
-                # Numeric types
-                (AbstractFloat, AbstractFloat, AbstractFloat),
-                (Float16, Float16, TracedRNumber{Float16}),
-                (Float32, Float32, TracedRNumber{Float32}),
-                (Float64, Float64, TracedRNumber{Float64}),
-                (Integer, Integer, Integer),
-                (Int8, Int8, TracedRNumber{Int8}),
-                (Int16, Int16, TracedRNumber{Int16}),
-                (Int32, Int32, TracedRNumber{Int32}),
-                (Int64, Int64, TracedRNumber{Int64}),
-                (UInt8, UInt8, TracedRNumber{UInt8}),
-                (UInt16, UInt16, TracedRNumber{UInt16}),
-                (UInt32, UInt32, TracedRNumber{UInt32}),
-                (UInt64, UInt64, TracedRNumber{UInt64}),
-                (Complex{Float32}, Complex{Float32}, TracedRNumber{Complex{Float32}}),
-                (Complex{Float64}, Complex{Float64}, TracedRNumber{Complex{Float64}}),
-                (Complex{Int8}, Complex{Int8}, TracedRNumber{Complex{Int8}}),
-                (Complex{Int16}, Complex{Int16}, TracedRNumber{Complex{Int16}}),
-                (Complex{Int32}, Complex{Int32}, TracedRNumber{Complex{Int32}}),
-                (Complex{Int64}, Complex{Int64}, TracedRNumber{Complex{Int64}}),
-                (Complex{UInt8}, Complex{UInt8}, TracedRNumber{Complex{UInt8}}),
-                (Complex{UInt16}, Complex{UInt16}, TracedRNumber{Complex{UInt16}}),
-                (Complex{UInt32}, Complex{UInt32}, TracedRNumber{Complex{UInt32}}),
-                (Complex{UInt64}, Complex{UInt64}, TracedRNumber{Complex{UInt64}}),
-
-                # RArray types
-                (
-                    ConcreteRArray{Float64,0},
-                    TracedRArray{Float64,0},
-                    TracedRArray{Float64,0},
-                ),
-                (
-                    ConcreteRArray{Float64,1},
-                    TracedRArray{Float64,1},
-                    TracedRArray{Float64,1},
-                ),
-                (
-                    ConcreteRArray{Float64,2},
-                    TracedRArray{Float64,2},
-                    TracedRArray{Float64,2},
-                ),
-                (
-                    ConcreteRArray{Float64,3},
-                    TracedRArray{Float64,3},
-                    TracedRArray{Float64,3},
-                ),
-
-                # Array types
-                (Array{Float64,1}, Array{Float64,1}, Array{TracedRNumber{Float64},1}),
-                (
-                    Array{ConcreteRArray{Float64,2},1},
-                    Array{TracedRArray{Float64,2},1},
-                    Array{TracedRArray{Float64,2},1},
-                ),
-
-                # AbstractArray types
-                (
-                    AbstractArray{Float64,1},
-                    AbstractArray{Float64,1},
-                    AbstractArray{TracedRNumber{Float64},1},
-                ),
-                (AbstractArray, AbstractArray, AbstractArray),
-                (
-                    AbstractArray{Float64},
-                    AbstractArray{Float64},
-                    AbstractArray{TracedRNumber{Float64}},
-                ),
-                (AbstractVector, AbstractVector, AbstractVector),
-                (AbstractMatrix, AbstractMatrix, AbstractMatrix),
-
-                # BitArray types
-                (BitArray, BitArray, BitArray),
-                (BitArray{1}, BitArray{1}, BitArray{1}),
-
-                # Union types
-                (Union{Nothing,Int}, Union{Nothing,Int}, Union{Nothing,TracedRNumber{Int}}),
-                (
-                    Union{Nothing,ConcreteRArray{Float64,1}},
-                    Union{Nothing,TracedRArray{Float64,1}},
-                    Union{Nothing,TracedRArray{Float64,1}},
-                ),
-
-                # UnionAll types
-                (Array, Array, Array),
-                (Array{Float64}, Array{Float64}, Array{TracedRNumber{Float64}}),
-                (Matrix, Matrix, Matrix),
-                (Array{<:AbstractFloat}, Array{<:AbstractFloat}, Array{<:AbstractFloat}),
-                (Array{>:Float32}, Array{>:Float32}, Array{>:Float32}),
-                (ConcreteRNumber, TracedRNumber, TracedRNumber),
-                (ConcreteRArray, TracedRArray, TracedRArray),
-                (ConcreteRArray{Float64}, TracedRArray{Float64}, TracedRArray{Float64}),
-                (
-                    ConcreteRArray{T,2} where {T},
-                    TracedRArray{T,2} where {T},
-                    TracedRArray{T,2} where {T},
-                ),
-                (
-                    ConcreteRArray{<:AbstractFloat},
-                    TracedRArray{<:AbstractFloat},
-                    TracedRArray{<:AbstractFloat},
-                ),
-                (
-                    ConcreteRArray{>:Float32},
-                    TracedRArray{>:Float32},
-                    TracedRArray{>:Float32},
-                ),
-                (Union{Nothing,Array}, Union{Nothing,Array}, Union{Nothing,Array}),
-                (
-                    Union{Nothing,Array{Float64}},
-                    Union{Nothing,Array{Float64}},
-                    Union{Nothing,Array{TracedRNumber{Float64}}},
-                ),
-                (
-                    Union{Nothing,ConcreteRArray},
-                    Union{Nothing,TracedRArray},
-                    Union{Nothing,TracedRArray},
-                ),
-                (
-                    Union{Nothing,ConcreteRArray{Float64}},
-                    Union{Nothing,TracedRArray{Float64}},
-                    Union{Nothing,TracedRArray{Float64}},
-                ),
-                (
-                    Union{Nothing,ConcreteRArray{T,2} where {T}},
-                    Union{Nothing,TracedRArray{T,2} where {T}},
-                    Union{Nothing,TracedRArray{T,2} where {T}},
-                ),
-                (
-                    Union{Nothing,ConcreteRArray{T,2}} where {T},
-                    Union{Nothing,TracedRArray{T,2}} where {T},
-                    Union{Nothing,TracedRArray{T,2}} where {T},
-                ),
-
-                # Ptr types
-                (Ptr{Float64}, Ptr{Float64}, Ptr{TracedRNumber{Float64}}),
-                (
-                    Ptr{ConcreteRArray{Float64,1}},
-                    Ptr{TracedRArray{Float64,1}},
-                    Ptr{TracedRArray{Float64,1}},
-                ),
-                (
-                    Core.LLVMPtr{Float64},
-                    Core.LLVMPtr{Float64},
-                    Core.LLVMPtr{TracedRNumber{Float64}},
-                ),
-                (
-                    Core.LLVMPtr{ConcreteRArray{Float64,1}},
-                    Core.LLVMPtr{TracedRArray{Float64,1}},
-                    Core.LLVMPtr{TracedRArray{Float64,1}},
-                ),
-                (
-                    Base.RefValue{Float64},
-                    Base.RefValue{Float64},
-                    Base.RefValue{TracedRNumber{Float64}},
-                ),
-                (
-                    Base.RefValue{ConcreteRArray{Float64,1}},
-                    Base.RefValue{TracedRArray{Float64,1}},
-                    Base.RefValue{TracedRArray{Float64,1}},
-                ),
-                (Ref{Float64}, Ref{Float64}, Ref{TracedRNumber{Float64}}),
-                (
-                    Ref{ConcreteRArray{Float64,1}},
-                    Ref{TracedRArray{Float64,1}},
-                    Ref{TracedRArray{Float64,1}},
-                ),
-                @static if isdefined(Core, :Memory)
-                    (Core.Memory{UInt8}, Core.Memory{UInt8}, Core.Memory{UInt8}),
-                end
-
-                # Ptr + UnionAll types
-                (Ptr, Ptr, Ptr),
-                (Core.LLVMPtr, Core.LLVMPtr, Core.LLVMPtr),
-                (Base.RefValue, Base.RefValue, Base.RefValue),
-                @static if isdefined(Core, :Memory)
-                    (Core.Memory, Core.Memory, Core.Memory),
-                end
-
-                # Function types
-                (
-                    MyFix{2,typeof(mul),ConcreteRArray{Float64,1}},
-                    MyFix{2,typeof(mul),TracedRArray{Float64,1}},
-                    MyFix{2,typeof(mul),TracedRArray{Float64,1}},
-                ),
-
-                # Val types
-                (Val{0}, Val{0}, Val{0}),
-                (Val{0.5}, Val{0.5}, Val{0.5}),
-                (Val{:x}, Val{:x}, Val{:x}),
-                (
-                    Dict{Int,ConcreteRArray{Float64,0}},
-                    Dict{Int,TracedRArray{Float64,0}},
-                    Dict{Int,TracedRArray{Float64,0}},
-                ),
-                (Dict{Int}, Dict{Int}, Dict{Int}),
-                (Dict, Dict, Dict),
-                (
-                    (Dict{A,ConcreteRArray{Float64,0}} where {A}),
-                    (Dict{A,TracedRArray{Float64,0}} where {A}),
-                    (Dict{A,TracedRArray{Float64,0}} where {A}),
-                ),
-                (
-                    (
-                        Dict{
-                            Symbol,NTuple{nsteps,SpectralVariable3D}
-                        } where {nsteps} where {SpectralVariable3D}
-                    ),
-                    (
-                        Dict{
-                            Symbol,NTuple{nsteps,SpectralVariable3D}
-                        } where {nsteps} where {SpectralVariable3D}
-                    ),
-                    (
-                        Dict{
-                            Symbol,NTuple{nsteps,SpectralVariable3D}
-                        } where {nsteps} where {SpectralVariable3D}
-                    ),
-                ),
-                (
-                    Base.Pairs{Symbol,Union{}},
-                    Base.Pairs{Symbol,Union{}},
-                    Base.Pairs{Symbol,Union{}},
-                ),
-                (
-                    NTuple{nsteps,SpectralVariable3D} where {nsteps,SpectralVariable3D},
-                    NTuple{nsteps,SpectralVariable3D} where {nsteps,SpectralVariable3D},
-                    NTuple{nsteps,SpectralVariable3D} where {nsteps,SpectralVariable3D},
-                ),
-                (
-                    Base.RefValue{A} where {A},
-                    Base.RefValue{A} where {A},
-                    Base.RefValue{A} where {A},
-                ),
-                (Wrapper{Symbol,Symbol}, Wrapper{Symbol,Symbol}, Wrapper{Symbol,Symbol}),
-                (
-                    Wrapper{Float64,Vector{Float64}},
-                    Wrapper{Float64,Vector{Float64}},
-                    Wrapper{TracedRNumber{Float64},Vector{Float64}},
-                ),
-                (
-                    Wrapper{Float64,ConcreteRArray{Float64,1}},
-                    Wrapper{Float64,TracedRArray{Float64,1}},
-                    Wrapper{TracedRNumber{Float64},TracedRArray{Float64,1}},
-                ),
-                (Wrapper{Symbol}, Wrapper{Symbol}, Wrapper{Symbol}),
-                (Wrapper{Float64}, Wrapper{Float64}, Wrapper{TracedRNumber{Float64}}),
-                (
-                    Wrapper{ConcreteRArray{Float64,1}},
-                    Wrapper{TracedRArray{Float64,1}},
-                    Wrapper{TracedRArray{Float64,1}},
-                ),
-                (Wrapper, Wrapper, Wrapper),
-            ]
+            @testset "$origty" for (origty, targetty, targettynum) in testsuite
                 tracedty = traced_type(
                     origty,
                     Val(ConcreteToTraced),
