@@ -49,11 +49,13 @@ end
 
         trace, weight = ProbProg.generate_(rng, constraint, model, μ, σ, shape)
 
-        @test trace.choices[:s] == constraint[ProbProg.Address(:s)]
+        @test trace.choices[:s][1, :] == constraint[ProbProg.Address(:s)]
 
         expected_weight =
             normal_logpdf(constraint[ProbProg.Address(:s)], 0.0, 1.0, shape) +
-            normal_logpdf(trace.choices[:t], constraint[ProbProg.Address(:s)], 1.0, shape)
+            normal_logpdf(
+                trace.choices[:t][1, :], constraint[ProbProg.Address(:s)], 1.0, shape
+            )
         @test weight ≈ expected_weight atol = 1e-6
     end
 
@@ -72,20 +74,23 @@ end
 
         trace, weight = ProbProg.generate_(rng, constraint, nested_model, μ, σ, shape)
 
-        @test trace.choices[:s] == fill(0.1, shape)
-        @test trace.subtraces[:t].choices[:x] == fill(0.2, shape)
-        @test trace.subtraces[:u].choices[:y] == fill(0.3, shape)
+        @test trace.choices[:s][1, :] == fill(0.1, shape)
+        @test trace.subtraces[:t].choices[:x][1, :] == fill(0.2, shape)
+        @test trace.subtraces[:u].choices[:y][1, :] == fill(0.3, shape)
 
         s_weight = normal_logpdf(fill(0.1, shape), 0.0, 1.0, shape)
         tx_weight = normal_logpdf(fill(0.2, shape), fill(0.1, shape), 1.0, shape)
         ty_weight = normal_logpdf(
-            trace.subtraces[:t].choices[:y], fill(0.2, shape), 1.0, shape
+            trace.subtraces[:t].choices[:y][1, :], fill(0.2, shape), 1.0, shape
         )
         ux_weight = normal_logpdf(
-            trace.subtraces[:u].choices[:x], trace.subtraces[:t].choices[:y], 1.0, shape
+            trace.subtraces[:u].choices[:x][1, :],
+            trace.subtraces[:t].choices[:y][1, :],
+            1.0,
+            shape,
         )
         uy_weight = normal_logpdf(
-            fill(0.3, shape), trace.subtraces[:u].choices[:x], 1.0, shape
+            fill(0.3, shape), trace.subtraces[:u].choices[:x][1, :], 1.0, shape
         )
 
         expected_weight = s_weight + tx_weight + ty_weight + ux_weight + uy_weight
@@ -123,6 +128,6 @@ end
         t2, w2, r2 = compiled_fn(rng, c2_tensor, model, μ, σ, shape)
         trace2 = ProbProg.unflatten_trace(t2, w2, tt.entries, r2[2:end])
 
-        @test trace1.choices[:s] != trace2.choices[:s]
+        @test trace1.choices[:s][1, :] != trace2.choices[:s][1, :]
     end
 end

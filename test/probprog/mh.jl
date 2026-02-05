@@ -110,8 +110,8 @@ end
         )
         trace = ProbProg.unflatten_trace(trace_tensor, weight_val, tt.entries, ())
 
-        slope = only(trace.choices[:slope])
-        intercept = only(trace.choices[:intercept])
+        slope = trace.choices[:slope][1, 1]
+        intercept = trace.choices[:intercept][1, 1]
         @show slope, intercept
 
         @test slope ≈ -2.0 rtol = 0.1

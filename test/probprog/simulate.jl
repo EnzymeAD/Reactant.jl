@@ -65,8 +65,8 @@ end
         @test size(trace.retval[1]) == shape
         @test haskey(trace.choices, :s)
         @test haskey(trace.choices, :t)
-        @test size(trace.choices[:s]) == shape
-        @test size(trace.choices[:t]) == shape
+        @test size(trace.choices[:s]) == (1, shape...)
+        @test size(trace.choices[:t]) == (1, shape...)
         @test trace.weight isa Float64
     end
 
@@ -89,7 +89,7 @@ end
 
         @test Array(trace.retval[1]) == op(rng, x, y)
         @test haskey(trace.choices, :matmul)
-        @test trace.choices[:matmul] == op(rng, x, y)
+        @test trace.choices[:matmul][1, :, :] == op(rng, x, y)
         @test trace.weight == logpdf(op(rng, x, y), x, y)
     end
 
@@ -115,8 +115,8 @@ end
         @test trace.subtraces[:s].choices[:a] !== trace.subtraces[:t].choices[:a]
         @test trace.subtraces[:s].choices[:b] !== trace.subtraces[:t].choices[:b]
 
-        @test size(trace.subtraces[:s].choices[:a]) == shape
-        @test size(trace.subtraces[:s].choices[:b]) == shape
+        @test size(trace.subtraces[:s].choices[:a]) == (1, shape...)
+        @test size(trace.subtraces[:s].choices[:b]) == (1, shape...)
 
         @test trace.weight isa Float64
     end
@@ -143,8 +143,8 @@ end
         @test trace.subtraces[:s].choices[:a] !== trace.subtraces[:t].choices[:a]
         @test trace.subtraces[:s].choices[:b] !== trace.subtraces[:t].choices[:b]
 
-        @test size(trace.subtraces[:s].choices[:a]) == shape
-        @test size(trace.subtraces[:s].choices[:b]) == shape
+        @test size(trace.subtraces[:s].choices[:a]) == (1, shape...)
+        @test size(trace.subtraces[:s].choices[:b]) == (1, shape...)
 
         @test trace.weight isa Float64
     end
