@@ -354,15 +354,6 @@ function __init__()
         end
     end
 
-    # create a persistent context to hold data along the program lifetime
-    # if any op/module is used after calling `compile`, MLIR attrs/types/... will segfault
-    # this Context is freed at exit
-    if !precompiling()
-        ctx = MLIR.IR.Context(registry[]; threading=false)
-        register_enzymexla_dialects(ctx)
-        MLIR.IR.activate(ctx)
-    end
-
     return nothing
 end
 
