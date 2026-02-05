@@ -1550,7 +1550,8 @@ function __get_compile_options_and_kwargs(;
     )
 end
 
-function compile_mlir(ctx, f, args; client=XLA.default_backend(), drop_unsupported_attributes=false, kwargs...)
+function compile_mlir(ctx, f, args; client=nothing, drop_unsupported_attributes=false, kwargs...)
+    client = isnothing(client) ? XLA.default_backend() : client
     backend = XLA.platform_name(client)
     if backend == "CUDA"
         backend = "GPU"
@@ -1740,10 +1741,11 @@ function compile_mlir!(
     backend="gpu",
     runtime::Union{Val{:PJRT},Val{:IFRT}},
     legalize_stablehlo_to_mhlo::Bool=false,
-    client=XLA.default_backend(),
+    client=nothing,
     kwargs...,
 )
     @assert MLIR.IR.current_context() == MLIR.IR.context(mod)
+    client = isnothing(client) ? XLA.default_backend() : client
 
     MLIR.IR.activate(mod)
     MLIR.IR.activate(MLIR.IR.body(mod))
@@ -3734,10 +3736,11 @@ function compile_xla(
     f,
     args;
     before_xla_optimizations::Bool=false,
-    client=XLA.default_backend(),
+    client=nothing,
     serializable::Bool=false,
     kwargs...,
 )
+    client = isnothing(client) ? XLA.default_backend() : client
     backend = XLA.platform_name(client)
     if backend == "CUDA"
         backend = "GPU"
