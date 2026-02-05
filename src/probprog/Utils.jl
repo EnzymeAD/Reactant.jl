@@ -163,17 +163,50 @@ function build_selection_attr(trace::TracedTrace)
     return MLIR.IR.Attribute(selection)
 end
 
+function filter_entries_by_selection(entries::Vector{TraceEntry}, selection::Selection)
+    filtered = TraceEntry[]
+    new_offset = 0
+    for address in selection
+        for entry in entries
+            entry_path = [entry.parent_path..., entry.symbol]
+            if entry_path == collect(address.path)
+                push!(
+                    filtered,
+                    TraceEntry(
+                        entry.symbol,
+                        entry.shape,
+                        entry.num_elements,
+                        new_offset,
+                        entry.parent_path,
+                    ),
+                )
+                new_offset += entry.num_elements
+                break
+            end
+        end
+    end
+    return filtered
+end
+
 function unflatten_trace(trace_tensor, weight, entries::Vector{TraceEntry}, retval)
     result = Trace()
     result.weight =
         weight isa AbstractArray ? Float64(only(Array(weight))) : Float64(weight)
     result.retval = retval
 
-    flat = vec(Array(trace_tensor))
+    trace_arr = Array(trace_tensor)
+    num_samples = size(trace_arr, 1)
+
     for entry in entries
-        start = entry.offset + 1
-        raw = flat[start:(start + entry.num_elements - 1)]
-        value = entry.shape == () ? only(raw) : reshape(raw, entry.shape)
+        start_col = entry.offset + 1
+        stop_col = start_col + entry.num_elements - 1
+
+        raw = trace_arr[:, start_col:stop_col]
+        if entry.shape == ()
+            value = vec(raw)
+        else
+            value = reshape(raw, (num_samples, entry.shape...))
+        end
 
         target = result
         for psym in entry.parent_path
