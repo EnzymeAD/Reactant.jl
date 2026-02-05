@@ -33,7 +33,6 @@ end
 
 macro mlir_str(code)
     quote
-        ctx = Context()
         parse(Module, $code)
     end
 end
