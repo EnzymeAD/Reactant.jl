@@ -2672,18 +2672,20 @@ macro code_hlo(args...)
         merge(get_common_compile_options(), Dict{Symbol,Any}(:shardy_passes => :(:none))),
         args...,
     )
+    mod_symbol = gensym("mod")
 
-    return quote
-        $MLIR.IR.@dispose $ctx = $MLIR.IR.Context($Reactant.registry[]) begin
-            $(compile_expr);
-            mod = $(first)($(compiled))
+    return esc(quote
+        $MLIR.IR.@dispose $ctx = $(MLIR.IR.Context)($(Reactant.registry)[]) begin
+            $(Reactant.register_enzymexla_dialects)($ctx)
+            $(compile_expr)
+            $mod_symbol = $(first)($(compiled))
             try
-                $TextualModule(mod)
+                $TextualModule($mod_symbol)
             finally
-                $MLIR.IR.dispose(mod)
+                $MLIR.IR.dispose($mod_symbol)
             end
         end
-    end
+    end)
 end
 
 """
@@ -2709,18 +2711,20 @@ macro code_mhlo(args...)
         ),
         args...,
     )
+    mod_symbol = gensym("mod")
 
-    return quote
-        MLIR.IR.@dispose $ctx = $MLIR.IR.Context($Reactant.registry[]) begin
+    return esc(quote
+        $MLIR.IR.@dispose $ctx = $(MLIR.IR.Context)($(Reactant.registry)[]) begin
+            $(Reactant.register_enzymexla_dialects)($ctx)
             $(compile_expr)
-            mod = $(first)($(compiled))
+            $mod_symbol = $(first)($(compiled))
             try
-                $TextualModule(mod)
+                $TextualModule($mod_symbol)
             finally
-                $MLIR.IR.dispose(mod)
+                $MLIR.IR.dispose($mod_symbol)
             end
         end
-    end
+    end)
 end
 
 """
@@ -2747,12 +2751,13 @@ macro code_xla(args...)
         args...,
     )
 
-    return quote
-        $MLIR.IR.@dispose $ctx = $MLIR.IR.Context($Reactant.registry[]) begin
+    return esc(quote
+        $MLIR.IR.@dispose $ctx = $(MLIR.IR.Context)($(Reactant.registry)[]) begin
+            $(Reactant.register_enzymexla_dialects)($ctx)
             $(compile_expr)
             $(compiled)[2]
         end
-    end
+    end)
 end
 
 """
@@ -2784,11 +2789,22 @@ $(COMMON_COMPILE_OPTIONS_DOCS)
 See also [`@jit`](@ref), [`@code_hlo`](@ref), [`@code_mhlo`](@ref), [`@code_xla`](@ref).
 """
 macro compile(args...)
-    default_options = merge(
-        get_common_compile_options(),
-        Dict{Symbol,Any}(:sync => false, :serializable => false),
+    compile_expr, (; compiled, ctx) = compile_call_expr(
+        __module__,
+        compile,
+        merge(
+            get_common_compile_options(),
+            Dict{Symbol,Any}(:sync => false, :serializable => false),
+        ),
+        args...,
     )
-    return esc(first(compile_call_expr(__module__, compile, default_options, args...)))
+    return esc(quote
+        $MLIR.IR.@dispose $ctx = $(MLIR.IR.Context)($(Reactant.registry)[]) begin
+            $(Reactant.register_enzymexla_dialects)($ctx)
+            $(compile_expr)
+            $(compiled)
+        end
+    end)
 end
 
 """
@@ -2820,17 +2836,17 @@ See also [`@compile`](@ref), [`@code_hlo`](@ref), [`@code_mhlo`](@ref), [`@code_
 """
 macro jit(args...)
     default_options = merge(get_common_compile_options(), Dict{Symbol,Any}(:sync => false))
-    compile_expr, (; compiled, args) = compile_call_expr(
+    compile_expr, (; compiled, args, ctx) = compile_call_expr(
         __module__, compile, default_options, args...
     )
     #! format: off
-    return esc(
-        :(
-            $(compile_expr);
+    return esc(quote
+        $MLIR.IR.@dispose $ctx = $(MLIR.IR.Context)($(Reactant.registry)[]) begin
+            $(Reactant.register_enzymexla_dialects)($ctx)
+            $(compile_expr)
             $(compiled)($(args)...)
-        )
-    )
-    #! format: on
+        end
+    end)
 end
 
 # TODO remove `_mod` argument or use it
