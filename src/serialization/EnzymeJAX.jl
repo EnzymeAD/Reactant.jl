@@ -119,7 +119,8 @@ function export_to_enzymejax(
             finally
                 MLIR.IR.dispose(mod)
             end
-        hlo_code, mlir_fn_res
+            hlo_code, mlir_fn_res
+        end
     end
 
     # Save MLIR code
