@@ -25,7 +25,7 @@ end
     hlo = @code_hlo(donate_fill_x_with_2(a, b))
     @test length(findall("tf.aliasing_output = 0", repr(hlo))) == 1
 
-    (; preserved_args) = Reactant.Compiler.compile_xla(donate_fill_x_with_2, (a, b))[4]
+    (; preserved_args) = Reactant.Compiler.compile_xla(donate_fill_x_with_2, (a, b))[3]
     preserved_args_idx = last.(preserved_args)
     @test preserved_args_idx == [1] # only `y`(i.e. `b`) is preserved
 
@@ -36,7 +36,7 @@ end
     hlo = @code_hlo(donate_inplace_mul(a, b))
     @test length(findall("tf.aliasing_output = 0", repr(hlo))) == 1
 
-    (; preserved_args) = Reactant.Compiler.compile_xla(donate_inplace_mul, (a, b))[4]
+    (; preserved_args) = Reactant.Compiler.compile_xla(donate_inplace_mul, (a, b))[3]
     preserved_args_idx = last.(preserved_args)
     @test preserved_args_idx == [1] # only `y`(i.e. `b`) is preserved
 
@@ -71,7 +71,7 @@ end
     z = Reactant.to_rarray(ones(3))
 
     @code_hlo assert_nonallocating = true update_inplace!(x, y, z)
-    (; preserved_args) = Reactant.Compiler.compile_xla(update_inplace!, (x, y, z))[4]
+    (; preserved_args) = Reactant.Compiler.compile_xla(update_inplace!, (x, y, z))[3]
     preserved_args_idx = last.(preserved_args)
     @test preserved_args_idx == [1, 2] # y and z are both preserved (preserved_args is 0-indexed)
 
