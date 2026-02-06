@@ -274,7 +274,9 @@ function AbstractFFTs.plan_bfft(x::AnyTracedRArray{T}, dims=1:ndims(x); _kwargs.
     return normbfft(real(T), size(x), dims) * pl
 end
 
-function AbstractFFTs.plan_bfft!(x::AnyTracedRArray{T}, dims=1:ndims(x); _kwargs...) where {T}
+function AbstractFFTs.plan_bfft!(
+    x::AnyTracedRArray{T}, dims=1:ndims(x); _kwargs...
+) where {T}
     pl = AbstractFFTs.plan_ifft!(x, dims)
     return normbfft(real(T), size(x), dims) * pl
 end
