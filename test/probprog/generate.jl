@@ -1,4 +1,4 @@
-using Reactant, Test, Random, Statistics
+using Reactant, Test, Random, Statistics, ScopedValues
 using Reactant: ProbProg, ReactantRNG
 
 normal(rng, μ, σ, shape) = μ .+ σ .* randn(rng, shape)
