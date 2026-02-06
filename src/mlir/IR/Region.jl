@@ -107,6 +107,6 @@ Gets the first block in the region.
 function first_block(region::Region)
     block = API.mlirRegionGetFirstBlock(region)
     mlirIsNull(block) && return nothing
-    return Block(block, false)
+    return Block(block)
 end
 Base.first(region::Region) = first_block(region)
