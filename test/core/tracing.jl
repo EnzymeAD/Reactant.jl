@@ -99,6 +99,10 @@ testsuite = [
     (AbstractVector, AbstractVector, AbstractVector),
     (AbstractMatrix, AbstractMatrix, AbstractMatrix),
 
+    # BitArray types
+    (BitArray, BitArray, BitArray),
+    (BitArray{1}, BitArray{1}, BitArray{1}),
+
     # Union types
     (Union{Nothing,Int}, Union{Nothing,Int}, Union{Nothing,TracedRNumber{Int}}),
     (
