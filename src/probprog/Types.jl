@@ -1,5 +1,4 @@
 using OrderedCollections: OrderedSet
-using ..Reactant: AbstractConcreteNumber, AbstractConcreteArray
 
 mutable struct Trace
     choices::Dict{Symbol,Any}

@@ -1,4 +1,4 @@
-using ..Reactant: MLIR, Profiler
+using ..Reactant: MLIR
 
 const DUMP_BUFFER = Vector{Tuple{String,Any}}()
 const DUMP_BUFFER_LOCK = ReentrantLock()
