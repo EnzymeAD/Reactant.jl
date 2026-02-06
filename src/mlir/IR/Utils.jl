@@ -44,6 +44,41 @@ function visit(f, op)
     return all_ok
 end
 
+# TODO try to fuse it with Ops.hlo_call?
+function tryinject!(sym_name, code; verify=false, mod=current_module(), location=Location())
+    fn = lookup(SymbolTable(Operation(mod)), sym_name)
+
+    if fn === nothing
+        ctx = current_context()
+        block = body(mod)
+        return @ccall API.mlir_c.mlirOperationInject(
+            ctx::API.MlirContext,
+            block::API.MlirBlock,
+            code::API.MlirStringRef,
+            location::API.MlirLocation,
+            verify::Bool,
+        )::Bool
+    else
+        return false
+    end
+end
+
+function inject!(sym_name, code; kwargs...)
+    success = tryinject!(sym_name, code; kwargs...)
+    @assert success "Failed injecting MLIR to top-level block"
+end
+
+function tryinjectop!(sym_name, code; mod=current_module(), location=Location())
+    fn = lookup(SymbolTable(Operation(mod)), sym_name)
+
+    if isnothing(fn)
+        top_level_block = body(mod)
+        return parse(Operation, code; block=top_level_block, location)
+    else
+        return nothing
+    end
+end
+
 # TODO potentially move to `ScopedValues.@with` if we move from task-local storage to ScopedValues
 """
     @scope obj begin
