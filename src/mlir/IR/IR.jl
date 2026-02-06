@@ -3,7 +3,7 @@ module IR
 using ..Reactant
 using ..API
 
-import LLVM: activate, deactivate, dispose
+import LLVM: activate, deactivate, dispose, @dispose
 
 # WARN do not export `Type` nor `Module` as they are already defined in Core
 # also, use `Core.Type` and `Core.Module` inside this module to avoid clash with
