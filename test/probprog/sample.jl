@@ -80,16 +80,16 @@ end
         _, X = @jit optimize = :probprog ProbProg.untraced_call(
             rng1, one_sample, μ, σ, shape
         )
-        @test !all(rng1.seed .== seed)
+        @test Array(rng1.seed) != Array(seed)
 
         rng2 = ReactantRNG(copy(seed))
         _, Y = @jit optimize = :probprog ProbProg.untraced_call(
             rng2, two_samples, μ, σ, shape
         )
 
-        @test !all(rng2.seed .== seed)
-        @test !all(rng2.seed .== rng1.seed)
+        @test Array(rng2.seed) != Array(seed)
+        @test Array(rng2.seed) != Array(rng1.seed)
 
-        @test !all(X .≈ Y)
+        @test !all(Array(X) .≈ Array(Y))
     end
 end
