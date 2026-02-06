@@ -3788,6 +3788,64 @@ end
 # typedef PJRT_Error * PJRT_TpuTopology_GetRoutingStrategy ( PJRT_TpuTopology_GetRoutingStrategy_Args * args )
 const PJRT_TpuTopology_GetRoutingStrategy = Cvoid
 
+struct PJRT_TpuTopology_SliceConfig
+    dim_size::Csize_t
+    dimensions::NTuple{4,Int32}
+    wrap::NTuple{4,Bool}
+    twist::Bool
+end
+
+@cenum __JL_Ctag_1677::UInt32 begin
+    PJRT_TpuTopology_SliceConfig_STRUCT_SIZE = 0x000000000000001d
+end
+
+struct PJRT_TpuTopology_GetSliceConfig_Args
+    struct_size::Csize_t
+    platform_type_name::Cstring
+    platform_type_name_len::Csize_t
+    slice_name::Cstring
+    slice_name_len::Csize_t
+    slice_config::Ptr{PJRT_TpuTopology_SliceConfig}
+end
+
+@cenum __JL_Ctag_1678::UInt32 begin
+    PJRT_TpuTopology_GetSliceConfig_Args_STRUCT_SIZE = 0x0000000000000030
+end
+
+# typedef PJRT_Error * PJRT_TpuTopology_GetSliceConfig ( PJRT_TpuTopology_GetSliceConfig_Args * args )
+const PJRT_TpuTopology_GetSliceConfig = Cvoid
+
+struct PJRT_TpuTopology_GetSliceConfigs_Args
+    struct_size::Csize_t
+    platform_type_name::Cstring
+    platform_type_name_len::Csize_t
+    slice_configs::Ptr{PJRT_TpuTopology_SliceConfig}
+    max_slice_configs::Csize_t
+    num_slice_configs::Csize_t
+end
+
+@cenum __JL_Ctag_1679::UInt32 begin
+    PJRT_TpuTopology_GetSliceConfigs_Args_STRUCT_SIZE = 0x0000000000000030
+end
+
+# typedef PJRT_Error * PJRT_TpuTopology_GetSliceConfigs ( PJRT_TpuTopology_GetSliceConfigs_Args * args )
+const PJRT_TpuTopology_GetSliceConfigs = Cvoid
+
+struct PJRT_TpuTopology_GetDefaultPlatformConfig_Args
+    struct_size::Csize_t
+    platform_type_name::Cstring
+    platform_type_name_len::Csize_t
+    num_chips_per_tray::Int64
+    num_trays::Int64
+end
+
+@cenum __JL_Ctag_1680::UInt32 begin
+    PJRT_TpuTopology_GetDefaultPlatformConfig_Args_STRUCT_SIZE = 0x0000000000000028
+end
+
+# typedef PJRT_Error * PJRT_TpuTopology_GetDefaultPlatformConfig ( PJRT_TpuTopology_GetDefaultPlatformConfig_Args * args )
+const PJRT_TpuTopology_GetDefaultPlatformConfig = Cvoid
+
 struct PJRT_TpuTopology_Extension
     base::PJRT_Extension_Base
     subslice::Ptr{PJRT_TpuTopology_Subslice}
@@ -3824,10 +3882,13 @@ struct PJRT_TpuTopology_Extension
     chip_bounds::Ptr{PJRT_TpuTopology_ChipBounds}
     process_bounds::Ptr{PJRT_TpuTopology_ProcessBounds}
     get_routing_strategy::Ptr{PJRT_TpuTopology_GetRoutingStrategy}
+    get_slice_config::Ptr{PJRT_TpuTopology_GetSliceConfig}
+    get_slice_configs::Ptr{PJRT_TpuTopology_GetSliceConfigs}
+    get_default_platform_config::Ptr{PJRT_TpuTopology_GetDefaultPlatformConfig}
 end
 
-@cenum __JL_Ctag_1677::UInt32 begin
-    PJRT_TpuTopology_Extension_STRUCT_SIZE = 0x00000000000000f8
+@cenum __JL_Ctag_1681::UInt32 begin
+    PJRT_TpuTopology_Extension_STRUCT_SIZE = 0x0000000000000110
 end
 
 struct PJRT_Triton_Compile_Args
@@ -3844,7 +3905,7 @@ struct PJRT_Triton_Compile_Args
     out_smem_bytes::Int64
 end
 
-@cenum __JL_Ctag_1824::UInt32 begin
+@cenum __JL_Ctag_1828::UInt32 begin
     PJRT_Triton_Compile_Args_STRUCT_SIZE = 0x0000000000000050
 end
 
@@ -3858,7 +3919,7 @@ end
 
 const PJRT_Triton = PJRT_Triton_Extension
 
-@cenum __JL_Ctag_1825::UInt32 begin
+@cenum __JL_Ctag_1829::UInt32 begin
     PJRT_Triton_Extension_STRUCT_SIZE = 0x0000000000000020
 end
 

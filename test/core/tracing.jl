@@ -122,6 +122,10 @@ end
                 (AbstractVector, AbstractVector, AbstractVector),
                 (AbstractMatrix, AbstractMatrix, AbstractMatrix),
 
+                # BitArray types
+                (BitArray, BitArray, BitArray),
+                (BitArray{1}, BitArray{1}, BitArray{1}),
+
                 # Union types
                 (Union{Nothing,Int}, Union{Nothing,Int}, Union{Nothing,TracedRNumber{Int}}),
                 (
@@ -375,6 +379,28 @@ end
 
         x_ra = Reactant.to_rarray(1.0; track_numbers=Number)
         @test @inferred Reactant.to_rarray(x_ra) isa ConcreteRNumber
+    end
+
+    @testset "BitArray" begin
+        mask = BitVector([true, true, false])
+        mask_ra = Reactant.to_rarray(mask)
+        @test mask_ra isa ConcreteRArray{Bool,1}
+        @test Array(mask_ra) == Bool[true, true, false]
+
+        mask2d = BitArray([true false; false true])
+        mask2d_ra = Reactant.to_rarray(mask2d)
+        @test mask2d_ra isa ConcreteRArray{Bool,2}
+        @test Array(mask2d_ra) == Bool[true false; false true]
+
+        struct BitVecStorage{B}
+            v::B
+        end
+
+        mask_struct = BitVecStorage(mask)
+        mask_struct_ra = Reactant.to_rarray(mask_struct)
+        @test mask_struct_ra isa BitVecStorage{<:ConcreteRArray{Bool,1}}
+        @test mask_struct_ra.v isa ConcreteRArray{Bool,1}
+        @test Array(mask_struct_ra.v) == Bool[true, true, false]
     end
 
     @testset "no trace Val" begin

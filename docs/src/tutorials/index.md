@@ -10,5 +10,6 @@
 - [Persistent Compilation Cache](@ref persistent_compile_cache).
 - [Raising](@ref Raising).
 - [Computational kernels](@ref computational-kernels).
+- [Debugging compilation errors](@ref debugging-compilation).
 
 We are currently working on adding more tutorials to Reactant!! Please check back soon!

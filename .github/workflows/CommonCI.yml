@@ -181,7 +181,7 @@ jobs:
         timeout-minutes: 10
         if: always()
         with:
-          name: "mlir-${{ inputs.julia_version }}-${{ inputs.os }}-${{ inputs.runtime }}-assertions=${{ inputs.assertions }}-${{ github.event_name }}-test_group=${{ inputs.test_group }}-${{ inputs.localjll }}"
+          name: "mlir-${{ inputs.julia_version }}-${{ inputs.os }}-${{ inputs.runtime }}-assertions=${{ inputs.assertions }}-${{ github.event_name }}-test_args=${{ inputs.test_args }}-${{ inputs.localjll }}"
           path: "**/*.mlir"
           retention-days: 90
           overwrite: false

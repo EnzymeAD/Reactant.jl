@@ -526,4 +526,5 @@ end
     @test @jit(size(x_ra, ConcreteRNumber(1))) == 5
     @test @jit(size(x_ra, ConcreteRNumber(2))) == 32
     @test @jit(size(x_ra, ConcreteRNumber(3))) == 7
+    @test @jit(size(x_ra, ConcreteRNumber(4))) == 1
 end

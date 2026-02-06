@@ -102,7 +102,8 @@ export default defineConfig({
             link: "/tutorials/persistent_compile_cache",
           },
           { text: "Raising", link: "/tutorials/raising" },
-          { text: "Computational kernels", link: "/tutorials/kernels" }
+          { text: "Computational kernels", link: "/tutorials/kernels" },
+          { text: "Debugging compilation errors", link: "/tutorials/debugging" },
         ],
       },
       {
@@ -191,7 +192,8 @@ export default defineConfig({
             link: "/tutorials/persistent_compile_cache",
           },
           { text: "Raising", link: "/tutorials/raising" },
-          { text: "Computational kernels", link: "/tutorials/kernels" }
+          { text: "Computational kernels", link: "/tutorials/kernels" },
+          { text: "Debugging compilation errors", link: "/tutorials/debugging" },
         ],
       }
     ],
