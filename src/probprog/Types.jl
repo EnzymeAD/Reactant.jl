@@ -43,9 +43,6 @@ mutable struct Constraint <: AbstractDict{Address,Any}
 
     Constraint() = new(Dict{Address,Any}())
     Constraint(d::Dict{Address,Any}) = new(d)
-    function Constraint(x::Union{AbstractConcreteNumber,AbstractConcreteArray})
-        return convert(Constraint, x)
-    end
 end
 
 Base.getindex(c::Constraint, k::Address) = c.dict[k]

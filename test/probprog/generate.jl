@@ -114,7 +114,7 @@ end
         c1_tensor = Reactant.to_rarray(reshape(c1_flat, 1, :))
 
         tt = ProbProg.TracedTrace()
-        compiled_fn = Base.ScopedValues.with(ProbProg.TRACING_TRACE => tt) do
+        compiled_fn = ScopedValues.with(ProbProg.TRACING_TRACE => tt) do
             @compile optimize = :probprog ProbProg.generate(
                 rng, c1_tensor, model, μ, σ, shape; constrained_addresses
             )

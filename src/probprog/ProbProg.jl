@@ -1,8 +1,7 @@
 module ProbProg
 
 using ..Reactant:
-    MLIR, TracedUtils, AbstractRNG, TracedRArray, TracedRNumber, ConcreteRNumber
-using ..Compiler: @compile
+    MLIR, TracedUtils, AbstractRNG
 
 include("Types.jl")
 include("Distributions.jl")

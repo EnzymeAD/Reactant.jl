@@ -1,22 +1,15 @@
-using Base.ScopedValues: ScopedValue, with as scoped_with
+using ScopedValues: ScopedValues, ScopedValue
 using ..Reactant:
     MLIR,
     TracedUtils,
-    Ops,
-    TracedRArray,
-    TracedRNumber,
     Compiler,
     OrderedIdDict,
     TracedToTypes,
     TracedType,
     TracedTrack,
-    TracedSetPath,
-    ConcreteToTraced,
-    AbstractConcreteArray,
-    Sharding,
-    to_number
-import ..Reactant: promote_to, make_tracer
-import ..Compiler: donate_argument!
+    TracedSetPath
+
+import ..Reactant: make_tracer
 
 const TRACING_TRACE = ScopedValue{Union{Nothing,TracedTrace}}(nothing)
 

@@ -1,7 +1,7 @@
 using Reactant, Test, Random
 using Statistics
 using Reactant: ProbProg, ReactantRNG, ConcreteRNumber, ConcreteRArray
-using Base.ScopedValues
+using ScopedValues
 
 include(joinpath(@__DIR__, "common.jl"))
 

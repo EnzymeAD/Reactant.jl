@@ -21,7 +21,7 @@ function mcmc(
     args = (rng, args...)
 
     tt = TracedTrace()
-    ppf = scoped_with(TRACING_TRACE => tt) do
+    ppf = ScopedValues.with(TRACING_TRACE => tt) do
         process_probprog_function(f, args, "mcmc")
     end
 

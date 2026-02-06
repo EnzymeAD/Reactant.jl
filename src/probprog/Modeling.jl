@@ -159,7 +159,7 @@ function simulate(rng::AbstractRNG, f::Function, args::Vararg{Any,Nargs}) where 
     ppf = if existing_tt !== nothing
         process_probprog_function(f, args, "simulate")
     else
-        scoped_with(TRACING_TRACE => tt) do
+        ScopedValues.with(TRACING_TRACE => tt) do
             process_probprog_function(f, args, "simulate")
         end
     end
@@ -213,7 +213,7 @@ end
 function simulate_(rng::AbstractRNG, f::Function, args::Vararg{Any,Nargs}) where {Nargs}
     tt = TracedTrace()
 
-    compiled_fn = scoped_with(TRACING_TRACE => tt) do
+    compiled_fn = ScopedValues.with(TRACING_TRACE => tt) do
         @compile optimize = :probprog simulate(rng, f, args...)
     end
     trace_tensor, weight_val, traced_result = compiled_fn(rng, f, args...)
@@ -237,7 +237,7 @@ function generate_(
     end
     constraint_tensor = to_rarray(reshape(constraint_flat, 1, :))
 
-    compiled_fn = scoped_with(TRACING_TRACE => tt) do
+    compiled_fn = ScopedValues.with(TRACING_TRACE => tt) do
         @compile optimize = :probprog generate(
             rng, constraint_tensor, f, args...; constrained_addresses
         )
@@ -266,7 +266,7 @@ function generate(
     ppf = if existing_tt !== nothing
         process_probprog_function(f, args, "generate")
     else
-        scoped_with(TRACING_TRACE => tt) do
+        ScopedValues.with(TRACING_TRACE => tt) do
             process_probprog_function(f, args, "generate")
         end
     end

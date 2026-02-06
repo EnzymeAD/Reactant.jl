@@ -1,5 +1,6 @@
 using Reactant, Test, Random
 using Reactant: ProbProg, ReactantRNG
+using ScopedValues
 
 # Reference: https://www.gen.dev/docs/stable/getting_started/linear_regression/
 
@@ -90,7 +91,7 @@ end
         obs_tensor = Reactant.to_rarray(reshape(obs_flat, 1, :))
 
         tt = ProbProg.TracedTrace()
-        code = Base.ScopedValues.with(ProbProg.TRACING_TRACE => tt) do
+        code = ScopedValues.with(ProbProg.TRACING_TRACE => tt) do
             @code_hlo optimize = :probprog mh_program(
                 rng, model, xs, num_iters, obs_tensor, constrained_addresses
             )
@@ -99,7 +100,7 @@ end
 
         tt = ProbProg.TracedTrace()
         num_iters = ConcreteRNumber(1000)
-        compiled_fn = Base.ScopedValues.with(ProbProg.TRACING_TRACE => tt) do
+        compiled_fn = ScopedValues.with(ProbProg.TRACING_TRACE => tt) do
             @compile optimize = :probprog mh_program(
                 rng, model, xs, num_iters, obs_tensor, constrained_addresses
             )
