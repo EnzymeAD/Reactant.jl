@@ -269,7 +269,9 @@ end
 
 # Because we override the plan_bfft and plan_brfft functions we actually do not need to define
 # AbstractFFTs.bfft functions since they come for free via the plan mechanism.
-function AbstractFFTs.plan_bfft(x::AnyTracedRArray{T}, dims=1:ndims(x); _kwargs...) where {T}
+function AbstractFFTs.plan_bfft(
+    x::AnyTracedRArray{T}, dims=1:ndims(x); _kwargs...
+) where {T}
     pl = AbstractFFTs.plan_ifft(x, dims)
     return normbfft(real(T), size(x), dims) * pl
 end
