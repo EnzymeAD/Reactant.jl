@@ -7,17 +7,14 @@ mutable struct ExternalPassHandle
     pass::AbstractPass
 end
 
-mutable struct PassManager
+@checked struct PassManager
     ref::API.MlirPassManager
     allocator::TypeIDAllocator
     passes::Dict{TypeID,ExternalPassHandle}
+end
 
-    function PassManager(pm::API.MlirPassManager)
-        @assert !mlirIsNull(pm) "cannot create PassManager with null MlirPassManager"
-        finalizer(new(pm, TypeIDAllocator(), Dict{TypeID,ExternalPassHandle}())) do pm
-            return API.mlirPassManagerDestroy(pm.ref)
-        end
-    end
+function PassManager(pm::API.MlirPassManager)
+    return PassManager(pm, TypeIDAllocator(), Dict{TypeID,ExternalPassHandle}())
 end
 
 """
@@ -26,7 +23,7 @@ end
 Create a new top-level PassManager.
 """
 function PassManager(; context::Context=current_context())
-    return PassManager(API.mlirPassManagerCreate(context))
+    return PassManager(mark_alloc(API.mlirPassManagerCreate(context)))
 end
 
 """
@@ -35,11 +32,13 @@ end
 Create a new top-level PassManager anchored on `anchorOp`.
 """
 function PassManager(anchor_op::Operation; context::Context=current_context())
-    return PassManager(API.mlirPassManagerCreateOnOperation(context, anchor_op))
+    return PassManager(mark_alloc(API.mlirPassManagerCreateOnOperation(context, anchor_op)))
 end
 
+dispose(pass::PassManager) = mark_dispose(API.mlirPassManagerDestroy, pass)
+
 Base.cconvert(::Core.Type{API.MlirPassManager}, pass::PassManager) = pass
-Base.unsafe_convert(::Core.Type{API.MlirPassManager}, pass::PassManager) = pass.ref
+Base.unsafe_convert(::Core.Type{API.MlirPassManager}, pass::PassManager) = mark_use(pass).ref
 
 """
     enable_ir_printing!(passManager)
@@ -195,14 +194,9 @@ function run!(pm::PassManager, operation, key::String="")
     return operation
 end
 
-struct OpPassManager
+@checked struct OpPassManager
     ref::API.MlirOpPassManager
     pass::PassManager
-
-    function OpPassManager(op_pass, pass)
-        @assert !mlirIsNull(op_pass) "cannot create OpPassManager with null MlirOpPassManager"
-        return new(op_pass, pass)
-    end
 end
 
 """
@@ -354,7 +348,7 @@ function _pass_clone(handle::ExternalPassHandle)
 end
 
 function _pass_run(rawop, external_pass, handle::ExternalPassHandle)
-    op = Operation(rawop, false)
+    op = Operation(rawop)
     try
         pass_run(handle.ctx, handle.pass, op)
     catch ex

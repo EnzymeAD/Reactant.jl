@@ -2521,9 +2521,10 @@ function compile_mlir!(
             )
         end
 
-        func_op = MLIR.API.mlirSymbolTableLookup(MLIR.IR.SymbolTable(module_op), fnname)
-        @assert func_op.ptr !== C_NULL
-        func_op_new_module = MLIR.IR.Operation(func_op, false)
+        func_op = MLIR.IR.@dispose sym_table = MLIR.IR.SymbolTable(module_op) begin
+            MLIR.IR.lookup(sym_table, fnname)
+        end
+        func_op_new_module = MLIR.IR.Operation(func_op)
 
         result_attrs = MLIR.IR.getattr(func_op_new_module, "res_attrs")
         if result_attrs !== nothing
@@ -2598,11 +2599,9 @@ function compile_mlir!(
 
     run_pass_pipeline!(mod, "mark-func-memory-effects", "mark-func-memory-effects")
 
-    func_op = MLIR.API.mlirSymbolTableLookup(
-        MLIR.IR.SymbolTable(MLIR.IR.Operation(mod)), fnname
-    )
-    @assert func_op.ptr !== C_NULL
-    func_op = MLIR.IR.Operation(func_op, false)
+    func_op = MLIR.IR.@dispose sym_table = MLIR.IR.SymbolTable(MLIR.IR.Operation(mod)) begin
+        MLIR.IR.Operation(MLIR.IR.lookup(sym_table, fnname))
+    end
     fnbody = MLIR.IR.first_block(MLIR.IR.region(func_op, 1))::MLIR.IR.Block
     ret = MLIR.IR.terminator(fnbody)::MLIR.IR.Operation
 
@@ -2623,8 +2622,8 @@ function compile_mlir!(
         push!(preserved_args, (linear_results[i], MLIR.IR.block_arg_num(op)))
     end
 
-    MLIR.API.mlirOperationDestroy(ret)
-    ret.ref = MLIR.API.MlirOperation(C_NULL)
+    MLIR.IR.dispose(ret)
+
     MLIR.IR.with_block(fnbody) do
         return MLIR.Dialects.func.return_(nresults)
     end
@@ -2666,8 +2665,7 @@ function compile_mlir!(
         MLIR.IR.setattr!(func3, "enzymexla.memory_effects", mem)
     end
 
-    MLIR.API.mlirOperationDestroy(compiled_f)
-    compiled_f.ref = MLIR.API.MlirOperation(C_NULL)
+    MLIR.IR.dispose(compiled_f)
 
     # Add a `donated` attr to the function arguments. This doesn't affect XLA, but lets us
     # check which arguments were donated.
@@ -2699,8 +2697,7 @@ function compile_mlir!(
     if backend == "tpu"
         for op in collect(MLIR.IR.body(mod))
             if MLIR.IR.dialect(op) == :llvm
-                MLIR.API.mlirOperationDestroy(op)
-                op.ref = MLIR.API.MlirOperation(C_NULL)
+                MLIR.IR.dispose(op)
             end
         end
     end

@@ -1,15 +1,5 @@
-mutable struct Region
+@checked struct Region
     ref::API.MlirRegion
-    @atomic owned::Bool
-
-    function Region(region, owned=true)
-        @assert !mlirIsNull(region)
-        finalizer(new(region, owned)) do region
-            if region.owned
-                API.mlirRegionDestroy(region.ref)
-            end
-        end
-    end
 end
 
 """
@@ -17,10 +7,18 @@ end
 
 Creates a new empty region and transfers ownership to the caller.
 """
-Region() = Region(API.mlirRegionCreate())
+Region() = Region(mark_alloc(API.mlirRegionCreate()))
+
+"""
+    dispose(region::Region)
+
+Disposes the given region and releases its resources.
+After calling this function, the region must not be used anymore.
+"""
+dispose(region::Region) = mark_dispose(API.mlirRegionDestroy, region)
 
 Base.cconvert(::Core.Type{API.MlirRegion}, region::Region) = region
-Base.unsafe_convert(::Core.Type{API.MlirRegion}, region::Region) = region.ref
+Base.unsafe_convert(::Core.Type{API.MlirRegion}, region::Region) = mark_use(region).ref
 
 """
     ==(region, other)
@@ -43,7 +41,7 @@ function Base.iterate(it::Region)
     if mlirIsNull(raw_block)
         nothing
     else
-        b = Block(raw_block, false)
+        b = Block(raw_block)
         (b, b)
     end
 end
@@ -53,7 +51,7 @@ function Base.iterate(::Region, block)
     if mlirIsNull(raw_block)
         nothing
     else
-        b = Block(raw_block, false)
+        b = Block(raw_block)
         (b, b)
     end
 end
@@ -64,7 +62,7 @@ end
 Takes a block owned by the caller and appends it to the given region.
 """
 function Base.push!(region::Region, block::Block)
-    API.mlirRegionAppendOwnedBlock(region, lose_ownership!(block))
+    API.mlirRegionAppendOwnedBlock(region, mark_donate(block))
     return block
 end
 
@@ -74,7 +72,7 @@ end
 Takes a block owned by the caller and inserts it at `index` to the given region. This is an expensive operation that linearly scans the region, prefer insertAfter/Before instead.
 """
 function Base.insert!(region::Region, index, block::Block)
-    API.mlirRegionInsertOwnedBlock(region, index - 1, lose_ownership!(block))
+    API.mlirRegionInsertOwnedBlock(region, index - 1, mark_donate(block))
     return block
 end
 
@@ -89,7 +87,7 @@ end
 Takes a block owned by the caller and inserts it after the (non-owned) reference block in the given region. The reference block must belong to the region. If the reference block is null, prepends the block to the region.
 """
 function insert_after!(region::Region, reference::Block, block::Block)
-    return API.mlirRegionInsertOwnedBlockAfter(region, reference, lose_ownership!(block))
+    return API.mlirRegionInsertOwnedBlockAfter(region, reference, mark_donate(block))
 end
 
 """
@@ -98,7 +96,7 @@ end
 Takes a block owned by the caller and inserts it before the (non-owned) reference block in the given region. The reference block must belong to the region. If the reference block is null, appends the block to the region.
 """
 function insert_before!(region::Region, reference::Block, block::Block)
-    return API.mlirRegionInsertOwnedBlockBefore(region, reference, lose_ownership!(block))
+    return API.mlirRegionInsertOwnedBlockBefore(region, reference, mark_donate(block))
 end
 
 """
@@ -112,9 +110,3 @@ function first_block(region::Region)
     return Block(block, false)
 end
 Base.first(region::Region) = first_block(region)
-
-function lose_ownership!(region::Region)
-    @assert region.owned
-    @atomic region.owned = false
-    return region
-end

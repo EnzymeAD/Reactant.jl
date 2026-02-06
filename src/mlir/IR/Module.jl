@@ -1,10 +1,5 @@
-mutable struct Module
+@checked struct Module
     ref::API.MlirModule
-
-    function Module(module_)
-        @assert !mlirIsNull(module_) "cannot create Module with null MlirModule"
-        return finalizer(API.mlirModuleDestroy, new(module_))
-    end
 end
 
 """
@@ -12,12 +7,20 @@ end
 
 Creates a new, empty module and transfers ownership to the caller.
 """
-Module(loc::Location=Location()) = Module(API.mlirModuleCreateEmpty(loc))
+Module(loc::Location=Location()) = Module(mark_alloc(API.mlirModuleCreateEmpty(loc)))
 
-Module(op::Operation) = Module(API.mlirModuleFromOperation(lose_ownership!(op)))
+Module(op::Operation) = Module(API.mlirModuleFromOperation(mark_donate(op)))
+
+"""
+    dispose(module)
+
+Disposes the given module and releases its resources.
+After calling this function, the module must not be used anymore.
+"""
+dispose(mod_::Module) = mark_dispose(API.mlirModuleDestroy, mod_)
 
 Base.cconvert(::Core.Type{API.MlirModule}, module_::Module) = module_
-Base.unsafe_convert(::Core.Type{API.MlirModule}, module_::Module) = module_.ref
+Base.unsafe_convert(::Core.Type{API.MlirModule}, module_::Module) = mark_use(module_).ref
 
 """
     parse(::Type{Module}, module; context=current_context())
@@ -47,14 +50,14 @@ context(module_::Module) = Context(API.mlirModuleGetContext(module_))
 
 Gets the body of the module, i.e. the only block it contains.
 """
-body(module_::Module) = Block(API.mlirModuleGetBody(module_), false)
+body(module_::Module) = Block(API.mlirModuleGetBody(module_))
 
 """
     Operation(module)
 
 Views the module as a generic operation.
 """
-Operation(module_::Module) = Operation(API.mlirModuleGetOperation(module_), false)
+Operation(module_::Module) = Operation(API.mlirModuleGetOperation(module_))
 
 Base.show(io::IO, module_::Module) = show(io, Operation(module_))
 

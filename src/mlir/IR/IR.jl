@@ -3,7 +3,41 @@ module IR
 using ..Reactant
 using ..API
 
-import LLVM: activate, deactivate, dispose, @dispose
+using LLVM: LLVM, @checked, mark_alloc, mark_use, mark_dispose
+import LLVM: activate, deactivate, dispose, @dispose, refcheck
+
+mark_donate(x) = (mark_dispose(x); x)
+
+# fix for `@checked` on MLIR.API types
+for AT in [
+    :MlirDialect,
+    :MlirDialectHandle,
+    :MlirDialectRegistry,
+    :MlirContext,
+    :MlirLocation,
+    :MlirType,
+    :MlirTypeID,
+    :MlirTypeIDAllocator,
+    :MlirModule,
+    :MlirOperation,
+    :MlirOpOperand,
+    :MlirBlock,
+    :MlirRegion,
+    :MlirValue,
+    # :MlirLogicalResult,
+    :MlirAffineExpr,
+    :MlirAffineMap,
+    # :MlirAttribute,
+    # :MlirNamedAttribute,
+    :MlirIntegerSet,
+    :MlirIdentifier,
+    :MlirSymbolTable,
+    :MlirExecutionEngine,
+    :MlirPassManager,
+    :MlirOpPassManager,
+]
+    @eval refcheck(T::Core.Type, ref::API.$AT) = refcheck(T, ref.ptr)
+end
 
 # WARN do not export `Type` nor `Module` as they are already defined in Core
 # also, use `Core.Type` and `Core.Module` inside this module to avoid clash with
