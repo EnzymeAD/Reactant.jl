@@ -13,6 +13,11 @@ import ..Reactant: make_tracer
 
 const TRACING_TRACE = ScopedValue{Union{Nothing,TracedTrace}}(nothing)
 
+function with_trace(f, tt::TracedTrace=TracedTrace())
+    result = ScopedValues.with(f, TRACING_TRACE => tt)
+    return result, tt
+end
+
 function process_probprog_function(f, args, op_name, with_rng=true)
     seen = OrderedIdDict()
     cache_key = []

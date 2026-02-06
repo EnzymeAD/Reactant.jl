@@ -1,4 +1,4 @@
-using Reactant, Test, Random, Statistics, ScopedValues
+using Reactant, Test, Random, Statistics
 using Reactant: ProbProg, ReactantRNG
 
 normal(rng, μ, σ, shape) = μ .+ σ .* randn(rng, shape)
@@ -113,8 +113,7 @@ end
         end
         c1_tensor = Reactant.to_rarray(reshape(c1_flat, 1, :))
 
-        tt = ProbProg.TracedTrace()
-        compiled_fn = ScopedValues.with(ProbProg.TRACING_TRACE => tt) do
+        compiled_fn, tt = ProbProg.with_trace() do
             @compile optimize = :probprog ProbProg.generate(
                 rng, c1_tensor, model, μ, σ, shape; constrained_addresses
             )

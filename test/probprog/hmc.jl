@@ -2,7 +2,6 @@ ENV["JULIA_DEBUG"] = "Reactant,Reactant_jll"
 using Reactant, Test, Random
 using Statistics
 using Reactant: ProbProg, ReactantRNG, ConcreteRNumber, ConcreteRArray
-using ScopedValues
 Reactant.MLIR.IR.DUMP_MLIR_ALWAYS[] = true
 
 include(joinpath(@__DIR__, "common.jl"))
@@ -87,9 +86,8 @@ function run_hmc_test(;
 
     selection = ProbProg.select(ProbProg.Address(:param_a), ProbProg.Address(:param_b))
 
-    tt = ProbProg.TracedTrace()
     compile_time_s = @elapsed begin
-        compiled_fn = ScopedValues.with(ProbProg.TRACING_TRACE => tt) do
+        compiled_fn, tt = ProbProg.with_trace() do
             @compile optimize = :probprog hmc_program(
                 rng,
                 model,
