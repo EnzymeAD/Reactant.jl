@@ -1,13 +1,9 @@
 [deps]
 CUDA = "052768ef-5323-5732-b1bb-66c8b64840ba"
 Enzyme = "7da242da-08ed-463a-9acd-ee780be4f1d9"
-FileIO = "5789e2e9-d7fb-5bc7-8068-2c6fae9b9549"
-JLD2 = "033835bb-8acc-5ee8-8aae-3f567f8a3819"
 Oceananigans = "9e8cae18-63c1-5223-a75c-80ca9d6e9a09"
 Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
 Reactant = "3c362404-f566-11ee-1572-e11a4b42c853"
-ReactantCore = "a3311ec8-5e00-46d5-b541-4f83e724a433"
-Reactant_jll = "0192cb87-2b54-54ad-80e0-3be72ad8a3c0"
 SeawaterPolynomials = "d496a93d-167e-4197-9f49-d3af4ff8fe40"
 
 [sources]
