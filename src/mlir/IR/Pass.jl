@@ -38,7 +38,9 @@ end
 dispose(pass::PassManager) = mark_dispose(API.mlirPassManagerDestroy, pass)
 
 Base.cconvert(::Core.Type{API.MlirPassManager}, pass::PassManager) = pass
-Base.unsafe_convert(::Core.Type{API.MlirPassManager}, pass::PassManager) = mark_use(pass).ref
+function Base.unsafe_convert(::Core.Type{API.MlirPassManager}, pass::PassManager)
+    return mark_use(pass).ref
+end
 
 """
     enable_ir_printing!(passManager)

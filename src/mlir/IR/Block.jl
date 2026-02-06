@@ -27,7 +27,6 @@ After calling this function, the block must not be used anymore.
 """
 dispose(blk::Block) = mark_dispose(API.mlirBlockDestroy, blk)
 
-
 """
     ==(block, other)
 
