@@ -1,7 +1,6 @@
 module ProbProg
 
-using ..Reactant:
-    MLIR, TracedUtils, AbstractRNG
+using ..Reactant: MLIR, TracedUtils, AbstractRNG
 
 include("Types.jl")
 include("Distributions.jl")
