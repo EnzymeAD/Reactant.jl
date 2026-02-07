@@ -2736,7 +2736,7 @@ macro code_xla(args...)
     return esc(
         :(
             $(compile_expr);
-            $(compiled)[3]
+            $(compiled)[2]
         )
     )
     #! format: on
@@ -3810,7 +3810,7 @@ function compile_xla(
             hlo_modules = length(hlo_modules) == 1 ? only(hlo_modules) : hlo_modules
         end
 
-        return mod, exec, hlo_modules, mlir_fn_res, device, client, module_string
+        return exec, hlo_modules, mlir_fn_res, device, client, module_string
     finally
         MLIR.IR.deactivate!(ctx)
     end
@@ -3823,7 +3823,7 @@ const __thunk_rev_body_cache = Dict{Expr,Symbol}()
 function compile(f, args; kwargs...)
     compile_options, kwargs = __get_compile_options_and_kwargs(; kwargs...)
 
-    _, exec, _, mlir_fn_res, device, client, str = compile_xla(
+    exec, _, mlir_fn_res, device, client, str = compile_xla(
         f, args; compile_options, kwargs...
     )
     (; linear_args, seen_args, linear_results, preserved_args, concrete_result) =
