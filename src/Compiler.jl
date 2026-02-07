@@ -1283,6 +1283,7 @@ function optimization_passes(
                 "transpose_select",
                 "transpose_while",
                 "transpose_slice",
+                "transpose_like_broadcast_slice",
                 "transpose_concat",
                 "transpose_iota",
                 "transpose_reduce",
@@ -1294,6 +1295,7 @@ function optimization_passes(
                 "transpose_extend",
                 "transpose_rotate",
                 "transpose_dynamic_slice",
+                "transpose_like_broadcast_dynamic_slice",
                 "transpose_reverse",
                 "transpose_batch_norm_training",
                 "transpose_batch_norm_inference",
@@ -1305,8 +1307,10 @@ function optimization_passes(
         )
         if AGGRESSIVE_PROPAGATION[]
             push!(transform_passes_list, "transpose_elementwise(0)")
+            push!(transform_passes_list, "transpose_like_broadcast_elementwise(0)")
         else
             push!(transform_passes_list, "transpose_elementwise(1)")
+            push!(transform_passes_list, "transpose_like_broadcast_elementwise(1)")
         end
     elseif compile_options.transpose_propagate === :down
         append!(
