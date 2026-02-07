@@ -213,6 +213,42 @@ MPI.Init()
 #     end
 # end
 
+# Works with at most 1 request passed into waitall
+@testset "Isend / Irecv! / Waitall" begin
+    comm = MPI.COMM_WORLD
+    rank = MPI.Comm_rank(comm)
+    tag = 42
+
+    for T in datatypes
+        # NOTE: currently don't allow a request to cross the compile boundary
+        function waitall(send_buf, recv_buf)
+            reqs = Reactant.TracedRNumber[]
+
+            if rank == 0
+                dest = 1
+                req = MPI.Isend(send_buf, dest, tag+1, comm)
+                push!(reqs, req)
+            elseif rank == 1
+                src = 0
+                req = MPI.Irecv!(recv_buf, src, tag+1, comm)
+                push!(reqs, req)
+            end
+
+            reqs = vcat(reqs...)
+            MPI.Waitall(reqs)
+        end
+
+        send_buf = ConcreteRArray(ones(T, 5))
+        recv_buf = ConcreteRArray(zeros(T, 5))
+        
+        @jit waitall(send_buf, recv_buf)
+        # rank==0 && println(@code_hlo optimize="lower-enzymexla-mpi{backend=cpu}" waitall(send_buf, recv_buf))
+
+        rank == 1 && @test recv_buf == send_buf
+    end
+end
+
+# Fails with more than 1 request passed into waitall
 @testset "Isend / Irecv! / Waitall" begin
     comm = MPI.COMM_WORLD
     rank = MPI.Comm_rank(comm)
@@ -251,8 +287,9 @@ MPI.Init()
         recv_buf = ConcreteRArray(zeros(T, 5))
         
         @jit waitall(send_buf, recv_buf)
+        # rank==0 && println(@code_hlo optimize="lower-enzymexla-mpi{backend=cpu}" waitall(send_buf, recv_buf))
 
-        # rank == 1 && @test recv_buf == send_buf
+        # # rank == 1 && @test recv_buf == send_buf
         println("rank = $rank, recv_buf = $recv_buf")
     end
 end
