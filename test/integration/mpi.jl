@@ -213,14 +213,14 @@ MPI.Init()
 #     end
 # end
 
-@testset "Isend / Irecv! / Wait" begin
+@testset "Isend / Irecv! / Waitall" begin
     comm = MPI.COMM_WORLD
     rank = MPI.Comm_rank(comm)
     tag = 42
 
     for T in datatypes
         # NOTE: currently don't allow a request to cross the compile boundary
-        function isendirecvwait(send_buf, recv_buf)
+        function waitall(send_buf, recv_buf)
             reqs = Reactant.TracedRNumber[]
 
             if rank == 0
@@ -250,7 +250,7 @@ MPI.Init()
         send_buf = ConcreteRArray(ones(T, 5))
         recv_buf = ConcreteRArray(zeros(T, 5))
         
-        @jit isendirecvwait(send_buf, recv_buf)
+        @jit waitall(send_buf, recv_buf)
 
         # rank == 1 && @test recv_buf == send_buf
         println("rank = $rank, recv_buf = $recv_buf")
