@@ -222,23 +222,19 @@ MPI.Init()
         # NOTE: currently don't allow a request to cross the compile boundary
         function isendirecvwait(send_buf, recv_buf)
             reqs = Reactant.TracedRNumber[]
+
             if rank == 0
                 dest = 1
-
                 req = MPI.Isend(send_buf, dest, tag, comm)
                 push!(reqs, req)
-                reqs = vcat(reqs...)
-
-                MPI.Waitall(reqs)
             elseif rank == 1
                 src = 0
-
                 req = MPI.Irecv!(recv_buf, src, tag, comm)
                 push!(reqs, req)
-                reqs = vcat(reqs...)
-
-                MPI.Waitall(reqs)
             end
+
+            reqs = vcat(reqs...)
+            MPI.Waitall(reqs)
         end
 
         send_buf = ConcreteRArray(ones(T, 5))
