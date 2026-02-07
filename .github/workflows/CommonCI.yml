@@ -145,12 +145,26 @@ jobs:
           contents: |
             [Reactant]
             xla_runtime = "PJRT"
+      - name: "Set test arguments and other environment variables"
+        shell: bash
+        run: |
+          # Run tests in verbose mode
+          TEST_ARGS=(--verbose)
+
+          if [[ ${{ runner.os }} == "macOS" ]]; then
+              # Encourage ParallelTestRunner to use two jobs on macOS, rather
+              # than the single one it'd use by default.
+              TEST_ARGS+=(--jobs=2)
+          fi
+
+          TEST_ARGS+=(${{ input.test_args }})
+          echo "runtest_test_args=${TEST_ARGS[@]}" | tee "${GITHUB_ENV}"
       - name: "Run Tests (PJRT)"
         if: ${{ inputs.runtime == 'pjrt' || inputs.runtime == 'both' }}
         timeout-minutes: 120
         uses: julia-actions/julia-runtest@v1
         with:
-          test_args: ${{ inputs.test_args }}
+          test_args: ${{ env.runtest_test_args }}
           allow_reresolve: ${{ !(inputs.downgrade_testing) }}
           project: "."
           coverage: true
@@ -170,7 +184,7 @@ jobs:
         timeout-minutes: 120
         uses: julia-actions/julia-runtest@v1
         with:
-          test_args: ${{ inputs.test_args }}
+          test_args: ${{ env.runtest_test_args }}
           allow_reresolve: ${{ !(inputs.downgrade_testing) }}
           project: "."
           coverage: true
