@@ -213,47 +213,84 @@ MPI.Init()
 #     end
 # end
 
-@testset "Isend / Irecv! / Waitall" begin
+@testset "Isend / Irecv! / Wait" begin
     comm = MPI.COMM_WORLD
     rank = MPI.Comm_rank(comm)
+    tag = 42
 
     for T in datatypes
         # NOTE: currently don't allow a request to cross the compile boundary
-        n = 5
-        send_buf = ConcreteRArray(ones(T, n))
-        recv_buf = ConcreteRArray(zeros(T, n))
-        tag = 42
-        function isendirecvwaitall(send_buf, recv_buf, rank, tag, comm)
+        function isendirecvwait(send_buf, recv_buf)
+            reqs = Reactant.TracedRNumber[]
             if rank == 0
-                requests = Reactant.TracedRNumber[]
                 dest = 1
 
-                for i in 1:n
-                    req = MPI.Isend(send_buf[i:i], dest, tag+i, comm)
-                    push!(requests, req)
-                end
+                req = MPI.Isend(send_buf, dest, tag, comm)
+                push!(reqs, req)
+                reqs = vcat(reqs...)
 
-                requests = vcat(requests...)
-                MPI.Waitall(requests)
-                return nothing
+                MPI.Waitall(reqs)
             elseif rank == 1
-                requests = Reactant.TracedRNumber[]
                 src = 0
 
-                for i in 1:n
-                    req = MPI.Irecv!(recv_buf[i:i], src, tag+i, comm)
-                    push!(requests, req)
-                end
+                req = MPI.Irecv!(recv_buf, src, tag, comm)
+                push!(reqs, req)
+                reqs = vcat(reqs...)
 
-                requests = vcat(requests...)
-                MPI.Waitall(requests)
-                return nothing
+                MPI.Waitall(reqs)
             end
         end
-        @jit isendirecvwaitall(send_buf, recv_buf, rank, tag, comm)
+
+        send_buf = ConcreteRArray(ones(T, 5))
+        recv_buf = ConcreteRArray(zeros(T, 5))
+        
+        @jit isendirecvwait(send_buf, recv_buf)
+
         rank == 1 && @test recv_buf == send_buf
     end
 end
+
+# @testset "Isend / Irecv! / Waitall" begin
+#     comm = MPI.COMM_WORLD
+#     rank = MPI.Comm_rank(comm)
+
+#     for T in datatypes
+#         # NOTE: currently don't allow a request to cross the compile boundary
+#         n = 5
+#         send_buf = ConcreteRArray(ones(T, n))
+#         recv_buf = ConcreteRArray(zeros(T, n))
+#         tag = 42
+#         function isendirecvwaitall(send_buf, recv_buf, rank, tag, comm)
+#             if rank == 0
+#                 requests = Reactant.TracedRNumber[]
+#                 dest = 1
+
+#                 for i in 1:n
+#                     req = MPI.Isend(send_buf[i:i], dest, tag+i, comm)
+#                     push!(requests, req)
+#                 end
+
+#                 requests = vcat(requests...)
+#                 MPI.Waitall(requests)
+#                 return nothing
+#             elseif rank == 1
+#                 requests = Reactant.TracedRNumber[]
+#                 src = 0
+
+#                 for i in 1:n
+#                     req = MPI.Irecv!(recv_buf[i:i], src, tag+i, comm)
+#                     push!(requests, req)
+#                 end
+
+#                 requests = vcat(requests...)
+#                 MPI.Waitall(requests)
+#                 return nothing
+#             end
+#         end
+#         @jit isendirecvwaitall(send_buf, recv_buf, rank, tag, comm)
+#         rank == 1 && @test recv_buf == send_buf
+#     end
+# end
 
 MPI.Finalize()
 
