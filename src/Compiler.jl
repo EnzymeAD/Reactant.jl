@@ -2521,10 +2521,9 @@ function compile_mlir!(
             )
         end
 
-        func_op = MLIR.IR.@dispose sym_table = MLIR.IR.SymbolTable(module_op) begin
+        func_op_new_module = MLIR.IR.@dispose sym_table = MLIR.IR.SymbolTable(module_op) begin
             MLIR.IR.lookup(sym_table, fnname)
         end
-        func_op_new_module = MLIR.IR.Operation(func_op)
 
         result_attrs = MLIR.IR.getattr(func_op_new_module, "res_attrs")
         if result_attrs !== nothing
