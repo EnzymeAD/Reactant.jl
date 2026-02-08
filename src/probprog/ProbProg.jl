@@ -24,7 +24,7 @@ export get_choices, select, unflatten_trace, filter_entries_by_selection, with_t
 export mcmc_summary
 
 # Core MLIR ops.
-export sample, untraced_call, simulate, generate, mh, mcmc
+export sample, untraced_call, simulate, generate, mh, mcmc, mcmc_logpdf
 
 # Gen-like helper functions.
 export simulate_, generate_
