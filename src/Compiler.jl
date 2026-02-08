@@ -2821,8 +2821,10 @@ Compile the function `f` with arguments `args` and return the compiled MLIR modu
 
 See also: [`@code_hlo`](@ref).
 """
-function code_hlo(ctx, f, args; fn_kwargs = NamedTuple(), kwargs...)
-    options = Dict(k => v isa QuoteNode ? v.value : v for (k,v) in get_common_compile_options())
+function code_hlo(ctx, f, args; fn_kwargs=NamedTuple(), kwargs...)
+    options = Dict(
+        k => v isa QuoteNode ? v.value : v for (k, v) in get_common_compile_options()
+    )
     options[:shardy_passes] = :none
     merge!(options, pairs(kwargs))
     return first(compile_mlir(ctx, f, args; fn_kwargs, options...))
@@ -2846,10 +2848,10 @@ macro code_hlo(args...)
     )
     return quote
         $MLIR.IR.@dispose ctx = $MLIR.IR.Context($(Reactant.registry)[]) begin
-            @ccall $MLIR.API.mlir_c.RegisterDialects(
-                ctx::$MLIR.API.MlirContext
-            )::Cvoid
-            mod = $code_hlo(ctx, $(esc(f)), $(esc(args)); fn_kwargs = $(esc(kwargs)), $(esc.(options)...))
+            @ccall $MLIR.API.mlir_c.RegisterDialects(ctx::$MLIR.API.MlirContext)::Cvoid
+            mod = $code_hlo(
+                ctx, $(esc(f)), $(esc(args)); fn_kwargs=$(esc(kwargs)), $(esc.(options)...)
+            )
             try
                 $TextualModule(mod)
             finally
@@ -2866,8 +2868,10 @@ Compile the function `f` with arguments `args` and return the compiled MLIR modu
 
 See also: [`@code_mhlo`](@ref).
 """
-function code_mhlo(ctx, f, args; fn_kwargs = NamedTuple(), kwargs...)
-    options = Dict(k => v isa QuoteNode ? v.value : v for (k,v) in get_common_compile_options())
+function code_mhlo(ctx, f, args; fn_kwargs=NamedTuple(), kwargs...)
+    options = Dict(
+        k => v isa QuoteNode ? v.value : v for (k, v) in get_common_compile_options()
+    )
     options[:legalize_stablehlo_to_mhlo] = true
     options[:shardy_passes] = :to_mhlo_shardings
     merge!(options, pairs(kwargs))
@@ -2897,10 +2901,10 @@ macro code_mhlo(args...)
     )
     return quote
         $MLIR.IR.@dispose ctx = $MLIR.IR.Context($(Reactant.registry)[]) begin
-            @ccall $MLIR.API.mlir_c.RegisterDialects(
-                ctx::$MLIR.API.MlirContext
-            )::Cvoid
-            mod = $code_mhlo(ctx, $(esc(f)), $(esc(args)); fn_kwargs = $(esc(kwargs)), $(esc.(options)...))
+            @ccall $MLIR.API.mlir_c.RegisterDialects(ctx::$MLIR.API.MlirContext)::Cvoid
+            mod = $code_mhlo(
+                ctx, $(esc(f)), $(esc(args)); fn_kwargs=$(esc(kwargs)), $(esc.(options)...)
+            )
             try
                 $TextualModule(mod)
             finally
@@ -2917,8 +2921,10 @@ Compile the function `f` with arguments `args` and return the compiled HLO modul
 
 See also: [`@code_xla`](@ref).
 """
-function code_xla(ctx, f, args; fn_kwargs = NamedTuple(), kwargs...)
-    options = Dict(k => v isa QuoteNode ? v.value : v for (k,v) in get_common_compile_options())
+function code_xla(ctx, f, args; fn_kwargs=NamedTuple(), kwargs...)
+    options = Dict(
+        k => v isa QuoteNode ? v.value : v for (k, v) in get_common_compile_options()
+    )
     options[:before_xla_optimizations] = false
     merge!(options, pairs(kwargs))
     return compile_xla(ctx, f, args; fn_kwargs, options...)[2]
@@ -2948,10 +2954,10 @@ macro code_xla(args...)
 
     return quote
         $MLIR.IR.@dispose ctx = $MLIR.IR.Context($(Reactant.registry)[]) begin
-            @ccall $MLIR.API.mlir_c.RegisterDialects(
-                ctx::$MLIR.API.MlirContext
-            )::Cvoid
-            $code_xla(ctx, $(esc(f)), $(esc(args)); fn_kwargs = $(esc(kwargs)), $(esc.(options)...))
+            @ccall $MLIR.API.mlir_c.RegisterDialects(ctx::$MLIR.API.MlirContext)::Cvoid
+            $code_xla(
+                ctx, $(esc(f)), $(esc(args)); fn_kwargs=$(esc(kwargs)), $(esc.(options)...)
+            )
         end
     end
 end
@@ -2994,10 +3000,10 @@ macro compile(args...)
     )
     return quote
         $MLIR.IR.@dispose ctx = $MLIR.IR.Context($(Reactant.registry)[]) begin
-            @ccall $MLIR.API.mlir_c.RegisterDialects(
-                ctx::$MLIR.API.MlirContext
-            )::Cvoid
-            $compile(ctx, $(esc(f)), $(esc(args)); fn_kwargs = $(esc(kwargs)), $(esc.(options)...))
+            @ccall $MLIR.API.mlir_c.RegisterDialects(ctx::$MLIR.API.MlirContext)::Cvoid
+            $compile(
+                ctx, $(esc(f)), $(esc(args)); fn_kwargs=$(esc(kwargs)), $(esc.(options)...)
+            )
         end
     end
 end
@@ -3035,7 +3041,9 @@ macro jit(args...)
     return quote
         $MLIR.IR.@dispose ctx = $MLIR.IR.Context($(Reactant.registry)[]) begin
             @ccall $MLIR.API.mlir_c.RegisterDialects(ctx::$MLIR.API.MlirContext)::Cvoid
-            fn = $compile(ctx, $(esc(f)), $(esc(args)); fn_kwargs = $(esc(kwargs)), $(esc.(options)...))
+            fn = $compile(
+                ctx, $(esc(f)), $(esc(args)); fn_kwargs=$(esc(kwargs)), $(esc.(options)...)
+            )
             fn($(esc(args))...)
         end
     end
@@ -3090,7 +3098,12 @@ function parse_macro_code_call(options::Dict, args...)
         error("Invalid function call: $(call)")
     end
 
-    return (; f=fname, args=args_rhs, kwargs=kwargs_rhs, options=Expr.(:kw, keys(options), values(options)))
+    return (;
+        f=fname,
+        args=args_rhs,
+        kwargs=kwargs_rhs,
+        options=Expr.(:kw, keys(options), values(options)),
+    )
 end
 
 function assert_mismatched_sharding(
