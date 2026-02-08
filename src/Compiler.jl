@@ -3913,9 +3913,8 @@ function __resolve_device_and_client(client, seen_args, linear_args, is_sharded)
 end
 
 function compile_xla(f, args; kwargs...)
-    MLIR.IR.@dispose ctx = MLIR.IR.Context(Reactant.registry[]) begin
-        @ccall MLIR.API.mlir_c.RegisterDialects(ctx::MLIR.API.MlirContext)::Cvoid
-        return compile_xla(ctx, f, args; kwargs...)
+    MLIR.IR.@dispose ctx = Reactant.ReactantContext() begin
+        compile_xla(ctx, f, args; kwargs...)
     end
 end
 
@@ -4031,9 +4030,8 @@ const __thunk_fwd_body_cache = Dict{Symbol,Expr}()
 const __thunk_rev_body_cache = Dict{Expr,Symbol}()
 
 function compile(f, args; kwargs...)
-    MLIR.IR.@dispose ctx = MLIR.IR.Context(Reactant.registry[]) begin
-        @ccall MLIR.API.mlir_c.RegisterDialects(ctx::MLIR.API.MlirContext)::Cvoid
-        return compile(ctx, f, args; kwargs...)
+    MLIR.IR.@dispose ctx = Reactant.ReactantContext() begin
+        compile(ctx, f, args; kwargs...)
     end
 end
 

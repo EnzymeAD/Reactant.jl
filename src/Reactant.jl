@@ -291,6 +291,18 @@ export ConcreteRArray,
 
 const registry = Ref{Union{Nothing,MLIR.IR.DialectRegistry}}()
 
+function register_enzymexla_dialects(ctx::MLIR.IR.Context)
+    @ccall MLIR.API.mlir_c.RegisterDialects(ctx::MLIR.API.MlirContext)::Cvoid
+    return nothing
+end
+
+ReactantContext(; kwargs...) = ReactantContext(registry[]; kwargs...)
+function ReactantContext(args...; kwargs...)
+    ctx = MLIR.IR.Context(args...; kwargs...)
+    register_enzymexla_dialects(ctx)
+    return ctx
+end
+
 const passes_initialized = Ref(false)
 function initialize_dialect()
     registry[] = MLIR.IR.DialectRegistry()

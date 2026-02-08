@@ -82,8 +82,7 @@ result = run_my_function(*inputs)
 ```
 """
 function export_to_enzymejax(f, args...; kwargs...)
-    MLIR.IR.@dispose ctx = MLIR.IR.Context(Reactant.registry[]) begin
-        @ccall MLIR.API.mlir_c.RegisterDialects(ctx::MLIR.API.MlirContext)::Cvoid
+    MLIR.IR.@dispose ctx = Reactant.ReactantContext() begin
         return export_to_enzymejax(
             ctx,
             f,

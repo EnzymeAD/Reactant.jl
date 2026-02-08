@@ -583,8 +583,7 @@ function sharding_to_array_slices(
 
     if needs_padding
         # MLIR for identity operation, avoid tracing here
-        ctx = MLIR.IR.Context(Reactant.registry[])
-        @ccall MLIR.API.mlir_c.RegisterDialects(ctx::MLIR.API.MlirContext)::Cvoid
+        ctx = Reactant.ReactantContext()
         MLIR.IR.activate(ctx)
 
         sdycache = Reactant.Compiler.default_sdycache()
