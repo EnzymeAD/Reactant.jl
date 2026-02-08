@@ -1145,15 +1145,14 @@ function sdy_sharding_to_reactant_sharding(attr, global_device_ids, mod)
         )
     end
 
-    mesh_op = MLIR.IR.Operation(
-        MLIR.API.mlirSymbolTableLookup(
-            MLIR.IR.SymbolTable(MLIR.IR.Operation(mod)),
+    mesh_op = MLIR.IR.@dispose sym_table = MLIR.IR.SymbolTable(mod) begin
+        MLIR.IR.lookup(
+            sym_table,
             MLIR.IR.leafref(
                 MLIR.IR.Attribute(MLIR.API.sdyTensorShardingAttrGetMeshOrRef(mlir_attr))
             ),
-        ),
-        false,
-    )
+        )
+    end
     return sdy_tensor_sharding_to_named_sharding(
         sdy_mesh_to_reactant_mesh(MLIR.IR.getattr(mesh_op, "mesh"), global_device_ids),
         MLIR.IR.Attribute(mlir_attr),
