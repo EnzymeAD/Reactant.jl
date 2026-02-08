@@ -47,9 +47,7 @@ using Test
 
 # const dataurl = "https://de.cyverse.org/anon-files/iplant/home/shared/commons_repo/curated/EHTC_M87pol2017_Nov2023/hops_data/April06/SR2_M87_2017_096_lo_hops_ALMArot.uvfits"
 # const dataf = Base.download(dataurl)
-const dataf = joinpath(
-    "/home/ptiede/.julia/dev/Comrade/examples/Data/SR1_M87_2017_096_lo_hops_netcal_StokesI.uvfits",
-)
+const dataf = joinpath(@__DIR__, "../../../../deps/SR1_M87_2017_096_lo_hops_netcal_StokesI.uvfits")
 
 # TODO upstream to VLBISkyModels
 
