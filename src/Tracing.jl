@@ -598,7 +598,7 @@ Base.@nospecializeinfer function traced_type_inner(
     }
 end
 
-@static if VERSION >= v"1.11"
+@static if isdefined(Core, :Memory)
     Base.@nospecializeinfer function traced_type_inner(
         @nospecialize(T::Type{<:Core.Memory}),
         seen,
