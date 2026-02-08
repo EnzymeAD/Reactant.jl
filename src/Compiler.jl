@@ -2850,7 +2850,7 @@ macro code_hlo(args...)
         $MLIR.IR.@dispose ctx = $MLIR.IR.Context($(Reactant.registry)[]) begin
             @ccall $MLIR.API.mlir_c.RegisterDialects(ctx::$MLIR.API.MlirContext)::Cvoid
             mod = $code_hlo(
-                ctx, $(esc(f)), $(esc(args)); fn_kwargs=$(esc(kwargs)), $(esc.(options)...)
+                ctx, $(esc(f)), $(esc(args)); fn_kwargs=(; $(esc.(kwargs)...)), $(esc.(options)...)
             )
             try
                 $TextualModule(mod)
@@ -2903,7 +2903,7 @@ macro code_mhlo(args...)
         $MLIR.IR.@dispose ctx = $MLIR.IR.Context($(Reactant.registry)[]) begin
             @ccall $MLIR.API.mlir_c.RegisterDialects(ctx::$MLIR.API.MlirContext)::Cvoid
             mod = $code_mhlo(
-                ctx, $(esc(f)), $(esc(args)); fn_kwargs=$(esc(kwargs)), $(esc.(options)...)
+                ctx, $(esc(f)), $(esc(args)); fn_kwargs=(; $(esc.(kwargs)...)), $(esc.(options)...)
             )
             try
                 $TextualModule(mod)
@@ -2956,7 +2956,7 @@ macro code_xla(args...)
         $MLIR.IR.@dispose ctx = $MLIR.IR.Context($(Reactant.registry)[]) begin
             @ccall $MLIR.API.mlir_c.RegisterDialects(ctx::$MLIR.API.MlirContext)::Cvoid
             $code_xla(
-                ctx, $(esc(f)), $(esc(args)); fn_kwargs=$(esc(kwargs)), $(esc.(options)...)
+                ctx, $(esc(f)), $(esc(args)); fn_kwargs=(; $(esc.(kwargs)...)), $(esc.(options)...)
             )
         end
     end
@@ -3002,7 +3002,7 @@ macro compile(args...)
         $MLIR.IR.@dispose ctx = $MLIR.IR.Context($(Reactant.registry)[]) begin
             @ccall $MLIR.API.mlir_c.RegisterDialects(ctx::$MLIR.API.MlirContext)::Cvoid
             $compile(
-                ctx, $(esc(f)), $(esc(args)); fn_kwargs=$(esc(kwargs)), $(esc.(options)...)
+                ctx, $(esc(f)), $(esc(args)); fn_kwargs=(; $(esc.(kwargs)...)), $(esc.(options)...)
             )
         end
     end
@@ -3042,7 +3042,7 @@ macro jit(args...)
         $MLIR.IR.@dispose ctx = $MLIR.IR.Context($(Reactant.registry)[]) begin
             @ccall $MLIR.API.mlir_c.RegisterDialects(ctx::$MLIR.API.MlirContext)::Cvoid
             fn = $compile(
-                ctx, $(esc(f)), $(esc(args)); fn_kwargs=$(esc(kwargs)), $(esc.(options)...)
+                ctx, $(esc(f)), $(esc(args)); fn_kwargs=(; $(esc.(kwargs)...)), $(esc.(options)...)
             )
             fn($(esc(args))...)
         end
