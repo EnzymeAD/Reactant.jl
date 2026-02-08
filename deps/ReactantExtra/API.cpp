@@ -2959,6 +2959,11 @@ REACTANT_ABI void dump_operation(Operation *op, const char *filename) {
 
   op->print(file, mlir::OpPrintingFlags().enableDebugInfo(true, false));
 }
+REACTANT_ABI void dump_string(const char*op, const char *filename) {
+  std::error_code EC;
+  llvm::raw_fd_ostream file(filename, EC, llvm::sys::fs::OF_Text);
+  file << op;
+}
 
 REACTANT_ABI bool pjrt_device_is_addressable(PjRtDevice *device) {
   return device->IsAddressable();
