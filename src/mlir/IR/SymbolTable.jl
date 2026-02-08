@@ -8,6 +8,7 @@ end
 Creates a symbol table for the given operation. If the operation does not have the SymbolTable trait, returns a null symbol table.
 """
 SymbolTable(op::Operation) = SymbolTable(mark_alloc(API.mlirSymbolTableCreate(op)))
+SymbolTable(mod::Module) = SymbolTable(Operation(mod))
 
 dispose(st::SymbolTable) = mark_dispose(API.mlirSymbolTableDestroy(st))
 

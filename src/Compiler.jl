@@ -2521,7 +2521,7 @@ function compile_mlir!(
             )
         end
 
-        func_op_new_module = MLIR.IR.@dispose sym_table = MLIR.IR.SymbolTable(module_op) begin
+        func_op_new_module = MLIR.IR.@dispose sym_table = MLIR.IR.SymbolTable(mod) begin
             MLIR.IR.lookup(sym_table, fnname)
         end
 
@@ -2598,7 +2598,7 @@ function compile_mlir!(
 
     run_pass_pipeline!(mod, "mark-func-memory-effects", "mark-func-memory-effects")
 
-    func_op = MLIR.IR.@dispose sym_table = MLIR.IR.SymbolTable(MLIR.IR.Operation(mod)) begin
+    func_op = MLIR.IR.@dispose sym_table = MLIR.IR.SymbolTable(mod) begin
         MLIR.IR.lookup(sym_table, fnname)
     end
     fnbody = MLIR.IR.first_block(MLIR.IR.region(func_op, 1))::MLIR.IR.Block
