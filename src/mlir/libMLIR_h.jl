@@ -12340,14 +12340,6 @@ function enzymexlaGuaranteedAnalysisResultAttrGet(ctx, mode)
     )::MlirAttribute
 end
 
-function enzymeTraceTypeGet(ctx)
-    @ccall mlir_c.enzymeTraceTypeGet(ctx::MlirContext)::MlirType
-end
-
-function enzymeConstraintTypeGet(ctx)
-    @ccall mlir_c.enzymeConstraintTypeGet(ctx::MlirContext)::MlirType
-end
-
 @cenum EnzymeRngDistribution::UInt32 begin
     EnzymeRngDistribution_Uniform = 0x0000000000000000
     EnzymeRngDistribution_Normal = 0x0000000000000001
