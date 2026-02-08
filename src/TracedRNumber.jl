@@ -585,64 +585,72 @@ function Base.:*(x::TwicePrecision, v::TracedRNumber)
     return result
 end
 
-for (T1, T2) in zip((Bool, Integer), (Bool, Integer))
-    T = promote_type(T1, T2)
+for T in (Bool, Integer)
     @eval begin
-        function Base.:&(x::TracedRNumber{<:$(T1)}, y::TracedRNumber{<:$(T2)})
+        function Base.:&(x::TracedRNumber{A}, y::TracedRNumber{B}) where {A<:$(T),B<:$(T)}
+            C = promote_type(A, B)
             return @opcall and(
-                Reactant.promote_to(TracedRNumber{$(T)}, x),
-                Reactant.promote_to(TracedRNumber{$(T)}, y),
+                Reactant.promote_to(TracedRNumber{C}, x),
+                Reactant.promote_to(TracedRNumber{C}, y),
             )
         end
-        function Base.:&(x::TracedRNumber{<:$(T1)}, y::$(T2))
+        function Base.:&(x::TracedRNumber{A}, y::B) where {A<:$(T),B<:$(T)}
+            C = promote_type(A, B)
             return @opcall and(
-                Reactant.promote_to(TracedRNumber{$(T)}, x),
-                Reactant.promote_to(TracedRNumber{$(T)}, y),
+                Reactant.promote_to(TracedRNumber{C}, x),
+                Reactant.promote_to(TracedRNumber{C}, y),
             )
         end
-        function Base.:&(x::$(T1), y::TracedRNumber{<:$(T2)})
+        function Base.:&(x::A, y::TracedRNumber{B}) where {A<:$(T),B<:$(T)}  
+            C = promote_type(A, B)
             return @opcall and(
-                Reactant.promote_to(TracedRNumber{$(T)}, x),
-                Reactant.promote_to(TracedRNumber{$(T)}, y),
+                Reactant.promote_to(TracedRNumber{C}, x),
+                Reactant.promote_to(TracedRNumber{C}, y),
             )
         end
-        function Base.:|(x::TracedRNumber{<:$(T1)}, y::TracedRNumber{<:$(T2)})
+        function Base.:|(x::TracedRNumber{A}, y::TracedRNumber{B}) where {A<:$(T),B<:$(T)}
+            C = promote_type(A, B)
             return @opcall or(
-                Reactant.promote_to(TracedRNumber{$(T)}, x),
-                Reactant.promote_to(TracedRNumber{$(T)}, y),
+                Reactant.promote_to(TracedRNumber{C}, x),
+                Reactant.promote_to(TracedRNumber{C}, y),
             )
         end
-        function Base.:|(x::TracedRNumber{<:$(T1)}, y::$(T2))
+        function Base.:|(x::TracedRNumber{A}, y::B) where {A<:$(T),B<:$(T)}
+            C = promote_type(A, B)
             return @opcall or(
-                Reactant.promote_to(TracedRNumber{$(T)}, x),
-                Reactant.promote_to(TracedRNumber{$(T)}, y),
+                Reactant.promote_to(TracedRNumber{C}, x),
+                Reactant.promote_to(TracedRNumber{C}, y),
             )
         end
-        function Base.:|(x::$(T1), y::TracedRNumber{<:$(T2)})
+        function Base.:|(x::A, y::TracedRNumber{B}) where {A<:$(T),B<:$(T)}  
+            C = promote_type(A, B)
             return @opcall or(
-                Reactant.promote_to(TracedRNumber{$(T)}, x),
-                Reactant.promote_to(TracedRNumber{$(T)}, y),
+                Reactant.promote_to(TracedRNumber{C}, x),
+                Reactant.promote_to(TracedRNumber{C}, y),
             )
         end
-        function Base.xor(x::TracedRNumber{<:$(T1)}, y::TracedRNumber{<:$(T2)})
+        function Base.xor(x::TracedRNumber{A}, y::TracedRNumber{B}) where {A<:$(T),B<:$(T)}
+            C = promote_type(A, B)
             return @opcall xor(
-                Reactant.promote_to(TracedRNumber{$(T)}, x),
-                Reactant.promote_to(TracedRNumber{$(T)}, y),
+                Reactant.promote_to(TracedRNumber{C}, x),
+                Reactant.promote_to(TracedRNumber{C}, y),
             )
         end
-        function Base.xor(x::TracedRNumber{<:$(T1)}, y::$(T2))
+        function Base.xor(x::TracedRNumber{A}, y::B) where {A<:$(T),B<:$(T)}  
+            C = promote_type(A, B)
             return @opcall xor(
-                Reactant.promote_to(TracedRNumber{$(T)}, x),
-                Reactant.promote_to(TracedRNumber{$(T)}, y),
+                Reactant.promote_to(TracedRNumber{C}, x),
+                Reactant.promote_to(TracedRNumber{C}, y),
             )
         end
-        function Base.xor(x::$(T1), y::TracedRNumber{<:$(T2)})
+        function Base.xor(x::A, y::TracedRNumber{B}) where {A<:$(T),B<:$(T)}  
+            C = promote_type(A, B)
             return @opcall xor(
-                Reactant.promote_to(TracedRNumber{$(T)}, x),
-                Reactant.promote_to(TracedRNumber{$(T)}, y),
+                Reactant.promote_to(TracedRNumber{C}, x),
+                Reactant.promote_to(TracedRNumber{C}, y),
             )
         end
-        Base.:!(x::TracedRNumber{<:$(T1)}) = @opcall not(x)
+        Base.:!(x::TracedRNumber{<:$(T)}) = @opcall not(x)
     end
 end
 
