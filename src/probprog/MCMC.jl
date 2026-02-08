@@ -150,3 +150,128 @@ function mcmc(
 
     return new_trace, diagnostics, traced_result
 end
+
+function mcmc_logpdf(
+    rng::AbstractRNG,
+    logdensity_fn::Function,
+    initial_position;
+    algorithm::Symbol=:NUTS,
+    inverse_mass_matrix=nothing,
+    step_size=nothing,
+    max_tree_depth::Int=10,
+    max_delta_energy::Float64=1000.0,
+    num_warmup::Int=0,
+    num_samples::Int=1,
+    thinning::Int=1,
+    adapt_step_size::Bool=true,
+    adapt_mass_matrix::Bool=true,
+    trajectory_length::Float64=2π,
+)
+    pos_size = length(initial_position)
+
+    sample_pos = TracedRArray{Float64,2}((), nothing, (1, pos_size))
+    logpdf_name = String(gensym(Symbol(logdensity_fn)))
+    TracedUtils.make_mlir_fn(
+        logdensity_fn,
+        (sample_pos,),
+        (),
+        logpdf_name,
+        false;
+        do_transpose=false,
+        args_in_result=:result,
+    )
+    logpdf_fn_attr = MLIR.IR.FlatSymbolRefAttribute(logpdf_name)
+
+    rng_args = (rng,)
+    ppf = process_probprog_function(identity, rng_args, "mcmc_logpdf")
+    (;
+        mlir_caller_args,
+        mlir_result_types,
+        traced_result,
+        linear_results,
+        fnwrapped,
+        argprefix,
+        resprefix,
+    ) = ppf
+
+    hmc_config_attr = nothing
+    nuts_config_attr = nothing
+
+    if algorithm == :HMC
+        hmc_config_attr = @ccall MLIR.API.mlir_c.enzymeHMCConfigAttrGet(
+            MLIR.IR.current_context()::MLIR.API.MlirContext,
+            trajectory_length::Float64,
+            adapt_step_size::Bool,
+            adapt_mass_matrix::Bool,
+        )::MLIR.IR.Attribute
+    elseif algorithm == :NUTS
+        nuts_config_attr = @ccall MLIR.API.mlir_c.enzymeNUTSConfigAttrGet(
+            MLIR.IR.current_context()::MLIR.API.MlirContext,
+            max_tree_depth::Int64,
+            true::Bool,
+            max_delta_energy::Float64,
+            adapt_step_size::Bool,
+            adapt_mass_matrix::Bool,
+        )::MLIR.IR.Attribute
+    else
+        error("Unknown MCMC algorithm: $algorithm. Supported: :HMC, :NUTS")
+    end
+
+    inverse_mass_matrix_val = if isnothing(inverse_mass_matrix)
+        nothing
+    else
+        TracedUtils.get_mlir_data(inverse_mass_matrix)
+    end
+    step_size_val = isnothing(step_size) ? nothing : TracedUtils.get_mlir_data(step_size)
+    initial_position_val = TracedUtils.get_mlir_data(initial_position)
+
+    collection_size = num_samples ÷ thinning
+    trace_type = MLIR.IR.TensorType([collection_size, pos_size], MLIR.IR.Type(Float64))
+    diagnostics_type = if collection_size == 1
+        MLIR.IR.TensorType(Int64[], MLIR.IR.Type(Bool))
+    else
+        MLIR.IR.TensorType([Int64(collection_size)], MLIR.IR.Type(Bool))
+    end
+
+    mcmc_op = MLIR.Dialects.enzyme.mcmc(
+        mlir_caller_args;
+        inverse_mass_matrix=inverse_mass_matrix_val,
+        step_size=step_size_val,
+        initial_position=initial_position_val,
+        trace=trace_type,
+        diagnostics=diagnostics_type,
+        output_rng_state=mlir_result_types[1],
+        logpdf_fn=logpdf_fn_attr,
+        selection=MLIR.IR.Attribute(MLIR.IR.Attribute[]),
+        all_addresses=MLIR.IR.Attribute(MLIR.IR.Attribute[]),
+        hmc_config=hmc_config_attr,
+        nuts_config=nuts_config_attr,
+        num_warmup=Int64(num_warmup),
+        num_samples=Int64(num_samples),
+        thinning=Int64(thinning),
+    )
+
+    traced_result = process_probprog_outputs(
+        mcmc_op,
+        linear_results,
+        traced_result,
+        identity,
+        rng_args,
+        fnwrapped,
+        resprefix,
+        argprefix,
+        2,
+        true,
+    )
+
+    new_trace = TracedRArray{Float64,2}(
+        (), MLIR.IR.result(mcmc_op, 1), (collection_size, pos_size)
+    )
+    diagnostics = if collection_size == 1
+        TracedRArray{Bool,0}((), MLIR.IR.result(mcmc_op, 2), ())
+    else
+        TracedRArray{Bool,1}((), MLIR.IR.result(mcmc_op, 2), (collection_size,))
+    end
+
+    return new_trace, diagnostics, traced_result
+end
