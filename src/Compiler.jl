@@ -1558,7 +1558,9 @@ function compile_mlir(f, args; kwargs...)
     end
 end
 
-function compile_mlir(ctx, f, args; client=nothing, drop_unsupported_attributes=false, kwargs...)
+function compile_mlir(
+    ctx, f, args; client=nothing, drop_unsupported_attributes=false, kwargs...
+)
     client = client !== nothing ? client : XLA.default_backend()
     backend = XLA.platform_name(client)
 
