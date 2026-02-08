@@ -34,6 +34,7 @@ Setfield = "efcf1570-3423-57d1-acb7-fd33fddbac46"
 Sockets = "6462fe0b-24de-5631-8697-dd941f90decc"
 StableRNGs = "860ef19b-820b-49d6-a774-d7a799459cd3"
 UUIDs = "cf7118a7-6976-5b1a-9a39-7adc72f591a4"
+Statistics = "10745b16-79ce-11e8-11f9-7d13ad32a3b2"
 p7zip_jll = "3f19e933-33d8-53b3-aaab-bd5110c3b7a0"
 
 [weakdeps]
@@ -45,6 +46,7 @@ FFTW = "7a1cc6ca-52ef-59f5-83cd-3a7055c09341"
 FillArrays = "1a297f60-69ca-5386-bcde-b61e274b549b"
 Float8s = "81dfefd7-55b0-40c6-a251-db853704e186"
 KernelAbstractions = "63c18a36-062a-441e-b654-da1e3ab1ce7c"
+MCMCDiagnosticTools = "be115224-59cd-429b-ad48-344e309966f0"
 MPI = "da04e1cc-30fd-572f-bb4f-1f8673147195"
 NNlib = "872c559c-99b0-510c-b3b7-b6c96a88d5cd"
 NPZ = "15e1cf62-19b3-5cfa-8e77-841668bca605"
@@ -54,12 +56,8 @@ PythonCall = "6099a3de-0909-46bc-b1f4-468b9a2dfc0d"
 Random123 = "74087812-796a-5b5d-8853-05524746bad3"
 SparseArrays = "2f01184e-e22b-5df5-ae63-d93ebab69eaf"
 SpecialFunctions = "276daf66-3868-5448-9aa4-cd146d93841b"
-Statistics = "10745b16-79ce-11e8-11f9-7d13ad32a3b2"
 YaoBlocks = "418bc28f-b43b-5e0b-a6e7-61bbc1a2c1df"
 Zygote = "e88e6eb3-aa80-5325-afca-941959d7151f"
-
-[sources]
-ReactantCore = {path = "lib/ReactantCore"}
 
 [extensions]
 ReactantAbstractFFTsExt = "AbstractFFTs"
@@ -70,6 +68,7 @@ ReactantFFTWExt = ["FFTW", "AbstractFFTs", "LinearAlgebra"]
 ReactantFillArraysExt = "FillArrays"
 ReactantFloat8sExt = "Float8s"
 ReactantKernelAbstractionsExt = "KernelAbstractions"
+ReactantMCMCDiagnosticToolsExt = "MCMCDiagnosticTools"
 ReactantMPIExt = "MPI"
 ReactantNNlibExt = ["NNlib", "Statistics"]
 ReactantNPZExt = "NPZ"
@@ -108,6 +107,7 @@ LLVM = "9.4"
 LLVMOpenMP_jll = "18.1.7"
 Libdl = "1.10"
 LinearAlgebra = "1.10"
+MCMCDiagnosticTools = "0.3.11"
 MPI = "0.20"
 NNlib = "0.9.26"
 NPZ = "0.4"
@@ -143,6 +143,9 @@ ArrayInterface = "4fba245c-0d91-5ea0-9b3e-6abc04ee57a9"
 CUDA = "052768ef-5323-5732-b1bb-66c8b64840ba"
 NNlib = "872c559c-99b0-510c-b3b7-b6c96a88d5cd"
 PythonCall = "6099a3de-0909-46bc-b1f4-468b9a2dfc0d"
+
+[sources.ReactantCore]
+path = "lib/ReactantCore"
 
 [workspace]
 projects = ["docs", "test", "benchmark"]

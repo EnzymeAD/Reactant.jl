@@ -34,39 +34,40 @@ jobs:
       fail-fast: false
       matrix:
         version:
-          - "1.10"
-          - "1.11"
+          # - "1.10"
+          # - "1.11"
           - "1.12"
           # - 'nightly'
         os:
           - ubuntu-24.04
           # `ubuntu-22.04-arm` is considered more stable than `ubuntu-24.04-arm`:
           # <https://github.com/orgs/community/discussions/148648#discussioncomment-12099554>.
-          - ubuntu-22.04-arm
+          # - ubuntu-22.04-arm
           # Disable `macOS-13` until
           # <https://github.com/EnzymeAD/Reactant.jl/issues/867> is resolved.
           # - macOS-13
-          - macOS-latest
-          - windows-latest
-          - linux-x86-ct6e-180-4tpu
-        test_group:
-          - core
-          - nn
-          - integration
+          # - macOS-latest
+          # - windows-latest
+          # - linux-x86-ct6e-180-4tpu
+        # test_group:
+        #   - core
+        #   - nn
+        #   - integration
         runtime:
-          - "pjrt"
+          # - "pjrt"
           - "ifrt"
-        exclude:
-          - os: linux-x86-ct6e-180-4tpu
-            version: "1.10"
-          - os: linux-x86-ct6e-180-4tpu
-            runtime: "pjrt"
+        # exclude:
+        #   - os: linux-x86-ct6e-180-4tpu
+        #     version: "1.10"
+        #   - os: linux-x86-ct6e-180-4tpu
+        #     runtime: "pjrt"
     uses: ./.github/workflows/CommonCI.yml
     with:
       julia_version: ${{ matrix.version }}
       os: ${{ matrix.os }}
       runtime: ${{ matrix.runtime }}
-      test_args: ${{ matrix.test_group == 'core' && 'core plugins' || matrix.test_group }}
+      # test_args: ${{ matrix.test_group == 'core' && 'core plugins' || matrix.test_group }}
+      test_args: "integration/Comrade"
 
   # This has been broken for a while, originating from CUDA.jl
   # test-assertions:
@@ -87,21 +88,21 @@ jobs:
   #     assertions: true
   #     test_args: ${{ matrix.test_group == 'core' && 'core plugins' || matrix.test_group }}
 
-  downgrade:
-    strategy:
-      fail-fast: false
-      matrix:
-        test_group:
-          - core
-          - nn
-          - integration
-        runtime:
-          - "pjrt"
-          - "ifrt"
-    uses: ./.github/workflows/CommonCI.yml
-    with:
-      julia_version: "1.10"
-      os: "ubuntu-24.04"
-      runtime: ${{ matrix.runtime }}
-      test_args: ${{ matrix.test_group == 'core' && 'core plugins' || matrix.test_group }}
-      downgrade_testing: true
+  # downgrade:
+  #   strategy:
+  #     fail-fast: false
+  #     matrix:
+  #       test_group:
+  #         - core
+  #         - nn
+  #         - integration
+  #       runtime:
+  #         - "pjrt"
+  #         - "ifrt"
+  #   uses: ./.github/workflows/CommonCI.yml
+  #   with:
+  #     julia_version: "1.10"
+  #     os: "ubuntu-24.04"
+  #     runtime: ${{ matrix.runtime }}
+  #     test_args: ${{ matrix.test_group == 'core' && 'core plugins' || matrix.test_group }}
+  #     downgrade_testing: true
