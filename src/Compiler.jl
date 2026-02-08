@@ -906,6 +906,7 @@ function optimization_passes(
         "compare_negate_const_simplify",
         "select_simplify",
         "concatenate_subtract_to_subtract_pad",
+        "concatenate_add_to_add_pad",
         "concatenate_broadcast_in_dim",
         "compare_abs",
         # "compare_mul",
