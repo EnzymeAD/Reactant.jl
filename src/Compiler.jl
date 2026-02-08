@@ -1660,7 +1660,9 @@ function compile_mlir(
 
         if drop_unsupported_attributes
             # Drop some of our attributes
-            run_pass_pipeline!(mod, "drop-unsupported-attributes", "drop_enzymexla_attributes")
+            run_pass_pipeline!(
+                mod, "drop-unsupported-attributes", "drop_enzymexla_attributes"
+            )
         end
 
         return mod, mlir_fn_res
@@ -2834,7 +2836,9 @@ macro code_hlo(args...)
     return esc(
         quote
             $MLIR.IR.@dispose $ctx = $MLIR.IR.Context($(Reactant.registry)[]) begin
-                @ccall $MLIR.API.mlir_c.RegisterDialects($ctx::$MLIR.API.MlirContext)::Cvoid
+                @ccall $MLIR.API.mlir_c.RegisterDialects(
+                    $ctx::$MLIR.API.MlirContext
+                )::Cvoid
                 $(compile_expr)
                 $mod_symbol = $(first)($(compiled))
                 try
@@ -2874,7 +2878,9 @@ macro code_mhlo(args...)
     return esc(
         quote
             $MLIR.IR.@dispose $ctx = $MLIR.IR.Context($(Reactant.registry)[]) begin
-                @ccall $MLIR.API.mlir_c.RegisterDialects($ctx::$MLIR.API.MlirContext)::Cvoid
+                @ccall $MLIR.API.mlir_c.RegisterDialects(
+                    $ctx::$MLIR.API.MlirContext
+                )::Cvoid
                 $(compile_expr)
                 $mod_symbol = $(first)($(compiled))
                 try
@@ -2914,13 +2920,15 @@ macro code_xla(args...)
     return esc(
         quote
             $MLIR.IR.@dispose $ctx = $MLIR.IR.Context($(Reactant.registry)[]) begin
-                @ccall $MLIR.API.mlir_c.RegisterDialects($ctx::$MLIR.API.MlirContext)::Cvoid
+                @ccall $MLIR.API.mlir_c.RegisterDialects(
+                    $ctx::$MLIR.API.MlirContext
+                )::Cvoid
                 $(compile_expr)
                 $(compiled)[2]
             end
         end,
-        )
-    end
+    )
+end
 
 """
     @compile [optimize = ...] [no_nan = <true/false>] [sync = <true/false>] f(args...)
@@ -2963,7 +2971,9 @@ macro compile(args...)
     return esc(
         quote
             $MLIR.IR.@dispose $ctx = $MLIR.IR.Context($(Reactant.registry)[]) begin
-                @ccall $MLIR.API.mlir_c.RegisterDialects($ctx::$MLIR.API.MlirContext)::Cvoid
+                @ccall $MLIR.API.mlir_c.RegisterDialects(
+                    $ctx::$MLIR.API.MlirContext
+                )::Cvoid
                 $(compile_expr)
                 $(compiled)
             end
