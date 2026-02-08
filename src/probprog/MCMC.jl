@@ -110,8 +110,8 @@ function mcmc(
 
     mcmc_op = MLIR.Dialects.enzyme.mcmc(
         mlir_caller_args,
-        trace_val,
-        inverse_mass_matrix_val;
+        trace_val;
+        inverse_mass_matrix=inverse_mass_matrix_val,
         step_size=step_size_val,
         trace=trace_type,
         diagnostics=diagnostics_type,
