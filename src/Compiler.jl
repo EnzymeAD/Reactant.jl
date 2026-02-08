@@ -31,6 +31,8 @@ import ..ReactantCore: correct_maybe_bcast_call
 const DEBUG_PRINT_CODEGEN = Ref(false)
 const DEBUG_DISABLE_RESHARDING = Ref(false)
 const DEBUG_ALIASED_BUFFER_ASSIGNMENT_ERROR = Ref(false)
+const DEBUG_PROBPROG_DUMP_VALUE = Ref(false)
+const DEBUG_PROBPROG_DISABLE_OPT = Ref(true)
 
 const DEBUG_BUFFER_POINTERS_STORE_DICT = Base.IdDict()
 
@@ -1444,6 +1446,16 @@ end
 # However, this errs as we cannot attach the transform with to the funcop itself [as we run a functionpass].
 const enzyme_pass::String = "enzyme{postpasses=\"arith-raise{stablehlo=true},canonicalize,cse,canonicalize,remove-unnecessary-enzyme-ops,enzyme-simplify-math,canonicalize,cse,canonicalize,arith-raise{stablehlo=true}\"}"
 
+function probprog_pass(;
+    debug_dump::Bool=DEBUG_PROBPROG_DUMP_VALUE[],
+    disable_optimizations::Bool=DEBUG_PROBPROG_DISABLE_OPT[],
+)
+    if !disable_optimizations
+        # TODO(#2063): Add probprog optimization passes
+    end
+    return "probprog{debug-dump=$debug_dump postpasses=\"arith-raise{stablehlo=true}\"}"
+end
+
 function run_pass_pipeline!(mod, pass_pipeline, key=""; enable_verifier=true)
     pm = MLIR.IR.PassManager()
     MLIR.IR.enable_verifier!(pm, enable_verifier)
@@ -2067,6 +2079,71 @@ function compile_mlir!(
                 ',',
             ),
             "no_enzyme",
+        )
+    elseif compile_options.optimization_passes === :probprog
+        run_pass_pipeline!(
+            mod,
+            join(
+                if compile_options.raise_first
+                    [
+                        "mark-func-memory-effects",
+                        opt_passes,
+                        kern,
+                        raise_passes,
+                        "enzyme-batch",
+                        opt_passes2,
+                        probprog_pass(),
+                        "lower-probprog-to-stablehlo{backend=$backend}",
+                        "outline-enzyme-regions",
+                        enzyme_pass,
+                        opt_passes2,
+                        "canonicalize",
+                        "remove-unnecessary-enzyme-ops",
+                        "enzyme-simplify-math",
+                        (
+                            if compile_options.legalize_chlo_to_stablehlo
+                                ["func.func(chlo-legalize-to-stablehlo)"]
+                            else
+                                []
+                            end
+                        )...,
+                        opt_passes2,
+                        lower_enzymexla_linalg_pass,
+                        "lower-probprog-trace-ops{backend=$backend}",
+                        jit,
+                    ]
+                else
+                    [
+                        "mark-func-memory-effects",
+                        opt_passes,
+                        "enzyme-batch",
+                        opt_passes2,
+                        probprog_pass(),
+                        "lower-probprog-to-stablehlo{backend=$backend}",
+                        "outline-enzyme-regions",
+                        enzyme_pass,
+                        opt_passes2,
+                        "canonicalize",
+                        "remove-unnecessary-enzyme-ops",
+                        "enzyme-simplify-math",
+                        (
+                            if compile_options.legalize_chlo_to_stablehlo
+                                ["func.func(chlo-legalize-to-stablehlo)"]
+                            else
+                                []
+                            end
+                        )...,
+                        opt_passes2,
+                        kern,
+                        raise_passes,
+                        lower_enzymexla_linalg_pass,
+                        "lower-probprog-trace-ops{backend=$backend}",
+                        jit,
+                    ]
+                end,
+                ",",
+            ),
+            "probprog",
         )
     elseif compile_options.optimization_passes === :only_enzyme
         run_pass_pipeline!(
