@@ -585,74 +585,74 @@ function Base.:*(x::TwicePrecision, v::TracedRNumber)
     return result
 end
 
-for T in (Bool, Integer)
+for (T1, T2) in Iterators.product((Bool, Integer), (Bool, Integer))
     @eval begin
-        function Base.:&(x::TracedRNumber{A}, y::TracedRNumber{B}) where {A<:$(T),B<:$(T)}
+        function Base.:&(x::TracedRNumber{A}, y::TracedRNumber{B}) where {A<:$(T1),B<:$(T2)}
             C = promote_type(A, B)
             return @opcall and(
                 Reactant.promote_to(TracedRNumber{C}, x),
                 Reactant.promote_to(TracedRNumber{C}, y),
             )
         end
-        function Base.:&(x::TracedRNumber{A}, y::B) where {A<:$(T),B<:$(T)}
+        function Base.:&(x::TracedRNumber{A}, y::B) where {A<:$(T1),B<:$(T2)}
             C = promote_type(A, B)
             return @opcall and(
                 Reactant.promote_to(TracedRNumber{C}, x),
                 Reactant.promote_to(TracedRNumber{C}, y),
             )
         end
-        function Base.:&(x::A, y::TracedRNumber{B}) where {A<:$(T),B<:$(T)}  
+        function Base.:&(x::A, y::TracedRNumber{B}) where {A<:$(T1),B<:$(T2)}  
             C = promote_type(A, B)
             return @opcall and(
                 Reactant.promote_to(TracedRNumber{C}, x),
                 Reactant.promote_to(TracedRNumber{C}, y),
             )
         end
-        function Base.:|(x::TracedRNumber{A}, y::TracedRNumber{B}) where {A<:$(T),B<:$(T)}
+        function Base.:|(x::TracedRNumber{A}, y::TracedRNumber{B}) where {A<:$(T1),B<:$(T2)}
             C = promote_type(A, B)
             return @opcall or(
                 Reactant.promote_to(TracedRNumber{C}, x),
                 Reactant.promote_to(TracedRNumber{C}, y),
             )
         end
-        function Base.:|(x::TracedRNumber{A}, y::B) where {A<:$(T),B<:$(T)}
+        function Base.:|(x::TracedRNumber{A}, y::B) where {A<:$(T1),B<:$(T2)}
             C = promote_type(A, B)
             return @opcall or(
                 Reactant.promote_to(TracedRNumber{C}, x),
                 Reactant.promote_to(TracedRNumber{C}, y),
             )
         end
-        function Base.:|(x::A, y::TracedRNumber{B}) where {A<:$(T),B<:$(T)}  
+        function Base.:|(x::A, y::TracedRNumber{B}) where {A<:$(T1),B<:$(T2)}  
             C = promote_type(A, B)
             return @opcall or(
                 Reactant.promote_to(TracedRNumber{C}, x),
                 Reactant.promote_to(TracedRNumber{C}, y),
             )
         end
-        function Base.xor(x::TracedRNumber{A}, y::TracedRNumber{B}) where {A<:$(T),B<:$(T)}
+        function Base.xor(x::TracedRNumber{A}, y::TracedRNumber{B}) where {A<:$(T1),B<:$(T2)}
             C = promote_type(A, B)
             return @opcall xor(
                 Reactant.promote_to(TracedRNumber{C}, x),
                 Reactant.promote_to(TracedRNumber{C}, y),
             )
         end
-        function Base.xor(x::TracedRNumber{A}, y::B) where {A<:$(T),B<:$(T)}  
+        function Base.xor(x::TracedRNumber{A}, y::B) where {A<:$(T1),B<:$(T2)}  
             C = promote_type(A, B)
             return @opcall xor(
                 Reactant.promote_to(TracedRNumber{C}, x),
                 Reactant.promote_to(TracedRNumber{C}, y),
             )
         end
-        function Base.xor(x::A, y::TracedRNumber{B}) where {A<:$(T),B<:$(T)}  
+        function Base.xor(x::A, y::TracedRNumber{B}) where {A<:$(T1),B<:$(T2)}  
             C = promote_type(A, B)
             return @opcall xor(
                 Reactant.promote_to(TracedRNumber{C}, x),
                 Reactant.promote_to(TracedRNumber{C}, y),
             )
         end
-        Base.:!(x::TracedRNumber{<:$(T)}) = @opcall not(x)
     end
 end
+Base.:!(x::TracedRNumber{<:Union{Bool, Integer}}) = @opcall not(x)
 
 function Base.literal_pow(
     ::Base.RefValue{typeof(^)}, x::TracedRNumber{T}, ::Base.RefValue{Val{P}}
