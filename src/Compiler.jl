@@ -2507,8 +2507,7 @@ function compile_mlir!(
     use_shardy_partitioner = false
     result_shardings = missing
     if is_sharded && legal_to_run_shardy_passes
-        module_op = copy(MLIR.IR.Operation(mod))
-        mod_copied = MLIR.IR.Module(module_op)
+        mod_copied = copy(mod)
 
         if compile_options.shardy_passes isa ShardyPropagationOptions
             run_pass_pipeline!(mod_copied, compile_options.shardy_passes)

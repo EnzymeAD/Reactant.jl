@@ -59,6 +59,8 @@ Views the module as a generic operation.
 """
 Operation(module_::Module) = Operation(API.mlirModuleGetOperation(module_))
 
+Base.copy(mod::Module) = Module(copy(Operation(mod)))
+
 Base.show(io::IO, module_::Module) = show(io, Operation(module_))
 
 verifyall(mod_::Module; debug=false) = verifyall(Operation(mod_); debug)
