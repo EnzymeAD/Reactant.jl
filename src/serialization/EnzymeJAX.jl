@@ -1,6 +1,6 @@
 module EnzymeJAX
 
-using ..Reactant: Reactant, Compiler, Serialization
+using ..Reactant: Reactant, Compiler, Serialization, MLIR
 
 """
     export_to_enzymejax(
@@ -81,7 +81,17 @@ import jax
 result = run_my_function(*inputs)
 ```
 """
+function export_to_enzymejax(f, args...; kwargs...)
+    MLIR.IR.@dispose ctx = MLIR.IR.Context(Reactant.registry[]) begin
+        @ccall MLIR.API.mlir_c.RegisterDialects(ctx::MLIR.API.MlirContext)::Cvoid
+        return export_to_enzymejax(
+            ctx, f, args...; kwargs..., preserve_sharding=true, compile_options=Reactant.Compiler.CompileOptions()
+        )
+    end
+end
+
 function export_to_enzymejax(
+    ctx::MLIR.IR.Context,
     f,
     args...;
     output_dir::Union{String,Nothing}=nothing,
@@ -101,16 +111,27 @@ function export_to_enzymejax(
     # Generate the StableHLO/MLIR code using compile_mlir
     # This returns compilation result with traced argument information
     argprefix = gensym("exportarg")
-    mod, mlir_fn_res = Compiler.compile_mlir(
-        f,
-        args;
-        argprefix,
-        drop_unsupported_attributes=true,
-        compile_options,
-        # to support older jax versions which don't support shardy
-        shardy_passes=:to_mhlo_shardings,
-    )
-    hlo_code = string(mod)
+
+    MLIR.IR.activate(ctx)
+    hlo_code, mlir_fn_res = try
+        mod, mlir_fn_res = Compiler.compile_mlir(
+            ctx,
+            f,
+            args;
+            argprefix,
+            drop_unsupported_attributes=true,
+            compile_options,
+            # to support older jax versions which don't support shardy
+            shardy_passes=:to_mhlo_shardings,
+        )
+        try
+            string(mod), mlir_fn_res
+        finally
+            MLIR.IR.dispose(mod)
+        end
+    finally
+        MLIR.IR.deactivate(ctx)
+    end
 
     # Save MLIR code
     fnid = 0

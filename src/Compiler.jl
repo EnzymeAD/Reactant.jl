@@ -1602,7 +1602,9 @@ function __get_compile_options_and_kwargs(;
     )
 end
 
-function compile_mlir(f, args; client=nothing, drop_unsupported_attributes=false, kwargs...)
+function compile_mlir(
+    ctx, f, args; client=nothing, drop_unsupported_attributes=false, kwargs...
+)
     client = client !== nothing ? client : XLA.default_backend()
     backend = XLA.platform_name(client)
 
@@ -1612,7 +1614,8 @@ function compile_mlir(f, args; client=nothing, drop_unsupported_attributes=false
         backend = "cpu"
     end
 
-    results = MLIR.IR.with_context() do _
+    MLIR.IR.activate!(ctx)
+    try
         mod = MLIR.IR.Module(MLIR.IR.Location())
 
         compile_options, kwargs_inner = __get_compile_options_and_kwargs(; kwargs...)
@@ -1661,6 +1664,8 @@ function compile_mlir(f, args; client=nothing, drop_unsupported_attributes=false
         end
 
         return mod, mlir_fn_res
+    finally
+        MLIR.IR.deactivate!(ctx)
     end
 
     return results
@@ -1823,6 +1828,7 @@ function compile_mlir!(
     client=nothing,
     kwargs...,
 )
+    @assert MLIR.IR.current_context() == MLIR.IR.context(mod)
     client = client !== nothing ? client : XLA.default_backend()
 
     # Explicitly don't use with_block to avoid creating a closure, which creates
@@ -2789,6 +2795,23 @@ const SYNC_DOCS = """
     recommended when benchmarking.
 """
 
+struct TextualModule
+    ir::String
+
+    function TextualModule(mod::MLIR.IR.Module)
+        io = IOBuffer()
+        show(io, mod)
+        return new(String(take!(io)))
+    end
+end
+
+Base.show(io::IO, tm::TextualModule) = print(io, tm.ir)
+Base.String(tm::TextualModule) = tm.ir
+
+function Base.convert(::Type{MLIR.IR.Module}, tm::TextualModule)
+    return parse(MLIR.IR.Module, tm.ir)
+end
+
 """
     @code_hlo [optimize = ...] [no_nan = <true/false>] f(args...)
 
@@ -2801,20 +2824,27 @@ $(COMMON_COMPILE_OPTIONS_DOCS)
 See also [`@code_xla`](@ref), [`@code_mhlo`](@ref).
 """
 macro code_hlo(args...)
-    compile_expr, (; compiled) = compile_call_expr(
+    compile_expr, (; compiled, ctx) = compile_call_expr(
         __module__,
         compile_mlir,
         merge(get_common_compile_options(), Dict{Symbol,Any}(:shardy_passes => :(:none))),
         args...,
     )
-    #! format: off
+    mod_symbol = gensym("mod")
     return esc(
-        :(
-            $(compile_expr);
-            $(first)($(compiled))
-        )
+        quote
+            $MLIR.IR.@dispose $ctx = $MLIR.IR.Context($(Reactant.registry)[]) begin
+                @ccall $MLIR.API.mlir_c.RegisterDialects($ctx::$MLIR.API.MlirContext)::Cvoid
+                $(compile_expr)
+                $mod_symbol = $(first)($(compiled))
+                try
+                    $TextualModule($mod_symbol)
+                finally
+                    $MLIR.IR.dispose($mod_symbol)
+                end
+            end
+        end,
     )
-    #! format: on
 end
 
 """
@@ -2829,7 +2859,7 @@ $(COMMON_COMPILE_OPTIONS_DOCS)
 See also [`@code_xla`](@ref), [`@code_hlo`](@ref).
 """
 macro code_mhlo(args...)
-    compile_expr, (; compiled) = compile_call_expr(
+    compile_expr, (; compiled, ctx) = compile_call_expr(
         __module__,
         compile_mlir,
         merge(
@@ -2840,14 +2870,21 @@ macro code_mhlo(args...)
         ),
         args...,
     )
-    #! format: off
+    mod_symbol = gensym("mod")
     return esc(
-        :(
-            $(compile_expr);
-            $(first)($(compiled))
-        )
+        quote
+            $MLIR.IR.@dispose $ctx = $MLIR.IR.Context($(Reactant.registry)[]) begin
+                @ccall $MLIR.API.mlir_c.RegisterDialects($ctx::$MLIR.API.MlirContext)::Cvoid
+                $(compile_expr)
+                $mod_symbol = $(first)($(compiled))
+                try
+                    $TextualModule($mod_symbol)
+                finally
+                    $MLIR.IR.dispose($mod_symbol)
+                end
+            end
+        end,
     )
-    #! format: on
 end
 
 """
@@ -2864,7 +2901,7 @@ $(COMMON_COMPILE_OPTIONS_DOCS)
 See also [`@code_mhlo`](@ref), [`@code_hlo`](@ref).
 """
 macro code_xla(args...)
-    compile_expr, (; compiled) = compile_call_expr(
+    compile_expr, (; compiled, ctx) = compile_call_expr(
         __module__,
         compile_xla,
         merge(
@@ -2873,15 +2910,17 @@ macro code_xla(args...)
         ),
         args...,
     )
-    #! format: off
+
     return esc(
-        :(
-            $(compile_expr);
-            $(compiled)[2]
+        quote
+            $MLIR.IR.@dispose $ctx = $MLIR.IR.Context($(Reactant.registry)[]) begin
+                @ccall $MLIR.API.mlir_c.RegisterDialects($ctx::$MLIR.API.MlirContext)::Cvoid
+                $(compile_expr)
+                $(compiled)[2]
+            end
+        end,
         )
-    )
-    #! format: on
-end
+    end
 
 """
     @compile [optimize = ...] [no_nan = <true/false>] [sync = <true/false>] f(args...)
@@ -2912,11 +2951,24 @@ $(COMMON_COMPILE_OPTIONS_DOCS)
 See also [`@jit`](@ref), [`@code_hlo`](@ref), [`@code_mhlo`](@ref), [`@code_xla`](@ref).
 """
 macro compile(args...)
-    default_options = merge(
-        get_common_compile_options(),
-        Dict{Symbol,Any}(:sync => false, :serializable => false),
+    compile_expr, (; compiled, ctx) = compile_call_expr(
+        __module__,
+        compile,
+        merge(
+            get_common_compile_options(),
+            Dict{Symbol,Any}(:sync => false, :serializable => false),
+        ),
+        args...,
     )
-    return esc(first(compile_call_expr(__module__, compile, default_options, args...)))
+    return esc(
+        quote
+            $MLIR.IR.@dispose $ctx = $MLIR.IR.Context($(Reactant.registry)[]) begin
+                @ccall $MLIR.API.mlir_c.RegisterDialects($ctx::$MLIR.API.MlirContext)::Cvoid
+                $(compile_expr)
+                $(compiled)
+            end
+        end,
+    )
 end
 
 """
@@ -2948,19 +3000,23 @@ See also [`@compile`](@ref), [`@code_hlo`](@ref), [`@code_mhlo`](@ref), [`@code_
 """
 macro jit(args...)
     default_options = merge(get_common_compile_options(), Dict{Symbol,Any}(:sync => false))
-    compile_expr, (; compiled, args) = compile_call_expr(
+    compile_expr, (; compiled, args, ctx) = compile_call_expr(
         __module__, compile, default_options, args...
     )
     #! format: off
     return esc(
-        :(
-            $(compile_expr);
-            $(compiled)($(args)...)
-        )
+        quote
+            $MLIR.IR.@dispose $ctx = $MLIR.IR.Context($(Reactant.registry)[]) begin
+                @ccall $MLIR.API.mlir_c.RegisterDialects($ctx::$MLIR.API.MlirContext)::Cvoid
+                $(compile_expr)
+                $(compiled)($(args)...)
+            end
+        end
     )
     #! format: on
 end
 
+# TODO remove `_mod` argument or use it
 function compile_call_expr(_mod, compiler, options::Dict, args...)
     while length(args) > 1
         option, args = args[1], args[2:end]
@@ -2974,6 +3030,7 @@ function compile_call_expr(_mod, compiler, options::Dict, args...)
     end
 
     call = only(args)
+    ctx_symbol = gensym(:ctx)
     f_symbol = gensym(:f)
     args_symbol = gensym(:args)
     kwargs_symbol = gensym(:kwargs)
@@ -3020,13 +3077,14 @@ function compile_call_expr(_mod, compiler, options::Dict, args...)
             $(args_symbol) = $(args_rhs)
             $(kwargs_symbol) = (; $(kwargs_rhs...))
             $(compiled_symbol) = $(compiler)(
+                $(ctx_symbol),
                 $(f_symbol),
                 $(args_symbol);
                 fn_kwargs=$(kwargs_symbol),
                 $(Expr.(:kw, keys(options), values(options))...),
             )
         end,
-        (; compiled=compiled_symbol, args=args_symbol),
+        (; compiled=compiled_symbol, args=args_symbol, ctx=ctx_symbol),
     )
 end
 
@@ -3849,7 +3907,15 @@ function __resolve_device_and_client(client, seen_args, linear_args, is_sharded)
     return (client, device)
 end
 
+function compile_xla(f, args; kwargs...)
+    MLIR.IR.@dispose ctx = MLIR.IR.Context(Reactant.registry[]) begin
+        @ccall MLIR.API.mlir_c.RegisterDialects(ctx::MLIR.API.MlirContext)::Cvoid
+        return compile_xla(ctx, f, args; kwargs...)
+    end
+end
+
 function compile_xla(
+    ctx,
     f,
     args;
     before_xla_optimizations::Bool=false,
@@ -3857,10 +3923,6 @@ function compile_xla(
     serializable::Bool=false,
     kwargs...,
 )
-    # register MLIR dialects
-    ctx = MLIR.IR.Context(Reactant.registry[])
-    @ccall MLIR.API.mlir_c.RegisterDialects(ctx::MLIR.API.MlirContext)::Cvoid
-
     client = client !== nothing ? client : XLA.default_backend()
     backend = XLA.platform_name(client)
 
@@ -3951,6 +4013,8 @@ function compile_xla(
             hlo_modules = length(hlo_modules) == 1 ? only(hlo_modules) : hlo_modules
         end
 
+        finalize(mod)
+
         return exec, hlo_modules, mlir_fn_res, device, client, module_string
     finally
         MLIR.IR.deactivate(ctx)
@@ -3962,10 +4026,17 @@ const __thunk_fwd_body_cache = Dict{Symbol,Expr}()
 const __thunk_rev_body_cache = Dict{Expr,Symbol}()
 
 function compile(f, args; kwargs...)
+    MLIR.IR.@dispose ctx = MLIR.IR.Context(Reactant.registry[]) begin
+        @ccall MLIR.API.mlir_c.RegisterDialects(ctx::MLIR.API.MlirContext)::Cvoid
+        return compile(ctx, f, args; kwargs...)
+    end
+end
+
+function compile(ctx, f, args; kwargs...)
     compile_options, kwargs = __get_compile_options_and_kwargs(; kwargs...)
 
     exec, _, mlir_fn_res, device, client, str = compile_xla(
-        f, args; compile_options, kwargs...
+        ctx, f, args; compile_options, kwargs...
     )
     (; linear_args, seen_args, linear_results, preserved_args, concrete_result) =
         mlir_fn_res
