@@ -12,7 +12,7 @@ function Context(registry=DialectRegistry(); threading::Bool=false)
 end
 
 """
-    dispose!(ctx::Context)
+    dispose(ctx::Context)
 
 Disposes the given context and releases its resources.
 After calling this function, the context must not be used anymore.
