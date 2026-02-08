@@ -15,7 +15,7 @@ using ..Reactant: Reactant, Compiler, Serialization, MLIR
 Export a Julia function to EnzymeJAX format for use in Python/JAX.
 
 This function:
-1. Compiles the function to StableHLO via `Reactant.@code_hlo`
+1. Compiles the function to StableHLO via `Reactant.code_hlo`
 2. Saves the MLIR/StableHLO code to a `.mlir` file
 3. Saves all input arrays to a single compressed `.npz` file (transposed to account for
    row-major vs column-major)

@@ -135,7 +135,7 @@ tensor IR.
 hlo = @code_hlo compile_options=CompileOptions(;
     disable_loop_raising_passes=false
 ) compute_attractive_force(positions_ra, masses_ra, 2.0f0)
-@assert !contains(repr(hlo), "stablehlo.while") #hide
+@assert !contains(hlo, "stablehlo.while") #hide
 hlo
 ```
 
