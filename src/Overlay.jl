@@ -8,7 +8,13 @@
     return f
 end
 
-@reactant_overlay function Base._return_type(t::DataType, world::UInt)
+@reactant_overlay function Core.Compiler.return_type(@nospecialize(f), t::DataType)
+    world = ccall(:jl_get_tls_world_age, UInt, ())
+    args = Any[_return_type, ReactantInterpreter(; world), Tuple{Core.Typeof(f), t.parameters...}]
+    return ccall(:jl_call_in_typeinf_world, Any, (Ptr{Ptr{Cvoid}}, Cint), args, length(args))
+end
+
+@reactant_overlay function Core.Compiler.return_type(t::DataType, world::UInt)
     return call_with_native(Base._return_type, ReactantInterpreter(; world), t)
 end
 
