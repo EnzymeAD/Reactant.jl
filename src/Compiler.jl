@@ -639,10 +639,13 @@ function create_result(
 
         for (k, v) in pairs(tocopy)
             subexpr = create_result(v, append_path(path, k), args...)
+            # symbol keys must be quoted in generated code; otherwise
+            # they are interpreted as variable references
+            k_expr = k isa Symbol ? QuoteNode(k) : k
             push!(
                 resultgen_code,
                 quote
-                    @inbounds $sym[$k] = $subexpr
+                    @inbounds $sym[$k_expr] = $subexpr
                 end,
             )
         end
