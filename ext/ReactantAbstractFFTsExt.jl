@@ -155,7 +155,9 @@ for op in (:rfft, :fft, :ifft)
     end
     @eval $(plan_name){T}(dims) where {T} = $(plan_name){T,typeof(dims)}(dims)
 
-    @eval function AbstractFFTs.$(plan_f)(x::AnyTracedRArray{T}, dims=1:ndims(x)) where {T}
+    @eval function AbstractFFTs.$(plan_f)(
+        x::AnyTracedRArray{T}, dims=1:ndims(x); _kwargs...
+    ) where {T}
         return $(plan_name){T,typeof(dims)}(dims)
     end
 
