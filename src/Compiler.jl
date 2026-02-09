@@ -1614,7 +1614,7 @@ function compile_mlir(
         backend = "cpu"
     end
 
-    MLIR.IR.activate!(ctx)
+    MLIR.IR.activate(ctx)
     try
         mod = MLIR.IR.Module(MLIR.IR.Location())
 
@@ -1667,7 +1667,7 @@ function compile_mlir(
 
         return mod, mlir_fn_res
     finally
-        MLIR.IR.deactivate!(ctx)
+        MLIR.IR.deactivate(ctx)
     end
 
     return results
