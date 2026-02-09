@@ -1141,7 +1141,7 @@ function elem_apply_via_while_loop(f, args::Vararg{Any,Nargs}) where {Nargs}
     # TODO: perhaps instead of this logic, we should have
     # `similar(::TracedRArray, TracedRNumber{T}) where T = similar(::TracedRArray, T)`
     # and just not unwrap here?
-    T_res = typeof(res_tmp) <: TracedRNumber ? unwrapped_eltype(res_tmp) : typeof(res_tmp)
+    T_res = typeof(res_tmp) <: TracedRNumber ? Reactant.unwrapped_eltype(res_tmp) : typeof(res_tmp)
     result = similar(first(flat_args), T_res, L)
 
     ind_var = Ref(0)
