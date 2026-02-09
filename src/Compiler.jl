@@ -1742,6 +1742,7 @@ function compile_mlir!(
     f,
     args,
     compile_options::CompileOptions,
+    debugcache=default_debugcache(),
     callcache=default_callcache(),
     sdycache=default_sdycache(),
     sdygroupidcache=default_sdygroupidcache();
@@ -1760,6 +1761,7 @@ function compile_mlir!(
     MLIR.IR.activate!(mod)
     MLIR.IR.activate!(MLIR.IR.body(mod))
     activate_callcache!(callcache)
+    activate_debugcache!(debugcache)
     activate_sdycache!(sdycache)
     activate_sdygroupidcache!(sdygroupidcache)
 
@@ -1790,6 +1792,7 @@ function compile_mlir!(
         deactivate_sdycache!(sdycache)
         deactivate_sdygroupidcache!(sdygroupidcache)
         deactivate_callcache!(callcache)
+        deactivate_debugcache!(debugcache)
         MLIR.IR.deactivate!(MLIR.IR.body(mod))
         clear_llvm_compiler_cache!(mod)
         release_guard_from_gc_for_module(mod)
@@ -4076,7 +4079,7 @@ function register_thunk(
     )
 end
 
-for cache_type in (:callcache, :sdycache, :sdygroupidcache)
+for cache_type in (:callcache, :sdycache, :sdygroupidcache, :debugcache)
     activate_fn = Symbol(:activate_, cache_type, :!)
     deactivate_fn = Symbol(:deactivate_, cache_type, :!)
     has_fn = Symbol(:_has_, cache_type)
@@ -4146,6 +4149,15 @@ function default_callcache()
             resargprefix::Symbol,
         }
     }()
+end
+
+function default_debugcache()
+    return Vector{
+        @NamedTuple{
+            f_name::String,
+	    file::String,
+	    line::Int64
+        }}(undef, 0)
 end
 
 # Since we cache these objects we cannot cache data containing MLIR operations (e.g. the entry must be a string

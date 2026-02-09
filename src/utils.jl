@@ -639,6 +639,37 @@ function Base.showerror(io::IO, ece::ReactantPrecompilationException)
     )
 end
 
+
+function traced_mi(mi)
+    spec = mi.specTypes.parameters
+    ft = spec[1]
+    arg_types_param = spec[2:end]
+    f_is_function = false
+    kwargs = []
+    if ft === typeof(Core.kwcall) && length(arg_types_param) >= 2 && arg_types_param[1] <: NamedTuple
+        ft = arg_types_param[2]
+        kwt = arg_types_param[1]
+        arg_types_param = arg_types_param[3:end]
+        keys = kwt.parameters[1]::Tuple
+        kwargs = Any[(keys[i], fieldtype(kwt, i)) for i in eachindex(keys)]
+    end
+
+    Base.sprint() do io
+	Base.show_signature_function(io, ft)
+    	Base.show_tuple_as_call(io, :function, Tuple{arg_types_param...}; hasfirst=false, kwargs = isempty(kwargs) ? nothing : kwargs)
+    end
+end
+
+function push_debug_stack!(fname::String, file::String, line::Int64)
+    push!(Reactant.Compiler.debugcache(), (; f_name=fname, file=file, line=line))
+    return nothing
+end
+
+function pop_debug_stack!()
+    pop!(Reactant.Compiler.debugcache())
+    return nothing
+end
+
 # Generator function which ensures that all calls to the function are executed within the ReactantInterpreter
 # In particular this entails two pieces:
 #   1) We enforce the use of the ReactantInterpreter method table when generating the original methodinstance
@@ -956,7 +987,53 @@ function call_llvm_generator(
                         LLVM.bitcast!(builder, g, LLVM.PointerType(jlvaluet)),
                     )
                 end
+
+                profile_julia_fns = Any[
+		    push_debug_stack!,
+		    pop_debug_stack!
+                ]
+
+                profile_llvm_fns = LLVM.Value[]
+                for f in profile_julia_fns
+                    gval = LLVM.load!(
+                        builder,
+                        jlvaluet,
+                        LLVM.gep!(
+                            builder,
+                            jlvaluet,
+                            args[4],
+                            LLVM.Value[LLVM.ConstantInt(length(globals))],
+                        ),
+                    )
+                    push!(
+                        globals,
+                        f,
+                    )
+                    push!(profile_llvm_fns, gval)
+                end
+
+                stringv = traced_mi(mi)
+    
+                fname = LLVM.globalstring_ptr!(builder, stringv, "mi_name")
+
+		m = mi.def
+
+    		tv, decls, file, line = Base.arg_decl_parts(m)
+                file = LLVM.globalstring_ptr!(builder, file, "mi_file")
+
+                jl_cstr_to_string, FT = Enzyme.Compiler.get_function!(llvm_module, "jl_cstr_to_string", LLVM.FunctionType(jlvaluet, [LLVM.PointerType(LLVM.IntType(8))]))
+                fname = LLVM.call!(builder, FT, jl_cstr_to_string, [fname])
+                
+		file = LLVM.call!(builder, FT, jl_cstr_to_string, [file])
+		
+		line = Enzyme.Compiler.emit_box_int64!(builder, LLVM.ConstantInt(Int64(line)))
+
+                Enzyme.Compiler.emit_apply_generic!(builder, LLVM.Value[profile_llvm_fns[1], fname, file, line])
+
                 res = LLVM.call!(builder, LLVM.function_type(p.entry), p.entry, args[1:3])
+
+                Enzyme.Compiler.emit_apply_generic!(builder, LLVM.Value[profile_llvm_fns[2]])
+
                 LLVM.ret!(builder, res)
                 push!(
                     LLVM.function_attributes(wrapper_f),
@@ -964,7 +1041,7 @@ function call_llvm_generator(
                 )
 
                 LLVM.run!(LLVM.GlobalOptPass(), llvm_module)
-
+                    
                 # Required for windows
                 for f in LLVM.functions(llvm_module)
                     if isempty(LLVM.blocks(f))
