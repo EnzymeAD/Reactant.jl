@@ -2728,8 +2728,10 @@ REACTANT_ABI void distributed_runtime_service_shutdown(
 #pragma region Shardy
 
 REACTANT_ABI xla::HloSharding *
-hloShardingFromTensorShardingAttr(mlir::sdy::TensorShardingAttr attr,
-                                  mlir::sdy::MeshAttr meshAttr) {
+hloShardingFromTensorShardingAttr(MlirAttribute cattr,
+                                  MlirAttribute cmeshAttr) {
+  auto attr = mlir::cast<mlir::sdy::TensorShardingAttr>(unwrap(cattr));
+  auto meshAttr = mlir::cast<mlir::sdy::MeshAttr>(unwrap(cmeshAttr));
   mlir::ArrayRef<mlir::StringAttr> manual_axes = {};
   std::function<mlir::sdy::MeshAttr(mlir::sdy::TensorShardingAttr)>
       get_mesh_attr = [meshAttr](mlir::sdy::TensorShardingAttr local_attr) {
