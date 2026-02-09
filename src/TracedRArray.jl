@@ -285,7 +285,9 @@ function Base.copy(bc::Broadcasted{<:AbstractReactantArrayStyle})
         res = fn(map(first_scalar, bc.args)...)
         ElType = Core.Typeof(res)
     end
-    @assert ElType != Any && ElType != Union{}
+    if ElType == Any || ElType == Union{}
+        throw(AssertionError("Failed to deduce eltype of broadcast of $fn, found $ElType"))
+    end
     sim = similar(bc, ElType)
     return copyto!(sim, bc)
 end
