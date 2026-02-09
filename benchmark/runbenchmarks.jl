@@ -1,51 +1,65 @@
+# Main Benchmark Runner
+# This script orchestrates running all benchmarks across subdirectories and aggregates results.
+
 using InteractiveUtils: versioninfo
 using PrettyTables: pretty_table
-using Reactant: Reactant
 using JSON3: JSON3
-using PrettyTables: pretty_table
 
 @info sprint(io -> versioninfo(io; verbose=true))
 
-# To run benchmarks on a specific backend
+# Determine backend from environment
 BENCHMARK_GROUP = get(ENV, "BENCHMARK_GROUP", nothing)
 
+if BENCHMARK_GROUP === nothing
+    # Try to auto-detect from devices
+    # Load Reactant just to check the default backend
+    using Reactant: Reactant
+    BENCHMARK_GROUP = String(split(string(first(Reactant.devices())), ":")[1])
+end
+
 if BENCHMARK_GROUP == "CUDA"
-    Reactant.set_default_backend("gpu")
     @info "Running CUDA benchmarks" maxlog = 1
 elseif BENCHMARK_GROUP == "TPU"
-    Reactant.set_default_backend("tpu")
+    @info "Running TPU benchmarks" maxlog = 1
 elseif BENCHMARK_GROUP == "CPU"
-    Reactant.set_default_backend("cpu")
     @info "Running CPU benchmarks" maxlog = 1
 else
-    BENCHMARK_GROUP = String(split(string(first(Reactant.devices())), ":")[1])
     @info "Running $(BENCHMARK_GROUP) benchmarks" maxlog = 1
 end
 
-@assert BENCHMARK_GROUP in ("CPU", "CUDA", "TPU")
+@assert BENCHMARK_GROUP in ("CPU", "CUDA", "TPU") "Unknown backend: $(BENCHMARK_GROUP)"
 
-# Main benchmark files
+# Main benchmark orchestration
 include("setup.jl")
 
-results = run_benchmarks(BENCHMARK_GROUP)
+results = run_all_benchmarks(BENCHMARK_GROUP)
 
-table = Matrix{Any}(undef, length(results), 5)
-for (i, (k, v)) in enumerate(sort(results))
-    i1, i2, i3, i4 = rsplit(k, "/"; limit=4)
-    table[i, 1] = i1
-    table[i, 2] = i2
-    table[i, 3] = i3
-    table[i, 4] = i4
-    table[i, 5] = v
+# Display results in a table
+if !isempty(results)
+    table = Matrix{Any}(undef, length(results), 5)
+    for (i, (k, v)) in enumerate(sort(results))
+        parts = rsplit(k, "/"; limit=4)
+        # Fill in parts, padding with empty strings if fewer than 4 parts
+        while length(parts) < 4
+            push!(parts, "")
+        end
+        i1, i2, i3, i4 = parts[1], parts[2], parts[3], parts[4]
+        table[i, 1] = i1
+        table[i, 2] = i2
+        table[i, 3] = i3
+        table[i, 4] = i4
+        table[i, 5] = v
+    end
+
+    pretty_table(
+        table;
+        alignment=[:l, :l, :l, :l, :c],
+        column_labels=["Benchmark", "Mode", "Backend", "Passes", "Time (s)"],
+        display_size=(-1, -1),
+    )
 end
 
-pretty_table(
-    table;
-    alignment=[:l, :l, :l, :l, :c],
-    column_labels=["Benchmark", "Mode", "Backend", "Passes", "Time (s)"],
-    display_size=(-1, -1),
-)
-
+# Save aggregated results
 filepath = joinpath(dirname(@__FILE__), "results")
 mkpath(filepath)
 filename = string(BENCHMARK_GROUP, "benchmarks.json")
@@ -61,4 +75,15 @@ open(joinpath(filepath, filename), "w") do io
     return JSON3.pretty(io, JSON3.write(standardized_results))
 end
 
-@info "Saved results to $(joinpath(filepath, filename))"
+@info "Saved $(length(results)) results to $(joinpath(filepath, filename))"
+
+# Also aggregate any results saved by individual subdirectories
+@info "Aggregating results from subdirectories..."
+subdirectory_results = aggregate_saved_results(dirname(@__FILE__))
+if !isempty(subdirectory_results)
+    combined_filename = string(BENCHMARK_GROUP, "_combined_benchmarks.json")
+    open(joinpath(filepath, combined_filename), "w") do io
+        return JSON3.pretty(io, JSON3.write(subdirectory_results))
+    end
+    @info "Saved $(length(subdirectory_results)) combined results to $(joinpath(filepath, combined_filename))"
+end
