@@ -8,4 +8,4 @@ PrettyTables = "3"
 julia = "1.11"
 
 [workspace]
-projects = ["nn", "misc", "polybench"]
+projects = ["nn", "misc", "polybench", "oceananigans"]
