@@ -110,6 +110,7 @@ end
             ),
             ignore=(
                 Reactant.Proto,
+                Reactant.MLIR.IR,
                 :p7zip,
                 :ShardyPropagationOptions,
                 :OneOf,
