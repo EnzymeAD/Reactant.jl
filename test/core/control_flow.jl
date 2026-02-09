@@ -707,8 +707,8 @@ end
     @test for_no_track_numbers_ra(x_ra, n_ra) == for_no_track_numbers(x, n)
 
     ir = @code_hlo optimize = "enzyme-batch" for_no_track_numbers(x_ra, n_ra)
-    @test contains(ir, "enzyme.disable_mincut")
-    @test contains(ir, "enzymexla.enable_checkpointing")
+    @test contains(repr(ir), "enzyme.disable_mincut")
+    @test contains(repr(ir), "enzymexla.enable_checkpointing")
 end
 
 _call1(a, b) = a
@@ -949,7 +949,7 @@ end
 
         MLIR.IR.@dispose ctx = Reactant.ReactantContext() begin
             ir = Reactant.code_hlo(
-                ctx, func_with_kwargs, (a_ra,); optimize=false; fn_kwargs=(; y=2.0f0)
+                ctx, func_with_kwargs, (a_ra,); optimize=false, fn_kwargs=(; y=2.0f0)
             )
             func_names = [
                 String(Reactant.MLIR.IR.getattr(op, "sym_name")) for

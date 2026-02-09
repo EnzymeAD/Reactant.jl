@@ -1,7 +1,7 @@
 using Reactant: MLIR
 
 @testset "inject" begin
-    mod = MLIR.IR.with_context() do ctx
+    MLIR.IR.with_context() do ctx
         mod = MLIR.IR.Module()
 
         MLIR.IR.with_module(mod) do
@@ -26,9 +26,9 @@ using Reactant: MLIR
             )
         end
 
-        return mod
-    end
+        mod_op = MLIR.IR.Operation(mod)
+        @test MLIR.API.mlirOperationVerify(mod_op)
 
-    mod_op = MLIR.IR.Operation(mod)
-    @test MLIR.API.mlirOperationVerify(mod_op)
+        MLIR.IR.dispose(mod)
+    end
 end
