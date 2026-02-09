@@ -35,30 +35,30 @@ end
 
 testsuite = find_tests(@__DIR__)
 
-if filter_tests!(testsuite, parsed_args)
-    delete!(testsuite, "plugins/metal") # Currently completely non functional
+filter_tests!(testsuite, parsed_args)
 
-    if Sys.isapple()
-        delete!(testsuite, "core/custom_number_types")
-        delete!(testsuite, "integration/enzymejax")
-    end
+delete!(testsuite, "plugins/metal") # Currently completely non functional
 
-    # Zygote is not supported on 1.12 https://github.com/FluxML/Zygote.jl/issues/1580
-    if VERSION ≥ v"1.12-"
-        delete!(testsuite, "integration/zygote")
-    end
+if Sys.isapple()
+    delete!(testsuite, "core/custom_number_types")
+    delete!(testsuite, "integration/enzymejax")
+end
 
-    # This is run in a special way
-    delete!(testsuite, "integration/mpi")
-    delete!(testsuite, "core/qa")
+# Zygote is not supported on 1.12 https://github.com/FluxML/Zygote.jl/issues/1580
+if VERSION ≥ v"1.12-"
+    delete!(testsuite, "integration/zygote")
+end
 
-    if !ENZYMEJAX_INSTALLED[]
-        delete!(testsuite, "integration/enzymejax")
-    end
+# This is run in a special way
+delete!(testsuite, "integration/mpi")
+delete!(testsuite, "core/qa")
 
-    if !NUMPYRO_INSTALLED[]
-        delete!(testsuite, "integration/numpyro")
-    end
+if !ENZYMEJAX_INSTALLED[]
+    delete!(testsuite, "integration/enzymejax")
+end
+
+if !NUMPYRO_INSTALLED[]
+    delete!(testsuite, "integration/numpyro")
 end
 
 if Reactant.Accelerators.TPU.has_tpu() || BACKEND == "tpu"
