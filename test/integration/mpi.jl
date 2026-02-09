@@ -302,6 +302,69 @@ end
     end
 end
 
+# Works when we wait between a sequence of requests. 
+# Note: copy pasted from above, so the problem above probably isn't a dumb typo in the test 
+# script at least
+@testset "Isend / Irecv! / Waitall" begin
+    comm = MPI.COMM_WORLD
+    rank = MPI.Comm_rank(comm)
+    tag = 42
+
+    for T in datatypes
+        # NOTE: currently don't allow a request to cross the compile boundary
+        function waitall(send_buf, recv_buf)
+            if rank == 0
+                dest = 1
+                src = 1
+
+                reqs = Reactant.TracedRNumber[]
+
+                req = MPI.Isend(send_buf, dest, tag+1, comm)
+                push!(reqs, req)
+
+                reqs = vcat(reqs...)
+                MPI.Waitall(reqs)
+
+                reqs = Reactant.TracedRNumber[]
+
+                req = MPI.Irecv!(recv_buf, src, tag-1, comm)
+                push!(reqs, req)
+
+                reqs = vcat(reqs...)
+                MPI.Waitall(reqs)
+            elseif rank == 1
+                dest = 0
+                src = 0
+
+                reqs = Reactant.TracedRNumber[]
+
+                req = MPI.Isend(send_buf, dest, tag-1, comm)
+                push!(reqs, req)
+
+                reqs = vcat(reqs...)
+                MPI.Waitall(reqs)
+
+                reqs = Reactant.TracedRNumber[]
+
+                req = MPI.Irecv!(recv_buf, src, tag+1, comm)
+                push!(reqs, req)
+
+                reqs = vcat(reqs...)
+                MPI.Waitall(reqs)
+            end
+        end
+
+        send_buf = ConcreteRArray(ones(T, 5))
+        recv_buf = ConcreteRArray(zeros(T, 5))
+        
+        @jit waitall(send_buf, recv_buf)
+        # rank==0 && println(@code_hlo optimize="lower-enzymexla-mpi{backend=cpu}" waitall(send_buf, recv_buf))
+
+        @test recv_buf == send_buf
+        println("rank = $rank, recv_buf = $recv_buf")
+    end
+end
+
 # @testset "Isend / Irecv! / Waitall" begin
 #     comm = MPI.COMM_WORLD
 #     rank = MPI.Comm_rank(comm)
