@@ -123,14 +123,24 @@ end
     # calling `stacktrace` can add a lot of time overhead, so let's avoid adding debug info if not used
     if !DEBUG_MODE[]
         init = MLIR.IR.Location(name, MLIR.IR.Location(file, line, 0))
-	res = init
+	res = nothing
 	if Reactant.Compiler._has_debugcache()
-		for stackframe in Base.reverse(Reactant.Compiler.debugcache())
-			res = MLIR.IR.Location(res, MLIR.IR.Location(
-			    string(stackframe.f_name), MLIR.IR.Location(stackframe.file, stackframe.line, 0)
-			    ))
+		for stackframe in Reactant.Compiler.debugcache()
+			cur = MLIR.IR.Location(
+                            string(stackframe.f_name), MLIR.IR.Location(stackframe.file, stackframe.line, 0)
+                            )
+			if res === nothing
+			   res = cur
+			else
+			   res = MLIR.IR.Location(cur, res)
+			end
 		end
 	end
+			if res === nothing
+			   res = init
+			else
+			   res = MLIR.IR.Location(init, res)
+			end
 	    return res
     end
 
