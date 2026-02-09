@@ -56,22 +56,24 @@ function export_as_saved_model(
                     NUMPY_SIMPLE_TYPES[MLIR.IR.julia_type(eltype(MLIR.IR.input(ftype, i)))],
                 ) for i in 1:MLIR.IR.ninputs(ftype)
             ]
-        
+
             output_signature = [
                 VariableSignature(
                     collect(Int64, size(MLIR.IR.result(ftype, i))),
-                    NUMPY_SIMPLE_TYPES[MLIR.IR.julia_type(eltype(MLIR.IR.result(ftype, i)))],
+                    NUMPY_SIMPLE_TYPES[MLIR.IR.julia_type(
+                        eltype(MLIR.IR.result(ftype, i))
+                    )],
                 ) for i in 1:MLIR.IR.nresults(ftype)
             ]
-        
+
             if isempty(input_locations)
                 input_locations = [InputArgument(i) for i in 1:length(input_signature)]
             end
-        
+
             @assert length(input_locations) == length(input_signature) "The number of input \
                                                                         locations must match the \
                                                                         number of input signatures."
-        
+
             c_print_callback = @cfunction(
                 MLIR.IR.print_callback, Cvoid, (MLIR.API.MlirStringRef, Any)
             )
@@ -83,7 +85,7 @@ function export_as_saved_model(
             )
             MLIR.IR.isfailure(result) && throw("Couldn't serialize the module")
             serialized_module = codeunits(String(take!(ref[])))
-        
+
             return to_tf_saved_model(
                 ReactantFunctionSpec(
                     input_signature,
@@ -98,8 +100,6 @@ function export_as_saved_model(
             MLIR.IR.deactivate(ctx)
         end
     end
-
-
 end
 
 function to_tf_saved_model(fn_spec::ReactantFunctionSpec, path::String)
