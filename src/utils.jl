@@ -661,12 +661,12 @@ function traced_mi(mi)
 end
 
 function push_debug_stack!(fname::String, file::String, line::Int64)
-    push!(Reactant.Compiler.debugcache(), (; f_name=fname, file=file, line=line))
+    push!(Compiler.debugcache(), (; f_name=fname, file=file, line=line))
     return nothing
 end
 
 function pop_debug_stack!()
-    pop!(Reactant.Compiler.debugcache())
+    pop!(Compiler.debugcache())
     return nothing
 end
 
