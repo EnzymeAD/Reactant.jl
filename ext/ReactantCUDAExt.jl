@@ -1275,6 +1275,7 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
         fn=MLIR.IR.FlatSymbolRefAttribute(sym_name),
         output_operand_aliases=MLIR.IR.Attribute(output_operand_aliases),
         xla_side_effect_free=MLIR.IR.UnitAttribute(),
+	location=Reactant.Ops.mlir_stacktrace("enzymexla.kernel_call", @__FILE__, @__LINE__)
     )
 
     argidx = 1
@@ -1476,6 +1477,12 @@ end
         Reactant.XLA.free_client(client)
         Reactant.deinitialize_dialect()
     end
+end
+
+function __init__()
+    # Required to unbreak with_profile
+    delete!(ENV, "NVTX_INJECTION64_PATH")
+    return nothing
 end
 
 end # module ReactantCUDAExt

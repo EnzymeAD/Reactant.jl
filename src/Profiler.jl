@@ -647,9 +647,14 @@ struct FlopsSummary
     UncappedFlops::Float64
     RawFlops::Float64
     BF16Flops::Float64
+    RawTime::Float64  # picoseconds
 end
 
 function _show_with_indent(io, summary::FlopsSummary, indent=0)
+    rawtime_s = summary.RawTime * 1e-12
+    rawflops_rate = summary.RawFlops / rawtime_s
+    bf16flops_rate = summary.BF16Flops / rawtime_s
+
     print(io, "    "^indent * "Flops = $(summary.Flops), ")
     Base.printstyled(
         " # [flops / (peak flops * program time)], capped at 1.0\n"; color=:light_black
@@ -662,6 +667,12 @@ function _show_with_indent(io, summary::FlopsSummary, indent=0)
         " # Total FLOPs Normalized to the bf16 (default) devices peak bandwidth\n";
         color=:light_black,
     )
+    print(io, "    "^indent * "RawTime = $(_timestr(rawtime_s * 1e9))s, ")
+    Base.printstyled(" # Raw time in seconds\n"; color=:light_black)
+    print(io, "    "^indent * "RawFlopsRate = $(rawflops_rate), ")
+    Base.printstyled(" # Raw FLOPs rate in FLOPs/seconds\n"; color=:light_black)
+    print(io, "    "^indent * "BF16FlopsRate = $(bf16flops_rate), ")
+    Base.printstyled(" # BF16 FLOPs rate in FLOPs/seconds\n"; color=:light_black)
     return nothing
 end
 
@@ -682,6 +693,7 @@ function get_aggregate_flops_statistics(xplane_file::String, nrepeat::Int)
         data[:byProgram][:metrics][:uncappedFlops],
         data[:byProgram][:metrics][:rawFlops] / nrepeat,
         data[:byProgram][:metrics][:bf16Flops] / nrepeat,
+        data[:byProgram][:metrics][:rawTime] / nrepeat,
     )
 end
 
@@ -762,6 +774,13 @@ function profile_thunk_with_xprof(
         ),
         xplane_file,
     )
+end
+
+function load_xplane_file(xplane_file::String; nrepeat::Int=1, compile_time_ns::Int64=0)
+    memory_data = get_aggregate_memory_statistics(xplane_file)
+    flops_data = get_aggregate_flops_statistics(xplane_file, nrepeat)
+    runtime_ns = extract_mean_step_time(xplane_file, nrepeat)
+    return AggregateProfilingResult(runtime_ns, compile_time_ns, memory_data, flops_data)
 end
 
 function _extract_kwargs_from_expr(args...)

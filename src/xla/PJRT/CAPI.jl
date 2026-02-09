@@ -3903,10 +3903,12 @@ struct PJRT_Triton_Compile_Args
     out_asm::Cstring
     out_asm_size::Csize_t
     out_smem_bytes::Int64
+    out_path::Cstring
+    out_path_size::Csize_t
 end
 
 @cenum __JL_Ctag_1828::UInt32 begin
-    PJRT_Triton_Compile_Args_STRUCT_SIZE = 0x0000000000000050
+    PJRT_Triton_Compile_Args_STRUCT_SIZE = 0x0000000000000060
 end
 
 # typedef PJRT_Error * PJRT_Triton_Compile ( PJRT_Triton_Compile_Args * args )
@@ -3951,4 +3953,4 @@ const PJRT_API_STREAM_EXTENSION_VERSION = 0
 
 const PJRT_API_TPU_TOPOLOGY_EXTENSION_VERSION = 1
 
-const PJRT_API_TRITON_EXTENSION_VERSION = 1
+const PJRT_API_TRITON_EXTENSION_VERSION = 2

@@ -14,84 +14,6 @@ import ..Dialects: operandsegmentsizes, resultsegmentsizes
 import ...API
 
 """
-`addRetvalToTrace`
-
-Add the function\'s return value(s) into the execution trace.
-"""
-function addRetvalToTrace(
-    trace::Value, retval::Vector{Value}; updated_trace::IR.Type, location=Location()
-)
-    op_ty_results = IR.Type[updated_trace,]
-    operands = Value[trace, retval...]
-    owned_regions = Region[]
-    successors = Block[]
-    attributes = NamedAttribute[]
-
-    return create_operation(
-        "enzyme.addRetvalToTrace",
-        location;
-        operands,
-        owned_regions,
-        successors,
-        attributes,
-        results=op_ty_results,
-        result_inference=false,
-    )
-end
-
-"""
-`addSampleToTrace`
-
-Add a sampled value into the execution trace.
-"""
-function addSampleToTrace(
-    trace::Value, sample::Vector{Value}; updated_trace::IR.Type, symbol, location=Location()
-)
-    op_ty_results = IR.Type[updated_trace,]
-    operands = Value[trace, sample...]
-    owned_regions = Region[]
-    successors = Block[]
-    attributes = NamedAttribute[NamedAttribute("symbol", symbol),]
-
-    return create_operation(
-        "enzyme.addSampleToTrace",
-        location;
-        operands,
-        owned_regions,
-        successors,
-        attributes,
-        results=op_ty_results,
-        result_inference=false,
-    )
-end
-
-"""
-`addSubtrace`
-
-Insert a subtrace into a parent trace.
-"""
-function addSubtrace(
-    subtrace::Value, trace::Value; updated_trace::IR.Type, symbol, location=Location()
-)
-    op_ty_results = IR.Type[updated_trace,]
-    operands = Value[subtrace, trace]
-    owned_regions = Region[]
-    successors = Block[]
-    attributes = NamedAttribute[NamedAttribute("symbol", symbol),]
-
-    return create_operation(
-        "enzyme.addSubtrace",
-        location;
-        operands,
-        owned_regions,
-        successors,
-        attributes,
-        results=op_ty_results,
-        result_inference=false,
-    )
-end
-
-"""
 `addTo`
 
 TODO
@@ -105,32 +27,6 @@ function addTo(values::Vector{Value}; location=Location())
 
     return create_operation(
         "enzyme.addTo",
-        location;
-        operands,
-        owned_regions,
-        successors,
-        attributes,
-        results=op_ty_results,
-        result_inference=false,
-    )
-end
-
-"""
-`addWeightToTrace`
-
-Add the aggregated log-probability weight to the execution trace.
-"""
-function addWeightToTrace(
-    trace::Value, weight::Value; updated_trace::IR.Type, location=Location()
-)
-    op_ty_results = IR.Type[updated_trace,]
-    operands = Value[trace, weight]
-    owned_regions = Region[]
-    successors = Block[]
-    attributes = NamedAttribute[]
-
-    return create_operation(
-        "enzyme.addWeightToTrace",
         location;
         operands,
         owned_regions,
@@ -399,19 +295,25 @@ function dump(value::Value; output::IR.Type, label, location=Location())
 end
 
 """
-`dynamic_extract`
+`dynamic_slice`
 
-Extracts a slice at the specified dynamic index along the first dimension.
+Extract a slice from a tensor at dynamic start indices.
 """
-function dynamic_extract(input::Value, index::Value; result::IR.Type, location=Location())
+function dynamic_slice(
+    operand::Value,
+    start_indices::Vector{Value};
+    result::IR.Type,
+    slice_sizes,
+    location=Location(),
+)
     op_ty_results = IR.Type[result,]
-    operands = Value[input, index]
+    operands = Value[operand, start_indices...]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[]
+    attributes = NamedAttribute[NamedAttribute("slice_sizes", slice_sizes),]
 
     return create_operation(
-        "enzyme.dynamic_extract",
+        "enzyme.dynamic_slice",
         location;
         operands,
         owned_regions,
@@ -423,21 +325,25 @@ function dynamic_extract(input::Value, index::Value; result::IR.Type, location=L
 end
 
 """
-`dynamic_update`
+`dynamic_update_slice`
 
-Returns a new tensor with the slice at the specified dynamic index replaced.
+Update a slice in a tensor at dynamic start indices.
 """
-function dynamic_update(
-    input::Value, index::Value, value::Value; result::IR.Type, location=Location()
+function dynamic_update_slice(
+    operand::Value,
+    update::Value,
+    start_indices::Vector{Value};
+    result::IR.Type,
+    location=Location(),
 )
     op_ty_results = IR.Type[result,]
-    operands = Value[input, index, value]
+    operands = Value[operand, update, start_indices...]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
 
     return create_operation(
-        "enzyme.dynamic_update",
+        "enzyme.dynamic_update_slice",
         location;
         operands,
         owned_regions,
@@ -577,12 +483,11 @@ end
 """
 `generate`
 
-Generate an execution trace and weight from a probabilistic function.
-If a `constraint` dict is provided AND the sample op\'s `symbol` is in the
-`constrained_symbols` array, we will use the corresponding constraint value
-instead of generating new samples from the probabilistic function.
-By convention, the 0th operand in `inputs` or `outputs` is the initial RNG
-state (seed).
+Generates from a generative function with some addresses constrained.
+The constraint tensor contains flattened constrained values in the order
+specified by constrained_addresses.
+
+Returns: (trace, weight, rng, retvals...)
 """
 function generate(
     inputs::Vector{Value},
@@ -591,6 +496,7 @@ function generate(
     weight::IR.Type,
     outputs::Vector{IR.Type},
     fn,
+    selection,
     constrained_addresses,
     name=nothing,
     location=Location(),
@@ -601,6 +507,7 @@ function generate(
     successors = Block[]
     attributes = NamedAttribute[
         NamedAttribute("fn", fn),
+        NamedAttribute("selection", selection),
         NamedAttribute("constrained_addresses", constrained_addresses),
     ]
     !isnothing(name) && push!(attributes, NamedAttribute("name", name))
@@ -653,33 +560,6 @@ function genericAdjoint(
     )
 end
 
-"""
-`getFlattenedSamplesFromTrace`
-
-Get sampled values for multiple addresses from an execution trace and
-flatten them into a single position vector for HMC.
-"""
-function getFlattenedSamplesFromTrace(
-    trace::Value; position::IR.Type, selection, location=Location()
-)
-    op_ty_results = IR.Type[position,]
-    operands = Value[trace,]
-    owned_regions = Region[]
-    successors = Block[]
-    attributes = NamedAttribute[NamedAttribute("selection", selection),]
-
-    return create_operation(
-        "enzyme.getFlattenedSamplesFromTrace",
-        location;
-        operands,
-        owned_regions,
-        successors,
-        attributes,
-        results=op_ty_results,
-        result_inference=false,
-    )
-end
-
 function get(gradient::Value; result::IR.Type, location=Location())
     op_ty_results = IR.Type[result,]
     operands = Value[gradient,]
@@ -689,132 +569,6 @@ function get(gradient::Value; result::IR.Type, location=Location())
 
     return create_operation(
         "enzyme.get",
-        location;
-        operands,
-        owned_regions,
-        successors,
-        attributes,
-        results=op_ty_results,
-        result_inference=false,
-    )
-end
-
-"""
-`getSampleFromConstraint`
-
-Get sampled values from a constraint for a given symbol.
-"""
-function getSampleFromConstraint(
-    constraint::Value; outputs::Vector{IR.Type}, symbol, location=Location()
-)
-    op_ty_results = IR.Type[outputs...,]
-    operands = Value[constraint,]
-    owned_regions = Region[]
-    successors = Block[]
-    attributes = NamedAttribute[NamedAttribute("symbol", symbol),]
-
-    return create_operation(
-        "enzyme.getSampleFromConstraint",
-        location;
-        operands,
-        owned_regions,
-        successors,
-        attributes,
-        results=op_ty_results,
-        result_inference=false,
-    )
-end
-
-"""
-`getSampleFromTrace`
-
-Get the sampled value for a given symbol from an execution trace.
-"""
-function getSampleFromTrace(
-    trace::Value; sample::Vector{IR.Type}, symbol, location=Location()
-)
-    op_ty_results = IR.Type[sample...,]
-    operands = Value[trace,]
-    owned_regions = Region[]
-    successors = Block[]
-    attributes = NamedAttribute[NamedAttribute("symbol", symbol),]
-
-    return create_operation(
-        "enzyme.getSampleFromTrace",
-        location;
-        operands,
-        owned_regions,
-        successors,
-        attributes,
-        results=op_ty_results,
-        result_inference=false,
-    )
-end
-
-"""
-`getSubconstraint`
-
-Get a subconstraint from a constraint for a given symbol.
-"""
-function getSubconstraint(
-    constraint::Value; subconstraint::IR.Type, symbol, location=Location()
-)
-    op_ty_results = IR.Type[subconstraint,]
-    operands = Value[constraint,]
-    owned_regions = Region[]
-    successors = Block[]
-    attributes = NamedAttribute[NamedAttribute("symbol", symbol),]
-
-    return create_operation(
-        "enzyme.getSubconstraint",
-        location;
-        operands,
-        owned_regions,
-        successors,
-        attributes,
-        results=op_ty_results,
-        result_inference=false,
-    )
-end
-
-"""
-`getSubtrace`
-
-Get a subtrace from a trace for a given symbol.
-"""
-function getSubtrace(trace::Value; subtrace::IR.Type, symbol, location=Location())
-    op_ty_results = IR.Type[subtrace,]
-    operands = Value[trace,]
-    owned_regions = Region[]
-    successors = Block[]
-    attributes = NamedAttribute[NamedAttribute("symbol", symbol),]
-
-    return create_operation(
-        "enzyme.getSubtrace",
-        location;
-        operands,
-        owned_regions,
-        successors,
-        attributes,
-        results=op_ty_results,
-        result_inference=false,
-    )
-end
-
-"""
-`getWeightFromTrace`
-
-Get the accumulated log-probability weight from an execution trace.
-"""
-function getWeightFromTrace(trace::Value; weight::IR.Type, location=Location())
-    op_ty_results = IR.Type[weight,]
-    operands = Value[trace,]
-    owned_regions = Region[]
-    successors = Block[]
-    attributes = NamedAttribute[]
-
-    return create_operation(
-        "enzyme.getWeightFromTrace",
         location;
         operands,
         owned_regions,
@@ -884,30 +638,6 @@ function init(; result_0::IR.Type, location=Location())
 
     return create_operation(
         "enzyme.init",
-        location;
-        operands,
-        owned_regions,
-        successors,
-        attributes,
-        results=op_ty_results,
-        result_inference=false,
-    )
-end
-
-"""
-`initTrace`
-
-Initialize an execution trace for a probabilistic function.
-"""
-function initTrace(; trace::IR.Type, location=Location())
-    op_ty_results = IR.Type[trace,]
-    operands = Value[]
-    owned_regions = Region[]
-    successors = Block[]
-    attributes = NamedAttribute[]
-
-    return create_operation(
-        "enzyme.initTrace",
         location;
         operands,
         owned_regions,
@@ -988,63 +718,72 @@ end
 """
 `mcmc`
 
-Performs MCMC inference on a probabilistic function.
+Runs MCMC inference on selected addresses.
 
-By default (num_warmup=0, num_samples=1, thinning=1), performs a single MCMC step
-and returns the resulting trace - backwards compatible with previous behavior.
+Two modes of operation:
+1. Trace-based mode: `fn` and `original_trace` are provided. The model
+   function with `enzyme.sample` ops defines the density.
+2. Custom logpdf mode: `logpdf_fn` and `initial_position` are provided.
+   The logpdf function maps position → scalar log-density directly.
 
-When num_samples > 1, runs a full MCMC chain and returns a trace where
-sampled values have an additional batch dimension (first dim = num_samples / thinning).
+The `selection` attribute determines which addresses to sample via HMC/NUTS.
+All sample addresses are included in the trace tensor for consistency.
 
-Thinning controls the fraction of samples retained: when thinning=k, every k-th
-sample is kept, resulting in num_samples/k output samples.
-
-Warmup iterations are discarded and used only for adaptation.
-
-By convention, the 0th operand in inputs is the initial RNG state
-and the 0th operand in results is the updated RNG state.
+Returns: (trace, diagnostics, rng)
+- trace: tensor<num_samples x position_size x f64>
+- diagnostics: tensor<num_samples x i1> - placeholder for future expansion
+- rng: updated RNG state
 """
 function mcmc(
     inputs::Vector{Value},
-    original_trace::Value,
-    inverse_mass_matrix=nothing::Union{Nothing,Value};
+    original_trace=nothing::Union{Nothing,Value};
+    inverse_mass_matrix=nothing::Union{Nothing,Value},
     step_size=nothing::Union{Nothing,Value},
-    new_trace::IR.Type,
-    accepted::IR.Type,
+    initial_position=nothing::Union{Nothing,Value},
+    trace::IR.Type,
+    diagnostics::IR.Type,
     output_rng_state::IR.Type,
-    fn,
+    fn=nothing,
     selection,
+    all_addresses,
     num_warmup=nothing,
     num_samples=nothing,
     thinning=nothing,
     hmc_config=nothing,
     nuts_config=nothing,
+    logpdf_fn=nothing,
     name=nothing,
     location=Location(),
 )
-    op_ty_results = IR.Type[new_trace, accepted, output_rng_state]
-    operands = Value[inputs..., original_trace]
+    op_ty_results = IR.Type[trace, diagnostics, output_rng_state]
+    operands = Value[inputs...,]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[
-        NamedAttribute("fn", fn), NamedAttribute("selection", selection)
+        NamedAttribute("selection", selection),
+        NamedAttribute("all_addresses", all_addresses),
     ]
+    !isnothing(original_trace) && push!(operands, original_trace)
     !isnothing(inverse_mass_matrix) && push!(operands, inverse_mass_matrix)
     !isnothing(step_size) && push!(operands, step_size)
+    !isnothing(initial_position) && push!(operands, initial_position)
     push!(
         attributes,
         operandsegmentsizes([
             length(inputs),
-            1,
+            Int(!isnothing(original_trace)),
             Int(!isnothing(inverse_mass_matrix)),
             Int(!isnothing(step_size)),
+            Int(!isnothing(initial_position)),
         ]),
     )
+    !isnothing(fn) && push!(attributes, NamedAttribute("fn", fn))
     !isnothing(num_warmup) && push!(attributes, NamedAttribute("num_warmup", num_warmup))
     !isnothing(num_samples) && push!(attributes, NamedAttribute("num_samples", num_samples))
     !isnothing(thinning) && push!(attributes, NamedAttribute("thinning", thinning))
     !isnothing(hmc_config) && push!(attributes, NamedAttribute("hmc_config", hmc_config))
     !isnothing(nuts_config) && push!(attributes, NamedAttribute("nuts_config", nuts_config))
+    !isnothing(logpdf_fn) && push!(attributes, NamedAttribute("logpdf_fn", logpdf_fn))
     !isnothing(name) && push!(attributes, NamedAttribute("name", name))
 
     return create_operation(
@@ -1062,29 +801,31 @@ end
 """
 `mh`
 
-Perform a Metropolis-Hastings step on a probabilistic function.
-This operation proposes a new trace by regenerating selected addresses,
-computes the acceptance probability, and returns the updated trace.
-By convention, the 0th operand in inputs is the initial RNG state
-and the 0th operand in results is the updated RNG state.
+Performs one MH step: regenerates selected addresses and accepts/rejects
+based on weight ratio.
 """
 function mh(
-    inputs::Vector{Value},
-    original_trace::Value;
+    original_trace::Value,
+    original_weight::Value,
+    inputs::Vector{Value};
     new_trace::IR.Type,
+    new_weight::IR.Type,
     accepted::IR.Type,
-    output_rng_state::IR.Type,
+    output_rng::IR.Type,
     fn,
     selection,
+    regenerate_addresses,
     name=nothing,
     location=Location(),
 )
-    op_ty_results = IR.Type[new_trace, accepted, output_rng_state]
-    operands = Value[inputs..., original_trace]
+    op_ty_results = IR.Type[new_trace, new_weight, accepted, output_rng]
+    operands = Value[original_trace, original_weight, inputs...]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[
-        NamedAttribute("fn", fn), NamedAttribute("selection", selection)
+        NamedAttribute("fn", fn),
+        NamedAttribute("selection", selection),
+        NamedAttribute("regenerate_addresses", regenerate_addresses),
     ]
     !isnothing(name) && push!(attributes, NamedAttribute("name", name))
 
@@ -1257,19 +998,43 @@ function randomSplit(
 end
 
 """
-`recover_sample`
+`regenerate`
 
-Recover a sample from a flattened position vector.
+Regenerates selected addresses while keeping others fixed.
+Used internally by MH.
+
+Takes explicit old_trace and returns new trace with weight.
+
+Returns: (new_trace, weight, retvals...)
+- new_trace: tensor<1 x position_size x f64> - flattened samples
+- weight: tensor<f64> - accumulated log probability
+- retvals: original function return values
 """
-function recover_sample(position::Value; result::IR.Type, offset, location=Location())
-    op_ty_results = IR.Type[result,]
-    operands = Value[position,]
+function regenerate(
+    inputs::Vector{Value},
+    original_trace::Value;
+    new_trace::IR.Type,
+    weight::IR.Type,
+    outputs::Vector{IR.Type},
+    fn,
+    selection,
+    regenerate_addresses,
+    name=nothing,
+    location=Location(),
+)
+    op_ty_results = IR.Type[new_trace, weight, outputs...]
+    operands = Value[inputs..., original_trace]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[NamedAttribute("offset", offset),]
+    attributes = NamedAttribute[
+        NamedAttribute("fn", fn),
+        NamedAttribute("selection", selection),
+        NamedAttribute("regenerate_addresses", regenerate_addresses),
+    ]
+    !isnothing(name) && push!(attributes, NamedAttribute("name", name))
 
     return create_operation(
-        "enzyme.recover_sample",
+        "enzyme.regenerate",
         location;
         operands,
         owned_regions,
@@ -1280,36 +1045,15 @@ function recover_sample(position::Value; result::IR.Type, offset, location=Locat
     )
 end
 
-"""
-`regenerate`
-
-Regenerate selected addresses in a probabilistic function while keeping
-other addresses fixed to their values in the given trace.
-By convention, the 0th operand in inputs is the initial RNG state
-and the 0th operand in results is the updated RNG state.
-"""
-function regenerate(
-    inputs::Vector{Value},
-    original_trace::Value;
-    trace::IR.Type,
-    weight::IR.Type,
-    output_rng_state::IR.Type,
-    fn,
-    selection,
-    name=nothing,
-    location=Location(),
-)
-    op_ty_results = IR.Type[trace, weight, output_rng_state]
-    operands = Value[inputs..., original_trace]
+function reshape(input::Value; result::IR.Type, location=Location())
+    op_ty_results = IR.Type[result,]
+    operands = Value[input,]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[
-        NamedAttribute("fn", fn), NamedAttribute("selection", selection)
-    ]
-    !isnothing(name) && push!(attributes, NamedAttribute("name", name))
+    attributes = NamedAttribute[]
 
     return create_operation(
-        "enzyme.regenerate",
+        "enzyme.reshape",
         location;
         operands,
         owned_regions,
@@ -1363,7 +1107,6 @@ end
 
 Extended select operation that supports:
 - `tensor<i1>` conditions with differently-sized operands
-- `!enzyme.Trace` operands
 - standard cases supported by `arith.select`
 """
 function select(
@@ -1413,11 +1156,17 @@ end
 """
 `simulate`
 
-Simulate a probabilistic function to generate execution trace
-by replacing all SampleOps with distribution calls and recording
-all sampled values into the trace. This op returns the trace, the weight
-(accumulated log-probability), and the other outputs. By convention,
-the 0th operand in `inputs` or `outputs` is the initial RNG state (seed).
+Simulates a generative function, building a trace tensor containing all
+sampled values and computing the accumulated log probability weight.
+
+The `selection` attribute specifies all sample addresses in order,
+determining the trace tensor layout.
+
+Returns: (trace, weight, rng, retvals...)
+- trace: tensor<1 x position_size x f64> - flattened samples
+- weight: tensor<f64> - accumulated log probability
+- rng: updated RNG state
+- retvals: original function return values
 """
 function simulate(
     inputs::Vector{Value};
@@ -1425,6 +1174,7 @@ function simulate(
     weight::IR.Type,
     outputs::Vector{IR.Type},
     fn,
+    selection,
     name=nothing,
     location=Location(),
 )
@@ -1432,11 +1182,48 @@ function simulate(
     operands = Value[inputs...,]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[NamedAttribute("fn", fn),]
+    attributes = NamedAttribute[
+        NamedAttribute("fn", fn), NamedAttribute("selection", selection)
+    ]
     !isnothing(name) && push!(attributes, NamedAttribute("name", name))
 
     return create_operation(
         "enzyme.simulate",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+"""
+`slice`
+
+Extract a static slice from a tensor.
+"""
+function slice(
+    operand::Value;
+    result::IR.Type,
+    start_indices,
+    limit_indices,
+    strides,
+    location=Location(),
+)
+    op_ty_results = IR.Type[result,]
+    operands = Value[operand,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[
+        NamedAttribute("start_indices", start_indices),
+        NamedAttribute("limit_indices", limit_indices),
+        NamedAttribute("strides", strides),
+    ]
+
+    return create_operation(
+        "enzyme.slice",
         location;
         operands,
         owned_regions,
@@ -1525,47 +1312,6 @@ function untracedCall(
 
     return create_operation(
         "enzyme.untracedCall",
-        location;
-        operands,
-        owned_regions,
-        successors,
-        attributes,
-        results=op_ty_results,
-        result_inference=false,
-    )
-end
-
-"""
-`update`
-
-Update selected addresses in a trace with new values from a position vector,
-re-evaluate the probabilistic function, and return the updated trace with
-the new weight (log probability) and updated RNG state.
-By convention, the 0th operand in inputs is the initial RNG state.
-"""
-function update(
-    inputs::Vector{Value},
-    original_trace::Value,
-    position::Value;
-    updated_trace::IR.Type,
-    weight::IR.Type,
-    output_rng_state::IR.Type,
-    fn,
-    selection,
-    name=nothing,
-    location=Location(),
-)
-    op_ty_results = IR.Type[updated_trace, weight, output_rng_state]
-    operands = Value[inputs..., original_trace, position]
-    owned_regions = Region[]
-    successors = Block[]
-    attributes = NamedAttribute[
-        NamedAttribute("fn", fn), NamedAttribute("selection", selection)
-    ]
-    !isnothing(name) && push!(attributes, NamedAttribute("name", name))
-
-    return create_operation(
-        "enzyme.update",
         location;
         operands,
         owned_regions,

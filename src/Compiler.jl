@@ -639,10 +639,13 @@ function create_result(
 
         for (k, v) in pairs(tocopy)
             subexpr = create_result(v, append_path(path, k), args...)
+            # symbol keys must be quoted in generated code; otherwise
+            # they are interpreted as variable references
+            k_expr = k isa Symbol ? QuoteNode(k) : k
             push!(
                 resultgen_code,
                 quote
-                    @inbounds $sym[$k] = $subexpr
+                    @inbounds $sym[$k_expr] = $subexpr
                 end,
             )
         end
@@ -906,6 +909,7 @@ function optimization_passes(
         "compare_negate_const_simplify",
         "select_simplify",
         "concatenate_subtract_to_subtract_pad",
+        "concatenate_add_to_add_pad",
         "concatenate_broadcast_in_dim",
         "compare_abs",
         # "compare_mul",
@@ -983,6 +987,7 @@ function optimization_passes(
                 "unary_elementwise_scatter_simplify",
                 "scatter_indices_are_unique",
                 "split_complex_scatter",
+                "split_complex_gather",
                 ## const prop patterns
                 "scatter_update_computation_const_prop",
                 # gather patterns
@@ -1283,6 +1288,7 @@ function optimization_passes(
                 "transpose_select",
                 "transpose_while",
                 "transpose_slice",
+                "transpose_like_broadcast_slice",
                 "transpose_concat",
                 "transpose_iota",
                 "transpose_reduce",
@@ -1294,6 +1300,7 @@ function optimization_passes(
                 "transpose_extend",
                 "transpose_rotate",
                 "transpose_dynamic_slice",
+                "transpose_like_broadcast_dynamic_slice",
                 "transpose_reverse",
                 "transpose_batch_norm_training",
                 "transpose_batch_norm_inference",
@@ -1305,8 +1312,10 @@ function optimization_passes(
         )
         if AGGRESSIVE_PROPAGATION[]
             push!(transform_passes_list, "transpose_elementwise(0)")
+            push!(transform_passes_list, "transpose_like_broadcast_elementwise(0)")
         else
             push!(transform_passes_list, "transpose_elementwise(1)")
+            push!(transform_passes_list, "transpose_like_broadcast_elementwise(1)")
         end
     elseif compile_options.transpose_propagate === :down
         append!(
@@ -1734,6 +1743,7 @@ function compile_mlir!(
     f,
     args,
     compile_options::CompileOptions,
+    debugcache=default_debugcache(),
     callcache=default_callcache(),
     sdycache=default_sdycache(),
     sdygroupidcache=default_sdygroupidcache();
@@ -1752,6 +1762,7 @@ function compile_mlir!(
     MLIR.IR.activate!(mod)
     MLIR.IR.activate!(MLIR.IR.body(mod))
     activate_callcache!(callcache)
+    activate_debugcache!(debugcache)
     activate_sdycache!(sdycache)
     activate_sdygroupidcache!(sdygroupidcache)
 
@@ -1782,6 +1793,7 @@ function compile_mlir!(
         deactivate_sdycache!(sdycache)
         deactivate_sdygroupidcache!(sdygroupidcache)
         deactivate_callcache!(callcache)
+        deactivate_debugcache!(debugcache)
         MLIR.IR.deactivate!(MLIR.IR.body(mod))
         clear_llvm_compiler_cache!(mod)
         release_guard_from_gc_for_module(mod)
@@ -4068,7 +4080,7 @@ function register_thunk(
     )
 end
 
-for cache_type in (:callcache, :sdycache, :sdygroupidcache)
+for cache_type in (:callcache, :sdycache, :sdygroupidcache, :debugcache)
     activate_fn = Symbol(:activate_, cache_type, :!)
     deactivate_fn = Symbol(:deactivate_, cache_type, :!)
     has_fn = Symbol(:_has_, cache_type)
@@ -4138,6 +4150,15 @@ function default_callcache()
             resargprefix::Symbol,
         }
     }()
+end
+
+function default_debugcache()
+    return Vector{
+        @NamedTuple{
+            f_name::String,
+	    file::String,
+	    line::Int64
+        }}(undef, 0)
 end
 
 # Since we cache these objects we cannot cache data containing MLIR operations (e.g. the entry must be a string
