@@ -182,7 +182,6 @@ const __skip_rewrite_func_set = Set([
     typeof(Base.argtype_decl),
     typeof(Base.arg_decl_parts),
     typeof(Base.StackTraces.show_spec_sig),
-    typeof(Core.Compiler.return_type),
     typeof(Core.throw_inexacterror),
     typeof(Base.throw_boundserror),
     typeof(Base._shrink),
