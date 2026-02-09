@@ -8,6 +8,10 @@
     return f
 end
 
+@reactant_overlay function Base._return_type(t::DataType, world::UInt)
+    return call_with_native(Base._return_type, ReactantInterpreter(; world), t)
+end
+
 # Enzyme.jl overlays
 const WITHIN_AUTODIFF = Ref(false)
 
