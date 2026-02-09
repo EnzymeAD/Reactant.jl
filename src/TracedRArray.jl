@@ -282,8 +282,11 @@ function Base.copy(bc::Broadcasted{<:AbstractReactantArrayStyle})
     if ElType === Union{}
         fn(map(first_scalar, bc.args)...)
     elseif ElType == Any
-        ElType = eltype(fn(map(first_scalar, bc.args)...))
-        @assert ElType != Any
+        res = fn(map(first_scalar, bc.args)...)
+        ElType = eltype(res)
+        if ElType == Any
+            throw(AssertionError("$fn($(map(first_scalar, bc.args)...)) = $res has eltype of Any"))
+        end
     end
     @assert ElType != Any && ElType != Union{}
     sim = similar(bc, ElType)
