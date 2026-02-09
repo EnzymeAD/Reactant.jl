@@ -581,3 +581,15 @@ end
 
     @test @jit(f(params_ra, points_ra)) ≈ f(params, points)
 end
+
+@testset "Dict with Symbol Keys" begin
+    f(x) = Dict(:Mhalo => x, :x => x .+ 1)
+    x = Reactant.to_rarray([1.0f0, 2.0f0])
+    y = @jit(f(x))
+
+    @test y isa Dict
+    @test haskey(y, :Mhalo)
+    @test haskey(y, :x)
+    @test Array(y[:Mhalo]) ≈ [1.0f0, 2.0f0]
+    @test Array(y[:x]) ≈ [2.0f0, 3.0f0]
+end
