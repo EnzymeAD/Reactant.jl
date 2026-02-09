@@ -764,6 +764,15 @@ function profile_thunk_with_xprof(
     )
 end
 
+function load_xplane_file(xplane_file::String; nrepeat::Int=1, compile_time_ns::Int64=0)
+    memory_data = get_aggregate_memory_statistics(xplane_file)
+    flops_data = get_aggregate_flops_statistics(xplane_file, nrepeat)
+    runtime_ns = extract_mean_step_time(xplane_file, nrepeat)
+    return AggregateProfilingResult(
+            runtime_ns, compile_time_ns, memory_data, flops_data
+        )
+end
+
 function _extract_kwargs_from_expr(args...)
     nrepeat = 1
     warmup = 1
