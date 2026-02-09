@@ -1,7 +1,7 @@
 module TFSavedModel
 
 using ..Serialization: serialization_supported, NUMPY_SIMPLE_TYPES
-using ..Reactant: Compiler, MLIR, ReactantContext
+using ..Reactant: Reactant, Compiler, MLIR
 
 # https://github.com/openxla/stablehlo/blob/955fa7e6e3b0a6411edc8ff6fcce1e644440acbd/stablehlo/integrations/python/stablehlo/savedmodel/stablehlo_to_tf_saved_model.py
 
@@ -44,7 +44,7 @@ function export_as_saved_model(
                PythonCall hasn't been installed and loaded.")
     end
 
-    MLIR.IR.@dispose ctx = ReactantContext() begin
+    MLIR.IR.@dispose ctx = Reactant.ReactantContext() begin
         MLIR.IR.activate(ctx)
         try
             mlir_mod = parse(MLIR.IR.Module, thunk.module_string)
