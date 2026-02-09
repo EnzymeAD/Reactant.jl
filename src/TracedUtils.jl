@@ -346,7 +346,7 @@ function make_mlir_fn(
 
     # Explicitly don't use with_block to avoid creating a closure, which creates
     # both compile-time and relocatability issues
-    MLIR.IR.activate!(fnbody)
+    MLIR.IR.activate(fnbody)
 
     result = try
         process_linear_args!(linear_args, fnbody, do_transpose, optimize_then_pad, inv_map)
@@ -357,7 +357,7 @@ function make_mlir_fn(
             Reactant.call_with_reactant(Core.kwcall, kwargs, f, traced_args...)
         end
     finally
-        MLIR.IR.deactivate!(fnbody)
+        MLIR.IR.deactivate(fnbody)
         Ops.deactivate_constant_context!(fnbody)
     end
 
@@ -452,7 +452,7 @@ function prepare_mlir_fn_args(
         Reactant.TracedSetPath
     end
     fnbody = MLIR.IR.Block(MLIR.IR.Type[], MLIR.IR.Location[])
-    MLIR.IR.activate!(fnbody)
+    MLIR.IR.activate(fnbody)
     Ops.activate_constant_context!(fnbody)
     seen_args0 = OrderedIdDict()
     try
@@ -462,7 +462,7 @@ function prepare_mlir_fn_args(
             )
         end
     finally
-        MLIR.IR.deactivate!(fnbody)
+        MLIR.IR.deactivate(fnbody)
         Ops.deactivate_constant_context!(fnbody)
     end
 
@@ -647,7 +647,7 @@ function finalize_mlir_fn(
     end
 
     seen_results = OrderedIdDict()
-    MLIR.IR.activate!(fnbody)
+    MLIR.IR.activate(fnbody)
     traced_result = try
         traced_result = Reactant.make_tracer(
             seen_results, result, (resprefix,), outmode; runtime
@@ -665,7 +665,7 @@ function finalize_mlir_fn(
         end
         traced_result
     finally
-        MLIR.IR.deactivate!(fnbody)
+        MLIR.IR.deactivate(fnbody)
     end
 
     linear_results = Reactant.TracedType[]
@@ -816,7 +816,7 @@ function finalize_mlir_fn(
     end
 
     out_tys = Vector{MLIR.IR.Type}(undef, length(linear_results))
-    MLIR.IR.activate!(fnbody)
+    MLIR.IR.activate(fnbody)
     ret = try
         vals = Vector{MLIR.IR.Value}(undef, length(linear_results))
 
@@ -859,7 +859,7 @@ function finalize_mlir_fn(
         dialect = getfield(MLIR.Dialects, return_dialect)
         dialect.return_(vals)
     finally
-        MLIR.IR.deactivate!(fnbody)
+        MLIR.IR.deactivate(fnbody)
     end
 
     func2 = MLIR.IR.with_block(MLIR.IR.body(mod)) do

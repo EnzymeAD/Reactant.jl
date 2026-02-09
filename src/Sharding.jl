@@ -585,7 +585,7 @@ function sharding_to_array_slices(
         # MLIR for identity operation, avoid tracing here
         ctx = MLIR.IR.Context(Reactant.registry[], false)
         @ccall MLIR.API.mlir_c.RegisterDialects(ctx::MLIR.API.MlirContext)::Cvoid
-        MLIR.IR.activate!(ctx)
+        MLIR.IR.activate(ctx)
 
         sdycache = Reactant.Compiler.default_sdycache()
         Reactant.Compiler.activate_sdycache!(sdycache)
@@ -606,11 +606,11 @@ function sharding_to_array_slices(
             )
             fnbody = MLIR.IR.Block(data_mlir_type, [MLIR.IR.Location()])
             push!(MLIR.IR.region(func, 1), fnbody)
-            MLIR.IR.activate!(fnbody)
+            MLIR.IR.activate(fnbody)
             try
                 MLIR.Dialects.func.return_([MLIR.IR.argument(fnbody, 1)])
             finally
-                MLIR.IR.deactivate!(fnbody)
+                MLIR.IR.deactivate(fnbody)
             end
             push!(MLIR.IR.body(mod), func)
 
@@ -642,7 +642,7 @@ function sharding_to_array_slices(
             @assert !needs_padding "This shouldn't happen. Open an issue on Reactant.jl.\nInput shape: $(size_x).\nOriginal Sharding: $(string(hlo_sharding.hlo_sharding)).\nNew sharding: $(string(new_hlo_sharding)).\nArray Slices: $(device_to_array_slices)."
         finally
             Reactant.Compiler.deactivate_sdycache!(sdycache)
-            MLIR.IR.deactivate!(ctx)
+            MLIR.IR.deactivate(ctx)
         end
     end
 

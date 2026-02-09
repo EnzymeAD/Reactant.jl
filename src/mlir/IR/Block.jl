@@ -213,7 +213,7 @@ end
 
 # to simplify the API, we maintain a stack of contexts in task local storage
 # and pass them implicitly to MLIR API's that require them.
-function activate!(blk::Block)
+function activate(blk::Block)
     stack = get!(task_local_storage(), :mlir_block) do
         return Block[]
     end::Vector{Block}
@@ -221,7 +221,7 @@ function activate!(blk::Block)
     return nothing
 end
 
-function deactivate!(blk::Block)
+function deactivate(blk::Block)
     current_block() == blk || error("Deactivating wrong block")
     return Base.pop!(task_local_storage(:mlir_block))
 end
@@ -240,10 +240,10 @@ function current_block(; throw_error::Core.Bool=true)
 end
 
 function with_block(f, blk::Block)
-    activate!(blk)
+    activate(blk)
     try
         f()
     finally
-        deactivate!(blk)
+        deactivate(blk)
     end
 end
