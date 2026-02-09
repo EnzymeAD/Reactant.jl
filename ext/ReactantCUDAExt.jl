@@ -1481,6 +1481,7 @@ end
 function __init__()
     # Required to unbreak with_profile
     delete!(ENV, "NVTX_INJECTION64_PATH")
+    return nothing
 end
 
 end # module ReactantCUDAExt
