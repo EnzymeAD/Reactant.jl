@@ -146,6 +146,39 @@ function process_probprog_outputs(
     return traced_result
 end
 
+function trace_logpdf_function(logdensity_fn, sample_pos, args)
+    logpdf_name = String(gensym(Symbol(logdensity_fn)))
+
+    seen = OrderedIdDict()
+    for (i, arg) in enumerate(args)
+        make_tracer(seen, arg, (:_logpdf_trace, i), TracedTrack; toscalar=false)
+    end
+    traced_vals = TracedType[]
+    for (_, v) in seen
+        v isa TracedType || continue
+        push!(traced_vals, v)
+        v.paths = v.paths[1:(end - 1)]
+    end
+
+    saved_paths = Tuple[v.paths for v in traced_vals]
+    TracedUtils.make_mlir_fn(
+        logdensity_fn,
+        (sample_pos, args...),
+        (),
+        logpdf_name,
+        false;
+        do_transpose=false,
+        args_in_result=:result,
+    )
+    for (i, v) in enumerate(traced_vals)
+        v.paths = saved_paths[i]
+    end
+
+    fn_attr = MLIR.IR.FlatSymbolRefAttribute(logpdf_name)
+    extra_mlir_data = MLIR.IR.Value[v.mlir_data for v in traced_vals]
+    return fn_attr, extra_mlir_data
+end
+
 function build_selection_attr(trace::TracedTrace)
     selection = MLIR.IR.Attribute[]
     for entry in trace.entries

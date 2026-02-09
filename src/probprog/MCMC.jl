@@ -154,7 +154,8 @@ end
 function mcmc_logpdf(
     rng::AbstractRNG,
     logdensity_fn::Function,
-    initial_position;
+    initial_position,
+    args::Vararg{Any,Nargs};
     algorithm::Symbol=:NUTS,
     inverse_mass_matrix=nothing,
     step_size=nothing,
@@ -166,21 +167,11 @@ function mcmc_logpdf(
     adapt_step_size::Bool=true,
     adapt_mass_matrix::Bool=true,
     trajectory_length::Float64=2π,
-)
+) where {Nargs}
     pos_size = length(initial_position)
 
     sample_pos = TracedRArray{Float64,2}((), nothing, (1, pos_size))
-    logpdf_name = String(gensym(Symbol(logdensity_fn)))
-    TracedUtils.make_mlir_fn(
-        logdensity_fn,
-        (sample_pos,),
-        (),
-        logpdf_name,
-        false;
-        do_transpose=false,
-        args_in_result=:result,
-    )
-    logpdf_fn_attr = MLIR.IR.FlatSymbolRefAttribute(logpdf_name)
+    logpdf_fn_attr, extra_mlir_data = trace_logpdf_function(logdensity_fn, sample_pos, args)
 
     rng_args = (rng,)
     ppf = process_probprog_function(identity, rng_args, "mcmc_logpdf")
@@ -193,6 +184,8 @@ function mcmc_logpdf(
         argprefix,
         resprefix,
     ) = ppf
+
+    append!(mlir_caller_args, extra_mlir_data)
 
     hmc_config_attr = nothing
     nuts_config_attr = nothing

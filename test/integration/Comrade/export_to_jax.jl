@@ -5,6 +5,8 @@ using Reactant, NPZ, PythonCall
 
 include("comimager.jl")
 
+xr = Reactant.to_rarray(x)
+
 logdensity_python_file_path = Reactant.Serialization.export_to_enzymejax(
     logdensityof, tpostr, xr; output_dir=joinpath(@__DIR__, "Sampling/Serialized/Fwd")
 )

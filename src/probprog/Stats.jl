@@ -135,6 +135,24 @@ function _compute_parameter_summary(name::String, samples::AbstractVector)
     )
 end
 
+function mcmc_summary(
+    samples::AbstractMatrix{<:Real}; names::Union{Nothing,AbstractVector{String}}=nothing
+)
+    n_samples, n_dims = size(samples)
+    parameters = ParameterSummary[]
+
+    for d in 1:n_dims
+        name = if names !== nothing
+            names[d]
+        else
+            "x[$(d - 1)]"
+        end
+        push!(parameters, _compute_parameter_summary(name, samples[:, d]))
+    end
+
+    return MCMCSummary(parameters)
+end
+
 function mcmc_summary(trace::Trace)
     sorted_choices = sort(collect(trace.choices); by=x -> string(x[1]))
     parameters = ParameterSummary[]
