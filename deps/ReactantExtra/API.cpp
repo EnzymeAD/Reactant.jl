@@ -2743,10 +2743,13 @@ hloShardingFromTensorShardingAttr(mlir::sdy::TensorShardingAttr attr,
 // TODO(#2252): This is incorrect for multiple meshes. We need to use the current mesh
 // to generate this instead of the global mesh Currently we are storing only a
 // single mesh, so we can just use this.
-REACTANT_ABI mlir::sdy::TensorShardingAttr hloShardingToTensorShardingAttr(
-    mlir::MLIRContext *context, const xla::HloSharding *hloSharding,
-    mlir::StringAttr meshName, mlir::sdy::MeshAttr meshAttr, int64_t rank,
+REACTANT_ABI MlirAttribute hloShardingToTensorShardingAttr(
+    MlirContext cctx, const xla::HloSharding *hloSharding,
+    MlirAttribute cmeshName, MlirAttribute cmeshAttr, int64_t rank,
     const bool *isClosed, const int64_t *priority) {
+  mlir::MLIRContext *context = unwrap(cctx);
+  mlir::StringAttr meshName = mlir::cast<mlir::StringAttr>(unwrap(cmeshName));
+  mlir::sdy::MeshAttr meshAttr = mlir::cast<mlir::sdy::MeshAttr>(unwrap(cmeshAttr));
   const llvm::SmallDenseMap<int64_t, llvm::StringRef>
       deviceIdToMaximalMeshName =
           llvm::SmallDenseMap<int64_t, llvm::StringRef>();
@@ -2768,10 +2771,10 @@ REACTANT_ABI mlir::sdy::TensorShardingAttr hloShardingToTensorShardingAttr(
                                                  isClosed[i], dimPriority));
   }
 
-  return mlir::sdy::TensorShardingAttr::get(
+  return wrap(mlir::sdy::TensorShardingAttr::get(
       context, meshName, tensorShardingAttr.getDimShardings(),
       tensorShardingAttr.getReplicatedAxes(),
-      tensorShardingAttr.getUnreducedAxes());
+      tensorShardingAttr.getUnreducedAxes()));
 }
 
 #pragma endregion
