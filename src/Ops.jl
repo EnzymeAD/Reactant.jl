@@ -122,7 +122,14 @@ end
 @noinline function mlir_stacktrace(name, file, line)::MLIR.IR.Location
     # calling `stacktrace` can add a lot of time overhead, so let's avoid adding debug info if not used
     if !DEBUG_MODE[]
-        return MLIR.IR.Location(name, MLIR.IR.Location(file, line, 0))
+        init = MLIR.IR.Location(name, MLIR.IR.Location(file, line, 0))
+	res = init
+	for stackframe in Base.reverse(Reactant.Compiler.debugcache())
+		res = MLIR.IR.Location(res, MLIR.IR.Location(
+		    string(stackframe.f_name), MLIR.IR.Location(stackframe.file, stackframe.line, 0)
+		    ))
+	end
+	    return res
     end
 
     # retrieve current stacktrace, remove this function's frame and translate to MLIR Location
