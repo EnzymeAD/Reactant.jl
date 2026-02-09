@@ -2,8 +2,9 @@ name: CI
 
 on:
   pull_request:
-    paths:
+    paths: &paths
       - ".github/workflows/CI.yml"
+      - ".github/workflows/CommonCI.yml"
       - "ext/**"
       - "lib/**"
       - "src/**"
@@ -14,13 +15,7 @@ on:
       - main
       - release-*
     tags: ["*"]
-    paths:
-      - ".github/workflows/CI.yml"
-      - "ext/**"
-      - "lib/**"
-      - "src/**"
-      - "test/**"
-      - "Project.toml"
+    paths: *paths
 
 concurrency:
   # Skip intermediate builds: always.
