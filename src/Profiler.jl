@@ -46,12 +46,6 @@ function with_profiler(
         device_tracer_level::UInt32, host_tracer_level::UInt32
     )::Ptr{Cvoid}
 
-    prev = nothing
-    if haskey(ENV, "NVTX_INJECTION64_PATH")
-	prev = ENV["NVTX_INJECTION64_PATH"]
-	delete!(ENV, "NVTX_INJECTION64_PATH")
-    end
-
     results = try
         f()
     finally
@@ -59,10 +53,6 @@ function with_profiler(
             profiler::Ptr{Cvoid}, trace_output_dir::Cstring
         )::Cvoid
         @ccall Reactant.MLIR.API.mlir_c.ProfilerSessionDelete(profiler::Ptr{Cvoid})::Cvoid
-    end
-
-    if prev !== nothing
-        ENV["NVTX_INJECTION64_PATH"] = prev
     end
 
     if create_perfetto_link
