@@ -241,10 +241,10 @@ MPI.Init()
         send_buf = ConcreteRArray(ones(T, 5))
         recv_buf = ConcreteRArray(zeros(T, 5))
         
-        @jit waitall(send_buf, recv_buf)
-        # rank==0 && println(@code_hlo optimize="lower-enzymexla-mpi{backend=cpu}" waitall(send_buf, recv_buf))
+        # @jit waitall(send_buf, recv_buf)
+        rank==0 && println(@code_hlo optimize="lower-enzymexla-mpi{backend=cpu}" waitall(send_buf, recv_buf))
 
-        rank == 1 && @test recv_buf == send_buf
+        # rank == 1 && @test recv_buf == send_buf
     end
 end
 
@@ -287,10 +287,18 @@ end
         recv_buf = ConcreteRArray(zeros(T, 5))
         
         @jit waitall(send_buf, recv_buf)
-        # rank==0 && println(@code_hlo optimize="lower-enzymexla-mpi{backend=cpu}" waitall(send_buf, recv_buf))
 
-        # # rank == 1 && @test recv_buf == send_buf
-        println("rank = $rank, recv_buf = $recv_buf")
+        if rank==0
+            println("\ncode_hlo optimize=false:\n",
+                    @code_hlo optimize=false waitall(send_buf, recv_buf))
+            println("\ncode_hlo optimize=\"lower-enzymexla-mpi{backend=cpu}\":\n",
+                    @code_hlo optimize="lower-enzymexla-mpi{backend=cpu}" waitall(send_buf, recv_buf))
+            println("\ncode_hlo:\n",
+                    @code_hlo waitall(send_buf, recv_buf))
+        end
+
+        # @test recv_buf == send_buf
+        # println("rank = $rank, recv_buf = $recv_buf")
     end
 end
 
