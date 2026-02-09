@@ -303,7 +303,7 @@ function replicate_array_to_all_devices(array::Array, sharding, mesh, size_arr)
     )
 
     # Manually write the MLIR for resharding resharding
-    ctx = MLIR.IR.ReactantContext()
+    ctx = Reactant.ReactantContext()
     MLIR.IR.activate(ctx)
 
     sdycache = Reactant.Compiler.default_sdycache()
