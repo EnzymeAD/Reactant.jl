@@ -2336,7 +2336,7 @@ end
 
     true_fn_args = true_fn_names[1]
 
-    MLIR.IR.activate!(true_fn_body)
+    MLIR.IR.activate(true_fn_body)
     activate_constant_context!(true_fn_body)
     tb_result = try
         for (i, arg) in enumerate(tb_linear_args)
@@ -2362,7 +2362,7 @@ end
         Reactant.call_with_reactant(true_fn, tb_traced_args...)
     finally
         deactivate_constant_context!(true_fn_body)
-        MLIR.IR.deactivate!(true_fn_body)
+        MLIR.IR.deactivate(true_fn_body)
     end
 
     seen_true_results = Reactant.OrderedIdDict()
@@ -2401,7 +2401,7 @@ end
     push!(MLIR.IR.region(false_func_tmp, 1), false_fn_body)
 
     false_fn_args = false_fn_names[1]
-    MLIR.IR.activate!(false_fn_body)
+    MLIR.IR.activate(false_fn_body)
     activate_constant_context!(false_fn_body)
     fb_result = try
         for (i, arg) in enumerate(fb_linear_args)
@@ -2427,7 +2427,7 @@ end
         Reactant.call_with_reactant(false_fn, fb_traced_args...)
     finally
         deactivate_constant_context!(false_fn_body)
-        MLIR.IR.deactivate!(false_fn_body)
+        MLIR.IR.deactivate(false_fn_body)
     end
 
     seen_false_results = Reactant.OrderedIdDict()
@@ -2507,7 +2507,7 @@ end
     @assert length(fb_paths) == length(all_paths)
 
     # finalize the true branch by adding the missing values
-    MLIR.IR.activate!(true_fn_body)
+    MLIR.IR.activate(true_fn_body)
     activate_constant_context!(true_fn_body)
     tb_corrected_linear_results = Reactant.TracedType[]
     try
@@ -2519,12 +2519,12 @@ end
             end
         end
     finally
-        MLIR.IR.deactivate!(true_fn_body)
+        MLIR.IR.deactivate(true_fn_body)
         deactivate_constant_context!(true_fn_body)
     end
 
     # finalize the false branch by adding the missing values
-    MLIR.IR.activate!(false_fn_body)
+    MLIR.IR.activate(false_fn_body)
     activate_constant_context!(false_fn_body)
     fb_corrected_linear_results = Reactant.TracedType[]
     try
@@ -2536,7 +2536,7 @@ end
             end
         end
     finally
-        MLIR.IR.deactivate!(false_fn_body)
+        MLIR.IR.deactivate(false_fn_body)
         deactivate_constant_context!(false_fn_body)
     end
 
@@ -2557,23 +2557,23 @@ end
             z
         elseif tr isa MissingTracedValue
             @assert !(fr isa MissingTracedValue)
-            MLIR.IR.activate!(true_fn_body)
+            MLIR.IR.activate(true_fn_body)
             activate_constant_context!(true_fn_body)
             try
                 tb_corrected_linear_results[i] = zero(fr)
             finally
-                MLIR.IR.deactivate!(true_fn_body)
+                MLIR.IR.deactivate(true_fn_body)
                 deactivate_constant_context!(true_fn_body)
             end
             fr
         elseif fr isa MissingTracedValue
             @assert !(tr isa MissingTracedValue)
-            MLIR.IR.activate!(false_fn_body)
+            MLIR.IR.activate(false_fn_body)
             activate_constant_context!(false_fn_body)
             try
                 fb_corrected_linear_results[i] = zero(tr)
             finally
-                MLIR.IR.deactivate!(false_fn_body)
+                MLIR.IR.deactivate(false_fn_body)
                 deactivate_constant_context!(false_fn_body)
             end
             tr
@@ -2588,7 +2588,7 @@ end
 
     @assert length(all_paths) == length(result_types) + length(both_missing)
 
-    MLIR.IR.activate!(true_fn_body)
+    MLIR.IR.activate(true_fn_body)
     activate_constant_context!(true_fn_body)
     try
         vals = MLIR.IR.Value[
@@ -2597,11 +2597,11 @@ end
         ]
         MLIR.Dialects.stablehlo.return_(vals; location)
     finally
-        MLIR.IR.deactivate!(true_fn_body)
+        MLIR.IR.deactivate(true_fn_body)
         deactivate_constant_context!(true_fn_body)
     end
 
-    MLIR.IR.activate!(false_fn_body)
+    MLIR.IR.activate(false_fn_body)
     activate_constant_context!(false_fn_body)
     try
         vals = MLIR.IR.Value[
@@ -2610,7 +2610,7 @@ end
         ]
         MLIR.Dialects.stablehlo.return_(vals; location)
     finally
-        MLIR.IR.deactivate!(false_fn_body)
+        MLIR.IR.deactivate(false_fn_body)
         deactivate_constant_context!(false_fn_body)
     end
 
@@ -2803,7 +2803,7 @@ result = Ops.case(
 
         branch_fn_args = branch_names[b][1]
 
-        MLIR.IR.activate!(branch_bodies[b])
+        MLIR.IR.activate(branch_bodies[b])
         activate_constant_context!(branch_bodies[b])
         branch_results[b] = try
             for (i, arg) in enumerate(branch_linear_args[b])
@@ -2828,7 +2828,7 @@ result = Ops.case(
             Reactant.call_with_reactant(branch_fns[b], branch_traced_args[b]...)
         finally
             deactivate_constant_context!(branch_bodies[b])
-            MLIR.IR.deactivate!(branch_bodies[b])
+            MLIR.IR.deactivate(branch_bodies[b])
         end
     end
 
@@ -2901,7 +2901,7 @@ result = Ops.case(
     branch_corrected_linear_results = [Reactant.TracedType[] for _ in 1:n_branches]
 
     for b in 1:n_branches
-        MLIR.IR.activate!(branch_bodies[b])
+        MLIR.IR.activate(branch_bodies[b])
         activate_constant_context!(branch_bodies[b])
         try
             for (i, _) in enumerate(branch_paths[b])
@@ -2927,7 +2927,7 @@ result = Ops.case(
                 end
             end
         finally
-            MLIR.IR.deactivate!(branch_bodies[b])
+            MLIR.IR.deactivate(branch_bodies[b])
             deactivate_constant_context!(branch_bodies[b])
         end
     end
@@ -2954,12 +2954,12 @@ result = Ops.case(
                     for other_b in 1:n_branches
                         if branch_corrected_linear_results[other_b][i] isa
                             MissingTracedValue
-                            MLIR.IR.activate!(branch_bodies[other_b])
+                            MLIR.IR.activate(branch_bodies[other_b])
                             activate_constant_context!(branch_bodies[other_b])
                             try
                                 branch_corrected_linear_results[other_b][i] = zero(res)
                             finally
-                                MLIR.IR.deactivate!(branch_bodies[other_b])
+                                MLIR.IR.deactivate(branch_bodies[other_b])
                                 deactivate_constant_context!(branch_bodies[other_b])
                             end
                         end
@@ -2972,7 +2972,7 @@ result = Ops.case(
 
     # Add return statements to each branch
     for b in 1:n_branches
-        MLIR.IR.activate!(branch_bodies[b])
+        MLIR.IR.activate(branch_bodies[b])
         activate_constant_context!(branch_bodies[b])
         try
             vals = MLIR.IR.Value[
@@ -2981,7 +2981,7 @@ result = Ops.case(
             ]
             MLIR.Dialects.stablehlo.return_(vals; location)
         finally
-            MLIR.IR.deactivate!(branch_bodies[b])
+            MLIR.IR.deactivate(branch_bodies[b])
             deactivate_constant_context!(branch_bodies[b])
         end
     end

@@ -14,7 +14,7 @@ Creates an MLIR context and transfers its ownership to the caller.
 """
 function Context()
     context = Context(API.mlirContextCreate())
-    activate!(context)
+    activate(context)
     return context
 end
 
@@ -23,7 +23,7 @@ function Context(f::Core.Function)
     try
         f(ctx)
     finally
-        dispose!(ctx)
+        dispose(ctx)
     end
 end
 
@@ -39,7 +39,7 @@ Base.unsafe_convert(::Core.Type{API.MlirContext}, c::Context) = c.ref
 
 # to simplify the API, we maintain a stack of contexts in task local storage
 # and pass them implicitly to MLIR API's that require them.
-function activate!(ctx::Context)
+function activate(ctx::Context)
     stack = get!(task_local_storage(), :mlir_context_stack) do
         return Context[]
     end::Vector{Context}
@@ -47,13 +47,13 @@ function activate!(ctx::Context)
     return nothing
 end
 
-function deactivate!(ctx::Context)
+function deactivate(ctx::Context)
     current_context() == ctx || error("Deactivating wrong context")
     return Base.pop!(task_local_storage(:mlir_context_stack)::Vector{Context})
 end
 
-function dispose!(ctx::Context)
-    deactivate!(ctx)
+function dispose(ctx::Context)
+    deactivate(ctx)
     return API.mlirContextDestroy(ctx)
 end
 
@@ -71,11 +71,11 @@ function current_context(; throw_error::Core.Bool=true)
 end
 
 function with_context(f, ctx::Context)
-    activate!(ctx)
+    activate(ctx)
     try
         f()
     finally
-        deactivate!(ctx)
+        deactivate(ctx)
     end
 end
 
@@ -88,11 +88,11 @@ function with_context(f; allow_use_existing=false)
         @ccall API.mlir_c.RegisterDialects(ctx::API.MlirContext)::Cvoid
     end
 
-    activate!(ctx)
+    activate(ctx)
     try
         return f(ctx)
     finally
-        deactivate!(ctx)
+        deactivate(ctx)
     end
 end
 
