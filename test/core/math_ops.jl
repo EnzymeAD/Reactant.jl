@@ -190,6 +190,16 @@ end
     for a in (true, false), b in (true, false)
         @test @jit(xor(ConcreteRNumber(a), ConcreteRNumber(b))) == xor(a, b)
     end
+
+    for (a,b) in Iterators.product((3, 0), (true, false))
+        at = Reactant.to_rarray(a; track_numbers=Number)
+        bt = Reactant.to_rarray(b; track_numbers=Number)
+    
+        @test @jit(xor(at, b)) == xor(a, b) 
+        @test @jit(xor(a, bt)) == xor(a, b)
+        @test @jit(xor(at, bt)) == xor(a, b)
+    end
+
 end
 
 @testset "signbit" begin

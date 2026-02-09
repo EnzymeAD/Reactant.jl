@@ -947,23 +947,4 @@ function with_transforms(
     )
 end
 
-function tma_gather_supported(; location=Location())
-    op_ty_results = IR.Type[]
-    operands = Value[]
-    owned_regions = Region[]
-    successors = Block[]
-    attributes = NamedAttribute[]
-
-    return create_operation(
-        "mosaic_gpu.tma_gather_supported",
-        location;
-        operands,
-        owned_regions,
-        successors,
-        attributes,
-        results=op_ty_results,
-        result_inference=false,
-    )
-end
-
 end # mosaic_gpu

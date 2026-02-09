@@ -1444,6 +1444,39 @@ function lapack_ormqr(
     )
 end
 
+"""
+`piecewise_select`
+
+For coordinates that fit inside any of the boxes defined by the attribute,
+the result contains the element from the first operand, for other coordinates,
+it contains the element from the second operand.
+"""
+function piecewise_select(
+    whenInBox::Value,
+    whenOutOfBox::Value;
+    result=nothing::Union{Nothing,IR.Type},
+    boxes,
+    location=Location(),
+)
+    op_ty_results = IR.Type[]
+    operands = Value[whenInBox, whenOutOfBox]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[NamedAttribute("boxes", boxes),]
+    !isnothing(result) && push!(op_ty_results, result)
+
+    return create_operation(
+        "enzymexla.piecewise_select",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
+    )
+end
+
 function pointer2memref(source::Value; result::IR.Type, location=Location())
     op_ty_results = IR.Type[result,]
     operands = Value[source,]

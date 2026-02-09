@@ -212,6 +212,12 @@ end
                     Base.RefValue{TracedRArray{Float64,1}},
                     Base.RefValue{TracedRArray{Float64,1}},
                 ),
+                (Ref{Float64}, Ref{Float64}, Ref{TracedRNumber{Float64}}),
+                (
+                    Ref{ConcreteRArray{Float64,1}},
+                    Ref{TracedRArray{Float64,1}},
+                    Ref{TracedRArray{Float64,1}},
+                ),
 
                 # Function types
                 (

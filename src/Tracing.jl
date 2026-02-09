@@ -542,7 +542,7 @@ Base.@nospecializeinfer function traced_type_inner(
     return SubArray{T2,N,P2,I2,L}
 end
 
-for P in (Ptr, Core.LLVMPtr, Base.RefValue)
+for P in (Ptr, Core.LLVMPtr, Base.RefValue, Ref)
     @eval Base.@nospecializeinfer function traced_type_inner(
         @nospecialize(PT::Type{$P}),
         seen,
@@ -554,7 +554,7 @@ for P in (Ptr, Core.LLVMPtr, Base.RefValue)
         return $(P)
     end
 end
-for P in (Ptr, Base.RefValue)
+for P in (Ptr, Base.RefValue, Ref)
     @eval Base.@nospecializeinfer function traced_type_inner(
         @nospecialize(PT::Type{$P{T}}),
         seen,
