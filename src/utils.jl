@@ -956,7 +956,45 @@ function call_llvm_generator(
                         LLVM.bitcast!(builder, g, LLVM.PointerType(jlvaluet)),
                     )
                 end
+
+                profile_julia_fns = Any[
+                    Base.Fix2(Reactant.Profiler.profiler_activity_start, Reactant.Profiler.TRACE_ME_LEVEL_INFO),
+                    Reactant.Profiler.profiler_activity_end
+                ]
+
+                profile_llvm_fns = LLVM.Value[]
+                for f in profile_julia_fns
+                    gval = LLVM.load!(
+                        builder,
+                        jlvaluet,
+                        LLVM.gep!(
+                            builder,
+                            jlvaluet,
+                            args[4],
+                            LLVM.Value[LLVM.ConstantInt(length(globals))],
+                        ),
+                    )
+                    push!(
+                        globals,
+                        f,
+                    )
+                    push!(profile_llvm_fns, gval)
+                end
+
+                stringv = sprint() do io
+                    Enzyme.Compiler.pretty_print_mi(mi, io)
+                end
+                fname = LLVM.globalstring_ptr!(builder, stringv, "mi_name")
+
+                jl_cstr_to_string, FT = Enzyme.Compiler.get_function!(llvm_module, "jl_cstr_to_string", LLVM.FunctionType(jlvaluet, [LLVM.PointerType(LLVM.IntType(8))]))
+                fname = LLVM.call!(builder, FT, jl_cstr_to_string, [fname])
+
+                id = Enzyme.Compiler.emit_apply_generic!(builder, LLVM.Value[profile_llvm_fns[1], fname])
+
                 res = LLVM.call!(builder, LLVM.function_type(p.entry), p.entry, args[1:3])
+
+                Enzyme.Compiler.emit_apply_generic!(builder, LLVM.Value[profile_llvm_fns[2], id])
+
                 LLVM.ret!(builder, res)
                 push!(
                     LLVM.function_attributes(wrapper_f),
