@@ -124,10 +124,12 @@ end
     if !DEBUG_MODE[]
         init = MLIR.IR.Location(name, MLIR.IR.Location(file, line, 0))
 	res = init
-	for stackframe in Base.reverse(Reactant.Compiler.debugcache())
-		res = MLIR.IR.Location(res, MLIR.IR.Location(
-		    string(stackframe.f_name), MLIR.IR.Location(stackframe.file, stackframe.line, 0)
-		    ))
+	if Reactant.Compiler._has_debugcache()
+		for stackframe in Base.reverse(Reactant.Compiler.debugcache())
+			res = MLIR.IR.Location(res, MLIR.IR.Location(
+			    string(stackframe.f_name), MLIR.IR.Location(stackframe.file, stackframe.line, 0)
+			    ))
+		end
 	end
 	    return res
     end
