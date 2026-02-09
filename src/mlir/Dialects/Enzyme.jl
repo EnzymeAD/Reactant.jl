@@ -720,6 +720,12 @@ end
 
 Runs MCMC inference on selected addresses.
 
+Two modes of operation:
+1. Trace-based mode: `fn` and `original_trace` are provided. The model
+   function with `enzyme.sample` ops defines the density.
+2. Custom logpdf mode: `logpdf_fn` and `initial_position` are provided.
+   The logpdf function maps position → scalar log-density directly.
+
 The `selection` attribute determines which addresses to sample via HMC/NUTS.
 All sample addresses are included in the trace tensor for consistency.
 
@@ -730,13 +736,14 @@ Returns: (trace, diagnostics, rng)
 """
 function mcmc(
     inputs::Vector{Value},
-    original_trace::Value,
-    inverse_mass_matrix=nothing::Union{Nothing,Value};
+    original_trace=nothing::Union{Nothing,Value};
+    inverse_mass_matrix=nothing::Union{Nothing,Value},
     step_size=nothing::Union{Nothing,Value},
+    initial_position=nothing::Union{Nothing,Value},
     trace::IR.Type,
     diagnostics::IR.Type,
     output_rng_state::IR.Type,
-    fn,
+    fn=nothing,
     selection,
     all_addresses,
     num_warmup=nothing,
@@ -744,34 +751,39 @@ function mcmc(
     thinning=nothing,
     hmc_config=nothing,
     nuts_config=nothing,
+    logpdf_fn=nothing,
     name=nothing,
     location=Location(),
 )
     op_ty_results = IR.Type[trace, diagnostics, output_rng_state]
-    operands = Value[inputs..., original_trace]
+    operands = Value[inputs...,]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[
-        NamedAttribute("fn", fn),
         NamedAttribute("selection", selection),
         NamedAttribute("all_addresses", all_addresses),
     ]
+    !isnothing(original_trace) && push!(operands, original_trace)
     !isnothing(inverse_mass_matrix) && push!(operands, inverse_mass_matrix)
     !isnothing(step_size) && push!(operands, step_size)
+    !isnothing(initial_position) && push!(operands, initial_position)
     push!(
         attributes,
         operandsegmentsizes([
             length(inputs),
-            1,
+            Int(!isnothing(original_trace)),
             Int(!isnothing(inverse_mass_matrix)),
             Int(!isnothing(step_size)),
+            Int(!isnothing(initial_position)),
         ]),
     )
+    !isnothing(fn) && push!(attributes, NamedAttribute("fn", fn))
     !isnothing(num_warmup) && push!(attributes, NamedAttribute("num_warmup", num_warmup))
     !isnothing(num_samples) && push!(attributes, NamedAttribute("num_samples", num_samples))
     !isnothing(thinning) && push!(attributes, NamedAttribute("thinning", thinning))
     !isnothing(hmc_config) && push!(attributes, NamedAttribute("hmc_config", hmc_config))
     !isnothing(nuts_config) && push!(attributes, NamedAttribute("nuts_config", nuts_config))
+    !isnothing(logpdf_fn) && push!(attributes, NamedAttribute("logpdf_fn", logpdf_fn))
     !isnothing(name) && push!(attributes, NamedAttribute("name", name))
 
     return create_operation(
