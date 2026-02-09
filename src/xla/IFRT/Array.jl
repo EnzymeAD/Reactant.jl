@@ -380,6 +380,7 @@ function replicate_array_to_all_devices(array::Array, sharding, mesh, size_arr)
         Reactant.Compiler.release_guard_from_gc_for_module(mod)
         Reactant.Compiler.deactivate_sdycache!(sdycache)
         MLIR.IR.deactivate(ctx)
+        MLIR.IR.dispose(ctx)
     end
 
     return output_buffer
