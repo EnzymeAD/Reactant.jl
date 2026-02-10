@@ -12,6 +12,7 @@ function from_row_major(ptr::Ptr{T}, shape::NTuple{N,<:Integer}) where {T,N}
     return permutedims(transposed, N:-1:1)
 end
 
+# Debug only
 function dump(
     value_ptr::Ptr{Any},
     label_ptr::Ptr{UInt8},
