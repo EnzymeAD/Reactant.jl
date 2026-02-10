@@ -2528,7 +2528,7 @@ function compile_mlir!(
             )
         end
 
-        func_op_new_module = MLIR.IR.@dispose sym_table = MLIR.IR.SymbolTable(mod) begin
+        func_op_new_module = MLIR.IR.@dispose sym_table = MLIR.IR.SymbolTable(mod_copied) begin
             MLIR.IR.lookup(sym_table, fnname)
         end
 
