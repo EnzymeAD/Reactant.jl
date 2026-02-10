@@ -4210,12 +4210,7 @@ function default_callcache()
 end
 
 function default_debugcache()
-    return Vector{
-        @NamedTuple{
-            f_name::String,
-	    file::String,
-	    line::Int64
-        }}(undef, 0)
+    return Vector{@NamedTuple{f_name::String, file::String, line::Int64}}(undef, 0)
 end
 
 # Since we cache these objects we cannot cache data containing MLIR operations (e.g. the entry must be a string
