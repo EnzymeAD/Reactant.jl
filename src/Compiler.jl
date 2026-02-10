@@ -27,13 +27,25 @@ import ..Reactant:
 import Reactant: OptimizeCommunicationOptions, ShardyPropagationOptions, CompileOptions
 using Reactant_jll: Reactant_jll
 
-import ..ReactantCore: correct_maybe_bcast_call
+import ..ReactantCore: correct_maybe_bcast_call, trace_function_definition
 
 const DEBUG_PRINT_CODEGEN = Ref(false)
 const DEBUG_DISABLE_RESHARDING = Ref(false)
 const DEBUG_ALIASED_BUFFER_ASSIGNMENT_ERROR = Ref(false)
 
 const DEBUG_BUFFER_POINTERS_STORE_DICT = Base.IdDict()
+
+# Registry for tessera_op annotations: maps function identity to tessera_op name
+const TESSERA_OP_REGISTRY = Dict{UInt,String}()
+
+@inline function get_tessera_op(f::Function)::Union{Nothing,String}
+    return get(TESSERA_OP_REGISTRY, objectid(f), nothing)
+end
+
+@inline function set_tessera_op(f::Function, op_name::String)
+    TESSERA_OP_REGISTRY[objectid(f)] = op_name
+    return f
+end
 
 @inline function traced_getfield(@nospecialize(obj::Dict), field)
     return Base.getindex(obj, field)
@@ -2887,6 +2899,61 @@ macro jit(args...)
         )
     )
     #! format: on
+end
+
+"""
+    @tessera_op(name) function foo(...) ... end
+
+Marks a function with a tessera operation attribute. When this function is called
+during compilation, the tessera_op will be automatically passed through to the MLIR operation.
+
+# Arguments
+- `name::String`: The name of the tessera operation (e.g., "inv", "matmul")
+
+# Example
+```julia
+@tessera_op("inv") function matrix_inverse(A::Matrix)
+    return inv(A)
+end
+
+# When called during compilation, tessera_op="inv" is passed automatically
+result = @compile matrix_inverse(some_matrix)
+```
+"""
+macro tessera_op(name, func_expr)
+    # Validate that name is a string literal
+    if !Meta.isexpr(name, :string) && !(name isa String)
+        error("@tessera_op expects a string literal as the first argument, got: $(name)")
+    end
+    
+    # Extract the actual string value
+    op_name = if Meta.isexpr(name, :string)
+        name.args[1]
+    elseif name isa String
+        name
+    else
+        error("Could not extract string from @tessera_op argument")
+    end
+    
+    # Validate that func_expr is a function definition
+    if !(func_expr.head in (:function, :(=)))
+        error("@tessera_op(\"$op_name\") must be followed by a function definition")
+    end
+    
+    # Get function name from expression
+    fname_expr = func_expr.args[1]
+    
+    # Extract just the symbol if it's a call expression
+    fname_sym = fname_expr isa Symbol ? fname_expr : fname_expr.args[1]
+    
+    traced_expr = trace_function_definition(__module__, func_expr; tessera_op=op_name)
+
+    return quote
+        # Define the function and register tessera_op
+        $(esc(traced_expr))
+        Compiler.set_tessera_op($(esc(fname_sym)), $op_name)
+        $(esc(fname_sym))
+    end
 end
 
 function compile_call_expr(_mod, compiler, options::Dict, args...)
