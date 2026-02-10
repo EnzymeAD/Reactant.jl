@@ -103,7 +103,7 @@ jobs:
         if: ${{ inputs.localjll }}
         run: |
           julia --color=yes --project=deps -e 'using Pkg; Pkg.instantiate()'
-          julia --color=yes --project=deps deps/build_local.jl --cc clang
+          julia --color=yes --project=deps deps/build_local.jl --cc clang  --push-cache
           cp LocalPreferences.toml test/
 
       # Compile Julia if assertions are enabled

@@ -87,6 +87,12 @@ s = ArgParseSettings()
         help = "Set to `yes` to enable color output, or `no` to disable it. Defaults to same color setting as the Julia process."
         default = something(Base.have_color, false) ? "yes" : "no"
         arg_type = String
+    "--cache"
+        help = "Build with bazel cache."
+        action = :store_true
+    "--push-cache"
+        help = "Build and store to bazel cache."
+        action = :store_true
 end
 #! format: on
 parsed_args = parse_args(ARGS, s)
@@ -198,6 +204,12 @@ end
 
 build_cmd_list = [bazel_cmd, "build"]
 !isempty(arg) && push!(build_cmd_list, arg)
+if parsed_args["cache"]
+    push!(build_cmd_list, "--config=public_cache")
+end
+if parsed_args["push-cache"]
+    push!(build_cmd_list, "--config=public_cache_push")
+end
 append!(build_cmd_list, ["-c", "$(build_kind)"])
 push!(build_cmd_list, "--action_env=JULIA=$(Base.julia_cmd().exec[1])")
 push!(build_cmd_list, "--repo_env=HERMETIC_PYTHON_VERSION=$(hermetic_python_version)")
