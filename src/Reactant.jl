@@ -277,9 +277,6 @@ using .Compiler:
     @code_mhlo,
     @jit,
     @code_xla,
-    code_hlo,
-    code_mhlo,
-    code_xla,
     traced_getfield,
     compile
 export ConcreteRArray,
