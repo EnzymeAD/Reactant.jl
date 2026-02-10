@@ -4,6 +4,7 @@ using Reactant_jll
 using Libdl: dlsym
 using LinearAlgebra: BlasInt
 using Functors: Functors
+import p7zip_jll: p7zip
 
 import ..Reactant:
     Reactant,
@@ -1494,6 +1495,39 @@ function release_guard_from_gc_for_module(mod::MLIR.IR.Module)
     return nothing
 end
 
+function create_pass_failure_zip(f, args)
+    try
+        # Create a temporary directory for the files
+        temp_dir = mktempdir(; prefix="reactant_failure_", cleanup=false)
+
+        script_path = nothing
+
+        function_name = string(f)
+        function_name = replace(function_name, "!" => "_")
+        try
+            script_path = Reactant.Serialization.export_to_reactant_script(
+                f,
+                args...;
+                function_name,
+                output_dir=temp_dir,
+                compile_options=Reactant.CompileOptions(; optimization_passes=:none),
+            )
+        catch e
+            @debug "Could not create Julia script for reproducing the error" exception = e
+        end
+
+        # Create the zip file
+        zip_path = temp_dir * ".zip"
+        temp_files = readdir(temp_dir; join=true)
+        run(pipeline(`$(p7zip()) a -tzip $zip_path $temp_files`, devnull))
+
+        return zip_path
+    catch e
+        @error "Failed to create debug zip file" exception = e
+        return nothing
+    end
+end
+
 # helper for debug purposes: String -> Text
 function run_pass_pipeline_on_source(source, pass_pipeline; enable_verifier=true)
     return MLIR.IR.with_context() do _
@@ -1570,16 +1604,39 @@ function compile_mlir(f, args; client=nothing, drop_unsupported_attributes=false
         mod = MLIR.IR.Module(MLIR.IR.Location())
 
         compile_options, kwargs_inner = __get_compile_options_and_kwargs(; kwargs...)
-        mlir_fn_res = compile_mlir!(
-            mod,
-            f,
-            args,
-            compile_options;
-            backend,
-            runtime=XLA.runtime(client),
-            client,
-            kwargs_inner...,
-        )
+
+        # Wrap compile_mlir! to catch pass pipeline failures
+        mlir_fn_res = try
+            compile_mlir!(
+                mod,
+                f,
+                args,
+                compile_options;
+                backend,
+                runtime=XLA.runtime(client),
+                client,
+                kwargs_inner...,
+            )
+        catch e
+            # Check if this is a pass pipeline failure
+            error_msg = string(e)
+            if contains(error_msg, "failed to run pass manager")
+                # Create a debug zip file with the unoptimized IR
+                zip_path = create_pass_failure_zip(f, args)
+                if zip_path !== nothing
+                    rethrow(
+                        ErrorException(
+                            "Compilation failed during pass pipeline execution.\n" *
+                            "A debug zip file has been created at: $(zip_path)\n" *
+                            "Please upload this file when reporting the issue at: " *
+                            "https://github.com/EnzymeAD/Reactant.jl/issues\n" *
+                            "Original error: $(error_msg)",
+                        ),
+                    )
+                end
+            end
+            rethrow()
+        end
 
         # Attach a name, and partitioning attributes to the module
         __add_mhlo_attributes_and_name!(
