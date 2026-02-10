@@ -1,6 +1,6 @@
 module ReactantExport
 
-using ..Reactant: Reactant, Compiler, Serialization
+using ..Reactant: Reactant, Compiler, Serialization, MLIR
 using Serialization: serialize
 
 """
@@ -86,50 +86,56 @@ function export_to_reactant_script(
     # Generate the StableHLO/MLIR code using compile_mlir
     # This returns compilation result with traced argument information
     argprefix = gensym("exportarg")
-    mod, mlir_fn_res = Compiler.compile_mlir(
-        f, args; argprefix, drop_unsupported_attributes=true, compile_options
-    )
-    hlo_code = string(mod)
-
-    # Save MLIR code
-    fnid = 0
-    while isfile(joinpath(output_dir, "$(function_name)_$(fnid).mlir"))
-        fnid += 1
-    end
-    mlir_path = joinpath(output_dir, "$(function_name)_$(fnid).mlir")
-    write(mlir_path, hlo_code)
-
-    # Process and save inputs based on the linearized arguments
-    input_data = Dict{String,Union{AbstractArray,Number}}()
-    input_info = []
-    input_idx = 1
-    for (concrete_arg, traced_arg) in mlir_fn_res.seen_args
-        path = Reactant.TracedUtils.get_idx(traced_arg, argprefix)[2:end]
-
-        # Store input data for the single NPZ file
-        arr_key = "arr_$input_idx"
-        input_data[arr_key] = _to_array(concrete_arg)
-
-        push!(
-            input_info,
-            (
-                shape=size(concrete_arg),
-                dtype=Reactant.unwrapped_eltype(concrete_arg),
-                path="arg." * join(string.(path), "."),
-                key=arr_key,
-            ),
+    MLIR.IR.@dispose ctx = Reactant.ReactantContext() begin
+        mod, mlir_fn_res = Compiler.compile_mlir(
+            f, args; argprefix, drop_unsupported_attributes=true, compile_options
         )
-        input_idx += 1
+        hlo_code = try
+            string(mod)
+        finally
+            MLIR.IR.dispose(mod)
+        end
+
+        # Save MLIR code
+        fnid = 0
+        while isfile(joinpath(output_dir, "$(function_name)_$(fnid).mlir"))
+            fnid += 1
+        end
+        mlir_path = joinpath(output_dir, "$(function_name)_$(fnid).mlir")
+        write(mlir_path, hlo_code)
+
+        # Process and save inputs based on the linearized arguments
+        input_data = Dict{String,Union{AbstractArray,Number}}()
+        input_info = []
+        input_idx = 1
+        for (concrete_arg, traced_arg) in mlir_fn_res.seen_args
+            path = Reactant.TracedUtils.get_idx(traced_arg, argprefix)[2:end]
+
+            # Store input data for the single NPZ file
+            arr_key = "arr_$input_idx"
+            input_data[arr_key] = _to_array(concrete_arg)
+
+            push!(
+                input_info,
+                (
+                    shape=size(concrete_arg),
+                    dtype=Reactant.unwrapped_eltype(concrete_arg),
+                    path="arg." * join(string.(path), "."),
+                    key=arr_key,
+                ),
+            )
+            input_idx += 1
+        end
+
+        # Save all inputs to a serialized file
+        input_path = joinpath(output_dir, "$(function_name)_$(fnid)_inputs.jls")
+        save_inputs_jls(input_path, input_data)
+
+        # Generate Julia script
+        julia_path = joinpath(output_dir, "$(function_name).jl")
+        _generate_julia_script(julia_path, function_name, mlir_path, input_path, input_info)
+        return julia_path
     end
-
-    # Save all inputs to a serialized file
-    input_path = joinpath(output_dir, "$(function_name)_$(fnid)_inputs.jls")
-    save_inputs_jls(input_path, input_data)
-
-    # Generate Julia script
-    julia_path = joinpath(output_dir, "$(function_name).jl")
-    _generate_julia_script(julia_path, function_name, mlir_path, input_path, input_info)
-    return julia_path
 end
 
 _to_array(x::Reactant.ConcreteRArray) = Array(x)
