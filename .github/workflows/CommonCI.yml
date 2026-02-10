@@ -161,8 +161,14 @@ jobs:
           echo "runtest_test_args=${TEST_ARGS[@]}" | tee "${GITHUB_ENV}"
       - name: Install earlyoom
         if: ${{ runner.os == 'Linux' }}
+        shell: bash
         run: |
-          sudo apt-get install -y earlyoom
+          SUDO="sudo"
+          if [[ ${{ startsWith(inputs.os, 'linux-') }} == 'true' ]]; then
+              # On self-hosted runners there's no `sudo`
+              SUDO=""
+          fi
+          ${SUDO} apt-get install -y earlyoom
       - name: "Run Tests (PJRT)"
         if: ${{ inputs.runtime == 'pjrt' || inputs.runtime == 'both' }}
         timeout-minutes: 120
