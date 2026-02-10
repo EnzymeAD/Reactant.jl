@@ -8,26 +8,12 @@ using JSON3: JSON3
 @info sprint(io -> versioninfo(io; verbose=true))
 
 # Determine backend from environment
-BENCHMARK_GROUP = get(ENV, "BENCHMARK_GROUP", nothing)
-
-if BENCHMARK_GROUP === nothing
-    # Try to auto-detect from devices
-    # Load Reactant just to check the default backend
-    using Reactant: Reactant
-    BENCHMARK_GROUP = String(split(string(first(Reactant.devices())), ":")[1])
-end
-
-if BENCHMARK_GROUP == "CUDA"
-    @info "Running CUDA benchmarks" maxlog = 1
-elseif BENCHMARK_GROUP == "TPU"
-    @info "Running TPU benchmarks" maxlog = 1
-elseif BENCHMARK_GROUP == "CPU"
-    @info "Running CPU benchmarks" maxlog = 1
-else
-    @info "Running $(BENCHMARK_GROUP) benchmarks" maxlog = 1
-end
-
+@assert length(ARGS) == 1 "Usage: julia --project=benchmark benchmark/runbenchmarks.jl \
+                           <backend>"
+const BENCHMARK_GROUP = ARGS[1]
 @assert BENCHMARK_GROUP in ("CPU", "CUDA", "TPU") "Unknown backend: $(BENCHMARK_GROUP)"
+
+@info "Running $(BENCHMARK_GROUP) benchmarks"
 
 # Main benchmark orchestration
 include("setup.jl")

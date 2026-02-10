@@ -1,15 +1,10 @@
 [deps]
 JSON3 = "0f8b85d8-7281-11e9-16c2-39a750bddbf1"
 PrettyTables = "08abe8d2-0d0c-5749-adfa-8a2ac140af0d"
-Reactant = "3c362404-f566-11ee-1572-e11a4b42c853"
-
-[sources]
-Reactant = {path = ".."}
 
 [compat]
 JSON3 = "1"
 PrettyTables = "3"
-Reactant = "0.2.161"
 julia = "1.11"
 
 [workspace]
