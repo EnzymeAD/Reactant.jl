@@ -28,7 +28,9 @@ concurrency:
 jobs:
   check-benchmark-changes:
     if: github.event_name == 'pull_request'
-    runs-on: ubuntu-latest
+    runs-on: linux-x86-n2-32
+    container:
+      image: 'ghcr.io/enzymead/reactant-docker-images@sha256:7004a6ebbdd77bd047900b2bffc542e8576864056dc27a9c94d30666d6f7ea01'
     outputs:
       benchmark_changed: ${{ steps.filter.outputs.benchmark }}
     steps:
@@ -129,11 +131,19 @@ jobs:
             include("benchmark/aggregate.jl")'
 
            echo "path=$(find benchmark -type f -name combinedbenchmarks.json 2>/dev/null)" >> $GITHUB_OUTPUT
+           echo "path_tflops=$(find benchmark -type f -name combinedbenchmarks_tflops.json 2>/dev/null)" >> $GITHUB_OUTPUT
       - name: Upload benchmark results as artifact
         uses: actions/upload-artifact@v6
         with:
           name: benchmark-results
           path: ${{ steps.locate.outputs.path }}
+          retention-days: 90
+          overwrite: false
+      - name: Upload benchmark results as artifact
+        uses: actions/upload-artifact@v6
+        with:
+          name: benchmark-results-tflops
+          path: ${{ steps.locate.outputs.path_tflops }}
           retention-days: 90
           overwrite: false
       - name: Upload Benchmark Results
@@ -143,6 +153,20 @@ jobs:
           tool: "customSmallerIsBetter"
           output-file-path: ${{ steps.locate.outputs.path }}
           benchmark-data-dir-path: "benchmarks"
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          comment-always: false
+          summary-always: true
+          alert-threshold: "150%"
+          fail-on-alert: false
+          auto-push: ${{ github.event_name != 'pull_request' }}
+          max-items-in-chart: 50
+      - name: Upload Benchmark Results (TFLOP/s)
+        uses: benchmark-action/github-action-benchmark@v1
+        with:
+          name: Reactant.jl Benchmarks (TFLOP/s)
+          tool: "customBiggerIsBetter"
+          output-file-path: ${{ steps.locate.outputs.path_tflops }}
+          benchmark-data-dir-path: "benchmarks_tflops"
           github-token: ${{ secrets.GITHUB_TOKEN }}
           comment-always: false
           summary-always: true

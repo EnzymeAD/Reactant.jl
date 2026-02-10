@@ -18,12 +18,12 @@ const BENCHMARK_GROUP = ARGS[1]
 # Main benchmark orchestration
 include("setup.jl")
 
-results = run_all_benchmarks(BENCHMARK_GROUP)
+all_results = run_all_benchmarks(BENCHMARK_GROUP)
 
 # Display results in a table
-if !isempty(results)
-    table = Matrix{Any}(undef, length(results), 5)
-    for (i, (k, v)) in enumerate(sort(results))
+if !isempty(all_results["Runtime (s)"])
+    table = Matrix{Any}(undef, length(all_results["Runtime (s)"]), 6)
+    for (i, (k, v)) in enumerate(sort(all_results["Runtime (s)"]))
         parts = rsplit(k, "/"; limit=4)
         # Fill in parts, padding with empty strings if fewer than 4 parts
         while length(parts) < 4
@@ -35,16 +35,17 @@ if !isempty(results)
         table[i, 3] = i3
         table[i, 4] = i4
         table[i, 5] = v
+        table[i, 6] = all_results["TFLOP/s"][k]
     end
 
     pretty_table(
         table;
-        alignment=[:l, :l, :l, :l, :c],
-        column_labels=["Benchmark", "Mode", "Backend", "Passes", "Time (s)"],
+        alignment=[:l, :l, :l, :l, :c, :c],
+        column_labels=["Benchmark", "Mode", "Backend", "Passes", "Time (s)", "TFLOP/s"],
         display_size=(-1, -1),
     )
 end
 
 include("utils.jl")
 
-save_results(results, joinpath(dirname(@__FILE__), "results"), "", BENCHMARK_GROUP)
+save_results(all_results, joinpath(dirname(@__FILE__), "results"), "", BENCHMARK_GROUP)

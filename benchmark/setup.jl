@@ -84,7 +84,10 @@ Load benchmark results from a subdirectory's results folder.
 function load_results_from_dir(benchmark_dir::String, backend::String)
     results_dir = joinpath(benchmark_dir, "results")
     benchmark_name = basename(benchmark_dir)
-    all_results = Dict{String,Any}[]
+    all_results = Dict(
+        "Runtime (s)" => Dict{String,Float64}(),
+        "TFLOP/s" => Dict{String,Float64}(),
+    )
 
     if !isdir(results_dir)
         @warn "No results directory found for $(benchmark_name)"
@@ -95,13 +98,17 @@ function load_results_from_dir(benchmark_dir::String, backend::String)
         # Only load files matching the current backend
         if endswith(filename, ".json") && contains(filename, backend)
             filepath = joinpath(results_dir, filename)
-            try
-                results = JSON3.read(read(filepath, String), Vector{Dict{String,Any}})
-                append!(all_results, results)
-                @info "Loaded $(length(results)) results from $(filepath)"
-            catch e
-                @error "Failed to load results from $(filepath)" exception = e
+            results = JSON3.read(read(filepath, String), Vector{Dict{String,Any}})
+
+            for result in results
+                if result["unit"] == "s"
+                    all_results["Runtime (s)"][result["name"]] = result["value"]
+                elseif result["unit"] == "TFLOP/s"
+                    all_results["TFLOP/s"][result["name"]] = result["value"]
+                end
             end
+
+            @info "Loaded $(length(results)) results from $(filepath)"
         end
     end
 
@@ -132,19 +139,10 @@ function run_all_benchmarks(backend::String)
 
     for dir in benchmark_dirs
         results = load_results_from_dir(dir, backend)
-
-        # Merge results
-        for result in results
-            name = result["name"]
-            value = result["value"]
-            if haskey(all_results, name)
-                @warn "Duplicate benchmark name" name
-            end
-            all_results[name] = value
-        end
+        merge!(all_results, results)
     end
 
-    @info "Aggregated $(length(all_results)) total benchmark results"
+    @info "Aggregated $(length(all_results["Runtime (s)"])) total benchmark results"
 
     return all_results
 end

@@ -2,7 +2,6 @@
 # Shared backend detection and result saving logic for all benchmark subdirectories.
 
 using InteractiveUtils: versioninfo
-using Reactant: Reactant
 using JSON3: JSON3
 
 """
@@ -34,7 +33,8 @@ function get_backend()
 end
 
 """
-    save_results(results::Dict{String,Float64}, results_dir::String, prefix::String,
+    save_results(results::Dict{String,Dict{String,Float64}},
+                 results_dir::String, prefix::String,
                  backend::String)
 
 Save benchmark results to a standardized JSON file.
@@ -45,16 +45,23 @@ Save benchmark results to a standardized JSON file.
 - `backend`: Backend name (e.g. "CPU", "CUDA", "TPU").
 """
 function save_results(
-    results::Dict{String,Float64}, results_dir::String, prefix::String, backend::String
+    results::Dict{String,Dict{String,Float64}},
+    results_dir::String,
+    prefix::String,
+    backend::String,
 )
     mkpath(results_dir)
 
     if isempty(prefix)
-        filename = string(backend, "benchmarks.json")
+        benchmark_filename = string(backend, "benchmarks.json")
+        tflops_filename = string(backend, "benchmarks_tflops.json")
     else
-        filename = string(prefix, "_", backend, "benchmarks.json")
+        benchmark_filename = string(prefix, "_", backend, "benchmarks.json")
+        tflops_filename = string(prefix, "_", backend, "benchmarks_tflops.json")
     end
-    filepath = joinpath(results_dir, filename)
+
+    benchmark_filepath = joinpath(results_dir, benchmark_filename)
+    tflops_filepath = joinpath(results_dir, tflops_filename)
 
     standardized_results = Vector{Dict{String,Union{String,Float64}}}(
         undef, length(results["Runtime (s)"])
@@ -62,16 +69,23 @@ function save_results(
     for (i, (k, v)) in enumerate(results["Runtime (s)"])
         standardized_results[i] = Dict("name" => k, "value" => v, "unit" => "s")
     end
+
+    tflops_results = Vector{Dict{String,Union{String,Float64}}}(
+        undef, length(results["TFLOP/s"])
+    )
     for (i, (k, v)) in enumerate(results["TFLOP/s"])
-        standardized_results[i] = Dict(
-            "name" => "$(k) -- TFLOP/s", "value" => v, "unit" => "TFLOP/s"
-        )
+        tflops_results[i] = Dict("name" => k, "value" => v, "unit" => "TFLOP/s")
     end
 
-    open(filepath, "w") do io
+    open(benchmark_filepath, "w") do io
         JSON3.pretty(io, JSON3.write(standardized_results))
     end
 
-    @info "Saved $(length(results)) benchmark results to $(filepath)"
-    return filepath
+    open(tflops_filepath, "w") do io
+        JSON3.pretty(io, JSON3.write(tflops_results))
+    end
+
+    @info "Saved $(length(results["Runtime (s)"])) benchmark results to \
+           $(benchmark_filepath) and $(tflops_filepath)"
+    return benchmark_filepath, tflops_filepath
 end
