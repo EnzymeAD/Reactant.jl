@@ -81,21 +81,7 @@ import jax
 result = run_my_function(*inputs)
 ```
 """
-function export_to_enzymejax(f, args...; kwargs...)
-    MLIR.IR.@dispose ctx = Reactant.ReactantContext() begin
-        return export_to_enzymejax(
-            ctx,
-            f,
-            args...;
-            kwargs...,
-            preserve_sharding=true,
-            compile_options=Reactant.Compiler.CompileOptions(),
-        )
-    end
-end
-
 function export_to_enzymejax(
-    ctx::MLIR.IR.Context,
     f,
     args...;
     output_dir::Union{String,Nothing}=nothing,
@@ -116,8 +102,7 @@ function export_to_enzymejax(
     # This returns compilation result with traced argument information
     argprefix = gensym("exportarg")
 
-    MLIR.IR.activate(ctx)
-    hlo_code, mlir_fn_res = try
+    MLIR.IR.@dispose ctx = Reactant.ReactantContext() begin
         mod, mlir_fn_res = Compiler.compile_mlir(
             ctx,
             f,
@@ -128,66 +113,64 @@ function export_to_enzymejax(
             # to support older jax versions which don't support shardy
             shardy_passes=:to_mhlo_shardings,
         )
-        try
-            string(mod), mlir_fn_res
+        hlo_code = try
+            string(mod)
         finally
             MLIR.IR.dispose(mod)
         end
-    finally
-        MLIR.IR.deactivate(ctx)
-    end
 
-    # Save MLIR code
-    fnid = 0
-    while isfile(joinpath(output_dir, "$(function_name)_$(fnid).mlir"))
-        fnid += 1
-    end
-    mlir_path = joinpath(output_dir, "$(function_name)_$(fnid).mlir")
-    write(mlir_path, hlo_code)
+        # Save MLIR code
+        fnid = 0
+        while isfile(joinpath(output_dir, "$(function_name)_$(fnid).mlir"))
+            fnid += 1
+        end
+        mlir_path = joinpath(output_dir, "$(function_name)_$(fnid).mlir")
+        write(mlir_path, hlo_code)
 
-    # Process and save inputs based on the linearized arguments
-    # seen_args is an OrderedIdDict where keys are concrete args and values are traced args
-    # linear_args contains only the arguments that need to be passed to the function
-    # We iterate over seen_args which preserves the order, and only save those in linear_args
-    input_data = Dict{String,Union{AbstractArray,Number}}()
-    input_info = []
-    input_idx = 1
-    for (concrete_arg, traced_arg) in mlir_fn_res.seen_args
-        path = Reactant.TracedUtils.get_idx(traced_arg, argprefix)[2:end]
+        # Process and save inputs based on the linearized arguments
+        # seen_args is an OrderedIdDict where keys are concrete args and values are traced args
+        # linear_args contains only the arguments that need to be passed to the function
+        # We iterate over seen_args which preserves the order, and only save those in linear_args
+        input_data = Dict{String,Union{AbstractArray,Number}}()
+        input_info = []
+        input_idx = 1
+        for (concrete_arg, traced_arg) in mlir_fn_res.seen_args
+            path = Reactant.TracedUtils.get_idx(traced_arg, argprefix)[2:end]
 
-        # Store input data for the single NPZ file
-        arr_key = "arr_$input_idx"
-        input_data[arr_key] = _to_array(concrete_arg)
+            # Store input data for the single NPZ file
+            arr_key = "arr_$input_idx"
+            input_data[arr_key] = _to_array(concrete_arg)
 
-        # Extract sharding information if available and if preserve_sharding is true
-        sharding_info = nothing
-        if preserve_sharding && _has_sharding_info(concrete_arg)
-            sharding_info = _extract_sharding_info(concrete_arg)
+            # Extract sharding information if available and if preserve_sharding is true
+            sharding_info = nothing
+            if preserve_sharding && _has_sharding_info(concrete_arg)
+                sharding_info = _extract_sharding_info(concrete_arg)
+            end
+
+            push!(
+                input_info,
+                (
+                    shape=size(concrete_arg),
+                    dtype=Reactant.unwrapped_eltype(concrete_arg),
+                    path="arg." * join(string.(path), "."),
+                    key=arr_key,
+                    sharding=sharding_info,
+                ),
+            )
+            input_idx += 1
         end
 
-        push!(
-            input_info,
-            (
-                shape=size(concrete_arg),
-                dtype=Reactant.unwrapped_eltype(concrete_arg),
-                path="arg." * join(string.(path), "."),
-                key=arr_key,
-                sharding=sharding_info,
-            ),
+        # Save all inputs to a single NPZ file
+        input_path = joinpath(output_dir, "$(function_name)_$(fnid)_inputs.npz")
+        save_inputs_npz(input_path, input_data)
+
+        # Generate Python script
+        python_path = joinpath(output_dir, "$(function_name).py")
+        _generate_python_script(
+            python_path, function_name, mlir_path, input_path, input_info; preserve_sharding
         )
-        input_idx += 1
+        return python_path
     end
-
-    # Save all inputs to a single NPZ file
-    input_path = joinpath(output_dir, "$(function_name)_$(fnid)_inputs.npz")
-    save_inputs_npz(input_path, input_data)
-
-    # Generate Python script
-    python_path = joinpath(output_dir, "$(function_name).py")
-    _generate_python_script(
-        python_path, function_name, mlir_path, input_path, input_info; preserve_sharding
-    )
-    return python_path
 end
 
 _to_array(x::Reactant.ConcreteRArray) = Array(x)
