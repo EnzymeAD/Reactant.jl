@@ -88,7 +88,7 @@ function export_to_reactant_script(
     argprefix = gensym("exportarg")
     MLIR.IR.@dispose ctx = Reactant.ReactantContext() begin
         mod, mlir_fn_res = Compiler.compile_mlir(
-            f, args; argprefix, drop_unsupported_attributes=true, compile_options
+            ctx, f, args; argprefix, drop_unsupported_attributes=true, compile_options
         )
         hlo_code = try
             string(mod)
