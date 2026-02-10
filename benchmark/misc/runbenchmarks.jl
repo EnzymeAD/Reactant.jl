@@ -1,7 +1,7 @@
 # Miscellaneous Benchmarks Runner
 # This script runs all misc benchmarks and stores results to a JSON file
 
-include("../utils.jl")
+include("common.jl")
 
 @info sprint(io -> versioninfo(io; verbose=true))
 
@@ -14,7 +14,6 @@ using Random: Random
 using Printf: @sprintf
 
 # Include benchmark modules
-include("common.jl")
 include("newton_schulz.jl")
 include("bloch_rf_optimization.jl")
 

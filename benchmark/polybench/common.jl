@@ -3,24 +3,7 @@ using LinearAlgebra: norm
 using Chairmarks: @b
 using Printf: @sprintf
 
-function get_backend()
-    # To run benchmarks on a specific backend
-    BENCHMARK_GROUP = get(ENV, "BENCHMARK_GROUP", nothing)
-
-    if BENCHMARK_GROUP == "CUDA"
-        Reactant.set_default_backend("gpu")
-        @info "Running CUDA benchmarks" maxlog = 1
-    elseif BENCHMARK_GROUP == "TPU"
-        Reactant.set_default_backend("tpu")
-    elseif BENCHMARK_GROUP == "CPU"
-        Reactant.set_default_backend("cpu")
-        @info "Running CPU benchmarks" maxlog = 1
-    else
-        BENCHMARK_GROUP = String(split(string(first(Reactant.devices())), ":")[1])
-        @info "Running $(BENCHMARK_GROUP) benchmarks" maxlog = 1
-    end
-    return BENCHMARK_GROUP
-end
+include("../utils.jl")
 
 function recursive_check(x::AbstractArray, y::AbstractArray; kwargs...)
     res = isapprox(x, y; norm=Base.Fix2(norm, Inf), kwargs...)
@@ -94,7 +77,8 @@ function run_benchmark!(
             args_ra = map(x -> Reactant.to_rarray(x; track_numbers), args)
             res_ra = @jit f′(args_ra...)
             @assert recursive_check(res_ra, gt_res, atol=5e-2, rtol=5e-2) "Result does not \
-                                                                        match ground truth"
+                                                                           match ground \
+                                                                           truth"
 
             time = Reactant.Profiler.profile_with_xprof(
                 f′, args_ra...; nrepeat=10, compile_options=compile_options
