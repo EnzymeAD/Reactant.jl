@@ -188,6 +188,7 @@ testsuite = [
     (Ptr, Ptr, Ptr),
     (Core.LLVMPtr, Core.LLVMPtr, Core.LLVMPtr),
     (Base.RefValue, Base.RefValue, Base.RefValue),
+    (Ref, Ref, Ref),
 
     # Function types
     (
