@@ -1,25 +1,14 @@
-using Oceananigans
-ENV["GKSwstype"] = "100"
+using Oceananigans, Printf, Statistics, SeawaterPolynomials, CUDA, Reactant, Enzyme
 
-using Printf
-using Statistics
-
-using Oceananigans
 using Oceananigans.Units
 using Oceananigans.OutputReaders: FieldTimeSeries
 using Oceananigans.Grids: xnode, ynode, znode
 using Oceananigans.TurbulenceClosures: CATKEVerticalDiffusivity, HorizontalFormulation
-
-using SeawaterPolynomials
-
-using CUDA
-
-using Reactant
 using Oceananigans.Architectures: ReactantState
 
-using Enzyme
-
 Oceananigans.defaults.FloatType = Float64
+
+include("../utils.jl")
 
 graph_directory = "run_abernathy_model_ad_spinup100_100steps/"
 
@@ -368,91 +357,85 @@ end
 ##### Actually creating our model and using these functions to run it:
 #####
 
-# Architecture
-architecture = ReactantState()
+function run_abernathey_channel_benchmark!(results::Dict{String,Float64}, backend::String)
+    architecture = ReactantState()
 
-# Timestep size:
-Δt₀ = 2.5minutes
+    Δt₀ = 2.5minutes
 
-# Make the grid:
-grid = make_grid(architecture, Nx, Ny, Nz, z_faces)
-model = build_model(grid, Δt₀, parameters)
-T_flux = T_flux_init(model.grid, parameters)
-u_wind_stress = u_wind_stress_init(model.grid, parameters)
-v_wind_stress = v_wind_stress_init(model.grid, parameters)
-Tᵢ, Sᵢ = temperature_salinity_init(model.grid, parameters)
-mld = Field{Center,Center,Nothing}(model.grid) # Not used for now
-Δz = Reactant.to_rarray(Δz)
+    # Make the grid:
+    grid = make_grid(architecture, Nx, Ny, Nz, z_faces)
+    model = build_model(grid, Δt₀, parameters)
+    T_flux = T_flux_init(model.grid, parameters)
+    u_wind_stress = u_wind_stress_init(model.grid, parameters)
+    v_wind_stress = v_wind_stress_init(model.grid, parameters)
+    Tᵢ, Sᵢ = temperature_salinity_init(model.grid, parameters)
+    mld = Field{Center,Center,Nothing}(model.grid) # Not used for now
+    Δz = Reactant.to_rarray(Δz)
 
-dmodel = Enzyme.make_zero(model)
-dTᵢ = Field{Center,Center,Center}(model.grid)
-dSᵢ = Field{Center,Center,Center}(model.grid)
-du_wind_stress = Field{Face,Center,Nothing}(model.grid)
-dv_wind_stress = Field{Center,Face,Nothing}(model.grid)
-dT_flux = Field{Center,Center,Nothing}(model.grid)
-dmld = Field{Center,Center,Nothing}(model.grid)
-dΔz = Enzyme.make_zero(Δz)
+    dmodel = Enzyme.make_zero(model)
+    dTᵢ = Field{Center,Center,Center}(model.grid)
+    dSᵢ = Field{Center,Center,Center}(model.grid)
+    du_wind_stress = Field{Face,Center,Nothing}(model.grid)
+    dv_wind_stress = Field{Center,Face,Nothing}(model.grid)
+    dT_flux = Field{Center,Center,Nothing}(model.grid)
+    dmld = Field{Center,Center,Nothing}(model.grid)
+    dΔz = Enzyme.make_zero(Δz)
 
-# Trying zonal transport:
+    # Profile and time the spinup_reentrant_channel_model!
+    time_spinup_reentrant_channel_model! = Reactant.Profiler.profile_with_xprof(
+        spinup_reentrant_channel_model!,
+        model,
+        Tᵢ,
+        Sᵢ,
+        u_wind_stress,
+        v_wind_stress,
+        T_flux;
+        nrepeat=10,
+        warmup=1,
+        compile_options=CompileOptions(; raise=true, raise_first=true),
+    )
+    results["Oceananigans/SpinUpReentrantChannelModel/$(backend)/Primal"] =
+        time_spinup_reentrant_channel_model!.profiling_result.runtime_ns / 1e9
 
-tic = time()
-rspinup_reentrant_channel_model! = @compile raise_first = true raise = true sync = true spinup_reentrant_channel_model!(
-    model, Tᵢ, Sᵢ, u_wind_stress, v_wind_stress, T_flux
-)
-#restimate_tracer_error = @compile raise_first=true raise=true sync=true estimate_tracer_error(model, Tᵢ, Sᵢ, u_wind_stress, v_wind_stress, T_flux, Δz, mld)
-rdifferentiate_tracer_error = @compile raise_first = true raise = true sync = true differentiate_tracer_error(
-    model,
-    Tᵢ,
-    Sᵢ,
-    u_wind_stress,
-    v_wind_stress,
-    T_flux,
-    Δz,
-    mld,
-    dmodel,
-    dTᵢ,
-    dSᵢ,
-    du_wind_stress,
-    dv_wind_stress,
-    dT_flux,
-    dΔz,
-    dmld,
-)
-compile_toc = time() - tic
+    # Spinup the model for a sufficient amount of time, save the T and S from this state:
+    rspinup_reentrant_channel_model! = @compile raise_first = true raise = true sync = true spinup_reentrant_channel_model!(
+        model, Tᵢ, Sᵢ, u_wind_stress, v_wind_stress, T_flux
+    )
+    rspinup_reentrant_channel_model!(model, Tᵢ, Sᵢ, u_wind_stress, v_wind_stress, T_flux)
+    @allowscalar set!(Tᵢ, model.tracers.T)
+    @allowscalar set!(Sᵢ, model.tracers.S)
 
-@show compile_toc
+    # Profile and time the differentiate_tracer_error
+    time_differentiate_tracer_error = Reactant.Profiler.profile_with_xprof(
+        differentiate_tracer_error,
+        model,
+        Tᵢ,
+        Sᵢ,
+        u_wind_stress,
+        v_wind_stress,
+        T_flux,
+        Δz,
+        mld,
+        dmodel,
+        dTᵢ,
+        dSᵢ,
+        du_wind_stress,
+        dv_wind_stress,
+        dT_flux,
+        dΔz,
+        dmld;
+        nrepeat=10,
+        warmup=1,
+        compile_options=CompileOptions(; raise=true, raise_first=true),
+    )
+    results["Oceananigans/DifferentiateTracerError/$(backend)/Reverse"] =
+        time_differentiate_tracer_error!.profiling_result.runtime_ns / 1e9
 
-# Spinup the model for a sufficient amount of time, save the T and S from this state:
-tic = time()
-rspinup_reentrant_channel_model!(model, Tᵢ, Sᵢ, u_wind_stress, v_wind_stress, T_flux)
-@allowscalar set!(Tᵢ, model.tracers.T)
-@allowscalar set!(Sᵢ, model.tracers.S)
-spinup_toc = time() - tic
-@show spinup_toc
+    return nothing
+end
 
-tic = time()
-#output = restimate_tracer_error(model, Tᵢ, Sᵢ, u_wind_stress, v_wind_stress, T_flux, Δz, mld)
-dedν = rdifferentiate_tracer_error(
-    model,
-    Tᵢ,
-    Sᵢ,
-    u_wind_stress,
-    v_wind_stress,
-    T_flux,
-    Δz,
-    mld,
-    dmodel,
-    dTᵢ,
-    dSᵢ,
-    du_wind_stress,
-    dv_wind_stress,
-    dT_flux,
-    dΔz,
-    dmld,
-)
-run_toc = time() - tic
-
-@show run_toc
-#@show output
-
-@show dedν
+if abspath(PROGRAM_FILE) == @__FILE__
+    backend = get_backend()
+    results = Dict()
+    run_abernathey_channel_benchmark!(results, backend)
+end
