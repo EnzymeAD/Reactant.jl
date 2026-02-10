@@ -623,7 +623,7 @@ end
 
 function get_aggregate_memory_statistics(xplane_file::String)
     data = JSON.parse(xspace_to_tools_data([xplane_file], "memory_profile")[1])
-    memory_data = Dict{Symbol,MemoryProfileSummary}()
+    memory_data = Dict{String,MemoryProfileSummary}()
     for (k, v) in data[:memoryProfilePerAllocator]
         profile_summary = v[:profileSummary]
         memory_data[k] = MemoryProfileSummary(
