@@ -49,28 +49,28 @@ z_faces[Nz + 1] = 0
 const f = -1e-4
 const β = 1e-11
 
-halo_size = 4 #3 for non-immersed grid
+halo_size = 4 # 3 for non-immersed grid
 
 # Other model parameters:
 const α = 2e-4     # [K⁻¹] thermal expansion coefficient
 const g = 9.8061   # [m/s²] gravitational constant
-const cᵖ = 3994.0   # [J/K]  heat capacity
+const cᵖ = 3994.0  # [J/K]  heat capacity
 const ρ = 999.8    # [kg/m³] reference density
 
 parameters = (
     Ly=Ly,
     Lz=Lz,
-    Qᵇ=10 / (ρ * cᵖ) * α * g,            # buoyancy flux magnitude [m² s⁻³]
-    Qᵀ=10 / (ρ * cᵖ),                    # temperature flux magnitude
-    y_shutoff=5 / 6 * Ly,                # shutoff location for buoyancy flux [m]
-    τ=0.2 / ρ,                           # surface kinematic wind stress [m² s⁻²]
-    μ=1 / 30days,                      # bottom drag damping time-scale [s⁻¹]
-    ΔB=8 * α * g,                      # surface vertical buoyancy gradient [s⁻²]
-    ΔT=8,                              # surface vertical temperature gradient
-    H=Lz,                              # domain depth [m]
-    h=1000.0,                          # exponential decay scale of stable stratification [m]
-    y_sponge=19 / 20 * Ly,               # southern boundary of sponge layer [m]
-    λt=7.0days,                         # relaxation time scale [s]
+    Qᵇ=10 / (ρ * cᵖ) * α * g,       # buoyancy flux magnitude [m² s⁻³]
+    Qᵀ=10 / (ρ * cᵖ),               # temperature flux magnitude
+    y_shutoff=5 / 6 * Ly,           # shutoff location for buoyancy flux [m]
+    τ=0.2 / ρ,                      # surface kinematic wind stress [m² s⁻²]
+    μ=1 / 30days,                   # bottom drag damping time-scale [s⁻¹]
+    ΔB=8 * α * g,                   # surface vertical buoyancy gradient [s⁻²]
+    ΔT=8,                           # surface vertical temperature gradient
+    H=Lz,                           # domain depth [m]
+    h=1000.0,                       # exponential decay scale of stable stratification [m]
+    y_sponge=19 / 20 * Ly,          # southern boundary of sponge layer [m]
+    λt=7.0days,                     # relaxation time scale [s]
 )
 
 # full ridge function:
@@ -168,7 +168,6 @@ function build_model(grid, Δt₀, parameters)
         taper = exp(-(k - 1) / decay_scale)
         κz_array[:, :, k] .= κz + κz_add * taper
     end
-    @show κz_array[1:2, 20, :]
 
     set!(κz_field, κz_array)
 
@@ -178,8 +177,6 @@ function build_model(grid, Δt₀, parameters)
     biharmonic_closure = ScalarBiharmonicDiffusivity(
         HorizontalFormulation(), Oceananigans.defaults.FloatType; ν=1e11
     )
-
-    @info "Building a model..."
 
     @allowscalar model = HydrostaticFreeSurfaceModel(;
         grid=grid,
@@ -352,7 +349,7 @@ function differentiate_tracer_error(
     dΔz,
     dmld,
 )
-    dedν = autodiff(
+    return autodiff(
         set_strong_zero(Enzyme.ReverseWithPrimal),
         estimate_tracer_error,
         Active,
@@ -365,8 +362,6 @@ function differentiate_tracer_error(
         Duplicated(Δz, dΔz),
         Duplicated(mld, dmld),
     )
-
-    return dedν
 end
 
 #####
@@ -387,9 +382,7 @@ u_wind_stress = u_wind_stress_init(model.grid, parameters)
 v_wind_stress = v_wind_stress_init(model.grid, parameters)
 Tᵢ, Sᵢ = temperature_salinity_init(model.grid, parameters)
 mld = Field{Center,Center,Nothing}(model.grid) # Not used for now
-Δz = Reactant.ConcreteRArray(Δz)
-
-@info "Built $model."
+Δz = Reactant.to_rarray(Δz)
 
 dmodel = Enzyme.make_zero(model)
 dTᵢ = Field{Center,Center,Center}(model.grid)
@@ -402,7 +395,6 @@ dΔz = Enzyme.make_zero(Δz)
 
 # Trying zonal transport:
 
-@info "Compiling the model run..."
 tic = time()
 rspinup_reentrant_channel_model! = @compile raise_first = true raise = true sync = true spinup_reentrant_channel_model!(
     model, Tᵢ, Sᵢ, u_wind_stress, v_wind_stress, T_flux
@@ -430,23 +422,6 @@ compile_toc = time() - tic
 
 @show compile_toc
 
-@info "Running the simulation..."
-
-#=
-using FileIO, JLD2
-
-filename = graph_directory * "data_init.jld2"
-
-if !isdir(graph_directory) Base.Filesystem.mkdir(graph_directory) end
-
-if isa(model.grid, ImmersedBoundaryGrid)
-    bottom_height = model.grid.immersed_boundary.bottom_height
-else
-    bottom_height = Field{Center, Center, Nothing}(model.grid)
-    set!(bottom_height, -Lz)
-end
-=#
-
 # Spinup the model for a sufficient amount of time, save the T and S from this state:
 tic = time()
 rspinup_reentrant_channel_model!(model, Tᵢ, Sᵢ, u_wind_stress, v_wind_stress, T_flux)
@@ -454,20 +429,6 @@ rspinup_reentrant_channel_model!(model, Tᵢ, Sᵢ, u_wind_stress, v_wind_stress
 @allowscalar set!(Sᵢ, model.tracers.S)
 spinup_toc = time() - tic
 @show spinup_toc
-
-#=
-jldsave(filename; Nx, Ny, Nz,
-                  bottom_height=convert(Array, interior(bottom_height)),
-                  T_init=convert(Array, interior(model.tracers.T)),
-                  S_init=convert(Array, interior(model.tracers.S)),
-                  ssh=convert(Array, interior(model.free_surface.η)),
-                  e_init=convert(Array, interior(model.tracers.e)),
-                  u_wind_stress=convert(Array, interior(u_wind_stress)),
-                  v_wind_stress=convert(Array, interior(v_wind_stress)),
-                  dkappaT_init=convert(Array, interior(dmodel.closure[2].κ[1])),
-                  dkappaS_init=convert(Array, interior(dmodel.closure[2].κ[2])),
-                  T_flux=convert(Array, interior(T_flux)))
-=#
 
 tic = time()
 #output = restimate_tracer_error(model, Tᵢ, Sᵢ, u_wind_stress, v_wind_stress, T_flux, Δz, mld)
@@ -495,28 +456,3 @@ run_toc = time() - tic
 #@show output
 
 @show dedν
-
-filename = graph_directory * "data_final.jld2"
-
-@info "Reactant Oceananigans ran without errors!"
-
-#=
-jldsave(filename; Nx, Ny, Nz,
-                  T_final=convert(Array, interior(model.tracers.T)),
-                  S_final=convert(Array, interior(model.tracers.S)),
-                  e_final=convert(Array, interior(model.tracers.e)),
-                  ssh=convert(Array, interior(model.free_surface.η)),
-                  u=convert(Array, interior(model.velocities.u)),
-                  v=convert(Array, interior(model.velocities.v)),
-                  w=convert(Array, interior(model.velocities.w)),
-                  mld=convert(Array, interior(mld)),
-                  #zonal_transport=convert(Float64, output),
-                  zonal_transport=convert(Float64, dedν[2]),
-                  du_wind_stress=convert(Array, interior(du_wind_stress)),
-                  dv_wind_stress=convert(Array, interior(dv_wind_stress)),
-                  dT=convert(Array, interior(dTᵢ)),
-                  dS=convert(Array, interior(dSᵢ)),
-                  dkappaT_final=convert(Array, interior(dmodel.closure[2].κ[1])),
-                  dkappaS_final=convert(Array, interior(dmodel.closure[2].κ[2])),
-                  dT_flux=convert(Array, interior(dT_flux)))
-=#
