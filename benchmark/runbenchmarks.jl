@@ -69,7 +69,7 @@ subdirectory_results = aggregate_saved_results(dirname(@__FILE__))
 if !isempty(subdirectory_results)
     combined_filename = string(BENCHMARK_GROUP, "_combined_benchmarks.json")
     open(joinpath(filepath, combined_filename), "w") do io
-        return JSON3.pretty(io, JSON3.write(subdirectory_results))
+        return JSON.json(io, subdirectory_results; pretty=true)
     end
     @info "Saved $(length(subdirectory_results)) combined results to $(joinpath(filepath, combined_filename))"
 end
