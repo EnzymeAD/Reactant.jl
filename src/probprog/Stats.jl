@@ -1,4 +1,3 @@
-using Statistics: mean, std, median, quantile
 using PrettyTables: pretty_table, fmt__printf
 
 struct ParameterSummary
@@ -119,26 +118,12 @@ function Base.show(io::IO, p::ParameterSummary)
     )
 end
 
-function _compute_ess end
-function _compute_rhat end
-
-function _compute_parameter_summary(name::String, samples::AbstractVector)
-    return ParameterSummary(
-        name,
-        mean(samples),
-        std(samples; corrected=true),
-        median(samples),
-        quantile(samples, 0.05),
-        quantile(samples, 0.95),
-        _compute_ess(samples),
-        _compute_rhat(samples),
-    )
-end
+function _compute_parameter_summary end
 
 function mcmc_summary(
     samples::AbstractMatrix{<:Real}; names::Union{Nothing,AbstractVector{String}}=nothing
 )
-    n_samples, n_dims = size(samples)
+    _, n_dims = size(samples)
     parameters = ParameterSummary[]
 
     for d in 1:n_dims
