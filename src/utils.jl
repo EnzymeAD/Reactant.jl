@@ -182,7 +182,6 @@ const __skip_rewrite_func_set = Set([
     typeof(Base.argtype_decl),
     typeof(Base.arg_decl_parts),
     typeof(Base.StackTraces.show_spec_sig),
-    typeof(Core.Compiler.return_type),
     typeof(Core.throw_inexacterror),
     typeof(Base.throw_boundserror),
     typeof(Base._shrink),
@@ -639,14 +638,15 @@ function Base.showerror(io::IO, ece::ReactantPrecompilationException)
     )
 end
 
-
 function traced_mi(mi)
     spec = mi.specTypes.parameters
     ft = spec[1]
     arg_types_param = spec[2:end]
     f_is_function = false
     kwargs = []
-    if ft === typeof(Core.kwcall) && length(arg_types_param) >= 2 && arg_types_param[1] <: NamedTuple
+    if ft === typeof(Core.kwcall) &&
+        length(arg_types_param) >= 2 &&
+        arg_types_param[1] <: NamedTuple
         ft = arg_types_param[2]
         kwt = arg_types_param[1]
         arg_types_param = arg_types_param[3:end]
@@ -655,8 +655,14 @@ function traced_mi(mi)
     end
 
     Base.sprint() do io
-	Base.show_signature_function(io, ft)
-    	Base.show_tuple_as_call(io, :function, Tuple{arg_types_param...}; hasfirst=false, kwargs = isempty(kwargs) ? nothing : kwargs)
+        Base.show_signature_function(io, ft)
+        Base.show_tuple_as_call(
+            io,
+            :function,
+            Tuple{arg_types_param...};
+            hasfirst=false,
+            kwargs=isempty(kwargs) ? nothing : kwargs,
+        )
     end
 end
 
@@ -988,10 +994,7 @@ function call_llvm_generator(
                     )
                 end
 
-                profile_julia_fns = Any[
-		    push_debug_stack!,
-		    pop_debug_stack!
-                ]
+                profile_julia_fns = Any[push_debug_stack!, pop_debug_stack!]
 
                 profile_llvm_fns = LLVM.Value[]
                 for f in profile_julia_fns
@@ -1005,34 +1008,41 @@ function call_llvm_generator(
                             LLVM.Value[LLVM.ConstantInt(length(globals))],
                         ),
                     )
-                    push!(
-                        globals,
-                        f,
-                    )
+                    push!(globals, f)
                     push!(profile_llvm_fns, gval)
                 end
 
                 stringv = traced_mi(mi)
-    
+
                 fname = LLVM.globalstring_ptr!(builder, stringv, "mi_name")
 
-		m = mi.def
+                m = mi.def
 
-    		tv, decls, file, line = Base.arg_decl_parts(m)
+                tv, decls, file, line = Base.arg_decl_parts(m)
                 file = LLVM.globalstring_ptr!(builder, file, "mi_file")
 
-                jl_cstr_to_string, FT = Enzyme.Compiler.get_function!(llvm_module, "jl_cstr_to_string", LLVM.FunctionType(jlvaluet, [LLVM.PointerType(LLVM.IntType(8))]))
+                jl_cstr_to_string, FT = Enzyme.Compiler.get_function!(
+                    llvm_module,
+                    "jl_cstr_to_string",
+                    LLVM.FunctionType(jlvaluet, [LLVM.PointerType(LLVM.IntType(8))]),
+                )
                 fname = LLVM.call!(builder, FT, jl_cstr_to_string, [fname])
-                
-		file = LLVM.call!(builder, FT, jl_cstr_to_string, [file])
-		
-		line = Enzyme.Compiler.emit_box_int64!(builder, LLVM.ConstantInt(Int64(line)))
 
-                Enzyme.Compiler.emit_apply_generic!(builder, LLVM.Value[profile_llvm_fns[1], fname, file, line])
+                file = LLVM.call!(builder, FT, jl_cstr_to_string, [file])
+
+                line = Enzyme.Compiler.emit_box_int64!(
+                    builder, LLVM.ConstantInt(Int64(line))
+                )
+
+                Enzyme.Compiler.emit_apply_generic!(
+                    builder, LLVM.Value[profile_llvm_fns[1], fname, file, line]
+                )
 
                 res = LLVM.call!(builder, LLVM.function_type(p.entry), p.entry, args[1:3])
 
-                Enzyme.Compiler.emit_apply_generic!(builder, LLVM.Value[profile_llvm_fns[2]])
+                Enzyme.Compiler.emit_apply_generic!(
+                    builder, LLVM.Value[profile_llvm_fns[2]]
+                )
 
                 LLVM.ret!(builder, res)
                 push!(
@@ -1041,7 +1051,7 @@ function call_llvm_generator(
                 )
 
                 LLVM.run!(LLVM.GlobalOptPass(), llvm_module)
-                    
+
                 # Required for windows
                 for f in LLVM.functions(llvm_module)
                     if isempty(LLVM.blocks(f))

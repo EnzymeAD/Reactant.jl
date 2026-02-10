@@ -44,7 +44,7 @@ jobs:
     timeout-minutes: 90
     needs: [check-benchmark-changes]
     if: |
-      always() && (
+      !cancelled() && (
         (github.ref == 'refs/heads/main' && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')) ||
         (github.event_name == 'pull_request' && (
           contains(join(github.event.pull_request.labels.*.name, ','), 'run benchmarks') ||
@@ -57,10 +57,13 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os:
-          - linux-x86-n2-32
-          - linux-x86-ct6e-180-4tpu
-          - linux-x86-a2-48-a100-4gpu
+        include:
+          - os: linux-x86-n2-32
+            device: CPU
+          - os: linux-x86-ct6e-180-4tpu
+            device: TPU
+          - os: linux-x86-a2-48-a100-4gpu
+            device: CUDA
     steps:
       - uses: actions/checkout@v6
       - uses: julia-actions/setup-julia@v2
@@ -74,7 +77,7 @@ jobs:
           Pkg.instantiate()
       - name: "Run Benchmarks"
         run: |
-          julia --color=yes --project=benchmark benchmark/runbenchmarks.jl
+          julia --color=yes --project=benchmark benchmark/runbenchmarks.jl ${{ matrix.device }}
         env:
           XLA_FLAGS: "--xla_gpu_experimental_use_raft_select_k=true"
       - name: Upload PProf Results
@@ -96,7 +99,7 @@ jobs:
 
   benchmark-aggregate:
     if: |
-      always() && (
+      !cancelled() && (
         (github.ref == 'refs/heads/main' && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')) ||
         (github.event_name == 'pull_request' && (
           contains(join(github.event.pull_request.labels.*.name, ','), 'run benchmarks') ||

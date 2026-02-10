@@ -21,7 +21,7 @@ function TracedStepRangeLen{T,R,S}(ref::R, step::S, len, offset=1) where {T,R,S}
     return TracedStepRangeLen{T,R,S,typeof(len)}(ref, step, len, offset)
 end
 function TracedStepRangeLen(ref::R, step::S, len, offset=1) where {R,S}
-    return TracedStepRangeLen{typeof(ref + zero(step)),R,S,typeof(len)}(
+    return TracedStepRangeLen{promote_type(typeof(ref), typeof(zero(step))),R,S,typeof(len)}(
         ref, step, len, offset
     )
 end
@@ -118,10 +118,12 @@ end
 # TracedUnitRange
 AbstractUnitRange{T}(r::TracedUnitRange) where {T} = TracedUnitRange{T}(r)
 
-function TracedUnitRange{T}(start, stop) where {T}
-    return TracedUnitRange{T}(convert(T, start), convert(T, stop))
+function TracedUnitRange{T}(start, stop, len::Int=-1) where {T}
+    return TracedUnitRange{T}(convert(T, start), convert(T, stop), len)
 end
-TracedUnitRange(start::T, stop::T) where {T} = TracedUnitRange{T}(start, stop)
+function TracedUnitRange(start::T, stop::T, len::Int=-1) where {T}
+    return TracedUnitRange{T}(start, stop, len)
+end
 function TracedUnitRange(start, stop)
     startstop_promoted = promote(start, stop)
     Base.not_sametype((start, stop), startstop_promoted)
@@ -153,13 +155,16 @@ function Base._in_unit_range(
 end
 
 @inline function Base.length(r::TracedUnitRange{TracedRNumber{T}}) where {T}
+    if r.length >= 0
+        return r.length
+    end
     start, stop = first(r), last(r)
     a = Base.oneunit(Base.zero(stop) - Base.zero(start))
     if a isa Signed
         # Signed are allowed to go negative
-        @opcall select(stop >= start, a + stop - start, a)
+        return @opcall select(stop >= start, a + stop - start, a)
     else
-        @opcall select(stop >= start, a + stop - start, zero(a))
+        return @opcall select(stop >= start, a + stop - start, zero(a))
     end
 end
 
@@ -186,4 +191,5 @@ end
 function (C::Base.Colon)(start::T, stop::TracedRNumber{T}) where {T}
     return C(TracedRNumber{T}(start), stop)
 end
+
 end

@@ -3,10 +3,12 @@ module IR
 using ..Reactant
 using ..API
 
+import LLVM: activate, deactivate, dispose
+
 # do not export `Type`, as it is already defined in Core
 # also, use `Core.Type` inside this module to avoid clash with MLIR `Type`
 export Attribute, Block, Context, Dialect, Location, Operation, Region, Value
-export activate!, deactivate!, dispose!, enable_multithreading!
+export activate, deactivate, dispose, enable_multithreading!
 export context, current_context, has_context, with_context
 export block, current_block, has_block, with_block
 export current_module, has_module, with_module
