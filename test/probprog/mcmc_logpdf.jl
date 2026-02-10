@@ -63,9 +63,6 @@ end
                 amm,
             )
         end
-        println("Compile time: $(round(compile_time_s * 1000, digits=2)) ms")
-
-        ProbProg.clear_dump_buffer!()
         run_time_s = @elapsed begin
             samples, diagnostics = compiled(
                 rng,
@@ -81,9 +78,6 @@ end
             samples_arr = Array(samples)
             diagnostics_arr = Array(diagnostics)
         end
-        println("Run time: $(round(run_time_s * 1000, digits=2)) ms")
-        ProbProg.show_dumps()
-
         @test size(samples_arr) == (num_samples, pos_size)
 
         if check_numpyro_available()
@@ -133,7 +127,6 @@ end
                     abs.(samples_arr .- numpyro_samples) ./
                     max.(abs.(numpyro_samples), 1e-300),
                 )
-                println("  max abs diff = $max_abs_diff, max rel diff = $max_rel_diff")
                 @test samples_arr ≈ numpyro_samples atol = 1e-8 rtol = 1e-6
             end
         end

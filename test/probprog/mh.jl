@@ -110,8 +110,6 @@ end
 
         slope = trace.choices[:slope][1, 1]
         intercept = trace.choices[:intercept][1, 1]
-        @show slope, intercept
-
         @test slope ≈ -2.0 rtol = 0.1
         @test intercept ≈ 10.0 rtol = 0.1
     end

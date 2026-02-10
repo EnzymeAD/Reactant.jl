@@ -102,9 +102,7 @@ function run_nuts_test(;
             )
         end
     end
-    println("Compile time: $(round(compile_time_s * 1000, digits=2)) ms")
 
-    # ProbProg.clear_dump_buffer!()
     run_time_s = @elapsed begin
         trace_tensor, diagnostics = compiled_fn(
             rng,
@@ -124,8 +122,6 @@ function run_nuts_test(;
         trace_tensor = Array(trace_tensor)
         diagnostics = Array(diagnostics)
     end
-    println("Run time: $(round(run_time_s * 1000, digits=2)) ms")
-    # ProbProg.show_dumps()
 
     selected_entries = ProbProg.filter_entries_by_selection(tt.entries, selection)
     trace = ProbProg.unflatten_trace(trace_tensor, 0.0, selected_entries, nothing)
