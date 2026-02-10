@@ -142,7 +142,8 @@ end
         # not modify the input.
         copied_x_r = copy(x_r)
 
-        planned_fft(x) = plan(x) * x
+        # Also use some keyword arguments defined by FFTW.jl planner methods.
+        planned_fft(x) = plan(x; timelimit=-1.0, num_threads=1) * x
         compiled_planned_fft = @compile planned_fft(x_r)
         # Make sure the result is correct
         @test compiled_planned_fft(x_r) ≈ fft(x)
