@@ -2,7 +2,7 @@ module Profiler
 
 import ..Reactant
 using Sockets: Sockets
-using JSON3: JSON3
+using JSON: JSON
 using PrettyTables: PrettyTables, pretty_table
 using Crayons: Crayon
 
@@ -439,7 +439,7 @@ function extract_mean_step_time(xplane_file::String, nrepeat::Int)
 end
 
 function extract_mean_step_time_from_overview_page(xplane_file::String, ::Int)
-    overview_data = JSON3.read(xspace_to_tools_data([xplane_file], "overview_page")[1])
+    overview_data = JSON.parse(xspace_to_tools_data([xplane_file], "overview_page")[1])
     step_table = overview_data[2]
     cols = step_table["cols"]
     rows = step_table["rows"]
@@ -466,7 +466,7 @@ function extract_mean_step_time_from_overview_page(xplane_file::String, ::Int)
 end
 
 function extract_mean_step_time_from_hlo_op_profile(xplane_file::String, nrepeat::Int)
-    data = JSON3.read(xspace_to_tools_data([xplane_file], "op_profile")[1])
+    data = JSON.parse(xspace_to_tools_data([xplane_file], "op_profile")[1])
     picosec = data["byProgram"]["metrics"]["normalizedTimePs"]
     return (picosec ÷ 1000) ÷ nrepeat
 end
@@ -622,7 +622,7 @@ function Base.show(io::IO, summary::MemoryProfileSummary)
 end
 
 function get_aggregate_memory_statistics(xplane_file::String)
-    data = JSON3.read(xspace_to_tools_data([xplane_file], "memory_profile")[1])
+    data = JSON.parse(xspace_to_tools_data([xplane_file], "memory_profile")[1])
     memory_data = Dict{Symbol,MemoryProfileSummary}()
     for (k, v) in data[:memoryProfilePerAllocator]
         profile_summary = v[:profileSummary]
@@ -684,7 +684,7 @@ function Base.show(io::IO, flops::FlopsSummary)
 end
 
 function get_aggregate_flops_statistics(xplane_file::String, nrepeat::Int)
-    data = JSON3.read(xspace_to_tools_data([xplane_file], "op_profile")[1])
+    data = JSON.parse(xspace_to_tools_data([xplane_file], "op_profile")[1])
     if !haskey(data, :byProgram) || !haskey(data[:byProgram], :metrics)
         return nothing
     end
@@ -903,7 +903,7 @@ struct KernelReport
 end
 
 function get_kernel_stats(xplane_file::String)
-    data = JSON3.read(xspace_to_tools_data([xplane_file], "kernel_stats")[1])
+    data = JSON.parse(xspace_to_tools_data([xplane_file], "kernel_stats")[1])
 
     cols = data[:cols]
     rows = data[:rows]
@@ -1090,7 +1090,7 @@ struct FrameworkOpStats
 end
 
 function get_framework_op_stats(xplane_file::String; include_idle::Bool=false)
-    raw_data = JSON3.read(xspace_to_tools_data([xplane_file], "framework_op_stats")[1])
+    raw_data = JSON.parse(xspace_to_tools_data([xplane_file], "framework_op_stats")[1])
     length(raw_data) == 2 || return FrameworkOpStats[]
 
     data = include_idle ? raw_data[1] : raw_data[2]

@@ -1,7 +1,7 @@
 using InteractiveUtils: versioninfo
 using PrettyTables: pretty_table
 using Reactant: Reactant
-using JSON3: JSON3
+using JSON: JSON
 using PrettyTables: pretty_table
 
 @info sprint(io -> versioninfo(io; verbose=true))
@@ -58,7 +58,7 @@ for (i, (k, v)) in enumerate(results)
 end
 
 open(joinpath(filepath, filename), "w") do io
-    return JSON3.pretty(io, JSON3.write(standardized_results))
+    return JSON.json(io, standardized_results; pretty=true)
 end
 
 @info "Saved results to $(joinpath(filepath, filename))"
