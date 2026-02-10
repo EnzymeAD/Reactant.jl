@@ -38,11 +38,26 @@ function ReactantCore.materialize_traced_array(x::Base.OneTo)
     return @opcall iota(Reactant.unwrapped_eltype(x), [length(x)]; iota_dimension=1)
 end
 
-function ReactantCore.materialize_traced_array(x::UnitRange)
+function ReactantCore.materialize_traced_array(x::AbstractUnitRange)
     return @opcall add(
         @opcall(iota(Reactant.unwrapped_eltype(x), [length(x)]; iota_dimension=1)),
         @opcall(fill(first(x), [length(x)])),
     )
+end
+
+function ReactantCore.materialize_traced_array(
+    x::Union{
+        StepRange,
+        StepRangeLen,
+        StepRange{<:TracedRNumber},
+        StepRangeLen{<:TracedRNumber},
+        Reactant.TracedStepRangeLen,
+    },
+)
+    step_arr = broadcast_to_size(step(x), (length(x),))
+    iota = @opcall iota(Reactant.unwrapped_eltype(x), [length(x)]; iota_dimension=1)
+    first_arr = broadcast_to_size(first(x), (length(x),))
+    return @opcall add(@opcall(multiply(step_arr, iota)), first_arr)
 end
 
 function ReactantCore.materialize_traced_array(x::SubArray)

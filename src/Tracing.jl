@@ -2291,7 +2291,8 @@ function make_tracer(
     if typeof(newstart) == typeof(prev.start) && typeof(newstop) == typeof(prev.stop)
         return prev
     else
-        return TracedUnitRange(newstart, newstop)
+        len = length(prev)
+        return TracedUnitRange(newstart, newstop, len isa Integer ? len : -1)
     end
 end
 
@@ -2307,7 +2308,7 @@ function traced_type_inner(
     newT = traced_type_inner(T, seen, mode, track_numbers, ndevices, runtime)
     newR = traced_type_inner(R, seen, mode, track_numbers, ndevices, runtime)
     newS = traced_type_inner(S, seen, mode, track_numbers, ndevices, runtime)
-    newL = traced_type_inner(L, seen, mode, track_numbers, ndevices, runtime)
+    newL = traced_type_inner(L, seen, mode, Union{}, ndevices, runtime)
     if T == newT && R == newR && S == newS && L == newL
         return RT
     else
@@ -2328,7 +2329,7 @@ function make_tracer(
         push!(path, Core.Typeof(prev))
         make_tracer(seen, prev.ref, path, mode; sharding, kwargs...)
         make_tracer(seen, prev.step, path, mode; sharding, kwargs...)
-        make_tracer(seen, prev.len, path, mode; sharding, kwargs...)
+        make_tracer(seen, prev.len, path, mode; sharding, kwargs..., track_numbers=Union{})
         make_tracer(seen, prev.offset, path, mode; sharding, kwargs...)
         return nothing
     end
@@ -2336,14 +2337,24 @@ function make_tracer(
     newstep = make_tracer(
         seen, prev.step, append_path(path, :step), mode; sharding, kwargs...
     )
-    newlen = make_tracer(seen, prev.len, append_path(path, :len), mode; sharding, kwargs...)
+    newlen = make_tracer(
+        seen,
+        prev.len,
+        append_path(path, :len),
+        mode;
+        sharding,
+        kwargs...,
+        track_numbers=Union{},
+    )
     newoffset = make_tracer(
         seen, prev.offset, append_path(path, :offset), mode; sharding, kwargs...
     )
-    if typeof(newref) == typeof(prev.ref) &&
+    if (
+        typeof(newref) == typeof(prev.ref) &&
         typeof(newstep) == typeof(prev.step) &&
         typeof(newlen) == typeof(prev.len) &&
         typeof(newoffset) == typeof(prev.offset)
+    )
         return prev
     else
         return TracedStepRangeLen(newref, newstep, newlen, newoffset)

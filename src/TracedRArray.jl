@@ -244,6 +244,9 @@ AbstractReactantArrayStyle{M}(::Val{N}) where {N,M} = AbstractReactantArrayStyle
 function Broadcast.BroadcastStyle(::Type{<:AnyTracedRArray{T,N}}) where {T,N}
     return AbstractReactantArrayStyle{N}()
 end
+function Broadcast.BroadcastStyle(::Type{<:AbstractRange{<:TracedRNumber}})
+    return AbstractReactantArrayStyle{1}()
+end
 
 function Base.similar(
     ::Broadcasted{AbstractReactantArrayStyle{N}}, ::Type{T}, dims
