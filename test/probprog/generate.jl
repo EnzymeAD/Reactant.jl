@@ -35,7 +35,7 @@ end
         μ = Reactant.ConcreteRNumber(0.0)
         σ = Reactant.ConcreteRNumber(1.0)
         trace, weight = ProbProg.generate_(rng, ProbProg.Constraint(), model, μ, σ, shape)
-        @test mean(trace.retval[1]) ≈ 0.0 atol = 0.05 rtol = 0.05
+        @test mean(Array(trace.retval[1])) ≈ 0.0 atol = 0.05 rtol = 0.05
     end
 
     @testset "constrained" begin
