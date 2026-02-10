@@ -273,10 +273,13 @@ include("probprog/ProbProg.jl")
 
 using .Compiler:
     @compile,
+    @jit,
     @code_hlo,
     @code_mhlo,
-    @jit,
     @code_xla,
+    code_hlo,
+    code_mhlo,
+    code_xla,
     traced_getfield,
     compile
 export ConcreteRArray,
@@ -291,9 +294,6 @@ export ConcreteRArray,
     @code_xla,
     @jit,
     @trace,
-    code_hlo,
-    code_mhlo,
-    code_xla,
     within_compile
 
 const registry = Ref{Union{Nothing,MLIR.IR.DialectRegistry}}()
