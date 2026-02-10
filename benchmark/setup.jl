@@ -66,7 +66,7 @@ function run_benchmark_subprocess(benchmark_dir::String, backend::String)
             "--threads=$(Threads.nthreads())",
             runbenchmarks_path,
         ]);
-        env=Dict("BENCHMARK_GROUP" => backend),
+        env=merge(ENV, Dict("BENCHMARK_GROUP" => backend)),
     )
 
     # Run the process - output goes to console, results are saved to files
