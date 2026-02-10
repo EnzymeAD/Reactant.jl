@@ -80,16 +80,14 @@ jobs:
       - name: "Run Benchmarks"
         run: |
           julia --color=yes --project=benchmark benchmark/runbenchmarks.jl ${{ matrix.device }}
-        env:
-          XLA_FLAGS: "--xla_gpu_experimental_use_raft_select_k=true"
-      - name: Upload PProf Results
-        uses: actions/upload-artifact@v6
-        timeout-minutes: 10
-        with:
-          name: pprof-results-${{ matrix.os }}
-          path: "**/*pb.gz"
-          retention-days: 90
-          overwrite: false
+      # - name: Upload PProf Results
+      #   uses: actions/upload-artifact@v6
+      #   timeout-minutes: 10
+      #   with:
+      #     name: pprof-results-${{ matrix.os }}
+      #     path: "**/*pb.gz"
+      #     retention-days: 90
+      #     overwrite: false
       - name: Upload Benchmark Results
         uses: actions/upload-artifact@v6
         timeout-minutes: 10
@@ -100,9 +98,7 @@ jobs:
           overwrite: false
 
   benchmark-aggregate:
-    runs-on: linux-x86-n2-32
-    container:
-      image: 'ghcr.io/enzymead/reactant-docker-images@sha256:7004a6ebbdd77bd047900b2bffc542e8576864056dc27a9c94d30666d6f7ea01'
+    runs-on: ubuntu-latest
     if: |
       !cancelled() && (
         (github.ref == 'refs/heads/main' && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')) ||

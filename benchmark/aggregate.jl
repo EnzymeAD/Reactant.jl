@@ -6,7 +6,7 @@ all_results = []
 all_results_tflops = []
 for backend in BACKENDS
     for (tag, arr) in
-        (["benchmarks.json", all_results], ["benchmark_tflops.json", all_results_tflops])
+        (["benchmarks.json", all_results], ["benchmarks_tflops.json", all_results_tflops])
         filename = string(backend, tag)
         filepath = joinpath(dirname(@__FILE__), "results", filename)
         if ispath(filepath)
@@ -22,6 +22,6 @@ open(joinpath(dirname(@__FILE__), "results", "combinedbenchmarks.json"), "w") do
     return JSON3.pretty(io, JSON3.write(all_results))
 end
 
-open(joinpath(dirname(@__FILE__), "results", "combinedbenchmark_tflops.json"), "w") do io
+open(joinpath(dirname(@__FILE__), "results", "combinedbenchmarks_tflops.json"), "w") do io
     return JSON3.pretty(io, JSON3.write(all_results_tflops))
 end
