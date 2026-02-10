@@ -1,8 +1,6 @@
-ENV["JULIA_DEBUG"] = "Reactant,Reactant_jll"
 using Reactant, Test, Random
 using Statistics
 using Reactant: ProbProg, ReactantRNG, ConcreteRNumber, ConcreteRArray
-Reactant.MLIR.IR.DUMP_MLIR_ALWAYS[] = true
 
 include(joinpath(@__DIR__, "common.jl"))
 
