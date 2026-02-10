@@ -49,7 +49,11 @@ function save_results(
 )
     mkpath(results_dir)
 
-    filename = string(prefix, "_", backend, "_benchmarks.json")
+    if isempty(prefix)
+        filename = string(backend, "benchmarks.json")
+    else
+        filename = string(prefix, "_", backend, "benchmarks.json")
+    end
     filepath = joinpath(results_dir, filename)
 
     standardized_results = Vector{Dict{String,Union{String,Float64}}}(

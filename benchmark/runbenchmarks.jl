@@ -45,31 +45,6 @@ if !isempty(results)
     )
 end
 
-# Save aggregated results
-filepath = joinpath(dirname(@__FILE__), "results")
-mkpath(filepath)
-filename = string(BENCHMARK_GROUP, "benchmarks.json")
+include("utils.jl")
 
-standardized_results = Vector{Dict{String,Union{String,Float64}}}(
-    undef, length(keys(results))
-)
-for (i, (k, v)) in enumerate(results)
-    standardized_results[i] = Dict("name" => k, "value" => v, "unit" => "s")
-end
-
-open(joinpath(filepath, filename), "w") do io
-    return JSON3.pretty(io, JSON3.write(standardized_results))
-end
-
-@info "Saved $(length(results)) results to $(joinpath(filepath, filename))"
-
-# Also aggregate any results saved by individual subdirectories
-@info "Aggregating results from subdirectories..."
-subdirectory_results = aggregate_saved_results(dirname(@__FILE__))
-if !isempty(subdirectory_results)
-    combined_filename = string(BENCHMARK_GROUP, "_combined_benchmarks.json")
-    open(joinpath(filepath, combined_filename), "w") do io
-        return JSON3.pretty(io, JSON3.write(subdirectory_results))
-    end
-    @info "Saved $(length(subdirectory_results)) combined results to $(joinpath(filepath, combined_filename))"
-end
+save_results(results, joinpath(dirname(@__FILE__), "results"), "", BENCHMARK_GROUP)

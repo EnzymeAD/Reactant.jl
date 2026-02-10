@@ -119,13 +119,11 @@ function run_all_benchmarks(backend::String)
 
     @info "Found $(length(benchmark_dirs)) benchmark directories: $(basename.(benchmark_dirs))"
 
-    # Instantiate all projects first
     for dir in benchmark_dirs
+        # instantiate project first
         instantiate_project(dir)
-    end
 
-    # Run all benchmarks
-    for dir in benchmark_dirs
+        # now run the benchmark
         run_benchmark_subprocess(dir, backend)
     end
 

@@ -144,7 +144,7 @@ jobs:
           output-file-path: ${{ steps.locate.outputs.path }}
           benchmark-data-dir-path: "benchmarks"
           github-token: ${{ secrets.GITHUB_TOKEN }}
-          comment-always: true
+          comment-always: false
           summary-always: true
           alert-threshold: "150%"
           fail-on-alert: false
