@@ -57,10 +57,15 @@ function save_results(
     filepath = joinpath(results_dir, filename)
 
     standardized_results = Vector{Dict{String,Union{String,Float64}}}(
-        undef, length(results)
+        undef, length(results["Runtime (s)"])
     )
-    for (i, (k, v)) in enumerate(results)
+    for (i, (k, v)) in enumerate(results["Runtime (s)"])
         standardized_results[i] = Dict("name" => k, "value" => v, "unit" => "s")
+    end
+    for (i, (k, v)) in enumerate(results["TFLOP/s"])
+        standardized_results[i] = Dict(
+            "name" => "$(k) -- TFLOP/s", "value" => v, "unit" => "TFLOP/s"
+        )
     end
 
     open(filepath, "w") do io

@@ -128,7 +128,7 @@ function run_all_benchmarks(backend::String)
     end
 
     # Aggregate results from saved files
-    all_results = Dict{String,Float64}()
+    all_results = Dict{String,Dict{String,Float64}}()
 
     for dir in benchmark_dirs
         results = load_results_from_dir(dir, backend)

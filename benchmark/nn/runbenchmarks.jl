@@ -14,7 +14,7 @@ include("dgcnn.jl")
 
 # Run all benchmarks
 function run_all_benchmarks(backend::String)
-    results = Dict{String,Float64}()
+    results = Dict{String,Dict{String,Float64}}()
 
     # Vision models
     run_vgg_benchmark!(results, backend)

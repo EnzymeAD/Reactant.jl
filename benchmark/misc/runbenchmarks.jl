@@ -19,7 +19,7 @@ include("bloch_rf_optimization.jl")
 
 # Run all benchmarks
 function run_all_benchmarks(backend::String)
-    results = Dict{String,Float64}()
+    results = Dict{String,Dict{String,Float64}}()
 
     run_newton_schulz_benchmark!(results, backend)
     run_bloch_rf_optimization_benchmark!(results, backend)

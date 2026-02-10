@@ -21,7 +21,7 @@ include("linalg_kernels.jl")
 
 # Run all benchmarks
 function run_all_benchmarks(backend::String)
-    results = Dict{String,Float64}()
+    results = Dict{String,Dict{String,Float64}}()
 
     run_data_mining_benchmarks!(results, backend)
     run_blas_benchmarks!(results, backend)

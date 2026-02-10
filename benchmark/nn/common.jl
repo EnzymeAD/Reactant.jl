@@ -210,32 +210,52 @@ function run_benchmark!(
     model,
     x_dims,
 )
-    prim_or_rev = fwd_or_bwd == "forward" ? "primal" : "reverse"
-    full_benchmark_name = string(benchmark_name, "/", prim_or_rev, "/", backend, "/", tag)
-    @assert !haskey(results, full_benchmark_name) "Benchmark already exists: \
-                                                   $(full_benchmark_name)"
-
-    if fwd_or_bwd == "forward"
-        x, ps, st = general_lux_setup(model, x_dims)
-        time = Reactant.Profiler.profile_with_xprof(
-            Lux.apply, model, x, ps, Lux.testmode(st); nrepeat=10, warmup=3, compile_options
-        )
-        time = time.profiling_result.runtime_ns / 1e9
-        results[full_benchmark_name] = time
-        GC.gc(true)
-    elseif fwd_or_bwd == "backward"
-        x, ps, st = general_lux_setup(model, x_dims)
-        time = Reactant.Profiler.profile_with_xprof(
-            simple_gradient, model, x, ps, st; nrepeat=10, warmup=3, compile_options
-        )
-        time = time.profiling_result.runtime_ns / 1e9
-        results[full_benchmark_name] = time
-        GC.gc(true)
-    else
-        @error "Unknown fwd_or_bwd: $(fwd_or_bwd)"
+    if !haskey(results, "TFLOP/s")
+        results["TFLOP/s"] = Dict{String,Float64}()
+    end
+    if !haskey(results, "Runtime (s)")
+        results["Runtime (s)"] = Dict{String,Float64}()
     end
 
-    print_stmt = @sprintf "%100s     :     %.5gs" full_benchmark_name time
+    prim_or_rev = fwd_or_bwd == "forward" ? "primal" : "reverse"
+    full_benchmark_name = string(benchmark_name, "/", prim_or_rev, "/", backend, "/", tag)
+    @assert !haskey(results["Runtime (s)"], full_benchmark_name) "Benchmark already \
+                                                                  exists: \
+                                                                  $(full_benchmark_name)"
+    @assert !haskey(results["TFLOP/s"], full_benchmark_name) "Benchmark already exists: \
+                                                              $(full_benchmark_name)"
+
+    x, ps, st = general_lux_setup(model, x_dims)
+
+    fn = if fwd_or_bwd == "forward"
+        st = Lux.testmode(st)
+        Lux.apply
+    elseif fwd_or_bwd == "backward"
+        simple_gradient
+    else
+        error("Unknown fwd_or_bwd: $(fwd_or_bwd)")
+    end
+
+    prof_result = Reactant.Profiler.profile_with_xprof(
+        fn, model, x, ps, st; nrepeat=10, warmup=3, compile_options
+    )
+    results["Runtime (s)"][full_benchmark_name] =
+        prof_result.profiling_result.runtime_ns / 1e9
+    results["TFLOP/s"][full_benchmark_name] =
+        if prof_result.profiling_result.flops_data === nothing
+            -1
+        else
+            prof_result.profiling_result.flops_data.RawFlopsRate / 1e12
+        end
+
+    GC.gc(true)
+
+    print_stmt = @sprintf(
+        "%100s     :     %.5gs\t%.5g TFLOP/s",
+        full_benchmark_name,
+        results["Runtime (s)"][full_benchmark_name],
+        results["TFLOP/s"][full_benchmark_name]
+    )
     @info print_stmt
 
     return nothing

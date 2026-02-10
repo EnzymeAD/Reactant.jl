@@ -1,4 +1,4 @@
-using Reactant: Reactant, @compile
+using Reactant: Reactant, @compile, @jit
 using LinearAlgebra: norm
 using Chairmarks: @b
 using Printf: @sprintf
@@ -40,6 +40,13 @@ function run_benchmark!(
     #     )
     # end
 
+    if !haskey(results, "TFLOP/s")
+        results["TFLOP/s"] = Dict{String,Float64}()
+    end
+    if !haskey(results, "Runtime (s)")
+        results["Runtime (s)"] = Dict{String,Float64}()
+    end
+
     gt_provided = ground_truth_fn !== nothing
     if !gt_provided
         ground_truth_fn = fn
@@ -58,7 +65,8 @@ function run_benchmark!(
         args_copied = map(copy, args)
         bench = @b fn_splat($args_copied) seconds = 15 evals = 1 samples = 10
 
-        results[full_benchmark_name] = bench.time
+        results["Runtime (s)"][full_benchmark_name] = bench.time
+        results["TFLOP/s"][full_benchmark_name] = -1 # TODO: compute FLOP/s using LIKWID??
 
         print_stmt = @sprintf "%100s     :     %.5gs" full_benchmark_name bench.time
         @info print_stmt
@@ -80,13 +88,24 @@ function run_benchmark!(
                                                                            match ground \
                                                                            truth"
 
-            time = Reactant.Profiler.profile_with_xprof(
+            prof_result = Reactant.Profiler.profile_with_xprof(
                 f′, args_ra...; nrepeat=10, compile_options=compile_options
             )
-            time = time.profiling_result.runtime_ns / 1e9
-            results[full_benchmark_name] = time
+            results["Runtime (s)"][full_benchmark_name] =
+                prof_result.profiling_result.runtime_ns / 1e9
+            results["TFLOP/s"][full_benchmark_name] =
+                if prof_result.profiling_result.flops_data === nothing
+                    -1
+                else
+                    prof_result.profiling_result.flops_data.RawFlopsRate / 1e12
+                end
 
-            print_stmt = @sprintf "%100s     :     %.5gs" full_benchmark_name time
+            print_stmt = @sprintf(
+                "%100s     :     %.5gs\t%.5g TFLOP/s",
+                full_benchmark_name,
+                results["Runtime (s)"][full_benchmark_name],
+                results["TFLOP/s"][full_benchmark_name]
+            )
             @info print_stmt
             GC.gc(true)
         end
