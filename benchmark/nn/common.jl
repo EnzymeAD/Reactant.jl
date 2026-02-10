@@ -251,7 +251,7 @@ function run_benchmark!(
     GC.gc(true)
 
     print_stmt = @sprintf(
-        "%100s     :     %.5gs\t%.5g TFLOP/s",
+        "%100s     :     %.5gs    %.5g TFLOP/s",
         full_benchmark_name,
         results["Runtime (s)"][full_benchmark_name],
         results["TFLOP/s"][full_benchmark_name]
