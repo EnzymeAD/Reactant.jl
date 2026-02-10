@@ -34,6 +34,15 @@ linear(x, W, b) = (W * x) .+ b
             @test length(framework_stats) > 0
         end
 
+        flops = Reactant.Profiler.get_aggregate_flops_statistics(file, 1)
+        if !RunningOnCPU
+            @test flops isa Reactant.Profiler.FlopsSummary
+            @test flops.RawFlopsRate > 0
+            @test flops.BF16FlopsRate > 0
+            @test flops.RawFlopsRate ≈ flops.RawFlops / (flops.RawTime * 1e-12)
+            @test flops.BF16FlopsRate ≈ flops.BF16Flops / (flops.RawTime * 1e-12)
+        end
+
         Reactant.@timed nrepeat = 32 linear(x, W, b)
         Reactant.@time nrepeat = 32 linear(x, W, b)
         Reactant.@profile nrepeat = 32 linear(x, W, b)
