@@ -1,5 +1,11 @@
 build --announce_rc
 
+# Public read-only cache
+common:public_cache --remote_cache="https://storage.googleapis.com/enzyme-presubmit-bazel-cache/" --remote_upload_local_results=false
+
+# Cache pushes are limited to Enzyme's CI system.
+common:public_cache_push --config=public_cache --remote_upload_local_results=true --google_default_credentials
+
 # TODO: Migrate for https://github.com/bazelbuild/bazel/issues/7260
 # common --incompatible_enable_cc_toolchain_resolution
 common --noincompatible_enable_cc_toolchain_resolution

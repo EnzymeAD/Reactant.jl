@@ -1,0 +1,20 @@
+[deps]
+Chairmarks = "0ca39b1e-fe0b-4e98-acfc-b1656634c4de"
+Enzyme = "7da242da-08ed-463a-9acd-ee780be4f1d9"
+JSON3 = "0f8b85d8-7281-11e9-16c2-39a750bddbf1"
+LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
+Printf = "de0858da-6303-5e67-8744-51eddeeeb8d7"
+Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
+Reactant = "3c362404-f566-11ee-1572-e11a4b42c853"
+
+[sources]
+Reactant = {path = "../.."}
+
+[compat]
+Chairmarks = "1"
+Enzyme = "0.13.73"
+JSON3 = "1"
+LinearAlgebra = "1.10"
+Printf = "1.10"
+Reactant = "0.2.161"
+julia = "1.11"

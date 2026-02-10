@@ -244,6 +244,9 @@ AbstractReactantArrayStyle{M}(::Val{N}) where {N,M} = AbstractReactantArrayStyle
 function Broadcast.BroadcastStyle(::Type{<:AnyTracedRArray{T,N}}) where {T,N}
     return AbstractReactantArrayStyle{N}()
 end
+function Broadcast.BroadcastStyle(::Type{<:AbstractRange{<:TracedRNumber}})
+    return AbstractReactantArrayStyle{1}()
+end
 
 function Base.similar(
     ::Broadcasted{AbstractReactantArrayStyle{N}}, ::Type{T}, dims
@@ -282,9 +285,12 @@ function Base.copy(bc::Broadcasted{<:AbstractReactantArrayStyle})
     if ElType === Union{}
         fn(map(first_scalar, bc.args)...)
     elseif ElType == Any
-        ElType = eltype(fn(map(first_scalar, bc.args)...))
+        res = fn(map(first_scalar, bc.args)...)
+        ElType = Core.Typeof(res)
     end
-    @assert ElType != Any && ElType != Union{}
+    if ElType == Any || ElType == Union{}
+        throw(AssertionError("Failed to deduce eltype of broadcast of $fn, found $ElType"))
+    end
     sim = similar(bc, ElType)
     return copyto!(sim, bc)
 end

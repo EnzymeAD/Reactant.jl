@@ -67,11 +67,11 @@ macro scope(obj, body)
     end
     quote
         $prologue
-        activate!($symbol)
+        activate($symbol)
         try
             $(esc.(bodybody)...)
         finally
-            deactivate!($symbol)
+            deactivate($symbol)
         end
     end
 end
