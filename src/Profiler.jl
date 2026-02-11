@@ -707,7 +707,7 @@ end
 struct AggregateProfilingResult
     runtime_ns::Int64
     compile_time_ns::Int64
-    memory_data::Dict{Symbol,MemoryProfileSummary}
+    memory_data::Dict{String,MemoryProfileSummary}
     flops_data::Union{Nothing,FlopsSummary}
 end
 
