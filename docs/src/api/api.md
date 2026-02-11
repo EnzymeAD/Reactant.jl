@@ -34,6 +34,9 @@ ConcreteRNumber
 @code_hlo
 @code_mhlo
 @code_xla
+Reactant.code_hlo
+Reactant.code_mhlo
+Reactant.code_xla
 ```
 
 ## Compile Options

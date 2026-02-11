@@ -344,7 +344,6 @@ function overload_autodiff(
     )
     (; result, linear_args, in_tys, linear_results) = mlir_fn_res
     fnwrap = mlir_fn_res.fnwrapped
-    func2 = mlir_fn_res.f
 
     activity = Int32[]
     ad_inputs = MLIR.IR.Value[]
@@ -426,7 +425,7 @@ function overload_autodiff(
         end
     end
 
-    fname = TracedUtils.get_attribute_by_name(func2, "sym_name")
+    fname = TracedUtils.get_attribute_by_name(mlir_fn_res.f, "sym_name")
     fname = MLIR.IR.FlatSymbolRefAttribute(Base.String(fname))
     res = (reverse ? MLIR.Dialects.enzyme.autodiff : MLIR.Dialects.enzyme.fwddiff)(
         [TracedUtils.transpose_val(v) for v in ad_inputs];
@@ -512,8 +511,6 @@ function overload_autodiff(
         )
         residx += 1
     end
-
-    func2.ref = MLIR.API.MlirOperation(C_NULL)
 
     if reverse
         if EnzymeCore.needs_primal(CMode)

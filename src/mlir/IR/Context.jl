@@ -1,39 +1,36 @@
-struct Context
+@checked struct Context
     ref::API.MlirContext
-
-    function Context(context)
-        @assert !mlirIsNull(context) "cannot create Context with null MlirContext"
-        return new(context)
-    end
 end
 
 """
-    Context()
+    Context(registry=DialectRegistry(); threading = false)
 
-Creates an MLIR context and transfers its ownership to the caller.
+Creates an MLIR context.
 """
-function Context()
-    context = Context(API.mlirContextCreate())
-    activate(context)
-    return context
+function Context(registry=DialectRegistry(); threading::Bool=false)
+    return Context(mark_alloc(API.mlirContextCreateWithRegistry(registry, threading)))
 end
 
-function Context(f::Core.Function)
-    ctx = Context()
-    try
-        f(ctx)
-    finally
-        dispose(ctx)
-    end
-end
+"""
+    dispose(ctx::Context)
 
-Context(threading::Bool) = Context(API.mlirContextCreateWithThreading(threading))
-function Context(registry, threading)
-    return Context(API.mlirContextCreateWithRegistry(registry, threading))
+Disposes the given context and releases its resources.
+After calling this function, the context must not be used anymore.
+"""
+function dispose(ctx::Context)
+    # deactivate(ctx)
+    return mark_dispose(API.mlirContextDestroy, ctx)
 end
 
 Base.cconvert(::Core.Type{API.MlirContext}, c::Context) = c
-Base.unsafe_convert(::Core.Type{API.MlirContext}, c::Context) = c.ref
+Base.unsafe_convert(::Core.Type{API.MlirContext}, c::Context) = mark_use(c).ref
+
+Base.:(==)(a::Context, b::Context) = API.mlirContextEqual(a, b)
+
+function enable_multithreading!(enable::Bool=true; context::Context=current_context())
+    API.mlirContextEnableMultithreading(context, enable)
+    return context
+end
 
 # Global state
 
@@ -50,11 +47,6 @@ end
 function deactivate(ctx::Context)
     current_context() == ctx || error("Deactivating wrong context")
     return Base.pop!(task_local_storage(:mlir_context_stack)::Vector{Context})
-end
-
-function dispose(ctx::Context)
-    deactivate(ctx)
-    return API.mlirContextDestroy(ctx)
 end
 
 function has_context()
@@ -81,10 +73,12 @@ end
 
 # TODO replace this method on all call sites for the one accepting a context argument
 function with_context(f; allow_use_existing=false)
+    do_dispose = false
     if allow_use_existing && has_context()
         ctx = current_context()
     else
-        ctx = Context(Reactant.registry[], false)
+        ctx = Context(Reactant.registry[])
+        do_dispose = true
         @ccall API.mlir_c.RegisterDialects(ctx::API.MlirContext)::Cvoid
     end
 
@@ -93,12 +87,6 @@ function with_context(f; allow_use_existing=false)
         return f(ctx)
     finally
         deactivate(ctx)
+        do_dispose && dispose(ctx)
     end
 end
-
-function enable_multithreading!(enable::Bool=true; context::Context=current_context())
-    API.mlirContextEnableMultithreading(context, enable)
-    return context
-end
-
-Base.:(==)(a::Context, b::Context) = API.mlirContextEqual(a, b)

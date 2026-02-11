@@ -1,10 +1,5 @@
-struct AffineExpr
+@checked struct AffineExpr
     ref::API.MlirAffineExpr
-
-    function AffineExpr(ref::API.MlirAffineExpr)
-        @assert !mlirIsNull(ref) "cannot create AffineExpr with null MlirAffineExpr"
-        return new(ref)
-    end
 end
 
 Base.cconvert(::Core.Type{API.MlirAffineExpr}, expr::AffineExpr) = expr
