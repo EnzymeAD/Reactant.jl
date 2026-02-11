@@ -841,7 +841,7 @@ function Base.convert(::Type{HloSharding}, sharding::NamedSharding)
             mesh_op = Reactant.Ops.mesh(sharding.mesh; mod=MLIR.IR.Module())
             tensor_sharding_attr, _ = get_tensor_sharding_attribute(
                 sharding,
-                MLIR.IR.current_context(),
+                ctx,
                 mesh_op.sym_name,
                 mesh_op.mesh_attr,
                 nothing;
