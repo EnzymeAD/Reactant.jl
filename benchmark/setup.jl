@@ -85,8 +85,7 @@ function load_results_from_dir(benchmark_dir::String, backend::String)
     results_dir = joinpath(benchmark_dir, "results")
     benchmark_name = basename(benchmark_dir)
     all_results = Dict(
-        "Runtime (s)" => Dict{String,Float64}(),
-        "TFLOP/s" => Dict{String,Float64}(),
+        "Runtime (s)" => Dict{String,Float64}(), "TFLOP/s" => Dict{String,Float64}()
     )
 
     if !isdir(results_dir)
