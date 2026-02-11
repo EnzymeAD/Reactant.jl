@@ -25,9 +25,20 @@ If the last command returns `true`, you are good to go, if you get `false` but y
 
 ## Reactant with GPU
 
-At the moment Reactant supports only Nvidia GPUs.
+At the moment Reactant supports Nvidia and AMD GPUs. The GPU type is automatically detected when running:
+```julia-repl
+julia> using Reactant
+
+julia> Reactant.set_default_backend("gpu")
+```
 
 ### Nvidia GPU
+The backend can be set explicitly to CUDA GPU with:
+```julia-repl
+julia> using Reactant
+
+julia> Reactant.set_default_backend("cuda")
+```
 
 Reactant can accelerate your code using Nvidia GPUs on Linux, with CUDA Driver 12.1+ on x86-64, and CUDA Driver 12.3+ on aarch64.
 You can check if Reactant detected the GPU on your system by running the following commands in the environment where you installed Reactant:
@@ -118,6 +129,14 @@ Linux x86_64 {cuda_version=none, cxxstring_abi=cxx11, gpu=none, julia_version=1.
 ```
 
 Reactant is still available for your system, but this time GPU support is disabled.
+
+### AMD GPU
+The backend can be set explicitly to AMD GPU with:
+```julia-repl
+julia> using Reactant
+
+julia> Reactant.set_default_backend("rocm")
+```
 
 ## Reactant with TPU
 
