@@ -1,6 +1,4 @@
-abstract type RNumber{T<:ReactantPrimitive} <: Number end
-
-abstract type AbstractConcreteNumber{T} <: RNumber{T} end
+abstract type AbstractConcreteNumber{T<:ReactantPrimitive} <: NestedNumbers.RemoteNumber{T} end
 
 abstract type RArray{T,N} <: DenseArray{T,N} end
 
@@ -38,7 +36,7 @@ end
 @leaf MissingTracedValue
 
 ## TracedRNumber
-mutable struct TracedRNumber{T} <: RNumber{T}
+mutable struct TracedRNumber{T<:ReactantPrimitive} <: NestedNumbers.OpaqueNumber{T}
     paths::Tuple
     mlir_data::Union{Nothing,MLIR.IR.Value}
 
@@ -51,6 +49,8 @@ mutable struct TracedRNumber{T} <: RNumber{T}
         return new{T}(paths, mlir_data)
     end
 end
+
+const RNumber{T<:ReactantPrimitive} = Union{AbstractConcreteNumber{T},TracedRNumber{T}}
 
 Base.elsize(::Type{TracedRNumber{T}}) where {T} = sizeof(T)
 Base.elsize(::Type{RNumber{T}}) where {T} = sizeof(T)
