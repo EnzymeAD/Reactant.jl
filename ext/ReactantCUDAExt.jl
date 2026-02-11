@@ -1106,13 +1106,15 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
     wrapftype = MLIR.IR.Type(
         MLIR.API.mlirLLVMFunctionTypeGet(voidty, length(wrapper_tys), wrapper_tys, false)
     )
-    wrapfunc = MLIR.Dialects.llvm.func(;
-        sym_name,
-        sym_visibility=MLIR.IR.Attribute("private"),
-        function_type=wrapftype,
-        body=MLIR.IR.Region(),
-        CConv,
-    )
+    wrapfunc = MLIR.IR.@scope MLIR.IR.body(mod) begin
+        MLIR.Dialects.llvm.func(;
+            sym_name,
+            sym_visibility=MLIR.IR.Attribute("private"),
+            function_type=wrapftype,
+            body=MLIR.IR.Region(),
+            CConv,
+        )
+    end
     push!(MLIR.IR.body(mod), wrapfunc)
     wrapbody = MLIR.IR.Block(wrapper_tys, [MLIR.IR.Location() for _ in wrapper_tys])
     push!(MLIR.IR.region(wrapfunc, 1), wrapbody)
