@@ -2842,7 +2842,7 @@ $(COMMON_COMPILE_OPTIONS_DOCS)
 See also [`@code_xla`](@ref), [`@code_mhlo`](@ref).
 """
 macro code_hlo(args...)
-    (; f, args, kwargs, options) = parse_macro_code_call(
+    (; f, args, kwargs, options) = parse_call_expr(
         merge(get_common_compile_options(), Dict{Symbol,Any}(:shardy_passes => :(:none))),
         args...,
     )
@@ -2894,7 +2894,7 @@ $(COMMON_COMPILE_OPTIONS_DOCS)
 See also [`@code_xla`](@ref), [`@code_hlo`](@ref).
 """
 macro code_mhlo(args...)
-    (; f, args, kwargs, options) = parse_macro_code_call(
+    (; f, args, kwargs, options) = parse_call_expr(
         merge(
             get_common_compile_options(),
             Dict{Symbol,Any}(
@@ -2952,7 +2952,7 @@ $(COMMON_COMPILE_OPTIONS_DOCS)
 See also [`@code_mhlo`](@ref), [`@code_hlo`](@ref).
 """
 macro code_xla(args...)
-    (; f, args, kwargs, options) = parse_macro_code_call(
+    (; f, args, kwargs, options) = parse_call_expr(
         merge(
             get_common_compile_options(),
             Dict{Symbol,Any}(:before_xla_optimizations => false),
@@ -3003,7 +3003,7 @@ $(COMMON_COMPILE_OPTIONS_DOCS)
 See also [`@jit`](@ref), [`@code_hlo`](@ref), [`@code_mhlo`](@ref), [`@code_xla`](@ref).
 """
 macro compile(args...)
-    (; f, args, kwargs, options) = parse_macro_code_call(
+    (; f, args, kwargs, options) = parse_call_expr(
         merge(
             get_common_compile_options(),
             Dict{Symbol,Any}(:sync => false, :serializable => false),
@@ -3053,7 +3053,7 @@ See also [`@compile`](@ref), [`@code_hlo`](@ref), [`@code_mhlo`](@ref), [`@code_
 """
 macro jit(args...)
     default_options = merge(get_common_compile_options(), Dict{Symbol,Any}(:sync => false))
-    (; f, args, kwargs, options) = parse_macro_code_call(default_options, args...)
+    (; f, args, kwargs, options) = parse_call_expr(default_options, args...)
     return quote
         $MLIR.IR.@dispose ctx = $MLIR.IR.Context($(Reactant.registry)[]) begin
             @ccall $MLIR.API.mlir_c.RegisterDialects(ctx::$MLIR.API.MlirContext)::Cvoid
@@ -3069,7 +3069,7 @@ macro jit(args...)
     end
 end
 
-function parse_macro_code_call(options::Dict, args...)
+function parse_call_expr(options::Dict, args...)
     while length(args) > 1
         option, args = args[1], args[2:end]
         if !Meta.isexpr(option, :(=))
