@@ -1,27 +1,20 @@
 using Reactant, Test, Random
 using Reactant: ProbProg, ReactantRNG
 
-normal(rng, μ, σ, shape) = μ .+ σ .* randn(rng, shape)
-
-function normal_logpdf(x, μ, σ, _)
-    return -length(x) * log(σ) - length(x) / 2 * log(2π) -
-           sum((x .- μ) .^ 2 ./ (2 .* (σ .^ 2)))
-end
-
 function one_sample(rng, μ, σ, shape)
-    _, s = ProbProg.sample(rng, normal, μ, σ, shape; logpdf=normal_logpdf)
+    _, s = ProbProg.sample(rng, ProbProg.Normal(μ, σ, shape))
     return s
 end
 
 function two_samples(rng, μ, σ, shape)
-    _ = ProbProg.sample(rng, normal, μ, σ, shape; logpdf=normal_logpdf)
-    _, t = ProbProg.sample(rng, normal, μ, σ, shape; logpdf=normal_logpdf)
+    _ = ProbProg.sample(rng, ProbProg.Normal(μ, σ, shape))
+    _, t = ProbProg.sample(rng, ProbProg.Normal(μ, σ, shape))
     return t
 end
 
 function compose(rng, μ, σ, shape)
-    _, s = ProbProg.sample(rng, normal, μ, σ, shape)
-    _, t = ProbProg.sample(rng, normal, s, σ, shape)
+    _, s = ProbProg.sample(rng, ProbProg.Normal(μ, σ, shape))
+    _, t = ProbProg.sample(rng, ProbProg.Normal(s, σ, shape))
     return t
 end
 
@@ -33,9 +26,7 @@ end
         μ = Reactant.ConcreteRNumber(0.0)
         σ = Reactant.ConcreteRNumber(1.0)
 
-        code = @code_hlo optimize = false ProbProg.sample(
-            rng, normal, μ, σ, shape; logpdf=normal_logpdf
-        )
+        code = @code_hlo optimize = false ProbProg.sample(rng, ProbProg.Normal(μ, σ, shape))
         @test contains(repr(code), "enzyme.sample")
     end
 
