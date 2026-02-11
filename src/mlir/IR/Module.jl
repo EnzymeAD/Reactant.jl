@@ -92,8 +92,3 @@ function current_module(; throw_error::Core.Bool=true)
     end
     return last(task_local_storage(:mlir_module)::Vector{Module})
 end
-
-function with_module(f, mod::Module)
-    depwarn("`with_module` is deprecated, use `@scope` instead.", :with_module)
-    @scope mod f()
-end

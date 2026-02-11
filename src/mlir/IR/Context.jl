@@ -61,8 +61,3 @@ function current_context(; throw_error::Core.Bool=true)
     end
     return last(task_local_storage(:mlir_context_stack)::Vector{Context})
 end
-
-function with_context(f, ctx::Context)
-    depwarn("`with_context` is deprecated, use `@scope` instead.", :with_context)
-    @scope ctx f()
-end

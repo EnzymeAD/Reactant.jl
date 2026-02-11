@@ -234,8 +234,3 @@ function current_block(; throw_error::Core.Bool=true)
     end
     return last(task_local_storage(:mlir_block)::Vector{Block})
 end
-
-function with_block(f, blk::Block)
-    depwarn("`with_block` is deprecated, use `@scope` instead.", :with_block)
-    @scope blk f()
-end
