@@ -90,7 +90,7 @@ end
 
 # This method is needed exclusively to resolve an ambiguity
 function Base.getindex(
-    l::Selectors.List{TracedRNumber{T}}, index::Union{Int, TracedRNumber{Int}}
+    l::Selectors.List{TracedRNumber{T}}, index::Union{Int,TracedRNumber{Int}}
 ) where {T}
     return getindex(Reactant.promote_to(TracedRArray{T,1}, l), index)
 end
