@@ -1,21 +1,20 @@
 # Neural Network Benchmarks Runner
 # This script runs all NN benchmarks and stores results to a JSON file
 
-include("../utils.jl")
+include("common.jl")
 
 @info sprint(io -> versioninfo(io; verbose=true))
 
 backend = get_backend()
 
 # Include benchmark modules
-include("common.jl")
 include("vision.jl")
 include("neural_operators.jl")
 include("dgcnn.jl")
 
 # Run all benchmarks
 function run_all_benchmarks(backend::String)
-    results = Dict{String,Float64}()
+    results = Dict{String,Dict{String,Float64}}()
 
     # Vision models
     run_vgg_benchmark!(results, backend)
