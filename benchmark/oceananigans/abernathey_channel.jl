@@ -388,7 +388,7 @@ function run_abernathey_channel_benchmark!(
     dv_wind_stress = Field{Center,Face,Nothing}(model.grid)
     dT_flux = Field{Center,Center,Nothing}(model.grid)
     dmld = Field{Center,Center,Nothing}(model.grid)
-    dΔz_ra = Enzyme.make_zero(Δz)
+    dΔz_ra = Enzyme.make_zero(Δz_ra)
 
     # Profile and time the spinup_reentrant_channel_model!
     prof_result = Reactant.Profiler.profile_with_xprof(
