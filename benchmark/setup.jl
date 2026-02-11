@@ -134,11 +134,14 @@ function run_all_benchmarks(backend::String)
     end
 
     # Aggregate results from saved files
-    all_results = Dict{String,Dict{String,Float64}}()
+    all_results = Dict(
+        "Runtime (s)" => Dict{String,Float64}(), "TFLOP/s" => Dict{String,Float64}()
+    )
 
     for dir in benchmark_dirs
         results = load_results_from_dir(dir, backend)
-        merge!(all_results, results)
+        merge!(all_results["Runtime (s)"], results["Runtime (s)"])
+        merge!(all_results["TFLOP/s"], results["TFLOP/s"])
     end
 
     @info "Aggregated $(length(all_results["Runtime (s)"])) total benchmark results"
