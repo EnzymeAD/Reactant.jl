@@ -90,7 +90,7 @@ Activates `obj` for the duration of `body`, then deactivates it.
 macro scope(args...)
     @assert length(args) >= 2
 
-    objs = args[1:end-1]
+    objs = args[1:(end - 1)]
     body = last(args)
 
     activations = [:($activate($(esc(obj)))) for obj in objs]
