@@ -121,7 +121,8 @@ Run all benchmark subdirectories in separate processes and aggregate results.
 """
 function run_all_benchmarks(backend::String)
     base_dir = dirname(@__FILE__)
-    benchmark_dirs = find_benchmark_dirs(base_dir)
+    # benchmark_dirs = find_benchmark_dirs(base_dir)
+    benchmark_dirs = [joinpath(base_dir, "oceananigans")] # XXX: remove
 
     @info "Found $(length(benchmark_dirs)) benchmark directories: $(basename.(benchmark_dirs))"
 
