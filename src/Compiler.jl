@@ -1542,11 +1542,13 @@ end
 
 # helper for debug purposes: String -> Text
 function run_pass_pipeline_on_source(source, pass_pipeline; enable_verifier=true)
-    return MLIR.IR.with_context() do _
-        mod = parse(MLIR.IR.Module, source)
-        run_pass_pipeline!(mod, pass_pipeline; enable_verifier)
-        MLIR.IR.verifyall(MLIR.IR.Operation(mod); debug=true)
-        Text(repr(mod))
+    MLIR.IR.@dispose ctx = Reactant.ReactantContext() begin
+        MLIR.IR.@scope ctx begin
+            mod = parse(MLIR.IR.Module, source)
+            run_pass_pipeline!(mod, pass_pipeline; enable_verifier)
+            MLIR.IR.verifyall(MLIR.IR.Operation(mod); debug=true)
+            Text(repr(mod))
+        end
     end
 end
 
