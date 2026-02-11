@@ -650,10 +650,17 @@ struct FlopsSummary
     RawTime::Float64  # picoseconds
 end
 
+function Base.getproperty(summary::FlopsSummary, name::Symbol)
+    if name == :RawFlopsRate || name == :BF16FlopsRate
+        rawtime_s = getfield(summary, :RawTime) * 1e-12
+        name_sym = name == :RawFlopsRate ? :RawFlops : :BF16Flops
+        return getfield(summary, name_sym) / rawtime_s
+    end
+    return getfield(summary, name)
+end
+
 function _show_with_indent(io, summary::FlopsSummary, indent=0)
     rawtime_s = summary.RawTime * 1e-12
-    rawflops_rate = summary.RawFlops / rawtime_s
-    bf16flops_rate = summary.BF16Flops / rawtime_s
 
     print(io, "    "^indent * "Flops = $(summary.Flops), ")
     Base.printstyled(
@@ -669,9 +676,9 @@ function _show_with_indent(io, summary::FlopsSummary, indent=0)
     )
     print(io, "    "^indent * "RawTime = $(_timestr(rawtime_s * 1e9))s, ")
     Base.printstyled(" # Raw time in seconds\n"; color=:light_black)
-    print(io, "    "^indent * "RawFlopsRate = $(rawflops_rate), ")
+    print(io, "    "^indent * "RawFlopsRate = $(summary.RawFlopsRate), ")
     Base.printstyled(" # Raw FLOPs rate in FLOPs/seconds\n"; color=:light_black)
-    print(io, "    "^indent * "BF16FlopsRate = $(bf16flops_rate), ")
+    print(io, "    "^indent * "BF16FlopsRate = $(summary.BF16FlopsRate), ")
     Base.printstyled(" # BF16 FLOPs rate in FLOPs/seconds\n"; color=:light_black)
     return nothing
 end

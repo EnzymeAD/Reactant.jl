@@ -3,17 +3,25 @@ using JSON: JSON
 const BACKENDS = ["CPU", "CUDA", "TPU"]
 
 all_results = []
+all_results_tflops = []
 for backend in BACKENDS
-    filename = string(backend, "benchmarks.json")
-    filepath = joinpath(dirname(@__FILE__), "results", filename)
-    if ispath(filepath)
-        results = JSON3.parsefile(filepath)
-        append!(all_results, results)
-    else
-        @warn "No file found at path: $(filepath)"
+    for (tag, arr) in
+        (["benchmarks.json", all_results], ["benchmarks_tflops.json", all_results_tflops])
+        filename = string(backend, tag)
+        filepath = joinpath(dirname(@__FILE__), "results", filename)
+        if ispath(filepath)
+            results = JSON.parsefile(filepath)
+            append!(arr, results)
+        else
+            @warn "No file found at path: $(filepath)"
+        end
     end
 end
 
 open(joinpath(dirname(@__FILE__), "results", "combinedbenchmarks.json"), "w") do io
     return JSON.json(io, all_results; pretty=true)
+end
+
+open(joinpath(dirname(@__FILE__), "results", "combinedbenchmarks_tflops.json"), "w") do io
+    return JSON3.pretty(io, JSON3.write(all_results_tflops))
 end

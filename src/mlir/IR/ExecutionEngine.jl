@@ -1,10 +1,5 @@
-struct ExecutionEngine
+@checked struct ExecutionEngine
     ref::API.MlirExecutionEngine
-
-    function ExecutionEngine(engine)
-        @assert !mlirIsNull(engine) "cannot create ExecutionEngine with null MlirExecutionEngine"
-        return finalizer(API.mlirExecutionEngineDestroy, new(engine))
-    end
 end
 
 """
@@ -25,15 +20,19 @@ function ExecutionEngine(
     enableObjectDump::Bool=false,
 )
     return ExecutionEngine(
-        API.mlirExecutionEngineCreate(
-            mod, optLevel, length(sharedlibs), sharedlibs, enableObjectDump
+        mark_alloc(
+            API.mlirExecutionEngineCreate(
+                mod, optLevel, length(sharedlibs), sharedlibs, enableObjectDump
+            ),
         ),
     )
 end
 
+dispose(engine::ExecutionEngine) = API.mlirExecutionEngineDestroy(engine)
+
 Base.cconvert(::Core.Type{API.MlirExecutionEngine}, engine::ExecutionEngine) = engine
 function Base.unsafe_convert(::Core.Type{API.MlirExecutionEngine}, engine::ExecutionEngine)
-    return engine.ref
+    return mark_use(engine).ref
 end
 
 # TODO(#2246) mlirExecutionEngineInvokePacked

@@ -1,10 +1,5 @@
-struct Dialect
+@checked struct Dialect
     ref::API.MlirDialect
-
-    function Dialect(dialect)
-        @assert !mlirIsNull(dialect) "cannot create Dialect from null MlirDialect"
-        return new(dialect)
-    end
 end
 
 Base.cconvert(::Core.Type{API.MlirDialect}, dialect::Dialect) = dialect
@@ -43,7 +38,7 @@ function get_or_load_dialect!(name::String; context::Context=current_context())
     return Dialect(dialect)
 end
 
-struct DialectHandle
+@checked struct DialectHandle
     ref::API.MlirDialectHandle
 end
 
@@ -70,22 +65,19 @@ function load_dialect!(handle::DialectHandle; context::Context=current_context()
     return Dialect(API.mlirDialectHandleLoadDialect(handle, context))
 end
 
-mutable struct DialectRegistry
+@checked struct DialectRegistry
     ref::API.MlirDialectRegistry
-
-    function DialectRegistry(registry)
-        @assert !mlirIsNull(registry) "cannot create DialectRegistry with null MlirDialectRegistry"
-        return finalizer(API.mlirDialectRegistryDestroy, new(registry))
-    end
 end
 
-DialectRegistry() = DialectRegistry(API.mlirDialectRegistryCreate())
+DialectRegistry() = DialectRegistry(mark_alloc(API.mlirDialectRegistryCreate()))
+
+dispose(registry::DialectRegistry) = API.mlirDialectRegistryDestroy(registry.ref)
 
 Base.cconvert(::Core.Type{API.MlirDialectRegistry}, registry::DialectRegistry) = registry
 function Base.unsafe_convert(
     ::Core.Type{API.MlirDialectRegistry}, registry::DialectRegistry
 )
-    return registry.ref
+    return mark_use(registry).ref
 end
 
 function Base.push!(registry::DialectRegistry, handle::DialectHandle)

@@ -268,7 +268,20 @@ include("Overlay.jl")
 # Serialization
 include("serialization/Serialization.jl")
 
-using .Compiler: @compile, @code_hlo, @code_mhlo, @jit, @code_xla, traced_getfield, compile
+# ProbProg
+include("probprog/ProbProg.jl")
+
+using .Compiler:
+    @compile,
+    @jit,
+    @code_hlo,
+    @code_mhlo,
+    @code_xla,
+    code_hlo,
+    code_mhlo,
+    code_xla,
+    traced_getfield,
+    compile
 export ConcreteRArray,
     ConcreteRNumber,
     ConcretePJRTArray,
@@ -284,6 +297,18 @@ export ConcreteRArray,
     within_compile
 
 const registry = Ref{Union{Nothing,MLIR.IR.DialectRegistry}}()
+
+function register_enzymexla_dialects(ctx::MLIR.IR.Context)
+    @ccall MLIR.API.mlir_c.RegisterDialects(ctx::MLIR.API.MlirContext)::Cvoid
+    return nothing
+end
+
+ReactantContext(; kwargs...) = ReactantContext(registry[]; kwargs...)
+function ReactantContext(args...; kwargs...)
+    ctx = MLIR.IR.Context(args...; kwargs...)
+    register_enzymexla_dialects(ctx)
+    return ctx
+end
 
 const passes_initialized = Ref(false)
 function initialize_dialect()

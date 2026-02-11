@@ -53,6 +53,7 @@ jobs:
           - core
           - nn
           - integration
+          - probprog
         runtime:
           - "pjrt"
           - "ifrt"
@@ -95,6 +96,7 @@ jobs:
           - core
           - nn
           - integration
+          - probprog
         runtime:
           - "pjrt"
           - "ifrt"
