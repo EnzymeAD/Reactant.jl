@@ -23,5 +23,5 @@ open(joinpath(dirname(@__FILE__), "results", "combinedbenchmarks.json"), "w") do
 end
 
 open(joinpath(dirname(@__FILE__), "results", "combinedbenchmarks_tflops.json"), "w") do io
-    return JSON3.pretty(io, JSON3.write(all_results_tflops))
+    return JSON.json(io, all_results_tflops; pretty=true)
 end
