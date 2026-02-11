@@ -89,7 +89,7 @@ function mlir_type(x::Union{RNumber,RArray})::MLIR.IR.Type
     return MLIR.IR.TensorType(collect(Int, size(x)), MLIR.IR.Type(unwrapped_eltype(x)))
 end
 
-mlir_type(::MissingTracedValue) = MLIR.IR.TensorType((), MLIR.IR.Type(Bool))
+mlir_type(::MissingTracedValue) = MLIR.IR.TensorType(Int[], MLIR.IR.Type(Bool))
 
 function mlir_type(RT::Type{<:RArray{T,N}}, shape) where {T,N}
     @assert length(shape) == N
@@ -2260,9 +2260,13 @@ end
     traced_args = Vector{Any}(undef, N)
 
     for (i, prev) in enumerate(args)
-        @inbounds traced_args[i] = Reactant.make_tracer(
-            seen_args, prev, (), Reactant.NoStopTracedTrack; track_numbers
-        )
+        @inbounds traced_args[i] = if prev isa Ref && prev[] isa MissingTracedValue
+             Ref{Nothing}(nothing)
+         else
+             Reactant.make_tracer(
+                seen_args, prev, (), Reactant.NoStopTracedTrack; track_numbers
+             )
+        end
     end
 
     linear_args = Reactant.TracedType[]
@@ -2407,6 +2411,9 @@ end
             end
             if isnothing(path)
                 error("if_condition: could not find path for linear arg $i")
+            end
+            if arg isa MissingTracedValue
+                continue
             end
             Reactant.TracedUtils.set_mlir_data!(
                 arg,
@@ -2724,13 +2731,15 @@ end
 
     corrected_traced_results =
         map(zip(traced_false_results, traced_true_results)) do (fr, tr)
-            if fr isa MissingTracedValue && tr isa MissingTracedValue
+            res = if fr isa MissingTracedValue && tr isa MissingTracedValue
                 return fr
             elseif fr isa MissingTracedValue
                 return tr
             else
                 return fr
             end
+            # @something res MissingTracedValue()
+            res
         end
 
     @assert length(all_paths) == length(result_types)
