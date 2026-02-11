@@ -2847,8 +2847,7 @@ macro code_hlo(args...)
         args...,
     )
     return quote
-        $MLIR.IR.@dispose ctx = $MLIR.IR.Context($(Reactant.registry)[]) begin
-            @ccall $MLIR.API.mlir_c.RegisterDialects(ctx::$MLIR.API.MlirContext)::Cvoid
+        $MLIR.IR.@dispose ctx = $Reactant.ReactantContext() begin
             mod = $code_hlo(
                 ctx,
                 $(esc(f)),
@@ -2904,8 +2903,7 @@ macro code_mhlo(args...)
         args...,
     )
     return quote
-        $MLIR.IR.@dispose ctx = $MLIR.IR.Context($(Reactant.registry)[]) begin
-            @ccall $MLIR.API.mlir_c.RegisterDialects(ctx::$MLIR.API.MlirContext)::Cvoid
+        $MLIR.IR.@dispose ctx = $Reactant.ReactantContext() begin
             mod = $code_mhlo(
                 ctx,
                 $(esc(f)),
@@ -2961,8 +2959,7 @@ macro code_xla(args...)
     )
 
     return quote
-        $MLIR.IR.@dispose ctx = $MLIR.IR.Context($(Reactant.registry)[]) begin
-            @ccall $MLIR.API.mlir_c.RegisterDialects(ctx::$MLIR.API.MlirContext)::Cvoid
+        $MLIR.IR.@dispose ctx = $Reactant.ReactantContext() begin
             $code_xla(
                 ctx,
                 $(esc(f)),
@@ -3011,8 +3008,7 @@ macro compile(args...)
         args...,
     )
     return quote
-        $MLIR.IR.@dispose ctx = $MLIR.IR.Context($(Reactant.registry)[]) begin
-            @ccall $MLIR.API.mlir_c.RegisterDialects(ctx::$MLIR.API.MlirContext)::Cvoid
+        $MLIR.IR.@dispose ctx = $Reactant.ReactantContext() begin
             $compile(
                 ctx,
                 $(esc(f)),
@@ -3055,8 +3051,7 @@ macro jit(args...)
     default_options = merge(get_common_compile_options(), Dict{Symbol,Any}(:sync => false))
     (; f, args, kwargs, options) = parse_call_expr(default_options, args...)
     return quote
-        $MLIR.IR.@dispose ctx = $MLIR.IR.Context($(Reactant.registry)[]) begin
-            @ccall $MLIR.API.mlir_c.RegisterDialects(ctx::$MLIR.API.MlirContext)::Cvoid
+        $MLIR.IR.@dispose ctx = $Reactant.ReactantContext() begin
             fn = $compile(
                 ctx,
                 $(esc(f)),
