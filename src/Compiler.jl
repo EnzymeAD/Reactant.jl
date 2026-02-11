@@ -1202,7 +1202,7 @@ function optimization_passes(
             "sub_const_prop",
             "xor_const_prop",
             # other constant propagations
-            "const_prop_through_barrier<16>",
+            # "const_prop_through_barrier<16>", # XXX: should we really do this??
             "concat_const_prop<1>($max_constant_threshold)",
             "dynamic_update_slice_const_prop($max_constant_threshold)",
             "clamp_const_prop",
