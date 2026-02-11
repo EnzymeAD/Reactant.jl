@@ -124,7 +124,7 @@ jobs:
         run: |
           julia --color=yes -e '@info "Instantiating project"
             using Pkg;
-            Pkg.add("JSON3");
+            Pkg.add("JSON");
             @info "Combining Benchmarks"
             include("benchmark/aggregate.jl")'
 
