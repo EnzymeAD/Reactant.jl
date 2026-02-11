@@ -1115,7 +1115,6 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
             CConv,
         )
     end
-    push!(MLIR.IR.body(mod), wrapfunc)
     wrapbody = MLIR.IR.Block(wrapper_tys, [MLIR.IR.Location() for _ in wrapper_tys])
     push!(MLIR.IR.region(wrapfunc, 1), wrapbody)
     for i in 1:length(wrapper_tys)
