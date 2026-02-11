@@ -32,14 +32,14 @@ function test()
         push!(MLIR.IR.region(func, 1), fnbody)
 
         GC.@preserve mod func fnbody begin
-            MLIR.IR.with_block(fnbody) do
+            MLIR.IR.@scope fnbody begin
                 a = ones(4)
                 b = ones(4)
                 d = Data(
                     Reactant.TracedRArray{Float64,1}((), MLIR.IR.argument(fnbody, 1), (4,))
                 )
 
-                return tmp(a, b, d)
+                tmp(a, b, d)
             end
         end
 
