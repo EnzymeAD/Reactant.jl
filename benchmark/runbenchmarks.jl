@@ -18,12 +18,12 @@ const BENCHMARK_GROUP = ARGS[1]
 # Main benchmark orchestration
 include("setup.jl")
 
-results = run_all_benchmarks(BENCHMARK_GROUP)
+all_results = run_all_benchmarks(BENCHMARK_GROUP)
 
 # Display results in a table
-if !isempty(results)
-    table = Matrix{Any}(undef, length(results), 5)
-    for (i, (k, v)) in enumerate(sort(results))
+if !isempty(all_results["Runtime (s)"])
+    table = Matrix{Any}(undef, length(all_results["Runtime (s)"]), 6)
+    for (i, (k, v)) in enumerate(sort(all_results["Runtime (s)"]))
         parts = rsplit(k, "/"; limit=4)
         # Fill in parts, padding with empty strings if fewer than 4 parts
         while length(parts) < 4
@@ -35,41 +35,17 @@ if !isempty(results)
         table[i, 3] = i3
         table[i, 4] = i4
         table[i, 5] = v
+        table[i, 6] = all_results["TFLOP/s"][k]
     end
 
     pretty_table(
         table;
-        alignment=[:l, :l, :l, :l, :c],
-        column_labels=["Benchmark", "Mode", "Backend", "Passes", "Time (s)"],
+        alignment=[:l, :l, :l, :l, :c, :c],
+        column_labels=["Benchmark", "Mode", "Backend", "Passes", "Time (s)", "TFLOP/s"],
         display_size=(-1, -1),
     )
 end
 
-# Save aggregated results
-filepath = joinpath(dirname(@__FILE__), "results")
-mkpath(filepath)
-filename = string(BENCHMARK_GROUP, "benchmarks.json")
+include("utils.jl")
 
-standardized_results = Vector{Dict{String,Union{String,Float64}}}(
-    undef, length(keys(results))
-)
-for (i, (k, v)) in enumerate(results)
-    standardized_results[i] = Dict("name" => k, "value" => v, "unit" => "s")
-end
-
-open(joinpath(filepath, filename), "w") do io
-    return JSON3.pretty(io, JSON3.write(standardized_results))
-end
-
-@info "Saved $(length(results)) results to $(joinpath(filepath, filename))"
-
-# Also aggregate any results saved by individual subdirectories
-@info "Aggregating results from subdirectories..."
-subdirectory_results = aggregate_saved_results(dirname(@__FILE__))
-if !isempty(subdirectory_results)
-    combined_filename = string(BENCHMARK_GROUP, "_combined_benchmarks.json")
-    open(joinpath(filepath, combined_filename), "w") do io
-        return JSON3.pretty(io, JSON3.write(subdirectory_results))
-    end
-    @info "Saved $(length(subdirectory_results)) combined results to $(joinpath(filepath, combined_filename))"
-end
+save_results(all_results, joinpath(dirname(@__FILE__), "results"), "", BENCHMARK_GROUP)

@@ -1013,8 +1013,7 @@ function finalize_mlir_fn(
         num_partitions = 1
     end
 
-    MLIR.API.mlirOperationDestroy(func.ref)
-    func.ref = MLIR.API.MlirOperation(C_NULL)
+    MLIR.IR.dispose(func)
 
     return (
         func2,
@@ -1299,13 +1298,9 @@ function elem_apply(f, args::Vararg{Any,Nargs}) where {Nargs}
     end
 
     seen_results = OrderedIdDict()
-    traced2_result = Reactant.make_tracer(
+    return Reactant.make_tracer(
         seen_results, result, (), Reactant.TracedSetPath; tobatch=OutShape
     )
-
-    func2.ref = MLIR.API.MlirOperation(C_NULL)
-
-    return traced2_result
 end
 
 function traced_indices(indices...)

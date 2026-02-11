@@ -1,10 +1,5 @@
-struct Location
+@checked struct Location
     ref::API.MlirLocation
-
-    function Location(location)
-        @assert !mlirIsNull(location) "cannot create Location with null MlirLocation"
-        return new(location)
-    end
 end
 
 function Location(; context::Context=current_context())

@@ -1861,14 +1861,25 @@ function _hlo_call_name(orig_name, module_suffix)
 end
 
 """
-    hlo_call(mlir_code::String, args::Vararg{AnyTracedRArray}...; func_name::String="main") -> NTuple{N, AnyTracedRArray}
+    hlo_call(
+        mlir_code::String,
+        args::Vararg{AnyTracedRArray}...;
+        func_name::String="main",
+        dummy_arguments::Bool=false,
+    ) -> NTuple{N, AnyTracedRArray}
 
-Given a MLIR module given as a string, calls the function identified by the `func_name` keyword parameter (default "main")
-with the provided arguments and return a tuple for each result of the call.
+Given a MLIR module given as a string, calls the function identified by the `func_name`
+keyword parameter (default "main") with the provided arguments and return a tuple for each
+result of the call.
+
+If `dummy_arguments` is set to `true`, then the function will be called with dummy arguments
+(zeros of the same shape and type as the provided arguments). We explicitly put an
+optimization barrier to ensure that these constants aren't folded into subsequent
+operations.
 
 ```julia-repl
 julia> Reactant.@jit(
-          hlo_call(
+          Reactant.Ops.hlo_call(
               \"\"\"
               module {
                 func.func @main(%arg0: tensor<3xf32>, %arg1: tensor<3xf32>) -> tensor<3xf32> {
@@ -1882,14 +1893,41 @@ julia> Reactant.@jit(
           )
        )
 (ConcretePJRTArray{Float32, 1}(Float32[2.0, 4.0, 6.0]),)
+
+julia> Reactant.@code_hlo(
+          Reactant.Ops.hlo_call(
+              \"\"\"
+              module {
+                func.func @main(%arg0: tensor<3xf32>, %arg1: tensor<3xf32>) -> tensor<3xf32> {
+                  %0 = stablehlo.add %arg0, %arg1 : tensor<3xf32>
+                  return %0 : tensor<3xf32>
+                }
+              }
+              \"\"\";
+              dummy_arguments=true,
+          )
+       )
+module @reactant_hlo_call attributes {mhlo.num_partitions = 1 : i64, mhlo.num_replicas = 1 : i64} {
+  func.func @main() -> tensor<3xf32> attributes {enzymexla.memory_effects = []} {
+    %cst = stablehlo.constant dense<0.000000e+00> : tensor<3xf32>
+    %0:2 = stablehlo.optimization_barrier %cst, %cst : tensor<3xf32>, tensor<3xf32>
+    %1 = stablehlo.add %0#0, %0#1 : tensor<3xf32>
+    return %1 : tensor<3xf32>
+  }
+}
 ```
 """
 @noinline function hlo_call(
     code,
     args...;
     func_name="main",
+    dummy_arguments::Bool=false,
     location=mlir_stacktrace("hlo_call", @__FILE__, @__LINE__),
 )
+    if dummy_arguments
+        @assert length(args) == 0 "hlo_call: dummy_arguments=true requires no arguments"
+    end
+
     module_suffix = string(hash(code); base=16)
     name_to_call = _hlo_call_name(func_name, module_suffix)
 
@@ -1947,16 +1985,35 @@ julia> Reactant.@jit(
     ftype_attr = MLIR.IR.getattr(fn, "function_type")
     ftype = MLIR.IR.Type(ftype_attr)
 
-    @assert all(Base.Fix2(isa, Union{TracedRArray,TracedRNumber}), args) "hlo_call: all inputs to hlo_call should be reactant arrays or numbers"
-    @assert MLIR.IR.ninputs(ftype) == length(args) "hlo_call: invalid number of arguments for function $func_name"
+    if dummy_arguments
+        operands = Union{TracedRArray,TracedRNumber}[]
+        for i in 1:MLIR.IR.ninputs(ftype)
+            expected_type = MLIR.IR.input(ftype, i)
+            base_num = Reactant.promote_to(
+                TracedRNumber, zero(MLIR.IR.julia_type(eltype(expected_type)))
+            )
+            if ndims(expected_type) != 0
+                push!(operands, fill(base_num, size(expected_type)))
+            else
+                push!(operands, base_num)
+            end
+        end
+        operands = MLIR.IR.Value[
+            Reactant.TracedUtils.get_mlir_data(a) for a in optimization_barrier(operands...)
+        ]
+    else
+        @assert all(Base.Fix2(isa, Union{TracedRArray,TracedRNumber}), args) "hlo_call: all inputs to hlo_call should be reactant arrays or numbers"
+        @assert MLIR.IR.ninputs(ftype) == length(args) "hlo_call: invalid number of arguments for function $func_name"
 
-    for (i, arg) in enumerate(args)
-        expected_type = MLIR.IR.input(ftype, i)
-        arg_type = MLIR.IR.type(Reactant.TracedUtils.get_mlir_data(arg))
-        @assert expected_type == arg_type "hlo_call: argument #$i has the wrong type (expected $expected_type, got $arg_type)"
+        for (i, arg) in enumerate(args)
+            expected_type = MLIR.IR.input(ftype, i)
+            arg_type = MLIR.IR.type(Reactant.TracedUtils.get_mlir_data(arg))
+            @assert expected_type == arg_type "hlo_call: argument #$i has the wrong type (expected $expected_type, got $arg_type)"
+        end
+
+        operands = MLIR.IR.Value[Reactant.TracedUtils.get_mlir_data(a) for a in args]
     end
 
-    operands = MLIR.IR.Value[Reactant.TracedUtils.get_mlir_data(a) for a in args]
     call = MLIR.Dialects.func.call(
         operands;
         result_0=[MLIR.IR.result(ftype, i) for i in 1:MLIR.IR.nresults(ftype)],
@@ -2631,8 +2688,7 @@ end
     MLIR.API.mlirRegionTakeBody(
         MLIR.IR.region(true_fn_compiled, 1), MLIR.IR.region(true_func_tmp, 1)
     )
-    MLIR.API.mlirOperationDestroy(true_func_tmp)
-    true_func_tmp.ref = MLIR.API.MlirOperation(C_NULL)
+    MLIR.IR.dispose(true_func_tmp)
 
     fb_out_types = [mlir_type(fr) for fr in fb_corrected_linear_results]
 
@@ -2649,8 +2705,7 @@ end
     MLIR.API.mlirRegionTakeBody(
         MLIR.IR.region(false_fn_compiled, 1), MLIR.IR.region(false_func_tmp, 1)
     )
-    MLIR.API.mlirOperationDestroy(false_func_tmp)
-    false_func_tmp.ref = MLIR.API.MlirOperation(C_NULL)
+    MLIR.IR.dispose(false_func_tmp)
 
     tb_region = Reactant.TracedUtils.__take_region(true_fn_compiled)
     fb_region = Reactant.TracedUtils.__take_region(false_fn_compiled)
@@ -3005,8 +3060,7 @@ result = Ops.case(
         MLIR.API.mlirRegionTakeBody(
             MLIR.IR.region(branch_fn_compiled, 1), MLIR.IR.region(branch_func_tmps[b], 1)
         )
-        MLIR.API.mlirOperationDestroy(branch_func_tmps[b].ref)
-        branch_func_tmps[b].ref = MLIR.API.MlirOperation(C_NULL)
+        MLIR.IR.dispose(branch_func_tmps[b])
 
         push!(branch_regions, Reactant.TracedUtils.__take_region(branch_fn_compiled))
         MLIR.IR.rmfromparent!(branch_fn_compiled)

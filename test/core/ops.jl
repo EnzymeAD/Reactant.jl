@@ -1066,6 +1066,32 @@ end
             )
         ),
     ) == 4.0f0
+
+    hlo = @code_hlo Ops.hlo_call(
+        """
+        module {
+          func.func @main(%arg0: tensor<3xf32>, %arg1: tensor<3xf32>) -> tensor<3xf32> {
+            %0 = stablehlo.add %arg0, %arg1 : tensor<3xf32>
+            return %0 : tensor<3xf32>
+          }
+        }
+        """;
+        dummy_arguments=true,
+    )
+    @test occursin("stablehlo.optimization_barrier", repr(hlo))
+
+    hlo = @code_hlo Ops.hlo_call(
+        """
+        module {
+          func.func @main(%arg0: tensor<f32>) -> tensor<f32> {
+            %0 = stablehlo.add %arg0, %arg0 : tensor<f32>
+            return %0 : tensor<f32>
+          }
+        }
+        """;
+        dummy_arguments=true,
+    )
+    @test occursin("stablehlo.optimization_barrier", repr(hlo))
 end
 
 function f_repeat(x, y)

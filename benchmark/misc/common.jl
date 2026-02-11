@@ -2,24 +2,7 @@ using Reactant: Reactant, @compile
 using Chairmarks: @b
 using Printf: @sprintf
 
-function get_backend()
-    # To run benchmarks on a specific backend
-    BENCHMARK_GROUP = get(ENV, "BENCHMARK_GROUP", nothing)
-
-    if BENCHMARK_GROUP == "CUDA"
-        Reactant.set_default_backend("gpu")
-        @info "Running CUDA benchmarks" maxlog = 1
-    elseif BENCHMARK_GROUP == "TPU"
-        Reactant.set_default_backend("tpu")
-    elseif BENCHMARK_GROUP == "CPU"
-        Reactant.set_default_backend("cpu")
-        @info "Running CPU benchmarks" maxlog = 1
-    else
-        BENCHMARK_GROUP = String(split(string(first(Reactant.devices())), ":")[1])
-        @info "Running $(BENCHMARK_GROUP) benchmarks" maxlog = 1
-    end
-    return BENCHMARK_GROUP
-end
+include("../utils.jl")
 
 struct BenchmarkConfiguration
     name::String
@@ -36,7 +19,7 @@ function BenchmarkConfiguration(
 end
 
 function run_benchmark!(
-    results,
+    results::Dict,
     backend::String,
     benchmark_name::String,
     fn::F,
@@ -47,6 +30,13 @@ function run_benchmark!(
     benchmark_seconds::Float64=5.0,
     benchmark_samples::Int=100,
 ) where {F}
+    if !haskey(results, "Runtime (s)")
+        results["Runtime (s)"] = Dict{String,Float64}()
+    end
+    if !haskey(results, "TFLOP/s")
+        results["TFLOP/s"] = Dict{String,Float64}()
+    end
+
     # Run CPU/Julia benchmark if on CPU backend
     if backend == "CPU" && !skip_cpu
         full_benchmark_name = string(benchmark_name, "/CPU/Julia")
@@ -58,7 +48,8 @@ function run_benchmark!(
         bench = @b fn($(cpu_args)...) seconds = benchmark_seconds evals = 1 samples =
             benchmark_samples
 
-        results[full_benchmark_name] = bench.time
+        results["Runtime (s)"][full_benchmark_name] = bench.time
+        results["TFLOP/s"][full_benchmark_name] = -1 # TODO: use LIKWID to get the TFLOP/s
 
         print_stmt = @sprintf "%100s     :     %.5gs" full_benchmark_name bench.time
         @info print_stmt
@@ -69,13 +60,24 @@ function run_benchmark!(
     for config in configs
         full_benchmark_name = string(benchmark_name, "/", backend, "/", config.name)
 
-        time = Reactant.Profiler.profile_with_xprof(
+        prof_results = Reactant.Profiler.profile_with_xprof(
             fn, ra_args...; nrepeat=config.nrepeat, compile_options=config.compile_options
         )
-        time = time.profiling_result.runtime_ns / 1e9
-        results[full_benchmark_name] = time
+        results["Runtime (s)"][full_benchmark_name] =
+            prof_results.profiling_result.runtime_ns / 1e9
+        results["TFLOP/s"][full_benchmark_name] =
+            if prof_results.profiling_result.flops_data === nothing
+                -1
+            else
+                prof_results.profiling_result.flops_data.RawFlopsRate / 1e12
+            end
 
-        print_stmt = @sprintf "%100s     :     %.5gs" full_benchmark_name time
+        print_stmt = @sprintf(
+            "%100s     :     %.5gs     %.5g TFLOP/s",
+            full_benchmark_name,
+            results["Runtime (s)"][full_benchmark_name],
+            results["TFLOP/s"][full_benchmark_name],
+        )
         @info print_stmt
         GC.gc(true)
     end

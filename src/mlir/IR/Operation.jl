@@ -1,19 +1,11 @@
-mutable struct Operation
+@checked struct Operation
     ref::API.MlirOperation
-    @atomic owned::Bool
-
-    function Operation(operation, owned=true)
-        @assert !mlirIsNull(operation) "cannot create Operation with null MlirOperation"
-        finalizer(new(operation, owned)) do op
-            if op.owned
-                API.mlirOperationDestroy(op)
-            end
-        end
-    end
 end
 
+dispose(op::Operation) = mark_dispose(API.mlirOperationDestroy, op)
+
 Base.cconvert(::Core.Type{API.MlirOperation}, op::Operation) = op
-Base.unsafe_convert(::Core.Type{API.MlirOperation}, op::Operation) = op.ref
+Base.unsafe_convert(::Core.Type{API.MlirOperation}, op::Operation) = mark_use(op).ref
 
 Base.:(==)(op::Operation, other::Operation) = API.mlirOperationEqual(op, other)
 
@@ -31,13 +23,15 @@ function Base.parse(
     location::Location=Location(),
 )
     return Operation(
-        @ccall API.mlir_c.mlirOperationParse(
-            context::API.MlirContext,
-            block::API.MlirBlock,
-            code::API.MlirStringRef,
-            location::API.MlirLocation,
-            verify::Bool,
-        )::API.MlirOperation
+        mark_alloc(
+            @ccall API.mlir_c.mlirOperationParse(
+                context::API.MlirContext,
+                block::API.MlirBlock,
+                code::API.MlirStringRef,
+                location::API.MlirLocation,
+                verify::Bool,
+            )::API.MlirOperation
+        ),
     )
 end
 
@@ -75,7 +69,7 @@ function Base.iterate(it::Operation)
     if mlirIsNull(raw_region)
         nothing
     else
-        region = Region(raw_region, false)
+        region = Region(raw_region)
         (region, region)
     end
 end
@@ -85,15 +79,9 @@ function Base.iterate(::Operation, region)
     if mlirIsNull(raw_region)
         nothing
     else
-        region = Region(raw_region, false)
+        region = Region(raw_region)
         (region, region)
     end
-end
-
-function lose_ownership!(operation::Operation)
-    @assert operation.owned
-    @atomic operation.owned = false
-    return operation
 end
 
 """
@@ -101,7 +89,7 @@ end
 
 Creates a deep copy of an operation. The operation is not inserted and ownership is transferred to the caller.
 """
-Base.copy(op::Operation) = Operation(API.mlirOperationClone(op))
+Base.copy(op::Operation) = Operation(mark_alloc(API.mlirOperationClone(op)))
 
 """
     context(op)
@@ -136,7 +124,7 @@ name(op::Operation) = String(API.mlirOperationGetName(op))
 
 Gets the block that owns this operation, returning null if the operation is not owned.
 """
-block(op::Operation) = Block(API.mlirOperationGetBlock(op), false)
+block(op::Operation) = Block(API.mlirOperationGetBlock(op))
 
 """
     parent_op(op)
@@ -144,7 +132,7 @@ block(op::Operation) = Block(API.mlirOperationGetBlock(op), false)
 Gets the operation that owns this operation, returning null if the operation is not owned.
 """
 function parent_op(op::Operation)
-    return Operation(API.mlirOperationGetParentOperation(op), false)
+    return Operation(API.mlirOperationGetParentOperation(op))
 end
 
 """
@@ -155,7 +143,7 @@ The ownership of the operation is transferred to the caller.
 """
 function rmfromparent!(op::Operation)
     API.mlirOperationRemoveFromParent(op)
-    @atomic op.owned = true
+    # TODO mark ownership moved to the caller
     return op
 end
 
@@ -175,7 +163,7 @@ Returns `i`-th region attached to the operation.
 """
 function region(op::Operation, i)
     i ∉ 1:nregions(op) && throw(BoundsError(op, i))
-    return Region(API.mlirOperationGetRegion(op, i - 1), false)
+    return Region(API.mlirOperationGetRegion(op, i - 1))
 end
 
 """
@@ -245,7 +233,7 @@ Returns `i`-th successor of the operation.
 """
 function successor(op::Operation, i)
     i ∉ 1:nsuccessors(op) && throw(BoundsError(op, i))
-    return Block(API.mlirOperationGetSuccessor(op, i - 1), false)
+    return Block(API.mlirOperationGetSuccessor(op, i - 1))
 end
 
 """
@@ -308,7 +296,7 @@ verify(operation::Operation) = API.mlirOperationVerify(operation)
 Moves the given operation immediately after the other operation in its parent block. The given operation may be owned by the caller or by its current block. The other operation must belong to a block. In any case, the ownership is transferred to the block of the other operation.
 """
 function move_after!(operation::Operation, other::Operation)
-    op.owned && lose_ownership!(operation)
+    mark_donate(operation)
     return API.mlirOperationMoveAfter(operation, other)
 end
 
@@ -321,7 +309,7 @@ The other operation must belong to a block.
 In any case, the ownership is transferred to the block of the other operation.
 """
 function move_before!(op::Operation, other::Operation)
-    op.owned && lose_ownership!(op)
+    mark_donate(op)
     return API.mlirOperationMoveBefore(op, other)
 end
 
@@ -357,7 +345,7 @@ function create_operation_common(
             API.mlirOperationStateAddOperands(state, length(operands), operands)
         end
         if !isnothing(owned_regions)
-            lose_ownership!.(owned_regions)
+            mark_donate.(owned_regions)
             GC.@preserve owned_regions begin
                 mlir_regions = Base.unsafe_convert.(API.MlirRegion, owned_regions)
                 API.mlirOperationStateAddOwnedRegions(
@@ -381,7 +369,7 @@ function create_operation_common(
         if mlirIsNull(op)
             error("Create Operation '$name' failed")
         end
-        return Operation(op, true)
+        return Operation(op)
     end
 end
 
