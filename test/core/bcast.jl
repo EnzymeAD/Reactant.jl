@@ -110,3 +110,18 @@ end
     x_ra = Reactant.to_rarray(x)
     @test @jit(custombcast(x_ra)) ≈ custombcast(x)
 end
+
+function bcast_scalar_with_jlarray(jlarr, x)
+    return jlarr .+ x
+end
+
+@testset "Broadcasting with scalars" begin
+    x = Reactant.TestUtils.construct_test_array(Float32, 2, 3)
+    a = ConcreteRNumber(0.3f0)
+    hlo = @code_hlo bcast_scalar_with_jlarray(x, a)
+    @test !occursin("stablehlo.slice", repr(hlo))
+    @test occursin("stablehlo.broadcast_in_dim", repr(hlo))
+
+    @test @jit(bcast_scalar_with_jlarray(x, a)) ≈
+        bcast_scalar_with_jlarray(Array(x), Float32(a))
+end
