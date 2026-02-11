@@ -87,26 +87,21 @@ end
 
 Activates `obj` for the duration of `body`, then deactivates it.
 """
-macro scope(obj, body)
-    bodybody = if Base.isexpr(body, :block)
-        body.args
-    else
-        [body]
-    end
-    if Base.isexpr(obj, :(=))
-        prologue = esc(obj)
-        symbol = obj.args[1]
-    else
-        prologue = nothing
-        symbol = esc(obj)
-    end
+macro scope(args...)
+    @assert length(args) >= 2
+
+    objs = args[1:end-1]
+    body = last(args)
+
+    activations = [:($activate($(esc(obj)))) for obj in objs]
+    deactivations = [:($deactivate($(esc(obj)))) for obj in reverse(objs)]
+
     quote
-        $prologue
-        activate($symbol)
+        $(activations...)
         try
-            $(esc.(bodybody)...)
+            $(esc(body))
         finally
-            deactivate($symbol)
+            $(deactivations...)
         end
     end
 end
