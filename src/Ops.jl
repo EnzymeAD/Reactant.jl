@@ -2261,11 +2261,9 @@ end
 
     for (i, prev) in enumerate(args)
         @inbounds traced_args[i] = if prev isa Ref && prev[] isa MissingTracedValue
-             Ref{Nothing}(nothing)
-         else
-             Reactant.make_tracer(
-                seen_args, prev, (), Reactant.NoStopTracedTrack; track_numbers
-             )
+            Ref{Nothing}(nothing)
+        else
+            Reactant.make_tracer(seen_args, prev, (), Reactant.NoStopTracedTrack; track_numbers)
         end
     end
 

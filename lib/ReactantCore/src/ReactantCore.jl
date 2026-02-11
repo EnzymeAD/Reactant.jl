@@ -717,7 +717,9 @@ end
 const CONTROL_FLOW_EXPRS = Symbol[:return, :break, :continue, :symbolicgoto, :macrocall]
 
 function prewalk_until_function_boundary(f, expr)
-    if Meta.isexpr(expr, :function) || Meta.isexpr(expr, :(->)) || (Meta.isexpr(expr, :(=), 2) && Meta.isexpr(expr.args[1], :call))
+    if Meta.isexpr(expr, :function) ||
+        Meta.isexpr(expr, :(->)) ||
+        (Meta.isexpr(expr, :(=), 2) && Meta.isexpr(expr.args[1], :call))
         return expr
     end
     if expr isa Expr
@@ -728,7 +730,9 @@ end
 
 error_if_any_control_flow(_) = nothing
 function error_if_any_control_flow(expr::Expr)
-    if Meta.isexpr(expr, :function) || Meta.isexpr(expr, :(->)) || (Meta.isexpr(expr, :(=), 2) && Meta.isexpr(expr.args[1], :call))
+    if Meta.isexpr(expr, :function) ||
+        Meta.isexpr(expr, :(->)) ||
+        (Meta.isexpr(expr, :(=), 2) && Meta.isexpr(expr.args[1], :call))
         return expr
     end
 
@@ -738,7 +742,7 @@ function error_if_any_control_flow(expr::Expr)
         error("Cannot use @trace on a block that contains a $head statement")
     end
 
-    foreach(error_if_any_control_flow, expr.args)
+    return foreach(error_if_any_control_flow, expr.args)
 end
 
 """
