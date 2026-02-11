@@ -293,6 +293,8 @@ function trace_function_definition(mod, expr)
     end
 end
 
+cond_val(s) = :(@isdefined($s) ? $s : $MissingTracedValue())
+
 function trace_while(expr; track_numbers, mincut, checkpointing, first_arg=nothing)
     Meta.isexpr(expr, :while, 2) || error("expected while expr")
     cond, body = expr.args
@@ -315,7 +317,6 @@ function trace_while(expr; track_numbers, mincut, checkpointing, first_arg=nothi
     all_syms = Expr(:tuple, external_syms...)
     args_names = Expr(:tuple, external_syms...)
 
-    cond_val(s) = :(@isdefined($s) ? $s : nothing)
     args_init = Expr(:tuple, (:(Ref($(cond_val(s)))) for s in external_syms)...)
 
     ref_syms = Symbol[Symbol(string(sym), "_ref") for sym in external_syms]
@@ -476,29 +477,30 @@ function trace_if(expr; store_last_line=nothing, depth=0, track_numbers)
     if depth == 0
         error_if_any_control_flow(expr)
 
-        counter = 0
-        expr = MacroTools.prewalk(expr) do x
-            counter += 1
-            if x isa Expr && x.head == :if && counter > 1
-                ex_new, dv, _ = trace_if(x; store_last_line, depth=depth + 1, track_numbers)
-                append!(discard_vars_from_expansion, dv)
-                return ex_new
-            end
-            return x
-        end
+        # counter = 0
+        # expr = MacroTools.prewalk(expr) do x
+        #     counter += 1
+        #     if x isa Expr && x.head == :if && counter > 1
+        #         ex_new, dv, _ = trace_if(x; store_last_line, depth=depth + 1, track_numbers)
+        #         append!(discard_vars_from_expansion, dv)
+        #         return ex_new
+        #     end
+        #     return x
+        # end
     end
 
-    cond_expr = remove_shortcircuiting(expr.args[1])
+    expr_args = filter(a -> !isa(a, Core.LineNumberNode), expr.args)
+    cond_expr = remove_shortcircuiting(expr_args[1])
     condition_vars = [ExpressionExplorer.compute_symbols_state(cond_expr).references...]
 
     true_block = if store_last_line !== nothing
-        if expr.args[2] isa Expr
-            @assert expr.args[2].head == :block "currently we only support blocks"
-            expr.args[2] = Expr(:block, expr.args[2].args...)
-            true_last_line = expr.args[2].args[end]
-            remaining_lines = expr.args[2].args[1:(end - 1)]
+        if expr_args[2] isa Expr
+            @assert expr_args[2].head == :block "currently we only support blocks"
+            expr_args[2] = Expr(:block, expr_args[2].args...)
+            true_last_line = expr_args[2].args[end]
+            remaining_lines = expr_args[2].args[1:(end - 1)]
         else
-            true_last_line = expr.args[2]
+            true_last_line = expr_args[2]
             remaining_lines = []
         end
         quote
@@ -507,7 +509,7 @@ function trace_if(expr; store_last_line=nothing, depth=0, track_numbers)
         end
     else
         quote
-            $(expr.args[2])
+            $(expr_args[2])
             nothing # explicitly return nothing to prevent branches from returning different types
         end
     end
@@ -519,13 +521,13 @@ function trace_if(expr; store_last_line=nothing, depth=0, track_numbers)
     all_true_branch_vars = true_branch_input_list ∪ true_branch_assignments
     true_branch_fn_name = gensym(:true_branch)
 
-    else_block, discard_vars, _ = if length(expr.args) == 3
-        if !(expr.args[3] isa Expr) || expr.args[3].head != :elseif
-            expr.args[3], [], nothing
+    else_block, discard_vars, _ = if length(expr_args) == 3
+        if !(expr_args[3] isa Expr) || expr_args[3].head != :elseif
+            expr_args[3], [], nothing
         else
-            trace_if(expr.args[3]; store_last_line, depth=depth + 1, track_numbers)
+            trace_if(expr_args[3]; store_last_line, depth=depth + 1, track_numbers)
         end
-    elseif length(expr.args) == 2
+    elseif length(expr_args) == 2
         tmp_expr = []
         for var in true_branch_assignments
             push!(tmp_expr, :($(var) = $(var)))
@@ -609,6 +611,7 @@ function trace_if(expr; store_last_line=nothing, depth=0, track_numbers)
 
     cond_name = gensym(:cond)
 
+    args_init = [cond_val(s) for s in all_input_vars]
     reactant_code_block = quote
         $(true_branch_fn)
         $(false_branch_fn)
@@ -616,15 +619,13 @@ function trace_if(expr; store_last_line=nothing, depth=0, track_numbers)
             $(cond_name),
             $(true_branch_fn_name),
             $(false_branch_fn_name),
-            ($(all_input_vars...),);
+            ($(args_init...),);
             track_numbers=($(track_numbers)),
         )
     end
 
-    non_reactant_code_block = Expr(:if, cond_name, original_expr.args[2])
-    if length(original_expr.args) > 2 # has else block
-        append!(non_reactant_code_block.args, original_expr.args[3:end])
-    end
+    non_reactant_code_block = Expr(:if, original_expr.args...)
+    non_reactant_code_block.args[1] = cond_name
 
     all_check_vars = [cond_name, all_input_vars..., condition_vars...]
     unique!(all_check_vars)
@@ -640,7 +641,7 @@ function trace_if(expr; store_last_line=nothing, depth=0, track_numbers)
 
     return quote
         $(cond_name) = $(cond_expr)
-        if $(within_compile)() && $(any)($(is_traced), ($(all_check_vars...),))
+        if $(within_compile)() && $(any)($(is_traced), ($((cond_val.(all_check_vars))...),))
             $(reactant_code_block)
         else
             $(non_reactant_code_block)
@@ -688,7 +689,7 @@ end
 
 # Generate this dummy function and later we remove it during tracing
 function traced_if(cond, true_fn, false_fn, args; track_numbers)
-    return cond ? true_fn(args) : false_fn(args)
+    return cond ? true_fn(args...) : false_fn(args...)
 end
 
 function traced_while end # defined inside Reactant.jl
@@ -713,17 +714,31 @@ function cleanup_expr_to_avoid_boxing(expr, prepend::Symbol, all_vars)
     end
 end
 
-const CONTROL_FLOW_EXPRS = [:return, :break, :continue, :symbolicgoto]
+const CONTROL_FLOW_EXPRS = Symbol[:return, :break, :continue, :symbolicgoto, :macrocall]
 
-function error_if_any_control_flow(expr)
-    return MacroTools.postwalk(expr) do x
-        for head in CONTROL_FLOW_EXPRS
-            if Meta.isexpr(x, head)
-                error("Cannot use @trace on a block that contains a $head statement")
-            end
-        end
-        return x
+function prewalk_until_function_boundary(f, expr)
+    if Meta.isexpr(expr, :function) || Meta.isexpr(expr, :(->)) || (Meta.isexpr(expr, :(=), 2) && Meta.isexpr(expr.args[1], :call))
+        return expr
     end
+    if expr isa Expr
+        return f(Expr(expr.head, map(f, expr.args)...))
+    end
+    return f(expr)
+end
+
+error_if_any_control_flow(_) = nothing
+function error_if_any_control_flow(expr::Expr)
+    if Meta.isexpr(expr, :function) || Meta.isexpr(expr, :(->)) || (Meta.isexpr(expr, :(=), 2) && Meta.isexpr(expr.args[1], :call))
+        return expr
+    end
+
+    head_idx = findfirst(==(expr.head), CONTROL_FLOW_EXPRS)
+    if !isnothing(head_idx)
+        head = CONTROL_FLOW_EXPRS[head_idx]
+        error("Cannot use @trace on a block that contains a $head statement")
+    end
+
+    foreach(error_if_any_control_flow, expr.args)
 end
 
 """

@@ -58,7 +58,7 @@ function condition2_nested_if(x, y)
     x_sum = sum(x)
     @trace if x_sum > 0
         y_sum = sum(y)
-        if y_sum > 0
+        @trace if y_sum > 0
             z = x_sum + y_sum
         else
             z = x_sum - y_sum
@@ -387,8 +387,8 @@ function condition11_nested_ifff(x, y, z)
     x_sum = sum(x)
     @trace if x_sum > 0
         y_sum = sum(y)
-        if y_sum > 0
-            if sum(z) > 0
+        @trace if y_sum > 0
+            @trace if sum(z) > 0
                 z = x_sum + y_sum + sum(z)
             else
                 z = x_sum + y_sum
