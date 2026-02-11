@@ -1,7 +1,9 @@
 using Reactant: Reactant, MLIR
 
 @testset "inject" begin
-    MLIR.IR.@dispose ctx = Reactant.ReactantContext() mod = MLIR.IR.Module(MLIR.IR.Location(; context=ctx)) begin
+    MLIR.IR.@dispose ctx = Reactant.ReactantContext() mod = MLIR.IR.Module(
+        MLIR.IR.Location(; context=ctx)
+    ) begin
         MLIR.IR.@scope ctx mod begin
             MLIR.IR.inject!(
                 "MPI_COMM_WORLD", "llvm.mlir.global constant @MPI_COMM_WORLD() : !llvm.ptr"

@@ -358,7 +358,7 @@ function make_mlir_fn(
 
     Ops.activate_constant_context!(fnbody)
     @assert MLIR.IR.has_block()
-    
+
     MLIR.IR.activate(fnbody)
     result = try
         process_linear_args!(linear_args, fnbody, do_transpose, optimize_then_pad, inv_map)
