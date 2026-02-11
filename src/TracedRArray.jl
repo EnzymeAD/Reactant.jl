@@ -247,6 +247,9 @@ end
 function Broadcast.BroadcastStyle(::Type{<:AbstractRange{<:TracedRNumber}})
     return AbstractReactantArrayStyle{1}()
 end
+function Broadcast.BroadcastStyle(::Type{<:TracedRNumber})
+    return AbstractReactantArrayStyle{0}()
+end
 
 function Base.similar(
     ::Broadcasted{AbstractReactantArrayStyle{N}}, ::Type{T}, dims
