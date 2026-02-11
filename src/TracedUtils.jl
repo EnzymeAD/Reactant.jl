@@ -1157,7 +1157,10 @@ end
 function elem_apply(f, args::Vararg{Any,Nargs}) where {Nargs}
     if all(iszero ∘ ndims, args)
         scalar_args = map(args) do arg
-            return promote_to(TracedRNumber{Reactant.unwrapped_eltype(arg)}, arg)
+            if arg isa Number || arg isa TracedRArray{<:Any,0}
+                return promote_to(TracedRNumber, arg)
+            end
+            return arg
         end
         return Reactant.call_with_reactant(f, scalar_args...)
     end
