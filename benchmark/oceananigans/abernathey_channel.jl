@@ -357,7 +357,16 @@ end
 ##### Actually creating our model and using these functions to run it:
 #####
 
-function run_abernathey_channel_benchmark!(results::Dict{String,Float64}, backend::String)
+function run_abernathey_channel_benchmark!(
+    results::Dict{String,Dict{String,Float64}}, backend::String
+)
+    if !haskey(results, "Runtime (s)")
+        results["Runtime (s)"] = Dict{String,Float64}()
+    end
+    if !haskey(results, "TFLOP/s")
+        results["TFLOP/s"] = Dict{String,Float64}()
+    end
+
     architecture = ReactantState()
 
     Δt₀ = 2.5minutes
@@ -370,7 +379,7 @@ function run_abernathey_channel_benchmark!(results::Dict{String,Float64}, backen
     v_wind_stress = v_wind_stress_init(model.grid, parameters)
     Tᵢ, Sᵢ = temperature_salinity_init(model.grid, parameters)
     mld = Field{Center,Center,Nothing}(model.grid) # Not used for now
-    Δz = Reactant.to_rarray(Δz)
+    Δz_ra = Reactant.to_rarray(Δz)
 
     dmodel = Enzyme.make_zero(model)
     dTᵢ = Field{Center,Center,Center}(model.grid)
@@ -379,10 +388,10 @@ function run_abernathey_channel_benchmark!(results::Dict{String,Float64}, backen
     dv_wind_stress = Field{Center,Face,Nothing}(model.grid)
     dT_flux = Field{Center,Center,Nothing}(model.grid)
     dmld = Field{Center,Center,Nothing}(model.grid)
-    dΔz = Enzyme.make_zero(Δz)
+    dΔz_ra = Enzyme.make_zero(Δz)
 
     # Profile and time the spinup_reentrant_channel_model!
-    time_spinup_reentrant_channel_model! = Reactant.Profiler.profile_with_xprof(
+    prof_result = Reactant.Profiler.profile_with_xprof(
         spinup_reentrant_channel_model!,
         model,
         Tᵢ,
@@ -394,8 +403,14 @@ function run_abernathey_channel_benchmark!(results::Dict{String,Float64}, backen
         warmup=1,
         compile_options=CompileOptions(; raise=true, raise_first=true),
     )
-    results["Oceananigans/SpinUpReentrantChannelModel/$(backend)/Primal"] =
-        time_spinup_reentrant_channel_model!.profiling_result.runtime_ns / 1e9
+    results["Runtime (s)"]["Oceananigans/SpinUpReentrantChannelModel/$(backend)/Primal"] =
+        prof_result.profiling_result.runtime_ns / 1e9
+    results["TFLOP/s"]["Oceananigans/SpinUpReentrantChannelModel/$(backend)/Primal"] =
+        if prof_result.profiling_result.flops_data === nothing
+            -1
+        else
+            prof_result.profiling_result.flops_data.RawFlopsRate / 1e12
+        end
 
     # Spinup the model for a sufficient amount of time, save the T and S from this state:
     rspinup_reentrant_channel_model! = @compile raise_first = true raise = true sync = true spinup_reentrant_channel_model!(
@@ -406,7 +421,7 @@ function run_abernathey_channel_benchmark!(results::Dict{String,Float64}, backen
     @allowscalar set!(Sᵢ, model.tracers.S)
 
     # Profile and time the differentiate_tracer_error
-    time_differentiate_tracer_error = Reactant.Profiler.profile_with_xprof(
+    prof_result = Reactant.Profiler.profile_with_xprof(
         differentiate_tracer_error,
         model,
         Tᵢ,
@@ -414,7 +429,7 @@ function run_abernathey_channel_benchmark!(results::Dict{String,Float64}, backen
         u_wind_stress,
         v_wind_stress,
         T_flux,
-        Δz,
+        Δz_ra,
         mld,
         dmodel,
         dTᵢ,
@@ -422,14 +437,20 @@ function run_abernathey_channel_benchmark!(results::Dict{String,Float64}, backen
         du_wind_stress,
         dv_wind_stress,
         dT_flux,
-        dΔz,
+        dΔz_ra,
         dmld;
         nrepeat=10,
         warmup=1,
         compile_options=CompileOptions(; raise=true, raise_first=true),
     )
-    results["Oceananigans/DifferentiateTracerError/$(backend)/Reverse"] =
-        time_differentiate_tracer_error!.profiling_result.runtime_ns / 1e9
+    results["Runtime (s)"]["Oceananigans/DifferentiateTracerError/$(backend)/Reverse"] =
+        prof_result.profiling_result.runtime_ns / 1e9
+    results["TFLOP/s"]["Oceananigans/DifferentiateTracerError/$(backend)/Reverse"] =
+        if prof_result.profiling_result.flops_data === nothing
+            -1
+        else
+            prof_result.profiling_result.flops_data.RawFlopsRate / 1e12
+        end
 
     return nothing
 end
