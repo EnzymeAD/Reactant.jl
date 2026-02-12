@@ -124,9 +124,9 @@ function pretty_print_results(results::Dict, suite::String, backend::String)
     end
 
     println()
-    println("=" ^ 120)
+    println("="^120)
     println("  Benchmark Results: $(suite) / $(backend)")
-    println("=" ^ 120)
+    println("="^120)
 
     pretty_table(
         table;
@@ -135,6 +135,6 @@ function pretty_print_results(results::Dict, suite::String, backend::String)
         display_size=(-1, -1),
     )
 
-    println("=" ^ 120)
+    println("="^120)
     return nothing
 end

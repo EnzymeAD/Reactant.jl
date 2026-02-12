@@ -11,8 +11,9 @@ all_results_tflops = []
 
 for backend in BACKENDS
     for suite in SUITES
-        for (tag, arr) in
-            [("benchmarks.json", all_results), ("benchmarks_tflops.json", all_results_tflops)]
+        for (tag, arr) in [
+            ("benchmarks.json", all_results), ("benchmarks_tflops.json", all_results_tflops)
+        ]
             filename = string(suite, "_", backend, tag)
             filepath = joinpath(dirname(@__FILE__), "results", filename)
             if ispath(filepath)
