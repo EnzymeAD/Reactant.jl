@@ -131,6 +131,55 @@ const AnyTracedRVector{T} = AnyTracedRArray{T,1}
 const AnyTracedRMatrix{T} = AnyTracedRArray{T,2}
 const AnyTracedRVecOrMat{T} = Union{AnyTracedRVector{T},AnyTracedRMatrix{T}}
 
+## ShapeDtypeStruct
+"""
+    ShapeDtypeStruct{T,N}(shape::NTuple{N,Int})
+    ShapeDtypeStruct(shape::NTuple{N,Int}, dtype::Type{T}) where {T,N}
+
+Lightweight structure that specifies the shape and element type (dtype) of an array
+without allocating the actual array data. Similar to JAX's `ShapeDtypeStruct`.
+
+This is useful for compiling functions without constructing the full `ConcreteRArray`,
+which can save memory and improve compilation performance.
+
+# Examples
+```julia
+# Specify shape and dtype for a 2D array
+spec = Reactant.ShapeDtypeStruct((10, 20), Float32)
+
+# Compile a function using just the spec
+f(x) = sum(x)
+compiled_f = Reactant.compile(f, (spec,))
+
+# Execute with actual data
+x = Reactant.ConcreteRArray(rand(Float32, 10, 20))
+result = compiled_f(x)
+```
+
+See also: [`compile`](@ref), [`ConcreteRArray`](@ref)
+"""
+struct ShapeDtypeStruct{T,N}
+    shape::NTuple{N,Int}
+
+    function ShapeDtypeStruct{T,N}(shape::NTuple{N,Int}) where {T,N}
+        return new{T,N}(shape)
+    end
+end
+
+function ShapeDtypeStruct(shape::NTuple{N,Int}, dtype::Type{T}) where {T,N}
+    return ShapeDtypeStruct{T,N}(shape)
+end
+
+function ShapeDtypeStruct(shape::Tuple{Vararg{Integer}}, dtype::Type{T}) where {T}
+    return ShapeDtypeStruct(map(Int, shape), dtype)
+end
+
+Base.size(x::ShapeDtypeStruct) = x.shape
+Base.ndims(::ShapeDtypeStruct{T,N}) where {T,N} = N
+Base.eltype(::ShapeDtypeStruct{T}) where {T} = T
+
+@leaf ShapeDtypeStruct
+
 # Concrete Types
 ## ConcretePJRTNumber
 mutable struct ConcretePJRTNumber{T,D} <: AbstractConcreteNumber{T}
