@@ -235,7 +235,7 @@ end
 
 function spinup_loop!(model)
     Δt = model.clock.last_Δt
-    @trace mincut = true track_numbers = false for i in 1:100
+    @trace mincut = true track_numbers = false for i in 1:10
         time_step!(model, Δt)
     end
     return nothing
@@ -267,21 +267,15 @@ end
 
 function loop!(model)
     Δt = model.clock.last_Δt
-    @trace mincut = true checkpointing = true track_numbers = false for i in 1:100
+    @trace mincut = true checkpointing = true track_numbers = false for i in 1:9
         time_step!(model, Δt)
     end
     return nothing
 end
 
 function run_reentrant_channel_model!(
-    model, Tᵢ, Sᵢ, u_wind_stress, v_wind_stress, temp_flux
+    model,
 )
-    # setting IC's and BC's:
-    set!(model.velocities.u.boundary_conditions.top.condition, u_wind_stress)
-    set!(model.velocities.v.boundary_conditions.top.condition, v_wind_stress)
-    set!(model.tracers.T, Tᵢ)
-    set!(model.tracers.S, Sᵢ)
-    set!(model.tracers.T.boundary_conditions.top.condition, temp_flux)
 
     # Initialize the model
     model.clock.iteration = 0
@@ -295,21 +289,10 @@ end
 
 function estimate_tracer_error(
     model,
-    initial_temperature,
-    initial_salinity,
-    u_wind_stress,
-    v_wind_stress,
-    temp_flux,
     Δz,
-    mld,
 )
     run_reentrant_channel_model!(
-        model,
-        initial_temperature,
-        initial_salinity,
-        u_wind_stress,
-        v_wind_stress,
-        temp_flux,
+        model
     )
 
     Nx, Ny, Nz = size(model.grid)
@@ -322,34 +305,16 @@ end
 
 function differentiate_tracer_error(
     model,
-    Tᵢ,
-    Sᵢ,
-    u_wind_stress,
-    v_wind_stress,
-    temp_flux,
     Δz,
-    mld,
     dmodel,
-    dTᵢ,
-    dSᵢ,
-    du_wind_stress,
-    dv_wind_stress,
-    dtemp_flux,
     dΔz,
-    dmld,
 )
     return autodiff(
         set_strong_zero(Enzyme.ReverseWithPrimal),
         estimate_tracer_error,
         Active,
         Duplicated(model, dmodel),
-        Duplicated(Tᵢ, dTᵢ),
-        Duplicated(Sᵢ, dSᵢ),
-        Duplicated(u_wind_stress, du_wind_stress),
-        Duplicated(v_wind_stress, dv_wind_stress),
-        Duplicated(temp_flux, dtemp_flux),
-        Duplicated(Δz, dΔz),
-        Duplicated(mld, dmld),
+        Duplicated(Δz, dΔz)
     )
 end
 
@@ -390,55 +355,13 @@ function run_abernathey_channel_benchmark!(
     dmld = Field{Center,Center,Nothing}(model.grid)
     dΔz_ra = Enzyme.make_zero(Δz_ra)
 
-    # Profile and time the spinup_reentrant_channel_model!
-    prof_result = Reactant.Profiler.profile_with_xprof(
-        spinup_reentrant_channel_model!,
-        model,
-        Tᵢ,
-        Sᵢ,
-        u_wind_stress,
-        v_wind_stress,
-        T_flux;
-        nrepeat=10,
-        warmup=1,
-        compile_options=CompileOptions(; raise=true, raise_first=true),
-    )
-    results["Runtime (s)"]["Oceananigans/SpinUpReentrantChannelModel/$(backend)/Primal"] =
-        prof_result.profiling_result.runtime_ns / 1e9
-    results["TFLOP/s"]["Oceananigans/SpinUpReentrantChannelModel/$(backend)/Primal"] =
-        if prof_result.profiling_result.flops_data === nothing
-            -1
-        else
-            prof_result.profiling_result.flops_data.RawFlopsRate / 1e12
-        end
-
-    # Spinup the model for a sufficient amount of time, save the T and S from this state:
-    rspinup_reentrant_channel_model! = @compile raise_first = true raise = true sync = true spinup_reentrant_channel_model!(
-        model, Tᵢ, Sᵢ, u_wind_stress, v_wind_stress, T_flux
-    )
-    rspinup_reentrant_channel_model!(model, Tᵢ, Sᵢ, u_wind_stress, v_wind_stress, T_flux)
-    @allowscalar set!(Tᵢ, model.tracers.T)
-    @allowscalar set!(Sᵢ, model.tracers.S)
-
     # Profile and time the differentiate_tracer_error
     prof_result = Reactant.Profiler.profile_with_xprof(
         differentiate_tracer_error,
         model,
-        Tᵢ,
-        Sᵢ,
-        u_wind_stress,
-        v_wind_stress,
-        T_flux,
         Δz_ra,
-        mld,
         dmodel,
-        dTᵢ,
-        dSᵢ,
-        du_wind_stress,
-        dv_wind_stress,
-        dT_flux,
-        dΔz_ra,
-        dmld;
+        dΔz_ra;
         nrepeat=10,
         warmup=1,
         compile_options=CompileOptions(; raise=true, raise_first=true),
