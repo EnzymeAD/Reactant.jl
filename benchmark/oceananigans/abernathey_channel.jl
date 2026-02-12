@@ -274,8 +274,15 @@ function loop!(model)
 end
 
 function run_reentrant_channel_model!(
-    model,
+    model, Tᵢ, Sᵢ, u_wind_stress, v_wind_stress, temp_flux
 )
+
+    # setting IC's and BC's:
+    set!(model.velocities.u.boundary_conditions.top.condition, u_wind_stress)
+    set!(model.velocities.v.boundary_conditions.top.condition, v_wind_stress)
+    set!(model.tracers.T, Tᵢ)
+    set!(model.tracers.S, Sᵢ)
+    set!(model.tracers.T.boundary_conditions.top.condition, temp_flux)
 
     # Initialize the model
     model.clock.iteration = 0
@@ -289,10 +296,20 @@ end
 
 function estimate_tracer_error(
     model,
+    initial_temperature,
+    initial_salinity,
+    u_wind_stress,
+    v_wind_stress,
+    temp_flux,
     Δz,
 )
     run_reentrant_channel_model!(
-        model
+        model,
+        initial_temperature,
+        initial_salinity,
+        u_wind_stress,
+        v_wind_stress,
+        temp_flux
     )
 
     Nx, Ny, Nz = size(model.grid)
@@ -305,8 +322,18 @@ end
 
 function differentiate_tracer_error(
     model,
+    Tᵢ,
+    Sᵢ,
+    u_wind_stress,
+    v_wind_stress,
+    temp_flux,
     Δz,
     dmodel,
+    dTᵢ,
+    dSᵢ,
+    du_wind_stress,
+    dv_wind_stress,
+    dtemp_flux,
     dΔz,
 )
     return autodiff(
@@ -314,6 +341,11 @@ function differentiate_tracer_error(
         estimate_tracer_error,
         Active,
         Duplicated(model, dmodel),
+        Duplicated(Tᵢ, dTᵢ),
+        Duplicated(Sᵢ, dSᵢ),
+        Duplicated(u_wind_stress, du_wind_stress),
+        Duplicated(v_wind_stress, dv_wind_stress),
+        Duplicated(temp_flux, dtemp_flux),
         Duplicated(Δz, dΔz)
     )
 end
@@ -359,8 +391,18 @@ function run_abernathey_channel_benchmark!(
     prof_result = Reactant.Profiler.profile_with_xprof(
         differentiate_tracer_error,
         model,
+        Tᵢ,
+        Sᵢ,
+        u_wind_stress,
+        v_wind_stress,
+        T_flux,
         Δz_ra,
         dmodel,
+        dTᵢ,
+        dSᵢ,
+        du_wind_stress,
+        dv_wind_stress,
+        dT_flux,
         dΔz_ra;
         nrepeat=10,
         warmup=1,
