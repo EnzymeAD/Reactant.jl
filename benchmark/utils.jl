@@ -3,6 +3,7 @@
 
 using InteractiveUtils: versioninfo
 using JSON: JSON
+using PrettyTables: pretty_table
 
 """
     get_backend() -> String
@@ -88,4 +89,52 @@ function save_results(
     @info "Saved $(length(results["Runtime (s)"])) benchmark results to \
            $(benchmark_filepath) and $(tflops_filepath)"
     return benchmark_filepath, tflops_filepath
+end
+
+"""
+    pretty_print_results(results::Dict, suite::String, backend::String)
+
+Pretty-print benchmark results in a formatted table.
+Splits benchmark names on "/" into columns for readability.
+"""
+function pretty_print_results(results::Dict, suite::String, backend::String)
+    runtime_results = get(results, "Runtime (s)", Dict{String,Float64}())
+    tflops_results = get(results, "TFLOP/s", Dict{String,Float64}())
+
+    if isempty(runtime_results)
+        @warn "No benchmark results to display for $(suite)/$(backend)"
+        return nothing
+    end
+
+    sorted_keys = sort(collect(keys(runtime_results)))
+    table = Matrix{Any}(undef, length(sorted_keys), 6)
+
+    for (i, k) in enumerate(sorted_keys)
+        parts = split(k, "/")
+        # Fill in up to 4 columns from the benchmark name parts
+        while length(parts) < 4
+            push!(parts, "")
+        end
+        table[i, 1] = parts[1]
+        table[i, 2] = length(parts) >= 2 ? parts[2] : ""
+        table[i, 3] = length(parts) >= 3 ? parts[3] : ""
+        table[i, 4] = length(parts) >= 4 ? join(parts[4:end], "/") : ""
+        table[i, 5] = runtime_results[k]
+        table[i, 6] = get(tflops_results, k, -1.0)
+    end
+
+    println()
+    println("=" ^ 120)
+    println("  Benchmark Results: $(suite) / $(backend)")
+    println("=" ^ 120)
+
+    pretty_table(
+        table;
+        alignment=[:l, :l, :l, :l, :c, :c],
+        column_labels=["Benchmark", "Mode", "Backend", "Passes", "Time (s)", "TFLOP/s"],
+        display_size=(-1, -1),
+    )
+
+    println("=" ^ 120)
+    return nothing
 end
