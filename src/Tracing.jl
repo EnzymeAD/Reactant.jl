@@ -1851,6 +1851,65 @@ end
 
 Base.@nospecializeinfer function make_tracer(
     seen,
+    @nospecialize(prev::Memory),
+    @nospecialize(path),
+    mode;
+    @nospecialize(track_numbers::Type = Union{}),
+    @nospecialize(sharding = Sharding.NoSharding()),
+    @nospecialize(runtime = nothing),
+    @nospecialize(device = nothing),
+    @nospecialize(client = nothing),
+    kwargs...,
+)
+    RT = Core.Typeof(prev)
+    if mode != NoStopTracedTrack && haskey(seen, prev)
+        if mode == TracedToTypes
+            visited = seen[prev]
+            push!(path, visited)
+            return nothing
+        end
+        return seen[prev]
+    end
+    if eltype(RT) <: ReactantPrimitive
+        if mode == ArrayToConcrete
+            runtime isa Val{:PJRT} &&
+                (return seen[prev] = ConcretePJRTArray(prev; sharding, device, client))
+            runtime isa Val{:IFRT} &&
+                (return seen[prev] = ConcreteIFRTArray(prev; sharding, device, client))
+            error("Unsupported runtime $runtime")
+        elseif mode == TracedToTypes
+            # Original array can get mutated so we store a copy:
+            push!(path, copy(prev))
+            seen[prev] = VisitedObject(length(seen) + 1)
+            return nothing
+        end
+    elseif mode == TracedToTypes
+        push!(path, RT)
+        for I in eachindex(prev)
+            if isassigned(prev, I)
+                pv = prev[I]
+                make_tracer(
+                    seen,
+                    pv,
+                    path,
+                    mode;
+                    track_numbers,
+                    sharding,
+                    runtime,
+                    device,
+                    client,
+                    kwargs...,
+                )
+            end
+        end
+        return nothing
+    end
+
+    return seen[prev] = prev
+end
+
+Base.@nospecializeinfer function make_tracer(
+    seen,
     @nospecialize(prev::Dict{Key,Value}),
     @nospecialize(path),
     mode;
