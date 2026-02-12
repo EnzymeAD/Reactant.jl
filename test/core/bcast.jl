@@ -125,3 +125,10 @@ end
     @test @jit(bcast_scalar_with_jlarray(x, a)) ≈
         bcast_scalar_with_jlarray(Array(x), Float32(a))
 end
+
+literal_pow_bcast(x) = x .^ 2
+
+@testset "Literal pow bcast" begin
+    x = ConcreteRNumber(2.0f0)
+    @test @jit(literal_pow_bcast(x)) ≈ 4
+end
