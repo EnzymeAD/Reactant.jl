@@ -26,6 +26,7 @@ within_compile
 ```@docs
 ConcreteRArray
 ConcreteRNumber
+ShapeDtypeStruct
 ```
 
 ## Inspect Generated HLO
