@@ -259,7 +259,7 @@ function CompileOptions(;
     disable_loop_raising_passes::Bool=false,
     disable_structured_tensors_detection_passes::Bool=true,  # missing optimization passes currently
     disable_structured_tensors_passes::Bool=false,
-    strip_llvm_debuginfo::Bool=false
+    strip_llvm_debuginfo::Bool=false,
 )
     optimization_passes isa Bool &&
         (optimization_passes = ifelse(optimization_passes, :all, :none))
@@ -318,7 +318,7 @@ function CompileOptions(;
         disable_loop_raising_passes,
         disable_structured_tensors_detection_passes,
         disable_structured_tensors_passes,
-	strip_llvm_debuginfo
+        strip_llvm_debuginfo,
     )
 end
 
@@ -369,7 +369,7 @@ function __compile_options_with_reversed_propagation(compile_options::CompileOpt
         compile_options.disable_loop_raising_passes,
         compile_options.disable_structured_tensors_detection_passes,
         compile_options.disable_structured_tensors_passes,
-	compile_options.strip_llvm_debuginfo,
+        compile_options.strip_llvm_debuginfo,
     )
 end
 
@@ -407,7 +407,7 @@ function __compile_options_with_updated_sync(compile_options::CompileOptions, sy
         compile_options.disable_loop_raising_passes,
         compile_options.disable_structured_tensors_detection_passes,
         compile_options.disable_structured_tensors_passes,
-	compile_options.strip_llvm_debuginfo
+        compile_options.strip_llvm_debuginfo,
     )
 end
 
