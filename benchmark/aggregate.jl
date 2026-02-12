@@ -1,4 +1,4 @@
-using JSON3
+using JSON: JSON
 
 const BACKENDS = ["CPU", "CUDA", "TPU"]
 
@@ -10,7 +10,7 @@ for backend in BACKENDS
         filename = string(backend, tag)
         filepath = joinpath(dirname(@__FILE__), "results", filename)
         if ispath(filepath)
-            results = JSON3.read(read(filepath, String))
+            results = JSON.parsefile(filepath)
             append!(arr, results)
         else
             @warn "No file found at path: $(filepath)"
@@ -19,9 +19,9 @@ for backend in BACKENDS
 end
 
 open(joinpath(dirname(@__FILE__), "results", "combinedbenchmarks.json"), "w") do io
-    return JSON3.pretty(io, JSON3.write(all_results))
+    return JSON.json(io, all_results; pretty=true)
 end
 
 open(joinpath(dirname(@__FILE__), "results", "combinedbenchmarks_tflops.json"), "w") do io
-    return JSON3.pretty(io, JSON3.write(all_results_tflops))
+    return JSON.json(io, all_results_tflops; pretty=true)
 end

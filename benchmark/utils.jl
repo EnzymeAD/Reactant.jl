@@ -2,7 +2,7 @@
 # Shared backend detection and result saving logic for all benchmark subdirectories.
 
 using InteractiveUtils: versioninfo
-using JSON3: JSON3
+using JSON: JSON
 
 """
     get_backend() -> String
@@ -78,11 +78,11 @@ function save_results(
     end
 
     open(benchmark_filepath, "w") do io
-        JSON3.pretty(io, JSON3.write(standardized_results))
+        JSON.json(io, standardized_results; pretty=true)
     end
 
     open(tflops_filepath, "w") do io
-        JSON3.pretty(io, JSON3.write(tflops_results))
+        JSON.json(io, tflops_results; pretty=true)
     end
 
     @info "Saved $(length(results["Runtime (s)"])) benchmark results to \

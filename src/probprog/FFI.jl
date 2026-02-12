@@ -115,16 +115,3 @@ function show_dumps()
         end
     end
 end
-
-function __init__()
-    dump_ptr = @cfunction(
-        dump,
-        Cvoid,
-        (Ptr{Any}, Ptr{UInt8}, Ptr{UInt64}, Ptr{UInt64}, Ptr{UInt64}, Ptr{UInt64})
-    )
-    @ccall MLIR.API.mlir_c.EnzymeJaXMapSymbol(
-        :enzyme_probprog_dump::Cstring, dump_ptr::Ptr{Cvoid}
-    )::Cvoid
-
-    return nothing
-end

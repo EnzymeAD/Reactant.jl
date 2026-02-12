@@ -50,7 +50,8 @@ end
 function _normal_logpdf(x, μ, σ, _)
     n = length(x)
     log_sigma = sum(log.(σ))
-    return -n * log_sigma - n / 2 * log(2π) - sum((x .- μ) .^ 2 ./ (2 .* σ .^ 2))
+    diff = x .- μ
+    return -n * log_sigma - n / 2 * log(2π) - sum(diff .* diff ./ (2 .* σ .* σ))
 end
 
 sampler(::Type{<:Normal}) = _normal_sampler
@@ -122,8 +123,9 @@ function _lognormal_logpdf(x, μ, σ, _)
     n = length(x)
     log_x = log.(x)
     log_sigma = sum(log.(σ))
+    diff = log_x .- μ
     return -sum(log_x) - n * log_sigma - n / 2 * log(2π) -
-           sum((log_x .- μ) .^ 2 ./ (2 .* σ .^ 2))
+           sum(diff .* diff ./ (2 .* σ .* σ))
 end
 
 sampler(::Type{<:LogNormal}) = _lognormal_sampler

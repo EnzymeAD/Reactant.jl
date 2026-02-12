@@ -145,16 +145,37 @@ jobs:
           contents: |
             [Reactant]
             xla_runtime = "PJRT"
+      - name: "Set test arguments and other environment variables"
+        shell: bash
+        run: |
+          # Run tests in verbose mode
+          TEST_ARGS=(--verbose)
+
+          if [[ ${{ runner.os }} == "macOS" ]]; then
+              # Encourage ParallelTestRunner to use two jobs on macOS, rather
+              # than the single one it'd use by default.
+              TEST_ARGS+=(--jobs=2)
+          fi
+
+          TEST_ARGS+=(${{ inputs.test_args }})
+          echo "runtest_test_args=${TEST_ARGS[@]}" | tee "${GITHUB_ENV}"
+      - name: Install earlyoom
+        # Use it only on GitHub-hosted runners, because earlyoom seems to make
+        # self-hosted runners hang.
+        if: ${{ startsWith(inputs.os, 'ubuntu-') }}
+        shell: bash
+        run: |
+          sudo apt-get install -y earlyoom
       - name: "Run Tests (PJRT)"
         if: ${{ inputs.runtime == 'pjrt' || inputs.runtime == 'both' }}
         timeout-minutes: 120
-        uses: julia-actions/julia-runtest@v1
-        with:
-          test_args: ${{ inputs.test_args }}
-          allow_reresolve: ${{ !(inputs.downgrade_testing) }}
-          project: "."
-          coverage: true
-          depwarn: yes
+        shell: bash
+        run: |
+          if [[ ${{ startsWith(inputs.os, 'ubuntu-') }} == 'true' ]]; then
+              # We use earlyoom only on the GitHub-hosted Linux machines
+              earlyoom -m 3 -s 100 -r 300 --prefer 'julia' &
+          fi
+          julia --project --color=yes --check-bounds=yes -e 'import Pkg; Pkg.test(;coverage=true, julia_args=["--check-bounds=yes", "--compiled-modules=yes", "--depwarn=yes"], test_args=`${{ env.runtest_test_args }}`, force_latest_compatible_version=false, allow_reresolve=${{ !(inputs.downgrade_testing) }})'
 
       - name: "Setup Runtime Preferences (IFRT)"
         if: ${{ inputs.runtime == 'ifrt' || inputs.runtime == 'both' }}
@@ -168,13 +189,13 @@ jobs:
       - name: "Run Tests (IFRT)"
         if: ${{ inputs.runtime == 'ifrt' || inputs.runtime == 'both' }}
         timeout-minutes: 120
-        uses: julia-actions/julia-runtest@v1
-        with:
-          test_args: ${{ inputs.test_args }}
-          allow_reresolve: ${{ !(inputs.downgrade_testing) }}
-          project: "."
-          coverage: true
-          depwarn: yes
+        shell: bash
+        run: |
+          if [[ ${{ startsWith(inputs.os, 'ubuntu-') }} == 'true' ]]; then
+              # We use earlyoom only on the GitHub-hosted Linux machines
+              earlyoom -m 3 -s 100 -r 300 --prefer 'julia' &
+          fi
+          julia --project --color=yes --check-bounds=yes -e 'import Pkg; Pkg.test(;coverage=true, julia_args=["--check-bounds=yes", "--compiled-modules=yes", "--depwarn=yes"], test_args=`${{ env.runtest_test_args }}`, force_latest_compatible_version=false, allow_reresolve=${{ !(inputs.downgrade_testing) }})'
 
       - name: "Upload MLIR modules"
         uses: actions/upload-artifact@v6

@@ -7,6 +7,7 @@ using ..TracedUtils: TracedUtils
 
 using GPUArraysCore: @allowscalar, assertscalar
 using ReactantCore: materialize_traced_array
+using StructUtils: Selectors
 
 using Base: TwicePrecision
 
@@ -85,6 +86,13 @@ function Base.getindex(
 ) where {T,N}
     ancestor, idxs = TracedUtils.get_ancestor_and_indices(a, index...)
     return getindex(ancestor, idxs...)
+end
+
+# This method is needed exclusively to resolve an ambiguity
+function Base.getindex(
+    l::Selectors.List{TracedRNumber{T}}, index::Union{Int,TracedRNumber{Int}}
+) where {T}
+    return getindex(Reactant.promote_to(TracedRArray{T,1}, l), index)
 end
 
 function Base.getindex(

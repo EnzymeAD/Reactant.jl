@@ -1,27 +1,22 @@
 using Reactant, Test, Random, Statistics
 using Reactant: ProbProg, ReactantRNG
 
-normal(rng, μ, σ, shape) = μ .+ σ .* randn(rng, shape)
-
-function normal_logpdf(x, μ, σ, _)
-    return -length(x) * log(σ) - length(x) / 2 * log(2π) -
-           sum((x .- μ) .^ 2 ./ (2 .* (σ .^ 2)))
-end
+normal_logpdf = ProbProg._normal_logpdf
 
 function model(rng, μ, σ, shape)
-    _, s = ProbProg.sample(rng, normal, μ, σ, shape; symbol=:s, logpdf=normal_logpdf)
-    _, t = ProbProg.sample(rng, normal, s, σ, shape; symbol=:t, logpdf=normal_logpdf)
+    _, s = ProbProg.sample(rng, ProbProg.Normal(μ, σ, shape); symbol=:s)
+    _, t = ProbProg.sample(rng, ProbProg.Normal(s, σ, shape); symbol=:t)
     return t
 end
 
 function two_normals(rng, μ, σ, shape)
-    _, x = ProbProg.sample(rng, normal, μ, σ, shape; symbol=:x, logpdf=normal_logpdf)
-    _, y = ProbProg.sample(rng, normal, x, σ, shape; symbol=:y, logpdf=normal_logpdf)
+    _, x = ProbProg.sample(rng, ProbProg.Normal(μ, σ, shape); symbol=:x)
+    _, y = ProbProg.sample(rng, ProbProg.Normal(x, σ, shape); symbol=:y)
     return y
 end
 
 function nested_model(rng, μ, σ, shape)
-    _, s = ProbProg.sample(rng, normal, μ, σ, shape; symbol=:s, logpdf=normal_logpdf)
+    _, s = ProbProg.sample(rng, ProbProg.Normal(μ, σ, shape); symbol=:s)
     _, t = ProbProg.sample(rng, two_normals, s, σ, shape; symbol=:t)
     _, u = ProbProg.sample(rng, two_normals, t, σ, shape; symbol=:u)
     return u
