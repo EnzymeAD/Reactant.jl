@@ -1,5 +1,4 @@
 
-
 # TODO Make Distributions package that is compatible with Reactant
 Distributions.logpdf(d::Uniform, x::Reactant.TracedRNumber) = oftype(x, -log(d.b - d.a))
 function Distributions.logpdf(d::Exponential, x::Reactant.TracedRNumber)
@@ -32,7 +31,6 @@ function sky(θ, metadata)
     return ContinuousImage(rast, grid, DeltaPulse{3}())
 end
 
-
 function build_post(fov, npix, dataf)
 
     # @testset "Comrade Integration Imaging" begin
@@ -55,7 +53,9 @@ function build_post(fov, npix, dataf)
     zprior = std_dist(pl)
     prior = (z=zprior, ρs=ρs, σ=Exponential(1.0))
 
-    skymr = SkyModel(sky, prior, grd; metadata=skymeta, algorithm=VLBISkyModels.ReactantAlg()) # Need to do this so that we allocate proper Reactant arrays for internal stuff
+    skymr = SkyModel(
+        sky, prior, grd; metadata=skymeta, algorithm=VLBISkyModels.ReactantAlg()
+    ) # Need to do this so that we allocate proper Reactant arrays for internal stuff
 
     g(x) = exp(complex(x.lg, x.gp))
     G = SingleStokesGain(g)
@@ -83,5 +83,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
     tpostr = build_post(μas2rad(200.0), 64, dataf)
     results = Dict()
     backend = get_backend()
-    run_comrade_benchmark!(results, "Comrade EHT Imaging 64 x 64", backend, tpostr, "forward", "test")
+    run_comrade_benchmark!(
+        results, "Comrade EHT Imaging 64 x 64", backend, tpostr, "forward", "test"
+    )
 end
