@@ -1,10 +1,4 @@
 
-# ENV["JULIA_DEBUG"] = "Reactant"
-
-
-const dataurl = "https://de.cyverse.org/anon-files/iplant/home/shared/commons_repo/curated/EHTC_M87pol2017_Nov2023/hops_data/April06/SR2_M87_2017_096_lo_hops_ALMArot.uvfits"
-const dataf = Base.download(dataurl)
-
 
 # TODO Make Distributions package that is compatible with Reactant
 Distributions.logpdf(d::Uniform, x::Reactant.TracedRNumber) = oftype(x, -log(d.b - d.a))
