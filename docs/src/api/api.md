@@ -32,6 +32,7 @@ Reactant.to_rarray
 ```@docs
 ConcreteRArray
 ConcreteRNumber
+ShapeDtypeStruct
 ```
 
 ## Inspect Generated HLO
