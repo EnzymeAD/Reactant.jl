@@ -1409,6 +1409,30 @@ end
 
 Base.@nospecializeinfer function make_tracer(
     seen,
+    @nospecialize(prev::ShapeDtypeStruct{T,N}),
+    @nospecialize(path),
+    mode;
+    kwargs...,
+) where {T,N}
+    if mode == TracedToTypes
+        throw("Cannot have ShapeDtypeStruct as function call argument.")
+    end
+    if mode == ArrayToConcrete
+        throw("Cannot convert ShapeDtypeStruct to ConcreteRArray. ShapeDtypeStruct is only for compilation signatures.")
+    end
+    # ShapeDtypeStruct behaves like ConcreteToTraced mode - creates a TracedRArray without data
+    # Accept both ConcreteToTraced and TracedSetPath modes
+    if mode != ConcreteToTraced && mode != TracedSetPath
+        throw("ShapeDtypeStruct can only be used with ConcreteToTraced or TracedSetPath mode, got $mode")
+    end
+    haskey(seen, prev) && return seen[prev]::TracedRArray{T,N}
+    res = TracedRArray{T,N}((path,), nothing, size(prev))
+    seen[prev] = res
+    return res
+end
+
+Base.@nospecializeinfer function make_tracer(
+    seen,
     prev::ConcretePJRTNumber{T},
     @nospecialize(path),
     mode;
