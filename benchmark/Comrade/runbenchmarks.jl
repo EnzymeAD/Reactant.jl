@@ -9,7 +9,7 @@ using Pkg
         PackageSpec(; name="Comrade", rev="ptiede-reactant"),
         PackageSpec(; name="VLBISkyModels", rev="ptiede-reactnfft"),
         PackageSpec(; name="VLBILikelihoods", rev="ptiede-reactant"),
-        PackageSpec(; name="VLBIImagePriors", rev="ptiede-reactantperf"),
+        PackageSpec(; name="VLBIImagePriors", rev="main"),
         PackageSpec(;
             url="https://github.com/ptiede/TransformVariables.jl", rev="ptiede-reactant"
         ),
@@ -32,6 +32,7 @@ using Printf: @sprintf
 using Reactant
 using LinearAlgebra
 using AbstractFFTs
+using Accessors: @set, @reset
 
 using VLBISkyModels
 using VLBILikelihoods
@@ -56,11 +57,12 @@ include("comimager.jl")
 
 function run_all_benchmarks(backend::String)
     results = Dict{String,Dict{String,Float64}}()
+    bkend = get_backend()
 
     dataurl = "https://de.cyverse.org/anon-files/iplant/home/shared/commons_repo/curated/EHTC_M87pol2017_Nov2023/hops_data/April06/SR2_M87_2017_096_lo_hops_ALMArot.uvfits"
     dataf = Base.download(dataurl)
 
-    tpostr = build_post(μas2rad(200.0), 64, dataf)
+    tpostr = build_post(μas2rad(200.0), 64, dataf, bkend)
     run_comrade_benchmark!(results, "Comrade EHT Imaging 64 x 64", backend, tpostr)
 
 
