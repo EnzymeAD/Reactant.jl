@@ -1,35 +1,11 @@
 # Comrade Benchmarks Runner
 # This script runs all Comrade benchmarks and stores results to a JSON file
-
-using Pkg
-
-@static if VERSION ≥ v"1.10-" && VERSION < v"1.11"
-    Pkg.add([
-        PackageSpec(; name="ComradeBase", rev="main"),
-        PackageSpec(; name="Comrade", rev="ptiede-reactant"),
-        PackageSpec(; name="VLBISkyModels", rev="ptiede-reactnfft"),
-        PackageSpec(; name="VLBILikelihoods", rev="ptiede-reactant"),
-        PackageSpec(; name="VLBIImagePriors", rev="ptiede-reactantperf"),
-        PackageSpec(;
-            url="https://github.com/ptiede/TransformVariables.jl", rev="ptiede-reactant"
-        ),
-        PackageSpec(;
-            url="https://github.com/ptiede/NFFT.jl", rev="ptiede-reactant"
-        )
-    ])
-    Pkg.develop(; path=joinpath(@__DIR__, "../../"))
-end
-
-
 # Load dependencies
 using Reactant
 using Chairmarks: @b
 using Random: Random
 using Printf: @sprintf
 
-
-
-using Reactant
 using LinearAlgebra
 using AbstractFFTs
 
@@ -52,6 +28,8 @@ include("common.jl")
 
 @info sprint(io -> versioninfo(io; verbose=true))
 
+backend = get_backend()
+
 include("comimager.jl")
 
 function run_all_benchmarks(backend::String)
@@ -63,7 +41,6 @@ function run_all_benchmarks(backend::String)
     tpostr = build_post(μas2rad(200.0), 64, dataf)
     run_comrade_benchmark!(results, "Comrade EHT Imaging 64 x 64", backend, tpostr)
 
-
     tpostr = build_post(μas2rad(200.0), 128, dataf)
     run_comrade_benchmark!(results, "Comrade EHT Imaging 128 x 128", backend, tpostr)
 
@@ -73,5 +50,6 @@ function run_all_benchmarks(backend::String)
     return results
 end
 
+res = run_all_benchmarks(backend)
 
-res = run_all_benchmarks(get_backend())
+save_results(results, joinpath(@__DIR__, "results"), "comrade", backend)

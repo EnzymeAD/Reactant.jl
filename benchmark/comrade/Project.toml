@@ -26,33 +26,15 @@ VLBIImagePriors = "b1ba175b-8447-452c-b961-7db2d6f7a029"
 VLBILikelihoods = "90db92cd-0007-4c0a-8e51-dbf0782ce592"
 VLBISkyModels = "d6343c73-7174-4e0f-bb64-562643efbeca"
 
-[sources.Comrade]
-rev = "ptiede-reactant"
-url = "https://github.com/ptiede/Comrade.jl"
+[sources]
+Comrade = {url = "https://github.com/ptiede/Comrade.jl", rev = "ptiede-reactant"}
+ComradeBase = {url = "https://github.com/ptiede/ComradeBase.jl", rev = "main"}
+NFFT = {url = "https://github.com/ptiede/NFFT.jl", rev = "ptiede-reactant"}
+Reactant = {path = "../.."}
+TransformVariables = {url = "https://github.com/ptiede/TransformVariables.jl", rev = "ptiede-reactant"}
+VLBIImagePriors = {url = "https://github.com/ptiede/VLBIImagePriors.jl", rev = "ptiede-reactantperf"}
+VLBILikelihoods = {url = "https://github.com/ptiede/VLBILikelihoods.jl", rev = "ptiede-reactant"}
+VLBISkyModels = {url = "https://github.com/EHTJulia/VLBISkyModels.jl", rev = "ptiede-reactnfft"}
 
-[sources.ComradeBase]
-rev = "main"
-url = "https://github.com/ptiede/ComradeBase.jl"
-
-[sources.NFFT]
-rev = "ptiede-reactant"
-url = "https://github.com/ptiede/NFFT.jl"
-
-[sources.Reactant]
-path = "../../"
-
-[sources.TransformVariables]
-rev = "ptiede-reactant"
-url = "https://github.com/ptiede/TransformVariables.jl"
-
-[sources.VLBIImagePriors]
-rev = "ptiede-reactantperf"
-url = "https://github.com/ptiede/VLBIImagePriors.jl"
-
-[sources.VLBILikelihoods]
-rev = "ptiede-reactant"
-url = "https://github.com/ptiede/VLBILikelihoods.jl"
-
-[sources.VLBISkyModels]
-rev = "ptiede-reactnfft"
-url = "https://github.com/EHTJulia/VLBISkyModels.jl"
+[compat]
+julia = "1.11"

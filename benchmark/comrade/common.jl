@@ -12,10 +12,7 @@ function gradref(tpostr, xr)
 end
 
 function run_comrade_benchmark!(
-    results::Dict,
-    benchmark_name::String,
-    backend::String,
-    tpostr, 
+    results::Dict, benchmark_name::String, backend::String, tpostr
 )
     # TODO which Enzyme passes do I want to enable and disable
     run_benchmark!(results, benchmark_name, backend, tpostr, "forward", "Default")
@@ -27,11 +24,10 @@ function run_benchmark!(
     results::Dict,
     benchmark_name::String,
     backend::String,
-    tpost, 
+    tpost,
     fwd_or_bwd::String,
-    tag::String
+    tag::String,
 )
-
     if !haskey(results, "TFLOP/s")
         results["TFLOP/s"] = Dict{String,Float64}()
     end
@@ -59,10 +55,7 @@ function run_benchmark!(
         error("Unknown fwd_or_bwd: $(fwd_or_bwd)")
     end
 
-    prof_result = Reactant.Profiler.profile_with_xprof(
-        fn,tpost, x; nrepeat=10, warmup=3
-    )
-
+    prof_result = Reactant.Profiler.profile_with_xprof(fn, tpost, x; nrepeat=10, warmup=3)
 
     results["Runtime (s)"][full_benchmark_name] =
         prof_result.profiling_result.runtime_ns / 1e9
@@ -84,5 +77,3 @@ function run_benchmark!(
     @info print_stmt
     return nothing
 end
-
-
