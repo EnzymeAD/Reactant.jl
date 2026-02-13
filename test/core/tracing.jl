@@ -259,7 +259,7 @@ testsuite = [
 ]
 
 if isdefined(Core, :Memory)
-    push!(testsuite, (Core.Memory{UInt8}, Core.Memory{UInt8}, Core.Memory{UInt8}))
+    push!(testsuite, (Core.Memory{UInt8}, Core.Memory{UInt8}, Core.Memory{TracedRNumber{UInt8}}))
     push!(testsuite, (Core.Memory, Core.Memory, Core.Memory))
 end
 
