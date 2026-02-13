@@ -38,7 +38,7 @@ struct MyFix{N,FT,XT} <: Base.Function
 end
 
 @testset "trace_type (mode = ConcreteToTraced)" begin
-    @testset "$origty" for (origty, targetty, targettynum) in [
+    testsuite = [
         (Any, Any, Any),
         (Real, Real, Real),
         (Module, Module, Module),
@@ -273,6 +273,14 @@ end
         ),
         (Wrapper, Wrapper, Wrapper),
     ]
+
+    if isdefined(Core, :Memory)
+        push!(testsuite, (Memory{UInt8}, Memory{UInt8}, Memory{TracedRNumber{UInt8}}))
+        push!(testsuite, (Memory{ConcreteRArray{Float64,1}}, Memory{TracedRArray{Float64,1}}, Memory{TracedRArray{Float64,1}}))
+        push!(testsuite, (Memory, Memory, Memory))
+    end
+
+    @testset "$origty" for (origty, targetty, targettynum) in testsuite
         tracedty = traced_type(
             origty,
             Val(ConcreteToTraced),
