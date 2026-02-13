@@ -261,7 +261,7 @@ function CompileOptions(;
     disable_structured_tensors_detection_passes::Bool=true,  # missing optimization passes currently
     disable_structured_tensors_passes::Bool=false,
     strip_llvm_debuginfo::Bool=false,
-    strip::Union{Symbol,Vector{String}}=String[],
+    strip::Union{Symbol,Vector{String}}=:all,
 )
     optimization_passes isa Bool &&
         (optimization_passes = ifelse(optimization_passes, :all, :none))
