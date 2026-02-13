@@ -166,3 +166,4 @@ jobs:
           fail-on-alert: false
           auto-push: ${{ github.event_name != 'pull_request' }}
           max-items-in-chart: 50
+          skip-fetch-gh-pages: true
