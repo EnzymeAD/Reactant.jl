@@ -2605,6 +2605,13 @@ function compile_mlir!(
 
     run_pass_pipeline!(mod, "mark-func-memory-effects", "mark-func-memory-effects")
 
+    if compile_options.strip isa Symbol
+        @assert compile_options.strip == :all
+        run_pass_pipeline!(mod, "strip-debuginfo", "strip-debuginfo")
+    elseif length(compile_options.strip) != 0
+        run_pass_pipeline!(mod, "trim-callsites{to_trim=$(join(compile_options.strip, ";"))}", "trim-callsites")
+    end
+
     func_op = MLIR.IR.@dispose sym_table = MLIR.IR.SymbolTable(mod) begin
         MLIR.IR.lookup(sym_table, fnname)
     end
