@@ -600,14 +600,49 @@ end
 
 @static if isdefined(Core, :Memory)
     Base.@nospecializeinfer function traced_type_inner(
-        @nospecialize(T::Type{<:Core.Memory}),
+        @nospecialize(A::Type{<:Core.Memory}),
         seen,
         @nospecialize(mode::TraceMode),
         @nospecialize(track_numbers::Type),
         @nospecialize(ndevices),
         @nospecialize(runtime)
     )
-        return T
+        T = eltype(A)
+        if A isa UnionAll
+            A´ = Base.unwrap_unionall(A)
+            traced_T = traced_type_inner(T, seen, mode, track_numbers, ndevices, runtime)
+
+            A_wrapper = A´.name.wrapper
+            if mode == ArrayToConcrete && T <: ReactantPrimitive
+                if runtime isa Val{:PJRT}
+                    A_wrapper = ConcretePJRTArray{T,1} where {T}
+                elseif runtime isa Val{:IFRT}
+                    A_wrapper = ConcreteIFRTArray{T,1} where {T}
+                else
+                    error("Unsupported runtime $runtime")
+                end
+            end
+
+            A´´ = A_wrapper{traced_T}
+            return T isa Core.TypeVar ? UnionAll(traced_T, A´´) : A´´
+        else
+            if mode == ArrayToConcrete && T <: ReactantPrimitive
+                runtime isa Val{:PJRT} && return ConcretePJRTArray{T,1,_unwrap_val(ndevices)}
+                if runtime isa Val{:IFRT}
+                    # For IFRT, when ndevices is 1, it's not sharded
+                    if ndevices isa Val{1}
+                        return ConcreteIFRTArray{T,1,Nothing}
+                    else
+                        return ConcreteIFRTArray{T,1}
+                    end
+                end
+                error("Unsupported runtime $runtime")
+            else
+                return Core.Memory{
+                    traced_type_inner(T, seen, mode, track_numbers, ndevices, runtime),N
+                }
+            end
+        end
     end
 end
 
