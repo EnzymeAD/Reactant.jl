@@ -52,4 +52,4 @@ end
 
 res = run_all_benchmarks(backend)
 
-save_results(results, joinpath(@__DIR__, "results"), "comrade", backend)
+save_results(res, joinpath(@__DIR__, "results"), "comrade", backend)
