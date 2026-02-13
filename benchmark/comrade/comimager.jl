@@ -1,4 +1,3 @@
-
 # TODO Make Distributions package that is compatible with Reactant
 Distributions.logpdf(d::Uniform, x::Reactant.TracedRNumber) = oftype(x, -log(d.b - d.a))
 
@@ -76,14 +75,7 @@ function convert_table(T, dvis)
     return EHTObservationTable{Td}(dvisT.measurement, dvisT.noise, confT)
 end
 
-function build_post(fov, npix, dataf, backend)
-    if backend == "TPU"
-        T = Float32
-    else
-        T = Float64
-    end
-
-    # @testset "Comrade Integration Imaging" begin
+function build_post(::Type{T}, fov, npix, dataf) where {T}
     obs = ehtim.obsdata.load_uvfits(dataf)
     obsavg = obs.add_fractional_noise(0.02)
     dvis0 = extract_table(obsavg, Visibilities())
@@ -94,8 +86,8 @@ function build_post(fov, npix, dataf, backend)
     fovx = T(fov)
     fovy = T(fov)
 
-    # Now let's form our cache's. First, we have our usual image cache which is needed to numerically
-    # compute the visibilities.
+    # Now let's form our cache's. First, we have our usual image cache which is needed
+    # to numerically compute the visibilities.
     grd = imagepixels(fovx, fovy, npix, npix)
     pl = StationaryRandomFieldPlan(grd)
     mimg = intensitymap(modify(Gaussian(), Stretch(μas2rad(T(25.0)))), grd)
