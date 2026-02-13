@@ -37,7 +37,7 @@ jobs:
           filters: |
             common:
               - '.github/workflows/benchmark.yml'
-              - 'benchmark/Project.toml'
+              # - 'benchmark/Project.toml'
               - 'benchmark/*.jl'
             benchmark_dirs:
               - 'benchmark/**'
