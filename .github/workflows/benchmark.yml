@@ -59,13 +59,16 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - os: linux-x86-n2-32
-            device: CPU
-          - os: linux-x86-ct6e-180-4tpu
-            device: TPU
-          - os: linux-x86-a2-48-a100-4gpu
-            device: CUDA
+        suite:
+          - nn
+          - misc
+          - polybench
+        os:
+          - linux-x86-n2-32
+          - linux-x86-ct6e-180-4tpu
+          - linux-x86-a2-48-a100-4gpu
+    env:
+      DEVICE: ${{ contains(matrix.os, 'a100') && 'CUDA' || contains(matrix.os, 'tpu') && 'TPU' || 'CPU' }}
     steps:
       - uses: actions/checkout@v6
       - uses: julia-actions/setup-julia@v2
@@ -73,27 +76,17 @@ jobs:
           version: "1.11"
       - uses: julia-actions/cache@v2
       - name: "Instantiate benchmarks environment"
-        shell: julia --color=yes --project=benchmark {0}
         run: |
-          using Pkg
-          Pkg.instantiate()
+          julia --color=yes --project=benchmark/${{ matrix.suite }} -e 'using Pkg; Pkg.instantiate()'
       - name: "Run Benchmarks"
         run: |
-          julia --color=yes --project=benchmark benchmark/runbenchmarks.jl ${{ matrix.device }}
-      # - name: Upload PProf Results
-      #   uses: actions/upload-artifact@v6
-      #   timeout-minutes: 10
-      #   with:
-      #     name: pprof-results-${{ matrix.os }}
-      #     path: "**/*pb.gz"
-      #     retention-days: 90
-      #     overwrite: false
+          julia --color=yes --project=benchmark/${{ matrix.suite }} benchmark/runbenchmarks.jl ${{ env.DEVICE }} ${{ matrix.suite }}
       - name: Upload Benchmark Results
         uses: actions/upload-artifact@v6
         timeout-minutes: 10
         with:
-          name: benchmark-results-${{ matrix.os }}
-          path: "benchmark/results/*"
+          name: benchmark-results-${{ matrix.suite }}-${{ env.DEVICE }}
+          path: "benchmark/${{ matrix.suite }}/results/*"
           retention-days: 90
           overwrite: false
 
@@ -137,7 +130,7 @@ jobs:
           path: ${{ steps.locate.outputs.path }}
           retention-days: 90
           overwrite: false
-      - name: Upload benchmark results as artifact
+      - name: Upload benchmark results as artifact (TFLOP/s)
         uses: actions/upload-artifact@v6
         with:
           name: benchmark-results-tflops
