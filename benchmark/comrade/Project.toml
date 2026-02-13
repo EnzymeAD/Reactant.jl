@@ -34,7 +34,7 @@ Reactant = {path = "../.."}
 TransformVariables = {url = "https://github.com/ptiede/TransformVariables.jl", rev = "ptiede-reactant"}
 VLBIImagePriors = {url = "https://github.com/ptiede/VLBIImagePriors.jl", rev = "main"}
 VLBILikelihoods = {url = "https://github.com/ptiede/VLBILikelihoods.jl", rev = "main"}
-VLBISkyModels = {url = "https://github.com/EHTJulia/VLBISkyModels.jl", rev = "main"}
+VLBISkyModels = {url = "https://github.com/EHTJulia/VLBISkyModels.jl", rev = "ptiede-reactnfft"}
 
 [compat]
 julia = "1.11"
