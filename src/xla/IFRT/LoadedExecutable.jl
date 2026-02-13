@@ -1,4 +1,4 @@
-mutable struct LoadedExecutable <: XLA.AbstractLoadedExecutable
+struct LoadedExecutable <: XLA.AbstractLoadedExecutable
     exec::Ptr{Cvoid}
     num_outputs::Int64
     num_parameters::Int64
@@ -13,7 +13,7 @@ mutable struct LoadedExecutable <: XLA.AbstractLoadedExecutable
 end
 
 function free_exec(exec::LoadedExecutable)
-    GC.@preserve exec begin
+    if XLA.is_live[]
         @ccall MLIR.API.mlir_c.ifrt_loaded_executable_dtor(exec.exec::Ptr{Cvoid})::Cvoid
     end
 end
