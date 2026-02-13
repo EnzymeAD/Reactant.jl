@@ -29,3 +29,4 @@ end
 results = run_all_benchmarks(backend)
 
 save_results(results, joinpath(@__DIR__, "results"), "oceananigans", backend)
+pretty_print_results(results, "oceananigans", backend)
