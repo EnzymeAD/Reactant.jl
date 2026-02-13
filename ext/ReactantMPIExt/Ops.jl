@@ -82,7 +82,7 @@ end
     MPI_DEBUG[] && println("[MPI DEBUG] Calling isend (length=$(length(buf)), type=$T)")
 
     count = Reactant.Ops.constant(Int32(length(buf)))
-    request = mlir_type(TracedRArray{Int64,0}, ())
+    request = mlir_type(TracedRArray{Int32,0}, ())
 
     res = IR.result(
         enzymexla.mpi_isend(
@@ -98,7 +98,7 @@ end
         ),
     )
 
-    return TracedRNumber{Int64}((), res)
+    return TracedRNumber{Int32}((), res)
 end
 
 @noinline function recv!(
@@ -140,7 +140,7 @@ end
     MPI_DEBUG[] && println("[MPI DEBUG] Calling irecv! (length=$(length(buf)), type=$T)")
 
     count = Reactant.Ops.constant(Int32(length(buf)))
-    request = mlir_type(TracedRArray{Int64,0}, ())
+    request = mlir_type(TracedRArray{Int32,0}, ())
 
     ret = enzymexla.mpi_irecv(
         buf.mlir_data,
@@ -154,7 +154,7 @@ end
     )
 
     buf.mlir_data = IR.result(ret, 1)
-    request = TracedRNumber{Int64}((), IR.result(ret, 2))
+    request = TracedRNumber{Int32}((), IR.result(ret, 2))
     return request
 end
 
