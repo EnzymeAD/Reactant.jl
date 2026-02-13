@@ -45,7 +45,14 @@ function run_benchmark!(
 
     rng = Random.default_rng()  # don't use any other rng
     Random.seed!(rng, 0)
-    x = Reactant.to_rarray(randn(rng, dimension(tpost)))
+
+    Ts = if backend == "TPU"
+        Float32
+    else
+        Float64
+    end
+
+    x = Reactant.to_rarray(randn(rng, Ts, dimension(tpost)))
 
     fn = if fwd_or_bwd == "forward"
         logdensityof
