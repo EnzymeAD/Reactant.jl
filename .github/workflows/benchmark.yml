@@ -63,6 +63,7 @@ jobs:
           - nn
           - misc
           - polybench
+          - comrade
         os:
           - linux-x86-n2-32
           - linux-x86-ct6e-180-4tpu

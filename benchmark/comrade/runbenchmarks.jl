@@ -50,6 +50,7 @@ function run_all_benchmarks(backend::String)
     return results
 end
 
-res = run_all_benchmarks(backend)
+results = run_all_benchmarks(backend)
 
-save_results(res, joinpath(@__DIR__, "results"), "comrade", backend)
+save_results(results, joinpath(@__DIR__, "results"), "comrade", backend)
+pretty_print_results(results, "comrade", backend)
