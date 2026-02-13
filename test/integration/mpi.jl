@@ -263,34 +263,35 @@ MPI.Init()
                 dest = 1
                 src = 1
 
-                # # --------
-                # # only recv, push the req to an array
-                # # succeeds
-                # # --------
-                # req = MPI.Irecv!(recv_buf, src, tag-1, comm)
-                # push!(reqs, req)
-
-                # # ------
-                # # send and recv, push both reqs to array
-                # # fails
-                # # ------
-                # req = MPI.Irecv!(recv_buf, src, tag-1, comm)
-                # push!(reqs, req)
-
-                # req = MPI.Isend(send_buf, dest, tag+1, comm)
-                # push!(reqs, req)
-
-                # --------
-                # push both reqs, but then pop the extra request:
-                # recvs the buffer but then segfaults (when trying to cleanup?)
-                # --------
+                # ------
+                # want: send and recv, push both reqs to array
+                # fails
+                # ------
                 req = MPI.Irecv!(recv_buf, src, tag-1, comm)
                 push!(reqs, req)
 
                 req = MPI.Isend(send_buf, dest, tag+1, comm)
                 push!(reqs, req)
 
-                pop!(reqs)
+                # # --------
+                # # debug: only recv, push the req to an array
+                # # succeeds
+                # # --------
+                # req = MPI.Irecv!(recv_buf, src, tag-1, comm)
+                # push!(reqs, req)
+
+                # # --------
+                # # debug: push both reqs, but then pop the extra request:
+                # # recvs the buffer but then segfaults (when trying to cleanup?)
+                # # --------
+                # req = MPI.Irecv!(recv_buf, src, tag-1, comm)
+                # push!(reqs, req)
+
+                # req = MPI.Isend(send_buf, dest, tag+1, comm)
+                # push!(reqs, req)
+
+                # pop!(reqs)
+
             elseif rank == 1
                 dest = 0
                 src = 0
@@ -298,8 +299,8 @@ MPI.Init()
                 req = MPI.Isend(send_buf, dest, tag-1, comm)
                 push!(reqs, req)
 
-                # req = MPI.Irecv!(recv_buf, src, tag+1, comm)
-                # push!(reqs, req)
+                req = MPI.Irecv!(recv_buf, src, tag+1, comm)
+                push!(reqs, req)
             end
 
             reqs = vcat(reqs...)
