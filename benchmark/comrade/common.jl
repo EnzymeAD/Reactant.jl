@@ -54,9 +54,6 @@ function run_benchmark!(
 
     x = Reactant.to_rarray(randn(rng, Ts, dimension(tpost)))
 
-    @info typeof(x)
-    @info typeof(tpost)
-
     fn = if fwd_or_bwd == "forward"
         logdensityof
     elseif fwd_or_bwd == "backward"
@@ -66,8 +63,6 @@ function run_benchmark!(
     end
 
     prof_result = Reactant.Profiler.profile_with_xprof(fn, tpost, x; nrepeat=10, warmup=3)
-
-    @code_hlo fn(tpost, x)
 
     results["Runtime (s)"][full_benchmark_name] =
         prof_result.profiling_result.runtime_ns / 1e9
