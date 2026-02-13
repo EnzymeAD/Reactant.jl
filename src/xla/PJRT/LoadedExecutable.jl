@@ -1,4 +1,4 @@
-struct LoadedExecutable <: XLA.AbstractLoadedExecutable
+mutable struct LoadedExecutable <: XLA.AbstractLoadedExecutable
     exec::Ptr{Cvoid}
     num_outputs::Int64
     num_parameters::Int64
