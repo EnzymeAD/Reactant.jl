@@ -1952,8 +1952,36 @@ Base.@nospecializeinfer function make_tracer(
         end
         return nothing
     end
-
-    return seen[prev] = prev
+    TT = traced_type(eltype(RT), Val(mode), track_numbers, sharding, runtime)
+    newa = Memory{TT}(undef, length(prev))
+    seen[prev] = newa
+    same = true
+    for I in eachindex(prev)
+        if isassigned(prev, I)
+            pv = prev[I]
+            nv = make_tracer(
+                seen,
+                pv,
+                append_path(path, I),
+                mode;
+                track_numbers,
+                sharding=Base.getproperty(sharding, I),
+                runtime,
+                device,
+                client,
+                kwargs...,
+            )
+            if pv !== nv
+                same = false
+            end
+            @inbounds newa[I] = nv
+        end
+    end
+    if same
+        seen[prev] = prev
+        return prev
+    end
+    return newa
 end
 
 Base.@nospecializeinfer function make_tracer(
