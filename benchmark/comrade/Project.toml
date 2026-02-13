@@ -32,7 +32,7 @@ ComradeBase = {url = "https://github.com/ptiede/ComradeBase.jl", rev = "main"}
 NFFT = {url = "https://github.com/ptiede/NFFT.jl", rev = "ptiede-reactant"}
 Reactant = {path = "../.."}
 TransformVariables = {url = "https://github.com/ptiede/TransformVariables.jl", rev = "ptiede-reactant"}
-VLBIImagePriors = {url = "https://github.com/ptiede/VLBIImagePriors.jl", rev = "ptiede-reactantperf"}
+# VLBIImagePriors = {url = "https://github.com/ptiede/VLBIImagePriors.jl", rev = "ptiede-reactantperf"}
 VLBILikelihoods = {url = "https://github.com/ptiede/VLBILikelihoods.jl", rev = "ptiede-reactant"}
 VLBISkyModels = {url = "https://github.com/EHTJulia/VLBISkyModels.jl", rev = "ptiede-reactnfft"}
 

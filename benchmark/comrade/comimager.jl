@@ -46,7 +46,7 @@ function sky(θ, metadata)
     bmimg = baseimage(mimg)
     rast = @. exp(x - mx) * bmimg
     rast ./= sum(rast)
-    return ContinuousImage(rast, grid, DeltaPulse())
+    return ContinuousImage(rast, grid, DeltaPulse{eltype(mimg)}())
 end
 
 function convert_table(T, dvis)
