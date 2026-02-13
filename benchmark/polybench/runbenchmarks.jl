@@ -34,3 +34,4 @@ end
 results = run_all_benchmarks(backend)
 
 save_results(results, joinpath(@__DIR__, "results"), "polybench", backend)
+pretty_print_results(results, "polybench", backend)

@@ -13,7 +13,9 @@ mutable struct LoadedExecutable <: XLA.AbstractLoadedExecutable
 end
 
 @inline function free_exec(exec::LoadedExecutable)
-    @ccall MLIR.API.mlir_c.ExecutableFree(exec.exec::Ptr{Cvoid})::Cvoid
+    if XLA.is_live[]
+        @ccall MLIR.API.mlir_c.ExecutableFree(exec.exec::Ptr{Cvoid})::Cvoid
+    end
 end
 
 function XLA.client(exec::LoadedExecutable)
