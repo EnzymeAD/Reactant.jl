@@ -432,6 +432,6 @@ end
 
 if abspath(PROGRAM_FILE) == @__FILE__
     backend = get_backend()
-    results = Dict()
+    results = Dict{String,Dict{String,Float64}}()
     run_abernathey_channel_benchmark!(results, backend)
 end
