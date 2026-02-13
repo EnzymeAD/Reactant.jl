@@ -988,7 +988,8 @@ REACTANT_ABI void CopyToBuffer(PjRtClient *client, PjRtBuffer *buffer,
   auto pid = client->platform_id();
   if (pid == xla::TpuId()) {
     auto dims = buffer->on_device_shape().dimensions();
-    // TODO(#2252): note this assume that we want to copy the entire buffer size.
+    // TODO(#2252): note this assume that we want to copy the entire buffer
+    // size.
     auto buf2 = ArrayFromHostBuffer(client, data, buffer->element_type(),
                                     dims.size(), dims.data(), buffer->device());
     *bufferP = buf2;
@@ -1050,7 +1051,8 @@ REACTANT_ABI void CopyFromBuffer(PjRtClient *client, PjRtBuffer *buffer,
 
   auto pid = client->platform_id();
   if (pid == xla::TpuId()) {
-    // TODO(#2252): note this assume that we want to copy the entire buffer size.
+    // TODO(#2252): note this assume that we want to copy the entire buffer
+    // size.
     BufferToHost(buffer, data);
     return;
   }
@@ -2713,13 +2715,13 @@ GetDistributedRuntimeService(char *c_address, int num_nodes,
       .release();
 }
 
-REACTANT_ABI void free_distributed_runtime_service(
-    xla::DistributedRuntimeService* service) {
+REACTANT_ABI void
+free_distributed_runtime_service(xla::DistributedRuntimeService *service) {
   delete service;
 }
 
-REACTANT_ABI void distributed_runtime_service_shutdown(
-    xla::DistributedRuntimeService *service) {
+REACTANT_ABI void
+distributed_runtime_service_shutdown(xla::DistributedRuntimeService *service) {
   service->Shutdown();
 }
 
@@ -2742,16 +2744,17 @@ hloShardingFromTensorShardingAttr(MlirAttribute cattr,
       xla::sdy::convertToHloSharding(attr, get_mesh_attr, manual_axes));
 }
 
-// TODO(#2252): This is incorrect for multiple meshes. We need to use the current mesh
-// to generate this instead of the global mesh Currently we are storing only a
-// single mesh, so we can just use this.
+// TODO(#2252): This is incorrect for multiple meshes. We need to use the
+// current mesh to generate this instead of the global mesh Currently we are
+// storing only a single mesh, so we can just use this.
 REACTANT_ABI MlirAttribute hloShardingToTensorShardingAttr(
     MlirContext cctx, const xla::HloSharding *hloSharding,
     MlirAttribute cmeshName, MlirAttribute cmeshAttr, int64_t rank,
     const bool *isClosed, const int64_t *priority) {
   mlir::MLIRContext *context = unwrap(cctx);
   mlir::StringAttr meshName = mlir::cast<mlir::StringAttr>(unwrap(cmeshName));
-  mlir::sdy::MeshAttr meshAttr = mlir::cast<mlir::sdy::MeshAttr>(unwrap(cmeshAttr));
+  mlir::sdy::MeshAttr meshAttr =
+      mlir::cast<mlir::sdy::MeshAttr>(unwrap(cmeshAttr));
   const llvm::SmallDenseMap<int64_t, llvm::StringRef>
       deviceIdToMaximalMeshName =
           llvm::SmallDenseMap<int64_t, llvm::StringRef>();
@@ -2964,7 +2967,7 @@ REACTANT_ABI void dump_operation(Operation *op, const char *filename) {
 
   op->print(file, mlir::OpPrintingFlags().enableDebugInfo(true, false));
 }
-REACTANT_ABI void dump_string(const char*op, const char *filename) {
+REACTANT_ABI void dump_string(const char *op, const char *filename) {
   std::error_code EC;
   llvm::raw_fd_ostream file(filename, EC, llvm::sys::fs::OF_Text);
   file << op;
@@ -3047,7 +3050,8 @@ ifrt_make_arrays_from_host_buffer_shards_spec(
   };
 }
 
-// TODO(#2252): We can batch the construction of multiple arrays into a single call.
+// TODO(#2252): We can batch the construction of multiple arrays into a single
+// call.
 REACTANT_ABI HeldIfrtArray *ifrt_make_array_from_host_buffer_shards(
     ifrt::Client *client, const void **host_buffers, int num_buffers,
     const int64_t **host_buffer_shapes,
@@ -3556,7 +3560,7 @@ InitializeXProfStubs(const char *cstr_worker_service_address) {
 }
 
 REACTANT_ABI void StartGrpcServer(int port) {
-  xprof::pywrap::StartGrpcServer(port);
+  xprof::pywrap::StartGrpcServer(port, /*max_concurrent_worker_requests=*/1);
 }
 
 // Creates a ToolOptions map from Julia arrays.
