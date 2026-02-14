@@ -121,7 +121,7 @@ function Statistics.corm(x::AbstractVector, mx, y::AbstractVector, my)
     xx = mapreduce(abs2, +, X)
     yy = mapreduce(abs2, +, Y)
     xy = mapreduce(*, +, X, conj.(Y))
-    
+
     return Statistics.clampcor(xy / max(xx, yy) / sqrt(min(xx, yy) / max(xx, yy)))
 end
 
