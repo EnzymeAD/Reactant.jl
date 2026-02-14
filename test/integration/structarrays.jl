@@ -9,18 +9,16 @@ using StructArrays, Reactant, Test
     # Note that the element type (the NamedTuple) contains ConcreteRNumbers even though track_numbers is not enabled.
     # This is because when the backing arrays are converted to TracedRArrays, their elements will contain TracedRNumbers.
     # In order for the element type to match the backing arrays, we need to use ConcreteRNumbers here as well:
-    @test typeof(x_ra) == StructArray{
-        @NamedTuple{
-            a::ConcreteRNumber{Float64,1}, b::String, c::ConcreteRNumber{Float32,1}
+    @test typeof(x_ra) <: (StructArray{
+         <:NamedTuple{(:a, :b, :c),
+	   <:Tuple{<:ConcreteRNumber{Float64}, String, <:ConcreteRNumber{Float32}}
         },
         2,
-        @NamedTuple{
-            a::ConcreteRArray{Float64,2,1},
-            b::Matrix{String},
-            c::ConcreteRArray{Float32,2,1},
+	<:NamedTuple{(:a, :b, :c),
+	     <:Tuple{<:ConcreteRArray{Float64, 2}, Matrix{String}, <:ConcreteRArray{Float32, 2}}
         },
         CartesianIndex{2},
-    }
+    })
 
     @test typeof(
         Reactant.make_tracer(Reactant.OrderedIdDict(), x_ra, (), Reactant.ConcreteToTraced)
@@ -55,9 +53,11 @@ end
 
     result = @jit broadcast_elwise(x_ra)
 
-    @test typeof(result) == StructVector{
-        @NamedTuple{c::ConcreteRNumber{Float32,1}, d::ConcreteRNumber{Float64,1}},
-        @NamedTuple{c::ConcreteRArray{Float32,1,1}, d::ConcreteRArray{Float64,1,1}},
+    @test typeof(result) <: StructVector{
+        <:NamedTuple{(:c, :d),
+		  <:Tuple{<:ConcreteRNumber{Float32}, <:ConcreteRNumber{Float64}}},
+	<:NamedTuple{(:c, :d),
+		  <:Tuple{<:ConcreteRArray{Float32,1}, <:ConcreteRArray{Float64,1}}},
         CartesianIndex{1},
     }
     for (component_ra, component) in
