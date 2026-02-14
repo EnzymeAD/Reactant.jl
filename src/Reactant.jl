@@ -201,6 +201,7 @@ Base.push!(no_rewrite_ancestor_modules, TracedUtils)
 include("TracedRNumber.jl")
 include("TracedRArray.jl")
 include("TracedRange.jl")
+include("TracedRational.jl")
 include("Indexing.jl")
 
 include("ConcreteRArray.jl")
@@ -223,6 +224,7 @@ use_overlayed_version(::TracedRArray) = true
 use_overlayed_version(::TracedRNumber) = true
 use_overlayed_version(::TracedStepRangeLen) = true
 use_overlayed_version(::TracedUnitRange) = true
+use_overlayed_version(::TracedRational) = true
 function use_overlayed_version(x::AbstractArray)
     a = ancestor(x)
     a === x && return false
