@@ -130,6 +130,15 @@ end
 @leaf TracedUnitRange
 Adapt.parent_type(::Type{TracedUnitRange{T}}) where {T} = TracedUnitRange{T}
 
+## TracedRational
+struct TracedRational{T} <: Real
+    num::T
+    den::T
+end
+
+@leaf TracedRational
+Adapt.parent_type(::Type{TracedRational{T}}) where {T} = TracedRational{T}
+
 const AnyTracedRArray{T,N} = AbstractArray{TracedRNumber{T},N}
 const AnyTracedRVector{T} = AnyTracedRArray{T,1}
 const AnyTracedRMatrix{T} = AnyTracedRArray{T,2}
