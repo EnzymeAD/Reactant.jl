@@ -65,3 +65,21 @@ end
     r_f32 = @jit(Float32(r))
     @test r_f32 ≈ 0.75f0
 end
+
+@testset "rational construction with //" begin
+    # Test // operator with TracedRNumber
+    i1 = Reactant.to_rarray(3; track_numbers=true)
+    i2 = Reactant.to_rarray(4; track_numbers=true)
+    
+    r = @jit(i1 // i2)
+    @test r isa Reactant.TracedRational
+    @test Rational(r) == 3//4
+    
+    # Test // with mixed types
+    i = Reactant.to_rarray(5; track_numbers=true)
+    r2 = @jit(i // 2)
+    @test Rational(r2) == 5//2
+    
+    r3 = @jit(7 // i2)
+    @test Rational(r3) == 7//4
+end
