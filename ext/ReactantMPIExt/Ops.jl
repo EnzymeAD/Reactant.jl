@@ -8,9 +8,6 @@ using Reactant.Ops: mlir_stacktrace, mlir_type
 using ..ReactantMPIExt: TracedRequest
 using MPI: MPI
 
-# Debug flag - set to true to enable debug prints
-const MPI_DEBUG = Ref(false)
-
 # TODO(#2242)
 # function init(; location=mlir_stacktrace("mpi.init", @__FILE__, @__LINE__))
 #     return mpi.init(; location)
@@ -24,7 +21,6 @@ const MPI_DEBUG = Ref(false)
 @noinline function comm_rank(;
     location=mlir_stacktrace("mpi.comm_rank", @__FILE__, @__LINE__)
 )
-    MPI_DEBUG[] && println("[MPI DEBUG] Calling comm_rank")
     rank = mlir_type(TracedRArray{Int32,0}, ())
     res = IR.result(enzymexla.mpi_comm_rank(; rank, location))
     return TracedRNumber{Int32}((), res)
@@ -33,14 +29,12 @@ end
 @noinline function comm_size(;
     location=mlir_stacktrace("mpi.comm_size", @__FILE__, @__LINE__)
 )
-    MPI_DEBUG[] && println("[MPI DEBUG] Calling comm_size")
     size = mlir_type(TracedRArray{Int32,0}, ())
     res = IR.result(enzymexla.mpi_comm_size(; size, location))
     return TracedRNumber{Int32}((), res)
 end
 
 @noinline function barrier(; location=mlir_stacktrace("mpi.barrier", @__FILE__, @__LINE__))
-    MPI_DEBUG[] && println("[MPI DEBUG] Calling barrier")
     enzymexla.mpi_barrier(; location)
     return nothing
 end
@@ -53,8 +47,6 @@ end
 )
     T = Reactant.unwrapped_eltype(buf)
     mpi_datatype = get_mpi_datatype_enum(MPI.Datatype(T))
-
-    MPI_DEBUG[] && println("[MPI DEBUG] Calling send (length=$(length(buf)), type=$T)")
 
     count = Reactant.Ops.constant(Int32(length(buf)))
 
@@ -78,8 +70,6 @@ end
 )
     T = Reactant.unwrapped_eltype(buf)
     mpi_datatype = get_mpi_datatype_enum(MPI.Datatype(T))
-
-    MPI_DEBUG[] && println("[MPI DEBUG] Calling isend (length=$(length(buf)), type=$T)")
 
     count = Reactant.Ops.constant(Int32(length(buf)))
     request = mlir_type(TracedRArray{Int32,0}, ())
@@ -110,8 +100,6 @@ end
     T = Reactant.unwrapped_eltype(buf)
     mpi_datatype = get_mpi_datatype_enum(MPI.Datatype(T))
 
-    MPI_DEBUG[] && println("[MPI DEBUG] Calling recv! (length=$(length(buf)), type=$T)")
-
     count = Reactant.Ops.constant(Int32(length(buf)))
 
     ret = enzymexla.mpi_recv(
@@ -137,8 +125,6 @@ end
     T = Reactant.unwrapped_eltype(buf)
     mpi_datatype = get_mpi_datatype_enum(MPI.Datatype(T))
 
-    MPI_DEBUG[] && println("[MPI DEBUG] Calling irecv! (length=$(length(buf)), type=$T)")
-
     count = Reactant.Ops.constant(Int32(length(buf)))
     request = mlir_type(TracedRArray{Int32,0}, ())
 
@@ -161,7 +147,6 @@ end
 @noinline function wait(
     req::TracedRNumber; location=mlir_stacktrace("mpi.wait", @__FILE__, @__LINE__)
 )
-    MPI_DEBUG[] && println("[MPI DEBUG] Calling wait")
     enzymexla.mpi_wait(req.mlir_data; location)
     return nothing
 end
@@ -169,7 +154,6 @@ end
 @noinline function waitall(
     req::TracedRArray; location=mlir_stacktrace("mpi.waitall", @__FILE__, @__LINE__)
 )
-    MPI_DEBUG[] && println("[MPI DEBUG] Calling waitall")
     count = Reactant.Ops.constant(Int32(length(req)))
     enzymexla.mpi_waitall(count.mlir_data, req.mlir_data; location)
     return nothing
@@ -185,10 +169,6 @@ end
 
     T = Reactant.unwrapped_eltype(sendbuf)
     mpi_datatype = get_mpi_datatype_enum(MPI.Datatype(T))
-
-    MPI_DEBUG[] && println(
-        "[MPI DEBUG] Calling allreduce! (op=$op, length=$(length(sendbuf)), type=$T)"
-    )
 
     count = Reactant.Ops.constant(Int32(length(sendbuf)))
 
