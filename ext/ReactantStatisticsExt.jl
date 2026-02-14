@@ -1,7 +1,6 @@
 module ReactantStatisticsExt
 
-using Reactant:
-    AnyTracedRArray, AnyTracedRVecOrMat, AnyTracedRMatrix, AnyTracedRVector, TracedRNumber
+using Reactant: AnyTracedRArray, AnyTracedRMatrix, AnyTracedRVector, TracedRNumber
 using ReactantCore: materialize_traced_array
 using GPUArraysCore: @allowscalar
 using LinearAlgebra: diag, tril!, Diagonal
