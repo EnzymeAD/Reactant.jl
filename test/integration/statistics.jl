@@ -1,4 +1,4 @@
-using Reactant, Test, Statistics
+using Reactant, Test, Statistics, LinearAlgebra
 
 @testset "Statistics: `mean` & `var`" begin
     x = Reactant.TestUtils.construct_test_array(Float64, 2, 3, 4)
@@ -15,4 +15,147 @@ using Reactant, Test, Statistics
         var(x; dims=(1, 2), corrected=false)
     @test @jit(var(x_ca; dims=(1, 3), corrected=false)) ≈
         var(x; dims=(1, 3), corrected=false)
+end
+
+@testset "middle" begin
+    x = Reactant.TestUtils.construct_test_array(Float64, 2, 3, 4)
+    x_ra = Reactant.to_rarray(x)
+
+    @test @jit(middle(x_ra)) ≈ middle(x)
+end
+
+@testset "cov2cor!" begin
+    @testset "Symmetric" begin
+        C = [16.0 4.0; 4.0 4.0]
+        xsd = [4.0, 2.0]
+
+        C_cpu = copy(C)
+        Statistics.cov2cor!(C_cpu, xsd)
+
+        C_r = Reactant.to_rarray(copy(C))
+        xsd_r = Reactant.to_rarray(xsd)
+
+        @jit(Statistics.cov2cor!(C_r, xsd_r))
+
+        @test Array(C_r) ≈ C_cpu
+        @test diag(Array(C_r)) ≈ ones(2)
+        @test issymmetric(Array(C_r))
+    end
+
+    @testset "Asymmetric" begin
+        C = [16.0 4.0; 4.0 4.0]
+        xsd = [4.0, 2.0]
+        ysd = [2.0, 4.0]
+
+        C_cpu = copy(C)
+        Statistics.cov2cor!(C_cpu, xsd, ysd)
+
+        C_r = Reactant.to_rarray(copy(C))
+        xsd_r = Reactant.to_rarray(xsd)
+        ysd_r = Reactant.to_rarray(ysd)
+
+        @jit(Statistics.cov2cor!(C_r, xsd_r, ysd_r))
+
+        @test Array(C_r) ≈ C_cpu
+    end
+
+    @testset "Asymmetric with Scalars" begin
+        C = [16.0 4.0; 4.0 4.0]
+        xsd_val = 4.0
+        ysd_val = 2.0
+        xsd_arr = [4.0, 2.0]
+        ysd_arr = [2.0, 4.0]
+
+        # Scalar xsd
+        C_cpu = copy(C)
+        Statistics.cov2cor!(C_cpu, xsd_val, ysd_arr)
+        C_r = Reactant.to_rarray(copy(C))
+        ysd_r = Reactant.to_rarray(ysd_arr)
+        @jit(Statistics.cov2cor!(C_r, xsd_val, ysd_r))
+        @test Array(C_r) ≈ C_cpu
+
+        # Scalar ysd
+        C_cpu = copy(C)
+        Statistics.cov2cor!(C_cpu, xsd_arr, ysd_val)
+        C_r = Reactant.to_rarray(copy(C))
+        xsd_r = Reactant.to_rarray(xsd_arr)
+        @jit(Statistics.cov2cor!(C_r, xsd_r, ysd_val))
+        @test Array(C_r) ≈ C_cpu
+    end
+
+    @testset "Symmetric - Complex" begin
+        A = [1.0+0im 0.5+0.5im; 0.5-0.5im 1.0+0im]
+        xsd = [1.0, 1.0]
+
+        C = A
+        C_cpu = copy(C)
+        Statistics.cov2cor!(C_cpu, xsd)
+
+        C_r = Reactant.to_rarray(copy(C))
+        xsd_r = Reactant.to_rarray(xsd)
+
+        @jit(Statistics.cov2cor!(C_r, xsd_r))
+
+        @test Array(C_r) ≈ C_cpu
+        @test ishermitian(Array(C_r))
+    end
+end
+
+@testset "Statistics: cor, cov, median" begin
+    @testset "median" begin
+        x = Reactant.TestUtils.construct_test_array(Float64, 10)
+        x_ra = Reactant.to_rarray(x)
+
+        @test @jit(median(x_ra)) ≈ median(x)
+
+        x_odd = Reactant.TestUtils.construct_test_array(Float64, 11)
+        x_odd_ra = Reactant.to_rarray(x_odd)
+        @test @jit(median(x_odd_ra)) ≈ median(x_odd)
+
+        # With NaNs
+        x_nan = copy(x)
+        x_nan[1] = NaN
+        x_nan_ra = Reactant.to_rarray(x_nan)
+        # Median with NaN should be NaN
+        @test isnan(@jit(median(x_nan_ra)))
+    end
+
+    @testset "cov" begin
+        x = Reactant.TestUtils.construct_test_array(Float64, 10, 5)
+        x_ra = Reactant.to_rarray(x)
+
+        @test @jit(cov(x_ra)) ≈ cov(x)
+        @test @jit(cov(x_ra; dims=1)) ≈ cov(x; dims=1)
+        @test @jit(cov(x_ra; dims=2)) ≈ cov(x; dims=2)
+        @test @jit(cov(x_ra; corrected=false)) ≈ cov(x; corrected=false)
+
+        y = Reactant.TestUtils.construct_test_array(Float64, 10, 5)
+        y_ra = Reactant.to_rarray(y)
+
+        @test @jit(cov(x_ra, y_ra)) ≈ cov(x, y)
+        @test @jit(cov(x_ra, y_ra; dims=2)) ≈ cov(x, y; dims=2)
+
+        # Vectors
+        v1 = Reactant.TestUtils.construct_test_array(Float64, 10)
+        v2 = Reactant.TestUtils.construct_test_array(Float64, 10)
+        v1_ra = Reactant.to_rarray(v1)
+        v2_ra = Reactant.to_rarray(v2)
+
+        @test @jit(cov(v1_ra, v2_ra)) ≈ cov(v1, v2)
+    end
+
+    @testset "cor" begin
+        x = Reactant.TestUtils.construct_test_array(Float64, 10, 5)
+        x_ra = Reactant.to_rarray(x)
+
+        @test @jit(cor(x_ra)) ≈ cor(x)
+        @test @jit(cor(x_ra; dims=2)) ≈ cor(x; dims=2)
+
+        v1 = Reactant.TestUtils.construct_test_array(Float64, 10)
+        v2 = Reactant.TestUtils.construct_test_array(Float64, 10)
+        v1_ra = Reactant.to_rarray(v1)
+        v2_ra = Reactant.to_rarray(v2)
+
+        @test @jit(cor(v1_ra, v2_ra)) ≈ cor(v1, v2)
+    end
 end

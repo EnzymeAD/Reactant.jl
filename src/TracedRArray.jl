@@ -1323,4 +1323,6 @@ function Base.permutedims!(dest::TracedRArray, src::AnyTracedRArray, perm)
     return dest
 end
 
+Base.extrema(A::TracedRArray) = minimum(A), maximum(A)
+
 end
