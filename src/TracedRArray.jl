@@ -1364,4 +1364,6 @@ function Base.append!(a::TracedRArray{T,1}, b::TracedRArray{T,1}) where {T}
     return a
 end
 
+Base.extrema(A::TracedRArray) = minimum(A), maximum(A)
+
 end
