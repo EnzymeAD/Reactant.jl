@@ -113,7 +113,7 @@ total_jobs = min(
     if (isempty(parsed_args.positionals) || "probprog" ∈ parsed_args.positionals)
         @testset "ProbProg" begin
             run(
-                `$(Base.julia_cmd()) --project=$(@__DIR__) $(joinpath(@__DIR__, "probprog", "runtests.jl"))`,
+                `$(Base.julia_cmd()) --project=$(Base.active_project()) $(joinpath(@__DIR__, "probprog", "runtests.jl"))`,
             )
         end
     end
