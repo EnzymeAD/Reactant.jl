@@ -1324,28 +1324,18 @@ function Base.permutedims!(dest::TracedRArray, src::AnyTracedRArray, perm)
 end
 
 function Base.push!(a::TracedRArray{T,1}, items...) where {T}
-    for x in items
-        x_num = Reactant.promote_to(TracedRNumber{T}, x)
-        x_arr = TracedRArray{T,1}(
-            (), @opcall(reshape(TracedRArray{T,0}((), x_num.mlir_data, ()), 1)).mlir_data, (1,)
-        )
-        result = @opcall concatenate(TracedRArray{T,1}[a, x_arr], 1)
-        a.mlir_data = result.mlir_data
-        a.shape = result.shape
-    end
+    items_cat = Reactant.promote_to(TracedRArray{T, 1}, reduce(vcat, items))
+    result = @opcall concatenate([a, items_cat], 1)
+    a.mlir_data = result.mlir_data
+    a.shape = result.shape
     return a
 end
 
 function Base.pushfirst!(a::TracedRArray{T,1}, items...) where {T}
-    for x in Iterators.reverse(items)
-        x_num = Reactant.promote_to(TracedRNumber{T}, x)
-        x_arr = TracedRArray{T,1}(
-            (), @opcall(reshape(TracedRArray{T,0}((), x_num.mlir_data, ()), 1)).mlir_data, (1,)
-        )
-        result = @opcall concatenate(TracedRArray{T,1}[x_arr, a], 1)
-        a.mlir_data = result.mlir_data
-        a.shape = result.shape
-    end
+    items_cat = Reactant.promote_to(TracedRArray{T, 1}, reduce(vcat, items))
+    result = @opcall concatenate([items_cat, a], 1)
+    a.mlir_data = result.mlir_data
+    a.shape = result.shape
     return a
 end
 
