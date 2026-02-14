@@ -53,8 +53,8 @@ end
 delete!(testsuite, "integration/mpi")
 delete!(testsuite, "core/qa")
 
-# Common code for checking against NumPyro
-delete!(testsuite, "probprog/common")
+# ProbProg tests require a compatible combination of NumPyro and JAX.
+filter!(((k, _),) -> !startswith(k, "probprog"), testsuite)
 
 if !ENZYMEJAX_INSTALLED[]
     delete!(testsuite, "integration/enzymejax")
@@ -107,6 +107,14 @@ total_jobs = min(
             using MPI
             nranks = 2
             run(`$(mpiexec()) -n $nranks $(Base.julia_cmd()) integration/mpi.jl`)
+        end
+    end
+
+    if (isempty(parsed_args.positionals) || "probprog" ∈ parsed_args.positionals)
+        @testset "ProbProg" begin
+            run(
+                `$(Base.julia_cmd()) --project=$(@__DIR__) $(joinpath(@__DIR__, "probprog", "runtests.jl"))`,
+            )
         end
     end
 end

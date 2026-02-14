@@ -1,18 +1,16 @@
 using PythonCall, CondaPkg
 
-const _NUMPYRO_AVAILABLE = Ref{Union{Nothing,Bool}}(nothing)
+if !@isdefined(_NUMPYRO_AVAILABLE)
+    const _NUMPYRO_AVAILABLE = Ref{Union{Nothing,Bool}}(nothing)
+end
 
 function check_numpyro_available()
     if _NUMPYRO_AVAILABLE[] !== nothing
         return _NUMPYRO_AVAILABLE[]
     end
     try
-        CondaPkg.add_pip("numpyro")
-
-        sys = pyimport("sys")
-        for p in ["/mnt/sbrantq/probprog/numpyro", "/mnt/sbrantq/probprog/jax"]
-            sys.path.insert(0, p)
-        end
+        CondaPkg.add_pip("jax"; version="==0.9.0")
+        CondaPkg.add_pip("numpyro"; version="==0.19.0")
 
         os = pyimport("os")
         os.environ.__setitem__("JAX_ENABLE_X64", "1")
