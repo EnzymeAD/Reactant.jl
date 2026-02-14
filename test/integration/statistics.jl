@@ -16,3 +16,10 @@ using Reactant, Test, Statistics
     @test @jit(var(x_ca; dims=(1, 3), corrected=false)) ≈
         var(x; dims=(1, 3), corrected=false)
 end
+
+@testset "middle" begin
+    x = Reactant.TestUtils.construct_test_array(Float64, 2, 3, 4)
+    x_ra = Reactant.to_rarray(x)
+
+    @test @jit(middle(x_ra)) ≈ middle(x)
+end
