@@ -27,6 +27,11 @@ import Reactant:
 import Reactant.TracedRArrayOverrides: AbstractReactantArrayStyle, _copy
 import Base.Broadcast: Broadcasted
 
+function __init__()
+    Reactant.@skip_rewrite_func StructArrays.index_type
+end
+
+
 StructArrays.always_struct_broadcast(::AbstractReactantArrayStyle) = true
 
 function Base.copy(
