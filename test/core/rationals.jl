@@ -1,0 +1,67 @@
+using Reactant, Test
+
+@testset "rationals" begin
+    # Test basic conversion
+    r = 1//2
+    r_ra = Reactant.to_rarray(r; track_numbers=true)
+    @test r_ra isa Reactant.TracedRational
+    @test numerator(r_ra) isa Reactant.TracedRNumber
+    @test denominator(r_ra) isa Reactant.TracedRNumber
+
+    # Test arithmetic operations
+    r1 = Reactant.to_rarray(1//2; track_numbers=true)
+    r2 = Reactant.to_rarray(1//3; track_numbers=true)
+    
+    # Addition
+    r_sum = @jit(r1 + r2)
+    @test Rational(r_sum) ≈ 1//2 + 1//3
+    
+    # Subtraction
+    r_diff = @jit(r1 - r2)
+    @test Rational(r_diff) ≈ 1//2 - 1//3
+    
+    # Multiplication
+    r_prod = @jit(r1 * r2)
+    @test Rational(r_prod) ≈ 1//2 * 1//3
+    
+    # Division
+    r_quot = @jit(r1 / r2)
+    @test Rational(r_quot) ≈ (1//2) / (1//3)
+    
+    # Negation
+    r_neg = @jit(-r1)
+    @test Rational(r_neg) ≈ -(1//2)
+end
+
+@testset "rational comparisons" begin
+    r1 = Reactant.to_rarray(1//2; track_numbers=true)
+    r2 = Reactant.to_rarray(1//3; track_numbers=true)
+    
+    # Equality
+    @test @jit(r1 == r1)
+    @test !@jit(r1 == r2)
+    
+    # Less than
+    @test @jit(r2 < r1)
+    @test !@jit(r1 < r2)
+    
+    # Less than or equal
+    @test @jit(r2 <= r1)
+    @test @jit(r1 <= r1)
+end
+
+@testset "rational conversions" begin
+    r = Reactant.to_rarray(3//4; track_numbers=true)
+    
+    # Convert to float
+    r_float = @jit(float(r))
+    @test r_float ≈ 0.75
+    
+    # Convert to Float64
+    r_f64 = @jit(Float64(r))
+    @test r_f64 ≈ 0.75
+    
+    # Convert to Float32
+    r_f32 = @jit(Float32(r))
+    @test r_f32 ≈ 0.75f0
+end
