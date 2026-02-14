@@ -5,7 +5,7 @@ using ProtoBuf.EnumX: @enumx
 export Duration
 
 
-struct Duration
+mutable struct Duration
     seconds::Int64
     nanos::Int32
 end

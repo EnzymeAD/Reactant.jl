@@ -5,7 +5,7 @@ using ProtoBuf.EnumX: @enumx
 export SourceInfo
 
 
-struct SourceInfo
+mutable struct SourceInfo
     file_name::String
     line_number::Int32
     stack_frame::String

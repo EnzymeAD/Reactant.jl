@@ -6,7 +6,7 @@ export JobInfo, TagMetric, var"CompilationLogEntry.CompilationStage", KeyValueMe
 export PassMetrics, CompilationLogEntry
 
 
-struct JobInfo
+mutable struct JobInfo
     name::String
     cell::String
     user::String
@@ -78,7 +78,7 @@ function PB._encoded_size(x::JobInfo)
     return encoded_size
 end
 
-struct TagMetric
+mutable struct TagMetric
     key::String
     value::String
 end
@@ -116,7 +116,7 @@ end
 
 @enumx var"CompilationLogEntry.CompilationStage" UNSPECIFIED=0 END_TO_END=1 HLO_PASSES=2 CODE_GENERATION=3 BACKEND_PASSES=4
 
-struct KeyValueMetric
+mutable struct KeyValueMetric
     key::String
     value::Int64
 end
@@ -152,7 +152,7 @@ function PB._encoded_size(x::KeyValueMetric)
     return encoded_size
 end
 
-struct PassMetrics
+mutable struct PassMetrics
     module_id::UInt64
     pass_name::String
     pass_duration::Union{Nothing,google.protobuf.Duration}
@@ -206,19 +206,41 @@ function PB._encoded_size(x::PassMetrics)
     return encoded_size
 end
 
-struct CompilationLogEntry
-    timestamp::Union{Nothing,google.protobuf.Timestamp}
-    stage::var"CompilationLogEntry.CompilationStage".T
-    duration::Union{Nothing,google.protobuf.Duration}
-    task_index::Int32
-    pass_metrics::Vector{PassMetrics}
-    module_ids::Vector{UInt64}
-    job_info::Union{Nothing,JobInfo}
-    hlo_module_name::String
-    tag::Vector{TagMetric}
+mutable struct CompilationLogEntry
+    __data::Dict{Symbol,Any}
 end
-PB.default_values(::Type{CompilationLogEntry}) = (;timestamp = nothing, stage = var"CompilationLogEntry.CompilationStage".UNSPECIFIED, duration = nothing, task_index = zero(Int32), pass_metrics = Vector{PassMetrics}(), module_ids = Vector{UInt64}(), job_info = nothing, hlo_module_name = "", tag = Vector{TagMetric}())
-PB.field_numbers(::Type{CompilationLogEntry}) = (;timestamp = 1, stage = 2, duration = 3, task_index = 4, pass_metrics = 5, module_ids = 6, job_info = 7, hlo_module_name = 8, tag = 9)
+
+# Default values for CompilationLogEntry fields
+const _CompilationLogEntry_defaults = Dict{Symbol,Any}(
+    :timestamp => nothing,
+    :stage => nothing,
+    :duration => nothing,
+    :task_index => zero(Int32),
+    :pass_metrics => Vector{PassMetrics}(),
+    :module_ids => Vector{UInt64}(),
+    :job_info => nothing,
+    :hlo_module_name => "",
+    :tag => Vector{TagMetric}()
+)
+
+# Keyword constructor for CompilationLogEntry
+function CompilationLogEntry(; kwargs...)
+    __data = Dict{Symbol,Any}(kwargs)
+    return CompilationLogEntry(__data)
+end
+
+# Field accessors for CompilationLogEntry
+function Base.getproperty(x::CompilationLogEntry, s::Symbol)
+    s === :__data && return getfield(x, :__data)
+    d = getfield(x, :__data)
+    return get(d, s, get(_CompilationLogEntry_defaults, s, nothing))
+end
+function Base.setproperty!(x::CompilationLogEntry, s::Symbol, v)
+    getfield(x, :__data)[s] = v
+end
+Base.propertynames(::CompilationLogEntry) = (:timestamp, :stage, :duration, :task_index, :pass_metrics, :module_ids, :job_info, :hlo_module_name, :tag,)
+# PB.default_values(::Type{CompilationLogEntry}) = (;timestamp = nothing, stage = var"CompilationLogEntry.CompilationStage".UNSPECIFIED, duration = nothing, task_index = zero(Int32), pass_metrics = Vector{PassMetrics}(), module_ids = Vector{UInt64}(), job_info = nothing, hlo_module_name = "", tag = Vector{TagMetric}())
+# PB.field_numbers(::Type{CompilationLogEntry}) = (;timestamp = 1, stage = 2, duration = 3, task_index = 4, pass_metrics = 5, module_ids = 6, job_info = 7, hlo_module_name = 8, tag = 9)
 
 function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:CompilationLogEntry})
     timestamp = Ref{Union{Nothing,google.protobuf.Timestamp}}(nothing)
@@ -254,7 +276,7 @@ function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:CompilationLogEntry})
             Base.skip(d, wire_type)
         end
     end
-    return CompilationLogEntry(timestamp[], stage, duration[], task_index, pass_metrics[], module_ids[], job_info[], hlo_module_name, tag[])
+    return CompilationLogEntry(; timestamp=timestamp[], stage=stage, duration=duration[], task_index=task_index, pass_metrics=pass_metrics[], module_ids=module_ids[], job_info=job_info[], hlo_module_name=hlo_module_name, tag=tag[])
 end
 
 function PB.encode(e::PB.AbstractProtoEncoder, x::CompilationLogEntry)

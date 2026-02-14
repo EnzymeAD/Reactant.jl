@@ -7,7 +7,7 @@ export var"CudaComputeCapabilityProto.FeatureExtension", CudaComputeCapabilityPr
 
 @enumx var"CudaComputeCapabilityProto.FeatureExtension" UNSPECIFIED=0 NONE=1 ACCELERATED_FEATURES=2 FAMILY_COMPATIBLE_FEATURES=3
 
-struct CudaComputeCapabilityProto
+mutable struct CudaComputeCapabilityProto
     major::Int32
     minor::Int32
     feature_extension::var"CudaComputeCapabilityProto.FeatureExtension".T

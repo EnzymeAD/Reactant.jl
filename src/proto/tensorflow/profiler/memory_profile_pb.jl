@@ -9,7 +9,7 @@ export MemoryProfile
 
 @enumx MemoryActivity UNKNOWN_ACTIVITY=0 ALLOCATION=1 DEALLOCATION=2 RESERVATION=3 EXPANSION=4
 
-struct MemoryAggregationStats
+mutable struct MemoryAggregationStats
     stack_reserved_bytes::Int64
     heap_allocated_bytes::Int64
     free_memory_bytes::Int64
@@ -63,7 +63,7 @@ function PB._encoded_size(x::MemoryAggregationStats)
     return encoded_size
 end
 
-struct ActiveAllocation
+mutable struct ActiveAllocation
     snapshot_index::Int64
     special_index::Int64
     num_occurrences::Int64
@@ -105,19 +105,41 @@ function PB._encoded_size(x::ActiveAllocation)
     return encoded_size
 end
 
-struct MemoryActivityMetadata
-    memory_activity::MemoryActivity.T
-    requested_bytes::Int64
-    allocation_bytes::Int64
-    address::UInt64
-    tf_op_name::String
-    step_id::Int64
-    region_type::String
-    data_type::String
-    tensor_shape::String
+mutable struct MemoryActivityMetadata
+    __data::Dict{Symbol,Any}
 end
-PB.default_values(::Type{MemoryActivityMetadata}) = (;memory_activity = MemoryActivity.UNKNOWN_ACTIVITY, requested_bytes = zero(Int64), allocation_bytes = zero(Int64), address = zero(UInt64), tf_op_name = "", step_id = zero(Int64), region_type = "", data_type = "", tensor_shape = "")
-PB.field_numbers(::Type{MemoryActivityMetadata}) = (;memory_activity = 1, requested_bytes = 2, allocation_bytes = 3, address = 4, tf_op_name = 5, step_id = 6, region_type = 7, data_type = 8, tensor_shape = 9)
+
+# Default values for MemoryActivityMetadata fields
+const _MemoryActivityMetadata_defaults = Dict{Symbol,Any}(
+    :memory_activity => nothing,
+    :requested_bytes => zero(Int64),
+    :allocation_bytes => zero(Int64),
+    :address => zero(UInt64),
+    :tf_op_name => "",
+    :step_id => zero(Int64),
+    :region_type => "",
+    :data_type => "",
+    :tensor_shape => ""
+)
+
+# Keyword constructor for MemoryActivityMetadata
+function MemoryActivityMetadata(; kwargs...)
+    __data = Dict{Symbol,Any}(kwargs)
+    return MemoryActivityMetadata(__data)
+end
+
+# Field accessors for MemoryActivityMetadata
+function Base.getproperty(x::MemoryActivityMetadata, s::Symbol)
+    s === :__data && return getfield(x, :__data)
+    d = getfield(x, :__data)
+    return get(d, s, get(_MemoryActivityMetadata_defaults, s, nothing))
+end
+function Base.setproperty!(x::MemoryActivityMetadata, s::Symbol, v)
+    getfield(x, :__data)[s] = v
+end
+Base.propertynames(::MemoryActivityMetadata) = (:memory_activity, :requested_bytes, :allocation_bytes, :address, :tf_op_name, :step_id, :region_type, :data_type, :tensor_shape,)
+# PB.default_values(::Type{MemoryActivityMetadata}) = (;memory_activity = MemoryActivity.UNKNOWN_ACTIVITY, requested_bytes = zero(Int64), allocation_bytes = zero(Int64), address = zero(UInt64), tf_op_name = "", step_id = zero(Int64), region_type = "", data_type = "", tensor_shape = "")
+# PB.field_numbers(::Type{MemoryActivityMetadata}) = (;memory_activity = 1, requested_bytes = 2, allocation_bytes = 3, address = 4, tf_op_name = 5, step_id = 6, region_type = 7, data_type = 8, tensor_shape = 9)
 
 function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:MemoryActivityMetadata})
     memory_activity = MemoryActivity.UNKNOWN_ACTIVITY
@@ -153,7 +175,7 @@ function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:MemoryActivityMetadata})
             Base.skip(d, wire_type)
         end
     end
-    return MemoryActivityMetadata(memory_activity, requested_bytes, allocation_bytes, address, tf_op_name, step_id, region_type, data_type, tensor_shape)
+    return MemoryActivityMetadata(; memory_activity=memory_activity, requested_bytes=requested_bytes, allocation_bytes=allocation_bytes, address=address, tf_op_name=tf_op_name, step_id=step_id, region_type=region_type, data_type=data_type, tensor_shape=tensor_shape)
 end
 
 function PB.encode(e::PB.AbstractProtoEncoder, x::MemoryActivityMetadata)
@@ -183,7 +205,7 @@ function PB._encoded_size(x::MemoryActivityMetadata)
     return encoded_size
 end
 
-struct MemoryProfileSummary
+mutable struct MemoryProfileSummary
     peak_bytes_usage_lifetime::Int64
     peak_stats::Union{Nothing,MemoryAggregationStats}
     peak_stats_time_ps::Int64
@@ -231,7 +253,7 @@ function PB._encoded_size(x::MemoryProfileSummary)
     return encoded_size
 end
 
-struct MemoryProfileSnapshot
+mutable struct MemoryProfileSnapshot
     time_offset_ps::Int64
     aggregation_stats::Union{Nothing,MemoryAggregationStats}
     activity_metadata::Union{Nothing,MemoryActivityMetadata}
@@ -273,7 +295,7 @@ function PB._encoded_size(x::MemoryProfileSnapshot)
     return encoded_size
 end
 
-struct PerAllocatorMemoryProfile
+mutable struct PerAllocatorMemoryProfile
     memory_profile_snapshots::Vector{MemoryProfileSnapshot}
     profile_summary::Union{Nothing,MemoryProfileSummary}
     active_allocations::Vector{ActiveAllocation}
@@ -327,7 +349,7 @@ function PB._encoded_size(x::PerAllocatorMemoryProfile)
     return encoded_size
 end
 
-struct MemoryProfile
+mutable struct MemoryProfile
     memory_profile_per_allocator::Dict{String,PerAllocatorMemoryProfile}
     num_hosts::Int32
     memory_ids::Vector{String}

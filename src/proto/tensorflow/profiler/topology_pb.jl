@@ -7,7 +7,7 @@ export var"LogicalTopology.LogicalDevice", Topology, var"LogicalTopology.Logical
 export var"LogicalTopology.LogicalSlice", LogicalTopology
 
 
-struct var"LogicalTopology.HostNetworkAddress"
+mutable struct var"LogicalTopology.HostNetworkAddress"
     address::String
     interface_name::String
 end
@@ -43,7 +43,7 @@ function PB._encoded_size(x::var"LogicalTopology.HostNetworkAddress")
     return encoded_size
 end
 
-struct TopologyLocation
+mutable struct TopologyLocation
     x::Int32
     y::Int32
     z::Int32
@@ -115,7 +115,7 @@ function PB._encoded_size(x::TopologyLocation)
     return encoded_size
 end
 
-struct TopologyDimension
+mutable struct TopologyDimension
     x::Int32
     y::Int32
     z::Int32
@@ -157,7 +157,7 @@ function PB._encoded_size(x::TopologyDimension)
     return encoded_size
 end
 
-struct var"LogicalTopology.LogicalDevice"
+mutable struct var"LogicalTopology.LogicalDevice"
     global_id::Int32
     slice_local_id::Int32
     host_local_id::Int32
@@ -199,7 +199,7 @@ function PB._encoded_size(x::var"LogicalTopology.LogicalDevice")
     return encoded_size
 end
 
-struct Topology
+mutable struct Topology
     chips_per_host_bounds::Union{Nothing,TopologyDimension}
     host_bounds::Union{Nothing,TopologyDimension}
     mesh_location::Vector{TopologyLocation}
@@ -241,7 +241,7 @@ function PB._encoded_size(x::Topology)
     return encoded_size
 end
 
-struct var"LogicalTopology.LogicalHost"
+mutable struct var"LogicalTopology.LogicalHost"
     slice_local_id::Int32
     network_addresses::Vector{var"LogicalTopology.HostNetworkAddress"}
     devices::Vector{var"LogicalTopology.LogicalDevice"}
@@ -283,7 +283,7 @@ function PB._encoded_size(x::var"LogicalTopology.LogicalHost")
     return encoded_size
 end
 
-struct var"LogicalTopology.LogicalSlice"
+mutable struct var"LogicalTopology.LogicalSlice"
     global_id::Int32
     hosts::Vector{var"LogicalTopology.LogicalHost"}
 end
@@ -319,7 +319,7 @@ function PB._encoded_size(x::var"LogicalTopology.LogicalSlice")
     return encoded_size
 end
 
-struct LogicalTopology
+mutable struct LogicalTopology
     slices::Vector{var"LogicalTopology.LogicalSlice"}
 end
 PB.default_values(::Type{LogicalTopology}) = (;slices = Vector{var"LogicalTopology.LogicalSlice"}())
