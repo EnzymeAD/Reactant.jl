@@ -3,6 +3,10 @@ module TracedRationalOverrides
 using ..Reactant: Reactant, AbstractConcreteNumber, TracedRNumber
 import ..Reactant: TracedRational
 using ..Ops: @opcall
+using ReactantCore: ReactantCore
+
+ReactantCore.is_traced(::TracedRational, seen) = true
+ReactantCore.is_traced(::TracedRational) = true
 
 # Constructors
 function TracedRational{T}(num::T, den::T) where {T}
@@ -38,6 +42,10 @@ end
 # Basic properties
 Base.numerator(x::TracedRational) = x.num
 Base.denominator(x::TracedRational) = x.den
+
+function Base.show(io::IO, x::TracedRational{T}) where {T}
+    return print(io, "TracedRational{", T, "}(", x.num, " // ", x.den, ")")
+end
 
 # Promotion
 function Base.promote_rule(
@@ -90,6 +98,8 @@ function Base.:(==)(x::TracedRational, y::TracedRational)
 end
 
 function Base.:<(x::TracedRational, y::TracedRational)
+    # Note: assuming denominators are always positive (as they should be in a normalized Rational)
+    # a/b < c/d  <==>  a*d < c*b (when b, d > 0)
     return @opcall <(x.num * y.den, y.num * x.den)
 end
 
@@ -136,7 +146,16 @@ function Base.sign(x::TracedRational)
     return @opcall sign(x.num)
 end
 
-# Simplification (for concrete numbers)
+# Rational construction with // operator
+function Base.://(num::TracedRNumber, den::TracedRNumber)
+    return TracedRational(num, den)
+end
+function Base.://(num::TracedRNumber{T}, den::Integer) where {T}
+    return TracedRational(num, Reactant.promote_to(TracedRNumber{T}, den))
+end
+function Base.://(num::Integer, den::TracedRNumber{T}) where {T}
+    return TracedRational(Reactant.promote_to(TracedRNumber{T}, num), den)
+end
 function Base.://(num::AbstractConcreteNumber, den::AbstractConcreteNumber)
     return TracedRational(num, den)
 end
