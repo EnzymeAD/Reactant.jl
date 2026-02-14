@@ -701,6 +701,36 @@ const DUS_SLICE_SIMPLIFY = Ref(true)
 const CONCATS_TO_DUS = Ref(false)
 const WHILE_UNROLL_THRESHOLD = Ref(4)
 
+# Must match EnzymeXLATransformPassesOptions in EnzymeXLAOptPasses.h
+struct EnzymeXLATransformPassesOptions
+    max_constant_threshold::Int64
+    while_unroll_threshold::Int64
+    reshape_propagate::Cint
+    transpose_propagate::Cint
+    no_nan::Bool
+    all_finite::Bool
+    dus_to_concat::Bool
+    dus_slice_simplify::Bool
+    sum_to_reducewindow::Bool
+    sum_to_conv::Bool
+    aggressive_sum_to_conv::Bool
+    while_concat::Bool
+    aggressive_propagation::Bool
+    is_sharded::Bool
+    raise_shlo_to_blas_lapack::Bool
+    recognize_comms::Bool
+    lower_comms::Bool
+    enable_structured_tensors_detection_passes::Bool
+    enable_structured_tensors_passes::Bool
+    enable_scatter_gather_optimization_passes::Bool
+    enable_slice_to_batch_passes::Bool
+    enable_reduce_slice_fusion_passes::Bool
+    enable_concat_to_batch_passes::Bool
+    enable_loop_raising_passes::Bool
+    enable_licm_optimization_passes::Bool
+    enable_pad_optimization_passes::Bool
+end
+
 # Optimization passes via transform dialect
 function optimization_passes(
     compile_options::CompileOptions;
@@ -714,690 +744,66 @@ function optimization_passes(
 )
     (; max_constant_threshold) = compile_options
 
-    transform_passes_list = [
-        "patterns=compare_op_canon<16>",
-        "transpose_transpose<16>",
-        "broadcast_in_dim_op_canon<16>",
-        "convert_op_canon<16>",
-        "dynamic_broadcast_in_dim_op_not_actually_dynamic<16>",
-        "chained_dynamic_broadcast_in_dim_canonicalization<16>",
-        "dynamic_broadcast_in_dim_all_dims_non_expanding<16>",
-        "noop_reduce_op_canon<16>",
-        "empty_reduce_op_canon<16>",
-        "dynamic_reshape_op_canon<16>",
-        "get_tuple_element_op_canon<16>",
-        "real_op_canon<16>",
-        "imag_op_canon<16>",
-        "conj_complex_negate<16>",
-        "get_dimension_size_op_canon<16>",
-        "reshape_op_canon<16>",
-        "merge_consecutive_reshapes<16>",
-        "transpose_is_reshape<16>",
-        "zero_extent_tensor_canon<16>",
-        "cse_broadcast_in_dim<16>",
-        "cse_slice<16>",
-        "cse_transpose<16>",
-        "cse_convert<16>",
-        "cse_dot_general<16>",
-        "cse_reshape<16>",
-        "cse_mul<16>",
-        "cse_div<16>",
-        "cse_add<16>",
-        "cse_subtract<16>",
-        "cse_min<16>",
-        "cse_max<16>",
-        "cse_neg<16>",
-        "cse_abs<16>",
-        "cse_concatenate<16>",
-        "cse_compare<16>",
-        "cse_select<16>",
-        "cse_real<16>",
-        "cse_imag<16>",
-        "cse_conj<16>",
-        "concatenate_op_canon<16>($max_constant_threshold)",
-        "select_op_canon<16>($max_constant_threshold)",
-        "add_simplify<16>",
-        "sub_simplify<16>",
-        "and_simplify<16>",
-        "max_simplify<16>",
-        "min_simplify<16>",
-        "or_simplify<16>",
-        "xor_simplify<16>",
-        "mul_simplify<16>",
-        "div_simplify<16>",
-        "rem_simplify<16>",
-        "pow_simplify<16>",
-        "simplify_extend<16>",
-        "simplify_wrap<16>",
-        "simplify_rotate<16>",
-        "extend_splat<16>",
-        "noop_slice<16>",
-        "noop_reverse<16>",
-        "slice_slice<16>",
-        "dynamic_slice_slice<16>",
-        "slice_dynamic_slice<16>",
-        "dynamic_slice_dynamic_slice<16>",
-        "shift_right_logical_simplify<16>",
-        "slice_simplify<16>",
-        "convert_simplify<16>",
-        "dynamic_slice_to_static<16>",
-        "dynamic_update_slice_elim<16>",
-        "concat_to_broadcast<16>",
-        "reduce_to_reshape<16>",
-        "broadcast_to_reshape<16>",
-        "slice_internal",
-        "iota_simplify<16>($max_constant_threshold)",
-        "broadcast_in_dim_simplify<16>($max_constant_threshold)",
-        "convert_concat<1>",
-        "dynamic_update_to_concat<1>",
-        "slice_of_dynamic_update<1>",
-        "slice_elementwise<1>",
-        "dot_reshape_dot<1>",
-        "concat_fuse<1>",
-        "concat_push_binop_add<1>",
-        "concat_push_binop_mul<1>",
-        "reduce_concat<1>",
-        "slice_concat<1>",
-        "concat_slice<1>",
-        "select_op_used_within_if<1>",
-        "bin_broadcast_splat_add<1>",
-        "bin_broadcast_splat_subtract<1>",
-        "bin_broadcast_splat_div<1>",
-        "bin_broadcast_splat_mul<1>",
-        "dot_general_simplify<16>",
-        "transpose_simplify<16>",
-        "reshape_empty_broadcast<1>",
-        "broadcast_reshape<1>",
-        "transpose_dot_reorder<1>",
-        "dot_transpose<1>",
-        "transpose_convolution<1>",
-        "convolution_transpose<1>",
-        "convert_convert_float<1>",
-        "convert_convert_int<1>",
-        "reshape_iota<1>",
-        "broadcast_reduce<1>",
-        "slice_dot_general<1>",
-        "if_inline<1>",
-        "if_to_select<1>",
-        "divide_sqrt_to_multiply_rsqrt<16>",
-        "associative_binary_op_reordering<1>",
-        "transpose_broadcast_in_dim_to_broadcast_in_dim<16>",
-        "replace_neg_add_with_subtract",
-        "replace_subtract_neg_with_add",
-        "binop_const_simplify",
-        "not_select_simplify",
-        "common_compare_expression_rewrite",
-        "compare_select_simplify",
-        "while_simplify<1>(1)",
-        "if_remove_unused",
-        "transpose_reshape_to_broadcast",
-        "reshape_transpose_to_broadcast",
-        "reshape_broadcast",
-        "dus_dus",
-        "dus_dus_concat",
-        "abs_positive_simplify",
-        "transpose_elementwise_transpose",
-        "select_comp_iota_const_simplify<1>",
-        "sign_abs_simplify<1>",
-        "broadcastindim_is_reshape",
-        "reduce_window_wrap<1>",
-        "slice_reduce_window<1>",
-        "while_deadresult",
-        "while_idempotent_dus",
-        "while_dus",
-        "while_updatewithoutcorners",
-        "while_op_induction_replacement",
-        "dus_concat",
-        "dusdus_to_duspad",
-        "slice_dus_to_concat",
-        "sink_dus",
-        "hoist_slice",
-        "while_induction_reduction",
-        "slice_broadcast",
-        "associative_common_mul_op_reordering",
-        "slice_select_to_select_slice",
-        "slice_if",
-        "dus_to_i32",
-        "slice_extend",
-        "slice_of_updatewithoutcorners",
-        "concat_wrap",
-        "cse_updatewithoutcorners<16>",
-        "cse_extend<16>",
-        "cse_wrap<16>",
-        "cse_rotate<16>",
-        "concat_concat_axis_swap",
-        "concat_concat_to_dus",
-        "broadcast_iota_simplify",
-        "select_comp_iota_to_dus",
-        "compare_cleanup",
-        "broadcast_compare",
-        "not_compare",
-        "broadcast_iota",
-        "cse_iota",
-        "compare_iota_const_simplify",
-        "reshuffle_ands_compares",
-        "square_abs_simplify",
-        "divide_divide_simplify",
-        "concat_reshape_slice",
-        "full_reduce_reshape_or_transpose",
-        "concat_reshape_reduce",
-        "concat_elementwise",
-        "reduce_reduce",
-        "conj_real",
-        "select_broadcast_in_dim",
-        "if_op_lift_common_ops",
-        "involution_neg_simplify",
-        "involution_conj_simplify",
-        "involution_not_simplify",
-        "real_conj_simplify",
-        "real_convert_simplify",
-        "conj_complex_simplify",
-        "conj_convert_simplify",
-        "elementwise_complex_simplify",
-        "split_convolution_into_reverse_convolution",
-        # TODO(#2251) we want to enable but may cause an infinite compile time
-        # "concat_to_onedim_dusslice",
-        # TODO(#2251) expose an option to enable this
-        # "chained_multiply_to_power",
-        "power_multiply_to_power",
-        "log_simplify",
-        "neg_mul_const_simplify",
-        "neg_div_const_simplify",
-        "reshape_deletions_broadcast_in_dim_simplify",
-        "reshape_insertions_broadcast_in_dim_simplify",
-        "dot_general_reshape",
-        "widen_wrap",
-        "widen_extend",
-        "elementwise_pad",
-        "compare_negate_const_simplify",
-        "select_simplify",
-        "concatenate_subtract_to_subtract_pad",
-        "concatenate_add_to_add_pad",
-        "concatenate_broadcast_in_dim",
-        "compare_abs",
-        # "compare_mul",
-        "compare_convert",
-        "add_selects",
-        "self_subtract_to_convolution_like(0)",
-        "self_add_to_convolution_like(0)",
-        "self_mul_to_convolution_like(0)",
-        "subtract_multiply_const_to_add_mul_const",
-        "trivial_reduce_window_to_reduce_op",
-        "case_to_if",
-        "dot_general_add_distributive_simplify",
-        "dot_general_subtract_distributive_simplify",
-        "remove_no_ops_from_while_loop",
-        "while_is_copy_simplify",
-        "split_variadic_scatter_op",
-        "dynamic_slice_simplify",
-        "enzyme_hlo_unroll($(WHILE_UNROLL_THRESHOLD[]))",
-        "divide_negated_operands_simplify",
-        "multiply_negated_operands_simplify",
-        "factor_scalars_in_dot_general",
-        "reduce_mul_to_dot_general",
-        "dot_general_broadcast_in_dim",
-        "dot_general_broadcast_in_dim_sort_dims",
-        "dus_dynamic_slice_simplify",
-        "while_dus_dus_simplify",
-        "while_dus_ds_simplify",
-        "reshape_slice_reshape",
-        "dynamic_slice_elementwise",
-        "dot_general_remove_batch_dimensions",
-        "delete_dims_reduce",
-        "reduce_delete_dims",
-        "dot_general_insert_dim_contraction_simplification",
-        "fuse_reshape_collapse_or_expand_dims_into_reduce",
-        "split_reduce_add_mul_to_add_dot_general",
-        "recognize_from_constant($(max_constant_threshold))",
-        "extend_to_broadcast",
-        "reduce_max_min_mul_positive_scalar",
-    ]
-
-    if !is_sharded
-        # these passes don't have optimized sharding implementations
-        if raise_shlo_to_blas_lapack
-            if !compile_options.disable_structured_tensors_detection_passes
-                append!(transform_passes_list, ["dot_general_to_syrk"])
-            end
-        end
+    # Map Julia symbols to C enum values for propagation direction
+    function propagate_dir(sym::Symbol)
+        sym === :none && return Cint(0) # ENZYMEXLA_PROPAGATE_NONE
+        sym === :up && return Cint(1)   # ENZYMEXLA_PROPAGATE_UP
+        sym === :down && return Cint(2) # ENZYMEXLA_PROPAGATE_DOWN
+        return Cint(0)
     end
 
-    if !compile_options.disable_structured_tensors_passes
-        append!(
-            transform_passes_list,
-            [
-                "transpose_syrk_to_syrk",
-                "fuse_mul_into_syrk",
-                "fuse_add_into_syrk",
-                "dot_general_only_diagonal_access",
-                "transpose_symmetric_simplify",
-                "syrk_simplify_output_uplo",
-            ],
-        )
-    end
-
-    if !compile_options.disable_scatter_gather_optimization_passes
-        append!(
-            transform_passes_list,
-            [
-                # scatter patterns
-                "scatter_op_canon<16>",
-                "scatter_to_dynamic_update_slice<1>",
-                "scatter_multiply_simplify",
-                "scatter_sub_simplify",
-                "scatter_add_simplify",
-                "scatter_div_simplify",
-                "unary_elementwise_scatter_simplify",
-                "scatter_indices_are_unique",
-                "split_complex_scatter",
-                "split_complex_gather",
-                ## const prop patterns
-                "scatter_update_computation_const_prop",
-                # gather patterns
-                "dynamic_gather_op_is_not_dynamic<16>",
-                "gather_op_canon<16>",
-                "gather_elementwise",
-                "elementwise_gather",
-                "gather_of_scatter_simplify",
-                ## const prop patterns
-                "gather_const_prop",
-                "scatter_const_fold($max_constant_threshold)",
-                "cse_gather",
-                "cse_scatter",
-            ],
-        )
-    end
-
-    if (
-        !compile_options.disable_scatter_gather_optimization_passes &&
-        !compile_options.disable_structured_tensors_passes
-    )
-        append!(transform_passes_list, ["diagonal_tensor_dot_general_rewrite"])
-    end
-
-    if !compile_options.disable_slice_to_batch_passes
-        append!(
-            transform_passes_list,
-            [
-                "dot_general_slice_to_batch",
-                "gather_slice_to_batch",
-                "iota_slice_to_batch",
-                "reduce_slice_to_batch",
-                "sort_slice_to_batch",
-                "transpose_slice_to_batch",
-                "broadcastindim_slice_to_batch",
-                "reducewindow_slice_to_batch",
-                "elementwise_slice_to_batch",
-                "convolution_slice_to_batch",
-            ],
-        )
-    end
-
-    if !compile_options.disable_reduce_slice_fusion_passes
-        append!(
-            transform_passes_list,
-            [
-                "add_reduce_slice_fusion",
-                "mul_reduce_slice_fusion",
-                "min_reduce_slice_fusion",
-                "max_reduce_slice_fusion",
-                "and_reduce_slice_fusion",
-                "xor_reduce_slice_fusion",
-                "or_reduce_slice_fusion",
-            ],
-        )
-    end
-
-    if !compile_options.disable_concat_to_batch_passes
-        append!(
-            transform_passes_list,
-            [
-                "concat_insert_dim_dot_general",
-                "concat_insert_dim_gather",
-                "concat_insert_dim_iota",
-                "concat_insert_dim_reduce",
-                "concat_insert_dim_sort",
-                "concat_insert_dim_reduce_window",
-                "concat_insert_dim_elementwise",
-                "concat_insert_dim_convolution",
-            ],
-        )
-    end
-
-    if !compile_options.disable_loop_raising_passes
-        append!(
-            transform_passes_list,
-            [
-                "greedy_while_loop_batch_fission",
-                "while_elementwise_reduction_to_reduce",
-                "remove_loop_carried_dependencies_from_while_load_operations",
-            ],
-        )
-    end
-
-    if !compile_options.disable_licm_optimization_passes
-        append!(
-            transform_passes_list,
-            [
-                "dus_licm(0)",
-                "slice_licm(0)",
-                "elementwise_licm(0)",
-                "concatenate_licm(0)",
-                "while_licm<1>(1)",
-                "transpose_licm(0)",
-                "broadcastindim_licm(0)",
-                "reshape_licm(0)",
-                "dot_general_licm(0)",
-                "reduce_licm(0)",
-                "reduce_window_licm(0)",
-                "reverse_licm(0)",
-                "convolution_licm(0)",
-                "dynamic_slice_licm(0)",
-                "scatter_licm(0)",
-                "gather_licm(0)",
-                "iota_licm(0)",
-                "rotate_licm(0)",
-                "wrap_licm(0)",
-                "extend_licm(0)",
-            ],
-        )
-    end
-
-    if !compile_options.disable_pad_optimization_passes
-        append!(
-            transform_passes_list,
-            [
-                "extend_pad",
-                "dus_pad",
-                "cse_pad<16>",
-                "pad_simplify<16>($max_constant_threshold)",
-                "select_pad_to_dus<1>",
-                "and_pad_pad<1>",
-                "negative_pad_to_slice<16>",
-                "slice_pad<1>",
-                "pad_reshape_pad<1>",
-                "pad_pad<1>",
-                "add_pad_pad_to_concat<1>",
-                "concat_pad<1>",
-                "reduce_pad<1>",
-                "broadcast_pad<1>",
-                "zero_product_reshape_pad<1>",
-                "mul_zero_pad<1>",
-                "div_zero_pad<1>",
-                "binop_const_reshape_pad<1>",
-                "binop_pad_to_concat_add<1>",
-                "binop_pad_to_concat_mul<1>",
-                "binop_const_pad_add<1>",
-                "binop_const_pad_subtract<1>",
-                "binop_const_pad_mul<1>",
-                "binop_const_pad_div<1>",
-                "binop_binop_pad_pad_add<1>",
-                "binop_binop_pad_pad_mul<1>",
-                "binop_pad_pad_add<1>",
-                "binop_pad_pad_subtract<1>",
-                "binop_pad_pad_mul<1>",
-                "binop_pad_pad_div<1>",
-                "binop_pad_pad_min<1>",
-                "binop_pad_pad_max<1>",
-                "unary_pad_push_convert<1>",
-                "unary_pad_push_tanh<1>",
-                "unary_pad_push_exp<1>",
-                "concat_to_pad<1>",
-                "while_pad_induction_reduction",
-                "pad_concat_to_concat_pad",
-                "rotate_pad",
-                "concat_multipad",
-                "speculate_if_pad_to_select",
-                "dus_to_dynamic_pad",
-                "dynamic_pad_to_pad",
-            ],
-        )
-
-        if !compile_options.disable_licm_optimization_passes
-            push!(transform_passes_list, "pad_licm(0)")
-        end
-    end
-
-    # constant prop patterns
-    append!(
-        transform_passes_list,
-        [
-            # unary constant propagation
-            "chlo_inf_const_prop<16>",
-            "gamma_const_prop<16>",
-            "abs_const_prop<16>",
-            "log_const_prop<1>",
-            "log_plus_one_const_prop<1>",
-            "is_finite_const_prop",
-            "not_const_prop",
-            "neg_const_prop",
-            "sqrt_const_prop",
-            "rsqrt_const_prop",
-            "cos_const_prop",
-            "sin_const_prop",
-            "exp_const_prop",
-            "expm1_const_prop",
-            "tanh_const_prop",
-            "logistic_const_prop",
-            "conj_const_prop",
-            "ceil_const_prop",
-            "cbrt_const_prop",
-            "real_const_prop",
-            "imag_const_prop",
-            "round_const_prop",
-            "round_nearest_even_const_prop",
-            "sign_const_prop",
-            "floor_const_prop",
-            "tan_const_prop",
-            # binary constant propagation
-            "add_const_prop",
-            "and_const_prop",
-            "atan2_const_prop",
-            "complex_const_prop",
-            "div_const_prop",
-            "max_const_prop",
-            "min_const_prop",
-            "mul_const_prop",
-            "or_const_prop",
-            "pow_const_prop",
-            "rem_const_prop",
-            "sub_const_prop",
-            "xor_const_prop",
-            # other constant propagations
-            # "const_prop_through_barrier<16>", # XXX: should we really do this??
-            "concat_const_prop<1>($max_constant_threshold)",
-            "dynamic_update_slice_const_prop($max_constant_threshold)",
-            "clamp_const_prop",
-        ],
+    # Build the C options struct (must match EnzymeXLATransformPassesOptions layout)
+    options = EnzymeXLATransformPassesOptions(
+        Int64(max_constant_threshold),
+        Int64(WHILE_UNROLL_THRESHOLD[]),
+        propagate_dir(compile_options.reshape_propagate),
+        propagate_dir(compile_options.transpose_propagate),
+        compile_options.no_nan,
+        compile_options.all_finite,
+        dus_to_concat,
+        DUS_SLICE_SIMPLIFY[],
+        SUM_TO_REDUCEWINDOW[],
+        SUM_TO_CONV[],
+        AGGRESSIVE_SUM_TO_CONV[],
+        WHILE_CONCAT[],
+        AGGRESSIVE_PROPAGATION[],
+        is_sharded,
+        raise_shlo_to_blas_lapack,
+        recognize_comms,
+        lower_comms,
+        !compile_options.disable_structured_tensors_detection_passes,
+        !compile_options.disable_structured_tensors_passes,
+        !compile_options.disable_scatter_gather_optimization_passes,
+        !compile_options.disable_slice_to_batch_passes,
+        !compile_options.disable_reduce_slice_fusion_passes,
+        !compile_options.disable_concat_to_batch_passes,
+        !compile_options.disable_loop_raising_passes,
+        !compile_options.disable_licm_optimization_passes,
+        !compile_options.disable_pad_optimization_passes,
     )
 
-    if DUS_SLICE_SIMPLIFY[]
-        push!(transform_passes_list, "dus_slice_simplify")
-    end
-    if SUM_TO_REDUCEWINDOW[]
-        push!(transform_passes_list, "sum_to_reducewindow")
-    end
-    if SUM_TO_CONV[]
-        push!(transform_passes_list, "sum_to_conv(0)")
-    end
-    if AGGRESSIVE_SUM_TO_CONV[]
-        push!(transform_passes_list, "sum_to_conv(1)")
-    end
+    main_passes_ptr = Ref(Ptr{Cchar}(C_NULL))
+    lower_passes_ptr = Ref(Ptr{Cchar}(C_NULL))
 
-    if WHILE_CONCAT[]
-        push!(transform_passes_list, "while_concat")
-        push!(transform_passes_list, "while_wrap")
-        push!(transform_passes_list, "while_extend")
-    end
+    @ccall MLIR.API.mlir_c.enzymexlaGetTransformPassesList(
+        options::Ref{typeof(options)},
+        main_passes_ptr::Ref{Ptr{Cchar}},
+        lower_passes_ptr::Ref{Ptr{Cchar}},
+    )::Cvoid
 
-    if dus_to_concat
-        push!(transform_passes_list, "dus_to_concat")
-    end
+    transform_passes_list_str = unsafe_string(main_passes_ptr[])
+    lower_transform_passes_str = unsafe_string(lower_passes_ptr[])
 
-    if compile_options.reshape_propagate === :up
-        append!(
-            transform_passes_list,
-            [
-                "reshape_concat",
-                "reshape_dus",
-                "dot_reshape_pad<1>",
-                "pad_dot_general<1>(0)",
-                # TODO(#2251): see https://github.com/EnzymeAD/Enzyme-JAX/issues/1445
-                # "pad_dot_general<1>(1)",
-                "reshape_pad",
-                "reshape_wrap",
-                "reshape_rotate",
-                "reshape_extend",
-                "delete_dims_broadcast",
-            ],
-        )
-        if AGGRESSIVE_PROPAGATION[]
-            push!(transform_passes_list, "reshape_slice(0)")
-            push!(transform_passes_list, "reshape_elementwise(0)")
-            push!(transform_passes_list, "reshape_dynamic_slice(0)")
-        else
-            push!(transform_passes_list, "reshape_slice(1)")
-            push!(transform_passes_list, "reshape_elementwise(1)")
-            push!(transform_passes_list, "reshape_dynamic_slice(1)")
-        end
-    elseif compile_options.reshape_propagate === :down
-        append!(
-            transform_passes_list,
-            [
-                "concat_appending_reshape",
-                "slice_reshape",
-                "slice_reshape_slice<1>",
-                "dynamic_slice_reshape_slice<1>",
-                "slice_reshape_dynamic_slice<1>",
-                "dynamic_slice_reshape_dynamic_slice<1>",
-                "slice_reshape_concat<1>",
-                "slice_reshape_elementwise<1>",
-                "slice_reshape_dot_general<1>",
-                "slice_reshape_pad<1>",
-                "elementwise_reshape_like",
-            ],
-        )
-        if AGGRESSIVE_PROPAGATION[]
-            push!(transform_passes_list, "reshape_elementwise_only_fusible(0)")
-        else
-            push!(transform_passes_list, "reshape_elementwise_only_fusible(1)")
-        end
-    end
-
-    if compile_options.transpose_propagate === :up
-        append!(
-            transform_passes_list,
-            [
-                "transpose_select",
-                "transpose_while",
-                "transpose_slice",
-                "transpose_like_broadcast_slice",
-                "transpose_concat",
-                "transpose_iota",
-                "transpose_reduce",
-                "transpose_reduce_window",
-                "transpose_dus",
-                "transpose_pad<1>",
-                "transpose_einsum<1>",
-                "transpose_wrap",
-                "transpose_extend",
-                "transpose_rotate",
-                "transpose_dynamic_slice",
-                "transpose_like_broadcast_dynamic_slice",
-                "transpose_reverse",
-                "transpose_batch_norm_training",
-                "transpose_batch_norm_inference",
-                "transpose_batch_norm_grad",
-                "transpose_if",
-                "transpose_fft",
-                "transpose_reshape",
-            ],
-        )
-        if AGGRESSIVE_PROPAGATION[]
-            push!(transform_passes_list, "transpose_elementwise(0)")
-            push!(transform_passes_list, "transpose_like_broadcast_elementwise(0)")
-        else
-            push!(transform_passes_list, "transpose_elementwise(1)")
-            push!(transform_passes_list, "transpose_like_broadcast_elementwise(1)")
-        end
-    elseif compile_options.transpose_propagate === :down
-        append!(
-            transform_passes_list,
-            [
-                "reorder_elementwise_and_shape_op<16>",
-                "elementwise_all_transpose_operands_simplify",
-                "slice_transpose",
-                "dynamic_slice_transpose",
-                "einsum_transpose<1>",
-                "slice_reshape_transpose<1>",
-                "reduce_transpose_simplify",
-                "reverse_transpose",
-                "transpose_all_users_slice",
-            ],
-        )
-    end
-
-    if compile_options.no_nan
-        append!(
-            transform_passes_list,
-            [
-                "no_nan_compare_simplify(1)",
-                "no_nan_self_sub_simplify(1)",
-                "no_nan_add_sub_simplify(1)",
-                "no_nan_mul_simplify(1)",
-                "no_nan_div_simplify(1)",
-            ],
-        )
-    else
-        append!(
-            transform_passes_list,
-            [
-                "no_nan_compare_simplify(0)",
-                "no_nan_self_sub_simplify(0)",
-                "no_nan_add_sub_simplify(0)",
-                "no_nan_mul_simplify(0)",
-                "no_nan_div_simplify(0)",
-            ],
-        )
-    end
-
-    if compile_options.all_finite
-        append!(
-            transform_passes_list,
-            [
-                "all_finite_is_finite",
-                "all_finite_is_inf",
-                "all_finite_is_pos_inf",
-                "all_finite_is_neg_inf",
-            ],
-        )
-    end
-
-    lower_transform_passes = copy(transform_passes_list)
-
-    if recognize_comms
-        append!(
-            transform_passes_list,
-            [
-                "recognize_extend",
-                "recognize_wrap",
-                "recognize_rotate",
-                "recognize_updatewithoutcorners",
-                "dusdus_to_dusextend",
-            ],
-        )
-    end
-
-    if lower_comms
-        append!(
-            lower_transform_passes,
-            ["lower_extend", "lower_wrap", "lower_rotate", "lower_updatewithoutcorners"],
-        )
-    end
+    @ccall MLIR.API.mlir_c.enzymexlaFreeTransformPassesList(
+        main_passes_ptr[]::Ptr{Cchar}
+    )::Cvoid
+    @ccall MLIR.API.mlir_c.enzymexlaFreeTransformPassesList(
+        lower_passes_ptr[]::Ptr{Cchar}
+    )::Cvoid
 
     transform_passes = join(
         [
-            "enzyme-hlo-generate-td{" * join(transform_passes_list, ';') * "}",
+            "enzyme-hlo-generate-td{patterns=" * transform_passes_list_str * "}",
             "transform-interpreter",
             "enzyme-hlo-remove-transform",
         ],
@@ -1407,15 +813,14 @@ function optimization_passes(
     if lower_comms
         func_passes =
             func_passes *
-            ",enzyme-hlo-generate-td{" *
-            join(lower_transform_passes, ';') *
+            ",enzyme-hlo-generate-td{patterns=" *
+            lower_transform_passes_str *
             "},transform-interpreter,enzyme-hlo-remove-transform"
     end
     if CONCATS_TO_DUS[]
-        push!(
-            transform_passes_list,
-            "enzyme-hlo-generate-td{patterns=concat_to_onedim_dus},transform-interpreter,enzyme-hlo-remove-transform",
-        )
+        func_passes =
+            func_passes *
+            ",enzyme-hlo-generate-td{patterns=concat_to_onedim_dus},transform-interpreter,enzyme-hlo-remove-transform"
     end
     passes = String[]
     if compile_options.inline
@@ -1446,6 +851,7 @@ function optimization_passes(
     push!(passes, func_passes)
     return join(passes, ',')
 end
+
 
 # TODO(#2251) we want to be able to run the more advanced passes via transform dialect as an enzyme intermediate
 # However, this errs as we cannot attach the transform with to the funcop itself [as we run a functionpass].
