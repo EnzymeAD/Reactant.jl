@@ -1389,6 +1389,7 @@ function optimization_passes(
                 "recognize_extend",
                 "recognize_wrap",
                 "recognize_rotate",
+                "recognize_multirotate",
                 "recognize_updatewithoutcorners",
                 "dusdus_to_dusextend",
             ],
