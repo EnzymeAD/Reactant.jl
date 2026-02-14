@@ -42,6 +42,10 @@ function promote_to(::Type{TracedRArray{T,N}}, rhs::AbstractArray{<:Any,N}) wher
     return promote_to(TracedRArray{T,N}, @opcall(constant(rhs)))
 end
 
+function promote_to(::Type{TracedRArray{T,N}}, rhs::Number) where {T,N}
+    return promote_to(TracedRArray{T,N}, [rhs])
+end
+
 ## Number types
 function promote_to(::Type{TracedRNumber}, rhs)
     T = rhs isa AbstractIrrational ? Float64 : unwrapped_eltype(rhs)
