@@ -1324,7 +1324,7 @@ function Base.permutedims!(dest::TracedRArray, src::AnyTracedRArray, perm)
 end
 
 function Base.push!(a::TracedRArray{T,1}, items...) where {T}
-    items_cat = Reactant.promote_to(TracedRArray{T,1}, reduce(vcat, items))
+    items_cat = Reactant.promote_to(TracedRArray{T,1}, [items...])
     result = @opcall concatenate([a, items_cat], 1)
     a.mlir_data = result.mlir_data
     a.shape = result.shape
@@ -1332,7 +1332,7 @@ function Base.push!(a::TracedRArray{T,1}, items...) where {T}
 end
 
 function Base.pushfirst!(a::TracedRArray{T,1}, items...) where {T}
-    items_cat = Reactant.promote_to(TracedRArray{T,1}, reduce(vcat, items))
+    items_cat = Reactant.promote_to(TracedRArray{T,1}, [items...])
     result = @opcall concatenate([items_cat, a], 1)
     a.mlir_data = result.mlir_data
     a.shape = result.shape
