@@ -92,6 +92,58 @@ function Base.:-(x::TracedRational)
     return TracedRational(@opcall -(x.num), x.den)
 end
 
+function Base.:+(x::TracedRational, y::Integer)
+    return TracedRational(@opcall +(x.num, x.den * y), x.den)
+end
+Base.:+(y::Integer, x::TracedRational) = x + y
+
+function Base.:+(x::TracedRational, y::TracedRNumber)
+    return TracedRational(@opcall +(x.num, x.den * y), x.den)
+end
+Base.:+(y::TracedRNumber, x::TracedRational) = x + y
+
+function Base.:-(x::TracedRational, y::Integer)
+    return TracedRational(@opcall -(x.num, x.den * y), x.den)
+end
+function Base.:-(y::Integer, x::TracedRational)
+    return TracedRational(@opcall -(x.den * y, x.num), x.den)
+end
+
+function Base.:-(x::TracedRational, y::TracedRNumber)
+    return TracedRational(@opcall -(x.num, x.den * y), x.den)
+end
+function Base.:-(y::TracedRNumber, x::TracedRational)
+    return TracedRational(@opcall -(x.den * y, x.num), x.den)
+end
+
+function Base.:*(x::TracedRational, y::Integer)
+    return TracedRational(@opcall *(x.num, y), x.den)
+end
+Base.:*(y::Integer, x::TracedRational) = x * y
+
+function Base.:*(x::TracedRational, y::TracedRNumber)
+    return TracedRational(@opcall *(x.num, y), x.den)
+end
+Base.:*(y::TracedRNumber, x::TracedRational) = x * y
+
+function Base.:/(x::TracedRational, y::Integer)
+    return TracedRational(x.num, @opcall *(x.den, y))
+end
+function Base.:/(x::Integer, y::TracedRational)
+    return TracedRational(@opcall *(x, y.den), y.num)
+end
+
+function Base.:/(x::TracedRational, y::TracedRNumber)
+    return TracedRational(x.num, @opcall *(x.den, y))
+end
+function Base.:/(x::TracedRNumber, y::TracedRational)
+    return TracedRational(@opcall *(x, y.den), y.num)
+end
+
+function Base.inv(x::TracedRational)
+    return TracedRational(x.den, x.num)
+end
+
 # Comparison operations
 function Base.:(==)(x::TracedRational, y::TracedRational)
     return @opcall ==(x.num * y.den, y.num * x.den)
