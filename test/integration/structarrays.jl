@@ -10,12 +10,14 @@ using StructArrays, Reactant, Test
     # This is because when the backing arrays are converted to TracedRArrays, their elements will contain TracedRNumbers.
     # In order for the element type to match the backing arrays, we need to use ConcreteRNumbers here as well:
     @test typeof(x_ra) <: (StructArray{
-         <:NamedTuple{(:a, :b, :c),
-	   <:Tuple{<:ConcreteRNumber{Float64}, String, <:ConcreteRNumber{Float32}}
+        <:NamedTuple{
+            (:a, :b, :c),
+            <:Tuple{<:ConcreteRNumber{Float64},String,<:ConcreteRNumber{Float32}},
         },
         2,
-	<:NamedTuple{(:a, :b, :c),
-	     <:Tuple{<:ConcreteRArray{Float64, 2}, Matrix{String}, <:ConcreteRArray{Float32, 2}}
+        <:NamedTuple{
+            (:a, :b, :c),
+            <:Tuple{<:ConcreteRArray{Float64,2},Matrix{String},<:ConcreteRArray{Float32,2}},
         },
         CartesianIndex{2},
     })
@@ -54,10 +56,12 @@ end
     result = @jit broadcast_elwise(x_ra)
 
     @test typeof(result) <: StructVector{
-        <:NamedTuple{(:c, :d),
-		  <:Tuple{<:ConcreteRNumber{Float32}, <:ConcreteRNumber{Float64}}},
-	<:NamedTuple{(:c, :d),
-		  <:Tuple{<:ConcreteRArray{Float32,1}, <:ConcreteRArray{Float64,1}}},
+        <:NamedTuple{
+            (:c, :d),<:Tuple{<:ConcreteRNumber{Float32},<:ConcreteRNumber{Float64}}
+        },
+        <:NamedTuple{
+            (:c, :d),<:Tuple{<:ConcreteRArray{Float32,1},<:ConcreteRArray{Float64,1}}
+        },
         CartesianIndex{1},
     }
     for (component_ra, component) in
