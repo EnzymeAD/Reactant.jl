@@ -30,9 +30,7 @@ end
 Base.numerator(x::TracedRational) = x.num
 Base.denominator(x::TracedRational) = x.den
 
-function Base.show(io::IO, x::TracedRational{T}) where {T}
-    return print(io, "TracedRational{", T, "}(", x.num, " // ", x.den, ")")
-end
+Base.show(io::IO, x::TracedRational) = print(io, x.num, " // ", x.den)
 
 # Promotion
 function Base.promote_rule(
