@@ -1409,6 +1409,7 @@ cc_library(
         "@xla//xla/pjrt/plugin/xla_gpu:xla_gpu_pjrt_client",
         "@xla//xla/stream_executor:rocm_platform",
         "@xla//xla/service/gpu:amdgpu_compiler",
+        "@xla//xla/backends/profiler:profiler_backends", 
         "@xla//xla/backends/profiler/gpu:device_tracer",
     ]) + select({
         # gloo tcp transport only builds on linux
