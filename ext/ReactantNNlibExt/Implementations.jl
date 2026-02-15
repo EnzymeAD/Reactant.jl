@@ -15,9 +15,9 @@ function NNlib.softmax!(out::AnyTracedRArray{T,N}, x::AbstractArray; dims=1) whe
     # TOOD: re-enable conditional once https://github.com/EnzymeAD/Reactant.jl/issues/1581
     # fixed
     @trace if all(isfinite, max_)
-      @. out = diff
+        @. out = diff
     else
-      @. out = ifelse(isinf(max_), ifelse(isinf(x), T(1), T(0)), diff)
+        @. out = ifelse(isinf(max_), ifelse(isinf(x), T(1), T(0)), diff)
     end
     out ./= sum(out; dims)
     return out
