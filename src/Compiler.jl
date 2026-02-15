@@ -1399,7 +1399,13 @@ function optimization_passes(
     if lower_comms
         append!(
             lower_transform_passes,
-            ["lower_extend", "lower_wrap", "lower_rotate", "lower_multirotate", "lower_updatewithoutcorners"],
+            [
+                "lower_extend",
+                "lower_wrap",
+                "lower_rotate",
+                "lower_multirotate",
+                "lower_updatewithoutcorners",
+            ],
         )
     end
 
