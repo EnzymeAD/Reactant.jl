@@ -110,7 +110,7 @@ function Statistics.median!(v::AnyTracedRVector)
     end
 end
 
-function Statistics.corm(x::AbstractVector, mx, y::AbstractVector, my)
+function Statistics.corm(x::AnyTracedRVector, mx, y::AnyTracedRVector, my)
     n = length(x)
     length(y) == n || throw(DimensionMismatch("inconsistent lengths"))
     n > 0 || throw(ArgumentError("correlation only defined for non-empty vectors"))
