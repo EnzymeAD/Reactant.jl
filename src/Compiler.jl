@@ -892,7 +892,6 @@ function optimization_passes(
         "real_conj_simplify",
         "real_convert_simplify",
         "conj_complex_simplify",
-        "conj_convert_simplify",
         "elementwise_complex_simplify",
         "split_convolution_into_reverse_convolution",
         # TODO(#2251) we want to enable but may cause an infinite compile time
@@ -951,6 +950,8 @@ function optimization_passes(
         "recognize_from_constant($(max_constant_threshold))",
         "extend_to_broadcast",
         "reduce_max_min_mul_positive_scalar",
+        "add_complex_simplify",
+        "sub_complex_simplify",
     ]
 
     if !is_sharded
