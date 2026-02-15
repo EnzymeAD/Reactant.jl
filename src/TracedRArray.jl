@@ -1323,6 +1323,47 @@ function Base.permutedims!(dest::TracedRArray, src::AnyTracedRArray, perm)
     return dest
 end
 
+function Base.push!(a::TracedRArray{T,1}, items...) where {T}
+    items_cat = Reactant.promote_to(TracedRArray{T,1}, [items...])
+    result = @opcall concatenate([a, items_cat], 1)
+    a.mlir_data = result.mlir_data
+    a.shape = result.shape
+    return a
+end
+
+function Base.pushfirst!(a::TracedRArray{T,1}, items...) where {T}
+    items_cat = Reactant.promote_to(TracedRArray{T,1}, [items...])
+    result = @opcall concatenate([items_cat, a], 1)
+    a.mlir_data = result.mlir_data
+    a.shape = result.shape
+    return a
+end
+
+function Base.pop!(a::TracedRArray{T,1}) where {T}
+    @assert length(a) > 0
+    val = @allowscalar a[end]
+    sliced = @opcall slice(a, [1], [length(a) - 1])
+    a.mlir_data = sliced.mlir_data
+    a.shape = sliced.shape
+    return val
+end
+
+function Base.popfirst!(a::TracedRArray{T,1}) where {T}
+    @assert length(a) > 0
+    val = @allowscalar a[1]
+    sliced = @opcall slice(a, [2], [length(a)])
+    a.mlir_data = sliced.mlir_data
+    a.shape = sliced.shape
+    return val
+end
+
+function Base.append!(a::TracedRArray{T,1}, b::TracedRArray{T,1}) where {T}
+    result = @opcall concatenate(TracedRArray{T,1}[a, b], 1)
+    a.mlir_data = result.mlir_data
+    a.shape = result.shape
+    return a
+end
+
 Base.extrema(A::TracedRArray) = minimum(A), maximum(A)
 
 end
