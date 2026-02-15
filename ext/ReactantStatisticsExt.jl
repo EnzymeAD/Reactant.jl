@@ -110,18 +110,24 @@ function Statistics.median!(v::AnyTracedRVector)
     end
 end
 
-function Statistics.corm(x::AbstractVector, mx, y::AbstractVector, my)
-    n = length(x)
-    length(y) == n || throw(DimensionMismatch("inconsistent lengths"))
-    n > 0 || throw(ArgumentError("correlation only defined for non-empty vectors"))
+for (xT, yT) in Iterators.product(
+    [AnyTracedRVector, AbstractVector], [AnyTracedRVector, AbstractVector]
+)
+    xT == AbstractVector && yT == AbstractVector && continue
 
-    X = x .- mx
-    Y = y .- my
-    xx = mapreduce(abs2, +, X)
-    yy = mapreduce(abs2, +, Y)
-    xy = mapreduce(*, +, X, conj.(Y))
+    @eval function Statistics.corm(x::$(xT), mx, y::$(yT), my)
+        n = length(x)
+        length(y) == n || throw(DimensionMismatch("inconsistent lengths"))
+        n > 0 || throw(ArgumentError("correlation only defined for non-empty vectors"))
 
-    return Statistics.clampcor(xy / max(xx, yy) / sqrt(min(xx, yy) / max(xx, yy)))
+        X = x .- mx
+        Y = y .- my
+        xx = mapreduce(abs2, +, X)
+        yy = mapreduce(abs2, +, Y)
+        xy = mapreduce(*, +, X, conj.(Y))
+
+        return Statistics.clampcor(xy / max(xx, yy) / sqrt(min(xx, yy) / max(xx, yy)))
+    end
 end
 
 end
