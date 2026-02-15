@@ -1400,7 +1400,7 @@ end
 
 @noinline function top_k(
     x::TracedRArray{T,N},
-    k;
+    k::Integer;
     dimension::Integer=N,
     location=mlir_stacktrace("top_k", @__FILE__, @__LINE__),
 ) where {T,N}

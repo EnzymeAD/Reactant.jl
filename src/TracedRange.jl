@@ -192,4 +192,6 @@ function (C::Base.Colon)(start::T, stop::TracedRNumber{T}) where {T}
     return C(TracedRNumber{T}(start), stop)
 end
 
+Base.maximum(r::TracedUnitRange) = last(r)
+
 end

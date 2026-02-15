@@ -159,3 +159,68 @@ end
         @test @jit(cor(v1_ra, v2_ra)) ≈ cor(v1, v2)
     end
 end
+
+@testset "quantile" begin
+    # Basic Vector
+    x = [1.0, 2.0, 3.0, 4.0]
+    x_ra = Reactant.to_rarray(x)
+
+    @test @jit(quantile(x_ra, 0.5)) ≈ 2.5
+
+    # Vector of probabilities
+    probs = [0.5]
+    @test @jit(quantile(x_ra, probs)) ≈ [2.5]
+
+    # Vector of probabilities - multiple
+    probs2 = [0.25, 0.5, 0.75]
+    x2 = [1.0, 3.0]
+    x2_ra = Reactant.to_rarray(x2)
+    @test Array(@jit(quantile(x2_ra, probs2)))[2] ≈ median(x2)
+
+    # Range
+    v = collect(100.0:-1.0:0.0)
+    p = collect(0.0:0.1:1.0)
+    v_ra = Reactant.to_rarray(v)
+    @test @jit(quantile(v_ra, p)) ≈ collect(0.0:10.0:100.0)
+
+    # Sorted
+    v_sorted = collect(0.0:100.0)
+    v_sorted_ra = Reactant.to_rarray(v_sorted)
+    @test @jit(quantile(v_sorted_ra, p; sorted=true)) ≈ collect(0.0:10.0:100.0)
+
+    # Float32
+    v32 = collect(100.0f0:-1.0f0:0.0f0)
+    p32 = collect(0.0f0:0.1f0:1.0f0)
+    v32_ra = Reactant.to_rarray(v32)
+    @test @jit(quantile(v32_ra, p32)) ≈ collect(0.0f0:10.0f0:100.0f0)
+
+    # TODO: fix nan/inf handling
+    # Inf
+    # x_inf = [Inf, Inf]
+    # x_inf_ra = Reactant.to_rarray(x_inf)
+    # @test @jit(quantile(x_inf_ra, 0.5)) == Inf
+
+    # -Inf
+    # x_ninf = [-Inf, 1.0]
+    # x_ninf_ra = Reactant.to_rarray(x_ninf)
+    # @test @jit(quantile(x_ninf_ra, 0.5)) == -Inf
+
+    # Small tolerance
+    x_small = [0.0, 1.0]
+    x_small_ra = Reactant.to_rarray(x_small)
+    @test @jit(quantile(x_small_ra, 1e-18)) ≈ quantile(x_small, 1e-18)
+
+    # Multidimensional
+    x_mat = reshape(collect(1.0:100.0), (10, 10))
+    x_mat_ra = Reactant.to_rarray(x_mat)
+    p_vec = [0.00, 0.25, 0.50, 0.75, 1.00]
+    @test @jit(quantile(x_mat_ra, p_vec)) ≈ [1.0, 25.75, 50.5, 75.25, 100.0]
+
+    # alpha/beta parameters
+    v_ab = [2.0, 3.0, 4.0, 6.0, 9.0, 2.0, 6.0, 2.0, 21.0, 17.0]
+    v_ab_ra = Reactant.to_rarray(v_ab)
+
+    @test @jit(quantile(v_ab_ra, 0.0, alpha=0.0, beta=0.0)) ≈ 2.0
+    @test @jit(quantile(v_ab_ra, 0.2, alpha=1.0, beta=1.0)) ≈ 2.0
+    @test @jit(quantile(v_ab_ra, 0.4, alpha=0.0, beta=1.0)) ≈ 3.0
+end
