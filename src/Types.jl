@@ -131,7 +131,9 @@ end
 Adapt.parent_type(::Type{TracedUnitRange{T}}) where {T} = TracedUnitRange{T}
 
 ## TracedRational
-struct TracedRational{T} <: Real
+struct TracedRational{
+    T<:Union{<:Integer,<:AbstractConcreteNumber{<:Integer},TracedRNumber{<:Integer}}
+} <: Real
     num::T
     den::T
 end
