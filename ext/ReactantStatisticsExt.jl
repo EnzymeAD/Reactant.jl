@@ -130,4 +130,94 @@ for (xT, yT) in Iterators.product(
     end
 end
 
+for (minT, maxT) in
+    Iterators.product([Real, TracedRNumber{<:Real}], [Real, TracedRNumber{<:Real}])
+    @eval function Statistics._quantilesort!(
+        v::AnyTracedRVector, sorted::Bool, minp::$(minT), maxp::$(maxT)
+    )
+        isempty(v) && throw(ArgumentError("empty data vector"))
+
+        if !sorted
+            lv = length(v)
+            lo = floor(Int, minp * lv)
+            hi = ceil(Int, 1 + maxp * lv)
+            partialsort!(v, max(lo, 1):min(hi, lv))
+        end
+
+        return v
+    end
+end
+
+function Statistics.quantile!(
+    q::AnyTracedRArray,
+    v::AnyTracedRVector,
+    p::AnyTracedRArray;
+    sorted::Bool=false,
+    alpha::Union{TracedRNumber{<:Real},Real}=1.0,
+    beta::Union{TracedRNumber{<:Real},Real}=alpha,
+)
+    if size(p) != size(q)
+        throw(DimensionMismatch("size of p, $(size(p)), must equal size of q, $(size(q))"))
+    end
+    isempty(q) && return q
+
+    p = materialize_traced_array(p)
+    v = materialize_traced_array(v)
+
+    minp, maxp = extrema(p)
+    Statistics._quantilesort!(v, sorted, minp, maxp)
+
+    @. q = Statistics._quantile((v,), p; alpha=alpha, beta=beta)
+    return q
+end
+
+function Statistics.quantile!(
+    v::AnyTracedRVector,
+    p::Union{AbstractArray,Tuple{Vararg{Real}}};
+    sorted::Bool=false,
+    alpha::Union{TracedRNumber{<:Real},Real}=1.0,
+    beta::Union{TracedRNumber{<:Real},Real}=alpha,
+)
+    if !isempty(p)
+        minp, maxp = extrema(p)
+        Statistics._quantilesort!(v, sorted, minp, maxp)
+    end
+    v = materialize_traced_array(v)
+    return map(x -> Statistics._quantile(v, x; alpha=alpha, beta=beta), p)
+end
+
+# Core quantile lookup function: assumes `v` sorted
+for pT in (Real, TracedRNumber{<:Real})
+    @eval function Statistics._quantile(
+        v::AnyTracedRVector, p::$(pT); alpha::Number=1.0, beta::Number=alpha
+    )
+        n = length(v)
+        @assert n > 0 # this case should never happen here
+
+        m = alpha + p * (one(alpha) - alpha - beta)
+        aleph = n * p + oftype(p, m)
+        j = clamp(trunc(Int, aleph), 1, n - 1)
+        γ = clamp(aleph - j, 0, 1)
+
+        if n == 1
+            a = @allowscalar v[1]
+            b = @allowscalar v[1]
+        else
+            a = @allowscalar v[j]
+            b = @allowscalar v[j + 1]
+        end
+
+        # TODO: fix nan/inf handling
+        # When a ≉ b, b-a may overflow
+        # When a ≈ b, (1-γ)*a + γ*b may not be increasing with γ due to rounding
+        # γ = oftype(a, γ)
+        # @trace if isfinite(a) & isfinite(b) & (!(a isa Number) | !(b isa Number) || a ≈ b)
+        #     res = a + γ * (b - a)
+        # else
+        #     res = (1 - γ) * a + γ * b
+        # end
+        return a + γ * (b - a)
+    end
+end
+
 end
