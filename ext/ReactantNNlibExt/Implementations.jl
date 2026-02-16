@@ -6,17 +6,19 @@ for (jlop, hloop) in (
     @eval $(jlop)(x::TracedRNumber) = @opcall $(hloop)(x)
 end
 
+Reactant.MLIR.IR.DUMP_MLIR_ALWAYS[] = true
+
 function NNlib.softmax!(out::AnyTracedRArray{T,N}, x::AbstractArray; dims=1) where {T,N}
     x = T.(materialize_traced_array(x))
     max_ = maximum(x; dims)
     diff = exp.(x .- max_)
     # TOOD: re-enable conditional once https://github.com/EnzymeAD/Reactant.jl/issues/1581
     # fixed
-    # @trace if all(isfinite, max_)
-    @. out = diff
-    # else
-    #     @. out = ifelse(isinf(max_), ifelse(isinf(x), T(1), T(0)), diff)
-    # end
+    @trace if all(isfinite, max_)
+        @. out = diff
+    else
+        @. out = ifelse(isinf(max_), ifelse(isinf(x), T(1), T(0)), diff)
+    end
     out ./= sum(out; dims)
     return out
 end
