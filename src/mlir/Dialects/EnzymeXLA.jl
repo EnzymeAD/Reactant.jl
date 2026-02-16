@@ -1210,6 +1210,25 @@ function mpi_wait(request::Value; location=Location())
     )
 end
 
+function mpi_waitall(count::Value, request::Value; location=Location())
+    op_ty_results = IR.Type[]
+    operands = Value[count, request]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+
+    return create_operation(
+        "enzymexla.mpi.waitall",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
 """
 `memcpy`
 
