@@ -72,7 +72,7 @@ end
     mpi_datatype = get_mpi_datatype_enum(MPI.Datatype(T))
 
     count = Reactant.Ops.constant(Int32(length(buf)))
-    request = mlir_type(TracedRArray{Int64,0}, ())
+    request = mlir_type(TracedRArray{Int32,0}, ())
 
     res = IR.result(
         enzymexla.mpi_isend(
@@ -88,7 +88,7 @@ end
         ),
     )
 
-    return TracedRNumber{Int64}((), res)
+    return TracedRNumber{Int32}((), res)
 end
 
 @noinline function recv!(
@@ -126,7 +126,7 @@ end
     mpi_datatype = get_mpi_datatype_enum(MPI.Datatype(T))
 
     count = Reactant.Ops.constant(Int32(length(buf)))
-    request = mlir_type(TracedRArray{Int64,0}, ())
+    request = mlir_type(TracedRArray{Int32,0}, ())
 
     ret = enzymexla.mpi_irecv(
         buf.mlir_data,
@@ -140,14 +140,22 @@ end
     )
 
     buf.mlir_data = IR.result(ret, 1)
-    request = TracedRNumber{Int64}((), IR.result(ret, 2))
+    request = TracedRNumber{Int32}((), IR.result(ret, 2))
     return request
 end
 
 @noinline function wait(
-    req::TracedRequest; location=mlir_stacktrace("mpi.wait", @__FILE__, @__LINE__)
+    req::TracedRNumber; location=mlir_stacktrace("mpi.wait", @__FILE__, @__LINE__)
 )
     enzymexla.mpi_wait(req.mlir_data; location)
+    return nothing
+end
+
+@noinline function waitall(
+    req::TracedRArray; location=mlir_stacktrace("mpi.waitall", @__FILE__, @__LINE__)
+)
+    count = Reactant.Ops.constant(Int32(length(req)))
+    enzymexla.mpi_waitall(count.mlir_data, req.mlir_data; location)
     return nothing
 end
 
@@ -155,7 +163,7 @@ end
     op,
     sendbuf::TracedRArray,
     recvbuf::TracedRArray;
-    location=mlir_stacktrace("mpi.wait", @__FILE__, @__LINE__),
+    location=mlir_stacktrace("mpi.allreduce", @__FILE__, @__LINE__),
 )
     mpi_op = get_mpi_op_enum(op)
 

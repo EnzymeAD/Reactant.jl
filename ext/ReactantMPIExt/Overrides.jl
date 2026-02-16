@@ -27,8 +27,13 @@ end
 end
 
 # TODO(#2241) status not supported yet
-function MPI.Wait(req::TracedRequest)
+function MPI.Wait(req::TracedRNumber)
     return Ops.wait(req)
+end
+
+# TODO(#2241) status not supported yet
+function MPI.Waitall(req::TracedRArray)
+    return Ops.waitall(req)
 end
 
 # TODO(#2241) use `make_tracer` to linearize arbitrary types? check out `MPI.Buffer`
@@ -52,14 +57,10 @@ function MPI.Isend(
     dest::Integer,
     tag::Integer,
     comm::MPI.Comm,
-    request::TracedRequest=TracedRequest((), nothing),
 )
     dest = Reactant.Ops.constant(Int32(dest))
     tag = Reactant.Ops.constant(Int32(tag))
-
-    gen_request = MPI.Isend(buf, dest, tag, comm)
-    request.mlir_data = gen_request.mlir_data
-    return request
+    return MPI.Isend(buf, dest, tag, comm)
 end
 
 # TODO(#2241) use `make_tracer` to linearize arbitrary types? check out `MPI.Buffer`
@@ -90,14 +91,10 @@ function MPI.Irecv!(
     source::Integer,
     tag::Integer,
     comm::MPI.Comm,
-    request::TracedRequest=TracedRequest((), nothing),
 )
     source = Reactant.Ops.constant(Int32(source))
     tag = Reactant.Ops.constant(Int32(tag))
-
-    gen_request = MPI.Irecv!(buf, source, tag, comm)
-    request.mlir_data = gen_request.mlir_data
-    return request
+    return MPI.Irecv!(buf, source, tag, comm)
 end
 
 # TODO(#2241) use `make_tracer` to delinearize arbitrary types? check out `MPI.Buffer`
