@@ -215,9 +215,7 @@ will need a `@reactant_overlay` method.
     signature.
 
 !!! warning
-    The macro call should be inside the `__init__` function. If you want to
-    mark it for precompilation, you must add the macro call in the global scope 
-    too.
+    The macro call should be inside the `__init__` function.
 
 See also: [`@skip_rewrite_type`](@ref)
 """
@@ -264,9 +262,7 @@ If you want to mark the set of constructors over it's type parameters or over it
 abstract type, you should use then the `Type{<:MyStruct}` syntax.
 
 !!! warning
-    The macro call should be inside the `__init__` function. If you want to
-    mark it for precompilation, you must add the macro call in the global scope 
-    too.
+    The macro call should be inside the `__init__` function.
 """
 macro skip_rewrite_type(typ)
     typ = if Base.isexpr(typ, :curly) && typ.args[1] === :Type
