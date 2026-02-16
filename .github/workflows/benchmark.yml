@@ -120,6 +120,7 @@ jobs:
           - linux-x86-a2-48-a100-4gpu
     env:
       DEVICE: ${{ contains(matrix.os, 'a100') && 'CUDA' || contains(matrix.os, 'tpu') && 'TPU' || 'CPU' }}
+      JULIA_PKG_SERVER_REGISTRY_PREFERENCE: "eager"
     steps:
       - uses: actions/checkout@v6
       - uses: julia-actions/setup-julia@v2
