@@ -88,7 +88,7 @@ for F in (:MappingRF, :FilteringRF)
 end
 
 function Base.reduce_empty(f::Base.BottomRF{<:CallWithReactant}, T::Type)
-    return Base.reduce_empty(BottomRF(f.rf.f), T)
+    return Base.reduce_empty(Base.BottomRF(f.rf.f), T)
 end
 
 function Base.reduce_empty(f::Base.FlipArgs{<:CallWithReactant}, T::Type)
