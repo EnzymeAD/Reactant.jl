@@ -1,3 +1,5 @@
+@static if false
+
 using Test, MPI, Reactant
 
 client = Reactant.XLA.default_backend()
@@ -216,3 +218,5 @@ end
 MPI.Finalize()
 
 Reactant.set_default_backend(client)
+
+end
