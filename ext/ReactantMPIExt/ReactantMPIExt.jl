@@ -218,23 +218,24 @@ function __init__()
     end
 end
 
-mutable struct TracedRequest <: MPI.AbstractRequest
-    paths::Tuple
-    mlir_data::Union{Nothing,Reactant.MLIR.IR.Value}
+# # NOTE: We currently do not allow a Request to cross the compile boundary. The commented
+# out code below is the beginning of what would be required to implement that
+# mutable struct TracedRequest <: MPI.AbstractRequest
+#     paths::Tuple
+#     mlir_data::Union{Nothing,Reactant.MLIR.IR.Value}
 
-    function TracedRequest(paths::Tuple, mlir_data::Union{Nothing,Reactant.MLIR.IR.Value})
-        if !isnothing(mlir_data)
-            @assert size(Reactant.MLIR.IR.type(mlir_data)) == ()
-        end
-        return new(paths, mlir_data)
-    end
-end
+#     function TracedRequest(paths::Tuple, mlir_data::Union{Nothing,Reactant.MLIR.IR.Value})
+#         if !isnothing(mlir_data)
+#             @assert size(Reactant.MLIR.IR.type(mlir_data)) == ()
+#         end
+#         return new(paths, mlir_data)
+#     end
+# end
 
-function Base.show(io::IOty, X::TracedRequest) where {IOty<:Union{IO,IOContext}}
-    return print(io, "TracedRequest(", X.paths, ")")
-end
+# function Base.show(io::IOty, X::TracedRequest) where {IOty<:Union{IO,IOContext}}
+#     return print(io, "TracedRequest(", X.paths, ")")
+# end
 
-# # NOTE: Commenting out the below on the assumption that a Request will never cross the compile boundary
 # #       If we ever want to return a request, the below could serve as a starting point
 # Reactant.TracedUtils.get_mlir_data(x::TracedRequest) = x.mlir_data
 # Reactant.TracedUtils.set_mlir_data!(x::TracedRequest, data) = (x.mlir_data = data; return x)
