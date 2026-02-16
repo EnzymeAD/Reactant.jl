@@ -52,12 +52,7 @@ function MPI.Send(
 end
 
 # TODO(#2241) should we error if other `AbstractRequest` types are passed in?
-function MPI.Isend(
-    buf::TracedRArray,
-    dest::Integer,
-    tag::Integer,
-    comm::MPI.Comm,
-)
+function MPI.Isend(buf::TracedRArray, dest::Integer, tag::Integer, comm::MPI.Comm)
     dest = Reactant.Ops.constant(Int32(dest))
     tag = Reactant.Ops.constant(Int32(tag))
     return MPI.Isend(buf, dest, tag, comm)
@@ -86,12 +81,7 @@ function MPI.Recv!(
     return Ops.recv!(buf, source, tag)
 end
 
-function MPI.Irecv!(
-    buf::TracedRArray,
-    source::Integer,
-    tag::Integer,
-    comm::MPI.Comm,
-)
+function MPI.Irecv!(buf::TracedRArray, source::Integer, tag::Integer, comm::MPI.Comm)
     source = Reactant.Ops.constant(Int32(source))
     tag = Reactant.Ops.constant(Int32(tag))
     return MPI.Irecv!(buf, source, tag, comm)

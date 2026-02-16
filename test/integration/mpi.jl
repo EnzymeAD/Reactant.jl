@@ -228,29 +228,29 @@ end
                 dest = 1
                 src = 1
 
-                req = MPI.Irecv!(recv_buf, src, tag-1, comm)
+                req = MPI.Irecv!(recv_buf, src, tag - 1, comm)
                 push!(reqs, req)
 
-                req = MPI.Isend(send_buf, dest, tag+1, comm)
+                req = MPI.Isend(send_buf, dest, tag + 1, comm)
                 push!(reqs, req)
             elseif rank == 1
                 dest = 0
                 src = 0
 
-                req = MPI.Isend(send_buf, dest, tag-1, comm)
+                req = MPI.Isend(send_buf, dest, tag - 1, comm)
                 push!(reqs, req)
 
-                req = MPI.Irecv!(recv_buf, src, tag+1, comm)
+                req = MPI.Irecv!(recv_buf, src, tag + 1, comm)
                 push!(reqs, req)
             end
 
             reqs = vcat(reqs...)
-            MPI.Waitall(reqs)
+            return MPI.Waitall(reqs)
         end
 
         send_buf = ConcreteRArray(ones(T, 5))
         recv_buf = ConcreteRArray(zeros(T, 5))
-        
+
         @jit waitall(send_buf, recv_buf)
 
         # debug
