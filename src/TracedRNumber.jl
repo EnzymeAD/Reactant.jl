@@ -40,6 +40,9 @@ function Base.typemax(::Type{TracedRNumber{T}}) where {T}
 end
 Base.typemax(x::TracedRNumber{T}) where {T} = typemax(typeof(x))
 
+Base.floatmin(::Type{Reactant.TracedRNumber{T}}) where {T} = floatmin(T)
+Base.floatmax(::Type{Reactant.TracedRNumber{T}}) where {T} = floatmax(T)
+
 function Base.nextfloat(x::TracedRNumber{T}) where {T<:AbstractFloat}
     return @opcall next_after(x, typemax(x))
 end
