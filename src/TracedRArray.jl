@@ -285,11 +285,8 @@ function Base.copy(bc::Broadcasted{<:AbstractReactantArrayStyle})
     end
     ElType = Broadcast.combine_eltypes(fn, bc.args)
     # Special case a union{} return so we can see the better error message
-    if ElType === Union{}
-        fn(map(first_scalar, bc.args)...)
-    elseif ElType == Any
-        res = fn(map(first_scalar, bc.args)...)
-        ElType = Core.Typeof(res)
+    if ElType === Union{} || ElType == Any || ElType == TracedRNumber
+        ElType = Core.Typeof(fn(map(first_scalar, bc.args)...))
     end
     if ElType == Any || ElType == Union{}
         throw(AssertionError("Failed to deduce eltype of broadcast of $fn, found $ElType"))

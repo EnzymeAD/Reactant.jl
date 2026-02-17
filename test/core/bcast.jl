@@ -132,3 +132,96 @@ literal_pow_bcast(x) = x .^ 2
     x = ConcreteRNumber(2.0f0)
     @test @jit(literal_pow_bcast(x)) ≈ 4
 end
+
+function DRF_whilebody_ifbody(XN, YN, ZN)
+    XNROOT = sqrt(XN)
+    YNROOT = sqrt(YN)
+    ZNROOT = sqrt(ZN)
+    YNROOTZNROOT = YNROOT * ZNROOT
+    LAMDA = muladd(XNROOT, (YNROOT + ZNROOT), YNROOTZNROOT)
+    return (XN + LAMDA) / 4, (YN + LAMDA) / 4, (ZN + LAMDA) / 4
+end
+
+function DRF_whilebody(XN, YN, ZN, ERRTOL)
+    MU = (XN + YN + ZN) / 3
+    ninvMU = -1 / MU
+    XNDEV = muladd(ninvMU, (MU + XN), 2)
+    YNDEV = muladd(ninvMU, (MU + YN), 2)
+    ZNDEV = muladd(ninvMU, (MU + ZN), 2)
+    EPSLON = max(abs(XNDEV), abs(YNDEV), abs(ZNDEV))
+    XN, YN, ZN = Base.ifelse(
+        EPSLON >= ERRTOL, DRF_whilebody_ifbody(XN, YN, ZN), (XN, YN, ZN)
+    )
+
+    return (XN, YN, ZN, XNDEV, YNDEV, ZNDEV, MU, (EPSLON >= ERRTOL))
+end
+
+function DRF_ifbody(X::A, Y::B, Z::C, ERRTOL::D) where {A,B,C,D}
+    T = promote_type(A, B, C, D)
+    C1 = T(1 / 24)
+    C2 = T(3 / 44)
+    C3 = T(1 / 14)
+
+    XN = X
+    YN = Y
+    ZN = Z
+    MU = zero(T)
+    XNDEV = zero(T)
+    YNDEV = zero(T)
+    ZNDEV = zero(T)
+    CONTINUE = true
+
+    @trace while CONTINUE
+        XN, YN, ZN, XNDEV, YNDEV, ZNDEV, MU, CONTINUE = DRF_whilebody(XN, YN, ZN, ERRTOL)
+    end
+    XNDEVYNDEV = XNDEV * YNDEV
+    E2 = muladd(-ZNDEV, ZNDEV, XNDEVYNDEV)
+    E3 = XNDEVYNDEV * ZNDEV
+    S = 1 + muladd(E2, muladd(-C2, E3, muladd(C1, E2, -T(1 / 10))), C3 * E3)
+    return S / sqrt(MU)
+end
+
+function DRF(X::A, Y::B, Z::C) where {A,B,C}
+    T = promote_type(A, B, C)
+
+    ERRTOL = (4 * eps(T) / 2)^T(1 / 6)
+    LOLIM = 5floatmin(T)
+    UPLIM = floatmax(T) / 5
+
+    ans = zero(T)
+    ierr = 0
+    ans, ierr = Base.ifelse(
+        min(X, Y, Z) < zero(T),
+        (ans, 1),
+        Base.ifelse(
+            max(X, Y, Z) > UPLIM,
+            (ans, 3),
+            Base.ifelse(min(X + Y, X + Z, Y + Z) < LOLIM, (ans, 2), (zero(T), 0)),
+        ),
+    )
+
+    ans = Base.ifelse(ierr == 0, DRF_ifbody(X, Y, Z, ERRTOL), ans)
+
+    return (ans, ierr)
+end
+
+function K(m::T) where {T}
+    drf, ierr = Base.ifelse(
+        m < 1,
+        DRF(zero(T), 1 - m, one(T)),
+        Base.ifelse(m == 1, (T(Inf), 0), Base.ifelse(isnan(m), (T(NaN), 0), (T(NaN), 4))),
+    )
+    if ierr isa Int
+        @assert ierr == 0
+    end
+    return drf
+end
+
+@testset "Non-concrete inferred type for broadcasting: #2467" begin
+    x_inner = Vector{Float64}(LinRange(0.0, 1.0, 1000))
+    x = Reactant.to_rarray(x_inner)
+
+    res_ra = @jit K.(x)
+    res_jl = K.(x_inner)
+    @test res_ra ≈ res_jl
+end
