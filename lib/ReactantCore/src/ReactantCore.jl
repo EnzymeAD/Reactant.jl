@@ -13,8 +13,8 @@ Checkpointing strategy for traced loops that specifies periodic checkpointing wi
 # Examples
 
 ```julia
-# Explicit periodic checkpointing with 10 checkpoints
-@trace checkpointing=Periodic(10) for i in 1:100
+# Explicit periodic checkpointing with 4 checkpoints
+@trace checkpointing=Periodic(4) for i in 1:100
     x = x .+ 1
 end
 
