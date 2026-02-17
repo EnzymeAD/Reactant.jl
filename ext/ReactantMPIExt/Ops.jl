@@ -5,7 +5,6 @@ using Reactant.MLIR: IR
 using Reactant.MLIR.IR: @mlir_str
 using Reactant.MLIR.Dialects: mpi, func, llvm, enzymexla
 using Reactant.Ops: mlir_stacktrace, mlir_type
-using ..ReactantMPIExt: TracedRequest
 using MPI: MPI
 
 # TODO(#2242)
