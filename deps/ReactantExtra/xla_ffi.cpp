@@ -507,6 +507,10 @@ void registerReactantXLACUDAFFI() {
                            "CUDA", SyrkFfi);
   XLA_FFI_REGISTER_HANDLER(xla::ffi::GetXlaFfiApi(),
                            "reactant_cublas_syrk_no_c_ffi", "CUDA", SyrkNoCFfi);
+  XLA_FFI_REGISTER_HANDLER(xla::ffi::GetXlaFfiApi(), "reactant_cublas_symm_ffi",
+                           "CUDA", SymmFfi);
+  XLA_FFI_REGISTER_HANDLER(xla::ffi::GetXlaFfiApi(),
+                           "reactant_cublas_symm_no_c_ffi", "CUDA", SymmNoCFfi);
 }
 
 #undef SOLVER_BLAS_DISPATCH_IMPL
