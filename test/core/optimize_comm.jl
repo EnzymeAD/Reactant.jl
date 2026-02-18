@@ -22,6 +22,18 @@ function dus2(x, y)
     return nothing
 end
 
+
+function multirot(x)
+    xs = [
+	  Reactant.Ops.rotate(x, size(x, 1)-2, ;dimension=1),
+	  Reactant.Ops.rotate(x, size(x, 1)-1, ;dimension=1),
+	  x,
+	  Reactant.Ops.rotate(x, 1, ;dimension=1),
+	  Reactant.Ops.rotate(x, 2, ;dimension=1)
+    ]
+    return sum(xs)
+end
+
 if length(addressable_devices) ≥ 8
     @testset "Rotate" begin
         N = min((length(Reactant.devices()) ÷ 2) * 2, 8)
@@ -34,6 +46,7 @@ if length(addressable_devices) ≥ 8
 
         hlo = repr(@code_xla shardy_passes = :to_mhlo_shardings rotate(rx))
         @test !contains(hlo, "all-to-all")
+        @test !contains(hlo, "all-reduce")
         @test !contains(hlo, "all-gather")
         @test contains(hlo, "collective-permute")
 
@@ -53,6 +66,7 @@ if length(addressable_devices) ≥ 8
 
         hlo = repr(@code_xla shardy_passes = :to_mhlo_shardings pad(rx))
         @test !contains(hlo, "all-to-all")
+        @test !contains(hlo, "all-reduce")
         @test !contains(hlo, "all-gather")
         @test contains(hlo, "collective-permute")
 
@@ -76,6 +90,7 @@ if length(addressable_devices) ≥ 8
 
         hlo = repr(@code_xla shardy_passes = :to_mhlo_shardings dus(rx, ry))
         @test !contains(hlo, "all-to-all")
+        @test !contains(hlo, "all-reduce")
         @test !contains(hlo, "all-gather")
         @test contains(hlo, "collective-permute")
 
@@ -100,6 +115,7 @@ if length(addressable_devices) ≥ 8
 
         hlo = repr(@code_xla shardy_passes = :to_mhlo_shardings dus2(rx, ry))
         @test !contains(hlo, "all-to-all")
+        @test !contains(hlo, "all-reduce")
         @test !contains(hlo, "all-gather")
         @test contains(hlo, "collective-permute")
 
@@ -107,5 +123,21 @@ if length(addressable_devices) ≥ 8
         @jit shardy_passes = :to_mhlo_shardings dus2(rx, ry)
         @test all(x .== convert(Array, rx))
         @test all(y .== convert(Array, ry))
+    end
+
+    @testset "MultiRotate" begin
+        N = min((length(Reactant.devices()) ÷ 2) * 2, 8)
+
+        mesh = Sharding.Mesh(reshape(Reactant.devices()[1:N], 2, :), (:x, :y))
+        sharding = Sharding.NamedSharding(mesh, (:x, :y))
+
+        x = reshape(collect(Int, 1:(1024 * 12)), 1024, 12)
+        rx = Reactant.to_rarray(x; sharding)
+
+        hlo = repr(@code_xla shardy_passes = :to_mhlo_shardings mr(rx))
+        @test !contains(hlo, "all-to-all")
+        @test !contains(hlo, "all-reduce")
+        @test !contains(hlo, "all-gather")
+	@test count(hlo, "collective-permute") == 2
     end
 end
