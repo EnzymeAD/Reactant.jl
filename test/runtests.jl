@@ -98,18 +98,17 @@ total_jobs = min(
         end
     end
 
-    # TODO: reenable once fixed
-    # if (
-    #     isempty(parsed_args.positionals) ||
-    #     "integration" ∈ parsed_args.positionals ||
-    #     "integration/mpi" ∈ parsed_args.positionals
-    # )
-    #     @testset "MPI" begin
-    #         using MPI
-    #         nranks = 2
-    #         run(`$(mpiexec()) -n $nranks $(Base.julia_cmd()) integration/mpi.jl`)
-    #     end
-    # end
+    if (
+        isempty(parsed_args.positionals) ||
+        "integration" ∈ parsed_args.positionals ||
+        "integration/mpi" ∈ parsed_args.positionals
+    )
+        @testset "MPI" begin
+            using MPI
+            nranks = 2
+            run(`$(mpiexec()) -n $nranks $(Base.julia_cmd()) integration/mpi.jl`)
+        end
+    end
 
     if (isempty(parsed_args.positionals) || "probprog" ∈ parsed_args.positionals)
         @testset "ProbProg" begin
