@@ -593,3 +593,68 @@ end
     @test Array(y[:Mhalo]) ≈ [1.0f0, 2.0f0]
     @test Array(y[:x]) ≈ [2.0f0, 3.0f0]
 end
+
+@testset "ShapeDtypeStruct compilation" begin
+    @testset "Basic compilation with ShapeDtypeStruct" begin
+        # Define a simple function
+        f(x) = sum(x)
+        
+        # Compile using ShapeDtypeStruct instead of ConcreteRArray
+        spec = Reactant.ShapeDtypeStruct((10, 20), Float32)
+        compiled_f = Reactant.compile(f, (spec,))
+        
+        # Execute with actual data
+        x = Reactant.ConcreteRArray(rand(Float32, 10, 20))
+        result = compiled_f(x)
+        
+        @test result isa Reactant.ConcreteRNumber{Float32}
+        @test result ≈ sum(Array(x))
+    end
+    
+    @testset "Multiple arguments with ShapeDtypeStruct" begin
+        f(x, y) = x .+ y
+        
+        spec1 = Reactant.ShapeDtypeStruct((5, 5), Float64)
+        spec2 = Reactant.ShapeDtypeStruct((5, 5), Float64)
+        compiled_f = Reactant.compile(f, (spec1, spec2))
+        
+        x = Reactant.ConcreteRArray(rand(Float64, 5, 5))
+        y = Reactant.ConcreteRArray(rand(Float64, 5, 5))
+        result = compiled_f(x, y)
+        
+        @test result isa Reactant.ConcreteRArray{Float64,2}
+        @test result ≈ Array(x) .+ Array(y)
+    end
+    
+    @testset "ShapeDtypeStruct with different dtypes" begin
+        f(x) = sin.(x)
+        
+        for dtype in [Float32, Float64]
+            spec = Reactant.ShapeDtypeStruct((10,), dtype)
+            compiled_f = Reactant.compile(f, (spec,))
+            
+            x = Reactant.ConcreteRArray(rand(dtype, 10))
+            result = compiled_f(x)
+            
+            @test result isa Reactant.ConcreteRArray{dtype,1}
+            @test result ≈ sin.(Array(x))
+        end
+    end
+    
+    @testset "ShapeDtypeStruct constructor variations" begin
+        # Test different constructor forms
+        spec1 = Reactant.ShapeDtypeStruct{Float32,2}((3, 4))
+        @test size(spec1) == (3, 4)
+        @test eltype(spec1) == Float32
+        @test ndims(spec1) == 2
+        
+        spec2 = Reactant.ShapeDtypeStruct((3, 4), Float32)
+        @test size(spec2) == (3, 4)
+        @test eltype(spec2) == Float32
+        
+        # Test with integer tuple (not Int tuple)
+        spec3 = Reactant.ShapeDtypeStruct((3, 4), Float64)
+        @test size(spec3) == (3, 4)
+        @test eltype(spec3) == Float64
+    end
+end
