@@ -729,6 +729,7 @@ function optimization_passes(
         "real_op_canon<16>",
         "imag_op_canon<16>",
         "conj_complex_negate<16>",
+        "negate_imag_conj<16>",
         "get_dimension_size_op_canon<16>",
         "reshape_op_canon<16>",
         "merge_consecutive_reshapes<16>",
