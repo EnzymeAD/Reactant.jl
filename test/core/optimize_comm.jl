@@ -22,14 +22,13 @@ function dus2(x, y)
     return nothing
 end
 
-
 function multirot(x)
     xs = [
-	  Reactant.Ops.rotate(x, size(x, 1)-2, ;dimension=1),
-	  Reactant.Ops.rotate(x, size(x, 1)-1, ;dimension=1),
-	  x,
-	  Reactant.Ops.rotate(x, 1, ;dimension=1),
-	  Reactant.Ops.rotate(x, 2, ;dimension=1)
+        Reactant.Ops.rotate(x, size(x, 1) - 2, ; dimension=1),
+        Reactant.Ops.rotate(x, size(x, 1) - 1, ; dimension=1),
+        x,
+        Reactant.Ops.rotate(x, 1, ; dimension=1),
+        Reactant.Ops.rotate(x, 2, ; dimension=1),
     ]
     return sum(xs)
 end
@@ -138,6 +137,6 @@ if length(addressable_devices) ≥ 8
         @test !contains(hlo, "all-to-all")
         @test !contains(hlo, "all-reduce")
         @test !contains(hlo, "all-gather")
-	@test length(collect(eachmatch(r"%collective-permute[\.0-9]* =", hlo))) == 2
+        @test length(collect(eachmatch(r"%collective-permute[\.0-9]* =", hlo))) == 2
     end
 end
