@@ -433,6 +433,21 @@ for (dialect, op) in [
     end
 end
 
+# stablehlo doesn't allow unsigned integers should should anyways produce a no-op
+@noinline function abs(
+    x::TracedRArray{<:Reactant.ReactantUInt,N};
+    location=mlir_stacktrace("abs", @__FILE__, @__LINE__),
+) where {N}
+    return x
+end
+
+@noinline function abs(
+    x::TracedRNumber{<:Reactant.ReactantUInt};
+    location=mlir_stacktrace("abs", @__FILE__, @__LINE__),
+)
+    return x
+end
+
 @noinline function conj(
     x::TracedRArray{T,N}; location=mlir_stacktrace("conj", @__FILE__, @__LINE__)
 ) where {T,N}

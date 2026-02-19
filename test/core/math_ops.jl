@@ -374,3 +374,19 @@ mulpi(x) = π * x
     y = @jit mulpi(x)
     @test all(Array(y) .≈ π)
 end
+
+@testset "gcd" begin
+    x = Reactant.to_rarray(UInt64(8); track_numbers=Integer)
+    y = Reactant.to_rarray(UInt64(32); track_numbers=Integer)
+    z = @jit gcd(x, y)
+    @test z isa ConcreteRNumber{UInt64}
+    @test z == 8
+    @test y == 32
+    @test x == 8
+
+    xd, yd = @jit Base.divgcd(x, y)
+    @test xd isa ConcreteRNumber{UInt64}
+    @test yd isa ConcreteRNumber{UInt64}
+    @test xd == 1
+    @test yd == 4
+end
