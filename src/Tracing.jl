@@ -1709,6 +1709,13 @@ Base.@nospecializeinfer function make_tracer(
     return prev
 end
 
+# avoid the real fallback
+Base.@nospecializeinfer function make_tracer(
+    seen, @nospecialize(prev::TracedRational), @nospecialize(path), mode; kwargs...
+)
+    return make_tracer_via_immutable_constructor(seen, prev, path, mode; kwargs...)
+end
+
 Base.@nospecializeinfer function make_tracer(
     seen, @nospecialize(prev::Type), @nospecialize(path), mode; kwargs...
 )
