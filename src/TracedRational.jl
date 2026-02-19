@@ -9,6 +9,7 @@ ReactantCore.is_traced(::TracedRational, seen) = true
 ReactantCore.is_traced(::TracedRational) = true
 
 # Constructors
+TracedRational{T}(num) where {T} = TracedRational(T(num), one(T))
 TracedRational(num) = TracedRational(num, one(num))
 
 # Conversion from Rational
@@ -29,6 +30,9 @@ end
 # Basic properties
 Base.numerator(x::TracedRational) = x.num
 Base.denominator(x::TracedRational) = x.den
+function Base.denominator(::TracedRNumber{T}) where {T<:Integer}
+    return Reactant.promote_to(TracedRNumber, one(T))
+end
 
 Base.show(io::IO, x::TracedRational) = print(io, x.num, " // ", x.den)
 
@@ -45,7 +49,35 @@ function Base.promote_rule(::Type{TracedRational{T}}, ::Type{Rational{S}}) where
     return TracedRational{promote_type(T, S)}
 end
 
-# Arithmetic operations
+# Operations
+Base.sign(x::TracedRational) = oftype(x, sign(x.num))
+Base.signbit(x::TracedRational) = signbit(x.num)
+function Base.copysign(x::TracedRational, y::Real)
+    return TracedRational(copysign(x.num, y), x.den)
+end
+function Base.copysign(x::TracedRational, y::Rational)
+    return TracedRational(copysign(x.num, y.num), x.den)
+end
+
+Base.abs(x::TracedRational) = TracedRational(abs(x.num), x.den)
+
+function Base.typemin(::Type{TracedRational{T}}) where {T<:Reactant.ReactantSInt}
+    return TracedRational(-one(T), one(T))
+end
+function Base.typemin(::Type{TracedRational{T}}) where {T<:Reactant.ReactantUInt}
+    return TracedRational(zero(T), one(T))
+end
+function Base.typemax(::Type{TracedRational{T}}) where {T<:Reactant.ReactantUInt}
+    return TracedRational(one(T), zero(T))
+end
+
+Base.isinteger(x::TracedRational) = x.den == 1
+Base.ispow2(x::TracedRational) = ispow2(x.num) & ispow2(x.den)
+
+Base.:+(x::TracedRational) = TracedRational(+x.num, x.den)
+Base.:-(x::TracedRational) = TracedRational(-x.num, x.den)
+# TODO: check for overflow/underflow for integer types
+
 # function Base.:+(x::TracedRational, y::TracedRational)
 #     num = @opcall +(x.num * y.den, y.num * x.den)
 #     den = @opcall *(x.den, y.den)
@@ -145,10 +177,6 @@ Base.zero(::Type{TracedRational{T}}) where {T} = TracedRational(zero(T), one(T))
 Base.one(::Type{TracedRational{T}}) where {T} = TracedRational(one(T), one(T))
 Base.zero(::TracedRational{T}) where {T} = zero(T)
 Base.one(::TracedRational{T}) where {T} = one(T)
-
-Base.abs(x::TracedRational) = TracedRational(abs(x.num), x.den)
-
-Base.sign(x::TracedRational) = sign(x.num)
 
 # Rational construction with // operator
 function Base.://(num::TracedRNumber{<:Integer}, den::TracedRNumber{<:Integer})
