@@ -2,7 +2,7 @@ using Reactant, Test
 using LinearAlgebra
 using Reactant.ReactantCore
 using Reactant: MLIR
-using Reactant.ReactantCore: Periodic
+using Reactant: Periodic
 
 function condition1(x)
     y = sum(x)
