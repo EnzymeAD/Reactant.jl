@@ -1697,6 +1697,24 @@ gentbl_cc_library(
 )
 
 gentbl_cc_library(
+    name = "CUDATileJLIncGen",
+    tbl_outs = [
+        (
+            [
+                "--generator=jl-op-defs",
+                "--disable-module-wrap=0",
+            ],
+            "CUDATile.jl",
+        ),
+    ],
+    tblgen = "//:mlir-jl-tblgen",
+    td_file = "@cuda_tile//:include/cuda_tile/Dialect/CudaTile/IR/Ops.td",
+    deps = [
+        "@cuda_tile//:CudaTileDialectTdFiles",
+    ],
+)
+
+gentbl_cc_library(
     name = "TPUJLIncGen",
     tbl_outs = [
         (

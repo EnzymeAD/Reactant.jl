@@ -33,6 +33,7 @@ dialect_files = [
     "Tensor.jl",
     "Shape.jl",
     "TritonExt.jl",
+    "CUDATile.jl",
 ]
 
 other_files = ["libMLIR_h.jl"]
