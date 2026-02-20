@@ -1,8 +1,8 @@
 module ReactantYaoBlocksExt
 
-using Reactant: broadcast_to_size
+using Reactant: Reactant, broadcast_to_size
 
-import YaoBlocks: mat
+import YaoBlocks: RotationGate, XGate, YGate, ZGate, mat
 
 function mat(::Type{T}, R::RotationGate{D,Reactant.TracedRNumber{S},<:XGate}) where {D,T,S}
     M = broadcast_to_size(zero(T), (2, 2))
