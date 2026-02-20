@@ -42,6 +42,7 @@ StatsBase = "2913bbd2-ae8a-5f71-8c99-4fb6c76f3a91"
 StructArrays = "09ab397b-f2b6-538f-b94a-2f83cf4a842a"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 Zygote = "e88e6eb3-aa80-5325-afca-941959d7151f"
+cuTile = "0dea8319-8c4a-4662-a73d-20234d115b9a"
 
 [sources]
 Reactant = {path = ".."}
@@ -62,9 +63,9 @@ HypothesisTests = "0.11"
 InteractiveUtils = "1.10"
 KernelAbstractions = "0.9.30"
 LinearAlgebra = "1.10"
+LogExpFunctions = "0.3"
 Lux = "1.21"
 LuxLib = "1.11"
-LogExpFunctions = "0.3"
 MPI = "0.20"
 NNlib = "0.9.26"
 NPZ = "0.4"
