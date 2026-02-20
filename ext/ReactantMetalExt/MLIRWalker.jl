@@ -130,41 +130,17 @@ end
 # ============================================================================
 
 """
-Parse MLIR type string like "tensor<4xf32>" into (shape, dtype).
+Get (shape, dtype) from an MLIR Value via the type API.
+Returns (Int[], Float32) for non-tensor (scalar) types.
 """
-function parse_mlir_type(type_str::AbstractString)
-    m = match(r"tensor<([^>]+)>", type_str)
-    if m === nothing
+function get_type_info(v::IR.Value)
+    t = IR.type(v)
+    if !IR.isshaped(t)
         return Int[], Float32
     end
-    inner = m.captures[1]
-    parts = split(inner, "x")
-    if isempty(parts)
-        return Int[], Float32
-    end
-    dtype_str = parts[end]
-    dtype = if dtype_str == "f32"
-        Float32
-    elseif dtype_str == "f16"
-        Float16
-    elseif dtype_str == "f64"
-        Float64
-    elseif dtype_str == "i32"
-        Int32
-    elseif dtype_str == "i64"
-        Int64
-    elseif dtype_str == "i1" || dtype_str == "pred"
-        Bool
-    else
-        Float32
-    end
-    shape = Int[]
-    for i in 1:(length(parts) - 1)
-        dim = tryparse(Int, String(parts[i]))
-        if dim !== nothing
-            push!(shape, dim)
-        end
-    end
+    rank = ndims(t)
+    shape = [Int(size(t, i)) for i in 1:rank]
+    dtype = IR.julia_type(IR.eltype(t))
     return shape, dtype
 end
 
@@ -172,195 +148,9 @@ end
 # Attribute extraction from op text representations
 # ============================================================================
 
-"""Extract contracting_dims from dot_general op text."""
-function parse_contracting_dims(op_text::AbstractString)
-    m = match(r"contracting_dims\s*=\s*\[(\d+(?:,\s*\d+)*)\]\s*x\s*\[(\d+(?:,\s*\d+)*)\]", op_text)
-    if m === nothing
-        return [1], [0]  # default: standard matmul
-    end
-    lhs = [parse(Int, strip(d)) for d in split(m.captures[1], ",")]
-    rhs = [parse(Int, strip(d)) for d in split(m.captures[2], ",")]
-    return lhs, rhs
-end
 
-"""Extract broadcast dims from broadcast_in_dim op text."""
-function parse_broadcast_dims(op_text::AbstractString)
-    m = match(r"(?<!contracting_)dims\s*=\s*\[(\d+(?:,\s*\d+)*)\]", op_text)
-    if m === nothing
-        return nothing
-    end
-    return [parse(Int, strip(d)) for d in split(m.captures[1], ",")]
-end
 
-"""Extract dense constant value from constant op text."""
-function parse_dense_value(op_text::AbstractString)
-    m = match(r"dense<([^>]+)>", op_text)
-    if m === nothing
-        return 0.0
-    end
-    val_str = strip(m.captures[1])
-    num = tryparse(Float64, val_str)
-    if num !== nothing
-        return num
-    end
-    # Array format — extract first number
-    first_num_match = match(r"[\-\d\.eE\+]+", val_str)
-    if first_num_match !== nothing
-        num = tryparse(Float64, first_num_match.match)
-        if num !== nothing
-            return num
-        end
-    end
-    return 0.0
-end
 
-"""Extract permutation from transpose op text."""
-function parse_permutation(op_text::AbstractString)
-    m = match(r"permutation\s*=\s*\[(\d+(?:,\s*\d+)*)\]", op_text)
-    if m === nothing
-        return nothing
-    end
-    return [parse(Int, strip(d)) for d in split(m.captures[1], ",")]
-end
-
-"""Extract reduce/reverse dimensions from op text. Handles both `dimensions = [...]` and `dims = [...]` formats."""
-function parse_reduce_dimensions(op_text::AbstractString)
-    # Try "dimensions = [...]" first (used by stablehlo.reduce)
-    m = match(r"dimensions\s*=\s*\[(\d+(?:,\s*\d+)*)\]", op_text)
-    if m !== nothing
-        return [parse(Int, strip(d)) for d in split(m.captures[1], ",")]
-    end
-    # Try "dims = [...]" (used by stablehlo.reverse)
-    m = match(r"dims\s*=\s*\[(\d+(?:,\s*\d+)*)\]", op_text)
-    if m !== nothing
-        return [parse(Int, strip(d)) for d in split(m.captures[1], ",")]
-    end
-    return Int[]
-end
-
-"""Extract concatenation dimension from concatenate op text.
-stablehlo.concatenate uses `dim = N` (not `dimension = N`).
-`\\bdim\\s*=` matches `dim =` but not `dims =` or `dimension =`."""
-function parse_concatenate_dimension(op_text::AbstractString)
-    m = match(r"\bdim\s*=\s*(\d+)", op_text)
-    return m !== nothing ? parse(Int, m.captures[1]) : 0
-end
-
-"""Parse an integer array attribute from MLIR text (handles array<i64: ...> and dense<[...]> formats)."""
-function parse_int_array_attr(op_text::AbstractString, attr_name::AbstractString)
-    # Format: array<i64: 1, 2, 3>
-    pat1 = Regex("$(attr_name)\\s*=\\s*array<i64:\\s*([^>]*)>")
-    m = match(pat1, op_text)
-    if m !== nothing
-        return [parse(Int, strip(s)) for s in split(m.captures[1], ",") if !isempty(strip(s))]
-    end
-    # Format: dense<[1, 2, 3]> : tensor<...>
-    pat2 = Regex("$(attr_name)\\s*=\\s*dense<\\[([^\\]]*)\\]>")
-    m = match(pat2, op_text)
-    if m !== nothing
-        return [parse(Int, strip(s)) for s in split(m.captures[1], ",") if !isempty(strip(s))]
-    end
-    # Format: dense<N> (scalar)
-    pat3 = Regex("$(attr_name)\\s*=\\s*dense<(\\-?\\d+)>")
-    m = match(pat3, op_text)
-    if m !== nothing
-        return [parse(Int, m.captures[1])]
-    end
-    return Int[]
-end
-
-"""Parse convolution dimension_numbers: [b, 0, 1, f]x[0, 1, i, o]->[b, 0, 1, f]"""
-function parse_conv_dimension_numbers(op_text::AbstractString)
-    m = match(r"\[([^\]]+)\]\s*x\s*\[([^\]]+)\]\s*->\s*\[([^\]]+)\]", op_text)
-    if m === nothing
-        # Default: NHWC input, HWIO kernel, NHWC output
-        return (input_batch=0, input_feature=3,
-                input_spatial=[1, 2], input_spatial_indices=[0, 1],
-                kernel_spatial=[0, 1], kernel_spatial_indices=[0, 1],
-                kernel_input=2, kernel_output=3,
-                output_batch=0, output_feature=3,
-                output_spatial=[1, 2], output_spatial_indices=[0, 1])
-    end
-    input_parts = strip.(split(m.captures[1], ","))
-    kernel_parts = strip.(split(m.captures[2], ","))
-    output_parts = strip.(split(m.captures[3], ","))
-
-    input_batch = -1; input_feature = -1; input_spatial = Int[]; input_spatial_indices = Int[]
-    for (idx, part) in enumerate(input_parts)
-        i0 = idx - 1
-        if part == "b";      input_batch = i0
-        elseif part == "f";  input_feature = i0
-        else;                push!(input_spatial, i0); push!(input_spatial_indices, parse(Int, part))
-        end
-    end
-
-    kernel_input = -1; kernel_output = -1; kernel_spatial = Int[]; kernel_spatial_indices = Int[]
-    for (idx, part) in enumerate(kernel_parts)
-        i0 = idx - 1
-        if part == "i";      kernel_input = i0
-        elseif part == "o";  kernel_output = i0
-        else;                push!(kernel_spatial, i0); push!(kernel_spatial_indices, parse(Int, part))
-        end
-    end
-
-    output_batch = -1; output_feature = -1; output_spatial = Int[]; output_spatial_indices = Int[]
-    for (idx, part) in enumerate(output_parts)
-        i0 = idx - 1
-        if part == "b";      output_batch = i0
-        elseif part == "f";  output_feature = i0
-        else;                push!(output_spatial, i0); push!(output_spatial_indices, parse(Int, part))
-        end
-    end
-
-    return (input_batch=input_batch, input_feature=input_feature,
-            input_spatial=input_spatial, input_spatial_indices=input_spatial_indices,
-            kernel_spatial=kernel_spatial, kernel_spatial_indices=kernel_spatial_indices,
-            kernel_input=kernel_input, kernel_output=kernel_output,
-            output_batch=output_batch, output_feature=output_feature,
-            output_spatial=output_spatial, output_spatial_indices=output_spatial_indices)
-end
-
-"""Parse convolution padding: pad = [[low, high], ...] or padding = dense<...>. Returns tuple of [low, high] pairs."""
-function parse_conv_padding(op_text::AbstractString)
-    # Format: pad = [[a, b], [c, d]] or pad = [[a, b], [c, d], [e, f]]
-    m = match(r"pad\s*=\s*\[\s*(\[[^\]]*\](?:\s*,\s*\[[^\]]*\])*)\s*\]", op_text)
-    if m !== nothing
-        result = Vector{Int}[]
-        for pair in eachmatch(r"\[([^\]]*)\]", m.captures[1])
-            push!(result, [parse(Int, strip(s)) for s in split(pair.captures[1], ",")])
-        end
-        return Tuple(result)
-    end
-    # Format: padding = dense<[[a, b], [c, d], ...]>
-    m = match(r"padding\s*=\s*dense<\[\s*(\[[^\]]*\](?:\s*,\s*\[[^\]]*\])*)\s*\]>", op_text)
-    if m !== nothing
-        result = Vector{Int}[]
-        for pair in eachmatch(r"\[([^\]]*)\]", m.captures[1])
-            push!(result, [parse(Int, strip(s)) for s in split(pair.captures[1], ",")])
-        end
-        return Tuple(result)
-    end
-    return ([0, 0], [0, 0])
-end
-
-"""Parse reduce_window padding: dense<[[a,b],[c,d],[e,f],[g,h]]> or dense<0>"""
-function parse_window_padding(op_text::AbstractString, n_dims::Int)
-    # Format: dense<[[a, b], [c, d], ...]>
-    m = match(r"padding\s*=\s*dense<\[\s*(\[[^\]]*\](?:\s*,\s*\[[^\]]*\])*)\s*\]>", op_text)
-    if m !== nothing
-        result = Tuple{Int,Int}[]
-        for pair in eachmatch(r"\[([^\]]*)\]", m.captures[1])
-            vals = [parse(Int, strip(s)) for s in split(pair.captures[1], ",")]
-            push!(result, (vals[1], length(vals) >= 2 ? vals[2] : 0))
-        end
-        return result
-    end
-    # Format: dense<0> (all zeros)
-    if occursin(r"padding\s*=\s*dense<0>", op_text)
-        return [(0, 0) for _ in 1:n_dims]
-    end
-    return [(0, 0) for _ in 1:n_dims]
-end
 
 # ============================================================================
 # Op handlers — each builds one StableHLO op's equivalent MPSGraph nodes
@@ -463,31 +253,41 @@ function handle_convert(ctx, op)
 end
 
 function handle_constant(ctx, op)
-    op_text = string(op)
-    res_type_str = string(IR.type(IR.result(op, 1)))
-    out_shape, out_dtype = parse_mlir_type(res_type_str)
+    out_shape, out_dtype = get_type_info(IR.result(op, 1))
     mps_dtype = julia_to_mps_dtype(out_dtype)
 
-    # Extract the dense<...> content
-    m = match(r"dense<([^>]+)>", op_text)
-    val_str = m !== nothing ? strip(m.captures[1]) : "0"
+    val_attr = IR.getattr(op, "value")
+
+    function get_splat_f64()
+        if out_dtype == Float32
+            return Float64(API.mlirDenseElementsAttrGetFloatSplatValue(val_attr))
+        elseif out_dtype == Float64
+            return Float64(API.mlirDenseElementsAttrGetDoubleSplatValue(val_attr))
+        else
+            return Float64(API.mlirDenseElementsAttrGetInt64SplatValue(val_attr))
+        end
+    end
 
     if isempty(out_shape)
-        # Scalar constant
-        value = something(tryparse(Float64, val_str), 0.0)
+        # Scalar constant (0-d tensor)
+        value = get_splat_f64()
         result = Metal.MPSGraphs.constantWithScalar(ctx.graph, value, mps_dtype)
-    elseif !occursin('[', val_str)
-        # Scalar fill: dense<1.0> : tensor<40xf32>
-        value = something(tryparse(Float64, val_str), 0.0)
+    elseif IR.issplat(val_attr)
+        # Splat tensor: dense<1.0> : tensor<40xf32>
+        value = get_splat_f64()
         scalar_const = Metal.MPSGraphs.constantWithScalar(ctx.graph, value, mps_dtype)
         ns_shape = NSArray(Metal.MTL.NSNumber.(out_shape))
         result = Metal.MPSGraphs.broadcastTensor(ctx.graph, scalar_const, ns_shape, "const_$(ctx.op_count)")
     else
-        # Multi-value array constant: dense<[[0,0],[1,1],...]>
-        # Parse all numbers in row-major order
+        # Multi-value array constant
         total = prod(out_shape)
-        nums = Float64[parse(Float64, m2.match)
-                       for m2 in eachmatch(r"-?\d+(?:\.\d+)?(?:[eE][+\-]?\d+)?", val_str)]
+        nums = if out_dtype == Float32
+            [Float64(API.mlirDenseElementsAttrGetFloatValue(val_attr, i)) for i in 0:(total-1)]
+        elseif out_dtype == Float64
+            [Float64(API.mlirDenseElementsAttrGetDoubleValue(val_attr, i)) for i in 0:(total-1)]
+        else
+            [Float64(API.mlirDenseElementsAttrGetInt64Value(val_attr, i)) for i in 0:(total-1)]
+        end
         if length(nums) == total
             flat_vals = convert(Vector{mps_dtype}, nums)
             # Tensors in MPSGraph are in IR convention; placeholderTensor reverses Julia→IR.
@@ -516,15 +316,20 @@ function handle_dot_general(ctx, op)
     lhs = ctx.value_map[IR.operand(op, 1)]
     rhs = ctx.value_map[IR.operand(op, 2)]
 
-    op_text = string(op)
-    lhs_contract, rhs_contract = parse_contracting_dims(op_text)
+    dnums_attr = IR.getattr(op, "dot_dimension_numbers")
+    lhs_contract, rhs_contract = if dnums_attr !== nothing
+        n_lc = Int(API.stablehloDotDimensionNumbersGetLhsContractingDimensionsSize(dnums_attr))
+        lc = [Int(API.stablehloDotDimensionNumbersGetLhsContractingDimensionsElem(dnums_attr, i)) for i in 0:n_lc-1]
+        n_rc = Int(API.stablehloDotDimensionNumbersGetRhsContractingDimensionsSize(dnums_attr))
+        rc = [Int(API.stablehloDotDimensionNumbersGetRhsContractingDimensionsElem(dnums_attr, i)) for i in 0:n_rc-1]
+        lc, rc
+    else
+        [1], [0]  # default: standard matmul
+    end
 
-    lhs_type_str = string(IR.type(IR.operand(op, 1)))
-    rhs_type_str = string(IR.type(IR.operand(op, 2)))
-    lhs_ir_shape, _ = parse_mlir_type(lhs_type_str)
-    rhs_ir_shape, _ = parse_mlir_type(rhs_type_str)
-    out_type_str = string(IR.type(IR.result(op, 1)))
-    out_ir_shape, _ = parse_mlir_type(out_type_str)
+    lhs_ir_shape, _ = get_type_info(IR.operand(op, 1))
+    rhs_ir_shape, _ = get_type_info(IR.operand(op, 2))
+    out_ir_shape, _ = get_type_info(IR.result(op, 1))
 
     lhs_ndim = length(lhs_ir_shape)
     rhs_ndim = length(rhs_ir_shape)
@@ -596,16 +401,15 @@ end
 
 function handle_broadcast_in_dim(ctx, op)
     input = ctx.value_map[IR.operand(op, 1)]
-    op_text = string(op)
-    res_type_str = string(IR.type(IR.result(op, 1)))
-    out_shape, _ = parse_mlir_type(res_type_str)
+    out_shape, _ = get_type_info(IR.result(op, 1))
 
     if isempty(out_shape)
         result = Metal.MPSGraphs.identityWithTensor(ctx.graph, input, "broadcast_$(ctx.op_count)")
     else
         # Tensors inside MPSGraph are in IR (row-major) convention because
         # placeholderTensor auto-reverses Julia shapes. Use IR shapes directly.
-        broadcast_dims = parse_broadcast_dims(op_text)
+        bcast_attr = IR.getattr(op, "broadcast_dimensions")
+        broadcast_dims = bcast_attr !== nothing ? [Int64(bcast_attr[i]) for i in 0:length(bcast_attr)-1] : nothing
         input_tensor = input
 
         # If broadcast_dims maps input dims to specific output dims, we need to
@@ -644,8 +448,7 @@ end
 
 function handle_reshape(ctx, op)
     input = ctx.value_map[IR.operand(op, 1)]
-    res_type_str = string(IR.type(IR.result(op, 1)))
-    out_shape, _ = parse_mlir_type(res_type_str)
+    out_shape, _ = get_type_info(IR.result(op, 1))
 
     if isempty(out_shape)
         result = Metal.MPSGraphs.identityWithTensor(ctx.graph, input, "reshape_$(ctx.op_count)")
@@ -658,14 +461,9 @@ end
 
 function handle_transpose(ctx, op)
     input = ctx.value_map[IR.operand(op, 1)]
-    op_text = string(op)
 
-    # stablehlo.transpose uses "dims = [...]" (not "permutation = [...]")
-    perm = parse_permutation(op_text)
-    if perm === nothing
-        # Fall back to dims = [...] format
-        perm = parse_reduce_dimensions(op_text)
-    end
+    perm_attr = IR.getattr(op, "permutation")
+    perm = perm_attr !== nothing ? [Int64(perm_attr[i]) for i in 0:length(perm_attr)-1] : Int[]
 
     if perm !== nothing && length(perm) >= 2
         result = apply_permutation(ctx.graph, input, perm, "transpose_$(ctx.op_count)")
@@ -676,8 +474,8 @@ function handle_transpose(ctx, op)
 end
 
 function handle_reduce(ctx, op)
-    op_text = string(op)
-    ir_reduce_dims = parse_reduce_dimensions(op_text)
+    dims_attr = IR.getattr(op, "dimensions")
+    ir_reduce_dims = dims_attr !== nothing ? [Int64(dims_attr[i]) for i in 0:length(dims_attr)-1] : Int[]
 
     # The input tensor (operand 1) — operand 2 is the init value (scalar identity)
     input = ctx.value_map[IR.operand(op, 1)]
@@ -809,8 +607,8 @@ end
 
 function handle_reverse(ctx, op)
     input = ctx.value_map[IR.operand(op, 1)]
-    op_text = string(op)
-    ir_dims = parse_reduce_dimensions(op_text)  # same "dimensions = [...]" format
+    dims_attr = IR.getattr(op, "dimensions")
+    ir_dims = dims_attr !== nothing ? [Int64(dims_attr[i]) for i in 0:length(dims_attr)-1] : Int[]
 
     # Tensors in MPSGraph are in IR (row-major) convention — use IR dims directly
     result = mps_reverse(ctx.graph, input, ir_dims, "reverse_$(ctx.op_count)")
@@ -818,8 +616,7 @@ function handle_reverse(ctx, op)
 end
 
 function handle_concatenate(ctx, op)
-    op_text = string(op)
-    ir_dim = parse_concatenate_dimension(op_text)
+    ir_dim = Int64(IR.getattr(op, "dimension"))
 
     # Collect all input tensors
     n_inputs = IR.noperands(op)
@@ -833,29 +630,22 @@ function handle_concatenate(ctx, op)
     ctx.value_map[IR.result(op, 1)] = result
 end
 
-"""Parse slice ranges from stablehlo.slice op text: [start0:end0, start1:end1, ...]"""
-function parse_slice_ranges(op_text::AbstractString)
-    m = match(r"\[\s*(\d+\s*:\s*\d+(?:\s*,\s*\d+\s*:\s*\d+)*)\s*\]", op_text)
-    m === nothing && return nothing
-    ranges = Tuple{Int,Int}[]
-    for range_str in split(m.captures[1], ",")
-        parts = split(strip(range_str), ":")
-        length(parts) == 2 && push!(ranges, (parse(Int, strip(parts[1])), parse(Int, strip(parts[2]))))
-    end
-    return ranges
-end
 
 function handle_slice(ctx, op)
     input = ctx.value_map[IR.operand(op, 1)]
-    op_text = string(op)
-    ranges = parse_slice_ranges(op_text)
+    start_attr = IR.getattr(op, "start_indices")
+    limit_attr = IR.getattr(op, "limit_indices")
+    ranges = if start_attr !== nothing && limit_attr !== nothing
+        [(Int64(start_attr[i]), Int64(limit_attr[i])) for i in 0:length(start_attr)-1]
+    else
+        nothing
+    end
     if ranges === nothing
         ctx.value_map[IR.result(op, 1)] = input
         return
     end
     # Get IR input shape to skip full-extent slices
-    in_type_str = string(IR.type(IR.operand(op, 1)))
-    ir_shape, _ = parse_mlir_type(in_type_str)
+    ir_shape, _ = get_type_info(IR.operand(op, 1))
 
     result = input
     name = "slice_$(ctx.op_count)"
@@ -891,9 +681,42 @@ function handle_convolution(ctx, op)
 
     op_text = string(op)
 
-    # Parse attributes
-    dim_nums = parse_conv_dimension_numbers(op_text)
-    strides = parse_int_array_attr(op_text, "window_strides")
+    # Parse attributes — dimension_numbers via StableHLO C API
+    dnums_attr = IR.getattr(op, "dimension_numbers")
+    dim_nums = if dnums_attr === nothing
+        # Default: NHWC input, HWIO kernel, NHWC output
+        (input_batch=0, input_feature=3,
+         input_spatial=[1, 2], input_spatial_indices=[0, 1],
+         kernel_spatial=[0, 1], kernel_spatial_indices=[0, 1],
+         kernel_input=2, kernel_output=3,
+         output_batch=0, output_feature=3,
+         output_spatial=[1, 2], output_spatial_indices=[0, 1])
+    else
+        n_in_sp = Int(API.stablehloConvDimensionNumbersGetInputSpatialDimensionsSize(dnums_attr))
+        in_sp_raw = sort!([(Int(API.stablehloConvDimensionNumbersGetInputSpatialDimensionsElem(dnums_attr, i)), Int(i)) for i in 0:n_in_sp-1])
+        n_ker_sp = Int(API.stablehloConvDimensionNumbersGetKernelSpatialDimensionsSize(dnums_attr))
+        ker_sp_raw = sort!([(Int(API.stablehloConvDimensionNumbersGetKernelSpatialDimensionsElem(dnums_attr, i)), Int(i)) for i in 0:n_ker_sp-1])
+        n_out_sp = Int(API.stablehloConvDimensionNumbersGetOutputSpatialDimensionsSize(dnums_attr))
+        out_sp_raw = sort!([(Int(API.stablehloConvDimensionNumbersGetOutputSpatialDimensionsElem(dnums_attr, i)), Int(i)) for i in 0:n_out_sp-1])
+        (input_batch=Int(API.stablehloConvDimensionNumbersGetInputBatchDimension(dnums_attr)),
+         input_feature=Int(API.stablehloConvDimensionNumbersGetInputFeatureDimension(dnums_attr)),
+         input_spatial=[p[1] for p in in_sp_raw],
+         input_spatial_indices=[p[2] for p in in_sp_raw],
+         kernel_spatial=[p[1] for p in ker_sp_raw],
+         kernel_spatial_indices=[p[2] for p in ker_sp_raw],
+         kernel_input=Int(API.stablehloConvDimensionNumbersGetKernelInputFeatureDimension(dnums_attr)),
+         kernel_output=Int(API.stablehloConvDimensionNumbersGetKernelOutputFeatureDimension(dnums_attr)),
+         output_batch=Int(API.stablehloConvDimensionNumbersGetOutputBatchDimension(dnums_attr)),
+         output_feature=Int(API.stablehloConvDimensionNumbersGetOutputFeatureDimension(dnums_attr)),
+         output_spatial=[p[1] for p in out_sp_raw],
+         output_spatial_indices=[p[2] for p in out_sp_raw])
+    end
+    strides_attr = IR.getattr(op, "window_strides")
+    strides = if strides_attr !== nothing
+        [Int64(strides_attr[i]) for i in 0:length(strides_attr)-1]
+    else
+        Int[]
+    end
     if isempty(strides)
         # Also try window = {stride = [...]} format
         m = match(r"stride\s*=\s*\[([^\]]*)\]", op_text)
@@ -903,8 +726,20 @@ function handle_convolution(ctx, op)
             strides = [1, 1]
         end
     end
-    padding = parse_conv_padding(op_text)
-    rhs_dilation = parse_int_array_attr(op_text, "rhs_dilation")
+    pad_attr = IR.getattr(op, "padding")
+    padding = if pad_attr !== nothing
+        n_sp = length(dim_nums.input_spatial)
+        Tuple([[Int(API.mlirDenseElementsAttrGetInt64Value(pad_attr, Int64(2*(i-1)))),
+                Int(API.mlirDenseElementsAttrGetInt64Value(pad_attr, Int64(2*(i-1)+1)))] for i in 1:n_sp])
+    else
+        Tuple([[0, 0] for _ in dim_nums.input_spatial])
+    end
+    rhs_dilation_attr = IR.getattr(op, "rhs_dilation")
+    rhs_dilation = if rhs_dilation_attr !== nothing
+        [Int64(rhs_dilation_attr[i]) for i in 0:length(rhs_dilation_attr)-1]
+    else
+        Int[]
+    end
     if isempty(rhs_dilation)
         m = match(r"rhs_dilate\s*=\s*\[([^\]]*)\]", op_text)
         rhs_dilation = if m !== nothing
@@ -917,8 +752,7 @@ function handle_convolution(ctx, op)
     groups = m_fgc !== nothing ? parse(Int, m_fgc.captures[1]) : 1
 
     # Get shapes for rank
-    lhs_type = string(IR.type(IR.operand(op, 1)))
-    lhs_shape, _ = parse_mlir_type(lhs_type)
+    lhs_shape, _ = get_type_info(IR.operand(op, 1))
     rank = length(lhs_shape)
     n_spatial = length(dim_nums.input_spatial)
     name = "conv_$(ctx.op_count)"
@@ -1095,22 +929,27 @@ function handle_convolution(ctx, op)
 end
 
 function handle_reduce_window(ctx, op)
-    op_text = string(op)
-
     # Parse window attributes
-    window_dims = parse_int_array_attr(op_text, "window_dimensions")
-    window_strides = parse_int_array_attr(op_text, "window_strides")
+    window_dims_attr = IR.getattr(op, "window_dimensions")
+    window_dims = window_dims_attr !== nothing ? [Int64(window_dims_attr[i]) for i in 0:length(window_dims_attr)-1] : Int[]
+    window_strides_attr = IR.getattr(op, "window_strides")
+    window_strides = window_strides_attr !== nothing ? [Int64(window_strides_attr[i]) for i in 0:length(window_strides_attr)-1] : Int[]
 
     # Get input tensor
     input = ctx.value_map[IR.operand(op, 1)]
 
     # Get input shape for rank
-    in_type_str = string(IR.type(IR.operand(op, 1)))
-    ir_input_shape, in_dtype = parse_mlir_type(in_type_str)
+    ir_input_shape, in_dtype = get_type_info(IR.operand(op, 1))
     rank = length(ir_input_shape)
 
     # Parse padding
-    window_padding = parse_window_padding(op_text, rank)
+    pad_attr = IR.getattr(op, "padding")
+    window_padding = if pad_attr !== nothing
+        [(Int(API.mlirDenseElementsAttrGetInt64Value(pad_attr, Int64(2*(i-1)))),
+          Int(API.mlirDenseElementsAttrGetInt64Value(pad_attr, Int64(2*(i-1)+1)))) for i in 1:rank]
+    else
+        [(0, 0) for _ in 1:rank]
+    end
 
     # Pattern-match the body to determine reduction type
     body_op_name = ""
@@ -1393,8 +1232,7 @@ function compile_mlir_module(mod)
     n_args = IR.nargs(func_block)
     for i in 1:n_args
         arg = IR.argument(func_block, i)
-        arg_type_str = string(IR.type(arg))
-        ir_shape, dtype = parse_mlir_type(arg_type_str)
+        ir_shape, dtype = get_type_info(arg)
         mps_dtype = julia_to_mps_dtype(dtype)
 
         # Placeholder uses Julia shape (reversed from IR for 2D+)
@@ -1421,8 +1259,7 @@ function compile_mlir_module(mod)
                 ret_val = IR.operand(op, j)
                 if haskey(ctx.value_map, ret_val)
                     push!(ctx.outputs, ctx.value_map[ret_val])
-                    ret_type_str = string(IR.type(ret_val))
-                    ir_shape, dtype = parse_mlir_type(ret_type_str)
+                    ir_shape, dtype = get_type_info(ret_val)
                     julia_shape = length(ir_shape) >= 2 ? reverse(ir_shape) : ir_shape
                     push!(ctx.output_shapes, julia_shape)
                     push!(ctx.output_dtypes, dtype)
