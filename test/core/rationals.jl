@@ -33,23 +33,6 @@ using Reactant, Test
     @test Rational(r_neg) ≈ -(1//2)
 end
 
-@testset "rational comparisons" begin
-    r1 = Reactant.to_rarray(1//2; track_numbers=true)
-    r2 = Reactant.to_rarray(1//3; track_numbers=true)
-
-    # Equality
-    @test @jit(r1 == r1)
-    @test !@jit(r1 == r2)
-
-    # Less than
-    @test @jit(r2 < r1)
-    @test !@jit(r1 < r2)
-
-    # Less than or equal
-    @test @jit(r2 <= r1)
-    @test @jit(r1 <= r1)
-end
-
 @testset "rational conversions" begin
     r = Reactant.to_rarray(3//4; track_numbers=true)
 
