@@ -79,7 +79,7 @@ mutable struct TracedRArray{T,N} <: RArray{TracedRNumber{T},N}
         return new{T,N}(paths, mlir_data, shape)
     end
     
-    function TracedRArray{T,N}(::UndefInitializer, shape::Integer...)
+    function TracedRArray{T,N}(::UndefInitializer, shape::Integer...) where {T,N}
         return similar(TracedRArray{T, N}, shape...)
     end
 end
