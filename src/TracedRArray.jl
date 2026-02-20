@@ -66,7 +66,7 @@ Base.collect(x::TracedRArray) = copy(x)
 Base.copy(A::TracedRArray{T,N}) where {T,N} = TracedRArray{T,N}((), A.mlir_data, size(A))
 
 function Base.similar(::TracedRArray, ::Type{T}, dims::Dims{N}) where {T,N}
-    return (@opcall fill(zero(unwrapped_eltype(T)), dims))::TracedRArray{T, N}
+    return (@opcall fill(zero(unwrapped_eltype(T)), dims))::TracedRArray{unwrapped_eltype(T), N}
 end
 
 function Base.similar(::Type{<:TracedRArray{T}}, dims::Dims{N}) where {T,N}
