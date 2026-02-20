@@ -292,6 +292,19 @@ for op in (:mod, :mod1, :rem)
     end
 end
 
+Base.flipsign(x::TracedRNumber, y::TracedRNumber) = ifelse(y < 0, -x, x)
+
+function Base.div(
+    x::TracedRNumber{<:Reactant.ReactantSInt}, y::TracedRNumber{<:Reactant.ReactantUInt}
+)
+    return flipsign(signed(div(unsigned(abs(x)), y)), x)
+end
+function Base.div(
+    x::TracedRNumber{<:Reactant.ReactantUInt}, y::TracedRNumber{<:Reactant.ReactantSInt}
+)
+    return unsigned(flipsign(signed(div(x, unsigned(abs(y)))), y))
+end
+
 function Base.div(
     @nospecialize(lhs::TracedRNumber{T}), rhs, r::Base.RoundingMode
 ) where {T<:Integer}
