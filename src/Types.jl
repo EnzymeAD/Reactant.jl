@@ -78,6 +78,10 @@ mutable struct TracedRArray{T,N} <: RArray{TracedRNumber{T},N}
         end
         return new{T,N}(paths, mlir_data, shape)
     end
+    
+    function TracedRArray{T,N}(::UndefInitializer, shape::Integer...)
+        return similar(TracedRArray{T, N}, shape...)
+    end
 end
 
 function repath(x::TracedRArray{T,N}, paths) where {T,N}
