@@ -73,7 +73,7 @@ function device_properties(device::AbstractDevice)
             )::Cvoid
         end
     else
-        @warn "`get_properties` not implemented for platform: $(pname)" maxlog = 1
+        @debug "`get_properties` not implemented for platform: $(pname)"
     end
     DEVICE_PROPERTIES_CACHE[(local_hardware_id, pname)] = jldevprops[]
     return jldevprops[]
