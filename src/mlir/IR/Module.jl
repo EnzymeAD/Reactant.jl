@@ -92,12 +92,3 @@ function current_module(; throw_error::Core.Bool=true)
     end
     return last(task_local_storage(:mlir_module)::Vector{Module})
 end
-
-function with_module(f, blk::Module)
-    activate(blk)
-    try
-        f()
-    finally
-        deactivate(blk)
-    end
-end

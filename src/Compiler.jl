@@ -1556,11 +1556,13 @@ end
 
 # helper for debug purposes: String -> Text
 function run_pass_pipeline_on_source(source, pass_pipeline; enable_verifier=true)
-    return MLIR.IR.with_context() do _
-        mod = parse(MLIR.IR.Module, source)
-        run_pass_pipeline!(mod, pass_pipeline; enable_verifier)
-        MLIR.IR.verifyall(MLIR.IR.Operation(mod); debug=true)
-        Text(repr(mod))
+    MLIR.IR.@dispose ctx = Reactant.ReactantContext() begin
+        MLIR.IR.@scope ctx begin
+            mod = parse(MLIR.IR.Module, source)
+            run_pass_pipeline!(mod, pass_pipeline; enable_verifier)
+            MLIR.IR.verifyall(MLIR.IR.Operation(mod); debug=true)
+            Text(repr(mod))
+        end
     end
 end
 
@@ -1846,9 +1848,6 @@ function compile_mlir!(
 )
     @assert MLIR.IR.current_context() == MLIR.IR.context(mod)
     client = client !== nothing ? client : XLA.default_backend()
-
-    # Explicitly don't use with_block to avoid creating a closure, which creates
-    # both compile-time and relocatability issues
 
     MLIR.IR.activate(mod)
     MLIR.IR.activate(MLIR.IR.body(mod))
@@ -2655,8 +2654,8 @@ function compile_mlir!(
 
     MLIR.IR.dispose(ret)
 
-    MLIR.IR.with_block(fnbody) do
-        return MLIR.Dialects.func.return_(nresults)
+    MLIR.IR.@scope fnbody begin
+        MLIR.Dialects.func.return_(nresults)
     end
 
     out_tys2 = [MLIR.IR.type(a) for a in nresults]
