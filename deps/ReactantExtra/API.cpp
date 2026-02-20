@@ -552,6 +552,27 @@ REACTANT_ABI PjRtClient *MakeClientUsingPluginAPI(const char *device_type,
   return GetCApiClient(client_name);
 }
 
+// Register a Julia-allocated PJRT_Api struct directly (no dlopen needed).
+// Julia fills the struct with @cfunction pointers, passes it here.
+REACTANT_ABI PjRtClient *MakeClientFromApi(const PJRT_Api *api,
+                                           const char *device_type,
+                                           const char *client_name,
+                                           const char **error) {
+  absl::Status set_status = pjrt::SetPjrtApi(device_type, api);
+  if (!set_status.ok()) {
+    auto str = set_status.message();
+    char *err = (char *)malloc(str.size() + 1);
+    memcpy(err, str.data(), str.size() + 1);
+    *error = err;
+    return nullptr;
+  }
+  if (InitializePjrtPlugin(device_type, error) == 1)
+    return nullptr;
+
+  RegisterProfiler(api);
+  return GetCApiClient(client_name);
+}
+
 REACTANT_ABI PjRtClient *MakeTPUClient(const char *tpu_path,
                                        const char **error) {
   // Prefer $TPU_LIBRARY_PATH if set
