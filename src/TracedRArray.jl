@@ -66,11 +66,11 @@ Base.collect(x::TracedRArray) = copy(x)
 Base.copy(A::TracedRArray{T,N}) where {T,N} = TracedRArray{T,N}((), A.mlir_data, size(A))
 
 function Base.similar(::TracedRArray, ::Type{T}, dims::Dims{N}) where {T,N}
-    return @opcall fill(zero(unwrapped_eltype(T)), dims)
+    return (@opcall fill(zero(unwrapped_eltype(T)), dims))::TracedRArray{T, N}
 end
 
 function Base.similar(::Type{<:TracedRArray{T}}, dims::Dims{N}) where {T,N}
-    return @opcall fill(zero(T), dims)
+    return (@opcall fill(zero(T), dims))::TracedRArray{T, N}
 end
 
 function Base.show(io::IOty, X::AnyTracedRArray) where {IOty<:Union{IO,IOContext}}
@@ -261,14 +261,14 @@ function Base.similar(
     ::Broadcasted{AbstractReactantArrayStyle{N}}, ::Type{T}, dims
 ) where {T<:Reactant.ReactantPrimitive,N}
     @assert N isa Int
-    return @opcall fill(zero(unwrapped_eltype(T)), dims)
+    return (@opcall fill(zero(unwrapped_eltype(T)), dims))::TracedRArray{T, N}
 end
 
 function Base.similar(
     ::Broadcasted{AbstractReactantArrayStyle{N}}, ::Type{TracedRNumber{T}}, dims
 ) where {T<:Reactant.ReactantPrimitive,N}
     @assert N isa Int
-    return @opcall fill(zero(T), dims)
+    return (@opcall fill(zero(T), dims))::TracedRArray{T, N}
 end
 
 function Base.copy(bc::Broadcasted{<:AbstractReactantArrayStyle{0}})
