@@ -47,17 +47,17 @@ jobs:
         env:
           JULIA_DEPOT_PATH: "${{ runner.temp }}/julia_depot:"
       - name: Generate MLIR Bindings
-        run: julia --project=. --color=yes make-bindings.jl
+        run: julia --project=. --color=yes --threads=auto make-bindings.jl
         working-directory: ./deps/ReactantExtra
         env:
           JULIA_DEPOT_PATH: "${{ runner.temp }}/julia_depot:"
       - name: Generate Proto Bindings
-        run: julia --project=. --color=yes make-proto-bindings.jl
+        run: julia --project=. --color=yes --threads=auto make-proto-bindings.jl
         working-directory: ./deps/ReactantExtra
         env:
           JULIA_DEPOT_PATH: "${{ runner.temp }}/julia_depot:"
       - name: Generate XLA PjRT Plugin Bindings
-        run: julia --project=. --color=yes make-pjrt-plugin-bindings.jl --force
+        run: julia --project=. --color=yes --threads=auto make-pjrt-plugin-bindings.jl --force
         working-directory: ./deps/ReactantExtra
         env:
           JULIA_DEPOT_PATH: "${{ runner.temp }}/julia_depot:"

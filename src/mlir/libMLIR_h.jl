@@ -47,6 +47,10 @@ end
     MlirLlvmThreadPool
 
 Re-export llvm::ThreadPool so as to avoid including the LLVM C API directly.
+
+| Field | Note                                                                          |
+| :---- | :---------------------------------------------------------------------------- |
+| ptr   | Re-export llvm::ThreadPool so as to avoid including the LLVM C API directly.  |
 """
 struct MlirLlvmThreadPool
     ptr::Ptr{Cvoid}
