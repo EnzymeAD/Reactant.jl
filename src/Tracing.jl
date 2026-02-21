@@ -598,6 +598,54 @@ Base.@nospecializeinfer function traced_type_inner(
     }
 end
 
+@static if isdefined(Core, :Memory)
+    Base.@nospecializeinfer function traced_type_inner(
+        @nospecialize(A::Type{<:Core.Memory}),
+        seen,
+        @nospecialize(mode::TraceMode),
+        @nospecialize(track_numbers::Type),
+        @nospecialize(ndevices),
+        @nospecialize(runtime)
+    )
+        T = eltype(A)
+        if A isa UnionAll
+            A´ = Base.unwrap_unionall(A)
+            traced_T = traced_type_inner(T, seen, mode, track_numbers, ndevices, runtime)
+
+            A_wrapper = A´.name.wrapper
+            if mode == ArrayToConcrete && T <: ReactantPrimitive
+                if runtime isa Val{:PJRT}
+                    A_wrapper = ConcretePJRTArray{T,1} where {T}
+                elseif runtime isa Val{:IFRT}
+                    A_wrapper = ConcreteIFRTArray{T,1} where {T}
+                else
+                    error("Unsupported runtime $runtime")
+                end
+            end
+
+            A´´ = A_wrapper{traced_T}
+            return T isa Core.TypeVar ? UnionAll(traced_T, A´´) : A´´
+        else
+            if mode == ArrayToConcrete && T <: ReactantPrimitive
+                runtime isa Val{:PJRT} && return ConcretePJRTArray{T,1,_unwrap_val(ndevices)}
+                if runtime isa Val{:IFRT}
+                    # For IFRT, when ndevices is 1, it's not sharded
+                    if ndevices isa Val{1}
+                        return ConcreteIFRTArray{T,1,Nothing}
+                    else
+                        return ConcreteIFRTArray{T,1}
+                    end
+                end
+                error("Unsupported runtime $runtime")
+            else
+                return Core.Memory{
+                    traced_type_inner(T, seen, mode, track_numbers, ndevices, runtime),N
+                }
+            end
+        end
+    end
+end
+
 Base.@nospecializeinfer function traced_type_inner(
     @nospecialize(PT::Type{ReactantRNG{S}}),
     seen,
@@ -1847,6 +1895,93 @@ Base.@nospecializeinfer function make_tracer(
     else
         return prev
     end
+end
+
+Base.@nospecializeinfer function make_tracer(
+    seen,
+    @nospecialize(prev::Memory),
+    @nospecialize(path),
+    mode;
+    @nospecialize(track_numbers::Type = Union{}),
+    @nospecialize(sharding = Sharding.NoSharding()),
+    @nospecialize(runtime = nothing),
+    @nospecialize(device = nothing),
+    @nospecialize(client = nothing),
+    kwargs...,
+)
+    RT = Core.Typeof(prev)
+    if mode != NoStopTracedTrack && haskey(seen, prev)
+        if mode == TracedToTypes
+            visited = seen[prev]
+            push!(path, visited)
+            return nothing
+        end
+        return seen[prev]
+    end
+    if eltype(RT) <: ReactantPrimitive
+        if mode == ArrayToConcrete
+            runtime isa Val{:PJRT} &&
+                (return seen[prev] = ConcretePJRTArray(prev; sharding, device, client))
+            runtime isa Val{:IFRT} &&
+                (return seen[prev] = ConcreteIFRTArray(prev; sharding, device, client))
+            error("Unsupported runtime $runtime")
+        elseif mode == TracedToTypes
+            # Original array can get mutated so we store a copy:
+            push!(path, copy(prev))
+            seen[prev] = VisitedObject(length(seen) + 1)
+            return nothing
+        end
+    elseif mode == TracedToTypes
+        push!(path, RT)
+        for I in eachindex(prev)
+            if isassigned(prev, I)
+                pv = prev[I]
+                make_tracer(
+                    seen,
+                    pv,
+                    path,
+                    mode;
+                    track_numbers,
+                    sharding,
+                    runtime,
+                    device,
+                    client,
+                    kwargs...,
+                )
+            end
+        end
+        return nothing
+    end
+    TT = traced_type(eltype(RT), Val(mode), track_numbers, sharding, runtime)
+    newa = Memory{TT}(undef, length(prev))
+    seen[prev] = newa
+    same = true
+    for I in eachindex(prev)
+        if isassigned(prev, I)
+            pv = prev[I]
+            nv = make_tracer(
+                seen,
+                pv,
+                append_path(path, I),
+                mode;
+                track_numbers,
+                sharding=Base.getproperty(sharding, I),
+                runtime,
+                device,
+                client,
+                kwargs...,
+            )
+            if pv !== nv
+                same = false
+            end
+            @inbounds newa[I] = nv
+        end
+    end
+    if same
+        seen[prev] = prev
+        return prev
+    end
+    return newa
 end
 
 Base.@nospecializeinfer function make_tracer(
