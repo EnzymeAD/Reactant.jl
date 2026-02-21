@@ -4,7 +4,7 @@ NSYNC_COMMIT = "82b118aa7ace3132e517e2c467f8732978cf4023"
 
 NSYNC_SHA256 = ""
 
-ENZYMEXLA_COMMIT = "b398f09eb2056333cd43c1cb10f5d870646b4f57"
+ENZYMEXLA_COMMIT = "3dad31a08c2087af74aba1b271d0cca18e46217d"
 
 ENZYMEXLA_SHA256 = ""
 
@@ -273,11 +273,14 @@ load(
     "CUDNN_REDISTRIBUTIONS",
 )
 load(
-    "@rules_ml_toolchain//gpu/cuda:cuda_redist_init_repositories.bzl"
+    "@rules_ml_toolchain//gpu/cuda:cuda_redist_init_repositories.bzl",
     "cuda_redist_init_repositories",
     "cudnn_redist_init_repository",
 )
-
+load(
+    "@rules_ml_toolchain//gpu/cuda:cuda_redist_versions.bzl",
+    "REDIST_VERSIONS_TO_BUILD_TEMPLATES",
+)
 load("@xla//third_party/cccl:workspace.bzl", "CCCL_3_2_0_DIST_DICT", "CCCL_GITHUB_VERSIONS_TO_BUILD_TEMPLATES")
 
 cuda_redist_init_repositories(
@@ -290,28 +293,28 @@ cudnn_redist_init_repository(
 )
 
 load(
-    "@rules_ml_toolchain//third_party/gpus/cuda/hermetic:cuda_configure.bzl",
+    "@rules_ml_toolchain//gpu/cuda:cuda_configure.bzl",
     "cuda_configure",
 )
 
 cuda_configure(name = "local_config_cuda")
 
 load(
-    "@rules_ml_toolchain//third_party/nccl/hermetic:nccl_redist_init_repository.bzl",
+    "@rules_ml_toolchain//gpu/nccl:nccl_redist_init_repository.bzl",
     "nccl_redist_init_repository",
 )
 
 nccl_redist_init_repository()
 
 load(
-    "@rules_ml_toolchain//third_party/nccl/hermetic:nccl_configure.bzl",
+    "@rules_ml_toolchain//gpu/nccl:nccl_configure.bzl",
     "nccl_configure",
 )
 
 nccl_configure(name = "local_config_nccl")
 
 load(
-    "@rules_ml_toolchain//third_party/nvshmem/hermetic:nvshmem_json_init_repository.bzl",
+    "@rules_ml_toolchain//gpu/nvshmem:nvshmem_json_init_repository.bzl",
     "nvshmem_json_init_repository",
 )
 
@@ -322,7 +325,7 @@ load(
     "NVSHMEM_REDISTRIBUTIONS",
 )
 load(
-    "@rules_ml_toolchain//third_party/nvshmem/hermetic:nvshmem_redist_init_repository.bzl",
+    "@rules_ml_toolchain//gpu/nvshmem:nvshmem_redist_init_repository.bzl",
     "nvshmem_redist_init_repository",
 )
 
