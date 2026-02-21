@@ -21,9 +21,10 @@ communication.
     wrap_to_pad_comm::Int = 0
     rotate_spmd::Int = 1
     multirotate_spmd::Int = 0
-    wrap_to_rotate::Int = 1
+    wrap_to_rotate::Int = 0
     updatewithoutcorners_to_select::Int = 1
     multirotate_custom_call::Int = 1
+    wrap_custom_call::Int = 1
 end
 
 function Base.String(options::OptimizeCommunicationOptions)
