@@ -71,6 +71,7 @@ let options = deepcopy(options)
             enzymexla_include_dir,
             "-I",
             enzymemlir_include_dir,
+            "-DREACTANT_BINDINGS_GENERATION=1",
             "-x",
             "c++",
         ],
@@ -85,6 +86,8 @@ let options = deepcopy(options)
         detect_headers(mosaic_gpu_include_dir, args, Dict())...,
         detect_headers(enzymexla_include_dir, args, Dict())...,
         detect_headers(enzymemlir_include_dir, args, Dict())...,
+        joinpath(@__DIR__, "API.h"),
+        joinpath(@__DIR__, "xla_ffi.h"),
     ]
 
     ctx = create_context(headers, args, options)
