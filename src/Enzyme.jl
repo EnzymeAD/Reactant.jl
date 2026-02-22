@@ -413,7 +413,7 @@ function overload_autodiff(
                 arg = idx == 1 && fnwrap ? f : args[idx - fnwrap]
                 act2 = act_from_type(arg, reverse, true)
                 seed = reverse_seeds[reverse_seed_idx]
-                reverse_seed_idx+=1
+                reverse_seed_idx += 1
                 if cst == nothing
                     if act == enzyme_const
                         act = enzyme_out
@@ -442,7 +442,7 @@ function overload_autodiff(
 
                 if act == enzyme_out || act == enzyme_outnoneed
                     seed = reverse_seeds[reverse_seed_idx]
-                    reverse_seed_idx+=1
+                    reverse_seed_idx += 1
                     push!(ad_inputs, seed)
                 end
             else

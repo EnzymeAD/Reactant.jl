@@ -585,8 +585,9 @@ end
 
 function seeded_reverse(dx, x, λ)
     du = zero(x)
-    Enzyme.autodiff(Reverse, Const(f_ret_buf!), Const,
-        Duplicated(dx, copy(λ)), Duplicated(x, du))
+    Enzyme.autodiff(
+        Reverse, Const(f_ret_buf!), Const, Duplicated(dx, copy(λ)), Duplicated(x, du)
+    )
     return du
 end
 
@@ -595,8 +596,8 @@ end
     x = Float32[3.0, 7.0]
     λ = ones(Float32, 2)
     r_dx = Reactant.ConcreteRArray(dx)
-    r_x  = Reactant.ConcreteRArray(x)
-    r_λ  = Reactant.ConcreteRArray(λ)
+    r_x = Reactant.ConcreteRArray(x)
+    r_λ = Reactant.ConcreteRArray(λ)
 
     res = kernel_bug(dx, x, λ)
     r_res = @jit seeded_reverse(r_dx, r_x, r_λ)
