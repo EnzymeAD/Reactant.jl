@@ -4171,7 +4171,7 @@ Throw a runtime error with the given `msg` if `condition` is `true`. If `conditi
 @noinline function throw(
     msg::String,
     condition::Union{TracedRNumber{Bool},Nothing}=nothing;
-    location=mlir_stacktrace("throw", @__FILE__, @__LINE__)
+    location=mlir_stacktrace("throw", @__FILE__, @__LINE__),
 )
     if condition === nothing
         condition = Reactant.TracedUtils.promote_to(TracedRNumber{Bool}, true)
