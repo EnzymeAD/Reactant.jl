@@ -250,6 +250,7 @@ end
 include("stdlibs/LinearAlgebra.jl")
 include("stdlibs/Random.jl")
 include("stdlibs/Base.jl")
+include("stdlibs/BLAS.jl")
 
 # Other Integrations
 include("Enzyme.jl")
