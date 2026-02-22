@@ -1924,6 +1924,8 @@ genrule(
         "@jax//jaxlib/mosaic/dialect/gpu:integrations/c/gpu_dialect.h",
         "@enzyme_ad//src/enzyme_ad/jax:Integrations/c/EnzymeXLA.h",
         "@enzyme//:Enzyme/MLIR/Integrations/c/EnzymeMLIR.h",
+        "//:API.h",
+        "//:xla_ffi.h",
         "//:Project.toml",
         "//:Manifest.toml",
         "//:wrap.toml",
