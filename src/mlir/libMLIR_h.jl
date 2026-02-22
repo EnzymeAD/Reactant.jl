@@ -52,6 +52,15 @@ struct MlirLlvmThreadPool
     ptr::Ptr{Cvoid}
 end
 
+"""
+    MlirLlvmRawFdOStream
+
+Re-export llvm::raw\\_fd\\_ostream so as to avoid including the LLVM C API directly.
+"""
+struct MlirLlvmRawFdOStream
+    ptr::Ptr{Cvoid}
+end
+
 struct MlirTypeID
     ptr::Ptr{Cvoid}
 end
@@ -171,6 +180,46 @@ Destroy an LLVM thread pool.
 """
 function mlirLlvmThreadPoolDestroy(pool)
     @ccall mlir_c.mlirLlvmThreadPoolDestroy(pool::MlirLlvmThreadPool)::Cvoid
+end
+
+"""
+    mlirLlvmRawFdOStreamCreate(path, binary, errorCallback, userData)
+
+Create a raw\\_fd\\_ostream for the given path. This wrapper is needed because std::ostream does not provide the file sharing semantics required on Windows. - `path`: output file path. - `binary`: controls text vs binary mode. - `errorCallback`: called with an error message on failure (optional). - `userData`: forwarded to `errorCallback` so it can copy the error message into caller-owned storage (e.g., a `std::string`). On failure, returns a null stream and invokes the optional error callback with the error message.
+"""
+function mlirLlvmRawFdOStreamCreate(path, binary, errorCallback, userData)
+    @ccall mlir_c.mlirLlvmRawFdOStreamCreate(
+        path::Cstring, binary::Bool, errorCallback::MlirStringCallback, userData::Ptr{Cvoid}
+    )::MlirLlvmRawFdOStream
+end
+
+"""
+    mlirLlvmRawFdOStreamWrite(stream, string)
+
+Write a string to a raw\\_fd\\_ostream created with [`mlirLlvmRawFdOStreamCreate`](@ref).
+"""
+function mlirLlvmRawFdOStreamWrite(stream, string)
+    @ccall mlir_c.mlirLlvmRawFdOStreamWrite(
+        stream::MlirLlvmRawFdOStream, string::MlirStringRef
+    )::Cvoid
+end
+
+"""
+    mlirLlvmRawFdOStreamIsNull(stream)
+
+Checks if a raw\\_fd\\_ostream is null.
+"""
+function mlirLlvmRawFdOStreamIsNull(stream)
+    @ccall mlir_c.mlirLlvmRawFdOStreamIsNull(stream::MlirLlvmRawFdOStream)::Bool
+end
+
+"""
+    mlirLlvmRawFdOStreamDestroy(stream)
+
+Destroy a raw\\_fd\\_ostream created with [`mlirLlvmRawFdOStreamCreate`](@ref).
+"""
+function mlirLlvmRawFdOStreamDestroy(stream)
+    @ccall mlir_c.mlirLlvmRawFdOStreamDestroy(stream::MlirLlvmRawFdOStream)::Cvoid
 end
 
 """
@@ -9484,6 +9533,76 @@ function mlirExecutionEngineDumpToObjectFile(jit, fileName)
     )::Cvoid
 end
 
+struct MlirDynamicOpTrait
+    ptr::Ptr{Cvoid}
+end
+
+"""
+    mlirDynamicOpTraitAttach(dynamicOpTrait, opName, context)
+
+Attach a dynamic op trait to the given operation name. Note that the operation name must be modeled by dynamic dialect and must be registered. The ownership of the trait will be transferred to the operation name after this call.
+"""
+function mlirDynamicOpTraitAttach(dynamicOpTrait, opName, context)
+    @ccall mlir_c.mlirDynamicOpTraitAttach(
+        dynamicOpTrait::MlirDynamicOpTrait, opName::MlirStringRef, context::MlirContext
+    )::Bool
+end
+
+"""
+    mlirDynamicOpTraitIsTerminatorCreate()
+
+Get the dynamic op trait that indicates the operation is a terminator.
+"""
+function mlirDynamicOpTraitIsTerminatorCreate()
+    @ccall mlir_c.mlirDynamicOpTraitIsTerminatorCreate()::MlirDynamicOpTrait
+end
+
+"""
+    mlirDynamicOpTraitNoTerminatorCreate()
+
+Get the dynamic op trait that indicates regions have no terminator.
+"""
+function mlirDynamicOpTraitNoTerminatorCreate()
+    @ccall mlir_c.mlirDynamicOpTraitNoTerminatorCreate()::MlirDynamicOpTrait
+end
+
+"""
+    mlirDynamicOpTraitDestroy(dynamicOpTrait)
+
+Destroy the dynamic op trait.
+"""
+function mlirDynamicOpTraitDestroy(dynamicOpTrait)
+    @ccall mlir_c.mlirDynamicOpTraitDestroy(dynamicOpTrait::MlirDynamicOpTrait)::Cvoid
+end
+
+"""
+    MlirDynamicOpTraitCallbacks
+
+| Field             | Note                                                                   |
+| :---------------- | :--------------------------------------------------------------------- |
+| construct         | Optional constructor for the user data. Set to nullptr to disable it.  |
+| destruct          | Optional destructor for the user data. Set to nullptr to disable it.   |
+| verifyTrait       | The callback function to verify the operation.                         |
+| verifyRegionTrait | The callback function to verify the operation with access to regions.  |
+"""
+struct MlirDynamicOpTraitCallbacks
+    construct::Ptr{Cvoid}
+    destruct::Ptr{Cvoid}
+    verifyTrait::Ptr{Cvoid}
+    verifyRegionTrait::Ptr{Cvoid}
+end
+
+"""
+    mlirDynamicOpTraitCreate(typeID, callbacks, userData)
+
+Create a custom dynamic op trait with the given type ID and callbacks.
+"""
+function mlirDynamicOpTraitCreate(typeID, callbacks, userData)
+    @ccall mlir_c.mlirDynamicOpTraitCreate(
+        typeID::MlirTypeID, callbacks::MlirDynamicOpTraitCallbacks, userData::Ptr{Cvoid}
+    )::MlirDynamicOpTrait
+end
+
 """
     mlirOperationImplementsInterface(operation, interfaceTypeID)
 
@@ -9958,6 +10077,26 @@ struct MlirPatternRewriter
 end
 
 struct MlirRewritePattern
+    ptr::Ptr{Cvoid}
+end
+
+struct MlirConversionTarget
+    ptr::Ptr{Cvoid}
+end
+
+struct MlirConversionPattern
+    ptr::Ptr{Cvoid}
+end
+
+struct MlirTypeConverter
+    ptr::Ptr{Cvoid}
+end
+
+struct MlirConversionPatternRewriter
+    ptr::Ptr{Cvoid}
+end
+
+struct MlirConversionConfig
     ptr::Ptr{Cvoid}
 end
 
@@ -10611,12 +10750,284 @@ function mlirWalkAndApplyPatterns(op, patterns)
 end
 
 """
+    mlirApplyPartialConversion(op, target, patterns, config)
+
+Apply a partial conversion on the given operation.
+"""
+function mlirApplyPartialConversion(op, target, patterns, config)
+    @ccall mlir_c.mlirApplyPartialConversion(
+        op::MlirOperation,
+        target::MlirConversionTarget,
+        patterns::MlirFrozenRewritePatternSet,
+        config::MlirConversionConfig,
+    )::MlirLogicalResult
+end
+
+"""
+    mlirApplyFullConversion(op, target, patterns, config)
+
+Apply a full conversion on the given operation.
+"""
+function mlirApplyFullConversion(op, target, patterns, config)
+    @ccall mlir_c.mlirApplyFullConversion(
+        op::MlirOperation,
+        target::MlirConversionTarget,
+        patterns::MlirFrozenRewritePatternSet,
+        config::MlirConversionConfig,
+    )::MlirLogicalResult
+end
+
+"""
+    mlirConversionConfigCreate()
+
+Create a default ConversionConfig.
+"""
+function mlirConversionConfigCreate()
+    @ccall mlir_c.mlirConversionConfigCreate()::MlirConversionConfig
+end
+
+"""
+    mlirConversionConfigDestroy(config)
+
+Destroy the given ConversionConfig.
+"""
+function mlirConversionConfigDestroy(config)
+    @ccall mlir_c.mlirConversionConfigDestroy(config::MlirConversionConfig)::Cvoid
+end
+
+@cenum MlirDialectConversionFoldingMode::UInt32 begin
+    MLIR_DIALECT_CONVERSION_FOLDING_MODE_NEVER = 0x0000000000000000
+    MLIR_DIALECT_CONVERSION_FOLDING_MODE_BEFORE_PATTERNS = 0x0000000000000001
+    MLIR_DIALECT_CONVERSION_FOLDING_MODE_AFTER_PATTERNS = 0x0000000000000002
+end
+
+"""
+    mlirConversionConfigSetFoldingMode(config, mode)
+
+Set the folding mode for the given ConversionConfig.
+"""
+function mlirConversionConfigSetFoldingMode(config, mode)
+    @ccall mlir_c.mlirConversionConfigSetFoldingMode(
+        config::MlirConversionConfig, mode::MlirDialectConversionFoldingMode
+    )::Cvoid
+end
+
+"""
+    mlirConversionConfigGetFoldingMode(config)
+
+Get the folding mode for the given ConversionConfig.
+"""
+function mlirConversionConfigGetFoldingMode(config)
+    @ccall mlir_c.mlirConversionConfigGetFoldingMode(
+        config::MlirConversionConfig
+    )::MlirDialectConversionFoldingMode
+end
+
+"""
+    mlirConversionConfigEnableBuildMaterializations(config, enable)
+
+Enable or disable building materializations during conversion.
+"""
+function mlirConversionConfigEnableBuildMaterializations(config, enable)
+    @ccall mlir_c.mlirConversionConfigEnableBuildMaterializations(
+        config::MlirConversionConfig, enable::Bool
+    )::Cvoid
+end
+
+"""
+    mlirConversionConfigIsBuildMaterializationsEnabled(config)
+
+Check if building materializations during conversion is enabled.
+"""
+function mlirConversionConfigIsBuildMaterializationsEnabled(config)
+    @ccall mlir_c.mlirConversionConfigIsBuildMaterializationsEnabled(
+        config::MlirConversionConfig
+    )::Bool
+end
+
+"""
     mlirPatternRewriterAsBase(rewriter)
 
 Cast the PatternRewriter to a RewriterBase
 """
 function mlirPatternRewriterAsBase(rewriter)
     @ccall mlir_c.mlirPatternRewriterAsBase(rewriter::MlirPatternRewriter)::MlirRewriterBase
+end
+
+"""
+    mlirConversionPatternRewriterAsPatternRewriter(rewriter)
+
+Cast the ConversionPatternRewriter to a PatternRewriter
+"""
+function mlirConversionPatternRewriterAsPatternRewriter(rewriter)
+    @ccall mlir_c.mlirConversionPatternRewriterAsPatternRewriter(
+        rewriter::MlirConversionPatternRewriter
+    )::MlirPatternRewriter
+end
+
+"""
+    mlirConversionTargetCreate(context)
+
+Create an empty ConversionTarget.
+"""
+function mlirConversionTargetCreate(context)
+    @ccall mlir_c.mlirConversionTargetCreate(context::MlirContext)::MlirConversionTarget
+end
+
+"""
+    mlirConversionTargetDestroy(target)
+
+Destroy the given ConversionTarget.
+"""
+function mlirConversionTargetDestroy(target)
+    @ccall mlir_c.mlirConversionTargetDestroy(target::MlirConversionTarget)::Cvoid
+end
+
+"""
+    mlirConversionTargetAddLegalOp(target, opName)
+
+Register the given operations as legal.
+"""
+function mlirConversionTargetAddLegalOp(target, opName)
+    @ccall mlir_c.mlirConversionTargetAddLegalOp(
+        target::MlirConversionTarget, opName::MlirStringRef
+    )::Cvoid
+end
+
+"""
+    mlirConversionTargetAddIllegalOp(target, opName)
+
+Register the given operations as illegal.
+"""
+function mlirConversionTargetAddIllegalOp(target, opName)
+    @ccall mlir_c.mlirConversionTargetAddIllegalOp(
+        target::MlirConversionTarget, opName::MlirStringRef
+    )::Cvoid
+end
+
+"""
+    mlirConversionTargetAddLegalDialect(target, dialectName)
+
+Register the operations of the given dialect as legal.
+"""
+function mlirConversionTargetAddLegalDialect(target, dialectName)
+    @ccall mlir_c.mlirConversionTargetAddLegalDialect(
+        target::MlirConversionTarget, dialectName::MlirStringRef
+    )::Cvoid
+end
+
+"""
+    mlirConversionTargetAddIllegalDialect(target, dialectName)
+
+Register the operations of the given dialect as illegal.
+"""
+function mlirConversionTargetAddIllegalDialect(target, dialectName)
+    @ccall mlir_c.mlirConversionTargetAddIllegalDialect(
+        target::MlirConversionTarget, dialectName::MlirStringRef
+    )::Cvoid
+end
+
+"""
+    mlirTypeConverterCreate()
+
+Create a TypeConverter.
+"""
+function mlirTypeConverterCreate()
+    @ccall mlir_c.mlirTypeConverterCreate()::MlirTypeConverter
+end
+
+"""
+    mlirTypeConverterDestroy(typeConverter)
+
+Destroy the given TypeConverter.
+"""
+function mlirTypeConverterDestroy(typeConverter)
+    @ccall mlir_c.mlirTypeConverterDestroy(typeConverter::MlirTypeConverter)::Cvoid
+end
+
+# typedef MlirLogicalResult ( * MlirTypeConverterConversionCallback ) ( MlirType type , MlirType * convertedType , void * userData )
+"""
+Callback type for type conversion functions. Returns failure or sets convertedType to [`MlirType`](@ref){NULL} to indicate failure. If failure is returned, the converter is allowed to try another conversion function to perform the conversion.
+"""
+const MlirTypeConverterConversionCallback = Ptr{Cvoid}
+
+"""
+    mlirTypeConverterAddConversion(typeConverter, convertType, userData)
+
+Add a type conversion function to the given TypeConverter.
+"""
+function mlirTypeConverterAddConversion(typeConverter, convertType, userData)
+    @ccall mlir_c.mlirTypeConverterAddConversion(
+        typeConverter::MlirTypeConverter,
+        convertType::MlirTypeConverterConversionCallback,
+        userData::Ptr{Cvoid},
+    )::Cvoid
+end
+
+"""
+    MlirConversionPatternCallbacks
+
+ConversionPattern API
+
+| Field           | Note                                                                                                                                                                                                |
+| :-------------- | :-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| construct       | Optional constructor for the user data. Set to nullptr to disable it.                                                                                                                               |
+| destruct        | Optional destructor for the user data. Set to nullptr to disable it.                                                                                                                                |
+| matchAndRewrite | The callback function to match against code rooted at the specified operation, and perform the conversion rewrite if the match is successful, corresponding to ConversionPattern::matchAndRewrite.  |
+"""
+struct MlirConversionPatternCallbacks
+    construct::Ptr{Cvoid}
+    destruct::Ptr{Cvoid}
+    matchAndRewrite::Ptr{Cvoid}
+end
+
+"""
+    mlirOpConversionPatternCreate(rootName, benefit, context, typeConverter, callbacks, userData, nGeneratedNames, generatedNames)
+
+Create a conversion pattern that matches the operation with the given rootName, corresponding to mlir::OpConversionPattern.
+"""
+function mlirOpConversionPatternCreate(
+    rootName,
+    benefit,
+    context,
+    typeConverter,
+    callbacks,
+    userData,
+    nGeneratedNames,
+    generatedNames,
+)
+    @ccall mlir_c.mlirOpConversionPatternCreate(
+        rootName::MlirStringRef,
+        benefit::Cuint,
+        context::MlirContext,
+        typeConverter::MlirTypeConverter,
+        callbacks::MlirConversionPatternCallbacks,
+        userData::Ptr{Cvoid},
+        nGeneratedNames::Csize_t,
+        generatedNames::Ptr{MlirStringRef},
+    )::MlirConversionPattern
+end
+
+"""
+    mlirConversionPatternGetTypeConverter(pattern)
+
+Get the type converter used by this conversion pattern.
+"""
+function mlirConversionPatternGetTypeConverter(pattern)
+    @ccall mlir_c.mlirConversionPatternGetTypeConverter(
+        pattern::MlirConversionPattern
+    )::MlirTypeConverter
+end
+
+"""
+    mlirConversionPatternAsRewritePattern(pattern)
+
+Cast the ConversionPattern to a RewritePattern.
+"""
+function mlirConversionPatternAsRewritePattern(pattern)
+    @ccall mlir_c.mlirConversionPatternAsRewritePattern(
+        pattern::MlirConversionPattern
+    )::MlirRewritePattern
 end
 
 """

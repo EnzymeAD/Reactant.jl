@@ -586,6 +586,23 @@ function call(
     convergent=nothing,
     no_unwind=nothing,
     will_return=nothing,
+    noreturn=nothing,
+    returns_twice=nothing,
+    hot=nothing,
+    cold=nothing,
+    noduplicate=nothing,
+    no_caller_saved_registers=nothing,
+    nocallback=nothing,
+    modular_format=nothing,
+    nobuiltins=nothing,
+    allocsize=nothing,
+    optsize=nothing,
+    minsize=nothing,
+    nobuiltin=nothing,
+    save_reg_params=nothing,
+    zero_call_used_regs=nothing,
+    trap_func_name=nothing,
+    default_func_attrs=nothing,
     op_bundle_sizes,
     op_bundle_tags=nothing,
     arg_attrs=nothing,
@@ -622,6 +639,32 @@ function call(
     !isnothing(convergent) && push!(attributes, NamedAttribute("convergent", convergent))
     !isnothing(no_unwind) && push!(attributes, NamedAttribute("no_unwind", no_unwind))
     !isnothing(will_return) && push!(attributes, NamedAttribute("will_return", will_return))
+    !isnothing(noreturn) && push!(attributes, NamedAttribute("noreturn", noreturn))
+    !isnothing(returns_twice) &&
+        push!(attributes, NamedAttribute("returns_twice", returns_twice))
+    !isnothing(hot) && push!(attributes, NamedAttribute("hot", hot))
+    !isnothing(cold) && push!(attributes, NamedAttribute("cold", cold))
+    !isnothing(noduplicate) && push!(attributes, NamedAttribute("noduplicate", noduplicate))
+    !isnothing(no_caller_saved_registers) && push!(
+        attributes,
+        NamedAttribute("no_caller_saved_registers", no_caller_saved_registers),
+    )
+    !isnothing(nocallback) && push!(attributes, NamedAttribute("nocallback", nocallback))
+    !isnothing(modular_format) &&
+        push!(attributes, NamedAttribute("modular_format", modular_format))
+    !isnothing(nobuiltins) && push!(attributes, NamedAttribute("nobuiltins", nobuiltins))
+    !isnothing(allocsize) && push!(attributes, NamedAttribute("allocsize", allocsize))
+    !isnothing(optsize) && push!(attributes, NamedAttribute("optsize", optsize))
+    !isnothing(minsize) && push!(attributes, NamedAttribute("minsize", minsize))
+    !isnothing(nobuiltin) && push!(attributes, NamedAttribute("nobuiltin", nobuiltin))
+    !isnothing(save_reg_params) &&
+        push!(attributes, NamedAttribute("save_reg_params", save_reg_params))
+    !isnothing(zero_call_used_regs) &&
+        push!(attributes, NamedAttribute("zero_call_used_regs", zero_call_used_regs))
+    !isnothing(trap_func_name) &&
+        push!(attributes, NamedAttribute("trap_func_name", trap_func_name))
+    !isnothing(default_func_attrs) &&
+        push!(attributes, NamedAttribute("default_func_attrs", default_func_attrs))
     !isnothing(op_bundle_tags) &&
         push!(attributes, NamedAttribute("op_bundle_tags", op_bundle_tags))
     !isnothing(arg_attrs) && push!(attributes, NamedAttribute("arg_attrs", arg_attrs))
@@ -1949,11 +1992,9 @@ function func(;
     reciprocal_estimates=nothing,
     prefer_vector_width=nothing,
     target_features=nothing,
-    no_infs_fp_math=nothing,
     no_nans_fp_math=nothing,
     no_signed_zeros_fp_math=nothing,
-    denormal_fp_math=nothing,
-    denormal_fp_math_f32=nothing,
+    denormal_fpenv=nothing,
     fp_contract=nothing,
     instrument_function_entry=nothing,
     instrument_function_exit=nothing,
@@ -1962,7 +2003,22 @@ function func(;
     inline_hint=nothing,
     no_unwind=nothing,
     will_return=nothing,
+    noreturn=nothing,
     optimize_none=nothing,
+    returns_twice=nothing,
+    hot=nothing,
+    cold=nothing,
+    noduplicate=nothing,
+    no_caller_saved_registers=nothing,
+    nocallback=nothing,
+    modular_format=nothing,
+    nobuiltins=nothing,
+    allocsize=nothing,
+    optsize=nothing,
+    minsize=nothing,
+    save_reg_params=nothing,
+    zero_call_used_regs=nothing,
+    default_func_attrs=nothing,
     vec_type_hint=nothing,
     work_group_size_hint=nothing,
     reqd_work_group_size=nothing,
@@ -2026,17 +2082,13 @@ function func(;
         push!(attributes, NamedAttribute("prefer_vector_width", prefer_vector_width))
     !isnothing(target_features) &&
         push!(attributes, NamedAttribute("target_features", target_features))
-    !isnothing(no_infs_fp_math) &&
-        push!(attributes, NamedAttribute("no_infs_fp_math", no_infs_fp_math))
     !isnothing(no_nans_fp_math) &&
         push!(attributes, NamedAttribute("no_nans_fp_math", no_nans_fp_math))
     !isnothing(no_signed_zeros_fp_math) && push!(
         attributes, NamedAttribute("no_signed_zeros_fp_math", no_signed_zeros_fp_math)
     )
-    !isnothing(denormal_fp_math) &&
-        push!(attributes, NamedAttribute("denormal_fp_math", denormal_fp_math))
-    !isnothing(denormal_fp_math_f32) &&
-        push!(attributes, NamedAttribute("denormal_fp_math_f32", denormal_fp_math_f32))
+    !isnothing(denormal_fpenv) &&
+        push!(attributes, NamedAttribute("denormal_fpenv", denormal_fpenv))
     !isnothing(fp_contract) && push!(attributes, NamedAttribute("fp_contract", fp_contract))
     !isnothing(instrument_function_entry) && push!(
         attributes,
@@ -2051,8 +2103,31 @@ function func(;
     !isnothing(inline_hint) && push!(attributes, NamedAttribute("inline_hint", inline_hint))
     !isnothing(no_unwind) && push!(attributes, NamedAttribute("no_unwind", no_unwind))
     !isnothing(will_return) && push!(attributes, NamedAttribute("will_return", will_return))
+    !isnothing(noreturn) && push!(attributes, NamedAttribute("noreturn", noreturn))
     !isnothing(optimize_none) &&
         push!(attributes, NamedAttribute("optimize_none", optimize_none))
+    !isnothing(returns_twice) &&
+        push!(attributes, NamedAttribute("returns_twice", returns_twice))
+    !isnothing(hot) && push!(attributes, NamedAttribute("hot", hot))
+    !isnothing(cold) && push!(attributes, NamedAttribute("cold", cold))
+    !isnothing(noduplicate) && push!(attributes, NamedAttribute("noduplicate", noduplicate))
+    !isnothing(no_caller_saved_registers) && push!(
+        attributes,
+        NamedAttribute("no_caller_saved_registers", no_caller_saved_registers),
+    )
+    !isnothing(nocallback) && push!(attributes, NamedAttribute("nocallback", nocallback))
+    !isnothing(modular_format) &&
+        push!(attributes, NamedAttribute("modular_format", modular_format))
+    !isnothing(nobuiltins) && push!(attributes, NamedAttribute("nobuiltins", nobuiltins))
+    !isnothing(allocsize) && push!(attributes, NamedAttribute("allocsize", allocsize))
+    !isnothing(optsize) && push!(attributes, NamedAttribute("optsize", optsize))
+    !isnothing(minsize) && push!(attributes, NamedAttribute("minsize", minsize))
+    !isnothing(save_reg_params) &&
+        push!(attributes, NamedAttribute("save_reg_params", save_reg_params))
+    !isnothing(zero_call_used_regs) &&
+        push!(attributes, NamedAttribute("zero_call_used_regs", zero_call_used_regs))
+    !isnothing(default_func_attrs) &&
+        push!(attributes, NamedAttribute("default_func_attrs", default_func_attrs))
     !isnothing(vec_type_hint) &&
         push!(attributes, NamedAttribute("vec_type_hint", vec_type_hint))
     !isnothing(work_group_size_hint) &&
