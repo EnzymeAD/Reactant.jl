@@ -47,6 +47,10 @@ end
     MlirLlvmThreadPool
 
 Re-export llvm::ThreadPool so as to avoid including the LLVM C API directly.
+
+| Field | Note                                                                          |
+| :---- | :---------------------------------------------------------------------------- |
+| ptr   | Re-export llvm::ThreadPool so as to avoid including the LLVM C API directly.  |
 """
 struct MlirLlvmThreadPool
     ptr::Ptr{Cvoid}
@@ -56,6 +60,10 @@ end
     MlirLlvmRawFdOStream
 
 Re-export llvm::raw\\_fd\\_ostream so as to avoid including the LLVM C API directly.
+
+| Field | Note                                                                                  |
+| :---- | :------------------------------------------------------------------------------------ |
+| ptr   | Re-export llvm::raw\\_fd\\_ostream so as to avoid including the LLVM C API directly.  |
 """
 struct MlirLlvmRawFdOStream
     ptr::Ptr{Cvoid}
@@ -12809,6 +12817,1810 @@ end
 
 function enzymeSymbolAttrGet(ctx, ptr)
     @ccall mlir_c.enzymeSymbolAttrGet(ctx::MlirContext, ptr::UInt64)::MlirAttribute
+end
+
+struct JLAllocatorStats
+    num_allocs::Int64
+    bytes_in_use::Int64
+    peak_bytes_in_use::Int64
+    largest_alloc_size::Int64
+    bytes_limit::Int64
+    bytes_reserved::Int64
+    peak_bytes_reserved::Int64
+    bytes_reservable_limit::Int64
+    largest_free_block_bytes::Int64
+    pool_bytes::Int64
+    peak_pool_bytes::Int64
+end
+
+struct DeviceProperties
+    totalGlobalMem::Csize_t
+    sharedMemPerBlock::Csize_t
+    regsPerBlock::Cint
+    warpSize::Cint
+    maxThreadsPerBlock::Cint
+    maxThreadsDim::NTuple{3,Cint}
+    maxGridSize::NTuple{3,Cint}
+    totalConstMem::Csize_t
+    major::Cint
+    minor::Cint
+    multiProcessorCount::Cint
+    canMapHostMemory::Cint
+    l2CacheSize::Cint
+    maxThreadsPerMultiProcessor::Cint
+end
+
+struct JLHloCostAnalysisProperties
+    flops::Cfloat
+    transcendentals::Cfloat
+    bytes_accessed::Cfloat
+    optimal_seconds::Cfloat
+    utilization::Cfloat
+    operand0_utilization::Cfloat
+    operand1_utilization::Cfloat
+    operand0_bytes_accessed::Cfloat
+    operand1_bytes_accessed::Cfloat
+    output_root_bytes_accessed::Cfloat
+    reserved0::Cfloat
+end
+
+struct JLEstimateRunTimeData
+    flops::Int64
+    bytes_read::Int64
+    bytes_written::Int64
+    read_time_ns::Int64
+    write_time_ns::Int64
+    compute_time_ns::Int64
+    execution_time_ns::Int64
+end
+
+const PjRtClientPtr = Ptr{Cvoid}
+
+const PjRtDevicePtr = Ptr{Cvoid}
+
+const PjRtBufferPtr = Ptr{Cvoid}
+
+const PjRtLoadedExecutablePtr = Ptr{Cvoid}
+
+const PJRT_ApiPtr = Ptr{Cvoid}
+
+const ProfilerSessionPtr = Ptr{Cvoid}
+
+const ProfilerServerPtr = Ptr{Cvoid}
+
+const FutureTypePtr = Ptr{Cvoid}
+
+const IfRtFutureTypePtr = Ptr{Cvoid}
+
+const HeldPjRtClientPtr = Ptr{Cvoid}
+
+const HeldPjRtBufferPtr = Ptr{Cvoid}
+
+const HeldIfrtArrayPtr = Ptr{Cvoid}
+
+const HeldHloModulePtr = Ptr{Cvoid}
+
+const HeldIfrtShardingPtr = Ptr{Cvoid}
+
+const HeldIfrtLoadedExecutablePtr = Ptr{Cvoid}
+
+const HeldIfrtConstShardingPtr = Ptr{Cvoid}
+
+const HeldDistributedRuntimeClientPtr = Ptr{Cvoid}
+
+const IfrtClientPtr = Ptr{Cvoid}
+
+const IfrtDevicePtr = Ptr{Cvoid}
+
+const IfrtMemoryPtr = Ptr{Cvoid}
+
+const IfrtMemoryKindPtr = Ptr{Cvoid}
+
+const IfrtPjRtClientPtr = Ptr{Cvoid}
+
+const IfrtPjRtLoadedExecutablePtr = Ptr{Cvoid}
+
+const IfrtGrpcServerPtr = Ptr{Cvoid}
+
+const OpShardingPtr = Ptr{Cvoid}
+
+const HloShardingPtr = Ptr{Cvoid}
+
+const HloComputationPtr = Ptr{Cvoid}
+
+const HloInstructionPtr = Ptr{Cvoid}
+
+const HloModulePtr = Ptr{Cvoid}
+
+const DeviceDescriptionPtr = Ptr{Cvoid}
+
+const DistributedRuntimeServicePtr = Ptr{Cvoid}
+
+const GPUPerformanceModelPtr = Ptr{Cvoid}
+
+const LinkableRuntimePtr = Ptr{Cvoid}
+
+function InitializeLogs()
+    @ccall mlir_c.InitializeLogs()::Cvoid
+end
+
+function SetLogLevel(level)
+    @ccall mlir_c.SetLogLevel(level::Cint)::Cvoid
+end
+
+function SetModuleLogLevel(module_pattern, level)
+    @ccall mlir_c.SetModuleLogLevel(module_pattern::Cstring, level::Cint)::Cvoid
+end
+
+function GetDefaultTargetTriple()
+    @ccall mlir_c.GetDefaultTargetTriple()::Cstring
+end
+
+function ReactantLLVMParseCommandLineOptions(argc, argv, Overview)
+    @ccall mlir_c.ReactantLLVMParseCommandLineOptions(
+        argc::Cint, argv::Ptr{Cstring}, Overview::Cstring
+    )::Cvoid
+end
+
+function ReactantHandleCuResult(curesult)
+    @ccall mlir_c.ReactantHandleCuResult(curesult::UInt32)::Cvoid
+end
+
+function ReactantCudaDriverGetVersion()
+    @ccall mlir_c.ReactantCudaDriverGetVersion()::Int32
+end
+
+function ReactantHermeticCudaGetVersion()
+    @ccall mlir_c.ReactantHermeticCudaGetVersion()::Int32
+end
+
+function ReactantCudaDeviceGetComputeCapalilityMajor()
+    @ccall mlir_c.ReactantCudaDeviceGetComputeCapalilityMajor()::Int32
+end
+
+function ReactantCudaDeviceGetComputeCapalilityMinor()
+    @ccall mlir_c.ReactantCudaDeviceGetComputeCapalilityMinor()::Int32
+end
+
+function ReactantCudaDeviceGetWarpSizeInThreads()
+    @ccall mlir_c.ReactantCudaDeviceGetWarpSizeInThreads()::Int32
+end
+
+function ReactantCudaDeviceGetProperties(jlprops, device_id)
+    @ccall mlir_c.ReactantCudaDeviceGetProperties(
+        jlprops::Ptr{DeviceProperties}, device_id::Int32
+    )::Cvoid
+end
+
+function ReactantCudaGetRegsSpillsMaxThreadsFromBinary(
+    binary, fnname, regs, spills, maxThreads
+)
+    @ccall mlir_c.ReactantCudaGetRegsSpillsMaxThreadsFromBinary(
+        binary::Cstring,
+        fnname::Cstring,
+        regs::Ptr{Int32},
+        spills::Ptr{Int32},
+        maxThreads::Ptr{Int32},
+    )::Cvoid
+end
+
+function CudaGetStreamExecutorDeviceDescription(device_id)
+    @ccall mlir_c.CudaGetStreamExecutorDeviceDescription(
+        device_id::Int32
+    )::DeviceDescriptionPtr
+end
+
+function deviceDescriptionToString(device)
+    @ccall mlir_c.deviceDescriptionToString(device::DeviceDescriptionPtr)::Cstring
+end
+
+function mlirOperationInject(ctx, block, code, location, verify_after_parse)
+    @ccall mlir_c.mlirOperationInject(
+        ctx::MlirContext,
+        block::MlirBlock,
+        code::MlirStringRef,
+        location::MlirLocation,
+        verify_after_parse::Bool,
+    )::Bool
+end
+
+function mlirOperationParse(ctx, block, code, location, verify_after_parse)
+    @ccall mlir_c.mlirOperationParse(
+        ctx::MlirContext,
+        block::MlirBlock,
+        code::MlirStringRef,
+        location::MlirLocation,
+        verify_after_parse::Bool,
+    )::MlirOperation
+end
+
+function mlirGetFunctionTypeFromOperation(op)
+    @ccall mlir_c.mlirGetFunctionTypeFromOperation(op::MlirOperation)::MlirType
+end
+
+function mlirIsFunctionOpInterface(op)
+    @ccall mlir_c.mlirIsFunctionOpInterface(op::MlirOperation)::Bool
+end
+
+function ReactantFuncSetResultAttr(op, pos, name, attr)
+    @ccall mlir_c.ReactantFuncSetResultAttr(
+        op::MlirOperation, pos::Cptrdiff_t, name::MlirStringRef, attr::MlirAttribute
+    )::Cvoid
+end
+
+function ReactantFuncSetArgAttr(op, pos, name, attr)
+    @ccall mlir_c.ReactantFuncSetArgAttr(
+        op::MlirOperation, pos::Cptrdiff_t, name::MlirStringRef, attr::MlirAttribute
+    )::Cvoid
+end
+
+function enzymeActivityAttrGet(ctx, val)
+    @ccall mlir_c.enzymeActivityAttrGet(ctx::MlirContext, val::Int32)::MlirAttribute
+end
+
+function RegisterDialects(cctx)
+    @ccall mlir_c.RegisterDialects(cctx::MlirContext)::Cvoid
+end
+
+function InitializePasses(creg)
+    @ccall mlir_c.InitializePasses(creg::MlirDialectRegistry)::Cvoid
+end
+
+function InitializeRegistry(creg)
+    @ccall mlir_c.InitializeRegistry(creg::MlirDialectRegistry)::Cvoid
+end
+
+function LinkInModule(prevModC, newModC, entryfn)
+    @ccall mlir_c.LinkInModule(
+        prevModC::MlirModule, newModC::MlirModule, entryfn::Cstring
+    )::MlirOperation
+end
+
+function ConvertLLVMToMLIR(lmod, cctx)
+    @ccall mlir_c.ConvertLLVMToMLIR(lmod::Cint, cctx::MlirContext)::MlirModule
+end
+
+function ConvertLLVMStrToMLIR(lmod, cctx)
+    @ccall mlir_c.ConvertLLVMStrToMLIR(lmod::Cstring, cctx::MlirContext)::MlirModule
+end
+
+function dump_op(op)
+    @ccall mlir_c.dump_op(op::Ptr{Cvoid})::Cvoid
+end
+
+function dump_mval(v)
+    @ccall mlir_c.dump_mval(v::MlirValue)::Cvoid
+end
+
+function dump_operation(op, filename)
+    @ccall mlir_c.dump_operation(op::Ptr{Cvoid}, filename::Cstring)::Cvoid
+end
+
+function dump_string(op, filename)
+    @ccall mlir_c.dump_string(op::Cstring, filename::Cstring)::Cvoid
+end
+
+function mlirGetParentOfTypeFunctionOp(op)
+    @ccall mlir_c.mlirGetParentOfTypeFunctionOp(op::Ptr{Cvoid})::Ptr{Cvoid}
+end
+
+function CreateProfilerSession(device_tracer_level, host_tracer_level)
+    @ccall mlir_c.CreateProfilerSession(
+        device_tracer_level::UInt32, host_tracer_level::UInt32
+    )::ProfilerSessionPtr
+end
+
+function ProfilerSessionCollectData(session, path)
+    @ccall mlir_c.ProfilerSessionCollectData(
+        session::ProfilerSessionPtr, path::Cstring
+    )::Cvoid
+end
+
+function ProfilerSessionDelete(session)
+    @ccall mlir_c.ProfilerSessionDelete(session::ProfilerSessionPtr)::Cvoid
+end
+
+function ProfilerActivityStart(name, level)
+    @ccall mlir_c.ProfilerActivityStart(name::Cstring, level::Cint)::Int64
+end
+
+function ProfilerActivityEnd(id)
+    @ccall mlir_c.ProfilerActivityEnd(id::Int64)::Cvoid
+end
+
+function ProfilerServerStart(port)
+    @ccall mlir_c.ProfilerServerStart(port::Int32)::ProfilerServerPtr
+end
+
+function ProfilerServerStop(server)
+    @ccall mlir_c.ProfilerServerStop(server::ProfilerServerPtr)::Cvoid
+end
+
+function MakeCPUClient(asynchronous, node_id)
+    @ccall mlir_c.MakeCPUClient(asynchronous::UInt8, node_id::Cint)::PjRtClientPtr
+end
+
+function MakeGPUClient(
+    node_id,
+    num_nodes,
+    allowed_devices,
+    num_allowed_devices,
+    memory_fraction,
+    preallocate,
+    platform_name,
+    error,
+    distributed_runtime_client,
+)
+    @ccall mlir_c.MakeGPUClient(
+        node_id::Cint,
+        num_nodes::Cint,
+        allowed_devices::Ptr{Int64},
+        num_allowed_devices::Int64,
+        memory_fraction::Cdouble,
+        preallocate::Bool,
+        platform_name::Cstring,
+        error::Ptr{Cstring},
+        distributed_runtime_client::Ptr{Cvoid},
+    )::PjRtClientPtr
+end
+
+function MakeTPUClient(tpu_path, error)
+    @ccall mlir_c.MakeTPUClient(tpu_path::Cstring, error::Ptr{Cstring})::PjRtClientPtr
+end
+
+function LoadPjrtPlugin(device_type, library_path, error)
+    @ccall mlir_c.LoadPjrtPlugin(
+        device_type::Cstring, library_path::Cstring, error::Ptr{Cstring}
+    )::PJRT_ApiPtr
+end
+
+function InitializePjrtPlugin(device_type, error)
+    @ccall mlir_c.InitializePjrtPlugin(device_type::Cstring, error::Ptr{Cstring})::Cint
+end
+
+function GetCApiClient(device_type)
+    @ccall mlir_c.GetCApiClient(device_type::Cstring)::PjRtClientPtr
+end
+
+function pjrt_client_register_profiler(api)
+    @ccall mlir_c.pjrt_client_register_profiler(api::PJRT_ApiPtr)::Cvoid
+end
+
+function MakeClientUsingPluginAPI(device_type, library_path, client_name, error)
+    @ccall mlir_c.MakeClientUsingPluginAPI(
+        device_type::Cstring,
+        library_path::Cstring,
+        client_name::Cstring,
+        error::Ptr{Cstring},
+    )::PjRtClientPtr
+end
+
+function MakeClientFromApi(api, device_type, client_name, error)
+    @ccall mlir_c.MakeClientFromApi(
+        api::PJRT_ApiPtr, device_type::Cstring, client_name::Cstring, error::Ptr{Cstring}
+    )::PjRtClientPtr
+end
+
+function ClientNumDevices(client)
+    @ccall mlir_c.ClientNumDevices(client::PjRtClientPtr)::Cint
+end
+
+function ClientNumAddressableDevices(client)
+    @ccall mlir_c.ClientNumAddressableDevices(client::PjRtClientPtr)::Cint
+end
+
+function ClientProcessIndex(client)
+    @ccall mlir_c.ClientProcessIndex(client::PjRtClientPtr)::Cint
+end
+
+function ClientGetDevice(client, device_id)
+    @ccall mlir_c.ClientGetDevice(client::PjRtClientPtr, device_id::Cint)::PjRtDevicePtr
+end
+
+function ClientGetAddressableDevice(client, device_id)
+    @ccall mlir_c.ClientGetAddressableDevice(
+        client::PjRtClientPtr, device_id::Cint
+    )::PjRtDevicePtr
+end
+
+function ClientGetPlatformName(client)
+    @ccall mlir_c.ClientGetPlatformName(client::PjRtClientPtr)::Cstring
+end
+
+function ClientGetDevices(client, out_devices)
+    @ccall mlir_c.ClientGetDevices(
+        client::PjRtClientPtr, out_devices::Ptr{PjRtDevicePtr}
+    )::Cvoid
+end
+
+function ClientGetAddressableDevices(client, out_devices)
+    @ccall mlir_c.ClientGetAddressableDevices(
+        client::PjRtClientPtr, out_devices::Ptr{PjRtDevicePtr}
+    )::Cvoid
+end
+
+function FreeClient(client)
+    @ccall mlir_c.FreeClient(client::PjRtClientPtr)::Cvoid
+end
+
+function DeviceGetKind(device)
+    @ccall mlir_c.DeviceGetKind(device::PjRtDevicePtr)::Cstring
+end
+
+function DeviceToClient(device)
+    @ccall mlir_c.DeviceToClient(device::PjRtDevicePtr)::PjRtClientPtr
+end
+
+function PjRtDeviceGetAllocatorStats(device, jlstats)
+    @ccall mlir_c.PjRtDeviceGetAllocatorStats(
+        device::PjRtDevicePtr, jlstats::Ptr{JLAllocatorStats}
+    )::Cvoid
+end
+
+function PjRtDeviceGetLocalDeviceId(device)
+    @ccall mlir_c.PjRtDeviceGetLocalDeviceId(device::PjRtDevicePtr)::Int64
+end
+
+function PjRtDeviceGetGlobalDeviceId(device)
+    @ccall mlir_c.PjRtDeviceGetGlobalDeviceId(device::PjRtDevicePtr)::Int64
+end
+
+function PjRtDeviceGetLocalHardwareId(device)
+    @ccall mlir_c.PjRtDeviceGetLocalHardwareId(device::PjRtDevicePtr)::Int64
+end
+
+function pjrt_device_is_addressable(device)
+    @ccall mlir_c.pjrt_device_is_addressable(device::PjRtDevicePtr)::Bool
+end
+
+function BufferToDevice(buffer)
+    @ccall mlir_c.BufferToDevice(buffer::PjRtBufferPtr)::PjRtDevicePtr
+end
+
+function BufferToClient(buffer)
+    @ccall mlir_c.BufferToClient(buffer::PjRtBufferPtr)::PjRtClientPtr
+end
+
+function BufferShape(buffer)
+    @ccall mlir_c.BufferShape(buffer::PjRtBufferPtr)::Ptr{Int64}
+end
+
+function BufferNDimensions(buffer)
+    @ccall mlir_c.BufferNDimensions(buffer::PjRtBufferPtr)::Int64
+end
+
+function BufferPrimitiveType(buffer)
+    @ccall mlir_c.BufferPrimitiveType(buffer::PjRtBufferPtr)::Cint
+end
+
+function PjRtBufferFree(buffer)
+    @ccall mlir_c.PjRtBufferFree(buffer::PjRtBufferPtr)::Cvoid
+end
+
+function UnsafeBufferPointer(buffer)
+    @ccall mlir_c.UnsafeBufferPointer(buffer::PjRtBufferPtr)::Ptr{Cvoid}
+end
+
+function ArrayFromHostBuffer(client, data, ptype, dim, cshape, device)
+    @ccall mlir_c.ArrayFromHostBuffer(
+        client::PjRtClientPtr,
+        data::Ptr{Cvoid},
+        ptype::UInt64,
+        dim::Csize_t,
+        cshape::Ptr{Int64},
+        device::PjRtDevicePtr,
+    )::PjRtBufferPtr
+end
+
+function CopyToBuffer(client, buffer, data, offset, size, bufferP)
+    @ccall mlir_c.CopyToBuffer(
+        client::PjRtClientPtr,
+        buffer::PjRtBufferPtr,
+        data::Ptr{Cvoid},
+        offset::Csize_t,
+        size::Csize_t,
+        bufferP::Ptr{PjRtBufferPtr},
+    )::Cvoid
+end
+
+function BufferToHost(buffer, data)
+    @ccall mlir_c.BufferToHost(buffer::PjRtBufferPtr, data::Ptr{Cvoid})::Cvoid
+end
+
+function CopyFromBuffer(client, buffer, data, offset, size, bufferP)
+    @ccall mlir_c.CopyFromBuffer(
+        client::PjRtClientPtr,
+        buffer::PjRtBufferPtr,
+        data::Ptr{Cvoid},
+        offset::Csize_t,
+        size::Csize_t,
+        bufferP::Ptr{PjRtBufferPtr},
+    )::Cvoid
+end
+
+function UninitPJRTBuffer(client, device, ptype, shapeLen, shape)
+    @ccall mlir_c.UninitPJRTBuffer(
+        client::PjRtClientPtr,
+        device::PjRtDevicePtr,
+        ptype::UInt64,
+        shapeLen::UInt64,
+        shape::Ptr{UInt64},
+    )::PjRtBufferPtr
+end
+
+function BufferOnCPU(buffer)
+    @ccall mlir_c.BufferOnCPU(buffer::PjRtBufferPtr)::UInt8
+end
+
+function CopyBufferToDevice(buffer, dst_device)
+    @ccall mlir_c.CopyBufferToDevice(
+        buffer::PjRtBufferPtr, dst_device::PjRtDevicePtr
+    )::PjRtBufferPtr
+end
+
+function RegisterCustomCallTarget(name, address, platform)
+    @ccall mlir_c.RegisterCustomCallTarget(
+        name::Cstring, address::Ptr{Cvoid}, platform::Cstring
+    )::Cvoid
+end
+
+function FreeFuture(future)
+    @ccall mlir_c.FreeFuture(future::FutureTypePtr)::Cvoid
+end
+
+function FutureIsReady(future)
+    @ccall mlir_c.FutureIsReady(future::FutureTypePtr)::UInt8
+end
+
+function FutureAwait(future)
+    @ccall mlir_c.FutureAwait(future::FutureTypePtr)::Cvoid
+end
+
+function ClientCompile(
+    client,
+    cmod,
+    device_id,
+    mesh_ids,
+    num_mesh_ids,
+    xla_gpu_cuda_data_dir,
+    use_shardy_partitioner,
+    num_replicas,
+    num_partitions,
+    use_spmd_partitioning,
+    kernel_cache_enabled,
+    kernel_cache_path,
+    autotune_cache_enabled,
+    autotune_cache_path,
+    process_id,
+)
+    @ccall mlir_c.ClientCompile(
+        client::PjRtClientPtr,
+        cmod::MlirModule,
+        device_id::Int64,
+        mesh_ids::Ptr{Int64},
+        num_mesh_ids::Int64,
+        xla_gpu_cuda_data_dir::Cstring,
+        use_shardy_partitioner::Bool,
+        num_replicas::Int64,
+        num_partitions::Int64,
+        use_spmd_partitioning::Bool,
+        kernel_cache_enabled::Bool,
+        kernel_cache_path::Cstring,
+        autotune_cache_enabled::Bool,
+        autotune_cache_path::Cstring,
+        process_id::Cint,
+    )::PjRtLoadedExecutablePtr
+end
+
+function ClientCompileWithProto(
+    client, cmod, compile_options_proto, compile_options_proto_size
+)
+    @ccall mlir_c.ClientCompileWithProto(
+        client::PjRtClientPtr,
+        cmod::MlirModule,
+        compile_options_proto::Cstring,
+        compile_options_proto_size::Csize_t,
+    )::PjRtLoadedExecutablePtr
+end
+
+function PjRtLoadedExecutableGetClient(exec)
+    @ccall mlir_c.PjRtLoadedExecutableGetClient(
+        exec::PjRtLoadedExecutablePtr
+    )::PjRtClientPtr
+end
+
+function ExecutableFree(exec)
+    @ccall mlir_c.ExecutableFree(exec::PjRtLoadedExecutablePtr)::Cvoid
+end
+
+function PjRtLoadedExecutableNumReplicas(exec)
+    @ccall mlir_c.PjRtLoadedExecutableNumReplicas(exec::PjRtLoadedExecutablePtr)::Cint
+end
+
+function PjRtLoadedExecutableNumPartitions(exec)
+    @ccall mlir_c.PjRtLoadedExecutableNumPartitions(exec::PjRtLoadedExecutablePtr)::Cint
+end
+
+function PjRtLoadedExecutableGetOuputShardings(exec, op_shardings, num_op_shardings)
+    @ccall mlir_c.PjRtLoadedExecutableGetOuputShardings(
+        exec::PjRtLoadedExecutablePtr,
+        op_shardings::Ptr{OpShardingPtr},
+        num_op_shardings::Int32,
+    )::Cvoid
+end
+
+function PjRtLoadedExecutableGetParameterShardings(exec, op_shardings, num_op_shardings)
+    @ccall mlir_c.PjRtLoadedExecutableGetParameterShardings(
+        exec::PjRtLoadedExecutablePtr,
+        op_shardings::Ptr{OpShardingPtr},
+        num_op_shardings::Int32,
+    )::Cvoid
+end
+
+function PjRtLoadedExecutableGetHloModules(exec, hlo_modules, nmodules)
+    @ccall mlir_c.PjRtLoadedExecutableGetHloModules(
+        exec::PjRtLoadedExecutablePtr, hlo_modules::Ptr{Ptr{Cvoid}}, nmodules::Ptr{Int32}
+    )::Cvoid
+end
+
+function XLAExecuteSharded(
+    exec,
+    num_args,
+    op_args,
+    device,
+    is_arg_donatable,
+    num_results,
+    op_results,
+    futures,
+    future_results,
+)
+    @ccall mlir_c.XLAExecuteSharded(
+        exec::PjRtLoadedExecutablePtr,
+        num_args::Cint,
+        op_args::Ptr{PjRtBufferPtr},
+        device::PjRtDevicePtr,
+        is_arg_donatable::Ptr{UInt8},
+        num_results::Cint,
+        op_results::Ptr{PjRtBufferPtr},
+        futures::Ptr{UInt8},
+        future_results::Ptr{FutureTypePtr},
+    )::Cvoid
+end
+
+function XLAExecute(
+    exec,
+    op_args_len,
+    op_args,
+    is_arg_donatable,
+    num_results,
+    op_results,
+    futures,
+    future_results,
+)
+    @ccall mlir_c.XLAExecute(
+        exec::PjRtLoadedExecutablePtr,
+        op_args_len::Cint,
+        op_args::Ptr{PjRtBufferPtr},
+        is_arg_donatable::Ptr{UInt8},
+        num_results::Cint,
+        op_results::Ptr{PjRtBufferPtr},
+        futures::Ptr{UInt8},
+        future_results::Ptr{FutureTypePtr},
+    )::Cvoid
+end
+
+function pjrt_client_dtor(client)
+    @ccall mlir_c.pjrt_client_dtor(client::HeldPjRtClientPtr)::Cvoid
+end
+
+function pjrt_client_num_devices(client)
+    @ccall mlir_c.pjrt_client_num_devices(client::HeldPjRtClientPtr)::Cint
+end
+
+function pjrt_client_num_addressable_devices(client)
+    @ccall mlir_c.pjrt_client_num_addressable_devices(client::HeldPjRtClientPtr)::Cint
+end
+
+function pjrt_client_pid(client)
+    @ccall mlir_c.pjrt_client_pid(client::HeldPjRtClientPtr)::Cint
+end
+
+function pjrt_client_get_device(client, device_id)
+    @ccall mlir_c.pjrt_client_get_device(
+        client::HeldPjRtClientPtr, device_id::Cint
+    )::PjRtDevicePtr
+end
+
+function pjrt_client_get_addressable_device(client, device_id)
+    @ccall mlir_c.pjrt_client_get_addressable_device(
+        client::HeldPjRtClientPtr, device_id::Cint
+    )::PjRtDevicePtr
+end
+
+function pjrt_client_platform_name(client)
+    @ccall mlir_c.pjrt_client_platform_name(client::HeldPjRtClientPtr)::Cstring
+end
+
+function pjrt_buffer_from_host(client, data, ptype, dim, cshape, device)
+    @ccall mlir_c.pjrt_buffer_from_host(
+        client::HeldPjRtClientPtr,
+        data::Ptr{Cvoid},
+        ptype::UInt64,
+        dim::Csize_t,
+        cshape::Ptr{Int64},
+        device::PjRtDevicePtr,
+    )::HeldPjRtBufferPtr
+end
+
+function pjrt_buffer_dtor(buffer)
+    @ccall mlir_c.pjrt_buffer_dtor(buffer::HeldPjRtBufferPtr)::Cvoid
+end
+
+function pjrt_buffer_unsafe_buffer_pointer(buffer)
+    @ccall mlir_c.pjrt_buffer_unsafe_buffer_pointer(buffer::HeldPjRtBufferPtr)::Ptr{Cvoid}
+end
+
+function pjrt_buffer_is_on_cpu(buffer)
+    @ccall mlir_c.pjrt_buffer_is_on_cpu(buffer::HeldPjRtBufferPtr)::Bool
+end
+
+function pjrt_buffer_copy_to_device(buffer, dst_device)
+    @ccall mlir_c.pjrt_buffer_copy_to_device(
+        buffer::HeldPjRtBufferPtr, dst_device::PjRtDevicePtr
+    )::HeldPjRtBufferPtr
+end
+
+function pjrt_buffer_to_host(buffer, data)
+    @ccall mlir_c.pjrt_buffer_to_host(buffer::HeldPjRtBufferPtr, data::Ptr{Cvoid})::Cvoid
+end
+
+function pjrt_buffer_print(buffer)
+    @ccall mlir_c.pjrt_buffer_print(buffer::HeldPjRtBufferPtr)::Cvoid
+end
+
+function pjrt_buffer_get_device(buffer)
+    @ccall mlir_c.pjrt_buffer_get_device(buffer::HeldPjRtBufferPtr)::PjRtDevicePtr
+end
+
+function pjrt_buffer_get_client(buffer)
+    @ccall mlir_c.pjrt_buffer_get_client(buffer::HeldPjRtBufferPtr)::HeldPjRtClientPtr
+end
+
+function ifrt_client_dtor(client)
+    @ccall mlir_c.ifrt_client_dtor(client::IfrtClientPtr)::Cvoid
+end
+
+function ifrt_client_make_array_from_host_buffer(
+    client, data, dtype_kind, ndims, c_shape, sharding, c_semantics
+)
+    @ccall mlir_c.ifrt_client_make_array_from_host_buffer(
+        client::IfrtClientPtr,
+        data::Ptr{Cvoid},
+        dtype_kind::Cint,
+        ndims::Cint,
+        c_shape::Ptr{Int64},
+        sharding::HeldIfrtConstShardingPtr,
+        c_semantics::Cint,
+    )::HeldIfrtArrayPtr
+end
+
+function ifrt_client_make_single_shard_array_from_host_buffer(
+    client, data, dtype_kind, ndims, c_shape, c_semantics, device, mem_kind
+)
+    @ccall mlir_c.ifrt_client_make_single_shard_array_from_host_buffer(
+        client::IfrtClientPtr,
+        data::Ptr{Cvoid},
+        dtype_kind::Cint,
+        ndims::Cint,
+        c_shape::Ptr{Int64},
+        c_semantics::Cint,
+        device::IfrtDevicePtr,
+        mem_kind::Cstring,
+    )::HeldIfrtArrayPtr
+end
+
+function ifrt_client_assemble_array_from_single_shards(
+    client, ndims, c_shape, sharding, narrays, c_arrays, c_semantics
+)
+    @ccall mlir_c.ifrt_client_assemble_array_from_single_shards(
+        client::IfrtClientPtr,
+        ndims::Int32,
+        c_shape::Ptr{Int64},
+        sharding::HeldIfrtConstShardingPtr,
+        narrays::Int32,
+        c_arrays::Ptr{HeldIfrtArrayPtr},
+        c_semantics::Int32,
+    )::HeldIfrtArrayPtr
+end
+
+function ifrt_pjrt_array_create(client, buffer)
+    @ccall mlir_c.ifrt_pjrt_array_create(
+        client::IfrtPjRtClientPtr, buffer::HeldPjRtBufferPtr
+    )::HeldIfrtArrayPtr
+end
+
+function ifrt_pjrt_make_client_with_default_kv_store(
+    pjrt_client, node_id, num_nodes, distributed_runtime_client, error, key_prefix
+)
+    @ccall mlir_c.ifrt_pjrt_make_client_with_default_kv_store(
+        pjrt_client::PjRtClientPtr,
+        node_id::Cint,
+        num_nodes::Cint,
+        distributed_runtime_client::Ptr{Cvoid},
+        error::Ptr{Cstring},
+        key_prefix::Cstring,
+    )::IfrtClientPtr
+end
+
+function ifrt_make_pjrt_cpu_client(
+    asynchronous, node_id, num_nodes, distributed_runtime_client, error
+)
+    @ccall mlir_c.ifrt_make_pjrt_cpu_client(
+        asynchronous::UInt8,
+        node_id::Cint,
+        num_nodes::Cint,
+        distributed_runtime_client::Ptr{Cvoid},
+        error::Ptr{Cstring},
+    )::IfrtClientPtr
+end
+
+function ifrt_make_pjrt_gpu_client(
+    node_id,
+    num_nodes,
+    allowed_devices,
+    num_allowed_devices,
+    memory_fraction,
+    preallocate,
+    platform_name,
+    error,
+    distributed_runtime_client,
+)
+    @ccall mlir_c.ifrt_make_pjrt_gpu_client(
+        node_id::Cint,
+        num_nodes::Cint,
+        allowed_devices::Ptr{Int64},
+        num_allowed_devices::Int64,
+        memory_fraction::Cdouble,
+        preallocate::Bool,
+        platform_name::Cstring,
+        error::Ptr{Cstring},
+        distributed_runtime_client::Ptr{Cvoid},
+    )::IfrtClientPtr
+end
+
+function ifrt_make_pjrt_tpu_client(
+    tpu_path, error, node_id, num_nodes, distributed_runtime_client
+)
+    @ccall mlir_c.ifrt_make_pjrt_tpu_client(
+        tpu_path::Cstring,
+        error::Ptr{Cstring},
+        node_id::Cint,
+        num_nodes::Cint,
+        distributed_runtime_client::Ptr{Cvoid},
+    )::IfrtClientPtr
+end
+
+function ifrt_FreeClient(client)
+    @ccall mlir_c.ifrt_FreeClient(client::IfrtClientPtr)::Cvoid
+end
+
+function ifrt_client_device_count(client)
+    @ccall mlir_c.ifrt_client_device_count(client::IfrtClientPtr)::Cint
+end
+
+function ifrt_client_addressable_device_count(client)
+    @ccall mlir_c.ifrt_client_addressable_device_count(client::IfrtClientPtr)::Cint
+end
+
+function ifrt_client_devices(client, out_devices)
+    @ccall mlir_c.ifrt_client_devices(
+        client::IfrtClientPtr, out_devices::Ptr{IfrtDevicePtr}
+    )::Cvoid
+end
+
+function ifrt_client_addressable_devices(client, out_devices)
+    @ccall mlir_c.ifrt_client_addressable_devices(
+        client::IfrtClientPtr, out_devices::Ptr{IfrtDevicePtr}
+    )::Cvoid
+end
+
+function ifrt_client_all_devices(client, out_devices)
+    @ccall mlir_c.ifrt_client_all_devices(
+        client::IfrtClientPtr, out_devices::Ptr{IfrtDevicePtr}
+    )::Cvoid
+end
+
+function ifrt_client_lookup_device(client, dev_id)
+    @ccall mlir_c.ifrt_client_lookup_device(
+        client::IfrtClientPtr, dev_id::Cint
+    )::IfrtDevicePtr
+end
+
+function ifrt_client_lookup_addressable_device(client, local_hw_id)
+    @ccall mlir_c.ifrt_client_lookup_addressable_device(
+        client::IfrtClientPtr, local_hw_id::Cint
+    )::IfrtDevicePtr
+end
+
+function ifrt_ClientProcessIndex(client)
+    @ccall mlir_c.ifrt_ClientProcessIndex(client::IfrtClientPtr)::Cint
+end
+
+function ifrt_ClientGetPlatformName(client)
+    @ccall mlir_c.ifrt_ClientGetPlatformName(client::IfrtClientPtr)::Cstring
+end
+
+function ifrt_ClientGetDevice(client, idx)
+    @ccall mlir_c.ifrt_ClientGetDevice(client::IfrtClientPtr, idx::Cint)::IfrtDevicePtr
+end
+
+function ifrt_ClientGetAddressableDevice(client, idx)
+    @ccall mlir_c.ifrt_ClientGetAddressableDevice(
+        client::IfrtClientPtr, idx::Cint
+    )::IfrtDevicePtr
+end
+
+function ifrt_DeviceGetGlobalDeviceId(device)
+    @ccall mlir_c.ifrt_DeviceGetGlobalDeviceId(device::IfrtDevicePtr)::Int64
+end
+
+function ifrt_DeviceGetKind(device)
+    @ccall mlir_c.ifrt_DeviceGetKind(device::IfrtDevicePtr)::Cstring
+end
+
+function ifrt_DeviceToClient(device)
+    @ccall mlir_c.ifrt_DeviceToClient(device::IfrtDevicePtr)::IfrtClientPtr
+end
+
+function ifrt_DeviceIsAddressable(device)
+    @ccall mlir_c.ifrt_DeviceIsAddressable(device::IfrtDevicePtr)::Bool
+end
+
+function ifrt_DeviceGetLocalHardwareId(device)
+    @ccall mlir_c.ifrt_DeviceGetLocalHardwareId(device::IfrtDevicePtr)::Int64
+end
+
+function ifrt_DeviceGetDefaultMemory(device)
+    @ccall mlir_c.ifrt_DeviceGetDefaultMemory(device::IfrtDevicePtr)::IfrtMemoryPtr
+end
+
+function ifrt_DeviceGetMemories(device, size)
+    @ccall mlir_c.ifrt_DeviceGetMemories(
+        device::IfrtDevicePtr, size::Ptr{Int32}
+    )::Ptr{IfrtMemoryPtr}
+end
+
+function ifrt_device_get_allocator_stats(device, jlstats)
+    @ccall mlir_c.ifrt_device_get_allocator_stats(
+        device::IfrtDevicePtr, jlstats::Ptr{JLAllocatorStats}
+    )::Cvoid
+end
+
+function ifrt_MemoryGetMemoryKind(memory)
+    @ccall mlir_c.ifrt_MemoryGetMemoryKind(memory::IfrtMemoryPtr)::IfrtMemoryKindPtr
+end
+
+function ifrt_MemoryToString(memory)
+    @ccall mlir_c.ifrt_MemoryToString(memory::IfrtMemoryPtr)::Cstring
+end
+
+function ifrt_MemoryKindToString(memory_kind)
+    @ccall mlir_c.ifrt_MemoryKindToString(memory_kind::IfrtMemoryKindPtr)::Cstring
+end
+
+function ifrt_MemoryKindsAreEqual(a, b)
+    @ccall mlir_c.ifrt_MemoryKindsAreEqual(a::IfrtMemoryKindPtr, b::IfrtMemoryKindPtr)::Bool
+end
+
+function ifrt_memory_kind_from_string(c_str)
+    @ccall mlir_c.ifrt_memory_kind_from_string(c_str::Cstring)::IfrtMemoryKindPtr
+end
+
+function ifrt_memory_kind_with_optional_memory_space()
+    @ccall mlir_c.ifrt_memory_kind_with_optional_memory_space()::IfrtMemoryKindPtr
+end
+
+function ifrt_memory_kind_has_value(memory_kind)
+    @ccall mlir_c.ifrt_memory_kind_has_value(memory_kind::IfrtMemoryKindPtr)::Bool
+end
+
+function ifrt_compile(
+    client,
+    cmod,
+    device_id,
+    mesh_ids,
+    num_mesh_ids,
+    xla_gpu_cuda_data_dir,
+    use_shardy_partitioner,
+    num_replicas,
+    num_partitions,
+    use_spmd_partitioning,
+    kernel_cache_enabled,
+    kernel_cache_path,
+    autotune_cache_enabled,
+    autotune_cache_path,
+    process_id,
+)
+    @ccall mlir_c.ifrt_compile(
+        client::IfrtClientPtr,
+        cmod::MlirModule,
+        device_id::Int64,
+        mesh_ids::Ptr{Int64},
+        num_mesh_ids::Int64,
+        xla_gpu_cuda_data_dir::Cstring,
+        use_shardy_partitioner::Bool,
+        num_replicas::Int64,
+        num_partitions::Int64,
+        use_spmd_partitioning::Bool,
+        kernel_cache_enabled::Bool,
+        kernel_cache_path::Cstring,
+        autotune_cache_enabled::Bool,
+        autotune_cache_path::Cstring,
+        process_id::Cint,
+    )::HeldIfrtLoadedExecutablePtr
+end
+
+function ifrt_compile_with_proto(
+    client, cmod, compile_options_proto, compile_options_proto_size
+)
+    @ccall mlir_c.ifrt_compile_with_proto(
+        client::IfrtClientPtr,
+        cmod::MlirModule,
+        compile_options_proto::Cstring,
+        compile_options_proto_size::Csize_t,
+    )::HeldIfrtLoadedExecutablePtr
+end
+
+function ifrt_pjrt_loaded_executable_dtor(exec)
+    @ccall mlir_c.ifrt_pjrt_loaded_executable_dtor(exec::IfrtPjRtLoadedExecutablePtr)::Cvoid
+end
+
+function ifrt_loaded_executable_dtor(exec)
+    @ccall mlir_c.ifrt_loaded_executable_dtor(exec::HeldIfrtLoadedExecutablePtr)::Cvoid
+end
+
+function ifrt_loaded_executable_execute(
+    exec, num_args, op_args, is_arg_donatable, num_results, op_results, futures, status
+)
+    @ccall mlir_c.ifrt_loaded_executable_execute(
+        exec::HeldIfrtLoadedExecutablePtr,
+        num_args::Cint,
+        op_args::Ptr{HeldIfrtArrayPtr},
+        is_arg_donatable::Ptr{UInt8},
+        num_results::Cint,
+        op_results::Ptr{HeldIfrtArrayPtr},
+        futures::Ptr{UInt8},
+        status::Ptr{FutureTypePtr},
+    )::Cvoid
+end
+
+function ifrt_loaded_executable_client(exec)
+    @ccall mlir_c.ifrt_loaded_executable_client(
+        exec::HeldIfrtLoadedExecutablePtr
+    )::IfrtClientPtr
+end
+
+function ifrt_loaded_executable_get_parameter_shardings(
+    exec, op_shardings, num_op_shardings
+)
+    @ccall mlir_c.ifrt_loaded_executable_get_parameter_shardings(
+        exec::HeldIfrtLoadedExecutablePtr,
+        op_shardings::Ptr{OpShardingPtr},
+        num_op_shardings::Int32,
+    )::Cvoid
+end
+
+function ifrt_loaded_executable_get_output_shardings(exec, op_shardings, num_op_shardings)
+    @ccall mlir_c.ifrt_loaded_executable_get_output_shardings(
+        exec::HeldIfrtLoadedExecutablePtr,
+        op_shardings::Ptr{OpShardingPtr},
+        num_op_shardings::Int32,
+    )::Cvoid
+end
+
+function ifrt_loaded_executable_get_hlo_modules(exec, hlo_modules, nmodules)
+    @ccall mlir_c.ifrt_loaded_executable_get_hlo_modules(
+        exec::HeldIfrtLoadedExecutablePtr,
+        hlo_modules::Ptr{Ptr{Cvoid}},
+        nmodules::Ptr{Int32},
+    )::Cvoid
+end
+
+function ifrt_loaded_executable_num_devices(exec)
+    @ccall mlir_c.ifrt_loaded_executable_num_devices(
+        exec::HeldIfrtLoadedExecutablePtr
+    )::Int32
+end
+
+function ifrt_array_dtor(array)
+    @ccall mlir_c.ifrt_array_dtor(array::HeldIfrtArrayPtr)::Cvoid
+end
+
+function ifrt_CopyArrayToHostBuffer(array, data, semantics)
+    @ccall mlir_c.ifrt_CopyArrayToHostBuffer(
+        array::HeldIfrtArrayPtr, data::Ptr{Cvoid}, semantics::Cint
+    )::FutureTypePtr
+end
+
+function ifrt_free_array(array)
+    @ccall mlir_c.ifrt_free_array(array::HeldIfrtArrayPtr)::Cvoid
+end
+
+function ifrt_array_shape(array)
+    @ccall mlir_c.ifrt_array_shape(array::HeldIfrtArrayPtr)::Ptr{Int64}
+end
+
+function ifrt_array_ndims(array)
+    @ccall mlir_c.ifrt_array_ndims(array::HeldIfrtArrayPtr)::Int64
+end
+
+function ifrt_array_eltype(array)
+    @ccall mlir_c.ifrt_array_eltype(array::HeldIfrtArrayPtr)::Cint
+end
+
+function ifrt_array_to_client(array)
+    @ccall mlir_c.ifrt_array_to_client(array::HeldIfrtArrayPtr)::IfrtClientPtr
+end
+
+function ifrt_array_to_sharding(array)
+    @ccall mlir_c.ifrt_array_to_sharding(array::HeldIfrtArrayPtr)::HeldIfrtConstShardingPtr
+end
+
+function ifrt_array_copy_to_host_buffer(array, data)
+    @ccall mlir_c.ifrt_array_copy_to_host_buffer(
+        array::HeldIfrtArrayPtr, data::Ptr{Cvoid}
+    )::Cvoid
+end
+
+function ifrt_array_disassemble_into_single_device_arrays(
+    array, c_semantics, c_single_device_shard_semantics, narrays
+)
+    @ccall mlir_c.ifrt_array_disassemble_into_single_device_arrays(
+        array::HeldIfrtArrayPtr,
+        c_semantics::Int32,
+        c_single_device_shard_semantics::Int32,
+        narrays::Ptr{Int32},
+    )::Ptr{HeldIfrtArrayPtr}
+end
+
+function ifrt_copy_array(array)
+    @ccall mlir_c.ifrt_copy_array(array::HeldIfrtArrayPtr)::HeldIfrtArrayPtr
+end
+
+function ifrt_copy_arrays_to_device_with_sharding(
+    client, arrays, num_arrays, dst_sharding, c_semantics
+)
+    @ccall mlir_c.ifrt_copy_arrays_to_device_with_sharding(
+        client::IfrtClientPtr,
+        arrays::Ptr{HeldIfrtArrayPtr},
+        num_arrays::Int32,
+        dst_sharding::HeldIfrtConstShardingPtr,
+        c_semantics::Int32,
+    )::Ptr{HeldIfrtArrayPtr}
+end
+
+function ifrt_make_array_from_host_buffer_shards(
+    client,
+    host_buffers,
+    num_buffers,
+    host_buffer_shapes,
+    addressable_shard_indices,
+    addressable_shard_indices_sizes,
+    dtype_kind,
+    ndims,
+    final_buffer_shape,
+    sharding,
+    c_host_buffer_semantics,
+)
+    @ccall mlir_c.ifrt_make_array_from_host_buffer_shards(
+        client::IfrtClientPtr,
+        host_buffers::Ptr{Ptr{Cvoid}},
+        num_buffers::Cint,
+        host_buffer_shapes::Ptr{Ptr{Int64}},
+        addressable_shard_indices::Ptr{Ptr{Int64}},
+        addressable_shard_indices_sizes::Ptr{Int64},
+        dtype_kind::Cint,
+        ndims::Cint,
+        final_buffer_shape::Ptr{Int64},
+        sharding::HeldIfrtConstShardingPtr,
+        c_host_buffer_semantics::Int32,
+    )::HeldIfrtArrayPtr
+end
+
+function ifrt_free_future(future)
+    @ccall mlir_c.ifrt_free_future(future::IfRtFutureTypePtr)::Cvoid
+end
+
+function ifrt_future_is_ready(future)
+    @ccall mlir_c.ifrt_future_is_ready(future::IfRtFutureTypePtr)::UInt8
+end
+
+function ifrt_future_await(future)
+    @ccall mlir_c.ifrt_future_await(future::IfRtFutureTypePtr)::Cvoid
+end
+
+function ifrt_proxy_grpc_server_dtor(server)
+    @ccall mlir_c.ifrt_proxy_grpc_server_dtor(server::IfrtGrpcServerPtr)::Cvoid
+end
+
+function ifrt_proxy_grpc_server_address(server)
+    @ccall mlir_c.ifrt_proxy_grpc_server_address(server::IfrtGrpcServerPtr)::Cstring
+end
+
+function ifrt_proxy_grpc_server_wait(server)
+    @ccall mlir_c.ifrt_proxy_grpc_server_wait(server::IfrtGrpcServerPtr)::Cvoid
+end
+
+function ifrt_proxy_create_client(c_proxy_server_address, connection_timeout_in_minutes)
+    @ccall mlir_c.ifrt_proxy_create_client(
+        c_proxy_server_address::Cstring, connection_timeout_in_minutes::Cint
+    )::IfrtClientPtr
+end
+
+function free_op_sharding(op_sharding)
+    @ccall mlir_c.free_op_sharding(op_sharding::OpShardingPtr)::Cvoid
+end
+
+function op_sharding_to_op_sharding_type(op_sharding)
+    @ccall mlir_c.op_sharding_to_op_sharding_type(op_sharding::OpShardingPtr)::Int32
+end
+
+function op_sharding_to_shard_group_type(op_sharding)
+    @ccall mlir_c.op_sharding_to_shard_group_type(op_sharding::OpShardingPtr)::Int32
+end
+
+function op_sharding_to_shard_group_id(op_sharding)
+    @ccall mlir_c.op_sharding_to_shard_group_id(op_sharding::OpShardingPtr)::Int32
+end
+
+function op_sharding_is_shard_group(op_sharding)
+    @ccall mlir_c.op_sharding_is_shard_group(op_sharding::OpShardingPtr)::Bool
+end
+
+function op_sharding_replicate_on_last_tile_dim(op_sharding)
+    @ccall mlir_c.op_sharding_replicate_on_last_tile_dim(op_sharding::OpShardingPtr)::Bool
+end
+
+function op_sharding_has_last_tile_dims(op_sharding)
+    @ccall mlir_c.op_sharding_has_last_tile_dims(op_sharding::OpShardingPtr)::Bool
+end
+
+function op_sharding_last_tile_dims_size(op_sharding)
+    @ccall mlir_c.op_sharding_last_tile_dims_size(op_sharding::OpShardingPtr)::Int32
+end
+
+function op_sharding_last_tile_dims(op_sharding, last_tile_dims)
+    @ccall mlir_c.op_sharding_last_tile_dims(
+        op_sharding::OpShardingPtr, last_tile_dims::Ptr{Int32}
+    )::Cvoid
+end
+
+function op_sharding_has_iota_reshape_dims(op_sharding)
+    @ccall mlir_c.op_sharding_has_iota_reshape_dims(op_sharding::OpShardingPtr)::Bool
+end
+
+function op_sharding_iota_reshape_dims_size(op_sharding)
+    @ccall mlir_c.op_sharding_iota_reshape_dims_size(op_sharding::OpShardingPtr)::Int32
+end
+
+function op_sharding_iota_reshape_dims(op_sharding, iota_reshape_dims)
+    @ccall mlir_c.op_sharding_iota_reshape_dims(
+        op_sharding::OpShardingPtr, iota_reshape_dims::Ptr{Int32}
+    )::Cvoid
+end
+
+function op_sharding_has_iota_transpose_perm(op_sharding)
+    @ccall mlir_c.op_sharding_has_iota_transpose_perm(op_sharding::OpShardingPtr)::Bool
+end
+
+function op_sharding_iota_transpose_perm_size(op_sharding)
+    @ccall mlir_c.op_sharding_iota_transpose_perm_size(op_sharding::OpShardingPtr)::Int32
+end
+
+function op_sharding_iota_transpose_perm(op_sharding, iota_transpose_perm)
+    @ccall mlir_c.op_sharding_iota_transpose_perm(
+        op_sharding::OpShardingPtr, iota_transpose_perm::Ptr{Int32}
+    )::Cvoid
+end
+
+function op_sharding_has_tile_assignment_dimensions(op_sharding)
+    @ccall mlir_c.op_sharding_has_tile_assignment_dimensions(
+        op_sharding::OpShardingPtr
+    )::Bool
+end
+
+function op_sharding_tile_assignment_dimensions_size(op_sharding)
+    @ccall mlir_c.op_sharding_tile_assignment_dimensions_size(
+        op_sharding::OpShardingPtr
+    )::Int32
+end
+
+function op_sharding_tile_assignment_dimensions(op_sharding, tile_assignment_dimensions)
+    @ccall mlir_c.op_sharding_tile_assignment_dimensions(
+        op_sharding::OpShardingPtr, tile_assignment_dimensions::Ptr{Int32}
+    )::Cvoid
+end
+
+function op_sharding_has_tile_assignment_devices(op_sharding)
+    @ccall mlir_c.op_sharding_has_tile_assignment_devices(op_sharding::OpShardingPtr)::Bool
+end
+
+function op_sharding_tile_assignment_devices_size(op_sharding)
+    @ccall mlir_c.op_sharding_tile_assignment_devices_size(
+        op_sharding::OpShardingPtr
+    )::Int32
+end
+
+function op_sharding_tile_assignment_devices(op_sharding, tile_assignment_devices)
+    @ccall mlir_c.op_sharding_tile_assignment_devices(
+        op_sharding::OpShardingPtr, tile_assignment_devices::Ptr{Int32}
+    )::Cvoid
+end
+
+function free_hlo_sharding(hlo_sharding)
+    @ccall mlir_c.free_hlo_sharding(hlo_sharding::HloShardingPtr)::Cvoid
+end
+
+function hlo_sharding_from_op_sharding(op_sharding)
+    @ccall mlir_c.hlo_sharding_from_op_sharding(op_sharding::OpShardingPtr)::HloShardingPtr
+end
+
+function hlo_sharding_to_op_sharding(hlo_sharding)
+    @ccall mlir_c.hlo_sharding_to_op_sharding(hlo_sharding::HloShardingPtr)::OpShardingPtr
+end
+
+function hlo_sharding_to_string(hlo_sharding)
+    @ccall mlir_c.hlo_sharding_to_string(hlo_sharding::HloShardingPtr)::Cstring
+end
+
+function hlo_sharding_is_tuple(hloSharding)
+    @ccall mlir_c.hlo_sharding_is_tuple(hloSharding::HloShardingPtr)::Bool
+end
+
+function hlo_sharding_is_replicated(hloSharding)
+    @ccall mlir_c.hlo_sharding_is_replicated(hloSharding::HloShardingPtr)::Bool
+end
+
+function hlo_sharding_is_manual(hloSharding)
+    @ccall mlir_c.hlo_sharding_is_manual(hloSharding::HloShardingPtr)::Bool
+end
+
+function hlo_sharding_is_unknown(hloSharding)
+    @ccall mlir_c.hlo_sharding_is_unknown(hloSharding::HloShardingPtr)::Bool
+end
+
+function hlo_sharding_is_tiled(hloSharding)
+    @ccall mlir_c.hlo_sharding_is_tiled(hloSharding::HloShardingPtr)::Bool
+end
+
+function hlo_sharding_is_maximal(hloSharding)
+    @ccall mlir_c.hlo_sharding_is_maximal(hloSharding::HloShardingPtr)::Bool
+end
+
+function hlo_sharding_replicate_on_last_tile_dim(hloSharding)
+    @ccall mlir_c.hlo_sharding_replicate_on_last_tile_dim(hloSharding::HloShardingPtr)::Bool
+end
+
+function hlo_sharding_tile_assignment_dimensions_size(hloSharding)
+    @ccall mlir_c.hlo_sharding_tile_assignment_dimensions_size(
+        hloSharding::HloShardingPtr
+    )::Int32
+end
+
+function hlo_sharding_tile_assignment_devices_size(hloSharding)
+    @ccall mlir_c.hlo_sharding_tile_assignment_devices_size(
+        hloSharding::HloShardingPtr
+    )::Int32
+end
+
+function hlo_sharding_tile_assignment_dimensions(hloSharding, dims, size)
+    @ccall mlir_c.hlo_sharding_tile_assignment_dimensions(
+        hloSharding::HloShardingPtr, dims::Ptr{Int64}, size::Int32
+    )::Cvoid
+end
+
+function hlo_sharding_tile_assignment_devices(hloSharding, devices, size)
+    @ccall mlir_c.hlo_sharding_tile_assignment_devices(
+        hloSharding::HloShardingPtr, devices::Ptr{Int64}, size::Int32
+    )::Cvoid
+end
+
+function hlo_sharding_check_eq(hloSharding, other)
+    @ccall mlir_c.hlo_sharding_check_eq(
+        hloSharding::HloShardingPtr, other::HloShardingPtr
+    )::Bool
+end
+
+function free_ifrt_sharding(sharding)
+    @ccall mlir_c.free_ifrt_sharding(sharding::HeldIfrtShardingPtr)::Cvoid
+end
+
+function ifrt_sharding_from_xla_hlo_sharding(
+    client, device_list, num_devices, memory_kind, xla_hlo_sharding
+)
+    @ccall mlir_c.ifrt_sharding_from_xla_hlo_sharding(
+        client::IfrtClientPtr,
+        device_list::Ptr{IfrtDevicePtr},
+        num_devices::Int32,
+        memory_kind::IfrtMemoryKindPtr,
+        xla_hlo_sharding::HloShardingPtr,
+    )::HeldIfrtShardingPtr
+end
+
+function ifrt_sharding_to_xla_hlo_sharding(sharding)
+    @ccall mlir_c.ifrt_sharding_to_xla_hlo_sharding(
+        sharding::HeldIfrtShardingPtr
+    )::HloShardingPtr
+end
+
+function ifrt_sharding_is_single_device_sharding(sharding)
+    @ccall mlir_c.ifrt_sharding_is_single_device_sharding(
+        sharding::HeldIfrtShardingPtr
+    )::Bool
+end
+
+function ifrt_sharding_is_fully_replicated(sharding)
+    @ccall mlir_c.ifrt_sharding_is_fully_replicated(sharding::HeldIfrtShardingPtr)::Bool
+end
+
+function ifrt_sharding_to_string(sharding)
+    @ccall mlir_c.ifrt_sharding_to_string(sharding::HeldIfrtShardingPtr)::Cstring
+end
+
+function ifrt_sharding_devices_size(sharding)
+    @ccall mlir_c.ifrt_sharding_devices_size(sharding::HeldIfrtShardingPtr)::Int32
+end
+
+function ifrt_sharding_to_device_list(sharding, devices)
+    @ccall mlir_c.ifrt_sharding_to_device_list(
+        sharding::HeldIfrtShardingPtr, devices::Ptr{IfrtDevicePtr}
+    )::Cvoid
+end
+
+function ifrt_sharding_to_index_domains(
+    sharding, array_size_list, array_size_len, index_domain_origins, index_domain_shapes
+)
+    @ccall mlir_c.ifrt_sharding_to_index_domains(
+        sharding::HeldIfrtShardingPtr,
+        array_size_list::Ptr{Int64},
+        array_size_len::Int32,
+        index_domain_origins::Ptr{Int64},
+        index_domain_shapes::Ptr{Int64},
+    )::Cvoid
+end
+
+function GetDistributedRuntimeClient(
+    c_address,
+    node_id,
+    rpc_timeout_in_seconds,
+    init_timeout,
+    shutdown_timeout_in_minutes,
+    heartbeat_timeout_in_seconds,
+    use_compression,
+)
+    @ccall mlir_c.GetDistributedRuntimeClient(
+        c_address::Cstring,
+        node_id::Int32,
+        rpc_timeout_in_seconds::Int32,
+        init_timeout::Int32,
+        shutdown_timeout_in_minutes::Int32,
+        heartbeat_timeout_in_seconds::Int32,
+        use_compression::Bool,
+    )::HeldDistributedRuntimeClientPtr
+end
+
+function free_distributed_runtime_client(client)
+    @ccall mlir_c.free_distributed_runtime_client(
+        client::HeldDistributedRuntimeClientPtr
+    )::Cvoid
+end
+
+function distributed_runtime_client_connect(client)
+    @ccall mlir_c.distributed_runtime_client_connect(
+        client::HeldDistributedRuntimeClientPtr
+    )::Cvoid
+end
+
+function distributed_runtime_client_shutdown(client)
+    @ccall mlir_c.distributed_runtime_client_shutdown(
+        client::HeldDistributedRuntimeClientPtr
+    )::Cvoid
+end
+
+function GetDistributedRuntimeService(
+    c_address,
+    num_nodes,
+    heartbeat_timeout_in_seconds,
+    cluster_register_timeout_in_minutes,
+    shutdown_timeout_in_minutes,
+)
+    @ccall mlir_c.GetDistributedRuntimeService(
+        c_address::Cstring,
+        num_nodes::Cint,
+        heartbeat_timeout_in_seconds::Int32,
+        cluster_register_timeout_in_minutes::Int32,
+        shutdown_timeout_in_minutes::Int32,
+    )::DistributedRuntimeServicePtr
+end
+
+function free_distributed_runtime_service(service)
+    @ccall mlir_c.free_distributed_runtime_service(
+        service::DistributedRuntimeServicePtr
+    )::Cvoid
+end
+
+function distributed_runtime_service_shutdown(service)
+    @ccall mlir_c.distributed_runtime_service_shutdown(
+        service::DistributedRuntimeServicePtr
+    )::Cvoid
+end
+
+function hloShardingFromTensorShardingAttr(cattr, cmeshAttr)
+    @ccall mlir_c.hloShardingFromTensorShardingAttr(
+        cattr::MlirAttribute, cmeshAttr::MlirAttribute
+    )::HloShardingPtr
+end
+
+function hloShardingToTensorShardingAttr(
+    cctx, hloSharding, cmeshName, cmeshAttr, rank, isClosed, priority
+)
+    @ccall mlir_c.hloShardingToTensorShardingAttr(
+        cctx::MlirContext,
+        hloSharding::Ptr{Cvoid},
+        cmeshName::MlirAttribute,
+        cmeshAttr::MlirAttribute,
+        rank::Int64,
+        isClosed::Ptr{Bool},
+        priority::Ptr{Int64},
+    )::MlirAttribute
+end
+
+function addSdyPropagationPipeline(
+    pm,
+    keepShardingRules,
+    conservativePropagation,
+    debugShardingOrigins,
+    debugPropagationEdgeSharding,
+    skipConvertToReshard,
+    skipInline,
+    enableInsertExplicitCollectives,
+)
+    @ccall mlir_c.addSdyPropagationPipeline(
+        pm::MlirOpPassManager,
+        keepShardingRules::UInt8,
+        conservativePropagation::UInt8,
+        debugShardingOrigins::UInt8,
+        debugPropagationEdgeSharding::UInt8,
+        skipConvertToReshard::UInt8,
+        skipInline::UInt8,
+        enableInsertExplicitCollectives::UInt8,
+    )::Cvoid
+end
+
+function convertMlirModuleToHloModule(mod)
+    @ccall mlir_c.convertMlirModuleToHloModule(mod::MlirModule)::HeldHloModulePtr
+end
+
+function parseAndReturnUnverifiedHloModule(cstr)
+    @ccall mlir_c.parseAndReturnUnverifiedHloModule(cstr::Cstring)::HeldHloModulePtr
+end
+
+function HloModuleToString(hlo_module, print_options)
+    @ccall mlir_c.HloModuleToString(
+        hlo_module::HeldHloModulePtr, print_options::Int32
+    )::Cstring
+end
+
+function FreeHloModule(hlo_module)
+    @ccall mlir_c.FreeHloModule(hlo_module::HeldHloModulePtr)::Cvoid
+end
+
+function hloModuleGetEntryComputation(hlo_module)
+    @ccall mlir_c.hloModuleGetEntryComputation(
+        hlo_module::HeldHloModulePtr
+    )::HloComputationPtr
+end
+
+function freeHloComputation(hlo_computation)
+    @ccall mlir_c.freeHloComputation(hlo_computation::HloComputationPtr)::Cvoid
+end
+
+function hloComputationToString(hlo_computation, print_options)
+    @ccall mlir_c.hloComputationToString(
+        hlo_computation::HloComputationPtr, print_options::Int32
+    )::Cstring
+end
+
+function hloComputationInstructionCount(hlo_computation)
+    @ccall mlir_c.hloComputationInstructionCount(hlo_computation::HloComputationPtr)::Int64
+end
+
+function hloComputationGetInstructionsPostOrder(
+    hlo_computation, num_instructions, hlo_instructions
+)
+    @ccall mlir_c.hloComputationGetInstructionsPostOrder(
+        hlo_computation::HloComputationPtr,
+        num_instructions::Int64,
+        hlo_instructions::Ptr{HloInstructionPtr},
+    )::Cvoid
+end
+
+function freeHloInstruction(hlo_instruction)
+    @ccall mlir_c.freeHloInstruction(hlo_instruction::HloInstructionPtr)::Cvoid
+end
+
+function hloInstructionToString(hlo_instruction, print_options)
+    @ccall mlir_c.hloInstructionToString(
+        hlo_instruction::HloInstructionPtr, print_options::Int32
+    )::Cstring
+end
+
+function hloInstructionHasToApply(hlo_instruction)
+    @ccall mlir_c.hloInstructionHasToApply(hlo_instruction::HloInstructionPtr)::UInt8
+end
+
+function hloInstructionGetToApply(hlo_instruction)
+    @ccall mlir_c.hloInstructionGetToApply(
+        hlo_instruction::HloInstructionPtr
+    )::HloComputationPtr
+end
+
+function hloInstructionGetOpcode(hlo_instruction)
+    @ccall mlir_c.hloInstructionGetOpcode(hlo_instruction::HloInstructionPtr)::UInt8
+end
+
+function hloOpcodeToString(opcode)
+    @ccall mlir_c.hloOpcodeToString(opcode::UInt8)::Cstring
+end
+
+function hloInstructionIsFusion(hlo_instruction)
+    @ccall mlir_c.hloInstructionIsFusion(hlo_instruction::HloInstructionPtr)::UInt8
+end
+
+function hloInstructionGetFusionKind(hlo_instruction)
+    @ccall mlir_c.hloInstructionGetFusionKind(hlo_instruction::HloInstructionPtr)::UInt8
+end
+
+function hloFusionKindToString(kind)
+    @ccall mlir_c.hloFusionKindToString(kind::UInt8)::Cstring
+end
+
+function hloInstructionFusedInstructionsComputation(hlo_instruction)
+    @ccall mlir_c.hloInstructionFusedInstructionsComputation(
+        hlo_instruction::HloInstructionPtr
+    )::HloComputationPtr
+end
+
+function pjrt_hlo_module_cost_analysis_properties(client, hlo_module, jlproperties)
+    @ccall mlir_c.pjrt_hlo_module_cost_analysis_properties(
+        client::PjRtClientPtr,
+        hlo_module::HeldHloModulePtr,
+        jlproperties::Ptr{JLHloCostAnalysisProperties},
+    )::Cvoid
+end
+
+function ifrt_hlo_module_cost_analysis_properties(client, hlo_module, jlproperties)
+    @ccall mlir_c.ifrt_hlo_module_cost_analysis_properties(
+        client::IfrtClientPtr,
+        hlo_module::HeldHloModulePtr,
+        jlproperties::Ptr{JLHloCostAnalysisProperties},
+    )::Cvoid
+end
+
+function CreateGPUPerformanceModel(ctx, device_description)
+    @ccall mlir_c.CreateGPUPerformanceModel(
+        ctx::MlirContext, device_description::DeviceDescriptionPtr
+    )::GPUPerformanceModelPtr
+end
+
+function RunAnalysisOnHloModule(gpu_performance_model, hlo_module)
+    @ccall mlir_c.RunAnalysisOnHloModule(
+        gpu_performance_model::GPUPerformanceModelPtr, hlo_module::HeldHloModulePtr
+    )::Cvoid
+end
+
+function EstimateRunTimeForInstruction(gpu_performance_model, hlo_instruction, jldata)
+    @ccall mlir_c.EstimateRunTimeForInstruction(
+        gpu_performance_model::GPUPerformanceModelPtr,
+        hlo_instruction::HloInstructionPtr,
+        jldata::Ptr{JLEstimateRunTimeData},
+    )::Cvoid
+end
+
+function InitializeXProfStubs(cstr_worker_service_address)
+    @ccall mlir_c.InitializeXProfStubs(cstr_worker_service_address::Cstring)::Cvoid
+end
+
+function StartGrpcServer(port)
+    @ccall mlir_c.StartGrpcServer(port::Cint)::Cvoid
+end
+
+function XSpaceToToolsData(
+    xspace_paths,
+    num_paths,
+    tool_name,
+    bool_keys,
+    bool_values,
+    bool_count,
+    int_keys,
+    int_values,
+    int_count,
+    str_keys,
+    str_values,
+    str_count,
+    result_data,
+    result_size,
+    is_binary,
+    error,
+)
+    @ccall mlir_c.XSpaceToToolsData(
+        xspace_paths::Ptr{Cstring},
+        num_paths::Int64,
+        tool_name::Cstring,
+        bool_keys::Ptr{Cstring},
+        bool_values::Ptr{Bool},
+        bool_count::Int64,
+        int_keys::Ptr{Cstring},
+        int_values::Ptr{Cint},
+        int_count::Int64,
+        str_keys::Ptr{Cstring},
+        str_values::Ptr{Cstring},
+        str_count::Int64,
+        result_data::Ptr{Cstring},
+        result_size::Ptr{Int64},
+        is_binary::Ptr{Bool},
+        error::Ptr{Cstring},
+    )::Cint
+end
+
+function reactantXLAThrow(str)
+    @ccall mlir_c.reactantXLAThrow(str::Cstring)::Cvoid
+end
+
+function reactantXLAInit(lrtP, backend)
+    @ccall mlir_c.reactantXLAInit(lrtP::Ptr{LinkableRuntimePtr}, backend::Cstring)::Cvoid
+end
+
+function reactantXLADeInit(lrt)
+    @ccall mlir_c.reactantXLADeInit(lrt::Ptr{LinkableRuntimePtr})::Cvoid
+end
+
+function reactantXLAMemcpy(lrtP, dst, src, size, direction)
+    @ccall mlir_c.reactantXLAMemcpy(
+        lrtP::Ptr{LinkableRuntimePtr},
+        dst::Ptr{Cvoid},
+        src::Ptr{Cvoid},
+        size::Csize_t,
+        direction::Int32,
+    )::Cvoid
+end
+
+function reactantXLAMalloc(lrtP, ptype, shapeLen, shape)
+    @ccall mlir_c.reactantXLAMalloc(
+        lrtP::Ptr{LinkableRuntimePtr}, ptype::UInt64, shapeLen::UInt64, shape::Ptr{UInt64}
+    )::Ptr{Cvoid}
+end
+
+function reactantXLAFree(lrtP, buffer0)
+    @ccall mlir_c.reactantXLAFree(lrtP::Ptr{LinkableRuntimePtr}, buffer0::Ptr{Cvoid})::Cvoid
+end
+
+function reactantXLAExec(lrtP, modstr, argcnt, args)
+    @ccall mlir_c.reactantXLAExec(
+        lrtP::Ptr{LinkableRuntimePtr}, modstr::Cstring, argcnt::Int64, args::Ptr{Ptr{Cvoid}}
+    )::Cvoid
+end
+
+function ReactantGetDebugOptions(size)
+    @ccall mlir_c.ReactantGetDebugOptions(size::Ptr{Csize_t})::Ptr{Cvoid}
+end
+
+function ReactantGetCompileOptions(size)
+    @ccall mlir_c.ReactantGetCompileOptions(size::Ptr{Csize_t})::Ptr{Cvoid}
+end
+
+function registerReactantXLAFFI()
+    @ccall mlir_c.registerReactantXLAFFI()::Cvoid
 end
 
 const MLIR_CAPI_DWARF_ADDRESS_SPACE_NULL = -1
