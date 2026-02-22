@@ -5,6 +5,7 @@
 #include "xla/ffi/ffi_api.h"
 
 #include "mlir/CAPI/IR.h"
+#include <string_view>
 
 #if defined(REACTANT_CUDA)
 #include "jaxlib/ffi_helpers.h"
@@ -16,7 +17,35 @@
 using namespace xla;
 
 namespace reactant {
-namespace cuda {
+namespace reactant_ffi {
+
+xla::ffi::Error xlaThrowError(std::string_view message) {
+  return xla::ffi::Error(xla::ffi::ErrorCode::kInternal, std::string(message));
+}
+
+xla::ffi::Error xlaThrowError(bool cond, std::string_view message) {
+  if (cond) {
+    return xlaThrowError(message);
+  }
+  return xla::ffi::Error::Success();
+}
+
+xla::ffi::Error xlaThrowErrorHost(xla::ffi::BufferR0<xla::ffi::PRED> cond,
+                                  std::string_view message) {
+  return xlaThrowError(cond.typed_data()[0], message);
+}
+
+xla::ffi::Error xlaAlwaysThrowErrorHost(std::string_view message) {
+  return xlaThrowError(message);
+}
+
+XLA_FFI_DEFINE_HANDLER(xlaThrowErrorHandlerHost, xlaThrowErrorHost,
+                       xla::ffi::Ffi::Bind()
+                           .Arg<xla::ffi::BufferR0<xla::ffi::PRED>>()
+                           .Attr<std::string_view>("message"));
+
+XLA_FFI_DEFINE_HANDLER(xlaAlwaysThrowErrorHandlerHost, xlaAlwaysThrowErrorHost,
+                       xla::ffi::Ffi::Bind().Attr<std::string_view>("message"));
 
 #if defined(REACTANT_CUDA)
 
@@ -310,25 +339,74 @@ XLA_FFI_DEFINE_HANDLER(
         .Ret<ffi::AnyBuffer>()             // c_out
 );
 
-void registerReactantXLACUDAFFI() {
+#undef SOLVER_BLAS_DISPATCH_IMPL
+
+xla::ffi::Error xlaThrowErrorCUDA(cudaStream_t stream,
+                                  xla::ffi::BufferR0<xla::ffi::PRED> cond,
+                                  std::string_view message) {
+  bool host_cond;
+  cudaError_t err =
+      cudaMemcpyAsync(&host_cond, cond.untyped_data(), sizeof(bool),
+                      cudaMemcpyDeviceToHost, stream);
+  if (err != cudaSuccess) {
+    return xla::ffi::Error(xla::ffi::ErrorCode::kInternal,
+                           "cudaMemcpyAsync failed in xlaThrowError");
+  }
+  err = cudaStreamSynchronize(stream);
+  if (err != cudaSuccess) {
+    return xla::ffi::Error(xla::ffi::ErrorCode::kInternal,
+                           "cudaStreamSynchronize failed in xlaThrowError");
+  }
+  return xlaThrowError(host_cond, message);
+}
+
+xla::ffi::Error xlaAlwaysThrowErrorCUDA(cudaStream_t stream,
+                                        std::string_view message) {
+  return xlaThrowError(message);
+}
+
+XLA_FFI_DEFINE_HANDLER(xlaThrowErrorHandlerCUDA, xlaThrowErrorCUDA,
+                       xla::ffi::Ffi::Bind()
+                           .Ctx<xla::ffi::PlatformStream<CUstream>>()
+                           .Arg<xla::ffi::BufferR0<xla::ffi::PRED>>()
+                           .Attr<std::string_view>("message"));
+
+XLA_FFI_DEFINE_HANDLER(xlaAlwaysThrowErrorHandlerCUDA, xlaAlwaysThrowErrorCUDA,
+                       xla::ffi::Ffi::Bind()
+                           .Ctx<xla::ffi::PlatformStream<CUstream>>()
+                           .Attr<std::string_view>("message"));
+
+void registerReactantXLAInternalFFI() {
   XLA_FFI_REGISTER_HANDLER(xla::ffi::GetXlaFfiApi(), "reactant_cublas_syrk_ffi",
                            "CUDA", SyrkFfi);
   XLA_FFI_REGISTER_HANDLER(xla::ffi::GetXlaFfiApi(),
                            "reactant_cublas_syrk_no_c_ffi", "CUDA", SyrkNoCFfi);
-}
 
-#undef SOLVER_BLAS_DISPATCH_IMPL
+  XLA_FFI_REGISTER_HANDLER(xla::ffi::GetXlaFfiApi(), "xla_throw_error", "CUDA",
+                           xlaThrowErrorHandlerCUDA);
+  XLA_FFI_REGISTER_HANDLER(xla::ffi::GetXlaFfiApi(), "xla_always_throw_error",
+                           "CUDA", xlaAlwaysThrowErrorHandlerCUDA);
+  XLA_FFI_REGISTER_HANDLER(xla::ffi::GetXlaFfiApi(), "xla_throw_error", "Host",
+                           xlaThrowErrorHandlerHost);
+  XLA_FFI_REGISTER_HANDLER(xla::ffi::GetXlaFfiApi(), "xla_always_throw_error",
+                           "Host", xlaAlwaysThrowErrorHandlerHost);
+}
 
 #else
 
-void registerReactantXLACUDAFFI() {}
+void registerReactantXLAInternalFFI() {
+  XLA_FFI_REGISTER_HANDLER(xla::ffi::GetXlaFfiApi(), "xla_throw_error", "Host",
+                           xlaThrowErrorHandlerHost);
+  XLA_FFI_REGISTER_HANDLER(xla::ffi::GetXlaFfiApi(), "xla_always_throw_error",
+                           "Host", xlaAlwaysThrowErrorHandlerHost);
+}
 
 #endif
 
-} // namespace cuda
+} // namespace reactant_ffi
 } // namespace reactant
 
 REACTANT_ABI void registerReactantXLAFFI() {
-  reactant::cuda::registerReactantXLACUDAFFI();
+  reactant::reactant_ffi::registerReactantXLAInternalFFI();
   return;
 }
