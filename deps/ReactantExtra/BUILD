@@ -40,6 +40,8 @@ genrule(
         "@xla//xla/pjrt/proto:compile_options.proto",
         "@xla//xla/stream_executor:device_description.proto",
         "@xla//xla/stream_executor/cuda:cuda_compute_capability.proto",
+        "@xla//xla/stream_executor/sycl:oneapi_compute_capability.proto",
+        "@xla//xla/backends/autotuner:backends.proto",
         "@xla//xla/tsl/protobuf:dnn.proto",
         # Xprof protos - main files
         "@org_xprof//plugin/xprof/protobuf:op_metrics.proto",
@@ -67,6 +69,12 @@ genrule(
         "@tsl//tsl/profiler/protobuf:profiler_options.proto",
         "@tsl//tsl/profiler/protobuf:profile.proto",
         "@tsl//tsl/profiler/protobuf:trace_events.proto",
+        # Google well-known types
+        "@com_google_protobuf//:any_proto",
+        "@com_google_protobuf//:duration_proto",
+        "@com_google_protobuf//:timestamp_proto",
+        "@com_google_protobuf//:wrappers_proto",
+        "@com_google_protobuf//:empty_proto",
     ],
     outs = ["proto_files.tar"],
     cmd = """
@@ -76,6 +84,8 @@ genrule(
         mkdir -p $$STAGING/xla/pjrt/proto
         mkdir -p $$STAGING/xla/service
         mkdir -p $$STAGING/xla/stream_executor/cuda
+        mkdir -p $$STAGING/xla/stream_executor/sycl
+        mkdir -p $$STAGING/xla/backends/autotuner
         mkdir -p $$STAGING/xla/tsl/protobuf
         mkdir -p $$STAGING/tsl/profiler/protobuf
         mkdir -p $$STAGING/google/protobuf
@@ -84,23 +94,31 @@ genrule(
         # Process each source file, preserving directory structure
         for src in $(SRCS); do
             # Route to correct directory based on path patterns
-            if echo "$$src" | grep -q "xla/service"; then
+            if echo "$$src" | grep -q "google/protobuf/"; then
+                # Handle well-known types from @com_google_protobuf
+                mkdir -p $$STAGING/google/protobuf
+                cp $$src $$STAGING/google/protobuf/
+            elif echo "$$src" | grep -q "xla/service/"; then
                 cp $$src $$STAGING/xla/service/
-            elif echo "$$src" | grep -q "xla/pjrt/proto"; then
+            elif echo "$$src" | grep -q "xla/pjrt/proto/"; then
                 cp $$src $$STAGING/xla/pjrt/proto/
-            elif echo "$$src" | grep -q "xla/stream_executor/cuda"; then
+            elif echo "$$src" | grep -q "xla/stream_executor/cuda/"; then
                 cp $$src $$STAGING/xla/stream_executor/cuda/
-            elif echo "$$src" | grep -q "xla/stream_executor"; then
+            elif echo "$$src" | grep -q "xla/stream_executor/sycl/"; then
+                cp $$src $$STAGING/xla/stream_executor/sycl/
+            elif echo "$$src" | grep -q "xla/backends/autotuner/"; then
+                cp $$src $$STAGING/xla/backends/autotuner/
+            elif echo "$$src" | grep -q "xla/stream_executor/"; then
                 cp $$src $$STAGING/xla/stream_executor/
-            elif echo "$$src" | grep -q "xla/tsl/protobuf"; then
+            elif echo "$$src" | grep -q "xla/tsl/protobuf/"; then
                 cp $$src $$STAGING/xla/tsl/protobuf/
-            elif echo "$$src" | grep -q "xla/xla"; then
+            elif echo "$$src" | grep -q "/xla/xla/"; then
                 cp $$src $$STAGING/xla/
             elif echo "$$src" | grep -q "/xla:"; then
                 cp $$src $$STAGING/xla/
-            elif echo "$$src" | grep -q "tsl/profiler"; then
+            elif echo "$$src" | grep -q "tsl/profiler/"; then
                 cp $$src $$STAGING/tsl/profiler/protobuf/
-            elif echo "$$src" | grep -q "xprof/protobuf"; then
+            elif echo "$$src" | grep -q "xprof/protobuf/"; then
                 cp $$src $$STAGING/plugin/xprof/protobuf/
             else
                 # Fallback: put in root
@@ -109,9 +127,9 @@ genrule(
         done
 
         # Patch xla/autotune_results.proto to be package autotune_results
-        sed -i 's/package xla;/package xla_autotuning;/g' $$STAGING/xla/autotune_results.proto
-        sed -i 's/package xla;/package xla_autotuning;/g' $$STAGING/xla/autotuning.proto
-        sed -i 's/package stream_executor.dnn;/package xla_tsl_dnn;/g' $$STAGING/xla/tsl/protobuf/dnn.proto
+        [ -f $$STAGING/xla/autotune_results.proto ] && sed -i 's/package xla;/package xla_autotuning;/g' $$STAGING/xla/autotune_results.proto
+        [ -f $$STAGING/xla/autotuning.proto ] && sed -i 's/package xla;/package xla_autotuning;/g' $$STAGING/xla/autotuning.proto
+        [ -f $$STAGING/xla/tsl/protobuf/dnn.proto ] && sed -i 's/package stream_executor.dnn;/package xla_tsl_dnn;/g' $$STAGING/xla/tsl/protobuf/dnn.proto
 
         # Update usages of stream_executor.dnn to xla_tsl_dnn
         find $$STAGING -name "*.proto" -type f -exec sed -i 's/stream_executor\\.dnn/xla_tsl_dnn/g' {} +
@@ -127,19 +145,8 @@ genrule(
             -e 's/xla\\.TritonGemmConfigsProto/xla_autotuning.TritonGemmConfigsProto/g' \
             {} +
 
-        # Copy google well-known types from the protobuf external repo
-        # These are needed for imports like google/protobuf/any.proto
-        if [ -d "external/com_google_protobuf/src/google/protobuf" ]; then
-            cp external/com_google_protobuf/src/google/protobuf/any.proto $$STAGING/google/protobuf/ 2>/dev/null || true
-            cp external/com_google_protobuf/src/google/protobuf/duration.proto $$STAGING/google/protobuf/ 2>/dev/null || true
-            cp external/com_google_protobuf/src/google/protobuf/timestamp.proto $$STAGING/google/protobuf/ 2>/dev/null || true
-            cp external/com_google_protobuf/src/google/protobuf/wrappers.proto $$STAGING/google/protobuf/ 2>/dev/null || true
-            cp external/com_google_protobuf/src/google/protobuf/empty.proto $$STAGING/google/protobuf/ 2>/dev/null || true
-            cp external/com_google_protobuf/src/google/protobuf/descriptor.proto $$STAGING/google/protobuf/ 2>/dev/null || true
-        fi
-
         # Create tar archive
-        tar -cf $@ -C $$STAGING .
+        tar -C $$STAGING -cf $@ .
 
         # Cleanup
         rm -rf $$STAGING
@@ -1905,6 +1912,8 @@ genrule(
         "@llvm-project//llvm:include/llvm-c/DataTypes.h",
         "@llvm-project//llvm:include/llvm-c/ExternC.h",
         "@llvm-project//llvm:include/llvm-c/Types.h",
+        "@llvm-project//llvm:include/llvm-c/Core.h",
+        "@llvm-project//mlir:include/mlir/Config/mlir-config.h",
         "@llvm-project//mlir:c_headers",
         "@llvm-project//mlir:ConversionPassIncGen_filegroup",
         "@llvm-project//mlir:TransformsPassIncGen_filegroup",
@@ -1924,8 +1933,8 @@ genrule(
         "@jax//jaxlib/mosaic/dialect/gpu:integrations/c/gpu_dialect.h",
         "@enzyme_ad//src/enzyme_ad/jax:Integrations/c/EnzymeXLA.h",
         "@enzyme//:Enzyme/MLIR/Integrations/c/EnzymeMLIR.h",
-        "//:API.h",
-        "//:xla_ffi.h",
+        "//:API.cpp",
+        "//:xla_ffi.cpp",
         "//:Project.toml",
         "//:Manifest.toml",
         "//:wrap.toml",
@@ -1933,7 +1942,7 @@ genrule(
         "//:make.jl",
     ],
     outs = ["libMLIR_h.jl"],
-    cmd = "$$JULIA \"--color=yes\" \"--project=$(location //:Project.toml)\" \"$(location //:make.jl)\" \"$(location @llvm-project//mlir:include/mlir-c/Bindings/Python/Interop.h)\" \"$(location @llvm-project//llvm:include/llvm-c/Support.h)\" \"$(locations @llvm-project//mlir:ConversionPassIncGen_filegroup)\" \"$(location @stablehlo//:stablehlo/integrations/c/StablehloAttributes.h)\" \"$(location @shardy//shardy/integrations/c:attributes.h)\" \"$(location @jax//jaxlib/triton:triton_dialect_capi.h)\" \"$(location @jax//jaxlib/mosaic:dialect/tpu/integrations/c/tpu_dialect.h)\" \"$(location @jax//jaxlib/mosaic/dialect/gpu:integrations/c/gpu_dialect.h)\" \"$(location @enzyme_ad//src/enzyme_ad/jax:Integrations/c/EnzymeXLA.h)\" \"$(location @enzyme//:Enzyme/MLIR/Integrations/c/EnzymeMLIR.h)\" \"$@\"",
+    cmd = "$$JULIA \"--color=yes\" \"--project=$(location //:Project.toml)\" \"$(location //:make.jl)\" \"--extract-api\" \"$(location @llvm-project//mlir:include/mlir-c/Bindings/Python/Interop.h)\" \"$(location @llvm-project//llvm:include/llvm-c/Support.h)\" \"$(location @llvm-project//llvm:include/llvm-c/Core.h)\" \"$(location @llvm-project//mlir:include/mlir/Config/mlir-config.h)\" \"$(locations @llvm-project//mlir:c_headers)\" \"$(locations @llvm-project//mlir:ConversionPassIncGen_filegroup)\" \"$(location @stablehlo//:stablehlo/integrations/c/StablehloAttributes.h)\" \"$(location @shardy//shardy/integrations/c:attributes.h)\" \"$(location @jax//jaxlib/triton:triton_dialect_capi.h)\" \"$(location @jax//jaxlib/mosaic:dialect/tpu/integrations/c/tpu_dialect.h)\" \"$(location @jax//jaxlib/mosaic/dialect/gpu:integrations/c/gpu_dialect.h)\" \"$(location @enzyme_ad//src/enzyme_ad/jax:Integrations/c/EnzymeXLA.h)\" \"$(location @enzyme//:Enzyme/MLIR/Integrations/c/EnzymeMLIR.h)\" \"$@\"",
     tags = [
         "jlrule",
     ],

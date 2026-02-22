@@ -1,6 +1,209 @@
 #include <iostream>
 
-#include "API.h"
+#include <stddef.h>
+#include <stdint.h>
+
+#include "mlir-c/IR.h"
+#include "mlir-c/Pass.h"
+#include "mlir-c/Support.h"
+#include "llvm-c/TargetMachine.h"
+
+#ifndef __cplusplus
+#include <stdbool.h>
+#endif
+
+//===----------------------------------------------------------------------===//
+// C-API TYPES START
+//===----------------------------------------------------------------------===//
+#include <stddef.h>
+#include <stdint.h>
+#ifndef __cplusplus
+#include <stdbool.h>
+#endif
+
+//===----------------------------------------------------------------------===//
+// Structs exposed to Julia
+//
+// These are defined here (and only here) so that both the C binding generator
+// and the C++ implementation share a single definition.
+//===----------------------------------------------------------------------===//
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+struct JLAllocatorStats {
+  int64_t num_allocs;
+  int64_t bytes_in_use;
+  int64_t peak_bytes_in_use;
+  int64_t largest_alloc_size;
+  int64_t bytes_limit;
+  int64_t bytes_reserved;
+  int64_t peak_bytes_reserved;
+  int64_t bytes_reservable_limit;
+  int64_t largest_free_block_bytes;
+  int64_t pool_bytes;
+  int64_t peak_pool_bytes;
+};
+
+struct DeviceProperties {
+  size_t totalGlobalMem;
+  size_t sharedMemPerBlock;
+  int regsPerBlock;
+  int warpSize;
+  int maxThreadsPerBlock;
+  int maxThreadsDim[3];
+  int maxGridSize[3];
+  size_t totalConstMem;
+  int major;
+  int minor;
+  int multiProcessorCount;
+  int canMapHostMemory;
+  int l2CacheSize;
+  int maxThreadsPerMultiProcessor;
+};
+
+struct JLHloCostAnalysisProperties {
+  float flops;
+  float transcendentals;
+  float bytes_accessed;
+  float optimal_seconds;
+  float utilization;
+  float operand0_utilization;
+  float operand1_utilization;
+  float operand0_bytes_accessed;
+  float operand1_bytes_accessed;
+  float output_root_bytes_accessed;
+  float reserved0;
+};
+
+struct JLEstimateRunTimeData {
+  int64_t flops;
+  int64_t bytes_read;
+  int64_t bytes_written;
+  int64_t read_time_ns;
+  int64_t write_time_ns;
+  int64_t compute_time_ns;
+  int64_t execution_time_ns;
+};
+
+#ifdef __cplusplus
+} // extern "C" (structs)
+#endif
+
+//===----------------------------------------------------------------------===//
+// Opaque handle types
+//
+// In C mode every handle is just `void *`.
+// In C++ mode we forward-declare the real types so that the compiler can
+// check that API.cpp definitions match these declarations.
+//===----------------------------------------------------------------------===//
+
+#ifndef REACTANT_BINDINGS_GENERATION
+
+#include <memory>
+
+// ---------- forward declarations (C++ only) ----------
+// These must match the concrete types used in API.cpp.
+namespace xla {
+class PjRtClient;
+class PjRtDevice;
+class PjRtBuffer;
+class PjRtLoadedExecutable;
+class HloModule;
+class HloComputation;
+class HloInstruction;
+class OpSharding;
+class HloSharding;
+class DistributedRuntimeService;
+class DistributedRuntimeClient;
+namespace ifrt {
+class Client;
+class Device;
+class Memory;
+class MemoryKind;
+class PjRtClient;
+class PjRtLoadedExecutable;
+class Sharding;
+class LoadedExecutable;
+class Array;
+namespace proxy {
+class GrpcServer;
+} // namespace proxy
+} // namespace ifrt
+} // namespace xla
+namespace tsl {
+class ProfilerSession;
+namespace profiler {
+class ProfilerServer;
+} // namespace profiler
+template <typename T> class RCReference;
+} // namespace tsl
+namespace stream_executor {
+class DeviceDescription;
+} // namespace stream_executor
+namespace mlir {
+class Operation;
+} // namespace mlir
+struct PJRT_Api;
+struct LinkableRuntime;
+
+namespace reactant {
+template <typename T> struct HeldValue;
+} // namespace reactant
+
+namespace details {
+class GPUPerformanceModel;
+} // namespace details
+
+// Concrete typedefs matching API.cpp types
+typedef xla::PjRtClient *PjRtClientPtr;
+typedef xla::PjRtDevice *PjRtDevicePtr;
+typedef xla::PjRtBuffer *PjRtBufferPtr;
+typedef xla::PjRtLoadedExecutable *PjRtLoadedExecutablePtr;
+typedef const PJRT_Api *PJRT_ApiPtr;
+typedef tsl::ProfilerSession *ProfilerSessionPtr;
+typedef tsl::profiler::ProfilerServer *ProfilerServerPtr;
+typedef void *FutureTypePtr;
+typedef void *IfRtFutureTypePtr;
+
+typedef reactant::HeldValue<std::shared_ptr<xla::PjRtClient>>
+    *HeldPjRtClientPtr;
+typedef reactant::HeldValue<std::shared_ptr<xla::PjRtBuffer>>
+    *HeldPjRtBufferPtr;
+typedef reactant::HeldValue<tsl::RCReference<xla::ifrt::Array>>
+    *HeldIfrtArrayPtr;
+typedef reactant::HeldValue<std::shared_ptr<xla::HloModule>> *HeldHloModulePtr;
+typedef reactant::HeldValue<std::shared_ptr<xla::ifrt::Sharding>>
+    *HeldIfrtShardingPtr;
+typedef reactant::HeldValue<std::shared_ptr<xla::ifrt::LoadedExecutable>>
+    *HeldIfrtLoadedExecutablePtr;
+typedef reactant::HeldValue<std::shared_ptr<const xla::ifrt::Sharding>>
+    *HeldIfrtConstShardingPtr;
+typedef reactant::HeldValue<std::shared_ptr<xla::DistributedRuntimeClient>>
+    *HeldDistributedRuntimeClientPtr;
+
+typedef xla::ifrt::Client *IfrtClientPtr;
+typedef xla::ifrt::Device *IfrtDevicePtr;
+typedef xla::ifrt::Memory *IfrtMemoryPtr;
+typedef xla::ifrt::MemoryKind *IfrtMemoryKindPtr;
+typedef xla::ifrt::PjRtClient *IfrtPjRtClientPtr;
+typedef xla::ifrt::PjRtLoadedExecutable *IfrtPjRtLoadedExecutablePtr;
+typedef xla::ifrt::proxy::GrpcServer *IfrtGrpcServerPtr;
+
+typedef xla::OpSharding *OpShardingPtr;
+typedef const xla::HloSharding *HloShardingPtr;
+typedef xla::HloComputation *HloComputationPtr;
+typedef xla::HloInstruction *HloInstructionPtr;
+typedef xla::HloModule *HloModulePtr;
+
+typedef stream_executor::DeviceDescription *DeviceDescriptionPtr;
+typedef xla::DistributedRuntimeService *DistributedRuntimeServicePtr;
+typedef details::GPUPerformanceModel *GPUPerformanceModelPtr;
+
+typedef LinkableRuntime *LinkableRuntimePtr;
+
+#endif /* !defined(REACTANT_BINDINGS_GENERATION) */
 
 #include "mlir-c/IR.h"
 #include "mlir-c/Support.h"
@@ -639,7 +842,7 @@ REACTANT_ABI void ClientGetAddressableDevices(PjRtClient *client,
   }
 }
 
-// JLAllocatorStats is defined in API.h
+// JLAllocatorStats is defined at the top of this file
 
 REACTANT_ABI void PjRtDeviceGetAllocatorStats(PjRtDevice *device,
                                               JLAllocatorStats *jlstats) {
@@ -734,7 +937,7 @@ std::vector<int64_t> row_major(int64_t dim) {
 }
 static void noop() {}
 
-// DeviceProperties is defined in API.h
+// DeviceProperties is defined at the top of this file
 
 #ifdef REACTANT_CUDA
 
@@ -2899,7 +3102,7 @@ ifrt_loaded_executable_num_devices(HeldIfrtLoadedExecutable *exec) {
 
 #pragma region CostAnalysis
 
-// JLHloCostAnalysisProperties is defined in API.h
+// JLHloCostAnalysisProperties is defined at the top of this file
 
 REACTANT_ABI void pjrt_hlo_module_cost_analysis_properties(
     PjRtClient *client, HeldHloModule *hlo_module,
@@ -3441,7 +3644,7 @@ hloInstructionFusedInstructionsComputation(HloInstruction *hlo_instruction) {
                      "instruction");
 }
 
-// JLEstimateRunTimeData is defined in API.h
+// JLEstimateRunTimeData is defined at the top of this file
 
 #if defined(REACTANT_CUDA) || defined(REACTANT_ROCM)
 namespace details {

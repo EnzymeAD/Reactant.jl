@@ -28,67 +28,194 @@ function rewrite!(::ExprDAG) end
 let options = deepcopy(options)
     options["general"]["output_file_path"] = ARGS[end]
 
-    include_dir = joinpath(splitpath(ARGS[1])[1:(end - 4)]...)
     args = Generators.get_default_args()
-    ll_include_dir = joinpath(splitpath(ARGS[2])[1:(end - 2)]...)
 
-    genarg = first(eachsplit(ARGS[3], " "))
+    # Robustly find include directories from ARGS
+    include_dirs = Set{String}()
+    push!(include_dirs, @__DIR__)
+    push!(include_dirs, ".")
 
-    gen_include_dir = joinpath(splitpath(genarg)[1:(end - 4)]...)
-    # Also add the llvm include dir from bazel-out for generated files
-    gen_llvm_include_dir = joinpath(splitpath(ARGS[2])[1:(end - 2)]...)
+    for arg in ARGS
+        # Handle multiple files in one arg (from locations)
+        for path in split(arg, " ")
+            isempty(path) && continue
+            isfile(path) || continue
 
-    hlo_include_dir = joinpath(splitpath(ARGS[end - 7])[1:(end - 1)]...)
-    sdy_include_dir = joinpath(splitpath(ARGS[end - 6])[1:(end - 1)]...)
-    triton_include_dir = joinpath(splitpath(ARGS[end - 5])[1:(end - 1)]...)
-    mosaic_tpu_include_dir = joinpath(splitpath(ARGS[end - 4])[1:(end - 1)]...)
-    mosaic_gpu_include_dir = joinpath(splitpath(ARGS[end - 3])[1:(end - 1)]...)
-    enzymexla_include_dir = joinpath(splitpath(ARGS[end - 2])[1:(end - 1)]...)
-    enzymemlir_include_dir = joinpath(splitpath(ARGS[end - 1])[1:(end - 1)]...)
+            # Add the directory of the file
+            d = dirname(path)
+            push!(include_dirs, d)
+
+            # If it's in an 'include' directory, add the 'include' directory itself
+            # This helps find things like 'mlir/...' when we have '.../include/mlir/...'
+            parts = splitpath(path)
+            idx = findlast(x -> x == "include", parts)
+            if idx !== nothing
+                push!(include_dirs, joinpath(parts[1:idx]...))
+            end
+
+            # Handle external repositories in Bazel (external/REPO/...)
+            # This helps find things like 'xla/...' when we have 'external/xla/xla/...'
+            if length(parts) >= 2 && parts[1] == "external"
+                push!(include_dirs, joinpath(parts[1:2]...))
+            end
+        end
+    end
+
+    for d in include_dirs
+        append!(args, ["-I", d])
+    end
 
     append!(
         args,
         [
-            "-I",
-            include_dir,
-            "-I",
-            ll_include_dir,
-            "-I",
-            gen_include_dir,
-            "-I",
-            gen_llvm_include_dir,
-            "-I",
-            hlo_include_dir,
-            "-I",
-            sdy_include_dir,
-            "-I",
-            triton_include_dir,
-            "-I",
-            mosaic_tpu_include_dir,
-            "-I",
-            mosaic_gpu_include_dir,
-            "-I",
-            enzymexla_include_dir,
-            "-I",
-            enzymemlir_include_dir,
             "-DREACTANT_BINDINGS_GENERATION=1",
             "-x",
             "c++",
+            "-DLLVM_ATTRIBUTE_C_DEPRECATED(decl, msg)=decl",
         ],
     )
 
-    headers = [
-        detect_headers(include_dir, args, Dict(), endswith("Python/Interop.h"))...,
-        detect_headers(hlo_include_dir, args, Dict())...,
-        detect_headers(sdy_include_dir, args, Dict())...,
-        detect_headers(triton_include_dir, args, Dict())...,
-        detect_headers(mosaic_tpu_include_dir, args, Dict())...,
-        detect_headers(mosaic_gpu_include_dir, args, Dict())...,
-        detect_headers(enzymexla_include_dir, args, Dict())...,
-        detect_headers(enzymemlir_include_dir, args, Dict())...,
-        joinpath(@__DIR__, "API.h"),
-        joinpath(@__DIR__, "xla_ffi.h"),
-    ]
+    extract_api =
+        get(options["general"], "extract_api", false) ||
+        any(x -> x == "--extract-api", ARGS)
+
+    extracted_api_path = joinpath(pwd(), "API_extracted_inner.h")
+    if extract_api
+        open(extracted_api_path, "w") do io
+            println(
+                io,
+                """
+    #include <stddef.h>
+    #include <stdint.h>
+    #ifndef __cplusplus
+    #include <stdbool.h>
+    #endif
+    """,
+            )
+
+            # Extract structs and functions from API.cpp and xla_ffi.cpp
+            structs = Dict{String,String}() # name -> full definition
+            ptrs = Set{String}()
+            signatures = String[]
+
+            for name in ["API.cpp", "xla_ffi.cpp"]
+                file = joinpath(@__DIR__, name)
+                if !isfile(file)
+                    continue
+                end
+                content = read(file, String)
+
+                # Extract structs
+                lines = split(content, "\n")
+                for (i, line) in enumerate(lines)
+                    m = match(r"struct\s+([A-Za-z0-9_]+)\s*\{", line)
+                    if m !== nothing
+                        struct_name = m.captures[1]
+                        # Check if previous line contains 'template'
+                        if i > 1 && contains(lines[i - 1], "template")
+                            continue
+                        end
+
+                        # Find completion of struct
+                        s = line
+                        j = i + 1
+                        open_braces =
+                            count(x -> x == '{', line) - count(x -> x == '}', line)
+                        while open_braces > 0 && j <= length(lines)
+                            s *= "\n" * lines[j]
+                            open_braces +=
+                                count(x -> x == '{', lines[j]) -
+                                count(x -> x == '}', lines[j])
+                            j += 1
+                        end
+                        if open_braces == 0
+                            # Final check for template inside
+                            contains(s, "template") && continue
+                            structs[struct_name] = s
+                        end
+                    end
+                end
+
+                # Extract functions
+                for m in
+                    eachmatch(r"REACTANT_ABI\s+(.*?)(?:\{|=(\s*nullptr\s*)?;|;)"s, content)
+                    sig = m.match
+                    sig = replace(sig, r"\s*\{\s*$" => ";")
+                    sig = replace(sig, r"\s*=\s*nullptr\s*;\s*$" => ";")
+                    sig = replace(sig, "REACTANT_ABI" => "MLIR_CAPI_EXPORTED")
+                    # Remove namespaces for C mode compatibility
+                    # E.g. tsl::ProfilerSession * -> ProfilerSession *
+                    sig = replace(sig, r"\b(?:\w+::)+" => "")
+                    # error on encountering C++ specific things that don't map nicely to C
+                    if (
+                        contains(sig, "std::string") ||
+                        contains(sig, "std::string_view") ||
+                        contains(sig, "std::vector<int64_t>")
+                    )
+                        error("Found C++ specific thing in signature: $sig")
+                    end
+                    push!(signatures, sig)
+
+                    for word in eachmatch(r"\b([A-Z]\w+)\s*\*", sig) # Match words starting with Capital letter
+                        push!(ptrs, word.captures[1])
+                    end
+                    for word in eachmatch(r"\b\w+Ptr\b", sig)
+                        push!(ptrs, word.match)
+                    end
+                end
+            end
+
+            for (name, s) in structs
+                println(io, s)
+                println(io, "")
+            end
+
+            for ptr in ptrs
+                if !haskey(structs, ptr) &&
+                    !in(
+                    ptr,
+                    [
+                        "MlirContext",
+                        "MlirBlock",
+                        "MlirOperation",
+                        "MlirType",
+                        "MlirAttribute",
+                        "MlirStringRef",
+                        "MlirLocation",
+                        "MlirModule",
+                        "MlirDialectRegistry",
+                        "MlirValue",
+                    ],
+                )
+                    println(io, "typedef void *", ptr, ";")
+                end
+            end
+            println(io, "")
+            for sig in signatures
+                println(io, sig)
+            end
+        end
+    end
+
+    headers = String[]
+    for arg in ARGS
+        # Handle multiple files in one arg
+        for path in split(arg, " ")
+            isempty(path) && continue
+            isfile(path) || continue
+            # Only wrap actual header files passed as entry points
+            if endswith(path, ".h")
+                # Avoid wrapping core LLVM or internal config headers that break Clang.jl
+                if contains(path, "llvm-c/") || contains(path, "Config/")
+                    continue
+                end
+                push!(headers, path)
+            end
+        end
+    end
+    if extract_api
+        push!(headers, extracted_api_path)
+    end
 
     ctx = create_context(headers, args, options)
 
