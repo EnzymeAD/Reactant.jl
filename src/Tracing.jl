@@ -2094,6 +2094,47 @@ Base.@nospecializeinfer function make_tracer(
     return prev
 end
 
+"""
+    to_rarray(x; track_numbers=false, sharding=NoSharding(), device=nothing, client=nothing, runtime=nothing)
+
+Convert a Julia value `x` into its Reactant equivalent by tracing through the structure.
+Arrays are converted to `ConcreteRArray`, and (optionally) scalar numbers are converted
+to `ConcreteRNumber`.
+
+## Keyword Arguments
+
+- `track_numbers::Union{Bool, Type} = false`: Controls whether plain Julia numbers are
+  converted to `ConcreteRNumber`.
+  - `false` (default): scalars are left as-is and will be treated as compile-time constants
+    (frozen at tracing time).
+  - `true`: all scalar numbers are converted to `ConcreteRNumber`.
+  - A type (e.g. `Number`, `Float64`, `Int`): only scalars that are subtypes of the given
+    type are tracked.
+- `sharding`: Sharding specification for the resulting array.
+- `device`: Target device for the resulting array.
+- `client`: XLA client to use.
+- `runtime`: Backend runtime to use (`:PJRT` or `:IFRT`).
+
+## Examples
+
+```julia
+# Convert an array (always tracked)
+x = Reactant.to_rarray([1.0, 2.0, 3.0])   # ConcreteRArray{Float64, 1}
+
+# Convert a scalar WITHOUT tracking (default) — frozen at compile time
+t = Reactant.to_rarray(0.5)                # plain Float64
+
+# Convert a scalar WITH tracking — varies at runtime
+t = Reactant.to_rarray(0.5; track_numbers=true)   # ConcreteRNumber{Float64}
+
+# Convert a struct, tracking all number fields
+struct Params; values::Vector{Float64}; scale::Float64; end
+rparams = Reactant.to_rarray(Params([1.0], 2.0); track_numbers=true)
+```
+
+See also: [Partial Evaluation](@ref partial-evaluation) for how untracked values
+become compile-time constants.
+"""
 @inline function to_rarray(
     @nospecialize(x);
     runtime::Union{Nothing,Val{:IFRT},Val{:PJRT}}=nothing,

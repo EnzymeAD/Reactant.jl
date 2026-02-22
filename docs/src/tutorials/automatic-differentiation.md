@@ -106,6 +106,32 @@ println("Gradient: ", result.derivs[1])
 nothing # hide
 ```
 
+## Scalar Arguments and `Enzyme.Const`
+
+When using `Enzyme.autodiff` inside a Reactant-compiled function, any argument
+wrapped in `Enzyme.Const` that is a plain Julia number (not a `ConcreteRNumber`)
+will be frozen at its tracing-time value. This is because Reactant's tracing
+does not track plain scalars by default — they are treated as compile-time
+constants (see [Partial Evaluation](@ref partial-evaluation) for details).
+
+For example, if you have an ODE right-hand side `f!(du, u, t)` where `t` is
+passed as `Enzyme.Const(t)`, you must ensure `t` is a `ConcreteRNumber` so its
+runtime value is used:
+
+```julia
+# WRONG: t is a plain Float64, frozen at trace time
+t = Reactant.to_rarray(0.0)  # still a Float64, not tracked!
+
+# CORRECT: use track_numbers to make t a ConcreteRNumber
+t = Reactant.to_rarray(0.0; track_numbers=true)  # ConcreteRNumber{Float64}
+```
+
+!!! tip
+    When calling `Reactant.to_rarray` on a struct or tuple that contains both
+    arrays and scalar parameters, pass `track_numbers=true` (or
+    `track_numbers=Number`) to ensure all scalar fields are tracked and will
+    respond to runtime values.
+
 ## More Examples
 
 ### Multi-argument Functions
