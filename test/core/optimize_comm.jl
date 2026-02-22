@@ -172,3 +172,70 @@ if length(addressable_devices) ≥ 2
         end
     end
 end
+
+function nrotate(x, amt)
+   res = similar(x)
+   res[(end-amt+1):end] = x[1:amt]
+   res[1:(end-amt)] = x[(amt+1):end]
+   return res
+end
+
+function multirotate_left(x, sz)
+  if size(x, 1) != sz
+     x = x[1:sz]
+  end
+  return (nrotate(x, 2), nrotate(x, 1), x)
+end
+
+function multirotate_right(x, sz)
+  if size(x, 1) != sz
+     x = x[1:sz]
+  end
+  return (x, nrotate(x, size(x,1)-1), nrotate(x, size(x,1)-2))
+end
+
+function multirotate_both(x, sz)
+  if size(x, 1) != sz
+     x = x[1:sz]
+  end
+  return (nrotate(x, 1), x, nrotate(x, size(x,1)-1), nrotate(x, size(x,1)-2))
+end
+
+if length(addressable_devices) ≥ 2
+   @testset "MultiRotate $mr $size" for mr in (multirotate_left,multirotate_right, multirotate_both), size in (20,21) begin
+        N = min((length(Reactant.devices()) ÷ 2) * 2, 2)
+
+        mesh = Sharding.Mesh(reshape(Reactant.devices()[1:N], 2), (:x,))
+        sharding = Sharding.NamedSharding(mesh, (:x,))
+
+        size2 = N * div(size + N - 1, N)
+        x = collect(Int, 1:size2)
+        rx = Reactant.to_rarray(x; sharding)
+
+        hlo = repr(@code_xla shardy_passes = :to_mhlo_shardings mr(rx, size))
+        y = mr(x, size)
+
+        @test !contains(hlo, "all-to-all")
+        @test !contains(hlo, "all-reduce")
+        @test !contains(hlo, "copy")
+
+        if mr == multirotate_both
+           @test length(collect(eachmatch(r"%collective-permute[\.0-9]* =", hlo))) == 2
+        else
+           @test length(collect(eachmatch(r"%collective-permute[\.0-9]* =", hlo))) == 1
+        end
+
+        if size2 == size
+           @test length(collect(eachmatch(r"%all-gather[\.0-9]* =", hlo))) == 0
+        else
+           @test length(collect(eachmatch(r"%all-gather[\.0-9]* =", hlo))) == length(y)
+        end
+
+        ry = @jit shardy_passes = :to_mhlo_shardings mr(rx, size)
+
+        for (z, rz) in zip(y, ry)
+           @test all(z .== convert(Array, rz))
+        end
+        end
+    end
+end
