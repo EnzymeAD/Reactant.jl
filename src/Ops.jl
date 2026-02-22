@@ -4173,19 +4173,20 @@ Throw a runtime error with the given `msg` if `condition` is `true`. If `conditi
     condition::Union{TracedRNumber{Bool},Nothing}=nothing;
     location=mlir_stacktrace("throw", @__FILE__, @__LINE__),
 )
-    if condition === nothing
-        condition = Reactant.TracedUtils.promote_to(TracedRNumber{Bool}, true)
-    end
-
-    return stablehlo.custom_call(
-        MLIR.IR.Value[condition.mlir_data];
+    stablehlo.custom_call(
+        condition === nothing ? MLIR.IR.Value[] : MLIR.IR.Value[condition.mlir_data];
         result_0=MLIR.IR.Type[],
         has_side_effect=true,
-        call_target_name="xla_throw_error",
+        call_target_name=if condition === nothing
+            "xla_always_throw_error"
+        else
+            "xla_throw_error"
+        end,
         backend_config=MLIR.IR.Attribute(Dict("message" => MLIR.IR.Attribute(msg))),
         api_version=MLIR.IR.Attribute(Int32(4)),
         location,
     )
+    return nothing
 end
 
 end # module Ops
