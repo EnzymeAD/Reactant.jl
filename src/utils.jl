@@ -751,6 +751,17 @@ function call_llvm_generator(
         safe_print("mi", mi)
     end
 
+    for svar in mi.sparam_vals
+	if svar isa TypeVar
+		errstr = sprint() do io
+		    println(io, "Calling method with unbound type parameters is unsupported by GPUCompiler and thus Reactant")
+		    Enzyme.Compiler.pretty_print_mi(mi, io)
+		end
+	method_error =
+            :(throw(AssertionError($errstr)))
+        return stub(world, source, method_error)
+	end
+    end
     slotnames = Any[:call_llvm_generator, REDUB_ARGUMENTS_NAME]
     overdubbed_code = Any[]
 
