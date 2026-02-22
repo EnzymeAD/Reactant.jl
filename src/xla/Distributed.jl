@@ -12,7 +12,7 @@ function DistributedRuntimeClient(
     coordinator_bind_address::String,
     process_id::Integer;
     rpc_timeout_in_seconds::Integer=120,
-    init_timeout_in_seconds::Integer=(60*60),
+    init_timeout_in_seconds::Integer=(60 * 60),
     shutdown_timeout_in_minutes::Integer=5,
     heartbeat_interval_in_seconds::Integer=10,
     use_compression::Bool=true,
@@ -23,7 +23,7 @@ function DistributedRuntimeClient(
             coordinator_bind_address::Cstring,
             Int32(process_id)::Int32,
             Int32(rpc_timeout_in_seconds)::Int32,
-	    Int32(init_timeout)::Int32,
+            Int32(init_timeout)::Int32,
             Int32(shutdown_timeout_in_minutes)::Int32,
             Int32(heartbeat_interval_in_seconds)::Int32,
             use_compression::Bool,
