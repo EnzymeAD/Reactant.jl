@@ -5194,6 +5194,88 @@ function tcgen05_ld(
 end
 
 """
+`tcgen05_ld_red`
+
+Instruction `tcgen05.ld.red` asynchronously loads data from the Tensor
+Memory at the location specified by the 32-bit address operand `addr` into
+the destination register `data`, collectively across all threads of the
+warp. The operation also performs reduction operation specified by `op` on
+the loaded data across columns in each lane and stored into `redVal`
+
+The `shape` and the `num` attribute together determines the total
+dimension of the data which is loaded from the Tensor Memory. The `shape`
+attribute indicates the base dimension of data to be accessed as described
+in the Data Movement Shape. The `num` attribute indicates the repeat
+factor on the base dimension resulting in the total dimension of the data
+that is accessed.
+
+The shape `16x32bx2` performs two accesses into Tensor Memory of the shape
+`16x32b`. The base address of the first access is specified by `addr`
+and the base address of the second access is specified by
+`addr + offset`, where `offset` is an immediate argument.
+
+The following table describes the size of the vector for various combinations
+of `num` and `shape` attributes:
+```
+|=============================================|
+| num/shape      |     16x32bx2/32x32b        |
+|=============================================|
+| x2             |             2              |
+| x4             |             4              |
+| x8             |             8              |
+| x16            |             16             |
+| x32            |             32             |
+| x64            |             64             |
+| x128           |             128            |
+|=============================================|
+```
+
+# Example
+```mlir
+  %data, %redval = nvvm.tcgen05.ld,red %addr, %offset {
+    shape = #nvvm.tcgen05_ldst_shape<shape_16x32bx2>,
+  } : <2xi32>, i32
+
+  %data, %redval = nvvm.tcgen05.ld,red %addr {
+    shape = #nvvm.tcgen05_ldst_shape<shape_32x32b>,
+  } : <2xf32>, f32
+```
+
+[For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/#tcgen05-instructions-tcgen05-ld)
+"""
+function tcgen05_ld_red(
+    addr::Value,
+    offset=nothing::Union{Nothing,Value};
+    data::IR.Type,
+    redVal::IR.Type,
+    shape,
+    op,
+    abs=nothing,
+    nan=nothing,
+    location=Location(),
+)
+    op_ty_results = IR.Type[data, redVal]
+    operands = Value[addr,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[NamedAttribute("shape", shape), NamedAttribute("op", op)]
+    !isnothing(offset) && push!(operands, offset)
+    !isnothing(abs) && push!(attributes, NamedAttribute("abs", abs))
+    !isnothing(nan) && push!(attributes, NamedAttribute("nan", nan))
+
+    return create_operation(
+        "nvvm.tcgen05.ld.red",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+"""
 `tcgen05_mma_block_scale`
 
 The `tcgen05.mma.block_scale` operation is an asynchronous tensor core instruction

@@ -643,6 +643,43 @@ function tcgen05_mma(
 end
 
 """
+`tile_shape`
+
+Tiles the shape of a strided `memref`.
+
+The `tiling` is applied to the logical trailing dimensions of the source
+`memref`.
+
+Note that this is different from tiling the `memref` itself, since this
+operation does not perform any data movement.
+
+E.g., for a contiguous `memref` of shape `(5, 128, 128)` and a tiling
+`(64, 32)`, the result will be a contiguous `memref` of shape
+`(5, 2, 4, 64, 32)`.
+"""
+function tile_shape(
+    source::Value; result_0=nothing::Union{Nothing,IR.Type}, tiling, location=Location()
+)
+    op_ty_results = IR.Type[]
+    operands = Value[source,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[NamedAttribute("tiling", tiling),]
+    !isnothing(result_0) && push!(op_ty_results, result_0)
+
+    return create_operation(
+        "mosaic_gpu.tile_shape",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
+    )
+end
+
+"""
 `tmem_alloc`
 
 This op allocates a chunk of TMEM and stores the pointer to the memory
