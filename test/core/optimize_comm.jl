@@ -140,3 +140,35 @@ if length(addressable_devices) ≥ 8
         @test length(collect(eachmatch(r"%collective-permute[\.0-9]* =", hlo))) == 2
     end
 end
+
+function wrap(x)
+   res = similar(x, size(x, 1)+2+3)
+   res[1:3] = x[(end-2):end]
+   res[4:(3+size(x, 1))] = x
+   res[(3+size(x,1)+1):end] = x[1:2]
+   return res
+end
+
+if length(addressable_devices) ≥ 2
+        @testset "Wrap Size ($Size)" for Size in [20, 22, 28] begin
+        N = 2
+        mesh = Sharding.Mesh(reshape(Reactant.devices()[1:N], 2), (:x,))
+        sharding = Sharding.NamedSharding(mesh, (:x,))
+
+        x = reshape(collect(Int, 1:Size), Size)
+        rx = Reactant.to_rarray(x; sharding)
+
+        hlo = repr(@code_xla shardy_passes = :to_mhlo_shardings wrap(rx))
+        @test !contains(hlo, "all-to-all")
+        @test !contains(hlo, "all-reduce")
+        # 1 all gather exists for the result sharding
+        @test length(collect(eachmatch(r"%all-gather[\.0-9]* =", hlo))) == 1
+        # 2 collective permutes exist for the left/right halos
+        @test length(collect(eachmatch(r"%collective-permute[\.0-9]* =", hlo))) == 2
+
+        x2 = wrap(x)
+        rx2 = @jit shardy_passes = :to_mhlo_shardings wrap(rx)
+        @test all(x .== convert(Array, rx))
+        end
+    end
+end
