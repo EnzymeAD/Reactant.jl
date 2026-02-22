@@ -38,9 +38,7 @@ function sample(
 
     fn_attr = MLIR.IR.FlatSymbolRefAttribute(f_name)
     symbol_addr = reinterpret(UInt64, pointer_from_objref(symbol))
-    symbol_attr = @ccall MLIR.API.mlir_c.enzymeSymbolAttrGet(
-        MLIR.IR.current_context()::MLIR.API.MlirContext, symbol_addr::UInt64
-    )::MLIR.IR.Attribute
+    symbol_attr = MLIR.API.enzymeSymbolAttrGet(MLIR.IR.current_context(), symbol_addr)
 
     logpdf_attr = nothing
     if logpdf isa Function
@@ -61,14 +59,9 @@ function sample(
     upper_val = isnothing(upper) ? NaN : Float64(upper)
 
     support_kind = get_support_kind_int(support)
-    support_attr = @ccall MLIR.API.mlir_c.enzymeSupportAttrGet(
-        MLIR.IR.current_context()::MLIR.API.MlirContext,
-        support_kind::Int32,
-        lower_val::Float64,
-        has_lower::Bool,
-        upper_val::Float64,
-        has_upper::Bool,
-    )::MLIR.IR.Attribute
+    support_attr = MLIR.API.enzymeSupportAttrGet(
+        MLIR.IR.current_context(), support_kind, lower_val, has_lower, upper_val, has_upper
+    )
 
     sample_op = MLIR.Dialects.enzyme.sample(
         mlir_caller_args;
@@ -291,9 +284,7 @@ function generate(
             sym_addr = reinterpret(UInt64, pointer_from_objref(sym))
             push!(
                 address_attr,
-                @ccall MLIR.API.mlir_c.enzymeSymbolAttrGet(
-                    MLIR.IR.current_context()::MLIR.API.MlirContext, sym_addr::UInt64
-                )::MLIR.IR.Attribute
+                MLIR.API.enzymeSymbolAttrGet(MLIR.IR.current_context(), sym_addr),
             )
         end
         push!(constrained_addresses_attr, MLIR.IR.Attribute(address_attr))

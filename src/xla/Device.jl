@@ -67,11 +67,7 @@ function device_properties(device::AbstractDevice)
 
     jldevprops = Ref{DeviceProperties}()
     if pname == "cuda"
-        GC.@preserve jldevprops begin
-            @ccall MLIR.API.mlir_c.ReactantCudaDeviceGetProperties(
-                jldevprops::Ptr{Cvoid}, local_hardware_id::Cint
-            )::Cvoid
-        end
+        MLIR.API.ReactantCudaDeviceGetProperties(jldevprops, local_hardware_id)
     else
         @warn "`get_properties` not implemented for platform: $(pname)" maxlog = 1
     end
@@ -118,9 +114,7 @@ function StreamExecutorDeviceDescription(device::AbstractDevice)
 
     if panme == "cuda"
         return StreamExecutorDeviceDescription(
-            @ccall MLIR.API.mlir_c.CudaGetStreamExecutorDeviceDescription(
-                local_hardware_id::Int32
-            )::Ptr{Cvoid}
+            MLIR.API.CudaGetStreamExecutorDeviceDescription(local_hardware_id)
         )
     else
         error("Unsupported platform: $(panme)")
@@ -128,11 +122,7 @@ function StreamExecutorDeviceDescription(device::AbstractDevice)
 end
 
 function Base.show(io::IO, ::MIME"text/plain", props::StreamExecutorDeviceDescription)
-    GC.@preserve props begin
-        str = @ccall MLIR.API.mlir_c.deviceDescriptionToString(
-            props.ptr::Ptr{Cvoid}
-        )::Cstring
-    end
+    str = MLIR.API.deviceDescriptionToString(props.ptr)
     print(io, unsafe_string_and_free(str))
     return nothing
 end

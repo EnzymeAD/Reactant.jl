@@ -1,4 +1,4 @@
-SetLogLevel(x) = @ccall MLIR.API.mlir_c.SetLogLevel(x::Cint)::Cvoid
+SetLogLevel(x) = MLIR.API.SetLogLevel(Int32(x))
 
 struct ReactantInternalError <: Base.Exception
     msg::String

@@ -8,18 +8,14 @@ mutable struct Future <: XLA.AbstractFuture
 end
 
 @inline function free_future(future::Future)
-    @ccall MLIR.API.mlir_c.FreeFuture(future.future::Ptr{Cvoid})::Cvoid
+    return MLIR.API.FreeFuture(future.future)
 end
 
 function Base.isready(future::Future)
-    GC.@preserve future begin
-        return (@ccall MLIR.API.mlir_c.FutureIsReady(future.future::Ptr{Cvoid})::UInt8) != 0
-    end
+    return (MLIR.API.FutureIsReady(future.future)) != 0
 end
 
 @inline function Base.wait(future::Future)::Nothing
-    GC.@preserve future begin
-        @ccall MLIR.API.mlir_c.FutureAwait(future.future::Ptr{Cvoid})::Cvoid
-    end
+    MLIR.API.FutureAwait(future.future)
     return nothing
 end

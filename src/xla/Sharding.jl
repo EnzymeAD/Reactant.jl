@@ -28,109 +28,59 @@ mutable struct OpSharding
 end
 
 function free_op_sharding(op_sharding::OpSharding)
-    @ccall MLIR.API.mlir_c.free_op_sharding(op_sharding.ptr::Ptr{Cvoid})::Cvoid
+    return MLIR.API.free_op_sharding(op_sharding.ptr)
 end
 
 function replicate_on_last_tile_dim(op_sharding::OpSharding)
-    GC.@preserve op_sharding begin
-        return @ccall MLIR.API.mlir_c.op_sharding_replicate_on_last_tile_dim(
-            op_sharding.ptr::Ptr{Cvoid}
-        )::Bool
-    end
+    return MLIR.API.op_sharding_replicate_on_last_tile_dim(op_sharding.ptr)
 end
 
 function op_sharding_type(op_sharding::OpSharding)
-    type = GC.@preserve op_sharding begin
-        @ccall MLIR.API.mlir_c.op_sharding_to_op_sharding_type(
-            op_sharding.ptr::Ptr{Cvoid}
-        )::Int32
+    type = begin
+        MLIR.API.op_sharding_to_op_sharding_type(op_sharding.ptr)
     end
     return convert(OpShardingType.T, type)
 end
 
 function has_iota_reshape_dims(op_sharding::OpSharding)
-    GC.@preserve op_sharding begin
-        return @ccall MLIR.API.mlir_c.op_sharding_has_iota_reshape_dims(
-            op_sharding.ptr::Ptr{Cvoid}
-        )::Bool
-    end
+    return MLIR.API.op_sharding_has_iota_reshape_dims(op_sharding.ptr)
 end
 
 function iota_reshape_dims(op_sharding::OpSharding)
-    GC.@preserve op_sharding begin
-        ndims = @ccall MLIR.API.mlir_c.op_sharding_iota_reshape_dims_size(
-            op_sharding.ptr::Ptr{Cvoid}
-        )::Int32
-    end
+    ndims = MLIR.API.op_sharding_iota_reshape_dims_size(op_sharding.ptr)
     dimensions = Vector{Int32}(undef, ndims)
-    GC.@preserve op_sharding dimensions begin
-        @ccall MLIR.API.mlir_c.op_sharding_iota_reshape_dims(
-            op_sharding.ptr::Ptr{Cvoid}, dimensions::Ptr{Int32}
-        )::Cvoid
-    end
+    MLIR.API.op_sharding_iota_reshape_dims(op_sharding.ptr, dimensions)
     return dimensions
 end
 
 function has_iota_transpose_perm(op_sharding::OpSharding)
-    GC.@preserve op_sharding begin
-        return @ccall MLIR.API.mlir_c.op_sharding_has_iota_transpose_perm(
-            op_sharding.ptr::Ptr{Cvoid}
-        )::Bool
-    end
+    return MLIR.API.op_sharding_has_iota_transpose_perm(op_sharding.ptr)
 end
 
 function iota_transpose_perm(op_sharding::OpSharding)
-    GC.@preserve op_sharding begin
-        ndims = @ccall MLIR.API.mlir_c.op_sharding_iota_transpose_perm_size(
-            op_sharding.ptr::Ptr{Cvoid}
-        )::Int32
-    end
+    ndims = MLIR.API.op_sharding_iota_transpose_perm_size(op_sharding.ptr)
     dimensions = Vector{Int32}(undef, ndims)
-    GC.@preserve op_sharding dimensions begin
-        @ccall MLIR.API.mlir_c.op_sharding_iota_transpose_perm(
-            op_sharding.ptr::Ptr{Cvoid}, dimensions::Ptr{Int32}
-        )::Cvoid
-    end
+    MLIR.API.op_sharding_iota_transpose_perm(op_sharding.ptr, dimensions)
     dimensions .+= 1
     return dimensions
 end
 
 function tile_assignment_dimensions(op_sharding::OpSharding)
-    GC.@preserve op_sharding begin
-        ndims = @ccall MLIR.API.mlir_c.op_sharding_tile_assignment_dimensions_size(
-            op_sharding.ptr::Ptr{Cvoid}
-        )::Int32
-    end
+    ndims = MLIR.API.op_sharding_tile_assignment_dimensions_size(op_sharding.ptr)
     dimensions = Vector{Int32}(undef, ndims)
-    GC.@preserve op_sharding dimensions begin
-        @ccall MLIR.API.mlir_c.op_sharding_tile_assignment_dimensions(
-            op_sharding.ptr::Ptr{Cvoid}, dimensions::Ptr{Int32}
-        )::Cvoid
-    end
+    MLIR.API.op_sharding_tile_assignment_dimensions(op_sharding.ptr, dimensions)
     return dimensions
 end
 
 function tile_assignment_devices(op_sharding::OpSharding)
-    GC.@preserve op_sharding begin
-        ndims = @ccall MLIR.API.mlir_c.op_sharding_tile_assignment_devices_size(
-            op_sharding.ptr::Ptr{Cvoid}
-        )::Int32
-    end
+    ndims = MLIR.API.op_sharding_tile_assignment_devices_size(op_sharding.ptr)
     devices = Vector{Int32}(undef, ndims)
-    GC.@preserve op_sharding devices begin
-        @ccall MLIR.API.mlir_c.op_sharding_tile_assignment_devices(
-            op_sharding.ptr::Ptr{Cvoid}, devices::Ptr{Int32}
-        )::Cvoid
-    end
+    MLIR.API.op_sharding_tile_assignment_devices(op_sharding.ptr, devices)
     return devices
 end
 
 function has_last_tile_dims(op_sharding::OpSharding)
-    GC.@preserve op_sharding begin
-        return @ccall MLIR.API.mlir_c.op_sharding_has_last_tile_dims(
-            op_sharding.ptr::Ptr{Cvoid}
-        )::Bool
-    end
+    return MLIR.API.op_sharding_has_last_tile_dims(op_sharding.ptr)
 end
 
 # This separation is mostly for testing purposes
@@ -316,15 +266,11 @@ mutable struct HloSharding
 end
 
 function Base.:(==)(hsharding1::HloSharding, hsharding2::HloSharding)
-    GC.@preserve hsharding1 hsharding2 begin
-        return @ccall MLIR.API.mlir_c.hlo_sharding_check_eq(
-            hsharding1.ptr::Ptr{Cvoid}, hsharding2.ptr::Ptr{Cvoid}
-        )::Bool
-    end
+    return MLIR.API.hlo_sharding_check_eq(hsharding1.ptr, hsharding2.ptr)
 end
 
 function free_hlo_sharding(hlo_sharding::HloSharding)
-    @ccall MLIR.API.mlir_c.free_hlo_sharding(hlo_sharding.ptr::Ptr{Cvoid})::Cvoid
+    return MLIR.API.free_hlo_sharding(hlo_sharding.ptr)
 end
 
 function Base.convert(::Type{CondensedOpSharding}, hlo_sharding::HloSharding)
@@ -332,23 +278,11 @@ function Base.convert(::Type{CondensedOpSharding}, hlo_sharding::HloSharding)
 end
 
 function Base.convert(::Type{OpSharding}, hlo_sharding::HloSharding)
-    GC.@preserve hlo_sharding begin
-        return OpSharding(
-            @ccall MLIR.API.mlir_c.hlo_sharding_to_op_sharding(
-                hlo_sharding.ptr::Ptr{Cvoid}
-            )::Ptr{Cvoid}
-        )
-    end
+    return OpSharding(MLIR.API.hlo_sharding_to_op_sharding(hlo_sharding.ptr))
 end
 
 function Base.convert(::Type{HloSharding}, op_sharding::OpSharding)
-    GC.@preserve op_sharding begin
-        return HloSharding(
-            @ccall MLIR.API.mlir_c.hlo_sharding_from_op_sharding(
-                op_sharding.ptr::Ptr{Cvoid}
-            )::Ptr{Cvoid}
-        )
-    end
+    return HloSharding(MLIR.API.hlo_sharding_from_op_sharding(op_sharding.ptr))
 end
 
 function Base.convert(::Type{HloSharding}, op_sharding::CondensedOpSharding)
@@ -356,11 +290,7 @@ function Base.convert(::Type{HloSharding}, op_sharding::CondensedOpSharding)
 end
 
 function Base.string(hlo_sharding::HloSharding)
-    GC.@preserve hlo_sharding begin
-        str = @ccall MLIR.API.mlir_c.hlo_sharding_to_string(
-            hlo_sharding.ptr::Ptr{Cvoid}
-        )::Cstring
-    end
+    str = MLIR.API.hlo_sharding_to_string(hlo_sharding.ptr)
     return unsafe_string_and_free(str)
 end
 
@@ -389,50 +319,28 @@ function compute_array_indices_and_hlo_sharding(
 end
 
 function tile_assignment_dimensions(hlo_sharding::HloSharding)
-    GC.@preserve hlo_sharding begin
-        ndims = @ccall MLIR.API.mlir_c.hlo_sharding_tile_assignment_dimensions_size(
-            hlo_sharding.ptr::Ptr{Cvoid}
-        )::Int32
-    end
+    ndims = MLIR.API.hlo_sharding_tile_assignment_dimensions_size(hlo_sharding.ptr)
     dimensions = Vector{Int64}(undef, ndims)
-    GC.@preserve hlo_sharding dimensions begin
-        @ccall MLIR.API.mlir_c.hlo_sharding_tile_assignment_dimensions(
-            hlo_sharding.ptr::Ptr{Cvoid}, dimensions::Ptr{Int64}, ndims::Int32
-        )::Cvoid
-    end
+    MLIR.API.hlo_sharding_tile_assignment_dimensions(hlo_sharding.ptr, dimensions, ndims)
     return dimensions
 end
 
 function tile_assignment_devices(hlo_sharding::HloSharding)
-    GC.@preserve hlo_sharding begin
-        ndims = @ccall MLIR.API.mlir_c.hlo_sharding_tile_assignment_devices_size(
-            hlo_sharding.ptr::Ptr{Cvoid}
-        )::Int32
-    end
+    ndims = MLIR.API.hlo_sharding_tile_assignment_devices_size(hlo_sharding.ptr)
     devices = Vector{Int64}(undef, ndims)
-    GC.@preserve hlo_sharding devices begin
-        @ccall MLIR.API.mlir_c.hlo_sharding_tile_assignment_devices(
-            hlo_sharding.ptr::Ptr{Cvoid}, devices::Ptr{Int64}, ndims::Int32
-        )::Cvoid
-    end
+    MLIR.API.hlo_sharding_tile_assignment_devices(hlo_sharding.ptr, devices, ndims)
     return devices
 end
 
 for check in (:is_tiled, :is_maximal, :is_tuple, :is_replicated, :is_manual, :is_unknown)
     cfn = Symbol(:hlo_sharding_, check)
     @eval function $(check)(hlo_sharding::HloSharding)
-        GC.@preserve hlo_sharding begin
-            return @ccall MLIR.API.mlir_c.$(cfn)(hlo_sharding.ptr::Ptr{Cvoid})::Bool
-        end
+        return MLIR.API.$(cfn)(hlo_sharding.ptr)
     end
 end
 
 function replicate_on_last_tile_dim(hlo_sharding::HloSharding)
-    GC.@preserve hlo_sharding begin
-        return @ccall MLIR.API.mlir_c.hlo_sharding_replicate_on_last_tile_dim(
-            hlo_sharding.ptr::Ptr{Cvoid}
-        )::Bool
-    end
+    return MLIR.API.hlo_sharding_replicate_on_last_tile_dim(hlo_sharding.ptr)
 end
 
 function shard_shape(args...; kwargs...)

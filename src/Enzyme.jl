@@ -289,9 +289,7 @@ function set_act!(inp, path, reverse, tostore; emptypath=false, width=1)
 end
 
 function act_attr(val)
-    val = @ccall MLIR.API.mlir_c.enzymeActivityAttrGet(
-        MLIR.IR.current_context()::MLIR.API.MlirContext, val::Int32
-    )::MLIR.API.MlirAttribute
+    val = MLIR.API.enzymeActivityAttrGet(MLIR.IR.current_context(), Int32(val))
     return MLIR.IR.Attribute(val)
 end
 

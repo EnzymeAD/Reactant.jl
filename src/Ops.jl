@@ -1079,7 +1079,7 @@ Base.@nospecializeinfer @noinline function dot_general(
     rhs_contracting_dimensions = rhs_contracting_dimensions .- 1
     ctx = MLIR.IR.current_context()
 
-    dot_dimension_numbers = GC.@preserve ctx lhs_contracting_dimensions rhs_contracting_dimensions lhs_batching_dimensions rhs_batching_dimensions begin
+    dot_dimension_numbers = begin
         MLIR.IR.Attribute(
             MLIR.API.stablehloDotDimensionNumbersGet(
                 ctx,

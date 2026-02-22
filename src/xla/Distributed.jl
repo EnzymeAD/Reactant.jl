@@ -17,44 +17,30 @@ function DistributedRuntimeClient(
     use_compression::Bool=true,
 )
     @debug "[GETPID $(getpid())] [PID $process_id] Creating distributed runtime client"
-    GC.@preserve coordinator_bind_address begin
-        client = @ccall MLIR.API.mlir_c.GetDistributedRuntimeClient(
-            coordinator_bind_address::Cstring,
-            Int32(process_id)::Int32,
-            Int32(rpc_timeout_in_seconds)::Int32,
-            Int32(shutdown_timeout_in_minutes)::Int32,
-            Int32(heartbeat_interval_in_seconds)::Int32,
-            use_compression::Bool,
-        )::Ptr{Cvoid}
-    end
+    client = MLIR.API.GetDistributedRuntimeClient(
+        coordinator_bind_address,
+        Int32(process_id),
+        Int32(rpc_timeout_in_seconds),
+        Int32(shutdown_timeout_in_minutes),
+        Int32(heartbeat_interval_in_seconds),
+        use_compression,
+    )
     return DistributedRuntimeClient(client)
 end
 
 function free_distributed_runtime_client(client::DistributedRuntimeClient)
     @debug "[GETPID $(getpid())] Freeing distributed runtime client"
-    GC.@preserve client begin
-        @ccall MLIR.API.mlir_c.free_distributed_runtime_client(
-            client.client::Ptr{Cvoid}
-        )::Cvoid
-    end
+    return MLIR.API.free_distributed_runtime_client(client.client)
 end
 
 function connect(client::DistributedRuntimeClient)
     @debug "[GETPID $(getpid())] Connecting to DistributedRuntimeClient"
-    GC.@preserve client begin
-        @ccall MLIR.API.mlir_c.distributed_runtime_client_connect(
-            client.client::Ptr{Cvoid}
-        )::Cvoid
-    end
+    return MLIR.API.distributed_runtime_client_connect(client.client)
 end
 
 function shutdown(client::DistributedRuntimeClient)
     @debug "[GETPID $(getpid())] Shutdown DistributedRuntimeClient"
-    GC.@preserve client begin
-        @ccall MLIR.API.mlir_c.distributed_runtime_client_shutdown(
-            client.client::Ptr{Cvoid}
-        )::Cvoid
-    end
+    return MLIR.API.distributed_runtime_client_shutdown(client.client)
 end
 
 # Service
@@ -75,34 +61,24 @@ function DistributedRuntimeService(
     shutdown_timeout_in_minutes::Integer=5,
 )
     @debug "[GETPID $(getpid())] Creating DistributedRuntimeService"
-    GC.@preserve coordinator_bind_address begin
-        service = @ccall MLIR.API.mlir_c.GetDistributedRuntimeService(
-            coordinator_bind_address::Cstring,
-            Cint(num_nodes)::Cint,
-            Int32(heartbeat_interval_in_seconds)::Int32,
-            Int32(cluster_register_timeout_in_minutes)::Int32,
-            Int32(shutdown_timeout_in_minutes)::Int32,
-        )::Ptr{Cvoid}
-    end
+    service = MLIR.API.GetDistributedRuntimeService(
+        coordinator_bind_address,
+        Cint(num_nodes),
+        Int32(heartbeat_interval_in_seconds),
+        Int32(cluster_register_timeout_in_minutes),
+        Int32(shutdown_timeout_in_minutes),
+    )
     return DistributedRuntimeService(service)
 end
 
 function free_distributed_runtime_service(service::DistributedRuntimeService)
     @debug "[GETPID $(getpid())] Freeing DistributedRuntimeService"
-    GC.@preserve service begin
-        @ccall MLIR.API.mlir_c.free_distributed_runtime_service(
-            service.service::Ptr{Cvoid}
-        )::Cvoid
-    end
+    return MLIR.API.free_distributed_runtime_service(service.service)
 end
 
 function shutdown(service::DistributedRuntimeService)
     @debug "[GETPID $(getpid())] Shutting down DistributedRuntimeService"
-    GC.@preserve service begin
-        @ccall MLIR.API.mlir_c.distributed_runtime_service_shutdown(
-            service.service::Ptr{Cvoid}
-        )::Cvoid
-    end
+    return MLIR.API.distributed_runtime_service_shutdown(service.service)
 end
 
 # Global State

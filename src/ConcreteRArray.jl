@@ -352,16 +352,14 @@ function Base.getindex(
     wait(a)
     if buffer_on_cpu(a) && !Sharding.is_sharded(a)
         buf = get_buffer(a)
-        GC.@preserve buf begin
-            ptr = Base.unsafe_convert(Ptr{T}, XLA.unsafe_buffer_pointer(buf))
-            start = 0
-            for i in 1:N
-                start *= size(a, N - i + 1)
-                start += (args[N - i + 1] - 1)
-            end
-            start += 1
-            return unsafe_load(ptr, start)
+        ptr = Base.unsafe_convert(Ptr{T}, XLA.unsafe_buffer_pointer(buf))
+        start = 0
+        for i in 1:N
+            start *= size(a, N - i + 1)
+            start += (args[N - i + 1] - 1)
         end
+        start += 1
+        return unsafe_load(ptr, start)
     end
 
     GPUArraysCore.assertscalar("getindex(::ConcretePJRTArray, ::Vararg{Int, N})")
@@ -404,16 +402,14 @@ function Base.setindex!(a::ConcretePJRTArray{T}, v, args::Vararg{Int,N}) where {
     wait(a)
     if buffer_on_cpu(a) && !Sharding.is_sharded(a)
         buf = get_buffer(a)
-        GC.@preserve buf begin
-            ptr = Base.unsafe_convert(Ptr{T}, XLA.unsafe_buffer_pointer(buf))
-            start = 0
-            for i in 1:N
-                start *= size(a, N - i + 1)
-                start += (args[N - i + 1] - 1)
-            end
-            start += 1
-            unsafe_store!(ptr, v, start)
+        ptr = Base.unsafe_convert(Ptr{T}, XLA.unsafe_buffer_pointer(buf))
+        start = 0
+        for i in 1:N
+            start *= size(a, N - i + 1)
+            start += (args[N - i + 1] - 1)
         end
+        start += 1
+        unsafe_store!(ptr, v, start)
         return a
     end
 
@@ -598,13 +594,9 @@ function Base.copyto!(
     src_sync = src_async.buffer
     wait(src_async)
 
-    GC.@preserve dest begin
-        @ccall MLIR.API.mlir_c.ifrt_array_copy_to_host_buffer(
-            src_sync.buffer::Ptr{Cvoid},
-            pointer(dest, doffs)::Ptr{T},
-            ((soffs - 1) * sizeof(T))::Int64,
-        )::Ptr{Cvoid}
-    end
+    MLIR.API.ifrt_array_copy_to_host_buffer(
+        src_sync.buffer, pointer(dest, doffs), ((soffs - 1) * sizeof(T))
+    )
 
     return dest
 end
@@ -623,15 +615,13 @@ function Base.copyto!(
     src_sync = src_async.buffer
     wait(src_async)
 
-    GC.@preserve dest begin
-        @ccall MLIR.API.mlir_c.CopyFromBuffer(
-            client.client::Ptr{Cvoid},
-            src_sync.buffer::Ptr{Cvoid},
-            pointer(dest, doffs)::Ptr{T},
-            ((soffs - 1) * sizeof(T))::Int64,
-            (n * sizeof(T))::Int64,
-        )::Ptr{Cvoid}
-    end
+    MLIR.API.CopyFromBuffer(
+        client.client,
+        src_sync.buffer,
+        pointer(dest, doffs),
+        ((soffs - 1) * sizeof(T)),
+        (n * sizeof(T)),
+    )
 
     return dest
 end
@@ -655,15 +645,13 @@ function Base.copyto!(
     dest_sync = dest_async.buffer
     wait(dest_async)
 
-    GC.@preserve src begin
-        @ccall MLIR.API.mlir_c.CopyToBuffer(
-            client.client::Ptr{Cvoid},
-            dest_sync.buffer::Ptr{Cvoid},
-            pointer(src, soffs)::Ptr{T},
-            ((doffs - 1) * sizeof(T))::Int64,
-            (n * sizeof(T))::Int64,
-        )::Ptr{Cvoid}
-    end
+    MLIR.API.CopyToBuffer(
+        client.client,
+        dest_sync.buffer,
+        pointer(src, soffs),
+        ((doffs - 1) * sizeof(T)),
+        (n * sizeof(T)),
+    )
 
     return dest
 end
@@ -760,11 +748,9 @@ function Base.fill!(a::ConcretePJRTArray{T,N}, val) where {T,N}
     wait(a)
     if buffer_on_cpu(a) && !Sharding.is_sharded(a)
         buf = get_buffer(a)
-        GC.@preserve buf begin
-            ptr = Base.unsafe_convert(Ptr{T}, XLA.unsafe_buffer_pointer(buf))
-            for start in 1:length(a)
-                unsafe_store!(ptr, val, start)
-            end
+        ptr = Base.unsafe_convert(Ptr{T}, XLA.unsafe_buffer_pointer(buf))
+        for start in 1:length(a)
+            unsafe_store!(ptr, val, start)
         end
         return a
     end

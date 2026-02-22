@@ -23,9 +23,7 @@ const CUDA_DATA_DIR = Ref(
 
 function LLVMclopts(opts...)
     args = ["", opts...]
-    @ccall MLIR.API.mlir_c.ReactantLLVMParseCommandLineOptions(
-        length(args)::Cint, args::Ptr{Cstring}, C_NULL::Ptr{Cvoid}
-    )::Cvoid
+    return MLIR.API.ReactantLLVMParseCommandLineOptions(length(args), args, "")
 end
 
 include("Distributed.jl")
@@ -198,9 +196,9 @@ function __init__()
 
         @debug "REACTANT_XLA_RUNTIME: " REACTANT_XLA_RUNTIME maxlog = 1
 
-        @ccall MLIR.API.mlir_c.RegisterEnzymeXLACPUHandler()::Cvoid
-        @ccall MLIR.API.mlir_c.RegisterEnzymeXLAGPUHandler()::Cvoid
-        @ccall MLIR.API.mlir_c.registerReactantXLAFFI()::Cvoid
+        MLIR.API.RegisterEnzymeXLACPUHandler()
+        MLIR.API.RegisterEnzymeXLAGPUHandler()
+        MLIR.API.registerReactantXLAFFI()
 
         @static if !Sys.isapple()
             lljit = LLVM.JuliaOJIT()

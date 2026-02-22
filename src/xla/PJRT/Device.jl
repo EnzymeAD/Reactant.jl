@@ -3,56 +3,32 @@ struct Device <: XLA.AbstractDevice
 end
 
 function XLA.client(device::Device)
-    GC.@preserve device begin
-        return Client(
-            @ccall MLIR.API.mlir_c.DeviceToClient(device.device::Ptr{Cvoid})::Ptr{Cvoid}
-        )
-    end
+    return Client(MLIR.API.DeviceToClient(device.device))
 end
 
 function XLA.device_ordinal(device::Device)
-    GC.@preserve device begin
-        return @ccall MLIR.API.mlir_c.PjRtDeviceGetLocalDeviceId(
-            device.device::Ptr{Cvoid}
-        )::Int64
-    end
+    return MLIR.API.PjRtDeviceGetLocalDeviceId(device.device)
 end
 
 function XLA.device_kind(device::Device)
-    GC.@preserve device begin
-        str = @ccall MLIR.API.mlir_c.DeviceGetKind(device.device::Ptr{Cvoid})::Cstring
-    end
+    str = MLIR.API.DeviceGetKind(device.device)
     return XLA.unsafe_string_and_free(str)
 end
 
 function XLA.get_local_device_id(device::Device)
-    GC.@preserve device begin
-        return @ccall MLIR.API.mlir_c.PjRtDeviceGetLocalDeviceId(
-            device.device::Ptr{Cvoid}
-        )::Cint
-    end
+    return MLIR.API.PjRtDeviceGetLocalDeviceId(device.device)
 end
 
 function XLA.get_local_hardware_id(device::Device)
-    GC.@preserve device begin
-        return @ccall MLIR.API.mlir_c.PjRtDeviceGetLocalHardwareId(
-            device.device::Ptr{Cvoid}
-        )::Cint
-    end
+    return MLIR.API.PjRtDeviceGetLocalHardwareId(device.device)
 end
 
 function XLA.is_addressable(device::Device)
-    GC.@preserve device begin
-        return @ccall MLIR.API.mlir_c.pjrt_device_is_addressable(
-            device.device::Ptr{Cvoid}
-        )::Bool
-    end
+    return MLIR.API.pjrt_device_is_addressable(device.device)
 end
 
 function XLA.allocatorstats_internal(device::Device)
     ref = Ref{XLA.JLAllocatorStats}()
-    @ccall MLIR.API.mlir_c.PjRtDeviceGetAllocatorStats(
-        device.device::Ptr{Cvoid}, ref::Ptr{Cvoid}
-    )::Cvoid
+    MLIR.API.PjRtDeviceGetAllocatorStats(device.device, ref)
     return ref[]
 end

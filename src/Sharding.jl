@@ -859,13 +859,11 @@ end
 function hlo_sharding_from_sdy_tensor_sharding_attr(attr, mesh_attr)
     @assert MLIR.API.sdyAttributeIsATensorShardingAttr(attr)
     @assert MLIR.API.sdyAttributeIsAMeshAttr(mesh_attr)
-    GC.@preserve attr begin
-        return XLA.HloSharding(
-            @ccall MLIR.API.mlir_c.hloShardingFromTensorShardingAttr(
-                attr::MLIR.API.MlirAttribute, mesh_attr::MLIR.API.MlirAttribute
-            )::Ptr{Cvoid}
-        )
-    end
+    return XLA.HloSharding(
+        @ccall MLIR.API.hloShardingFromTensorShardingAttr(
+            attr::MLIR.API.MlirAttribute, mesh_attr::MLIR.API.MlirAttribute
+        )::Ptr{Cvoid}
+    )
 end
 
 @inline ndevices(sharding::HloSharding) = length(sharding.mesh)
@@ -1031,19 +1029,17 @@ function get_tensor_sharding_attribute(
 
         # TODO(#2232): Not recommended path
         string_mesh_name = MLIR.IR.Attribute(MLIR.IR.flatsymbol(mesh_name); context=ctx)
-        GC.@preserve sharding begin
-            attr = MLIR.IR.Attribute(
-                @ccall MLIR.API.mlir_c.hloShardingToTensorShardingAttr(
-                    ctx::MLIR.API.MlirContext,
-                    sharding.hlo_sharding.ptr::Ptr{Cvoid},
-                    string_mesh_name::MLIR.API.MlirAttribute,
-                    mesh_attr::MLIR.API.MlirAttribute,
-                    Int64(length(sharding.is_closed))::Int64,
-                    Bool[sharding.is_closed...]::Ptr{Bool},
-                    Int64[sharding.priority...]::Ptr{Int64},
-                )::MLIR.API.MlirAttribute
-            )
-        end
+        attr = MLIR.IR.Attribute(
+            @ccall MLIR.API.hloShardingToTensorShardingAttr(
+                ctx::MLIR.API.MlirContext,
+                sharding.hlo_sharding.ptr::Ptr{Cvoid},
+                string_mesh_name::MLIR.API.MlirAttribute,
+                mesh_attr::MLIR.API.MlirAttribute,
+                Int64(length(sharding.is_closed))::Int64,
+                Bool[sharding.is_closed...]::Ptr{Bool},
+                Int64[sharding.priority...]::Ptr{Int64},
+            )::MLIR.API.MlirAttribute
+        )
         return attr, :sdy
     elseif dialect == :mhlo
         sharding_attr = parse(

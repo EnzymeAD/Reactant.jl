@@ -182,7 +182,7 @@ function Base.getproperty(x::PJRT_NamedValue, f::Symbol)
     r = Ref{PJRT_NamedValue}(x)
     ptr = Base.unsafe_convert(Ptr{PJRT_NamedValue}, r)
     fptr = getproperty(ptr, f)
-    GC.@preserve r unsafe_load(fptr)
+    return unsafe_load(fptr)
 end
 
 function Base.setproperty!(x::Ptr{PJRT_NamedValue}, f::Symbol, v)
@@ -926,7 +926,7 @@ function Base.getproperty(x::PJRT_Buffer_MemoryLayout, f::Symbol)
     r = Ref{PJRT_Buffer_MemoryLayout}(x)
     ptr = Base.unsafe_convert(Ptr{PJRT_Buffer_MemoryLayout}, r)
     fptr = getproperty(ptr, f)
-    GC.@preserve r unsafe_load(fptr)
+    return unsafe_load(fptr)
 end
 
 function Base.setproperty!(x::Ptr{PJRT_Buffer_MemoryLayout}, f::Symbol, v)
@@ -2027,7 +2027,7 @@ function Base.getproperty(x::PJRT_Buffer_GetMemoryLayout_Args, f::Symbol)
     r = Ref{PJRT_Buffer_GetMemoryLayout_Args}(x)
     ptr = Base.unsafe_convert(Ptr{PJRT_Buffer_GetMemoryLayout_Args}, r)
     fptr = getproperty(ptr, f)
-    GC.@preserve r unsafe_load(fptr)
+    return unsafe_load(fptr)
 end
 
 function Base.setproperty!(x::Ptr{PJRT_Buffer_GetMemoryLayout_Args}, f::Symbol, v)
