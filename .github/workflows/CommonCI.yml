@@ -176,6 +176,8 @@ jobs:
               earlyoom -m 3 -s 100 -r 300 --prefer 'julia' &
           fi
           julia --project --color=yes --check-bounds=yes -e 'import Pkg; Pkg.test(;coverage=true, julia_args=["--check-bounds=yes", "--compiled-modules=yes", "--depwarn=yes"], test_args=`${{ env.runtest_test_args }}`, force_latest_compatible_version=false, allow_reresolve=${{ !(inputs.downgrade_testing) }})'
+        env:
+          TF_CPP_MAX_VLOG_LEVEL: "6"
 
       - name: "Setup Runtime Preferences (IFRT)"
         if: ${{ inputs.runtime == 'ifrt' || inputs.runtime == 'both' }}
@@ -196,6 +198,8 @@ jobs:
               earlyoom -m 3 -s 100 -r 300 --prefer 'julia' &
           fi
           julia --project --color=yes --check-bounds=yes -e 'import Pkg; Pkg.test(;coverage=true, julia_args=["--check-bounds=yes", "--compiled-modules=yes", "--depwarn=yes"], test_args=`${{ env.runtest_test_args }}`, force_latest_compatible_version=false, allow_reresolve=${{ !(inputs.downgrade_testing) }})'
+        env:
+          TF_CPP_MAX_VLOG_LEVEL: "6"
 
       - name: "Upload MLIR modules"
         uses: actions/upload-artifact@v6
