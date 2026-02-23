@@ -18,8 +18,8 @@ export var"PaddingConfig.PaddingConfigDimension", GemmPerfTableEntry, OutputOper
 export var"PrecisionConfig.Precision", ExecutionProfile, var"AxisRefProto.SubAxis"
 export ProfileGenerationStrategy, PaddingType, var"MeshProto.MeshAxis"
 export var"OpSharding.ShardGroupType", CholeskyOptions, StatisticsViz
-export TriangularSolveOptions, DeviceAssignmentProto, ChannelHandle, ResultAccuracy
-export RaggedDotDimensionNumbers, Window, CollectiveDeviceListProto
+export TriangularSolveOptions, DeviceAssignmentProto, ChannelHandle
+export CollectiveDeviceListProto, ResultAccuracy, RaggedDotDimensionNumbers, Window
 export OriginalValueElementProto, WhileLoopBackendConfig, PaddingConfig
 export GemmPerfTableEntryValues, PrecisionConfig, AxisRefProto, var"OpMetadata.ProfileInfo"
 export MeshProto, OriginalValueProto, GemmPerfTable
@@ -1499,6 +1499,37 @@ function PB._encoded_size(x::ChannelHandle)
     return encoded_size
 end
 
+struct CollectiveDeviceListProto
+    replica_groups::Vector{ReplicaGroup}
+end
+PB.reserved_fields(::Type{CollectiveDeviceListProto}) = (names = ["iota_replica_group_list"], numbers = Union{Int,UnitRange{Int}}[2])
+PB.default_values(::Type{CollectiveDeviceListProto}) = (;replica_groups = Vector{ReplicaGroup}())
+PB.field_numbers(::Type{CollectiveDeviceListProto}) = (;replica_groups = 1)
+
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:CollectiveDeviceListProto})
+    replica_groups = PB.BufferedVector{ReplicaGroup}()
+    while !PB.message_done(d)
+        field_number, wire_type = PB.decode_tag(d)
+        if field_number == 1
+            PB.decode!(d, replica_groups)
+        else
+            Base.skip(d, wire_type)
+        end
+    end
+    return CollectiveDeviceListProto(replica_groups[])
+end
+
+function PB.encode(e::PB.AbstractProtoEncoder, x::CollectiveDeviceListProto)
+    initpos = position(e.io)
+    !isempty(x.replica_groups) && PB.encode(e, 1, x.replica_groups)
+    return position(e.io) - initpos
+end
+function PB._encoded_size(x::CollectiveDeviceListProto)
+    encoded_size = 0
+    !isempty(x.replica_groups) && (encoded_size += PB._encoded_size(x.replica_groups, 1))
+    return encoded_size
+end
+
 struct ResultAccuracy
     specs::Union{Nothing,OneOf{<:Union{var"ResultAccuracy.Mode".T,var"ResultAccuracy.Tolerance"}}}
 end
@@ -1613,42 +1644,6 @@ end
 function PB._encoded_size(x::Window)
     encoded_size = 0
     !isempty(x.dimensions) && (encoded_size += PB._encoded_size(x.dimensions, 1))
-    return encoded_size
-end
-
-struct CollectiveDeviceListProto
-    replica_groups::Vector{ReplicaGroup}
-    iota_replica_group_list::Union{Nothing,IotaReplicaGroupListProto}
-end
-PB.default_values(::Type{CollectiveDeviceListProto}) = (;replica_groups = Vector{ReplicaGroup}(), iota_replica_group_list = nothing)
-PB.field_numbers(::Type{CollectiveDeviceListProto}) = (;replica_groups = 1, iota_replica_group_list = 2)
-
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:CollectiveDeviceListProto})
-    replica_groups = PB.BufferedVector{ReplicaGroup}()
-    iota_replica_group_list = Ref{Union{Nothing,IotaReplicaGroupListProto}}(nothing)
-    while !PB.message_done(d)
-        field_number, wire_type = PB.decode_tag(d)
-        if field_number == 1
-            PB.decode!(d, replica_groups)
-        elseif field_number == 2
-            PB.decode!(d, iota_replica_group_list)
-        else
-            Base.skip(d, wire_type)
-        end
-    end
-    return CollectiveDeviceListProto(replica_groups[], iota_replica_group_list[])
-end
-
-function PB.encode(e::PB.AbstractProtoEncoder, x::CollectiveDeviceListProto)
-    initpos = position(e.io)
-    !isempty(x.replica_groups) && PB.encode(e, 1, x.replica_groups)
-    !isnothing(x.iota_replica_group_list) && PB.encode(e, 2, x.iota_replica_group_list)
-    return position(e.io) - initpos
-end
-function PB._encoded_size(x::CollectiveDeviceListProto)
-    encoded_size = 0
-    !isempty(x.replica_groups) && (encoded_size += PB._encoded_size(x.replica_groups, 1))
-    !isnothing(x.iota_replica_group_list) && (encoded_size += PB._encoded_size(x.iota_replica_group_list, 2))
     return encoded_size
 end
 
@@ -2210,17 +2205,19 @@ struct NamedShardingProto
     dim_shardings::Vector{var"NamedShardingProto.DimensionSharding"}
     replicated_axes::Vector{AxisRefProto}
     unreduced_axes::Vector{AxisRefProto}
+    manual_axes::Vector{AxisRefProto}
     metadata::Vector{OpMetadata}
 end
 PB.reserved_fields(::Type{NamedShardingProto}) = (names = String[], numbers = Union{Int,UnitRange{Int}}[1])
-PB.default_values(::Type{NamedShardingProto}) = (;mesh = nothing, dim_shardings = Vector{var"NamedShardingProto.DimensionSharding"}(), replicated_axes = Vector{AxisRefProto}(), unreduced_axes = Vector{AxisRefProto}(), metadata = Vector{OpMetadata}())
-PB.field_numbers(::Type{NamedShardingProto}) = (;mesh = 2, dim_shardings = 3, replicated_axes = 4, unreduced_axes = 5, metadata = 6)
+PB.default_values(::Type{NamedShardingProto}) = (;mesh = nothing, dim_shardings = Vector{var"NamedShardingProto.DimensionSharding"}(), replicated_axes = Vector{AxisRefProto}(), unreduced_axes = Vector{AxisRefProto}(), manual_axes = Vector{AxisRefProto}(), metadata = Vector{OpMetadata}())
+PB.field_numbers(::Type{NamedShardingProto}) = (;mesh = 2, dim_shardings = 3, replicated_axes = 4, unreduced_axes = 5, manual_axes = 7, metadata = 6)
 
 function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:NamedShardingProto})
     mesh = Ref{Union{Nothing,MeshProto}}(nothing)
     dim_shardings = PB.BufferedVector{var"NamedShardingProto.DimensionSharding"}()
     replicated_axes = PB.BufferedVector{AxisRefProto}()
     unreduced_axes = PB.BufferedVector{AxisRefProto}()
+    manual_axes = PB.BufferedVector{AxisRefProto}()
     metadata = PB.BufferedVector{OpMetadata}()
     while !PB.message_done(d)
         field_number, wire_type = PB.decode_tag(d)
@@ -2232,13 +2229,15 @@ function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:NamedShardingProto})
             PB.decode!(d, replicated_axes)
         elseif field_number == 5
             PB.decode!(d, unreduced_axes)
+        elseif field_number == 7
+            PB.decode!(d, manual_axes)
         elseif field_number == 6
             PB.decode!(d, metadata)
         else
             Base.skip(d, wire_type)
         end
     end
-    return NamedShardingProto(mesh[], dim_shardings[], replicated_axes[], unreduced_axes[], metadata[])
+    return NamedShardingProto(mesh[], dim_shardings[], replicated_axes[], unreduced_axes[], manual_axes[], metadata[])
 end
 
 function PB.encode(e::PB.AbstractProtoEncoder, x::NamedShardingProto)
@@ -2247,6 +2246,7 @@ function PB.encode(e::PB.AbstractProtoEncoder, x::NamedShardingProto)
     !isempty(x.dim_shardings) && PB.encode(e, 3, x.dim_shardings)
     !isempty(x.replicated_axes) && PB.encode(e, 4, x.replicated_axes)
     !isempty(x.unreduced_axes) && PB.encode(e, 5, x.unreduced_axes)
+    !isempty(x.manual_axes) && PB.encode(e, 7, x.manual_axes)
     !isempty(x.metadata) && PB.encode(e, 6, x.metadata)
     return position(e.io) - initpos
 end
@@ -2256,6 +2256,7 @@ function PB._encoded_size(x::NamedShardingProto)
     !isempty(x.dim_shardings) && (encoded_size += PB._encoded_size(x.dim_shardings, 3))
     !isempty(x.replicated_axes) && (encoded_size += PB._encoded_size(x.replicated_axes, 4))
     !isempty(x.unreduced_axes) && (encoded_size += PB._encoded_size(x.unreduced_axes, 5))
+    !isempty(x.manual_axes) && (encoded_size += PB._encoded_size(x.manual_axes, 7))
     !isempty(x.metadata) && (encoded_size += PB._encoded_size(x.metadata, 6))
     return encoded_size
 end

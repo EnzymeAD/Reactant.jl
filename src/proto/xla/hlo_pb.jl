@@ -3,8 +3,9 @@ using ProtoBuf: OneOf
 using ProtoBuf.EnumX: @enumx
 
 export var"HloScheduleProto.InstructionSequence", CustomCallApiVersion
-export var"StackFrameIndexProto.StackFrame", var"HloInputs.LiteralDescriptor"
-export HloPassMetadata, var"BufferAllocationProto.Assigned", Kind
+export var"StackFrameIndexProto.StackFrame", ConvolutionKind
+export var"HloInputs.LiteralDescriptor", HloPassMetadata
+export var"BufferAllocationProto.Assigned", TriState, Kind
 export var"StackFrameIndexProto.FileLocation", var"LogicalBufferProto.Location"
 export CrossProgramPrefetch, var"HloBufferDonorProto.BufferDonorEntryProto"
 export var"HloInstructionProto.SliceDimensions", var"HloModuleProto.ProfileType"
@@ -93,6 +94,8 @@ function PB._encoded_size(x::var"StackFrameIndexProto.StackFrame")
     x.parent_frame_id != zero(Int32) && (encoded_size += PB._encoded_size(x.parent_frame_id, 2))
     return encoded_size
 end
+
+@enumx ConvolutionKind CONVOLUTION_KIND_UNSET=0 CONVOLUTION_KIND_FPROP=1 CONVOLUTION_KIND_DGRAD=2 CONVOLUTION_KIND_WGRAD=3
 
 struct var"HloInputs.LiteralDescriptor"
     version::Int32
@@ -267,6 +270,8 @@ function PB._encoded_size(x::var"BufferAllocationProto.Assigned")
     x.element_type != PrimitiveType.PRIMITIVE_TYPE_INVALID && (encoded_size += PB._encoded_size(x.element_type, 4))
     return encoded_size
 end
+
+@enumx TriState TRI_STATE_UNSPECIFIED=0 TRI_STATE_TRUE=1 TRI_STATE_FALSE=2
 
 @enumx Kind UNDEFINED_ALIAS=0 MAY_ALIAS=1 MUST_ALIAS=2
 
@@ -1073,14 +1078,18 @@ struct HloInstructionProto
     original_value::Union{Nothing,OriginalValueProto}
     is_composite::Bool
     result_accuracy::Union{Nothing,ResultAccuracy}
+    is_reverse::Bool
+    num_carries::Int64
+    is_associative::TriState.T
+    conv_kind::ConvolutionKind.T
 end
 PB.reserved_fields(::Type{HloInstructionProto}) = (names = ["parameter_name", "fused_instructions_computation", "operand_names", "control_predecessor_names", "called_computation_names", "replica_group_ids", "custom_call_opaque", "all_reduce_barrier"], numbers = Union{Int,UnitRange{Int}}[10, 12, 4, 5, 6, 44, 53, 46, 41, 42, 64, 78, 83, 84, 86])
 PB.oneof_field_types(::Type{HloInstructionProto}) = (;
     optional_cross_program_prefetch_index = (;cross_program_prefetch_index=Int32),
     replica_group_list = (;collective_device_list=CollectiveDeviceListProto, iota_collective_device_list=IotaReplicaGroupListProto, mesh_axes_replica_group_list=MeshAxesReplicaGroupListProto),
 )
-PB.default_values(::Type{HloInstructionProto}) = (;name = "", opcode = "", shape = nothing, metadata = nothing, literal = nothing, parameter_number = zero(Int64), fusion_kind = "", tuple_index = zero(Int64), dimensions = Vector{Int64}(), window = nothing, convolution_dimension_numbers = nothing, feature_group_count = zero(Int64), batch_group_count = zero(Int64), slice_dimensions = Vector{var"HloInstructionProto.SliceDimensions"}(), exponent_bits = zero(Int32), mantissa_bits = zero(Int32), dynamic_slice_sizes = Vector{Int64}(), padding_config = nothing, outfeed_config = UInt8[], distribution = RandomDistribution.RNG_INVALID, epsilon = zero(Float32), feature_index = zero(Int64), channel_id = zero(Int64), infeed_config = UInt8[], custom_call_target = "", outfeed_shape = nothing, dot_dimension_numbers = nothing, ragged_dot_dimension_numbers = nothing, fft_type = FftType.FFT, fft_length = Vector{Int64}(), comparison_direction = "", gather_dimension_numbers = nothing, gather_slice_sizes = Vector{Int64}(), id = zero(Int64), operand_ids = Vector{Int64}(), control_predecessor_ids = Vector{Int64}(), called_computation_ids = Vector{Int64}(), sharding = nothing, backend_config = UInt8[], replica_groups = Vector{ReplicaGroup}(), all_reduce_id = zero(Int64), use_global_device_ids = false, is_host_transfer = false, is_stable = false, scatter_dimension_numbers = nothing, precision_config = nothing, source_target_pairs = Vector{SourceTarget}(), domain_entry_sharding = nothing, domain_exit_sharding = nothing, constrain_layout = false, operand_shapes_with_layout = Vector{ShapeProto}(), triangular_solve_options = nothing, cholesky_options = nothing, parameter_replication = nothing, custom_call_has_side_effect = false, output_operand_aliasing = Vector{OutputOperandAliasing}(), custom_call_schedule = CustomCallSchedule.SCHEDULE_NONE, delta = zero(Int64), indices_are_sorted = false, frontend_attributes = nothing, unique_indices = false, rng_algorithm = RandomAlgorithm.RNG_DEFAULT, comparison_type = "", is_cross_program_prefetch = false, cross_program_prefetch_index = zero(Int32), padding_type = PaddingType.PADDING_INVALID, custom_call_api_version = CustomCallApiVersion.API_VERSION_UNSPECIFIED, async_execution_thread = "", k = zero(Int64), largest = false, statistics_viz = nothing, collective_device_list = nothing, iota_collective_device_list = nothing, mesh_axes_replica_group_list = nothing, original_value = nothing, is_composite = false, result_accuracy = nothing)
-PB.field_numbers(::Type{HloInstructionProto}) = (;name = 1, opcode = 2, shape = 3, metadata = 7, literal = 8, parameter_number = 9, fusion_kind = 11, tuple_index = 13, dimensions = 14, window = 15, convolution_dimension_numbers = 16, feature_group_count = 50, batch_group_count = 58, slice_dimensions = 17, exponent_bits = 18, mantissa_bits = 19, dynamic_slice_sizes = 20, padding_config = 21, outfeed_config = 22, distribution = 23, epsilon = 24, feature_index = 25, channel_id = 26, infeed_config = 27, custom_call_target = 28, outfeed_shape = 29, dot_dimension_numbers = 30, ragged_dot_dimension_numbers = 90, fft_type = 31, fft_length = 32, comparison_direction = 63, gather_dimension_numbers = 33, gather_slice_sizes = 34, id = 35, operand_ids = 36, control_predecessor_ids = 37, called_computation_ids = 38, sharding = 40, backend_config = 43, replica_groups = 49, all_reduce_id = 45, use_global_device_ids = 71, is_host_transfer = 47, is_stable = 60, scatter_dimension_numbers = 48, precision_config = 51, source_target_pairs = 52, domain_entry_sharding = 54, domain_exit_sharding = 55, constrain_layout = 56, operand_shapes_with_layout = 57, triangular_solve_options = 59, cholesky_options = 62, parameter_replication = 61, custom_call_has_side_effect = 65, output_operand_aliasing = 74, custom_call_schedule = 76, delta = 66, indices_are_sorted = 67, frontend_attributes = 68, unique_indices = 69, rng_algorithm = 70, comparison_type = 72, is_cross_program_prefetch = 73, cross_program_prefetch_index = 80, padding_type = 75, custom_call_api_version = 77, async_execution_thread = 79, k = 81, largest = 85, statistics_viz = 82, collective_device_list = 87, iota_collective_device_list = 92, mesh_axes_replica_group_list = 93, original_value = 88, is_composite = 89, result_accuracy = 91)
+PB.default_values(::Type{HloInstructionProto}) = (;name = "", opcode = "", shape = nothing, metadata = nothing, literal = nothing, parameter_number = zero(Int64), fusion_kind = "", tuple_index = zero(Int64), dimensions = Vector{Int64}(), window = nothing, convolution_dimension_numbers = nothing, feature_group_count = zero(Int64), batch_group_count = zero(Int64), slice_dimensions = Vector{var"HloInstructionProto.SliceDimensions"}(), exponent_bits = zero(Int32), mantissa_bits = zero(Int32), dynamic_slice_sizes = Vector{Int64}(), padding_config = nothing, outfeed_config = UInt8[], distribution = RandomDistribution.RNG_INVALID, epsilon = zero(Float32), feature_index = zero(Int64), channel_id = zero(Int64), infeed_config = UInt8[], custom_call_target = "", outfeed_shape = nothing, dot_dimension_numbers = nothing, ragged_dot_dimension_numbers = nothing, fft_type = FftType.FFT, fft_length = Vector{Int64}(), comparison_direction = "", gather_dimension_numbers = nothing, gather_slice_sizes = Vector{Int64}(), id = zero(Int64), operand_ids = Vector{Int64}(), control_predecessor_ids = Vector{Int64}(), called_computation_ids = Vector{Int64}(), sharding = nothing, backend_config = UInt8[], replica_groups = Vector{ReplicaGroup}(), all_reduce_id = zero(Int64), use_global_device_ids = false, is_host_transfer = false, is_stable = false, scatter_dimension_numbers = nothing, precision_config = nothing, source_target_pairs = Vector{SourceTarget}(), domain_entry_sharding = nothing, domain_exit_sharding = nothing, constrain_layout = false, operand_shapes_with_layout = Vector{ShapeProto}(), triangular_solve_options = nothing, cholesky_options = nothing, parameter_replication = nothing, custom_call_has_side_effect = false, output_operand_aliasing = Vector{OutputOperandAliasing}(), custom_call_schedule = CustomCallSchedule.SCHEDULE_NONE, delta = zero(Int64), indices_are_sorted = false, frontend_attributes = nothing, unique_indices = false, rng_algorithm = RandomAlgorithm.RNG_DEFAULT, comparison_type = "", is_cross_program_prefetch = false, cross_program_prefetch_index = zero(Int32), padding_type = PaddingType.PADDING_INVALID, custom_call_api_version = CustomCallApiVersion.API_VERSION_UNSPECIFIED, async_execution_thread = "", k = zero(Int64), largest = false, statistics_viz = nothing, collective_device_list = nothing, iota_collective_device_list = nothing, mesh_axes_replica_group_list = nothing, original_value = nothing, is_composite = false, result_accuracy = nothing, is_reverse = false, num_carries = zero(Int64), is_associative = TriState.TRI_STATE_UNSPECIFIED, conv_kind = ConvolutionKind.CONVOLUTION_KIND_UNSET)
+PB.field_numbers(::Type{HloInstructionProto}) = (;name = 1, opcode = 2, shape = 3, metadata = 7, literal = 8, parameter_number = 9, fusion_kind = 11, tuple_index = 13, dimensions = 14, window = 15, convolution_dimension_numbers = 16, feature_group_count = 50, batch_group_count = 58, slice_dimensions = 17, exponent_bits = 18, mantissa_bits = 19, dynamic_slice_sizes = 20, padding_config = 21, outfeed_config = 22, distribution = 23, epsilon = 24, feature_index = 25, channel_id = 26, infeed_config = 27, custom_call_target = 28, outfeed_shape = 29, dot_dimension_numbers = 30, ragged_dot_dimension_numbers = 90, fft_type = 31, fft_length = 32, comparison_direction = 63, gather_dimension_numbers = 33, gather_slice_sizes = 34, id = 35, operand_ids = 36, control_predecessor_ids = 37, called_computation_ids = 38, sharding = 40, backend_config = 43, replica_groups = 49, all_reduce_id = 45, use_global_device_ids = 71, is_host_transfer = 47, is_stable = 60, scatter_dimension_numbers = 48, precision_config = 51, source_target_pairs = 52, domain_entry_sharding = 54, domain_exit_sharding = 55, constrain_layout = 56, operand_shapes_with_layout = 57, triangular_solve_options = 59, cholesky_options = 62, parameter_replication = 61, custom_call_has_side_effect = 65, output_operand_aliasing = 74, custom_call_schedule = 76, delta = 66, indices_are_sorted = 67, frontend_attributes = 68, unique_indices = 69, rng_algorithm = 70, comparison_type = 72, is_cross_program_prefetch = 73, cross_program_prefetch_index = 80, padding_type = 75, custom_call_api_version = 77, async_execution_thread = 79, k = 81, largest = 85, statistics_viz = 82, collective_device_list = 87, iota_collective_device_list = 92, mesh_axes_replica_group_list = 93, original_value = 88, is_composite = 89, result_accuracy = 91, is_reverse = 94, num_carries = 95, is_associative = 96, conv_kind = 97)
 
 function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:HloInstructionProto})
     name = ""
@@ -1158,6 +1167,10 @@ function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:HloInstructionProto})
     original_value = Ref{Union{Nothing,OriginalValueProto}}(nothing)
     is_composite = false
     result_accuracy = Ref{Union{Nothing,ResultAccuracy}}(nothing)
+    is_reverse = false
+    num_carries = zero(Int64)
+    is_associative = TriState.TRI_STATE_UNSPECIFIED
+    conv_kind = ConvolutionKind.CONVOLUTION_KIND_UNSET
     while !PB.message_done(d)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
@@ -1314,11 +1327,19 @@ function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:HloInstructionProto})
             is_composite = PB.decode(d, Bool)
         elseif field_number == 91
             PB.decode!(d, result_accuracy)
+        elseif field_number == 94
+            is_reverse = PB.decode(d, Bool)
+        elseif field_number == 95
+            num_carries = PB.decode(d, Int64)
+        elseif field_number == 96
+            is_associative = PB.decode(d, TriState.T)
+        elseif field_number == 97
+            conv_kind = PB.decode(d, ConvolutionKind.T)
         else
             Base.skip(d, wire_type)
         end
     end
-    return HloInstructionProto(name, opcode, shape[], metadata[], literal[], parameter_number, fusion_kind, tuple_index, dimensions[], window[], convolution_dimension_numbers[], feature_group_count, batch_group_count, slice_dimensions[], exponent_bits, mantissa_bits, dynamic_slice_sizes[], padding_config[], outfeed_config, distribution, epsilon, feature_index, channel_id, infeed_config, custom_call_target, outfeed_shape[], dot_dimension_numbers[], ragged_dot_dimension_numbers[], fft_type, fft_length[], comparison_direction, gather_dimension_numbers[], gather_slice_sizes[], id, operand_ids[], control_predecessor_ids[], called_computation_ids[], sharding[], backend_config, replica_groups[], all_reduce_id, use_global_device_ids, is_host_transfer, is_stable, scatter_dimension_numbers[], precision_config[], source_target_pairs[], domain_entry_sharding[], domain_exit_sharding[], constrain_layout, operand_shapes_with_layout[], triangular_solve_options[], cholesky_options[], parameter_replication[], custom_call_has_side_effect, output_operand_aliasing[], custom_call_schedule, delta, indices_are_sorted, frontend_attributes[], unique_indices, rng_algorithm, comparison_type, is_cross_program_prefetch, optional_cross_program_prefetch_index, padding_type, custom_call_api_version, async_execution_thread, k, largest, statistics_viz[], replica_group_list, original_value[], is_composite, result_accuracy[])
+    return HloInstructionProto(name, opcode, shape[], metadata[], literal[], parameter_number, fusion_kind, tuple_index, dimensions[], window[], convolution_dimension_numbers[], feature_group_count, batch_group_count, slice_dimensions[], exponent_bits, mantissa_bits, dynamic_slice_sizes[], padding_config[], outfeed_config, distribution, epsilon, feature_index, channel_id, infeed_config, custom_call_target, outfeed_shape[], dot_dimension_numbers[], ragged_dot_dimension_numbers[], fft_type, fft_length[], comparison_direction, gather_dimension_numbers[], gather_slice_sizes[], id, operand_ids[], control_predecessor_ids[], called_computation_ids[], sharding[], backend_config, replica_groups[], all_reduce_id, use_global_device_ids, is_host_transfer, is_stable, scatter_dimension_numbers[], precision_config[], source_target_pairs[], domain_entry_sharding[], domain_exit_sharding[], constrain_layout, operand_shapes_with_layout[], triangular_solve_options[], cholesky_options[], parameter_replication[], custom_call_has_side_effect, output_operand_aliasing[], custom_call_schedule, delta, indices_are_sorted, frontend_attributes[], unique_indices, rng_algorithm, comparison_type, is_cross_program_prefetch, optional_cross_program_prefetch_index, padding_type, custom_call_api_version, async_execution_thread, k, largest, statistics_viz[], replica_group_list, original_value[], is_composite, result_accuracy[], is_reverse, num_carries, is_associative, conv_kind)
 end
 
 function PB.encode(e::PB.AbstractProtoEncoder, x::HloInstructionProto)
@@ -1408,6 +1429,10 @@ function PB.encode(e::PB.AbstractProtoEncoder, x::HloInstructionProto)
     !isnothing(x.original_value) && PB.encode(e, 88, x.original_value)
     x.is_composite != false && PB.encode(e, 89, x.is_composite)
     !isnothing(x.result_accuracy) && PB.encode(e, 91, x.result_accuracy)
+    x.is_reverse != false && PB.encode(e, 94, x.is_reverse)
+    x.num_carries != zero(Int64) && PB.encode(e, 95, x.num_carries)
+    x.is_associative != TriState.TRI_STATE_UNSPECIFIED && PB.encode(e, 96, x.is_associative)
+    x.conv_kind != ConvolutionKind.CONVOLUTION_KIND_UNSET && PB.encode(e, 97, x.conv_kind)
     return position(e.io) - initpos
 end
 function PB._encoded_size(x::HloInstructionProto)
@@ -1497,6 +1522,10 @@ function PB._encoded_size(x::HloInstructionProto)
     !isnothing(x.original_value) && (encoded_size += PB._encoded_size(x.original_value, 88))
     x.is_composite != false && (encoded_size += PB._encoded_size(x.is_composite, 89))
     !isnothing(x.result_accuracy) && (encoded_size += PB._encoded_size(x.result_accuracy, 91))
+    x.is_reverse != false && (encoded_size += PB._encoded_size(x.is_reverse, 94))
+    x.num_carries != zero(Int64) && (encoded_size += PB._encoded_size(x.num_carries, 95))
+    x.is_associative != TriState.TRI_STATE_UNSPECIFIED && (encoded_size += PB._encoded_size(x.is_associative, 96))
+    x.conv_kind != ConvolutionKind.CONVOLUTION_KIND_UNSET && (encoded_size += PB._encoded_size(x.conv_kind, 97))
     return encoded_size
 end
 

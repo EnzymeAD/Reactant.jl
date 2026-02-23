@@ -2,12 +2,66 @@ import ProtoBuf as PB
 using ProtoBuf: OneOf
 using ProtoBuf.EnumX: @enumx
 
-export MemoryActivity, MemoryAggregationStats, ActiveAllocation, MemoryActivityMetadata
-export MemoryProfileSummary, MemoryProfileSnapshot, PerAllocatorMemoryProfile
-export MemoryProfile
+export MemoryActivity, HloModule, MemoryAggregationStats, ActiveAllocation
+export MemoryActivityMetadata, MemoryProfileSummary, MemoryProfileSnapshot
+export PerAllocatorMemoryProfile, MemoryProfile
 
 
 @enumx MemoryActivity UNKNOWN_ACTIVITY=0 ALLOCATION=1 DEALLOCATION=2 RESERVATION=3 EXPANSION=4
+
+struct HloModule
+    name::String
+    start_time_ps::Int64
+    end_time_ps::Int64
+    id::Int64
+    plane_name::String
+end
+PB.default_values(::Type{HloModule}) = (;name = "", start_time_ps = zero(Int64), end_time_ps = zero(Int64), id = zero(Int64), plane_name = "")
+PB.field_numbers(::Type{HloModule}) = (;name = 1, start_time_ps = 2, end_time_ps = 3, id = 4, plane_name = 5)
+
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:HloModule})
+    name = ""
+    start_time_ps = zero(Int64)
+    end_time_ps = zero(Int64)
+    id = zero(Int64)
+    plane_name = ""
+    while !PB.message_done(d)
+        field_number, wire_type = PB.decode_tag(d)
+        if field_number == 1
+            name = PB.decode(d, String)
+        elseif field_number == 2
+            start_time_ps = PB.decode(d, Int64)
+        elseif field_number == 3
+            end_time_ps = PB.decode(d, Int64)
+        elseif field_number == 4
+            id = PB.decode(d, Int64)
+        elseif field_number == 5
+            plane_name = PB.decode(d, String)
+        else
+            Base.skip(d, wire_type)
+        end
+    end
+    return HloModule(name, start_time_ps, end_time_ps, id, plane_name)
+end
+
+function PB.encode(e::PB.AbstractProtoEncoder, x::HloModule)
+    initpos = position(e.io)
+    !isempty(x.name) && PB.encode(e, 1, x.name)
+    x.start_time_ps != zero(Int64) && PB.encode(e, 2, x.start_time_ps)
+    x.end_time_ps != zero(Int64) && PB.encode(e, 3, x.end_time_ps)
+    x.id != zero(Int64) && PB.encode(e, 4, x.id)
+    !isempty(x.plane_name) && PB.encode(e, 5, x.plane_name)
+    return position(e.io) - initpos
+end
+function PB._encoded_size(x::HloModule)
+    encoded_size = 0
+    !isempty(x.name) && (encoded_size += PB._encoded_size(x.name, 1))
+    x.start_time_ps != zero(Int64) && (encoded_size += PB._encoded_size(x.start_time_ps, 2))
+    x.end_time_ps != zero(Int64) && (encoded_size += PB._encoded_size(x.end_time_ps, 3))
+    x.id != zero(Int64) && (encoded_size += PB._encoded_size(x.id, 4))
+    !isempty(x.plane_name) && (encoded_size += PB._encoded_size(x.plane_name, 5))
+    return encoded_size
+end
 
 struct MemoryAggregationStats
     stack_reserved_bytes::Int64
@@ -332,16 +386,18 @@ struct MemoryProfile
     num_hosts::Int32
     memory_ids::Vector{String}
     version::Int32
+    hlo_modules::Vector{HloModule}
 end
 PB.reserved_fields(::Type{MemoryProfile}) = (names = String[], numbers = Union{Int,UnitRange{Int}}[4])
-PB.default_values(::Type{MemoryProfile}) = (;memory_profile_per_allocator = Dict{String,PerAllocatorMemoryProfile}(), num_hosts = zero(Int32), memory_ids = Vector{String}(), version = zero(Int32))
-PB.field_numbers(::Type{MemoryProfile}) = (;memory_profile_per_allocator = 1, num_hosts = 2, memory_ids = 3, version = 5)
+PB.default_values(::Type{MemoryProfile}) = (;memory_profile_per_allocator = Dict{String,PerAllocatorMemoryProfile}(), num_hosts = zero(Int32), memory_ids = Vector{String}(), version = zero(Int32), hlo_modules = Vector{HloModule}())
+PB.field_numbers(::Type{MemoryProfile}) = (;memory_profile_per_allocator = 1, num_hosts = 2, memory_ids = 3, version = 5, hlo_modules = 6)
 
 function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:MemoryProfile})
     memory_profile_per_allocator = Dict{String,PerAllocatorMemoryProfile}()
     num_hosts = zero(Int32)
     memory_ids = PB.BufferedVector{String}()
     version = zero(Int32)
+    hlo_modules = PB.BufferedVector{HloModule}()
     while !PB.message_done(d)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
@@ -352,11 +408,13 @@ function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:MemoryProfile})
             PB.decode!(d, memory_ids)
         elseif field_number == 5
             version = PB.decode(d, Int32)
+        elseif field_number == 6
+            PB.decode!(d, hlo_modules)
         else
             Base.skip(d, wire_type)
         end
     end
-    return MemoryProfile(memory_profile_per_allocator, num_hosts, memory_ids[], version)
+    return MemoryProfile(memory_profile_per_allocator, num_hosts, memory_ids[], version, hlo_modules[])
 end
 
 function PB.encode(e::PB.AbstractProtoEncoder, x::MemoryProfile)
@@ -365,6 +423,7 @@ function PB.encode(e::PB.AbstractProtoEncoder, x::MemoryProfile)
     x.num_hosts != zero(Int32) && PB.encode(e, 2, x.num_hosts)
     !isempty(x.memory_ids) && PB.encode(e, 3, x.memory_ids)
     x.version != zero(Int32) && PB.encode(e, 5, x.version)
+    !isempty(x.hlo_modules) && PB.encode(e, 6, x.hlo_modules)
     return position(e.io) - initpos
 end
 function PB._encoded_size(x::MemoryProfile)
@@ -373,5 +432,6 @@ function PB._encoded_size(x::MemoryProfile)
     x.num_hosts != zero(Int32) && (encoded_size += PB._encoded_size(x.num_hosts, 2))
     !isempty(x.memory_ids) && (encoded_size += PB._encoded_size(x.memory_ids, 3))
     x.version != zero(Int32) && (encoded_size += PB._encoded_size(x.version, 5))
+    !isempty(x.hlo_modules) && (encoded_size += PB._encoded_size(x.hlo_modules, 6))
     return encoded_size
 end

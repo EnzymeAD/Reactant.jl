@@ -254,9 +254,10 @@ struct CompileOptionsProto
     target_config::Union{Nothing,stream_executor.GpuTargetConfigProto}
     allow_in_place_mlir_modification::Bool
     matrix_unit_operand_precision::var"PrecisionConfig.Precision".T
+    compiler_variant::String
 end
-PB.default_values(::Type{CompileOptionsProto}) = (;argument_layouts = Vector{ShapeProto}(), parameter_is_tupled_arguments = false, executable_build_options = nothing, compile_portable_executable = false, profile_version = zero(Int64), serialized_multi_slice_config = UInt8[], env_option_overrides = Dict{String,OptionOverrideProto}(), target_config = nothing, allow_in_place_mlir_modification = false, matrix_unit_operand_precision = var"PrecisionConfig.Precision".DEFAULT)
-PB.field_numbers(::Type{CompileOptionsProto}) = (;argument_layouts = 1, parameter_is_tupled_arguments = 2, executable_build_options = 3, compile_portable_executable = 4, profile_version = 5, serialized_multi_slice_config = 6, env_option_overrides = 7, target_config = 8, allow_in_place_mlir_modification = 9, matrix_unit_operand_precision = 10)
+PB.default_values(::Type{CompileOptionsProto}) = (;argument_layouts = Vector{ShapeProto}(), parameter_is_tupled_arguments = false, executable_build_options = nothing, compile_portable_executable = false, profile_version = zero(Int64), serialized_multi_slice_config = UInt8[], env_option_overrides = Dict{String,OptionOverrideProto}(), target_config = nothing, allow_in_place_mlir_modification = false, matrix_unit_operand_precision = var"PrecisionConfig.Precision".DEFAULT, compiler_variant = "")
+PB.field_numbers(::Type{CompileOptionsProto}) = (;argument_layouts = 1, parameter_is_tupled_arguments = 2, executable_build_options = 3, compile_portable_executable = 4, profile_version = 5, serialized_multi_slice_config = 6, env_option_overrides = 7, target_config = 8, allow_in_place_mlir_modification = 9, matrix_unit_operand_precision = 10, compiler_variant = 11)
 
 function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:CompileOptionsProto})
     argument_layouts = PB.BufferedVector{ShapeProto}()
@@ -269,6 +270,7 @@ function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:CompileOptionsProto})
     target_config = Ref{Union{Nothing,stream_executor.GpuTargetConfigProto}}(nothing)
     allow_in_place_mlir_modification = false
     matrix_unit_operand_precision = var"PrecisionConfig.Precision".DEFAULT
+    compiler_variant = ""
     while !PB.message_done(d)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
@@ -291,11 +293,13 @@ function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:CompileOptionsProto})
             allow_in_place_mlir_modification = PB.decode(d, Bool)
         elseif field_number == 10
             matrix_unit_operand_precision = PB.decode(d, var"PrecisionConfig.Precision".T)
+        elseif field_number == 11
+            compiler_variant = PB.decode(d, String)
         else
             Base.skip(d, wire_type)
         end
     end
-    return CompileOptionsProto(argument_layouts[], parameter_is_tupled_arguments, executable_build_options[], compile_portable_executable, profile_version, serialized_multi_slice_config, env_option_overrides, target_config[], allow_in_place_mlir_modification, matrix_unit_operand_precision)
+    return CompileOptionsProto(argument_layouts[], parameter_is_tupled_arguments, executable_build_options[], compile_portable_executable, profile_version, serialized_multi_slice_config, env_option_overrides, target_config[], allow_in_place_mlir_modification, matrix_unit_operand_precision, compiler_variant)
 end
 
 function PB.encode(e::PB.AbstractProtoEncoder, x::CompileOptionsProto)
@@ -310,6 +314,7 @@ function PB.encode(e::PB.AbstractProtoEncoder, x::CompileOptionsProto)
     !isnothing(x.target_config) && PB.encode(e, 8, x.target_config)
     x.allow_in_place_mlir_modification != false && PB.encode(e, 9, x.allow_in_place_mlir_modification)
     x.matrix_unit_operand_precision != var"PrecisionConfig.Precision".DEFAULT && PB.encode(e, 10, x.matrix_unit_operand_precision)
+    !isempty(x.compiler_variant) && PB.encode(e, 11, x.compiler_variant)
     return position(e.io) - initpos
 end
 function PB._encoded_size(x::CompileOptionsProto)
@@ -324,6 +329,7 @@ function PB._encoded_size(x::CompileOptionsProto)
     !isnothing(x.target_config) && (encoded_size += PB._encoded_size(x.target_config, 8))
     x.allow_in_place_mlir_modification != false && (encoded_size += PB._encoded_size(x.allow_in_place_mlir_modification, 9))
     x.matrix_unit_operand_precision != var"PrecisionConfig.Precision".DEFAULT && (encoded_size += PB._encoded_size(x.matrix_unit_operand_precision, 10))
+    !isempty(x.compiler_variant) && (encoded_size += PB._encoded_size(x.compiler_variant, 11))
     return encoded_size
 end
 
