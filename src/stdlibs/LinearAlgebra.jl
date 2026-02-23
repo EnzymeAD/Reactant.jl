@@ -12,7 +12,8 @@ using ..TracedUtils: TracedUtils, get_mlir_data, set_mlir_data!
 using ..Ops: @opcall
 
 using LinearAlgebra: LinearAlgebra, BLAS
-using LinearAlgebra: Adjoint, Transpose, Factorization, RowMaximum, NoPivot
+using LinearAlgebra:
+    Adjoint, Transpose, Factorization, RowMaximum, NoPivot, Hermitian, Symmetric
 using LinearAlgebra: SymTridiagonal, Symmetric, Bidiagonal, Diagonal, Tridiagonal
 using LinearAlgebra: LowerTriangular, UnitLowerTriangular, UpperTriangular
 using LinearAlgebra: I, diag, diagm, ldiv!, det, logabsdet, istriu, istril, triu!, tril!
@@ -133,6 +134,19 @@ for (AT, comp) in ((:LowerTriangular, "GE"), (:UpperTriangular, "LE"))
 end
 
 function ReactantCore.materialize_traced_array(
+    x::Hermitian{TracedRNumber{T},<:AnyTracedRMatrix}
+) where {T}
+    m, n = size(x)
+    row_idxs = @opcall iota(Int, [m, n]; iota_dimension=1)
+    col_idxs = @opcall iota(Int, [m, n]; iota_dimension=2)
+    indicator = @opcall compare(
+        row_idxs, col_idxs; comparison_direction=x.uplo == 'L' ? "GT" : "LT"
+    )
+    x_adj = @opcall conj(@opcall transpose(parent(x), [2, 1]))
+    return @opcall select(indicator, parent(x), x_adj)
+end
+
+function ReactantCore.materialize_traced_array(
     x::Symmetric{TracedRNumber{T},<:AnyTracedRMatrix}
 ) where {T}
     m, n = size(x)
@@ -209,6 +223,17 @@ for (AT, dcomp, ocomp) in (
 end
 
 function TracedUtils.set_mlir_data!(
+    x::Hermitian{TracedRNumber{T},<:AnyTracedRMatrix}, data
+) where {T}
+    if x.uplo == 'L'
+        set_mlir_data!(LowerTriangular(parent(x)), data)
+    else
+        set_mlir_data!(UpperTriangular(parent(x)), data)
+    end
+    return x
+end
+
+function TracedUtils.set_mlir_data!(
     x::Symmetric{TracedRNumber{T},<:AnyTracedRMatrix}, data
 ) where {T}
     if x.uplo == 'L'
@@ -245,37 +270,43 @@ function overloaded_mul!(
 
     size(A, 2) == size(B, 1) ||
         throw(DimensionMismatch("A has size $(size(A)), B has size $(size(B))"))
-    size(C, 1) == size(A, 1) ||
-        throw(DimensionMismatch("C has size $(size(C)), A has size $(size(A))"))
-    size(C, 2) == size(B, 2) ||
-        throw(DimensionMismatch("C has size $(size(C)), B has size $(size(B))"))
-
-    if ndims(C) == 1
-        @assert ndims(B) == 1 "B must be a vector if C is a vector"
     end
 
-    tmp = @opcall dot_general(A, B, contracting_dimensions=([2], [1]))
+    T = Reactant.unwrapped_eltype(C)
+    tmp = @opcall dot_general(
+        T.(materialize_traced_array(A)),
+        T.(materialize_traced_array(B));
+        contracting_dimensions=([2], [1]),
+    )
 
-    β_is_zero = !(β isa TracedRNumber) && iszero(β)
-    α_is_one = !(α isa TracedRNumber) && isone(α)
+    is_α_one = !(α isa TracedRNumber) && isone(α)
+    is_β_zero = !(β isa TracedRNumber) && iszero(β)
 
-    if α_is_one && β_is_zero
-        res = tmp
+    α_res = if is_α_one
+        tmp
     else
-        α_res = α_is_one ? tmp : @opcall multiply(tmp, @opcall(fill(T(α), size(tmp))))
-        if β_is_zero
-            res = α_res
-        else
-            β_C = @opcall multiply(C, @opcall(fill(T(β), size(C))))
-            res = @opcall add(α_res, β_C)
-        end
+        @opcall multiply(
+            tmp,
+            Reactant.broadcast_to_size(Reactant.promote_to(TracedRNumber{T}, α), size(C)),
+        )
     end
 
-    if ndims(C) == 2 && size(C, 2) == 1 && ndims(res) == 1
-        res = reshape(res, size(C))
+    res = if is_β_zero
+        α_res
+    elseif β isa TracedRNumber
+        β_C = @opcall multiply(
+            C,
+            Reactant.broadcast_to_size(Reactant.promote_to(TracedRNumber{T}, β), size(C)),
+        )
+        res_full = @opcall add(α_res, β_C)
+        @opcall select(Reactant.broadcast_to_size(iszero(β), size(C)), α_res, res_full)
+    else
+        β_C = @opcall multiply(
+            C,
+            Reactant.broadcast_to_size(Reactant.promote_to(TracedRNumber{T}, β), size(C)),
+        )
+        @opcall add(α_res, β_C)
     end
-
-    @assert size(C) == size(res) "C has size $(size(C)), res has size $(size(res))"
     set_mlir_data!(C, get_mlir_data(res))
     return C
 end
