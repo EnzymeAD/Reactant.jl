@@ -28,8 +28,8 @@ function setup_libtpu!()
         libtpu_dir[] = path_from_env
     else
         libtpu_dir[] = @get_scratch!("libtpu")
+        download_libtpu_if_needed(libtpu_dir[])
     end
-    download_libtpu_if_needed(libtpu_dir[])
     return nothing
 end
 
