@@ -599,7 +599,7 @@ end
     r_x = Reactant.ConcreteRArray(x)
     r_λ = Reactant.ConcreteRArray(λ)
 
-    res = kernel_bug(dx, x, λ)
+    res = seeded_reverse(dx, x, λ)
     r_res = @jit seeded_reverse(r_dx, r_x, r_λ)
 
     @test res ≈ convert(Array, r_res)

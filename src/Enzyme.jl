@@ -425,7 +425,7 @@ function overload_autodiff(
                     cst = seed
                 else
                     @assert act == enzyme_out || act == enzyme_outnoneed
-                    cst = MLIR.IR.result(MLIR.IR.Dialects.stablehlo.add(cst, seed), 1)
+                    cst = MLIR.IR.result(MLIR.Dialects.stablehlo.add(cst, seed), 1)
                 end
             end
 
