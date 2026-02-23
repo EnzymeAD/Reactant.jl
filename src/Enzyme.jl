@@ -372,7 +372,6 @@ function overload_autodiff(
     outtys = MLIR.IR.Type[]
     ret_activity = Int32[]
 
-
     reverse_seed_idx = 1
 
     for a in linear_results
