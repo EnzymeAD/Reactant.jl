@@ -35,10 +35,29 @@ end
 
 get_libtpu_dir() = libtpu_dir[]
 
-get_libtpu_path() = joinpath(get_libtpu_dir(), LIBTPU_SO)
+function get_libtpu_path()
+    path_from_env = get(ENV, "TPU_LIBRARY_PATH", nothing)
+    # Don't override libtpu if manually set
+    if path_from_env !== nothing && ispath(path_from_env)
+        manual_libtpu = joinpath(get_libtpu_dir(), "libtpu.so")
+        if isfile(manual_libtpu)
+            return manual_libtpu
+        end
+    end
+
+    path = get_libtpu_dir()
+    joinpath(get_libtpu_dir(), LIBTPU_SO)
+end
 
 function download_libtpu_if_needed(path=nothing)
-    path === nothing && (path = get_libtpu_dir())
+    if path === nothing
+        path = get_libtpu_dir()
+        path_from_env = get(ENV, "TPU_LIBRARY_PATH", nothing)
+        # Don't override libtpu if manually set
+        if path_from_env !== nothing && ispath(path_from_env)
+            return
+        end
+    end
     @assert path !== nothing "libtpu_dir is not set!"
 
     libtpu_path = joinpath(path, LIBTPU_SO)
