@@ -1807,7 +1807,7 @@ end
 """
     MlirWalkResult
 
-Operation walk result.
+[`Operation`](@ref) walk result.
 """
 @cenum MlirWalkResult::UInt32 begin
     MlirWalkResultAdvance = 0x0000000000000000
@@ -1827,7 +1827,7 @@ end
 
 # typedef MlirWalkResult ( * MlirOperationWalkCallback ) ( MlirOperation , void * userData )
 """
-Operation walker type. The handler is passed an (opaque) reference to an operation and a pointer to a `userData`.
+[`Operation`](@ref) walker type. The handler is passed an (opaque) reference to an operation and a pointer to a `userData`.
 """
 const MlirOperationWalkCallback = Ptr{Cvoid}
 
@@ -12825,13 +12825,6 @@ struct JLHloCostAnalysisProperties
     reserved0::Cfloat
 end
 
-struct LinkableRuntime
-    registry::Cint
-    client::Ptr{Cint}
-    device::Cint
-    shouldFreeClient::Bool
-end
-
 struct JLEstimateRunTimeData
     flops::Int64
     bytes_read::Int64
@@ -12873,79 +12866,69 @@ struct DeviceProperties
     maxThreadsPerMultiProcessor::Cint
 end
 
-const HeldPjRtClient = Ptr{Cvoid}
+const HeldPjRtClient = Cvoid
 
-const OpShardingPtr = Ptr{Cvoid}
+const HeldIfrtConstSharding = Cvoid
 
-const HeldIfrtConstShardingPtr = Ptr{Cvoid}
+const LinkableRuntime = Cvoid
 
-const DeviceDescription = Ptr{Cvoid}
+const Operation = Cvoid
 
-const Client = Ptr{Cvoid}
+const DeviceDescription = Cvoid
 
-const Memory = Ptr{Cvoid}
+const Client = Cvoid
 
-const PjRtBuffer = Ptr{Cvoid}
+const Memory = Cvoid
 
-const HeldIfrtLoadedExecutablePtr = Ptr{Cvoid}
+const PjRtBuffer = Cvoid
 
-const PjRtClient = Ptr{Cvoid}
+const IfRtFutureType = Cvoid
 
-const HloComputation = Ptr{Cvoid}
+const PjRtClient = Cvoid
 
-const HeldIfrtShardingPtr = Ptr{Cvoid}
+const HloComputation = Cvoid
 
-const PjRtLoadedExecutablePtr = Ptr{Cvoid}
+const HloModule = Cvoid
 
-const HeldPjRtBufferPtr = Ptr{Cvoid}
+const FutureType = Cvoid
 
-const HeldIfrtLoadedExecutable = Ptr{Cvoid}
+const Device = Cvoid
 
-const Device = Ptr{Cvoid}
+const HeldIfrtLoadedExecutable = Cvoid
 
-const HeldHloModule = Ptr{Cvoid}
+const HeldHloModule = Cvoid
 
-const HloShardingPtr = Ptr{Cvoid}
+const PjRtLoadedExecutable = Cvoid
 
-const PjRtLoadedExecutable = Ptr{Cvoid}
+const HloSharding = Cvoid
 
-const HloSharding = Ptr{Cvoid}
+const HeldDistributedRuntimeClient = Cvoid
 
-const DistributedRuntimeService = Ptr{Cvoid}
+const DistributedRuntimeService = Cvoid
 
-const IfRtFutureTypePtr = Ptr{Cvoid}
+const GrpcServer = Cvoid
 
-const GrpcServer = Ptr{Cvoid}
+const HloInstruction = Cvoid
 
-const HloInstruction = Ptr{Cvoid}
+const GPUPerformanceModel = Cvoid
 
-const GPUPerformanceModel = Ptr{Cvoid}
+const ProfilerServer = Cvoid
 
-const ProfilerServer = Ptr{Cvoid}
+const HeldPjRtBuffer = Cvoid
 
-const HeldPjRtBuffer = Ptr{Cvoid}
+const HeldIfrtSharding = Cvoid
 
-const HeldIfrtSharding = Ptr{Cvoid}
+const MemoryKind = Cvoid
 
-const KeyValueStoreInterface = Ptr{Cvoid}
+const PjRtDevice = Cvoid
 
-const FutureTypePtr = Ptr{Cvoid}
+const ProfilerSession = Cvoid
 
-const MemoryKind = Ptr{Cvoid}
+const OpSharding = Cvoid
 
-const PjRtDevice = Ptr{Cvoid}
+const PJRT_Api = Cvoid
 
-const HeldIfrtArrayPtr = Ptr{Cvoid}
-
-const ProfilerSession = Ptr{Cvoid}
-
-const OpSharding = Ptr{Cvoid}
-
-const HeldDistributedRuntimeClientPtr = Ptr{Cvoid}
-
-const PJRT_Api = Ptr{Cvoid}
-
-const HeldIfrtArray = Ptr{Cvoid}
+const HeldIfrtArray = Cvoid
 
 function ReactantHandleCuResult(curesult)
     @ccall mlir_c.ReactantHandleCuResult(curesult::UInt32)::Cvoid
@@ -13345,16 +13328,16 @@ function ConvertLLVMStrToMLIR(lmod, cctx)
     @ccall mlir_c.ConvertLLVMStrToMLIR(lmod::Cstring, cctx::MlirContext)::MlirModule
 end
 
-function FreeFuture(future)
-    @ccall mlir_c.FreeFuture(future::FutureTypePtr)::Cvoid
+function FreeFuture(Future)
+    @ccall mlir_c.FreeFuture(Future::Ptr{FutureType})::Cvoid
 end
 
-function FutureIsReady(future)
-    @ccall mlir_c.FutureIsReady(future::FutureTypePtr)::UInt8
+function FutureIsReady(Future)
+    @ccall mlir_c.FutureIsReady(Future::Ptr{FutureType})::UInt8
 end
 
-function FutureAwait(future)
-    @ccall mlir_c.FutureAwait(future::FutureTypePtr)::Cvoid
+function FutureAwait(Future)
+    @ccall mlir_c.FutureAwait(Future::Ptr{FutureType})::Cvoid
 end
 
 function ClientCompile(
@@ -13432,7 +13415,7 @@ function XLAExecuteSharded(
     future_results,
 )
     @ccall mlir_c.XLAExecuteSharded(
-        exec::PjRtLoadedExecutablePtr,
+        exec::Ptr{PjRtLoadedExecutable},
         num_args::Cint,
         op_args::Ptr{Ptr{PjRtBuffer}},
         device::Ptr{PjRtDevice},
@@ -13440,7 +13423,7 @@ function XLAExecuteSharded(
         num_results::Cint,
         op_results::Ptr{Ptr{PjRtBuffer}},
         futures::Ptr{UInt8},
-        future_results::Ptr{FutureTypePtr},
+        future_results::Ptr{Ptr{FutureType}},
     )::Cvoid
 end
 
@@ -13455,14 +13438,14 @@ function XLAExecute(
     future_results,
 )
     @ccall mlir_c.XLAExecute(
-        exec::PjRtLoadedExecutablePtr,
+        exec::Ptr{PjRtLoadedExecutable},
         op_args_len::Cint,
         op_args::Ptr{Ptr{PjRtBuffer}},
         is_arg_donatable::Ptr{UInt8},
         num_results::Cint,
         op_results::Ptr{Ptr{PjRtBuffer}},
         futures::Ptr{UInt8},
-        future_results::Ptr{FutureTypePtr},
+        future_results::Ptr{Ptr{FutureType}},
     )::Cvoid
 end
 
@@ -13524,10 +13507,6 @@ function pjrt_client_platform_name(client)
     @ccall mlir_c.pjrt_client_platform_name(client::Ptr{HeldPjRtClient})::Cstring
 end
 
-function reactant_hold_pjrtbuffer(buffer)
-    @ccall mlir_c.reactant_hold_pjrtbuffer(buffer::Ptr{PjRtBuffer})::HeldPjRtBufferPtr
-end
-
 function pjrt_buffer_from_host(client, data, ptype, dim, cshape, device)
     @ccall mlir_c.pjrt_buffer_from_host(
         client::Ptr{HeldPjRtClient},
@@ -13586,9 +13565,9 @@ function ifrt_client_make_array_from_host_buffer(
         dtype_kind::Cint,
         ndims::Cint,
         c_shape::Ptr{Int64},
-        sharding::HeldIfrtConstShardingPtr,
+        sharding::Ptr{HeldIfrtConstSharding},
         c_semantics::Cint,
-    )::HeldIfrtArrayPtr
+    )::Ptr{HeldIfrtArray}
 end
 
 function ifrt_client_make_single_shard_array_from_host_buffer(
@@ -13603,7 +13582,7 @@ function ifrt_client_make_single_shard_array_from_host_buffer(
         c_semantics::Cint,
         device::Ptr{Device},
         mem_kind::Cstring,
-    )::HeldIfrtArrayPtr
+    )::Ptr{HeldIfrtArray}
 end
 
 function ifrt_client_assemble_array_from_single_shards(
@@ -13613,17 +13592,17 @@ function ifrt_client_assemble_array_from_single_shards(
         client::Ptr{Client},
         ndims::Int32,
         c_shape::Ptr{Int64},
-        sharding::HeldIfrtConstShardingPtr,
+        sharding::Ptr{HeldIfrtConstSharding},
         narrays::Int32,
-        c_arrays::Ptr{HeldIfrtArrayPtr},
+        c_arrays::Ptr{Ptr{HeldIfrtArray}},
         c_semantics::Int32,
-    )::HeldIfrtArrayPtr
+    )::Ptr{HeldIfrtArray}
 end
 
 function ifrt_pjrt_array_create(client, buffer)
     @ccall mlir_c.ifrt_pjrt_array_create(
-        client::Ptr{PjRtClient}, buffer::HeldPjRtBufferPtr
-    )::HeldIfrtArrayPtr
+        client::Ptr{PjRtClient}, buffer::Ptr{HeldPjRtBuffer}
+    )::Ptr{HeldIfrtArray}
 end
 
 function ifrt_compile(
@@ -13683,8 +13662,8 @@ end
 
 function ifrt_CopyArrayToHostBuffer(array, data, semantics)
     @ccall mlir_c.ifrt_CopyArrayToHostBuffer(
-        array::HeldIfrtArrayPtr, data::Ptr{Cvoid}, semantics::Cint
-    )::FutureTypePtr
+        array::Ptr{HeldIfrtArray}, data::Ptr{Cvoid}, semantics::Cint
+    )::Ptr{FutureType}
 end
 
 function PjRtLoadedExecutableGetHloModules(exec, hlo_modules, nmodules)
@@ -13703,6 +13682,10 @@ function FreeHloModule(hlo_module)
     @ccall mlir_c.FreeHloModule(hlo_module::Ptr{HeldHloModule})::Cvoid
 end
 
+function ifrt_proxy_grpc_server_dtor(server)
+    @ccall mlir_c.ifrt_proxy_grpc_server_dtor(server::Ptr{GrpcServer})::Cvoid
+end
+
 function ifrt_proxy_grpc_server_address(server)
     @ccall mlir_c.ifrt_proxy_grpc_server_address(server::Ptr{GrpcServer})::Cstring
 end
@@ -13714,20 +13697,6 @@ end
 function ifrt_proxy_create_client(c_proxy_server_address, connection_timeout_in_minutes)
     @ccall mlir_c.ifrt_proxy_create_client(
         c_proxy_server_address::Cstring, connection_timeout_in_minutes::Cint
-    )::Ptr{Client}
-end
-
-function ifrt_pjrt_make_client(
-    pjrt_client, node_id, num_nodes, distributed_runtime_client, error, key_prefix, kv_store
-)
-    @ccall mlir_c.ifrt_pjrt_make_client(
-        pjrt_client::Ptr{PjRtClient},
-        node_id::Cint,
-        num_nodes::Cint,
-        distributed_runtime_client::Ptr{Cvoid},
-        error::Ptr{Cstring},
-        key_prefix::Cstring,
-        kv_store::Ptr{KeyValueStoreInterface},
     )::Ptr{Client}
 end
 
@@ -13999,15 +13968,19 @@ function op_sharding_tile_assignment_devices(op_sharding, tile_assignment_device
 end
 
 function free_hlo_sharding(hlo_sharding)
-    @ccall mlir_c.free_hlo_sharding(hlo_sharding::HloShardingPtr)::Cvoid
+    @ccall mlir_c.free_hlo_sharding(hlo_sharding::Ptr{HloSharding})::Cvoid
 end
 
 function hlo_sharding_from_op_sharding(op_sharding)
-    @ccall mlir_c.hlo_sharding_from_op_sharding(op_sharding::OpShardingPtr)::HloShardingPtr
+    @ccall mlir_c.hlo_sharding_from_op_sharding(
+        op_sharding::Ptr{OpSharding}
+    )::Ptr{HloSharding}
 end
 
 function hlo_sharding_to_op_sharding(hlo_sharding)
-    @ccall mlir_c.hlo_sharding_to_op_sharding(hlo_sharding::HloShardingPtr)::OpShardingPtr
+    @ccall mlir_c.hlo_sharding_to_op_sharding(
+        hlo_sharding::Ptr{HloSharding}
+    )::Ptr{OpSharding}
 end
 
 function hlo_sharding_to_string(hlo_sharding)
@@ -14038,14 +14011,14 @@ function ifrt_sharding_from_xla_hlo_sharding(
         device_list::Ptr{Ptr{Device}},
         num_devices::Int32,
         memory_kind::Ptr{MemoryKind},
-        xla_hlo_sharding::HloShardingPtr,
-    )::HeldIfrtShardingPtr
+        xla_hlo_sharding::Ptr{HloSharding},
+    )::Ptr{HeldIfrtSharding}
 end
 
 function ifrt_sharding_to_xla_hlo_sharding(sharding)
     @ccall mlir_c.ifrt_sharding_to_xla_hlo_sharding(
-        sharding::HeldIfrtShardingPtr
-    )::HloShardingPtr
+        sharding::Ptr{HeldIfrtSharding}
+    )::Ptr{HloSharding}
 end
 
 function ifrt_sharding_is_single_device_sharding(sharding)
@@ -14085,73 +14058,75 @@ function ifrt_sharding_to_index_domains(
 end
 
 function hlo_sharding_is_tuple(hloSharding)
-    @ccall mlir_c.hlo_sharding_is_tuple(hloSharding::HloShardingPtr)::Bool
+    @ccall mlir_c.hlo_sharding_is_tuple(hloSharding::Ptr{HloSharding})::Bool
 end
 
 function hlo_sharding_is_replicated(hloSharding)
-    @ccall mlir_c.hlo_sharding_is_replicated(hloSharding::HloShardingPtr)::Bool
+    @ccall mlir_c.hlo_sharding_is_replicated(hloSharding::Ptr{HloSharding})::Bool
 end
 
 function hlo_sharding_is_manual(hloSharding)
-    @ccall mlir_c.hlo_sharding_is_manual(hloSharding::HloShardingPtr)::Bool
+    @ccall mlir_c.hlo_sharding_is_manual(hloSharding::Ptr{HloSharding})::Bool
 end
 
 function hlo_sharding_is_unknown(hloSharding)
-    @ccall mlir_c.hlo_sharding_is_unknown(hloSharding::HloShardingPtr)::Bool
+    @ccall mlir_c.hlo_sharding_is_unknown(hloSharding::Ptr{HloSharding})::Bool
 end
 
 function hlo_sharding_is_tiled(hloSharding)
-    @ccall mlir_c.hlo_sharding_is_tiled(hloSharding::HloShardingPtr)::Bool
+    @ccall mlir_c.hlo_sharding_is_tiled(hloSharding::Ptr{HloSharding})::Bool
 end
 
 function hlo_sharding_is_maximal(hloSharding)
-    @ccall mlir_c.hlo_sharding_is_maximal(hloSharding::HloShardingPtr)::Bool
+    @ccall mlir_c.hlo_sharding_is_maximal(hloSharding::Ptr{HloSharding})::Bool
 end
 
 function hlo_sharding_replicate_on_last_tile_dim(hloSharding)
-    @ccall mlir_c.hlo_sharding_replicate_on_last_tile_dim(hloSharding::HloShardingPtr)::Bool
+    @ccall mlir_c.hlo_sharding_replicate_on_last_tile_dim(
+        hloSharding::Ptr{HloSharding}
+    )::Bool
 end
 
 function hlo_sharding_tile_assignment_dimensions_size(hloSharding)
     @ccall mlir_c.hlo_sharding_tile_assignment_dimensions_size(
-        hloSharding::HloShardingPtr
+        hloSharding::Ptr{HloSharding}
     )::Int32
 end
 
 function hlo_sharding_tile_assignment_devices_size(hloSharding)
     @ccall mlir_c.hlo_sharding_tile_assignment_devices_size(
-        hloSharding::HloShardingPtr
+        hloSharding::Ptr{HloSharding}
     )::Int32
 end
 
 function hlo_sharding_tile_assignment_dimensions(hloSharding, dims, size)
     @ccall mlir_c.hlo_sharding_tile_assignment_dimensions(
-        hloSharding::HloShardingPtr, dims::Ptr{Int64}, size::Int32
+        hloSharding::Ptr{HloSharding}, dims::Ptr{Int64}, size::Int32
     )::Cvoid
 end
 
 function hlo_sharding_tile_assignment_devices(hloSharding, devices, size)
     @ccall mlir_c.hlo_sharding_tile_assignment_devices(
-        hloSharding::HloShardingPtr, devices::Ptr{Int64}, size::Int32
+        hloSharding::Ptr{HloSharding}, devices::Ptr{Int64}, size::Int32
     )::Cvoid
 end
 
 function hlo_sharding_check_eq(hloSharding, other)
     @ccall mlir_c.hlo_sharding_check_eq(
-        hloSharding::HloShardingPtr, other::HloShardingPtr
+        hloSharding::Ptr{HloSharding}, other::Ptr{HloSharding}
     )::Bool
 end
 
-function ifrt_free_future(future)
-    @ccall mlir_c.ifrt_free_future(future::IfRtFutureTypePtr)::Cvoid
+function ifrt_free_future(Future)
+    @ccall mlir_c.ifrt_free_future(Future::Ptr{IfRtFutureType})::Cvoid
 end
 
-function ifrt_future_is_ready(future)
-    @ccall mlir_c.ifrt_future_is_ready(future::IfRtFutureTypePtr)::UInt8
+function ifrt_future_is_ready(Future)
+    @ccall mlir_c.ifrt_future_is_ready(Future::Ptr{IfRtFutureType})::UInt8
 end
 
-function ifrt_future_await(future)
-    @ccall mlir_c.ifrt_future_await(future::IfRtFutureTypePtr)::Cvoid
+function ifrt_future_await(Future)
+    @ccall mlir_c.ifrt_future_await(Future::Ptr{IfRtFutureType})::Cvoid
 end
 
 function ifrt_free_array(array)
@@ -14167,7 +14142,7 @@ function ifrt_array_ndims(array)
 end
 
 function ifrt_array_eltype(array)
-    @ccall mlir_c.ifrt_array_eltype(array::HeldIfrtArrayPtr)::Cint
+    @ccall mlir_c.ifrt_array_eltype(array::Ptr{HeldIfrtArray})::Cint
 end
 
 function ifrt_array_to_client(array)
@@ -14175,7 +14150,9 @@ function ifrt_array_to_client(array)
 end
 
 function ifrt_array_to_sharding(array)
-    @ccall mlir_c.ifrt_array_to_sharding(array::HeldIfrtArrayPtr)::HeldIfrtConstShardingPtr
+    @ccall mlir_c.ifrt_array_to_sharding(
+        array::Ptr{HeldIfrtArray}
+    )::Ptr{HeldIfrtConstSharding}
 end
 
 function ifrt_array_copy_to_host_buffer(array, data)
@@ -14212,24 +14189,24 @@ function GetDistributedRuntimeClient(
         shutdown_timeout_in_minutes::Int32,
         heartbeat_timeout_in_seconds::Int32,
         use_compression::Bool,
-    )::HeldDistributedRuntimeClientPtr
+    )::Ptr{HeldDistributedRuntimeClient}
 end
 
 function free_distributed_runtime_client(client)
     @ccall mlir_c.free_distributed_runtime_client(
-        client::HeldDistributedRuntimeClientPtr
+        client::Ptr{HeldDistributedRuntimeClient}
     )::Cvoid
 end
 
 function distributed_runtime_client_connect(client)
     @ccall mlir_c.distributed_runtime_client_connect(
-        client::HeldDistributedRuntimeClientPtr
+        client::Ptr{HeldDistributedRuntimeClient}
     )::Cvoid
 end
 
 function distributed_runtime_client_shutdown(client)
     @ccall mlir_c.distributed_runtime_client_shutdown(
-        client::HeldDistributedRuntimeClientPtr
+        client::Ptr{HeldDistributedRuntimeClient}
     )::Cvoid
 end
 
@@ -14264,15 +14241,15 @@ end
 function hloShardingFromTensorShardingAttr(cattr, cmeshAttr)
     @ccall mlir_c.hloShardingFromTensorShardingAttr(
         cattr::MlirAttribute, cmeshAttr::MlirAttribute
-    )::HloShardingPtr
+    )::Ptr{HloSharding}
 end
 
 function hloShardingToTensorShardingAttr(
-    cctx, chloSharding, cmeshName, cmeshAttr, rank, isClosed, priority
+    cctx, hloSharding, cmeshName, cmeshAttr, rank, isClosed, priority
 )
     @ccall mlir_c.hloShardingToTensorShardingAttr(
         cctx::MlirContext,
-        chloSharding::Ptr{Cvoid},
+        hloSharding::Ptr{HloSharding},
         cmeshName::MlirAttribute,
         cmeshAttr::MlirAttribute,
         rank::Int64,
@@ -14289,14 +14266,14 @@ function ifrt_loaded_executable_execute(
     exec, num_args, op_args, is_arg_donatable, num_results, op_results, futures, status
 )
     @ccall mlir_c.ifrt_loaded_executable_execute(
-        exec::HeldIfrtLoadedExecutablePtr,
+        exec::Ptr{HeldIfrtLoadedExecutable},
         num_args::Cint,
-        op_args::Ptr{HeldIfrtArrayPtr},
+        op_args::Ptr{Ptr{Cint}},
         is_arg_donatable::Ptr{UInt8},
         num_results::Cint,
-        op_results::Ptr{HeldIfrtArrayPtr},
+        op_results::Ptr{Ptr{Cint}},
         futures::Ptr{UInt8},
-        status::Ptr{FutureTypePtr},
+        status::Ptr{Ptr{FutureType}},
     )::Cvoid
 end
 
@@ -14359,7 +14336,7 @@ function pjrt_device_is_addressable(device)
 end
 
 function mlirGetParentOfTypeFunctionOp(op)
-    @ccall mlir_c.mlirGetParentOfTypeFunctionOp(op::Ptr{Cvoid})::Ptr{Cvoid}
+    @ccall mlir_c.mlirGetParentOfTypeFunctionOp(op::Ptr{Operation})::Ptr{Operation}
 end
 
 function ifrt_copy_arrays_to_device_with_sharding(
@@ -14367,11 +14344,11 @@ function ifrt_copy_arrays_to_device_with_sharding(
 )
     @ccall mlir_c.ifrt_copy_arrays_to_device_with_sharding(
         client::Ptr{Client},
-        arrays::Ptr{HeldIfrtArrayPtr},
+        arrays::Ptr{Ptr{HeldIfrtArray}},
         num_arrays::Int32,
-        dst_sharding::HeldIfrtConstShardingPtr,
+        dst_sharding::Ptr{HeldIfrtConstSharding},
         c_semantics::Int32,
-    )::Ptr{HeldIfrtArrayPtr}
+    )::Ptr{Ptr{HeldIfrtArray}}
 end
 
 function ifrt_make_array_from_host_buffer_shards(
@@ -14397,31 +14374,9 @@ function ifrt_make_array_from_host_buffer_shards(
         dtype_kind::Cint,
         ndims::Cint,
         final_buffer_shape::Ptr{Int64},
-        sharding::HeldIfrtConstShardingPtr,
+        sharding::Ptr{HeldIfrtConstSharding},
         c_host_buffer_semantics::Int32,
-    )::HeldIfrtArrayPtr
-end
-
-function addSdyPropagationPipeline(
-    pm,
-    keepShardingRules,
-    conservativePropagation,
-    debugShardingOrigins,
-    debugPropagationEdgeSharding,
-    skipConvertToReshard,
-    skipInline,
-    enableInsertExplicitCollectives,
-)
-    @ccall mlir_c.addSdyPropagationPipeline(
-        pm::Cint,
-        keepShardingRules::UInt8,
-        conservativePropagation::UInt8,
-        debugShardingOrigins::UInt8,
-        debugPropagationEdgeSharding::UInt8,
-        skipConvertToReshard::UInt8,
-        skipInline::UInt8,
-        enableInsertExplicitCollectives::UInt8,
-    )::Cvoid
+    )::Ptr{HeldIfrtArray}
 end
 
 function ifrt_copy_array(array)
