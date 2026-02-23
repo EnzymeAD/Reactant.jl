@@ -117,6 +117,7 @@ class OpSharding;
 class HloSharding;
 class DistributedRuntimeService;
 class DistributedRuntimeClient;
+class KeyValueStoreInterface;
 namespace ifrt {
 class Client;
 class Device;
@@ -448,6 +449,8 @@ using HeldHloModule = HeldValue<std::shared_ptr<xla::HloModule>>;
 using HeldIfrtSharding = HeldValue<std::shared_ptr<xla::ifrt::Sharding>>;
 using HeldIfrtLoadedExecutable =
     HeldValue<std::shared_ptr<xla::ifrt::LoadedExecutable>>;
+using HeldIfrtConstSharding =
+    HeldValue<std::shared_ptr<const xla::ifrt::Sharding>>;
 
 REACTANT_ABI void (*ReactantThrowError)(const char *) = nullptr;
 
@@ -1901,10 +1904,9 @@ REACTANT_ABI const char *pjrt_client_platform_name(HeldPjRtClient *client) {
 }
 
 // deprecated
-// REACTANT_ABI HeldValue<std::shared_ptr<xla::PjRtBuffer>> *
-// reactant_hold_pjrtbuffer(xla::PjRtBuffer *buffer) {
-//   return reactant::capture(std::shared_ptr<xla::PjRtBuffer>(buffer));
-// }
+REACTANT_ABI HeldPjRtBufferPtr reactant_hold_pjrtbuffer(PjRtBuffer *buffer) {
+  return reactant::capture(std::shared_ptr<PjRtBuffer>(buffer));
+}
 
 REACTANT_ABI HeldPjRtBuffer *pjrt_buffer_from_host(HeldPjRtClient *client,
                                                    void *data, uint64_t ptype,
@@ -1952,11 +1954,10 @@ REACTANT_ABI void ifrt_client_dtor(ifrt::Client *client) { delete client; }
 
 // generic version, but IFRT-PjRt backend only supports SingleDeviceSharding
 // and FullyReplicated. use `ifrt_pjrt_array_create` if using IFRT-PjRt.
-REACTANT_ABI HeldIfrtArray *ifrt_client_make_array_from_host_buffer(
+REACTANT_ABI HeldIfrtArrayPtr ifrt_client_make_array_from_host_buffer(
     ifrt::Client *client, void *data,
     int dtype_kind, // int
-    int ndims, const int64_t *c_shape,
-    HeldValue<std::shared_ptr<const ifrt::Sharding>> *sharding,
+    int ndims, const int64_t *c_shape, HeldIfrtConstShardingPtr sharding,
     int c_semantics) {
   auto dtype = ifrt::DType(static_cast<ifrt::DType::Kind>(dtype_kind));
   auto shape = ifrt::Shape(absl::Span<const int64_t>(c_shape, ndims));
@@ -1967,7 +1968,7 @@ REACTANT_ABI HeldIfrtArray *ifrt_client_make_array_from_host_buffer(
       static_cast<ifrt::Client::HostBufferSemantics>(c_semantics), [] {})));
 }
 
-REACTANT_ABI HeldIfrtArray *
+REACTANT_ABI HeldIfrtArrayPtr
 ifrt_client_make_single_shard_array_from_host_buffer(
     ifrt::Client *client, void *data,
     int dtype_kind, // int
@@ -1982,10 +1983,10 @@ ifrt_client_make_single_shard_array_from_host_buffer(
 
 // all arrays are assumed to have same DType
 // each process only provides arrays for its own addressable devices
-REACTANT_ABI HeldIfrtArray *ifrt_client_assemble_array_from_single_shards(
+REACTANT_ABI HeldIfrtArrayPtr ifrt_client_assemble_array_from_single_shards(
     ifrt::Client *client, int32_t ndims, const int64_t *c_shape,
-    HeldValue<std::shared_ptr<const ifrt::Sharding>> *sharding, int32_t narrays,
-    HeldIfrtArray **c_arrays, int32_t c_semantics) {
+    HeldIfrtConstShardingPtr sharding, int32_t narrays,
+    HeldIfrtArrayPtr *c_arrays, int32_t c_semantics) {
   ifrt::Shape shape = ifrt::Shape(absl::Span<const int64_t>(c_shape, ndims));
   std::vector<tsl::RCReference<ifrt::Array>> arrays(narrays);
   for (int i = 0; i < narrays; i++) {
@@ -2000,9 +2001,8 @@ REACTANT_ABI HeldIfrtArray *ifrt_client_assemble_array_from_single_shards(
 
 // we should deprecate this because is IFRT-PjRt specific
 // try use `ifrt_client_make_single_shard_array_from_host_buffer` instead
-REACTANT_ABI HeldIfrtArray *
-ifrt_pjrt_array_create(ifrt::PjRtClient *client,
-                       HeldValue<std::shared_ptr<xla::PjRtBuffer>> *buffer) {
+REACTANT_ABI HeldIfrtArrayPtr ifrt_pjrt_array_create(ifrt::PjRtClient *client,
+                                                     HeldPjRtBufferPtr buffer) {
   return reactant::capture(
       tsl::RCReference<ifrt::Array>(MyValueOrThrow(xla::ifrt::PjRtArray::Create(
           client, buffer->obj(), /*has_custom_layout*/ false))));
@@ -2210,11 +2210,11 @@ ifrt_proxy_create_client(const char *c_proxy_server_address,
       .release();
 }
 
-REACTANT_ABI ifrt::Client *ifrt_pjrt_make_client(
+static ifrt::Client *ifrt_pjrt_make_client_internal(
     PjRtClient *pjrt_client, int node_id, int num_nodes,
     void *distributed_runtime_client, const char **error,
-    std::string key_prefix,
-    std::optional<std::shared_ptr<KeyValueStoreInterface>> kv_store) {
+    const char *key_prefix,
+    std::shared_ptr<xla::KeyValueStoreInterface> kv_store) {
   ifrt::PjRtClient::CreateOptions options;
   options.pjrt_client = std::shared_ptr<PjRtClient>(pjrt_client);
 
@@ -2224,14 +2224,14 @@ REACTANT_ABI ifrt::Client *ifrt_pjrt_make_client(
           "`distributed_runtime_client` must be non-null if `num_nodes` > 1";
       return nullptr;
     }
-    if (kv_store.has_value()) {
-      options.kv_store = kv_store.value();
+    if (kv_store != nullptr) {
+      options.kv_store = kv_store;
     } else {
       auto typed_distributed_runtime_client = static_cast<
           HeldValue<std::shared_ptr<xla::DistributedRuntimeClient>> *>(
           distributed_runtime_client);
       options.kv_store = GetDistributedKeyValueStore(
-          typed_distributed_runtime_client->obj(), key_prefix);
+          typed_distributed_runtime_client->obj(), std::string(key_prefix));
     }
   }
 
@@ -2241,14 +2241,28 @@ REACTANT_ABI ifrt::Client *ifrt_pjrt_make_client(
   return MyValueOrThrow(xla::ifrt::PjRtClient::Create(options)).release();
 }
 
+REACTANT_ABI ifrt::Client *
+ifrt_pjrt_make_client(PjRtClient *pjrt_client, int node_id, int num_nodes,
+                      void *distributed_runtime_client, const char **error,
+                      const char *key_prefix,
+                      xla::KeyValueStoreInterface *kv_store) {
+  std::shared_ptr<xla::KeyValueStoreInterface> kv_store_shared;
+  if (kv_store != nullptr) {
+    kv_store_shared = std::shared_ptr<xla::KeyValueStoreInterface>(
+        kv_store, [](xla::KeyValueStoreInterface *) {});
+  }
+  return ifrt_pjrt_make_client_internal(pjrt_client, node_id, num_nodes,
+                                        distributed_runtime_client, error,
+                                        key_prefix, kv_store_shared);
+}
+
 REACTANT_ABI ifrt::Client *ifrt_pjrt_make_client_with_default_kv_store(
     PjRtClient *pjrt_client, int node_id, int num_nodes,
     void *distributed_runtime_client, const char **error,
     const char *key_prefix) {
-  std::optional<std::shared_ptr<KeyValueStoreInterface>> kv_store;
-  return ifrt_pjrt_make_client(pjrt_client, node_id, num_nodes,
-                               distributed_runtime_client, error, key_prefix,
-                               kv_store);
+  return ifrt_pjrt_make_client_internal(pjrt_client, node_id, num_nodes,
+                                        distributed_runtime_client, error,
+                                        key_prefix, nullptr);
 }
 
 const char *const kMpiTrampolineLibEnv = "MPITRAMPOLINE_LIB";
@@ -2258,7 +2272,7 @@ ifrt_make_pjrt_cpu_client(uint8_t asynchronous, int node_id, int num_nodes,
                           void *distributed_runtime_client,
                           const char **error) {
   std::optional<std::shared_ptr<xla::cpu::CpuCollectives>> collectives;
-  std::optional<std::shared_ptr<KeyValueStoreInterface>> kv_store;
+  std::shared_ptr<xla::KeyValueStoreInterface> kv_store;
 
   if (distributed_runtime_client != nullptr) {
     auto mpi_trampoline_path = llvm::sys::Process::GetEnv(kMpiTrampolineLibEnv);
@@ -2283,14 +2297,14 @@ ifrt_make_pjrt_cpu_client(uint8_t asynchronous, int node_id, int num_nodes,
                                       /*key_prefix=*/"cpu:");
 #if defined(__linux__)
       auto gloo_kv_store =
-          std::make_unique<xla::cpu::GlooKeyValueStore>(kv_store.value());
+          std::make_unique<xla::cpu::GlooKeyValueStore>(kv_store);
       auto tcp_attrs = gloo::transport::tcp::attr();
       auto tcp_device = gloo::transport::tcp::CreateDevice(tcp_attrs);
       collectives = std::make_shared<xla::cpu::GlooCollectives>(
           std::move(gloo_kv_store), std::move(tcp_device));
 #elif defined(__APPLE__)
       auto gloo_kv_store =
-          std::make_unique<xla::cpu::GlooKeyValueStore>(kv_store.value());
+          std::make_unique<xla::cpu::GlooKeyValueStore>(kv_store);
       auto uv_attrs = gloo::transport::uv::attr();
       auto uv_device = gloo::transport::uv::CreateDevice(uv_attrs);
       collectives = std::make_shared<xla::cpu::GlooCollectives>(
@@ -2306,9 +2320,9 @@ ifrt_make_pjrt_cpu_client(uint8_t asynchronous, int node_id, int num_nodes,
       MakeCPUClientInternal(asynchronous, node_id, collectives);
   if (pjrt_client == nullptr)
     return nullptr;
-  return ifrt_pjrt_make_client(pjrt_client, node_id, num_nodes,
-                               distributed_runtime_client, error, "cpu",
-                               kv_store);
+  return ifrt_pjrt_make_client_internal(pjrt_client, node_id, num_nodes,
+                                        distributed_runtime_client, error,
+                                        "cpu", kv_store);
 }
 
 REACTANT_ABI ifrt::Client *
@@ -2322,10 +2336,9 @@ ifrt_make_pjrt_gpu_client(int node_id, int num_nodes, int64_t *allowed_devices,
       preallocate, platform_name, error, distributed_runtime_client);
   if (pjrt_client == nullptr)
     return nullptr;
-  std::optional<std::shared_ptr<KeyValueStoreInterface>> kv_store;
-  return ifrt_pjrt_make_client(pjrt_client, node_id, num_nodes,
-                               distributed_runtime_client, error, "gpu",
-                               kv_store);
+  return ifrt_pjrt_make_client_internal(pjrt_client, node_id, num_nodes,
+                                        distributed_runtime_client, error,
+                                        "gpu", nullptr);
 }
 
 REACTANT_ABI ifrt::Client *
@@ -2334,10 +2347,9 @@ ifrt_make_pjrt_tpu_client(const char *tpu_path, const char **error, int node_id,
   PjRtClient *pjrt_client = MakeTPUClient(tpu_path, error);
   if (pjrt_client == nullptr)
     return nullptr;
-  std::optional<std::shared_ptr<KeyValueStoreInterface>> kv_store;
-  return ifrt_pjrt_make_client(pjrt_client, node_id, num_nodes,
-                               distributed_runtime_client, error, "tpu",
-                               kv_store);
+  return ifrt_pjrt_make_client_internal(pjrt_client, node_id, num_nodes,
+                                        distributed_runtime_client, error,
+                                        "tpu", nullptr);
 }
 
 REACTANT_ABI void ifrt_FreeClient(ifrt::Client *client) { delete client; }
@@ -2829,8 +2841,8 @@ REACTANT_ABI ifrt::Client *ifrt_array_to_client(HeldIfrtArray *array) {
   return array->obj()->client();
 }
 
-REACTANT_ABI HeldValue<std::shared_ptr<const ifrt::Sharding>> *
-ifrt_array_to_sharding(HeldIfrtArray *array) {
+REACTANT_ABI HeldIfrtConstShardingPtr
+ifrt_array_to_sharding(HeldIfrtArrayPtr array) {
   return reactant::capture(array->obj()->shared_ptr_sharding());
 }
 
@@ -3179,10 +3191,9 @@ REACTANT_ABI void *mlirGetParentOfTypeFunctionOp(void *op) {
 // https://github.com/jax-ml/jax/blob/2b86f38585a517ce50e8ddf964a4709040a1bd53/jaxlib/xla/py_array.cc#L1112
 
 // xla::ifrt::CopyArrays
-REACTANT_ABI HeldIfrtArray **ifrt_copy_arrays_to_device_with_sharding(
-    ifrt::Client *client, HeldIfrtArray **arrays, int32_t num_arrays,
-    HeldValue<std::shared_ptr<const ifrt::Sharding>> *dst_sharding,
-    int32_t c_semantics) {
+REACTANT_ABI HeldIfrtArrayPtr *ifrt_copy_arrays_to_device_with_sharding(
+    ifrt::Client *client, HeldIfrtArrayPtr *arrays, int32_t num_arrays,
+    HeldIfrtConstShardingPtr dst_sharding, int32_t c_semantics) {
   std::vector<tsl::RCReference<ifrt::Array>> src_arrays_vec;
   for (int i = 0; i < num_arrays; i++) {
     src_arrays_vec.push_back(arrays[i]->obj());
@@ -3195,7 +3206,7 @@ REACTANT_ABI HeldIfrtArray **ifrt_copy_arrays_to_device_with_sharding(
 
   HeldIfrtArray **res_dst_arrays = new HeldIfrtArray *[num_arrays];
   for (int i = 0; i < num_arrays; i++) {
-    arrays[i] = reactant::capture(std::move(dst_arrays[i]));
+    res_dst_arrays[i] = reactant::capture(std::move(dst_arrays[i]));
   }
   return res_dst_arrays;
 }
@@ -3206,8 +3217,7 @@ ifrt_make_arrays_from_host_buffer_shards_spec(
     const int64_t **host_buffer_shapes,
     const int64_t **addressable_shard_indices,
     const int64_t *addressable_shard_indices_sizes, int dtype_kind, int ndims,
-    const int64_t *final_buffer_shape,
-    HeldValue<std::shared_ptr<const ifrt::Sharding>> *sharding) {
+    const int64_t *final_buffer_shape, HeldIfrtConstSharding *sharding) {
   ifrt::DType ifrt_dtype =
       ifrt::DType(static_cast<ifrt::DType::Kind>(dtype_kind));
 
@@ -3245,13 +3255,12 @@ ifrt_make_arrays_from_host_buffer_shards_spec(
 
 // TODO(#2252): We can batch the construction of multiple arrays into a single
 // call.
-REACTANT_ABI HeldIfrtArray *ifrt_make_array_from_host_buffer_shards(
+REACTANT_ABI HeldIfrtArrayPtr ifrt_make_array_from_host_buffer_shards(
     ifrt::Client *client, const void **host_buffers, int num_buffers,
     const int64_t **host_buffer_shapes,
     const int64_t **addressable_shard_indices,
     const int64_t *addressable_shard_indices_sizes, int dtype_kind, int ndims,
-    const int64_t *final_buffer_shape,
-    HeldValue<std::shared_ptr<const ifrt::Sharding>> *sharding,
+    const int64_t *final_buffer_shape, HeldIfrtConstShardingPtr sharding,
     int32_t c_host_buffer_semantics) {
   auto spec = ifrt_make_arrays_from_host_buffer_shards_spec(
       host_buffers, num_buffers, host_buffer_shapes, addressable_shard_indices,

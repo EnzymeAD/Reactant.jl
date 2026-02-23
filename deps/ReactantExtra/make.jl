@@ -20,7 +20,7 @@ end
 
 options = load_options(joinpath(@__DIR__, "wrap.toml"))
 
-function rewrite!(::ExprDAG) end
+function rewrite!(dag::ExprDAG) end
 
 @add_def off_t
 @add_def MlirTypesCallback
@@ -28,37 +28,45 @@ function rewrite!(::ExprDAG) end
 let options = deepcopy(options)
     options["general"]["output_file_path"] = ARGS[end]
 
+    extract_api =
+        get(options["general"], "extract_api", false) ||
+        any(x -> x == "--extract-api", ARGS)
+
+    first_arg_is_extract_api = first(ARGS) == "--extract-api"
+
+    start_idx = first_arg_is_extract_api ? 2 : 1
+    include_dir = joinpath(splitpath(ARGS[start_idx])[1:(end - 4)]...)
+    ll_include_dir = joinpath(splitpath(ARGS[start_idx + 1])[1:(end - 2)]...)
+    genarg = first(eachsplit(ARGS[start_idx + 2], " "))
+    gen_include_dir = joinpath(splitpath(genarg)[1:(end - 4)]...)
+    gen_llvm_include_dir = joinpath(splitpath(ARGS[start_idx + 1])[1:(end - 2)]...)
+
+    hlo_include_dir = joinpath(splitpath(ARGS[end - 7])[1:(end - 1)]...)
+    sdy_include_dir = joinpath(splitpath(ARGS[end - 6])[1:(end - 1)]...)
+    triton_include_dir = joinpath(splitpath(ARGS[end - 5])[1:(end - 1)]...)
+    mosaic_tpu_include_dir = joinpath(splitpath(ARGS[end - 4])[1:(end - 1)]...)
+    mosaic_gpu_include_dir = joinpath(splitpath(ARGS[end - 3])[1:(end - 1)]...)
+    enzymexla_include_dir = joinpath(splitpath(ARGS[end - 2])[1:(end - 1)]...)
+    enzymemlir_include_dir = joinpath(splitpath(ARGS[end - 1])[1:(end - 1)]...)
+
     args = Generators.get_default_args()
 
     # Robustly find include directories from ARGS
     include_dirs = Set{String}()
-    push!(include_dirs, @__DIR__)
-    push!(include_dirs, ".")
-
-    for arg in ARGS
-        # Handle multiple files in one arg (from locations)
-        for path in split(arg, " ")
-            isempty(path) && continue
-            isfile(path) || continue
-
-            # Add the directory of the file
-            d = dirname(path)
-            push!(include_dirs, d)
-
-            # If it's in an 'include' directory, add the 'include' directory itself
-            # This helps find things like 'mlir/...' when we have '.../include/mlir/...'
-            parts = splitpath(path)
-            idx = findlast(x -> x == "include", parts)
-            if idx !== nothing
-                push!(include_dirs, joinpath(parts[1:idx]...))
-            end
-
-            # Handle external repositories in Bazel (external/REPO/...)
-            # This helps find things like 'xla/...' when we have 'external/xla/xla/...'
-            if length(parts) >= 2 && parts[1] == "external"
-                push!(include_dirs, joinpath(parts[1:2]...))
-            end
-        end
+    for dir in [
+        include_dir,
+        ll_include_dir,
+        gen_include_dir,
+        gen_llvm_include_dir,
+        hlo_include_dir,
+        sdy_include_dir,
+        triton_include_dir,
+        mosaic_tpu_include_dir,
+        mosaic_gpu_include_dir,
+        enzymexla_include_dir,
+        enzymemlir_include_dir,
+    ]
+        push!(include_dirs, dir)
     end
 
     for d in include_dirs
@@ -75,20 +83,34 @@ let options = deepcopy(options)
         ],
     )
 
-    extract_api =
-        get(options["general"], "extract_api", false) ||
-        any(x -> x == "--extract-api", ARGS)
-
     extracted_api_path = joinpath(pwd(), "API_extracted_inner.h")
     if extract_api
         open(extracted_api_path, "w") do io
             println(
                 io,
                 """
+    #ifndef REACTANT_EXTRACTED_API_H
+    #define REACTANT_EXTRACTED_API_H
+
     #include <stddef.h>
     #include <stdint.h>
     #ifndef __cplusplus
     #include <stdbool.h>
+    #endif
+
+    #include "mlir-c/IR.h"
+    #include "mlir-c/Support.h"
+
+    #ifndef MLIR_CAPI_EXPORTED
+    #ifdef _WIN32
+    #ifdef MLIR_CAPI_BUILDING_LIBRARY
+    #define MLIR_CAPI_EXPORTED __declspec(dllexport)
+    #else
+    #define MLIR_CAPI_EXPORTED __declspec(dllimport)
+    #endif
+    #else
+    #define MLIR_CAPI_EXPORTED __attribute__((visibility("default")))
+    #endif
     #endif
     """,
             )
@@ -140,20 +162,40 @@ let options = deepcopy(options)
                 for m in
                     eachmatch(r"REACTANT_ABI\s+(.*?)(?:\{|=(\s*nullptr\s*)?;|;)"s, content)
                     sig = m.match
+
+                    # Skip dump functions
+                    # Match function name: optional return type, space, then name
+                    m_name = match(r"REACTANT_ABI\s+(?:.*?\s+)?(\w+)\s*\(", sig)
+                    if m_name !== nothing && startswith(m_name.captures[1], "dump_")
+                        continue
+                    end
+
                     sig = replace(sig, r"\s*\{\s*$" => ";")
                     sig = replace(sig, r"\s*=\s*nullptr\s*;\s*$" => ";")
-                    sig = replace(sig, "REACTANT_ABI" => "MLIR_CAPI_EXPORTED")
-                    # Remove namespaces for C mode compatibility
-                    # E.g. tsl::ProfilerSession * -> ProfilerSession *
-                    sig = replace(sig, r"\b(?:\w+::)+" => "")
+
                     # error on encountering C++ specific things that don't map nicely to C
                     if (
                         contains(sig, "std::string") ||
                         contains(sig, "std::string_view") ||
-                        contains(sig, "std::vector<int64_t>")
+                        contains(sig, "std::vector") ||
+                        contains(sig, "std::shared_ptr") ||
+                        contains(sig, "std::optional") ||
+                        contains(sig, "std::unique_ptr")
                     )
-                        error("Found C++ specific thing in signature: $sig")
+                        # error("Found C++ specific thing in signature: $sig")
+                        @error("Found C++ specific thing in signature: $sig")
+                        continue
                     end
+
+                    sig = replace(sig, "REACTANT_ABI" => "MLIR_CAPI_EXPORTED")
+                    # Remove namespaces for C mode compatibility
+                    # E.g. tsl::ProfilerSession * -> ProfilerSession *
+                    sig = replace(sig, r"\b(?:\w+::)+" => "")
+                    # Fix double MLIR_CAPI_EXPORTED
+                    sig = replace(
+                        sig, "MLIR_CAPI_EXPORTED MLIR_CAPI_EXPORTED" => "MLIR_CAPI_EXPORTED"
+                    )
+
                     push!(signatures, sig)
 
                     for word in eachmatch(r"\b([A-Z]\w+)\s*\*", sig) # Match words starting with Capital letter
@@ -185,6 +227,7 @@ let options = deepcopy(options)
                         "MlirModule",
                         "MlirDialectRegistry",
                         "MlirValue",
+                        "MlirTypeID",
                     ],
                 )
                     println(io, "typedef void *", ptr, ";")
@@ -194,25 +237,21 @@ let options = deepcopy(options)
             for sig in signatures
                 println(io, sig)
             end
+
+            println(io, "#endif")
         end
     end
 
-    headers = String[]
-    for arg in ARGS
-        # Handle multiple files in one arg
-        for path in split(arg, " ")
-            isempty(path) && continue
-            isfile(path) || continue
-            # Only wrap actual header files passed as entry points
-            if endswith(path, ".h")
-                # Avoid wrapping core LLVM or internal config headers that break Clang.jl
-                if contains(path, "llvm-c/") || contains(path, "Config/")
-                    continue
-                end
-                push!(headers, path)
-            end
-        end
-    end
+    headers = [
+        detect_headers(include_dir, args, Dict(), endswith("Python/Interop.h"))...,
+        detect_headers(hlo_include_dir, args, Dict())...,
+        detect_headers(sdy_include_dir, args, Dict())...,
+        detect_headers(triton_include_dir, args, Dict())...,
+        detect_headers(mosaic_tpu_include_dir, args, Dict())...,
+        detect_headers(mosaic_gpu_include_dir, args, Dict())...,
+        detect_headers(enzymexla_include_dir, args, Dict())...,
+        detect_headers(enzymemlir_include_dir, args, Dict())...,
+    ]
     if extract_api
         push!(headers, extracted_api_path)
     end

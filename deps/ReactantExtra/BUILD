@@ -1912,8 +1912,6 @@ genrule(
         "@llvm-project//llvm:include/llvm-c/DataTypes.h",
         "@llvm-project//llvm:include/llvm-c/ExternC.h",
         "@llvm-project//llvm:include/llvm-c/Types.h",
-        "@llvm-project//llvm:include/llvm-c/Core.h",
-        "@llvm-project//mlir:include/mlir/Config/mlir-config.h",
         "@llvm-project//mlir:c_headers",
         "@llvm-project//mlir:ConversionPassIncGen_filegroup",
         "@llvm-project//mlir:TransformsPassIncGen_filegroup",
@@ -1942,7 +1940,7 @@ genrule(
         "//:make.jl",
     ],
     outs = ["libMLIR_h.jl"],
-    cmd = "$$JULIA \"--color=yes\" \"--project=$(location //:Project.toml)\" \"$(location //:make.jl)\" \"--extract-api\" \"$(location @llvm-project//mlir:include/mlir-c/Bindings/Python/Interop.h)\" \"$(location @llvm-project//llvm:include/llvm-c/Support.h)\" \"$(location @llvm-project//llvm:include/llvm-c/Core.h)\" \"$(location @llvm-project//mlir:include/mlir/Config/mlir-config.h)\" \"$(locations @llvm-project//mlir:c_headers)\" \"$(locations @llvm-project//mlir:ConversionPassIncGen_filegroup)\" \"$(location @stablehlo//:stablehlo/integrations/c/StablehloAttributes.h)\" \"$(location @shardy//shardy/integrations/c:attributes.h)\" \"$(location @jax//jaxlib/triton:triton_dialect_capi.h)\" \"$(location @jax//jaxlib/mosaic:dialect/tpu/integrations/c/tpu_dialect.h)\" \"$(location @jax//jaxlib/mosaic/dialect/gpu:integrations/c/gpu_dialect.h)\" \"$(location @enzyme_ad//src/enzyme_ad/jax:Integrations/c/EnzymeXLA.h)\" \"$(location @enzyme//:Enzyme/MLIR/Integrations/c/EnzymeMLIR.h)\" \"$@\"",
+    cmd = "$$JULIA \"--color=yes\" \"--project=$(location //:Project.toml)\" \"$(location //:make.jl)\" \"--extract-api\" \"$(location @llvm-project//mlir:include/mlir-c/Bindings/Python/Interop.h)\" \"$(location @llvm-project//llvm:include/llvm-c/Support.h)\" \"$(locations @llvm-project//mlir:ConversionPassIncGen_filegroup)\" \"$(location @stablehlo//:stablehlo/integrations/c/StablehloAttributes.h)\" \"$(location @shardy//shardy/integrations/c:attributes.h)\" \"$(location @jax//jaxlib/triton:triton_dialect_capi.h)\" \"$(location @jax//jaxlib/mosaic:dialect/tpu/integrations/c/tpu_dialect.h)\" \"$(location @jax//jaxlib/mosaic/dialect/gpu:integrations/c/gpu_dialect.h)\" \"$(location @enzyme_ad//src/enzyme_ad/jax:Integrations/c/EnzymeXLA.h)\" \"$(location @enzyme//:Enzyme/MLIR/Integrations/c/EnzymeMLIR.h)\" \"$@\"",
     tags = [
         "jlrule",
     ],
