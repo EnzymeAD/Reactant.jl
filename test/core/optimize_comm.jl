@@ -142,100 +142,106 @@ if length(addressable_devices) ≥ 8
 end
 
 function wrap(x)
-   res = similar(x, size(x, 1)+2+3)
-   res[1:3] = x[(end-2):end]
-   res[4:(3+size(x, 1))] = x
-   res[(3+size(x,1)+1):end] = x[1:2]
-   return res
+    res = similar(x, size(x, 1) + 2 + 3)
+    res[1:3] = x[(end - 2):end]
+    res[4:(3 + size(x, 1))] = x
+    res[(3 + size(x, 1) + 1):end] = x[1:2]
+    return res
 end
 
 if length(addressable_devices) ≥ 2
-        @testset "Wrap Size ($Size)" for Size in [20, 22, 28] begin
-        N = 2
-        mesh = Sharding.Mesh(reshape(Reactant.devices()[1:N], 2), (:x,))
-        sharding = Sharding.NamedSharding(mesh, (:x,))
+    @testset "Wrap Size ($Size)" for Size in [20, 22, 28]
+        begin
+            N = 2
+            mesh = Sharding.Mesh(reshape(Reactant.devices()[1:N], 2), (:x,))
+            sharding = Sharding.NamedSharding(mesh, (:x,))
 
-        x = reshape(collect(Int, 1:Size), Size)
-        rx = Reactant.to_rarray(x; sharding)
+            x = reshape(collect(Int, 1:Size), Size)
+            rx = Reactant.to_rarray(x; sharding)
 
-        hlo = repr(@code_xla shardy_passes = :to_mhlo_shardings wrap(rx))
-        @test !contains(hlo, "all-to-all")
-        @test !contains(hlo, "all-reduce")
-        # 1 all gather exists for the result sharding
-        @test length(collect(eachmatch(r"%all-gather[\.0-9]* =", hlo))) == 1
-        # 2 collective permutes exist for the left/right halos
-        @test length(collect(eachmatch(r"%collective-permute[\.0-9]* =", hlo))) == 2
+            hlo = repr(@code_xla shardy_passes = :to_mhlo_shardings wrap(rx))
+            @test !contains(hlo, "all-to-all")
+            @test !contains(hlo, "all-reduce")
+            # 1 all gather exists for the result sharding
+            @test length(collect(eachmatch(r"%all-gather[\.0-9]* =", hlo))) == 1
+            # 2 collective permutes exist for the left/right halos
+            @test length(collect(eachmatch(r"%collective-permute[\.0-9]* =", hlo))) == 2
 
-        x2 = wrap(x)
-        rx2 = @jit shardy_passes = :to_mhlo_shardings wrap(rx)
-        @test all(x .== convert(Array, rx))
+            x2 = wrap(x)
+            rx2 = @jit shardy_passes = :to_mhlo_shardings wrap(rx)
+            @test all(x .== convert(Array, rx))
         end
     end
 end
 
 function nrotate(x, amt)
-   res = similar(x)
-   res[(end-amt+1):end] = x[1:amt]
-   res[1:(end-amt)] = x[(amt+1):end]
-   return res
+    res = similar(x)
+    res[(end - amt + 1):end] = x[1:amt]
+    res[1:(end - amt)] = x[(amt + 1):end]
+    return res
 end
 
 function multirotate_left(x, sz)
-  if size(x, 1) != sz
-     x = x[1:sz]
-  end
-  return (nrotate(x, 2), nrotate(x, 1), x)
+    if size(x, 1) != sz
+        x = x[1:sz]
+    end
+    return (nrotate(x, 2), nrotate(x, 1), x)
 end
 
 function multirotate_right(x, sz)
-  if size(x, 1) != sz
-     x = x[1:sz]
-  end
-  return (x, nrotate(x, size(x,1)-1), nrotate(x, size(x,1)-2))
+    if size(x, 1) != sz
+        x = x[1:sz]
+    end
+    return (x, nrotate(x, size(x, 1) - 1), nrotate(x, size(x, 1) - 2))
 end
 
 function multirotate_both(x, sz)
-  if size(x, 1) != sz
-     x = x[1:sz]
-  end
-  return (nrotate(x, 1), x, nrotate(x, size(x,1)-1), nrotate(x, size(x,1)-2))
+    if size(x, 1) != sz
+        x = x[1:sz]
+    end
+    return (nrotate(x, 1), x, nrotate(x, size(x, 1) - 1), nrotate(x, size(x, 1) - 2))
 end
 
 if length(addressable_devices) ≥ 2
-   @testset "MultiRotate $mr $size" for mr in (multirotate_left,multirotate_right, multirotate_both), size in (20,21) begin
-        N = min((length(Reactant.devices()) ÷ 2) * 2, 2)
+    @testset "MultiRotate $mr $size" for mr in (
+            multirotate_left, multirotate_right, multirotate_both
+        ),
+        size in (20, 21)
 
-        mesh = Sharding.Mesh(reshape(Reactant.devices()[1:N], 2), (:x,))
-        sharding = Sharding.NamedSharding(mesh, (:x,))
+        begin
+            N = min((length(Reactant.devices()) ÷ 2) * 2, 2)
 
-        size2 = N * div(size + N - 1, N)
-        x = collect(Int, 1:size2)
-        rx = Reactant.to_rarray(x; sharding)
+            mesh = Sharding.Mesh(reshape(Reactant.devices()[1:N], 2), (:x,))
+            sharding = Sharding.NamedSharding(mesh, (:x,))
 
-        hlo = repr(@code_xla shardy_passes = :to_mhlo_shardings mr(rx, size))
-        y = mr(x, size)
+            size2 = N * div(size + N - 1, N)
+            x = collect(Int, 1:size2)
+            rx = Reactant.to_rarray(x; sharding)
 
-        @test !contains(hlo, "all-to-all")
-        @test !contains(hlo, "all-reduce")
-        @test !contains(hlo, "copy")
+            hlo = repr(@code_xla shardy_passes = :to_mhlo_shardings mr(rx, size))
+            y = mr(x, size)
 
-        if mr == multirotate_both
-           @test length(collect(eachmatch(r"%collective-permute[\.0-9]* =", hlo))) == 2
-        else
-           @test length(collect(eachmatch(r"%collective-permute[\.0-9]* =", hlo))) == 1
-        end
+            @test !contains(hlo, "all-to-all")
+            @test !contains(hlo, "all-reduce")
+            @test !contains(hlo, "copy")
 
-        if size2 == size
-           @test length(collect(eachmatch(r"%all-gather[\.0-9]* =", hlo))) == 0
-        else
-           @test length(collect(eachmatch(r"%all-gather[\.0-9]* =", hlo))) == length(y)
-        end
+            if mr == multirotate_both
+                @test length(collect(eachmatch(r"%collective-permute[\.0-9]* =", hlo))) == 2
+            else
+                @test length(collect(eachmatch(r"%collective-permute[\.0-9]* =", hlo))) == 1
+            end
 
-        ry = @jit shardy_passes = :to_mhlo_shardings mr(rx, size)
+            if size2 == size
+                @test length(collect(eachmatch(r"%all-gather[\.0-9]* =", hlo))) == 0
+            else
+                @test length(collect(eachmatch(r"%all-gather[\.0-9]* =", hlo))) == length(y)
+            end
 
-        for (z, rz) in zip(y, ry)
-           @test all(z .== convert(Array, rz))
-        end
+            ry = @jit shardy_passes = :to_mhlo_shardings mr(rx, size)
+
+            for (z, rz) in zip(y, ry)
+                @test all(z .== convert(Array, rz))
+            end
         end
     end
 end
