@@ -12,7 +12,8 @@ using ..TracedUtils: TracedUtils, get_mlir_data, set_mlir_data!
 using ..Ops: @opcall
 
 using LinearAlgebra: LinearAlgebra, BLAS
-using LinearAlgebra: Adjoint, Transpose, Factorization, RowMaximum, NoPivot
+using LinearAlgebra:
+    Adjoint, Transpose, Factorization, RowMaximum, NoPivot, Hermitian, Symmetric
 using LinearAlgebra: SymTridiagonal, Symmetric, Bidiagonal, Diagonal, Tridiagonal
 using LinearAlgebra: LowerTriangular, UnitLowerTriangular, UpperTriangular
 using LinearAlgebra: I, diag, diagm, ldiv!, det, logabsdet, istriu, istril, triu!, tril!
@@ -134,6 +135,19 @@ for (AT, comp) in ((:LowerTriangular, "GE"), (:UpperTriangular, "LE"))
 end
 
 function ReactantCore.materialize_traced_array(
+    x::Hermitian{TracedRNumber{T},<:AnyTracedRMatrix}
+) where {T}
+    m, n = size(x)
+    row_idxs = @opcall iota(Int, [m, n]; iota_dimension=1)
+    col_idxs = @opcall iota(Int, [m, n]; iota_dimension=2)
+    indicator = @opcall compare(
+        row_idxs, col_idxs; comparison_direction=x.uplo == 'L' ? "GT" : "LT"
+    )
+    x_adj = @opcall conj(@opcall transpose(parent(x), [2, 1]))
+    return @opcall select(indicator, parent(x), x_adj)
+end
+
+function ReactantCore.materialize_traced_array(
     x::Symmetric{TracedRNumber{T},<:AnyTracedRMatrix}
 ) where {T}
     m, n = size(x)
@@ -207,6 +221,17 @@ for (AT, dcomp, ocomp) in (
         set_mlir_data!(parent(x), res.mlir_data)
         return x
     end
+end
+
+function TracedUtils.set_mlir_data!(
+    x::Hermitian{TracedRNumber{T},<:AnyTracedRMatrix}, data
+) where {T}
+    if x.uplo == 'L'
+        set_mlir_data!(LowerTriangular(parent(x)), data)
+    else
+        set_mlir_data!(UpperTriangular(parent(x)), data)
+    end
+    return x
 end
 
 function TracedUtils.set_mlir_data!(
@@ -287,15 +312,32 @@ function overloaded_mul!(
         contracting_dimensions=([2], [1]),
     )
 
-    res = if iszero(β)
-        if isone(α)
-            tmp
-        else
-            @opcall(multiply(tmp, Reactant.broadcast_to_size(T(α), size(C))))
-        end
+    is_α_one = !(α isa TracedRNumber) && isone(α)
+    is_β_zero = !(β isa TracedRNumber) && iszero(β)
+
+    α_res = if is_α_one
+        tmp
     else
-        α_res = @opcall multiply(tmp, Reactant.broadcast_to_size(T(α), size(C)))
-        β_C = @opcall multiply(C, Reactant.broadcast_to_size(T(β), size(C)))
+        @opcall multiply(
+            tmp,
+            Reactant.broadcast_to_size(Reactant.promote_to(TracedRNumber{T}, α), size(C)),
+        )
+    end
+
+    res = if is_β_zero
+        α_res
+    elseif β isa TracedRNumber
+        β_C = @opcall multiply(
+            C,
+            Reactant.broadcast_to_size(Reactant.promote_to(TracedRNumber{T}, β), size(C)),
+        )
+        res_full = @opcall add(α_res, β_C)
+        @opcall select(Reactant.broadcast_to_size(iszero(β), size(C)), α_res, res_full)
+    else
+        β_C = @opcall multiply(
+            C,
+            Reactant.broadcast_to_size(Reactant.promote_to(TracedRNumber{T}, β), size(C)),
+        )
         @opcall add(α_res, β_C)
     end
     set_mlir_data!(C, get_mlir_data(res))
