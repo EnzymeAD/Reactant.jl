@@ -147,20 +147,14 @@ function generate_bindings(staging_dir::String, output_dir::String)
     # This is critical - calling protojl separately for each file will overwrite
     # the module files (like xla.jl) since each call generates its own module structure
     println("\n  Processing all $(length(proto_rel_paths)) proto files together...")
-    try
-        ProtoBuf.protojl(
-            proto_rel_paths,  # Pass all files as a vector
-            include_paths,
-            output_dir;
-            always_use_modules=true,
-            parametrize_oneofs=false,
-            add_kwarg_constructors=false,
-        )
-        println("    ✓ Generated bindings for $(length(proto_rel_paths)) proto files")
-    catch e
-        @warn "Failed to generate bindings" exception = (e, catch_backtrace())
-        return nothing
-    end
+    ProtoBuf.protojl(
+        proto_rel_paths,
+        include_paths,
+        output_dir;
+        always_use_modules=true,
+        parametrize_oneofs=false,
+        add_kwarg_constructors=false,
+    )
 
     # Remove headers from generated files to minimize diffs
     remove_proto_headers(output_dir)
@@ -291,7 +285,7 @@ function main(; output_dir::String=DEFAULT_OUTPUT_DIR, force::Bool=false)
 end
 
 # Main entry point
-if abspath(PROGRAM_FILE) == @__FILE__
+if (abspath(PROGRAM_FILE) == @__FILE__) || isinteractive()
     # Parse command line arguments
     force = "--force" in ARGS || "-f" in ARGS
 

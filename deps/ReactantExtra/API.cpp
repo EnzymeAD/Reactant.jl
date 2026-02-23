@@ -1,9 +1,216 @@
 #include <iostream>
 
+#include <stddef.h>
+#include <stdint.h>
+
+#include "mlir-c/IR.h"
+#include "mlir-c/Pass.h"
+#include "mlir-c/Support.h"
+#include "llvm-c/TargetMachine.h"
+
+#ifndef __cplusplus
+#include <stdbool.h>
+#endif
+
+//===----------------------------------------------------------------------===//
+// C-API TYPES START
+//===----------------------------------------------------------------------===//
+#include <stddef.h>
+#include <stdint.h>
+#ifndef __cplusplus
+#include <stdbool.h>
+#endif
+
+//===----------------------------------------------------------------------===//
+// Structs exposed to Julia
+//
+// These are defined here (and only here) so that both the C binding generator
+// and the C++ implementation share a single definition.
+//===----------------------------------------------------------------------===//
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+struct JLAllocatorStats {
+  int64_t num_allocs;
+  int64_t bytes_in_use;
+  int64_t peak_bytes_in_use;
+  int64_t largest_alloc_size;
+  int64_t bytes_limit;
+  int64_t bytes_reserved;
+  int64_t peak_bytes_reserved;
+  int64_t bytes_reservable_limit;
+  int64_t largest_free_block_bytes;
+  int64_t pool_bytes;
+  int64_t peak_pool_bytes;
+};
+
+struct DeviceProperties {
+  size_t totalGlobalMem;
+  size_t sharedMemPerBlock;
+  int regsPerBlock;
+  int warpSize;
+  int maxThreadsPerBlock;
+  int maxThreadsDim[3];
+  int maxGridSize[3];
+  size_t totalConstMem;
+  int major;
+  int minor;
+  int multiProcessorCount;
+  int canMapHostMemory;
+  int l2CacheSize;
+  int maxThreadsPerMultiProcessor;
+};
+
+struct JLHloCostAnalysisProperties {
+  float flops;
+  float transcendentals;
+  float bytes_accessed;
+  float optimal_seconds;
+  float utilization;
+  float operand0_utilization;
+  float operand1_utilization;
+  float operand0_bytes_accessed;
+  float operand1_bytes_accessed;
+  float output_root_bytes_accessed;
+  float reserved0;
+};
+
+struct JLEstimateRunTimeData {
+  int64_t flops;
+  int64_t bytes_read;
+  int64_t bytes_written;
+  int64_t read_time_ns;
+  int64_t write_time_ns;
+  int64_t compute_time_ns;
+  int64_t execution_time_ns;
+};
+
+#ifdef __cplusplus
+} // extern "C" (structs)
+#endif
+
+//===----------------------------------------------------------------------===//
+// Opaque handle types
+//
+// In C mode every handle is just `void *`.
+// In C++ mode we forward-declare the real types so that the compiler can
+// check that API.cpp definitions match these declarations.
+//===----------------------------------------------------------------------===//
+
+#ifndef REACTANT_BINDINGS_GENERATION
+
+#include <memory>
+
+// ---------- forward declarations (C++ only) ----------
+// These must match the concrete types used in API.cpp.
+namespace xla {
+class PjRtClient;
+class PjRtDevice;
+class PjRtBuffer;
+class PjRtLoadedExecutable;
+class HloModule;
+class HloComputation;
+class HloInstruction;
+class OpSharding;
+class HloSharding;
+class DistributedRuntimeService;
+class DistributedRuntimeClient;
+class KeyValueStoreInterface;
+namespace ifrt {
+class Client;
+class Device;
+class Memory;
+class MemoryKind;
+class PjRtClient;
+class PjRtLoadedExecutable;
+class Sharding;
+class LoadedExecutable;
+class Array;
+namespace proxy {
+class GrpcServer;
+} // namespace proxy
+} // namespace ifrt
+} // namespace xla
+namespace tsl {
+class ProfilerSession;
+namespace profiler {
+class ProfilerServer;
+} // namespace profiler
+template <typename T> class RCReference;
+} // namespace tsl
+namespace stream_executor {
+class DeviceDescription;
+} // namespace stream_executor
+namespace mlir {
+class Operation;
+} // namespace mlir
+struct PJRT_Api;
+struct LinkableRuntime;
+
+namespace reactant {
+template <typename T> struct HeldValue;
+} // namespace reactant
+
+namespace details {
+class GPUPerformanceModel;
+} // namespace details
+
+// Concrete typedefs matching API.cpp types
+typedef xla::PjRtClient *PjRtClientPtr;
+typedef xla::PjRtDevice *PjRtDevicePtr;
+typedef xla::PjRtBuffer *PjRtBufferPtr;
+typedef xla::PjRtLoadedExecutable *PjRtLoadedExecutablePtr;
+typedef const PJRT_Api *PJRT_ApiPtr;
+typedef tsl::ProfilerSession *ProfilerSessionPtr;
+typedef tsl::profiler::ProfilerServer *ProfilerServerPtr;
+typedef void *FutureTypePtr;
+typedef void *IfRtFutureTypePtr;
+
+typedef reactant::HeldValue<std::shared_ptr<xla::PjRtClient>>
+    *HeldPjRtClientPtr;
+typedef reactant::HeldValue<std::shared_ptr<xla::PjRtBuffer>>
+    *HeldPjRtBufferPtr;
+typedef reactant::HeldValue<tsl::RCReference<xla::ifrt::Array>>
+    *HeldIfrtArrayPtr;
+typedef reactant::HeldValue<std::shared_ptr<xla::HloModule>> *HeldHloModulePtr;
+typedef reactant::HeldValue<std::shared_ptr<xla::ifrt::Sharding>>
+    *HeldIfrtShardingPtr;
+typedef reactant::HeldValue<std::shared_ptr<xla::ifrt::LoadedExecutable>>
+    *HeldIfrtLoadedExecutablePtr;
+typedef reactant::HeldValue<std::shared_ptr<const xla::ifrt::Sharding>>
+    *HeldIfrtConstShardingPtr;
+typedef reactant::HeldValue<std::shared_ptr<xla::DistributedRuntimeClient>>
+    *HeldDistributedRuntimeClientPtr;
+
+typedef xla::ifrt::Client *IfrtClientPtr;
+typedef xla::ifrt::Device *IfrtDevicePtr;
+typedef xla::ifrt::Memory *IfrtMemoryPtr;
+typedef xla::ifrt::MemoryKind *IfrtMemoryKindPtr;
+typedef xla::ifrt::PjRtClient *IfrtPjRtClientPtr;
+typedef xla::ifrt::PjRtLoadedExecutable *IfrtPjRtLoadedExecutablePtr;
+typedef xla::ifrt::proxy::GrpcServer *IfrtGrpcServerPtr;
+
+typedef xla::OpSharding *OpShardingPtr;
+typedef const xla::HloSharding *HloShardingPtr;
+typedef xla::HloComputation *HloComputationPtr;
+typedef xla::HloInstruction *HloInstructionPtr;
+typedef xla::HloModule *HloModulePtr;
+
+typedef stream_executor::DeviceDescription *DeviceDescriptionPtr;
+typedef xla::DistributedRuntimeService *DistributedRuntimeServicePtr;
+typedef details::GPUPerformanceModel *GPUPerformanceModelPtr;
+
+typedef LinkableRuntime *LinkableRuntimePtr;
+
+#endif /* !defined(REACTANT_BINDINGS_GENERATION) */
+
 #include "mlir-c/IR.h"
 #include "mlir-c/Support.h"
 
 #include "mlir/CAPI/IR.h"
+#include "mlir/CAPI/Pass.h"
 #include "mlir/CAPI/Wrap.h"
 #include "mlir/Pass/PassManager.h"
 
@@ -242,6 +449,8 @@ using HeldHloModule = HeldValue<std::shared_ptr<xla::HloModule>>;
 using HeldIfrtSharding = HeldValue<std::shared_ptr<xla::ifrt::Sharding>>;
 using HeldIfrtLoadedExecutable =
     HeldValue<std::shared_ptr<xla::ifrt::LoadedExecutable>>;
+using HeldIfrtConstSharding =
+    HeldValue<std::shared_ptr<const xla::ifrt::Sharding>>;
 
 REACTANT_ABI void (*ReactantThrowError)(const char *) = nullptr;
 
@@ -636,20 +845,7 @@ REACTANT_ABI void ClientGetAddressableDevices(PjRtClient *client,
   }
 }
 
-// To keep in sync with JLAllocatorStats in src/XLA.jl
-struct JLAllocatorStats {
-  int64_t num_allocs;
-  int64_t bytes_in_use;
-  int64_t peak_bytes_in_use;
-  int64_t largest_alloc_size;
-  int64_t bytes_limit;
-  int64_t bytes_reserved;
-  int64_t peak_bytes_reserved;
-  int64_t bytes_reservable_limit;
-  int64_t largest_free_block_bytes;
-  int64_t pool_bytes;
-  int64_t peak_pool_bytes;
-};
+// JLAllocatorStats is defined at the top of this file
 
 REACTANT_ABI void PjRtDeviceGetAllocatorStats(PjRtDevice *device,
                                               JLAllocatorStats *jlstats) {
@@ -700,8 +896,8 @@ REACTANT_ABI int64_t BufferNDimensions(PjRtBuffer *Buffer) {
   return Buffer->dimensions().length();
 }
 
-REACTANT_ABI xla::PrimitiveType BufferPrimitiveType(PjRtBuffer *Buffer) {
-  return Buffer->element_type();
+REACTANT_ABI int BufferPrimitiveType(PjRtBuffer *Buffer) {
+  return static_cast<int>(Buffer->element_type());
 }
 
 REACTANT_ABI void PjRtBufferFree(PjRtBuffer *Buffer) { delete Buffer; }
@@ -744,22 +940,7 @@ std::vector<int64_t> row_major(int64_t dim) {
 }
 static void noop() {}
 
-struct DeviceProperties {
-  size_t totalGlobalMem;
-  size_t sharedMemPerBlock;
-  int regsPerBlock;
-  int warpSize;
-  int maxThreadsPerBlock;
-  int maxThreadsDim[3];
-  int maxGridSize[3];
-  size_t totalConstMem;
-  int major;
-  int minor;
-  int multiProcessorCount;
-  int canMapHostMemory;
-  int l2CacheSize;
-  int maxThreadsPerMultiProcessor;
-};
+// DeviceProperties is defined at the top of this file
 
 #ifdef REACTANT_CUDA
 
@@ -1201,13 +1382,17 @@ REACTANT_ABI MlirModule ConvertLLVMStrToMLIR(const char *lmod,
 }
 
 typedef xla::Future<> FutureType;
-REACTANT_ABI void FreeFuture(FutureType *Future) { delete Future; }
-
-REACTANT_ABI uint8_t FutureIsReady(FutureType *Future) {
-  return Future->IsReady();
+REACTANT_ABI void FreeFuture(FutureTypePtr future) {
+  delete static_cast<FutureType *>(future);
 }
 
-REACTANT_ABI void FutureAwait(FutureType *Future) { Future->Await(); }
+REACTANT_ABI uint8_t FutureIsReady(FutureTypePtr future) {
+  return static_cast<FutureType *>(future)->IsReady();
+}
+
+REACTANT_ABI void FutureAwait(FutureTypePtr future) {
+  static_cast<FutureType *>(future)->Await();
+}
 
 xla::CompileOptions
 GenerateCompileOptions(int64_t device_id, const int64_t *mesh_ids,
@@ -1419,12 +1604,11 @@ PjRtLoadedExecutableGetParameterShardings(xla::PjRtLoadedExecutable *exec,
   }
 }
 
-REACTANT_ABI void XLAExecuteSharded(xla::PjRtLoadedExecutable *exec,
-                                    int num_args, PjRtBuffer **op_args,
-                                    PjRtDevice *device,
+REACTANT_ABI void XLAExecuteSharded(PjRtLoadedExecutablePtr exec, int num_args,
+                                    PjRtBuffer **op_args, PjRtDevice *device,
                                     uint8_t *is_arg_donatable, int num_results,
                                     PjRtBuffer **op_results, uint8_t *futures,
-                                    FutureType **future_results) {
+                                    FutureTypePtr *future_results) {
   // Create a vector of PjRtBuffer* from the input array.
   std::vector<PjRtBuffer *> argument_handles(op_args, op_args + num_args);
 
@@ -1487,10 +1671,10 @@ void PrintPjRtBuffer(PjRtBuffer *buffer) {
   return;
 }
 
-REACTANT_ABI void XLAExecute(xla::PjRtLoadedExecutable *exec, int op_args_len,
+REACTANT_ABI void XLAExecute(PjRtLoadedExecutablePtr exec, int op_args_len,
                              PjRtBuffer **op_args, uint8_t *is_arg_donatable,
                              int num_results, PjRtBuffer **op_results,
-                             uint8_t *futures, FutureType **future_results) {
+                             uint8_t *futures, FutureTypePtr *future_results) {
   xla::DeviceAssignment device_assignment = exec->device_assignment();
   int num_devices = device_assignment.computation_count();
 
@@ -1720,10 +1904,9 @@ REACTANT_ABI const char *pjrt_client_platform_name(HeldPjRtClient *client) {
 }
 
 // deprecated
-// REACTANT_ABI HeldValue<std::shared_ptr<xla::PjRtBuffer>> *
-// reactant_hold_pjrtbuffer(xla::PjRtBuffer *buffer) {
-//   return reactant::capture(std::shared_ptr<xla::PjRtBuffer>(buffer));
-// }
+REACTANT_ABI HeldPjRtBufferPtr reactant_hold_pjrtbuffer(PjRtBuffer *buffer) {
+  return reactant::capture(std::shared_ptr<PjRtBuffer>(buffer));
+}
 
 REACTANT_ABI HeldPjRtBuffer *pjrt_buffer_from_host(HeldPjRtClient *client,
                                                    void *data, uint64_t ptype,
@@ -1771,11 +1954,10 @@ REACTANT_ABI void ifrt_client_dtor(ifrt::Client *client) { delete client; }
 
 // generic version, but IFRT-PjRt backend only supports SingleDeviceSharding
 // and FullyReplicated. use `ifrt_pjrt_array_create` if using IFRT-PjRt.
-REACTANT_ABI HeldIfrtArray *ifrt_client_make_array_from_host_buffer(
+REACTANT_ABI HeldIfrtArrayPtr ifrt_client_make_array_from_host_buffer(
     ifrt::Client *client, void *data,
     int dtype_kind, // int
-    int ndims, const int64_t *c_shape,
-    HeldValue<std::shared_ptr<const ifrt::Sharding>> *sharding,
+    int ndims, const int64_t *c_shape, HeldIfrtConstShardingPtr sharding,
     int c_semantics) {
   auto dtype = ifrt::DType(static_cast<ifrt::DType::Kind>(dtype_kind));
   auto shape = ifrt::Shape(absl::Span<const int64_t>(c_shape, ndims));
@@ -1786,7 +1968,7 @@ REACTANT_ABI HeldIfrtArray *ifrt_client_make_array_from_host_buffer(
       static_cast<ifrt::Client::HostBufferSemantics>(c_semantics), [] {})));
 }
 
-REACTANT_ABI HeldIfrtArray *
+REACTANT_ABI HeldIfrtArrayPtr
 ifrt_client_make_single_shard_array_from_host_buffer(
     ifrt::Client *client, void *data,
     int dtype_kind, // int
@@ -1801,10 +1983,10 @@ ifrt_client_make_single_shard_array_from_host_buffer(
 
 // all arrays are assumed to have same DType
 // each process only provides arrays for its own addressable devices
-REACTANT_ABI HeldIfrtArray *ifrt_client_assemble_array_from_single_shards(
+REACTANT_ABI HeldIfrtArrayPtr ifrt_client_assemble_array_from_single_shards(
     ifrt::Client *client, int32_t ndims, const int64_t *c_shape,
-    HeldValue<std::shared_ptr<const ifrt::Sharding>> *sharding, int32_t narrays,
-    HeldIfrtArray **c_arrays, int32_t c_semantics) {
+    HeldIfrtConstShardingPtr sharding, int32_t narrays,
+    HeldIfrtArrayPtr *c_arrays, int32_t c_semantics) {
   ifrt::Shape shape = ifrt::Shape(absl::Span<const int64_t>(c_shape, ndims));
   std::vector<tsl::RCReference<ifrt::Array>> arrays(narrays);
   for (int i = 0; i < narrays; i++) {
@@ -1819,9 +2001,8 @@ REACTANT_ABI HeldIfrtArray *ifrt_client_assemble_array_from_single_shards(
 
 // we should deprecate this because is IFRT-PjRt specific
 // try use `ifrt_client_make_single_shard_array_from_host_buffer` instead
-REACTANT_ABI HeldIfrtArray *
-ifrt_pjrt_array_create(ifrt::PjRtClient *client,
-                       HeldValue<std::shared_ptr<xla::PjRtBuffer>> *buffer) {
+REACTANT_ABI HeldIfrtArrayPtr ifrt_pjrt_array_create(ifrt::PjRtClient *client,
+                                                     HeldPjRtBufferPtr buffer) {
   return reactant::capture(
       tsl::RCReference<ifrt::Array>(MyValueOrThrow(xla::ifrt::PjRtArray::Create(
           client, buffer->obj(), /*has_custom_layout*/ false))));
@@ -1892,11 +2073,11 @@ ifrt_pjrt_loaded_executable_dtor(xla::ifrt::PjRtLoadedExecutable *exec) {
 REACTANT_ABI void ifrt_array_dtor(HeldIfrtArray *array) { delete array; }
 
 // in principle, use ArrayCopySemantics::kAlwaysCopy (=0)
-REACTANT_ABI FutureType *
-ifrt_CopyArrayToHostBuffer(HeldIfrtArray *array, void *data,
-                           ifrt::ArrayCopySemantics semantics) {
-  return new FutureType(
-      (*array)->CopyToHostBuffer(data, std::nullopt, semantics));
+REACTANT_ABI FutureTypePtr ifrt_CopyArrayToHostBuffer(HeldIfrtArrayPtr array,
+                                                      void *data,
+                                                      int semantics) {
+  return new FutureType((*array)->CopyToHostBuffer(
+      data, std::nullopt, static_cast<ifrt::ArrayCopySemantics>(semantics)));
 }
 
 REACTANT_ABI void
@@ -2029,11 +2210,11 @@ ifrt_proxy_create_client(const char *c_proxy_server_address,
       .release();
 }
 
-REACTANT_ABI ifrt::Client *ifrt_pjrt_make_client(
+static ifrt::Client *ifrt_pjrt_make_client_internal(
     PjRtClient *pjrt_client, int node_id, int num_nodes,
     void *distributed_runtime_client, const char **error,
-    std::string key_prefix,
-    std::optional<std::shared_ptr<KeyValueStoreInterface>> kv_store) {
+    const char *key_prefix,
+    std::shared_ptr<xla::KeyValueStoreInterface> kv_store) {
   ifrt::PjRtClient::CreateOptions options;
   options.pjrt_client = std::shared_ptr<PjRtClient>(pjrt_client);
 
@@ -2043,14 +2224,14 @@ REACTANT_ABI ifrt::Client *ifrt_pjrt_make_client(
           "`distributed_runtime_client` must be non-null if `num_nodes` > 1";
       return nullptr;
     }
-    if (kv_store.has_value()) {
-      options.kv_store = kv_store.value();
+    if (kv_store != nullptr) {
+      options.kv_store = kv_store;
     } else {
       auto typed_distributed_runtime_client = static_cast<
           HeldValue<std::shared_ptr<xla::DistributedRuntimeClient>> *>(
           distributed_runtime_client);
       options.kv_store = GetDistributedKeyValueStore(
-          typed_distributed_runtime_client->obj(), key_prefix);
+          typed_distributed_runtime_client->obj(), std::string(key_prefix));
     }
   }
 
@@ -2060,14 +2241,28 @@ REACTANT_ABI ifrt::Client *ifrt_pjrt_make_client(
   return MyValueOrThrow(xla::ifrt::PjRtClient::Create(options)).release();
 }
 
+REACTANT_ABI ifrt::Client *
+ifrt_pjrt_make_client(PjRtClient *pjrt_client, int node_id, int num_nodes,
+                      void *distributed_runtime_client, const char **error,
+                      const char *key_prefix,
+                      xla::KeyValueStoreInterface *kv_store) {
+  std::shared_ptr<xla::KeyValueStoreInterface> kv_store_shared;
+  if (kv_store != nullptr) {
+    kv_store_shared = std::shared_ptr<xla::KeyValueStoreInterface>(
+        kv_store, [](xla::KeyValueStoreInterface *) {});
+  }
+  return ifrt_pjrt_make_client_internal(pjrt_client, node_id, num_nodes,
+                                        distributed_runtime_client, error,
+                                        key_prefix, kv_store_shared);
+}
+
 REACTANT_ABI ifrt::Client *ifrt_pjrt_make_client_with_default_kv_store(
     PjRtClient *pjrt_client, int node_id, int num_nodes,
     void *distributed_runtime_client, const char **error,
     const char *key_prefix) {
-  std::optional<std::shared_ptr<KeyValueStoreInterface>> kv_store;
-  return ifrt_pjrt_make_client(pjrt_client, node_id, num_nodes,
-                               distributed_runtime_client, error, key_prefix,
-                               kv_store);
+  return ifrt_pjrt_make_client_internal(pjrt_client, node_id, num_nodes,
+                                        distributed_runtime_client, error,
+                                        key_prefix, nullptr);
 }
 
 const char *const kMpiTrampolineLibEnv = "MPITRAMPOLINE_LIB";
@@ -2077,7 +2272,7 @@ ifrt_make_pjrt_cpu_client(uint8_t asynchronous, int node_id, int num_nodes,
                           void *distributed_runtime_client,
                           const char **error) {
   std::optional<std::shared_ptr<xla::cpu::CpuCollectives>> collectives;
-  std::optional<std::shared_ptr<KeyValueStoreInterface>> kv_store;
+  std::shared_ptr<xla::KeyValueStoreInterface> kv_store;
 
   if (distributed_runtime_client != nullptr) {
     auto mpi_trampoline_path = llvm::sys::Process::GetEnv(kMpiTrampolineLibEnv);
@@ -2102,14 +2297,14 @@ ifrt_make_pjrt_cpu_client(uint8_t asynchronous, int node_id, int num_nodes,
                                       /*key_prefix=*/"cpu:");
 #if defined(__linux__)
       auto gloo_kv_store =
-          std::make_unique<xla::cpu::GlooKeyValueStore>(kv_store.value());
+          std::make_unique<xla::cpu::GlooKeyValueStore>(kv_store);
       auto tcp_attrs = gloo::transport::tcp::attr();
       auto tcp_device = gloo::transport::tcp::CreateDevice(tcp_attrs);
       collectives = std::make_shared<xla::cpu::GlooCollectives>(
           std::move(gloo_kv_store), std::move(tcp_device));
 #elif defined(__APPLE__)
       auto gloo_kv_store =
-          std::make_unique<xla::cpu::GlooKeyValueStore>(kv_store.value());
+          std::make_unique<xla::cpu::GlooKeyValueStore>(kv_store);
       auto uv_attrs = gloo::transport::uv::attr();
       auto uv_device = gloo::transport::uv::CreateDevice(uv_attrs);
       collectives = std::make_shared<xla::cpu::GlooCollectives>(
@@ -2125,9 +2320,9 @@ ifrt_make_pjrt_cpu_client(uint8_t asynchronous, int node_id, int num_nodes,
       MakeCPUClientInternal(asynchronous, node_id, collectives);
   if (pjrt_client == nullptr)
     return nullptr;
-  return ifrt_pjrt_make_client(pjrt_client, node_id, num_nodes,
-                               distributed_runtime_client, error, "cpu",
-                               kv_store);
+  return ifrt_pjrt_make_client_internal(pjrt_client, node_id, num_nodes,
+                                        distributed_runtime_client, error,
+                                        "cpu", kv_store);
 }
 
 REACTANT_ABI ifrt::Client *
@@ -2141,10 +2336,9 @@ ifrt_make_pjrt_gpu_client(int node_id, int num_nodes, int64_t *allowed_devices,
       preallocate, platform_name, error, distributed_runtime_client);
   if (pjrt_client == nullptr)
     return nullptr;
-  std::optional<std::shared_ptr<KeyValueStoreInterface>> kv_store;
-  return ifrt_pjrt_make_client(pjrt_client, node_id, num_nodes,
-                               distributed_runtime_client, error, "gpu",
-                               kv_store);
+  return ifrt_pjrt_make_client_internal(pjrt_client, node_id, num_nodes,
+                                        distributed_runtime_client, error,
+                                        "gpu", nullptr);
 }
 
 REACTANT_ABI ifrt::Client *
@@ -2153,10 +2347,9 @@ ifrt_make_pjrt_tpu_client(const char *tpu_path, const char **error, int node_id,
   PjRtClient *pjrt_client = MakeTPUClient(tpu_path, error);
   if (pjrt_client == nullptr)
     return nullptr;
-  std::optional<std::shared_ptr<KeyValueStoreInterface>> kv_store;
-  return ifrt_pjrt_make_client(pjrt_client, node_id, num_nodes,
-                               distributed_runtime_client, error, "tpu",
-                               kv_store);
+  return ifrt_pjrt_make_client_internal(pjrt_client, node_id, num_nodes,
+                                        distributed_runtime_client, error,
+                                        "tpu", nullptr);
 }
 
 REACTANT_ABI void ifrt_FreeClient(ifrt::Client *client) { delete client; }
@@ -2428,19 +2621,19 @@ op_sharding_tile_assignment_devices(xla::OpSharding *op_sharding,
 
 #pragma region HloSharding
 
-REACTANT_ABI void free_hlo_sharding(xla::HloSharding *hlo_sharding) {
-  delete hlo_sharding;
+REACTANT_ABI void free_hlo_sharding(HloShardingPtr hlo_sharding) {
+  delete const_cast<xla::HloSharding *>(hlo_sharding);
 }
 
-REACTANT_ABI xla::HloSharding *
-hlo_sharding_from_op_sharding(xla::OpSharding *op_sharding) {
+REACTANT_ABI HloShardingPtr
+hlo_sharding_from_op_sharding(OpShardingPtr op_sharding) {
   xla::HloSharding *hlo_sharding = new xla::HloSharding(
       MyValueOrThrow(xla::HloSharding::FromProto(*op_sharding)));
   return hlo_sharding;
 }
 
-REACTANT_ABI xla::OpSharding *
-hlo_sharding_to_op_sharding(xla::HloSharding *hlo_sharding) {
+REACTANT_ABI OpShardingPtr
+hlo_sharding_to_op_sharding(HloShardingPtr hlo_sharding) {
   xla::OpSharding *op_sharding = new xla::OpSharding(hlo_sharding->ToProto());
   return op_sharding;
 }
@@ -2466,9 +2659,9 @@ REACTANT_ABI void free_ifrt_sharding(HeldIfrtSharding *sharding) {
   delete sharding;
 }
 
-REACTANT_ABI HeldIfrtSharding *ifrt_sharding_from_xla_hlo_sharding(
+REACTANT_ABI HeldIfrtShardingPtr ifrt_sharding_from_xla_hlo_sharding(
     ifrt::Client *client, ifrt::Device **device_list, int32_t num_devices,
-    ifrt::MemoryKind *memory_kind, xla::HloSharding *xla_hlo_sharding) {
+    ifrt::MemoryKind *memory_kind, HloShardingPtr xla_hlo_sharding) {
   // convert to ifrt::HloSharding
   auto hlo_sharding =
       ifrt::HloSharding::Create(
@@ -2480,8 +2673,8 @@ REACTANT_ABI HeldIfrtSharding *ifrt_sharding_from_xla_hlo_sharding(
       std::shared_ptr<ifrt::Sharding>(std::move(hlo_sharding)));
 }
 
-REACTANT_ABI xla::HloSharding *
-ifrt_sharding_to_xla_hlo_sharding(HeldIfrtSharding *sharding) {
+REACTANT_ABI HloShardingPtr
+ifrt_sharding_to_xla_hlo_sharding(HeldIfrtShardingPtr sharding) {
   const ifrt::Sharding *val = sharding->obj().get();
   if (!llvm::isa<ifrt::HloSharding>(val))
     ReactantThrowError("Expected a HloSharding");
@@ -2546,47 +2739,47 @@ REACTANT_ABI void ifrt_sharding_to_index_domains(HeldIfrtSharding *sharding,
   }
 }
 
-REACTANT_ABI bool hlo_sharding_is_tuple(xla::HloSharding *hloSharding) {
+REACTANT_ABI bool hlo_sharding_is_tuple(HloShardingPtr hloSharding) {
   return hloSharding->IsTuple();
 }
 
-REACTANT_ABI bool hlo_sharding_is_replicated(xla::HloSharding *hloSharding) {
+REACTANT_ABI bool hlo_sharding_is_replicated(HloShardingPtr hloSharding) {
   return hloSharding->IsReplicated();
 }
 
-REACTANT_ABI bool hlo_sharding_is_manual(xla::HloSharding *hloSharding) {
+REACTANT_ABI bool hlo_sharding_is_manual(HloShardingPtr hloSharding) {
   return hloSharding->IsManual();
 }
 
-REACTANT_ABI bool hlo_sharding_is_unknown(xla::HloSharding *hloSharding) {
+REACTANT_ABI bool hlo_sharding_is_unknown(HloShardingPtr hloSharding) {
   return hloSharding->IsUnknown();
 }
 
-REACTANT_ABI bool hlo_sharding_is_tiled(xla::HloSharding *hloSharding) {
+REACTANT_ABI bool hlo_sharding_is_tiled(HloShardingPtr hloSharding) {
   return hloSharding->IsTiled();
 }
 
-REACTANT_ABI bool hlo_sharding_is_maximal(xla::HloSharding *hloSharding) {
+REACTANT_ABI bool hlo_sharding_is_maximal(HloShardingPtr hloSharding) {
   return hloSharding->IsTileMaximal();
 }
 
 REACTANT_ABI bool
-hlo_sharding_replicate_on_last_tile_dim(xla::HloSharding *hloSharding) {
+hlo_sharding_replicate_on_last_tile_dim(HloShardingPtr hloSharding) {
   return hloSharding->ReplicateOnLastTileDim();
 }
 
 REACTANT_ABI int32_t
-hlo_sharding_tile_assignment_dimensions_size(xla::HloSharding *hloSharding) {
+hlo_sharding_tile_assignment_dimensions_size(HloShardingPtr hloSharding) {
   return static_cast<int32_t>(hloSharding->tile_assignment().num_dimensions());
 }
 
 REACTANT_ABI int32_t
-hlo_sharding_tile_assignment_devices_size(xla::HloSharding *hloSharding) {
+hlo_sharding_tile_assignment_devices_size(HloShardingPtr hloSharding) {
   return static_cast<int32_t>(hloSharding->tile_assignment().num_elements());
 }
 
 REACTANT_ABI void
-hlo_sharding_tile_assignment_dimensions(xla::HloSharding *hloSharding,
+hlo_sharding_tile_assignment_dimensions(HloShardingPtr hloSharding,
                                         int64_t *dims, int32_t size) {
   auto tileAssignmentDims = hloSharding->tile_assignment().dimensions();
   for (int32_t i = 0; i < size; i++) {
@@ -2595,7 +2788,7 @@ hlo_sharding_tile_assignment_dimensions(xla::HloSharding *hloSharding,
 }
 
 REACTANT_ABI void
-hlo_sharding_tile_assignment_devices(xla::HloSharding *hloSharding,
+hlo_sharding_tile_assignment_devices(HloShardingPtr hloSharding,
                                      int64_t *devices, int32_t size) {
   auto tileAssignmentDevices = hloSharding->tile_assignment().array().data();
   for (int32_t i = 0; i < size; i++) {
@@ -2603,8 +2796,8 @@ hlo_sharding_tile_assignment_devices(xla::HloSharding *hloSharding,
   }
 }
 
-REACTANT_ABI bool hlo_sharding_check_eq(xla::HloSharding *hloSharding,
-                                        xla::HloSharding *other) {
+REACTANT_ABI bool hlo_sharding_check_eq(HloShardingPtr hloSharding,
+                                        HloShardingPtr other) {
   return *hloSharding == *other;
 }
 
@@ -2612,13 +2805,17 @@ REACTANT_ABI bool hlo_sharding_check_eq(xla::HloSharding *hloSharding,
 
 typedef tsl::Future<> IfRtFutureType;
 
-REACTANT_ABI void ifrt_free_future(IfRtFutureType *Future) { delete Future; }
-
-REACTANT_ABI uint8_t ifrt_future_is_ready(IfRtFutureType *Future) {
-  return Future->IsReady();
+REACTANT_ABI void ifrt_free_future(IfRtFutureTypePtr future) {
+  delete static_cast<IfRtFutureType *>(future);
 }
 
-REACTANT_ABI void ifrt_future_await(IfRtFutureType *Future) { Future->Await(); }
+REACTANT_ABI uint8_t ifrt_future_is_ready(IfRtFutureTypePtr future) {
+  return static_cast<IfRtFutureType *>(future)->IsReady();
+}
+
+REACTANT_ABI void ifrt_future_await(IfRtFutureTypePtr future) {
+  static_cast<IfRtFutureType *>(future)->Await();
+}
 
 #pragma region IfRtArray
 
@@ -2636,16 +2833,16 @@ REACTANT_ABI int64_t ifrt_array_ndims(HeldIfrtArray *array) {
   return array->obj()->shape().dims().size();
 }
 
-REACTANT_ABI ifrt::DType ifrt_array_eltype(HeldIfrtArray *array) {
-  return array->obj()->dtype();
+REACTANT_ABI int ifrt_array_eltype(HeldIfrtArrayPtr array) {
+  return static_cast<int>(array->obj()->dtype().kind());
 }
 
 REACTANT_ABI ifrt::Client *ifrt_array_to_client(HeldIfrtArray *array) {
   return array->obj()->client();
 }
 
-REACTANT_ABI HeldValue<std::shared_ptr<const ifrt::Sharding>> *
-ifrt_array_to_sharding(HeldIfrtArray *array) {
+REACTANT_ABI HeldIfrtConstShardingPtr
+ifrt_array_to_sharding(HeldIfrtArrayPtr array) {
   return reactant::capture(array->obj()->shared_ptr_sharding());
 }
 
@@ -2679,13 +2876,10 @@ REACTANT_ABI HeldIfrtArray **ifrt_array_disassemble_into_single_device_arrays(
 
 #pragma region xla::Distributed
 
-REACTANT_ABI HeldValue<std::shared_ptr<xla::DistributedRuntimeClient>> *
-GetDistributedRuntimeClient(char *c_address, int32_t node_id,
-                            int32_t rpc_timeout_in_seconds,
-                            int32_t init_timeout,
-                            int32_t shutdown_timeout_in_minutes,
-                            int32_t heartbeat_timeout_in_seconds,
-                            bool use_compression) {
+REACTANT_ABI HeldDistributedRuntimeClientPtr GetDistributedRuntimeClient(
+    char *c_address, int32_t node_id, int32_t rpc_timeout_in_seconds,
+    int32_t init_timeout, int32_t shutdown_timeout_in_minutes,
+    int32_t heartbeat_timeout_in_seconds, bool use_compression) {
   xla::DistributedRuntimeClient::Options options;
   options.node_id = node_id;
   options.rpc_timeout = absl::Seconds(rpc_timeout_in_seconds);
@@ -2699,20 +2893,20 @@ GetDistributedRuntimeClient(char *c_address, int32_t node_id,
       xla::GetDistributedRuntimeClient(address, options, use_compression));
 }
 
-REACTANT_ABI void free_distributed_runtime_client(
-    HeldValue<std::shared_ptr<xla::DistributedRuntimeClient>> *client) {
+REACTANT_ABI void
+free_distributed_runtime_client(HeldDistributedRuntimeClientPtr client) {
   delete client;
 }
 
-REACTANT_ABI void distributed_runtime_client_connect(
-    HeldValue<std::shared_ptr<xla::DistributedRuntimeClient>> *client) {
+REACTANT_ABI void
+distributed_runtime_client_connect(HeldDistributedRuntimeClientPtr client) {
   auto status = client->obj()->Connect();
   if (!status.ok())
     ReactantThrowError(status.ToString().c_str());
 }
 
-REACTANT_ABI void distributed_runtime_client_shutdown(
-    HeldValue<std::shared_ptr<xla::DistributedRuntimeClient>> *client) {
+REACTANT_ABI void
+distributed_runtime_client_shutdown(HeldDistributedRuntimeClientPtr client) {
   auto status = client->obj()->Shutdown();
   if (!status.ok())
     ReactantThrowError(status.ToString().c_str());
@@ -2750,9 +2944,8 @@ distributed_runtime_service_shutdown(xla::DistributedRuntimeService *service) {
 
 #pragma region Shardy
 
-REACTANT_ABI xla::HloSharding *
-hloShardingFromTensorShardingAttr(MlirAttribute cattr,
-                                  MlirAttribute cmeshAttr) {
+REACTANT_ABI HloShardingPtr hloShardingFromTensorShardingAttr(
+    MlirAttribute cattr, MlirAttribute cmeshAttr) {
   auto attr = mlir::cast<mlir::sdy::TensorShardingAttr>(unwrap(cattr));
   auto meshAttr = mlir::cast<mlir::sdy::MeshAttr>(unwrap(cmeshAttr));
   mlir::ArrayRef<mlir::StringAttr> manual_axes = {};
@@ -2769,9 +2962,10 @@ hloShardingFromTensorShardingAttr(MlirAttribute cattr,
 // current mesh to generate this instead of the global mesh Currently we are
 // storing only a single mesh, so we can just use this.
 REACTANT_ABI MlirAttribute hloShardingToTensorShardingAttr(
-    MlirContext cctx, const xla::HloSharding *hloSharding,
-    MlirAttribute cmeshName, MlirAttribute cmeshAttr, int64_t rank,
-    const bool *isClosed, const int64_t *priority) {
+    MlirContext cctx, const void *chloSharding, MlirAttribute cmeshName,
+    MlirAttribute cmeshAttr, int64_t rank, const bool *isClosed,
+    const int64_t *priority) {
+  auto hloSharding = static_cast<const xla::HloSharding *>(chloSharding);
   mlir::MLIRContext *context = unwrap(cctx);
   mlir::StringAttr meshName = mlir::cast<mlir::StringAttr>(unwrap(cmeshName));
   mlir::sdy::MeshAttr meshAttr =
@@ -2812,11 +3006,9 @@ REACTANT_ABI void ifrt_loaded_executable_dtor(HeldIfrtLoadedExecutable *exec) {
 }
 
 REACTANT_ABI void ifrt_loaded_executable_execute(
-    HeldIfrtLoadedExecutable *exec, int num_args,
-    HeldValue<tsl::RCReference<ifrt::Array>> **op_args,
-    uint8_t *is_arg_donatable, int num_results,
-    HeldValue<tsl::RCReference<ifrt::Array>> **op_results, uint8_t *futures,
-    FutureType **status) {
+    HeldIfrtLoadedExecutablePtr exec, int num_args, HeldIfrtArrayPtr *op_args,
+    uint8_t *is_arg_donatable, int num_results, HeldIfrtArrayPtr *op_results,
+    uint8_t *futures, FutureTypePtr *status) {
   std::vector<tsl::RCReference<xla::ifrt::Array>> args;
   for (int i = 0; i < num_args; i++) {
     args.emplace_back(op_args[i]->obj());
@@ -2922,19 +3114,7 @@ ifrt_loaded_executable_num_devices(HeldIfrtLoadedExecutable *exec) {
 
 #pragma region CostAnalysis
 
-struct JLHloCostAnalysisProperties {
-  float flops;
-  float transcendentals;
-  float bytes_accessed;
-  float optimal_seconds;
-  float utilization;
-  float operand0_utilization;
-  float operand1_utilization;
-  float operand0_bytes_accessed;
-  float operand1_bytes_accessed;
-  float output_root_bytes_accessed;
-  float reserved0;
-};
+// JLHloCostAnalysisProperties is defined at the top of this file
 
 REACTANT_ABI void pjrt_hlo_module_cost_analysis_properties(
     PjRtClient *client, HeldHloModule *hlo_module,
@@ -2975,9 +3155,11 @@ REACTANT_ABI void ifrt_hlo_module_cost_analysis_properties(
 
 #pragma endregion
 
-REACTANT_ABI void dump_op(Operation *op) { llvm::errs() << *op << "\n"; }
-REACTANT_ABI void dump_mval(mlir::Value v) { llvm::errs() << v << "\n"; }
-REACTANT_ABI void dump_operation(Operation *op, const char *filename) {
+REACTANT_ABI void dump_op(void *op) {
+  llvm::errs() << *static_cast<Operation *>(op) << "\n";
+}
+REACTANT_ABI void dump_mval(MlirValue v) { llvm::errs() << unwrap(v) << "\n"; }
+REACTANT_ABI void dump_operation(void *op, const char *filename) {
   std::error_code EC;
   llvm::raw_fd_ostream file(filename, EC, llvm::sys::fs::OF_Text);
 
@@ -2986,7 +3168,8 @@ REACTANT_ABI void dump_operation(Operation *op, const char *filename) {
     return;
   }
 
-  op->print(file, mlir::OpPrintingFlags().enableDebugInfo(true, false));
+  static_cast<Operation *>(op)->print(
+      file, mlir::OpPrintingFlags().enableDebugInfo(true, false));
 }
 REACTANT_ABI void dump_string(const char *op, const char *filename) {
   std::error_code EC;
@@ -2998,19 +3181,19 @@ REACTANT_ABI bool pjrt_device_is_addressable(PjRtDevice *device) {
   return device->IsAddressable();
 }
 
-REACTANT_ABI mlir::Operation *
-mlirGetParentOfTypeFunctionOp(mlir::Operation *op) {
-  return op->getParentOfType<mlir::FunctionOpInterface>();
+REACTANT_ABI void *mlirGetParentOfTypeFunctionOp(void *op) {
+  mlir::Operation *mlirOp = static_cast<mlir::Operation *>(op);
+  return static_cast<void *>(
+      mlirOp->getParentOfType<mlir::FunctionOpInterface>());
 }
 
 // batched copy
 // https://github.com/jax-ml/jax/blob/2b86f38585a517ce50e8ddf964a4709040a1bd53/jaxlib/xla/py_array.cc#L1112
 
 // xla::ifrt::CopyArrays
-REACTANT_ABI HeldIfrtArray **ifrt_copy_arrays_to_device_with_sharding(
-    ifrt::Client *client, HeldIfrtArray **arrays, int32_t num_arrays,
-    HeldValue<std::shared_ptr<const ifrt::Sharding>> *dst_sharding,
-    int32_t c_semantics) {
+REACTANT_ABI HeldIfrtArrayPtr *ifrt_copy_arrays_to_device_with_sharding(
+    ifrt::Client *client, HeldIfrtArrayPtr *arrays, int32_t num_arrays,
+    HeldIfrtConstShardingPtr dst_sharding, int32_t c_semantics) {
   std::vector<tsl::RCReference<ifrt::Array>> src_arrays_vec;
   for (int i = 0; i < num_arrays; i++) {
     src_arrays_vec.push_back(arrays[i]->obj());
@@ -3023,7 +3206,7 @@ REACTANT_ABI HeldIfrtArray **ifrt_copy_arrays_to_device_with_sharding(
 
   HeldIfrtArray **res_dst_arrays = new HeldIfrtArray *[num_arrays];
   for (int i = 0; i < num_arrays; i++) {
-    arrays[i] = reactant::capture(std::move(dst_arrays[i]));
+    res_dst_arrays[i] = reactant::capture(std::move(dst_arrays[i]));
   }
   return res_dst_arrays;
 }
@@ -3034,8 +3217,7 @@ ifrt_make_arrays_from_host_buffer_shards_spec(
     const int64_t **host_buffer_shapes,
     const int64_t **addressable_shard_indices,
     const int64_t *addressable_shard_indices_sizes, int dtype_kind, int ndims,
-    const int64_t *final_buffer_shape,
-    HeldValue<std::shared_ptr<const ifrt::Sharding>> *sharding) {
+    const int64_t *final_buffer_shape, HeldIfrtConstSharding *sharding) {
   ifrt::DType ifrt_dtype =
       ifrt::DType(static_cast<ifrt::DType::Kind>(dtype_kind));
 
@@ -3073,13 +3255,12 @@ ifrt_make_arrays_from_host_buffer_shards_spec(
 
 // TODO(#2252): We can batch the construction of multiple arrays into a single
 // call.
-REACTANT_ABI HeldIfrtArray *ifrt_make_array_from_host_buffer_shards(
+REACTANT_ABI HeldIfrtArrayPtr ifrt_make_array_from_host_buffer_shards(
     ifrt::Client *client, const void **host_buffers, int num_buffers,
     const int64_t **host_buffer_shapes,
     const int64_t **addressable_shard_indices,
     const int64_t *addressable_shard_indices_sizes, int dtype_kind, int ndims,
-    const int64_t *final_buffer_shape,
-    HeldValue<std::shared_ptr<const ifrt::Sharding>> *sharding,
+    const int64_t *final_buffer_shape, HeldIfrtConstShardingPtr sharding,
     int32_t c_host_buffer_semantics) {
   auto spec = ifrt_make_arrays_from_host_buffer_shards_spec(
       host_buffers, num_buffers, host_buffer_shapes, addressable_shard_indices,
@@ -3092,7 +3273,7 @@ REACTANT_ABI HeldIfrtArray *ifrt_make_array_from_host_buffer_shards(
 }
 
 REACTANT_ABI void addSdyPropagationPipeline(
-    mlir::OpPassManager &pm, uint8_t keepShardingRules /*false*/,
+    MlirOpPassManager pm, uint8_t keepShardingRules /*false*/,
     uint8_t conservativePropagation /*false*/,
     uint8_t debugShardingOrigins /*false*/,
     uint8_t debugPropagationEdgeSharding /*false*/,
@@ -3107,7 +3288,7 @@ REACTANT_ABI void addSdyPropagationPipeline(
                                               skipInline != 0,
                                               enableInsertExplicitCollectives !=
                                                   0};
-  mlir::sdy::addPropagationPipeline(pm, options);
+  mlir::sdy::addPropagationPipeline(*unwrap(pm), options);
 }
 
 REACTANT_ABI HeldIfrtArray *ifrt_copy_array(HeldIfrtArray *array) {
@@ -3348,7 +3529,7 @@ REACTANT_ABI void reactantXLAExec(LinkableRuntime **__restrict__ lrtP,
   int num_results = argcnt;
   std::vector<PjRtBuffer *> results(argcnt);
   std::vector<uint8_t> futures(argcnt, 0);
-  std::vector<FutureType *> future_results(argcnt, nullptr);
+  std::vector<FutureTypePtr> future_results(argcnt, nullptr);
   PjRtDevice *device = ClientGetDevice(lrt->client, lrt->device);
   XLAExecuteSharded(exec, argcnt, baseArrays.data(), device, is_arg_donatable,
                     num_results, results.data(), futures.data(),
@@ -3472,15 +3653,7 @@ hloInstructionFusedInstructionsComputation(HloInstruction *hlo_instruction) {
                      "instruction");
 }
 
-struct JLEstimateRunTimeData {
-  int64_t flops;
-  int64_t bytes_read;
-  int64_t bytes_written;
-  int64_t read_time_ns;
-  int64_t write_time_ns;
-  int64_t compute_time_ns;
-  int64_t execution_time_ns;
-};
+// JLEstimateRunTimeData is defined at the top of this file
 
 #if defined(REACTANT_CUDA) || defined(REACTANT_ROCM)
 namespace details {
@@ -3553,20 +3726,21 @@ REACTANT_ABI void EstimateRunTimeForInstruction(
 
 #else
 
-REACTANT_ABI void *CreateGPUPerformanceModel(
+REACTANT_ABI details::GPUPerformanceModel *CreateGPUPerformanceModel(
     MlirContext ctx, stream_executor::DeviceDescription *device_description) {
   return nullptr;
 }
 
-REACTANT_ABI void RunAnalysisOnHloModule(void *gpu_performance_model,
-                                         HloModule *hlo_module) {
+REACTANT_ABI void
+RunAnalysisOnHloModule(details::GPUPerformanceModel *gpu_performance_model,
+                       HeldHloModule *hlo_module) {
   ReactantThrowError("RunAnalysisOnHloModule is only supported if Reactant "
                      "was compiled with CUDA or ROCM support.");
 }
 
-REACTANT_ABI void EstimateRunTimeForInstruction(void *gpu_performance_model,
-                                                HloInstruction *hlo_instruction,
-                                                JLEstimateRunTimeData *jldata) {
+REACTANT_ABI void EstimateRunTimeForInstruction(
+    details::GPUPerformanceModel *gpu_performance_model,
+    HloInstruction *hlo_instruction, JLEstimateRunTimeData *jldata) {
   ReactantThrowError(
       "EstimateRunTimeForInstruction is only supported if Reactant "
       "was compiled with CUDA or ROCM support.");
