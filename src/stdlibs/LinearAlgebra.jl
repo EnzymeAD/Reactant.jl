@@ -62,10 +62,9 @@ function __init__()
             (BLAS.@blasfunc(csymm_), :enzymexla_blas_csymm_),
             (BLAS.@blasfunc(zsymm_), :enzymexla_blas_zsymm_),
         ]
-            sym = Libdl.dlsym(libblastrampoline_handle, cname)
-            @ccall MLIR.API.mlir_c.EnzymeJaXMapSymbol(
-                enzymexla_name::Cstring, sym::Ptr{Cvoid}
-            )::Cvoid
+            MLIR.API.EnzymeJaXMapSymbol(
+                enzymexla_name, Libdl.dlsym(libblastrampoline_handle, cname)
+            )
         end
     end
 

@@ -52,8 +52,7 @@ function __init__()
         :MPI_Wait,
         :MPI_Request_free,
     ]
-        sym = Libdl.dlsym(libmpi_handle, name)
-        @ccall MLIR.API.mlir_c.EnzymeJaXMapSymbol(name::Cstring, sym::Ptr{Cvoid})::Cvoid
+        MLIR.API.EnzymeJaXMapSymbol(name, Libdl.dlsym(libmpi_handle, name))
     end
 
     # register MPI constants
@@ -213,8 +212,7 @@ function __init__()
         if value isa Base.RefValue
             value = value[]
         end
-        value = convert(Int, value)
-        @ccall MLIR.API.mlir_c.EnzymeJaXMapSymbol(name::Cstring, value::Int)::Cvoid
+        MLIR.API.EnzymeJaXMapSymbol(name, Int(value))
     end
 end
 

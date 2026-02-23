@@ -2,57 +2,24 @@ struct Device <: XLA.AbstractDevice
     device::Ptr{Cvoid}
 end
 
-function XLA.client(device::Device)
-    GC.@preserve device begin
-        return Client(
-            @ccall MLIR.API.mlir_c.DeviceToClient(device.device::Ptr{Cvoid})::Ptr{Cvoid}
-        )
-    end
-end
+XLA.client(device::Device) = Client(MLIR.API.DeviceToClient(device.device))
 
-function XLA.device_ordinal(device::Device)
-    GC.@preserve device begin
-        return @ccall MLIR.API.mlir_c.PjRtDeviceGetLocalDeviceId(
-            device.device::Ptr{Cvoid}
-        )::Int64
-    end
-end
+XLA.device_ordinal(device::Device) = MLIR.API.PjRtDeviceGetLocalDeviceId(device.device)
 
 function XLA.device_kind(device::Device)
-    GC.@preserve device begin
-        str = @ccall MLIR.API.mlir_c.DeviceGetKind(device.device::Ptr{Cvoid})::Cstring
-    end
-    return XLA.unsafe_string_and_free(str)
+    return XLA.unsafe_string_and_free(MLIR.API.DeviceGetKind(device.device))
 end
 
-function XLA.get_local_device_id(device::Device)
-    GC.@preserve device begin
-        return @ccall MLIR.API.mlir_c.PjRtDeviceGetLocalDeviceId(
-            device.device::Ptr{Cvoid}
-        )::Cint
-    end
-end
+XLA.get_local_device_id(device::Device) = MLIR.API.PjRtDeviceGetLocalDeviceId(device.device)
 
 function XLA.get_local_hardware_id(device::Device)
-    GC.@preserve device begin
-        return @ccall MLIR.API.mlir_c.PjRtDeviceGetLocalHardwareId(
-            device.device::Ptr{Cvoid}
-        )::Cint
-    end
+    return MLIR.API.PjRtDeviceGetLocalHardwareId(device.device)
 end
 
-function XLA.is_addressable(device::Device)
-    GC.@preserve device begin
-        return @ccall MLIR.API.mlir_c.pjrt_device_is_addressable(
-            device.device::Ptr{Cvoid}
-        )::Bool
-    end
-end
+XLA.is_addressable(device::Device) = MLIR.API.PjRtDeviceIsAddressable(device.device)
 
 function XLA.allocatorstats_internal(device::Device)
-    ref = Ref{XLA.JLAllocatorStats}()
-    @ccall MLIR.API.mlir_c.PjRtDeviceGetAllocatorStats(
-        device.device::Ptr{Cvoid}, ref::Ptr{Cvoid}
-    )::Cvoid
+    ref = Ref{MLIR.API.JLAllocatorStats}()
+    MLIR.API.PjRtDeviceGetAllocatorStats(device.device, ref)
     return ref[]
 end

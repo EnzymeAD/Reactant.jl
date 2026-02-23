@@ -42,17 +42,16 @@ function with_profiler(
         trace_device isa Bool ? UInt32(trace_device ? 1 : 0) : UInt32(trace_device)
     host_tracer_level =
         trace_host isa Bool ? UInt32(trace_host ? 2 : 0) : UInt32(trace_host)
-    profiler = @ccall Reactant.MLIR.API.mlir_c.CreateProfilerSession(
-        device_tracer_level::UInt32, host_tracer_level::UInt32
-    )::Ptr{Cvoid}
+
+    profiler = Reactant.MLIR.API.CreateProfilerSession(
+        device_tracer_level, host_tracer_level
+    )
 
     results = try
         f()
     finally
-        @ccall Reactant.MLIR.API.mlir_c.ProfilerSessionCollectData(
-            profiler::Ptr{Cvoid}, trace_output_dir::Cstring
-        )::Cvoid
-        @ccall Reactant.MLIR.API.mlir_c.ProfilerSessionDelete(profiler::Ptr{Cvoid})::Cvoid
+        Reactant.MLIR.API.ProfilerSessionCollectData(profiler, trace_output_dir)
+        Reactant.MLIR.API.ProfilerSessionDelete(profiler)
     end
 
     if create_perfetto_link
@@ -104,9 +103,7 @@ profiler_activity_end(id)
 ```
 """
 function profiler_activity_start(name::String, level::Cint)
-    return @ccall Reactant.MLIR.API.mlir_c.ProfilerActivityStart(
-        name::Cstring, level::Cint
-    )::Int64
+    return Reactant.MLIR.API.ProfilerActivityStart(name, level)
 end
 
 function profiler_activity_start(name::String, level::Cint, ::Nothing)
@@ -127,7 +124,7 @@ end
 End a profiler activity. See [`profiler_activity_start`](@ref) for more information.
 """
 function profiler_activity_end(id::Int64)
-    return @ccall Reactant.MLIR.API.mlir_c.ProfilerActivityEnd(id::Int64)::Cvoid
+    return Reactant.MLIR.API.ProfilerActivityEnd(id)
 end
 
 """
@@ -257,14 +254,14 @@ function serve_to_perfetto(path_to_trace_file)
 end
 
 @inline function free_profiler(exec)
-    @ccall Reactant.MLIR.API.mlir_c.ProfilerServerStop(exec.exec::Ptr{Cvoid})::Cvoid
+    return Reactant.MLIR.API.ProfilerServerStop(exec.exec)
 end
 
 mutable struct ProfileServer
     exec::Ptr{Cvoid}
 
     function ProfileServer(port)
-        exec = @ccall Reactant.MLIR.API.mlir_c.ProfilerServerStart(port::Int32)::Ptr{Cvoid}
+        exec = Reactant.MLIR.API.ProfilerServerStart(port)
         @assert exec != C_NULL
         return finalizer(free_profiler, new(exec))
     end
@@ -281,9 +278,7 @@ for connecting to the XProf profiler service.
   - `worker_service_address`: The address of the worker service (e.g., "localhost:9001")
 """
 function initialize_xprof_stubs(worker_service_address::String)
-    @ccall Reactant.MLIR.API.mlir_c.InitializeXProfStubs(
-        worker_service_address::Cstring
-    )::Cvoid
+    Reactant.MLIR.API.InitializeXProfStubs(worker_service_address)
     return nothing
 end
 
@@ -298,7 +293,7 @@ connections from tools like TensorBoard.
   - `port`: The port number to start the GRPC server on
 """
 function start_xprof_grpc_server(port::Integer)
-    @ccall Reactant.MLIR.API.mlir_c.StartGrpcServer(port::Cint)::Cvoid
+    Reactant.MLIR.API.StartGrpcServer(port)
     return nothing
 end
 
@@ -379,24 +374,24 @@ function xspace_to_tools_data(
     end
 
     GC.@preserve xspace_paths bool_keys bool_values int_keys int_values str_keys str_values begin
-        ret = @ccall Reactant.MLIR.API.mlir_c.XSpaceToToolsData(
-            xspace_paths_ptrs::Ptr{Cstring},
-            length(xspace_paths)::Int64,
-            tool_name::Cstring,
-            (isempty(bool_keys) ? C_NULL : bool_keys_ptrs)::Ptr{Cstring},
-            (isempty(bool_values) ? C_NULL : bool_values)::Ptr{Bool},
-            length(bool_keys)::Int64,
-            (isempty(int_keys) ? C_NULL : int_keys_ptrs)::Ptr{Cstring},
-            (isempty(int_values) ? C_NULL : int_values)::Ptr{Cint},
-            length(int_keys)::Int64,
-            (isempty(str_keys) ? C_NULL : str_keys_ptrs)::Ptr{Cstring},
-            (isempty(str_values) ? C_NULL : str_values_ptrs)::Ptr{Cstring},
-            length(str_keys)::Int64,
-            result_data::Ptr{Ptr{Cchar}},
-            result_size::Ptr{Int64},
-            is_binary::Ptr{Bool},
-            error_ptr::Ptr{Ptr{Cchar}},
-        )::Cint
+        ret = Reactant.MLIR.API.XSpaceToToolsData(
+            xspace_paths_ptrs,
+            length(xspace_paths),
+            tool_name,
+            (isempty(bool_keys) ? C_NULL : bool_keys_ptrs),
+            (isempty(bool_values) ? C_NULL : bool_values),
+            length(bool_keys),
+            (isempty(int_keys) ? C_NULL : int_keys_ptrs),
+            (isempty(int_values) ? C_NULL : int_values),
+            length(int_keys),
+            (isempty(str_keys) ? C_NULL : str_keys_ptrs),
+            (isempty(str_values) ? C_NULL : str_values_ptrs),
+            length(str_keys),
+            result_data,
+            result_size,
+            is_binary,
+            error_ptr,
+        )
     end
 
     if ret != 0

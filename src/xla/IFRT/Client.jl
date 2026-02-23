@@ -12,67 +12,37 @@ const NullClient = Client(C_NULL; skip_check=true)
 function XLA.free_client(client::Client)
     @assert client.client != C_NULL "Client is null"
     @debug "[GETPID $(getpid())] Freeing Client $client"
-    GC.@preserve client begin
-        @ccall MLIR.API.mlir_c.ifrt_FreeClient(client.client::Ptr{Cvoid})::Cvoid
-    end
+    return MLIR.API.ifrt_FreeClient(client.client)
 end
 
 function XLA.num_devices(client::Client)
     @assert client.client != C_NULL "Client is null"
-    GC.@preserve client begin
-        return @ccall MLIR.API.mlir_c.ifrt_client_device_count(
-            client.client::Ptr{Cvoid}
-        )::Cint
-    end
+    return MLIR.API.ifrt_client_device_count(client.client)
 end
 
 function XLA.num_addressable_devices(client::Client)
     @assert client.client != C_NULL "Client is null"
-    GC.@preserve client begin
-        return @ccall MLIR.API.mlir_c.ifrt_client_addressable_device_count(
-            client.client::Ptr{Cvoid}
-        )::Cint
-    end
+    return MLIR.API.ifrt_client_addressable_device_count(client.client)
 end
 
 function XLA.process_index(client::Client)
     @assert client.client != C_NULL "Client is null"
-    GC.@preserve client begin
-        return @ccall MLIR.API.mlir_c.ifrt_ClientProcessIndex(
-            client.client::Ptr{Cvoid}
-        )::Cint
-    end
+    return MLIR.API.ifrt_client_process_index(client.client)
 end
 
 function XLA.get_device(client::Client, idx)
     @assert client.client != C_NULL "Client is null"
-    GC.@preserve client begin
-        return Device(
-            @ccall MLIR.API.mlir_c.ifrt_client_lookup_device(
-                client.client::Ptr{Cvoid}, idx::Cint
-            )::Ptr{Cvoid}
-        )
-    end
+    return Device(MLIR.API.ifrt_client_lookup_device(client.client, idx))
 end
 
 function XLA.get_addressable_device(client::Client, idx)
     @assert client.client != C_NULL "Client is null"
-    GC.@preserve client begin
-        return Device(
-            @ccall MLIR.API.mlir_c.ifrt_client_lookup_addressable_device(
-                client.client::Ptr{Cvoid}, idx::Cint
-            )::Ptr{Cvoid}
-        )
-    end
+    return Device(MLIR.API.ifrt_client_lookup_addressable_device(client.client, idx))
 end
 
 function XLA.platform_name(client::Client)
     @assert client.client != C_NULL "Client is null"
-    GC.@preserve client begin
-        str = @ccall MLIR.API.mlir_c.ifrt_ClientGetPlatformName(
-            client.client::Ptr{Cvoid}
-        )::Cstring
-    end
+    str = MLIR.API.ifrt_ClientGetPlatformName(client.client)
     return XLA.unsafe_string_and_free(str)
 end
 
@@ -80,11 +50,7 @@ function XLA.devices(client::Client)
     @assert client.client != C_NULL "Client is null"
     ndevices = Int(XLA.num_devices(client))
     devices = Ref{NTuple{ndevices,Ptr{Cvoid}}}()
-    GC.@preserve client devices begin
-        @ccall MLIR.API.mlir_c.ifrt_client_devices(
-            client.client::Ptr{Cvoid}, devices::Ptr{Ptr{Cvoid}}
-        )::Cvoid
-    end
+    MLIR.API.ifrt_client_devices(client.client, devices)
     return [Device(device) for device in devices[]]
 end
 
@@ -92,23 +58,15 @@ function XLA.addressable_devices(client::Client)
     @assert client.client != C_NULL "Client is null"
     naddressable_devices = Int(XLA.num_addressable_devices(client))
     addressable_devices = Ref{NTuple{naddressable_devices,Ptr{Cvoid}}}()
-    GC.@preserve client addressable_devices begin
-        @ccall MLIR.API.mlir_c.ifrt_client_addressable_devices(
-            client.client::Ptr{Cvoid}, addressable_devices::Ptr{Ptr{Cvoid}}
-        )::Cvoid
-    end
+    MLIR.API.ifrt_client_addressable_devices(client.client, addressable_devices)
     return [Device(device) for device in addressable_devices[]]
 end
 
 function XLA.cost_analysis(client::Client, hlo_module::XLA.HloModule)
     @assert client.client != C_NULL "Client is null"
-    GC.@preserve client hlo_module begin
-        ref = Ref{XLA.HloCostAnalysisProperties}()
-        @ccall MLIR.API.mlir_c.ifrt_hlo_module_cost_analysis_properties(
-            client.client::Ptr{Cvoid}, hlo_module.ptr::Ptr{Cvoid}, ref::Ptr{Cvoid}
-        )::Cvoid
-        return ref[]
-    end
+    ref = Ref{MLIR.API.JLHloCostAnalysisProperties}()
+    MLIR.API.ifrt_hlo_module_cost_analysis_properties(client.client, hlo_module.ptr, ref)
+    return ref[]
 end
 
 # Different Backends
@@ -152,15 +110,9 @@ function MakeIFRTPJRTCPUClient(;
     distributed_runtime_client =
         distributed_runtime_client === nothing ? C_NULL : distributed_runtime_client.client
 
-    GC.@preserve refstr distributed_runtime_client begin
-        client = @ccall MLIR.API.mlir_c.ifrt_make_pjrt_cpu_client(
-            asynchronous::UInt8,
-            node_id::Cint,
-            num_nodes::Cint,
-            distributed_runtime_client::Ptr{Cvoid},
-            refstr::Ptr{Cstring},
-        )::Ptr{Cvoid}
-    end
+    client = MLIR.API.ifrt_make_pjrt_cpu_client(
+        asynchronous, node_id, num_nodes, distributed_runtime_client, refstr
+    )
 
     return client, refstr
 end
@@ -179,20 +131,17 @@ function MakeIFRTPJRTCUDAClient(;
     distributed_runtime_client =
         distributed_runtime_client === nothing ? C_NULL : distributed_runtime_client.client
 
-    GC.@preserve refstr allowed_devices distributed_runtime_client begin
-        client = @ccall MLIR.API.mlir_c.ifrt_make_pjrt_gpu_client(
-            node_id::Cint,
-            num_nodes::Cint,
-            allowed_devices::Ptr{Int64},
-            num_allowed_devices::Int64,
-            XLA.XLA_REACTANT_GPU_MEM_FRACTION[]::Cdouble,
-            XLA.XLA_REACTANT_GPU_PREALLOCATE[]::Bool,
-            platform::Cstring,
-            refstr::Ptr{Cstring},
-            distributed_runtime_client::Ptr{Cvoid},
-        )::Ptr{Cvoid}
-    end
-
+    client = MLIR.API.ifrt_make_pjrt_gpu_client(
+        node_id,
+        num_nodes,
+        allowed_devices,
+        num_allowed_devices,
+        XLA.XLA_REACTANT_GPU_MEM_FRACTION[],
+        XLA.XLA_REACTANT_GPU_PREALLOCATE[],
+        platform,
+        refstr,
+        distributed_runtime_client,
+    )
     return client, refstr
 end
 
@@ -248,16 +197,8 @@ function MakeIFRTPJRTClientViaPluginAPI(
         distributed_runtime_client === nothing ? C_NULL : distributed_runtime_client.client
 
     errstr = Ref{Cstring}()
-    GC.@preserve pjrt_client errstr distributed_runtime_client device_type begin
-        client = @ccall MLIR.API.mlir_c.ifrt_pjrt_make_client_with_default_kv_store(
-            pjrt_client::Ptr{Cvoid},
-            node_id::Cint,
-            num_nodes::Cint,
-            distributed_runtime_client::Ptr{Cvoid},
-            errstr::Ptr{Cstring},
-            device_type::Cstring,
-        )::Ptr{Cvoid}
-    end
-
+    client = MLIR.API.ifrt_pjrt_make_client_with_default_kv_store(
+        pjrt_client, node_id, num_nodes, distributed_runtime_client, errstr, device_type
+    )
     return client, errstr
 end

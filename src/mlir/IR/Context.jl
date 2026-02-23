@@ -79,7 +79,7 @@ function with_context(f; allow_use_existing=false)
     else
         ctx = Context(Reactant.registry[])
         do_dispose = true
-        @ccall API.mlir_c.RegisterDialects(ctx::API.MlirContext)::Cvoid
+        API.RegisterDialects(ctx)
     end
 
     activate(ctx)

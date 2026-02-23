@@ -598,13 +598,9 @@ function Base.copyto!(
     src_sync = src_async.buffer
     wait(src_async)
 
-    GC.@preserve dest begin
-        @ccall MLIR.API.mlir_c.ifrt_array_copy_to_host_buffer(
-            src_sync.buffer::Ptr{Cvoid},
-            pointer(dest, doffs)::Ptr{T},
-            ((soffs - 1) * sizeof(T))::Int64,
-        )::Ptr{Cvoid}
-    end
+    MLIR.API.ifrt_array_copy_to_host_buffer(
+        src_sync.buffer, pointer(dest, doffs), (soffs - 1) * sizeof(T)
+    )
 
     return dest
 end
@@ -623,15 +619,13 @@ function Base.copyto!(
     src_sync = src_async.buffer
     wait(src_async)
 
-    GC.@preserve dest begin
-        @ccall MLIR.API.mlir_c.CopyFromBuffer(
-            client.client::Ptr{Cvoid},
-            src_sync.buffer::Ptr{Cvoid},
-            pointer(dest, doffs)::Ptr{T},
-            ((soffs - 1) * sizeof(T))::Int64,
-            (n * sizeof(T))::Int64,
-        )::Ptr{Cvoid}
-    end
+    MLIR.API.CopyFromBuffer(
+        client.client,
+        src_sync.buffer,
+        pointer(dest, doffs),
+        (soffs - 1) * sizeof(T),
+        n * sizeof(T),
+    )
 
     return dest
 end
@@ -655,15 +649,13 @@ function Base.copyto!(
     dest_sync = dest_async.buffer
     wait(dest_async)
 
-    GC.@preserve src begin
-        @ccall MLIR.API.mlir_c.CopyToBuffer(
-            client.client::Ptr{Cvoid},
-            dest_sync.buffer::Ptr{Cvoid},
-            pointer(src, soffs)::Ptr{T},
-            ((doffs - 1) * sizeof(T))::Int64,
-            (n * sizeof(T))::Int64,
-        )::Ptr{Cvoid}
-    end
+    MLIR.API.CopyToBuffer(
+        client.client,
+        dest_sync.buffer,
+        pointer(src, soffs),
+        (doffs - 1) * sizeof(T),
+        n * sizeof(T),
+    )
 
     return dest
 end

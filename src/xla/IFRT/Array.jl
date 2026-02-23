@@ -22,19 +22,16 @@ function Array(
     device::Device=XLA.default_device(client),
     memory_kind::AbstractString=string(convert(MemoryKind, XLA.default_memory(device))),
 ) where {T<:Reactant.ReactantPrimitive,N}
-    sizear = collect(Int64, reverse(size(array)))
-    buffer = GC.@preserve array sizear begin
-        @ccall MLIR.API.mlir_c.ifrt_client_make_single_shard_array_from_host_buffer(
-            client.client::Ptr{Cvoid},
-            array::Ptr{T},
-            XLA.primitive_type(T)::UInt64,
-            N::Csize_t,
-            sizear::Ptr{Int64},
-            0::Cint, # kAlwaysCopy
-            device.device::Ptr{Cvoid},
-            string(memory_kind)::Cstring,
-        )::Ptr{Cvoid}
-    end
+    buffer = MLIR.API.ifrt_client_make_single_shard_array_from_host_buffer(
+        client.client,
+        array,
+        XLA.primitive_type(T),
+        N,
+        collect(Int64, reverse(size(array))),
+        0,
+        device.device,
+        string(memory_kind),
+    )
     return Array(buffer)
 end
 
@@ -102,43 +99,15 @@ function Array(
 
     array_shape = collect(Int64, reverse(array_shape))
 
-    buffer = GC.@preserve client single_device_arrays array_shape sharding begin
-        @ccall MLIR.API.mlir_c.ifrt_client_assemble_array_from_single_shards(
-            client.client::Ptr{Cvoid},
-            length(array_shape)::Int32,
-            array_shape::Ptr{Int64},
-            sharding.ptr::Ptr{Cvoid},
-            length(single_device_arrays)::Int32,
-            single_device_arrays::Ptr{Ptr{Cvoid}},
-            2::Int32, # kDonateInput
-        )::Ptr{Cvoid}
-    end
-
-    # host_buffer_shapes = Vector{Vector{Int64}}(undef, length(host_buffers))
-    # addressable_shard_indices_sizes = Vector{Int64}(undef, length(host_buffers))
-
-    # for (i, host_buffer) in enumerate(host_buffers)
-    #     host_buffer_shapes[i] = collect(Int64, reverse(size(host_buffer)))
-    #     addressable_shard_indices_sizes[i] = length(addressable_shard_indices[i])
-    # end
-
-    # array_shape = collect(Int64, reverse(array_shape))
-
-    # buffer = GC.@preserve client host_buffers host_buffer_shapes addressable_shard_indices addressable_shard_indices_sizes array_shape sharding begin
-    #     @ccall MLIR.API.mlir_c.ifrt_make_array_from_host_buffer_shards(
-    #         client.client::Ptr{Cvoid},
-    #         host_buffers::Ptr{Ptr{Cvoid}},
-    #         length(host_buffers)::Cint,
-    #         host_buffer_shapes::Ptr{Ptr{Int64}},
-    #         addressable_shard_indices::Ptr{Ptr{Int64}},
-    #         addressable_shard_indices_sizes::Ptr{Int64},
-    #         XLA.primitive_type(T)::Cint,
-    #         N::Cint,
-    #         array_shape::Ptr{Int64},
-    #         sharding.ptr::Ptr{Cvoid},
-    #         0::Cint,
-    #     )::Ptr{Cvoid}
-    # end
+    buffer = MLIR.API.ifrt_client_assemble_array_from_single_shards(
+        client.client,
+        length(array_shape),
+        array_shape,
+        sharding.ptr,
+        length(single_device_arrays),
+        single_device_arrays,
+        2, # kDonateInput
+    )
 
     return Array(buffer)
 end
@@ -160,29 +129,20 @@ end
 
 @inline function XLA.free_buffer(buffer::Array)
     if buffer.buffer != C_NULL && XLA.is_live[]
-        @ccall MLIR.API.mlir_c.ifrt_free_array(buffer.buffer::Ptr{Cvoid})::Cvoid
+        MLIR.API.ifrt_free_array(buffer.buffer)
     end
 end
 
-function Base.ndims(buffer::Array)
-    GC.@preserve buffer begin
-        return @ccall MLIR.API.mlir_c.ifrt_array_ndims(buffer.buffer::Ptr{Cvoid})::Int64
-    end
-end
+Base.ndims(buffer::Array) = MLIR.API.ifrt_array_ndims(buffer.buffer)
 
 function Base.size(buffer::Array)
-    GC.@preserve buffer begin
-        sz = @ccall MLIR.API.mlir_c.ifrt_array_shape(buffer.buffer::Ptr{Cvoid})::Ptr{Int64}
-    end
-    return Tuple(unsafe_wrap(Base.Array, sz, ndims(buffer)))
+    return Tuple(
+        unsafe_wrap(Base.Array, MLIR.API.ifrt_array_shape(buffer.buffer), ndims(buffer))
+    )
 end
 
 function Base.eltype(buffer::Array)
-    GC.@preserve buffer begin
-        return XLA.julia_type(
-            @ccall MLIR.API.mlir_c.ifrt_array_eltype(buffer.buffer::Ptr{Cvoid})::Cint
-        )
-    end
+    return XLA.julia_type(MLIR.API.ifrt_array_eltype(buffer.buffer))
 end
 
 function XLA.device(buffer::Array)
@@ -192,13 +152,7 @@ function XLA.device(buffer::Array)
 end
 
 function XLA.client(buffer::Array)
-    GC.@preserve buffer begin
-        return Client(
-            @ccall MLIR.API.mlir_c.ifrt_array_to_client(
-                buffer.buffer::Ptr{Cvoid}
-            )::Ptr{Cvoid}
-        )
-    end
+    return Client(MLIR.API.ifrt_array_to_client(buffer.buffer))
 end
 
 XLA.synced_buffer(buffer::Array) = buffer
@@ -219,11 +173,7 @@ function XLA.to_host(buffer::Array, data, reactant_sharding)
         data_buffer_shape = reverse(size(data_buffer))
         @assert size(data) == data_buffer_shape "Expected data to be of size \
                                                  $(size(data)), got $(data_buffer_shape)"
-        GC.@preserve data_buffer data begin
-            @ccall MLIR.API.mlir_c.ifrt_array_copy_to_host_buffer(
-                data_buffer.buffer::Ptr{Cvoid}, data::Ptr{Cvoid}
-            )::Cvoid
-        end
+        MLIR.API.ifrt_array_copy_to_host_buffer(data_buffer.buffer, data)
         return data
     end
 
@@ -269,14 +219,9 @@ end
 function disassemble_into_single_device_arrays(array::Array, only_addressable_devices::Bool)
     c_single_device_shard_semantics = Int32(!only_addressable_devices)
     narrays = Ref{Int32}(0)
-    arrays = GC.@preserve array begin
-        @ccall MLIR.API.mlir_c.ifrt_array_disassemble_into_single_device_arrays(
-            array.buffer::Ptr{Cvoid},
-            0::Int32,
-            c_single_device_shard_semantics::Int32,
-            narrays::Ptr{Int32},
-        )::Ptr{Ptr{Cvoid}}
-    end
+    arrays = MLIR.API.ifrt_array_disassemble_into_single_device_arrays(
+        array.buffer, 0, c_single_device_shard_semantics, narrays
+    )
     return [Array(unsafe_load(arrays, i)) for i in 1:narrays[]]
 end
 
@@ -395,27 +340,19 @@ function XLA.copy_buffer_to_device(::Array, ::Device)
 end
 
 function XLA.sharding(buffer::Array)
-    GC.@preserve buffer begin
-        return Sharding(
-            @ccall MLIR.API.mlir_c.ifrt_array_to_sharding(
-                buffer.buffer::Ptr{Cvoid}
-            )::Ptr{Cvoid}
-        )
-    end
+    return Sharding(MLIR.API.ifrt_array_to_sharding(buffer.buffer))
 end
 
 function copy_arrays_to_device_with_sharding(buffers::Vector{Array}, sharding::Sharding)
     ifrt_client = XLA.client(first(buffers)) # TODO(#2235): check all clients are the same?
     src_buffers = [buffer.buffer for buffer in buffers]
-    GC.@preserve buffers ifrt_client begin
-        dst_buffers = @ccall MLIR.API.mlir_c.ifrt_copy_arrays_to_device_with_sharding(
-            ifrt_client.client::Ptr{Cvoid},
-            src_buffers::Ptr{Ptr{Cvoid}},
-            length(buffers)::Int32,
-            sharding.ptr::Ptr{Cvoid},
-            0::Cint, # kAlwaysCopy
-        )::Ptr{Ptr{Cvoid}}
-    end
+    dst_buffers = MLIR.API.ifrt_copy_arrays_to_device_with_sharding(
+        ifrt_client.client,
+        src_buffers,
+        length(buffers),
+        sharding.ptr,
+        0, # kAlwaysCopy
+    )
     dst_arrays = Vector{Array}(undef, length(buffers))
     for i in 1:length(buffers)
         dst_arrays[i] = Array(unsafe_load(dst_buffers, i))
@@ -423,10 +360,4 @@ function copy_arrays_to_device_with_sharding(buffers::Vector{Array}, sharding::S
     return dst_arrays
 end
 
-function Base.copy(b::Array)
-    GC.@preserve b begin
-        return Array(
-            @ccall MLIR.API.mlir_c.ifrt_copy_array(b.buffer::Ptr{Cvoid})::Ptr{Cvoid}
-        )
-    end
-end
+Base.copy(b::Array) = Array(MLIR.API.ifrt_copy_array(b.buffer))

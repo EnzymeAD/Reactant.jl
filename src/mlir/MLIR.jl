@@ -17,6 +17,19 @@ module API
     let
         include("libMLIR_h.jl")
     end
+
+    # Additional functions
+    function EnzymeJaXMapSymbol(name, sym)
+        @ccall mlir_c.EnzymeJaXMapSymbol(name::Cstring, sym::Ptr{Cvoid})::Cvoid
+    end
+
+    function RegisterEnzymeXLACPUHandler()
+        @ccall mlir_c.RegisterEnzymeXLACPUHandler()::Cvoid
+    end
+
+    function RegisterEnzymeXLAGPUHandler()
+        @ccall mlir_c.RegisterEnzymeXLAGPUHandler()::Cvoid
+    end
 end # module API
 
 include("IR/IR.jl")

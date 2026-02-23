@@ -113,9 +113,7 @@ end
 # Similarly, `enzyme.random` op is not intended to be emitted directly in Reactant-land.
 # It is solely an intermediate representation within the `enzyme.mcmc` op lowering.
 function rng_distribution_attr(distribution::Int32)
-    return @ccall MLIR.API.mlir_c.enzymeRngDistributionAttrGet(
-        MLIR.IR.current_context()::MLIR.API.MlirContext, distribution::Int32
-    )::MLIR.IR.Attribute
+    return MLIR.API.enzymeRngDistributionAttrGet(MLIR.IR.current_context(), distribution)
 end
 
 const RNG_UNIFORM = Int32(0)
