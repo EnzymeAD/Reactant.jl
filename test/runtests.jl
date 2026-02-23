@@ -79,7 +79,7 @@ total_jobs = min(
     ) do
         runtests(
             Reactant,
-            ARGS;
+            parsed_args;
             testsuite,
             init_code=quote
                 using Reactant
