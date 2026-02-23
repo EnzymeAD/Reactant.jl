@@ -217,6 +217,10 @@ function __init__()
                 )
             end
         end
+
+        # Force nothing to ensure these dont get baked in at precompile
+        DEFAULT_XLA_DEBUG_OPTIONS[] = nothing
+        DEFAULT_XLA_COMPILE_OPTIONS[] = nothing
     end
 
     # Register the cleanup function
