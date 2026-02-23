@@ -14,9 +14,9 @@
 # Arguments:
 #   output_dir - Directory for generated Julia files (default: ../../src/proto)
 
-using Pkg: Pkg
-Pkg.activate(@__DIR__)
-Pkg.instantiate()
+# using Pkg: Pkg
+# Pkg.activate(@__DIR__)
+# Pkg.instantiate()
 
 using ProtoBuf
 
@@ -115,65 +115,6 @@ end
 
 Generate Julia bindings from proto files using ProtoBuf.jl.
 """
-function apply_parser_fixes!(staging_dir::String)
-    # Define files that are known to cause parser errors
-    # These often involve complex cross-references or Proto3 'optional'
-    problematic = [
-        "xla/xla.proto",
-        "xla/pjrt/proto/compile_options.proto",
-        "xla/backends/autotuner/backends.proto",
-        "xla/stream_executor/sycl/oneapi_compute_capability.proto",
-    ]
-
-    # Types that frequently cause resolution issues when used unqualified in the same package
-    types_to_qualify = [
-        "HloModuleProto",
-        "HloSnapshot",
-        "ShapeProto",
-        "LayoutProto",
-        "ExecutionOptions",
-        "DebugOptions",
-        "PrecisionConfig",
-        "CompilationEnvironmentsProto",
-        "ProgramShapeProto",
-        "DeviceAssignmentProto",
-        "HloInstructionProto",
-        "HloComputationProto",
-        "OpSharding",
-        "LiteralProto",
-    ]
-
-    println("\n  Applying parser fixes to problematic proto files...")
-
-    for rel in problematic
-        abs_path = joinpath(staging_dir, rel)
-        if isfile(abs_path)
-            content = read(abs_path, String)
-            original_content = content
-
-            # 1. Remove Proto3 'optional' keyword. 
-            # ProtoBuf.jl 1.x's handwritten parser sometimes chokes on this in complex files.
-            content = replace(content, r"(^|\n) *optional " => s"\1 ")
-
-            # 2. Qualify common types in the xla package to help the parser.
-            for t in types_to_qualify
-                # Qualify if preceded by space/newline and NOT already qualified
-                # and followed by space, semicolon or newline.
-                # Example: " ShapeProto " -> " xla.ShapeProto "
-                content = replace(
-                    content,
-                    Regex("(?<=[ \\n])(?!" * "xla\\.)" * t * "(?=[ ;\\n])") => "xla." * t,
-                )
-            end
-
-            if content != original_content
-                write(abs_path, content)
-                println("    ✓ Patched $rel")
-            end
-        end
-    end
-end
-
 function generate_bindings(staging_dir::String, output_dir::String)
     mkpath(output_dir)
 
@@ -196,85 +137,24 @@ function generate_bindings(staging_dir::String, output_dir::String)
 
     println("\nGenerating Julia bindings...")
 
-    # Apply fixes to problematic files before parsing
-    apply_parser_fixes!(staging_dir)
-
     # The include paths for proto resolution
-    include_paths = [staging_dir]
+    include_paths = [staging_dir, joinpath(staging_dir, "google", "protobuf")]
 
     # Collect all proto file paths (relative to staging_dir)
-    # CRITICAL: Exclude google/protobuf files from the list of files to generate
-    # bindings for. ProtoBuf.jl has issues generating bindings for descriptor.proto,
-    # and well-known types should be treated as imports only.
-    proto_rel_paths = String[]
-    for (rel, _) in all_proto_files
-        if !startswith(rel, "google/")
-            push!(proto_rel_paths, rel)
-        end
-    end
+    proto_rel_paths = [rel for (rel, _) in all_proto_files]
 
-    # DEBUG: Try to identify the problematic file by processing them individually first
-    # into a dummy directory. This helps isolate which file triggers the ReferencedType MethodError.
-    println("\n" * "="^40)
-    println("DEBUG: Identifying problematic files")
-    println("="^40)
-    problematic_files = String[]
-    mktempdir() do tmp_out
-        for (i, rel) in enumerate(proto_rel_paths)
-            print("[$i/$(length(proto_rel_paths))] Testing $rel ... ")
-            try
-                ProtoBuf.protojl(
-                    [rel],
-                    include_paths,
-                    tmp_out;
-                    always_use_modules=true,
-                    parametrize_oneofs=false,
-                    add_kwarg_constructors=false,
-                )
-                println("✓")
-            catch e
-                println("✖")
-                if e isa MethodError && contains(string(e), "ReferencedType")
-                    println("      --> TRIGGERED THE ReferencedType MethodError")
-                else
-                    println("      --> Failed with: $(typeof(e))")
-                end
-                push!(problematic_files, rel)
-            end
-        end
-    end
-    println("="^40 * "\n")
-
-    if !isempty(problematic_files)
-        println(
-            "Excluding $(length(problematic_files)) problematic files: $(join(problematic_files, ", "))",
-        )
-        proto_rel_paths = filter(p -> p ∉ problematic_files, proto_rel_paths)
-    end
-
-    if isempty(proto_rel_paths)
-        @warn "No valid proto files left to process!"
-        return nothing
-    end
-
-    # Generate bindings for the remaining files in a single call
-    println("Processing $(length(proto_rel_paths)) remaining proto files together...")
-    try
-        ProtoBuf.protojl(
-            proto_rel_paths,
-            include_paths,
-            output_dir;
-            always_use_modules=true,
-            parametrize_oneofs=false,
-            add_kwarg_constructors=false,
-        )
-        println("    ✓ Generated bindings successfully")
-    catch e
-        @warn "Failed to generate bindings in batch even after exclusions" exception = (
-            e, catch_backtrace()
-        )
-        return nothing
-    end
+    # Generate bindings for ALL proto files in a single call
+    # This is critical - calling protojl separately for each file will overwrite
+    # the module files (like xla.jl) since each call generates its own module structure
+    println("\n  Processing all $(length(proto_rel_paths)) proto files together...")
+    ProtoBuf.protojl(
+        proto_rel_paths,
+        include_paths,
+        output_dir;
+        always_use_modules=true,
+        parametrize_oneofs=false,
+        add_kwarg_constructors=false,
+    )
 
     # Remove headers from generated files to minimize diffs
     remove_proto_headers(output_dir)
