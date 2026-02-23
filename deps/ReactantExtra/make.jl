@@ -122,9 +122,7 @@ let options = deepcopy(options)
 
             for name in ["API.cpp", "xla_ffi.cpp"]
                 file = joinpath(@__DIR__, name)
-                if !isfile(file)
-                    continue
-                end
+                @assert isfile(file) "File $(file) not found"
                 content = read(file, String)
 
                 # Extract structs
@@ -132,6 +130,12 @@ let options = deepcopy(options)
                 for (i, line) in enumerate(lines)
                     m = match(r"struct\s+([A-Za-z0-9_]+)\s*\{", line)
                     if m !== nothing
+                        # Skip commented out structs
+                        line_prefix = line[1:(m.offset - 1)]
+                        if contains(line_prefix, "//")
+                            continue
+                        end
+
                         struct_name = m.captures[1]
                         # Check if previous line contains 'template'
                         if i > 1 && contains(lines[i - 1], "template")
@@ -161,6 +165,15 @@ let options = deepcopy(options)
                 # Extract functions
                 for m in
                     eachmatch(r"REACTANT_ABI\s+(.*?)(?:\{|=(\s*nullptr\s*)?;|;)"s, content)
+                    # Skip commented out definitions or macro definitions
+                    start_pos = m.offset
+                    line_start = findlast('\n', view(content, 1:(start_pos - 1)))
+                    line_start = (line_start === nothing) ? 1 : line_start + 1
+                    line_prefix = view(content, line_start:(start_pos - 1))
+                    if contains(line_prefix, "//") || contains(line_prefix, "#")
+                        continue
+                    end
+
                     sig = m.match
 
                     # Skip dump functions
@@ -207,30 +220,34 @@ let options = deepcopy(options)
                 end
             end
 
+            filter!(((k, v),) -> k ∉ ["LinkableRuntime"], structs)
+
             for (name, s) in structs
                 println(io, s)
                 println(io, "")
             end
 
             for ptr in ptrs
-                if !haskey(structs, ptr) &&
+                if (
+                    !haskey(structs, ptr) &&
                     !in(
-                    ptr,
-                    [
-                        "MlirContext",
-                        "MlirBlock",
-                        "MlirOperation",
-                        "MlirType",
-                        "MlirAttribute",
-                        "MlirStringRef",
-                        "MlirLocation",
-                        "MlirModule",
-                        "MlirDialectRegistry",
-                        "MlirValue",
-                        "MlirTypeID",
-                    ],
+                        ptr,
+                        [
+                            "MlirContext",
+                            "MlirBlock",
+                            "MlirOperation",
+                            "MlirType",
+                            "MlirAttribute",
+                            "MlirStringRef",
+                            "MlirLocation",
+                            "MlirModule",
+                            "MlirDialectRegistry",
+                            "MlirValue",
+                            "MlirTypeID",
+                        ],
+                    )
                 )
-                    println(io, "typedef void *", ptr, ";")
+                    println(io, "typedef void ", ptr, ";")
                 end
             end
             println(io, "")
