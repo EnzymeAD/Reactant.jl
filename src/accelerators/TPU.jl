@@ -12,7 +12,7 @@ using ..Registration: register_backend
 const libtpu_dir = Ref{Union{Nothing,String}}(nothing)
 const RUNNING_IN_CLOUD_TPU_VM = Ref(false)
 
-const LIBTPU_VERSION = "0.0.36.dev20260221"
+const LIBTPU_VERSION = "0.0.36.dev20260223"
 const LIBTPU_SO = "libtpu-$(replace(string(LIBTPU_VERSION), '.' => '_')).so"
 
 function setup_correct_env_vars!()
