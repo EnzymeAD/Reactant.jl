@@ -11,7 +11,7 @@ const libtpu_dir = Ref{Union{Nothing,String}}(nothing)
 const RUNNING_IN_CLOUD_TPU_VM = Ref(false)
 
 const LIBTPU_VERSION = "0.0.35.dev20260129"
-const LIBTPU_SO = "libtpu-$(replace(string(LIBTPU_VERSION), '.' => '_')).so"
+const LIBTPU_SO = Ref{String}("")
 
 function __init__()
     @static if !Sys.isapple()
@@ -24,18 +24,21 @@ end
 
 function setup_libtpu!()
     path_from_env = get(ENV, "TPU_LIBRARY_PATH", nothing)
-    if path_from_env !== nothing && ispath(path_from_env)
-        libtpu_dir[] = path_from_env
+    if path_from_env !== nothing
+        @assert ispath(path_from_env) "TPU_LIBRARY_PATH is not a valid path!"
+        libtpu_dir[] = dirname(path_from_env)
+        LIBTPU_SO[] = basename(path_from_env)
     else
         libtpu_dir[] = @get_scratch!("libtpu")
+        download_libtpu_if_needed(libtpu_dir[])
+        LIBTPU_SO[] = "libtpu-$(replace(string(LIBTPU_VERSION), '.' => '_')).so"
     end
-    download_libtpu_if_needed(libtpu_dir[])
     return nothing
 end
 
 get_libtpu_dir() = libtpu_dir[]
 
-get_libtpu_path() = joinpath(get_libtpu_dir(), LIBTPU_SO)
+get_libtpu_path() = joinpath(get_libtpu_dir(), LIBTPU_SO[])
 
 function download_libtpu_if_needed(path=nothing)
     path === nothing && (path = get_libtpu_dir())
