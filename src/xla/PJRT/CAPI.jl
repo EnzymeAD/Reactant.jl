@@ -3079,6 +3079,21 @@ end
 # typedef PJRT_Error * PJRT_Layouts_PJRT_Executable_GetOutputLayouts ( PJRT_Layouts_PJRT_Executable_GetOutputLayouts_Args * args )
 const PJRT_Layouts_PJRT_Executable_GetOutputLayouts = Cvoid
 
+struct PJRT_Layouts_PJRT_Executable_GetParameterLayouts_Args
+    struct_size::Csize_t
+    extension_start::Ptr{PJRT_Extension_Base}
+    executable::Ptr{PJRT_Executable}
+    num_parameters::Csize_t
+    layouts::Ptr{Ptr{PJRT_Layouts_MemoryLayout}}
+end
+
+@cenum __JL_Ctag_756::UInt32 begin
+    PJRT_Layouts_PJRT_Executable_GetParameterLayouts_Args_STRUCT_SIZE = 0x0000000000000028
+end
+
+# typedef PJRT_Error * PJRT_Layouts_PJRT_Executable_GetParameterLayouts ( PJRT_Layouts_PJRT_Executable_GetParameterLayouts_Args * args )
+const PJRT_Layouts_PJRT_Executable_GetParameterLayouts = Cvoid
+
 struct PJRT_Layouts_Extension
     base::PJRT_Extension_Base
     PJRT_Layouts_MemoryLayout_Destroy::Ptr{PJRT_Layouts_MemoryLayout_Destroy}
@@ -3093,10 +3108,13 @@ struct PJRT_Layouts_Extension
     PJRT_Layouts_PJRT_Executable_GetOutputLayouts::Ptr{
         PJRT_Layouts_PJRT_Executable_GetOutputLayouts
     }
+    PJRT_Layouts_PJRT_Executable_GetParameterLayouts::Ptr{
+        PJRT_Layouts_PJRT_Executable_GetParameterLayouts
+    }
 end
 
-@cenum __JL_Ctag_756::UInt32 begin
-    PJRT_Layouts_Extension_STRUCT_SIZE = 0x0000000000000048
+@cenum __JL_Ctag_757::UInt32 begin
+    PJRT_Layouts_Extension_STRUCT_SIZE = 0x0000000000000050
 end
 
 mutable struct PJRT_MemoryDescription end
@@ -3110,7 +3128,7 @@ struct PJRT_DeviceDescription_MemoryDescriptions_Args
     default_memory_index::Csize_t
 end
 
-@cenum __JL_Ctag_904::UInt32 begin
+@cenum __JL_Ctag_905::UInt32 begin
     PJRT_DeviceDescription_MemoryDescriptions_Args_STRUCT_SIZE = 0x0000000000000030
 end
 
@@ -3126,7 +3144,7 @@ struct PJRT_MemoryDescription_Kind_Args
     kind_id::Cint
 end
 
-@cenum __JL_Ctag_905::UInt32 begin
+@cenum __JL_Ctag_906::UInt32 begin
     PJRT_MemoryDescription_Kind_Args_STRUCT_SIZE = 0x000000000000002c
 end
 
@@ -3141,7 +3159,7 @@ struct PJRT_MemoryDescriptions_Extension
     PJRT_MemoryDescription_Kind::Ptr{PJRT_MemoryDescription_Kind}
 end
 
-@cenum __JL_Ctag_906::UInt32 begin
+@cenum __JL_Ctag_907::UInt32 begin
     PJRT_MemoryDescriptions_Extension_STRUCT_SIZE = 0x0000000000000028
 end
 
@@ -3151,7 +3169,7 @@ struct PJRT_PhaseCompile_Get_Compiler_Args
     phase_compiler::Ptr{PJRT_PhaseCompiler}
 end
 
-@cenum __JL_Ctag_1054::UInt32 begin
+@cenum __JL_Ctag_1055::UInt32 begin
     PJRT_PhaseCompile_Get_Compiler_Args_STRUCT_SIZE = 0x0000000000000018
 end
 
@@ -3164,7 +3182,7 @@ struct PJRT_PhaseCompile_Destroy_Compiler_Args
     phase_compiler::Ptr{PJRT_PhaseCompiler}
 end
 
-@cenum __JL_Ctag_1055::UInt32 begin
+@cenum __JL_Ctag_1056::UInt32 begin
     PJRT_PhaseCompile_Destroy_Compiler_Args_STRUCT_SIZE = 0x0000000000000018
 end
 
@@ -3189,7 +3207,7 @@ struct PJRT_PhaseCompile_Run_Phase_Args
     num_output_programs::Csize_t
 end
 
-@cenum __JL_Ctag_1056::UInt32 begin
+@cenum __JL_Ctag_1057::UInt32 begin
     PJRT_PhaseCompile_Run_Phase_Args_STRUCT_SIZE = 0x0000000000000078
 end
 
@@ -3205,7 +3223,7 @@ struct PJRT_PhaseCompile_Get_PhaseNames_Args
     num_phase_names::Csize_t
 end
 
-@cenum __JL_Ctag_1057::UInt32 begin
+@cenum __JL_Ctag_1058::UInt32 begin
     PJRT_PhaseCompile_Get_PhaseNames_Args_STRUCT_SIZE = 0x0000000000000030
 end
 
@@ -3220,7 +3238,7 @@ struct PJRT_PhaseCompile_C_Buffers_Destroy_Args
     num_char_buffers::Csize_t
 end
 
-@cenum __JL_Ctag_1058::UInt32 begin
+@cenum __JL_Ctag_1059::UInt32 begin
     PJRT_PhaseCompile_C_Buffers_Destroy_Args_STRUCT_SIZE = 0x0000000000000028
 end
 
@@ -3236,7 +3254,7 @@ struct PJRT_PhaseCompile_Extension
     phase_compile_c_buffers_destroy::Ptr{PJRT_PhaseCompile_C_Buffers_Destroy}
 end
 
-@cenum __JL_Ctag_1059::UInt32 begin
+@cenum __JL_Ctag_1060::UInt32 begin
     PJRT_PhaseCompile_Extension_STRUCT_SIZE = 0x0000000000000040
 end
 
@@ -3246,7 +3264,7 @@ struct PJRT_Profiler_Extension
     traceme_context_id::Int64
 end
 
-@cenum __JL_Ctag_1207::UInt32 begin
+@cenum __JL_Ctag_1208::UInt32 begin
     PJRT_Profiler_Extension_STRUCT_SIZE = 0x0000000000000000
 end
 
@@ -3259,7 +3277,7 @@ struct PJRT_RawBuffer_CreateRawAliasOfBuffer_Args
     raw_buffer::Ptr{PJRT_RawBuffer}
 end
 
-@cenum __JL_Ctag_1355::UInt32 begin
+@cenum __JL_Ctag_1356::UInt32 begin
     PJRT_RawBuffer_CreateRawAliasOfBuffer_Args_STRUCT_SIZE = 0x0000000000000020
 end
 
@@ -3272,7 +3290,7 @@ struct PJRT_RawBuffer_Destroy_Args
     buffer::Ptr{PJRT_RawBuffer}
 end
 
-@cenum __JL_Ctag_1356::UInt32 begin
+@cenum __JL_Ctag_1357::UInt32 begin
     PJRT_RawBuffer_Destroy_Args_STRUCT_SIZE = 0x0000000000000018
 end
 
@@ -3286,7 +3304,7 @@ struct PJRT_RawBuffer_GetHostPointer_Args
     host_pointer::Ptr{Cvoid}
 end
 
-@cenum __JL_Ctag_1357::UInt32 begin
+@cenum __JL_Ctag_1358::UInt32 begin
     PJRT_RawBuffer_GetHostPointer_Args_STRUCT_SIZE = 0x0000000000000020
 end
 
@@ -3300,7 +3318,7 @@ struct PJRT_RawBuffer_GetOnDeviceSizeInBytes_Args
     on_device_size_in_bytes::Csize_t
 end
 
-@cenum __JL_Ctag_1358::UInt32 begin
+@cenum __JL_Ctag_1359::UInt32 begin
     PJRT_RawBuffer_GetOnDeviceSizeInBytes_Args_STRUCT_SIZE = 0x0000000000000020
 end
 
@@ -3314,7 +3332,7 @@ struct PJRT_RawBuffer_GetMemorySpace_Args
     memory_space::Ptr{PJRT_Memory}
 end
 
-@cenum __JL_Ctag_1359::UInt32 begin
+@cenum __JL_Ctag_1360::UInt32 begin
     PJRT_RawBuffer_GetMemorySpace_Args_STRUCT_SIZE = 0x0000000000000020
 end
 
@@ -3331,7 +3349,7 @@ struct PJRT_RawBuffer_CopyRawDeviceToHost_Args
     event::Ptr{PJRT_Event}
 end
 
-@cenum __JL_Ctag_1360::UInt32 begin
+@cenum __JL_Ctag_1361::UInt32 begin
     PJRT_RawBuffer_CopyRawDeviceToHost_Args_STRUCT_SIZE = 0x0000000000000038
 end
 
@@ -3348,7 +3366,7 @@ struct PJRT_RawBuffer_CopyRawHostToDevice_Args
     event::Ptr{PJRT_Event}
 end
 
-@cenum __JL_Ctag_1361::UInt32 begin
+@cenum __JL_Ctag_1362::UInt32 begin
     PJRT_RawBuffer_CopyRawHostToDevice_Args_STRUCT_SIZE = 0x0000000000000038
 end
 
@@ -3366,7 +3384,7 @@ struct PJRT_RawBuffer_Extension
     PJRT_RawBuffer_GetHostPointer::Ptr{PJRT_RawBuffer_GetHostPointer}
 end
 
-@cenum __JL_Ctag_1362::UInt32 begin
+@cenum __JL_Ctag_1363::UInt32 begin
     PJRT_RawBuffer_Extension_STRUCT_SIZE = 0x0000000000000050
 end
 
@@ -3376,7 +3394,7 @@ struct PJRT_Get_Stream_For_External_Ready_Events_Args
     stream::Cptrdiff_t
 end
 
-@cenum __JL_Ctag_1510::UInt32 begin
+@cenum __JL_Ctag_1511::UInt32 begin
     PJRT_Get_Stream_For_External_Ready_Events_Args_STRUCT_SIZE = 0x0000000000000018
 end
 
@@ -3389,7 +3407,7 @@ struct PJRT_Wait_Until_Buffer_Ready_On_Stream_Args
     buffer::Ptr{PJRT_Buffer}
 end
 
-@cenum __JL_Ctag_1511::UInt32 begin
+@cenum __JL_Ctag_1512::UInt32 begin
     PJRT_Wait_Until_Buffer_Ready_On_Stream_Args_STRUCT_SIZE = 0x0000000000000018
 end
 
@@ -3402,7 +3420,7 @@ struct PJRT_Stream_Extension
     wait_stream::Ptr{PJRT_Wait_Until_Buffer_Ready_On_Stream}
 end
 
-@cenum __JL_Ctag_1512::UInt32 begin
+@cenum __JL_Ctag_1513::UInt32 begin
     PJRT_Stream_Extension_STRUCT_SIZE = 0x0000000000000028
 end
 
@@ -3416,7 +3434,7 @@ struct PJRT_TpuTopology_Subslice_Args
     subslice_topology::Ptr{PJRT_TopologyDescription}
 end
 
-@cenum __JL_Ctag_1660::UInt32 begin
+@cenum __JL_Ctag_1661::UInt32 begin
     PJRT_TpuTopology_Subslice_Args_STRUCT_SIZE = 0x0000000000000038
 end
 
@@ -3429,7 +3447,7 @@ struct PJRT_TpuTopology_IsSubsliceTopology_Args
     is_subslice_topology::Bool
 end
 
-@cenum __JL_Ctag_1661::UInt32 begin
+@cenum __JL_Ctag_1662::UInt32 begin
     PJRT_TpuTopology_IsSubsliceTopology_Args_STRUCT_SIZE = 0x0000000000000011
 end
 
@@ -3446,7 +3464,7 @@ struct PJRT_TpuTopology_SubsliceDeviceIdFromFullDeviceId_Args
     subslice_device_id::Int32
 end
 
-@cenum __JL_Ctag_1662::UInt32 begin
+@cenum __JL_Ctag_1663::UInt32 begin
     PJRT_TpuTopology_SubsliceDeviceIdFromFullDeviceId_Args_STRUCT_SIZE = 0x0000000000000030
 end
 
@@ -3461,7 +3479,7 @@ struct PJRT_TpuTopology_ReplaceHostBounds_Args
     new_topology::Ptr{PJRT_TopologyDescription}
 end
 
-@cenum __JL_Ctag_1663::UInt32 begin
+@cenum __JL_Ctag_1664::UInt32 begin
     PJRT_TpuTopology_ReplaceHostBounds_Args_STRUCT_SIZE = 0x0000000000000028
 end
 
@@ -3474,7 +3492,7 @@ struct PJRT_TpuTopology_IsEnhancedBarrierEnabled_Args
     is_enhanced_barrier_enabled::Bool
 end
 
-@cenum __JL_Ctag_1664::UInt32 begin
+@cenum __JL_Ctag_1665::UInt32 begin
     PJRT_TpuTopology_IsEnhancedBarrierEnabled_Args_STRUCT_SIZE = 0x0000000000000011
 end
 
@@ -3487,7 +3505,7 @@ struct PJRT_TpuTopology_HasLimitedIciConnectivity_Args
     has_limited_ici_connectivity::Bool
 end
 
-@cenum __JL_Ctag_1665::UInt32 begin
+@cenum __JL_Ctag_1666::UInt32 begin
     PJRT_TpuTopology_HasLimitedIciConnectivity_Args_STRUCT_SIZE = 0x0000000000000011
 end
 
@@ -3502,7 +3520,7 @@ struct PJRT_TpuTopology_IsReachableOverLimitedIci_Args
     is_reachable_over_limited_ici::Bool
 end
 
-@cenum __JL_Ctag_1666::UInt32 begin
+@cenum __JL_Ctag_1667::UInt32 begin
     PJRT_TpuTopology_IsReachableOverLimitedIci_Args_STRUCT_SIZE = 0x0000000000000019
 end
 
@@ -3515,7 +3533,7 @@ struct PJRT_TpuTopology_ProcessCount_Args
     process_count::Int32
 end
 
-@cenum __JL_Ctag_1667::UInt32 begin
+@cenum __JL_Ctag_1668::UInt32 begin
     PJRT_TpuTopology_ProcessCount_Args_STRUCT_SIZE = 0x0000000000000014
 end
 
@@ -3528,7 +3546,7 @@ struct PJRT_TpuTopology_ChipsPerProcess_Args
     chips_per_process::Int32
 end
 
-@cenum __JL_Ctag_1668::UInt32 begin
+@cenum __JL_Ctag_1669::UInt32 begin
     PJRT_TpuTopology_ChipsPerProcess_Args_STRUCT_SIZE = 0x0000000000000014
 end
 
@@ -3541,7 +3559,7 @@ struct PJRT_TpuTopology_CoreCountPerChip_Args
     core_count_of_default_type_per_chip::Int32
 end
 
-@cenum __JL_Ctag_1669::UInt32 begin
+@cenum __JL_Ctag_1670::UInt32 begin
     PJRT_TpuTopology_CoreCountPerChip_Args_STRUCT_SIZE = 0x0000000000000014
 end
 
@@ -3554,7 +3572,7 @@ struct PJRT_TpuTopology_ChipCount_Args
     chip_count::Int32
 end
 
-@cenum __JL_Ctag_1670::UInt32 begin
+@cenum __JL_Ctag_1671::UInt32 begin
     PJRT_TpuTopology_ChipCount_Args_STRUCT_SIZE = 0x0000000000000014
 end
 
@@ -3567,7 +3585,7 @@ struct PJRT_TpuTopology_CoreCount_Args
     core_count_of_default_type::Int32
 end
 
-@cenum __JL_Ctag_1671::UInt32 begin
+@cenum __JL_Ctag_1672::UInt32 begin
     PJRT_TpuTopology_CoreCount_Args_STRUCT_SIZE = 0x0000000000000014
 end
 
@@ -3580,7 +3598,7 @@ struct PJRT_TpuTopology_LogiDeviceCount_Args
     logical_device_count_of_default_type::Int32
 end
 
-@cenum __JL_Ctag_1672::UInt32 begin
+@cenum __JL_Ctag_1673::UInt32 begin
     PJRT_TpuTopology_LogiDeviceCount_Args_STRUCT_SIZE = 0x0000000000000014
 end
 
@@ -3593,7 +3611,7 @@ struct PJRT_TpuTopology_LogiDeviceCountPerProcess_Args
     logical_device_count_of_default_type_per_process::Int32
 end
 
-@cenum __JL_Ctag_1673::UInt32 begin
+@cenum __JL_Ctag_1674::UInt32 begin
     PJRT_TpuTopology_LogiDeviceCountPerProcess_Args_STRUCT_SIZE = 0x0000000000000014
 end
 
@@ -3606,7 +3624,7 @@ struct PJRT_TpuTopology_LogiDeviceCountPerChip_Args
     logical_device_count_of_default_type_per_chip::Int32
 end
 
-@cenum __JL_Ctag_1674::UInt32 begin
+@cenum __JL_Ctag_1675::UInt32 begin
     PJRT_TpuTopology_LogiDeviceCountPerChip_Args_STRUCT_SIZE = 0x0000000000000014
 end
 
@@ -3619,7 +3637,7 @@ struct PJRT_TpuTopology_CoreCountPerProcess_Args
     core_count_of_default_type_per_process::Int32
 end
 
-@cenum __JL_Ctag_1675::UInt32 begin
+@cenum __JL_Ctag_1676::UInt32 begin
     PJRT_TpuTopology_CoreCountPerProcess_Args_STRUCT_SIZE = 0x0000000000000014
 end
 
@@ -3634,7 +3652,7 @@ struct PJRT_TpuTopology_ProcessIds_Args
     num_process_ids::Csize_t
 end
 
-@cenum __JL_Ctag_1676::UInt32 begin
+@cenum __JL_Ctag_1677::UInt32 begin
     PJRT_TpuTopology_ProcessIds_Args_STRUCT_SIZE = 0x0000000000000028
 end
 
@@ -3650,7 +3668,7 @@ struct PJRT_TpuTopology_LogiDeviceIdsOnProcess_Args
     num_logical_device_ids::Csize_t
 end
 
-@cenum __JL_Ctag_1677::UInt32 begin
+@cenum __JL_Ctag_1678::UInt32 begin
     PJRT_TpuTopology_LogiDeviceIdsOnProcess_Args_STRUCT_SIZE = 0x0000000000000028
 end
 
@@ -3665,7 +3683,7 @@ struct PJRT_TpuTopology_ProcIdAndIdxOnProcForChip_Args
     index_on_process::Int32
 end
 
-@cenum __JL_Ctag_1678::UInt32 begin
+@cenum __JL_Ctag_1679::UInt32 begin
     PJRT_TpuTopology_ProcIdAndIdxOnProcForChip_Args_STRUCT_SIZE = 0x000000000000001c
 end
 
@@ -3680,7 +3698,7 @@ struct PJRT_TpuTopology_ProcIdAndIdxOnProcForLogiDevice_Args
     index_on_process::Int32
 end
 
-@cenum __JL_Ctag_1679::UInt32 begin
+@cenum __JL_Ctag_1680::UInt32 begin
     PJRT_TpuTopology_ProcIdAndIdxOnProcForLogiDevice_Args_STRUCT_SIZE = 0x000000000000001c
 end
 
@@ -3696,7 +3714,7 @@ struct PJRT_TpuTopology_ProcessCoordFromId_Args
     coords_num_dims::Csize_t
 end
 
-@cenum __JL_Ctag_1680::UInt32 begin
+@cenum __JL_Ctag_1681::UInt32 begin
     PJRT_TpuTopology_ProcessCoordFromId_Args_STRUCT_SIZE = 0x0000000000000030
 end
 
@@ -3711,7 +3729,7 @@ struct PJRT_TpuTopology_ChipIdFromCoord_Args
     chip_id::Int32
 end
 
-@cenum __JL_Ctag_1681::UInt32 begin
+@cenum __JL_Ctag_1682::UInt32 begin
     PJRT_TpuTopology_ChipIdFromCoord_Args_STRUCT_SIZE = 0x0000000000000024
 end
 
@@ -3727,7 +3745,7 @@ struct PJRT_TpuTopology_LogiDeviceIdFromChipCoordAndIdx_Args
     logical_device_of_default_type_id::Int32
 end
 
-@cenum __JL_Ctag_1682::UInt32 begin
+@cenum __JL_Ctag_1683::UInt32 begin
     PJRT_TpuTopology_LogiDeviceIdFromChipCoordAndIdx_Args_STRUCT_SIZE = 0x0000000000000028
 end
 
@@ -3744,7 +3762,7 @@ struct PJRT_TpuTopology_ChipCoordAndIdxForLogiDevice_Args
     device_index_on_chip::Int32
 end
 
-@cenum __JL_Ctag_1683::UInt32 begin
+@cenum __JL_Ctag_1684::UInt32 begin
     PJRT_TpuTopology_ChipCoordAndIdxForLogiDevice_Args_STRUCT_SIZE = 0x0000000000000034
 end
 
@@ -3759,7 +3777,7 @@ struct PJRT_TpuTopology_ChipsPerProcessBounds_Args
     chip_per_process_bounds_num_dims::Csize_t
 end
 
-@cenum __JL_Ctag_1684::UInt32 begin
+@cenum __JL_Ctag_1685::UInt32 begin
     PJRT_TpuTopology_ChipsPerProcessBounds_Args_STRUCT_SIZE = 0x0000000000000028
 end
 
@@ -3774,7 +3792,7 @@ struct PJRT_TpuTopology_ChipBounds_Args
     chip_bounds_num_dims::Csize_t
 end
 
-@cenum __JL_Ctag_1685::UInt32 begin
+@cenum __JL_Ctag_1686::UInt32 begin
     PJRT_TpuTopology_ChipBounds_Args_STRUCT_SIZE = 0x0000000000000028
 end
 
@@ -3789,7 +3807,7 @@ struct PJRT_TpuTopology_ProcessBounds_Args
     process_bounds_num_dims::Csize_t
 end
 
-@cenum __JL_Ctag_1686::UInt32 begin
+@cenum __JL_Ctag_1687::UInt32 begin
     PJRT_TpuTopology_ProcessBounds_Args_STRUCT_SIZE = 0x0000000000000028
 end
 
@@ -3803,7 +3821,7 @@ struct PJRT_TpuTopology_GetRoutingStrategy_Args
     routing_strategy_len::Csize_t
 end
 
-@cenum __JL_Ctag_1687::UInt32 begin
+@cenum __JL_Ctag_1688::UInt32 begin
     PJRT_TpuTopology_GetRoutingStrategy_Args_STRUCT_SIZE = 0x0000000000000020
 end
 
@@ -3817,7 +3835,7 @@ struct PJRT_TpuTopology_SliceConfig
     twist::Bool
 end
 
-@cenum __JL_Ctag_1688::UInt32 begin
+@cenum __JL_Ctag_1689::UInt32 begin
     PJRT_TpuTopology_SliceConfig_STRUCT_SIZE = 0x000000000000001d
 end
 
@@ -3830,7 +3848,7 @@ struct PJRT_TpuTopology_GetSliceConfig_Args
     slice_config::Ptr{PJRT_TpuTopology_SliceConfig}
 end
 
-@cenum __JL_Ctag_1689::UInt32 begin
+@cenum __JL_Ctag_1690::UInt32 begin
     PJRT_TpuTopology_GetSliceConfig_Args_STRUCT_SIZE = 0x0000000000000030
 end
 
@@ -3846,7 +3864,7 @@ struct PJRT_TpuTopology_GetSliceConfigs_Args
     num_slice_configs::Csize_t
 end
 
-@cenum __JL_Ctag_1690::UInt32 begin
+@cenum __JL_Ctag_1691::UInt32 begin
     PJRT_TpuTopology_GetSliceConfigs_Args_STRUCT_SIZE = 0x0000000000000030
 end
 
@@ -3861,7 +3879,7 @@ struct PJRT_TpuTopology_GetDefaultPlatformConfig_Args
     num_trays::Int64
 end
 
-@cenum __JL_Ctag_1691::UInt32 begin
+@cenum __JL_Ctag_1692::UInt32 begin
     PJRT_TpuTopology_GetDefaultPlatformConfig_Args_STRUCT_SIZE = 0x0000000000000028
 end
 
@@ -3909,7 +3927,7 @@ struct PJRT_TpuTopology_Extension
     get_default_platform_config::Ptr{PJRT_TpuTopology_GetDefaultPlatformConfig}
 end
 
-@cenum __JL_Ctag_1692::UInt32 begin
+@cenum __JL_Ctag_1693::UInt32 begin
     PJRT_TpuTopology_Extension_STRUCT_SIZE = 0x0000000000000110
 end
 
@@ -3929,7 +3947,7 @@ struct PJRT_Triton_Compile_Args
     out_path_size::Csize_t
 end
 
-@cenum __JL_Ctag_1840::UInt32 begin
+@cenum __JL_Ctag_1841::UInt32 begin
     PJRT_Triton_Compile_Args_STRUCT_SIZE = 0x0000000000000060
 end
 
@@ -3943,13 +3961,13 @@ end
 
 const PJRT_Triton = PJRT_Triton_Extension
 
-@cenum __JL_Ctag_1841::UInt32 begin
+@cenum __JL_Ctag_1842::UInt32 begin
     PJRT_Triton_Extension_STRUCT_SIZE = 0x0000000000000020
 end
 
 const PJRT_API_MAJOR = 0
 
-const PJRT_API_MINOR = 92
+const PJRT_API_MINOR = 93
 
 const _PJRT_API_STRUCT_FIELD = fn_type(fn_type) * fn_type
 
@@ -3961,7 +3979,7 @@ const PJRT_API_FFI_EXTENSION_VERSION = 3
 
 const PJRT_API_GPU_EXTENSION_VERSION = 2
 
-const PJRT_API_LAYOUTS_EXTENSION_VERSION = 3
+const PJRT_API_LAYOUTS_EXTENSION_VERSION = 4
 
 const PJRT_API_MEMORY_DESCRIPTIONS_EXTENSION_VERSION = 1
 

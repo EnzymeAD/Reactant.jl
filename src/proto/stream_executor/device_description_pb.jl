@@ -2,8 +2,9 @@ import ProtoBuf as PB
 using ProtoBuf: OneOf
 using ProtoBuf.EnumX: @enumx
 
-export RocmComputeCapabilityProto, DnnVersionInfoProto, RuntimeVersionProto
-export GpuDeviceInfoProto, GpuComputeCapabilityProto, GpuTargetConfigProto
+export RocmComputeCapabilityProto, var"ExecutionUnitDescriptionProto.RateInfoProto"
+export DnnVersionInfoProto, RuntimeVersionProto, GpuComputeCapabilityProto
+export ExecutionUnitDescriptionProto, GpuDeviceInfoProto, GpuTargetConfigProto
 
 
 struct RocmComputeCapabilityProto
@@ -33,6 +34,48 @@ end
 function PB._encoded_size(x::RocmComputeCapabilityProto)
     encoded_size = 0
     !isempty(x.gcn_arch_name) && (encoded_size += PB._encoded_size(x.gcn_arch_name, 1))
+    return encoded_size
+end
+
+struct var"ExecutionUnitDescriptionProto.RateInfoProto"
+    clock_rate_ghz::Float32
+    units_per_core::Int32
+    ops_per_clock::Int32
+end
+PB.default_values(::Type{var"ExecutionUnitDescriptionProto.RateInfoProto"}) = (;clock_rate_ghz = zero(Float32), units_per_core = zero(Int32), ops_per_clock = zero(Int32))
+PB.field_numbers(::Type{var"ExecutionUnitDescriptionProto.RateInfoProto"}) = (;clock_rate_ghz = 1, units_per_core = 2, ops_per_clock = 3)
+
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:var"ExecutionUnitDescriptionProto.RateInfoProto"})
+    clock_rate_ghz = zero(Float32)
+    units_per_core = zero(Int32)
+    ops_per_clock = zero(Int32)
+    while !PB.message_done(d)
+        field_number, wire_type = PB.decode_tag(d)
+        if field_number == 1
+            clock_rate_ghz = PB.decode(d, Float32)
+        elseif field_number == 2
+            units_per_core = PB.decode(d, Int32)
+        elseif field_number == 3
+            ops_per_clock = PB.decode(d, Int32)
+        else
+            Base.skip(d, wire_type)
+        end
+    end
+    return var"ExecutionUnitDescriptionProto.RateInfoProto"(clock_rate_ghz, units_per_core, ops_per_clock)
+end
+
+function PB.encode(e::PB.AbstractProtoEncoder, x::var"ExecutionUnitDescriptionProto.RateInfoProto")
+    initpos = position(e.io)
+    x.clock_rate_ghz !== zero(Float32) && PB.encode(e, 1, x.clock_rate_ghz)
+    x.units_per_core != zero(Int32) && PB.encode(e, 2, x.units_per_core)
+    x.ops_per_clock != zero(Int32) && PB.encode(e, 3, x.ops_per_clock)
+    return position(e.io) - initpos
+end
+function PB._encoded_size(x::var"ExecutionUnitDescriptionProto.RateInfoProto")
+    encoded_size = 0
+    x.clock_rate_ghz !== zero(Float32) && (encoded_size += PB._encoded_size(x.clock_rate_ghz, 1))
+    x.units_per_core != zero(Int32) && (encoded_size += PB._encoded_size(x.units_per_core, 2))
+    x.ops_per_clock != zero(Int32) && (encoded_size += PB._encoded_size(x.ops_per_clock, 3))
     return encoded_size
 end
 
@@ -120,6 +163,87 @@ function PB._encoded_size(x::RuntimeVersionProto)
     return encoded_size
 end
 
+struct GpuComputeCapabilityProto
+    compute_capability::Union{Nothing,OneOf{<:Union{CudaComputeCapabilityProto,RocmComputeCapabilityProto,OneAPIComputeCapabilityProto}}}
+end
+PB.oneof_field_types(::Type{GpuComputeCapabilityProto}) = (;
+    compute_capability = (;cuda_compute_capability=CudaComputeCapabilityProto, rocm_compute_capability=RocmComputeCapabilityProto, oneapi_compute_capability=OneAPIComputeCapabilityProto),
+)
+PB.default_values(::Type{GpuComputeCapabilityProto}) = (;cuda_compute_capability = nothing, rocm_compute_capability = nothing, oneapi_compute_capability = nothing)
+PB.field_numbers(::Type{GpuComputeCapabilityProto}) = (;cuda_compute_capability = 1, rocm_compute_capability = 2, oneapi_compute_capability = 3)
+
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:GpuComputeCapabilityProto})
+    compute_capability = nothing
+    while !PB.message_done(d)
+        field_number, wire_type = PB.decode_tag(d)
+        if field_number == 1
+            compute_capability = OneOf(:cuda_compute_capability, PB.decode(d, Ref{CudaComputeCapabilityProto}))
+        elseif field_number == 2
+            compute_capability = OneOf(:rocm_compute_capability, PB.decode(d, Ref{RocmComputeCapabilityProto}))
+        elseif field_number == 3
+            compute_capability = OneOf(:oneapi_compute_capability, PB.decode(d, Ref{OneAPIComputeCapabilityProto}))
+        else
+            Base.skip(d, wire_type)
+        end
+    end
+    return GpuComputeCapabilityProto(compute_capability)
+end
+
+function PB.encode(e::PB.AbstractProtoEncoder, x::GpuComputeCapabilityProto)
+    initpos = position(e.io)
+    if isnothing(x.compute_capability);
+    elseif x.compute_capability.name === :cuda_compute_capability
+        PB.encode(e, 1, x.compute_capability[]::CudaComputeCapabilityProto)
+    elseif x.compute_capability.name === :rocm_compute_capability
+        PB.encode(e, 2, x.compute_capability[]::RocmComputeCapabilityProto)
+    elseif x.compute_capability.name === :oneapi_compute_capability
+        PB.encode(e, 3, x.compute_capability[]::OneAPIComputeCapabilityProto)
+    end
+    return position(e.io) - initpos
+end
+function PB._encoded_size(x::GpuComputeCapabilityProto)
+    encoded_size = 0
+    if isnothing(x.compute_capability);
+    elseif x.compute_capability.name === :cuda_compute_capability
+        encoded_size += PB._encoded_size(x.compute_capability[]::CudaComputeCapabilityProto, 1)
+    elseif x.compute_capability.name === :rocm_compute_capability
+        encoded_size += PB._encoded_size(x.compute_capability[]::RocmComputeCapabilityProto, 2)
+    elseif x.compute_capability.name === :oneapi_compute_capability
+        encoded_size += PB._encoded_size(x.compute_capability[]::OneAPIComputeCapabilityProto, 3)
+    end
+    return encoded_size
+end
+
+struct ExecutionUnitDescriptionProto
+    rate_infos::Dict{Int32,var"ExecutionUnitDescriptionProto.RateInfoProto"}
+end
+PB.default_values(::Type{ExecutionUnitDescriptionProto}) = (;rate_infos = Dict{Int32,var"ExecutionUnitDescriptionProto.RateInfoProto"}())
+PB.field_numbers(::Type{ExecutionUnitDescriptionProto}) = (;rate_infos = 1)
+
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:ExecutionUnitDescriptionProto})
+    rate_infos = Dict{Int32,var"ExecutionUnitDescriptionProto.RateInfoProto"}()
+    while !PB.message_done(d)
+        field_number, wire_type = PB.decode_tag(d)
+        if field_number == 1
+            PB.decode!(d, rate_infos)
+        else
+            Base.skip(d, wire_type)
+        end
+    end
+    return ExecutionUnitDescriptionProto(rate_infos)
+end
+
+function PB.encode(e::PB.AbstractProtoEncoder, x::ExecutionUnitDescriptionProto)
+    initpos = position(e.io)
+    !isempty(x.rate_infos) && PB.encode(e, 1, x.rate_infos)
+    return position(e.io) - initpos
+end
+function PB._encoded_size(x::ExecutionUnitDescriptionProto)
+    encoded_size = 0
+    !isempty(x.rate_infos) && (encoded_size += PB._encoded_size(x.rate_infos, 1))
+    return encoded_size
+end
+
 struct GpuDeviceInfoProto
     threads_per_block_limit::Int32
     threads_per_warp::Int32
@@ -136,15 +260,17 @@ struct GpuDeviceInfoProto
     clock_rate_ghz::Float32
     device_memory_size::Int64
     shared_memory_per_block_optin::Int32
-    compute_capability::Union{Nothing,OneOf{<:Union{CudaComputeCapabilityProto,RocmComputeCapabilityProto}}}
+    compute_capability::Union{Nothing,OneOf{<:Union{CudaComputeCapabilityProto,RocmComputeCapabilityProto,OneAPIComputeCapabilityProto}}}
     registers_per_core_limit::Int64
     registers_per_block_limit::Int64
+    scalar_unit_description::Union{Nothing,ExecutionUnitDescriptionProto}
+    matrix_unit_description::Union{Nothing,ExecutionUnitDescriptionProto}
 end
 PB.oneof_field_types(::Type{GpuDeviceInfoProto}) = (;
-    compute_capability = (;cuda_compute_capability=CudaComputeCapabilityProto, rocm_compute_capability=RocmComputeCapabilityProto),
+    compute_capability = (;cuda_compute_capability=CudaComputeCapabilityProto, rocm_compute_capability=RocmComputeCapabilityProto, oneapi_compute_capability=OneAPIComputeCapabilityProto),
 )
-PB.default_values(::Type{GpuDeviceInfoProto}) = (;threads_per_block_limit = zero(Int32), threads_per_warp = zero(Int32), shared_memory_per_block = zero(Int32), shared_memory_per_core = zero(Int32), threads_per_core_limit = zero(Int32), core_count = zero(Int32), fpus_per_core = zero(Int64), block_dim_limit_x = zero(Int32), block_dim_limit_y = zero(Int32), block_dim_limit_z = zero(Int32), memory_bandwidth = zero(Int64), l2_cache_size = zero(Int64), clock_rate_ghz = zero(Float32), device_memory_size = zero(Int64), shared_memory_per_block_optin = zero(Int32), cuda_compute_capability = nothing, rocm_compute_capability = nothing, registers_per_core_limit = zero(Int64), registers_per_block_limit = zero(Int64))
-PB.field_numbers(::Type{GpuDeviceInfoProto}) = (;threads_per_block_limit = 1, threads_per_warp = 2, shared_memory_per_block = 3, shared_memory_per_core = 4, threads_per_core_limit = 5, core_count = 6, fpus_per_core = 7, block_dim_limit_x = 8, block_dim_limit_y = 9, block_dim_limit_z = 10, memory_bandwidth = 11, l2_cache_size = 12, clock_rate_ghz = 13, device_memory_size = 14, shared_memory_per_block_optin = 15, cuda_compute_capability = 16, rocm_compute_capability = 17, registers_per_core_limit = 18, registers_per_block_limit = 19)
+PB.default_values(::Type{GpuDeviceInfoProto}) = (;threads_per_block_limit = zero(Int32), threads_per_warp = zero(Int32), shared_memory_per_block = zero(Int32), shared_memory_per_core = zero(Int32), threads_per_core_limit = zero(Int32), core_count = zero(Int32), fpus_per_core = zero(Int64), block_dim_limit_x = zero(Int32), block_dim_limit_y = zero(Int32), block_dim_limit_z = zero(Int32), memory_bandwidth = zero(Int64), l2_cache_size = zero(Int64), clock_rate_ghz = zero(Float32), device_memory_size = zero(Int64), shared_memory_per_block_optin = zero(Int32), cuda_compute_capability = nothing, rocm_compute_capability = nothing, oneapi_compute_capability = nothing, registers_per_core_limit = zero(Int64), registers_per_block_limit = zero(Int64), scalar_unit_description = nothing, matrix_unit_description = nothing)
+PB.field_numbers(::Type{GpuDeviceInfoProto}) = (;threads_per_block_limit = 1, threads_per_warp = 2, shared_memory_per_block = 3, shared_memory_per_core = 4, threads_per_core_limit = 5, core_count = 6, fpus_per_core = 7, block_dim_limit_x = 8, block_dim_limit_y = 9, block_dim_limit_z = 10, memory_bandwidth = 11, l2_cache_size = 12, clock_rate_ghz = 13, device_memory_size = 14, shared_memory_per_block_optin = 15, cuda_compute_capability = 16, rocm_compute_capability = 17, oneapi_compute_capability = 22, registers_per_core_limit = 18, registers_per_block_limit = 19, scalar_unit_description = 20, matrix_unit_description = 21)
 
 function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:GpuDeviceInfoProto})
     threads_per_block_limit = zero(Int32)
@@ -165,6 +291,8 @@ function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:GpuDeviceInfoProto})
     compute_capability = nothing
     registers_per_core_limit = zero(Int64)
     registers_per_block_limit = zero(Int64)
+    scalar_unit_description = Ref{Union{Nothing,ExecutionUnitDescriptionProto}}(nothing)
+    matrix_unit_description = Ref{Union{Nothing,ExecutionUnitDescriptionProto}}(nothing)
     while !PB.message_done(d)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
@@ -201,15 +329,21 @@ function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:GpuDeviceInfoProto})
             compute_capability = OneOf(:cuda_compute_capability, PB.decode(d, Ref{CudaComputeCapabilityProto}))
         elseif field_number == 17
             compute_capability = OneOf(:rocm_compute_capability, PB.decode(d, Ref{RocmComputeCapabilityProto}))
+        elseif field_number == 22
+            compute_capability = OneOf(:oneapi_compute_capability, PB.decode(d, Ref{OneAPIComputeCapabilityProto}))
         elseif field_number == 18
             registers_per_core_limit = PB.decode(d, Int64)
         elseif field_number == 19
             registers_per_block_limit = PB.decode(d, Int64)
+        elseif field_number == 20
+            PB.decode!(d, scalar_unit_description)
+        elseif field_number == 21
+            PB.decode!(d, matrix_unit_description)
         else
             Base.skip(d, wire_type)
         end
     end
-    return GpuDeviceInfoProto(threads_per_block_limit, threads_per_warp, shared_memory_per_block, shared_memory_per_core, threads_per_core_limit, core_count, fpus_per_core, block_dim_limit_x, block_dim_limit_y, block_dim_limit_z, memory_bandwidth, l2_cache_size, clock_rate_ghz, device_memory_size, shared_memory_per_block_optin, compute_capability, registers_per_core_limit, registers_per_block_limit)
+    return GpuDeviceInfoProto(threads_per_block_limit, threads_per_warp, shared_memory_per_block, shared_memory_per_core, threads_per_core_limit, core_count, fpus_per_core, block_dim_limit_x, block_dim_limit_y, block_dim_limit_z, memory_bandwidth, l2_cache_size, clock_rate_ghz, device_memory_size, shared_memory_per_block_optin, compute_capability, registers_per_core_limit, registers_per_block_limit, scalar_unit_description[], matrix_unit_description[])
 end
 
 function PB.encode(e::PB.AbstractProtoEncoder, x::GpuDeviceInfoProto)
@@ -234,9 +368,13 @@ function PB.encode(e::PB.AbstractProtoEncoder, x::GpuDeviceInfoProto)
         PB.encode(e, 16, x.compute_capability[]::CudaComputeCapabilityProto)
     elseif x.compute_capability.name === :rocm_compute_capability
         PB.encode(e, 17, x.compute_capability[]::RocmComputeCapabilityProto)
+    elseif x.compute_capability.name === :oneapi_compute_capability
+        PB.encode(e, 22, x.compute_capability[]::OneAPIComputeCapabilityProto)
     end
     x.registers_per_core_limit != zero(Int64) && PB.encode(e, 18, x.registers_per_core_limit)
     x.registers_per_block_limit != zero(Int64) && PB.encode(e, 19, x.registers_per_block_limit)
+    !isnothing(x.scalar_unit_description) && PB.encode(e, 20, x.scalar_unit_description)
+    !isnothing(x.matrix_unit_description) && PB.encode(e, 21, x.matrix_unit_description)
     return position(e.io) - initpos
 end
 function PB._encoded_size(x::GpuDeviceInfoProto)
@@ -261,54 +399,13 @@ function PB._encoded_size(x::GpuDeviceInfoProto)
         encoded_size += PB._encoded_size(x.compute_capability[]::CudaComputeCapabilityProto, 16)
     elseif x.compute_capability.name === :rocm_compute_capability
         encoded_size += PB._encoded_size(x.compute_capability[]::RocmComputeCapabilityProto, 17)
+    elseif x.compute_capability.name === :oneapi_compute_capability
+        encoded_size += PB._encoded_size(x.compute_capability[]::OneAPIComputeCapabilityProto, 22)
     end
     x.registers_per_core_limit != zero(Int64) && (encoded_size += PB._encoded_size(x.registers_per_core_limit, 18))
     x.registers_per_block_limit != zero(Int64) && (encoded_size += PB._encoded_size(x.registers_per_block_limit, 19))
-    return encoded_size
-end
-
-struct GpuComputeCapabilityProto
-    compute_capability::Union{Nothing,OneOf{<:Union{CudaComputeCapabilityProto,RocmComputeCapabilityProto}}}
-end
-PB.oneof_field_types(::Type{GpuComputeCapabilityProto}) = (;
-    compute_capability = (;cuda_compute_capability=CudaComputeCapabilityProto, rocm_compute_capability=RocmComputeCapabilityProto),
-)
-PB.default_values(::Type{GpuComputeCapabilityProto}) = (;cuda_compute_capability = nothing, rocm_compute_capability = nothing)
-PB.field_numbers(::Type{GpuComputeCapabilityProto}) = (;cuda_compute_capability = 1, rocm_compute_capability = 2)
-
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:GpuComputeCapabilityProto})
-    compute_capability = nothing
-    while !PB.message_done(d)
-        field_number, wire_type = PB.decode_tag(d)
-        if field_number == 1
-            compute_capability = OneOf(:cuda_compute_capability, PB.decode(d, Ref{CudaComputeCapabilityProto}))
-        elseif field_number == 2
-            compute_capability = OneOf(:rocm_compute_capability, PB.decode(d, Ref{RocmComputeCapabilityProto}))
-        else
-            Base.skip(d, wire_type)
-        end
-    end
-    return GpuComputeCapabilityProto(compute_capability)
-end
-
-function PB.encode(e::PB.AbstractProtoEncoder, x::GpuComputeCapabilityProto)
-    initpos = position(e.io)
-    if isnothing(x.compute_capability);
-    elseif x.compute_capability.name === :cuda_compute_capability
-        PB.encode(e, 1, x.compute_capability[]::CudaComputeCapabilityProto)
-    elseif x.compute_capability.name === :rocm_compute_capability
-        PB.encode(e, 2, x.compute_capability[]::RocmComputeCapabilityProto)
-    end
-    return position(e.io) - initpos
-end
-function PB._encoded_size(x::GpuComputeCapabilityProto)
-    encoded_size = 0
-    if isnothing(x.compute_capability);
-    elseif x.compute_capability.name === :cuda_compute_capability
-        encoded_size += PB._encoded_size(x.compute_capability[]::CudaComputeCapabilityProto, 1)
-    elseif x.compute_capability.name === :rocm_compute_capability
-        encoded_size += PB._encoded_size(x.compute_capability[]::RocmComputeCapabilityProto, 2)
-    end
+    !isnothing(x.scalar_unit_description) && (encoded_size += PB._encoded_size(x.scalar_unit_description, 20))
+    !isnothing(x.matrix_unit_description) && (encoded_size += PB._encoded_size(x.matrix_unit_description, 21))
     return encoded_size
 end
 
