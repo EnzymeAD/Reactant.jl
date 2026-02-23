@@ -668,7 +668,9 @@ function Base.copyto!(
     return dest
 end
 
-function Base.copyto!(dest::ConcretePJRTArray{T}, src::Array{T}) where {T<:ReactantPrimitive}
+function Base.copyto!(
+    dest::ConcretePJRTArray{T}, src::Array{T}
+) where {T<:ReactantPrimitive}
     return copyto!(dest, 1, src, 1, length(src))
 end
 
