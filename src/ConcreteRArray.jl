@@ -581,7 +581,7 @@ end
 
 function Base.copyto!(
     dest::Array{T}, doffs::Int64, src::ConcreteIFRTArray{T}, soffs::Int64, n::Int64
-) where {T}
+) where {T<:ReactantPrimitive}
     n == 0 && return dest
     n > 0 || Base._throw_argerror("Number of elements to copy must be non-negative.")
     @boundscheck checkbounds(dest, doffs:(doffs + n - 1))
@@ -611,7 +611,7 @@ end
 
 function Base.copyto!(
     dest::Array{T}, doffs::Int64, src::ConcretePJRTArray{T}, soffs::Int64, n::Int64
-) where {T}
+) where {T<:ReactantPrimitive}
     n == 0 && return dest
     n > 0 || Base._throw_argerror("Number of elements to copy must be non-negative.")
     @boundscheck checkbounds(dest, doffs:(doffs + n - 1))
@@ -638,13 +638,13 @@ end
 
 function Base.copyto!(
     dest::Array{T}, src::Union{ConcretePJRTArray{T},ConcreteIFRTArray{T}}
-) where {T}
+) where {T<:ReactantPrimitive}
     return copyto!(dest, 1, src, 1, length(src))
 end
 
 function Base.copyto!(
     dest::ConcretePJRTArray{T}, doffs::Int64, src::Array{T}, soffs::Int64, n::Int64
-) where {T}
+) where {T<:ReactantPrimitive}
     n == 0 && return dest
     n > 0 || Base._throw_argerror("Number of elements to copy must be non-negative.")
     @boundscheck checkbounds(dest, doffs:(doffs + n - 1))
@@ -668,7 +668,7 @@ function Base.copyto!(
     return dest
 end
 
-function Base.copyto!(dest::ConcretePJRTArray{T}, src::Array{T}) where {T}
+function Base.copyto!(dest::ConcretePJRTArray{T}, src::Array{T}) where {T<:ReactantPrimitive}
     return copyto!(dest, 1, src, 1, length(src))
 end
 
