@@ -68,7 +68,7 @@ end
 
 function XLA.cost_analysis(client::Client, hlo_module::XLA.HloModule)
     ref = Ref{MLIR.API.JLHloCostAnalysisProperties}()
-    GC.@preserve client hlo_module MLIR.API.PjRtHloModuleCostAnalysisProperties(
+    GC.@preserve client hlo_module MLIR.API.pjrt_hlo_module_cost_analysis_properties(
         client.client, hlo_module.ptr, ref
     )
     return ref[]

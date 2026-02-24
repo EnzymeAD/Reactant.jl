@@ -22,6 +22,9 @@ module API
     function EnzymeJaXMapSymbol(name, sym)
         @ccall mlir_c.EnzymeJaXMapSymbol(name::Cstring, sym::Ptr{Cvoid})::Cvoid
     end
+    function EnzymeJaXMapSymbol(name, sym::Integer)
+        @ccall mlir_c.EnzymeJaXMapSymbol(name::Cstring, sym::Int64)::Cvoid
+    end
 
     function RegisterEnzymeXLACPUHandler()
         @ccall mlir_c.RegisterEnzymeXLACPUHandler()::Cvoid

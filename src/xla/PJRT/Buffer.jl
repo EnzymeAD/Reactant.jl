@@ -133,7 +133,8 @@ end
 XLA.synced_buffer(buffer::Buffer) = buffer
 
 function XLA.buffer_on_cpu(buffer::Buffer)
-    return GC.@preserve buffer MLIR.API.BufferOnCPU(buffer.buffer)
+    res = GC.@preserve buffer MLIR.API.BufferOnCPU(buffer.buffer)
+    return res == 1
 end
 
 function XLA.to_host(buffer::Buffer, data, sharding)

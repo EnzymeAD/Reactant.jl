@@ -617,13 +617,16 @@ function Base.copyto!(
     src_sync = src_async.buffer
     wait(src_async)
 
-    MLIR.API.CopyFromBuffer(
-        client.client,
-        src_sync.buffer,
-        pointer(dest, doffs),
-        (soffs - 1) * sizeof(T),
-        n * sizeof(T),
-    )
+    GC.@preserve client src_sync dest begin
+        MLIR.API.CopyFromBuffer(
+            client.client,
+            src_sync.buffer,
+            pointer(dest, doffs),
+            (soffs - 1) * sizeof(T),
+            n * sizeof(T),
+            C_NULL,
+        )
+    end
 
     return dest
 end
@@ -647,13 +650,16 @@ function Base.copyto!(
     dest_sync = dest_async.buffer
     wait(dest_async)
 
-    MLIR.API.CopyToBuffer(
-        client.client,
-        dest_sync.buffer,
-        pointer(src, soffs),
-        (doffs - 1) * sizeof(T),
-        n * sizeof(T),
-    )
+    GC.@preserve dest_sync client src begin
+        MLIR.API.CopyToBuffer(
+            client.client,
+            dest_sync.buffer,
+            pointer(src, soffs),
+            (doffs - 1) * sizeof(T),
+            n * sizeof(T),
+            C_NULL,
+        )
+    end
 
     return dest
 end
