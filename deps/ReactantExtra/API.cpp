@@ -607,7 +607,7 @@ REACTANT_ABI int ClientProcessIndex(PjRtClient *client) {
 }
 
 REACTANT_ABI PjRtDevice *ClientGetDevice(PjRtClient *client, int device_id) {
-  return MyValueOrThrow(client->LookupDevice(PjRtGlobalDeviceId(device_id)));
+  return MyValueOrThrow(client->LookupDevice(GlobalDeviceId(device_id)));
 }
 
 REACTANT_ABI PjRtDevice *ClientGetAddressableDevice(PjRtClient *client,
