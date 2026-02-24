@@ -604,3 +604,27 @@ end
 
     @test res ≈ convert(Array, r_res)
 end
+
+mutable struct TwoArgStruct{A,B}
+    clock::A
+    velocities::B
+end
+
+function two_arg_fn(model)
+    model.clock = 0
+    return nothing
+end
+
+function differentiate_two_arg_fn(model)
+    dmodel = Enzyme.make_zero(model)
+    dedν = autodiff(set_strong_zero(Enzyme.ReverseWithPrimal),
+                    two_arg_fn, Active,
+                    Duplicated(model, dmodel))
+    return dedν
+end
+
+@testset "Two Arg Struct" begin
+    model = TwoArgStruct(ConcreteRNumber(0), Reactant.to_rarray(ones(Float32, 3)))
+    @jit differentiate_tracer_error(model)
+end
+
