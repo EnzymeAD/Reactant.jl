@@ -318,7 +318,8 @@ function Base.convert(::Type{HloSharding}, op_sharding::CondensedOpSharding)
 end
 
 function Base.string(hlo_sharding::HloSharding)
-    return GC.@preserve hlo_sharding MLIR.API.hlo_sharding_to_string(hlo_sharding.ptr)
+    str = GC.@preserve hlo_sharding MLIR.API.hlo_sharding_to_string(hlo_sharding.ptr)
+    return unsafe_string_and_free(str)
 end
 
 function Base.show(io::IO, hlo_sharding::HloSharding)

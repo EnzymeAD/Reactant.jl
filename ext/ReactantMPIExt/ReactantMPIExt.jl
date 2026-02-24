@@ -212,7 +212,7 @@ function __init__()
         if value isa Base.RefValue
             value = value[]
         end
-        MLIR.API.EnzymeJaXMapSymbol(name, Int(value))
+        MLIR.API.EnzymeJaXMapSymbol(name, convert(Int, value))
     end
 end
 
