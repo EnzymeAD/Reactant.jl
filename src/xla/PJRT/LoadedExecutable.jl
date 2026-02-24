@@ -14,7 +14,7 @@ end
 
 @inline function free_exec(exec::LoadedExecutable)
     if XLA.is_live[]
-        MLIR.API.ExecutableFree(exec.exec)
+        GC.@preserve exec MLIR.API.ExecutableFree(exec.exec)
     end
 end
 
@@ -38,7 +38,7 @@ for (jlop, xlaop, field) in (
         end
 
         op_shardings = Ref{NTuple{exec.$(field),Ptr{Cvoid}}}()
-        MLIR.API.$(xlaop)(exec.exec, op_shardings, exec.$(field))
+        GC.@preserve exec MLIR.API.$(xlaop)(exec.exec, op_shardings, exec.$(field))
         return [XLA.OpSharding(op_sharding) for op_sharding in op_shardings[]]
     end
 end
@@ -49,7 +49,9 @@ function XLA.get_hlo_modules(exec::LoadedExecutable)
     # and use the ones assigned to by XLA
     hlo_modules = Ref{NTuple{Int64(XLA.num_partitions(exec)),Ptr{Cvoid}}}()
     nmodules = Ref{Int32}(0)
-    MLIR.API.PjRtLoadedExecutableGetHloModules(exec.exec, hlo_modules, nmodules)
+    GC.@preserve exec MLIR.API.PjRtLoadedExecutableGetHloModules(
+        exec.exec, hlo_modules, nmodules
+    )
     return map(XLA.HloModule, hlo_modules[][1:Int(nmodules[])])
 end
 
@@ -65,7 +67,9 @@ function XLA.compile(
 )
     compile_options_bytes = Reactant.ProtoUtils.proto_to_bytes(compile_options)
     exec = MLIR.IR.try_compile_dump_mlir(mod) do
-        MLIR.API.ClientCompileWithProto(client.client, mod, compile_options_bytes)
+        GC.@preserve client MLIR.API.ClientCompileWithProto(
+            client.client, mod, compile_options_bytes
+        )
     end
     return LoadedExecutable(
         exec, num_outputs, num_parameters, is_sharded, num_replicas, num_partitions
@@ -288,16 +292,18 @@ end
     future_res = Ref{NTuple{n_outs * K,Ptr{Cvoid}}}()
     futures = Ref{UInt8}(0)
 
-    MLIR.API.XLAExecute(
-        exec.exec,
-        N,
-        Base.RefValue(inputs),
-        Base.RefValue(donated_args),
-        n_outs,
-        Base.unsafe_convert(Ptr{Cvoid}, outputs),
-        Base.unsafe_convert(Ptr{UInt8}, futures),
-        Base.unsafe_convert(Ptr{Cvoid}, future_res),
-    )
+    GC.@preserve exec inputs donated_args outputs future_res futures begin
+        MLIR.API.XLAExecute(
+            exec.exec,
+            N,
+            Base.RefValue(inputs),
+            Base.RefValue(donated_args),
+            n_outs,
+            Base.unsafe_convert(Ptr{Cvoid}, outputs),
+            Base.unsafe_convert(Ptr{UInt8}, futures),
+            Base.unsafe_convert(Ptr{Cvoid}, future_res),
+        )
+    end
 
     outputs = outputs[]
     future = futures[] != 0

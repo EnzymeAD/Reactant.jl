@@ -30,30 +30,36 @@ end
 free_sharding(sharding::Sharding) = MLIR.API.free_ifrt_sharding(sharding.ptr)
 
 function XLA.num_devices(sharding::Sharding)
-    return MLIR.API.ifrt_sharding_devices_size(sharding.ptr)
+    return GC.@preserve sharding MLIR.API.ifrt_sharding_devices_size(sharding.ptr)
 end
 
 function XLA.devices(sharding::Sharding)
     ndevices = XLA.num_devices(sharding)
     devices = Ref{NTuple{Int64(ndevices),Ptr{Cvoid}}}()
-    MLIR.API.ifrt_sharding_to_device_list(sharding.ptr, devices)
+    GC.@preserve sharding MLIR.API.ifrt_sharding_to_device_list(sharding.ptr, devices)
     return map(Device, devices[])
 end
 
 function Base.convert(::Type{XLA.HloSharding}, sharding::Sharding)
-    return XLA.HloSharding(MLIR.API.ifrt_sharding_to_xla_hlo_sharding(sharding.ptr))
+    return XLA.HloSharding(
+        GC.@preserve sharding MLIR.API.ifrt_sharding_to_xla_hlo_sharding(sharding.ptr)
+    )
 end
 
 function Base.string(sharding::Sharding)
-    return XLA.unsafe_string_and_free(MLIR.API.ifrt_sharding_to_string(sharding.ptr))
+    return XLA.unsafe_string_and_free(
+        GC.@preserve sharding MLIR.API.ifrt_sharding_to_string(sharding.ptr)
+    )
 end
 
 function is_fully_replicated(sharding::Sharding)
-    return MLIR.API.ifrt_sharding_is_fully_replicated(sharding.ptr)
+    return GC.@preserve sharding MLIR.API.ifrt_sharding_is_fully_replicated(sharding.ptr)
 end
 
 function is_single_device_sharding(sharding::Sharding)
-    return MLIR.API.ifrt_sharding_is_single_device_sharding(sharding.ptr)
+    return GC.@preserve sharding MLIR.API.ifrt_sharding_is_single_device_sharding(
+        sharding.ptr
+    )
 end
 
 function Base.show(io::IO, ::MIME"text/plain", sharding::Sharding)
@@ -70,7 +76,7 @@ function XLA.sharding_to_concrete_array_indices(
     index_domain_origins = Vector{Int64}(undef, length(logical_device_ids) * length(shape))
     index_domain_shapes = Vector{Int64}(undef, length(logical_device_ids) * length(shape))
 
-    MLIR.API.ifrt_sharding_to_index_domains(
+    GC.@preserve sharding MLIR.API.ifrt_sharding_to_index_domains(
         sharding.ptr, shape, Int32(length(shape)), index_domain_origins, index_domain_shapes
     )
 

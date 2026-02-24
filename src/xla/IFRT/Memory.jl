@@ -3,7 +3,7 @@ mutable struct Memory <: XLA.AbstractMemory
 end
 
 function Base.show(io::IO, memory::Memory)
-    str = MLIR.API.ifrt_MemoryToString(memory.ptr)
+    str = GC.@preserve memory MLIR.API.ifrt_MemoryToString(memory.ptr)
     print(io, "XLA.IFRT.Memory(\"", XLA.unsafe_string_and_free(str), "\")")
     return nothing
 end
@@ -21,20 +21,21 @@ function MemoryKind(str::AbstractString)
 end
 
 function Base.isempty(memory_kind::MemoryKind)
-    return !MLIR.API.ifrt_memory_kind_has_value(memory_kind.ptr)
+    res = GC.@preserve memory_kind MLIR.API.ifrt_memory_kind_has_value(memory_kind.ptr)
+    return !res
 end
 
 function Base.convert(::Type{MemoryKind}, memory::Memory)
-    return MemoryKind(MLIR.API.ifrt_MemoryGetMemoryKind(memory.ptr))
+    return MemoryKind(GC.@preserve memory MLIR.API.ifrt_MemoryGetMemoryKind(memory.ptr))
 end
 
 function Base.:(==)(a::MemoryKind, b::MemoryKind)
-    return MLIR.API.ifrt_MemoryKindsAreEqual(a.ptr, b.ptr)
+    return GC.@preserve a b MLIR.API.ifrt_MemoryKindsAreEqual(a.ptr, b.ptr)
 end
 
 function Base.string(memory_kind::MemoryKind)
     isempty(memory_kind) && return "<null>"
-    str = MLIR.API.ifrt_MemoryKindToString(memory_kind.ptr)
+    str = GC.@preserve memory_kind MLIR.API.ifrt_MemoryKindToString(memory_kind.ptr)
     return XLA.unsafe_string_and_free(str)
 end
 

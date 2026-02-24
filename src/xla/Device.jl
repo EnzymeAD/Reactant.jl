@@ -104,6 +104,8 @@ function StreamExecutorDeviceDescription(device::AbstractDevice)
 end
 
 function Base.show(io::IO, ::MIME"text/plain", props::StreamExecutorDeviceDescription)
-    print(io, unsafe_string_and_free(MLIR.API.deviceDescriptionToString(props.ptr)))
+    GC.@preserve props print(
+        io, unsafe_string_and_free(MLIR.API.deviceDescriptionToString(props.ptr))
+    )
     return nothing
 end

@@ -38,7 +38,7 @@ function mh(
             push!(
                 address_attr,
                 MLIR.IR.Attribute(
-                    MLIR.API.enzymeSymbolAttrGet(MLIR.IR.current_context(), sym_addr),
+                    MLIR.API.enzymeSymbolAttrGet(MLIR.IR.current_context(), sym_addr)
                 ),
             )
         end

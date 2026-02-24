@@ -11,24 +11,24 @@ const NullClient = Client(C_NULL; skip_check=true)
 
 function XLA.free_client(client::Client)
     @assert client.client != C_NULL "Client is null"
-    return MLIR.API.FreeClient(client.client)
+    return GC.@preserve client MLIR.API.FreeClient(client.client)
 end
 
 function XLA.num_devices(client::Client)
     @assert client.client != C_NULL "Client is null"
-    return MLIR.API.ClientNumDevices(client.client)
+    return GC.@preserve client MLIR.API.ClientNumDevices(client.client)
 end
 
 function XLA.num_addressable_devices(client::Client)
     @assert client.client != C_NULL "Client is null"
-    return MLIR.API.ClientNumAddressableDevices(client.client)
+    return GC.@preserve client MLIR.API.ClientNumAddressableDevices(client.client)
 end
 
 function XLA.devices(client::Client)
     @assert client.client != C_NULL "Client is null"
     ndevices = Int(XLA.num_devices(client))
     devices = Ref{NTuple{ndevices,Ptr{Cvoid}}}()
-    MLIR.API.ClientGetDevices(client.client, devices)
+    GC.@preserve client MLIR.API.ClientGetDevices(client.client, devices)
     return [Device(device) for device in devices[]]
 end
 
@@ -36,33 +36,41 @@ function XLA.addressable_devices(client::Client)
     @assert client.client != C_NULL "Client is null"
     naddressable_devices = Int(XLA.num_addressable_devices(client))
     addressable_devices = Ref{NTuple{naddressable_devices,Ptr{Cvoid}}}()
-    MLIR.API.ClientGetAddressableDevices(client.client, addressable_devices)
+    GC.@preserve client MLIR.API.ClientGetAddressableDevices(
+        client.client, addressable_devices
+    )
     return [Device(device) for device in addressable_devices[]]
 end
 
 function XLA.process_index(client::Client)
     @assert client.client != C_NULL "Client is null"
-    return MLIR.API.ClientProcessIndex(client.client)
+    return GC.@preserve client MLIR.API.ClientProcessIndex(client.client)
 end
 
 function XLA.get_device(client::Client, idx)
     @assert client.client != C_NULL "Client is null"
-    return Device(MLIR.API.ClientGetDevice(client.client, idx))
+    return Device(GC.@preserve client MLIR.API.ClientGetDevice(client.client, idx))
 end
 
 function XLA.get_addressable_device(client::Client, idx)
     @assert client.client != C_NULL "Client is null"
-    return Device(MLIR.API.ClientGetAddressableDevice(client.client, idx))
+    return Device(
+        GC.@preserve client MLIR.API.ClientGetAddressableDevice(client.client, idx)
+    )
 end
 
 function XLA.platform_name(client::Client)
     @assert client.client != C_NULL "Client is null"
-    return XLA.unsafe_string_and_free(MLIR.API.ClientGetPlatformName(client.client))
+    return GC.@preserve client XLA.unsafe_string_and_free(
+        MLIR.API.ClientGetPlatformName(client.client)
+    )
 end
 
 function XLA.cost_analysis(client::Client, hlo_module::XLA.HloModule)
     ref = Ref{MLIR.API.JLHloCostAnalysisProperties}()
-    MLIR.API.PjRtHloModuleCostAnalysisProperties(client.client, hlo_module.ptr, ref)
+    GC.@preserve client hlo_module MLIR.API.PjRtHloModuleCostAnalysisProperties(
+        client.client, hlo_module.ptr, ref
+    )
     return ref[]
 end
 

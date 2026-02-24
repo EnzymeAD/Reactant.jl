@@ -12,10 +12,11 @@ end
 @inline free_future(future::Future) = MLIR.API.ifrt_free_future(future.future)
 
 function Base.isready(future::Future)
-    return MLIR.API.mlir_c.ifrt_future_is_ready(future.future::Ptr{Cvoid}) != 0
+    res = GC.@preserve future MLIR.API.mlir_c.ifrt_future_is_ready(future.future)
+    return res != 0
 end
 
 @inline function Base.wait(future::Future)::Nothing
-    MLIR.API.ifrt_future_await(future.future)
+    GC.@preserve future MLIR.API.ifrt_future_await(future.future)
     return nothing
 end

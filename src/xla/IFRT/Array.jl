@@ -22,7 +22,7 @@ function Array(
     device::Device=XLA.default_device(client),
     memory_kind::AbstractString=string(convert(MemoryKind, XLA.default_memory(device))),
 ) where {T<:Reactant.ReactantPrimitive,N}
-    buffer = MLIR.API.ifrt_client_make_single_shard_array_from_host_buffer(
+    buffer = GC.@preserve client device MLIR.API.ifrt_client_make_single_shard_array_from_host_buffer(
         client.client,
         array,
         XLA.primitive_type(T),
@@ -99,7 +99,7 @@ function Array(
 
     array_shape = collect(Int64, reverse(array_shape))
 
-    buffer = MLIR.API.ifrt_client_assemble_array_from_single_shards(
+    buffer = GC.@preserve client sharding MLIR.API.ifrt_client_assemble_array_from_single_shards(
         client.client,
         length(array_shape),
         array_shape,
@@ -129,20 +129,20 @@ end
 
 @inline function XLA.free_buffer(buffer::Array)
     if buffer.buffer != C_NULL && XLA.is_live[]
-        MLIR.API.ifrt_free_array(buffer.buffer)
+        GC.@preserve buffer MLIR.API.ifrt_free_array(buffer.buffer)
     end
 end
 
-Base.ndims(buffer::Array) = MLIR.API.ifrt_array_ndims(buffer.buffer)
+Base.ndims(buffer::Array) = GC.@preserve buffer MLIR.API.ifrt_array_ndims(buffer.buffer)
 
 function Base.size(buffer::Array)
-    return Tuple(
-        unsafe_wrap(Base.Array, MLIR.API.ifrt_array_shape(buffer.buffer), ndims(buffer))
-    )
+    sz = GC.@preserve buffer MLIR.API.ifrt_array_shape(buffer.buffer)
+    return Tuple(unsafe_wrap(Base.Array, sz, ndims(buffer)))
 end
 
 function Base.eltype(buffer::Array)
-    return XLA.julia_type(MLIR.API.ifrt_array_eltype(buffer.buffer))
+    _elt = GC.@preserve buffer MLIR.API.ifrt_array_eltype(buffer.buffer)
+    return XLA.julia_type(_elt)
 end
 
 function XLA.device(buffer::Array)
@@ -152,7 +152,8 @@ function XLA.device(buffer::Array)
 end
 
 function XLA.client(buffer::Array)
-    return Client(MLIR.API.ifrt_array_to_client(buffer.buffer))
+    client_ptr = GC.@preserve buffer MLIR.API.ifrt_array_to_client(buffer.buffer)
+    return Client(client_ptr)
 end
 
 XLA.synced_buffer(buffer::Array) = buffer
@@ -173,7 +174,9 @@ function XLA.to_host(buffer::Array, data, reactant_sharding)
         data_buffer_shape = reverse(size(data_buffer))
         @assert size(data) == data_buffer_shape "Expected data to be of size \
                                                  $(size(data)), got $(data_buffer_shape)"
-        MLIR.API.ifrt_array_copy_to_host_buffer(data_buffer.buffer, data)
+        GC.@preserve data_buffer MLIR.API.ifrt_array_copy_to_host_buffer(
+            data_buffer.buffer, data
+        )
         return data
     end
 
@@ -219,7 +222,7 @@ end
 function disassemble_into_single_device_arrays(array::Array, only_addressable_devices::Bool)
     c_single_device_shard_semantics = Int32(!only_addressable_devices)
     narrays = Ref{Int32}(0)
-    arrays = MLIR.API.ifrt_array_disassemble_into_single_device_arrays(
+    arrays = GC.@preserve array MLIR.API.ifrt_array_disassemble_into_single_device_arrays(
         array.buffer, 0, c_single_device_shard_semantics, narrays
     )
     return [Array(unsafe_load(arrays, i)) for i in 1:narrays[]]
@@ -340,13 +343,14 @@ function XLA.copy_buffer_to_device(::Array, ::Device)
 end
 
 function XLA.sharding(buffer::Array)
-    return Sharding(MLIR.API.ifrt_array_to_sharding(buffer.buffer))
+    sharding_ptr = GC.@preserve buffer MLIR.API.ifrt_array_to_sharding(buffer.buffer)
+    return Sharding(sharding_ptr)
 end
 
 function copy_arrays_to_device_with_sharding(buffers::Vector{Array}, sharding::Sharding)
     ifrt_client = XLA.client(first(buffers)) # TODO(#2235): check all clients are the same?
     src_buffers = [buffer.buffer for buffer in buffers]
-    dst_buffers = MLIR.API.ifrt_copy_arrays_to_device_with_sharding(
+    dst_buffers = GC.@preserve ifrt_client sharding MLIR.API.ifrt_copy_arrays_to_device_with_sharding(
         ifrt_client.client,
         src_buffers,
         length(buffers),
@@ -360,4 +364,4 @@ function copy_arrays_to_device_with_sharding(buffers::Vector{Array}, sharding::S
     return dst_arrays
 end
 
-Base.copy(b::Array) = Array(MLIR.API.ifrt_copy_array(b.buffer))
+Base.copy(b::Array) = Array(GC.@preserve b MLIR.API.ifrt_copy_array(b.buffer))

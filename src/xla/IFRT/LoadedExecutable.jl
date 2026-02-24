@@ -14,7 +14,7 @@ end
 
 function free_exec(exec::LoadedExecutable)
     if XLA.is_live[]
-        MLIR.API.ifrt_loaded_executable_dtor(exec.exec)
+        GC.@preserve exec MLIR.API.ifrt_loaded_executable_dtor(exec.exec)
     end
 end
 
@@ -40,7 +40,7 @@ for (jlop, xlaop, field) in (
         end
 
         op_shardings = Ref{NTuple{exec.$(field),Ptr{Cvoid}}}()
-        MLIR.API.$(xlaop)(exec.exec, op_shardings, exec.$(field))
+        GC.@preserve exec MLIR.API.$(xlaop)(exec.exec, op_shardings, exec.$(field))
         return [XLA.OpSharding(op_sharding) for op_sharding in op_shardings[]]
     end
 end
@@ -51,7 +51,9 @@ function XLA.get_hlo_modules(exec::LoadedExecutable)
     # and use the ones assigned to by XLA
     hlo_modules = Ref{NTuple{Int64(XLA.num_partitions(exec)),Ptr{Cvoid}}}()
     nmodules = Ref{Int32}(0)
-    MLIR.API.ifrt_loaded_executable_get_hlo_modules(exec.exec, hlo_modules, nmodules)
+    GC.@preserve exec MLIR.API.ifrt_loaded_executable_get_hlo_modules(
+        exec.exec, hlo_modules, nmodules
+    )
     return map(XLA.HloModule, hlo_modules[][1:Int(nmodules[])])
 end
 
@@ -67,7 +69,7 @@ function XLA.compile(
 )
     compile_options_bytes = Reactant.ProtoUtils.proto_to_bytes(compile_options)
     exec = MLIR.IR.try_compile_dump_mlir(mod) do
-        MLIR.API.ifrt_compile_with_proto(
+        GC.@preserve client MLIR.API.ifrt_compile_with_proto(
             client.client, mod, compile_options_bytes, length(compile_options_bytes)
         )
     end
@@ -86,7 +88,7 @@ end
     future_res = Ref{Ptr{Cvoid}}()
     futures = Ref{UInt8}(0)
 
-    MLIR.API.ifrt_loaded_executable_execute(
+    GC.@preserve exec MLIR.API.ifrt_loaded_executable_execute(
         exec.exec,
         N,
         Base.RefValue(inputs),

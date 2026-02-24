@@ -11,14 +11,18 @@ end
 function GPUPerformanceModel(
     mlir_context::MLIR.IR.Context, device_description::StreamExecutorDeviceDescription
 )
-    return GPUPerformanceModel(
-        MLIR.API.CreateGPUPerformanceModel(mlir_context, device_description.ptr)
-    )
+    GC.@preserve device_description begin
+        return GPUPerformanceModel(
+            MLIR.API.CreateGPUPerformanceModel(mlir_context, device_description.ptr)
+        )
+    end
 end
 
 # Runs the analysis on the given HLO module.
 function (gpu_performance_model::GPUPerformanceModel)(hlo_module::HloModule)
-    MLIR.API.RunAnalysisOnHloModule(gpu_performance_model.ptr, hlo_module.ptr)
+    GC.@preserve gpu_performance_model MLIR.API.RunAnalysisOnHloModule(
+        gpu_performance_model.ptr, hlo_module.ptr
+    )
     return nothing
 end
 
@@ -41,6 +45,10 @@ function estimate_runtime_for_instruction(
     performance_model::GPUPerformanceModel, hlo_instruction::HloInstruction
 )
     data = Ref{EstimateRunTimeData}()
-    MLIR.API.EstimateRunTimeForInstruction(performance_model.ptr, hlo_instruction.ptr, data)
+    GC.@preserve performance_model hlo_instruction begin
+        MLIR.API.EstimateRunTimeForInstruction(
+            performance_model.ptr, hlo_instruction.ptr, data
+        )
+    end
     return data[]
 end

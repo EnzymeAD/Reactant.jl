@@ -3,15 +3,16 @@ struct Device <: XLA.AbstractDevice
 end
 
 function XLA.client(device::Device)
-    return Client(MLIR.API.ifrt_DeviceToClient(device.device))
+    client_ptr = GC.@preserve device MLIR.API.ifrt_DeviceToClient(device.device)
+    return Client(client_ptr)
 end
 
 function XLA.device_ordinal(device::Device)
-    return MLIR.API.ifrt_DeviceGetGlobalDeviceId(device.device)
+    return GC.@preserve device MLIR.API.ifrt_DeviceGetGlobalDeviceId(device.device)
 end
 
 function XLA.device_kind(device::Device)
-    str = MLIR.API.ifrt_DeviceGetKind(device.device)
+    str = GC.@preserve device MLIR.API.ifrt_DeviceGetKind(device.device)
     return XLA.unsafe_string_and_free(str)
 end
 
@@ -20,16 +21,16 @@ function XLA.get_local_device_id(::Device)
 end
 
 function XLA.get_local_hardware_id(device::Device)
-    return MLIR.API.ifrt_DeviceGetLocalHardwareId(device.device)
+    return GC.@preserve device MLIR.API.ifrt_DeviceGetLocalHardwareId(device.device)
 end
 
 function XLA.default_memory(device::Device)
-    return Memory(MLIR.API.ifrt_DeviceGetDefaultMemory(device.device))
+    return Memory(GC.@preserve device MLIR.API.ifrt_DeviceGetDefaultMemory(device.device))
 end
 
 function XLA.memories(device::Device)
     memories_size = Ref{Int32}(0)
-    ptr = MLIR.API.ifrt_DeviceGetMemories(device.device, memories_size)
+    ptr = GC.@preserve device MLIR.API.ifrt_DeviceGetMemories(device.device, memories_size)
     return [Memory(unsafe_load(ptr, i)) for i in 1:memories_size[]]
 end
 
@@ -48,11 +49,11 @@ function XLA.client(device_list::AbstractVector{Device})
 end
 
 function XLA.is_addressable(device::Device)
-    return MLIR.API.ifrt_DeviceIsAddressable(device.device)
+    return GC.@preserve device MLIR.API.ifrt_DeviceIsAddressable(device.device)
 end
 
 function XLA.allocatorstats_internal(device::Device)
     ref = Ref{MLIR.API.JLAllocatorStats}()
-    MLIR.API.ifrt_device_get_allocator_stats(device.device, ref)
+    GC.@preserve device MLIR.API.ifrt_device_get_allocator_stats(device.device, ref)
     return ref[]
 end

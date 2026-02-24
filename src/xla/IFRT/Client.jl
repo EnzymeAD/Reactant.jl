@@ -42,7 +42,7 @@ end
 
 function XLA.platform_name(client::Client)
     @assert client.client != C_NULL "Client is null"
-    str = MLIR.API.ifrt_ClientGetPlatformName(client.client)
+    str = GC.@preserve client MLIR.API.ifrt_ClientGetPlatformName(client.client)
     return XLA.unsafe_string_and_free(str)
 end
 
@@ -50,7 +50,7 @@ function XLA.devices(client::Client)
     @assert client.client != C_NULL "Client is null"
     ndevices = Int(XLA.num_devices(client))
     devices = Ref{NTuple{ndevices,Ptr{Cvoid}}}()
-    MLIR.API.ifrt_client_devices(client.client, devices)
+    GC.@preserve client MLIR.API.ifrt_client_devices(client.client, devices)
     return [Device(device) for device in devices[]]
 end
 
@@ -58,14 +58,18 @@ function XLA.addressable_devices(client::Client)
     @assert client.client != C_NULL "Client is null"
     naddressable_devices = Int(XLA.num_addressable_devices(client))
     addressable_devices = Ref{NTuple{naddressable_devices,Ptr{Cvoid}}}()
-    MLIR.API.ifrt_client_addressable_devices(client.client, addressable_devices)
+    GC.@preserve client MLIR.API.ifrt_client_addressable_devices(
+        client.client, addressable_devices
+    )
     return [Device(device) for device in addressable_devices[]]
 end
 
 function XLA.cost_analysis(client::Client, hlo_module::XLA.HloModule)
     @assert client.client != C_NULL "Client is null"
     ref = Ref{MLIR.API.JLHloCostAnalysisProperties}()
-    MLIR.API.ifrt_hlo_module_cost_analysis_properties(client.client, hlo_module.ptr, ref)
+    GC.@preserve client MLIR.API.ifrt_hlo_module_cost_analysis_properties(
+        client.client, hlo_module.ptr, ref
+    )
     return ref[]
 end
 
