@@ -270,43 +270,48 @@ function overloaded_mul!(
 
     size(A, 2) == size(B, 1) ||
         throw(DimensionMismatch("A has size $(size(A)), B has size $(size(B))"))
+    size(C, 1) == size(A, 1) ||
+        throw(DimensionMismatch("C has size $(size(C)), A has size $(size(A))"))
+    size(C, 2) == size(B, 2) ||
+        throw(DimensionMismatch("C has size $(size(C)), B has size $(size(B))"))
+
+    if ndims(C) == 1
+        @assert ndims(B) == 1 "B must be a vector if C is a vector"
     end
 
-    T = Reactant.unwrapped_eltype(C)
-    tmp = @opcall dot_general(
-        T.(materialize_traced_array(A)),
-        T.(materialize_traced_array(B));
-        contracting_dimensions=([2], [1]),
-    )
+    tmp = @opcall dot_general(A, B, contracting_dimensions=([2], [1]))
 
-    is_α_one = !(α isa TracedRNumber) && isone(α)
-    is_β_zero = !(β isa TracedRNumber) && iszero(β)
+    β_is_zero = !(β isa TracedRNumber) && iszero(β)
+    α_is_one = !(α isa TracedRNumber) && isone(α)
 
-    α_res = if is_α_one
-        tmp
+    if α_is_one && β_is_zero
+        res = tmp
     else
-        @opcall multiply(
-            tmp,
-            Reactant.broadcast_to_size(Reactant.promote_to(TracedRNumber{T}, α), size(C)),
-        )
+        α_res = if α_is_one
+            tmp
+        else
+            @opcall(
+                multiply(
+                    tmp,
+                    @opcall(fill(Reactant.promote_to(TracedRNumber{T}, α), size(tmp)))
+                )
+            )
+        end
+        if β_is_zero
+            res = α_res
+        else
+            β_C = @opcall multiply(
+                C, @opcall(fill(Reactant.promote_to(TracedRNumber{T}, β), size(C)))
+            )
+            res = @opcall add(α_res, β_C)
+        end
     end
 
-    res = if is_β_zero
-        α_res
-    elseif β isa TracedRNumber
-        β_C = @opcall multiply(
-            C,
-            Reactant.broadcast_to_size(Reactant.promote_to(TracedRNumber{T}, β), size(C)),
-        )
-        res_full = @opcall add(α_res, β_C)
-        @opcall select(Reactant.broadcast_to_size(iszero(β), size(C)), α_res, res_full)
-    else
-        β_C = @opcall multiply(
-            C,
-            Reactant.broadcast_to_size(Reactant.promote_to(TracedRNumber{T}, β), size(C)),
-        )
-        @opcall add(α_res, β_C)
+    if ndims(C) == 2 && size(C, 2) == 1 && ndims(res) == 1
+        res = reshape(res, size(C))
     end
+
+    @assert size(C) == size(res) "C has size $(size(C)), res has size $(size(res))"
     set_mlir_data!(C, get_mlir_data(res))
     return C
 end

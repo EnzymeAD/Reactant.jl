@@ -188,11 +188,13 @@ function BLAS.ger!(
     return A
 end
 
-function BLAS.geru!(
-    alpha::Number, x::AnyTracedRVector, y::AnyTracedRVector, A::AnyTracedRMatrix
-)
-    A .+= alpha .* (x * transpose(y))
-    return A
+@static if isdefined(BLAS, :geru!)
+    function BLAS.geru!(
+        alpha::Number, x::AnyTracedRVector, y::AnyTracedRVector, A::AnyTracedRMatrix
+    )
+        A .+= alpha .* (x * transpose(y))
+        return A
+    end
 end
 
 function BLAS.symv(uplo::Char, alpha::Number, A::AnyTracedRMatrix, x::AnyTracedRVector)
