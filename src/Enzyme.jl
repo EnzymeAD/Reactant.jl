@@ -365,7 +365,7 @@ function overload_autodiff(
                 call_with_reactant(stack, arg.dval)
             end
             for p in path[3:end]
-                x = Reactant.Compiler.traced_getfield(x, p)
+                x = Compiler.traced_getfield(x, p)
             end
             x = TracedUtils.get_mlir_data(x)
             reverse_seeds[path] = x
