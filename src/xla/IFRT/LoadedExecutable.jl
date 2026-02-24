@@ -86,15 +86,13 @@ end
     future_res = Ref{Ptr{Cvoid}}()
     futures = Ref{UInt8}(0)
 
-    inputs = Base.RefValue(inputs)
-    donated_args = Base.RefValue(donated_args)
     MLIR.API.ifrt_loaded_executable_execute(
         exec.exec,
         N,
-        inputs,
-        donated_args,
+        Base.RefValue(inputs),
+        Base.RefValue(donated_args),
         n_outs,
-        Base.unsafe_convert(Ptr{Ptr{Cvoid}}, outputs),
+        outputs,
         futures,
         future_res,
     )

@@ -7,7 +7,7 @@ mutable struct HloModule
     end
 end
 
-free_hlo_module(hlo_module) = MLIR.API.freeHloModule(hlo_module.ptr)
+free_hlo_module(hlo_module) = MLIR.API.FreeHloModule(hlo_module.ptr)
 
 HloModule(mod::MLIR.IR.Module) = HloModule(MLIR.API.convertMlirModuleToHloModule(mod))
 

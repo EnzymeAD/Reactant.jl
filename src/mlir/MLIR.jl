@@ -30,6 +30,17 @@ module API
     function RegisterEnzymeXLAGPUHandler()
         @ccall mlir_c.RegisterEnzymeXLAGPUHandler()::Cvoid
     end
+
+    function ifrt_compile_with_proto(
+        client, cmod, compile_options_proto::Vector{UInt8}, compile_options_proto_size
+    )
+        return @ccall mlir_c.ifrt_compile_with_proto(
+            client::Ptr{Client},
+            cmod::MlirModule,
+            compile_options_proto::Ptr{UInt8},
+            compile_options_proto_size::Csize_t,
+        )::Ptr{HeldIfrtLoadedExecutable}
+    end
 end # module API
 
 include("IR/IR.jl")
