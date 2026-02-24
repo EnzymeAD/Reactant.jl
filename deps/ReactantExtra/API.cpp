@@ -613,7 +613,7 @@ REACTANT_ABI PjRtDevice *ClientGetDevice(PjRtClient *client, int device_id) {
 REACTANT_ABI PjRtDevice *ClientGetAddressableDevice(PjRtClient *client,
                                                     int device_id) {
   return MyValueOrThrow(
-      client->LookupAddressableDevice(PjRtLocalDeviceId(device_id)));
+      client->LookupAddressableDevice(LocalDeviceId(device_id)));
 }
 
 REACTANT_ABI const char *ClientGetPlatformName(PjRtClient *client) {
