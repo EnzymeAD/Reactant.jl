@@ -617,9 +617,12 @@ end
 
 function differentiate_two_arg_fn(model)
     dmodel = Enzyme.make_zero(model)
-    dedν = autodiff(set_strong_zero(Enzyme.ReverseWithPrimal),
-                    two_arg_fn, Active,
-                    Duplicated(model, dmodel))
+    dedν = autodiff(
+        set_strong_zero(Enzyme.ReverseWithPrimal),
+        two_arg_fn,
+        Active,
+        Duplicated(model, dmodel),
+    )
     return dedν
 end
 
