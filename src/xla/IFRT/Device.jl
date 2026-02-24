@@ -52,7 +52,7 @@ function XLA.is_addressable(device::Device)
 end
 
 function XLA.allocatorstats_internal(device::Device)
-    ref = Ref{XLA.JLAllocatorStats}()
+    ref = Ref{MLIR.API.JLAllocatorStats}()
     MLIR.API.ifrt_device_get_allocator_stats(device.device, ref)
     return ref[]
 end

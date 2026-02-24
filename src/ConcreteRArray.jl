@@ -598,9 +598,7 @@ function Base.copyto!(
     src_sync = src_async.buffer
     wait(src_async)
 
-    MLIR.API.ifrt_array_copy_to_host_buffer(
-        src_sync.buffer, pointer(dest, doffs), (soffs - 1) * sizeof(T)
-    )
+    MLIR.API.ifrt_array_copy_to_host_buffer(src_sync.buffer, pointer(dest, doffs))
 
     return dest
 end
