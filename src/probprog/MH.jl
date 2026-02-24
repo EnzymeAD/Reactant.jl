@@ -37,7 +37,9 @@ function mh(
             sym_addr = reinterpret(UInt64, pointer_from_objref(sym))
             push!(
                 address_attr,
-                MLIR.API.enzymeSymbolAttrGet(MLIR.IR.current_context(), sym_addr),
+                MLIR.IR.Attribute(
+                    MLIR.API.enzymeSymbolAttrGet(MLIR.IR.current_context(), sym_addr),
+                ),
             )
         end
         push!(regenerate_attr, MLIR.IR.Attribute(address_attr))

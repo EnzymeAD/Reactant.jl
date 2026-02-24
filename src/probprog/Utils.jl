@@ -184,8 +184,10 @@ function build_selection_attr(trace::TracedTrace)
     for entry in trace.entries
         addr_path = [entry.parent_path..., entry.symbol]
         addr_attrs = [
-            MLIR.API.enzymeSymbolAttrGet(
-                MLIR.IR.current_context(), reinterpret(UInt64, pointer_from_objref(sym))
+            MLIR.IR.Attribute(
+                MLIR.API.enzymeSymbolAttrGet(
+                    MLIR.IR.current_context(), reinterpret(UInt64, pointer_from_objref(sym))
+                ),
             ) for sym in addr_path
         ]
         push!(selection, MLIR.IR.Attribute(addr_attrs))

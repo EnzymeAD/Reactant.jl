@@ -1115,7 +1115,7 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
         MLIR.API.ReactantFuncSetArgAttr(
             wrapfunc,
             (i - 1),
-            MLIR.API.MlirStringRef("llvm.noalias"),
+            Base.unsafe_convert(MLIR.API.MlirStringRef, "llvm.noalias"),
             MLIR.IR.UnitAttribute(),
         )
     end

@@ -58,7 +58,9 @@ function mcmc(
             sym_addr = reinterpret(UInt64, pointer_from_objref(sym))
             push!(
                 address_attr,
-                MLIR.API.enzymeSymbolAttrGet(MLIR.IR.current_context(), sym_addr),
+                MLIR.IR.Attribute(
+                    MLIR.API.enzymeSymbolAttrGet(MLIR.IR.current_context(), sym_addr)
+                ),
             )
         end
         push!(selection_attr, MLIR.IR.Attribute(address_attr))
@@ -78,17 +80,24 @@ function mcmc(
     nuts_config_attr = nothing
 
     if algorithm == :HMC
-        hmc_config_attr = MLIR.API.enzymeHMCConfigAttrGet(
-            MLIR.IR.current_context(), trajectory_length, adapt_step_size, adapt_mass_matrix
+        hmc_config_attr = MLIR.IR.Attribute(
+            MLIR.API.enzymeHMCConfigAttrGet(
+                MLIR.IR.current_context(),
+                trajectory_length,
+                adapt_step_size,
+                adapt_mass_matrix,
+            ),
         )
     elseif algorithm == :NUTS
-        nuts_config_attr = MLIR.API.enzymeNUTSConfigAttrGet(
-            MLIR.IR.current_context(),
-            max_tree_depth,
-            true,
-            max_delta_energy,
-            adapt_step_size,
-            adapt_mass_matrix,
+        nuts_config_attr = MLIR.IR.Attribute(
+            MLIR.API.enzymeNUTSConfigAttrGet(
+                MLIR.IR.current_context(),
+                max_tree_depth,
+                true,
+                max_delta_energy,
+                adapt_step_size,
+                adapt_mass_matrix,
+            ),
         )
     else
         error("Unknown MCMC algorithm: $algorithm. Supported: :HMC, :NUTS")
