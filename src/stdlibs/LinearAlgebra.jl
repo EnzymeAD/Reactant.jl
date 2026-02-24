@@ -234,70 +234,49 @@ Reactant.aos_to_soa(x::Tridiagonal{TracedRNumber{T}}) where {T} = x
 
 # Core functions
 function overloaded_mul!(
-    @nospecialize(C::TracedRArray{T,1}),
-    @nospecialize(A::AbstractMatrix),
-    @nospecialize(B::AbstractVector),
-    α::Number=true,
-    β::Number=false,
-) where {T}
-    # TODO: The reshape operations are not getting optimized, we should directly call
-    #       dot_general
-    rC = @opcall reshape(C, length(C), 1)
-    overloaded_mul!(rC, A, reshape(B, :, 1), α, β)
-    C.mlir_data = get_mlir_data(vec(rC))
-    return C
-end
-
-function overloaded_mul!(
-    @nospecialize(C::TracedRArray{T,2}),
-    @nospecialize(A::AbstractMatrix),
-    @nospecialize(B::AbstractVector),
-    α::Number=true,
-    β::Number=false,
-) where {T}
-    overloaded_mul!(C, A, reshape(B, :, 1), α, β)
-    return C
-end
-
-function overloaded_mul!(
-    @nospecialize(C::TracedRArray{T,2} where {T}),
-    @nospecialize(A::AbstractMatrix),
-    @nospecialize(B::AbstractMatrix),
+    C::AbstractVecOrMat,
+    A::AbstractVecOrMat,
+    B::AbstractVecOrMat,
     α::Number=true,
     β::Number=false,
 )
-    A = call_with_reactant(Reactant.promote_to, TracedRArray, A)
-    B = call_with_reactant(Reactant.promote_to, TracedRArray, B)
+    T = unwrapped_eltype(C)
+    A = call_with_reactant(Reactant.promote_to, TracedRArray{T}, A)
+    B = call_with_reactant(Reactant.promote_to, TracedRArray{T}, B)
 
-    if size(C) != (size(A, 1), size(B, 2))
-        throw(
-            DimensionMismatch(
-                "C has size $(size(C)), A has size $(size(A)), B has size $(size(B))"
-            ),
-        )
-    end
-    if size(A, 2) != size(B, 1)
+    size(A, 2) == size(B, 1) ||
         throw(DimensionMismatch("A has size $(size(A)), B has size $(size(B))"))
+    size(C, 1) == size(A, 1) ||
+        throw(DimensionMismatch("C has size $(size(C)), A has size $(size(A))"))
+    size(C, 2) == size(B, 2) ||
+        throw(DimensionMismatch("C has size $(size(C)), B has size $(size(B))"))
+
+    if ndims(C) == 1
+        @assert ndims(B) == 1 "B must be a vector if C is a vector"
     end
 
-    T = Reactant.unwrapped_eltype(C)
-    tmp = @opcall dot_general(
-        T.(materialize_traced_array(A)),
-        T.(materialize_traced_array(B));
-        contracting_dimensions=([2], [1]),
-    )
+    tmp = @opcall dot_general(A, B, contracting_dimensions=([2], [1]))
 
-    res = if iszero(β)
-        if isone(α)
-            tmp
-        else
-            @opcall(multiply(tmp, Reactant.broadcast_to_size(T(α), size(C))))
-        end
+    β_is_zero = !(β isa TracedRNumber) && iszero(β)
+    α_is_one = !(α isa TracedRNumber) && isone(α)
+
+    if α_is_one && β_is_zero
+        res = tmp
     else
-        α_res = @opcall multiply(tmp, Reactant.broadcast_to_size(T(α), size(C)))
-        β_C = @opcall multiply(C, Reactant.broadcast_to_size(T(β), size(C)))
-        @opcall add(α_res, β_C)
+        α_res = α_is_one ? tmp : @opcall multiply(tmp, @opcall(fill(T(α), size(tmp))))
+        if β_is_zero
+            res = α_res
+        else
+            β_C = @opcall multiply(C, @opcall(fill(T(β), size(C))))
+            res = @opcall add(α_res, β_C)
+        end
     end
+
+    if ndims(C) == 2 && size(C, 2) == 1 && ndims(res) == 1
+        res = reshape(res, size(C))
+    end
+
+    @assert size(C) == size(res) "C has size $(size(C)), res has size $(size(res))"
     set_mlir_data!(C, get_mlir_data(res))
     return C
 end
