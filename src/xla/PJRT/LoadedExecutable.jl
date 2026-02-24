@@ -68,7 +68,7 @@ function XLA.compile(
     compile_options_bytes = Reactant.ProtoUtils.proto_to_bytes(compile_options)
     exec = MLIR.IR.try_compile_dump_mlir(mod) do
         GC.@preserve client MLIR.API.ClientCompileWithProto(
-            client.client, mod, compile_options_bytes
+            client.client, mod, compile_options_bytes, length(compile_options_bytes)
         )
     end
     return LoadedExecutable(
