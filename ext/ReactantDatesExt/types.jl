@@ -57,9 +57,9 @@ Base.eps(::T) where {T<:TracedRTime} = eps(T)
 Base.zero(::Type{TracedRDateTime}) = TracedRMillisecond(0)
 Base.zero(::Type{TracedRDate}) = TracedRDay(0)
 Base.zero(::Type{TracedRTime}) = TracedRNanosecond(0)
-Base.zero(::T) where {T <: TracedRDateTime} = zero(T)
-Base.zero(::T) where {T <: TracedRDate} = zero(T)
-Base.zero(::T) where {T <: TracedRTime} = zero(T)
+Base.zero(::T) where {T<:TracedRDateTime} = zero(T)
+Base.zero(::T) where {T<:TracedRDate} = zero(T)
+Base.zero(::T) where {T<:TracedRTime} = zero(T)
 
 # isless and == for TracedR* TimeTypes
 Base.isless(x::TracedRDateTime, y::TracedRDateTime) = isless(value(x), value(y))
