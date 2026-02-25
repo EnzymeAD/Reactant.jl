@@ -41,9 +41,9 @@ Dates.value(dt::TracedRDate) = dt.instant.periods.value
 Dates.value(t::TracedRTime) = t.instant.value
 
 # Traits
-Base.isfinite(::Union{Type{T}, T}) where {T <: TracedRDateTime} = true
-Base.isfinite(::Union{Type{T}, T}) where {T <: TracedRDate} = true
-Base.isfinite(::Union{Type{T}, T}) where {T <: TracedRTime} = true
+Base.isfinite(::Union{Type{T},T}) where {T<:TracedRDateTime} = true
+Base.isfinite(::Union{Type{T},T}) where {T<:TracedRDate} = true
+Base.isfinite(::Union{Type{T},T}) where {T<:TracedRTime} = true
 
 # eps
 Base.eps(::Type{TracedRDateTime}) = TracedRMillisecond(1)
