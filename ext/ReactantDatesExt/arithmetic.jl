@@ -127,10 +127,12 @@ end
 (-)(x::TracedRDateTime, y::TracedRQuarter) = x - TracedRMonth(3 * value(y))
 
 # TracedRDate-TracedRWeek/TracedRDay arithmetic
-(+)(x::TracedRDate, y::TracedRWeek) =
-    TracedRDate(UTInstant(TracedRDay(value(x) + 7 * value(y))))
-(-)(x::TracedRDate, y::TracedRWeek) =
-    TracedRDate(UTInstant(TracedRDay(value(x) - 7 * value(y))))
+function (+)(x::TracedRDate, y::TracedRWeek)
+    return TracedRDate(UTInstant(TracedRDay(value(x) + 7 * value(y))))
+end
+function (-)(x::TracedRDate, y::TracedRWeek)
+    return TracedRDate(UTInstant(TracedRDay(value(x) - 7 * value(y))))
+end
 (+)(x::TracedRDate, y::TracedRDay) = TracedRDate(UTInstant(TracedRDay(value(x) + value(y))))
 (-)(x::TracedRDate, y::TracedRDay) = TracedRDate(UTInstant(TracedRDay(value(x) - value(y))))
 
