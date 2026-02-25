@@ -302,8 +302,10 @@ using Reactant
         @test @jit(dt + Dates.Microsecond(501)) == Dates.DateTime(1999, 12, 27, 0, 0, 0, 1)
         @test @jit(dt + Dates.Microsecond(1499)) == Dates.DateTime(1999, 12, 27, 0, 0, 0, 1)
         @test @jit(dt - Dates.Microsecond(1)) == dt
-        @test @jit(dt - Dates.Microsecond(501)) == Dates.DateTime(1999, 12, 26, 23, 59, 59, 999)
-        @test @jit(dt - Dates.Microsecond(1499)) == Dates.DateTime(1999, 12, 26, 23, 59, 59, 999)
+        @test @jit(dt - Dates.Microsecond(501)) ==
+            Dates.DateTime(1999, 12, 26, 23, 59, 59, 999)
+        @test @jit(dt - Dates.Microsecond(1499)) ==
+            Dates.DateTime(1999, 12, 26, 23, 59, 59, 999)
     end
 
     @testset "DateTime-Nanosecond arithmetic" begin
