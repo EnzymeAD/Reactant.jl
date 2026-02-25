@@ -38,8 +38,8 @@ days(c::TracedRWeek) = 7 * value(c)
 
 # TracedRDateTime/TracedRDate-TracedRYear arithmetic
 function (+)(dt::TracedRDateTime, y::TracedRYear)
-    oy, m, d = yearmonthday(dt);
-    ny = oy + value(y);
+    oy, m, d = yearmonthday(dt)
+    ny = oy + value(y)
     ld = daysinmonth(ny, m)
     return TracedRDateTime(
         UTInstant(
