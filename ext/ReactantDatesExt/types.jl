@@ -8,13 +8,13 @@ for T in (:TracedRYear, :TracedRQuarter, :TracedRMonth, :TracedRWeek, :TracedRDa
     end
 end
 for T in (
-        :TracedRHour,
-        :TracedRMinute,
-        :TracedRSecond,
-        :TracedRMillisecond,
-        :TracedRMicrosecond,
-        :TracedRNanosecond,
-    )
+    :TracedRHour,
+    :TracedRMinute,
+    :TracedRSecond,
+    :TracedRMillisecond,
+    :TracedRMicrosecond,
+    :TracedRNanosecond,
+)
     @eval struct $T{I} <: TimePeriod
         value::I
         $T(v::Number) = new{typeof(v)}(v)
