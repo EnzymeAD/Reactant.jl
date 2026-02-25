@@ -106,50 +106,51 @@ Base.@nospecializeinfer function Reactant.traced_type_inner(
     return StructArray{ET_traced,N,C_traced,index_type(fieldtypes(C_traced))}
 end
 
-function Reactant.make_tracer(
-    seen,
-    @nospecialize(prev::StructArray{NT}),
-    @nospecialize(path),
-    mode;
-    track_numbers=false,
-    sharding=Reactant.Sharding.Sharding.NoSharding(),
-    runtime=nothing,
-    kwargs...,
-) where {NT}
+# function Reactant.make_tracer(
+#     seen,
+#     @nospecialize(prev::StructArray{NT}),
+#     @nospecialize(path),
+#     mode;
+#     track_numbers=false,
+#     sharding=Reactant.Sharding.Sharding.NoSharding(),
+#     runtime=nothing,
+#     kwargs...,
+# ) where {NT}
 
-    track_numbers isa Bool && (track_numbers = track_numbers ? Number : Union{})
-    components = StructArrays.components(prev)
-    if mode == TracedToTypes
-        push!(path, typeof(prev))
-        for c in components
-            make_tracer(seen, c, path, mode; track_numbers, sharding, runtime, kwargs...)
-        end
-        return nothing
-    end
-    traced_components = make_tracer(
-        seen,
-        components,
-        append_path(path, 1),
-        mode;
-        track_numbers,
-        sharding,
-        runtime,
-        kwargs...,
-    )
+#     track_numbers isa Bool && (track_numbers = track_numbers ? Number : Union{})
+#     components = StructArrays.components(prev)
+#     if mode == TracedToTypes
+#         push!(path, typeof(prev))
+#         for c in components
+#             make_tracer(seen, c, path, mode; track_numbers, sharding, runtime, kwargs...)
+#         end
+#         return nothing
+#     end
+#     traced_components = make_tracer(
+#         seen,
+#         components,
+#         append_path(path, 1),
+#         mode;
+#         track_numbers,
+#         sharding,
+#         runtime,
+#         kwargs...,
+#     )
 
 
-    T_traced = traced_type(typeof(prev), Val(mode), track_numbers, sharding, runtime)
-    np = length(T_traced.parameters)
-    # WTF why does this even happen? Clearly I messed something up with tracing
-    if first(traced_components) isa TracedRNumber
-        return T_traced.parameters[1](traced_components)
-    end
-    return StructArray{T_traced.parameters[1:np-1]...}(traced_components)
-end
+#     T_traced = traced_type(typeof(prev), Val(mode), track_numbers, sharding, runtime)
+#     np = length(T_traced.parameters)
+#     # WTF why does this even happen? Clearly I messed something up with tracing
+#     if first(traced_components) isa TracedRNumber
+#         return T_traced.parameters[1](traced_components)
+#     end
+#     return StructArray{T_traced.parameters[1:np-1]...}(traced_components)
+# end
 
 @inline function Reactant.traced_getfield(@nospecialize(obj::StructArray), field)
     return Base.getfield(obj, field)
 end
+
 
 # This is to tell StructArrays to leave these array types alone.
 StructArrays.staticschema(::Type{<:Reactant.AnyTracedRArray}) = NamedTuple{()}
