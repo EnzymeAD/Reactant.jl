@@ -80,7 +80,7 @@ end
 function (+)(dt::TracedRDateTime, z::TracedRMonth)
     y, m, d = yearmonthday(dt)
     ny = yearwrap(y, m, value(z))
-    mm = monthwrap(m, value(z));
+    mm = monthwrap(m, value(z))
     ld = daysinmonth(ny, mm)
     return TracedRDateTime(
         UTInstant(
