@@ -383,5 +383,4 @@ using Reactant
         @test @jit(Dates.days(Dates.Week(1))) == 7
         @test @jit(Dates.days(Dates.Week(2))) == 14
     end
-
 end # @testset "ReactantDatesExt"
