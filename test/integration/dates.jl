@@ -290,8 +290,10 @@ using Reactant
 
         dt = Dates.DateTime(1972, 6, 30, 23, 59, 59)
         @test @jit(dt + Dates.Millisecond(1)) == Dates.DateTime(1972, 6, 30, 23, 59, 59, 1)
-        @test @jit(dt - Dates.Millisecond(1)) == Dates.DateTime(1972, 6, 30, 23, 59, 58, 999)
-        @test @jit(dt + Dates.Millisecond(-1)) == Dates.DateTime(1972, 6, 30, 23, 59, 58, 999)
+        @test @jit(dt - Dates.Millisecond(1)) ==
+            Dates.DateTime(1972, 6, 30, 23, 59, 58, 999)
+        @test @jit(dt + Dates.Millisecond(-1)) ==
+            Dates.DateTime(1972, 6, 30, 23, 59, 58, 999)
     end
 
     @testset "DateTime-Microsecond arithmetic" begin
