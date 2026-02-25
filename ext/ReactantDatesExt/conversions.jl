@@ -36,8 +36,9 @@ end
 function Base.convert(::Type{TracedRDate}, dt::Dates.Date)
     return TracedRDate(UTInstant(TracedRDay(value(dt))))
 end
-Base.convert(::Type{Dates.Date}, x::TracedRDate) =
-    Dates.Date(UTInstant(Dates.Day(value(x))))
+function Base.convert(::Type{Dates.Date}, x::TracedRDate)
+    return Dates.Date(UTInstant(Dates.Day(value(x))))
+end
 TracedRDate(dt::Dates.Date) = convert(TracedRDate, dt)
 TracedRDate{I}(dt::Dates.Date) where {I} = TracedRDate{I}(UTInstant(TracedRDay(value(dt))))
 
