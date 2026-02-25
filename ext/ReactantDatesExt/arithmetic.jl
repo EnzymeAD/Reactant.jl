@@ -57,8 +57,8 @@ function (+)(dt::TracedRDate, y::TracedRYear)
     return TracedRDate(UTInstant(TracedRDay(totaldays(ny, m, d <= ld ? d : ld))))
 end
 function (-)(dt::TracedRDateTime, y::TracedRYear)
-    oy, m, d = yearmonthday(dt);
-    ny = oy - value(y);
+    oy, m, d = yearmonthday(dt)
+    ny = oy - value(y)
     ld = daysinmonth(ny, m)
     return TracedRDateTime(
         UTInstant(
