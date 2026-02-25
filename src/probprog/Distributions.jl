@@ -6,6 +6,7 @@ function sampler(::Type{D}) where {D<:Distribution}
     return error("sampler not implemented for $D")
 end
 
+# TODO(#2542): logpdf_fn should return a vector of log probabilities for each element of the input
 function logpdf_fn(::Type{D}) where {D<:Distribution}
     return error("logpdf_fn not implemented for $D")
 end
@@ -131,3 +132,31 @@ end
 sampler(::Type{<:LogNormal}) = _lognormal_sampler
 logpdf_fn(::Type{<:LogNormal}) = _lognormal_logpdf
 support(::Type{<:LogNormal}) = :positive
+
+struct Bernoulli{Tp,S<:Tuple} <: Distribution
+    logits::Tp
+    shape::S
+
+    function Bernoulli{Tp,S}(logits::Tp, shape::S) where {Tp,S<:Tuple}
+        isempty(shape) && throw(ArgumentError("shape cannot be empty"))
+        return new{Tp,S}(logits, shape)
+    end
+end
+
+Bernoulli(logits::Tp, shape::S) where {Tp,S<:Tuple} = Bernoulli{Tp,S}(logits, shape)
+
+params(d::Bernoulli) = (d.logits, d.shape)
+
+function _bernoulli_sampler(rng, logits, shape)
+    probs = 1.0 ./ (1.0 .+ exp.(-logits))
+    u = rand(rng, size(probs)...)
+    return Float64.(u .< probs)
+end
+
+function _bernoulli_logpdf(y, logits, _)
+    return sum(y .* logits .- max.(logits, 0.0) .- log1p.(exp.(.-abs.(logits))))
+end
+
+sampler(::Type{<:Bernoulli}) = _bernoulli_sampler
+logpdf_fn(::Type{<:Bernoulli}) = _bernoulli_logpdf
+support(::Type{<:Bernoulli}) = :real
