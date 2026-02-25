@@ -193,9 +193,9 @@ function MakeTPUClient(;
                                                     distributed_runtime_client"
 
     # LibTPU has its own internal copy of XLA which does not read the regular XLA flags
-    if !haskey(ENV,  "LIBTPU_INIT_ARGS")
+    if !haskey(ENV, "LIBTPU_INIT_ARGS")
         xla_flags = "--xla_enable_enzyme_comms_opt=true"
-        if haskey(ENV,  "XLA_FLAGS")
+        if haskey(ENV, "XLA_FLAGS")
             xla_flags = xla_flags * " " * ENV["XLA_FLAGS"]
         end
         ENV["LIBTPU_INIT_ARGS"] = xla_flags
