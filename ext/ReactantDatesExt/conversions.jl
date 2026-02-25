@@ -28,8 +28,9 @@ function Base.convert(::Type{Dates.DateTime}, x::TracedRDateTime)
     return Dates.DateTime(UTInstant(Dates.Millisecond(value(x))))
 end
 TracedRDateTime(dt::Dates.DateTime) = convert(TracedRDateTime, dt)
-TracedRDateTime{I}(dt::Dates.DateTime) where {I} =
-    TracedRDateTime{I}(UTInstant(TracedRMillisecond(value(dt))))
+function TracedRDateTime{I}(dt::Dates.DateTime) where {I}
+    return TracedRDateTime{I}(UTInstant(TracedRMillisecond(value(dt))))
+end
 
 # Date conversion
 function Base.convert(::Type{TracedRDate}, dt::Dates.Date)
