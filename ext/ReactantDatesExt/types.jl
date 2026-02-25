@@ -49,9 +49,9 @@ Base.isfinite(::Union{Type{T},T}) where {T<:TracedRTime} = true
 Base.eps(::Type{TracedRDateTime}) = TracedRMillisecond(1)
 Base.eps(::Type{TracedRDate}) = TracedRDay(1)
 Base.eps(::Type{TracedRTime}) = TracedRNanosecond(1)
-Base.eps(::T) where {T <: TracedRDateTime} = eps(T)
-Base.eps(::T) where {T <: TracedRDate} = eps(T)
-Base.eps(::T) where {T <: TracedRTime} = eps(T)
+Base.eps(::T) where {T<:TracedRDateTime} = eps(T)
+Base.eps(::T) where {T<:TracedRDate} = eps(T)
+Base.eps(::T) where {T<:TracedRTime} = eps(T)
 
 # zero
 Base.zero(::Type{TracedRDateTime}) = TracedRMillisecond(0)
