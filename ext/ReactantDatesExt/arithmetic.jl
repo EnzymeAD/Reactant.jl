@@ -137,10 +137,12 @@ end
 (-)(x::TracedRDate, y::TracedRDay) = TracedRDate(UTInstant(TracedRDay(value(x) - value(y))))
 
 # TracedRDateTime + any Period (via toms)
-(+)(x::TracedRDateTime, y::Period) =
-    TracedRDateTime(UTInstant(TracedRMillisecond(value(x) + toms(y))))
-(-)(x::TracedRDateTime, y::Period) =
-    TracedRDateTime(UTInstant(TracedRMillisecond(value(x) - toms(y))))
+function (+)(x::TracedRDateTime, y::Period)
+    return TracedRDateTime(UTInstant(TracedRMillisecond(value(x) + toms(y))))
+end
+function (-)(x::TracedRDateTime, y::Period)
+    return TracedRDateTime(UTInstant(TracedRMillisecond(value(x) - toms(y))))
+end
 
 # TracedRTime + any TimePeriod (via tons)
 (+)(x::TracedRTime, y::TimePeriod) = TracedRTime(TracedRNanosecond(value(x) + tons(y)))
