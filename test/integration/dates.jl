@@ -357,7 +357,8 @@ using Reactant
         @test @jit((a + Dates.Day(1)) + Dates.Month(1)) !=
             @jit((a + Dates.Month(1)) + Dates.Day(1))
         a = Dates.Date(2012, 2, 29)
-        @test @jit((a + Dates.Day(1)) + Dates.Month(1)) != @jit((a + Dates.Month(1)) + Dates.Day(1))
+        @test @jit((a + Dates.Day(1)) + Dates.Month(1)) !=
+            @jit((a + Dates.Month(1)) + Dates.Day(1))
     end
 
     @testset "toms and tons" begin
