@@ -40,8 +40,8 @@ function Base.copy(
 end
 
 function Reactant.broadcast_to_size(arg::StructArray{T}, rsize) where {T}
-    new = [broadcast_to_size(c, rsize) for c in components(arg)]
-    return StructArray{T}(NamedTuple(Base.propertynames(arg) .=> new))
+    new = Tuple((broadcast_to_size(c, rsize) for c in components(arg)))
+    return StructArray{T}(new)
 end
 
 function Base.copyto!(
@@ -58,6 +58,24 @@ function Base.copyto!(
 
     return copyto!(dest, res)
 end
+
+# Horrible hack because we have to use elem_apply_via_while_loop to avoid materializing
+# TODO figure out a better way to support broadcasting
+function Base.copyto!(
+    dest::TracedRArray, bc::Base.Broadcast.Broadcasted{<:AbstractReactantArrayStyle, I, F, Args}
+) where {I, F, Args<:Tuple{StructArray}}
+    axes(dest) == axes(bc) || Broadcast.throwdm(axes(dest), axes(bc))
+    isempty(dest) && return dest
+
+    bc = Broadcast.preprocess(dest, bc)
+
+    args = (Reactant.broadcast_to_size(Base.materialize(a), size(bc)) for a in bc.args)
+    res = Reactant.TracedUtils.elem_apply_via_while_loop(bc.f, args...)
+    return copyto!(dest, res)
+end
+
+
+
 
 Base.@propagate_inbounds function StructArrays._getindex(
     x::StructArray{T}, I::Vararg{TracedRNumber{<:Integer}}
@@ -82,35 +100,35 @@ Base.@nospecializeinfer function Reactant.traced_type_inner(
     @nospecialize(track_numbers::Type),
     @nospecialize(sharding),
     @nospecialize(runtime)
-) where {NT<:NamedTuple}
+) where {NT}
     T, N, C, I = prev.parameters
     C_traced = traced_type_inner(C, seen, mode, track_numbers, sharding, runtime)
 
-    names = T.parameters[1]
-    valuetypes = T.parameters[2].parameters
-    traced_value_types = map(valuetypes) do VT
-        # The elements in the NamedTuple are backed by vectors,
-        # these vectors are converted to RArrays so we need to track numbers:
+    traced_value_types = map(T.parameters) do VT
+        VT isa Type || return VT
+        if VT <: Tuple
+            return Reactant.traced_tuple_type_inner(VT, seen, mode, track_numbers, sharding, runtime)
+        end
         track_numbers = VT <: ReactantPrimitive ? ReactantPrimitive : track_numbers
         traced_type_inner(VT, seen, mode, track_numbers, sharding, runtime)
     end
-    T_traced = NamedTuple{names,Tuple{traced_value_types...}}
-
-    return StructArray{T_traced,N,C_traced,index_type(fieldtypes(C_traced))}
+    T_traced = T.name.wrapper{traced_value_types...}
+    return StructArray{T_traced,N,C_traced, index_type(fieldtypes(C_traced))}
 end
 
 function Reactant.make_tracer(
     seen,
-    @nospecialize(prev::StructArray{NT,N}),
+    @nospecialize(prev::StructArray{NT}),
     @nospecialize(path),
     mode;
     track_numbers=false,
     sharding=Reactant.Sharding.Sharding.NoSharding(),
     runtime=nothing,
     kwargs...,
-) where {NT<:NamedTuple,N}
+) where {NT}
+
     track_numbers isa Bool && (track_numbers = track_numbers ? Number : Union{})
-    components = getfield(prev, :components)
+    components = StructArrays.components(prev)
     if mode == TracedToTypes
         push!(path, typeof(prev))
         for c in components
@@ -128,12 +146,28 @@ function Reactant.make_tracer(
         runtime,
         kwargs...,
     )
+
+
     T_traced = traced_type(typeof(prev), Val(mode), track_numbers, sharding, runtime)
-    return StructArray{first(T_traced.parameters)}(traced_components)
+    np = length(T_traced.parameters)
+    # WTF why does this even happen? Clearly I messed something up with tracing
+    if first(traced_components) isa TracedRNumber
+        return T_traced.parameters[1](traced_components)
+    end
+    return StructArray{T_traced.parameters[1:np-1]...}(traced_components)
 end
 
 @inline function Reactant.traced_getfield(@nospecialize(obj::StructArray), field)
     return Base.getfield(obj, field)
 end
+
+# This is to tell StructArrays to leave these array types alone.
+StructArrays.staticschema(::Type{<:Reactant.AnyTracedRArray}) = NamedTuple{()}
+StructArrays.staticschema(::Type{<:Reactant.RArray}) = NamedTuple{()}
+StructArrays.staticschema(::Type{<:Reactant.RNumber}) = NamedTuple{()}
+# Even though RArrays and RNumbers we have fields we want them to be threated as empty structs
+StructArrays.isnonemptystructtype(::Type{<:Reactant.AnyTracedRArray}) = false
+StructArrays.isnonemptystructtype(::Type{<:Reactant.RArray}) = false
+StructArrays.isnonemptystructtype(::Type{<:Reactant.RNumber}) = false
 
 end
