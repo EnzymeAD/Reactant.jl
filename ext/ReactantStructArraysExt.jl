@@ -76,15 +76,17 @@ Base.@propagate_inbounds function Base.setindex!(
 end
 
 Base.@nospecializeinfer function Reactant.traced_type_inner(
-    @nospecialize(prev::Type{StructArray{ET, N, C, I}}),
+    @nospecialize(prev::Type{StructArray{ET,N,C,I}}),
     seen,
     @nospecialize(mode::TraceMode),
     @nospecialize(track_numbers::Type),
     @nospecialize(sharding),
     @nospecialize(runtime)
-) where {ET, N, C, I}
-    ET_traced = traced_type_inner(ET, seen, mode, Union{ReactantPrimitive,track_numbers}, sharding, runtime)
-    C_traced  = traced_type_inner(C, seen, mode, track_numbers, sharding, runtime)
+) where {ET,N,C,I}
+    ET_traced = traced_type_inner(
+        ET, seen, mode, Union{ReactantPrimitive,track_numbers}, sharding, runtime
+    )
+    C_traced = traced_type_inner(C, seen, mode, track_numbers, sharding, runtime)
     return StructArray{ET_traced,N,C_traced,index_type(fieldtypes(C_traced))}
 end
 
