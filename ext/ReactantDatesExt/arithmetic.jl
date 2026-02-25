@@ -115,7 +115,7 @@ end
 function (-)(dt::TracedRDate, z::TracedRMonth)
     y, m, d = yearmonthday(dt)
     ny = yearwrap(y, m, -value(z))
-    mm = monthwrap(m, -value(z));
+    mm = monthwrap(m, -value(z))
     ld = daysinmonth(ny, mm)
     return TracedRDate(UTInstant(TracedRDay(totaldays(ny, mm, d <= ld ? d : ld))))
 end
