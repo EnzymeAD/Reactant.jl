@@ -279,7 +279,8 @@ using Reactant
     @testset "DateTime-Millisecond arithmetic" begin
         dt = Dates.DateTime(1999, 12, 27)
         @test @jit(dt + Dates.Millisecond(1)) == Dates.DateTime(1999, 12, 27, 0, 0, 0, 1)
-        @test @jit(dt + Dates.Millisecond(100)) == Dates.DateTime(1999, 12, 27, 0, 0, 0, 100)
+        @test @jit(dt + Dates.Millisecond(100)) ==
+            Dates.DateTime(1999, 12, 27, 0, 0, 0, 100)
         @test @jit(dt + Dates.Millisecond(1000)) == Dates.DateTime(1999, 12, 27, 0, 0, 1)
         @test @jit(dt - Dates.Millisecond(1)) == Dates.DateTime(1999, 12, 26, 23, 59, 59, 999)
         @test @jit(dt - Dates.Millisecond(100)) == Dates.DateTime(1999, 12, 26, 23, 59, 59, 900)
