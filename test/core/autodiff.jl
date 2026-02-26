@@ -630,4 +630,3 @@ end
     model = TwoArgStruct(ConcreteRNumber(0), Reactant.to_rarray(ones(Float32, 3)))
     @jit differentiate_two_arg_fn(model)
 end
-
