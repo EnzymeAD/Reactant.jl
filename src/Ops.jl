@@ -1310,9 +1310,7 @@ end
     @assert fn_name == "comparator" "$comparator: no function generated"
     ftype_attr = MLIR.IR.getattr(func, "function_type")
     ftype = MLIR.IR.Type(ftype_attr)
-    @assert MLIR.IR.result(ftype) == MLIR.IR.TensorType(Int[], MLIR.IR.Type(Bool)) error(
-        "$comparator return type is not tensor<i1>"
-    )
+    @assert MLIR.IR.result(ftype) == MLIR.IR.TensorType((), MLIR.IR.Type(Bool)) "$comparator return type is not tensor<i1>"
 
     comparator = MLIR.IR.Region()
     MLIR.API.mlirRegionTakeBody(comparator, MLIR.IR.region(func, 1))
@@ -4158,6 +4156,36 @@ end
         end
     end
 
+    return nothing
+end
+
+"""
+    throw(
+        msg::String,
+        condition::Union{TracedRNumber{Bool},Nothing}=nothing;
+        location=mlir_stacktrace("throw", @__FILE__, @__LINE__)
+    )
+
+Throw a runtime error with the given `msg` if `condition` is `true`. If `condition` is not provided, it defaults to `true`.
+"""
+@noinline function throw(
+    msg::String,
+    condition::Union{TracedRNumber{Bool},Nothing}=nothing;
+    location=mlir_stacktrace("throw", @__FILE__, @__LINE__),
+)
+    stablehlo.custom_call(
+        condition === nothing ? MLIR.IR.Value[] : MLIR.IR.Value[condition.mlir_data];
+        result_0=MLIR.IR.Type[],
+        has_side_effect=true,
+        call_target_name=if condition === nothing
+            "xla_always_throw_error"
+        else
+            "xla_throw_error"
+        end,
+        backend_config=MLIR.IR.Attribute(Dict("message" => MLIR.IR.Attribute(msg))),
+        api_version=MLIR.IR.Attribute(Int32(4)),
+        location,
+    )
     return nothing
 end
 
