@@ -59,11 +59,9 @@ function Base.copyto!(
     return copyto!(dest, res)
 end
 
-# Horrible hack because we have to use elem_apply_via_while_loop to avoid materializing
-# TODO figure out a better way to support broadcasting
 function Base.copyto!(
-    dest::TracedRArray, bc::Base.Broadcast.Broadcasted{<:AbstractReactantArrayStyle, I, F, Args}
-) where {I, F, Args<:Tuple{StructArray}}
+    dest::Reactant.TracedRArray, bc::Broadcasted{StructArrayStyle{S,N}}
+) where {S<:AbstractReactantArrayStyle,N}
     axes(dest) == axes(bc) || Broadcast.throwdm(axes(dest), axes(bc))
     isempty(dest) && return dest
 
@@ -74,8 +72,20 @@ function Base.copyto!(
     return copyto!(dest, res)
 end
 
+function Base.similar(
+    bc::Broadcasted{StructArrayStyle{S,N}}, ::Type{ElType}
+) where {S<:AbstractReactantArrayStyle,N,ElType}
+    bc′ = convert(Broadcasted{S}, bc)
+    if StructArrays.isnonemptystructtype(ElType)
+        StructArrays.buildfromschema(T -> similar(bc′, T), ElType)
+    else
+        similar(bc′, ElType)
+    end
+end
 
-
+function StructArrays.get_ith(cols::NTuple{N,<:Reactant.RArray}, I...) where {N}
+    return ntuple(i -> Reactant.@allowscalar(cols[i][I...]), Val(N))
+end
 
 Base.@propagate_inbounds function StructArrays._getindex(
     x::StructArray{T}, I::Vararg{TracedRNumber{<:Integer}}
@@ -94,15 +104,17 @@ Base.@propagate_inbounds function Base.setindex!(
 end
 
 Base.@nospecializeinfer function Reactant.traced_type_inner(
-    @nospecialize(prev::Type{StructArray{ET, N, C, I}}),
+    @nospecialize(prev::Type{StructArray{ET,N,C,I}}),
     seen,
     @nospecialize(mode::TraceMode),
     @nospecialize(track_numbers::Type),
     @nospecialize(sharding),
     @nospecialize(runtime)
-) where {ET, N, C, I}
-    ET_traced = traced_type_inner(ET, seen, mode, Union{ReactantPrimitive,track_numbers}, sharding, runtime)
-    C_traced  = traced_type_inner(C, seen, mode, track_numbers, sharding, runtime)
+) where {ET,N,C,I}
+    ET_traced = traced_type_inner(
+        ET, seen, mode, Union{ReactantPrimitive,track_numbers}, sharding, runtime
+    )
+    C_traced = traced_type_inner(C, seen, mode, track_numbers, sharding, runtime)
     return StructArray{ET_traced,N,C_traced,index_type(fieldtypes(C_traced))}
 end
 
@@ -137,7 +149,6 @@ end
 #         kwargs...,
 #     )
 
-
 #     T_traced = traced_type(typeof(prev), Val(mode), track_numbers, sharding, runtime)
 #     np = length(T_traced.parameters)
 #     # WTF why does this even happen? Clearly I messed something up with tracing
@@ -151,14 +162,18 @@ end
     return Base.getfield(obj, field)
 end
 
+function Base.similar(
+    ::Base.Broadcast.Broadcasted{AbstractReactantArrayStyle}, ::Type{Eltype}, dims
+) where {Eltype}
+    @info Eltype
+    return similar(TracedRArray{Eltype}, dims)
+end
 
 # This is to tell StructArrays to leave these array types alone.
 StructArrays.staticschema(::Type{<:Reactant.AnyTracedRArray}) = NamedTuple{()}
 StructArrays.staticschema(::Type{<:Reactant.RArray}) = NamedTuple{()}
 StructArrays.staticschema(::Type{<:Reactant.RNumber}) = NamedTuple{()}
-# Even though RArrays and RNumbers we have fields we want them to be threated as empty structs
-StructArrays.isnonemptystructtype(::Type{<:Reactant.AnyTracedRArray}) = false
-StructArrays.isnonemptystructtype(::Type{<:Reactant.RArray}) = false
+# # Even though RNumbers we have fields we want them to be threated as empty structs
 StructArrays.isnonemptystructtype(::Type{<:Reactant.RNumber}) = false
-
+StructArrays.isnonemptystructtype(::Type{<:Reactant.TracedRArray}) = false
 end

@@ -294,6 +294,7 @@ function _copy(bc)
     ElType = Broadcast.combine_eltypes(fn, bc.args)
     # Special case a union{} return so we can see the better error message
     if ElType === Union{} || ElType == Any || ElType == TracedRNumber
+        @info map(first_scalar, bc.args)
         ElType = Core.Typeof(fn(map(first_scalar, bc.args)...))
     end
     if ElType == Any || ElType == Union{}
