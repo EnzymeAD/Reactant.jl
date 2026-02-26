@@ -467,7 +467,7 @@ using Reactant
         function timestepping!(state::State)
             (; clock) = state
 
-            @trace for i in 1:clock.n_timesteps
+            @trace for i in 1:(clock.n_timesteps)
                 timestep!(state)
             end
 
