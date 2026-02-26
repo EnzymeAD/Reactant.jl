@@ -35,13 +35,13 @@ for T in (
     end
 
     @eval function Reactant.traced_type_inner(
-            @nospecialize(T::Type{<:$T}),
-            seen,
-            mode::Reactant.TraceMode,
-            @nospecialize(track_numbers::Type),
-            @nospecialize(ndevices),
-            @nospecialize(runtime)
-        )
+        @nospecialize(T::Type{<:$T}),
+        seen,
+        mode::Reactant.TraceMode,
+        @nospecialize(track_numbers::Type),
+        @nospecialize(ndevices),
+        @nospecialize(runtime)
+    )
         # all Dates types are hard coded to have Int64 fields
         NF = Reactant.traced_type_inner(Int64, seen, mode, track_numbers, ndevices, runtime)
         return $(reactant_type){NF}
