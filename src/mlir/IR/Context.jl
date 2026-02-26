@@ -61,32 +61,3 @@ function current_context(; throw_error::Core.Bool=true)
     end
     return last(task_local_storage(:mlir_context_stack)::Vector{Context})
 end
-
-function with_context(f, ctx::Context)
-    activate(ctx)
-    try
-        f()
-    finally
-        deactivate(ctx)
-    end
-end
-
-# TODO replace this method on all call sites for the one accepting a context argument
-function with_context(f; allow_use_existing=false)
-    do_dispose = false
-    if allow_use_existing && has_context()
-        ctx = current_context()
-    else
-        ctx = Context(Reactant.registry[])
-        do_dispose = true
-        @ccall API.mlir_c.RegisterDialects(ctx::API.MlirContext)::Cvoid
-    end
-
-    activate(ctx)
-    try
-        return f(ctx)
-    finally
-        deactivate(ctx)
-        do_dispose && dispose(ctx)
-    end
-end

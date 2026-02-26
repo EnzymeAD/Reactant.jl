@@ -359,10 +359,7 @@ function make_mlir_fn(
     Ops.activate_constant_context!(fnbody)
     @assert MLIR.IR.has_block()
 
-    # Explicitly don't use with_block to avoid creating a closure, which creates
-    # both compile-time and relocatability issues
     MLIR.IR.activate(fnbody)
-
     result = try
         process_linear_args!(linear_args, fnbody, do_transpose, optimize_then_pad, inv_map)
 
@@ -538,8 +535,8 @@ function prepare_mlir_fn_args(
         end
     end
 
-    func = MLIR.IR.with_block(MLIR.IR.body(mod)) do
-        return MLIR.Dialects.func.func_(;
+    func = MLIR.IR.@scope MLIR.IR.body(mod) begin
+        MLIR.Dialects.func.func_(;
             sym_name=name * "_tmp",
             function_type=MLIR.IR.FunctionType(in_tys, Vector{MLIR.IR.Type}(undef, 0)),
             body=MLIR.IR.Region(),
@@ -877,8 +874,8 @@ function finalize_mlir_fn(
         MLIR.IR.deactivate(fnbody)
     end
 
-    func2 = MLIR.IR.with_block(MLIR.IR.body(mod)) do
-        return MLIR.Dialects.func.func_(;
+    func2 = MLIR.IR.@scope MLIR.IR.body(mod) begin
+        MLIR.Dialects.func.func_(;
             sym_name=__lookup_unique_name_in_module(mod, name),
             function_type=MLIR.IR.FunctionType(in_tys, out_tys),
             body=MLIR.IR.Region(),
@@ -1033,13 +1030,15 @@ end
 
 function __lookup_unique_name_in_module(mod, name)
     new_name = name
-    tab = MLIR.IR.SymbolTable(MLIR.IR.Operation(mod))
-    for i in 0:10000
-        new_name = i == 0 ? name : name * "_" * string(i)
-        MLIR.IR.mlirIsNull(MLIR.API.mlirSymbolTableLookup(tab, new_name)) && return new_name
+    MLIR.IR.@dispose tab = MLIR.IR.SymbolTable(mod) begin
+        for i in 0:10000
+            new_name = i == 0 ? name : name * "_" * string(i)
+            MLIR.IR.mlirIsNull(MLIR.API.mlirSymbolTableLookup(tab, new_name)) &&
+                return new_name
+        end
+        modstr = string(mod)
+        return error("Mod\n$modstr\nCould not find unique name for $name")
     end
-    modstr = string(mod)
-    return error("Mod\n$modstr\nCould not find unique name for $name")
 end
 
 function __take_region(compiled_fn)
