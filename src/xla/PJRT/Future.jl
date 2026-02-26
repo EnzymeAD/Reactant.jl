@@ -7,8 +7,22 @@ mutable struct Future <: XLA.AbstractFuture
     end
 end
 
-@inline free_future(future::Future) = GC.@preserve future MLIR.API.FreeFuture(future.future)
+@inline function free_future(future::Future)
+    GC.@preserve future begin
+        MLIR.API.FreeFuture(future.future)
+    end
+end
 
-Base.isready(future::Future) = GC.@preserve future MLIR.API.FutureIsReady(future.future)
+function Base.isready(future::Future)
+    GC.@preserve future begin
+        res = MLIR.API.FutureIsReady(future.future)
+    end
+    return res != 0
+end
 
-@inline Base.wait(future::Future) = GC.@preserve future MLIR.API.FutureAwait(future.future)
+@inline function Base.wait(future::Future)::Nothing
+    GC.@preserve future begin
+        MLIR.API.FutureAwait(future.future)
+    end
+    return nothing
+end

@@ -8,7 +8,9 @@ mutable struct HloModule
 end
 
 function free_hlo_module(hlo_module)
-    return GC.@preserve hlo_module MLIR.API.FreeHloModule(hlo_module.ptr)
+    GC.@preserve hlo_module begin
+        MLIR.API.FreeHloModule(hlo_module.ptr)
+    end
 end
 
 HloModule(mod::MLIR.IR.Module) = HloModule(MLIR.API.convertMlirModuleToHloModule(mod))
@@ -22,9 +24,9 @@ function _iobuffer_to_hlo_print_options(io::IO)
 end
 
 function Base.show(io::IO, hlo_module::HloModule)
-    str = GC.@preserve hlo_module MLIR.API.HloModuleToString(
-        hlo_module.ptr, _iobuffer_to_hlo_print_options(io)
-    )
+    GC.@preserve hlo_module begin
+        str = MLIR.API.HloModuleToString(hlo_module.ptr, _iobuffer_to_hlo_print_options(io))
+    end
     print(io, unsafe_string_and_free(str))
     return nothing
 end
@@ -39,7 +41,9 @@ end
 
 function Base.getproperty(hlo_module::HloModule, sym::Symbol)
     if sym === :entry_computation
-        ptr = GC.@preserve hlo_module MLIR.API.hloModuleGetEntryComputation(hlo_module.ptr)
+        GC.@preserve hlo_module begin
+            ptr = MLIR.API.hloModuleGetEntryComputation(hlo_module.ptr)
+        end
         return HloComputation(ptr)
     end
     return getfield(hlo_module, sym)

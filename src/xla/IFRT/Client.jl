@@ -42,7 +42,9 @@ end
 
 function XLA.platform_name(client::Client)
     @assert client.client != C_NULL "Client is null"
-    str = GC.@preserve client MLIR.API.ifrt_ClientGetPlatformName(client.client)
+    GC.@preserve client begin
+        str = MLIR.API.ifrt_ClientGetPlatformName(client.client)
+    end
     return XLA.unsafe_string_and_free(str)
 end
 
@@ -50,7 +52,9 @@ function XLA.devices(client::Client)
     @assert client.client != C_NULL "Client is null"
     ndevices = Int(XLA.num_devices(client))
     devices = Ref{NTuple{ndevices,Ptr{Cvoid}}}()
-    GC.@preserve client MLIR.API.ifrt_client_devices(client.client, devices)
+    GC.@preserve client begin
+        MLIR.API.ifrt_client_devices(client.client, devices)
+    end
     return [Device(device) for device in devices[]]
 end
 
@@ -58,18 +62,20 @@ function XLA.addressable_devices(client::Client)
     @assert client.client != C_NULL "Client is null"
     naddressable_devices = Int(XLA.num_addressable_devices(client))
     addressable_devices = Ref{NTuple{naddressable_devices,Ptr{Cvoid}}}()
-    GC.@preserve client MLIR.API.ifrt_client_addressable_devices(
-        client.client, addressable_devices
-    )
+    GC.@preserve client begin
+        MLIR.API.ifrt_client_addressable_devices(client.client, addressable_devices)
+    end
     return [Device(device) for device in addressable_devices[]]
 end
 
 function XLA.cost_analysis(client::Client, hlo_module::XLA.HloModule)
     @assert client.client != C_NULL "Client is null"
     ref = Ref{MLIR.API.JLHloCostAnalysisProperties}()
-    GC.@preserve client MLIR.API.ifrt_hlo_module_cost_analysis_properties(
-        client.client, hlo_module.ptr, ref
-    )
+    GC.@preserve client hlo_module begin
+        MLIR.API.ifrt_hlo_module_cost_analysis_properties(
+            client.client, hlo_module.ptr, ref
+        )
+    end
     return ref[]
 end
 
@@ -114,9 +120,11 @@ function MakeIFRTPJRTCPUClient(;
     distributed_runtime_client =
         distributed_runtime_client === nothing ? C_NULL : distributed_runtime_client.client
 
-    client = MLIR.API.ifrt_make_pjrt_cpu_client(
-        asynchronous, node_id, num_nodes, distributed_runtime_client, refstr
-    )
+    GC.@preserve refstr distributed_runtime_client begin
+        client = MLIR.API.ifrt_make_pjrt_cpu_client(
+            asynchronous, node_id, num_nodes, distributed_runtime_client, refstr
+        )
+    end
 
     return client, refstr
 end
@@ -135,17 +143,19 @@ function MakeIFRTPJRTCUDAClient(;
     distributed_runtime_client =
         distributed_runtime_client === nothing ? C_NULL : distributed_runtime_client.client
 
-    client = MLIR.API.ifrt_make_pjrt_gpu_client(
-        node_id,
-        num_nodes,
-        allowed_devices,
-        num_allowed_devices,
-        XLA.XLA_REACTANT_GPU_MEM_FRACTION[],
-        XLA.XLA_REACTANT_GPU_PREALLOCATE[],
-        platform,
-        refstr,
-        distributed_runtime_client,
-    )
+    GC.@preserve refstr allowed_devices distributed_runtime_client begin
+        client = MLIR.API.ifrt_make_pjrt_gpu_client(
+            node_id,
+            num_nodes,
+            allowed_devices,
+            num_allowed_devices,
+            XLA.XLA_REACTANT_GPU_MEM_FRACTION[],
+            XLA.XLA_REACTANT_GPU_PREALLOCATE[],
+            platform,
+            refstr,
+            distributed_runtime_client,
+        )
+    end
     return client, refstr
 end
 
@@ -201,8 +211,10 @@ function MakeIFRTPJRTClientViaPluginAPI(
         distributed_runtime_client === nothing ? C_NULL : distributed_runtime_client.client
 
     errstr = Ref{Cstring}()
-    client = MLIR.API.ifrt_pjrt_make_client_with_default_kv_store(
-        pjrt_client, node_id, num_nodes, distributed_runtime_client, errstr, device_type
-    )
+    GC.@preserve pjrt_client errstr distributed_runtime_client device_type begin
+        client = MLIR.API.ifrt_pjrt_make_client_with_default_kv_store(
+            pjrt_client, node_id, num_nodes, distributed_runtime_client, errstr, device_type
+        )
+    end
     return client, errstr
 end

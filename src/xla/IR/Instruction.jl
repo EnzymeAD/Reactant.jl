@@ -12,59 +12,59 @@ function free_hlo_instruction(hlo_instruction)
 end
 
 function Base.show(io::IO, hlo_instruction::HloInstruction)
-    str = GC.@preserve hlo_instruction MLIR.API.hloInstructionToString(
-        hlo_instruction.ptr, _iobuffer_to_hlo_print_options(io)
-    )
+    GC.@preserve hlo_instruction begin
+        str = MLIR.API.hloInstructionToString(
+            hlo_instruction.ptr, _iobuffer_to_hlo_print_options(io)
+        )
+    end
     print(io, unsafe_string_and_free(str))
     return nothing
 end
 
 function Base.getproperty(hlo_instruction::HloInstruction, sym::Symbol)
     if sym === :opcode
-        return HloOpcode(
-            GC.@preserve hlo_instruction MLIR.API.hloInstructionGetOpcode(
-                hlo_instruction.ptr
-            )
-        )
+        GC.@preserve hlo_instruction begin
+            ptr = MLIR.API.hloInstructionGetOpcode(hlo_instruction.ptr)
+        end
+        return HloOpcode(ptr)
     end
     if sym === :to_apply
         @assert has_to_apply(hlo_instruction)
-        return HloComputation(
-            GC.@preserve hlo_instruction MLIR.API.hloInstructionGetToApply(
-                hlo_instruction.ptr
-            )
-        )
+        GC.@preserve hlo_instruction begin
+            ptr = MLIR.API.hloInstructionGetToApply(hlo_instruction.ptr)
+        end
+        return HloComputation(ptr)
     end
     if sym in (:fusion_kind, :fused_instructions_computation)
         @assert is_fusion_instruction(hlo_instruction)
         if sym === :fusion_kind
-            return HloFusionKind(
-                GC.@preserve hlo_instruction MLIR.API.hloInstructionGetFusionKind(
-                    hlo_instruction.ptr
-                )
-            )
+            GC.@preserve hlo_instruction begin
+                ptr = MLIR.API.hloInstructionGetFusionKind(hlo_instruction.ptr)
+            end
+            return HloFusionKind(ptr)
         else
-            return HloComputation(
-                GC.@preserve hlo_instruction MLIR.API.hloInstructionFusedInstructionsComputation(
+            GC.@preserve hlo_instruction begin
+                ptr = MLIR.API.hloInstructionFusedInstructionsComputation(
                     hlo_instruction.ptr
                 )
-            )
+            end
+            return HloComputation(ptr)
         end
     end
     return getfield(hlo_instruction, sym)
 end
 
 function has_to_apply(hlo_instruction::HloInstruction)
-    has_to_apply = GC.@preserve hlo_instruction MLIR.API.hloInstructionHasToApply(
-        hlo_instruction.ptr
-    )
+    GC.@preserve hlo_instruction begin
+        has_to_apply = MLIR.API.hloInstructionHasToApply(hlo_instruction.ptr)
+    end
     return has_to_apply == 1
 end
 
 function is_fusion_instruction(hlo_instruction::HloInstruction)
-    is_fusion = GC.@preserve hlo_instruction MLIR.API.hloInstructionIsFusion(
-        hlo_instruction.ptr
-    )
+    GC.@preserve hlo_instruction begin
+        is_fusion = MLIR.API.hloInstructionIsFusion(hlo_instruction.ptr)
+    end
     return is_fusion == 1
 end
 
@@ -73,7 +73,9 @@ struct HloOpcode
 end
 
 function Base.show(io::IO, hlo_opcode::HloOpcode)
-    str = GC.@preserve hlo_opcode MLIR.API.hloOpcodeToString(hlo_opcode.opcode)
+    GC.@preserve hlo_opcode begin
+        str = MLIR.API.hloOpcodeToString(hlo_opcode.opcode)
+    end
     print(io, unsafe_string_and_free(str))
     return nothing
 end
@@ -83,7 +85,9 @@ struct HloFusionKind
 end
 
 function Base.show(io::IO, fusion_kind::HloFusionKind)
-    str = GC.@preserve fusion_kind MLIR.API.hloFusionKindToString(fusion_kind.kind)
+    GC.@preserve fusion_kind begin
+        str = MLIR.API.hloFusionKindToString(fusion_kind.kind)
+    end
     print(io, unsafe_string_and_free(str))
     return nothing
 end

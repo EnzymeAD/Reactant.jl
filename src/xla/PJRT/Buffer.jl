@@ -104,63 +104,81 @@ end
 
 @inline function XLA.free_buffer(buffer::Buffer)
     if buffer.buffer != C_NULL && XLA.is_live[]
-        GC.@preserve buffer MLIR.API.PjRtBufferFree(buffer.buffer)
+        GC.@preserve buffer begin
+            MLIR.API.PjRtBufferFree(buffer.buffer)
+        end
     end
 end
 
 function Base.ndims(buffer::Buffer)
-    return GC.@preserve buffer MLIR.API.BufferNDimensions(buffer.buffer)
+    GC.@preserve buffer begin
+        return MLIR.API.BufferNDimensions(buffer.buffer)
+    end
 end
 
 function Base.size(buffer::Buffer)
-    sz = GC.@preserve buffer MLIR.API.BufferShape(buffer.buffer)
+    GC.@preserve buffer begin
+        sz = MLIR.API.BufferShape(buffer.buffer)
+    end
     return Tuple(unsafe_wrap(Array, sz, ndims(buffer)))
 end
 
 function Base.eltype(buffer::Buffer)
-    pt = GC.@preserve buffer MLIR.API.BufferPrimitiveType(buffer.buffer)
+    GC.@preserve buffer begin
+        pt = MLIR.API.BufferPrimitiveType(buffer.buffer)
+    end
     return XLA.julia_type(pt)
 end
 
 function XLA.device(buffer::Buffer)
-    return Device(GC.@preserve buffer MLIR.API.BufferToDevice(buffer.buffer))
+    GC.@preserve buffer begin
+        return Device(MLIR.API.BufferToDevice(buffer.buffer))
+    end
 end
 
 function XLA.client(buffer::Buffer)
-    return Client(GC.@preserve buffer MLIR.API.BufferToClient(buffer.buffer))
+    GC.@preserve buffer begin
+        return Client(MLIR.API.BufferToClient(buffer.buffer))
+    end
 end
 
 XLA.synced_buffer(buffer::Buffer) = buffer
 
 function XLA.buffer_on_cpu(buffer::Buffer)
-    res = GC.@preserve buffer MLIR.API.BufferOnCPU(buffer.buffer)
+    GC.@preserve buffer begin
+        res = MLIR.API.BufferOnCPU(buffer.buffer)
+    end
     return res == 1
 end
 
 function XLA.to_host(buffer::Buffer, data, sharding)
     @assert data !== C_NULL
     @assert buffer.buffer !== C_NULL
-    GC.@preserve buffer MLIR.API.BufferToHost(buffer.buffer, data)
+    GC.@preserve buffer begin
+        MLIR.API.BufferToHost(buffer.buffer, data)
+    end
     return data
 end
 
 # TODO(#2235): users themselves need to gc preserve here
 function XLA.unsafe_buffer_pointer(buffer::Buffer)
-    return GC.@preserve buffer MLIR.API.UnsafeBufferPointer(buffer.buffer)
+    GC.@preserve buffer begin
+        return MLIR.API.UnsafeBufferPointer(buffer.buffer)
+    end
 end
 
 function Base.copy(buffer::Buffer)
     dev = XLA.device(buffer)
-    return Buffer(
-        GC.@preserve buffer dev MLIR.API.CopyBufferToDevice(buffer.buffer, dev.device)
-    )
+    GC.@preserve buffer dev begin
+        return Buffer(MLIR.API.CopyBufferToDevice(buffer.buffer, dev.device))
+    end
 end
 
 function XLA.copy_buffer_to_device(buffer::Buffer, dev::Device)
     XLA.device(buffer) == dev && return buffer
-    return Buffer(
-        GC.@preserve buffer dev MLIR.API.CopyBufferToDevice(buffer.buffer, dev.device)
-    )
+    GC.@preserve buffer dev begin
+        return Buffer(MLIR.API.CopyBufferToDevice(buffer.buffer, dev.device))
+    end
 end
 
 XLA.sharding(::Buffer) = Reactant.Sharding.NoSharding()

@@ -19,20 +19,24 @@ function Base.getproperty(hlo_computation::HloComputation, sym::Symbol)
 end
 
 function Base.show(io::IO, hlo_computation::HloComputation)
-    str = GC.@preserve hlo_computation MLIR.API.hloComputationToString(
-        hlo_computation.ptr, _iobuffer_to_hlo_print_options(io)
-    )
+    GC.@preserve hlo_computation begin
+        str = MLIR.API.hloComputationToString(
+            hlo_computation.ptr, _iobuffer_to_hlo_print_options(io)
+        )
+    end
     print(io, unsafe_string_and_free(str))
     return nothing
 end
 
 function Base.convert(::Type{Vector{HloInstruction}}, hlo_computation::HloComputation)
-    num_instructions = GC.@preserve hlo_computation MLIR.API.hloComputationInstructionCount(
-        hlo_computation.ptr
-    )
+    GC.@preserve hlo_computation begin
+        num_instructions = MLIR.API.hloComputationInstructionCount(hlo_computation.ptr)
+    end
     hlo_instructions = Ref{NTuple{num_instructions,Ptr{Cvoid}}}()
-    GC.@preserve hlo_computation MLIR.API.hloComputationGetInstructionsPostOrder(
-        hlo_computation.ptr, num_instructions, hlo_instructions
-    )
+    GC.@preserve hlo_computation begin
+        MLIR.API.hloComputationGetInstructionsPostOrder(
+            hlo_computation.ptr, num_instructions, hlo_instructions
+        )
+    end
     return [map(HloInstruction, hlo_instructions[])...]
 end

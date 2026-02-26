@@ -30,36 +30,43 @@ end
 free_sharding(sharding::Sharding) = MLIR.API.free_ifrt_sharding(sharding.ptr)
 
 function XLA.num_devices(sharding::Sharding)
-    return GC.@preserve sharding MLIR.API.ifrt_sharding_devices_size(sharding.ptr)
+    GC.@preserve sharding begin
+        return MLIR.API.ifrt_sharding_devices_size(sharding.ptr)
+    end
 end
 
 function XLA.devices(sharding::Sharding)
     ndevices = XLA.num_devices(sharding)
     devices = Ref{NTuple{Int64(ndevices),Ptr{Cvoid}}}()
-    GC.@preserve sharding MLIR.API.ifrt_sharding_to_device_list(sharding.ptr, devices)
+    GC.@preserve sharding begin
+        MLIR.API.ifrt_sharding_to_device_list(sharding.ptr, devices)
+    end
     return map(Device, devices[])
 end
 
 function Base.convert(::Type{XLA.HloSharding}, sharding::Sharding)
-    return XLA.HloSharding(
-        GC.@preserve sharding MLIR.API.ifrt_sharding_to_xla_hlo_sharding(sharding.ptr)
-    )
+    GC.@preserve sharding begin
+        return XLA.HloSharding(MLIR.API.ifrt_sharding_to_xla_hlo_sharding(sharding.ptr))
+    end
 end
 
 function Base.string(sharding::Sharding)
-    return XLA.unsafe_string_and_free(
-        GC.@preserve sharding MLIR.API.ifrt_sharding_to_string(sharding.ptr)
-    )
+    GC.@preserve sharding begin
+        str = MLIR.API.ifrt_sharding_to_string(sharding.ptr)
+    end
+    return XLA.unsafe_string_and_free(str)
 end
 
 function is_fully_replicated(sharding::Sharding)
-    return GC.@preserve sharding MLIR.API.ifrt_sharding_is_fully_replicated(sharding.ptr)
+    GC.@preserve sharding begin
+        return MLIR.API.ifrt_sharding_is_fully_replicated(sharding.ptr)
+    end
 end
 
 function is_single_device_sharding(sharding::Sharding)
-    return GC.@preserve sharding MLIR.API.ifrt_sharding_is_single_device_sharding(
-        sharding.ptr
-    )
+    GC.@preserve sharding begin
+        return MLIR.API.ifrt_sharding_is_single_device_sharding(sharding.ptr)
+    end
 end
 
 function Base.show(io::IO, ::MIME"text/plain", sharding::Sharding)
@@ -76,9 +83,15 @@ function XLA.sharding_to_concrete_array_indices(
     index_domain_origins = Vector{Int64}(undef, length(logical_device_ids) * length(shape))
     index_domain_shapes = Vector{Int64}(undef, length(logical_device_ids) * length(shape))
 
-    GC.@preserve sharding MLIR.API.ifrt_sharding_to_index_domains(
-        sharding.ptr, shape, Int32(length(shape)), index_domain_origins, index_domain_shapes
-    )
+    GC.@preserve sharding begin
+        MLIR.API.ifrt_sharding_to_index_domains(
+            sharding.ptr,
+            shape,
+            Int32(length(shape)),
+            index_domain_origins,
+            index_domain_shapes,
+        )
+    end
 
     needs_padding = false
     array_indices = Vector{NTuple{length(shape),UnitRange{Int64}}}(

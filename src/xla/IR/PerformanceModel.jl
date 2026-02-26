@@ -20,9 +20,9 @@ end
 
 # Runs the analysis on the given HLO module.
 function (gpu_performance_model::GPUPerformanceModel)(hlo_module::HloModule)
-    GC.@preserve gpu_performance_model MLIR.API.RunAnalysisOnHloModule(
-        gpu_performance_model.ptr, hlo_module.ptr
-    )
+    GC.@preserve gpu_performance_model hlo_module begin
+        MLIR.API.RunAnalysisOnHloModule(gpu_performance_model.ptr, hlo_module.ptr)
+    end
     return nothing
 end
 

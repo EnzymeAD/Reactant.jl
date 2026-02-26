@@ -11,24 +11,33 @@ const NullClient = Client(C_NULL; skip_check=true)
 
 function XLA.free_client(client::Client)
     @assert client.client != C_NULL "Client is null"
-    return GC.@preserve client MLIR.API.FreeClient(client.client)
+    GC.@preserve client begin
+        MLIR.API.FreeClient(client.client)
+    end
+    return nothing
 end
 
 function XLA.num_devices(client::Client)
     @assert client.client != C_NULL "Client is null"
-    return GC.@preserve client MLIR.API.ClientNumDevices(client.client)
+    GC.@preserve client begin
+        return MLIR.API.ClientNumDevices(client.client)
+    end
 end
 
 function XLA.num_addressable_devices(client::Client)
     @assert client.client != C_NULL "Client is null"
-    return GC.@preserve client MLIR.API.ClientNumAddressableDevices(client.client)
+    GC.@preserve client begin
+        return MLIR.API.ClientNumAddressableDevices(client.client)
+    end
 end
 
 function XLA.devices(client::Client)
     @assert client.client != C_NULL "Client is null"
     ndevices = Int(XLA.num_devices(client))
     devices = Ref{NTuple{ndevices,Ptr{Cvoid}}}()
-    GC.@preserve client MLIR.API.ClientGetDevices(client.client, devices)
+    GC.@preserve client devices begin
+        MLIR.API.ClientGetDevices(client.client, devices)
+    end
     return [Device(device) for device in devices[]]
 end
 
@@ -36,41 +45,48 @@ function XLA.addressable_devices(client::Client)
     @assert client.client != C_NULL "Client is null"
     naddressable_devices = Int(XLA.num_addressable_devices(client))
     addressable_devices = Ref{NTuple{naddressable_devices,Ptr{Cvoid}}}()
-    GC.@preserve client MLIR.API.ClientGetAddressableDevices(
-        client.client, addressable_devices
-    )
+    GC.@preserve client addressable_devices begin
+        MLIR.API.ClientGetAddressableDevices(client.client, addressable_devices)
+    end
     return [Device(device) for device in addressable_devices[]]
 end
 
 function XLA.process_index(client::Client)
     @assert client.client != C_NULL "Client is null"
-    return GC.@preserve client MLIR.API.ClientProcessIndex(client.client)
+    GC.@preserve client begin
+        return MLIR.API.ClientProcessIndex(client.client)
+    end
 end
 
 function XLA.get_device(client::Client, idx)
     @assert client.client != C_NULL "Client is null"
-    return Device(GC.@preserve client MLIR.API.ClientGetDevice(client.client, idx))
+    GC.@preserve client begin
+        return Device(MLIR.API.ClientGetDevice(client.client, idx))
+    end
 end
 
 function XLA.get_addressable_device(client::Client, idx)
     @assert client.client != C_NULL "Client is null"
-    return Device(
-        GC.@preserve client MLIR.API.ClientGetAddressableDevice(client.client, idx)
-    )
+    GC.@preserve client begin
+        return Device(MLIR.API.ClientGetAddressableDevice(client.client, idx))
+    end
 end
 
 function XLA.platform_name(client::Client)
     @assert client.client != C_NULL "Client is null"
-    return GC.@preserve client XLA.unsafe_string_and_free(
-        MLIR.API.ClientGetPlatformName(client.client)
-    )
+    GC.@preserve client begin
+        str = MLIR.API.ClientGetPlatformName(client.client)
+    end
+    return XLA.unsafe_string_and_free(str)
 end
 
 function XLA.cost_analysis(client::Client, hlo_module::XLA.HloModule)
     ref = Ref{MLIR.API.JLHloCostAnalysisProperties}()
-    GC.@preserve client hlo_module MLIR.API.pjrt_hlo_module_cost_analysis_properties(
-        client.client, hlo_module.ptr, ref
-    )
+    GC.@preserve client hlo_module begin
+        MLIR.API.pjrt_hlo_module_cost_analysis_properties(
+            client.client, hlo_module.ptr, ref
+        )
+    end
     return ref[]
 end
 
@@ -129,17 +145,19 @@ function MakeCUDAClient(;
     distributed_runtime_client =
         distributed_runtime_client === nothing ? C_NULL : distributed_runtime_client.client
 
-    client = MLIR.API.MakeGPUClient(
-        node_id,
-        num_nodes,
-        allowed_devices,
-        num_allowed_devices,
-        XLA.XLA_REACTANT_GPU_MEM_FRACTION[],
-        XLA.XLA_REACTANT_GPU_PREALLOCATE[],
-        platform,
-        refstr,
-        distributed_runtime_client,
-    )
+    GC.@preserve refstr allowed_devices distributed_runtime_client begin
+        client = MLIR.API.MakeGPUClient(
+            node_id,
+            num_nodes,
+            allowed_devices,
+            num_allowed_devices,
+            XLA.XLA_REACTANT_GPU_MEM_FRACTION[],
+            XLA.XLA_REACTANT_GPU_PREALLOCATE[],
+            platform,
+            refstr,
+            distributed_runtime_client,
+        )
+    end
 
     client == C_NULL && throw(AssertionError(unsafe_string(refstr[])))
     return client
@@ -203,9 +221,11 @@ function MakeClientUsingPluginAPI(
                                   plugin."
 
     errstr = Ref{Cstring}()
-    client = MLIR.API.MakeClientUsingPluginAPI(
-        device_type, library_path, client_name, errstr
-    )
+    GC.@preserve errstr library_path device_type client_name begin
+        client = MLIR.API.MakeClientUsingPluginAPI(
+            device_type, library_path, client_name, errstr
+        )
+    end
     client == C_NULL && throw(AssertionError(unsafe_string(errstr[])))
     return client
 end

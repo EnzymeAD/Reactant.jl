@@ -49,7 +49,9 @@ function device_properties(device::AbstractDevice)
 
     jldevprops = Ref{MLIR.API.DeviceProperties}()
     if pname == "cuda"
-        MLIR.API.ReactantCudaDeviceGetProperties(jldevprops, local_hardware_id)
+        GC.@preserve jldevprops begin
+            MLIR.API.ReactantCudaDeviceGetProperties(jldevprops, local_hardware_id)
+        end
     else
         @warn "`get_properties` not implemented for platform: $(pname)" maxlog = 1
     end
@@ -104,8 +106,9 @@ function StreamExecutorDeviceDescription(device::AbstractDevice)
 end
 
 function Base.show(io::IO, ::MIME"text/plain", props::StreamExecutorDeviceDescription)
-    GC.@preserve props print(
-        io, unsafe_string_and_free(MLIR.API.deviceDescriptionToString(props.ptr))
-    )
+    GC.@preserve props begin
+        str = MLIR.API.deviceDescriptionToString(props.ptr)
+    end
+    print(io, unsafe_string_and_free(str))
     return nothing
 end

@@ -14,7 +14,9 @@ end
 
 @inline function free_exec(exec::LoadedExecutable)
     if XLA.is_live[]
-        GC.@preserve exec MLIR.API.ExecutableFree(exec.exec)
+        GC.@preserve exec begin
+            MLIR.API.ExecutableFree(exec.exec)
+        end
     end
 end
 
@@ -38,7 +40,9 @@ for (jlop, xlaop, field) in (
         end
 
         op_shardings = Ref{NTuple{exec.$(field),Ptr{Cvoid}}}()
-        GC.@preserve exec MLIR.API.$(xlaop)(exec.exec, op_shardings, exec.$(field))
+        GC.@preserve exec begin
+            MLIR.API.$(xlaop)(exec.exec, op_shardings, exec.$(field))
+        end
         return [XLA.OpSharding(op_sharding) for op_sharding in op_shardings[]]
     end
 end
@@ -49,9 +53,9 @@ function XLA.get_hlo_modules(exec::LoadedExecutable)
     # and use the ones assigned to by XLA
     hlo_modules = Ref{NTuple{Int64(XLA.num_partitions(exec)),Ptr{Cvoid}}}()
     nmodules = Ref{Int32}(0)
-    GC.@preserve exec MLIR.API.PjRtLoadedExecutableGetHloModules(
-        exec.exec, hlo_modules, nmodules
-    )
+    GC.@preserve exec hlo_modules begin
+        MLIR.API.PjRtLoadedExecutableGetHloModules(exec.exec, hlo_modules, nmodules)
+    end
     return map(XLA.HloModule, hlo_modules[][1:Int(nmodules[])])
 end
 
@@ -66,10 +70,12 @@ function XLA.compile(
     num_partitions::Int64,
 )
     compile_options_bytes = Reactant.ProtoUtils.proto_to_bytes(compile_options)
-    exec = MLIR.IR.try_compile_dump_mlir(mod) do
-        GC.@preserve client MLIR.API.ClientCompileWithProto(
-            client.client, mod, compile_options_bytes, length(compile_options_bytes)
-        )
+    GC.@preserve client mod compile_options_bytes begin
+        exec = MLIR.IR.try_compile_dump_mlir(mod) do
+            MLIR.API.ClientCompileWithProto(
+                client.client, mod, compile_options_bytes, length(compile_options_bytes)
+            )
+        end
     end
     return LoadedExecutable(
         exec, num_outputs, num_parameters, is_sharded, num_replicas, num_partitions
@@ -218,17 +224,19 @@ end
             outputs_p = Ref{NTuple{$n_outs,Ptr{Cvoid}}}()
             futures = Ref{UInt8}(0)
             futures_res = Ref{NTuple{$n_outs,Ptr{Cvoid}}}()
-            MLIR.API.XLAExecuteSharded(
-                exec,
-                $N,
-                Base.RefValue(inputs),
-                Base.RefValue(device),
-                Base.RefValue(is_arg_donatable),
-                $n_outs,
-                outputs_p,
-                futures,
-                futures_res,
-            )
+            GC.@preserve exec device inputs is_arg_donatable outputs_p futures futures_res begin
+                MLIR.API.XLAExecuteSharded(
+                    exec,
+                    $N,
+                    Base.RefValue(inputs),
+                    Base.RefValue(device),
+                    Base.RefValue(is_arg_donatable),
+                    $n_outs,
+                    outputs_p,
+                    futures,
+                    futures_res,
+                )
+            end
             outputs = outputs_p[]
             future_res = futures_res[]
             future = futures[] != 0
