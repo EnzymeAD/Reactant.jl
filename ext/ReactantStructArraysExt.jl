@@ -83,9 +83,6 @@ function Base.similar(
     end
 end
 
-function StructArrays.get_ith(cols::NTuple{N,<:Reactant.RArray}, I...) where {N}
-    return ntuple(i -> Reactant.@allowscalar(cols[i][I...]), Val(N))
-end
 
 Base.@propagate_inbounds function StructArrays._getindex(
     x::StructArray{T}, I::Vararg{TracedRNumber{<:Integer}}
