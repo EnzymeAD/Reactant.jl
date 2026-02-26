@@ -21,15 +21,15 @@ for T in (
     reactant_type = Symbol(reactant_type_prefix, T)
 
     @eval function Reactant.make_tracer(
-            seen,
-            @nospecialize(prev::$T),
-            @nospecialize(path),
-            mode;
-            @nospecialize(track_numbers::Type = Union{}),
-            @nospecialize(sharding = Reactant.Sharding.NoSharding()),
-            @nospecialize(runtime),
-            kwargs...,
-        )
+        seen,
+        @nospecialize(prev::$T),
+        @nospecialize(path),
+        mode;
+        @nospecialize(track_numbers::Type = Union{}),
+        @nospecialize(sharding = Reactant.Sharding.NoSharding()),
+        @nospecialize(runtime),
+        kwargs...,
+    )
         RT = Reactant.traced_type($T, Val(mode), track_numbers, sharding, runtime)
         return RT(prev)
     end
