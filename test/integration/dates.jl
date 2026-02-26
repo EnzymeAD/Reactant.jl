@@ -440,4 +440,53 @@ using Reactant
         @test @jit(Dates.days(Dates.Week(1))) == 7
         @test @jit(Dates.days(Dates.Week(2))) == 14
     end
+
+    @testset "datetime2julian" begin
+        @test @jit(Dates.datetime2julian(Dates.DateTime(2000))) ==
+            Dates.datetime2julian(Dates.DateTime(2000))
+        @test @jit(Dates.datetime2julian(Dates.DateTime(1930, 12, 1, 1, 5, 1))) ==
+            Dates.datetime2julian(Dates.DateTime(1930, 12, 1, 1, 5, 1))
+    end
+
+    @testset "Minimal timestepper with Dates" begin
+        # Inspired by the usage in SpeedyWeather.jl
+
+        # Minimal clock-like mutable struct
+        mutable struct Clock{I,T,TS}
+            n_timesteps::I
+            time::T
+            time_step::TS
+        end
+
+        # Minimal state
+        struct State{T,C}
+            x::T
+            clock::C
+        end
+
+        function timestepping!(state::State)
+            (; clock) = state
+
+            @trace for i in 1:clock.n_timesteps
+                timestep!(state)
+            end
+
+            return nothing
+        end
+
+        function timestep!(state::State)
+            state.x .+= 1.0
+            return state.clock.time += state.clock.time_step
+        end
+
+        clock = Clock(5, DateTime(2002, 1, 1), Dates.Day(1))
+        state = State(zeros(1), clock)
+        timestepping!(state)
+
+        clock_jit = Clock(5, DateTime(2002, 1, 1), Dates.Day(1))
+        state_jit = State(zeros(1), clock)
+        @jit timestepping!(state_jit)
+
+        @test DateTime(state_jit.clock.time) == state.clock.time
+    end
 end # @testset "ReactantDatesExt"

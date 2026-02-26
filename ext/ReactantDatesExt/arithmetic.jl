@@ -1,4 +1,4 @@
-import Base: +, -, fld, mod, div, mod1
+import Base: +, -, fld, mod, div
 import Dates:
     Period,
     yearmonthday,
