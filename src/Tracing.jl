@@ -2113,7 +2113,7 @@ to `ConcreteRNumber`.
 - `sharding`: Sharding specification for the resulting array.
 - `device`: Target device for the resulting array.
 - `client`: XLA client to use.
-- `runtime`: Backend runtime to use (`:PJRT` or `:IFRT`).
+- `runtime`: Backend runtime to use (`Val(:PJRT)` or `Val(:IFRT)`).
 
 ## Examples
 
