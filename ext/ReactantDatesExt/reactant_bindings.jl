@@ -3,21 +3,21 @@
 reactant_type_prefix = "TracedR"
 
 for T in (
-        :Year,
-        :Quarter,
-        :Month,
-        :Week,
-        :Day,
-        :Hour,
-        :Minute,
-        :Second,
-        :Millisecond,
-        :Microsecond,
-        :Nanosecond,
-        :DateTime,
-        :Date,
-        :Time,
-    )
+    :Year,
+    :Quarter,
+    :Month,
+    :Week,
+    :Day,
+    :Hour,
+    :Minute,
+    :Second,
+    :Millisecond,
+    :Microsecond,
+    :Nanosecond,
+    :DateTime,
+    :Date,
+    :Time,
+)
     reactant_type = Symbol(reactant_type_prefix, T)
 
     @eval function Reactant.make_tracer(
