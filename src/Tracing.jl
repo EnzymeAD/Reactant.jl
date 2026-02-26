@@ -110,15 +110,11 @@ Base.@nospecializeinfer function traced_tuple_type_inner(
         end
         throw(AssertionError("Type $T is not concrete type or concrete tuple"))
     end
-    # TODO How can I handle it when type parameters look like Tuple{1,1}. This used to give an error
-    # this hack prevents that but I don't think this is the correct thing to do.
-    TT = []
+    TT = Union{Type,Core.TypeofVararg}[]
     for i in 1:length(T.parameters)
-        if T.parameters[i] isa DataType || T.parameters[i] isa UnionAll
-            st = traced_type_inner(T.parameters[i], seen, mode, track_numbers, ndevices, runtime)
-        else
-            st = T.parameters[i]
-        end
+        st = traced_type_inner(
+            T.parameters[i], seen, mode, track_numbers, ndevices, runtime
+        )
         push!(TT, st)
     end
     return Tuple{TT...}
