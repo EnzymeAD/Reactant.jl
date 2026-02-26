@@ -58,7 +58,7 @@ function condition2_nested_if(x, y)
     x_sum = sum(x)
     @trace if x_sum > 0
         y_sum = sum(y)
-        if y_sum > 0
+        @trace if y_sum > 0
             z = x_sum + y_sum
         else
             z = x_sum - y_sum
@@ -387,8 +387,8 @@ function condition11_nested_ifff(x, y, z)
     x_sum = sum(x)
     @trace if x_sum > 0
         y_sum = sum(y)
-        if y_sum > 0
-            if sum(z) > 0
+        @trace if y_sum > 0
+            @trace if sum(z) > 0
                 z = x_sum + y_sum + sum(z)
             else
                 z = x_sum + y_sum
@@ -1109,4 +1109,42 @@ end
 
     @test a_ra ≈ a
     @test b_ra ≈ b
+end
+
+function myfunc_traced_if_in_for(x)  # compute sum of positive elements in x
+    s = zero(eltype(x))
+    @trace for i in eachindex(x)
+        @allowscalar cond = x[i] > 0
+        @trace if cond
+            @allowscalar s += x[i]
+        end
+    end
+    return s
+end
+
+function nested_trace_if_for(u, mask)
+    acc = zero(eltype(u))
+    n = length(u)
+    keep = sum(mask) > 0
+
+    @trace if keep
+        @trace for i in 1:n
+            acc = acc + @allowscalar(u[i])
+        end
+        out = acc
+    else
+        out = acc
+    end
+
+    return out
+end
+
+@testset "for in if and if in for" begin
+    u = Reactant.to_rarray(Reactant.TestUtils.construct_test_array(Float64, 16))
+    mask = Reactant.ConcreteRArray(collect(rand(Float64, 16) .> 0.5))
+
+    @test @jit(nested_trace_if_for(u, mask)) ≈ nested_trace_if_for(Array(u), Array(mask))
+
+    x = Reactant.to_rarray(Reactant.TestUtils.construct_test_array(Float64, 10))
+    @test @jit(myfunc_traced_if_in_for(x)) ≈ myfunc_traced_if_in_for(Array(x))
 end
