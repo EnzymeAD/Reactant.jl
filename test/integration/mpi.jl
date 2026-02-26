@@ -213,7 +213,6 @@ end
     end
 end
 
-# Fails with more than 1 request passed into waitall
 @testset "Isend / Irecv! / Waitall" begin
     comm = MPI.COMM_WORLD
     rank = MPI.Comm_rank(comm)
