@@ -13,4 +13,14 @@ function get_device end
 function get_addressable_device end
 function platform_name end
 
-default_device(client::AbstractClient) = first(addressable_devices(client))
+"""
+    DEFAULT_DEVICE :: Ref{Int}
+
+0-based index of default device to use.
+By default, the value of the environment variable `REACTANT_DEFAULT_DEVICE` is used when set to a non-negative integer, otherwise it is set to 0 (first available device).
+"""
+const DEFAULT_DEVICE = Ref{Int}(0)
+
+function default_device(client::AbstractClient)
+    return addressable_devices(client)[DEFAULT_DEVICE[] + 1]
+end
