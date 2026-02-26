@@ -116,3 +116,81 @@ end
     z = Reactant.to_rarray([1e-8, 0.001, 2.0])
     @test SpecialFunctions.zeta.(Array(s), Array(z)) ≈ @jit SpecialFunctions.zeta.(s, z)
 end
+
+@testset "bessel" begin
+    x = ConcreteRNumber(0.5)
+
+    @test contains(
+        repr(@code_hlo(SpecialFunctions.besselj0(x))), "enzymexla.special.besselj"
+    )
+    @test contains(
+        repr(@code_hlo(SpecialFunctions.besselj1(x))), "enzymexla.special.besselj"
+    )
+    @test contains(
+        repr(@code_hlo(SpecialFunctions.besselj(2.0, x))), "enzymexla.special.besselj"
+    )
+    @test contains(
+        repr(@code_hlo(SpecialFunctions.besseljx(2.0, x))), "enzymexla.special.besseljx"
+    )
+    @test contains(
+        repr(@code_hlo(SpecialFunctions.sphericalbesselj(2.0, x))),
+        "enzymexla.special.sphericalbesselj",
+    )
+
+    @test contains(
+        repr(@code_hlo(SpecialFunctions.bessely0(x))), "enzymexla.special.bessely"
+    )
+    @test contains(
+        repr(@code_hlo(SpecialFunctions.bessely1(x))), "enzymexla.special.bessely"
+    )
+    @test contains(
+        repr(@code_hlo(SpecialFunctions.bessely(2.0, x))), "enzymexla.special.bessely"
+    )
+    @test contains(
+        repr(@code_hlo(SpecialFunctions.besselyx(2.0, x))), "enzymexla.special.besselyx"
+    )
+    @test contains(
+        repr(@code_hlo(SpecialFunctions.sphericalbessely(2.0, x))),
+        "enzymexla.special.sphericalbessely",
+    )
+
+    @test contains(
+        repr(@code_hlo(SpecialFunctions.besselh(2.0, 1, x))), "enzymexla.special.besselh"
+    )
+    @test contains(
+        repr(@code_hlo(SpecialFunctions.besselh(2.0, 2, x))), "enzymexla.special.besselh"
+    )
+    @test contains(
+        repr(@code_hlo(SpecialFunctions.besselh(2.0, ConcreteRNumber(1.0), x))),
+        "enzymexla.special.besselh",
+    )
+
+    @test contains(
+        repr(@code_hlo(SpecialFunctions.hankelh1(2.0, x))), "enzymexla.special.besselh"
+    )
+    @test contains(
+        repr(@code_hlo(SpecialFunctions.hankelh1x(2.0, x))), "enzymexla.special.hankelh1x"
+    )
+    @test contains(
+        repr(@code_hlo(SpecialFunctions.hankelh2(2.0, x))), "enzymexla.special.besselh"
+    )
+    @test contains(
+        repr(@code_hlo(SpecialFunctions.hankelh2x(2.0, x))), "enzymexla.special.hankelh2x"
+    )
+
+    @test contains(
+        repr(@code_hlo(SpecialFunctions.besseli(2.0, x))), "enzymexla.special.besseli"
+    )
+    @test contains(
+        repr(@code_hlo(SpecialFunctions.besselix(2.0, x))), "enzymexla.special.besselix"
+    )
+
+    @test contains(
+        repr(@code_hlo(SpecialFunctions.besselk(2.0, x))), "enzymexla.special.besselk"
+    )
+    @test contains(
+        repr(@code_hlo(SpecialFunctions.besselkx(2.0, x))), "enzymexla.special.besselkx"
+    )
+
+    @test contains(repr(@code_hlo(SpecialFunctions.jinc(x))), "enzymexla.special.jinc")
+end

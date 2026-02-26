@@ -108,7 +108,130 @@ end
 
 #Airy and Related Functions
 
-#Bessel ...
+# Bessel Functions of the First Kind
+
+function SpecialFunctions.besselj0(z::TracedRNumber{T}) where {T<:ReactantFloat}
+    zf = float(z)
+    TF = eltype(zf)
+    return @opcall(special_besselj(@opcall(constant(TF(0))), zf))
+end
+
+function SpecialFunctions.besselj1(z::TracedRNumber{T}) where {T<:ReactantFloat}
+    zf = float(z)
+    TF = eltype(zf)
+    return @opcall(special_besselj(@opcall(constant(TF(1))), zf))
+end
+
+function SpecialFunctions.besselj(nu::Real, z::TracedRNumber{T}) where {T<:ReactantFloat}
+    return @opcall(special_besselj(@opcall(constant(nu)), float(z)))
+end
+
+function SpecialFunctions.besseljx(nu::Real, z::TracedRNumber{T}) where {T<:ReactantFloat}
+    return @opcall(special_besseljx(@opcall(constant(nu)), float(z)))
+end
+
+function SpecialFunctions.sphericalbesselj(
+    nu::Real, z::TracedRNumber{T}
+) where {T<:ReactantFloat}
+    return @opcall(special_sphericalbesselj(@opcall(constant(nu)), float(z)))
+end
+
+# Bessel Functions of the Second Kind
+
+function SpecialFunctions.bessely0(z::TracedRNumber{T}) where {T<:ReactantFloat}
+    zf = float(z)
+    TF = eltype(zf)
+    return @opcall(special_bessely(@opcall(constant(TF(0))), zf))
+end
+
+function SpecialFunctions.bessely1(z::TracedRNumber{T}) where {T<:ReactantFloat}
+    zf = float(z)
+    TF = eltype(zf)
+    return @opcall(special_bessely(@opcall(constant(TF(1))), zf))
+end
+
+function SpecialFunctions.bessely(nu::Real, z::TracedRNumber{T}) where {T<:ReactantFloat}
+    return @opcall(special_bessely(@opcall(constant(nu)), float(z)))
+end
+
+function SpecialFunctions.besselyx(nu::Real, z::TracedRNumber{T}) where {T<:ReactantFloat}
+    return @opcall(special_besselyx(@opcall(constant(nu)), float(z)))
+end
+
+function SpecialFunctions.sphericalbessely(
+    nu::Real, z::TracedRNumber{T}
+) where {T<:ReactantFloat}
+    return @opcall(special_sphericalbessely(@opcall(constant(nu)), float(z)))
+end
+
+# Bessel Functions of the Third Kind (Hankel Functions)
+
+function SpecialFunctions.besselh(
+    nu::Real, k::Integer, z::TracedRNumber{T}
+) where {T<:ReactantFloat}
+    nuf = @opcall(constant(nu))
+    zf = float(z)
+    TF = eltype(zf)
+    if k == 1 || k == 2
+        return @opcall(special_besselh(nuf, @opcall(constant(TF(k))), zf))
+    else
+        throw(DomainError(k, "besselh: k must be 1 or 2"))
+    end
+end
+
+function SpecialFunctions.besselh(
+    nu::Real, k::TracedRNumber{T}, z::TracedRNumber{T}
+) where {T<:ReactantFloat}
+    return @opcall(special_besselh(@opcall(constant(nu)), float(k), float(z)))
+end
+
+function SpecialFunctions.hankelh1(nu::Real, z::TracedRNumber{T}) where {T<:ReactantFloat}
+    nuf = @opcall(constant(nu))
+    zf = float(z)
+    TF = eltype(zf)
+    return @opcall(special_besselh(nuf, @opcall(constant(TF(1))), zf))
+end
+
+function SpecialFunctions.hankelh1x(nu::Real, z::TracedRNumber{T}) where {T<:ReactantFloat}
+    return @opcall(special_hankelh1x(@opcall(constant(nu)), float(z)))
+end
+
+function SpecialFunctions.hankelh2(nu::Real, z::TracedRNumber{T}) where {T<:ReactantFloat}
+    nuf = @opcall(constant(nu))
+    zf = float(z)
+    TF = eltype(zf)
+    return @opcall(special_besselh(nuf, @opcall(constant(TF(2))), zf))
+end
+
+function SpecialFunctions.hankelh2x(nu::Real, z::TracedRNumber{T}) where {T<:ReactantFloat}
+    return @opcall(special_hankelh2x(@opcall(constant(nu)), float(z)))
+end
+
+# Modified Bessel Functions of the First Kind
+
+function SpecialFunctions.besseli(nu::Real, z::TracedRNumber{T}) where {T<:ReactantFloat}
+    return @opcall(special_besseli(@opcall(constant(nu)), float(z)))
+end
+
+function SpecialFunctions.besselix(nu::Real, z::TracedRNumber{T}) where {T<:ReactantFloat}
+    return @opcall(special_besselix(@opcall(constant(nu)), float(z)))
+end
+
+# Modified Bessel Functions of the Second Kind
+
+function SpecialFunctions.besselk(nu::Real, z::TracedRNumber{T}) where {T<:ReactantFloat}
+    return @opcall(special_besselk(@opcall(constant(nu)), float(z)))
+end
+
+function SpecialFunctions.besselkx(nu::Real, z::TracedRNumber{T}) where {T<:ReactantFloat}
+    return @opcall(special_besselkx(@opcall(constant(nu)), float(z)))
+end
+
+# Jinc Function (sombrero/besinc)
+
+function SpecialFunctions.jinc(x::TracedRNumber{<:ReactantFloatInt})
+    return @opcall(special_jinc(float(x)))
+end
 
 #Elliptic Integrals
 
