@@ -160,3 +160,48 @@ end
 sampler(::Type{<:Bernoulli}) = _bernoulli_sampler
 logpdf_fn(::Type{<:Bernoulli}) = _bernoulli_logpdf
 support(::Type{<:Bernoulli}) = :real
+
+#==============================================================================#
+# Multivariate Normal Distribution
+#==============================================================================#
+
+struct MultivariateNormal{Tμ,TΣ,S<:Tuple} <: Distribution
+    μ::Tμ
+    Σ::TΣ
+    shape::S
+
+    function MultivariateNormal{Tμ,TΣ,S}(μ::Tμ, Σ::TΣ, shape::S) where {Tμ,TΣ,S<:Tuple}
+        isempty(shape) && throw(ArgumentError("shape cannot be empty"))
+        return new{Tμ,TΣ,S}(μ, Σ, shape)
+    end
+end
+
+function MultivariateNormal(μ::Tμ, Σ::TΣ, shape::S) where {Tμ,TΣ,S<:Tuple}
+    return MultivariateNormal{Tμ,TΣ,S}(μ, Σ, shape)
+end
+
+const MultiNormal = MultivariateNormal
+
+params(d::MultivariateNormal) = (d.μ, d.Σ, d.shape)
+
+function _mvn_sampler(rng, μ, Σ, shape)
+    n = shape[1]
+    z = randn(rng, shape)
+    C = cholesky(Σ)
+    return μ .+ reshape(C.factors' * reshape(z, n, 1), n)
+end
+
+function _mvn_logpdf(x, μ, Σ, shape)
+    n = shape[1]
+    C = cholesky(Σ)
+    diff = x .- μ
+    alpha = reshape(C \ reshape(diff, n, 1), n)
+    I_n = Matrix{Float64}(LinearAlgebra.I, n, n)
+    U_diag = vec(sum(C.factors .* I_n; dims=1))
+    log_det = 2.0 * sum(log.(U_diag))
+    return -0.5 * (sum(diff .* alpha) + log_det + n * log(2π))
+end
+
+sampler(::Type{<:MultivariateNormal}) = _mvn_sampler
+logpdf_fn(::Type{<:MultivariateNormal}) = _mvn_logpdf
+support(::Type{<:MultivariateNormal}) = :real
