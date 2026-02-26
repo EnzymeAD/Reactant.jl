@@ -1,4 +1,5 @@
 using Random: randexp
+using LinearAlgebra: cholesky, I
 
 abstract type Distribution end
 
@@ -196,7 +197,7 @@ function _mvn_logpdf(x, μ, Σ, shape)
     C = cholesky(Σ)
     diff = x .- μ
     alpha = reshape(C \ reshape(diff, n, 1), n)
-    I_n = Matrix{Float64}(LinearAlgebra.I, n, n)
+    I_n = Matrix{Float64}(I, n, n)
     U_diag = vec(sum(C.factors .* I_n; dims=1))
     log_det = 2.0 * sum(log.(U_diag))
     return -0.5 * (sum(diff .* alpha) + log_det + n * log(2π))
