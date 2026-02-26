@@ -83,6 +83,28 @@ end
     @test C_ra ≈ C atol = 1e-3 rtol = 1e-2
 end
 
+function do_mul_view!(data_3d, A, B)
+    C = view(data_3d, :, :, 1)
+    mul!(C, A, B)
+    return nothing
+end
+
+@testset "Matrix Multiplication with Views" begin
+    C = Reactant.TestUtils.construct_test_array(ComplexF32, 100, 8, 2)
+    A = Reactant.TestUtils.construct_test_array(ComplexF32, 100, 200)
+    B = Reactant.TestUtils.construct_test_array(ComplexF32, 200, 8)
+
+    C_ra = Reactant.to_rarray(C)
+    A_ra = Reactant.to_rarray(A)
+    B_ra = Reactant.to_rarray(B)
+
+    do_mul_view!(C, A, B)
+
+    @jit(do_mul_view!(C_ra, A_ra, B_ra))
+
+    @test C_ra ≈ C atol = 1e-3 rtol = 1e-2
+end
+
 @testset "triu & tril" begin
     A = Reactant.TestUtils.construct_test_array(Float32, 4, 6)
     A_ra = Reactant.to_rarray(A)

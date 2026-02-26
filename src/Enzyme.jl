@@ -348,7 +348,7 @@ function overload_autodiff(
     activity = Int32[]
     ad_inputs = MLIR.IR.Value[]
 
-    reverse_seeds = MLIR.IR.Value[]
+    reverse_seeds = Dict{Tuple,MLIR.IR.Value}()
 
     for a in linear_args
         idx, path = TracedUtils.get_argidx(a, argprefix)
@@ -357,22 +357,23 @@ function overload_autodiff(
         push_acts!(ad_inputs, arg, path[3:end], reverse)
 
         if CMode <: ReverseMode && act_from_type(arg, false) == enzyme_dup
-            if width == 1
-                TracedUtils.push_val!(reverse_seeds, arg.dval, path[3:end])
+            x = if width == 1
+                arg.dval
             elseif arg.dval isa AbstractArray
-                TracedUtils.push_val!(reverse_seeds, arg.dval, path[3:end])
+                arg.dval
             else
-                TracedUtils.push_val!(
-                    reverse_seeds, call_with_reactant(stack, arg.dval), path[3:end]
-                )
+                call_with_reactant(stack, arg.dval)
             end
+            for p in path[3:end]
+                x = Compiler.traced_getfield(x, p)
+            end
+            x = TracedUtils.get_mlir_data(x)
+            reverse_seeds[path] = x
         end
     end
 
     outtys = MLIR.IR.Type[]
     ret_activity = Int32[]
-
-    reverse_seed_idx = 1
 
     for a in linear_results
         if TracedUtils.has_idx(a, resprefix)
@@ -411,8 +412,7 @@ function overload_autodiff(
                 idx, path = TracedUtils.get_argidx(a, argprefix)
                 arg = idx == 1 && fnwrap ? f : args[idx - fnwrap]
                 act2 = act_from_type(arg, reverse, true)
-                seed = reverse_seeds[reverse_seed_idx]
-                reverse_seed_idx += 1
+                seed = reverse_seeds[path]
                 if cst == nothing
                     if act == enzyme_const
                         act = enzyme_out
@@ -440,8 +440,7 @@ function overload_autodiff(
                 push!(ret_activity, act)
 
                 if act == enzyme_out || act == enzyme_outnoneed
-                    seed = reverse_seeds[reverse_seed_idx]
-                    reverse_seed_idx += 1
+                    seed = reverse_seeds[path]
                     push!(ad_inputs, seed)
                 end
             else
