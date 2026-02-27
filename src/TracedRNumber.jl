@@ -671,7 +671,9 @@ for (jlop, hloop) in (
     (:(Base.abs), :abs),
     (:(Base.:-), :negate),
     (:(Base.sin), :sine),
+    (:(Base.sinh), :sinh),
     (:(Base.cos), :cosine),
+    (:(Base.cosh), :cosh),
     (:(Base.tan), :tan),
     (:(Base.tanh), :tanh),
     (:(Base.FastMath.tanh_fast), :tanh),
@@ -720,7 +722,9 @@ Base.acotd(x::TracedRNumber) = rad2deg(atan(1 / x))
 
 for (jlop, hloop) in (
     (:(Base.sin), :sine),
+    (:(Base.sinh), :sinh),
     (:(Base.cos), :cosine),
+    (:(Base.cosh), :cosh),
     (:(Base.tan), :tan),
     (:(Base.tanh), :tanh),
     (:(Base.FastMath.tanh_fast), :tanh),
