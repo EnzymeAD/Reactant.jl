@@ -37,7 +37,14 @@ testsuite = find_tests(@__DIR__)
 
 filter_tests!(testsuite, parsed_args)
 
-delete!(testsuite, "plugins/metal") # Currently completely non functional
+if !Sys.isapple() || !try
+    @eval using Metal
+    Metal.functional()
+catch
+    false
+end
+    delete!(testsuite, "plugins/metal")
+end
 
 if Sys.isapple()
     delete!(testsuite, "core/custom_number_types")
