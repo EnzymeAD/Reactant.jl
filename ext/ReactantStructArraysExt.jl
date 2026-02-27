@@ -40,8 +40,8 @@ function Base.copy(
 end
 
 function Reactant.broadcast_to_size(arg::StructArray{T}, rsize) where {T}
-    new = [broadcast_to_size(c, rsize) for c in components(arg)]
-    return StructArray{T}(NamedTuple(Base.propertynames(arg) .=> new))
+    new = Tuple((broadcast_to_size(c, rsize) for c in components(arg)))
+    return StructArray{T}(new)
 end
 
 function Base.copyto!(
@@ -58,6 +58,31 @@ function Base.copyto!(
 
     return copyto!(dest, res)
 end
+
+function Base.copyto!(
+    dest::Reactant.TracedRArray, bc::Broadcasted{StructArrayStyle{S,N}}
+) where {S<:AbstractReactantArrayStyle,N}
+    axes(dest) == axes(bc) || Broadcast.throwdm(axes(dest), axes(bc))
+    isempty(dest) && return dest
+
+    bc = Broadcast.preprocess(dest, bc)
+
+    args = (Reactant.broadcast_to_size(Base.materialize(a), size(bc)) for a in bc.args)
+    res = Reactant.TracedUtils.elem_apply_via_while_loop(bc.f, args...)
+    return copyto!(dest, res)
+end
+
+function Base.similar(
+    bc::Broadcasted{StructArrayStyle{S,N}}, ::Type{ElType}
+) where {S<:AbstractReactantArrayStyle,N,ElType}
+    bc′ = convert(Broadcasted{S}, bc)
+    if StructArrays.isnonemptystructtype(ElType)
+        StructArrays.buildfromschema(T -> similar(bc′, T), ElType)
+    else
+        similar(bc′, ElType)
+    end
+end
+
 
 Base.@propagate_inbounds function StructArrays._getindex(
     x::StructArray{T}, I::Vararg{TracedRNumber{<:Integer}}
@@ -90,41 +115,62 @@ Base.@nospecializeinfer function Reactant.traced_type_inner(
     return StructArray{ET_traced,N,C_traced,index_type(fieldtypes(C_traced))}
 end
 
-function Reactant.make_tracer(
-    seen,
-    @nospecialize(prev::StructArray{NT,N}),
-    @nospecialize(path),
-    mode;
-    track_numbers=false,
-    sharding=Reactant.Sharding.Sharding.NoSharding(),
-    runtime=nothing,
-    kwargs...,
-) where {NT<:NamedTuple,N}
-    track_numbers isa Bool && (track_numbers = track_numbers ? Number : Union{})
-    components = getfield(prev, :components)
-    if mode == TracedToTypes
-        push!(path, typeof(prev))
-        for c in components
-            make_tracer(seen, c, path, mode; track_numbers, sharding, runtime, kwargs...)
-        end
-        return nothing
-    end
-    traced_components = make_tracer(
-        seen,
-        components,
-        append_path(path, 1),
-        mode;
-        track_numbers,
-        sharding,
-        runtime,
-        kwargs...,
-    )
-    T_traced = traced_type(typeof(prev), Val(mode), track_numbers, sharding, runtime)
-    return StructArray{first(T_traced.parameters)}(traced_components)
-end
+# function Reactant.make_tracer(
+#     seen,
+#     @nospecialize(prev::StructArray{NT}),
+#     @nospecialize(path),
+#     mode;
+#     track_numbers=false,
+#     sharding=Reactant.Sharding.Sharding.NoSharding(),
+#     runtime=nothing,
+#     kwargs...,
+# ) where {NT}
+
+#     track_numbers isa Bool && (track_numbers = track_numbers ? Number : Union{})
+#     components = StructArrays.components(prev)
+#     if mode == TracedToTypes
+#         push!(path, typeof(prev))
+#         for c in components
+#             make_tracer(seen, c, path, mode; track_numbers, sharding, runtime, kwargs...)
+#         end
+#         return nothing
+#     end
+#     traced_components = make_tracer(
+#         seen,
+#         components,
+#         append_path(path, 1),
+#         mode;
+#         track_numbers,
+#         sharding,
+#         runtime,
+#         kwargs...,
+#     )
+
+#     T_traced = traced_type(typeof(prev), Val(mode), track_numbers, sharding, runtime)
+#     np = length(T_traced.parameters)
+#     # WTF why does this even happen? Clearly I messed something up with tracing
+#     if first(traced_components) isa TracedRNumber
+#         return T_traced.parameters[1](traced_components)
+#     end
+#     return StructArray{T_traced.parameters[1:np-1]...}(traced_components)
+# end
 
 @inline function Reactant.traced_getfield(@nospecialize(obj::StructArray), field)
     return Base.getfield(obj, field)
 end
 
+function Base.similar(
+    ::Base.Broadcast.Broadcasted{AbstractReactantArrayStyle}, ::Type{Eltype}, dims
+) where {Eltype}
+    @info Eltype
+    return similar(TracedRArray{Eltype}, dims)
+end
+
+# This is to tell StructArrays to leave these array types alone.
+StructArrays.staticschema(::Type{<:Reactant.AnyTracedRArray}) = NamedTuple{()}
+StructArrays.staticschema(::Type{<:Reactant.RArray}) = NamedTuple{()}
+StructArrays.staticschema(::Type{<:Reactant.RNumber}) = NamedTuple{()}
+# # Even though RNumbers we have fields we want them to be threated as empty structs
+StructArrays.isnonemptystructtype(::Type{<:Reactant.RNumber}) = false
+StructArrays.isnonemptystructtype(::Type{<:Reactant.TracedRArray}) = false
 end
