@@ -1,4 +1,4 @@
-using LinearAlgebra, Reactant, Test
+using LinearAlgebra, Reactant, Test, Enzyme
 
 const RunningOnTPU = contains(string(Reactant.devices()[1]), "TPU")
 
@@ -370,6 +370,66 @@ end
                 @test @jit(fn6(A_ra, B_ra)) ≈ fn6(A_wrapped, B)
             end
         end
+    end
+end
+
+lower_tri_solve_sum(A, b) = sum(LowerTriangular(A) \ b)
+upper_tri_solve_sum(A, b) = sum(UpperTriangular(A) \ b)
+lower_tri_solve_mat_sum(A, B) = sum(LowerTriangular(A) \ B)
+upper_tri_solve_mat_sum(A, B) = sum(UpperTriangular(A) \ B)
+
+@testset "Triangular Solve AD" begin
+    n = 4
+
+    A_raw = randn(Float64, n, n)
+    for i in 1:n
+        A_raw[i, i] = abs(A_raw[i, i]) + n
+    end
+    b = randn(Float64, n)
+    B = randn(Float64, n, 3)
+
+    A_ra = Reactant.to_rarray(A_raw)
+    b_ra = Reactant.to_rarray(b)
+    B_ra = Reactant.to_rarray(B)
+
+    @testset "LowerTriangular \\ vector" begin
+        dA_enz, db_enz = @jit Enzyme.gradient(Reverse, lower_tri_solve_sum, A_ra, b_ra)
+        dA_fd, db_fd = @jit Reactant.TestUtils.finite_difference_gradient(
+            lower_tri_solve_sum, A_ra, b_ra
+        )
+
+        @test Array(dA_enz) ≈ Array(dA_fd) atol = 1e-5 rtol = 1e-4
+        @test Array(db_enz) ≈ Array(db_fd) atol = 1e-5 rtol = 1e-4
+    end
+
+    @testset "UpperTriangular \\ vector" begin
+        dA_enz, db_enz = @jit Enzyme.gradient(Reverse, upper_tri_solve_sum, A_ra, b_ra)
+        dA_fd, db_fd = @jit Reactant.TestUtils.finite_difference_gradient(
+            upper_tri_solve_sum, A_ra, b_ra
+        )
+
+        @test Array(dA_enz) ≈ Array(dA_fd) atol = 1e-5 rtol = 1e-4
+        @test Array(db_enz) ≈ Array(db_fd) atol = 1e-5 rtol = 1e-4
+    end
+
+    @testset "LowerTriangular \\ matrix" begin
+        dA_enz, dB_enz = @jit Enzyme.gradient(Reverse, lower_tri_solve_mat_sum, A_ra, B_ra)
+        dA_fd, dB_fd = @jit Reactant.TestUtils.finite_difference_gradient(
+            lower_tri_solve_mat_sum, A_ra, B_ra
+        )
+
+        @test Array(dA_enz) ≈ Array(dA_fd) atol = 1e-5 rtol = 1e-4
+        @test Array(dB_enz) ≈ Array(dB_fd) atol = 1e-5 rtol = 1e-4
+    end
+
+    @testset "UpperTriangular \\ matrix" begin
+        dA_enz, dB_enz = @jit Enzyme.gradient(Reverse, upper_tri_solve_mat_sum, A_ra, B_ra)
+        dA_fd, dB_fd = @jit Reactant.TestUtils.finite_difference_gradient(
+            upper_tri_solve_mat_sum, A_ra, B_ra
+        )
+
+        @test Array(dA_enz) ≈ Array(dA_fd) atol = 1e-5 rtol = 1e-4
+        @test Array(dB_enz) ≈ Array(dB_fd) atol = 1e-5 rtol = 1e-4
     end
 end
 

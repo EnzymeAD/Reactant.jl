@@ -1,4 +1,4 @@
-using LinearAlgebra, Reactant, Test
+using LinearAlgebra, Reactant, Test, Enzyme
 
 const RunningOnTPU = contains(string(Reactant.devices()[1]), "TPU")
 
@@ -159,6 +159,39 @@ end
             @test @jit(solve_with_cholesky(A_ra, B_ra)) ≈ solve_with_cholesky_batched(A, B) atol =
                 1e-4 rtol = 1e-2
         end
+    end
+end
+
+chol_factor_sum(A) = sum(cholesky(A).factors)
+chol_solve_sum(A, b) = sum(cholesky(A) \ b)
+
+@testset "Cholesky AD" begin
+    n = 4
+
+    M = random_matrix_with_cond(Float64, n, n, 1.001)
+    A = M * M'
+    b = randn(Float64, n)
+
+    A_ra = Reactant.to_rarray(A)
+    b_ra = Reactant.to_rarray(b)
+
+    @testset "gradient of sum(cholesky(A).factors)" begin
+        dA_enz = @jit Enzyme.gradient(Reverse, chol_factor_sum, A_ra)
+        dA_fd = @jit Reactant.TestUtils.finite_difference_gradient(chol_factor_sum, A_ra)
+        dA_fd_sym = (Array(dA_fd) + Array(dA_fd)') / 2
+
+        @test Array(dA_enz[1]) ≈ dA_fd_sym atol = 1e-5 rtol = 1e-4
+    end
+
+    @testset "gradient of sum(cholesky(A) \\ b)" begin
+        dA_enz, db_enz = @jit Enzyme.gradient(Reverse, chol_solve_sum, A_ra, b_ra)
+        dA_fd, db_fd = @jit Reactant.TestUtils.finite_difference_gradient(
+            chol_solve_sum, A_ra, b_ra
+        )
+        dA_fd_sym = (Array(dA_fd) + Array(dA_fd)') / 2
+
+        @test Array(dA_enz) ≈ dA_fd_sym atol = 1e-5 rtol = 1e-4
+        @test Array(db_enz) ≈ Array(db_fd) atol = 1e-5 rtol = 1e-4
     end
 end
 
