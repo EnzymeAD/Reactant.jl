@@ -92,7 +92,7 @@ include("CompileOptions.jl")
 export OptimizeCommunicationOptions, ShardyPropagationOptions, CompileOptions
 
 include("mlir/MLIR.jl")
-include("MLIR_highlighter.jl")
+include("MLIRHighlight.jl")
 include("xla/XLA.jl")
 
 include("Configuration.jl")
