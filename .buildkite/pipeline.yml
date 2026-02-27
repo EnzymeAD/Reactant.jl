@@ -47,6 +47,36 @@ steps:
         if: build.message !~ /\[skip tests\]/
         timeout_in_minutes: 120
 
+      - label: ":julia: :apple: Metal Julia v{{matrix.version}} -- plugins/metal"
+        matrix:
+          setup:
+            version:
+              - "1.12"
+        plugins:
+          - JuliaCI/julia#v1:
+              version: "{{matrix.version}}"
+          - JuliaCI/julia-coverage#v1:
+              codecov: true
+              dirs:
+                - src
+                - ext
+        commands: |
+          julia --project=. -e 'println("--- :julia: Instantiating project")
+              using Pkg
+              Pkg.develop([PackageSpec(path="lib/ReactantCore")])'
+
+          julia --project=. -e 'println("--- :julia: Run Tests")
+              using Pkg
+              Pkg.test(; coverage="user", test_args=["plugins/metal"])'
+        agents:
+          queue: "juliaecosystem"
+          os: "macos"
+          arch: "aarch64"
+        env:
+          JULIA_DEBUG: "Reactant,Reactant_jll"
+        if: build.message !~ /\[skip tests\]/ && build.message !~ /\[skip metal\]/
+        timeout_in_minutes: 60
+
   # - label: ":julia: :linux: AMDGPU Julia v{{matrix.version}} -- {{matrix.group}} -- {{matrix.runtime}}"
   #   matrix:
   #     setup:
