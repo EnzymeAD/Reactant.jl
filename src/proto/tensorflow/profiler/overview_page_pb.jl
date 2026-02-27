@@ -21,7 +21,7 @@ end
 PB.default_values(::Type{OverviewTfOp}) = (;name = "", category = "", self_time_fraction = zero(Float64), cumulative_time_fraction = zero(Float64), flop_rate = zero(Float64), is_op_tensorcore_eligible = false, is_op_using_tensorcore = false)
 PB.field_numbers(::Type{OverviewTfOp}) = (;name = 1, category = 2, self_time_fraction = 3, cumulative_time_fraction = 4, flop_rate = 5, is_op_tensorcore_eligible = 6, is_op_using_tensorcore = 7)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:OverviewTfOp})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:OverviewTfOp}, _endpos::Int=0, _group::Bool=false)
     name = ""
     category = ""
     self_time_fraction = zero(Float64)
@@ -29,7 +29,7 @@ function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:OverviewTfOp})
     flop_rate = zero(Float64)
     is_op_tensorcore_eligible = false
     is_op_using_tensorcore = false
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             name = PB.decode(d, String)
@@ -85,13 +85,13 @@ end
 PB.default_values(::Type{DistributionStats}) = (;avg = zero(Float64), p50 = zero(Float64), p90 = zero(Float64), p95 = zero(Float64), p99 = zero(Float64))
 PB.field_numbers(::Type{DistributionStats}) = (;avg = 1, p50 = 2, p90 = 3, p95 = 4, p99 = 5)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:DistributionStats})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:DistributionStats}, _endpos::Int=0, _group::Bool=false)
     avg = zero(Float64)
     p50 = zero(Float64)
     p90 = zero(Float64)
     p95 = zero(Float64)
     p99 = zero(Float64)
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             avg = PB.decode(d, Float64)
@@ -139,13 +139,13 @@ end
 PB.default_values(::Type{OverviewPageHostDependentJobInfo}) = (;host_id = "", command_line = "", start_time = zero(Int64), bns_address = "", profile_time_ns = zero(UInt64))
 PB.field_numbers(::Type{OverviewPageHostDependentJobInfo}) = (;host_id = 1, command_line = 2, start_time = 3, bns_address = 4, profile_time_ns = 5)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:OverviewPageHostDependentJobInfo})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:OverviewPageHostDependentJobInfo}, _endpos::Int=0, _group::Bool=false)
     host_id = ""
     command_line = ""
     start_time = zero(Int64)
     bns_address = ""
     profile_time_ns = zero(UInt64)
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             host_id = PB.decode(d, String)
@@ -192,12 +192,12 @@ end
 PB.default_values(::Type{OverviewLatencyBreakdown}) = (;total_latency_us = zero(Float64), host_latency_us = zero(Float64), device_latency_us = zero(Float64), communication_latency_us = zero(Float64))
 PB.field_numbers(::Type{OverviewLatencyBreakdown}) = (;total_latency_us = 1, host_latency_us = 2, device_latency_us = 3, communication_latency_us = 4)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:OverviewLatencyBreakdown})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:OverviewLatencyBreakdown}, _endpos::Int=0, _group::Bool=false)
     total_latency_us = zero(Float64)
     host_latency_us = zero(Float64)
     device_latency_us = zero(Float64)
     communication_latency_us = zero(Float64)
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             total_latency_us = PB.decode(d, Float64)
@@ -243,7 +243,7 @@ end
 PB.default_values(::Type{GenericRecommendation}) = (;kernel_launch_bottleneck = "", kernel_launch_statement = "", all_other_bottleneck = "", all_other_statement = "", precision_statement = "", device_collectives_bottleneck = "", device_collectives_statement = "")
 PB.field_numbers(::Type{GenericRecommendation}) = (;kernel_launch_bottleneck = 1, kernel_launch_statement = 2, all_other_bottleneck = 3, all_other_statement = 4, precision_statement = 5, device_collectives_bottleneck = 6, device_collectives_statement = 7)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:GenericRecommendation})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:GenericRecommendation}, _endpos::Int=0, _group::Bool=false)
     kernel_launch_bottleneck = ""
     kernel_launch_statement = ""
     all_other_bottleneck = ""
@@ -251,7 +251,7 @@ function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:GenericRecommendation})
     precision_statement = ""
     device_collectives_bottleneck = ""
     device_collectives_statement = ""
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             kernel_launch_bottleneck = PB.decode(d, String)
@@ -303,9 +303,9 @@ end
 PB.default_values(::Type{OverviewPageTip}) = (;link = "")
 PB.field_numbers(::Type{OverviewPageTip}) = (;link = 1)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:OverviewPageTip})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:OverviewPageTip}, _endpos::Int=0, _group::Bool=false)
     link = ""
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             link = PB.decode(d, String)
@@ -338,14 +338,14 @@ end
 PB.default_values(::Type{OverviewPageHostIndependentJobInfo}) = (;change_list = zero(Int64), workspace_id = "", snapshot = zero(Int64), build_time = zero(Int64), build_target = "", profile_duration_ms = zero(UInt32))
 PB.field_numbers(::Type{OverviewPageHostIndependentJobInfo}) = (;change_list = 1, workspace_id = 5, snapshot = 6, build_time = 2, build_target = 3, profile_duration_ms = 4)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:OverviewPageHostIndependentJobInfo})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:OverviewPageHostIndependentJobInfo}, _endpos::Int=0, _group::Bool=false)
     change_list = zero(Int64)
     workspace_id = ""
     snapshot = zero(Int64)
     build_time = zero(Int64)
     build_target = ""
     profile_duration_ms = zero(UInt32)
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             change_list = PB.decode(d, Int64)
@@ -423,7 +423,7 @@ end
 PB.default_values(::Type{OverviewPageAnalysis}) = (;mxu_utilization_percent = zero(Float64), device_idle_time_percent = zero(Float64), host_idle_time_percent = zero(Float64), top_device_ops = Vector{OverviewTfOp}(), remark_text = "", remark_color = "", flop_rate_utilization_relative_to_roofline_percent = zero(Float64), memory_bw_utilization_relative_to_hw_limit_percent = zero(Float64), device_compute_16bit_percent = zero(Float64), device_compute_32bit_percent = zero(Float64), host_tf_op_percent = zero(Float64), device_tf_op_percent = zero(Float64), host_trace_level = zero(UInt32), host_op_time_eager_percent = zero(Float64), device_op_time_eager_percent = zero(Float64), device_op_time_outside_compilation_percent = zero(Float64), device_duty_cycle_percent = zero(Float64), hbm_utilization_percent = zero(Float64), program_goodput_percent = zero(Float64), sc_step_time_ms_average = zero(Float64), sc_infeed_time_ms_avg = zero(Float64), sc_outfeed_time_ms_avg = zero(Float64), sc_idle_time_ms_avg = zero(Float64), fw_max_vdd_core_pl1_power_watts = zero(Float64), fw_max_vdd_core_pl2_power_watts = zero(Float64), fw_max_vdd_core_pl3_power_watts = zero(Float64), fw_max_vdd_core_pl4_power_watts = zero(Float64), fw_max_hbm_pl1_power_watts = zero(Float64), fw_max_hbm_pl2_power_watts = zero(Float64), fw_max_hbm_pl3_power_watts = zero(Float64), fw_max_hbm_pl4_power_watts = zero(Float64))
 PB.field_numbers(::Type{OverviewPageAnalysis}) = (;mxu_utilization_percent = 1, device_idle_time_percent = 2, host_idle_time_percent = 3, top_device_ops = 4, remark_text = 5, remark_color = 6, flop_rate_utilization_relative_to_roofline_percent = 7, memory_bw_utilization_relative_to_hw_limit_percent = 8, device_compute_16bit_percent = 9, device_compute_32bit_percent = 10, host_tf_op_percent = 11, device_tf_op_percent = 12, host_trace_level = 13, host_op_time_eager_percent = 14, device_op_time_eager_percent = 15, device_op_time_outside_compilation_percent = 16, device_duty_cycle_percent = 17, hbm_utilization_percent = 31, program_goodput_percent = 18, sc_step_time_ms_average = 19, sc_infeed_time_ms_avg = 20, sc_outfeed_time_ms_avg = 21, sc_idle_time_ms_avg = 22, fw_max_vdd_core_pl1_power_watts = 23, fw_max_vdd_core_pl2_power_watts = 24, fw_max_vdd_core_pl3_power_watts = 25, fw_max_vdd_core_pl4_power_watts = 26, fw_max_hbm_pl1_power_watts = 27, fw_max_hbm_pl2_power_watts = 28, fw_max_hbm_pl3_power_watts = 29, fw_max_hbm_pl4_power_watts = 30)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:OverviewPageAnalysis})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:OverviewPageAnalysis}, _endpos::Int=0, _group::Bool=false)
     mxu_utilization_percent = zero(Float64)
     device_idle_time_percent = zero(Float64)
     host_idle_time_percent = zero(Float64)
@@ -455,7 +455,7 @@ function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:OverviewPageAnalysis})
     fw_max_hbm_pl2_power_watts = zero(Float64)
     fw_max_hbm_pl3_power_watts = zero(Float64)
     fw_max_hbm_pl4_power_watts = zero(Float64)
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             mxu_utilization_percent = PB.decode(d, Float64)
@@ -608,14 +608,14 @@ end
 PB.default_values(::Type{OverviewDisaggregatedServingLatency}) = (;prefill_step_time_us = nothing, num_prefill_steps = zero(Int64), decode_step_time_us = nothing, num_decode_steps = zero(Int64), insert_time_us = nothing, transfer_time_us = nothing)
 PB.field_numbers(::Type{OverviewDisaggregatedServingLatency}) = (;prefill_step_time_us = 1, num_prefill_steps = 2, decode_step_time_us = 3, num_decode_steps = 4, insert_time_us = 5, transfer_time_us = 6)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:OverviewDisaggregatedServingLatency})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:OverviewDisaggregatedServingLatency}, _endpos::Int=0, _group::Bool=false)
     prefill_step_time_us = Ref{Union{Nothing,DistributionStats}}(nothing)
     num_prefill_steps = zero(Int64)
     decode_step_time_us = Ref{Union{Nothing,DistributionStats}}(nothing)
     num_decode_steps = zero(Int64)
     insert_time_us = Ref{Union{Nothing,DistributionStats}}(nothing)
     transfer_time_us = Ref{Union{Nothing,DistributionStats}}(nothing)
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             PB.decode!(d, prefill_step_time_us)
@@ -667,13 +667,13 @@ end
 PB.default_values(::Type{OverviewInferenceLatency}) = (;percentile_numbers = Vector{Float64}(), latency_breakdowns = Vector{OverviewLatencyBreakdown}(), max_latency_us = zero(Float64), min_latency_us = zero(Float64), sessions_per_second = zero(Float64))
 PB.field_numbers(::Type{OverviewInferenceLatency}) = (;percentile_numbers = 1, latency_breakdowns = 2, max_latency_us = 3, min_latency_us = 4, sessions_per_second = 5)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:OverviewInferenceLatency})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:OverviewInferenceLatency}, _endpos::Int=0, _group::Bool=false)
     percentile_numbers = PB.BufferedVector{Float64}()
     latency_breakdowns = PB.BufferedVector{OverviewLatencyBreakdown}()
     max_latency_us = zero(Float64)
     min_latency_us = zero(Float64)
     sessions_per_second = zero(Float64)
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             PB.decode!(d, wire_type, percentile_numbers)
@@ -729,7 +729,7 @@ end
 PB.default_values(::Type{OverviewPageRecommendation}) = (;bottleneck = "", statement = "", input_tips = Vector{OverviewPageTip}(), output_statement = "", eager_statement_html = "", outside_compilation_statement_html = "", tf_function_statement_html = "", host_tips = Vector{OverviewPageTip}(), device_tips = Vector{OverviewPageTip}(), documentation_tips = Vector{OverviewPageTip}(), recommendation = nothing, faq_tips = Vector{OverviewPageTip}(), inference_tips = Vector{OverviewPageTip}())
 PB.field_numbers(::Type{OverviewPageRecommendation}) = (;bottleneck = 1, statement = 2, input_tips = 11, output_statement = 9, eager_statement_html = 12, outside_compilation_statement_html = 13, tf_function_statement_html = 10, host_tips = 3, device_tips = 4, documentation_tips = 5, recommendation = 6, faq_tips = 7, inference_tips = 8)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:OverviewPageRecommendation})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:OverviewPageRecommendation}, _endpos::Int=0, _group::Bool=false)
     bottleneck = ""
     statement = ""
     input_tips = PB.BufferedVector{OverviewPageTip}()
@@ -743,7 +743,7 @@ function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:OverviewPageRecommendati
     recommendation = Ref{Union{Nothing,google.protobuf.var"#Any"}}(nothing)
     faq_tips = PB.BufferedVector{OverviewPageTip}()
     inference_tips = PB.BufferedVector{OverviewPageTip}()
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             bottleneck = PB.decode(d, String)
@@ -830,7 +830,7 @@ PB.reserved_fields(::Type{OverviewPageRunEnvironment}) = (names = String[], numb
 PB.default_values(::Type{OverviewPageRunEnvironment}) = (;host_count = zero(Int32), task_count = zero(Int32), hostnames = Dict{String,Bool}(), device_type = "", device_core_count = zero(Int32), host_independent_job_info = nothing, host_dependent_job_info = Vector{OverviewPageHostDependentJobInfo}(), replica_count = zero(Int32), num_cores_per_replica = zero(Int32), is_training = false, power_metrics = nothing)
 PB.field_numbers(::Type{OverviewPageRunEnvironment}) = (;host_count = 1, task_count = 2, hostnames = 3, device_type = 4, device_core_count = 5, host_independent_job_info = 7, host_dependent_job_info = 8, replica_count = 9, num_cores_per_replica = 10, is_training = 11, power_metrics = 12)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:OverviewPageRunEnvironment})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:OverviewPageRunEnvironment}, _endpos::Int=0, _group::Bool=false)
     host_count = zero(Int32)
     task_count = zero(Int32)
     hostnames = Dict{String,Bool}()
@@ -842,7 +842,7 @@ function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:OverviewPageRunEnvironme
     num_cores_per_replica = zero(Int32)
     is_training = false
     power_metrics = Ref{Union{Nothing,PowerMetrics}}(nothing)
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             host_count = PB.decode(d, Int32)
@@ -916,14 +916,14 @@ PB.reserved_fields(::Type{OverviewPage}) = (names = String[], numbers = Union{In
 PB.default_values(::Type{OverviewPage}) = (;run_environment = nothing, input_analysis = nothing, analysis = nothing, recommendation = nothing, diagnostics = nothing, inference_latency = nothing)
 PB.field_numbers(::Type{OverviewPage}) = (;run_environment = 6, input_analysis = 2, analysis = 3, recommendation = 4, diagnostics = 8, inference_latency = 9)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:OverviewPage})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:OverviewPage}, _endpos::Int=0, _group::Bool=false)
     run_environment = Ref{Union{Nothing,OverviewPageRunEnvironment}}(nothing)
     input_analysis = Ref{Union{Nothing,InputPipelineAnalysisResult}}(nothing)
     analysis = Ref{Union{Nothing,OverviewPageAnalysis}}(nothing)
     recommendation = Ref{Union{Nothing,OverviewPageRecommendation}}(nothing)
     diagnostics = Ref{Union{Nothing,Diagnostics}}(nothing)
     inference_latency = Ref{Union{Nothing,OverviewInferenceLatency}}(nothing)
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 6
             PB.decode!(d, run_environment)

@@ -13,11 +13,11 @@ end
 PB.default_values(::Type{Resource}) = (;name = "", resource_id = zero(UInt32), sort_index = zero(UInt32))
 PB.field_numbers(::Type{Resource}) = (;name = 1, resource_id = 2, sort_index = 3)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:Resource})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:Resource}, _endpos::Int=0, _group::Bool=false)
     name = ""
     resource_id = zero(UInt32)
     sort_index = zero(UInt32)
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             name = PB.decode(d, String)
@@ -58,14 +58,14 @@ end
 PB.default_values(::Type{TraceEvent}) = (;device_id = zero(UInt32), resource_id = zero(UInt32), name = "", timestamp_ps = zero(UInt64), duration_ps = zero(UInt64), args = Dict{String,String}())
 PB.field_numbers(::Type{TraceEvent}) = (;device_id = 1, resource_id = 2, name = 3, timestamp_ps = 9, duration_ps = 10, args = 11)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:TraceEvent})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:TraceEvent}, _endpos::Int=0, _group::Bool=false)
     device_id = zero(UInt32)
     resource_id = zero(UInt32)
     name = ""
     timestamp_ps = zero(UInt64)
     duration_ps = zero(UInt64)
     args = Dict{String,String}()
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             device_id = PB.decode(d, UInt32)
@@ -115,11 +115,11 @@ end
 PB.default_values(::Type{Device}) = (;name = "", device_id = zero(UInt32), resources = Dict{UInt32,Resource}())
 PB.field_numbers(::Type{Device}) = (;name = 1, device_id = 2, resources = 3)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:Device})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:Device}, _endpos::Int=0, _group::Bool=false)
     name = ""
     device_id = zero(UInt32)
     resources = Dict{UInt32,Resource}()
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             name = PB.decode(d, String)
@@ -156,10 +156,10 @@ end
 PB.default_values(::Type{Trace}) = (;devices = Dict{UInt32,Device}(), trace_events = Vector{TraceEvent}())
 PB.field_numbers(::Type{Trace}) = (;devices = 1, trace_events = 4)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:Trace})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:Trace}, _endpos::Int=0, _group::Bool=false)
     devices = Dict{UInt32,Device}()
     trace_events = PB.BufferedVector{TraceEvent}()
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             PB.decode!(d, devices)

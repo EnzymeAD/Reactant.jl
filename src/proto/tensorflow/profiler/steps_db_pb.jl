@@ -15,11 +15,11 @@ end
 PB.default_values(::Type{DeviceMemoryTransfer}) = (;occurrence = zero(UInt64), time_us = zero(Float64), bytes_transferred = zero(UInt64))
 PB.field_numbers(::Type{DeviceMemoryTransfer}) = (;occurrence = 1, time_us = 2, bytes_transferred = 3)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:DeviceMemoryTransfer})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:DeviceMemoryTransfer}, _endpos::Int=0, _group::Bool=false)
     occurrence = zero(UInt64)
     time_us = zero(Float64)
     bytes_transferred = zero(UInt64)
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             occurrence = PB.decode(d, UInt64)
@@ -56,10 +56,10 @@ end
 PB.default_values(::Type{GenericStepBreakdown}) = (;type_ps = Dict{Int32,UInt64}(), category_ps = Dict{String,UInt64}())
 PB.field_numbers(::Type{GenericStepBreakdown}) = (;type_ps = 1, category_ps = 2)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:GenericStepBreakdown})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:GenericStepBreakdown}, _endpos::Int=0, _group::Bool=false)
     type_ps = Dict{Int32,UInt64}()
     category_ps = Dict{String,UInt64}()
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             PB.decode!(d, type_ps)
@@ -96,14 +96,14 @@ end
 PB.default_values(::Type{AllReduceInfo}) = (;id = zero(UInt64), name = "", all_reduce_id = zero(UInt64), start_time_ps = zero(UInt64), end_time_ps = zero(UInt64), byte_size = zero(UInt64))
 PB.field_numbers(::Type{AllReduceInfo}) = (;id = 1, name = 2, all_reduce_id = 3, start_time_ps = 4, end_time_ps = 5, byte_size = 6)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:AllReduceInfo})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:AllReduceInfo}, _endpos::Int=0, _group::Bool=false)
     id = zero(UInt64)
     name = ""
     all_reduce_id = zero(UInt64)
     start_time_ps = zero(UInt64)
     end_time_ps = zero(UInt64)
     byte_size = zero(UInt64)
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             id = PB.decode(d, UInt64)
@@ -155,13 +155,13 @@ end
 PB.default_values(::Type{SparseCoreStepBreakdown}) = (;sc_compute_ps = zero(UInt64), sc_infeed_ps = zero(UInt64), sc_outfeed_ps = zero(UInt64), sc_idle_ps = zero(UInt64), sc_busy_ps = zero(UInt64))
 PB.field_numbers(::Type{SparseCoreStepBreakdown}) = (;sc_compute_ps = 1, sc_infeed_ps = 2, sc_outfeed_ps = 3, sc_idle_ps = 4, sc_busy_ps = 5)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:SparseCoreStepBreakdown})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:SparseCoreStepBreakdown}, _endpos::Int=0, _group::Bool=false)
     sc_compute_ps = zero(UInt64)
     sc_infeed_ps = zero(UInt64)
     sc_outfeed_ps = zero(UInt64)
     sc_idle_ps = zero(UInt64)
     sc_busy_ps = zero(UInt64)
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             sc_compute_ps = PB.decode(d, UInt64)
@@ -223,7 +223,7 @@ PB.reserved_fields(::Type{TpuStepBreakdown}) = (names = String[], numbers = Unio
 PB.default_values(::Type{TpuStepBreakdown}) = (;infeed_duration_ps = zero(UInt64), host_outfeed_ps = zero(UInt64), wait_for_scv0_duration_ps = zero(UInt64), scv0_infeed_transform_ps = zero(UInt64), scv0_outfeed_ps = zero(UInt64), crs_duration_ps = zero(UInt64), scv0_infeed_percent = zero(Float64), send_duration_ps = zero(UInt64), recv_duration_ps = zero(UInt64), host_send_duration_ps = zero(UInt64), host_recv_duration_ps = zero(UInt64), wait_for_megacore_fusion_peer_duration_ps = zero(UInt64), overlay_wait_duration_ps = zero(UInt64), high_flops_compute_ps = zero(UInt64), tc_idle_ps = zero(UInt64), tc_busy_ps = zero(UInt64), scv0_busy_ps = zero(UInt64), scv0_step_ps = zero(UInt64))
 PB.field_numbers(::Type{TpuStepBreakdown}) = (;infeed_duration_ps = 1, host_outfeed_ps = 2, wait_for_scv0_duration_ps = 3, scv0_infeed_transform_ps = 4, scv0_outfeed_ps = 5, crs_duration_ps = 6, scv0_infeed_percent = 7, send_duration_ps = 8, recv_duration_ps = 9, host_send_duration_ps = 15, host_recv_duration_ps = 16, wait_for_megacore_fusion_peer_duration_ps = 14, overlay_wait_duration_ps = 11, high_flops_compute_ps = 12, tc_idle_ps = 13, tc_busy_ps = 17, scv0_busy_ps = 18, scv0_step_ps = 19)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:TpuStepBreakdown})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:TpuStepBreakdown}, _endpos::Int=0, _group::Bool=false)
     infeed_duration_ps = zero(UInt64)
     host_outfeed_ps = zero(UInt64)
     wait_for_scv0_duration_ps = zero(UInt64)
@@ -242,7 +242,7 @@ function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:TpuStepBreakdown})
     tc_busy_ps = zero(UInt64)
     scv0_busy_ps = zero(UInt64)
     scv0_step_ps = zero(UInt64)
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             infeed_duration_ps = PB.decode(d, UInt64)
@@ -343,14 +343,14 @@ end
 PB.default_values(::Type{StepInfoResult}) = (;step_num = zero(UInt32), step_name = "", duration_ps = zero(UInt64), begin_ps = zero(UInt64), step_breakdown = nothing, collectives = nothing)
 PB.field_numbers(::Type{StepInfoResult}) = (;step_num = 1, step_name = 5, duration_ps = 2, begin_ps = 3, step_breakdown = 4, collectives = 6)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:StepInfoResult})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:StepInfoResult}, _endpos::Int=0, _group::Bool=false)
     step_num = zero(UInt32)
     step_name = ""
     duration_ps = zero(UInt64)
     begin_ps = zero(UInt64)
     step_breakdown = Ref{Union{Nothing,google.protobuf.var"#Any"}}(nothing)
     collectives = Ref{Union{Nothing,DeviceMemoryTransfer}}(nothing)
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             step_num = PB.decode(d, UInt32)
@@ -398,9 +398,9 @@ end
 PB.default_values(::Type{AllReduceDbResult}) = (;all_reduce_info = Vector{AllReduceInfo}())
 PB.field_numbers(::Type{AllReduceDbResult}) = (;all_reduce_info = 1)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:AllReduceDbResult})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:AllReduceDbResult}, _endpos::Int=0, _group::Bool=false)
     all_reduce_info = PB.BufferedVector{AllReduceInfo}()
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             PB.decode!(d, all_reduce_info)
@@ -434,14 +434,14 @@ PB.reserved_fields(::Type{PerCoreStepInfo}) = (names = String[], numbers = Union
 PB.default_values(::Type{PerCoreStepInfo}) = (;step_num = zero(UInt32), step_info_per_core = Dict{UInt32,StepInfoResult}(), hlo_metrics_db = nothing, core_id_to_replica_id_map = Dict{UInt32,UInt32}(), all_reduce_db_per_core = Dict{UInt32,AllReduceDbResult}(), device_memory_transfers = Vector{DeviceMemoryTransfer}())
 PB.field_numbers(::Type{PerCoreStepInfo}) = (;step_num = 1, step_info_per_core = 2, hlo_metrics_db = 3, core_id_to_replica_id_map = 5, all_reduce_db_per_core = 6, device_memory_transfers = 7)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:PerCoreStepInfo})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:PerCoreStepInfo}, _endpos::Int=0, _group::Bool=false)
     step_num = zero(UInt32)
     step_info_per_core = Dict{UInt32,StepInfoResult}()
     hlo_metrics_db = Ref{Union{Nothing,OpMetricsDb}}(nothing)
     core_id_to_replica_id_map = Dict{UInt32,UInt32}()
     all_reduce_db_per_core = Dict{UInt32,AllReduceDbResult}()
     device_memory_transfers = PB.BufferedVector{DeviceMemoryTransfer}()
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             step_num = PB.decode(d, UInt32)
@@ -492,12 +492,12 @@ end
 PB.default_values(::Type{StepDatabaseResult}) = (;step_sequence = Vector{PerCoreStepInfo}(), use_incomplete_step = false, num_steps_dropped = zero(UInt32), empty_intersect = false)
 PB.field_numbers(::Type{StepDatabaseResult}) = (;step_sequence = 1, use_incomplete_step = 2, num_steps_dropped = 3, empty_intersect = 4)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:StepDatabaseResult})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:StepDatabaseResult}, _endpos::Int=0, _group::Bool=false)
     step_sequence = PB.BufferedVector{PerCoreStepInfo}()
     use_incomplete_step = false
     num_steps_dropped = zero(UInt32)
     empty_intersect = false
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             PB.decode!(d, step_sequence)
