@@ -13,11 +13,11 @@ end
 PB.default_values(::Type{SourceInfo}) = (;file_name = "", line_number = zero(Int32), stack_frame = "")
 PB.field_numbers(::Type{SourceInfo}) = (;file_name = 1, line_number = 2, stack_frame = 3)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:SourceInfo})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:SourceInfo}, _endpos::Int=0, _group::Bool=false)
     file_name = ""
     line_number = zero(Int32)
     stack_frame = ""
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             file_name = PB.decode(d, String)

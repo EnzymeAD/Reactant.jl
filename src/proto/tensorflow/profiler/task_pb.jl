@@ -28,7 +28,7 @@ end
 PB.default_values(::Type{Task}) = (;changelist = zero(Int64), workspace_id = "", snapshot = zero(Int64), clean_build = false, build_time = zero(Int64), build_target = "", command_line = "", start_time = zero(Int64), task_address = "", profile_time_ns = zero(UInt64), profile_duration_ms = zero(UInt32), host_trace_level = zero(UInt32), tensor_core_freq_hz = zero(UInt64), sparse_core_freq_hz = zero(UInt64), gtc_freq_hz = zero(UInt64), peak_memory_usage = zero(UInt64), cpu_limit = zero(Float64), cpu_usage = zero(Float64))
 PB.field_numbers(::Type{Task}) = (;changelist = 1, workspace_id = 17, snapshot = 18, clean_build = 2, build_time = 3, build_target = 4, command_line = 5, start_time = 6, task_address = 7, profile_time_ns = 8, profile_duration_ms = 9, host_trace_level = 10, tensor_core_freq_hz = 11, sparse_core_freq_hz = 12, gtc_freq_hz = 13, peak_memory_usage = 14, cpu_limit = 15, cpu_usage = 16)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:Task})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:Task}, _endpos::Int=0, _group::Bool=false)
     changelist = zero(Int64)
     workspace_id = ""
     snapshot = zero(Int64)
@@ -47,7 +47,7 @@ function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:Task})
     peak_memory_usage = zero(UInt64)
     cpu_limit = zero(Float64)
     cpu_usage = zero(Float64)
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             changelist = PB.decode(d, Int64)

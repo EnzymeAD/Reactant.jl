@@ -19,7 +19,7 @@ end
 PB.default_values(::Type{ExecuteOptionsProto}) = (;arguments_are_tupled = false, untuple_result = false, launch_id = zero(Int32), strict_shape_checking = false, use_major_to_minor_data_layout_for_callbacks = false, execution_mode = ExecutionModeProto.EXECUTION_MODE_UNSPECIFIED, non_donatable_input_indices = Vector{Int32}())
 PB.field_numbers(::Type{ExecuteOptionsProto}) = (;arguments_are_tupled = 1, untuple_result = 2, launch_id = 3, strict_shape_checking = 4, use_major_to_minor_data_layout_for_callbacks = 8, execution_mode = 6, non_donatable_input_indices = 7)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:ExecuteOptionsProto})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:ExecuteOptionsProto}, _endpos::Int=0, _group::Bool=false)
     arguments_are_tupled = false
     untuple_result = false
     launch_id = zero(Int32)
@@ -27,7 +27,7 @@ function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:ExecuteOptionsProto})
     use_major_to_minor_data_layout_for_callbacks = false
     execution_mode = ExecutionModeProto.EXECUTION_MODE_UNSPECIFIED
     non_donatable_input_indices = PB.BufferedVector{Int32}()
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             arguments_are_tupled = PB.decode(d, Bool)

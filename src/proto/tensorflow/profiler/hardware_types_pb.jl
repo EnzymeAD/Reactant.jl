@@ -14,10 +14,10 @@ end
 PB.default_values(::Type{GPUComputeCapability}) = (;major = zero(UInt32), minor = zero(UInt32))
 PB.field_numbers(::Type{GPUComputeCapability}) = (;major = 1, minor = 2)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:GPUComputeCapability})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:GPUComputeCapability}, _endpos::Int=0, _group::Bool=false)
     major = zero(UInt32)
     minor = zero(UInt32)
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             major = PB.decode(d, UInt32)
@@ -54,14 +54,14 @@ end
 PB.default_values(::Type{DeviceCapabilities}) = (;clock_rate_in_ghz = zero(Float64), num_cores = zero(UInt32), memory_size_in_bytes = zero(UInt64), memory_bandwidth = zero(UInt64), compute_capability = nothing, device_vendor = "")
 PB.field_numbers(::Type{DeviceCapabilities}) = (;clock_rate_in_ghz = 1, num_cores = 2, memory_size_in_bytes = 3, memory_bandwidth = 4, compute_capability = 5, device_vendor = 6)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:DeviceCapabilities})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:DeviceCapabilities}, _endpos::Int=0, _group::Bool=false)
     clock_rate_in_ghz = zero(Float64)
     num_cores = zero(UInt32)
     memory_size_in_bytes = zero(UInt64)
     memory_bandwidth = zero(UInt64)
     compute_capability = Ref{Union{Nothing,GPUComputeCapability}}(nothing)
     device_vendor = ""
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             clock_rate_in_ghz = PB.decode(d, Float64)

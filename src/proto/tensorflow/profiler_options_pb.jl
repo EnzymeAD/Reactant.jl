@@ -13,9 +13,9 @@ end
 PB.default_values(::Type{var"ProfileOptions.TraceOptions"}) = (;host_traceme_filter_mask = zero(UInt64))
 PB.field_numbers(::Type{var"ProfileOptions.TraceOptions"}) = (;host_traceme_filter_mask = 1)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:var"ProfileOptions.TraceOptions"})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:var"ProfileOptions.TraceOptions"}, _endpos::Int=0, _group::Bool=false)
     host_traceme_filter_mask = zero(UInt64)
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             host_traceme_filter_mask = PB.decode(d, UInt64)
@@ -48,9 +48,9 @@ PB.oneof_field_types(::Type{var"ProfileOptions.AdvancedConfigValue"}) = (;
 PB.default_values(::Type{var"ProfileOptions.AdvancedConfigValue"}) = (;string_value = "", bool_value = false, int64_value = zero(Int64))
 PB.field_numbers(::Type{var"ProfileOptions.AdvancedConfigValue"}) = (;string_value = 1, bool_value = 2, int64_value = 3)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:var"ProfileOptions.AdvancedConfigValue"})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:var"ProfileOptions.AdvancedConfigValue"}, _endpos::Int=0, _group::Bool=false)
     value = nothing
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             value = OneOf(:string_value, PB.decode(d, String))
@@ -110,7 +110,7 @@ end
 PB.default_values(::Type{ProfileOptions}) = (;version = zero(UInt32), device_type = var"ProfileOptions.DeviceType".UNSPECIFIED, include_dataset_ops = false, host_tracer_level = zero(UInt32), device_tracer_level = zero(UInt32), python_tracer_level = zero(UInt32), enable_hlo_proto = false, start_timestamp_ns = zero(UInt64), duration_ms = zero(UInt64), repository_path = "", trace_options = nothing, advanced_configuration = Dict{String,var"ProfileOptions.AdvancedConfigValue"}(), raise_error_on_start_failure = false, session_id = "", override_hostname = "")
 PB.field_numbers(::Type{ProfileOptions}) = (;version = 5, device_type = 6, include_dataset_ops = 1, host_tracer_level = 2, device_tracer_level = 3, python_tracer_level = 4, enable_hlo_proto = 7, start_timestamp_ns = 8, duration_ms = 9, repository_path = 10, trace_options = 11, advanced_configuration = 12, raise_error_on_start_failure = 13, session_id = 14, override_hostname = 15)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:ProfileOptions})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:ProfileOptions}, _endpos::Int=0, _group::Bool=false)
     version = zero(UInt32)
     device_type = var"ProfileOptions.DeviceType".UNSPECIFIED
     include_dataset_ops = false
@@ -126,7 +126,7 @@ function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:ProfileOptions})
     raise_error_on_start_failure = false
     session_id = ""
     override_hostname = ""
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 5
             version = PB.decode(d, UInt32)
@@ -214,13 +214,13 @@ end
 PB.default_values(::Type{RemoteProfilerSessionManagerOptions}) = (;profiler_options = nothing, service_addresses = Vector{String}(), session_creation_timestamp_ns = zero(UInt64), max_session_duration_ms = zero(UInt64), delay_ms = zero(UInt64))
 PB.field_numbers(::Type{RemoteProfilerSessionManagerOptions}) = (;profiler_options = 1, service_addresses = 2, session_creation_timestamp_ns = 3, max_session_duration_ms = 4, delay_ms = 5)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:RemoteProfilerSessionManagerOptions})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:RemoteProfilerSessionManagerOptions}, _endpos::Int=0, _group::Bool=false)
     profiler_options = Ref{Union{Nothing,ProfileOptions}}(nothing)
     service_addresses = PB.BufferedVector{String}()
     session_creation_timestamp_ns = zero(UInt64)
     max_session_duration_ms = zero(UInt64)
     delay_ms = zero(UInt64)
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             PB.decode!(d, profiler_options)
