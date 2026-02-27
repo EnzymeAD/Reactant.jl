@@ -7,7 +7,6 @@ using LinearAlgebra: LinearAlgebra, RowMaximum, NoPivot
 using Random: Random, AbstractRNG
 using EnumX: @enumx
 using Functors: Functors, @leaf
-using StyledStrings: StyledStrings, Face, AnnotatedString, addface!
 
 using Libdl: Libdl
 using Reactant_jll: Reactant_jll
