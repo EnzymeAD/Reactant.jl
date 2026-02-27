@@ -7,6 +7,7 @@ using LinearAlgebra: LinearAlgebra, RowMaximum, NoPivot
 using Random: Random, AbstractRNG
 using EnumX: @enumx
 using Functors: Functors, @leaf
+using StyledStrings: StyledStrings, Face, AnnotatedString, addface!
 
 using Libdl: Libdl
 using Reactant_jll: Reactant_jll
@@ -91,6 +92,7 @@ include("CompileOptions.jl")
 export OptimizeCommunicationOptions, ShardyPropagationOptions, CompileOptions
 
 include("mlir/MLIR.jl")
+include("MLIR_highlighter.jl")
 include("xla/XLA.jl")
 
 include("Configuration.jl")
@@ -372,7 +374,7 @@ function __init__()
             )
         end
     end
-
+    register_reactant_theme()
     return nothing
 end
 
