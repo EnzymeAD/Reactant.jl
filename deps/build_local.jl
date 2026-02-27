@@ -223,7 +223,15 @@ push!(build_cmd_list, "--jobs=$(parsed_args["jobs"])")
 push!(build_cmd_list, "--experimental_ui_max_stdouterr_bytes=-1")
 push!(build_cmd_list, "--sandbox_debug")
 
-push!(build_cmd_list, "--linkopt=-fuse-ld=lld")
+if !Sys.isapple()
+    push!(build_cmd_list, "--linkopt=-fuse-ld=lld")
+end
+
+# On macOS, enable new toolchain resolution so Bazel uses platform-aware
+# selection instead of legacy CPU-string matching (which maps "darwin" to x86)
+if Sys.isapple()
+    push!(build_cmd_list, "--incompatible_enable_cc_toolchain_resolution")
+end
 
 for opt in parsed_args["copt"]
     push!(build_cmd_list, "--copt=$(opt)")

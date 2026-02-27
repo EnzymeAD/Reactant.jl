@@ -196,7 +196,7 @@ function MakeTPUClient(;
 end
 
 function MakeMetalClient(;
-    metal_pjrt_plugin_path::String,
+    metal_pjrt_plugin_path::Union{String,Nothing}=nothing,
     node_id::Integer=0,
     num_nodes::Integer=1,
     distributed_runtime_client::Union{Nothing,XLA.DistributedRuntimeClient}=nothing,
@@ -206,7 +206,12 @@ function MakeMetalClient(;
     @assert distributed_runtime_client === nothing "`PJRT.MakeMetalClient` does not support \
                                                     distributed_runtime_client"
 
-    return MakeClientUsingPluginAPI(metal_pjrt_plugin_path, "metal", "METAL")
+    if metal_pjrt_plugin_path !== nothing
+        return MakeClientUsingPluginAPI(metal_pjrt_plugin_path, "metal", "METAL")
+    else
+        @assert _metal_pjrt_api_ptr[] != C_NULL "Metal PJRT API not initialized. Load Metal.jl first."
+        return MakeClientFromApi(_metal_pjrt_api_ptr[], "metal", "METAL")
+    end
 end
 
 function MakeTTClient(;
@@ -222,6 +227,23 @@ function MakeTTClient(;
 
     return MakeClientUsingPluginAPI(tt_pjrt_plugin_path, "tt", "TT")
 end
+
+function MakeClientFromApi(api_ptr::Ptr{Cvoid}, device_type, client_name)
+    errstr = Ref{Cstring}()
+    GC.@preserve errstr begin
+        client = @ccall MLIR.API.mlir_c.MakeClientFromApi(
+            api_ptr::Ptr{Cvoid},
+            device_type::Cstring,
+            client_name::Cstring,
+            errstr::Ptr{Cstring},
+        )::Ptr{Cvoid}
+    end
+    client == C_NULL && throw(AssertionError(unsafe_string(errstr[])))
+    return client
+end
+
+# Set by ReactantMetalExt when Metal.jl is loaded
+const _metal_pjrt_api_ptr = Ref{Ptr{Cvoid}}(C_NULL)
 
 function MakeClientUsingPluginAPI(
     library_path::String, device_type::String, client_name::String=uppercase(device_type)

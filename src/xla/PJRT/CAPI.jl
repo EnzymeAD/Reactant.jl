@@ -3929,7 +3929,8 @@ const PJRT_API_MAJOR = 0
 
 const PJRT_API_MINOR = 90
 
-const _PJRT_API_STRUCT_FIELD = fn_type(fn_type) * fn_type
+# FIXME(generator): `fn_type` is undefined — dead code from Clang.jl generator artifact
+# const _PJRT_API_STRUCT_FIELD = fn_type(fn_type) * fn_type
 
 const PJRT_API_CALLBACK_EXTENSION_VERSION = 1
 
