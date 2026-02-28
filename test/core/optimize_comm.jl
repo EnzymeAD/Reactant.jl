@@ -166,7 +166,7 @@ if length(addressable_devices) ≥ 2
 
             if Nallgathers != 1 || Ncollectives != 2
                 # for debugging print hlo
-                display(hlo)
+                println(hlo)
             end
 
             @test !contains(hlo, "all-to-all")
@@ -238,7 +238,7 @@ if length(addressable_devices) ≥ 2
 
             if Nallgathers != expected_allgathers || Ncollectives != expected_collectives
                 # for debugging print hlo
-                display(hlo)
+                println(hlo)
             end
 
             @test !contains(hlo, "all-to-all")
