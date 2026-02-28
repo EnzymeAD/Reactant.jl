@@ -12,23 +12,22 @@ const NullClient = Client(C_NULL; skip_check=true)
 function XLA.free_client(client::Client)
     @assert client.client != C_NULL "Client is null"
     GC.@preserve client begin
-        @ccall MLIR.API.mlir_c.FreeClient(client.client::Ptr{Cvoid})::Cvoid
+        MLIR.API.FreeClient(client.client)
     end
+    return nothing
 end
 
 function XLA.num_devices(client::Client)
     @assert client.client != C_NULL "Client is null"
     GC.@preserve client begin
-        return @ccall MLIR.API.mlir_c.ClientNumDevices(client.client::Ptr{Cvoid})::Cint
+        return MLIR.API.ClientNumDevices(client.client)
     end
 end
 
 function XLA.num_addressable_devices(client::Client)
     @assert client.client != C_NULL "Client is null"
     GC.@preserve client begin
-        return @ccall MLIR.API.mlir_c.ClientNumAddressableDevices(
-            client.client::Ptr{Cvoid}
-        )::Cint
+        return MLIR.API.ClientNumAddressableDevices(client.client)
     end
 end
 
@@ -37,9 +36,7 @@ function XLA.devices(client::Client)
     ndevices = Int(XLA.num_devices(client))
     devices = Ref{NTuple{ndevices,Ptr{Cvoid}}}()
     GC.@preserve client devices begin
-        @ccall MLIR.API.mlir_c.ClientGetDevices(
-            client.client::Ptr{Cvoid}, devices::Ptr{Ptr{Cvoid}}
-        )::Cvoid
+        MLIR.API.ClientGetDevices(client.client, devices)
     end
     return [Device(device) for device in devices[]]
 end
@@ -49,9 +46,7 @@ function XLA.addressable_devices(client::Client)
     naddressable_devices = Int(XLA.num_addressable_devices(client))
     addressable_devices = Ref{NTuple{naddressable_devices,Ptr{Cvoid}}}()
     GC.@preserve client addressable_devices begin
-        @ccall MLIR.API.mlir_c.ClientGetAddressableDevices(
-            client.client::Ptr{Cvoid}, addressable_devices::Ptr{Ptr{Cvoid}}
-        )::Cvoid
+        MLIR.API.ClientGetAddressableDevices(client.client, addressable_devices)
     end
     return [Device(device) for device in addressable_devices[]]
 end
@@ -59,50 +54,40 @@ end
 function XLA.process_index(client::Client)
     @assert client.client != C_NULL "Client is null"
     GC.@preserve client begin
-        return @ccall MLIR.API.mlir_c.ClientProcessIndex(client.client::Ptr{Cvoid})::Cint
+        return MLIR.API.ClientProcessIndex(client.client)
     end
 end
 
 function XLA.get_device(client::Client, idx)
     @assert client.client != C_NULL "Client is null"
     GC.@preserve client begin
-        return Device(
-            @ccall MLIR.API.mlir_c.ClientGetDevice(
-                client.client::Ptr{Cvoid}, idx::Cint
-            )::Ptr{Cvoid}
-        )
+        return Device(MLIR.API.ClientGetDevice(client.client, idx))
     end
 end
 
 function XLA.get_addressable_device(client::Client, idx)
     @assert client.client != C_NULL "Client is null"
     GC.@preserve client begin
-        return Device(
-            @ccall MLIR.API.mlir_c.ClientGetAddressableDevice(
-                client.client::Ptr{Cvoid}, idx::Cint
-            )::Ptr{Cvoid}
-        )
+        return Device(MLIR.API.ClientGetAddressableDevice(client.client, idx))
     end
 end
 
 function XLA.platform_name(client::Client)
     @assert client.client != C_NULL "Client is null"
     GC.@preserve client begin
-        str = @ccall MLIR.API.mlir_c.ClientGetPlatformName(
-            client.client::Ptr{Cvoid}
-        )::Cstring
+        str = MLIR.API.ClientGetPlatformName(client.client)
     end
     return XLA.unsafe_string_and_free(str)
 end
 
 function XLA.cost_analysis(client::Client, hlo_module::XLA.HloModule)
+    ref = Ref{MLIR.API.JLHloCostAnalysisProperties}()
     GC.@preserve client hlo_module begin
-        ref = Ref{XLA.HloCostAnalysisProperties}()
-        @ccall MLIR.API.mlir_c.pjrt_hlo_module_cost_analysis_properties(
-            client.client::Ptr{Cvoid}, hlo_module.ptr::Ptr{Cvoid}, ref::Ptr{Cvoid}
-        )::Cvoid
-        return ref[]
+        MLIR.API.pjrt_hlo_module_cost_analysis_properties(
+            client.client, hlo_module.ptr, ref
+        )
     end
+    return ref[]
 end
 
 # Different Backends
@@ -143,10 +128,7 @@ function MakeCPUClient(;
     @assert num_nodes == 1 "`PJRT.MakeCPUClient` does not support num_nodes > 1"
     @assert distributed_runtime_client === nothing "`PJRT.MakeCPUClient` does not support \
                                                     distributed_runtime_client"
-
-    return @ccall MLIR.API.mlir_c.MakeCPUClient(
-        asynchronous::UInt8, node_id::Cint
-    )::Ptr{Cvoid}
+    return MLIR.API.MakeCPUClient(asynchronous, node_id)
 end
 
 function MakeCUDAClient(;
@@ -164,17 +146,17 @@ function MakeCUDAClient(;
         distributed_runtime_client === nothing ? C_NULL : distributed_runtime_client.client
 
     GC.@preserve refstr allowed_devices distributed_runtime_client begin
-        client = @ccall MLIR.API.mlir_c.MakeGPUClient(
-            node_id::Cint,
-            num_nodes::Cint,
-            allowed_devices::Ptr{Int64},
-            num_allowed_devices::Int64,
-            XLA.XLA_REACTANT_GPU_MEM_FRACTION[]::Cdouble,
-            XLA.XLA_REACTANT_GPU_PREALLOCATE[]::Bool,
-            platform::Cstring,
-            refstr::Ptr{Cstring},
-            distributed_runtime_client::Ptr{Cvoid},
-        )::Ptr{Cvoid}
+        client = MLIR.API.MakeGPUClient(
+            node_id,
+            num_nodes,
+            allowed_devices,
+            num_allowed_devices,
+            XLA.XLA_REACTANT_GPU_MEM_FRACTION[],
+            XLA.XLA_REACTANT_GPU_PREALLOCATE[],
+            platform,
+            refstr,
+            distributed_runtime_client,
+        )
     end
 
     client == C_NULL && throw(AssertionError(unsafe_string(refstr[])))
@@ -240,14 +222,10 @@ function MakeClientUsingPluginAPI(
 
     errstr = Ref{Cstring}()
     GC.@preserve errstr library_path device_type client_name begin
-        client = @ccall MLIR.API.mlir_c.MakeClientUsingPluginAPI(
-            device_type::Cstring,
-            library_path::Cstring,
-            client_name::Cstring,
-            errstr::Ptr{Cstring},
-        )::Ptr{Cvoid}
+        client = MLIR.API.MakeClientUsingPluginAPI(
+            device_type, library_path, client_name, errstr
+        )
     end
-
     client == C_NULL && throw(AssertionError(unsafe_string(errstr[])))
     return client
 end

@@ -299,7 +299,7 @@ export ConcreteRArray,
 const registry = Ref{Union{Nothing,MLIR.IR.DialectRegistry}}()
 
 function register_enzymexla_dialects(ctx::MLIR.IR.Context)
-    @ccall MLIR.API.mlir_c.RegisterDialects(ctx::MLIR.API.MlirContext)::Cvoid
+    MLIR.API.RegisterDialects(ctx)
     return nothing
 end
 
@@ -313,13 +313,9 @@ end
 const passes_initialized = Ref(false)
 function initialize_dialect()
     registry[] = MLIR.IR.DialectRegistry()
-    @ccall MLIR.API.mlir_c.InitializeRegistry(
-        registry[]::MLIR.API.MlirDialectRegistry
-    )::Cvoid
+    MLIR.API.InitializeRegistry(registry[])
     if !passes_initialized[]
-        @ccall MLIR.API.mlir_c.InitializePasses(
-            registry[]::MLIR.API.MlirDialectRegistry
-        )::Cvoid
+        MLIR.API.InitializePasses(registry[])
         passes_initialized[] = true
     end
     return nothing
@@ -338,18 +334,18 @@ function initialize_ptrs()
         "__kmpc_for_static_init_8u",
         "__kmpc_fork_call",
     )
-        sym = Libdl.dlsym(LLVMOpenMP_jll.libomp_handle, name)
-        @ccall MLIR.API.mlir_c.EnzymeJaXMapSymbol(name::Cstring, sym::Ptr{Cvoid})::Cvoid
+        MLIR.API.EnzymeJaXMapSymbol(name, Libdl.dlsym(LLVMOpenMP_jll.libomp_handle, name))
     end
-    if (@ccall MLIR.API.mlir_c.ReactantHermeticCudaGetVersion()::UInt32) != 0
+    if MLIR.API.ReactantHermeticCudaGetVersion() != 0
         for name in (
             "cuLaunchKernel",
             "cuModuleLoadData",
             "cuModuleGetFunction",
             "cuStreamSynchronize",
         )
-            sym = Libdl.dlsym(Reactant_jll.libReactantExtra_handle, name)
-            @ccall MLIR.API.mlir_c.EnzymeJaXMapSymbol(name::Cstring, sym::Ptr{Cvoid})::Cvoid
+            MLIR.API.EnzymeJaXMapSymbol(
+                name, Libdl.dlsym(Reactant_jll.libReactantExtra_handle, name)
+            )
         end
     end
 end

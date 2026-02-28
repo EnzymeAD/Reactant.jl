@@ -11,19 +11,17 @@ end
 function GPUPerformanceModel(
     mlir_context::MLIR.IR.Context, device_description::StreamExecutorDeviceDescription
 )
-    return GPUPerformanceModel(
-        @ccall MLIR.API.mlir_c.CreateGPUPerformanceModel(
-            mlir_context::MLIR.API.MlirContext, device_description.ptr::Ptr{Cvoid}
-        )::Ptr{Cvoid}
-    )
+    GC.@preserve device_description begin
+        return GPUPerformanceModel(
+            MLIR.API.CreateGPUPerformanceModel(mlir_context, device_description.ptr)
+        )
+    end
 end
 
 # Runs the analysis on the given HLO module.
 function (gpu_performance_model::GPUPerformanceModel)(hlo_module::HloModule)
-    GC.@preserve hlo_module begin
-        @ccall MLIR.API.mlir_c.RunAnalysisOnHloModule(
-            gpu_performance_model.ptr::Ptr{Cvoid}, hlo_module.ptr::Ptr{Cvoid}
-        )::Cvoid
+    GC.@preserve gpu_performance_model hlo_module begin
+        MLIR.API.RunAnalysisOnHloModule(gpu_performance_model.ptr, hlo_module.ptr)
     end
     return nothing
 end
@@ -47,12 +45,10 @@ function estimate_runtime_for_instruction(
     performance_model::GPUPerformanceModel, hlo_instruction::HloInstruction
 )
     data = Ref{EstimateRunTimeData}()
-    GC.@preserve performance_model hlo_instruction data begin
-        @ccall MLIR.API.mlir_c.EstimateRunTimeForInstruction(
-            performance_model.ptr::Ptr{Cvoid},
-            hlo_instruction.ptr::Ptr{Cvoid},
-            data::Ptr{EstimateRunTimeData},
-        )::Cvoid
+    GC.@preserve performance_model hlo_instruction begin
+        MLIR.API.EstimateRunTimeForInstruction(
+            performance_model.ptr, hlo_instruction.ptr, data
+        )
     end
     return data[]
 end

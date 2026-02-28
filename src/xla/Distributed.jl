@@ -19,15 +19,15 @@ function DistributedRuntimeClient(
 )
     @debug "[GETPID $(getpid())] [PID $process_id] Creating distributed runtime client"
     GC.@preserve coordinator_bind_address begin
-        client = @ccall MLIR.API.mlir_c.GetDistributedRuntimeClient(
-            coordinator_bind_address::Cstring,
-            Int32(process_id)::Int32,
-            Int32(rpc_timeout_in_seconds)::Int32,
-            Int32(init_timeout_in_seconds)::Int32,
-            Int32(shutdown_timeout_in_minutes)::Int32,
-            Int32(heartbeat_interval_in_seconds)::Int32,
-            use_compression::Bool,
-        )::Ptr{Cvoid}
+        client = MLIR.API.GetDistributedRuntimeClient(
+            coordinator_bind_address,
+            process_id,
+            rpc_timeout_in_seconds,
+            init_timeout_in_seconds,
+            shutdown_timeout_in_minutes,
+            heartbeat_interval_in_seconds,
+            use_compression,
+        )
     end
     return DistributedRuntimeClient(client)
 end
@@ -35,28 +35,25 @@ end
 function free_distributed_runtime_client(client::DistributedRuntimeClient)
     @debug "[GETPID $(getpid())] Freeing distributed runtime client"
     GC.@preserve client begin
-        @ccall MLIR.API.mlir_c.free_distributed_runtime_client(
-            client.client::Ptr{Cvoid}
-        )::Cvoid
+        MLIR.API.free_distributed_runtime_client(client.client)
     end
+    return nothing
 end
 
 function connect(client::DistributedRuntimeClient)
     @debug "[GETPID $(getpid())] Connecting to DistributedRuntimeClient"
     GC.@preserve client begin
-        @ccall MLIR.API.mlir_c.distributed_runtime_client_connect(
-            client.client::Ptr{Cvoid}
-        )::Cvoid
+        MLIR.API.distributed_runtime_client_connect(client.client)
     end
+    return nothing
 end
 
 function shutdown(client::DistributedRuntimeClient)
     @debug "[GETPID $(getpid())] Shutdown DistributedRuntimeClient"
     GC.@preserve client begin
-        @ccall MLIR.API.mlir_c.distributed_runtime_client_shutdown(
-            client.client::Ptr{Cvoid}
-        )::Cvoid
+        MLIR.API.distributed_runtime_client_shutdown(client.client)
     end
+    return nothing
 end
 
 # Service
@@ -78,13 +75,13 @@ function DistributedRuntimeService(
 )
     @debug "[GETPID $(getpid())] Creating DistributedRuntimeService"
     GC.@preserve coordinator_bind_address begin
-        service = @ccall MLIR.API.mlir_c.GetDistributedRuntimeService(
-            coordinator_bind_address::Cstring,
-            Cint(num_nodes)::Cint,
-            Int32(heartbeat_interval_in_seconds)::Int32,
-            Int32(cluster_register_timeout_in_minutes)::Int32,
-            Int32(shutdown_timeout_in_minutes)::Int32,
-        )::Ptr{Cvoid}
+        service = MLIR.API.GetDistributedRuntimeService(
+            coordinator_bind_address,
+            num_nodes,
+            heartbeat_interval_in_seconds,
+            cluster_register_timeout_in_minutes,
+            shutdown_timeout_in_minutes,
+        )
     end
     return DistributedRuntimeService(service)
 end
@@ -92,19 +89,17 @@ end
 function free_distributed_runtime_service(service::DistributedRuntimeService)
     @debug "[GETPID $(getpid())] Freeing DistributedRuntimeService"
     GC.@preserve service begin
-        @ccall MLIR.API.mlir_c.free_distributed_runtime_service(
-            service.service::Ptr{Cvoid}
-        )::Cvoid
+        MLIR.API.free_distributed_runtime_service(service.service)
     end
+    return nothing
 end
 
 function shutdown(service::DistributedRuntimeService)
     @debug "[GETPID $(getpid())] Shutting down DistributedRuntimeService"
     GC.@preserve service begin
-        @ccall MLIR.API.mlir_c.distributed_runtime_service_shutdown(
-            service.service::Ptr{Cvoid}
-        )::Cvoid
+        MLIR.API.distributed_runtime_service_shutdown(service.service)
     end
+    return nothing
 end
 
 # Global State
@@ -164,8 +159,8 @@ function update!(
     if process_id == 0
         @assert state.service === nothing "`Reactant.Distributed.initialize` should only \
                                            be called once."
-        @debug "[GETPID $(getpid())][PID $(process_id)] Starting Reactant distributed service on \
-                $(coordinator_bind_address)"
+        @debug "[GETPID $(getpid())][PID $(process_id)] Starting Reactant distributed \
+                service on $(coordinator_bind_address)"
         state.service = DistributedRuntimeService(
             coordinator_bind_address,
             num_processes;
@@ -194,11 +189,11 @@ function update!(
         heartbeat_interval_in_seconds,
         use_compression,
     )
-    @debug "[GETPID $(getpid())][PID $(process_id)] Connecting to Reactant distributed service on \
-            $(coordinator_address)"
+    @debug "[GETPID $(getpid())][PID $(process_id)] Connecting to Reactant distributed \
+            service on $(coordinator_address)"
     connect(state.client)
-    @debug "[GETPID $(getpid())][PID $(process_id)] Connected to Reactant distributed service on \
-            $(coordinator_address)"
+    @debug "[GETPID $(getpid())][PID $(process_id)] Connected to Reactant distributed \
+            service on $(coordinator_address)"
 
     return nothing
 end

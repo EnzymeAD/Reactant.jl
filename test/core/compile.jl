@@ -435,7 +435,8 @@ end
     x_ra = Reactant.to_rarray(Reactant.TestUtils.construct_test_array(Float64, 4, 4))
     mul_comp = @compile x_ra * x_ra
     @test begin
-        Reactant.XLA.cost_analysis(mul_comp) isa Reactant.XLA.HloCostAnalysisProperties
+        Reactant.XLA.cost_analysis(mul_comp) isa
+        Reactant.MLIR.API.JLHloCostAnalysisProperties
     end broken = RunningOnTPU
 end
 

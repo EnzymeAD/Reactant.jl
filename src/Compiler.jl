@@ -1490,6 +1490,7 @@ function run_pass_pipeline!(
     pm = MLIR.IR.PassManager()
     MLIR.IR.enable_verifier!(pm, enable_verifier)
     opm = MLIR.IR.OpPassManager(pm)
+    # TODO: why isn't this being auto-generated?
     @ccall MLIR.API.mlir_c.addSdyPropagationPipeline(
         opm::MLIR.API.MlirOpPassManager,
         propagation_options.keep_sharding_rules::UInt8,
@@ -1699,12 +1700,12 @@ const cuOptLevel = Ref{Int}(2)
 #                                      12.2 -> 82
 #                                      11.8 -> 78
 function cubinFeatures()
-    ver = @ccall MLIR.API.mlir_c.ReactantCudaDriverGetVersion()::UInt32
+    ver = MLIR.API.ReactantCudaDriverGetVersion()
     # No cuda available
     if ver == 0
         return "+ptx86"
     end
-    ver2 = @ccall MLIR.API.mlir_c.ReactantHermeticCudaGetVersion()::UInt32
+    ver2 = MLIR.API.ReactantHermeticCudaGetVersion()
     ver = min(ver, ver2)
     major, ver = divrem(ver, 1000)
     minor, _ = divrem(ver, 10)
