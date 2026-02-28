@@ -1,6 +1,7 @@
 using Reactant, Test
 using Reactant:
     traced_type,
+    make_tracer,
     TracedRArray,
     TracedRNumber,
     ConcreteToTraced,
@@ -37,7 +38,7 @@ struct MyFix{N,FT,XT} <: Base.Function
 end
 
 @testset "trace_type (mode = ConcreteToTraced)" begin
-    @testset "$origty" for (origty, targetty, targettynum) in [
+    testsuite = [
         (Any, Any, Any),
         (Real, Real, Real),
         (Module, Module, Module),
@@ -272,6 +273,14 @@ end
         ),
         (Wrapper, Wrapper, Wrapper),
     ]
+
+    if isdefined(Core, :Memory)
+        push!(testsuite, (Memory{UInt8}, Memory{UInt8}, Memory{TracedRNumber{UInt8}}))
+        push!(testsuite, (Memory{ConcreteRArray{Float64,1}}, Memory{TracedRArray{Float64,1}}, Memory{TracedRArray{Float64,1}}))
+        push!(testsuite, (Memory, Memory, Memory))
+    end
+
+    @testset "$origty" for (origty, targetty, targettynum) in testsuite
         tracedty = traced_type(
             origty,
             Val(ConcreteToTraced),
@@ -422,4 +431,21 @@ end
     @static if VERSION >= v"1.11.0"
         @test iszero(t.compile_time)
     end
+end
+
+@testset "make_tracer" begin
+    sharding = Sharding.NoSharding()
+    rt = Reactant.XLA.runtime()
+
+    m = Memory{Int64}(undef, 1)
+
+    # Memory maps to ConcreteRArray in ArrayToConcrete mode
+    mt = make_tracer(IdDict(), m, Val(ArrayToConcrete), Union{}, sharding, rt)
+    @test mt isa ConcreteRArray{Int64,1}
+    @test mt[1] == m[1]
+
+    # Memory should map to itself in other modes
+    mt = make_tracer(IdDict(), m, Val(ConcreteToTraced), Union{}, sharding, rt)
+    @test mt isa Memory{Int64}
+    @test mt === m
 end
