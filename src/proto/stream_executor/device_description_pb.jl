@@ -13,9 +13,9 @@ end
 PB.default_values(::Type{RocmComputeCapabilityProto}) = (;gcn_arch_name = "")
 PB.field_numbers(::Type{RocmComputeCapabilityProto}) = (;gcn_arch_name = 1)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:RocmComputeCapabilityProto})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:RocmComputeCapabilityProto}, _endpos::Int=0, _group::Bool=false)
     gcn_arch_name = ""
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             gcn_arch_name = PB.decode(d, String)
@@ -45,11 +45,11 @@ end
 PB.default_values(::Type{var"ExecutionUnitDescriptionProto.RateInfoProto"}) = (;clock_rate_ghz = zero(Float32), units_per_core = zero(Int32), ops_per_clock = zero(Int32))
 PB.field_numbers(::Type{var"ExecutionUnitDescriptionProto.RateInfoProto"}) = (;clock_rate_ghz = 1, units_per_core = 2, ops_per_clock = 3)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:var"ExecutionUnitDescriptionProto.RateInfoProto"})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:var"ExecutionUnitDescriptionProto.RateInfoProto"}, _endpos::Int=0, _group::Bool=false)
     clock_rate_ghz = zero(Float32)
     units_per_core = zero(Int32)
     ops_per_clock = zero(Int32)
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             clock_rate_ghz = PB.decode(d, Float32)
@@ -87,11 +87,11 @@ end
 PB.default_values(::Type{DnnVersionInfoProto}) = (;major = zero(Int32), minor = zero(Int32), patch = zero(Int32))
 PB.field_numbers(::Type{DnnVersionInfoProto}) = (;major = 1, minor = 2, patch = 3)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:DnnVersionInfoProto})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:DnnVersionInfoProto}, _endpos::Int=0, _group::Bool=false)
     major = zero(Int32)
     minor = zero(Int32)
     patch = zero(Int32)
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             major = PB.decode(d, Int32)
@@ -129,11 +129,11 @@ end
 PB.default_values(::Type{RuntimeVersionProto}) = (;major = zero(Int32), minor = zero(Int32), patch = zero(Int32))
 PB.field_numbers(::Type{RuntimeVersionProto}) = (;major = 1, minor = 2, patch = 3)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:RuntimeVersionProto})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:RuntimeVersionProto}, _endpos::Int=0, _group::Bool=false)
     major = zero(Int32)
     minor = zero(Int32)
     patch = zero(Int32)
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             major = PB.decode(d, Int32)
@@ -172,9 +172,9 @@ PB.oneof_field_types(::Type{GpuComputeCapabilityProto}) = (;
 PB.default_values(::Type{GpuComputeCapabilityProto}) = (;cuda_compute_capability = nothing, rocm_compute_capability = nothing, oneapi_compute_capability = nothing)
 PB.field_numbers(::Type{GpuComputeCapabilityProto}) = (;cuda_compute_capability = 1, rocm_compute_capability = 2, oneapi_compute_capability = 3)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:GpuComputeCapabilityProto})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:GpuComputeCapabilityProto}, _endpos::Int=0, _group::Bool=false)
     compute_capability = nothing
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             compute_capability = OneOf(:cuda_compute_capability, PB.decode(d, Ref{CudaComputeCapabilityProto}))
@@ -220,9 +220,9 @@ end
 PB.default_values(::Type{ExecutionUnitDescriptionProto}) = (;rate_infos = Dict{Int32,var"ExecutionUnitDescriptionProto.RateInfoProto"}())
 PB.field_numbers(::Type{ExecutionUnitDescriptionProto}) = (;rate_infos = 1)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:ExecutionUnitDescriptionProto})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:ExecutionUnitDescriptionProto}, _endpos::Int=0, _group::Bool=false)
     rate_infos = Dict{Int32,var"ExecutionUnitDescriptionProto.RateInfoProto"}()
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             PB.decode!(d, rate_infos)
@@ -272,7 +272,7 @@ PB.oneof_field_types(::Type{GpuDeviceInfoProto}) = (;
 PB.default_values(::Type{GpuDeviceInfoProto}) = (;threads_per_block_limit = zero(Int32), threads_per_warp = zero(Int32), shared_memory_per_block = zero(Int32), shared_memory_per_core = zero(Int32), threads_per_core_limit = zero(Int32), core_count = zero(Int32), fpus_per_core = zero(Int64), block_dim_limit_x = zero(Int32), block_dim_limit_y = zero(Int32), block_dim_limit_z = zero(Int32), memory_bandwidth = zero(Int64), l2_cache_size = zero(Int64), clock_rate_ghz = zero(Float32), device_memory_size = zero(Int64), shared_memory_per_block_optin = zero(Int32), cuda_compute_capability = nothing, rocm_compute_capability = nothing, oneapi_compute_capability = nothing, registers_per_core_limit = zero(Int64), registers_per_block_limit = zero(Int64), scalar_unit_description = nothing, matrix_unit_description = nothing)
 PB.field_numbers(::Type{GpuDeviceInfoProto}) = (;threads_per_block_limit = 1, threads_per_warp = 2, shared_memory_per_block = 3, shared_memory_per_core = 4, threads_per_core_limit = 5, core_count = 6, fpus_per_core = 7, block_dim_limit_x = 8, block_dim_limit_y = 9, block_dim_limit_z = 10, memory_bandwidth = 11, l2_cache_size = 12, clock_rate_ghz = 13, device_memory_size = 14, shared_memory_per_block_optin = 15, cuda_compute_capability = 16, rocm_compute_capability = 17, oneapi_compute_capability = 22, registers_per_core_limit = 18, registers_per_block_limit = 19, scalar_unit_description = 20, matrix_unit_description = 21)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:GpuDeviceInfoProto})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:GpuDeviceInfoProto}, _endpos::Int=0, _group::Bool=false)
     threads_per_block_limit = zero(Int32)
     threads_per_warp = zero(Int32)
     shared_memory_per_block = zero(Int32)
@@ -293,7 +293,7 @@ function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:GpuDeviceInfoProto})
     registers_per_block_limit = zero(Int64)
     scalar_unit_description = Ref{Union{Nothing,ExecutionUnitDescriptionProto}}(nothing)
     matrix_unit_description = Ref{Union{Nothing,ExecutionUnitDescriptionProto}}(nothing)
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             threads_per_block_limit = PB.decode(d, Int32)
@@ -421,14 +421,14 @@ PB.reserved_fields(::Type{GpuTargetConfigProto}) = (names = ["cuda_compute_capab
 PB.default_values(::Type{GpuTargetConfigProto}) = (;gpu_device_info = nothing, platform_name = "", dnn_version_info = nothing, runtime_version = nothing, autotune_results = nothing, device_description_str = "")
 PB.field_numbers(::Type{GpuTargetConfigProto}) = (;gpu_device_info = 1, platform_name = 4, dnn_version_info = 5, runtime_version = 8, autotune_results = 6, device_description_str = 7)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:GpuTargetConfigProto})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:GpuTargetConfigProto}, _endpos::Int=0, _group::Bool=false)
     gpu_device_info = Ref{Union{Nothing,GpuDeviceInfoProto}}(nothing)
     platform_name = ""
     dnn_version_info = Ref{Union{Nothing,DnnVersionInfoProto}}(nothing)
     runtime_version = Ref{Union{Nothing,RuntimeVersionProto}}(nothing)
     autotune_results = Ref{Union{Nothing,xla_autotuning.AutotuneResults}}(nothing)
     device_description_str = ""
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             PB.decode!(d, gpu_device_info)

@@ -12,10 +12,10 @@ end
 PB.default_values(::Type{Timestamp}) = (;seconds = zero(Int64), nanos = zero(Int32))
 PB.field_numbers(::Type{Timestamp}) = (;seconds = 1, nanos = 2)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:Timestamp})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:Timestamp}, _endpos::Int=0, _group::Bool=false)
     seconds = zero(Int64)
     nanos = zero(Int32)
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             seconds = PB.decode(d, Int64)

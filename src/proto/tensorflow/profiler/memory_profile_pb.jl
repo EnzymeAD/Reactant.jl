@@ -19,13 +19,13 @@ end
 PB.default_values(::Type{HloModule}) = (;name = "", start_time_ps = zero(Int64), end_time_ps = zero(Int64), id = zero(Int64), plane_name = "")
 PB.field_numbers(::Type{HloModule}) = (;name = 1, start_time_ps = 2, end_time_ps = 3, id = 4, plane_name = 5)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:HloModule})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:HloModule}, _endpos::Int=0, _group::Bool=false)
     name = ""
     start_time_ps = zero(Int64)
     end_time_ps = zero(Int64)
     id = zero(Int64)
     plane_name = ""
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             name = PB.decode(d, String)
@@ -73,13 +73,13 @@ end
 PB.default_values(::Type{MemoryAggregationStats}) = (;stack_reserved_bytes = zero(Int64), heap_allocated_bytes = zero(Int64), free_memory_bytes = zero(Int64), fragmentation = zero(Float64), peak_bytes_in_use = zero(Int64))
 PB.field_numbers(::Type{MemoryAggregationStats}) = (;stack_reserved_bytes = 1, heap_allocated_bytes = 2, free_memory_bytes = 3, fragmentation = 4, peak_bytes_in_use = 5)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:MemoryAggregationStats})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:MemoryAggregationStats}, _endpos::Int=0, _group::Bool=false)
     stack_reserved_bytes = zero(Int64)
     heap_allocated_bytes = zero(Int64)
     free_memory_bytes = zero(Int64)
     fragmentation = zero(Float64)
     peak_bytes_in_use = zero(Int64)
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             stack_reserved_bytes = PB.decode(d, Int64)
@@ -125,11 +125,11 @@ end
 PB.default_values(::Type{ActiveAllocation}) = (;snapshot_index = zero(Int64), special_index = zero(Int64), num_occurrences = zero(Int64))
 PB.field_numbers(::Type{ActiveAllocation}) = (;snapshot_index = 1, special_index = 2, num_occurrences = 3)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:ActiveAllocation})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:ActiveAllocation}, _endpos::Int=0, _group::Bool=false)
     snapshot_index = zero(Int64)
     special_index = zero(Int64)
     num_occurrences = zero(Int64)
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             snapshot_index = PB.decode(d, Int64)
@@ -173,7 +173,7 @@ end
 PB.default_values(::Type{MemoryActivityMetadata}) = (;memory_activity = MemoryActivity.UNKNOWN_ACTIVITY, requested_bytes = zero(Int64), allocation_bytes = zero(Int64), address = zero(UInt64), tf_op_name = "", step_id = zero(Int64), region_type = "", data_type = "", tensor_shape = "")
 PB.field_numbers(::Type{MemoryActivityMetadata}) = (;memory_activity = 1, requested_bytes = 2, allocation_bytes = 3, address = 4, tf_op_name = 5, step_id = 6, region_type = 7, data_type = 8, tensor_shape = 9)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:MemoryActivityMetadata})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:MemoryActivityMetadata}, _endpos::Int=0, _group::Bool=false)
     memory_activity = MemoryActivity.UNKNOWN_ACTIVITY
     requested_bytes = zero(Int64)
     allocation_bytes = zero(Int64)
@@ -183,7 +183,7 @@ function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:MemoryActivityMetadata})
     region_type = ""
     data_type = ""
     tensor_shape = ""
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             memory_activity = PB.decode(d, MemoryActivity.T)
@@ -246,12 +246,12 @@ end
 PB.default_values(::Type{MemoryProfileSummary}) = (;peak_bytes_usage_lifetime = zero(Int64), peak_stats = nothing, peak_stats_time_ps = zero(Int64), memory_capacity = zero(Int64))
 PB.field_numbers(::Type{MemoryProfileSummary}) = (;peak_bytes_usage_lifetime = 1, peak_stats = 2, peak_stats_time_ps = 3, memory_capacity = 4)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:MemoryProfileSummary})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:MemoryProfileSummary}, _endpos::Int=0, _group::Bool=false)
     peak_bytes_usage_lifetime = zero(Int64)
     peak_stats = Ref{Union{Nothing,MemoryAggregationStats}}(nothing)
     peak_stats_time_ps = zero(Int64)
     memory_capacity = zero(Int64)
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             peak_bytes_usage_lifetime = PB.decode(d, Int64)
@@ -293,11 +293,11 @@ end
 PB.default_values(::Type{MemoryProfileSnapshot}) = (;time_offset_ps = zero(Int64), aggregation_stats = nothing, activity_metadata = nothing)
 PB.field_numbers(::Type{MemoryProfileSnapshot}) = (;time_offset_ps = 1, aggregation_stats = 2, activity_metadata = 3)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:MemoryProfileSnapshot})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:MemoryProfileSnapshot}, _endpos::Int=0, _group::Bool=false)
     time_offset_ps = zero(Int64)
     aggregation_stats = Ref{Union{Nothing,MemoryAggregationStats}}(nothing)
     activity_metadata = Ref{Union{Nothing,MemoryActivityMetadata}}(nothing)
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             time_offset_ps = PB.decode(d, Int64)
@@ -337,13 +337,13 @@ end
 PB.default_values(::Type{PerAllocatorMemoryProfile}) = (;memory_profile_snapshots = Vector{MemoryProfileSnapshot}(), profile_summary = nothing, active_allocations = Vector{ActiveAllocation}(), special_allocations = Vector{MemoryActivityMetadata}(), sampled_timeline_snapshots = Vector{MemoryProfileSnapshot}())
 PB.field_numbers(::Type{PerAllocatorMemoryProfile}) = (;memory_profile_snapshots = 1, profile_summary = 2, active_allocations = 3, special_allocations = 4, sampled_timeline_snapshots = 5)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:PerAllocatorMemoryProfile})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:PerAllocatorMemoryProfile}, _endpos::Int=0, _group::Bool=false)
     memory_profile_snapshots = PB.BufferedVector{MemoryProfileSnapshot}()
     profile_summary = Ref{Union{Nothing,MemoryProfileSummary}}(nothing)
     active_allocations = PB.BufferedVector{ActiveAllocation}()
     special_allocations = PB.BufferedVector{MemoryActivityMetadata}()
     sampled_timeline_snapshots = PB.BufferedVector{MemoryProfileSnapshot}()
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             PB.decode!(d, memory_profile_snapshots)
@@ -392,13 +392,13 @@ PB.reserved_fields(::Type{MemoryProfile}) = (names = String[], numbers = Union{I
 PB.default_values(::Type{MemoryProfile}) = (;memory_profile_per_allocator = Dict{String,PerAllocatorMemoryProfile}(), num_hosts = zero(Int32), memory_ids = Vector{String}(), version = zero(Int32), hlo_modules = Vector{HloModule}())
 PB.field_numbers(::Type{MemoryProfile}) = (;memory_profile_per_allocator = 1, num_hosts = 2, memory_ids = 3, version = 5, hlo_modules = 6)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:MemoryProfile})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:MemoryProfile}, _endpos::Int=0, _group::Bool=false)
     memory_profile_per_allocator = Dict{String,PerAllocatorMemoryProfile}()
     num_hosts = zero(Int32)
     memory_ids = PB.BufferedVector{String}()
     version = zero(Int32)
     hlo_modules = PB.BufferedVector{HloModule}()
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             PB.decode!(d, memory_profile_per_allocator)

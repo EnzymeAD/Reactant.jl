@@ -4161,4 +4161,24 @@ end
     return nothing
 end
 
+# log1pexp based on log1pexp from LogExpFunctions.jl
+@noinline function log1pexp(
+    x::TracedRNumber{T}; location=mlir_stacktrace("log1pexp", @__FILE__, @__LINE__)
+) where {T<:Real}
+    prec = precision(x)
+    logtwo = oftype(x, Base.log(BigFloat(2)))
+    x1 = (exponent(nextfloat(zero(T))) - 1) * logtwo
+    x2 = -prec * logtwo
+    x3 = (prec - 1) * logtwo / 2
+    # approximate root of e^-x == x * ϵ/2 via asymptotics of Lambert's W function
+    x4 = -x2 - log(-x2) * (1 + 1 / x2)
+    return ifelse(
+        x < x1,
+        zero(x),
+        ifelse(
+            x < x2, exp(x), ifelse(x < x3, log1p(exp(x)), ifelse(x < x4, x + exp(-x), x))
+        ),
+    )
+end
+
 end # module Ops

@@ -12,10 +12,10 @@ end
 PB.default_values(::Type{var"#Any"}) = (;type_url = "", value = UInt8[])
 PB.field_numbers(::Type{var"#Any"}) = (;type_url = 1, value = 2)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:var"#Any"})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:var"#Any"}, _endpos::Int=0, _group::Bool=false)
     type_url = ""
     value = UInt8[]
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             type_url = PB.decode(d, String)

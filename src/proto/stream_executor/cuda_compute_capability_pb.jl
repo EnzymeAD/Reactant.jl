@@ -15,11 +15,11 @@ end
 PB.default_values(::Type{CudaComputeCapabilityProto}) = (;major = zero(Int32), minor = zero(Int32), feature_extension = var"CudaComputeCapabilityProto.FeatureExtension".UNSPECIFIED)
 PB.field_numbers(::Type{CudaComputeCapabilityProto}) = (;major = 1, minor = 2, feature_extension = 3)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:CudaComputeCapabilityProto})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:CudaComputeCapabilityProto}, _endpos::Int=0, _group::Bool=false)
     major = zero(Int32)
     minor = zero(Int32)
     feature_extension = var"CudaComputeCapabilityProto.FeatureExtension".UNSPECIFIED
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             major = PB.decode(d, Int32)
