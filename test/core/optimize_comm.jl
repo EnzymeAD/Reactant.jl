@@ -150,9 +150,9 @@ function wrap(x)
     return res
 end
 
-if length(addressable_devices) ≥ 2
-    @testset "Wrap Size ($Size)" for Size in [20, 22, 28]
-        begin
+@testset "Wrap Size" begin
+    if length(addressable_devices) ≥ 2
+        @testset "Wrap Size ($Size)" for Size in [20, 22, 28]
             N = 2
             mesh = Sharding.Mesh(reshape(Reactant.devices()[1:N], 2), (:x,))
             sharding = Sharding.NamedSharding(mesh, (:x,))
@@ -214,13 +214,13 @@ function multirotate_both(x, sz)
     return (nrotate(x, 1), x, nrotate(x, size(x, 1) - 1), nrotate(x, size(x, 1) - 2))
 end
 
-if length(addressable_devices) ≥ 2
-    @testset "MultiRotate $mr $size" for mr in (
-            multirotate_left, multirotate_right, multirotate_both
-        ),
-        size in (20, 21)
+@testset "MultiRotate" begin
+    if length(addressable_devices) ≥ 2
+        @testset "MultiRotate $mr $size" for mr in (
+                multirotate_left, multirotate_right, multirotate_both
+            ),
+            size in (20, 21)
 
-        begin
             N = min((length(Reactant.devices()) ÷ 2) * 2, 2)
 
             mesh = Sharding.Mesh(reshape(Reactant.devices()[1:N], 2), (:x,))
