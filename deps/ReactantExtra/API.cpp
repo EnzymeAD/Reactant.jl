@@ -2807,11 +2807,9 @@ REACTANT_ABI void ifrt_loaded_executable_dtor(HeldIfrtLoadedExecutable *exec) {
 }
 
 REACTANT_ABI void ifrt_loaded_executable_execute(
-    HeldIfrtLoadedExecutable *exec, int num_args,
-    HeldValue<tsl::RCReference<ifrt::Array>> **op_args,
-    uint8_t *is_arg_donatable, int num_results,
-    HeldValue<tsl::RCReference<ifrt::Array>> **op_results, uint8_t *futures,
-    FutureType **status) {
+    HeldIfrtLoadedExecutable *exec, int num_args, HeldIfrtArray **op_args,
+    uint8_t *is_arg_donatable, int num_results, HeldIfrtArray **op_results,
+    uint8_t *futures, FutureType **status) {
   std::vector<tsl::RCReference<xla::ifrt::Array>> args;
   for (int i = 0; i < num_args; i++) {
     args.emplace_back(op_args[i]->obj());
