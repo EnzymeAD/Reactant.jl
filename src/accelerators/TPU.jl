@@ -7,18 +7,65 @@ using HTTP: HTTP
 using Downloads: Downloads
 using p7zip_jll: p7zip
 
+using ..Registration: register_backend
+
 const libtpu_dir = Ref{Union{Nothing,String}}(nothing)
 const RUNNING_IN_CLOUD_TPU_VM = Ref(false)
 
 const LIBTPU_VERSION = "0.0.35.dev20260129"
 const LIBTPU_SO = "libtpu-$(replace(string(LIBTPU_VERSION), '.' => '_')).so"
 
-function __init__()
-    @static if !Sys.isapple()
-        if !Reactant.precompiling() && has_tpu()
-            setup_libtpu!()
-            cloud_tpu_init!()
+function setup_correct_env_vars!()
+    # LibTPU has its own internal copy of XLA which does not read the regular XLA flags
+    if !haskey(ENV, "LIBTPU_INIT_ARGS")
+        xla_flags = "--xla_enable_enzyme_comms_opt=true"
+        if haskey(ENV, "XLA_FLAGS")
+            xla_flags = xla_flags * " " * ENV["XLA_FLAGS"]
         end
+        ENV["LIBTPU_INIT_ARGS"] = xla_flags
+    end
+end
+
+function make_pjrt_client(;
+    node_id::Integer=0,
+    num_nodes::Integer=1,
+    distributed_runtime_client=nothing,
+    allowed_devices::Union{Nothing,Vector{Int}}=nothing,
+)
+    @assert node_id == 0 "`make_pjrt_client` does not support node_id"
+    @assert num_nodes == 1 "`make_pjrt_client` does not support num_nodes > 1"
+    @assert distributed_runtime_client === nothing "`make_pjrt_client` does not \
+                                                    support distributed_runtime_client"
+
+    setup_correct_env_vars!()
+    return Reactant.XLA.PJRT.MakeClientUsingPluginAPI(get_libtpu_path(), "tpu", "TPU")
+end
+
+function make_ifrt_client(;
+    node_id::Integer=0,
+    num_nodes::Integer=1,
+    distributed_runtime_client=nothing,
+    allowed_devices::Union{Nothing,Vector{Int}}=nothing,
+)
+    setup_correct_env_vars!()
+    return Reactant.XLA.IFRT.MakeIFRTPJRTClientViaPluginAPI(
+        get_libtpu_path(), "tpu", "TPU"; node_id, num_nodes, distributed_runtime_client
+    )
+end
+
+function __init__()
+    if !Sys.isapple() && has_tpu() && !Reactant.precompiling()
+        register_backend(
+            "tpu";
+            priority=1000,
+            pjrt_initialize_function=make_pjrt_client,
+            ifrt_initialize_function=make_ifrt_client,
+            preinitialize_setup_function=() -> begin
+                setup_libtpu!()
+                cloud_tpu_init!()
+                nothing
+            end,
+        )
     end
 end
 
