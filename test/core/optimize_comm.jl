@@ -160,12 +160,21 @@ if length(addressable_devices) ≥ 2
             rx = Reactant.to_rarray(x; sharding)
 
             hlo = repr(@code_xla shardy_passes = :to_mhlo_shardings wrap(rx))
+
+            Nallgathers = length(collect(eachmatch(r"%all-gather[\.0-9]* =", hlo)))
+            Ncollectives = length(collect(eachmatch(r"%collective-permute[\.0-9]* =", hlo)))
+
+            if Nallgathers != 1 || Ncollectives != 2
+                # for debugging print hlo
+                display(hlo)
+            end
+
             @test !contains(hlo, "all-to-all")
             @test !contains(hlo, "all-reduce")
             # 1 all gather exists for the result sharding
-            @test length(collect(eachmatch(r"%all-gather[\.0-9]* =", hlo))) == 1
+            @test Nallgathers == 1
             # 2 collective permutes exist for the left/right halos
-            @test length(collect(eachmatch(r"%collective-permute[\.0-9]* =", hlo))) == 2
+            @test Ncollectives == 2
 
             x2 = wrap(x)
             rx2 = @jit shardy_passes = :to_mhlo_shardings wrap(rx)
@@ -221,21 +230,22 @@ if length(addressable_devices) ≥ 2
             hlo = repr(@code_xla shardy_passes = :to_mhlo_shardings mr(rx, size))
             y = mr(x, size)
 
+            Nallgathers = length(collect(eachmatch(r"%all-gather[\.0-9]* =", hlo)))
+            Ncollectives = length(collect(eachmatch(r"%collective-permute[\.0-9]* =", hlo)))
+
+            expected_allgathers = size2 == size ? 0 : length(y)
+            expected_collectives = mr == multirotate_both ? 2 : 1
+
+            if Nallgathers != expected_allgathers || Ncollectives != expected_collectives
+                # for debugging print hlo
+                display(hlo)
+            end
+
             @test !contains(hlo, "all-to-all")
             @test !contains(hlo, "all-reduce")
             @test !contains(hlo, "copy")
-
-            if mr == multirotate_both
-                @test length(collect(eachmatch(r"%collective-permute[\.0-9]* =", hlo))) == 2
-            else
-                @test length(collect(eachmatch(r"%collective-permute[\.0-9]* =", hlo))) == 1
-            end
-
-            if size2 == size
-                @test length(collect(eachmatch(r"%all-gather[\.0-9]* =", hlo))) == 0
-            else
-                @test length(collect(eachmatch(r"%all-gather[\.0-9]* =", hlo))) == length(y)
-            end
+            @test Ncollectives == expected_collectives
+            @test Nallgathers == expected_allgathers
 
             ry = @jit shardy_passes = :to_mhlo_shardings mr(rx, size)
 
