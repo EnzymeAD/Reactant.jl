@@ -19,6 +19,7 @@ within_compile
 
 ```@docs
 @trace
+Periodic
 ```
 
 ## Reactant data types
