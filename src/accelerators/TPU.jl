@@ -10,7 +10,7 @@ using p7zip_jll: p7zip
 const libtpu_dir = Ref{Union{Nothing,String}}(nothing)
 const RUNNING_IN_CLOUD_TPU_VM = Ref(false)
 
-const LIBTPU_VERSION = "0.0.35.dev20260129"
+const LIBTPU_VERSION = "0.0.37.dev20260225"
 const LIBTPU_SO = "libtpu-$(replace(string(LIBTPU_VERSION), '.' => '_')).so"
 
 function __init__()
