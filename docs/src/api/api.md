@@ -21,6 +21,12 @@ within_compile
 @trace
 ```
 
+## Converting Data
+
+```@docs
+Reactant.to_rarray
+```
+
 ## Reactant data types
 
 ```@docs
