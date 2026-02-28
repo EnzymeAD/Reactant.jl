@@ -137,7 +137,8 @@ if length(addressable_devices) ≥ 8
         @test !contains(hlo, "all-to-all")
         @test !contains(hlo, "all-reduce")
         @test !contains(hlo, "all-gather")
-        @test length(collect(eachmatch(r"%collective-permute[\.0-9]* =", hlo))) == 2
+        @test length(collect(eachmatch(r"%collective-permute(-start)?[\.0-9]* =", hlo))) ==
+            2
     end
 end
 
@@ -161,8 +162,10 @@ if length(addressable_devices) ≥ 2
 
             hlo = repr(@code_xla shardy_passes = :to_mhlo_shardings wrap(rx))
 
-            Nallgathers = length(collect(eachmatch(r"%all-gather[\.0-9]* =", hlo)))
-            Ncollectives = length(collect(eachmatch(r"%collective-permute[\.0-9]* =", hlo)))
+            Nallgathers = length(collect(eachmatch(r"%all-gather(-start)?[\.0-9]* =", hlo)))
+            Ncollectives = length(
+                collect(eachmatch(r"%collective-permute(-start)?[\.0-9]* =", hlo))
+            )
 
             if Nallgathers != 1 || Ncollectives != 2
                 # for debugging print hlo
@@ -230,8 +233,10 @@ if length(addressable_devices) ≥ 2
             hlo = repr(@code_xla shardy_passes = :to_mhlo_shardings mr(rx, size))
             y = mr(x, size)
 
-            Nallgathers = length(collect(eachmatch(r"%all-gather[\.0-9]* =", hlo)))
-            Ncollectives = length(collect(eachmatch(r"%collective-permute[\.0-9]* =", hlo)))
+            Nallgathers = length(collect(eachmatch(r"%all-gather(-start)?[\.0-9]* =", hlo)))
+            Ncollectives = length(
+                collect(eachmatch(r"%collective-permute(-start)?[\.0-9]* =", hlo))
+            )
 
             expected_allgathers = size2 == size ? 0 : length(y)
             expected_collectives = mr == multirotate_both ? 2 : 1
