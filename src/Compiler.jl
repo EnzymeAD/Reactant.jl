@@ -10,6 +10,7 @@ import ..Reactant:
     Reactant,
     MLIR,
     XLA,
+    highlight_MLIR,
     Sharding,
     ConcretePJRTArray,
     ConcretePJRTNumber,
@@ -2832,7 +2833,7 @@ struct TextualModule
     end
 end
 
-Base.show(io::IO, tm::TextualModule) = print(io, tm.ir)
+Base.show(io::IO, tm::TextualModule) = print(io, highlight_MLIR(tm.ir))
 Base.String(tm::TextualModule) = tm.ir
 
 function Base.convert(::Type{MLIR.IR.Module}, tm::TextualModule)

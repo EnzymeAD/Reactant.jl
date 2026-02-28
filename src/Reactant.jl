@@ -91,6 +91,7 @@ include("CompileOptions.jl")
 export OptimizeCommunicationOptions, ShardyPropagationOptions, CompileOptions
 
 include("mlir/MLIR.jl")
+include("MLIRHighlight.jl")
 include("xla/XLA.jl")
 
 include("Configuration.jl")
@@ -372,7 +373,7 @@ function __init__()
             )
         end
     end
-
+    register_reactant_theme()
     return nothing
 end
 
