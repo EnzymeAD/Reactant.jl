@@ -1709,6 +1709,13 @@ Base.@nospecializeinfer function make_tracer(
     return prev
 end
 
+# avoid the real fallback
+Base.@nospecializeinfer function make_tracer(
+    seen, @nospecialize(prev::TracedRational), @nospecialize(path), mode; kwargs...
+)
+    return make_tracer_via_immutable_constructor(seen, prev, path, mode; kwargs...)
+end
+
 Base.@nospecializeinfer function make_tracer(
     seen, @nospecialize(prev::Type), @nospecialize(path), mode; kwargs...
 )
@@ -2358,5 +2365,46 @@ function make_tracer(
         return prev
     else
         return TracedStepRangeLen(newref, newstep, newlen, newoffset)
+    end
+end
+
+function traced_type_inner(
+    @nospecialize(RT::Type{<:Rational}),
+    seen,
+    mode::TraceMode,
+    track_numbers::Type,
+    @nospecialize(ndevices),
+    runtime,
+)
+    (T,) = RT.parameters
+    newT = traced_type_inner(T, seen, mode, track_numbers, ndevices, runtime)
+    if T == newT
+        return RT
+    else
+        return TracedRational{newT}
+    end
+end
+
+function make_tracer(
+    seen,
+    @nospecialize(prev::Rational),
+    @nospecialize(path),
+    mode;
+    @nospecialize(sharding = Sharding.NoSharding()),
+    kwargs...,
+)
+    Sharding.is_sharded(sharding) && error("Cannot specify sharding for Rational")
+    if mode == TracedToTypes
+        push!(path, Core.Typeof(prev))
+        make_tracer(seen, prev.num, path, mode; kwargs...)
+        make_tracer(seen, prev.den, path, mode; kwargs...)
+        return nothing
+    end
+    newnum = make_tracer(seen, prev.num, append_path(path, :num), mode; kwargs...)
+    newden = make_tracer(seen, prev.den, append_path(path, :den), mode; kwargs...)
+    if typeof(newnum) == typeof(prev.num) && typeof(newden) == typeof(prev.den)
+        return prev
+    else
+        return TracedRational(newnum, newden)
     end
 end
