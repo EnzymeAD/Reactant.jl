@@ -577,8 +577,7 @@ void registerReactantXLAInternalFFI() {
                            "CUDA", SymmFfi);
   XLA_FFI_REGISTER_HANDLER(xla::ffi::GetXlaFfiApi(),
                            "reactant_cublas_symm_no_c_ffi", "CUDA", SymmNoCFfi);
-}
-
+                           
   XLA_FFI_REGISTER_HANDLER(xla::ffi::GetXlaFfiApi(), "xla_throw_error", "CUDA",
                            xlaThrowErrorHandlerCUDA);
   XLA_FFI_REGISTER_HANDLER(xla::ffi::GetXlaFfiApi(), "xla_always_throw_error",
