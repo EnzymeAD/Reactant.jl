@@ -4234,4 +4234,204 @@ end
     )
 end
 
+const _CALLBACK_REGISTRY = Dict{UInt,Any}()
+const _CALLBACK_LOCK = ReentrantLock()
+
+function _register_callback!(ptr::Ptr{Cvoid}, closure)
+    @lock _CALLBACK_LOCK begin
+        _CALLBACK_REGISTRY[UInt(ptr)] = closure
+    end
+    return nothing
+end
+
+@inline function _construct_host_julia_buffer(::Type{T}, shape, ptr) where {T}
+    return unsafe_wrap(Array, Ptr{T}(ptr), shape)
+end
+@inline function _construct_host_julia_buffer(::Type{T}, ::Tuple{}, ptr) where {T}
+    return _construct_host_julia_buffer(T, (1,), ptr)[1] # convert to number
+end
+
+# Defined in CUDAExt.jl
+function __construct_cuda_julia_buffer end
+
+@inline function _construct_cuda_julia_buffer(::Type{T}, shape, ptr) where {T}
+    if !Reactant.is_extension_loaded(Val(:CUDA))
+        error("CUDA.jl extension must be loaded to perform julia callbacks on the GPU.")
+    end
+    return __construct_cuda_julia_buffer(T, shape, ptr)
+end
+
+# Backend Values:
+#   1: Host
+#   2: CUDA.jl
+@inline function _wrap_buffers(
+    data_ptrs::Ptr{Ptr{Cvoid}},
+    specs::NTuple{N,Tuple{DataType,Tuple}},
+    ::Val{N},
+    backend::Int32,
+) where {N}
+    return ntuple(Val(N)) do i
+        T, shape = @inbounds specs[i]
+        ptr = unsafe_load(data_ptrs, i)
+        if backend == 1
+            return _construct_host_julia_buffer(T, shape, ptr)
+        elseif backend == 2
+            return _construct_cuda_julia_buffer(T, shape, ptr)
+        else
+            error("Unsupported backend: $backend")
+        end
+    end
+end
+
+function _make_c_callback(f::F, output_specs::Tuple, input_specs::Tuple) where {F}
+    out_val = Val(length(output_specs))
+    in_val = Val(length(input_specs))
+
+    function trampoline(
+        inputs_ptr::Ptr{Ptr{Cvoid}}, outputs_ptr::Ptr{Ptr{Cvoid}}, backend::Int32
+    )
+        output_arrays = _wrap_buffers(outputs_ptr, output_specs, out_val, backend)
+        input_arrays = _wrap_buffers(inputs_ptr, input_specs, in_val, backend)
+        try
+            f(output_arrays..., input_arrays...)
+            return true
+        catch e
+            @error "CustomCall callback failed" exception = (e, catch_backtrace())
+            return false
+        end
+    end
+
+    cfunc = @cfunction($trampoline, Bool, (
+        Ptr{Ptr{Cvoid}},  # inputs
+        Ptr{Ptr{Cvoid}},  # outputs
+        Int32,            # backend
+    ))
+
+    # Extract raw pointer from Base.CFunction
+    ptr = Base.unsafe_convert(Ptr{Cvoid}, cfunc)
+    # Store the CFunction (and closure) in the registry to prevent GC
+    _register_callback!(ptr, (f, trampoline, cfunc))
+    return ptr
+end
+
+"""
+    julia_callback(
+        f,
+        result_specs::Tuple,
+        args::Union{TracedRArray, TracedRNumber}...;
+        has_side_effect::Bool = true,
+        result_alias = nothing,
+        location = Ops.mlir_stacktrace("custom_call", @__FILE__, @__LINE__),
+    )
+
+Emit a `stablehlo.custom_call` that will call back into Julia function `f` at
+execution time.
+
+!!! warning "Limited Backend Support"
+
+    Currently this only supports CUDA and CPU backends. For CUDA support, `CUDA.jl`
+    must be loaded.
+
+# Arguments
+
+  - `f`: A Julia function with signature `f(output_arrays..., input_arrays...)`.
+    The function receives N output arrays followed by M input arrays as positional
+    arguments.
+
+  - `result_specs`: A tuple of `(ElementType, shape)` pairs describing each output.
+    - `ElementType` is a Julia type (e.g., `Float32`, `Int64`).
+    - `shape` is a tuple of integers (e.g., `(3, 4)`). Use `()` for scalars.
+    - Example: `((Float32, (4,)), (Int64, ()))` for one 4-element vector and one scalar.
+
+  - `args...`: Traced inputs (`TracedRArray` or `TracedRNumber`).
+
+# Keyword Arguments
+
+  - `has_side_effect::Bool = true`: Whether the custom call has side effects. Set to `true`
+    if the callback modifies global state or the ordering matters. Default is `true` for
+    safety; set to `false` if the call is a pure function.
+
+  - `output_operand_aliases`: Optional output operand aliasing specification.
+
+# Returns
+
+A tuple of `TracedRArray` / `TracedRNumber` corresponding to the `result_specs`.
+If there is exactly one result, returns it unwrapped (not in a tuple).
+
+# Example
+
+```julia
+function my_scale!(out, x, alpha)
+    out .= alpha .* x
+    return nothing
+end
+
+function traced_fn(x, alpha)
+    return Reactant.Ops.julia_callback(
+        my_scale!, ((promote_type(eltype(x), eltype(alpha)), size(x))), x, alpha
+    )
+end
+```
+"""
+function julia_callback(
+    f,
+    result_specs::Tuple,
+    args::Union{TracedRArray,TracedRNumber}...;
+    has_side_effect::Bool=true,
+    output_operand_aliases=nothing,
+    location=mlir_stacktrace("julia_callback", @__FILE__, @__LINE__),
+)
+    # Build specs tuples for the callback (captured at trace time)
+    output_specs = Tuple((unwrapped_eltype(T), Tuple(shape)) for (T, shape) in result_specs)
+    input_specs = Tuple((unwrapped_eltype(typeof(arg)), Tuple(size(arg))) for arg in args)
+
+    # Get the C function pointer for the callback
+    callback_ptr = _make_c_callback(f, output_specs, input_specs)
+    callback_ptr_int = Int64(UInt(callback_ptr))
+
+    # Build MLIR input values
+    input_values = MLIR.IR.Value[arg.mlir_data for arg in args]
+
+    # Build MLIR result types
+    result_types = MLIR.IR.Type[]
+    for (T, shape) in output_specs
+        shape_vec = collect(Int, shape)
+        push!(result_types, MLIR.IR.TensorType(shape_vec, MLIR.IR.Type(T)))
+    end
+
+    # Build backend_config as a dictionary with the callback pointer
+    backend_config = Dict("callback_ptr" => MLIR.IR.Attribute(callback_ptr_int))
+
+    # Emit the custom call op
+    op = stablehlo.custom_call(
+        input_values;
+        result_0=result_types,
+        call_target_name="reactant_julia_callback",
+        has_side_effect=MLIR.IR.Attribute(has_side_effect),
+        backend_config,
+        api_version=Int32(4),
+        output_operand_aliases=output_operand_aliases,
+        location,
+    )
+
+    # Wrap results  
+    results = []
+    for (i, (T, shape)) in enumerate(output_specs)
+        res = MLIR.IR.result(op, i)
+        if shape == () || shape == (1,) && length(shape) == 0
+            push!(results, TracedRNumber{T}((), res))
+        else
+            shape_tuple = Tuple(shape)
+            N = length(shape)
+            push!(results, TracedRArray{T,N}((), res, shape_tuple))
+        end
+    end
+
+    # Unwrap single results for convenience
+    if length(results) == 1
+        return results[1]
+    end
+    return Tuple(results)
+end
+
 end # module Ops
