@@ -1201,3 +1201,15 @@ nmantissa(::Type{Float64}) = 52
 
 @inline _unwrap_val(x) = x
 @inline _unwrap_val(::Val{val}) where {val} = _unwrap_val(val)
+
+@generated function unsafe_load_field(ptr::Ptr{T}, ::Val{field}) where {T, field}
+    i = findfirst(Base.Fix1(===, field), fieldnames(T))
+    isnothing(i) && throw(FieldError(T, field))
+    return :(unsafe_load(Ptr{$(fieldtype(T, i))}(ptr + $(fieldoffset(T, i)))))
+end
+
+@generated function unsafe_store_field!(ptr::Ptr{T}, val, ::Val{field}) where {T, field}
+    i = findfirst(Base.Fix1(===, field), fieldnames(T))
+    isnothing(i) && throw(FieldError(T, field))
+    return :(unsafe_store!(Ptr{$(fieldtype(T, i))}(ptr + $(fieldoffset(T, i))), val))
+end

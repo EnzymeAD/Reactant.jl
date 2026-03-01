@@ -322,23 +322,19 @@ for runtime in (:PJRT, :IFRT)
                     end
                 end
             else
-                try
-                    #=
+                # Apple Silicon: Metal PJRT backend via ReactantMetalExt/MPSGraph
+                if Accelerators.Metal.has_metal()
                     if was_initialized && haskey(state.clients, "metal")
                         free_client(state.clients["metal"])
                         $(runtime).metal_client_count[] -= 1
                     end
-                    gpu = $(runtime).MetalClient(;
-                        metal_pjrt_plugin_path=Accelerators.Metal.get_metal_pjrt_plugin_path(),
-                        common_kwargs...,
-                    )
-                    state.clients["metal"] = gpu
-                    # Don't put this in the default_client since metal support is fairly
-                    # limited
-                    =#
-                    # Metal PJRT plugin is not yet compatible with latest OpenXLA
-                catch e
-                    println(stdout, e)
+                    try
+                        metal = $(runtime).MetalClient()
+                        state.clients["metal"] = metal
+                        state.default_client = metal
+                    catch e
+                        println(stdout, e)
+                    end
                 end
             end
         end
