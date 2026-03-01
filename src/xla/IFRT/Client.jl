@@ -95,7 +95,12 @@ function MakeIFRTPJRTClientViaPluginAPI(
     errstr = Ref{Cstring}()
     GC.@preserve pjrt_client errstr distributed_runtime_client device_type begin
         client = MLIR.API.ifrt_pjrt_make_client_with_default_kv_store(
-            pjrt_client, node_id, num_nodes, distributed_runtime_client, errstr, device_type
+            pjrt_client.client,
+            node_id,
+            num_nodes,
+            distributed_runtime_client,
+            errstr,
+            device_type,
         )
     end
 
