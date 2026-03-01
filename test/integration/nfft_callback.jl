@@ -43,6 +43,6 @@ if RunningOnCPU || RunningOnCUDA
 
         res_ra = @jit traced_nfft(x_ra, v_ra)
 
-        @test res ≈ res_ra atol=1e-5 rtol=1e-5
+        @test res ≈ res_ra atol = 1e-5 rtol = 1e-5
     end
 end
