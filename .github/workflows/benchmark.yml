@@ -134,7 +134,7 @@ jobs:
         run: |
           julia --color=yes --project=benchmark/${{ matrix.suite }} benchmark/runbenchmarks.jl ${{ env.DEVICE }} ${{ matrix.suite }}
       - name: Upload Benchmark Results
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         timeout-minutes: 10
         with:
           name: benchmark-results-${{ matrix.suite }}-${{ env.DEVICE }}
@@ -169,14 +169,14 @@ jobs:
            echo "path=$(find benchmark -type f -name combinedbenchmarks.json 2>/dev/null)" >> $GITHUB_OUTPUT
            echo "path_tflops=$(find benchmark -type f -name combinedbenchmarks_tflops.json 2>/dev/null)" >> $GITHUB_OUTPUT
       - name: Upload benchmark results as artifact
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: benchmark-results
           path: ${{ steps.locate.outputs.path }}
           retention-days: 90
           overwrite: false
       - name: Upload benchmark results as artifact (TFLOP/s)
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: benchmark-results-tflops
           path: ${{ steps.locate.outputs.path_tflops }}
