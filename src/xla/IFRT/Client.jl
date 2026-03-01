@@ -98,5 +98,7 @@ function MakeIFRTPJRTClientViaPluginAPI(
             pjrt_client, node_id, num_nodes, distributed_runtime_client, errstr, device_type
         )
     end
-    return client, errstr
+
+    client == C_NULL && throw(AssertionError(unsafe_string(errstr[])))
+    return Client(client)
 end

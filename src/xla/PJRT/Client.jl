@@ -103,5 +103,5 @@ function MakeClientUsingPluginAPI(
         )
     end
     client == C_NULL && throw(AssertionError(unsafe_string(errstr[])))
-    return client
+    return Client(client)
 end
