@@ -198,7 +198,7 @@ jobs:
           julia --project --color=yes --check-bounds=yes -e 'import Pkg; Pkg.test(;coverage=true, julia_args=["--check-bounds=yes", "--compiled-modules=yes", "--depwarn=yes"], test_args=`${{ env.runtest_test_args }}`, force_latest_compatible_version=false, allow_reresolve=${{ !(inputs.downgrade_testing) }})'
 
       - name: "Upload MLIR modules"
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         timeout-minutes: 10
         if: always()
         with:
