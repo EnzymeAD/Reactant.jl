@@ -124,6 +124,10 @@ unwrapped_eltype(::TracedRNumber{T}) where {T} = T
 unwrapped_eltype(::Type{<:AbstractArray{T,N}}) where {T,N} = unwrapped_eltype(T)
 unwrapped_eltype(::AbstractArray{T,N}) where {T,N} = unwrapped_eltype(T)
 
+# For ShapeDtypeStruct
+unwrapped_eltype(::Type{ShapeDtypeStruct{T,N}}) where {T,N} = T
+unwrapped_eltype(::ShapeDtypeStruct{T,N}) where {T,N} = T
+
 include("Ops.jl")
 Base.push!(no_rewrite_ancestor_modules, Ops)
 
@@ -288,6 +292,7 @@ export ConcreteRArray,
     ConcretePJRTNumber,
     ConcreteIFRTArray,
     ConcreteIFRTNumber,
+    ShapeDtypeStruct,
     @compile,
     @code_hlo,
     @code_mhlo,
