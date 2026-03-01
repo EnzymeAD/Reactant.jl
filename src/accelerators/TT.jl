@@ -41,6 +41,10 @@ function make_pjrt_client(;
     @assert distributed_runtime_client === nothing "`make_pjrt_client` does not \
                                                     support distributed_runtime_client"
 
+    if allowed_devices !== nothing
+        @debug "TTClient doesn't support allowed_devices. Ignoring the kwarg."
+    end
+
     return Reactant.XLA.PJRT.MakeClientUsingPluginAPI(get_tt_pjrt_plugin_path(), "tt", "TT")
 end
 
@@ -50,6 +54,10 @@ function make_ifrt_client(;
     distributed_runtime_client=nothing,
     allowed_devices::Union{Nothing,Vector{Int}}=nothing,
 )
+    if allowed_devices !== nothing
+        @debug "TTClient doesn't support allowed_devices. Ignoring the kwarg."
+    end
+
     return Reactant.XLA.IFRT.MakeIFRTPJRTClientViaPluginAPI(
         get_tt_pjrt_plugin_path(),
         "tt",

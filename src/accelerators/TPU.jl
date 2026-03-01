@@ -37,6 +37,10 @@ function make_pjrt_client(;
     @assert distributed_runtime_client === nothing "`make_pjrt_client` does not \
                                                     support distributed_runtime_client"
 
+    if allowed_devices !== nothing
+        @debug "TPUClient doesn't support allowed_devices. Ignoring the kwarg."
+    end
+
     return Reactant.XLA.PJRT.MakeClientUsingPluginAPI(get_libtpu_path(), "tpu", "TPU")
 end
 
@@ -46,6 +50,10 @@ function make_ifrt_client(;
     distributed_runtime_client=nothing,
     allowed_devices::Union{Nothing,Vector{Int}}=nothing,
 )
+    if allowed_devices !== nothing
+        @debug "TPUClient doesn't support allowed_devices. Ignoring the kwarg."
+    end
+
     return Reactant.XLA.IFRT.MakeIFRTPJRTClientViaPluginAPI(
         get_libtpu_path(), "tpu", "TPU"; node_id, num_nodes, distributed_runtime_client
     )
@@ -59,9 +67,9 @@ function __init__()
             pjrt_initialize_function=make_pjrt_client,
             ifrt_initialize_function=make_ifrt_client,
             preinitialize_setup_function=() -> begin
+                setup_correct_env_vars!() # important to do this first before cloud_tpu_init!
                 setup_libtpu!()
                 cloud_tpu_init!()
-                setup_correct_env_vars!()
                 nothing
             end,
         )

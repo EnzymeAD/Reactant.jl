@@ -107,7 +107,9 @@ function initialize_backends(
             state.clients[backend.platform_name] = client
             successful_initializations[i] = true
         catch err
-            @error "Failed to initialize client: $(backend.platform_name)" exception = err
+            @error "Failed to initialize client: $(backend.platform_name)" exception = (
+                err, catch_backtrace()
+            )
         end
     end
 
