@@ -7,18 +7,77 @@ using HTTP: HTTP
 using Downloads: Downloads
 using p7zip_jll: p7zip
 
+using ..Registration: register_backend
+
 const libtpu_dir = Ref{Union{Nothing,String}}(nothing)
 const RUNNING_IN_CLOUD_TPU_VM = Ref(false)
 
 const LIBTPU_VERSION = "0.0.35.dev20260129"
 const LIBTPU_SO = "libtpu-$(replace(string(LIBTPU_VERSION), '.' => '_')).so"
 
+function setup_correct_env_vars!()
+    # LIBTPU_INIT_ARGS are somewhat different from XLA_FLAGS. See
+    # https://github.com/EnzymeAD/Reactant.jl/actions/runs/22545998508/job/65308441694?pr=2571#step:22:1919
+    # │ ERROR: Unknown command line flag 'xla_enable_enzyme_comms_opt'
+    # └ ERROR: Unknown command line flag 'xla_force_host_platform_device_count'
+
+    # LibTPU has its own internal copy of XLA which does not read the regular XLA flags
+    # if !haskey(ENV, "LIBTPU_INIT_ARGS")
+    #     xla_flags = "--xla_enable_enzyme_comms_opt=true"
+    #     if haskey(ENV, "XLA_FLAGS")
+    #         xla_flags = xla_flags * " " * ENV["XLA_FLAGS"]
+    #     end
+    #     ENV["LIBTPU_INIT_ARGS"] = xla_flags
+    # end
+end
+
+function make_pjrt_client(;
+    node_id::Integer=0,
+    num_nodes::Integer=1,
+    distributed_runtime_client=nothing,
+    allowed_devices::Union{Nothing,Vector{Int}}=nothing,
+)
+    @assert node_id == 0 "`make_pjrt_client` does not support node_id"
+    @assert num_nodes == 1 "`make_pjrt_client` does not support num_nodes > 1"
+    @assert distributed_runtime_client === nothing "`make_pjrt_client` does not \
+                                                    support distributed_runtime_client"
+
+    if allowed_devices !== nothing
+        @debug "TPUClient doesn't support allowed_devices. Ignoring the kwarg."
+    end
+
+    return Reactant.XLA.PJRT.MakeClientUsingPluginAPI(get_libtpu_path(), "tpu", "TPU")
+end
+
+function make_ifrt_client(;
+    node_id::Integer=0,
+    num_nodes::Integer=1,
+    distributed_runtime_client=nothing,
+    allowed_devices::Union{Nothing,Vector{Int}}=nothing,
+)
+    if allowed_devices !== nothing
+        @debug "TPUClient doesn't support allowed_devices. Ignoring the kwarg."
+    end
+
+    return Reactant.XLA.IFRT.MakeIFRTPJRTClientViaPluginAPI(
+        get_libtpu_path(), "tpu", "TPU"; node_id, num_nodes, distributed_runtime_client
+    )
+end
+
 function __init__()
-    @static if !Sys.isapple()
-        if !Reactant.precompiling() && has_tpu()
-            setup_libtpu!()
-            cloud_tpu_init!()
-        end
+    if !Sys.isapple() && has_tpu() && !Reactant.precompiling()
+        register_backend(
+            "tpu";
+            priority=1000,
+            pjrt_initialize_function=make_pjrt_client,
+            ifrt_initialize_function=make_ifrt_client,
+            preinitialize_setup_function=() -> begin
+                setup_correct_env_vars!() # important to do this first before cloud_tpu_init!
+                setup_libtpu!()
+                cloud_tpu_init!()
+                nothing
+            end,
+        )
     end
 end
 
@@ -29,6 +88,7 @@ function setup_libtpu!()
         libtpu_dir[] = dirname(path_from_env)
     else
         libtpu_dir[] = @get_scratch!("libtpu")
+        @debug "TPU_LIBRARY_PATH not set. Manually setting up libtpu at $(libtpu_dir[])"
         download_libtpu_if_needed(libtpu_dir[])
     end
     return nothing
@@ -57,8 +117,10 @@ function download_libtpu_if_needed(path=nothing)
 
     libtpu_path = joinpath(path, LIBTPU_SO)
     if !isfile(libtpu_path)
+        @debug "Downloading libtpu: $(LIBTPU_VERSION)"
         zip_file_path = joinpath(path, "tpu.zip")
-        tmp_dir = joinpath(path, "tmp")
+        !isdir(path) && mkpath(path)
+        tmp_dir = mktempdir(path)
         Downloads.download(
             "https://storage.googleapis.com/libtpu-nightly-releases/wheels/libtpu/libtpu-$(LIBTPU_VERSION)+nightly-cp314-cp314-manylinux_2_31_x86_64.whl",
             zip_file_path,

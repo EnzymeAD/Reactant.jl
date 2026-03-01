@@ -1,6 +1,6 @@
 module XLA
 
-using ..Reactant: Reactant, MLIR, Accelerators
+using ..Reactant: Reactant, MLIR
 using Reactant_jll: Reactant_jll
 using LLVM: LLVM
 using Libdl: Libdl
@@ -72,12 +72,15 @@ for runtime in (:PJRT, :IFRT)
     end
 
     @eval function finalize_backend_state(state::$(backend_state))
+        state.initialized || return nothing
+
         @debug "[GETPID $(getpid())] Finalizing backend state, $state"
         for (_, client) in state.clients
             free_client(client)
         end
         empty!(state.clients)
-        return state.default_client = $(runtime).NullClient
+        state.default_client = $(runtime).NullClient
+        return nothing
     end
 end
 
@@ -237,111 +240,22 @@ for runtime in (:PJRT, :IFRT)
         else
             nothing
         end
-        common_kwargs = (;
+
+        Reactant.Accelerators.Registration.initialize_backends(
+            Val($(Meta.quot(runtime))),
+            state,
+            was_initialized;
+            allow_initialization=backend -> begin
+                if Reactant.precompiling()
+                    return backend.platform_name == "cpu"
+                end
+                return true
+            end,
             node_id=global_state.process_id,
             num_nodes=global_state.num_processes,
             distributed_runtime_client,
+            allowed_devices=global_state.local_gpu_device_ids,
         )
-
-        # CPU
-        if was_initialized && haskey(state.clients, "cpu")
-            free_client(state.clients["cpu"])
-            $(runtime).cpu_client_count[] -= 1
-        end
-        cpu = $(runtime).CPUClient(; common_kwargs..., asynchronous=true)
-        state.clients["cpu"] = cpu
-        state.default_client = cpu
-
-        # Try TPU if possible, then try GPU (CUDA)
-        if !Reactant.precompiling()
-            @static if !Sys.isapple()
-                if Accelerators.TPU.has_tpu()
-                    Accelerators.TPU.download_libtpu_if_needed()
-                    try
-                        if was_initialized && haskey(state.clients, "tpu")
-                            free_client(state.clients["tpu"])
-                            $(runtime).tpu_client_count[] -= 1
-                        end
-                        tpu = $(runtime).TPUClient(;
-                            tpu_path=Accelerators.TPU.get_libtpu_path(), common_kwargs...
-                        )
-                        state.clients["tpu"] = tpu
-                        state.default_client = tpu
-                    catch e
-                        println(stdout, e)
-                    end
-                elseif Accelerators.TT.has_tt()
-                    @debug "TT accelerator detected, setting it up"
-                    try
-                        if was_initialized && haskey(state.clients, "tt")
-                            free_client(state.clients["tt"])
-                            $(runtime).tt_client_count[] -= 1
-                        end
-                        # The env var `TT_METAL_RUNTIME_ROOT` must be set before creating the client.
-                        tt_metal_runtime_root = get(ENV, "TT_METAL_RUNTIME_ROOT", nothing)
-                        if isnothing(tt_metal_runtime_root)
-                            tt_metal_path_in_wheel = joinpath(
-                                dirname(Accelerators.TT.get_tt_pjrt_plugin_path()),
-                                "tt-metal",
-                            )
-                            if ispath(tt_metal_path_in_wheel)
-                                @debug "Setting environment variable 'TT_METAL_RUNTIME_ROOT' to '$(tt_metal_path_in_wheel)'"
-                                ENV["TT_METAL_RUNTIME_ROOT"] = tt_metal_path_in_wheel
-                            else
-                                error(
-                                    "`TT_METAL_RUNTIME_ROOT` environment variable not set and we could not automatically determine it",
-                                )
-                            end
-                        else
-                            @debug "Environment variable 'TT_METAL_RUNTIME_ROOT' already set to to '$(tt_metal_runtime_root)'"
-                        end
-
-                        tt = $(runtime).TTClient(;
-                            tt_pjrt_plugin_path=Accelerators.TT.get_tt_pjrt_plugin_path(),
-                            common_kwargs...,
-                        )
-                        state.clients["tt"] = tt
-                        state.default_client = tt
-                    catch e
-                        println(stdout, e)
-                    end
-                elseif Reactant_jll.host_platform.tags["gpu"] != "none"
-                    try
-                        if was_initialized && haskey(state.clients, "cuda")
-                            free_client(state.clients["cuda"])
-                            $(runtime).cuda_client_count[] -= 1
-                        end
-                        gpu = $(runtime).CUDAClient(;
-                            common_kwargs...,
-                            allowed_devices=global_state.local_gpu_device_ids,
-                        )
-                        state.clients["cuda"] = gpu
-                        state.default_client = gpu
-                    catch e
-                        println(stdout, e)
-                    end
-                end
-            else
-                try
-                    #=
-                    if was_initialized && haskey(state.clients, "metal")
-                        free_client(state.clients["metal"])
-                        $(runtime).metal_client_count[] -= 1
-                    end
-                    gpu = $(runtime).MetalClient(;
-                        metal_pjrt_plugin_path=Accelerators.Metal.get_metal_pjrt_plugin_path(),
-                        common_kwargs...,
-                    )
-                    state.clients["metal"] = gpu
-                    # Don't put this in the default_client since metal support is fairly
-                    # limited
-                    =#
-                    # Metal PJRT plugin is not yet compatible with latest OpenXLA
-                catch e
-                    println(stdout, e)
-                end
-            end
-        end
 
         return nothing
     end

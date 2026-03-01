@@ -5,14 +5,82 @@ using Scratch: @get_scratch!
 using Downloads: Downloads
 using p7zip_jll: p7zip
 
+using ..Registration: register_backend
+
 const tt_pjrt_plugin_dir = Ref{Union{Nothing,String}}(nothing)
 const tt_pjrt_plugin_name = Ref{String}("pjrt_plugin_tt.so")
 
-function __init__()
-    @static if Sys.islinux()
-        if !Reactant.precompiling() && has_tt()
-            setup_tt_pjrt_plugin!()
+function setup_correct_env_vars!()
+    # The env var `TT_METAL_RUNTIME_ROOT` must be set before creating the client.
+    tt_metal_runtime_root = get(ENV, "TT_METAL_RUNTIME_ROOT", nothing)
+    if tt_metal_runtime_root === nothing
+        tt_metal_path_in_wheel = joinpath(dirname(get_tt_pjrt_plugin_path()), "tt-metal")
+        if ispath(tt_metal_path_in_wheel)
+            @debug "Setting environment variable 'TT_METAL_RUNTIME_ROOT' to \
+                    '$(tt_metal_path_in_wheel)'"
+            ENV["TT_METAL_RUNTIME_ROOT"] = tt_metal_path_in_wheel
+        else
+            error(
+                "`TT_METAL_RUNTIME_ROOT` environment variable not set and we could not automatically determine it",
+            )
         end
+    else
+        @debug "Environment variable 'TT_METAL_RUNTIME_ROOT' already set to to \
+                '$(tt_metal_runtime_root)'"
+    end
+end
+
+function make_pjrt_client(;
+    node_id::Integer=0,
+    num_nodes::Integer=1,
+    distributed_runtime_client=nothing,
+    allowed_devices::Union{Nothing,Vector{Int}}=nothing,
+)
+    @assert node_id == 0 "`make_pjrt_client` does not support node_id"
+    @assert num_nodes == 1 "`make_pjrt_client` does not support num_nodes > 1"
+    @assert distributed_runtime_client === nothing "`make_pjrt_client` does not \
+                                                    support distributed_runtime_client"
+
+    if allowed_devices !== nothing
+        @debug "TTClient doesn't support allowed_devices. Ignoring the kwarg."
+    end
+
+    return Reactant.XLA.PJRT.MakeClientUsingPluginAPI(get_tt_pjrt_plugin_path(), "tt", "TT")
+end
+
+function make_ifrt_client(;
+    node_id::Integer=0,
+    num_nodes::Integer=1,
+    distributed_runtime_client=nothing,
+    allowed_devices::Union{Nothing,Vector{Int}}=nothing,
+)
+    if allowed_devices !== nothing
+        @debug "TTClient doesn't support allowed_devices. Ignoring the kwarg."
+    end
+
+    return Reactant.XLA.IFRT.MakeIFRTPJRTClientViaPluginAPI(
+        get_tt_pjrt_plugin_path(),
+        "tt",
+        "TT";
+        node_id,
+        num_nodes,
+        distributed_runtime_client,
+    )
+end
+
+function __init__()
+    if Sys.islinux() && has_tt() && !Reactant.precompiling()
+        register_backend(
+            "tt";
+            priority=1000,
+            pjrt_initialize_function=make_pjrt_client,
+            ifrt_initialize_function=make_ifrt_client,
+            preinitialize_setup_function=() -> begin
+                setup_tt_pjrt_plugin!()
+                setup_correct_env_vars!()
+                nothing
+            end,
+        )
     end
 end
 
