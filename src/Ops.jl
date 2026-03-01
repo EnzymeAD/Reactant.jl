@@ -4321,7 +4321,7 @@ end
         args::Union{TracedRArray, TracedRNumber}...;
         has_side_effect::Bool = true,
         result_alias = nothing,
-        location = Ops.mlir_stacktrace("custom_call", @__FILE__, @__LINE__),
+        location = Ops.mlir_stacktrace("julia_callback", @__FILE__, @__LINE__),
     )
 
 Emit a `stablehlo.custom_call` that will call back into Julia function `f` at
@@ -4331,6 +4331,10 @@ execution time.
 
     Currently this only supports CUDA and CPU backends. For CUDA support, `CUDA.jl`
     must be loaded.
+
+!!! warning "Single Device"
+
+    This function doesn't support sharding across multiple devices.
 
 # Arguments
 
@@ -4414,7 +4418,7 @@ function julia_callback(
         location,
     )
 
-    # Wrap results  
+    # Wrap results
     results = []
     for (i, (T, shape)) in enumerate(output_specs)
         res = MLIR.IR.result(op, i)
