@@ -241,7 +241,7 @@ for runtime in (:PJRT, :IFRT)
             nothing
         end
 
-        Reactant.Accelerators.initialize_backends(
+        Reactant.Accelerators.Registration.initialize_backends(
             Val($(Meta.quot(runtime))),
             state,
             was_initialized;

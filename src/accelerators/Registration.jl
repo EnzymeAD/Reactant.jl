@@ -127,8 +127,4 @@ function initialize_backends(
     return nothing
 end
 
-export register_backend, make_client, initialize_backends
-
 end
-
-using .Registration: register_backend, make_client, initialize_backends
