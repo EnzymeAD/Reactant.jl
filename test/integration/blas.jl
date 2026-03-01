@@ -286,18 +286,20 @@ end
         @test LowerTriangular(C2_ra) ≈ LowerTriangular(C2_target)
     end
 
-    @testset "gemmt!" begin
-        A = Reactant.TestUtils.construct_test_array(Float32, 16, 16)
-        B = Reactant.TestUtils.construct_test_array(Float32, 16, 16)
-        C = Reactant.TestUtils.construct_test_array(Float32, 16, 16)
-        A_ra, B_ra, C_ra = Reactant.to_rarray(A),
-        Reactant.to_rarray(B),
-        Reactant.to_rarray(C)
+    if isdefined(BLAS, :gemmt!)
+        @testset "gemmt!" begin
+            A = Reactant.TestUtils.construct_test_array(Float32, 16, 16)
+            B = Reactant.TestUtils.construct_test_array(Float32, 16, 16)
+            C = Reactant.TestUtils.construct_test_array(Float32, 16, 16)
+            A_ra, B_ra, C_ra = Reactant.to_rarray(A),
+            Reactant.to_rarray(B),
+            Reactant.to_rarray(C)
 
-        @jit BLAS.gemmt!('U', 'N', 'N', 2.0f0, A_ra, B_ra, 3.0f0, C_ra)
-        C_target = copy(C)
-        BLAS.gemmt!('U', 'N', 'N', 2.0f0, A, B, 3.0f0, C_target)
-        @test UpperTriangular(C_ra) ≈ UpperTriangular(C_target)
+            @jit BLAS.gemmt!('U', 'N', 'N', 2.0f0, A_ra, B_ra, 3.0f0, C_ra)
+            C_target = copy(C)
+            BLAS.gemmt!('U', 'N', 'N', 2.0f0, A, B, 3.0f0, C_target)
+            @test UpperTriangular(C_ra) ≈ UpperTriangular(C_target)
+        end
     end
 
     @testset "symm!/hemm!" begin
@@ -382,8 +384,11 @@ end
 
         @test @jit(BLAS.gemm('N', 'N', 2.0f0, A_ra, B_ra)) ≈
             BLAS.gemm('N', 'N', 2.0f0, A, B)
-        @test UpperTriangular(@jit(BLAS.gemmt('U', 'N', 'N', 2.0f0, A_ra, B_ra))) ≈
-            UpperTriangular(BLAS.gemmt('U', 'N', 'N', 2.0f0, A, B))
+
+        if isdefined(BLAS, :gemmt)
+            @test UpperTriangular(@jit(BLAS.gemmt('U', 'N', 'N', 2.0f0, A_ra, B_ra))) ≈
+                UpperTriangular(BLAS.gemmt('U', 'N', 'N', 2.0f0, A, B))
+        end
 
         Ainv = A' * A + I
         Ainv_ra = Reactant.to_rarray(Ainv)

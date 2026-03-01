@@ -339,48 +339,52 @@ function BLAS.gemm(transA::Char, transB::Char, A::AnyTracedRMatrix, B::AnyTraced
     return BLAS.gemm(transA, transB, one(eltype(A)), A, B)
 end
 
-function BLAS.gemmt!(
-    uplo::Char,
-    transA::Char,
-    transB::Char,
-    alpha::Number,
-    A::AnyTracedRMatrix,
-    B::AnyTracedRMatrix,
-    beta::Number,
-    C::AnyTracedRMatrix,
-)
-    A = materialize_traced_array(A)
-    B = materialize_traced_array(B)
-    C = materialize_traced_array(C)
-    A_op = (transA == 'N') ? A : (transA == 'T' ? transpose(A) : adjoint(A))
-    B_op = (transB == 'N') ? B : (transB == 'T' ? transpose(B) : adjoint(B))
-    res = alpha .* (A_op * B_op) .+ beta .* C
-    if uplo == 'U'
-        UpperTriangular(C) .= UpperTriangular(res)
-    else
-        LowerTriangular(C) .= LowerTriangular(res)
+@static if isdefined(BLAS, :gemmt!)
+    function BLAS.gemmt!(
+        uplo::Char,
+        transA::Char,
+        transB::Char,
+        alpha::Number,
+        A::AnyTracedRMatrix,
+        B::AnyTracedRMatrix,
+        beta::Number,
+        C::AnyTracedRMatrix,
+    )
+        A = materialize_traced_array(A)
+        B = materialize_traced_array(B)
+        C = materialize_traced_array(C)
+        A_op = (transA == 'N') ? A : (transA == 'T' ? transpose(A) : adjoint(A))
+        B_op = (transB == 'N') ? B : (transB == 'T' ? transpose(B) : adjoint(B))
+        res = alpha .* (A_op * B_op) .+ beta .* C
+        if uplo == 'U'
+            UpperTriangular(C) .= UpperTriangular(res)
+        else
+            LowerTriangular(C) .= LowerTriangular(res)
+        end
+        return C
     end
-    return C
 end
 
-function BLAS.gemmt(
-    uplo::Char,
-    transA::Char,
-    transB::Char,
-    alpha::Number,
-    A::AnyTracedRMatrix,
-    B::AnyTracedRMatrix,
-)
-    T = promote_type(eltype(A), eltype(B), typeof(alpha))
-    n = (uplo == 'U' || uplo == 'L') ? size(A, (transA == 'N' ? 1 : 2)) : 0
-    C = zeros(T, n, n)
-    return BLAS.gemmt!(uplo, transA, transB, alpha, A, B, zero(T), C)
-end
+@static if isdefined(BLAS, :gemmt)
+    function BLAS.gemmt(
+        uplo::Char,
+        transA::Char,
+        transB::Char,
+        alpha::Number,
+        A::AnyTracedRMatrix,
+        B::AnyTracedRMatrix,
+    )
+        T = promote_type(eltype(A), eltype(B), typeof(alpha))
+        n = (uplo == 'U' || uplo == 'L') ? size(A, (transA == 'N' ? 1 : 2)) : 0
+        C = zeros(T, n, n)
+        return BLAS.gemmt!(uplo, transA, transB, alpha, A, B, zero(T), C)
+    end
 
-function BLAS.gemmt(
-    uplo::Char, transA::Char, transB::Char, A::AnyTracedRMatrix, B::AnyTracedRMatrix
-)
-    return BLAS.gemmt(uplo, transA, transB, true, A, B)
+    function BLAS.gemmt(
+        uplo::Char, transA::Char, transB::Char, A::AnyTracedRMatrix, B::AnyTracedRMatrix
+    )
+        return BLAS.gemmt(uplo, transA, transB, true, A, B)
+    end
 end
 
 function BLAS.symm!(
