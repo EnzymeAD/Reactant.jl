@@ -108,12 +108,6 @@ function BLAS.blascopy!(
     return y
 end
 
-function BLAS.copy!(
-    n::Integer, x::AnyTracedRArray, incx::Integer, y::AnyTracedRArray, incy::Integer
-)
-    return BLAS.blascopy!(n, x, incx, y, incy)
-end
-
 function BLAS.iamax(n::Integer, x::AnyTracedRArray, incx::Integer)
     return findmax(abs, __extract_strided_view(x, n, incx))[2]
 end
