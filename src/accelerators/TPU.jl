@@ -16,14 +16,19 @@ const LIBTPU_VERSION = "0.0.35.dev20260129"
 const LIBTPU_SO = "libtpu-$(replace(string(LIBTPU_VERSION), '.' => '_')).so"
 
 function setup_correct_env_vars!()
+    # LIBTPU_INIT_ARGS are somewhat different from XLA_FLAGS. See
+    # https://github.com/EnzymeAD/Reactant.jl/actions/runs/22545998508/job/65308441694?pr=2571#step:22:1919
+    # │ ERROR: Unknown command line flag 'xla_enable_enzyme_comms_opt'
+    # └ ERROR: Unknown command line flag 'xla_force_host_platform_device_count'
+
     # LibTPU has its own internal copy of XLA which does not read the regular XLA flags
-    if !haskey(ENV, "LIBTPU_INIT_ARGS")
-        xla_flags = "--xla_enable_enzyme_comms_opt=true"
-        if haskey(ENV, "XLA_FLAGS")
-            xla_flags = xla_flags * " " * ENV["XLA_FLAGS"]
-        end
-        ENV["LIBTPU_INIT_ARGS"] = xla_flags
-    end
+    # if !haskey(ENV, "LIBTPU_INIT_ARGS")
+    #     xla_flags = "--xla_enable_enzyme_comms_opt=true"
+    #     if haskey(ENV, "XLA_FLAGS")
+    #         xla_flags = xla_flags * " " * ENV["XLA_FLAGS"]
+    #     end
+    #     ENV["LIBTPU_INIT_ARGS"] = xla_flags
+    # end
 end
 
 function make_pjrt_client(;
