@@ -73,6 +73,7 @@ function export_to_reactant_script(
     output_dir::Union{String,Nothing}=nothing,
     function_name::String=string(f),
     compile_options::Reactant.CompileOptions=Reactant.CompileOptions(),
+    try_zip_on_failure::Bool=true, # internal option, don't expose
 )
     function_name = replace(function_name, "!" => "_")
 
@@ -88,7 +89,13 @@ function export_to_reactant_script(
     argprefix = gensym("exportarg")
     MLIR.IR.@dispose ctx = Reactant.ReactantContext() begin
         mod, mlir_fn_res = Compiler.compile_mlir(
-            ctx, f, args; argprefix, drop_unsupported_attributes=true, compile_options
+            ctx,
+            f,
+            args;
+            argprefix,
+            drop_unsupported_attributes=true,
+            compile_options,
+            try_zip_on_failure,
         )
         hlo_code = try
             string(mod)
