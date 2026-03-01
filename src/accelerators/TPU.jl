@@ -37,7 +37,6 @@ function make_pjrt_client(;
     @assert distributed_runtime_client === nothing "`make_pjrt_client` does not \
                                                     support distributed_runtime_client"
 
-    setup_correct_env_vars!()
     return Reactant.XLA.PJRT.MakeClientUsingPluginAPI(get_libtpu_path(), "tpu", "TPU")
 end
 
@@ -47,7 +46,6 @@ function make_ifrt_client(;
     distributed_runtime_client=nothing,
     allowed_devices::Union{Nothing,Vector{Int}}=nothing,
 )
-    setup_correct_env_vars!()
     return Reactant.XLA.IFRT.MakeIFRTPJRTClientViaPluginAPI(
         get_libtpu_path(), "tpu", "TPU"; node_id, num_nodes, distributed_runtime_client
     )
@@ -63,6 +61,7 @@ function __init__()
             preinitialize_setup_function=() -> begin
                 setup_libtpu!()
                 cloud_tpu_init!()
+                setup_correct_env_vars!()
                 nothing
             end,
         )
@@ -76,6 +75,7 @@ function setup_libtpu!()
         libtpu_dir[] = dirname(path_from_env)
     else
         libtpu_dir[] = @get_scratch!("libtpu")
+        @debug "TPU_LIBRARY_PATH not set. Manually setting up libtpu at $(libtpu_dir[])"
         download_libtpu_if_needed(libtpu_dir[])
     end
     return nothing
@@ -104,6 +104,7 @@ function download_libtpu_if_needed(path=nothing)
 
     libtpu_path = joinpath(path, LIBTPU_SO)
     if !isfile(libtpu_path)
+        @debug "Downloading libtpu: $(LIBTPU_VERSION)"
         zip_file_path = joinpath(path, "tpu.zip")
         tmp_dir = joinpath(path, "tmp")
         Downloads.download(

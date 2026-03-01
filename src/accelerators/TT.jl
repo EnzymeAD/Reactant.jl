@@ -41,7 +41,6 @@ function make_pjrt_client(;
     @assert distributed_runtime_client === nothing "`make_pjrt_client` does not \
                                                     support distributed_runtime_client"
 
-    setup_correct_env_vars!()
     return Reactant.XLA.PJRT.MakeClientUsingPluginAPI(get_tt_pjrt_plugin_path(), "tt", "TT")
 end
 
@@ -51,7 +50,6 @@ function make_ifrt_client(;
     distributed_runtime_client=nothing,
     allowed_devices::Union{Nothing,Vector{Int}}=nothing,
 )
-    setup_correct_env_vars!()
     return Reactant.XLA.IFRT.MakeIFRTPJRTClientViaPluginAPI(
         get_tt_pjrt_plugin_path(),
         "tt",
@@ -69,7 +67,11 @@ function __init__()
             priority=1000,
             pjrt_initialize_function=make_pjrt_client,
             ifrt_initialize_function=make_ifrt_client,
-            preinitialize_setup_function=setup_tt_pjrt_plugin!,
+            preinitialize_setup_function=() -> begin
+                setup_tt_pjrt_plugin!()
+                setup_correct_env_vars!()
+                nothing
+            end,
         )
     end
 end
