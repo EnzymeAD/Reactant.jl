@@ -59,6 +59,13 @@ function Base.copyto!(
     return copyto!(dest, res)
 end
 
+function Reactant.TracedRArrayOverrides._copyto!(
+    dest::StructArray, bc::Base.Broadcast.Broadcasted{<:AbstractReactantArrayStyle}
+)
+    return copyto!(dest, bc)
+end
+
+
 function Base.copyto!(
     dest::Reactant.TracedRArray, bc::Broadcasted{StructArrayStyle{S,N}}
 ) where {S<:AbstractReactantArrayStyle,N}
@@ -89,16 +96,28 @@ Base.@propagate_inbounds function StructArrays._getindex(
 ) where {T}
     cols = components(x)
     @boundscheck checkbounds(x, I...)
-    return createinstance(T, get_ith(cols, I...)...)
+    return T(get_ith(cols, I...)...)
 end
 
 Base.@propagate_inbounds function Base.setindex!(
     s::StructArray{T,<:Any,<:Any,Int}, vals, I::TracedRNumber{TI}
 ) where {T,TI<:Integer}
     valsT = maybe_convert_elt(T, vals)
-    foreachfield((col, val) -> (@inbounds col[I] = val), s, valsT)
+    foreachfield((col, val) -> (@inbounds Reactant.@allowscalar col[I] = val), s, valsT)
     return s
 end
+
+const MRarr = Union{Reactant.AnyTracedRArray, Reactant.RArray}
+function StructArrays.get_ith(cols::NamedTuple{N, <: NTuple{K, <:MRarr}}, I...) where {N, K}
+    ith = ntuple(n->Reactant.@allowscalar(cols[n][I...]), Val(K))
+    return ith
+end
+
+function StructArrays.get_ith(cols::NTuple{K, <:MRarr}, I...) where {K}
+    ith = ntuple(n->Reactant.@allowscalar(cols[n][I...]), Val(K))
+    return ith
+end
+
 
 Base.@nospecializeinfer function Reactant.traced_type_inner(
     @nospecialize(prev::Type{StructArray{ET,N,C,I}}),
@@ -162,7 +181,6 @@ end
 function Base.similar(
     ::Base.Broadcast.Broadcasted{AbstractReactantArrayStyle}, ::Type{Eltype}, dims
 ) where {Eltype}
-    @info Eltype
     return similar(TracedRArray{Eltype}, dims)
 end
 
