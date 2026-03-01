@@ -4120,6 +4120,59 @@ end
     )
 end
 
+@noinline function syrk(
+    A::TracedRArray{T,N},
+    C::TracedRArray{T,N},
+    alpha::Union{TracedRNumber{T},T},
+    beta::Union{TracedRNumber{T},T};
+    uplo::Char,
+    transpose_a::Char,
+    location=mlir_stacktrace("syrk", @__FILE__, @__LINE__),
+) where {T,N}
+    ctx = MLIR.IR.current_context()
+    uplo_attr = MLIR.API.enzymexlaLapackUploAttrGet(
+        ctx,
+        if uplo == 'U'
+            Int32(1)
+        elseif uplo == 'L'
+            Int32(0)
+        else
+            Int32(2)
+        end,
+    )
+    transpose_attr = MLIR.API.enzymexlaLapackTransposeAttrGet(
+        ctx,
+        if transpose_a == 'N'
+            Int32(0)
+        elseif transpose_a == 'T'
+            Int32(1)
+        elseif transpose_a == 'C'
+            Int32(2)
+        else
+            error("Unknown transpose mode: $transpose_a")
+        end,
+    )
+
+    alpha_ = constant(alpha; location)
+    beta_ = constant(beta; location)
+
+    res = MLIR.IR.result(
+        enzymexla.blas_syrk(
+            A.mlir_data,
+            C.mlir_data,
+            alpha_.mlir_data,
+            beta_.mlir_data;
+            uplo=uplo_attr,
+            output_uplo=uplo_attr,
+            transpose=transpose_attr,
+            output=mlir_type(TracedRArray{T,N}, size(C)),
+            location,
+        ),
+        1,
+    )
+    return TracedRArray{T,N}((), res, size(C))
+end
+
 @noinline function sharding_group(
     inputs::Union{TracedRArray,TracedRNumber}...;
     group_id::Union{Integer,Nothing}=nothing,

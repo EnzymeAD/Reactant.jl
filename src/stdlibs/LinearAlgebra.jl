@@ -12,7 +12,8 @@ using ..TracedUtils: TracedUtils, get_mlir_data, set_mlir_data!
 using ..Ops: @opcall
 
 using LinearAlgebra: LinearAlgebra, BLAS
-using LinearAlgebra: Adjoint, Transpose, Factorization, RowMaximum, NoPivot
+using LinearAlgebra:
+    Adjoint, Transpose, Factorization, RowMaximum, NoPivot, Hermitian, Symmetric
 using LinearAlgebra: SymTridiagonal, Symmetric, Bidiagonal, Diagonal, Tridiagonal
 using LinearAlgebra: LowerTriangular, UnitLowerTriangular, UpperTriangular
 using LinearAlgebra: I, diag, diagm, ldiv!, det, logabsdet, istriu, istril, triu!, tril!
@@ -133,6 +134,19 @@ for (AT, comp) in ((:LowerTriangular, "GE"), (:UpperTriangular, "LE"))
 end
 
 function ReactantCore.materialize_traced_array(
+    x::Hermitian{TracedRNumber{T},<:AnyTracedRMatrix}
+) where {T}
+    m, n = size(x)
+    row_idxs = @opcall iota(Int, [m, n]; iota_dimension=1)
+    col_idxs = @opcall iota(Int, [m, n]; iota_dimension=2)
+    indicator = @opcall compare(
+        row_idxs, col_idxs; comparison_direction=x.uplo == 'L' ? "GT" : "LT"
+    )
+    x_adj = @opcall conj(@opcall transpose(parent(x), [2, 1]))
+    return @opcall select(indicator, parent(x), x_adj)
+end
+
+function ReactantCore.materialize_traced_array(
     x::Symmetric{TracedRNumber{T},<:AnyTracedRMatrix}
 ) where {T}
     m, n = size(x)
@@ -209,6 +223,17 @@ for (AT, dcomp, ocomp) in (
 end
 
 function TracedUtils.set_mlir_data!(
+    x::Hermitian{TracedRNumber{T},<:AnyTracedRMatrix}, data
+) where {T}
+    if x.uplo == 'L'
+        set_mlir_data!(LowerTriangular(parent(x)), data)
+    else
+        set_mlir_data!(UpperTriangular(parent(x)), data)
+    end
+    return x
+end
+
+function TracedUtils.set_mlir_data!(
     x::Symmetric{TracedRNumber{T},<:AnyTracedRMatrix}, data
 ) where {T}
     if x.uplo == 'L'
@@ -262,11 +287,22 @@ function overloaded_mul!(
     if α_is_one && β_is_zero
         res = tmp
     else
-        α_res = α_is_one ? tmp : @opcall multiply(tmp, @opcall(fill(T(α), size(tmp))))
+        α_res = if α_is_one
+            tmp
+        else
+            @opcall(
+                multiply(
+                    tmp,
+                    @opcall(fill(Reactant.promote_to(TracedRNumber{T}, α), size(tmp)))
+                )
+            )
+        end
         if β_is_zero
             res = α_res
         else
-            β_C = @opcall multiply(C, @opcall(fill(T(β), size(C))))
+            β_C = @opcall multiply(
+                C, @opcall(fill(Reactant.promote_to(TracedRNumber{T}, β), size(C)))
+            )
             res = @opcall add(α_res, β_C)
         end
     end
