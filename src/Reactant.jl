@@ -263,6 +263,8 @@ include("Tracing.jl")
 
 include("Compiler.jl")
 
+include("CustomCall.jl")
+
 include("Overlay.jl")
 
 # Serialization

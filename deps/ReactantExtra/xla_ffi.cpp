@@ -47,6 +47,104 @@ XLA_FFI_DEFINE_HANDLER(xlaThrowErrorHandlerHost, xlaThrowErrorHost,
 XLA_FFI_DEFINE_HANDLER(xlaAlwaysThrowErrorHandlerHost, xlaAlwaysThrowErrorHost,
                        xla::ffi::Ffi::Bind().Attr<std::string_view>("message"));
 
+// ============================================================================
+// Generic Julia callback handler for CPU custom calls.
+//
+// The Julia side emits a stablehlo.custom_call targeting
+// "reactant_julia_callback" with api_version = 4 (TYPED_FFI).  The
+// backend_config dict carries a single i64 attribute "callback_ptr" that
+// encodes the address of a C-callable Julia function:
+//
+//   void callback(void** inputs,  int32_t* input_types,
+//                 int32_t* input_ranks, int64_t** input_dims,
+//                 int64_t  num_inputs,
+//                 void** outputs, int32_t* output_types,
+//                 int32_t* output_ranks, int64_t** output_dims,
+//                 int64_t  num_outputs);
+//
+// Element type encoding mirrors xla::ffi::DataType (== xla::PrimitiveType):
+//   PRED=1, S8=2, S16=3, S32=4, S64=5, U8=6, U16=7, U32=8, U64=9,
+//   F16=10, F32=11, F64=12, BF16=16, C64=15, C128=18, ...
+// ============================================================================
+
+using JuliaCallbackFn = void (*)(
+    void ** /*inputs*/, int32_t * /*input_types*/, int32_t * /*input_ranks*/,
+    int64_t ** /*input_dims*/, int64_t /*num_inputs*/, void ** /*outputs*/,
+    int32_t * /*output_types*/, int32_t * /*output_ranks*/,
+    int64_t ** /*output_dims*/, int64_t /*num_outputs*/);
+
+xla::ffi::Error juliaCallbackHost(ffi::RemainingArgs args,
+                                  ffi::RemainingRets rets,
+                                  int64_t callback_ptr) {
+
+  auto fn = reinterpret_cast<JuliaCallbackFn>(callback_ptr);
+  if (!fn) {
+    return ffi::Error(ffi::ErrorCode::kInternal,
+                      "reactant_julia_callback: null callback pointer");
+  }
+
+  int64_t num_inputs = static_cast<int64_t>(args.size());
+  int64_t num_outputs = static_cast<int64_t>(rets.size());
+
+  // Allocate temporary arrays on the stack / heap for the metadata.
+  std::vector<void *> input_ptrs(num_inputs);
+  std::vector<int32_t> input_types(num_inputs);
+  std::vector<int32_t> input_ranks(num_inputs);
+  std::vector<int64_t *> input_dims(num_inputs);
+  // We need to own the dimension data for the lifetime of the call.
+  std::vector<std::vector<int64_t>> input_dims_storage(num_inputs);
+
+  for (int64_t i = 0; i < num_inputs; ++i) {
+    auto buf = args.get<ffi::AnyBuffer>(i);
+    if (!buf.has_value()) {
+      return ffi::Error(
+          ffi::ErrorCode::kInternal,
+          absl::StrFormat(
+              "reactant_julia_callback: failed to get input buffer %d", i));
+    }
+    input_ptrs[i] = buf->untyped_data();
+    input_types[i] = static_cast<int32_t>(buf->element_type());
+    auto dims = buf->dimensions();
+    input_ranks[i] = static_cast<int32_t>(dims.size());
+    input_dims_storage[i].assign(dims.begin(), dims.end());
+    input_dims[i] = input_dims_storage[i].data();
+  }
+
+  std::vector<void *> output_ptrs(num_outputs);
+  std::vector<int32_t> output_types(num_outputs);
+  std::vector<int32_t> output_ranks(num_outputs);
+  std::vector<int64_t *> output_dims(num_outputs);
+  std::vector<std::vector<int64_t>> output_dims_storage(num_outputs);
+
+  for (int64_t i = 0; i < num_outputs; ++i) {
+    auto buf = rets.get<ffi::AnyBuffer>(i);
+    if (!buf.has_value()) {
+      return ffi::Error(
+          ffi::ErrorCode::kInternal,
+          absl::StrFormat(
+              "reactant_julia_callback: failed to get output buffer %d", i));
+    }
+    output_ptrs[i] = (*buf)->untyped_data();
+    output_types[i] = static_cast<int32_t>((*buf)->element_type());
+    auto dims = (*buf)->dimensions();
+    output_ranks[i] = static_cast<int32_t>(dims.size());
+    output_dims_storage[i].assign(dims.begin(), dims.end());
+    output_dims[i] = output_dims_storage[i].data();
+  }
+
+  // Invoke the Julia callback.
+  fn(input_ptrs.data(), input_types.data(), input_ranks.data(),
+     input_dims.data(), num_inputs, output_ptrs.data(), output_types.data(),
+     output_ranks.data(), output_dims.data(), num_outputs);
+
+  return ffi::Error::Success();
+}
+
+XLA_FFI_DEFINE_HANDLER(
+    juliaCallbackHandlerHost, juliaCallbackHost,
+    xla::ffi::Ffi::Bind().RemainingArgs().RemainingRets().Attr<int64_t>(
+        "callback_ptr"));
+
 #if defined(REACTANT_CUDA)
 
 #include "third_party/gpus/cuda/include/cuComplex.h"
@@ -390,6 +488,8 @@ void registerReactantXLAInternalFFI() {
                            xlaThrowErrorHandlerHost);
   XLA_FFI_REGISTER_HANDLER(xla::ffi::GetXlaFfiApi(), "xla_always_throw_error",
                            "Host", xlaAlwaysThrowErrorHandlerHost);
+  XLA_FFI_REGISTER_HANDLER(xla::ffi::GetXlaFfiApi(), "reactant_julia_callback",
+                           "Host", juliaCallbackHandlerHost);
 }
 
 #else
@@ -399,6 +499,8 @@ void registerReactantXLAInternalFFI() {
                            xlaThrowErrorHandlerHost);
   XLA_FFI_REGISTER_HANDLER(xla::ffi::GetXlaFfiApi(), "xla_always_throw_error",
                            "Host", xlaAlwaysThrowErrorHandlerHost);
+  XLA_FFI_REGISTER_HANDLER(xla::ffi::GetXlaFfiApi(), "reactant_julia_callback",
+                           "Host", juliaCallbackHandlerHost);
 }
 
 #endif
