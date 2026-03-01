@@ -514,7 +514,6 @@ function get_slice_stride(x)
 end
 
 function getindex_linear(a::TracedRArray{T,N}, indices::AbstractArray) where {T,N}
-    @info eltype(indices)
     if !(indices isa Reactant.TracedType || eltype(indices) <: TracedRNumber)
         if length(indices) == 1 && first(indices) isa CartesianIndex
             # fast-path else we will end up with a gather
