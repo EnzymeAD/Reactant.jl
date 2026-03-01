@@ -103,6 +103,7 @@ function initialize_backends(
                 end
             end
 
+            backend.preinitialize_setup_function()
             client = make_client(runtime, backend, args...; kwargs...)
             state.clients[backend.platform_name] = client
             successful_initializations[i] = true
