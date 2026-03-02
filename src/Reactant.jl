@@ -12,6 +12,8 @@ using Libdl: Libdl
 using Reactant_jll: Reactant_jll
 using LLVMOpenMP_jll: LLVMOpenMP_jll
 
+import NestedNumbers
+
 using Adapt: Adapt, WrappedArray
 using GPUArraysCore: GPUArraysCore, @allowscalar, allowscalar
 
