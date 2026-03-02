@@ -453,7 +453,7 @@ using Dates: value, UTInstant
         # Inspired by the usage in SpeedyWeather.jl
 
         # Minimal clock-like mutable struct
-        mutable struct Clock{I, T, TS}
+        mutable struct Clock{I,T,TS}
             n_timesteps::I
             time::T
             time_step::TS
