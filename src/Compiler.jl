@@ -10,7 +10,6 @@ import ..Reactant:
     Reactant,
     MLIR,
     XLA,
-    highlight_MLIR,
     Sharding,
     ConcretePJRTArray,
     ConcretePJRTNumber,
