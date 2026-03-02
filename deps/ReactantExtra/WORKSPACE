@@ -15,7 +15,7 @@ http_archive(
     urls = ["https://github.com/wsmoses/nsync/archive/{commit}.tar.gz".format(commit = NSYNC_COMMIT)],
 )
 
-XPROF_COMMIT = "4f957e315d31061c1109a30d4c14820e715a766f"
+XPROF_COMMIT = "a193bc6485ff2865f284362a038761165d833311"
 
 XPROF_SHA256 = ""
 
