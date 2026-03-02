@@ -55,6 +55,10 @@ TracedRTime(t::Time) = convert(TracedRTime, t)
 TracedRTime{I}(t::Time) where {I} = TracedRTime{I}(TracedRNanosecond(value(t)))
 
 # converting e.g. Int64 to ConcretePJRTNumber
-Base.convert(::Type{UTInstant{P}}, uti::UTInstant{Q}) where {P <: TracedRMillisecond, Q <: TracedRMillisecond} = UTInstant{P}(uti.periods)
+function Base.convert(
+    ::Type{UTInstant{P}}, uti::UTInstant{Q}
+) where {P<:TracedRMillisecond,Q<:TracedRMillisecond}
+    return UTInstant{P}(uti.periods)
+end
 
 Dates.datetime2julian(dt::TracedRDateTime) = (value(dt) - Dates.JULIANEPOCH) / 86400000.0
