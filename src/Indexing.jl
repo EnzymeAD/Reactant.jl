@@ -514,7 +514,7 @@ function get_slice_stride(x)
 end
 
 function getindex_linear(a::TracedRArray{T,N}, indices::AbstractArray) where {T,N}
-    if !(indices isa Reactant.TracedType)
+    if !(indices isa Reactant.TracedType || eltype(indices) <: TracedRNumber)
         if length(indices) == 1 && first(indices) isa CartesianIndex
             # fast-path else we will end up with a gather
             return Reactant.broadcast_to_size(
@@ -541,7 +541,7 @@ function getindex_linear(a::TracedRArray{T,N}, indices::AbstractArray) where {T,
         end
     end
 
-    if !(indices isa TracedRArray)
+    if !(indices isa TracedRArray || eltype(indices) <: TracedRNumber)
         indices = collect(indices)
         eltype(indices) <: CartesianIndex && (indices = LinearIndices(size(a))[indices])
         indices = Reactant.promote_to(TracedRArray{Int}, indices)
