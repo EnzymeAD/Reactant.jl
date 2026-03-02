@@ -4,7 +4,7 @@ NSYNC_COMMIT = "82b118aa7ace3132e517e2c467f8732978cf4023"
 
 NSYNC_SHA256 = ""
 
-ENZYMEXLA_COMMIT = "6938a814d73544ee081c1bf7003e6c1e6946ff0a"
+ENZYMEXLA_COMMIT = "2cc71916bfaa81efb84662a05213138c2c3e2c92"
 
 ENZYMEXLA_SHA256 = ""
 
@@ -13,17 +13,6 @@ http_archive(
     sha256 = NSYNC_SHA256,
     strip_prefix = "nsync-" + NSYNC_COMMIT,
     urls = ["https://github.com/wsmoses/nsync/archive/{commit}.tar.gz".format(commit = NSYNC_COMMIT)],
-)
-
-XPROF_COMMIT = "a193bc6485ff2865f284362a038761165d833311"
-
-XPROF_SHA256 = ""
-
-http_archive(
-    name = "org_xprof",
-    sha256 = XPROF_SHA256,
-    strip_prefix = "xprof-" + XPROF_COMMIT,
-    urls = ["https://github.com/openxla/xprof/archive/{commit}.tar.gz".format(commit = XPROF_COMMIT)],
 )
 
 # Required by Perfetto.
@@ -111,6 +100,9 @@ LLVM_TARGETS = [
 #         "https://github.com/facebook/zstd/releases/download/v1.5.2/zstd-1.5.2.tar.gz"
 #     ],
 # )
+
+load("@enzyme_ad//third_party/xprof:workspace.bzl", xprof_workspace = "repo")
+xprof_workspace()
 
 load("@enzyme_ad//third_party/ml_toolchain:workspace.bzl", ml_toolchain_workspace = "repo")
 
