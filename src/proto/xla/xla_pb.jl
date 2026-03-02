@@ -31,13 +31,13 @@ end
 PB.default_values(::Type{var"ScheduleProto.Instruction"}) = (;id = zero(Int64), start_timestamp_cycles = zero(Float64), end_timestamp_cycles = zero(Float64), memory_usage_after = zero(Int64), peak_memory_after = zero(Int64))
 PB.field_numbers(::Type{var"ScheduleProto.Instruction"}) = (;id = 1, start_timestamp_cycles = 2, end_timestamp_cycles = 3, memory_usage_after = 5, peak_memory_after = 6)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:var"ScheduleProto.Instruction"})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:var"ScheduleProto.Instruction"}, _endpos::Int=0, _group::Bool=false)
     id = zero(Int64)
     start_timestamp_cycles = zero(Float64)
     end_timestamp_cycles = zero(Float64)
     memory_usage_after = zero(Int64)
     peak_memory_after = zero(Int64)
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             id = PB.decode(d, Int64)
@@ -92,11 +92,11 @@ end
 PB.default_values(::Type{ShardableValueUpdatePairProto}) = (;input_parameter_number = zero(Int64), parameter_shape_index = Vector{Int64}(), output_shape_index = Vector{Int64}())
 PB.field_numbers(::Type{ShardableValueUpdatePairProto}) = (;input_parameter_number = 1, parameter_shape_index = 2, output_shape_index = 3)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:ShardableValueUpdatePairProto})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:ShardableValueUpdatePairProto}, _endpos::Int=0, _group::Bool=false)
     input_parameter_number = zero(Int64)
     parameter_shape_index = PB.BufferedVector{Int64}()
     output_shape_index = PB.BufferedVector{Int64}()
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             input_parameter_number = PB.decode(d, Int64)
@@ -138,9 +138,9 @@ end
 PB.default_values(::Type{var"HloModuleConfigProto.Int64List"}) = (;vals = Vector{Int64}())
 PB.field_numbers(::Type{var"HloModuleConfigProto.Int64List"}) = (;vals = 1)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:var"HloModuleConfigProto.Int64List"})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:var"HloModuleConfigProto.Int64List"}, _endpos::Int=0, _group::Bool=false)
     vals = PB.BufferedVector{Int64}()
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             PB.decode!(d, wire_type, vals)
@@ -180,7 +180,7 @@ end
 PB.default_values(::Type{var"ScheduleProto.SchedulerStatisticsProto"}) = (;all_gather_wasted_cycles = zero(Float64), all_reduce_wasted_cycles = zero(Float64), collective_broadcast_wasted_cycles = zero(Float64), collective_permute_wasted_cycles = zero(Float64), all_to_all_wasted_cycles = zero(Float64), ragged_all_to_all_wasted_cycles = zero(Float64), reduce_scatter_wasted_cycles = zero(Float64), send_wasted_cycles = zero(Float64), recv_wasted_cycles = zero(Float64), call_wasted_cycles = zero(Float64), total_wasted_cycles = zero(Float64), total_cycles = zero(Float64), memory_pressure_peak = zero(Int64))
 PB.field_numbers(::Type{var"ScheduleProto.SchedulerStatisticsProto"}) = (;all_gather_wasted_cycles = 1, all_reduce_wasted_cycles = 2, collective_broadcast_wasted_cycles = 3, collective_permute_wasted_cycles = 4, all_to_all_wasted_cycles = 5, ragged_all_to_all_wasted_cycles = 6, reduce_scatter_wasted_cycles = 7, send_wasted_cycles = 8, recv_wasted_cycles = 9, call_wasted_cycles = 10, total_wasted_cycles = 11, total_cycles = 12, memory_pressure_peak = 13)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:var"ScheduleProto.SchedulerStatisticsProto"})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:var"ScheduleProto.SchedulerStatisticsProto"}, _endpos::Int=0, _group::Bool=false)
     all_gather_wasted_cycles = zero(Float64)
     all_reduce_wasted_cycles = zero(Float64)
     collective_broadcast_wasted_cycles = zero(Float64)
@@ -194,7 +194,7 @@ function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:var"ScheduleProto.Schedu
     total_wasted_cycles = zero(Float64)
     total_cycles = zero(Float64)
     memory_pressure_peak = zero(Int64)
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             all_gather_wasted_cycles = PB.decode(d, Float64)
@@ -270,9 +270,9 @@ end
 PB.default_values(::Type{var"HloModuleConfigProto.BoolList"}) = (;vals = Vector{Bool}())
 PB.field_numbers(::Type{var"HloModuleConfigProto.BoolList"}) = (;vals = 1)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:var"HloModuleConfigProto.BoolList"})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:var"HloModuleConfigProto.BoolList"}, _endpos::Int=0, _group::Bool=false)
     vals = PB.BufferedVector{Bool}()
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             PB.decode!(d, wire_type, vals)
@@ -308,9 +308,9 @@ end
 PB.default_values(::Type{GpuCompilationEnvironment}) = (;dummy_flag = zero(Int64))
 PB.field_numbers(::Type{GpuCompilationEnvironment}) = (;dummy_flag = 1)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:GpuCompilationEnvironment})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:GpuCompilationEnvironment}, _endpos::Int=0, _group::Bool=false)
     dummy_flag = zero(Int64)
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             dummy_flag = PB.decode(d, Int64)
@@ -338,9 +338,9 @@ end
 PB.default_values(::Type{var"ScheduleConfigProto.Instruction"}) = (;name = "")
 PB.field_numbers(::Type{var"ScheduleConfigProto.Instruction"}) = (;name = 1)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:var"ScheduleConfigProto.Instruction"})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:var"ScheduleConfigProto.Instruction"}, _endpos::Int=0, _group::Bool=false)
     name = ""
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             name = PB.decode(d, String)
@@ -371,10 +371,10 @@ end
 PB.default_values(::Type{NodeShardingConfigProto}) = (;sharding = nothing, nodes = Vector{NodeShardingConfigProto}())
 PB.field_numbers(::Type{NodeShardingConfigProto}) = (;sharding = 1, nodes = 2)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:NodeShardingConfigProto})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:NodeShardingConfigProto}, _endpos::Int=0, _group::Bool=false)
     sharding = Ref{Union{Nothing,OpSharding}}(nothing)
     nodes = PB.BufferedVector{NodeShardingConfigProto}()
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             PB.decode!(d, sharding)
@@ -407,10 +407,10 @@ end
 PB.default_values(::Type{IntRangeInclusive}) = (;first = zero(Int64), last = zero(Int64))
 PB.field_numbers(::Type{IntRangeInclusive}) = (;first = 1, last = 2)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:IntRangeInclusive})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:IntRangeInclusive}, _endpos::Int=0, _group::Bool=false)
     first = zero(Int64)
     last = zero(Int64)
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             first = PB.decode(d, Int64)
@@ -444,9 +444,9 @@ end
 PB.default_values(::Type{CompilationEnvironmentsProto}) = (;environments = Vector{google.protobuf.var"#Any"}())
 PB.field_numbers(::Type{CompilationEnvironmentsProto}) = (;environments = 1)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:CompilationEnvironmentsProto})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:CompilationEnvironmentsProto}, _endpos::Int=0, _group::Bool=false)
     environments = PB.BufferedVector{google.protobuf.var"#Any"}()
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             PB.decode!(d, environments)
@@ -482,9 +482,9 @@ end
 PB.default_values(::Type{var"HloModuleConfigProto.Int64ListList"}) = (;lists = Vector{var"HloModuleConfigProto.Int64List"}())
 PB.field_numbers(::Type{var"HloModuleConfigProto.Int64ListList"}) = (;lists = 1)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:var"HloModuleConfigProto.Int64ListList"})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:var"HloModuleConfigProto.Int64ListList"}, _endpos::Int=0, _group::Bool=false)
     lists = PB.BufferedVector{var"HloModuleConfigProto.Int64List"}()
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             PB.decode!(d, lists)
@@ -515,12 +515,12 @@ end
 PB.default_values(::Type{var"ScheduleProto.ComputationScheduleProto"}) = (;computation_id = zero(Int64), instructions = Vector{var"ScheduleProto.Instruction"}(), scheduler_statistics = nothing, cycles_per_microsecond = zero(Int64))
 PB.field_numbers(::Type{var"ScheduleProto.ComputationScheduleProto"}) = (;computation_id = 1, instructions = 2, scheduler_statistics = 3, cycles_per_microsecond = 4)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:var"ScheduleProto.ComputationScheduleProto"})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:var"ScheduleProto.ComputationScheduleProto"}, _endpos::Int=0, _group::Bool=false)
     computation_id = zero(Int64)
     instructions = PB.BufferedVector{var"ScheduleProto.Instruction"}()
     scheduler_statistics = Ref{Union{Nothing,var"ScheduleProto.SchedulerStatisticsProto"}}(nothing)
     cycles_per_microsecond = zero(Int64)
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             computation_id = PB.decode(d, Int64)
@@ -560,9 +560,9 @@ end
 PB.default_values(::Type{ScheduleConfigProto}) = (;sequence = Vector{var"ScheduleConfigProto.Instruction"}())
 PB.field_numbers(::Type{ScheduleConfigProto}) = (;sequence = 1)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:ScheduleConfigProto})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:ScheduleConfigProto}, _endpos::Int=0, _group::Bool=false)
     sequence = PB.BufferedVector{var"ScheduleConfigProto.Instruction"}()
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             PB.decode!(d, sequence)
@@ -590,9 +590,9 @@ end
 PB.default_values(::Type{ShardingConfigProto}) = (;nodes = Vector{NodeShardingConfigProto}())
 PB.field_numbers(::Type{ShardingConfigProto}) = (;nodes = 1)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:ShardingConfigProto})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:ShardingConfigProto}, _endpos::Int=0, _group::Bool=false)
     nodes = PB.BufferedVector{NodeShardingConfigProto}()
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             PB.decode!(d, nodes)
@@ -621,10 +621,10 @@ end
 PB.default_values(::Type{ThunkBufferDebugFilter}) = (;thunk_id_ranges = Vector{IntRangeInclusive}(), profile_annotation_regexes = Vector{String}())
 PB.field_numbers(::Type{ThunkBufferDebugFilter}) = (;thunk_id_ranges = 1, profile_annotation_regexes = 2)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:ThunkBufferDebugFilter})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:ThunkBufferDebugFilter}, _endpos::Int=0, _group::Bool=false)
     thunk_id_ranges = PB.BufferedVector{IntRangeInclusive}()
     profile_annotation_regexes = PB.BufferedVector{String}()
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             PB.decode!(d, thunk_id_ranges)
@@ -657,10 +657,10 @@ end
 PB.default_values(::Type{ScheduleProto}) = (;hlo_module = nothing, computation_schedules = Vector{var"ScheduleProto.ComputationScheduleProto"}())
 PB.field_numbers(::Type{ScheduleProto}) = (;hlo_module = 1, computation_schedules = 2)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:ScheduleProto})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:ScheduleProto}, _endpos::Int=0, _group::Bool=false)
     hlo_module = Ref{Union{Nothing,HloModuleProto}}(nothing)
     computation_schedules = PB.BufferedVector{var"ScheduleProto.ComputationScheduleProto"}()
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             PB.decode!(d, hlo_module)
@@ -971,7 +971,7 @@ PB.reserved_fields(::Type{DebugOptions}) = (names = ["hlo_reduce_precision_optio
 PB.default_values(::Type{DebugOptions}) = (;xla_allow_h2h_copy_when_automatic_host_compute_offload_disabled = false, xla_disable_automatic_host_compute_offload = false, xla_enable_hlo_sharding_v3 = false, xla_enable_scoped_logging_timers = false, xla_hlo_pass_fix_detect_cycles = false, xla_keep_shardings_after_spmd = false, xla_unsupported_crash_on_hlo_pass_fix_max_iterations = false, xla_unsupported_crash_on_hlo_pass_noop_change = false, xla_unsupported_crash_on_hlo_pass_silent_hlo_change = false, xla_cpu_collective_call_terminate_timeout_seconds = zero(Int32), xla_cpu_collective_call_warn_stuck_seconds = zero(Int32), xla_cpu_collective_timeout_seconds = zero(Int32), xla_cpu_copy_insertion_use_region_analysis = false, xla_cpu_emitter_verification_level = zero(Int32), xla_cpu_enable_concurrency_optimized_scheduler = false, xla_cpu_enable_fast_math = false, xla_cpu_enable_fast_min_max = false, xla_cpu_enable_platform_dependent_math = false, xla_cpu_experimental_onednn_custom_call = false, xla_cpu_experimental_onednn_fusion_type = Vector{var"DebugOptions.LibraryFusionType".T}(), xla_cpu_experimental_xnn_fusion_type = Vector{var"DebugOptions.LibraryFusionType".T}(), xla_cpu_experimental_xnn_graph_fusion_mode = var"DebugOptions.XnnGraphFusionMode".XNN_GRAPH_FUSION_MODE_DISABLED, xla_cpu_experimental_ynn_fusion_type = Vector{var"DebugOptions.LibraryFusionType".T}(), xla_cpu_fast_math_honor_division = false, xla_cpu_fast_math_honor_functions = false, xla_cpu_fast_math_honor_infs = false, xla_cpu_fast_math_honor_nans = false, xla_cpu_generate_unique_c_style_kernel_entry_points = false, xla_cpu_max_isa = "", xla_cpu_parallel_codegen_split_count = zero(Int32), xla_cpu_prefer_vector_width = zero(Int32), xla_cpu_scheduler_type = var"DebugOptions.CpuSchedulerType".CPU_SCHEDULER_TYPE_DEFAULT, xla_cpu_use_fusion_emitters = false, xla_cpu_use_xnnpack = false, xla_enable_fast_math = false, xla_gpu_experimental_thunk_buffer_debug_filter = nothing, xla_gpu_experimental_autotune_backends = Vector{xla.autotuner.Backend.T}(), xla_dump_hlo_unoptimized_snapshots = false, xla_enable_enzyme_comms_opt = false, xla_gpu_algorithm_denylist_path = "", xla_gpu_all_gather_combine_threshold_bytes = zero(Int64), xla_gpu_all_reduce_blueconnect_num_devices_per_host = zero(Int32), xla_gpu_all_reduce_combine_threshold_bytes = zero(Int64), xla_gpu_analytical_latency_estimator_options = Dict{String,String}(), xla_gpu_async_dot = false, xla_gpu_auto_spmd_partitioning_memory_budget_gb = zero(Int32), xla_gpu_auto_spmd_partitioning_memory_budget_ratio = zero(Float32), xla_gpu_autotune_gemm_rtol = zero(Float32), xla_gpu_autotune_level = zero(Int32), xla_gpu_autotune_max_solutions = zero(Int64), xla_gpu_collect_cost_model_stats = false, xla_gpu_collective_inflation_factor = zero(Int32), xla_gpu_collective_permute_combine_threshold_bytes = zero(Int64), xla_gpu_collective_permute_decomposer_threshold = zero(Int64), xla_gpu_command_buffer_scheduling_mode = var"DebugOptions.CommandBufferSchedulingMode".SERIALIZE, xla_gpu_command_buffer_unroll_loops = false, xla_gpu_copy_insertion_use_region_analysis = false, xla_gpu_crash_on_verification_failures = false, xla_gpu_cublas_fallback = false, xla_gpu_cuda_data_dir = "", xla_gpu_cudnn_gemm_fusion_level = zero(Int32), xla_gpu_cudnn_gemm_max_plans = zero(Int32), xla_gpu_default_to_alg_dot_bf16_bf16_f32 = false, xla_gpu_deterministic_ops = false, xla_gpu_disable_async_collectives = Vector{var"DebugOptions.CollectiveOpType".T}(), xla_gpu_disable_gpuasm_optimizations = false, xla_gpu_dot_merger_threshold_mb = zero(Int32), xla_gpu_dump_autotune_logs_to = "", xla_gpu_dump_autotune_results_to = "", xla_gpu_dump_autotuned_gemm_fusions = false, xla_gpu_dump_autotuned_instructions = false, xla_gpu_dump_llvmir = false, xla_gpu_enable_all_gather_combine_by_dim = false, xla_gpu_enable_analytical_latency_estimator = false, xla_gpu_enable_analytical_sol_latency_estimator = false, xla_gpu_enable_approx_costly_collectives = false, xla_gpu_enable_command_buffer = Vector{var"DebugOptions.CommandBufferCmdType".T}(), xla_gpu_enable_cub_radix_sort = false, xla_gpu_enable_cublaslt = false, xla_gpu_enable_cudnn_int8x32_convolution_reordering = false, xla_gpu_enable_cudnn_layer_norm = false, xla_gpu_enable_dynamic_slice_fusion = false, xla_gpu_enable_fast_min_max = false, xla_gpu_enable_highest_priority_async_stream = false, xla_gpu_enable_host_memory_offloading = false, xla_gpu_enable_latency_hiding_scheduler = false, xla_gpu_enable_libnvptxcompiler = false, xla_gpu_enable_llvm_module_compilation_parallelism = false, xla_gpu_enable_nccl_clique_optimization = false, xla_gpu_enable_nccl_comm_splitting = false, xla_gpu_enable_nccl_user_buffers = false, xla_gpu_enable_pipelined_all_gather = false, xla_gpu_enable_pipelined_all_reduce = false, xla_gpu_enable_pipelined_collectives = false, xla_gpu_enable_pipelined_host_offloading = false, xla_gpu_enable_pipelined_p2p = false, xla_gpu_enable_pipelined_reduce_scatter = false, xla_gpu_enable_reassociation_for_converted_ar = false, xla_gpu_enable_reduce_scatter_combine_by_dim = false, xla_gpu_enable_reduction_epilogue_fusion = false, xla_gpu_enable_scatter_determinism_expander = false, xla_gpu_enable_shared_constants = false, xla_gpu_enable_split_k_autotuning = false, xla_gpu_enable_triton_gemm = false, xla_gpu_enable_while_loop_double_buffering = false, xla_gpu_enable_while_loop_reduce_scatter_code_motion = false, xla_gpu_enable_while_loop_unrolling = var"DebugOptions.WhileLoopUnrolling".WHILE_LOOP_UNROLLING_NO_UNROLL, xla_gpu_exclude_nondeterministic_ops = false, xla_gpu_executable_embed_debug_info = false, xla_gpu_executable_terminate_timeout_seconds = zero(Int32), xla_gpu_executable_warn_stuck_timeout_seconds = zero(Int32), xla_gpu_execution_terminate_timeout = "", xla_gpu_exhaustive_tiling_search = false, xla_gpu_experimental_all_fusions_with_triton = false, xla_gpu_experimental_allow_unroll_factor_eight = false, xla_gpu_experimental_aot_compiled_thunks = false, xla_gpu_experimental_autotune_cache_mode = var"DebugOptions.AutotuneCacheMode".AUTOTUNE_CACHE_MODE_UNSPECIFIED, xla_gpu_experimental_autotuner_cache_dir = "", xla_gpu_experimental_collective_cse_distance_threshold = zero(Int64), xla_gpu_experimental_collective_perf_table_path = "", xla_gpu_experimental_disable_binary_libraries = false, xla_gpu_experimental_dump_fdo_profiles = false, xla_gpu_experimental_dump_gpu_executable = false, xla_gpu_experimental_enable_alltoall_windowed_einsum = false, xla_gpu_experimental_enable_buffer_saver_on_thunks = false, xla_gpu_experimental_enable_checksum_tracing_on_thunks = false, xla_gpu_experimental_enable_fusion_autotuner = false, xla_gpu_experimental_enable_fusion_block_level_rewriter = false, xla_gpu_experimental_enable_heuristic_collective_combining = false, xla_gpu_experimental_enable_nccl_symmetric_buffers = false, xla_gpu_experimental_enable_nvshmem = false, xla_gpu_experimental_enable_split_k_rewrite = false, xla_gpu_experimental_enable_subchannel_dequantisation_fusion = false, xla_gpu_experimental_enable_triton_heroless_priority_fusion = false, xla_gpu_experimental_enable_triton_warp_specialization = false, xla_gpu_experimental_pack_dot_operands_along_k_dimension = false, xla_gpu_experimental_parallel_collective_overlap_limit = zero(Int32), xla_gpu_experimental_pipeline_parallelism_opt_level = var"DebugOptions.PipelineParallelismOptLevel".PIPELINE_PARALLELISM_OPT_LEVEL_DISABLE, xla_gpu_experimental_stream_annotation = false, xla_gpu_experimental_use_autotuner_pass = false, xla_gpu_experimental_use_ragged_dot_fusion = false, xla_gpu_fail_ptx_compilation_on_register_spilling = false, xla_gpu_filter_kernels_spilling_registers_on_autotuning = false, xla_gpu_first_collective_call_terminate_timeout_seconds = zero(Int32), xla_gpu_first_collective_call_warn_stuck_timeout_seconds = zero(Int32), xla_gpu_force_compilation_parallelism = zero(Int32), xla_gpu_force_conv_nchw = false, xla_gpu_force_conv_nhwc = false, xla_gpu_ftz = false, xla_gpu_fused_attention_use_cudnn_rng = false, xla_gpu_gemm_autotuner_override_file = "", xla_gpu_gemm_rewrite_size_threshold = zero(Int64), xla_gpu_generate_debug_info = false, xla_gpu_generate_line_info = false, xla_gpu_graph_enable_concurrent_region = false, xla_gpu_graph_min_graph_size = zero(Int32), xla_gpu_kernel_cache_file = "", xla_gpu_libnvjitlink_mode = var"DebugOptions.LibNvJitLinkMode".LIB_NV_JIT_LINK_MODE_AUTO, xla_gpu_llvm_ir_file = Vector{String}(), xla_gpu_llvm_verification_level = zero(Int32), xla_gpu_load_autotune_results_from = "", xla_gpu_memory_limit_slop_factor = zero(Int32), xla_gpu_mock_custom_calls = false, xla_gpu_multi_streamed_windowed_einsum = false, xla_gpu_nccl_async_execution = false, xla_gpu_nccl_blocking_communicators = false, xla_gpu_nccl_collective_max_nchannels = zero(Int64), xla_gpu_nccl_init_max_rank_per_root_ratio = zero(Int64), xla_gpu_nccl_p2p_max_nchannels = zero(Int64), xla_gpu_nccl_terminate_on_error = false, xla_gpu_nccl_termination_timeout_seconds = zero(Int64), xla_gpu_operand_bytes_threshold_for_windowed_einsum = zero(Int64), xla_gpu_override_gemm_autotuner = "", xla_gpu_per_fusion_autotune_cache_dir = "", xla_gpu_pgle_accuracy_checker = var"DebugOptions.PGLEStrictnessLevel".PGLE_STRICTNESS_LEVEL_OFF, xla_gpu_pgle_profile_file_or_directory_path = "", xla_gpu_print_compilation_stats = false, xla_gpu_ptx_file = Vector{String}(), xla_gpu_reduce_scatter_combine_threshold_bytes = zero(Int64), xla_gpu_redzone_padding_bytes = zero(Int64), xla_gpu_require_complete_aot_autotune_results = false, xla_gpu_require_exclusive_lock = false, xla_gpu_rocm_max_trace_events = zero(Int64), xla_gpu_shape_checks = var"DebugOptions.ShapeChecks".IGNORE, xla_gpu_shard_autotuning = false, xla_gpu_target_config_filename = "", xla_gpu_temp_buffer_use_separate_color = false, xla_gpu_threshold_for_windowed_einsum_mib = zero(Int64), xla_gpu_triton_gemm_any = false, xla_gpu_unsafe_fallback_to_driver_on_ptxas_not_found = false, xla_gpu_unsupported_disable_nested_gemm_fusions = false, xla_gpu_unsupported_enable_all_reduce_decomposer = false, xla_gpu_unsupported_enable_ragged_all_to_all_decomposer = false, xla_gpu_unsupported_enable_ragged_all_to_all_multi_host_decomposer = false, xla_gpu_unsupported_enable_triton_gemm = false, xla_gpu_unsupported_enable_triton_multi_output_fusion = false, xla_gpu_unsupported_override_fast_interconnect_slice_size = zero(Int64), xla_gpu_unsupported_use_all_reduce_one_shot_kernel = false, xla_gpu_unsupported_use_ragged_all_to_all_one_shot_kernel = false, xla_gpu_use_embeded_device_lib = false, xla_gpu_use_inprocess_lld = false, xla_gpu_use_memcpy_local_p2p = false, xla_gpu_use_runtime_fusion = false, xla_gpu_verify_triton_fusion_numerics = false, xla_hlo_graph_addresses = false, xla_hlo_profile = false, xla_disable_hlo_passes = Vector{String}(), xla_enable_hlo_passes_only = Vector{String}(), xla_disable_all_hlo_passes = false, xla_backend_optimization_level = zero(Int32), xla_embed_ir_in_executable = false, xla_eliminate_hlo_implicit_broadcast = false, xla_cpu_multi_thread_eigen = false, xla_llvm_enable_alias_scope_metadata = false, xla_llvm_enable_noalias_metadata = false, xla_llvm_enable_invariant_load_metadata = false, xla_llvm_disable_expensive_passes = false, xla_test_all_output_layouts = false, xla_test_all_input_layouts = false, xla_hlo_graph_sharding_color = false, xla_cpu_use_onednn = false, xla_allow_excess_precision = false, xla_force_host_platform_device_count = zero(Int32), xla_hlo_evaluator_use_fast_path = false, xla_allow_scalar_index_dynamic_ops = false, xla_step_marker_location = var"DebugOptions.StepMarkerLocation".STEP_MARK_AT_ENTRY, xla_dump_to = "", xla_flags_reset = false, xla_dump_hlo_module_re = "", xla_dump_hlo_pass_re = "", xla_dump_emitter_re = "", xla_dump_hlo_as_text = false, xla_dump_hlo_as_proto = false, xla_dump_hlo_as_dot = false, xla_dump_hlo_as_url = false, xla_dump_hlo_as_html = false, xla_dump_fusion_visualization = false, xla_dump_hlo_snapshots = false, xla_dump_include_timestamp = false, xla_dump_max_hlo_modules = zero(Int32), xla_dump_module_metadata = false, xla_dump_compress_protos = false, xla_dump_hlo_as_long_text = false, xla_dump_enable_mlir_pretty_form = false, xla_dump_full_hlo_config = false, xla_tpu_detect_nan = false, xla_tpu_detect_inf = false, xla_cpu_enable_xprof_traceme = false, xla_multiheap_size_constraint_per_heap = zero(Int32), xla_detailed_logging = false, xla_enable_dumping = false, xla_llvm_force_inline_before_split = false, xla_dump_disable_metadata = false, xla_dump_hlo_pipeline_re = "", xla_cpu_use_acl = false, xla_cpu_strict_dot_conv_math = false, xla_dump_latency_hiding_schedule = false, xla_partitioning_algorithm = var"DebugOptions.PartitioningAlgorithm".PARTITIONING_ALGORITHM_NOOP, xla_debug_buffer_assignment_show_max = zero(Int64), xla_detect_unstable_reductions = var"DebugOptions.DetectionMode".DETECTION_MODE_NONE, xla_detect_unstable_reductions_post_optimizations = var"DebugOptions.DetectionMode".DETECTION_MODE_NONE, xla_gpu_detect_nan = var"DebugOptions.DetectionMode".DETECTION_MODE_NONE, xla_gpu_detect_inf = var"DebugOptions.DetectionMode".DETECTION_MODE_NONE, xla_gpu_log_minmax = false, xla_dump_large_constants = false, xla_reduce_window_rewrite_base_length = zero(Int64), xla_cmd_buffer_trace_cache_size = zero(Int64), xla_syntax_sugar_async_ops = false, xla_enable_command_buffers_during_profiling = false, xla_hlo_print_inline_stack_frames = false, xla_ignore_channel_id = false, xla_pjrt_allow_auto_layout_in_hlo = false, xla_test_add_command_buffer_mode = false, xla_gpu_experimental_matmul_perf_table_path = "", xla_early_exit_with_layouts = false, xla_gpu_experimental_scaled_dot_with_triton = false, xla_gpu_experimental_use_raft_select_k = false, xla_gpu_experimental_ragged_all_to_all_use_barrier = false, xla_backend_extra_options = Dict{String,String}())
 PB.field_numbers(::Type{DebugOptions}) = (;xla_allow_h2h_copy_when_automatic_host_compute_offload_disabled = 439, xla_disable_automatic_host_compute_offload = 408, xla_enable_hlo_sharding_v3 = 452, xla_enable_scoped_logging_timers = 436, xla_hlo_pass_fix_detect_cycles = 370, xla_keep_shardings_after_spmd = 419, xla_unsupported_crash_on_hlo_pass_fix_max_iterations = 363, xla_unsupported_crash_on_hlo_pass_noop_change = 379, xla_unsupported_crash_on_hlo_pass_silent_hlo_change = 380, xla_cpu_collective_call_terminate_timeout_seconds = 417, xla_cpu_collective_call_warn_stuck_seconds = 418, xla_cpu_collective_timeout_seconds = 438, xla_cpu_copy_insertion_use_region_analysis = 337, xla_cpu_emitter_verification_level = 395, xla_cpu_enable_concurrency_optimized_scheduler = 307, xla_cpu_enable_fast_math = 99, xla_cpu_enable_fast_min_max = 140, xla_cpu_enable_platform_dependent_math = 425, xla_cpu_experimental_onednn_custom_call = 412, xla_cpu_experimental_onednn_fusion_type = 399, xla_cpu_experimental_xnn_fusion_type = 400, xla_cpu_experimental_xnn_graph_fusion_mode = 365, xla_cpu_experimental_ynn_fusion_type = 422, xla_cpu_fast_math_honor_division = 126, xla_cpu_fast_math_honor_functions = 129, xla_cpu_fast_math_honor_infs = 121, xla_cpu_fast_math_honor_nans = 120, xla_cpu_generate_unique_c_style_kernel_entry_points = 372, xla_cpu_max_isa = 333, xla_cpu_parallel_codegen_split_count = 323, xla_cpu_prefer_vector_width = 308, xla_cpu_scheduler_type = 448, xla_cpu_use_fusion_emitters = 376, xla_cpu_use_xnnpack = 359, xla_enable_fast_math = 335, xla_gpu_experimental_thunk_buffer_debug_filter = 424, xla_gpu_experimental_autotune_backends = 442, xla_dump_hlo_unoptimized_snapshots = 405, xla_enable_enzyme_comms_opt = 429, xla_gpu_algorithm_denylist_path = 128, xla_gpu_all_gather_combine_threshold_bytes = 212, xla_gpu_all_reduce_blueconnect_num_devices_per_host = 159, xla_gpu_all_reduce_combine_threshold_bytes = 157, xla_gpu_analytical_latency_estimator_options = 357, xla_gpu_async_dot = 321, xla_gpu_auto_spmd_partitioning_memory_budget_gb = 224, xla_gpu_auto_spmd_partitioning_memory_budget_ratio = 225, xla_gpu_autotune_gemm_rtol = 316, xla_gpu_autotune_level = 123, xla_gpu_autotune_max_solutions = 288, xla_gpu_collect_cost_model_stats = 240, xla_gpu_collective_inflation_factor = 205, xla_gpu_collective_permute_combine_threshold_bytes = 378, xla_gpu_collective_permute_decomposer_threshold = 237, xla_gpu_command_buffer_scheduling_mode = 404, xla_gpu_command_buffer_unroll_loops = 411, xla_gpu_copy_insertion_use_region_analysis = 236, xla_gpu_crash_on_verification_failures = 101, xla_gpu_cublas_fallback = 247, xla_gpu_cuda_data_dir = 61, xla_gpu_cudnn_gemm_fusion_level = 285, xla_gpu_cudnn_gemm_max_plans = 318, xla_gpu_default_to_alg_dot_bf16_bf16_f32 = 441, xla_gpu_deterministic_ops = 148, xla_gpu_disable_async_collectives = 289, xla_gpu_disable_gpuasm_optimizations = 103, xla_gpu_dot_merger_threshold_mb = 331, xla_gpu_dump_autotune_logs_to = 292, xla_gpu_dump_autotune_results_to = 222, xla_gpu_dump_autotuned_gemm_fusions = 232, xla_gpu_dump_autotuned_instructions = 445, xla_gpu_dump_llvmir = 155, xla_gpu_enable_all_gather_combine_by_dim = 254, xla_gpu_enable_analytical_latency_estimator = 255, xla_gpu_enable_analytical_sol_latency_estimator = 356, xla_gpu_enable_approx_costly_collectives = 305, xla_gpu_enable_command_buffer = 258, xla_gpu_enable_cub_radix_sort = 259, xla_gpu_enable_cublaslt = 166, xla_gpu_enable_cudnn_int8x32_convolution_reordering = 189, xla_gpu_enable_cudnn_layer_norm = 262, xla_gpu_enable_dynamic_slice_fusion = 105, xla_gpu_enable_fast_min_max = 100, xla_gpu_enable_highest_priority_async_stream = 216, xla_gpu_enable_host_memory_offloading = 296, xla_gpu_enable_latency_hiding_scheduler = 186, xla_gpu_enable_libnvptxcompiler = 269, xla_gpu_enable_llvm_module_compilation_parallelism = 268, xla_gpu_enable_nccl_clique_optimization = 244, xla_gpu_enable_nccl_comm_splitting = 272, xla_gpu_enable_nccl_user_buffers = 267, xla_gpu_enable_pipelined_all_gather = 227, xla_gpu_enable_pipelined_all_reduce = 217, xla_gpu_enable_pipelined_collectives = 239, xla_gpu_enable_pipelined_host_offloading = 440, xla_gpu_enable_pipelined_p2p = 246, xla_gpu_enable_pipelined_reduce_scatter = 231, xla_gpu_enable_reassociation_for_converted_ar = 209, xla_gpu_enable_reduce_scatter_combine_by_dim = 257, xla_gpu_enable_reduction_epilogue_fusion = 243, xla_gpu_enable_scatter_determinism_expander = 345, xla_gpu_enable_shared_constants = 165, xla_gpu_enable_split_k_autotuning = 241, xla_gpu_enable_triton_gemm = 188, xla_gpu_enable_while_loop_double_buffering = 248, xla_gpu_enable_while_loop_reduce_scatter_code_motion = 203, xla_gpu_enable_while_loop_unrolling = 294, xla_gpu_exclude_nondeterministic_ops = 297, xla_gpu_executable_embed_debug_info = 437, xla_gpu_executable_terminate_timeout_seconds = 328, xla_gpu_executable_warn_stuck_timeout_seconds = 327, xla_gpu_execution_terminate_timeout = 451, xla_gpu_exhaustive_tiling_search = 219, xla_gpu_experimental_all_fusions_with_triton = 444, xla_gpu_experimental_allow_unroll_factor_eight = 430, xla_gpu_experimental_aot_compiled_thunks = 435, xla_gpu_experimental_autotune_cache_mode = 324, xla_gpu_experimental_autotuner_cache_dir = 407, xla_gpu_experimental_collective_cse_distance_threshold = 374, xla_gpu_experimental_collective_perf_table_path = 377, xla_gpu_experimental_disable_binary_libraries = 329, xla_gpu_experimental_dump_fdo_profiles = 338, xla_gpu_experimental_dump_gpu_executable = 427, xla_gpu_experimental_enable_alltoall_windowed_einsum = 360, xla_gpu_experimental_enable_buffer_saver_on_thunks = 431, xla_gpu_experimental_enable_checksum_tracing_on_thunks = 414, xla_gpu_experimental_enable_fusion_autotuner = 409, xla_gpu_experimental_enable_fusion_block_level_rewriter = 334, xla_gpu_experimental_enable_heuristic_collective_combining = 366, xla_gpu_experimental_enable_nccl_symmetric_buffers = 406, xla_gpu_experimental_enable_nvshmem = 388, xla_gpu_experimental_enable_split_k_rewrite = 386, xla_gpu_experimental_enable_subchannel_dequantisation_fusion = 368, xla_gpu_experimental_enable_triton_heroless_priority_fusion = 340, xla_gpu_experimental_enable_triton_warp_specialization = 421, xla_gpu_experimental_pack_dot_operands_along_k_dimension = 362, xla_gpu_experimental_parallel_collective_overlap_limit = 336, xla_gpu_experimental_pipeline_parallelism_opt_level = 351, xla_gpu_experimental_stream_annotation = 342, xla_gpu_experimental_use_autotuner_pass = 396, xla_gpu_experimental_use_ragged_dot_fusion = 401, xla_gpu_fail_ptx_compilation_on_register_spilling = 353, xla_gpu_filter_kernels_spilling_registers_on_autotuning = 250, xla_gpu_first_collective_call_terminate_timeout_seconds = 392, xla_gpu_first_collective_call_warn_stuck_timeout_seconds = 391, xla_gpu_force_compilation_parallelism = 147, xla_gpu_force_conv_nchw = 125, xla_gpu_force_conv_nhwc = 146, xla_gpu_ftz = 62, xla_gpu_fused_attention_use_cudnn_rng = 235, xla_gpu_gemm_autotuner_override_file = 434, xla_gpu_gemm_rewrite_size_threshold = 283, xla_gpu_generate_debug_info = 348, xla_gpu_generate_line_info = 349, xla_gpu_graph_enable_concurrent_region = 215, xla_gpu_graph_min_graph_size = 208, xla_gpu_kernel_cache_file = 306, xla_gpu_libnvjitlink_mode = 343, xla_gpu_llvm_ir_file = 150, xla_gpu_llvm_verification_level = 256, xla_gpu_load_autotune_results_from = 223, xla_gpu_memory_limit_slop_factor = 260, xla_gpu_mock_custom_calls = 245, xla_gpu_multi_streamed_windowed_einsum = 280, xla_gpu_nccl_async_execution = 393, xla_gpu_nccl_blocking_communicators = 390, xla_gpu_nccl_collective_max_nchannels = 273, xla_gpu_nccl_init_max_rank_per_root_ratio = 277, xla_gpu_nccl_p2p_max_nchannels = 274, xla_gpu_nccl_terminate_on_error = 301, xla_gpu_nccl_termination_timeout_seconds = 163, xla_gpu_operand_bytes_threshold_for_windowed_einsum = 339, xla_gpu_override_gemm_autotuner = 295, xla_gpu_per_fusion_autotune_cache_dir = 310, xla_gpu_pgle_accuracy_checker = 341, xla_gpu_pgle_profile_file_or_directory_path = 210, xla_gpu_print_compilation_stats = 454, xla_gpu_ptx_file = 127, xla_gpu_reduce_scatter_combine_threshold_bytes = 213, xla_gpu_redzone_padding_bytes = 228, xla_gpu_require_complete_aot_autotune_results = 284, xla_gpu_require_exclusive_lock = 347, xla_gpu_rocm_max_trace_events = 449, xla_gpu_shape_checks = 170, xla_gpu_shard_autotuning = 304, xla_gpu_target_config_filename = 261, xla_gpu_temp_buffer_use_separate_color = 312, xla_gpu_threshold_for_windowed_einsum_mib = 265, xla_gpu_triton_gemm_any = 190, xla_gpu_unsafe_fallback_to_driver_on_ptxas_not_found = 138, xla_gpu_unsupported_disable_nested_gemm_fusions = 443, xla_gpu_unsupported_enable_all_reduce_decomposer = 384, xla_gpu_unsupported_enable_ragged_all_to_all_decomposer = 350, xla_gpu_unsupported_enable_ragged_all_to_all_multi_host_decomposer = 415, xla_gpu_unsupported_enable_triton_gemm = 322, xla_gpu_unsupported_enable_triton_multi_output_fusion = 382, xla_gpu_unsupported_override_fast_interconnect_slice_size = 416, xla_gpu_unsupported_use_all_reduce_one_shot_kernel = 387, xla_gpu_unsupported_use_ragged_all_to_all_one_shot_kernel = 375, xla_gpu_use_embeded_device_lib = 420, xla_gpu_use_inprocess_lld = 389, xla_gpu_use_memcpy_local_p2p = 287, xla_gpu_use_runtime_fusion = 181, xla_gpu_verify_triton_fusion_numerics = 291, xla_hlo_graph_addresses = 2, xla_hlo_profile = 9, xla_disable_hlo_passes = 30, xla_enable_hlo_passes_only = 124, xla_disable_all_hlo_passes = 104, xla_backend_optimization_level = 31, xla_embed_ir_in_executable = 33, xla_eliminate_hlo_implicit_broadcast = 35, xla_cpu_multi_thread_eigen = 60, xla_llvm_enable_alias_scope_metadata = 70, xla_llvm_enable_noalias_metadata = 71, xla_llvm_enable_invariant_load_metadata = 72, xla_llvm_disable_expensive_passes = 73, xla_test_all_output_layouts = 90, xla_test_all_input_layouts = 91, xla_hlo_graph_sharding_color = 92, xla_cpu_use_onednn = 97, xla_allow_excess_precision = 122, xla_force_host_platform_device_count = 102, xla_hlo_evaluator_use_fast_path = 106, xla_allow_scalar_index_dynamic_ops = 107, xla_step_marker_location = 108, xla_dump_to = 109, xla_flags_reset = 364, xla_dump_hlo_module_re = 110, xla_dump_hlo_pass_re = 111, xla_dump_emitter_re = 433, xla_dump_hlo_as_text = 112, xla_dump_hlo_as_proto = 113, xla_dump_hlo_as_dot = 114, xla_dump_hlo_as_url = 115, xla_dump_hlo_as_html = 116, xla_dump_fusion_visualization = 149, xla_dump_hlo_snapshots = 118, xla_dump_include_timestamp = 131, xla_dump_max_hlo_modules = 132, xla_dump_module_metadata = 144, xla_dump_compress_protos = 151, xla_dump_hlo_as_long_text = 164, xla_dump_enable_mlir_pretty_form = 185, xla_dump_full_hlo_config = 381, xla_tpu_detect_nan = 135, xla_tpu_detect_inf = 136, xla_cpu_enable_xprof_traceme = 137, xla_multiheap_size_constraint_per_heap = 142, xla_detailed_logging = 252, xla_enable_dumping = 253, xla_llvm_force_inline_before_split = 300, xla_dump_disable_metadata = 153, xla_dump_hlo_pipeline_re = 154, xla_cpu_use_acl = 174, xla_cpu_strict_dot_conv_math = 175, xla_dump_latency_hiding_schedule = 182, xla_partitioning_algorithm = 187, xla_debug_buffer_assignment_show_max = 251, xla_detect_unstable_reductions = 403, xla_detect_unstable_reductions_post_optimizations = 432, xla_gpu_detect_nan = 426, xla_gpu_detect_inf = 428, xla_gpu_log_minmax = 453, xla_dump_large_constants = 290, xla_reduce_window_rewrite_base_length = 293, xla_cmd_buffer_trace_cache_size = 311, xla_syntax_sugar_async_ops = 315, xla_enable_command_buffers_during_profiling = 317, xla_hlo_print_inline_stack_frames = 447, xla_ignore_channel_id = 330, xla_pjrt_allow_auto_layout_in_hlo = 344, xla_test_add_command_buffer_mode = 373, xla_gpu_experimental_matmul_perf_table_path = 383, xla_early_exit_with_layouts = 397, xla_gpu_experimental_scaled_dot_with_triton = 410, xla_gpu_experimental_use_raft_select_k = 413, xla_gpu_experimental_ragged_all_to_all_use_barrier = 450, xla_backend_extra_options = 500)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:DebugOptions})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:DebugOptions}, _endpos::Int=0, _group::Bool=false)
     xla_allow_h2h_copy_when_automatic_host_compute_offload_disabled = false
     xla_disable_automatic_host_compute_offload = false
     xla_enable_hlo_sharding_v3 = false
@@ -1251,7 +1251,7 @@ function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:DebugOptions})
     xla_gpu_experimental_use_raft_select_k = false
     xla_gpu_experimental_ragged_all_to_all_use_barrier = false
     xla_backend_extra_options = Dict{String,String}()
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 439
             xla_allow_h2h_copy_when_automatic_host_compute_offload_disabled = PB.decode(d, Bool)
@@ -2432,7 +2432,7 @@ PB.reserved_fields(::Type{HloModuleConfigProto}) = (names = ["flag_config"], num
 PB.default_values(::Type{HloModuleConfigProto}) = (;entry_computation_layout = nothing, seed = zero(UInt64), launch_id = zero(Int32), replica_count = zero(Int64), num_partitions = zero(Int64), param_requires_broadcast_via_collectives = Vector{Bool}(), use_spmd_partitioning = false, use_auto_spmd_partitioning = false, auto_spmd_partitioning_mesh_shape = Vector{Int64}(), auto_spmd_partitioning_mesh_ids = Vector{Int64}(), exec_time_optimization_effort = zero(Float32), memory_fitting_effort = zero(Float32), optimization_level = var"ExecutionOptions.EffortLevel".EFFORT_UNKNOWN, memory_fitting_level = var"ExecutionOptions.EffortLevel".EFFORT_UNKNOWN, deduplicate_hlo = false, intra_op_parallelism_threads = zero(Int64), device_type = "", debug_options = nothing, static_device_assignment = nothing, pre_simulation_device_assignment = nothing, allow_separate_sharding_programs = false, shardable_value_update_pairs = Vector{ShardableValueUpdatePairProto}(), alias_passthrough_params = false, content_aware_computation_sorting = false, fusion_config_collection = var"HloModuleConfigProto.FusionConfigCollection".OFF, fusion_config = Vector{var"HloModuleConfigProto.BoolList"}(), dot_config = Dict{String,var"HloModuleConfigProto.Int64List"}(), layout_config = Vector{var"HloModuleConfigProto.Int64ListList"}(), memory_space_assignment_config = Vector{UInt64}(), phase_ordering_config = Vector{var"HloModuleConfigProto.BoolList"}(), phase_index = zero(Int32), allow_spmd_sharding_propagation_to_parameters = Vector{Bool}(), allow_spmd_sharding_propagation_to_output = Vector{Bool}(), analysis_allowance_map = Dict{String,Int64}(), matrix_unit_operand_precision = var"PrecisionConfig.Precision".DEFAULT, fdo_profile = UInt8[], device_memory_size = zero(Int64), use_shardy_partitioner = false, sharding_config = nothing, schedule_config = nothing, partition_size = zero(Int64))
 PB.field_numbers(::Type{HloModuleConfigProto}) = (;entry_computation_layout = 1, seed = 2, launch_id = 3, replica_count = 4, num_partitions = 5, param_requires_broadcast_via_collectives = 6, use_spmd_partitioning = 7, use_auto_spmd_partitioning = 8, auto_spmd_partitioning_mesh_shape = 9, auto_spmd_partitioning_mesh_ids = 10, exec_time_optimization_effort = 36, memory_fitting_effort = 37, optimization_level = 39, memory_fitting_level = 40, deduplicate_hlo = 11, intra_op_parallelism_threads = 12, device_type = 13, debug_options = 14, static_device_assignment = 15, pre_simulation_device_assignment = 35, allow_separate_sharding_programs = 30, shardable_value_update_pairs = 16, alias_passthrough_params = 17, content_aware_computation_sorting = 18, fusion_config_collection = 19, fusion_config = 20, dot_config = 21, layout_config = 22, memory_space_assignment_config = 23, phase_ordering_config = 24, phase_index = 25, allow_spmd_sharding_propagation_to_parameters = 33, allow_spmd_sharding_propagation_to_output = 27, analysis_allowance_map = 28, matrix_unit_operand_precision = 29, fdo_profile = 31, device_memory_size = 32, use_shardy_partitioner = 34, sharding_config = 38, schedule_config = 41, partition_size = 42)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:HloModuleConfigProto})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:HloModuleConfigProto}, _endpos::Int=0, _group::Bool=false)
     entry_computation_layout = Ref{Union{Nothing,ProgramShapeProto}}(nothing)
     seed = zero(UInt64)
     launch_id = zero(Int32)
@@ -2474,7 +2474,7 @@ function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:HloModuleConfigProto})
     sharding_config = Ref{Union{Nothing,ShardingConfigProto}}(nothing)
     schedule_config = Ref{Union{Nothing,ScheduleConfigProto}}(nothing)
     partition_size = zero(Int64)
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             PB.decode!(d, entry_computation_layout)
@@ -2688,7 +2688,7 @@ PB.reserved_fields(::Type{ExecutionOptions}) = (names = ["broadcast_replicated_p
 PB.default_values(::Type{ExecutionOptions}) = (;shape_with_output_layout = nothing, seed = zero(UInt64), debug_options = nothing, device_handles = Vector{DeviceHandle}(), num_replicas = zero(Int32), device_assignment = nothing, alias_passthrough_params = false, num_partitions = zero(Int32), launch_id = zero(Int32), use_spmd_partitioning = false, use_auto_spmd_partitioning = false, auto_spmd_partitioning_mesh_shape = Vector{Int64}(), auto_spmd_partitioning_mesh_ids = Vector{Int64}(), exec_time_optimization_effort = zero(Float32), memory_fitting_effort = zero(Float32), optimization_level = var"ExecutionOptions.EffortLevel".EFFORT_UNKNOWN, memory_fitting_level = var"ExecutionOptions.EffortLevel".EFFORT_UNKNOWN, deduplicate_hlo = false, allow_spmd_sharding_propagation_to_parameters = Vector{Bool}(), allow_spmd_sharding_propagation_to_output = Vector{Bool}(), param_requires_broadcast_via_collectives = Vector{Bool}(), allow_separate_sharding_programs = false, shardable_value_update_pairs = Vector{ShardableValueUpdatePairProto}(), fdo_profile = UInt8[], device_memory_size = zero(Int64), use_shardy_partitioner = false)
 PB.field_numbers(::Type{ExecutionOptions}) = (;shape_with_output_layout = 2, seed = 3, debug_options = 4, device_handles = 5, num_replicas = 6, device_assignment = 7, alias_passthrough_params = 8, num_partitions = 9, launch_id = 10, use_spmd_partitioning = 11, use_auto_spmd_partitioning = 15, auto_spmd_partitioning_mesh_shape = 16, auto_spmd_partitioning_mesh_ids = 17, exec_time_optimization_effort = 25, memory_fitting_effort = 26, optimization_level = 27, memory_fitting_level = 28, deduplicate_hlo = 12, allow_spmd_sharding_propagation_to_parameters = 23, allow_spmd_sharding_propagation_to_output = 14, param_requires_broadcast_via_collectives = 18, allow_separate_sharding_programs = 19, shardable_value_update_pairs = 20, fdo_profile = 21, device_memory_size = 22, use_shardy_partitioner = 24)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:ExecutionOptions})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:ExecutionOptions}, _endpos::Int=0, _group::Bool=false)
     shape_with_output_layout = Ref{Union{Nothing,ShapeProto}}(nothing)
     seed = zero(UInt64)
     debug_options = Ref{Union{Nothing,DebugOptions}}(nothing)
@@ -2715,7 +2715,7 @@ function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:ExecutionOptions})
     fdo_profile = UInt8[]
     device_memory_size = zero(Int64)
     use_shardy_partitioner = false
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 2
             PB.decode!(d, shape_with_output_layout)
@@ -2844,10 +2844,10 @@ end
 PB.default_values(::Type{HloModuleProtoWithConfig}) = (;hlo_module = nothing, config = nothing)
 PB.field_numbers(::Type{HloModuleProtoWithConfig}) = (;hlo_module = 1, config = 2)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:HloModuleProtoWithConfig})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:HloModuleProtoWithConfig}, _endpos::Int=0, _group::Bool=false)
     hlo_module = Ref{Union{Nothing,HloModuleProto}}(nothing)
     config = Ref{Union{Nothing,HloModuleConfigProto}}(nothing)
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             PB.decode!(d, hlo_module)

@@ -14268,10 +14268,10 @@ function ifrt_loaded_executable_execute(
     @ccall mlir_c.ifrt_loaded_executable_execute(
         exec::Ptr{HeldIfrtLoadedExecutable},
         num_args::Cint,
-        op_args::Ptr{Ptr{Cint}},
+        op_args::Ptr{Ptr{HeldIfrtArray}},
         is_arg_donatable::Ptr{UInt8},
         num_results::Cint,
-        op_results::Ptr{Ptr{Cint}},
+        op_results::Ptr{Ptr{HeldIfrtArray}},
         futures::Ptr{UInt8},
         status::Ptr{Ptr{FutureType}},
     )::Cvoid

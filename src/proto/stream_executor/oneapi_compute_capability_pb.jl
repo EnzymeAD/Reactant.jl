@@ -12,10 +12,10 @@ end
 PB.default_values(::Type{OneAPIComputeCapabilityProto}) = (;architecture = "", variant = "")
 PB.field_numbers(::Type{OneAPIComputeCapabilityProto}) = (;architecture = 1, variant = 2)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:OneAPIComputeCapabilityProto})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:OneAPIComputeCapabilityProto}, _endpos::Int=0, _group::Bool=false)
     architecture = ""
     variant = ""
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             architecture = PB.decode(d, String)

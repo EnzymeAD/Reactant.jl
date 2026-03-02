@@ -19,7 +19,7 @@ end
 PB.default_values(::Type{JobInfo}) = (;name = "", cell = "", user = "", uid = zero(Int64), task_id = zero(Int64), task_uid = zero(Int64), process_id = zero(Int64), thread_id = zero(Int64))
 PB.field_numbers(::Type{JobInfo}) = (;name = 1, cell = 2, user = 3, uid = 4, task_id = 5, task_uid = 6, process_id = 7, thread_id = 8)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:JobInfo})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:JobInfo}, _endpos::Int=0, _group::Bool=false)
     name = ""
     cell = ""
     user = ""
@@ -28,7 +28,7 @@ function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:JobInfo})
     task_uid = zero(Int64)
     process_id = zero(Int64)
     thread_id = zero(Int64)
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             name = PB.decode(d, String)
@@ -85,10 +85,10 @@ end
 PB.default_values(::Type{TagMetric}) = (;key = "", value = "")
 PB.field_numbers(::Type{TagMetric}) = (;key = 1, value = 2)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:TagMetric})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:TagMetric}, _endpos::Int=0, _group::Bool=false)
     key = ""
     value = ""
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             key = PB.decode(d, String)
@@ -123,10 +123,10 @@ end
 PB.default_values(::Type{KeyValueMetric}) = (;key = "", value = zero(Int64))
 PB.field_numbers(::Type{KeyValueMetric}) = (;key = 1, value = 2)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:KeyValueMetric})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:KeyValueMetric}, _endpos::Int=0, _group::Bool=false)
     key = ""
     value = zero(Int64)
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             key = PB.decode(d, String)
@@ -162,13 +162,13 @@ end
 PB.default_values(::Type{PassMetrics}) = (;module_id = zero(UInt64), pass_name = "", pass_duration = nothing, custom_metrics = nothing, kv_metrics = Vector{KeyValueMetric}())
 PB.field_numbers(::Type{PassMetrics}) = (;module_id = 1, pass_name = 2, pass_duration = 3, custom_metrics = 4, kv_metrics = 5)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:PassMetrics})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:PassMetrics}, _endpos::Int=0, _group::Bool=false)
     module_id = zero(UInt64)
     pass_name = ""
     pass_duration = Ref{Union{Nothing,google.protobuf.Duration}}(nothing)
     custom_metrics = Ref{Union{Nothing,google.protobuf.var"#Any"}}(nothing)
     kv_metrics = PB.BufferedVector{KeyValueMetric}()
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             module_id = PB.decode(d, UInt64)
@@ -220,7 +220,7 @@ end
 PB.default_values(::Type{CompilationLogEntry}) = (;timestamp = nothing, stage = var"CompilationLogEntry.CompilationStage".UNSPECIFIED, duration = nothing, task_index = zero(Int32), pass_metrics = Vector{PassMetrics}(), module_ids = Vector{UInt64}(), job_info = nothing, hlo_module_name = "", tag = Vector{TagMetric}())
 PB.field_numbers(::Type{CompilationLogEntry}) = (;timestamp = 1, stage = 2, duration = 3, task_index = 4, pass_metrics = 5, module_ids = 6, job_info = 7, hlo_module_name = 8, tag = 9)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:CompilationLogEntry})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:CompilationLogEntry}, _endpos::Int=0, _group::Bool=false)
     timestamp = Ref{Union{Nothing,google.protobuf.Timestamp}}(nothing)
     stage = var"CompilationLogEntry.CompilationStage".UNSPECIFIED
     duration = Ref{Union{Nothing,google.protobuf.Duration}}(nothing)
@@ -230,7 +230,7 @@ function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:CompilationLogEntry})
     job_info = Ref{Union{Nothing,JobInfo}}(nothing)
     hlo_module_name = ""
     tag = PB.BufferedVector{TagMetric}()
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             PB.decode!(d, timestamp)

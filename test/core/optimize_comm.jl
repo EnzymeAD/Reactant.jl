@@ -137,7 +137,8 @@ if length(addressable_devices) ≥ 8
         @test !contains(hlo, "all-to-all")
         @test !contains(hlo, "all-reduce")
         @test !contains(hlo, "all-gather")
-        @test length(collect(eachmatch(r"%collective-permute[\.0-9]* =", hlo))) == 2
+        @test length(collect(eachmatch(r"%collective-permute(-start)?[\.0-9]* =", hlo))) ==
+            2
     end
 end
 
@@ -149,9 +150,9 @@ function wrap(x)
     return res
 end
 
-if length(addressable_devices) ≥ 2
-    @testset "Wrap Size ($Size)" for Size in [20, 22, 28]
-        begin
+@testset "Wrap Size" begin
+    if length(addressable_devices) ≥ 2
+        @testset "Wrap Size ($Size)" for Size in [20, 22, 28]
             N = 2
             mesh = Sharding.Mesh(reshape(Reactant.devices()[1:N], 2), (:x,))
             sharding = Sharding.NamedSharding(mesh, (:x,))
@@ -160,12 +161,23 @@ if length(addressable_devices) ≥ 2
             rx = Reactant.to_rarray(x; sharding)
 
             hlo = repr(@code_xla shardy_passes = :to_mhlo_shardings wrap(rx))
+
+            Nallgathers = length(collect(eachmatch(r"%all-gather(-start)?[\.0-9]* =", hlo)))
+            Ncollectives = length(
+                collect(eachmatch(r"%collective-permute(-start)?[\.0-9]* =", hlo))
+            )
+
+            if Nallgathers != 1 || Ncollectives != 2
+                # for debugging print hlo
+                println(hlo)
+            end
+
             @test !contains(hlo, "all-to-all")
             @test !contains(hlo, "all-reduce")
             # 1 all gather exists for the result sharding
-            @test length(collect(eachmatch(r"%all-gather[\.0-9]* =", hlo))) == 1
+            @test Nallgathers == 1
             # 2 collective permutes exist for the left/right halos
-            @test length(collect(eachmatch(r"%collective-permute[\.0-9]* =", hlo))) == 2
+            @test Ncollectives == 2
 
             x2 = wrap(x)
             rx2 = @jit shardy_passes = :to_mhlo_shardings wrap(rx)
@@ -202,13 +214,13 @@ function multirotate_both(x, sz)
     return (nrotate(x, 1), x, nrotate(x, size(x, 1) - 1), nrotate(x, size(x, 1) - 2))
 end
 
-if length(addressable_devices) ≥ 2
-    @testset "MultiRotate $mr $size" for mr in (
-            multirotate_left, multirotate_right, multirotate_both
-        ),
-        size in (20, 21)
+@testset "MultiRotate" begin
+    if length(addressable_devices) ≥ 2
+        @testset "MultiRotate $mr $size" for mr in (
+                multirotate_left, multirotate_right, multirotate_both
+            ),
+            size in (20, 21)
 
-        begin
             N = min((length(Reactant.devices()) ÷ 2) * 2, 2)
 
             mesh = Sharding.Mesh(reshape(Reactant.devices()[1:N], 2), (:x,))
@@ -221,21 +233,24 @@ if length(addressable_devices) ≥ 2
             hlo = repr(@code_xla shardy_passes = :to_mhlo_shardings mr(rx, size))
             y = mr(x, size)
 
+            Nallgathers = length(collect(eachmatch(r"%all-gather(-start)?[\.0-9]* =", hlo)))
+            Ncollectives = length(
+                collect(eachmatch(r"%collective-permute(-start)?[\.0-9]* =", hlo))
+            )
+
+            expected_allgathers = size2 == size ? 0 : length(y)
+            expected_collectives = mr == multirotate_both ? 2 : 1
+
+            if Nallgathers != expected_allgathers || Ncollectives != expected_collectives
+                # for debugging print hlo
+                println(hlo)
+            end
+
             @test !contains(hlo, "all-to-all")
             @test !contains(hlo, "all-reduce")
             @test !contains(hlo, "copy")
-
-            if mr == multirotate_both
-                @test length(collect(eachmatch(r"%collective-permute[\.0-9]* =", hlo))) == 2
-            else
-                @test length(collect(eachmatch(r"%collective-permute[\.0-9]* =", hlo))) == 1
-            end
-
-            if size2 == size
-                @test length(collect(eachmatch(r"%all-gather[\.0-9]* =", hlo))) == 0
-            else
-                @test length(collect(eachmatch(r"%all-gather[\.0-9]* =", hlo))) == length(y)
-            end
+            @test Ncollectives == expected_collectives
+            @test Nallgathers == expected_allgathers
 
             ry = @jit shardy_passes = :to_mhlo_shardings mr(rx, size)
 

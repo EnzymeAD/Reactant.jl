@@ -1490,6 +1490,7 @@ function run_pass_pipeline!(
     pm = MLIR.IR.PassManager()
     MLIR.IR.enable_verifier!(pm, enable_verifier)
     opm = MLIR.IR.OpPassManager(pm)
+    # TODO: why isn't this being auto-generated?
     @ccall MLIR.API.mlir_c.addSdyPropagationPipeline(
         opm::MLIR.API.MlirOpPassManager,
         propagation_options.keep_sharding_rules::UInt8,
@@ -1526,21 +1527,16 @@ function create_pass_failure_zip(f, args)
         # Create a temporary directory for the files
         temp_dir = mktempdir(; prefix="reactant_failure_", cleanup=false)
 
-        script_path = nothing
-
         function_name = string(f)
         function_name = replace(function_name, "!" => "_")
-        try
-            script_path = Reactant.Serialization.export_to_reactant_script(
-                f,
-                args...;
-                function_name,
-                output_dir=temp_dir,
-                compile_options=Reactant.CompileOptions(; optimization_passes=:none),
-            )
-        catch e
-            @debug "Could not create Julia script for reproducing the error" exception = e
-        end
+        Reactant.Serialization.export_to_reactant_script(
+            f,
+            args...;
+            function_name,
+            output_dir=temp_dir,
+            compile_options=Reactant.CompileOptions(; optimization_passes=:none),
+            try_zip_on_failure=false,
+        )
 
         # Create the zip file
         zip_path = temp_dir * ".zip"
@@ -1617,7 +1613,13 @@ function __get_compile_options_and_kwargs(;
 end
 
 function compile_mlir(
-    ctx, f, args; client=nothing, drop_unsupported_attributes=false, kwargs...
+    ctx,
+    f,
+    args;
+    client=nothing,
+    drop_unsupported_attributes=false,
+    try_zip_on_failure::Bool=true,
+    kwargs...,
 )
     client = client !== nothing ? client : XLA.default_backend()
     backend = XLA.platform_name(client)
@@ -1650,16 +1652,28 @@ function compile_mlir(
             # Check if this is a pass pipeline failure
             error_msg = string(e)
             if contains(error_msg, "failed to run pass manager")
+                # Prevent infinite recursion
+                if !try_zip_on_failure
+                    rethrow(
+                        ErrorException(
+                            "Compilation failed and we were unable to create a debug zip \
+                            file.\nPlease report this issue at: \
+                            https://github.com/EnzymeAD/Reactant.jl/issues\n\
+                            Original error: $(error_msg)",
+                        ),
+                    )
+                end
+
                 # Create a debug zip file with the unoptimized IR
                 zip_path = create_pass_failure_zip(f, args)
                 if zip_path !== nothing
                     rethrow(
                         ErrorException(
-                            "Compilation failed during pass pipeline execution.\n" *
-                            "A debug zip file has been created at: $(zip_path)\n" *
-                            "Please upload this file when reporting the issue at: " *
-                            "https://github.com/EnzymeAD/Reactant.jl/issues\n" *
-                            "Original error: $(error_msg)",
+                            "Compilation failed during pass pipeline execution.\n\
+                            A debug zip file has been created at: $(zip_path)\n\
+                            Please upload this file when reporting the issue at: \
+                            https://github.com/EnzymeAD/Reactant.jl/issues\n\
+                            Original error: $(error_msg)"
                         ),
                     )
                 end
@@ -1699,12 +1713,12 @@ const cuOptLevel = Ref{Int}(2)
 #                                      12.2 -> 82
 #                                      11.8 -> 78
 function cubinFeatures()
-    ver = @ccall MLIR.API.mlir_c.ReactantCudaDriverGetVersion()::UInt32
+    ver = MLIR.API.ReactantCudaDriverGetVersion()
     # No cuda available
     if ver == 0
         return "+ptx86"
     end
-    ver2 = @ccall MLIR.API.mlir_c.ReactantHermeticCudaGetVersion()::UInt32
+    ver2 = MLIR.API.ReactantHermeticCudaGetVersion()
     ver = min(ver, ver2)
     major, ver = divrem(ver, 1000)
     minor, _ = divrem(ver, 10)
@@ -2617,7 +2631,9 @@ function compile_mlir!(
         end
     end
 
-    run_pass_pipeline!(mod, "mark-func-memory-effects", "mark-func-memory-effects")
+    if compile_options.optimization_passes !== :none
+        run_pass_pipeline!(mod, "mark-func-memory-effects", "mark-func-memory-effects")
+    end
 
     if compile_options.strip isa Symbol
         @assert compile_options.strip == :all
