@@ -1,4 +1,4 @@
-using Enzyme, Reactant, Test, Random, Statistics
+using Enzyme, Reactant, Test, Random, Statistics, FileCheck
 
 square(x) = x * 2
 
@@ -190,7 +190,10 @@ end
 @testset "onehot" begin
     x = Reactant.to_rarray(ones(3, 4))
     hlo = @code_hlo optimize = false Enzyme.onehot(x)
-    @test !contains("stablehlo.constant", repr(hlo))
+    @test @filecheck begin
+        @check_not "stablehlo.constant"
+        repr(hlo)
+    end
 end
 
 fn(x) = sum(abs2, x)
@@ -298,7 +301,10 @@ end
 
     @test begin
         hlo = @code_hlo gradient_fn(x, st)
-        contains(repr(hlo), "stablehlo.rng_bit_generator")
+        @filecheck begin
+            @check "stablehlo.rng_bit_generator"
+            repr(hlo)
+        end
     end
 end
 

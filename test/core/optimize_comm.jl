@@ -1,4 +1,4 @@
-using Reactant, Test
+using Reactant, Test, FileCheck
 
 const addressable_devices = Reactant.addressable_devices()
 
@@ -44,10 +44,13 @@ if length(addressable_devices) ≥ 8
         rx = Reactant.to_rarray(x; sharding)
 
         hlo = repr(@code_xla shardy_passes = :to_mhlo_shardings rotate(rx))
-        @test !contains(hlo, "all-to-all")
-        @test !contains(hlo, "all-reduce")
-        @test !contains(hlo, "all-gather")
-        @test contains(hlo, "collective-permute")
+        @test @filecheck begin
+            @check_not "all-to-all"
+            @check_not "all-reduce"
+            @check_not "all-gather"
+            @check "collective-permute"
+            hlo
+        end
 
         rotate(x)
         @jit shardy_passes = :to_mhlo_shardings rotate(rx)
@@ -64,10 +67,13 @@ if length(addressable_devices) ≥ 8
         rx = Reactant.to_rarray(x; sharding)
 
         hlo = repr(@code_xla shardy_passes = :to_mhlo_shardings pad(rx))
-        @test !contains(hlo, "all-to-all")
-        @test !contains(hlo, "all-reduce")
-        @test !contains(hlo, "all-gather")
-        @test contains(hlo, "collective-permute")
+        @test @filecheck begin
+            @check_not "all-to-all"
+            @check_not "all-reduce"
+            @check_not "all-gather"
+            @check "collective-permute"
+            hlo
+        end
 
         # No non reactant version available res = pad(x)
         r_res = @jit shardy_passes = :to_mhlo_shardings pad(rx)
@@ -88,10 +94,13 @@ if length(addressable_devices) ≥ 8
         ry = Reactant.to_rarray(y; sharding)
 
         hlo = repr(@code_xla shardy_passes = :to_mhlo_shardings dus(rx, ry))
-        @test !contains(hlo, "all-to-all")
-        @test !contains(hlo, "all-reduce")
-        @test !contains(hlo, "all-gather")
-        @test contains(hlo, "collective-permute")
+        @test @filecheck begin
+            @check_not "all-to-all"
+            @check_not "all-reduce"
+            @check_not "all-gather"
+            @check "collective-permute"
+            hlo
+        end
 
         dus(x, y)
         @jit shardy_passes = :to_mhlo_shardings dus(rx, ry)
@@ -113,10 +122,13 @@ if length(addressable_devices) ≥ 8
         ry = Reactant.to_rarray(y; sharding)
 
         hlo = repr(@code_xla shardy_passes = :to_mhlo_shardings dus2(rx, ry))
-        @test !contains(hlo, "all-to-all")
-        @test !contains(hlo, "all-reduce")
-        @test !contains(hlo, "all-gather")
-        @test contains(hlo, "collective-permute")
+        @test @filecheck begin
+            @check_not "all-to-all"
+            @check_not "all-reduce"
+            @check_not "all-gather"
+            @check "collective-permute"
+            hlo
+        end
 
         dus2(x, y)
         @jit shardy_passes = :to_mhlo_shardings dus2(rx, ry)
@@ -134,9 +146,12 @@ if length(addressable_devices) ≥ 8
         rx = Reactant.to_rarray(x; sharding)
 
         hlo = repr(@code_xla shardy_passes = :to_mhlo_shardings multirot(rx))
-        @test !contains(hlo, "all-to-all")
-        @test !contains(hlo, "all-reduce")
-        @test !contains(hlo, "all-gather")
+        @test @filecheck begin
+            @check_not "all-to-all"
+            @check_not "all-reduce"
+            @check_not "all-gather"
+            hlo
+        end
         @test length(collect(eachmatch(r"%collective-permute(-start)?[\.0-9]* =", hlo))) ==
             2
     end
@@ -172,8 +187,11 @@ end
                 println(hlo)
             end
 
-            @test !contains(hlo, "all-to-all")
-            @test !contains(hlo, "all-reduce")
+            @test @filecheck begin
+                @check_not "all-to-all"
+                @check_not "all-reduce"
+                hlo
+            end
             # 1 all gather exists for the result sharding
             @test Nallgathers == 1
             # 2 collective permutes exist for the left/right halos
@@ -246,9 +264,12 @@ end
                 println(hlo)
             end
 
-            @test !contains(hlo, "all-to-all")
-            @test !contains(hlo, "all-reduce")
-            @test !contains(hlo, "copy")
+            @test @filecheck begin
+                @check_not "all-to-all"
+                @check_not "all-reduce"
+                @check_not "copy"
+                hlo
+            end
             @test Ncollectives == expected_collectives
             @test Nallgathers == expected_allgathers
 

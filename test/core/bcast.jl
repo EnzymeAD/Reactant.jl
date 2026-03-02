@@ -1,4 +1,4 @@
-using Test, Reactant, Enzyme, NNlib, Statistics
+using Test, Reactant, Enzyme, NNlib, Statistics, FileCheck
 using Reactant.MLIR
 
 @noinline function no(@nospecialize(x))
@@ -119,8 +119,11 @@ end
     x = Reactant.TestUtils.construct_test_array(Float32, 2, 3)
     a = ConcreteRNumber(0.3f0)
     hlo = @code_hlo bcast_scalar_with_jlarray(x, a)
-    @test !occursin("stablehlo.slice", repr(hlo))
-    @test occursin("stablehlo.broadcast_in_dim", repr(hlo))
+    @test @filecheck begin
+        @check_not "stablehlo.slice"
+        @check "stablehlo.broadcast_in_dim"
+        repr(hlo)
+    end
 
     @test @jit(bcast_scalar_with_jlarray(x, a)) ≈
         bcast_scalar_with_jlarray(Array(x), Float32(a))

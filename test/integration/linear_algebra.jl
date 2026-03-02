@@ -1,4 +1,4 @@
-using LinearAlgebra, Reactant, Test
+using LinearAlgebra, Reactant, Test, FileCheck
 
 const RunningOnTPU = contains(string(Reactant.devices()[1]), "TPU")
 
@@ -505,7 +505,10 @@ raise_to_syrk2(x, y) = 3 .* (transpose(x) * x) .+ 5 .* y
                 disable_structured_tensors_detection_passes=false,
                 optimization_passes=:before_jit,
             ) fn(x_ra, y_ra)
-            @test occursin("enzymexla.blas.syrk", repr(hlo))
+            @test @filecheck begin
+                @check "enzymexla.blas.syrk"
+                repr(hlo)
+            end
 
             fn_compile = @compile compile_options = CompileOptions(;
                 disable_structured_tensors_detection_passes=false

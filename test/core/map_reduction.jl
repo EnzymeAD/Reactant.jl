@@ -1,5 +1,5 @@
 # Tests for reduction and mapreduce operations
-using Reactant, Test, Enzyme, Statistics
+using Reactant, Test, Enzyme, Statistics, FileCheck
 
 const RunningOnTPU = contains(string(Reactant.devices()[1]), "TPU")
 
@@ -277,7 +277,10 @@ end
     x = Reactant.TestUtils.construct_test_array(Float64, 5, 5)
 
     hlo = repr(@code_hlo mapreduce_with_closure(ρr, x))
-    @test contains(hlo, "stablehlo.reduce")
+    @test @filecheck begin
+        @check "stablehlo.reduce"
+        hlo
+    end
 
     @test @jit(mapreduce_with_closure(ρr, x)) ≈ mapreduce_with_closure(2.0, x)
 end
