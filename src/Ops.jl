@@ -4314,6 +4314,10 @@ function _make_c_callback(f::F, output_specs::Tuple, input_specs::Tuple) where {
     return ptr
 end
 
+function _col_major_layout(ndims::Integer)
+    return MLIR.IR.DenseIndexElementsAttribute(collect(Int64, 0:(ndims - 1)))
+end
+
 """
     julia_callback(
         f,
@@ -4415,6 +4419,20 @@ function julia_callback(
         backend_config,
         api_version=Int32(4),
         output_operand_aliases=output_operand_aliases,
+        result_layouts=if length(output_specs) == 0
+            nothing
+        else
+            MLIR.IR.Attribute(
+                _col_major_layout.([length(spec[2]) for spec in output_specs])
+            )
+        end,
+        operand_layouts=if length(input_specs) == 0
+            nothing
+        else
+            MLIR.IR.Attribute(
+                _col_major_layout.([length(spec[2]) for spec in input_specs])
+            )
+        end,
         location,
     )
 
