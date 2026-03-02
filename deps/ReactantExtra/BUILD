@@ -1253,6 +1253,8 @@ cc_library(
             "-Wl,-exported_symbol,_XSpaceToToolsData",
             "-Wl,-exported_symbol,_ReactantGetDebugOptions",
             "-Wl,-exported_symbol,_ReactantGetCompileOptions",
+            "-Wl,-exported_symbol,_GetDistributedRuntimeClientWithOptions",
+            "-Wl,-exported_symbol,_GetDistributedRuntimeServiceWithOptions",
         ],
     }),
     linkstatic = True,

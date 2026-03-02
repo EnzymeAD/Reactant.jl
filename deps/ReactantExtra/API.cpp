@@ -2677,21 +2677,81 @@ REACTANT_ABI HeldIfrtArray **ifrt_array_disassemble_into_single_device_arrays(
 
 #pragma region xla::Distributed
 
+struct DistributedRuntimeClientOptions {
+  int32_t node_id;
+  int32_t rpc_timeout_in_seconds;
+  int32_t init_timeout_in_seconds;
+  int32_t shutdown_timeout_in_minutes;
+  int32_t heartbeat_timeout_in_seconds;
+  bool use_compression;
+  bool shutdown_on_destruction;
+  bool poll_for_error_from_service_at_startup;
+  bool recoverable;
+};
+
+REACTANT_ABI HeldDistributedRuntimeClient *
+GetDistributedRuntimeClientWithOptions(
+    char *c_address, DistributedRuntimeClientOptions *options) {
+  VLOG(3) << "DistributedRuntimeClientOptions: node_id: " << options->node_id
+          << " rpc_timeout_in_seconds: " << options->rpc_timeout_in_seconds
+          << " init_timeout_in_seconds: " << options->init_timeout_in_seconds
+          << " shutdown_timeout_in_minutes: "
+          << options->shutdown_timeout_in_minutes
+          << " heartbeat_timeout_in_seconds: "
+          << options->heartbeat_timeout_in_seconds
+          << " shutdown_on_destruction: " << options->shutdown_on_destruction
+          << " poll_for_error_from_service_at_startup: "
+          << options->poll_for_error_from_service_at_startup
+          << " recoverable: " << options->recoverable << "\n";
+
+  xla::DistributedRuntimeClient::Options xla_options;
+  xla_options.node_id = options->node_id;
+
+  if (options->rpc_timeout_in_seconds > 0) {
+    xla_options.rpc_timeout = absl::Seconds(options->rpc_timeout_in_seconds);
+  }
+  if (options->init_timeout_in_seconds > 0) {
+    xla_options.init_timeout = absl::Seconds(options->init_timeout_in_seconds);
+  }
+  if (options->shutdown_timeout_in_minutes > 0) {
+    xla_options.shutdown_timeout =
+        absl::Minutes(options->shutdown_timeout_in_minutes);
+  }
+  if (options->heartbeat_timeout_in_seconds > 0) {
+    xla_options.heartbeat_timeout =
+        absl::Seconds(options->heartbeat_timeout_in_seconds);
+  }
+
+  xla_options.shutdown_on_destruction = options->shutdown_on_destruction;
+  xla_options.poll_for_error_from_service_at_startup =
+      options->poll_for_error_from_service_at_startup;
+  xla_options.recoverable = options->recoverable;
+
+  std::string address = c_address;
+
+  VLOG(3) << "address: " << address
+          << " use_compression: " << options->use_compression << "\n";
+
+  return reactant::capture(xla::GetDistributedRuntimeClient(
+      address, xla_options, options->use_compression));
+}
+
 REACTANT_ABI HeldDistributedRuntimeClient *GetDistributedRuntimeClient(
     char *c_address, int32_t node_id, int32_t rpc_timeout_in_seconds,
     int32_t init_timeout, int32_t shutdown_timeout_in_minutes,
     int32_t heartbeat_timeout_in_seconds, bool use_compression) {
-  xla::DistributedRuntimeClient::Options options;
+  DistributedRuntimeClientOptions options;
   options.node_id = node_id;
-  options.rpc_timeout = absl::Seconds(rpc_timeout_in_seconds);
-  options.init_timeout = absl::Seconds(init_timeout);
-  options.shutdown_timeout = absl::Minutes(shutdown_timeout_in_minutes);
-  options.heartbeat_timeout = absl::Seconds(heartbeat_timeout_in_seconds);
+  options.rpc_timeout_in_seconds = rpc_timeout_in_seconds;
+  options.init_timeout_in_seconds = init_timeout;
+  options.shutdown_timeout_in_minutes = shutdown_timeout_in_minutes;
+  options.heartbeat_timeout_in_seconds = heartbeat_timeout_in_seconds;
+  options.use_compression = use_compression;
+  options.shutdown_on_destruction = true;
+  options.poll_for_error_from_service_at_startup = true;
+  options.recoverable = false;
 
-  std::string address = c_address;
-
-  return reactant::capture(
-      xla::GetDistributedRuntimeClient(address, options, use_compression));
+  return GetDistributedRuntimeClientWithOptions(c_address, &options);
 }
 
 REACTANT_ABI void
@@ -2713,22 +2773,64 @@ distributed_runtime_client_shutdown(HeldDistributedRuntimeClient *client) {
     ReactantThrowError(status.ToString().c_str());
 }
 
+struct DistributedRuntimeServiceOptions {
+  int32_t num_nodes;
+  bool recoverable;
+  int32_t heartbeat_timeout_in_seconds;
+  int32_t cluster_register_timeout_in_minutes;
+  int32_t shutdown_timeout_in_minutes;
+};
+
+REACTANT_ABI xla::DistributedRuntimeService *
+GetDistributedRuntimeServiceWithOptions(
+    char *c_address, DistributedRuntimeServiceOptions *options) {
+  xla::CoordinationServiceImpl::Options xla_options;
+  xla_options.num_nodes = options->num_nodes;
+  xla_options.recoverable = options->recoverable;
+
+  if (options->heartbeat_timeout_in_seconds > 0) {
+    xla_options.heartbeat_timeout =
+        absl::Seconds(options->heartbeat_timeout_in_seconds);
+  }
+  if (options->cluster_register_timeout_in_minutes > 0) {
+    xla_options.cluster_register_timeout =
+        absl::Minutes(options->cluster_register_timeout_in_minutes);
+  }
+  if (options->shutdown_timeout_in_minutes > 0) {
+    xla_options.shutdown_timeout =
+        absl::Minutes(options->shutdown_timeout_in_minutes);
+  }
+
+  std::string address = c_address;
+
+  VLOG(3) << "DistributedRuntimeServiceOptions: num_nodes: "
+          << options->num_nodes << " heartbeat_timeout_in_seconds: "
+          << options->heartbeat_timeout_in_seconds
+          << " cluster_register_timeout_in_minutes: "
+          << options->cluster_register_timeout_in_minutes
+          << " shutdown_timeout_in_minutes: "
+          << options->shutdown_timeout_in_minutes << "\n";
+
+  VLOG(3) << "address: " << address << "\n";
+
+  return MyValueOrThrow(xla::GetDistributedRuntimeService(address, xla_options))
+      .release();
+}
+
 REACTANT_ABI xla::DistributedRuntimeService *
 GetDistributedRuntimeService(char *c_address, int num_nodes,
                              int32_t heartbeat_timeout_in_seconds,
                              int32_t cluster_register_timeout_in_minutes,
                              int32_t shutdown_timeout_in_minutes) {
-  xla::CoordinationServiceImpl::Options options;
+  DistributedRuntimeServiceOptions options;
   options.num_nodes = num_nodes;
-  options.heartbeat_timeout = absl::Seconds(heartbeat_timeout_in_seconds);
-  options.cluster_register_timeout =
-      absl::Minutes(cluster_register_timeout_in_minutes);
-  options.shutdown_timeout = absl::Minutes(shutdown_timeout_in_minutes);
+  options.recoverable = false;
+  options.heartbeat_timeout_in_seconds = heartbeat_timeout_in_seconds;
+  options.cluster_register_timeout_in_minutes =
+      cluster_register_timeout_in_minutes;
+  options.shutdown_timeout_in_minutes = shutdown_timeout_in_minutes;
 
-  std::string address = c_address;
-
-  return MyValueOrThrow(xla::GetDistributedRuntimeService(address, options))
-      .release();
+  return GetDistributedRuntimeServiceWithOptions(c_address, &options);
 }
 
 REACTANT_ABI void
