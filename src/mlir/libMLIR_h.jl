@@ -12866,6 +12866,26 @@ struct DeviceProperties
     maxThreadsPerMultiProcessor::Cint
 end
 
+struct DistributedRuntimeClientOptions
+    node_id::Int32
+    rpc_timeout_in_seconds::Int32
+    init_timeout_in_seconds::Int32
+    shutdown_timeout_in_minutes::Int32
+    heartbeat_timeout_in_seconds::Int32
+    use_compression::Bool
+    shutdown_on_destruction::Bool
+    poll_for_error_from_service_at_startup::Bool
+    recoverable::Bool
+end
+
+struct DistributedRuntimeServiceOptions
+    num_nodes::Int32
+    recoverable::Bool
+    heartbeat_timeout_in_seconds::Int32
+    cluster_register_timeout_in_minutes::Int32
+    shutdown_timeout_in_minutes::Int32
+end
+
 const HeldPjRtClient = Cvoid
 
 const HeldIfrtConstSharding = Cvoid
@@ -14172,6 +14192,12 @@ function ifrt_array_disassemble_into_single_device_arrays(
     )::Ptr{Ptr{HeldIfrtArray}}
 end
 
+function GetDistributedRuntimeClientWithOptions(c_address, options)
+    @ccall mlir_c.GetDistributedRuntimeClientWithOptions(
+        c_address::Cstring, options::Ptr{DistributedRuntimeClientOptions}
+    )::Ptr{HeldDistributedRuntimeClient}
+end
+
 function GetDistributedRuntimeClient(
     c_address,
     node_id,
@@ -14208,6 +14234,12 @@ function distributed_runtime_client_shutdown(client)
     @ccall mlir_c.distributed_runtime_client_shutdown(
         client::Ptr{HeldDistributedRuntimeClient}
     )::Cvoid
+end
+
+function GetDistributedRuntimeServiceWithOptions(c_address, options)
+    @ccall mlir_c.GetDistributedRuntimeServiceWithOptions(
+        c_address::Cstring, options::Ptr{DistributedRuntimeServiceOptions}
+    )::Ptr{DistributedRuntimeService}
 end
 
 function GetDistributedRuntimeService(
