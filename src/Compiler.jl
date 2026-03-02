@@ -2850,7 +2850,7 @@ struct TextualModule
     end
 end
 
-Base.show(io::IO, tm::TextualModule) = print(io, highlight_MLIR(tm.ir))
+Base.show(io::IO, tm::TextualModule) = print(io, MLIR.highlight_MLIR(tm.ir))
 Base.String(tm::TextualModule) = tm.ir
 
 function Base.convert(::Type{MLIR.IR.Module}, tm::TextualModule)
