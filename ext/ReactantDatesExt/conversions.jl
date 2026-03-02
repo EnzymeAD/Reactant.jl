@@ -2,22 +2,26 @@
 
 # Period conversions
 for (S, T) in (
-    (:Year, :TracedRYear),
-    (:Quarter, :TracedRQuarter),
-    (:Month, :TracedRMonth),
-    (:Week, :TracedRWeek),
-    (:Day, :TracedRDay),
-    (:Hour, :TracedRHour),
-    (:Minute, :TracedRMinute),
-    (:Second, :TracedRSecond),
-    (:Millisecond, :TracedRMillisecond),
-    (:Microsecond, :TracedRMicrosecond),
-    (:Nanosecond, :TracedRNanosecond),
-)
+        (:Year, :TracedRYear),
+        (:Quarter, :TracedRQuarter),
+        (:Month, :TracedRMonth),
+        (:Week, :TracedRWeek),
+        (:Day, :TracedRDay),
+        (:Hour, :TracedRHour),
+        (:Minute, :TracedRMinute),
+        (:Second, :TracedRSecond),
+        (:Millisecond, :TracedRMillisecond),
+        (:Microsecond, :TracedRMicrosecond),
+        (:Nanosecond, :TracedRNanosecond),
+    )
     @eval Base.convert(::Type{$T}, x::$S) = $T(value(x))
     @eval Base.convert(::Type{$T{Int64}}, x::$S) = $T(value(x))
+    @eval Base.convert(::Type{$T{I}}, x::$S) where {I} = $T(convert(I, value(x)))
     @eval Base.convert(::Type{$S}, x::$T) = $S(value(x))
     @eval $T(x::$S) = $T(value(x))
+
+    # e.g. for conversions from Int64 to ConcretePJRTNumber
+    @eval Base.convert(::Type{$T{I}}, x::$T{J}) where {I, J} = $T(convert(I, value(x)))
 end
 
 # DateTime conversion
@@ -49,5 +53,8 @@ end
 Base.convert(::Type{Time}, x::TracedRTime) = Dates.Time(Dates.Nanosecond(value(x)))
 TracedRTime(t::Time) = convert(TracedRTime, t)
 TracedRTime{I}(t::Time) where {I} = TracedRTime{I}(TracedRNanosecond(value(t)))
+
+# converting e.g. Int64 to ConcretePJRTNumber
+Base.convert(::Type{UTInstant{P}}, uti::UTInstant{Q}) where {P <: TracedRMillisecond, Q <: TracedRMillisecond} = UTInstant{P}(uti.periods)
 
 Dates.datetime2julian(dt::TracedRDateTime) = (value(dt) - Dates.JULIANEPOCH) / 86400000.0

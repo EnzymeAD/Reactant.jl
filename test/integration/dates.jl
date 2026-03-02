@@ -1,7 +1,8 @@
 using Test
+using Reactant
+
 using Dates
 using Dates: value, UTInstant
-using Reactant
 
 @testset "ReactantDatesExt" begin
 
@@ -452,15 +453,14 @@ using Reactant
         # Inspired by the usage in SpeedyWeather.jl
 
         # Minimal clock-like mutable struct
-        mutable struct Clock{I,T,TS}
+        mutable struct Clock{I, T, TS}
             n_timesteps::I
             time::T
             time_step::TS
         end
 
         # Minimal state
-        struct State{T,C}
-            x::T
+        struct State{C}
             clock::C
         end
 
@@ -475,18 +475,20 @@ using Reactant
         end
 
         function timestep!(state::State)
-            state.x .+= 1.0
-            return state.clock.time += state.clock.time_step
+            state.clock.time += state.clock.time_step
+            return nothing
         end
 
         clock = Clock(5, DateTime(2002, 1, 1), Dates.Day(1))
-        state = State(zeros(1), clock)
+        state = State(clock)
         timestepping!(state)
 
-        clock_jit = Clock(5, DateTime(2002, 1, 1), Dates.Day(1))
-        state_jit = State(zeros(1), clock)
+        # TODO: the track_numbers here is necessary. That may or may not be a bug within trace (track_numbers option in trace gives wrong results), see https://github.com/EnzymeAD/Reactant.jl/issues/2561
+        clock_jit = Reactant.to_rarray(Clock(5, DateTime(2002, 1, 1), Dates.Day(1)), track_numbers = true)
+
+        state_jit = State(clock_jit)
         @jit timestepping!(state_jit)
 
         @test DateTime(state_jit.clock.time) == state.clock.time
     end
-end # @testset "ReactantDatesExt"
+end
