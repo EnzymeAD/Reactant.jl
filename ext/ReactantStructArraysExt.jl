@@ -65,7 +65,6 @@ function Reactant.TracedRArrayOverrides._copyto!(
     return copyto!(dest, bc)
 end
 
-
 function Base.copyto!(
     dest::Reactant.TracedRArray, bc::Broadcasted{StructArrayStyle{S,N}}
 ) where {S<:AbstractReactantArrayStyle,N}
@@ -90,7 +89,6 @@ function Base.similar(
     end
 end
 
-
 Base.@propagate_inbounds function StructArrays._getindex(
     x::StructArray{T}, I::Vararg{TracedRNumber{<:Integer}}
 ) where {T}
@@ -107,17 +105,16 @@ Base.@propagate_inbounds function Base.setindex!(
     return s
 end
 
-const MRarr = Union{Reactant.AnyTracedRArray, Reactant.RArray}
-function StructArrays.get_ith(cols::NamedTuple{N, <: NTuple{K, <:MRarr}}, I...) where {N, K}
-    ith = ntuple(n->Reactant.@allowscalar(cols[n][I...]), Val(K))
+const MRarr = Union{Reactant.AnyTracedRArray,Reactant.RArray}
+function StructArrays.get_ith(cols::NamedTuple{N,<:NTuple{K,<:MRarr}}, I...) where {N,K}
+    ith = ntuple(n -> Reactant.@allowscalar(cols[n][I...]), Val(K))
     return ith
 end
 
-function StructArrays.get_ith(cols::NTuple{K, <:MRarr}, I...) where {K}
-    ith = ntuple(n->Reactant.@allowscalar(cols[n][I...]), Val(K))
+function StructArrays.get_ith(cols::NTuple{K,<:MRarr}, I...) where {K}
+    ith = ntuple(n -> Reactant.@allowscalar(cols[n][I...]), Val(K))
     return ith
 end
-
 
 Base.@nospecializeinfer function Reactant.traced_type_inner(
     @nospecialize(prev::Type{StructArray{ET,N,C,I}}),
