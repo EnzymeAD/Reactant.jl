@@ -494,7 +494,7 @@ end
             sharding=Sharding.NamedSharding(mesh, (:x, :y)),
         )
         hlo = @code_xla sum(x_ra)
-        @test @filecheck begin
+        @filecheck begin
             @check "num_partitions=8"
             repr(hlo)
         end

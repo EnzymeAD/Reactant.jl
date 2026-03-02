@@ -189,10 +189,14 @@ end
 
 @testset "onehot" begin
     x = Reactant.to_rarray(ones(3, 4))
-    hlo = @code_hlo optimize = false Enzyme.onehot(x)
+    hlo = @code_hlo compile_options = CompileOptions(; max_constant_threshold=0) Enzyme.onehot(
+        x
+    )
     @test @filecheck begin
+        @check "%cst = stablehlo.constant dense<0.000000e+00> : tensor<12x12xf64>"
+        @check "%cst_0 = stablehlo.constant dense<1.000000e+00> : tensor<12xf64>"
         @check_not "stablehlo.constant"
-        repr(hlo)
+        hlo
     end
 end
 
