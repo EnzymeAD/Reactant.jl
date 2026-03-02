@@ -4,7 +4,7 @@ using StructArrays, Reactant, Test
     x = StructArray(;
         a=rand(10, 2), b=fill("some strings", (10, 2)), c=rand(Float32, 10, 2)
     )
-    x_ra = Reactant.to_rarray(x)
+    x_ra = Reactant.to_rarray(x);
 
     # Note that the element type (the NamedTuple) contains ConcreteRNumbers even though track_numbers is not enabled.
     # This is because when the backing arrays are converted to TracedRArrays, their elements will contain TracedRNumbers.
@@ -68,4 +68,16 @@ end
         zip(components(result), components(broadcast_elwise(x)))
         @test component_ra ≈ component
     end
+end
+
+@testset "structarray with static array broadcasting" begin
+
+    trel(x) = tr.(x)
+    s = StructArray{SMatrix{2,2,Float64, 4}}((fill(1.0, 4), fill(2.0, 4), fill(3.0, 4), fill(4.0, 4)))
+    sr = Reactant.to_rarray(s);
+    out = @jit(trel(sr)) 
+    @test out ≈ trel(s)
+    @test out isa ConcreteRArray
+    @test @jit(sum(sr)) ≈ sum(s)
+
 end

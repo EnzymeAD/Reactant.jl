@@ -94,7 +94,7 @@ Base.@propagate_inbounds function StructArrays._getindex(
 ) where {T}
     cols = components(x)
     @boundscheck checkbounds(x, I...)
-    return T(get_ith(cols, I...)...)
+    return createinstance(T, get_ith(cols, I...)...)
 end
 
 Base.@propagate_inbounds function Base.setindex!(
