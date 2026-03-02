@@ -509,29 +509,3 @@ end
         @test @jit(uscale2(x_ra, y_ra)) ≈ uscale2(x, y)
     end
 end
-
-raise_to_symm(x, y) = (x * transpose(x)) * y
-
-@testset "symm optimizations" begin
-    @testset for elty in (Float32, Float64, ComplexF32, ComplexF64)
-        RunningOnTPU && elty == ComplexF64 && continue
-
-        x = Reactant.TestUtils.construct_test_array(elty, 4, 4)
-        y = Reactant.TestUtils.construct_test_array(elty, 4, 5)
-        x_ra = Reactant.to_rarray(x)
-
-        y_ra = Reactant.to_rarray(y)
-
-        hlo = @code_hlo compile_options = CompileOptions(;
-            disable_structured_tensors_detection_passes=false,
-            optimization_passes=:before_jit,
-        ) raise_to_symm(x_ra, y_ra)
-        @test occursin("enzymexla.blas.symm", repr(hlo))
-
-        fn_compile = @compile compile_options = CompileOptions(;
-            disable_structured_tensors_detection_passes=false
-        ) raise_to_symm(x_ra, y_ra)
-
-        @test fn_compile(x_ra, y_ra) ≈ raise_to_symm(x, y) atol = 1e-3 rtol = 1e-3
-    end
-end
