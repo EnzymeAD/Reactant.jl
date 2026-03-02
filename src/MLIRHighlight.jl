@@ -22,7 +22,7 @@ const REACTANT_THEME = [
 ]
 
 function register_reactant_theme()
-    foreach(addface!, REACTANT_THEME)
+    return foreach(addface!, REACTANT_THEME)
 end
 """
     rule_prefixed_identifier(str::AbstractString, i, prefix::Char, kind::Symbol)
@@ -156,13 +156,23 @@ Takes a string to be styled and a Vector with information for styling then
 usess Julias AnnotatedStrings to make pretty colors when printing
 """
 function style_MLIR(str::AbstractString, tokens::Vector{MLIRToken})
-    styling_info = Vector{Tuple{UnitRange{Int},Symbol,Symbol}}()
-    sizehint!(styling_info, length(tokens))
-    for token in tokens
-        push!(styling_info, (token.text, :face, token.kind))
+    if VERSION < v"1.11"
+        styling_info = Vector{Tuple{UnitRange{Int},Pair{Symbol,Symbol}}}()
+        sizehint!(styling_info, length(tokens))
+        for token in tokens
+            push!(styling_info, (token.text, :face => token.kind))
+        end
+        styled_text = AnnotatedString(str, styling_info)
+        return styled_text
+    else
+        styling_info = Vector{Tuple{UnitRange{Int},Symbol,Symbol}}()
+        sizehint!(styling_info, length(tokens))
+        for token in tokens
+            push!(styling_info, (token.text, :face, token.kind))
+        end
+        styled_text = AnnotatedString(str, styling_info)
+        return styled_text
     end
-    styled_text = AnnotatedString(str, styling_info)
-    return styled_text
 end
 
 const DEFAULT_RULES = (
