@@ -1,4 +1,4 @@
-using StructArrays, StaticArrays, Reactant, Test
+using StructArrays, StaticArrays, Reactant, LinearAlgebra, Test
 
 @testset "StructArray to_rarray and make_tracer" begin
     x = StructArray(;
