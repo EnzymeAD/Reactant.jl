@@ -11,25 +11,33 @@ end
 function DistributedRuntimeClient(
     coordinator_bind_address::String,
     process_id::Integer;
-    rpc_timeout_in_seconds::Integer=120,
-    init_timeout_in_seconds::Integer=(60 * 60),
-    shutdown_timeout_in_minutes::Integer=5,
-    heartbeat_interval_in_seconds::Integer=10,
+    rpc_timeout_in_seconds::Integer=-1,
+    init_timeout_in_seconds::Integer=-1,
+    shutdown_timeout_in_minutes::Integer=-1,
+    heartbeat_interval_in_seconds::Integer=-1,
     use_compression::Bool=true,
 )
     @debug "[GETPID $(getpid())] [PID $process_id] Creating distributed runtime client"
     GC.@preserve coordinator_bind_address begin
-        client = MLIR.API.GetDistributedRuntimeClient(
-            coordinator_bind_address,
-            process_id,
-            rpc_timeout_in_seconds,
-            init_timeout_in_seconds,
-            shutdown_timeout_in_minutes,
-            heartbeat_interval_in_seconds,
-            use_compression,
+        return DistributedRuntimeClient(
+            MLIR.API.GetDistributedRuntimeClientWithOptions(
+                coordinator_bind_address,
+                Ref(
+                    MLIR.API.DistributedRuntimeClientOptions(
+                        process_id,
+                        rpc_timeout_in_seconds,
+                        init_timeout_in_seconds,
+                        shutdown_timeout_in_minutes,
+                        heartbeat_interval_in_seconds,
+                        use_compression,
+                        true,
+                        true,
+                        false,
+                    ),
+                ),
+            ),
         )
     end
-    return DistributedRuntimeClient(client)
 end
 
 function free_distributed_runtime_client(client::DistributedRuntimeClient)
@@ -69,21 +77,27 @@ end
 function DistributedRuntimeService(
     coordinator_bind_address::String,
     num_nodes::Integer;
-    heartbeat_interval_in_seconds::Integer=10,
-    cluster_register_timeout_in_minutes::Integer=60,
-    shutdown_timeout_in_minutes::Integer=5,
+    heartbeat_interval_in_seconds::Integer=-1,
+    cluster_register_timeout_in_minutes::Integer=-1,
+    shutdown_timeout_in_minutes::Integer=-1,
 )
     @debug "[GETPID $(getpid())] Creating DistributedRuntimeService"
     GC.@preserve coordinator_bind_address begin
-        service = MLIR.API.GetDistributedRuntimeService(
-            coordinator_bind_address,
-            num_nodes,
-            heartbeat_interval_in_seconds,
-            cluster_register_timeout_in_minutes,
-            shutdown_timeout_in_minutes,
+        return DistributedRuntimeService(
+            MLIR.API.GetDistributedRuntimeServiceWithOptions(
+                coordinator_bind_address,
+                Ref(
+                    MLIR.API.DistributedRuntimeServiceOptions(
+                        num_nodes,
+                        false,
+                        heartbeat_interval_in_seconds,
+                        cluster_register_timeout_in_minutes,
+                        shutdown_timeout_in_minutes,
+                    ),
+                ),
+            ),
         )
     end
-    return DistributedRuntimeService(service)
 end
 
 function free_distributed_runtime_service(service::DistributedRuntimeService)
@@ -131,10 +145,10 @@ function update!(
     process_id::Int,
     local_gpu_device_ids::Union{Nothing,Vector{Int}},
     coordinator_bind_address::Union{Nothing,String}=nothing,
-    cluster_register_timeout_in_minutes::Integer=60,
-    rpc_timeout_in_seconds::Integer=120,
-    shutdown_timeout_in_minutes::Integer=5,
-    heartbeat_interval_in_seconds::Integer=10,
+    cluster_register_timeout_in_minutes::Integer=-1,
+    rpc_timeout_in_seconds::Integer=-1,
+    shutdown_timeout_in_minutes::Integer=-1,
+    heartbeat_interval_in_seconds::Integer=-1,
     use_compression::Bool=true,
 )
     @assert 0 ≤ process_id < num_processes
