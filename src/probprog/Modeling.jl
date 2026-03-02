@@ -3,15 +3,15 @@ using ..Compiler: @compile
 
 include("Utils.jl")
 
-function get_support_kind_int(s::Symbol)
-    s === :real && return Int32(0)
-    s === :positive && return Int32(1)
-    s === :unit_interval && return Int32(2)
-    s === :interval && return Int32(3)
-    s === :greater_than && return Int32(4)
-    s === :less_than && return Int32(5)
-    s === :simplex && return Int32(6)
-    s === :lower_cholesky && return Int32(7)
+function get_support_kind(s::Symbol)
+    s === :real && return MLIR.API.EnzymeSupportKind_Real
+    s === :positive && return MLIR.API.EnzymeSupportKind_Positive
+    s === :unit_interval && return MLIR.API.EnzymeSupportKind_UnitInterval
+    s === :interval && return MLIR.API.EnzymeSupportKind_Interval
+    s === :greater_than && return MLIR.API.EnzymeSupportKind_GreaterThan
+    s === :less_than && return MLIR.API.EnzymeSupportKind_LessThan
+    s === :simplex && return MLIR.API.EnzymeSupportKind_Simplex
+    s === :lower_cholesky && return MLIR.API.EnzymeSupportKind_LowerCholesky
     return error("Unknown support type: $s")
 end
 
@@ -38,9 +38,9 @@ function sample(
 
     fn_attr = MLIR.IR.FlatSymbolRefAttribute(f_name)
     symbol_addr = reinterpret(UInt64, pointer_from_objref(symbol))
-    symbol_attr = @ccall MLIR.API.mlir_c.enzymeSymbolAttrGet(
-        MLIR.IR.current_context()::MLIR.API.MlirContext, symbol_addr::UInt64
-    )::MLIR.IR.Attribute
+    symbol_attr = MLIR.IR.Attribute(
+        MLIR.API.enzymeSymbolAttrGet(MLIR.IR.current_context(), symbol_addr)
+    )
 
     logpdf_attr = nothing
     if logpdf isa Function
@@ -60,15 +60,16 @@ function sample(
     lower_val = isnothing(lower) ? NaN : Float64(lower)
     upper_val = isnothing(upper) ? NaN : Float64(upper)
 
-    support_kind = get_support_kind_int(support)
-    support_attr = @ccall MLIR.API.mlir_c.enzymeSupportAttrGet(
-        MLIR.IR.current_context()::MLIR.API.MlirContext,
-        support_kind::Int32,
-        lower_val::Float64,
-        has_lower::Bool,
-        upper_val::Float64,
-        has_upper::Bool,
-    )::MLIR.IR.Attribute
+    support_attr = MLIR.IR.Attribute(
+        MLIR.API.enzymeSupportAttrGet(
+            MLIR.IR.current_context(),
+            get_support_kind(support),
+            has_lower,
+            lower_val,
+            has_upper,
+            upper_val,
+        ),
+    )
 
     sample_op = MLIR.Dialects.enzyme.sample(
         mlir_caller_args;
@@ -291,9 +292,9 @@ function generate(
             sym_addr = reinterpret(UInt64, pointer_from_objref(sym))
             push!(
                 address_attr,
-                @ccall MLIR.API.mlir_c.enzymeSymbolAttrGet(
-                    MLIR.IR.current_context()::MLIR.API.MlirContext, sym_addr::UInt64
-                )::MLIR.IR.Attribute
+                MLIR.IR.Attribute(
+                    MLIR.API.enzymeSymbolAttrGet(MLIR.IR.current_context(), sym_addr)
+                ),
             )
         end
         push!(constrained_addresses_attr, MLIR.IR.Attribute(address_attr))

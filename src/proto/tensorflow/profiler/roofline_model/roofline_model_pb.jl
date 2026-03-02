@@ -54,7 +54,7 @@ PB.reserved_fields(::Type{RooflineModelRecord}) = (names = String[], numbers = U
 PB.default_values(::Type{RooflineModelRecord}) = (;record_type = RecordType.INVALID_RECORD_TYPE, step_num = zero(UInt32), rank = zero(UInt64), hlo_module_id = zero(UInt64), hlo_category = "", hlo_name = "", occurrences = zero(Int64), total_time_in_us = zero(Float64), total_time_per_core_in_us = zero(Float64), total_time_in_percentage = zero(Float64), avg_time_in_us = zero(Float64), total_self_time_in_us = zero(Float64), avg_self_time_in_us = zero(Float64), total_self_time_as_fraction = zero(Float64), cumulative_total_self_time_as_fraction = zero(Float64), dma_stall_fraction = zero(Float64), measured_flop_rate = zero(Float64), model_flop_rate = zero(Float64), measured_memory_bw = zero(Float64), hbm_bw = zero(Float64), cmem_read_bw = zero(Float64), cmem_write_bw = zero(Float64), vmem_read_bw = zero(Float64), vmem_write_bw = zero(Float64), operational_intensity = zero(Float64), hbm_operational_intensity = zero(Float64), cmem_read_operational_intensity = zero(Float64), cmem_write_operational_intensity = zero(Float64), vmem_read_operational_intensity = zero(Float64), vmem_write_operational_intensity = zero(Float64), bottleneck_operational_intensity = zero(Float64), bound_by = "", optimal_flop_rate = zero(Float64), roofline_efficiency = zero(Float64), flop_rate_relative_to_hw_limit = zero(Float64), memory_bw_relative_to_hw_limit = zero(Float64), include_infeed_outfeed = false, apply_time_scale_multiplier = false, flops = zero(UInt64), bytes_accessed = zero(UInt64), source_info = nothing)
 PB.field_numbers(::Type{RooflineModelRecord}) = (;record_type = 18, step_num = 19, rank = 1, hlo_module_id = 35, hlo_category = 17, hlo_name = 2, occurrences = 3, total_time_in_us = 4, total_time_per_core_in_us = 20, total_time_in_percentage = 21, avg_time_in_us = 5, total_self_time_in_us = 6, avg_self_time_in_us = 7, total_self_time_as_fraction = 8, cumulative_total_self_time_as_fraction = 9, dma_stall_fraction = 10, measured_flop_rate = 13, model_flop_rate = 38, measured_memory_bw = 14, hbm_bw = 27, cmem_read_bw = 28, cmem_write_bw = 29, vmem_read_bw = 39, vmem_write_bw = 40, operational_intensity = 15, hbm_operational_intensity = 30, cmem_read_operational_intensity = 31, cmem_write_operational_intensity = 32, vmem_read_operational_intensity = 41, vmem_write_operational_intensity = 42, bottleneck_operational_intensity = 33, bound_by = 16, optimal_flop_rate = 22, roofline_efficiency = 34, flop_rate_relative_to_hw_limit = 24, memory_bw_relative_to_hw_limit = 25, include_infeed_outfeed = 26, apply_time_scale_multiplier = 44, flops = 36, bytes_accessed = 37, source_info = 43)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:RooflineModelRecord})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:RooflineModelRecord}, _endpos::Int=0, _group::Bool=false)
     record_type = RecordType.INVALID_RECORD_TYPE
     step_num = zero(UInt32)
     rank = zero(UInt64)
@@ -96,7 +96,7 @@ function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:RooflineModelRecord})
     flops = zero(UInt64)
     bytes_accessed = zero(UInt64)
     source_info = Ref{Union{Nothing,tensorflow.profiler.SourceInfo}}(nothing)
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 18
             record_type = PB.decode(d, RecordType.T)
@@ -297,7 +297,7 @@ PB.reserved_fields(::Type{RooflineModelDatabase}) = (names = String[], numbers =
 PB.default_values(::Type{RooflineModelDatabase}) = (;device_type = "", megacore = false, has_cmem = false, has_merged_vmem = false, peak_flop_rate = zero(Float64), peak_hbm_bw = zero(Float64), peak_cmem_read_bw = zero(Float64), peak_cmem_write_bw = zero(Float64), peak_vmem_read_bw = zero(Float64), peak_vmem_write_bw = zero(Float64), roofline_model_record = Vector{RooflineModelRecord}(), diagnostics = nothing, time_scale_multiplier = zero(Float64))
 PB.field_numbers(::Type{RooflineModelDatabase}) = (;device_type = 1, megacore = 12, has_cmem = 8, has_merged_vmem = 15, peak_flop_rate = 2, peak_hbm_bw = 9, peak_cmem_read_bw = 10, peak_cmem_write_bw = 11, peak_vmem_read_bw = 13, peak_vmem_write_bw = 14, roofline_model_record = 5, diagnostics = 7, time_scale_multiplier = 16)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:RooflineModelDatabase})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:RooflineModelDatabase}, _endpos::Int=0, _group::Bool=false)
     device_type = ""
     megacore = false
     has_cmem = false
@@ -311,7 +311,7 @@ function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:RooflineModelDatabase})
     roofline_model_record = PB.BufferedVector{RooflineModelRecord}()
     diagnostics = Ref{Union{Nothing,tensorflow.profiler.Diagnostics}}(nothing)
     time_scale_multiplier = zero(Float64)
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             device_type = PB.decode(d, String)

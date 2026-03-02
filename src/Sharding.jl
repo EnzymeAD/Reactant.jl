@@ -860,11 +860,7 @@ function hlo_sharding_from_sdy_tensor_sharding_attr(attr, mesh_attr)
     @assert MLIR.API.sdyAttributeIsATensorShardingAttr(attr)
     @assert MLIR.API.sdyAttributeIsAMeshAttr(mesh_attr)
     GC.@preserve attr begin
-        return XLA.HloSharding(
-            @ccall MLIR.API.mlir_c.hloShardingFromTensorShardingAttr(
-                attr::MLIR.API.MlirAttribute, mesh_attr::MLIR.API.MlirAttribute
-            )::Ptr{Cvoid}
-        )
+        return XLA.HloSharding(MLIR.API.hloShardingFromTensorShardingAttr(attr, mesh_attr))
     end
 end
 
@@ -1033,15 +1029,15 @@ function get_tensor_sharding_attribute(
         string_mesh_name = MLIR.IR.Attribute(MLIR.IR.flatsymbol(mesh_name); context=ctx)
         GC.@preserve sharding begin
             attr = MLIR.IR.Attribute(
-                @ccall MLIR.API.mlir_c.hloShardingToTensorShardingAttr(
-                    ctx::MLIR.API.MlirContext,
-                    sharding.hlo_sharding.ptr::Ptr{Cvoid},
-                    string_mesh_name::MLIR.API.MlirAttribute,
-                    mesh_attr::MLIR.API.MlirAttribute,
-                    Int64(length(sharding.is_closed))::Int64,
-                    Bool[sharding.is_closed...]::Ptr{Bool},
-                    Int64[sharding.priority...]::Ptr{Int64},
-                )::MLIR.API.MlirAttribute
+                MLIR.API.hloShardingToTensorShardingAttr(
+                    ctx,
+                    sharding.hlo_sharding.ptr,
+                    string_mesh_name,
+                    mesh_attr,
+                    length(sharding.is_closed),
+                    Bool[sharding.is_closed...],
+                    Int64[sharding.priority...],
+                ),
             )
         end
         return attr, :sdy

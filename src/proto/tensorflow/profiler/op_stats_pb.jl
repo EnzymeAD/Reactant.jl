@@ -17,14 +17,14 @@ end
 PB.default_values(::Type{HostIndependentJobInfoResult}) = (;change_list = zero(Int64), workspace_id = "", snapshot = zero(Int64), build_time = zero(Int64), build_target = "", profile_duration_ms = zero(UInt32))
 PB.field_numbers(::Type{HostIndependentJobInfoResult}) = (;change_list = 1, workspace_id = 5, snapshot = 6, build_time = 2, build_target = 3, profile_duration_ms = 4)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:HostIndependentJobInfoResult})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:HostIndependentJobInfoResult}, _endpos::Int=0, _group::Bool=false)
     change_list = zero(Int64)
     workspace_id = ""
     snapshot = zero(Int64)
     build_time = zero(Int64)
     build_target = ""
     profile_duration_ms = zero(UInt32)
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             change_list = PB.decode(d, Int64)
@@ -78,7 +78,7 @@ end
 PB.default_values(::Type{CoreDetails}) = (;hostname = "", device_ordinal = zero(UInt32), core_num = zero(UInt32), local_chip_id = zero(UInt32), global_chip_id = zero(UInt32), global_core_id = zero(UInt32), is_sparse_core = false)
 PB.field_numbers(::Type{CoreDetails}) = (;hostname = 1, device_ordinal = 2, core_num = 3, local_chip_id = 4, global_chip_id = 5, global_core_id = 6, is_sparse_core = 7)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:CoreDetails})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:CoreDetails}, _endpos::Int=0, _group::Bool=false)
     hostname = ""
     device_ordinal = zero(UInt32)
     core_num = zero(UInt32)
@@ -86,7 +86,7 @@ function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:CoreDetails})
     global_chip_id = zero(UInt32)
     global_core_id = zero(UInt32)
     is_sparse_core = false
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             hostname = PB.decode(d, String)
@@ -142,13 +142,13 @@ end
 PB.default_values(::Type{HostDependentJobInfoResult}) = (;host_id = "", command_line = "", start_time = zero(Int64), bns_address = "", profile_time_ns = zero(UInt64))
 PB.field_numbers(::Type{HostDependentJobInfoResult}) = (;host_id = 1, command_line = 2, start_time = 3, bns_address = 4, profile_time_ns = 5)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:HostDependentJobInfoResult})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:HostDependentJobInfoResult}, _endpos::Int=0, _group::Bool=false)
     host_id = ""
     command_line = ""
     start_time = zero(Int64)
     bns_address = ""
     profile_time_ns = zero(UInt64)
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             host_id = PB.decode(d, String)
@@ -195,12 +195,12 @@ end
 PB.default_values(::Type{SystemTopology}) = (;x_dimension = zero(Int64), y_dimension = zero(Int64), z_dimension = zero(Int64), num_expected_reduced_chips = zero(Int64))
 PB.field_numbers(::Type{SystemTopology}) = (;x_dimension = 1, y_dimension = 2, z_dimension = 3, num_expected_reduced_chips = 4)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:SystemTopology})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:SystemTopology}, _endpos::Int=0, _group::Bool=false)
     x_dimension = zero(Int64)
     y_dimension = zero(Int64)
     z_dimension = zero(Int64)
     num_expected_reduced_chips = zero(Int64)
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             x_dimension = PB.decode(d, Int64)
@@ -241,10 +241,10 @@ end
 PB.default_values(::Type{PerformanceCounterResult}) = (;matrix_unit_utilization_percent = zero(Float64), hbm_utilization_percent = zero(Float64))
 PB.field_numbers(::Type{PerformanceCounterResult}) = (;matrix_unit_utilization_percent = 1, hbm_utilization_percent = 2)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:PerformanceCounterResult})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:PerformanceCounterResult}, _endpos::Int=0, _group::Bool=false)
     matrix_unit_utilization_percent = zero(Float64)
     hbm_utilization_percent = zero(Float64)
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             matrix_unit_utilization_percent = PB.decode(d, Float64)
@@ -283,7 +283,7 @@ end
 PB.default_values(::Type{PerfEnv}) = (;peak_tera_flops_per_second = zero(Float64), peak_bw_giga_bytes_per_second = zero(Float64), peak_hbm_bw_giga_bytes_per_second = zero(Float64), peak_bws_giga_bytes_per_second = Vector{Float64}(), ridge_point = zero(Float64), has_cmem = false, has_merged_vmem = false, has_megacore = false)
 PB.field_numbers(::Type{PerfEnv}) = (;peak_tera_flops_per_second = 1, peak_bw_giga_bytes_per_second = 4, peak_hbm_bw_giga_bytes_per_second = 2, peak_bws_giga_bytes_per_second = 5, ridge_point = 3, has_cmem = 6, has_merged_vmem = 7, has_megacore = 8)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:PerfEnv})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:PerfEnv}, _endpos::Int=0, _group::Bool=false)
     peak_tera_flops_per_second = zero(Float64)
     peak_bw_giga_bytes_per_second = zero(Float64)
     peak_hbm_bw_giga_bytes_per_second = zero(Float64)
@@ -292,7 +292,7 @@ function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:PerfEnv})
     has_cmem = false
     has_merged_vmem = false
     has_megacore = false
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             peak_tera_flops_per_second = PB.decode(d, Float64)
@@ -362,7 +362,7 @@ PB.reserved_fields(::Type{RunEnvironment}) = (names = String[], numbers = Union{
 PB.default_values(::Type{RunEnvironment}) = (;host_count = zero(Int32), task_count = zero(Int32), hostnames = Dict{String,Bool}(), device_type = "", device_core_count = zero(Int32), host_independent_job_info = nothing, host_dependent_job_info = Vector{HostDependentJobInfoResult}(), replica_count = zero(Int32), num_cores_per_replica = zero(Int32), host_trace_level = zero(UInt32), system_topology = nothing, is_training = false, power_metrics = nothing, hardware_type = HardwareType.UNKNOWN_HARDWARE)
 PB.field_numbers(::Type{RunEnvironment}) = (;host_count = 1, task_count = 2, hostnames = 3, device_type = 4, device_core_count = 5, host_independent_job_info = 7, host_dependent_job_info = 8, replica_count = 9, num_cores_per_replica = 10, host_trace_level = 12, system_topology = 13, is_training = 14, power_metrics = 15, hardware_type = 16)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:RunEnvironment})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:RunEnvironment}, _endpos::Int=0, _group::Bool=false)
     host_count = zero(Int32)
     task_count = zero(Int32)
     hostnames = Dict{String,Bool}()
@@ -377,7 +377,7 @@ function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:RunEnvironment})
     is_training = false
     power_metrics = Ref{Union{Nothing,PowerMetrics}}(nothing)
     hardware_type = HardwareType.UNKNOWN_HARDWARE
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             host_count = PB.decode(d, Int32)
@@ -470,7 +470,7 @@ PB.reserved_fields(::Type{OpStats}) = (names = String[], numbers = Union{Int,Uni
 PB.default_values(::Type{OpStats}) = (;host_op_metrics_db = nothing, device_op_metrics_db = nothing, hlo_metrics_db_complete_steps_only = nothing, perf_env = nothing, step_db = nothing, run_environment = nothing, kernel_stats_db = nothing, tf_function_db = nothing, core_id_to_details = Dict{UInt32,CoreDetails}(), diagnostics = nothing, program_id_to_name_map = Dict{UInt64,String}(), performance_counter_result = nothing, source_stats = nothing)
 PB.field_numbers(::Type{OpStats}) = (;host_op_metrics_db = 1, device_op_metrics_db = 2, hlo_metrics_db_complete_steps_only = 10, perf_env = 3, step_db = 4, run_environment = 5, kernel_stats_db = 6, tf_function_db = 8, core_id_to_details = 11, diagnostics = 9, program_id_to_name_map = 12, performance_counter_result = 13, source_stats = 14)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:OpStats})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:OpStats}, _endpos::Int=0, _group::Bool=false)
     host_op_metrics_db = Ref{Union{Nothing,OpMetricsDb}}(nothing)
     device_op_metrics_db = Ref{Union{Nothing,OpMetricsDb}}(nothing)
     hlo_metrics_db_complete_steps_only = Ref{Union{Nothing,OpMetricsDb}}(nothing)
@@ -484,7 +484,7 @@ function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:OpStats})
     program_id_to_name_map = Dict{UInt64,String}()
     performance_counter_result = Ref{Union{Nothing,PerformanceCounterResult}}(nothing)
     source_stats = Ref{Union{Nothing,SourceStats}}(nothing)
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             PB.decode!(d, host_op_metrics_db)

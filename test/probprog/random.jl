@@ -112,15 +112,11 @@ end
 
 # Similarly, `enzyme.random` op is not intended to be emitted directly in Reactant-land.
 # It is solely an intermediate representation within the `enzyme.mcmc` op lowering.
-function rng_distribution_attr(distribution::Int32)
-    return @ccall MLIR.API.mlir_c.enzymeRngDistributionAttrGet(
-        MLIR.IR.current_context()::MLIR.API.MlirContext, distribution::Int32
-    )::MLIR.IR.Attribute
+function rng_distribution_attr(distribution)
+    return MLIR.IR.Attribute(
+        MLIR.API.enzymeRngDistributionAttrGet(MLIR.IR.current_context(), distribution)
+    )
 end
-
-const RNG_UNIFORM = Int32(0)
-const RNG_NORMAL = Int32(1)
-const RNG_MULTINORMAL = Int32(2)
 
 function uniform_batch(
     rng_state::TracedRArray{UInt64,1},
@@ -134,7 +130,7 @@ function uniform_batch(
 
     rng_state_type = IR.TensorType([2], IR.Type(UInt64))
     result_type = IR.TensorType([BatchSize], IR.Type(Float64))
-    dist_attr = rng_distribution_attr(RNG_UNIFORM)
+    dist_attr = rng_distribution_attr(MLIR.API.EnzymeRngDistribution_Uniform)
 
     op = enzyme.random(
         rng_mlir,
@@ -162,7 +158,7 @@ function normal_batch(
 
     rng_state_type = IR.TensorType([2], IR.Type(UInt64))
     result_type = IR.TensorType([BatchSize], IR.Type(Float64))
-    dist_attr = rng_distribution_attr(RNG_NORMAL)
+    dist_attr = rng_distribution_attr(MLIR.API.EnzymeRngDistribution_Normal)
 
     op = enzyme.random(
         rng_mlir,
@@ -190,7 +186,7 @@ function multinormal_sample(
 
     rng_state_type = IR.TensorType([2], IR.Type(UInt64))
     result_type = IR.TensorType([Dim], IR.Type(Float64))
-    dist_attr = rng_distribution_attr(RNG_MULTINORMAL)
+    dist_attr = rng_distribution_attr(MLIR.API.EnzymeRngDistribution_MultiNormal)
 
     op = enzyme.random(
         rng_mlir,

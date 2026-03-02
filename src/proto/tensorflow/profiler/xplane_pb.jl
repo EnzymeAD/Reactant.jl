@@ -13,11 +13,11 @@ end
 PB.default_values(::Type{XStatMetadata}) = (;id = zero(Int64), name = "", description = "")
 PB.field_numbers(::Type{XStatMetadata}) = (;id = 1, name = 2, description = 3)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:XStatMetadata})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:XStatMetadata}, _endpos::Int=0, _group::Bool=false)
     id = zero(Int64)
     name = ""
     description = ""
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             id = PB.decode(d, Int64)
@@ -57,10 +57,10 @@ PB.oneof_field_types(::Type{XStat}) = (;
 PB.default_values(::Type{XStat}) = (;metadata_id = zero(Int64), double_value = zero(Float64), uint64_value = zero(UInt64), int64_value = zero(Int64), str_value = "", bytes_value = UInt8[], ref_value = zero(UInt64))
 PB.field_numbers(::Type{XStat}) = (;metadata_id = 1, double_value = 2, uint64_value = 3, int64_value = 4, str_value = 5, bytes_value = 6, ref_value = 7)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:XStat})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:XStat}, _endpos::Int=0, _group::Bool=false)
     metadata_id = zero(Int64)
     value = nothing
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             metadata_id = PB.decode(d, Int64)
@@ -133,14 +133,14 @@ end
 PB.default_values(::Type{XEventMetadata}) = (;id = zero(Int64), name = "", display_name = "", metadata = UInt8[], stats = Vector{XStat}(), child_id = Vector{Int64}())
 PB.field_numbers(::Type{XEventMetadata}) = (;id = 1, name = 2, display_name = 4, metadata = 3, stats = 5, child_id = 6)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:XEventMetadata})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:XEventMetadata}, _endpos::Int=0, _group::Bool=false)
     id = zero(Int64)
     name = ""
     display_name = ""
     metadata = UInt8[]
     stats = PB.BufferedVector{XStat}()
     child_id = PB.BufferedVector{Int64}()
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             id = PB.decode(d, Int64)
@@ -194,12 +194,12 @@ PB.oneof_field_types(::Type{XEvent}) = (;
 PB.default_values(::Type{XEvent}) = (;metadata_id = zero(Int64), offset_ps = zero(Int64), num_occurrences = zero(Int64), duration_ps = zero(Int64), stats = Vector{XStat}())
 PB.field_numbers(::Type{XEvent}) = (;metadata_id = 1, offset_ps = 2, num_occurrences = 5, duration_ps = 3, stats = 4)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:XEvent})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:XEvent}, _endpos::Int=0, _group::Bool=false)
     metadata_id = zero(Int64)
     data = nothing
     duration_ps = zero(Int64)
     stats = PB.BufferedVector{XStat}()
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             metadata_id = PB.decode(d, Int64)
@@ -258,7 +258,7 @@ PB.reserved_fields(::Type{XLine}) = (names = String[], numbers = Union{Int,UnitR
 PB.default_values(::Type{XLine}) = (;id = zero(Int64), display_id = zero(Int64), name = "", display_name = "", timestamp_ns = zero(Int64), duration_ps = zero(Int64), events = Vector{XEvent}())
 PB.field_numbers(::Type{XLine}) = (;id = 1, display_id = 10, name = 2, display_name = 11, timestamp_ns = 3, duration_ps = 9, events = 4)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:XLine})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:XLine}, _endpos::Int=0, _group::Bool=false)
     id = zero(Int64)
     display_id = zero(Int64)
     name = ""
@@ -266,7 +266,7 @@ function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:XLine})
     timestamp_ns = zero(Int64)
     duration_ps = zero(Int64)
     events = PB.BufferedVector{XEvent}()
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             id = PB.decode(d, Int64)
@@ -323,14 +323,14 @@ end
 PB.default_values(::Type{XPlane}) = (;id = zero(Int64), name = "", lines = Vector{XLine}(), event_metadata = Dict{Int64,XEventMetadata}(), stat_metadata = Dict{Int64,XStatMetadata}(), stats = Vector{XStat}())
 PB.field_numbers(::Type{XPlane}) = (;id = 1, name = 2, lines = 3, event_metadata = 4, stat_metadata = 5, stats = 6)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:XPlane})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:XPlane}, _endpos::Int=0, _group::Bool=false)
     id = zero(Int64)
     name = ""
     lines = PB.BufferedVector{XLine}()
     event_metadata = Dict{Int64,XEventMetadata}()
     stat_metadata = Dict{Int64,XStatMetadata}()
     stats = PB.BufferedVector{XStat}()
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             id = PB.decode(d, Int64)
@@ -381,12 +381,12 @@ end
 PB.default_values(::Type{XSpace}) = (;planes = Vector{XPlane}(), errors = Vector{String}(), warnings = Vector{String}(), hostnames = Vector{String}())
 PB.field_numbers(::Type{XSpace}) = (;planes = 1, errors = 2, warnings = 3, hostnames = 4)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:XSpace})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:XSpace}, _endpos::Int=0, _group::Bool=false)
     planes = PB.BufferedVector{XPlane}()
     errors = PB.BufferedVector{String}()
     warnings = PB.BufferedVector{String}()
     hostnames = PB.BufferedVector{String}()
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             PB.decode!(d, planes)

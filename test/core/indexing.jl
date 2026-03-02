@@ -514,3 +514,29 @@ end
     c = comparison_of_views(a, b)
     @test c_r ≈ c
 end
+
+function tracestep(x)
+    I = 1:5:20
+    s = zero(eltype(x))
+    @allowscalar @trace for i in eachindex(I)
+        idx = I[i]
+        s += x[idx]
+    end
+    return s
+end
+
+@testset "StepRange Traced Indexing" begin
+    x = Reactant.to_rarray(collect(Float32, 1:20))
+    x_ra = Reactant.to_rarray(x)
+    @test @jit(tracestep(x_ra)) ≈ tracestep(x)
+end
+
+@testset "Indexing: $(x)" for x in (1:3:10, range(-0.1, 0.3; length=5))
+    x_ra = Reactant.to_rarray(x; track_numbers=true)
+    @testset "idx: $(idx)" for idx in (1, 2, 3)
+        @test @jit(getindex(x_ra, idx)) ≈ getindex(x, idx)
+
+        idx_ra = Reactant.to_rarray(idx; track_numbers=true)
+        @test @jit(getindex(x_ra, idx_ra)) ≈ getindex(x, idx)
+    end
+end

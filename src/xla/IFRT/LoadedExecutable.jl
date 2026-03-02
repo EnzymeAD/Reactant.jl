@@ -14,17 +14,15 @@ end
 
 function free_exec(exec::LoadedExecutable)
     if XLA.is_live[]
-        @ccall MLIR.API.mlir_c.ifrt_loaded_executable_dtor(exec.exec::Ptr{Cvoid})::Cvoid
+        GC.@preserve exec begin
+            MLIR.API.ifrt_loaded_executable_dtor(exec.exec)
+        end
     end
 end
 
 function XLA.client(exec::LoadedExecutable)
     GC.@preserve exec begin
-        return Client(
-            @ccall MLIR.API.mlir_c.ifrt_loaded_executable_client(
-                exec.exec::Ptr{Cvoid}
-            )::Ptr{Cvoid}
-        )
+        return Client(MLIR.API.ifrt_loaded_executable_client(exec.exec))
     end
 end
 
@@ -46,13 +44,9 @@ for (jlop, xlaop, field) in (
         end
 
         op_shardings = Ref{NTuple{exec.$(field),Ptr{Cvoid}}}()
-
-        GC.@preserve exec op_shardings begin
-            @ccall MLIR.API.mlir_c.$(xlaop)(
-                exec.exec::Ptr{Cvoid}, op_shardings::Ptr{Ptr{Cvoid}}, exec.$(field)::Cint
-            )::Cvoid
+        GC.@preserve exec begin
+            MLIR.API.$(xlaop)(exec.exec, op_shardings, exec.$(field))
         end
-
         return [XLA.OpSharding(op_sharding) for op_sharding in op_shardings[]]
     end
 end
@@ -64,9 +58,7 @@ function XLA.get_hlo_modules(exec::LoadedExecutable)
     hlo_modules = Ref{NTuple{Int64(XLA.num_partitions(exec)),Ptr{Cvoid}}}()
     nmodules = Ref{Int32}(0)
     GC.@preserve exec hlo_modules begin
-        @ccall MLIR.API.mlir_c.ifrt_loaded_executable_get_hlo_modules(
-            exec.exec::Ptr{Cvoid}, hlo_modules::Ptr{Ptr{Cvoid}}, nmodules::Ptr{Int32}
-        )::Cvoid
+        MLIR.API.ifrt_loaded_executable_get_hlo_modules(exec.exec, hlo_modules, nmodules)
     end
     return map(XLA.HloModule, hlo_modules[][1:Int(nmodules[])])
 end
@@ -84,12 +76,9 @@ function XLA.compile(
     compile_options_bytes = Reactant.ProtoUtils.proto_to_bytes(compile_options)
     GC.@preserve client mod compile_options_bytes begin
         exec = MLIR.IR.try_compile_dump_mlir(mod) do
-            @ccall MLIR.API.mlir_c.ifrt_compile_with_proto(
-                client.client::Ptr{Cvoid},
-                mod::MLIR.API.MlirModule,
-                compile_options_bytes::Ptr{UInt8},
-                length(compile_options_bytes)::Csize_t,
-            )::Ptr{Cvoid}
+            MLIR.API.ifrt_compile_with_proto(
+                client.client, mod, compile_options_bytes, length(compile_options_bytes)
+            )
         end
     end
     return LoadedExecutable(
@@ -107,19 +96,17 @@ end
     future_res = Ref{Ptr{Cvoid}}()
     futures = Ref{UInt8}(0)
 
-    inputs = Base.RefValue(inputs)
-    donated_args = Base.RefValue(donated_args)
     GC.@preserve exec outputs future_res futures begin
-        @ccall MLIR.API.mlir_c.ifrt_loaded_executable_execute(
-            exec.exec::Ptr{Cvoid},
-            N::Cint,
-            inputs::Ptr{Ptr{Cvoid}},
-            donated_args::Ptr{UInt8},
-            n_outs::Cint,
-            Base.unsafe_convert(Ptr{Ptr{Cvoid}}, outputs)::Ptr{Ptr{Cvoid}},
-            futures::Ptr{UInt8},
-            future_res::Ptr{Ptr{Cvoid}},
-        )::Cvoid
+        MLIR.API.ifrt_loaded_executable_execute(
+            exec.exec,
+            N,
+            Base.RefValue(inputs),
+            Base.RefValue(donated_args),
+            n_outs,
+            outputs,
+            futures,
+            future_res,
+        )
     end
 
     outputs = outputs[]

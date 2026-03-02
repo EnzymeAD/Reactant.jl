@@ -46,7 +46,7 @@ PB.reserved_fields(::Type{HloStatsRecord}) = (names = String[], numbers = Union{
 PB.default_values(::Type{HloStatsRecord}) = (;rank = zero(UInt64), program_id = zero(UInt64), hlo_category = "", hlo_expression = "", tf_op_name = "", occurrences = zero(Int64), total_time_in_us = zero(Float64), avg_time_in_us = zero(Float64), total_self_time_in_us = zero(Float64), avg_self_time_in_us = zero(Float64), total_self_time_as_fraction = zero(Float64), cumulative_total_self_time_as_fraction = zero(Float64), dma_stall_fraction = zero(Float64), measured_flop_rate = zero(Float64), model_flop_rate = zero(Float64), measured_memory_bw = zero(Float64), hbm_bw = zero(Float64), cmem_read_bw = zero(Float64), cmem_write_bw = zero(Float64), vmem_read_bw = zero(Float64), vmem_write_bw = zero(Float64), operational_intensity = zero(Float64), hbm_operational_intensity = zero(Float64), cmem_read_operational_intensity = zero(Float64), cmem_write_operational_intensity = zero(Float64), vmem_read_operational_intensity = zero(Float64), vmem_write_operational_intensity = zero(Float64), bottleneck_operational_intensity = zero(Float64), bound_by = "", rematerialization = false, outside_compilation = false, autotuned = false, flops = zero(UInt64), bytes_accessed = zero(UInt64), source_info = nothing)
 PB.field_numbers(::Type{HloStatsRecord}) = (;rank = 1, program_id = 30, hlo_category = 17, hlo_expression = 2, tf_op_name = 21, occurrences = 3, total_time_in_us = 4, avg_time_in_us = 5, total_self_time_in_us = 6, avg_self_time_in_us = 7, total_self_time_as_fraction = 8, cumulative_total_self_time_as_fraction = 9, dma_stall_fraction = 10, measured_flop_rate = 13, model_flop_rate = 34, measured_memory_bw = 14, hbm_bw = 22, cmem_read_bw = 23, cmem_write_bw = 24, vmem_read_bw = 35, vmem_write_bw = 36, operational_intensity = 15, hbm_operational_intensity = 26, cmem_read_operational_intensity = 27, cmem_write_operational_intensity = 28, vmem_read_operational_intensity = 37, vmem_write_operational_intensity = 38, bottleneck_operational_intensity = 29, bound_by = 16, rematerialization = 20, outside_compilation = 25, autotuned = 31, flops = 32, bytes_accessed = 33, source_info = 39)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:HloStatsRecord})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:HloStatsRecord}, _endpos::Int=0, _group::Bool=false)
     rank = zero(UInt64)
     program_id = zero(UInt64)
     hlo_category = ""
@@ -82,7 +82,7 @@ function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:HloStatsRecord})
     flops = zero(UInt64)
     bytes_accessed = zero(UInt64)
     source_info = Ref{Union{Nothing,tensorflow.profiler.SourceInfo}}(nothing)
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             rank = PB.decode(d, UInt64)
@@ -246,9 +246,9 @@ end
 PB.default_values(::Type{HloStatsDatabase}) = (;hlo_stats_record = Vector{HloStatsRecord}())
 PB.field_numbers(::Type{HloStatsDatabase}) = (;hlo_stats_record = 1)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:HloStatsDatabase})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:HloStatsDatabase}, _endpos::Int=0, _group::Bool=false)
     hlo_stats_record = PB.BufferedVector{HloStatsRecord}()
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             PB.decode!(d, hlo_stats_record)

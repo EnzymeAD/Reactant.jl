@@ -33,9 +33,9 @@ end
 PB.default_values(::Type{var"HloScheduleProto.InstructionSequence"}) = (;instruction_ids = Vector{Int64}())
 PB.field_numbers(::Type{var"HloScheduleProto.InstructionSequence"}) = (;instruction_ids = 1)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:var"HloScheduleProto.InstructionSequence"})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:var"HloScheduleProto.InstructionSequence"}, _endpos::Int=0, _group::Bool=false)
     instruction_ids = PB.BufferedVector{Int64}()
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             PB.decode!(d, wire_type, instruction_ids)
@@ -66,10 +66,10 @@ end
 PB.default_values(::Type{var"StackFrameIndexProto.StackFrame"}) = (;file_location_id = zero(Int32), parent_frame_id = zero(Int32))
 PB.field_numbers(::Type{var"StackFrameIndexProto.StackFrame"}) = (;file_location_id = 1, parent_frame_id = 2)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:var"StackFrameIndexProto.StackFrame"})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:var"StackFrameIndexProto.StackFrame"}, _endpos::Int=0, _group::Bool=false)
     file_location_id = zero(Int32)
     parent_frame_id = zero(Int32)
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             file_location_id = PB.decode(d, Int32)
@@ -104,10 +104,10 @@ end
 PB.default_values(::Type{var"HloInputs.LiteralDescriptor"}) = (;version = zero(Int32), argument_size_bytes = zero(UInt64))
 PB.field_numbers(::Type{var"HloInputs.LiteralDescriptor"}) = (;version = 1, argument_size_bytes = 2)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:var"HloInputs.LiteralDescriptor"})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:var"HloInputs.LiteralDescriptor"}, _endpos::Int=0, _group::Bool=false)
     version = zero(Int32)
     argument_size_bytes = zero(UInt64)
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             version = PB.decode(d, Int32)
@@ -149,7 +149,7 @@ end
 PB.default_values(::Type{HloPassMetadata}) = (;pass_id = zero(Int64), pass_name = "", pipeline_name = "", dump_filenames = Vector{String}(), module_changed = false, module_id = zero(Int64), module_group_module_ids = Vector{Int64}(), start_timestamp_usec = zero(Int64), end_timestamp_usec = zero(Int64), custom_metadata = nothing, kv_metrics = Vector{KeyValueMetric}())
 PB.field_numbers(::Type{HloPassMetadata}) = (;pass_id = 1, pass_name = 2, pipeline_name = 3, dump_filenames = 4, module_changed = 5, module_id = 6, module_group_module_ids = 7, start_timestamp_usec = 8, end_timestamp_usec = 9, custom_metadata = 10, kv_metrics = 11)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:HloPassMetadata})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:HloPassMetadata}, _endpos::Int=0, _group::Bool=false)
     pass_id = zero(Int64)
     pass_name = ""
     pipeline_name = ""
@@ -161,7 +161,7 @@ function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:HloPassMetadata})
     end_timestamp_usec = zero(Int64)
     custom_metadata = Ref{Union{Nothing,google.protobuf.var"#Any"}}(nothing)
     kv_metrics = PB.BufferedVector{KeyValueMetric}()
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             pass_id = PB.decode(d, Int64)
@@ -232,12 +232,12 @@ end
 PB.default_values(::Type{var"BufferAllocationProto.Assigned"}) = (;logical_buffer_id = zero(Int64), offset = zero(Int64), size = zero(Int64), element_type = PrimitiveType.PRIMITIVE_TYPE_INVALID)
 PB.field_numbers(::Type{var"BufferAllocationProto.Assigned"}) = (;logical_buffer_id = 1, offset = 2, size = 3, element_type = 4)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:var"BufferAllocationProto.Assigned"})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:var"BufferAllocationProto.Assigned"}, _endpos::Int=0, _group::Bool=false)
     logical_buffer_id = zero(Int64)
     offset = zero(Int64)
     size = zero(Int64)
     element_type = PrimitiveType.PRIMITIVE_TYPE_INVALID
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             logical_buffer_id = PB.decode(d, Int64)
@@ -286,14 +286,14 @@ end
 PB.default_values(::Type{var"StackFrameIndexProto.FileLocation"}) = (;file_name_id = zero(Int32), function_name_id = zero(Int32), line = zero(Int32), end_line = zero(Int32), column = zero(Int32), end_column = zero(Int32))
 PB.field_numbers(::Type{var"StackFrameIndexProto.FileLocation"}) = (;file_name_id = 1, function_name_id = 2, line = 3, end_line = 5, column = 4, end_column = 6)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:var"StackFrameIndexProto.FileLocation"})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:var"StackFrameIndexProto.FileLocation"}, _endpos::Int=0, _group::Bool=false)
     file_name_id = zero(Int32)
     function_name_id = zero(Int32)
     line = zero(Int32)
     end_line = zero(Int32)
     column = zero(Int32)
     end_column = zero(Int32)
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             file_name_id = PB.decode(d, Int32)
@@ -344,11 +344,11 @@ PB.reserved_fields(::Type{var"LogicalBufferProto.Location"}) = (names = String[]
 PB.default_values(::Type{var"LogicalBufferProto.Location"}) = (;instruction_name = "", instruction_id = zero(Int64), shape_index = Vector{Int64}())
 PB.field_numbers(::Type{var"LogicalBufferProto.Location"}) = (;instruction_name = 2, instruction_id = 4, shape_index = 3)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:var"LogicalBufferProto.Location"})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:var"LogicalBufferProto.Location"}, _endpos::Int=0, _group::Bool=false)
     instruction_name = ""
     instruction_id = zero(Int64)
     shape_index = PB.BufferedVector{Int64}()
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 2
             instruction_name = PB.decode(d, String)
@@ -386,11 +386,11 @@ end
 PB.default_values(::Type{CrossProgramPrefetch}) = (;parameter = zero(Int64), index = Vector{Int64}(), offset = zero(Int64))
 PB.field_numbers(::Type{CrossProgramPrefetch}) = (;parameter = 1, index = 2, offset = 3)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:CrossProgramPrefetch})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:CrossProgramPrefetch}, _endpos::Int=0, _group::Bool=false)
     parameter = zero(Int64)
     index = PB.BufferedVector{Int64}()
     offset = zero(Int64)
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             parameter = PB.decode(d, Int64)
@@ -427,10 +427,10 @@ end
 PB.default_values(::Type{var"HloBufferDonorProto.BufferDonorEntryProto"}) = (;parameter_number = zero(Int64), parameter_shape_index = Vector{Int64}())
 PB.field_numbers(::Type{var"HloBufferDonorProto.BufferDonorEntryProto"}) = (;parameter_number = 1, parameter_shape_index = 2)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:var"HloBufferDonorProto.BufferDonorEntryProto"})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:var"HloBufferDonorProto.BufferDonorEntryProto"}, _endpos::Int=0, _group::Bool=false)
     parameter_number = zero(Int64)
     parameter_shape_index = PB.BufferedVector{Int64}()
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             parameter_number = PB.decode(d, Int64)
@@ -464,11 +464,11 @@ end
 PB.default_values(::Type{var"HloInstructionProto.SliceDimensions"}) = (;start = zero(Int64), limit = zero(Int64), stride = zero(Int64))
 PB.field_numbers(::Type{var"HloInstructionProto.SliceDimensions"}) = (;start = 1, limit = 2, stride = 3)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:var"HloInstructionProto.SliceDimensions"})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:var"HloInstructionProto.SliceDimensions"}, _endpos::Int=0, _group::Bool=false)
     start = zero(Int64)
     limit = zero(Int64)
     stride = zero(Int64)
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             start = PB.decode(d, Int64)
@@ -510,9 +510,9 @@ end
 PB.default_values(::Type{HloScheduleProto}) = (;sequences = Dict{Int64,var"HloScheduleProto.InstructionSequence"}())
 PB.field_numbers(::Type{HloScheduleProto}) = (;sequences = 1)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:HloScheduleProto})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:HloScheduleProto}, _endpos::Int=0, _group::Bool=false)
     sequences = Dict{Int64,var"HloScheduleProto.InstructionSequence"}()
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             PB.decode!(d, sequences)
@@ -541,10 +541,10 @@ end
 PB.default_values(::Type{HloInputs}) = (;arguments = Vector{LiteralProto}(), arguments_descriptors = Vector{var"HloInputs.LiteralDescriptor"}())
 PB.field_numbers(::Type{HloInputs}) = (;arguments = 1, arguments_descriptors = 2)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:HloInputs})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:HloInputs}, _endpos::Int=0, _group::Bool=false)
     arguments = PB.BufferedVector{LiteralProto}()
     arguments_descriptors = PB.BufferedVector{var"HloInputs.LiteralDescriptor"}()
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             PB.decode!(d, arguments)
@@ -580,13 +580,13 @@ end
 PB.default_values(::Type{HloModuleMetadataProto}) = (;canonical_module_id = zero(Int64), module_group_name = "", original_module_id = zero(Int64), partitioned_module_ids = Vector{Int64}(), pass_metadata = Vector{HloPassMetadata}())
 PB.field_numbers(::Type{HloModuleMetadataProto}) = (;canonical_module_id = 1, module_group_name = 2, original_module_id = 3, partitioned_module_ids = 4, pass_metadata = 5)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:HloModuleMetadataProto})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:HloModuleMetadataProto}, _endpos::Int=0, _group::Bool=false)
     canonical_module_id = zero(Int64)
     module_group_name = ""
     original_module_id = zero(Int64)
     partitioned_module_ids = PB.BufferedVector{Int64}()
     pass_metadata = PB.BufferedVector{HloPassMetadata}()
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             canonical_module_id = PB.decode(d, Int64)
@@ -641,7 +641,7 @@ end
 PB.default_values(::Type{BufferAllocationProto}) = (;index = zero(Int64), size = zero(Int64), is_thread_local = false, is_tuple = false, is_entry_computation_parameter = false, is_constant = false, parameter_number = zero(Int64), parameter_shape_index = Vector{Int64}(), is_parameter_aliased_with_output = false, maybe_live_out = false, color = zero(Int64), assigned = Vector{var"BufferAllocationProto.Assigned"}())
 PB.field_numbers(::Type{BufferAllocationProto}) = (;index = 1, size = 2, is_thread_local = 3, is_tuple = 11, is_entry_computation_parameter = 5, is_constant = 12, parameter_number = 6, parameter_shape_index = 10, is_parameter_aliased_with_output = 13, maybe_live_out = 7, color = 8, assigned = 9)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:BufferAllocationProto})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:BufferAllocationProto}, _endpos::Int=0, _group::Bool=false)
     index = zero(Int64)
     size = zero(Int64)
     is_thread_local = false
@@ -654,7 +654,7 @@ function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:BufferAllocationProto})
     maybe_live_out = false
     color = zero(Int64)
     assigned = PB.BufferedVector{var"BufferAllocationProto.Assigned"}()
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             index = PB.decode(d, Int64)
@@ -729,12 +729,12 @@ end
 PB.default_values(::Type{var"HloInputOutputAliasProto.AliasEntryProto"}) = (;output_shape_index = Vector{Int64}(), parameter_number = zero(Int64), parameter_shape_index = Vector{Int64}(), kind = Kind.UNDEFINED_ALIAS)
 PB.field_numbers(::Type{var"HloInputOutputAliasProto.AliasEntryProto"}) = (;output_shape_index = 1, parameter_number = 2, parameter_shape_index = 3, kind = 4)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:var"HloInputOutputAliasProto.AliasEntryProto"})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:var"HloInputOutputAliasProto.AliasEntryProto"}, _endpos::Int=0, _group::Bool=false)
     output_shape_index = PB.BufferedVector{Int64}()
     parameter_number = zero(Int64)
     parameter_shape_index = PB.BufferedVector{Int64}()
     kind = Kind.UNDEFINED_ALIAS
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             PB.decode!(d, wire_type, output_shape_index)
@@ -777,12 +777,12 @@ end
 PB.default_values(::Type{StackFrameIndexProto}) = (;file_names = Vector{String}(), function_names = Vector{String}(), file_locations = Vector{var"StackFrameIndexProto.FileLocation"}(), stack_frames = Vector{var"StackFrameIndexProto.StackFrame"}())
 PB.field_numbers(::Type{StackFrameIndexProto}) = (;file_names = 1, function_names = 2, file_locations = 3, stack_frames = 4)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:StackFrameIndexProto})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:StackFrameIndexProto}, _endpos::Int=0, _group::Bool=false)
     file_names = PB.BufferedVector{String}()
     function_names = PB.BufferedVector{String}()
     file_locations = PB.BufferedVector{var"StackFrameIndexProto.FileLocation"}()
     stack_frames = PB.BufferedVector{var"StackFrameIndexProto.StackFrame"}()
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             PB.decode!(d, file_names)
@@ -825,12 +825,12 @@ end
 PB.default_values(::Type{LogicalBufferProto}) = (;id = zero(Int64), size = zero(Int64), defined_at = nothing, color = zero(Int64))
 PB.field_numbers(::Type{LogicalBufferProto}) = (;id = 1, size = 2, defined_at = 3, color = 4)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:LogicalBufferProto})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:LogicalBufferProto}, _endpos::Int=0, _group::Bool=false)
     id = zero(Int64)
     size = zero(Int64)
     defined_at = Ref{Union{Nothing,var"LogicalBufferProto.Location"}}(nothing)
     color = zero(Int64)
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             id = PB.decode(d, Int64)
@@ -871,10 +871,10 @@ end
 PB.default_values(::Type{var"BufferAssignmentProto.BufferAlias"}) = (;source_buffer_id = zero(Int64), location = nothing)
 PB.field_numbers(::Type{var"BufferAssignmentProto.BufferAlias"}) = (;source_buffer_id = 1, location = 2)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:var"BufferAssignmentProto.BufferAlias"})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:var"BufferAssignmentProto.BufferAlias"}, _endpos::Int=0, _group::Bool=false)
     source_buffer_id = zero(Int64)
     location = Ref{Union{Nothing,var"LogicalBufferProto.Location"}}(nothing)
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             source_buffer_id = PB.decode(d, Int64)
@@ -906,9 +906,9 @@ end
 PB.default_values(::Type{HloBufferDonorProto}) = (;entries = Vector{var"HloBufferDonorProto.BufferDonorEntryProto"}())
 PB.field_numbers(::Type{HloBufferDonorProto}) = (;entries = 1)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:HloBufferDonorProto})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:HloBufferDonorProto}, _endpos::Int=0, _group::Bool=false)
     entries = PB.BufferedVector{var"HloBufferDonorProto.BufferDonorEntryProto"}()
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             PB.decode!(d, entries)
@@ -943,7 +943,7 @@ end
 PB.default_values(::Type{var"HloModuleProto.ProfileInfo"}) = (;profile_type = var"HloModuleProto.ProfileType".INVALID, relative_speedup = zero(Float64), profile_source = ProfileSource.PROFILE_SOURCE_UNKNOWN_SOURCE, compilation_event = CompilationEvent.COMPILATION_EVENT_UNKNOWN_EVENT, fingerprint = "", profile_generation_strategy = ProfileGenerationStrategy.PROFILE_GENERATION_STRATEGY_UNKNOWN, original_changelist = zero(Int64), changelist = zero(Int64))
 PB.field_numbers(::Type{var"HloModuleProto.ProfileInfo"}) = (;profile_type = 1, relative_speedup = 2, profile_source = 3, compilation_event = 4, fingerprint = 5, profile_generation_strategy = 6, original_changelist = 7, changelist = 8)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:var"HloModuleProto.ProfileInfo"})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:var"HloModuleProto.ProfileInfo"}, _endpos::Int=0, _group::Bool=false)
     profile_type = var"HloModuleProto.ProfileType".INVALID
     relative_speedup = zero(Float64)
     profile_source = ProfileSource.PROFILE_SOURCE_UNKNOWN_SOURCE
@@ -952,7 +952,7 @@ function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:var"HloModuleProto.Profi
     profile_generation_strategy = ProfileGenerationStrategy.PROFILE_GENERATION_STRATEGY_UNKNOWN
     original_changelist = zero(Int64)
     changelist = zero(Int64)
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             profile_type = PB.decode(d, var"HloModuleProto.ProfileType".T)
@@ -1091,7 +1091,7 @@ PB.oneof_field_types(::Type{HloInstructionProto}) = (;
 PB.default_values(::Type{HloInstructionProto}) = (;name = "", opcode = "", shape = nothing, metadata = nothing, literal = nothing, parameter_number = zero(Int64), fusion_kind = "", tuple_index = zero(Int64), dimensions = Vector{Int64}(), window = nothing, convolution_dimension_numbers = nothing, feature_group_count = zero(Int64), batch_group_count = zero(Int64), slice_dimensions = Vector{var"HloInstructionProto.SliceDimensions"}(), exponent_bits = zero(Int32), mantissa_bits = zero(Int32), dynamic_slice_sizes = Vector{Int64}(), padding_config = nothing, outfeed_config = UInt8[], distribution = RandomDistribution.RNG_INVALID, epsilon = zero(Float32), feature_index = zero(Int64), channel_id = zero(Int64), infeed_config = UInt8[], custom_call_target = "", outfeed_shape = nothing, dot_dimension_numbers = nothing, ragged_dot_dimension_numbers = nothing, fft_type = FftType.FFT, fft_length = Vector{Int64}(), comparison_direction = "", gather_dimension_numbers = nothing, gather_slice_sizes = Vector{Int64}(), id = zero(Int64), operand_ids = Vector{Int64}(), control_predecessor_ids = Vector{Int64}(), called_computation_ids = Vector{Int64}(), sharding = nothing, backend_config = UInt8[], replica_groups = Vector{ReplicaGroup}(), all_reduce_id = zero(Int64), use_global_device_ids = false, is_host_transfer = false, is_stable = false, scatter_dimension_numbers = nothing, precision_config = nothing, source_target_pairs = Vector{SourceTarget}(), domain_entry_sharding = nothing, domain_exit_sharding = nothing, constrain_layout = false, operand_shapes_with_layout = Vector{ShapeProto}(), triangular_solve_options = nothing, cholesky_options = nothing, parameter_replication = nothing, custom_call_has_side_effect = false, output_operand_aliasing = Vector{OutputOperandAliasing}(), custom_call_schedule = CustomCallSchedule.SCHEDULE_NONE, delta = zero(Int64), indices_are_sorted = false, frontend_attributes = nothing, unique_indices = false, rng_algorithm = RandomAlgorithm.RNG_DEFAULT, comparison_type = "", is_cross_program_prefetch = false, cross_program_prefetch_index = zero(Int32), padding_type = PaddingType.PADDING_INVALID, custom_call_api_version = CustomCallApiVersion.API_VERSION_UNSPECIFIED, async_execution_thread = "", k = zero(Int64), largest = false, statistics_viz = nothing, collective_device_list = nothing, iota_collective_device_list = nothing, mesh_axes_replica_group_list = nothing, original_value = nothing, is_composite = false, result_accuracy = nothing, is_reverse = false, num_carries = zero(Int64), is_associative = TriState.TRI_STATE_UNSPECIFIED, conv_kind = ConvolutionKind.CONVOLUTION_KIND_UNSET)
 PB.field_numbers(::Type{HloInstructionProto}) = (;name = 1, opcode = 2, shape = 3, metadata = 7, literal = 8, parameter_number = 9, fusion_kind = 11, tuple_index = 13, dimensions = 14, window = 15, convolution_dimension_numbers = 16, feature_group_count = 50, batch_group_count = 58, slice_dimensions = 17, exponent_bits = 18, mantissa_bits = 19, dynamic_slice_sizes = 20, padding_config = 21, outfeed_config = 22, distribution = 23, epsilon = 24, feature_index = 25, channel_id = 26, infeed_config = 27, custom_call_target = 28, outfeed_shape = 29, dot_dimension_numbers = 30, ragged_dot_dimension_numbers = 90, fft_type = 31, fft_length = 32, comparison_direction = 63, gather_dimension_numbers = 33, gather_slice_sizes = 34, id = 35, operand_ids = 36, control_predecessor_ids = 37, called_computation_ids = 38, sharding = 40, backend_config = 43, replica_groups = 49, all_reduce_id = 45, use_global_device_ids = 71, is_host_transfer = 47, is_stable = 60, scatter_dimension_numbers = 48, precision_config = 51, source_target_pairs = 52, domain_entry_sharding = 54, domain_exit_sharding = 55, constrain_layout = 56, operand_shapes_with_layout = 57, triangular_solve_options = 59, cholesky_options = 62, parameter_replication = 61, custom_call_has_side_effect = 65, output_operand_aliasing = 74, custom_call_schedule = 76, delta = 66, indices_are_sorted = 67, frontend_attributes = 68, unique_indices = 69, rng_algorithm = 70, comparison_type = 72, is_cross_program_prefetch = 73, cross_program_prefetch_index = 80, padding_type = 75, custom_call_api_version = 77, async_execution_thread = 79, k = 81, largest = 85, statistics_viz = 82, collective_device_list = 87, iota_collective_device_list = 92, mesh_axes_replica_group_list = 93, original_value = 88, is_composite = 89, result_accuracy = 91, is_reverse = 94, num_carries = 95, is_associative = 96, conv_kind = 97)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:HloInstructionProto})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:HloInstructionProto}, _endpos::Int=0, _group::Bool=false)
     name = ""
     opcode = ""
     shape = Ref{Union{Nothing,ShapeProto}}(nothing)
@@ -1171,7 +1171,7 @@ function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:HloInstructionProto})
     num_carries = zero(Int64)
     is_associative = TriState.TRI_STATE_UNSPECIFIED
     conv_kind = ConvolutionKind.CONVOLUTION_KIND_UNSET
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             name = PB.decode(d, String)
@@ -1539,13 +1539,13 @@ end
 PB.default_values(::Type{var"HeapSimulatorTrace.Event"}) = (;kind = var"HeapSimulatorTrace.Event.Kind".ALLOC, buffer_id = zero(Int64), computation_name = "", instruction_name = "", share_with_canonical_id = zero(Int64))
 PB.field_numbers(::Type{var"HeapSimulatorTrace.Event"}) = (;kind = 1, buffer_id = 2, computation_name = 3, instruction_name = 4, share_with_canonical_id = 5)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:var"HeapSimulatorTrace.Event"})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:var"HeapSimulatorTrace.Event"}, _endpos::Int=0, _group::Bool=false)
     kind = var"HeapSimulatorTrace.Event.Kind".ALLOC
     buffer_id = zero(Int64)
     computation_name = ""
     instruction_name = ""
     share_with_canonical_id = zero(Int64)
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             kind = PB.decode(d, var"HeapSimulatorTrace.Event.Kind".T)
@@ -1589,9 +1589,9 @@ end
 PB.default_values(::Type{HloInputOutputAliasProto}) = (;entries = Vector{var"HloInputOutputAliasProto.AliasEntryProto"}())
 PB.field_numbers(::Type{HloInputOutputAliasProto}) = (;entries = 1)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:HloInputOutputAliasProto})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:HloInputOutputAliasProto}, _endpos::Int=0, _group::Bool=false)
     entries = PB.BufferedVector{var"HloInputOutputAliasProto.AliasEntryProto"}()
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             PB.decode!(d, entries)
@@ -1626,7 +1626,7 @@ PB.reserved_fields(::Type{HloComputationProto}) = (names = ["root_name"], number
 PB.default_values(::Type{HloComputationProto}) = (;name = "", instructions = Vector{HloInstructionProto}(), program_shape = nothing, id = zero(Int64), root_id = zero(Int64), is_fusion_computation = false, execution_thread = "")
 PB.field_numbers(::Type{HloComputationProto}) = (;name = 1, instructions = 2, program_shape = 4, id = 5, root_id = 6, is_fusion_computation = 7, execution_thread = 8)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:HloComputationProto})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:HloComputationProto}, _endpos::Int=0, _group::Bool=false)
     name = ""
     instructions = PB.BufferedVector{HloInstructionProto}()
     program_shape = Ref{Union{Nothing,ProgramShapeProto}}(nothing)
@@ -1634,7 +1634,7 @@ function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:HloComputationProto})
     root_id = zero(Int64)
     is_fusion_computation = false
     execution_thread = ""
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             name = PB.decode(d, String)
@@ -1688,11 +1688,11 @@ end
 PB.default_values(::Type{HeapSimulatorTrace}) = (;events = Vector{var"HeapSimulatorTrace.Event"}(), whole_module_simulation = false, buffer_allocation_index = zero(Int64))
 PB.field_numbers(::Type{HeapSimulatorTrace}) = (;events = 1, whole_module_simulation = 2, buffer_allocation_index = 3)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:HeapSimulatorTrace})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:HeapSimulatorTrace}, _endpos::Int=0, _group::Bool=false)
     events = PB.BufferedVector{var"HeapSimulatorTrace.Event"}()
     whole_module_simulation = false
     buffer_allocation_index = zero(Int64)
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             PB.decode!(d, events)
@@ -1731,12 +1731,12 @@ end
 PB.default_values(::Type{BufferAssignmentProto}) = (;logical_buffers = Vector{LogicalBufferProto}(), buffer_aliases = Vector{var"BufferAssignmentProto.BufferAlias"}(), buffer_allocations = Vector{BufferAllocationProto}(), heap_simulator_traces = Vector{HeapSimulatorTrace}())
 PB.field_numbers(::Type{BufferAssignmentProto}) = (;logical_buffers = 1, buffer_aliases = 2, buffer_allocations = 3, heap_simulator_traces = 4)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:BufferAssignmentProto})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:BufferAssignmentProto}, _endpos::Int=0, _group::Bool=false)
     logical_buffers = PB.BufferedVector{LogicalBufferProto}()
     buffer_aliases = PB.BufferedVector{var"BufferAssignmentProto.BufferAlias"}()
     buffer_allocations = PB.BufferedVector{BufferAllocationProto}()
     heap_simulator_traces = PB.BufferedVector{HeapSimulatorTrace}()
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             PB.decode!(d, logical_buffers)
@@ -1830,10 +1830,10 @@ const HloModuleGroupProto = var"##Stub#HloModuleGroupProto"{var"##Stub#HloModule
 PB.default_values(::Type{HloModuleGroupProto}) = (;name = "", hlo_modules = Vector{HloModuleProto}())
 PB.field_numbers(::Type{HloModuleGroupProto}) = (;name = 1, hlo_modules = 2)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:HloModuleGroupProto})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:HloModuleGroupProto}, _endpos::Int=0, _group::Bool=false)
     name = ""
     hlo_modules = PB.BufferedVector{HloModuleProto}()
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             name = PB.decode(d, String)
@@ -1864,7 +1864,7 @@ PB.reserved_fields(::Type{HloModuleProto}) = (names = ["dynamic_parameter_bindin
 PB.default_values(::Type{HloModuleProto}) = (;name = "", entry_computation_name = "", entry_computation_id = zero(Int64), computations = Vector{HloComputationProto}(), host_program_shape = nothing, id = zero(Int64), schedule = nothing, input_output_alias = nothing, buffer_donor = nothing, cross_program_prefetches = Vector{CrossProgramPrefetch}(), is_dynamic = false, spmd_output_sharding = nothing, spmd_parameters_shardings = Vector{OpSharding}(), use_auto_spmd_partitioning = false, profile_info = Vector{var"HloModuleProto.ProfileInfo"}(), device_assignment = nothing, stack_frame_index = nothing, frontend_attributes = nothing, original_value_recovery_table = nothing)
 PB.field_numbers(::Type{HloModuleProto}) = (;name = 1, entry_computation_name = 2, entry_computation_id = 6, computations = 3, host_program_shape = 4, id = 5, schedule = 7, input_output_alias = 8, buffer_donor = 18, cross_program_prefetches = 10, is_dynamic = 11, spmd_output_sharding = 12, spmd_parameters_shardings = 14, use_auto_spmd_partitioning = 16, profile_info = 13, device_assignment = 15, stack_frame_index = 17, frontend_attributes = 19, original_value_recovery_table = 20)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:HloModuleProto})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:HloModuleProto}, _endpos::Int=0, _group::Bool=false)
     name = ""
     entry_computation_name = ""
     entry_computation_id = zero(Int64)
@@ -1884,7 +1884,7 @@ function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:HloModuleProto})
     stack_frame_index = Ref{Union{Nothing,StackFrameIndexProto}}(nothing)
     frontend_attributes = Ref{Union{Nothing,FrontendAttributes}}(nothing)
     original_value_recovery_table = Ref{Union{Nothing,OriginalValueRecoveryTableProto}}(nothing)
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             name = PB.decode(d, String)
@@ -1983,10 +1983,10 @@ PB.reserved_fields(::Type{HloProto}) = (names = ["hlo_ordering"], numbers = Unio
 PB.default_values(::Type{HloProto}) = (;hlo_module = nothing, buffer_assignment = nothing)
 PB.field_numbers(::Type{HloProto}) = (;hlo_module = 1, buffer_assignment = 3)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:HloProto})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:HloProto}, _endpos::Int=0, _group::Bool=false)
     hlo_module = Ref{Union{Nothing,HloModuleProto}}(nothing)
     buffer_assignment = Ref{Union{Nothing,BufferAssignmentProto}}(nothing)
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             PB.decode!(d, hlo_module)
@@ -2016,12 +2016,12 @@ const HloSnapshot = var"##Stub#HloSnapshot"{var"##Stub#OriginalValueRecoveryTabl
 PB.default_values(::Type{HloSnapshot}) = (;hlo = nothing, arguments = Vector{LiteralProto}(), result = nothing, execution_platform = "")
 PB.field_numbers(::Type{HloSnapshot}) = (;hlo = 1, arguments = 2, result = 3, execution_platform = 4)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:HloSnapshot})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:HloSnapshot}, _endpos::Int=0, _group::Bool=false)
     hlo = Ref{Union{Nothing,HloProto}}(nothing)
     arguments = PB.BufferedVector{LiteralProto}()
     result = Ref{Union{Nothing,LiteralProto}}(nothing)
     execution_platform = ""
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             PB.decode!(d, hlo)
@@ -2059,11 +2059,11 @@ const HloUnoptimizedSnapshot = var"##Stub#HloUnoptimizedSnapshot"{var"##Stub#Ori
 PB.default_values(::Type{HloUnoptimizedSnapshot}) = (;hlo_module = nothing, partitions = Vector{HloInputs}(), version = zero(Int32))
 PB.field_numbers(::Type{HloUnoptimizedSnapshot}) = (;hlo_module = 1, partitions = 2, version = 3)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:HloUnoptimizedSnapshot})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:HloUnoptimizedSnapshot}, _endpos::Int=0, _group::Bool=false)
     hlo_module = Ref{Union{Nothing,HloModuleProto}}(nothing)
     partitions = PB.BufferedVector{HloInputs}()
     version = zero(Int32)
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             PB.decode!(d, hlo_module)
@@ -2097,9 +2097,9 @@ const OriginalValueRecoveryTableProto = var"##Stub#OriginalValueRecoveryTablePro
 PB.default_values(::Type{OriginalValueRecoveryTableProto}) = (;entries = Vector{var"OriginalValueRecoveryTableProto.Entry"}())
 PB.field_numbers(::Type{OriginalValueRecoveryTableProto}) = (;entries = 1)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:OriginalValueRecoveryTableProto})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:OriginalValueRecoveryTableProto}, _endpos::Int=0, _group::Bool=false)
     entries = PB.BufferedVector{var"OriginalValueRecoveryTableProto.Entry"}()
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             PB.decode!(d, entries)
@@ -2125,11 +2125,11 @@ const var"OriginalValueRecoveryTableProto.Entry" = var"##Stub#OriginalValueRecov
 PB.default_values(::Type{var"OriginalValueRecoveryTableProto.Entry"}) = (;old_original_array = nothing, new_original_array = nothing, recovery_module = nothing)
 PB.field_numbers(::Type{var"OriginalValueRecoveryTableProto.Entry"}) = (;old_original_array = 1, new_original_array = 2, recovery_module = 3)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:var"OriginalValueRecoveryTableProto.Entry"})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:var"OriginalValueRecoveryTableProto.Entry"}, _endpos::Int=0, _group::Bool=false)
     old_original_array = Ref{Union{Nothing,OriginalArrayProto}}(nothing)
     new_original_array = Ref{Union{Nothing,OriginalArrayProto}}(nothing)
     recovery_module = Ref{Union{Nothing,HloModuleProto}}(nothing)
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             PB.decode!(d, old_original_array)

@@ -14,17 +14,15 @@ end
 
 @inline function free_exec(exec::LoadedExecutable)
     if XLA.is_live[]
-        @ccall MLIR.API.mlir_c.ExecutableFree(exec.exec::Ptr{Cvoid})::Cvoid
+        GC.@preserve exec begin
+            MLIR.API.ExecutableFree(exec.exec)
+        end
     end
 end
 
 function XLA.client(exec::LoadedExecutable)
     GC.@preserve exec begin
-        return Client(
-            @ccall MLIR.API.mlir_c.PjRtLoadedExecutableGetClient(
-                exec.exec::Ptr{Cvoid}
-            )::Ptr{Cvoid}
-        )
+        return Client(MLIR.API.PjRtLoadedExecutableGetClient(exec.exec))
     end
 end
 
@@ -42,13 +40,9 @@ for (jlop, xlaop, field) in (
         end
 
         op_shardings = Ref{NTuple{exec.$(field),Ptr{Cvoid}}}()
-
-        GC.@preserve op_shardings begin
-            @ccall MLIR.API.mlir_c.$(xlaop)(
-                exec.exec::Ptr{Cvoid}, op_shardings::Ptr{Ptr{Cvoid}}, exec.$(field)::Int32
-            )::Cvoid
+        GC.@preserve exec begin
+            MLIR.API.$(xlaop)(exec.exec, op_shardings, exec.$(field))
         end
-
         return [XLA.OpSharding(op_sharding) for op_sharding in op_shardings[]]
     end
 end
@@ -60,9 +54,7 @@ function XLA.get_hlo_modules(exec::LoadedExecutable)
     hlo_modules = Ref{NTuple{Int64(XLA.num_partitions(exec)),Ptr{Cvoid}}}()
     nmodules = Ref{Int32}(0)
     GC.@preserve exec hlo_modules begin
-        @ccall MLIR.API.mlir_c.PjRtLoadedExecutableGetHloModules(
-            exec.exec::Ptr{Cvoid}, hlo_modules::Ptr{Ptr{Cvoid}}, nmodules::Ptr{Cint}
-        )::Cvoid
+        MLIR.API.PjRtLoadedExecutableGetHloModules(exec.exec, hlo_modules, nmodules)
     end
     return map(XLA.HloModule, hlo_modules[][1:Int(nmodules[])])
 end
@@ -80,12 +72,9 @@ function XLA.compile(
     compile_options_bytes = Reactant.ProtoUtils.proto_to_bytes(compile_options)
     GC.@preserve client mod compile_options_bytes begin
         exec = MLIR.IR.try_compile_dump_mlir(mod) do
-            @ccall MLIR.API.mlir_c.ClientCompileWithProto(
-                client.client::Ptr{Cvoid},
-                mod::MLIR.API.MlirModule,
-                compile_options_bytes::Ptr{UInt8},
-                length(compile_options_bytes)::Csize_t,
-            )::Ptr{Cvoid}
+            MLIR.API.ClientCompileWithProto(
+                client.client, mod, compile_options_bytes, length(compile_options_bytes)
+            )
         end
     end
     return LoadedExecutable(
@@ -236,17 +225,17 @@ end
             futures = Ref{UInt8}(0)
             futures_res = Ref{NTuple{$n_outs,Ptr{Cvoid}}}()
             GC.@preserve exec device inputs is_arg_donatable outputs_p futures futures_res begin
-                @ccall MLIR.API.mlir_c.XLAExecuteSharded(
-                    exec::Ptr{Cvoid},
-                    $N::Cuint,
-                    inputs::Ptr{Cvoid},
-                    device::Ptr{Cvoid},
-                    is_arg_donatable::Ptr{Cvoid},
-                    $n_outs::Cuint,
-                    outputs_p::Ptr{Cvoid},
-                    futures::Ptr{Cvoid},
-                    futures_res::Ptr{Cvoid},
-                )::Cvoid
+                MLIR.API.XLAExecuteSharded(
+                    exec,
+                    $N,
+                    Base.RefValue(inputs),
+                    Base.RefValue(device),
+                    Base.RefValue(is_arg_donatable),
+                    $n_outs,
+                    outputs_p,
+                    futures,
+                    futures_res,
+                )
             end
             outputs = outputs_p[]
             future_res = futures_res[]
@@ -311,19 +300,17 @@ end
     future_res = Ref{NTuple{n_outs * K,Ptr{Cvoid}}}()
     futures = Ref{UInt8}(0)
 
-    inputs = Base.RefValue(inputs)
-    donated_args = Base.RefValue(donated_args)
-    GC.@preserve inputs donated_args outputs futures future_res begin
-        @ccall MLIR.API.mlir_c.XLAExecute(
-            exec.exec::Ptr{Cvoid},
-            N::Cint,
-            inputs::Ptr{Cvoid},
-            donated_args::Ptr{UInt8},
-            n_outs::Cint,
-            Base.unsafe_convert(Ptr{Cvoid}, outputs)::Ptr{Cvoid},
-            Base.unsafe_convert(Ptr{UInt8}, futures)::Ptr{UInt8},
-            Base.unsafe_convert(Ptr{Cvoid}, future_res)::Ptr{Cvoid},
-        )::Cvoid
+    GC.@preserve exec inputs donated_args outputs future_res futures begin
+        MLIR.API.XLAExecute(
+            exec.exec,
+            N,
+            Base.RefValue(inputs),
+            Base.RefValue(donated_args),
+            n_outs,
+            Base.unsafe_convert(Ptr{Cvoid}, outputs),
+            Base.unsafe_convert(Ptr{UInt8}, futures),
+            Base.unsafe_convert(Ptr{Cvoid}, future_res),
+        )
     end
 
     outputs = outputs[]
