@@ -3,6 +3,10 @@ using NonuniformFFTs, Reactant, Test, CUDA, LinearAlgebra, KernelAbstractions
 const RunningOnCPU = contains(string(Reactant.devices()[1]), "CPU")
 const RunningOnCUDA = contains(string(Reactant.devices()[1]), "CUDA")
 
+# platforms that support cfunction with closures
+# (requires LLVM back-end support for trampoline intrinsics)
+const cfunction_closure = Sys.ARCH === :x86_64 || Sys.ARCH === :i686
+
 function nfft!(
     out::AbstractVector{<:Complex}, x::AbstractVector{<:Real}, v::AbstractVector{<:Real}
 )
@@ -27,7 +31,7 @@ function traced_nfft(x, v)
     return out
 end
 
-if RunningOnCPU || RunningOnCUDA
+if (RunningOnCPU || RunningOnCUDA) && cfunction_closure
     @testset "NonuniformFFTs callback" begin
         Np = 100  # number of non-uniform points
 

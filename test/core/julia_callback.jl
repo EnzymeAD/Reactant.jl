@@ -3,7 +3,11 @@ using Reactant, CUDA, Test
 const RunningOnCPU = contains(string(Reactant.devices()[1]), "CPU")
 const RunningOnCUDA = contains(string(Reactant.devices()[1]), "CUDA")
 
-if RunningOnCPU || RunningOnCUDA
+# platforms that support cfunction with closures
+# (requires LLVM back-end support for trampoline intrinsics)
+const cfunction_closure = Sys.ARCH === :x86_64 || Sys.ARCH === :i686
+
+if (RunningOnCPU || RunningOnCUDA) && cfunction_closure
     @testset "simple element-wise add" begin
         function my_add!(out, x, y)
             out .= x .+ y

@@ -4372,7 +4372,7 @@ end
 
 function traced_fn(x, alpha)
     return Reactant.Ops.julia_callback(
-        my_scale!, ((promote_type(eltype(x), eltype(alpha)), size(x))), x, alpha
+        my_scale!, ((promote_type(eltype(x), eltype(alpha)), size(x)),), x, alpha
     )
 end
 ```
