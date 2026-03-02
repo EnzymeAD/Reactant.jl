@@ -1843,6 +1843,8 @@ function get_stablehlo_to_hlo_passes(; stablehlo_to_mhlo::Bool=true)
     return passes
 end
 
+join_after_filtering_empty(list, delim) = join(filter(!isempty, list), delim)
+
 function compile_mlir!(
     mod,
     f,
@@ -2021,10 +2023,38 @@ function compile_mlir!(
 
     legal_to_run_shardy_passes = compile_options.optimization_passes === :all
 
+    layout_propagation_passes = ""
+    # We want to run these passes even before enzyme to raise loops
+    # which are generally nasty to differentiate and often times it
+    # hard to raise post differentiation
+    if (
+        compile_options.transpose_propagate === :up ||
+        compile_options.reshape_propagate === :up
+    )
+        # We tried propagating reshapes and transposes up. If at this point we are left
+        # with them, we propagate them down to minimize the number of Ops in the IR.
+        # Since this might enable certain raising, we do push down -> push up -> push down
+        common_kwargs = (;
+            recognize_comms,
+            lower_comms,
+            backend,
+            is_sharded,
+            raise_shlo_to_blas_lapack=false,
+        )
+        opt_passes_down = optimization_passes(
+            Reactant.__compile_options_with_reversed_propagation(compile_options);
+            common_kwargs...,
+        )
+        opt_passes_up = optimization_passes(compile_options; common_kwargs...)
+        layout_propagation_passes = join_after_filtering_empty(
+            [opt_passes_down, opt_passes_up, opt_passes_down, opt_passes_up], ","
+        )
+    end
+
     if compile_options.optimization_passes === :all
         run_pass_pipeline!(
             mod,
-            join(
+            join_after_filtering_empty(
                 if compile_options.raise_first
                     [
                         "mark-func-memory-effects",
@@ -2033,6 +2063,7 @@ function compile_mlir!(
                         raise_passes,
                         "enzyme-batch",
                         opt_passes2,
+                        layout_propagation_passes,
                         enzyme_pass,
                         opt_passes2,
                         "canonicalize",
@@ -2043,6 +2074,7 @@ function compile_mlir!(
                         lower_enzymexla_linalg_pass,
                         lower_enzymexla_mpi_pass,
                         jit,
+                        layout_propagation_passes,
                     ]
                 else
                     [
@@ -2050,6 +2082,7 @@ function compile_mlir!(
                         opt_passes,
                         "enzyme-batch",
                         opt_passes2,
+                        layout_propagation_passes,
                         enzyme_pass,
                         opt_passes2,
                         "canonicalize",
@@ -2062,6 +2095,7 @@ function compile_mlir!(
                         lower_enzymexla_linalg_pass,
                         lower_enzymexla_mpi_pass,
                         jit,
+                        layout_propagation_passes,
                     ]
                 end,
                 ",",
@@ -2071,7 +2105,7 @@ function compile_mlir!(
     elseif compile_options.optimization_passes === :before_kernel
         run_pass_pipeline!(
             mod,
-            join(
+            join_after_filtering_empty(
                 if compile_options.raise_first
                     ["mark-func-memory-effects", opt_passes]
                 else
@@ -2080,6 +2114,7 @@ function compile_mlir!(
                         opt_passes,
                         "enzyme-batch",
                         opt_passes2,
+                        layout_propagation_passes,
                         enzyme_pass,
                         opt_passes2,
                         "canonicalize",
@@ -2087,6 +2122,7 @@ function compile_mlir!(
                         "enzyme-simplify-math",
                         legalize_chlo_to_stablehlo...,
                         opt_passes2,
+                        layout_propagation_passes,
                     ]
                 end,
                 ',',
@@ -2096,7 +2132,7 @@ function compile_mlir!(
     elseif compile_options.optimization_passes === :before_jit
         run_pass_pipeline!(
             mod,
-            join(
+            join_after_filtering_empty(
                 if compile_options.raise_first
                     [
                         "mark-func-memory-effects",
@@ -2105,6 +2141,7 @@ function compile_mlir!(
                         raise_passes,
                         "enzyme-batch",
                         opt_passes2,
+                        layout_propagation_passes,
                         enzyme_pass,
                         opt_passes2,
                         "canonicalize",
@@ -2112,6 +2149,7 @@ function compile_mlir!(
                         "enzyme-simplify-math",
                         legalize_chlo_to_stablehlo...,
                         opt_passes2,
+                        layout_propagation_passes,
                     ]
                 else
                     [
@@ -2119,6 +2157,7 @@ function compile_mlir!(
                         opt_passes,
                         "enzyme-batch",
                         opt_passes2,
+                        layout_propagation_passes,
                         enzyme_pass,
                         opt_passes2,
                         "canonicalize",
@@ -2128,6 +2167,7 @@ function compile_mlir!(
                         opt_passes2,
                         kern,
                         raise_passes,
+                        layout_propagation_passes,
                     ]
                 end,
                 ',',
@@ -2137,7 +2177,7 @@ function compile_mlir!(
     elseif compile_options.optimization_passes === :before_raise
         run_pass_pipeline!(
             mod,
-            join(
+            join_after_filtering_empty(
                 if compile_options.raise_first
                     ["mark-func-memory-effects", opt_passes]
                 else
@@ -2146,6 +2186,7 @@ function compile_mlir!(
                         opt_passes,
                         "enzyme-batch",
                         opt_passes2,
+                        layout_propagation_passes,
                         enzyme_pass,
                         opt_passes2,
                         "canonicalize",
@@ -2154,6 +2195,7 @@ function compile_mlir!(
                         legalize_chlo_to_stablehlo...,
                         opt_passes2,
                         kern,
+                        layout_propagation_passes,
                     ]
                 end,
                 ',',
@@ -2163,19 +2205,20 @@ function compile_mlir!(
     elseif compile_options.optimization_passes === :no_enzyme
         run_pass_pipeline!(
             mod,
-            join(
+            join_after_filtering_empty(
                 [
                     "mark-func-memory-effects",
                     opt_passes,
                     "enzyme-batch",
                     opt_passes2,
-                    enzyme_pass,
+                    layout_propagation_passes,
                     opt_passes2,
                     "canonicalize",
                     "remove-unnecessary-enzyme-ops",
                     "enzyme-simplify-math",
                     legalize_chlo_to_stablehlo...,
                     opt_passes2,
+                    layout_propagation_passes,
                 ],
                 ',',
             ),
@@ -2249,7 +2292,7 @@ function compile_mlir!(
     elseif compile_options.optimization_passes === :only_enzyme
         run_pass_pipeline!(
             mod,
-            join(
+            join_after_filtering_empty(
                 [
                     "mark-func-memory-effects",
                     "enzyme-batch",
@@ -2265,7 +2308,7 @@ function compile_mlir!(
     elseif compile_options.optimization_passes === :after_enzyme
         run_pass_pipeline!(
             mod,
-            join(
+            join_after_filtering_empty(
                 if compile_options.raise_first
                     [
                         "mark-func-memory-effects",
@@ -2281,6 +2324,7 @@ function compile_mlir!(
                         lower_enzymexla_linalg_pass,
                         lower_enzymexla_mpi_pass,
                         jit,
+                        layout_propagation_passes,
                     ]
                 else
                     [
@@ -2297,6 +2341,7 @@ function compile_mlir!(
                         lower_enzymexla_linalg_pass,
                         lower_enzymexla_mpi_pass,
                         jit,
+                        layout_propagation_passes,
                     ]
                 end,
                 ',',
@@ -2306,7 +2351,7 @@ function compile_mlir!(
     elseif compile_options.optimization_passes === :before_enzyme
         run_pass_pipeline!(
             mod,
-            join(
+            join_after_filtering_empty(
                 if compile_options.raise_first
                     [
                         "mark-func-memory-effects",
@@ -2315,6 +2360,7 @@ function compile_mlir!(
                         raise_passes,
                         "enzyme-batch",
                         opt_passes2,
+                        layout_propagation_passes,
                         enzyme_pass,
                         "canonicalize,remove-unnecessary-enzyme-ops,enzyme-simplify-math",
                         lower_enzymexla_linalg_pass,
@@ -2327,6 +2373,7 @@ function compile_mlir!(
                         opt_passes,
                         "enzyme-batch",
                         opt_passes2,
+                        layout_propagation_passes,
                         enzyme_pass,
                         "canonicalize,remove-unnecessary-enzyme-ops,enzyme-simplify-math",
                         kern,
@@ -2346,34 +2393,6 @@ function compile_mlir!(
         run_pass_pipeline!(mod, "enzyme-batch", "enzyme-batch")
     elseif compile_options.optimization_passes isa String
         run_pass_pipeline!(mod, compile_options.optimization_passes, "custom_pass")
-    end
-
-    if compile_options.optimization_passes isa Symbol &&
-        compile_options.optimization_passes === :all &&
-        (
-            compile_options.transpose_propagate === :up ||
-            compile_options.reshape_propagate === :up
-        )
-        # We tried propagating reshapes and transposes up. If at this point we are left
-        # with them, we propagate them down to minimize the number of Ops in the IR.
-        # Since this might enable certain raising, we do push down -> push up -> push down
-        common_kwargs = (;
-            recognize_comms,
-            lower_comms,
-            backend,
-            is_sharded,
-            raise_shlo_to_blas_lapack=false,
-        )
-        opt_passes_down = optimization_passes(
-            Reactant.__compile_options_with_reversed_propagation(compile_options);
-            common_kwargs...,
-        )
-        opt_passes_up = optimization_passes(compile_options; common_kwargs...)
-        run_pass_pipeline!(
-            mod,
-            join([opt_passes_down, opt_passes_up, opt_passes_down], ","),
-            "post_op_transpose_reshape",
-        )
     end
 
     if backend == "cuda" && compile_options.cudnn_hlo_optimize
@@ -2512,7 +2531,7 @@ function compile_mlir!(
             if compile_options.optimization_passes === :all
                 run_pass_pipeline!(
                     mod,
-                    join(
+                    join_after_filtering_empty(
                         [
                             opt_passes,
                             "canonicalize",
