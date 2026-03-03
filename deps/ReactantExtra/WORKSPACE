@@ -102,6 +102,7 @@ LLVM_TARGETS = [
 # )
 
 load("@enzyme_ad//third_party/xprof:workspace.bzl", xprof_workspace = "repo")
+
 xprof_workspace()
 
 load("@enzyme_ad//third_party/ml_toolchain:workspace.bzl", ml_toolchain_workspace = "repo")
