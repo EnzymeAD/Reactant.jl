@@ -26,7 +26,7 @@ linear(x, W, b) = (W * x) .+ b
 
         kernel_stats = Reactant.Profiler.get_kernel_stats(file)
         if RunningOnCUDA
-            @test length(kernel_stats) > 0
+            @test length(kernel_stats.reports) > 0
         end
 
         framework_stats = Reactant.Profiler.get_framework_op_stats(file)
@@ -34,13 +34,13 @@ linear(x, W, b) = (W * x) .+ b
             @test length(framework_stats) > 0
         end
 
-        flops = Reactant.Profiler.get_aggregate_metrics(file, 1)
+        metrics = Reactant.Profiler.get_aggregate_metrics(file, 1)
         if !RunningOnCPU
-            @test flops isa Reactant.Profiler.FlopsSummary
-            @test flops.RawFlopsRate > 0
-            @test flops.BF16FlopsRate > 0
-            @test flops.RawFlopsRate ≈ flops.RawFlops / (flops.RawTime * 1e-12)
-            @test flops.BF16FlopsRate ≈ flops.BF16Flops / (flops.RawTime * 1e-12)
+            @test metrics isa Reactant.Proto.tensorflow.profiler.op_profile.Metrics
+            @test metrics.raw_flops_rate > 0
+            @test metrics.bf16_flops_rate > 0
+            @test metrics.raw_flops_rate ≈ metrics.raw_flops / (metrics.raw_time * 1e-12)
+            @test metrics.bf16_flops_rate ≈ metrics.bf16_flops / (metrics.raw_time * 1e-12)
         end
 
         Reactant.@timed nrepeat = 32 linear(x, W, b)
