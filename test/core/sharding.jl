@@ -1,4 +1,4 @@
-using Reactant, Test, Enzyme
+using Reactant, Test, Enzyme, FileCheck
 
 const addressable_devices = Reactant.addressable_devices()
 const RunningOnTPU = contains(string(Reactant.devices()[1]), "TPU")
@@ -214,9 +214,15 @@ end
         end
 
         hlo = @code_hlo shardy_passes = :none fn_with_constraint(x_ra)
-        @test contains(repr(hlo), "sharding_constraint")
+        @test @filecheck begin
+            @check "sharding_constraint"
+            repr(hlo)
+        end
         hlo = @code_hlo shardy_passes = :to_mhlo_shardings fn_with_constraint(x_ra)
-        @test !contains(repr(hlo), "sharding_constraint")
+        @test @filecheck begin
+            @check_not "sharding_constraint"
+            repr(hlo)
+        end
         @test length(collect(eachmatch(r"mhlo.sharding", repr(hlo)))) == 5
 
         z = Reactant.to_rarray(x; sharding=constraint)
@@ -237,11 +243,17 @@ end
         x_ra_no_sharding = Reactant.to_rarray(x)
 
         hlo = @code_hlo shardy_passes = :none fn_with_constraint(x_ra_no_sharding)
-        @test contains(repr(hlo), "sharding_constraint")
+        @test @filecheck begin
+            @check "sharding_constraint"
+            repr(hlo)
+        end
         hlo = @code_hlo shardy_passes = :to_mhlo_shardings fn_with_constraint(
             x_ra_no_sharding
         )
-        @test !contains(repr(hlo), "sharding_constraint")
+        @test @filecheck begin
+            @check_not "sharding_constraint"
+            repr(hlo)
+        end
         @test length(collect(eachmatch(r"mhlo.sharding", repr(hlo)))) == 5
 
         res = @jit fn_with_constraint(x_ra_no_sharding)
@@ -381,9 +393,10 @@ end
 
         @jit test1!(x_ra, z_ra)
 
-        @test contains(
-            string(Reactant.XLA.sharding(z_ra.data.buffer)), "SingleDeviceSharding"
-        )
+        @test @filecheck begin
+            @check "SingleDeviceSharding"
+            string(Reactant.XLA.sharding(z_ra.data.buffer))
+        end
     else
         @warn "Not enough addressable devices to run sharding tests"
     end
@@ -481,7 +494,10 @@ end
             sharding=Sharding.NamedSharding(mesh, (:x, :y)),
         )
         hlo = @code_xla sum(x_ra)
-        contains(repr(hlo), "num_partitions=8")
+        @filecheck begin
+            @check "num_partitions=8"
+            repr(hlo)
+        end
     end skip = RunningOnTPU
 end
 

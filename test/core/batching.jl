@@ -1,4 +1,4 @@
-using Reactant, Test
+using Reactant, Test, FileCheck
 
 f1(x::AbstractMatrix) = sum(x; dims=1)
 
@@ -47,14 +47,20 @@ function run_auto_batching_tests(f::F, args...) where {F}
                     disable_loop_raising_passes=true
                 ) f(args...)
             )
-            @test occursin("stablehlo.while", hlo)
+            @test @filecheck begin
+                @check "stablehlo.while"
+                hlo
+            end
 
             hlo = repr(
                 @code_hlo compile_options = CompileOptions(;
                     disable_loop_raising_passes=false
                 ) f(args...)
             )
-            @test !occursin("stablehlo.while", hlo)
+            @test @filecheck begin
+                @check_not "stablehlo.while"
+                hlo
+            end
         end
     end
 end
@@ -122,11 +128,17 @@ end
     hlo = @code_hlo compile_options = CompileOptions(; disable_loop_raising_passes=true) mctr(
         map_with_scalar_indexing, 1:8, input1, input2
     )
-    @test contains(repr(hlo), "stablehlo.while")
+    @test @filecheck begin
+        @check "stablehlo.while"
+        repr(hlo)
+    end
     hlo = @code_hlo compile_options = CompileOptions(; disable_loop_raising_passes=false) mctr(
         map_with_scalar_indexing, 1:8, input1, input2
     )
-    @test !contains(repr(hlo), "stablehlo.while")
+    @test @filecheck begin
+        @check_not "stablehlo.while"
+        repr(hlo)
+    end
 
     res_ra = @jit mctr(map_with_scalar_indexing, 1:8, input1, input2)
     res = mctr(map_with_scalar_indexing, 1:8, Array(input1), Array(input2))
