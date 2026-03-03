@@ -744,6 +744,39 @@ function composite_v1(
     )
 end
 
+function composite_v2(
+    inputs::Vector{Value};
+    results::Vector{IR.Type},
+    name,
+    composite_attributes,
+    decomposition,
+    version,
+    composite_regions::Vector{Region},
+    location=Location(),
+)
+    op_ty_results = IR.Type[results...,]
+    operands = Value[inputs...,]
+    owned_regions = Region[composite_regions...,]
+    successors = Block[]
+    attributes = NamedAttribute[
+        NamedAttribute("name", name),
+        NamedAttribute("composite_attributes", composite_attributes),
+        NamedAttribute("decomposition", decomposition),
+        NamedAttribute("version", version),
+    ]
+
+    return create_operation(
+        "vhlo.composite_v2",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
 function concatenate_v1(
     inputs::Vector{Value}; result::IR.Type, dimension, location=Location()
 )

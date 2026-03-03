@@ -2,8 +2,9 @@ import ProtoBuf as PB
 using ProtoBuf: OneOf
 using ProtoBuf.EnumX: @enumx
 
-export HostIndependentJobInfoResult, CoreDetails, HostDependentJobInfoResult
-export SystemTopology, PerformanceCounterResult, PerfEnv, RunEnvironment, OpStats
+export HostIndependentJobInfoResult, CoreDetails, DistributionStats
+export HostDependentJobInfoResult, SystemTopology, PerformanceCounterResult, PerfEnv
+export DisaggregatedServingLatency, RunEnvironment, OpStats
 
 
 struct HostIndependentJobInfoResult
@@ -129,6 +130,60 @@ function PB._encoded_size(x::CoreDetails)
     x.global_chip_id != zero(UInt32) && (encoded_size += PB._encoded_size(x.global_chip_id, 5))
     x.global_core_id != zero(UInt32) && (encoded_size += PB._encoded_size(x.global_core_id, 6))
     x.is_sparse_core != false && (encoded_size += PB._encoded_size(x.is_sparse_core, 7))
+    return encoded_size
+end
+
+struct DistributionStats
+    avg::Float64
+    p50::Float64
+    p90::Float64
+    p95::Float64
+    p99::Float64
+end
+PB.default_values(::Type{DistributionStats}) = (;avg = zero(Float64), p50 = zero(Float64), p90 = zero(Float64), p95 = zero(Float64), p99 = zero(Float64))
+PB.field_numbers(::Type{DistributionStats}) = (;avg = 1, p50 = 2, p90 = 3, p95 = 4, p99 = 5)
+
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:DistributionStats}, _endpos::Int=0, _group::Bool=false)
+    avg = zero(Float64)
+    p50 = zero(Float64)
+    p90 = zero(Float64)
+    p95 = zero(Float64)
+    p99 = zero(Float64)
+    while !PB.message_done(d, _endpos, _group)
+        field_number, wire_type = PB.decode_tag(d)
+        if field_number == 1
+            avg = PB.decode(d, Float64)
+        elseif field_number == 2
+            p50 = PB.decode(d, Float64)
+        elseif field_number == 3
+            p90 = PB.decode(d, Float64)
+        elseif field_number == 4
+            p95 = PB.decode(d, Float64)
+        elseif field_number == 5
+            p99 = PB.decode(d, Float64)
+        else
+            Base.skip(d, wire_type)
+        end
+    end
+    return DistributionStats(avg, p50, p90, p95, p99)
+end
+
+function PB.encode(e::PB.AbstractProtoEncoder, x::DistributionStats)
+    initpos = position(e.io)
+    x.avg !== zero(Float64) && PB.encode(e, 1, x.avg)
+    x.p50 !== zero(Float64) && PB.encode(e, 2, x.p50)
+    x.p90 !== zero(Float64) && PB.encode(e, 3, x.p90)
+    x.p95 !== zero(Float64) && PB.encode(e, 4, x.p95)
+    x.p99 !== zero(Float64) && PB.encode(e, 5, x.p99)
+    return position(e.io) - initpos
+end
+function PB._encoded_size(x::DistributionStats)
+    encoded_size = 0
+    x.avg !== zero(Float64) && (encoded_size += PB._encoded_size(x.avg, 1))
+    x.p50 !== zero(Float64) && (encoded_size += PB._encoded_size(x.p50, 2))
+    x.p90 !== zero(Float64) && (encoded_size += PB._encoded_size(x.p90, 3))
+    x.p95 !== zero(Float64) && (encoded_size += PB._encoded_size(x.p95, 4))
+    x.p99 !== zero(Float64) && (encoded_size += PB._encoded_size(x.p99, 5))
     return encoded_size
 end
 
@@ -342,6 +397,54 @@ function PB._encoded_size(x::PerfEnv)
     return encoded_size
 end
 
+struct DisaggregatedServingLatency
+    prefill_step_time_us::Union{Nothing,DistributionStats}
+    num_prefill_steps::Int64
+    decode_step_time_us::Union{Nothing,DistributionStats}
+    num_decode_steps::Int64
+end
+PB.default_values(::Type{DisaggregatedServingLatency}) = (;prefill_step_time_us = nothing, num_prefill_steps = zero(Int64), decode_step_time_us = nothing, num_decode_steps = zero(Int64))
+PB.field_numbers(::Type{DisaggregatedServingLatency}) = (;prefill_step_time_us = 1, num_prefill_steps = 2, decode_step_time_us = 3, num_decode_steps = 4)
+
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:DisaggregatedServingLatency}, _endpos::Int=0, _group::Bool=false)
+    prefill_step_time_us = Ref{Union{Nothing,DistributionStats}}(nothing)
+    num_prefill_steps = zero(Int64)
+    decode_step_time_us = Ref{Union{Nothing,DistributionStats}}(nothing)
+    num_decode_steps = zero(Int64)
+    while !PB.message_done(d, _endpos, _group)
+        field_number, wire_type = PB.decode_tag(d)
+        if field_number == 1
+            PB.decode!(d, prefill_step_time_us)
+        elseif field_number == 2
+            num_prefill_steps = PB.decode(d, Int64)
+        elseif field_number == 3
+            PB.decode!(d, decode_step_time_us)
+        elseif field_number == 4
+            num_decode_steps = PB.decode(d, Int64)
+        else
+            Base.skip(d, wire_type)
+        end
+    end
+    return DisaggregatedServingLatency(prefill_step_time_us[], num_prefill_steps, decode_step_time_us[], num_decode_steps)
+end
+
+function PB.encode(e::PB.AbstractProtoEncoder, x::DisaggregatedServingLatency)
+    initpos = position(e.io)
+    !isnothing(x.prefill_step_time_us) && PB.encode(e, 1, x.prefill_step_time_us)
+    x.num_prefill_steps != zero(Int64) && PB.encode(e, 2, x.num_prefill_steps)
+    !isnothing(x.decode_step_time_us) && PB.encode(e, 3, x.decode_step_time_us)
+    x.num_decode_steps != zero(Int64) && PB.encode(e, 4, x.num_decode_steps)
+    return position(e.io) - initpos
+end
+function PB._encoded_size(x::DisaggregatedServingLatency)
+    encoded_size = 0
+    !isnothing(x.prefill_step_time_us) && (encoded_size += PB._encoded_size(x.prefill_step_time_us, 1))
+    x.num_prefill_steps != zero(Int64) && (encoded_size += PB._encoded_size(x.num_prefill_steps, 2))
+    !isnothing(x.decode_step_time_us) && (encoded_size += PB._encoded_size(x.decode_step_time_us, 3))
+    x.num_decode_steps != zero(Int64) && (encoded_size += PB._encoded_size(x.num_decode_steps, 4))
+    return encoded_size
+end
+
 struct RunEnvironment
     host_count::Int32
     task_count::Int32
@@ -465,10 +568,11 @@ struct OpStats
     program_id_to_name_map::Dict{UInt64,String}
     performance_counter_result::Union{Nothing,PerformanceCounterResult}
     source_stats::Union{Nothing,SourceStats}
+    disaggregated_serving_latency::Union{Nothing,DisaggregatedServingLatency}
 end
 PB.reserved_fields(::Type{OpStats}) = (names = String[], numbers = Union{Int,UnitRange{Int}}[7])
-PB.default_values(::Type{OpStats}) = (;host_op_metrics_db = nothing, device_op_metrics_db = nothing, hlo_metrics_db_complete_steps_only = nothing, perf_env = nothing, step_db = nothing, run_environment = nothing, kernel_stats_db = nothing, tf_function_db = nothing, core_id_to_details = Dict{UInt32,CoreDetails}(), diagnostics = nothing, program_id_to_name_map = Dict{UInt64,String}(), performance_counter_result = nothing, source_stats = nothing)
-PB.field_numbers(::Type{OpStats}) = (;host_op_metrics_db = 1, device_op_metrics_db = 2, hlo_metrics_db_complete_steps_only = 10, perf_env = 3, step_db = 4, run_environment = 5, kernel_stats_db = 6, tf_function_db = 8, core_id_to_details = 11, diagnostics = 9, program_id_to_name_map = 12, performance_counter_result = 13, source_stats = 14)
+PB.default_values(::Type{OpStats}) = (;host_op_metrics_db = nothing, device_op_metrics_db = nothing, hlo_metrics_db_complete_steps_only = nothing, perf_env = nothing, step_db = nothing, run_environment = nothing, kernel_stats_db = nothing, tf_function_db = nothing, core_id_to_details = Dict{UInt32,CoreDetails}(), diagnostics = nothing, program_id_to_name_map = Dict{UInt64,String}(), performance_counter_result = nothing, source_stats = nothing, disaggregated_serving_latency = nothing)
+PB.field_numbers(::Type{OpStats}) = (;host_op_metrics_db = 1, device_op_metrics_db = 2, hlo_metrics_db_complete_steps_only = 10, perf_env = 3, step_db = 4, run_environment = 5, kernel_stats_db = 6, tf_function_db = 8, core_id_to_details = 11, diagnostics = 9, program_id_to_name_map = 12, performance_counter_result = 13, source_stats = 14, disaggregated_serving_latency = 15)
 
 function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:OpStats}, _endpos::Int=0, _group::Bool=false)
     host_op_metrics_db = Ref{Union{Nothing,OpMetricsDb}}(nothing)
@@ -484,6 +588,7 @@ function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:OpStats}, _endpos::Int=0
     program_id_to_name_map = Dict{UInt64,String}()
     performance_counter_result = Ref{Union{Nothing,PerformanceCounterResult}}(nothing)
     source_stats = Ref{Union{Nothing,SourceStats}}(nothing)
+    disaggregated_serving_latency = Ref{Union{Nothing,DisaggregatedServingLatency}}(nothing)
     while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
@@ -512,11 +617,13 @@ function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:OpStats}, _endpos::Int=0
             PB.decode!(d, performance_counter_result)
         elseif field_number == 14
             PB.decode!(d, source_stats)
+        elseif field_number == 15
+            PB.decode!(d, disaggregated_serving_latency)
         else
             Base.skip(d, wire_type)
         end
     end
-    return OpStats(host_op_metrics_db[], device_op_metrics_db[], hlo_metrics_db_complete_steps_only[], perf_env[], step_db[], run_environment[], kernel_stats_db[], tf_function_db[], core_id_to_details, diagnostics[], program_id_to_name_map, performance_counter_result[], source_stats[])
+    return OpStats(host_op_metrics_db[], device_op_metrics_db[], hlo_metrics_db_complete_steps_only[], perf_env[], step_db[], run_environment[], kernel_stats_db[], tf_function_db[], core_id_to_details, diagnostics[], program_id_to_name_map, performance_counter_result[], source_stats[], disaggregated_serving_latency[])
 end
 
 function PB.encode(e::PB.AbstractProtoEncoder, x::OpStats)
@@ -534,6 +641,7 @@ function PB.encode(e::PB.AbstractProtoEncoder, x::OpStats)
     !isempty(x.program_id_to_name_map) && PB.encode(e, 12, x.program_id_to_name_map)
     !isnothing(x.performance_counter_result) && PB.encode(e, 13, x.performance_counter_result)
     !isnothing(x.source_stats) && PB.encode(e, 14, x.source_stats)
+    !isnothing(x.disaggregated_serving_latency) && PB.encode(e, 15, x.disaggregated_serving_latency)
     return position(e.io) - initpos
 end
 function PB._encoded_size(x::OpStats)
@@ -551,5 +659,6 @@ function PB._encoded_size(x::OpStats)
     !isempty(x.program_id_to_name_map) && (encoded_size += PB._encoded_size(x.program_id_to_name_map, 12))
     !isnothing(x.performance_counter_result) && (encoded_size += PB._encoded_size(x.performance_counter_result, 13))
     !isnothing(x.source_stats) && (encoded_size += PB._encoded_size(x.source_stats, 14))
+    !isnothing(x.disaggregated_serving_latency) && (encoded_size += PB._encoded_size(x.disaggregated_serving_latency, 15))
     return encoded_size
 end
