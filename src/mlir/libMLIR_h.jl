@@ -47,10 +47,6 @@ end
     MlirLlvmThreadPool
 
 Re-export llvm::ThreadPool so as to avoid including the LLVM C API directly.
-
-| Field | Note                                                                          |
-| :---- | :---------------------------------------------------------------------------- |
-| ptr   | Re-export llvm::ThreadPool so as to avoid including the LLVM C API directly.  |
 """
 struct MlirLlvmThreadPool
     ptr::Ptr{Cvoid}
@@ -60,10 +56,6 @@ end
     MlirLlvmRawFdOStream
 
 Re-export llvm::raw\\_fd\\_ostream so as to avoid including the LLVM C API directly.
-
-| Field | Note                                                                                  |
-| :---- | :------------------------------------------------------------------------------------ |
-| ptr   | Re-export llvm::raw\\_fd\\_ostream so as to avoid including the LLVM C API directly.  |
 """
 struct MlirLlvmRawFdOStream
     ptr::Ptr{Cvoid}
