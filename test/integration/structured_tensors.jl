@@ -24,7 +24,7 @@ raise_to_syrk2(x, y) = 3 .* (transpose(x) * x) .+ 5 .* y
             ) fn(x_ra, y_ra)
             @test @filecheck begin
                 @check "enzymexla.blas.syrk"
-                repr(hlo)
+                hlo
             end
 
             fn_compile = @compile compile_options = CompileOptions(;
@@ -64,7 +64,10 @@ end
                 disable_structured_tensors_detection_passes=false,
                 optimization_passes=:before_jit,
             ) fn(x_ra, y_ra)
-            @test occursin("enzymexla.blas.symm", repr(hlo))
+            @test @filecheck begin
+                @check "enzymexla.blas.symm"
+                hlo
+            end
 
             fn_compile = @compile compile_options = CompileOptions(;
                 disable_structured_tensors_detection_passes=false
