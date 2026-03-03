@@ -464,6 +464,11 @@ using Dates: value, UTInstant
             clock::C
         end
 
+        function timestep!(state::State)
+            state.clock.time += state.clock.time_step
+            return nothing
+        end
+
         function timestepping!(state::State)
             (; clock) = state
 
@@ -471,11 +476,6 @@ using Dates: value, UTInstant
                 timestep!(state)
             end
 
-            return nothing
-        end
-
-        function timestep!(state::State)
-            state.clock.time += state.clock.time_step
             return nothing
         end
 
