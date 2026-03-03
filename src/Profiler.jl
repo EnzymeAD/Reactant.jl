@@ -648,23 +648,35 @@ function _show_with_indent(
 )
     rawtime_s = summary.raw_time * 1e-12
 
-    print(io, "    "^indent * "Flops = $(summary.flops), ")
+    print(io, "    "^indent * "flops = $(summary.flops), ")
     Base.printstyled(
         " # [flops / (peak flops * program time)], capped at 1.0\n"; color=:light_black
     )
-    println(io, "    "^indent * "UncappedFlops = $(summary.uncapped_flops), ")
-    print(io, "    "^indent * "RawFlops = $(summary.raw_flops), ")
+
+    println(io, "    "^indent * "bandwidth_utils = $(summary.bandwidth_utils),")
+
+    println(io, "    "^indent * "uncapped_flops = $(summary.uncapped_flops), ")
+
+    print(io, "    "^indent * "raw_time = $(_timestr(rawtime_s * 1e9))s, ")
+    Base.printstyled(" # Raw time in seconds\n"; color=:light_black)
+
+    print(io, "    "^indent * "raw_flops = $(summary.raw_flops), ")
     Base.printstyled(" # Total FLOPs performed\n"; color=:light_black)
-    print(io, "    "^indent * "BF16Flops = $(summary.bf16_flops), ")
+
+    print(io, "    "^indent * "bf16_flops = $(summary.bf16_flops), ")
     Base.printstyled(
         " # Total FLOPs Normalized to the bf16 (default) devices peak bandwidth\n";
         color=:light_black,
     )
-    print(io, "    "^indent * "RawTime = $(_timestr(rawtime_s * 1e9))s, ")
-    Base.printstyled(" # Raw time in seconds\n"; color=:light_black)
-    print(io, "    "^indent * "RawFlopsRate = $(summary.raw_flops_rate), ")
+
+    println(io, "    "^indent * "raw_bytes_accessed = $(summary.raw_bytes_accessed_array)")
+
+    println(io, "    "^indent * "occurrences = $(summary.occurrences)")
+
+    print(io, "    "^indent * "raw_flops_rate = $(summary.raw_flops_rate), ")
     Base.printstyled(" # Raw FLOPs rate in FLOPs/seconds\n"; color=:light_black)
-    print(io, "    "^indent * "BF16FlopsRate = $(summary.bf16_flops_rate), ")
+
+    print(io, "    "^indent * "bf16_flops_rate = $(summary.bf16_flops_rate), ")
     Base.printstyled(" # BF16 FLOPs rate in FLOPs/seconds\n"; color=:light_black)
     return nothing
 end
@@ -1087,10 +1099,10 @@ function get_framework_op_stats(xplane_file::String; include_idle::Bool=false)
                 Float64(round(get_val("avg_time"))),
                 Float64(round(get_val("total_self_time"))),
                 Float64(round(get_val("avg_self_time"))),
-                Float64(get_val("device_total_self_time_percent")) / 100,
-                Float64(get_val("device_cumulative_total_self_time_percent")) / 100,
-                Float64(get_val("host_total_self_time_percent")) / 100,
-                Float64(get_val("Host_cumulative_total_self_time_percent")) / 100,
+                Float64(get_val("device_total_self_time_percent")),
+                Float64(get_val("device_cumulative_total_self_time_percent")),
+                Float64(get_val("host_total_self_time_percent")),
+                Float64(get_val("Host_cumulative_total_self_time_percent")),
                 Float64(get_val("measured_flop_rate")),
                 Float64(get_val("model_flop_rate")),
                 Float64(get_val("measured_memory_bw")),
@@ -1148,89 +1160,82 @@ function print_framework_op_stats(
     data_entry!("Type", r -> r.op_type, false)
     data_entry!("Host/Device", r -> r.host_or_device, false)
     data_entry!("Occurrences", r -> string(r.occurrences), false)
+    data_entry!("Total Self-Time (s)", r -> _timestr(r.total_self_time_in_us * 1000), true)
+    data_entry!("Avg Self-Time (s)", r -> _timestr(r.avg_self_time_in_us * 1000), true)
     data_entry!(
-        "Total Self-Time", r -> _timestr(r.total_self_time_in_us * 1000) * "s", true
-    )
-    data_entry!("Avg Self-Time", r -> _timestr(r.avg_self_time_in_us * 1000) * "s", true)
-    data_entry!(
-        "Device %",
-        r -> string(round(r.device_total_self_time_as_fraction * 100; digits=2)) * "%",
+        "Device (%)",
+        r -> string(round(r.device_total_self_time_as_fraction * 100; digits=2)),
         false,
     )
     if has_host_stats
         data_entry!(
-            "Host %",
-            r -> string(round(r.host_total_self_time_as_fraction * 100; digits=2)) * "%",
+            "Host (%)",
+            r -> string(round(r.host_total_self_time_as_fraction * 100; digits=2)),
             false,
         )
     end
     data_entry!(
-        "Memory BW", r -> string(round(r.measured_memory_bw; digits=2)) * " GB/s", false
+        "Memory BW (GB/s)", r -> string(round(r.measured_memory_bw; digits=2)), false
     )
     data_entry!(
-        "FLOP Rate", r -> string(round(r.model_flop_rate; digits=2)) * " GFLOP/s", false
+        "FLOP Rate (GFLOP/s)", r -> string(round(r.model_flop_rate; digits=2)), false
     )
     if has_tensorcore
         data_entry!(
-            "TensorCore",
-            r -> string(round(r.gpu_tensorcore_utilization * 100; digits=1)) * "%",
+            "TensorCore (%)",
+            r -> string(round(r.gpu_tensorcore_utilization * 100; digits=1)),
             false,
         )
     end
     data_entry!("Bound By", r -> r.bound_by, false)
     if has_tpu_stats
-        data_entry!("HBM BW", r -> string(round(r.hbm_bw; digits=2)) * " GB/s", false)
+        data_entry!("HBM BW (GB/s)", r -> string(round(r.hbm_bw; digits=2)), false)
         data_entry!(
-            "CMEM Read BW", r -> string(round(r.cmem_read_bw; digits=2)) * " GB/s", false
+            "CMEM Read BW (GB/s)", r -> string(round(r.cmem_read_bw; digits=2)), false
         )
         data_entry!(
-            "CMEM Write BW", r -> string(round(r.cmem_write_bw; digits=2)) * " GB/s", false
+            "CMEM Write BW (GB/s)", r -> string(round(r.cmem_write_bw; digits=2)), false
         )
         data_entry!(
-            "VMEM Read BW", r -> string(round(r.vmem_read_bw; digits=2)) * " GB/s", false
+            "VMEM Read BW (GB/s)", r -> string(round(r.vmem_read_bw; digits=2)), false
         )
         data_entry!(
-            "VMEM Write BW", r -> string(round(r.vmem_write_bw; digits=2)) * " GB/s", false
+            "VMEM Write BW (GB/s)", r -> string(round(r.vmem_write_bw; digits=2)), false
         )
         data_entry!(
-            "HBM Operational Intensity",
-            r -> string(round(r.hbm_operational_intensity; digits=2)) * " FLOPs/byte",
+            "HBM Operational Intensity (FLOPs/byte)",
+            r -> string(round(r.hbm_operational_intensity; digits=2)),
             false,
         )
         data_entry!(
-            "CMEM Read Operational Intensity",
-            r -> string(round(r.cmem_read_operational_intensity; digits=2)) * " FLOPs/byte",
+            "CMEM Read Operational Intensity (FLOPs/byte)",
+            r -> string(round(r.cmem_read_operational_intensity; digits=2)),
             false,
         )
         data_entry!(
-            "CMEM Write Operational Intensity",
-            r ->
-                string(round(r.cmem_write_operational_intensity; digits=2)) * " FLOPs/byte",
+            "CMEM Write Operational Intensity (FLOPs/byte)",
+            r -> string(round(r.cmem_write_operational_intensity; digits=2)),
             false,
         )
         data_entry!(
-            "VMEM Read Operational Intensity",
-            r -> string(round(r.vmem_read_operational_intensity; digits=2)) * " FLOPs/byte",
+            "VMEM Read Operational Intensity (FLOPs/byte)",
+            r -> string(round(r.vmem_read_operational_intensity; digits=2)),
             false,
         )
         data_entry!(
-            "VMEM Write Operational Intensity",
-            r ->
-                string(round(r.vmem_write_operational_intensity; digits=2)) * " FLOPs/byte",
+            "VMEM Write Operational Intensity (FLOPs/byte)",
+            r -> string(round(r.vmem_write_operational_intensity; digits=2)),
             false,
         )
         data_entry!(
-            "Bottleneck Operational Intensity",
-            r ->
-                string(round(r.bottleneck_operational_intensity; digits=2)) * " FLOPs/byte",
+            "Bottleneck Operational Intensity (FLOPs/byte)",
+            r -> string(round(r.bottleneck_operational_intensity; digits=2)),
             false,
         )
     end
     if has_bytes_accessed
         data_entry!(
-            "Bytes Accessed",
-            r -> string(round(r.bytes_accessed; digits=2)) * " bytes",
-            false,
+            "Bytes Accessed (bytes)", r -> string(round(r.bytes_accessed; digits=2)), false
         )
     end
 
@@ -1242,8 +1247,8 @@ function print_framework_op_stats(
     raw_durations = Matrix{UInt64}(undef, length(reports), 2)
 
     for (i, r) in enumerate(reports)
-        raw_durations[i, 1] = r.total_self_time_ns
-        raw_durations[i, 2] = r.avg_self_time_ns
+        raw_durations[i, 1] = r.total_self_time_in_us * 1000
+        raw_durations[i, 2] = r.avg_self_time_in_us * 1000
 
         for (j, (_, extractor, _)) in enumerate(columns)
             data[i, j] = extractor(r)
