@@ -293,6 +293,7 @@ end
 Base.eltype(::Broadcast.Extruded{T}) where {T} = eltype(T)
 
 first_scalar(x) = @allowscalar first(x)
+first_scalar(x::Broadcast.Extruded) = first_scalar(x.x)
 
 # we need to override the outer copy method to make sure we never fall back to scalar
 # iteration (see, e.g., CUDA.jl#145)
