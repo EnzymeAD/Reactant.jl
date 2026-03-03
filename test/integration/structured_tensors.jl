@@ -53,7 +53,6 @@ end
         x = Reactant.TestUtils.construct_test_array(elty, 4, 5)
         y1 = Reactant.TestUtils.construct_test_array(elty, 4, 7)
         y2 = Reactant.TestUtils.construct_test_array(elty, 7, 4)
-        
         x_ra = Reactant.to_rarray(x)
 
         @testset "fn: $(fn) | y: $(size(y))" for (fn, y) in (
