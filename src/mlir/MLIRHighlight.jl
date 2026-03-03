@@ -156,7 +156,7 @@ Takes a string to be styled and a Vector with information for styling then
 usess Julias AnnotatedStrings to make pretty colors when printing
 """
 function style_MLIR(str::AbstractString, tokens::Vector{MLIRToken})
-    if VERSION < v"1.11"
+    @static if VERSION < v"1.11"
         styling_info = Vector{Tuple{UnitRange{Int},Pair{Symbol,Symbol}}}()
         sizehint!(styling_info, length(tokens))
         for token in tokens
