@@ -55,9 +55,8 @@ end
         y2 = Reactant.TestUtils.construct_test_array(elty, 7, 4)
         x_ra = Reactant.to_rarray(x)
 
-        @testset "fn: $(fn) | y: $(size(y))" for (fn, y) in (
-            (raise_to_symm, y1), (raise_to_symm2, y2)
-        )
+        @testset "fn: $(fn) | y: $(size(y))" for (fn, y) in
+                                                 ((raise_to_symm, y1), (raise_to_symm2, y2))
             y_ra = Reactant.to_rarray(y)
 
             hlo = @code_hlo compile_options = CompileOptions(;
