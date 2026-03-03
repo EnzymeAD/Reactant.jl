@@ -1,106 +1,149 @@
 #!/usr/bin/env julia
 """
-    run_mlir.jl — Generator: parse pre_xla MLIR files → emit standalone execute script.
+    run_mlir_v2.jl — Generator (Reactant-dependent): MLIR IR introspection → emit execute script.
 
 Usage:
-    julia run_mlir.jl [first_time_step.mlir] [loop.mlir] [output_script.jl]
+    julia --project=Reactant.jl run_mlir_v2.jl [first.mlir] [loop.mlir] [output.jl]
 
-Reads two GB-25 pre_xla_compile MLIR files, parses their func.func @main
-signatures, and writes a self-contained Julia script that:
-  1. Creates mock data with the correct shapes and shardings
-  2. Loads the MLIR modules
-  3. XLA-compiles both
-  4. Runs first_time_step → marshals outputs → runs loop
-
-The generated script has no parsing logic — all shapes, types, and shardings
-are hardcoded from the analysis done here.
+Same two-phase approach as run_mlir.jl, but uses Reactant's MLIR IR APIs
+instead of regex to parse signatures. Compare with run_mlir.jl (regex-only).
 """
 
+using Reactant
+using Reactant.MLIR
+using Reactant.MLIR.IR
+
 # ──────────────────────────────────────────────────────────────
-# MLIR Signature Parsing (no Reactant dependency needed)
+# MLIR IR introspection (replaces ~100 lines of regex in v1)
 # ──────────────────────────────────────────────────────────────
 
 struct TensorSig
-    eltype::String                # Julia type name: "Float32", "Int64", ...
-    mlir_shape::Vector{Int}       # MLIR dimension order (row-major)
-    mlir_sharding::Vector{Symbol} # per MLIR dim: :_none = replicated, :x/:y = axis name
+    eltype::String
+    mlir_shape::Vector{Int}
+    mlir_sharding::Vector{Symbol}  # per Julia dim: :_none = replicated, :x/:y = axis
 end
 
-const MLIR_ELTYPES = Dict{String,String}(
-    "f16" => "Float16", "bf16" => "Float16", "f32" => "Float32", "f64" => "Float64",
-    "i1" => "Bool", "i8" => "Int8", "i16" => "Int16", "i32" => "Int32", "i64" => "Int64",
-)
-
-function parse_tensor_type(s::AbstractString)
-    m = match(r"tensor<((?:\d+x)*)(\w+)>", s)
-    m === nothing && error("Cannot parse tensor type: $s")
-    dims_part, elem_part = m.captures
-    T = get(MLIR_ELTYPES, elem_part, nothing)
-    T === nothing && error("Unknown MLIR element type: $elem_part")
-    shape = isempty(dims_part) ? Int[] : parse.(Int, split(rstrip(dims_part, 'x'), 'x'))
-    return T, shape
+# TODO: upstream haskey/get for dictionary Attributes into Reactant's MLIR IR bindings
+# (Attribute.jl). getattr on Operation already returns nothing for missing keys,
+# but dict["key"] wraps a null pointer instead. See also: getindex fix for isdict branch.
+"""Get a named element from a dictionary attribute, returning nothing if absent."""
+function dict_get(dict::IR.Attribute, name::String)
+    raw = MLIR.API.mlirDictionaryAttrGetElementByName(dict, name)
+    return raw.ptr == C_NULL ? nothing : IR.Attribute(raw)
 end
 
-function parse_sharding_spec(s::AbstractString)
-    dims = Symbol[]
-    for m in eachmatch(r"\{([^}]*)\}", s)
-        content = strip(m.captures[1])
-        if isempty(content)
-            push!(dims, :_none)
+function get_main_func(mod::IR.Module)
+    for op in IR.body(mod)
+        IR.name(op) == "func.func" || continue
+        attr = IR.getattr(op, "sym_name")
+        attr !== nothing && String(attr) == "main" && return op
+    end
+    error("No func.func @main found in module")
+end
+
+"""Extract mesh axes/sizes from an sdy.mesh operation using the sdy C API."""
+function extract_mesh_spec(mod::IR.Module)
+    mesh_axes = Symbol[]
+    mesh_sizes = Int[]
+    for op in IR.body(mod)
+        IR.name(op) == "sdy.mesh" || continue
+        mesh_attr = IR.getattr(op, "mesh")
+        mesh_attr === nothing && continue
+        naxes = MLIR.API.sdyMeshAttrGetAxesSize(mesh_attr)
+        for i in 1:naxes
+            axis_attr = IR.Attribute(MLIR.API.sdyMeshAttrGetAxesElem(mesh_attr, i - 1))
+            push!(mesh_axes, Symbol(String(MLIR.API.sdyMeshAxisAttrGetName(axis_attr))))
+            push!(mesh_sizes, Int(MLIR.API.sdyMeshAxisAttrGetSize(axis_attr)))
+        end
+        break
+    end
+    return mesh_axes, mesh_sizes
+end
+
+"""Extract sharding partition spec from an sdy.sharding attribute using the sdy C API.
+Returns per-MLIR-dim symbols (before Julia reversal), e.g. [:_none, :y, :x]."""
+function extract_sharding_spec(sdy_attr)
+    MLIR.API.sdyAttributeIsATensorShardingAttr(sdy_attr) || return Symbol[]
+    ndims = MLIR.API.sdyTensorShardingAttrGetDimShardingsSize(sdy_attr)
+    spec = Vector{Symbol}(undef, ndims)
+    for i in 1:ndims
+        dim_attr = IR.Attribute(
+            MLIR.API.sdyTensorShardingAttrGetDimShardingsElem(sdy_attr, i - 1))
+        naxes = MLIR.API.sdyDimensionShardingAttrGetAxesSize(dim_attr)
+        if naxes == 0
+            spec[i] = :_none
         else
-            ax = match(r"\"(\w+)\"", content)
-            ax === nothing && error("Cannot parse axis name in sharding: $content")
-            push!(dims, Symbol(ax.captures[1]))
+            axis_attr = IR.Attribute(
+                MLIR.API.sdyDimensionShardingAttrGetAxesElem(dim_attr, 0))
+            spec[i] = Symbol(String(MLIR.API.sdyAxisRefAttrGetName(axis_attr)))
         end
     end
-    return dims
+    return spec
 end
 
-function parse_typed_section(s::AbstractString)
-    types = [m.match for m in eachmatch(r"tensor<[^>]+>", s)]
-    shards = [m.captures[1] for m in eachmatch(
-        r"sdy\.sharding\s*=\s*#sdy\.sharding<@mesh,\s*(\[[^\]]*\])>", s,
-    )]
-    length(types) == length(shards) || error(
-        "Mismatch: $(length(types)) tensor types vs $(length(shards)) sharding specs",
-    )
-    return [TensorSig(parse_tensor_type(t)..., parse_sharding_spec(sh))
-            for (t, sh) in zip(types, shards)]
-end
+function analyze_module(mlir_string::String)
+    mod = parse(IR.Module, mlir_string)
+    main_op = get_main_func(mod)
+    ftype = IR.FunctionType(main_op)
 
-function find_close_paren(s::AbstractString, pos::Int)
-    depth = 1
-    while depth > 0 && pos <= lastindex(s)
-        c = s[pos]
-        c == '(' && (depth += 1)
-        c == ')' && (depth -= 1)
-        depth > 0 && (pos = nextind(s, pos))
-    end
-    return pos
-end
+    # Input types & shardings
+    n_in = IR.ninputs(ftype)
+    inputs = TensorSig[]
+    arg_attrs = IR.getattr(main_op, "arg_attrs")
 
-function parse_main_signature(mlir::AbstractString)
-    idx = findfirst("func.func @main(", mlir)
-    idx === nothing && error("Cannot find func.func @main")
-    args_start = last(idx) + 1
+    n_grid_const = 0
+    found_alias = false
+    for i in 1:n_in
+        mlir_type = IR.input(ftype, i)
+        T = string(IR.julia_type(IR.eltype(mlir_type)))
+        shape = IR.istensor(mlir_type) && IR.ndims(mlir_type) > 0 ?
+            collect(Int, IR.size(mlir_type)) : Int[]
 
-    args_close = find_close_paren(mlir, args_start)
-    args_str = SubString(mlir, args_start, prevind(mlir, args_close))
-
-    rest = SubString(mlir, args_close)
-    rets_str = ""
-    m = match(r"^\)\s*->\s*\(", rest)
-    if m !== nothing
-        rets_start = args_close + length(m.match)
-        rets_close = find_close_paren(mlir, rets_start)
-        rets_str = SubString(mlir, rets_start, prevind(mlir, rets_close))
+        sharding = Symbol[]
+        has_alias = false
+        if arg_attrs !== nothing && IR.isarray(arg_attrs)
+            dict = arg_attrs[i - 1]  # 0-based C API
+            if IR.isdict(dict)
+                sdy_attr = dict_get(dict, "sdy.sharding")
+                if sdy_attr !== nothing
+                    sharding = extract_sharding_spec(sdy_attr)
+                end
+                has_alias = dict_get(dict, "tf.aliasing_output") !== nothing
+            end
+        end
+        if !found_alias && !has_alias
+            n_grid_const += 1
+        else
+            found_alias = true
+        end
+        push!(inputs, TensorSig(T, shape, sharding))
     end
 
-    return parse_typed_section(args_str), parse_typed_section(rets_str)
+    # Output types
+    n_out = IR.nresults(ftype)
+    outputs = [begin
+        t = IR.result(ftype, i)
+        T = string(IR.julia_type(IR.eltype(t)))
+        shape = IR.istensor(t) && IR.ndims(t) > 0 ? collect(Int, IR.size(t)) : Int[]
+        TensorSig(T, shape, Symbol[])
+    end for i in 1:n_out]
+
+    # Module attributes
+    mod_op = IR.Operation(mod)
+    np = IR.getattr(mod_op, "mhlo.num_partitions")
+    num_partitions = np !== nothing ? Int(np) : 1
+    nr = IR.getattr(mod_op, "mhlo.num_replicas")
+    num_replicas = nr !== nothing ? Int(nr) : 1
+
+    # Mesh spec via sdy C API
+    mesh_axes, mesh_sizes = extract_mesh_spec(mod)
+
+    return (; inputs, outputs, n_grid_const, num_partitions, num_replicas,
+              mesh_axes, mesh_sizes)
 end
 
 # ──────────────────────────────────────────────────────────────
-# Code generation helpers
+# Code generation helpers (same as v1)
 # ──────────────────────────────────────────────────────────────
 
 function julia_shape_str(sig::TensorSig)
@@ -112,88 +155,31 @@ function julia_sharding_expr(sig::TensorSig)
     isempty(sig.mlir_sharding) && return "Sharding.Replicated(mesh)"
     spec = reverse(sig.mlir_sharding)
     parts = [s == :_none ? "nothing" : ":$s" for s in spec]
-    if all(p -> p == "nothing", parts)
-        return "Sharding.Replicated(mesh)"
-    end
+    all(p -> p == "nothing", parts) && return "Sharding.Replicated(mesh)"
     return "Sharding.NamedSharding(mesh, ($(join(parts, ", ")),))"
 end
 
 function codegen_create_input(i::Int, sig::TensorSig; is_sharded::Bool)
     T = sig.eltype
+    shard_kw = is_sharded ? "; sharding=$(julia_sharding_expr(sig))" : ""
     if isempty(sig.mlir_shape)
-        # Scalar
         default_val = T in ("Float32", "Float64", "Float16") ? "$T(60)" : "$T(0)"
-        if is_sharded
-            sharding = julia_sharding_expr(sig)
-            return "    ConcreteRNumber{$T}($default_val; sharding=$sharding)"
-        else
-            return "    ConcreteRNumber{$T}($default_val)"
-        end
+        return "    ConcreteRNumber{$T}($default_val$shard_kw)"
     else
         shape = julia_shape_str(sig)
-        if is_sharded
-            sharding = julia_sharding_expr(sig)
-            return "    ConcreteRArray(zeros($T, $shape...); sharding=$sharding)"
-        else
-            return "    ConcreteRArray(zeros($T, $shape...))"
-        end
+        return "    ConcreteRArray(randn($T, $shape...)$shard_kw)"
     end
-end
-
-function parse_mesh_spec(mlir::AbstractString)
-    # Extract mesh shape from: sdy.mesh @mesh = <["x"=2, "y"=2]>
-    m = match(r"sdy\.mesh\s+@mesh\s*=\s*<\[([^\]]+)\]>", mlir)
-    m === nothing && return ((:x, :y), (2, 2))  # fallback
-    axes = Symbol[]
-    sizes = Int[]
-    for am in eachmatch(r"\"(\w+)\"\s*=\s*(\d+)", m.captures[1])
-        push!(axes, Symbol(am.captures[1]))
-        push!(sizes, parse(Int, am.captures[2]))
-    end
-    return tuple(axes...), tuple(sizes...)
-end
-
-function count_grid_constants(mlir::AbstractString)
-    # Count args that don't have tf.aliasing_output — those are grid constants.
-    # Parse the args section and count %argN entries without aliasing.
-    idx = findfirst("func.func @main(", mlir)
-    idx === nothing && return 0
-    args_start = last(idx) + 1
-    args_close = find_close_paren(mlir, args_start)
-    args_str = SubString(mlir, args_start, prevind(mlir, args_close))
-
-    # Split by %arg to get per-argument blocks
-    n = 0
-    for m in eachmatch(r"%arg(\d+):[^%]*", args_str)
-        if !contains(m.match, "tf.aliasing_output")
-            n += 1
-        else
-            break  # first aliased arg → stop counting
-        end
-    end
-    return n
-end
-
-function parse_module_attrs(mlir::AbstractString)
-    num_partitions = 1
-    num_replicas = 1
-    m = match(r"mhlo\.num_partitions\s*=\s*(\d+)", mlir)
-    m !== nothing && (num_partitions = parse(Int, m.captures[1]))
-    m = match(r"mhlo\.num_replicas\s*=\s*(\d+)", mlir)
-    m !== nothing && (num_replicas = parse(Int, m.captures[1]))
-    return num_partitions, num_replicas
 end
 
 # ──────────────────────────────────────────────────────────────
-# Script generation
+# Script generation (identical to v1 from here down)
 # ──────────────────────────────────────────────────────────────
 
 function generate_script(;
     first_path, loop_path,
     first_in, first_out, loop_in, loop_out,
     mesh_axes, mesh_sizes, num_partitions, num_replicas,
-    n_grid_const,
-    output_dir,
+    n_grid_const, output_dir,
 )
     n_first_in  = length(first_in)
     n_first_out = length(first_out)
@@ -203,32 +189,21 @@ function generate_script(;
 
     first_rel = relpath(first_path, output_dir)
     loop_rel  = relpath(loop_path, output_dir)
-
     mesh_names_str = "($(join([":" * string(a) for a in mesh_axes], ", ")),)"
     mesh_shape_str = join(mesh_sizes, ", ")
-
     is_sharded = num_partitions > 1
 
-    # Build create_mock_inputs body
-    input_lines = String[]
-    for (i, sig) in enumerate(first_in)
-        push!(input_lines, codegen_create_input(i, sig; is_sharded) * ",  # arg$(i-1)")
-    end
+    input_lines = [codegen_create_input(i, sig; is_sharded) * ",  # arg$(i-1)"
+                   for (i, sig) in enumerate(first_in)]
+    summary_lines = ["#   arg$(i-1): $(sig.eltype) $(julia_shape_str(sig))"
+                     for (i, sig) in enumerate(first_in)]
 
-    # Build summary comments
-    summary_lines = String[]
-    for (i, sig) in enumerate(first_in)
-        jshape = julia_shape_str(sig)
-        push!(summary_lines, "#   arg$(i-1): $(sig.eltype) $jshape")
-    end
-
-    # Use IOBuffer to avoid string interpolation escaping issues
     io = IOBuffer()
     W(s) = println(io, s)
 
     W("#!/usr/bin/env julia")
     W("#")
-    W("# Generated by run_mlir.jl — do not edit by hand.")
+    W("# Generated by run_mlir_v2.jl — do not edit by hand.")
     W("#")
     W("# Standalone XLA compile + execute for pre_xla MLIR modules.")
     W("# Requires $ndevices device(s) (num_partitions=$num_partitions, num_replicas=$num_replicas).")
@@ -310,7 +285,7 @@ function generate_script(;
     end
     W("")
 
-    # The rest is static code — write it verbatim
+    # Static runtime code
     print(io, raw"""
 # ── Buffer helpers ──
 
@@ -522,7 +497,7 @@ main()
 end
 
 # ──────────────────────────────────────────────────────────────
-# Main: parse MLIR, emit script
+# Main: analyze MLIR via IR APIs, emit script
 # ──────────────────────────────────────────────────────────────
 
 function main()
@@ -538,51 +513,43 @@ function main()
     loop_path  = length(ARGS) >= 2 ? ARGS[2] : default_loop
     out_path   = length(ARGS) >= 3 ? ARGS[3] : default_out
 
-    println("=== run_mlir.jl — MLIR → script generator ===")
+    println("=== run_mlir_v2.jl — MLIR IR → script generator ===")
     println("First time step: $first_path")
     println("Loop:            $loop_path")
     println("Output script:   $out_path")
 
-    # Read & parse
-    first_mlir = read(first_path, String)
-    loop_mlir  = read(loop_path, String)
+    # Use Reactant's MLIR IR to analyze modules
+    ctx = Reactant.ReactantContext()
+    IR.activate(ctx)
 
-    first_in, first_out = parse_main_signature(first_mlir)
-    loop_in,  loop_out  = parse_main_signature(loop_mlir)
+    println("\nAnalyzing MLIR modules...")
+    first = analyze_module(read(first_path, String))
+    loop  = analyze_module(read(loop_path, String))
 
-    println("\nParsed signatures:")
-    println("  first_time_step: $(length(first_in)) inputs → $(length(first_out)) outputs")
-    println("  loop:            $(length(loop_in)) inputs → $(length(loop_out)) outputs")
+    IR.deactivate(ctx)
 
-    for (i, sig) in enumerate(first_in)
+    println("  first: $(length(first.inputs)) in → $(length(first.outputs)) out " *
+            "($(first.n_grid_const) grid constants)")
+    println("  loop:  $(length(loop.inputs)) in → $(length(loop.outputs)) out")
+    println("  mesh:  $(collect(zip(first.mesh_axes, first.mesh_sizes)))")
+    println("  partitions=$(first.num_partitions) replicas=$(first.num_replicas)")
+
+    for (i, sig) in enumerate(first.inputs)
         jshape = julia_shape_str(sig)
-        shard  = julia_sharding_expr(sig)
+        shard = julia_sharding_expr(sig)
         println("    arg$(i-1): $(sig.eltype) $jshape  $shard")
     end
-
-    # Extract mesh / module attributes from the first MLIR
-    mesh_axes, mesh_sizes = parse_mesh_spec(first_mlir)
-    num_partitions, num_replicas = parse_module_attrs(first_mlir)
-    ndevices = prod(mesh_sizes)
-
-    println("\nModule attributes:")
-    println("  mesh:           $(collect(zip(mesh_axes, mesh_sizes)))")
-    println("  num_partitions: $num_partitions")
-    println("  num_replicas:   $num_replicas")
-    println("  ndevices:       $ndevices")
-
-    # Detect n_grid_const: count args before the first tf.aliasing_output
-    n_grid_const = count_grid_constants(first_mlir)
-    println("  n_grid_const:   $n_grid_const (args 0-$(n_grid_const-1))")
 
     # Generate
     output_dir = dirname(abspath(out_path))
     script = generate_script(;
         first_path=abspath(first_path),
         loop_path=abspath(loop_path),
-        first_in, first_out, loop_in, loop_out,
-        mesh_axes, mesh_sizes, num_partitions, num_replicas,
-        n_grid_const,
+        first_in=first.inputs, first_out=first.outputs,
+        loop_in=loop.inputs, loop_out=loop.outputs,
+        mesh_axes=first.mesh_axes, mesh_sizes=first.mesh_sizes,
+        first.num_partitions, first.num_replicas,
+        first.n_grid_const,
         output_dir,
     )
 
