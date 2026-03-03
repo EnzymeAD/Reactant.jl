@@ -23,15 +23,7 @@ function Base.parse(
     location::Location=Location(),
 )
     return Operation(
-        mark_alloc(
-            @ccall API.mlir_c.mlirOperationParse(
-                context::API.MlirContext,
-                block::API.MlirBlock,
-                code::API.MlirStringRef,
-                location::API.MlirLocation,
-                verify::Bool,
-            )::API.MlirOperation
-        ),
+        mark_alloc(API.mlirOperationParse(context, block, code, location, verify))
     )
 end
 
@@ -388,15 +380,9 @@ function create_operation_at_front(args...; kwargs...)
 end
 
 function FunctionType(op::Operation)
-    is_function_op = @ccall API.mlir_c.mlirIsFunctionOpInterface(
-        op::API.MlirOperation
-    )::Bool
+    is_function_op = API.mlirIsFunctionOpInterface(op)
     if is_function_op
-        return Type(
-            @ccall API.mlir_c.mlirGetFunctionTypeFromOperation(
-                op::API.MlirOperation
-            )::API.MlirType
-        )
+        return Type(API.mlirGetFunctionTypeFromOperation(op))
     else
         throw("operation is not a function operation")
     end

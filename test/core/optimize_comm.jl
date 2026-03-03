@@ -1,4 +1,4 @@
-using Reactant, Test
+using Reactant, Test, FileCheck
 
 const addressable_devices = Reactant.addressable_devices()
 
@@ -43,11 +43,14 @@ if length(addressable_devices) ≥ 8
         x = reshape(collect(Int, 1:(1024 * 12)), 1024, 12)
         rx = Reactant.to_rarray(x; sharding)
 
-        hlo = repr(@code_xla shardy_passes = :to_mhlo_shardings rotate(rx))
-        @test !contains(hlo, "all-to-all")
-        @test !contains(hlo, "all-reduce")
-        @test !contains(hlo, "all-gather")
-        @test contains(hlo, "collective-permute")
+        hlo = @code_xla shardy_passes = :to_mhlo_shardings rotate(rx)
+        @test @filecheck begin
+            @check_not "all-to-all"
+            @check_not "all-reduce"
+            @check_not "all-gather"
+            @check "collective-permute"
+            hlo
+        end
 
         rotate(x)
         @jit shardy_passes = :to_mhlo_shardings rotate(rx)
@@ -63,11 +66,14 @@ if length(addressable_devices) ≥ 8
         x = reshape(collect(Int, 1:(1024 * 12)), 1024, 12)
         rx = Reactant.to_rarray(x; sharding)
 
-        hlo = repr(@code_xla shardy_passes = :to_mhlo_shardings pad(rx))
-        @test !contains(hlo, "all-to-all")
-        @test !contains(hlo, "all-reduce")
-        @test !contains(hlo, "all-gather")
-        @test contains(hlo, "collective-permute")
+        hlo = @code_xla shardy_passes = :to_mhlo_shardings pad(rx)
+        @test @filecheck begin
+            @check_not "all-to-all"
+            @check_not "all-reduce"
+            @check_not "all-gather"
+            @check "collective-permute"
+            hlo
+        end
 
         # No non reactant version available res = pad(x)
         r_res = @jit shardy_passes = :to_mhlo_shardings pad(rx)
@@ -87,11 +93,14 @@ if length(addressable_devices) ≥ 8
         rx = Reactant.to_rarray(x; sharding)
         ry = Reactant.to_rarray(y; sharding)
 
-        hlo = repr(@code_xla shardy_passes = :to_mhlo_shardings dus(rx, ry))
-        @test !contains(hlo, "all-to-all")
-        @test !contains(hlo, "all-reduce")
-        @test !contains(hlo, "all-gather")
-        @test contains(hlo, "collective-permute")
+        hlo = @code_xla shardy_passes = :to_mhlo_shardings dus(rx, ry)
+        @test @filecheck begin
+            @check_not "all-to-all"
+            @check_not "all-reduce"
+            @check_not "all-gather"
+            @check "collective-permute"
+            hlo
+        end
 
         dus(x, y)
         @jit shardy_passes = :to_mhlo_shardings dus(rx, ry)
@@ -112,11 +121,14 @@ if length(addressable_devices) ≥ 8
         rx = Reactant.to_rarray(x; sharding)
         ry = Reactant.to_rarray(y; sharding)
 
-        hlo = repr(@code_xla shardy_passes = :to_mhlo_shardings dus2(rx, ry))
-        @test !contains(hlo, "all-to-all")
-        @test !contains(hlo, "all-reduce")
-        @test !contains(hlo, "all-gather")
-        @test contains(hlo, "collective-permute")
+        hlo = @code_xla shardy_passes = :to_mhlo_shardings dus2(rx, ry)
+        @test @filecheck begin
+            @check_not "all-to-all"
+            @check_not "all-reduce"
+            @check_not "all-gather"
+            @check "collective-permute"
+            hlo
+        end
 
         dus2(x, y)
         @jit shardy_passes = :to_mhlo_shardings dus2(rx, ry)
@@ -133,11 +145,16 @@ if length(addressable_devices) ≥ 8
         x = reshape(collect(Int, 1:(1024 * 12)), 1024, 12)
         rx = Reactant.to_rarray(x; sharding)
 
-        hlo = repr(@code_xla shardy_passes = :to_mhlo_shardings multirot(rx))
-        @test !contains(hlo, "all-to-all")
-        @test !contains(hlo, "all-reduce")
-        @test !contains(hlo, "all-gather")
-        @test length(collect(eachmatch(r"%collective-permute[\.0-9]* =", hlo))) == 2
+        hlo = @code_xla shardy_passes = :to_mhlo_shardings multirot(rx)
+        @test @filecheck begin
+            @check_not "all-to-all"
+            @check_not "all-reduce"
+            @check_not "all-gather"
+            @check_count 2 "%collective-permute{{(-start)?[.0-9]*}} ="
+            @check_not "%collective-permute{{(-start)?[.0-9]*}} ="
+
+            hlo
+        end
     end
 end
 
@@ -149,9 +166,9 @@ function wrap(x)
     return res
 end
 
-if length(addressable_devices) ≥ 2
-    @testset "Wrap Size ($Size)" for Size in [20, 22, 28]
-        begin
+@testset "Wrap Size" begin
+    if length(addressable_devices) ≥ 2
+        @testset "Wrap Size ($Size)" for Size in [20, 22, 28]
             N = 2
             mesh = Sharding.Mesh(reshape(Reactant.devices()[1:N], 2), (:x,))
             sharding = Sharding.NamedSharding(mesh, (:x,))
@@ -159,13 +176,18 @@ if length(addressable_devices) ≥ 2
             x = reshape(collect(Int, 1:Size), Size)
             rx = Reactant.to_rarray(x; sharding)
 
-            hlo = repr(@code_xla shardy_passes = :to_mhlo_shardings wrap(rx))
-            @test !contains(hlo, "all-to-all")
-            @test !contains(hlo, "all-reduce")
-            # 1 all gather exists for the result sharding
-            @test length(collect(eachmatch(r"%all-gather[\.0-9]* =", hlo))) == 1
-            # 2 collective permutes exist for the left/right halos
-            @test length(collect(eachmatch(r"%collective-permute[\.0-9]* =", hlo))) == 2
+            hlo = @code_xla shardy_passes = :to_mhlo_shardings wrap(rx)
+
+            @test @filecheck begin
+                @check_not "all-to-all"
+                @check_not "all-reduce"
+                @check_count 2 "%collective-permute{{(-start)?[.0-9]*}} ="
+                @check_not "%collective-permute{{(-start)?[.0-9]*}} ="
+                @check_count 1 "%all-gather{{(-start)?[.0-9]*}} ="
+                @check_not "%all-gather{{(-start)?[.0-9]*}} ="
+
+                hlo
+            end
 
             x2 = wrap(x)
             rx2 = @jit shardy_passes = :to_mhlo_shardings wrap(rx)
@@ -202,42 +224,46 @@ function multirotate_both(x, sz)
     return (nrotate(x, 1), x, nrotate(x, size(x, 1) - 1), nrotate(x, size(x, 1) - 2))
 end
 
-if length(addressable_devices) ≥ 2
-    @testset "MultiRotate $mr $size" for mr in (
-            multirotate_left, multirotate_right, multirotate_both
-        ),
-        size in (20, 21)
+@testset "MultiRotate" begin
+    if length(addressable_devices) ≥ 2
+        @testset "MultiRotate $mr $sz" for mr in (
+                multirotate_left, multirotate_right, multirotate_both
+            ),
+            sz in (20, 21)
 
-        begin
             N = min((length(Reactant.devices()) ÷ 2) * 2, 2)
 
             mesh = Sharding.Mesh(reshape(Reactant.devices()[1:N], 2), (:x,))
             sharding = Sharding.NamedSharding(mesh, (:x,))
 
-            size2 = N * div(size + N - 1, N)
+            size2 = N * div(sz + N - 1, N)
             x = collect(Int, 1:size2)
             rx = Reactant.to_rarray(x; sharding)
 
-            hlo = repr(@code_xla shardy_passes = :to_mhlo_shardings mr(rx, size))
-            y = mr(x, size)
+            hlo = repr(@code_xla shardy_passes = :to_mhlo_shardings mr(rx, sz))
+            y = mr(x, sz)
 
-            @test !contains(hlo, "all-to-all")
-            @test !contains(hlo, "all-reduce")
-            @test !contains(hlo, "copy")
+            Nallgathers = length(collect(eachmatch(r"%all-gather(-start)?[\.0-9]* =", hlo)))
+            Ncollectives = length(
+                collect(eachmatch(r"%collective-permute(-start)?[\.0-9]* =", hlo))
+            )
 
-            if mr == multirotate_both
-                @test length(collect(eachmatch(r"%collective-permute[\.0-9]* =", hlo))) == 2
-            else
-                @test length(collect(eachmatch(r"%collective-permute[\.0-9]* =", hlo))) == 1
+            expected_allgathers = size2 == sz ? 0 : length(y)
+            expected_collectives = mr == multirotate_both ? 2 : 1
+
+            if Nallgathers != expected_allgathers || Ncollectives != expected_collectives
+                # for debugging print hlo
+                println(hlo)
             end
 
-            if size2 == size
-                @test length(collect(eachmatch(r"%all-gather[\.0-9]* =", hlo))) == 0
-            else
-                @test length(collect(eachmatch(r"%all-gather[\.0-9]* =", hlo))) == length(y)
+            @test @filecheck begin
+                @check_not "all-to-all"
+                @check_not "all-reduce"
+                @check_not "copy"
+                hlo
             end
 
-            ry = @jit shardy_passes = :to_mhlo_shardings mr(rx, size)
+            ry = @jit shardy_passes = :to_mhlo_shardings mr(rx, sz)
 
             for (z, rz) in zip(y, ry)
                 @test all(z .== convert(Array, rz))

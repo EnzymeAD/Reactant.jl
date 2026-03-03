@@ -1,4 +1,4 @@
-using Reactant, Test, Random
+using Reactant, Test, Random, FileCheck
 using Reactant: ProbProg, ReactantRNG
 
 function one_sample(rng, μ, σ, shape)
@@ -27,7 +27,10 @@ end
         σ = Reactant.ConcreteRNumber(1.0)
 
         code = @code_hlo optimize = false ProbProg.sample(rng, ProbProg.Normal(μ, σ, shape))
-        @test contains(repr(code), "enzyme.sample")
+        @test @filecheck begin
+            @check "enzyme.sample"
+            repr(code)
+        end
     end
 
     @testset "two_samples_hlo" begin
@@ -38,7 +41,10 @@ end
         σ = Reactant.ConcreteRNumber(1.0)
 
         code = @code_hlo optimize = false ProbProg.sample(rng, two_samples, μ, σ, shape)
-        @test contains(repr(code), "enzyme.sample")
+        @test @filecheck begin
+            @check "enzyme.sample"
+            repr(code)
+        end
     end
 
     @testset "compose" begin
@@ -51,12 +57,18 @@ end
         before = @code_hlo optimize = false ProbProg.untraced_call(
             rng, compose, μ, σ, shape
         )
-        @test contains(repr(before), "enzyme.sample")
+        @test @filecheck begin
+            @check "enzyme.sample"
+            repr(before)
+        end
 
         after = @code_hlo optimize = :probprog ProbProg.untraced_call(
             rng, compose, μ, σ, shape
         )
-        @test !contains(repr(after), "enzyme.sample")
+        @test @filecheck begin
+            @check_not "enzyme.sample"
+            repr(after)
+        end
     end
 
     @testset "rng_state" begin

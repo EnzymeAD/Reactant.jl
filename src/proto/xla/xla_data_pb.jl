@@ -12,17 +12,17 @@ export ReplicaGroup, var"ResultAccuracy.Tolerance", TileProto, ScatterDimensionN
 export SourceTarget, ExecutionHandle, GlobalDataHandle, FftType, ProfileSource
 export DotDimensionNumbers, DeviceHandle, var"OpSharding.Type", WindowDimension
 export ConvolutionDimensionNumbers, IotaReplicaGroupListProto, OriginalArrayProto
-export ComputationStats, FrontendAttributes, ProfileType, AsyncStreamKind
+export ComputationStats, ProfileType, AsyncStreamKind, FrontendAttributes
 export var"WhileLoopBackendConfig.KnownInductionVariable"
 export var"PaddingConfig.PaddingConfigDimension", GemmPerfTableEntry, OutputOperandAliasing
 export var"PrecisionConfig.Precision", ExecutionProfile, var"AxisRefProto.SubAxis"
-export ProfileGenerationStrategy, PaddingType, var"MeshProto.MeshAxis"
-export var"OpSharding.ShardGroupType", CholeskyOptions, StatisticsViz
-export TriangularSolveOptions, DeviceAssignmentProto, ChannelHandle
+export var"SparsityConfig.TensorSparsityConfig", ProfileGenerationStrategy, PaddingType
+export var"MeshProto.MeshAxis", var"OpSharding.ShardGroupType", CholeskyOptions
+export StatisticsViz, TriangularSolveOptions, DeviceAssignmentProto, ChannelHandle
 export CollectiveDeviceListProto, ResultAccuracy, RaggedDotDimensionNumbers, Window
 export OriginalValueElementProto, WhileLoopBackendConfig, PaddingConfig
-export GemmPerfTableEntryValues, PrecisionConfig, AxisRefProto, var"OpMetadata.ProfileInfo"
-export MeshProto, OriginalValueProto, GemmPerfTable
+export GemmPerfTableEntryValues, PrecisionConfig, AxisRefProto, SparsityConfig
+export var"OpMetadata.ProfileInfo", MeshProto, OriginalValueProto, GemmPerfTable
 export var"NamedShardingProto.DimensionSharding", OpMetadata, MeshAxesReplicaGroupListProto
 export NamedShardingProto, LayoutProto, LiteralProto, OpSharding, ProgramShapeProto
 export ShapeProto
@@ -953,6 +953,10 @@ function PB._encoded_size(x::ComputationStats)
     return encoded_size
 end
 
+@enumx ProfileType INVALID=0 WINDOW=1 FLAG=2 INTEGER=3
+
+@enumx AsyncStreamKind ASYNC_STREAM_KIND_COLLECTIVE=0 ASYNC_STREAM_KIND_P2P0=1 ASYNC_STREAM_KIND_P2P1=2 ASYNC_STREAM_KIND_MEMCPYP2P=3
+
 struct FrontendAttributes
     map::Dict{String,String}
 end
@@ -982,10 +986,6 @@ function PB._encoded_size(x::FrontendAttributes)
     !isempty(x.map) && (encoded_size += PB._encoded_size(x.map, 1))
     return encoded_size
 end
-
-@enumx ProfileType INVALID=0 WINDOW=1 FLAG=2 INTEGER=3
-
-@enumx AsyncStreamKind ASYNC_STREAM_KIND_COLLECTIVE=0 ASYNC_STREAM_KIND_P2P0=1 ASYNC_STREAM_KIND_P2P1=2 ASYNC_STREAM_KIND_MEMCPYP2P=3
 
 struct var"WhileLoopBackendConfig.KnownInductionVariable"
     tuple_index::Int64
@@ -1262,6 +1262,54 @@ function PB._encoded_size(x::var"AxisRefProto.SubAxis")
     encoded_size = 0
     x.pre_size != zero(Int64) && (encoded_size += PB._encoded_size(x.pre_size, 1))
     x.size != zero(Int64) && (encoded_size += PB._encoded_size(x.size, 2))
+    return encoded_size
+end
+
+struct var"SparsityConfig.TensorSparsityConfig"
+    num_non_zero::Int64
+    block_size::Int64
+    dimension::Int64
+    stride::Int64
+end
+PB.default_values(::Type{var"SparsityConfig.TensorSparsityConfig"}) = (;num_non_zero = zero(Int64), block_size = zero(Int64), dimension = zero(Int64), stride = zero(Int64))
+PB.field_numbers(::Type{var"SparsityConfig.TensorSparsityConfig"}) = (;num_non_zero = 1, block_size = 2, dimension = 3, stride = 4)
+
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:var"SparsityConfig.TensorSparsityConfig"}, _endpos::Int=0, _group::Bool=false)
+    num_non_zero = zero(Int64)
+    block_size = zero(Int64)
+    dimension = zero(Int64)
+    stride = zero(Int64)
+    while !PB.message_done(d, _endpos, _group)
+        field_number, wire_type = PB.decode_tag(d)
+        if field_number == 1
+            num_non_zero = PB.decode(d, Int64)
+        elseif field_number == 2
+            block_size = PB.decode(d, Int64)
+        elseif field_number == 3
+            dimension = PB.decode(d, Int64)
+        elseif field_number == 4
+            stride = PB.decode(d, Int64)
+        else
+            Base.skip(d, wire_type)
+        end
+    end
+    return var"SparsityConfig.TensorSparsityConfig"(num_non_zero, block_size, dimension, stride)
+end
+
+function PB.encode(e::PB.AbstractProtoEncoder, x::var"SparsityConfig.TensorSparsityConfig")
+    initpos = position(e.io)
+    x.num_non_zero != zero(Int64) && PB.encode(e, 1, x.num_non_zero)
+    x.block_size != zero(Int64) && PB.encode(e, 2, x.block_size)
+    x.dimension != zero(Int64) && PB.encode(e, 3, x.dimension)
+    x.stride != zero(Int64) && PB.encode(e, 4, x.stride)
+    return position(e.io) - initpos
+end
+function PB._encoded_size(x::var"SparsityConfig.TensorSparsityConfig")
+    encoded_size = 0
+    x.num_non_zero != zero(Int64) && (encoded_size += PB._encoded_size(x.num_non_zero, 1))
+    x.block_size != zero(Int64) && (encoded_size += PB._encoded_size(x.block_size, 2))
+    x.dimension != zero(Int64) && (encoded_size += PB._encoded_size(x.dimension, 3))
+    x.stride != zero(Int64) && (encoded_size += PB._encoded_size(x.stride, 4))
     return encoded_size
 end
 
@@ -1860,6 +1908,42 @@ function PB._encoded_size(x::AxisRefProto)
     encoded_size = 0
     x.mesh_axis_index != zero(Int64) && (encoded_size += PB._encoded_size(x.mesh_axis_index, 1))
     !isnothing(x.sub_axis_info) && (encoded_size += PB._encoded_size(x.sub_axis_info, 2))
+    return encoded_size
+end
+
+struct SparsityConfig
+    lhs::Union{Nothing,var"SparsityConfig.TensorSparsityConfig"}
+    rhs::Union{Nothing,var"SparsityConfig.TensorSparsityConfig"}
+end
+PB.default_values(::Type{SparsityConfig}) = (;lhs = nothing, rhs = nothing)
+PB.field_numbers(::Type{SparsityConfig}) = (;lhs = 1, rhs = 2)
+
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:SparsityConfig}, _endpos::Int=0, _group::Bool=false)
+    lhs = Ref{Union{Nothing,var"SparsityConfig.TensorSparsityConfig"}}(nothing)
+    rhs = Ref{Union{Nothing,var"SparsityConfig.TensorSparsityConfig"}}(nothing)
+    while !PB.message_done(d, _endpos, _group)
+        field_number, wire_type = PB.decode_tag(d)
+        if field_number == 1
+            PB.decode!(d, lhs)
+        elseif field_number == 2
+            PB.decode!(d, rhs)
+        else
+            Base.skip(d, wire_type)
+        end
+    end
+    return SparsityConfig(lhs[], rhs[])
+end
+
+function PB.encode(e::PB.AbstractProtoEncoder, x::SparsityConfig)
+    initpos = position(e.io)
+    !isnothing(x.lhs) && PB.encode(e, 1, x.lhs)
+    !isnothing(x.rhs) && PB.encode(e, 2, x.rhs)
+    return position(e.io) - initpos
+end
+function PB._encoded_size(x::SparsityConfig)
+    encoded_size = 0
+    !isnothing(x.lhs) && (encoded_size += PB._encoded_size(x.lhs, 1))
+    !isnothing(x.rhs) && (encoded_size += PB._encoded_size(x.rhs, 2))
     return encoded_size
 end
 

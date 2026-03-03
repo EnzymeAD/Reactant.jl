@@ -1103,13 +1103,19 @@ the cvt instruction.
 [For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-cvt)
 """
 function convert_f32x2_to_f4x2(
-    a::Value, b::Value; dst::IR.Type, relu=nothing, dstTy, location=Location()
+    a::Value,
+    b::Value;
+    dst=nothing::Union{Nothing,IR.Type},
+    relu=nothing,
+    dstTy,
+    location=Location(),
 )
-    op_ty_results = IR.Type[dst,]
+    op_ty_results = IR.Type[]
     operands = Value[a, b]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[NamedAttribute("dstTy", dstTy),]
+    !isnothing(dst) && push!(op_ty_results, dst)
     !isnothing(relu) && push!(attributes, NamedAttribute("relu", relu))
 
     return create_operation(
@@ -1119,8 +1125,8 @@ function convert_f32x2_to_f4x2(
         owned_regions,
         successors,
         attributes,
-        results=op_ty_results,
-        result_inference=false,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
     )
 end
 
@@ -1272,13 +1278,19 @@ Note: These operations always use RS rounding mode and SATFINITE saturation mode
 [For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-cvt)
 """
 function convert_f32x4_to_f4x4(
-    src::Value, rbits::Value; dst::IR.Type, relu=nothing, dstTy, location=Location()
+    src::Value,
+    rbits::Value;
+    dst=nothing::Union{Nothing,IR.Type},
+    relu=nothing,
+    dstTy,
+    location=Location(),
 )
-    op_ty_results = IR.Type[dst,]
+    op_ty_results = IR.Type[]
     operands = Value[src, rbits]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[NamedAttribute("dstTy", dstTy),]
+    !isnothing(dst) && push!(op_ty_results, dst)
     !isnothing(relu) && push!(attributes, NamedAttribute("relu", relu))
 
     return create_operation(
@@ -1288,8 +1300,8 @@ function convert_f32x4_to_f4x4(
         owned_regions,
         successors,
         attributes,
-        results=op_ty_results,
-        result_inference=false,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
     )
 end
 
@@ -1373,13 +1385,19 @@ the rounding and saturation modes respectively.
 [For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-cvt)
 """
 function convert_float_to_tf32(
-    src::Value; res::IR.Type, rnd=nothing, sat=nothing, relu=nothing, location=Location()
+    src::Value;
+    res=nothing::Union{Nothing,IR.Type},
+    rnd=nothing,
+    sat=nothing,
+    relu=nothing,
+    location=Location(),
 )
-    op_ty_results = IR.Type[res,]
+    op_ty_results = IR.Type[]
     operands = Value[src,]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
+    !isnothing(res) && push!(op_ty_results, res)
     !isnothing(rnd) && push!(attributes, NamedAttribute("rnd", rnd))
     !isnothing(sat) && push!(attributes, NamedAttribute("sat", sat))
     !isnothing(relu) && push!(attributes, NamedAttribute("relu", relu))
@@ -1391,8 +1409,8 @@ function convert_float_to_tf32(
         owned_regions,
         successors,
         attributes,
-        results=op_ty_results,
-        result_inference=false,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
     )
 end
 
@@ -1999,9 +2017,16 @@ signed.
 [For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/#integer-arithmetic-instructions-dp2a)
 """
 function dot_accumulate_2way(
-    a::Value, b::Value, c::Value; res::IR.Type, a_type, b_type, b_hi, location=Location()
+    a::Value,
+    b::Value,
+    c::Value;
+    res=nothing::Union{Nothing,IR.Type},
+    a_type,
+    b_type,
+    b_hi,
+    location=Location(),
 )
-    op_ty_results = IR.Type[res,]
+    op_ty_results = IR.Type[]
     operands = Value[a, b, c]
     owned_regions = Region[]
     successors = Block[]
@@ -2010,6 +2035,7 @@ function dot_accumulate_2way(
         NamedAttribute("b_type", b_type),
         NamedAttribute("b_hi", b_hi),
     ]
+    !isnothing(res) && push!(op_ty_results, res)
 
     return create_operation(
         "nvvm.dot.accumulate.2way",
@@ -2018,8 +2044,8 @@ function dot_accumulate_2way(
         owned_regions,
         successors,
         attributes,
-        results=op_ty_results,
-        result_inference=false,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
     )
 end
 
@@ -2044,15 +2070,22 @@ treated as holding a signed integer if any of `a_type` or `b_type` is `s8`.
 [For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/#integer-arithmetic-instructions-dp4a)
 """
 function dot_accumulate_4way(
-    a::Value, b::Value, c::Value; res::IR.Type, a_type, b_type, location=Location()
+    a::Value,
+    b::Value,
+    c::Value;
+    res=nothing::Union{Nothing,IR.Type},
+    a_type,
+    b_type,
+    location=Location(),
 )
-    op_ty_results = IR.Type[res,]
+    op_ty_results = IR.Type[]
     operands = Value[a, b, c]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[
         NamedAttribute("a_type", a_type), NamedAttribute("b_type", b_type)
     ]
+    !isnothing(res) && push!(op_ty_results, res)
 
     return create_operation(
         "nvvm.dot.accumulate.4way",
@@ -2061,8 +2094,8 @@ function dot_accumulate_4way(
         owned_regions,
         successors,
         attributes,
-        results=op_ty_results,
-        result_inference=false,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
     )
 end
 
@@ -2097,14 +2130,17 @@ the leader thread, and `False` for all other threads.
 [For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#parallel-synchronization-and-communication-instructions-elect-sync)
 """
 function elect_sync(
-    membermask=nothing::Union{Nothing,Value}; pred::IR.Type, location=Location()
+    membermask=nothing::Union{Nothing,Value};
+    pred=nothing::Union{Nothing,IR.Type},
+    location=Location(),
 )
-    op_ty_results = IR.Type[pred,]
+    op_ty_results = IR.Type[]
     operands = Value[]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
     !isnothing(membermask) && push!(operands, membermask)
+    !isnothing(pred) && push!(op_ty_results, pred)
 
     return create_operation(
         "nvvm.elect.sync",
@@ -2113,8 +2149,8 @@ function elect_sync(
         owned_regions,
         successors,
         attributes,
-        results=op_ty_results,
-        result_inference=false,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
     )
 end
 
@@ -3374,13 +3410,14 @@ will not cause the barrier to complete its current phase.
 [For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#parallel-synchronization-and-communication-instructions-mbarrier-arrive-drop)
 """
 function mbarrier_arrive_drop_nocomplete(
-    addr::Value, count::Value; res::IR.Type, location=Location()
+    addr::Value, count::Value; res=nothing::Union{Nothing,IR.Type}, location=Location()
 )
-    op_ty_results = IR.Type[res,]
+    op_ty_results = IR.Type[]
     operands = Value[addr, count]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
+    !isnothing(res) && push!(op_ty_results, res)
 
     return create_operation(
         "nvvm.mbarrier.arrive_drop.nocomplete",
@@ -3389,8 +3426,8 @@ function mbarrier_arrive_drop_nocomplete(
         owned_regions,
         successors,
         attributes,
-        results=op_ty_results,
-        result_inference=false,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
     )
 end
 
@@ -3527,13 +3564,14 @@ The operation takes the following operands:
 [For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#parallel-synchronization-and-communication-instructions-mbarrier-arrive)
 """
 function mbarrier_arrive_nocomplete(
-    addr::Value, count::Value; res::IR.Type, location=Location()
+    addr::Value, count::Value; res=nothing::Union{Nothing,IR.Type}, location=Location()
 )
-    op_ty_results = IR.Type[res,]
+    op_ty_results = IR.Type[]
     operands = Value[addr, count]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
+    !isnothing(res) && push!(op_ty_results, res)
 
     return create_operation(
         "nvvm.mbarrier.arrive.nocomplete",
@@ -3542,8 +3580,8 @@ function mbarrier_arrive_nocomplete(
         owned_regions,
         successors,
         attributes,
-        results=op_ty_results,
-        result_inference=false,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
     )
 end
 
@@ -3816,16 +3854,17 @@ ordering guarantees hold:
 function mbarrier_test_wait(
     addr::Value,
     stateOrPhase::Value;
-    res::IR.Type,
+    res=nothing::Union{Nothing,IR.Type},
     scope=nothing,
     relaxed=nothing,
     location=Location(),
 )
-    op_ty_results = IR.Type[res,]
+    op_ty_results = IR.Type[]
     operands = Value[addr, stateOrPhase]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
+    !isnothing(res) && push!(op_ty_results, res)
     !isnothing(scope) && push!(attributes, NamedAttribute("scope", scope))
     !isnothing(relaxed) && push!(attributes, NamedAttribute("relaxed", relaxed))
 
@@ -3836,8 +3875,8 @@ function mbarrier_test_wait(
         owned_regions,
         successors,
         attributes,
-        results=op_ty_results,
-        result_inference=false,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
     )
 end
 
@@ -3861,17 +3900,18 @@ function mbarrier_try_wait(
     addr::Value,
     stateOrPhase::Value,
     ticks=nothing::Union{Nothing,Value};
-    res::IR.Type,
+    res=nothing::Union{Nothing,IR.Type},
     scope=nothing,
     relaxed=nothing,
     location=Location(),
 )
-    op_ty_results = IR.Type[res,]
+    op_ty_results = IR.Type[]
     operands = Value[addr, stateOrPhase]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
     !isnothing(ticks) && push!(operands, ticks)
+    !isnothing(res) && push!(op_ty_results, res)
     !isnothing(scope) && push!(attributes, NamedAttribute("scope", scope))
     !isnothing(relaxed) && push!(attributes, NamedAttribute("relaxed", relaxed))
 
@@ -3882,8 +3922,8 @@ function mbarrier_try_wait(
         owned_regions,
         successors,
         attributes,
-        results=op_ty_results,
-        result_inference=false,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
     )
 end
 
@@ -4601,16 +4641,17 @@ function prmt(
     lo::Value,
     hi=nothing::Union{Nothing,Value};
     selector::Value,
-    res::IR.Type,
+    res=nothing::Union{Nothing,IR.Type},
     mode,
     location=Location(),
 )
-    op_ty_results = IR.Type[res,]
+    op_ty_results = IR.Type[]
     operands = Value[lo, selector]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[NamedAttribute("mode", mode),]
     !isnothing(hi) && push!(operands, hi)
+    !isnothing(res) && push!(op_ty_results, res)
 
     return create_operation(
         "nvvm.prmt",
@@ -4619,8 +4660,8 @@ function prmt(
         owned_regions,
         successors,
         attributes,
-        results=op_ty_results,
-        result_inference=false,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
     )
 end
 
@@ -4688,12 +4729,15 @@ function prefetch(
     )
 end
 
-function rcp_approx_ftz_f(arg::Value; res::IR.Type, location=Location())
-    op_ty_results = IR.Type[res,]
+function rcp_approx_ftz_f(
+    arg::Value; res=nothing::Union{Nothing,IR.Type}, location=Location()
+)
+    op_ty_results = IR.Type[]
     operands = Value[arg,]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
+    !isnothing(res) && push!(op_ty_results, res)
 
     return create_operation(
         "nvvm.rcp.approx.ftz.f",
@@ -4702,8 +4746,8 @@ function rcp_approx_ftz_f(arg::Value; res::IR.Type, location=Location())
         owned_regions,
         successors,
         attributes,
-        results=op_ty_results,
-        result_inference=false,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
     )
 end
 
@@ -4724,17 +4768,18 @@ NaN.
 function redux_sync(
     val::Value,
     mask_and_clamp::Value;
-    res::IR.Type,
+    res=nothing::Union{Nothing,IR.Type},
     kind,
     abs=nothing,
     nan=nothing,
     location=Location(),
 )
-    op_ty_results = IR.Type[res,]
+    op_ty_results = IR.Type[]
     operands = Value[val, mask_and_clamp]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[NamedAttribute("kind", kind),]
+    !isnothing(res) && push!(op_ty_results, res)
     !isnothing(abs) && push!(attributes, NamedAttribute("abs", abs))
     !isnothing(nan) && push!(attributes, NamedAttribute("nan", nan))
 
@@ -4745,8 +4790,8 @@ function redux_sync(
         owned_regions,
         successors,
         attributes,
-        results=op_ty_results,
-        result_inference=false,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
     )
 end
 
@@ -5751,10 +5796,10 @@ function tcgen05_mma_smem_desc(
     baseOffset::Value,
     leadingDimMode::Value,
     swizzleMode::Value;
-    res::IR.Type,
+    res=nothing::Union{Nothing,IR.Type},
     location=Location(),
 )
-    op_ty_results = IR.Type[res,]
+    op_ty_results = IR.Type[]
     operands = Value[
         startAddr,
         leadingDimOffset,
@@ -5766,6 +5811,7 @@ function tcgen05_mma_smem_desc(
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
+    !isnothing(res) && push!(op_ty_results, res)
 
     return create_operation(
         "nvvm.tcgen05.mma_smem_desc",
@@ -5774,8 +5820,8 @@ function tcgen05_mma_smem_desc(
         owned_regions,
         successors,
         attributes,
-        results=op_ty_results,
-        result_inference=false,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
     )
 end
 

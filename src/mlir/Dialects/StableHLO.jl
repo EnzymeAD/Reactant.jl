@@ -1031,6 +1031,10 @@ op semantics, prefer using `custom_call`.
 The `version` field (defaults to `0`) is used to denote when a composite\'s
 semantics change.
 
+The intent of `composite_regions` is to only be used to model ops with
+bodies, regions are thrown away if the fallback decomposition function gets
+inlined.
+
 See:
 https://github.com/openxla/stablehlo/blob/main/docs/spec.md#composite
 
@@ -1052,11 +1056,12 @@ function composite(
     composite_attributes=nothing,
     decomposition,
     version=nothing,
+    composite_regions::Vector{Region},
     location=Location(),
 )
     op_ty_results = IR.Type[result_0...,]
     operands = Value[inputs...,]
-    owned_regions = Region[]
+    owned_regions = Region[composite_regions...,]
     successors = Block[]
     attributes = NamedAttribute[
         NamedAttribute("name", name), NamedAttribute("decomposition", decomposition)

@@ -47,6 +47,80 @@ XLA_FFI_DEFINE_HANDLER(xlaThrowErrorHandlerHost, xlaThrowErrorHost,
 XLA_FFI_DEFINE_HANDLER(xlaAlwaysThrowErrorHandlerHost, xlaAlwaysThrowErrorHost,
                        xla::ffi::Ffi::Bind().Attr<std::string_view>("message"));
 
+// ============================================================================
+// Generic Julia callback handler for CPU custom calls.
+//
+// The Julia side emits a stablehlo.custom_call targeting
+// "reactant_julia_callback" with api_version = 4 (TYPED_FFI).  The
+// backend_config dict carries a single i64 attribute "callback_ptr" that
+// encodes the address of a C-callable Julia function:
+//
+//   bool callback(void** inputs, void** outputs, int32_t backend);
+//
+// Backend Values:
+//   1: Host
+//   2: CUDA
+// ============================================================================
+
+using JuliaCallbackFn = bool (*)(void ** /*inputs*/, void ** /*outputs*/,
+                                 int32_t /*backend*/);
+
+template <int32_t Backend>
+xla::ffi::Error juliaCallbackHost(ffi::RemainingArgs args,
+                                  ffi::RemainingRets rets,
+                                  int64_t callback_ptr) {
+
+  auto fn = reinterpret_cast<JuliaCallbackFn>(callback_ptr);
+  if (!fn) {
+    return ffi::Error(ffi::ErrorCode::kInternal,
+                      "reactant_julia_callback: null callback pointer");
+  }
+
+  int64_t num_inputs = static_cast<int64_t>(args.size());
+  int64_t num_outputs = static_cast<int64_t>(rets.size());
+
+  // Allocate temporary arrays on the stack / heap for the metadata.
+  std::vector<void *> input_ptrs(num_inputs);
+
+  for (int64_t i = 0; i < num_inputs; ++i) {
+    auto buf = args.get<ffi::AnyBuffer>(i);
+    if (!buf.has_value()) {
+      return ffi::Error(
+          ffi::ErrorCode::kInternal,
+          absl::StrFormat(
+              "reactant_julia_callback: failed to get input buffer %d", i));
+    }
+    input_ptrs[i] = buf->untyped_data();
+  }
+
+  std::vector<void *> output_ptrs(num_outputs);
+
+  for (int64_t i = 0; i < num_outputs; ++i) {
+    auto buf = rets.get<ffi::AnyBuffer>(i);
+    if (!buf.has_value()) {
+      return ffi::Error(
+          ffi::ErrorCode::kInternal,
+          absl::StrFormat(
+              "reactant_julia_callback: failed to get output buffer %d", i));
+    }
+    output_ptrs[i] = (*buf)->untyped_data();
+  }
+
+  // Invoke the Julia callback.
+  bool ok = fn(input_ptrs.data(), output_ptrs.data(), Backend);
+  if (!ok) {
+    return ffi::Error(ffi::ErrorCode::kInternal,
+                      "reactant_julia_callback: callback returned false");
+  }
+
+  return ffi::Error::Success();
+}
+
+XLA_FFI_DEFINE_HANDLER(
+    juliaCallbackHandlerHost, juliaCallbackHost<1>,
+    xla::ffi::Ffi::Bind().RemainingArgs().RemainingRets().Attr<int64_t>(
+        "callback_ptr"));
+
 #if defined(REACTANT_CUDA)
 
 #include "third_party/gpus/cuda/include/cuComplex.h"
@@ -376,6 +450,11 @@ XLA_FFI_DEFINE_HANDLER(xlaAlwaysThrowErrorHandlerCUDA, xlaAlwaysThrowErrorCUDA,
                            .Ctx<xla::ffi::PlatformStream<CUstream>>()
                            .Attr<std::string_view>("message"));
 
+XLA_FFI_DEFINE_HANDLER(
+    juliaCallbackHandlerCUDA, juliaCallbackHost<2>,
+    xla::ffi::Ffi::Bind().RemainingArgs().RemainingRets().Attr<int64_t>(
+        "callback_ptr"));
+
 void registerReactantXLAInternalFFI() {
   XLA_FFI_REGISTER_HANDLER(xla::ffi::GetXlaFfiApi(), "reactant_cublas_syrk_ffi",
                            "CUDA", SyrkFfi);
@@ -390,6 +469,11 @@ void registerReactantXLAInternalFFI() {
                            xlaThrowErrorHandlerHost);
   XLA_FFI_REGISTER_HANDLER(xla::ffi::GetXlaFfiApi(), "xla_always_throw_error",
                            "Host", xlaAlwaysThrowErrorHandlerHost);
+
+  XLA_FFI_REGISTER_HANDLER(xla::ffi::GetXlaFfiApi(), "reactant_julia_callback",
+                           "Host", juliaCallbackHandlerHost);
+  XLA_FFI_REGISTER_HANDLER(xla::ffi::GetXlaFfiApi(), "reactant_julia_callback",
+                           "CUDA", juliaCallbackHandlerCUDA);
 }
 
 #else
@@ -399,6 +483,9 @@ void registerReactantXLAInternalFFI() {
                            xlaThrowErrorHandlerHost);
   XLA_FFI_REGISTER_HANDLER(xla::ffi::GetXlaFfiApi(), "xla_always_throw_error",
                            "Host", xlaAlwaysThrowErrorHandlerHost);
+
+  XLA_FFI_REGISTER_HANDLER(xla::ffi::GetXlaFfiApi(), "reactant_julia_callback",
+                           "Host", juliaCallbackHandlerHost);
 }
 
 #endif

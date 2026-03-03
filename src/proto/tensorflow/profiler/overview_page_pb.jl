@@ -2,11 +2,10 @@ import ProtoBuf as PB
 using ProtoBuf: OneOf
 using ProtoBuf.EnumX: @enumx
 
-export OverviewTfOp, DistributionStats, OverviewPageHostDependentJobInfo
-export OverviewLatencyBreakdown, GenericRecommendation, OverviewPageTip
-export OverviewPageHostIndependentJobInfo, OverviewPageAnalysis
-export OverviewDisaggregatedServingLatency, OverviewInferenceLatency
-export OverviewPageRecommendation, OverviewPageRunEnvironment, OverviewPage
+export OverviewTfOp, OverviewPageHostDependentJobInfo, OverviewLatencyBreakdown
+export GenericRecommendation, OverviewPageTip, OverviewPageHostIndependentJobInfo
+export OverviewPageAnalysis, OverviewInferenceLatency, OverviewPageRecommendation
+export OverviewPageRunEnvironment, OverviewPage
 
 
 struct OverviewTfOp
@@ -72,60 +71,6 @@ function PB._encoded_size(x::OverviewTfOp)
     x.flop_rate !== zero(Float64) && (encoded_size += PB._encoded_size(x.flop_rate, 5))
     x.is_op_tensorcore_eligible != false && (encoded_size += PB._encoded_size(x.is_op_tensorcore_eligible, 6))
     x.is_op_using_tensorcore != false && (encoded_size += PB._encoded_size(x.is_op_using_tensorcore, 7))
-    return encoded_size
-end
-
-struct DistributionStats
-    avg::Float64
-    p50::Float64
-    p90::Float64
-    p95::Float64
-    p99::Float64
-end
-PB.default_values(::Type{DistributionStats}) = (;avg = zero(Float64), p50 = zero(Float64), p90 = zero(Float64), p95 = zero(Float64), p99 = zero(Float64))
-PB.field_numbers(::Type{DistributionStats}) = (;avg = 1, p50 = 2, p90 = 3, p95 = 4, p99 = 5)
-
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:DistributionStats}, _endpos::Int=0, _group::Bool=false)
-    avg = zero(Float64)
-    p50 = zero(Float64)
-    p90 = zero(Float64)
-    p95 = zero(Float64)
-    p99 = zero(Float64)
-    while !PB.message_done(d, _endpos, _group)
-        field_number, wire_type = PB.decode_tag(d)
-        if field_number == 1
-            avg = PB.decode(d, Float64)
-        elseif field_number == 2
-            p50 = PB.decode(d, Float64)
-        elseif field_number == 3
-            p90 = PB.decode(d, Float64)
-        elseif field_number == 4
-            p95 = PB.decode(d, Float64)
-        elseif field_number == 5
-            p99 = PB.decode(d, Float64)
-        else
-            Base.skip(d, wire_type)
-        end
-    end
-    return DistributionStats(avg, p50, p90, p95, p99)
-end
-
-function PB.encode(e::PB.AbstractProtoEncoder, x::DistributionStats)
-    initpos = position(e.io)
-    x.avg !== zero(Float64) && PB.encode(e, 1, x.avg)
-    x.p50 !== zero(Float64) && PB.encode(e, 2, x.p50)
-    x.p90 !== zero(Float64) && PB.encode(e, 3, x.p90)
-    x.p95 !== zero(Float64) && PB.encode(e, 4, x.p95)
-    x.p99 !== zero(Float64) && PB.encode(e, 5, x.p99)
-    return position(e.io) - initpos
-end
-function PB._encoded_size(x::DistributionStats)
-    encoded_size = 0
-    x.avg !== zero(Float64) && (encoded_size += PB._encoded_size(x.avg, 1))
-    x.p50 !== zero(Float64) && (encoded_size += PB._encoded_size(x.p50, 2))
-    x.p90 !== zero(Float64) && (encoded_size += PB._encoded_size(x.p90, 3))
-    x.p95 !== zero(Float64) && (encoded_size += PB._encoded_size(x.p95, 4))
-    x.p99 !== zero(Float64) && (encoded_size += PB._encoded_size(x.p99, 5))
     return encoded_size
 end
 
@@ -597,66 +542,6 @@ function PB._encoded_size(x::OverviewPageAnalysis)
     return encoded_size
 end
 
-struct OverviewDisaggregatedServingLatency
-    prefill_step_time_us::Union{Nothing,DistributionStats}
-    num_prefill_steps::Int64
-    decode_step_time_us::Union{Nothing,DistributionStats}
-    num_decode_steps::Int64
-    insert_time_us::Union{Nothing,DistributionStats}
-    transfer_time_us::Union{Nothing,DistributionStats}
-end
-PB.default_values(::Type{OverviewDisaggregatedServingLatency}) = (;prefill_step_time_us = nothing, num_prefill_steps = zero(Int64), decode_step_time_us = nothing, num_decode_steps = zero(Int64), insert_time_us = nothing, transfer_time_us = nothing)
-PB.field_numbers(::Type{OverviewDisaggregatedServingLatency}) = (;prefill_step_time_us = 1, num_prefill_steps = 2, decode_step_time_us = 3, num_decode_steps = 4, insert_time_us = 5, transfer_time_us = 6)
-
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:OverviewDisaggregatedServingLatency}, _endpos::Int=0, _group::Bool=false)
-    prefill_step_time_us = Ref{Union{Nothing,DistributionStats}}(nothing)
-    num_prefill_steps = zero(Int64)
-    decode_step_time_us = Ref{Union{Nothing,DistributionStats}}(nothing)
-    num_decode_steps = zero(Int64)
-    insert_time_us = Ref{Union{Nothing,DistributionStats}}(nothing)
-    transfer_time_us = Ref{Union{Nothing,DistributionStats}}(nothing)
-    while !PB.message_done(d, _endpos, _group)
-        field_number, wire_type = PB.decode_tag(d)
-        if field_number == 1
-            PB.decode!(d, prefill_step_time_us)
-        elseif field_number == 2
-            num_prefill_steps = PB.decode(d, Int64)
-        elseif field_number == 3
-            PB.decode!(d, decode_step_time_us)
-        elseif field_number == 4
-            num_decode_steps = PB.decode(d, Int64)
-        elseif field_number == 5
-            PB.decode!(d, insert_time_us)
-        elseif field_number == 6
-            PB.decode!(d, transfer_time_us)
-        else
-            Base.skip(d, wire_type)
-        end
-    end
-    return OverviewDisaggregatedServingLatency(prefill_step_time_us[], num_prefill_steps, decode_step_time_us[], num_decode_steps, insert_time_us[], transfer_time_us[])
-end
-
-function PB.encode(e::PB.AbstractProtoEncoder, x::OverviewDisaggregatedServingLatency)
-    initpos = position(e.io)
-    !isnothing(x.prefill_step_time_us) && PB.encode(e, 1, x.prefill_step_time_us)
-    x.num_prefill_steps != zero(Int64) && PB.encode(e, 2, x.num_prefill_steps)
-    !isnothing(x.decode_step_time_us) && PB.encode(e, 3, x.decode_step_time_us)
-    x.num_decode_steps != zero(Int64) && PB.encode(e, 4, x.num_decode_steps)
-    !isnothing(x.insert_time_us) && PB.encode(e, 5, x.insert_time_us)
-    !isnothing(x.transfer_time_us) && PB.encode(e, 6, x.transfer_time_us)
-    return position(e.io) - initpos
-end
-function PB._encoded_size(x::OverviewDisaggregatedServingLatency)
-    encoded_size = 0
-    !isnothing(x.prefill_step_time_us) && (encoded_size += PB._encoded_size(x.prefill_step_time_us, 1))
-    x.num_prefill_steps != zero(Int64) && (encoded_size += PB._encoded_size(x.num_prefill_steps, 2))
-    !isnothing(x.decode_step_time_us) && (encoded_size += PB._encoded_size(x.decode_step_time_us, 3))
-    x.num_decode_steps != zero(Int64) && (encoded_size += PB._encoded_size(x.num_decode_steps, 4))
-    !isnothing(x.insert_time_us) && (encoded_size += PB._encoded_size(x.insert_time_us, 5))
-    !isnothing(x.transfer_time_us) && (encoded_size += PB._encoded_size(x.transfer_time_us, 6))
-    return encoded_size
-end
-
 struct OverviewInferenceLatency
     percentile_numbers::Vector{Float64}
     latency_breakdowns::Vector{OverviewLatencyBreakdown}
@@ -911,10 +796,11 @@ struct OverviewPage
     recommendation::Union{Nothing,OverviewPageRecommendation}
     diagnostics::Union{Nothing,Diagnostics}
     inference_latency::Union{Nothing,OverviewInferenceLatency}
+    disaggregated_serving_latency::Union{Nothing,DisaggregatedServingLatency}
 end
 PB.reserved_fields(::Type{OverviewPage}) = (names = String[], numbers = Union{Int,UnitRange{Int}}[1, 5, 7])
-PB.default_values(::Type{OverviewPage}) = (;run_environment = nothing, input_analysis = nothing, analysis = nothing, recommendation = nothing, diagnostics = nothing, inference_latency = nothing)
-PB.field_numbers(::Type{OverviewPage}) = (;run_environment = 6, input_analysis = 2, analysis = 3, recommendation = 4, diagnostics = 8, inference_latency = 9)
+PB.default_values(::Type{OverviewPage}) = (;run_environment = nothing, input_analysis = nothing, analysis = nothing, recommendation = nothing, diagnostics = nothing, inference_latency = nothing, disaggregated_serving_latency = nothing)
+PB.field_numbers(::Type{OverviewPage}) = (;run_environment = 6, input_analysis = 2, analysis = 3, recommendation = 4, diagnostics = 8, inference_latency = 9, disaggregated_serving_latency = 10)
 
 function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:OverviewPage}, _endpos::Int=0, _group::Bool=false)
     run_environment = Ref{Union{Nothing,OverviewPageRunEnvironment}}(nothing)
@@ -923,6 +809,7 @@ function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:OverviewPage}, _endpos::
     recommendation = Ref{Union{Nothing,OverviewPageRecommendation}}(nothing)
     diagnostics = Ref{Union{Nothing,Diagnostics}}(nothing)
     inference_latency = Ref{Union{Nothing,OverviewInferenceLatency}}(nothing)
+    disaggregated_serving_latency = Ref{Union{Nothing,DisaggregatedServingLatency}}(nothing)
     while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 6
@@ -937,11 +824,13 @@ function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:OverviewPage}, _endpos::
             PB.decode!(d, diagnostics)
         elseif field_number == 9
             PB.decode!(d, inference_latency)
+        elseif field_number == 10
+            PB.decode!(d, disaggregated_serving_latency)
         else
             Base.skip(d, wire_type)
         end
     end
-    return OverviewPage(run_environment[], input_analysis[], analysis[], recommendation[], diagnostics[], inference_latency[])
+    return OverviewPage(run_environment[], input_analysis[], analysis[], recommendation[], diagnostics[], inference_latency[], disaggregated_serving_latency[])
 end
 
 function PB.encode(e::PB.AbstractProtoEncoder, x::OverviewPage)
@@ -952,6 +841,7 @@ function PB.encode(e::PB.AbstractProtoEncoder, x::OverviewPage)
     !isnothing(x.recommendation) && PB.encode(e, 4, x.recommendation)
     !isnothing(x.diagnostics) && PB.encode(e, 8, x.diagnostics)
     !isnothing(x.inference_latency) && PB.encode(e, 9, x.inference_latency)
+    !isnothing(x.disaggregated_serving_latency) && PB.encode(e, 10, x.disaggregated_serving_latency)
     return position(e.io) - initpos
 end
 function PB._encoded_size(x::OverviewPage)
@@ -962,5 +852,6 @@ function PB._encoded_size(x::OverviewPage)
     !isnothing(x.recommendation) && (encoded_size += PB._encoded_size(x.recommendation, 4))
     !isnothing(x.diagnostics) && (encoded_size += PB._encoded_size(x.diagnostics, 8))
     !isnothing(x.inference_latency) && (encoded_size += PB._encoded_size(x.inference_latency, 9))
+    !isnothing(x.disaggregated_serving_latency) && (encoded_size += PB._encoded_size(x.disaggregated_serving_latency, 10))
     return encoded_size
 end

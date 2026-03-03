@@ -98,6 +98,17 @@ end
 # Override _parentsmatch to avoid pointer comparisons during tracing
 # Direct TracedRArray comparisons - they don't alias unless they're the same object
 Base._parentsmatch(A::TracedRArray, B::TracedRArray) = A === B
+# A TracedRArray and a regular Array can never share memory, so they never alias.
+# Without this, the default DenseArray/StridedArray methods call pointer() which
+# isn't defined for TracedRArray, causing "conversion to pointer not defined"
+# errors when @views creates SubArray wrappers that trigger broadcast alias checking.
+Base._parentsmatch(::TracedRArray, ::AbstractArray) = false
+Base._parentsmatch(::AbstractArray, ::TracedRArray) = false
+# Resolve method ambiguities with Base's DenseArray and StridedArray specializations
+Base._parentsmatch(::TracedRArray, ::DenseArray) = false
+Base._parentsmatch(::DenseArray, ::TracedRArray) = false
+Base._parentsmatch(::TracedRArray, ::StridedArray) = false
+Base._parentsmatch(::StridedArray, ::TracedRArray) = false
 # ReshapedArray comparisons - check if they share the same parent (more specific than StridedArray)
 function Base._parentsmatch(
     A::Base.ReshapedArray{
