@@ -46,6 +46,7 @@ genrule(
         # Xprof protos - main files
         "@org_xprof//plugin/xprof/protobuf:op_metrics.proto",
         "@org_xprof//plugin/xprof/protobuf:op_stats.proto",
+        "@org_xprof//plugin/xprof/protobuf:tf_stats.proto",
         "@org_xprof//plugin/xprof/protobuf:op_profile.proto",
         "@org_xprof//plugin/xprof/protobuf:hlo_stats.proto",
         "@org_xprof//plugin/xprof/protobuf:kernel_stats.proto",
