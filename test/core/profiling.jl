@@ -34,7 +34,7 @@ linear(x, W, b) = (W * x) .+ b
             @test length(framework_stats) > 0
         end
 
-        flops = Reactant.Profiler.get_aggregate_flops_statistics(file, 1)
+        flops = Reactant.Profiler.get_aggregate_metrics(file, 1)
         if !RunningOnCPU
             @test flops isa Reactant.Profiler.FlopsSummary
             @test flops.RawFlopsRate > 0
