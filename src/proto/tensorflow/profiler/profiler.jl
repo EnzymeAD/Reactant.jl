@@ -5,6 +5,7 @@ import ..google
 include("kernel_stats_pb.jl")
 include("power_metrics_pb.jl")
 include("diagnostics_pb.jl")
+include("tf_stats_pb.jl")
 include("xplane_pb.jl")
 include("topology_pb.jl")
 include("source_info_pb.jl")
