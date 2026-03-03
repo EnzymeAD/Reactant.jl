@@ -245,8 +245,6 @@ end
     # indices aren't a TracedRArray but we should still be able to trace
     idx = Reactant.TracedUnitRange(ConcreteRNumber(1), ConcreteRNumber(5), 5)
     @test @jit(getindex_linear_vector(x_ra, idx)) ≈ getindex_linear_vector(x, 1:5)
-
-
 end
 
 @testset "Boolean Indexing" begin
