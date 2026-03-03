@@ -1055,31 +1055,9 @@ function print_kernel_report(
     return nothing
 end
 
-struct FrameworkOpStats
-    host_or_device::String
-    op_type::String
-    op_name::String
-    occurrences::UInt32
-    total_time_ns::UInt64
-    avg_time_ns::UInt64
-    total_self_time_ns::UInt64
-    avg_self_time_ns::UInt64
-    device_total_self_time_pct::Float64
-    device_cumulative_total_self_time_pct::Float64
-    host_total_self_time_pct::Float64
-    host_cumulative_total_self_time_pct::Float64
-    measured_flop_rate::Float64
-    model_flop_rate_gflops::Float64
-    measured_memory_bw_gbps::Float64
-    operational_intensity::Float64
-    gpu_tensorcore_utilization::Float64
-    bound_by::String
-    execution_mode::String
-end
-
 function get_framework_op_stats(xplane_file::String; include_idle::Bool=false)
     raw_data = JSON.parse(xspace_to_tools_data([xplane_file], "framework_op_stats")[1])
-    length(raw_data) == 2 || return FrameworkOpStats[]
+    length(raw_data) == 2 || return Proto.tensorflow.profiler.TfStatsRecord[]
 
     data = include_idle ? raw_data[1] : raw_data[2]
 
@@ -1089,7 +1067,7 @@ function get_framework_op_stats(xplane_file::String; include_idle::Bool=false)
     # Build column index mapping: column_id => position (1-indexed)
     col_indices = Dict{String,Int}(col[:id] => i for (i, col) in enumerate(cols))
 
-    reports = FrameworkOpStats[]
+    reports = Proto.tensorflow.profiler.TfStatsRecord[]
     for row in rows
         cells = row[:c]
         function get_val(id, allowmissing=false)
@@ -1097,29 +1075,43 @@ function get_framework_op_stats(xplane_file::String; include_idle::Bool=false)
             return cells[col_indices[id]][:v]
         end
 
-        # Convert μs to ns for time fields
         push!(
             reports,
-            FrameworkOpStats(
+            Proto.tensorflow.profiler.TfStatsRecord(
+                UInt64(get_val("rank")),
                 String(get_val("host_or_device")),
                 String(get_val("type")),
                 String(get_val("operation")),
                 UInt32(get_val("occurrences")),
-                UInt64(round(get_val("total_time") * 1000)),      # μs to ns
-                UInt64(round(get_val("avg_time") * 1000)),        # μs to ns
-                UInt64(round(get_val("total_self_time") * 1000)), # μs to ns
-                UInt64(round(get_val("avg_self_time") * 1000)),   # μs to ns
-                Float64(get_val("device_total_self_time_percent")),
-                Float64(get_val("device_cumulative_total_self_time_percent")),
-                Float64(get_val("host_total_self_time_percent")),
-                Float64(get_val("Host_cumulative_total_self_time_percent")),
+                Float64(round(get_val("total_time"))),
+                Float64(round(get_val("avg_time"))),
+                Float64(round(get_val("total_self_time"))),
+                Float64(round(get_val("avg_self_time"))),
+                Float64(get_val("device_total_self_time_percent")) / 100,
+                Float64(get_val("device_cumulative_total_self_time_percent")) / 100,
+                Float64(get_val("host_total_self_time_percent")) / 100,
+                Float64(get_val("Host_cumulative_total_self_time_percent")) / 100,
                 Float64(get_val("measured_flop_rate")),
                 Float64(get_val("model_flop_rate")),
                 Float64(get_val("measured_memory_bw")),
                 Float64(get_val("operational_intensity")),
-                Float64(get_val("gpu_tensorcore_utilization", true)),
                 String(get_val("bound_by")),
-                String(get_val("eager")),
+                false, # Bool(get_val("eager")) <-- returns a string "Function"
+                Float64(get_val("gpu_tensorcore_utilization", true)),
+                Float64(get_val("hbm_bw", true)),
+                Float64(get_val("cmem_read_bw", true)),
+                Float64(get_val("cmem_write_bw", true)),
+                Float64(get_val("vmem_read_bw", true)),
+                Float64(get_val("vmem_write_bw", true)),
+                Float64(get_val("hbm_operational_intensity", true)),
+                Float64(get_val("cmem_read_operational_intensity", true)),
+                Float64(get_val("cmem_write_operational_intensity", true)),
+                Float64(get_val("vmem_read_operational_intensity", true)),
+                Float64(get_val("vmem_write_operational_intensity", true)),
+                Float64(get_val("bottleneck_operational_intensity", true)),
+                UInt64(get_val("flops", true)),
+                Float64(get_val("flops_v2", true)),
+                UInt64(get_val("bytes_accessed", true)),
             ),
         )
     end
@@ -1127,73 +1119,120 @@ function get_framework_op_stats(xplane_file::String; include_idle::Bool=false)
     return reports
 end
 
-function print_framework_op_stats(reports::Vector{FrameworkOpStats}; io::IO=stdout)
+function print_framework_op_stats(
+    reports::Vector{Proto.tensorflow.profiler.TfStatsRecord}; io::IO=stdout
+)
     isempty(reports) && return nothing
 
     # Calculate quantiles based on total_self_time_ns
-    durations = [r.total_self_time_ns for r in reports]
+    durations = [r.total_self_time_in_us * 1000 for r in reports]
     sorted_durations = sort(durations)
     n = length(sorted_durations)
     q90 = sorted_durations[max(1, ceil(Int, 0.90 * n))]
     q75 = sorted_durations[max(1, ceil(Int, 0.75 * n))]
 
     # Check which optional columns have data
-    has_host_stats = any(r -> r.host_total_self_time_pct > 0, reports)
+    has_host_stats = any(r -> r.host_total_self_time_as_fraction > 0, reports)
     has_tensorcore = any(r -> r.gpu_tensorcore_utilization > 0, reports)
+    has_tpu_stats = any(r -> r.hbm_bw > 0, reports)
+    has_bytes_accessed = any(r -> r.bytes_accessed > 0, reports)
 
     # Build column definitions: (header, extractor, is_duration)
     columns = Tuple{String,Function,Bool}[]
-    push!(columns, ("Operation", r -> _clip_str(r.op_name), false))
-    push!(columns, ("Type", r -> r.op_type, false))
-    push!(columns, ("Host/Device", r -> r.host_or_device, false))
-    push!(columns, ("Occurrences", r -> string(r.occurrences), false))
-    push!(columns, ("Total Self-Time", r -> _timestr(r.total_self_time_ns) * "s", true))
-    push!(columns, ("Avg Self-Time", r -> _timestr(r.avg_self_time_ns) * "s", true))
-    push!(
-        columns,
-        (
-            "Device %",
-            r -> string(round(r.device_total_self_time_pct * 100; digits=2)) * "%",
-            false,
-        ),
+
+    function data_entry!(header::String, extractor, is_duration::Bool)
+        return push!(columns, (header, extractor, is_duration))
+    end
+
+    data_entry!("Operation", r -> _clip_str(r.op_name), false)
+    data_entry!("Type", r -> r.op_type, false)
+    data_entry!("Host/Device", r -> r.host_or_device, false)
+    data_entry!("Occurrences", r -> string(r.occurrences), false)
+    data_entry!(
+        "Total Self-Time", r -> _timestr(r.total_self_time_in_us * 1000) * "s", true
+    )
+    data_entry!("Avg Self-Time", r -> _timestr(r.avg_self_time_in_us * 1000) * "s", true)
+    data_entry!(
+        "Device %",
+        r -> string(round(r.device_total_self_time_as_fraction * 100; digits=2)) * "%",
+        false,
     )
     if has_host_stats
-        push!(
-            columns,
-            (
-                "Host %",
-                r -> string(round(r.host_total_self_time_pct * 100; digits=2)) * "%",
-                false,
-            ),
+        data_entry!(
+            "Host %",
+            r -> string(round(r.host_total_self_time_as_fraction * 100; digits=2)) * "%",
+            false,
         )
     end
-    push!(
-        columns,
-        (
-            "Memory BW",
-            r -> string(round(r.measured_memory_bw_gbps; digits=2)) * " GB/s",
-            false,
-        ),
+    data_entry!(
+        "Memory BW", r -> string(round(r.measured_memory_bw; digits=2)) * " GB/s", false
     )
-    push!(
-        columns,
-        (
-            "FLOP Rate",
-            r -> string(round(r.model_flop_rate_gflops; digits=2)) * " GFLOP/s",
-            false,
-        ),
+    data_entry!(
+        "FLOP Rate", r -> string(round(r.model_flop_rate; digits=2)) * " GFLOP/s", false
     )
     if has_tensorcore
-        push!(
-            columns,
-            (
-                "TensorCore",
-                r -> string(round(r.gpu_tensorcore_utilization * 100; digits=1)) * "%",
-                false,
-            ),
+        data_entry!(
+            "TensorCore",
+            r -> string(round(r.gpu_tensorcore_utilization * 100; digits=1)) * "%",
+            false,
         )
     end
-    push!(columns, ("Bound By", r -> r.bound_by, false))
+    data_entry!("Bound By", r -> r.bound_by, false)
+    if has_tpu_stats
+        data_entry!("HBM BW", r -> string(round(r.hbm_bw; digits=2)) * " GB/s", false)
+        data_entry!(
+            "CMEM Read BW", r -> string(round(r.cmem_read_bw; digits=2)) * " GB/s", false
+        )
+        data_entry!(
+            "CMEM Write BW", r -> string(round(r.cmem_write_bw; digits=2)) * " GB/s", false
+        )
+        data_entry!(
+            "VMEM Read BW", r -> string(round(r.vmem_read_bw; digits=2)) * " GB/s", false
+        )
+        data_entry!(
+            "VMEM Write BW", r -> string(round(r.vmem_write_bw; digits=2)) * " GB/s", false
+        )
+        data_entry!(
+            "HBM Operational Intensity",
+            r -> string(round(r.hbm_operational_intensity; digits=2)) * " FLOPs/byte",
+            false,
+        )
+        data_entry!(
+            "CMEM Read Operational Intensity",
+            r -> string(round(r.cmem_read_operational_intensity; digits=2)) * " FLOPs/byte",
+            false,
+        )
+        data_entry!(
+            "CMEM Write Operational Intensity",
+            r ->
+                string(round(r.cmem_write_operational_intensity; digits=2)) * " FLOPs/byte",
+            false,
+        )
+        data_entry!(
+            "VMEM Read Operational Intensity",
+            r -> string(round(r.vmem_read_operational_intensity; digits=2)) * " FLOPs/byte",
+            false,
+        )
+        data_entry!(
+            "VMEM Write Operational Intensity",
+            r ->
+                string(round(r.vmem_write_operational_intensity; digits=2)) * " FLOPs/byte",
+            false,
+        )
+        data_entry!(
+            "Bottleneck Operational Intensity",
+            r ->
+                string(round(r.bottleneck_operational_intensity; digits=2)) * " FLOPs/byte",
+            false,
+        )
+    end
+    if has_bytes_accessed
+        data_entry!(
+            "Bytes Accessed",
+            r -> string(round(r.bytes_accessed; digits=2)) * " bytes",
+            false,
+        )
+    end
 
     header = [c[1] for c in columns]
     duration_cols = findall(c -> c[3], columns)
