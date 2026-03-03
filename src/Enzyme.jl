@@ -394,7 +394,6 @@ function overload_autodiff(
             end
 
             act = act_from_type(A, reverse, EnzymeCore.needs_primal(CMode))
-            push!(ret_activity, act)
             cst = nothing
             if act == enzyme_out || act == enzyme_outnoneed
                 if width == 1
@@ -408,23 +407,25 @@ function overload_autodiff(
             if CMode <: ReverseMode && TracedUtils.has_idx(a, argprefix)
                 idx, path = TracedUtils.get_argidx(a, argprefix)
                 arg = idx == 1 && fnwrap ? f : args[idx - fnwrap]
-                act2 = act_from_type(arg, reverse, true)
-                seed = reverse_seeds[path]
-                if cst == nothing
-                    if act == enzyme_const
-                        act = enzyme_out
-                    elseif act == enzyme_constnoneed
-                        act = enzyme_outnoneed
-                    else
-                        @assert false
-                    end
-                    cst = seed
-                else
-                    @assert act == enzyme_out || act == enzyme_outnoneed
-                    cst = MLIR.IR.result(MLIR.Dialects.stablehlo.add(cst, seed), 1)
-                end
+                if act_from_type(arg, false) == enzyme_dup
+                       seed = reverse_seeds[path]
+                       if cst == nothing
+                           if act == enzyme_const
+                               act = enzyme_out
+                           elseif act == enzyme_constnoneed
+                               act = enzyme_outnoneed
+                           else
+                               @assert false
+                           end
+                           cst = seed
+                       else
+                           @assert act == enzyme_out || act == enzyme_outnoneed
+                           cst = MLIR.IR.result(MLIR.Dialects.stablehlo.add(cst, seed), 1)
+                       end
+                 end
             end
-
+                     
+            push!(ret_activity, act)
             if cst != nothing
                 push!(ad_inputs, cst)
             end
