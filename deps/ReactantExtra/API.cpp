@@ -34,8 +34,11 @@
 #include "mlir/Dialect/Transform/Transforms/Passes.h"
 #include "mlir/InitAllPasses.h"
 #include "mlir/Parser/Parser.h"
+
 #include "mlir/Pass/PassRegistry.h"
 #include "mlir/Transforms/Passes.h"
+#include "mlir/lib/AsmParser/Lexer.h"
+#include "mlir/lib/AsmParser/Token.h"
 #include "src/enzyme_ad/jax/Dialect/Dialect.h"
 #include "src/enzyme_ad/jax/Implementations/XLADerivatives.h"
 #include "src/enzyme_ad/jax/Passes/Passes.h"
@@ -3785,4 +3788,116 @@ REACTANT_ABI void *ReactantGetCompileOptions(size_t *size) {
   void *data = malloc(*size);
   memcpy(data, serialized.data(), *size);
   return data;
+}
+
+namespace {
+
+// Map mlir::Token::Kind to a simple integer category for Julia-side
+// highlighting
+int32_t mlirTokenKindToCategory(mlir::Token::Kind kind) {
+  switch (kind) {
+  case mlir::Token::percent_identifier:
+    return 1; // SSA (%foo)
+  case mlir::Token::at_identifier:
+    return 2; // Symbol (@foo)
+  case mlir::Token::caret_identifier:
+    return 3; // Block (^foo)
+  case mlir::Token::string:
+    return 4; // String
+
+  // Punctuation
+  case mlir::Token::arrow:
+  case mlir::Token::at:
+  case mlir::Token::colon:
+  case mlir::Token::comma:
+  case mlir::Token::ellipsis:
+  case mlir::Token::equal:
+  case mlir::Token::greater:
+  case mlir::Token::l_brace:
+  case mlir::Token::l_paren:
+  case mlir::Token::l_square:
+  case mlir::Token::less:
+  case mlir::Token::minus:
+  case mlir::Token::plus:
+  case mlir::Token::question:
+  case mlir::Token::r_brace:
+  case mlir::Token::r_paren:
+  case mlir::Token::r_square:
+  case mlir::Token::slash:
+  case mlir::Token::star:
+  case mlir::Token::vertical_bar:
+  case mlir::Token::file_metadata_begin:
+  case mlir::Token::file_metadata_end:
+    return 5; // Punct
+
+  case mlir::Token::bare_identifier:
+    return 7; // BareIdentifier
+  case mlir::Token::hash_identifier:
+    return 8; // HashIdentifier
+  case mlir::Token::exclamation_identifier:
+    return 9; // ExclamationIdentifier
+
+  case mlir::Token::integer:
+  case mlir::Token::floatliteral:
+    return 10; // Number
+  case mlir::Token::inttype:
+    return 11; // IntType
+
+  case mlir::Token::error:
+    return -1; // Error
+
+  case mlir::Token::eof:
+  case mlir::Token::code_complete:
+    return 0; // Default/EOF
+
+  default:
+    // Check if it's a keyword (kw_*)
+    if (kind >= mlir::Token::kw_affine_map)
+      return 6; // Keyword
+    return 0;   // Default
+  }
+}
+
+} // namespace
+
+REACTANT_ABI int32_t ReactantLexMLIR(MlirContext ctx, const char *input,
+                                     int32_t input_len, int32_t *token_kinds,
+                                     int32_t *token_offsets,
+                                     int32_t *token_lengths,
+                                     int32_t max_tokens) {
+  mlir::MLIRContext *context = unwrap(ctx);
+
+  // Create a MemoryBuffer from the input string (non-owning copy)
+  auto memBuffer = llvm::MemoryBuffer::getMemBuffer(
+      llvm::StringRef(input, input_len), "ReactantLexMLIR",
+      /*RequiresNullTerminator=*/false);
+
+  // Set up a SourceMgr with this buffer
+  llvm::SourceMgr sourceMgr;
+  sourceMgr.AddNewSourceBuffer(std::move(memBuffer), llvm::SMLoc());
+
+  // Create the lexer (no code completion)
+  mlir::Lexer lexer(sourceMgr, context, /*codeCompleteContext=*/nullptr);
+
+  const char *bufferStart = lexer.getBufferBegin();
+  int32_t count = 0;
+
+  while (count < max_tokens) {
+    mlir::Token tok = lexer.lexToken();
+    mlir::Token::Kind kind = tok.getKind();
+
+    if (kind == mlir::Token::eof)
+      break;
+
+    llvm::StringRef spelling = tok.getSpelling();
+    int32_t offset = static_cast<int32_t>(spelling.data() - bufferStart);
+    int32_t length = static_cast<int32_t>(spelling.size());
+
+    token_kinds[count] = mlirTokenKindToCategory(kind);
+    token_offsets[count] = offset;
+    token_lengths[count] = length;
+    count++;
+  }
+
+  return count;
 }
