@@ -5,11 +5,15 @@ using Sockets: Sockets
 using JSON: JSON
 using PrettyTables: PrettyTables, pretty_table
 using Crayons: Crayon
+using Scratch: @get_scratch!
 
+const PROFILING_DIR = Ref{Union{Nothing,String}}(nothing)
 const GRPC_SERVER_STARTED = Ref{Bool}(false)
 
 function __init__()
-    return GRPC_SERVER_STARTED[] = false
+    GRPC_SERVER_STARTED[] = false
+    PROFILING_DIR[] = @get_scratch!("reactant_profiling")
+    return nothing
 end
 
 """
@@ -506,8 +510,13 @@ function profile_and_get_xplane_file(
                                    will produce incorrect profiling results, and hence is \
                                    disable."
 
-    profile_dir === nothing && (profile_dir = joinpath(tempdir(), "reactant_profile"))
-    mkpath(profile_dir)
+    if profile_dir === nothing
+        @assert PROFILING_DIR[] !== nothing "Profiling directory not set. Open an issue!"
+        profile_dir = mktempdir(PROFILING_DIR[])
+        @debug "Profiling directory: $(profile_dir)"
+    else
+        mkpath(profile_dir)
+    end
 
     # warmup
     val = fn(args...; kwargs...)
@@ -669,9 +678,9 @@ function _show_with_indent(
         color=:light_black,
     )
 
-    println(io, "    "^indent * "raw_bytes_accessed = $(summary.raw_bytes_accessed_array)")
+    println(io, "    "^indent * "raw_bytes_accessed = $(summary.raw_bytes_accessed_array),")
 
-    println(io, "    "^indent * "occurrences = $(summary.occurrences)")
+    println(io, "    "^indent * "occurrences = $(summary.occurrences),")
 
     print(io, "    "^indent * "raw_flops_rate = $(summary.raw_flops_rate), ")
     Base.printstyled(" # Raw FLOPs rate in FLOPs/seconds\n"; color=:light_black)
