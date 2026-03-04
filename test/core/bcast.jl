@@ -86,6 +86,29 @@ end
     @test @jit(custom_ln(x_ra)) ≈ custom_ln(x)
 end
 
+struct Unstable
+    x
+end
+
+
+@testset "Extruded broadcasting" begin
+    x = Reactant.TestUtils.construct_test_array(Float32, 10)
+    y = Reactant.TestUtils.construct_test_array(Float32, 10)
+    x_ra = Reactant.to_rarray(x)
+    y_ra = Reactant.to_rarray(y)
+
+
+    a = Unstable(ConcreteRNumber(3.0f0))
+    f(a, x, y) = x*y + a.x
+    fb(out_ra, a, x_ra, y_ra) = (out_ra .= f.(Ref(a), x_ra, y_ra) .* 5f0)
+    out_ra = similar(x_ra, 10, 10)
+    @jit fb(out_ra, a, reshape(x_ra, :, 1), reshape(y_ra, 1, :))
+
+    out = similar(x, 10, 10)
+    fb(out, a, reshape(x, :, 1), reshape(y, 1, :))
+    @test out_ra ≈ out
+end
+
 pow(x, n) = x .^ n
 
 @testset "Pow" begin
