@@ -4,6 +4,37 @@ using Reactant
 using Dates
 using Dates: value, UTInstant
 
+# Preparations for timestepper MWE unit test in the end
+# Can't do that in the @testset scope, as scope issues occur
+# Inspired by the usage in SpeedyWeather.jl
+
+# Minimal clock-like mutable struct
+mutable struct Clock{I,T,TS}
+    n_timesteps::I
+    time::T
+    time_step::TS
+end
+
+# Minimal state
+struct State{C}
+    clock::C
+end
+
+function timestep!(state::State)
+    state.clock.time += state.clock.time_step
+    return nothing
+end
+
+function timestepping!(state::State)
+    (; clock) = state
+
+    @trace for i in 1:(clock.n_timesteps)
+        timestep!(state)
+    end
+
+    return nothing
+end
+
 @testset "ReactantDatesExt" begin
 
     # --- Accessors via @jit ---
@@ -450,35 +481,6 @@ using Dates: value, UTInstant
     end
 
     @testset "Minimal timestepper with Dates" begin
-        # Inspired by the usage in SpeedyWeather.jl
-
-        # Minimal clock-like mutable struct
-        mutable struct Clock{I,T,TS}
-            n_timesteps::I
-            time::T
-            time_step::TS
-        end
-
-        # Minimal state
-        struct State{C}
-            clock::C
-        end
-
-        function timestep!(state::State)
-            state.clock.time += state.clock.time_step
-            return nothing
-        end
-
-        function timestepping!(state::State)
-            (; clock) = state
-
-            @trace for i in 1:(clock.n_timesteps)
-                timestep!(state)
-            end
-
-            return nothing
-        end
-
         clock = Clock(5, DateTime(2002, 1, 1), Dates.Day(1))
         state = State(clock)
         timestepping!(state)
