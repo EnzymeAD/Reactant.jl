@@ -1,16 +1,16 @@
-# Example: Using ShapeDtypeStruct for compilation without concrete arrays
+# Example: Using ShapedRArray for compilation without concrete arrays
 #
-# This example demonstrates how to use Reactant.ShapeDtypeStruct to compile
+# This example demonstrates how to use Reactant.ShapedRArray to compile
 # functions without having to construct full ConcreteRArray instances with
 # actual data. This is useful for:
 # 1. Faster compilation when you only need shape/dtype information
 # 2. Memory efficiency when working with large arrays
-# 3. Similar workflow to JAX's ShapeDtypeStruct
+# 3. Similar workflow to JAX's ShapedRArray
 
 using Reactant
 
 # Example 1: Basic usage with a simple function
-println("Example 1: Basic compilation with ShapeDtypeStruct")
+println("Example 1: Basic compilation with ShapedRArray")
 println("=" ^ 60)
 
 # Define a simple function that sums an array
@@ -19,9 +19,9 @@ f_sum(x) = sum(x)
 # Instead of creating a full ConcreteRArray:
 # x = Reactant.ConcreteRArray(rand(Float32, 10, 20))  # This allocates memory!
 
-# Use ShapeDtypeStruct to specify only shape and dtype:
-spec = Reactant.ShapeDtypeStruct((10, 20), Float32)
-println("Created ShapeDtypeStruct: ", spec)
+# Use ShapedRArray to specify only shape and dtype:
+spec = Reactant.ShapedRArray((10, 20), Float32)
+println("Created ShapedRArray: ", spec)
 println("  Shape: ", size(spec))
 println("  Element type: ", eltype(spec))
 println("  Dimensions: ", ndims(spec))
@@ -37,13 +37,13 @@ println("Result: ", result, " (type: ", typeof(result), ")")
 println()
 
 # Example 2: Multiple arguments
-println("Example 2: Multiple arguments with ShapeDtypeStruct")
+println("Example 2: Multiple arguments with ShapedRArray")
 println("=" ^ 60)
 
 f_add(x, y) = x .+ y
 
-spec1 = Reactant.ShapeDtypeStruct((5, 5), Float64)
-spec2 = Reactant.ShapeDtypeStruct((5, 5), Float64)
+spec1 = Reactant.ShapedRArray((5, 5), Float64)
+spec2 = Reactant.ShapedRArray((5, 5), Float64)
 
 compiled_f_add = Reactant.compile(f_add, (spec1, spec2))
 println("✓ Function with 2 arguments compiled")
@@ -61,7 +61,7 @@ println("=" ^ 60)
 f_sin(x) = sin.(x)
 
 for dtype in [Float32, Float64]
-    spec = Reactant.ShapeDtypeStruct((100,), dtype)
+    spec = Reactant.ShapedRArray((100,), dtype)
     compiled = Reactant.compile(f_sin, (spec,))
     
     x = Reactant.ConcreteRArray(rand(dtype, 100))
@@ -75,7 +75,7 @@ println("Example 4: Memory efficiency")
 println("=" ^ 60)
 
 # For very large arrays, you can compile without allocating the full array:
-large_spec = Reactant.ShapeDtypeStruct((10000, 10000), Float32)
+large_spec = Reactant.ShapedRArray((10000, 10000), Float32)
 println("Created spec for large array: ", size(large_spec))
 println("  This doesn't allocate ", prod(size(large_spec)) * sizeof(Float32) / 1e9, " GB of memory!")
 
@@ -88,7 +88,7 @@ println()
 println("All examples completed successfully!")
 println()
 println("Key Takeaways:")
-println("1. ShapeDtypeStruct allows compilation without data allocation")
+println("1. ShapedRArray allows compilation without data allocation")
 println("2. Same compiled function can be used with actual ConcreteRArray data")
 println("3. Useful for large arrays and rapid prototyping")
-println("4. Similar API to JAX's ShapeDtypeStruct")
+println("4. Similar API to JAX's ShapedRArray")

@@ -1409,7 +1409,7 @@ end
 
 Base.@nospecializeinfer function make_tracer(
     seen,
-    @nospecialize(prev::ShapeDtypeStruct{T,N}),
+    @nospecialize(prev::ShapedRArray{T,N}),
     @nospecialize(path),
     mode;
     kwargs...,
@@ -1417,23 +1417,23 @@ Base.@nospecializeinfer function make_tracer(
     if mode == TracedToTypes
         throw(
             ArgumentError(
-                "ShapeDtypeStruct cannot be used as a function call argument; it is only valid for compilation signatures."
+                "ShapedRArray cannot be used as a function call argument; it is only valid for compilation signatures."
             ),
         )
     end
     if mode == ArrayToConcrete
         throw(
             ErrorException(
-                "Cannot convert ShapeDtypeStruct to ConcreteRArray. ShapeDtypeStruct is only for compilation signatures."
+                "Cannot convert ShapedRArray to ConcreteRArray. ShapedRArray is only for compilation signatures."
             ),
         )
     end
-    # ShapeDtypeStruct behaves like ConcreteToTraced mode - creates a TracedRArray without data
+    # ShapedRArray behaves like ConcreteToTraced mode - creates a TracedRArray without data
     # Accept both ConcreteToTraced and TracedSetPath modes
     if mode != ConcreteToTraced && mode != TracedSetPath
         throw(
             ArgumentError(
-                "ShapeDtypeStruct can only be used with ConcreteToTraced or TracedSetPath mode, got $mode"
+                "ShapedRArray can only be used with ConcreteToTraced or TracedSetPath mode, got $mode"
             ),
         )
     end
