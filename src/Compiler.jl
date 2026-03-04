@@ -953,6 +953,7 @@ function optimization_passes(
         "reduce_max_min_mul_positive_scalar",
         "add_complex_simplify",
         "sub_complex_simplify",
+        "exponential_minus_one_fuse",
     ]
 
     if !is_sharded
@@ -2848,7 +2849,7 @@ struct TextualModule
     end
 end
 
-Base.show(io::IO, tm::TextualModule) = print(io, tm.ir)
+Base.show(io::IO, tm::TextualModule) = print(io, MLIR.Highlight.highlight(tm.ir))
 Base.String(tm::TextualModule) = tm.ir
 
 function Base.convert(::Type{MLIR.IR.Module}, tm::TextualModule)

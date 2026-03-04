@@ -183,6 +183,15 @@ function mlirLlvmThreadPoolDestroy(pool)
 end
 
 """
+    mlirLlvmThreadPoolGetMaxConcurrency(pool)
+
+Returns the maximum number of threads in the thread pool.
+"""
+function mlirLlvmThreadPoolGetMaxConcurrency(pool)
+    @ccall mlir_c.mlirLlvmThreadPoolGetMaxConcurrency(pool::MlirLlvmThreadPool)::Cint
+end
+
+"""
     mlirLlvmRawFdOStreamCreate(path, binary, errorCallback, userData)
 
 Create a raw\\_fd\\_ostream for the given path. This wrapper is needed because std::ostream does not provide the file sharing semantics required on Windows. - `path`: output file path. - `binary`: controls text vs binary mode. - `errorCallback`: called with an error message on failure (optional). - `userData`: forwarded to `errorCallback` so it can copy the error message into caller-owned storage (e.g., a `std::string`). On failure, returns a null stream and invokes the optional error callback with the error message.
@@ -1483,6 +1492,17 @@ Returns `pos`-th operand of the operation.
 """
 function mlirOperationGetOperand(op, pos)
     @ccall mlir_c.mlirOperationGetOperand(op::MlirOperation, pos::Cptrdiff_t)::MlirValue
+end
+
+"""
+    mlirOperationGetOpOperand(op, pos)
+
+Returns `pos`-th OpOperand of the operation.
+"""
+function mlirOperationGetOpOperand(op, pos)
+    @ccall mlir_c.mlirOperationGetOpOperand(
+        op::MlirOperation, pos::Cptrdiff_t
+    )::MlirOpOperand
 end
 
 """
@@ -8867,6 +8887,10 @@ function mlirSMTBitVectorTypeGetName()
     @ccall mlir_c.mlirSMTBitVectorTypeGetName()::MlirStringRef
 end
 
+function mlirSMTBitVectorTypeGetTypeID()
+    @ccall mlir_c.mlirSMTBitVectorTypeGetTypeID()::MlirTypeID
+end
+
 """
     mlirSMTTypeIsABool(type)
 
@@ -8889,6 +8913,10 @@ function mlirSMTBoolTypeGetName()
     @ccall mlir_c.mlirSMTBoolTypeGetName()::MlirStringRef
 end
 
+function mlirSMTBoolTypeGetTypeID()
+    @ccall mlir_c.mlirSMTBoolTypeGetTypeID()::MlirTypeID
+end
+
 """
     mlirSMTTypeIsAInt(type)
 
@@ -8909,6 +8937,10 @@ end
 
 function mlirSMTIntTypeGetName()
     @ccall mlir_c.mlirSMTIntTypeGetName()::MlirStringRef
+end
+
+function mlirSMTIntTypeGetTypeID()
+    @ccall mlir_c.mlirSMTIntTypeGetTypeID()::MlirTypeID
 end
 
 """
@@ -9212,395 +9244,8 @@ function mlirGetDialectHandle__tosa__()
     @ccall mlir_c.mlirGetDialectHandle__tosa__()::MlirDialectHandle
 end
 
-function mlirGetDialectHandle__transform__()
-    @ccall mlir_c.mlirGetDialectHandle__transform__()::MlirDialectHandle
-end
-
-function mlirTypeIsATransformAnyOpType(type)
-    @ccall mlir_c.mlirTypeIsATransformAnyOpType(type::MlirType)::Bool
-end
-
-function mlirTransformAnyOpTypeGetTypeID()
-    @ccall mlir_c.mlirTransformAnyOpTypeGetTypeID()::MlirTypeID
-end
-
-function mlirTransformAnyOpTypeGet(ctx)
-    @ccall mlir_c.mlirTransformAnyOpTypeGet(ctx::MlirContext)::MlirType
-end
-
-function mlirTransformAnyOpTypeGetName()
-    @ccall mlir_c.mlirTransformAnyOpTypeGetName()::MlirStringRef
-end
-
-function mlirTypeIsATransformAnyParamType(type)
-    @ccall mlir_c.mlirTypeIsATransformAnyParamType(type::MlirType)::Bool
-end
-
-function mlirTransformAnyParamTypeGetTypeID()
-    @ccall mlir_c.mlirTransformAnyParamTypeGetTypeID()::MlirTypeID
-end
-
-function mlirTransformAnyParamTypeGet(ctx)
-    @ccall mlir_c.mlirTransformAnyParamTypeGet(ctx::MlirContext)::MlirType
-end
-
-function mlirTransformAnyParamTypeGetName()
-    @ccall mlir_c.mlirTransformAnyParamTypeGetName()::MlirStringRef
-end
-
-function mlirTypeIsATransformAnyValueType(type)
-    @ccall mlir_c.mlirTypeIsATransformAnyValueType(type::MlirType)::Bool
-end
-
-function mlirTransformAnyValueTypeGetTypeID()
-    @ccall mlir_c.mlirTransformAnyValueTypeGetTypeID()::MlirTypeID
-end
-
-function mlirTransformAnyValueTypeGet(ctx)
-    @ccall mlir_c.mlirTransformAnyValueTypeGet(ctx::MlirContext)::MlirType
-end
-
-function mlirTransformAnyValueTypeGetName()
-    @ccall mlir_c.mlirTransformAnyValueTypeGetName()::MlirStringRef
-end
-
-function mlirTypeIsATransformOperationType(type)
-    @ccall mlir_c.mlirTypeIsATransformOperationType(type::MlirType)::Bool
-end
-
-function mlirTransformOperationTypeGetTypeID()
-    @ccall mlir_c.mlirTransformOperationTypeGetTypeID()::MlirTypeID
-end
-
-function mlirTransformOperationTypeGet(ctx, operationName)
-    @ccall mlir_c.mlirTransformOperationTypeGet(
-        ctx::MlirContext, operationName::MlirStringRef
-    )::MlirType
-end
-
-function mlirTransformOperationTypeGetName()
-    @ccall mlir_c.mlirTransformOperationTypeGetName()::MlirStringRef
-end
-
-function mlirTransformOperationTypeGetOperationName(type)
-    @ccall mlir_c.mlirTransformOperationTypeGetOperationName(type::MlirType)::MlirStringRef
-end
-
-function mlirTypeIsATransformParamType(type)
-    @ccall mlir_c.mlirTypeIsATransformParamType(type::MlirType)::Bool
-end
-
-function mlirTransformParamTypeGetTypeID()
-    @ccall mlir_c.mlirTransformParamTypeGetTypeID()::MlirTypeID
-end
-
-function mlirTransformParamTypeGet(ctx, type)
-    @ccall mlir_c.mlirTransformParamTypeGet(ctx::MlirContext, type::MlirType)::MlirType
-end
-
-function mlirTransformParamTypeGetName()
-    @ccall mlir_c.mlirTransformParamTypeGetName()::MlirStringRef
-end
-
-function mlirTransformParamTypeGetType(type)
-    @ccall mlir_c.mlirTransformParamTypeGetType(type::MlirType)::MlirType
-end
-
-struct MlirTransformOptions
+struct MlirMemoryEffectInstancesList
     ptr::Ptr{Cvoid}
-end
-
-"""
-    mlirTransformOptionsCreate()
-
-Creates a default-initialized transform options object.
-"""
-function mlirTransformOptionsCreate()
-    @ccall mlir_c.mlirTransformOptionsCreate()::MlirTransformOptions
-end
-
-"""
-    mlirTransformOptionsEnableExpensiveChecks(transformOptions, enable)
-
-Enables or disables expensive checks in transform options.
-"""
-function mlirTransformOptionsEnableExpensiveChecks(transformOptions, enable)
-    @ccall mlir_c.mlirTransformOptionsEnableExpensiveChecks(
-        transformOptions::MlirTransformOptions, enable::Bool
-    )::Cvoid
-end
-
-"""
-    mlirTransformOptionsGetExpensiveChecksEnabled(transformOptions)
-
-Returns true if expensive checks are enabled in transform options.
-"""
-function mlirTransformOptionsGetExpensiveChecksEnabled(transformOptions)
-    @ccall mlir_c.mlirTransformOptionsGetExpensiveChecksEnabled(
-        transformOptions::MlirTransformOptions
-    )::Bool
-end
-
-"""
-    mlirTransformOptionsEnforceSingleTopLevelTransformOp(transformOptions, enable)
-
-Enables or disables the enforcement of the top-level transform op being single in transform options.
-"""
-function mlirTransformOptionsEnforceSingleTopLevelTransformOp(transformOptions, enable)
-    @ccall mlir_c.mlirTransformOptionsEnforceSingleTopLevelTransformOp(
-        transformOptions::MlirTransformOptions, enable::Bool
-    )::Cvoid
-end
-
-"""
-    mlirTransformOptionsGetEnforceSingleTopLevelTransformOp(transformOptions)
-
-Returns true if the enforcement of the top-level transform op being single is enabled in transform options.
-"""
-function mlirTransformOptionsGetEnforceSingleTopLevelTransformOp(transformOptions)
-    @ccall mlir_c.mlirTransformOptionsGetEnforceSingleTopLevelTransformOp(
-        transformOptions::MlirTransformOptions
-    )::Bool
-end
-
-"""
-    mlirTransformOptionsDestroy(transformOptions)
-
-Destroys a transform options object previously created by [`mlirTransformOptionsCreate`](@ref).
-"""
-function mlirTransformOptionsDestroy(transformOptions)
-    @ccall mlir_c.mlirTransformOptionsDestroy(transformOptions::MlirTransformOptions)::Cvoid
-end
-
-"""
-    mlirTransformApplyNamedSequence(payload, transformRoot, transformModule, transformOptions)
-
-Applies the transformation script starting at the given transform root operation to the given payload operation. The module containing the transform root as well as the transform options should be provided. The transform operation must implement TransformOpInterface and the module must be a ModuleOp. Returns the status of the application.
-"""
-function mlirTransformApplyNamedSequence(
-    payload, transformRoot, transformModule, transformOptions
-)
-    @ccall mlir_c.mlirTransformApplyNamedSequence(
-        payload::MlirOperation,
-        transformRoot::MlirOperation,
-        transformModule::MlirOperation,
-        transformOptions::MlirTransformOptions,
-    )::MlirLogicalResult
-end
-
-"""
-    mlirMergeSymbolsIntoFromClone(target, other)
-
-Merge the symbols from `other` into `target`, potentially renaming them to avoid conflicts. Private symbols may be renamed during the merge, public symbols must have at most one declaration. A name conflict in public symbols is reported as an error before returning a failure.
-
-Note that this clones the `other` operation unlike the C++ counterpart that takes ownership.
-"""
-function mlirMergeSymbolsIntoFromClone(target, other)
-    @ccall mlir_c.mlirMergeSymbolsIntoFromClone(
-        target::MlirOperation, other::MlirOperation
-    )::MlirLogicalResult
-end
-
-function mlirGetDialectHandle__ub__()
-    @ccall mlir_c.mlirGetDialectHandle__ub__()::MlirDialectHandle
-end
-
-function mlirGetDialectHandle__vcix__()
-    @ccall mlir_c.mlirGetDialectHandle__vcix__()::MlirDialectHandle
-end
-
-function mlirGetDialectHandle__vector__()
-    @ccall mlir_c.mlirGetDialectHandle__vector__()::MlirDialectHandle
-end
-
-function mlirGetDialectHandle__wasmssa__()
-    @ccall mlir_c.mlirGetDialectHandle__wasmssa__()::MlirDialectHandle
-end
-
-function mlirGetDialectHandle__x86vector__()
-    @ccall mlir_c.mlirGetDialectHandle__x86vector__()::MlirDialectHandle
-end
-
-function mlirGetDialectHandle__xegpu__()
-    @ccall mlir_c.mlirGetDialectHandle__xegpu__()::MlirDialectHandle
-end
-
-function mlirGetDialectHandle__xevm__()
-    @ccall mlir_c.mlirGetDialectHandle__xevm__()::MlirDialectHandle
-end
-
-struct MlirExecutionEngine
-    ptr::Ptr{Cvoid}
-end
-
-"""
-    mlirExecutionEngineCreate(op, optLevel, numPaths, sharedLibPaths, enableObjectDump, enablePIC)
-
-Creates an ExecutionEngine for the provided ModuleOp. The ModuleOp is expected to be "translatable" to LLVM IR (only contains operations in dialects that implement the `LLVMTranslationDialectInterface`). The module ownership stays with the client and can be destroyed as soon as the call returns. `optLevel` is the optimization level to be used for transformation and code generation. LLVM passes at `optLevel` are run before code generation. The number and array of paths corresponding to shared libraries that will be loaded are specified via `numPaths` and `sharedLibPaths` respectively. The `enablePIC` arguments controls the relocation model, when true the generated code is emitted as "position independent", making it possible to save it and reload it as a shared object in another process. TODO: figure out other options.
-"""
-function mlirExecutionEngineCreate(
-    op, optLevel, numPaths, sharedLibPaths, enableObjectDump, enablePIC
-)
-    @ccall mlir_c.mlirExecutionEngineCreate(
-        op::MlirModule,
-        optLevel::Cint,
-        numPaths::Cint,
-        sharedLibPaths::Ptr{MlirStringRef},
-        enableObjectDump::Bool,
-        enablePIC::Bool,
-    )::MlirExecutionEngine
-end
-
-"""
-    mlirExecutionEngineInitialize(jit)
-
-Initialize the ExecutionEngine. Global constructors specified by `llvm.mlir.global\\_ctors` will be run. One common scenario is that kernel binary compiled from `gpu.module` gets loaded during initialization. Make sure all symbols are resolvable before initialization by calling [`mlirExecutionEngineRegisterSymbol`](@ref) or including shared libraries.
-"""
-function mlirExecutionEngineInitialize(jit)
-    @ccall mlir_c.mlirExecutionEngineInitialize(jit::MlirExecutionEngine)::Cvoid
-end
-
-"""
-    mlirExecutionEngineDestroy(jit)
-
-Destroy an ExecutionEngine instance.
-"""
-function mlirExecutionEngineDestroy(jit)
-    @ccall mlir_c.mlirExecutionEngineDestroy(jit::MlirExecutionEngine)::Cvoid
-end
-
-"""
-    mlirExecutionEngineIsNull(jit)
-
-Checks whether an execution engine is null.
-"""
-function mlirExecutionEngineIsNull(jit)
-    @ccall mlir_c.mlirExecutionEngineIsNull(jit::MlirExecutionEngine)::Bool
-end
-
-"""
-    mlirExecutionEngineInvokePacked(jit, name, arguments)
-
-Invoke a native function in the execution engine by name with the arguments and result of the invoked function passed as an array of pointers. The function must have been tagged with the `llvm.emit\\_c\\_interface` attribute. Returns a failure if the execution fails for any reason (the function name can't be resolved for instance).
-"""
-function mlirExecutionEngineInvokePacked(jit, name, arguments)
-    @ccall mlir_c.mlirExecutionEngineInvokePacked(
-        jit::MlirExecutionEngine, name::MlirStringRef, arguments::Ptr{Ptr{Cvoid}}
-    )::MlirLogicalResult
-end
-
-"""
-    mlirExecutionEngineLookupPacked(jit, name)
-
-Lookup the wrapper of the native function in the execution engine with the given name, returns nullptr if the function can't be looked-up.
-"""
-function mlirExecutionEngineLookupPacked(jit, name)
-    @ccall mlir_c.mlirExecutionEngineLookupPacked(
-        jit::MlirExecutionEngine, name::MlirStringRef
-    )::Ptr{Cvoid}
-end
-
-"""
-    mlirExecutionEngineLookup(jit, name)
-
-Lookup a native function in the execution engine by name, returns nullptr if the name can't be looked-up.
-"""
-function mlirExecutionEngineLookup(jit, name)
-    @ccall mlir_c.mlirExecutionEngineLookup(
-        jit::MlirExecutionEngine, name::MlirStringRef
-    )::Ptr{Cvoid}
-end
-
-"""
-    mlirExecutionEngineRegisterSymbol(jit, name, sym)
-
-Register a symbol with the jit: this symbol will be accessible to the jitted code.
-"""
-function mlirExecutionEngineRegisterSymbol(jit, name, sym)
-    @ccall mlir_c.mlirExecutionEngineRegisterSymbol(
-        jit::MlirExecutionEngine, name::MlirStringRef, sym::Ptr{Cvoid}
-    )::Cvoid
-end
-
-"""
-    mlirExecutionEngineDumpToObjectFile(jit, fileName)
-
-Dump as an object in `fileName`.
-"""
-function mlirExecutionEngineDumpToObjectFile(jit, fileName)
-    @ccall mlir_c.mlirExecutionEngineDumpToObjectFile(
-        jit::MlirExecutionEngine, fileName::MlirStringRef
-    )::Cvoid
-end
-
-struct MlirDynamicOpTrait
-    ptr::Ptr{Cvoid}
-end
-
-"""
-    mlirDynamicOpTraitAttach(dynamicOpTrait, opName, context)
-
-Attach a dynamic op trait to the given operation name. Note that the operation name must be modeled by dynamic dialect and must be registered. The ownership of the trait will be transferred to the operation name after this call.
-"""
-function mlirDynamicOpTraitAttach(dynamicOpTrait, opName, context)
-    @ccall mlir_c.mlirDynamicOpTraitAttach(
-        dynamicOpTrait::MlirDynamicOpTrait, opName::MlirStringRef, context::MlirContext
-    )::Bool
-end
-
-"""
-    mlirDynamicOpTraitIsTerminatorCreate()
-
-Get the dynamic op trait that indicates the operation is a terminator.
-"""
-function mlirDynamicOpTraitIsTerminatorCreate()
-    @ccall mlir_c.mlirDynamicOpTraitIsTerminatorCreate()::MlirDynamicOpTrait
-end
-
-"""
-    mlirDynamicOpTraitNoTerminatorCreate()
-
-Get the dynamic op trait that indicates regions have no terminator.
-"""
-function mlirDynamicOpTraitNoTerminatorCreate()
-    @ccall mlir_c.mlirDynamicOpTraitNoTerminatorCreate()::MlirDynamicOpTrait
-end
-
-"""
-    mlirDynamicOpTraitDestroy(dynamicOpTrait)
-
-Destroy the dynamic op trait.
-"""
-function mlirDynamicOpTraitDestroy(dynamicOpTrait)
-    @ccall mlir_c.mlirDynamicOpTraitDestroy(dynamicOpTrait::MlirDynamicOpTrait)::Cvoid
-end
-
-"""
-    MlirDynamicOpTraitCallbacks
-
-| Field             | Note                                                                   |
-| :---------------- | :--------------------------------------------------------------------- |
-| construct         | Optional constructor for the user data. Set to nullptr to disable it.  |
-| destruct          | Optional destructor for the user data. Set to nullptr to disable it.   |
-| verifyTrait       | The callback function to verify the operation.                         |
-| verifyRegionTrait | The callback function to verify the operation with access to regions.  |
-"""
-struct MlirDynamicOpTraitCallbacks
-    construct::Ptr{Cvoid}
-    destruct::Ptr{Cvoid}
-    verifyTrait::Ptr{Cvoid}
-    verifyRegionTrait::Ptr{Cvoid}
-end
-
-"""
-    mlirDynamicOpTraitCreate(typeID, callbacks, userData)
-
-Create a custom dynamic op trait with the given type ID and callbacks.
-"""
-function mlirDynamicOpTraitCreate(typeID, callbacks, userData)
-    @ccall mlir_c.mlirDynamicOpTraitCreate(
-        typeID::MlirTypeID, callbacks::MlirDynamicOpTraitCallbacks, userData::Ptr{Cvoid}
-    )::MlirDynamicOpTrait
 end
 
 """
@@ -9721,317 +9366,44 @@ function mlirInferShapedTypeOpInterfaceInferReturnTypes(
     )::MlirLogicalResult
 end
 
-struct MlirPass
-    ptr::Ptr{Cvoid}
-end
+"""
+    mlirMemoryEffectsOpInterfaceTypeID()
 
-struct MlirExternalPass
-    ptr::Ptr{Cvoid}
-end
-
-struct MlirPassManager
-    ptr::Ptr{Cvoid}
-end
-
-struct MlirOpPassManager
-    ptr::Ptr{Cvoid}
+Returns the interface TypeID of the MemoryEffectsOpInterface.
+"""
+function mlirMemoryEffectsOpInterfaceTypeID()
+    @ccall mlir_c.mlirMemoryEffectsOpInterfaceTypeID()::MlirTypeID
 end
 
 """
-    mlirPassManagerCreate(ctx)
+    MlirMemoryEffectsOpInterfaceCallbacks
 
-Create a new top-level PassManager with the default anchor.
+Callbacks for implementing MemoryEffectsOpInterface from external code.
+
+| Field      | Note                                                               |
+| :--------- | :----------------------------------------------------------------- |
+| construct  | Optional constructor for user data. Set to nullptr to disable it.  |
+| destruct   | Optional destructor for user data. Set to nullptr to disable it.   |
+| getEffects | Get memory effects callback.                                       |
 """
-function mlirPassManagerCreate(ctx)
-    @ccall mlir_c.mlirPassManagerCreate(ctx::MlirContext)::MlirPassManager
-end
-
-"""
-    mlirPassManagerCreateOnOperation(ctx, anchorOp)
-
-Create a new top-level PassManager anchored on `anchorOp`.
-"""
-function mlirPassManagerCreateOnOperation(ctx, anchorOp)
-    @ccall mlir_c.mlirPassManagerCreateOnOperation(
-        ctx::MlirContext, anchorOp::MlirStringRef
-    )::MlirPassManager
-end
-
-"""
-    mlirPassManagerDestroy(passManager)
-
-Destroy the provided PassManager.
-"""
-function mlirPassManagerDestroy(passManager)
-    @ccall mlir_c.mlirPassManagerDestroy(passManager::MlirPassManager)::Cvoid
-end
-
-"""
-    mlirPassManagerIsNull(passManager)
-
-Checks if a PassManager is null.
-"""
-function mlirPassManagerIsNull(passManager)
-    @ccall mlir_c.mlirPassManagerIsNull(passManager::MlirPassManager)::Bool
-end
-
-"""
-    mlirPassManagerGetAsOpPassManager(passManager)
-
-Cast a top-level PassManager to a generic OpPassManager.
-"""
-function mlirPassManagerGetAsOpPassManager(passManager)
-    @ccall mlir_c.mlirPassManagerGetAsOpPassManager(
-        passManager::MlirPassManager
-    )::MlirOpPassManager
-end
-
-"""
-    mlirPassManagerRunOnOp(passManager, op)
-
-Run the provided `passManager` on the given `op`.
-"""
-function mlirPassManagerRunOnOp(passManager, op)
-    @ccall mlir_c.mlirPassManagerRunOnOp(
-        passManager::MlirPassManager, op::MlirOperation
-    )::MlirLogicalResult
-end
-
-"""
-    mlirPassManagerEnableIRPrinting(passManager, printBeforeAll, printAfterAll, printModuleScope, printAfterOnlyOnChange, printAfterOnlyOnFailure, flags, treePrintingPath)
-
-Enable IR printing. The treePrintingPath argument is an optional path to a directory where the dumps will be produced. If it isn't provided then dumps are produced to stderr.
-"""
-function mlirPassManagerEnableIRPrinting(
-    passManager,
-    printBeforeAll,
-    printAfterAll,
-    printModuleScope,
-    printAfterOnlyOnChange,
-    printAfterOnlyOnFailure,
-    flags,
-    treePrintingPath,
-)
-    @ccall mlir_c.mlirPassManagerEnableIRPrinting(
-        passManager::MlirPassManager,
-        printBeforeAll::Bool,
-        printAfterAll::Bool,
-        printModuleScope::Bool,
-        printAfterOnlyOnChange::Bool,
-        printAfterOnlyOnFailure::Bool,
-        flags::MlirOpPrintingFlags,
-        treePrintingPath::MlirStringRef,
-    )::Cvoid
-end
-
-"""
-    mlirPassManagerEnableVerifier(passManager, enable)
-
-Enable / disable verify-each.
-"""
-function mlirPassManagerEnableVerifier(passManager, enable)
-    @ccall mlir_c.mlirPassManagerEnableVerifier(
-        passManager::MlirPassManager, enable::Bool
-    )::Cvoid
-end
-
-"""
-    mlirPassManagerEnableTiming(passManager)
-
-Enable pass timing.
-"""
-function mlirPassManagerEnableTiming(passManager)
-    @ccall mlir_c.mlirPassManagerEnableTiming(passManager::MlirPassManager)::Cvoid
-end
-
-"""
-    MlirPassDisplayMode
-
-Enumerated type of pass display modes. Mainly used in [`mlirPassManagerEnableStatistics`](@ref).
-"""
-@cenum MlirPassDisplayMode::UInt32 begin
-    MLIR_PASS_DISPLAY_MODE_LIST = 0x0000000000000000
-    MLIR_PASS_DISPLAY_MODE_PIPELINE = 0x0000000000000001
-end
-
-"""
-    mlirPassManagerEnableStatistics(passManager, displayMode)
-
-Enable pass statistics.
-"""
-function mlirPassManagerEnableStatistics(passManager, displayMode)
-    @ccall mlir_c.mlirPassManagerEnableStatistics(
-        passManager::MlirPassManager, displayMode::MlirPassDisplayMode
-    )::Cvoid
-end
-
-"""
-    mlirPassManagerGetNestedUnder(passManager, operationName)
-
-Nest an OpPassManager under the top-level PassManager, the nested passmanager will only run on operations matching the provided name. The returned OpPassManager will be destroyed when the parent is destroyed. To further nest more OpPassManager under the newly returned one, see `mlirOpPassManagerNest` below.
-"""
-function mlirPassManagerGetNestedUnder(passManager, operationName)
-    @ccall mlir_c.mlirPassManagerGetNestedUnder(
-        passManager::MlirPassManager, operationName::MlirStringRef
-    )::MlirOpPassManager
-end
-
-"""
-    mlirOpPassManagerGetNestedUnder(passManager, operationName)
-
-Nest an OpPassManager under the provided OpPassManager, the nested passmanager will only run on operations matching the provided name. The returned OpPassManager will be destroyed when the parent is destroyed.
-"""
-function mlirOpPassManagerGetNestedUnder(passManager, operationName)
-    @ccall mlir_c.mlirOpPassManagerGetNestedUnder(
-        passManager::MlirOpPassManager, operationName::MlirStringRef
-    )::MlirOpPassManager
-end
-
-"""
-    mlirPassManagerAddOwnedPass(passManager, pass)
-
-Add a pass and transfer ownership to the provided top-level mlirPassManager. If the pass is not a generic operation pass or a ModulePass, a new OpPassManager is implicitly nested under the provided PassManager.
-"""
-function mlirPassManagerAddOwnedPass(passManager, pass)
-    @ccall mlir_c.mlirPassManagerAddOwnedPass(
-        passManager::MlirPassManager, pass::MlirPass
-    )::Cvoid
-end
-
-"""
-    mlirOpPassManagerAddOwnedPass(passManager, pass)
-
-Add a pass and transfer ownership to the provided mlirOpPassManager. If the pass is not a generic operation pass or matching the type of the provided PassManager, a new OpPassManager is implicitly nested under the provided PassManager.
-"""
-function mlirOpPassManagerAddOwnedPass(passManager, pass)
-    @ccall mlir_c.mlirOpPassManagerAddOwnedPass(
-        passManager::MlirOpPassManager, pass::MlirPass
-    )::Cvoid
-end
-
-"""
-    mlirOpPassManagerAddPipeline(passManager, pipelineElements, callback, userData)
-
-Parse a sequence of textual MLIR pass pipeline elements and add them to the provided OpPassManager. If parsing fails an error message is reported using the provided callback.
-"""
-function mlirOpPassManagerAddPipeline(passManager, pipelineElements, callback, userData)
-    @ccall mlir_c.mlirOpPassManagerAddPipeline(
-        passManager::MlirOpPassManager,
-        pipelineElements::MlirStringRef,
-        callback::MlirStringCallback,
-        userData::Ptr{Cvoid},
-    )::MlirLogicalResult
-end
-
-"""
-    mlirPrintPassPipeline(passManager, callback, userData)
-
-Print a textual MLIR pass pipeline by sending chunks of the string representation and forwarding `userData to `callback`. Note that the callback may be called several times with consecutive chunks of the string.
-"""
-function mlirPrintPassPipeline(passManager, callback, userData)
-    @ccall mlir_c.mlirPrintPassPipeline(
-        passManager::MlirOpPassManager, callback::MlirStringCallback, userData::Ptr{Cvoid}
-    )::Cvoid
-end
-
-"""
-    mlirParsePassPipeline(passManager, pipeline, callback, userData)
-
-Parse a textual MLIR pass pipeline and assign it to the provided OpPassManager. If parsing fails an error message is reported using the provided callback.
-"""
-function mlirParsePassPipeline(passManager, pipeline, callback, userData)
-    @ccall mlir_c.mlirParsePassPipeline(
-        passManager::MlirOpPassManager,
-        pipeline::MlirStringRef,
-        callback::MlirStringCallback,
-        userData::Ptr{Cvoid},
-    )::MlirLogicalResult
-end
-
-"""
-    MlirExternalPassCallbacks
-
-Structure of external [`MlirPass`](@ref) callbacks. All callbacks are required to be set unless otherwise specified.
-
-| Field      | Note                                                                                                                                                                                              |
-| :--------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| construct  | This callback is called from the pass is created. This is analogous to a C++ pass constructor.                                                                                                    |
-| destruct   | This callback is called when the pass is destroyed This is analogous to a C++ pass destructor.                                                                                                    |
-| initialize | This callback is optional. The callback is called before the pass is run, allowing a chance to initialize any complex state necessary for running the pass. See Pass::initialize(MLIRContext *).  |
-| clone      | This callback is called when the pass is cloned. See Pass::clonePass().                                                                                                                           |
-| run        | This callback is called when the pass is run. See Pass::runOnOperation().                                                                                                                         |
-"""
-struct MlirExternalPassCallbacks
+struct MlirMemoryEffectsOpInterfaceCallbacks
     construct::Ptr{Cvoid}
     destruct::Ptr{Cvoid}
-    initialize::Ptr{Cvoid}
-    clone::Ptr{Cvoid}
-    run::Ptr{Cvoid}
+    getEffects::Ptr{Cvoid}
+    userData::Ptr{Cvoid}
 end
 
 """
-    mlirCreateExternalPass(passID, name, argument, description, opName, nDependentDialects, dependentDialects, callbacks, userData)
+    mlirMemoryEffectsOpInterfaceAttachFallbackModel(ctx, opName, callbacks)
 
-Creates an external [`MlirPass`](@ref) that calls the supplied `callbacks` using the supplied `userData`. If `opName` is empty, the pass is a generic operation pass. Otherwise it is an operation pass specific to the specified pass name.
+Attach a new FallbackModel for the MemoryEffectsOpInterface to the named operation. The FallbackModel will call the provided callbacks.
 """
-function mlirCreateExternalPass(
-    passID,
-    name,
-    argument,
-    description,
-    opName,
-    nDependentDialects,
-    dependentDialects,
-    callbacks,
-    userData,
-)
-    @ccall mlir_c.mlirCreateExternalPass(
-        passID::MlirTypeID,
-        name::MlirStringRef,
-        argument::MlirStringRef,
-        description::MlirStringRef,
+function mlirMemoryEffectsOpInterfaceAttachFallbackModel(ctx, opName, callbacks)
+    @ccall mlir_c.mlirMemoryEffectsOpInterfaceAttachFallbackModel(
+        ctx::MlirContext,
         opName::MlirStringRef,
-        nDependentDialects::Cptrdiff_t,
-        dependentDialects::Ptr{MlirDialectHandle},
-        callbacks::MlirExternalPassCallbacks,
-        userData::Ptr{Cvoid},
-    )::MlirPass
-end
-
-"""
-    mlirExternalPassSignalFailure(pass)
-
-This signals that the pass has failed. This is only valid to call during the `run` callback of [`MlirExternalPassCallbacks`](@ref). See Pass::signalPassFailure().
-"""
-function mlirExternalPassSignalFailure(pass)
-    @ccall mlir_c.mlirExternalPassSignalFailure(pass::MlirExternalPass)::Cvoid
-end
-
-"""
-    mlirRegisterAllDialects(registry)
-
-Appends all upstream dialects and extensions to the dialect registry.
-"""
-function mlirRegisterAllDialects(registry)
-    @ccall mlir_c.mlirRegisterAllDialects(registry::MlirDialectRegistry)::Cvoid
-end
-
-"""
-    mlirRegisterAllLLVMTranslations(context)
-
-Register all translations to LLVM IR for dialects that can support it.
-"""
-function mlirRegisterAllLLVMTranslations(context)
-    @ccall mlir_c.mlirRegisterAllLLVMTranslations(context::MlirContext)::Cvoid
-end
-
-"""
-    mlirRegisterAllPasses()
-
-Register all compiler passes of MLIR.
-"""
-function mlirRegisterAllPasses()
-    @ccall mlir_c.mlirRegisterAllPasses()::Cvoid
+        callbacks::MlirMemoryEffectsOpInterfaceCallbacks,
+    )::Cvoid
 end
 
 struct MlirRewriterBase
@@ -10965,6 +10337,17 @@ function mlirTypeConverterAddConversion(typeConverter, convertType, userData)
 end
 
 """
+    mlirTypeConverterConvertType(typeConverter, type)
+
+Convert the given type using the given TypeConverter.
+"""
+function mlirTypeConverterConvertType(typeConverter, type)
+    @ccall mlir_c.mlirTypeConverterConvertType(
+        typeConverter::MlirTypeConverter, type::MlirType
+    )::MlirType
+end
+
+"""
     MlirConversionPatternCallbacks
 
 ConversionPattern API
@@ -11093,6 +10476,1150 @@ function mlirRewritePatternSetAdd(set, pattern)
     @ccall mlir_c.mlirRewritePatternSetAdd(
         set::MlirRewritePatternSet, pattern::MlirRewritePattern
     )::Cvoid
+end
+
+function mlirGetDialectHandle__transform__()
+    @ccall mlir_c.mlirGetDialectHandle__transform__()::MlirDialectHandle
+end
+
+struct MlirTransformResults
+    ptr::Ptr{Cvoid}
+end
+
+struct MlirTransformRewriter
+    ptr::Ptr{Cvoid}
+end
+
+struct MlirTransformState
+    ptr::Ptr{Cvoid}
+end
+
+"""
+    MlirDiagnosedSilenceableFailure
+
+Enum representing the result of a transform operation.
+"""
+@cenum MlirDiagnosedSilenceableFailure::UInt32 begin
+    MlirDiagnosedSilenceableFailureSuccess = 0x0000000000000000
+    MlirDiagnosedSilenceableFailureSilenceableFailure = 0x0000000000000001
+    MlirDiagnosedSilenceableFailureDefiniteFailure = 0x0000000000000002
+end
+
+function mlirTypeIsATransformAnyOpType(type)
+    @ccall mlir_c.mlirTypeIsATransformAnyOpType(type::MlirType)::Bool
+end
+
+function mlirTransformAnyOpTypeGetTypeID()
+    @ccall mlir_c.mlirTransformAnyOpTypeGetTypeID()::MlirTypeID
+end
+
+function mlirTransformAnyOpTypeGet(ctx)
+    @ccall mlir_c.mlirTransformAnyOpTypeGet(ctx::MlirContext)::MlirType
+end
+
+function mlirTransformAnyOpTypeGetName()
+    @ccall mlir_c.mlirTransformAnyOpTypeGetName()::MlirStringRef
+end
+
+function mlirTypeIsATransformAnyParamType(type)
+    @ccall mlir_c.mlirTypeIsATransformAnyParamType(type::MlirType)::Bool
+end
+
+function mlirTransformAnyParamTypeGetTypeID()
+    @ccall mlir_c.mlirTransformAnyParamTypeGetTypeID()::MlirTypeID
+end
+
+function mlirTransformAnyParamTypeGet(ctx)
+    @ccall mlir_c.mlirTransformAnyParamTypeGet(ctx::MlirContext)::MlirType
+end
+
+function mlirTransformAnyParamTypeGetName()
+    @ccall mlir_c.mlirTransformAnyParamTypeGetName()::MlirStringRef
+end
+
+function mlirTypeIsATransformAnyValueType(type)
+    @ccall mlir_c.mlirTypeIsATransformAnyValueType(type::MlirType)::Bool
+end
+
+function mlirTransformAnyValueTypeGetTypeID()
+    @ccall mlir_c.mlirTransformAnyValueTypeGetTypeID()::MlirTypeID
+end
+
+function mlirTransformAnyValueTypeGet(ctx)
+    @ccall mlir_c.mlirTransformAnyValueTypeGet(ctx::MlirContext)::MlirType
+end
+
+function mlirTransformAnyValueTypeGetName()
+    @ccall mlir_c.mlirTransformAnyValueTypeGetName()::MlirStringRef
+end
+
+function mlirTypeIsATransformOperationType(type)
+    @ccall mlir_c.mlirTypeIsATransformOperationType(type::MlirType)::Bool
+end
+
+function mlirTransformOperationTypeGetTypeID()
+    @ccall mlir_c.mlirTransformOperationTypeGetTypeID()::MlirTypeID
+end
+
+function mlirTransformOperationTypeGet(ctx, operationName)
+    @ccall mlir_c.mlirTransformOperationTypeGet(
+        ctx::MlirContext, operationName::MlirStringRef
+    )::MlirType
+end
+
+function mlirTransformOperationTypeGetName()
+    @ccall mlir_c.mlirTransformOperationTypeGetName()::MlirStringRef
+end
+
+function mlirTransformOperationTypeGetOperationName(type)
+    @ccall mlir_c.mlirTransformOperationTypeGetOperationName(type::MlirType)::MlirStringRef
+end
+
+function mlirTypeIsATransformParamType(type)
+    @ccall mlir_c.mlirTypeIsATransformParamType(type::MlirType)::Bool
+end
+
+function mlirTransformParamTypeGetTypeID()
+    @ccall mlir_c.mlirTransformParamTypeGetTypeID()::MlirTypeID
+end
+
+function mlirTransformParamTypeGet(ctx, type)
+    @ccall mlir_c.mlirTransformParamTypeGet(ctx::MlirContext, type::MlirType)::MlirType
+end
+
+function mlirTransformParamTypeGetName()
+    @ccall mlir_c.mlirTransformParamTypeGetName()::MlirStringRef
+end
+
+function mlirTransformParamTypeGetType(type)
+    @ccall mlir_c.mlirTransformParamTypeGetType(type::MlirType)::MlirType
+end
+
+"""
+    mlirTransformRewriterAsBase(rewriter)
+
+Cast the TransformRewriter to a RewriterBase
+"""
+function mlirTransformRewriterAsBase(rewriter)
+    @ccall mlir_c.mlirTransformRewriterAsBase(
+        rewriter::MlirTransformRewriter
+    )::MlirRewriterBase
+end
+
+"""
+    mlirTransformResultsSetOps(results, result, numOps, ops)
+
+Set the payload operations for a transform result by iterating over a list.
+"""
+function mlirTransformResultsSetOps(results, result, numOps, ops)
+    @ccall mlir_c.mlirTransformResultsSetOps(
+        results::MlirTransformResults,
+        result::MlirValue,
+        numOps::Cptrdiff_t,
+        ops::Ptr{MlirOperation},
+    )::Cvoid
+end
+
+"""
+    mlirTransformResultsSetValues(results, result, numValues, values)
+
+Set the payload values for a transform result by iterating over a list.
+"""
+function mlirTransformResultsSetValues(results, result, numValues, values)
+    @ccall mlir_c.mlirTransformResultsSetValues(
+        results::MlirTransformResults,
+        result::MlirValue,
+        numValues::Cptrdiff_t,
+        values::Ptr{MlirValue},
+    )::Cvoid
+end
+
+"""
+    mlirTransformResultsSetParams(results, result, numParams, params)
+
+Set the parameters for a transform result by iterating over a list.
+"""
+function mlirTransformResultsSetParams(results, result, numParams, params)
+    @ccall mlir_c.mlirTransformResultsSetParams(
+        results::MlirTransformResults,
+        result::MlirValue,
+        numParams::Cptrdiff_t,
+        params::Ptr{MlirAttribute},
+    )::Cvoid
+end
+
+# typedef void ( * MlirOperationCallback ) ( MlirOperation , void * userData )
+"""
+Callback for iterating over payload operations.
+"""
+const MlirOperationCallback = Ptr{Cvoid}
+
+"""
+    mlirTransformStateForEachPayloadOp(state, value, callback, userData)
+
+Iterate over payload operations associated with the transform IR value. Calls the callback for each payload operation.
+"""
+function mlirTransformStateForEachPayloadOp(state, value, callback, userData)
+    @ccall mlir_c.mlirTransformStateForEachPayloadOp(
+        state::MlirTransformState,
+        value::MlirValue,
+        callback::MlirOperationCallback,
+        userData::Ptr{Cvoid},
+    )::Cvoid
+end
+
+# typedef void ( * MlirValueCallback ) ( MlirValue , void * userData )
+"""
+Callback for iterating over payload values.
+"""
+const MlirValueCallback = Ptr{Cvoid}
+
+"""
+    mlirTransformStateForEachPayloadValue(state, value, callback, userData)
+
+Iterate over payload values associated with the transform IR value. Calls the callback for each payload value.
+"""
+function mlirTransformStateForEachPayloadValue(state, value, callback, userData)
+    @ccall mlir_c.mlirTransformStateForEachPayloadValue(
+        state::MlirTransformState,
+        value::MlirValue,
+        callback::MlirValueCallback,
+        userData::Ptr{Cvoid},
+    )::Cvoid
+end
+
+# typedef void ( * MlirAttributeCallback ) ( MlirAttribute , void * userData )
+"""
+Callback for iterating over parameters.
+"""
+const MlirAttributeCallback = Ptr{Cvoid}
+
+"""
+    mlirTransformStateForEachParam(state, value, callback, userData)
+
+Iterate over parameters associated with the transform IR value. Calls the callback for each parameter.
+"""
+function mlirTransformStateForEachParam(state, value, callback, userData)
+    @ccall mlir_c.mlirTransformStateForEachParam(
+        state::MlirTransformState,
+        value::MlirValue,
+        callback::MlirAttributeCallback,
+        userData::Ptr{Cvoid},
+    )::Cvoid
+end
+
+"""
+    mlirTransformOpInterfaceTypeID()
+
+Returns the interface TypeID of the TransformOpInterface.
+"""
+function mlirTransformOpInterfaceTypeID()
+    @ccall mlir_c.mlirTransformOpInterfaceTypeID()::MlirTypeID
+end
+
+"""
+    MlirTransformOpInterfaceCallbacks
+
+Callbacks for implementing TransformOpInterface from external code.
+
+| Field                        | Note                                                                   |
+| :--------------------------- | :--------------------------------------------------------------------- |
+| construct                    | Optional constructor for the user data. Set to nullptr to disable it.  |
+| destruct                     | Optional destructor for the user data. Set to nullptr to disable it.   |
+| apply                        | Apply callback that implements the transformation.                     |
+| allowsRepeatedHandleOperands | Callback to check if repeated handle operands are allowed.             |
+"""
+struct MlirTransformOpInterfaceCallbacks
+    construct::Ptr{Cvoid}
+    destruct::Ptr{Cvoid}
+    apply::Ptr{Cvoid}
+    allowsRepeatedHandleOperands::Ptr{Cvoid}
+    userData::Ptr{Cvoid}
+end
+
+"""
+    mlirTransformOpInterfaceAttachFallbackModel(ctx, opName, callbacks)
+
+Attach TransformOpInterface to the operation with the given name using the provided callbacks.
+"""
+function mlirTransformOpInterfaceAttachFallbackModel(ctx, opName, callbacks)
+    @ccall mlir_c.mlirTransformOpInterfaceAttachFallbackModel(
+        ctx::MlirContext,
+        opName::MlirStringRef,
+        callbacks::MlirTransformOpInterfaceCallbacks,
+    )::Cvoid
+end
+
+"""
+    mlirTransformOnlyReadsHandle(operands, numOperands, effects)
+
+Helper to mark operands as only reading handles.
+"""
+function mlirTransformOnlyReadsHandle(operands, numOperands, effects)
+    @ccall mlir_c.mlirTransformOnlyReadsHandle(
+        operands::Ptr{MlirOpOperand},
+        numOperands::Cptrdiff_t,
+        effects::MlirMemoryEffectInstancesList,
+    )::Cvoid
+end
+
+"""
+    mlirTransformConsumesHandle(operands, numOperands, effects)
+
+Helper to mark operands as consuming handles.
+"""
+function mlirTransformConsumesHandle(operands, numOperands, effects)
+    @ccall mlir_c.mlirTransformConsumesHandle(
+        operands::Ptr{MlirOpOperand},
+        numOperands::Cptrdiff_t,
+        effects::MlirMemoryEffectInstancesList,
+    )::Cvoid
+end
+
+"""
+    mlirTransformProducesHandle(results, numResults, effects)
+
+Helper to mark results as producing handles.
+"""
+function mlirTransformProducesHandle(results, numResults, effects)
+    @ccall mlir_c.mlirTransformProducesHandle(
+        results::Ptr{MlirValue},
+        numResults::Cptrdiff_t,
+        effects::MlirMemoryEffectInstancesList,
+    )::Cvoid
+end
+
+"""
+    mlirTransformModifiesPayload(effects)
+
+Helper to mark potential modifications to the payload IR.
+"""
+function mlirTransformModifiesPayload(effects)
+    @ccall mlir_c.mlirTransformModifiesPayload(
+        effects::MlirMemoryEffectInstancesList
+    )::Cvoid
+end
+
+"""
+    mlirTransformOnlyReadsPayload(effects)
+
+Helper to mark potential reads from the payload IR.
+"""
+function mlirTransformOnlyReadsPayload(effects)
+    @ccall mlir_c.mlirTransformOnlyReadsPayload(
+        effects::MlirMemoryEffectInstancesList
+    )::Cvoid
+end
+
+struct MlirTransformOptions
+    ptr::Ptr{Cvoid}
+end
+
+"""
+    mlirTransformOptionsCreate()
+
+Creates a default-initialized transform options object.
+"""
+function mlirTransformOptionsCreate()
+    @ccall mlir_c.mlirTransformOptionsCreate()::MlirTransformOptions
+end
+
+"""
+    mlirTransformOptionsEnableExpensiveChecks(transformOptions, enable)
+
+Enables or disables expensive checks in transform options.
+"""
+function mlirTransformOptionsEnableExpensiveChecks(transformOptions, enable)
+    @ccall mlir_c.mlirTransformOptionsEnableExpensiveChecks(
+        transformOptions::MlirTransformOptions, enable::Bool
+    )::Cvoid
+end
+
+"""
+    mlirTransformOptionsGetExpensiveChecksEnabled(transformOptions)
+
+Returns true if expensive checks are enabled in transform options.
+"""
+function mlirTransformOptionsGetExpensiveChecksEnabled(transformOptions)
+    @ccall mlir_c.mlirTransformOptionsGetExpensiveChecksEnabled(
+        transformOptions::MlirTransformOptions
+    )::Bool
+end
+
+"""
+    mlirTransformOptionsEnforceSingleTopLevelTransformOp(transformOptions, enable)
+
+Enables or disables the enforcement of the top-level transform op being single in transform options.
+"""
+function mlirTransformOptionsEnforceSingleTopLevelTransformOp(transformOptions, enable)
+    @ccall mlir_c.mlirTransformOptionsEnforceSingleTopLevelTransformOp(
+        transformOptions::MlirTransformOptions, enable::Bool
+    )::Cvoid
+end
+
+"""
+    mlirTransformOptionsGetEnforceSingleTopLevelTransformOp(transformOptions)
+
+Returns true if the enforcement of the top-level transform op being single is enabled in transform options.
+"""
+function mlirTransformOptionsGetEnforceSingleTopLevelTransformOp(transformOptions)
+    @ccall mlir_c.mlirTransformOptionsGetEnforceSingleTopLevelTransformOp(
+        transformOptions::MlirTransformOptions
+    )::Bool
+end
+
+"""
+    mlirTransformOptionsDestroy(transformOptions)
+
+Destroys a transform options object previously created by [`mlirTransformOptionsCreate`](@ref).
+"""
+function mlirTransformOptionsDestroy(transformOptions)
+    @ccall mlir_c.mlirTransformOptionsDestroy(transformOptions::MlirTransformOptions)::Cvoid
+end
+
+"""
+    mlirTransformApplyNamedSequence(payload, transformRoot, transformModule, transformOptions)
+
+Applies the transformation script starting at the given transform root operation to the given payload operation. The module containing the transform root as well as the transform options should be provided. The transform operation must implement TransformOpInterface and the module must be a ModuleOp. Returns the status of the application.
+"""
+function mlirTransformApplyNamedSequence(
+    payload, transformRoot, transformModule, transformOptions
+)
+    @ccall mlir_c.mlirTransformApplyNamedSequence(
+        payload::MlirOperation,
+        transformRoot::MlirOperation,
+        transformModule::MlirOperation,
+        transformOptions::MlirTransformOptions,
+    )::MlirLogicalResult
+end
+
+"""
+    mlirMergeSymbolsIntoFromClone(target, other)
+
+Merge the symbols from `other` into `target`, potentially renaming them to avoid conflicts. Private symbols may be renamed during the merge, public symbols must have at most one declaration. A name conflict in public symbols is reported as an error before returning a failure.
+
+Note that this clones the `other` operation unlike the C++ counterpart that takes ownership.
+"""
+function mlirMergeSymbolsIntoFromClone(target, other)
+    @ccall mlir_c.mlirMergeSymbolsIntoFromClone(
+        target::MlirOperation, other::MlirOperation
+    )::MlirLogicalResult
+end
+
+function mlirGetDialectHandle__ub__()
+    @ccall mlir_c.mlirGetDialectHandle__ub__()::MlirDialectHandle
+end
+
+function mlirGetDialectHandle__vcix__()
+    @ccall mlir_c.mlirGetDialectHandle__vcix__()::MlirDialectHandle
+end
+
+function mlirGetDialectHandle__vector__()
+    @ccall mlir_c.mlirGetDialectHandle__vector__()::MlirDialectHandle
+end
+
+function mlirGetDialectHandle__wasmssa__()
+    @ccall mlir_c.mlirGetDialectHandle__wasmssa__()::MlirDialectHandle
+end
+
+function mlirGetDialectHandle__x86__()
+    @ccall mlir_c.mlirGetDialectHandle__x86__()::MlirDialectHandle
+end
+
+function mlirGetDialectHandle__xegpu__()
+    @ccall mlir_c.mlirGetDialectHandle__xegpu__()::MlirDialectHandle
+end
+
+function mlirGetDialectHandle__xevm__()
+    @ccall mlir_c.mlirGetDialectHandle__xevm__()::MlirDialectHandle
+end
+
+struct MlirExecutionEngine
+    ptr::Ptr{Cvoid}
+end
+
+"""
+    mlirExecutionEngineCreate(op, optLevel, numPaths, sharedLibPaths, enableObjectDump, enablePIC)
+
+Creates an ExecutionEngine for the provided ModuleOp. The ModuleOp is expected to be "translatable" to LLVM IR (only contains operations in dialects that implement the `LLVMTranslationDialectInterface`). The module ownership stays with the client and can be destroyed as soon as the call returns. `optLevel` is the optimization level to be used for transformation and code generation. LLVM passes at `optLevel` are run before code generation. The number and array of paths corresponding to shared libraries that will be loaded are specified via `numPaths` and `sharedLibPaths` respectively. The `enablePIC` arguments controls the relocation model, when true the generated code is emitted as "position independent", making it possible to save it and reload it as a shared object in another process. TODO: figure out other options.
+"""
+function mlirExecutionEngineCreate(
+    op, optLevel, numPaths, sharedLibPaths, enableObjectDump, enablePIC
+)
+    @ccall mlir_c.mlirExecutionEngineCreate(
+        op::MlirModule,
+        optLevel::Cint,
+        numPaths::Cint,
+        sharedLibPaths::Ptr{MlirStringRef},
+        enableObjectDump::Bool,
+        enablePIC::Bool,
+    )::MlirExecutionEngine
+end
+
+"""
+    mlirExecutionEngineInitialize(jit)
+
+Initialize the ExecutionEngine. Global constructors specified by `llvm.mlir.global\\_ctors` will be run. One common scenario is that kernel binary compiled from `gpu.module` gets loaded during initialization. Make sure all symbols are resolvable before initialization by calling [`mlirExecutionEngineRegisterSymbol`](@ref) or including shared libraries.
+"""
+function mlirExecutionEngineInitialize(jit)
+    @ccall mlir_c.mlirExecutionEngineInitialize(jit::MlirExecutionEngine)::Cvoid
+end
+
+"""
+    mlirExecutionEngineDestroy(jit)
+
+Destroy an ExecutionEngine instance.
+"""
+function mlirExecutionEngineDestroy(jit)
+    @ccall mlir_c.mlirExecutionEngineDestroy(jit::MlirExecutionEngine)::Cvoid
+end
+
+"""
+    mlirExecutionEngineIsNull(jit)
+
+Checks whether an execution engine is null.
+"""
+function mlirExecutionEngineIsNull(jit)
+    @ccall mlir_c.mlirExecutionEngineIsNull(jit::MlirExecutionEngine)::Bool
+end
+
+"""
+    mlirExecutionEngineInvokePacked(jit, name, arguments)
+
+Invoke a native function in the execution engine by name with the arguments and result of the invoked function passed as an array of pointers. The function must have been tagged with the `llvm.emit\\_c\\_interface` attribute. Returns a failure if the execution fails for any reason (the function name can't be resolved for instance).
+"""
+function mlirExecutionEngineInvokePacked(jit, name, arguments)
+    @ccall mlir_c.mlirExecutionEngineInvokePacked(
+        jit::MlirExecutionEngine, name::MlirStringRef, arguments::Ptr{Ptr{Cvoid}}
+    )::MlirLogicalResult
+end
+
+"""
+    mlirExecutionEngineLookupPacked(jit, name)
+
+Lookup the wrapper of the native function in the execution engine with the given name, returns nullptr if the function can't be looked-up.
+"""
+function mlirExecutionEngineLookupPacked(jit, name)
+    @ccall mlir_c.mlirExecutionEngineLookupPacked(
+        jit::MlirExecutionEngine, name::MlirStringRef
+    )::Ptr{Cvoid}
+end
+
+"""
+    mlirExecutionEngineLookup(jit, name)
+
+Lookup a native function in the execution engine by name, returns nullptr if the name can't be looked-up.
+"""
+function mlirExecutionEngineLookup(jit, name)
+    @ccall mlir_c.mlirExecutionEngineLookup(
+        jit::MlirExecutionEngine, name::MlirStringRef
+    )::Ptr{Cvoid}
+end
+
+"""
+    mlirExecutionEngineRegisterSymbol(jit, name, sym)
+
+Register a symbol with the jit: this symbol will be accessible to the jitted code.
+"""
+function mlirExecutionEngineRegisterSymbol(jit, name, sym)
+    @ccall mlir_c.mlirExecutionEngineRegisterSymbol(
+        jit::MlirExecutionEngine, name::MlirStringRef, sym::Ptr{Cvoid}
+    )::Cvoid
+end
+
+"""
+    mlirExecutionEngineDumpToObjectFile(jit, fileName)
+
+Dump as an object in `fileName`.
+"""
+function mlirExecutionEngineDumpToObjectFile(jit, fileName)
+    @ccall mlir_c.mlirExecutionEngineDumpToObjectFile(
+        jit::MlirExecutionEngine, fileName::MlirStringRef
+    )::Cvoid
+end
+
+struct MlirDynamicOpTrait
+    ptr::Ptr{Cvoid}
+end
+
+struct MlirDynamicTypeDefinition
+    ptr::Ptr{Cvoid}
+end
+
+struct MlirDynamicAttrDefinition
+    ptr::Ptr{Cvoid}
+end
+
+"""
+    mlirDynamicOpTraitAttach(dynamicOpTrait, opName, context)
+
+Attach a dynamic op trait to the given operation name. Note that the operation name must be modeled by dynamic dialect and must be registered. The ownership of the trait will be transferred to the operation name after this call.
+"""
+function mlirDynamicOpTraitAttach(dynamicOpTrait, opName, context)
+    @ccall mlir_c.mlirDynamicOpTraitAttach(
+        dynamicOpTrait::MlirDynamicOpTrait, opName::MlirStringRef, context::MlirContext
+    )::Bool
+end
+
+"""
+    mlirDynamicOpTraitIsTerminatorCreate()
+
+Get the dynamic op trait that indicates the operation is a terminator.
+"""
+function mlirDynamicOpTraitIsTerminatorCreate()
+    @ccall mlir_c.mlirDynamicOpTraitIsTerminatorCreate()::MlirDynamicOpTrait
+end
+
+"""
+    mlirDynamicOpTraitNoTerminatorCreate()
+
+Get the dynamic op trait that indicates regions have no terminator.
+"""
+function mlirDynamicOpTraitNoTerminatorCreate()
+    @ccall mlir_c.mlirDynamicOpTraitNoTerminatorCreate()::MlirDynamicOpTrait
+end
+
+"""
+    mlirDynamicOpTraitDestroy(dynamicOpTrait)
+
+Destroy the dynamic op trait.
+"""
+function mlirDynamicOpTraitDestroy(dynamicOpTrait)
+    @ccall mlir_c.mlirDynamicOpTraitDestroy(dynamicOpTrait::MlirDynamicOpTrait)::Cvoid
+end
+
+"""
+    MlirDynamicOpTraitCallbacks
+
+| Field             | Note                                                                   |
+| :---------------- | :--------------------------------------------------------------------- |
+| construct         | Optional constructor for the user data. Set to nullptr to disable it.  |
+| destruct          | Optional destructor for the user data. Set to nullptr to disable it.   |
+| verifyTrait       | The callback function to verify the operation.                         |
+| verifyRegionTrait | The callback function to verify the operation with access to regions.  |
+"""
+struct MlirDynamicOpTraitCallbacks
+    construct::Ptr{Cvoid}
+    destruct::Ptr{Cvoid}
+    verifyTrait::Ptr{Cvoid}
+    verifyRegionTrait::Ptr{Cvoid}
+end
+
+"""
+    mlirDynamicOpTraitCreate(typeID, callbacks, userData)
+
+Create a custom dynamic op trait with the given type ID and callbacks.
+"""
+function mlirDynamicOpTraitCreate(typeID, callbacks, userData)
+    @ccall mlir_c.mlirDynamicOpTraitCreate(
+        typeID::MlirTypeID, callbacks::MlirDynamicOpTraitCallbacks, userData::Ptr{Cvoid}
+    )::MlirDynamicOpTrait
+end
+
+"""
+    mlirDialectIsAExtensibleDialect(dialect)
+
+Check if the given dialect is an extensible dialect.
+"""
+function mlirDialectIsAExtensibleDialect(dialect)
+    @ccall mlir_c.mlirDialectIsAExtensibleDialect(dialect::MlirDialect)::Bool
+end
+
+"""
+    mlirExtensibleDialectLookupTypeDefinition(dialect, typeName)
+
+Look up a registered type definition by type name in the given dialect. Note that the dialect must be an extensible dialect.
+"""
+function mlirExtensibleDialectLookupTypeDefinition(dialect, typeName)
+    @ccall mlir_c.mlirExtensibleDialectLookupTypeDefinition(
+        dialect::MlirDialect, typeName::MlirStringRef
+    )::MlirDynamicTypeDefinition
+end
+
+"""
+    mlirTypeIsADynamicType(type)
+
+Check if the given type is a dynamic type.
+"""
+function mlirTypeIsADynamicType(type)
+    @ccall mlir_c.mlirTypeIsADynamicType(type::MlirType)::Bool
+end
+
+"""
+    mlirDynamicTypeGet(typeDef, attrs, numAttrs)
+
+Get a dynamic type by instantiating the given type definition with the provided attributes.
+"""
+function mlirDynamicTypeGet(typeDef, attrs, numAttrs)
+    @ccall mlir_c.mlirDynamicTypeGet(
+        typeDef::MlirDynamicTypeDefinition, attrs::Ptr{MlirAttribute}, numAttrs::Cptrdiff_t
+    )::MlirType
+end
+
+"""
+    mlirDynamicTypeGetNumParams(type)
+
+Get the number of parameters in the given dynamic type.
+"""
+function mlirDynamicTypeGetNumParams(type)
+    @ccall mlir_c.mlirDynamicTypeGetNumParams(type::MlirType)::Cptrdiff_t
+end
+
+"""
+    mlirDynamicTypeGetParam(type, index)
+
+Get the parameter at the given index in the provided dynamic type.
+"""
+function mlirDynamicTypeGetParam(type, index)
+    @ccall mlir_c.mlirDynamicTypeGetParam(type::MlirType, index::Cptrdiff_t)::MlirAttribute
+end
+
+"""
+    mlirDynamicTypeGetTypeDef(type)
+
+Get the type definition of the given dynamic type.
+"""
+function mlirDynamicTypeGetTypeDef(type)
+    @ccall mlir_c.mlirDynamicTypeGetTypeDef(type::MlirType)::MlirDynamicTypeDefinition
+end
+
+"""
+    mlirDynamicTypeDefinitionGetTypeID(typeDef)
+
+Get the type ID of a dynamic type definition.
+"""
+function mlirDynamicTypeDefinitionGetTypeID(typeDef)
+    @ccall mlir_c.mlirDynamicTypeDefinitionGetTypeID(
+        typeDef::MlirDynamicTypeDefinition
+    )::MlirTypeID
+end
+
+"""
+    mlirDynamicTypeDefinitionGetName(typeDef)
+
+Get the name of the given dynamic type definition.
+"""
+function mlirDynamicTypeDefinitionGetName(typeDef)
+    @ccall mlir_c.mlirDynamicTypeDefinitionGetName(
+        typeDef::MlirDynamicTypeDefinition
+    )::MlirStringRef
+end
+
+"""
+    mlirDynamicTypeDefinitionGetDialect(typeDef)
+
+Get the dialect that the given dynamic type definition belongs to.
+"""
+function mlirDynamicTypeDefinitionGetDialect(typeDef)
+    @ccall mlir_c.mlirDynamicTypeDefinitionGetDialect(
+        typeDef::MlirDynamicTypeDefinition
+    )::MlirDialect
+end
+
+"""
+    mlirExtensibleDialectLookupAttrDefinition(dialect, attrName)
+
+Look up a registered attribute definition by attribute name in the given dialect. Note that the dialect must be an extensible dialect.
+"""
+function mlirExtensibleDialectLookupAttrDefinition(dialect, attrName)
+    @ccall mlir_c.mlirExtensibleDialectLookupAttrDefinition(
+        dialect::MlirDialect, attrName::MlirStringRef
+    )::MlirDynamicAttrDefinition
+end
+
+"""
+    mlirAttributeIsADynamicAttr(attr)
+
+Check if the given attribute is a dynamic attribute.
+"""
+function mlirAttributeIsADynamicAttr(attr)
+    @ccall mlir_c.mlirAttributeIsADynamicAttr(attr::MlirAttribute)::Bool
+end
+
+"""
+    mlirDynamicAttrGet(attrDef, attrs, numAttrs)
+
+Get a dynamic attribute by instantiating the given attribute definition with the provided attributes.
+"""
+function mlirDynamicAttrGet(attrDef, attrs, numAttrs)
+    @ccall mlir_c.mlirDynamicAttrGet(
+        attrDef::MlirDynamicAttrDefinition, attrs::Ptr{MlirAttribute}, numAttrs::Cptrdiff_t
+    )::MlirAttribute
+end
+
+"""
+    mlirDynamicAttrGetNumParams(attr)
+
+Get the number of parameters in the given dynamic attribute.
+"""
+function mlirDynamicAttrGetNumParams(attr)
+    @ccall mlir_c.mlirDynamicAttrGetNumParams(attr::MlirAttribute)::Cptrdiff_t
+end
+
+"""
+    mlirDynamicAttrGetParam(attr, index)
+
+Get the parameter at the given index in the provided dynamic attribute.
+"""
+function mlirDynamicAttrGetParam(attr, index)
+    @ccall mlir_c.mlirDynamicAttrGetParam(
+        attr::MlirAttribute, index::Cptrdiff_t
+    )::MlirAttribute
+end
+
+"""
+    mlirDynamicAttrGetAttrDef(attr)
+
+Get the attribute definition of the given dynamic attribute.
+"""
+function mlirDynamicAttrGetAttrDef(attr)
+    @ccall mlir_c.mlirDynamicAttrGetAttrDef(attr::MlirAttribute)::MlirDynamicAttrDefinition
+end
+
+"""
+    mlirDynamicAttrDefinitionGetTypeID(attrDef)
+
+Get the type ID of a dynamic attribute definition.
+"""
+function mlirDynamicAttrDefinitionGetTypeID(attrDef)
+    @ccall mlir_c.mlirDynamicAttrDefinitionGetTypeID(
+        attrDef::MlirDynamicAttrDefinition
+    )::MlirTypeID
+end
+
+"""
+    mlirDynamicAttrDefinitionGetName(attrDef)
+
+Get the name of the given dynamic attribute definition.
+"""
+function mlirDynamicAttrDefinitionGetName(attrDef)
+    @ccall mlir_c.mlirDynamicAttrDefinitionGetName(
+        attrDef::MlirDynamicAttrDefinition
+    )::MlirStringRef
+end
+
+"""
+    mlirDynamicAttrDefinitionGetDialect(attrDef)
+
+Get the dialect that the given dynamic attribute definition belongs to.
+"""
+function mlirDynamicAttrDefinitionGetDialect(attrDef)
+    @ccall mlir_c.mlirDynamicAttrDefinitionGetDialect(
+        attrDef::MlirDynamicAttrDefinition
+    )::MlirDialect
+end
+
+struct MlirPass
+    ptr::Ptr{Cvoid}
+end
+
+struct MlirExternalPass
+    ptr::Ptr{Cvoid}
+end
+
+struct MlirPassManager
+    ptr::Ptr{Cvoid}
+end
+
+struct MlirOpPassManager
+    ptr::Ptr{Cvoid}
+end
+
+"""
+    mlirPassManagerCreate(ctx)
+
+Create a new top-level PassManager with the default anchor.
+"""
+function mlirPassManagerCreate(ctx)
+    @ccall mlir_c.mlirPassManagerCreate(ctx::MlirContext)::MlirPassManager
+end
+
+"""
+    mlirPassManagerCreateOnOperation(ctx, anchorOp)
+
+Create a new top-level PassManager anchored on `anchorOp`.
+"""
+function mlirPassManagerCreateOnOperation(ctx, anchorOp)
+    @ccall mlir_c.mlirPassManagerCreateOnOperation(
+        ctx::MlirContext, anchorOp::MlirStringRef
+    )::MlirPassManager
+end
+
+"""
+    mlirPassManagerDestroy(passManager)
+
+Destroy the provided PassManager.
+"""
+function mlirPassManagerDestroy(passManager)
+    @ccall mlir_c.mlirPassManagerDestroy(passManager::MlirPassManager)::Cvoid
+end
+
+"""
+    mlirPassManagerIsNull(passManager)
+
+Checks if a PassManager is null.
+"""
+function mlirPassManagerIsNull(passManager)
+    @ccall mlir_c.mlirPassManagerIsNull(passManager::MlirPassManager)::Bool
+end
+
+"""
+    mlirPassManagerGetAsOpPassManager(passManager)
+
+Cast a top-level PassManager to a generic OpPassManager.
+"""
+function mlirPassManagerGetAsOpPassManager(passManager)
+    @ccall mlir_c.mlirPassManagerGetAsOpPassManager(
+        passManager::MlirPassManager
+    )::MlirOpPassManager
+end
+
+"""
+    mlirPassManagerRunOnOp(passManager, op)
+
+Run the provided `passManager` on the given `op`.
+"""
+function mlirPassManagerRunOnOp(passManager, op)
+    @ccall mlir_c.mlirPassManagerRunOnOp(
+        passManager::MlirPassManager, op::MlirOperation
+    )::MlirLogicalResult
+end
+
+"""
+    mlirPassManagerEnableIRPrinting(passManager, printBeforeAll, printAfterAll, printModuleScope, printAfterOnlyOnChange, printAfterOnlyOnFailure, flags, treePrintingPath)
+
+Enable IR printing. The treePrintingPath argument is an optional path to a directory where the dumps will be produced. If it isn't provided then dumps are produced to stderr.
+"""
+function mlirPassManagerEnableIRPrinting(
+    passManager,
+    printBeforeAll,
+    printAfterAll,
+    printModuleScope,
+    printAfterOnlyOnChange,
+    printAfterOnlyOnFailure,
+    flags,
+    treePrintingPath,
+)
+    @ccall mlir_c.mlirPassManagerEnableIRPrinting(
+        passManager::MlirPassManager,
+        printBeforeAll::Bool,
+        printAfterAll::Bool,
+        printModuleScope::Bool,
+        printAfterOnlyOnChange::Bool,
+        printAfterOnlyOnFailure::Bool,
+        flags::MlirOpPrintingFlags,
+        treePrintingPath::MlirStringRef,
+    )::Cvoid
+end
+
+"""
+    mlirPassManagerEnableVerifier(passManager, enable)
+
+Enable / disable verify-each.
+"""
+function mlirPassManagerEnableVerifier(passManager, enable)
+    @ccall mlir_c.mlirPassManagerEnableVerifier(
+        passManager::MlirPassManager, enable::Bool
+    )::Cvoid
+end
+
+"""
+    mlirPassManagerEnableTiming(passManager)
+
+Enable pass timing.
+"""
+function mlirPassManagerEnableTiming(passManager)
+    @ccall mlir_c.mlirPassManagerEnableTiming(passManager::MlirPassManager)::Cvoid
+end
+
+"""
+    MlirPassDisplayMode
+
+Enumerated type of pass display modes. Mainly used in [`mlirPassManagerEnableStatistics`](@ref).
+"""
+@cenum MlirPassDisplayMode::UInt32 begin
+    MLIR_PASS_DISPLAY_MODE_LIST = 0x0000000000000000
+    MLIR_PASS_DISPLAY_MODE_PIPELINE = 0x0000000000000001
+end
+
+"""
+    mlirPassManagerEnableStatistics(passManager, displayMode)
+
+Enable pass statistics.
+"""
+function mlirPassManagerEnableStatistics(passManager, displayMode)
+    @ccall mlir_c.mlirPassManagerEnableStatistics(
+        passManager::MlirPassManager, displayMode::MlirPassDisplayMode
+    )::Cvoid
+end
+
+"""
+    mlirPassManagerGetNestedUnder(passManager, operationName)
+
+Nest an OpPassManager under the top-level PassManager, the nested passmanager will only run on operations matching the provided name. The returned OpPassManager will be destroyed when the parent is destroyed. To further nest more OpPassManager under the newly returned one, see `mlirOpPassManagerNest` below.
+"""
+function mlirPassManagerGetNestedUnder(passManager, operationName)
+    @ccall mlir_c.mlirPassManagerGetNestedUnder(
+        passManager::MlirPassManager, operationName::MlirStringRef
+    )::MlirOpPassManager
+end
+
+"""
+    mlirOpPassManagerGetNestedUnder(passManager, operationName)
+
+Nest an OpPassManager under the provided OpPassManager, the nested passmanager will only run on operations matching the provided name. The returned OpPassManager will be destroyed when the parent is destroyed.
+"""
+function mlirOpPassManagerGetNestedUnder(passManager, operationName)
+    @ccall mlir_c.mlirOpPassManagerGetNestedUnder(
+        passManager::MlirOpPassManager, operationName::MlirStringRef
+    )::MlirOpPassManager
+end
+
+"""
+    mlirPassManagerAddOwnedPass(passManager, pass)
+
+Add a pass and transfer ownership to the provided top-level mlirPassManager. If the pass is not a generic operation pass or a ModulePass, a new OpPassManager is implicitly nested under the provided PassManager.
+"""
+function mlirPassManagerAddOwnedPass(passManager, pass)
+    @ccall mlir_c.mlirPassManagerAddOwnedPass(
+        passManager::MlirPassManager, pass::MlirPass
+    )::Cvoid
+end
+
+"""
+    mlirOpPassManagerAddOwnedPass(passManager, pass)
+
+Add a pass and transfer ownership to the provided mlirOpPassManager. If the pass is not a generic operation pass or matching the type of the provided PassManager, a new OpPassManager is implicitly nested under the provided PassManager.
+"""
+function mlirOpPassManagerAddOwnedPass(passManager, pass)
+    @ccall mlir_c.mlirOpPassManagerAddOwnedPass(
+        passManager::MlirOpPassManager, pass::MlirPass
+    )::Cvoid
+end
+
+"""
+    mlirOpPassManagerAddPipeline(passManager, pipelineElements, callback, userData)
+
+Parse a sequence of textual MLIR pass pipeline elements and add them to the provided OpPassManager. If parsing fails an error message is reported using the provided callback.
+"""
+function mlirOpPassManagerAddPipeline(passManager, pipelineElements, callback, userData)
+    @ccall mlir_c.mlirOpPassManagerAddPipeline(
+        passManager::MlirOpPassManager,
+        pipelineElements::MlirStringRef,
+        callback::MlirStringCallback,
+        userData::Ptr{Cvoid},
+    )::MlirLogicalResult
+end
+
+"""
+    mlirPrintPassPipeline(passManager, callback, userData)
+
+Print a textual MLIR pass pipeline by sending chunks of the string representation and forwarding `userData to `callback`. Note that the callback may be called several times with consecutive chunks of the string.
+"""
+function mlirPrintPassPipeline(passManager, callback, userData)
+    @ccall mlir_c.mlirPrintPassPipeline(
+        passManager::MlirOpPassManager, callback::MlirStringCallback, userData::Ptr{Cvoid}
+    )::Cvoid
+end
+
+"""
+    mlirParsePassPipeline(passManager, pipeline, callback, userData)
+
+Parse a textual MLIR pass pipeline and assign it to the provided OpPassManager. If parsing fails an error message is reported using the provided callback.
+"""
+function mlirParsePassPipeline(passManager, pipeline, callback, userData)
+    @ccall mlir_c.mlirParsePassPipeline(
+        passManager::MlirOpPassManager,
+        pipeline::MlirStringRef,
+        callback::MlirStringCallback,
+        userData::Ptr{Cvoid},
+    )::MlirLogicalResult
+end
+
+"""
+    MlirExternalPassCallbacks
+
+Structure of external [`MlirPass`](@ref) callbacks. All callbacks are required to be set unless otherwise specified.
+
+| Field      | Note                                                                                                                                                                                              |
+| :--------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| construct  | This callback is called from the pass is created. This is analogous to a C++ pass constructor.                                                                                                    |
+| destruct   | This callback is called when the pass is destroyed This is analogous to a C++ pass destructor.                                                                                                    |
+| initialize | This callback is optional. The callback is called before the pass is run, allowing a chance to initialize any complex state necessary for running the pass. See Pass::initialize(MLIRContext *).  |
+| clone      | This callback is called when the pass is cloned. See Pass::clonePass().                                                                                                                           |
+| run        | This callback is called when the pass is run. See Pass::runOnOperation().                                                                                                                         |
+"""
+struct MlirExternalPassCallbacks
+    construct::Ptr{Cvoid}
+    destruct::Ptr{Cvoid}
+    initialize::Ptr{Cvoid}
+    clone::Ptr{Cvoid}
+    run::Ptr{Cvoid}
+end
+
+"""
+    mlirCreateExternalPass(passID, name, argument, description, opName, nDependentDialects, dependentDialects, callbacks, userData)
+
+Creates an external [`MlirPass`](@ref) that calls the supplied `callbacks` using the supplied `userData`. If `opName` is empty, the pass is a generic operation pass. Otherwise it is an operation pass specific to the specified pass name.
+"""
+function mlirCreateExternalPass(
+    passID,
+    name,
+    argument,
+    description,
+    opName,
+    nDependentDialects,
+    dependentDialects,
+    callbacks,
+    userData,
+)
+    @ccall mlir_c.mlirCreateExternalPass(
+        passID::MlirTypeID,
+        name::MlirStringRef,
+        argument::MlirStringRef,
+        description::MlirStringRef,
+        opName::MlirStringRef,
+        nDependentDialects::Cptrdiff_t,
+        dependentDialects::Ptr{MlirDialectHandle},
+        callbacks::MlirExternalPassCallbacks,
+        userData::Ptr{Cvoid},
+    )::MlirPass
+end
+
+"""
+    mlirExternalPassSignalFailure(pass)
+
+This signals that the pass has failed. This is only valid to call during the `run` callback of [`MlirExternalPassCallbacks`](@ref). See Pass::signalPassFailure().
+"""
+function mlirExternalPassSignalFailure(pass)
+    @ccall mlir_c.mlirExternalPassSignalFailure(pass::MlirExternalPass)::Cvoid
+end
+
+"""
+    mlirRegisterAllDialects(registry)
+
+Appends all upstream dialects and extensions to the dialect registry.
+"""
+function mlirRegisterAllDialects(registry)
+    @ccall mlir_c.mlirRegisterAllDialects(registry::MlirDialectRegistry)::Cvoid
+end
+
+"""
+    mlirRegisterAllLLVMTranslations(context)
+
+Register all translations to LLVM IR for dialects that can support it.
+"""
+function mlirRegisterAllLLVMTranslations(context)
+    @ccall mlir_c.mlirRegisterAllLLVMTranslations(context::MlirContext)::Cvoid
+end
+
+"""
+    mlirRegisterAllPasses()
+
+Register all compiler passes of MLIR.
+"""
+function mlirRegisterAllPasses()
+    @ccall mlir_c.mlirRegisterAllPasses()::Cvoid
 end
 
 """
@@ -12866,6 +13393,26 @@ struct DeviceProperties
     maxThreadsPerMultiProcessor::Cint
 end
 
+struct DistributedRuntimeClientOptions
+    node_id::Int32
+    rpc_timeout_in_seconds::Int32
+    init_timeout_in_seconds::Int32
+    shutdown_timeout_in_minutes::Int32
+    heartbeat_timeout_in_seconds::Int32
+    use_compression::Bool
+    shutdown_on_destruction::Bool
+    poll_for_error_from_service_at_startup::Bool
+    recoverable::Bool
+end
+
+struct DistributedRuntimeServiceOptions
+    num_nodes::Int32
+    recoverable::Bool
+    heartbeat_timeout_in_seconds::Int32
+    cluster_register_timeout_in_minutes::Int32
+    shutdown_timeout_in_minutes::Int32
+end
+
 const HeldPjRtClient = Cvoid
 
 const HeldIfrtConstSharding = Cvoid
@@ -14172,6 +14719,12 @@ function ifrt_array_disassemble_into_single_device_arrays(
     )::Ptr{Ptr{HeldIfrtArray}}
 end
 
+function GetDistributedRuntimeClientWithOptions(c_address, options)
+    @ccall mlir_c.GetDistributedRuntimeClientWithOptions(
+        c_address::Cstring, options::Ptr{DistributedRuntimeClientOptions}
+    )::Ptr{HeldDistributedRuntimeClient}
+end
+
 function GetDistributedRuntimeClient(
     c_address,
     node_id,
@@ -14208,6 +14761,12 @@ function distributed_runtime_client_shutdown(client)
     @ccall mlir_c.distributed_runtime_client_shutdown(
         client::Ptr{HeldDistributedRuntimeClient}
     )::Cvoid
+end
+
+function GetDistributedRuntimeServiceWithOptions(c_address, options)
+    @ccall mlir_c.GetDistributedRuntimeServiceWithOptions(
+        c_address::Cstring, options::Ptr{DistributedRuntimeServiceOptions}
+    )::Ptr{DistributedRuntimeService}
 end
 
 function GetDistributedRuntimeService(
@@ -14584,6 +15143,20 @@ end
 
 function ReactantGetCompileOptions(size)
     @ccall mlir_c.ReactantGetCompileOptions(size::Ptr{Csize_t})::Ptr{Cvoid}
+end
+
+function ReactantLexMLIR(
+    ctx, input, input_len, token_kinds, token_offsets, token_lengths, max_tokens
+)
+    @ccall mlir_c.ReactantLexMLIR(
+        ctx::MlirContext,
+        input::Cstring,
+        input_len::Int32,
+        token_kinds::Ptr{Int32},
+        token_offsets::Ptr{Int32},
+        token_lengths::Ptr{Int32},
+        max_tokens::Int32,
+    )::Int32
 end
 
 function registerReactantXLAFFI()

@@ -1,4 +1,4 @@
-using LinearAlgebra, Reactant, Test
+using LinearAlgebra, Reactant, Test, FileCheck
 
 function update_on_copy(x)
     y = x[1:2, 2:4, :]
@@ -38,7 +38,10 @@ end
     y_ra = Reactant.to_rarray(y)
 
     hlo = @code_hlo optimize = false setindex!(x_ra, y_ra, 6:11)
-    @test contains(repr(hlo), "dynamic_update_slice")
+    @test @filecheck begin
+        @check "dynamic_update_slice"
+        repr(hlo)
+    end
 
     @jit setindex!(x_ra, y_ra, 6:11)
     setindex!(x, y, 6:11)
@@ -139,11 +142,17 @@ end
     x_ra = Reactant.to_rarray(x)
 
     hlo = @code_hlo optimize = false getindex(x_ra, 1:2:4, 3:2:6)
-    @test contains(repr(hlo), "stablehlo.slice")
+    @test @filecheck begin
+        @check "stablehlo.slice"
+        repr(hlo)
+    end
     @test @jit(getindex(x_ra, 1:2:4, 3:2:6)) ≈ getindex(x, 1:2:4, 3:2:6)
 
     hlo = @code_hlo optimize = false getindex(x_ra, 1:3:8)
-    @test contains(repr(hlo), "stablehlo.slice")
+    @test @filecheck begin
+        @check "stablehlo.slice"
+        repr(hlo)
+    end
     @test @jit(getindex(x_ra, 1:3:8)) ≈ getindex(x, 1:3:8)
 end
 
@@ -241,6 +250,10 @@ end
 
     @test @jit(getindex_linear_vector(x_ra, idx_ra)) ≈ getindex_linear_vector(x, idx)
     @test @jit(getindex_linear_vector(x_ra, idx)) ≈ getindex_linear_vector(x, idx)
+
+    # indices aren't a TracedRArray but we should still be able to trace
+    idx = Reactant.TracedUnitRange(ConcreteRNumber(1), ConcreteRNumber(5), 5)
+    @test @jit(getindex_linear_vector(x_ra, idx)) ≈ getindex_linear_vector(x, 1:5)
 end
 
 @testset "Boolean Indexing" begin

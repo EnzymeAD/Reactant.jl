@@ -1,5 +1,4 @@
-# Tests for array operations
-using Reactant, Test
+using Reactant, Test, FileCheck
 
 const RunningOnTPU = contains(string(Reactant.devices()[1]), "TPU")
 
@@ -175,7 +174,10 @@ end
 @testset "repeat specialize" begin
     x_ra = Reactant.to_rarray(Reactant.TestUtils.construct_test_array(Float32, 2, 3))
     hlo = repr(@code_hlo(repeat(x_ra, 2, 3)))
-    @test !contains(hlo, "stablehlo.dynamic_update_slice")
+    @test @filecheck begin
+        @check_not "stablehlo.dynamic_update_slice"
+        hlo
+    end
 end
 
 @testset "stack" begin

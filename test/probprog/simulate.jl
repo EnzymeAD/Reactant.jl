@@ -1,4 +1,4 @@
-using Reactant, Test, Random
+using Reactant, Test, Random, FileCheck
 using Reactant: ProbProg, ReactantRNG
 
 function product_two_normals(rng, μ, σ, shape)
@@ -34,10 +34,16 @@ end
         σ = Reactant.ConcreteRNumber(1.0)
 
         before = @code_hlo optimize = false ProbProg.simulate(rng, model, μ, σ, shape)
-        @test contains(repr(before), "enzyme.simulate")
+        @test @filecheck begin
+            @check "enzyme.simulate"
+            repr(before)
+        end
 
         after = @code_hlo optimize = :probprog ProbProg.simulate(rng, model, μ, σ, shape)
-        @test !contains(repr(after), "enzyme.simulate")
+        @test @filecheck begin
+            @check_not "enzyme.simulate"
+            repr(after)
+        end
     end
 
     @testset "compiled_simulate" begin

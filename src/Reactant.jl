@@ -369,7 +369,7 @@ function __init__()
             )
         end
     end
-
+    MLIR.Highlight.register_reactant_theme()
     return nothing
 end
 

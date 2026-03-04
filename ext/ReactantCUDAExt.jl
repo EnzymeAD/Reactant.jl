@@ -14,6 +14,7 @@ using Adapt: Adapt, adapt
 using CUDA: CUDA, CuDim, DenseCuArray, unsafe_cached_load
 
 using GPUCompiler: GPUCompiler
+using GPUArraysCore: @allowscalar
 using KernelAbstractions: KernelAbstractions
 using LLVM: LLVM
 
@@ -1421,6 +1422,15 @@ function Reactant.make_tracer(
         return prev
     end
     return newa
+end
+
+@inline function Reactant.Ops.__construct_cuda_julia_buffer(::Type{T}, shape, ptr) where {T}
+    return unsafe_wrap(CUDA.CuArray, reinterpret(CUDA.CuPtr{T}, UInt(ptr)), shape)
+end
+@inline function Reactant.Ops.__construct_cuda_julia_buffer(
+    ::Type{T}, ::Tuple{}, ptr
+) where {T}
+    return @allowscalar Reactant.Ops.__construct_cuda_julia_buffer(T, (1,), ptr)[1]
 end
 
 # In Julia v1.11.3 precompiling this module caches bad code:

@@ -1,4 +1,4 @@
-using Reactant, Test
+using Reactant, Test, FileCheck
 using LinearAlgebra
 using Reactant.ReactantCore
 using Reactant: MLIR
@@ -707,8 +707,11 @@ end
     @test for_no_track_numbers_ra(x_ra, n_ra) == for_no_track_numbers(x, n)
 
     ir = @code_hlo optimize = "enzyme-batch" for_no_track_numbers(x_ra, n_ra)
-    @test contains(repr(ir), "enzyme.disable_mincut")
-    @test contains(repr(ir), "enzymexla.enable_checkpointing")
+    @test @filecheck begin
+        @check_dag "enzyme.disable_mincut"
+        @check_dag "enzymexla.enable_checkpointing"
+        repr(ir)
+    end
 end
 
 _call1(a, b) = a

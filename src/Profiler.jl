@@ -1,12 +1,20 @@
 module Profiler
 
-import ..Reactant
+using ..Reactant: Reactant, Proto
 using Sockets: Sockets
 using JSON: JSON
 using PrettyTables: PrettyTables, pretty_table
 using Crayons: Crayon
+using Scratch: @get_scratch!
 
+const PROFILING_DIR = Ref{Union{Nothing,String}}(nothing)
 const GRPC_SERVER_STARTED = Ref{Bool}(false)
+
+function __init__()
+    GRPC_SERVER_STARTED[] = false
+    PROFILING_DIR[] = @get_scratch!("reactant_profiling")
+    return nothing
+end
 
 """
     with_profiler(f, trace_output_dir::String; trace_device=true, trace_host=true, create_perfetto_link=false)
@@ -278,6 +286,7 @@ for connecting to the XProf profiler service.
   - `worker_service_address`: The address of the worker service (e.g., "localhost:9001")
 """
 function initialize_xprof_stubs(worker_service_address::String)
+    @debug "Initializing XProf stubs for worker service at $(worker_service_address)"
     Reactant.MLIR.API.InitializeXProfStubs(worker_service_address)
     return nothing
 end
@@ -293,6 +302,7 @@ connections from tools like TensorBoard.
   - `port`: The port number to start the GRPC server on
 """
 function start_xprof_grpc_server(port::Integer)
+    @debug "Starting XProf gRPC server on port $(port)"
     Reactant.MLIR.API.StartGrpcServer(port)
     return nothing
 end
@@ -477,6 +487,7 @@ end
 function initialize_xprof_stubs_and_server()
     GRPC_SERVER_STARTED[] && return nothing
 
+    @debug "Starting XProf gRPC server..."
     grpc_port = get_free_port()
     initialize_xprof_stubs("0.0.0.0:$(grpc_port)")
     start_xprof_grpc_server(grpc_port)
@@ -499,8 +510,13 @@ function profile_and_get_xplane_file(
                                    will produce incorrect profiling results, and hence is \
                                    disable."
 
-    profile_dir === nothing && (profile_dir = joinpath(tempdir(), "reactant_profile"))
-    mkpath(profile_dir)
+    if profile_dir === nothing
+        @assert PROFILING_DIR[] !== nothing "Profiling directory not set. Open an issue!"
+        profile_dir = mktempdir(PROFILING_DIR[])
+        @debug "Profiling directory: $(profile_dir)"
+    else
+        mkpath(profile_dir)
+    end
 
     # warmup
     val = fn(args...; kwargs...)
@@ -527,16 +543,9 @@ function profile_and_get_xplane_file(
     return (; val=val, xplane_file=xplane_file)
 end
 
-# https://github.com/openxla/xprof/blob/e2f03b3f236c581ec2ce70a548b753546f587c3d/plugin/xprof/protobuf/memory_profile.proto#L75
-struct MemoryAggregationStats
-    stack_reserved_bytes::Int64
-    heap_allocated_bytes::Int64
-    free_memory_bytes::Int64
-    fragmentation::Float64
-    peak_bytes_in_use::Int64
-end
-
-function _show_with_indent(io, stats::MemoryAggregationStats, indent=0)
+function _show_with_indent(
+    io, stats::Proto.tensorflow.profiler.MemoryAggregationStats, indent=0
+)
     print(
         io,
         "    "^indent *
@@ -569,21 +578,16 @@ function _show_with_indent(io, stats::MemoryAggregationStats, indent=0)
     return nothing
 end
 
-function Base.show(io::IO, stats::MemoryAggregationStats)
+function Base.show(io::IO, stats::Proto.tensorflow.profiler.MemoryAggregationStats)
     println(io, "MemoryAggregationStats(")
     _show_with_indent(io, stats, 1)
     print(io, ")")
     return nothing
 end
 
-struct MemoryProfileSummary
-    peak_bytes_usage_lifetime::Int64
-    peak_stats::MemoryAggregationStats
-    peak_stats_time_ps::Int64
-    memory_capacity::Int64
-end
-
-function _show_with_indent(io, summary::MemoryProfileSummary, indent=0)
+function _show_with_indent(
+    io, summary::Proto.tensorflow.profiler.MemoryProfileSummary, indent=0
+)
     print(
         io,
         "    "^indent *
@@ -609,7 +613,7 @@ function _show_with_indent(io, summary::MemoryProfileSummary, indent=0)
     return nothing
 end
 
-function Base.show(io::IO, summary::MemoryProfileSummary)
+function Base.show(io::IO, summary::Proto.tensorflow.profiler.MemoryProfileSummary)
     println(io, "MemoryProfileSummary(")
     _show_with_indent(io, summary, 1)
     println(io, ")")
@@ -618,12 +622,12 @@ end
 
 function get_aggregate_memory_statistics(xplane_file::String)
     data = JSON.parse(xspace_to_tools_data([xplane_file], "memory_profile")[1])
-    memory_data = Dict{String,MemoryProfileSummary}()
+    memory_data = Dict{String,Proto.tensorflow.profiler.MemoryProfileSummary}()
     for (k, v) in data[:memoryProfilePerAllocator]
         profile_summary = v[:profileSummary]
-        memory_data[k] = MemoryProfileSummary(
+        memory_data[k] = Proto.tensorflow.profiler.MemoryProfileSummary(
             parse(Int64, profile_summary[:peakBytesUsageLifetime]),
-            MemoryAggregationStats(
+            Proto.tensorflow.profiler.MemoryAggregationStats(
                 parse(Int64, profile_summary[:peakStats][:stackReservedBytes]),
                 parse(Int64, profile_summary[:peakStats][:heapAllocatedBytes]),
                 parse(Int64, profile_summary[:peakStats][:freeMemoryBytes]),
@@ -637,73 +641,87 @@ function get_aggregate_memory_statistics(xplane_file::String)
     return memory_data
 end
 
-struct FlopsSummary
-    Flops::Float64
-    UncappedFlops::Float64
-    RawFlops::Float64
-    BF16Flops::Float64
-    RawTime::Float64  # picoseconds
-end
-
-function Base.getproperty(summary::FlopsSummary, name::Symbol)
-    if name == :RawFlopsRate || name == :BF16FlopsRate
-        rawtime_s = getfield(summary, :RawTime) * 1e-12
-        name_sym = name == :RawFlopsRate ? :RawFlops : :BF16Flops
+function Base.getproperty(
+    summary::Proto.tensorflow.profiler.op_profile.Metrics, name::Symbol
+)
+    if name == :raw_flops_rate || name == :bf16_flops_rate
+        rawtime_s = getfield(summary, :raw_time) * 1e-12
+        name_sym = name == :raw_flops_rate ? :raw_flops : :bf16_flops
         return getfield(summary, name_sym) / rawtime_s
     end
     return getfield(summary, name)
 end
 
-function _show_with_indent(io, summary::FlopsSummary, indent=0)
-    rawtime_s = summary.RawTime * 1e-12
+function _show_with_indent(
+    io, summary::Proto.tensorflow.profiler.op_profile.Metrics, indent=0
+)
+    rawtime_s = summary.raw_time * 1e-12
 
-    print(io, "    "^indent * "Flops = $(summary.Flops), ")
+    print(io, "    "^indent * "flops = $(summary.flops), ")
     Base.printstyled(
         " # [flops / (peak flops * program time)], capped at 1.0\n"; color=:light_black
     )
-    println(io, "    "^indent * "UncappedFlops = $(summary.UncappedFlops), ")
-    print(io, "    "^indent * "RawFlops = $(summary.RawFlops), ")
+
+    println(io, "    "^indent * "bandwidth_utils = $(summary.bandwidth_utils),")
+
+    println(io, "    "^indent * "uncapped_flops = $(summary.uncapped_flops), ")
+
+    print(io, "    "^indent * "raw_time = $(_timestr(rawtime_s * 1e9))s, ")
+    Base.printstyled(" # Raw time in seconds\n"; color=:light_black)
+
+    print(io, "    "^indent * "raw_flops = $(summary.raw_flops), ")
     Base.printstyled(" # Total FLOPs performed\n"; color=:light_black)
-    print(io, "    "^indent * "BF16Flops = $(summary.BF16Flops), ")
+
+    print(io, "    "^indent * "bf16_flops = $(summary.bf16_flops), ")
     Base.printstyled(
         " # Total FLOPs Normalized to the bf16 (default) devices peak bandwidth\n";
         color=:light_black,
     )
-    print(io, "    "^indent * "RawTime = $(_timestr(rawtime_s * 1e9))s, ")
-    Base.printstyled(" # Raw time in seconds\n"; color=:light_black)
-    print(io, "    "^indent * "RawFlopsRate = $(summary.RawFlopsRate), ")
+
+    println(io, "    "^indent * "raw_bytes_accessed = $(summary.raw_bytes_accessed_array),")
+
+    println(io, "    "^indent * "occurrences = $(summary.occurrences),")
+
+    print(io, "    "^indent * "raw_flops_rate = $(summary.raw_flops_rate), ")
     Base.printstyled(" # Raw FLOPs rate in FLOPs/seconds\n"; color=:light_black)
-    print(io, "    "^indent * "BF16FlopsRate = $(summary.BF16FlopsRate), ")
+
+    print(io, "    "^indent * "bf16_flops_rate = $(summary.bf16_flops_rate), ")
     Base.printstyled(" # BF16 FLOPs rate in FLOPs/seconds\n"; color=:light_black)
     return nothing
 end
 
-function Base.show(io::IO, flops::FlopsSummary)
-    println(io, "FlopsSummary(")
+function Base.show(io::IO, flops::Proto.tensorflow.profiler.op_profile.Metrics)
+    println(io, "Metrics(")
     _show_with_indent(io, flops, 1)
     println(io, ")")
     return nothing
 end
 
-function get_aggregate_flops_statistics(xplane_file::String, nrepeat::Int)
+function get_aggregate_metrics(xplane_file::String, nrepeat::Int)
     data = JSON.parse(xspace_to_tools_data([xplane_file], "op_profile")[1])
     if !haskey(data, :byProgram) || !haskey(data[:byProgram], :metrics)
         return nothing
     end
-    return FlopsSummary(
+
+    return Proto.tensorflow.profiler.op_profile.Metrics(
         data[:byProgram][:metrics][:flops],
         data[:byProgram][:metrics][:uncappedFlops],
-        data[:byProgram][:metrics][:rawFlops] / nrepeat,
-        data[:byProgram][:metrics][:bf16Flops] / nrepeat,
-        data[:byProgram][:metrics][:rawTime] / nrepeat,
+        Float64.(data[:byProgram][:metrics][:bandwidthUtils]),
+        data[:byProgram][:metrics][:rawTime],
+        data[:byProgram][:metrics][:rawFlops],
+        data[:byProgram][:metrics][:bf16Flops],
+        data[:byProgram][:metrics][:normalizedTimePs],
+        Float64.(data[:byProgram][:metrics][:rawBytesAccessedArray]),
+        data[:byProgram][:metrics][:occurrences],
+        data[:byProgram][:metrics][:avgTimePs],
     )
 end
 
 struct AggregateProfilingResult
     runtime_ns::Int64
     compile_time_ns::Int64
-    memory_data::Dict{String,MemoryProfileSummary}
-    flops_data::Union{Nothing,FlopsSummary}
+    memory_data::Dict{String,Proto.tensorflow.profiler.MemoryProfileSummary}
+    metrics_data::Union{Nothing,Proto.tensorflow.profiler.op_profile.Metrics}
 end
 
 _timestr(time_ns) = Base.Ryu.writefixed(Float64(time_ns / 1e9), 8)
@@ -720,9 +738,9 @@ function Base.show(io::IO, result::AggregateProfilingResult)
         _show_with_indent(io, v, 2)
         println(io, "    )")
     end
-    if result.flops_data !== nothing
-        println(io, "    flops = FlopsSummary(")
-        _show_with_indent(io, result.flops_data, 2)
+    if result.metrics_data !== nothing
+        println(io, "    metrics = Metrics(")
+        _show_with_indent(io, result.metrics_data, 2)
         println(io, "    )")
     end
     print(io, ")")
@@ -767,12 +785,12 @@ function profile_thunk_with_xprof(
         fn, args...; nrepeat, warmup, profile_dir, kwargs...
     )
     memory_data = get_aggregate_memory_statistics(xplane_file)
-    flops_data = get_aggregate_flops_statistics(xplane_file, nrepeat)
+    metrics_data = get_aggregate_metrics(xplane_file, nrepeat)
     runtime_ns = extract_mean_step_time(xplane_file, nrepeat)
     return (;
         val,
         profiling_result=AggregateProfilingResult(
-            runtime_ns, compile_time_ns, memory_data, flops_data
+            runtime_ns, compile_time_ns, memory_data, metrics_data
         ),
         xplane_file,
     )
@@ -780,9 +798,9 @@ end
 
 function load_xplane_file(xplane_file::String; nrepeat::Int=1, compile_time_ns::Int64=0)
     memory_data = get_aggregate_memory_statistics(xplane_file)
-    flops_data = get_aggregate_flops_statistics(xplane_file, nrepeat)
+    metrics_data = get_aggregate_metrics(xplane_file, nrepeat)
     runtime_ns = extract_mean_step_time(xplane_file, nrepeat)
-    return AggregateProfilingResult(runtime_ns, compile_time_ns, memory_data, flops_data)
+    return AggregateProfilingResult(runtime_ns, compile_time_ns, memory_data, metrics_data)
 end
 
 function _extract_kwargs_from_expr(args...)
@@ -887,23 +905,6 @@ macro time(args...)
     )
 end
 
-struct KernelReport
-    name::String
-    registers_per_thread::UInt32
-    static_shmem_bytes::UInt32
-    dynamic_shmem_bytes::UInt32
-    block_dim::Vector{UInt32}
-    grid_dim::Vector{UInt32}
-    total_duration_ns::UInt64
-    min_duration_ns::UInt64
-    max_duration_ns::UInt64
-    is_kernel_using_tensor_core::Bool
-    is_op_tensor_core_eligible::Bool
-    op_name::String
-    occurrences::UInt32
-    occupancy_pct::Float32
-end
-
 function get_kernel_stats(xplane_file::String)
     data = JSON.parse(xspace_to_tools_data([xplane_file], "kernel_stats")[1])
 
@@ -943,7 +944,7 @@ function get_kernel_stats(xplane_file::String)
         end
     end
 
-    reports = KernelReport[]
+    reports = Proto.tensorflow.profiler.KernelReport[]
     for row in rows
         cells = row[:c]
         # Extract values by column ID
@@ -951,7 +952,7 @@ function get_kernel_stats(xplane_file::String)
 
         push!(
             reports,
-            KernelReport(
+            Proto.tensorflow.profiler.KernelReport(
                 String(get_val("kernel_name")),
                 UInt32(get_val("registers_per_thread")),
                 UInt32(get_val_with_fallback(cells, "static_shmem_bytes", "shmem_bytes")),
@@ -976,12 +977,18 @@ function get_kernel_stats(xplane_file::String)
         )
     end
 
-    return reports
+    return Proto.tensorflow.profiler.KernelStatsDb(reports)
 end
 
 _clip_str(x, N::Int=50) = length(x) > N ? x[1:N] * "..." : x
 
-function print_kernel_report(reports::Vector{KernelReport}; io::IO=stdout)
+function print_kernel_report(db::Proto.tensorflow.profiler.KernelStatsDb; io::IO=stdout)
+    return print_kernel_report(db.reports; io=io)
+end
+
+function print_kernel_report(
+    reports::Vector{Proto.tensorflow.profiler.KernelReport}; io::IO=stdout
+)
     isempty(reports) && return nothing
 
     # Calculate quantiles based on total_duration_ns
@@ -1069,31 +1076,9 @@ function print_kernel_report(reports::Vector{KernelReport}; io::IO=stdout)
     return nothing
 end
 
-struct FrameworkOpStats
-    host_or_device::String
-    op_type::String
-    op_name::String
-    occurrences::UInt32
-    total_time_ns::UInt64
-    avg_time_ns::UInt64
-    total_self_time_ns::UInt64
-    avg_self_time_ns::UInt64
-    device_total_self_time_pct::Float64
-    device_cumulative_total_self_time_pct::Float64
-    host_total_self_time_pct::Float64
-    host_cumulative_total_self_time_pct::Float64
-    measured_flop_rate::Float64
-    model_flop_rate_gflops::Float64
-    measured_memory_bw_gbps::Float64
-    operational_intensity::Float64
-    gpu_tensorcore_utilization::Float64
-    bound_by::String
-    execution_mode::String
-end
-
 function get_framework_op_stats(xplane_file::String; include_idle::Bool=false)
     raw_data = JSON.parse(xspace_to_tools_data([xplane_file], "framework_op_stats")[1])
-    length(raw_data) == 2 || return FrameworkOpStats[]
+    length(raw_data) == 2 || return Proto.tensorflow.profiler.TfStatsRecord[]
 
     data = include_idle ? raw_data[1] : raw_data[2]
 
@@ -1103,7 +1088,7 @@ function get_framework_op_stats(xplane_file::String; include_idle::Bool=false)
     # Build column index mapping: column_id => position (1-indexed)
     col_indices = Dict{String,Int}(col[:id] => i for (i, col) in enumerate(cols))
 
-    reports = FrameworkOpStats[]
+    reports = Proto.tensorflow.profiler.TfStatsRecord[]
     for row in rows
         cells = row[:c]
         function get_val(id, allowmissing=false)
@@ -1111,18 +1096,18 @@ function get_framework_op_stats(xplane_file::String; include_idle::Bool=false)
             return cells[col_indices[id]][:v]
         end
 
-        # Convert μs to ns for time fields
         push!(
             reports,
-            FrameworkOpStats(
+            Proto.tensorflow.profiler.TfStatsRecord(
+                UInt64(get_val("rank")),
                 String(get_val("host_or_device")),
                 String(get_val("type")),
                 String(get_val("operation")),
                 UInt32(get_val("occurrences")),
-                UInt64(round(get_val("total_time") * 1000)),      # μs to ns
-                UInt64(round(get_val("avg_time") * 1000)),        # μs to ns
-                UInt64(round(get_val("total_self_time") * 1000)), # μs to ns
-                UInt64(round(get_val("avg_self_time") * 1000)),   # μs to ns
+                Float64(round(get_val("total_time"))),
+                Float64(round(get_val("avg_time"))),
+                Float64(round(get_val("total_self_time"))),
+                Float64(round(get_val("avg_self_time"))),
                 Float64(get_val("device_total_self_time_percent")),
                 Float64(get_val("device_cumulative_total_self_time_percent")),
                 Float64(get_val("host_total_self_time_percent")),
@@ -1131,9 +1116,23 @@ function get_framework_op_stats(xplane_file::String; include_idle::Bool=false)
                 Float64(get_val("model_flop_rate")),
                 Float64(get_val("measured_memory_bw")),
                 Float64(get_val("operational_intensity")),
-                Float64(get_val("gpu_tensorcore_utilization", true)),
                 String(get_val("bound_by")),
-                String(get_val("eager")),
+                false, # Bool(get_val("eager")) <-- returns a string "Function"
+                Float64(get_val("gpu_tensorcore_utilization", true)),
+                Float64(get_val("hbm_bw", true)),
+                Float64(get_val("cmem_read_bw", true)),
+                Float64(get_val("cmem_write_bw", true)),
+                Float64(get_val("vmem_read_bw", true)),
+                Float64(get_val("vmem_write_bw", true)),
+                Float64(get_val("hbm_operational_intensity", true)),
+                Float64(get_val("cmem_read_operational_intensity", true)),
+                Float64(get_val("cmem_write_operational_intensity", true)),
+                Float64(get_val("vmem_read_operational_intensity", true)),
+                Float64(get_val("vmem_write_operational_intensity", true)),
+                Float64(get_val("bottleneck_operational_intensity", true)),
+                UInt64(get_val("flops", true)),
+                Float64(get_val("flops_v2", true)),
+                UInt64(get_val("bytes_accessed", true)),
             ),
         )
     end
@@ -1141,73 +1140,113 @@ function get_framework_op_stats(xplane_file::String; include_idle::Bool=false)
     return reports
 end
 
-function print_framework_op_stats(reports::Vector{FrameworkOpStats}; io::IO=stdout)
+function print_framework_op_stats(
+    reports::Vector{Proto.tensorflow.profiler.TfStatsRecord}; io::IO=stdout
+)
     isempty(reports) && return nothing
 
     # Calculate quantiles based on total_self_time_ns
-    durations = [r.total_self_time_ns for r in reports]
+    durations = [r.total_self_time_in_us * 1000 for r in reports]
     sorted_durations = sort(durations)
     n = length(sorted_durations)
     q90 = sorted_durations[max(1, ceil(Int, 0.90 * n))]
     q75 = sorted_durations[max(1, ceil(Int, 0.75 * n))]
 
     # Check which optional columns have data
-    has_host_stats = any(r -> r.host_total_self_time_pct > 0, reports)
+    has_host_stats = any(r -> r.host_total_self_time_as_fraction > 0, reports)
     has_tensorcore = any(r -> r.gpu_tensorcore_utilization > 0, reports)
+    has_tpu_stats = any(r -> r.hbm_bw > 0, reports)
+    has_bytes_accessed = any(r -> r.bytes_accessed > 0, reports)
 
     # Build column definitions: (header, extractor, is_duration)
     columns = Tuple{String,Function,Bool}[]
-    push!(columns, ("Operation", r -> _clip_str(r.op_name), false))
-    push!(columns, ("Type", r -> r.op_type, false))
-    push!(columns, ("Host/Device", r -> r.host_or_device, false))
-    push!(columns, ("Occurrences", r -> string(r.occurrences), false))
-    push!(columns, ("Total Self-Time", r -> _timestr(r.total_self_time_ns) * "s", true))
-    push!(columns, ("Avg Self-Time", r -> _timestr(r.avg_self_time_ns) * "s", true))
-    push!(
-        columns,
-        (
-            "Device %",
-            r -> string(round(r.device_total_self_time_pct * 100; digits=2)) * "%",
-            false,
-        ),
+
+    function data_entry!(header::String, extractor, is_duration::Bool)
+        return push!(columns, (header, extractor, is_duration))
+    end
+
+    data_entry!("Operation", r -> _clip_str(r.op_name), false)
+    data_entry!("Type", r -> r.op_type, false)
+    data_entry!("Host/Device", r -> r.host_or_device, false)
+    data_entry!("Occurrences", r -> string(r.occurrences), false)
+    data_entry!("Total Self-Time (s)", r -> _timestr(r.total_self_time_in_us * 1000), true)
+    data_entry!("Avg Self-Time (s)", r -> _timestr(r.avg_self_time_in_us * 1000), true)
+    data_entry!(
+        "Device (%)",
+        r -> string(round(r.device_total_self_time_as_fraction * 100; digits=2)),
+        false,
     )
     if has_host_stats
-        push!(
-            columns,
-            (
-                "Host %",
-                r -> string(round(r.host_total_self_time_pct * 100; digits=2)) * "%",
-                false,
-            ),
+        data_entry!(
+            "Host (%)",
+            r -> string(round(r.host_total_self_time_as_fraction * 100; digits=2)),
+            false,
         )
     end
-    push!(
-        columns,
-        (
-            "Memory BW",
-            r -> string(round(r.measured_memory_bw_gbps; digits=2)) * " GB/s",
-            false,
-        ),
+    data_entry!(
+        "Memory BW (GB/s)", r -> string(round(r.measured_memory_bw; digits=2)), false
     )
-    push!(
-        columns,
-        (
-            "FLOP Rate",
-            r -> string(round(r.model_flop_rate_gflops; digits=2)) * " GFLOP/s",
-            false,
-        ),
+    data_entry!(
+        "FLOP Rate (GFLOP/s)", r -> string(round(r.model_flop_rate; digits=2)), false
     )
     if has_tensorcore
-        push!(
-            columns,
-            (
-                "TensorCore",
-                r -> string(round(r.gpu_tensorcore_utilization * 100; digits=1)) * "%",
-                false,
-            ),
+        data_entry!(
+            "TensorCore (%)",
+            r -> string(round(r.gpu_tensorcore_utilization * 100; digits=1)),
+            false,
         )
     end
-    push!(columns, ("Bound By", r -> r.bound_by, false))
+    data_entry!("Bound By", r -> r.bound_by, false)
+    if has_tpu_stats
+        data_entry!("HBM BW (GB/s)", r -> string(round(r.hbm_bw; digits=2)), false)
+        data_entry!(
+            "CMEM Read BW (GB/s)", r -> string(round(r.cmem_read_bw; digits=2)), false
+        )
+        data_entry!(
+            "CMEM Write BW (GB/s)", r -> string(round(r.cmem_write_bw; digits=2)), false
+        )
+        data_entry!(
+            "VMEM Read BW (GB/s)", r -> string(round(r.vmem_read_bw; digits=2)), false
+        )
+        data_entry!(
+            "VMEM Write BW (GB/s)", r -> string(round(r.vmem_write_bw; digits=2)), false
+        )
+        data_entry!(
+            "HBM Operational Intensity (FLOPs/byte)",
+            r -> string(round(r.hbm_operational_intensity; digits=2)),
+            false,
+        )
+        data_entry!(
+            "CMEM Read Operational Intensity (FLOPs/byte)",
+            r -> string(round(r.cmem_read_operational_intensity; digits=2)),
+            false,
+        )
+        data_entry!(
+            "CMEM Write Operational Intensity (FLOPs/byte)",
+            r -> string(round(r.cmem_write_operational_intensity; digits=2)),
+            false,
+        )
+        data_entry!(
+            "VMEM Read Operational Intensity (FLOPs/byte)",
+            r -> string(round(r.vmem_read_operational_intensity; digits=2)),
+            false,
+        )
+        data_entry!(
+            "VMEM Write Operational Intensity (FLOPs/byte)",
+            r -> string(round(r.vmem_write_operational_intensity; digits=2)),
+            false,
+        )
+        data_entry!(
+            "Bottleneck Operational Intensity (FLOPs/byte)",
+            r -> string(round(r.bottleneck_operational_intensity; digits=2)),
+            false,
+        )
+    end
+    if has_bytes_accessed
+        data_entry!(
+            "Bytes Accessed (bytes)", r -> string(round(r.bytes_accessed; digits=2)), false
+        )
+    end
 
     header = [c[1] for c in columns]
     duration_cols = findall(c -> c[3], columns)
@@ -1217,8 +1256,8 @@ function print_framework_op_stats(reports::Vector{FrameworkOpStats}; io::IO=stdo
     raw_durations = Matrix{UInt64}(undef, length(reports), 2)
 
     for (i, r) in enumerate(reports)
-        raw_durations[i, 1] = r.total_self_time_ns
-        raw_durations[i, 2] = r.avg_self_time_ns
+        raw_durations[i, 1] = r.total_self_time_in_us * 1000
+        raw_durations[i, 2] = r.avg_self_time_in_us * 1000
 
         for (j, (_, extractor, _)) in enumerate(columns)
             data[i, j] = extractor(r)
@@ -1281,7 +1320,7 @@ macro profile(args...)
             local kernel_stats = $(get_kernel_stats)(xplane_file)
             local framework_stats = $(get_framework_op_stats)(xplane_file)
 
-            if !isempty(kernel_stats)
+            if !isempty(kernel_stats.reports)
                 $(_print_summary_header)("KERNEL STATISTICS")
                 println()
                 $(print_kernel_report)(kernel_stats)

@@ -1,4 +1,4 @@
-using Reactant, Test
+using Reactant, Test, FileCheck
 
 @testset "sort & sortperm" begin
     x = Reactant.TestUtils.construct_test_array(Float64, 10)
@@ -210,15 +210,21 @@ end
         @code_hlo partialsortperm(x_ra, 4:15)
     end
 
-    @test contains(repr(hlo), "ApproxTopK")
-    @test contains(repr(hlo), "top_k = 15 : i64")
+    @test @filecheck begin
+        @check_dag "ApproxTopK"
+        @check_dag "top_k = 15 : i64"
+        repr(hlo)
+    end
 
     hlo = Reactant.with_config(; lower_partialsort_to_approx_top_k=false) do
         @code_hlo partialsortperm(x_ra, 4:15)
     end
 
-    @test !contains(repr(hlo), "ApproxTopK")
-    @test contains(repr(hlo), "chlo.top_k")
+    @test @filecheck begin
+        @check_not "ApproxTopK"
+        @check "chlo.top_k"
+        repr(hlo)
+    end
 
     idxs = partialsortperm(x, 4:15)
     idxs_ra = Reactant.with_config(; lower_partialsort_to_approx_top_k=false) do

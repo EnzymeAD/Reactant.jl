@@ -58,7 +58,7 @@ module API
 end # module API
 
 include("IR/IR.jl")
-
 include("Dialects.jl")
+include("Highlight.jl")
 
 end # module MLIR
