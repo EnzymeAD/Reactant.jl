@@ -288,6 +288,7 @@ function CompileOptions(;
             :just_batch,
             :none,
             :probprog,
+            :probprog_no_opt,
         ]
     end
 
