@@ -52,6 +52,12 @@ function promote_to(::Type{TracedRNumber}, rhs)
     return promote_to(TracedRNumber{T}, rhs)
 end
 
+function promote_to(
+    ::Type{TracedRNumber}, rhs::Union{Rational{T},TracedRational{T}}
+) where {T}
+    return promote_to(TracedRNumber{float(unwrapped_eltype(T))}, rhs)
+end
+
 promote_to(::Type{TracedRNumber{T}}, rhs::TracedRNumber{T}) where {T} = rhs
 function promote_to(::Type{TracedRNumber{T}}, rhs::TracedRNumber{T2}) where {T,T2}
     return @opcall convert(TracedRNumber{T}, rhs)

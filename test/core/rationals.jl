@@ -66,3 +66,25 @@ end
     r3 = @jit(7//i2)
     @test Rational(r3) == 7//4
 end
+
+function mutliply_with_rational(x, n, d)
+    coeff = n//d
+    return x .* coeff
+end
+
+@testset "broadcasted rational multiplication" begin
+    x = [1.0f0, 2.0f0, 3.0f0]
+    x_ra = Reactant.to_rarray(x; track_numbers=true)
+
+    y_ra_mutliplied = @jit(mutliply_with_rational(x_ra, 1, 2))
+
+    y_ra_mutliplied2 = @jit(
+        mutliply_with_rational(x_ra, ConcreteRNumber(1), ConcreteRNumber(2))
+    )
+
+    y = mutliply_with_rational(x, 1, 2)
+
+    @test y ≈ y_ra_mutliplied
+    @test y_ra_mutliplied ≈ y_ra_mutliplied2
+    @test y_ra_mutliplied isa Reactant.ConcreteRArray
+end

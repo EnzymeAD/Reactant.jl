@@ -2,7 +2,6 @@ module TracedRationalOverrides
 
 using ..Reactant: Reactant, AbstractConcreteNumber, TracedRNumber
 import ..Reactant: TracedRational
-using ..Ops: @opcall
 using ReactantCore: ReactantCore
 
 ReactantCore.is_traced(::TracedRational, seen) = true
@@ -26,6 +25,22 @@ end
 # Constructors
 TracedRational{T}(num) where {T} = TracedRational(T(num), one(T))
 TracedRational(num) = TracedRational(num, one(num))
+
+TracedRational(x::TracedRational) = x
+
+TracedRational{T}(c::AbstractChar) where {T} = TracedRational{T}(codepoint(c))
+TracedRational(c::AbstractChar) = TracedRational(codepoint(c))
+
+function TracedRational{T}(::Complex) where {T}
+    throw("Currently we dont support complex numbers in rationals")
+end
+TracedRational(::Complex) = throw("Currently we dont support complex numbers in rationals")
+
+function TracedRational{T}(x::Base.TwicePrecision) where {T}
+    R = TracedRational{T}
+    return (R(x.hi) + R(x.lo))::R
+end
+TracedRational(x::Base.TwicePrecision{T}) where {T} = TracedRational{T}(x)
 
 # Conversion from Rational
 TracedRational{T}(r::TracedRational{T}) where {T} = r
@@ -62,6 +77,15 @@ function Base.promote_rule(::Type{TracedRational{T}}, ::Type{S}) where {T,S<:Int
 end
 function Base.promote_rule(::Type{TracedRational{T}}, ::Type{Rational{S}}) where {T,S}
     return TracedRational{promote_type(T, S)}
+end
+function Base.promote_rule(::Type{TracedRational{T}}, ::Type{S}) where {T,S<:AbstractFloat}
+    return S
+end
+function Base.promote_rule(::Type{S}, ::Type{TracedRational{T}}) where {T,S<:AbstractFloat}
+    return S
+end
+function Base.promote_rule(::Type{BigFloat}, ::Type{Reactant.TracedRational{T}}) where {T}
+    return BigFloat
 end
 
 # Operations
