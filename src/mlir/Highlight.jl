@@ -1,5 +1,7 @@
 module Highlight
 
+using ..API: API
+using ..IR: IR
 using StyledStrings: Face, AnnotatedString, addface!
 
 export highlight
@@ -10,7 +12,7 @@ struct MLIRToken
 end
 
 # Adding faces to the global Faces Dict should be prefaced with Reactant
-# to avoid naming conflicts. 
+# to avoid naming conflicts.
 const REACTANT_THEME = [
     # Metadata / Layout
     :Reactant_default => Face(),
@@ -20,137 +22,87 @@ const REACTANT_THEME = [
     :Reactant_SSA => Face(; foreground=:cyan),
     :Reactant_symbol => Face(; foreground=:magenta),
     :Reactant_block => Face(; foreground=:green),
+
     # Literals & Comments
     :Reactant_comment => Face(; foreground=:gray),
     :Reactant_string => Face(; foreground=:red),
     :Reactant_punct => Face(; foreground=:red),
+
+    # Additional categories from the C lexer
+    :Reactant_keyword => Face(; foreground=:yellow),
+    :Reactant_bare_identifier => Face(),
+    :Reactant_hash_identifier => Face(; foreground=:magenta),
+    :Reactant_exclamation_identifier => Face(; foreground=:magenta),
+    :Reactant_number => Face(; foreground=:blue),
+    :Reactant_inttype => Face(; foreground=:blue),
+    :Reactant_error => Face(; foreground=:red, bold=true),
 ]
 
 function register_reactant_theme()
     return foreach(addface!, REACTANT_THEME)
 end
 
-"""
-    rule_prefixed_identifier(str::AbstractString, i, prefix::Char, kind::Symbol)
-
-Matches a prefix character and then any number of alphanumeric chars including '_'
-Useful for e.g. SSA and Symbols.
-Returns a `Tuple{MLIRToken, Int}` if a match is found, otherwise `nothing`.
-"""
-@inline function rule_prefixed_identifier(
-    str::AbstractString, i::Int, prefix::Char, kind::Symbol
+# Map C-side token category integers to Julia face symbols.
+# Must match mlirTokenKindToCategory in API.cpp.
+const TOKEN_CATEGORY_MAP = Dict{Int32,Symbol}(
+    1 => :Reactant_SSA,                    # %foo
+    2 => :Reactant_symbol,                 # @foo
+    3 => :Reactant_block,                  # ^foo
+    4 => :Reactant_string,                 # "..."
+    5 => :Reactant_punct,                  # punctuation
+    6 => :Reactant_keyword,               # keywords (func, tensor, etc.)
+    7 => :Reactant_bare_identifier,       # bare identifiers
+    8 => :Reactant_hash_identifier,       # #foo
+    9 => :Reactant_exclamation_identifier, # !foo
+    10 => :Reactant_number,               # integers, floats
+    11 => :Reactant_inttype,              # i32, si8, ui16
+    -1 => :Reactant_error,               # error tokens
+    0 => :Reactant_default,              # default / unknown
 )
-    if str[i] != prefix
-        return nothing
-    end
-    start = i
-    i = nextind(str, i)
-    while i <= lastindex(str) && (isletter(str[i]) || isdigit(str[i]) || str[i] == '_')
-        i = nextind(str, i)
-    end
-    return MLIRToken(kind, range(start, prevind(str, i))), i
-end
 
 """
-    rule_single_chars(str::AbstractString, i, chars::Set, kind::Symbol)
+    tokenize(str::AbstractString)
 
-Matches a Set of singular chars.
-Returns a `Tuple{MLIRToken, Int}` if a match is found, otherwise `nothing`.
+Parses an MLIR string using the real MLIR C++ lexer via `ReactantLexMLIR`.
+Returns a `Vector{MLIRToken}`.
 """
-@inline function rule_single_chars(str::AbstractString, i::Int, chars::Set, kind::Symbol)
-    if !(str[i] in chars)
-        return nothing
-    end
-    start = i
-    i = nextind(str, i)
-    while i <= lastindex(str) && str[i] in chars
-        i = nextind(str, i)
-    end
-    return MLIRToken(kind, range(start, prevind(str, i))), i
-end
+function tokenize(str::AbstractString)
+    input = String(str)
+    input_len = Int32(ncodeunits(input))
 
-"""
-    rule_comment(str, i, kind::Symbol)
+    # Estimate max tokens (generous upper bound)
+    max_tokens = Int32(max(input_len, Int32(16)))
 
-Matches the comment lines.
-Returns a `Tuple{MLIRToken, Int}` if a match is found, otherwise `nothing`.
-"""
-@inline function rule_comment(str::AbstractString, i::Int)
-    if (str[i] != '/' || nextind(str, i) > lastindex(str) || str[nextind(str, i)] != '/')
-        return nothing
-    end
-    start = i
-    i = nextind(str, i)
-    while i <= lastindex(str) && str[i] != '\n'
-        i = nextind(str, i)
-    end
-    return MLIRToken(:Reactant_comment, range(start, prevind(str, i))), i
-end
+    token_kinds = Vector{Int32}(undef, max_tokens)
+    token_offsets = Vector{Int32}(undef, max_tokens)
+    token_lengths = Vector{Int32}(undef, max_tokens)
 
-"""
-rule_whitespace(str, i, kind::Symbol)
+    # We need an MLIRContext for the lexer. Use existing if available,
+    # otherwise create a temporary one.
+    has_ctx = IR.has_context()
+    ctx = has_ctx ? IR.current_context() : IR.Context()
 
-Matches whitespace. 
-Returns a `Tuple{MLIRToken, Int}` if a match is found, otherwise `nothing`.
-"""
-@inline function rule_whitespace(str::AbstractString, i::Int)
-    if !(isspace(str[i]))
-        return nothing
-    end
-    start = i
-    i = nextind(str, i)
-    while i <= lastindex(str) && isspace(str[i])
-        i = nextind(str, i)
-    end
-
-    return MLIRToken(:Reactant_whitespace, range(start, prevind(str, i))), i
-end
-
-@inline rule_ssa(str, i) = rule_prefixed_identifier(str, i, '%', :Reactant_SSA)
-@inline rule_symbol(str, i) = rule_prefixed_identifier(str, i, '@', :Reactant_symbol)
-@inline rule_block(str, i) = rule_prefixed_identifier(str, i, '^', :Reactant_block)
-
-const PUNCTUATION_SET = Set(":-?*=><|")
-@inline rule_punctuation(str, i) =
-    rule_single_chars(str, i, PUNCTUATION_SET, :Reactant_punct)
-
-# Unrolling the tuple of functions for type stability
-# There might be a smarter way to do this without causing huge amounts of Allocations
-function apply_rules(str, i, rules::Tuple{})
-    return nothing
-end
-
-function apply_rules(str, i, rules::Tuple)
-    result = first(rules)(str, i)
-    if result !== nothing
-        return result
-    end
-    return apply_rules(str, i, Base.tail(rules))
-end
-
-"""
-    tokenize(str::AbstractString)::Vector{MLIRToken}
-
-Tokenizes a MLIR string to be later used for simple highliting.
-"""
-function tokenize(str::AbstractString, token_rules::Tuple)
     tokens = MLIRToken[]
-    sizehint!(tokens, length(str))
-    i = firstindex(str)
-    last_idx = lastindex(str)
+    try
+        count = API.ReactantLexMLIR(
+            ctx, input, input_len, token_kinds, token_offsets, token_lengths, max_tokens
+        )
 
-    while i <= last_idx
-        # This call is now type-stable because 'rules' is a fixed Tuple
-        res = apply_rules(str, i, token_rules)
+        sizehint!(tokens, count)
+        for i in 1:count
+            kind_int = token_kinds[i]
+            # C offsets are 0-based byte offsets, Julia strings are 1-indexed
+            offset = token_offsets[i]
+            length = token_lengths[i]
+            start_idx = offset + 1  # convert to 1-based
+            end_idx = offset + length  # inclusive end in 1-based
 
-        if res !== nothing
-            token, new_i = res
-            push!(tokens, token)
-            i = new_i
-        else
-            # fallback single-char token
-            push!(tokens, MLIRToken(:Reactant_default, i:i))
-            i = nextind(str, i)
+            face = get(TOKEN_CATEGORY_MAP, kind_int, :Reactant_default)
+            push!(tokens, MLIRToken(face, start_idx:end_idx))
+        end
+    finally
+        if !has_ctx
+            IR.dispose(ctx)
         end
     end
     return tokens
@@ -159,8 +111,8 @@ end
 """
     style(str::AbstractString, tokens::Vector{MLIRToken})
 
-Takes a string to be styled and a Vector with information for styling then 
-uses Julias AnnotatedStrings to make pretty colors when printing
+Takes a string to be styled and a Vector with information for styling then
+uses Julia's AnnotatedStrings to make pretty colors when printing.
 """
 function style(str::AbstractString, tokens::Vector{MLIRToken})
     @static if VERSION < v"1.11"
@@ -182,20 +134,14 @@ function style(str::AbstractString, tokens::Vector{MLIRToken})
     end
 end
 
-# Order matters
-const DEFAULT_RULES = (
-    rule_whitespace, rule_symbol, rule_ssa, rule_block, rule_comment, rule_punctuation
-)
-
 """
-    highlight(str::AbstractString, rules::Tuple=DEFAULT_RULES)
+    highlight(str::AbstractString)
 
-Returns a `StyledString` (that prints colorfully in the REPL) by tokenizing a string according to a tuple of rules. 
-Rules should return a `Tuple{MLIRToken, new_index{Int}` or `nothing` if there was no match.
-A few simple rules are provided as the default using Reactant's default faces.
+Returns a `StyledString` (that prints colorfully in the REPL) by lexing the MLIR
+string using the real MLIR C++ lexer for accurate tokenization.
 """
-function highlight(str::AbstractString, rules::Tuple=DEFAULT_RULES)
-    tokens = tokenize(str, rules)
+function highlight(str::AbstractString)
+    tokens = tokenize(str)
     styled_text = style(str, tokens)
     return styled_text
 end
