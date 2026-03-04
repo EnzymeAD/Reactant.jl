@@ -4,6 +4,8 @@ using Reactant
 using Dates
 using Dates: value, UTInstant
 
+const RDExt = Base.get_extension(Reactant, :ReactantDatesExt)
+
 # Preparations for timestepper MWE unit test in the end
 # Can't do that in the @testset scope, as scope issues occur
 # Inspired by the usage in SpeedyWeather.jl
@@ -36,6 +38,79 @@ function timestepping!(state::State)
 end
 
 @testset "ReactantDatesExt" begin
+
+    # --- Conversions: Dates ↔ TracedR roundtrips ---
+    @testset "Period conversions: Dates → TracedR → Dates" begin
+        for (DatesT, TracedT) in (
+            (Dates.Year, RDExt.TracedRYear),
+            (Dates.Quarter, RDExt.TracedRQuarter),
+            (Dates.Month, RDExt.TracedRMonth),
+            (Dates.Week, RDExt.TracedRWeek),
+            (Dates.Day, RDExt.TracedRDay),
+            (Dates.Hour, RDExt.TracedRHour),
+            (Dates.Minute, RDExt.TracedRMinute),
+            (Dates.Second, RDExt.TracedRSecond),
+            (Dates.Millisecond, RDExt.TracedRMillisecond),
+            (Dates.Microsecond, RDExt.TracedRMicrosecond),
+            (Dates.Nanosecond, RDExt.TracedRNanosecond),
+        )
+            for v in (0, 42)
+                orig = DatesT(v)
+                traced = convert(TracedT, orig)
+                @test traced isa TracedT
+                @test value(traced) == v
+                back = convert(DatesT, traced)
+                @test back == orig
+            end
+
+            # Parametric convert: TracedT{Int64}
+            orig = DatesT(5)
+            traced_typed = convert(TracedT{Int64}, orig)
+            @test traced_typed isa TracedT{Int64}
+            @test value(traced_typed) == 5
+
+            # Direct constructor
+            @test value(TracedT(orig)) == value(orig)
+        end
+    end
+
+    @testset "DateTime conversion: DateTime → TracedRDateTime → DateTime" begin
+        dt = DateTime(2000, 1, 1)
+        traced = convert(RDExt.TracedRDateTime, dt)
+        @test traced isa RDExt.TracedRDateTime
+        @test value(traced) == value(dt)
+        back = convert(DateTime, traced)
+        @test back == dt
+
+        # Direct constructors
+        dt = DateTime(2002, 6, 15)
+        @test value(RDExt.TracedRDateTime(dt)) == value(dt)
+        @test value(RDExt.TracedRDateTime{Int64}(dt)) == value(dt)
+    end
+
+    @testset "Date conversion: Date → TracedRDate → Date" begin
+        d = Date(2000, 1, 1)
+        traced = convert(RDExt.TracedRDate, d)
+        @test traced isa RDExt.TracedRDate
+        @test value(traced) == value(d)
+        back = convert(Date, traced)
+        @test back == d
+    end
+
+    @testset "Time conversion: Time → TracedRTime → Time" begin
+        t = Time(12, 30, 45, 500, 250, 100)
+        traced = convert(RDExt.TracedRTime, t)
+        @test traced isa RDExt.TracedRTime
+        @test value(traced) == value(t)
+        back = convert(Time, traced)
+        @test back == t
+    end
+
+    @testset "Time conversion: Time → TracedRTime → Time" begin
+        t = Time(12, 30)
+        @test value(RDExt.TracedRTime(t)) == value(t)
+        @test value(RDExt.TracedRTime{Int64}(t)) == value(t)
+    end
 
     # --- Accessors via @jit ---
     @testset "year, month, day accessors" begin
