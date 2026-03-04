@@ -22,7 +22,7 @@ for T in (
 
     @eval function Reactant.make_tracer(
         seen,
-        @nospecialize(prev::$T),
+        @nospecialize(prev::Dates.$T),
         @nospecialize(path),
         mode;
         @nospecialize(track_numbers::Type = Union{}),
@@ -30,12 +30,12 @@ for T in (
         @nospecialize(runtime),
         kwargs...,
     )
-        RT = Reactant.traced_type($T, Val(mode), track_numbers, sharding, runtime)
+        RT = Reactant.traced_type(Dates.$T, Val(mode), track_numbers, sharding, runtime)
         return RT(prev)
     end
 
     @eval function Reactant.traced_type_inner(
-        @nospecialize(T::Type{<:$T}),
+        @nospecialize(T::Type{<:Dates.$T}),
         seen,
         mode::Reactant.TraceMode,
         @nospecialize(track_numbers::Type),

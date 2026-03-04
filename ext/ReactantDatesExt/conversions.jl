@@ -14,11 +14,11 @@ for (S, T) in (
     (:Microsecond, :TracedRMicrosecond),
     (:Nanosecond, :TracedRNanosecond),
 )
-    @eval Base.convert(::Type{$T}, x::$S) = $T(value(x))
-    @eval Base.convert(::Type{$T{Int64}}, x::$S) = $T(value(x))
-    @eval Base.convert(::Type{$T{I}}, x::$S) where {I} = $T(convert(I, value(x)))
-    @eval Base.convert(::Type{$S}, x::$T) = $S(value(x))
-    @eval $T(x::$S) = $T(value(x))
+    @eval Base.convert(::Type{$T}, x::Dates.$S) = $T(value(x))
+    @eval Base.convert(::Type{$T{Int64}}, x::Dates.$S) = $T(value(x))
+    @eval Base.convert(::Type{$T{I}}, x::Dates.$S) where {I} = $T(convert(I, value(x)))
+    @eval Base.convert(::Type{Dates.$S}, x::$T) = $S(value(x))
+    @eval $T(x::Dates.$S) = $T(value(x))
 
     # e.g. for conversions from Int64 to ConcretePJRTNumber
     @eval Base.convert(::Type{$T{I}}, x::$T{J}) where {I,J} = $T(convert(I, value(x)))
