@@ -15145,6 +15145,20 @@ function ReactantGetCompileOptions(size)
     @ccall mlir_c.ReactantGetCompileOptions(size::Ptr{Csize_t})::Ptr{Cvoid}
 end
 
+function ReactantLexMLIR(
+    ctx, input, input_len, token_kinds, token_offsets, token_lengths, max_tokens
+)
+    @ccall mlir_c.ReactantLexMLIR(
+        ctx::MlirContext,
+        input::Cstring,
+        input_len::Int32,
+        token_kinds::Ptr{Int32},
+        token_offsets::Ptr{Int32},
+        token_lengths::Ptr{Int32},
+        max_tokens::Int32,
+    )::Int32
+end
+
 function registerReactantXLAFFI()
     @ccall mlir_c.registerReactantXLAFFI()::Cvoid
 end
