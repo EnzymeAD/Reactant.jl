@@ -2,6 +2,8 @@ using Reactant, Test, FileCheck
 
 const addressable_devices = Reactant.addressable_devices()
 
+const RunningOnTPU = contains(string(Reactant.devices()[1]), "TPU")
+
 function rotate(x)
     y = x[1:100, :]
     x[1:924, :] = x[101:1024, :]
@@ -173,7 +175,7 @@ end
             mesh = Sharding.Mesh(reshape(Reactant.devices()[1:N], 2), (:x,))
             sharding = Sharding.NamedSharding(mesh, (:x,))
 
-            x = reshape(collect(Int, 1:Size), Size)
+            x = reshape(collect(Int32, 1:Size), Size)
             rx = Reactant.to_rarray(x; sharding)
 
             hlo = @code_xla shardy_passes = :to_mhlo_shardings wrap(rx)
@@ -225,7 +227,7 @@ function multirotate_both(x, sz)
 end
 
 @testset "MultiRotate" begin
-    if length(addressable_devices) ≥ 2
+    if length(addressable_devices) ≥ 2 && !RunningOnTPU
         @testset "MultiRotate $mr $sz" for mr in (
                 multirotate_left, multirotate_right, multirotate_both
             ),
@@ -268,6 +270,10 @@ end
             for (z, rz) in zip(y, ry)
                 @test all(z .== convert(Array, rz))
             end
+        end
+    else
+        if RunningOnTPU
+            @warn "Skipping MultiRotate test on TPU"
         end
     end
 end
