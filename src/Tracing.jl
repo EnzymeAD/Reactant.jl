@@ -3,6 +3,7 @@
     TracedTrack = 2
     TracedToConcrete = 3
     ArrayToConcrete = 4
+    # TODO: Array to Specification
     TracedSetPath = 5
     TracedToTypes = 6
     NoStopTracedTrack = 7
@@ -324,6 +325,45 @@ Base.@nospecializeinfer function traced_type_inner(
         A_ret = N isa Core.TypeVar ? UnionAll(N, A´´) : A´´
         A_ret2 = T isa Core.TypeVar ? UnionAll(T, A_ret) : A_ret
         return A_ret2
+    else
+        throw("Unsupported mode: $mode")
+    end
+end
+
+Base.@nospecializeinfer function traced_type_inner(
+    @nospecialize(T::Type{<:RArraySpec}),
+    seen,
+    @nospecialize(mode::TraceMode),
+    @nospecialize(track_numbers::Type),
+    @nospecialize(ndevices),
+    @nospecialize(runtime)
+)
+    if mode == ConcreteToTraced
+        T´ = Base.unwrap_unionall(T)
+        T, N = T´.parameters
+        T´´ = TracedRArray{T,N}
+        T_ret = N isa Core.TypeVar ? UnionAll(N, T´´) : T´´
+        T_ret2 = T isa Core.TypeVar ? UnionAll(T, T_ret) : T_ret
+        return T_ret2
+    else
+        throw("Unsupported mode: $mode")
+    end
+end
+
+Base.@nospecializeinfer function traced_type_inner(
+    @nospecialize(T::Type{<:RNumberSpec}),
+    seen,
+    @nospecialize(mode::TraceMode),
+    @nospecialize(track_numbers::Type),
+    @nospecialize(ndevices),
+    @nospecialize(runtime)
+)
+    if mode == ConcreteToTraced
+        T´ = Base.unwrap_unionall(T)
+        T = T´.parameters
+        T´´ = TracedRNumber{T}
+        T_ret = T isa Core.TypeVar ? UnionAll(T, T´´) : T´´
+        return T_ret
     else
         throw("Unsupported mode: $mode")
     end
@@ -1408,37 +1448,33 @@ Base.@nospecializeinfer function make_tracer(
 end
 
 Base.@nospecializeinfer function make_tracer(
-    seen,
-    @nospecialize(prev::ShapedRArray{T,N}),
-    @nospecialize(path),
-    mode;
-    kwargs...,
+    seen, @nospecialize(prev::RArraySpec{T,N}), @nospecialize(path), mode; kwargs...
 ) where {T,N}
-    if mode == TracedToTypes
+    if mode != ConcreteToTraced
         throw(
             ArgumentError(
-                "ShapedRArray cannot be used as a function call argument; it is only valid for compilation signatures."
-            ),
-        )
-    end
-    if mode == ArrayToConcrete
-        throw(
-            ErrorException(
-                "Cannot convert ShapedRArray to ConcreteRArray. ShapedRArray is only for compilation signatures."
-            ),
-        )
-    end
-    # ShapedRArray behaves like ConcreteToTraced mode - creates a TracedRArray without data
-    # Accept both ConcreteToTraced and TracedSetPath modes
-    if mode != ConcreteToTraced && mode != TracedSetPath
-        throw(
-            ArgumentError(
-                "ShapedRArray can only be used with ConcreteToTraced or TracedSetPath mode, got $mode"
+                "RArraySpec can only be used with ConcreteToTraced mode, got $mode"
             ),
         )
     end
     haskey(seen, prev) && return seen[prev]::TracedRArray{T,N}
     res = TracedRArray{T,N}((path,), nothing, size(prev))
+    seen[prev] = res
+    return res
+end
+
+Base.@nospecializeinfer function make_tracer(
+    seen, @nospecialize(prev::RNumberSpec{T}), @nospecialize(path), mode; kwargs...
+) where {T}
+    if mode != ConcreteToTraced
+        throw(
+            ArgumentError(
+                "RNumberSpec can only be used with ConcreteToTraced mode, got $mode"
+            ),
+        )
+    end
+    haskey(seen, prev) && return seen[prev]::TracedRNumber{T}
+    res = TracedRNumber{T}((path,), nothing)
     seen[prev] = res
     return res
 end

@@ -135,13 +135,13 @@ const AnyTracedRVector{T} = AnyTracedRArray{T,1}
 const AnyTracedRMatrix{T} = AnyTracedRArray{T,2}
 const AnyTracedRVecOrMat{T} = Union{AnyTracedRVector{T},AnyTracedRMatrix{T}}
 
-## ShapedRArray
+## RArraySpec
 """
-    ShapedRArray{T,N}(shape::NTuple{N,Int})
-    ShapedRArray(shape::NTuple{N,Int}, dtype::Type{T}) where {T,N}
+    RArraySpec{T,N}(shape::NTuple{N,Int})
+    RArraySpec{T}(shape::NTuple{N,Int})
 
 Lightweight structure that specifies the shape and element type (dtype) of an array
-without allocating the actual array data. Similar to JAX's `ShapedRArray`.
+without allocating the actual array data. Similar to JAX's `RArraySpec`.
 
 This is useful for compiling functions without constructing the full `ConcreteRArray`,
 which can save memory and improve compilation performance.
@@ -149,7 +149,7 @@ which can save memory and improve compilation performance.
 # Examples
 ```julia
 # Specify shape and dtype for a 2D array
-spec = Reactant.ShapedRArray((10, 20), Float32)
+spec = Reactant.RArraySpec{Float32}((10, 20))
 
 # Compile a function using just the spec
 f(x) = sum(x)
@@ -162,28 +162,51 @@ result = compiled_f(x)
 
 See also: [`compile`](@ref), [`ConcreteRArray`](@ref)
 """
-struct ShapedRArray{T,N}
+struct RArraySpec{T,N} <: RArray{T,N}
     shape::NTuple{N,Int}
     # TODO: Sharding
-
-    function ShapedRArray{T,N}(shape::NTuple{N,Int}) where {T,N}
-        return new{T,N}(shape)
-    end
 end
 
-function ShapedRArray(shape::NTuple{N,Int}, dtype::Type{T}) where {T,N}
-    return ShapedRArray{T,N}(shape)
+RArraySpec{T}(shape::NTuple{N,Int}) where {T,N} = RArraySpec{T,N}(shape)
+
+Base.size(x::RArraySpec) = x.shape
+Base.ndims(::RArraySpec{T,N}) where {T,N} = N
+Base.eltype(::RArraySpec{T}) where {T} = T
+
+@leaf RArraySpec
+
+"""
+    RNumberSpec{T}()
+
+Lightweight structure that specifies the element type (dtype) of a number
+without allocating the actual number data. Similar to JAX's `RNumberSpec`.
+
+This is useful for compiling functions without constructing the full `ConcreteRNumber`,
+which can save memory and improve compilation performance.
+
+# Examples
+```julia
+# Specify dtype for a number
+spec = Reactant.RNumberSpec{Float32}()
+
+# Compile a function using just the spec
+f(x) = x + 1
+compiled_f = Reactant.compile(f, (spec,))
+
+# Execute with actual data
+x = Reactant.ConcreteRNumber(1.0f0)
+result = compiled_f(x)
+```
+
+See also: [`compile`](@ref), [`ConcreteRNumber`](@ref)
+"""
+struct RNumberSpec{T} <: RNumber{T}
+    # TODO: Sharding
 end
 
-function ShapedRArray(shape::Tuple{Vararg{Integer}}, dtype::Type{T}) where {T}
-    return ShapedRArray(map(Int, shape), dtype)
-end
+Base.eltype(::RNumberSpec{T}) where {T} = T
 
-Base.size(x::ShapedRArray) = x.shape
-Base.ndims(::ShapedRArray{T,N}) where {T,N} = N
-Base.eltype(::ShapedRArray{T}) where {T} = T
-
-@leaf ShapedRArray
+@leaf RNumberSpec
 
 # Concrete Types
 ## ConcretePJRTNumber
