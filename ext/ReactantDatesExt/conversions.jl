@@ -56,8 +56,8 @@ TracedRTime{I}(t::Time) where {I} = TracedRTime{I}(TracedRNanosecond(value(t)))
 
 # converting e.g. Int64 to ConcretePJRTNumber
 function Base.convert(
-        ::Type{UTInstant{P}}, uti::UTInstant{Q}
-    ) where {P <: TracedRMillisecond, Q <: TracedRMillisecond}
+    ::Type{UTInstant{P}}, uti::UTInstant{Q}
+) where {P<:TracedRMillisecond,Q<:TracedRMillisecond}
     return UTInstant{P}(uti.periods)
 end
 
