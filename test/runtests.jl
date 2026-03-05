@@ -37,6 +37,8 @@ testsuite = find_tests(@__DIR__)
 
 filter_tests!(testsuite, parsed_args)
 
+delete!(testsuite, "test_helpers")
+
 delete!(testsuite, "plugins/metal") # Currently completely non functional
 
 if Sys.isapple()
@@ -52,6 +54,8 @@ end
 # This is run in a special way
 delete!(testsuite, "integration/mpi")
 delete!(testsuite, "core/qa")
+delete!(testsuite, "core/sharding/sharding")
+delete!(testsuite, "core/sharding/optimize_comm")
 
 # ProbProg tests require a compatible combination of NumPyro and JAX.
 filter!(((k, _),) -> !startswith(k, "probprog"), testsuite)
@@ -64,13 +68,20 @@ if !NUMPYRO_INSTALLED[]
     delete!(testsuite, "integration/numpyro")
 end
 
-if Reactant.Accelerators.TPU.has_tpu() || BACKEND == "tpu"
-    @set! parsed_args.jobs = Some(1)
+include("test_helpers.jl")
+
+custom_test_worker = false
+
+if NTPUs > 0 || BACKEND == "tpu"
+    custom_test_worker = true
+    @set! parsed_args.jobs = Some(NTPUs)
 end
 
 total_jobs = min(
     something(parsed_args.jobs, ParallelTestRunner.default_njobs()), length(keys(testsuite))
 )
+
+test_worker = custom_test_worker ? tpu_custom_worker_launcher : Returns(nothing)
 
 @testset "Reactant Tests" begin
     withenv(
@@ -81,6 +92,7 @@ total_jobs = min(
             Reactant,
             parsed_args;
             testsuite,
+            test_worker,
             init_code=quote
                 using Reactant
                 $(BACKEND) != "auto" && Reactant.set_default_backend($(BACKEND))
@@ -88,15 +100,12 @@ total_jobs = min(
         )
     end
 
-    if (
-        isempty(parsed_args.positionals) ||
-        "core" ∈ parsed_args.positionals ||
-        "core/qa" ∈ parsed_args.positionals
-    )
-        @testset "QA" begin
-            include("core/qa.jl")
-        end
-    end
+    # These tests require multiple devices
+    run_specific_test("core/sharding", parsed_args)
+    run_specific_test("core/sharding/optimize_comm", parsed_args)
+
+    # qa tests run a separate process
+    run_specific_test("core/qa", parsed_args)
 
     if (
         isempty(parsed_args.positionals) ||

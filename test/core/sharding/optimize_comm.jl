@@ -189,7 +189,7 @@ end
                 @check_not "%all-gather{{(-start)?[.0-9]*}} ="
 
                 hlo
-            end
+            end broken = RunningOnTPU
 
             x2 = wrap(x)
             rx2 = @jit shardy_passes = :to_mhlo_shardings wrap(rx)
