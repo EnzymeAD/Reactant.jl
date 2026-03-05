@@ -960,11 +960,9 @@ function optimization_passes(
         # these passes don't have optimized sharding implementations
         if raise_shlo_to_blas_lapack
             if !compile_options.disable_structured_tensors_detection_passes
-                append!(transform_passes_list, [
-                    # TODO: enable once we have the lowering implemented
-                    # "dot_general_to_symm",
-                    "dot_general_to_syrk",
-                ])
+                append!(
+                    transform_passes_list, ["dot_general_to_symm", "dot_general_to_syrk"]
+                )
             end
         end
     end
