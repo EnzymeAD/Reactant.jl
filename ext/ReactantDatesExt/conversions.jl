@@ -33,7 +33,7 @@ function Base.convert(::Type{DateTime}, x::TracedRDateTime)
 end
 TracedRDateTime(dt::DateTime) = convert(TracedRDateTime, dt)
 function TracedRDateTime{I}(dt::DateTime) where {I}
-    return TracedRDateTime{I}(UTInstant(TracedRMillisecond(value(dt))))
+    return TracedRDateTime{I}(UTInstant(TracedRMillisecond(convert(I, value(dt)))))
 end
 
 # Date conversion
@@ -44,7 +44,9 @@ function Base.convert(::Type{Date}, x::TracedRDate)
     return Date(UTInstant(Dates.Day(value(x))))
 end
 TracedRDate(dt::Date) = convert(TracedRDate, dt)
-TracedRDate{I}(dt::Date) where {I} = TracedRDate{I}(UTInstant(TracedRDay(value(dt))))
+function TracedRDate{I}(dt::Date) where {I}
+    return TracedRDate{I}(UTInstant(TracedRDay(convert(I, value(dt)))))
+end
 
 # Time conversion
 function Base.convert(::Type{TracedRTime}, t::Time)
@@ -52,7 +54,7 @@ function Base.convert(::Type{TracedRTime}, t::Time)
 end
 Base.convert(::Type{Time}, x::TracedRTime) = Dates.Time(Dates.Nanosecond(value(x)))
 TracedRTime(t::Time) = convert(TracedRTime, t)
-TracedRTime{I}(t::Time) where {I} = TracedRTime{I}(TracedRNanosecond(value(t)))
+TracedRTime{I}(t::Time) where {I} = TracedRTime{I}(TracedRNanosecond(convert(I, value(t))))
 
 # converting e.g. Int64 to ConcretePJRTNumber
 function Base.convert(
