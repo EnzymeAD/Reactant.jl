@@ -2,18 +2,18 @@
 
 # Period conversions
 for (S, T) in (
-        (:Year, :TracedRYear),
-        (:Quarter, :TracedRQuarter),
-        (:Month, :TracedRMonth),
-        (:Week, :TracedRWeek),
-        (:Day, :TracedRDay),
-        (:Hour, :TracedRHour),
-        (:Minute, :TracedRMinute),
-        (:Second, :TracedRSecond),
-        (:Millisecond, :TracedRMillisecond),
-        (:Microsecond, :TracedRMicrosecond),
-        (:Nanosecond, :TracedRNanosecond),
-    )
+    (:Year, :TracedRYear),
+    (:Quarter, :TracedRQuarter),
+    (:Month, :TracedRMonth),
+    (:Week, :TracedRWeek),
+    (:Day, :TracedRDay),
+    (:Hour, :TracedRHour),
+    (:Minute, :TracedRMinute),
+    (:Second, :TracedRSecond),
+    (:Millisecond, :TracedRMillisecond),
+    (:Microsecond, :TracedRMicrosecond),
+    (:Nanosecond, :TracedRNanosecond),
+)
     @eval Base.convert(::Type{$T}, x::Dates.$S) = $T(value(x))
     @eval Base.convert(::Type{$T{Int64}}, x::Dates.$S) = $T(value(x))
     @eval Base.convert(::Type{$T{I}}, x::Dates.$S) where {I} = $T(convert(I, value(x)))
