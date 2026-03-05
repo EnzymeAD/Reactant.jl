@@ -21,7 +21,7 @@ for (S, T) in (
     @eval $T(x::Dates.$S) = $T(value(x))
 
     # e.g. for conversions from Int64 to ConcretePJRTNumber
-    @eval Base.convert(::Type{$T{I}}, x::$T{J}) where {I, J} = $T(convert(I, value(x)))
+    @eval Base.convert(::Type{$T{I}}, x::$T{J}) where {I,J} = $T(convert(I, value(x)))
 end
 
 # DateTime conversion
