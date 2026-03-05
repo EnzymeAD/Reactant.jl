@@ -267,7 +267,7 @@ end
 
 function loop!(model)
     Δt = model.clock.last_Δt
-    @trace mincut = true checkpointing = true track_numbers = false for i in 1:9
+    @trace mincut = true checkpointing = true track_numbers = false for i in 1:25
         time_step!(model, Δt)
     end
     return nothing
@@ -378,6 +378,30 @@ function run_abernathey_channel_benchmark!(
     mld = Field{Center,Center,Nothing}(model.grid) # Not used for now
     Δz_ra = Reactant.to_rarray(Δz)
 
+    # Profile and time the spinup_reentrant_channel_model!
+    prof_result = Reactant.Profiler.profile_with_xprof(
+        estimate_tracer_error,
+        model,
+        Tᵢ,
+        Sᵢ,
+        u_wind_stress,
+        v_wind_stress,
+        T_flux,
+        Δz_ra;
+        nrepeat=10,
+        warmup=1,
+        compile_options=CompileOptions(; raise=true, raise_first=true),
+    )
+    results["Runtime (s)"]["Oceananigans/SpinUpReentrantChannelModel/$(backend)/Primal"] =
+        prof_result.profiling_result.runtime_ns / 1e9
+    #=results["TFLOP/s"]["Oceananigans/SpinUpReentrantChannelModel/$(backend)/Primal"] =
+        if prof_result.profiling_result.flops_data === nothing
+            -1
+        else
+            prof_result.profiling_result.flops_data.RawFlopsRate / 1e12
+        end
+    =#
+
     dmodel = Enzyme.make_zero(model)
     dTᵢ = Field{Center,Center,Center}(model.grid)
     dSᵢ = Field{Center,Center,Center}(model.grid)
@@ -387,9 +411,15 @@ function run_abernathey_channel_benchmark!(
     dmld = Field{Center,Center,Nothing}(model.grid)
     dΔz_ra = Enzyme.make_zero(Δz_ra)
 
-    # Profile and time the differentiate_tracer_error
-    full_benchmark_name = "Oceananigans/DifferentiateTracerError/$(backend)/Reverse"
+    # Spinup the model for a sufficient amount of time, save the T and S from this state:
+    restimate_tracer_error = @compile raise_first = true raise = true sync = true estimate_tracer_error(
+        model, Tᵢ, Sᵢ, u_wind_stress, v_wind_stress, T_flux, Δz_ra
+    )
+    restimate_tracer_error(model, Tᵢ, Sᵢ, u_wind_stress, v_wind_stress, T_flux, Δz_ra)
+    @allowscalar set!(Tᵢ, model.tracers.T)
+    @allowscalar set!(Sᵢ, model.tracers.S)
 
+    # Profile and time the differentiate_tracer_error
     prof_result = Reactant.Profiler.profile_with_xprof(
         differentiate_tracer_error,
         model,
@@ -410,25 +440,18 @@ function run_abernathey_channel_benchmark!(
         warmup=1,
         compile_options=CompileOptions(; raise=true, raise_first=true),
     )
-    results["Runtime (s)"][full_benchmark_name] =
+    results["Runtime (s)"]["Oceananigans/DifferentiateTracerError/$(backend)/Reverse"] =
         prof_result.profiling_result.runtime_ns / 1e9
-    results["TFLOP/s"][full_benchmark_name] =
+    #=results["TFLOP/s"]["Oceananigans/DifferentiateTracerError/$(backend)/Reverse"] =
         if prof_result.profiling_result.flops_data === nothing
             -1
         else
             prof_result.profiling_result.flops_data.RawFlopsRate / 1e12
         end
-
-    print_stmt = @sprintf(
-        "%100s     :     %.5gs    %.5g TFLOP/s",
-        full_benchmark_name,
-        results["Runtime (s)"][full_benchmark_name],
-        results["TFLOP/s"][full_benchmark_name]
-    )
-    @info print_stmt
-
+    =#
     return nothing
 end
+
 
 if abspath(PROGRAM_FILE) == @__FILE__
     backend = get_backend()
