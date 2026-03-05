@@ -165,9 +165,17 @@ See also: [`compile`](@ref), [`ConcreteRArray`](@ref)
 struct RArraySpec{T,N} <: RArray{T,N}
     shape::NTuple{N,Int}
     # TODO: Sharding
+
+    function RArraySpec{T,N}(
+        shape::NTuple{N,Int}; sharding=Sharding.NoShardInfo()
+    ) where {T,N}
+        return new{T,N}(shape)
+    end
 end
 
-RArraySpec{T}(shape::NTuple{N,Int}) where {T,N} = RArraySpec{T,N}(shape)
+function RArraySpec{T}(shape::NTuple{N,Int}; sharding=Sharding.NoShardInfo()) where {T,N}
+    return RArraySpec{T,N}(shape; sharding)
+end
 
 Base.size(x::RArraySpec) = x.shape
 Base.ndims(::RArraySpec{T,N}) where {T,N} = N
@@ -202,6 +210,10 @@ See also: [`compile`](@ref), [`ConcreteRNumber`](@ref)
 """
 struct RNumberSpec{T} <: RNumber{T}
     # TODO: Sharding
+
+    function RNumberSpec{T}(; sharding=Sharding.NoShardInfo()) where {T}
+        return new{T}()
+    end
 end
 
 Base.eltype(::RNumberSpec{T}) where {T} = T

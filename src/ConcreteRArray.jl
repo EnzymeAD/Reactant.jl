@@ -298,6 +298,11 @@ function Base.print_array(io::IO, ::RArraySpec)
     return nothing
 end
 
+function Base.show(io::IO, X::RArraySpec)
+    print(io, "$(typeof(X))()")
+    return nothing
+end
+
 function Base.print_array(io::IO, X::Union{AnyConcretePJRTArray,AnyConcreteIFRTArray})
     if isempty(X)
         print(io, "<Empty Buffer eltype $(eltype(X)) of size $(size(X))>")
