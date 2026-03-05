@@ -378,8 +378,8 @@ ffi::Error SymmImpl(CUstream stream, bool side_, bool uplo_, ffi::AnyBuffer a,
   FFI_RETURN_IF_ERROR(
       CheckShape(c_out->dimensions(), {batch, rows, cols}, "c_out", "symm"));
 
-  FFI_ASSIGN_OR_RETURN(auto m, MaybeCastNoOverflow<int>(rows));
-  FFI_ASSIGN_OR_RETURN(auto n, MaybeCastNoOverflow<int>(cols));
+  FFI_ASSIGN_OR_RETURN(auto n, MaybeCastNoOverflow<int>(rows));
+  FFI_ASSIGN_OR_RETURN(auto m, MaybeCastNoOverflow<int>(cols));
 
   // We flip uplo here because A is passed in row-major format.
   // Row-major A is equivalent to A^T in column-major, and since A is
@@ -396,9 +396,9 @@ ffi::Error SymmImpl(CUstream stream, bool side_, bool uplo_, ffi::AnyBuffer a,
 
   FFI_ASSIGN_OR_RETURN(auto handle, BlasHandlePool::Borrow(stream));
   // lda is the leading dimension of a, etc.
-  int lda = side == CUBLAS_SIDE_LEFT ? n : m;
-  int ldb = lda;
-  int ldc = lda;
+  int lda = side == CUBLAS_SIDE_LEFT ? m : n;
+  int ldb = m;
+  int ldc = m;
   for (int i = 0; i < batch; ++i) {
     FFI_RETURN_IF_ERROR(blas::Symm<T>(handle.get(), side, uplo, m, n, alpha,
                                       a_data, lda, b_data, ldb, beta,
@@ -450,7 +450,7 @@ SymmImpl(CUstream stream, bool side, bool uplo, bool use_alpha_attribute,
                                        alpha_imag, alpha_, &host_alpha));
   FFI_RETURN_IF_ERROR(GetHostScalar<T>(stream, use_beta_attribute, beta_real,
                                        beta_imag, beta_, &host_beta));
-  return SymmImpl<T>(stream, side, uplo, a, c_in, &host_alpha, &host_beta,
+  return SymmImpl<T>(stream, side, uplo, a, b, c_in, &host_alpha, &host_beta,
                      c_out);
 }
 
