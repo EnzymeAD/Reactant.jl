@@ -180,16 +180,29 @@ end
 
             hlo = @code_xla shardy_passes = :to_mhlo_shardings wrap(rx)
 
-            @test @filecheck begin
-                @check_not "all-to-all"
-                @check_not "all-reduce"
-                @check_count 2 "%collective-permute{{(-start)?[.0-9]*}} ="
-                @check_not "%collective-permute{{(-start)?[.0-9]*}} ="
-                @check_count 1 "%all-gather{{(-start)?[.0-9]*}} ="
-                @check_not "%all-gather{{(-start)?[.0-9]*}} ="
+            if RunningOnTPU
+                @test_broken @filecheck begin
+                    @check_not "all-to-all"
+                    @check_not "all-reduce"
+                    @check_count 2 "%collective-permute{{(-start)?[.0-9]*}} ="
+                    @check_not "%collective-permute{{(-start)?[.0-9]*}} ="
+                    @check_count 1 "%all-gather{{(-start)?[.0-9]*}} ="
+                    @check_not "%all-gather{{(-start)?[.0-9]*}} ="
 
-                hlo
-            end broken = RunningOnTPU
+                    hlo
+                end
+            else
+                @test @filecheck begin
+                    @check_not "all-to-all"
+                    @check_not "all-reduce"
+                    @check_count 2 "%collective-permute{{(-start)?[.0-9]*}} ="
+                    @check_not "%collective-permute{{(-start)?[.0-9]*}} ="
+                    @check_count 1 "%all-gather{{(-start)?[.0-9]*}} ="
+                    @check_not "%all-gather{{(-start)?[.0-9]*}} ="
+
+                    hlo
+                end
+            end
 
             x2 = wrap(x)
             rx2 = @jit shardy_passes = :to_mhlo_shardings wrap(rx)
