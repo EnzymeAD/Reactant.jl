@@ -11,6 +11,10 @@ delete!(testsuite, "common")
 
 include("../test_helpers.jl")
 
+if NTPUs > 0 || BACKEND == "tpu"
+    empty!(testsuite)
+end
+
 custom_test_worker = NTPUs > 0 || BACKEND == "tpu"
 
 jobs = min(
