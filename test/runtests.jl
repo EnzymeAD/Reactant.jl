@@ -101,9 +101,12 @@ test_worker = custom_test_worker ? tpu_custom_worker_launcher : Returns(nothing)
     end
 
     if (
-        isempty(parsed_args.positionals) ||
-        "integration" ∈ parsed_args.positionals ||
-        "integration/mpi" ∈ parsed_args.positionals
+        # MPI is only supported on CPU
+        (BACKEND == "cpu" || BACKEND == "auto") && (
+            isempty(parsed_args.positionals) ||
+            "integration" ∈ parsed_args.positionals ||
+            "integration/mpi" ∈ parsed_args.positionals
+        )
     )
         @testset "MPI" begin
             using MPI
