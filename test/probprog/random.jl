@@ -7,25 +7,6 @@ using Statistics
 
 include(joinpath(@__DIR__, "common.jl"))
 
-const _JAX_AVAILABLE = Ref{Union{Nothing,Bool}}(nothing)
-
-function check_jax_available()
-    if _JAX_AVAILABLE[] !== nothing
-        return _JAX_AVAILABLE[]
-    end
-    try
-        os = pyimport("os")
-        os.environ.__setitem__("JAX_ENABLE_X64", "1")
-        jax = pyimport("jax")
-        jax.config.update("jax_enable_x64", true)
-        _JAX_AVAILABLE[] = true
-    catch e
-        @warn "JAX not available, skipping pointwise comparison tests" exception = e
-        _JAX_AVAILABLE[] = false
-    end
-    return _JAX_AVAILABLE[]
-end
-
 function jax_uniform(seed::Vector{UInt64}, a::Float64, b::Float64, shape::Tuple)
     jax_random = pyimport("jax.random")
     np = pyimport("numpy")
