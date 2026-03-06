@@ -9,11 +9,12 @@ CondaPkg.resolve()
 testsuite = find_tests(@__DIR__)
 delete!(testsuite, "common")
 
+include("../test_helpers.jl")
+
+custom_test_worker = NTPUs > 0 || BACKEND == "tpu"
+
 jobs = min(
-    something(
-        Reactant.Accelerators.TPU.has_tpu() || BACKEND == "tpu" ? 1 : nothing,
-        ParallelTestRunner.default_njobs(),
-    ),
+    something(custom_test_worker ? NTPUs : nothing, ParallelTestRunner.default_njobs()),
     length(keys(testsuite)),
 )
 
@@ -26,6 +27,7 @@ jobs = min(
             Reactant,
             String["--jobs=$(jobs)"];
             testsuite,
+            test_worker=custom_test_worker ? tpu_custom_worker_launcher : Returns(nothing),
             init_code=quote
                 using Reactant
                 $(BACKEND) != "auto" && Reactant.set_default_backend($(BACKEND))
