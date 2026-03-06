@@ -9,11 +9,11 @@ CondaPkg.resolve()
 testsuite = find_tests(@__DIR__)
 delete!(testsuite, "common")
 
+include("../test_helpers.jl")
+
 if NTPUs > 0 || BACKEND == "tpu"
     empty!(testsuite)
 end
-
-include("../test_helpers.jl")
 
 custom_test_worker = NTPUs > 0 || BACKEND == "tpu"
 
