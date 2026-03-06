@@ -6,7 +6,19 @@ function run_specific_test(test_name::String, parsed_args)
         any(Base.Fix1(startswith, test_name), parsed_args.positionals)
     )
         test_file = joinpath(@__DIR__, test_name * ".jl")
-        ParallelTestRunner.runtest(:(include($(test_file))), test_name, :())
+        mod = @eval(Main, module $(gensym()) end)
+        @eval(mod, using ParallelTestRunner: Test, Random)
+        @eval(mod, using .Test, .Random)
+        @eval(mod, using Reactant)
+
+        @eval mod begin
+            GC.gc(true)
+            Random.seed!(1)
+
+            @testset $(test_name) begin
+                include($(test_file))
+            end
+        end
     end
 end
 

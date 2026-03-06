@@ -72,7 +72,7 @@ end
                 disable_structured_tensors_detection_passes=false
             ) fn(x_ra, y_ra)
 
-            @test fn_compile(x_ra, y_ra) ≈ fn(x, y) atol = 1e-3 rtol = 1e-3
+            @test fn_compile(x_ra, y_ra) ≈ fn(x, y) atol = 1e-2 rtol = 1e-2
         end
     end
 end

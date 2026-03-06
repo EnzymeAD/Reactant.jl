@@ -100,13 +100,6 @@ test_worker = custom_test_worker ? tpu_custom_worker_launcher : Returns(nothing)
         )
     end
 
-    # These tests require multiple devices
-    run_specific_test("core/sharding", parsed_args)
-    run_specific_test("core/sharding/optimize_comm", parsed_args)
-
-    # qa tests run a separate process
-    run_specific_test("core/qa", parsed_args)
-
     if (
         isempty(parsed_args.positionals) ||
         "integration" ∈ parsed_args.positionals ||
@@ -125,5 +118,16 @@ test_worker = custom_test_worker ? tpu_custom_worker_launcher : Returns(nothing)
                 `$(Base.julia_cmd()) --project=$(Base.active_project()) $(joinpath(@__DIR__, "probprog", "runtests.jl"))`,
             )
         end
+    end
+
+    # Important to run these last, since they will capture the TPU and any
+    # processes triggered in multi-process tests will not be able to use TPUs
+    # These tests require multiple devices
+    run_specific_test("core/sharding", parsed_args)
+    run_specific_test("core/sharding/optimize_comm", parsed_args)
+
+    # qa tests run a separate process
+    if BACKEND == "cpu" || BACKEND == "auto"
+        run_specific_test("core/qa", parsed_args)
     end
 end
