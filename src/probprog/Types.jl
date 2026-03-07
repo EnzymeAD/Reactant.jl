@@ -75,7 +75,7 @@ mutable struct TracedTrace
 end
 TracedTrace() = TracedTrace(TraceEntry[], 0, Symbol[])
 
-struct MCMCState
+mutable struct MCMCState
     position::Any
     gradient::Any
     potential_energy::Any
