@@ -1,4 +1,5 @@
 using ..Reactant: TracedRArray, ReactantRNG
+using Serialization
 
 function mcmc(
     rng::AbstractRNG,
@@ -387,5 +388,175 @@ function mcmc_logpdf(
         adapt_step_size,
         adapt_mass_matrix,
         kwargs...,
+    )
+end
+
+function _print_progress(current, total; width=40)
+    frac = current / total
+    filled = round(Int, frac * width)
+    bar = "━"^filled * " "^(width - filled)
+    print("\r  Sampling $(bar) $(current)/$(total)")
+    current == total && println()
+    flush(stdout)
+end
+
+function save_state(filename::String, state::MCMCState)
+    data = Dict{String,Any}(
+        "position" => Array(state.position),
+        "gradient" => Array(state.gradient),
+        "potential_energy" => Array(state.potential_energy)[],
+        "step_size" => Array(state.step_size)[],
+        "inverse_mass_matrix" => Array(state.inverse_mass_matrix),
+        "rng" => Array(state.rng),
+    )
+    open(io -> Serialization.serialize(io, data), filename, "w")
+end
+
+function load_state(filename::String)
+    data = open(Serialization.deserialize, filename)
+    return MCMCState(
+        Reactant.to_rarray(data["position"]),
+        Reactant.to_rarray(data["gradient"]),
+        Reactant.to_rarray(fill(data["potential_energy"])),
+        Reactant.to_rarray(fill(data["step_size"])),
+        Reactant.to_rarray(data["inverse_mass_matrix"]),
+        Reactant.to_rarray(data["rng"]),
+    )
+end
+
+# TODO(#2619): add trace-based mode support
+function run_chain(
+    rng,
+    logpdf_fn::Function,
+    initial_position;
+    algorithm::Symbol=:NUTS,
+    num_warmup::Int=0,
+    num_samples::Int=1000,
+    chunk_size::Int=100,
+    step_size=nothing,
+    inverse_mass_matrix=nothing,
+    progress_bar::Bool=true,
+    max_tree_depth::Int=10,
+    max_delta_energy::Float64=1000.0,
+    adapt_step_size::Bool=true,
+    adapt_mass_matrix::Bool=true,
+    thinning::Int=1,
+    trajectory_length::Float64=2π,
+)
+    first_chunk = min(chunk_size, num_samples)
+    remaining = num_samples - first_chunk
+
+    warmup_fn = function (rng, logpdf_fn, pos, ss, imm)
+        samples, _, _, state = mcmc_logpdf(
+            rng, logpdf_fn, pos;
+            algorithm, step_size=ss, inverse_mass_matrix=imm,
+            max_tree_depth, max_delta_energy, trajectory_length,
+            num_warmup, num_samples=first_chunk, thinning,
+            adapt_step_size, adapt_mass_matrix,
+        )
+        return samples, state
+    end
+
+    progress_bar && num_warmup > 0 && print("  Warmup: $(num_warmup) steps... ")
+
+    compiled_warmup = Reactant.Compiler.compile(
+        warmup_fn, (rng, logpdf_fn, initial_position, step_size, inverse_mass_matrix);
+        optimize=:probprog,
+    )
+    samples1, state = compiled_warmup(
+        rng, logpdf_fn, initial_position, step_size, inverse_mass_matrix,
+    )
+
+    progress_bar && num_warmup > 0 && println("done.")
+
+    all_chunks = [Array(samples1)]
+    progress_bar && _print_progress(first_chunk, num_samples)
+
+    if remaining > 0
+        full_chunks = remaining ÷ chunk_size
+        remainder = remaining % chunk_size
+
+        if full_chunks > 0
+            continue_fn = function (sr, lf, pos, grad, pe, ss, imm)
+                samples, _, _, st = mcmc_logpdf(
+                    ReactantRNG(sr), lf, pos;
+                    algorithm, step_size=ss, inverse_mass_matrix=imm,
+                    initial_gradient=grad, initial_potential_energy=pe,
+                    max_tree_depth, max_delta_energy, trajectory_length,
+                    num_warmup=0, num_samples=chunk_size, thinning,
+                    adapt_step_size=false, adapt_mass_matrix=false,
+                )
+                return samples, st
+            end
+
+            compiled_continue = Reactant.Compiler.compile(
+                continue_fn,
+                (state.rng, logpdf_fn, state.position, state.gradient,
+                 state.potential_energy, state.step_size, state.inverse_mass_matrix);
+                optimize=:probprog,
+            )
+
+            for i in 1:full_chunks
+                chunk, state = compiled_continue(
+                    state.rng, logpdf_fn, state.position, state.gradient,
+                    state.potential_energy, state.step_size, state.inverse_mass_matrix,
+                )
+                push!(all_chunks, Array(chunk))
+                progress_bar && _print_progress(first_chunk + i * chunk_size, num_samples)
+            end
+        end
+
+        if remainder > 0
+            remainder_fn = function (sr, lf, pos, grad, pe, ss, imm)
+                samples, _, _, st = mcmc_logpdf(
+                    ReactantRNG(sr), lf, pos;
+                    algorithm, step_size=ss, inverse_mass_matrix=imm,
+                    initial_gradient=grad, initial_potential_energy=pe,
+                    max_tree_depth, max_delta_energy, trajectory_length,
+                    num_warmup=0, num_samples=remainder, thinning,
+                    adapt_step_size=false, adapt_mass_matrix=false,
+                )
+                return samples, st
+            end
+
+            compiled_remainder = Reactant.Compiler.compile(
+                remainder_fn,
+                (state.rng, logpdf_fn, state.position, state.gradient,
+                 state.potential_energy, state.step_size, state.inverse_mass_matrix);
+                optimize=:probprog,
+            )
+
+            chunk, state = compiled_remainder(
+                state.rng, logpdf_fn, state.position, state.gradient,
+                state.potential_energy, state.step_size, state.inverse_mass_matrix,
+            )
+            push!(all_chunks, Array(chunk))
+            progress_bar && _print_progress(num_samples, num_samples)
+        end
+    end
+
+    return vcat(all_chunks...), state
+end
+
+function run_chain(
+    state::MCMCState,
+    logpdf_fn::Function;
+    algorithm::Symbol=:NUTS,
+    num_samples::Int=1000,
+    chunk_size::Int=100,
+    progress_bar::Bool=true,
+    max_tree_depth::Int=10,
+    max_delta_energy::Float64=1000.0,
+    thinning::Int=1,
+    trajectory_length::Float64=2π,
+)
+    return run_chain(
+        ReactantRNG(state.rng), logpdf_fn, state.position;
+        algorithm, num_warmup=0, num_samples, chunk_size,
+        step_size=state.step_size,
+        inverse_mass_matrix=state.inverse_mass_matrix,
+        progress_bar, max_tree_depth, max_delta_energy,
+        adapt_step_size=false, adapt_mass_matrix=false,
+        thinning, trajectory_length,
     )
 end
